@@ -1,10 +1,5 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import type {
-	EditorIdentifier,
-	EditorInstanceId,
-	EditorPartChangeEvent,
-	IEditorStateSource,
-} from '../../../services/editor/common/editorState.js';
+import type { EditorIdentifier, EditorInstanceId, EditorPartChangeEvent, IEditorStateSource } from '../../../services/editor/common/editorState.js';
 
 /** Tracks activation order across the editor groups of one editor part. */
 export class EditorsObserver extends Disposable {
@@ -56,9 +51,7 @@ export class EditorsObserver extends Disposable {
 	}
 
 	private pruneClosedEditors(): void {
-		const openIds = new Set(
-			this.source.getEditorState().groups.flatMap(group => group.editors.map(editor => editor.instanceId)),
-		);
+		const openIds = new Set(this.source.getEditorState().groups.flatMap(group => group.editors.map(editor => editor.instanceId)));
 		for (let index = this.recentIds.length - 1; index >= 0; index -= 1) {
 			if (!openIds.has(this.recentIds[index]!)) this.recentIds.splice(index, 1);
 		}

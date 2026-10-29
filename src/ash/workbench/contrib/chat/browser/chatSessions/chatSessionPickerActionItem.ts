@@ -18,12 +18,7 @@ export interface IChatSessionPickerDelegate {
 
 /** Presents session options using the input's existing popup and focus owner. */
 export class ChatSessionPickerActionItem extends ChatInputPickerActionViewItem {
-	constructor(
-		action: IAction,
-		delegate: IChatSessionPickerDelegate,
-		listOptions: IActionListOptions,
-		@IInstantiationService instantiationService: IInstantiationService,
-	) {
+	constructor(action: IAction, delegate: IChatSessionPickerDelegate, listOptions: IActionListOptions, @IInstantiationService instantiationService: IInstantiationService) {
 		super(
 			action,
 			{

@@ -69,33 +69,21 @@ export class RenderLinesResult {
 			const partIndex = Array.prototype.indexOf.call(line.domNode.children, domNode) as number;
 			const length = domNode.textContent?.length ?? 0;
 			if (partIndex >= 0 && offset >= 0 && offset <= length) {
-				return new Position(
-					line.lineNumber,
-					line.startColumn + line.mapping.getColumn(new DomPosition(partIndex, offset), length),
-				);
+				return new Position(line.lineNumber, line.startColumn + line.mapping.getColumn(new DomPosition(partIndex, offset), length));
 			}
 		}
 		return undefined;
 	}
 }
 
-export function renderLines(
-	source: LineSource,
-	options: RenderOptions,
-	decorations: readonly InlineDecoration[],
-	domNode: HTMLElement,
-): RenderLinesResult {
+export function renderLines(source: LineSource, options: RenderOptions, decorations: readonly InlineDecoration[], domNode: HTMLElement): RenderLinesResult {
 	// Use the original editor's breaks so token backgrounds can occupy a full
 	// display row without changing wrapping or source columns used by Copy.
 	const rows = source.lines.flatMap((line, index) => {
 		const segments: { startColumn: number; endColumn: number; indent: number }[] = [];
 		const projection = source.projection;
 		if (projection) {
-			for (
-				let row = projection.firstVisualLineIndex(line.lineNumber - 1);
-				row < projection.visualLineCount;
-				row++
-			) {
+			for (let row = projection.firstVisualLineIndex(line.lineNumber - 1); row < projection.visualLineCount; row++) {
 				const visualLine = projection.lineAt(row)!;
 				if (visualLine.logicalLineIndex !== line.lineNumber - 1) break;
 				segments.push({
@@ -114,14 +102,9 @@ export function renderLines(
 			? [domNode]
 			: rows.map((_, index) => {
 					const existing = domNode.children[index];
-					return existing?.classList.contains('ash-diff-original-row')
-						? (existing as HTMLElement)
-						: h(domNode.ownerDocument, 'div', { className: 'ash-diff-original-row' });
+					return existing?.classList.contains('ash-diff-original-row') ? (existing as HTMLElement) : h(domNode.ownerDocument, 'div', { className: 'ash-diff-original-row' });
 				});
-	if (
-		rows.length !== 1 &&
-		(nodes.length !== domNode.children.length || nodes.some((node, index) => node !== domNode.children[index]))
-	) {
+	if (rows.length !== 1 && (nodes.length !== domNode.children.length || nodes.some((node, index) => node !== domNode.children[index]))) {
 		domNode.replaceChildren(...nodes);
 	}
 	applyFontInfo(domNode, options.fontInfo);
@@ -134,39 +117,16 @@ export function renderLines(
 			return end > start ? [{ ...token, startColumn: start - startColumn, endColumn: end - startColumn }] : [];
 		});
 		const rowDecorations = decorations.flatMap(decoration => {
-			if (decoration.range.startLineNumber > line.lineNumber || decoration.range.endLineNumber < line.lineNumber)
-				return [];
-			const start = Math.max(
-				startColumn,
-				decoration.range.startLineNumber === line.lineNumber ? decoration.range.startColumn - 1 : 0,
-			);
-			const end = Math.min(
-				endColumn,
-				decoration.range.endLineNumber === line.lineNumber
-					? decoration.range.endColumn - 1
-					: line.content.length,
-			);
-			return end >= start
-				? [
-						new InlineDecoration(
-							new Range(1, start - startColumn + 1, 1, end - startColumn + 1),
-							decoration.inlineClassName,
-							decoration.type,
-						),
-					]
-				: [];
+			if (decoration.range.startLineNumber > line.lineNumber || decoration.range.endLineNumber < line.lineNumber) return [];
+			const start = Math.max(startColumn, decoration.range.startLineNumber === line.lineNumber ? decoration.range.startColumn - 1 : 0);
+			const end = Math.min(endColumn, decoration.range.endLineNumber === line.lineNumber ? decoration.range.endColumn - 1 : line.content.length);
+			return end >= start ? [new InlineDecoration(new Range(1, start - startColumn + 1, 1, end - startColumn + 1), decoration.inlineClassName, decoration.type)] : [];
 		});
 		return {
 			domNode: node,
 			lineNumber,
 			startColumn,
-			mapping: projectStanzaSemanticTokenLine(
-				node,
-				line.content.slice(startColumn, endColumn),
-				tokens,
-				options.tabSize,
-				rowDecorations,
-			),
+			mapping: projectStanzaSemanticTokenLine(node, line.content.slice(startColumn, endColumn), tokens, options.tabSize, rowDecorations),
 		};
 	});
 	return new RenderLinesResult(lines);

@@ -26,17 +26,12 @@ test('Base and Platform production imports preserve the layer direction', () => 
 	}
 	for (const file of productionTypeScriptFiles(join(sourceRoot, 'base'))) {
 		for (const target of localImports(file)) {
-			if (target.startsWith(sourceRoot) && target !== nlsRoot && !target.startsWith(`${baseRoot}${sep}`))
-				violations.push(`${sourceName(file)} -> ${sourceName(target)}`);
+			if (target.startsWith(sourceRoot) && target !== nlsRoot && !target.startsWith(`${baseRoot}${sep}`)) violations.push(`${sourceName(file)} -> ${sourceName(target)}`);
 		}
 	}
 	for (const file of productionTypeScriptFiles(join(sourceRoot, 'platform'))) {
 		for (const target of localImports(file)) {
-			if (
-				target.startsWith(join(sourceRoot, 'workbench')) ||
-				target.startsWith(join(sourceRoot, 'editor')) ||
-				target.startsWith(join(sourceRoot, 'code'))
-			)
+			if (target.startsWith(join(sourceRoot, 'workbench')) || target.startsWith(join(sourceRoot, 'editor')) || target.startsWith(join(sourceRoot, 'code')))
 				violations.push(`${sourceName(file)} -> ${sourceName(target)}`);
 		}
 	}
@@ -84,10 +79,7 @@ test('Terminal and Tasks contracts cannot reach contribution implementations thr
 			if (visited.has(file)) return;
 			visited.add(file);
 			for (const target of localImports(file)) {
-				if (
-					(target.startsWith(contributionRoot) && !contracts.has(target)) ||
-					(entry.includes(`${sep}common${sep}`) && target.includes(`${sep}browser${sep}`))
-				) {
+				if ((target.startsWith(contributionRoot) && !contracts.has(target)) || (entry.includes(`${sep}common${sep}`) && target.includes(`${sep}browser${sep}`))) {
 					violations.push(`${sourceName(entry)} via ${sourceName(file)} -> ${sourceName(target)}`);
 				} else if (target.startsWith(sourceRoot) && existsSync(target)) {
 					visit(target);
@@ -109,29 +101,21 @@ test('Terminal and Tasks domain service identifiers have one owner', () => {
 	const declarations = new Map(
 		[...owners.keys()].map(name => [
 			name,
-			{ identifiers: [] as string[], contracts: [] as string[], reexports: [] as string[] },
+			{
+				identifiers: [] as string[],
+				contracts: [] as string[],
+				reexports: [] as string[],
+			},
 		]),
 	);
 	for (const file of productionTypeScriptFiles(sourceRoot)) {
-		const source = ts.createSourceFile(
-			file,
-			readFileSync(file, 'utf8'),
-			ts.ScriptTarget.Latest,
-			true,
-			ts.ScriptKind.TS,
-		);
+		const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 		source.forEachChild(node => {
 			if (ts.isInterfaceDeclaration(node)) declarations.get(node.name.text)?.contracts.push(sourceName(file));
 			if (ts.isExportDeclaration(node) && node.exportClause && ts.isNamedExports(node.exportClause)) {
-				for (const exported of node.exportClause.elements)
-					declarations.get(exported.name.text)?.reexports.push(sourceName(file));
+				for (const exported of node.exportClause.elements) declarations.get(exported.name.text)?.reexports.push(sourceName(file));
 			}
-			if (
-				ts.isExportDeclaration(node) &&
-				!node.exportClause &&
-				node.moduleSpecifier &&
-				ts.isStringLiteral(node.moduleSpecifier)
-			) {
+			if (ts.isExportDeclaration(node) && !node.exportClause && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
 				const target = resolve(dirname(file), node.moduleSpecifier.text.replace(/\.js$/u, '.ts'));
 				for (const [name, owner] of owners) {
 					if (target === join(sourceRoot, owner)) declarations.get(name)!.reexports.push(sourceName(file));
@@ -139,13 +123,11 @@ test('Terminal and Tasks domain service identifiers have one owner', () => {
 			}
 			if (!ts.isVariableStatement(node)) return;
 			for (const declaration of node.declarationList.declarations) {
-				if (ts.isIdentifier(declaration.name))
-					declarations.get(declaration.name.text)?.identifiers.push(sourceName(file));
+				if (ts.isIdentifier(declaration.name)) declarations.get(declaration.name.text)?.identifiers.push(sourceName(file));
 			}
 		});
 	}
-	for (const [name, owner] of owners)
-		assert.deepEqual(declarations.get(name), { identifiers: [owner], contracts: [owner], reexports: [] }, name);
+	for (const [name, owner] of owners) assert.deepEqual(declarations.get(name), { identifiers: [owner], contracts: [owner], reexports: [] }, name);
 });
 
 test('Workbench production imports do not depend on Sessions', () => {
@@ -191,21 +173,14 @@ test('Frontend common service contracts do not import browser implementations', 
 	const workbenchRoot = join(sourceRoot, 'workbench');
 	const sessionsRoot = join(sourceRoot, 'sessions');
 	const platformRoot = join(sourceRoot, 'platform');
-	const candidates = [
-		...productionTypeScriptFiles(join(sessionsRoot, 'services')),
-		...productionTypeScriptFiles(join(workbenchRoot, 'services')),
-	].filter(file => /services[/\\][^/\\]+[/\\]common[/\\]/u.test(file));
+	const candidates = [...productionTypeScriptFiles(join(sessionsRoot, 'services')), ...productionTypeScriptFiles(join(workbenchRoot, 'services'))].filter(file =>
+		/services[/\\][^/\\]+[/\\]common[/\\]/u.test(file),
+	);
 	candidates.push(join(workbenchRoot, 'contrib/debug/common/debug.ts'));
 	candidates.push(...taskContracts);
 	const violations = candidates.flatMap(file =>
 		localImports(file)
-			.filter(
-				target =>
-					(target.startsWith(sessionsRoot) ||
-						target.startsWith(workbenchRoot) ||
-						target.startsWith(platformRoot)) &&
-					target.includes(`${sep}browser${sep}`),
-			)
+			.filter(target => (target.startsWith(sessionsRoot) || target.startsWith(workbenchRoot) || target.startsWith(platformRoot)) && target.includes(`${sep}browser${sep}`))
 			.map(target => `${sourceName(file)} -> ${sourceName(target)}`),
 	);
 	assert.deepEqual(violations, []);
@@ -215,29 +190,20 @@ test('Workbench contributions consume frontend services rather than Host aggrega
 	const violations: string[] = [];
 	for (const file of productionTypeScriptFiles(join(sourceRoot, 'workbench/contrib'))) {
 		const source = readFileSync(file, 'utf8');
-		if (/rendererHost|platform\/renderer\/common\/rendererHost|generated\/app-server\/types/u.test(source))
-			violations.push(sourceName(file));
+		if (/rendererHost|platform\/renderer\/common\/rendererHost|generated\/app-server\/types/u.test(source)) violations.push(sourceName(file));
 	}
 	assert.deepEqual(violations, []);
 });
 
 test('Frontend common service contracts own their domain types', () => {
 	const candidates = [
-		...productionTypeScriptFiles(join(sourceRoot, 'sessions/services')).filter(file =>
-			/services[/\\][^/\\]+[/\\]common[/\\]/u.test(file),
-		),
-		...productionTypeScriptFiles(join(sourceRoot, 'workbench/services')).filter(file =>
-			/services[/\\][^/\\]+[/\\]common[/\\]/u.test(file),
-		),
-		...productionTypeScriptFiles(join(sourceRoot, 'platform')).filter(file =>
-			/common[/\\][^/\\]*Service\.ts$/u.test(file),
-		),
+		...productionTypeScriptFiles(join(sourceRoot, 'sessions/services')).filter(file => /services[/\\][^/\\]+[/\\]common[/\\]/u.test(file)),
+		...productionTypeScriptFiles(join(sourceRoot, 'workbench/services')).filter(file => /services[/\\][^/\\]+[/\\]common[/\\]/u.test(file)),
+		...productionTypeScriptFiles(join(sourceRoot, 'platform')).filter(file => /common[/\\][^/\\]*Service\.ts$/u.test(file)),
 		join(sourceRoot, 'workbench/contrib/debug/common/debug.ts'),
 		...taskContracts,
 	];
-	const violations = candidates
-		.filter(file => /generated\/app-server\/types/u.test(readFileSync(file, 'utf8')))
-		.map(sourceName);
+	const violations = candidates.filter(file => /generated\/app-server\/types/u.test(readFileSync(file, 'utf8'))).map(sourceName);
 	assert.deepEqual(violations, []);
 });
 
@@ -269,11 +235,7 @@ test('Layer boundary scanning distinguishes erased type references from runtime 
 		['void import("./tasks.js");', false],
 	];
 	for (const [source, typeOnly] of cases) {
-		assert.deepEqual(
-			localImportEdges(join(sourceRoot, 'entry.ts'), source),
-			[{ target: join(sourceRoot, 'tasks.ts'), typeOnly }],
-			source,
-		);
+		assert.deepEqual(localImportEdges(join(sourceRoot, 'entry.ts'), source), [{ target: join(sourceRoot, 'tasks.ts'), typeOnly }], source);
 	}
 });
 
@@ -321,10 +283,7 @@ function localImportEdges(file: string, source = readFileSync(file, 'utf8')): { 
 			} else if (ts.isExportDeclaration(node)) {
 				typeOnly =
 					node.isTypeOnly ||
-					(!!node.exportClause &&
-						ts.isNamedExports(node.exportClause) &&
-						node.exportClause.elements.length > 0 &&
-						node.exportClause.elements.every(element => element.isTypeOnly));
+					(!!node.exportClause && ts.isNamedExports(node.exportClause) && node.exportClause.elements.length > 0 && node.exportClause.elements.every(element => element.isTypeOnly));
 			}
 			targets.push({ target: resolve(dirname(file), module.text.replace(/\.js$/u, '.ts')), typeOnly });
 		}
@@ -346,29 +305,17 @@ test('Design editor stays within its Sessions contribution and keeps document co
 	const violations: string[] = [];
 	for (const file of productionTypeScriptFiles(commonRoot)) {
 		for (const target of localImports(file)) {
-			if (
-				target.includes(`${sep}browser${sep}`) ||
-				target.startsWith(join(sourceRoot, 'workbench')) ||
-				target.startsWith(join(sourceRoot, 'editor'))
-			) {
+			if (target.includes(`${sep}browser${sep}`) || target.startsWith(join(sourceRoot, 'workbench')) || target.startsWith(join(sourceRoot, 'editor'))) {
 				violations.push(`${sourceName(file)} -> ${sourceName(target)}`);
 			}
-			if (
-				file.startsWith(`${coreRoot}${sep}`) &&
-				target.startsWith(designRoot) &&
-				!target.startsWith(`${coreRoot}${sep}`)
-			) {
+			if (file.startsWith(`${coreRoot}${sep}`) && target.startsWith(designRoot) && !target.startsWith(`${coreRoot}${sep}`)) {
 				violations.push(`${sourceName(file)} -> ${sourceName(target)}`);
 			}
 		}
 	}
 	const widget = join(designRoot, 'browser/widget/designEditorWidget.ts');
 	for (const target of localImports(widget)) {
-		if (
-			target.startsWith(join(sourceRoot, 'sessions')) &&
-			!target.startsWith(`${designRoot}${sep}`) &&
-			!target.startsWith(`${canvasRoot}${sep}`)
-		) {
+		if (target.startsWith(join(sourceRoot, 'sessions')) && !target.startsWith(`${designRoot}${sep}`) && !target.startsWith(`${canvasRoot}${sep}`)) {
 			violations.push(`${sourceName(widget)} -> ${sourceName(target)}`);
 		}
 	}
@@ -411,15 +358,13 @@ test("Creator host consumes mode contracts and modes do not import each other's 
 	const violations: string[] = [];
 	for (const file of [join(root, 'browser/creatorPage.ts'), join(root, 'browser/creatorWorkspace.ts')]) {
 		for (const target of localImports(file)) {
-			if (roots.some(modeRoot => target.startsWith(modeRoot + sep)))
-				violations.push(sourceName(file) + ' -> ' + sourceName(target));
+			if (roots.some(modeRoot => target.startsWith(modeRoot + sep))) violations.push(sourceName(file) + ' -> ' + sourceName(target));
 		}
 	}
 	for (const modeRoot of roots) {
 		for (const file of productionTypeScriptFiles(modeRoot)) {
 			for (const target of localImports(file)) {
-				if (roots.some(other => other !== modeRoot && target.startsWith(other + sep)))
-					violations.push(sourceName(file) + ' -> ' + sourceName(target));
+				if (roots.some(other => other !== modeRoot && target.startsWith(other + sep))) violations.push(sourceName(file) + ' -> ' + sourceName(target));
 			}
 		}
 	}

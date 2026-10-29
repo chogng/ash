@@ -1,7 +1,4 @@
-import {
-	IQuickInputService,
-	type IQuickInputService as QuickInputService,
-} from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickInputService as QuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
@@ -68,9 +65,7 @@ test('desktop Open File returns the path selected by its window', async () => {
 	} as unknown as INativeHostApi);
 	const service = services.createInstance(FileDialogService);
 
-	assert.deepEqual(await service.showOpenDialog({ canSelectFiles: true, canSelectFolders: false }), [
-		URI.file('C:\\Users\\test\\paper.md'),
-	]);
+	assert.deepEqual(await service.showOpenDialog({ canSelectFiles: true, canSelectFolders: false }), [URI.file('C:\\Users\\test\\paper.md')]);
 });
 
 test('desktop open and save dialogs pass VS Code file options through to the window', async () => {
@@ -104,10 +99,7 @@ test('desktop open and save dialogs pass VS Code file options through to the win
 		}),
 		[URI.file('C:\\work\\one.md'), URI.file('C:\\work\\two.md')],
 	);
-	assert.deepEqual(
-		await service.showSaveDialog({ title: 'Export', saveLabel: 'Write', defaultUri: report, filters }),
-		URI.file('C:\\work\\report.md'),
-	);
+	assert.deepEqual(await service.showSaveDialog({ title: 'Export', saveLabel: 'Write', defaultUri: report, filters }), URI.file('C:\\work\\report.md'));
 	assert.deepEqual(calls, [
 		{
 			properties: ['openFile', 'multiSelections'],
@@ -118,10 +110,7 @@ test('desktop open and save dialogs pass VS Code file options through to the win
 		},
 		{ defaultPath: report.fsPath, title: 'Export', buttonLabel: 'Write', filters },
 	]);
-	await assert.rejects(
-		service.showOpenDialog({ canSelectFiles: false, canSelectFolders: false }),
-		/must allow files or folders/,
-	);
+	await assert.rejects(service.showOpenDialog({ canSelectFiles: false, canSelectFolders: false }), /must allow files or folders/);
 	await assert.rejects(service.showSaveDialog({ availableFileSystems: ['other'] }), /file scheme only/);
 });
 
@@ -173,12 +162,7 @@ for (const locale of ['en', 'zh-CN'])
 			services.registerInstance(IQuickInputService, {
 				input: async options => {
 					assert.equal(options.value, '/remote/client');
-					assert.equal(
-						await options.validateInput?.('relative'),
-						locale === 'en'
-							? 'Enter an absolute folder path on the current remote host.'
-							: '输入当前远端主机上的绝对文件夹路径。',
-					);
+					assert.equal(await options.validateInput?.('relative'), locale === 'en' ? 'Enter an absolute folder path on the current remote host.' : '输入当前远端主机上的绝对文件夹路径。');
 					assert.equal(await options.validateInput?.('/remote/server'), undefined);
 					return '/remote/server';
 				},

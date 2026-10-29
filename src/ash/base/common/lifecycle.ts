@@ -38,7 +38,10 @@ export interface IAsyncDisposable extends globalThis.AsyncDisposable {
 }
 
 /** Reusable cleanup handle for contracts that intentionally own no resource. */
-export const noneDisposable: IDisposable = Object.freeze({ dispose(): void {}, [Symbol.dispose](): void {} });
+export const noneDisposable: IDisposable = Object.freeze({
+	dispose(): void {},
+	[Symbol.dispose](): void {},
+});
 
 /** @internal */
 export type TrackableDisposable = globalThis.Disposable | globalThis.AsyncDisposable;
@@ -173,11 +176,7 @@ export class DisposableTracker implements IDisposableTracker {
 		if (existingOwner && existingOwner !== owner) {
 			throw new Error(`${this.label(disposable)} already belongs to ${this.label(existingOwner)}`);
 		}
-		for (
-			let ancestor: TrackableDisposable | undefined = owner;
-			ancestor;
-			ancestor = this.records.get(ancestor)?.owner
-		) {
+		for (let ancestor: TrackableDisposable | undefined = owner; ancestor; ancestor = this.records.get(ancestor)?.owner) {
 			if (ancestor === disposable) {
 				throw new Error('Disposable ownership cannot contain a cycle');
 			}
@@ -224,9 +223,7 @@ export class DisposableTracker implements IDisposableTracker {
 	leaks(): readonly DisposableLeak[] {
 		// Recompute from current roots so detaching or transferring ownership restores reporting.
 		const singletonOwned = new Set<TrackableDisposable>();
-		const pending = [...this.records.values()]
-			.filter(record => record.isSingleton && !record.owner)
-			.map(record => record.disposable);
+		const pending = [...this.records.values()].filter(record => record.isSingleton && !record.owner).map(record => record.disposable);
 		while (pending.length > 0) {
 			const disposable = pending.pop()!;
 			if (singletonOwned.has(disposable)) {
@@ -331,7 +328,10 @@ export function toDisposable(fn: () => void): IDisposable {
 			markAsDisposed(resource);
 		}
 	};
-	const resource: IDisposable = { dispose, [Symbol.dispose]: dispose };
+	const resource: IDisposable = {
+		dispose,
+		[Symbol.dispose]: dispose,
+	};
 	trackDisposable(resource, 'toDisposable');
 	return resource;
 }
@@ -522,10 +522,7 @@ export class MutableDisposable<T extends IDisposable> extends AbstractDisposable
 }
 
 /** Owns disposable resources whose lifetime follows stable keys. */
-export class DisposableMap<K, V extends IDisposable = IDisposable>
-	extends AbstractDisposable
-	implements Iterable<[K, V]>
-{
+export class DisposableMap<K, V extends IDisposable = IDisposable> extends AbstractDisposable implements Iterable<[K, V]> {
 	private readonly resources = new Map<K, V>();
 
 	public get size(): number {
@@ -615,14 +612,10 @@ export function combinedDisposable(...resources: readonly IDisposable[]): IDispo
 
 export function dispose<T extends { dispose(): void }>(resource: T): T;
 export function dispose<T extends { dispose(): void }>(resource: T | undefined): T | undefined;
-export function dispose<T extends { dispose(): void }, TCollection extends Iterable<T>>(
-	resources: TCollection,
-): TCollection;
+export function dispose<T extends { dispose(): void }, TCollection extends Iterable<T>>(resources: TCollection): TCollection;
 export function dispose<T extends { dispose(): void }>(resources: Array<T>): Array<T>;
 export function dispose<T extends { dispose(): void }>(resources: ReadonlyArray<T>): ReadonlyArray<T>;
-export function dispose<T extends { dispose(): void }>(
-	value: T | Iterable<T> | undefined,
-): T | Iterable<T> | undefined {
+export function dispose<T extends { dispose(): void }>(value: T | Iterable<T> | undefined): T | Iterable<T> | undefined {
 	if (!value) {
 		return value;
 	}

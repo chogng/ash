@@ -35,19 +35,11 @@ export class KeybindingTestServices extends Disposable {
 		const disk = this._register(new DiskFileSystemProvider([URI.file(this.directory)]));
 		const provider = this._register(new FileUserDataProvider(disk, URI.file(this.directory)));
 		this.files = this._register(createTestFileService(provider, [Schemas.vscodeUserData]));
-		this.models = this._register(
-			this.uriIdentityServices.createInstance(
-				BrowserTextModelService,
-				getBrowserTextResourceStore(this._register(createTestTextFileService(this.files))),
-				{},
-			),
-		);
+		this.models = this._register(this.uriIdentityServices.createInstance(BrowserTextModelService, getBrowserTextResourceStore(this._register(createTestTextFileService(this.files))), {}));
 		this.services.registerInstance(IFileService, this.files);
 		this.services.registerInstance(IFileTextModelService, this.models);
 		this.services.registerInstance(IUserDataProfileService, this.profiles);
-		this.services.registerSingleton(IKeybindingEditingService, () =>
-			this.services.createInstance(KeybindingsEditingService),
-		);
+		this.services.registerSingleton(IKeybindingEditingService, () => this.services.createInstance(KeybindingsEditingService));
 	}
 
 	public async write(bindings: readonly IUserFriendlyKeybinding[]): Promise<void> {
@@ -59,8 +51,6 @@ export class KeybindingTestServices extends Disposable {
 	}
 
 	public async read(): Promise<readonly IUserFriendlyKeybinding[]> {
-		return parseUserKeybindings(
-			(await this.files.readFile(this.profiles.currentProfile.keybindingsResource)).content,
-		);
+		return parseUserKeybindings((await this.files.readFile(this.profiles.currentProfile.keybindingsResource)).content);
 	}
 }

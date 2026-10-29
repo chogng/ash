@@ -17,48 +17,28 @@ export interface LocalProfileMigrationConflict {
 }
 
 /** Copies legacy Desktop resources only when their canonical destination does not exist. */
-export async function migrateLegacyLocalProfile(
-	options: LegacyLocalProfileMigrationOptions,
-): Promise<LocalProfileMigrationConflict | undefined> {
+export async function migrateLegacyLocalProfile(options: LegacyLocalProfileMigrationOptions): Promise<LocalProfileMigrationConflict | undefined> {
 	await mkdir(options.profileRoot, { recursive: true });
 	const settingsPath = join(options.profileRoot, 'settings.json');
 	await copyFileIfMissing(join(options.legacyUserDataRoot, 'settings.json'), settingsPath);
 	if (!(await pathExists(settingsPath))) {
-		await copyFileIfMissing(
-			join(options.legacyUserDataRoot, 'configuration.json'),
-			join(options.profileRoot, 'configuration.json'),
-		);
+		await copyFileIfMissing(join(options.legacyUserDataRoot, 'configuration.json'), join(options.profileRoot, 'configuration.json'));
 	}
 	const conflict = await migrateLegacyConfiguration(options.profileRoot);
-	await copyFileIfMissing(
-		join(options.legacyUserDataRoot, 'keybindings.json'),
-		join(options.profileRoot, 'keybindings.json'),
-	);
-	await copyFileIfMissing(
-		join(options.legacyUserDataRoot, 'keyboard-layout.json'),
-		join(options.profileRoot, 'keyboard-layout.json'),
-	);
+	await copyFileIfMissing(join(options.legacyUserDataRoot, 'keybindings.json'), join(options.profileRoot, 'keybindings.json'));
+	await copyFileIfMissing(join(options.legacyUserDataRoot, 'keyboard-layout.json'), join(options.profileRoot, 'keyboard-layout.json'));
 	await copyDirectoryIfMissing(join(options.legacyUserDataRoot, 'themes'), join(options.profileRoot, 'themes'));
 	return conflict;
 }
 
 /** Moves the old configuration envelope into the profile's plain JSONC settings resource. */
-export async function migrateLegacyConfiguration(
-	profileRoot: string,
-): Promise<LocalProfileMigrationConflict | undefined> {
+export async function migrateLegacyConfiguration(profileRoot: string): Promise<LocalProfileMigrationConflict | undefined> {
 	const legacyPath = join(profileRoot, 'configuration.json');
 	const targetPath = join(profileRoot, 'settings.json');
 	let legacySource: string;
 	try {
 		const legacy = JSON.parse(await readFile(legacyPath, 'utf8')) as Record<string, unknown>;
-		if (
-			!legacy ||
-			typeof legacy !== 'object' ||
-			Array.isArray(legacy) ||
-			Object.keys(legacy).sort().join(',') !== 'source,version' ||
-			legacy.version !== 1 ||
-			typeof legacy.source !== 'string'
-		) {
+		if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy) || Object.keys(legacy).sort().join(',') !== 'source,version' || legacy.version !== 1 || typeof legacy.source !== 'string') {
 			throw new TypeError('Invalid legacy configuration document');
 		}
 		legacySource = validateSettingsSource(legacy.source);

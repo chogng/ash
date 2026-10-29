@@ -26,13 +26,10 @@ export interface ElectronLaunchResult extends ElectronApplicationLaunchResult {
 	readonly videoStartedAt?: number;
 }
 
-export type ElectronLaunchMilestone =
-	'electron-launch-resolved' | 'first-window' | 'trust-accepted' | 'workbench-ready';
+export type ElectronLaunchMilestone = 'electron-launch-resolved' | 'first-window' | 'trust-accepted' | 'workbench-ready';
 
 /** Owns an Electron process independently of whether its first window is Workbench or Agents. */
-export async function launchElectronApplication(
-	options: ElectronLaunchOptions,
-): Promise<ElectronApplicationLaunchResult> {
+export async function launchElectronApplication(options: ElectronLaunchOptions): Promise<ElectronApplicationLaunchResult> {
 	const configuration = resolveElectronConfiguration(options);
 	const startupDeadline = Date.now() + (options.startupTimeout ?? 30_000);
 	const resource = await registerRunResource(
@@ -55,9 +52,7 @@ export async function launchElectronApplication(
 		cwd: configuration.cwd,
 		env: configuration.env,
 		executablePath: configuration.executablePath,
-		recordVideo: options.recordVideo
-			? { dir: options.recordVideo.directory, size: options.recordVideo.size }
-			: undefined,
+		recordVideo: options.recordVideo ? { dir: options.recordVideo.directory, size: options.recordVideo.size } : undefined,
 		timeout: Math.max(1, startupDeadline - Date.now()),
 	});
 	const diagnostics = new WorkbenchDiagnostics(application.context());
@@ -65,10 +60,8 @@ export async function launchElectronApplication(
 		page.on('dialog', dialog => {
 			// Main coordinates product-document reloads. CDP's automatic dismissal
 			// otherwise races its will-prevent-unload decision and can force navigation.
-			if (dialog.type() === 'beforeunload' && /\/(?:workbench|sessions)\.html(?:[?#].*)?$/u.test(page.url()))
-				return;
-			if (getEventListeners(page as unknown as EventEmitter, 'dialog').length === 1)
-				void dialog.dismiss().catch(() => {});
+			if (dialog.type() === 'beforeunload' && /\/(?:workbench|sessions)\.html(?:[?#].*)?$/u.test(page.url())) return;
+			if (getEventListeners(page as unknown as EventEmitter, 'dialog').length === 1) void dialog.dismiss().catch(() => {});
 		});
 	};
 	for (const page of application.context().pages()) observeDialogs(page);
@@ -80,9 +73,7 @@ export async function launchElectronApplication(
 	const shutdown = (kind: 'quit' | 'destroy'): Promise<void> =>
 		(closing ??= (async () => {
 			const exited =
-				electronProcess.exitCode !== null || electronProcess.signalCode !== null
-					? Promise.resolve()
-					: new Promise<void>(resolveExit => electronProcess.once('exit', () => resolveExit()));
+				electronProcess.exitCode !== null || electronProcess.signalCode !== null ? Promise.resolve() : new Promise<void>(resolveExit => electronProcess.once('exit', () => resolveExit()));
 			let termination: Promise<void> | undefined;
 			const shutdownTimer = setTimeout(() => {
 				termination = terminateElectronProcess(electronProcess);
@@ -90,11 +81,7 @@ export async function launchElectronApplication(
 			try {
 				try {
 					// End the renderer before stopping its daemon, so it cannot reconnect.
-					if (
-						kind === 'destroy' &&
-						electronProcess.exitCode === null &&
-						electronProcess.signalCode === null
-					) {
+					if (kind === 'destroy' && electronProcess.exitCode === null && electronProcess.signalCode === null) {
 						try {
 							await application.evaluate(({ app }) => {
 								// Let Electron own forced window teardown. Destroying windows first
@@ -106,17 +93,10 @@ export async function launchElectronApplication(
 							// Forced exit can close Main before its inspector sends the reply.
 							// Accept a confirmed clean exit or the fixture's deliberate force
 							// termination, never an unrelated process crash.
-							if (
-								!(error instanceof Error) ||
-								!error.message.includes('Target page, context or browser has been closed')
-							)
-								throw error;
+							if (!(error instanceof Error) || !error.message.includes('Target page, context or browser has been closed')) throw error;
 							await exited;
 							if (electronProcess.exitCode !== 0 && !termination) {
-								throw new Error(
-									`Fixture destruction observed an unexpected Main exit: code=${electronProcess.exitCode}; signal=${electronProcess.signalCode}`,
-									{ cause: error },
-								);
+								throw new Error(`Fixture destruction observed an unexpected Main exit: code=${electronProcess.exitCode}; signal=${electronProcess.signalCode}`, { cause: error });
 							}
 						}
 					}
@@ -136,10 +116,9 @@ export async function launchElectronApplication(
 							windowsHide: true,
 							timeout: 30_000,
 						}).catch(error => {
-							throw new Error(
-								`Test daemon shutdown failed: code=${error.code}; signal=${error.signal}; killed=${error.killed}; stdout=${error.stdout}; stderr=${error.stderr}`,
-								{ cause: error },
-							);
+							throw new Error(`Test daemon shutdown failed: code=${error.code}; signal=${error.signal}; killed=${error.killed}; stdout=${error.stdout}; stderr=${error.stderr}`, {
+								cause: error,
+							});
 						});
 					};
 					await Promise.all([
@@ -163,8 +142,7 @@ export async function launchElectronApplication(
 					clearTimeout(shutdownTimer);
 				}
 			}
-			if (termination && kind === 'quit')
-				throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated');
+			if (termination && kind === 'quit') throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated');
 			await resource.dispose();
 		})());
 	try {
@@ -187,10 +165,7 @@ export async function launchElectronApplication(
 }
 
 /** Launches Ash Desktop through Playwright's Electron adapter and waits for Workbench readiness. */
-export async function launchElectron(
-	options: ElectronLaunchOptions,
-	onMilestone?: (milestone: ElectronLaunchMilestone) => void,
-): Promise<ElectronLaunchResult> {
+export async function launchElectron(options: ElectronLaunchOptions, onMilestone?: (milestone: ElectronLaunchMilestone) => void): Promise<ElectronLaunchResult> {
 	const startupDeadline = Date.now() + (options.startupTimeout ?? 30_000);
 	const session = await launchElectronApplication(options);
 	const { application, process: electronProcess, diagnostics, close } = session;
@@ -209,9 +184,7 @@ export async function launchElectron(
 	const pendingRequests = new Set<Request>();
 	const failedRequests: string[] = [];
 	const start = async (): Promise<ElectronLaunchResult> => {
-		const page =
-			application.windows()[0] ??
-			(await application.waitForEvent('window', { timeout: Math.max(1, startupDeadline - Date.now()) }));
+		const page = application.windows()[0] ?? (await application.waitForEvent('window', { timeout: Math.max(1, startupDeadline - Date.now()) }));
 		// Cold Remote initialization can defer trust and Workbench UI past ordinary action deadlines.
 		page.setDefaultTimeout(Math.max(1, startupDeadline - Date.now()));
 		startupResources.add(toDisposable(() => page.setDefaultTimeout(30_000)));
@@ -244,17 +217,11 @@ export async function launchElectron(
 			}),
 		);
 		const ready = driver.workbench.waitForReady();
-		if (
-			options.appServerMode === 'required' &&
-			options.workspaceDirectory &&
-			options.workspacePermissions === 'development'
-		) {
+		if (options.appServerMode === 'required' && options.workspaceDirectory && options.workspacePermissions === 'development') {
 			const prompt = page.getByRole('dialog', { name: 'Ash' });
 			await Promise.race([ready, prompt.waitFor({ state: 'visible' })]);
 			if (await prompt.isVisible()) {
-				await prompt
-					.getByRole('button', { name: /^(?:Trust Folder(?: & Enable Features)?|信任文件夹)$/u })
-					.click();
+				await prompt.getByRole('button', { name: /^(?:Trust Folder(?: & Enable Features)?|信任文件夹)$/u }).click();
 				onMilestone?.('trust-accepted');
 			}
 		}
@@ -275,22 +242,12 @@ export async function launchElectron(
 				: undefined;
 		const text = page
 			? await beforeDeadline(
-					page.evaluate(() =>
-						[
-							document.body.innerText,
-							...Array.from(document.querySelectorAll('textarea'), field => field.value),
-						].join('\n'),
-					),
+					page.evaluate(() => [document.body.innerText, ...Array.from(document.querySelectorAll('textarea'), field => field.value)].join('\n')),
 					Date.now() + 1_000,
 					'Startup document diagnostics timed out',
 				).catch(error => String(error))
 			: 'No Electron window opened';
-		const details = [
-			...diagnostics.consoleErrors.slice(-8),
-			...diagnostics.pageErrors,
-			...failedRequests,
-			...[...pendingRequests].map(request => `Pending: ${request.url()}`),
-		].join('\n');
+		const details = [...diagnostics.consoleErrors.slice(-8), ...diagnostics.pageErrors, ...failedRequests, ...[...pendingRequests].map(request => `Pending: ${request.url()}`)].join('\n');
 		const bufferedError = electronProcess.stderr?.read();
 		if (bufferedError) {
 			onProcessError(Buffer.isBuffer(bufferedError) ? bufferedError : Buffer.from(String(bufferedError)));
@@ -301,10 +258,9 @@ export async function launchElectron(
 		} catch (closeError) {
 			processErrors = `${processErrors}\nCleanup: ${String(closeError)}`;
 		}
-		throw new Error(
-			`Electron startup failed${exitCode === null ? '' : ` (exit code ${exitCode})`}: ${String(error)}\n${text}\n${details}${processErrors ? `\n${processErrors}` : ''}`,
-			{ cause: error },
-		);
+		throw new Error(`Electron startup failed${exitCode === null ? '' : ` (exit code ${exitCode})`}: ${String(error)}\n${text}\n${details}${processErrors ? `\n${processErrors}` : ''}`, {
+			cause: error,
+		});
 	} finally {
 		startupResources.dispose();
 	}

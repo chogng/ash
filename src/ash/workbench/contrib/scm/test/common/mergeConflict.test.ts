@@ -15,15 +15,11 @@ test('merge conflicts preserve each choice and the exact result range', () => {
 		},
 	]);
 	assert.equal(hasMergeConflictMarkers(text), true);
-	assert.equal(
-		hasMergeConflictMarkers(text.slice(0, blocks[0].start) + blocks[0].incoming + text.slice(blocks[0].end)),
-		false,
-	);
+	assert.equal(hasMergeConflictMarkers(text.slice(0, blocks[0].start) + blocks[0].incoming + text.slice(blocks[0].end)), false);
 });
 
 test('merge conflicts parse independent blocks with CRLF line endings', () => {
-	const text =
-		'<<<<<<< HEAD\r\na\r\n=======\r\nb\r\n>>>>>>> topic\r\nkeep\r\n<<<<<<< HEAD\r\nc\r\n=======\r\nd\r\n>>>>>>> topic\r\n';
+	const text = '<<<<<<< HEAD\r\na\r\n=======\r\nb\r\n>>>>>>> topic\r\nkeep\r\n<<<<<<< HEAD\r\nc\r\n=======\r\nd\r\n>>>>>>> topic\r\n';
 	assert.deepEqual(
 		parseMergeConflictBlocks(text).map(block => [block.current, block.incoming]),
 		[

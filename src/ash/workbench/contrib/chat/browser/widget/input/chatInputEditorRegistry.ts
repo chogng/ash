@@ -147,11 +147,7 @@ class TextareaChatInputEditor extends Disposable implements IChatInputEditor {
 	}
 
 	setSelection(selection: ChatInputEditorSelection): void {
-		this.element.setSelectionRange(
-			Math.min(selection.anchor, selection.active),
-			Math.max(selection.anchor, selection.active),
-			selection.anchor > selection.active ? 'backward' : 'forward',
-		);
+		this.element.setSelectionRange(Math.min(selection.anchor, selection.active), Math.max(selection.anchor, selection.active), selection.anchor > selection.active ? 'backward' : 'forward');
 	}
 
 	isAtHistoryBoundary(direction: 'previous' | 'next'): boolean {

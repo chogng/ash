@@ -36,11 +36,7 @@ export function workspacesHistoryChannel(service: IWorkspacesService): IServerCh
 					if (!Array.isArray(arg)) {
 						throw new TypeError('Recent project removal requires URI paths');
 					}
-					return (await service.removeRecentlyOpened(
-						restoreRecentlyOpened({ workspaces: arg.map(folderUri => ({ folderUri })) }).workspaces.map(
-							recentWorkspaceUri,
-						),
-					)) as T;
+					return (await service.removeRecentlyOpened(restoreRecentlyOpened({ workspaces: arg.map(folderUri => ({ folderUri })) }).workspaces.map(recentWorkspaceUri))) as T;
 				case 'clearRecentlyOpened':
 					if (arg !== undefined) {
 						throw new TypeError('Recent projects clear takes no arguments');
@@ -90,9 +86,7 @@ export class WorkspacesHistoryMainService extends Disposable implements IWorkspa
 	}
 
 	public async removeRecentlyOpened(paths: readonly URI[]): Promise<void> {
-		const workspaces = this.recentlyOpened.workspaces.filter(
-			recent => !paths.some(path => extUriBiasedIgnorePathCase.isEqual(path, recentWorkspaceUri(recent))),
-		);
+		const workspaces = this.recentlyOpened.workspaces.filter(recent => !paths.some(path => extUriBiasedIgnorePathCase.isEqual(path, recentWorkspaceUri(recent))));
 		if (workspaces.length === this.recentlyOpened.workspaces.length) {
 			return;
 		}
@@ -125,24 +119,19 @@ export class WorkspacesHistoryMainService extends Disposable implements IWorkspa
 		];
 		const settings = app.getJumpListSettings();
 		const removed = this.recentlyOpened.workspaces.filter(recent =>
-			settings.removedItems.some(
-				item =>
-					item.args === windowsCommandLine([...launchArguments, ...this.getWorkspaceLaunchArguments(recent)]),
-			),
+			settings.removedItems.some(item => item.args === windowsCommandLine([...launchArguments, ...this.getWorkspaceLaunchArguments(recent)])),
 		);
 		// Explorer rejects a whole category if it contains an item the user removed.
 		if (removed.length > 0) await this.removeRecentlyOpened(removed.map(recentWorkspaceUri));
-		const items = this.recentlyOpened.workspaces
-			.slice(0, settings.minItems)
-			.map(recent => ({
-				type: 'task' as const,
-				program: executable,
-				args: windowsCommandLine([...launchArguments, ...this.getWorkspaceLaunchArguments(recent)]),
-				iconPath,
-				iconIndex: 0,
-				title: (recent.label ?? basename(recentWorkspaceUri(recent).fsPath)).slice(0, 255),
-				description: recentWorkspaceUri(recent).fsPath.slice(0, 255),
-			}));
+		const items = this.recentlyOpened.workspaces.slice(0, settings.minItems).map(recent => ({
+			type: 'task' as const,
+			program: executable,
+			args: windowsCommandLine([...launchArguments, ...this.getWorkspaceLaunchArguments(recent)]),
+			iconPath,
+			iconIndex: 0,
+			title: (recent.label ?? basename(recentWorkspaceUri(recent).fsPath)).slice(0, 255),
+			description: recentWorkspaceUri(recent).fsPath.slice(0, 255),
+		}));
 		if (items.length > 0) categories.push({ type: 'custom', name: options.recentProjectsTitle, items });
 		categories.push({ type: 'recent' });
 		if (this.isDisposed) return;
@@ -177,9 +166,7 @@ export class WorkspacesHistoryMainService extends Disposable implements IWorkspa
 	}
 
 	public getWorkspaceLaunchArguments(recent: IRecent): string[] {
-		return 'workspace' in recent
-			? ['--workspace', recent.workspace.configPath.fsPath]
-			: ['--folder-uri', recent.folderUri.toString()];
+		return 'workspace' in recent ? ['--workspace', recent.workspace.configPath.fsPath] : ['--folder-uri', recent.folderUri.toString()];
 	}
 
 	private async save(): Promise<void> {

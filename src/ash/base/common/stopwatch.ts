@@ -1,7 +1,4 @@
-const highResolutionNow =
-	typeof globalThis.performance?.now === 'function'
-		? globalThis.performance.now.bind(globalThis.performance)
-		: Date.now;
+const highResolutionNow = typeof globalThis.performance?.now === 'function' ? globalThis.performance.now.bind(globalThis.performance) : Date.now;
 
 export class StopWatch {
 	private startTime: number;

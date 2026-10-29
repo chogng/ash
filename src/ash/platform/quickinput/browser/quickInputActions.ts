@@ -4,26 +4,9 @@ import { isMacintosh } from '../../../base/common/platform.js';
 import { CommandsRegistry } from '../../commands/common/commands.js';
 import { ContextKeyExpr, type Context, type ContextKeyValue } from '../../contextkey/common/contextkey.js';
 import { KeybindingResolver, KeybindingResolveKind } from '../../keybinding/common/keybindingResolver.js';
-import {
-	KeybindingSource,
-	KeybindingsRegistry,
-	KeybindingWeight,
-} from '../../keybinding/common/keybindingsRegistry.js';
-import {
-	IQuickInputService,
-	QuickInputType,
-	QuickPickFocus,
-	type IKeyMods,
-	type IQuickInput,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../common/quickInput.js';
-import {
-	endOfQuickInputBoxContext,
-	inQuickInputContext,
-	quickInputFocusContext,
-	quickInputTypeContextKey,
-} from './quickInput.js';
+import { KeybindingSource, KeybindingsRegistry, KeybindingWeight } from '../../keybinding/common/keybindingsRegistry.js';
+import { IQuickInputService, QuickInputType, QuickPickFocus, type IKeyMods, type IQuickInput, type IQuickPick, type IQuickPickItem } from '../common/quickInput.js';
+import { endOfQuickInputBoxContext, inQuickInputContext, quickInputFocusContext, quickInputTypeContextKey } from './quickInput.js';
 
 interface QuickInputCommand {
 	readonly id: string;
@@ -60,9 +43,7 @@ function run(command: QuickInputCommand, input: IQuickInput | undefined, mods?: 
 }
 
 for (const command of commands) {
-	CommandsRegistry.register(command.id, (accessor, mods) =>
-		run(command, accessor.get(IQuickInputService).currentQuickInput, mods as IKeyMods | undefined),
-	);
+	CommandsRegistry.register(command.id, (accessor, mods) => run(command, accessor.get(IQuickInputService).currentQuickInput, mods as IKeyMods | undefined));
 	const when = ContextKeyExpr.and(
 		inQuickInputContext.isEqualTo(true),
 		command.anywhere ? undefined : quickInputFocusContext.isEqualTo(true),
@@ -70,12 +51,7 @@ for (const command of commands) {
 		command.endOnly ? endOfQuickInputBoxContext.isEqualTo(true) : undefined,
 	);
 	const bits = [KeyMod.CtrlCmd, KeyMod.WinCtrl, KeyMod.Alt, KeyMod.Shift];
-	const modifiers =
-		command.id === 'quickInput.accept'
-			? Array.from({ length: 16 }, (_, index) =>
-					bits.reduce((value, bit, offset) => value | (index & (1 << offset) ? bit : 0), 0),
-				)
-			: [0];
+	const modifiers = command.id === 'quickInput.accept' ? Array.from({ length: 16 }, (_, index) => bits.reduce((value, bit, offset) => value | (index & (1 << offset) ? bit : 0), 0)) : [0];
 	for (const modifier of modifiers) {
 		KeybindingsRegistry.registerKeybindingRule({
 			command: command.id,
@@ -105,14 +81,10 @@ export function dispatchQuickInputKeyDown(event: KeyboardEvent, input: IQuickInp
 		[inQuickInputContext.key, true],
 		[quickInputTypeContextKey.key, input.type],
 		[quickInputFocusContext.key, !target.closest('button, [role="tab"]')],
-		[
-			endOfQuickInputBoxContext.key,
-			!field || (field.selectionStart === field.selectionEnd && field.selectionEnd === field.value.length),
-		],
+		[endOfQuickInputBoxContext.key, !field || (field.selectionStart === field.selectionEnd && field.selectionEnd === field.value.length)],
 	]);
 	const context: Context = {
-		getValue: <T extends ContextKeyValue>(key: string): T | undefined =>
-			(values.has(key) ? values.get(key) : inherited?.getValue(key)) as T | undefined,
+		getValue: <T extends ContextKeyValue>(key: string): T | undefined => (values.has(key) ? values.get(key) : inherited?.getValue(key)) as T | undefined,
 	};
 	const result = resolver.resolve(context, [
 		{

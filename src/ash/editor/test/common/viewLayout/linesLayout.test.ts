@@ -45,7 +45,12 @@ test('whitespace batches preserve visual order, offsets, and width', () => {
 
 test('line changes keep custom heights and whitespace anchored to the line collection', () => {
 	const layout = new LinesLayout(5, 10, 0, 0, [
-		{ decorationId: 'tall', startLineNumber: 2, endLineNumber: 3, lineHeight: 20 },
+		{
+			decorationId: 'tall',
+			startLineNumber: 2,
+			endLineNumber: 3,
+			lineHeight: 20,
+		},
 	]);
 	let zone = '';
 	layout.changeWhitespace(accessor => {
@@ -104,9 +109,7 @@ test('viewport queries include intersecting lines and whitespace geometry', () =
 			completelyVisibleEndLineNumber: 2,
 		},
 	);
-	assert.deepEqual(layout.getWhitespaceViewportData(0, 45), [
-		{ id: zone, afterLineNumber: 2, verticalOffset: 20, height: 20 },
-	]);
+	assert.deepEqual(layout.getWhitespaceViewportData(0, 45), [{ id: zone, afterLineNumber: 2, verticalOffset: 20, height: 20 }]);
 	assert.deepEqual(layout.getWhitespaceAtVerticalOffset(39), {
 		id: zone,
 		afterLineNumber: 2,

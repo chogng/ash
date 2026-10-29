@@ -1,11 +1,6 @@
 import { roundDesignVectorCorners } from './designVectorCorners.js';
 import { cubicBezierPoint } from '../core/geometry.js';
-import {
-	designNetworkContours,
-	designNetworkNodes,
-	designNetworkFillContours,
-	designNetworkStrokeContours,
-} from './designVectorNetwork.js';
+import { designNetworkContours, designNetworkNodes, designNetworkFillContours, designNetworkStrokeContours } from './designVectorNetwork.js';
 import type { DesignPoint } from '../core/geometry.js';
 import type { DesignPathNode, DesignShape } from './document.js';
 
@@ -19,33 +14,19 @@ export type DesignPath = Extract<DesignShape, { kind: 'path' }>;
 
 /** The first contour retains the original file contract; subpaths contain only additional contours. */
 export function designPathContours(path: DesignPath): readonly DesignPathContour[] {
-	return path.network
-		? designNetworkContours(path.network)
-		: [{ nodes: path.nodes, closed: path.closed }, ...(path.subpaths ?? [])];
+	return path.network ? designNetworkContours(path.network) : [{ nodes: path.nodes, closed: path.closed }, ...(path.subpaths ?? [])];
 }
 export function designPathEditingContours(path: DesignPath): readonly DesignPathContour[] {
 	return path.network ? [{ nodes: designNetworkNodes(path.network), closed: false }] : designPathContours(path);
 }
 export function designPathFillContours(path: DesignPath): readonly DesignPathContour[] {
-	return roundDesignVectorCorners(
-		path.network
-			? designNetworkFillContours(path.network)
-			: designPathContours(path).filter(contour => contour.closed),
-		path.width,
-		path.height,
-		path.cornerSmoothing,
-	);
+	return roundDesignVectorCorners(path.network ? designNetworkFillContours(path.network) : designPathContours(path).filter(contour => contour.closed), path.width, path.height, path.cornerSmoothing);
 }
 const strokeContoursCache = new WeakMap<DesignPath, readonly DesignPathContour[]>();
 export function designPathStrokeContours(path: DesignPath): readonly DesignPathContour[] {
 	let contours = strokeContoursCache.get(path);
 	if (!contours) {
-		contours = roundDesignVectorCorners(
-			path.network ? designNetworkStrokeContours(path.network) : designPathContours(path),
-			path.width,
-			path.height,
-			path.cornerSmoothing,
-		);
+		contours = roundDesignVectorCorners(path.network ? designNetworkStrokeContours(path.network) : designPathContours(path), path.width, path.height, path.cornerSmoothing);
 		strokeContoursCache.set(path, contours);
 	}
 	return contours;
@@ -58,9 +39,7 @@ export function withDesignPathContours(path: DesignPath, contours: readonly Desi
 		fill,
 		nodes: contours[0]?.nodes ?? [],
 		closed: contours[0]?.closed ?? false,
-		subpaths: contours
-			.slice(1)
-			.map(contour => (fill !== path.fill && !contour.fill ? { ...contour, fill: path.fill } : contour)),
+		subpaths: contours.slice(1).map(contour => (fill !== path.fill && !contour.fill ? { ...contour, fill: path.fill } : contour)),
 	};
 }
 
@@ -83,13 +62,7 @@ export function fitDesignPathBounds(path: DesignPath): DesignPath {
 					C = q - p,
 					discriminant = B * B - 4 * A * C;
 				const roots =
-					Math.abs(A) < 1e-12
-						? Math.abs(B) < 1e-12
-							? []
-							: [-C / B]
-						: discriminant < 0
-							? []
-							: [(-B + Math.sqrt(discriminant)) / (2 * A), (-B - Math.sqrt(discriminant)) / (2 * A)];
+					Math.abs(A) < 1e-12 ? (Math.abs(B) < 1e-12 ? [] : [-C / B]) : discriminant < 0 ? [] : [(-B + Math.sqrt(discriminant)) / (2 * A), (-B - Math.sqrt(discriminant)) / (2 * A)];
 				for (const t of roots) {
 					if (t > 0 && t < 1) {
 						points.push(cubicBezierPoint(a, a.outgoing, b.incoming, b, t));
@@ -137,10 +110,7 @@ export function fitDesignPathBounds(path: DesignPath): DesignPath {
 		})),
 	);
 }
-export function designPathData(
-	contours: readonly DesignPathContour[],
-	frame: { x: number; y: number; width: number; height: number },
-): string {
+export function designPathData(contours: readonly DesignPathContour[], frame: { x: number; y: number; width: number; height: number }): string {
 	const point = (p: DesignPoint): string => `${frame.x + p.x * frame.width} ${frame.y + p.y * frame.height}`;
 	return contours
 		.filter(contour => contour.nodes.length)
@@ -156,12 +126,7 @@ export function designPathData(
 		.join(' ');
 }
 export function isDesignVector(shape: DesignShape): boolean {
-	return (
-		shape.kind === 'rectangle' ||
-		shape.kind === 'ellipse' ||
-		shape.kind === 'path' ||
-		(shape.kind === 'group' && shape.children.every(isDesignVector))
-	);
+	return shape.kind === 'rectangle' || shape.kind === 'ellipse' || shape.kind === 'path' || (shape.kind === 'group' && shape.children.every(isDesignVector));
 }
 /** Basic shapes become cubic contours without sampling their curves. */
 export function designShapeContours(shape: DesignShape): readonly DesignPathContour[] {
@@ -190,14 +155,7 @@ export function designShapeContours(shape: DesignShape): readonly DesignPathCont
 }
 
 /** Handles follow a moved anchor. Mirroring is evaluated in design pixels, not normalized fractions. */
-export function moveDesignPathNode(
-	node: DesignPathNode,
-	point: 'anchor' | 'incoming' | 'outgoing',
-	target: DesignPoint,
-	width: number,
-	height: number,
-	independent = false,
-): DesignPathNode {
+export function moveDesignPathNode(node: DesignPathNode, point: 'anchor' | 'incoming' | 'outgoing', target: DesignPoint, width: number, height: number, independent = false): DesignPathNode {
 	if (point === 'anchor') {
 		const dx = target.x - node.x,
 			dy = target.y - node.y;
@@ -216,12 +174,7 @@ export function moveDesignPathNode(
 	const dx = (target.x - node.x) * width,
 		dy = (target.y - node.y) * height;
 	const length = Math.hypot(dx, dy);
-	const ratio =
-		mode === 'angle-length'
-			? 1
-			: length
-				? Math.hypot((node[opposite].x - node.x) * width, (node[opposite].y - node.y) * height) / length
-				: 0;
+	const ratio = mode === 'angle-length' ? 1 : length ? Math.hypot((node[opposite].x - node.x) * width, (node[opposite].y - node.y) * height) / length : 0;
 	return {
 		...node,
 		[point]: target,
@@ -255,11 +208,7 @@ export function splitDesignPathSegment(contour: DesignPathContour, index: number
 }
 
 /** Locate a cubic for point insertion; splitting still uses the exact curve, never the hit-test samples. */
-export function nearestDesignPathSegment(
-	path: DesignPath,
-	point: DesignPoint,
-	tolerance: number,
-): { contour: number; segment: number; t: number } | undefined {
+export function nearestDesignPathSegment(path: DesignPath, point: DesignPoint, tolerance: number): { contour: number; segment: number; t: number } | undefined {
 	let best: { contour: number; segment: number; t: number } | undefined,
 		distance = tolerance;
 	for (const [contour, value] of designPathContours(path).entries()) {
@@ -269,12 +218,8 @@ export function nearestDesignPathSegment(
 			const at = (t: number) => {
 				const u = 1 - t;
 				return {
-					x:
-						(u ** 3 * a.x + 3 * u * u * t * a.outgoing.x + 3 * u * t * t * b.incoming.x + t ** 3 * b.x) *
-						path.width,
-					y:
-						(u ** 3 * a.y + 3 * u * u * t * a.outgoing.y + 3 * u * t * t * b.incoming.y + t ** 3 * b.y) *
-						path.height,
+					x: (u ** 3 * a.x + 3 * u * u * t * a.outgoing.x + 3 * u * t * t * b.incoming.x + t ** 3 * b.x) * path.width,
+					y: (u ** 3 * a.y + 3 * u * u * t * a.outgoing.y + 3 * u * t * t * b.incoming.y + t ** 3 * b.y) * path.height,
 				};
 			};
 			const gap = (t: number) => {

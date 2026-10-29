@@ -7,23 +7,14 @@ import { Position } from '../../common/core/position.js';
 import { Range } from '../../common/core/range.js';
 import { Selection } from '../../common/core/selection.js';
 import { TextChange, TextModelChangeReason } from '../../common/core/textChange.js';
-import {
-	EndOfLinePreference,
-	EndOfLineSequence,
-	MinimapPosition,
-	OverviewRulerLane,
-	PositionAffinity,
-	TrackedRangeStickiness,
-	isITextSnapshot,
-} from '../../common/model.js';
+import { EndOfLinePreference, EndOfLineSequence, MinimapPosition, OverviewRulerLane, PositionAffinity, TrackedRangeStickiness, isITextSnapshot } from '../../common/model.js';
 import { TextModel } from '../../common/model/textModel.js';
 import { createTestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent } from '../../common/languages.js';
 import type { IViewModel } from '../../common/viewModel.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
-const range = (startLine: number, startColumn: number, endLine: number, endColumn: number): Range =>
-	Range.fromPositions(position(startLine, startColumn), position(endLine, endColumn));
+const range = (startLine: number, startColumn: number, endLine: number, endColumn: number): Range => Range.fromPositions(position(startLine, startColumn), position(endLine, endColumn));
 
 test('TextModel normalizes line endings and maps UTF-16 positions', () => {
 	using model = new TextModel('A😀\r\nbeta\rgamma\u2028');
@@ -88,12 +79,21 @@ test('TextModel validates surrogate boundaries before committing an edit batch',
 	);
 	assert.deepEqual(
 		{ text: model.getText(), version: model.version, eventCount: changes.length, canUndo: model.canUndo() },
-		{ text: 'a📚b', version: 1, eventCount: 0, canUndo: false },
+		{
+			text: 'a📚b',
+			version: 1,
+			eventCount: 0,
+			canUndo: false,
+		},
 	);
 	model.applyEdits([{ range: new Range(1, 2, 1, 3), text: '' }]);
 	assert.deepEqual(
 		{ text: model.getText(), version: model.version, eventCount: changes.length },
-		{ text: 'ab', version: 2, eventCount: 1 },
+		{
+			text: 'ab',
+			version: 2,
+			eventCount: 1,
+		},
 	);
 });
 
@@ -131,7 +131,11 @@ test('TextModel expands a cross-line UTF-16 edit to complete surrogate pairs', (
 	model.applyEdits([{ range: new Range(1, 3, 2, 3), text: 'Q\nR' }]);
 	assert.deepEqual(
 		{ text: model.getText(), version: model.version, events: events.length },
-		{ text: 'xQ\r\nRz', version: 2, events: 1 },
+		{
+			text: 'xQ\r\nRz',
+			version: 2,
+			events: 1,
+		},
 	);
 });
 
@@ -192,11 +196,27 @@ test('TextModel exposes the editor model reading contract', () => {
 test('TextModel owns word lookup at a model position', () => {
 	using model = new TextModel('alpha  beta.\ntail');
 
-	assert.deepEqual(model.getWordAtPosition(position(0, 2)), { word: 'alpha', startColumn: 1, endColumn: 6 });
-	assert.deepEqual(model.getWordAtPosition(position(0, 5)), { word: 'alpha', startColumn: 1, endColumn: 6 });
+	assert.deepEqual(model.getWordAtPosition(position(0, 2)), {
+		word: 'alpha',
+		startColumn: 1,
+		endColumn: 6,
+	});
+	assert.deepEqual(model.getWordAtPosition(position(0, 5)), {
+		word: 'alpha',
+		startColumn: 1,
+		endColumn: 6,
+	});
 	assert.equal(model.getWordAtPosition(position(0, 6)), null);
-	assert.deepEqual(model.getWordAtPosition(position(0, 7)), { word: 'beta', startColumn: 8, endColumn: 12 });
-	assert.deepEqual(model.getWordAtPosition(position(1, 4)), { word: 'tail', startColumn: 1, endColumn: 5 });
+	assert.deepEqual(model.getWordAtPosition(position(0, 7)), {
+		word: 'beta',
+		startColumn: 8,
+		endColumn: 12,
+	});
+	assert.deepEqual(model.getWordAtPosition(position(1, 4)), {
+		word: 'tail',
+		startColumn: 1,
+		endColumn: 5,
+	});
 });
 
 test('TextModel delegates unusual-line-terminator state to ITextBuffer', () => {
@@ -235,8 +255,7 @@ test('TextModel separates the editor snapshot iterator from versioned language s
 	assert.equal(versionedSnapshot.getText(), 'x'.repeat(70_000));
 	model.dispose();
 	const retainedChunks: string[] = [];
-	for (let chunk = retainedSnapshot.read(); chunk !== null; chunk = retainedSnapshot.read())
-		retainedChunks.push(chunk);
+	for (let chunk = retainedSnapshot.read(); chunk !== null; chunk = retainedSnapshot.read()) retainedChunks.push(chunk);
 	assert.equal(retainedChunks.join(''), `\uFEFF${'x'.repeat(70_000)}`);
 	assert.equal(retainedSnapshot.read(), null);
 	assert.deepEqual(
@@ -279,7 +298,11 @@ test('TextModel setValue advances the version and flushes even when the text is 
 		readonly changes: number;
 	}> = [];
 	using listener = model.onDidChangeContent(change =>
-		events.push({ version: change.version, reason: change.reason, changes: change.changes.length }),
+		events.push({
+			version: change.version,
+			reason: change.reason,
+			changes: change.changes.length,
+		}),
 	);
 
 	model.setValue('same');
@@ -450,7 +473,12 @@ test('TextModel applies unordered edits against one atomic snapshot', () => {
 	]);
 
 	assert.deepEqual(
-		{ text: model.getText(), version: model.version, change, eventCount: events.length },
+		{
+			text: model.getText(),
+			version: model.version,
+			change,
+			eventCount: events.length,
+		},
 		{
 			text: 'alpha!\nB\nB2\nG',
 			version: 2,
@@ -463,9 +491,24 @@ test('TextModel applies unordered edits against one atomic snapshot', () => {
 				detailedReasons: [],
 				resultingSelection: null,
 				changes: [
-					{ range: range(0, 5, 0, 5), rangeOffset: 5, rangeLength: 0, text: '!' },
-					{ range: range(1, 0, 1, 4), rangeOffset: 6, rangeLength: 4, text: 'B\nB2' },
-					{ range: range(2, 0, 2, 5), rangeOffset: 11, rangeLength: 5, text: 'G' },
+					{
+						range: range(0, 5, 0, 5),
+						rangeOffset: 5,
+						rangeLength: 0,
+						text: '!',
+					},
+					{
+						range: range(1, 0, 1, 4),
+						rangeOffset: 6,
+						rangeLength: 4,
+						text: 'B\nB2',
+					},
+					{
+						range: range(2, 0, 2, 5),
+						rangeOffset: 11,
+						rangeLength: 5,
+						text: 'G',
+					},
 				],
 			},
 			eventCount: 1,
@@ -493,8 +536,16 @@ test('TextModel rejects overlapping edits without mutating', () => {
 		/must not overlap/,
 	);
 	assert.deepEqual(
-		{ text: model.getText(), version: model.version, canUndo: model.canUndo() },
-		{ text: 'abcdef', version: 1, canUndo: false },
+		{
+			text: model.getText(),
+			version: model.version,
+			canUndo: model.canUndo(),
+		},
+		{
+			text: 'abcdef',
+			version: 1,
+			canUndo: false,
+		},
 	);
 });
 
@@ -547,12 +598,20 @@ test('TextModel alternative version follows document states through undo and red
 	model.undo();
 	assert.deepEqual(
 		{ text: model.getValue(), version: model.getVersionId(), alternativeVersion: model.getAlternativeVersionId() },
-		{ text: 'ab', version: 4, alternativeVersion: firstEditedAlternativeVersion },
+		{
+			text: 'ab',
+			version: 4,
+			alternativeVersion: firstEditedAlternativeVersion,
+		},
 	);
 	model.undo();
 	assert.deepEqual(
 		{ text: model.getValue(), version: model.getVersionId(), alternativeVersion: model.getAlternativeVersionId() },
-		{ text: 'a', version: 5, alternativeVersion: 1 },
+		{
+			text: 'a',
+			version: 5,
+			alternativeVersion: 1,
+		},
 	);
 	model.redo();
 	assert.equal(model.getAlternativeVersionId(), firstEditedAlternativeVersion);
@@ -567,7 +626,10 @@ test('TextModel applies external undo and redo payloads without taking history o
 	using model = new TextModel('abc');
 	const events: Array<{ reason: TextModelChangeReason; selection: Selection[] | null }> = [];
 	using listener = model.onDidChangeContent(change =>
-		events.push({ reason: change.reason, selection: change.resultingSelection }),
+		events.push({
+			reason: change.reason,
+			selection: change.resultingSelection,
+		}),
 	);
 	const changes = [new TextChange(1, 'b', 1, 'XY')];
 	const redoSelection = [new Selection(1, 3, 1, 3)];
@@ -595,8 +657,18 @@ test('TextModel clears redo on a new edit and ignores exact no-ops', () => {
 	model.applyOperations([{ range: range(0, 1, 0, 2), text: 'B' }]);
 
 	assert.deepEqual(
-		{ text: model.getText(), version: model.version, canRedo: model.canRedo(), eventCount },
-		{ text: 'aBc', version: 4, canRedo: false, eventCount: 3 },
+		{
+			text: model.getText(),
+			version: model.version,
+			canRedo: model.canRedo(),
+			eventCount,
+		},
+		{
+			text: 'aBc',
+			version: 4,
+			canRedo: false,
+			eventCount: 3,
+		},
 	);
 });
 
@@ -620,10 +692,7 @@ test('TextModel owns attached editor count and visible-line handles', () => {
 	assert.equal(model.getAttachedEditorCount(), 2);
 	assert.equal(attachedChanges, 1);
 	first.setVisibleLines([{ startLineNumber: 1, endLineNumber: 2 }], true);
-	assert.throws(
-		() => first.setVisibleLines([{ startLineNumber: 0, endLineNumber: 1 }], false),
-		/valid model line ranges/,
-	);
+	assert.throws(() => first.setVisibleLines([{ startLineNumber: 0, endLineNumber: 1 }], false), /valid model line ranges/);
 	model.onBeforeDetached(first);
 	assert.equal(attachedChanges, 1);
 	model.onBeforeDetached(second);
@@ -682,7 +751,12 @@ test('TextModel owns decoration identifiers, ranges, and lane invalidation', () 
 	const previousId = ids[0];
 	ids = model.deltaDecorations(
 		ids,
-		[{ range: new Range(1, 1, 1, 2), options: { description: 'cursor-auto-close' } }],
+		[
+			{
+				range: new Range(1, 1, 1, 2),
+				options: { description: 'cursor-auto-close' },
+			},
+		],
 		7,
 	);
 	assert.equal(ids[0], previousId);
@@ -694,7 +768,15 @@ test('TextModel owns decoration identifiers, ranges, and lane invalidation', () 
 
 test('TextModel rejects an invalid decoration delta atomically', () => {
 	using model = new TextModel('abc');
-	const ids = model.deltaDecorations([], [{ range: new Range(1, 1, 1, 2), options: { description: 'existing' } }]);
+	const ids = model.deltaDecorations(
+		[],
+		[
+			{
+				range: new Range(1, 1, 1, 2),
+				options: { description: 'existing' },
+			},
+		],
+	);
 	assert.throws(
 		() =>
 			model.deltaDecorations(ids, [
@@ -739,7 +821,12 @@ test('TextModel changes one decoration owner atomically through an accessor', ()
 
 	const other = model.deltaDecorations(
 		[],
-		[{ range: new Range(3, 1, 3, 2), options: { description: 'other-owner' } }],
+		[
+			{
+				range: new Range(3, 1, 3, 2),
+				options: { description: 'other-owner' },
+			},
+		],
 		8,
 	)[0]!;
 	model.removeAllDecorationsWithOwnerId(7);
@@ -752,7 +839,12 @@ test('TextModel rolls back accessor changes when the callback fails', () => {
 	using model = new TextModel('alpha');
 	const [id] = model.deltaDecorations(
 		[],
-		[{ range: new Range(1, 1, 1, 2), options: { description: 'original' } }],
+		[
+			{
+				range: new Range(1, 1, 1, 2),
+				options: { description: 'original' },
+			},
+		],
 		4,
 	);
 	let changeCount = 0;
@@ -778,20 +870,9 @@ test('TextModel rolls back accessor changes when the callback fails', () => {
 
 test('injected text queries avoid cosmetic bracket work and retain tracked owner ranges', () => {
 	using model = new TextModel('first\nsecond');
-	const [injected] = model.deltaDecorations(
-		[],
-		[{ range: new Range(1, 2, 1, 2), options: { description: 'injected', before: { content: '中文' } } }],
-		7,
-	);
-	model.deltaDecorations(
-		[],
-		[{ range: new Range(2, 2, 2, 2), options: { description: 'other owner', after: { content: 'other' } } }],
-		8,
-	);
-	model.deltaDecorations(
-		[],
-		[{ range: new Range(1, 1, 1, 1), options: { description: 'global', before: { content: 'global' } } }],
-	);
+	const [injected] = model.deltaDecorations([], [{ range: new Range(1, 2, 1, 2), options: { description: 'injected', before: { content: '中文' } } }], 7);
+	model.deltaDecorations([], [{ range: new Range(2, 2, 2, 2), options: { description: 'other owner', after: { content: 'other' } } }], 8);
+	model.deltaDecorations([], [{ range: new Range(1, 1, 1, 1), options: { description: 'global', before: { content: 'global' } } }]);
 	model.bracketPairs.getBracketsInRange = () => {
 		throw new Error('Injected text must not query bracket colorization');
 	};
@@ -805,10 +886,7 @@ test('injected text queries avoid cosmetic bracket work and retain tracked owner
 	);
 	assert.deepEqual(model.getLineInjectedText(2, 7), []);
 	model.applyEdits([{ range: new Range(1, 1, 1, 1), text: '\n' }]);
-	assert.equal(
-		model.getInjectedTextDecorations(7).find(decoration => decoration.id === injected)?.range.startLineNumber,
-		2,
-	);
+	assert.equal(model.getInjectedTextDecorations(7).find(decoration => decoration.id === injected)?.range.startLineNumber, 2);
 	assert.deepEqual(
 		model.getLineInjectedText(1, 7).map(text => text.options.content),
 		['global'],
@@ -824,15 +902,29 @@ test('TextModel exposes owner-filtered margin, injected text, and word-prefix qu
 	const [margin, injected, regular] = model.deltaDecorations(
 		[],
 		[
-			{ range: new Range(1, 1, 1, 2), options: { description: 'margin', glyphMarginClassName: 'fold-control' } },
-			{ range: new Range(1, 6, 1, 6), options: { description: 'injected', before: { content: '>' } } },
-			{ range: new Range(1, 7, 1, 11), options: { description: 'regular', className: 'mark' } },
+			{
+				range: new Range(1, 1, 1, 2),
+				options: { description: 'margin', glyphMarginClassName: 'fold-control' },
+			},
+			{
+				range: new Range(1, 6, 1, 6),
+				options: { description: 'injected', before: { content: '>' } },
+			},
+			{
+				range: new Range(1, 7, 1, 11),
+				options: { description: 'regular', className: 'mark' },
+			},
 		],
 		7,
 	);
 	const [otherInjected] = model.deltaDecorations(
 		[],
-		[{ range: new Range(1, 11, 1, 11), options: { description: 'other-injected', after: { content: '!' } } }],
+		[
+			{
+				range: new Range(1, 11, 1, 11),
+				options: { description: 'other-injected', after: { content: '!' } },
+			},
+		],
 		8,
 	);
 
@@ -849,8 +941,16 @@ test('TextModel exposes owner-filtered margin, injected text, and word-prefix qu
 		[injected, otherInjected],
 	);
 	assert.ok(!model.getAllMarginDecorations(7).some(decoration => decoration.id === regular));
-	assert.deepEqual(model.getWordUntilPosition(new Position(1, 4)), { word: 'alp', startColumn: 1, endColumn: 4 });
-	assert.deepEqual(model.getWordUntilPosition(new Position(2, 1)), { word: '', startColumn: 1, endColumn: 1 });
+	assert.deepEqual(model.getWordUntilPosition(new Position(1, 4)), {
+		word: 'alp',
+		startColumn: 1,
+		endColumn: 4,
+	});
+	assert.deepEqual(model.getWordUntilPosition(new Position(2, 1)), {
+		word: '',
+		startColumn: 1,
+		endColumn: 1,
+	});
 });
 
 test('TextModel owns view-model delivery and model-part events', () => {
@@ -863,15 +963,11 @@ test('TextModel owns view-model delivery and model-part events', () => {
 	let languageConfigurationChanges = 0;
 	using contentListener = model.onDidChangeContent(() => order.push('content'));
 	using lineHeightListener = model.onDidChangeLineHeight(event => {
-		lineHeights.push(
-			...event.changes.map(change => ({ line: change.lineNumber, height: change.lineHeightMultiplier })),
-		);
+		lineHeights.push(...event.changes.map(change => ({ line: change.lineNumber, height: change.lineHeightMultiplier })));
 	});
 	using fontListener = model.onDidChangeFont(event => fontLines.push(event.changes.map(change => change.lineNumber)));
 	using tokensListener = model.onDidChangeTokens(event => tokenRanges.push([...event.ranges]));
-	using languageConfigurationListener = model.onDidChangeLanguageConfiguration(
-		() => (languageConfigurationChanges += 1),
-	);
+	using languageConfigurationListener = model.onDidChangeLanguageConfiguration(() => (languageConfigurationChanges += 1));
 	const viewModel = {
 		onDidChangeContentOrInjectedText: () => order.push('view-update'),
 		emitContentChangeEvent: () => order.push('view-emit'),
@@ -935,8 +1031,16 @@ test('TextModel commits history before reentrant change listeners run', () => {
 	model.undo();
 
 	assert.deepEqual(
-		{ afterFirstUndo, afterSecondUndo: model.getText(), versions },
-		{ afterFirstUndo: 'Abc', afterSecondUndo: 'abc', versions: [2, 3, 4, 5] },
+		{
+			afterFirstUndo,
+			afterSecondUndo: model.getText(),
+			versions,
+		},
+		{
+			afterFirstUndo: 'Abc',
+			afterSecondUndo: 'abc',
+			versions: [2, 3, 4, 5],
+		},
 	);
 });
 
@@ -948,10 +1052,7 @@ test('TextModel does not install language rules merely from its language id', ()
 		languageId: 'typescript',
 		languageConfigurationService: configurations,
 	});
-	assert.deepEqual(configured.bracketPairs.matchBracket(new Position(1, 1)), [
-		new Range(1, 1, 1, 2),
-		new Range(1, 7, 1, 8),
-	]);
+	assert.deepEqual(configured.bracketPairs.matchBracket(new Position(1, 1)), [new Range(1, 1, 1, 2), new Range(1, 7, 1, 8)]);
 	configured.dispose();
 	assert.equal(configurations.getLanguageConfiguration('typescript').comments?.lineCommentToken, '//');
 });

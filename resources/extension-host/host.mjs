@@ -15,27 +15,15 @@ let registrationListener;
 let fullRegistrationSnapshots = false;
 let registrationRevision = 0;
 let speechRegistrationGeneration = 0;
-const dynamicTerminalRegistration = kind =>
-	[
-		'terminalProfileProvider',
-		'terminalPty',
-		'terminalLinkProvider',
-		'terminalCompletionProvider',
-		'terminalQuickFixProvider',
-	].includes(kind);
+const dynamicTerminalRegistration = kind => ['terminalProfileProvider', 'terminalPty', 'terminalLinkProvider', 'terminalCompletionProvider', 'terminalQuickFixProvider'].includes(kind);
 const dynamicRegistration = (kind, channelId) =>
-	kind === 'speechProvider' ||
-	kind === 'treeDataProvider' ||
-	(kind === 'dataChannel' && channelId === 'canvas.provider.v1') ||
-	dynamicTerminalRegistration(kind);
+	kind === 'speechProvider' || kind === 'treeDataProvider' || (kind === 'dataChannel' && channelId === 'canvas.provider.v1') || dynamicTerminalRegistration(kind);
 
 function publishDynamicRegistrations() {
 	if (phase !== 'active') return;
 	const active = [...registrations.values()];
 	if (fullRegistrationSnapshots) {
-		registrationListener?.(
-			JSON.stringify({ revision: ++registrationRevision, registrations: registrationDescriptors() }),
-		);
+		registrationListener?.(JSON.stringify({ revision: ++registrationRevision, registrations: registrationDescriptors() }));
 		return;
 	}
 	registrationListener?.(
@@ -75,9 +63,7 @@ function publishDynamicRegistrations() {
 }
 
 function registrationDescriptors() {
-	return [...registrations.values()].map(
-		({ callback, operation, dispatch, disposeResources, invokePayload, ...descriptor }) => descriptor,
-	);
+	return [...registrations.values()].map(({ callback, operation, dispatch, disposeResources, invokePayload, ...descriptor }) => descriptor);
 }
 
 export class CancellationTokenSource {
@@ -133,10 +119,7 @@ export class CancellationTokenSource {
 }
 
 function register(registration) {
-	if (
-		phase !== 'activating' &&
-		!(phase === 'active' && dynamicRegistration(registration.kind, registration.channelId) && registrationListener)
-	) {
+	if (phase !== 'activating' && !(phase === 'active' && dynamicRegistration(registration.kind, registration.channelId) && registrationListener)) {
 		throw new Error('Registrations must be created during activation');
 	}
 	if (registrations.has(registration.registrationId)) {
@@ -161,8 +144,7 @@ function register(registration) {
 				try {
 					registration.disposeResources?.();
 				} finally {
-					if (dynamicRegistration(registration.kind, registration.channelId) || fullRegistrationSnapshots)
-						publishDynamicRegistrations();
+					if (dynamicRegistration(registration.kind, registration.channelId) || fullRegistrationSnapshots) publishDynamicRegistrations();
 				}
 			}
 		},
@@ -215,17 +197,9 @@ export const languages = Object.freeze({
 			completionTriggerCharacters: [...triggerCharacters],
 			operation: 'completion',
 			async callback(context, payload) {
-				if (
-					!selector.includes(payload.languageId) ||
-					!Number.isSafeInteger(payload.version) ||
-					payload.version < 1 ||
-					typeof payload.text !== 'string'
-				)
+				if (!selector.includes(payload.languageId) || !Number.isSafeInteger(payload.version) || payload.version < 1 || typeof payload.text !== 'string')
 					throw new TypeError('Invalid completion document snapshot');
-				const position = checkedPosition(
-					{ line: payload.position?.lineIndex, character: payload.position?.columnIndex },
-					payload.text,
-				);
+				const position = checkedPosition({ line: payload.position?.lineIndex, character: payload.position?.columnIndex }, payload.text);
 				const document = Object.freeze({
 					uri: payload.resource,
 					languageId: payload.languageId,
@@ -236,13 +210,7 @@ export const languages = Object.freeze({
 					},
 				});
 				const result = await provider.provideCompletionItems(context, document, position, payload.context);
-				if (
-					!result ||
-					!Array.isArray(result.items) ||
-					result.items.length > 10_000 ||
-					typeof result.isIncomplete !== 'boolean'
-				)
-					throw new TypeError('Invalid completion result');
+				if (!result || !Array.isArray(result.items) || result.items.length > 10_000 || typeof result.isIncomplete !== 'boolean') throw new TypeError('Invalid completion result');
 				return {
 					isIncomplete: result.isIncomplete,
 					items: result.items.map(item => ({
@@ -290,10 +258,7 @@ export const languages = Object.freeze({
 				) {
 					throw new TypeError('Invalid hover document snapshot');
 				}
-				const position = checkedPosition(
-					{ line: payload.position?.lineIndex, character: payload.position?.columnIndex },
-					payload.text,
-				);
+				const position = checkedPosition({ line: payload.position?.lineIndex, character: payload.position?.columnIndex }, payload.text);
 				const document = Object.freeze({
 					uri: payload.resource,
 					languageId: payload.languageId,
@@ -310,12 +275,7 @@ export const languages = Object.freeze({
 				if (
 					!Array.isArray(hover?.contents) ||
 					!hover.contents.length ||
-					hover.contents.some(
-						content =>
-							typeof content !== 'string' &&
-							(typeof content?.value !== 'string' ||
-								(content.language !== undefined && typeof content.language !== 'string')),
-					)
+					hover.contents.some(content => typeof content !== 'string' && (typeof content?.value !== 'string' || (content.language !== undefined && typeof content.language !== 'string')))
 				) {
 					throw new TypeError('Invalid hover contents');
 				}
@@ -339,14 +299,7 @@ export const languages = Object.freeze({
 
 export class ResolvedAuthority {
 	constructor(host, port, connectionToken) {
-		if (
-			typeof host !== 'string' ||
-			!/^[a-zA-Z0-9._:-]{1,255}$/.test(host) ||
-			!Number.isInteger(port) ||
-			port < 1 ||
-			port > 65535
-		)
-			throw new TypeError('Invalid remote endpoint');
+		if (typeof host !== 'string' || !/^[a-zA-Z0-9._:-]{1,255}$/.test(host) || !Number.isInteger(port) || port < 1 || port > 65535) throw new TypeError('Invalid remote endpoint');
 		checkedToken(connectionToken);
 		this.host = host;
 		this.port = port;
@@ -356,8 +309,7 @@ export class ResolvedAuthority {
 
 export class ManagedResolvedAuthority {
 	constructor(makeConnection, connectionToken) {
-		if (typeof makeConnection !== 'function')
-			throw new TypeError('Managed authority requires a connection factory');
+		if (typeof makeConnection !== 'function') throw new TypeError('Managed authority requires a connection factory');
 		checkedToken(connectionToken);
 		this.makeConnection = makeConnection;
 		this.connectionToken = connectionToken;
@@ -387,26 +339,16 @@ function checkedResolvedOptions(result) {
 	}
 	if (result.extensionHostEnv !== undefined) {
 		const env = result.extensionHostEnv;
-		if (!env || typeof env !== 'object' || Array.isArray(env) || Object.keys(env).length > 128)
-			throw new TypeError('Invalid resolver environment');
+		if (!env || typeof env !== 'object' || Array.isArray(env) || Object.keys(env).length > 128) throw new TypeError('Invalid resolver environment');
 		for (const [key, value] of Object.entries(env)) {
-			if (
-				!/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(key) ||
-				(value !== null && (typeof value !== 'string' || value.length > 8192 || value.includes('\0')))
-			)
+			if (!/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(key) || (value !== null && (typeof value !== 'string' || value.length > 8192 || value.includes('\0'))))
 				throw new TypeError('Invalid resolver environment entry');
 		}
 		options.extensionHostEnv = { ...env };
 	}
 	const session = result.authenticationSessionForInitializingExtensions;
 	if (session !== undefined) {
-		if (
-			!session ||
-			[session.id, session.providerId].some(
-				value =>
-					typeof value !== 'string' || !value || value.length > 1024 || /[\u0000-\u001f\u007f]/.test(value),
-			)
-		)
+		if (!session || [session.id, session.providerId].some(value => typeof value !== 'string' || !value || value.length > 1024 || /[\u0000-\u001f\u007f]/.test(value)))
 			throw new TypeError('Invalid resolver authentication session');
 		// The local authentication owner retains the token; consumers receive only a session reference.
 		options.authenticationSession = { id: session.id, providerId: session.providerId };
@@ -415,35 +357,23 @@ function checkedResolvedOptions(result) {
 }
 
 function checkedToken(token) {
-	if (
-		token !== undefined &&
-		(typeof token !== 'string' || token.length > 8192 || /[\u0000-\u001f\u007f]/.test(token))
-	)
-		throw new TypeError('Invalid remote connection token');
+	if (token !== undefined && (typeof token !== 'string' || token.length > 8192 || /[\u0000-\u001f\u007f]/.test(token))) throw new TypeError('Invalid remote connection token');
 }
 
 // Hex chunks avoid a JSON node per byte and stay within the invocation payload quota.
 function bytesFromHex(hex) {
-	if (typeof hex !== 'string' || hex.length > 65536 || hex.length % 2 || !/^[0-9a-f]*$/.test(hex))
-		throw new TypeError('Invalid managed socket bytes');
+	if (typeof hex !== 'string' || hex.length > 65536 || hex.length % 2 || !/^[0-9a-f]*$/.test(hex)) throw new TypeError('Invalid managed socket bytes');
 	return Uint8Array.from({ length: hex.length / 2 }, (_, index) => parseInt(hex.slice(index * 2, index * 2 + 2), 16));
 }
 
 export const workspace = Object.freeze({
 	registerWorkspaceEvents(registrationId, listener) {
-		if (typeof registrationId !== 'string' || !registrationId || typeof listener !== 'function')
-			throw new TypeError('Workspace events require an ID and listener');
+		if (typeof registrationId !== 'string' || !registrationId || typeof listener !== 'function') throw new TypeError('Workspace events require an ID and listener');
 		return register({ registrationId, kind: 'workspaceEvents', operation: 'workspaceEvent', callback: listener });
 	},
 	registerRemoteAuthorityResolver(authorityPrefix, resolver, Uri) {
-		if (
-			typeof authorityPrefix !== 'string' ||
-			!/^[a-z][a-z0-9-]{0,63}$/.test(authorityPrefix) ||
-			typeof resolver?.resolve !== 'function'
-		)
-			throw new TypeError('Invalid Remote resolver');
-		if (resolver.getCanonicalURI !== undefined && typeof resolver.getCanonicalURI !== 'function')
-			throw new TypeError('Invalid canonical URI provider');
+		if (typeof authorityPrefix !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(authorityPrefix) || typeof resolver?.resolve !== 'function') throw new TypeError('Invalid Remote resolver');
+		if (resolver.getCanonicalURI !== undefined && typeof resolver.getCanonicalURI !== 'function') throw new TypeError('Invalid canonical URI provider');
 		let nextId = 0;
 		const factories = new Map();
 		const sockets = new Map();
@@ -464,8 +394,7 @@ export const workspace = Object.freeze({
 			},
 			async dispatch(payload, operation) {
 				const owner = payload?.__connectionOwner;
-				if (typeof owner !== 'string' || !/^[0-9]{1,20}$/.test(owner))
-					throw new TypeError('Invalid managed connection owner');
+				if (typeof owner !== 'string' || !/^[0-9]{1,20}$/.test(owner)) throw new TypeError('Invalid managed connection owner');
 				if (operation === 'remoteReleaseOwner') {
 					for (const [id, factory] of factories) {
 						if (factory.owner === owner) factories.delete(id);
@@ -487,12 +416,7 @@ export const workspace = Object.freeze({
 					)
 						throw new TypeError('Invalid canonical URI request');
 					const uri = Uri.parse(payload.uri.external);
-					if (
-						['scheme', 'authority', 'path', 'query', 'fragment'].some(
-							key => uri[key] !== (payload.uri[key] ?? ''),
-						)
-					)
-						throw new TypeError('Inconsistent canonical URI components');
+					if (['scheme', 'authority', 'path', 'query', 'fragment'].some(key => uri[key] !== (payload.uri[key] ?? ''))) throw new TypeError('Inconsistent canonical URI components');
 					const result = await resolver.getCanonicalURI?.(uri);
 					if (result == null) return null;
 					if (!(result instanceof Uri)) throw new TypeError('Canonical URI provider must return a Uri');
@@ -508,10 +432,7 @@ export const workspace = Object.freeze({
 					)
 						throw new TypeError('Invalid Remote resolution request');
 					try {
-						const result = await resolver.resolve(
-							payload.authority,
-							Object.freeze({ resolveAttempt: payload.resolveAttempt }),
-						);
+						const result = await resolver.resolve(payload.authority, Object.freeze({ resolveAttempt: payload.resolveAttempt }));
 						checkedToken(result?.connectionToken);
 						const options = checkedResolvedOptions(result);
 						// Re-resolution retires the previous factory and all sockets from that result.
@@ -527,8 +448,7 @@ export const workspace = Object.freeze({
 							factories.set(id, { owner, makeConnection: result.makeConnection });
 							return { type: 'managed', id, connectionToken: result.connectionToken ?? null, ...options };
 						}
-						if (!(result instanceof ResolvedAuthority))
-							throw new TypeError('Resolver must return a ResolvedAuthority');
+						if (!(result instanceof ResolvedAuthority)) throw new TypeError('Resolver must return a ResolvedAuthority');
 						return {
 							type: 'webSocket',
 							host: result.host,
@@ -543,12 +463,7 @@ export const workspace = Object.freeze({
 				}
 				if (operation === 'remoteConnect') {
 					const factory = factories.get(payload.id);
-					if (
-						!factory ||
-						factory.owner !== owner ||
-						sockets.size >= 128 ||
-						[...sockets.values()].filter(state => state.owner === owner).length >= 4
-					)
+					if (!factory || factory.owner !== owner || sockets.size >= 128 || [...sockets.values()].filter(state => state.owner === owner).length >= 4)
 						throw new Error('Managed connection factory is unavailable');
 					const connection = await factory.makeConnection();
 					if (factories.get(payload.id) !== factory || phase !== 'active') {
@@ -578,11 +493,7 @@ export const workspace = Object.freeze({
 					state.listeners.push(
 						connection.onDidReceiveMessage(data => {
 							if (state.closed || state.ended) return;
-							if (
-								!(data instanceof Uint8Array) ||
-								state.bytes + data.byteLength > 1024 * 1024 ||
-								state.queue.length + Math.ceil(data.byteLength / 32768) > 64
-							) {
+							if (!(data instanceof Uint8Array) || state.bytes + data.byteLength > 1024 * 1024 || state.queue.length + Math.ceil(data.byteLength / 32768) > 64) {
 								state.closed = true;
 								state.error = 'Managed receive quota exceeded';
 								connection.end();
@@ -590,9 +501,7 @@ export const workspace = Object.freeze({
 							}
 							for (let offset = 0; offset < data.byteLength; offset += 32768) {
 								const chunk = data.slice(offset, offset + 32768);
-								state.queue.push(
-									Array.from(chunk, byte => byte.toString(16).padStart(2, '0')).join(''),
-								);
+								state.queue.push(Array.from(chunk, byte => byte.toString(16).padStart(2, '0')).join(''));
 								state.bytes += chunk.byteLength;
 							}
 						}),
@@ -643,8 +552,7 @@ export const workspace = Object.freeze({
 		});
 	},
 	registerTextDocumentEvents(registrationId, listener) {
-		if (typeof registrationId !== 'string' || !registrationId || typeof listener !== 'function')
-			throw new TypeError('Document events require an ID and listener');
+		if (typeof registrationId !== 'string' || !registrationId || typeof listener !== 'function') throw new TypeError('Document events require an ID and listener');
 		return register({ registrationId, kind: 'textDocumentEvents', operation: 'documentEvent', callback: listener });
 	},
 });
@@ -684,8 +592,7 @@ function registerPseudoterminalCallbacks(registration, provider) {
 	}
 	async function retainPty(pty, creationToken, retainCancellation) {
 		if (terminals.size >= 64) throw new Error('Pseudoterminal quota exceeded');
-		if (typeof pty?.onDidWrite !== 'function' || typeof pty.open !== 'function' || typeof pty.close !== 'function')
-			throw new TypeError('CustomExecution requires a Pseudoterminal');
+		if (typeof pty?.onDidWrite !== 'function' || typeof pty.open !== 'function' || typeof pty.close !== 'function') throw new TypeError('CustomExecution requires a Pseudoterminal');
 		const id = `pty.${++sequence}`;
 		const state = { pty, listeners: [], events: [], bytes: 0, closed: false, opened: false };
 		function enqueue(event) {
@@ -715,8 +622,7 @@ function registerPseudoterminalCallbacks(registration, provider) {
 				state.listeners.push(
 					pty.onDidClose(code => {
 						if (!state.closed) {
-							if (code !== undefined && (!Number.isSafeInteger(code) || code < 0 || code > 2147483647))
-								throw new TypeError('Invalid custom task exit code');
+							if (code !== undefined && (!Number.isSafeInteger(code) || code < 0 || code > 2147483647)) throw new TypeError('Invalid custom task exit code');
 							enqueue({ type: 'close', code: code ?? null });
 							state.closed = true;
 						}
@@ -728,8 +634,7 @@ function registerPseudoterminalCallbacks(registration, provider) {
 						if (!state.closed && typeof name === 'string') enqueue({ type: 'name', name });
 					}),
 				);
-			if (state.listeners.some(listener => typeof listener?.dispose !== 'function'))
-				throw new TypeError('Pseudoterminal events require disposable listeners');
+			if (state.listeners.some(listener => typeof listener?.dispose !== 'function')) throw new TypeError('Pseudoterminal events require disposable listeners');
 		} catch (error) {
 			try {
 				release(id);
@@ -755,8 +660,7 @@ function registerPseudoterminalCallbacks(registration, provider) {
 						release(id);
 					},
 					callback(context, payload, operation) {
-						if (payload.ptyId !== id)
-							throw new TypeError('Pseudoterminal handle does not own this resource');
+						if (payload.ptyId !== id) throw new TypeError('Pseudoterminal handle does not own this resource');
 						return terminalCallback(context, payload, operation);
 					},
 				});
@@ -779,13 +683,7 @@ function registerPseudoterminalCallbacks(registration, provider) {
 		};
 	}
 
-	const terminalOperations = [
-		'openTaskTerminal',
-		'readTaskTerminal',
-		'inputTaskTerminal',
-		'resizeTaskTerminal',
-		'closeTaskTerminal',
-	];
+	const terminalOperations = ['openTaskTerminal', 'readTaskTerminal', 'inputTaskTerminal', 'resizeTaskTerminal', 'closeTaskTerminal'];
 	async function terminalCallback(context, payload, operation) {
 		if (operation === 'taskEvent') return await provider.onTaskEvent(context, payload);
 		if (operation === 'provideTasks') return { tasks: (await provider.provideTasks(context)) ?? [] };
@@ -803,13 +701,10 @@ function registerPseudoterminalCallbacks(registration, provider) {
 			}
 			if (!pty) return { options };
 			const retained = await retainPty(pty, context.cancellationToken, context.retainCancellation);
-			return retained && !context.cancellationToken.isCancellationRequested
-				? { options, pty: retained }
-				: { options: null };
+			return retained && !context.cancellationToken.isCancellationRequested ? { options, pty: retained } : { options: null };
 		}
 		if (operation === 'createTaskTerminal') {
-			if (terminals.size >= 64 || typeof provider.createTaskTerminal !== 'function')
-				throw new Error('Custom task terminal is unavailable');
+			if (terminals.size >= 64 || typeof provider.createTaskTerminal !== 'function') throw new Error('Custom task terminal is unavailable');
 			return retainPty(await provider.createTaskTerminal(context, payload.executionId, payload.definition));
 		}
 		const state = terminals.get(payload.ptyId);
@@ -825,8 +720,7 @@ function registerPseudoterminalCallbacks(registration, provider) {
 			state.pty.open(payload.dimensions ?? undefined);
 		}
 		if (operation === 'inputTaskTerminal' && !state.closed) {
-			if (typeof payload.data !== 'string' || payload.data.length > 32768)
-				throw new TypeError('Invalid task input');
+			if (typeof payload.data !== 'string' || payload.data.length > 32768) throw new TypeError('Invalid task input');
 			state.pty.handleInput?.(payload.data);
 		}
 		if (operation === 'resizeTaskTerminal' && !state.closed) {
@@ -849,11 +743,7 @@ function registerPseudoterminalCallbacks(registration, provider) {
 		...registration,
 		operation: independentResources
 			? ['createTerminalProfile']
-			: [
-					...(registration.kind === 'taskEvents' ? ['taskEvent'] : ['provideTasks', 'resolveTask']),
-					'createTaskTerminal',
-					...terminalOperations,
-				],
+			: [...(registration.kind === 'taskEvents' ? ['taskEvent'] : ['provideTasks', 'resolveTask']), 'createTaskTerminal', ...terminalOperations],
 		callback: terminalCallback,
 	});
 	const disposable = Object.freeze({
@@ -881,9 +771,7 @@ export const speech = Object.freeze({
 			typeof identifier !== 'string' ||
 			!identifier ||
 			identifier.length > 256 ||
-			['provideSpeechToTextSession', 'provideTextToSpeechSession', 'provideKeywordRecognitionSession'].some(
-				name => typeof provider?.[name] !== 'function',
-			)
+			['provideSpeechToTextSession', 'provideTextToSpeechSession', 'provideKeywordRecognitionSession'].some(name => typeof provider?.[name] !== 'function')
 		) {
 			throw new TypeError('Speech registration requires an identifier and all standard session factories');
 		}
@@ -922,40 +810,23 @@ export const speech = Object.freeze({
 				if (failure) throw failure;
 			},
 			async callback(context, payload, operation) {
-				if (
-					!payload ||
-					typeof payload !== 'object' ||
-					Array.isArray(payload) ||
-					typeof payload.sessionId !== 'string' ||
-					!/^[a-f0-9-]{36}$/.test(payload.sessionId)
-				)
+				if (!payload || typeof payload !== 'object' || Array.isArray(payload) || typeof payload.sessionId !== 'string' || !/^[a-f0-9-]{36}$/.test(payload.sessionId))
 					throw new TypeError('Invalid speech session identity');
-				const allowed =
-					operation === 'createSpeechSession'
-						? ['sessionId', 'kind', 'language']
-						: operation === 'synthesizeSpeech'
-							? ['sessionId', 'text']
-							: ['sessionId'];
-				if (Object.keys(payload).some(key => !allowed.includes(key)))
-					throw new TypeError('Unexpected speech session field');
+				const allowed = operation === 'createSpeechSession' ? ['sessionId', 'kind', 'language'] : operation === 'synthesizeSpeech' ? ['sessionId', 'text'] : ['sessionId'];
+				if (Object.keys(payload).some(key => !allowed.includes(key))) throw new TypeError('Unexpected speech session field');
 				const id = payload.sessionId;
 				if (operation === 'closeSpeechSession') {
 					release(id);
 					return {};
 				}
 				if (operation === 'createSpeechSession') {
-					if (sessions.has(id) || sessions.size >= 32)
-						throw new Error('Speech session admission limit exceeded');
+					if (sessions.has(id) || sessions.size >= 32) throw new Error('Speech session admission limit exceeded');
 					const factories = {
 						speechToText: 'provideSpeechToTextSession',
 						textToSpeech: 'provideTextToSpeechSession',
 						keywordRecognition: 'provideKeywordRecognitionSession',
 					};
-					if (
-						!Object.hasOwn(factories, payload.kind) ||
-						(payload.language !== undefined &&
-							(typeof payload.language !== 'string' || !/^[A-Za-z0-9-]{1,35}$/.test(payload.language)))
-					)
+					if (!Object.hasOwn(factories, payload.kind) || (payload.language !== undefined && (typeof payload.language !== 'string' || !/^[A-Za-z0-9-]{1,35}$/.test(payload.language))))
 						throw new TypeError('Invalid speech session options');
 					const state = {
 						token: new CancellationTokenSource(),
@@ -969,16 +840,9 @@ export const speech = Object.freeze({
 					sessions.set(id, state);
 					const cancellation = context.cancellationToken.onCancellationRequested(() => release(id));
 					try {
-						state.session = await provider[factories[payload.kind]](
-							state.token.token,
-							payload.language === undefined ? undefined : { language: payload.language },
-						);
-						if (context.cancellationToken.isCancellationRequested || sessions.get(id) !== state)
-							throw new Error('Speech session creation cancelled');
-						if (
-							typeof state.session?.onDidChange !== 'function' ||
-							(state.kind === 'textToSpeech' && typeof state.session.synthesize !== 'function')
-						)
+						state.session = await provider[factories[payload.kind]](state.token.token, payload.language === undefined ? undefined : { language: payload.language });
+						if (context.cancellationToken.isCancellationRequested || sessions.get(id) !== state) throw new Error('Speech session creation cancelled');
+						if (typeof state.session?.onDidChange !== 'function' || (state.kind === 'textToSpeech' && typeof state.session.synthesize !== 'function'))
 							throw new TypeError('Invalid speech provider session');
 						state.listener = state.session.onDidChange(event => {
 							if (state.closed || sessions.get(id) !== state) return;
@@ -987,8 +851,7 @@ export const speech = Object.freeze({
 								!Number.isInteger(event?.status) ||
 								event.status < 1 ||
 								event.status > maximum ||
-								(event.text !== undefined &&
-									(typeof event.text !== 'string' || event.text.length > 16384))
+								(event.text !== undefined && (typeof event.text !== 'string' || event.text.length > 16384))
 							) {
 								release(id);
 								return;
@@ -1004,14 +867,9 @@ export const speech = Object.freeze({
 							}
 							state.events.push(value);
 							state.bytes += bytes;
-							if (
-								(state.kind === 'speechToText' && (event.status === 4 || event.status === 5)) ||
-								(state.kind === 'keywordRecognition' && event.status === 2)
-							)
-								state.closed = true;
+							if ((state.kind === 'speechToText' && (event.status === 4 || event.status === 5)) || (state.kind === 'keywordRecognition' && event.status === 2)) state.closed = true;
 						});
-						if (typeof state.listener?.dispose !== 'function')
-							throw new TypeError('Speech event subscription must be disposable');
+						if (typeof state.listener?.dispose !== 'function') throw new TypeError('Speech event subscription must be disposable');
 						if (sessions.get(id) !== state) {
 							state.listener.dispose();
 							throw new Error('Speech session was released while subscribing');
@@ -1032,13 +890,7 @@ export const speech = Object.freeze({
 					return { events, closed: state.closed };
 				}
 				if (operation === 'synthesizeSpeech') {
-					if (
-						state.kind !== 'textToSpeech' ||
-						state.closed ||
-						typeof payload.text !== 'string' ||
-						!payload.text.trim() ||
-						payload.text.length > 16384
-					)
+					if (state.kind !== 'textToSpeech' || state.closed || typeof payload.text !== 'string' || !payload.text.trim() || payload.text.length > 16384)
 						throw new TypeError('Invalid speech synthesis request');
 					const cancellation = context.cancellationToken.onCancellationRequested(() => release(id));
 					try {
@@ -1064,9 +916,7 @@ export const terminals = Object.freeze({
 			!Array.isArray(triggerCharacters) ||
 			triggerCharacters.length > 64 ||
 			new Set(triggerCharacters).size !== triggerCharacters.length ||
-			triggerCharacters.some(
-				value => typeof value !== 'string' || [...value].length !== 1 || /[\x00-\x1f\x7f]/.test(value),
-			) ||
+			triggerCharacters.some(value => typeof value !== 'string' || [...value].length !== 1 || /[\x00-\x1f\x7f]/.test(value)) ||
 			typeof provider !== 'function'
 		)
 			throw new TypeError('Invalid terminal completion provider');
@@ -1104,17 +954,13 @@ export const terminals = Object.freeze({
 							range[0] < 0 ||
 							range[1] < range[0] ||
 							range[1] > payload.commandLine.length ||
-							(item.detail !== undefined &&
-								(typeof item.detail !== 'string' || item.detail.length > 4096))
+							(item.detail !== undefined && (typeof item.detail !== 'string' || item.detail.length > 4096))
 						)
 							throw new TypeError('Invalid terminal completion item or replacement range');
-						const documentation =
-							typeof item.documentation === 'string' ? item.documentation : item.documentation?.value;
+						const documentation = typeof item.documentation === 'string' ? item.documentation : item.documentation?.value;
 						if (
-							(documentation !== undefined &&
-								(typeof documentation !== 'string' || documentation.length > 32768)) ||
-							(item.kind !== undefined &&
-								(!Number.isInteger(item.kind) || item.kind < 0 || item.kind > 16))
+							(documentation !== undefined && (typeof documentation !== 'string' || documentation.length > 32768)) ||
+							(item.kind !== undefined && (!Number.isInteger(item.kind) || item.kind < 0 || item.kind > 16))
 						)
 							throw new TypeError('Invalid terminal completion documentation or kind');
 						return {
@@ -1167,32 +1013,19 @@ export const terminals = Object.freeze({
 			async callback(context, payload, operation) {
 				if (operation === 'handleTerminalQuickFix') {
 					const action = actions.get(payload.id);
-					if (
-						!action ||
-						action.terminalId !== payload.terminalId ||
-						action.commandLine !== payload.commandLine
-					)
-						throw new Error('Terminal quick fix is no longer available');
+					if (!action || action.terminalId !== payload.terminalId || action.commandLine !== payload.commandLine) throw new Error('Terminal quick fix is no longer available');
 					actions.delete(payload.id);
 					if (!context.cancellationToken.isCancellationRequested) await activate(context, action.value);
 					return null;
 				}
-				if (
-					typeof payload.commandLine !== 'string' ||
-					payload.commandLine.length > 32768 ||
-					typeof payload.terminalId !== 'string' ||
-					!Number.isSafeInteger(payload.exitCode)
-				)
+				if (typeof payload.commandLine !== 'string' || payload.commandLine.length > 32768 || typeof payload.terminalId !== 'string' || !Number.isSafeInteger(payload.exitCode))
 					throw new TypeError('Invalid terminal command snapshot');
 				const commandLineMatch = payload.commandLine.match(commandMatcher);
-				const matches =
-					!!commandLineMatch && (payload.exitCode === 0) === (selector.commandExitResult === 'success');
+				const matches = !!commandLineMatch && (payload.exitCode === 0) === (selector.commandExitResult === 'success');
 				if (payload.phase === 'matcher')
 					return {
 						matches,
-						outputMatcher: output
-							? { anchor: output.anchor, offset: output.offset, length: output.length }
-							: null,
+						outputMatcher: output ? { anchor: output.anchor, offset: output.offset, length: output.length } : null,
 					};
 				if (
 					payload.phase !== 'provide' ||
@@ -1236,15 +1069,8 @@ export const terminals = Object.freeze({
 								label: value.terminalCommand,
 								shouldExecute: value.shouldExecute === true,
 							};
-						if (value?.uri && typeof value.uri.toString === 'function')
-							return { kind: 'opener', label: value.uri.toString() };
-						if (
-							typeof value?.command !== 'string' ||
-							!value.command ||
-							typeof value.title !== 'string' ||
-							!value.title ||
-							value.title.length > 512
-						)
+						if (value?.uri && typeof value.uri.toString === 'function') return { kind: 'opener', label: value.uri.toString() };
+						if (typeof value?.command !== 'string' || !value.command || typeof value.title !== 'string' || !value.title || value.title.length > 512)
 							throw new TypeError('Invalid terminal quick fix');
 						const id = String(++sequence);
 						actions.set(id, { value, terminalId: payload.terminalId, commandLine: payload.commandLine });
@@ -1256,18 +1082,11 @@ export const terminals = Object.freeze({
 		});
 	},
 	registerTerminalLinkProvider(registrationId, provider) {
-		if (typeof provider?.provideTerminalLinks !== 'function' || typeof provider?.handleTerminalLink !== 'function')
-			throw new TypeError('Terminal links require provide and handle callbacks');
+		if (typeof provider?.provideTerminalLinks !== 'function' || typeof provider?.handleTerminalLink !== 'function') throw new TypeError('Terminal links require provide and handle callbacks');
 		const links = new Map();
 		let sequence = 0;
 		const provide = async (context, payload) => {
-			if (
-				typeof payload.line !== 'string' ||
-				payload.line.length > 32768 ||
-				!payload.terminal ||
-				typeof payload.terminal.id !== 'string' ||
-				typeof payload.terminal.name !== 'string'
-			)
+			if (typeof payload.line !== 'string' || payload.line.length > 32768 || !payload.terminal || typeof payload.terminal.id !== 'string' || typeof payload.terminal.name !== 'string')
 				throw new TypeError('Invalid terminal link context');
 			const result = await provider.provideTerminalLinks(context, payload);
 			if (context.cancellationToken.isCancellationRequested || result === undefined || result === null) return [];
@@ -1279,10 +1098,7 @@ export const terminals = Object.freeze({
 					!Number.isSafeInteger(link.length) ||
 					link.length < 1 ||
 					link.startIndex + link.length > payload.line.length ||
-					(link.tooltip !== undefined &&
-						(typeof link.tooltip !== 'string' ||
-							link.tooltip.length > 512 ||
-							/[\u0000-\u001f\u007f]/.test(link.tooltip)))
+					(link.tooltip !== undefined && (typeof link.tooltip !== 'string' || link.tooltip.length > 512 || /[\u0000-\u001f\u007f]/.test(link.tooltip)))
 				)
 					throw new TypeError('Invalid terminal link range or tooltip');
 			}
@@ -1299,13 +1115,8 @@ export const terminals = Object.freeze({
 				if (operation === 'handleTerminalLink') {
 					// A picker can outlive the bounded callback cache. Re-resolve its
 					// original line on acceptance rather than silently dropping the click.
-					const entry =
-						links.get(payload.id) ??
-						(await provide(context, payload)).find(
-							link => link.startIndex === payload.startIndex && link.length === payload.length,
-						);
-					if (entry && !context.cancellationToken.isCancellationRequested)
-						await provider.handleTerminalLink(context, entry);
+					const entry = links.get(payload.id) ?? (await provide(context, payload)).find(link => link.startIndex === payload.startIndex && link.length === payload.length);
+					if (entry && !context.cancellationToken.isCancellationRequested) await provider.handleTerminalLink(context, entry);
 					return null;
 				}
 				const validated = (await provide(context, payload)).map(link => ({ link, id: String(++sequence) }));
@@ -1325,8 +1136,7 @@ export const terminals = Object.freeze({
 		});
 	},
 	registerEnvironmentVariableCollection(registrationId, snapshot) {
-		if (typeof snapshot !== 'function')
-			throw new TypeError('Terminal environment collection requires a snapshot callback');
+		if (typeof snapshot !== 'function') throw new TypeError('Terminal environment collection requires a snapshot callback');
 		return register({
 			registrationId,
 			kind: 'terminalEnvironment',
@@ -1335,35 +1145,20 @@ export const terminals = Object.freeze({
 		});
 	},
 	registerTerminalProfileProvider(registrationId, profileId, title, provider) {
-		if (
-			typeof provider?.createTerminalProfile !== 'function' ||
-			typeof profileId !== 'string' ||
-			!profileId ||
-			typeof title !== 'string' ||
-			!title
-		)
+		if (typeof provider?.createTerminalProfile !== 'function' || typeof profileId !== 'string' || !profileId || typeof title !== 'string' || !title)
 			throw new TypeError('Terminal profile providers require an ID, title and callback');
-		return registerPseudoterminalCallbacks(
-			{ registrationId, kind: 'terminalProfileProvider', profileId, title },
-			provider,
-		);
+		return registerPseudoterminalCallbacks({ registrationId, kind: 'terminalProfileProvider', profileId, title }, provider);
 	},
 });
 
 export const tasks = Object.freeze({
 	registerTaskEvents(registrationId, listener, createTaskTerminal) {
-		if (typeof registrationId !== 'string' || !registrationId || typeof listener !== 'function')
-			throw new TypeError('Task events require an ID and listener');
-		if (createTaskTerminal !== undefined && typeof createTaskTerminal !== 'function')
-			throw new TypeError('Custom task terminal requires a factory');
-		return registerPseudoterminalCallbacks(
-			{ registrationId, kind: 'taskEvents' },
-			{ onTaskEvent: listener, createTaskTerminal },
-		);
+		if (typeof registrationId !== 'string' || !registrationId || typeof listener !== 'function') throw new TypeError('Task events require an ID and listener');
+		if (createTaskTerminal !== undefined && typeof createTaskTerminal !== 'function') throw new TypeError('Custom task terminal requires a factory');
+		return registerPseudoterminalCallbacks({ registrationId, kind: 'taskEvents' }, { onTaskEvent: listener, createTaskTerminal });
 	},
 	registerTaskProvider(registrationId, taskType, provider) {
-		if (typeof provider?.provideTasks !== 'function' || typeof taskType !== 'string' || !taskType)
-			throw new TypeError('Task providers require a type and provideTasks');
+		if (typeof provider?.provideTasks !== 'function' || typeof taskType !== 'string' || !taskType) throw new TypeError('Task providers require a type and provideTasks');
 		return registerPseudoterminalCallbacks({ registrationId, kind: 'taskProvider', taskType }, provider);
 	},
 });
@@ -1374,19 +1169,13 @@ export const debug = Object.freeze({
 		return register({ registrationId, kind: 'debugEvents', operation: 'debugEvent', callback: listener });
 	},
 	registerDebugConfigurationProvider(registrationId, debuggerType, provider, triggerKind = 1) {
-		const operations = [
-			'provideDebugConfigurations',
-			'resolveDebugConfiguration',
-			'resolveDebugConfigurationWithSubstitutedVariables',
-		];
+		const operations = ['provideDebugConfigurations', 'resolveDebugConfiguration', 'resolveDebugConfigurationWithSubstitutedVariables'];
 		if (
 			typeof debuggerType !== 'string' ||
 			!debuggerType ||
 			![1, 2].includes(triggerKind) ||
 			!operations.some(operation => typeof provider?.[operation] === 'function') ||
-			operations.some(
-				operation => provider?.[operation] !== undefined && typeof provider[operation] !== 'function',
-			)
+			operations.some(operation => provider?.[operation] !== undefined && typeof provider[operation] !== 'function')
 		)
 			throw new TypeError('Debug configuration providers require a type, trigger kind and callbacks');
 		return register({
@@ -1398,35 +1187,21 @@ export const debug = Object.freeze({
 			async callback(context, payload, operation) {
 				if (operation === 'provideDebugConfigurations')
 					return {
-						configurations:
-							(await provider.provideDebugConfigurations?.(context, payload.folder ?? undefined)) ?? [],
+						configurations: (await provider.provideDebugConfigurations?.(context, payload.folder ?? undefined)) ?? [],
 					};
 				const callback = provider[operation];
-				const configuration = callback
-					? await callback.call(provider, context, payload.folder ?? undefined, payload.configuration)
-					: payload.configuration;
+				const configuration = callback ? await callback.call(provider, context, payload.folder ?? undefined, payload.configuration) : payload.configuration;
 				// JSON cannot encode undefined; cancellation must survive the Host boundary.
 				return configuration === undefined ? { cancelled: true } : { configuration };
 			},
 		});
 	},
 	registerDebugAdapterTrackerFactory(registrationId, debuggerType, factory) {
-		if (
-			typeof debuggerType !== 'string' ||
-			!debuggerType ||
-			typeof factory?.createDebugAdapterTracker !== 'function'
-		) {
+		if (typeof debuggerType !== 'string' || !debuggerType || typeof factory?.createDebugAdapterTracker !== 'function') {
 			throw new TypeError('Debug Adapter trackers require a type and factory');
 		}
 		const trackers = new Map();
-		const operations = [
-			'onWillStartSession',
-			'onWillReceiveMessage',
-			'onDidSendMessage',
-			'onWillStopSession',
-			'onError',
-			'onExit',
-		];
+		const operations = ['onWillStartSession', 'onWillReceiveMessage', 'onDidSendMessage', 'onWillStopSession', 'onError', 'onExit'];
 		let enabled = true;
 		let sequence = 0;
 		const registration = register({
@@ -1443,10 +1218,7 @@ export const debug = Object.freeze({
 					if (!enabled || tracker === undefined || tracker === null) {
 						return null;
 					}
-					if (
-						typeof tracker !== 'object' ||
-						operations.some(key => tracker[key] !== undefined && typeof tracker[key] !== 'function')
-					) {
+					if (typeof tracker !== 'object' || operations.some(key => tracker[key] !== undefined && typeof tracker[key] !== 'function')) {
 						throw new TypeError('Invalid Debug Adapter tracker');
 					}
 					const trackerId = String(++sequence);
@@ -1499,11 +1271,7 @@ export const debug = Object.freeze({
 		});
 	},
 	registerDebugAdapterDescriptorFactory(registrationId, debuggerType, factory) {
-		if (
-			typeof factory?.createDebugAdapterDescriptor !== 'function' ||
-			typeof debuggerType !== 'string' ||
-			!debuggerType
-		)
+		if (typeof factory?.createDebugAdapterDescriptor !== 'function' || typeof debuggerType !== 'string' || !debuggerType)
 			throw new TypeError('Debug adapter factories require a type and createDebugAdapterDescriptor');
 		const adapters = new Map();
 		let enabled = true;
@@ -1532,23 +1300,13 @@ export const debug = Object.freeze({
 			registrationId,
 			kind: 'debugAdapter',
 			debuggerType,
-			operation: [
-				'createDebugAdapterDescriptor',
-				'sendInlineDebugAdapter',
-				'readInlineDebugAdapter',
-				'closeInlineDebugAdapter',
-			],
+			operation: ['createDebugAdapterDescriptor', 'sendInlineDebugAdapter', 'readInlineDebugAdapter', 'closeInlineDebugAdapter'],
 			async callback(context, payload, operation) {
 				if (operation === 'createDebugAdapterDescriptor') {
 					if (!enabled) {
 						throw new Error('Debug Adapter factory is disposed');
 					}
-					const descriptor = await factory.createDebugAdapterDescriptor(
-						context,
-						payload.configuration,
-						payload.session,
-						payload.executable,
-					);
+					const descriptor = await factory.createDebugAdapterDescriptor(context, payload.configuration, payload.session, payload.executable);
 					if (descriptor === undefined || descriptor === null) return null;
 					if (!descriptor?.implementation) {
 						return descriptor;
@@ -1558,11 +1316,7 @@ export const debug = Object.freeze({
 						await implementation.dispose(context);
 						throw new Error('Inline Debug Adapter is unavailable');
 					}
-					if (
-						typeof implementation.handleMessage !== 'function' ||
-						typeof implementation.onDidSendMessage !== 'function' ||
-						typeof implementation.dispose !== 'function'
-					) {
+					if (typeof implementation.handleMessage !== 'function' || typeof implementation.onDidSendMessage !== 'function' || typeof implementation.dispose !== 'function') {
 						throw new TypeError('Inline Debug Adapter requires messages, an event and disposal');
 					}
 					const id = `inline.${++sequence}`;
@@ -1583,11 +1337,7 @@ export const debug = Object.freeze({
 							}
 							try {
 								const encoded = JSON.stringify(message);
-								if (
-									typeof encoded !== 'string' ||
-									state.messages.length >= 512 ||
-									state.bytes + encoded.length * 3 > 262144
-								) {
+								if (typeof encoded !== 'string' || state.messages.length >= 512 || state.bytes + encoded.length * 3 > 262144) {
 									throw new Error('Inline Debug Adapter message queue exceeded its limit');
 								}
 								const snapshot = JSON.parse(encoded);
@@ -1683,12 +1433,7 @@ export const debug = Object.freeze({
 });
 
 function checkedPosition(position, text) {
-	if (
-		!Number.isSafeInteger(position?.line) ||
-		position.line < 0 ||
-		!Number.isSafeInteger(position?.character) ||
-		position.character < 0
-	) {
+	if (!Number.isSafeInteger(position?.line) || position.line < 0 || !Number.isSafeInteger(position?.character) || position.character < 0) {
 		throw new TypeError('Invalid UTF-16 position');
 	}
 	const line = text.split('\n')[position.line];
@@ -1701,8 +1446,7 @@ function checkedPosition(position, text) {
 function checkedRange(range, text) {
 	const start = checkedPosition(range?.start, text);
 	const end = checkedPosition(range?.end, text);
-	if (start.line > end.line || (start.line === end.line && start.character > end.character))
-		throw new RangeError('Range must be ordered');
+	if (start.line > end.line || (start.line === end.line && start.character > end.character)) throw new RangeError('Range must be ordered');
 	return {
 		start: { lineIndex: start.line, columnIndex: start.character },
 		end: { lineIndex: end.line, columnIndex: end.character },
@@ -1713,8 +1457,7 @@ function checkedRange(range, text) {
 export const __runtime = Object.freeze({
 	// The product transport owns this hook; authors cannot import the runtime module.
 	onRegistrationsChanged(listener, fullSnapshot = false) {
-		if (phase !== 'new' || registrationListener || typeof listener !== 'function')
-			throw new Error('Invalid registration event binding');
+		if (phase !== 'new' || registrationListener || typeof listener !== 'function') throw new Error('Invalid registration event binding');
 		registrationListener = listener;
 		fullRegistrationSnapshots = fullSnapshot;
 	},
@@ -1738,12 +1481,7 @@ export const __runtime = Object.freeze({
 	},
 	// Browser contributions reuse the same registration and cancellation owner.
 	registerContribution(descriptor, operation, callback) {
-		return register(
-			Object.defineProperties(
-				{ operation, callback, invokePayload: true },
-				Object.getOwnPropertyDescriptors(descriptor),
-			),
-		);
+		return register(Object.defineProperties({ operation, callback, invokePayload: true }, Object.getOwnPropertyDescriptors(descriptor)));
 	},
 	async invoke(registrationId, payloadJson, requestId, operation, registrationGeneration, deadlineUnixMillis) {
 		if (phase !== 'active') {
@@ -1757,12 +1495,7 @@ export const __runtime = Object.freeze({
 		if (registration.kind === 'speechProvider' && registrationGeneration !== registration.registrationGeneration) {
 			throw new Error('Speech registration generation has retired');
 		}
-		if (
-			!registration.dispatch &&
-			(Array.isArray(registration.operation)
-				? !registration.operation.includes(operation)
-				: registration.operation !== operation)
-		) {
+		if (!registration.dispatch && (Array.isArray(registration.operation) ? !registration.operation.includes(operation) : registration.operation !== operation)) {
 			throw new TypeError('Invocation operation does not match its registration');
 		}
 		const payload = JSON.parse(payloadJson);
@@ -1808,9 +1541,7 @@ export const __runtime = Object.freeze({
 				// The product Node host also bounds an unused resource when no caller
 				// returns to cancel it. Other hosts retain the broker's bounded lease.
 				if (typeof setTimeout === 'function') {
-					const remaining = Number.isSafeInteger(deadlineUnixMillis)
-						? Math.max(0, deadlineUnixMillis - Date.now())
-						: 60_000;
+					const remaining = Number.isSafeInteger(deadlineUnixMillis) ? Math.max(0, deadlineUnixMillis - Date.now()) : 60_000;
 					retentionTimer = setTimeout(
 						() => {
 							try {

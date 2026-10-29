@@ -45,11 +45,9 @@ export async function waitForElectronWindowState(
 			() =>
 				application.evaluate(({ BrowserWindow, powerMonitor }, id) => {
 					const systemIdleState = powerMonitor.getSystemIdleState(60);
-					if (systemIdleState === 'locked')
-						throw new Error('Desktop is locked; window focus and fullscreen cannot be verified');
+					if (systemIdleState === 'locked') throw new Error('Desktop is locked; window focus and fullscreen cannot be verified');
 					const window = BrowserWindow.fromId(id);
-					if (!window)
-						throw new Error(`Electron window ${id} was closed before its state transition completed`);
+					if (!window) throw new Error(`Electron window ${id} was closed before its state transition completed`);
 					return {
 						id,
 						focused: window.isFocused(),

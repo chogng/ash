@@ -22,16 +22,8 @@ export function onActivate(register: () => IDisposable): void {
 	registrations.push(register);
 }
 export function registerEditorContribution(contribution: EditorContributionHooks): void;
-export function registerEditorContribution(
-	id: string,
-	ctor: EditorContributionCtor,
-	instantiation: EditorContributionInstantiation,
-): void;
-export function registerEditorContribution(
-	value: string | EditorContributionHooks,
-	ctor?: EditorContributionCtor,
-	instantiation?: EditorContributionInstantiation,
-): void {
+export function registerEditorContribution(id: string, ctor: EditorContributionCtor, instantiation: EditorContributionInstantiation): void;
+export function registerEditorContribution(value: string | EditorContributionHooks, ctor?: EditorContributionCtor, instantiation?: EditorContributionInstantiation): void {
 	contributions.push(typeof value === 'string' ? { id: value, ctor: ctor!, instantiation: instantiation! } : value);
 }
 export function registerEditorAction<T extends EditorAction>(ctor: new () => T): T {

@@ -1,10 +1,6 @@
 import type { Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import type {
-	IOpenEmptyWindowOptions,
-	IOpenWindowOptions,
-	IWindowOpenable,
-} from '../../../../platform/window/common/window.js';
+import type { IOpenEmptyWindowOptions, IOpenWindowOptions, IWindowOpenable } from '../../../../platform/window/common/window.js';
 import type { VSBuffer } from '../../../../base/common/buffer.js';
 import type { IRectangle } from '../../../../platform/window/common/window.js';
 

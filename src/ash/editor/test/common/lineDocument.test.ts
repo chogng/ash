@@ -99,10 +99,7 @@ test('LineDocumentSnapshot treats only CR and LF as physical line boundaries', (
 	const snapshot = createLineDocumentSnapshot({ lines: [{ id: 'line', text: 'left\u2028right\u2029' }] });
 
 	assert.equal(snapshot.getText(), 'left\u2028right\u2029');
-	assert.throws(
-		() => createLineDocumentSnapshot({ lines: [{ id: 'line', text: 'left\nright' }] }),
-		/line terminator/,
-	);
+	assert.throws(() => createLineDocumentSnapshot({ lines: [{ id: 'line', text: 'left\nright' }] }), /line terminator/);
 });
 
 test('LineDocumentSnapshot rejects detached atoms, atom marks, non-exclusive block atoms, and crossing regions', () => {
@@ -181,11 +178,7 @@ test('TextModel preserves logical line identity through edits and history withou
 	const initialSnapshot = model.lineDocument;
 	assert.equal(model.lineDocument, initialSnapshot);
 
-	model.pushEditOperations(
-		null,
-		[{ range: Range.fromPositions(new Position(0 + 1, 1 + 1), new Position(0 + 1, 1 + 1)), text: 'X\nY' }],
-		() => null,
-	);
+	model.pushEditOperations(null, [{ range: Range.fromPositions(new Position(0 + 1, 1 + 1), new Position(0 + 1, 1 + 1)), text: 'X\nY' }], () => null);
 	assert.notEqual(model.lineDocument, initialSnapshot);
 	assert.equal(initialSnapshot.getText(), 'a\nb');
 	assert.deepEqual(
@@ -207,9 +200,7 @@ test('TextModel preserves logical line identity through edits and history withou
 		['first', 'inserted:1', 'second'],
 	);
 
-	model.applyEdits([
-		{ range: Range.fromPositions(new Position(0 + 1, 2 + 1), new Position(1 + 1, 0 + 1)), text: '' },
-	]);
+	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 2 + 1), new Position(1 + 1, 0 + 1)), text: '' }]);
 	assert.deepEqual(
 		model.lineDocument.lines.values.map(line => line.id),
 		['first', 'second'],
@@ -274,7 +265,11 @@ test('TextModel leaves text and line identities unchanged when a line id generat
 			lineIds: model.lineDocument.lines.values.map(line => line.id),
 			version: model.getVersionId(),
 		},
-		{ text: 'a\n\n\nb', lineIds: ['first', 'generated:1', 'generated:2', 'second'], version: 2 },
+		{
+			text: 'a\n\n\nb',
+			lineIds: ['first', 'generated:1', 'generated:2', 'second'],
+			version: 2,
+		},
 	);
 });
 
@@ -303,7 +298,14 @@ test('TextModel keeps undo history when reset cannot allocate line identities', 
 			canUndo: model.canUndo(),
 			eventCount: events.length,
 		},
-		{ text: 'a!\nb', version, lineIds: ['first', 'second'], snapshotRetained: true, canUndo: true, eventCount: 0 },
+		{
+			text: 'a!\nb',
+			version,
+			lineIds: ['first', 'second'],
+			snapshotRetained: true,
+			canUndo: true,
+			eventCount: 0,
+		},
 	);
 
 	fail = false;

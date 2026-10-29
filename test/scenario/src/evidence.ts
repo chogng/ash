@@ -104,13 +104,7 @@ export class EvidenceService {
 		}
 	}
 
-	async step(
-		id: string,
-		title: string,
-		status: StepStatus,
-		details?: string,
-		blockedOn?: StepBlocker,
-	): Promise<void> {
+	async step(id: string, title: string, status: StepStatus, details?: string, blockedOn?: StepBlocker): Promise<void> {
 		const run = this.requireRun();
 		let step = run.steps.find(candidate => candidate.id === id);
 		if (status === 'started') {
@@ -247,12 +241,8 @@ export class EvidenceService {
 		const rows = run.steps
 			.map(step => {
 				const result = step.captures.at(-1);
-				const screenshots = step.captures
-					.map(capture => `<a href="${escapeHtml(capture.screenshot)}">${escapeHtml(capture.status)}</a>`)
-					.join(', ');
-				const blocker = result?.blockedOn
-					? ` <span class="blocked">(needs ${escapeHtml(result.blockedOn)})</span>`
-					: '';
+				const screenshots = step.captures.map(capture => `<a href="${escapeHtml(capture.screenshot)}">${escapeHtml(capture.status)}</a>`).join(', ');
+				const blocker = result?.blockedOn ? ` <span class="blocked">(needs ${escapeHtml(result.blockedOn)})</span>` : '';
 				return `<tr><td>${escapeHtml(step.id)}</td><td>${escapeHtml(step.title)}</td><td class="${escapeHtml(result?.status ?? '')}">${escapeHtml(result?.status ?? 'unknown')}${blocker}</td><td>${screenshots}</td><td>${escapeHtml(result?.details ?? '')}</td></tr>`;
 			})
 			.join('');
@@ -263,12 +253,8 @@ export class EvidenceService {
 		const blockedSection = blocked.length
 			? `<h2>Needs attention</h2><ul>${blocked.map(({ step, capture }) => `<li><strong>${escapeHtml(step.id)}</strong> needs ${escapeHtml(capture.blockedOn ?? '')}: ${escapeHtml(capture.details ?? '')}</li>`).join('')}</ul>`
 			: '';
-		const videos = run.artifacts.videos.length
-			? run.artifacts.videos.map(video => `<video controls src="${escapeHtml(video)}"></video>`).join('')
-			: '<p>No video file was produced.</p>';
-		const logs = run.artifacts.logs
-			.map(log => `<li><a href="${escapeHtml(log)}">${escapeHtml(log)}</a></li>`)
-			.join('');
+		const videos = run.artifacts.videos.length ? run.artifacts.videos.map(video => `<video controls src="${escapeHtml(video)}"></video>`).join('') : '<p>No video file was produced.</p>';
+		const logs = run.artifacts.logs.map(log => `<li><a href="${escapeHtml(log)}">${escapeHtml(log)}</a></li>`).join('');
 		const report = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(run.title)}</title>
 <style>body{font:14px system-ui;margin:32px;max-width:1200px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbb;padding:8px;text-align:left}th{background:#eee}video{display:block;max-width:100%;margin:16px 0}.passed{color:#187b34}.failed{color:#b42318}.skipped,.blocked{color:#8a6100}.blocked{font-weight:600}</style></head>
 <body><h1>${escapeHtml(run.title)}</h1><p><strong>Scenario:</strong> ${escapeHtml(run.scenarioId)}<br><strong>Outcome:</strong> <span class="${escapeHtml(run.outcome ?? '')}">${escapeHtml(run.outcome ?? 'unknown')}</span><br><strong>Started:</strong> ${escapeHtml(run.startedAt)}<br><strong>Completed:</strong> ${escapeHtml(run.completedAt ?? '')}</p>
@@ -296,12 +282,7 @@ function sanitizePathSegment(value: string): string {
 }
 
 function escapeHtml(value: string): string {
-	return value
-		.replaceAll('&', '&amp;')
-		.replaceAll('<', '&lt;')
-		.replaceAll('>', '&gt;')
-		.replaceAll('"', '&quot;')
-		.replaceAll("'", '&#39;');
+	return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 }
 
 function isHttpUrl(value: string): boolean {
@@ -314,9 +295,7 @@ function isHttpUrl(value: string): boolean {
 
 function readAshVersion(): string {
 	const packagePath = join(repositoryRoot, '.', 'package.json');
-	return existsSync(packagePath)
-		? (JSON.parse(readFileSync(packagePath, 'utf8')) as { version: string }).version
-		: 'unknown';
+	return existsSync(packagePath) ? (JSON.parse(readFileSync(packagePath, 'utf8')) as { version: string }).version : 'unknown';
 }
 
 function toRelativePath(root: string, path: string): string {

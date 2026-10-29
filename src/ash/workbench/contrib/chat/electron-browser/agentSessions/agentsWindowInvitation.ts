@@ -2,10 +2,7 @@ import { Disposable, DisposableStore, toDisposable } from '../../../../../base/c
 import { URI } from '../../../../../base/common/uri.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { localize } from '../../../../../nls.js';
-import {
-	buildOpenSessionLinkUri,
-	parseOpenSessionLinkUri,
-} from '../../../../../platform/agentHost/common/openSessionLink.js';
+import { buildOpenSessionLinkUri, parseOpenSessionLinkUri } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import {
 	getAgentHostEditorActivity,
@@ -16,11 +13,7 @@ import {
 } from '../../../../../platform/chat/common/agentsWindowInvitation.js';
 import { ChatAIDisabledSettingId } from '../../../../../platform/chat/common/chatSettings.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import {
-	INotificationService,
-	Severity,
-	type INotificationHandle,
-} from '../../../../../platform/notification/common/notification.js';
+import { INotificationService, Severity, type INotificationHandle } from '../../../../../platform/notification/common/notification.js';
 import { INativeHostService } from '../../../../common/services.js';
 import type { INativeHostApi } from '../../../../../platform/native/common/nativeHost.js';
 import { IChatService } from '../../../../services/chat/common/chatService.js';
@@ -115,8 +108,7 @@ export class AgentsWindowInvitationContribution extends Disposable {
 			} else {
 				this.delay.cancel();
 				this.closePresentation();
-				for (const [key, session] of this.activity)
-					this.activity.set(key, { ...session, inProgress: false, needsInput: false });
+				for (const [key, session] of this.activity) this.activity.set(key, { ...session, inProgress: false, needsInput: false });
 				this.enqueue(() => this.publishActivity());
 			}
 		});
@@ -185,10 +177,7 @@ export class AgentsWindowInvitationContribution extends Disposable {
 			await this.host.updateAgentHostEditorState({ kind: 'delete', resources: [resource.toJSON()] });
 		} else {
 			const turn = thread.turns.at(-1);
-			const needsInput =
-				turn?.status === 'waitingForApproval' ||
-				turn?.status === 'waitingForUserInput' ||
-				turn?.status === 'waitingForCapability';
+			const needsInput = turn?.status === 'waitingForApproval' || turn?.status === 'waitingForUserInput' || turn?.status === 'waitingForCapability';
 			const inProgress = !!turn && ['created', 'running', 'cancelling'].includes(turn.status);
 			this.activity.set(resource.toString(), { resource: resource.toJSON(), inProgress, needsInput });
 		}
@@ -237,11 +226,8 @@ export class AgentsWindowInvitationContribution extends Disposable {
 
 	private schedule(): void {
 		const candidate = this.candidate;
-		const session =
-			candidate &&
-			this.state?.sessions.find(session => URI.revive(session.resource).toString() === candidate.toString());
-		const activity =
-			candidate && session && this.state && getAgentHostEditorActivity(this.state, session.windowId, candidate);
+		const session = candidate && this.state?.sessions.find(session => URI.revive(session.resource).toString() === candidate.toString());
+		const activity = candidate && session && this.state && getAgentHostEditorActivity(this.state, session.windowId, candidate);
 		if (
 			!candidate ||
 			!activity ||
@@ -254,8 +240,7 @@ export class AgentsWindowInvitationContribution extends Disposable {
 			this.delay.cancel();
 			return;
 		}
-		if (!this.delay.isScheduled())
-			this.delay.schedule(activity.acrossWindows || activity.sameWindow >= 2 ? 15_000 : 30_000);
+		if (!this.delay.isScheduled()) this.delay.schedule(activity.acrossWindows || activity.sameWindow >= 2 ? 15_000 : 30_000);
 	}
 
 	private async show(): Promise<void> {
@@ -270,9 +255,7 @@ export class AgentsWindowInvitationContribution extends Disposable {
 				this.isDisposed ||
 				!this.isCurrent(candidate) ||
 				this.candidate?.toString() !== candidate.toString() ||
-				(this.state &&
-					this.state.revision >= invitation.revision &&
-					this.state.invitation?.id !== invitation.id)
+				(this.state && this.state.revision >= invitation.revision && this.state.invitation?.id !== invitation.id)
 			) {
 				await this.host.releaseAgentsWindowInvitation(invitation.id);
 				return;
@@ -280,10 +263,7 @@ export class AgentsWindowInvitationContribution extends Disposable {
 			const claimed = invitation;
 			const notification = this.notifications.notify({
 				severity: Severity.Info,
-				message: localize(
-					'agentsWindowInvitation.message',
-					'Continue in the Agents Window to keep track of your agent conversations across projects.',
-				),
+				message: localize('agentsWindowInvitation.message', 'Continue in the Agents Window to keep track of your agent conversations across projects.'),
 				actions: {
 					primary: [
 						{
@@ -300,9 +280,7 @@ export class AgentsWindowInvitationContribution extends Disposable {
 			this.presentation = { invitation: claimed, notification, lifetime };
 			const recordShown = (visible: boolean): void => {
 				if (visible && !this.isDisposed && this.isCurrent(candidate)) {
-					void this.host
-						.markAgentsWindowInvitationShown(claimed.id)
-						.catch(error => console.error('Could not record Agents invitation', error));
+					void this.host.markAgentsWindowInvitationShown(claimed.id).catch(error => console.error('Could not record Agents invitation', error));
 				}
 			};
 			lifetime.add(notification.onDidChangeVisibility(recordShown));

@@ -96,13 +96,10 @@ export type WorkspaceConfigurationRequest =
 	  };
 
 export function validateWorkspaceConfigurationRequest(value: unknown): WorkspaceConfigurationRequest {
-	if (!value || typeof value !== 'object' || Array.isArray(value))
-		throw new TypeError('Invalid workspace configuration request');
+	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid workspace configuration request');
 	const request = value as Record<string, unknown>;
-	if (typeof request.uri !== 'string' || request.uri.length > 32768)
-		throw new TypeError('Invalid workspace configuration URI');
-	if (request.operation === 'read' && Object.keys(request).sort().join(',') === 'operation,uri')
-		return request as WorkspaceConfigurationRequest;
+	if (typeof request.uri !== 'string' || request.uri.length > 32768) throw new TypeError('Invalid workspace configuration URI');
+	if (request.operation === 'read' && Object.keys(request).sort().join(',') === 'operation,uri') return request as WorkspaceConfigurationRequest;
 	if (
 		request.operation !== 'write' ||
 		Object.keys(request).sort().join(',') !== 'content,operation,options,uri' ||

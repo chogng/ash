@@ -6,11 +6,8 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 export interface McpServerConfiguration {
 	readonly id: string;
 	readonly displayName: string;
-	readonly transport:
-		| { readonly type: 'stdio'; readonly command: string; readonly args: readonly string[] }
-		| { readonly type: 'streamableHttp'; readonly url: string };
-	readonly credential:
-		{ readonly type: 'unauthenticated' } | { readonly type: 'reference'; readonly credentialRef: string };
+	readonly transport: { readonly type: 'stdio'; readonly command: string; readonly args: readonly string[] } | { readonly type: 'streamableHttp'; readonly url: string };
+	readonly credential: { readonly type: 'unauthenticated' } | { readonly type: 'reference'; readonly credentialRef: string };
 	readonly enablement: 'enabled' | 'disabled';
 }
 
@@ -45,5 +42,4 @@ export interface IMcpServerManagementService extends IDisposable {
 	disconnect(serverId: string): Promise<void>;
 }
 
-export const IMcpServerManagementService =
-	createServiceIdentifier<IMcpServerManagementService>('mcpServerManagementService');
+export const IMcpServerManagementService = createServiceIdentifier<IMcpServerManagementService>('mcpServerManagementService');

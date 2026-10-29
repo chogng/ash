@@ -7,12 +7,7 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { ILanguageService } from '../../../editor/common/languages/language.js';
 import { LanguageService } from '../../../editor/common/services/languageService.js';
-import {
-	Disposable,
-	DisposableTracker,
-	installDisposableTracker,
-	toDisposable,
-} from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableTracker, installDisposableTracker, toDisposable } from '../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { createColorTheme, highContrastDarkColorTheme } from '../../../platform/theme/common/colorTheme.js';
@@ -39,18 +34,13 @@ class ThemeWindow extends Disposable {
 		this._register(toDisposable(() => this.browser.window.close()));
 		Object.defineProperty(this.browser.window, 'matchMedia', {
 			value: (query: string) => {
-				return query === '(prefers-color-scheme: dark)'
-					? this.systemTheme
-					: { matches: false, addEventListener() {}, removeEventListener() {} };
+				return query === '(prefers-color-scheme: dark)' ? this.systemTheme : { matches: false, addEventListener() {}, removeEventListener() {} };
 			},
 		});
 		this.services.registerInstance(IConfigurationService, this.configuration);
 		this.services.registerInstance(ITelemetryService, NullTelemetryService);
 		this.services.registerInstance(ILanguageService, this._register(new LanguageService()));
-		this.services.registerInstance(
-			IHostColorSchemeService,
-			this._register(new BrowserHostColorSchemeService(this.browser.window as unknown as Window)),
-		);
+		this.services.registerInstance(IHostColorSchemeService, this._register(new BrowserHostColorSchemeService(this.browser.window as unknown as Window)));
 		this.themes = this._register(this.services.createInstance(WorkbenchThemeService, this.root));
 		this.themes.initialize();
 	}
@@ -59,8 +49,7 @@ class ThemeWindow extends Disposable {
 test('Activity Bar badge theme colors respect profile and theme-specific overrides and reset independently', async () => {
 	using window = new ThemeWindow();
 	const { configuration } = window;
-	const read = (): string[] =>
-		['background', 'foreground'].map(part => window.styles.getPropertyValue(`--ash-activityBarBadge-${part}`));
+	const read = (): string[] => ['background', 'foreground'].map(part => window.styles.getPropertyValue(`--ash-activityBarBadge-${part}`));
 	const defaults = read();
 	await configuration.updateValue(WorkbenchConfiguration.colorCustomizations, {
 		'badge.background': '#111111',
@@ -149,9 +138,7 @@ test('dynamic theme registration and replacement update the active window withou
 	const { configuration, themes, root } = window;
 	await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'extension-demo-dark');
 	assert.equal(themes.getColorTheme().id, 'ash-light');
-	using registration = WorkbenchThemesRegistry.registerColorThemes([
-		createColorTheme({ id: 'extension-demo-dark', label: 'Demo Dark', colorScheme: ColorScheme.Dark }),
-	]);
+	using registration = WorkbenchThemesRegistry.registerColorThemes([createColorTheme({ id: 'extension-demo-dark', label: 'Demo Dark', colorScheme: ColorScheme.Dark })]);
 	assert.equal(root.getAttribute('data-color-theme'), 'extension-demo-dark');
 	let changes = 0;
 	using listener = themes.onDidColorThemeChange(() => changes++);
@@ -164,12 +151,7 @@ test('dynamic theme registration and replacement update the active window withou
 		}),
 	]);
 	assert.deepEqual(
-		[
-			themes.getColorTheme().label,
-			root.getAttribute('data-color-scheme'),
-			window.styles.getPropertyValue('--ash-editor-background'),
-			changes,
-		],
+		[themes.getColorTheme().label, root.getAttribute('data-color-scheme'), window.styles.getPropertyValue('--ash-editor-background'), changes],
 		['Updated', ColorScheme.HighContrastDark, '#123456', 1],
 	);
 	registration.dispose();

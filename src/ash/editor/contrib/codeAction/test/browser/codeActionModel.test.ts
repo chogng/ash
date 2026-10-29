@@ -4,11 +4,7 @@ import assert from 'node:assert/strict';
 import { setup, suite, teardown, test } from 'mocha';
 import { createLanguageFeatureEditor } from '../../../../test/browser/testLanguageFeatureEditor.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
-import {
-	CodeActionTriggerType,
-	type LanguageCodeAction,
-	type LanguageDiagnostic,
-} from '../../../../common/languages.js';
+import { CodeActionTriggerType, type LanguageCodeAction, type LanguageDiagnostic } from '../../../../common/languages.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { CodeActionModel, CodeActionsState } from '../../browser/codeActionModel.js';
 import { CodeActionTriggerSource } from '../../common/types.js';
@@ -65,11 +61,7 @@ test('code action filtering excludes families unless the user explicitly request
 	});
 	using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(fixture.model);
 	using model = fixture.editor.invokeWithinContext(accessor =>
-		accessor
-			.get(IInstantiationService)
-			.createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) =>
-				fixture.errors.push(error),
-			),
+		accessor.get(IInstantiationService).createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)),
 	);
 	const excluded = model.trigger({
 		type: CodeActionTriggerType.Invoke,
@@ -100,11 +92,7 @@ test('code action model keeps filters, disabled actions and the original provide
 	using provider = fixture.features.codeActionProvider.register('typescript', {
 		provideCodeActions: request => {
 			assert.deepEqual(request.only, ['refactor']);
-			return [
-				original,
-				{ title: 'Unavailable', kind: 'refactor', disabledReason: 'No selection' },
-				{ title: 'Fix', kind: 'quickfix' },
-			];
+			return [original, { title: 'Unavailable', kind: 'refactor', disabledReason: 'No selection' }, { title: 'Fix', kind: 'quickfix' }];
 		},
 		resolveCodeAction: action => {
 			resolvedOriginal = action;
@@ -113,11 +101,7 @@ test('code action model keeps filters, disabled actions and the original provide
 	});
 	using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(fixture.model);
 	using model = fixture.editor.invokeWithinContext(accessor =>
-		accessor
-			.get(IInstantiationService)
-			.createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) =>
-				fixture.errors.push(error),
-			),
+		accessor.get(IInstantiationService).createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)),
 	);
 	const state = model.trigger({
 		type: CodeActionTriggerType.Invoke,
@@ -148,18 +132,13 @@ for (const change of ['content', 'language', 'selection', 'provider', 'dispose']
 			provideCodeActions: (_request, cancellation) => {
 				signal = cancellation;
 				return new Promise(resolve => {
-					finish = () =>
-						resolve({ actions: [{ title: 'Late action', isAI: true }], ...toDisposable(() => released++) });
+					finish = () => resolve({ actions: [{ title: 'Late action', isAI: true }], ...toDisposable(() => released++) });
 				});
 			},
 		});
 		using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(fixture.model);
 		using model = fixture.editor.invokeWithinContext(accessor =>
-			accessor
-				.get(IInstantiationService)
-				.createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) =>
-					fixture.errors.push(error),
-				),
+			accessor.get(IInstantiationService).createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)),
 		);
 		const state = model.trigger({
 			type: CodeActionTriggerType.Invoke,
@@ -211,11 +190,7 @@ suite('Code action result ownership and AI markers', () => {
 			],
 			[true, false, false],
 		],
-		[
-			'disabled AI',
-			[{ title: 'AI fix', isAI: true, disabledReason: 'Unavailable' }, { title: 'Fix' }],
-			[false, false, false],
-		],
+		['disabled AI', [{ title: 'AI fix', isAI: true, disabledReason: 'Unavailable' }, { title: 'Fix' }], [false, false, false]],
 		[
 			'disabled ordinary',
 			[
@@ -225,11 +200,7 @@ suite('Code action result ownership and AI markers', () => {
 			[true, true, false],
 		],
 		['all disabled', [{ title: 'AI fix', isAI: true, disabledReason: 'Unavailable' }], [false, true, false]],
-		[
-			'preferred AI quick fix',
-			[{ title: 'AI fix', kind: 'quickfix', isAI: true, isPreferred: true }],
-			[true, true, true],
-		],
+		['preferred AI quick fix', [{ title: 'AI fix', kind: 'quickfix', isAI: true, isPreferred: true }], [true, true, true]],
 	] as const) {
 		test('computes flags from valid actions: ' + label, async () => {
 			using provider = fixture.features.codeActionProvider.register('typescript', {
@@ -237,11 +208,7 @@ suite('Code action result ownership and AI markers', () => {
 			});
 			using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(fixture.model);
 			using model = fixture.editor.invokeWithinContext(accessor =>
-				accessor
-					.get(IInstantiationService)
-					.createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) =>
-						fixture.errors.push(error),
-					),
+				accessor.get(IInstantiationService).createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)),
 			);
 			const state = model.trigger({
 				type: CodeActionTriggerType.Invoke,
@@ -268,11 +235,7 @@ suite('Code action result ownership and AI markers', () => {
 			});
 			using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(fixture.model);
 			using model = fixture.editor.invokeWithinContext(accessor =>
-				accessor
-					.get(IInstantiationService)
-					.createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) =>
-						fixture.errors.push(error),
-					),
+				accessor.get(IInstantiationService).createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)),
 			);
 			const trigger = { type: CodeActionTriggerType.Invoke, triggerAction: CodeActionTriggerSource.QuickFix };
 			const state = model.trigger(trigger)!;
@@ -325,11 +288,7 @@ suite('Code action result ownership and AI markers', () => {
 		});
 		using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(fixture.model);
 		using model = fixture.editor.invokeWithinContext(accessor =>
-			accessor
-				.get(IInstantiationService)
-				.createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) =>
-					fixture.errors.push(error),
-				),
+			accessor.get(IInstantiationService).createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)),
 		);
 		const state = model.trigger({
 			type: CodeActionTriggerType.Invoke,
@@ -353,11 +312,7 @@ suite('Code action result ownership and AI markers', () => {
 		});
 		using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(fixture.model);
 		using model = fixture.editor.invokeWithinContext(accessor =>
-			accessor
-				.get(IInstantiationService)
-				.createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) =>
-					fixture.errors.push(error),
-				),
+			accessor.get(IInstantiationService).createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)),
 		);
 		const state = model.trigger({
 			type: CodeActionTriggerType.Invoke,
@@ -382,11 +337,7 @@ suite('Code action result ownership and AI markers', () => {
 		});
 		using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(fixture.model);
 		using model = fixture.editor.invokeWithinContext(accessor =>
-			accessor
-				.get(IInstantiationService)
-				.createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) =>
-					fixture.errors.push(error),
-				),
+			accessor.get(IInstantiationService).createInstance(CodeActionModel, fixture.editor, diagnostics, (error: unknown) => fixture.errors.push(error)),
 		);
 		const state = model.trigger({
 			type: CodeActionTriggerType.Invoke,
@@ -410,9 +361,7 @@ suite('Code action result ownership and AI markers', () => {
 			provideCodeActions: () => ({ actions: [{ title: 'Ready' }], ...toDisposable(() => released++) }),
 		});
 		using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(fixture.model);
-		using model = fixture.editor.invokeWithinContext(accessor =>
-			accessor.get(IInstantiationService).createInstance(CodeActionModel, fixture.editor, diagnostics, () => {}),
-		);
+		using model = fixture.editor.invokeWithinContext(accessor => accessor.get(IInstantiationService).createInstance(CodeActionModel, fixture.editor, diagnostics, () => {}));
 		const state = model.trigger({
 			type: CodeActionTriggerType.Invoke,
 			triggerAction: CodeActionTriggerSource.QuickFix,

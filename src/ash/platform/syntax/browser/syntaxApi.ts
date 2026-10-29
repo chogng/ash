@@ -89,8 +89,7 @@ export function createAppServerSyntaxApi(connection: AppServerProtocolClient): I
 								folds: {
 									...facts.folds,
 									items: facts.folds.items.map(([startLineIndex, endLineIndex, kind]) => {
-										if (kind !== null && kind !== 'comment' && kind !== 'region')
-											throw new TypeError('Invalid syntax fold category');
+										if (kind !== null && kind !== 'comment' && kind !== 'region') throw new TypeError('Invalid syntax fold category');
 										return { startLineIndex, endLineIndex, ...(kind ? { kind } : {}) };
 									}),
 								},
@@ -109,8 +108,7 @@ export function createAppServerSyntaxApi(connection: AppServerProtocolClient): I
 			}
 		},
 		analyze: params => appServerRequest(connection, 'syntax/analyze', params),
-		selectionRanges: params =>
-			appServerRequest(connection, 'syntax/selectionRanges', { ...params, ranges: [...params.ranges] }),
+		selectionRanges: params => appServerRequest(connection, 'syntax/selectionRanges', { ...params, ranges: [...params.ranges] }),
 		close: async params => {
 			await appServerRequest(connection, 'syntax/close', params);
 		},

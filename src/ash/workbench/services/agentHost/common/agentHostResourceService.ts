@@ -1,10 +1,7 @@
 import { Disposable, toDisposable, type IReference } from '../../../../base/common/lifecycle.js';
 import { canceled } from '../../../../base/common/errors.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
-import type {
-	AgentHostResourceSnapshot,
-	IAgentHostResourceService,
-} from '../../../../platform/agentHost/common/agentHostResourceService.js';
+import type { AgentHostResourceSnapshot, IAgentHostResourceService } from '../../../../platform/agentHost/common/agentHostResourceService.js';
 
 interface Snapshot {
 	readonly bytes: Uint8Array;
@@ -48,11 +45,7 @@ export class AgentHostResourceService extends Disposable implements IAgentHostRe
 		return { object, ...toDisposable(() => this.release(handle)) };
 	}
 
-	public read(
-		handle: string,
-		offset: number,
-		maximum: number,
-	): { readonly bytes: Uint8Array; readonly eof: boolean } {
+	public read(handle: string, offset: number, maximum: number): { readonly bytes: Uint8Array; readonly eof: boolean } {
 		this.assertNotDisposed();
 		this.expire();
 		const snapshot = this.snapshots.get(handle);
@@ -84,11 +77,7 @@ export class AgentHostResourceService extends Disposable implements IAgentHostRe
 	}
 
 	private hasCapacity(bytes: number): boolean {
-		return (
-			this.snapshots.size < 64 &&
-			[...this.snapshots.values()].reduce((total, snapshot) => total + snapshot.bytes.byteLength, 0) + bytes <=
-				32 * 1024 * 1024
-		);
+		return this.snapshots.size < 64 && [...this.snapshots.values()].reduce((total, snapshot) => total + snapshot.bytes.byteLength, 0) + bytes <= 32 * 1024 * 1024;
 	}
 
 	private expire(): void {

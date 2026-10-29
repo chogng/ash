@@ -5,8 +5,6 @@ import { type EditorFoldingModel } from './folding/browser/foldingModel.js';
 
 /** Typed identities for shared runtime objects consumed by independently selected text-editor contributions. */
 export const TextEditorCapability = Object.freeze({
-	diagnosticDecorations: createServiceIdentifier<TextDecorationCollection<LanguageDiagnostic>>(
-		'editor.capability.diagnosticDecorations',
-	),
+	diagnosticDecorations: createServiceIdentifier<TextDecorationCollection<LanguageDiagnostic>>('editor.capability.diagnosticDecorations'),
 	folding: createServiceIdentifier<EditorFoldingModel>('editor.capability.folding'),
 });

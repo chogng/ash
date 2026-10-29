@@ -2,10 +2,7 @@ import { isCancellationError } from '../../../../../../base/common/errors.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
-import {
-	ChatAttachmentModel,
-	type IChatAttachmentChangeEvent,
-} from '../../../browser/attachments/chatAttachmentModel.js';
+import { ChatAttachmentModel, type IChatAttachmentChangeEvent } from '../../../browser/attachments/chatAttachmentModel.js';
 import type { ChatContextAttachment } from '../../../../../services/chat/common/chatContextService.js';
 
 function attachment(id: string): ChatContextAttachment {
@@ -94,10 +91,7 @@ test('Clearing an empty draft cancels waiters and rejects results that ignore ca
 	const result = new DeferredPromise<readonly ChatContextAttachment[]>();
 	const acquiring = model.acquireContext(() => result.p);
 	const waiting = model.resolvePendingContext();
-	const rejected = Promise.all([
-		assert.rejects(acquiring, isCancellationError),
-		assert.rejects(waiting, isCancellationError),
-	]);
+	const rejected = Promise.all([assert.rejects(acquiring, isCancellationError), assert.rejects(waiting, isCancellationError)]);
 	model.clear();
 	await rejected;
 	await result.complete([attachment('stale')]);
@@ -117,10 +111,7 @@ test('Preparation failure rejects a waiting submission and retains existing cont
 	const result = new DeferredPromise<readonly ChatContextAttachment[]>();
 	const acquiring = model.acquireContext(() => result.p);
 	const waiting = model.resolvePendingContext();
-	const rejected = Promise.all([
-		assert.rejects(acquiring, /invalid file/u),
-		assert.rejects(waiting, /invalid file/u),
-	]);
+	const rejected = Promise.all([assert.rejects(acquiring, /invalid file/u), assert.rejects(waiting, /invalid file/u)]);
 	await result.error(new Error('invalid file'));
 	await rejected;
 	assert.deepEqual(

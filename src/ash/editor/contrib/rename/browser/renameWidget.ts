@@ -76,28 +76,15 @@ export class RenameWidget extends Disposable {
 				if (event.key === 'Escape') {
 					stopEvent(event);
 					editor.trigger('keyboard', 'cancelRenameInput', {});
-				} else if (
-					event.key === 'Enter' &&
-					!event.altKey &&
-					((!event.ctrlKey && !event.metaKey) || this.supportsPreview)
-				) {
+				} else if (event.key === 'Enter' && !event.altKey && ((!event.ctrlKey && !event.metaKey) || this.supportsPreview)) {
 					stopEvent(event);
-					editor.trigger(
-						'keyboard',
-						event.ctrlKey || event.metaKey ? 'acceptRenameInputWithPreview' : 'acceptRenameInput',
-						{},
-					);
+					editor.trigger('keyboard', event.ctrlKey || event.metaKey ? 'acceptRenameInputWithPreview' : 'acceptRenameInput', {});
 				}
 			}),
 		);
 	}
 
-	public getInput(
-		where: Range,
-		currentName: string,
-		signal: AbortSignal,
-		supportsPreview: boolean,
-	): Promise<RenameWidgetResult | undefined> {
+	public getInput(where: Range, currentName: string, signal: AbortSignal, supportsPreview: boolean): Promise<RenameWidgetResult | undefined> {
 		this.cancelInput(false, 'new input');
 		this.supportsPreview = supportsPreview;
 		this.input.value = currentName;
@@ -108,9 +95,7 @@ export class RenameWidget extends Disposable {
 		const result = new Promise<RenameWidgetResult | undefined>(resolve => {
 			this.complete = resolve;
 		});
-		this.cancellation.value = addDisposableListener(signal, 'abort', () =>
-			this.cancelInput(true, 'request cancelled'),
-		);
+		this.cancellation.value = addDisposableListener(signal, 'abort', () => this.cancelInput(true, 'request cancelled'));
 		this.domNode.hidden = false;
 		this.visible.set(true);
 		this.input.focus();
@@ -136,10 +121,7 @@ export class RenameWidget extends Disposable {
 	}
 	private get inputHint(): string {
 		return this.supportsPreview
-			? localize(
-					'rename.inputPreviewHint',
-					'Enter to rename, Ctrl+Enter or Command+Enter to preview, Escape to cancel',
-				)
+			? localize('rename.inputPreviewHint', 'Enter to rename, Ctrl+Enter or Command+Enter to preview, Escape to cancel')
 			: localize('rename.inputHint', 'Enter to rename, Escape to cancel');
 	}
 	public cancelInput(focusEditor: boolean, _caller: string): void {

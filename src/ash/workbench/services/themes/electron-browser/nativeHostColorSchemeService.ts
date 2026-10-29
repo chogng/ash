@@ -29,11 +29,7 @@ export class NativeHostColorSchemeService extends Disposable implements IHostCol
 		// A system event received during the read is newer than its reply.
 		const revision = this.revision;
 		const scheme = await this.host.getOSColorScheme();
-		if (
-			this.isDisposed ||
-			revision !== this.revision ||
-			(scheme.dark === this.dark && scheme.highContrast === this.highContrast)
-		) {
+		if (this.isDisposed || revision !== this.revision || (scheme.dark === this.dark && scheme.highContrast === this.highContrast)) {
 			return;
 		}
 		this.scheme = scheme;

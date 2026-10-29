@@ -1,10 +1,6 @@
 import type { IEditorOptions } from '../../../../editor/common/config/editorOptions.js';
 import { localize } from '../../../../nls.js';
-import {
-	ConfigurationScope,
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { IDocumentDiffProviderOptions } from '../../../../editor/common/diff/documentDiffProvider.js';
@@ -24,21 +20,12 @@ export const EditorFocusRecentEditorAfterCloseConfiguration = configurationRegis
 	schema: { type: 'boolean' },
 	defaultValue: true,
 	parse: value => {
-		if (typeof value !== 'boolean')
-			throw new TypeError(
-				localize(
-					'workbench.editor.focusRecentEditorAfterClose.invalid',
-					'Focus Recent Editor After Close must be true or false.',
-				),
-			);
+		if (typeof value !== 'boolean') throw new TypeError(localize('workbench.editor.focusRecentEditorAfterClose.invalid', 'Focus Recent Editor After Close must be true or false.'));
 		return value;
 	},
 	setting: {
 		get title() {
-			return localize(
-				'workbench.editor.focusRecentEditorAfterClose.title',
-				'Workbench › Editor: Focus Recent Editor After Close',
-			);
+			return localize('workbench.editor.focusRecentEditorAfterClose.title', 'Workbench › Editor: Focus Recent Editor After Close');
 		},
 		get description() {
 			return localize(
@@ -56,10 +43,7 @@ export const EditorCloseEmptyGroupsConfiguration = configurationRegistry.registe
 	schema: { type: 'boolean' },
 	defaultValue: true,
 	parse: value => {
-		if (typeof value !== 'boolean')
-			throw new TypeError(
-				localize('workbench.editor.closeEmptyGroups.invalid', 'Close Empty Groups must be true or false.'),
-			);
+		if (typeof value !== 'boolean') throw new TypeError(localize('workbench.editor.closeEmptyGroups.invalid', 'Close Empty Groups must be true or false.'));
 		return value;
 	},
 	setting: {
@@ -76,51 +60,37 @@ export const EditorCloseEmptyGroupsConfiguration = configurationRegistry.registe
 	},
 });
 
-export const EditorOpenSideBySideDirectionConfiguration = configurationRegistry.registerConfiguration<'right' | 'down'>(
-	{
-		key: 'workbench.editor.openSideBySideDirection',
-		scope: ConfigurationScope.WINDOW,
-		schema: { type: 'string', enum: ['right', 'down'] },
-		defaultValue: 'right',
-		parse: value => {
-			if (value !== 'right' && value !== 'down')
-				throw new TypeError(
-					localize(
-						'workbench.editor.openSideBySideDirection.invalid',
-						'Editor split direction must be right or down.',
-					),
-				);
-			return value;
+export const EditorOpenSideBySideDirectionConfiguration = configurationRegistry.registerConfiguration<'right' | 'down'>({
+	key: 'workbench.editor.openSideBySideDirection',
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', enum: ['right', 'down'] },
+	defaultValue: 'right',
+	parse: value => {
+		if (value !== 'right' && value !== 'down') throw new TypeError(localize('workbench.editor.openSideBySideDirection.invalid', 'Editor split direction must be right or down.'));
+		return value;
+	},
+	setting: {
+		get title() {
+			return localize('workbench.editor.openSideBySideDirection.title', 'Workbench › Editor: Open Side by Side Direction');
 		},
-		setting: {
-			get title() {
-				return localize(
-					'workbench.editor.openSideBySideDirection.title',
-					'Workbench › Editor: Open Side by Side Direction',
-				);
-			},
-			get description() {
-				return localize(
-					'workbench.editor.openSideBySideDirection.description',
-					'Controls whether editors open side by side to the right or below.',
-				);
-			},
-			valueType: 'select',
-			get options() {
-				return [
-					{
-						value: 'right' as const,
-						label: localize('workbench.editor.openSideBySideDirection.right', 'Right'),
-					},
-					{
-						value: 'down' as const,
-						label: localize('workbench.editor.openSideBySideDirection.down', 'Down'),
-					},
-				];
-			},
+		get description() {
+			return localize('workbench.editor.openSideBySideDirection.description', 'Controls whether editors open side by side to the right or below.');
+		},
+		valueType: 'select',
+		get options() {
+			return [
+				{
+					value: 'right' as const,
+					label: localize('workbench.editor.openSideBySideDirection.right', 'Right'),
+				},
+				{
+					value: 'down' as const,
+					label: localize('workbench.editor.openSideBySideDirection.down', 'Down'),
+				},
+			];
 		},
 	},
-);
+});
 
 export const EditorTabSizingConfiguration = configurationRegistry.registerConfiguration<EditorTabSizing>({
 	key: 'workbench.editor.tabSizing',
@@ -129,9 +99,7 @@ export const EditorTabSizingConfiguration = configurationRegistry.registerConfig
 	defaultValue: 'fit',
 	parse: value => {
 		if (value !== 'fit' && value !== 'shrink' && value !== 'fixed') {
-			throw new TypeError(
-				localize('workbench.editor.tabSizing.invalid', 'Invalid editor tab sizing. Use fit, shrink, or fixed.'),
-			);
+			throw new TypeError(localize('workbench.editor.tabSizing.invalid', 'Invalid editor tab sizing. Use fit, shrink, or fixed.'));
 		}
 		return value;
 	},
@@ -163,27 +131,16 @@ export const EditorTabSizingFixedMinWidthConfiguration = configurationRegistry.r
 	defaultValue: 50,
 	parse: value => {
 		if (typeof value !== 'number' || !Number.isFinite(value) || value < 38) {
-			throw new TypeError(
-				localize(
-					'workbench.editor.tabSizingFixedMinWidth.invalid',
-					'Minimum tab width must be a finite number of at least 38 pixels.',
-				),
-			);
+			throw new TypeError(localize('workbench.editor.tabSizingFixedMinWidth.invalid', 'Minimum tab width must be a finite number of at least 38 pixels.'));
 		}
 		return value;
 	},
 	setting: {
 		get title() {
-			return localize(
-				'workbench.editor.tabSizingFixedMinWidth.title',
-				'Workbench › Editor: Tab Sizing Fixed Min Width',
-			);
+			return localize('workbench.editor.tabSizingFixedMinWidth.title', 'Workbench › Editor: Tab Sizing Fixed Min Width');
 		},
 		get description() {
-			return localize(
-				'workbench.editor.tabSizingFixedMinWidth.description',
-				'Controls the minimum width in pixels of tabs when Tab Sizing is Fixed.',
-			);
+			return localize('workbench.editor.tabSizingFixedMinWidth.description', 'Controls the minimum width in pixels of tabs when Tab Sizing is Fixed.');
 		},
 		valueType: 'number',
 		minimum: 38,
@@ -198,27 +155,16 @@ export const EditorTabSizingFixedMaxWidthConfiguration = configurationRegistry.r
 	defaultValue: 160,
 	parse: value => {
 		if (typeof value !== 'number' || !Number.isFinite(value) || value < 38) {
-			throw new TypeError(
-				localize(
-					'workbench.editor.tabSizingFixedMaxWidth.invalid',
-					'Maximum tab width must be a finite number of at least 38 pixels.',
-				),
-			);
+			throw new TypeError(localize('workbench.editor.tabSizingFixedMaxWidth.invalid', 'Maximum tab width must be a finite number of at least 38 pixels.'));
 		}
 		return value;
 	},
 	setting: {
 		get title() {
-			return localize(
-				'workbench.editor.tabSizingFixedMaxWidth.title',
-				'Workbench › Editor: Tab Sizing Fixed Max Width',
-			);
+			return localize('workbench.editor.tabSizingFixedMaxWidth.title', 'Workbench › Editor: Tab Sizing Fixed Max Width');
 		},
 		get description() {
-			return localize(
-				'workbench.editor.tabSizingFixedMaxWidth.description',
-				'Controls the maximum width in pixels of tabs when Tab Sizing is Fixed.',
-			);
+			return localize('workbench.editor.tabSizingFixedMaxWidth.description', 'Controls the maximum width in pixels of tabs when Tab Sizing is Fixed.');
 		},
 		valueType: 'number',
 		minimum: 38,
@@ -233,12 +179,7 @@ export const EditorLabelFormatConfiguration = configurationRegistry.registerConf
 	defaultValue: 'default',
 	parse: value => {
 		if (value !== 'default' && value !== 'short' && value !== 'medium' && value !== 'long') {
-			throw new TypeError(
-				localize(
-					'workbench.editor.labelFormat.invalid',
-					'Invalid editor label format. Use default, short, medium, or long.',
-				),
-			);
+			throw new TypeError(localize('workbench.editor.labelFormat.invalid', 'Invalid editor label format. Use default, short, medium, or long.'));
 		}
 		return value;
 	},
@@ -264,81 +205,67 @@ export const EditorLabelFormatConfiguration = configurationRegistry.registerConf
 	},
 });
 
-export const EditorTitleScrollbarSizingConfiguration =
-	configurationRegistry.registerConfiguration<EditorTitleScrollbarSizing>({
-		key: 'workbench.editor.titleScrollbarSizing',
-		scope: ConfigurationScope.WINDOW,
-		schema: { type: 'string', enum: ['default', 'large'] },
-		defaultValue: 'default',
-		parse: value => (value === 'large' ? 'large' : 'default'),
-		setting: {
-			get title() {
-				return localize(
-					'workbench.editor.titleScrollbarSizing.title',
-					'Workbench › Editor: Title Scrollbar Sizing',
-				);
-			},
-			get description() {
-				return localize(
-					'workbench.editor.titleScrollbarSizing.description',
-					'Controls the size of the scrollbars for editor tabs and breadcrumbs.',
-				);
-			},
-			valueType: 'select',
-			get options() {
-				return [
-					{
-						value: 'default' as const,
-						label: localize('workbench.editor.titleScrollbarSizing.default', 'Default'),
-					},
-					{
-						value: 'large' as const,
-						label: localize('workbench.editor.titleScrollbarSizing.large', 'Large'),
-					},
-				];
-			},
+export const EditorTitleScrollbarSizingConfiguration = configurationRegistry.registerConfiguration<EditorTitleScrollbarSizing>({
+	key: 'workbench.editor.titleScrollbarSizing',
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', enum: ['default', 'large'] },
+	defaultValue: 'default',
+	parse: value => (value === 'large' ? 'large' : 'default'),
+	setting: {
+		get title() {
+			return localize('workbench.editor.titleScrollbarSizing.title', 'Workbench › Editor: Title Scrollbar Sizing');
 		},
-	});
+		get description() {
+			return localize('workbench.editor.titleScrollbarSizing.description', 'Controls the size of the scrollbars for editor tabs and breadcrumbs.');
+		},
+		valueType: 'select',
+		get options() {
+			return [
+				{
+					value: 'default' as const,
+					label: localize('workbench.editor.titleScrollbarSizing.default', 'Default'),
+				},
+				{
+					value: 'large' as const,
+					label: localize('workbench.editor.titleScrollbarSizing.large', 'Large'),
+				},
+			];
+		},
+	},
+});
 
-export const EditorTitleScrollbarVisibilityConfiguration =
-	configurationRegistry.registerConfiguration<EditorTitleScrollbarVisibility>({
-		key: 'workbench.editor.titleScrollbarVisibility',
-		scope: ConfigurationScope.WINDOW,
-		schema: { type: 'string', enum: ['auto', 'visible', 'hidden'] },
-		defaultValue: 'auto',
-		parse: value => (value === 'visible' || value === 'hidden' ? value : 'auto'),
-		setting: {
-			get title() {
-				return localize(
-					'workbench.editor.titleScrollbarVisibility.title',
-					'Workbench › Editor: Title Scrollbar Visibility',
-				);
-			},
-			get description() {
-				return localize(
-					'workbench.editor.titleScrollbarVisibility.description',
-					'Controls when scrollbars for editor tabs and breadcrumbs are visible.',
-				);
-			},
-			valueType: 'select',
-			get options() {
-				return [
-					{
-						value: 'auto' as const,
-						label: localize('workbench.editor.titleScrollbarVisibility.auto', 'Auto'),
-					},
-					{
-						value: 'visible' as const,
-						label: localize('workbench.editor.titleScrollbarVisibility.visible', 'Visible'),
-					},
-					{
-						value: 'hidden' as const,
-						label: localize('workbench.editor.titleScrollbarVisibility.hidden', 'Hidden'),
-					},
-				];
-			},
+export const EditorTitleScrollbarVisibilityConfiguration = configurationRegistry.registerConfiguration<EditorTitleScrollbarVisibility>({
+	key: 'workbench.editor.titleScrollbarVisibility',
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', enum: ['auto', 'visible', 'hidden'] },
+	defaultValue: 'auto',
+	parse: value => (value === 'visible' || value === 'hidden' ? value : 'auto'),
+	setting: {
+		get title() {
+			return localize('workbench.editor.titleScrollbarVisibility.title', 'Workbench › Editor: Title Scrollbar Visibility');
 		},
-	});
+		get description() {
+			return localize('workbench.editor.titleScrollbarVisibility.description', 'Controls when scrollbars for editor tabs and breadcrumbs are visible.');
+		},
+		valueType: 'select',
+		get options() {
+			return [
+				{
+					value: 'auto' as const,
+					label: localize('workbench.editor.titleScrollbarVisibility.auto', 'Auto'),
+				},
+				{
+					value: 'visible' as const,
+					label: localize('workbench.editor.titleScrollbarVisibility.visible', 'Visible'),
+				},
+				{
+					value: 'hidden' as const,
+					label: localize('workbench.editor.titleScrollbarVisibility.hidden', 'Hidden'),
+				},
+			];
+		},
+	},
+});
 
 export const EditorTabsModeConfiguration = configurationRegistry.registerConfiguration<EditorTabsMode>({
 	key: 'workbench.editor.showTabs',
@@ -391,10 +318,7 @@ export const EditorAutoSaveConfiguration = configurationRegistry.registerConfigu
 export const EditorAutoSaveDelayConfiguration = configurationRegistry.registerConfiguration<number>({
 	key: 'files.autoSaveDelay',
 	defaultValue: 1_000,
-	parse: value =>
-		typeof value === 'number' && Number.isFinite(value)
-			? Math.min(60_000, Math.max(100, Math.round(value)))
-			: 1_000,
+	parse: value => (typeof value === 'number' && Number.isFinite(value) ? Math.min(60_000, Math.max(100, Math.round(value))) : 1_000),
 	setting: {
 		title: 'Files: Auto Save Delay',
 		description: 'Delay in milliseconds before a dirty editor is automatically saved.',
@@ -405,10 +329,7 @@ export const EditorAutoSaveDelayConfiguration = configurationRegistry.registerCo
 });
 
 /** Reads computation settings shared by single-file and multi-file diff panes. */
-export function getDiffComputationOptions(
-	configuration: IConfigurationService,
-	languageId: string,
-): IDocumentDiffProviderOptions {
+export function getDiffComputationOptions(configuration: IConfigurationService, languageId: string): IDocumentDiffProviderOptions {
 	return {
 		ignoreTrimWhitespace: configuration.getValue<boolean>('diffEditor.ignoreTrimWhitespace', {
 			overrideIdentifier: languageId,
@@ -420,13 +341,8 @@ export function getDiffComputationOptions(
 	};
 }
 
-export function getDiffWordWrap(
-	configuration: IConfigurationService,
-	languageId?: string,
-): NonNullable<IEditorOptions['wordWrap']> {
+export function getDiffWordWrap(configuration: IConfigurationService, languageId?: string): NonNullable<IEditorOptions['wordWrap']> {
 	const overrides = { overrideIdentifier: languageId };
 	const value = configuration.getValue<'off' | 'on' | 'inherit'>('diffEditor.wordWrap', overrides);
-	return value === 'inherit'
-		? configuration.getValue<NonNullable<IEditorOptions['wordWrap']>>('editor.wordWrap', overrides)
-		: value;
+	return value === 'inherit' ? configuration.getValue<NonNullable<IEditorOptions['wordWrap']>>('editor.wordWrap', overrides) : value;
 }

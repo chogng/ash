@@ -1,12 +1,7 @@
 import type { MarkedExtension, Token, TokenizerThis, Tokens } from '../../../../base/common/marked/marked.js';
 import { basicMarkupHtmlTags, sanitizeHtmlToFragment } from '../../../../base/browser/domSanitize.js';
 import { getDocument } from '../../../../base/browser/dom.js';
-import {
-	allowedMarkdownHtmlAttributes,
-	renderAsPlaintext,
-	renderWorkbenchMarkdown,
-	type MarkdownRenderOptions,
-} from '../../../../base/browser/markdownRenderer.js';
+import { allowedMarkdownHtmlAttributes, renderAsPlaintext, renderWorkbenchMarkdown, type MarkdownRenderOptions } from '../../../../base/browser/markdownRenderer.js';
 import { htmlAttributeEncodeValue } from '../../../../base/common/strings.js';
 import { localize } from '../../../../nls.js';
 import type { ChatGPTReference, ChatGPTResource } from './chatGPTClient.js';
@@ -24,20 +19,7 @@ interface RichTag {
 const inlineTags = new Set(['text', 'icon']);
 const mediaTags = new Set(['img', 'video', 'audio', 'iframe', 'canvas']);
 // This is routing to the shared HTML renderer, not a second HTML implementation.
-const htmlTags = new Set<string>([
-	...basicMarkupHtmlTags,
-	'script',
-	'style',
-	'svg',
-	'path',
-	'line',
-	'title',
-	'desc',
-	'canvas',
-	'iframe',
-	'audio',
-	'math',
-]);
+const htmlTags = new Set<string>([...basicMarkupHtmlTags, 'script', 'style', 'svg', 'path', 'line', 'title', 'desc', 'canvas', 'iframe', 'audio', 'math']);
 const hiddenTags = new Set(['cite']);
 const iconText = new Map(
 	Object.entries({
@@ -55,8 +37,7 @@ const iconText = new Map(
 );
 const escapeHTML = htmlAttributeEncodeValue;
 const fallbackText = (): string => localize('sessions.chatgpt.viewContent', 'View this content in ChatGPT');
-const fallbackHTML = (): string =>
-	`<a class="ash-chatgpt-rich-fallback" href="https://chatgpt.com/">${escapeHTML(fallbackText())}</a>`;
+const fallbackHTML = (): string => `<a class="ash-chatgpt-rich-fallback" href="https://chatgpt.com/">${escapeHTML(fallbackText())}</a>`;
 
 interface RichContent {
 	readonly tag: RichTag;
@@ -253,22 +234,14 @@ function attributes(tag: RichTag): Map<string, string> {
 
 function description(tag: RichTag): string {
 	const values = attributes(tag);
-	return [
-		...new Set(
-			['title', 'label', 'alt', 'caption', 'description', 'text'].flatMap(key =>
-				values.has(key) ? [values.get(key)!] : [],
-			),
-		),
-	].join(' — ');
+	return [...new Set(['title', 'label', 'alt', 'caption', 'description', 'text'].flatMap(key => (values.has(key) ? [values.get(key)!] : [])))].join(' — ');
 }
 
 function componentData(tag: RichTag): string {
 	const values = attributes(tag);
 	const data = values.get('data');
 	if (!data) {
-		const properties = Object.fromEntries(
-			[...values].filter(([key]) => !['title', 'label', 'alt', 'caption', 'description', 'text'].includes(key)),
-		);
+		const properties = Object.fromEntries([...values].filter(([key]) => !['title', 'label', 'alt', 'caption', 'description', 'text'].includes(key)));
 		return Object.keys(properties).length ? JSON.stringify(properties, null, 2) : '';
 	}
 	try {
@@ -279,9 +252,7 @@ function componentData(tag: RichTag): string {
 }
 
 function colorClass(property: 'background' | 'border', value: string | undefined): string | undefined {
-	const match =
-		value &&
-		/^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(0(?:\.\d+)?|1(?:\.0+)?))?\s*\)$/u.exec(value);
+	const match = value && /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(0(?:\.\d+)?|1(?:\.0+)?))?\s*\)$/u.exec(value);
 	if (!match || match.slice(1, 4).some(channel => Number(channel) > 255)) {
 		return undefined;
 	}
@@ -324,12 +295,7 @@ function classes(tag: RichTag): string {
 }
 
 const lexerDepth = new WeakMap<TokenizerThis['lexer'], number>();
-function tokenize(
-	this: TokenizerThis,
-	source: string,
-	level: 'block' | 'inline',
-	previous: readonly Token[],
-): Tokens.Generic | undefined {
+function tokenize(this: TokenizerThis, source: string, level: 'block' | 'inline', previous: readonly Token[]): Tokens.Generic | undefined {
 	if (this.lexer.state.inRawBlock) {
 		return undefined;
 	}
@@ -396,9 +362,7 @@ function resourceMarkup(resource: ChatGPTResource): string {
 function referenceMarkup(ids: readonly string[], references: readonly ChatGPTReference[]): string {
 	const selected = [...new Set(ids)].flatMap(id => {
 		const exact = references.find(reference => reference.id === id);
-		const candidates = references.filter(
-			reference => reference.id.replace(/^turn\d+/u, '') === id.replace(/^turn\d+/u, ''),
-		);
+		const candidates = references.filter(reference => reference.id.replace(/^turn\d+/u, '') === id.replace(/^turn\d+/u, ''));
 		const reference = exact ?? (candidates.length === 1 ? candidates[0] : undefined);
 		return reference ? [reference] : [];
 	});
@@ -410,8 +374,7 @@ function createRichContentExtension(references: readonly ChatGPTReference[] = []
 	return {
 		renderer: {
 			image(token) {
-				if (token.href.startsWith('data:image/'))
-					return `<img src="${escapeHTML(token.href)}" alt="${escapeHTML(token.text)}">`;
+				if (token.href.startsWith('data:image/')) return `<img src="${escapeHTML(token.href)}" alt="${escapeHTML(token.text)}">`;
 				return resourceMarkup({
 					uri: token.href,
 					name: token.text || localize('sessions.chatgpt.image', 'Image'),
@@ -470,20 +433,17 @@ function createRichContentExtension(references: readonly ChatGPTReference[] = []
 						if (tag.name === 'canvas')
 							return resourceMarkup({
 								uri: `data:text/html;charset=utf-8,${encodeURIComponent(token.raw)}`,
-								name:
-									description(tag) || localize('sessions.chatgpt.interactive', 'Interactive content'),
+								name: description(tag) || localize('sessions.chatgpt.interactive', 'Interactive content'),
 								kind: 'html',
 							});
 						if (tag.name === 'iframe' && values.has('srcdoc')) {
 							// Decode the HTML attribute as inert text before handing its document
 							// to the isolated host. The Workbench never inserts that HTML.
 							const encoded = values.get('srcdoc')!.replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-							const html =
-								sanitizeHtmlToFragment(encoded, { ownerDocument: getDocument() }).textContent ?? '';
+							const html = sanitizeHtmlToFragment(encoded, { ownerDocument: getDocument() }).textContent ?? '';
 							return resourceMarkup({
 								uri: `data:text/html;charset=utf-8,${encodeURIComponent(html)}`,
-								name:
-									description(tag) || localize('sessions.chatgpt.interactive', 'Interactive content'),
+								name: description(tag) || localize('sessions.chatgpt.interactive', 'Interactive content'),
 								kind: 'html',
 							});
 						}
@@ -494,9 +454,7 @@ function createRichContentExtension(references: readonly ChatGPTReference[] = []
 								if (url.protocol === 'https:' && !url.username && !url.password)
 									return resourceMarkup({
 										uri: `data:text/html;charset=utf-8,${encodeURIComponent(`<iframe src="${escapeHTML(url.href)}" title="${escapeHTML(description(tag))}" style="border:0;width:100%;height:100vh" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>`)}`,
-										name:
-											description(tag) ||
-											localize('sessions.chatgpt.interactive', 'Interactive content'),
+										name: description(tag) || localize('sessions.chatgpt.interactive', 'Interactive content'),
 										kind: 'html',
 										frameOrigin: url.origin,
 									});
@@ -508,12 +466,7 @@ function createRichContentExtension(references: readonly ChatGPTReference[] = []
 							return resourceMarkup({
 								uri,
 								name: description(tag) || localize('sessions.chatgpt.media', 'Media'),
-								kind:
-									tag.name === 'img'
-										? 'image'
-										: tag.name === 'iframe'
-											? 'html'
-											: (tag.name as 'audio' | 'video'),
+								kind: tag.name === 'img' ? 'image' : tag.name === 'iframe' ? 'html' : (tag.name as 'audio' | 'video'),
 							});
 						return `<span class="ash-chat-markdown-media">${localize('chat.markdown.mediaUnavailable', 'Media content is unavailable here.')}</span>`;
 					}
@@ -533,8 +486,7 @@ function createRichContentExtension(references: readonly ChatGPTReference[] = []
 					}
 					const label = escapeHTML(description(tag));
 					const data = componentData(tag);
-					const chart =
-						tag.name === 'chart' && data && !plaintext ? chartDocument(description(tag), data) : undefined;
+					const chart = tag.name === 'chart' && data && !plaintext ? chartDocument(description(tag), data) : undefined;
 					if (chart)
 						return resourceMarkup({
 							uri: `data:text/html;charset=utf-8,${encodeURIComponent(chart)}`,
@@ -566,9 +518,7 @@ function createRichContentExtension(references: readonly ChatGPTReference[] = []
 					const ids = token.ids as string[];
 					if (typeof token.label === 'string') {
 						const reference = references.find(reference => ids.includes(reference.id));
-						return reference
-							? `<a href="${escapeHTML(reference.url)}">${escapeHTML(token.label)}</a>`
-							: escapeHTML(token.label);
+						return reference ? `<a href="${escapeHTML(reference.url)}">${escapeHTML(token.label)}</a>` : escapeHTML(token.label);
 					}
 					return referenceMarkup(ids, references);
 				},
@@ -608,10 +558,7 @@ function createRichContentExtension(references: readonly ChatGPTReference[] = []
 }
 
 /** Map web component syntax to shared Markdown and inert attachment descriptors. */
-export function getChatGPTMarkdownRenderOptions(
-	role: 'user' | 'assistant',
-	references?: readonly ChatGPTReference[],
-): MarkdownRenderOptions {
+export function getChatGPTMarkdownRenderOptions(role: 'user' | 'assistant', references?: readonly ChatGPTReference[]): MarkdownRenderOptions {
 	return {
 		markedExtensions: role === 'assistant' ? [createRichContentExtension(references)] : [],
 		sanitizerConfig: {
@@ -621,7 +568,10 @@ export function getChatGPTMarkdownRenderOptions(
 					...allowedMarkdownHtmlAttributes,
 					'data-chatgpt-resource',
 					'open',
-					{ attributeName: 'src', shouldKeep: (_element, data) => data.attrValue.startsWith('data:') },
+					{
+						attributeName: 'src',
+						shouldKeep: (_element, data) => data.attrValue.startsWith('data:'),
+					},
 				],
 			},
 		},
@@ -640,9 +590,7 @@ export function completeChatGPTRichContent(root: HTMLElement, conversationId: st
 		media.append(link);
 	}
 	for (const link of root.querySelectorAll<HTMLAnchorElement>('.ash-chatgpt-rich-fallback')) {
-		link.href = conversationId
-			? `https://chatgpt.com/c/${encodeURIComponent(conversationId)}`
-			: 'https://chatgpt.com/';
+		link.href = conversationId ? `https://chatgpt.com/c/${encodeURIComponent(conversationId)}` : 'https://chatgpt.com/';
 	}
 	for (const element of root.querySelectorAll<HTMLElement>('.ash-chatgpt-rich')) {
 		for (const name of element.classList) {
@@ -682,10 +630,7 @@ function chartDocument(title: string, json: string): string | undefined {
 		rows = data.labels.map((label, index) =>
 			Object.fromEntries([
 				['label', label],
-				...datasets.map((dataset, series) => [
-					typeof dataset.label === 'string' ? dataset.label : String(series + 1),
-					Array.isArray(dataset.data) ? dataset.data[index] : null,
-				]),
+				...datasets.map((dataset, series) => [typeof dataset.label === 'string' ? dataset.label : String(series + 1), Array.isArray(dataset.data) ? dataset.data[index] : null]),
 			]),
 		);
 	}

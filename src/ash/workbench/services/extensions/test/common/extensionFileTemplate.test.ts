@@ -40,8 +40,5 @@ test('replaces extension file templates as one immutable catalog', () => {
 });
 
 test('materializes file-template defaults without leaving snippet tabstops', () => {
-	assert.equal(
-		materializeExtensionFileTemplate({ body: 'class ${1:Name} {\n\t$0\n}', isFileTemplate: true }),
-		'class Name {\n\t\n}',
-	);
+	assert.equal(materializeExtensionFileTemplate({ body: 'class ${1:Name} {\n\t$0\n}', isFileTemplate: true }), 'class Name {\n\t\n}');
 });

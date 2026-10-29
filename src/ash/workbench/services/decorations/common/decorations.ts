@@ -30,10 +30,7 @@ export interface IDecorationsProvider {
 	readonly label: string;
 	/** An empty list invalidates every resource supplied by this provider. */
 	readonly onDidChange: Event<readonly URI[]>;
-	provideDecorations(
-		uri: URI,
-		token: CancellationToken,
-	): IDecorationData | Promise<IDecorationData | undefined> | undefined;
+	provideDecorations(uri: URI, token: CancellationToken): IDecorationData | Promise<IDecorationData | undefined> | undefined;
 }
 
 export interface IResourceDecorationChangeEvent {

@@ -71,10 +71,7 @@ export class LaunchMainService extends Disposable implements ILaunchMainService 
 				} else {
 					const line = location ? Number(location[2]) : undefined;
 					const column = location?.[3] ? Number(location[3]) : undefined;
-					if (
-						(line !== undefined && (!Number.isSafeInteger(line) || line < 1)) ||
-						(column !== undefined && (!Number.isSafeInteger(column) || column < 1))
-					) {
+					if ((line !== undefined && (!Number.isSafeInteger(line) || line < 1)) || (column !== undefined && (!Number.isSafeInteger(column) || column < 1))) {
 						throw new Error('File positions must be positive integers');
 					}
 					files.push({ uri: URI.file(path).toString(), line, column });
@@ -91,9 +88,7 @@ export class LaunchMainService extends Disposable implements ILaunchMainService 
 			if (args.waitMarkerFilePath) {
 				// The secondary process waits on the marker; launch completion must not block startup or later requests.
 				const finished = files.length > 0 ? opened.whenFilesClosed : opened.whenClosed;
-				void finished
-					.then(() => this.waitMarkers.deleteAndDispose(args.waitMarkerFilePath!))
-					.catch(error => console.error('Failed to complete the waiting launch request', error));
+				void finished.then(() => this.waitMarkers.deleteAndDispose(args.waitMarkerFilePath!)).catch(error => console.error('Failed to complete the waiting launch request', error));
 			}
 		} catch (error) {
 			if (args.waitMarkerFilePath) {
@@ -105,19 +100,12 @@ export class LaunchMainService extends Disposable implements ILaunchMainService 
 }
 
 /** Validates product window selection before startup can create a wait marker or acquire the instance lock. */
-export function parseWindowLaunch(
-	arguments_: readonly string[],
-	cwd: string,
-	invalidAgentsArgumentsMessage: string,
-): IStartArguments {
+export function parseWindowLaunch(arguments_: readonly string[], cwd: string, invalidAgentsArgumentsMessage: string): IStartArguments {
 	const separator = arguments_.indexOf('--');
 	const switches = separator < 0 ? arguments_ : arguments_.slice(0, separator);
 	const args = parseLaunchArguments(arguments_);
 	const agentsWindow = switches.includes('--agents-window');
-	if (
-		agentsWindow &&
-		(args.paths.length > 0 || args.urls.length > 0 || args.newWindow || args.reuseWindow || args.goto || args.wait)
-	) {
+	if (agentsWindow && (args.paths.length > 0 || args.urls.length > 0 || args.newWindow || args.reuseWindow || args.goto || args.wait)) {
 		throw new Error(invalidAgentsArgumentsMessage);
 	}
 	return { args, cwd, agentsWindow };

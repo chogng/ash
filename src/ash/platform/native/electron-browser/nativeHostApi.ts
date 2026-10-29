@@ -67,16 +67,12 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		async getScreenshot(rect) {
 			const value = await invoke<unknown>('ash:host:screenshot', rect);
 			if (value === undefined) return undefined;
-			if (!(value instanceof Uint8Array) || value.byteLength === 0 || value.byteLength > 20 * 1024 * 1024)
-				throw new TypeError('Invalid screenshot image');
+			if (!(value instanceof Uint8Array) || value.byteLength === 0 || value.byteLength > 20 * 1024 * 1024) throw new TypeError('Invalid screenshot image');
 			return VSBuffer.wrap(new Uint8Array(value));
 		},
-		getTitleBarStyle: async () =>
-			parseTitleBarStyle(await invoke<unknown>(NATIVE_HOST_GET_TITLE_BAR_STYLE_CHANNEL)),
-		getWindowClientSize: async () =>
-			validateWindowClientSize(await invoke<unknown>(NATIVE_HOST_GET_WINDOW_CLIENT_SIZE_CHANNEL)),
-		onDidChangeWindowClientSize: listener =>
-			subscribe<unknown>(WINDOW_CLIENT_SIZE_CHANGED_CHANNEL, value => listener(validateWindowClientSize(value))),
+		getTitleBarStyle: async () => parseTitleBarStyle(await invoke<unknown>(NATIVE_HOST_GET_TITLE_BAR_STYLE_CHANNEL)),
+		getWindowClientSize: async () => validateWindowClientSize(await invoke<unknown>(NATIVE_HOST_GET_WINDOW_CLIENT_SIZE_CHANNEL)),
+		onDidChangeWindowClientSize: listener => subscribe<unknown>(WINDOW_CLIENT_SIZE_CHANGED_CHANNEL, value => listener(validateWindowClientSize(value))),
 		async isAdmin(): Promise<boolean> {
 			const value = await invoke<unknown>(NATIVE_HOST_IS_ADMIN_CHANNEL);
 			if (typeof value !== 'boolean') {
@@ -85,8 +81,7 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 			return value;
 		},
 		getOSColorScheme: async () => validateColorScheme(await colors.call<unknown>('getOSColorScheme')),
-		onDidChangeColorScheme: listener =>
-			colors.listen<unknown>('onDidChangeColorScheme')(value => listener(validateColorScheme(value))),
+		onDidChangeColorScheme: listener => colors.listen<unknown>('onDidChangeColorScheme')(value => listener(validateColorScheme(value))),
 		showMessageBox,
 		listWindows: windowName =>
 			invoke<readonly IWorkbenchWindowInfo[]>(WINDOW_OPERATION_CHANNEL, {
@@ -118,14 +113,8 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 				...(windowName === undefined ? {} : { windowName }),
 				...(allWindows ? { allWindows: true } : {}),
 			}),
-		getAuxiliaryWindowState: async windowName =>
-			validateAuxiliaryWindowState(
-				await invoke<unknown>(WINDOW_OPERATION_CHANNEL, { kind: 'getAuxiliaryState', windowName }),
-			),
-		onDidChangeAuxiliaryWindowState: listener =>
-			subscribe<unknown>(AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL, value =>
-				listener(validateAuxiliaryWindowStateEvent(value)),
-			),
+		getAuxiliaryWindowState: async windowName => validateAuxiliaryWindowState(await invoke<unknown>(WINDOW_OPERATION_CHANNEL, { kind: 'getAuxiliaryState', windowName })),
+		onDidChangeAuxiliaryWindowState: listener => subscribe<unknown>(AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL, value => listener(validateAuxiliaryWindowStateEvent(value))),
 		isAlwaysOnTop: windowName =>
 			invoke<boolean>(WINDOW_OPERATION_CHANNEL, {
 				kind: 'getAlwaysOnTop',
@@ -137,17 +126,12 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 				enabled,
 				...(windowName === undefined ? {} : { windowName }),
 			}),
-		onDidChangeWindowAlwaysOnTop: listener =>
-			subscribe<unknown>(WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL, value =>
-				listener(validateWindowAlwaysOnTopChangedEvent(value)),
-			),
+		onDidChangeWindowAlwaysOnTop: listener => subscribe<unknown>(WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL, value => listener(validateWindowAlwaysOnTopChangedEvent(value))),
 		performNativeTabAction: action => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'nativeTab', action }),
 		openNewWindowTab: () => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'newTab' }),
 		pickFolder: () => invoke<string | undefined>(NATIVE_HOST_PICK_FOLDER_CHANNEL),
-		showOpenDialog: async options =>
-			validateOpenDialogResult(await invoke<unknown>(NATIVE_HOST_PICK_FILE_CHANNEL, options)),
-		openWorkspace: (root, forceNewWindow) =>
-			invoke<void>(NATIVE_HOST_OPEN_WORKSPACE_CHANNEL, forceNewWindow ? { root, forceNewWindow } : root),
+		showOpenDialog: async options => validateOpenDialogResult(await invoke<unknown>(NATIVE_HOST_PICK_FILE_CHANNEL, options)),
+		openWorkspace: (root, forceNewWindow) => invoke<void>(NATIVE_HOST_OPEN_WORKSPACE_CHANNEL, forceNewWindow ? { root, forceNewWindow } : root),
 		openWindow: options => invoke<void>(NATIVE_HOST_OPEN_WINDOW_CHANNEL, options),
 		openAgentsWindow: options => invoke<void>(NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, options),
 		async moveTerminalToWindow(transfer, targetWindowId) {
@@ -163,21 +147,13 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		},
 		completeTerminalTransfer: result => invoke<void>(NATIVE_HOST_TERMINAL_COMPLETE_CHANNEL, result),
 		onDidRequestTerminalTransfer: listener => subscribe<void>(NATIVE_HOST_TERMINAL_REQUEST_CHANNEL, listener),
-		getAgentHostEditorState: async () =>
-			validateAgentHostEditorState(await invoke<unknown>(AGENT_HOST_EDITOR_STATE_CHANNEL)),
+		getAgentHostEditorState: async () => validateAgentHostEditorState(await invoke<unknown>(AGENT_HOST_EDITOR_STATE_CHANNEL)),
 		updateAgentHostEditorState: update => invoke<void>(AGENT_HOST_EDITOR_UPDATE_CHANNEL, update),
-		onDidChangeAgentHostEditorState: listener =>
-			subscribe<unknown>(AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL, value =>
-				listener(validateAgentHostEditorState(value)),
-			),
-		claimAgentsWindowInvitation: async resource =>
-			validateAgentsWindowInvitation(await invoke<unknown>(AGENTS_WINDOW_INVITATION_CLAIM_CHANNEL, resource)),
+		onDidChangeAgentHostEditorState: listener => subscribe<unknown>(AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL, value => listener(validateAgentHostEditorState(value))),
+		claimAgentsWindowInvitation: async resource => validateAgentsWindowInvitation(await invoke<unknown>(AGENTS_WINDOW_INVITATION_CLAIM_CHANNEL, resource)),
 		markAgentsWindowInvitationShown: id => invoke<void>(AGENTS_WINDOW_INVITATION_SHOWN_CHANNEL, id),
 		releaseAgentsWindowInvitation: id => invoke<void>(AGENTS_WINDOW_INVITATION_RELEASE_CHANNEL, id),
-		syncSystemWideKeybindings: async keybindings =>
-			validateSystemWideKeybindingsResult(
-				await invoke<unknown>(NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL, keybindings),
-			),
+		syncSystemWideKeybindings: async keybindings => validateSystemWideKeybindingsResult(await invoke<unknown>(NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL, keybindings)),
 		openExternal: target => invoke<boolean>('ash:host:openExternal', target),
 		onDidRequestOpenExternalUri: listener =>
 			subscribe<unknown>(WINDOW_OPEN_EXTERNAL_URI_CHANNEL, value => {
@@ -190,15 +166,12 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		setWindowTheme: theme => invoke<void>(NATIVE_HOST_SET_WINDOW_THEME_CHANNEL, theme),
 		setWindowDimmed: dimmed => invoke<void>(NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL, dimmed),
 		toggleDeveloperTools: () => invoke<void>(NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL),
-		showSaveDialog: async options =>
-			validateSaveDialogResult(await invoke<unknown>(NATIVE_HOST_SAVE_FILE_CHANNEL, options)),
+		showSaveDialog: async options => validateSaveDialogResult(await invoke<unknown>(NATIVE_HOST_SAVE_FILE_CHANNEL, options)),
 		async isAccessibilitySupportEnabled(): Promise<boolean> {
 			return validateAccessibilitySupport(await invoke<unknown>(NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL));
 		},
 		onDidChangeAccessibilitySupport(listener) {
-			return subscribe<unknown>(NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, value =>
-				listener(validateAccessibilitySupport(value)),
-			);
+			return subscribe<unknown>(NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, value => listener(validateAccessibilitySupport(value)));
 		},
 	};
 }

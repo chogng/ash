@@ -22,19 +22,13 @@ export async function paintPixel(page: Page, x: number, y: number): Promise<numb
 			canvas.height = image.height;
 			const context = canvas.getContext('2d')!;
 			context.drawImage(image, 0, 0);
-			return [
-				...context.getImageData(Math.round(x * devicePixelRatio), Math.round(y * devicePixelRatio), 1, 1).data,
-			];
+			return [...context.getImageData(Math.round(x * devicePixelRatio), Math.round(y * devicePixelRatio), 1, 1).data];
 		},
 		{ png: png.toString('base64'), x, y },
 	);
 }
 
-export async function clickCanvasMenu(
-	canvas: Locator,
-	name: string,
-	application?: PlaywrightApplication,
-): Promise<void> {
+export async function clickCanvasMenu(canvas: Locator, name: string, application?: PlaywrightApplication): Promise<void> {
 	const trigger = async (): Promise<void> => {
 		await canvas.focus();
 		await canvas.press('Shift+F10');
@@ -47,15 +41,10 @@ export async function clickCanvasMenu(
 	}
 }
 
-export async function inspectCanvasMenu(
-	canvas: Locator,
-	application?: PlaywrightApplication,
-	pointer = false,
-): Promise<readonly { label: string; enabled: boolean }[]> {
+export async function inspectCanvasMenu(canvas: Locator, application?: PlaywrightApplication, pointer = false): Promise<readonly { label: string; enabled: boolean }[]> {
 	const trigger = async (): Promise<void> => {
 		await canvas.focus();
-		if (pointer)
-			await canvas.locator('.ash-canvas-viewport').click({ button: 'right', position: { x: 20, y: 20 } });
+		if (pointer) await canvas.locator('.ash-canvas-viewport').click({ button: 'right', position: { x: 20, y: 20 } });
 		else await canvas.press('Shift+F10');
 	};
 	if (application && 'windows' in application && process.platform === 'darwin') {
@@ -64,14 +53,12 @@ export async function inspectCanvasMenu(
 	await trigger();
 	const menu = canvas.page().getByRole('menu');
 	await expect(menu).toBeVisible();
-	const items = await menu
-		.getByRole('menuitem')
-		.evaluateAll(items =>
-			items.map(item => ({
-				label: item.querySelector('.ash-button-label')!.textContent!,
-				enabled: !(item as HTMLButtonElement).disabled,
-			})),
-		);
+	const items = await menu.getByRole('menuitem').evaluateAll(items =>
+		items.map(item => ({
+			label: item.querySelector('.ash-button-label')!.textContent!,
+			enabled: !(item as HTMLButtonElement).disabled,
+		})),
+	);
 	await canvas.page().keyboard.press('Escape');
 	return items;
 }

@@ -2,11 +2,7 @@ import { Action2, registerAction2 } from '../../../../platform/actions/common/ac
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize2 } from '../../../../nls.js';
-import {
-	IOnboardingTryoutService,
-	parseOnboardingTryoutArguments,
-	RUN_ONBOARDING_TRYOUT_COMMAND_ID,
-} from '../common/onboardingTryout.js';
+import { IOnboardingTryoutService, parseOnboardingTryoutArguments, RUN_ONBOARDING_TRYOUT_COMMAND_ID } from '../common/onboardingTryout.js';
 import { OnboardingTryoutService } from './onboardingTryoutService.js';
 
 registerSingleton(IOnboardingTryoutService, OnboardingTryoutService, InstantiationType.Delayed);

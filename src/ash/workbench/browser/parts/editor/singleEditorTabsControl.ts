@@ -25,28 +25,12 @@ export class SingleEditorTabsControl extends MultiEditorTabsControl {
 		@IWorkspaceContextService workspaceContextService: IWorkspaceContextService,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
-		super(
-			container,
-			delegate,
-			model,
-			resourceLabels,
-			configurationService,
-			contextKeyService,
-			labelService,
-			workspaceContextService,
-			instantiationService,
-		);
+		super(container, delegate, model, resourceLabels, configurationService, contextKeyService, labelService, workspaceContextService, instantiationService);
 		this.domNode.classList.add('ash-single-editor-tabs-control');
 	}
 
-	override setEditors(
-		editors: readonly EditorTabDescriptor[],
-		activeInput: IResourceEditorInput | undefined,
-		selectedIds?: ReadonlySet<string>,
-	): void {
-		const active = activeInput
-			? editors.find(editor => editorInputKey(editor.input) === editorInputKey(activeInput))
-			: undefined;
+	override setEditors(editors: readonly EditorTabDescriptor[], activeInput: IResourceEditorInput | undefined, selectedIds?: ReadonlySet<string>): void {
+		const active = activeInput ? editors.find(editor => editorInputKey(editor.input) === editorInputKey(activeInput)) : undefined;
 		super.setEditors(active ? [active] : [], activeInput, selectedIds);
 	}
 }

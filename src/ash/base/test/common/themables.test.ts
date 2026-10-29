@@ -11,10 +11,6 @@ test('ThemeIcon parses, modifies, compares, and emits stable classes', () => {
 	assert.equal(ThemeIcon.getModifier(icon), 'spin');
 	assert.deepEqual(ThemeIcon.modify(icon, 'disabled'), { id: 'symbol-method~disabled', color });
 	assert.equal(ThemeIcon.isEqual(icon, { id: 'symbol-method~spin', color: { id: 'editor.foreground' } }), true);
-	assert.deepEqual(ThemeIcon.asClassNameArray(icon), [
-		'ash-icon',
-		'ash-icon-symbol-method',
-		'ash-icon-modifier-spin',
-	]);
+	assert.deepEqual(ThemeIcon.asClassNameArray(icon), ['ash-icon', 'ash-icon-symbol-method', 'ash-icon-modifier-spin']);
 	assert.equal(ThemeIcon.asCSSSelector(icon), '.ash-icon.ash-icon-symbol-method.ash-icon-modifier-spin');
 });

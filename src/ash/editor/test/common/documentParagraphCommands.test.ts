@@ -1,12 +1,5 @@
-import {
-	getDocumentParagraphStyles,
-	resolveDocumentParagraphAttributes,
-} from '../../../../../extensions/academy/common/model/documentParagraph.js';
-import {
-	createReplaceDocumentMatchesCommand,
-	findDocumentText,
-	getDocumentFindMatchIndex,
-} from '../../../../../extensions/academy/common/commands/documentFindCommands.js';
+import { getDocumentParagraphStyles, resolveDocumentParagraphAttributes } from '../../../../../extensions/academy/common/model/documentParagraph.js';
+import { createReplaceDocumentMatchesCommand, findDocumentText, getDocumentFindMatchIndex } from '../../../../../extensions/academy/common/commands/documentFindCommands.js';
 import { DocumentTextModel } from '../../../../../extensions/academy/common/model/documentTextModel.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -22,11 +15,7 @@ import {
 	createSetParagraphStyleCommand,
 	getSelectedDocumentParagraphs,
 } from '../../../../../extensions/academy/common/commands/documentParagraphCommands.js';
-import {
-	createSplitBlockCommand,
-	createInsertFragmentCommand,
-	createSetBlockTypeCommand,
-} from '../../../../../extensions/academy/common/commands/documentCommands.js';
+import { createSplitBlockCommand, createInsertFragmentCommand, createSetBlockTypeCommand } from '../../../../../extensions/academy/common/commands/documentCommands.js';
 import { createDefaultDocumentSchema } from '../../../../../extensions/academy/common/model/documentSchema.js';
 import { TextModel } from '../../common/model/textModel.js';
 import {
@@ -36,10 +25,7 @@ import {
 	serializeDocumentFragment,
 	deserializeDocumentFragment,
 } from '../../../../../extensions/academy/common/model/documentSerialization.js';
-import {
-	createAcademyDocumentSchema,
-	createEmptyAcademyDocument,
-} from '../../../../../extensions/academy/browser/contrib/academy/common/schema.js';
+import { createAcademyDocumentSchema, createEmptyAcademyDocument } from '../../../../../extensions/academy/browser/contrib/academy/common/schema.js';
 
 test('Paragraph formatting is one reversible transaction with shared line semantics and durable measurements', () => {
 	const schema = createDefaultDocumentSchema();
@@ -66,11 +52,7 @@ test('Paragraph formatting is one reversible transaction with shared line semant
 	assert.deepEqual(model.selection, selection);
 	assert.deepEqual(
 		model.document.content.map(node => node.attrs),
-		[
-			{ textAlign: 'center', lineSpacing: 2, spaceBefore: 6, spaceAfter: 12 },
-			{ textAlign: 'center', lineSpacing: 2, spaceBefore: 6, spaceAfter: 12 },
-			{},
-		],
+		[{ textAlign: 'center', lineSpacing: 2, spaceBefore: 6, spaceAfter: 12 }, { textAlign: 'center', lineSpacing: 2, spaceBefore: 6, spaceAfter: 12 }, {}],
 	);
 	assert.ok(model.lineDocument.facets.values.some(facet => facet.attrs.lineSpacing === 2));
 	assert.deepEqual(deserializeDocument(serializeDocument(model.document, schema), schema), model.document);
@@ -90,10 +72,7 @@ test('Paragraph selection excludes the final start boundary in both directions a
 		content: [schema.createNode('tableRow', { content: [schema.createNode('tableCell', { content: [second] })] })],
 	});
 	const document = schema.createDocument([first, table]);
-	for (const selection of [
-		textSelection({ nodeId: 't1', offset: 1 }, { nodeId: 't2', offset: 0 }),
-		textSelection({ nodeId: 't2', offset: 0 }, { nodeId: 't1', offset: 1 }),
-	]) {
+	for (const selection of [textSelection({ nodeId: 't1', offset: 1 }, { nodeId: 't2', offset: 0 }), textSelection({ nodeId: 't2', offset: 0 }, { nodeId: 't1', offset: 1 })]) {
 		assert.deepEqual(
 			getSelectedDocumentParagraphs(document, 'p1', selection).map(node => node.id),
 			['p1'],
@@ -150,20 +129,9 @@ test('Invalid persisted paragraph measurements reject atomically and retain the 
 	const document = schema.createDocument([schema.createNode('paragraph', { id: 'p' })]);
 	using model = DocumentTextModel.create(schema, document);
 	const version = model.getVersionId();
-	for (const attrs of [
-		{ lineSpacing: 0 },
-		{ lineSpacing: Infinity },
-		{ spaceBefore: -1 },
-		{ spaceAfter: 145 },
-		{ textAlign: 'invalid' },
-	]) {
+	for (const attrs of [{ lineSpacing: 0 }, { lineSpacing: Infinity }, { spaceBefore: -1 }, { spaceAfter: 145 }, { textAlign: 'invalid' }]) {
 		const malformed = { ...document, content: [{ ...document.content[0]!, attrs }] };
-		assert.throws(() =>
-			deserializeDocument(
-				{ format: 'ash.document', version: 2, documentType: 'general', document: malformed },
-				schema,
-			),
-		);
+		assert.throws(() => deserializeDocument({ format: 'ash.document', version: 2, documentType: 'general', document: malformed }, schema));
 	}
 	const command = createSetParagraphFormatCommand(document, 'p', undefined, { spaceAfter: -1 });
 	assert.ok(command);
@@ -235,13 +203,7 @@ test('Academy rejects malformed style definitions, references, indents and numbe
 		{ ...document, content: [{ ...paragraph, attrs: { indentStart: 721 } }] },
 		{ ...document, content: [{ ...paragraph, attrs: { firstLineIndent: -145 } }] },
 	];
-	for (const value of invalid)
-		assert.throws(() =>
-			deserializeDocument(
-				{ format: 'ash.document', version: 2, documentType: 'general', document: value },
-				schema,
-			),
-		);
+	for (const value of invalid) assert.throws(() => deserializeDocument({ format: 'ash.document', version: 2, documentType: 'general', document: value }, schema));
 	assert.throws(() =>
 		schema.createNode('orderedList', {
 			attrs: { order: 0 },
@@ -269,9 +231,7 @@ test('Academy numbering targets the innermost ordered list and persists in a rev
 		content: [schema.createNode('listItem', { content: [inner] })],
 	});
 	using model = DocumentTextModel.create(schema, schema.createDocument([outer]));
-	model.dispatch(
-		createSetListNumberingCommand(model.document, 'p', { order: 5, numbering: 'upper-roman' })!.transaction,
-	);
+	model.dispatch(createSetListNumberingCommand(model.document, 'p', { order: 5, numbering: 'upper-roman' })!.transaction);
 	assert.deepEqual(getDocumentList(model.document, 'p')!.attrs, { order: 5, numbering: 'upper-roman' });
 	assert.equal(model.document.content[0]!.attrs.order, 3);
 	assert.deepEqual(deserializeDocument(serializeDocument(model.document, schema), schema), model.document);
@@ -341,10 +301,7 @@ test('Academy named styles produce self-contained clipboard fragments and allow 
 		),
 	);
 	source.dispatch(createDefineParagraphStyleCommand(source.document, 'p0', 'Essay')!.transaction);
-	const fragment = deserializeDocumentFragment(
-		serializeDocumentFragment(extractDocumentFragment(schema, source.document, allSelection())!, schema),
-		schema,
-	);
+	const fragment = deserializeDocumentFragment(serializeDocumentFragment(extractDocumentFragment(schema, source.document, allSelection())!, schema), schema);
 	assert.equal(fragment.content[0]!.attrs.styleId, undefined);
 	assert.equal(fragment.content[0]!.attrs.indentStart, 36);
 	using destination = DocumentTextModel.create(
@@ -356,14 +313,9 @@ test('Academy named styles produce self-contained clipboard fragments and allow 
 			}),
 		]),
 	);
-	destination.dispatch(
-		createInsertFragmentCommand(schema, destination.document, 'target', allSelection(), fragment)!.transaction,
-	);
+	destination.dispatch(createInsertFragmentCommand(schema, destination.document, 'target', allSelection(), fragment)!.transaction);
 	assert.equal(destination.document.content.length, 2);
-	assert.deepEqual(
-		deserializeDocument(serializeDocument(destination.document, schema), schema),
-		destination.document,
-	);
+	assert.deepEqual(deserializeDocument(serializeDocument(destination.document, schema), schema), destination.document);
 	source.dispatch(createSetBlockTypeCommand(source.document, 'p0', 'heading')!.transaction);
 	assert.equal(source.document.content[0]!.type, 'heading');
 	assert.equal(source.document.content[0]!.attrs.styleId, undefined);
@@ -377,10 +329,7 @@ test('Academy replacing entire marked runs with empty text leaves valid empty bl
 	const document = schema.createDocument([
 		schema.createNode('paragraph', {
 			id: 'p',
-			content: [
-				schema.createText('😀', { id: 'a', marks: [{ type: 'strong', attrs: {} }] }),
-				schema.createText('文', { id: 'b' }),
-			],
+			content: [schema.createText('😀', { id: 'a', marks: [{ type: 'strong', attrs: {} }] }), schema.createText('文', { id: 'b' })],
 		}),
 		schema.createNode('codeBlock', { id: 'code', content: [schema.createText('😀文', { id: 'c' })] }),
 	]);

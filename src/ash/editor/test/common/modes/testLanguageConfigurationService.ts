@@ -73,8 +73,7 @@ const ECMASCRIPT_INDENTATION_RULES: IndentationRule = {
 	unIndentedLinePattern: /^(\t|[ ])*[ ]\*[^/]*\*\/\s*$|^(\t|[ ])*[ ]\*\/\s*$|^(\t|[ ])*\*([ ]([^\*]|\*(?!\/))*)?$/,
 };
 const JSON_INDENTATION_RULES: IndentationRule = {
-	increaseIndentPattern:
-		/({+(?=((\\.|[^"\\])*"(\\.|[^"\\])*")*[^"}]*)$)|(\[+(?=((\\.|[^"\\])*"(\\.|[^"\\])*")*[^"\]]*)$)/,
+	increaseIndentPattern: /({+(?=((\\.|[^"\\])*"(\\.|[^"\\])*")*[^"}]*)$)|(\[+(?=((\\.|[^"\\])*"(\\.|[^"\\])*")*[^"\]]*)$)/,
 	decreaseIndentPattern: /^\s*[}\]],?\s*$/,
 };
 const RUST_INDENTATION_RULES: IndentationRule = {
@@ -99,9 +98,7 @@ const ECMASCRIPT_ON_ENTER_RULES: OnEnterRule[] = [
 	onEnter(/^(\t|[ ])*[ ]\*[^/]*\*\/\s*$/, IndentAction.None, { removeText: 1 }),
 	onEnter(/^\s*(\bcase\s.+:|\bdefault:)$/, IndentAction.Indent, { afterText: /^(?!\s*(\bcase\b|\bdefault\b))/ }),
 ];
-const JSONC_ON_ENTER_RULES: OnEnterRule[] = [
-	onEnter(/^\s*\/\/\s*\S|\s\/\/\s+\S/, IndentAction.None, { afterText: /^(?!\s*$)/, appendText: '// ' }),
-];
+const JSONC_ON_ENTER_RULES: OnEnterRule[] = [onEnter(/^\s*\/\/\s*\S|\s\/\/\s+\S/, IndentAction.None, { afterText: /^(?!\s*$)/, appendText: '// ' })];
 const RUST_ON_ENTER_RULES: OnEnterRule[] = [
 	onEnter(/^\s*\/\/\/.*$/, IndentAction.None, { appendText: '/// ' }),
 	onEnter(/^\s*\/\/!.*$/, IndentAction.None, { appendText: '//! ' }),
@@ -157,8 +154,7 @@ const RUST_CONFIGURATION: LanguageConfiguration = {
 
 export function registerTestLanguageConfigurations(service: ILanguageConfigurationService): IDisposable {
 	const registrations = new DisposableStore();
-	for (const languageId of ECMASCRIPT_LANGUAGE_IDS)
-		registrations.add(service.register(languageId, ECMASCRIPT_CONFIGURATION));
+	for (const languageId of ECMASCRIPT_LANGUAGE_IDS) registrations.add(service.register(languageId, ECMASCRIPT_CONFIGURATION));
 	registrations.add(service.register('json', JSON_CONFIGURATION));
 	registrations.add(service.register('jsonc', JSONC_CONFIGURATION));
 	registrations.add(service.register('rust', RUST_CONFIGURATION));

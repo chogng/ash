@@ -1,8 +1,5 @@
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import {
-	ChatResponseResourceFileSystemProvider,
-	IChatResponseResourceFileSystemProvider,
-} from '../../common/widget/chatResponseResourceFileSystemProvider.js';
+import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystemProvider } from '../../common/widget/chatResponseResourceFileSystemProvider.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -33,13 +30,7 @@ const run: ChatHookRun = {
 	toolName: 'shell-command',
 };
 const reason = '<img src=x onerror=alert(1)> & literal process reason';
-const statuses: readonly ChatHookRun['status'][] = [
-	{ type: 'running' },
-	{ type: 'continued' },
-	{ type: 'denied', reason },
-	{ type: 'failed', message: reason },
-	{ type: 'cancelled', reason },
-];
+const statuses: readonly ChatHookRun['status'][] = [{ type: 'running' }, { type: 'continued' }, { type: 'denied', reason }, { type: 'failed', message: reason }, { type: 'cancelled', reason }];
 const entry = (status: ChatHookRun['status']): Extract<ThreadTranscriptEntry, { type: 'hookRun' }> => ({
 	type: 'hookRun',
 	entryId: 'hook:run',
@@ -62,25 +53,19 @@ test('Hook transcript retains all five domain states and their canonical run ide
 for (const host of [
 	{
 		name: 'Code',
-		create: (services: ReturnType<typeof createTestEditorServices>, container: HTMLElement) =>
-			services.createInstance(ChatListWidget, container, {}),
+		create: (services: ReturnType<typeof createTestEditorServices>, container: HTMLElement) => services.createInstance(ChatListWidget, container, {}),
 	},
 	{
 		name: 'Cowork',
-		create: (services: ReturnType<typeof createTestEditorServices>, container: HTMLElement) =>
-			services.createInstance(ChatListWidget, container, { classPrefix: 'ash-cowork' }),
+		create: (services: ReturnType<typeof createTestEditorServices>, container: HTMLElement) => services.createInstance(ChatListWidget, container, { classPrefix: 'ash-cowork' }),
 	},
 ]) {
 	test(`${host.name} Hook status updates retain the summary focus, disclosure and literal process reason`, () => {
 		using resources = new DisposableStore();
 		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
-		if (!services.has(IAgentThreadService))
-			services.registerInstance(IAgentThreadService, createDisconnectedRendererApi().thread);
+		if (!services.has(IAgentThreadService)) services.registerInstance(IAgentThreadService, createDisconnectedRendererApi().thread);
 		if (!services.has(IChatResponseResourceFileSystemProvider))
-			services.registerInstance(
-				IChatResponseResourceFileSystemProvider,
-				resources.add(services.createInstance(ChatResponseResourceFileSystemProvider)),
-			);
+			services.registerInstance(IChatResponseResourceFileSystemProvider, resources.add(services.createInstance(ChatResponseResourceFileSystemProvider)));
 		if (!services.has(IEditorService))
 			services.registerInstance(IEditorService, {
 				...emptyEditorServiceState,
@@ -106,15 +91,9 @@ for (const host of [
 			assert.equal(disclosure.querySelector('summary'), summary);
 			assert.equal(disclosure.open, true);
 			assert.equal(document.activeElement, summary);
-			assert.equal(
-				disclosure.querySelector('p')!.textContent,
-				status.type === 'running' || status.type === 'continued' ? '' : reason,
-			);
+			assert.equal(disclosure.querySelector('p')!.textContent, status.type === 'running' || status.type === 'continued' ? '' : reason);
 			assert.equal(disclosure.querySelector('img'), null);
-			assert.equal(
-				disclosure.closest('article')!.classList.contains('error'),
-				status.type === 'denied' || status.type === 'failed',
-			);
+			assert.equal(disclosure.closest('article')!.classList.contains('error'), status.type === 'denied' || status.type === 'failed');
 			labels.add(summary.textContent!);
 		}
 		assert.equal(labels.size, 5, 'each domain state has its own localized summary');
@@ -127,11 +106,7 @@ for (const host of [
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`Hook summaries distinguish all five statuses in ${locale} without translating process reasons`, () => {
-		if (locale === 'zh-CN')
-			setNlsMessages(
-				locale,
-				JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')),
-			);
+		if (locale === 'zh-CN') setNlsMessages(locale, JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
 		try {
 			const labels =
 				locale === 'zh-CN'
@@ -151,20 +126,8 @@ for (const locale of ['en', 'zh-CN']) {
 						];
 			const withoutTool =
 				locale === 'zh-CN'
-					? [
-							'正在运行 preToolUse Hook',
-							'preToolUse Hook 已允许继续',
-							'已被 preToolUse Hook 阻断',
-							'preToolUse Hook 失败',
-							'preToolUse Hook 已取消',
-						]
-					: [
-							'Running preToolUse Hook',
-							'Allowed by preToolUse Hook',
-							'Blocked by preToolUse Hook',
-							'preToolUse Hook failed',
-							'preToolUse Hook cancelled',
-						];
+					? ['正在运行 preToolUse Hook', 'preToolUse Hook 已允许继续', '已被 preToolUse Hook 阻断', 'preToolUse Hook 失败', 'preToolUse Hook 已取消']
+					: ['Running preToolUse Hook', 'Allowed by preToolUse Hook', 'Blocked by preToolUse Hook', 'preToolUse Hook failed', 'preToolUse Hook cancelled'];
 			using part = new ChatHookContentPart(document, { kind: 'hook', run });
 			for (const [index, status] of statuses.entries()) {
 				part.render({ kind: 'hook', run: { ...run, status } });

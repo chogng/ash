@@ -5,25 +5,13 @@ import { CanvasesEnabledSettingId } from '../../../../platform/agentHost/common/
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import { URI } from '../../../../base/common/uri.js';
 import { CancellationError } from '../../../../base/common/errors.js';
-import {
-	IBrowserViewService,
-	type IBrowserViewInfo,
-	type BrowserViewEvent,
-} from '../../../../platform/browserView/common/browserView.js';
+import { IBrowserViewService, type IBrowserViewInfo, type BrowserViewEvent } from '../../../../platform/browserView/common/browserView.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { BrowserViewModel } from '../../browserView/common/browserView.js';
-import {
-	CanvasInput,
-	ICanvasContextService,
-	type ICanvasService,
-	type ICanvasReference,
-	type ICanvasReopenTarget,
-	type ICanvasModelResolution,
-	type ICanvas,
-} from '../common/canvas.js';
+import { CanvasInput, ICanvasContextService, type ICanvasService, type ICanvasReference, type ICanvasReopenTarget, type ICanvasModelResolution, type ICanvas } from '../common/canvas.js';
 import { localize } from '../../../../nls.js';
 
 interface LiveCanvas {
@@ -63,9 +51,7 @@ export class CanvasService extends Disposable implements ICanvasService {
 		this.enabled = observableFromEvent(
 			this,
 			configuration.onDidChangeConfiguration,
-			() =>
-				configuration.getValue<boolean>(CanvasesEnabledSettingId) !== false &&
-				configuration.getValue<boolean>(ChatAIDisabledSettingId) !== true,
+			() => configuration.getValue<boolean>(CanvasesEnabledSettingId) !== false && configuration.getValue<boolean>(ChatAIDisabledSettingId) !== true,
 		);
 		this._register(
 			autorun(reader => {
@@ -116,12 +102,7 @@ export class CanvasService extends Disposable implements ICanvasService {
 		this._register(contexts.onDidChangeVisibility(() => this.scheduleRefresh()));
 		this._register(
 			editorPart.onDidChangeEditors(event => {
-				if (
-					event.kind !== 'groupChanged' ||
-					event.event.kind !== 'editorClosed' ||
-					event.event.reason === 'move' ||
-					event.event.reason === 'reset'
-				) {
+				if (event.kind !== 'groupChanged' || event.event.kind !== 'editorClosed' || event.event.reason === 'move' || event.event.reason === 'reset') {
 					return;
 				}
 				for (const entry of this.live.values()) {
@@ -129,9 +110,7 @@ export class CanvasService extends Disposable implements ICanvasService {
 						entry.dismissed = true;
 						entry.requested = false;
 						const instanceId = entry.input.canvas.get().instanceId;
-						entry.dismissedRequestId = instanceId
-							? this.contexts.getContext(entry.input.reference)?.openRequests?.get().get(instanceId)?.id
-							: undefined;
+						entry.dismissedRequestId = instanceId ? this.contexts.getContext(entry.input.reference)?.openRequests?.get().get(instanceId)?.id : undefined;
 					}
 				}
 				this.scheduleRefresh();
@@ -157,9 +136,7 @@ export class CanvasService extends Disposable implements ICanvasService {
 			for (const event of this.buffered.splice(0)) {
 				this.acceptEvent(event);
 			}
-			this.notifications.error(
-				localize('canvas.initializeFailed', 'Could not load conversation Canvases: {0}', String(error)),
-			);
+			this.notifications.error(localize('canvas.initializeFailed', 'Could not load conversation Canvases: {0}', String(error)));
 		});
 	}
 
@@ -195,24 +172,13 @@ export class CanvasService extends Disposable implements ICanvasService {
 			title: info.canvas.title,
 			source: info.state.url === 'about:blank' || info.canvas.extensionId ? undefined : URI.parse(info.state.url),
 		};
-		if (
-			this.contexts
-				.getContext({ providerId: 'local-agent-host', session, chat })
-				?.openRequests?.get()
-				.has(info.canvas.instanceId)
-		) {
+		if (this.contexts.getContext({ providerId: 'local-agent-host', session, chat })?.openRequests?.get().has(info.canvas.instanceId)) {
 			requested = false;
 		}
 		let entry = this.live.get(info.id);
 		if (!entry) {
 			const lifetime = new DisposableStore();
-			const input = lifetime.add(
-				this.instantiation.createInstance(
-					CanvasInput,
-					{ providerId: 'local-agent-host', session, chat, canvas: resource },
-					canvas,
-				),
-			);
+			const input = lifetime.add(this.instantiation.createInstance(CanvasInput, { providerId: 'local-agent-host', session, chat, canvas: resource }, canvas));
 			const model = lifetime.add(this.instantiation.createInstance(BrowserViewModel, info));
 			entry = { input, model, lifetime, dismissed: false, requested };
 			if (this.contexts.workingSets) {
@@ -282,9 +248,7 @@ export class CanvasService extends Disposable implements ICanvasService {
 		const targets: ICanvasReopenTarget[] = [];
 		for (const entry of this.live.values()) {
 			const context = this.contexts.getContext(entry.input.reference);
-			const canvas = context?.canvases
-				.get()
-				?.find(canvas => canvas.resource.toString() === entry.input.reference.canvas.toString());
+			const canvas = context?.canvases.get()?.find(canvas => canvas.resource.toString() === entry.input.reference.canvas.toString());
 			if (canvas) {
 				entry.input.setCanvas(canvas);
 			}
@@ -324,16 +288,10 @@ export class CanvasService extends Disposable implements ICanvasService {
 				}
 				void this.revealCanvas(entry.input.reference).catch(error => {
 					if (!(error instanceof CancellationError)) {
-						this.notifications.error(
-							localize('canvas.openFailed', 'Could not open Canvas: {0}', String(error)),
-						);
+						this.notifications.error(localize('canvas.openFailed', 'Could not open Canvas: {0}', String(error)));
 					}
 				});
-			} else if (
-				entry.suspended &&
-				!entry.dismissed &&
-				!this.editorPart.groups.some(group => group.inputs.includes(entry.input))
-			) {
+			} else if (entry.suspended && !entry.dismissed && !this.editorPart.groups.some(group => group.inputs.includes(entry.input))) {
 				entry.suspended = false;
 				void this.openInput(entry, true).catch(error => {
 					if (!(error instanceof CancellationError)) {
@@ -346,12 +304,7 @@ export class CanvasService extends Disposable implements ICanvasService {
 	}
 
 	isOwnerPresentable(reference: ICanvasReference): boolean {
-		return (
-			!this.isDisposed &&
-			this.enabled.get() &&
-			this.contexts.isOwnerVisible(reference) &&
-			!!this.lookup(reference)
-		);
+		return !this.isDisposed && this.enabled.get() && this.contexts.isOwnerVisible(reference) && !!this.lookup(reference);
 	}
 
 	async revealCanvas(reference: ICanvasReference): Promise<void> {
@@ -376,11 +329,7 @@ export class CanvasService extends Disposable implements ICanvasService {
 			const suppression = restore ? this.contexts.workingSets?.suppressEditorPartAutoVisibility() : undefined;
 			try {
 				const group = this.contexts.getEditorGroup(reference, entry.input, restore);
-				await this.editors.openEditor(
-					entry.input,
-					{ pinned: true, ignoreError: true, preserveFocus: restore },
-					group ? { groupId: group.id } : undefined,
-				);
+				await this.editors.openEditor(entry.input, { pinned: true, ignoreError: true, preserveFocus: restore }, group ? { groupId: group.id } : undefined);
 			} catch (error) {
 				entry.dismissed = true;
 				if (!this.live.has(entry.model.id) || this.isDisposed) {
@@ -418,17 +367,12 @@ export class CanvasService extends Disposable implements ICanvasService {
 	}
 
 	restoreCanvasInput(serializationId: string): CanvasInput | undefined {
-		return [...this.live.values()].find(entry => entry.admitted && entry.input.serializationId === serializationId)
-			?.input;
+		return [...this.live.values()].find(entry => entry.admitted && entry.input.serializationId === serializationId)?.input;
 	}
 
 	async resolveCanvasModel(reference: ICanvasReference, source: URI): Promise<ICanvasModelResolution> {
 		const entry = this.lookup(reference);
-		if (
-			!entry ||
-			!this.isOwnerPresentable(reference) ||
-			entry.input.canvas.get().source?.toString() !== source.toString()
-		) {
+		if (!entry || !this.isOwnerPresentable(reference) || entry.input.canvas.get().source?.toString() !== source.toString()) {
 			throw new CancellationError();
 		}
 		entry.admitted = true;
@@ -446,10 +390,6 @@ export class CanvasService extends Disposable implements ICanvasService {
 	}
 
 	private async closeEditors(input: CanvasInput): Promise<void> {
-		await Promise.all(
-			this.editorPart.groups
-				.filter(group => group.inputs.includes(input))
-				.map(group => group.closeEditor(input, { reason: 'reset' })),
-		);
+		await Promise.all(this.editorPart.groups.filter(group => group.inputs.includes(input)).map(group => group.closeEditor(input, { reason: 'reset' })));
 	}
 }

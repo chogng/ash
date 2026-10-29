@@ -5,9 +5,7 @@ import type { URI } from '../../../../base/common/uri.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { MultiDiffEditorInput, MultiDiffEditorInputItem, MultiDiffEditorSource } from './multiDiffEditorInput.js';
 
-export const IMultiDiffSourceResolverService = createServiceIdentifier<IMultiDiffSourceResolverService>(
-	'multiDiffSourceResolverService',
-);
+export const IMultiDiffSourceResolverService = createServiceIdentifier<IMultiDiffSourceResolverService>('multiDiffSourceResolverService');
 
 export interface IResolvedMultiDiffSource {
 	readonly resource: URI;

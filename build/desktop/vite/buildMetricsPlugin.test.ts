@@ -45,8 +45,5 @@ test('reports final emitted JavaScript bytes', async () => {
 });
 
 test('fails a build when a JavaScript chunk exceeds the size limit', async () => {
-	await assert.rejects(
-		buildFixture(`globalThis.fixture = ${JSON.stringify('x'.repeat(500_001))};`),
-		/JavaScript chunk exceeds 500 kB/,
-	);
+	await assert.rejects(buildFixture(`globalThis.fixture = ${JSON.stringify('x'.repeat(500_001))};`), /JavaScript chunk exceeds 500 kB/);
 });

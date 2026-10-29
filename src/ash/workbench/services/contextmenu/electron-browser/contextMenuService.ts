@@ -13,19 +13,12 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { hasSystemContextMenu, MenuSettings } from '../../../../platform/window/common/window.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import {
-	type INativeContextMenuApi,
-	type INativeContextMenuRequest,
-	type NativeContextMenuItem,
-} from '../../../../base/parts/contextmenu/common/contextmenu.js';
+import { type INativeContextMenuApi, type INativeContextMenuRequest, type NativeContextMenuItem } from '../../../../base/parts/contextmenu/common/contextmenu.js';
 import type { ContextMenuAnchor, IContextMenuDelegate } from '../../../../base/browser/contextmenu.js';
 import { AnchorAlignment, AnchorAxisAlignment } from '../../../../base/browser/ui/contextview/contextview.js';
 import { transformContextMenuDelegate } from '../../../../platform/contextview/browser/contextMenuService.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
-import type {
-	IContextMenuMenuDelegate,
-	IContextMenuService,
-} from '../../../../platform/contextview/browser/contextView.js';
+import type { IContextMenuMenuDelegate, IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 
 interface ISystemMenuPopup {
 	readonly delegate: IContextMenuDelegate;
@@ -70,16 +63,8 @@ export class NativeContextMenuService extends Disposable implements IContextMenu
 		}
 		const resolved = transformContextMenuDelegate(delegate, this.menuService, this.contextKeyService);
 		const actions = resolved.getActions();
-		const serialized = serializeActions(
-			actions,
-			resolved.getKeyBinding ?? (action => this.keybindingService.lookupKeybinding(action.id)),
-		);
-		if (
-			serialized.items.length === 0 ||
-			this.activePopup ||
-			this.isDisposed ||
-			resolved.cancellationToken?.isCancellationRequested
-		) {
+		const serialized = serializeActions(actions, resolved.getKeyBinding ?? (action => this.keybindingService.lookupKeybinding(action.id)));
+		if (serialized.items.length === 0 || this.activePopup || this.isDisposed || resolved.cancellationToken?.isCancellationRequested) {
 			resolved.onHide?.(true);
 			return;
 		}
@@ -180,9 +165,7 @@ export class NativeContextMenuService extends Disposable implements IContextMenu
 	private runAction(action: IAction, delegate: IContextMenuDelegate): void {
 		let operation: unknown;
 		try {
-			operation = delegate.actionRunner
-				? delegate.actionRunner.run(action, delegate.getActionsContext?.())
-				: action.run(delegate.getActionsContext?.());
+			operation = delegate.actionRunner ? delegate.actionRunner.run(action, delegate.getActionsContext?.()) : action.run(delegate.getActionsContext?.());
 		} catch (error) {
 			if (!this.isDisposed) {
 				this.notificationService.error(toErrorMessage(error));
@@ -202,10 +185,7 @@ interface ISerializedActions {
 	readonly actions: ReadonlyMap<string, IAction>;
 }
 
-function serializeActions(
-	actions: readonly IAction[],
-	getKeybinding: NonNullable<IContextMenuDelegate['getKeyBinding']>,
-): ISerializedActions {
+function serializeActions(actions: readonly IAction[], getKeybinding: NonNullable<IContextMenuDelegate['getKeyBinding']>): ISerializedActions {
 	const actionMap = new Map<string, IAction>();
 	let nextId = 1;
 
@@ -219,7 +199,12 @@ function serializeActions(
 			if (action instanceof SubmenuAction) {
 				const children = serialize(action.actions);
 				if (children.length > 0) {
-					items.push({ type: 'submenu', label: action.label, enabled: action.enabled, items: children });
+					items.push({
+						type: 'submenu',
+						label: action.label,
+						enabled: action.enabled,
+						items: children,
+					});
 				}
 				continue;
 			}
@@ -242,7 +227,10 @@ function serializeActions(
 		return trimSerializedSeparators(items);
 	};
 
-	return { items: serialize(actions), actions: actionMap };
+	return {
+		items: serialize(actions),
+		actions: actionMap,
+	};
 }
 
 function trimSerializedSeparators(items: readonly NativeContextMenuItem[]): readonly NativeContextMenuItem[] {
@@ -257,32 +245,24 @@ function trimSerializedSeparators(items: readonly NativeContextMenuItem[]): read
 	return result;
 }
 
-function anchorPoint(
-	anchor: ContextMenuAnchor,
-	delegate: IContextMenuDelegate,
-): { readonly x: number; readonly y: number; readonly elementAnchor?: boolean } {
+function anchorPoint(anchor: ContextMenuAnchor, delegate: IContextMenuDelegate): { readonly x: number; readonly y: number; readonly elementAnchor?: boolean } {
 	if (!isNode(anchor)) {
-		return { x: normalizeCoordinate(anchor.x), y: normalizeCoordinate(anchor.y) };
+		return {
+			x: normalizeCoordinate(anchor.x),
+			y: normalizeCoordinate(anchor.y),
+		};
 	}
 	const bounds = anchor.getBoundingClientRect();
 	const targetWindow = anchor.ownerDocument.defaultView;
 	if (!targetWindow) throw new Error('Context menu anchor has no window');
-	const isClipped =
-		bounds.left < 0 ||
-		bounds.top < 0 ||
-		bounds.right > targetWindow.innerWidth ||
-		bounds.bottom > targetWindow.innerHeight;
-	const x = isClipped
-		? Math.min(Math.max(bounds.right, 0), targetWindow.innerWidth)
-		: delegate.anchorAlignment === AnchorAlignment.Right
-			? bounds.right
-			: bounds.left;
-	const y = isClipped
-		? Math.min(Math.max(bounds.bottom, 0), targetWindow.innerHeight)
-		: delegate.anchorAxisAlignment === AnchorAxisAlignment.Horizontal
-			? bounds.top
-			: bounds.bottom;
-	return { x: normalizeCoordinate(x), y: normalizeCoordinate(y), elementAnchor: true };
+	const isClipped = bounds.left < 0 || bounds.top < 0 || bounds.right > targetWindow.innerWidth || bounds.bottom > targetWindow.innerHeight;
+	const x = isClipped ? Math.min(Math.max(bounds.right, 0), targetWindow.innerWidth) : delegate.anchorAlignment === AnchorAlignment.Right ? bounds.right : bounds.left;
+	const y = isClipped ? Math.min(Math.max(bounds.bottom, 0), targetWindow.innerHeight) : delegate.anchorAxisAlignment === AnchorAxisAlignment.Horizontal ? bounds.top : bounds.bottom;
+	return {
+		x: normalizeCoordinate(x),
+		y: normalizeCoordinate(y),
+		elementAnchor: true,
+	};
 }
 
 function normalizeCoordinate(value: number): number {
@@ -316,18 +296,8 @@ export class ElectronContextMenuService extends Disposable implements IContextMe
 	) {
 		super();
 		this.usesSystemMenu = hasSystemContextMenu(configurationService);
-		this.systemMenu = this._register(
-			new NativeContextMenuService(api, menuService, contextKeyService, keybindingService, notificationService),
-		);
-		this.browserMenu = this._register(
-			new BrowserContextMenuService(
-				menuService,
-				contextKeyService,
-				keybindingService,
-				contextViewService,
-				notificationService,
-			),
-		);
+		this.systemMenu = this._register(new NativeContextMenuService(api, menuService, contextKeyService, keybindingService, notificationService));
+		this.browserMenu = this._register(new BrowserContextMenuService(menuService, contextKeyService, keybindingService, contextViewService, notificationService));
 		this._register(this.systemMenu.onDidShowContextMenu(() => this.setVisible('system', true)));
 		this._register(this.systemMenu.onDidHideContextMenu(() => this.setVisible('system', false)));
 		this._register(this.browserMenu.onDidShowContextMenu(() => this.setVisible('browser', true)));
@@ -369,10 +339,7 @@ export class ElectronContextMenuService extends Disposable implements IContextMe
 			return;
 		}
 		// Electron Menu.popup cannot align its right edge with an element on the right side of the window.
-		const rightHandTrigger =
-			isNode(anchor) &&
-			delegate.anchorAxisAlignment === AnchorAxisAlignment.Horizontal &&
-			delegate.anchorAlignment === AnchorAlignment.Left;
+		const rightHandTrigger = isNode(anchor) && delegate.anchorAxisAlignment === AnchorAxisAlignment.Horizontal && delegate.anchorAlignment === AnchorAlignment.Left;
 		// Caller-owned styling needs the browser menu's DOM, including on macOS.
 		const styledMenu = !!delegate.getMenuClassName?.();
 		const menu = this.usesSystemMenu && !rightHandTrigger && !styledMenu ? this.systemMenu : this.browserMenu;

@@ -6,15 +6,9 @@ import { ContextKeyService, IContextKeyService } from '../../../../../platform/c
 import type { LanguageInlineCompletionsProvider } from '../../../../common/languages.js';
 import { createTestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { ILanguageConfigurationService } from '../../../../common/languages/languageConfigurationRegistry.js';
-import {
-	ILanguageFeatureDebounceService,
-	LanguageFeatureDebounceService,
-} from '../../../../common/services/languageFeatureDebounce.js';
+import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../../../common/services/languageFeatureDebounce.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import {
-	IInlineCompletionsService,
-	InlineCompletionsService,
-} from '../../../../browser/services/inlineCompletionsService.js';
+import { IInlineCompletionsService, InlineCompletionsService } from '../../../../browser/services/inlineCompletionsService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -102,17 +96,9 @@ test('Registered editor commands retrigger inline completions after their edit',
 	services.registerInstance(ILanguageFeatureDebounceService, new LanguageFeatureDebounceService());
 	using configurations = createTestLanguageConfigurationService();
 	services.registerInstance(ILanguageConfigurationService, configurations);
-	using controller = services.createInstance(
-		InlineCompletionsController,
-		editorFor(model, selections),
-		viewport,
-		model,
-		providers,
-		commands.event,
-		(error: unknown) => {
-			throw error;
-		},
-	);
+	using controller = services.createInstance(InlineCompletionsController, editorFor(model, selections), viewport, model, providers, commands.event, (error: unknown) => {
+		throw error;
+	});
 
 	commands.fire({ commandId: 'editor.test.unrelatedCommand' });
 	await flushPromises();
@@ -124,10 +110,7 @@ test('Registered editor commands retrigger inline completions after their edit',
 	await flushPromises();
 	assert.deepEqual(requests, ['automatic']);
 	assert.deepEqual(cues, ['accessibility.signals.inlineSuggestion']);
-	assert.equal(
-		viewport.domNode.domNode.querySelector('.stanza-editor-inline-completion')?.textContent,
-		' completion',
-	);
+	assert.equal(viewport.domNode.domNode.querySelector('.stanza-editor-inline-completion')?.textContent, ' completion');
 	selections.setSelections([Selection.fromPositions(new Position(1, 2))]);
 	assert.equal(viewport.domNode.domNode.querySelector<HTMLElement>('.stanza-editor-inline-completion')?.hidden, true);
 	await controller.trigger();
@@ -166,7 +149,10 @@ test('inline completion acceptance applies additional edits and undoes atomicall
 	const providers = new LanguageFeatureRegistry<LanguageInlineCompletionsProvider>();
 	using provider = providers.register('plaintext', {
 		provideInlineCompletions: () => [
-			{ insertText: 'value', additionalTextEdits: [{ range: new Selection(1, 1, 1, 1), text: 'const ' }] },
+			{
+				insertText: 'value',
+				additionalTextEdits: [{ range: new Selection(1, 1, 1, 1), text: 'const ' }],
+			},
 		],
 	});
 	using service = new InlineCompletionsService();
@@ -184,49 +170,25 @@ test('inline completion acceptance applies additional edits and undoes atomicall
 	services.registerInstance(IContextKeyService, new ContextKeyService());
 	assert.throws(
 		() =>
-			services.createInstance(
-				InlineCompletionsController,
-				editorFor(model, selections),
-				viewport,
-				model,
-				providers,
-				undefined,
-				(error: unknown) => {
-					throw error;
-				},
-			),
+			services.createInstance(InlineCompletionsController, editorFor(model, selections), viewport, model, providers, undefined, (error: unknown) => {
+				throw error;
+			}),
 		/Unknown service/,
 	);
 	services.registerInstance(IInlineCompletionsService, service);
 	assert.throws(
 		() =>
-			services.createInstance(
-				InlineCompletionsController,
-				editorFor(model, selections),
-				viewport,
-				model,
-				providers,
-				undefined,
-				(error: unknown) => {
-					throw error;
-				},
-			),
+			services.createInstance(InlineCompletionsController, editorFor(model, selections), viewport, model, providers, undefined, (error: unknown) => {
+				throw error;
+			}),
 		/Unknown service/,
 	);
 	services.registerInstance(ILanguageFeatureDebounceService, new LanguageFeatureDebounceService());
 	using configurations = createTestLanguageConfigurationService();
 	services.registerInstance(ILanguageConfigurationService, configurations);
-	using controller = services.createInstance(
-		InlineCompletionsController,
-		editorFor(model, selections),
-		viewport,
-		model,
-		providers,
-		undefined,
-		(error: unknown) => {
-			throw error;
-		},
-	);
+	using controller = services.createInstance(InlineCompletionsController, editorFor(model, selections), viewport, model, providers, undefined, (error: unknown) => {
+		throw error;
+	});
 
 	await controller.trigger();
 	await flushPromises();
@@ -310,8 +272,7 @@ function editorFor(model: TextModel, selections: CursorsController): ICodeEditor
 			model.pushStackElement();
 			return true;
 		},
-		executeCommands: (source: string | null | undefined, commands: (ICommand | null)[]) =>
-			selections.executeCommands(commands, source),
+		executeCommands: (source: string | null | undefined, commands: (ICommand | null)[]) => selections.executeCommands(commands, source),
 	} as unknown as ICodeEditor;
 }
 

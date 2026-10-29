@@ -3,13 +3,7 @@ import { KeyChord, KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import * as nls from '../../../../nls.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import {
-	EditorAction,
-	registerEditorAction,
-	registerEditorContribution,
-	type IActionOptions,
-	type ServicesAccessor,
-} from '../../../browser/editorFeatureRegistration.js';
+import { EditorAction, registerEditorAction, registerEditorContribution, type IActionOptions, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { Range } from '../../../common/core/range.js';
 import { type ICommand } from '../../../common/editorCommon.js';
@@ -32,9 +26,7 @@ abstract class CommentLineAction extends EditorAction {
 		const configuration = accessor.get(ILanguageConfigurationService);
 		const comments = editor.getOption(EditorOption.comments);
 		const modelOptions = model.getOptions();
-		const ordered = selections
-			.map((selection, index) => ({ selection, index, ignoreFirstLine: false }))
-			.sort((left, right) => Range.compareRangesUsingStarts(left.selection, right.selection));
+		const ordered = selections.map((selection, index) => ({ selection, index, ignoreFirstLine: false })).sort((left, right) => Range.compareRangesUsingStarts(left.selection, right.selection));
 		for (let index = 1; index < ordered.length; index += 1) {
 			const previous = ordered[index - 1]!;
 			const current = ordered[index]!;
@@ -44,18 +36,7 @@ abstract class CommentLineAction extends EditorAction {
 		}
 		const commands = ordered
 			.sort((left, right) => left.index - right.index)
-			.map<ICommand>(
-				entry =>
-					new LineCommentCommand(
-						configuration,
-						entry.selection,
-						modelOptions.indentSize,
-						this.type,
-						comments.insertSpace,
-						comments.ignoreEmptyLines,
-						entry.ignoreFirstLine,
-					),
-			);
+			.map<ICommand>(entry => new LineCommentCommand(configuration, entry.selection, modelOptions.indentSize, this.type, comments.insertSpace, comments.ignoreEmptyLines, entry.ignoreFirstLine));
 		editor.pushUndoStop();
 		editor.executeCommands(this.id, commands);
 		editor.pushUndoStop();
@@ -146,20 +127,11 @@ registerEditorContribution({
 		}
 		context.register(
 			context.editor.onKeyDown(event => {
-				if (
-					event.browserEvent.defaultPrevented ||
-					event.isComposing ||
-					event.browserEvent.getModifierState('AltGraph')
-				) {
+				if (event.browserEvent.defaultPrevented || event.isComposing || event.browserEvent.getModifierState('AltGraph')) {
 					return;
 				}
 				const line = (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === '/';
-				const block =
-					event.shiftKey &&
-					event.altKey &&
-					!event.ctrlKey &&
-					!event.metaKey &&
-					event.key.toLowerCase() === 'a';
+				const block = event.shiftKey && event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'a';
 				if (!line && !block) {
 					return;
 				}
@@ -174,11 +146,7 @@ registerEditorContribution({
 				}
 				const languageId = model.getLanguageIdAtPosition(position.lineNumber, position.column);
 				const comments = context.configurations.getLanguageConfiguration(languageId).comments;
-				if (
-					line
-						? !comments?.lineCommentToken
-						: !comments?.blockCommentStartToken || !comments.blockCommentEndToken
-				) {
+				if (line ? !comments?.lineCommentToken : !comments?.blockCommentStartToken || !comments.blockCommentEndToken) {
 					return;
 				}
 				event.stop();

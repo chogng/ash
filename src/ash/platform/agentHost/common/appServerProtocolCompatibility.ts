@@ -1,8 +1,4 @@
-import {
-	APP_SERVER_PROTOCOL_MAJOR,
-	APP_SERVER_SCHEMA_HASH,
-	APP_SERVER_REQUIRED_SESSION_CAPABILITIES,
-} from '../../../../../.build/protocol/typescript/protocol.js';
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, APP_SERVER_REQUIRED_SESSION_CAPABILITIES } from '../../../../../.build/protocol/typescript/protocol.js';
 import type { InitializeResult, ServerCapabilities } from '../../../../../.build/protocol/typescript/index.js';
 import { localize } from '../../../nls.js';
 
@@ -39,10 +35,7 @@ export interface ValidateAppServerInitializeOptions {
 /** The protocol decoder owns schema validation. Typed callers only check the
  * negotiated contract here, so a large initialization is not walked twice.
  */
-export function checkAppServerInitializeCompatibility(
-	initialized: InitializeResult,
-	options: ValidateAppServerInitializeOptions = {},
-): InitializeResult {
+export function checkAppServerInitializeCompatibility(initialized: InitializeResult, options: ValidateAppServerInitializeOptions = {}): InitializeResult {
 	const { serverInfo, protocolVersion, capabilities } = initialized;
 	if (options.expectedServerName && serverInfo.name !== options.expectedServerName) {
 		throw new Error(`Unexpected App Server identity: ${serverInfo.name}`);
@@ -96,10 +89,6 @@ function describeIncompatibility(incompatibility: AppServerProtocolIncompatibili
 				incompatibility.received,
 			);
 		case 'missingCapability':
-			return localize(
-				'appServer.protocol.missingCapability',
-				'Ash App Server is missing required capability {0}',
-				incompatibility.name,
-			);
+			return localize('appServer.protocol.missingCapability', 'Ash App Server is missing required capability {0}', incompatibility.name);
 	}
 }

@@ -1,20 +1,9 @@
-import {
-	Disposable,
-	DisposableStore,
-	MutableDisposable,
-	isDisposable,
-	toDisposable,
-} from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, isDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { CancellationTokenSource } from '../../../base/common/cancellation.js';
 import { Emitter } from '../../../base/common/event.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../common/quickInput.js';
-import {
-	QuickAccessRegistry,
-	type IQuickAccessController,
-	type IQuickAccessOptions,
-	type IQuickAccessProviderDescriptor,
-} from '../common/quickAccess.js';
+import { QuickAccessRegistry, type IQuickAccessController, type IQuickAccessOptions, type IQuickAccessProviderDescriptor } from '../common/quickAccess.js';
 
 /** Keeps one picker mounted while its search provider changes with the input prefix. */
 export class QuickAccessController extends Disposable implements IQuickAccessController {
@@ -67,10 +56,7 @@ export class QuickAccessController extends Disposable implements IQuickAccessCon
 		};
 		const activate = (input: string): void => {
 			const match = QuickAccessRegistry.get(input);
-			const next =
-				match && (!options?.enabledProviderPrefixes || options.enabledProviderPrefixes.includes(match.prefix))
-					? match
-					: QuickAccessRegistry.get('');
+			const next = match && (!options?.enabledProviderPrefixes || options.enabledProviderPrefixes.includes(match.prefix)) ? match : QuickAccessRegistry.get('');
 			if (next === descriptor) return;
 			provider.clear();
 			descriptor = next;

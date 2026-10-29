@@ -25,11 +25,7 @@ export class TestExtensionService extends AppServerExtensionService {
 	}
 }
 
-export function registerTestExtensionService(
-	owner: DisposableStore,
-	services: InstantiationService,
-	api?: IExtensionApi,
-): TestExtensionService {
+export function registerTestExtensionService(owner: DisposableStore, services: InstantiationService, api?: IExtensionApi): TestExtensionService {
 	const extensions = owner.add(new TestExtensionService(api));
 	services.registerInstance(IExtensionService, extensions);
 	return extensions;

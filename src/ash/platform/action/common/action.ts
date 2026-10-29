@@ -40,8 +40,6 @@ export function commandActionLabel(title: CommandActionTitle): string {
 	return typeof title === 'string' ? title : title.value;
 }
 
-export function isCommandActionToggleInfo(
-	value: ContextKeyExpression | ICommandActionToggleInfo,
-): value is ICommandActionToggleInfo {
+export function isCommandActionToggleInfo(value: ContextKeyExpression | ICommandActionToggleInfo): value is ICommandActionToggleInfo {
 	return 'condition' in value;
 }

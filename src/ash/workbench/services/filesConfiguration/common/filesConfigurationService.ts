@@ -4,11 +4,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import {
-	ConfigurationScope,
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import type { IFileStat } from '../../../../platform/files/common/files.js';
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
@@ -21,39 +17,23 @@ const expressionSettings = [
 	[
 		'files.readonlyInclude',
 		localize('files.readonlyIncludeTitle', 'Read-only file patterns'),
-		localize(
-			'files.readonlyIncludeDescription',
-			'Open matching files as read-only. Add writable exceptions below to allow editing specific files.',
-		),
+		localize('files.readonlyIncludeDescription', 'Open matching files as read-only. Add writable exceptions below to allow editing specific files.'),
 	],
 	[
 		'files.readonlyExclude',
 		localize('files.readonlyExcludeTitle', 'Writable file exceptions'),
-		localize(
-			'files.readonlyExcludeDescription',
-			'Allow editing matching files even when they match a read-only rule. Filesystem permissions still apply.',
-		),
+		localize('files.readonlyExcludeDescription', 'Allow editing matching files even when they match a read-only rule. Filesystem permissions still apply.'),
 	],
 	[
 		'files.exclude',
 		localize('files.excludeTitle', 'File exclusion patterns'),
-		localize(
-			'files.excludeDescription',
-			'Hide matching files and folders in Explorer. Removing a default rule makes those files visible again.',
-		),
+		localize('files.excludeDescription', 'Hide matching files and folders in Explorer. Removing a default rule makes those files visible again.'),
 	],
-	[
-		'search.exclude',
-		localize('files.searchExcludeTitle', 'Search exclusion patterns'),
-		localize('files.searchExcludeDescription', 'Skip matching files and folders when searching the workspace.'),
-	],
+	['search.exclude', localize('files.searchExcludeTitle', 'Search exclusion patterns'), localize('files.searchExcludeDescription', 'Skip matching files and folders when searching the workspace.')],
 	[
 		'explorer.autoRevealExclude',
 		localize('files.autoRevealExcludeTitle', 'Auto-reveal exclusion patterns'),
-		localize(
-			'files.autoRevealExcludeDescription',
-			'Keep Explorer from automatically revealing and selecting matching files when you open them. The files remain visible in Explorer.',
-		),
+		localize('files.autoRevealExcludeDescription', 'Keep Explorer from automatically revealing and selecting matching files when you open them. The files remain visible in Explorer.'),
 	],
 	[
 		'workbench.localHistory.exclude',
@@ -95,36 +75,18 @@ for (const [key, title, description] of expressionSettings) {
 		},
 		parse: value => {
 			if (!value || typeof value !== 'object' || Array.isArray(value)) {
-				throw new TypeError(
-					localize('files.invalidGlobExpression', '{0} must be an object containing path patterns.', key),
-				);
+				throw new TypeError(localize('files.invalidGlobExpression', '{0} must be an object containing path patterns.', key));
 			}
 			for (const [pattern, rule] of Object.entries(value)) {
 				if (
 					!pattern ||
 					(typeof rule !== 'boolean' &&
-						(!conditional ||
-							typeof rule !== 'object' ||
-							rule === null ||
-							Array.isArray(rule) ||
-							Object.keys(rule).length !== 1 ||
-							!('when' in rule) ||
-							typeof rule.when !== 'string'))
+						(!conditional || typeof rule !== 'object' || rule === null || Array.isArray(rule) || Object.keys(rule).length !== 1 || !('when' in rule) || typeof rule.when !== 'string'))
 				) {
 					throw new TypeError(
 						conditional
-							? localize(
-									'files.invalidGlobRule',
-									'Invalid rule for {0} in {1}. Use true, false, or an object with a when string.',
-									pattern,
-									key,
-								)
-							: localize(
-									'files.invalidBooleanGlobRule',
-									'Invalid rule for {0} in {1}. Use true or false.',
-									pattern,
-									key,
-								),
+							? localize('files.invalidGlobRule', 'Invalid rule for {0} in {1}. Use true, false, or an object with a when string.', pattern, key)
+							: localize('files.invalidBooleanGlobRule', 'Invalid rule for {0} in {1}. Use true or false.', pattern, key),
 					);
 				}
 			}
@@ -150,9 +112,7 @@ registry.registerConfiguration({
 	defaultValue: true as boolean | 'focusNoScroll',
 	parse(value: unknown): boolean | 'focusNoScroll' {
 		if (typeof value !== 'boolean' && value !== 'focusNoScroll') {
-			throw new TypeError(
-				localize('files.invalidAutoReveal', 'Auto reveal must be true, false, or focusNoScroll.'),
-			);
+			throw new TypeError(localize('files.invalidAutoReveal', 'Auto reveal must be true, false, or focusNoScroll.'));
 		}
 		return value;
 	},
@@ -161,10 +121,7 @@ registry.registerConfiguration({
 	setting: {
 		valueType: 'select',
 		title: localize('files.autoRevealTitle', 'Auto reveal'),
-		description: localize(
-			'files.autoRevealDescription',
-			'Select the active editor file in Explorer without moving keyboard focus.',
-		),
+		description: localize('files.autoRevealDescription', 'Select the active editor file in Explorer without moving keyboard focus.'),
 		options: [
 			{ value: true, label: localize('files.autoRevealOn', 'Reveal and select') },
 			{ value: false, label: localize('files.autoRevealOff', 'Off') },
@@ -187,10 +144,7 @@ export class FilesConfigurationService extends Disposable implements IFilesConfi
 	private readonly include: ResourceGlobMatcher;
 	private readonly exclude: ResourceGlobMatcher;
 
-	constructor(
-		@IConfigurationService configuration: IConfigurationService,
-		@IWorkspaceContextService workspace: IWorkspaceContextService,
-	) {
+	constructor(@IConfigurationService configuration: IConfigurationService, @IWorkspaceContextService workspace: IWorkspaceContextService) {
 		super();
 		this.include = this._register(
 			new ResourceGlobMatcher(
@@ -217,10 +171,7 @@ export class FilesConfigurationService extends Disposable implements IFilesConfi
 			return true;
 		}
 		return this.include.matches(resource) && !this.exclude.matches(resource)
-			? localize(
-					'files.configuredReadonly',
-					'This file is read-only because it matches the configured read-only patterns.',
-				)
+			? localize('files.configuredReadonly', 'This file is read-only because it matches the configured read-only patterns.')
 			: false;
 	}
 }

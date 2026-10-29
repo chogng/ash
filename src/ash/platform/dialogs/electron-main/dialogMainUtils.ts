@@ -1,10 +1,7 @@
 import type { MessageBoxOptions } from '../../../base/parts/sandbox/common/electronTypes.js';
 import { release } from 'node:os';
 
-export function massageMessageBoxOptions(
-	options: MessageBoxOptions,
-	platform: NodeJS.Platform = process.platform,
-): { options: MessageBoxOptions; buttonIndices: readonly number[] } {
+export function massageMessageBoxOptions(options: MessageBoxOptions, platform: NodeJS.Platform = process.platform): { options: MessageBoxOptions; buttonIndices: readonly number[] } {
 	const buttons = [...(options.buttons ?? [])];
 	const buttonIndices = buttons.map((_, index) => index);
 	const originalDefault = options.defaultId ?? 0;

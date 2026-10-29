@@ -5,12 +5,7 @@
 
 import { Range } from '../core/range.js';
 import { Selection } from '../core/selection.js';
-import {
-	IPartialViewLinesViewportData,
-	IViewModel,
-	IViewWhitespaceViewportData,
-	ViewLineRenderingData,
-} from '../viewModel.js';
+import { IPartialViewLinesViewportData, IViewModel, IViewWhitespaceViewportData, ViewLineRenderingData } from '../viewModel.js';
 import { ViewModelDecoration } from '../viewModel/viewModelDecoration.js';
 
 /**
@@ -53,12 +48,7 @@ export class ViewportData {
 
 	public readonly lineHeight: number;
 
-	constructor(
-		selections: Selection[],
-		partialData: IPartialViewLinesViewportData,
-		whitespaceViewportData: IViewWhitespaceViewportData[],
-		model: IViewModel,
-	) {
+	constructor(selections: Selection[], partialData: IPartialViewLinesViewportData, whitespaceViewportData: IViewWhitespaceViewportData[], model: IViewModel) {
 		this.selections = selections;
 		this.startLineNumber = partialData.startLineNumber | 0;
 		this.endLineNumber = partialData.endLineNumber | 0;

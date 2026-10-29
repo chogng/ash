@@ -1,8 +1,4 @@
-import {
-	ConfigurationScope,
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { normalizeLocale } from '../../../../platform/languagePacks/common/languagePackCatalog.js';
 import type { ILanguagePackItem } from '../../../../platform/languagePacks/common/languagePacks.js';
@@ -34,10 +30,7 @@ export const LocalizationConfiguration = Object.freeze({
 				return localize({ bundle: 'ash.settings', key: 'displayLanguage.select' }, 'Interface language');
 			},
 			get description() {
-				return localize(
-					{ bundle: 'ash.settings', key: 'displayLanguage.description' },
-					'Choose the language used by the Ash interface.',
-				);
+				return localize({ bundle: 'ash.settings', key: 'displayLanguage.description' }, 'Choose the language used by the Ash interface.');
 			},
 			keywords: ['language', 'locale', 'display language', '语言'],
 			options: productLanguages.map(language => ({

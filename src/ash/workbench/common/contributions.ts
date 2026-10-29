@@ -51,17 +51,18 @@ export class WorkbenchContributionRegistry {
 		this.add(id, phase, factory);
 	}
 
-	private add(
-		id: string,
-		phase: WorkbenchPhase,
-		factory: WorkbenchContributionFactory,
-	): IWorkbenchContributionRegistration {
+	private add(id: string, phase: WorkbenchPhase, factory: WorkbenchContributionFactory): IWorkbenchContributionRegistration {
 		validateContributionId(id);
 		validateWorkbenchPhase(phase);
 		if (this.registrations.has(id)) {
 			throw new Error(`Workbench contribution is already registered: ${id}`);
 		}
-		const registration: IWorkbenchContributionRegistration = { id, phase, factory, order: this.nextOrder++ };
+		const registration: IWorkbenchContributionRegistration = {
+			id,
+			phase,
+			factory,
+			order: this.nextOrder++,
+		};
 		this.registrations.set(id, registration);
 		return registration;
 	}
@@ -69,11 +70,7 @@ export class WorkbenchContributionRegistry {
 	/**
 	 * Creates a window host from the contributions registered at this moment.
 	 */
-	createHost(
-		accessor: ServicesAccessor,
-		onError: WorkbenchContributionErrorHandler = defaultErrorHandler,
-		contributionIds?: readonly string[],
-	): WorkbenchContributionHost {
+	createHost(accessor: ServicesAccessor, onError: WorkbenchContributionErrorHandler = defaultErrorHandler, contributionIds?: readonly string[]): WorkbenchContributionHost {
 		// Product windows explicitly select their composition from the shared declarations.
 		const registrations =
 			contributionIds === undefined
@@ -108,11 +105,7 @@ export class WorkbenchContributionHost extends Disposable {
 	private readonly instances: { readonly id: string; readonly contribution: IWorkbenchContribution }[] = [];
 	private _phase = 0;
 
-	constructor(
-		accessor: ServicesAccessor,
-		registrations: readonly IWorkbenchContributionRegistration[],
-		onError: WorkbenchContributionErrorHandler,
-	) {
+	constructor(accessor: ServicesAccessor, registrations: readonly IWorkbenchContributionRegistration[], onError: WorkbenchContributionErrorHandler) {
 		super();
 		this.accessor = accessor;
 		this.registrations = registrations;
@@ -168,11 +161,7 @@ export const WorkbenchContributionsRegistry = new WorkbenchContributionRegistry(
  * Contribution modules should call this during module evaluation, before a
  * workbench host is created.
  */
-export function registerWorkbenchContribution(
-	id: string,
-	phase: WorkbenchPhase,
-	factory: WorkbenchContributionFactory,
-): void {
+export function registerWorkbenchContribution(id: string, phase: WorkbenchPhase, factory: WorkbenchContributionFactory): void {
 	WorkbenchContributionsRegistry.registerStatic(id, phase, factory);
 }
 

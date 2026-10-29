@@ -1,7 +1,4 @@
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
 import { localize } from '../../nls.js';
 
@@ -17,13 +14,7 @@ export const EditorSelectionConfiguration = Object.freeze({
 		parse(value: unknown): DefaultNewDocumentEditor {
 			if (value === 'profile') return 'buildMode';
 			if (value === 'buildMode' || value === 'code' || value === 'academy') return value;
-			throw new TypeError(
-				localize(
-					'editor.selection.invalid',
-					'Default new document editor must be buildMode, code, or academy; received {0}.',
-					String(value),
-				),
-			);
+			throw new TypeError(localize('editor.selection.invalid', 'Default new document editor must be buildMode, code, or academy; received {0}.', String(value)));
 		},
 		setting: {
 			valueType: 'select',
@@ -31,10 +22,7 @@ export const EditorSelectionConfiguration = Object.freeze({
 				return localize('editor.selection.title', 'Default editor for new documents');
 			},
 			get description() {
-				return localize(
-					'editor.selection.description',
-					'Use the default editor, or prefer Code or Academy for new untitled documents.',
-				);
+				return localize('editor.selection.description', 'Use the default editor, or prefer Code or Academy for new untitled documents.');
 			},
 			options: [
 				{ value: 'buildMode', label: 'Default' },

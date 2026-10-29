@@ -2,10 +2,7 @@ import type { ModelListResult } from '../../../../../.build/protocol/typescript/
 import type { ModelCatalogEntry } from '../common/agentModels.js';
 import { localize } from '../../../nls.js';
 import { createUuid } from '../../../base/common/uuid.js';
-import type {
-	ProviderConfigDto,
-	ProviderModelsListFailureCodeDto,
-} from '../../../../../.build/protocol/typescript/index.js';
+import type { ProviderConfigDto, ProviderModelsListFailureCodeDto } from '../../../../../.build/protocol/typescript/index.js';
 import type { AppServerProtocolClient } from './appServerProtocolClient.js';
 import { appServerRequest } from './appServerRequest.js';
 import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
@@ -92,16 +89,11 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 					apiFormat: config.custom!.protocol,
 					order: config.custom!.order,
 					models: Object.entries(config.modelContext ?? {})
-						.filter(
-							(entry): entry is [string, (typeof entry)[1] & { contextWindow: number }] =>
-								entry[1].contextWindow != null,
-						)
+						.filter((entry): entry is [string, (typeof entry)[1] & { contextWindow: number }] => entry[1].contextWindow != null)
 						.map(([id, context]) => ({
 							id,
 							contextWindow: context.contextWindow,
-							...(config.custom?.modelAliases?.[id]
-								? { upstreamModel: config.custom.modelAliases[id] }
-								: {}),
+							...(config.custom?.modelAliases?.[id] ? { upstreamModel: config.custom.modelAliases[id] } : {}),
 						})),
 				}));
 		},
@@ -116,13 +108,13 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 					...config,
 					modelContext: Object.fromEntries(
 						Object.entries(config.modelContext ?? {})
-							.filter(
-								(entry): entry is [string, (typeof entry)[1] & { contextWindow: number }] =>
-									entry[1].contextWindow != null,
-							)
+							.filter((entry): entry is [string, (typeof entry)[1] & { contextWindow: number }] => entry[1].contextWindow != null)
 							.map(([id, context]) => [
 								id,
-								{ ...snapshot.connections[provider.id]?.modelContext?.[id], ...context },
+								{
+									...snapshot.connections[provider.id]?.modelContext?.[id],
+									...context,
+								},
 							]),
 					),
 					custom: {
@@ -159,12 +151,9 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 			}
 			return result.type === 'models' ? result.models.map(modelCatalogEntry) : [];
 		},
-		setProviderApiKey: params =>
-			withSecretStorageErrors(appServerRequest(connection, 'provider/apiKey/set', params)),
+		setProviderApiKey: params => withSecretStorageErrors(appServerRequest(connection, 'provider/apiKey/set', params)),
 		removeProviderApiKey: async provider => {
-			await withSecretStorageErrors(
-				appServerRequest(connection, 'provider/apiKey/remove', { connection: provider }),
-			);
+			await withSecretStorageErrors(appServerRequest(connection, 'provider/apiKey/remove', { connection: provider }));
 		},
 		readModel: async () => (await appServerRequest(connection, 'config/read', {})).model,
 		readAdvisorDefault: async () => (await appServerRequest(connection, 'config/read', {})).advisor ?? null,
@@ -198,13 +187,9 @@ function customProviderConfig(provider: CustomModelProvider): ProviderConfigDto 
 			order: provider.order,
 			contextWindow: 272_000,
 			model: null,
-			modelAliases: Object.fromEntries(
-				provider.models.filter(model => model.upstreamModel).map(model => [model.id, model.upstreamModel!]),
-			),
+			modelAliases: Object.fromEntries(provider.models.filter(model => model.upstreamModel).map(model => [model.id, model.upstreamModel!])),
 		},
-		modelContext: Object.fromEntries(
-			provider.models.map(model => [model.id, { contextWindow: model.contextWindow }]),
-		),
+		modelContext: Object.fromEntries(provider.models.map(model => [model.id, { contextWindow: model.contextWindow }])),
 	};
 }
 
@@ -215,31 +200,19 @@ function modelDiscoveryMessage(code: ProviderModelsListFailureCodeDto): string {
 		case 'permission':
 			return localize('models.discovery.permission', 'The API key does not have permission to list models.');
 		case 'unsupported':
-			return localize(
-				'models.discovery.unsupported',
-				'This endpoint does not provide a model list. Add model IDs manually.',
-			);
+			return localize('models.discovery.unsupported', 'This endpoint does not provide a model list. Add model IDs manually.');
 		case 'rateLimited':
 			return localize('models.discovery.rateLimited', 'The endpoint rate limit was reached. Try again later.');
 		case 'unreachable':
-			return localize(
-				'models.discovery.unreachable',
-				'Could not reach the endpoint. Check the Base URL and connection.',
-			);
+			return localize('models.discovery.unreachable', 'Could not reach the endpoint. Check the Base URL and connection.');
 		case 'providerUnavailable':
 			return localize('models.discovery.providerUnavailable', 'The endpoint is temporarily unavailable.');
 		case 'invalidRequest':
-			return localize(
-				'models.discovery.invalidRequest',
-				'The endpoint rejected the model list request. Check the API format and Base URL.',
-			);
+			return localize('models.discovery.invalidRequest', 'The endpoint rejected the model list request. Check the API format and Base URL.');
 		case 'invalidResponse':
 			return localize('models.discovery.invalidResponse', 'The endpoint returned an invalid model list.');
 		case 'invalidConfiguration':
-			return localize(
-				'models.discovery.invalidConfiguration',
-				'The provider configuration is invalid. Check its fields.',
-			);
+			return localize('models.discovery.invalidConfiguration', 'The provider configuration is invalid. Check its fields.');
 		case 'cancelled':
 			return localize('models.discovery.cancelled', 'Model discovery was cancelled.');
 		case 'unknown':
@@ -261,9 +234,7 @@ function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatal
 		longContext: entry.long_context,
 		...(entry.discovered === true ? { discovered: true } : {}),
 		contextWindow: entry.context_window,
-		supportedReasoningEfforts: Object.freeze(
-			entry.supported_reasoning_efforts.map(option => Object.freeze({ ...option })),
-		),
+		supportedReasoningEfforts: Object.freeze(entry.supported_reasoning_efforts.map(option => Object.freeze({ ...option }))),
 		...(entry.default_reasoning_effort != null ? { defaultReasoningEffort: entry.default_reasoning_effort } : {}),
 	});
 }

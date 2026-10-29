@@ -58,15 +58,9 @@ export class CanvasInputController extends Disposable {
 				passive: false,
 			}),
 		);
-		this._register(
-			addDisposableListener(host.domNode, 'pointerdown', (event: PointerEvent) => this.handlePointerDown(event)),
-		);
-		this._register(
-			addDisposableListener(host.domNode, 'pointermove', (event: PointerEvent) => this.handlePointerMove(event)),
-		);
-		this._register(
-			addDisposableListener(host.domNode, 'pointerup', (event: PointerEvent) => this.handlePointerUp(event)),
-		);
+		this._register(addDisposableListener(host.domNode, 'pointerdown', (event: PointerEvent) => this.handlePointerDown(event)));
+		this._register(addDisposableListener(host.domNode, 'pointermove', (event: PointerEvent) => this.handlePointerMove(event)));
+		this._register(addDisposableListener(host.domNode, 'pointerup', (event: PointerEvent) => this.handlePointerUp(event)));
 		for (const type of ['pointercancel', 'lostpointercapture']) {
 			this._register(
 				addDisposableListener(host.domNode, type, (event: PointerEvent) => {
@@ -109,12 +103,7 @@ export class CanvasInputController extends Disposable {
 	}
 
 	private handlePointerDown(event: PointerEvent): void {
-		if (
-			event.defaultPrevented ||
-			!event.isPrimary ||
-			(event.button !== 0 && event.button !== 1) ||
-			this.isGesturing
-		) {
+		if (event.defaultPrevented || !event.isPrimary || (event.button !== 0 && event.button !== 1) || this.isGesturing) {
 			return;
 		}
 		const input = this.input(event);

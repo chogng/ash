@@ -20,10 +20,7 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 		return localize('github.settings.title', 'Codex review');
 	}
 	public get description(): string {
-		return localize(
-			'github.settings.description',
-			'Use your existing accounts to request and read PR reviews. Confirm official Connector authorization and automatic review settings in Codex.',
-		);
+		return localize('github.settings.description', 'Use your existing accounts to request and read PR reviews. Confirm official Connector authorization and automatic review settings in Codex.');
 	}
 	public get help(): string {
 		return (
@@ -124,16 +121,9 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 	public get fields(): readonly SettingsSectionField[] {
 		const codex = this.accountState?.accounts.find(account => account.provider === 'chatgpt-subscription');
 		const codexStatus = !this.accountState
-			? localize(
-					'github.settings.codexUnknown',
-					'Codex login status is unavailable. Connect to App Server and refresh accounts.',
-				)
+			? localize('github.settings.codexUnknown', 'Codex login status is unavailable. Connect to App Server and refresh accounts.')
 			: codex?.status === 'ready'
-				? localize(
-						'github.settings.codexReady',
-						'Existing Codex login available for model access: {0}.',
-						codex.displayName ?? codex.email ?? codex.accountId,
-					)
+				? localize('github.settings.codexReady', 'Existing Codex login available for model access: {0}.', codex.displayName ?? codex.email ?? codex.accountId)
 				: localize(
 						'github.settings.codexUnavailable',
 						'No valid reused Codex login detected. Sign in with Codex, then refresh. PR review requests use your GitHub account; the official Connector runs the review.',
@@ -177,11 +167,7 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 				id: 'refreshManagedSettings',
 				kind: 'action',
 				label: localize('github.settings.refreshManaged', 'Refresh managed settings'),
-				enabled:
-					this.policies.state.phase !== 'refreshing' &&
-					this.accountState?.accounts.some(
-						account => account.provider === 'github' && account.status === 'ready',
-					) === true,
+				enabled: this.policies.state.phase !== 'refreshing' && this.accountState?.accounts.some(account => account.provider === 'github' && account.status === 'ready') === true,
 				run: () => this.policies.refresh(),
 			},
 			{
@@ -256,35 +242,22 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 			{
 				id: 'status',
 				kind: 'status',
-				text: this.isBusy
-					? localize('github.settings.loading', 'Reading GitHub account and repository information…')
-					: this.status,
+				text: this.isBusy ? localize('github.settings.loading', 'Reading GitHub account and repository information…') : this.status,
 			},
 		];
 	}
 
 	private managedSettingsStatus(): string {
 		const state = this.policies.state;
-		const account = this.review.accounts.find(
-			account => account.id === state.scope?.accountId && account.host === state.scope.host,
-		);
-		const identity = state.scope
-			? `${account?.login ?? state.scope.accountId}@${state.scope.host}`
-			: localize('github.settings.primaryAccount', 'the primary GitHub account');
+		const account = this.review.accounts.find(account => account.id === state.scope?.accountId && account.host === state.scope.host);
+		const identity = state.scope ? `${account?.login ?? state.scope.accountId}@${state.scope.host}` : localize('github.settings.primaryAccount', 'the primary GitHub account');
 		let message: string;
 		switch (state.phase) {
 			case 'idle':
-				message = localize(
-					'github.settings.managedIdle',
-					'Managed settings have not been fetched for the current account.',
-				);
+				message = localize('github.settings.managedIdle', 'Managed settings have not been fetched for the current account.');
 				break;
 			case 'refreshing':
-				message = localize(
-					'github.settings.managedRefreshing',
-					'Refreshing managed settings for {0}…',
-					identity,
-				);
+				message = localize('github.settings.managedRefreshing', 'Refreshing managed settings for {0}…', identity);
 				break;
 			case 'ready':
 				message = localize('github.settings.managedReady', 'Managed settings retrieved for {0}.', identity);
@@ -292,60 +265,30 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 			case 'failed':
 				switch (state.failure) {
 					case GitHubErrorCode.AuthenticationRequired:
-						message = localize(
-							'github.settings.managedAuthentication',
-							'Reconnect GitHub, then refresh managed settings.',
-						);
+						message = localize('github.settings.managedAuthentication', 'Reconnect GitHub, then refresh managed settings.');
 						break;
 					case GitHubErrorCode.PermissionDenied:
-						message = localize(
-							'github.settings.managedPermission',
-							'GitHub denied access to managed settings. Check account permissions with your administrator.',
-						);
+						message = localize('github.settings.managedPermission', 'GitHub denied access to managed settings. Check account permissions with your administrator.');
 						break;
 					case GitHubErrorCode.RateLimited:
-						message = localize(
-							'github.settings.managedRateLimited',
-							'GitHub limited managed settings requests. Wait before retrying.',
-						);
+						message = localize('github.settings.managedRateLimited', 'GitHub limited managed settings requests. Wait before retrying.');
 						break;
 					case GitHubErrorCode.ManagedSettingsUpdateRequired:
-						message = localize(
-							'github.settings.managedCompatibility',
-							'GitHub rejected this client’s compatibility for managed settings. Contact your administrator.',
-						);
+						message = localize('github.settings.managedCompatibility', 'GitHub rejected this client’s compatibility for managed settings. Contact your administrator.');
 						break;
 					case 'invalidResponse':
-						message = localize(
-							'github.settings.managedInvalid',
-							'GitHub returned invalid managed settings. Retry or contact your administrator.',
-						);
+						message = localize('github.settings.managedInvalid', 'GitHub returned invalid managed settings. Retry or contact your administrator.');
 						break;
 					default:
-						message = localize(
-							'github.settings.managedFailed',
-							'Could not refresh managed settings. Check your connection and retry.',
-						);
+						message = localize('github.settings.managedFailed', 'Could not refresh managed settings. Check your connection and retry.');
 				}
 		}
 		const details = [message];
 		if (state.lastAttemptAt !== undefined) {
-			details.push(
-				localize(
-					'github.settings.managedAttempt',
-					'Last attempt: {0}.',
-					new Date(state.lastAttemptAt).toLocaleString(getNLSLanguage()),
-				),
-			);
+			details.push(localize('github.settings.managedAttempt', 'Last attempt: {0}.', new Date(state.lastAttemptAt).toLocaleString(getNLSLanguage())));
 		}
 		if (state.lastSuccessAt !== undefined) {
-			details.push(
-				localize(
-					'github.settings.managedSuccess',
-					'Last successful refresh: {0}.',
-					new Date(state.lastSuccessAt).toLocaleString(getNLSLanguage()),
-				),
-			);
+			details.push(localize('github.settings.managedSuccess', 'Last successful refresh: {0}.', new Date(state.lastSuccessAt).toLocaleString(getNLSLanguage())));
 		} else if (state.phase !== 'idle') {
 			details.push(localize('github.settings.managedNoSuccess', 'No successful refresh for this account.'));
 		}
@@ -386,10 +329,7 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 		this.isBusy = true;
 		this.changed.fire();
 		try {
-			const [state] = await Promise.all([
-				this.accounts.read(),
-				this.review.initialize().then(() => this.review.refreshAccounts()),
-			]);
+			const [state] = await Promise.all([this.accounts.read(), this.review.initialize().then(() => this.review.refreshAccounts())]);
 			if (this.isDisposed || !this.isVisible || version !== this.version) {
 				return;
 			}
@@ -399,10 +339,7 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 				return;
 			}
 			this.accountState = undefined;
-			this.status = localize(
-				'github.settings.readFailed',
-				'Could not read accounts. Connect to App Server and refresh.',
-			);
+			this.status = localize('github.settings.readFailed', 'Could not read accounts. Connect to App Server and refresh.');
 		} finally {
 			if (!this.isDisposed && version === this.version) {
 				this.isBusy = false;
@@ -414,17 +351,8 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 	private async checkRepository(): Promise<void> {
 		const account = this.review.selectedAccount;
 		const parts = this.repository.trim().split('/');
-		if (
-			this.isBusy ||
-			!account ||
-			account.status !== 'ready' ||
-			parts.length !== 2 ||
-			parts.some(part => !/^[\w.-]+$/.test(part) || part === '.' || part === '..')
-		) {
-			this.status = localize(
-				'github.settings.invalidRepository',
-				'Choose a ready GitHub account and enter a repository as owner/name.',
-			);
+		if (this.isBusy || !account || account.status !== 'ready' || parts.length !== 2 || parts.some(part => !/^[\w.-]+$/.test(part) || part === '.' || part === '..')) {
+			this.status = localize('github.settings.invalidRepository', 'Choose a ready GitHub account and enter a repository as owner/name.');
 			this.changed.fire();
 			return;
 		}
@@ -435,10 +363,7 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 		this.isBusy = true;
 		this.changed.fire();
 		try {
-			const repository = await this.github.readRepository(
-				{ host: account.host, accountId: account.id, owner: parts[0]!, name: parts[1]! },
-				operation.token,
-			);
+			const repository = await this.github.readRepository({ host: account.host, accountId: account.id, owner: parts[0]!, name: parts[1]! }, operation.token);
 			if (this.isDisposed || operation.token.isCancellationRequested || version !== this.version) {
 				return;
 			}
@@ -452,10 +377,7 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 			if (this.isDisposed || operation.token.isCancellationRequested || version !== this.version) {
 				return;
 			}
-			this.status = localize(
-				'github.settings.checkFailed',
-				'Could not access this repository. Check its name and GitHub account permissions.',
-			);
+			this.status = localize('github.settings.checkFailed', 'Could not access this repository. Check its name and GitHub account permissions.');
 		} finally {
 			if (!this.isDisposed && version === this.version) {
 				this.isBusy = false;
@@ -470,10 +392,7 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 			await work();
 		} catch {
 			if (!this.isDisposed) {
-				this.status = localize(
-					'github.settings.actionFailed',
-					'Could not complete this action. Refresh accounts or try opening the management page again.',
-				);
+				this.status = localize('github.settings.actionFailed', 'Could not complete this action. Refresh accounts or try opening the management page again.');
 				this.changed.fire();
 			}
 		}

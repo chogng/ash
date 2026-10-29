@@ -39,9 +39,7 @@ for (const lifecycle of ['hide', 'dispose'] as const) {
 			logout: async () => {},
 		});
 		services.registerInstance(IGitHubService, {
-			listAccounts: async () => [
-				{ id: 'alice', host: 'github.com', login: 'alice', status: 'ready', credentialRevision: 1n },
-			],
+			listAccounts: async () => [{ id: 'alice', host: 'github.com', login: 'alice', status: 'ready', credentialRevision: 1n }],
 			readRepository: async (_repository, cancellation) => {
 				token = cancellation;
 				return new Promise(resolve => {

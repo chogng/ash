@@ -18,8 +18,7 @@ class DevelopmentAppServerRuntime extends AbstractDisposable implements IDevelop
 
 	assertActive(): void {
 		this.assertNotDisposed();
-		if (this.process.exitCode !== null || this.process.signalCode !== null || this.process.stdin.destroyed)
-			throw new Error('Development runtime lease process exited');
+		if (this.process.exitCode !== null || this.process.signalCode !== null || this.process.stdin.destroyed) throw new Error('Development runtime lease process exited');
 	}
 
 	protected override disposeCore(): void {
@@ -28,11 +27,7 @@ class DevelopmentAppServerRuntime extends AbstractDisposable implements IDevelop
 }
 
 /** Rust holds publish.lock while reading current.json and acquiring the shared runtime lease. */
-export async function acquireDevelopmentAppServerRuntime(
-	executable: string,
-	generationFile: string,
-	environment: Readonly<Record<string, string>>,
-): Promise<IDevelopmentAppServerRuntime> {
+export async function acquireDevelopmentAppServerRuntime(executable: string, generationFile: string, environment: Readonly<Record<string, string>>): Promise<IDevelopmentAppServerRuntime> {
 	const process = spawn(executable, ['lease-development', generationFile], {
 		env: { ...environment },
 		shell: false,
@@ -60,13 +55,7 @@ export async function acquireDevelopmentAppServerRuntime(
 				if (!output.includes('\n')) return;
 				try {
 					const value: unknown = JSON.parse(output);
-					if (
-						!value ||
-						typeof value !== 'object' ||
-						!('runtime' in value) ||
-						typeof value.runtime !== 'string' ||
-						!isAbsolute(value.runtime)
-					)
+					if (!value || typeof value !== 'object' || !('runtime' in value) || typeof value.runtime !== 'string' || !isAbsolute(value.runtime))
 						throw new Error('Invalid development runtime lease response');
 					cleanup();
 					resolve(resolvePath(value.runtime));

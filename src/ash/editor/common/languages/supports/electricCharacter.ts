@@ -65,6 +65,8 @@ export class BracketElectricCharacterSupport {
 			return null;
 		}
 
-		return { matchOpenBracket: bracketText };
+		return {
+			matchOpenBracket: bracketText,
+		};
 	}
 }

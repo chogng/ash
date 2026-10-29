@@ -12,12 +12,7 @@ import { parseWorkspace } from '../../workspace/common/workspace.js';
 import type { IWorkspaceContextApi } from '../../workspace/common/workspaceIpc.js';
 import { getRemoteWorkspacePath, isRemoteResource } from '../../remote/common/remote.js';
 import type { EnvDirSetEntry, PermissionDto } from '../../../../../.build/protocol/typescript/index.js';
-import {
-	DEVELOPMENT_DIR_PERMISSIONS,
-	READ_DIR_PERMISSIONS,
-	type IWorkspaceTrustApi,
-	type IDirectoryPermissionRequestService,
-} from '../../workspace/common/workspaceTrust.js';
+import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, type IWorkspaceTrustApi, type IDirectoryPermissionRequestService } from '../../workspace/common/workspaceTrust.js';
 
 export async function initializeWorkspace(
 	client: AppServerProtocolClient,
@@ -72,10 +67,7 @@ export async function initializeWorkspaceDirectories(
 				continue;
 			}
 			// The frontend prompt can outlive its connection; retiring setup must not wait for its answer.
-			const choice = await raceCancellationError(
-				workspaceTrust.requestDirectoryPermissions(folder.label ?? path, cancellation.signal),
-				cancellation.signal,
-			);
+			const choice = await raceCancellationError(workspaceTrust.requestDirectoryPermissions(folder.label ?? path, cancellation.signal), cancellation.signal);
 			assertCurrent();
 			if (choice === 'cancel') {
 				throw canceled();
@@ -83,9 +75,7 @@ export async function initializeWorkspaceDirectories(
 			if (choice !== 'development' && choice !== 'readOnly') {
 				throw new TypeError('Invalid directory permission selection');
 			}
-			const permissions: PermissionDto[] = [
-				...(choice === 'readOnly' ? READ_DIR_PERMISSIONS : DEVELOPMENT_DIR_PERMISSIONS),
-			];
+			const permissions: PermissionDto[] = [...(choice === 'readOnly' ? READ_DIR_PERMISSIONS : DEVELOPMENT_DIR_PERMISSIONS)];
 			const grant = await trustApi.createGrant(path, permissions);
 			assertCurrent();
 			await client.request(APP_SERVER_METHODS['env/dirs/set'], {
@@ -129,9 +119,7 @@ export function registerAppServerWorkspaceHost(
 					if (
 						typeof params.path !== 'string' ||
 						!Array.isArray(params.permissions) ||
-						!params.permissions.every(value =>
-							DEVELOPMENT_DIR_PERMISSIONS.some(permission => permission === value),
-						)
+						!params.permissions.every(value => DEVELOPMENT_DIR_PERMISSIONS.some(permission => permission === value))
 					) {
 						throw new TypeError('Invalid workspace trust grant');
 					}
@@ -160,10 +148,7 @@ export function registerAppServerWorkspaceHost(
 					return;
 				}
 				case 'setFolders':
-					return client.request(
-						APP_SERVER_METHODS['env/dirs/set'],
-						decodeAppServerRequestParams('env/dirs/set', { dirs: params.folders }),
-					);
+					return client.request(APP_SERVER_METHODS['env/dirs/set'], decodeAppServerRequestParams('env/dirs/set', { dirs: params.folders }));
 				default:
 					throw new Error('Unknown workspace operation');
 			}

@@ -47,19 +47,13 @@ export class ExplorerService extends Disposable implements IExplorerService {
 	}
 
 	public shouldAutoReveal(resource: URI, hasSibling?: (name: string) => boolean): boolean {
-		if (
-			!this.configuration.getValue<boolean | 'focusNoScroll'>('explorer.autoReveal') ||
-			this.revealExcludeMatcher.matches(resource, hasSibling)
-		)
-			return false;
+		if (!this.configuration.getValue<boolean | 'focusNoScroll'>('explorer.autoReveal') || this.revealExcludeMatcher.matches(resource, hasSibling)) return false;
 		const root = this.model.root;
-		const folder =
-			root?.children?.find(item => extUriBiasedIgnorePathCase.isEqualOrParent(resource, item.resource)) ?? root;
+		const folder = root?.children?.find(item => extUriBiasedIgnorePathCase.isEqualOrParent(resource, item.resource)) ?? root;
 		if (!folder || !extUriBiasedIgnorePathCase.isEqualOrParent(resource, folder.resource)) return true;
 		for (
 			let parent = dirname(resource);
-			extUriBiasedIgnorePathCase.isEqualOrParent(parent, folder.resource) &&
-			!extUriBiasedIgnorePathCase.isEqual(parent, folder.resource);
+			extUriBiasedIgnorePathCase.isEqualOrParent(parent, folder.resource) && !extUriBiasedIgnorePathCase.isEqual(parent, folder.resource);
 			parent = dirname(parent)
 		) {
 			if (this.revealExcludeMatcher.matches(parent)) return false;

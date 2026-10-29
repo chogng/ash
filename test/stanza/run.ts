@@ -29,9 +29,7 @@ await withProcessRun(repositoryRoot, async (run, environment) => {
 			const pnpm = process.env.npm_execpath;
 			if (!pnpm) throw new Error('Run this command through pnpm test:stanza.');
 			const buildArgs = ['run', 'build:stanza', '--outDir', assetsDirectory];
-			const build = /\.[cm]?js$/u.test(pnpm)
-				? await run.command(process.execPath, [pnpm, ...buildArgs], environment)
-				: await run.command(pnpm, buildArgs, environment);
+			const build = /\.[cm]?js$/u.test(pnpm) ? await run.command(process.execPath, [pnpm, ...buildArgs], environment) : await run.command(pnpm, buildArgs, environment);
 			if (build.code !== 0) {
 				process.exitCode = build.code;
 				return;

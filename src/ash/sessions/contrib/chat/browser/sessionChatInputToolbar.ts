@@ -1,12 +1,7 @@
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { createUuid } from '../../../../base/common/uuid.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import './media/sessionChatInputToolbar.css';
@@ -23,12 +18,7 @@ import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.j
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { IGitHubService } from '../../github/browser/githubService.js';
-import {
-	getIssueLabel,
-	getPullRequestLabel,
-	type IResolvedSessionIssue,
-	type IResolvedSessionPullRequest,
-} from '../../github/common/types.js';
+import { getIssueLabel, getPullRequestLabel, type IResolvedSessionIssue, type IResolvedSessionPullRequest } from '../../github/common/types.js';
 
 /** Shows durable Issue associations and PRs resolved for the active Session. */
 export class SessionChatInputToolbar extends Disposable {
@@ -135,11 +125,7 @@ export class SessionChatInputToolbar extends Disposable {
 					return new AccessibleContentProvider(
 						AccessibleViewProviderId.SessionsChat,
 						{ type: AccessibleViewType.View },
-						() =>
-							[
-								this.issueSummaryDomNode.textContent,
-								...this.github.getSessionIssues(this.model.sessionId!).map(getIssueLabel),
-							].join('\n'),
+						() => [this.issueSummaryDomNode.textContent, ...this.github.getSessionIssues(this.model.sessionId!).map(getIssueLabel)].join('\n'),
 						() => {
 							if (focused.isConnected) {
 								focused.focus();
@@ -167,24 +153,17 @@ export class SessionChatInputToolbar extends Disposable {
 			if (!entry) {
 				entry = this.entries.set(
 					key,
-					new PullRequestEntry(
-						this.domNode,
-						request,
-						this.opener,
-						this.notifications,
-						this.editors,
-						async reference => {
-							const sessionId = this.model.sessionId;
-							if (!sessionId) {
-								return;
-							}
-							await this.github.detachPullRequest(sessionId, reference);
-							if (!this.isDisposed) {
-								this.attachDomNode.focus();
-								status(localize('sessions.github.detached', 'Pull request attachment removed.'));
-							}
-						},
-					),
+					new PullRequestEntry(this.domNode, request, this.opener, this.notifications, this.editors, async reference => {
+						const sessionId = this.model.sessionId;
+						if (!sessionId) {
+							return;
+						}
+						await this.github.detachPullRequest(sessionId, reference);
+						if (!this.isDisposed) {
+							this.attachDomNode.focus();
+							status(localize('sessions.github.detached', 'Pull request attachment removed.'));
+						}
+					}),
 				);
 				this.domNode.insertBefore(entry.containerDomNode, this.attachDomNode);
 			}
@@ -206,18 +185,9 @@ export class SessionChatInputToolbar extends Disposable {
 		this.issueIconDomNode.replaceChildren();
 		appendIcon(icon, this.issueIconDomNode);
 		this.issueIconDomNode.style.color = `var(${colorCssVariable(icon.color!.id)})`;
-		const unresolved = issues.filter(
-			entry => !entry.issue || !['open', 'closed'].includes(entry.issue.state),
-		).length;
+		const unresolved = issues.filter(entry => !entry.issue || !['open', 'closed'].includes(entry.issue.state)).length;
 		const open = issues.filter(entry => entry.issue?.state === 'open').length;
-		const summary = localize(
-			'sessions.github.issueSummary',
-			'{0} issues · {1} open · {2} closed · {3} unavailable',
-			issues.length,
-			open,
-			issues.length - open - unresolved,
-			unresolved,
-		);
+		const summary = localize('sessions.github.issueSummary', '{0} issues · {1} open · {2} closed · {3} unavailable', issues.length, open, issues.length - open - unresolved, unresolved);
 		this.issueLabelDomNode.textContent = summary;
 		this.issueSummaryDomNode.setAttribute('aria-label', summary);
 		this.issueSummaryDomNode.title = summary;
@@ -345,16 +315,7 @@ class PullRequestEntry extends Disposable {
 			}),
 		).domNode;
 		reviewDomNode.classList.add('ash-session-chat-input-pr-action');
-		reviewDomNode.setAttribute(
-			'aria-label',
-			localize(
-				'sessions.github.reviewLabel',
-				'Review pull request {0}/{1} #{2} in Ash',
-				request.owner,
-				request.repo,
-				request.number,
-			),
-		);
+		reviewDomNode.setAttribute('aria-label', localize('sessions.github.reviewLabel', 'Review pull request {0}/{1} #{2} in Ash', request.owner, request.repo, request.number));
 		this._register(
 			addDisposableListener(reviewDomNode, 'click', () => {
 				const resource = this.request.uri.with({ scheme: 'ash-github', query: '', fragment: '' });
@@ -396,16 +357,7 @@ class PullRequestEntry extends Disposable {
 	public update(request: IResolvedSessionPullRequest): void {
 		this.request = request;
 		this.removeDomNode.hidden = !request.recordedReference;
-		this.removeDomNode.setAttribute(
-			'aria-label',
-			localize(
-				'sessions.github.removeLabel',
-				'Remove attached pull request {0}/{1} #{2}',
-				request.owner,
-				request.repo,
-				request.number,
-			),
-		);
+		this.removeDomNode.setAttribute('aria-label', localize('sessions.github.removeLabel', 'Remove attached pull request {0}/{1} #{2}', request.owner, request.repo, request.number));
 		this.iconDomNode.replaceChildren();
 		appendIcon(request.icon, this.iconDomNode);
 		this.iconDomNode.style.color = `var(${colorCssVariable(request.icon.color!.id)})`;
@@ -489,14 +441,7 @@ class IssueEntry extends Disposable {
 		const { repository, number } = entry.reference;
 		this.removeDomNode.setAttribute(
 			'aria-label',
-			localize(
-				'sessions.github.removeIssueLabel',
-				'Remove attached issue {0}/{1}/{2} #{3}',
-				repository.host,
-				repository.owner,
-				repository.name,
-				number,
-			),
+			localize('sessions.github.removeIssueLabel', 'Remove attached issue {0}/{1}/{2} #{3}', repository.host, repository.owner, repository.name, number),
 		);
 	}
 }

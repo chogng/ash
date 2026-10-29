@@ -10,9 +10,7 @@ import { normalizeExtensionHostPayload } from '../../../src/ash/platform/agentHo
 test('the packaged extension binds the public SDK, observes schemas and retires its diagnostics', async () => {
 	const fixture = JSON.parse(await readFile('.build/builtin/fixture.json', 'utf8'));
 	for (const id of ['ash.json', 'ash.json-language-features']) {
-		const manifest = JSON.parse(
-			fixture.catalog.extensions.find((value: { id: string }) => value.id === id).manifestJson,
-		);
+		const manifest = JSON.parse(fixture.catalog.extensions.find((value: { id: string }) => value.id === id).manifestJson);
 		assert.deepEqual(manifest.ashUiTargets, ['ide', 'agents']);
 	}
 	const resources = fixture.resources['ash.json-language-features'];

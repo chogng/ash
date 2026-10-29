@@ -5,10 +5,7 @@ import { Schemas } from '../../base/common/network.js';
 import { equals } from '../../base/common/objects.js';
 import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
 import type { URI } from '../../base/common/uri.js';
-import {
-	IConfigurationService,
-	type IConfigurationChangeEvent,
-} from '../../platform/configuration/common/configuration.js';
+import { IConfigurationService, type IConfigurationChangeEvent } from '../../platform/configuration/common/configuration.js';
 import { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
 
 interface RuleSet {
@@ -51,21 +48,14 @@ export class ResourceGlobMatcher extends Disposable {
 	public matches(resource: URI, hasSibling?: (name: string) => boolean): boolean {
 		this.assertNotDisposed();
 		const folder = this.workspace.getWorkspaceFolder(resource);
-		const rules =
-			this.rules.get(folder ? extUriBiasedIgnorePathCase.getComparisonKey(folder.uri) : undefined) ??
-			this.rules.get(undefined);
+		const rules = this.rules.get(folder ? extUriBiasedIgnorePathCase.getComparisonKey(folder.uri) : undefined) ?? this.rules.get(undefined);
 		if (!rules) {
 			return false;
 		}
 		const absolute = normalizePath(resource.scheme === Schemas.file ? resource.fsPath : resource.path);
 		// Use the workspace owner's containment decision, including nested roots and path casing.
-		const relative = folder
-			? resource.path.slice(folder.uri.path.replace(/\/$/, '').length).replace(/^\//, '')
-			: absolute;
-		return (
-			rules.matches(relative, undefined, hasSibling) !== null ||
-			(rules.hasAbsolutePath && relative !== absolute && rules.matches(absolute, undefined, hasSibling) !== null)
-		);
+		const relative = folder ? resource.path.slice(folder.uri.path.replace(/\/$/, '').length).replace(/^\//, '') : absolute;
+		return rules.matches(relative, undefined, hasSibling) !== null || (rules.hasAbsolutePath && relative !== absolute && rules.matches(absolute, undefined, hasSibling) !== null);
 	}
 
 	private refresh(): boolean {
@@ -78,10 +68,7 @@ export class ResourceGlobMatcher extends Disposable {
 				continue;
 			}
 			const expression: IExpression = Object.fromEntries(
-				Object.entries(configured).map(([pattern, value]) => [
-					normalizePath(pattern),
-					typeof value === 'object' ? { when: value.when } : value,
-				]),
+				Object.entries(configured).map(([pattern, value]) => [normalizePath(pattern), typeof value === 'object' ? { when: value.when } : value]),
 			);
 			const previous = this.rules.get(key);
 			if (previous && equals(previous.expression, expression)) {

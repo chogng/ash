@@ -21,10 +21,8 @@ export class RemoteRuntimeFetcher {
 	private readonly runCommand: RunRemoteCommand;
 
 	constructor(private readonly options: RemoteRuntimeFetcherOptions) {
-		if (!validLocalCommand(options.remoteExecutable))
-			throw new Error('Remote runtime fetcher executable is invalid');
-		if (!isAbsolute(options.source.cacheRoot) || !validLocalCommand(options.source.cacheRoot))
-			throw new Error('Remote runtime download cache must be an absolute local path');
+		if (!validLocalCommand(options.remoteExecutable)) throw new Error('Remote runtime fetcher executable is invalid');
+		if (!isAbsolute(options.source.cacheRoot) || !validLocalCommand(options.source.cacheRoot)) throw new Error('Remote runtime download cache must be an absolute local path');
 		this.runCommand = options.runCommand ?? runRemoteCommand;
 	}
 
@@ -47,18 +45,13 @@ export class RemoteRuntimeFetcher {
 			this.options.source.cacheRoot,
 		];
 		const reportProgress = request.onProgress ?? this.options.onProgress;
-		const decoder =
-			reportProgress === undefined ? undefined : new RemoteRuntimeDownloadProgressDecoder(reportProgress);
+		const decoder = reportProgress === undefined ? undefined : new RemoteRuntimeDownloadProgressDecoder(reportProgress);
 		if (decoder !== undefined) args.push('--progress', 'json-lines');
-		const observer =
-			decoder === undefined && request.signal === undefined
-				? undefined
-				: { onStderrData: (chunk: string) => decoder?.accept(chunk), signal: request.signal };
+		const observer = decoder === undefined && request.signal === undefined ? undefined : { onStderrData: (chunk: string) => decoder?.accept(chunk), signal: request.signal };
 		const result = await this.runCommand(this.options.remoteExecutable, args, this.options.environment, observer);
 		decoder?.finish();
 		if (result.exitCode !== 0) {
-			const diagnostic =
-				result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode ?? 'unknown'}`;
+			const diagnostic = result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode ?? 'unknown'}`;
 			throw new Error(`Remote runtime download failed: ${diagnostic}`);
 		}
 		return parseArtifact(result.stdout, target);
@@ -90,18 +83,13 @@ class RemoteRuntimeDownloadProgressDecoder {
 		} catch {
 			throw new Error('Remote runtime fetcher returned malformed progress JSON');
 		}
-		if (!isRecord(value) || value.kind !== 'remoteRuntimeDownloadProgress' || typeof value.phase !== 'string')
-			throw new Error('Remote runtime fetcher returned an invalid progress record');
+		if (!isRecord(value) || value.kind !== 'remoteRuntimeDownloadProgress' || typeof value.phase !== 'string') throw new Error('Remote runtime fetcher returned an invalid progress record');
 		switch (value.phase) {
 			case 'downloadingCatalog':
 				this.report(Object.freeze({ phase: 'downloadingCatalog' }));
 				return;
 			case 'downloadingArtifact':
-				if (
-					!isNonNegativeSafeInteger(value.transferredBytes) ||
-					!isPositiveSafeInteger(value.totalBytes) ||
-					value.transferredBytes > value.totalBytes
-				)
+				if (!isNonNegativeSafeInteger(value.transferredBytes) || !isPositiveSafeInteger(value.totalBytes) || value.transferredBytes > value.totalBytes)
 					throw new Error('Remote runtime fetcher returned invalid download progress');
 				this.report(
 					Object.freeze({
@@ -115,8 +103,7 @@ class RemoteRuntimeDownloadProgressDecoder {
 				this.report(Object.freeze({ phase: 'validatingDownload' }));
 				return;
 			case 'complete':
-				if (value.disposition !== 'downloaded' && value.disposition !== 'reused')
-					throw new Error('Remote runtime fetcher returned an invalid completion disposition');
+				if (value.disposition !== 'downloaded' && value.disposition !== 'reused') throw new Error('Remote runtime fetcher returned an invalid completion disposition');
 				this.report(Object.freeze({ phase: 'downloadComplete', disposition: value.disposition }));
 				return;
 			default:
@@ -132,8 +119,7 @@ function parseArtifact(text: string, target: string): TrustedRemoteRuntimeArtifa
 	} catch (error) {
 		throw new Error('Remote runtime fetcher did not return valid artifact JSON', { cause: error });
 	}
-	if (!isRecord(value) || !hasExactKeys(value, ARTIFACT_KEYS))
-		throw new Error('Remote runtime fetcher returned an invalid artifact record');
+	if (!isRecord(value) || !hasExactKeys(value, ARTIFACT_KEYS)) throw new Error('Remote runtime fetcher returned an invalid artifact record');
 	if (
 		typeof value.archivePath !== 'string' ||
 		typeof value.version !== 'string' ||

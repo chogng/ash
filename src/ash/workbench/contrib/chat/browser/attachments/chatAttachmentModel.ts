@@ -12,10 +12,7 @@ export interface IChatAttachmentChangeEvent {
 /** Owns the attachments of one composer, including identity during an in-flight submission. */
 export class ChatAttachmentModel extends Disposable {
 	private readonly entries = new Map<string, ChatContextAttachment>();
-	private readonly pending = new Map<
-		Promise<readonly ChatContextAttachment[]>,
-		{ readonly controller: AbortController; readonly editsMessage: boolean }
-	>();
+	private readonly pending = new Map<Promise<readonly ChatContextAttachment[]>, { readonly controller: AbortController; readonly editsMessage: boolean }>();
 	private readonly changes = this._register(new Emitter<IChatAttachmentChangeEvent>());
 	public readonly onDidChange = this.changes.event;
 	private readonly preparationChanges = this._register(new Emitter<void>());
@@ -45,10 +42,7 @@ export class ChatAttachmentModel extends Disposable {
 	public acquireContext(
 		prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>,
 		signal?: AbortSignal,
-		accept?: (
-			attachments: readonly ChatContextAttachment[],
-			signal: AbortSignal,
-		) => readonly ChatContextAttachment[],
+		accept?: (attachments: readonly ChatContextAttachment[], signal: AbortSignal) => readonly ChatContextAttachment[],
 	): Promise<readonly ChatContextAttachment[]> {
 		if (this.isDisposed || signal?.aborted) return Promise.reject(new CancellationError());
 		const controller = new AbortController();
@@ -139,9 +133,7 @@ export class ChatAttachmentModel extends Disposable {
 		for (const attachment of upsert) next.set(attachment.id, attachment);
 		const deleted = [...this.entries.keys()].filter(id => !next.has(id));
 		const added = [...next.values()].filter(attachment => !this.entries.has(attachment.id));
-		const updated = [...next.values()].filter(
-			attachment => this.entries.has(attachment.id) && this.entries.get(attachment.id) !== attachment,
-		);
+		const updated = [...next.values()].filter(attachment => this.entries.has(attachment.id) && this.entries.get(attachment.id) !== attachment);
 		if (!deleted.length && !added.length && !updated.length) return;
 		this.entries.clear();
 		for (const [id, attachment] of next) this.entries.set(id, attachment);

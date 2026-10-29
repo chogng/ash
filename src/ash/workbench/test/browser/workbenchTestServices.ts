@@ -31,10 +31,7 @@ import { BrowserStorageService } from '../../services/storage/browser/storageSer
 import { TestWorkspaceService } from '../../services/configuration/test/common/testServices.js';
 import { TextResourcePropertiesService } from '../../services/textresourceProperties/common/textResourcePropertiesService.js';
 import { TextModelResolverService } from '../../services/textmodelResolver/common/textModelResolverService.js';
-import {
-	IFileTextModelService,
-	ITextModelResourceService,
-} from '../../services/textmodelResolver/common/textModelResourceService.js';
+import { IFileTextModelService, ITextModelResourceService } from '../../services/textmodelResolver/common/textModelResourceService.js';
 import { IOutputService } from '../../services/output/common/output.js';
 import { OutputService } from '../../contrib/output/browser/outputServices.js';
 import { IStatusbarService } from '../../services/statusbar/browser/statusbar.js';
@@ -73,14 +70,10 @@ import { IWorkbenchLayoutService, Position } from '../../services/layout/browser
 
 /** Explicit window dependencies for fixtures that construct the real terminal owner. */
 export function registerTestTerminalLifecycleServices(services: InstantiationService): void {
-	if (!services.has(IContextKeyService))
-		services.registerSingleton(IContextKeyService, () => new ContextKeyService());
-	if (!services.has(IConfigurationService))
-		services.registerSingleton(IConfigurationService, () => new WorkbenchConfigurationService());
-	if (!services.has(IDialogService))
-		services.registerSingleton(IDialogService, () => services.createInstance(DialogService));
-	if (!services.has(ISecretStorageService))
-		services.registerSingleton(ISecretStorageService, () => new BaseSecretStorageService());
+	if (!services.has(IContextKeyService)) services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+	if (!services.has(IConfigurationService)) services.registerSingleton(IConfigurationService, () => new WorkbenchConfigurationService());
+	if (!services.has(IDialogService)) services.registerSingleton(IDialogService, () => services.createInstance(DialogService));
+	if (!services.has(ISecretStorageService)) services.registerSingleton(ISecretStorageService, () => new BaseSecretStorageService());
 	if (!services.has(IStorageService)) services.registerSingleton(IStorageService, () => new TerminalTestStorage());
 }
 
@@ -139,11 +132,7 @@ export function registerTestTerminalCreationServices(services: InstantiationServ
 			instantiation: InstantiationType.Delayed,
 		});
 	if (!services.has(ITerminalProfileResolverService))
-		services.registerSingleton(
-			ITerminalProfileResolverService,
-			() => services.createInstance(BrowserTerminalProfileResolverService),
-			{ instantiation: InstantiationType.Delayed },
-		);
+		services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService), { instantiation: InstantiationType.Delayed });
 	if (!services.has(ITerminalGroupService))
 		services.registerSingleton(ITerminalGroupService, () => services.createInstance(TerminalGroupService), {
 			instantiation: InstantiationType.Delayed,
@@ -199,22 +188,8 @@ export function workbenchInstantiationService(
 	services.registerInstance(IStatusbarService, resources.add(new StatusbarService()));
 	services.registerInstance(ILanguageService, languages);
 	services.registerInstance(ILanguageFeaturesService, features);
-	services.registerInstance(
-		IModelService,
-		resources.add(
-			new ModelService(
-				configuration,
-				services.createInstance(TextResourcePropertiesService),
-				languages,
-				features,
-				languageConfiguration,
-			),
-		),
-	);
-	services.registerInstance(
-		IWorkspaceContextService,
-		resources.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') })),
-	);
+	services.registerInstance(IModelService, resources.add(new ModelService(configuration, services.createInstance(TextResourcePropertiesService), languages, features, languageConfiguration)));
+	services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') })));
 	if (!storage) {
 		const browser = new JSDOM('', { url: 'https://ash.test' });
 		resources.add(toDisposable(() => browser.window.close()));
@@ -273,9 +248,7 @@ export function workbenchInstantiationService(
 export function registerTestWorkbenchInteractionServices(owner: DisposableStore, services: InstantiationService): void {
 	services.registerSingleton(IFileSearchService, () => services.createInstance(BrowserFileSearchService));
 	const viewContext = owner.add(new ContextKeyService());
-	const descriptors = owner.add(
-		new TestViewDescriptorService({ registry: owner.add(new WorkbenchViewRegistry()) }, viewContext),
-	);
+	const descriptors = owner.add(new TestViewDescriptorService({ registry: owner.add(new WorkbenchViewRegistry()) }, viewContext));
 	// Service scenarios have no UI Parts. The real view owner returns null for
 	// unregistered views; Web/Electron scenarios exercise their actual containers.
 	const panes: IPaneCompositePartService = {
@@ -309,17 +282,12 @@ export function registerTestWorkbenchInteractionServices(owner: DisposableStore,
 			}),
 		),
 	);
-	if (!services.has(INotificationService))
-		services.registerInstance(INotificationService, owner.add(new TestNotificationService()));
+	if (!services.has(INotificationService)) services.registerInstance(INotificationService, owner.add(new TestNotificationService()));
 }
 
 /** Assembles the real Views owner with isolated profile storage for non-window units. */
 export class TestViewDescriptorService extends ViewDescriptorService {
-	constructor(
-		options: ConstructorParameters<typeof ViewDescriptorService>[0],
-		contextKeys: IContextKeyService,
-		storage?: IStorageService,
-	) {
+	constructor(options: ConstructorParameters<typeof ViewDescriptorService>[0], contextKeys: IContextKeyService, storage?: IStorageService) {
 		const resources = new DisposableStore();
 		const services = resources.add(new InstantiationService());
 		services.registerInstance(IContextKeyService, contextKeys);

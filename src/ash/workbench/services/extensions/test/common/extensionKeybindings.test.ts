@@ -3,10 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { test } from 'mocha';
 import { isMacintosh, isLinux } from '../../../../../base/common/platform.js';
-import {
-	KeybindingsRegistry,
-	KeybindingWeight,
-} from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
+import { KeybindingsRegistry, KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import type { ExtensionDescriptor } from '../../../../../platform/extensions/common/extensionApi.js';
 import { AdapterManager } from '../../../../contrib/debug/browser/debugAdapterManager.js';
@@ -15,8 +12,7 @@ import { AppServerExtensionService } from '../../browser/appServerExtensionServi
 import { parseExtensionManifest } from '../../common/extensionManifest.js';
 
 const identity = { id: 'ash.keys', name: 'keys', publisher: 'ash', version: '1.0.0' };
-const parse = (keybindings: unknown) =>
-	parseExtensionManifest(JSON.stringify({ ...identity, contributes: { keybindings } }), identity);
+const parse = (keybindings: unknown) => parseExtensionManifest(JSON.stringify({ ...identity, contributes: { keybindings } }), identity);
 
 test('Keybinding declarations validate every platform and preserve context and structured arguments', () => {
 	const manifest = parse([
@@ -83,11 +79,7 @@ test('A real optional keymap admits editing bindings, rejects command execution 
 	const added = () => KeybindingsRegistry.getKeybindings().filter(rule => !before.has(rule));
 	assert.equal(added().length, 8);
 	assert.ok(added().every(rule => rule.priority === KeybindingWeight.ExternalExtension));
-	assert.ok(
-		added().every(
-			rule => rule.kind === 'command' && rule.command.startsWith('editor.action.') && rule.args === undefined,
-		),
-	);
+	assert.ok(added().every(rule => rule.kind === 'command' && rule.command.startsWith('editor.action.') && rule.args === undefined));
 	extensions = [];
 	await service.reload();
 	assert.deepEqual(added(), []);

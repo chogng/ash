@@ -6,10 +6,7 @@ import type { ITextModel } from '../../../editor/common/model.js';
 import { isAiEdit } from '../../../editor/common/textModelEditSource.js';
 import { extUriBiasedIgnorePathCase } from '../../../base/common/resources.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
-import type {
-	ExtensionClientSource,
-	ExtensionHostFleetSnapshot,
-} from '../../../platform/agentHost/common/extensionHostApi.js';
+import type { ExtensionClientSource, ExtensionHostFleetSnapshot } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { localize, getNLSLanguage } from '../../../nls.js';
 import { IMarkerService } from '../../../platform/markers/common/markers.js';
 import { MarkerSeverity } from '../../../platform/markers/common/markers.js';
@@ -49,20 +46,11 @@ export class MainThreadEditors extends Disposable {
 		lifetime.add(
 			model.onDidChangeContent(event => {
 				const reasons = event.detailedReasons.filter(isAiEdit);
-				if (
-					!reasons.length ||
-					event.reason === TextModelChangeReason.Undo ||
-					event.reason === TextModelChangeReason.Reset
-				)
-					this.aiEdited.delete(model);
+				if (!reasons.length || event.reason === TextModelChangeReason.Undo || event.reason === TextModelChangeReason.Reset) this.aiEdited.delete(model);
 				else
 					this.aiEdited.set(model, {
 						version: event.version,
-						chat: reasons.some(
-							reason =>
-								reason.metadata.source === 'Chat.applyEdits' ||
-								reason.metadata.source === 'inlineChat.applyEdits',
-						),
+						chat: reasons.some(reason => reason.metadata.source === 'Chat.applyEdits' || reason.metadata.source === 'inlineChat.applyEdits'),
 					});
 			}),
 		);
@@ -71,11 +59,7 @@ export class MainThreadEditors extends Disposable {
 	private readonly annotations = this._register(new DisposableMap<string, DisposableStore>());
 	public updateSources(snapshot: ExtensionHostFleetSnapshot): void {
 		const active = new Set(
-			snapshot.extensions
-				.filter(extension => extension.lifecycle === 'ready')
-				.map(extension =>
-					JSON.stringify([extension.id, extension.incarnation, extension.activationGeneration]),
-				),
+			snapshot.extensions.filter(extension => extension.lifecycle === 'ready').map(extension => JSON.stringify([extension.id, extension.incarnation, extension.activationGeneration])),
 		);
 		for (const key of this.annotations.keys()) if (!active.has(key)) this.annotations.deleteAndDispose(key);
 	}
@@ -121,21 +105,14 @@ export class MainThreadEditors extends Disposable {
 		switch (request.method) {
 			case 'aiEditedResources': {
 				const root = URI.parse(text(request.root));
-				if (request.mode !== 'all' && request.mode !== 'chatAndAgent')
-					throw new TypeError('Invalid AI edit scope');
+				if (request.mode !== 'all' && request.mode !== 'chatAndAgent') throw new TypeError('Invalid AI edit scope');
 				const entries: JsonValue[] = [];
 				let bytes = 0;
 				for (const [model, evidence] of this.aiEdited) {
-					if (
-						evidence.version !== model.getVersionId() ||
-						(request.mode !== 'all' && !evidence.chat) ||
-						!extUriBiasedIgnorePathCase.isEqualOrParent(model.uri, root)
-					)
-						continue;
+					if (evidence.version !== model.getVersionId() || (request.mode !== 'all' && !evidence.chat) || !extUriBiasedIgnorePathCase.isEqualOrParent(model.uri, root)) continue;
 					const contents = model.getValue();
 					bytes += new TextEncoder().encode(contents).byteLength;
-					if (bytes > 256 * 1024 || entries.length >= 100)
-						throw new RangeError('AI edit evidence exceeds the payload limit');
+					if (bytes > 256 * 1024 || entries.length >= 100) throw new RangeError('AI edit evidence exceeds the payload limit');
 					entries.push({ uri: model.uri.toString(), text: contents });
 				}
 				return entries;
@@ -176,10 +153,7 @@ export class MainThreadEditors extends Disposable {
 						range: new Range(line, model.getLineMaxColumn(line), line, model.getLineMaxColumn(line)),
 						options: {
 							...options,
-							hoverMessage:
-								request.hover == null
-									? undefined
-									: { value: text(request.hover, 16384), isTrusted: false, supportHtml: false },
+							hoverMessage: request.hover == null ? undefined : { value: text(request.hover, 16384), isTrusted: false, supportHtml: false },
 						},
 					},
 				]);
@@ -192,9 +166,7 @@ export class MainThreadEditors extends Disposable {
 				if (
 					!Array.isArray(request.timestamps) ||
 					request.timestamps.length > 512 ||
-					request.timestamps.some(
-						value => typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) > 8.64e15,
-					)
+					request.timestamps.some(value => typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) > 8.64e15)
 				)
 					throw new TypeError('Invalid timestamp batch');
 				const date = new Intl.DateTimeFormat(getNLSLanguage(), { dateStyle: 'medium', timeStyle: 'short' });
@@ -203,12 +175,7 @@ export class MainThreadEditors extends Disposable {
 				return request.timestamps.map(value => {
 					const milliseconds = value as number;
 					const seconds = Math.round((milliseconds - now) / 1000);
-					const [unit, divisor] =
-						Math.abs(seconds) >= 86400
-							? (['day', 86400] as const)
-							: Math.abs(seconds) >= 3600
-								? (['hour', 3600] as const)
-								: (['minute', 60] as const);
+					const [unit, divisor] = Math.abs(seconds) >= 86400 ? (['day', 86400] as const) : Math.abs(seconds) >= 3600 ? (['hour', 3600] as const) : (['minute', 60] as const);
 					return {
 						date: date.format(milliseconds),
 						relative: relative.format(Math.round(seconds / divisor), unit),
@@ -216,16 +183,9 @@ export class MainThreadEditors extends Disposable {
 				});
 			}
 			case 'openEditorResources':
-				return [
-					...new Set(this.part.groups.flatMap(group => group.inputs.map(input => input.resource.toString()))),
-				].slice(0, 4096);
+				return [...new Set(this.part.groups.flatMap(group => group.inputs.map(input => input.resource.toString())))].slice(0, 4096);
 			case 'hostFacts': {
-				const canOpenWorkspace = this.contexts.contextMatchesRules(
-					ContextKeyExpr.or(
-						OpenFolderWorkspaceSupportContext.isEqualTo(true),
-						BrowserLocalFolderSupportContext.isEqualTo(true),
-					),
-				);
+				const canOpenWorkspace = this.contexts.contextMatchesRules(ContextKeyExpr.or(OpenFolderWorkspaceSupportContext.isEqualTo(true), BrowserLocalFolderSupportContext.isEqualTo(true)));
 				return { canClone: canOpenWorkspace, canOpenWorkspace };
 			}
 			case 'input': {
@@ -260,26 +220,15 @@ export class MainThreadEditors extends Disposable {
 				return { confirmed: result.confirmed };
 			}
 			case 'prompt': {
-				if (!Array.isArray(request.buttons) || !request.buttons.length || request.buttons.length > 16)
-					throw new TypeError('Invalid extension dialog buttons');
-				if (
-					request.severity !== undefined &&
-					request.severity !== 'info' &&
-					request.severity !== 'warning' &&
-					request.severity !== 'error'
-				)
+				if (!Array.isArray(request.buttons) || !request.buttons.length || request.buttons.length > 16) throw new TypeError('Invalid extension dialog buttons');
+				if (request.severity !== undefined && request.severity !== 'info' && request.severity !== 'warning' && request.severity !== 'error')
 					throw new TypeError('Invalid extension dialog severity');
 				const buttons = request.buttons.map((label, index) => ({ label: text(label, 1024), run: () => index }));
 				const result = await this.dialogs.prompt({
 					title: optionalText(request.title),
 					message: text(request.message),
 					detail: optionalText(request.detail),
-					severity:
-						request.severity === 'warning'
-							? DialogSeverity.Warning
-							: request.severity === 'error'
-								? DialogSeverity.Error
-								: DialogSeverity.Info,
+					severity: request.severity === 'warning' ? DialogSeverity.Warning : request.severity === 'error' ? DialogSeverity.Error : DialogSeverity.Info,
 					buttons,
 					cancelButton: optionalText(request.cancelButton),
 				});
@@ -298,19 +247,13 @@ export class MainThreadEditors extends Disposable {
 				return resource?.toString() ?? null;
 			}
 			case 'openWorkspace': {
-				if (request.forceNewWindow !== undefined && typeof request.forceNewWindow !== 'boolean')
-					throw new TypeError('Invalid workspace window policy');
+				if (request.forceNewWindow !== undefined && typeof request.forceNewWindow !== 'boolean') throw new TypeError('Invalid workspace window policy');
 				const resource = await this.paths.fileURI(text(request.path));
-				await this.host.openWindow(
-					[hasWorkspaceFileExtension(resource) ? { workspaceUri: resource } : { folderUri: resource }],
-					{ forceNewWindow: request.forceNewWindow === true },
-				);
+				await this.host.openWindow([hasWorkspaceFileExtension(resource) ? { workspaceUri: resource } : { folderUri: resource }], { forceNewWindow: request.forceNewWindow === true });
 				return null;
 			}
 			case 'openView':
-				await this.instantiation.invokeFunction(accessor =>
-					accessor.get(IViewsService).openView(text(request.id), request.focus === true),
-				);
+				await this.instantiation.invokeFunction(accessor => accessor.get(IViewsService).openView(text(request.id), request.focus === true));
 				return null;
 			case 'clipboard':
 				await this.clipboard.writeText(text(request.text));
@@ -325,10 +268,7 @@ export class MainThreadEditors extends Disposable {
 			case 'openEditorDocument': {
 				const resource = URI.parse(text(request.uri));
 				if (resource.scheme !== 'untitled') throw new TypeError('Expected an untitled document');
-				await this.editors.openEditor(
-					{ resource, initialText: text(request.text), label: text(request.label), languageId: 'git-commit' },
-					{ pinned: true },
-				);
+				await this.editors.openEditor({ resource, initialText: text(request.text), label: text(request.label), languageId: 'git-commit' }, { pinned: true });
 				return null;
 			}
 			case 'readEditorDocument': {
@@ -350,28 +290,16 @@ export class MainThreadEditors extends Disposable {
 			}
 			case 'prepareRepositoryOperation': {
 				const root = URI.parse(text(request.root));
-				if (!['always', 'staged', 'never'].includes(text(request.saveMode)))
-					throw new TypeError('Invalid save policy');
-				if (!Array.isArray(request.paths) || request.paths.length > 10000)
-					throw new TypeError('Invalid repository paths');
+				if (!['always', 'staged', 'never'].includes(text(request.saveMode))) throw new TypeError('Invalid save policy');
+				if (!Array.isArray(request.paths) || request.paths.length > 10000) throw new TypeError('Invalid repository paths');
 				const paths = request.paths.map(value => URI.parse(text(value)));
-				if (paths.some(path => !extUriBiasedIgnorePathCase.isEqualOrParent(path, root)))
-					throw new TypeError('Path exceeds repository');
+				if (paths.some(path => !extUriBiasedIgnorePathCase.isEqualOrParent(path, root))) throw new TypeError('Path exceeds repository');
 				const selected = (resource: URI) =>
-					request.saveMode === 'always'
-						? extUriBiasedIgnorePathCase.isEqualOrParent(resource, root)
-						: paths.some(path => extUriBiasedIgnorePathCase.isEqual(path, resource));
-				const dirty =
-					request.saveMode === 'never'
-						? []
-						: this.workingCopies.getAll().filter(copy => copy.isDirty && selected(copy.resource));
+					request.saveMode === 'always' ? extUriBiasedIgnorePathCase.isEqualOrParent(resource, root) : paths.some(path => extUriBiasedIgnorePathCase.isEqual(path, resource));
+				const dirty = request.saveMode === 'never' ? [] : this.workingCopies.getAll().filter(copy => copy.isDirty && selected(copy.resource));
 				if (dirty.length) {
 					const confirmation = await this.dialogs.confirm({
-						message: localize(
-							{ bundle: 'ash', key: 'extension.editor.saveBeforeOperation' },
-							'Save {0} changed files before continuing?',
-							dirty.length,
-						),
+						message: localize({ bundle: 'ash', key: 'extension.editor.saveBeforeOperation' }, 'Save {0} changed files before continuing?', dirty.length),
 						primaryButton: localize({ bundle: 'ash', key: 'extension.editor.saveFiles' }, 'Save Files'),
 					});
 					if (!confirmation.confirmed) return false;
@@ -385,14 +313,7 @@ export class MainThreadEditors extends Disposable {
 					const sources = record(request.diagnostics);
 					if (
 						Object.keys(sources).length > 100 ||
-						Object.values(sources).some(
-							level =>
-								level !== 'error' &&
-								level !== 'warning' &&
-								level !== 'information' &&
-								level !== 'hint' &&
-								level !== 'none',
-						)
+						Object.values(sources).some(level => level !== 'error' && level !== 'warning' && level !== 'information' && level !== 'hint' && level !== 'none')
 					)
 						throw new TypeError('Invalid diagnostic policy');
 					const markers = this.instantiation.invokeFunction(accessor => accessor.get(IMarkerService)).read();
@@ -414,11 +335,7 @@ export class MainThreadEditors extends Disposable {
 						});
 					if (blocked.length) {
 						await this.dialogs.confirm({
-							message: localize(
-								{ bundle: 'ash', key: 'extension.editor.commitDiagnostics' },
-								'Resolve {0} diagnostics before committing.',
-								blocked.length,
-							),
+							message: localize({ bundle: 'ash', key: 'extension.editor.commitDiagnostics' }, 'Resolve {0} diagnostics before committing.', blocked.length),
 						});
 						return false;
 					}
@@ -434,10 +351,7 @@ export class MainThreadEditors extends Disposable {
 							input.modified &&
 							typeof input.modified === 'object' &&
 							'resource' in input.modified &&
-							extUriBiasedIgnorePathCase.isEqualOrParent(
-								(input.modified as IResourceEditorInput).resource,
-								root,
-							)
+							extUriBiasedIgnorePathCase.isEqualOrParent((input.modified as IResourceEditorInput).resource, root)
 						)
 							await group.closeEditor(input);
 					}
@@ -451,18 +365,10 @@ export class MainThreadEditors extends Disposable {
 			}
 			case 'activeEditor': {
 				const context = request.context == null ? undefined : record(request.context);
-				if (
-					context?.groupId !== undefined &&
-					(typeof context.groupId !== 'number' ||
-						!Number.isSafeInteger(context.groupId) ||
-						context.groupId < 0)
-				) {
+				if (context?.groupId !== undefined && (typeof context.groupId !== 'number' || !Number.isSafeInteger(context.groupId) || context.groupId < 0)) {
 					throw new TypeError('Invalid editor group ID');
 				}
-				const group =
-					typeof context?.groupId === 'number'
-						? this.part.groups.find(group => group.id === context.groupId)
-						: this.part.activeGroup;
+				const group = typeof context?.groupId === 'number' ? this.part.groups.find(group => group.id === context.groupId) : this.part.activeGroup;
 				const index = context?.editorIndex;
 				if (index != null && (typeof index !== 'number' || !Number.isSafeInteger(index) || index < 0)) {
 					throw new TypeError('Invalid editor index');
@@ -470,19 +376,14 @@ export class MainThreadEditors extends Disposable {
 				const input = typeof index === 'number' ? group?.inputs[index] : group?.activeInput;
 				const pane = input === group?.activeInput ? group?.activePane : undefined;
 				const selection = isEditorPaneWithSelection(pane) ? pane.getSelection() : undefined;
-				const copy = input
-					? this.workingCopies.get(input.resource).find(copy => copy.backupKind === 'text')
-					: undefined;
-				if (request.includeContents !== undefined && typeof request.includeContents !== 'boolean')
-					throw new TypeError('Invalid editor contents request');
+				const copy = input ? this.workingCopies.get(input.resource).find(copy => copy.backupKind === 'text') : undefined;
+				if (request.includeContents !== undefined && typeof request.includeContents !== 'boolean') throw new TypeError('Invalid editor contents request');
 				const contents = request.includeContents === false ? undefined : copy?.backup();
 				return normalizeExtensionHostPayload({
 					version: input
 						? (this.codeEditors
 								.listCodeEditors()
-								.find(editor =>
-									extUriBiasedIgnorePathCase.isEqual(editor.getModel()?.uri, input.resource),
-								)
+								.find(editor => extUriBiasedIgnorePathCase.isEqual(editor.getModel()?.uri, input.resource))
 								?.getModel()
 								?.getVersionId() ?? null)
 						: null,
@@ -490,10 +391,7 @@ export class MainThreadEditors extends Disposable {
 					input: input
 						? {
 								resource: input.resource.toString(),
-								modified:
-									'modified' in input
-										? { resource: (input.modified as IResourceEditorInput).resource.toString() }
-										: null,
+								modified: 'modified' in input ? { resource: (input.modified as IResourceEditorInput).resource.toString() } : null,
 							}
 						: null,
 					selection: selection
@@ -510,18 +408,10 @@ export class MainThreadEditors extends Disposable {
 			case 'diffChange':
 			case 'readTextFile':
 			case 'saveTextFile':
-				return new MainThreadEditorChanges(this.codeEditors, this.workingCopies, this.files).handle(
-					value,
-					signal,
-				);
+				return new MainThreadEditorChanges(this.codeEditors, this.workingCopies, this.files).handle(value, signal);
 			case 'revealDiff': {
 				const original = URI.parse(text(request.originalResource, 16 * 1024));
-				if (
-					!Array.isArray(request.modifiedResources) ||
-					request.modifiedResources.length < 1 ||
-					request.modifiedResources.length > 2
-				)
-					throw new TypeError('Invalid comparison resources');
+				if (!Array.isArray(request.modifiedResources) || request.modifiedResources.length < 1 || request.modifiedResources.length > 2) throw new TypeError('Invalid comparison resources');
 				const modified = request.modifiedResources.map(value => URI.parse(text(value, 16 * 1024)));
 				const options = parseOptions(request.options);
 				// Compare identities before requiring any snapshot contents. Reuse only
@@ -531,9 +421,7 @@ export class MainThreadEditors extends Disposable {
 					input =>
 						isResourceDiffEditorInput(input) &&
 						extUriBiasedIgnorePathCase.isEqual(input.original.resource, original) &&
-						modified.some(resource =>
-							extUriBiasedIgnorePathCase.isEqual(input.modified.resource, resource),
-						),
+						modified.some(resource => extUriBiasedIgnorePathCase.isEqual(input.modified.resource, resource)),
 				);
 				if (!existing) return false;
 				await this.editors.openEditor(existing, options, { groupId: group.id });
@@ -575,19 +463,10 @@ function positiveInteger(value: JsonValue): number {
 }
 function parseRange(value: JsonValue): Range {
 	const range = record(value);
-	return new Range(
-		positiveInteger(range.startLineNumber),
-		positiveInteger(range.startColumn),
-		positiveInteger(range.endLineNumber),
-		positiveInteger(range.endColumn),
-	);
+	return new Range(positiveInteger(range.startLineNumber), positiveInteger(range.startColumn), positiveInteger(range.endLineNumber), positiveInteger(range.endColumn));
 }
 function selectionSource(value: JsonValue): TextEditorSelectionSource {
-	if (
-		value === TextEditorSelectionSource.PROGRAMMATIC ||
-		value === TextEditorSelectionSource.NAVIGATION ||
-		value === TextEditorSelectionSource.JUMP
-	) {
+	if (value === TextEditorSelectionSource.PROGRAMMATIC || value === TextEditorSelectionSource.NAVIGATION || value === TextEditorSelectionSource.JUMP) {
 		return value;
 	}
 	throw new TypeError('Invalid editor selection source');

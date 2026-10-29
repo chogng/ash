@@ -17,14 +17,7 @@ export interface CreatedIssue extends ISimilarIssue {
 	readonly number: number;
 }
 
-export type IssueReporterErrorCode =
-	| 'authenticationRequired'
-	| 'permissionDenied'
-	| 'rateLimited'
-	| 'unavailable'
-	| 'invalidInput'
-	| 'submissionUncertain'
-	| 'operationFailed';
+export type IssueReporterErrorCode = 'authenticationRequired' | 'permissionDenied' | 'rateLimited' | 'unavailable' | 'invalidInput' | 'submissionUncertain' | 'operationFailed';
 
 export class IssueReporterError extends Error {
 	constructor(readonly code: IssueReporterErrorCode) {

@@ -29,8 +29,7 @@ export class ReplModel extends Disposable implements IReplModel {
 		this._register(debug.onDidChangeSession(() => this.synchronize()));
 		this._register(
 			toDisposable(() => {
-				for (const record of this.records.values())
-					for (const member of record.members.values()) member.listener.dispose();
+				for (const record of this.records.values()) for (const member of record.members.values()) member.listener.dispose();
 				this.records.clear();
 			}),
 		);
@@ -48,8 +47,7 @@ export class ReplModel extends Disposable implements IReplModel {
 
 	selectSession(id: string): void {
 		const record = this.records.get(id);
-		if (!record)
-			throw new Error(localize('debug.repl.unavailable', 'Debug Console session is no longer available'));
+		if (!record) throw new Error(localize('debug.repl.unavailable', 'Debug Console session is no longer available'));
 		if (this.activeSessionId === id) return;
 		this.activeSessionId = id;
 		if (record.session) this.debug.setActiveSession(record.session);
@@ -70,18 +68,12 @@ export class ReplModel extends Disposable implements IReplModel {
 	async evaluate(expression: string): Promise<void> {
 		const normalized = expression.trim();
 		if (!normalized || normalized.length > 32_768 || normalized.includes('\0'))
-			throw new TypeError(
-				localize('debug.repl.invalidExpression', 'Debug Console expression must contain 1 to 32768 characters'),
-			);
+			throw new TypeError(localize('debug.repl.invalidExpression', 'Debug Console expression must contain 1 to 32768 characters'));
 		const record = this.activeSessionId ? this.records.get(this.activeSessionId) : undefined;
-		if (!record?.session)
-			throw new Error(localize('debug.repl.activeRequired', 'Debug Console requires an active session'));
+		if (!record?.session) throw new Error(localize('debug.repl.activeRequired', 'Debug Console requires an active session'));
 		const session = record.session;
 		// Capture the selected frame at submission; frame IDs belong to one paused adapter session.
-		const frame =
-			this.debug.session === session && session.state === 'stopped'
-				? this.debug.getViewModel().focusedStackFrame
-				: undefined;
+		const frame = this.debug.session === session && session.state === 'stopped' ? this.debug.getViewModel().focusedStackFrame : undefined;
 		await session.evaluate(normalized, frame?.id, 'repl');
 		if (this.isDisposed) return;
 		if (session.replElementsRevision >= record.revision) {
@@ -103,16 +95,12 @@ export class ReplModel extends Disposable implements IReplModel {
 		for (const session of active.values()) this.ensureRecord(session);
 		for (const record of this.records.values()) {
 			const selected = this.debug.session;
-			record.session =
-				selected && record.members.has(selected.id)
-					? selected
-					: (record.members.get(record.id)?.session ?? [...record.members.values()].at(-1)?.session);
+			record.session = selected && record.members.has(selected.id) ? selected : (record.members.get(record.id)?.session ?? [...record.members.values()].at(-1)?.session);
 			if (record.session) record.state = record.session.state;
 			else if (record.state !== 'error') record.state = 'terminated';
 		}
 		if (this.debug.session) this.activeSessionId = this.debug.session.consoleSessionId;
-		else if (!this.activeSessionId || !this.records.has(this.activeSessionId))
-			this.activeSessionId = [...this.records.keys()].at(-1);
+		else if (!this.activeSessionId || !this.records.has(this.activeSessionId)) this.activeSessionId = [...this.records.keys()].at(-1);
 		this.trimRecords();
 		this.outputNotification.cancel();
 		this.changeEmitter.fire();
@@ -141,11 +129,7 @@ export class ReplModel extends Disposable implements IReplModel {
 		if (record.members.has(session.id)) return record;
 		// A later-published parent may carry an older snapshot than its child.
 		// Fresh connection scopes use new session IDs even if their clock restarts.
-		if (
-			!this.consoleCatalog ||
-			session.consoleCatalogRevision >= this.consoleCatalog.revision ||
-			!this.consoleCatalog.ids.includes(session.consoleSessionId)
-		) {
+		if (!this.consoleCatalog || session.consoleCatalogRevision >= this.consoleCatalog.revision || !this.consoleCatalog.ids.includes(session.consoleSessionId)) {
 			this.consoleCatalog = { revision: session.consoleCatalogRevision, ids: session.retainedConsoleSessionIds };
 		}
 		// Shared-console snapshots replace the cache only in backend revision order.

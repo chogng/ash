@@ -11,12 +11,7 @@ import { BrowserLayoutService, type ILayoutOffsetInfo } from '../../platform/lay
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
 import { WorkbenchState } from '../../platform/workspace/common/workspace.js';
 import { DEFAULT_WORKSPACE_WINDOW_SIZE } from '../../platform/window/common/window.js';
-import {
-	ActivityBarPosition,
-	WorkbenchConfiguration,
-	type SideBarLocation,
-	type WorkbenchLayoutStyle,
-} from '../common/configuration.js';
+import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation, type WorkbenchLayoutStyle } from '../common/configuration.js';
 import {
 	Position,
 	isHorizontal,
@@ -29,10 +24,7 @@ import {
 } from '../services/layout/browser/layoutService.js';
 import type { Part } from './part.js';
 import { WorkbenchPartView } from './workbenchPartView.js';
-import {
-	IAuxiliaryWindowService,
-	type IAuxiliaryWindow,
-} from '../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 
 const WINDOW_LEFT_EDGE_INSET = 4;
 const WINDOW_RIGHT_EDGE_INSET = 4;
@@ -123,8 +115,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 	// Maximization is transient; retain the restored size on the Panel's current axis.
 	private panelSizeBeforeMaximize: number | undefined;
 	// The ordinary layout remains the persistence source while maximization temporarily hides its Parts.
-	private auxiliaryBarRestoreState:
-		{ readonly layout: WorkbenchLayoutState; readonly editorVisible: boolean } | undefined;
+	private auxiliaryBarRestoreState: { readonly layout: WorkbenchLayoutState; readonly editorVisible: boolean } | undefined;
 	private readonly auxiliaryBarMaximizedEmitter = this._register(new Emitter<void>());
 	private readonly auxiliaryContainers = this._register(new DisposableMap<Window, DisposableStore>());
 	private readonly auxiliaryWindows = new Map<Window, IAuxiliaryWindow>();
@@ -141,14 +132,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 	public getVisibleNeighborPart(partId: WorkbenchPartId, direction: Direction): WorkbenchPartId | undefined {
 		return this.grid
 			.getNeighborViews(this.view(partId), direction)
-			.find(
-				view =>
-					view.partId === 'editor' ||
-					view.partId === 'sidebar' ||
-					view.partId === 'panel' ||
-					view.partId === 'auxiliarybar' ||
-					view.partId === 'agentSidebar',
-			)?.partId;
+			.find(view => view.partId === 'editor' || view.partId === 'sidebar' || view.partId === 'panel' || view.partId === 'auxiliarybar' || view.partId === 'agentSidebar')?.partId;
 	}
 
 	/** Editor restoration follows the Workbench setting; Ash has no startup-file or temporary-workspace launch path. */
@@ -189,9 +173,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		// Input can arrive before Electron's document focus notification. Capture it
 		// at the window boundary before keybindings or titlebar actions choose a host.
 		for (const event of ['focus', 'keydown', 'pointerdown'] as const) {
-			this._register(
-				addDisposableListener(getWindow(container), event, () => this.activateContainer(container), true),
-			);
+			this._register(addDisposableListener(getWindow(container), event, () => this.activateContainer(container), true));
 		}
 		this._register(addDisposableListener(container, 'focusin', () => this.activateContainer(container)));
 		this._register(auxiliaryWindowService.onDidOpenWindow(window => this.trackAuxiliaryWindow(window)));
@@ -207,9 +189,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		return this.focusedContainer ?? this.mainContainer;
 	}
 	override get activeContainerDimension(): IDimension {
-		return this.activeContainer === this.mainContainer
-			? this.mainContainerDimension
-			: getClientArea(this.activeContainer);
+		return this.activeContainer === this.mainContainer ? this.mainContainerDimension : getClientArea(this.activeContainer);
 	}
 	override get containers(): Iterable<HTMLElement> {
 		return [this.mainContainer, ...[...this.auxiliaryWindows.values()].map(window => window.container)];
@@ -225,10 +205,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		return this.auxiliaryWindows.get(targetWindow)?.container ?? super.getContainer(targetWindow);
 	}
 	override whenContainerStylesLoaded(targetWindow: Window): Promise<void> | undefined {
-		return (
-			this.auxiliaryWindows.get(targetWindow)?.whenStylesHaveLoaded ??
-			super.whenContainerStylesLoaded(targetWindow)
-		);
+		return this.auxiliaryWindows.get(targetWindow)?.whenStylesHaveLoaded ?? super.whenContainerStylesLoaded(targetWindow);
 	}
 
 	private activateContainer(container: HTMLElement): void {
@@ -243,13 +220,9 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		this.auxiliaryWindows.set(window.window, window);
 		this.auxiliaryContainers.set(window.window, resources);
 		for (const event of ['focus', 'keydown', 'pointerdown'] as const) {
-			resources.add(
-				addDisposableListener(window.window, event, () => this.activateContainer(window.container), true),
-			);
+			resources.add(addDisposableListener(window.window, event, () => this.activateContainer(window.container), true));
 		}
-		resources.add(
-			addDisposableListener(window.container, 'focusin', () => this.activateContainer(window.container)),
-		);
+		resources.add(addDisposableListener(window.container, 'focusin', () => this.activateContainer(window.container)));
 		resources.add(
 			window.onDidLayout(dimension => {
 				this._onDidLayoutContainer.fire({ container: window.container, dimension });
@@ -272,26 +245,17 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		for (const partId of workbenchPartIds) {
 			this.views.set(
 				partId,
-				new WorkbenchPartView(partId, requiredPart(parts, partId), { snap: isSnappableWorkbenchPart(partId) }),
+				new WorkbenchPartView(partId, requiredPart(parts, partId), {
+					snap: isSnappableWorkbenchPart(partId),
+				}),
 			);
 		}
 		const initialState = this.stateModel.state;
 		this.domNode.dataset.panelPosition = positionToString(this.panelPosition);
-		this.projectPartFrameInsets(
-			initialState.sidebar.visible,
-			initialState.auxiliarybar.visible,
-			initialState.agentSidebar.visible,
-			initialState.panel.visible,
-		);
+		this.projectPartFrameInsets(initialState.sidebar.visible, initialState.auxiliarybar.visible, initialState.agentSidebar.visible, initialState.panel.visible);
 		this.grid = SerializableGrid.deserialize(
 			this.domNode,
-			createWorkbenchGridDescriptor(
-				this.views,
-				this.initialDimension,
-				initialState,
-				this.activityBarLocation,
-				this.sideBarLocation,
-			),
+			createWorkbenchGridDescriptor(this.views, this.initialDimension, initialState, this.activityBarLocation, this.sideBarLocation),
 			{ fromJSON: data => this.view(parseWorkbenchPartId(data)) },
 			{
 				sashPresentation: this.layoutStyle === 'modern' ? { type: 'inset', gap: PART_GUTTER_SIZE } : undefined,
@@ -299,10 +263,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 			},
 		);
 		this.gridHandle.value = this.grid;
-		this.grid.setViewVisible(
-			this.view('statusbar'),
-			this.configurationService.getValue<boolean>(WorkbenchConfiguration.statusBarVisible) !== false,
-		);
+		this.grid.setViewVisible(this.view('statusbar'), this.configurationService.getValue<boolean>(WorkbenchConfiguration.statusBarVisible) !== false);
 		this.gridChangeHandle.value = this.grid.onDidChange(() => {
 			this.projectPartFrameInsets();
 			this.publishPartVisibility();
@@ -314,25 +275,16 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		this._register(
 			this.configurationService.onDidChangeConfiguration(event => {
 				if (event.affectsConfiguration(WorkbenchConfiguration.secondarySideBarForceMaximized)) {
-					this.setAuxiliaryBarMaximized(
-						this.configurationService.getValue(WorkbenchConfiguration.secondarySideBarForceMaximized),
-					);
+					this.setAuxiliaryBarMaximized(this.configurationService.getValue(WorkbenchConfiguration.secondarySideBarForceMaximized));
 				}
 				if (event.affectsConfiguration(WorkbenchConfiguration.panelDefaultLocation)) {
-					this.stateModel.defaultPanelPosition = positionFromString(
-						this.configurationService.getValue(WorkbenchConfiguration.panelDefaultLocation),
-					);
+					this.stateModel.defaultPanelPosition = positionFromString(this.configurationService.getValue(WorkbenchConfiguration.panelDefaultLocation));
 				}
 				if (event.affectsConfiguration(WorkbenchConfiguration.statusBarVisible)) {
-					this.grid.setViewVisible(
-						this.view('statusbar'),
-						this.configurationService.getValue<boolean>(WorkbenchConfiguration.statusBarVisible) !== false,
-					);
+					this.grid.setViewVisible(this.view('statusbar'), this.configurationService.getValue<boolean>(WorkbenchConfiguration.statusBarVisible) !== false);
 				}
 				if (event.affectsConfiguration(WorkbenchConfiguration.activityBarLocation)) {
-					this.setActivityBarLocation(
-						this.configurationService.getValue(WorkbenchConfiguration.activityBarLocation),
-					);
+					this.setActivityBarLocation(this.configurationService.getValue(WorkbenchConfiguration.activityBarLocation));
 				}
 				if (event.affectsConfiguration(WorkbenchConfiguration.sideBarLocation)) {
 					this.setSideBarLocation(this.configurationService.getValue(WorkbenchConfiguration.sideBarLocation));
@@ -378,8 +330,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		const state = this.state;
 		this.panelPosition = position;
 		this.domNode.dataset.panelPosition = positionToString(position);
-		if (this.panelSizeBeforeMaximize !== undefined)
-			this.panelSizeBeforeMaximize = isHorizontal(position) ? state.panel.height : state.panel.width;
+		if (this.panelSizeBeforeMaximize !== undefined) this.panelSizeBeforeMaximize = isHorizontal(position) ? state.panel.height : state.panel.width;
 		this.rebuildGrid({ ...state, panel: { ...state.panel, position } });
 		this.saveState();
 		this.panelPositionEmitter.fire(positionToString(position));
@@ -387,9 +338,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 
 	private panelDimension(size: number): Dimension {
 		const current = this.getPartSize('panel');
-		return isHorizontal(this.panelPosition)
-			? new Dimension(current.width, size)
-			: new Dimension(size, current.height);
+		return isHorizontal(this.panelPosition) ? new Dimension(current.width, size) : new Dimension(size, current.height);
 	}
 
 	private rebuildGrid(restoredState?: WorkbenchLayoutState): void {
@@ -400,23 +349,12 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		const state = restoredState ?? this.state;
 		const editorVisible = this.isPartVisible('editor');
 		const bannerVisible = this.isPartVisible('banner');
-		const dimension = new Dimension(
-			this.grid.width || getClientArea(this.domNode).width,
-			this.grid.height || getClientArea(this.domNode).height,
-		);
+		const dimension = new Dimension(this.grid.width || getClientArea(this.domNode).width, this.grid.height || getClientArea(this.domNode).height);
 		this.gridChangeHandle.clear();
 		this.gridHandle.clear();
 		this.grid = SerializableGrid.deserialize(
 			this.domNode,
-			createWorkbenchGridDescriptor(
-				this.views,
-				dimension,
-				state,
-				this.activityBarLocation,
-				this.sideBarLocation,
-				editorVisible,
-				bannerVisible,
-			),
+			createWorkbenchGridDescriptor(this.views, dimension, state, this.activityBarLocation, this.sideBarLocation, editorVisible, bannerVisible),
 			{ fromJSON: data => this.view(parseWorkbenchPartId(data)) },
 			{
 				sashPresentation: this.layoutStyle === 'modern' ? { type: 'inset', gap: PART_GUTTER_SIZE } : undefined,
@@ -424,10 +362,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 			},
 		);
 		this.gridHandle.value = this.grid;
-		this.grid.setViewVisible(
-			this.view('statusbar'),
-			this.configurationService.getValue<boolean>(WorkbenchConfiguration.statusBarVisible) !== false,
-		);
+		this.grid.setViewVisible(this.view('statusbar'), this.configurationService.getValue<boolean>(WorkbenchConfiguration.statusBarVisible) !== false);
 		this.gridChangeHandle.value = this.grid.onDidChange(() => {
 			this.projectPartFrameInsets();
 			this.publishPartVisibility();
@@ -443,9 +378,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		if (!this.gridHandle.value) return { top: 0, quickInputTop: 0 };
 		const titlebar = this.getPartSize('titlebar');
 		return {
-			top:
-				(this.isPartVisible('titlebar') ? titlebar.height : 0) +
-				(this.isPartVisible('banner') ? this.getPartSize('banner').height : 0),
+			top: (this.isPartVisible('titlebar') ? titlebar.height : 0) + (this.isPartVisible('banner') ? this.getPartSize('banner').height : 0),
 			quickInputTop: 0,
 		};
 	}
@@ -468,9 +401,18 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		else this.panelRestoredWidth = this.panelSizeBeforeMaximize ?? panel.width;
 		return {
 			version: 3,
-			sidebar: { width: sidebar.width, visible: this.isPartVisible('sidebar') },
-			auxiliarybar: { width: auxiliarybar.width, visible: this.isPartVisible('auxiliarybar') },
-			agentSidebar: { width: agentSidebar.width, visible: this.isPartVisible('agentSidebar') },
+			sidebar: {
+				width: sidebar.width,
+				visible: this.isPartVisible('sidebar'),
+			},
+			auxiliarybar: {
+				width: auxiliarybar.width,
+				visible: this.isPartVisible('auxiliarybar'),
+			},
+			agentSidebar: {
+				width: agentSidebar.width,
+				visible: this.isPartVisible('agentSidebar'),
+			},
 			panel: {
 				position: this.panelPosition,
 				width: this.panelRestoredWidth,
@@ -524,21 +466,13 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 			const restore = this.auxiliaryBarRestoreState!;
 			this.auxiliaryBarRestoreState = undefined;
 			for (const partId of ['editor', 'panel', 'sidebar', 'agentSidebar'] as const) {
-				this.updatePartsVisibility(
-					[partId],
-					partId === 'editor' ? restore.editorVisible : restore.layout[partId].visible,
-				);
+				this.updatePartsVisibility([partId], partId === 'editor' ? restore.editorVisible : restore.layout[partId].visible);
 			}
 			for (const partId of ['sidebar', 'agentSidebar', 'auxiliarybar'] as const) {
 				this.resizePart(partId, this.getPartSize(partId).with(restore.layout[partId].width));
 			}
 			if (restore.editorVisible) {
-				this.resizePart(
-					'panel',
-					this.panelDimension(
-						isHorizontal(this.panelPosition) ? restore.layout.panel.height : restore.layout.panel.width,
-					),
-				);
+				this.resizePart('panel', this.panelDimension(isHorizontal(this.panelPosition) ? restore.layout.panel.height : restore.layout.panel.width));
 			}
 		}
 		this.stateModel.auxiliaryBarWasLastMaximized = maximized;
@@ -560,12 +494,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 	}
 
 	showParts(partIds: readonly WorkbenchPartId[]): void {
-		if (
-			partIds.some(
-				partId =>
-					partId === 'editor' || partId === 'panel' || partId === 'sidebar' || partId === 'agentSidebar',
-			)
-		) {
+		if (partIds.some(partId => partId === 'editor' || partId === 'panel' || partId === 'sidebar' || partId === 'agentSidebar')) {
 			this.setAuxiliaryBarMaximized(false);
 		}
 		const panelOpensMaximized = this.configurationService.getValue(WorkbenchConfiguration.panelOpensMaximized);
@@ -573,8 +502,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 			partIds.includes('panel') &&
 			!partIds.includes('editor') &&
 			!this.isPartVisible('panel') &&
-			(panelOpensMaximized === 'always' ||
-				(panelOpensMaximized === 'preserve' && this.stateModel.panelWasLastMaximized));
+			(panelOpensMaximized === 'always' || (panelOpensMaximized === 'preserve' && this.stateModel.panelWasLastMaximized));
 		const panelSize = partIds.includes('editor') ? this.panelSizeBeforeMaximize : undefined;
 		this.updatePartsVisibility(partIds, true);
 		if (panelSize !== undefined) {
@@ -636,10 +564,7 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		this.resizePart('sidebar', this.getPartSize('sidebar').with(state.sidebar.width));
 		this.resizePart('auxiliarybar', this.getPartSize('auxiliarybar').with(state.auxiliarybar.width));
 		this.resizePart('agentSidebar', this.getPartSize('agentSidebar').with(state.agentSidebar.width));
-		this.resizePart(
-			'panel',
-			this.panelDimension(isHorizontal(this.panelPosition) ? state.panel.height : state.panel.width),
-		);
+		this.resizePart('panel', this.panelDimension(isHorizontal(this.panelPosition) ? state.panel.height : state.panel.width));
 		this.updatePartsVisibility(['sidebar'], state.sidebar.visible);
 		this.updatePartsVisibility(['auxiliarybar'], state.auxiliarybar.visible);
 		this.updatePartsVisibility(['agentSidebar'], state.agentSidebar.visible);
@@ -684,19 +609,9 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 					};
 		this.view('sidebar').setFrameInsets({
 			top: 0,
-			right:
-				this.sideBarLocation === 'left'
-					? metrics.partGutterHalf
-					: activityBarBesideSidebar
-						? 0
-						: metrics.windowRightEdgeInset,
+			right: this.sideBarLocation === 'left' ? metrics.partGutterHalf : activityBarBesideSidebar ? 0 : metrics.windowRightEdgeInset,
 			bottom: 0,
-			left:
-				this.sideBarLocation === 'right'
-					? metrics.partGutterHalf
-					: activityBarBesideSidebar
-						? 0
-						: metrics.windowLeftEdgeInset,
+			left: this.sideBarLocation === 'right' ? metrics.partGutterHalf : activityBarBesideSidebar ? 0 : metrics.windowLeftEdgeInset,
 		});
 		this.view('activitybar').setFrameInsets({
 			top: 0,
@@ -706,17 +621,9 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		});
 		this.view('auxiliarybar').setFrameInsets({
 			top: 0,
-			right:
-				this.sideBarLocation === 'left'
-					? agentSidebarVisible
-						? metrics.partGutterHalf
-						: metrics.windowRightEdgeInset
-					: metrics.partGutterHalf,
+			right: this.sideBarLocation === 'left' ? (agentSidebarVisible ? metrics.partGutterHalf : metrics.windowRightEdgeInset) : metrics.partGutterHalf,
 			bottom: 0,
-			left:
-				this.sideBarLocation === 'right' && !agentSidebarVisible
-					? metrics.windowLeftEdgeInset
-					: metrics.partGutterHalf,
+			left: this.sideBarLocation === 'right' && !agentSidebarVisible ? metrics.windowLeftEdgeInset : metrics.partGutterHalf,
 		});
 		this.view('agentSidebar').setFrameInsets({
 			top: 0,
@@ -785,25 +692,20 @@ function createWorkbenchGridDescriptor(
 	editorVisible = true,
 	bannerVisible = false,
 ): SerializedGridDescriptor {
-	const leaf = (
-		partId: WorkbenchPartId,
-		size: number,
-		visible = true,
-		priority: 'normal' | 'high' = 'normal',
-	): SerializedGridDescriptor => ({ type: 'leaf', data: partId, size, visible, priority });
+	const leaf = (partId: WorkbenchPartId, size: number, visible = true, priority: 'normal' | 'high' = 'normal'): SerializedGridDescriptor => ({
+		type: 'leaf',
+		data: partId,
+		size,
+		visible,
+		priority,
+	});
 	const titlebarHeight = requiredView(views, 'titlebar').minimumHeight;
 	const bannerHeight = requiredView(views, 'banner').minimumHeight;
 	const statusbarHeight = requiredView(views, 'statusbar').minimumHeight;
 	const activitybarWidth = requiredView(views, 'activitybar').minimumWidth;
-	const bodyHeight = Math.max(
-		0,
-		dimension.height - titlebarHeight - statusbarHeight - (bannerVisible ? bannerHeight : 0),
-	);
+	const bodyHeight = Math.max(0, dimension.height - titlebarHeight - statusbarHeight - (bannerVisible ? bannerHeight : 0));
 	const panelHeight = state.panel.height;
-	const editorHeight = Math.max(
-		0,
-		bodyHeight - (state.panel.visible && isHorizontal(state.panel.position) ? panelHeight : 0),
-	);
+	const editorHeight = Math.max(0, bodyHeight - (state.panel.visible && isHorizontal(state.panel.position) ? panelHeight : 0));
 	const editorWidth = Math.max(
 		0,
 		dimension.width -
@@ -814,30 +716,16 @@ function createWorkbenchGridDescriptor(
 	);
 	const primary: SerializedGridDescriptor[] =
 		sideBarLocation === 'left'
-			? [
-					leaf('activitybar', activitybarWidth, activityBarLocation === ActivityBarPosition.DEFAULT),
-					leaf('sidebar', state.sidebar.width, state.sidebar.visible),
-				]
-			: [
-					leaf('sidebar', state.sidebar.width, state.sidebar.visible),
-					leaf('activitybar', activitybarWidth, activityBarLocation === ActivityBarPosition.DEFAULT),
-				];
+			? [leaf('activitybar', activitybarWidth, activityBarLocation === ActivityBarPosition.DEFAULT), leaf('sidebar', state.sidebar.width, state.sidebar.visible)]
+			: [leaf('sidebar', state.sidebar.width, state.sidebar.visible), leaf('activitybar', activitybarWidth, activityBarLocation === ActivityBarPosition.DEFAULT)];
 	const secondary: SerializedGridDescriptor[] = [
 		leaf('auxiliarybar', state.auxiliarybar.width, state.auxiliarybar.visible),
 		leaf('agentSidebar', state.agentSidebar.width, state.agentSidebar.visible),
 	];
 	const horizontalPanel = isHorizontal(state.panel.position);
-	const editor = leaf(
-		'editor',
-		horizontalPanel ? editorHeight : Math.max(0, editorWidth - (state.panel.visible ? state.panel.width : 0)),
-		editorVisible,
-		EDITOR_LAYOUT_PRIORITY,
-	);
+	const editor = leaf('editor', horizontalPanel ? editorHeight : Math.max(0, editorWidth - (state.panel.visible ? state.panel.width : 0)), editorVisible, EDITOR_LAYOUT_PRIORITY);
 	const panel = leaf('panel', horizontalPanel ? panelHeight : state.panel.width, state.panel.visible);
-	const centralParts =
-		state.panel.position === Position.TOP || state.panel.position === Position.LEFT
-			? [panel, editor]
-			: [editor, panel];
+	const centralParts = state.panel.position === Position.TOP || state.panel.position === Position.LEFT ? [panel, editor] : [editor, panel];
 	// Side panels are siblings in the horizontal body. Nesting another horizontal
 	// branch would violate Grid's alternating-axis contract.
 	const center: SerializedGridDescriptor[] = horizontalPanel
@@ -864,10 +752,7 @@ function createWorkbenchGridDescriptor(
 				orientation: 'horizontal',
 				size: bodyHeight,
 				priority: EDITOR_LAYOUT_PRIORITY,
-				children:
-					sideBarLocation === 'left'
-						? [...primary, ...center, ...secondary]
-						: [...secondary.slice().reverse(), ...center, ...primary],
+				children: sideBarLocation === 'left' ? [...primary, ...center, ...secondary] : [...secondary.slice().reverse(), ...center, ...primary],
 			},
 			leaf('statusbar', statusbarHeight),
 		],
@@ -882,10 +767,7 @@ function resolveInitialDimension(container: HTMLElement, dimension: IDimension |
 		}
 	}
 	const measured = measureWorkbenchContainer(container);
-	return new Dimension(
-		measured.width > 0 ? measured.width : DEFAULT_WORKSPACE_WINDOW_SIZE.width,
-		measured.height > 0 ? measured.height : DEFAULT_WORKSPACE_WINDOW_SIZE.height,
-	);
+	return new Dimension(measured.width > 0 ? measured.width : DEFAULT_WORKSPACE_WINDOW_SIZE.width, measured.height > 0 ? measured.height : DEFAULT_WORKSPACE_WINDOW_SIZE.height);
 }
 
 function measureWorkbenchContainer(container: HTMLElement): Dimension {
@@ -902,31 +784,19 @@ function parseWorkbenchPartId(value: unknown): WorkbenchPartId {
 	throw new TypeError('Workbench Grid contains an unknown Part');
 }
 
-function requiredView(
-	views: ReadonlyMap<WorkbenchPartId, WorkbenchPartView>,
-	partId: WorkbenchPartId,
-): WorkbenchPartView {
+function requiredView(views: ReadonlyMap<WorkbenchPartId, WorkbenchPartView>, partId: WorkbenchPartId): WorkbenchPartView {
 	const view = views.get(partId);
 	if (!view) throw new Error(`Workbench Part view is not registered: ${partId}`);
 	return view;
 }
 
 function assertDimension(dimension: IDimension): void {
-	if (
-		!Number.isFinite(dimension.width) ||
-		dimension.width < 0 ||
-		!Number.isFinite(dimension.height) ||
-		dimension.height < 0
-	) {
+	if (!Number.isFinite(dimension.width) || dimension.width < 0 || !Number.isFinite(dimension.height) || dimension.height < 0) {
 		throw new RangeError('Workbench layout dimensions must be non-negative and finite');
 	}
 }
 
-function createDefaultWorkbenchLayoutState(
-	parts: WorkbenchDefaultLayout['parts'] | undefined,
-	dimension: IDimension,
-	forceMaximized: boolean,
-): WorkbenchLayoutState {
+function createDefaultWorkbenchLayoutState(parts: WorkbenchDefaultLayout['parts'] | undefined, dimension: IDimension, forceMaximized: boolean): WorkbenchLayoutState {
 	if (parts !== undefined && !isRecord(parts)) {
 		throw new TypeError('Workbench default layout Parts must be an object');
 	}
@@ -937,9 +807,7 @@ function createDefaultWorkbenchLayoutState(
 			visible: defaultPartVisibility(parts, 'sidebar', true),
 		},
 		auxiliarybar: {
-			width: forceMaximized
-				? Math.max(DEFAULT_AUXILIARYBAR_WIDTH, dimension.width / 2)
-				: Math.min(DEFAULT_AUXILIARYBAR_WIDTH, dimension.width / 4),
+			width: forceMaximized ? Math.max(DEFAULT_AUXILIARYBAR_WIDTH, dimension.width / 2) : Math.min(DEFAULT_AUXILIARYBAR_WIDTH, dimension.width / 4),
 			visible: defaultPartVisibility(parts, 'auxiliarybar', true),
 		},
 		agentSidebar: {
@@ -968,11 +836,7 @@ function validateWorkbenchDefaultLayout(defaultLayout: WorkbenchDefaultLayout | 
 	}
 }
 
-function defaultPartVisibility(
-	parts: WorkbenchDefaultLayout['parts'] | undefined,
-	partId: keyof NonNullable<WorkbenchDefaultLayout['parts']>,
-	fallback: boolean,
-): boolean {
+function defaultPartVisibility(parts: WorkbenchDefaultLayout['parts'] | undefined, partId: keyof NonNullable<WorkbenchDefaultLayout['parts']>, fallback: boolean): boolean {
 	const value = parts?.[partId];
 	if (value === undefined) return fallback;
 	if (typeof value !== 'boolean') {
@@ -982,18 +846,10 @@ function defaultPartVisibility(
 }
 
 function parseWorkbenchLayoutState(value: unknown): WorkbenchLayoutState {
-	if (
-		!isRecord(value) ||
-		!isHorizontalLayoutRegionState(value.sidebar) ||
-		!isHorizontalLayoutRegionState(value.auxiliarybar)
-	) {
+	if (!isRecord(value) || !isHorizontalLayoutRegionState(value.sidebar) || !isHorizontalLayoutRegionState(value.auxiliarybar)) {
 		throw new TypeError('Workbench layout state is invalid or unsupported');
 	}
-	if (
-		isRecord(value.panel) &&
-		((value.panel.position !== undefined && !isPanelPosition(value.panel.position)) ||
-			(value.panel.width !== undefined && !isLayoutDimension(value.panel.width)))
-	) {
+	if (isRecord(value.panel) && ((value.panel.position !== undefined && !isPanelPosition(value.panel.position)) || (value.panel.width !== undefined && !isLayoutDimension(value.panel.width)))) {
 		throw new TypeError('Workbench layout state is invalid or unsupported');
 	}
 	let panel: { readonly height: number; readonly visible: boolean };
@@ -1004,11 +860,7 @@ function parseWorkbenchLayoutState(value: unknown): WorkbenchLayoutState {
 	} else if (value.version === 2 && isVerticalLayoutRegionState(value.panel)) {
 		panel = value.panel;
 		agentSidebar = { width: DEFAULT_AGENT_SIDEBAR_WIDTH, visible: false };
-	} else if (
-		value.version === 3 &&
-		isVerticalLayoutRegionState(value.panel) &&
-		isHorizontalLayoutRegionState(value.agentSidebar)
-	) {
+	} else if (value.version === 3 && isVerticalLayoutRegionState(value.panel) && isHorizontalLayoutRegionState(value.agentSidebar)) {
 		panel = value.panel;
 		agentSidebar = value.agentSidebar;
 	} else {
@@ -1016,13 +868,18 @@ function parseWorkbenchLayoutState(value: unknown): WorkbenchLayoutState {
 	}
 	return {
 		version: 3,
-		sidebar: { width: value.sidebar.width, visible: value.sidebar.visible },
-		auxiliarybar: { width: value.auxiliarybar.width, visible: value.auxiliarybar.visible },
+		sidebar: {
+			width: value.sidebar.width,
+			visible: value.sidebar.visible,
+		},
+		auxiliarybar: {
+			width: value.auxiliarybar.width,
+			visible: value.auxiliarybar.visible,
+		},
 		agentSidebar,
 		panel: {
 			position: readPanelPosition(isRecord(value.panel) ? value.panel.position : undefined),
-			width:
-				isRecord(value.panel) && isLayoutDimension(value.panel.width) ? value.panel.width : DEFAULT_PANEL_WIDTH,
+			width: isRecord(value.panel) && isLayoutDimension(value.panel.width) ? value.panel.width : DEFAULT_PANEL_WIDTH,
 			height: panel.height,
 			visible: panel.visible,
 		},
@@ -1055,10 +912,7 @@ class WorkbenchLayoutStateModel {
 		if (saved !== undefined) return saved;
 		if (!this.storageService.isNew(StorageScope.WORKSPACE)) return false;
 		const visibility = this.configurationService.getValue(WorkbenchConfiguration.secondarySideBarDefaultVisibility);
-		return (
-			visibility === 'maximized' ||
-			(visibility === 'maximizedInWorkspace' && this.workbenchState !== WorkbenchState.EMPTY)
-		);
+		return visibility === 'maximized' || (visibility === 'maximizedInWorkspace' && this.workbenchState !== WorkbenchState.EMPTY);
 	}
 
 	private get defaultAuxiliaryBarVisible(): boolean {
@@ -1066,19 +920,11 @@ class WorkbenchLayoutStateModel {
 		const visibility = this.configurationService.getValue(WorkbenchConfiguration.secondarySideBarDefaultVisibility);
 		if (visibility === 'hidden') return false;
 		const configured = this.configurationService.inspect(WorkbenchConfiguration.secondarySideBarDefaultVisibility);
-		if (
-			!isConfigured(configured) &&
-			configured.memoryValue === undefined &&
-			this.storageService.getBoolean('workbench.layout.auxiliarybar.empty', StorageScope.PROFILE, false)
-		) {
+		if (!isConfigured(configured) && configured.memoryValue === undefined && this.storageService.getBoolean('workbench.layout.auxiliarybar.empty', StorageScope.PROFILE, false)) {
 			return false;
 		}
 		// New profiles expose Chat even in an empty window, unless AI is disabled.
-		if (
-			this.storageService.isNew(StorageScope.APPLICATION) &&
-			!this.configurationService.getValue<boolean>(ChatAIDisabledSettingId)
-		)
-			return true;
+		if (this.storageService.isNew(StorageScope.APPLICATION) && !this.configurationService.getValue<boolean>(ChatAIDisabledSettingId)) return true;
 		return visibility === 'visible' || visibility === 'maximized' || this.workbenchState !== WorkbenchState.EMPTY;
 	}
 
@@ -1093,45 +939,23 @@ class WorkbenchLayoutStateModel {
 
 	get state(): WorkbenchLayoutState {
 		const storage = this.storageService;
-		const forceMaximized = this.configurationService.getValue<boolean>(
-			WorkbenchConfiguration.secondarySideBarForceMaximized,
-		);
+		const forceMaximized = this.configurationService.getValue<boolean>(WorkbenchConfiguration.secondarySideBarForceMaximized);
 		const fallbackParts = {
 			sidebar: this.workbenchState !== WorkbenchState.EMPTY && !forceMaximized,
 			auxiliarybar: this.defaultAuxiliaryBarVisible,
 			agentSidebar: false,
 			panel: false,
 		} as const satisfies NonNullable<WorkbenchDefaultLayout['parts']>;
-		const parts = this.shouldApplyDefaultLayout(storage)
-			? { ...fallbackParts, ...this.defaultLayout?.parts }
-			: fallbackParts;
+		const parts = this.shouldApplyDefaultLayout(storage) ? { ...fallbackParts, ...this.defaultLayout?.parts } : fallbackParts;
 		const defaults = createDefaultWorkbenchLayoutState(parts, this.initialDimension, forceMaximized);
 		return {
 			version: 3,
 			sidebar: {
-				width: storedDimension(
-					storage.getNumber(
-						WorkbenchLayoutStorageKeys.SIDEBAR_WIDTH.key,
-						WorkbenchLayoutStorageKeys.SIDEBAR_WIDTH.scope,
-					),
-					defaults.sidebar.width,
-				),
-				visible: this.storedVisibility(
-					storage,
-					WorkbenchLayoutStorageKeys.SIDEBAR_VISIBLE.key,
-					WorkbenchLayoutStorageKeys.SIDEBAR_VISIBLE.scope,
-					defaults.sidebar.visible,
-					'sidebar',
-				),
+				width: storedDimension(storage.getNumber(WorkbenchLayoutStorageKeys.SIDEBAR_WIDTH.key, WorkbenchLayoutStorageKeys.SIDEBAR_WIDTH.scope), defaults.sidebar.width),
+				visible: this.storedVisibility(storage, WorkbenchLayoutStorageKeys.SIDEBAR_VISIBLE.key, WorkbenchLayoutStorageKeys.SIDEBAR_VISIBLE.scope, defaults.sidebar.visible, 'sidebar'),
 			},
 			auxiliarybar: {
-				width: storedDimension(
-					storage.getNumber(
-						WorkbenchLayoutStorageKeys.AUXILIARYBAR_WIDTH.key,
-						WorkbenchLayoutStorageKeys.AUXILIARYBAR_WIDTH.scope,
-					),
-					defaults.auxiliarybar.width,
-				),
+				width: storedDimension(storage.getNumber(WorkbenchLayoutStorageKeys.AUXILIARYBAR_WIDTH.key, WorkbenchLayoutStorageKeys.AUXILIARYBAR_WIDTH.scope), defaults.auxiliarybar.width),
 				visible: this.storedVisibility(
 					storage,
 					WorkbenchLayoutStorageKeys.AUXILIARYBAR_VISIBLE.key,
@@ -1141,13 +965,7 @@ class WorkbenchLayoutStateModel {
 				),
 			},
 			agentSidebar: {
-				width: storedDimension(
-					storage.getNumber(
-						WorkbenchLayoutStorageKeys.AGENT_SIDEBAR_WIDTH.key,
-						WorkbenchLayoutStorageKeys.AGENT_SIDEBAR_WIDTH.scope,
-					),
-					defaults.agentSidebar.width,
-				),
+				width: storedDimension(storage.getNumber(WorkbenchLayoutStorageKeys.AGENT_SIDEBAR_WIDTH.key, WorkbenchLayoutStorageKeys.AGENT_SIDEBAR_WIDTH.scope), defaults.agentSidebar.width),
 				visible: this.storedVisibility(
 					storage,
 					WorkbenchLayoutStorageKeys.AGENT_SIDEBAR_VISIBLE.key,
@@ -1157,52 +975,19 @@ class WorkbenchLayoutStateModel {
 				),
 			},
 			panel: {
-				position: readPanelPosition(
-					storage.getNumber(
-						WorkbenchLayoutStorageKeys.PANEL_POSITION.key,
-						WorkbenchLayoutStorageKeys.PANEL_POSITION.scope,
-					),
-					this.defaultPanelPosition,
-				),
-				width: storedDimension(
-					storage.getNumber(
-						WorkbenchLayoutStorageKeys.PANEL_WIDTH.key,
-						WorkbenchLayoutStorageKeys.PANEL_WIDTH.scope,
-					),
-					defaults.panel.width,
-				),
-				height: storedDimension(
-					storage.getNumber(
-						WorkbenchLayoutStorageKeys.PANEL_HEIGHT.key,
-						WorkbenchLayoutStorageKeys.PANEL_HEIGHT.scope,
-					),
-					defaults.panel.height,
-				),
-				visible: this.storedVisibility(
-					storage,
-					WorkbenchLayoutStorageKeys.PANEL_VISIBLE.key,
-					WorkbenchLayoutStorageKeys.PANEL_VISIBLE.scope,
-					defaults.panel.visible,
-					'panel',
-				),
+				position: readPanelPosition(storage.getNumber(WorkbenchLayoutStorageKeys.PANEL_POSITION.key, WorkbenchLayoutStorageKeys.PANEL_POSITION.scope), this.defaultPanelPosition),
+				width: storedDimension(storage.getNumber(WorkbenchLayoutStorageKeys.PANEL_WIDTH.key, WorkbenchLayoutStorageKeys.PANEL_WIDTH.scope), defaults.panel.width),
+				height: storedDimension(storage.getNumber(WorkbenchLayoutStorageKeys.PANEL_HEIGHT.key, WorkbenchLayoutStorageKeys.PANEL_HEIGHT.scope), defaults.panel.height),
+				visible: this.storedVisibility(storage, WorkbenchLayoutStorageKeys.PANEL_VISIBLE.key, WorkbenchLayoutStorageKeys.PANEL_VISIBLE.scope, defaults.panel.visible, 'panel'),
 			},
 		};
 	}
 
 	private shouldApplyDefaultLayout(storage: IStorageService): boolean {
-		return (
-			this.defaultLayout !== undefined &&
-			(this.defaultLayout.force === true || storage.isNew(StorageScope.WORKSPACE))
-		);
+		return this.defaultLayout !== undefined && (this.defaultLayout.force === true || storage.isNew(StorageScope.WORKSPACE));
 	}
 
-	private storedVisibility(
-		storage: IStorageService,
-		key: string,
-		scope: StorageScope,
-		fallback: boolean,
-		partId: keyof NonNullable<WorkbenchDefaultLayout['parts']>,
-	): boolean {
+	private storedVisibility(storage: IStorageService, key: string, scope: StorageScope, fallback: boolean, partId: keyof NonNullable<WorkbenchDefaultLayout['parts']>): boolean {
 		if (this.defaultLayout?.force === true) {
 			const forced = this.defaultLayout.parts?.[partId];
 			if (forced !== undefined) return forced;
@@ -1273,7 +1058,11 @@ const WorkbenchLayoutStorageKeys = {
 		target: StorageTarget.MACHINE,
 	},
 	PANEL_WIDTH: { key: 'workbench.layout.panel.width', scope: StorageScope.PROFILE, target: StorageTarget.MACHINE },
-	PANEL_HEIGHT: { key: 'workbench.layout.panel.height', scope: StorageScope.PROFILE, target: StorageTarget.MACHINE },
+	PANEL_HEIGHT: {
+		key: 'workbench.layout.panel.height',
+		scope: StorageScope.PROFILE,
+		target: StorageTarget.MACHINE,
+	},
 	PANEL_VISIBLE: {
 		key: 'workbench.layout.panel.visible',
 		scope: StorageScope.WORKSPACE,

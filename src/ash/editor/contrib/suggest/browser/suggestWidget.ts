@@ -4,14 +4,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { FileKind } from '../../../../platform/files/common/files.js';
 import type { ILanguageService } from '../../../common/languages/language.js';
 import { getIconClasses } from '../../../common/services/getIconClasses.js';
-import {
-	addDisposableListener,
-	fragment as createFragment,
-	h,
-	isElement,
-	reset,
-	stopEvent,
-} from '../../../../base/browser/dom.js';
+import { addDisposableListener, fragment as createFragment, h, isElement, reset, stopEvent } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { LanguageCompletionDetailsStatus, type LanguageCompletionSessionState, SuggestModel } from './suggestModel.js';
@@ -79,14 +72,7 @@ export class CompletionWidget extends Disposable {
 	}
 
 	private handleKeydown(event: KeyboardEvent): void {
-		if (
-			event.defaultPrevented ||
-			event.isComposing ||
-			!this.readState() ||
-			event.ctrlKey ||
-			event.altKey ||
-			event.metaKey
-		) {
+		if (event.defaultPrevented || event.isComposing || !this.readState() || event.ctrlKey || event.altKey || event.metaKey) {
 			return;
 		}
 		switch (event.key) {
@@ -161,15 +147,8 @@ export class CompletionWidget extends Disposable {
 				const detail = item.detail ? URI.parse(`fake:///${encodeURIComponent(item.detail)}`) : undefined;
 				const labelClasses = getIconClasses(undefined, this.languageService, resource, fileKind);
 				const detailClasses = detail ? getIconClasses(undefined, this.languageService, detail, fileKind) : [];
-				const iconClasses =
-					fileKind === FileKind.File && detailClasses.length > labelClasses.length
-						? detailClasses
-						: labelClasses;
-				kind.classList.add(
-					'ash-themed-file-icon',
-					...iconClasses,
-					...(fileKind === FileKind.Directory ? detailClasses : []),
-				);
+				const iconClasses = fileKind === FileKind.File && detailClasses.length > labelClasses.length ? detailClasses : labelClasses;
+				kind.classList.add('ash-themed-file-icon', ...iconClasses, ...(fileKind === FileKind.Directory ? detailClasses : []));
 			}
 			label.className = 'stanza-editor-completion-label';
 			appendHighlightedText(label, item.label, item.labelMatchIndices);

@@ -1,11 +1,7 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import {
-	IAgentExecutionSettingsService,
-	type ExecutionSettings,
-	type ExecutionSettingsSnapshot,
-} from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
+import { IAgentExecutionSettingsService, type ExecutionSettings, type ExecutionSettingsSnapshot } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 import type { SettingsSectionField, SettingsSectionModel } from './settingsTreeModels.js';
 
@@ -16,10 +12,7 @@ export class SandboxSettingsModel extends Disposable implements SettingsSectionM
 		return localize({ bundle: 'ash.settings', key: 'sandbox.title' }, 'Sandbox');
 	}
 	get description(): string {
-		return localize(
-			{ bundle: 'ash.settings', key: 'sandbox.description' },
-			'Set file and network access defaults for Agent commands on the connected host.',
-		);
+		return localize({ bundle: 'ash.settings', key: 'sandbox.description' }, 'Set file and network access defaults for Agent commands on the connected host.');
 	}
 	get help(): string {
 		return localize(
@@ -53,10 +46,7 @@ export class SandboxSettingsModel extends Disposable implements SettingsSectionM
 				}
 				if (this.dirty) {
 					this.stale = true;
-					this.message = localize(
-						{ bundle: 'ash.settings', key: 'sandbox.changed' },
-						'Backend settings changed. Refresh before saving; refresh discards your draft.',
-					);
+					this.message = localize({ bundle: 'ash.settings', key: 'sandbox.changed' }, 'Backend settings changed. Refresh before saving; refresh discards your draft.');
 					this.changed.fire();
 				} else {
 					void this.refresh();
@@ -89,16 +79,12 @@ export class SandboxSettingsModel extends Disposable implements SettingsSectionM
 					},
 					{
 						value: 'directoryWrite',
-						label: localize(
-							{ bundle: 'ash.settings', key: 'execution.directoryWrite' },
-							'Write in authorized directories',
-						),
+						label: localize({ bundle: 'ash.settings', key: 'execution.directoryWrite' }, 'Write in authorized directories'),
 					},
 				],
 				enabled: editable,
 				setValue: value => {
-					if (this.draft && (value === 'readOnly' || value === 'directoryWrite'))
-						this.edit({ ...this.draft, commandFileAccess: value });
+					if (this.draft && (value === 'readOnly' || value === 'directoryWrite')) this.edit({ ...this.draft, commandFileAccess: value });
 				},
 			},
 			{
@@ -118,8 +104,7 @@ export class SandboxSettingsModel extends Disposable implements SettingsSectionM
 				],
 				enabled: editable,
 				setValue: value => {
-					if (this.draft && (value === 'denied' || value === 'allowed'))
-						this.edit({ ...this.draft, commandNetworkAccess: value });
+					if (this.draft && (value === 'denied' || value === 'allowed')) this.edit({ ...this.draft, commandNetworkAccess: value });
 				},
 			},
 			{
@@ -187,11 +172,7 @@ export class SandboxSettingsModel extends Disposable implements SettingsSectionM
 		} catch (error) {
 			if (this.current(generation)) {
 				this.snapshot = undefined;
-				this.message = localize(
-					{ bundle: 'ash.settings', key: 'sandbox.readFailed' },
-					'Could not read sandbox defaults: {0}',
-					String(error),
-				);
+				this.message = localize({ bundle: 'ash.settings', key: 'sandbox.readFailed' }, 'Could not read sandbox defaults: {0}', String(error));
 			}
 		} finally {
 			if (this.current(generation)) {
@@ -213,11 +194,7 @@ export class SandboxSettingsModel extends Disposable implements SettingsSectionM
 		} catch (error) {
 			if (this.current(generation)) {
 				this.stale = true;
-				this.message = localize(
-					{ bundle: 'ash.settings', key: 'sandbox.saveFailed' },
-					'Could not save sandbox defaults. Refresh before trying again: {0}',
-					String(error),
-				);
+				this.message = localize({ bundle: 'ash.settings', key: 'sandbox.saveFailed' }, 'Could not save sandbox defaults. Refresh before trying again: {0}', String(error));
 			}
 		} finally {
 			if (this.current(generation)) {

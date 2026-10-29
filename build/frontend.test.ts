@@ -8,9 +8,7 @@ import { playwrightTargetForProject } from '../test/automation/testTarget.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
 const workflow = readFileSync(resolve(repositoryRoot, '.github/workflows/frontend.yml'), 'utf8');
-const scripts: Record<string, string> = JSON.parse(
-	readFileSync(resolve(repositoryRoot, 'package.json'), 'utf8'),
-).scripts;
+const scripts: Record<string, string> = JSON.parse(readFileSync(resolve(repositoryRoot, 'package.json'), 'utf8')).scripts;
 const execute = promisify(execFile);
 const projects = [...workflow.matchAll(/pnpm run (test:smoke:[\w:-]+no-compile)\b/g)].map(match => {
 	const project = scripts[match[1]]?.match(/^node test\/smoke\/run\.ts ([\w-]+)$/)?.[1];
@@ -36,11 +34,7 @@ test('Frontend acceptance waits for shared contracts and unit tests', () => {
 	assert.match(contracts, /pnpm --dir build run test:prepared/u);
 	assert.doesNotMatch(contracts, /node build\/protocol\/generate.ts|pnpm test:build\b/u);
 	const buildScripts = JSON.parse(readFileSync(resolve(repositoryRoot, 'build/package.json'), 'utf8')).scripts;
-	assert.equal(
-		buildScripts['test:prepared'],
-		buildScripts.test,
-		'Prepared build tests must run the full standalone test suite',
-	);
+	assert.equal(buildScripts['test:prepared'], buildScripts.test, 'Prepared build tests must run the full standalone test suite');
 	assert.equal(buildScripts['pretest:prepared'], undefined, 'Prepared build tests must reuse generated inputs');
 	assert.match(contracts, /pnpm run test:unit:prepared/u);
 	assert.match(contracts, /pnpm run test:unit:runner/u);
@@ -49,102 +43,67 @@ test('Frontend acceptance waits for shared contracts and unit tests', () => {
 test('Frontend CI collects GPU regressions and schedules Windows process ownership', { timeout: 15_000 }, async () => {
 	assert.match(workflow, /playwright install --with-deps chromium chrome/u);
 	assert.match(workflow, /test:browser:integration:prepared --project=chromium --project=chrome-gpu/u);
-	assert.match(
-		workflow,
-		/name: Test Windows process ownership\n\s+if: runner.os == 'Windows'\n\s+run: pnpm exec node --test build\/processes.test.ts/u,
-	);
-	const { stdout } = await execute(
-		process.execPath,
-		['test/integration/browser/run.ts', '--project=chrome-gpu', '--list'],
-		{ cwd: repositoryRoot, timeout: 10_000 },
-	);
+	assert.match(workflow, /name: Test Windows process ownership\n\s+if: runner.os == 'Windows'\n\s+run: pnpm exec node --test build\/processes.test.ts/u);
+	const { stdout } = await execute(process.execPath, ['test/integration/browser/run.ts', '--project=chrome-gpu', '--list'], { cwd: repositoryRoot, timeout: 10_000 });
 	assert.match(stdout, /GPU device loss restores DOM text/u);
 	assert.match(stdout, /GPU initialization falls back to editable DOM text/u);
 	assert.match(stdout, /Total: [1-9]\d* tests in 1 file/u);
 });
 
-test(
-	'Frontend CI smoke commands collect applicable tests from configured Playwright projects',
-	{ timeout: 30_000 },
-	async () => {
-		assert.ok(projects.length > 0, 'Frontend CI must retain explicit smoke project selections');
-		for (const project of projects) {
-			assert.doesNotThrow(() => playwrightTargetForProject(project));
-			const { stdout } = await execute(
-				process.execPath,
-				['test/smoke/run.ts', project, 'test/smoke/areas/windows/home.spec.ts', '--list'],
-				{ cwd: repositoryRoot, timeout: 10_000 },
-			);
-			assert.match(stdout, /Total: [1-9]\d* tests? in [1-9]\d* files?/);
-		}
-	},
-);
+test('Frontend CI smoke commands collect applicable tests from configured Playwright projects', { timeout: 30_000 }, async () => {
+	assert.ok(projects.length > 0, 'Frontend CI must retain explicit smoke project selections');
+	for (const project of projects) {
+		assert.doesNotThrow(() => playwrightTargetForProject(project));
+		const { stdout } = await execute(process.execPath, ['test/smoke/run.ts', project, 'test/smoke/areas/windows/home.spec.ts', '--list'], { cwd: repositoryRoot, timeout: 10_000 });
+		assert.match(stdout, /Total: [1-9]\d* tests? in [1-9]\d* files?/);
+	}
+});
 
-test(
-	'Frontend CI retains disconnected Academy source and connected editor coverage in applicable projects',
-	{ timeout: 15_000 },
-	async () => {
-		assert.ok(projects.includes('electron-ui'));
-		assert.deepEqual(playwrightTargetForProject('electron-ui'), { kind: 'electron', appServerMode: 'disabled' });
-		assert.ok(projects.includes('electron-app-server'));
-		assert.deepEqual(playwrightTargetForProject('electron-app-server'), {
-			kind: 'electron',
-			appServerMode: 'required',
-		});
-		for (const [project, file] of [
-			['browser-ui', 'academy/academy-workbench.spec.ts'],
-			['electron-app-server', 'editor/academy-open.spec.ts'],
-			['browser-app-server', 'editor/academy-open.spec.ts'],
-		]) {
-			const { stdout } = await execute(
-				process.execPath,
-				['test/smoke/run.ts', project, `test/smoke/areas/${file}`, '--list'],
-				{ cwd: repositoryRoot, timeout: 10_000 },
-			);
-			assert.match(stdout, /Total: [1-9]\d* tests? in 1 file/);
-		}
-	},
-);
+test('Frontend CI retains disconnected Academy source and connected editor coverage in applicable projects', { timeout: 15_000 }, async () => {
+	assert.ok(projects.includes('electron-ui'));
+	assert.deepEqual(playwrightTargetForProject('electron-ui'), { kind: 'electron', appServerMode: 'disabled' });
+	assert.ok(projects.includes('electron-app-server'));
+	assert.deepEqual(playwrightTargetForProject('electron-app-server'), {
+		kind: 'electron',
+		appServerMode: 'required',
+	});
+	for (const [project, file] of [
+		['browser-ui', 'academy/academy-workbench.spec.ts'],
+		['electron-app-server', 'editor/academy-open.spec.ts'],
+		['browser-app-server', 'editor/academy-open.spec.ts'],
+	]) {
+		const { stdout } = await execute(process.execPath, ['test/smoke/run.ts', project, `test/smoke/areas/${file}`, '--list'], { cwd: repositoryRoot, timeout: 10_000 });
+		assert.match(stdout, /Total: [1-9]\d* tests? in 1 file/);
+	}
+});
 
-test(
-	'Frontend CI collects lifecycle, dependency, readiness, output and reuse cases for both Task kinds',
-	{ timeout: 15_000 },
-	async () => {
-		assert.match(
-			workflow,
-			/name: Test mock Agent process and shell Task execution\n\s+if: matrix.surface == 'electron'[\s\S]*?run: pnpm run test:smoke:desktop:no-compile test\/smoke\/areas\/tasks\/task-agent.spec.ts/u,
-		);
-		const { stdout } = await execute(
-			process.execPath,
-			['test/smoke/run.ts', 'electron-app-server', 'test/smoke/areas/tasks/task-agent.spec.ts', '--list'],
-			{ cwd: repositoryRoot, timeout: 10_000 },
-		);
-		assert.match(stdout, /process › Mock Agent Task loop/u);
-		assert.match(stdout, /shell › Mock Agent Task loop/u);
-		for (const title of [
-			'keeps the root unstarted',
-			'cancels nested dependencies',
-			'keeps a background Task unready',
-			'recovers a stale cursor',
-			'waits for dependency completion',
-			'observes background readiness',
-			'pages Unicode output',
-			'isolates retained output',
-			'refuses a declined approval',
-			'retains the failed Run ID',
-			'rechecks revoked command permission',
-			'releases the running process',
-			'closes its process with the owning window',
-			'discovers, runs, reads and cancels',
-		]) {
-			for (const kind of ['process', 'shell']) {
-				assert.equal(
-					stdout.split('\n').filter(line => line.includes(kind + ' ›') && line.includes(title)).length,
-					1,
-					kind + ': ' + title,
-				);
-			}
+test('Frontend CI collects lifecycle, dependency, readiness, output and reuse cases for both Task kinds', { timeout: 15_000 }, async () => {
+	assert.match(
+		workflow,
+		/name: Test mock Agent process and shell Task execution\n\s+if: matrix.surface == 'electron'[\s\S]*?run: pnpm run test:smoke:desktop:no-compile test\/smoke\/areas\/tasks\/task-agent.spec.ts/u,
+	);
+	const { stdout } = await execute(process.execPath, ['test/smoke/run.ts', 'electron-app-server', 'test/smoke/areas/tasks/task-agent.spec.ts', '--list'], { cwd: repositoryRoot, timeout: 10_000 });
+	assert.match(stdout, /process › Mock Agent Task loop/u);
+	assert.match(stdout, /shell › Mock Agent Task loop/u);
+	for (const title of [
+		'keeps the root unstarted',
+		'cancels nested dependencies',
+		'keeps a background Task unready',
+		'recovers a stale cursor',
+		'waits for dependency completion',
+		'observes background readiness',
+		'pages Unicode output',
+		'isolates retained output',
+		'refuses a declined approval',
+		'retains the failed Run ID',
+		'rechecks revoked command permission',
+		'releases the running process',
+		'closes its process with the owning window',
+		'discovers, runs, reads and cancels',
+	]) {
+		for (const kind of ['process', 'shell']) {
+			assert.equal(stdout.split('\n').filter(line => line.includes(kind + ' ›') && line.includes(title)).length, 1, kind + ': ' + title);
 		}
-		assert.match(stdout, /Total: 28 tests in 1 file/u);
-	},
-);
+	}
+	assert.match(stdout, /Total: 28 tests in 1 file/u);
+});

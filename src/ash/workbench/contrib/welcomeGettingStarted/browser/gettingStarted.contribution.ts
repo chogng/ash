@@ -1,22 +1,11 @@
 import { localize, localize2 } from '../../../../nls.js';
 import { getActiveElement, isHTMLElement } from '../../../../base/browser/dom.js';
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import {
-	IInstantiationService,
-	type ServicesAccessor,
-} from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { registerEditorPane } from '../../../browser/editor.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
@@ -38,10 +27,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 			return localize('workbench.startupEditor.title', 'Startup editor');
 		},
 		get description() {
-			return localize(
-				'workbench.startupEditor.description',
-				'Choose the editor to show when no editor is restored.',
-			);
+			return localize('workbench.startupEditor.description', 'Choose the editor to show when no editor is restored.');
 		},
 		get options() {
 			return [
@@ -49,10 +35,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 				{ value: 'welcomePage', label: localize('workbench.startupEditor.welcomePage', 'Welcome') },
 				{
 					value: 'welcomePageInEmptyWorkbench',
-					label: localize(
-						'workbench.startupEditor.welcomePageInEmptyWorkbench',
-						'Welcome in empty workbench',
-					),
+					label: localize('workbench.startupEditor.welcomePageInEmptyWorkbench', 'Welcome in empty workbench'),
 				},
 			] as const;
 		},
@@ -69,9 +52,7 @@ registerEditorPane({
 	},
 });
 
-registerWorkbenchContribution('workbench.contrib.startupPageRunner', WorkbenchPhase.AfterRestored, accessor =>
-	accessor.get(IInstantiationService).createInstance(StartupPageRunnerContribution),
-);
+registerWorkbenchContribution('workbench.contrib.startupPageRunner', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(StartupPageRunnerContribution));
 
 registerAction2(
 	class OpenWelcomeAction extends Action2 {

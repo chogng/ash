@@ -16,11 +16,7 @@ export interface DocumentFindMatch {
 }
 
 /** Search contiguous text across marks, but never through an image, citation or block boundary. */
-export function findDocumentText(
-	document: DocumentNode,
-	query: string,
-	options: DocumentFindOptions,
-): readonly DocumentFindMatch[] {
+export function findDocumentText(document: DocumentNode, query: string, options: DocumentFindOptions): readonly DocumentFindMatch[] {
 	if (!query || query.length > 10_000) return [];
 	const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), options.matchCase ? 'gu' : 'giu');
 	const matches: DocumentFindMatch[] = [];
@@ -30,17 +26,12 @@ export function findDocumentText(
 		for (const match of text.matchAll(pattern)) {
 			const start = match.index;
 			const end = start + match[0].length;
-			if (
-				options.wholeWord &&
-				(/[\p{L}\p{N}\p{M}_]$/u.test(text.slice(0, start)) || /^[\p{L}\p{N}\p{M}_]/u.test(text.slice(end)))
-			)
-				continue;
+			if (options.wholeWord && (/[\p{L}\p{N}\p{M}_]$/u.test(text.slice(0, start)) || /^[\p{L}\p{N}\p{M}_]/u.test(text.slice(end)))) continue;
 			const point = (offset: number, endBoundary: boolean) => {
 				let consumed = 0;
 				for (const run of runs) {
 					const length = run.text!.length;
-					if (offset < consumed + length || (endBoundary && offset === consumed + length))
-						return { nodeId: run.id, offset: offset - consumed };
+					if (offset < consumed + length || (endBoundary && offset === consumed + length)) return { nodeId: run.id, offset: offset - consumed };
 					consumed += length;
 				}
 				return { nodeId: runs[runs.length - 1]!.id, offset: runs[runs.length - 1]!.text!.length };
@@ -67,13 +58,7 @@ export function findDocumentText(
 }
 
 /** Navigation uses semantic text identities, independent of the current DOM surface or marks. */
-export function getDocumentFindMatchIndex(
-	document: DocumentNode,
-	matches: readonly DocumentFindMatch[],
-	selection: DocumentSelection | undefined,
-	direction: 1 | -1,
-	includeCurrent = false,
-): number {
+export function getDocumentFindMatchIndex(document: DocumentNode, matches: readonly DocumentFindMatch[], selection: DocumentSelection | undefined, direction: 1 | -1, includeCurrent = false): number {
 	if (!matches.length) return -1;
 	const exact = matches.findIndex(match => selectionsEqual(match.selection, selection));
 	if (exact >= 0) return includeCurrent ? exact : (exact + direction + matches.length) % matches.length;
@@ -84,13 +69,9 @@ export function getDocumentFindMatchIndex(
 			for (const child of node.content) visit(child);
 		};
 		visit(document);
-		const compare = (left: DocumentPoint, right: DocumentPoint): number =>
-			left.nodeId === right.nodeId
-				? left.offset - right.offset
-				: order.get(left.nodeId)! - order.get(right.nodeId)!;
+		const compare = (left: DocumentPoint, right: DocumentPoint): number => (left.nodeId === right.nodeId ? left.offset - right.offset : order.get(left.nodeId)! - order.get(right.nodeId)!);
 		const forward = compare(selection.anchor, selection.head) <= 0;
-		const boundary =
-			direction > 0 ? (forward ? selection.head : selection.anchor) : forward ? selection.anchor : selection.head;
+		const boundary = direction > 0 ? (forward ? selection.head : selection.anchor) : forward ? selection.anchor : selection.head;
 		if (direction > 0) {
 			const next = matches.findIndex(match => compare(match.selection.anchor, boundary) >= 0);
 			if (next >= 0) return next;
@@ -104,12 +85,7 @@ export function getDocumentFindMatchIndex(
 }
 
 /** Reverse document order keeps earlier identities/offsets valid; the model commits one history entry. */
-export function createReplaceDocumentMatchesCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	matches: readonly DocumentFindMatch[],
-	replacement: string,
-): DocumentCommand | undefined {
+export function createReplaceDocumentMatchesCommand(schema: DocumentSchema, document: DocumentNode, matches: readonly DocumentFindMatch[], replacement: string): DocumentCommand | undefined {
 	const text = replacement.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
 	let current = document;
 	let transaction = new DocumentTransaction();
@@ -118,16 +94,11 @@ export function createReplaceDocumentMatchesCommand(
 	for (const match of [...matches].reverse()) {
 		const { anchor, head } = match.selection;
 		const point = { nodeId: anchor.nodeId, offset: anchor.offset + text.length };
-		const remaining =
-			(findDocumentNode(current, anchor.nodeId)?.node.text?.length ?? 0) -
-			(head.offset - anchor.offset) +
-			text.length;
+		const remaining = (findDocumentNode(current, anchor.nodeId)?.node.text?.length ?? 0) - (head.offset - anchor.offset) + text.length;
 		const command =
 			anchor.nodeId === head.nodeId
 				? {
-						transaction: new DocumentTransaction()
-							.replaceText(anchor.nodeId, anchor.offset, head.offset, text)
-							.withSelection(remaining ? textSelection(point) : undefined),
+						transaction: new DocumentTransaction().replaceText(anchor.nodeId, anchor.offset, head.offset, text).withSelection(remaining ? textSelection(point) : undefined),
 						focus: { blockId: match.blockId, ...(remaining ? { point } : {}) },
 					}
 				: createReplaceTextCommand(schema, current, match.blockId, match.selection, text);

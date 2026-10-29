@@ -27,7 +27,5 @@ export async function acceptWorkspaceSymbol(
 		}
 	}
 	quickPick.hide();
-	await editor
-		.openEditor({ resource: symbol.resource }, { selection: symbol.range })
-		.catch(error => console.error('Could not open workspace symbol', error));
+	await editor.openEditor({ resource: symbol.resource }, { selection: symbol.range }).catch(error => console.error('Could not open workspace symbol', error));
 }

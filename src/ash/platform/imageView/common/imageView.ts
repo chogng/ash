@@ -37,13 +37,10 @@ export function validateImageViewPermissionAction(value: unknown): ImageViewPerm
 }
 
 export type ImageViewCompletion =
-	| { readonly kind: 'cancel' | 'retake' }
-	| { readonly kind: 'error'; readonly message: string }
-	| { readonly kind: 'attach' | 'copy' | 'save'; readonly image: Uint8Array };
+	{ readonly kind: 'cancel' | 'retake' } | { readonly kind: 'error'; readonly message: string } | { readonly kind: 'attach' | 'copy' | 'save'; readonly image: Uint8Array };
 
 export function validateImageViewId(value: unknown): string {
-	if (typeof value !== 'string' || !/^[0-9a-f-]{36}$/u.test(value))
-		throw new TypeError('Invalid image view request ID');
+	if (typeof value !== 'string' || !/^[0-9a-f-]{36}$/u.test(value)) throw new TypeError('Invalid image view request ID');
 	return value;
 }
 
@@ -85,39 +82,22 @@ export function validateImageViewImage(value: unknown): Uint8Array {
 	const view = new DataView(value.buffer, value.byteOffset, value.byteLength);
 	const width = view.getUint32(16);
 	const height = view.getUint32(20);
-	if (!width || !height || width * height > SCREENSHOT_MAX_PIXELS)
-		throw new RangeError('ImageView image is too large');
+	if (!width || !height || width * height > SCREENSHOT_MAX_PIXELS) throw new RangeError('ImageView image is too large');
 	return value;
 }
 
 export function validateImageViewCompletion(value: unknown): ImageViewCompletion {
 	if (!isRecord(value)) throw new TypeError('Invalid image view completion');
-	if (
-		value.kind === 'error' &&
-		Object.keys(value).sort().join(',') === 'kind,message' &&
-		typeof value.message === 'string' &&
-		value.message.length > 0 &&
-		value.message.length <= 4096
-	)
+	if (value.kind === 'error' && Object.keys(value).sort().join(',') === 'kind,message' && typeof value.message === 'string' && value.message.length > 0 && value.message.length <= 4096)
 		return value as unknown as ImageViewCompletion;
-	if ((value.kind === 'cancel' || value.kind === 'retake') && Object.keys(value).length === 1)
-		return value as ImageViewCompletion;
-	if (
-		!['attach', 'copy', 'save'].includes(value.kind as string) ||
-		Object.keys(value).sort().join(',') !== 'image,kind'
-	)
-		throw new TypeError('Invalid image view completion');
+	if ((value.kind === 'cancel' || value.kind === 'retake') && Object.keys(value).length === 1) return value as ImageViewCompletion;
+	if (!['attach', 'copy', 'save'].includes(value.kind as string) || Object.keys(value).sort().join(',') !== 'image,kind') throw new TypeError('Invalid image view completion');
 	validateImageViewImage(value.image);
 	return value as unknown as ImageViewCompletion;
 }
 
 export function validateImageViewInitialization(value: unknown): ImageViewInitialization {
-	if (
-		!isRecord(value) ||
-		!['bundles,image,locale,presentation', 'bundles,image,locale,permission,presentation'].includes(
-			Object.keys(value).sort().join(','),
-		)
-	) {
+	if (!isRecord(value) || !['bundles,image,locale,presentation', 'bundles,image,locale,permission,presentation'].includes(Object.keys(value).sort().join(','))) {
 		throw new TypeError('Invalid image view initialization');
 	}
 	const presentation = validateImageViewRequest(value.presentation);
@@ -135,8 +115,7 @@ export function validateImageViewInitialization(value: unknown): ImageViewInitia
 			throw new TypeError('Invalid screen permission initialization');
 		validateImageViewImage(value.permission.icon);
 	} else if (presentation.source === 'screen') validateImageViewImage(value.image);
-	else if (!(value.image instanceof Uint8Array) || value.image.length !== 0)
-		throw new TypeError('Content views cannot include screen pixels');
+	else if (!(value.image instanceof Uint8Array) || value.image.length !== 0) throw new TypeError('Content views cannot include screen pixels');
 	validateLocalization(value);
 	return value as unknown as ImageViewInitialization;
 }
@@ -146,10 +125,6 @@ function validateLocalization(value: Record<string, unknown>): void {
 		throw new TypeError('Invalid image view localization');
 	}
 	for (const bundle of Object.values(value.bundles)) {
-		if (
-			!isRecord(bundle) ||
-			Object.values(bundle).some(message => typeof message !== 'string' || message.length > 100_000)
-		)
-			throw new TypeError('Invalid image view localization');
+		if (!isRecord(bundle) || Object.values(bundle).some(message => typeof message !== 'string' || message.length > 100_000)) throw new TypeError('Invalid image view localization');
 	}
 }

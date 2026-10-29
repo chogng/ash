@@ -13,14 +13,7 @@ import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { ScrollableElement } from '../../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-	type IDisposable,
-} from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../../base/common/uri.js';
 import type { ChatTurnErrorAction, IChatListItem } from './chatListItems.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -34,12 +27,7 @@ import { DomWidget } from '../../../../../platform/domWidget/browser/domWidget.j
 import { ChatToolInvocationPart } from './chatContentParts/toolInvocationParts/chatToolInvocationPart.js';
 import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { localize } from '../../../../../nls.js';
 import { ChatHookContentPart } from './chatContentParts/chatHookContentPart.js';
@@ -55,8 +43,7 @@ interface ChatListWidgetOptions {
 }
 
 const textInputSelector = 'textarea, [role="textbox"], [contenteditable="true"]';
-const focusableSelector =
-	'button, a, summary, textarea, audio, [role="textbox"], [tabindex="0"], [contenteditable="true"]';
+const focusableSelector = 'button, a, summary, textarea, audio, [role="textbox"], [tabindex="0"], [contenteditable="true"]';
 const speechContextKeys = new Set([HasSpeechProvider.key, TextToSpeechInProgress.key]);
 const viewportMargin = 600;
 
@@ -66,14 +53,8 @@ class RenderedItem extends Disposable {
 	public editButton: Button | undefined;
 	public copyButton: Button | undefined;
 	public updateReadAloud: (() => void) | undefined;
-	public readonly reading = this._register(
-		new MutableDisposable<
-			IDisposable & { readonly source: CancellationTokenSource; readonly item: IChatListItem }
-		>(),
-	);
-	readonly memoryReferences = this._register(
-		new DisposableMap<string, IDisposable & { readonly element: HTMLButtonElement }>(),
-	);
+	public readonly reading = this._register(new MutableDisposable<IDisposable & { readonly source: CancellationTokenSource; readonly item: IChatListItem }>());
+	readonly memoryReferences = this._register(new DisposableMap<string, IDisposable & { readonly element: HTMLButtonElement }>());
 	readonly media = this._register(new MutableDisposable<ChatAttachmentsContentPart>());
 	readonly mediaChanges = this._register(new MutableDisposable());
 	readonly resources = this._register(new MutableDisposable<ChatResourceGroupWidget>());
@@ -163,7 +144,11 @@ export class ChatListWidget extends DomWidget {
 		this.mcpAppDelegate = options.mcpAppDelegate;
 		this.classPrefix = options.classPrefix ?? 'ash-chat';
 		this.scrollable = this._register(
-			new ScrollableElement(container, { direction: 'vertical', vertical: 'auto', tabIndex: -1 }),
+			new ScrollableElement(container, {
+				direction: 'vertical',
+				vertical: 'auto',
+				tabIndex: -1,
+			}),
 		);
 		this._register(
 			this.scrollable.onDidScroll(event => {
@@ -198,11 +183,7 @@ export class ChatListWidget extends DomWidget {
 			this._register(toDisposable(() => this.viewportObserver?.disconnect()));
 			this._register(addDisposableListener(this.transcript, 'focusin', () => this.refreshRowViewports()));
 			this._register(addDisposableListener(this.transcript, 'focusout', () => this.refreshViewport.schedule()));
-			this._register(
-				addDisposableListener(this.element.ownerDocument, 'selectionchange', () =>
-					this.refreshViewport.schedule(),
-				),
-			);
+			this._register(addDisposableListener(this.element.ownerDocument, 'selectionchange', () => this.refreshViewport.schedule()));
 		}
 		const accessibilityId = createUuid();
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
@@ -252,14 +233,7 @@ export class ChatListWidget extends DomWidget {
 													.map(child => child.textContent)
 													.filter(Boolean)
 													.join('\n\n')
-											: [
-													itemLabel(row.item),
-													row.item.text,
-													row.item.contextText,
-													row.item.detail,
-												]
-													.filter(Boolean)
-													.join('\n\n'),
+											: [itemLabel(row.item), row.item.text, row.item.contextText, row.item.detail].filter(Boolean).join('\n\n'),
 									)
 									.join('\n\n');
 							},
@@ -282,12 +256,7 @@ export class ChatListWidget extends DomWidget {
 		this.updateCodeBlockOptions();
 		this._register(
 			this.configurationService.onDidChangeConfiguration(event => {
-				const keys = [
-					...Object.values(ChatEditorConfiguration),
-					CodeEditorConfiguration.fontFamily,
-					CodeEditorConfiguration.fontSize,
-					CodeEditorConfiguration.lineHeight,
-				];
+				const keys = [...Object.values(ChatEditorConfiguration), CodeEditorConfiguration.fontFamily, CodeEditorConfiguration.fontSize, CodeEditorConfiguration.lineHeight];
 				if (!keys.some(key => event.affectsConfiguration(key))) return;
 				if (this.visible) this.captureFollowState();
 				const anchor = this.visible && !this.shouldFollow ? this.readingPosition : undefined;
@@ -302,21 +271,14 @@ export class ChatListWidget extends DomWidget {
 			this.configurationService.getValue<string>(ChatEditorConfiguration.fontFamily) ||
 			this.configurationService.getValue<string>(CodeEditorConfiguration.fontFamily) ||
 			EDITOR_FONT_DEFAULTS.fontFamily;
-		const size =
-			this.configurationService.getValue<number>(ChatEditorConfiguration.fontSize) ||
-			this.configurationService.getValue<number>(CodeEditorConfiguration.fontSize);
-		const height =
-			this.configurationService.getValue<number>(ChatEditorConfiguration.lineHeight) ||
-			this.configurationService.getValue<number>(CodeEditorConfiguration.lineHeight);
+		const size = this.configurationService.getValue<number>(ChatEditorConfiguration.fontSize) || this.configurationService.getValue<number>(CodeEditorConfiguration.fontSize);
+		const height = this.configurationService.getValue<number>(ChatEditorConfiguration.lineHeight) || this.configurationService.getValue<number>(CodeEditorConfiguration.lineHeight);
 		const font = BareFontInfo._create(family, 'normal', size, 'normal', 'normal', height, 0, 1, true);
 		// Inherited CSS values update existing Markdown nodes without replacing selections or link handlers.
 		this.transcript.style.setProperty('--ash-chat-code-font-family', font.getMassagedFontFamily());
 		this.transcript.style.setProperty('--ash-chat-code-font-size', `${font.fontSize}px`);
 		this.transcript.style.setProperty('--ash-chat-code-line-height', `${font.lineHeight}px`);
-		this.element.classList.toggle(
-			'code-word-wrap',
-			this.configurationService.getValue<string>(ChatEditorConfiguration.wordWrap) === 'on',
-		);
+		this.element.classList.toggle('code-word-wrap', this.configurationService.getValue<string>(ChatEditorConfiguration.wordWrap) === 'on');
 	}
 
 	render(items: readonly IChatListItem[]): void {
@@ -345,12 +307,7 @@ export class ChatListWidget extends DomWidget {
 		let next: ChildNode | null = this.transcript.firstChild;
 		for (const item of items) {
 			let row = this.renderedItems.get(item.id);
-			if (
-				row &&
-				sameItem(row.item, item) &&
-				row.item.content === item.content &&
-				sameToolInvocation(row.item.toolInvocation, item.toolInvocation)
-			) {
+			if (row && sameItem(row.item, item) && row.item.content === item.content && sameToolInvocation(row.item.toolInvocation, item.toolInvocation)) {
 				row.item = item;
 				if (row.element !== next) {
 					this.transcript.insertBefore(row.element, next);
@@ -371,11 +328,7 @@ export class ChatListWidget extends DomWidget {
 				row.element.classList.toggle('error', item.isError === true);
 				if (item.transient) row.element.dataset.transient = 'true';
 				else delete row.element.dataset.transient;
-			} else if (
-				row?.toolPart &&
-				item.toolInvocation &&
-				row.toolPart.toolCallId === item.toolInvocation.call.toolCallId
-			) {
+			} else if (row?.toolPart && item.toolInvocation && row.toolPart.toolCallId === item.toolInvocation.call.toolCallId) {
 				row.toolPart.render(item.toolInvocation, item.attachmentSource);
 				row.item = item;
 				row.element.classList.toggle('error', item.isError === true);
@@ -389,10 +342,7 @@ export class ChatListWidget extends DomWidget {
 				row.item.detail === item.detail &&
 				sameAction(row.item.action, item.action) &&
 				((row.item.text === item.text && row.item.transient === item.transient) ||
-					row.markdownPart.tryIncrementalUpdate(
-						{ value: item.text, supportThemeIcons: true, supportAlertSyntax: true },
-						item.transient,
-					))
+					row.markdownPart.tryIncrementalUpdate({ value: item.text, supportThemeIcons: true, supportAlertSyntax: true }, item.transient))
 			) {
 				row.item = item;
 				row.element.classList.toggle('error', item.isError === true);
@@ -476,16 +426,11 @@ export class ChatListWidget extends DomWidget {
 
 	private refreshRowViewports(): void {
 		if (!this.visible) return;
-		const viewport = this.pendingViewportMeasurements.size
-			? this.scrollable.scrollableElement.getBoundingClientRect()
-			: undefined;
+		const viewport = this.pendingViewportMeasurements.size ? this.scrollable.scrollableElement.getBoundingClientRect() : undefined;
 		for (const [id, row] of this.renderedItems) {
 			if (viewport && this.pendingViewportMeasurements.delete(id)) {
 				const bounds = row.element.getBoundingClientRect();
-				row.inViewport =
-					viewport.height > 0 &&
-					bounds.bottom > viewport.top - viewportMargin &&
-					bounds.top < viewport.bottom + viewportMargin;
+				row.inViewport = viewport.height > 0 && bounds.bottom > viewport.top - viewportMargin && bounds.top < viewport.bottom + viewportMargin;
 			}
 			this.updateRowViewport(row);
 		}
@@ -499,11 +444,7 @@ export class ChatListWidget extends DomWidget {
 		// scrolls it out of view; scrolling must not interrupt editing or copying.
 		const pinned =
 			row.element.contains(document.activeElement) ||
-			(!!selection &&
-				!selection.isCollapsed &&
-				Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index)).some(range =>
-					range.intersectsNode(row.element),
-				));
+			(!!selection && !selection.isCollapsed && Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index)).some(range => range.intersectsNode(row.element)));
 		row.markdownPart.setViewportVisible(row.inViewport || pinned);
 	}
 
@@ -516,9 +457,7 @@ export class ChatListWidget extends DomWidget {
 			// Editor scrollbars appear after measurement; their controls must not shift the
 			// remembered input ordinal while a replacement editor is still being laid out.
 			const textInput = active?.matches(textInputSelector) === true;
-			const index = [...row.element.querySelectorAll(textInput ? textInputSelector : focusableSelector)].indexOf(
-				active!,
-			);
+			const index = [...row.element.querySelectorAll(textInput ? textInputSelector : focusableSelector)].indexOf(active!);
 			if (index >= 0) {
 				focus = { itemId, index, ...(textInput ? { textInput: true } : {}) };
 				break;
@@ -528,23 +467,10 @@ export class ChatListWidget extends DomWidget {
 			visible: this.visible,
 			shouldFollow: this.shouldFollow,
 			top: this.pendingReadingPosition?.top ?? this.scrollable.state.top,
-			anchor:
-				this.pendingReadingPosition?.anchor ??
-				(this.visible && !this.shouldFollow ? this.readingPosition : undefined),
+			anchor: this.pendingReadingPosition?.anchor ?? (this.visible && !this.shouldFollow ? this.readingPosition : undefined),
 			advisorExpansion: [...this.advisorExpansion],
-			contextExpansion: [...this.renderedItems]
-				.filter(([, row]) => row.context)
-				.map(([id, row]) => [id, row.context!.disclosure.open]),
-			toolExpansion: [...this.renderedItems].flatMap(([id, row]) =>
-				row.toolPart
-					? [
-							[id, row.toolPart.domNode.querySelector<HTMLDetailsElement>('details')!.open] as [
-								string,
-								boolean,
-							],
-						]
-					: [],
-			),
+			contextExpansion: [...this.renderedItems].filter(([, row]) => row.context).map(([id, row]) => [id, row.context!.disclosure.open]),
+			toolExpansion: [...this.renderedItems].flatMap(([id, row]) => (row.toolPart ? [[id, row.toolPart.domNode.querySelector<HTMLDetailsElement>('details')!.open] as [string, boolean]] : [])),
 			focus,
 		};
 	}
@@ -604,8 +530,7 @@ export class ChatListWidget extends DomWidget {
 			} else if (anchor) {
 				const row = this.renderedItems.get(anchor.id);
 				if (row) {
-					const contentTop =
-						row.element.getBoundingClientRect().top - this.transcript.getBoundingClientRect().top;
+					const contentTop = row.element.getBoundingClientRect().top - this.transcript.getBoundingClientRect().top;
 					this.scrollable.scrollTo(0, contentTop - anchor.viewportTop);
 				}
 			}
@@ -662,23 +587,12 @@ export class ChatListWidget extends DomWidget {
 		}
 		if (content.some(part => part.type === 'artifact')) {
 			if (!row.resources.value) {
-				const resources = this.instantiationService.createInstance(
-					ChatResourceGroupWidget,
-					row.element.ownerDocument,
-				);
+				const resources = this.instantiationService.createInstance(ChatResourceGroupWidget, row.element.ownerDocument);
 				row.resources.value = resources;
 				row.attachments.append(resources.domNode);
 				row.resourceChanges.value = resources.onDidChangeHeight(changed);
 			}
-			row.resources.value.render(
-				content,
-				JSON.stringify([
-					row.item.attachmentSource?.sessionId,
-					row.item.attachmentSource?.threadId,
-					row.item.id,
-				]),
-				row.item.attachmentSource,
-			);
+			row.resources.value.render(content, JSON.stringify([row.item.attachmentSource?.sessionId, row.item.attachmentSource?.threadId, row.item.id]), row.item.attachmentSource);
 		} else {
 			row.resourceChanges.clear();
 			row.resources.clear();
@@ -729,11 +643,7 @@ export class ChatListWidget extends DomWidget {
 						},
 						error => {
 							if (row.isDisposed || row.item !== item) return;
-							feedback.textContent = localize(
-								'chat.message.copyFailed',
-								'Could not copy message: {0}',
-								String(error),
-							);
+							feedback.textContent = localize('chat.message.copyFailed', 'Could not copy message: {0}', String(error));
 						},
 					)
 					.finally(() => {
@@ -828,12 +738,7 @@ export class ChatListWidget extends DomWidget {
 						});
 						if (!row.isDisposed) close();
 					} catch (error) {
-						if (!row.isDisposed)
-							feedback.textContent = localize(
-								'chat.edit.failed',
-								'Could not send the edited request: {0}',
-								String(error),
-							);
+						if (!row.isDisposed) feedback.textContent = localize('chat.edit.failed', 'Could not send the edited request: {0}', String(error));
 					} finally {
 						pending = false;
 						if (!row.isDisposed && row.edit.value === store) {
@@ -842,8 +747,7 @@ export class ChatListWidget extends DomWidget {
 							cancel.enabled = true;
 							editor.removeAttribute('aria-busy');
 							const active = editor.ownerDocument.activeElement;
-							if (this.visible && (editor.contains(active) || active === editor.ownerDocument.body))
-								input.focus();
+							if (this.visible && (editor.contains(active) || active === editor.ownerDocument.body)) input.focus();
 						}
 					}
 				};
@@ -890,16 +794,10 @@ export class ChatListWidget extends DomWidget {
 		const update = () => {
 			if (row.isDisposed) return;
 			const context = this.contextKeys.getContext();
-			button.domNode.hidden =
-				!CommandsRegistry.hasCommand('workbench.action.chat.readChatResponseAloud') ||
-				context.getValue(HasSpeechProvider.key) !== true;
+			button.domNode.hidden = !CommandsRegistry.hasCommand('workbench.action.chat.readChatResponseAloud') || context.getValue(HasSpeechProvider.key) !== true;
 			const reading = !!row.reading.value;
-			button.label = reading
-				? localize('chat.message.stopReadAloud', 'Stop reading aloud')
-				: localize('chat.message.readAloud', 'Read aloud');
-			button.enabled =
-				reading ||
-				(!row.item.transient && !!row.item.text && context.getValue(TextToSpeechInProgress.key) !== true);
+			button.label = reading ? localize('chat.message.stopReadAloud', 'Stop reading aloud') : localize('chat.message.readAloud', 'Read aloud');
+			button.enabled = reading || (!row.item.transient && !!row.item.text && context.getValue(TextToSpeechInProgress.key) !== true);
 			button.domNode.setAttribute('aria-pressed', String(reading));
 		};
 		row.updateReadAloud = update;
@@ -944,17 +842,8 @@ export class ChatListWidget extends DomWidget {
 						source,
 					})
 					.catch(error => {
-						if (
-							!row.isDisposed &&
-							row.reading.value === operation &&
-							!source.token.isCancellationRequested &&
-							!isCancellationError(error)
-						) {
-							feedback.textContent = localize(
-								'chat.message.readAloudFailed',
-								'Could not read response aloud: {0}',
-								String(error),
-							);
+						if (!row.isDisposed && row.reading.value === operation && !source.token.isCancellationRequested && !isCancellationError(error)) {
+							feedback.textContent = localize('chat.message.readAloudFailed', 'Could not read response aloud: {0}', String(error));
 						}
 					})
 					.finally(() => {
@@ -968,9 +857,7 @@ export class ChatListWidget extends DomWidget {
 
 	private renderMemoryReferences(row: RenderedItem): void {
 		if (!this.onDidRequestMemoryReference) return;
-		const references = [...new Set(row.item.text.match(/memory:[A-Za-z0-9_-]+/g) ?? [])]
-			.filter(reference => reference.length <= 4096)
-			.slice(0, 8);
+		const references = [...new Set(row.item.text.match(/memory:[A-Za-z0-9_-]+/g) ?? [])].filter(reference => reference.length <= 4096).slice(0, 8);
 		for (const [reference] of row.memoryReferences) {
 			if (!references.includes(reference)) row.memoryReferences.deleteAndDispose(reference);
 		}
@@ -979,9 +866,7 @@ export class ChatListWidget extends DomWidget {
 			if (!rendered) {
 				const button = h(row.element.ownerDocument, 'button');
 				button.type = 'button';
-				const click = addDisposableListener(button, 'click', () =>
-					this.onDidRequestMemoryReference?.(reference),
-				);
+				const click = addDisposableListener(button, 'click', () => this.onDidRequestMemoryReference?.(reference));
 				rendered = row.memoryReferences.set(
 					reference,
 					Object.assign(
@@ -994,11 +879,7 @@ export class ChatListWidget extends DomWidget {
 				);
 				row.element.append(button);
 			}
-			rendered.element.textContent = localize(
-				'chat.transcript.memoryReference',
-				'Open memory reference {0}',
-				index + 1,
-			);
+			rendered.element.textContent = localize('chat.transcript.memoryReference', 'Open memory reference {0}', index + 1);
 		}
 	}
 
@@ -1010,15 +891,7 @@ export class ChatListWidget extends DomWidget {
 		if (item.transient) article.dataset.transient = 'true';
 		if (item.isError) article.classList.add('error');
 		if (item.toolInvocation) {
-			const part = disposables.add(
-				this.instantiationService.createInstance(
-					ChatToolInvocationPart,
-					article.ownerDocument,
-					item.toolInvocation,
-					item.attachmentSource,
-					this.mcpAppDelegate,
-				),
-			);
+			const part = disposables.add(this.instantiationService.createInstance(ChatToolInvocationPart, article.ownerDocument, item.toolInvocation, item.attachmentSource, this.mcpAppDelegate));
 			disposables.add(
 				part.onDidChangeHeight(() => {
 					this.relayout.schedule();
@@ -1076,12 +949,7 @@ export class ChatListWidget extends DomWidget {
 			article.append(body);
 		}
 		let markdownPart: ChatMarkdownContentPart | undefined;
-		if (
-			item.type === 'agentMessage' ||
-			item.type === 'reasoning' ||
-			item.type === 'plan' ||
-			item.type === 'advisor'
-		) {
+		if (item.type === 'agentMessage' || item.type === 'reasoning' || item.type === 'plan' || item.type === 'advisor') {
 			const markdown = disposables.add(
 				this.instantiationService.createInstance(ChatMarkdownContentPart, {
 					ownerDocument: this.element.ownerDocument,
@@ -1090,9 +958,7 @@ export class ChatListWidget extends DomWidget {
 					markdown: { value: item.text, supportThemeIcons: true, supportAlertSyntax: true },
 					markedOptions: { breaks: true },
 					fillInIncompleteTokens: item.transient,
-					actionHandler: this.onDidRequestLink
-						? (target: string) => this.onDidRequestLink!(target)
-						: undefined,
+					actionHandler: this.onDidRequestLink ? (target: string) => this.onDidRequestLink!(target) : undefined,
 					sanitizerConfig: { allowedLinkSchemes: { augment: [OPEN_SESSION_LINK_SCHEME] } },
 					imageResourceLoader: this.imageResourceLoader,
 				}),
@@ -1207,9 +1073,7 @@ function itemLabel(item: IChatListItem): string {
 		case 'toolCall':
 			return localize('chat.transcript.toolCall', 'Tool call');
 		case 'toolResult':
-			return item.isError
-				? localize('chat.transcript.toolError', 'Tool error')
-				: localize('chat.transcript.toolResult', 'Tool result');
+			return item.isError ? localize('chat.transcript.toolError', 'Tool error') : localize('chat.transcript.toolResult', 'Tool result');
 		case 'advisor':
 			return localize('advisor.settings.title', 'Advisor');
 		case 'turnError':

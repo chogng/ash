@@ -21,11 +21,7 @@ import { IContextKeyService } from '../../../../../platform/contextkey/browser/c
 import { ActiveEditorContext } from '../../../../common/contextkeys.js';
 import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
 import { CodeEditorConfiguration } from '../../common/editorConfiguration.js';
-import {
-	EditorLineWrapping,
-	EditorOption,
-	RenderLineNumbersType,
-} from '../../../../../editor/common/config/editorOptions.js';
+import { EditorLineWrapping, EditorOption, RenderLineNumbersType } from '../../../../../editor/common/config/editorOptions.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
@@ -33,11 +29,7 @@ import { type DiffEditorWidget } from '../../../../../editor/browser/widget/diff
 import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import {
-	type IDocumentDiff,
-	type IDocumentDiffProvider,
-	type IDocumentDiffProviderOptions,
-} from '../../../../../editor/common/diff/documentDiffProvider.js';
+import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from '../../../../../editor/common/diff/documentDiffProvider.js';
 import { DefaultLinesDiffComputer } from '../../../../../editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
 import { type ITextModel } from '../../../../../editor/common/model.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
@@ -47,11 +39,7 @@ import { createTextModelFeatures } from '../../../../../editor/common/model/mode
 import { registerTextModelFeatures } from '../../../../../editor/common/model/textModelFeatures.js';
 
 import { EditorPaneSelectionChangeReason, type IResourceEditorInput } from '../../../../common/editor.js';
-import {
-	TextFileContentSource,
-	type ResolvedTextFileContent,
-	type TextFileResolveRequest,
-} from '../../../../services/textfile/common/textFileService.js';
+import { TextFileContentSource, type ResolvedTextFileContent, type TextFileResolveRequest } from '../../../../services/textfile/common/textFileService.js';
 import { type ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 
 import { StatusbarAlignment } from '../../../../services/statusbar/browser/statusbar.js';
@@ -82,19 +70,14 @@ const { createCodeEditorServices } = await import('../../../../../editor/test/br
 const { registerTestComponentServices } = await import('../../../../test/common/testEditorServices.js');
 function createDiffServices(resources: DisposableStore) {
 	const services = registerTestComponentServices(createCodeEditorServices(resources));
-	services.registerInstance(
-		IWorkingCopyService,
-		resources.add(uriIdentityServices.createInstance(BrowserWorkingCopyService)),
-	);
+	services.registerInstance(IWorkingCopyService, resources.add(uriIdentityServices.createInstance(BrowserWorkingCopyService)));
 	return services;
 }
 
-const { BrowserTextModelService } =
-	await import('../../../../services/textmodelResolver/browser/browserTextModelService.js');
+const { BrowserTextModelService } = await import('../../../../services/textmodelResolver/browser/browserTextModelService.js');
 const { BrowserTextResourceStore } = await import('../../browser/browserTextResourceStore.js');
 const { createDiffEditorInput, isDiffEditorInput } = await import('../../../../common/editor/diffEditorInput.js');
-const { DiffEditorCommandsService, IDiffEditorCommandsService } =
-	await import('../../../../browser/parts/editor/diffEditorCommandsService.js');
+const { DiffEditorCommandsService, IDiffEditorCommandsService } = await import('../../../../browser/parts/editor/diffEditorCommandsService.js');
 const {
 	DIFF_FOCUS_SECONDARY_SIDE,
 	DIFF_OPEN_SIDE,
@@ -132,10 +115,7 @@ test('Diff pane prepares its provider before resolving models and owns it across
 		pane.create(requiredElement<HTMLElement>(dom.window.document, 'main'));
 		for (let index = 0; index < 2; index++) {
 			await pane.setInput(
-				createDiffEditorInput(
-					{ resource: URI.file(`/provider-before-${index}.txt`), initialText: 'before' },
-					{ resource: URI.file(`/provider-after-${index}.txt`), initialText: 'after' },
-				),
+				createDiffEditorInput({ resource: URI.file(`/provider-before-${index}.txt`), initialText: 'before' }, { resource: URI.file(`/provider-after-${index}.txt`), initialText: 'after' }),
 				new AbortController().signal,
 			);
 			pane.clearInput();
@@ -241,10 +221,7 @@ test('Diff commands navigate and focus the active comparison through the Workben
 	await configuration.updateValue('diffEditor.splitViewDefaultRatio', 0.3);
 	const availableWidth = widget.originalEditor.getLayoutInfo().width + widget.modifiedEditor.getLayoutInfo().width;
 	const centerWidth = Number.parseFloat(widget.element.style.getPropertyValue('--ash-diff-center-width'));
-	assert.equal(
-		widget.element.style.getPropertyValue('--stanza-diff-original-width'),
-		`${Math.floor((availableWidth + centerWidth) * 0.3) - centerWidth}px`,
-	);
+	assert.equal(widget.element.style.getPropertyValue('--stanza-diff-original-width'), `${Math.floor((availableWidth + centerWidth) * 0.3) - centerWidth}px`);
 	const sash = widget.element.querySelector('.stanza-diff-sash') as HTMLElement;
 	sash.focus();
 	await configuration.updateValue('diffEditor.enableSplitViewResizing', false);
@@ -294,12 +271,7 @@ test('Diff commands navigate and focus the active comparison through the Workben
 test('Stanza diff pane rejects a missing Workbench diff computation service', () => {
 	using services = new DisposableStore();
 	assert.throws(
-		() =>
-			createDiffServices(services).createInstance(
-				DiffEditorPane,
-				new BrowserTextResourceStore(new BootstrapTextFiles()),
-				undefined as never,
-			),
+		() => createDiffServices(services).createInstance(DiffEditorPane, new BrowserTextResourceStore(new BootstrapTextFiles()), undefined as never),
 		/requires a Workbench diff computation service/,
 	);
 });
@@ -396,10 +368,7 @@ test('Diff pane honors a readonly modified resource and preserves shared text wh
 		const modified = { resource: URI.file('/readonly-after.ts'), initialText: 'after', readOnly: true };
 		using shared = await models.acquire(modified, new AbortController().signal);
 		pane.create(requiredElement<HTMLElement>(dom.window.document, 'main'));
-		await pane.setInput(
-			createDiffEditorInput({ resource: URI.file('/readonly-before.ts'), initialText: 'before' }, modified),
-			new AbortController().signal,
-		);
+		await pane.setInput(createDiffEditorInput({ resource: URI.file('/readonly-before.ts'), initialText: 'before' }, modified), new AbortController().signal);
 		const widget = pane.getControl();
 		assert.ok(widget);
 		assert.equal(widget.modifiedEditor.getOption(EditorOption.readOnly), true);
@@ -460,10 +429,7 @@ for (const failedSide of ['original', 'modified'] as const) {
 			});
 			pane.create(requiredElement<HTMLElement>(dom.window.document, 'main'));
 			const loading = pane.setInput(
-				createDiffEditorInput(
-					{ resource: URI.file('/parallel-original.ts'), initialText: 'before' },
-					{ resource: URI.file('/parallel-modified.ts'), initialText: 'after' },
-				),
+				createDiffEditorInput({ resource: URI.file('/parallel-original.ts'), initialText: 'before' }, { resource: URI.file('/parallel-modified.ts'), initialText: 'after' }),
 				new AbortController().signal,
 			);
 			const rejected = assert.rejects(loading, error => error === failure);
@@ -510,12 +476,7 @@ for (const phase of ['acquisition', 'computation']) {
 					phase === 'acquisition'
 						? new PaneTestDiffComputationService()
 						: new (class extends PaneTestDiffComputationService {
-								override async computeDiff(
-									original: ITextModel,
-									modified: ITextModel,
-									options: IDocumentDiffProviderOptions,
-									token: CancellationToken,
-								): Promise<IDocumentDiff> {
+								override async computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, token: CancellationToken): Promise<IDocumentDiff> {
 									await Promise.resolve();
 									cancellation.abort();
 									return super.computeDiff(original, modified, options, token);
@@ -525,10 +486,7 @@ for (const phase of ['acquisition', 'computation']) {
 			pane.create(requiredElement<HTMLElement>(dom.window.document, 'main'));
 			await assert.rejects(
 				pane.setInput(
-					createDiffEditorInput(
-						{ resource: URI.file('/cancelled-before.ts'), initialText: 'before' },
-						{ resource: URI.file('/cancelled-after.ts'), initialText: 'after' },
-					),
+					createDiffEditorInput({ resource: URI.file('/cancelled-before.ts'), initialText: 'before' }, { resource: URI.file('/cancelled-after.ts'), initialText: 'after' }),
 					cancellation.signal,
 				),
 				{ name: 'CancellationError' },
@@ -597,16 +555,8 @@ for (const cancelled of [false, true])
 					throw new Error('Input published before syntax readiness');
 				}),
 			]);
-			assert.equal(
-				pane.getControl(),
-				undefined,
-				'pending controls do not publish the input before lexical setup',
-			);
-			assert.equal(
-				editors.listDiffEditors().length,
-				1,
-				'the control is already constructed while syntax is blocked',
-			);
+			assert.equal(pane.getControl(), undefined, 'pending controls do not publish the input before lexical setup');
+			assert.equal(editors.listDiffEditors().length, 1, 'the control is already constructed while syntax is blocked');
 			if (cancelled) {
 				controller.abort();
 				await assert.rejects(opening, { name: 'CancellationError' });
@@ -639,15 +589,11 @@ test('Diff pane recomputes an open comparison when ignore-trim-whitespace change
 	const seenLimits: number[] = [];
 	const pane = container.createInstance(DiffEditorPane, resourceStore, {
 		modelService: models,
-		createComputationService: () =>
-			new PaneTestDiffComputationService(options => seenLimits.push(options.maxComputationTimeMs)),
+		createComputationService: () => new PaneTestDiffComputationService(options => seenLimits.push(options.maxComputationTimeMs)),
 	});
 	pane.create(parent);
 	await pane.setInput(
-		createDiffEditorInput(
-			{ resource: URI.file('/before.ts'), initialText: 'word', label: 'before.ts' },
-			{ resource: URI.file('/after.ts'), initialText: 'word ', label: 'after.ts' },
-		),
+		createDiffEditorInput({ resource: URI.file('/before.ts'), initialText: 'word', label: 'before.ts' }, { resource: URI.file('/after.ts'), initialText: 'word ', label: 'after.ts' }),
 		new AbortController().signal,
 	);
 	await Promise.resolve();
@@ -728,13 +674,7 @@ test('Diff pane follows the modified language override and language changes', as
 		languageId: 'typescript',
 		label: 'after.ts',
 	};
-	await pane.setInput(
-		createDiffEditorInput(
-			{ resource: URI.file('/language-before.ts'), initialText: 'word', label: 'before.ts' },
-			modifiedInput,
-		),
-		new AbortController().signal,
-	);
+	await pane.setInput(createDiffEditorInput({ resource: URI.file('/language-before.ts'), initialText: 'word', label: 'before.ts' }, modifiedInput), new AbortController().signal);
 	await Promise.resolve();
 	const diffWidget = container.get(ICodeEditorService).listDiffEditors()[0] as DiffEditorWidget;
 	assert.equal(diffWidget.diff?.hunks.length, 1);
@@ -860,10 +800,7 @@ test('Diff pane reveals its first change after layout and keeps an explicit sele
 		const modified = [...lines];
 		modified[59] = 'first change';
 		modified[89] = 'second change';
-		const input = createDiffEditorInput(
-			{ resource: URI.file('/initial-before.ts'), initialText: lines.join('\n') },
-			{ resource: URI.file('/initial-after.ts'), initialText: modified.join('\n') },
-		);
+		const input = createDiffEditorInput({ resource: URI.file('/initial-before.ts'), initialText: lines.join('\n') }, { resource: URI.file('/initial-after.ts'), initialText: modified.join('\n') });
 		await pane.setInput(input, new AbortController().signal);
 		const editor = pane.getControl()!;
 		assert.equal(editor.currentChangeRow, -1);
@@ -936,10 +873,7 @@ class BootstrapTextFiles implements ITextFileService {
 		return {
 			resource: request.resource,
 			text: request.bootstrapText ?? '',
-			source:
-				request.bootstrapText === undefined
-					? TextFileContentSource.FileSystem
-					: TextFileContentSource.Bootstrap,
+			source: request.bootstrapText === undefined ? TextFileContentSource.FileSystem : TextFileContentSource.Bootstrap,
 			revision: undefined,
 			encoding: 'utf8',
 		};
@@ -954,19 +888,10 @@ class PaneTestDiffComputationService implements IDocumentDiffProvider {
 	readonly onDidChange = Event.None;
 	constructor(private readonly observe?: (options: IDocumentDiffProviderOptions) => void) {}
 
-	async computeDiff(
-		original: ITextModel,
-		modified: ITextModel,
-		options: IDocumentDiffProviderOptions,
-		token: CancellationToken,
-	): Promise<IDocumentDiff> {
+	async computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, token: CancellationToken): Promise<IDocumentDiff> {
 		assert.equal(token.isCancellationRequested, false);
 		this.observe?.(options);
-		const result = new DefaultLinesDiffComputer().computeDiff(
-			original.getLinesContent(),
-			modified.getLinesContent(),
-			options,
-		);
+		const result = new DefaultLinesDiffComputer().computeDiff(original.getLinesContent(), modified.getLinesContent(), options);
 		return {
 			identical: original.getValue() === modified.getValue(),
 			quitEarly: result.hitTimeout,
@@ -1025,8 +950,7 @@ test('Diff editor status follows the selected side and ignores the inactive side
 		onDidChangeEditors: Event.None,
 	} as unknown as IEditorPart;
 	using status = container.createInstance(EditorStatusContribution, statusPart, statusbar);
-	const cursorStatus = () =>
-		statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === 'ash.status.editor.cursor')?.entry.text;
+	const cursorStatus = () => statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === 'ash.status.editor.cursor')?.entry.text;
 	assert.equal(cursorStatus(), 'Ln 1, Col 1');
 	widget.modifiedEditor.focus();
 	widget.modifiedEditor.setSelection(new Range(2, 3, 2, 3));

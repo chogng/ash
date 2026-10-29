@@ -11,10 +11,7 @@ import { KeybindingTestServices } from './keybindingTestServices.js';
 import { suiteTeardown } from 'mocha';
 const profileFixture = new KeybindingTestServices();
 suiteTeardown(() => profileFixture.dispose());
-import {
-	Extensions as JSONExtensions,
-	type IJSONContributionRegistry,
-} from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
+import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { parseJsonDocument } from '../../../../../base/common/json.js';
 import { jsonSchemaAtPath, validateJsonSchema, type JsonSchema } from '../../../../../base/common/jsonSchema.js';
 import assert from 'node:assert/strict';
@@ -26,12 +23,7 @@ import { Keybinding, logicalKey, physicalKey, resolveKeybinding } from '../../..
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
-import {
-	KeyCode,
-	NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE,
-	ScanCode,
-	ScanCodeUtils,
-} from '../../../../../base/common/keyCodes.js';
+import { KeyCode, NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE, ScanCode, ScanCodeUtils } from '../../../../../base/common/keyCodes.js';
 import { parseKeybinding } from '../../../../../base/common/keybindingParser.js';
 import { getKeybindingLabel } from '../../../../../base/common/keybindingLabels.js';
 import { CommandRegistry, CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
@@ -44,18 +36,11 @@ import { AccessibilityService } from '../../../../../platform/accessibility/brow
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { INotificationService, Severity } from '../../../../../platform/notification/common/notification.js';
-import {
-	KeybindingResolveKind,
-	KeybindingResolver,
-} from '../../../../../platform/keybinding/common/keybindingResolver.js';
+import { KeybindingResolveKind, KeybindingResolver } from '../../../../../platform/keybinding/common/keybindingResolver.js';
 import { KeybindingRegistry, KeybindingSource } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { BrowserKeyboardLayoutService } from '../../../../../workbench/services/keybinding/browser/keyboardLayoutService.js';
 import { loadBuiltinKeyboardLayouts } from '../../../../../workbench/services/keybinding/browser/builtinKeyboardLayouts.js';
-import {
-	KeyboardDispatchMode,
-	type IKeyboardLayoutDefinition,
-	type IKeyboardMapping,
-} from '../../../../../platform/keyboardLayout/common/keyboardLayout.js';
+import { KeyboardDispatchMode, type IKeyboardLayoutDefinition, type IKeyboardMapping } from '../../../../../platform/keyboardLayout/common/keyboardLayout.js';
 import { KeyboardConfiguration } from '../../../../../platform/keyboardLayout/common/keyboardConfiguration.js';
 import { validateNativeKeyboardLayout } from '../../../../../platform/keyboardLayout/common/nativeKeyboardLayout.js';
 import { WorkbenchKeybindingService } from '../../../../../workbench/services/keybinding/browser/keybindingService.js';
@@ -72,9 +57,7 @@ test('keybinding hold mode follows the invoking shortcut, suppresses repeats and
 	const registry = new KeybindingRegistry();
 	const commands = new CommandRegistry();
 	const contexts = resources.add(new ContextKeyService());
-	const layouts = resources.add(
-		new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows }),
-	);
+	const layouts = resources.add(new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows }));
 	const service = resources.add(
 		new WorkbenchKeybindingService(
 			{
@@ -108,9 +91,7 @@ test('keybinding hold mode follows the invoking shortcut, suppresses repeats and
 	assert.equal(service.enableKeybindingHoldMode('test.hold'), undefined);
 	for (const end of ['key', 'modifier', 'blur', 'dispose']) {
 		const before = executions;
-		dom.window.document.body.dispatchEvent(
-			new dom.window.KeyboardEvent('keydown', { key: 'p', code: 'KeyP', ctrlKey: true, bubbles: true }),
-		);
+		dom.window.document.body.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'p', code: 'KeyP', ctrlKey: true, bubbles: true }));
 		assert.ok(release);
 		let ended = false;
 		void release.then(() => {
@@ -126,9 +107,7 @@ test('keybinding hold mode follows the invoking shortcut, suppresses repeats and
 			}),
 		);
 		assert.equal(executions, before + 1);
-		dom.window.document.body.dispatchEvent(
-			new dom.window.KeyboardEvent('keyup', { key: 'q', code: 'KeyQ', ctrlKey: true, bubbles: true }),
-		);
+		dom.window.document.body.dispatchEvent(new dom.window.KeyboardEvent('keyup', { key: 'q', code: 'KeyQ', ctrlKey: true, bubbles: true }));
 		await Promise.resolve();
 		assert.equal(ended, false);
 		if (end === 'blur') dom.window.dispatchEvent(new dom.window.Event('blur'));
@@ -153,7 +132,11 @@ test('resolver applies context, source, priority, and latest-registration preced
 	const contexts = registrations.add(new ContextKeyService());
 	const keybinding = Keybinding.single(logicalKey('p', { ctrlKey: true }));
 	registrations.add(
-		registry.registerKeybindingRule({ command: 'test.low', keybinding, source: KeybindingSource.Builtin }),
+		registry.registerKeybindingRule({
+			command: 'test.low',
+			keybinding,
+			source: KeybindingSource.Builtin,
+		}),
 	);
 	registrations.add(
 		registry.registerKeybindingRule({
@@ -163,7 +146,12 @@ test('resolver applies context, source, priority, and latest-registration preced
 			source: KeybindingSource.User,
 		}),
 	);
-	registrations.add(registry.registerKeybindingRule({ command: 'test.latest', keybinding }));
+	registrations.add(
+		registry.registerKeybindingRule({
+			command: 'test.latest',
+			keybinding,
+		}),
+	);
 	const resolver = new KeybindingResolver({
 		registry,
 		resolveKeybinding: keybinding => resolveKeybinding(keybinding, OperatingSystem.Windows),
@@ -237,15 +225,10 @@ test('browser service executes chords and restores IME state', async () => {
 	registrations.add(
 		registry.registerKeybindingRule({
 			command: 'test.chord',
-			keybinding: Keybinding.chord(
-				physicalKey('KeyK', { ctrlKey: true }),
-				physicalKey('KeyC', { ctrlKey: true }),
-			),
+			keybinding: Keybinding.chord(physicalKey('KeyK', { ctrlKey: true }), physicalKey('KeyC', { ctrlKey: true })),
 		}),
 	);
-	const keyboardLayout = registrations.add(
-		new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows }),
-	);
+	const keyboardLayout = registrations.add(new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows }));
 	const statusbar = registrations.add(new StatusbarService());
 	const service = registrations.add(
 		new WorkbenchKeybindingService(
@@ -304,10 +287,7 @@ test('browser layout observation preserves a chord ending with Shift+Enter', asy
 	registrations.add(
 		registry.registerKeybindingRule({
 			command: 'test.shiftEnter',
-			keybinding: Keybinding.chord(
-				physicalKey('KeyK', { ctrlKey: true }),
-				logicalKey('Enter', { shiftKey: true }),
-			),
+			keybinding: Keybinding.chord(physicalKey('KeyK', { ctrlKey: true }), logicalKey('Enter', { shiftKey: true })),
 		}),
 	);
 	using services = new InstantiationService();
@@ -330,21 +310,11 @@ test('browser layout observation preserves a chord ending with Shift+Enter', asy
 		layoutChanges += 1;
 	});
 	assert.equal(keybindings.dispatchEvent(keyboardEvent({ code: 'KeyK', key: 'k' }).event), true);
-	keybindings.dispatchEvent(
-		keyboardEvent({ code: 'ShiftLeft', key: 'Shift', keyCode: 16, ctrlKey: false, shiftKey: true }).event,
-	);
+	keybindings.dispatchEvent(keyboardEvent({ code: 'ShiftLeft', key: 'Shift', keyCode: 16, ctrlKey: false, shiftKey: true }).event);
 	assert.equal(keybindings.inChordMode, true);
-	assert.equal(
-		keybindings.dispatchEvent(
-			keyboardEvent({ code: 'Enter', key: 'Enter', keyCode: 13, ctrlKey: false, shiftKey: true }).event,
-		),
-		true,
-	);
+	assert.equal(keybindings.dispatchEvent(keyboardEvent({ code: 'Enter', key: 'Enter', keyCode: 13, ctrlKey: false, shiftKey: true }).event), true);
 	await Promise.resolve();
-	assert.deepEqual(
-		{ executions, layoutChanges, chord: keybindings.inChordMode },
-		{ executions: 1, layoutChanges: 0, chord: false },
-	);
+	assert.deepEqual({ executions, layoutChanges, chord: keybindings.inChordMode }, { executions: 1, layoutChanges: 0, chord: false });
 });
 
 for (const operatingSystem of [OperatingSystem.Windows, OperatingSystem.Macintosh]) {
@@ -355,9 +325,7 @@ for (const operatingSystem of [OperatingSystem.Windows, OperatingSystem.Macintos
 		const registry = new KeybindingRegistry();
 		const commands = new CommandRegistry();
 		const contexts = resources.add(new ContextKeyService());
-		const layouts = resources.add(
-			new BrowserKeyboardLayoutService({ navigator: fakeNavigator(new Map()), operatingSystem }),
-		);
+		const layouts = resources.add(new BrowserKeyboardLayoutService({ navigator: fakeNavigator(new Map()), operatingSystem }));
 		await layouts.refreshKeyboardLayout();
 		const mac = operatingSystem === OperatingSystem.Macintosh;
 		const modifiers = { ctrlKey: !mac, metaKey: mac };
@@ -394,18 +362,8 @@ for (const operatingSystem of [OperatingSystem.Windows, OperatingSystem.Macintos
 			),
 		);
 		assert.equal(layouts.getRawKeyboardMapping()?.KeyC, undefined);
-		assert.equal(
-			service.dispatchEvent(
-				keyboardEvent({ key: 'c', code: 'KeyC', keyCode: 67, ...modifiers, shiftKey: true }).event,
-			),
-			true,
-		);
-		assert.equal(
-			service.dispatchEvent(
-				keyboardEvent({ key: 'c', code: 'KeyC', keyCode: 67, ...modifiers, shiftKey: false }).event,
-			),
-			true,
-		);
+		assert.equal(service.dispatchEvent(keyboardEvent({ key: 'c', code: 'KeyC', keyCode: 67, ...modifiers, shiftKey: true }).event), true);
+		assert.equal(service.dispatchEvent(keyboardEvent({ key: 'c', code: 'KeyC', keyCode: 67, ...modifiers, shiftKey: false }).event), true);
 		assert.deepEqual(executed, ['copy', 'copyAndClear']);
 		assert.equal(layouts.getRawKeyboardMapping()?.KeyC, undefined);
 	});
@@ -425,12 +383,15 @@ test('browser service dispatches Ctrl+Shift+P with a shifted key value', async (
 	registrations.add(
 		registry.registerKeybindingRule({
 			command: commandId,
-			keybinding: Keybinding.single(logicalKey('p', { ctrlKey: true, shiftKey: true })),
+			keybinding: Keybinding.single(
+				logicalKey('p', {
+					ctrlKey: true,
+					shiftKey: true,
+				}),
+			),
 		}),
 	);
-	const keyboardLayout = registrations.add(
-		new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows }),
-	);
+	const keyboardLayout = registrations.add(new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows }));
 	const service = registrations.add(
 		new WorkbenchKeybindingService(
 			{
@@ -445,7 +406,11 @@ test('browser service dispatches Ctrl+Shift+P with a shifted key value', async (
 			profileFixture.profiles,
 		),
 	);
-	const shortcut = keyboardEvent({ code: 'KeyP', key: 'P', shiftKey: true });
+	const shortcut = keyboardEvent({
+		code: 'KeyP',
+		key: 'P',
+		shiftKey: true,
+	});
 
 	assert.equal(service.dispatchEvent(shortcut.event), true);
 	await executed;
@@ -473,9 +438,7 @@ test('registered auxiliary window dispatches workbench shortcuts until it closes
 		}),
 	);
 	const contexts = resources.add(new ContextKeyService());
-	const keyboardLayout = resources.add(
-		new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows }),
-	);
+	const keyboardLayout = resources.add(new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows }));
 	const services = resources.add(new InstantiationService());
 	resources.add(
 		new WorkbenchKeybindingService(
@@ -541,9 +504,7 @@ test('failed keyboard command appears as a warning notification', async () => {
 		}),
 	);
 	const contexts = resources.add(new ContextKeyService());
-	const keyboardLayout = resources.add(
-		new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows }),
-	);
+	const keyboardLayout = resources.add(new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows }));
 	const notifications = resources.add(new TestNotificationService());
 	const files = resources.add(new KeybindingTestServices());
 	const services = files.services;
@@ -595,9 +556,7 @@ test('keyboard shortcut troubleshooting traces native, mapped, and resolved even
 			keybinding: Keybinding.single(logicalKey('p', { ctrlKey: true })),
 		}),
 	);
-	const keyboardLayout = registrations.add(
-		new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows }),
-	);
+	const keyboardLayout = registrations.add(new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows }));
 	const service = registrations.add(
 		new WorkbenchKeybindingService(
 			{
@@ -636,9 +595,7 @@ test('browser keyboard layouts provide physical key labels', async () => {
 	});
 	await service.refreshKeyboardLayout();
 
-	const resolved = service
-		.getKeyboardMapper()
-		.resolveKeybinding(Keybinding.single(physicalKey('KeyY', { ctrlKey: true })))[0];
+	const resolved = service.getKeyboardMapper().resolveKeybinding(Keybinding.single(physicalKey('KeyY', { ctrlKey: true })))[0];
 	assert.ok(resolved);
 	assert.equal(getKeybindingLabel(resolved), 'Ctrl+Z');
 	assert.equal(service.getCurrentKeyboardLayout().source, 'browser');
@@ -659,10 +616,13 @@ test('single modifier bindings dispatch on keyup only when the modifier was unus
 	);
 	const parsed = parseKeybinding('ctrl');
 	assert.ok(parsed);
-	registrations.add(registry.registerKeybindingRule({ command: 'test.ctrl', keybinding: parsed }));
-	const keyboardLayout = registrations.add(
-		new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows }),
+	registrations.add(
+		registry.registerKeybindingRule({
+			command: 'test.ctrl',
+			keybinding: parsed,
+		}),
 	);
+	const keyboardLayout = registrations.add(new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows }));
 	const service = registrations.add(
 		new WorkbenchKeybindingService(
 			{
@@ -714,12 +674,13 @@ test('code dispatch resolves logical bindings through the active physical layout
 		navigator: fakeNavigator(),
 		operatingSystem: OperatingSystem.Linux,
 		dispatch: KeyboardDispatchMode.Code,
-		layout: keyboardLayout({ KeyY: mappingEntry('z', 'Z'), KeyZ: mappingEntry('z', 'Z') }),
+		layout: keyboardLayout({
+			KeyY: mappingEntry('z', 'Z'),
+			KeyZ: mappingEntry('z', 'Z'),
+		}),
 	});
 
-	const candidates = service
-		.getKeyboardMapper()
-		.resolveKeybinding(Keybinding.single(logicalKey('z', { ctrlKey: true })));
+	const candidates = service.getKeyboardMapper().resolveKeybinding(Keybinding.single(logicalKey('z', { ctrlKey: true })));
 	assert.deepEqual(
 		candidates.map(candidate => candidate.chords[0].key),
 		['KeyY', 'KeyZ'],
@@ -735,9 +696,7 @@ test('keyCode dispatch retains logical identity', () => {
 		layout: keyboardLayout({ KeyY: mappingEntry('z', 'Z') }),
 	});
 
-	const resolved = service
-		.getKeyboardMapper()
-		.resolveKeybinding(Keybinding.single(logicalKey('z', { ctrlKey: true })))[0];
+	const resolved = service.getKeyboardMapper().resolveKeybinding(Keybinding.single(logicalKey('z', { ctrlKey: true })))[0];
 	assert.ok(resolved);
 	assert.equal(resolved.chords[0].kind, 'logical');
 	assert.equal(resolved.chords[0].key, 'z');
@@ -752,16 +711,14 @@ test('keyCode dispatch preserves numpad identity while NumLock is off', () => {
 	});
 
 	const binding = service.getKeyboardMapper().resolveKeybinding(Keybinding.single(logicalKey('numpad1')))[0];
-	const event = service
-		.getKeyboardMapper()
-		.resolveKeyboardEvent({
-			...keyEventData(),
-			key: 'End',
-			code: 'Numpad1',
-			keyCode: KeyCode.Numpad1,
-			location: 3,
-			ctrlKey: false,
-		});
+	const event = service.getKeyboardMapper().resolveKeyboardEvent({
+		...keyEventData(),
+		key: 'End',
+		code: 'Numpad1',
+		keyCode: KeyCode.Numpad1,
+		location: 3,
+		ctrlKey: false,
+	});
 
 	assert.ok(binding);
 	assert.equal(binding.chords[0].key, 'numpad1');
@@ -772,24 +729,20 @@ test('Windows vkeys and non-Latin fallback resolve logical shortcuts to physical
 	using windows = new BrowserKeyboardLayoutService({
 		navigator: fakeNavigator(),
 		operatingSystem: OperatingSystem.Windows,
-		layout: keyboardLayout({ KeyA: { ...mappingEntry('й', 'Й'), vkey: 'VK_Q' } }),
+		layout: keyboardLayout({
+			KeyA: { ...mappingEntry('й', 'Й'), vkey: 'VK_Q' },
+		}),
 	});
 	using linux = new BrowserKeyboardLayoutService({
 		navigator: fakeNavigator(),
 		operatingSystem: OperatingSystem.Linux,
-		layout: keyboardLayout({ KeyQ: mappingEntry('й', 'Й') }),
+		layout: keyboardLayout({
+			KeyQ: mappingEntry('й', 'Й'),
+		}),
 	});
 
-	assert.equal(
-		windows.getKeyboardMapper().resolveKeybinding(Keybinding.single(logicalKey('q', { ctrlKey: true })))[0]
-			?.chords[0].key,
-		'KeyA',
-	);
-	assert.equal(
-		linux.getKeyboardMapper().resolveKeybinding(Keybinding.single(logicalKey('q', { ctrlKey: true })))[0]?.chords[0]
-			.key,
-		'KeyQ',
-	);
+	assert.equal(windows.getKeyboardMapper().resolveKeybinding(Keybinding.single(logicalKey('q', { ctrlKey: true })))[0]?.chords[0].key, 'KeyA');
+	assert.equal(linux.getKeyboardMapper().resolveKeybinding(Keybinding.single(logicalKey('q', { ctrlKey: true })))[0]?.chords[0].key, 'KeyQ');
 });
 
 test('AltGr can opt into Ctrl+Alt dispatch without changing physical key identity', () => {
@@ -797,22 +750,20 @@ test('AltGr can opt into Ctrl+Alt dispatch without changing physical key identit
 		navigator: fakeNavigator(),
 		operatingSystem: OperatingSystem.Linux,
 		mapAltGrToCtrlAlt: true,
-		layout: keyboardLayout({ KeyE: mappingEntry('e', 'E', '€') }),
+		layout: keyboardLayout({
+			KeyE: mappingEntry('e', 'E', '€'),
+		}),
 	});
 
-	const binding = service
-		.getKeyboardMapper()
-		.resolveKeybinding(Keybinding.single(logicalKey('e', { ctrlKey: true, altKey: true })))[0];
-	const event = service
-		.getKeyboardMapper()
-		.resolveKeyboardEvent({
-			...keyEventData(),
-			key: '€',
-			code: 'KeyE',
-			ctrlKey: false,
-			altKey: true,
-			altGraphKey: true,
-		});
+	const binding = service.getKeyboardMapper().resolveKeybinding(Keybinding.single(logicalKey('e', { ctrlKey: true, altKey: true })))[0];
+	const event = service.getKeyboardMapper().resolveKeyboardEvent({
+		...keyEventData(),
+		key: '€',
+		code: 'KeyE',
+		ctrlKey: false,
+		altKey: true,
+		altGraphKey: true,
+	});
 
 	assert.ok(binding);
 	assert.equal(binding.chords[0].key, 'KeyE');
@@ -852,13 +803,14 @@ test('mapper labels AltGr states and macOS combining dead keys', () => {
 		mapAltGrToCtrlAlt: true,
 		layout: keyboardLayout({
 			KeyE: mappingEntry('e', 'E', '€', 'Ê'),
-			Backquote: { ...mappingEntry('\u0300', '~'), valueIsDeadKey: true },
+			Backquote: {
+				...mappingEntry('\u0300', '~'),
+				valueIsDeadKey: true,
+			},
 		}),
 	});
 
-	const altGr = service
-		.getKeyboardMapper()
-		.resolveKeybinding(Keybinding.single(physicalKey('KeyE', { ctrlKey: true, altKey: true })))[0];
+	const altGr = service.getKeyboardMapper().resolveKeybinding(Keybinding.single(physicalKey('KeyE', { ctrlKey: true, altKey: true })))[0];
 	const dead = service.getKeyboardMapper().resolveKeybinding(Keybinding.single(physicalKey('Backquote')))[0];
 	assert.ok(altGr && dead);
 	assert.equal(altGr.chords[0].label, '€');
@@ -880,15 +832,9 @@ test('macOS mapper translates US logical punctuation into required physical modi
 	});
 
 	const z = service.getKeyboardMapper().resolveKeybinding(Keybinding.single(logicalKey('z', { metaKey: true })))[0];
-	const slash = service
-		.getKeyboardMapper()
-		.resolveKeybinding(Keybinding.single(logicalKey('/', { metaKey: true })))[0];
-	const question = service
-		.getKeyboardMapper()
-		.resolveKeybinding(Keybinding.single(logicalKey('/', { shiftKey: true, metaKey: true })))[0];
-	const bracket = service
-		.getKeyboardMapper()
-		.resolveKeybinding(Keybinding.single(logicalKey(']', { metaKey: true })))[0];
+	const slash = service.getKeyboardMapper().resolveKeybinding(Keybinding.single(logicalKey('/', { metaKey: true })))[0];
+	const question = service.getKeyboardMapper().resolveKeybinding(Keybinding.single(logicalKey('/', { shiftKey: true, metaKey: true })))[0];
+	const bracket = service.getKeyboardMapper().resolveKeybinding(Keybinding.single(logicalKey(']', { metaKey: true })))[0];
 
 	assert.equal(z?.chords[0].key, 'KeyY');
 	assert.equal(slash?.chords[0].key, 'Digit7');
@@ -909,7 +855,11 @@ test('mapper diagnostics enumerate modifier states, dead keys, vkeys, and dispat
 		navigator: fakeNavigator(),
 		operatingSystem: OperatingSystem.Windows,
 		layout: keyboardLayout({
-			Backquote: { ...mappingEntry('`', '~', '´', '¨'), withAltGrIsDeadKey: true, vkey: 'VK_OEM_3' },
+			Backquote: {
+				...mappingEntry('`', '~', '´', '¨'),
+				withAltGrIsDeadKey: true,
+				vkey: 'VK_OEM_3',
+			},
 		}),
 	});
 	const diagnostics = service.getKeyboardMapper().dumpDebugInfo();
@@ -941,7 +891,12 @@ test('browser mapping learns AltGr and dead-key states from native events', asyn
 		altKey: true,
 		altGraphKey: true,
 	});
-	service.validateCurrentKeyboardMapping({ ...keyEventData(), key: 'Dead', code: 'Backquote', ctrlKey: false });
+	service.validateCurrentKeyboardMapping({
+		...keyEventData(),
+		key: 'Dead',
+		code: 'Backquote',
+		ctrlKey: false,
+	});
 
 	assert.equal(service.getRawKeyboardMapping()?.KeyE.withAltGr, '€');
 	assert.equal(service.getRawKeyboardMapping()?.Backquote.valueIsDeadKey, true);
@@ -966,7 +921,9 @@ test('native layout provider takes priority and refreshes after an OS layout cha
 	assert.equal(service.getCurrentKeyboardLayout().source, 'native');
 	assert.equal(service.getRawKeyboardMapping()?.KeyY.value, 'z');
 
-	current = nativeKeyboardLayout('native.second', { KeyY: mappingEntry('y', 'Y') });
+	current = nativeKeyboardLayout('native.second', {
+		KeyY: mappingEntry('y', 'Y'),
+	});
 	changes.fire();
 	await service.refreshKeyboardLayout();
 
@@ -977,7 +934,12 @@ test('native layout provider takes priority and refreshes after an OS layout cha
 test('user layout provider is explicit-only and hot-reloads the selected profile layout', async () => {
 	using changes = new Emitter<void>();
 	let current: IKeyboardLayoutDefinition | undefined = {
-		layout: { id: 'user.custom', label: 'User custom', source: 'user', operatingSystem: OperatingSystem.Linux },
+		layout: {
+			id: 'user.custom',
+			label: 'User custom',
+			source: 'user',
+			operatingSystem: OperatingSystem.Linux,
+		},
 		mapping: { KeyQ: mappingEntry('x', 'X') },
 	};
 	using configuration = new WorkbenchConfigurationService();
@@ -1029,11 +991,7 @@ test('built-in layout corpus has valid scan codes, Windows vkeys, and four-state
 				assert.equal(typeof entry.withAltGr, 'string');
 				assert.equal(typeof entry.withShiftAltGr, 'string');
 				if (entry.vkey) {
-					assert.notEqual(
-						NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE[entry.vkey],
-						undefined,
-						`${definition.layout.id}: ${entry.vkey}`,
-					);
+					assert.notEqual(NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE[entry.vkey], undefined, `${definition.layout.id}: ${entry.vkey}`);
 				}
 			}
 		}
@@ -1047,8 +1005,18 @@ test('native keyboard layout IPC validation rejects untrusted shapes', () => {
 	assert.throws(
 		() =>
 			validateNativeKeyboardLayout({
-				layout: { id: 'native.test', label: 'Native test', source: 'native', operatingSystem: 'windows' },
-				mapping: { KeyA: { ...mappingEntry('a', 'A'), unexpected: true } },
+				layout: {
+					id: 'native.test',
+					label: 'Native test',
+					source: 'native',
+					operatingSystem: 'windows',
+				},
+				mapping: {
+					KeyA: {
+						...mappingEntry('a', 'A'),
+						unexpected: true,
+					},
+				},
 			}),
 		/unknown fields/,
 	);
@@ -1095,9 +1063,7 @@ test('user keybindings load conditions, arguments, OS overrides and blockers thr
 			source: KeybindingSource.Builtin,
 		}),
 	);
-	const layouts = registrations.add(
-		new BrowserKeyboardLayoutService({ navigator: dom.window.navigator, operatingSystem: OperatingSystem.Windows }),
-	);
+	const layouts = registrations.add(new BrowserKeyboardLayoutService({ navigator: dom.window.navigator, operatingSystem: OperatingSystem.Windows }));
 	const notifications = registrations.add(new TestNotificationService());
 	const service = registrations.add(
 		new WorkbenchKeybindingService(
@@ -1150,7 +1116,14 @@ test('user keybindings load conditions, arguments, OS overrides and blockers thr
 });
 
 function keyEventData() {
-	return { key: 'p', code: 'KeyP', ctrlKey: true, shiftKey: false, altKey: false, metaKey: false } as const;
+	return {
+		key: 'p',
+		code: 'KeyP',
+		ctrlKey: true,
+		shiftKey: false,
+		altKey: false,
+		metaKey: false,
+	} as const;
 }
 
 function keyboardEvent(overrides: Partial<KeyboardEvent> = {}): { event: KeyboardEvent; readonly prevented: boolean } {
@@ -1190,15 +1163,33 @@ function fakeNavigator(layout?: ReadonlyMap<string, string>): Navigator {
 				},
 			}
 		: undefined;
-	return { language: 'en-US', keyboard } as unknown as Navigator;
+	return {
+		language: 'en-US',
+		keyboard,
+	} as unknown as Navigator;
 }
 
 function keyboardLayout(mapping: IKeyboardMapping) {
-	return { layout: { id: 'test.layout', label: 'Test layout', source: 'user' as const }, mapping };
+	return {
+		layout: {
+			id: 'test.layout',
+			label: 'Test layout',
+			source: 'user' as const,
+		},
+		mapping,
+	};
 }
 
 function nativeKeyboardLayout(id: string, mapping: IKeyboardMapping): IKeyboardLayoutDefinition {
-	return { layout: { id, label: id, source: 'native', operatingSystem: OperatingSystem.Windows }, mapping };
+	return {
+		layout: {
+			id,
+			label: id,
+			source: 'native',
+			operatingSystem: OperatingSystem.Windows,
+		},
+		mapping,
+	};
 }
 
 function mappingEntry(value: string, withShift = '', withAltGr = '', withShiftAltGr = '') {
@@ -1254,16 +1245,10 @@ test('keybinding schema registration updates conditional command arguments and r
 		},
 	});
 	const invalid = (): number =>
-		validateJsonSchema(
-			parseJsonDocument('[{"key":"ctrl+p","command":"test.paste","args":{"kind":"html"}}]'),
-			jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings'],
-		).length;
+		validateJsonSchema(parseJsonDocument('[{"key":"ctrl+p","command":"test.paste","args":{"kind":"html"}}]'), jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings']).length;
 	assert.equal(invalid(), 1);
 	assert.equal(
-		validateJsonSchema(
-			parseJsonDocument('[{"key":"ctrl+p","command":"other","args":{"kind":42}}]'),
-			jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings'],
-		).length,
+		validateJsonSchema(parseJsonDocument('[{"key":"ctrl+p","command":"other","args":{"kind":42}}]'), jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings']).length,
 		0,
 	);
 	kind = 'html';
@@ -1273,10 +1258,7 @@ test('keybinding schema registration updates conditional command arguments and r
 	const readsAfterDispose = schemaReads;
 	changed.fire();
 	assert.equal(schemaReads, readsAfterDispose);
-	assert.deepEqual(
-		jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings']!.definitions!.commandsSchemas.allOf,
-		[],
-	);
+	assert.deepEqual(jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings']!.definitions!.commandsSchemas.allOf, []);
 	keybindings.dispose();
 	assert.equal(jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings'], undefined);
 });
@@ -1310,10 +1292,7 @@ test('registered command metadata drives nested batch validation, completion and
 		profileFixture.profiles,
 	);
 	const validate = (value: unknown): readonly string[] =>
-		validateJsonSchema(
-			parseJsonDocument(JSON.stringify([value])),
-			jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings'],
-		).map(issue => issue.message);
+		validateJsonSchema(parseJsonDocument(JSON.stringify([value])), jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings']).map(issue => issue.message);
 	const target = registry.registerMany([
 		{
 			id: 'test.argument',
@@ -1343,10 +1322,7 @@ test('registered command metadata drives nested batch validation, completion and
 		assert.deepEqual(validate(value), []);
 		assert.deepEqual(validate({ key: 'ctrl+p', command: 'runCommands' }), ["Required property 'args' is missing"]);
 		assert.equal(validate({ ...value, args: { commands: [{ command: 'test.argument' }] } }).length, 1);
-		assert.equal(
-			validate({ ...value, args: { commands: [{ command: 'test.argument', args: { kind: 42 } }] } }).length,
-			1,
-		);
+		assert.equal(validate({ ...value, args: { commands: [{ command: 'test.argument', args: { kind: 42 } }] } }).length, 1);
 		assert.deepEqual(
 			validate({
 				...value,
@@ -1390,10 +1366,7 @@ test('registered command metadata drives nested batch validation, completion and
 		assert.deepEqual(validate({ key: 'ctrl+p', command: 'test.argument', args: 3 }), []);
 		target.dispose();
 		assert.deepEqual(validate(value), []);
-		assert.deepEqual(
-			jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings']!.definitions!.commandNames.enum,
-			['runCommands'],
-		);
+		assert.deepEqual(jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings']!.definitions!.commandNames.enum, ['runCommands']);
 	} finally {
 		target.dispose();
 	}

@@ -9,20 +9,9 @@ import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import type { WorkbenchCompressibleAsyncDataTree } from '../../../../../platform/list/browser/listService.js';
 import { addDisposableListener, h, stopEvent } from '../../../../../base/browser/dom.js';
-import {
-	AbstractDisposable,
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	toDisposable,
-} from '../../../../../base/common/lifecycle.js';
+import { AbstractDisposable, Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
-import {
-	FileKind,
-	FileNotFoundError,
-	FileSystemProviderCapabilities,
-	IFileService,
-} from '../../../../../platform/files/common/files.js';
+import { FileKind, FileNotFoundError, FileSystemProviderCapabilities, IFileService } from '../../../../../platform/files/common/files.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IHoverService } from '../../../../../platform/hover/browser/hoverService.js';
 import { ILabelService } from '../../../../../platform/label/common/label.js';
@@ -67,13 +56,7 @@ export class ExplorerFindProvider extends Disposable {
 		this._register(toDisposable(() => this.input.remove()));
 		this._register(
 			addDisposableListener(tree.element, 'keydown', (event: KeyboardEvent) => {
-				if (
-					!(event.ctrlKey || event.metaKey) ||
-					event.altKey ||
-					event.shiftKey ||
-					event.key.toLowerCase() !== 'f'
-				)
-					return;
+				if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'f') return;
 				stopEvent(event);
 				this.input.hidden = false;
 				this.input.focus();
@@ -124,18 +107,12 @@ export class ExplorerFindProvider extends Disposable {
 		if (!root || !pattern) return;
 		const queue = [root];
 		const visited = new Set<string>();
-		while (
-			queue.length &&
-			!this.isDisposed &&
-			generation === this.searchGeneration &&
-			this.tree.getInput() === root
-		) {
+		while (queue.length && !this.isDisposed && generation === this.searchGeneration && this.tree.getInput() === root) {
 			const directory = queue.shift()!;
 			if (visited.has(directory.resource.toString())) continue;
 			visited.add(directory.resource.toString());
 			try {
-				if (this.tree.getNode(directory).children === undefined)
-					await this.tree.updateChildren(directory, { recursive: false });
+				if (this.tree.getNode(directory).children === undefined) await this.tree.updateChildren(directory, { recursive: false });
 				if (this.isDisposed || generation !== this.searchGeneration || this.tree.getInput() !== root) return;
 				for (const node of this.tree.getNode(directory).children ?? []) {
 					const item = node.element as ExplorerItem;
@@ -171,18 +148,14 @@ export class FileSorter {
 		} else if (order === SortOrder.FoldersNestsFiles && !leftDirectory) {
 			result = Number(!!right.children?.length) - Number(!!left.children?.length);
 		}
-		const lexical =
-			this.configurationService.getValue<LexicographicOptions>('explorer.sortOrderLexicographicOptions') ??
-			LexicographicOptions.Default;
+		const lexical = this.configurationService.getValue<LexicographicOptions>('explorer.sortOrderLexicographicOptions') ?? LexicographicOptions.Default;
 		if (!result && lexical === LexicographicOptions.Unicode) {
 			result = compareFileNamesUnicode(left.name, right.name);
 		} else if (!result) {
 			if (lexical !== LexicographicOptions.Default) {
 				const leftUpper = /^\p{Lu}/u.test(left.name);
 				const rightUpper = /^\p{Lu}/u.test(right.name);
-				if (/^\p{L}/u.test(left.name) && /^\p{L}/u.test(right.name))
-					result =
-						(Number(rightUpper) - Number(leftUpper)) * (lexical === LexicographicOptions.Lower ? -1 : 1);
+				if (/^\p{L}/u.test(left.name) && /^\p{L}/u.test(right.name)) result = (Number(rightUpper) - Number(leftUpper)) * (lexical === LexicographicOptions.Lower ? -1 : 1);
 			}
 			if (!result) result = compareFileNames(left.name, right.name);
 		}
@@ -225,20 +198,12 @@ export class ExplorerDataSource extends Disposable {
 		}
 		const raw = await this.fileService.readDirectory(item.resource);
 		const siblings = new Set(raw.map(entry => entry.name));
-		let entries = raw
-			.filter(entry => !this.excludes.matches(entry.resource, name => siblings.has(name)))
-			.map(ExplorerItem.fromFileEntry);
+		let entries = raw.filter(entry => !this.excludes.matches(entry.resource, name => siblings.has(name))).map(ExplorerItem.fromFileEntry);
 		if (this.configurationService.getValue<SortOrder>('explorer.sortOrder') === SortOrder.Modified) {
 			entries = await Promise.all(
 				entries.map(async entry => {
 					const stat = await this.fileService.stat(entry.resource);
-					return new ExplorerItem(
-						entry.resource,
-						entry.name,
-						entry.kind,
-						entry.children,
-						stat.modifiedAtMillis,
-					);
+					return new ExplorerItem(entry.resource, entry.name, entry.kind, entry.children, stat.modifiedAtMillis);
 				}),
 			);
 		}
@@ -246,9 +211,7 @@ export class ExplorerDataSource extends Disposable {
 		if (!this.configurationService.getValue<boolean>(ExplorerFileNestingSettingId.Enabled)) {
 			return entries;
 		}
-		const patterns = this.configurationService.getValue<Record<string, string>>(
-			ExplorerFileNestingSettingId.Patterns,
-		);
+		const patterns = this.configurationService.getValue<Record<string, string>>(ExplorerFileNestingSettingId.Patterns);
 		const rules = Object.entries(patterns).map(
 			([parent, children]) =>
 				[
@@ -268,12 +231,8 @@ export class ExplorerDataSource extends Disposable {
 		const roots = entries.filter(entry => entry.kind !== FileKind.File);
 		for (const [name, childNames] of nests) {
 			const file = filesByName.get(name)!;
-			const children = [...childNames]
-				.map(child => filesByName.get(child)!)
-				.sort((left, right) => this.sorter.compare(left, right));
-			roots.push(
-				children.length ? new ExplorerItem(file.resource, file.name, file.kind, children, file.mtime) : file,
-			);
+			const children = [...childNames].map(child => filesByName.get(child)!).sort((left, right) => this.sorter.compare(left, right));
+			roots.push(children.length ? new ExplorerItem(file.resource, file.name, file.kind, children, file.mtime) : file);
 		}
 		return roots.sort((left, right) => this.sorter.compare(left, right));
 	}
@@ -311,10 +270,7 @@ export class FilesRenderer extends Disposable {
 	}
 
 	public renderCompressedElements(items: readonly ExplorerItem[]): HTMLElement {
-		const content = this.renderElement(
-			items[items.length - 1]!,
-			items.length > 1 ? items.map(item => item.name) : undefined,
-		);
+		const content = this.renderElement(items[items.length - 1]!, items.length > 1 ? items.map(item => item.name) : undefined);
 		if (items.length > 1) {
 			content.classList.add('ash-explorer-compressed');
 			content.querySelectorAll<HTMLElement>('.ash-icon-label-segment').forEach((segment, index) => {
@@ -342,16 +298,8 @@ export class FilesRenderer extends Disposable {
 			},
 			...(decoration
 				? {
-						suffix:
-							this.configurationService.getValue<boolean>('explorer.decorations.badges') === false
-								? undefined
-								: decoration.letter,
-						ariaLabel: localize(
-							'workbench.explorerDecoratedFile',
-							'{0}, {1}',
-							item.name,
-							decoration.tooltip,
-						),
+						suffix: this.configurationService.getValue<boolean>('explorer.decorations.badges') === false ? undefined : decoration.letter,
+						ariaLabel: localize('workbench.explorerDecoratedFile', '{0}, {1}', item.name, decoration.tooltip),
 					}
 				: {}),
 		};
@@ -361,19 +309,12 @@ export class FilesRenderer extends Disposable {
 		resources.add(
 			this.hoverService.setupHover({
 				target: label.element,
-				content: () =>
-					labelText && labelText.scrollWidth > labelText.clientWidth
-						? (names?.join('/') ?? item.name)
-						: undefined,
+				content: () => (labelText && labelText.scrollWidth > labelText.clientWidth ? (names?.join('/') ?? item.name) : undefined),
 				groupId: 'explorer.items',
 			}),
 		);
 		if (item.kind === FileKind.File) {
-			for (const contribution of explorerFileContribRegistry.create(
-				this.instantiationService,
-				content,
-				resources,
-			)) {
+			for (const contribution of explorerFileContribRegistry.create(this.instantiationService, content, resources)) {
 				contribution.setResource(item.resource);
 				resources.add(toDisposable(() => contribution.setResource(undefined)));
 			}
@@ -417,33 +358,17 @@ export class FileDragAndDrop extends AbstractDisposable implements TreeDragAndDr
 		);
 	}
 
-	public onDragOver(
-		data: TreeDragData<ExplorerItem>,
-		target: ExplorerItem | undefined,
-		_index: number | undefined,
-		_sector: unknown,
-		event: DragEvent,
-	): boolean | TreeDragOverReaction {
+	public onDragOver(data: TreeDragData<ExplorerItem>, target: ExplorerItem | undefined, _index: number | undefined, _sector: unknown, event: DragEvent): boolean | TreeDragOverReaction {
 		const directory = this.getDirectory(this.segmentTarget(target, event));
 		const copy = this.isCopy(event) || data.kind === 'native';
-		if (
-			!this.configuration.getValue<boolean>('explorer.enableDragAndDrop') ||
-			!directory ||
-			this.files.hasCapability(directory, FileSystemProviderCapabilities.Readonly)
-		)
-			return false;
-		if (
-			data.elements.some(item => !(item instanceof ExplorerItem)) ||
-			(!data.elements.length && !data.types.includes('Files') && !data.types.includes('text/uri-list'))
-		)
-			return false;
+		if (!this.configuration.getValue<boolean>('explorer.enableDragAndDrop') || !directory || this.files.hasCapability(directory, FileSystemProviderCapabilities.Readonly)) return false;
+		if (data.elements.some(item => !(item instanceof ExplorerItem)) || (!data.elements.length && !data.types.includes('Files') && !data.types.includes('text/uri-list'))) return false;
 		const sources = data.kind === 'internal' ? this.resolveItems(data.elements) : data.elements;
 		if (
 			sources.some(
 				item =>
 					this.isRoot(item) ||
-					(item.kind === FileKind.Directory &&
-						extUriBiasedIgnorePathCase.isEqualOrParent(directory, item.resource)) ||
+					(item.kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(directory, item.resource)) ||
 					(!copy && extUriBiasedIgnorePathCase.isEqual(dirname(item.resource), directory)),
 			)
 		)
@@ -456,38 +381,20 @@ export class FileDragAndDrop extends AbstractDisposable implements TreeDragAndDr
 		};
 	}
 
-	public drop(
-		data: TreeDragData<ExplorerItem>,
-		target: ExplorerItem | undefined,
-		index: number | undefined,
-		sector: unknown,
-		event: DragEvent,
-	): void {
+	public drop(data: TreeDragData<ExplorerItem>, target: ExplorerItem | undefined, index: number | undefined, sector: unknown, event: DragEvent): void {
 		if (!this.onDragOver(data, target, index, sector, event)) return;
 		const directory = this.getDirectory(this.segmentTarget(target, event))!;
 		const copy = this.isCopy(event) || data.kind === 'native';
 		const workspaceId = this.workspace.getWorkspace().id;
-		const uris =
-			data.kind === 'native' && !data.files.length ? (event.dataTransfer?.getData('text/uri-list') ?? '') : '';
-		void this.performDrop(
-			{ ...data, elements: data.kind === 'internal' ? this.resolveItems(data.elements) : data.elements },
-			directory,
-			copy,
-			workspaceId,
-			uris,
-		).catch(this.onError);
+		const uris = data.kind === 'native' && !data.files.length ? (event.dataTransfer?.getData('text/uri-list') ?? '') : '';
+		void this.performDrop({ ...data, elements: data.kind === 'internal' ? this.resolveItems(data.elements) : data.elements }, directory, copy, workspaceId, uris).catch(this.onError);
 	}
 
 	private segmentTarget(item: ExplorerItem | undefined, event: DragEvent): ExplorerItem | undefined {
-		const segment =
-			typeof Element !== 'undefined' && event.target instanceof Element
-				? event.target.closest<HTMLElement>('[data-explorer-segment]')
-				: null;
+		const segment = typeof Element !== 'undefined' && event.target instanceof Element ? event.target.closest<HTMLElement>('[data-explorer-segment]') : null;
 		if (!item || item.kind !== FileKind.Directory || !segment?.dataset.resource) return item;
 		const resource = URI.parse(segment.dataset.resource);
-		return extUriBiasedIgnorePathCase.isEqualOrParent(item.resource, resource)
-			? new ExplorerItem(resource, basename(resource), FileKind.Directory)
-			: item;
+		return extUriBiasedIgnorePathCase.isEqualOrParent(item.resource, resource) ? new ExplorerItem(resource, basename(resource), FileKind.Directory) : item;
 	}
 
 	private getDirectory(item: ExplorerItem | undefined): URI | undefined {
@@ -498,50 +405,26 @@ export class FileDragAndDrop extends AbstractDisposable implements TreeDragAndDr
 	}
 
 	private isRoot(item: ExplorerItem): boolean {
-		return (
-			item.resource.scheme === 'ash-workspace' ||
-			this.workspace
-				.getWorkspace()
-				.folders.some(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, item.resource))
-		);
+		return item.resource.scheme === 'ash-workspace' || this.workspace.getWorkspace().folders.some(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, item.resource));
 	}
 
 	private isCopy(event: DragEvent): boolean {
 		return isMacintosh ? event.altKey : event.ctrlKey;
 	}
 
-	private async performDrop(
-		data: TreeDragData<ExplorerItem>,
-		directory: URI,
-		copy: boolean,
-		workspaceId: string,
-		uriList: string,
-	): Promise<void> {
+	private async performDrop(data: TreeDragData<ExplorerItem>, directory: URI, copy: boolean, workspaceId: string, uriList: string): Promise<void> {
 		const imported: ExplorerItem[] = [];
 		for (const line of uriList.split(/\r?\n/).filter(line => line && !line.startsWith('#'))) {
 			const resource = URI.parse(line);
-			if (resource.scheme !== 'file')
-				throw new TypeError(localize('files.invalidDropURI', 'Invalid dropped file URI.'));
+			if (resource.scheme !== 'file') throw new TypeError(localize('files.invalidDropURI', 'Invalid dropped file URI.'));
 			const stat = await this.files.stat(resource);
 			imported.push(new ExplorerItem(resource, basename(resource), stat.kind));
 		}
 		const sources = [...data.elements, ...imported];
-		if (
-			sources.some(
-				item =>
-					item.kind === FileKind.Directory &&
-					extUriBiasedIgnorePathCase.isEqualOrParent(directory, item.resource),
-			)
-		)
+		if (sources.some(item => item.kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(directory, item.resource)))
 			throw new Error(localize('files.pasteIntoSelf', 'Cannot paste a folder into itself.'));
 		const items = sources.filter(
-			item =>
-				!sources.some(
-					parent =>
-						parent !== item &&
-						parent.kind === FileKind.Directory &&
-						extUriBiasedIgnorePathCase.isEqualOrParent(item.resource, parent.resource),
-				),
+			item => !sources.some(parent => parent !== item && parent.kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(item.resource, parent.resource)),
 		);
 		if (!copy && this.configuration.getValue<boolean>('explorer.confirmDragAndDrop')) {
 			const confirmed = await this.dialogs.confirm({
@@ -552,8 +435,7 @@ export class FileDragAndDrop extends AbstractDisposable implements TreeDragAndDr
 		}
 		for (const item of items) {
 			if (this.isDisposed || workspaceId !== this.workspace.getWorkspace().id) return;
-			if (!(await this.paths.hasValidBasename(directory, item.name)))
-				throw new Error(localize('files.invalidDropName', 'Invalid file name: {0}', item.name));
+			if (!(await this.paths.hasValidBasename(directory, item.name))) throw new Error(localize('files.invalidDropName', 'Invalid file name: {0}', item.name));
 			const target = await this.copyTarget(directory, item.name, copy);
 			if (this.isDisposed || workspaceId !== this.workspace.getWorkspace().id) return;
 			if (copy) await this.files.copy(item.resource, target);
@@ -561,8 +443,7 @@ export class FileDragAndDrop extends AbstractDisposable implements TreeDragAndDr
 		}
 		for (const file of data.files) {
 			if (this.isDisposed || workspaceId !== this.workspace.getWorkspace().id) return;
-			if (!(await this.paths.hasValidBasename(directory, file.name)))
-				throw new Error(localize('files.invalidDropName', 'Invalid file name: {0}', file.name));
+			if (!(await this.paths.hasValidBasename(directory, file.name))) throw new Error(localize('files.invalidDropName', 'Invalid file name: {0}', file.name));
 			const target = await this.copyTarget(directory, file.name, true);
 			const bytes = new Uint8Array(await file.arrayBuffer());
 			if (this.isDisposed || workspaceId !== this.workspace.getWorkspace().id) return;
@@ -578,10 +459,7 @@ export class FileDragAndDrop extends AbstractDisposable implements TreeDragAndDr
 		const stem = dot > 0 ? name.slice(0, dot) : name;
 		const extension = dot > 0 ? name.slice(dot) : '';
 		for (let index = 0; index < 10000; index++) {
-			const candidate =
-				index === 0
-					? target
-					: directory.joinPathSegment(`${stem} copy${index === 1 ? '' : ` ${index}`}${extension}`);
+			const candidate = index === 0 ? target : directory.joinPathSegment(`${stem} copy${index === 1 ? '' : ` ${index}`}${extension}`);
 			try {
 				await this.files.stat(candidate);
 			} catch (error) {

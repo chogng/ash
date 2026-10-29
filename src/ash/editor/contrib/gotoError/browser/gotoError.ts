@@ -27,28 +27,15 @@ export class DiagnosticNavigationController extends Disposable {
 	}
 
 	private handleKeydown(event: KeyboardEvent): void {
-		if (
-			event.defaultPrevented ||
-			event.isComposing ||
-			event.ctrlKey ||
-			event.metaKey ||
-			event.altKey ||
-			event.key !== 'F8'
-		)
-			return;
+		if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.key !== 'F8') return;
 		const diagnostics = this.diagnostics.decorations;
 		if (diagnostics.length === 0) return;
 		stopEvent(event);
 		const active = this.viewModel.getSelections()[0]!.getPosition();
 		const direction = event.shiftKey ? -1 : 1;
-		const index =
-			direction > 0
-				? diagnostics.findIndex(diagnostic => Position.compare(diagnostic.range.getStartPosition(), active) > 0)
-				: findPreviousDiagnostic(diagnostics, active);
+		const index = direction > 0 ? diagnostics.findIndex(diagnostic => Position.compare(diagnostic.range.getStartPosition(), active) > 0) : findPreviousDiagnostic(diagnostics, active);
 		const target = diagnostics[index === -1 ? (direction > 0 ? 0 : diagnostics.length - 1) : index]!;
-		this.viewModel.setSelections('editor.action.marker.next', [
-			Selection.fromPositions(target.range.getStartPosition(), target.range.getEndPosition()),
-		]);
+		this.viewModel.setSelections('editor.action.marker.next', [Selection.fromPositions(target.range.getStartPosition(), target.range.getEndPosition())]);
 		this.viewport.revealPosition(target.range.getStartPosition());
 		this.viewport.announceAccessibilityStatus(describeDiagnostic(target.metadata));
 	}
@@ -71,11 +58,6 @@ registerEditorContribution({
 	id: 'editor.contrib.gotoError',
 	install: context => {
 		if (context.kind !== 'text') return;
-		return new DiagnosticNavigationController(
-			context.controller.element,
-			context.view,
-			context.viewModel,
-			context.getService(TextEditorCapability.diagnosticDecorations),
-		);
+		return new DiagnosticNavigationController(context.controller.element, context.view, context.viewModel, context.getService(TextEditorCapability.diagnosticDecorations));
 	},
 });

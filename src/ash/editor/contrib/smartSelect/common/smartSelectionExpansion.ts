@@ -4,11 +4,7 @@ import { Range } from '../../../common/core/range.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 
 /** Expands one selection through word, parser, enclosing-pair, line, and document scopes. */
-export function expandSmartSelection(
-	model: TextModel,
-	selection: Selection,
-	syntaxRanges: readonly Range[] = [],
-): Selection {
+export function expandSmartSelection(model: TextModel, selection: Selection, syntaxRanges: readonly Range[] = []): Selection {
 	const current = selection;
 	const next = expandRange(model, current, syntaxRanges);
 	return Selection.fromRange(next, selection.getDirection());
@@ -28,17 +24,10 @@ function expandRange(model: TextModel, range: Range, syntaxRanges: readonly Rang
 	const lineEnd = new Position(range.endLineNumber, model.getLineContent(range.endLineNumber).length + 1);
 	const lineRange = Range.fromPositions(lineStart, lineEnd);
 	if (!lineRange.equalsRange(range)) return lineRange;
-	return Range.fromPositions(
-		new Position(0 + 1, 0 + 1),
-		new Position(model.lineCount - 1 + 1, model.getLineContent(model.lineCount - 1 + 1).length + 1),
-	);
+	return Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(model.lineCount - 1 + 1, model.getLineContent(model.lineCount - 1 + 1).length + 1));
 }
 
-function smallestStrictlyContainingRange(
-	model: TextModel,
-	current: Range,
-	ranges: readonly Range[],
-): Range | undefined {
+function smallestStrictlyContainingRange(model: TextModel, current: Range, ranges: readonly Range[]): Range | undefined {
 	let best: Range | undefined;
 	let bestLength = Number.POSITIVE_INFINITY;
 	for (const candidate of ranges) {
@@ -70,10 +59,7 @@ function findEnclosingPair(model: TextModel, range: Range): Range | undefined {
 		while (openOffset >= 0) {
 			const closeOffset = text.indexOf(close, Math.max(openOffset + open.length, endOffset));
 			if (closeOffset < 0) break;
-			const candidate = Range.fromPositions(
-				model.positionAt(openOffset),
-				model.positionAt(closeOffset + close.length),
-			);
+			const candidate = Range.fromPositions(model.positionAt(openOffset), model.positionAt(closeOffset + close.length));
 			const candidateLength = closeOffset + close.length - openOffset;
 			if (candidate.containsRange(range) && candidateLength < bestLength) {
 				best = candidate;

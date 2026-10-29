@@ -1,25 +1,12 @@
 import './hover.css';
 import { Emitter } from '../../../common/event.js';
 import { cancelOnDispose, type CancellationToken } from '../../../common/cancellation.js';
-import {
-	Disposable,
-	MutableDisposable,
-	DisposableStore,
-	type IDisposable,
-	toDisposable,
-} from '../../../common/lifecycle.js';
+import { Disposable, MutableDisposable, DisposableStore, type IDisposable, toDisposable } from '../../../common/lifecycle.js';
 import { addDisposableListener, getWindow, isHTMLElement, isNode, h } from '../../dom.js';
 import { disposableWindowTimeout } from '../../scheduler.js';
 import { restoreFocus, trapTabFocus } from '../../focus.js';
 import { getAriaAttribute, setAriaAttribute } from '../aria/aria.js';
-import {
-	AnchorAlignment,
-	AnchorAxisAlignment,
-	AnchorPosition,
-	ContextView,
-	ContextViewHideReason,
-	type IContextViewProvider,
-} from '../contextview/contextview.js';
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewHideReason, type IContextViewProvider } from '../contextview/contextview.js';
 import { HoverPosition } from './hoverWidget.js';
 
 export type HoverContentValue = string | HTMLElement | undefined;
@@ -156,8 +143,7 @@ export class Hover extends Disposable {
 				this.targetFocused = true;
 				this.bindTargetExitListeners();
 				// Focus returning from a dismissed hover or removed overlay must not reopen it.
-				const fromHover =
-					isHTMLElement(event.relatedTarget) && event.relatedTarget.closest('.ash-hover') !== null;
+				const fromHover = isHTMLElement(event.relatedTarget) && event.relatedTarget.closest('.ash-hover') !== null;
 				if (this.pointerDown || !event.relatedTarget || fromHover) {
 					return;
 				}
@@ -351,9 +337,7 @@ export class Hover extends Disposable {
 			}),
 		);
 
-		this.tooltipListeners.add(
-			addDisposableListener(ownerDocument, 'pointermove', event => this.handlePointerMove(event, tooltip)),
-		);
+		this.tooltipListeners.add(addDisposableListener(ownerDocument, 'pointermove', event => this.handlePointerMove(event, tooltip)));
 		const dismissOutsideTooltip = (event: Event) => {
 			if (isNode(event.target) && tooltip.contains(event.target)) {
 				return;
@@ -469,14 +453,8 @@ function isPointInHoverRegion(x: number, y: number, target: DOMRect, tooltip: DO
 
 	// Only the gap within both rectangles' shared span keeps the hover open.
 	const inHorizontalGap =
-		x >= Math.min(target.right, tooltip.right) &&
-		x <= Math.max(target.left, tooltip.left) &&
-		y >= Math.max(target.top, tooltip.top) &&
-		y <= Math.min(target.bottom, tooltip.bottom);
+		x >= Math.min(target.right, tooltip.right) && x <= Math.max(target.left, tooltip.left) && y >= Math.max(target.top, tooltip.top) && y <= Math.min(target.bottom, tooltip.bottom);
 	const inVerticalGap =
-		y >= Math.min(target.bottom, tooltip.bottom) &&
-		y <= Math.max(target.top, tooltip.top) &&
-		x >= Math.max(target.left, tooltip.left) &&
-		x <= Math.min(target.right, tooltip.right);
+		y >= Math.min(target.bottom, tooltip.bottom) && y <= Math.max(target.top, tooltip.top) && x >= Math.max(target.left, tooltip.left) && x <= Math.min(target.right, tooltip.right);
 	return inHorizontalGap || inVerticalGap;
 }

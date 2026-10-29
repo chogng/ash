@@ -3,18 +3,8 @@ import { test } from 'mocha';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { DocumentCommands } from '../../contrib/creator/common/commands/documentCommands.js';
 import { DesignModel } from '../../contrib/creator/common/model/designModel.js';
-import {
-	documentFromShapes,
-	flattenDesignShapes,
-	parseDesignDocument,
-	serializeDesignDocument,
-	type DesignShape,
-} from '../../contrib/creator/common/model/document.js';
-import {
-	getDesignResourceCatalog,
-	resolveDesignVariable,
-	type DesignLibrary,
-} from '../../contrib/creator/common/model/designResources.js';
+import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/creator/common/model/document.js';
+import { getDesignResourceCatalog, resolveDesignVariable, type DesignLibrary } from '../../contrib/creator/common/model/designResources.js';
 import { hitTestDesignShapes } from '../../contrib/creator/common/model/hitTest.js';
 
 type Frame = Extract<DesignShape, { kind: 'frame' }>;
@@ -307,10 +297,7 @@ test('Design library removals retain missing component and variable appearance, 
 	assert.equal(commands.components.getMain(id), undefined);
 	roundTrip(consumer);
 	const token = consumer.version;
-	assert.throws(
-		() => commands.resources.acceptLibrary({ ...library(source), id: consumer.value.documentId }),
-		/conflicting/u,
-	);
+	assert.throws(() => commands.resources.acceptLibrary({ ...library(source), id: consumer.value.documentId }), /conflicting/u);
 	assert.equal(consumer.version, token);
 });
 
@@ -357,9 +344,7 @@ test('Design resources reject malformed persistence values, type mismatches and 
 	const resources = new DocumentCommands(consumer).resources;
 	resources.acceptLibrary(library(model));
 	const recursive = JSON.parse(serializeDesignDocument(consumer.value));
-	recursive.resources.libraries[0].document.resources.libraries.push(
-		structuredClone(recursive.resources.libraries[0]),
-	);
+	recursive.resources.libraries[0].document.resources.libraries.push(structuredClone(recursive.resources.libraries[0]));
 	assert.throws(() => parseDesignDocument(JSON.stringify(recursive)), /Invalid/u);
 });
 

@@ -33,6 +33,4 @@ export interface ExtensionEditorModuleRequest {
 	readonly assertCurrent: () => Promise<void>;
 }
 
-export type ExtensionEditorModuleLoader = (
-	request: ExtensionEditorModuleRequest,
-) => Promise<ExtensionEditorClientModule>;
+export type ExtensionEditorModuleLoader = (request: ExtensionEditorModuleRequest) => Promise<ExtensionEditorClientModule>;

@@ -79,34 +79,23 @@ export class SmartSnippetInserter {
 					break;
 			}
 
-			if (
-				token.offset + token.length < desiredOffset ||
-				(currentState === InsertionState.Invalid && lastValidOffset < 0)
-			)
-				continue;
-			const acceptedState = (
-				currentState === InsertionState.Invalid ? lastValidState : currentState
-			) as InsertionState;
-			const acceptedOffset =
-				currentState === InsertionState.Invalid
-					? lastValidOffset
-					: isSafeToken
-						? token.offset + token.length
-						: token.offset;
+			if (token.offset + token.length < desiredOffset || (currentState === InsertionState.Invalid && lastValidOffset < 0)) continue;
+			const acceptedState = (currentState === InsertionState.Invalid ? lastValidState : currentState) as InsertionState;
+			const acceptedOffset = currentState === InsertionState.Invalid ? lastValidOffset : isSafeToken ? token.offset + token.length : token.offset;
 			if (acceptedState === InsertionState.AfterObject) {
 				return Object.freeze({ position: model.positionAt(acceptedOffset), prepend: ',', append: '' });
 			}
 			return Object.freeze({
 				position: model.positionAt(acceptedOffset),
 				prepend: '',
-				append: tokens.some(
-					candidate => candidate.offset >= acceptedOffset && candidate.kind === JsonTokenKind.OpenBrace,
-				)
-					? ','
-					: '',
+				append: tokens.some(candidate => candidate.offset >= acceptedOffset && candidate.kind === JsonTokenKind.OpenBrace) ? ',' : '',
 			});
 		}
 
-		return Object.freeze({ position: model.positionAt(model.length), prepend: '\n[', append: ']' });
+		return Object.freeze({
+			position: model.positionAt(model.length),
+			prepend: '\n[',
+			append: ']',
+		});
 	}
 }

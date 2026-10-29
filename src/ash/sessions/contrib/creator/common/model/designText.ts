@@ -42,10 +42,7 @@ export interface DesignTextProperties extends DesignTextStyle {
 	readonly maxLines?: number;
 }
 export type DesignTextShape = Extract<DesignShape, { kind: 'text' }>;
-export type DesignTextMeasurer = (
-	shape: DesignTextShape,
-	width: number | undefined,
-) => { width: number; height: number };
+export type DesignTextMeasurer = (shape: DesignTextShape, width: number | undefined) => { width: number; height: number };
 export const designTextStyleKeys = [
 	'fontFamily',
 	'fontSize',
@@ -68,14 +65,7 @@ export const designTextStyleKeys = [
 	'fontFeatures',
 	'fontVariations',
 ] as const;
-export const designTextKeys = [
-	...designTextStyleKeys,
-	'textRuns',
-	'textAutoResize',
-	'textVerticalAlign',
-	'textTruncate',
-	'maxLines',
-] as const;
+export const designTextKeys = [...designTextStyleKeys, 'textRuns', 'textAutoResize', 'textVerticalAlign', 'textTruncate', 'maxLines'] as const;
 const choices: Partial<Record<keyof DesignTextProperties, readonly string[]>> = {
 	textWrap: ['auto', 'balance', 'pretty'],
 	textTrim: ['none', 'cap-height'],
@@ -94,12 +84,7 @@ function invalid(): never {
 	throw new TypeError(localize('sessions.design.invalidText', 'Invalid design text'));
 }
 function boundary(text: string, index: number): boolean {
-	return !(
-		index > 0 &&
-		index < text.length &&
-		/[\uD800-\uDBFF]/u.test(text[index - 1]) &&
-		/[\uDC00-\uDFFF]/u.test(text[index])
-	);
+	return !(index > 0 && index < text.length && /[\uD800-\uDBFF]/u.test(text[index - 1]) && /[\uDC00-\uDFFF]/u.test(text[index]));
 }
 
 /** Used at file, clipboard and typed-property input boundaries. No arbitrary CSS is accepted. */
@@ -128,11 +113,7 @@ export function parseDesignTextStyle(value: unknown): DesignTextStyle {
 				!isRecord(item) ||
 				Object.keys(item).length > 64 ||
 				Object.entries(item).some(
-					([tag, number]) =>
-						!/^[a-z\d]{4}$/iu.test(tag) ||
-						typeof number !== 'number' ||
-						!Number.isFinite(number) ||
-						(key === 'fontFeatures' && (!Number.isInteger(number) || number < 0)),
+					([tag, number]) => !/^[a-z\d]{4}$/iu.test(tag) || typeof number !== 'number' || !Number.isFinite(number) || (key === 'fontFeatures' && (!Number.isInteger(number) || number < 0)),
 				)
 			) {
 				invalid();
@@ -150,11 +131,7 @@ export function parseDesignTextStyle(value: unknown): DesignTextStyle {
 	return { ...value } as DesignTextStyle;
 }
 export function parseDesignTextProperties(value: Record<string, unknown>): DesignTextProperties {
-	const style = parseDesignTextStyle(
-		Object.fromEntries(
-			Object.entries(value).filter(([key]) => (designTextStyleKeys as readonly string[]).includes(key)),
-		),
-	);
+	const style = parseDesignTextStyle(Object.fromEntries(Object.entries(value).filter(([key]) => (designTextStyleKeys as readonly string[]).includes(key))));
 	for (const key of ['textAutoResize', 'textVerticalAlign'] as const) {
 		if (value[key] !== undefined && !choices[key]!.includes(value[key] as string)) {
 			invalid();
@@ -163,13 +140,7 @@ export function parseDesignTextProperties(value: Record<string, unknown>): Desig
 	if (value.textTruncate !== undefined && typeof value.textTruncate !== 'boolean') {
 		invalid();
 	}
-	if (
-		value.maxLines !== undefined &&
-		(typeof value.maxLines !== 'number' ||
-			!Number.isInteger(value.maxLines) ||
-			value.maxLines < 1 ||
-			value.maxLines > 10000)
-	) {
+	if (value.maxLines !== undefined && (typeof value.maxLines !== 'number' || !Number.isInteger(value.maxLines) || value.maxLines < 1 || value.maxLines > 10000)) {
 		invalid();
 	}
 	let end = 0;
@@ -195,12 +166,7 @@ export function parseDesignTextProperties(value: Record<string, unknown>): Desig
 			if (run.styleId !== undefined && !isUuid(run.styleId)) {
 				invalid();
 			}
-			if (
-				run.overrides !== undefined &&
-				(!run.styleId ||
-					!Array.isArray(run.overrides) ||
-					run.overrides.some(key => !(designTextStyleKeys as readonly unknown[]).includes(key)))
-			) {
+			if (run.overrides !== undefined && (!run.styleId || !Array.isArray(run.overrides) || run.overrides.some(key => !(designTextStyleKeys as readonly unknown[]).includes(key)))) {
 				invalid();
 			}
 			end = run.end as number;
@@ -208,9 +174,7 @@ export function parseDesignTextProperties(value: Record<string, unknown>): Desig
 	}
 	return {
 		...style,
-		...Object.fromEntries(
-			Object.entries(value).filter(([key]) => (designTextKeys as readonly string[]).includes(key)),
-		),
+		...Object.fromEntries(Object.entries(value).filter(([key]) => (designTextKeys as readonly string[]).includes(key))),
 	} as DesignTextProperties;
 }
 
@@ -258,9 +222,7 @@ function mergeRuns(runs: readonly DesignTextRun[]): DesignTextRun[] {
 }
 export function designTextStyleAt(shape: DesignTextShape, offset: number): DesignTextStyle {
 	return {
-		...Object.fromEntries(
-			designTextStyleKeys.filter(key => shape[key] !== undefined).map(key => [key, shape[key]]),
-		),
+		...Object.fromEntries(designTextStyleKeys.filter(key => shape[key] !== undefined).map(key => [key, shape[key]])),
 		...shape.textRuns?.find(run => run.start <= offset && offset < run.end)?.style,
 	};
 }
@@ -269,31 +231,14 @@ export function convertDesignTextUnits(current: DesignTextStyle, patch: DesignTe
 	const result = { ...patch };
 	for (const key of ['lineHeight', 'letterSpacing'] as const) {
 		const unit = `${key}Unit` as const;
-		if (
-			patch[unit] &&
-			patch[key] === undefined &&
-			current[key] !== undefined &&
-			(current[unit] ?? 'px') !== patch[unit]
-		) {
-			Reflect.set(
-				result,
-				key,
-				patch[unit] === 'percent'
-					? (current[key]! * 100) / (current.fontSize ?? 24)
-					: (current[key]! * (current.fontSize ?? 24)) / 100,
-			);
+		if (patch[unit] && patch[key] === undefined && current[key] !== undefined && (current[unit] ?? 'px') !== patch[unit]) {
+			Reflect.set(result, key, patch[unit] === 'percent' ? (current[key]! * 100) / (current.fontSize ?? 24) : (current[key]! * (current.fontSize ?? 24)) / 100);
 		}
 	}
 	return result;
 }
 /** Split only at edit boundaries. Other characters keep both their appearance and linked style. */
-export function formatDesignText(
-	shape: DesignTextShape,
-	start: number,
-	end: number,
-	style: DesignTextStyle,
-	styleId?: string,
-): DesignTextShape {
+export function formatDesignText(shape: DesignTextShape, start: number, end: number, style: DesignTextStyle, styleId?: string): DesignTextShape {
 	if (start === end) {
 		return shape;
 	}
@@ -306,12 +251,7 @@ export function formatDesignText(
 				? { styleId, overrides: [] }
 				: run.styleId
 					? {
-							overrides: [
-								...new Set([
-									...(run.overrides ?? []),
-									...(Object.keys(patch) as (keyof DesignTextStyle)[]),
-								]),
-							],
+							overrides: [...new Set([...(run.overrides ?? []), ...(Object.keys(patch) as (keyof DesignTextStyle)[])])],
 						}
 					: {}),
 		};
@@ -319,18 +259,9 @@ export function formatDesignText(
 	const runs = [...designTextSegments(shape, 0, start), ...formatted, ...designTextSegments(shape, end)];
 	return { ...shape, textRuns: mergeRuns(runs) };
 }
-export function replaceDesignText(
-	shape: DesignTextShape,
-	start: number,
-	end: number,
-	text: string,
-	style?: DesignTextStyle,
-	insertedRuns?: readonly DesignTextRun[],
-): DesignTextShape {
+export function replaceDesignText(shape: DesignTextShape, start: number, end: number, text: string, style?: DesignTextStyle, insertedRuns?: readonly DesignTextRun[]): DesignTextShape {
 	const delta = text.length - (end - start);
-	const inherited = shape.textRuns?.find(
-		run => run.start <= Math.max(0, start - 1) && Math.max(0, start - 1) < run.end,
-	);
+	const inherited = shape.textRuns?.find(run => run.start <= Math.max(0, start - 1) && Math.max(0, start - 1) < run.end);
 	const inserted = insertedRuns
 		? insertedRuns.map(run => ({ ...run, start: start + run.start, end: start + run.end }))
 		: text
@@ -342,12 +273,7 @@ export function replaceDesignText(
 						style: { ...inherited?.style, ...style },
 						...(inherited?.styleId && style
 							? {
-									overrides: [
-										...new Set([
-											...(inherited.overrides ?? []),
-											...(Object.keys(style) as (keyof DesignTextStyle)[]),
-										]),
-									],
+									overrides: [...new Set([...(inherited.overrides ?? []), ...(Object.keys(style) as (keyof DesignTextStyle)[])])],
 								}
 							: {}),
 					},
@@ -356,11 +282,7 @@ export function replaceDesignText(
 	return {
 		...shape,
 		text: shape.text.slice(0, start) + text + shape.text.slice(end),
-		textRuns: mergeRuns([
-			...designTextSegments(shape, 0, start),
-			...inserted,
-			...designTextSegments(shape, end).map(run => ({ ...run, start: run.start + delta, end: run.end + delta })),
-		]),
+		textRuns: mergeRuns([...designTextSegments(shape, 0, start), ...inserted, ...designTextSegments(shape, end).map(run => ({ ...run, start: run.start + delta, end: run.end + delta }))]),
 	};
 }
 /** A text replacement must keep surrogate pairs intact, including when two emoji share a high surrogate. */
@@ -395,12 +317,8 @@ export function scaleDesignText(shape: DesignTextShape, scale: number): DesignTe
 	const scaled = (style: DesignTextStyle): DesignTextStyle => ({
 		...style,
 		...(style.fontSize === undefined ? {} : { fontSize: style.fontSize * scale }),
-		...(style.lineHeight === undefined || style.lineHeightUnit === 'percent'
-			? {}
-			: { lineHeight: style.lineHeight * scale }),
-		...(style.letterSpacing === undefined || style.letterSpacingUnit === 'percent'
-			? {}
-			: { letterSpacing: style.letterSpacing * scale }),
+		...(style.lineHeight === undefined || style.lineHeightUnit === 'percent' ? {} : { lineHeight: style.lineHeight * scale }),
+		...(style.letterSpacing === undefined || style.letterSpacingUnit === 'percent' ? {} : { letterSpacing: style.letterSpacing * scale }),
 		...(style.paragraphSpacing === undefined ? {} : { paragraphSpacing: style.paragraphSpacing * scale }),
 		...(style.paragraphIndent === undefined ? {} : { paragraphIndent: style.paragraphIndent * scale }),
 	});
@@ -417,15 +335,7 @@ export function scaleDesignText(shape: DesignTextShape, scale: number): DesignTe
 							style,
 							...(run.styleId
 								? {
-										overrides: [
-											...new Set([
-												...(run.overrides ?? []),
-												...designTextStyleKeys.filter(
-													key =>
-														JSON.stringify(style[key]) !== JSON.stringify(run.style[key]),
-												),
-											]),
-										],
+										overrides: [...new Set([...(run.overrides ?? []), ...designTextStyleKeys.filter(key => JSON.stringify(style[key]) !== JSON.stringify(run.style[key]))])],
 									}
 								: {}),
 						};

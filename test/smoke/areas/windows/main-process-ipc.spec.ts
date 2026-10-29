@@ -27,10 +27,7 @@ interface IpcHarness {
 
 const test = baseTest.extend<{ ipcHarness: IpcHarness }>({
 	ipcHarness: async ({ target }, use, testInfo) => {
-		baseTest.skip(
-			target.kind !== 'electron' || target.appServerMode !== 'disabled',
-			'Requires the Electron UI project.',
-		);
+		baseTest.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled', 'Requires the Electron UI project.');
 		const directory = await mkdtemp(join(tmpdir(), 'ash-ipc-'));
 		const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory: directory });
 		const entry = testInfo.outputPath('main-process-ipc.mjs');
@@ -92,10 +89,7 @@ startElectronApplication();
 			await use({
 				application,
 				page,
-				active: () =>
-					application.evaluate(() => [
-						...(globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.active,
-					]),
+				active: () => application.evaluate(() => [...(globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.active]),
 			});
 			expect(errors).toEqual([]);
 		} finally {
@@ -111,9 +105,7 @@ startElectronApplication();
 	},
 });
 
-test('Main color subscriptions follow their own window through reload and close', async ({
-	ipcHarness: { application, page, active },
-}) => {
+test('Main color subscriptions follow their own window through reload and close', async ({ ipcHarness: { application, page, active } }) => {
 	const firstId = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.id);
 	await expect.poll(active).toEqual([[`window:${firstId}`, 1]]);
 	const opened = application.waitForEvent('window');
@@ -121,10 +113,7 @@ test('Main color subscriptions follow their own window through reload and close'
 		app.emit('second-instance', {}, [process.execPath, app.getAppPath(), '--new-window'], process.cwd(), {});
 	});
 	const second = await opened;
-	const secondId = await application.evaluate(
-		({ BrowserWindow }, firstId) => BrowserWindow.getAllWindows().find(window => window.id !== firstId)!.id,
-		firstId,
-	);
+	const secondId = await application.evaluate(({ BrowserWindow }, firstId) => BrowserWindow.getAllWindows().find(window => window.id !== firstId)!.id, firstId);
 	await expect(second.locator('.ash-workbench')).toBeVisible();
 	await expect.poll(active).toEqual([
 		[`window:${firstId}`, 1],
@@ -162,25 +151,15 @@ test('Main color subscriptions follow their own window through reload and close'
 	await expect(second.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-dark');
 });
 
-test('reload cancels a pending Main call and an old reply cannot overwrite the new document', async ({
-	ipcHarness: { application, page, active },
-}) => {
+test('reload cancels a pending Main call and an old reply cannot overwrite the new document', async ({ ipcHarness: { application, page, active } }) => {
 	await application.evaluate(() => {
 		(globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.holdNextRead = true;
 	});
 	await page.reload();
-	await expect
-		.poll(() =>
-			application.evaluate(() => (globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.waitingRead),
-		)
-		.toBe(true);
+	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.waitingRead)).toBe(true);
 	await page.reload();
 	await expect(page.locator('.ash-workbench')).toBeVisible();
-	await expect
-		.poll(() =>
-			application.evaluate(() => (globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.cancelled),
-		)
-		.toBe(true);
+	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.cancelled)).toBe(true);
 	await application.evaluate(({ nativeTheme }) => {
 		nativeTheme.themeSource = 'dark';
 	});
@@ -188,13 +167,7 @@ test('reload cancels a pending Main call and an old reply cannot overwrite the n
 	await application.evaluate(() => {
 		(globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.releaseRead();
 	});
-	await expect
-		.poll(() =>
-			application.evaluate(
-				() => (globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.readReleased,
-			),
-		)
-		.toBe(true);
+	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.readReleased)).toBe(true);
 	await expect(page.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-dark');
 	await expect.poll(async () => (await active()).map(([, count]) => count)).toEqual([1]);
 	await application.evaluate(({ nativeTheme }) => {
@@ -203,9 +176,7 @@ test('reload cancels a pending Main call and an old reply cannot overwrite the n
 	await expect(page.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-light');
 });
 
-test('configuration changes reach other windows and survive document replacement', async ({
-	ipcHarness: { application, page },
-}) => {
+test('configuration changes reach other windows and survive document replacement', async ({ ipcHarness: { application, page } }) => {
 	const opened = application.waitForEvent('window');
 	await application.evaluate(({ app }) => {
 		app.emit('second-instance', {}, [process.execPath, app.getAppPath(), '--new-window'], process.cwd(), {});
@@ -216,9 +187,7 @@ test('configuration changes reach other windows and survive document replacement
 	await first.settingsEditor.openUserSettingsUI();
 	await first.settingsEditor.selectGroup('workbench');
 	await first.settingsEditor.selectCategory('appearance');
-	const theme = first.settingsEditor.element
-		.locator('[data-settings-item-id="workbench.colorTheme"]')
-		.getByRole('combobox');
+	const theme = first.settingsEditor.element.locator('[data-settings-item-id="workbench.colorTheme"]').getByRole('combobox');
 	await theme.click();
 	await page.getByRole('option', { name: 'Ash Dark', exact: true }).click();
 	for (const window of [page, second]) {
@@ -234,9 +203,7 @@ test('configuration changes reach other windows and survive document replacement
 	}
 });
 
-test('Main IPC rejects removed acquisition routes and renderer-supplied window identity', async ({
-	ipcHarness: { application, page, active },
-}) => {
+test('Main IPC rejects removed acquisition routes and renderer-supplied window identity', async ({ ipcHarness: { application, page, active } }) => {
 	const initial = await active();
 	const errors = await page.evaluate(async () => {
 		const ipc = (

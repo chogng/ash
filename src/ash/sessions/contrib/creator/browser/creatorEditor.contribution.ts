@@ -4,17 +4,9 @@ import { Action2, registerAction2 } from '../../../../platform/actions/common/ac
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { getActiveElement } from '../../../../base/browser/dom.js';
 
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
@@ -22,11 +14,7 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { ViewContainerLocation, type IView } from '../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
 import { DesignEditorWidget } from './widget/designEditorWidget.js';
-import {
-	IDesignEditorService,
-	DESIGN_LAYERS_CONTAINER_ID,
-	DESIGN_PROPERTIES_CONTAINER_ID,
-} from './designEditorService.js';
+import { IDesignEditorService, DESIGN_LAYERS_CONTAINER_ID, DESIGN_PROPERTIES_CONTAINER_ID } from './designEditorService.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { DesignLayersView, DesignPropertiesView } from './designViews.js';
 import { designToolActions, designModeActions } from './widget/designToolsWidget.js';
@@ -143,13 +131,7 @@ for (const [mode, title, icon] of designModeActions) {
 
 for (const [id, title, key, location, view] of [
 	[DESIGN_LAYERS_CONTAINER_ID, 'Layers', 'sessions.design.layers', ViewContainerLocation.Sidebar, DesignLayersView],
-	[
-		DESIGN_PROPERTIES_CONTAINER_ID,
-		'Shape properties',
-		'sessions.design.properties',
-		ViewContainerLocation.AuxiliaryBar,
-		DesignPropertiesView,
-	],
+	[DESIGN_PROPERTIES_CONTAINER_ID, 'Shape properties', 'sessions.design.properties', ViewContainerLocation.AuxiliaryBar, DesignPropertiesView],
 ] as const) {
 	SessionsViewRegistry.registerStaticViewContainer({
 		id,
@@ -185,10 +167,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize('sessions.design.verbosityTitle', 'Design canvas accessibility help');
 		},
 		get description() {
-			return localize(
-				'sessions.design.verbosityDescription',
-				'Announce how to open accessibility help when the Design canvas receives focus.',
-			);
+			return localize('sessions.design.verbosityDescription', 'Announce how to open accessibility help when the Design canvas receives focus.');
 		},
 	},
 });
@@ -197,10 +176,7 @@ AccessibleViewRegistry.register({
 	type: AccessibleViewType.Help,
 	priority: 100,
 	name: 'sessionsDesignCanvasHelp',
-	when: ContextKeyExpr.or(
-		ContextKeyExpr.has('sessionsDesignCanvasFocused'),
-		ContextKeyExpr.has('sessionsDesignLayersFocused'),
-	),
+	when: ContextKeyExpr.or(ContextKeyExpr.has('sessionsDesignCanvasFocused'), ContextKeyExpr.has('sessionsDesignLayersFocused')),
 	getProvider: accessor => {
 		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
 		return new AccessibleContentProvider(
@@ -293,15 +269,10 @@ AccessibleViewRegistry.register({
 	type: AccessibleViewType.View,
 	priority: 100,
 	name: 'sessionsDesignCanvasContent',
-	when: ContextKeyExpr.or(
-		ContextKeyExpr.has('sessionsDesignCanvasFocused'),
-		ContextKeyExpr.has('sessionsDesignLayersFocused'),
-	),
+	when: ContextKeyExpr.or(ContextKeyExpr.has('sessionsDesignCanvasFocused'), ContextKeyExpr.has('sessionsDesignLayersFocused')),
 	getProvider: accessor => {
 		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
-		const editor =
-			DesignEditorWidget.getFocused(focused) ??
-			(focused.closest('.ash-design-layers') ? accessor.get(IDesignEditorService).activeEditor.get() : undefined);
+		const editor = DesignEditorWidget.getFocused(focused) ?? (focused.closest('.ash-design-layers') ? accessor.get(IDesignEditorService).activeEditor.get() : undefined);
 		const content = editor?.getAccessibleContent();
 		if (content === undefined) {
 			return undefined;
@@ -366,10 +337,7 @@ registerAction2(
 				title: localize2({ bundle: 'ash', key: 'sessions.design.undo' }, 'Undo'),
 				keybinding: {
 					primary: Keybinding.single(logicalKey('z', { primaryKey: true })),
-					when: ContextKeyExpr.or(
-						ContextKeyExpr.has('sessionsDesignCanvasActive'),
-						ContextKeyExpr.has('sessionsDesignTextEditing'),
-					),
+					when: ContextKeyExpr.or(ContextKeyExpr.has('sessionsDesignCanvasActive'), ContextKeyExpr.has('sessionsDesignTextEditing')),
 					priority: 1000,
 				},
 			});
@@ -390,10 +358,7 @@ registerAction2(
 				keybinding: {
 					primary: Keybinding.single(logicalKey('z', { primaryKey: true, shiftKey: true })),
 					secondary: [Keybinding.single(logicalKey('y', { primaryKey: true }))],
-					when: ContextKeyExpr.or(
-						ContextKeyExpr.has('sessionsDesignCanvasActive'),
-						ContextKeyExpr.has('sessionsDesignTextEditing'),
-					),
+					when: ContextKeyExpr.or(ContextKeyExpr.has('sessionsDesignCanvasActive'), ContextKeyExpr.has('sessionsDesignTextEditing')),
 					priority: 1000,
 				},
 			});
@@ -414,10 +379,7 @@ registerAction2(
 				title: localize2({ bundle: 'ash', key: 'sessions.design.selectAll' }, 'Select all'),
 				keybinding: {
 					primary: Keybinding.single(logicalKey('a', { primaryKey: true })),
-					when: ContextKeyExpr.or(
-						ContextKeyExpr.has('sessionsDesignCanvasActive'),
-						ContextKeyExpr.has('sessionsDesignTextEditing'),
-					),
+					when: ContextKeyExpr.or(ContextKeyExpr.has('sessionsDesignCanvasActive'), ContextKeyExpr.has('sessionsDesignTextEditing')),
 					priority: 1000,
 				},
 			});
@@ -456,27 +418,9 @@ registerAction2(
 
 // These chords also exist in text editors; resolve them in the owning design context first.
 for (const [id, key, title, chord, run] of [
-	[
-		'duplicate',
-		'sessions.design.duplicate',
-		'Duplicate',
-		logicalKey('d', { primaryKey: true }),
-		(editor: DesignEditorWidget) => editor.duplicateSelected(),
-	],
-	[
-		'bringForward',
-		'sessions.design.bringForward',
-		'Bring forward',
-		physicalKey('BracketRight', { primaryKey: true }),
-		(editor: DesignEditorWidget) => editor.reorderSelected('forward'),
-	],
-	[
-		'sendBackward',
-		'sessions.design.sendBackward',
-		'Send backward',
-		physicalKey('BracketLeft', { primaryKey: true }),
-		(editor: DesignEditorWidget) => editor.reorderSelected('backward'),
-	],
+	['duplicate', 'sessions.design.duplicate', 'Duplicate', logicalKey('d', { primaryKey: true }), (editor: DesignEditorWidget) => editor.duplicateSelected()],
+	['bringForward', 'sessions.design.bringForward', 'Bring forward', physicalKey('BracketRight', { primaryKey: true }), (editor: DesignEditorWidget) => editor.reorderSelected('forward')],
+	['sendBackward', 'sessions.design.sendBackward', 'Send backward', physicalKey('BracketLeft', { primaryKey: true }), (editor: DesignEditorWidget) => editor.reorderSelected('backward')],
 	[
 		'bringToFront',
 		'sessions.design.bringToFront',
@@ -484,34 +428,10 @@ for (const [id, key, title, chord, run] of [
 		physicalKey('BracketRight', { primaryKey: true, shiftKey: true }),
 		(editor: DesignEditorWidget) => editor.reorderSelected('front'),
 	],
-	[
-		'sendToBack',
-		'sessions.design.sendToBack',
-		'Send to back',
-		physicalKey('BracketLeft', { primaryKey: true, shiftKey: true }),
-		(editor: DesignEditorWidget) => editor.reorderSelected('back'),
-	],
-	[
-		'addAutoLayout',
-		'sessions.design.addAutoLayout',
-		'Add auto layout',
-		logicalKey('a', { shiftKey: true }),
-		(editor: DesignEditorWidget) => editor.addAutoLayout(),
-	],
-	[
-		'createComponent',
-		'sessions.design.createComponent',
-		'Create component',
-		physicalKey('KeyK', { primaryKey: true, altKey: true }),
-		(editor: DesignEditorWidget) => editor.createComponent(),
-	],
-	[
-		'detachInstance',
-		'sessions.design.detachInstance',
-		'Detach instance',
-		physicalKey('KeyB', { primaryKey: true, altKey: true }),
-		(editor: DesignEditorWidget) => editor.detachInstance(),
-	],
+	['sendToBack', 'sessions.design.sendToBack', 'Send to back', physicalKey('BracketLeft', { primaryKey: true, shiftKey: true }), (editor: DesignEditorWidget) => editor.reorderSelected('back')],
+	['addAutoLayout', 'sessions.design.addAutoLayout', 'Add auto layout', logicalKey('a', { shiftKey: true }), (editor: DesignEditorWidget) => editor.addAutoLayout()],
+	['createComponent', 'sessions.design.createComponent', 'Create component', physicalKey('KeyK', { primaryKey: true, altKey: true }), (editor: DesignEditorWidget) => editor.createComponent()],
+	['detachInstance', 'sessions.design.detachInstance', 'Detach instance', physicalKey('KeyB', { primaryKey: true, altKey: true }), (editor: DesignEditorWidget) => editor.detachInstance()],
 ] as const) {
 	registerAction2(
 		class EditDesignLayout extends Action2 {
@@ -521,23 +441,14 @@ for (const [id, key, title, chord, run] of [
 					title: localize2({ bundle: 'ash', key }, title),
 					keybinding: {
 						primary: Keybinding.single(chord),
-						when: ContextKeyExpr.or(
-							ContextKeyExpr.has('sessionsDesignCanvasActive'),
-							ContextKeyExpr.has('sessionsDesignLayersFocused'),
-						),
+						when: ContextKeyExpr.or(ContextKeyExpr.has('sessionsDesignCanvasActive'), ContextKeyExpr.has('sessionsDesignLayersFocused')),
 						priority: 1000,
 					},
 				});
 			}
 			public override run(accessor: ServicesAccessor): void {
-				const focused = getActiveElement(
-					accessor.get(ILayoutService).activeContainer.ownerDocument,
-				) as HTMLElement;
-				const editor =
-					DesignEditorWidget.getFocused(focused) ??
-					(focused.closest('.ash-design-layers')
-						? accessor.get(IDesignEditorService).activeEditor.get()
-						: undefined);
+				const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
+				const editor = DesignEditorWidget.getFocused(focused) ?? (focused.closest('.ash-design-layers') ? accessor.get(IDesignEditorService).activeEditor.get() : undefined);
 				if (editor) {
 					run(editor);
 				}
@@ -579,9 +490,7 @@ for (const [format, key, title] of [
 				});
 			}
 			public override run(accessor: ServicesAccessor): void {
-				const focused = getActiveElement(
-					accessor.get(ILayoutService).activeContainer.ownerDocument,
-				) as HTMLElement;
+				const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
 				DesignEditorWidget.getFocused(focused)?.formatText(format);
 			}
 		},

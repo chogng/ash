@@ -63,10 +63,7 @@ for (const kind of ['approval', 'userInput'] as const) {
 		transport.frame({ method: 'agent/request', params: { ...identity, interaction: request } });
 		assert.equal(client.state, 'ready');
 		assert.equal(offers.length, 1);
-		assert.deepEqual(
-			{ ...offers[0], interaction: undefined },
-			{ ...identity, connectionGeneration: 1, interaction: undefined },
-		);
+		assert.deepEqual({ ...offers[0], interaction: undefined }, { ...identity, connectionGeneration: 1, interaction: undefined });
 		assert.equal(offers[0].interaction.requestId, 'approval');
 		assert.equal(offers[0].interaction.request.type, kind);
 		client.disconnect();
@@ -104,13 +101,7 @@ test('committed interaction history never grants delivery ownership', async () =
 	assert.deepEqual(offers, []);
 });
 
-for (const type of [
-	'interactionResolved',
-	'interactionCancelled',
-	'turnCompleted',
-	'turnFailed',
-	'turnInterrupted',
-] as const) {
+for (const type of ['interactionResolved', 'interactionCancelled', 'turnCompleted', 'turnFailed', 'turnInterrupted'] as const) {
 	test(`${type} retirement preserves the owning turn and request identity`, async () => {
 		const transport = new InteractionTransport();
 		const client = new AppServerProtocolClient(transport);

@@ -62,11 +62,8 @@ export function getRemoteAuthority(resource: URI): RemoteAuthority | undefined {
 export function getRemoteWorkspacePath(resource: URI): string {
 	const authority = getResourceRemoteAuthority(resource);
 	if (!authority) throw new Error('Resource is not a Remote workspace URI');
-	if (resource.query || resource.fragment)
-		throw new Error('Remote workspace URI must not contain a query or fragment');
-	const path = normalizeRemoteWorkspacePath(
-		/^\/[a-zA-Z]:\//u.test(resource.path) ? resource.path.slice(1) : resource.path,
-	);
+	if (resource.query || resource.fragment) throw new Error('Remote workspace URI must not contain a query or fragment');
+	const path = normalizeRemoteWorkspacePath(/^\/[a-zA-Z]:\//u.test(resource.path) ? resource.path.slice(1) : resource.path);
 	// Provider-independent resource paths must also work for extension-resolved hosts.
 	// SSH identities still pass through the stricter credential-free alias validator.
 	const canonical = remoteResourceUri(authority, path);
@@ -105,19 +102,12 @@ export function normalizeRemoteWorkspacePath(path: string): string {
 		const drive = /^[a-zA-Z]:/u.test(normalized);
 		if (drive) normalized = normalized[0]!.toUpperCase() + normalized.slice(1);
 		const rest = normalized.slice(drive ? 3 : 2);
-		if ((drive && normalized[2] !== '/') || (!drive && rest.split('/').length < 2))
-			throw new Error('Remote workspace path must be absolute');
+		if ((drive && normalized[2] !== '/') || (!drive && rest.split('/').length < 2)) throw new Error('Remote workspace path must be absolute');
 		if (
 			!(drive && rest.length === 0) &&
 			rest
 				.split('/')
-				.some(
-					segment =>
-						!segment ||
-						/[. ]$/u.test(segment) ||
-						/[<>:"|?*]/u.test(segment) ||
-						/^(?:CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|COM[1-9¹²³]|LPT[1-9¹²³])[ ]*(?:\.|$)/iu.test(segment),
-				)
+				.some(segment => !segment || /[. ]$/u.test(segment) || /[<>:"|?*]/u.test(segment) || /^(?:CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|COM[1-9¹²³]|LPT[1-9¹²³])[ ]*(?:\.|$)/iu.test(segment))
 		)
 			throw new Error('Remote workspace path must be canonical');
 		return normalized;
@@ -128,11 +118,7 @@ export function normalizeRemoteWorkspacePath(path: string): string {
 		throw new Error('Remote workspace path must be absolute');
 	}
 	const segments = normalized.split('/');
-	if (
-		normalized !== '/' &&
-		(normalized.endsWith('/') ||
-			segments.slice(1).some(segment => segment.length === 0 || segment === '.' || segment === '..'))
-	) {
+	if (normalized !== '/' && (normalized.endsWith('/') || segments.slice(1).some(segment => segment.length === 0 || segment === '.' || segment === '..'))) {
 		throw new Error('Remote workspace path must be canonical');
 	}
 	return normalized;

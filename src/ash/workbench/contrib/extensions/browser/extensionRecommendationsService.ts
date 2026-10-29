@@ -1,7 +1,4 @@
-import {
-	extensionTips,
-	type ProductExtensionTip,
-} from '../../../../platform/extensionManagement/common/extensionTipsService.js';
+import { extensionTips, type ProductExtensionTip } from '../../../../platform/extensionManagement/common/extensionTipsService.js';
 import { isWeb } from '../../../../base/common/platform.js';
 import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 import { localize } from '../../../../nls.js';
@@ -15,17 +12,9 @@ import { ILanguageService } from '../../../../editor/common/languages/language.j
 import { IModelService } from '../../../../editor/common/services/model.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { ILanguageServerService } from '../../../../platform/language/common/languageServerService.js';
-import {
-	ExtensionUiTarget,
-	IExtensionManagementService,
-} from '../../../../platform/extensionManagement/common/extensionManagementService.js';
+import { ExtensionUiTarget, IExtensionManagementService } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { RecommendationSource } from '../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
-import {
-	IFileService,
-	FileKind,
-	FileSystemProviderErrorCode,
-	toFileSystemProviderErrorCode,
-} from '../../../../platform/files/common/files.js';
+import { IFileService, FileKind, FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
@@ -118,11 +107,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 				if (
 					!event.resources ||
 					this.projectResources().some(({ resource }) =>
-						event.resources!.some(
-							changed =>
-								uriIdentity.extUri.isEqual(changed, resource) ||
-								uriIdentity.extUri.isEqual(changed, dirname(resource)),
-						),
+						event.resources!.some(changed => uriIdentity.extUri.isEqual(changed, resource) || uriIdentity.extUri.isEqual(changed, dirname(resource))),
 					)
 				) {
 					this.invalidate();
@@ -213,45 +198,30 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 					? {
 							context: {
 								source: RecommendationSource.WORKSPACE,
-								name: localize(
-									{ bundle: 'ash.extensions', key: 'recommendationWorkspace' },
-									'this workspace',
-								),
+								name: localize({ bundle: 'ash.extensions', key: 'recommendationWorkspace' }, 'this workspace'),
 							},
 						}
 					: {}),
 			});
 		}
 		const languageQueries = new Map<string, ReturnType<IExtensionManagementService['search']>>();
-		const forLanguage = async (
-			languageId: string,
-			name: string,
-			reasonId: ExtensionRecommendationReason,
-			resource: URI,
-		): Promise<void> => {
+		const forLanguage = async (languageId: string, name: string, reasonId: ExtensionRecommendationReason, resource: URI): Promise<void> => {
 			const folder = this.workspace.getWorkspaceFolder(resource) ?? folders[0];
 			const hasProvider = [...this.editorModels.getModels(), ...this.models.getModels()].some(
 				model =>
 					model.getLanguageId() === languageId &&
 					(this.uriIdentity.extUri.isEqual(model.uri, resource) ||
-						(reasonId === ExtensionRecommendationReason.WorkspaceConfig &&
-							this.workspace.getWorkspaceFolder(model.uri)?.id === folder?.id)) &&
+						(reasonId === ExtensionRecommendationReason.WorkspaceConfig && this.workspace.getWorkspaceFolder(model.uri)?.id === folder?.id)) &&
 					this.languageFeatures.hoverProvider.has(model),
 			);
-			if (
-				languageId === 'plaintext' ||
-				hasProvider ||
-				(folder && serverLanguages.get(folder.id)?.has(languageId))
-			) {
+			if (languageId === 'plaintext' || hasProvider || (folder && serverLanguages.get(folder.id)?.has(languageId))) {
 				return;
 			}
 			let query = languageQueries.get(languageId);
 			if (!query) {
 				// A recognized language already has its declarations. Search only exact server
 				// routes; free-text metadata also matches unrelated associations such as .css.map.
-				query = this.packages
-					.search('', { languageId, capabilityKind: 'executable', limit: 5 })
-					.catch(() => []);
+				query = this.packages.search('', { languageId, capabilityKind: 'executable', limit: 5 }).catch(() => []);
 				languageQueries.set(languageId, query);
 			}
 			try {
@@ -261,23 +231,14 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 						uiTargets: candidate.uiTargets,
 						reason: {
 							reasonId,
-							reasonText: localize(
-								{ bundle: 'ash.extensions', key: 'contextRecommendationReason' },
-								'Recommended for {0}',
-								name,
-							),
+							reasonText: localize({ bundle: 'ash.extensions', key: 'contextRecommendationReason' }, 'Recommended for {0}', name),
 						},
 						...(candidate.uiTargets?.includes(this.target)
 							? {
 									context: {
-										source:
-											reasonId === ExtensionRecommendationReason.WorkspaceConfig
-												? RecommendationSource.WORKSPACE
-												: RecommendationSource.FILE,
+										source: reasonId === ExtensionRecommendationReason.WorkspaceConfig ? RecommendationSource.WORKSPACE : RecommendationSource.FILE,
 										name,
-										...(candidate.packageType === 'language'
-											? { searchValue: languageId }
-											: { languageId, searchValue: '' }),
+										...(candidate.packageType === 'language' ? { searchValue: languageId } : { languageId, searchValue: '' }),
 									},
 								}
 							: {}),
@@ -308,53 +269,27 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 		}
 		const work: Promise<void>[] = [];
 		for (const { resource, languageId } of resources.values()) {
-			if (
-				![
-					'file',
-					'untitled',
-					'ash-remote',
-					...this.workspace.getWorkspace().folders.map(folder => folder.uri.scheme),
-				].includes(resource.scheme)
-			) {
+			if (!['file', 'untitled', 'ash-remote', ...this.workspace.getWorkspace().folders.map(folder => folder.uri.scheme)].includes(resource.scheme)) {
 				continue;
 			}
 			const extension = extname(resource.path).toLowerCase();
 			const tip = editorTips.find(tip => (tip.extensions as readonly string[]).includes(extension));
 			if (tip) {
 				const uiTargets = await targetsFor(tip.id);
-				const name =
-					tip.kind === 'docs'
-						? localize({ bundle: 'ash.extensions', key: 'recommendationDocs' }, 'Docs')
-						: localize({ bundle: 'ash.extensions', key: 'recommendationPdf' }, 'PDF');
+				const name = tip.kind === 'docs' ? localize({ bundle: 'ash.extensions', key: 'recommendationDocs' }, 'Docs') : localize({ bundle: 'ash.extensions', key: 'recommendationPdf' }, 'PDF');
 				add({
 					extensionId: tip.id,
 					uiTargets,
 					reason: {
 						reasonId: ExtensionRecommendationReason.File,
-						reasonText: localize(
-							{ bundle: 'ash.extensions', key: 'fileRecommendationReason' },
-							'Recommended for {0} files',
-							extension,
-						),
+						reasonText: localize({ bundle: 'ash.extensions', key: 'fileRecommendationReason' }, 'Recommended for {0} files', extension),
 					},
-					...(uiTargets?.includes(this.target)
-						? { context: { source: RecommendationSource.FILE, name, searchValue: tip.query } }
-						: {}),
+					...(uiTargets?.includes(this.target) ? { context: { source: RecommendationSource.FILE, name, searchValue: tip.query } } : {}),
 				});
 			}
-			const language =
-				languageId && languageId !== 'plaintext'
-					? languageId
-					: this.languages.guessLanguageIdByFilepathOrFirstLine(resource);
+			const language = languageId && languageId !== 'plaintext' ? languageId : this.languages.guessLanguageIdByFilepathOrFirstLine(resource);
 			if (language) {
-				work.push(
-					forLanguage(
-						language,
-						this.languages.getLanguageName(language) ?? language,
-						ExtensionRecommendationReason.Application,
-						resource,
-					),
-				);
+				work.push(forLanguage(language, this.languages.getLanguageName(language) ?? language, ExtensionRecommendationReason.Application, resource));
 			} else if (!tip && extension) {
 				// Language packages publish file extensions in their searchable catalog metadata, even before installation.
 				const key = `file:${extension}`;
@@ -372,11 +307,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 									uiTargets: candidate.uiTargets,
 									reason: {
 										reasonId: ExtensionRecommendationReason.File,
-										reasonText: localize(
-											{ bundle: 'ash.extensions', key: 'fileRecommendationReason' },
-											'Recommended for {0} files',
-											extension,
-										),
+										reasonText: localize({ bundle: 'ash.extensions', key: 'fileRecommendationReason' }, 'Recommended for {0} files', extension),
 									},
 									...(candidate.uiTargets?.includes(this.target)
 										? {
@@ -403,18 +334,10 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 			this.projectResources().map(async ({ resource, language }) => {
 				try {
 					if ((await this.files.stat(resource)).kind === FileKind.File) {
-						await forLanguage(
-							language,
-							basename(resource),
-							ExtensionRecommendationReason.WorkspaceConfig,
-							resource,
-						);
+						await forLanguage(language, basename(resource), ExtensionRecommendationReason.WorkspaceConfig, resource);
 					}
 				} catch (error) {
-					if (
-						toFileSystemProviderErrorCode(error instanceof Error ? error : undefined) !==
-						FileSystemProviderErrorCode.FileNotFound
-					) {
+					if (toFileSystemProviderErrorCode(error instanceof Error ? error : undefined) !== FileSystemProviderErrorCode.FileNotFound) {
 						diagnostics.push(
 							localize(
 								{ bundle: 'ash.extensions', key: 'projectRecommendationsReadError' },
@@ -446,9 +369,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 			this.storage.store(this.recentStorageKey, serialized, StorageScope.PROFILE, StorageTarget.MACHINE);
 		}
 		for (let index = 0; index < remembered.length; index += 6) {
-			const group = remembered
-				.slice(index, index + 6)
-				.filter(([id]) => !excluded.has(identity(id)) && !recommendations.has(identity(id)));
+			const group = remembered.slice(index, index + 6).filter(([id]) => !excluded.has(identity(id)) && !recommendations.has(identity(id)));
 			const targets = await Promise.all(group.map(([id]) => targetsFor(id)));
 			if (this.isDisposed || generation !== this.generation) {
 				throw new CancellationError();
@@ -459,10 +380,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 					uiTargets: targets[offset],
 					reason: {
 						reasonId: ExtensionRecommendationReason.File,
-						reasonText: localize(
-							{ bundle: 'ash.extensions', key: 'recentRecommendationReason' },
-							'Recommended because of recently opened files',
-						),
+						reasonText: localize({ bundle: 'ash.extensions', key: 'recentRecommendationReason' }, 'Recommended because of recently opened files'),
 					},
 				});
 			}
@@ -482,27 +400,16 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 	}
 
 	private async collectProductRecommendations(add: (recommendation: ExtensionRecommendation) => void): Promise<void> {
-		const remoteWorkspace =
-			!!this.workspace.getWorkspace().remoteAuthority ||
-			(!!this.remote.connection && this.remote.connection.kind !== 'local');
-		const candidates: { tip: ProductExtensionTip; reason: string; executable?: boolean }[] = (
-			this.target === ExtensionUiTarget.IDE ? extensionTips.keymaps : []
-		).map(tip => ({
+		const remoteWorkspace = !!this.workspace.getWorkspace().remoteAuthority || (!!this.remote.connection && this.remote.connection.kind !== 'local');
+		const candidates: { tip: ProductExtensionTip; reason: string; executable?: boolean }[] = (this.target === ExtensionUiTarget.IDE ? extensionTips.keymaps : []).map(tip => ({
 			tip,
-			reason: localize(
-				{ bundle: 'ash.extensions', key: 'keymapRecommendationReason' },
-				'Keymap recommended for {0}',
-				tip.name,
-			),
+			reason: localize({ bundle: 'ash.extensions', key: 'keymapRecommendationReason' }, 'Keymap recommended for {0}', tip.name),
 		}));
 		if (remoteWorkspace && this.target === ExtensionUiTarget.IDE) {
 			candidates.push(
 				...extensionTips.remote.map(tip => ({
 					tip,
-					reason: localize(
-						{ bundle: 'ash.extensions', key: 'remoteRecommendationReason' },
-						'Recommended for remote workspaces',
-					),
+					reason: localize({ bundle: 'ash.extensions', key: 'remoteRecommendationReason' }, 'Recommended for remote workspaces'),
 				})),
 			);
 		}
@@ -510,10 +417,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 			candidates.push(
 				...extensionTips.web.map(tip => ({
 					tip,
-					reason: localize(
-						{ bundle: 'ash.extensions', key: 'webRecommendationReason' },
-						'Recommended for Ash in a browser',
-					),
+					reason: localize({ bundle: 'ash.extensions', key: 'webRecommendationReason' }, 'Recommended for Ash in a browser'),
 				})),
 			);
 		}
@@ -524,11 +428,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 				if (tip.executables.some(name => environment?.executables.includes(name))) {
 					candidates.push({
 						tip,
-						reason: localize(
-							{ bundle: 'ash.extensions', key: 'executableRecommendationReason' },
-							'Recommended because {0} is available on this host',
-							tip.name,
-						),
+						reason: localize({ bundle: 'ash.extensions', key: 'executableRecommendationReason' }, 'Recommended because {0} is available on this host', tip.name),
 						executable: true,
 					});
 				}
@@ -549,9 +449,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 						extensionId: details.package.id,
 						uiTargets: details.uiTargets,
 						reason: {
-							reasonId: executable
-								? ExtensionRecommendationReason.Executable
-								: ExtensionRecommendationReason.Application,
+							reasonId: executable ? ExtensionRecommendationReason.Executable : ExtensionRecommendationReason.Application,
 							reasonText: reason,
 						},
 					});
@@ -576,14 +474,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 			return Object.fromEntries(
 				Object.entries(value)
 					.slice(0, 2000)
-					.filter(
-						([id, time]) =>
-							/^[a-z0-9][a-z0-9_.@/-]{0,255}$/iu.test(id) &&
-							typeof time === 'number' &&
-							Number.isFinite(time) &&
-							time <= now &&
-							now - time < recentDuration,
-					),
+					.filter(([id, time]) => /^[a-z0-9][a-z0-9_.@/-]{0,255}$/iu.test(id) && typeof time === 'number' && Number.isFinite(time) && time <= now && now - time < recentDuration),
 			);
 		} catch {
 			return {};
@@ -593,14 +484,12 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 	private projectResources(): { resource: URI; language: string }[] {
 		return this.target !== ExtensionUiTarget.IDE
 			? []
-			: this.workspace
-					.getWorkspace()
-					.folders.flatMap(folder =>
-						projectLanguages.map(tip => ({
-							resource: URI.joinPath(folder.uri, tip.filename),
-							language: tip.language,
-						})),
-					);
+			: this.workspace.getWorkspace().folders.flatMap(folder =>
+					projectLanguages.map(tip => ({
+						resource: URI.joinPath(folder.uri, tip.filename),
+						language: tip.language,
+					})),
+				);
 	}
 	private watchProjects(): void {
 		this.watches.clear();
@@ -628,10 +517,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 					extensionId,
 					reason: {
 						reasonId: ExtensionRecommendationReason.Workspace,
-						reasonText: localize(
-							{ bundle: 'ash.extensions', key: 'workspaceRecommendationReason' },
-							'Recommended by this workspace',
-						),
+						reasonText: localize({ bundle: 'ash.extensions', key: 'workspaceRecommendationReason' }, 'Recommended by this workspace'),
 					},
 				})),
 			resources: configs.map(config => config.resource),

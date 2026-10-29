@@ -1,13 +1,7 @@
 import { isLinux } from '../../../base/common/platform.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { decodeBase64, encodeBase64, VSBuffer } from '../../../base/common/buffer.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	toDisposable,
-	type IDisposable,
-} from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { canceled } from '../../../base/common/errors.js';
 import { newWriteableStream, type ReadableStreamEvents } from '../../../base/common/stream.js';
@@ -38,10 +32,7 @@ import {
 export const LOCAL_FILE_SYSTEM_CHANNEL_NAME = 'localFilesystem';
 
 /** URI serialization and error transport for the desktop file provider. */
-export class DiskFileSystemProviderClient
-	extends Disposable
-	implements IFileSystemProviderWithFileReadStreamCapability
-{
+export class DiskFileSystemProviderClient extends Disposable implements IFileSystemProviderWithFileReadStreamCapability {
 	public readonly capabilities =
 		FileSystemProviderCapabilities.FileReadWrite |
 		FileSystemProviderCapabilities.FileFolderCopy |
@@ -61,11 +52,9 @@ export class DiskFileSystemProviderClient
 					this.changes.fire({ resources: undefined });
 					return;
 				}
-				if (!Array.isArray(value) || value.some(resource => typeof resource !== 'string'))
-					throw new TypeError('Invalid file-change resources');
+				if (!Array.isArray(value) || value.some(resource => typeof resource !== 'string')) throw new TypeError('Invalid file-change resources');
 				const resources = value.map(resource => URI.parse(resource));
-				if (resources.some(resource => resource.scheme !== 'file' || resource.query || resource.fragment))
-					throw new TypeError('Invalid file-change resource');
+				if (resources.some(resource => resource.scheme !== 'file' || resource.query || resource.fragment)) throw new TypeError('Invalid file-change resource');
 				this.changes.fire({ resources });
 			}),
 		);
@@ -76,24 +65,16 @@ export class DiskFileSystemProviderClient
 		return { ...stat, resource };
 	}
 	public async readDirectory(resource: URI): Promise<readonly IFileEntry[]> {
-		const entries = await this.call<readonly { name: string; kind: IFileEntry['kind']; resource: string }[]>(
-			'readdir',
-			resource,
-		);
+		const entries = await this.call<readonly { name: string; kind: IFileEntry['kind']; resource: string }[]>('readdir', resource);
 		return entries.map(entry => ({ ...entry, resource: URI.parse(entry.resource) }));
 	}
 	public async readFile(resource: URI): Promise<IFileBytes> {
 		const content = await this.call<{ bytes: string; revision: string }>('readFile', resource);
-		if (typeof content?.bytes !== 'string' || typeof content.revision !== 'string')
-			throw new TypeError('Invalid file content');
+		if (typeof content?.bytes !== 'string' || typeof content.revision !== 'string') throw new TypeError('Invalid file content');
 		return { bytes: decodeBase64(content.bytes).buffer, revision: content.revision, resource };
 	}
 
-	public readFileStream(
-		resource: URI,
-		options: IFileReadStreamOptions,
-		token: CancellationToken,
-	): ReadableStreamEvents<Uint8Array> {
+	public readFileStream(resource: URI, options: IFileReadStreamOptions, token: CancellationToken): ReadableStreamEvents<Uint8Array> {
 		this.assertNotDisposed();
 		const stream = newWriteableStream<Uint8Array>(null);
 		const lifetime = new DisposableStore();
@@ -137,14 +118,8 @@ export class DiskFileSystemProviderClient
 						stream.write(decodeBase64(payload.bytes).buffer);
 						return;
 					}
-					if (
-						isRecord(payload) &&
-						isRecord(payload.error) &&
-						typeof payload.error.message === 'string' &&
-						typeof payload.error.name === 'string'
-					) {
-						const error =
-							payload.error.name === 'CancellationError' ? canceled() : new Error(payload.error.message);
+					if (isRecord(payload) && isRecord(payload.error) && typeof payload.error.message === 'string' && typeof payload.error.name === 'string') {
+						const error = payload.error.name === 'CancellationError' ? canceled() : new Error(payload.error.message);
 						error.name = payload.error.name;
 						fail(error);
 						return;
@@ -159,12 +134,9 @@ export class DiskFileSystemProviderClient
 	}
 	public watch(resource: URI, options: IWatchOptions): IDisposable {
 		this.assertNotDisposed();
-		if (resource.scheme !== 'file' || resource.query || resource.fragment)
-			throw new TypeError('Expected a local file resource');
+		if (resource.scheme !== 'file' || resource.query || resource.fragment) throw new TypeError('Expected a local file resource');
 		// The subscription owns the Main-side watch; notifications use the shared fileChange event.
-		const watch = this.watches.add(
-			this.channel.listen<void>('watch', { resource: resource.toString(), options })(() => {}),
-		);
+		const watch = this.watches.add(this.channel.listen<void>('watch', { resource: resource.toString(), options })(() => {}));
 		return toDisposable(() => {
 			this.watches.delete(watch);
 			watch.dispose();
@@ -201,8 +173,7 @@ export class DiskFileSystemProviderClient
 			return await this.channel.call<T>(operation, { resource: resource.toString(), ...args });
 		} catch (error) {
 			if (error instanceof Error && error.name === 'FileNotFoundError') throw new FileNotFoundError(resource);
-			if (error instanceof Error && error.name === 'FileRevisionConflictError')
-				throw new FileRevisionConflictError(resource);
+			if (error instanceof Error && error.name === 'FileRevisionConflictError') throw new FileRevisionConflictError(resource);
 			if (error instanceof Error) {
 				const code = toFileSystemProviderErrorCode(error);
 				if (code === FileSystemProviderErrorCode.FileNotFound) throw new FileNotFoundError(resource);

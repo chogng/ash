@@ -1,10 +1,5 @@
 import { SettingsPageRenderer } from './settingsRenderers.js';
-import {
-	defaultButtonStyles,
-	defaultInputBoxStyles,
-	defaultSelectBoxStyles,
-	defaultToggleStyles,
-} from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultInputBoxStyles, defaultSelectBoxStyles, defaultToggleStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/settingsSection.css';
 import { h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -27,12 +22,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
-import type {
-	SettingsSectionReference,
-	SettingsSectionField,
-	SettingsSectionModel,
-	SettingsTreeNode,
-} from './settingsTreeModels.js';
+import type { SettingsSectionReference, SettingsSectionField, SettingsSectionModel, SettingsTreeNode } from './settingsTreeModels.js';
 
 /** Renders service-backed sections from data while preserving controls and focus across updates. */
 export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectionReference> {
@@ -148,11 +138,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 							id: this.model.itemId ?? `${this.categoryId}.section`,
 							title: this.model.title,
 							description: this.model.description,
-							keywords: [
-								this.categoryId,
-								...(this.model.keywords ?? []),
-								...this.model.fields.flatMap(field => (field.kind === 'status' ? [] : [field.label])),
-							],
+							keywords: [this.categoryId, ...(this.model.keywords ?? []), ...this.model.fields.flatMap(field => (field.kind === 'status' ? [] : [field.label]))],
 							value: this.retainElement(this.model.itemId ?? `${this.categoryId}.section`, this.domNode),
 						},
 					},
@@ -178,11 +164,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 				case 'select':
 					return `${field.label}: ${field.options.find(option => option.value === field.value)?.label ?? ''}`;
 				case 'boolean':
-					return `${field.label}: ${
-						field.value
-							? localize({ bundle: 'ash.settings', key: 'section.on' }, 'On')
-							: localize({ bundle: 'ash.settings', key: 'section.off' }, 'Off')
-					}`;
+					return `${field.label}: ${field.value ? localize({ bundle: 'ash.settings', key: 'section.on' }, 'On') : localize({ bundle: 'ash.settings', key: 'section.off' }, 'Off')}`;
 			}
 		});
 		return [this.model.title, this.model.description, ...content].join('\n');
@@ -249,7 +231,11 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 					const select = this._register(
 						new SelectBox(
 							this.domNode,
-							{ options: field.options, ariaLabel: field.label, contextViewProvider: this.contextView },
+							{
+								options: field.options,
+								ariaLabel: field.label,
+								contextViewProvider: this.contextView,
+							},
 							defaultSelectBoxStyles,
 						),
 					);

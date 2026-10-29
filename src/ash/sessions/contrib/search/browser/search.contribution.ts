@@ -1,17 +1,9 @@
 import { localize, localize2 } from '../../../../nls.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -43,19 +35,14 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	defaultValue: true,
 	parse(value: unknown): boolean {
 		if (typeof value !== 'boolean') {
-			throw new TypeError(
-				localize('sessions.search.verbosityInvalid', 'Search accessibility verbosity must be boolean'),
-			);
+			throw new TypeError(localize('sessions.search.verbosityInvalid', 'Search accessibility verbosity must be boolean'));
 		}
 		return value;
 	},
 	setting: {
 		valueType: 'boolean',
 		title: localize('sessions.search.verbosityTitle', 'Search accessibility help'),
-		description: localize(
-			'sessions.search.verbosityDescription',
-			'Announce how to open accessibility help when Search receives focus.',
-		),
+		description: localize('sessions.search.verbosityDescription', 'Announce how to open accessibility help when Search receives focus.'),
 	},
 });
 

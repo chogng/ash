@@ -71,16 +71,7 @@ export class CommandDetectionCapability extends Disposable implements ICommandDe
 		private readonly log: ILogService,
 	) {
 		super();
-		this.promptInputModel = this._register(
-			new PromptInputModel(
-				terminal,
-				this.onCommandStarted,
-				this.startChanged.event,
-				this.onCommandExecuted,
-				this.onCommandFinished,
-				log,
-			),
-		);
+		this.promptInputModel = this._register(new PromptInputModel(terminal, this.onCommandStarted, this.startChanged.event, this.onCommandExecuted, this.onCommandFinished, log));
 		this._register(
 			this.promptInputModel.onDidInterrupt(() => {
 				if (this.partial) {
@@ -202,19 +193,14 @@ export class CommandDetectionCapability extends Disposable implements ICommandDe
 		});
 		this.pendingLifetime!.add(trimmed);
 		partial.commandStartX = this.terminal.buffer.normal.cursorX;
-		partial.commandStartLineContent = this.storageDisabled
-			? undefined
-			: this.terminal.buffer.normal.getLine(partial.commandStartMarker.line)?.translateToString(true);
+		partial.commandStartLineContent = this.storageDisabled ? undefined : this.terminal.buffer.normal.getLine(partial.commandStartMarker.line)?.translateToString(true);
 		this.active = partial.promoteToFullCommand(this.directory, undefined, true, options.markProperties);
 		if (this.active) {
 			this.started.fire(this.active);
 		}
 	}
 
-	handleCommandExecuted(
-		options: IHandleCommandOptions = {},
-		metadata?: Extract<TerminalShellIntegrationEvent, { type: 'commandExecuted' }>,
-	): void {
+	handleCommandExecuted(options: IHandleCommandOptions = {}, metadata?: Extract<TerminalShellIntegrationEvent, { type: 'commandExecuted' }>): void {
 		// After an output gap the execution boundary may be our first retained
 		// position. Anchor at that observed position rather than reconstructing
 		// a prompt or echoed command that is no longer in this screen.
@@ -308,10 +294,7 @@ export class CommandDetectionCapability extends Disposable implements ICommandDe
 		}
 		this.partial.commandRightPromptEndX = this.terminal.buffer.normal.cursorX;
 		if (this.partial.commandRightPromptStartX !== undefined) {
-			this.promptInputModel.setRightPromptRange(
-				this.partial.commandRightPromptStartX,
-				this.partial.commandRightPromptEndX,
-			);
+			this.promptInputModel.setRightPromptRange(this.partial.commandRightPromptStartX, this.partial.commandRightPromptEndX);
 		}
 		this.startChanged.fire();
 	}
@@ -322,12 +305,7 @@ export class CommandDetectionCapability extends Disposable implements ICommandDe
 		}
 		for (let index = this.completed.length - 1; index >= 0; index--) {
 			const command = this.completed[index]!;
-			if (
-				!command.marker?.isDisposed &&
-				command.marker !== undefined &&
-				command.marker.line <= line &&
-				(command.endMarker?.line ?? Infinity) >= line
-			) {
+			if (!command.marker?.isDisposed && command.marker !== undefined && command.marker.line <= line && (command.endMarker?.line ?? Infinity) >= line) {
 				return command;
 			}
 		}
@@ -336,11 +314,7 @@ export class CommandDetectionCapability extends Disposable implements ICommandDe
 
 	getCwdForLine(line: number): string | undefined {
 		const command = this.getCommandForLine(line);
-		return command && isFullTerminalCommand(command)
-			? command.cwd
-			: command
-				? (this.active?.cwd ?? this.directory)
-				: undefined;
+		return command && isFullTerminalCommand(command) ? command.cwd : command ? (this.active?.cwd ?? this.directory) : undefined;
 	}
 
 	clearCommands(): void {
@@ -371,12 +345,7 @@ export class CommandDetectionCapability extends Disposable implements ICommandDe
 				continue;
 			}
 			const lifetime = new DisposableStore();
-			for (const marker of new Set([
-				command.marker,
-				command.promptStartMarker,
-				command.executedMarker,
-				command.endMarker,
-			]))
+			for (const marker of new Set([command.marker, command.promptStartMarker, command.executedMarker, command.endMarker]))
 				if (marker) {
 					lifetime.add(toDisposable(() => marker.dispose()));
 				}
@@ -390,10 +359,7 @@ export class CommandDetectionCapability extends Disposable implements ICommandDe
 				partial.commandExecutedMarker = command.executedMarker;
 				partial.commandStartX = command.startX;
 				partial.commandExecutedX = command.executedX;
-				partial.command =
-					this.storageDisabled || (!command.command && command.commandLineConfidence === 'low')
-						? undefined
-						: command.command;
+				partial.command = this.storageDisabled || (!command.command && command.commandLineConfidence === 'low') ? undefined : command.command;
 				partial.isTrusted = command.isTrusted;
 				this.partial = partial;
 				this.active = command;

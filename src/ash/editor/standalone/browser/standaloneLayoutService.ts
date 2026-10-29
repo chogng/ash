@@ -1,11 +1,7 @@
 import { getClientArea, type IDimension } from '../../../base/browser/dom.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../base/common/lifecycle.js';
-import {
-	ILayoutService,
-	type ILayoutContainerEvent,
-	type ILayoutOffsetInfo,
-} from '../../../platform/layout/browser/layoutService.js';
+import { ILayoutService, type ILayoutContainerEvent, type ILayoutOffsetInfo } from '../../../platform/layout/browser/layoutService.js';
 import type { ICodeEditor } from '../../browser/editorBrowser.js';
 import { ICodeEditorService } from '../../browser/services/codeEditorService.js';
 

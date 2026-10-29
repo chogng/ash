@@ -27,8 +27,6 @@ export class SessionsLayoutPolicy {
 	}
 
 	public getFrameMetrics(style: SessionsLayoutStyle): { readonly leftEdge: number; readonly rightEdge: number } {
-		return style === 'modern'
-			? { leftEdge: 6, rightEdge: AGENTS_FLOATING_PANEL_GAP }
-			: { leftEdge: 0, rightEdge: 0 };
+		return style === 'modern' ? { leftEdge: 6, rightEdge: AGENTS_FLOATING_PANEL_GAP } : { leftEdge: 0, rightEdge: 0 };
 	}
 }

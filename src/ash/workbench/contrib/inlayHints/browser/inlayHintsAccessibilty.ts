@@ -1,13 +1,7 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import type { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
-import {
-	EditorAction,
-	registerEditorAction,
-	registerEditorContribution,
-	EditorContributionInstantiation,
-	type ServicesAccessor,
-} from '../../../../editor/browser/editorExtensions.js';
+import { EditorAction, registerEditorAction, registerEditorContribution, EditorContributionInstantiation, type ServicesAccessor } from '../../../../editor/browser/editorExtensions.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.js';
 import { InlayHintsController } from '../../../../editor/contrib/inlayHints/browser/inlayHintsController.js';
@@ -38,11 +32,7 @@ export class InlayHintsAccessibility extends Disposable {
 				name: `${InlayHintsAccessibility.ID}.${editor.getId()}`,
 				when: EditorContextKeys.editorTextFocus.isEqualTo(true),
 				getProvider: accessor => {
-					if (
-						accessor.get(ICodeEditorService) !== codeEditors ||
-						codeEditors.getFocusedCodeEditor() !== editor ||
-						editor.isSimpleWidget
-					) {
+					if (accessor.get(ICodeEditorService) !== codeEditors || codeEditors.getFocusedCodeEditor() !== editor || editor.isSimpleWidget) {
 						return undefined;
 					}
 					const model = editor.getModel();
@@ -63,23 +53,11 @@ export class InlayHintsAccessibility extends Disposable {
 							const parts: string[] = [];
 							for (const hint of hints.getInlayHintsForLine(line)) {
 								const column = Math.min(text.length, hint.position.column - 1);
-								parts.push(
-									text.slice(offset, column),
-									' ',
-									typeof hint.label === 'string'
-										? hint.label
-										: hint.label.map(part => part.value).join(''),
-									' ',
-								);
+								parts.push(text.slice(offset, column), ' ', typeof hint.label === 'string' ? hint.label : hint.label.map(part => part.value).join(''), ' ');
 								offset = column;
 							}
 							parts.push(text.slice(offset));
-							return localize(
-								'inlayHints.readLine',
-								'Line {0} with inlay hints:\n{1}',
-								line,
-								parts.join(''),
-							);
+							return localize('inlayHints.readLine', 'Line {0} with inlay hints:\n{1}', line, parts.join(''));
 						},
 						() => {
 							if (!model.isDisposed() && editor.getModel() === model) editor.focus();
@@ -108,11 +86,7 @@ export class InlayHintsAccessibility extends Disposable {
 	}
 }
 
-registerEditorContribution(
-	InlayHintsAccessibility.ID,
-	InlayHintsAccessibility,
-	EditorContributionInstantiation.AfterFirstRender,
-);
+registerEditorContribution(InlayHintsAccessibility.ID, InlayHintsAccessibility, EditorContributionInstantiation.AfterFirstRender);
 registerEditorAction(
 	class ReadInlayHints extends EditorAction {
 		constructor() {

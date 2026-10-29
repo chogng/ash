@@ -38,18 +38,11 @@ test('MoveOperations preserves visible columns across vertical movement and tran
 	assert.deepEqual([vertical.lineNumber, vertical.column, vertical.leftoverVisibleColumns], [3, 5, 0]);
 
 	const movedDown = MoveOperations.moveDown(config, model, source, false, 1);
-	assert.deepEqual(
-		[movedDown.position.lineNumber, movedDown.position.column, movedDown.leftoverVisibleColumns],
-		[2, 2, 3],
-	);
+	assert.deepEqual([movedDown.position.lineNumber, movedDown.position.column, movedDown.leftoverVisibleColumns], [2, 2, 3]);
 	const movedUp = MoveOperations.moveUp(config, model, movedDown, false, 1);
 	assert.deepEqual([movedUp.position.lineNumber, movedUp.position.column], [1, 5]);
 	assert.equal(MoveOperations.translateDown(config, model, source).position.lineNumber, 2);
-	assert.equal(
-		MoveOperations.translateUp(config, model, MoveOperations.translateDown(config, model, source)).position
-			.lineNumber,
-		1,
-	);
+	assert.equal(MoveOperations.translateUp(config, model, MoveOperations.translateDown(config, model, source)).position.lineNumber, 1);
 });
 
 test('MoveOperations finds blank lines and standard line and buffer boundaries', () => {
@@ -59,29 +52,14 @@ test('MoveOperations finds blank lines and standard line and buffer boundaries',
 	const middle = state(new Selection(2, 4, 2, 4));
 
 	assert.equal(MoveOperations.moveToNextBlankLine(config, model, middle, false).position.lineNumber, 3);
-	assert.equal(
-		MoveOperations.moveToPrevBlankLine(config, model, state(new Selection(4, 2, 4, 2)), false).position.lineNumber,
-		3,
-	);
-	assert.equal(
-		MoveOperations.moveToBeginningOfLine(config, model, state(new Selection(1, 4, 1, 4)), false).position.column,
-		3,
-	);
-	assert.equal(
-		MoveOperations.moveToBeginningOfLine(config, model, state(new Selection(1, 3, 1, 3)), false).position.column,
-		1,
-	);
+	assert.equal(MoveOperations.moveToPrevBlankLine(config, model, state(new Selection(4, 2, 4, 2)), false).position.lineNumber, 3);
+	assert.equal(MoveOperations.moveToBeginningOfLine(config, model, state(new Selection(1, 4, 1, 4)), false).position.column, 3);
+	assert.equal(MoveOperations.moveToBeginningOfLine(config, model, state(new Selection(1, 3, 1, 3)), false).position.column, 1);
 	assert.equal(MoveOperations.moveToEndOfLine(config, model, middle, false, false).position.column, 7);
 	assert.deepEqual(MoveOperations.moveToBeginningOfBuffer(config, model, middle, false).position, new Position(1, 1));
 	assert.deepEqual(MoveOperations.moveToEndOfBuffer(config, model, middle, false).position, new Position(4, 5));
 });
 
 function state(selection: Selection): SingleCursorState {
-	return new SingleCursorState(
-		Range.fromPositions(selection.getSelectionStart()),
-		SelectionStartKind.Simple,
-		0,
-		selection.getPosition(),
-		0,
-	);
+	return new SingleCursorState(Range.fromPositions(selection.getSelectionStart()), SelectionStartKind.Simple, 0, selection.getPosition(), 0);
 }

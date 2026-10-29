@@ -16,11 +16,7 @@ export function readDesignTextHtml(document: Document, html: string): { text: st
 	const walk = (node: Node, inherited: DesignTextStyle): void => {
 		if (node.nodeType === 3) {
 			const value = node.textContent ?? '';
-			const betweenBlocks =
-				/^\s*$/u.test(value) &&
-				[...(node.parentElement?.children ?? [])].some(child =>
-					['DIV', 'P', 'LI', 'UL', 'OL'].includes(child.tagName),
-				);
+			const betweenBlocks = /^\s*$/u.test(value) && [...(node.parentElement?.children ?? [])].some(child => ['DIV', 'P', 'LI', 'UL', 'OL'].includes(child.tagName));
 			if (!betweenBlocks) {
 				append(value, inherited);
 			}
@@ -60,11 +56,7 @@ export function readDesignTextHtml(document: Document, html: string): { text: st
 			Reflect.set(style, 'fontFamily', css.fontFamily);
 		}
 		if (css.fontWeight) {
-			Reflect.set(
-				style,
-				'fontWeight',
-				css.fontWeight === 'bold' ? 700 : css.fontWeight === 'normal' ? 400 : Number(css.fontWeight),
-			);
+			Reflect.set(style, 'fontWeight', css.fontWeight === 'bold' ? 700 : css.fontWeight === 'normal' ? 400 : Number(css.fontWeight));
 		}
 		if (css.fontStyle === 'normal' || css.fontStyle === 'italic') {
 			Reflect.set(style, 'fontStyle', css.fontStyle);
@@ -83,16 +75,7 @@ export function readDesignTextHtml(document: Document, html: string): { text: st
 		}
 		const decoration = css.textDecorationLine || css.textDecoration;
 		if (decoration.includes('underline') || decoration.includes('line-through')) {
-			Reflect.set(
-				style,
-				'textDecoration',
-				[
-					decoration.includes('underline') ? 'underline' : '',
-					decoration.includes('line-through') ? 'line-through' : '',
-				]
-					.filter(Boolean)
-					.join(' '),
-			);
+			Reflect.set(style, 'textDecoration', [decoration.includes('underline') ? 'underline' : '', decoration.includes('line-through') ? 'line-through' : ''].filter(Boolean).join(' '));
 		}
 		if (['left', 'center', 'right', 'justify'].includes(css.textAlign)) {
 			Reflect.set(style, 'textAlign', css.textAlign);

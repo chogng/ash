@@ -4,12 +4,7 @@ import { AnimationFrameScheduler } from '../../scheduler.js';
 import type { Icon } from '../../../common/icon.js';
 import type { IAction } from '../../../common/actions.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../common/lifecycle.js';
-import {
-	ActionBar,
-	type ActionBarDragAndDrop,
-	type ActionBarDropPosition,
-	type ActionBarOrientation,
-} from '../actionbar/actionbar.js';
+import { ActionBar, type ActionBarDragAndDrop, type ActionBarDropPosition, type ActionBarOrientation } from '../actionbar/actionbar.js';
 import { ScrollableElement } from '../scrollbar/scrollableElement.js';
 import type { ScrollableElementUpdateOptions } from '../scrollbar/scrollableElementOptions.js';
 import { TabAction, TabActionViewItem } from './tabActionViewItem.js';
@@ -49,9 +44,7 @@ export interface TabListItem<T> {
 /** Flush and inset serve document tabs; navigation and underline fit page categories to their labels. */
 export type TabListPresentation = 'flush' | 'inset' | 'navigation' | 'underline';
 /** Fit preserves labels; shrink shares available space; fixed shares bounded equal widths. */
-export type TabListSizing =
-	| { readonly mode: 'fit' | 'shrink' }
-	| { readonly mode: 'fixed'; readonly minWidth: number; readonly maxWidth: number };
+export type TabListSizing = { readonly mode: 'fit' | 'shrink' } | { readonly mode: 'fixed'; readonly minWidth: number; readonly maxWidth: number };
 export type TabListDropPosition = ActionBarDropPosition;
 
 /** Drag callbacks for a tab list; the caller owns payload and mutation semantics. */
@@ -59,12 +52,7 @@ export interface TabListDragAndDrop<T> {
 	readonly canDrop: (event: DragEvent, target: T | undefined, position: TabListDropPosition) => boolean;
 	readonly onDragStart: (value: T, event: DragEvent) => void;
 	readonly onDragEnter?: (target: T | undefined, position: TabListDropPosition, event: DragEvent) => void;
-	readonly onDragOver?: (
-		target: T | undefined,
-		position: TabListDropPosition,
-		event: DragEvent,
-		duration: number,
-	) => void;
+	readonly onDragOver?: (target: T | undefined, position: TabListDropPosition, event: DragEvent, duration: number) => void;
 	readonly onDragLeave?: () => void;
 	readonly onDrop: (target: T | undefined, position: TabListDropPosition, event: DragEvent) => void;
 	readonly onDragEnd: () => void;
@@ -122,29 +110,15 @@ export class TabList<T> extends Disposable {
 		const dragAndDrop = options.dragAndDrop;
 		const actionBarDragAndDrop: ActionBarDragAndDrop | undefined = dragAndDrop
 			? {
-					canDrop: (event, action, position) =>
-						dragAndDrop.canDrop(
-							event,
-							action instanceof TabAction ? action.tab.value : undefined,
-							position,
-						),
+					canDrop: (event, action, position) => dragAndDrop.canDrop(event, action instanceof TabAction ? action.tab.value : undefined, position),
 					onDragStart: (action, event) => {
 						if (action instanceof TabAction) dragAndDrop.onDragStart(action.tab.value, event);
 					},
 					onDragEnter: (action, position, event) => {
-						dragAndDrop.onDragEnter?.(
-							action instanceof TabAction ? action.tab.value : undefined,
-							position,
-							event,
-						);
+						dragAndDrop.onDragEnter?.(action instanceof TabAction ? action.tab.value : undefined, position, event);
 					},
 					onDragOver: (action, position, event, duration) => {
-						dragAndDrop.onDragOver?.(
-							action instanceof TabAction ? action.tab.value : undefined,
-							position,
-							event,
-							duration,
-						);
+						dragAndDrop.onDragOver?.(action instanceof TabAction ? action.tab.value : undefined, position, event, duration);
 					},
 					onDragLeave: () => dragAndDrop.onDragLeave?.(),
 					onDrop: (action, position, event) => {
@@ -193,8 +167,7 @@ export class TabList<T> extends Disposable {
 			new AnimationFrameScheduler(container.ownerDocument.defaultView!, () => {
 				// Refreshes must keep a manually focused tab visible even when it is not selected.
 				const focusedTab = getActiveElement(this.element.ownerDocument)?.closest<HTMLElement>('.ash-tab');
-				const revealTab =
-					focusedTab && this.actionBar.element.contains(focusedTab) ? focusedTab : this.selectedTab;
+				const revealTab = focusedTab && this.actionBar.element.contains(focusedTab) ? focusedTab : this.selectedTab;
 				if (revealTab?.isConnected) {
 					this.scrollable.reveal(revealTab);
 				} else {

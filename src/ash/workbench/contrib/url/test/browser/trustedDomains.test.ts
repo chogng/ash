@@ -35,17 +35,13 @@ suite('url browser component', () => {
 		await expect(link).toBeFocused();
 		await link.press('Enter');
 		await dialog.getByRole('button', { name: 'Copy', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashURLIntegration.copied))
-			.toEqual(['https://docs.example.test/guide?q=1#topic']);
+		await expect.poll(() => page.evaluate(() => window.ashURLIntegration.copied)).toEqual(['https://docs.example.test/guide?q=1#topic']);
 		await expect(dialog).toHaveCount(0);
 		expect(await page.evaluate(() => window.ashURLIntegration.contributed)).toEqual([]);
 		await link.focus();
 		await link.press('Enter');
 		await dialog.getByRole('button', { name: 'Open', exact: true }).press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashURLIntegration.contributed))
-			.toEqual(['https://docs.example.test/guide?q=1#topic']);
+		await expect.poll(() => page.evaluate(() => window.ashURLIntegration.contributed)).toEqual(['https://docs.example.test/guide?q=1#topic']);
 		await link.focus();
 		await link.press('Enter');
 		await expect(dialog).toBeVisible();
@@ -135,8 +131,6 @@ suite('url browser component', () => {
 		await page.evaluate(() => window.ashURLIntegration.disposeContribution());
 		await expect(page.getByRole('dialog')).toHaveCount(0);
 		expect(await page.evaluate(() => window.ashURLIntegration.contributed)).toEqual([]);
-		expect(await page.evaluate(() => window.ashURLIntegration.content)).not.toContain(
-			'"https://docs.example.test"',
-		);
+		expect(await page.evaluate(() => window.ashURLIntegration.content)).not.toContain('"https://docs.example.test"');
 	});
 });

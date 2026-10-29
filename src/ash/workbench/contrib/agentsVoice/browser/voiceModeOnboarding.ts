@@ -28,12 +28,7 @@ export class VoiceModeOnboardingBanner extends Disposable {
 				...defaultButtonStyles,
 				label: localize('agentsVoice.introduction.dismiss', 'Got it'),
 				onClick: () => {
-					storage.store(
-						AgentsVoiceStorageKeys.IntroBannerShown,
-						true,
-						StorageScope.PROFILE,
-						StorageTarget.USER,
-					);
+					storage.store(AgentsVoiceStorageKeys.IntroBannerShown, true, StorageScope.PROFILE, StorageTarget.USER);
 					this.element.hidden = true;
 					onDismiss();
 				},

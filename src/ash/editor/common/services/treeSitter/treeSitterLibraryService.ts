@@ -11,11 +11,7 @@ export interface TreeSitterSyntaxSession extends IDisposable {
 	readonly execution?: 'rust' | 'worker';
 	update(change: TextModelChange): void;
 	setTabSize(tabSize: number): void;
-	request(
-		operation: 'highlight' | 'facts' | 'selection' | 'preview',
-		data: object,
-		signal: AbortSignal,
-	): Promise<TreeSitterSyntaxResult>;
+	request(operation: 'highlight' | 'facts' | 'selection' | 'preview', data: object, signal: AbortSignal): Promise<TreeSitterSyntaxResult>;
 }
 
 /** Window-owned background analysis; parser resources and trees never enter the renderer. */

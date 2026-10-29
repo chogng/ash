@@ -8,13 +8,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import {
-	ICanvasService,
-	getCanvasInstanceLabels,
-	getCanvasReferenceKey,
-	type ICanvas,
-	type ICanvasContext,
-} from '../common/canvas.js';
+import { ICanvasService, getCanvasInstanceLabels, getCanvasReferenceKey, type ICanvas, type ICanvasContext } from '../common/canvas.js';
 
 interface CanvasRow {
 	readonly element: HTMLElement;
@@ -60,9 +54,7 @@ export class CanvasesPillControl extends Disposable {
 		this._register(
 			autorun(reader => {
 				const current = context.read(reader);
-				const entries = this.canvases.enabled.read(reader)
-					? (current?.canvases.read(reader)?.filter(canvas => canvas.source !== undefined) ?? [])
-					: [];
+				const entries = this.canvases.enabled.read(reader) ? (current?.canvases.read(reader)?.filter(canvas => canvas.source !== undefined) ?? []) : [];
 				const labels = getCanvasInstanceLabels(entries);
 				const active = new Set<string>();
 				for (const [index, canvas] of entries.entries()) {
@@ -104,9 +96,7 @@ export class CanvasesPillControl extends Disposable {
 						const target = row;
 						lifetime.add(
 							open.onDidClick(() => {
-								void this.canvases
-									.revealCanvas({ ...target.context.owner, canvas: target.canvas.resource })
-									.catch(error => this.notifications.error(error));
+								void this.canvases.revealCanvas({ ...target.context.owner, canvas: target.canvas.resource }).catch(error => this.notifications.error(error));
 							}),
 						);
 						lifetime.add(close.onDidClick(() => void this.close(target)));
@@ -117,16 +107,10 @@ export class CanvasesPillControl extends Disposable {
 					row.canvas = canvas;
 					row.label = labels[index]!;
 					row.open.label = row.label;
-					row.open.domNode.setAttribute(
-						'aria-label',
-						localize('canvas.openNamed', 'Open Canvas {0}', row.label),
-					);
+					row.open.domNode.setAttribute('aria-label', localize('canvas.openNamed', 'Open Canvas {0}', row.label));
 					row.open.domNode.title = canvas.status ? `${row.label}: ${canvas.status}` : row.label;
 					row.close.domNode.hidden = !current!.closeCanvas;
-					row.close.domNode.setAttribute(
-						'aria-label',
-						localize('canvas.closeNamed', 'Close Canvas {0}', row.label),
-					);
+					row.close.domNode.setAttribute('aria-label', localize('canvas.closeNamed', 'Close Canvas {0}', row.label));
 					row.close.domNode.title = localize('canvas.close', 'Close Canvas');
 				}
 				for (const [key, row] of this.rows) {
@@ -141,9 +125,7 @@ export class CanvasesPillControl extends Disposable {
 					this.rows.delete(key);
 				}
 				this.domNode.hidden = this.rows.size === 0;
-				const content = entries
-					.map((canvas, index) => (canvas.status ? `${labels[index]}: ${canvas.status}` : labels[index]))
-					.join('\n');
+				const content = entries.map((canvas, index) => (canvas.status ? `${labels[index]}: ${canvas.status}` : labels[index])).join('\n');
 				if (content !== this.content) {
 					this.content = content;
 					this.changed.fire();
@@ -157,11 +139,7 @@ export class CanvasesPillControl extends Disposable {
 	}
 
 	private async close(row: CanvasRow): Promise<void> {
-		if (
-			row.closing ||
-			!row.context.closeCanvas ||
-			!this.canvases.isOwnerPresentable({ ...row.context.owner, canvas: row.canvas.resource })
-		) {
+		if (row.closing || !row.context.closeCanvas || !this.canvases.isOwnerPresentable({ ...row.context.owner, canvas: row.canvas.resource })) {
 			return;
 		}
 		row.closing = true;
@@ -170,9 +148,7 @@ export class CanvasesPillControl extends Disposable {
 		try {
 			await row.context.closeCanvas(row.canvas);
 		} catch (error) {
-			this.notifications.error(
-				localize('canvas.closeFailed', 'Could not close Canvas {0}: {1}', row.label, String(error)),
-			);
+			this.notifications.error(localize('canvas.closeFailed', 'Could not close Canvas {0}: {1}', row.label, String(error)));
 		} finally {
 			row.closing = false;
 			if (!this.isDisposed && !row.lifetime.isDisposed) {

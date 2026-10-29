@@ -9,8 +9,7 @@ import type { RemoteRuntimeInstallProgressState } from '../common/remoteRuntimeI
 /** Creates the narrow API used by the pre-Workbench Remote installation page. */
 export function createRemoteRuntimeInstallProgressApi(): IRemoteRuntimeInstallProgressApi {
 	return {
-		getState: () =>
-			invoke<RemoteRuntimeInstallProgressState | undefined>(REMOTE_RUNTIME_INSTALL_PROGRESS_READ_CHANNEL),
+		getState: () => invoke<RemoteRuntimeInstallProgressState | undefined>(REMOTE_RUNTIME_INSTALL_PROGRESS_READ_CHANNEL),
 		cancel: () => invoke<void>(REMOTE_RUNTIME_INSTALL_PROGRESS_CANCEL_CHANNEL),
 		onDidChange: listener => subscribe(REMOTE_RUNTIME_INSTALL_PROGRESS_CHANGED_CHANNEL, listener),
 	};

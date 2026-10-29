@@ -1,9 +1,4 @@
-import {
-	SemanticTokenModifier,
-	SemanticTokenPresentation,
-	type LanguageToken,
-	type SemanticTokenStyling,
-} from '../tokens/languageTokens.js';
+import { SemanticTokenModifier, SemanticTokenPresentation, type LanguageToken, type SemanticTokenStyling } from '../tokens/languageTokens.js';
 
 export function resolveSemanticTokenStyling(token: LanguageToken): SemanticTokenStyling {
 	const presentation = resolveSemanticTokenPresentation(token);

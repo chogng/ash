@@ -1,14 +1,5 @@
 import { validateReviewAttributes } from './documentReview.js';
-import {
-	createDocumentNode,
-	createDocumentRoot,
-	createTextNode,
-	type DocumentAttributeValue,
-	type DocumentAttributes,
-	type DocumentMark,
-	type DocumentNode,
-	type DocumentNodeId,
-} from './document.js';
+import { createDocumentNode, createDocumentRoot, createTextNode, type DocumentAttributeValue, type DocumentAttributes, type DocumentMark, type DocumentNode, type DocumentNodeId } from './document.js';
 import { validateDocumentPageAttributes } from './documentPageLayout.js';
 import { validateDocumentParagraphAttributes, validateDocumentParagraphStyles } from './documentParagraph.js';
 
@@ -108,12 +99,7 @@ export class DocumentSchema {
 	/** Returns whether a node type is a leaf according to the schema content contract. */
 	isLeafNode(node: DocumentNode): boolean {
 		const spec = this.requireNodeSpec(node.type);
-		return (
-			spec.kind === 'text' ||
-			((spec.content?.length ?? 0) === 0 &&
-				(spec.allowedChildren?.length ?? 0) === 0 &&
-				(spec.allowedChildGroups?.length ?? 0) === 0)
-		);
+		return spec.kind === 'text' || ((spec.content?.length ?? 0) === 0 && (spec.allowedChildren?.length ?? 0) === 0 && (spec.allowedChildGroups?.length ?? 0) === 0);
 	}
 
 	/** Returns whether a parent type accepts a child type directly or through a declared group. */
@@ -121,10 +107,7 @@ export class DocumentSchema {
 		const parent = this.requireNodeSpec(parentType);
 		const child = this.requireNodeSpec(childType);
 		if (parent.content) return parent.content.some(term => contentTermMatches(term, childType, child.groups));
-		return (
-			(parent.allowedChildren?.includes(childType) ?? false) ||
-			(parent.allowedChildGroups?.some(group => child.groups?.includes(group) ?? false) ?? false)
-		);
+		return (parent.allowedChildren?.includes(childType) ?? false) || (parent.allowedChildGroups?.some(group => child.groups?.includes(group) ?? false) ?? false);
 	}
 
 	/** Creates a node using schema defaults and a generated id when omitted. */
@@ -161,21 +144,12 @@ export class DocumentSchema {
 			throw new TypeError(`Document root must be '${this.topNodeType}'`);
 		}
 		this.validateNode(document, new Set(), true, false);
-		if (document.attrs.trackChanges !== undefined && typeof document.attrs.trackChanges !== 'boolean')
-			throw new TypeError('Invalid track changes option');
-		if (
-			document.content.filter(node => node.type === 'reviewComment' || node.type === 'reviewChange').length > 1000
-		)
-			throw new TypeError('Too many review records');
+		if (document.attrs.trackChanges !== undefined && typeof document.attrs.trackChanges !== 'boolean') throw new TypeError('Invalid track changes option');
+		if (document.content.filter(node => node.type === 'reviewComment' || node.type === 'reviewChange').length > 1000) throw new TypeError('Too many review records');
 		validateDocumentParagraphStyles(document);
 		const visitSections = (node: DocumentNode): void => {
 			for (const child of node.content) {
-				if (
-					(child.type === 'documentSection' ||
-						child.type === 'reviewComment' ||
-						child.type === 'reviewChange') &&
-					node !== document
-				)
+				if ((child.type === 'documentSection' || child.type === 'reviewComment' || child.type === 'reviewChange') && node !== document)
 					throw new TypeError('Document metadata and sections must be root children');
 				visitSections(child);
 			}
@@ -189,12 +163,7 @@ export class DocumentSchema {
 		this.validateNode(node, new Set(), false, options.allowIncompleteContent ?? false);
 	}
 
-	private validateNode(
-		node: DocumentNode,
-		ids: Set<DocumentNodeId>,
-		isRoot: boolean,
-		allowIncompleteContent: boolean,
-	): void {
+	private validateNode(node: DocumentNode, ids: Set<DocumentNodeId>, isRoot: boolean, allowIncompleteContent: boolean): void {
 		if (!node || typeof node !== 'object') throw new TypeError('Document node is required');
 		if (ids.has(node.id)) throw new Error(`Duplicate document node id '${node.id}'`);
 		ids.add(node.id);
@@ -205,8 +174,7 @@ export class DocumentSchema {
 		validateAttributes(node.attrs, node.type);
 		spec.validateAttributes?.(node.attrs);
 		if (spec.kind === 'text') {
-			if (node.text === undefined || node.text.length === 0)
-				throw new TypeError('Text nodes must contain non-empty text');
+			if (node.text === undefined || node.text.length === 0) throw new TypeError('Text nodes must contain non-empty text');
 			if (node.content.length > 0) throw new TypeError('Text nodes cannot contain child nodes');
 			this.validateMarks(node.marks);
 		} else {
@@ -215,25 +183,15 @@ export class DocumentSchema {
 		}
 		const minChildren = spec.minChildren ?? 0;
 		const maxChildren = spec.maxChildren;
-		if (!allowIncompleteContent && node.content.length < minChildren)
-			throw new RangeError(
-				`Node '${node.type}' requires at least ${minChildren} child${minChildren === 1 ? '' : 'ren'}`,
-			);
-		if (maxChildren !== undefined && node.content.length > maxChildren)
-			throw new RangeError(
-				`Node '${node.type}' allows at most ${maxChildren} child${maxChildren === 1 ? '' : 'ren'}`,
-			);
+		if (!allowIncompleteContent && node.content.length < minChildren) throw new RangeError(`Node '${node.type}' requires at least ${minChildren} child${minChildren === 1 ? '' : 'ren'}`);
+		if (maxChildren !== undefined && node.content.length > maxChildren) throw new RangeError(`Node '${node.type}' allows at most ${maxChildren} child${maxChildren === 1 ? '' : 'ren'}`);
 		for (const child of node.content) {
 			if (!this.canContainChild(node.type, child.type)) {
 				throw new TypeError(`Node '${node.type}' cannot contain '${child.type}'`);
 			}
 			this.validateNode(child, ids, false, allowIncompleteContent);
 		}
-		if (
-			spec.content &&
-			!matchesContentExpression(spec.content, node.content, this.nodeSpecs, allowIncompleteContent)
-		)
-			throw new TypeError(`Node '${node.type}' content does not match its schema`);
+		if (spec.content && !matchesContentExpression(spec.content, node.content, this.nodeSpecs, allowIncompleteContent)) throw new TypeError(`Node '${node.type}' content does not match its schema`);
 	}
 
 	/** Validates marks before a command or input adapter stores them as insertion state. */
@@ -263,8 +221,7 @@ export class DocumentSchema {
 
 	private validateSchemaDefinition(): void {
 		const root = this.nodeSpecs.get(this.topNodeType);
-		if (!root || root.kind !== 'root')
-			throw new TypeError(`Schema top node '${this.topNodeType}' must be a root node`);
+		if (!root || root.kind !== 'root') throw new TypeError(`Schema top node '${this.topNodeType}' must be a root node`);
 		const declaredGroups = new Set<string>();
 		for (const [type, spec] of this.nodeSpecs) {
 			if (!/^[a-z][a-zA-Z0-9_-]*$/.test(type)) throw new TypeError(`Invalid document node type '${type}'`);
@@ -276,24 +233,18 @@ export class DocumentSchema {
 				if (declaredGroups.has(group)) continue;
 				declaredGroups.add(group);
 			}
-			for (const group of spec.allowedChildGroups ?? [])
-				validateGroupName(group, `Node '${type}' allowed child group`);
-			if (
-				spec.kind === 'text' &&
-				((spec.allowedChildren?.length ?? 0) > 0 || (spec.allowedChildGroups?.length ?? 0) > 0)
-			)
+			for (const group of spec.allowedChildGroups ?? []) validateGroupName(group, `Node '${type}' allowed child group`);
+			if (spec.kind === 'text' && ((spec.allowedChildren?.length ?? 0) > 0 || (spec.allowedChildGroups?.length ?? 0) > 0))
 				throw new TypeError(`Text node '${type}' cannot declare child content`);
 			if (spec.content && ((spec.allowedChildren?.length ?? 0) > 0 || (spec.allowedChildGroups?.length ?? 0) > 0))
 				throw new TypeError(`Node '${type}' cannot combine content terms with allowed child lists`);
 			for (const childType of spec.allowedChildren ?? []) {
-				if (!this.nodeSpecs.has(childType))
-					throw new TypeError(`Node '${type}' references unknown child '${childType}'`);
+				if (!this.nodeSpecs.has(childType)) throw new TypeError(`Node '${type}' references unknown child '${childType}'`);
 			}
 		}
 		for (const [type, spec] of this.nodeSpecs) {
 			for (const group of spec.allowedChildGroups ?? []) {
-				if (!declaredGroups.has(group))
-					throw new TypeError(`Node '${type}' references unknown child group '${group}'`);
+				if (!declaredGroups.has(group)) throw new TypeError(`Node '${type}' references unknown child group '${group}'`);
 			}
 		}
 		for (const [type, spec] of this.markSpecs) {
@@ -307,34 +258,9 @@ export function createDefaultDocumentSchema(): DocumentSchema {
 }
 
 function defaultNodeSpecs(): Readonly<Record<string, DocumentNodeSpec>> {
-	const blocks = [
-		'paragraph',
-		'heading',
-		'blockquote',
-		'bulletList',
-		'orderedList',
-		'codeBlock',
-		'table',
-		'horizontalRule',
-	] as const;
-	const listBlocks = [
-		'paragraph',
-		'heading',
-		'blockquote',
-		'bulletList',
-		'orderedList',
-		'codeBlock',
-		'table',
-	] as const;
-	const tableCellBlocks = [
-		'paragraph',
-		'heading',
-		'blockquote',
-		'bulletList',
-		'orderedList',
-		'codeBlock',
-		'table',
-	] as const;
+	const blocks = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'codeBlock', 'table', 'horizontalRule'] as const;
+	const listBlocks = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'codeBlock', 'table'] as const;
+	const tableCellBlocks = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'codeBlock', 'table'] as const;
 	return {
 		doc: { kind: 'root', allowedChildren: [...blocks, 'documentSection', 'reviewComment', 'reviewChange'] },
 		reviewComment: {
@@ -377,12 +303,7 @@ function defaultNodeSpecs(): Readonly<Record<string, DocumentNodeSpec>> {
 			defaultAttrs: { order: 1 },
 			validateAttributes: attrs => {
 				validateIntegerAttribute(attrs, 'order', 1, Number.MAX_SAFE_INTEGER);
-				if (
-					attrs.numbering !== undefined &&
-					!['decimal', 'lower-alpha', 'upper-alpha', 'lower-roman', 'upper-roman'].includes(
-						String(attrs.numbering),
-					)
-				)
+				if (attrs.numbering !== undefined && !['decimal', 'lower-alpha', 'upper-alpha', 'lower-roman', 'upper-roman'].includes(String(attrs.numbering)))
 					throw new TypeError('Invalid list numbering format');
 			},
 		},
@@ -414,42 +335,32 @@ function defaultMarkSpecs(): Readonly<Record<string, DocumentMarkSpec>> {
 }
 
 function validateAttributes(attrs: DocumentAttributes, owner: string): void {
-	if (!attrs || typeof attrs !== 'object' || Array.isArray(attrs))
-		throw new TypeError(`Attributes for '${owner}' must be an object`);
+	if (!attrs || typeof attrs !== 'object' || Array.isArray(attrs)) throw new TypeError(`Attributes for '${owner}' must be an object`);
 	for (const [key, value] of Object.entries(attrs)) {
 		if (!/^[a-z][a-zA-Z0-9_-]*$/.test(key)) throw new TypeError(`Invalid attribute '${key}' on '${owner}'`);
-		if (!isDocumentAttributeValue(value))
-			throw new TypeError(`Attribute '${key}' on '${owner}' has an invalid value`);
+		if (!isDocumentAttributeValue(value)) throw new TypeError(`Attribute '${key}' on '${owner}' has an invalid value`);
 	}
 }
 
 function isDocumentAttributeValue(value: unknown): value is DocumentAttributeValue {
-	return (
-		value === null ||
-		typeof value === 'string' ||
-		typeof value === 'boolean' ||
-		(typeof value === 'number' && Number.isFinite(value))
-	);
+	return value === null || typeof value === 'string' || typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value));
 }
 
 function validateStringAttribute(attrs: DocumentAttributes, name: string, required: boolean): void {
 	const value = attrs[name];
 	if (value === undefined && !required) return;
-	if (typeof value !== 'string' || (required && value.length === 0))
-		throw new TypeError(`Attribute '${name}' must be a ${required ? 'non-empty ' : ''}string`);
+	if (typeof value !== 'string' || (required && value.length === 0)) throw new TypeError(`Attribute '${name}' must be a ${required ? 'non-empty ' : ''}string`);
 }
 
 function validateIntegerAttribute(attrs: DocumentAttributes, name: string, min: number, max: number): void {
 	const value = attrs[name];
-	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < min || value > max)
-		throw new RangeError(`Attribute '${name}' must be an integer between ${min} and ${max}`);
+	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < min || value > max) throw new RangeError(`Attribute '${name}' must be an integer between ${min} and ${max}`);
 }
 
 function validateTextStyleMarkAttributes(attrs: DocumentAttributes): void {
 	const fontFamily = attrs.fontFamily;
 	const fontSize = attrs.fontSize;
-	if (fontFamily === undefined && fontSize === undefined)
-		throw new TypeError('Text style marks require a font family or font size');
+	if (fontFamily === undefined && fontSize === undefined) throw new TypeError('Text style marks require a font family or font size');
 	if (fontFamily !== undefined && fontFamily !== 'sans' && fontFamily !== 'serif' && fontFamily !== 'monospace') {
 		throw new TypeError('Text style font family must be sans, serif, or monospace');
 	}
@@ -462,32 +373,20 @@ function validateTextStyleMarkAttributes(attrs: DocumentAttributes): void {
 function validateCardinality(type: string, spec: DocumentNodeSpec): void {
 	const min = spec.minChildren;
 	const max = spec.maxChildren;
-	if (min !== undefined && (!Number.isSafeInteger(min) || min < 0))
-		throw new RangeError(`Node '${type}' minChildren must be a non-negative safe integer`);
-	if (max !== undefined && (!Number.isSafeInteger(max) || max < 0))
-		throw new RangeError(`Node '${type}' maxChildren must be a non-negative safe integer`);
-	if (min !== undefined && max !== undefined && min > max)
-		throw new RangeError(`Node '${type}' minChildren cannot exceed maxChildren`);
+	if (min !== undefined && (!Number.isSafeInteger(min) || min < 0)) throw new RangeError(`Node '${type}' minChildren must be a non-negative safe integer`);
+	if (max !== undefined && (!Number.isSafeInteger(max) || max < 0)) throw new RangeError(`Node '${type}' maxChildren must be a non-negative safe integer`);
+	if (min !== undefined && max !== undefined && min > max) throw new RangeError(`Node '${type}' minChildren cannot exceed maxChildren`);
 }
 
 function validateGroupName(group: string, owner: string): void {
-	if (typeof group !== 'string' || !/^[a-z][a-zA-Z0-9_-]*$/.test(group))
-		throw new TypeError(`${owner} must use a valid group name`);
+	if (typeof group !== 'string' || !/^[a-z][a-zA-Z0-9_-]*$/.test(group)) throw new TypeError(`${owner} must use a valid group name`);
 }
 
-function contentTermMatches(
-	term: DocumentContentTerm,
-	childType: string,
-	childGroups: readonly string[] | undefined,
-): boolean {
+function contentTermMatches(term: DocumentContentTerm, childType: string, childGroups: readonly string[] | undefined): boolean {
 	return term.type === childType || (term.group !== undefined && (childGroups?.includes(term.group) ?? false));
 }
 
-function validateContentTerms(
-	owner: string,
-	spec: DocumentNodeSpec,
-	nodeSpecs: ReadonlyMap<string, DocumentNodeSpec>,
-): void {
+function validateContentTerms(owner: string, spec: DocumentNodeSpec, nodeSpecs: ReadonlyMap<string, DocumentNodeSpec>): void {
 	if (!spec.content) return;
 	if (spec.kind === 'text') throw new TypeError(`Text node '${owner}' cannot declare content terms`);
 	const declaredGroups = new Set<string>();
@@ -495,26 +394,20 @@ function validateContentTerms(
 	for (const term of spec.content) {
 		const hasType = term.type !== undefined;
 		const hasGroup = term.group !== undefined;
-		if (hasType === hasGroup)
-			throw new TypeError(`Node '${owner}' content terms must declare exactly one type or group`);
-		if (hasType && !nodeSpecs.has(term.type!))
-			throw new TypeError(`Node '${owner}' content references unknown child '${term.type}'`);
+		if (hasType === hasGroup) throw new TypeError(`Node '${owner}' content terms must declare exactly one type or group`);
+		if (hasType && !nodeSpecs.has(term.type!)) throw new TypeError(`Node '${owner}' content references unknown child '${term.type}'`);
 		if (hasGroup) {
 			validateGroupName(term.group!, `Node '${owner}' content group`);
-			if (!declaredGroups.has(term.group!))
-				throw new TypeError(`Node '${owner}' content references unknown child group '${term.group}'`);
+			if (!declaredGroups.has(term.group!)) throw new TypeError(`Node '${owner}' content references unknown child group '${term.group}'`);
 		}
 		validateContentTermCardinality(owner, term);
 	}
 }
 
 function validateContentTermCardinality(owner: string, term: DocumentContentTerm): void {
-	if (term.min !== undefined && (!Number.isSafeInteger(term.min) || term.min < 0))
-		throw new RangeError(`Node '${owner}' content min must be a non-negative safe integer`);
-	if (term.max !== undefined && (!Number.isSafeInteger(term.max) || term.max < 0))
-		throw new RangeError(`Node '${owner}' content max must be a non-negative safe integer`);
-	if (term.min !== undefined && term.max !== undefined && term.min > term.max)
-		throw new RangeError(`Node '${owner}' content min cannot exceed max`);
+	if (term.min !== undefined && (!Number.isSafeInteger(term.min) || term.min < 0)) throw new RangeError(`Node '${owner}' content min must be a non-negative safe integer`);
+	if (term.max !== undefined && (!Number.isSafeInteger(term.max) || term.max < 0)) throw new RangeError(`Node '${owner}' content max must be a non-negative safe integer`);
+	if (term.min !== undefined && term.max !== undefined && term.min > term.max) throw new RangeError(`Node '${owner}' content min cannot exceed max`);
 }
 
 function matchesContentExpression(

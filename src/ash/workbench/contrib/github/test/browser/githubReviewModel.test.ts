@@ -42,9 +42,7 @@ function setup() {
 	let submissions = 0;
 	let failSubmission = false;
 	const github: Partial<IGitHubService> = {
-		listAccounts: async () => [
-			{ id: 'alice', host: 'github.com', login: 'alice', status: 'ready', credentialRevision: 1n },
-		],
+		listAccounts: async () => [{ id: 'alice', host: 'github.com', login: 'alice', status: 'ready', credentialRevision: 1n }],
 		requestedReviewers: async () => ({ users: [], teams: [] }),
 		readRepository: async () => ({
 			fullName: 'team/repo',
@@ -140,10 +138,7 @@ test('refresh preserves an old draft and blocks submitting it on a changed commi
 	await model.openPullRequest(7);
 	assert.equal(model.staleDraft, true);
 	assert.equal(model.draft?.body, 'Keep this draft');
-	await assert.rejects(
-		model.submitReview(GitHubReviewEvent.Comment),
-		(error: unknown) => error instanceof GitHubError && error.code === GitHubErrorCode.Conflict,
-	);
+	await assert.rejects(model.submitReview(GitHubReviewEvent.Comment), (error: unknown) => error instanceof GitHubError && error.code === GitHubErrorCode.Conflict);
 	assert.equal(fixture.count(), 0);
 	model.discardDraft();
 	assert.equal(model.canWrite, true);
@@ -236,8 +231,7 @@ test('initial account selection follows the GitHub catalog and other account upd
 	const fixture = setup();
 	using model = fixture.model;
 	using accounts = fixture.accounts;
-	fixture.github.listAccounts = async () =>
-		['bob', 'alice'].map(id => ({ id, host: 'github.com', login: id, status: 'ready', credentialRevision: 1n }));
+	fixture.github.listAccounts = async () => ['bob', 'alice'].map(id => ({ id, host: 'github.com', login: id, status: 'ready', credentialRevision: 1n }));
 	await model.loadRepository('team', 'repo');
 	await model.openPullRequest(7);
 	model.setReviewBody('Bob draft');
@@ -306,10 +300,7 @@ test('an account change cancels inbox reads and does not display a late private 
 		nextPage: null,
 	});
 	await reading;
-	assert.deepEqual(
-		{ items: model.notifications, selected: model.selectedNotification, busy: model.busy },
-		{ items: [], selected: undefined, busy: false },
-	);
+	assert.deepEqual({ items: model.notifications, selected: model.selectedNotification, busy: model.busy }, { items: [], selected: undefined, busy: false });
 });
 
 test('a fork with an uncertain result cannot be submitted again after repository reload', async () => {
@@ -326,10 +317,7 @@ test('a fork with an uncertain result cannot be submitted again after repository
 	await model.createFork(fork);
 	await model.loadRepository('team', 'repo');
 	await model.createFork(fork);
-	assert.deepEqual(
-		{ calls, uncertain: model.submissionUncertain, fork: model.fork },
-		{ calls: 1, uncertain: true, fork: undefined },
-	);
+	assert.deepEqual({ calls, uncertain: model.submissionUncertain, fork: model.fork }, { calls: 1, uncertain: true, fork: undefined });
 });
 
 test('Codex requests post one PR comment, paginate discussion results and reject an unseen head', async () => {

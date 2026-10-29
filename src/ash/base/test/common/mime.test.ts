@@ -1,13 +1,6 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
-import {
-	getExtensionForMimeType,
-	getMediaMime,
-	getMediaOrTextMime,
-	isTextStreamMime,
-	Mimes,
-	normalizeMimeType,
-} from '../../common/mime.js';
+import { getExtensionForMimeType, getMediaMime, getMediaOrTextMime, isTextStreamMime, Mimes, normalizeMimeType } from '../../common/mime.js';
 
 suite('MIME types', () => {
 	test('looks up text and media extensions without depending on path casing', () => {
@@ -24,18 +17,7 @@ suite('MIME types', () => {
 				getMediaOrTextMime('/assets/.hidden'),
 				getMediaOrTextMime('/assets/unknown.extension'),
 			],
-			[
-				'image/avif',
-				'video/mp4',
-				'application/pdf',
-				undefined,
-				Mimes.text,
-				Mimes.html,
-				'application/json',
-				'image/png',
-				undefined,
-				undefined,
-			],
+			['image/avif', 'video/mp4', 'application/pdf', undefined, Mimes.text, Mimes.html, 'application/json', 'image/png', undefined, undefined],
 		);
 	});
 

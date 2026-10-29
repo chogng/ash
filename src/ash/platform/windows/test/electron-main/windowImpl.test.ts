@@ -34,7 +34,12 @@ setup(() => {
 	windowServices.registerSingleton(IThemeMainService, () => {
 		const state = new Map<string, unknown>();
 		return new ThemeMainService(
-			{ shouldUseDarkColors: false, shouldUseHighContrastColors: false, on: () => {}, removeListener: () => {} },
+			{
+				shouldUseDarkColors: false,
+				shouldUseHighContrastColors: false,
+				on: () => {},
+				removeListener: () => {},
+			},
 			{
 				getItem: key => state.get(key),
 				setItem: (key, value) => {
@@ -165,13 +170,7 @@ class TestWindow extends EventEmitter implements ICodeWindowHandle<TestWindow> {
 		this.navigate();
 	}
 	public navigate(inPlace = false, mainFrame = true): void {
-		this.webContents.emit(
-			'did-start-navigation',
-			undefined,
-			'file:///synthetic/workbench.html',
-			inPlace,
-			mainFrame,
-		);
+		this.webContents.emit('did-start-navigation', undefined, 'file:///synthetic/workbench.html', inPlace, mainFrame);
 	}
 	public close(): void {
 		this.destroy();
@@ -407,11 +406,7 @@ test('CodeWindow closes a renderer lost before loading and releases startup reso
 	);
 	host.win.webContents.emit('render-process-gone', undefined, { reason: 'crashed', exitCode: 139 });
 	assert.deepEqual({ destroyed: host.win.destroyed, released }, { destroyed: true, released: 1 });
-	assert.deepEqual(errors[0], [
-		'window',
-		'Renderer process gone',
-		{ windowId: host.id, reason: 'crashed', exitCode: 139 },
-	]);
+	assert.deepEqual(errors[0], ['window', 'Renderer process gone', { windowId: host.id, reason: 'crashed', exitCode: 139 }]);
 });
 
 function createHost(window = new TestWindow(), reopen: () => Promise<void> = async () => {}): CodeWindow<TestWindow> {
@@ -453,9 +448,7 @@ test('CodeWindow preserves native client pixels, coalesces resize and releases i
 	resize(0, 0, 1);
 	resize(1501, 1001);
 	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.deepEqual(window.messages, [
-		{ channel: 'ash:window:client-size-changed', token: { width: 1501, height: 1001 } },
-	]);
+	assert.deepEqual(window.messages, [{ channel: 'ash:window:client-size-changed', token: { width: 1501, height: 1001 } }]);
 	resize(1500, 997);
 	host.dispose();
 	assert.equal(window.messageHooks.size, 0);
@@ -644,9 +637,7 @@ test('CodeWindow diagnostics distinguish native unresponsiveness from a shutdown
 });
 
 test('CodeWindow offers localized crash recovery and replaces the window without a dead-renderer handshake', async () => {
-	const messages = JSON.parse(
-		await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'),
-	) as Record<string, Record<string, string>>;
+	const messages = JSON.parse(await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')) as Record<string, Record<string, string>>;
 	setNlsMessages('zh-CN', messages);
 	const result = new DeferredPromise<MessageBoxReturnValue>();
 	const shown = new DeferredPromise<MessageBoxOptions>();
@@ -686,10 +677,7 @@ test('CodeWindow recovery waits for its new host before destroying the unrespons
 	lifecycle.respondToClose(host.win, { kind: 'ready' });
 	const recovering = host.reportWindowError(false);
 	await opening.p;
-	assert.deepEqual(
-		{ destroyed: host.win.destroyed, reloads: host.win.reloads, messages: host.win.messages },
-		{ destroyed: false, reloads: 0, messages: [] },
-	);
+	assert.deepEqual({ destroyed: host.win.destroyed, reloads: host.win.reloads, messages: host.win.messages }, { destroyed: false, reloads: 0, messages: [] });
 	await replacement.complete();
 	await recovering;
 	assert.equal(host.win.destroyed, true);
@@ -753,10 +741,7 @@ for (const choice of ['Keep Waiting', 'Close'] as const) {
 			reopened++;
 		});
 		await host.reportWindowError(false);
-		assert.deepEqual(
-			{ reopened, destroyed: host.win.destroyed, requests: host.win.messages },
-			{ reopened: 0, destroyed: choice === 'Close', requests: [] },
-		);
+		assert.deepEqual({ reopened, destroyed: host.win.destroyed, requests: host.win.messages }, { reopened: 0, destroyed: choice === 'Close', requests: [] });
 	});
 }
 

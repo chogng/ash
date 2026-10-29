@@ -1,7 +1,4 @@
-import {
-	documentCodec,
-	bindDocumentCodec,
-} from '../../../../../../../extensions/academy/common/model/documentCodec.js';
+import { documentCodec, bindDocumentCodec } from '../../../../../../../extensions/academy/common/model/documentCodec.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import type { DocumentCollaborationOpenParams } from '../../../../../../../.build/protocol/typescript/index.js';
@@ -15,14 +12,8 @@ import type { DocumentCollaborationUpdate } from '../../../../../../../.build/pr
 import type { ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
 import { textSelection } from '../../../../../../../extensions/academy/common/core/documentSelection.js';
 import type { DocumentNode } from '../../../../../../../extensions/academy/common/model/document.js';
-import {
-	createDefaultDocumentSchema,
-	type DocumentSchema,
-} from '../../../../../../../extensions/academy/common/model/documentSchema.js';
-import {
-	applyDocumentTransaction,
-	DocumentTransaction,
-} from '../../../../../../../extensions/academy/common/model/documentTransaction.js';
+import { createDefaultDocumentSchema, type DocumentSchema } from '../../../../../../../extensions/academy/common/model/documentSchema.js';
+import { applyDocumentTransaction, DocumentTransaction } from '../../../../../../../extensions/academy/common/model/documentTransaction.js';
 import { serializeDocumentTransaction } from '../../../../../../../extensions/academy/common/model/documentTransactionSerialization.js';
 import type { DocumentCollaborationRemoteEnvelope } from '../../common/documentCollaborationService.js';
 import type { IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
@@ -35,19 +26,13 @@ test('Stanza App Server collaboration adapter uses JSON-safe ordered versions an
 	const events = new FakeServerEvents();
 	const api = new FakeDocumentCollaborationApi();
 	using service = new AppServerDocumentCollaborationService(api, events);
-	using connection = await service.open(
-		{ codec: bindDocumentCodec(schema), clientId: 'client-a', schemaId: 'stanza-document-v1', document },
-		new AbortController().signal,
-	);
+	using connection = await service.open({ codec: bindDocumentCodec(schema), clientId: 'client-a', schemaId: 'stanza-document-v1', document }, new AbortController().signal);
 
 	assert.equal(connection.roomId, 'room-a');
 	assert.equal(connection.canEdit, true);
 	assert.equal(connection.canManageMembers, false);
 	assert.equal(connection.principalId, undefined);
-	await assert.rejects(
-		connection.createInvite('Writer', 'editor', new AbortController().signal),
-		/does not manage remote room members/,
-	);
+	await assert.rejects(connection.createInvite('Writer', 'editor', new AbortController().signal), /does not manage remote room members/);
 	await assert.rejects(connection.listMembers(new AbortController().signal), /does not manage remote room members/);
 	assert.equal(connection.initialSnapshot.version, 0);
 	assert.equal(connection.currentPresence[0]?.clientId, 'client-c');
@@ -69,20 +54,14 @@ test('Stanza App Server collaboration adapter uses JSON-safe ordered versions an
 
 	const local = new DocumentTransaction().replaceText('text-1', 0, 0, 'A');
 	const localDocument = applyDocumentTransaction(document, schema, local).document;
-	const outcome = await connection.submit(
-		{ clientId: 'client-a', sequence: 1, baseVersion: 0, transaction: local },
-		localDocument,
-		new AbortController().signal,
-	);
+	const outcome = await connection.submit({ clientId: 'client-a', sequence: 1, baseVersion: 0, transaction: local }, localDocument, new AbortController().signal);
 	assert.equal(api.submissions[0]?.sequence, 1);
 	assert.equal(api.submissions[0]?.baseVersion, 0);
 	assert.equal(outcome.kind, 'accepted');
 	assert.equal(outcome.kind === 'accepted' ? outcome.update.version : -1, 1);
 
 	const receivedPresence: string[] = [];
-	connection.onDidReceivePresence(presences =>
-		receivedPresence.push(...presences.map(presence => presence.clientId)),
-	);
+	connection.onDidReceivePresence(presences => receivedPresence.push(...presences.map(presence => presence.clientId)));
 	await connection.updatePresence(textSelection({ nodeId: 'text-1', offset: 1 }), new AbortController().signal);
 	assert.equal(api.presenceUpdates[0]?.clientId, 'client-a');
 	events.firePresence({
@@ -91,9 +70,7 @@ test('Stanza App Server collaboration adapter uses JSON-safe ordered versions an
 		presences: [
 			{
 				clientId: 'client-b',
-				selection: JSON.stringify(
-					textSelection({ nodeId: 'text-1', offset: 0 }, { nodeId: 'text-1', offset: 1 }),
-				),
+				selection: JSON.stringify(textSelection({ nodeId: 'text-1', offset: 0 }, { nodeId: 'text-1', offset: 1 })),
 			},
 		],
 	});
@@ -118,9 +95,7 @@ class FakeDocumentCollaborationApi implements IDocumentCollaborationApi {
 	readonly initialPresence: DocumentCollaborationPresenceSnapshot = {
 		roomId: 'room-a',
 		generation: 0,
-		presences: [
-			{ clientId: 'client-c', selection: JSON.stringify(textSelection({ nodeId: 'text-1', offset: 0 })) },
-		],
+		presences: [{ clientId: 'client-c', selection: JSON.stringify(textSelection({ nodeId: 'text-1', offset: 0 })) }],
 	};
 
 	async open(params: DocumentCollaborationOpenParams): Promise<DocumentCollaborationOpenResult> {
@@ -151,9 +126,7 @@ class FakeDocumentCollaborationApi implements IDocumentCollaborationApi {
 		return { roomId: params.roomId, generation: this.presenceUpdates.length, presences: [] };
 	}
 
-	async readPresence(
-		params: DocumentCollaborationPresenceReadParams,
-	): Promise<DocumentCollaborationPresenceSnapshot> {
+	async readPresence(params: DocumentCollaborationPresenceReadParams): Promise<DocumentCollaborationPresenceSnapshot> {
 		assert.equal(params.roomId, this.initialPresence.roomId);
 		return this.initialPresence;
 	}

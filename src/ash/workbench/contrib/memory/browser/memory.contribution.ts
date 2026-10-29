@@ -11,10 +11,7 @@ function describe(report: MemoryDiagnosticSummary): string {
 	return [
 		`Memory diagnostics: ${report.status} · ${report.elapsedSeconds}s`,
 		'Growth is evidence for investigation, not proof of a leak.',
-		...report.targets.map(
-			target =>
-				`${target.label} · ${target.samples} samples\n${target.metrics.join('\n')}\n${target.findings.join('\n')}`,
-		),
+		...report.targets.map(target => `${target.label} · ${target.samples} samples\n${target.metrics.join('\n')}\n${target.findings.join('\n')}`),
 		`Evidence gaps: ${report.evidenceGaps}`,
 	].join('\n');
 }
@@ -42,11 +39,7 @@ registerWorkbenchContribution('workbench.contrib.memoryDiagnostics', WorkbenchPh
 						try {
 							if (operation === 'export') {
 								const bytes = await memory.export();
-								triggerDownload(
-									new Blob([new Uint8Array(bytes)], { type: 'application/json' }),
-									`memory-diagnostics-${Date.now()}.json`,
-									document,
-								);
+								triggerDownload(new Blob([new Uint8Array(bytes)], { type: 'application/json' }), `memory-diagnostics-${Date.now()}.json`, document);
 							} else {
 								notifications.info(describe(await memory[operation]()));
 							}

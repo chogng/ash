@@ -1,13 +1,7 @@
 import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
 import type { IContextKey } from '../../platform/contextkey/common/contextkey.js';
 import type { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
-import {
-	IsLinuxContext,
-	IsMacContext,
-	IsNativeContext,
-	IsWebContext,
-	IsWindowsContext,
-} from '../../platform/contextkey/common/contextkeys.js';
+import { IsLinuxContext, IsMacContext, IsNativeContext, IsWebContext, IsWindowsContext } from '../../platform/contextkey/common/contextkeys.js';
 import { type IWorkspaceContextService, workbenchStateToString } from '../../platform/workspace/common/workspace.js';
 import {
 	ActiveEditorGroupEmptyContext,
@@ -31,11 +25,7 @@ import {
 } from '../common/contextkeys.js';
 import type { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
 import type { IEditorService } from '../services/editor/common/editorService.js';
-import {
-	positionToString,
-	type IWorkbenchLayoutService,
-	type WorkbenchPartId,
-} from '../services/layout/browser/layoutService.js';
+import { positionToString, type IWorkbenchLayoutService, type WorkbenchPartId } from '../services/layout/browser/layoutService.js';
 import type { IWorkingCopyService } from '../services/workingCopy/common/workingCopyService.js';
 
 /** Projects window-wide service state into Workbench context keys. */
@@ -57,9 +47,7 @@ export class WorkbenchContextKeysHandler extends Disposable {
 			this.bindOpenFolderKey(contextKeyService);
 			this.bindWorkingCopyKeys(contextKeyService, workingCopyService);
 			this.bindLayoutKeys(contextKeyService, layoutService);
-			this._register(
-				new WorkbenchEditorContextKeysHandler(contextKeyService, editorGroupsService, editorService),
-			);
+			this._register(new WorkbenchEditorContextKeysHandler(contextKeyService, editorGroupsService, editorService));
 		});
 	}
 
@@ -87,10 +75,7 @@ export class WorkbenchContextKeysHandler extends Disposable {
 		this._register(toDisposable(() => resetContextKeys(contextKeyService, keys)));
 	}
 
-	private bindWorkspaceKeys(
-		contextKeyService: IContextKeyService,
-		workspaceContextService: IWorkspaceContextService,
-	): void {
+	private bindWorkspaceKeys(contextKeyService: IContextKeyService, workspaceContextService: IWorkspaceContextService): void {
 		const keys = bufferContextKeyChanges(contextKeyService, () => {
 			const workbenchState = WorkbenchStateContext.bindTo(contextKeyService);
 			const workspaceFolderCount = WorkspaceFolderCountContext.bindTo(contextKeyService);
@@ -98,9 +83,7 @@ export class WorkbenchContextKeysHandler extends Disposable {
 			return { workbenchState, workspaceFolderCount };
 		});
 		const update = () => {
-			contextKeyService.bufferChangeEvents(() =>
-				updateWorkspaceKeys(keys.workbenchState, keys.workspaceFolderCount, workspaceContextService),
-			);
+			contextKeyService.bufferChangeEvents(() => updateWorkspaceKeys(keys.workbenchState, keys.workspaceFolderCount, workspaceContextService));
 		};
 		this._register(workspaceContextService.onDidChangeWorkbenchState(update));
 		this._register(workspaceContextService.onDidChangeWorkspaceFolders(update));
@@ -110,28 +93,23 @@ export class WorkbenchContextKeysHandler extends Disposable {
 	private bindWorkingCopyKeys(contextKeyService: IContextKeyService, workingCopyService: IWorkingCopyService): void {
 		const dirtyWorkingCopies = DirtyWorkingCopiesContext.bindTo(contextKeyService);
 		dirtyWorkingCopies.set(workingCopyService.hasDirtyWorkingCopies);
-		this._register(
-			workingCopyService.onDidChangeDirty(() => dirtyWorkingCopies.set(workingCopyService.hasDirtyWorkingCopies)),
-		);
+		this._register(workingCopyService.onDidChangeDirty(() => dirtyWorkingCopies.set(workingCopyService.hasDirtyWorkingCopies)));
 		this._register(toDisposable(() => dirtyWorkingCopies.reset()));
 	}
 
 	private bindLayoutKeys(contextKeyService: IContextKeyService, layoutService: IWorkbenchLayoutService): void {
-		const { visibilityKeys, panelMaximized, panelPosition, auxiliaryBarMaximized } = bufferContextKeyChanges(
-			contextKeyService,
-			() => ({
-				visibilityKeys: new Map<WorkbenchPartId, IContextKey<boolean>>([
-					['sidebar', SideBarVisibleContext.bindTo(contextKeyService)],
-					['auxiliarybar', AuxiliaryBarVisibleContext.bindTo(contextKeyService)],
-					['agentSidebar', AgentSidebarVisibleContext.bindTo(contextKeyService)],
-					['panel', PanelVisibleContext.bindTo(contextKeyService)],
-					['editor', EditorAreaVisibleContext.bindTo(contextKeyService)],
-				]),
-				panelMaximized: PanelMaximizedContext.bindTo(contextKeyService),
-				panelPosition: PanelPositionContext.bindTo(contextKeyService),
-				auxiliaryBarMaximized: AuxiliaryBarMaximizedContext.bindTo(contextKeyService),
-			}),
-		);
+		const { visibilityKeys, panelMaximized, panelPosition, auxiliaryBarMaximized } = bufferContextKeyChanges(contextKeyService, () => ({
+			visibilityKeys: new Map<WorkbenchPartId, IContextKey<boolean>>([
+				['sidebar', SideBarVisibleContext.bindTo(contextKeyService)],
+				['auxiliarybar', AuxiliaryBarVisibleContext.bindTo(contextKeyService)],
+				['agentSidebar', AgentSidebarVisibleContext.bindTo(contextKeyService)],
+				['panel', PanelVisibleContext.bindTo(contextKeyService)],
+				['editor', EditorAreaVisibleContext.bindTo(contextKeyService)],
+			]),
+			panelMaximized: PanelMaximizedContext.bindTo(contextKeyService),
+			panelPosition: PanelPositionContext.bindTo(contextKeyService),
+			auxiliaryBarMaximized: AuxiliaryBarMaximizedContext.bindTo(contextKeyService),
+		}));
 		const updateAll = (): void =>
 			contextKeyService.bufferChangeEvents(() => {
 				for (const [partId, key] of visibilityKeys) key.set(layoutService.isPartVisible(partId));
@@ -151,26 +129,13 @@ export class WorkbenchContextKeysHandler extends Disposable {
 		);
 		this._register(layoutService.onDidChangeAuxiliaryBarMaximized(updateAll));
 		this._register(layoutService.onDidChangePanelPosition(updateAll));
-		this._register(
-			toDisposable(() =>
-				resetContextKeys(contextKeyService, [
-					...visibilityKeys.values(),
-					panelMaximized,
-					panelPosition,
-					auxiliaryBarMaximized,
-				]),
-			),
-		);
+		this._register(toDisposable(() => resetContextKeys(contextKeyService, [...visibilityKeys.values(), panelMaximized, panelPosition, auxiliaryBarMaximized])));
 	}
 }
 
 /** Shares window editor bindings with Sessions without requiring its layout to be Workbench layout. */
 export class WorkbenchEditorContextKeysHandler extends Disposable {
-	constructor(
-		contextKeyService: IContextKeyService,
-		editorGroupsService: IEditorGroupsService,
-		editorService: IEditorService,
-	) {
+	constructor(contextKeyService: IContextKeyService, editorGroupsService: IEditorGroupsService, editorService: IEditorService) {
 		super();
 		const keys = bufferContextKeyChanges(contextKeyService, () => ({
 			activeEditorGroupEmpty: ActiveEditorGroupEmptyContext.bindTo(contextKeyService),
@@ -184,9 +149,7 @@ export class WorkbenchEditorContextKeysHandler extends Disposable {
 				const groups = editorGroupsService.groups;
 				const activeGroup = editorGroupsService.activeGroup;
 				const activeGroupIndex = groups.findIndex(group => group.id === activeGroup.id);
-				keys.activeEditorGroupEmpty.set(
-					activeGroup.editors.length === 0 && editorService.activeEditor === undefined,
-				);
+				keys.activeEditorGroupEmpty.set(activeGroup.editors.length === 0 && editorService.activeEditor === undefined);
 				keys.activeEditorGroupIndex.set(activeGroupIndex >= 0 ? activeGroupIndex + 1 : 0);
 				keys.activeEditorGroupLast.set(activeGroupIndex >= 0 && activeGroupIndex === groups.length - 1);
 				keys.multipleEditorGroups.set(groups.length > 1);
@@ -203,19 +166,12 @@ export class WorkbenchEditorContextKeysHandler extends Disposable {
 	}
 }
 
-function updateWorkspaceKeys(
-	workbenchState: IContextKey<string>,
-	workspaceFolderCount: IContextKey<number>,
-	workspaceContextService: IWorkspaceContextService,
-): void {
+function updateWorkspaceKeys(workbenchState: IContextKey<string>, workspaceFolderCount: IContextKey<number>, workspaceContextService: IWorkspaceContextService): void {
 	workbenchState.set(workbenchStateToString(workspaceContextService.getWorkbenchState()));
 	workspaceFolderCount.set(workspaceContextService.getWorkspace().folders.length);
 }
 
-function resetContextKeys(
-	contextKeyService: IContextKeyService,
-	keys: readonly Pick<IContextKey<never>, 'reset'>[],
-): void {
+function resetContextKeys(contextKeyService: IContextKeyService, keys: readonly Pick<IContextKey<never>, 'reset'>[]): void {
 	contextKeyService.bufferChangeEvents(() => {
 		for (const key of keys) key.reset();
 	});

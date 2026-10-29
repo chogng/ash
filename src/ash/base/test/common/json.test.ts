@@ -10,20 +10,9 @@ test('JSON scanner retains JSONC structure and source ranges', () => {
 	assert.equal(scanned.errors.length, 0);
 	assert.deepEqual(
 		scanned.tokens.filter(token => token.kind !== JsonTokenKind.Trivia).map(token => token.kind),
-		[
-			JsonTokenKind.OpenBrace,
-			JsonTokenKind.LineComment,
-			JsonTokenKind.String,
-			JsonTokenKind.Colon,
-			JsonTokenKind.True,
-			JsonTokenKind.Comma,
-			JsonTokenKind.CloseBrace,
-		],
+		[JsonTokenKind.OpenBrace, JsonTokenKind.LineComment, JsonTokenKind.String, JsonTokenKind.Colon, JsonTokenKind.True, JsonTokenKind.Comma, JsonTokenKind.CloseBrace],
 	);
-	assert.equal(
-		source.slice(scanned.tokens[2]!.offset, scanned.tokens[2]!.offset + scanned.tokens[2]!.length),
-		'// note',
-	);
+	assert.equal(source.slice(scanned.tokens[2]!.offset, scanned.tokens[2]!.offset + scanned.tokens[2]!.length), '// note');
 });
 
 test('JSON parser distinguishes strict JSON from JSONC', () => {

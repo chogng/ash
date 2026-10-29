@@ -57,11 +57,7 @@ export interface IInlineModelDecorationsComputerContext {
 	/**
 	 * Get model decorations for a view range
 	 */
-	getModelDecorations(
-		viewRange: Range,
-		onlyMinimapDecorations: boolean,
-		onlyMarginDecorations: boolean,
-	): IModelDecoration[];
+	getModelDecorations(viewRange: Range, onlyMinimapDecorations: boolean, onlyMarginDecorations: boolean): IModelDecoration[];
 }
 
 export class InlineModelDecorationsComputer implements IInlineDecorationsComputer {
@@ -82,16 +78,8 @@ export class InlineModelDecorationsComputer implements IInlineDecorationsCompute
 		return decorationsViewportData.inlineDecorations;
 	}
 
-	public getDecorations(
-		viewRange: Range,
-		onlyMinimapDecorations: boolean,
-		onlyMarginDecorations: boolean,
-	): IViewDecorationsCollection {
-		const modelDecorations = this.context.getModelDecorations(
-			viewRange,
-			onlyMinimapDecorations,
-			onlyMarginDecorations,
-		);
+	public getDecorations(viewRange: Range, onlyMinimapDecorations: boolean, onlyMarginDecorations: boolean): IViewDecorationsCollection {
+		const modelDecorations = this.context.getModelDecorations(viewRange, onlyMinimapDecorations, onlyMarginDecorations);
 		const startLineNumber = viewRange.startLineNumber;
 		const endLineNumber = viewRange.endLineNumber;
 
@@ -121,9 +109,7 @@ export class InlineModelDecorationsComputer implements IInlineDecorationsCompute
 				const inlineDecoration = new InlineDecoration(
 					viewRange,
 					decorationOptions.inlineClassName,
-					decorationOptions.inlineClassNameAffectsLetterSpacing
-						? InlineDecorationType.RegularAffectingLetterSpacing
-						: InlineDecorationType.Regular,
+					decorationOptions.inlineClassNameAffectsLetterSpacing ? InlineDecorationType.RegularAffectingLetterSpacing : InlineDecorationType.Regular,
 				);
 				const intersectedStartLineNumber = Math.max(startLineNumber, viewRange.startLineNumber);
 				const intersectedEndLineNumber = Math.min(endLineNumber, viewRange.endLineNumber);
@@ -137,12 +123,7 @@ export class InlineModelDecorationsComputer implements IInlineDecorationsCompute
 			if (decorationOptions.beforeContentClassName) {
 				if (startLineNumber <= viewRange.startLineNumber && viewRange.startLineNumber <= endLineNumber) {
 					const inlineDecoration = new InlineDecoration(
-						new Range(
-							viewRange.startLineNumber,
-							viewRange.startColumn,
-							viewRange.startLineNumber,
-							viewRange.startColumn,
-						),
+						new Range(viewRange.startLineNumber, viewRange.startColumn, viewRange.startLineNumber, viewRange.startColumn),
 						decorationOptions.beforeContentClassName,
 						InlineDecorationType.Before,
 					);
@@ -155,12 +136,7 @@ export class InlineModelDecorationsComputer implements IInlineDecorationsCompute
 			if (decorationOptions.afterContentClassName) {
 				if (startLineNumber <= viewRange.endLineNumber && viewRange.endLineNumber <= endLineNumber) {
 					const inlineDecoration = new InlineDecoration(
-						new Range(
-							viewRange.endLineNumber,
-							viewRange.endColumn,
-							viewRange.endLineNumber,
-							viewRange.endColumn,
-						),
+						new Range(viewRange.endLineNumber, viewRange.endColumn, viewRange.endLineNumber, viewRange.endColumn),
 						decorationOptions.afterContentClassName,
 						InlineDecorationType.After,
 					);
@@ -172,7 +148,11 @@ export class InlineModelDecorationsComputer implements IInlineDecorationsCompute
 			}
 		}
 
-		return { decorations: decorationsInViewport, inlineDecorations: inlineDecorations, hasVariableFonts };
+		return {
+			decorations: decorationsInViewport,
+			inlineDecorations: inlineDecorations,
+			hasVariableFonts,
+		};
 	}
 
 	public reset(): void {
@@ -195,12 +175,7 @@ export class InlineModelDecorationsComputer implements IInlineDecorationsCompute
 			const options = modelDecoration.options;
 			let viewRange: Range;
 			if (options.isWholeLine) {
-				const start = this.coordinatesConverter.convertModelPositionToViewPosition(
-					new Position(modelRange.startLineNumber, 1),
-					PositionAffinity.Left,
-					false,
-					true,
-				);
+				const start = this.coordinatesConverter.convertModelPositionToViewPosition(new Position(modelRange.startLineNumber, 1), PositionAffinity.Left, false, true);
 				const end = this.coordinatesConverter.convertModelPositionToViewPosition(
 					new Position(modelRange.endLineNumber, this.model.getLineMaxColumn(modelRange.endLineNumber)),
 					PositionAffinity.Right,
@@ -266,58 +241,39 @@ export class InjectedTextInlineDecorationsComputer implements IInlineDecorations
 			while (currentInjectedOffset < injectionOffsets.length) {
 				const options = injectionOptions![currentInjectedOffset];
 				const length = options.content.length;
-				const injectedTextStartOffsetInInputWithInjections =
-					injectionOffsets[currentInjectedOffset] + totalInjectedTextLengthBefore;
-				const injectedTextEndOffsetInInputWithInjections =
-					injectedTextStartOffsetInInputWithInjections + length;
+				const injectedTextStartOffsetInInputWithInjections = injectionOffsets[currentInjectedOffset] + totalInjectedTextLengthBefore;
+				const injectedTextEndOffsetInInputWithInjections = injectedTextStartOffsetInInputWithInjections + length;
 				const isWidthOnly = length === 0 && options.widthInEm !== undefined;
 				const isLastOutputLine = outputLineIndex === breakOffsets.length - 1;
-				const isAtInternalWrapBoundary =
-					injectedTextStartOffsetInInputWithInjections === lineEndOffsetInInputWithInjections &&
-					!isLastOutputLine;
+				const isAtInternalWrapBoundary = injectedTextStartOffsetInInputWithInjections === lineEndOffsetInInputWithInjections && !isLastOutputLine;
 
-				if (
-					injectedTextStartOffsetInInputWithInjections > lineEndOffsetInInputWithInjections ||
-					(isWidthOnly && isAtInternalWrapBoundary)
-				) {
+				if (injectedTextStartOffsetInInputWithInjections > lineEndOffsetInInputWithInjections || (isWidthOnly && isAtInternalWrapBoundary)) {
 					// Injected text only starts in later wrapped lines.
 					break;
 				}
 
 				const isInLine = isWidthOnly
 					? lineStartOffsetInInputWithInjections <= injectedTextStartOffsetInInputWithInjections &&
-						(injectedTextStartOffsetInInputWithInjections < lineEndOffsetInInputWithInjections ||
-							isLastOutputLine)
+						(injectedTextStartOffsetInInputWithInjections < lineEndOffsetInInputWithInjections || isLastOutputLine)
 					: lineStartOffsetInInputWithInjections < injectedTextEndOffsetInInputWithInjections;
 				if (isInLine) {
 					// Injected text ends after or in this line (but also starts in or before this line).
 					if (options.inlineClassName) {
 						const wrappedTextIndentLength = this.context.getWrappedTextIndentLength(modelLineNumber);
 						const offset = outputLineIndex > 0 ? wrappedTextIndentLength : 0;
-						const start =
-							offset +
-							Math.max(
-								injectedTextStartOffsetInInputWithInjections - lineStartOffsetInInputWithInjections,
-								0,
-							);
+						const start = offset + Math.max(injectedTextStartOffsetInInputWithInjections - lineStartOffsetInInputWithInjections, 0);
 						const end =
 							offset +
-							Math.min(
-								injectedTextEndOffsetInInputWithInjections - lineStartOffsetInInputWithInjections,
-								lineEndOffsetInInputWithInjections - lineStartOffsetInInputWithInjections,
-							);
+							Math.min(injectedTextEndOffsetInInputWithInjections - lineStartOffsetInInputWithInjections, lineEndOffsetInInputWithInjections - lineStartOffsetInInputWithInjections);
 						if (start !== end || isWidthOnly) {
-							const viewLineNumber =
-								this.context.getBaseViewLineNumber(modelLineNumber) + outputLineIndex;
+							const viewLineNumber = this.context.getBaseViewLineNumber(modelLineNumber) + outputLineIndex;
 							const range = new Range(viewLineNumber, start + 1, viewLineNumber, end + 1);
 							const type: InlineDecorationType = isWidthOnly
 								? InlineDecorationType.WidthOnly
 								: options.inlineClassNameAffectsLetterSpacing
 									? InlineDecorationType.RegularAffectingLetterSpacing
 									: InlineDecorationType.Regular;
-							inlineDecorations.push(
-								new InlineDecoration(range, options.inlineClassName, type, options.widthInEm),
-							);
+							inlineDecorations.push(new InlineDecoration(range, options.inlineClassName, type, options.widthInEm));
 						}
 					}
 				}

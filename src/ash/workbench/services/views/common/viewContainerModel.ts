@@ -4,12 +4,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/common/conte
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import type { ContextKeyChangeEvent, IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { getVisibleViewContextKey } from '../../../common/contextkeys.js';
-import type {
-	IViewContainerDescriptor,
-	IViewContainerModel,
-	IViewDescriptor,
-	IViewDescriptorsChangeEvent,
-} from '../../../common/views.js';
+import type { IViewContainerDescriptor, IViewContainerModel, IViewDescriptor, IViewDescriptorsChangeEvent } from '../../../common/views.js';
 
 export class ViewContainerModel extends Disposable implements IViewContainerModel {
 	private filter: ((view: IViewDescriptor) => boolean) | undefined;
@@ -74,11 +69,7 @@ export class ViewContainerModel extends Disposable implements IViewContainerMode
 
 	/** Membership is supplied by the window's descriptor owner, independently of default declarations. */
 	public add(views: readonly IViewDescriptor[]): void {
-		this.recompute(
-			[...this._allViewDescriptors, ...views].sort(
-				(a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER),
-			),
-		);
+		this.recompute([...this._allViewDescriptors, ...views].sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER)));
 	}
 
 	public remove(views: readonly IViewDescriptor[]): void {
@@ -114,12 +105,7 @@ export class ViewContainerModel extends Disposable implements IViewContainerMode
 		// Read the current stored table before changing one preference, preserving
 		// views registered later and updates written by another window.
 		this.visibility.set(viewId, visible);
-		this.storage.store(
-			this.stateKey,
-			JSON.stringify([...this.visibility].map(([id, preferred]) => ({ id, isHidden: !preferred }))),
-			StorageScope.PROFILE,
-			StorageTarget.MACHINE,
-		);
+		this.storage.store(this.stateKey, JSON.stringify([...this.visibility].map(([id, preferred]) => ({ id, isHidden: !preferred }))), StorageScope.PROFILE, StorageTarget.MACHINE);
 		this.recompute();
 	}
 
@@ -159,9 +145,7 @@ export class ViewContainerModel extends Disposable implements IViewContainerMode
 		const previousAll = this._allViewDescriptors;
 		const previousActive = this._activeViewDescriptors;
 		const previousVisible = this._visibleViewDescriptors;
-		const active = all.filter(
-			view => this.contextKeyService.contextMatchesRules(view.when) && (this.filter?.(view) ?? true),
-		);
+		const active = all.filter(view => this.contextKeyService.contextMatchesRules(view.when) && (this.filter?.(view) ?? true));
 		const visible = active.filter(view => this.preferredVisibility(view));
 
 		this._allViewDescriptors = all;
@@ -199,11 +183,7 @@ export class ViewContainerModel extends Disposable implements IViewContainerMode
 	}
 }
 
-function fireDescriptorChanges(
-	emitter: Emitter<IViewDescriptorsChangeEvent>,
-	previous: readonly IViewDescriptor[],
-	next: readonly IViewDescriptor[],
-): void {
+function fireDescriptorChanges(emitter: Emitter<IViewDescriptorsChangeEvent>, previous: readonly IViewDescriptor[], next: readonly IViewDescriptor[]): void {
 	const previousIds = new Set(previous.map(view => view.id));
 	const nextIds = new Set(next.map(view => view.id));
 	const added = next.filter(view => !previousIds.has(view.id));

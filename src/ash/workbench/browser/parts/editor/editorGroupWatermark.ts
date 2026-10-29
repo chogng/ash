@@ -4,13 +4,7 @@ import { KeybindingLabel } from '../../../../base/browser/ui/keybindinglabel/key
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { getKeybindingLabel, KeybindingLabelStyle } from '../../../../base/common/keybindingLabels.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
-import {
-	Disposable,
-	type IDisposable,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { Disposable, type IDisposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ICommandService, type CommandId } from '../../../../platform/commands/common/commands.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -185,10 +179,7 @@ export class EditorGroupWatermark extends Disposable {
 				});
 			}
 			if (keybinding) {
-				shortcut.row.setAttribute(
-					'aria-description',
-					getKeybindingLabel(keybinding, KeybindingLabelStyle.Aria),
-				);
+				shortcut.row.setAttribute('aria-description', getKeybindingLabel(keybinding, KeybindingLabelStyle.Aria));
 			}
 		}
 	}

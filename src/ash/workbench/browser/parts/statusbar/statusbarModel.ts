@@ -43,12 +43,7 @@ export class StatusbarViewModel extends Disposable {
 		if (hidden.size === 0) {
 			this.storageService.remove(StatusbarViewModel.HIDDEN_ENTRIES_KEY, StorageScope.PROFILE);
 		} else {
-			this.storageService.store(
-				StatusbarViewModel.HIDDEN_ENTRIES_KEY,
-				JSON.stringify([...hidden]),
-				StorageScope.PROFILE,
-				StorageTarget.USER,
-			);
+			this.storageService.store(StatusbarViewModel.HIDDEN_ENTRIES_KEY, JSON.stringify([...hidden]), StorageScope.PROFILE, StorageTarget.USER);
 		}
 	}
 

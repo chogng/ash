@@ -4,19 +4,8 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
 const sourceExtensions = /\.(?:[cm]?[jt]s|[jt]sx)$/;
-const excludedDirectories =
-	/(?:^|\/)(?:node_modules|generated|vendor|dist|out|fixtures|test-data|testData|typings)(?:\/|$)/;
-const sourceRoots = [
-	'src/',
-	'build/',
-	'extensions/',
-	'test/',
-	'services/',
-	'sdk/typescript/',
-	'examples/extensions/',
-	'crates/external-js-ext/',
-	'resources/extension-host/',
-];
+const excludedDirectories = /(?:^|\/)(?:node_modules|generated|vendor|dist|out|fixtures|test-data|testData|typings)(?:\/|$)/;
+const sourceRoots = ['src/', 'build/', 'extensions/', 'test/', 'services/', 'sdk/typescript/', 'examples/extensions/', 'crates/external-js-ext/', 'resources/extension-host/'];
 const copiedSourceRoots = ['src/ash/base/browser/dompurify/', 'src/ash/base/common/marked/'];
 
 function sourceFiles(paths: readonly string[], contentRoot: string): string[] {
@@ -30,11 +19,11 @@ function sourceFiles(paths: readonly string[], contentRoot: string): string[] {
 	// Git owns the input inventory so ignored build outputs cannot become sources.
 	// Literal pathspecs preserve filenames containing glob characters, such as brackets.
 	const scope = selections.length ? selections.map(({ name }) => name || '.') : sourceRoots;
-	const inventory = execFileSync(
-		'git',
-		['--literal-pathspecs', 'ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', ...scope],
-		{ cwd: repositoryRoot, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 },
-	).split('\0');
+	const inventory = execFileSync('git', ['--literal-pathspecs', 'ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', ...scope], {
+		cwd: repositoryRoot,
+		encoding: 'utf8',
+		maxBuffer: 16 * 1024 * 1024,
+	}).split('\0');
 	const files = [...new Set(inventory)]
 		.filter(
 			name =>
@@ -46,16 +35,13 @@ function sourceFiles(paths: readonly string[], contentRoot: string): string[] {
 		)
 		.sort();
 	// Narrow requested paths before touching the filesystem; Git may still list deleted files.
-	const isFile = (name: string): boolean =>
-		statSync(resolve(contentRoot, name), { throwIfNoEntry: false })?.isFile() === true;
+	const isFile = (name: string): boolean => statSync(resolve(contentRoot, name), { throwIfNoEntry: false })?.isFile() === true;
 	if (paths.length === 0) {
 		return files.filter(isFile);
 	}
 	const selected = new Set<string>();
 	for (const { path, name } of selections) {
-		const matches = files
-			.filter(file => name === '' || file === name || file.startsWith(`${name}/`))
-			.filter(isFile);
+		const matches = files.filter(file => name === '' || file === name || file.startsWith(`${name}/`)).filter(isFile);
 		if (matches.length === 0) {
 			throw new Error(`No first-party TypeScript or JavaScript sources matched: ${path}`);
 		}

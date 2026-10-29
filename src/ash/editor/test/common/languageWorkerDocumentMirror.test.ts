@@ -13,8 +13,14 @@ test('Worker document mirror applies model transactions through its Piece Tree',
 	const mirror = new LanguageWorkerDocumentMirror(model.createVersionedSnapshot());
 	const captured = mirror.createSnapshot();
 	const change = pushEdits(model, [
-		{ range: Range.fromPositions(new Position(0 + 1, 1 + 1), new Position(0 + 1, 2 + 1)), text: 'XYZ' },
-		{ range: Range.fromPositions(new Position(1 + 1, 3 + 1)), text: '\nlast' },
+		{
+			range: Range.fromPositions(new Position(0 + 1, 1 + 1), new Position(0 + 1, 2 + 1)),
+			text: 'XYZ',
+		},
+		{
+			range: Range.fromPositions(new Position(1 + 1, 3 + 1)),
+			text: '\nlast',
+		},
 	])!;
 
 	mirror.synchronize(change.version - 1, change.version, change.changes);
@@ -50,11 +56,25 @@ test('Worker document mirror rejects invalid synchronization atomically', () => 
 	const mirror = new LanguageWorkerDocumentMirror(model.createVersionedSnapshot());
 
 	assert.throws(
-		() => mirror.synchronize(2, 3, [{ rangeOffset: 0, rangeLength: 1, text: 'V' }]),
+		() =>
+			mirror.synchronize(2, 3, [
+				{
+					rangeOffset: 0,
+					rangeLength: 1,
+					text: 'V',
+				},
+			]),
 		/version does not follow/,
 	);
 	assert.throws(
-		() => mirror.synchronize(1, 2, [{ rangeOffset: 99, rangeLength: 0, text: '!' }]),
+		() =>
+			mirror.synchronize(1, 2, [
+				{
+					rangeOffset: 99,
+					rangeLength: 0,
+					text: '!',
+				},
+			]),
 		/inside the mirror/,
 	);
 	assert.equal(mirror.version, 1);

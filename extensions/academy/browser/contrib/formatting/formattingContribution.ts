@@ -7,16 +7,9 @@ import { Lxicon } from 'ash:editor/base/common/lxicons.js';
 import { Disposable, toDisposable } from 'ash:editor/base/common/lifecycle.js';
 import type { DocumentTextStyleFontFamily } from '../../../common/model/documentSchema.js';
 import { addDisposableListener, h } from 'ash:editor/base/browser/dom.js';
-import type {
-	DocumentEditorContributionContext,
-	DocumentFormattingContribution,
-	DocumentFormattingState,
-} from '../../documentContributions.js';
+import type { DocumentEditorContributionContext, DocumentFormattingContribution, DocumentFormattingState } from '../../documentContributions.js';
 
-type FormattingContributionOptions = Pick<
-	DocumentEditorContributionContext,
-	'documentActions' | 'onToggleMark' | 'onSetTextStyle' | 'onClearTextStyle' | 'onRunDocumentAction'
->;
+type FormattingContributionOptions = Pick<DocumentEditorContributionContext, 'documentActions' | 'onToggleMark' | 'onSetTextStyle' | 'onClearTextStyle' | 'onRunDocumentAction'>;
 
 /** The host owns formatting state and document commands; this contribution owns its controls and listeners. */
 export class FormattingContribution extends Disposable implements DocumentFormattingContribution {
@@ -138,50 +131,20 @@ export class FormattingContribution extends Disposable implements DocumentFormat
 		setSelectValue(this.fontFamily, state.fontFamily ?? '');
 		setSelectValue(this.fontSize, state.fontSize === undefined ? '' : String(state.fontSize));
 		this.inlineActions.setActions([
-			createAction(
-				'bold',
-				'Bold',
-				'Toggle bold',
-				Lxicon.bold,
-				hasTextContext && !state.readOnly,
-				state.bold,
-				() => this.options.onToggleMark('strong'),
-			),
-			createAction(
-				'italic',
-				'Italic',
-				'Toggle italic',
-				Lxicon.italics,
-				hasTextContext && !state.readOnly,
-				state.italic,
-				() => this.options.onToggleMark('em'),
-			),
+			createAction('bold', 'Bold', 'Toggle bold', Lxicon.bold, hasTextContext && !state.readOnly, state.bold, () => this.options.onToggleMark('strong')),
+			createAction('italic', 'Italic', 'Toggle italic', Lxicon.italics, hasTextContext && !state.readOnly, state.italic, () => this.options.onToggleMark('em')),
 		]);
 		this.documentActions.setActions(
 			this.options.documentActions.map(action =>
-				createAction(
-					action.id,
-					action.label,
-					action.label,
-					undefined,
-					hasTextContext && !state.readOnly,
-					state.checkedDocumentActionIds.has(action.id),
-					() => this.options.onRunDocumentAction(action.id),
+				createAction(action.id, action.label, action.label, undefined, hasTextContext && !state.readOnly, state.checkedDocumentActionIds.has(action.id), () =>
+					this.options.onRunDocumentAction(action.id),
 				),
 			),
 		);
 	}
 }
 
-function createAction(
-	id: string,
-	label: string,
-	tooltip: string,
-	icon: IAction['icon'],
-	enabled: boolean,
-	checked: boolean,
-	run: () => void,
-): IAction {
+function createAction(id: string, label: string, tooltip: string, icon: IAction['icon'], enabled: boolean, checked: boolean, run: () => void): IAction {
 	return { id, label, tooltip, icon, enabled, checked, run };
 }
 

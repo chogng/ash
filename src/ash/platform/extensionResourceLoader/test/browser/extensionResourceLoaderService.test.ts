@@ -29,24 +29,12 @@ suite('Extension resource loader', () => {
 			return new Uint8Array();
 		});
 		for (const path of ['../file', 'a/../file', '/file', 'a\\file', 'a//file', 'a:stream', 'a\0file']) {
-			await assert.rejects(
-				loader.readExtensionResourceBytes({ generation: 1, extensionId: 'publisher.sample', path }),
-				/path/u,
-			);
+			await assert.rejects(loader.readExtensionResourceBytes({ generation: 1, extensionId: 'publisher.sample', path }), /path/u);
 		}
 		for (const query of ['generation=-1', 'generation=1&other=2', 'generation=9007199254740992']) {
-			await assert.rejects(
-				loader.readExtensionResource(
-					URI.from({ scheme: 'ash-extension-resource', authority: 'publisher.sample', path: '/file', query }),
-				),
-				/generation/u,
-			);
+			await assert.rejects(loader.readExtensionResource(URI.from({ scheme: 'ash-extension-resource', authority: 'publisher.sample', path: '/file', query })), /generation/u);
 		}
-		for (const resource of [
-			'https://registry.example/package.json',
-			'http://other.example/file',
-			'file:/outside/file',
-		]) {
+		for (const resource of ['https://registry.example/package.json', 'http://other.example/file', 'file:/outside/file']) {
 			await assert.rejects(loader.readExtensionResource(URI.parse(resource)), /installed extension/u);
 		}
 		assert.equal(reads, 0);
@@ -54,15 +42,8 @@ suite('Extension resource loader', () => {
 
 	test('reports unsupported resources in Chinese and rejects invalid UTF-8', async () => {
 		const loader = new ExtensionResourceLoaderService(async () => Uint8Array.of(0xff));
-		await assert.rejects(
-			loader.readExtensionResource(
-				toExtensionResourceURI({ generation: 1, extensionId: 'publisher.sample', path: 'file' }),
-			),
-			TypeError,
-		);
-		const bundles = JSON.parse(
-			readFileSync(resolve(process.cwd(), 'extensions/language-pack-zh-cn/translations/workbench.json'), 'utf8'),
-		);
+		await assert.rejects(loader.readExtensionResource(toExtensionResourceURI({ generation: 1, extensionId: 'publisher.sample', path: 'file' })), TypeError);
+		const bundles = JSON.parse(readFileSync(resolve(process.cwd(), 'extensions/language-pack-zh-cn/translations/workbench.json'), 'utf8'));
 		setNlsMessages('zh-CN', bundles);
 		try {
 			await assert.rejects(loader.readExtensionResource(URI.parse('https://other.example/package.json')), {

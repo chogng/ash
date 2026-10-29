@@ -3,13 +3,7 @@ import { CancellationError } from '../../../../base/common/errors.js';
 import { Disposable, dispose, toDisposable } from '../../../../base/common/lifecycle.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import {
-	ProcessPropertyType,
-	type IProcessProperty,
-	type IProcessReadyEvent,
-	type IShellLaunchConfig,
-	type ITerminalChildProcess,
-} from '../../../../platform/terminal/common/terminal.js';
+import { ProcessPropertyType, type IProcessProperty, type IProcessReadyEvent, type IShellLaunchConfig, type ITerminalChildProcess } from '../../../../platform/terminal/common/terminal.js';
 
 export const IEmbedderTerminalService = createServiceIdentifier<IEmbedderTerminalService>('embedderTerminalService');
 
@@ -55,12 +49,7 @@ class EmbedderTerminalService extends Disposable implements IEmbedderTerminalSer
 
 	public createTerminal(options: IEmbedderTerminalOptions): void {
 		this.assertNotDisposed();
-		if (
-			typeof options.name !== 'string' ||
-			typeof options.pty?.onDidWrite !== 'function' ||
-			typeof options.pty.open !== 'function' ||
-			typeof options.pty.close !== 'function'
-		) {
+		if (typeof options.name !== 'string' || typeof options.pty?.onDidWrite !== 'function' || typeof options.pty.open !== 'function' || typeof options.pty.close !== 'function') {
 			throw new TypeError('Embedder terminal requires a name and an output PTY');
 		}
 		if (

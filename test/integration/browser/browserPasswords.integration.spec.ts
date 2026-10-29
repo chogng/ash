@@ -3,18 +3,12 @@ import { expect, test } from '@playwright/test';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 
 // Exercise the sandbox preload with trusted Chromium input and a test-owned IPC sink.
-const preload = transpileModule(
-	readFileSync(
-		new URL('../../../src/ash/platform/browserView/electron-browser/preload-browserView.ts', import.meta.url),
-		'utf8',
-	),
-	{ compilerOptions: { target: ScriptTarget.ES2022, module: ModuleKind.None } },
-).outputText;
+const preload = transpileModule(readFileSync(new URL('../../../src/ash/platform/browserView/electron-browser/preload-browserView.ts', import.meta.url), 'utf8'), {
+	compilerOptions: { target: ScriptTarget.ES2022, module: ModuleKind.None },
+}).outputText;
 
 for (const nativeForm of [true, false]) {
-	test(`Browser password submission ignores visibility toggles and retains ${nativeForm ? 'native form validation and keyboard submit' : 'SPA click submission'}`, async ({
-		page,
-	}) => {
+	test(`Browser password submission ignores visibility toggles and retains ${nativeForm ? 'native form validation and keyboard submit' : 'SPA click submission'}`, async ({ page }) => {
 		const tag = nativeForm ? 'form' : 'div role="form"';
 		await page.route('https://password.test/**', route =>
 			route.fulfill({
@@ -48,8 +42,7 @@ for (const nativeForm of [true, false]) {
 					contextBridge: { exposeInIsolatedWorld() {} },
 					ipcRenderer: {
 						send(_channel: string, message: { type: string; data: unknown }) {
-							if (['passwordSubmitted', 'passwordIdentitySubmitted'].includes(message.type))
-								host.passwordMessages.push({ type: message.type, data: message.data });
+							if (['passwordSubmitted', 'passwordIdentitySubmitted'].includes(message.type)) host.passwordMessages.push({ type: message.type, data: message.data });
 						},
 						on() {},
 					},

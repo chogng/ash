@@ -1,12 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
-import {
-	CancellationToken,
-	CancellationTokenPool,
-	CancellationTokenSource,
-	cancelOnDispose,
-	throwIfCancelled,
-} from '../../common/cancellation.js';
+import { CancellationToken, CancellationTokenPool, CancellationTokenSource, cancelOnDispose, throwIfCancelled } from '../../common/cancellation.js';
 import { raceCancellationError } from '../../common/async.js';
 import { errorHandler, isCancellationError, setUnexpectedErrorHandler } from '../../common/errors.js';
 import { DisposableStore, type IDisposable } from '../../common/lifecycle.js';
@@ -241,23 +235,13 @@ test('raceCancellationError preserves settlement and classifies caller cancellat
 
 	const cancelled = new AbortController();
 	const reason = new Error('stop waiting');
-	const pending = raceCancellationError(
-		new Promise<number>(() => undefined),
-		cancelled.signal,
-		'Module wait cancelled',
-	);
+	const pending = raceCancellationError(new Promise<number>(() => undefined), cancelled.signal, 'Module wait cancelled');
 	cancelled.abort(reason);
-	await assert.rejects(
-		pending,
-		error => isCancellationError(error) && error.message === 'Module wait cancelled' && error.reason === reason,
-	);
+	await assert.rejects(pending, error => isCancellationError(error) && error.message === 'Module wait cancelled' && error.reason === reason);
 
 	const alreadyCancelled = new AbortController();
 	alreadyCancelled.abort('already');
-	await assert.rejects(
-		raceCancellationError(Promise.resolve(1), alreadyCancelled.signal),
-		error => isCancellationError(error) && error.reason === 'already',
-	);
+	await assert.rejects(raceCancellationError(Promise.resolve(1), alreadyCancelled.signal), error => isCancellationError(error) && error.reason === 'already');
 
 	using source = new CancellationTokenSource();
 	const tokenRace = raceCancellationError(new Promise<number>(() => undefined), source.token, 'Token wait cancelled');

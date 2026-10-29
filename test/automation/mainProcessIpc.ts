@@ -38,12 +38,8 @@ function initializeMainChannelTestClient(): void {
 				};
 			}
 		).ash.ipcRenderer;
-	const send = (packet: object): void =>
-		bridge().send('ash:message', new TextEncoder().encode(JSON.stringify(packet)));
-	const receive = (
-		id: number,
-		listener: (packet: { type: string; data?: unknown; error?: { name: string; message: string } }) => void,
-	) =>
+	const send = (packet: object): void => bridge().send('ash:message', new TextEncoder().encode(JSON.stringify(packet)));
+	const receive = (id: number, listener: (packet: { type: string; data?: unknown; error?: { name: string; message: string } }) => void) =>
 		bridge().on('ash:message', value => {
 			const packet = JSON.parse(new TextDecoder().decode(value));
 			if (packet.id === id) {

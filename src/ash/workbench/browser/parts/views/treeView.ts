@@ -1,20 +1,9 @@
 import './media/views.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Emitter } from '../../../../base/common/event.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
@@ -39,9 +28,7 @@ export class TreeView extends Disposable {
 	private readonly editing = this._register(new MutableDisposable<InlineEditInputBox>());
 	private readonly checkboxChanges = this._register(new CheckboxStateHandler());
 	public readonly onDidChangeCheckboxState = this.checkboxChanges.onDidChangeCheckboxState;
-	private readonly changedSelection = this._register(
-		new Emitter<{ selection: readonly ITreeItem[]; focus: ITreeItem | undefined }>(),
-	);
+	private readonly changedSelection = this._register(new Emitter<{ selection: readonly ITreeItem[]; focus: ITreeItem | undefined }>());
 	public readonly onDidChangeSelectionAndFocus = this.changedSelection.event;
 	private readonly mounting = this._register(new MutableDisposable<DisposableStore>());
 	private dirty = true;
@@ -129,9 +116,7 @@ export class TreeView extends Disposable {
 		mounting.add(
 			tree.onDidOpen(event => {
 				if (event.element.command) {
-					void this.commands
-						.executeCommand(event.element.command.id, ...(event.element.command.arguments ?? []))
-						.catch(error => this.notifications.error(error));
+					void this.commands.executeCommand(event.element.command.id, ...(event.element.command.arguments ?? [])).catch(error => this.notifications.error(error));
 				}
 			}),
 		);
@@ -154,9 +139,7 @@ export class TreeView extends Disposable {
 						if (tree !== this.tree || !this.visible || tree.focus?.handle !== node.handle) {
 							return;
 						}
-						const row = [...container.querySelectorAll<HTMLElement>('[data-tree-handle]')].find(
-							row => row.dataset.treeHandle === node.handle,
-						);
+						const row = [...container.querySelectorAll<HTMLElement>('[data-tree-handle]')].find(row => row.dataset.treeHandle === node.handle);
 						if (!row || !this.dataProvider?.getEditableData) {
 							return;
 						}
@@ -303,11 +286,7 @@ export class TreeView extends Disposable {
 				}
 			} catch (error) {
 				if (tree === this.tree) {
-					this.status!.textContent = localize(
-						'treeView.failed',
-						'Could not load items: {0}',
-						error instanceof Error ? error.message : String(error),
-					);
+					this.status!.textContent = localize('treeView.failed', 'Could not load items: {0}', error instanceof Error ? error.message : String(error));
 				}
 			}
 		}

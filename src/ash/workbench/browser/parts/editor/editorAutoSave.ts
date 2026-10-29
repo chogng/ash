@@ -2,11 +2,7 @@ import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { DisposableMap, Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { IWorkbenchContribution } from '../../../common/contributions.js';
-import {
-	EditorAutoSaveConfiguration,
-	EditorAutoSaveDelayConfiguration,
-	type EditorAutoSaveMode,
-} from '../../../services/editor/common/editorConfiguration.js';
+import { EditorAutoSaveConfiguration, EditorAutoSaveDelayConfiguration, type EditorAutoSaveMode } from '../../../services/editor/common/editorConfiguration.js';
 import type { IWorkingCopy, IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
 import type { IEditorPart } from './editorPart.js';
 import { SaveReason } from '../../../common/editor.js';
@@ -32,11 +28,7 @@ export class EditorAutoSave extends Disposable implements IWorkbenchContribution
 		this._register(workingCopies.onDidUnregister(workingCopy => this.detach(workingCopy)));
 		this._register(
 			configuration.onDidChangeConfiguration(event => {
-				if (
-					!event.affectsConfiguration(EditorAutoSaveConfiguration) &&
-					!event.affectsConfiguration(EditorAutoSaveDelayConfiguration)
-				)
-					return;
+				if (!event.affectsConfiguration(EditorAutoSaveConfiguration) && !event.affectsConfiguration(EditorAutoSaveDelayConfiguration)) return;
 				this.clearTimers();
 				if (event.affectsConfiguration(EditorAutoSaveConfiguration) && this.mode !== 'off') {
 					for (const workingCopy of workingCopies.getAll()) void this.save(workingCopy, SaveReason.AUTO);
@@ -82,16 +74,10 @@ export class EditorAutoSave extends Disposable implements IWorkbenchContribution
 		listeners.add(
 			addDisposableListener(ownerWindow, 'blur', () => {
 				if (this.mode !== 'onWindowChange' && this.mode !== 'onFocusChange') return;
-				for (const workingCopy of this.workingCopies.getAll())
-					void this.save(
-						workingCopy,
-						this.mode === 'onWindowChange' ? SaveReason.WINDOW_CHANGE : SaveReason.FOCUS_CHANGE,
-					);
+				for (const workingCopy of this.workingCopies.getAll()) void this.save(workingCopy, this.mode === 'onWindowChange' ? SaveReason.WINDOW_CHANGE : SaveReason.FOCUS_CHANGE);
 			}),
 		);
-		listeners.add(
-			addDisposableListener(ownerWindow, 'unload', () => this.windowListeners.deleteAndDispose(ownerWindow)),
-		);
+		listeners.add(addDisposableListener(ownerWindow, 'unload', () => this.windowListeners.deleteAndDispose(ownerWindow)));
 		this.windowListeners.set(ownerWindow, listeners);
 	}
 
@@ -103,8 +89,7 @@ export class EditorAutoSave extends Disposable implements IWorkbenchContribution
 
 	private schedule(workingCopy: IWorkingCopy): void {
 		this.clearTimer(workingCopy);
-		if (this.isDisposed || this.mode !== 'afterDelay' || !workingCopy.isDirty || workingCopy.hasExternalChange)
-			return;
+		if (this.isDisposed || this.mode !== 'afterDelay' || !workingCopy.isDirty || workingCopy.hasExternalChange) return;
 		const ownerWindow = this.editorPart.domNode.ownerDocument.defaultView;
 		if (!ownerWindow) return;
 		const handle = ownerWindow.setTimeout(() => {
@@ -117,18 +102,11 @@ export class EditorAutoSave extends Disposable implements IWorkbenchContribution
 	private handleActiveEditorChange(): void {
 		const previous = this.activeWorkingCopy;
 		this.activeWorkingCopy = this.editorPart.activePane?.workingCopy;
-		if (this.mode === 'onFocusChange' && previous && previous !== this.activeWorkingCopy)
-			void this.save(previous, SaveReason.FOCUS_CHANGE);
+		if (this.mode === 'onFocusChange' && previous && previous !== this.activeWorkingCopy) void this.save(previous, SaveReason.FOCUS_CHANGE);
 	}
 
 	private async save(workingCopy: IWorkingCopy, reason: SaveReason): Promise<void> {
-		if (
-			workingCopy.resource.scheme === 'untitled' ||
-			!workingCopy.isDirty ||
-			workingCopy.hasExternalChange ||
-			this.saving.has(workingCopy)
-		)
-			return;
+		if (workingCopy.resource.scheme === 'untitled' || !workingCopy.isDirty || workingCopy.hasExternalChange || this.saving.has(workingCopy)) return;
 		this.saving.add(workingCopy);
 		try {
 			await workingCopy.save(new AbortController().signal, { reason });

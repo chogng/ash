@@ -49,18 +49,24 @@ test('Bracket match controller stores standard decoration options and clears the
 		model
 			.getAllDecorations()
 			.filter(decoration => decoration.options.className === 'bracket-match')
-			.map(decoration => ({ range: decoration.range, className: decoration.options.className })),
+			.map(decoration => ({
+				range: decoration.range,
+				className: decoration.options.className,
+			})),
 		[
-			{ range: new Range(1, 18, 1, 19), className: 'bracket-match' },
-			{ range: new Range(2, 1, 2, 2), className: 'bracket-match' },
+			{
+				range: new Range(1, 18, 1, 19),
+				className: 'bracket-match',
+			},
+			{
+				range: new Range(2, 1, 2, 2),
+				className: 'bracket-match',
+			},
 		],
 	);
 
 	selections.setSelections([Selection.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 1 + 1))]);
-	assert.equal(
-		model.getAllDecorations().filter(decoration => decoration.options.className === 'bracket-match').length,
-		0,
-	);
+	assert.equal(model.getAllDecorations().filter(decoration => decoration.options.className === 'bracket-match').length, 0);
 	dom.window.close();
 });
 
@@ -108,8 +114,7 @@ function editorFor(model: TextModel, selections: ReturnType<typeof createTestCur
 	return {
 		getModel: () => model,
 		getSelections: () => selections.getSelections(),
-		onDidChangeCursorSelection: (listener: Parameters<ICodeEditor['onDidChangeCursorSelection']>[0]) =>
-			selections.onDidChange(() => listener({} as never)),
+		onDidChangeCursorSelection: (listener: Parameters<ICodeEditor['onDidChangeCursorSelection']>[0]) => selections.onDidChange(() => listener({} as never)),
 	} as unknown as ICodeEditor;
 }
 

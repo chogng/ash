@@ -4,11 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'mocha';
-import {
-	PackagedRemoteRuntimeCatalog,
-	packagedRemoteRuntimeBundleRoot,
-	packagedRemoteRuntimeCatalogSource,
-} from '../../../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js';
+import { PackagedRemoteRuntimeCatalog, packagedRemoteRuntimeBundleRoot, packagedRemoteRuntimeCatalogSource } from '../../../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js';
 
 test('packaged catalog validates and selects a release artifact', async () => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-remote-catalog-test-'));
@@ -93,16 +89,10 @@ test('packaged catalog rejects extra fields, traversal, and duplicate targets', 
 		await mkdir(join(root, 'artifacts'));
 		await writeFile(join(root, 'artifacts', 'ash-linux.tar.gz'), archive);
 		const record = artifactRecord(archive);
-		await writeFile(
-			join(root, 'catalog.json'),
-			JSON.stringify({ formatVersion: 1, artifacts: [{ ...record, channel: 'latest' }] }),
-		);
+		await writeFile(join(root, 'catalog.json'), JSON.stringify({ formatVersion: 1, artifacts: [{ ...record, channel: 'latest' }] }));
 		await assert.rejects(PackagedRemoteRuntimeCatalog.load(root), /invalid shape/);
 
-		await writeFile(
-			join(root, 'catalog.json'),
-			JSON.stringify({ formatVersion: 1, artifacts: [{ ...record, archive: '../escape.tar.gz' }] }),
-		);
+		await writeFile(join(root, 'catalog.json'), JSON.stringify({ formatVersion: 1, artifacts: [{ ...record, archive: '../escape.tar.gz' }] }));
 		await assert.rejects(PackagedRemoteRuntimeCatalog.load(root), /not canonical/);
 
 		await writeFile(join(root, 'catalog.json'), JSON.stringify({ formatVersion: 1, artifacts: [record, record] }));
@@ -134,10 +124,7 @@ test('packaged catalog rejects symbolic artifact paths', async function () {
 		await mkdir(join(root, 'artifacts'));
 		await writeFile(outside, archive);
 		await symlink(outside, join(root, 'artifacts', 'ash-linux.tar.gz'));
-		await writeFile(
-			join(root, 'catalog.json'),
-			JSON.stringify({ formatVersion: 1, artifacts: [artifactRecord(archive)] }),
-		);
+		await writeFile(join(root, 'catalog.json'), JSON.stringify({ formatVersion: 1, artifacts: [artifactRecord(archive)] }));
 
 		await assert.rejects(PackagedRemoteRuntimeCatalog.load(root), /symbolic path/);
 	} finally {
@@ -148,21 +135,9 @@ test('packaged catalog rejects symbolic artifact paths', async function () {
 test('bundle location follows the canonical development and packaged roots', async () => {
 	const workspace = join(tmpdir(), `ash-remote-workspace-${process.pid}`);
 	const build = 'b'.repeat(64);
-	const developmentRoot = join(
-		workspace,
-		'.build',
-		'runtime',
-		'dev',
-		'store-v1',
-		developmentTarget(),
-		'host-provided-node',
-		'dev-small',
-	);
+	const developmentRoot = join(workspace, '.build', 'runtime', 'dev', 'store-v1', developmentTarget(), 'host-provided-node', 'dev-small');
 	await mkdir(join(developmentRoot, 'manifests'), { recursive: true });
-	await writeFile(
-		join(developmentRoot, 'manifests', '00000000000000000001.json'),
-		JSON.stringify({ formatVersion: 1, sequence: 1, directory: `packages/0.1.0/${build}` }),
-	);
+	await writeFile(join(developmentRoot, 'manifests', '00000000000000000001.json'), JSON.stringify({ formatVersion: 1, sequence: 1, directory: `packages/0.1.0/${build}` }));
 	try {
 		assert.equal(
 			packagedRemoteRuntimeBundleRoot({
@@ -200,10 +175,7 @@ function developmentTarget(): string {
 async function writeCatalog(root: string, archive: Buffer): Promise<void> {
 	await mkdir(join(root, 'artifacts'));
 	await writeFile(join(root, 'artifacts', 'ash-linux.tar.gz'), archive);
-	await writeFile(
-		join(root, 'catalog.json'),
-		JSON.stringify({ formatVersion: 1, artifacts: [artifactRecord(archive)] }),
-	);
+	await writeFile(join(root, 'catalog.json'), JSON.stringify({ formatVersion: 1, artifacts: [artifactRecord(archive)] }));
 }
 
 function artifactRecord(archive: Buffer) {

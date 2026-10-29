@@ -27,9 +27,7 @@ function createTokenizer(resources: DisposableStore, definition: IMonarchLanguag
 	services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 	const languages = services.get(ILanguageService);
 	resources.add(languages.registerLanguage({ id: 'monarch-test' }));
-	const tokenizer = resources.add(
-		services.createInstance(MonarchTokenizer, 'monarch-test', compile('monarch-test', definition)),
-	);
+	const tokenizer = resources.add(services.createInstance(MonarchTokenizer, 'monarch-test', compile('monarch-test', definition)));
 	return { tokenizer, languages, configuration: services.get(IConfigurationService) };
 }
 
@@ -39,12 +37,7 @@ test('Monarch carries nested comments across lines and leaves incoming states un
 		ignoreCase: true,
 		keywords: ['let'],
 		tokenizer: {
-			root: [
-				{ include: '@space' },
-				[/[a-z]+/, { cases: { '@keywords': 'keyword', '@default': 'identifier' } }],
-				[/\/\*/, 'comment', '@comment'],
-				[/[{}]/, '@brackets'],
-			],
+			root: [{ include: '@space' }, [/[a-z]+/, { cases: { '@keywords': 'keyword', '@default': 'identifier' } }], [/\/\*/, 'comment', '@comment'], [/[{}]/, '@brackets']],
 			space: [[/\s+/, '']],
 			comment: [
 				[/\/\*/, 'comment', '@push'],
@@ -80,14 +73,8 @@ test('Monarch carries nested comments across lines and leaves incoming states un
 	definition.keywords.push('x');
 	assert.equal(tokenizer.tokenize('x', false, initial).tokens[0]!.type, 'identifier.monarch-test');
 	const encoded = tokenizer.tokenizeEncoded('LET', false, initial).tokens;
-	assert.equal(
-		TokenMetadata.getLanguageId(encoded[1]!),
-		TokenMetadata.getLanguageId(tokenizer.tokenizeEncoded('x', false, initial).tokens[1]!),
-	);
-	assert.notEqual(
-		TokenMetadata.getForeground(encoded[1]!),
-		TokenMetadata.getForeground(tokenizer.tokenizeEncoded('x', false, initial).tokens[1]!),
-	);
+	assert.equal(TokenMetadata.getLanguageId(encoded[1]!), TokenMetadata.getLanguageId(tokenizer.tokenizeEncoded('x', false, initial).tokens[1]!));
+	assert.notEqual(TokenMetadata.getForeground(encoded[1]!), TokenMetadata.getForeground(tokenizer.tokenizeEncoded('x', false, initial).tokens[1]!));
 });
 
 test('Monarch handles captures, rematching, regex macros and literal state parameters', () => {

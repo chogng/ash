@@ -80,10 +80,7 @@ export class ChatDebugFilterState extends Disposable {
 		if (record.recordedAt < parsed.after || record.recordedAt > parsed.before) {
 			return false;
 		}
-		return (
-			(!parsed.include.length || parsed.include.some(term => text.includes(term))) &&
-			!parsed.exclude.some(term => text.includes(term))
-		);
+		return (!parsed.include.length || parsed.include.some(term => text.includes(term))) && !parsed.exclude.some(term => text.includes(term));
 	}
 }
 
@@ -104,55 +101,41 @@ function eventKind(record: AgentTraceEvent): ChatDebugEventKind {
 /** Date-only bounds use UTC day boundaries; timestamp bounds require an explicit zone.
  * Invalid bounds fail visibly instead of silently widening the search. Thread/Turn IDs
  * retain their case, while free-text inclusion/exclusion is case-insensitive. */
-function parseFilter(
-	query: string,
-):
-	| { threads: Set<string>; turns: Set<string>; after: number; before: number; include: string[]; exclude: string[] }
-	| string {
+function parseFilter(query: string): { threads: Set<string>; turns: Set<string>; after: number; before: number; include: string[]; exclude: string[] } | string {
 	const threads = new Set<string>();
 	const turns = new Set<string>();
 	let after = Number.NEGATIVE_INFINITY;
 	let before = Number.POSITIVE_INFINITY;
 	let invalid: string | undefined;
-	const text = query.replace(
-		/(^|[\s,])(thread|turn|after|before):([^\s,]*)/gi,
-		(_match, separator: string, field: string, value: string) => {
-			const key = field.toLowerCase();
-			if (!value) {
-				invalid = `${field}:`;
-				return separator;
-			}
-			if (key === 'thread') {
-				threads.add(value);
-			} else if (key === 'turn') {
-				turns.add(value);
-			} else {
-				const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
-				const date = value.slice(0, 10);
-				const day = Date.parse(`${date}T00:00:00Z`);
-				const validDay = Number.isFinite(day) && new Date(day).toISOString().slice(0, 10) === date;
-				const validTimestamp =
-					/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,3})?)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(
-						value,
-					);
-				const timestamp = Date.parse(value);
-				if (!validDay || (!dateOnly && !validTimestamp) || !Number.isFinite(timestamp)) {
-					invalid = `${field}:${value}`;
-				} else if (key === 'after') {
-					after = Math.max(after, timestamp);
-				} else {
-					before = Math.min(before, timestamp + (dateOnly ? 86_400_000 - 1 : 0));
-				}
-			}
+	const text = query.replace(/(^|[\s,])(thread|turn|after|before):([^\s,]*)/gi, (_match, separator: string, field: string, value: string) => {
+		const key = field.toLowerCase();
+		if (!value) {
+			invalid = `${field}:`;
 			return separator;
-		},
-	);
+		}
+		if (key === 'thread') {
+			threads.add(value);
+		} else if (key === 'turn') {
+			turns.add(value);
+		} else {
+			const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
+			const date = value.slice(0, 10);
+			const day = Date.parse(`${date}T00:00:00Z`);
+			const validDay = Number.isFinite(day) && new Date(day).toISOString().slice(0, 10) === date;
+			const validTimestamp = /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,3})?)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(value);
+			const timestamp = Date.parse(value);
+			if (!validDay || (!dateOnly && !validTimestamp) || !Number.isFinite(timestamp)) {
+				invalid = `${field}:${value}`;
+			} else if (key === 'after') {
+				after = Math.max(after, timestamp);
+			} else {
+				before = Math.min(before, timestamp + (dateOnly ? 86_400_000 - 1 : 0));
+			}
+		}
+		return separator;
+	});
 	if (invalid !== undefined || after > before) {
-		return localize(
-			'agentTrace.invalidFilter',
-			'Invalid trace filter: {0}. Use Thread/Turn IDs or ISO dates; timestamps need a time zone, and after must not exceed before.',
-			invalid ?? query,
-		);
+		return localize('agentTrace.invalidFilter', 'Invalid trace filter: {0}. Use Thread/Turn IDs or ISO dates; timestamps need a time zone, and after must not exceed before.', invalid ?? query);
 	}
 	const terms = text
 		.split(',')

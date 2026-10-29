@@ -46,9 +46,7 @@ test('Web workspace Finish response loss preserves the recorded UI outcome for p
 	};
 	try {
 		const client = new AppServerWebWorkspaceClient(state.endpoint, 'token', state.target, state.initial);
-		const transition = await client.updateWorkspace(URI.parse(state.next.configuration), [
-			{ path: '/second', name: 'Second' },
-		]);
+		const transition = await client.updateWorkspace(URI.parse(state.next.configuration), [{ path: '/second', name: 'Second' }]);
 		assert.equal(transition.workspace.folders[0]?.id, 'second');
 		await assert.rejects(transition.complete(true), /connection lost/);
 		assert.deepEqual(
@@ -59,10 +57,7 @@ test('Web workspace Finish response loss preserves the recorded UI outcome for p
 				['finish', true],
 			],
 		);
-		assert.equal(
-			JSON.parse(state.storage.getItem('ash.appServer.workspaceTransaction:http://127.0.0.1:5174')!).accepted,
-			true,
-		);
+		assert.equal(JSON.parse(state.storage.getItem('ash.appServer.workspaceTransaction:http://127.0.0.1:5174')!).accepted, true);
 		disconnected = false;
 		const reloaded = new AppServerWebWorkspaceClient(state.endpoint, 'token', state.target, state.initial);
 		await reloaded.recoverPending();
@@ -87,10 +82,7 @@ test('Web workspace lost Apply response explicitly restores its previous authori
 	};
 	try {
 		const client = new AppServerWebWorkspaceClient(state.endpoint, 'token', state.target, state.initial);
-		await assert.rejects(
-			client.updateWorkspace(URI.parse(state.next.configuration), [{ path: '/second', name: 'Second' }]),
-			/response lost after apply/,
-		);
+		await assert.rejects(client.updateWorkspace(URI.parse(state.next.configuration), [{ path: '/second', name: 'Second' }]), /response lost after apply/);
 		assert.deepEqual(operations, ['apply', 'finish']);
 		assert.equal(state.storage.length, 0);
 		assert.equal(client.getInitialWorkspace()?.id, 'first');
@@ -115,16 +107,11 @@ test('Web workspace denied server authorization uses Chinese text and clears onl
 	const state = fixture();
 	const originalFetch = globalThis.fetch;
 	globalThis.fetch = async (_input, options) =>
-		JSON.parse(String(options?.body)).operation === 'apply'
-			? new Response('Directory authorization declined', { status: 403 })
-			: new Response('Unknown workspace transaction', { status: 400 });
+		JSON.parse(String(options?.body)).operation === 'apply' ? new Response('Directory authorization declined', { status: 403 }) : new Response('Unknown workspace transaction', { status: 400 });
 	await initializeTestLocalization('zh-CN');
 	try {
 		const client = new AppServerWebWorkspaceClient(state.endpoint, 'token', state.target, state.initial);
-		await assert.rejects(
-			client.updateWorkspace(URI.parse(state.next.configuration), [{ path: '/second', name: 'Second' }]),
-			/服务器未授权此次工作区更改/,
-		);
+		await assert.rejects(client.updateWorkspace(URI.parse(state.next.configuration), [{ path: '/second', name: 'Second' }]), /服务器未授权此次工作区更改/);
 		assert.equal(state.storage.length, 0);
 	} finally {
 		globalThis.fetch = originalFetch;

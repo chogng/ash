@@ -1,10 +1,5 @@
 import type { DisposableStore } from '../../../../base/common/lifecycle.js';
-import {
-	darkColorTheme,
-	lightColorTheme,
-	highContrastDarkColorTheme,
-	highContrastLightColorTheme,
-} from '../../../../platform/theme/common/colorTheme.js';
+import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import type { IColorTheme } from '../../../../platform/theme/common/themeService.js';
 
 interface ComponentFixtureContext {
@@ -32,8 +27,7 @@ export function defineComponentFixture(options: ComponentFixture): ComponentFixt
 			const roots = await options.render(context);
 			if (!roots.length) throw new Error('A component fixture must expose at least one rendered root');
 			for (const [index, root] of roots.entries()) {
-				if (!root.isConnected || root.ownerDocument !== context.container.ownerDocument)
-					throw new Error('Fixture roots must belong to the rendered document');
+				if (!root.isConnected || root.ownerDocument !== context.container.ownerDocument) throw new Error('Fixture roots must belong to the rendered document');
 				root.dataset.fixtureTarget = String(index);
 			}
 			return roots;
@@ -42,10 +36,7 @@ export function defineComponentFixture(options: ComponentFixture): ComponentFixt
 }
 
 /** Expands each named scenario across all four product color schemes. */
-export function defineThemedFixtureGroup(
-	options: { readonly path: string },
-	scenarios: Readonly<Record<string, ComponentFixture>>,
-): readonly ThemedFixture[] {
+export function defineThemedFixtureGroup(options: { readonly path: string }, scenarios: Readonly<Record<string, ComponentFixture>>): readonly ThemedFixture[] {
 	return Object.entries(scenarios).flatMap(([name, fixture]) =>
 		[darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme].map(theme => ({
 			...fixture,

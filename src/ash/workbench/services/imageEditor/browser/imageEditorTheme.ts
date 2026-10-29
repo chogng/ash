@@ -39,12 +39,7 @@ export function readImageEditorTheme(document: Document) {
 			borderWidth: value('strokeThickness'),
 			smallRadius: value('cornerRadius-small'),
 			largeRadius: value('cornerRadius-large'),
-			spacing: [
-				value('spacing-size40'),
-				value('spacing-size80'),
-				value('spacing-size120'),
-				value('spacing-size160'),
-			] as const,
+			spacing: [value('spacing-size40'), value('spacing-size80'), value('spacing-size120'), value('spacing-size160')] as const,
 		},
 		shadow: value('shadow-lg'),
 	};

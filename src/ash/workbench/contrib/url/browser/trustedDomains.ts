@@ -71,10 +71,7 @@ export async function configureOpenerTrustedDomainsHandler(
 		return false;
 	}
 	const content = trustedDomains.content;
-	const updated = applyEdits(
-		content,
-		setProperty(content, [-1], selected.pattern, { insertSpaces: true, tabSize: 2 }),
-	);
+	const updated = applyEdits(content, setProperty(content, [-1], selected.pattern, { insertSpaces: true, tabSize: 2 }));
 	await trustedDomains.setTrustedDomains(updated, content);
 	return trustedDomains.isValid(resource);
 }

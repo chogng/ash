@@ -1,11 +1,7 @@
 import '../../browser/taskService.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
-import {
-	IFileService,
-	FileSystemProviderError,
-	FileSystemProviderErrorCode,
-} from '../../../../../platform/files/common/files.js';
+import { IFileService, FileSystemProviderError, FileSystemProviderErrorCode } from '../../../../../platform/files/common/files.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
@@ -21,12 +17,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import {
-	IQuickInputService,
-	type IQuickPick,
-	type IQuickPickItem,
-	type IQuickPickSeparator,
-} from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPick, type IQuickPickItem, type IQuickPickSeparator } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { ITaskService } from '../../common/taskService.js';
@@ -140,11 +131,7 @@ suite('Tasks command catalog and async service lifetime', () => {
 				services.registerInstance(IEditorService, {
 					activeEditor: { resource: URI.file('/workspace/b/src/index.ts') },
 				} as IEditorService);
-				services.invokeFunction(
-					CommandsRegistry.getCommand(
-						group === 'build' ? RUN_BUILD_TASK_COMMAND_ID : RUN_TEST_TASK_COMMAND_ID,
-					)!,
-				);
+				services.invokeFunction(CommandsRegistry.getCommand(group === 'build' ? RUN_BUILD_TASK_COMMAND_ID : RUN_TEST_TASK_COMMAND_ID)!);
 				try {
 					await completed.p;
 					assert.deepEqual(executed, ['b:task']);
@@ -249,10 +236,7 @@ suite('Tasks command catalog and async service lifetime', () => {
 				picker.selectedItems = [picker.items[0] as TaskItem];
 				picker.accepted.fire({ inBackground: false });
 				await new Promise<void>(resolve => setImmediate(resolve));
-				assert.deepEqual(
-					{ executed, focused, errors },
-					{ executed: [latest], focused: [], errors: failure ? ['Unsupported execution setting'] : [] },
-				);
+				assert.deepEqual({ executed, focused, errors }, { executed: [latest], focused: [], errors: failure ? ['Unsupported execution setting'] : [] });
 				changes.fire([previous]);
 				assert.deepEqual(
 					picker.items.map(item => item.label),
@@ -299,19 +283,13 @@ suite('Configure Tasks command', () => {
 					opened.push(input.resource.toString());
 				},
 			} as IEditorService);
-			const operation = services
-				.get(ICommandService)
-				.executeCommand('workbench.action.tasks.configureTaskRunner');
+			const operation = services.get(ICommandService).executeCommand('workbench.action.tasks.configureTaskRunner');
 			try {
 				await picker.shown.p;
 				assert.equal(picker.isDisposed, false);
 				if (cancel) picker.hide();
 				else {
-					picker.selectedItems = [
-						picker.items.find(
-							item => !('type' in item && item.type === 'separator') && item.label === 'npm',
-						) as TaskItem,
-					];
+					picker.selectedItems = [picker.items.find(item => !('type' in item && item.type === 'separator') && item.label === 'npm') as TaskItem];
 					picker.accepted.fire({ inBackground: false });
 				}
 			} finally {
@@ -326,9 +304,7 @@ suite('Configure Tasks command', () => {
 			else
 				assert.deepEqual(JSON.parse((await files.readFile(resource)).content), {
 					version: '2.0.0',
-					tasks: [
-						{ label: 'build', type: 'shell', command: 'npm', args: ['run', 'build'], problemMatcher: [] },
-					],
+					tasks: [{ label: 'build', type: 'shell', command: 'npm', args: ['run', 'build'], problemMatcher: [] }],
 				});
 		});
 	}
@@ -343,12 +319,7 @@ suite('Configure Tasks command', () => {
 			const second = { id: 'b', uri: URI.file('/workspace/b'), name: 'B', index: 1 };
 			using workspace = new TestWorkspaceService({
 				id: 'workspace',
-				folders:
-					scenario === 'no-folder'
-						? []
-						: scenario === 'multi-root' || scenario === 'cancel'
-							? [first, second]
-							: [first],
+				folders: scenario === 'no-folder' ? [] : scenario === 'multi-root' || scenario === 'cancel' ? [first, second] : [first],
 			});
 			services.registerInstance(IWorkspaceContextService, workspace);
 			services.registerInstance(ITaskService, {
@@ -370,8 +341,7 @@ suite('Configure Tasks command', () => {
 			const root = scenario === 'multi-root' ? second.uri : first.uri;
 			const resource = URI.joinPath(root, '.vscode', 'tasks.json');
 			await files.createDirectory(root);
-			const original =
-				'{ // retain comments and user tasks\n "version": "2.0.0", "tasks": [{"label":"Existing"}] }';
+			const original = '{ // retain comments and user tasks\n "version": "2.0.0", "tasks": [{"label":"Existing"}] }';
 			if (scenario === 'existing') {
 				await files.createDirectory(URI.joinPath(root, '.vscode'));
 				await files.writeFile({ resource, content: original }, { create: true, overwrite: false });
@@ -425,9 +395,7 @@ suite('Configure Tasks command', () => {
 				else
 					assert.deepEqual(JSON.parse(content), {
 						version: '2.0.0',
-						tasks: [
-							{ label: 'example', type: 'shell', command: 'echo', args: ['Hello'], problemMatcher: [] },
-						],
+						tasks: [{ label: 'example', type: 'shell', command: 'echo', args: ['Hello'], problemMatcher: [] }],
 					});
 			}
 		});

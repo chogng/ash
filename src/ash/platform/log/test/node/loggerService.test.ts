@@ -145,8 +145,7 @@ suite('Desktop log files', () => {
 			services.registerInstance(IMainProcessService, {
 				_serviceBrand: undefined,
 				getChannel: () => ({
-					call: (command, arg) =>
-						channel.call('window:7', command, JSON.parse(JSON.stringify(arg ?? null)) ?? undefined),
+					call: (command, arg) => channel.call('window:7', command, JSON.parse(JSON.stringify(arg ?? null)) ?? undefined),
 					listen: event => channel.listen('window:7', event),
 				}),
 				registerChannel: () => {
@@ -170,10 +169,7 @@ suite('Desktop log files', () => {
 					.map(line => JSON.parse(line).message),
 				['ready {"generation":2}', 'crashed carrier exited'],
 			);
-			await assert.rejects(
-				channel.call('window:7', 'read', { id: files[0]!.id, cursor: { generation: 'x', offset: -1 } }),
-				/Invalid log cursor/,
-			);
+			await assert.rejects(channel.call('window:7', 'read', { id: files[0]!.id, cursor: { generation: 'x', offset: -1 } }), /Invalid log cursor/);
 			await assert.rejects(client.files.read('../outside'), /Invalid log file identity/);
 			const logs = (await readFile(join(owner.sessionPath, 'window-7.log'), 'utf8'))
 				.trim()
@@ -206,10 +202,7 @@ suite('Desktop log files', () => {
 			);
 			assert.match(logs[1].error, /Error: carrier exited/);
 			await assert.rejects(channel.call('../outside', 'log', entry('invalid source')), /Invalid logger window/);
-			await assert.rejects(
-				channel.call('window:7', 'log', { ...entry('invalid entry'), level: 'invalid' }),
-				/Invalid log entry/,
-			);
+			await assert.rejects(channel.call('window:7', 'log', { ...entry('invalid entry'), level: 'invalid' }), /Invalid log entry/);
 			await owner.close();
 			assert.throws(() => owner.log('main', entry('after close')), /not open/);
 		} finally {
@@ -225,9 +218,7 @@ suite('Desktop log files', () => {
 			await Promise.all([1, 2, 3, 4, 5].map(index => owner.log('main', entry('x'.repeat(200) + index))));
 			await owner.close();
 			assert.deepEqual((await readdir(owner.sessionPath)).sort(), ['main.log', 'main.log.1', 'main.log.2']);
-			const sources = await Promise.all(
-				['main.log.2', 'main.log.1', 'main.log'].map(file => readFile(join(owner.sessionPath, file), 'utf8')),
-			);
+			const sources = await Promise.all(['main.log.2', 'main.log.1', 'main.log'].map(file => readFile(join(owner.sessionPath, file), 'utf8')));
 			assert.deepEqual(
 				sources.map(source => JSON.parse(source.trim()).message.at(-1)),
 				['3', '4', '5'],
@@ -241,9 +232,7 @@ suite('Desktop log files', () => {
 	test('maintenance retains the current and latest session and leaves unrelated directories alone', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'ash-logs-'));
 		try {
-			const old = ['20250101T000000000', '20250102T000000000', '20250103T000000000'].map(
-				timestamp => `${timestamp}-00000000-0000-0000-0000-000000000000`,
-			);
+			const old = ['20250101T000000000', '20250102T000000000', '20250103T000000000'].map(timestamp => `${timestamp}-00000000-0000-0000-0000-000000000000`);
 			for (const name of [...old, 'custom']) {
 				await mkdir(join(directory, name));
 			}
@@ -252,10 +241,7 @@ suite('Desktop log files', () => {
 			await owner.cleanUpLogs();
 			await owner.log('main', entry('after maintenance'));
 			await owner.flush();
-			assert.deepEqual(
-				(await readdir(directory)).sort(),
-				[old[2]!, owner.sessionPath.slice(directory.length + 1), 'custom'].sort(),
-			);
+			assert.deepEqual((await readdir(directory)).sort(), [old[2]!, owner.sessionPath.slice(directory.length + 1), 'custom'].sort());
 			assert.match(await readFile(join(owner.sessionPath, 'main.log'), 'utf8'), /after maintenance/);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
@@ -338,20 +324,14 @@ suite('Desktop log files', () => {
 			await owner.initialize();
 			await owner.log('main', entry('start'));
 			const source = (await owner.getLogFiles('window-1'))[0]!;
-			await appendFile(
-				join(owner.sessionPath, 'main.log'),
-				'x'.repeat(1024 * 1024) + '\n' + JSON.stringify(entry('tail')) + '\n',
-			);
+			await appendFile(join(owner.sessionPath, 'main.log'), 'x'.repeat(1024 * 1024) + '\n' + JSON.stringify(entry('tail')) + '\n');
 			const result = await owner.readLogFile(source.id);
 			assert.equal(result.gap, true);
 			assert.equal(JSON.parse(result.text).message, 'tail');
 			if (process.platform !== 'win32') {
 				const sessionId = source.id.split('/')[0]!;
 				await symlink(join(owner.sessionPath, 'main.log'), join(owner.sessionPath, 'window-99.log'));
-				await assert.rejects(
-					owner.readLogFile(`${sessionId}/window-99.log`),
-					/Log source must be a regular file/,
-				);
+				await assert.rejects(owner.readLogFile(`${sessionId}/window-99.log`), /Log source must be a regular file/);
 				const session = '20250101T000000000-00000000-0000-0000-0000-000000000000';
 				await symlink(owner.sessionPath, join(directory, session));
 				await assert.rejects(owner.readLogFile(`${session}/main.log`), /Invalid log session directory/);

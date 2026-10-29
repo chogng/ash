@@ -2,11 +2,7 @@ import { defaultButtonStyles } from '../../theme/browser/defaultStyles.js';
 import { DropdownWithPrimaryActionViewItem } from './dropdownWithPrimaryActionViewItem.js';
 import { addDisposableListener, ModifierKeyEmitter } from '../../../base/browser/dom.js';
 import { setAriaAttribute } from '../../../base/browser/ui/aria/aria.js';
-import {
-	ActionViewItem,
-	ButtonActionViewItem,
-	type ActionViewItemOptions,
-} from '../../../base/browser/ui/actionbar/actionViewItems.js';
+import { ActionViewItem, ButtonActionViewItem, type ActionViewItemOptions } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import type { IContextMenuProvider } from '../../../base/browser/contextmenu.js';
 import { DropdownMenuActionViewItem } from '../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { Separator, SubmenuAction, type IAction } from '../../../base/common/actions.js';
@@ -26,27 +22,13 @@ export function getContextMenuActions(
 	targetWindow: Window | undefined = typeof window === 'undefined' ? undefined : window,
 ): PrimaryAndSecondaryActions {
 	const target: PrimaryAndSecondaryActions = { primary: [], secondary: [] };
-	fillInActions(
-		groups,
-		target,
-		targetWindow ? shouldUseAlternativeMenuActions(targetWindow) : false,
-		primaryGroup ? group => group === primaryGroup : undefined,
-	);
+	fillInActions(groups, target, targetWindow ? shouldUseAlternativeMenuActions(targetWindow) : false, primaryGroup ? group => group === primaryGroup : undefined);
 	return target;
 }
 
-export function getFlatContextMenuActions(
-	groups: MenuActionGroups,
-	primaryGroup?: string,
-	targetWindow: Window | undefined = typeof window === 'undefined' ? undefined : window,
-): IAction[] {
+export function getFlatContextMenuActions(groups: MenuActionGroups, primaryGroup?: string, targetWindow: Window | undefined = typeof window === 'undefined' ? undefined : window): IAction[] {
 	const target: IAction[] = [];
-	fillInActions(
-		groups,
-		target,
-		targetWindow ? shouldUseAlternativeMenuActions(targetWindow) : false,
-		primaryGroup ? group => group === primaryGroup : undefined,
-	);
+	fillInActions(groups, target, targetWindow ? shouldUseAlternativeMenuActions(targetWindow) : false, primaryGroup ? group => group === primaryGroup : undefined);
 	return target;
 }
 
@@ -79,8 +61,7 @@ export function fillInActionBarActions(
 	shouldInlineSubmenu?: (action: SubmenuAction, group: string, groupSize: number) => boolean,
 	useSeparatorsInPrimaryActions = false,
 ): void {
-	const isPrimaryGroup =
-		typeof primaryGroup === 'string' ? (group: string): boolean => group === primaryGroup : primaryGroup;
+	const isPrimaryGroup = typeof primaryGroup === 'string' ? (group: string): boolean => group === primaryGroup : primaryGroup;
 	fillInActions(groups, target, false, isPrimaryGroup, shouldInlineSubmenu, useSeparatorsInPrimaryActions);
 }
 
@@ -122,10 +103,7 @@ export function shouldUseAlternativeMenuActions(targetWindow: Window): boolean {
 	return status.altKey || ((isWindows || isLinux) && status.shiftKey);
 }
 
-export function resolveAlternativeMenuActions(
-	actions: readonly IAction[],
-	useAlternative: boolean,
-): readonly IAction[] {
+export function resolveAlternativeMenuActions(actions: readonly IAction[], useAlternative: boolean): readonly IAction[] {
 	if (!useAlternative) return actions;
 	return actions.map(resolveAlternativeMenuAction);
 }
@@ -154,7 +132,10 @@ export class MenuEntryActionViewItem extends ButtonActionViewItem {
 	private isMouseOver = false;
 
 	constructor(action: MenuItemAction, options: IMenuEntryActionViewItemOptions = {}) {
-		super(action, { buttonStyles: defaultButtonStyles, ...options });
+		super(action, {
+			buttonStyles: defaultButtonStyles,
+			...options,
+		});
 		this.menuItemAction = action;
 		this.activeAction = action;
 	}
@@ -190,10 +171,7 @@ export class MenuEntryActionViewItem extends ButtonActionViewItem {
 	private updateAlternativeState(modifiers: ModifierKeyEmitter): void {
 		const status = modifiers.keyStatus;
 		const alternate = this.menuItemAction.alt;
-		const nextAction =
-			alternate?.enabled && (status.altKey || (status.shiftKey && this.isMouseOver))
-				? alternate
-				: this.menuItemAction;
+		const nextAction = alternate?.enabled && (status.altKey || (status.shiftKey && this.isMouseOver)) ? alternate : this.menuItemAction;
 		if (this.activeAction === nextAction) return;
 		this.activeAction = nextAction;
 		this.button.label = nextAction.label;
@@ -212,12 +190,11 @@ export class MenuEntryActionViewItem extends ButtonActionViewItem {
  * rendering, keyboard navigation, and nested submenus to base Menu.
  */
 export class SubmenuEntryActionViewItem extends DropdownMenuActionViewItem {
-	constructor(
-		action: SubmenuItemAction,
-		contextMenuProvider: IContextMenuProvider,
-		options: IMenuEntryActionViewItemOptions = {},
-	) {
-		super(action, () => action.actions, contextMenuProvider, { buttonStyles: defaultButtonStyles, ...options });
+	constructor(action: SubmenuItemAction, contextMenuProvider: IContextMenuProvider, options: IMenuEntryActionViewItemOptions = {}) {
+		super(action, () => action.actions, contextMenuProvider, {
+			buttonStyles: defaultButtonStyles,
+			...options,
+		});
 	}
 
 	override render(container: HTMLElement): void {
@@ -232,24 +209,14 @@ export class SubmenuEntryActionViewItem extends DropdownMenuActionViewItem {
  * Returning undefined lets ActionBar use its base representation for actions
  * that were not produced by the platform menu service.
  */
-export function createActionViewItem(
-	action: IAction,
-	contextMenuProvider: IContextMenuProvider,
-	options: IMenuEntryActionViewItemOptions = {},
-): ActionViewItem | undefined {
+export function createActionViewItem(action: IAction, contextMenuProvider: IContextMenuProvider, options: IMenuEntryActionViewItemOptions = {}): ActionViewItem | undefined {
 	if (action instanceof MenuItemAction) {
 		return new MenuEntryActionViewItem(action, options);
 	}
 	if (action instanceof SubmenuItemAction) {
 		const primary = action.actions.find(candidate => !(candidate instanceof Separator));
 		if (action.item.isSplitButton && primary) {
-			return new DropdownWithPrimaryActionViewItem(
-				primary,
-				action,
-				() => action.actions,
-				contextMenuProvider,
-				options,
-			);
+			return new DropdownWithPrimaryActionViewItem(primary, action, () => action.actions, contextMenuProvider, options);
 		}
 		return new SubmenuEntryActionViewItem(action, contextMenuProvider, options);
 	}

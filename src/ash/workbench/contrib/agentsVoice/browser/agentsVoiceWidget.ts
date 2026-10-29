@@ -4,12 +4,7 @@ import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import type { AgentVoiceInputMode, AgentVoiceTranscript } from '../../../../platform/agentHost/common/agent.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -245,10 +240,7 @@ export class AgentsVoiceWidget extends Disposable {
 		this.transcript.setAttribute('role', 'region');
 		this.transcript.setAttribute('aria-label', localize('agentsVoice.transcript', 'Voice transcript'));
 		this.element.append(style, header, this.status, controls);
-		if (options.showOnboarding !== false)
-			this._register(
-				instantiation.createInstance(VoiceModeOnboardingBanner, this.element, () => this.openChat.focus()),
-			);
+		if (options.showOnboarding !== false) this._register(instantiation.createInstance(VoiceModeOnboardingBanner, this.element, () => this.openChat.focus()));
 		this.element.append(this.transcript);
 		this.transcript.hidden = options.inputBoxLayout === true;
 		container.append(this.element);
@@ -272,8 +264,7 @@ export class AgentsVoiceWidget extends Disposable {
 				press();
 			}),
 		);
-		for (const type of ['pointerup', 'pointercancel', 'lostpointercapture', 'blur'] as const)
-			this._register(addDisposableListener(this.ptt.domNode, type, release));
+		for (const type of ['pointerup', 'pointercancel', 'lostpointercapture', 'blur'] as const) this._register(addDisposableListener(this.ptt.domNode, type, release));
 		this._register(
 			addDisposableListener(this.ptt.domNode, 'keydown', event => {
 				if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
@@ -300,13 +291,7 @@ export class AgentsVoiceWidget extends Disposable {
 			addDisposableListener(this.element, 'focusin', () => {
 				focused.set(true);
 				if (configuration.getValue<boolean>(AccessibilityVerbositySettingId.AgentsVoice) !== false) {
-					this.element.setAttribute(
-						'aria-description',
-						localize(
-							'agentsVoice.helpHint',
-							'Use the accessibility help command for voice conversation controls.',
-						),
-					);
+					this.element.setAttribute('aria-description', localize('agentsVoice.helpHint', 'Use the accessibility help command for voice conversation controls.'));
 				} else this.element.removeAttribute('aria-description');
 			}),
 		);
@@ -354,11 +339,7 @@ export class AgentsVoiceWidget extends Disposable {
 										)
 									: `${this.status.textContent}\n\n${this.rows.size ? [...this.rows.values()].map(row => row.textContent).join('\n\n') : this.transcript.textContent}`,
 							() => {
-								if (
-									focusedElement instanceof document.defaultView!.HTMLElement &&
-									focusedElement.isConnected
-								)
-									focusedElement.focus();
+								if (focusedElement instanceof document.defaultView!.HTMLElement && focusedElement.isConnected) focusedElement.focus();
 							},
 							AccessibilityVerbositySettingId.AgentsVoice,
 						);
@@ -371,8 +352,7 @@ export class AgentsVoiceWidget extends Disposable {
 	}
 
 	setConnected(connected: boolean): void {
-		const restoreFocus =
-			!connected && [this.mute, this.mode, this.ptt, this.interrupt].some(button => button.hasFocus());
+		const restoreFocus = !connected && [this.mute, this.mode, this.ptt, this.interrupt].some(button => button.hasFocus());
 		this.connected = connected;
 		this.mute.enabled = this.mode.enabled = connected;
 		this.updateInput();
@@ -401,14 +381,9 @@ export class AgentsVoiceWidget extends Disposable {
 	}
 	private updateInput(): void {
 		this.mute.checked = this.muted;
-		this.mute.label = this.muted
-			? localize('agentsVoice.unmute', 'Unmute microphone')
-			: localize('agentsVoice.mute', 'Mute microphone');
+		this.mute.label = this.muted ? localize('agentsVoice.unmute', 'Unmute microphone') : localize('agentsVoice.mute', 'Mute microphone');
 		this.mode.checked = this.inputMode === 'pushToTalk';
-		this.mode.label =
-			this.inputMode === 'pushToTalk'
-				? localize('agentsVoice.useOpenMic', 'Use open microphone')
-				: localize('agentsVoice.usePtt', 'Use push to talk');
+		this.mode.label = this.inputMode === 'pushToTalk' ? localize('agentsVoice.useOpenMic', 'Use open microphone') : localize('agentsVoice.usePtt', 'Use push to talk');
 		const enabled = this.connected && !this.muted && this.inputMode === 'pushToTalk';
 		const restoreFocus = !enabled && this.ptt.hasFocus();
 		this.ptt.enabled = enabled;
@@ -420,8 +395,7 @@ export class AgentsVoiceWidget extends Disposable {
 	}
 
 	setTranscriptTurns(turns: readonly AgentVoiceTranscript[]): void {
-		const wasAtBottom =
-			this.transcript.scrollHeight - this.transcript.clientHeight - this.transcript.scrollTop <= 4;
+		const wasAtBottom = this.transcript.scrollHeight - this.transcript.clientHeight - this.transcript.scrollTop <= 4;
 		const ids = new Set(turns.map(turn => turn.itemId));
 		for (const [id, row] of this.rows) {
 			if (!ids.has(id)) {
@@ -430,10 +404,7 @@ export class AgentsVoiceWidget extends Disposable {
 			}
 		}
 		if (!turns.length) {
-			this.transcript.textContent = localize(
-				'agentsVoice.transcript.empty',
-				'Spoken text appears here after you start voice in Chat.',
-			);
+			this.transcript.textContent = localize('agentsVoice.transcript.empty', 'Spoken text appears here after you start voice in Chat.');
 			return;
 		}
 		if (!this.rows.size) this.transcript.replaceChildren();
@@ -445,10 +416,7 @@ export class AgentsVoiceWidget extends Disposable {
 				row.append(h(this.element.ownerDocument, 'strong'), h(this.element.ownerDocument, 'span'));
 				this.rows.set(turn.itemId, row);
 			}
-			const speaker =
-				turn.speaker === 'user'
-					? localize('agentsVoice.speaker.user', 'You')
-					: localize('agentsVoice.speaker.assistant', 'Agent');
+			const speaker = turn.speaker === 'user' ? localize('agentsVoice.speaker.user', 'You') : localize('agentsVoice.speaker.assistant', 'Agent');
 			row.children[0]!.textContent = `${speaker}: `;
 			row.children[1]!.textContent = turn.text;
 			// Reorder existing nodes without losing the transcript's focus or interpreting speech as markup.

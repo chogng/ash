@@ -2,11 +2,7 @@ import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.j
 import { getErrorMessage, isCancellationError } from '../../../../base/common/errors.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { IConfigurationService, ConfigurationTarget } from '../../../../platform/configuration/common/configuration.js';
-import {
-	ConfigurationScope,
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IWorkspaceTrustManagementService } from '../../../../platform/workspace/common/workspaceTrust.js';
@@ -25,8 +21,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	scope: ConfigurationScope.APPLICATION,
 	schema: { type: 'string', enum: ['on', 'off'] },
 	parse(value: unknown): 'on' | 'off' {
-		if (value !== 'on' && value !== 'off')
-			throw new TypeError(localize('tasks.invalidAutomaticPolicy', 'Automatic tasks must be on or off.'));
+		if (value !== 'on' && value !== 'off') throw new TypeError(localize('tasks.invalidAutomaticPolicy', 'Automatic tasks must be on or off.'));
 		return value;
 	},
 	setting: {
@@ -35,10 +30,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize('tasks.automaticTitle', 'Automatic tasks');
 		},
 		get description() {
-			return localize(
-				'tasks.automaticDescription',
-				'Run folder-open tasks in trusted workspaces. Disabled by default.',
-			);
+			return localize('tasks.automaticDescription', 'Run folder-open tasks in trusted workspaces. Disabled by default.');
 		},
 		get options() {
 			return [
@@ -101,16 +93,12 @@ export class RunAutomaticTasks extends Disposable implements IWorkbenchContribut
 		this.operation = this.operation
 			.then(() => this.run(generation, refresh))
 			.catch(error => {
-				if (!this.isDisposed && generation === this.generation && !isCancellationError(error))
-					this.notifications.error(getErrorMessage(error));
+				if (!this.isDisposed && generation === this.generation && !isCancellationError(error)) this.notifications.error(getErrorMessage(error));
 			});
 	}
 
 	private async run(generation: number, refresh: boolean): Promise<void> {
-		const current = (): boolean =>
-			!this.isDisposed &&
-			generation === this.generation &&
-			this.configuration.getValue(allowAutomaticTasks) === 'on';
+		const current = (): boolean => !this.isDisposed && generation === this.generation && this.configuration.getValue(allowAutomaticTasks) === 'on';
 		if (!current()) return;
 		await this.trust.workspaceTrustInitialized;
 		await this.trust.resolveWorkspaceTrust();
@@ -129,14 +117,7 @@ export class RunAutomaticTasks extends Disposable implements IWorkbenchContribut
 			} catch (error) {
 				this.attempted.delete(task.id);
 				if (!controller.signal.aborted && generation === this.generation && !isCancellationError(error))
-					this.notifications.error(
-						localize(
-							'tasks.automaticFailed',
-							"Automatic task '{0}' could not start: {1}",
-							task.label,
-							getErrorMessage(error),
-						),
-					);
+					this.notifications.error(localize('tasks.automaticFailed', "Automatic task '{0}' could not start: {1}", task.label, getErrorMessage(error)));
 			} finally {
 				if (this.preparing === preparing) this.preparing = undefined;
 			}
@@ -167,10 +148,7 @@ export class ManageAutomaticTaskRunning extends Action2 {
 		const selected = await new Promise<'on' | 'off' | undefined>(resolve => {
 			const resources = new DisposableStore();
 			const picker = resources.add(quickInput.createQuickPick<{ label: string; value: 'on' | 'off' }>());
-			picker.placeholder = localize(
-				'tasks.automaticPlaceholder',
-				'Choose whether trusted workspaces may run folder-open tasks',
-			);
+			picker.placeholder = localize('tasks.automaticPlaceholder', 'Choose whether trusted workspaces may run folder-open tasks');
 			picker.items = [
 				{ label: localize('tasks.allowAutomatic', 'Allow Automatic Tasks'), value: 'on' },
 				{ label: localize('tasks.disallowAutomatic', 'Disallow Automatic Tasks'), value: 'off' },
@@ -194,11 +172,7 @@ export class ManageAutomaticTaskRunning extends Action2 {
 		});
 		if (selected) {
 			await configuration.updateValue(allowAutomaticTasks, selected, ConfigurationTarget.USER);
-			notifications.info(
-				selected === 'on'
-					? localize('tasks.automaticEnabled', 'Automatic tasks enabled.')
-					: localize('tasks.automaticDisabled', 'Automatic tasks disabled.'),
-			);
+			notifications.info(selected === 'on' ? localize('tasks.automaticEnabled', 'Automatic tasks enabled.') : localize('tasks.automaticDisabled', 'Automatic tasks disabled.'));
 		}
 	}
 }

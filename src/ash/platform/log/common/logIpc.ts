@@ -1,16 +1,7 @@
 import type { IChannel } from '../../../base/parts/ipc/common/ipc.js';
 import { isRecord } from '../../../base/common/types.js';
 import { ConsoleLogSink } from './consoleLogSink.js';
-import {
-	isLogLevel,
-	LogLevel,
-	AbstractLoggerService,
-	type ILogSink,
-	type LogEntry,
-	type ILogFileService,
-	type ILogFile,
-	type ILogFileReadResult,
-} from './log.js';
+import { isLogLevel, LogLevel, AbstractLoggerService, type ILogSink, type LogEntry, type ILogFileService, type ILogFile, type ILogFileReadResult } from './log.js';
 import { LogService } from './logServiceImpl.js';
 import { localize } from '../../../nls.js';
 
@@ -78,8 +69,7 @@ export class LoggerChannelClient extends AbstractLoggerService<LogService> imple
 			sinks: [
 				new ConsoleLogSink(),
 				{
-					log: entry =>
-						this.log({ ...entry, category: entry.category === 'application' ? category : entry.category }),
+					log: entry => this.log({ ...entry, category: entry.category === 'application' ? category : entry.category }),
 				},
 			],
 		});
@@ -89,12 +79,7 @@ export class LoggerChannelClient extends AbstractLoggerService<LogService> imple
 		if (this.isDisposed) {
 			return;
 		}
-		const error =
-			entry.error instanceof Error
-				? (entry.error.stack ?? entry.error.message)
-				: entry.error === undefined
-					? undefined
-					: String(entry.error);
+		const error = entry.error instanceof Error ? (entry.error.stack ?? entry.error.message) : entry.error === undefined ? undefined : String(entry.error);
 		const serialized = { ...entry, error };
 		const characters = entry.category.length + entry.message.length + (error?.length ?? 0);
 		// Disk rotation bounds saved files, not queued IPC payloads. Keep one request
@@ -111,11 +96,7 @@ export class LoggerChannelClient extends AbstractLoggerService<LogService> imple
 						timestampMillis: Date.now(),
 						category: 'logs',
 						level: LogLevel.Warning,
-						message: localize(
-							'logs.pendingLimit',
-							'Omitted {0} log entries because the pending log limit was exceeded.',
-							omitted,
-						),
+						message: localize('logs.pendingLimit', 'Omitted {0} log entries because the pending log limit was exceeded.', omitted),
 						error: undefined,
 					});
 				});

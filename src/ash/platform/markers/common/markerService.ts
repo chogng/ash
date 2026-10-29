@@ -1,16 +1,7 @@
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { type URI } from '../../../base/common/uri.js';
-import {
-	type IMarker,
-	type IMarkerData,
-	type IMarkerChangeOptions,
-	type IMarkerReadOptions,
-	type IMarkerService,
-	type IResourceMarker,
-	MarkerSeverity,
-	type MarkerStatistics,
-} from './markers.js';
+import { type IMarker, type IMarkerData, type IMarkerChangeOptions, type IMarkerReadOptions, type IMarkerService, type IResourceMarker, MarkerSeverity, type MarkerStatistics } from './markers.js';
 
 interface MarkerSnapshot {
 	readonly resource: URI;
@@ -151,8 +142,6 @@ function storeMarker(owner: string, resource: URI, marker: IMarkerData): IMarker
 		resource,
 		...(typeof marker.code === 'object' ? { code: { ...marker.code } } : {}),
 		...(marker.tags ? { tags: [...marker.tags] } : {}),
-		...(marker.relatedInformation
-			? { relatedInformation: marker.relatedInformation.map(info => ({ ...info })) }
-			: {}),
+		...(marker.relatedInformation ? { relatedInformation: marker.relatedInformation.map(info => ({ ...info })) } : {}),
 	});
 }

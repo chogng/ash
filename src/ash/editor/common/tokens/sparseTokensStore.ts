@@ -28,11 +28,7 @@ export class SparseTokensStore {
 		return this._pieces.length === 0;
 	}
 
-	public set(
-		pieces: SparseMultilineTokens[] | null,
-		isComplete: boolean,
-		textModel: ITextModel | undefined = undefined,
-	): void {
+	public set(pieces: SparseMultilineTokens[] | null, isComplete: boolean, textModel: ITextModel | undefined = undefined): void {
 		this._pieces = pieces || [];
 		this._isComplete = isComplete;
 
@@ -114,11 +110,7 @@ export class SparseTokensStore {
 		insertPosition = insertPosition || { index: this._pieces.length };
 
 		if (pieces.length > 0) {
-			this._pieces = [
-				...this._pieces.slice(0, insertPosition.index),
-				...pieces,
-				...this._pieces.slice(insertPosition.index),
-			];
+			this._pieces = [...this._pieces.slice(0, insertPosition.index), ...pieces, ...this._pieces.slice(insertPosition.index)];
 		}
 
 		// console.log(`I HAVE ${this._pieces.length} pieces`);
@@ -236,11 +228,7 @@ export class SparseTokensStore {
 			} else if (pieces[mid].startLineNumber > lineNumber) {
 				high = mid - 1;
 			} else {
-				while (
-					mid > low &&
-					pieces[mid - 1].startLineNumber <= lineNumber &&
-					lineNumber <= pieces[mid - 1].endLineNumber
-				) {
+				while (mid > low && pieces[mid - 1].startLineNumber <= lineNumber && lineNumber <= pieces[mid - 1].endLineNumber) {
 					mid--;
 				}
 				return mid;
@@ -250,13 +238,7 @@ export class SparseTokensStore {
 		return low;
 	}
 
-	public acceptEdit(
-		range: IRange,
-		eolCount: number,
-		firstLineLength: number,
-		lastLineLength: number,
-		firstCharCode: number,
-	): void {
+	public acceptEdit(range: IRange, eolCount: number, firstLineLength: number, lastLineLength: number, firstCharCode: number): void {
 		for (let i = 0; i < this._pieces.length; i++) {
 			const piece = this._pieces[i];
 			piece.acceptEdit(range, eolCount, firstLineLength, lastLineLength, firstCharCode);

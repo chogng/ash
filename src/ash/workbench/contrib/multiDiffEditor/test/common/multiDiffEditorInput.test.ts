@@ -3,13 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { URI } from '../../../../../base/common/uri.js';
 import { EditorPaneMatch } from '../../../../browser/parts/editor/editorPane.js';
-import {
-	createMultiDiffEditorInput,
-	isMultiDiffEditorInput,
-	matchMultiDiffEditor,
-	multiDiffEditorItemKey,
-	MULTI_DIFF_EDITOR_ID,
-} from '../../browser/multiDiffEditorInput.js';
+import { createMultiDiffEditorInput, isMultiDiffEditorInput, matchMultiDiffEditor, multiDiffEditorItemKey, MULTI_DIFF_EDITOR_ID } from '../../browser/multiDiffEditorInput.js';
 
 test('Stanza multi-diff inputs keep one caller-owned tab identity and ordered comparisons', () => {
 	const source = URI.parse('ash-multi-diff:/scm/working?revision=7');
@@ -50,10 +44,7 @@ test('Stanza multi-diff inputs reject duplicate comparisons', () => {
 		original: { resource: URI.parse('git-change:/first/original') },
 		modified: { resource: URI.parse('git-change:/first/modified') },
 	};
-	assert.throws(
-		() => createMultiDiffEditorInput(URI.parse('ash-multi-diff:/duplicates'), [item, item], 'Changes'),
-		/Duplicate multi-diff comparison/,
-	);
+	assert.throws(() => createMultiDiffEditorInput(URI.parse('ash-multi-diff:/duplicates'), [item, item], 'Changes'), /Duplicate multi-diff comparison/);
 });
 
 test('Source-provided identities survive revisions while captured comparisons stay distinct', () => {
@@ -68,14 +59,7 @@ test('Source-provided identities survive revisions while captured comparisons st
 	const capturedFirst = { ...first, id: undefined };
 	const capturedSecond = { ...second, id: undefined };
 	assert.notEqual(multiDiffEditorItemKey(capturedFirst), multiDiffEditorItemKey(capturedSecond));
-	assert.equal(
-		createMultiDiffEditorInput(
-			URI.parse('ash-multi-diff:/snapshot'),
-			[capturedFirst, capturedSecond],
-			'Comparisons',
-		).items.length,
-		2,
-	);
+	assert.equal(createMultiDiffEditorInput(URI.parse('ash-multi-diff:/snapshot'), [capturedFirst, capturedSecond], 'Comparisons').items.length, 2);
 });
 
 test('binary metadata survives serialization and never makes a comparison writable', () => {
@@ -86,23 +70,10 @@ test('binary metadata survives serialization and never makes a comparison writab
 		modified: { resource: URI.file('/workspace/image.bin') },
 	};
 	const input = createMultiDiffEditorInput(URI.parse('ash-multi-diff:/binary'), [binary], 'Binary review');
-	const restored = EditorInputSerializers.deserialize(
-		JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input))),
-	);
+	const restored = EditorInputSerializers.deserialize(JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input))));
 	assert.ok(isMultiDiffEditorInput(restored));
-	assert.deepEqual(
-		[restored.readOnly, restored.items[0].binary, restored.items[0].modified.resource.toString()],
-		[true, true, binary.modified.resource.toString()],
-	);
-	assert.throws(
-		() =>
-			createMultiDiffEditorInput(
-				input.resource,
-				[{ ...binary, binary: 'yes' as unknown as boolean }],
-				input.label,
-			),
-		/binary state must be boolean/,
-	);
+	assert.deepEqual([restored.readOnly, restored.items[0].binary, restored.items[0].modified.resource.toString()], [true, true, binary.modified.resource.toString()]);
+	assert.throws(() => createMultiDiffEditorInput(input.resource, [{ ...binary, binary: 'yes' as unknown as boolean }], input.label), /binary state must be boolean/);
 });
 
 test('restored comparisons retain disabled file capabilities and reject corrupted context values', () => {

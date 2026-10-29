@@ -10,10 +10,7 @@ import { TextModel } from '../../../../common/model/textModel.js';
 import { isMacintosh } from '../../../../../base/common/platform.js';
 import { KeyCode } from '../../../../../base/common/keyCodes.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import {
-	KeybindingResolver,
-	KeybindingResolveKind,
-} from '../../../../../platform/keybinding/common/keybindingResolver.js';
+import { KeybindingResolver, KeybindingResolveKind } from '../../../../../platform/keybinding/common/keybindingResolver.js';
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
@@ -61,11 +58,7 @@ test('Cursor Undo shortcut reaches the shell outside text inputs and retains edi
 	};
 	context.setContext('terminalFocus', true);
 	context.setContext('textInputFocus', false);
-	assert.equal(
-		resolver.resolve(context, [shortcut]).kind,
-		KeybindingResolveKind.NoMatch,
-		'the editor action must leave the native shell control key available',
-	);
+	assert.equal(resolver.resolve(context, [shortcut]).kind, KeybindingResolveKind.NoMatch, 'the editor action must leave the native shell control key available');
 	context.setContext('terminalFocus', false);
 	context.setContext('textInputFocus', true);
 	const resolved = resolver.resolve(context, [shortcut]);

@@ -15,5 +15,4 @@ export interface IAppServerRemoteAgentService {
 	rollbackRuntime(): Promise<RemoteRuntimeRollbackResult>;
 }
 
-export const IAppServerRemoteAgentService =
-	createServiceIdentifier<IAppServerRemoteAgentService>('appServerRemoteAgentService');
+export const IAppServerRemoteAgentService = createServiceIdentifier<IAppServerRemoteAgentService>('appServerRemoteAgentService');

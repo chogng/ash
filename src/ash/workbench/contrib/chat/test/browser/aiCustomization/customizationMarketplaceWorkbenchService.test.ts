@@ -4,17 +4,10 @@ import { CancellationToken, CancellationTokenSource } from '../../../../../../ba
 import { isCancellationError } from '../../../../../../base/common/errors.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
-import {
-	IConfigurationService,
-	type IConfigurationChangeEvent,
-} from '../../../../../../platform/configuration/common/configuration.js';
+import { IConfigurationService, type IConfigurationChangeEvent } from '../../../../../../platform/configuration/common/configuration.js';
 import { CustomizationMarketplaceMediaType } from '../../../../../../platform/customizationMarketplace/common/customizationMarketplaceService.js';
 import { CustomizationMarketplaceConfiguration } from '../../../../../../platform/customizationMarketplace/common/customizationMarketplaceSources.js';
-import {
-	IExtensionManagementService,
-	type ExtensionsSearchPage,
-	type ExtensionsSearchOptions,
-} from '../../../../../../platform/extensionManagement/common/extensionManagementService.js';
+import { IExtensionManagementService, type ExtensionsSearchPage, type ExtensionsSearchOptions } from '../../../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { CustomizationMarketplaceWorkbenchService } from '../../../browser/aiCustomization/customizationMarketplaceWorkbenchService.js';
 
@@ -77,24 +70,15 @@ function fixture(read?: (query: string, options: ExtensionsSearchOptions) => Pro
 suite('Customization marketplace backend catalog', () => {
 	test('DI requires its existing package and configuration owners', () => {
 		using services = new InstantiationService();
-		assert.throws(
-			() => services.createInstance(CustomizationMarketplaceWorkbenchService),
-			/extensionManagementService/,
-		);
+		assert.throws(() => services.createInstance(CustomizationMarketplaceWorkbenchService), /extensionManagementService/);
 	});
 
 	test('skill discovery uses the capability filter and retains source failures and exact installation identity', async () => {
 		using owner = fixture();
-		const page = await owner.service.query(
-			{ query: ' review ', mediaType: CustomizationMarketplaceMediaType.Skill, pageSize: 200 },
-			CancellationToken.None,
-		);
+		const page = await owner.service.query({ query: ' review ', mediaType: CustomizationMarketplaceMediaType.Skill, pageSize: 200 }, CancellationToken.None);
 		assert.deepEqual(
 			owner.requests,
-			['ash', 'offline'].map(sourceId => [
-				'review',
-				{ sourceId, capabilityKind: 'skill', pageSize: 100, cursor: undefined },
-			]),
+			['ash', 'offline'].map(sourceId => ['review', { sourceId, capabilityKind: 'skill', pageSize: 100, cursor: undefined }]),
 		);
 		assert.deepEqual(page.items, [
 			{
@@ -116,17 +100,11 @@ suite('Customization marketplace backend catalog', () => {
 
 	test('MCP queries use the backend MCP filter; an untyped query combines package identities once', async () => {
 		using owner = fixture();
-		const mcp = await owner.service.query(
-			{ mediaType: CustomizationMarketplaceMediaType.McpServer },
-			CancellationToken.None,
-		);
+		const mcp = await owner.service.query({ mediaType: CustomizationMarketplaceMediaType.McpServer }, CancellationToken.None);
 		assert.equal(mcp.items[0].installation.resourceKind, 'mcp');
 		assert.deepEqual(
 			owner.requests,
-			['ash', 'offline'].map(sourceId => [
-				'',
-				{ sourceId, capabilityKind: 'mcp', pageSize: 30, cursor: undefined },
-			]),
+			['ash', 'offline'].map(sourceId => ['', { sourceId, capabilityKind: 'mcp', pageSize: 30, cursor: undefined }]),
 		);
 		const combined = await owner.service.query({}, CancellationToken.None);
 		assert.equal(combined.items.length, 1);
@@ -145,13 +123,7 @@ suite('Customization marketplace backend catalog', () => {
 
 	test('invalid query bounds or source selections fail before requesting the registry', async () => {
 		using owner = fixture();
-		for (const options of [
-			{ pageSize: 0 },
-			{ pageSize: 1.5 },
-			{ query: 'x'.repeat(4097) },
-			{ sourceIds: ['unknown'] },
-			{ sourceIds: ['extensions', 'extensions'] },
-		]) {
+		for (const options of [{ pageSize: 0 }, { pageSize: 1.5 }, { query: 'x'.repeat(4097) }, { sourceIds: ['unknown'] }, { sourceIds: ['extensions', 'extensions'] }]) {
 			await assert.rejects(owner.service.query(options, CancellationToken.None), /invalid/);
 		}
 		await assert.rejects(owner.service.query({}, CancellationToken.Cancelled), isCancellationError);

@@ -65,12 +65,7 @@ export class BreadcrumbsWidget extends Disposable {
 		this.scrollable = this._register(
 			new ScrollableElement(container, {
 				direction: 'horizontal',
-				horizontal:
-					horizontalScrollbarVisibility === ScrollbarVisibility.Hidden
-						? 'hidden'
-						: horizontalScrollbarVisibility === ScrollbarVisibility.Visible
-							? 'visible'
-							: 'auto',
+				horizontal: horizontalScrollbarVisibility === ScrollbarVisibility.Hidden ? 'hidden' : horizontalScrollbarVisibility === ScrollbarVisibility.Visible ? 'visible' : 'auto',
 				scrollbarSize: horizontalScrollbarSize,
 				tabIndex: -1,
 			}),
@@ -124,12 +119,7 @@ export class BreadcrumbsWidget extends Disposable {
 				if (!this.enabled || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
 					return;
 				}
-				if (
-					event.key === 'ArrowLeft' ||
-					event.key === 'ArrowRight' ||
-					event.key === 'Home' ||
-					event.key === 'End'
-				) {
+				if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Home' || event.key === 'End') {
 					event.preventDefault();
 					event.stopPropagation();
 					switch (event.key) {

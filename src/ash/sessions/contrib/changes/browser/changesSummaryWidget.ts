@@ -31,9 +31,7 @@ export class ChangesSummaryWidget extends Disposable {
 				element,
 				derived(reader => {
 					const statistics = this.summary.read(reader);
-					return statistics
-						? { files: statistics.files, insertions: statistics.additions, deletions: statistics.deletions }
-						: undefined;
+					return statistics ? { files: statistics.files, insertions: statistics.additions, deletions: statistics.deletions } : undefined;
 				}),
 				true,
 			),

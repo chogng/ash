@@ -84,10 +84,7 @@ export class TextPropertiesWidget extends Disposable {
 				loadFonts.enabled = true;
 				fontMessage.textContent = families.length
 					? localize('sessions.design.fontsLoaded', '{0} font families available.', new Set(families).size)
-					: localize(
-							'sessions.design.fontsUnavailable',
-							'Font access is unavailable. You can enter a font family name.',
-						);
+					: localize('sessions.design.fontsUnavailable', 'Font access is unavailable. You can enter a font family name.');
 			}),
 		);
 		this.updateFonts();
@@ -98,10 +95,7 @@ export class TextPropertiesWidget extends Disposable {
 			['italic', localize('sessions.design.textItalic', 'Italic')],
 		]);
 		this.input('fill', localize('sessions.design.textColor', 'Text color'), 'text');
-		this.number('lineHeight', localize('sessions.design.lineHeight', 'Line height'), 0).placeholder = localize(
-			'sessions.design.textAuto',
-			'Auto',
-		);
+		this.number('lineHeight', localize('sessions.design.lineHeight', 'Line height'), 0).placeholder = localize('sessions.design.textAuto', 'Auto');
 		this.select('lineHeightUnit', localize('sessions.design.lineHeightUnit', 'Line height unit'), [
 			['px', 'px'],
 			['percent', '%'],
@@ -141,20 +135,10 @@ export class TextPropertiesWidget extends Disposable {
 		this.styleSelect = h(document, 'select', {
 			attributes: { 'aria-label': localize('sessions.design.rangeTextStyle', 'Text selection style') },
 		});
-		this.domNode.append(
-			h(
-				document,
-				'label',
-				{ className: 'ash-design-property-wide' },
-				localize('sessions.design.rangeTextStyle', 'Text selection style'),
-				this.styleSelect,
-			),
-		);
+		this.domNode.append(h(document, 'label', { className: 'ash-design-property-wide' }, localize('sessions.design.rangeTextStyle', 'Text selection style'), this.styleSelect));
 		this._register(
 			addDisposableListener(this.styleSelect, 'change', () => {
-				const style = getDesignResourceCatalog(this.controller.model.value.resources, true).styles.find(
-					style => style.id === this.styleSelect.value,
-				);
+				const style = getDesignResourceCatalog(this.controller.model.value.resources, true).styles.find(style => style.id === this.styleSelect.value);
 				if (!this.shape || !style) {
 					return;
 				}
@@ -165,12 +149,7 @@ export class TextPropertiesWidget extends Disposable {
 				}
 			}),
 		);
-		const details = h(
-			document,
-			'details',
-			{ className: 'ash-design-text-details ash-design-property-wide' },
-			h(document, 'summary', {}, localize('sessions.design.typeDetails', 'Type details')),
-		);
+		const details = h(document, 'details', { className: 'ash-design-text-details ash-design-property-wide' }, h(document, 'summary', {}, localize('sessions.design.typeDetails', 'Type details')));
 		const advanced = h(document, 'div', { className: 'ash-design-text-properties' });
 		details.append(advanced);
 		this.domNode.append(details);
@@ -181,10 +160,7 @@ export class TextPropertiesWidget extends Disposable {
 				['none', localize('sessions.design.textNone', 'None')],
 				['underline', localize('sessions.design.textUnderline', 'Underline')],
 				['line-through', localize('sessions.design.textStrikethrough', 'Strikethrough')],
-				[
-					'underline line-through',
-					localize('sessions.design.textBothDecorations', 'Underline and strikethrough'),
-				],
+				['underline line-through', localize('sessions.design.textBothDecorations', 'Underline and strikethrough')],
 			],
 			false,
 			true,
@@ -239,20 +215,8 @@ export class TextPropertiesWidget extends Disposable {
 			true,
 			advanced,
 		);
-		this.number(
-			'paragraphSpacing',
-			localize('sessions.design.paragraphSpacing', 'Paragraph spacing'),
-			0,
-			undefined,
-			advanced,
-		);
-		this.number(
-			'paragraphIndent',
-			localize('sessions.design.paragraphIndent', 'Paragraph indent'),
-			undefined,
-			undefined,
-			advanced,
-		);
+		this.number('paragraphSpacing', localize('sessions.design.paragraphSpacing', 'Paragraph spacing'), 0, undefined, advanced);
+		this.number('paragraphIndent', localize('sessions.design.paragraphIndent', 'Paragraph indent'), undefined, undefined, advanced);
 		this.select(
 			'listType',
 			localize('sessions.design.textList', 'List'),
@@ -294,42 +258,19 @@ export class TextPropertiesWidget extends Disposable {
 		const truncate = h(document, 'input', { properties: { type: 'checkbox' } });
 		this.field(advanced, 'textTruncate', localize('sessions.design.textTruncate', 'Truncate text'), truncate);
 		this._register(addDisposableListener(truncate, 'change', () => this.layer({ textTruncate: truncate.checked })));
-		const lines = this.number(
-			'maxLines',
-			localize('sessions.design.textMaxLines', 'Max lines'),
-			1,
-			10000,
-			advanced,
-			true,
-		);
+		const lines = this.number('maxLines', localize('sessions.design.textMaxLines', 'Max lines'), 1, 10000, advanced, true);
 		lines.step = '1';
 		lines.placeholder = localize('sessions.design.textAuto', 'Auto');
-		this._register(
-			editor.onDidChangeSelection(() =>
-				this.update(this.shape ? this.commands.text.get(this.shape.id) : undefined),
-			),
-		);
+		this._register(editor.onDidChangeSelection(() => this.update(this.shape ? this.commands.text.get(this.shape.id) : undefined)));
 	}
 	private updateFonts(): void {
-		this.fontList.replaceChildren(
-			...[...this.fontFamilies]
-				.sort()
-				.map(family => h(this.domNode.ownerDocument, 'option', { properties: { value: family } })),
-		);
+		this.fontList.replaceChildren(...[...this.fontFamilies].sort().map(family => h(this.domNode.ownerDocument, 'option', { properties: { value: family } })));
 	}
 
-	private field(
-		parent: HTMLElement,
-		key: keyof DesignTextProperties | 'text',
-		label: string,
-		control: Control,
-		wide = false,
-	): void {
+	private field(parent: HTMLElement, key: keyof DesignTextProperties | 'text', label: string, control: Control, wide = false): void {
 		control.setAttribute('aria-label', label);
 		this.controls.set(key, control);
-		parent.append(
-			h(parent.ownerDocument, 'label', { className: wide ? 'ash-design-property-wide' : '' }, label, control),
-		);
+		parent.append(h(parent.ownerDocument, 'label', { className: wide ? 'ash-design-property-wide' : '' }, label, control));
 	}
 	private input(key: keyof DesignTextStyle, label: string, type: string, wide = false): HTMLInputElement {
 		const input = h(this.domNode.ownerDocument, 'input', { properties: { type } });
@@ -346,14 +287,7 @@ export class TextPropertiesWidget extends Disposable {
 		);
 		return input;
 	}
-	private number(
-		key: keyof DesignTextProperties,
-		label: string,
-		min?: number,
-		max?: number,
-		parent = this.domNode,
-		layer = false,
-	): HTMLInputElement {
+	private number(key: keyof DesignTextProperties, label: string, min?: number, max?: number, parent = this.domNode, layer = false): HTMLInputElement {
 		const input = h(parent.ownerDocument, 'input', { properties: { type: 'number', step: 'any' } });
 		if (min !== undefined) {
 			input.min = String(min);
@@ -365,11 +299,7 @@ export class TextPropertiesWidget extends Disposable {
 		this._register(
 			addDisposableListener(input, 'change', () => {
 				const value = input.value === '' ? undefined : input.valueAsNumber;
-				if (
-					!input.checkValidity() ||
-					(value !== undefined && !Number.isFinite(value)) ||
-					(key === 'fontSize' && value === undefined)
-				) {
+				if (!input.checkValidity() || (value !== undefined && !Number.isFinite(value)) || (key === 'fontSize' && value === undefined)) {
 					input.setAttribute('aria-invalid', 'true');
 					return;
 				}
@@ -383,32 +313,14 @@ export class TextPropertiesWidget extends Disposable {
 		);
 		return input;
 	}
-	private select(
-		key: keyof DesignTextProperties,
-		label: string,
-		options: readonly (readonly [string, string])[],
-		layer = false,
-		wide = false,
-		parent = this.domNode,
-	): void {
+	private select(key: keyof DesignTextProperties, label: string, options: readonly (readonly [string, string])[], layer = false, wide = false, parent = this.domNode): void {
 		const select = h(parent.ownerDocument, 'select');
-		select.append(
-			h(
-				parent.ownerDocument,
-				'option',
-				{ properties: { value: '', disabled: true } },
-				localize('sessions.design.textMixed', 'Mixed'),
-			),
-		);
+		select.append(h(parent.ownerDocument, 'option', { properties: { value: '', disabled: true } }, localize('sessions.design.textMixed', 'Mixed')));
 		for (const [value, name] of options) {
 			select.append(h(parent.ownerDocument, 'option', { properties: { value } }, name));
 		}
 		this.field(parent, key, label, select, wide);
-		this._register(
-			addDisposableListener(select, 'change', () =>
-				layer ? this.layer({ [key]: select.value }) : this.style({ [key]: select.value }),
-			),
-		);
+		this._register(addDisposableListener(select, 'change', () => (layer ? this.layer({ [key]: select.value }) : this.style({ [key]: select.value }))));
 	}
 	private style(style: DesignTextStyle): void {
 		if (!this.shape || this.controller.isBusy) {
@@ -425,12 +337,7 @@ export class TextPropertiesWidget extends Disposable {
 					style: { ...run.style, ...convertDesignTextUnits({ ...this.shape!, ...run.style }, style) },
 					...(run.styleId
 						? {
-								overrides: [
-									...new Set([
-										...(run.overrides ?? []),
-										...(Object.keys(style) as (keyof DesignTextStyle)[]),
-									]),
-								],
+								overrides: [...new Set([...(run.overrides ?? []), ...(Object.keys(style) as (keyof DesignTextStyle)[])])],
 							}
 						: {}),
 				})),
@@ -468,15 +375,8 @@ export class TextPropertiesWidget extends Disposable {
 			this.updateFonts();
 		}
 		const range = this.editor.editingId === shape.id ? this.editor.range : undefined;
-		const segments =
-			range && range.start !== range.end
-				? designTextSegments(shape, range.start, range.end)
-				: !range
-					? designTextSegments(shape)
-					: [];
-		const styles = segments.length
-			? segments.map(run => ({ ...shape, ...run.style }))
-			: [{ ...designTextStyleAt(shape, Math.max(0, (range?.start ?? 0) - 1)), ...this.editor.typingStyle }];
+		const segments = range && range.start !== range.end ? designTextSegments(shape, range.start, range.end) : !range ? designTextSegments(shape) : [];
+		const styles = segments.length ? segments.map(run => ({ ...shape, ...run.style })) : [{ ...designTextStyleAt(shape, Math.max(0, (range?.start ?? 0) - 1)), ...this.editor.typingStyle }];
 		const defaults: DesignTextProperties = {
 			fontFamily: 'sans-serif',
 			fontWeight: 400,
@@ -502,10 +402,7 @@ export class TextPropertiesWidget extends Disposable {
 				: localize('sessions.design.textSelectionCount', '{0} characters selected', range.end - range.start)
 			: localize('sessions.design.textAll', 'All text');
 		for (const [key, control] of this.controls) {
-			control.disabled =
-				this.controller.isBusy ||
-				(key === 'maxLines' &&
-					(!shape.textTruncate || !shape.textAutoResize || shape.textAutoResize === 'none'));
+			control.disabled = this.controller.isBusy || (key === 'maxLines' && (!shape.textTruncate || !shape.textAutoResize || shape.textAutoResize === 'none'));
 			if (control.ownerDocument.activeElement === control) {
 				continue;
 			}
@@ -531,27 +428,14 @@ export class TextPropertiesWidget extends Disposable {
 			}
 			control.removeAttribute('aria-invalid');
 		}
-		const stylesAvailable = getDesignResourceCatalog(this.controller.model.value.resources, true).styles.filter(
-			style => style.kind === 'text',
-		);
+		const stylesAvailable = getDesignResourceCatalog(this.controller.model.value.resources, true).styles.filter(style => style.kind === 'text');
 		this.styleSelect.replaceChildren(
-			h(
-				this.domNode.ownerDocument,
-				'option',
-				{ properties: { value: '' } },
-				localize('sessions.design.textChooseStyle', 'Choose text style'),
-			),
-			...stylesAvailable.map(style =>
-				h(this.domNode.ownerDocument, 'option', { properties: { value: style.id } }, style.name),
-			),
+			h(this.domNode.ownerDocument, 'option', { properties: { value: '' } }, localize('sessions.design.textChooseStyle', 'Choose text style')),
+			...stylesAvailable.map(style => h(this.domNode.ownerDocument, 'option', { properties: { value: style.id } }, style.name)),
 		);
 		const styleIds = segments.map(run => run.styleId ?? shape.styleBindings?.text);
 		this.styleSelect.value =
-			range?.start === range?.end && this.editor.typingStyleId
-				? this.editor.typingStyleId
-				: styleIds.length && styleIds.every(id => id === styleIds[0])
-					? (styleIds[0] ?? '')
-					: '';
+			range?.start === range?.end && this.editor.typingStyleId ? this.editor.typingStyleId : styleIds.length && styleIds.every(id => id === styleIds[0]) ? (styleIds[0] ?? '') : '';
 		this.styleSelect.disabled = this.controller.isBusy;
 	}
 }

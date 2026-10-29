@@ -5,10 +5,7 @@ import { fileIconThemeSchema, fileIconThemeSchemaId } from './fileIconThemeSchem
 import { productIconThemeSchema, productIconThemeSchemaId } from './productIconThemeSchema.js';
 import type { JsonSchema } from '../../../../base/common/jsonSchema.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
-import {
-	Extensions as JSONExtensions,
-	type IJSONContributionRegistry,
-} from '../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
+import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { Colors } from '../../../../platform/theme/common/colorRegistry.js';
 import '../../../../platform/theme/common/colorTheme.js';
 import '../../../../editor/common/core/editorColorRegistry.js';
@@ -36,9 +33,7 @@ export const colorThemeSchema: JsonSchema = {
 		colors: {
 			type: 'object',
 			get properties() {
-				return Object.fromEntries(
-					Colors.getColors().map(entry => [entry.id, { ...color, description: entry.description }]),
-				);
+				return Object.fromEntries(Colors.getColors().map(entry => [entry.id, { ...color, description: entry.description }]));
 			},
 			additionalProperties: color,
 		},
@@ -52,8 +47,7 @@ export const colorThemeSchema: JsonSchema = {
 						.map(type => [
 							type.id,
 							{
-								...(colorThemeSchema.properties!.semanticTokenColors!
-									.additionalProperties as JsonSchema),
+								...(colorThemeSchema.properties!.semanticTokenColors!.additionalProperties as JsonSchema),
 								description: type.description,
 							},
 						]),

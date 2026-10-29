@@ -1,25 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`terminal screen commands navigate retained output and clear selection from the keyboard in ${locale}`, async ({
-		page,
-	}) => {
+	test(`terminal screen commands navigate retained output and clear selection from the keyboard in ${locale}`, async ({ page }) => {
 		await page.goto(`/terminal.html?input&groups&clipboard&browser&locale=${locale}`);
 		await page.waitForFunction(() => Boolean(window.ashTerminalInputIntegration));
 		await page.evaluate(() => {
-			window.ashTerminalInputIntegration.feed(
-				Array.from({ length: 120 }, (_, index) => `screen-row-${index}\r\n`).join(''),
-			);
+			window.ashTerminalInputIntegration.feed(Array.from({ length: 120 }, (_, index) => `screen-row-${index}\r\n`).join(''));
 		});
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot()))
-			.toContain('screen-row-119');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('screen-row-119');
 		await page.evaluate(() => window.ashTerminalInputIntegration.clear());
 		const command = async (id: string): Promise<void> => {
-			await page.evaluate(
-				id => window.ashTerminalInputIntegration.command(id),
-				`workbench.action.terminal.${id}`,
-			);
+			await page.evaluate(id => window.ashTerminalInputIntegration.command(id), `workbench.action.terminal.${id}`);
 		};
 		await command('scrollToTop');
 		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.viewport().top)).toBe(0);
@@ -28,9 +19,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await command('scrollUp');
 		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.viewport().top)).toBe(0);
 		await command('scrollDownPage');
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.viewport().top))
-			.toBeGreaterThan(1);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.viewport().top)).toBeGreaterThan(1);
 		await command('scrollUpPage');
 		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.viewport().top)).toBe(0);
 		await command('scrollToBottom');
@@ -54,9 +43,7 @@ for (const locale of ['en', 'zh-CN']) {
 			)
 			.toBe(true);
 		await command('selectAll');
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalClipboardIntegration.selection()))
-			.toContain('screen-row-0');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalClipboardIntegration.selection())).toContain('screen-row-0');
 		await textarea.press('Escape');
 		await expect.poll(() => page.evaluate(() => window.ashTerminalClipboardIntegration.selection())).toBe('');
 		await expect(textarea).toBeFocused();
@@ -92,35 +79,21 @@ test('terminal ConPTY height expansion retains history before a full viewport re
 	await page.goto('/terminal.html?stream&commandModel&os=windows');
 	await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
 	await page.evaluate(() => window.ashTerminalStreamIntegration.start());
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot()))
-		.toContain('result 中文🙂');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toContain('result 中文🙂');
 	await page.evaluate(async () => {
 		const terminal = window.ashTerminalStreamIntegration;
 		terminal.stickyScroll.resize(80, 10);
-		terminal.feedModel(
-			'\r\n' + Array.from({ length: 180 }, (_, index) => `pty-row-${index}\r\n`).join('') + 'prompt>',
-		);
+		terminal.feedModel('\r\n' + Array.from({ length: 180 }, (_, index) => `pty-row-${index}\r\n`).join('') + 'prompt>');
 	});
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot()))
-		.toContain('pty-row-179');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toContain('pty-row-179');
 	await page.evaluate(() => {
 		const terminal = window.ashTerminalStreamIntegration;
 		terminal.stickyScroll.resize(80, 12);
-		terminal.feedModel(
-			'\x1b[H\x1b[2J' +
-				Array.from({ length: 9 }, (_, index) => `pty-row-${171 + index}\r\n`).join('') +
-				'prompt>',
-		);
+		terminal.feedModel('\x1b[H\x1b[2J' + Array.from({ length: 9 }, (_, index) => `pty-row-${171 + index}\r\n`).join('') + 'prompt>');
 	});
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed()))
-		.toContain('\x1b[H\x1b[2J');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed())).toContain('\x1b[H\x1b[2J');
 	const text = await page.evaluate(() => window.ashTerminalStreamIntegration.snapshot());
-	expect([...text!.matchAll(/^pty-row-(\d+)$/gmu)].map(match => Number(match[1]))).toEqual(
-		Array.from({ length: 180 }, (_, index) => index),
-	);
+	expect([...text!.matchAll(/^pty-row-(\d+)$/gmu)].map(match => Number(match[1]))).toEqual(Array.from({ length: 180 }, (_, index) => index));
 	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
 });
 
@@ -128,48 +101,26 @@ test('terminal ConPTY narrowing retains output when a long prompt wraps during r
 	await page.goto('/terminal.html?stream&commandModel&os=windows');
 	await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
 	await page.evaluate(() => window.ashTerminalStreamIntegration.start());
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot()))
-		.toContain('result 中文🙂');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toContain('result 中文🙂');
 	await page.evaluate(() => {
 		const terminal = window.ashTerminalStreamIntegration;
 		terminal.stickyScroll.resize(80, 10);
-		terminal.feedModel(
-			'\r\n' +
-				Array.from({ length: 180 }, (_, index) => `pty-row-${index}\r\n`).join('') +
-				'PS ' +
-				'/folder'.repeat(11) +
-				'> ',
-		);
+		terminal.feedModel('\r\n' + Array.from({ length: 180 }, (_, index) => `pty-row-${index}\r\n`).join('') + 'PS ' + '/folder'.repeat(11) + '> ');
 	});
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot()))
-		.toContain('pty-row-179');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toContain('pty-row-179');
 	await page.evaluate(() => {
 		const terminal = window.ashTerminalStreamIntegration;
 		terminal.stickyScroll.resize(37, 10);
-		terminal.feedModel(
-			'\x1b[H\x1b[2J' +
-				Array.from({ length: 7 }, (_, index) => `pty-row-${173 + index}\r\n`).join('') +
-				'PS ' +
-				'/folder'.repeat(11) +
-				'> ',
-		);
+		terminal.feedModel('\x1b[H\x1b[2J' + Array.from({ length: 7 }, (_, index) => `pty-row-${173 + index}\r\n`).join('') + 'PS ' + '/folder'.repeat(11) + '> ');
 	});
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed()))
-		.toContain('\x1b[H\x1b[2J');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed())).toContain('\x1b[H\x1b[2J');
 	const text = await page.evaluate(() => window.ashTerminalStreamIntegration.snapshot());
-	expect([...text!.matchAll(/^pty-row-(\d+)$/gmu)].map(match => Number(match[1]))).toEqual(
-		Array.from({ length: 180 }, (_, index) => index),
-	);
+	expect([...text!.matchAll(/^pty-row-(\d+)$/gmu)].map(match => Number(match[1]))).toEqual(Array.from({ length: 180 }, (_, index) => index));
 	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
 });
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`terminal path drops insert literal filenames and recent directories support keyboard acceptance and cancellation in ${locale}`, async ({
-		page,
-	}) => {
+	test(`terminal path drops insert literal filenames and recent directories support keyboard acceptance and cancellation in ${locale}`, async ({ page }) => {
 		await page.goto(`/terminal.html?input&groups&clipboard&browser&locale=${locale}`);
 		await page.waitForFunction(() => Boolean(window.ashTerminalInputIntegration));
 		await page.evaluate(() => window.ashTerminalInputIntegration.clear());
@@ -183,24 +134,17 @@ for (const locale of ['en', 'zh-CN']) {
 					return transfer;
 				}),
 			});
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes))
-			.toEqual(["'/workspace/space '\"'\"'$(literal).sh'"]);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(["'/workspace/space '\"'\"'$(literal).sh'"]);
 		await page.evaluate(() => {
 			void window.ashTerminalInputIntegration.command('workbench.action.terminal.goToRecentDirectory');
 		});
 		await page.evaluate(() => window.ashTerminalInputIntegration.visit("/workspace/quoted ' directory"));
 		// The backend fixture publishes cwd through the normal output-commit metadata path.
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.cwd()))
-			.toBe("/workspace/quoted ' directory");
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.cwd())).toBe("/workspace/quoted ' directory");
 		await expect(page.getByText("/workspace/quoted ' directory", { exact: true })).toBeVisible();
 		await expect(
 			page.getByRole('combobox', {
-				name:
-					locale === 'zh-CN'
-						? '此终端执行宿主上的最近目录'
-						: 'Recent directories on this terminal execution host',
+				name: locale === 'zh-CN' ? '此终端执行宿主上的最近目录' : 'Recent directories on this terminal execution host',
 				exact: true,
 			}),
 		).toBeVisible();
@@ -211,9 +155,7 @@ for (const locale of ['en', 'zh-CN']) {
 		});
 		await expect(page.getByText("/workspace/quoted ' directory", { exact: true })).toBeVisible();
 		await page.keyboard.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes))
-			.toEqual(["'/workspace/space '\"'\"'$(literal).sh'", "cd -- '/workspace/quoted '\"'\"' directory'\r"]);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(["'/workspace/space '\"'\"'$(literal).sh'", "cd -- '/workspace/quoted '\"'\"' directory'\r"]);
 		await page.evaluate(() => window.ashTerminalInputIntegration.close());
 	});
 }
@@ -257,9 +199,7 @@ test('Enter input without shell integration records fallback positions and erase
 	await page.evaluate(() => window.ashTerminalIntegration.start());
 	await page.evaluate(() => window.ashTerminalIntegration.ready());
 	await page.evaluate(() => window.ashTerminalIntegration.write('prompt> echo text'));
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalIntegration.snapshot(100)))
-		.toContain('prompt> echo text');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalIntegration.snapshot(100))).toContain('prompt> echo text');
 	await page.locator('.xterm-helper-textarea').focus();
 	await page.keyboard.press('Enter');
 	await expect.poll(() => page.evaluate(() => window.ashTerminalIntegration.markers().length)).toBe(1);
@@ -269,9 +209,7 @@ test('Enter input without shell integration records fallback positions and erase
 	expect(errors).toEqual([]);
 });
 
-test('terminal Find uses Chinese labels and keeps a bounded overlay with visible focus in high contrast', async ({
-	page,
-}) => {
+test('terminal Find uses Chinese labels and keeps a bounded overlay with visible focus in high contrast', async ({ page }) => {
 	await page.goto('/terminal.html?input&find&locale=zh-CN');
 	await page.waitForFunction(() => Boolean(window.ashTerminalFindIntegration));
 	await page.evaluate(() => window.ashTerminalFindIntegration.command('workbench.action.terminal.focusFind'));
@@ -332,9 +270,7 @@ test('program text follows child paste mode while raw keyboard input stays uncha
 	await page.goto('/terminal.html?input');
 	await page.waitForFunction(() => Boolean(window.ashTerminalInputIntegration));
 	// A startup device query proves input was bound before the first output was parsed.
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes))
-		.toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
 	await page.evaluate(() => window.ashTerminalInputIntegration.clear());
 	await page.keyboard.press('Control+j');
 	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['\n']);
@@ -345,12 +281,7 @@ test('program text follows child paste mode while raw keyboard input stays uncha
 	await page.evaluate(() => window.ashTerminalInputIntegration.feed('\x1b[?2004l'));
 	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.pasteMode())).toBe(false);
 	await page.evaluate(() => window.ashTerminalInputIntegration.send('done\r', true, true));
-	expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([
-		'\n',
-		'one\rtwo\r',
-		'\x1b[200~three\rfour\x1b[201~\r',
-		'done\r',
-	]);
+	expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['\n', 'one\rtwo\r', '\x1b[200~three\rfour\x1b[201~\r', 'done\r']);
 	await page.evaluate(() => window.ashTerminalInputIntegration.close());
 	expect(errors).toEqual([]);
 });
@@ -358,21 +289,13 @@ test('program text follows child paste mode while raw keyboard input stays uncha
 test('instance reattachment preserves its screen and binds raw input only once', async ({ page }) => {
 	await page.goto('/terminal.html?input');
 	await page.waitForFunction(() => Boolean(window.ashTerminalInputIntegration));
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot()))
-		.toContain('retained screen');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('retained screen');
 	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes.length)).toBe(1);
 	await page.evaluate(() => window.ashTerminalInputIntegration.clear());
 	expect(await page.evaluate(() => window.ashTerminalInputIntegration.reattach())).toBe(true);
 	await expect(page.locator('.xterm-helper-textarea').last()).toBeFocused();
 	await page.keyboard.type('after');
-	await expect
-		.poll(() =>
-			page.evaluate(() =>
-				window.ashTerminalInputIntegration.writes.filter(value => typeof value === 'string').join(''),
-			),
-		)
-		.toBe('after');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes.filter(value => typeof value === 'string').join(''))).toBe('after');
 	expect(await page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('retained screen');
 	await page.evaluate(() => window.ashTerminalInputIntegration.close());
 	await expect(page.locator('.ash-terminal-instance')).toHaveCount(0);
@@ -393,9 +316,7 @@ test('host PTY created before the contribution preserves early output and remain
 		window.ashEmbedderTerminalIntegration.output('later output\r\n');
 		window.ashEmbedderTerminalIntegration.exit(0);
 	});
-	await expect(page.locator('.xterm-rows')).toHaveText(
-		/synchronous host output.*later output.*process exited with code 0/su,
-	);
+	await expect(page.locator('.xterm-rows')).toHaveText(/synchronous host output.*later output.*process exited with code 0/su);
 	expect(await page.evaluate(() => window.ashEmbedderTerminalIntegration.status())).toEqual({
 		opens: 1,
 		closes: 0,
@@ -451,9 +372,7 @@ test('terminal loads xterm on demand and preserves early display writes and firs
 });
 
 for (const requestFocus of [false, true]) {
-	test(`terminal activation ${requestFocus ? 'honors explicit focus' : 'preserves editor focus'}`, async ({
-		page,
-	}) => {
+	test(`terminal activation ${requestFocus ? 'honors explicit focus' : 'preserves editor focus'}`, async ({ page }) => {
 		await page.goto('/terminal.html?pane');
 		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
 		await page.locator('#outside').focus();
@@ -517,30 +436,20 @@ test('legacy mouse reports deliver their raw high bytes through xterm onBinary',
 	await expect
 		.poll(async () => {
 			await screen.click({ position: { x: 1100, y: 20 } });
-			return page.evaluate(() =>
-				window.ashTerminalInputIntegration.writes.some(
-					value => Array.isArray(value) && value.some(byte => byte >= 0x80),
-				),
-			);
+			return page.evaluate(() => window.ashTerminalInputIntegration.writes.some(value => Array.isArray(value) && value.some(byte => byte >= 0x80)));
 		})
 		.toBe(true);
-	expect(
-		await page.evaluate(() => window.ashTerminalInputIntegration.writes.filter(value => typeof value === 'string')),
-	).toEqual([]);
+	expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes.filter(value => typeof value === 'string'))).toEqual([]);
 	await page.evaluate(() => window.ashTerminalInputIntegration.close());
 });
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`terminal retains process output consumed before screen creation and its exit (${locale})`, async ({
-		page,
-	}) => {
+	test(`terminal retains process output consumed before screen creation and its exit (${locale})`, async ({ page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto(`/terminal.html?stream&deferred&locale=${locale}`);
 		await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status()))
-			.toEqual({ reads: [0, 1], events: ['succeeded', 'exit'], closes: 0, state: 'exited', remaining: 1 });
+		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status())).toEqual({ reads: [0, 1], events: ['succeeded', 'exit'], closes: 0, state: 'exited', remaining: 1 });
 		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.observed())).toBe('中文🙂\r\n');
 		await expect(page.locator('.xterm')).toHaveCount(0);
 		await page.locator('#outside').focus();
@@ -566,17 +475,13 @@ test('Shell output waits for xterm loading and preserves split UTF-8 before comp
 	try {
 		await page.goto('/terminal.html?stream');
 		await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status()))
-			.toEqual({ reads: [0], events: [], closes: 0, state: 'running', remaining: 1 });
+		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status())).toEqual({ reads: [0], events: [], closes: 0, state: 'running', remaining: 1 });
 		await expect(page.locator('.xterm')).toHaveCount(0);
 	} finally {
 		release();
 	}
 	await page.evaluate(() => window.ashTerminalStreamIntegration.start());
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status()))
-		.toEqual({ reads: [0, 1], events: ['succeeded', 'exit'], closes: 0, state: 'exited', remaining: 1 });
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status())).toEqual({ reads: [0, 1], events: ['succeeded', 'exit'], closes: 0, state: 'exited', remaining: 1 });
 	await expect(page.locator('.xterm-rows')).toHaveText(/中文🙂.*process exited with code 0/su);
 	await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
 	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
@@ -588,9 +493,7 @@ test('an existing hidden Shell parses and completes without revealing the panel 
 	await page.goto('/terminal.html?stream&hidden');
 	await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
 	await page.locator('#outside').focus();
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status()))
-		.toEqual({ reads: [0, 1], events: ['succeeded', 'exit'], closes: 0, state: 'exited', remaining: 1 });
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status())).toEqual({ reads: [0, 1], events: ['succeeded', 'exit'], closes: 0, state: 'exited', remaining: 1 });
 	await expect(page.locator('.ash-terminal-instance')).toBeHidden();
 	await expect(page.locator('#outside')).toBeFocused();
 	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
@@ -600,9 +503,7 @@ test('runCommands shortcuts execute with Terminal focused and keep command keys 
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/terminal.html?shortcuts');
-	await expect
-		.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalBatchIntegration)), errors }))
-		.toEqual({ ready: true, errors: [] });
+	await expect.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalBatchIntegration)), errors })).toEqual({ ready: true, errors: [] });
 	await page.evaluate(async () => {
 		window.ashTerminalIntegration.start();
 		await window.ashTerminalIntegration.ready();
@@ -610,20 +511,10 @@ test('runCommands shortcuts execute with Terminal focused and keep command keys 
 	const terminal = page.locator('.xterm-helper-textarea');
 	await expect(terminal).toBeFocused();
 	await terminal.press('Control+Alt+Y');
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalBatchIntegration.order))
-		.toEqual([{ source: 'shortcut' }, 'first finished', 'second']);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalBatchIntegration.order)).toEqual([{ source: 'shortcut' }, 'first finished', 'second']);
 	await terminal.press('Control+Alt+Z');
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalBatchIntegration.errors()))
-		.toEqual(['Unknown command: test.terminal.missing']);
-	expect(await page.evaluate(() => window.ashTerminalBatchIntegration.order)).toEqual([
-		{ source: 'shortcut' },
-		'first finished',
-		'second',
-		undefined,
-		'first finished',
-	]);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalBatchIntegration.errors())).toEqual(['Unknown command: test.terminal.missing']);
+	expect(await page.evaluate(() => window.ashTerminalBatchIntegration.order)).toEqual([{ source: 'shortcut' }, 'first finished', 'second', undefined, 'first finished']);
 	expect(await page.evaluate(() => window.ashTerminalIntegration.writes)).toEqual([]);
 	await terminal.press('x');
 	await expect.poll(() => page.evaluate(() => window.ashTerminalIntegration.writes)).toEqual(['x']);
@@ -631,9 +522,7 @@ test('runCommands shortcuts execute with Terminal focused and keep command keys 
 	await page.evaluate(() => window.ashTerminalIntegration.dispose());
 });
 
-test('hidden terminal view exposes its retained output without changing focus or creating a shell', async ({
-	page,
-}) => {
+test('hidden terminal view exposes its retained output without changing focus or creating a shell', async ({ page }) => {
 	await page.goto('/terminal.html?pane&existing');
 	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
 	await page.evaluate(() => window.ashTerminalIntegration.write('hidden output\r\n'));
@@ -656,23 +545,14 @@ test('terminal screen follows light, dark and high contrast themes after initial
 		['hcLight', { background: '#ffffff', foreground: '#000000', red: '#a00000' }],
 	] as const) {
 		expect(await page.evaluate(mode => window.ashTerminalIntegration.theme(mode), mode)).toEqual(expected);
-		const background =
-			mode === 'hcDark'
-				? 'rgb(0, 0, 0)'
-				: mode === 'dark'
-					? 'rgb(37, 37, 38)'
-					: mode === 'light'
-						? 'rgb(248, 248, 248)'
-						: 'rgb(255, 255, 255)';
+		const background = mode === 'hcDark' ? 'rgb(0, 0, 0)' : mode === 'dark' ? 'rgb(37, 37, 38)' : mode === 'light' ? 'rgb(248, 248, 248)' : 'rgb(255, 255, 255)';
 		await expect(page.locator('.xterm-scrollable-element')).toHaveCSS('background-color', background);
 		await expect(page.locator('.xterm-viewport')).toHaveCSS('background-color', background);
 	}
 	await page.evaluate(() => window.ashTerminalIntegration.dispose());
 });
 
-test('Windows revival preserves history across fragmented initial ConPTY paint and allows later clear', async ({
-	page,
-}) => {
+test('Windows revival preserves history across fragmented initial ConPTY paint and allows later clear', async ({ page }) => {
 	await page.goto('/terminal.html?stream&commandModel&reviveHistory');
 	await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
 	await page.evaluate(() => window.ashTerminalStreamIntegration.start());
@@ -706,9 +586,7 @@ test('child alternate scroll mode controls wheel input and restores its saved va
 		await window.ashTerminalIntegration.snapshot(1000);
 	});
 	await page.mouse.wheel(0, 60);
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalIntegration.writes.join('')))
-		.toMatch(/^x(?:\x1b\[B)+$/u);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalIntegration.writes.join(''))).toMatch(/^x(?:\x1b\[B)+$/u);
 	await page.evaluate(() => window.ashTerminalIntegration.dispose());
 });
 
@@ -718,16 +596,11 @@ test('terminal quick fixes preserve current input and cancel when command output
 	await page.evaluate(() => window.ashTerminalStreamIntegration.start());
 	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().input)).toBe('|');
 	await page.evaluate(() => window.ashTerminalStreamIntegration.feedModel('pending command'));
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().input))
-		.toBe('pending command|');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().input)).toBe('pending command|');
 	const before = await page.evaluate(() => window.ashTerminalStreamIntegration.quickFix.writes());
 	const blocked = page.evaluate(() => window.ashTerminalStreamIntegration.quickFix.command());
 	const picker = page.getByRole('combobox', { name: 'Terminal Quick Fixes', exact: true });
-	await expect(picker).toHaveAttribute(
-		'placeholder',
-		'Quick fixes require an empty shell prompt; current input is preserved',
-	);
+	await expect(picker).toHaveAttribute('placeholder', 'Quick fixes require an empty shell prompt; current input is preserved');
 	await expect(page.getByRole('option')).toHaveCount(0);
 	await picker.press('Escape');
 	await blocked;
@@ -743,9 +616,7 @@ test('terminal quick fixes preserve current input and cancel when command output
 			cwd: '/workspace',
 			timestampMillis: 201,
 		});
-		fixture.feedModel(
-			'fatal: The current branch topic has no upstream branch.\r\n    git push --set-upstream origin topic\r\n',
-		);
+		fixture.feedModel('fatal: The current branch topic has no upstream branch.\r\n    git push --set-upstream origin topic\r\n');
 		fixture.environmentFrame({ type: 'commandFinished', exitCode: 1, durationMillis: 1 });
 		fixture.environmentFrame({ type: 'promptStart' });
 		fixture.feedModel('$ ');
@@ -762,61 +633,39 @@ test('terminal quick fixes preserve current input and cancel when command output
 });
 
 for (const clipboardFirst of [false, true])
-	test(`terminal clipboard commands copy the parsed selection and preserve Shell Ctrl+C (clipboard first: ${clipboardFirst})`, async ({
-		page,
-	}) => {
+	test(`terminal clipboard commands copy the parsed selection and preserve Shell Ctrl+C (clipboard first: ${clipboardFirst})`, async ({ page }) => {
 		await page.goto(`/terminal.html?input&clipboard${clipboardFirst ? '&clipboardFirst' : ''}`);
 		await page.waitForFunction(() => Boolean(window.ashTerminalClipboardIntegration));
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot()))
-			.toContain('retained screen');
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes))
-			.toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('retained screen');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
 		await page.evaluate(() => {
 			window.ashTerminalInputIntegration.clear();
 			window.ashTerminalClipboardIntegration.select(0, 8);
 		});
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalClipboardIntegration.selectedContext()))
-			.toBe(true);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalClipboardIntegration.selectedContext())).toBe(true);
 		const copyKey = await page.evaluate(() => (/Mac/u.test(navigator.platform) ? 'Meta+c' : 'Control+Shift+c'));
 		await page.keyboard.press(copyKey);
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalClipboardIntegration.copied))
-			.toEqual(['retained']);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalClipboardIntegration.copied)).toEqual(['retained']);
 		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([]);
 		await page.getByRole('textbox', { name: 'Outside terminal' }).focus();
 		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.selectedContext())).toBe(false);
 		await page.locator('.xterm-helper-textarea').focus();
 		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.selectedContext())).toBe(true);
-		await page.evaluate(() =>
-			window.ashTerminalClipboardIntegration.command('workbench.action.terminal.copyAndClearSelection'),
-		);
-		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.copied)).toEqual([
-			'retained',
-			'retained',
-		]);
+		await page.evaluate(() => window.ashTerminalClipboardIntegration.command('workbench.action.terminal.copyAndClearSelection'));
+		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.copied)).toEqual(['retained', 'retained']);
 		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.selection())).toBe('');
 		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.selectedContext())).toBe(false);
 		await page.keyboard.press('Control+c');
 		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['\x03']);
-		await page.evaluate(() =>
-			window.ashTerminalClipboardIntegration.command('workbench.action.terminal.copySelection'),
-		);
-		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.copied)).toEqual([
-			'retained',
-			'retained',
-		]);
+		await page.evaluate(() => window.ashTerminalClipboardIntegration.command('workbench.action.terminal.copySelection'));
+		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.copied)).toEqual(['retained', 'retained']);
 		await page.evaluate(() => window.ashTerminalInputIntegration.close());
 	});
 
 test('terminal selection auto-copy and right-click copy/paste use the live terminal selection', async ({ page }) => {
 	await page.goto('/terminal.html?input&clipboard');
 	await page.waitForFunction(() => Boolean(window.ashTerminalClipboardIntegration));
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot()))
-		.toContain('retained screen');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('retained screen');
 	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toContain('\x1b[?1;2c');
 	await page.evaluate(async () => {
 		window.ashTerminalInputIntegration.clear();
@@ -826,15 +675,11 @@ test('terminal selection auto-copy and right-click copy/paste use the live termi
 	});
 	await expect.poll(() => page.evaluate(() => window.ashTerminalClipboardIntegration.copied)).toEqual(['retained']);
 	await page.locator('.xterm-screen').click({ button: 'right' });
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalClipboardIntegration.copied))
-		.toEqual(['retained', 'retained']);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalClipboardIntegration.copied)).toEqual(['retained', 'retained']);
 	expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.selection())).toBe('');
 	await page.evaluate(() => window.ashTerminalClipboardIntegration.setText('from right click'));
 	await page.locator('.xterm-screen').click({ button: 'right' });
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes))
-		.toEqual(['from right click']);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['from right click']);
 	await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
 	await page.evaluate(async () => {
 		await window.ashTerminalIntegration.configure('terminal.integrated.copyOnSelection', false);
@@ -842,9 +687,7 @@ test('terminal selection auto-copy and right-click copy/paste use the live termi
 		await window.ashTerminalIntegration.configure('terminal.integrated.rightClickBehavior', 'paste');
 	});
 	await page.locator('.xterm-screen').click({ button: 'right' });
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes))
-		.toEqual(['from right click', 'from right click']);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['from right click', 'from right click']);
 	expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.copied)).toEqual(['retained', 'retained']);
 	await page.evaluate(() => window.ashTerminalInputIntegration.close());
 });
@@ -874,35 +717,21 @@ test('terminal right-click paste drops clipboard text after focus leaves and ret
 });
 
 for (const clipboardFirst of [false, true])
-	test(`terminal clipboard paste uses acknowledged input and the current child paste mode (clipboard first: ${clipboardFirst})`, async ({
-		page,
-	}) => {
+	test(`terminal clipboard paste uses acknowledged input and the current child paste mode (clipboard first: ${clipboardFirst})`, async ({ page }) => {
 		await page.goto(`/terminal.html?input&clipboard${clipboardFirst ? '&clipboardFirst' : ''}`);
 		await page.waitForFunction(() => Boolean(window.ashTerminalClipboardIntegration));
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot()))
-			.toContain('retained screen');
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes))
-			.toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('retained screen');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
 		await page.evaluate(() => {
 			window.ashTerminalInputIntegration.clear();
 			window.ashTerminalClipboardIntegration.setText('中文\r\nsecond');
 		});
-		const pasteKey = await page.evaluate(() =>
-			/Mac/u.test(navigator.platform)
-				? 'Meta+v'
-				: /Linux/u.test(navigator.platform)
-					? 'Control+Shift+v'
-					: 'Control+v',
-		);
+		const pasteKey = await page.evaluate(() => (/Mac/u.test(navigator.platform) ? 'Meta+v' : /Linux/u.test(navigator.platform) ? 'Control+Shift+v' : 'Control+v'));
 		await page.keyboard.press(pasteKey);
 		await expect(page.getByRole('dialog')).toBeVisible();
 		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([]);
 		await page.getByRole('button', { name: 'Paste', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes))
-			.toEqual(['中文\rsecond']);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['中文\rsecond']);
 		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.reads())).toBe(1);
 		await page.evaluate(() => window.ashTerminalInputIntegration.feed('\x1b[?2004h'));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.pasteMode())).toBe(true);
@@ -910,9 +739,7 @@ for (const clipboardFirst of [false, true])
 			window.ashTerminalInputIntegration.clear();
 			await window.ashTerminalClipboardIntegration.command('workbench.action.terminal.paste');
 		});
-		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([
-			'\x1b[200~中文\rsecond\x1b[201~',
-		]);
+		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['\x1b[200~中文\rsecond\x1b[201~']);
 		await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
 		await page.getByRole('textbox', { name: 'Outside terminal' }).focus();
 		await page.keyboard.press(pasteKey);
@@ -921,9 +748,7 @@ for (const clipboardFirst of [false, true])
 	});
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`terminal multi-line paste choices preserve whitespace and remember accepted preferences in ${locale}`, async ({
-		page,
-	}) => {
+	test(`terminal multi-line paste choices preserve whitespace and remember accepted preferences in ${locale}`, async ({ page }) => {
 		await page.goto(`/terminal.html?input&clipboard&locale=${locale}`);
 		await page.waitForFunction(() => Boolean(window.ashTerminalClipboardIntegration));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toContain('\x1b[?1;2c');
@@ -968,9 +793,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(singleLine).toBeFocused();
 		await page.keyboard.press('Enter');
 		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.finish())).toBeUndefined();
-		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([
-			' echo first \techo second third',
-		]);
+		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([' echo first \techo second third']);
 		await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
 
 		await page.evaluate(() => {
@@ -984,9 +807,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await paste.focus();
 		await page.keyboard.press('Enter');
 		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.finish())).toBeUndefined();
-		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([
-			' echo first \r\techo second \rthird\r',
-		]);
+		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([' echo first \r\techo second \rthird\r']);
 		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.warningPolicy())).toEqual({
 			value: 'never',
 			persisted: 'never',
@@ -996,31 +817,23 @@ for (const locale of ['en', 'zh-CN']) {
 			await window.ashTerminalClipboardIntegration.command('workbench.action.terminal.paste');
 		});
 		await expect(dialog).toHaveCount(0);
-		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([
-			' echo first \r\techo second \rthird\r',
-		]);
+		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([' echo first \r\techo second \rthird\r']);
 		await page.evaluate(() => window.ashTerminalInputIntegration.close());
 	});
 }
 
 for (const browserPaste of [false, true]) {
-	test(`terminal multi-line ${browserPaste ? 'browser' : 'command'} paste cancels with Escape and accepts once`, async ({
-		page,
-	}) => {
+	test(`terminal multi-line ${browserPaste ? 'browser' : 'command'} paste cancels with Escape and accepts once`, async ({ page }) => {
 		await page.goto('/terminal.html?input&clipboard');
 		await page.waitForFunction(() => Boolean(window.ashTerminalClipboardIntegration));
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot()))
-			.toContain('retained screen');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('retained screen');
 		await page.evaluate(() => window.ashTerminalInputIntegration.clear());
 		const paste = async () => {
 			if (browserPaste) {
 				await page.locator('.xterm-helper-textarea').evaluate(element => {
 					const data = new DataTransfer();
 					data.setData('text/plain', 'first\r\nsecond');
-					element.dispatchEvent(
-						new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }),
-					);
+					element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }));
 				});
 			} else {
 				await page.evaluate(() => {
@@ -1040,9 +853,7 @@ for (const browserPaste of [false, true]) {
 		await paste();
 		await page.getByRole('button', { name: 'Paste', exact: true }).focus();
 		await page.keyboard.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes))
-			.toEqual(['first\rsecond']);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['first\rsecond']);
 		await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
 		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.reads())).toBe(browserPaste ? 0 : 2);
 		await page.evaluate(() => window.ashTerminalInputIntegration.close());
@@ -1053,9 +864,7 @@ for (const transition of ['close', 'switch', 'disconnect'] as const) {
 	test(`terminal multi-line confirmation drops its paste after ${transition}`, async ({ page }) => {
 		await page.goto('/terminal.html?input&clipboard');
 		await page.waitForFunction(() => Boolean(window.ashTerminalClipboardIntegration));
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot()))
-			.toContain('retained screen');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('retained screen');
 		// The fixture asks for device attributes. Its asynchronous reply must finish
 		// before clearing input observations for the paste cancellation assertion.
 		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toContain('\x1b[?1;2c');
@@ -1066,8 +875,7 @@ for (const transition of ['close', 'switch', 'disconnect'] as const) {
 		});
 		await expect(page.getByRole('dialog')).toBeVisible();
 		if (transition === 'close') await page.evaluate(() => window.ashTerminalInputIntegration.close());
-		else if (transition === 'disconnect')
-			await page.evaluate(() => window.ashTerminalClipboardIntegration.disconnect());
+		else if (transition === 'disconnect') await page.evaluate(() => window.ashTerminalClipboardIntegration.disconnect());
 		else
 			await page.evaluate(async () => {
 				await window.ashTerminalClipboardIntegration.switchAway();
@@ -1083,9 +891,7 @@ for (const transition of ['close', 'switch', 'disconnect'] as const) {
 test('terminal multi-line warning policy reloads and always confirms bracketed paste in Chinese', async ({ page }) => {
 	await page.goto('/terminal.html?input&clipboard&locale=zh-CN');
 	await page.waitForFunction(() => Boolean(window.ashTerminalClipboardIntegration));
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot()))
-		.toContain('retained screen');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('retained screen');
 	await page.evaluate(async () => {
 		await window.ashTerminalIntegration.configure('terminal.integrated.enableMultiLinePasteWarning', 'always');
 		window.ashTerminalInputIntegration.feed('\x1b[?2004h');
@@ -1100,21 +906,15 @@ test('terminal multi-line warning policy reloads and always confirms bracketed p
 	await expect(page.getByRole('dialog')).toContainText('要将多行文本粘贴到终端吗？');
 	await page.getByRole('button', { name: '粘贴', exact: true }).click();
 	await page.evaluate(() => window.ashTerminalClipboardIntegration.finish());
-	expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([
-		'\x1b[200~中文\r命令\x1b[201~',
-	]);
+	expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['\x1b[200~中文\r命令\x1b[201~']);
 	await page.evaluate(async () => {
 		await window.ashTerminalIntegration.configure('terminal.integrated.enableMultiLinePasteWarning', 'never');
 		window.ashTerminalInputIntegration.clear();
 		await window.ashTerminalClipboardIntegration.command('workbench.action.terminal.paste');
 	});
 	await expect(page.getByRole('dialog')).toHaveCount(0);
-	expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([
-		'\x1b[200~中文\r命令\x1b[201~',
-	]);
-	expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.help())).toContain(
-		'始终模式即使在括号粘贴模式下也确认换行',
-	);
+	expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['\x1b[200~中文\r命令\x1b[201~']);
+	expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.help())).toContain('始终模式即使在括号粘贴模式下也确认换行');
 	await page.evaluate(() => window.ashTerminalInputIntegration.close());
 });
 
@@ -1124,12 +924,8 @@ for (const transition of ['close', 'switch', 'disconnect'] as const) {
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto('/terminal.html?input&clipboard');
 		await page.waitForFunction(() => Boolean(window.ashTerminalClipboardIntegration));
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot()))
-			.toContain('retained screen');
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes))
-			.toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('retained screen');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
 		await page.evaluate(() => {
 			window.ashTerminalInputIntegration.clear();
 			window.ashTerminalClipboardIntegration.hold();
@@ -1137,8 +933,7 @@ for (const transition of ['close', 'switch', 'disconnect'] as const) {
 		});
 		await expect.poll(() => page.evaluate(() => window.ashTerminalClipboardIntegration.reads())).toBe(1);
 		if (transition === 'close') await page.evaluate(() => window.ashTerminalInputIntegration.close());
-		else if (transition === 'disconnect')
-			expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.disconnect())).toBe('disconnected');
+		else if (transition === 'disconnect') expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.disconnect())).toBe('disconnected');
 		else
 			await page.evaluate(async () => {
 				await window.ashTerminalClipboardIntegration.switchAway();
@@ -1162,12 +957,8 @@ for (const transition of ['close', 'switch', 'disconnect'] as const) {
 test('terminal clipboard read failures reject the command without entering stdin', async ({ page }) => {
 	await page.goto('/terminal.html?input&clipboard');
 	await page.waitForFunction(() => Boolean(window.ashTerminalClipboardIntegration));
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot()))
-		.toContain('retained screen');
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes))
-		.toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('retained screen');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
 	await page.evaluate(() => {
 		window.ashTerminalInputIntegration.clear();
 		window.ashTerminalClipboardIntegration.hold();
@@ -1183,14 +974,8 @@ test('terminal clipboard read failures reject the command without entering stdin
 test('terminal clipboard commands and accessibility help are localized in Chinese', async ({ page }) => {
 	await page.goto('/terminal.html?input&clipboard&locale=zh-CN');
 	await page.waitForFunction(() => Boolean(window.ashTerminalClipboardIntegration));
-	expect(
-		await page.evaluate(() =>
-			window.ashTerminalClipboardIntegration.title('workbench.action.terminal.copySelection'),
-		),
-	).toBe('终端：复制选区');
-	expect(
-		await page.evaluate(() => window.ashTerminalClipboardIntegration.title('workbench.action.terminal.paste')),
-	).toBe('终端：粘贴到活动终端');
+	expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.title('workbench.action.terminal.copySelection'))).toBe('终端：复制选区');
+	expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.title('workbench.action.terminal.paste'))).toBe('终端：粘贴到活动终端');
 	const help = await page.evaluate(() => window.ashTerminalClipboardIntegration.help());
 	expect(help).toContain('复制选中的终端文本');
 	expect(help).toContain('将剪贴板文本粘贴到当前正在运行的终端');
@@ -1201,28 +986,20 @@ test('terminal clipboard commands and accessibility help are localized in Chines
 });
 
 for (const failed of [false, true]) {
-	test(`terminal clipboard paste ${failed ? 'rejects a failed' : 'waits for the'} process acknowledgement`, async ({
-		page,
-	}) => {
+	test(`terminal clipboard paste ${failed ? 'rejects a failed' : 'waits for the'} process acknowledgement`, async ({ page }) => {
 		await page.goto('/terminal.html?input&clipboard');
 		await page.waitForFunction(() => Boolean(window.ashTerminalClipboardIntegration));
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes))
-			.toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([expect.stringMatching(/^\x1b\[\?[\d;]+c$/u)]);
 		await page.evaluate(() => {
 			window.ashTerminalInputIntegration.clear();
 			window.ashTerminalClipboardIntegration.setText('acknowledged');
 			window.ashTerminalClipboardIntegration.holdInput();
 			window.ashTerminalClipboardIntegration.beginPaste();
 		});
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes))
-			.toEqual(['acknowledged']);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['acknowledged']);
 		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.finished())).toBe(false);
 		await page.evaluate(failed => window.ashTerminalClipboardIntegration.releaseInput(failed), failed);
-		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.finish())).toBe(
-			failed ? 'Terminal write denied' : undefined,
-		);
+		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.finish())).toBe(failed ? 'Terminal write denied' : undefined);
 		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.finished())).toBe(true);
 		await page.evaluate(() => window.ashTerminalInputIntegration.close());
 	});
@@ -1232,9 +1009,7 @@ for (const locale of ['en', 'zh-CN'])
 	test(`terminal clipboard menu retains its target after active selection changes in ${locale}`, async ({ page }) => {
 		await page.goto(`/terminal.html?input&groups&clipboard&browser&locale=${locale}`);
 		await page.waitForFunction(() => Boolean(window.ashTerminalClipboardIntegration));
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot()))
-			.toContain('retained screen');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('retained screen');
 		await page.evaluate(async () => {
 			window.ashTerminalClipboardIntegration.select(0, 8);
 			await window.ashTerminalClipboardIntegration.switchAway();
@@ -1254,9 +1029,7 @@ for (const locale of ['en', 'zh-CN'])
 			window.ashTerminalGroupsIntegration.clearWrites();
 		});
 		await page.getByRole('menuitem', { name: locale === 'en' ? 'Paste' : '粘贴', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes()))
-			.toEqual([{ terminalId: 'input-shell-1', data: 'menu target text' }]);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes())).toEqual([{ terminalId: 'input-shell-1', data: 'menu target text' }]);
 		await page.evaluate(() => window.ashTerminalInputIntegration.close());
 	});
 for (const [theme, locale] of [
@@ -1265,9 +1038,7 @@ for (const [theme, locale] of [
 	['hcDark', 'en'],
 	['hcLight', 'zh-CN'],
 ] as const) {
-	test(`terminal row actions reveal only on hover or list focus in ${theme}/${locale}`, async ({
-		page,
-	}, testInfo) => {
+	test(`terminal row actions reveal only on hover or list focus in ${theme}/${locale}`, async ({ page }, testInfo) => {
 		await page.goto(`/terminal.html?pane&profiles&browser&locale=${locale}`);
 		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
 		await page.evaluate(async theme => {
@@ -1315,9 +1086,7 @@ for (const [theme, locale] of [
 		await rows.first().hover();
 		await page.screenshot({ path: testInfo.outputPath(`terminal-row-actions-${theme}.png`) });
 		await actions(0).locator('.ash-tab-close-action button').click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.operations().closed))
-			.toEqual([ids[0]]);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.operations().closed)).toEqual([ids[0]]);
 		await expect(rows).toHaveCount(2);
 		await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
 	});
@@ -1359,9 +1128,7 @@ test('terminal browser list menu supports keyboard dismissal and Chinese labels'
 	await tab.press('ArrowDown');
 	await expect(page.getByRole('tablist', { name: '终端实例' }).getByRole('tab').last()).toBeFocused();
 	await page.keyboard.press('Enter');
-	expect(await page.evaluate(() => window.ashTerminalPaneIntegration.activeId())).toBe(
-		(await page.evaluate(() => window.ashTerminalPaneIntegration.ids()))[1],
-	);
+	expect(await page.evaluate(() => window.ashTerminalPaneIntegration.activeId())).toBe((await page.evaluate(() => window.ashTerminalPaneIntegration.ids()))[1]);
 	await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
 });
 
@@ -1384,9 +1151,7 @@ test('terminal browser resize preserves scrollback while coalescing horizontal r
 	});
 	expect(result.immediate.cols).toBe(result.before.cols);
 	expect(result.immediate.rows).toBeGreaterThan(result.before.rows);
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalIntegration.dimensions().cols))
-		.toBeGreaterThan(result.before.cols);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalIntegration.dimensions().cols)).toBeGreaterThan(result.before.cols);
 	expect(await page.evaluate(() => window.ashTerminalIntegration.snapshot(100_000))).toContain('line-319');
 	expect(await page.evaluate(() => window.ashTerminalIntegration.snapshot(100_000))).toContain('line-0');
 	await page.evaluate(() => window.ashTerminalIntegration.dispose());
@@ -1437,9 +1202,7 @@ test('terminal configuration applies live options and keeps the existing screen 
 		await window.ashTerminalIntegration.ready();
 		window.ashTerminalIntegration.write('configuration retained\r\n');
 	});
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalIntegration.snapshot(10000)))
-		.toContain('configuration retained');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalIntegration.snapshot(10000))).toContain('configuration retained');
 	expect(await page.evaluate(() => window.ashTerminalIntegration.options().fontSize)).toBe(16);
 	await page.evaluate(async () => {
 		for (const [key, value] of Object.entries({
@@ -1465,9 +1228,7 @@ test('terminal configuration applies live options and keeps the existing screen 
 		letterSpacing: 2,
 		minimumContrastRatio: 7,
 	});
-	expect(await page.evaluate(() => window.ashTerminalIntegration.snapshot(10000))).toContain(
-		'configuration retained',
-	);
+	expect(await page.evaluate(() => window.ashTerminalIntegration.snapshot(10000))).toContain('configuration retained');
 	expect(
 		await page.evaluate(async () => {
 			try {
@@ -1529,9 +1290,7 @@ test('terminal split action layers the hovered half over its shared background',
 	await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
 });
 
-test('terminal title toolbar opens captured instance actions, splits with a profile and closes the last terminal', async ({
-	page,
-}, testInfo) => {
+test('terminal title toolbar opens captured instance actions, splits with a profile and closes the last terminal', async ({ page }, testInfo) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/terminal.html?pane&profiles&browser');
@@ -1580,9 +1339,7 @@ test('terminal title toolbar opens captured instance actions, splits with a prof
 	expect(errors).toEqual([]);
 });
 
-test('terminal reuse keeps command decorations separate when the new PTY restarts command IDs with Chinese status labels', async ({
-	page,
-}) => {
+test('terminal reuse keeps command decorations separate when the new PTY restarts command IDs with Chinese status labels', async ({ page }) => {
 	await page.goto('/terminal.html?stream&reuseCommands&locale=zh-CN');
 	await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
 	await page.evaluate(() => window.ashTerminalStreamIntegration.start());
@@ -1608,12 +1365,8 @@ test('terminal font rendering updates the existing screen without replacing its 
 	});
 	await expect(page.locator('.xterm-rows')).toContainText('font policy retained');
 	const mac = await page.evaluate(() => /Mac/.test(navigator.platform));
-	await page.evaluate(() =>
-		window.ashTerminalIntegration.configure('terminal.integrated.fontRendering', 'grayscale'),
-	);
-	await expect(page.locator('.xterm')).toHaveClass(
-		mac ? /ash-terminal-font-grayscale/ : /^(?!.*ash-terminal-font-grayscale)/,
-	);
+	await page.evaluate(() => window.ashTerminalIntegration.configure('terminal.integrated.fontRendering', 'grayscale'));
+	await expect(page.locator('.xterm')).toHaveClass(mac ? /ash-terminal-font-grayscale/ : /^(?!.*ash-terminal-font-grayscale)/);
 	if (mac) await expect(page.locator('.xterm')).toHaveCSS('-webkit-font-smoothing', 'antialiased');
 	await page.evaluate(() => window.ashTerminalIntegration.configure('terminal.integrated.fontRendering', 'auto'));
 	await expect(page.locator('.xterm')).not.toHaveClass(/ash-terminal-font-grayscale/);
@@ -1621,34 +1374,24 @@ test('terminal font rendering updates the existing screen without replacing its 
 	await page.evaluate(() => window.ashTerminalIntegration.dispose());
 });
 
-test('terminal Split creates independent processes, preserves output and moves focus between panes', async ({
-	page,
-}) => {
+test('terminal Split creates independent processes, preserves output and moves focus between panes', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/terminal.html?input&groups');
-	await expect
-		.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalGroupsIntegration)), errors }))
-		.toEqual({ ready: true, errors: [] });
+	await expect.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalGroupsIntegration)), errors })).toEqual({ ready: true, errors: [] });
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.feed('original pane output'));
 	await expect(page.locator('.xterm-rows')).toContainText('original pane output');
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.split'));
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.groups()))
-		.toEqual([['terminal-instance-1', 'terminal-instance-2']]);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.groups())).toEqual([['terminal-instance-1', 'terminal-instance-2']]);
 	// No shell cwd metadata has arrived: the split must query the live execution owner.
-	expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.launchDirectories()[1])).toBe(
-		'/workspace/current',
-	);
+	expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.launchDirectories()[1])).toBe('/workspace/current');
 	const panes = page.locator('.ash-terminal-group-pane');
 	await expect(panes).toHaveCount(2);
 	await expect(panes.nth(0).locator('.xterm-rows')).toContainText('original pane output');
 	await expect(panes.nth(1).locator('.xterm-helper-textarea')).toBeFocused();
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.clearWrites());
 	await page.keyboard.type('right input');
-	await page.evaluate(() =>
-		window.ashTerminalGroupsIntegration.command('workbench.action.terminal.focusPreviousPane'),
-	);
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.focusPreviousPane'));
 	await expect(panes.nth(0).locator('.xterm-helper-textarea')).toBeFocused();
 	await page.keyboard.type('left input');
 	await expect
@@ -1674,9 +1417,7 @@ test('terminal Split creates independent processes, preserves output and moves f
 	expect(right.width).toBeGreaterThan(120);
 	expect(right.x).toBeGreaterThanOrEqual(left.x + left.width - 1);
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.kill'));
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.groups()))
-		.toEqual([['terminal-instance-2']]);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.groups())).toEqual([['terminal-instance-2']]);
 	await expect(panes).toHaveCount(1);
 	await expect(panes.locator('.xterm-helper-textarea')).toBeFocused();
 	expect(errors).toEqual([]);
@@ -1687,9 +1428,7 @@ test('terminal split sash accepts keyboard resizing and Unsplit retains both pro
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/terminal.html?input&groups&locale=zh-CN');
-	await expect
-		.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalGroupsIntegration)), errors }))
-		.toEqual({ ready: true, errors: [] });
+	await expect.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalGroupsIntegration)), errors })).toEqual({ ready: true, errors: [] });
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.split'));
 	await expect(page.locator('.ash-terminal-group-pane')).toHaveCount(2);
 	const left = page.locator('.ash-terminal-group-pane').nth(0);
@@ -1698,22 +1437,12 @@ test('terminal split sash accepts keyboard resizing and Unsplit retains both pro
 	await sash.focus();
 	await sash.press('ArrowRight');
 	await expect.poll(async () => (await left.boundingBox())!.width).toBeGreaterThan(initialWidth);
-	await expect
-		.poll(() =>
-			page.evaluate(() =>
-				window.ashTerminalGroupsIntegration.sizes().some(size => size.terminalId === 'input-shell-1'),
-			),
-		)
-		.toBe(true);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.sizes().some(size => size.terminalId === 'input-shell-1'))).toBe(true);
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.unsplit'));
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.groups()))
-		.toEqual([['terminal-instance-1'], ['terminal-instance-2']]);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.groups())).toEqual([['terminal-instance-1'], ['terminal-instance-2']]);
 	await expect(page.locator('.ash-terminal-group:not([hidden])')).toHaveCount(1);
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.focusAtIndex1'));
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.active()))
-		.toBe('terminal-instance-1');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.active())).toBe('terminal-instance-1');
 	await expect(page.locator('.ash-terminal-group:not([hidden]) .xterm-helper-textarea')).toBeFocused();
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.close());
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.close());
@@ -1731,32 +1460,14 @@ test('terminal row drag reorders adjacent panes while retaining their screen and
 	await sash.focus();
 	await sash.press('ArrowRight');
 	await sash.press('ArrowRight');
-	const before = await panes.evaluateAll(elements =>
-		Object.fromEntries(
-			elements.map(element => [
-				(element as HTMLElement).dataset.instanceId!,
-				element.getBoundingClientRect().width,
-			]),
-		),
-	);
+	const before = await panes.evaluateAll(elements => Object.fromEntries(elements.map(element => [(element as HTMLElement).dataset.instanceId!, element.getBoundingClientRect().width])));
 	const content = await page.evaluate(() => window.ashTerminalInputIntegration.snapshot());
 	expect(content).toContain('pending input');
 	const targetRow = page.locator('#terminal-instance-2-tab');
 	const rowBounds = (await targetRow.boundingBox())!;
-	await page
-		.locator('#terminal-instance-1-tab')
-		.dragTo(targetRow, { targetPosition: { x: 10, y: rowBounds.height - 3 } });
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.groups()))
-		.toEqual([['terminal-instance-2', 'terminal-instance-1']]);
-	const after = await panes.evaluateAll(elements =>
-		Object.fromEntries(
-			elements.map(element => [
-				(element as HTMLElement).dataset.instanceId!,
-				element.getBoundingClientRect().width,
-			]),
-		),
-	);
+	await page.locator('#terminal-instance-1-tab').dragTo(targetRow, { targetPosition: { x: 10, y: rowBounds.height - 3 } });
+	await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.groups())).toEqual([['terminal-instance-2', 'terminal-instance-1']]);
+	const after = await panes.evaluateAll(elements => Object.fromEntries(elements.map(element => [(element as HTMLElement).dataset.instanceId!, element.getBoundingClientRect().width])));
 	for (const id of Object.keys(before)) expect(after[id]).toBeCloseTo(before[id]!, 0);
 	expect(await page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toBe(content);
 	expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.metadata().created)).toBe(2);
@@ -1774,52 +1485,29 @@ for (const locale of ['en', 'zh-CN']) {
 			name: locale === 'zh-CN' ? '选择目标终端及窗格位置' : 'Choose a terminal and pane position',
 			exact: true,
 		});
-		const canceled = page.evaluate(() =>
-			window.ashTerminalGroupsIntegration.command('workbench.action.terminal.join'),
-		);
+		const canceled = page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.join'));
 		await expect(picker).toBeVisible();
 		await picker.press('Escape');
 		await canceled;
-		expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.groups())).toEqual([
-			['terminal-instance-1'],
-			['terminal-instance-2'],
-		]);
-		const moving = page.evaluate(() =>
-			window.ashTerminalGroupsIntegration.command('workbench.action.terminal.join'),
-		);
+		expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.groups())).toEqual([['terminal-instance-1'], ['terminal-instance-2']]);
+		const moving = page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.join'));
 		await expect(picker).toBeVisible();
 		await picker.press('Enter');
 		await moving;
-		expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.groups())).toEqual([
-			['terminal-instance-2', 'terminal-instance-1'],
-		]);
-		await expect(
-			page.locator('.ash-terminal-group-pane[data-instance-id="terminal-instance-2"] .xterm-helper-textarea'),
-		).toBeFocused();
+		expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.groups())).toEqual([['terminal-instance-2', 'terminal-instance-1']]);
+		await expect(page.locator('.ash-terminal-group-pane[data-instance-id="terminal-instance-2"] .xterm-helper-textarea')).toBeFocused();
 		expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.metadata().created)).toBe(2);
 	});
 }
 
-test('terminal error tooltip explains a refused input operation and relaunch removes the old reason', async ({
-	page,
-}) => {
+test('terminal error tooltip explains a refused input operation and relaunch removes the old reason', async ({ page }) => {
 	await page.goto('/terminal.html?input&groups&clipboard&locale=zh-CN');
 	await page.waitForFunction(() => Boolean(window.ashTerminalGroupsIntegration));
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.split'));
 	await expect(page.getByRole('tab')).toHaveCount(2);
 	await page.evaluate(() => window.ashTerminalClipboardIntegration.holdInput());
-	const sending = page.evaluate(() =>
-		window.ashTerminalGroupsIntegration
-			.command('workbench.action.terminal.sendSequence', { text: 'failure input' })
-			.catch(error => String(error.message)),
-	);
-	await expect
-		.poll(() =>
-			page.evaluate(() =>
-				window.ashTerminalGroupsIntegration.writes().some(write => write.data === 'failure input'),
-			),
-		)
-		.toBe(true);
+	const sending = page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.sendSequence', { text: 'failure input' }).catch(error => String(error.message)));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().some(write => write.data === 'failure input'))).toBe(true);
 	await page.evaluate(() => window.ashTerminalClipboardIntegration.releaseInput(true));
 	expect(await sending).toBe('Terminal write denied');
 	const active = page.getByRole('tab', { selected: true });
@@ -1842,47 +1530,21 @@ for (const locale of ['en', 'zh-CN']) {
 			}))
 			.toEqual({ ready: true, errors: [] });
 		await page.evaluate(() => window.ashTerminalFindIntegration.theme('light'));
-		await expect(page.locator('.ash-terminal-widgets .xterm-scrollable-element')).toHaveCSS(
-			'background-color',
-			'rgb(248, 248, 248)',
-		);
+		await expect(page.locator('.ash-terminal-widgets .xterm-scrollable-element')).toHaveCSS('background-color', 'rgb(248, 248, 248)');
 		await page.evaluate(() => window.ashTerminalGroupsIntegration.feed('preserved editor output'));
-		await page.evaluate(() =>
-			window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToEditor'),
-		);
+		await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToEditor'));
 		await expect(page.locator('.ash-terminal-editor .xterm-rows')).toContainText('preserved editor output');
-		await expect(page.locator('.ash-terminal-editor .xterm-scrollable-element')).toHaveCSS(
-			'background-color',
-			'rgb(255, 255, 255)',
-		);
-		await expect(page.locator('.ash-terminal-editor .ash-terminal-instance')).toHaveCSS(
-			'background-color',
-			'rgb(255, 255, 255)',
-		);
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state()))
-			.toEqual({ instances: 1, created: 1, editorTabs: 1, originalScreen: true, target: 2 });
+		await expect(page.locator('.ash-terminal-editor .xterm-scrollable-element')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+		await expect(page.locator('.ash-terminal-editor .ash-terminal-instance')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state())).toEqual({ instances: 1, created: 1, editorTabs: 1, originalScreen: true, target: 2 });
 		await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.groups())).toEqual([]);
 		await page.locator('.ash-terminal-editor .xterm-helper-textarea').press('x');
-		await expect
-			.poll(() =>
-				page.evaluate(() => window.ashTerminalGroupsIntegration.writes().some(write => write.data === 'x')),
-			)
-			.toBe(true);
-		await page.evaluate(() =>
-			window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToTerminalPanel'),
-		);
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state()))
-			.toEqual({ instances: 1, created: 1, editorTabs: 0, originalScreen: true, target: 1 });
+		await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().some(write => write.data === 'x'))).toBe(true);
+		await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToTerminalPanel'));
+		await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state())).toEqual({ instances: 1, created: 1, editorTabs: 0, originalScreen: true, target: 1 });
 		await expect(page.locator('.ash-terminal-widgets .xterm-rows')).toContainText('preserved editor output');
-		await expect(page.locator('.ash-terminal-widgets .xterm-scrollable-element')).toHaveCSS(
-			'background-color',
-			'rgb(248, 248, 248)',
-		);
-		await page.evaluate(() =>
-			window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToEditor'),
-		);
+		await expect(page.locator('.ash-terminal-widgets .xterm-scrollable-element')).toHaveCSS('background-color', 'rgb(248, 248, 248)');
+		await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToEditor'));
 		await page.evaluate(() => window.ashTerminalEditorIntegration.close());
 		await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state().instances)).toBe(0);
 		await expect(page.locator('.ash-terminal-editor')).toHaveCount(0);
@@ -1891,28 +1553,19 @@ for (const locale of ['en', 'zh-CN']) {
 }
 
 for (const contributed of [false, true])
-	test(`background ${contributed ? 'extension' : 'standard'} terminal editor creation and reveal preserve panel focus and input destination`, async ({
-		page,
-	}) => {
+	test(`background ${contributed ? 'extension' : 'standard'} terminal editor creation and reveal preserve panel focus and input destination`, async ({ page }) => {
 		await page.goto(`/terminal.html?input&groups&editor${contributed ? '&extensionProfiles' : ''}`);
 		await page.waitForFunction(() => Boolean(window.ashTerminalEditorIntegration));
 		const panelInput = page.locator('.ash-terminal-widgets .xterm-helper-textarea');
 		await panelInput.focus();
 		const original = await page.evaluate(() => window.ashTerminalGroupsIntegration.active());
-		const background = await page.evaluate(
-			contributed => window.ashTerminalEditorIntegration.createBackground(contributed),
-			contributed,
-		);
+		const background = await page.evaluate(contributed => window.ashTerminalEditorIntegration.createBackground(contributed), contributed);
 		expect(background).not.toBe(original);
 		await expect(page.locator('.ash-terminal-editor .xterm-helper-textarea')).toHaveCount(1);
 		await expect(panelInput).toBeFocused();
 		expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.active())).toBe(original);
 		await panelInput.press('a');
-		await expect
-			.poll(() =>
-				page.evaluate(() => window.ashTerminalGroupsIntegration.writes().filter(write => write.data === 'a')),
-			)
-			.toEqual([{ terminalId: 'input-shell-1', data: 'a' }]);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().filter(write => write.data === 'a'))).toEqual([{ terminalId: 'input-shell-1', data: 'a' }]);
 		await page.evaluate(id => window.ashTerminalEditorIntegration.revealBackground(id), background);
 		await expect(panelInput).toBeFocused();
 		expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.active())).toBe(original);
@@ -1922,11 +1575,7 @@ for (const contributed of [false, true])
 			}),
 		);
 		await expect
-			.poll(() =>
-				page.evaluate(() =>
-					window.ashTerminalGroupsIntegration.writes().filter(write => write.data === 'panel-target'),
-				),
-			)
+			.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().filter(write => write.data === 'panel-target')))
 			.toEqual([{ terminalId: 'input-shell-1', data: 'panel-target' }]);
 		await page.locator('.ash-terminal-editor .xterm-helper-textarea').focus();
 		expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.active())).toBe(background);
@@ -1936,37 +1585,23 @@ for (const contributed of [false, true])
 			}),
 		);
 		await expect
-			.poll(() =>
-				page.evaluate(() =>
-					window.ashTerminalGroupsIntegration.writes().filter(write => write.data === 'editor-target'),
-				),
-			)
+			.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().filter(write => write.data === 'editor-target')))
 			.toEqual([{ terminalId: 'input-shell-2', data: 'editor-target' }]);
 		await page.evaluate(() => window.ashTerminalGroupsIntegration.dispose());
 	});
 
-test('splitting an editor terminal opens an adjacent shell while retaining the original screen and launch cwd', async ({
-	page,
-}) => {
+test('splitting an editor terminal opens an adjacent shell while retaining the original screen and launch cwd', async ({ page }) => {
 	await page.goto('/terminal.html?input&groups&editor');
 	await page.waitForFunction(() => Boolean(window.ashTerminalEditorIntegration));
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToEditor'));
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.feed('editor pending'));
 	const original = await page.evaluate(() => window.ashTerminalInputIntegration.snapshot());
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.split'));
-	await expect
-		.poll(() =>
-			page.evaluate(() => window.ashTerminalEditorIntegration.groups().map(group => group.resources.length)),
-		)
-		.toEqual([1, 1]);
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state()))
-		.toEqual({ instances: 2, created: 2, editorTabs: 2, originalScreen: true, target: 2 });
+	await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.groups().map(group => group.resources.length))).toEqual([1, 1]);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state())).toEqual({ instances: 2, created: 2, editorTabs: 2, originalScreen: true, target: 2 });
 	expect(await page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toBe(original);
 	expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.groups())).toEqual([]);
-	expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.launchDirectories()[1])).toBe(
-		'/workspace/current',
-	);
+	expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.launchDirectories()[1])).toBe('/workspace/current');
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.clearWrites());
 	await page.keyboard.type('second-shell');
 	await expect
@@ -2005,9 +1640,7 @@ for (const [theme, locale] of [
 	['hcDark', 'en'],
 	['hcLight', 'zh-CN'],
 ] as const) {
-	test(`terminal URL hover uses screen geometry and shared Escape lifecycle in ${theme}/${locale}`, async ({
-		page,
-	}) => {
+	test(`terminal URL hover uses screen geometry and shared Escape lifecycle in ${theme}/${locale}`, async ({ page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto(`/terminal.html?input&find&browser&locale=${locale}`);
@@ -2016,15 +1649,10 @@ for (const [theme, locale] of [
 			window.ashTerminalFindIntegration.theme(theme);
 			window.ashTerminalInputIntegration.feed('\x1b[2J\x1b[H' + 'https://example.com/terminal\r\n');
 		}, theme);
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot()))
-			.toContain('https://example.com/terminal');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('https://example.com/terminal');
 		const screen = await page.locator('.xterm-screen').boundingBox();
 		const dimensions = await page.evaluate(() => window.ashTerminalInputIntegration.dimensions());
-		await page.mouse.move(
-			screen!.x + (6.5 * screen!.width) / dimensions.cols,
-			screen!.y + (0.5 * screen!.height) / dimensions.rows,
-		);
+		await page.mouse.move(screen!.x + (6.5 * screen!.width) / dimensions.cols, screen!.y + (0.5 * screen!.height) / dimensions.rows);
 		await expect(page.locator('.ash-hover')).toContainText('https://example.com/terminal');
 		const anchor = await page.locator('.ash-terminal-link-hover-target').boundingBox();
 		expect(anchor!.x).toBeCloseTo(screen!.x, 0);
@@ -2032,13 +1660,8 @@ for (const [theme, locale] of [
 		await page.keyboard.press('Escape');
 		await expect(page.locator('.ash-hover')).toHaveCount(0);
 		await page.mouse.move(0, 0);
-		await page.evaluate(() =>
-			window.ashTerminalInputIntegration.configure('terminal.integrated.showLinkHover', false),
-		);
-		await page.mouse.move(
-			screen!.x + (5.5 * screen!.width) / dimensions.cols,
-			screen!.y + (0.5 * screen!.height) / dimensions.rows,
-		);
+		await page.evaluate(() => window.ashTerminalInputIntegration.configure('terminal.integrated.showLinkHover', false));
+		await page.mouse.move(screen!.x + (5.5 * screen!.width) / dimensions.cols, screen!.y + (0.5 * screen!.height) / dimensions.rows);
 		await expect(page.locator('.ash-hover')).toHaveCount(0);
 		await page.evaluate(() => window.ashTerminalInputIntegration.close());
 		await expect(page.locator('.ash-terminal-widget-overlay')).toHaveCount(0);
@@ -2047,9 +1670,7 @@ for (const [theme, locale] of [
 }
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`terminal instance hover focus command reaches a hidden-title terminal and the focused row in ${locale}`, async ({
-		page,
-	}) => {
+	test(`terminal instance hover focus command reaches a hidden-title terminal and the focused row in ${locale}`, async ({ page }) => {
 		await page.goto(`/terminal.html?pane&profiles&browser&workbench&locale=${locale}`);
 		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
 		await page.evaluate(async () => {
@@ -2082,9 +1703,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
 	});
 
-	test(`terminal instance hover updates received sequences and prompt input from the parsed screen in ${locale}`, async ({
-		page,
-	}) => {
+	test(`terminal instance hover updates received sequences and prompt input from the parsed screen in ${locale}`, async ({ page }) => {
 		await page.goto(`/terminal.html?pane&profiles&browser&workbench&shellIntegration=rich&locale=${locale}`);
 		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
 		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
@@ -2092,31 +1711,16 @@ for (const locale of ['en', 'zh-CN']) {
 		await title.focus();
 		await title.press('Alt+ArrowDown');
 		const card = page.locator('.ash-terminal-instance-hover');
-		await card
-			.getByRole('button', { name: locale === 'zh-CN' ? '显示详细信息' : 'Show Details', exact: true })
-			.click();
+		await card.getByRole('button', { name: locale === 'zh-CN' ? '显示详细信息' : 'Show Details', exact: true }).click();
 		await page.evaluate(() => {
 			window.ashTerminalPaneIntegration.sequence({ type: 'promptStart' }, '\r\nfixture> ');
 			window.ashTerminalPaneIntegration.sequence({ type: 'commandStart' });
-			window.ashTerminalPaneIntegration.sequence(
-				{ type: 'commandLine', value: 'echo fixture', isTrusted: true },
-				'echo fixture',
-			);
+			window.ashTerminalPaneIntegration.sequence({ type: 'commandLine', value: 'echo fixture', isTrusted: true }, 'echo fixture');
 		});
-		await expect(card).toContainText(
-			locale === 'zh-CN'
-				? '已接收的序列：promptStart, commandStart, commandLine'
-				: 'Seen sequences: promptStart, commandStart, commandLine',
-		);
-		await expect(card).toContainText(
-			locale === 'zh-CN' ? '提示符输入：echo fixture|' : 'Prompt input: echo fixture|',
-		);
-		await expect(
-			card.getByRole('button', { name: locale === 'zh-CN' ? '隐藏详细信息' : 'Hide Details', exact: true }),
-		).toBeFocused();
-		await page.evaluate(() =>
-			window.ashTerminalPaneIntegration.sequence({ type: 'processReady', isWindowsPty: false }),
-		);
+		await expect(card).toContainText(locale === 'zh-CN' ? '已接收的序列：promptStart, commandStart, commandLine' : 'Seen sequences: promptStart, commandStart, commandLine');
+		await expect(card).toContainText(locale === 'zh-CN' ? '提示符输入：echo fixture|' : 'Prompt input: echo fixture|');
+		await expect(card.getByRole('button', { name: locale === 'zh-CN' ? '隐藏详细信息' : 'Hide Details', exact: true })).toBeFocused();
+		await page.evaluate(() => window.ashTerminalPaneIntegration.sequence({ type: 'processReady', isWindowsPty: false }));
 		await expect(card).not.toContainText('commandLine');
 		await expect(card).not.toContainText('echo fixture');
 		await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
@@ -2160,9 +1764,7 @@ for (const [level, label] of [
 }
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`terminal instance hover updates live integration details and preserves action focus in ${locale}`, async ({
-		page,
-	}) => {
+	test(`terminal instance hover updates live integration details and preserves action focus in ${locale}`, async ({ page }) => {
 		await page.goto(`/terminal.html?pane&profiles&browser&workbench&shellIntegration=basic&locale=${locale}`);
 		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
 		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
@@ -2175,24 +1777,16 @@ for (const locale of ['en', 'zh-CN']) {
 		const hide = locale === 'zh-CN' ? '隐藏详细信息' : 'Hide Details';
 		await page.keyboard.press('Tab');
 		await expect(card.getByRole('button', { name: show, exact: true })).toBeFocused();
-		await page.evaluate(() =>
-			window.ashTerminalPaneIntegration.metadata('rich', '/workspace/hover-next', 'fixture-prompt'),
-		);
+		await page.evaluate(() => window.ashTerminalPaneIntegration.metadata('rich', '/workspace/hover-next', 'fixture-prompt'));
 		await expect(card).toContainText(locale === 'zh-CN' ? 'Shell 集成：丰富' : 'Shell integration: Rich');
 		await expect(card.getByRole('button', { name: show, exact: true })).toBeFocused();
 		await page.evaluate(() => window.ashTerminalPaneIntegration.environment(true));
-		await expect(card.locator('[data-severity="warning"]')).toContainText(
-			locale === 'zh-CN'
-				? '扩展更改了此终端的环境贡献'
-				: 'Extensions changed this terminal’s environment contributions',
-		);
+		await expect(card.locator('[data-severity="warning"]')).toContainText(locale === 'zh-CN' ? '扩展更改了此终端的环境贡献' : 'Extensions changed this terminal’s environment contributions');
 		await expect(card.getByRole('button', { name: show, exact: true })).toBeFocused();
 		await page.keyboard.press('Enter');
 		await expect(card).toContainText(locale === 'zh-CN' ? 'Shell 类型：bash' : 'Shell type: bash');
 		await expect(card).toContainText('/workspace/hover-next');
-		await expect(card).toContainText(
-			locale === 'zh-CN' ? '提示符类型：fixture-prompt' : 'Prompt type: fixture-prompt',
-		);
+		await expect(card).toContainText(locale === 'zh-CN' ? '提示符类型：fixture-prompt' : 'Prompt type: fixture-prompt');
 		await page.evaluate(() => window.ashTerminalPaneIntegration.metadata('none', '/workspace/hover-final'));
 		await expect(card).toContainText(locale === 'zh-CN' ? 'Shell 集成：无' : 'Shell integration: None');
 		await expect(card).toContainText('/workspace/hover-final');
@@ -2206,20 +1800,13 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 }
 
-async function seedSuggestPrompt(
-	page: Page,
-	prefix: string,
-	locale = 'en',
-	shell: 'bash' | 'zsh' = 'bash',
-): Promise<void> {
+async function seedSuggestPrompt(page: Page, prefix: string, locale = 'en', shell: 'bash' | 'zsh' = 'bash'): Promise<void> {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto(`/terminal.html?input&groups&clipboard&browser&suggest&locale=${locale}`);
 	await expect
 		.poll(async () => ({
-			ready: await page.evaluate(() =>
-				Boolean(window.ashTerminalSuggestIntegration && window.ashTerminalInputIntegration),
-			),
+			ready: await page.evaluate(() => Boolean(window.ashTerminalSuggestIntegration && window.ashTerminalInputIntegration)),
 			errors,
 		}))
 		.toEqual({ ready: true, errors: [] });
@@ -2243,9 +1830,7 @@ async function seedSuggestPrompt(
 }
 
 for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as const) {
-	test(`terminal suggest follows registered theme colors and preserves keyboard dismissal in ${theme}`, async ({
-		page,
-	}) => {
+	test(`terminal suggest follows registered theme colors and preserves keyboard dismissal in ${theme}`, async ({ page }) => {
 		await seedSuggestPrompt(page, 'echo ');
 		await page.evaluate(theme => {
 			window.ashTerminalFindIntegration.theme(theme, {
@@ -2275,10 +1860,7 @@ for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as const) {
 		await expect(picker.locator('.ash-terminal-suggest-instructions')).toHaveCSS('color', 'rgb(120, 154, 188)');
 		if (theme === 'hcDark' || theme === 'hcLight') {
 			await expect(picker).toHaveCSS('box-shadow', 'none');
-			await expect(picker).toHaveCSS(
-				'border-top-color',
-				theme === 'hcDark' ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)',
-			);
+			await expect(picker).toHaveCSS('border-top-color', theme === 'hcDark' ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)');
 		}
 		await page.keyboard.press('Escape');
 		await expect(picker).toBeHidden();
@@ -2306,9 +1888,7 @@ test('terminal suggest preserves middle-of-input edits and shell ghost text', as
 });
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`terminal sticky scroll follows retained command ranges and restores keyboard focus in ${locale}`, async ({
-		page,
-	}, testInfo) => {
+	test(`terminal sticky scroll follows retained command ranges and restores keyboard focus in ${locale}`, async ({ page }, testInfo) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto(`/terminal.html?stream&commandModel&browser&locale=${locale}`);
@@ -2331,9 +1911,7 @@ for (const locale of ['en', 'zh-CN']) {
 			fixture.feedModel('$ ');
 			fixture.environmentFrame({ type: 'commandStart' });
 		});
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().commands?.length))
-			.toBe(2);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().commands?.length)).toBe(2);
 		await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.scroll(8));
 		const header = page.getByRole('button', {
 			name: locale === 'zh-CN' ? '滚动到命令：echo sticky 中文🙂' : 'Scroll to command: echo sticky 中文🙂',
@@ -2341,10 +1919,7 @@ for (const locale of ['en', 'zh-CN']) {
 		});
 		await expect(header).toBeVisible();
 		await expect(header).toHaveText('$ echo sticky 中文🙂');
-		await page.evaluate(
-			isChinese => window.ashTerminalStreamIntegration.stickyScroll.theme(isChinese ? 'hcLight' : 'hcDark'),
-			locale === 'zh-CN',
-		);
+		await page.evaluate(isChinese => window.ashTerminalStreamIntegration.stickyScroll.theme(isChinese ? 'hcLight' : 'hcDark'), locale === 'zh-CN');
 		const colors = await header.evaluate(element => {
 			const style = getComputedStyle(element);
 			return { background: style.backgroundColor, foreground: style.color, border: style.borderBottomColor };
@@ -2353,10 +1928,7 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(colors.foreground).not.toBe(colors.background);
 		expect(colors.border).not.toBe('rgba(0, 0, 0, 0)');
 		const geometry = await header.evaluate(element => {
-			const screen = element
-				.closest('.ash-terminal-instance')!
-				.querySelector('.xterm-screen')!
-				.getBoundingClientRect();
+			const screen = element.closest('.ash-terminal-instance')!.querySelector('.xterm-screen')!.getBoundingClientRect();
 			const bounds = element.getBoundingClientRect();
 			return {
 				left: Math.abs(screen.left - bounds.left),
@@ -2365,9 +1937,7 @@ for (const locale of ['en', 'zh-CN']) {
 			};
 		});
 		expect(geometry).toEqual({ left: 0, top: 0, width: 0 });
-		await page
-			.locator('.ash-terminal-instance:visible')
-			.screenshot({ path: testInfo.outputPath('sticky-scroll.png') });
+		await page.locator('.ash-terminal-instance:visible').screenshot({ path: testInfo.outputPath('sticky-scroll.png') });
 		const screen = page.locator('.ash-terminal-instance:visible .xterm-screen');
 		await screen.evaluate(element => {
 			for (let packet = 0; packet < 16; packet++)
@@ -2380,12 +1950,8 @@ for (const locale of ['en', 'zh-CN']) {
 					}),
 				);
 		});
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.position().viewport))
-			.not.toBe(8);
-		const wheelPosition = await page.evaluate(
-			() => window.ashTerminalStreamIntegration.stickyScroll.position().viewport,
-		);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.position().viewport)).not.toBe(8);
+		const wheelPosition = await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.position().viewport);
 		await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.scroll(8));
 		await header.evaluate(element => {
 			for (let packet = 0; packet < 16; packet++)
@@ -2398,9 +1964,7 @@ for (const locale of ['en', 'zh-CN']) {
 					}),
 				);
 		});
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.position().viewport))
-			.toBe(wheelPosition);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.position().viewport)).toBe(wheelPosition);
 		await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.scroll(8));
 		await header.focus();
 		await header.press('Escape');
@@ -2410,9 +1974,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(header).toBeHidden();
 		await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.toggle());
 		await expect(header).toBeVisible();
-		await page.evaluate(() =>
-			window.ashTerminalStreamIntegration.stickyScroll.configure('ignoredCommands', ['echo']),
-		);
+		await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.configure('ignoredCommands', ['echo']));
 		await expect(header).toBeHidden();
 		await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.configure('ignoredCommands', []));
 		await expect(header).toBeVisible();
@@ -2435,9 +1997,7 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 }
 
-test('terminal sticky header preserves fractional trackpad wheel input through the xterm viewport', async ({
-	page,
-}) => {
+test('terminal sticky header preserves fractional trackpad wheel input through the xterm viewport', async ({ page }) => {
 	await page.goto('/terminal.html?stream&commandModel');
 	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration?.model().input)).toBe('|');
 	await page.evaluate(() => {
@@ -2454,9 +2014,7 @@ test('terminal sticky header preserves fractional trackpad wheel input through t
 		});
 		fixture.feedModel('wheel-output\r\n'.repeat(120));
 	});
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed()))
-		.toContain('wheel-output');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed())).toContain('wheel-output');
 	const header = page.locator('.ash-terminal-sticky-scroll');
 	const viewport = () => page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.position().viewport);
 	const positions: number[] = [];
@@ -2476,9 +2034,7 @@ test('terminal sticky header preserves fractional trackpad wheel input through t
 					}),
 				);
 		});
-		await page.evaluate(
-			() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
-		);
+		await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 		positions.push(await viewport());
 	}
 	expect(positions[0]).toBeLessThanOrEqual(32);
@@ -2516,12 +2072,8 @@ test('decoded shell boundaries own prompt input and command output on the origin
 	await page.evaluate(() => window.ashTerminalStreamIntegration.feedModel('\x1b[2D'));
 	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().input)).toBe('中文|🙂');
 	await page.evaluate(() => window.ashTerminalStreamIntegration.feedModel('\x1b[2C\x1b[2mghost\x1b[0m\x1b[5D'));
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().input))
-		.toBe('中文🙂|[ghost]');
-	expect((await page.evaluate(() => window.ashTerminalStreamIntegration.model())).commands![0]!.output).toBe(
-		'result 中文🙂',
-	);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().input)).toBe('中文🙂|[ghost]');
+	expect((await page.evaluate(() => window.ashTerminalStreamIntegration.model())).commands![0]!.output).toBe('result 中文🙂');
 	await page.evaluate(() => {
 		window.ashTerminalStreamIntegration.feedModel('\x1b[2K\r$ ');
 		window.ashTerminalStreamIntegration.environmentFrame({ type: 'promptStart' });
@@ -2546,27 +2098,17 @@ test('decoded shell boundaries own prompt input and command output on the origin
 	await page.evaluate(() => window.ashTerminalStreamIntegration.clearModel());
 	expect((await page.evaluate(() => window.ashTerminalStreamIntegration.model())).commands).toEqual([]);
 	await page.evaluate(value => window.ashTerminalStreamIntegration.restoreModel(value), serialized);
-	expect((await page.evaluate(() => window.ashTerminalStreamIntegration.model())).commands![0]!.output).toBe(
-		'result 中文🙂',
-	);
+	expect((await page.evaluate(() => window.ashTerminalStreamIntegration.model())).commands![0]!.output).toBe('result 中文🙂');
 	await page.evaluate(() => window.ashTerminalStreamIntegration.environmentFrame({ type: 'commandStorageDisabled' }));
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().commands![0]!.text))
-		.toBe('');
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.commandStartContents()))
-		.toEqual([undefined]);
-	expect(
-		(await page.evaluate(() => window.ashTerminalStreamIntegration.serializeModel())).promptInputModel,
-	).toBeUndefined();
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().commands![0]!.text)).toBe('');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.commandStartContents())).toEqual([undefined]);
+	expect((await page.evaluate(() => window.ashTerminalStreamIntegration.serializeModel())).promptInputModel).toBeUndefined();
 	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
 	expect(errors).toEqual([]);
 });
 
 for (const chinese of [false, true]) {
-	test(`terminal dropdown wires settings and task configuration with keyboard access (${chinese ? 'Chinese' : 'English'})`, async ({
-		page,
-	}) => {
+	test(`terminal dropdown wires settings and task configuration with keyboard access (${chinese ? 'Chinese' : 'English'})`, async ({ page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto(`/terminal.html?pane&profiles&browser&menuWiring${chinese ? '&locale=zh-CN' : ''}`);
@@ -2579,9 +2121,7 @@ for (const chinese of [false, true]) {
 		});
 		await dropdown.focus();
 		await dropdown.press('ArrowDown');
-		await expect(
-			page.getByRole('menuitem', { name: chinese ? '新建终端窗口' : 'New Terminal Window', exact: true }),
-		).toBeVisible();
+		await expect(page.getByRole('menuitem', { name: chinese ? '新建终端窗口' : 'New Terminal Window', exact: true })).toBeVisible();
 		await page.keyboard.press('Escape');
 		await expect(dropdown).toBeFocused();
 		await dropdown.press('ArrowDown');
@@ -2591,9 +2131,7 @@ for (const chinese of [false, true]) {
 		});
 		await settings.focus();
 		await settings.press('Enter');
-		await expect
-			.poll(() => page.evaluate(async () => (await window.ashTerminalPaneIntegration.menuEffects()).settings))
-			.toEqual([{ jsonEditor: false, query: '@id:terminal.integrated.*' }]);
+		await expect.poll(() => page.evaluate(async () => (await window.ashTerminalPaneIntegration.menuEffects()).settings)).toEqual([{ jsonEditor: false, query: '@id:terminal.integrated.*' }]);
 		await dropdown.click();
 		await page.getByRole('menuitem', { name: chinese ? '运行任务...' : 'Run Task...', exact: true }).click();
 		const picker = page.getByRole('combobox', {
@@ -2607,9 +2145,7 @@ for (const chinese of [false, true]) {
 		await page.getByRole('menuitem', { name: chinese ? '运行任务...' : 'Run Task...', exact: true }).click();
 		await expect(picker).toBeFocused();
 		await picker.press('Enter');
-		await expect
-			.poll(() => page.evaluate(async () => (await window.ashTerminalPaneIntegration.menuEffects()).tasks))
-			.toEqual(['build']);
+		await expect.poll(() => page.evaluate(async () => (await window.ashTerminalPaneIntegration.menuEffects()).tasks)).toEqual(['build']);
 		await dropdown.click();
 		await page.getByRole('menuitem', { name: chinese ? '配置任务...' : 'Configure Tasks...', exact: true }).click();
 		const configurationPicker = page.getByRole('combobox', {
@@ -2639,11 +2175,8 @@ for (const chinese of [false, true]) {
 		await expect(templatePicker).toBeFocused();
 		await templatePicker.fill(chinese ? '其他' : 'Others');
 		await templatePicker.press('Enter');
-		await expect
-			.poll(() => page.evaluate(async () => (await window.ashTerminalPaneIntegration.menuEffects()).editors))
-			.toEqual(['file:///workspace/.vscode/tasks.json']);
-		const configuration = (await page.evaluate(() => window.ashTerminalPaneIntegration.menuEffects()))
-			.configuration!;
+		await expect.poll(() => page.evaluate(async () => (await window.ashTerminalPaneIntegration.menuEffects()).editors)).toEqual(['file:///workspace/.vscode/tasks.json']);
+		const configuration = (await page.evaluate(() => window.ashTerminalPaneIntegration.menuEffects())).configuration!;
 		expect(JSON.parse(configuration)).toEqual({
 			version: '2.0.0',
 			tasks: [{ label: 'example', type: 'shell', command: 'echo', args: ['Hello'], problemMatcher: [] }],
@@ -2653,14 +2186,8 @@ for (const chinese of [false, true]) {
 		await expect(configurationPicker).toBeFocused();
 		await configurationPicker.fill('Build from terminal menu');
 		await configurationPicker.press('Enter');
-		await expect
-			.poll(() =>
-				page.evaluate(async () => (await window.ashTerminalPaneIntegration.menuEffects()).editors.length),
-			)
-			.toBe(2);
-		expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuEffects())).configuration).toBe(
-			configuration,
-		);
+		await expect.poll(() => page.evaluate(async () => (await window.ashTerminalPaneIntegration.menuEffects()).editors.length)).toBe(2);
+		expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuEffects())).configuration).toBe(configuration);
 		await expect(templatePicker).toHaveCount(0);
 		expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(1);
 		await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
@@ -2668,9 +2195,7 @@ for (const chinese of [false, true]) {
 	});
 }
 
-test('terminal split profile submenu activates extension providers and joins their created terminal', async ({
-	page,
-}) => {
+test('terminal split profile submenu activates extension providers and joins their created terminal', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/terminal.html?pane&profiles&browser&extensionProfiles');
@@ -2682,9 +2207,7 @@ test('terminal split profile submenu activates extension providers and joins the
 	await submenu.focus();
 	await submenu.press('ArrowRight');
 	await expect(submenu).toHaveAttribute('aria-expanded', 'true');
-	await page
-		.locator('[data-action-id="workbench.action.terminal.split.extension:acme.extension/shell"] button')
-		.click();
+	await page.locator('[data-action-id="workbench.action.terminal.split.extension:acme.extension/shell"] button').click();
 	await expect(page.locator('.xterm')).toHaveCount(2);
 	await expect(page.getByRole('separator', { name: 'Resize terminal panes', exact: true })).toHaveCount(1);
 	expect(await page.evaluate(() => window.ashTerminalPaneIntegration.launches().at(-1))).toMatchObject({
@@ -2695,15 +2218,11 @@ test('terminal split profile submenu activates extension providers and joins the
 	expect(errors).toEqual([]);
 });
 
-test('new terminal window opens a focused compact terminal editor and retains input in its own window', async ({
-	page,
-}) => {
+test('new terminal window opens a focused compact terminal editor and retains input in its own window', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/terminal.html?pane&profiles&browser&newWindow&workbench');
-	await expect
-		.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalPaneIntegration)), errors }))
-		.toEqual({ ready: true, errors: [] });
+	await expect.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalPaneIntegration)), errors })).toEqual({ ready: true, errors: [] });
 	await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
 	await expect(page.locator('.xterm')).toHaveCount(1);
 	await page.getByRole('button', { name: 'Select Terminal Profile', exact: true }).click();
@@ -2715,18 +2234,14 @@ test('new terminal window opens a focused compact terminal editor and retains in
 	await expect(input).toBeFocused();
 	await expect(popup.locator('.ash-auxiliary-titlebar-compact')).toBeVisible();
 	await input.pressSequentially('echo auxiliary');
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.newWindowState().input))
-		.toBe('echo auxiliary');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.newWindowState().input)).toBe('echo auxiliary');
 	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.newWindowState().parts)).toBe(2);
 	await expect(page.locator('.ash-terminal-group-pane:visible .xterm')).toHaveCount(1);
 	await page.evaluate(() => window.ashTerminalPaneIntegration.focus());
 	await expect(page.locator('.ash-terminal-group-pane:visible .xterm-helper-textarea')).toBeFocused();
 	await input.focus();
 	await input.pressSequentially(' again');
-	await expect
-		.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.newWindowState().input))
-		.toBe('echo auxiliary again');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.newWindowState().input)).toBe('echo auxiliary again');
 	await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
 	await expect.poll(() => popup.isClosed()).toBe(true);
 	expect(errors).toEqual([]);
@@ -2771,14 +2286,7 @@ test('screen reader textarea follows committed shell input and stops synchronizi
 	});
 	const input = page.locator('.xterm-helper-textarea');
 	await expect(input).toHaveValue('echo 中文');
-	await expect
-		.poll(() =>
-			input.evaluate(element => [
-				(element as HTMLTextAreaElement).selectionStart,
-				(element as HTMLTextAreaElement).selectionEnd,
-			]),
-		)
-		.toEqual([7, 7]);
+	await expect.poll(() => input.evaluate(element => [(element as HTMLTextAreaElement).selectionStart, (element as HTMLTextAreaElement).selectionEnd])).toEqual([7, 7]);
 	await page.evaluate(() => window.ashTerminalInputIntegration.screenReader(false));
 	await page.evaluate(() => window.ashTerminalInputIntegration.feed('\b\bchanged'));
 	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('changed');
@@ -2787,9 +2295,7 @@ test('screen reader textarea follows committed shell input and stops synchronizi
 });
 
 for (const locale of ['en', 'zh-CN'] as const) {
-	test(`terminal split direction follows the real panel layout without replacing screens or sending input in ${locale}`, async ({
-		page,
-	}) => {
+	test(`terminal split direction follows the real panel layout without replacing screens or sending input in ${locale}`, async ({ page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto(`/terminal.html?input&groups&panelLayout&locale=${locale}`);
@@ -2799,10 +2305,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				errors,
 			}))
 			.toEqual({ ready: true, errors: [] });
-		await page.evaluate(
-			locale => window.ashTerminalFindIntegration.theme(locale === 'zh-CN' ? 'hcLight' : 'hcDark'),
-			locale,
-		);
+		await page.evaluate(locale => window.ashTerminalFindIntegration.theme(locale === 'zh-CN' ? 'hcLight' : 'hcDark'), locale);
 		const command = async (id: string): Promise<void> => {
 			await page.evaluate(id => window.ashTerminalGroupsIntegration.command(id), id);
 		};
@@ -2819,9 +2322,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		});
 		const share = async (horizontal: boolean): Promise<number> =>
 			panes.evaluateAll((nodes, horizontal) => {
-				const sizes = nodes.map(node =>
-					horizontal ? node.getBoundingClientRect().width : node.getBoundingClientRect().height,
-				);
+				const sizes = nodes.map(node => (horizontal ? node.getBoundingClientRect().width : node.getBoundingClientRect().height));
 				return sizes[0]! / sizes.reduce((sum, size) => sum + size, 0);
 			}, horizontal);
 		const before = await share(true);
@@ -2872,9 +2373,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				});
 			expect(separator.color).not.toBe('rgba(0, 0, 0, 0)');
 			expect(horizontal ? separator.width : separator.height).toBeGreaterThan(0);
-			await expect
-				.poll(() => panes.evaluateAll(nodes => nodes.map(node => node.getAttribute('data-instance-id'))))
-				.toEqual(ids);
+			await expect.poll(() => panes.evaluateAll(nodes => nodes.map(node => node.getAttribute('data-instance-id')))).toEqual(ids);
 			await expect.poll(async () => Math.abs((await share(horizontal)) - expectedShare)).toBeLessThan(0.025);
 			if (position === 'left') {
 				await sash.focus();
@@ -2900,9 +2399,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		const target = page.locator(`.ash-terminal-group-pane[data-instance-id="${ids[1]}"]`);
 		const bounds = (await target.boundingBox())!;
 		await page.locator(`#${ids[0]}-tab`).dragTo(target, { targetPosition: { x: 10, y: bounds.height - 10 } });
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.groups()))
-			.toEqual([[ids[1], ids[0]]]);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.groups())).toEqual([[ids[1], ids[0]]]);
 		expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.writes())).toEqual([]);
 		expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.metadata().created)).toBe(created);
 		expect(errors).toEqual([]);
@@ -2910,9 +2407,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 }
 
 for (const moveFocus of [false, true]) {
-	test(`restored terminal keeps deferred focus ownership before its first visible layout (move focus: ${moveFocus})`, async ({
-		page,
-	}) => {
+	test(`restored terminal keeps deferred focus ownership before its first visible layout (move focus: ${moveFocus})`, async ({ page }) => {
 		await page.goto('/terminal.html?deferredFocus&browser');
 		await page.waitForFunction(() => Boolean(window.ashTerminalDeferredFocusIntegration));
 		const root = page.locator('#terminal-deferred-focus');
@@ -2933,15 +2428,12 @@ for (const moveFocus of [false, true]) {
 }
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`terminal font zoom commands and wheel resize the retained screen without sending input in ${locale}`, async ({
-		page,
-	}) => {
+	test(`terminal font zoom commands and wheel resize the retained screen without sending input in ${locale}`, async ({ page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto(`/terminal.html?input&groups&locale=${locale}`);
 		await page.waitForFunction(() => Boolean(window.ashTerminalGroupsIntegration));
-		const command = (id: string): Promise<unknown> =>
-			page.evaluate(id => window.ashTerminalGroupsIntegration.command(id), id);
+		const command = (id: string): Promise<unknown> => page.evaluate(id => window.ashTerminalGroupsIntegration.command(id), id);
 		const rows = page.locator('.ash-terminal-group-pane:visible .xterm-rows');
 		const input = page.locator('.ash-terminal-group-pane:visible .xterm-helper-textarea');
 		const fontSize = () => rows.evaluate(element => parseFloat(getComputedStyle(element).fontSize));
@@ -2973,9 +2465,7 @@ for (const locale of ['en', 'zh-CN']) {
 		}));
 		await command('workbench.action.terminal.fontZoomIn');
 		await expect.poll(fontSize).toBe(19);
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.dimensions().cols))
-			.toBeLessThan(before.dimensions.cols);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.dimensions().cols)).toBeLessThan(before.dimensions.cols);
 		const resized = await page.evaluate(() => window.ashTerminalInputIntegration.dimensions());
 		await expect
 			.poll(() =>
@@ -2991,17 +2481,13 @@ for (const locale of ['en', 'zh-CN']) {
 			.toBe(true);
 		await command('workbench.action.terminal.fontZoomOut');
 		await expect.poll(fontSize).toBe(18);
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.dimensions()))
-			.toEqual(before.dimensions);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.dimensions())).toEqual(before.dimensions);
 		await command('workbench.action.terminal.fontZoomReset');
 		await expect.poll(fontSize).toBe(initialSize);
 		await page.evaluate(() => window.ashTerminalInputIntegration.configure('terminal.integrated.fontSize', 18));
 
 		let wheelTime = 1000;
-		const wheel = (
-			options: Pick<WheelEventInit, 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey' | 'deltaY' | 'deltaMode'> = {},
-		) =>
+		const wheel = (options: Pick<WheelEventInit, 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey' | 'deltaY' | 'deltaMode'> = {}) =>
 			page.locator('.ash-terminal-group-pane:visible .xterm-viewport').evaluate(
 				(element, { time, options }) => {
 					let reachedViewport = false;
@@ -3030,9 +2516,7 @@ for (const locale of ['en', 'zh-CN']) {
 		expect((await wheel()).reachedViewport).toBe(true);
 		await command('workbench.action.terminal.fontZoomIn');
 		await expect.poll(fontSize).toBe(19);
-		await page.evaluate(() =>
-			window.ashTerminalInputIntegration.configure('terminal.integrated.mouseWheelZoom', true),
-		);
+		await page.evaluate(() => window.ashTerminalInputIntegration.configure('terminal.integrated.mouseWheelZoom', true));
 		expect(await wheel()).toEqual({ reachedViewport: false, defaultPrevented: true });
 		await command('workbench.action.terminal.fontZoomIn');
 		await expect.poll(fontSize).toBe(21);
@@ -3048,9 +2532,7 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(await wheel({ deltaY: 5, ctrlKey: true })).toEqual({ reachedViewport: false, defaultPrevented: true });
 		await command('workbench.action.terminal.fontZoomIn');
 		await expect.poll(fontSize).toBe(mac ? 20 : 19);
-		await page.evaluate(() =>
-			window.ashTerminalInputIntegration.configure('terminal.integrated.mouseWheelZoom', false),
-		);
+		await page.evaluate(() => window.ashTerminalInputIntegration.configure('terminal.integrated.mouseWheelZoom', false));
 		expect((await wheel()).reachedViewport).toBe(true);
 		await command('workbench.action.terminal.fontZoomIn');
 		await expect.poll(fontSize).toBe(mac ? 21 : 20);
@@ -3064,19 +2546,13 @@ for (const locale of ['en', 'zh-CN']) {
 }
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`terminal resize dimensions overlay follows the committed grid and setting without taking focus in ${locale}`, async ({
-		page,
-	}) => {
+	test(`terminal resize dimensions overlay follows the committed grid and setting without taking focus in ${locale}`, async ({ page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto(`/terminal.html?input&groups&browser&locale=${locale}`);
 		await page.waitForFunction(() => Boolean(window.ashTerminalGroupsIntegration));
-		await page.evaluate(
-			locale => window.ashTerminalFindIntegration.theme(locale === 'zh-CN' ? 'hcLight' : 'dark'),
-			locale,
-		);
-		const command = (id: string): Promise<unknown> =>
-			page.evaluate(id => window.ashTerminalGroupsIntegration.command(id), id);
+		await page.evaluate(locale => window.ashTerminalFindIntegration.theme(locale === 'zh-CN' ? 'hcLight' : 'dark'), locale);
+		const command = (id: string): Promise<unknown> => page.evaluate(id => window.ashTerminalGroupsIntegration.command(id), id);
 		const firstPane = page.locator('.ash-terminal-group-pane:visible').first();
 		const overlay = firstPane.locator('.ash-terminal-resize-dimensions-overlay');
 		// Attachment is observable readiness for the contribution's startup grace period.
@@ -3086,9 +2562,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(firstPane.locator('.xterm-rows')).toContainText('retained dimensions output');
 		await command('workbench.action.terminal.split');
 		await expect(page.locator('.ash-terminal-group-pane:visible')).toHaveCount(2);
-		await expect(
-			page.locator('.ash-terminal-group-pane:visible .ash-terminal-resize-dimensions-overlay'),
-		).toHaveCount(2);
+		await expect(page.locator('.ash-terminal-group-pane:visible .ash-terminal-resize-dimensions-overlay')).toHaveCount(2);
 		await expect(overlay).toBeHidden();
 		const original = await page.evaluate(() => ({
 			dimensions: window.ashTerminalInputIntegration.dimensions(),
@@ -3101,16 +2575,10 @@ for (const locale of ['en', 'zh-CN']) {
 		});
 		await sash.focus();
 		await sash.press('ArrowRight');
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.dimensions().cols))
-			.toBeGreaterThan(original.dimensions.cols);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.dimensions().cols)).toBeGreaterThan(original.dimensions.cols);
 		const dimensions = await page.evaluate(() => window.ashTerminalInputIntegration.dimensions());
 		await expect(overlay).toBeVisible();
-		await expect(overlay).toHaveText(
-			locale === 'zh-CN'
-				? `${dimensions.cols} 列 × ${dimensions.rows} 行`
-				: `${dimensions.cols} columns × ${dimensions.rows} rows`,
-		);
+		await expect(overlay).toHaveText(locale === 'zh-CN' ? `${dimensions.cols} 列 × ${dimensions.rows} 行` : `${dimensions.cols} columns × ${dimensions.rows} rows`);
 		await expect(overlay).toHaveAttribute('aria-hidden', 'true');
 		await expect(sash).toBeFocused();
 		const style = await overlay.evaluate(element => {
@@ -3134,26 +2602,20 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(Math.abs(badge.y + badge.height / 2 - terminal.y - terminal.height / 2)).toBeLessThan(1);
 		await expect(overlay).toBeHidden();
 
-		await page.evaluate(() =>
-			window.ashTerminalInputIntegration.configure('terminal.integrated.resizeDimensionsOverlay.enabled', false),
-		);
+		await page.evaluate(() => window.ashTerminalInputIntegration.configure('terminal.integrated.resizeDimensionsOverlay.enabled', false));
 		await expect(page.locator('.ash-terminal-resize-dimensions-overlay')).toHaveCount(0);
 		const input = firstPane.locator('.xterm-helper-textarea');
 		await input.focus();
 		await command('workbench.action.terminal.fontZoomIn');
 		await expect(page.locator('.ash-terminal-resize-dimensions-overlay')).toHaveCount(0);
-		await page.evaluate(() =>
-			window.ashTerminalInputIntegration.configure('terminal.integrated.resizeDimensionsOverlay.enabled', true),
-		);
+		await page.evaluate(() => window.ashTerminalInputIntegration.configure('terminal.integrated.resizeDimensionsOverlay.enabled', true));
 		await expect(overlay).toBeHidden();
 		await command('workbench.action.terminal.fontZoomOut');
 		await expect(overlay).toBeVisible();
 		await expect(input).toBeFocused();
 		await expect(firstPane.locator('.xterm-rows')).toContainText('retained dimensions output');
 		expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.writes())).toEqual([]);
-		expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.metadata().created)).toBe(
-			original.created,
-		);
+		expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.metadata().created)).toBe(original.created);
 		await page.evaluate(() => window.ashTerminalGroupsIntegration.dispose());
 		await expect(page.locator('.ash-terminal-resize-dimensions-overlay')).toHaveCount(0);
 		expect(errors).toEqual([]);
@@ -3169,19 +2631,13 @@ async function hoverCommandGuideOutput(page: Page): Promise<void> {
 }
 
 for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as const) {
-	test(`terminal command guide projects command rows and follows the ${theme} theme without sending input`, async ({
-		page,
-	}) => {
+	test(`terminal command guide projects command rows and follows the ${theme} theme without sending input`, async ({ page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await seedScreenCommand(page);
 		await page.evaluate(theme => window.ashTerminalFindIntegration.theme(theme), theme);
-		const command = page
-			.locator('.ash-terminal-instance:visible .xterm-rows > div')
-			.filter({ hasText: '$ echo marker' });
-		const output = page
-			.locator('.ash-terminal-instance:visible .xterm-rows > div')
-			.filter({ hasText: 'first line' });
+		const command = page.locator('.ash-terminal-instance:visible .xterm-rows > div').filter({ hasText: '$ echo marker' });
+		const output = page.locator('.ash-terminal-instance:visible .xterm-rows > div').filter({ hasText: 'first line' });
 		await expect(output).toBeVisible();
 		await hoverCommandGuideOutput(page);
 		const guide = page.locator('.ash-terminal-command-guide');
@@ -3190,10 +2646,7 @@ for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as const) {
 		const commandBounds = await command.boundingBox();
 		const geometry = await guide.evaluate(element => {
 			const bounds = element.getBoundingClientRect();
-			const screen = element
-				.closest('.ash-terminal-instance')!
-				.querySelector('.xterm-screen')!
-				.getBoundingClientRect();
+			const screen = element.closest('.ash-terminal-instance')!.querySelector('.xterm-screen')!.getBoundingClientRect();
 			const terminal = element.closest('.ash-terminal-instance')!.getBoundingClientRect();
 			return {
 				top: bounds.top,
@@ -3210,10 +2663,7 @@ for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as const) {
 		expect(color).not.toBe('rgba(0, 0, 0, 0)');
 		if (theme === 'hcDark') expect(color).toBe('rgb(255, 255, 255)');
 		if (theme === 'hcLight') expect(color).toBe('rgb(0, 0, 0)');
-		await page.evaluate(
-			theme => window.ashTerminalFindIntegration.theme(theme, { 'terminalCommandGuide.foreground': '#123456' }),
-			theme,
-		);
+		await page.evaluate(theme => window.ashTerminalFindIntegration.theme(theme, { 'terminalCommandGuide.foreground': '#123456' }), theme);
 		await expect(guide).toHaveCSS('border-left-color', 'rgb(18, 52, 86)');
 		await page.mouse.move(0, 0);
 		await expect(guide).toBeHidden();
@@ -3224,9 +2674,7 @@ for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as const) {
 	});
 }
 
-test('terminal command guide clears on typing, alternate buffer, disabled configuration and trimmed markers', async ({
-	page,
-}) => {
+test('terminal command guide clears on typing, alternate buffer, disabled configuration and trimmed markers', async ({ page }) => {
 	await seedScreenCommand(page);
 	const output = page.locator('.ash-terminal-instance:visible .xterm-rows > div').filter({ hasText: 'first line' });
 	const guide = page.locator('.ash-terminal-command-guide');
@@ -3245,16 +2693,12 @@ test('terminal command guide clears on typing, alternate buffer, disabled config
 	await page.mouse.move(0, 0);
 	await hoverCommandGuideOutput(page);
 	await expect(guide).toBeVisible();
-	await page.evaluate(() =>
-		window.ashTerminalInputIntegration.configure('terminal.integrated.shellIntegration.showCommandGuide', false),
-	);
+	await page.evaluate(() => window.ashTerminalInputIntegration.configure('terminal.integrated.shellIntegration.showCommandGuide', false));
 	await expect(guide).toBeHidden();
 	await page.mouse.move(0, 0);
 	await hoverCommandGuideOutput(page);
 	await expect(guide).toBeHidden();
-	await page.evaluate(() =>
-		window.ashTerminalInputIntegration.configure('terminal.integrated.shellIntegration.showCommandGuide', true),
-	);
+	await page.evaluate(() => window.ashTerminalInputIntegration.configure('terminal.integrated.shellIntegration.showCommandGuide', true));
 	await page.mouse.move(0, 0);
 	await hoverCommandGuideOutput(page);
 	await expect(guide).toBeVisible();
@@ -3273,13 +2717,9 @@ test('terminal command guide clears on typing, alternate buffer, disabled config
 });
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`terminal typeahead confirms raw echo without changing parsed output or duplicating input in ${locale}`, async ({
-		page,
-	}) => {
+	test(`terminal typeahead confirms raw echo without changing parsed output or duplicating input in ${locale}`, async ({ page }) => {
 		await seedScreenCommand(page, true, locale);
-		await page.evaluate(() =>
-			window.ashTerminalInputIntegration.configure('terminal.integrated.localEchoEnabled', 'on'),
-		);
+		await page.evaluate(() => window.ashTerminalInputIntegration.configure('terminal.integrated.localEchoEnabled', 'on'));
 		const screen = page.locator('.ash-terminal-instance:visible');
 		const prediction = screen.locator('.ash-terminal-typeahead');
 		const input = screen.locator('.xterm-helper-textarea');

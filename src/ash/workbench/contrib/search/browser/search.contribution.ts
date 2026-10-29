@@ -6,12 +6,7 @@ import { SEARCH_VIEW_ID, FOCUS_SEARCH_COMMAND_ID } from '../common/constants.js'
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
-import {
-	ViewContainerLocation,
-	type WorkbenchViewRegistry,
-	WorkbenchViewContainerId,
-	ViewsRegistry,
-} from '../../../common/views.js';
+import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from '../../../common/views.js';
 import { SearchView } from './searchView.js';
 import './media/search.css';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';

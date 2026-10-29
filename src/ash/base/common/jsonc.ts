@@ -21,28 +21,20 @@ export function stripComments(content: string): string {
 	for (const token of tokens) {
 		if (token.kind !== SyntaxKind.LineCommentTrivia && token.kind !== SyntaxKind.BlockCommentTrivia) continue;
 		const raw = content.slice(token.offset, token.offset + token.length);
-		const replacement =
-			token.kind === SyntaxKind.LineCommentTrivia ? raw.replace(/[^\r\n]/gu, '') : raw.replace(/[^\r\n]/gu, ' ');
+		const replacement = token.kind === SyntaxKind.LineCommentTrivia ? raw.replace(/[^\r\n]/gu, '') : raw.replace(/[^\r\n]/gu, ' ');
 		removals.push({ offset: token.offset, length: token.length, replacement });
 	}
 	for (let index = 0; index < tokens.length; index += 1) {
 		if (tokens[index]!.kind !== SyntaxKind.CommaToken) continue;
 		let next = index + 1;
 		while (next < tokens.length && isTrivia(tokens[next]!.kind)) next += 1;
-		if (
-			next < tokens.length &&
-			(tokens[next]!.kind === SyntaxKind.CloseBraceToken || tokens[next]!.kind === SyntaxKind.CloseBracketToken)
-		) {
+		if (next < tokens.length && (tokens[next]!.kind === SyntaxKind.CloseBraceToken || tokens[next]!.kind === SyntaxKind.CloseBracketToken)) {
 			removals.push({ offset: tokens[index]!.offset, length: 1, replacement: '' });
 		}
 	}
 	return removals
 		.sort((left, right) => right.offset - left.offset)
-		.reduce(
-			(source, removal) =>
-				`${source.slice(0, removal.offset)}${removal.replacement}${source.slice(removal.offset + removal.length)}`,
-			content,
-		);
+		.reduce((source, removal) => `${source.slice(0, removal.offset)}${removal.replacement}${source.slice(removal.offset + removal.length)}`, content);
 }
 
 export function parse<T>(content: string): T {
@@ -50,10 +42,5 @@ export function parse<T>(content: string): T {
 }
 
 function isTrivia(kind: SyntaxKind): boolean {
-	return (
-		kind === SyntaxKind.Trivia ||
-		kind === SyntaxKind.LineBreakTrivia ||
-		kind === SyntaxKind.LineCommentTrivia ||
-		kind === SyntaxKind.BlockCommentTrivia
-	);
+	return kind === SyntaxKind.Trivia || kind === SyntaxKind.LineBreakTrivia || kind === SyntaxKind.LineCommentTrivia || kind === SyntaxKind.BlockCommentTrivia;
 }

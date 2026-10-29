@@ -5,12 +5,8 @@ interface Selector {
 
 function selectors(contents: string): Selector[] {
 	// Keep offsets while excluding examples and braces embedded in strings.
-	const source = contents.replace(/\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, value =>
-		' '.repeat(value.length),
-	);
-	return [...source.matchAll(/([^{};]+)\{/g)]
-		.filter(match => !match[1]!.trimStart().startsWith('@'))
-		.map(match => ({ text: match[1]!, offset: match.index }));
+	const source = contents.replace(/\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, value => ' '.repeat(value.length));
+	return [...source.matchAll(/([^{};]+)\{/g)].filter(match => !match[1]!.trimStart().startsWith('@')).map(match => ({ text: match[1]!, offset: match.index }));
 }
 
 export function findRootAnchoredHas(contents: string): number | undefined {
@@ -65,9 +61,7 @@ export function findSessionsReference(contents: string): number | undefined {
 			return selector.offset + match.index;
 		}
 	}
-	const source = contents.replace(/\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|url\([^)]*\)/gi, text =>
-		' '.repeat(text.length),
-	);
+	const source = contents.replace(/\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|url\([^)]*\)/gi, text => ' '.repeat(text.length));
 	const variable = /--(?:ash-)?sessions-[\w-]+/.exec(source);
 	return variable?.index;
 }

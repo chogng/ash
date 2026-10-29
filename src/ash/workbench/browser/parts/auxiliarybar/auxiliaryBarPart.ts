@@ -60,10 +60,7 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 		super(
 			container,
 			{
-				openComposite: (id, preserveFocus) =>
-					instantiationService.invokeFunction(accessor =>
-						accessor.get(IViewsService).openViewContainer(id, !preserveFocus),
-					),
+				openComposite: (id, preserveFocus) => instantiationService.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
 				viewDescriptorService,
 				contextKeyService,
 				localizationService,
@@ -91,9 +88,7 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 		this.titleHost.className = 'ash-auxiliarybar-title-content';
 		this.activeTitle = h(container.ownerDocument, 'span');
 		this.activeTitle.className = 'ash-auxiliarybar-title-label';
-		this._register(
-			hoverService.setupDelayedHover(this.activeTitle, () => ({ content: this.activeTitle.textContent ?? '' })),
-		);
+		this._register(hoverService.setupDelayedHover(this.activeTitle, () => ({ content: this.activeTitle.textContent ?? '' })));
 		const showSelectorMenu = (event: MouseEvent | KeyboardEvent): void => {
 			this.compositeBar.showContextMenu(event, [], {
 				transformContextMenuActionsForComposite: (actions, id) => {
@@ -113,9 +108,7 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 				}
 			}),
 		);
-		this.visibleViewContainersTracker = this._register(
-			instantiationService.createInstance(VisibleViewContainersTracker, ViewContainerLocation.AuxiliaryBar),
-		);
+		this.visibleViewContainersTracker = this._register(instantiationService.createInstance(VisibleViewContainersTracker, ViewContainerLocation.AuxiliaryBar));
 		this._register(
 			this.visibleViewContainersTracker.onDidChange(({ before, after }) => {
 				if (before > 1 !== after > 1) {
@@ -125,10 +118,7 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 		);
 		this._register(
 			configurationService.onDidChangeConfiguration(event => {
-				if (
-					event.affectsConfiguration(WorkbenchConfiguration.activityBarLocation) ||
-					event.affectsConfiguration(WorkbenchConfiguration.activityBarAutoHide)
-				) {
+				if (event.affectsConfiguration(WorkbenchConfiguration.activityBarLocation) || event.affectsConfiguration(WorkbenchConfiguration.activityBarAutoHide)) {
 					this.updateContainerSelector();
 				}
 			}),
@@ -148,20 +138,12 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 	}
 
 	protected override setTitleProjection(projection: PartTitleProjection | undefined): void {
-		const focused = this.compositeBar.domNode.contains(this.domNode.ownerDocument.activeElement)
-			? (this.domNode.ownerDocument.activeElement as HTMLElement)
-			: undefined;
-		const position = this.configurationService.getValue<ActivityBarPosition>(
-			WorkbenchConfiguration.activityBarLocation,
-		);
+		const focused = this.compositeBar.domNode.contains(this.domNode.ownerDocument.activeElement) ? (this.domNode.ownerDocument.activeElement as HTMLElement) : undefined;
+		const position = this.configurationService.getValue<ActivityBarPosition>(WorkbenchConfiguration.activityBarLocation);
 		const separateRow = position === ActivityBarPosition.TOP || position === ActivityBarPosition.BOTTOM;
 		const visible =
 			position !== ActivityBarPosition.HIDDEN &&
-			!(
-				separateRow &&
-				this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarAutoHide) &&
-				this.visibleViewContainersTracker.visibleCount <= 1
-			);
+			!(separateRow && this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarAutoHide) && this.visibleViewContainersTracker.visibleCount <= 1);
 		const active = this.activeCompositeId ? this.getComposite(this.activeCompositeId) : undefined;
 		this.activeTitle.textContent = active?.getTitle() ?? '';
 		// Custom view headers and the container selector share this Part-owned title slot.
@@ -174,10 +156,7 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 		} else if (separateRow || !visible) {
 			content.push(this.activeTitle);
 		}
-		if (
-			content.length !== this.titleHost.childNodes.length ||
-			content.some((node, index) => node !== this.titleHost.childNodes[index])
-		) {
+		if (content.length !== this.titleHost.childNodes.length || content.some((node, index) => node !== this.titleHost.childNodes[index])) {
 			this.titleHost.replaceChildren(...content);
 		}
 		if (separateRow) {

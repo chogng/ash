@@ -19,11 +19,7 @@ import { HistoryService } from '../../browser/historyService.js';
 import { IHistoryService } from '../../common/history.js';
 
 class HistoryFixture extends Disposable {
-	readonly services = this._register(
-		registerTestComponentServices(
-			createTestEditorServices(undefined, undefined, browserEnvironment.window.document),
-		),
-	);
+	readonly services = this._register(registerTestComponentServices(createTestEditorServices(undefined, undefined, browserEnvironment.window.document)));
 	readonly registry = this._register(new EditorPaneRegistry());
 	readonly failures = new Map<string, Error>();
 	readonly gates = new Map<string, DeferredPromise<void>>();

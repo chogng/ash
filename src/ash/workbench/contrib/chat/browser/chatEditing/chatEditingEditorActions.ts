@@ -8,11 +8,7 @@ import type { ServicesAccessor } from '../../../../../platform/instantiation/com
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
-import {
-	IChatEditingService,
-	type IChatEditReviewSession,
-	type IModifiedFileEntry,
-} from '../../common/editing/chatEditingService.js';
+import { IChatEditingService, type IChatEditReviewSession, type IModifiedFileEntry } from '../../common/editing/chatEditingService.js';
 
 async function selectReviewSession(accessor: ServicesAccessor): Promise<IChatEditReviewSession | undefined> {
 	const editing = accessor.get(IChatEditingService);
@@ -21,27 +17,13 @@ async function selectReviewSession(accessor: ServicesAccessor): Promise<IChatEdi
 		return sessions[0];
 	}
 	const store = new DisposableStore();
-	const picker = store.add(
-		accessor.get(IQuickInputService).createQuickPick<IQuickPickItem & { session: IChatEditReviewSession }>(),
-	);
-	picker.ariaLabel = picker.placeholder = localize(
-		'chatEditing.selectChat',
-		'Choose a chat to review its Agent changes',
-	);
+	const picker = store.add(accessor.get(IQuickInputService).createQuickPick<IQuickPickItem & { session: IChatEditReviewSession }>());
+	picker.ariaLabel = picker.placeholder = localize('chatEditing.selectChat', 'Choose a chat to review its Agent changes');
 	const refresh = (): void => {
 		picker.items = editing.editingSessionsObs.get().map(session => ({
 			session,
-			label: localize(
-				'chatEditing.chat',
-				'Chat {0}',
-				new URLSearchParams(session.chatSessionResource.query).get('threadId'),
-			),
-			description: localize(
-				'chatEditing.fileSet',
-				'{0} files',
-				new Set(session.entries.get().flatMap(entry => entry.resources.map(resource => resource.toString())))
-					.size,
-			),
+			label: localize('chatEditing.chat', 'Chat {0}', new URLSearchParams(session.chatSessionResource.query).get('threadId')),
+			description: localize('chatEditing.fileSet', '{0} files', new Set(session.entries.get().flatMap(entry => entry.resources.map(resource => resource.toString()))).size),
 			detail: session.entries
 				.get()
 				.map(entry => entry.resources.map(basename).join(', '))
@@ -87,9 +69,7 @@ registerAction2(
 			const notifications = accessor.get(INotificationService);
 			const codeEditors = accessor.get(ICodeEditorService);
 			const store = new DisposableStore();
-			const picker = store.add(
-				accessor.get(IQuickInputService).createQuickPick<IQuickPickItem & { entry: IModifiedFileEntry }>(),
-			);
+			const picker = store.add(accessor.get(IQuickInputService).createQuickPick<IQuickPickItem & { entry: IModifiedFileEntry }>());
 			picker.ariaLabel = picker.placeholder = localize('chatEditing.review', 'Review Agent changes');
 			const countdowns = new Map<IModifiedFileEntry, boolean>();
 			const refresh = (reader?: IReader): void => {
@@ -98,12 +78,7 @@ registerAction2(
 					const seconds = editing.getAutoAcceptCountdown(entry);
 					const chats = editing.editingSessionsObs
 						.read(reader)
-						.filter(
-							candidate =>
-								(reader
-									? candidate.readEntry(entry.modifiedURI, reader)
-									: candidate.getEntry(entry.modifiedURI)) === entry,
-						).length;
+						.filter(candidate => (reader ? candidate.readEntry(entry.modifiedURI, reader) : candidate.getEntry(entry.modifiedURI)) === entry).length;
 					const content =
 						chats > 1
 							? localize(
@@ -122,14 +97,7 @@ registerAction2(
 							: entry.isFileOperation
 								? localize('chatEditing.atomic', 'Atomic file operation')
 								: localize('chatEditing.changeCount', '{0} changes', entry.hunks.length),
-						detail:
-							seconds === undefined
-								? content
-								: localize(
-										'chatEditing.autoAcceptPending',
-										'Automatic acceptance pending. {0}',
-										content,
-									),
+						detail: seconds === undefined ? content : localize('chatEditing.autoAcceptPending', 'Automatic acceptance pending. {0}', content),
 						buttons: [
 							{
 								id: 'accept',
@@ -155,10 +123,7 @@ registerAction2(
 								: [
 										{
 											id: 'cancelAutoAccept',
-											label: localize(
-												'chatEditing.cancelAutoAccept',
-												'Cancel automatic acceptance',
-											),
+											label: localize('chatEditing.cancelAutoAccept', 'Cancel automatic acceptance'),
 										},
 									]),
 						],
@@ -178,26 +143,12 @@ registerAction2(
 				picker.onDidTriggerItemButton(({ item, button }) => {
 					if (button.id === 'cancelAutoAccept') {
 						editing.cancelAutoAccept(item.entry);
-						status(
-							localize(
-								'chatEditing.autoAcceptCancelled',
-								'Automatic acceptance cancelled. Changes remain available for review.',
-							),
-						);
+						status(localize('chatEditing.autoAcceptCancelled', 'Automatic acceptance cancelled. Changes remain available for review.'));
 						return;
 					}
-					void (
-						button.id === 'accept'
-							? editing.acceptEntry(item.entry)
-							: item.entry.hasPendingSave
-								? editing.retrySaveEntry(item.entry)
-								: editing.rejectEntry(item.entry)
-					).then(
+					void (button.id === 'accept' ? editing.acceptEntry(item.entry) : item.entry.hasPendingSave ? editing.retrySaveEntry(item.entry) : editing.rejectEntry(item.entry)).then(
 						() => status(localize('chatEditing.reviewed', 'Changes reviewed.')),
-						error =>
-							notifications.error(
-								localize('chatEditing.failed', 'Could not review changes: {0}', String(error)),
-							),
+						error => notifications.error(localize('chatEditing.failed', 'Could not review changes: {0}', String(error))),
 					);
 				}),
 			);
@@ -222,9 +173,7 @@ for (const accept of [true, false]) {
 			constructor() {
 				super({
 					id: accept ? 'chatEditing.acceptAll' : 'chatEditing.rejectAll',
-					title: accept
-						? localize2('chatEditing.acceptAll', 'Accept all Agent changes in a chat')
-						: localize2('chatEditing.rejectAll', 'Reject all Agent changes in a chat'),
+					title: accept ? localize2('chatEditing.acceptAll', 'Accept all Agent changes in a chat') : localize2('chatEditing.rejectAll', 'Reject all Agent changes in a chat'),
 					f1: true,
 				});
 			}

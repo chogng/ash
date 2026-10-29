@@ -5,8 +5,7 @@ import { createDiffEditorInput, isDiffEditorInput } from '../../../common/editor
 import { IEditorPart } from './editorPart.js';
 import { TextDiffEditor } from './textDiffEditor.js';
 
-export const IDiffEditorCommandsService =
-	createServiceIdentifier<IDiffEditorCommandsService>('diffEditorCommandsService');
+export const IDiffEditorCommandsService = createServiceIdentifier<IDiffEditorCommandsService>('diffEditorCommandsService');
 
 export const enum FocusTextDiffEditorMode {
 	Original,
@@ -59,8 +58,7 @@ export class DiffEditorCommandsService implements IDiffEditorCommandsService {
 		const original = control.originalEditor;
 		const modified = control.modifiedEditor;
 		const originalFocused = original.getDomNode().contains(original.getDomNode().ownerDocument.activeElement);
-		if (mode === FocusTextDiffEditorMode.Original || (mode === FocusTextDiffEditorMode.Toggle && !originalFocused))
-			original.focus();
+		if (mode === FocusTextDiffEditorMode.Original || (mode === FocusTextDiffEditorMode.Toggle && !originalFocused)) original.focus();
 		else modified.focus();
 	}
 
@@ -68,9 +66,7 @@ export class DiffEditorCommandsService implements IDiffEditorCommandsService {
 		const input = this.editorPart.activeInput;
 		const control = this.activeControl();
 		if (!input || !control || !isDiffEditorInput(input)) return;
-		const originalFocused = control.originalEditor
-			.getDomNode()
-			.contains(control.originalEditor.getDomNode().ownerDocument.activeElement);
+		const originalFocused = control.originalEditor.getDomNode().contains(control.originalEditor.getDomNode().ownerDocument.activeElement);
 		await this.editorService.openEditor(originalFocused ? input.original : input.modified, {
 			pinned: false,
 			revealIfOpened: true,

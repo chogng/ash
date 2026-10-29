@@ -75,10 +75,7 @@ test('CSS isolates intentional color samples', async () => {
 
 test('color scanning excludes alpha mask stops while retaining painted colors on the same line', () => {
 	assert.deepEqual(rawColorLines('.mask { mask-image: linear-gradient(to right, rgb(0 0 0 / 16%), black); }'), []);
-	assert.deepEqual(
-		rawColorLines('.mask { mask-image: linear-gradient(black, transparent); color: rgb(0 0 0); }'),
-		[1],
-	);
+	assert.deepEqual(rawColorLines('.mask { mask-image: linear-gradient(black, transparent); color: rgb(0 0 0); }'), [1]);
 	assert.deepEqual(rawColorLines('.mask { mask-image: linear-gradient(rgb(1 2 3), black); }'), [1]);
 	assert.deepEqual(rawColorLines('.surface {\n background: #ffffff;\n}'), [2]);
 });
@@ -86,12 +83,8 @@ test('color scanning excludes alpha mask stops while retaining painted colors on
 function rawColorLines(source: string): number[] {
 	// Black alpha stops describe mask coverage without choosing a painted theme color.
 	// Other literal colors, including other mask colors, still require review.
-	const painted = source.replace(/\b(?:-webkit-)?mask-image\s*:[^;{}]*;/gu, declaration =>
-		declaration.replace(/\brgb\(0\s+0\s+0\s*\/\s*\d+(?:\.\d+)?%\)/gu, color => ' '.repeat(color.length)),
-	);
-	return painted
-		.split(/\r?\n/)
-		.flatMap((line, index) => (/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/.test(line) ? [index + 1] : []));
+	const painted = source.replace(/\b(?:-webkit-)?mask-image\s*:[^;{}]*;/gu, declaration => declaration.replace(/\brgb\(0\s+0\s+0\s*\/\s*\d+(?:\.\d+)?%\)/gu, color => ' '.repeat(color.length)));
+	return painted.split(/\r?\n/).flatMap((line, index) => (/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/.test(line) ? [index + 1] : []));
 }
 
 test('presentation scan skips nested .build output while retaining source CSS', async () => {
@@ -116,8 +109,7 @@ async function presentationFiles(directory: string): Promise<string[]> {
 		if (entry.isDirectory() && entry.name === '.build') continue;
 		const path = join(directory, entry.name);
 		if (entry.isDirectory()) result.push(...(await presentationFiles(path)));
-		else if (entry.name.endsWith('.css') || (entry.name.endsWith('.ts') && !path.includes('/test/')))
-			result.push(path);
+		else if (entry.name.endsWith('.css') || (entry.name.endsWith('.ts') && !path.includes('/test/'))) result.push(path);
 	}
 	return result;
 }

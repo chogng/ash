@@ -65,12 +65,7 @@ export class AppServerExtensionManagementService extends Disposable implements I
 		});
 		const total = Number(page.total);
 		if (!Number.isSafeInteger(total) || total < 0) {
-			throw new TypeError(
-				localize(
-					{ bundle: 'ash.extensions', key: 'marketplaceInvalidCount' },
-					'The registry returned an invalid result count.',
-				),
-			);
+			throw new TypeError(localize({ bundle: 'ash.extensions', key: 'marketplaceInvalidCount' }, 'The registry returned an invalid result count.'));
 		}
 		return { packages: page.packages.map(packageSummary), total, nextCursor: page.nextCursor ?? undefined };
 	}
@@ -81,11 +76,7 @@ export class AppServerExtensionManagementService extends Disposable implements I
 		return result;
 	}
 
-	async setSourceEnabled(
-		sourceId: string,
-		enabled: boolean,
-		expectedRevision: number,
-	): Promise<ExtensionRegistrySources> {
+	async setSourceEnabled(sourceId: string, enabled: boolean, expectedRevision: number): Promise<ExtensionRegistrySources> {
 		const result = await this.api.setSourceEnabled({ sourceId, enabled, expectedRevision });
 		this.invalidateBrowse();
 		return result;
@@ -94,11 +85,7 @@ export class AppServerExtensionManagementService extends Disposable implements I
 	public listBuiltInProviders(): Promise<ExtensionsBuiltInProviders> {
 		return this.api.builtInProviders();
 	}
-	public setBuiltInProviderEnabled(
-		id: string,
-		enabled: boolean,
-		expectedRevision: number,
-	): Promise<ExtensionsBuiltInProviders> {
+	public setBuiltInProviderEnabled(id: string, enabled: boolean, expectedRevision: number): Promise<ExtensionsBuiltInProviders> {
 		return this.api.setBuiltInProviderEnablement({ id, enabled, expectedRevision });
 	}
 
@@ -106,11 +93,7 @@ export class AppServerExtensionManagementService extends Disposable implements I
 		return this.api.editorExtensions();
 	}
 
-	setEditorExtensionPolicy(
-		extension: ExtensionsEditorExtensionPolicy,
-		action: ExtensionsEditorExtensionPolicyAction,
-		expectedRevision: number,
-	): Promise<ExtensionsEditorExtensions> {
+	setEditorExtensionPolicy(extension: ExtensionsEditorExtensionPolicy, action: ExtensionsEditorExtensionPolicyAction, expectedRevision: number): Promise<ExtensionsEditorExtensions> {
 		return this.api.setEditorExtensionPolicy({
 			installationId: extension.installationId,
 			packageDigest: extension.package.digest,
@@ -126,11 +109,7 @@ export class AppServerExtensionManagementService extends Disposable implements I
 		super();
 		const subscription = events.subscribe(event => {
 			if (event.method !== 'extensions/changed') return;
-			if (
-				event.params.instanceId === this.installedInstanceId &&
-				event.params.generation <= this.installedGeneration
-			)
-				return;
+			if (event.params.instanceId === this.installedInstanceId && event.params.generation <= this.installedGeneration) return;
 			this.installedInstanceId = event.params.instanceId;
 			this.installedGeneration = event.params.generation;
 			this.invalidateBrowse();
@@ -280,13 +259,7 @@ export class AppServerExtensionManagementService extends Disposable implements I
 }
 
 function browseKey(query: string, options: ExtensionsSearchOptions = {}): string {
-	return JSON.stringify([
-		query,
-		options.packageType ?? null,
-		options.limit ?? null,
-		options.capabilityKind ?? null,
-		options.languageId ?? null,
-	]);
+	return JSON.stringify([query, options.packageType ?? null, options.limit ?? null, options.capabilityKind ?? null, options.languageId ?? null]);
 }
 
 function uiTargets(value: readonly ('ide' | 'agents')[]): readonly ExtensionUiTarget[] {

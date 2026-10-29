@@ -10,10 +10,7 @@ import { remotePortForwardingChannel } from '../../../../../platform/remote/elec
 import { SshPortForwardingService } from '../../../../../platform/remote/electron-main/sshPortForwardingService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IMainProcessService } from '../../../../../platform/ipc/common/mainProcessService.js';
-import type {
-	SshPortForward as Forward,
-	SshPortForwardChange as ForwardChange,
-} from '../../../../../platform/remote/electron-main/sshPortForwardingService.js';
+import type { SshPortForward as Forward, SshPortForwardChange as ForwardChange } from '../../../../../platform/remote/electron-main/sshPortForwardingService.js';
 import { TunnelPrivacyId, type RemoteTunnel } from '../../../../../platform/tunnel/common/tunnel.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { TunnelService } from '../../electron-browser/tunnelService.js';
@@ -34,7 +31,12 @@ test('Tunnel handles share a forward and release the process after the last refe
 			localAddress: first.localAddress,
 			privacy: first.privacy,
 		},
-		{ host: '127.0.0.1', port: 3000, localAddress: '127.0.0.1:13000', privacy: TunnelPrivacyId.ConstantPrivate },
+		{
+			host: '127.0.0.1',
+			port: 3000,
+			localAddress: '127.0.0.1:13000',
+			privacy: TunnelPrivacyId.ConstantPrivate,
+		},
 	);
 	await first.dispose();
 	assert.deepEqual(api.closed, []);
@@ -86,10 +88,7 @@ test('Unsupported Tunnel options are rejected before IPC and use Chinese localiz
 	setNlsMessages('zh-CN', chinese);
 	try {
 		assert.equal(await service.openTunnel(undefined, '0.0.0.0', 3000), chinese.ash['tunnel.unsupportedOptions']);
-		assert.equal(
-			await service.openTunnel(undefined, 'localhost', 3000, undefined, 3000),
-			chinese.ash['tunnel.unsupportedOptions'],
-		);
+		assert.equal(await service.openTunnel(undefined, 'localhost', 3000, undefined, 3000), chinese.ash['tunnel.unsupportedOptions']);
 		await assert.rejects(service.openTunnel(undefined, 'localhost', 0), {
 			message: chinese.ash['tunnel.invalidPort'],
 		});
@@ -173,9 +172,7 @@ test('Desktop TunnelService rejects malformed Main tunnel data before exposing h
 	using services = new InstantiationService();
 	registerMainProcess(services, api);
 	using service = services.createInstance(TunnelService);
-	api.nextList = Promise.resolve([
-		{ id: 'unsafe', remoteHost: '0.0.0.0', remotePort: 3000, localPort: 13000, state: 'open' },
-	] as unknown as Forward[]);
+	api.nextList = Promise.resolve([{ id: 'unsafe', remoteHost: '0.0.0.0', remotePort: 3000, localPort: 13000, state: 'open' }] as unknown as Forward[]);
 	await assert.rejects(service.tunnels, /Invalid Remote tunnel reply/);
 	assert.deepEqual(await service.tunnels, []);
 });
@@ -207,13 +204,19 @@ test('Desktop tunnels cross the Main channel into the window SSH owner and close
 	const mainMessages = resources.add(new Emitter<VSBuffer>());
 	const renderer = resources.add(
 		new IPCClient(
-			{ onMessage: rendererMessages.event, send: buffer => queueMicrotask(() => mainMessages.fire(buffer)) },
+			{
+				onMessage: rendererMessages.event,
+				send: buffer => queueMicrotask(() => mainMessages.fire(buffer)),
+			},
 			'renderer',
 		),
 	);
 	const main = resources.add(
 		new IPCClient(
-			{ onMessage: mainMessages.event, send: buffer => queueMicrotask(() => rendererMessages.fire(buffer)) },
+			{
+				onMessage: mainMessages.event,
+				send: buffer => queueMicrotask(() => rendererMessages.fire(buffer)),
+			},
 			'window:1',
 		),
 	);
@@ -238,20 +241,25 @@ test('Desktop tunnels cross the Main channel into the window SSH owner and close
 	const tunnel = await open(service);
 	assert.deepEqual(
 		{ hosts, opened, localAddress: tunnel.localAddress },
-		{ hosts: ['second-host', 'first-host'], opened: ['127.0.0.1:13000'], localAddress: '127.0.0.1:13000' },
+		{
+			hosts: ['second-host', 'first-host'],
+			opened: ['127.0.0.1:13000'],
+			localAddress: '127.0.0.1:13000',
+		},
 	);
 	const channel = renderer.getChannel('remotePortForwarding');
-	await assert.rejects(
-		channel.call('ash:remote:tunnel:open', { remotePort: 3000, window: 'window:2' }),
-		/exactly required keys/,
-	);
+	await assert.rejects(channel.call('ash:remote:tunnel:open', { remotePort: 3000, window: 'window:2' }), /exactly required keys/);
 	await assert.rejects(channel.call('ash:remote:tunnel:open', { remotePort: 0 }), /positive/);
 	await assert.rejects(channel.call('ash:remote:tunnel:list', { host: 'second-host' }), /does not accept parameters/);
 	await tunnel.dispose();
 	assert.deepEqual(await service.tunnels, []);
 	assert.deepEqual(
 		{ firstExit: children[1]?.exitCode, otherExit: children[0]?.exitCode, otherTunnels: await secondOwner.list() },
-		{ firstExit: 0, otherExit: null, otherTunnels: [otherForward] },
+		{
+			firstExit: 0,
+			otherExit: null,
+			otherTunnels: [otherForward],
+		},
 	);
 });
 
@@ -381,8 +389,7 @@ function fixture() {
 		wait: async () => {},
 	});
 	const channel = remotePortForwardingChannel(() => host);
-	const call = <T>(method: string, params?: unknown): Promise<T> =>
-		channel.call<T>('window:1', `ash:remote:tunnel:${method}`, params);
+	const call = <T>(method: string, params?: unknown): Promise<T> => channel.call<T>('window:1', `ash:remote:tunnel:${method}`, params);
 	const services = new InstantiationService();
 	services.registerInstance(IMainProcessService, {
 		_serviceBrand: undefined,
@@ -403,10 +410,7 @@ test('Workbench tunnel handles share the host forward across loopback aliases an
 	const f = fixture();
 	using host = f.host;
 	using services = f.services;
-	const [first, second] = await Promise.all([
-		f.tunnel.openTunnel(undefined, 'localhost', 3000),
-		f.tunnel.openTunnel(undefined, '::1', 3000),
-	]);
+	const [first, second] = await Promise.all([f.tunnel.openTunnel(undefined, 'localhost', 3000), f.tunnel.openTunnel(undefined, '::1', 3000)]);
 	assert.ok(first && typeof first !== 'string');
 	assert.ok(second && typeof second !== 'string');
 	assert.equal(f.children.length, 1);

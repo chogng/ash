@@ -14,9 +14,7 @@ import type { SessionTraceReadResult } from '../../../platform/agentHost/common/
 function graph(scope: ISessionProviderScope, value: AgentTraceGraph): AgentTraceGraph {
 	return {
 		...value,
-		nodes: Object.fromEntries(
-			Object.entries(value.nodes).map(([id, node]) => [id, { ...node, threadId: scope.identity(node.threadId) }]),
-		),
+		nodes: Object.fromEntries(Object.entries(value.nodes).map(([id, node]) => [id, { ...node, threadId: scope.identity(node.threadId) }])),
 	};
 }
 
@@ -42,12 +40,8 @@ function trace(scope: ISessionProviderScope, value: AgentTrace): AgentTrace {
 							? {
 									origin: {
 										...origin,
-										...(typeof origin.parentThreadId === 'string'
-											? { parentThreadId: scope.identity(origin.parentThreadId) }
-											: {}),
-										...(typeof origin.sourceThreadId === 'string'
-											? { sourceThreadId: scope.identity(origin.sourceThreadId) }
-											: {}),
+										...(typeof origin.parentThreadId === 'string' ? { parentThreadId: scope.identity(origin.parentThreadId) } : {}),
+										...(typeof origin.sourceThreadId === 'string' ? { sourceThreadId: scope.identity(origin.sourceThreadId) } : {}),
 									},
 								}
 							: {}),
@@ -59,12 +53,7 @@ function trace(scope: ISessionProviderScope, value: AgentTrace): AgentTrace {
 			? {
 					overview: {
 						...value.overview,
-						threadCursors: Object.fromEntries(
-							Object.entries(value.overview.threadCursors).map(([id, cursor]) => [
-								scope.identity(id),
-								cursor,
-							]),
-						),
+						threadCursors: Object.fromEntries(Object.entries(value.overview.threadCursors).map(([id, cursor]) => [scope.identity(id), cursor])),
 					},
 				}
 			: {}),
@@ -73,12 +62,7 @@ function trace(scope: ISessionProviderScope, value: AgentTrace): AgentTrace {
 	};
 }
 
-export function projectSessionTrace(
-	scope: ISessionProviderScope,
-	result: SessionTraceReadResult,
-	backendSessionId: string,
-	after: Readonly<Record<string, number>>,
-): SessionTraceReadResult {
+export function projectSessionTrace(scope: ISessionProviderScope, result: SessionTraceReadResult, backendSessionId: string, after: Readonly<Record<string, number>>): SessionTraceReadResult {
 	const page = parseAgentTracePage(result.trace, result.cursors, result.hasMore, backendSessionId, after);
 	return {
 		...result,

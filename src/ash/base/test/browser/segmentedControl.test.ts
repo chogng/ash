@@ -15,11 +15,7 @@ suite('SegmentedControl contract', () => {
 	test('invalid items and selection fail without creating DOM or owned resources', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		const options = { ariaLabel: 'View', selectedId: 'list', onActivate: () => {} };
-		assert.throws(
-			() =>
-				new SegmentedControl(dom.window.document.body, { ...options, items: [{ id: 'list', label: 'List' }] }),
-			TypeError,
-		);
+		assert.throws(() => new SegmentedControl(dom.window.document.body, { ...options, items: [{ id: 'list', label: 'List' }] }), TypeError);
 		assert.throws(
 			() =>
 				new SegmentedControl(dom.window.document.body, {
@@ -106,22 +102,14 @@ suite('SegmentedControl contract', () => {
 		});
 		const buttons = [...control.domNode.querySelectorAll('button')];
 		buttons[0]!.focus();
-		buttons[0]!.dispatchEvent(
-			new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }),
-		);
+		buttons[0]!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
 		assert.equal(dom.window.document.activeElement, buttons[2]);
 		assert.equal(buttons[0]!.getAttribute('aria-pressed'), 'true');
-		buttons[2]!.dispatchEvent(
-			new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }),
-		);
+		buttons[2]!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
 		assert.equal(dom.window.document.activeElement, buttons[0]);
-		buttons[0]!.dispatchEvent(
-			new dom.window.KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }),
-		);
+		buttons[0]!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
 		assert.equal(dom.window.document.activeElement, buttons[2]);
-		buttons[2]!.dispatchEvent(
-			new dom.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }),
-		);
+		buttons[2]!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
 		assert.equal(dom.window.document.activeElement, buttons[0]);
 		buttons[1]!.click();
 		control.dispose();
@@ -188,9 +176,7 @@ suite('SegmentedControl rendered component', () => {
 			await buttons.nth(3).press('Space');
 			await expect(page.getByRole('status')).toHaveText('split');
 			await expect(buttons.nth(1)).toHaveAttribute('aria-pressed', 'true');
-			const initial = await icons
-				.locator('.ash-icon')
-				.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().toJSON()));
+			const initial = await icons.locator('.ash-icon').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().toJSON()));
 			for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
 				await page.evaluate(theme => window.ashSegmentedControlIntegration.theme(theme), theme);
 				for (const width of [520, 360]) {
@@ -233,18 +219,12 @@ suite('SegmentedControl rendered component', () => {
 						expect(contrast.selected).not.toBe(contrast.slider);
 						await buttons.first().press('End');
 						await expect(buttons.nth(3)).toBeFocused();
-						const selectedOutline = await buttons
-							.nth(3)
-							.evaluate(element => getComputedStyle(element).outlineColor);
+						const selectedOutline = await buttons.nth(3).evaluate(element => getComputedStyle(element).outlineColor);
 						expect(selectedOutline).not.toBe(contrast.slider);
 					}
 					await icons.getByRole('button').nth(2).click();
 					await expect(icons.getByRole('button').nth(2)).toHaveAttribute('aria-pressed', 'true');
-					expect(
-						await icons
-							.locator('.ash-icon')
-							.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().toJSON())),
-					).toEqual(initial);
+					expect(await icons.locator('.ash-icon').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().toJSON()))).toEqual(initial);
 				}
 			}
 			await text.evaluate(element => element.setAttribute('dir', 'rtl'));

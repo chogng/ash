@@ -2,20 +2,12 @@ import { colorThemeSchema } from './colorThemeSchema.js';
 import { Colors, validateTokenId } from '../../../../platform/theme/common/colorRegistry.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import {
-	Extensions,
-	ConfigurationScope,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, ConfigurationScope, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { JsonSchema } from '../../../../base/common/jsonSchema.js';
 import { createColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import type { IColorTheme } from '../../../../platform/theme/common/themeService.js';
-import {
-	defaultWorkbenchColorThemePreference,
-	SystemColorThemePreference,
-	WorkbenchThemesRegistry,
-} from '../../../common/theme.js';
+import { defaultWorkbenchColorThemePreference, SystemColorThemePreference, WorkbenchThemesRegistry } from '../../../common/theme.js';
 import { WorkbenchFileIconThemesRegistry, WorkbenchProductIconThemesRegistry } from './themeExtensionPoints.js';
 import { parseColorThemeDocument, parseSemanticTokenRules } from './colorThemeData.js';
 import type { IColorCustomizations } from './workbenchThemeService.js';
@@ -29,9 +21,7 @@ const colorSchema: JsonSchema = {
 const colorMapSchema: JsonSchema = {
 	type: 'object',
 	get properties() {
-		return Object.fromEntries(
-			Colors.getColors().map(color => [color.id, { ...colorSchema, description: color.description }]),
-		);
+		return Object.fromEntries(Colors.getColors().map(color => [color.id, { ...colorSchema, description: color.description }]));
 	},
 	additionalProperties: colorSchema,
 };
@@ -67,10 +57,7 @@ export const ThemeConfigurationSettings = Object.freeze({
 				return localize('theme.fileIcons.title', 'File Icon Theme');
 			},
 			get description() {
-				return localize(
-					'theme.fileIcons.description',
-					'Choose file icons contributed by installed extensions.',
-				);
+				return localize('theme.fileIcons.description', 'Choose file icons contributed by installed extensions.');
 			},
 			get options() {
 				return [
@@ -90,9 +77,7 @@ export const ThemeConfigurationSettings = Object.freeze({
 		defaultValue: 'default',
 		parse(value: unknown): string {
 			if (typeof value === 'string' && /^[a-zA-Z0-9._-]{1,256}$/u.test(value)) return value;
-			throw new TypeError(
-				localize('theme.invalidSetting', 'Invalid theme setting: {0}', 'workbench.productIconTheme'),
-			);
+			throw new TypeError(localize('theme.invalidSetting', 'Invalid theme setting: {0}', 'workbench.productIconTheme'));
 		},
 		setting: {
 			valueType: 'select',
@@ -100,10 +85,7 @@ export const ThemeConfigurationSettings = Object.freeze({
 				return localize('theme.productIcons.title', 'Product Icon Theme');
 			},
 			get description() {
-				return localize(
-					'theme.productIcons.description',
-					'Choose artwork for controls and other product icons.',
-				);
+				return localize('theme.productIcons.description', 'Choose artwork for controls and other product icons.');
 			},
 			get options() {
 				return [
@@ -153,10 +135,7 @@ export const ThemeConfigurationSettings = Object.freeze({
 				return localize('workbench.colorCustomizations.remove', 'Remove Color');
 			},
 			get incompleteMessage() {
-				return localize(
-					'workbench.colorCustomizations.incomplete',
-					'Enter a color name and value, or a theme name in brackets and a JSON color object.',
-				);
+				return localize('workbench.colorCustomizations.incomplete', 'Enter a color name and value, or a theme name in brackets and a JSON color object.');
 			},
 			get duplicateMessage() {
 				return localize('workbench.colorCustomizations.duplicate', 'Each theme color name must be unique.');
@@ -169,10 +148,7 @@ export const ThemeConfigurationSettings = Object.freeze({
 		schema: { type: 'string' },
 		defaultValue: defaultWorkbenchColorThemePreference,
 		parse(value: unknown): string {
-			if (typeof value !== 'string' || !isColorThemePreference(value))
-				throw new TypeError(
-					localize('theme.invalidSetting', 'Invalid theme setting: {0}', 'workbench.colorTheme'),
-				);
+			if (typeof value !== 'string' || !isColorThemePreference(value)) throw new TypeError(localize('theme.invalidSetting', 'Invalid theme setting: {0}', 'workbench.colorTheme'));
 			return value;
 		},
 		setting: {
@@ -194,20 +170,14 @@ export const ThemeConfigurationSettings = Object.freeze({
 	tokenColorCustomizations: registerRuleSetting(
 		'editor.tokenColorCustomizations',
 		localize2('theme.editor.tokenColorCustomizations.title', 'Token Colors').original,
-		localize2(
-			'theme.editor.tokenColorCustomizations.description',
-			'Override syntax colors and styles by token category.',
-		).original,
+		localize2('theme.editor.tokenColorCustomizations.description', 'Override syntax colors and styles by token category.').original,
 		parseTokenColors,
 		tokenCustomizationSchema(),
 	),
 	semanticTokenColorCustomizations: registerRuleSetting(
 		'editor.semanticTokenColorCustomizations',
 		localize2('theme.editor.semanticTokenColorCustomizations.title', 'Semantic Token Colors').original,
-		localize2(
-			'theme.editor.semanticTokenColorCustomizations.description',
-			'Override semantic token colors and styles.',
-		).original,
+		localize2('theme.editor.semanticTokenColorCustomizations.description', 'Override semantic token colors and styles.').original,
 		parseSemanticColors,
 		semanticCustomizationSchema(),
 	),
@@ -215,41 +185,25 @@ export const ThemeConfigurationSettings = Object.freeze({
 		'window.autoDetectColorScheme',
 		false,
 		localize2('theme.window.autoDetectColorScheme.title', 'Follow System Appearance').original,
-		localize2(
-			'theme.window.autoDetectColorScheme.description',
-			'Select your preferred light or dark theme when the system appearance changes.',
-		).original,
+		localize2('theme.window.autoDetectColorScheme.description', 'Select your preferred light or dark theme when the system appearance changes.').original,
 	),
 	autoDetectHighContrast: registerBoolean(
 		'window.autoDetectHighContrast',
 		true,
 		localize2('theme.window.autoDetectHighContrast.title', 'Follow System High Contrast').original,
-		localize2(
-			'theme.window.autoDetectHighContrast.description',
-			'Select your preferred high contrast theme when the system enables high contrast.',
-		).original,
+		localize2('theme.window.autoDetectHighContrast.description', 'Select your preferred high contrast theme when the system enables high contrast.').original,
 	),
-	preferredDarkColorTheme: registerPreferred(
-		'workbench.preferredDarkColorTheme',
-		'ash-dark',
-		localize2('theme.workbench.preferredDarkColorTheme.title', 'Preferred Dark Theme').original,
-	),
-	preferredLightColorTheme: registerPreferred(
-		'workbench.preferredLightColorTheme',
-		'ash-light',
-		localize2('theme.workbench.preferredLightColorTheme.title', 'Preferred Light Theme').original,
-	),
+	preferredDarkColorTheme: registerPreferred('workbench.preferredDarkColorTheme', 'ash-dark', localize2('theme.workbench.preferredDarkColorTheme.title', 'Preferred Dark Theme').original),
+	preferredLightColorTheme: registerPreferred('workbench.preferredLightColorTheme', 'ash-light', localize2('theme.workbench.preferredLightColorTheme.title', 'Preferred Light Theme').original),
 	preferredHighContrastColorTheme: registerPreferred(
 		'workbench.preferredHighContrastColorTheme',
 		'ash-high-contrast-dark',
-		localize2('theme.workbench.preferredHighContrastColorTheme.title', 'Preferred High Contrast Dark Theme')
-			.original,
+		localize2('theme.workbench.preferredHighContrastColorTheme.title', 'Preferred High Contrast Dark Theme').original,
 	),
 	preferredHighContrastLightColorTheme: registerPreferred(
 		'workbench.preferredHighContrastLightColorTheme',
 		'ash-high-contrast-light',
-		localize2('theme.workbench.preferredHighContrastLightColorTheme.title', 'Preferred High Contrast Light Theme')
-			.original,
+		localize2('theme.workbench.preferredHighContrastLightColorTheme.title', 'Preferred High Contrast Light Theme').original,
 	),
 });
 
@@ -304,13 +258,7 @@ function registerPreferred(key: string, defaultValue: string, title: string): st
 	});
 }
 
-function registerRuleSetting(
-	key: string,
-	title: string,
-	description: string,
-	parse: (value: unknown) => Record<string, unknown>,
-	schema: JsonSchema,
-): string {
+function registerRuleSetting(key: string, title: string, description: string, parse: (value: unknown) => Record<string, unknown>, schema: JsonSchema): string {
 	return configurationRegistry.registerConfiguration<Record<string, unknown>>({
 		key,
 		defaultValue: {},
@@ -350,17 +298,12 @@ function registerRuleSetting(
 
 function record(value: unknown): Record<string, unknown> {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) {
-		throw new TypeError(
-			localize('workbench.colorCustomizations.invalidObject', 'Color customizations must be an object.'),
-		);
+		throw new TypeError(localize('workbench.colorCustomizations.invalidObject', 'Color customizations must be an object.'));
 	}
 	return value as Record<string, unknown>;
 }
 
-function parseScopedCustomizations<T extends Record<string, unknown>>(
-	value: unknown,
-	parse: (value: unknown) => T,
-): Record<string, T[keyof T] | T> {
+function parseScopedCustomizations<T extends Record<string, unknown>>(value: unknown, parse: (value: unknown) => T): Record<string, T[keyof T] | T> {
 	const source = record(value);
 	const general: Record<string, unknown> = {};
 	const scoped: Record<string, unknown> = {};
@@ -381,13 +324,8 @@ function parseColors(value: unknown): Record<string, string> {
 	const colors: Record<string, string> = {};
 	for (const [id, color] of Object.entries(record(value))) {
 		validateTokenId(id, 'color');
-		if (
-			typeof color !== 'string' ||
-			!/^(?:default|#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8}))$/iu.test(color)
-		) {
-			throw new TypeError(
-				localize('workbench.colorCustomizations.invalidColor', 'Invalid theme color or hex value: {0}', id),
-			);
+		if (typeof color !== 'string' || !/^(?:default|#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8}))$/iu.test(color)) {
+			throw new TypeError(localize('workbench.colorCustomizations.invalidColor', 'Invalid theme color or hex value: {0}', id));
 		}
 		colors[id] = color;
 	}
@@ -452,31 +390,19 @@ function themeSpecificValues(theme: IColorTheme, value: Record<string, unknown>)
 		) {
 			for (const [property, value] of Object.entries(entry as Record<string, unknown>)) {
 				if (groups[property] && (typeof value === 'object' || typeof result[property] === 'object')) {
-					const previous =
-						typeof result[property] === 'string'
-							? { foreground: result[property] }
-							: (result[property] as Record<string, unknown>);
+					const previous = typeof result[property] === 'string' ? { foreground: result[property] } : (result[property] as Record<string, unknown>);
 					const next = typeof value === 'string' ? { foreground: value } : (value as Record<string, unknown>);
 					result[property] = { ...previous, ...next };
 				} else if (Array.isArray(value) && Array.isArray(result[property])) {
 					result[property] = [...(result[property] as unknown[]), ...value];
-				} else if (
-					value &&
-					typeof value === 'object' &&
-					result[property] &&
-					typeof result[property] === 'object'
-				) {
+				} else if (value && typeof value === 'object' && result[property] && typeof result[property] === 'object') {
 					const previous = result[property] as Record<string, unknown>;
 					const merged = { ...previous };
 					for (const [name, style] of Object.entries(value)) {
 						const original = previous[name];
 						if (property === 'rules') {
-							const prior =
-								typeof original === 'string'
-									? { foreground: original }
-									: (original as Record<string, unknown>);
-							const next =
-								typeof style === 'string' ? { foreground: style } : (style as Record<string, unknown>);
+							const prior = typeof original === 'string' ? { foreground: original } : (original as Record<string, unknown>);
+							const next = typeof style === 'string' ? { foreground: style } : (style as Record<string, unknown>);
 							merged[name] = { ...prior, ...next };
 						} else {
 							merged[name] = style;
@@ -494,14 +420,8 @@ function themeSpecificValues(theme: IColorTheme, value: Record<string, unknown>)
 
 export function applyThemeCustomizations(theme: IColorTheme, configuration: IConfigurationService): IColorTheme {
 	const colors = themeSpecificValues(theme, configuration.getValue(ThemeConfigurationSettings.colorCustomizations));
-	const tokens = themeSpecificValues(
-		theme,
-		configuration.getValue(ThemeConfigurationSettings.tokenColorCustomizations),
-	);
-	const semantic = themeSpecificValues(
-		theme,
-		configuration.getValue(ThemeConfigurationSettings.semanticTokenColorCustomizations),
-	);
+	const tokens = themeSpecificValues(theme, configuration.getValue(ThemeConfigurationSettings.tokenColorCustomizations));
+	const semantic = themeSpecificValues(theme, configuration.getValue(ThemeConfigurationSettings.semanticTokenColorCustomizations));
 	if (![colors, tokens, semantic].some(value => Object.keys(value).length)) {
 		return theme;
 	}
@@ -517,9 +437,7 @@ export function applyThemeCustomizations(theme: IColorTheme, configuration: ICon
 	const tokenRules = [...(theme.semanticTokenRules ?? [])];
 	for (const [key, value] of Object.entries(tokens)) {
 		if (groups[key]) {
-			const styles = Object.fromEntries(groups[key]!.map(type => [type, value])) as Parameters<
-				typeof parseSemanticTokenRules
-			>[0];
+			const styles = Object.fromEntries(groups[key]!.map(type => [type, value])) as Parameters<typeof parseSemanticTokenRules>[0];
 			tokenRules.push(...parseSemanticTokenRules(styles));
 		}
 	}
@@ -529,14 +447,8 @@ export function applyThemeCustomizations(theme: IColorTheme, configuration: ICon
 		colorOverrides: overrides,
 		resetColorOverrides: reset,
 		allowUnregisteredColorOverrides: true,
-		semanticHighlighting:
-			(semantic.enabled as boolean | undefined) ??
-			(tokens.semanticHighlighting as boolean | undefined) ??
-			theme.semanticHighlighting,
-		semanticTokenRules: [
-			...tokenRules,
-			...parseSemanticTokenRules(semantic.rules as Parameters<typeof parseSemanticTokenRules>[0]),
-		],
+		semanticHighlighting: (semantic.enabled as boolean | undefined) ?? (tokens.semanticHighlighting as boolean | undefined) ?? theme.semanticHighlighting,
+		semanticTokenRules: [...tokenRules, ...parseSemanticTokenRules(semantic.rules as Parameters<typeof parseSemanticTokenRules>[0])],
 	});
 }
 
@@ -560,6 +472,9 @@ function semanticCustomizationSchema(): JsonSchema {
 	return {
 		type: 'object',
 		additionalProperties: false,
-		properties: { enabled: { type: 'boolean' }, rules: colorThemeSchema.properties!.semanticTokenColors! },
+		properties: {
+			enabled: { type: 'boolean' },
+			rules: colorThemeSchema.properties!.semanticTokenColors!,
+		},
 	};
 }

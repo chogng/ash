@@ -5,12 +5,7 @@ import { Severity, INotificationService } from '../../../../platform/notificatio
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import type { OnboardingOutcome } from '../common/onboardingScenario.js';
 import { IOnboardingScenarioService } from '../common/onboardingScenarioService.js';
-import {
-	type IOnboardingTryout,
-	type IOnboardingTryoutService,
-	onboardingTryoutRegistry,
-	parseOnboardingTryoutLink,
-} from '../common/onboardingTryout.js';
+import { type IOnboardingTryout, type IOnboardingTryoutService, onboardingTryoutRegistry, parseOnboardingTryoutLink } from '../common/onboardingTryout.js';
 import { localize } from '../../../../nls.js';
 
 export class OnboardingTryoutService implements IOnboardingTryoutService {
@@ -35,9 +30,7 @@ export class OnboardingTryoutService implements IOnboardingTryoutService {
 			if (tryout.setup) {
 				this.notifications.notify({
 					severity: Severity.Info,
-					message:
-						tryout.unavailableMessage ??
-						localize('onboarding.tryoutUnavailable', 'This example is unavailable.'),
+					message: tryout.unavailableMessage ?? localize('onboarding.tryoutUnavailable', 'This example is unavailable.'),
 					actions: {
 						primary: [
 							{
@@ -57,21 +50,18 @@ export class OnboardingTryoutService implements IOnboardingTryoutService {
 		const presentation = tryout.presentation;
 		switch (presentation.kind) {
 			case 'command':
-				if (!CommandsRegistry.hasCommand(presentation.commandId) || !(await this.isAvailable(id, token)))
-					return token.isCancellationRequested ? 'cancelled' : 'unavailable';
+				if (!CommandsRegistry.hasCommand(presentation.commandId) || !(await this.isAvailable(id, token))) return token.isCancellationRequested ? 'cancelled' : 'unavailable';
 				if (token.isCancellationRequested) return 'cancelled';
 				await this.commands.executeCommand(presentation.commandId, ...(presentation.arguments ?? []));
 				return 'completed';
 			case 'openView':
-				if (!(await this.isAvailable(id, token)))
-					return token.isCancellationRequested ? 'cancelled' : 'unavailable';
+				if (!(await this.isAvailable(id, token))) return token.isCancellationRequested ? 'cancelled' : 'unavailable';
 				if (token.isCancellationRequested) return 'cancelled';
 				return (await this.views.focusView(presentation.viewId)) ? 'completed' : 'unavailable';
 			case 'guided': {
 				const scope = await presentation.prepare?.(token);
 				if (token.isCancellationRequested) return 'cancelled';
-				if (!(await this.isAvailable(id, token)))
-					return token.isCancellationRequested ? 'cancelled' : 'unavailable';
+				if (!(await this.isAvailable(id, token))) return token.isCancellationRequested ? 'cancelled' : 'unavailable';
 				if (token.isCancellationRequested) return 'cancelled';
 				return this.onboarding.showSteps(presentation.steps, token, scope || undefined);
 			}

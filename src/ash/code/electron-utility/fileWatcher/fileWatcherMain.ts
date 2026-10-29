@@ -45,10 +45,8 @@ process.parentPort.on('message', (event: Electron.MessageEvent) => {
 				postMessage: data => port.postMessage(data),
 				start: () => port.start(),
 				close: () => port.close(),
-				addEventListener: (type, listener) =>
-					type === 'message' ? port.on('message', listener) : port.on('close', listener as () => void),
-				removeEventListener: (type, listener) =>
-					type === 'message' ? port.off('message', listener) : port.off('close', listener as () => void),
+				addEventListener: (type, listener) => (type === 'message' ? port.on('message', listener) : port.on('close', listener as () => void)),
+				removeEventListener: (type, listener) => (type === 'message' ? port.off('message', listener) : port.off('close', listener as () => void)),
 			},
 			'profile',
 		),

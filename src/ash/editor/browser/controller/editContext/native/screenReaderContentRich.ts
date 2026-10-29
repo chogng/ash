@@ -2,11 +2,7 @@ import { fragment as createFragment, h, text as createText } from '../../../../.
 import { type FastDomNode } from '../../../../../base/browser/fastDomNode.js';
 import { type ViewContext } from '../../../../common/viewModel/viewContext.js';
 import { type EditContextViewController } from '../editContext.js';
-import {
-	projectStanzaSemanticTokenLine,
-	type ResolvedSemanticToken,
-	type SemanticTokenSource,
-} from '../../../viewParts/viewLines/viewLine.js';
+import { projectStanzaSemanticTokenLine, type ResolvedSemanticToken, type SemanticTokenSource } from '../../../viewParts/viewLines/viewLine.js';
 import { type ScreenReaderContentState } from './screenReaderUtils.js';
 import { SimpleScreenReaderContent } from './screenReaderContentSimple.js';
 import { EditorOption } from '../../../../common/config/editorOptions.js';
@@ -44,36 +40,17 @@ export class RichScreenReaderContent extends SimpleScreenReaderContent {
 		const fragment = createFragment(ownerDocument);
 		for (const [index, segment] of state.segments.entries()) {
 			if (index > 0) {
-				fragment.append(
-					createText(
-						ownerDocument,
-						text.slice(state.segments[index - 1]!.contentEndOffset, segment.contentStartOffset),
-					),
-				);
+				fragment.append(createText(ownerDocument, text.slice(state.segments[index - 1]!.contentEndOffset, segment.contentStartOffset)));
 			}
 			const segmentText = text.slice(segment.contentStartOffset, segment.contentEndOffset);
 			const startPosition = this.richContext.viewModel.model.getPositionAt(segment.modelStartOffset);
-			renderSegment(
-				fragment,
-				segmentText,
-				startPosition.lineNumber - 1,
-				startPosition.column - 1,
-				this.options,
-				this.richContext,
-			);
+			renderSegment(fragment, segmentText, startPosition.lineNumber - 1, startPosition.column - 1, this.options, this.richContext);
 		}
 		this.element.replaceChildren(fragment);
 	}
 }
 
-function renderSegment(
-	fragment: DocumentFragment,
-	text: string,
-	startLineIndex: number,
-	startColumn: number,
-	options: RichScreenReaderContentOptions,
-	context: ViewContext,
-): void {
+function renderSegment(fragment: DocumentFragment, text: string, startLineIndex: number, startColumn: number, options: RichScreenReaderContentOptions, context: ViewContext): void {
 	const ownerDocument = fragment.ownerDocument;
 	const lines = text.split('\n');
 	const lineCount = text.endsWith('\n') ? lines.length - 1 : lines.length;
@@ -85,9 +62,7 @@ function renderSegment(
 		lineElement.dataset.lineIndex = String(lineIndex);
 		const lineEndColumn = lineStartColumn + lineText.length;
 		const decorations = context.configuration.options.get(EditorOption.bracketPairColorization).enabled
-			? context.viewModel.model
-					.getLineDecorations(lineIndex + 1)
-					.filter(decoration => decoration.options.description === 'BracketPairColorization')
+			? context.viewModel.model.getLineDecorations(lineIndex + 1).filter(decoration => decoration.options.description === 'BracketPairColorization')
 			: [];
 		const inlineDecorations = decorations.flatMap(decoration => {
 			const start = Math.max(lineStartColumn, decoration.range.startColumn - 1);
@@ -101,11 +76,7 @@ function renderSegment(
 		projectStanzaSemanticTokenLine(
 			lineElement,
 			lineText,
-			clipSemanticTokens(
-				options.semanticTokenSource?.getLineTokens(lineIndex) ?? [],
-				lineStartColumn,
-				lineEndColumn,
-			),
+			clipSemanticTokens(options.semanticTokenSource?.getLineTokens(lineIndex) ?? [], lineStartColumn, lineEndColumn),
 			context.viewModel.model.getOptions().tabSize,
 			inlineDecorations,
 		);
@@ -117,11 +88,7 @@ function renderSegment(
 	}
 }
 
-function clipSemanticTokens(
-	tokens: readonly ResolvedSemanticToken[],
-	startColumn: number,
-	endColumn: number,
-): readonly ResolvedSemanticToken[] {
+function clipSemanticTokens(tokens: readonly ResolvedSemanticToken[], startColumn: number, endColumn: number): readonly ResolvedSemanticToken[] {
 	return Object.freeze(
 		tokens.flatMap(token => {
 			const start = Math.max(token.startColumn, startColumn);

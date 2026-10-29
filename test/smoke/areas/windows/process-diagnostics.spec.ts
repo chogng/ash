@@ -20,9 +20,7 @@ interface CpuScenario {
 const desktop = resolve(import.meta.dirname, '../../../..');
 const mainOutput = join(desktop, '.build/desktop/main/src');
 
-test('Desktop CPU diagnostics stay responsive, share concurrent reads and recover after collection failures', async ({
-	target,
-}, testInfo) => {
+test('Desktop CPU diagnostics stay responsive, share concurrent reads and recover after collection failures', async ({ target }, testInfo) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled', 'Requires the Electron UI project.');
 	const entry = testInfo.outputPath('cpu-diagnostics.mjs');
 	await writeFile(
@@ -99,8 +97,7 @@ startElectronApplication();
 		const page = await application.firstWindow();
 		await new Workbench(page).waitForReady();
 		await installMainChannelTestClient(page);
-		const read = () =>
-			page.evaluate(() => globalThis.ashTestMainProcess.call<SystemInfo>('process', 'getSystemInfo', []));
+		const read = () => page.evaluate(() => globalThis.ashTestMainProcess.call<SystemInfo>('process', 'getSystemInfo', []));
 		const native = await read();
 		expect(native.cpus).toMatch(/.+ \(\d+ × \d+ MHz\)/u);
 		expect(native.os).not.toBe('');
@@ -129,21 +126,14 @@ startElectronApplication();
 				}),
 			)
 			.toEqual({ waiting: 1, started: 2 });
-		expect(await page.evaluate(() => (globalThis as unknown as { cpuReadComplete: boolean }).cpuReadComplete)).toBe(
-			false,
-		);
+		expect(await page.evaluate(() => (globalThis as unknown as { cpuReadComplete: boolean }).cpuReadComplete)).toBe(false);
 		await application.evaluate(() => {
 			const control = new Int32Array((globalThis as unknown as { cpuScenario: CpuScenario }).cpuScenario.control);
 			Atomics.store(control, 1, 1);
 			Atomics.notify(control, 1);
 		});
-		const concurrent = await page.evaluate(
-			() => (globalThis as unknown as { cpuRead: Promise<SystemInfo[]> }).cpuRead,
-		);
-		expect(concurrent.map(info => info.cpus)).toEqual([
-			'Diagnostic CPU (2 × 1000 MHz)',
-			'Diagnostic CPU (2 × 1000 MHz)',
-		]);
+		const concurrent = await page.evaluate(() => (globalThis as unknown as { cpuRead: Promise<SystemInfo[]> }).cpuRead);
+		expect(concurrent.map(info => info.cpus)).toEqual(['Diagnostic CPU (2 × 1000 MHz)', 'Diagnostic CPU (2 × 1000 MHz)']);
 		await application.evaluate(() => {
 			const scenario = (globalThis as unknown as { cpuScenario: CpuScenario }).cpuScenario;
 			scenario.mode = 'sample';
@@ -167,8 +157,7 @@ startElectronApplication();
 		await expect
 			.poll(() =>
 				application.evaluate(() => {
-					const { started, exited, mainReads } = (globalThis as unknown as { cpuScenario: CpuScenario })
-						.cpuScenario;
+					const { started, exited, mainReads } = (globalThis as unknown as { cpuScenario: CpuScenario }).cpuScenario;
 					return { started, exited, mainReads };
 				}),
 			)
@@ -176,9 +165,7 @@ startElectronApplication();
 	} finally {
 		try {
 			await application.evaluate(({ BrowserWindow }) => {
-				const control = new Int32Array(
-					(globalThis as unknown as { cpuScenario: CpuScenario }).cpuScenario.control,
-				);
+				const control = new Int32Array((globalThis as unknown as { cpuScenario: CpuScenario }).cpuScenario.control);
 				Atomics.store(control, 1, 1);
 				Atomics.notify(control, 1);
 				for (const window of BrowserWindow.getAllWindows()) {

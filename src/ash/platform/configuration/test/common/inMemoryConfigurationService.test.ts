@@ -21,16 +21,7 @@ test('in-memory change events index exact sections and descendants without match
 	await service.updateValue('editor.options', 2);
 	await service.updateValue('editorial.enabled', false);
 
-	const sections = [
-		'editor',
-		'editor.options',
-		'editor.option',
-		'editor.options.fontSize',
-		'editorial',
-		'',
-		'editor.',
-		'Editor',
-	];
+	const sections = ['editor', 'editor.options', 'editor.option', 'editor.options.fontSize', 'editorial', '', 'editor.', 'Editor'];
 	assert.deepEqual(
 		events.map(event => sections.map(section => event.affectsConfiguration(section))),
 		[
@@ -98,7 +89,11 @@ test('in-memory configuration resolves base and language override values', async
 		value: 2,
 		default: { value: 4 },
 		memoryValue: 2,
-		memory: { value: 8, override: 2, overrides: [{ identifiers: ['typescript'], value: 2 }] },
+		memory: {
+			value: 8,
+			override: 2,
+			overrides: [{ identifiers: ['typescript'], value: 2 }],
+		},
 		overrideIdentifiers: ['typescript'],
 	});
 });
@@ -111,9 +106,7 @@ test('in-memory configuration validates writes and reports canonical data', asyn
 	await assert.rejects(service.updateValue('editor.unknown', 2), /not registered/u);
 	await assert.rejects(service.updateValue(tabSize, 0), /positive integer/u);
 	await service.updateValue(tabSize, 6, { overrideIdentifiers: ['typescript', 'typescript', 'javascript'] });
-	assert.deepEqual(service.inspect<number>(tabSize, { overrideIdentifier: 'typescript' }).memory?.overrides, [
-		{ identifiers: ['javascript', 'typescript'], value: 6 },
-	]);
+	assert.deepEqual(service.inspect<number>(tabSize, { overrideIdentifier: 'typescript' }).memory?.overrides, [{ identifiers: ['javascript', 'typescript'], value: 6 }]);
 
 	assert.deepEqual(service.keys(), {
 		default: ['editor.tabSize'],
@@ -158,22 +151,8 @@ test('in-memory configuration rejects unsupported owners and compares effective 
 	assert.equal(service.getValue(tabSize, address), 8);
 	assert.equal(service.inspect(tabSize, address).memoryValue, 8);
 
-	await assert.rejects(
-		service.updateValue(tabSize, 2, ConfigurationTarget.USER),
-		/Unable to write editor\.tabSize to target 2/u,
-	);
+	await assert.rejects(service.updateValue(tabSize, 2, ConfigurationTarget.USER), /Unable to write editor\.tabSize to target 2/u);
 	await assert.rejects(service.updateValue(tabSize, 2, 99 as ConfigurationTarget), /target is invalid/u);
-	await assert.rejects(
-		service.updateValue(
-			tabSize,
-			2,
-			{ resource: URI.parse('file:///workspace/file.ts') },
-			ConfigurationTarget.MEMORY,
-		),
-		/does not support resource overrides/u,
-	);
-	await assert.rejects(
-		service.reloadConfiguration(ConfigurationTarget.USER),
-		/Unable to reload in-memory configuration target 2/u,
-	);
+	await assert.rejects(service.updateValue(tabSize, 2, { resource: URI.parse('file:///workspace/file.ts') }, ConfigurationTarget.MEMORY), /does not support resource overrides/u);
+	await assert.rejects(service.reloadConfiguration(ConfigurationTarget.USER), /Unable to reload in-memory configuration target 2/u);
 });

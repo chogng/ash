@@ -1,10 +1,6 @@
 import { isAbsolute, relative, resolve } from 'node:path';
 import type { Plugin } from 'vite';
-import {
-	browserExtensionRoots,
-	browserExtensionWatchFiles,
-	prepareBuiltinExtensions,
-} from '../../builtin/extensions.ts';
+import { browserExtensionRoots, browserExtensionWatchFiles, prepareBuiltinExtensions } from '../../builtin/extensions.ts';
 import { watchRebuild } from '../../lib/watchRebuild.ts';
 import { generateLocalization, isLocalizationInput, localizationWatchRoots } from '../../resources/localization.ts';
 
@@ -45,9 +41,7 @@ export function browserExtensionsPlugin(): Plugin {
 							inside !== '..' &&
 							!inside.startsWith('..\\') &&
 							!inside.startsWith('../') &&
-							!inside
-								.split(/[\\/]/)
-								.some(part => part.startsWith('.') || ['node_modules', 'test', 'target'].includes(part))
+							!inside.split(/[\\/]/).some(part => part.startsWith('.') || ['node_modules', 'test', 'target'].includes(part))
 						);
 					}),
 				async () => {

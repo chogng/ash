@@ -58,9 +58,7 @@ export function dictationBackend(configuration: Pick<IConfigurationService, 'get
 	if (type === 'local') {
 		return {
 			type,
-			modelId: parseLocalModel(
-				configuration.getValue(DictationConfiguration.model) ?? DEFAULT_LOCAL_TRANSCRIPTION_MODEL,
-			),
+			modelId: parseLocalModel(configuration.getValue(DictationConfiguration.model) ?? DEFAULT_LOCAL_TRANSCRIPTION_MODEL),
 		};
 	}
 	const provider = parseCloudProvider(configuration.getValue(DictationConfiguration.cloudProvider) ?? 'openAi');
@@ -81,10 +79,7 @@ export function parseLanguage(value: unknown): string {
 	throw new TypeError('dictation.language must be auto or a language code');
 }
 
-export function dictationInputOptions(
-	configuration: Pick<IConfigurationService, 'getValue'>,
-	backend: 'local' | 'cloud' | 'codex',
-): { inputDevice: string | null; language: string | null } {
+export function dictationInputOptions(configuration: Pick<IConfigurationService, 'getValue'>, backend: 'local' | 'cloud' | 'codex'): { inputDevice: string | null; language: string | null } {
 	const inputDevice = parseInputDevice(configuration.getValue('dictation.inputDevice') ?? '');
 	const language = parseLanguage(configuration.getValue('dictation.language') ?? 'auto');
 	return { inputDevice: inputDevice || null, language: backend === 'local' || language === 'auto' ? null : language };

@@ -48,21 +48,9 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { IPromptsService } from '../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
-import {
-	addConnection,
-	describeConnectorState,
-	describeMcpServerState,
-	getSkillSummary,
-} from '../../../../workbench/contrib/extensions/browser/extensionsActions.js';
-import {
-	changeExtensionPackage,
-	ExtensionEditor,
-} from '../../../../workbench/contrib/extensions/browser/extensionEditor.js';
-import {
-	ExtensionsCapabilityInput,
-	ExtensionsInput,
-	ExtensionsInputSource,
-} from '../../../../workbench/contrib/extensions/common/extensionsInput.js';
+import { addConnection, describeConnectorState, describeMcpServerState, getSkillSummary } from '../../../../workbench/contrib/extensions/browser/extensionsActions.js';
+import { changeExtensionPackage, ExtensionEditor } from '../../../../workbench/contrib/extensions/browser/extensionEditor.js';
+import { ExtensionsCapabilityInput, ExtensionsInput, ExtensionsInputSource } from '../../../../workbench/contrib/extensions/common/extensionsInput.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { CustomizeSkillActions } from './customizeSkillActions.js';
 import './customizeEditor.css';
@@ -98,8 +86,7 @@ export class CustomizeEditorPane extends EditorPane {
 	private back!: Button;
 	private detailEditor: ExtensionEditor | undefined;
 	private catalogScrollTop = 0;
-	private returnFocus:
-		{ readonly element: HTMLElement; readonly resourceId?: string; readonly action: boolean } | undefined;
+	private returnFocus: { readonly element: HTMLElement; readonly resourceId?: string; readonly action: boolean } | undefined;
 	private readonly detailResources = this._register(new DisposableStore());
 	private panel!: HTMLElement;
 	private grid!: HTMLElement;
@@ -158,14 +145,7 @@ export class CustomizeEditorPane extends EditorPane {
 		@IStorageService storage: IStorageService,
 	) {
 		super('sessions.editor.customize', theme, storage);
-		for (const event of [
-			prompts.onDidChangeSkills,
-			marketplace.onDidChangeSources,
-			extensions.onDidChangeInstalled,
-			plugins.onDidChange,
-			connectors.onDidChange,
-			mcp.onDidChange,
-		]) {
+		for (const event of [prompts.onDidChangeSkills, marketplace.onDidChangeSources, extensions.onDidChangeInstalled, plugins.onDidChange, connectors.onDidChange, mcp.onDidChange]) {
 			this._register(
 				event(() => {
 					if (this.shown) this.refresh.schedule();
@@ -261,20 +241,8 @@ export class CustomizeEditorPane extends EditorPane {
 				label: localize('customize.filter', 'Filter sources'),
 				icon: Lxicon.listFilter,
 				getActions: () => [
-					this.menuAction(
-						'all',
-						localize('customize.allSources', 'All sources'),
-						() => this.setSource(undefined),
-						!this.sourceId,
-					),
-					...this.marketplace.sources.map(source =>
-						this.menuAction(
-							source.id,
-							source.displayName,
-							() => this.setSource(source.id),
-							this.sourceId === source.id,
-						),
-					),
+					this.menuAction('all', localize('customize.allSources', 'All sources'), () => this.setSource(undefined), !this.sourceId),
+					...this.marketplace.sources.map(source => this.menuAction(source.id, source.displayName, () => this.setSource(source.id), this.sourceId === source.id)),
 				],
 			},
 			{
@@ -319,9 +287,7 @@ export class CustomizeEditorPane extends EditorPane {
 					const provider =
 						action.id === 'addResource'
 							? {
-									showContextMenu: (
-										delegate: Parameters<IContextMenuService['showContextMenu']>[0],
-									) =>
+									showContextMenu: (delegate: Parameters<IContextMenuService['showContextMenu']>[0]) =>
 										this.menus.showContextMenu({
 											...delegate,
 											anchorAlignment: AnchorAlignment.Right,
@@ -460,15 +426,8 @@ export class CustomizeEditorPane extends EditorPane {
 		);
 		this.panel.setAttribute('aria-labelledby', `ash-customize-${this.category}`);
 		this.collectionControl.setSelection(this.collection);
-		this.toolbar.setActions(
-			this.toolbarActions.filter(
-				action =>
-					action.id !== 'filterSources' || (this.collection === 'discover' && this.category !== 'plugins'),
-			),
-		);
-		this.toolbar.element
-			.querySelector('[data-action-id="filterSources"] button')
-			?.setAttribute('aria-pressed', String(!!this.sourceId));
+		this.toolbar.setActions(this.toolbarActions.filter(action => action.id !== 'filterSources' || (this.collection === 'discover' && this.category !== 'plugins')));
+		this.toolbar.element.querySelector('[data-action-id="filterSources"] button')?.setAttribute('aria-pressed', String(!!this.sourceId));
 		this.hero.hidden = this.collection !== 'discover';
 		this.heroTitle.textContent =
 			this.category === 'skills'
@@ -478,31 +437,14 @@ export class CustomizeEditorPane extends EditorPane {
 					: localize('customize.pluginsTitle', 'Make Ash your own');
 		this.heroDescription.textContent =
 			this.category === 'skills'
-				? localize(
-						'customize.skillsDescription',
-						'Discover reusable instructions for writing, research, coding and everyday work.',
-					)
+				? localize('customize.skillsDescription', 'Discover reusable instructions for writing, research, coding and everyday work.')
 				: this.category === 'connectors'
-					? localize(
-							'customize.connectorsDescription',
-							'Connect your services and MCP servers to work with the context you need.',
-						)
-					: localize(
-							'customize.pluginsDescription',
-							'Explore plugins that add tools and capabilities to your workspace.',
-						);
+					? localize('customize.connectorsDescription', 'Connect your services and MCP servers to work with the context you need.')
+					: localize('customize.pluginsDescription', 'Explore plugins that add tools and capabilities to your workspace.');
 		this.heading.textContent =
 			this.collection === 'yours'
-				? localize(
-						'customize.yourResources',
-						'Your {0}',
-						categories.find(item => item.id === this.category)!.label.toLocaleLowerCase(),
-					)
-				: localize(
-						'customize.discoverResources',
-						'Discover {0}',
-						categories.find(item => item.id === this.category)!.label.toLocaleLowerCase(),
-					);
+				? localize('customize.yourResources', 'Your {0}', categories.find(item => item.id === this.category)!.label.toLocaleLowerCase())
+				: localize('customize.discoverResources', 'Discover {0}', categories.find(item => item.id === this.category)!.label.toLocaleLowerCase());
 	}
 
 	private async load(append = false): Promise<void> {
@@ -512,13 +454,7 @@ export class CustomizeEditorPane extends EditorPane {
 		const request = (this.request = new CancellationTokenSource());
 		const sessionId = this.sessions.getActiveConversation()?.sessionId;
 		const cursor = append ? this.cursor : undefined;
-		const queryKey = JSON.stringify([
-			this.category,
-			this.collection,
-			this.sourceId,
-			this.collection === 'discover' ? this.search.value : '',
-			sessionId,
-		]);
+		const queryKey = JSON.stringify([this.category, this.collection, this.sourceId, this.collection === 'discover' ? this.search.value : '', sessionId]);
 		if (!append && queryKey !== this.loadedQuery) {
 			this.cards = [];
 			this.note = '';
@@ -527,9 +463,7 @@ export class CustomizeEditorPane extends EditorPane {
 			this.renderCards();
 		}
 		this.panel.setAttribute('aria-busy', 'true');
-		this.loading ??= this._register(
-			new LoadingSkeleton(this.panel, localize('customize.loading', 'Loading resources…'), 'cards', 6),
-		);
+		this.loading ??= this._register(new LoadingSkeleton(this.panel, localize('customize.loading', 'Loading resources…'), 'cards', 6));
 		this.grid.before(this.loading.element);
 		this.loading.setVisible(!this.cards.length);
 		this.more.enabled = false;
@@ -537,18 +471,13 @@ export class CustomizeEditorPane extends EditorPane {
 		this.message.hidden = !this.cards.length;
 		this.message.textContent = this.cards.length ? localize('customize.loading', 'Loading resources…') : '';
 		try {
-			const result =
-				this.collection === 'discover'
-					? await this.readDiscover(request, cursor)
-					: await this.readYours(sessionId);
+			const result = this.collection === 'discover' ? await this.readDiscover(request, cursor) : await this.readYours(sessionId);
 			if (request.token.isCancellationRequested || !this.shown) return;
 			if (sessionId !== this.sessions.getActiveConversation()?.sessionId) {
 				this.refresh.schedule();
 				return;
 			}
-			const unique = new Map(
-				(append ? [...this.cards, ...result.cards] : result.cards).map(card => [card.id, card]),
-			);
+			const unique = new Map((append ? [...this.cards, ...result.cards] : result.cards).map(card => [card.id, card]));
 			this.cards = [...unique.values()];
 			this.note = result.note ?? '';
 			this.cursor = result.cursor;
@@ -570,10 +499,7 @@ export class CustomizeEditorPane extends EditorPane {
 		}
 	}
 
-	private async readDiscover(
-		request: CancellationTokenSource,
-		cursor?: ICustomizationMarketplaceCursor,
-	): Promise<Catalog> {
+	private async readDiscover(request: CancellationTokenSource, cursor?: ICustomizationMarketplaceCursor): Promise<Catalog> {
 		const query = this.search.value.trim();
 		if (this.category === 'plugins') {
 			const snapshot = await this.extensions.refreshBrowse(query, { packageType: 'plugin', limit: 200 });
@@ -584,14 +510,7 @@ export class CustomizeEditorPane extends EditorPane {
 					description: summary.description,
 					metadata: summary.version,
 					open: () =>
-						this.openInput(
-							new ExtensionsInput(
-								summary,
-								snapshot.installed.find(
-									item => item.package.id === summary.id && item.package.version === summary.version,
-								)?.installationId,
-							),
-						),
+						this.openInput(new ExtensionsInput(summary, snapshot.installed.find(item => item.package.id === summary.id && item.package.version === summary.version)?.installationId)),
 				})),
 				note: snapshot.unavailableSources.join(' · '),
 			};
@@ -601,9 +520,7 @@ export class CustomizeEditorPane extends EditorPane {
 			this.marketplace.query(
 				{
 					query,
-					mediaType: skills
-						? CustomizationMarketplaceMediaType.Skill
-						: CustomizationMarketplaceMediaType.McpServer,
+					mediaType: skills ? CustomizationMarketplaceMediaType.Skill : CustomizationMarketplaceMediaType.McpServer,
 					sourceIds: this.sourceId ? [this.sourceId] : undefined,
 					pageSize: 30,
 					cursor,
@@ -618,29 +535,13 @@ export class CustomizeEditorPane extends EditorPane {
 				name: resource.displayName,
 				description: resource.description,
 				metadata: `${this.marketplace.allSources.find(source => source.id === resource.sourceId)?.displayName ?? resource.sourceId} · ${resource.version}`,
-				installed:
-					skills &&
-					installed.some(
-						item =>
-							item.package.id === resource.installation.selectionId &&
-							item.package.version === resource.version &&
-							item.state === 'installed',
-					),
+				installed: skills && installed.some(item => item.package.id === resource.installation.selectionId && item.package.version === resource.version && item.state === 'installed'),
 				install:
 					skills && !installed.some(item => item.package.id === resource.installation.selectionId)
 						? async () => {
-								const details = await this.extensions.get(
-									resource.installation.selectionId,
-									resource.version,
-								);
+								const details = await this.extensions.get(resource.installation.selectionId, resource.version);
 								if (!this.shown || this.isDisposed) return;
-								const result = await changeExtensionPackage(
-									this.extensions,
-									this.dialogs,
-									this.notifications,
-									'install',
-									details,
-								);
+								const result = await changeExtensionPackage(this.extensions, this.dialogs, this.notifications, 'install', details);
 								if (result && this.shown && !this.isDisposed) await this.load();
 							}
 						: undefined,
@@ -648,10 +549,7 @@ export class CustomizeEditorPane extends EditorPane {
 			})),
 			cursor: page.nextCursor,
 			note: !this.marketplace.sources.length
-				? localize(
-						'customize.discoveryUnavailable',
-						'Discovery is disabled or no catalog sources are available.',
-					)
+				? localize('customize.discoveryUnavailable', 'Discovery is disabled or no catalog sources are available.')
 				: page.sourceErrors?.map(error => error.message).join(' · '),
 		};
 	}
@@ -685,10 +583,7 @@ export class CustomizeEditorPane extends EditorPane {
 					id: installation.installationId,
 					name: installation.package.id,
 					description: installation.capabilities.map(capability => capability.kind).join(' · '),
-					metadata:
-						installation.state === 'pendingRemoval'
-							? localize('customize.removing', 'Removal pending')
-							: installation.package.version,
+					metadata: installation.state === 'pendingRemoval' ? localize('customize.removing', 'Removal pending') : installation.package.version,
 					open: () =>
 						this.openInput(
 							new ExtensionsInput(
@@ -707,12 +602,7 @@ export class CustomizeEditorPane extends EditorPane {
 					id: `local/${plugin.id}`,
 					name: plugin.displayName,
 					description: localize('customize.localPlugin', 'Local plugin'),
-					metadata: [
-						plugin.version,
-						plugin.enabled
-							? localize('customize.enabled', 'Enabled')
-							: localize('customize.disabled', 'Disabled'),
-					].join(' · '),
+					metadata: [plugin.version, plugin.enabled ? localize('customize.enabled', 'Enabled') : localize('customize.disabled', 'Disabled')].join(' · '),
 					open: () =>
 						this.openInput(
 							new ExtensionsInput(
@@ -741,12 +631,7 @@ export class CustomizeEditorPane extends EditorPane {
 			this.extensions.listInstalled(),
 		]);
 		const connectors = accounts.status === 'fulfilled' ? accounts.value.connectors : [];
-		const linked = new Set(
-			connectors.flatMap(connector => [
-				connector.mcpDeclarationId,
-				...(connector.mcpServerId ? [connector.mcpServerId] : []),
-			]),
-		);
+		const linked = new Set(connectors.flatMap(connector => [connector.mcpDeclarationId, ...(connector.mcpServerId ? [connector.mcpServerId] : [])]));
 		const cards = new Map<string, Card>();
 		for (const connector of connectors)
 			cards.set(`connector/${connector.id}`, {
@@ -754,8 +639,7 @@ export class CustomizeEditorPane extends EditorPane {
 				name: connector.displayName,
 				description: connector.description,
 				metadata: describeConnectorState(connector.state, connector.enabled),
-				open: () =>
-					this.openInput(new ExtensionsCapabilityInput({ kind: 'connector', connectorId: connector.id })),
+				open: () => this.openInput(new ExtensionsCapabilityInput({ kind: 'connector', connectorId: connector.id })),
 			});
 		for (const installation of packages.status === 'fulfilled' ? packages.value : []) {
 			for (const capability of installation.capabilities.filter(capability => capability.kind === 'mcp')) {
@@ -784,10 +668,7 @@ export class CustomizeEditorPane extends EditorPane {
 				id: server.id,
 				name: server.displayName,
 				description: server.id,
-				metadata:
-					server.enablement === 'enabled'
-						? localize('customize.enabled', 'Enabled')
-						: localize('customize.disabled', 'Disabled'),
+				metadata: server.enablement === 'enabled' ? localize('customize.enabled', 'Enabled') : localize('customize.disabled', 'Disabled'),
 				open: () => this.openInput(new ExtensionsCapabilityInput({ kind: 'mcp', serverId: server.id })),
 			});
 		}
@@ -799,33 +680,23 @@ export class CustomizeEditorPane extends EditorPane {
 				name: server.displayName || existing?.name || server.id,
 				description: existing?.description ?? server.id,
 				metadata: describeMcpServerState(server.state),
-				open:
-					existing?.open ??
-					(() => this.openInput(new ExtensionsCapabilityInput({ kind: 'mcp', serverId: server.id }))),
+				open: existing?.open ?? (() => this.openInput(new ExtensionsCapabilityInput({ kind: 'mcp', serverId: server.id }))),
 			});
 		}
 		return {
 			cards: [...cards.values()],
-			note: [accounts, configuration, runtime, packages]
-				.flatMap(result => (result.status === 'rejected' ? [String(result.reason)] : []))
-				.join('\n'),
+			note: [accounts, configuration, runtime, packages].flatMap(result => (result.status === 'rejected' ? [String(result.reason)] : [])).join('\n'),
 		};
 	}
 
 	private renderCards(): void {
 		const active = this.root.ownerDocument.activeElement as HTMLElement | null;
-		const focusedId = this.grid.contains(active)
-			? active?.closest<HTMLElement>('[data-resource-id]')?.dataset.resourceId
-			: undefined;
+		const focusedId = this.grid.contains(active) ? active?.closest<HTMLElement>('[data-resource-id]')?.dataset.resourceId : undefined;
 		this.cardResources.clear();
 		this.grid.replaceChildren();
 		const query = this.search.value.trim().toLocaleLowerCase();
 		const cards = this.cards
-			.filter(
-				card =>
-					this.collection === 'discover' ||
-					`${card.name} ${card.description} ${card.metadata ?? ''}`.toLocaleLowerCase().includes(query),
-			)
+			.filter(card => this.collection === 'discover' || `${card.name} ${card.description} ${card.metadata ?? ''}`.toLocaleLowerCase().includes(query))
 			.sort((left, right) => left.name.localeCompare(right.name) * (this.descending ? -1 : 1));
 		for (const card of cards) {
 			const article = h(this.grid.ownerDocument, 'article', { className: 'ash-customize-card' });
@@ -834,14 +705,7 @@ export class CustomizeEditorPane extends EditorPane {
 				className: 'ash-customize-card-icon',
 				attributes: { 'aria-hidden': 'true' },
 			});
-			appendIcon(
-				this.category === 'skills'
-					? Lxicon.book
-					: this.category === 'connectors'
-						? Lxicon.plug
-						: Lxicon.extensions,
-				icon,
-			);
+			appendIcon(this.category === 'skills' ? Lxicon.book : this.category === 'connectors' ? Lxicon.plug : Lxicon.extensions, icon);
 			const content = h(this.grid.ownerDocument, 'div', { className: 'ash-customize-card-content' });
 			const name = this.cardResources.add(
 				new Button(content, {
@@ -853,20 +717,10 @@ export class CustomizeEditorPane extends EditorPane {
 				}),
 			);
 			name.domNode.classList.add('ash-customize-card-name');
-			const description = h(
-				this.grid.ownerDocument,
-				'p',
-				{ className: 'ash-customize-card-description' },
-				card.description,
-			);
+			const description = h(this.grid.ownerDocument, 'p', { className: 'ash-customize-card-description' }, card.description);
 			content.append(description);
 			if (card.metadata) {
-				const metadata = h(
-					this.grid.ownerDocument,
-					'p',
-					{ className: 'ash-customize-card-metadata' },
-					card.metadata,
-				);
+				const metadata = h(this.grid.ownerDocument, 'p', { className: 'ash-customize-card-metadata' }, card.metadata);
 				content.append(metadata);
 				this.cardResources.add(this.hover.setupDelayedHover(metadata, { content: card.metadata }));
 			}
@@ -894,9 +748,7 @@ export class CustomizeEditorPane extends EditorPane {
 								if (open.domNode.isConnected) open.enabled = true;
 								// The review dialog cannot restore focus to the disabled install button.
 								if (restoreFocus && this.shown && document.activeElement === document.body) {
-									const row = [...this.grid.children].find(
-										row => (row as HTMLElement).dataset.resourceId === card.id,
-									);
+									const row = [...this.grid.children].find(row => (row as HTMLElement).dataset.resourceId === card.id);
 									row?.querySelector<HTMLButtonElement>('.ash-customize-card-open')?.focus();
 								}
 							}
@@ -955,14 +807,9 @@ export class CustomizeEditorPane extends EditorPane {
 	}
 
 	private async openResource(resource: ICustomizationMarketplaceResource): Promise<void> {
-		const [details, installed] = await Promise.all([
-			this.extensions.get(resource.installation.selectionId, resource.version),
-			this.extensions.listInstalled(),
-		]);
+		const [details, installed] = await Promise.all([this.extensions.get(resource.installation.selectionId, resource.version), this.extensions.listInstalled()]);
 		if (!this.shown || this.isDisposed) return;
-		const installation = installed.find(
-			item => item.package.id === details.package.id && item.package.version === details.package.version,
-		);
+		const installation = installed.find(item => item.package.id === details.package.id && item.package.version === details.package.version);
 		await this.openInput(
 			new ExtensionsInput(
 				{
@@ -1014,10 +861,7 @@ export class CustomizeEditorPane extends EditorPane {
 				: this.category === 'connectors'
 					? localize('customize.connectors', 'Connectors')
 					: localize('customize.plugins', 'Plugins');
-		this.back.domNode.setAttribute(
-			'aria-label',
-			localize('customize.backToCollection', 'Back to {0}', this.back.label),
-		);
+		this.back.domNode.setAttribute('aria-label', localize('customize.backToCollection', 'Back to {0}', this.back.label));
 		pane.create(this.detailHost);
 		pane.setVisible(true);
 		this.back.focus();
@@ -1040,14 +884,8 @@ export class CustomizeEditorPane extends EditorPane {
 		const previous = this.returnFocus;
 		this.returnFocus = undefined;
 		if (restoreFocus) {
-			const row = [...this.grid.children].find(
-				row => (row as HTMLElement).dataset.resourceId === previous?.resourceId,
-			);
-			const target = previous?.element.isConnected
-				? previous.element
-				: row?.querySelector<HTMLButtonElement>(
-						previous?.action ? '.ash-customize-card-open' : '.ash-customize-card-name',
-					);
+			const row = [...this.grid.children].find(row => (row as HTMLElement).dataset.resourceId === previous?.resourceId);
+			const target = previous?.element.isConnected ? previous.element : row?.querySelector<HTMLButtonElement>(previous?.action ? '.ash-customize-card-open' : '.ash-customize-card-name');
 			if (target) target.focus({ preventScroll: true });
 			else this.search.focus();
 		}
@@ -1109,36 +947,22 @@ export class CustomizeEditorPane extends EditorPane {
 					enabled: this.skillActions.isAvailable,
 				},
 				{
-					...this.menuAction('createWithAsh', localize('customize.createWithAsh', 'Create with Ash'), () =>
-						this.skillActions.createWithAsh(),
-					),
+					...this.menuAction('createWithAsh', localize('customize.createWithAsh', 'Create with Ash'), () => this.skillActions.createWithAsh()),
 					icon: Lxicon.chat1,
 				},
 			];
 		return [
 			{
-				...this.menuAction('discover', localize('customize.browse', 'Browse catalog'), () =>
-					this.selectCollection('discover'),
-				),
+				...this.menuAction('discover', localize('customize.browse', 'Browse catalog'), () => this.selectCollection('discover')),
 				icon: Lxicon.search,
 			},
 			...(this.category === 'connectors'
 				? [
 						{
-							...this.menuAction(
-								'connect',
-								localize('customize.addConnection', 'Add connection'),
-								async () => {
-									const target = await addConnection(
-										this.connectors,
-										this.mcp,
-										this.quickInput,
-										this.dialogs,
-										this.actions.signal,
-									);
-									if (target) await this.openInput(new ExtensionsCapabilityInput(target));
-								},
-							),
+							...this.menuAction('connect', localize('customize.addConnection', 'Add connection'), async () => {
+								const target = await addConnection(this.connectors, this.mcp, this.quickInput, this.dialogs, this.actions.signal);
+								if (target) await this.openInput(new ExtensionsCapabilityInput(target));
+							}),
 							icon: Lxicon.plug,
 						},
 					]
@@ -1146,23 +970,15 @@ export class CustomizeEditorPane extends EditorPane {
 			...(this.category === 'plugins'
 				? [
 						{
-							...this.menuAction(
-								'local',
-								localize('customize.installLocal', 'Install from workspace'),
-								async () => {
-									await this.commands.executeCommand('ash.extensions.installLocal');
-								},
-							),
+							...this.menuAction('local', localize('customize.installLocal', 'Install from workspace'), async () => {
+								await this.commands.executeCommand('ash.extensions.installLocal');
+							}),
 							icon: Lxicon.folder,
 						},
 						{
-							...this.menuAction(
-								'git',
-								localize('customize.installGit', 'Install from Git repository'),
-								async () => {
-									await this.commands.executeCommand('ash.extensions.installFromGit');
-								},
-							),
+							...this.menuAction('git', localize('customize.installGit', 'Install from Git repository'), async () => {
+								await this.commands.executeCommand('ash.extensions.installFromGit');
+							}),
 							icon: Lxicon.sourceControl,
 						},
 					]
@@ -1188,13 +1004,7 @@ export class CustomizeEditorPane extends EditorPane {
 					when: ContextKeyExpr.has('sessionsCustomizeFocused'),
 					getProvider: () => {
 						const focused = this.root.ownerDocument.activeElement as HTMLElement | null;
-						if (
-							!this.shown ||
-							!focused ||
-							!this.root.contains(focused) ||
-							this.detailHost.contains(focused)
-						)
-							return undefined;
+						if (!this.shown || !focused || !this.root.contains(focused) || this.detailHost.contains(focused)) return undefined;
 						return new AccessibleContentProvider(
 							AccessibleViewProviderId.Customize,
 							{ type },

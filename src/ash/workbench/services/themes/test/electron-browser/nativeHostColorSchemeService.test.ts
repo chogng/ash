@@ -89,9 +89,7 @@ test('a system event wins over an older startup read and disposed windows ignore
 	services.registerInstance(INativeHostService, host);
 	using colors = services.createInstance(NativeHostColorSchemeService, { dark: false, highContrast: false });
 	const changes: IColorScheme[] = [];
-	using listener = colors.onDidChangeColorScheme(() =>
-		changes.push({ dark: colors.dark, highContrast: colors.highContrast }),
-	);
+	using listener = colors.onDidChangeColorScheme(() => changes.push({ dark: colors.dark, highContrast: colors.highContrast }));
 	const initialization = colors.initialize();
 	events.fire({ dark: true, highContrast: true });
 	pending.shift()!({ dark: false, highContrast: false });

@@ -1,10 +1,5 @@
 import { SettingsPageRenderer } from './settingsRenderers.js';
-import {
-	defaultMenuStyles,
-	defaultToggleStyles,
-	defaultButtonStyles,
-	defaultKeybindingLabelStyles,
-} from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultMenuStyles, defaultToggleStyles, defaultButtonStyles, defaultKeybindingLabelStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { ILanguageModelsService } from '../../chat/common/languageModels.js';
 import './media/advisorSettingsRenderer.css';
 import { h, isHTMLElement } from '../../../../base/browser/dom.js';
@@ -113,7 +108,12 @@ export class AdvisorSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 		enabledRow.className = 'ash-advisor-settings-row';
 		this.enabledLabel = h(document, 'span');
 		enabledRow.append(this.enabledLabel);
-		this.enabled = this._register(new Switch(enabledRow, { ...defaultToggleStyles, disabled: true }));
+		this.enabled = this._register(
+			new Switch(enabledRow, {
+				...defaultToggleStyles,
+				disabled: true,
+			}),
+		);
 		this.domNode.append(enabledRow);
 		this.status = h(document, 'p');
 		this.status.className = 'ash-advisor-settings-status';
@@ -121,9 +121,7 @@ export class AdvisorSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 		this.domNode.append(this.status);
 		this._register(
 			this.enabled.onDidChange(() => {
-				void this.saveAdvisor(
-					this.savedAdvisor ? { ...this.savedAdvisor, enabled: this.enabled.checked } : null,
-				);
+				void this.saveAdvisor(this.savedAdvisor ? { ...this.savedAdvisor, enabled: this.enabled.checked } : null);
 			}),
 		);
 		this.updateLabels();
@@ -195,13 +193,7 @@ export class AdvisorSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 					id: 'chat.advisor',
 					title: localize('advisor.settings.title', 'Advisor'),
 					description: this.note.textContent ?? '',
-					keywords: [
-						'advisor',
-						'model',
-						'second opinion',
-						localize('advisor.settings.model', 'Advisor model'),
-						localize('advisor.settings.enabled', 'Enable Advisor'),
-					],
+					keywords: ['advisor', 'model', 'second opinion', localize('advisor.settings.model', 'Advisor model'), localize('advisor.settings.enabled', 'Enable Advisor')],
 					value: this.retainElement('chat.advisor', this.domNode),
 				},
 			},
@@ -231,10 +223,7 @@ export class AdvisorSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 		this.updateControls();
 		this.status.textContent = localize('advisor.settings.loading', 'Loading Advisor settings…');
 		try {
-			const [models, advisor] = await Promise.all([
-				this.languageModels.listAdvisorModels(),
-				this.chat.readAdvisorDefault(),
-			]);
+			const [models, advisor] = await Promise.all([this.languageModels.listAdvisorModels(), this.chat.readAdvisorDefault()]);
 			if (this.isDisposed || !this.visible || version !== this.loadVersion) {
 				return;
 			}
@@ -246,11 +235,7 @@ export class AdvisorSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 			this.status.textContent = '';
 		} catch (error) {
 			if (!this.isDisposed && this.visible && version === this.loadVersion) {
-				this.status.textContent = localize(
-					'advisor.settings.loadFailed',
-					'Could not load Advisor settings: {0}',
-					String(error),
-				);
+				this.status.textContent = localize('advisor.settings.loadFailed', 'Could not load Advisor settings: {0}', String(error));
 			}
 		} finally {
 			if (!this.isDisposed && this.visible && version === this.loadVersion) {
@@ -284,11 +269,7 @@ export class AdvisorSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 			}
 			this.updateModelLabel();
 			this.enabled.checked = this.savedAdvisor?.enabled ?? false;
-			this.status.textContent = localize(
-				'advisor.settings.saveFailed',
-				'Could not save Advisor settings: {0}',
-				String(error),
-			);
+			this.status.textContent = localize('advisor.settings.saveFailed', 'Could not save Advisor settings: {0}', String(error));
 		} finally {
 			if (!this.isDisposed && this.visible && version === this.loadVersion) {
 				this.working = false;
@@ -325,12 +306,9 @@ export class AdvisorSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 
 	private updateModelLabel(): void {
 		const advisor = this.savedAdvisor;
-		const selected =
-			advisor && this.models.find(entry => modelRefIdentity(entry.model) === modelRefIdentity(advisor.model));
+		const selected = advisor && this.models.find(entry => modelRefIdentity(entry.model) === modelRefIdentity(advisor.model));
 		// Hiding a model changes menu choices, not the saved preference or the trigger's label.
-		const label = advisor?.enabled
-			? (selected?.displayName ?? `${advisor.model.provider}/${advisor.model.model}`)
-			: localize('advisor.settings.disabled', 'Disable');
+		const label = advisor?.enabled ? (selected?.displayName ?? `${advisor.model.provider}/${advisor.model.model}`) : localize('advisor.settings.disabled', 'Disable');
 		this.advisor.setLabel(label);
 		this.advisor.button.title = label;
 	}
@@ -345,19 +323,13 @@ export class AdvisorSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 			checked: !this.savedAdvisor?.enabled,
 			run: () => this.saveAdvisor(this.savedAdvisor ? { ...this.savedAdvisor, enabled: false } : null),
 		};
-		const models = this.models.filter(
-			entry =>
-				flagshipModels[entry.model.provider]?.includes(entry.model.model) &&
-				this.languageModels.isModelVisible(entry.model),
-		);
+		const models = this.models.filter(entry => flagshipModels[entry.model.provider]?.includes(entry.model.model) && this.languageModels.isModelVisible(entry.model));
 		const modelActions: IAction[] = models.map(entry => ({
 			id: modelRefIdentity(entry.model),
 			label: entry.displayName,
 			tooltip: '',
 			enabled: true,
-			checked:
-				!!this.savedAdvisor?.enabled &&
-				modelRefIdentity(this.savedAdvisor.model) === modelRefIdentity(entry.model),
+			checked: !!this.savedAdvisor?.enabled && modelRefIdentity(this.savedAdvisor.model) === modelRefIdentity(entry.model),
 			run: () =>
 				this.saveAdvisor({
 					model: entry.model,
@@ -365,10 +337,7 @@ export class AdvisorSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 					maxCalls: this.savedAdvisor?.maxCalls ?? 3,
 					maxOutputTokens: this.savedAdvisor?.maxOutputTokens ?? 2048,
 					reasoningEffort:
-						this.savedAdvisor?.reasoningEffort &&
-						entry.supportedReasoningEfforts?.some(
-							option => option.effort === this.savedAdvisor?.reasoningEffort,
-						)
+						this.savedAdvisor?.reasoningEffort && entry.supportedReasoningEfforts?.some(option => option.effort === this.savedAdvisor?.reasoningEffort)
 							? this.savedAdvisor.reasoningEffort
 							: undefined,
 				}),

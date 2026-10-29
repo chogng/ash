@@ -25,14 +25,7 @@ export function score(
 	if (Array.isArray(selector)) {
 		let ret = 0;
 		for (const item of selector) {
-			const value = score(
-				item,
-				candidateUri,
-				candidateLanguage,
-				candidateIsSynchronized,
-				candidateNotebookUri,
-				candidateNotebookType,
-			);
+			const value = score(item, candidateUri, candidateLanguage, candidateIsSynchronized, candidateNotebookUri, candidateNotebookType);
 			if (value === 10) return value;
 			if (value > ret) ret = value;
 		}

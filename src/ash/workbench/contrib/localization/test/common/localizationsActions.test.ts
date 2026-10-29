@@ -12,22 +12,11 @@ import { registerAction2 } from '../../../../../platform/actions/common/actions.
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import {
-	ILanguagePackService,
-	type ILanguagePackItem,
-} from '../../../../../platform/languagePacks/common/languagePacks.js';
+import { ILanguagePackService, type ILanguagePackItem } from '../../../../../platform/languagePacks/common/languagePacks.js';
 import type { LanguagePackCatalog } from '../../../../../platform/languagePacks/common/languagePackContract.js';
-import {
-	IExtensionManagementService,
-	type ExtensionsInstalledPackage,
-	type ExtensionsSearchOptions,
-} from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
+import { IExtensionManagementService, type ExtensionsInstalledPackage, type ExtensionsSearchOptions } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import {
-	IQuickInputService,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { ILocaleService, LocalizationConfiguration } from '../../../../services/localization/common/locale.js';
@@ -46,10 +35,7 @@ test('display language commands select an installed catalog and clear the prefer
 		picker.chooseItem(picker.items.find(item => item.label === '简体中文')!);
 		await changed;
 		assert.equal(environment.configuration.getValue(LocalizationConfiguration.locale), 'zh-CN');
-		assert.equal(
-			environment.localization.translate('ash.settings', 'displayLanguage.title', 'Display Language'),
-			'Display Language',
-		);
+		assert.equal(environment.localization.translate('ash.settings', 'displayLanguage.title', 'Display Language'), 'Display Language');
 		assert.equal(commandActionLabel(new ConfigureDisplayLanguageAction().desc.title), 'Configure Display Language');
 
 		await environment.commands.executeCommand(ClearDisplayLanguageAction.ID);
@@ -76,10 +62,7 @@ test('display language command installs a Extensions catalog before selecting it
 		assert.deepEqual(environment.searches, [['French', { packageType: 'localization', limit: 30 }]]);
 		assert.equal(environment.configuration.getValue(LocalizationConfiguration.locale), 'fr');
 		assert.equal(environment.locale.locale, 'en');
-		assert.equal(
-			environment.localization.translate('ash.settings', 'displayLanguage.title', 'Display Language'),
-			'Display Language',
-		);
+		assert.equal(environment.localization.translate('ash.settings', 'displayLanguage.title', 'Display Language'), 'Display Language');
 		assert.deepEqual(environment.errors, []);
 	} finally {
 		resetNlsResolver();

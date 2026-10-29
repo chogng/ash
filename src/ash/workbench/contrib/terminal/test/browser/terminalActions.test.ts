@@ -14,25 +14,14 @@ import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { TerminalLocation } from '../../../../../platform/terminal/common/terminal.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import {
-	ITerminalEditorService,
-	ITerminalGroupService,
-	ITerminalService,
-	type ITerminalInstance,
-	type IXtermTerminal,
-	type TerminalInstanceState,
-} from '../../browser/terminal.js';
+import { ITerminalEditorService, ITerminalGroupService, ITerminalService, type ITerminalInstance, type IXtermTerminal, type TerminalInstanceState } from '../../browser/terminal.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { registerTerminalActions } from '../../browser/terminalActions.js';
 import { TerminalCommandId } from '../../common/terminal.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Event } from '../../../../../base/common/event.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
-import {
-	IWorkspaceTrustManagementService,
-	IWorkspaceTrustRequestService,
-	READ_DIR_PERMISSIONS,
-} from '../../../../../platform/workspace/common/workspaceTrust.js';
+import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService, READ_DIR_PERMISSIONS } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { TestWorkspaceTrustManagementService } from '../../../../test/common/workbenchTestServices.js';
@@ -107,9 +96,7 @@ suite('Terminal retained screen commands', () => {
 });
 
 class SelectionFixture extends Disposable {
-	readonly model = this._register(
-		new TextModel('  echo first  \r\necho second', { resource: URI.file('/workspace/run.sh') }),
-	);
+	readonly model = this._register(new TextModel('  echo first  \r\necho second', { resource: URI.file('/workspace/run.sh') }));
 	selection = new Selection(1, 3, 2, 12);
 	editor: ICodeEditor | null = {
 		getModel: () => this.model,
@@ -479,10 +466,8 @@ suite('Terminal dropdown commands', () => {
 
 			using commands = new CommandService(services);
 			const operation = commands.executeCommand(TerminalCommandId.NewInNewWindow);
-			if (outcome === 'blocked' || outcome === 'failed')
-				await assert.rejects(operation, outcome === 'blocked' ? /popup blocked/ : /editor failed/);
-			else if (outcome === 'canceled' || outcome === 'closed')
-				await assert.rejects(operation, isCancellationError);
+			if (outcome === 'blocked' || outcome === 'failed') await assert.rejects(operation, outcome === 'blocked' ? /popup blocked/ : /editor failed/);
+			else if (outcome === 'canceled' || outcome === 'closed') await assert.rejects(operation, isCancellationError);
 			else if (outcome === 'focus-failed') await assert.rejects(operation, /focus failed/);
 			else await operation;
 			assert.deepEqual(
@@ -492,11 +477,7 @@ suite('Terminal dropdown commands', () => {
 					: [
 							'open window',
 							['create terminal', { location: { viewColumn: 12 } }],
-							...(outcome === 'opened'
-								? ['focus window', 'focus auxiliary']
-								: outcome === 'focus-failed'
-									? ['focus window', 'close terminal', 'close window']
-									: ['close window']),
+							...(outcome === 'opened' ? ['focus window', 'focus auxiliary'] : outcome === 'focus-failed' ? ['focus window', 'close terminal', 'close window'] : ['close window']),
 						],
 			);
 			assert.equal(instances.length, outcome === 'opened' ? 1 : 0);

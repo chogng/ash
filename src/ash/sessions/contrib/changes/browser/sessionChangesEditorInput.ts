@@ -3,11 +3,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import type { SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
 import { DockedEditorInput } from '../../../common/dockedEditorInput.js';
-import {
-	EditorInputSerializers,
-	requireRecord,
-	requireString,
-} from '../../../../workbench/services/editor/common/editorInputSerializer.js';
+import { EditorInputSerializers, requireRecord, requireString } from '../../../../workbench/services/editor/common/editorInputSerializer.js';
 import type { ISessionChangesEditorOptions } from '../common/sessionChangesService.js';
 import './media/sessionChangesEditorInput.css';
 
@@ -54,12 +50,7 @@ EditorInputSerializers.registerStatic({
 	canSerialize: input => input.resource.scheme === 'ash-session-changes',
 	serialize: input => ({
 		resource: input.resource.toString(),
-		changesetId:
-			input instanceof SessionChangesEditorInput
-				? input.changesetSelection?.kind === 'transient'
-					? input.changesetSelection.changeset.id
-					: input.changesetSelection?.id
-				: undefined,
+		changesetId: input instanceof SessionChangesEditorInput ? (input.changesetSelection?.kind === 'transient' ? input.changesetSelection.changeset.id : input.changesetSelection?.id) : undefined,
 	}),
 	deserialize: value => {
 		const record = requireRecord(value, 'session Changes input');
@@ -67,11 +58,6 @@ EditorInputSerializers.registerStatic({
 		if (resource.scheme !== 'ash-session-changes' || !resource.path.startsWith('/') || resource.path.length < 2) {
 			throw new TypeError('Invalid session Changes resource');
 		}
-		return new SessionChangesEditorInput(
-			resource,
-			record.changesetId === undefined
-				? undefined
-				: { kind: 'id', id: requireString(record.changesetId, 'session changeset ID') },
-		);
+		return new SessionChangesEditorInput(resource, record.changesetId === undefined ? undefined : { kind: 'id', id: requireString(record.changesetId, 'session changeset ID') });
 	},
 });

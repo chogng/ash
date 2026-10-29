@@ -12,12 +12,7 @@ import { localize2 } from '../../../../nls.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { SEARCH_VIEW_ID, SearchCommandIds, SearchContext } from '../common/constants.js';
 import type { SearchView } from './searchView.js';
-import type {
-	RenderableMatch,
-	SearchFileMatch,
-	SearchFolderMatch,
-	SearchMatch,
-} from './searchTreeModel/searchResult.js';
+import type { RenderableMatch, SearchFileMatch, SearchFolderMatch, SearchMatch } from './searchTreeModel/searchResult.js';
 
 const lineDelimiter = isWindows ? '\r\n' : '\n';
 
@@ -29,10 +24,7 @@ registerAction2(
 				title: localize2('search.copy', 'Copy'),
 				keybinding: {
 					weight: KeybindingWeight.WorkbenchContrib,
-					when: ContextKeyExpr.and(
-						SearchContext.SearchViewFocusedKey.isEqualTo(true),
-						SearchContext.FileMatchOrMatchFocusKey.isEqualTo(true),
-					),
+					when: ContextKeyExpr.and(SearchContext.SearchViewFocusedKey.isEqualTo(true), SearchContext.FileMatchOrMatchFocusKey.isEqualTo(true)),
 					primary: KeyMod.CtrlCmd | KeyCode.KeyC,
 				},
 			});
@@ -40,8 +32,7 @@ registerAction2(
 
 		public override async run(accessor: ServicesAccessor, match?: RenderableMatch): Promise<void> {
 			// Explicit arguments format their own current contents; only implicit selection needs an active view.
-			match ??= accessor.get(IViewsService).getActiveViewWithId<SearchView>(SEARCH_VIEW_ID)?.getControl()
-				.selection[0];
+			match ??= accessor.get(IViewsService).getActiveViewWithId<SearchView>(SEARCH_VIEW_ID)?.getControl().selection[0];
 			if (!match) {
 				return;
 			}
@@ -67,25 +58,16 @@ registerAction2(
 				title: localize2('search.copyPath', 'Copy Path'),
 				keybinding: {
 					weight: KeybindingWeight.WorkbenchContrib,
-					when: ContextKeyExpr.and(
-						SearchContext.SearchViewFocusedKey.isEqualTo(true),
-						SearchContext.FileMatchOrFolderMatchWithResourceFocusKey.isEqualTo(true),
-					),
+					when: ContextKeyExpr.and(SearchContext.SearchViewFocusedKey.isEqualTo(true), SearchContext.FileMatchOrFolderMatchWithResourceFocusKey.isEqualTo(true)),
 					primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyC,
 					win: { primary: KeyMod.Shift | KeyMod.Alt | KeyCode.KeyC },
 				},
 			});
 		}
 
-		public override async run(
-			accessor: ServicesAccessor,
-			fileMatch?: SearchFileMatch | SearchFolderMatch,
-		): Promise<void> {
+		public override async run(accessor: ServicesAccessor, fileMatch?: SearchFileMatch | SearchFolderMatch): Promise<void> {
 			if (!fileMatch) {
-				const selected = accessor
-					.get(IViewsService)
-					.getActiveViewWithId<SearchView>(SEARCH_VIEW_ID)
-					?.getControl().selection[0];
+				const selected = accessor.get(IViewsService).getActiveViewWithId<SearchView>(SEARCH_VIEW_ID)?.getControl().selection[0];
 				// Implicit selection accepts files only; an explicit folder carries its own resource.
 				if (selected?.kind !== 'file') {
 					return;
@@ -128,9 +110,7 @@ function formatFiles(files: readonly SearchFileMatch[], labels: ILabelService): 
 	return [...files]
 		.sort(compareResultFiles)
 		.map(file => {
-			const rows = [...file.matches]
-				.sort((a, b) => Range.compareRangesUsingStarts(a.range, b.range))
-				.map(match => formatMatch(match));
+			const rows = [...file.matches].sort((a, b) => Range.compareRangesUsingStarts(a.range, b.range)).map(match => formatMatch(match));
 			return labels.getUriLabel(file.resource, { noPrefix: true }) + lineDelimiter + rows.join(lineDelimiter);
 		})
 		.join(lineDelimiter + lineDelimiter);
@@ -160,20 +140,9 @@ function compareResultFiles(a: SearchFileMatch, b: SearchFileMatch): number {
 
 function formatMatch(match: SearchMatch, indent = 2): string {
 	const firstPreviewLine = match.preview.slice(0, match.previewRange.start).split(/\r\n|\r|\n/).length - 1;
-	const lines = match.preview
-		.split(/\r\n|\r|\n/)
-		.slice(firstPreviewLine, firstPreviewLine + match.range.endLineNumber - match.range.startLineNumber + 1);
-	const prefixes = lines.map((_line, index) =>
-		index
-			? String(match.range.startLineNumber + index)
-			: `${match.range.startLineNumber},${match.range.startColumn}`,
-	);
+	const lines = match.preview.split(/\r\n|\r|\n/).slice(firstPreviewLine, firstPreviewLine + match.range.endLineNumber - match.range.startLineNumber + 1);
+	const prefixes = lines.map((_line, index) => (index ? String(match.range.startLineNumber + index) : `${match.range.startLineNumber},${match.range.startColumn}`));
 	const width = prefixes.reduce((maximum, prefix) => Math.max(maximum, prefix.length), 0);
 	// Multi-line previews keep LF internally, including on Windows; result blocks use the host delimiter.
-	return lines
-		.map(
-			(line, index) =>
-				`${' '.repeat(indent)}${prefixes[index]}: ${' '.repeat(width - prefixes[index]!.length)}${line}`,
-		)
-		.join('\n');
+	return lines.map((line, index) => `${' '.repeat(indent)}${prefixes[index]}: ${' '.repeat(width - prefixes[index]!.length)}${line}`).join('\n');
 }

@@ -6,37 +6,20 @@ import { ILogService } from '../../../../../platform/log/common/log.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
-import {
-	ILocalTranscriptionModelService,
-	isModelPreparing,
-} from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionModelService, isModelPreparing } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { readDictationPreparation } from '../speechToText/dictationInput.js';
-import {
-	activeDictationEditor,
-	cancelDictation,
-	isDictating,
-	onDidChangeDictationEditor,
-	startDictation,
-	stopDictation,
-} from '../speechToText/dictationSession.js';
+import { activeDictationEditor, cancelDictation, isDictating, onDidChangeDictationEditor, startDictation, stopDictation } from '../speechToText/dictationSession.js';
 import { IChatWidgetService, type IChatWidget } from '../chat.js';
 import { SELECT_MICROPHONE_COMMAND } from '../speechToText/micButtonMenuActions.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
-import {
-	IDictationOnboardingService,
-	SHOW_DICTATION_ONBOARDING_COMMAND,
-	RESET_DICTATION_ONBOARDING_COMMAND,
-} from '../speechToText/dictationOnboarding.js';
+import { IDictationOnboardingService, SHOW_DICTATION_ONBOARDING_COMMAND, RESET_DICTATION_ONBOARDING_COMMAND } from '../speechToText/dictationOnboarding.js';
 import { IChatSpeechToTextService, ChatSpeechToTextInProgress } from '../speechToText/chatSpeechToTextService.js';
 
 // Command admission while local model discovery is pending; capture state belongs to the speech service.
-const preparations = new WeakMap<
-	IChatSpeechToTextService,
-	{ readonly widget: IChatWidget; readonly cancel: () => void }
->();
+const preparations = new WeakMap<IChatSpeechToTextService, { readonly widget: IChatWidget; readonly cancel: () => void }>();
 
 registerAction2(
 	class ShowDictationIntroductionAction extends Action2 {
@@ -104,10 +87,7 @@ async function toggle(accessor: ServicesAccessor, context?: unknown): Promise<vo
 
 function targetWidget(widgets: IChatWidgetService, context: unknown): IChatWidget | undefined {
 	const explicit = context && typeof context === 'object' && 'widget' in context ? context.widget : undefined;
-	const widget =
-		explicit === undefined
-			? widgets.lastFocusedWidget
-			: widgets.getAllWidgets().find(widget => widget === explicit);
+	const widget = explicit === undefined ? widgets.lastFocusedWidget : widgets.getAllWidgets().find(widget => widget === explicit);
 	return widget?.visible && !widget.isTranscriptProgressActive && widget.inputEditor ? widget : undefined;
 }
 
@@ -152,29 +132,14 @@ async function record(accessor: ServicesAccessor, widget: IChatWidget, released?
 	});
 	try {
 		const model = await readDictationPreparation(configuration, local, speech);
-		if (
-			controller.signal.aborted ||
-			!widget.visible ||
-			widget.isTranscriptProgressActive ||
-			!widgets.getAllWidgets().includes(widget) ||
-			service.isBusy ||
-			isDictating()
-		)
-			return;
+		if (controller.signal.aborted || !widget.visible || widget.isTranscriptProgressActive || !widgets.getAllWidgets().includes(widget) || service.isBusy || isDictating()) return;
 		if (model && (!model.available || isModelPreparing(model.status))) {
 			await preferences.openSettings({ section: 'dictation' });
 			return;
 		}
 		onboarding.showIfNeeded();
 		if (preparations.get(service) === preparation) preparations.delete(service);
-		await startDictation(
-			service,
-			editor,
-			editor.getContainerDomNode().ownerDocument.defaultView as Window & typeof globalThis,
-			log,
-			'chat',
-			controller.signal,
-		);
+		await startDictation(service, editor, editor.getContainerDomNode().ownerDocument.defaultView as Window & typeof globalThis, log, 'chat', controller.signal);
 		if (release) {
 			await release;
 			if (!controller.signal.aborted && activeDictationEditor() === editor) await stopDictation();
@@ -231,8 +196,7 @@ registerAction2(
 		}
 		public override async run(accessor: ServicesAccessor): Promise<void> {
 			const editor = activeDictationEditor() ?? accessor.get(IChatWidgetService).lastFocusedWidget?.inputEditor;
-			const target = (editor?.getContainerDomNode().ownerDocument.defaultView ?? window) as Window &
-				typeof globalThis;
+			const target = (editor?.getContainerDomNode().ownerDocument.defaultView ?? window) as Window & typeof globalThis;
 			const configuration = accessor.get(IConfigurationService);
 			const service = accessor.get(IChatSpeechToTextService);
 			const onboarding = accessor.get(IDictationOnboardingService);
@@ -244,21 +208,14 @@ registerAction2(
 			const items = [
 				{ label: localize('dictation.defaultMicrophone', 'System default'), deviceId: '' },
 				...devices
-					.filter(
-						device =>
-							device.kind === 'audioinput' &&
-							device.deviceId !== 'default' &&
-							device.deviceId !== 'communications',
-					)
+					.filter(device => device.kind === 'audioinput' && device.deviceId !== 'default' && device.deviceId !== 'communications')
 					.map(device => ({
 						label: device.label || localize('dictation.microphone', 'Microphone'),
 						deviceId: device.deviceId,
 					})),
 			];
 			picker.items = items;
-			picker.activeItems = items.filter(
-				item => item.deviceId === configuration.getValue('dictation.inputDevice'),
-			);
+			picker.activeItems = items.filter(item => item.deviceId === configuration.getValue('dictation.inputDevice'));
 			await new Promise<void>((resolve, reject) => {
 				let accepted = false;
 				lifetime.add(

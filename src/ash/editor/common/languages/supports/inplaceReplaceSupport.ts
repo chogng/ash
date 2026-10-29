@@ -4,24 +4,24 @@ import { IInplaceReplaceSupportResult } from '../../languages.js';
 export class BasicInplaceReplace {
 	public static readonly INSTANCE = new BasicInplaceReplace();
 
-	public navigateValueSet(
-		range1: IRange,
-		text1: string,
-		range2: IRange,
-		text2: string | null,
-		up: boolean,
-	): IInplaceReplaceSupportResult | null {
+	public navigateValueSet(range1: IRange, text1: string, range2: IRange, text2: string | null, up: boolean): IInplaceReplaceSupportResult | null {
 		if (range1 && text1) {
 			const result = this.doNavigateValueSet(text1, up);
 			if (result) {
-				return { range: range1, value: result };
+				return {
+					range: range1,
+					value: result,
+				};
 			}
 		}
 
 		if (range2 && text2) {
 			const result = this.doNavigateValueSet(text2, up);
 			if (result) {
-				return { range: range2, value: result };
+				return {
+					range: range2,
+					value: result,
+				};
 			}
 		}
 

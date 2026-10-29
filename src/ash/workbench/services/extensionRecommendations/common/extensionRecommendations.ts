@@ -37,9 +37,7 @@ export interface IExtensionRecommendationsService {
 	refresh(): void;
 }
 
-export const IExtensionRecommendationsService = createServiceIdentifier<IExtensionRecommendationsService>(
-	'extensionRecommendationsService',
-);
+export const IExtensionRecommendationsService = createServiceIdentifier<IExtensionRecommendationsService>('extensionRecommendationsService');
 
 /** Registry-qualified package IDs and declarative editor IDs share one recommendation identity. */
 export function extensionRecommendationKey(id: string): string {
@@ -57,6 +55,4 @@ export interface IExtensionIgnoredRecommendationsService {
 	toggleGlobalIgnoredRecommendation(extensionId: string, ignore: boolean): void;
 }
 
-export const IExtensionIgnoredRecommendationsService = createServiceIdentifier<IExtensionIgnoredRecommendationsService>(
-	'IExtensionIgnoredRecommendationsService',
-);
+export const IExtensionIgnoredRecommendationsService = createServiceIdentifier<IExtensionIgnoredRecommendationsService>('IExtensionIgnoredRecommendationsService');

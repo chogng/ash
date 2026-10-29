@@ -13,6 +13,4 @@ export interface ICodeIntelligenceDocumentService {
 	close(path: string): Promise<void>;
 }
 
-export const ICodeIntelligenceDocumentService = createServiceIdentifier<ICodeIntelligenceDocumentService>(
-	'codeIntelligenceDocumentService',
-);
+export const ICodeIntelligenceDocumentService = createServiceIdentifier<ICodeIntelligenceDocumentService>('codeIntelligenceDocumentService');

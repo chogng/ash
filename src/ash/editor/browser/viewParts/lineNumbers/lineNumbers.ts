@@ -1,10 +1,6 @@
 import './lineNumbers.css';
 import { htmlAttributeEncodeValue } from '../../../../base/common/strings.js';
-import {
-	EditorOption,
-	type InternalEditorRenderLineNumbersOptions,
-	RenderLineNumbersType,
-} from '../../../common/config/editorOptions.js';
+import { EditorOption, type InternalEditorRenderLineNumbersOptions, RenderLineNumbersType } from '../../../common/config/editorOptions.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type IViewModel } from '../../../common/viewModel.js';
 import { type RenderingContext } from '../../view/renderingContext.js';
@@ -53,11 +49,7 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 		const activeLineNumber = event.modelSelections[0]?.positionLineNumber ?? this.activeLineNumber;
 		const activeLineChanged = activeLineNumber !== this.activeLineNumber;
 		this.activeLineNumber = activeLineNumber;
-		return (
-			activeLineChanged ||
-			this.lineNumbers.renderType === RenderLineNumbersType.Relative ||
-			this.lineNumbers.renderType === RenderLineNumbersType.Interval
-		);
+		return activeLineChanged || this.lineNumbers.renderType === RenderLineNumbersType.Relative || this.lineNumbers.renderType === RenderLineNumbersType.Interval;
 	}
 
 	public override onDecorationsChanged(event: viewEvents.ViewDecorationsChangedEvent): boolean {
@@ -89,23 +81,15 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 		}
 		const visualProjection = this.readVisualProjection();
 		const activeLineIndex = this.viewModel.getPrimaryCursorState().modelState.position.lineNumber - 1;
-		for (
-			let lineNumber = context.viewportData.startLineNumber;
-			lineNumber <= context.viewportData.endLineNumber;
-			lineNumber++
-		) {
+		for (let lineNumber = context.viewportData.startLineNumber; lineNumber <= context.viewportData.endLineNumber; lineNumber++) {
 			const visualLine = visualProjection.lineAt(lineNumber - 1);
 			if (!visualLine) {
 				this._renderResult.push('');
 				continue;
 			}
 			const active = visualLine.logicalLineIndex === activeLineIndex ? ' active active-line-number' : '';
-			const label = visualLine.firstForLogicalLine
-				? renderLineNumber(this.lineNumbers, visualLine.logicalLineIndex, activeLineIndex)
-				: '';
-			this._renderResult.push(
-				`<span class="${LineNumbersOverlay.CLASS_NAME}${active}">${htmlAttributeEncodeValue(String(label))}</span>`,
-			);
+			const label = visualLine.firstForLogicalLine ? renderLineNumber(this.lineNumbers, visualLine.logicalLineIndex, activeLineIndex) : '';
+			this._renderResult.push(`<span class="${LineNumbersOverlay.CLASS_NAME}${active}">${htmlAttributeEncodeValue(String(label))}</span>`);
 		}
 	}
 
@@ -114,11 +98,7 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 	}
 }
 
-function renderLineNumber(
-	options: InternalEditorRenderLineNumbersOptions,
-	lineIndex: number,
-	activeLineIndex: number | undefined,
-): string {
+function renderLineNumber(options: InternalEditorRenderLineNumbersOptions, lineIndex: number, activeLineIndex: number | undefined): string {
 	const lineNumber = lineIndex + 1;
 	switch (options.renderType) {
 		case RenderLineNumbersType.Off:
@@ -126,9 +106,7 @@ function renderLineNumber(
 		case RenderLineNumbersType.On:
 			return String(lineNumber);
 		case RenderLineNumbersType.Relative:
-			return activeLineIndex === undefined || activeLineIndex === lineIndex
-				? String(lineNumber)
-				: String(Math.abs(lineIndex - activeLineIndex));
+			return activeLineIndex === undefined || activeLineIndex === lineIndex ? String(lineNumber) : String(Math.abs(lineIndex - activeLineIndex));
 		case RenderLineNumbersType.Interval:
 			return lineNumber % 10 === 0 ? String(lineNumber) : '';
 		case RenderLineNumbersType.Custom:

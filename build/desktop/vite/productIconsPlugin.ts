@@ -32,12 +32,8 @@ export type AshProductIconsPlugin = Omit<Plugin, 'configureServer' | 'handleHotU
  * schedules it and reloads after the complete generation succeeds.
  */
 export function productIconsPlugin(options: ProductIconsPluginOptions = {}): AshProductIconsPlugin {
-	const sourceDirectory = resolve(
-		options.sourceDirectory ?? resolve(import.meta.dirname, '../../../resources/icons'),
-	);
-	const outputFile = resolve(
-		options.outputFile ?? resolve(import.meta.dirname, '../../../src/ash/base/common/lxiconsLibrary.ts'),
-	);
+	const sourceDirectory = resolve(options.sourceDirectory ?? resolve(import.meta.dirname, '../../../resources/icons'));
+	const outputFile = resolve(options.outputFile ?? resolve(import.meta.dirname, '../../../src/ash/base/common/lxiconsLibrary.ts'));
 	const fontDirectory = resolve(options.fontDirectory ?? resolve(repository, 'src/ash/base/browser/ui/lxicons'));
 	const inputs = [
 		resolve(sourceDirectory, 'font/sessions.json'),
@@ -100,13 +96,7 @@ export function productIconsPlugin(options: ProductIconsPluginOptions = {}): Ash
 		handleHotUpdate({ file }) {
 			// Vite must not reload individual files from a partially published generation.
 			// Generated outputs are deliberately not compiler inputs, preventing loops.
-			if (
-				accepts(file) ||
-				samePath(resolve(file), outputFile) ||
-				['lxicon.woff2', 'lxicon-variable.woff2'].some(name =>
-					samePath(resolve(file), resolve(fontDirectory, name)),
-				)
-			) {
+			if (accepts(file) || samePath(resolve(file), outputFile) || ['lxicon.woff2', 'lxicon-variable.woff2'].some(name => samePath(resolve(file), resolve(fontDirectory, name)))) {
 				return [];
 			}
 		},

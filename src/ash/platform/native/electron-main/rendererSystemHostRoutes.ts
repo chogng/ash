@@ -32,27 +32,15 @@ export function rendererSystemHostRoutes(
 		if (typeof value === 'string') {
 			return { text: text(value), type: undefined };
 		}
-		if (
-			!value ||
-			typeof value !== 'object' ||
-			Array.isArray(value) ||
-			Object.keys(value).some(key => key !== 'text' && key !== 'type') ||
-			!('text' in value)
-		) {
+		if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => key !== 'text' && key !== 'type') || !('text' in value)) {
 			throw new TypeError('Invalid clipboard text write');
 		}
 		return { text: text(value.text), type: clipboardType('type' in value ? value.type : undefined) };
 	};
 	const resourceWrite = (value: unknown): { resources: string[]; operation: 'copy' | 'move' } => {
-		if (!value || typeof value !== 'object' || !('resources' in value) || !('operation' in value))
-			throw new Error('Invalid clipboard resources');
+		if (!value || typeof value !== 'object' || !('resources' in value) || !('operation' in value)) throw new Error('Invalid clipboard resources');
 		const { resources, operation } = value;
-		if (
-			!Array.isArray(resources) ||
-			resources.length > 1024 ||
-			!resources.every(item => typeof item === 'string' && item.length <= 8192) ||
-			(operation !== 'copy' && operation !== 'move')
-		)
+		if (!Array.isArray(resources) || resources.length > 1024 || !resources.every(item => typeof item === 'string' && item.length <= 8192) || (operation !== 'copy' && operation !== 'move'))
 			throw new Error('Invalid clipboard resources');
 		return { resources, operation };
 	};
@@ -87,12 +75,7 @@ export function rendererSystemHostRoutes(
 			invoke: async value => {
 				if (value === undefined) return clipboard.triggerPaste(window.id);
 				// A renderer can select only a live auxiliary window registered under its own workbench.
-				const target = auxiliaryWindows
-					.getWindows()
-					.find(
-						candidate =>
-							candidate.parentId === window.id && candidate.win.webContents.mainFrame.name === value,
-					);
+				const target = auxiliaryWindows.getWindows().find(candidate => candidate.parentId === window.id && candidate.win.webContents.mainFrame.name === value);
 				if (!target) throw new Error('The paste target window is unavailable');
 				await new ElectronMainClipboardService(target.win).triggerPaste(target.id);
 			},

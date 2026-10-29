@@ -2,11 +2,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize2 } from '../../../../nls.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import {
-	AuxiliaryBarMaximizedContext,
-	AuxiliaryBarVisibleContext,
-	IsAuxiliaryWindowContext,
-} from '../../../common/contextkeys.js';
+import { AuxiliaryBarMaximizedContext, AuxiliaryBarVisibleContext, IsAuxiliaryWindowContext } from '../../../common/contextkeys.js';
 import { ViewContainerLocation } from '../../../common/views.js';
 import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
 import { IWorkbenchLayoutService } from '../../../services/layout/browser/layoutService.js';
@@ -33,7 +29,11 @@ export class ToggleAuxiliaryBarAction extends Action2 {
 					group: 'navigation',
 					order: 10,
 				},
-				{ id: MenuId.MenubarViewMenu, group: '2_appearance', order: 10 },
+				{
+					id: MenuId.MenubarViewMenu,
+					group: '2_appearance',
+					order: 10,
+				},
 			],
 			f1: true,
 		});
@@ -76,21 +76,12 @@ registerAction2(
 			super({
 				id: 'workbench.action.toggleMaximizedAuxiliaryBar',
 				title: localize2({ bundle: 'ash.actions', key: 'maximizeAuxiliaryBar' }, 'Maximize Secondary Side Bar'),
-				tooltip: localize2(
-					{ bundle: 'ash.actions', key: 'maximizeAuxiliaryBar' },
-					'Maximize Secondary Side Bar',
-				),
+				tooltip: localize2({ bundle: 'ash.actions', key: 'maximizeAuxiliaryBar' }, 'Maximize Secondary Side Bar'),
 				icon: Lxicon.screenFull,
 				toggled: {
 					condition: AuxiliaryBarMaximizedContext.isEqualTo(true),
-					title: localize2(
-						{ bundle: 'ash.actions', key: 'restoreAuxiliaryBar' },
-						'Restore Secondary Side Bar',
-					),
-					tooltip: localize2(
-						{ bundle: 'ash.actions', key: 'restoreAuxiliaryBar' },
-						'Restore Secondary Side Bar',
-					),
+					title: localize2({ bundle: 'ash.actions', key: 'restoreAuxiliaryBar' }, 'Restore Secondary Side Bar'),
+					tooltip: localize2({ bundle: 'ash.actions', key: 'restoreAuxiliaryBar' }, 'Restore Secondary Side Bar'),
 					icon: Lxicon.screenNormal,
 				},
 				menu: { id: MenuId.AuxiliaryBarTitle, group: 'navigation', order: 40 },
@@ -103,10 +94,7 @@ registerAction2(
 			layout.toggleMaximizedAuxiliaryBar();
 			// Commands can originate in the editor or Command Palette; keep input in the visible Part.
 			if (!layout.hasFocus('auxiliarybar')) {
-				accessor
-					.get(IPaneCompositePartService)
-					.getActivePaneComposite(ViewContainerLocation.AuxiliaryBar)
-					?.focus();
+				accessor.get(IPaneCompositePartService).getActivePaneComposite(ViewContainerLocation.AuxiliaryBar)?.focus();
 			}
 		}
 	},

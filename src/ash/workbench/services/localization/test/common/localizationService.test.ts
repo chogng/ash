@@ -1,10 +1,5 @@
 import { Registry } from '../../../../../platform/registry/common/platform.js';
-import {
-	createTestLanguagePackStore,
-	createTestLanguagePacks,
-	createTestLocaleService,
-	initializeTestLocalization,
-} from './localizationTestUtils.js';
+import { createTestLanguagePackStore, createTestLanguagePacks, createTestLocaleService, initializeTestLocalization } from './localizationTestUtils.js';
 import { localize2, localize, resetNlsResolver } from '../../../../../nls.js';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -17,10 +12,7 @@ import { initializeBrowserLocalization } from '../../browser/localizationBootstr
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import type { IExtensionManagementService } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { productLanguagePackCatalogs } from '../../common/localizationCatalogs.js';
-import {
-	normalizeLocale,
-	parseLanguagePackCatalog,
-} from '../../../../../platform/languagePacks/common/languagePackCatalog.js';
+import { normalizeLocale, parseLanguagePackCatalog } from '../../../../../platform/languagePacks/common/languagePackCatalog.js';
 import { LocalizationConfiguration } from '../../common/locale.js';
 import { WorkbenchLocalizationService } from '../../browser/workbenchLocalizationService.js';
 import { AppServerProtocolIncompatibleError } from '../../../../../platform/agentHost/common/appServerProtocolCompatibility.js';
@@ -29,10 +21,7 @@ import { commandActionLabel } from '../../../../../platform/action/common/action
 import { workspaceTrustPermissionNames } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { JSDOM } from 'jsdom';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
-import {
-	Extensions as JSONExtensions,
-	type IJSONContributionRegistry,
-} from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
+import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { colorThemeSchemaId, registerColorThemeSchemas } from '../../../themes/common/colorThemeSchema.js';
 import '../../../../common/theme.js';
 import { DefaultSettings } from '../../../preferences/common/settingsModels.js';
@@ -49,14 +38,7 @@ suite('Workbench localization', () => {
 		initializeTestLocalization('zh-CN');
 		using localization = new WorkbenchLocalizationService();
 		assert.equal(workspaceTrustPermissionNames.readFiles, 'Read files');
-		assert.equal(
-			localization.translate(
-				'ash.settings',
-				'capabilities.permission.readFiles',
-				workspaceTrustPermissionNames.readFiles,
-			),
-			'读取文件',
-		);
+		assert.equal(localization.translate('ash.settings', 'capabilities.permission.readFiles', workspaceTrustPermissionNames.readFiles), '读取文件');
 	});
 
 	test('backend protocol mismatch reports the fingerprints in Chinese', () => {
@@ -64,30 +46,17 @@ suite('Workbench localization', () => {
 		const expected = `sha256:${'a'.repeat(64)}`;
 		const received = `sha256:${'b'.repeat(64)}`;
 		const error = new AppServerProtocolIncompatibleError({ kind: 'schemaHash', expected, received });
-		assert.equal(
-			error.message,
-			`Ash 前后端协议指纹不匹配：客户端要求 ${expected}，后端返回 ${received}。请重新构建并启动对应的后端。`,
-		);
+		assert.equal(error.message, `Ash 前后端协议指纹不匹配：客户端要求 ${expected}，后端返回 ${received}。请重新构建并启动对应的后端。`);
 	});
 
 	test('auxiliary window labels and document return notices use the selected Chinese catalog', () => {
 		initializeTestLocalization('zh-CN');
-		assert.deepEqual(
-			[localize('auxiliaryWindow.editor', ''), localize('auxiliaryWindow.returningEditors', '')],
-			['编辑器', '正在将未保存的编辑器移回主窗口。'],
-		);
+		assert.deepEqual([localize('auxiliaryWindow.editor', ''), localize('auxiliaryWindow.returningEditors', '')], ['编辑器', '正在将未保存的编辑器移回主窗口。']);
 	});
 
 	test('theme editor actions and workspace help use the selected Chinese catalog', () => {
 		initializeTestLocalization('zh-CN');
-		assert.deepEqual(
-			[
-				localize('themeEditor.selectTheme', ''),
-				localize('themeEditor.openJSON', ''),
-				localize('themeEditor.openUI', ''),
-			],
-			['打开主题…', '打开主题（JSON）', '打开主题（界面）'],
-		);
+		assert.deepEqual([localize('themeEditor.selectTheme', ''), localize('themeEditor.openJSON', ''), localize('themeEditor.openUI', '')], ['打开主题…', '打开主题（JSON）', '打开主题（界面）']);
 		assert.ok(localize('themeEditor.help', '').includes('默认在当前窗口的标签页中打开'));
 		assert.ok(localize('themeEditor.sourceHelp', '').includes('编辑器工具栏'));
 	});
@@ -96,9 +65,7 @@ suite('Workbench localization', () => {
 		initializeTestLocalization('zh-CN');
 		assert.deepEqual(
 			[
-				commandActionLabel(
-					localize2({ bundle: 'ash.actions', key: 'togglePanelVisibility' }, 'Toggle Panel Visibility'),
-				),
+				commandActionLabel(localize2({ bundle: 'ash.actions', key: 'togglePanelVisibility' }, 'Toggle Panel Visibility')),
 				commandActionLabel(localize2({ bundle: 'ash.actions', key: 'focusPanel' }, 'Focus into Panel')),
 			],
 			['切换面板显示', '将焦点移入面板'],
@@ -132,21 +99,12 @@ suite('Workbench localization', () => {
 		assert.deepEqual(
 			[
 				localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'),
-				localize(
-					'sessions.layout.restoreFailed',
-					'Could not restore the editors for this session: {0}',
-					'Cancelled',
-				),
+				localize('sessions.layout.restoreFailed', 'Could not restore the editors for this session: {0}', 'Cancelled'),
 			],
 			['保存的会话编辑器布局无效。', '无法恢复此会话的编辑器：Cancelled'],
 		);
 		assert.deepEqual(
-			[
-				localize('sessions.layout.togglePanel', ''),
-				localize('sessions.layout.hideEditor', ''),
-				localize('sessions.layout.showEditor', ''),
-				localize('sessions.layout.openChanges', ''),
-			],
+			[localize('sessions.layout.togglePanel', ''), localize('sessions.layout.hideEditor', ''), localize('sessions.layout.showEditor', ''), localize('sessions.layout.openChanges', '')],
 			['切换 Code 底部面板', '隐藏编辑器', '显示编辑器', '打开更改标签'],
 		);
 		assert.match(localize('sessions.changes.editorHelp', ''), /按 Alt\+F2 阅读更改前后的内容/u);
@@ -181,17 +139,10 @@ suite('Workbench localization', () => {
 			restarted = true;
 		});
 		await localeService.setLocale({ id: 'zh_cn', label: 'Chinese' });
-		assert.deepEqual(
-			[localeService.locale, configuration.getValue(LocalizationConfiguration.locale), restarted],
-			['en', 'zh-CN', false],
-		);
+		assert.deepEqual([localeService.locale, configuration.getValue(LocalizationConfiguration.locale), restarted], ['en', 'zh-CN', false]);
 		await localeService.clearLocalePreference();
 		assert.deepEqual(
-			[
-				localeService.locale,
-				configuration.getValue(LocalizationConfiguration.locale),
-				configuration.inspect(LocalizationConfiguration.locale).memoryValue,
-			],
+			[localeService.locale, configuration.getValue(LocalizationConfiguration.locale), configuration.inspect(LocalizationConfiguration.locale).memoryValue],
 			['en', 'en', undefined],
 		);
 		await assert.rejects(localeService.setLocale({ id: 'fr', label: 'French' }), /not installed/);
@@ -228,18 +179,12 @@ suite('Workbench localization', () => {
 		const changing = localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
 		await writing.p;
 		try {
-			assert.deepEqual(
-				[configuration.inspect(LocalizationConfiguration.locale).memoryValue, events],
-				[undefined, []],
-			);
+			assert.deepEqual([configuration.inspect(LocalizationConfiguration.locale).memoryValue, events], [undefined, []]);
 		} finally {
 			await saved.complete();
 			await changing;
 		}
-		assert.deepEqual(
-			[localeService.locale, configuration.getValue(LocalizationConfiguration.locale), events],
-			['en', 'zh-CN', ['resource', 'preference', 'confirm', 'restart']],
-		);
+		assert.deepEqual([localeService.locale, configuration.getValue(LocalizationConfiguration.locale), events], ['en', 'zh-CN', ['resource', 'preference', 'confirm', 'restart']]);
 	});
 
 	for (const confirmed of [false, true]) {
@@ -284,10 +229,7 @@ suite('Workbench localization', () => {
 			},
 		);
 		await locale.setLocale({ id: 'ZH_cn', label: 'Chinese' });
-		assert.deepEqual(
-			[configuration.inspect(LocalizationConfiguration.locale).memoryValue, locale.locale],
-			['zh-CN', 'zh-CN'],
-		);
+		assert.deepEqual([configuration.inspect(LocalizationConfiguration.locale).memoryValue, locale.locale], ['zh-CN', 'zh-CN']);
 	});
 
 	test('localization lookup falls back to English and formats parameters', async () => {
@@ -307,72 +249,27 @@ suite('Workbench localization', () => {
 				localization.translate('ash', 'workbench.closeAllEditors', ''),
 				localization.translate('ash', 'workbench.reopenClosedEditor', ''),
 			],
-			[
-				'Close',
-				'Close Others',
-				'Close to the Left',
-				'Close to the Right',
-				'Close Saved',
-				'Close All in Group',
-				'Close All Tabs',
-				'Reopen Closed Tab',
-			],
+			['Close', 'Close Others', 'Close to the Left', 'Close to the Right', 'Close Saved', 'Close All in Group', 'Close All Tabs', 'Reopen Closed Tab'],
 		);
 		initializeTestLocalization('zh-CN');
-		assert.equal(
-			localization.translate('ash', 'sessions.chat.welcome', 'What can we work on?'),
-			'今天想做些什么？',
-		);
-		assert.equal(
-			commandActionLabel(localize2({ bundle: 'ash', key: 'files.revealInExplorer' }, 'Reveal in Explorer View')),
-			'在资源管理器视图中显示',
-		);
-		assert.equal(
-			localization.translate('ash', 'workbench.colorCustomizations.title', 'Color Customizations'),
-			'自定义颜色',
-		);
-		assert.equal(
-			localization.translate('ash', 'color.editor.selectionForeground', 'Foreground'),
-			'编辑器选中文字的颜色。未设置时保留语法高亮颜色。',
-		);
-		assert.equal(
-			localization.translate('ash', 'color.sessions.inputShadow', 'Shadow around the Sessions input card.'),
-			'Sessions 输入卡片周围的阴影。',
-		);
+		assert.equal(localization.translate('ash', 'sessions.chat.welcome', 'What can we work on?'), '今天想做些什么？');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'files.revealInExplorer' }, 'Reveal in Explorer View')), '在资源管理器视图中显示');
+		assert.equal(localization.translate('ash', 'workbench.colorCustomizations.title', 'Color Customizations'), '自定义颜色');
+		assert.equal(localization.translate('ash', 'color.editor.selectionForeground', 'Foreground'), '编辑器选中文字的颜色。未设置时保留语法高亮颜色。');
+		assert.equal(localization.translate('ash', 'color.sessions.inputShadow', 'Shadow around the Sessions input card.'), 'Sessions 输入卡片周围的阴影。');
 		assert.deepEqual(
-			[
-				localization.translate('ash', 'scm.history.actions', 'History actions'),
-				localization.translate('ash', 'scm.history.references', 'History references'),
-			],
+			[localization.translate('ash', 'scm.history.actions', 'History actions'), localization.translate('ash', 'scm.history.references', 'History references')],
 			['历史记录操作', '历史记录引用'],
 		);
 		assert.equal(localization.translate('ash', 'mergeEditor.completeMerge', 'Complete Merge'), '完成合并');
-		assert.equal(
-			localization.translate(
-				'ash',
-				'mergeEditor.unresolved',
-				'Review or resolve every conflict before completing the merge.',
-			),
-			'请先检查或处理所有冲突，再完成合并。',
-		);
+		assert.equal(localization.translate('ash', 'mergeEditor.unresolved', 'Review or resolve every conflict before completing the merge.'), '请先检查或处理所有冲突，再完成合并。');
 		assert.equal(localization.translate('ash', 'mergeEditor.markHandled', 'Mark Handled'), '标记为已处理');
-		assert.equal(
-			localization.translate(
-				'ash',
-				'chat.draftHandoffConflict',
-				'The Agents Window already has an unsent draft in this chat.',
-			),
-			'Agents 窗口中的这个聊天已有未发送的草稿。',
-		);
+		assert.equal(localization.translate('ash', 'chat.draftHandoffConflict', 'The Agents Window already has an unsent draft in this chat.'), 'Agents 窗口中的这个聊天已有未发送的草稿。');
 		assert.deepEqual(
 			[
 				localization.translate('ash', 'workbench.startupError.title', 'Unable to start Ash'),
 				localization.translate('ash', 'workbench.startupError.copy', 'Copy details'),
-				localization.translate(
-					'ash',
-					'workbench.startupError.copyFailed',
-					'Could not copy. Select the details above to copy them manually.',
-				),
+				localization.translate('ash', 'workbench.startupError.copyFailed', 'Could not copy. Select the details above to copy them manually.'),
 			],
 			['无法启动 Ash', '复制详情', '无法复制。请选中上方详情并手动复制。'],
 		);
@@ -382,43 +279,16 @@ suite('Workbench localization', () => {
 				commandActionLabel(localize2({ bundle: 'ash.actions', key: 'showPanel' }, 'Show Panel')),
 				commandActionLabel(localize2({ bundle: 'ash.actions', key: 'openAgentsWindow' }, 'Open Agents Window')),
 				commandActionLabel(localize2({ bundle: 'ash.actions', key: 'openInAgents' }, 'Open in Agents')),
-				commandActionLabel(
-					localize2({ bundle: 'ash.actions', key: 'openInAgentsWindow' }, 'Open in Agents Window'),
-				),
+				commandActionLabel(localize2({ bundle: 'ash.actions', key: 'openInAgentsWindow' }, 'Open in Agents Window')),
 				commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.openFolder' }, 'Open Folder...')),
-				commandActionLabel(
-					localize2(
-						{ bundle: 'ash', key: 'workbench.toggleDeveloperTools' },
-						'Developer: Toggle Developer Tools',
-					),
-				),
+				commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.toggleDeveloperTools' }, 'Developer: Toggle Developer Tools')),
 				commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.switchWindow' }, 'Switch Window...')),
 				commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.navigateEditorBack' }, 'Go Back')),
 				commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.navigateEditorForward' }, 'Go Forward')),
-				commandActionLabel(
-					localize2(
-						{ bundle: 'ash', key: 'workbench.navigateBackInEditLocations' },
-						'Go Back in Edit Locations',
-					),
-				),
-				commandActionLabel(
-					localize2(
-						{ bundle: 'ash', key: 'workbench.navigateForwardInEditLocations' },
-						'Go Forward in Edit Locations',
-					),
-				),
-				commandActionLabel(
-					localize2(
-						{ bundle: 'ash', key: 'workbench.navigateBackInNavigationLocations' },
-						'Go Back in Navigation Locations',
-					),
-				),
-				commandActionLabel(
-					localize2(
-						{ bundle: 'ash', key: 'workbench.navigateForwardInNavigationLocations' },
-						'Go Forward in Navigation Locations',
-					),
-				),
+				commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.navigateBackInEditLocations' }, 'Go Back in Edit Locations')),
+				commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.navigateForwardInEditLocations' }, 'Go Forward in Edit Locations')),
+				commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.navigateBackInNavigationLocations' }, 'Go Back in Navigation Locations')),
+				commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.navigateForwardInNavigationLocations' }, 'Go Forward in Navigation Locations')),
 			],
 			[
 				'文件',
@@ -438,12 +308,7 @@ suite('Workbench localization', () => {
 			],
 		);
 		assert.equal(
-			localization.translate(
-				'ash',
-				'openAgentsWindow.systemWideFailed',
-				'Some system-wide shortcuts could not be registered ({0}); they may be used by another application.',
-				{ '0': 'Ctrl+A' },
-			),
+			localization.translate('ash', 'openAgentsWindow.systemWideFailed', 'Some system-wide shortcuts could not be registered ({0}); they may be used by another application.', { '0': 'Ctrl+A' }),
 			'部分系统级快捷键无法注册（Ctrl+A）；它们可能已被其他应用占用。',
 		);
 		assert.equal(localization.translate('ash', 'sessions.list.search', 'Search sessions'), '搜索会话');
@@ -460,10 +325,7 @@ suite('Workbench localization', () => {
 		const activityHelp = localization.translate('ash', 'sessions.activity.help', '');
 		assert.match(activityHelp, /每个 ChatGPT 会话和 Agent 会话分别保留自己的历史、未发送的文字和附件/u);
 		assert.match(activityHelp, /每个会话恢复自己的编辑器标签/u);
-		assert.equal(
-			localization.translate('ash', 'chat.modelPicker.context', '{0} context tokens', { '0': '128,000' }),
-			'上下文：128,000 个词元',
-		);
+		assert.equal(localization.translate('ash', 'chat.modelPicker.context', '{0} context tokens', { '0': '128,000' }), '上下文：128,000 个词元');
 		assert.equal(localization.translate('ash', 'chat.defaultModel.title', 'Default chat model'), '默认聊天模型');
 		assert.deepEqual(
 			[
@@ -481,20 +343,11 @@ suite('Workbench localization', () => {
 			],
 			['聊天', 'Collab', '项目'],
 		);
-		assert.equal(
-			localization.translate('ash', 'sessions.activityBar.location.title', 'Sessions Activity Bar Position'),
-			'活动栏位置',
-		);
+		assert.equal(localization.translate('ash', 'sessions.activityBar.location.title', 'Sessions Activity Bar Position'), '活动栏位置');
 		assert.equal(localization.translate('ash', 'dialog.input', 'Input'), '输入');
-		assert.equal(
-			localization.translate('ash', 'call.credential', 'Administrator key or invitation key'),
-			'管理员密钥或邀请密钥',
-		);
+		assert.equal(localization.translate('ash', 'call.credential', 'Administrator key or invitation key'), '管理员密钥或邀请密钥');
 		assert.equal(localization.translate('ash.regions', 'searchCommands', 'Search commands'), '搜索命令');
-		assert.equal(
-			localization.translate('ash.regions', 'titleBarLeftActions', 'Title bar left actions'),
-			'标题栏左侧操作',
-		);
+		assert.equal(localization.translate('ash.regions', 'titleBarLeftActions', 'Title bar left actions'), '标题栏左侧操作');
 		assert.deepEqual(
 			[
 				localization.translate('ash', 'workbench.activityBarGlobalActions', 'Activity Bar global actions'),
@@ -505,11 +358,7 @@ suite('Workbench localization', () => {
 				localization.translate('ash', 'workbench.activityBarPositionBottom', 'Bottom'),
 				localization.translate('ash', 'workbench.activityBarPositionHidden', 'Hidden'),
 				localization.translate('ash', 'workbench.activityBarSize', 'Activity Bar Size'),
-				localization.translate(
-					'ash',
-					'workbench.activityBar.location.description',
-					'Choose where the Activity Bar appears.',
-				),
+				localization.translate('ash', 'workbench.activityBar.location.description', 'Choose where the Activity Bar appears.'),
 				localization.translate('ash', 'workbench.activityBar.compact.title', 'Compact Activity Bar'),
 				localization.translate('ash', 'workbench.sideBar.location.title', 'Primary Side Bar Position'),
 				localization.translate('ash', 'workbench.movePrimarySideBarRight', 'Move Primary Side Bar Right'),
@@ -552,33 +401,15 @@ suite('Workbench localization', () => {
 				commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.commandPalette' }, 'Command Palette...')),
 				commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.manageSettings' }, 'Settings')),
 				commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.manageExtensions' }, 'Extensions')),
-				commandActionLabel(
-					localize2({ bundle: 'ash', key: 'workbench.manageKeyboardShortcuts' }, 'Keyboard Shortcuts'),
-				),
+				commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.manageKeyboardShortcuts' }, 'Keyboard Shortcuts')),
 				commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.manageRunTask' }, 'Run Task...')),
 				commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.manageThemes' }, 'Themes')),
 				commandActionLabel(localize2({ bundle: 'ash', key: 'update.checkForUpdates' }, 'Check for Updates...')),
 				commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.selectColorTheme' }, 'Color Theme')),
-				commandActionLabel(
-					localize2({ bundle: 'ash', key: 'workbench.selectFileIconTheme' }, 'File Icon Theme'),
-				),
-				commandActionLabel(
-					localize2({ bundle: 'ash', key: 'workbench.selectProductIconTheme' }, 'Product Icon Theme'),
-				),
+				commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.selectFileIconTheme' }, 'File Icon Theme')),
+				commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.selectProductIconTheme' }, 'Product Icon Theme')),
 			],
-			[
-				'管理',
-				'命令面板...',
-				'设置',
-				'扩展',
-				'键盘快捷方式',
-				'运行任务...',
-				'主题',
-				'检查更新...',
-				'颜色主题',
-				'文件图标主题',
-				'产品图标主题',
-			],
+			['管理', '命令面板...', '设置', '扩展', '键盘快捷方式', '运行任务...', '主题', '检查更新...', '颜色主题', '文件图标主题', '产品图标主题'],
 		);
 		assert.equal(
 			localization.translate('ash', 'update.available', 'Ash {0} is available. You are using {1}.', {
@@ -587,42 +418,21 @@ suite('Workbench localization', () => {
 			}),
 			'Ash 0.2.0 已可更新。当前版本为 0.1.0。',
 		);
-		assert.equal(
-			localization.translate('ash', 'update.ready', 'Ash {0} is ready to install.', { '0': '0.2.0' }),
-			'Ash 0.2.0 已准备好安装。',
-		);
+		assert.equal(localization.translate('ash', 'update.ready', 'Ash {0} is ready to install.', { '0': '0.2.0' }), 'Ash 0.2.0 已准备好安装。');
 		assert.equal(localization.translate('ash', 'update.install', 'Install and Restart'), '安装并重启');
 		assert.equal(localization.translate('ash', 'update.policyTitle', 'Update channel'), '更新通道');
 		assert.equal(localization.translate('ash', 'iPadShowKeyboard.label', 'Show Keyboard'), '显示键盘');
-		assert.equal(
-			localization.translate('ash', 'inspectTokens.label', 'Developer: Inspect Tokens'),
-			'开发者：检查词法单元',
-		);
+		assert.equal(localization.translate('ash', 'inspectTokens.label', 'Developer: Inspect Tokens'), '开发者：检查词法单元');
 		assert.equal(localization.translate('ash', 'inspectTokens.scope', 'Token type'), '词法单元类型');
 		assert.equal(localization.translate('ash', 'quickHelp.dialog', 'Quick Access Help'), '快速访问帮助');
-		assert.equal(
-			localization.translate(
-				'ash',
-				'quickCommand.placeholder',
-				'Type > for commands, ? for help, or @ for symbols',
-			),
-			'输入 > 查找命令、? 查看帮助，或 @ 查找符号',
-		);
+		assert.equal(localization.translate('ash', 'quickCommand.placeholder', 'Type > for commands, ? for help, or @ for symbols'), '输入 > 查找命令、? 查看帮助，或 @ 查找符号');
 		assert.deepEqual(
 			[
 				localization.translate('ash', 'workbench.editorPinnedTabHint', 'Pinned tab. Use Unpin to unpin.'),
-				localization.translate(
-					'ash',
-					'workbench.editorPreviewTabHint',
-					'Double-click or use Keep Open to keep this tab open. Use Pin to pin this tab.',
-				),
+				localization.translate('ash', 'workbench.editorPreviewTabHint', 'Double-click or use Keep Open to keep this tab open. Use Pin to pin this tab.'),
 				localization.translate('ash', 'workbench.editorUnpinnedTabHint', 'Use Pin to pin this tab.'),
 			],
-			[
-				'已固定的标签。使用“取消固定”可取消固定。',
-				'双击或使用“保持打开”可保留此标签。使用“固定”可固定此标签。',
-				'使用“固定”可固定此标签。',
-			],
+			['已固定的标签。使用“取消固定”可取消固定。', '双击或使用“保持打开”可保留此标签。使用“固定”可固定此标签。', '使用“固定”可固定此标签。'],
 		);
 		assert.deepEqual(
 			[
@@ -633,19 +443,12 @@ suite('Workbench localization', () => {
 			['关闭其他', '固定', '取消固定'],
 		);
 		assert.deepEqual(
-			[
-				localization.translate('ash', 'workbench.closeFolder', 'Close Folder'),
-				localization.translate('ash', 'workbench.closeWorkspace', 'Close Workspace'),
-			],
+			[localization.translate('ash', 'workbench.closeFolder', 'Close Folder'), localization.translate('ash', 'workbench.closeWorkspace', 'Close Workspace')],
 			['关闭文件夹', '关闭工作区'],
 		);
 		assert.equal(localization.translate('ash', 'chat.settings.advisorDisable', 'Turn Advisor off'), '关闭顾问');
 		assert.equal(
-			localization.translate(
-				'ash',
-				'chat.advisor.configure',
-				'Configure an advisor model in Chat Settings before asking for a second opinion',
-			),
+			localization.translate('ash', 'chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'),
 			'请先在聊天设置中配置顾问模型，再请求第二意见',
 		);
 		assert.deepEqual(
@@ -667,15 +470,7 @@ suite('Workbench localization', () => {
 				localization.translate('ash', 'files.saveConflictTitle', 'File changed on disk'),
 				localization.translate('ash', 'files.openBinaryAsText', 'Open as Read-Only Text'),
 			],
-			[
-				'打开的编辑器',
-				'第 2 组',
-				'未保存的更改',
-				'文件嵌套',
-				'在资源管理器中查找文件',
-				'磁盘上的文件已更改',
-				'以只读文本打开',
-			],
+			['打开的编辑器', '第 2 组', '未保存的更改', '文件嵌套', '在资源管理器中查找文件', '磁盘上的文件已更改', '以只读文本打开'],
 		);
 		assert.deepEqual(
 			[
@@ -685,33 +480,14 @@ suite('Workbench localization', () => {
 				localization.translate('ash', 'workbench.editorOpenCreateFile', ''),
 				localization.translate('ash', 'workbench.editorOpenTooLarge', '', { '0': '128.0' }),
 			],
-			[
-				'警告',
-				'此文件是二进制文件或使用不支持的文本编码，无法显示为文本。',
-				'找不到此文件，无法打开。',
-				'创建文件',
-				'此文件过大，无法作为文本打开（128.0 MiB）。',
-			],
+			['警告', '此文件是二进制文件或使用不支持的文本编码，无法显示为文本。', '找不到此文件，无法打开。', '创建文件', '此文件过大，无法作为文本打开（128.0 MiB）。'],
 		);
 		assert.match(localization.translate('ash', 'accessibility.explorerHelp', 'Explorer'), /Option\+Command\+V/);
 		assert.match(localization.translate('ash', 'accessibility.explorerHelp', 'Explorer'), /紧凑文件夹/);
 		assert.equal(localization.translate('ash', 'files.compactFoldersTitle', 'Compact folders'), '紧凑文件夹');
-		assert.equal(
-			localization.translate('ash', 'files.autoRevealNoScroll', 'Select without scrolling'),
-			'选中但不滚动',
-		);
-		assert.equal(
-			localization.translate('ash', 'accessibility.explorerFolderSegment', '', { '0': 'src', '1': 1, '2': 2 }),
-			'src，第 1 个文件夹，共 2 个',
-		);
-		assert.equal(
-			localization.translate(
-				'ash',
-				'accessibility.explorerSystemFilesPasted',
-				'Files pasted into the selected folder.',
-			),
-			'文件已粘贴到选中的文件夹。',
-		);
+		assert.equal(localization.translate('ash', 'files.autoRevealNoScroll', 'Select without scrolling'), '选中但不滚动');
+		assert.equal(localization.translate('ash', 'accessibility.explorerFolderSegment', '', { '0': 'src', '1': 1, '2': 2 }), 'src，第 1 个文件夹，共 2 个');
+		assert.equal(localization.translate('ash', 'accessibility.explorerSystemFilesPasted', 'Files pasted into the selected folder.'), '文件已粘贴到选中的文件夹。');
 	});
 
 	test('minimap menu uses the selected Chinese language catalog', async () => {
@@ -727,8 +503,7 @@ suite('Workbench localization', () => {
 		using localeService = createTestLocaleService(configuration, languagePacks);
 		using schemaRegistration = registerColorThemeSchemas();
 		const schema = jsonRegistry.getSchemaContributions().schemas[colorThemeSchemaId]!;
-		const description = (id: string): string | undefined =>
-			schema.properties?.colors?.properties?.[id]?.description;
+		const description = (id: string): string | undefined => schema.properties?.colors?.properties?.[id]?.description;
 		await localeService.setLocale({ id: 'zh-CN', label: 'Chinese' });
 		assert.equal(configuration.getValue(LocalizationConfiguration.locale), 'zh-CN');
 		assert.equal(description('input.background'), 'Input background.');
@@ -741,27 +516,11 @@ suite('Workbench localization', () => {
 		initializeTestLocalization('zh-CN');
 		assert.deepEqual(
 			[
-				localization.translate(
-					'ash',
-					'color.sessions.tooltip.background',
-					'Background of tooltips in the Sessions window.',
-				),
-				localization.translate(
-					'ash',
-					'color.sessions.tooltip.foreground',
-					'Text color of tooltips in the Sessions window.',
-				),
-				localization.translate(
-					'ash',
-					'color.sessions.tooltip.border',
-					'Border of tooltips in the Sessions window.',
-				),
+				localization.translate('ash', 'color.sessions.tooltip.background', 'Background of tooltips in the Sessions window.'),
+				localization.translate('ash', 'color.sessions.tooltip.foreground', 'Text color of tooltips in the Sessions window.'),
+				localization.translate('ash', 'color.sessions.tooltip.border', 'Border of tooltips in the Sessions window.'),
 			],
-			[
-				'Sessions 窗口中悬浮提示的背景色。',
-				'Sessions 窗口中悬浮提示的文字颜色。',
-				'Sessions 窗口中悬浮提示的边框颜色。',
-			],
+			['Sessions 窗口中悬浮提示的背景色。', 'Sessions 窗口中悬浮提示的文字颜色。', 'Sessions 窗口中悬浮提示的边框颜色。'],
 		);
 	});
 
@@ -774,17 +533,9 @@ suite('Workbench localization', () => {
 				localization.translate('ash', 'dropOrPaste.pasteAs', 'Paste As...'),
 				localization.translate('ash', 'dropOrPaste.selectPasteAction', 'Select Paste Action'),
 				localization.translate('ash', 'dropOrPaste.pasteOptions', 'Paste options'),
-				localization.translate(
-					'ash',
-					'dropOrPaste.selectorHelp',
-					'Use arrow keys to choose an edit. Press Escape to return to the editor.',
-				),
+				localization.translate('ash', 'dropOrPaste.selectorHelp', 'Use arrow keys to choose an edit. Press Escape to return to the editor.'),
 				localization.translate('ash', 'dropOrPaste.invalidEdit', 'Could not prepare edit: {0}'),
-				localization.translate(
-					'ash',
-					'dropOrPaste.snippetUnavailable',
-					'Snippet navigation is unavailable in this editor.',
-				),
+				localization.translate('ash', 'dropOrPaste.snippetUnavailable', 'Snippet navigation is unavailable in this editor.'),
 				localization.translate('ash', 'dropOrPaste.switchFailed', 'Could not change edit: {0}'),
 			],
 			[
@@ -825,8 +576,7 @@ suite('Workbench localization', () => {
 		using localization = new WorkbenchLocalizationService();
 		await localization.whenReady;
 		initializeTestLocalization('zh-CN');
-		const { ForceRetokenizeAction } =
-			await import('../../../../../editor/contrib/tokenization/browser/tokenization.js');
+		const { ForceRetokenizeAction } = await import('../../../../../editor/contrib/tokenization/browser/tokenization.js');
 		await import('../../../../../editor/contrib/caretOperations/browser/caretOperations.js');
 		await import('../../../../../editor/contrib/insertFinalNewLine/browser/insertFinalNewLine.js');
 		const { EditorExtensionsRegistry } = await import('../../../../../editor/browser/editorExtensions.js');
@@ -847,17 +597,10 @@ suite('Workbench localization', () => {
 		assert.equal(localize('chat.providerKeys.manage', 'Manage Model Connections'), '管理模型接入');
 		assert.equal(localize('chat.input.dictate', 'Dictate message'), '听写');
 		assert.equal(localize('dictation.cloudProvider.title', 'Cloud dictation provider'), '云端听写供应商');
-		assert.equal(
-			localize(
-				'dictation.cloudProvider.description',
-				'Choose the cloud transcription provider. Its API key is required.',
-			),
-			'选择云端语音转写供应商，并配置对应的 API 密钥。',
-		);
+		assert.equal(localize('dictation.cloudProvider.description', 'Choose the cloud transcription provider. Its API key is required.'), '选择云端语音转写供应商，并配置对应的 API 密钥。');
 		assert.equal(localize('dictation.connectionLost', 'Dictation connection lost'), '语音输入连接已断开');
 		assert.equal(localize('dictation.alreadyActive', 'Dictation is already active'), '语音输入已在进行中');
-		const { NullLocalTranscriptionService } =
-			await import('../../../localTranscription/browser/localTranscriptionService.js');
+		const { NullLocalTranscriptionService } = await import('../../../localTranscription/browser/localTranscriptionService.js');
 		using transcription = new NullLocalTranscriptionService();
 		await assert.rejects(transcription.start(), { message: '语音输入连接不可用' });
 		assert.equal(localize('chat.agentPicker.mode', 'Agent: {0}', 'reviewer'), '智能体：reviewer');
@@ -865,102 +608,33 @@ suite('Workbench localization', () => {
 		assert.equal(localize('chat.input.voice', 'Voice conversation'), '语音对话');
 		assert.equal(localize('chat.providerKeys.inputTitle', 'API key for {0}', 'OpenAI'), 'OpenAI 的 API 密钥');
 		assert.equal(localize('onboarding.stepProgress', 'Step {0} of {1}', 2, 3), '第 2 步，共 3 步');
-		assert.equal(
-			localize('settings.workbench.layout.description', 'Configure the Workbench layout and window zoom.'),
-			'配置工作台布局和窗口缩放。',
-		);
+		assert.equal(localize('settings.workbench.layout.description', 'Configure the Workbench layout and window zoom.'), '配置工作台布局和窗口缩放。');
 		assert.equal(localize({ bundle: 'ash.settings', key: 'groups.workbench.label' }, 'Workbench'), '工作台');
 		assert.equal(localize({ bundle: 'ash.settings', key: 'categories.layout.label' }, 'Layout'), '布局');
 		assert.equal(localize('releaseNotes.open', 'Show Release Notes'), '显示版本说明');
 		assert.equal(localize('workspaceTrust.restrictedStatus', 'Restricted workspace'), '受限工作区');
-		assert.equal(
-			localize(
-				'workspaceTrust.restrictedStatusDetail',
-				'Some workspace features are limited by directory permissions.',
-			),
-			'目录权限限制了部分工作区功能。',
-		);
+		assert.equal(localize('workspaceTrust.restrictedStatusDetail', 'Some workspace features are limited by directory permissions.'), '目录权限限制了部分工作区功能。');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path'), '复制路径');
-		assert.equal(
-			localize({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path'),
-			'复制相对路径',
-		);
-		assert.equal(
-			commandActionLabel(
-				localize2({ bundle: 'ash', key: 'workbench.closeEditorsToTheLeft' }, 'Close to the Left'),
-			),
-			'关闭左侧',
-		);
+		assert.equal(localize({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path'), '复制相对路径');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeEditorsToTheLeft' }, 'Close to the Left')), '关闭左侧');
 		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeEditor' }, 'Close')), '关闭');
-		assert.equal(
-			commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeAllEditors' }, 'Close All Tabs')),
-			'关闭所有标签页',
-		);
-		assert.equal(
-			commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.reopenClosedEditor' }, 'Reopen Closed Tab')),
-			'重新打开已关闭的标签页',
-		);
-		assert.equal(
-			commandActionLabel(
-				localize2({ bundle: 'ash', key: 'workbench.closeEditorsToTheRight' }, 'Close to the Right'),
-			),
-			'关闭右侧',
-		);
-		assert.equal(
-			commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeSavedEditors' }, 'Close Saved')),
-			'关闭已保存',
-		);
-		assert.equal(
-			commandActionLabel(
-				localize2({ bundle: 'ash', key: 'workbench.closeEditorsInGroup' }, 'Close All in Group'),
-			),
-			'关闭组内全部',
-		);
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeAllEditors' }, 'Close All Tabs')), '关闭所有标签页');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.reopenClosedEditor' }, 'Reopen Closed Tab')), '重新打开已关闭的标签页');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeEditorsToTheRight' }, 'Close to the Right')), '关闭右侧');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeSavedEditors' }, 'Close Saved')), '关闭已保存');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeEditorsInGroup' }, 'Close All in Group')), '关闭组内全部');
 		assert.equal(localize('workbench.splitMenu', 'Split'), '拆分');
-		assert.equal(
-			commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.splitEditorUp' }, 'Split Up')),
-			'向上拆分',
-		);
-		assert.equal(
-			commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.splitEditorDown' }, 'Split Down')),
-			'向下拆分',
-		);
-		assert.equal(
-			commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.splitEditorLeft' }, 'Split Left')),
-			'向左拆分',
-		);
-		assert.equal(
-			commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.splitEditorRight' }, 'Split Right')),
-			'向右拆分',
-		);
-		assert.equal(
-			commandActionLabel(
-				localize2({ bundle: 'ash', key: 'workbench.splitEditorHorizontal' }, 'Split Editor Horizontal'),
-			),
-			'水平拆分编辑器',
-		);
-		assert.equal(
-			commandActionLabel(
-				localize2({ bundle: 'ash', key: 'workbench.splitEditorVertical' }, 'Split Editor Vertical'),
-			),
-			'垂直拆分编辑器',
-		);
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.splitEditorUp' }, 'Split Up')), '向上拆分');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.splitEditorDown' }, 'Split Down')), '向下拆分');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.splitEditorLeft' }, 'Split Left')), '向左拆分');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.splitEditorRight' }, 'Split Right')), '向右拆分');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.splitEditorHorizontal' }, 'Split Editor Horizontal')), '水平拆分编辑器');
+		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.splitEditorVertical' }, 'Split Editor Vertical')), '垂直拆分编辑器');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.newFile' }, 'New File...'), '新建文件...');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.newFileName' }, 'New File Name'), '新建文件名称');
 		assert.equal(localize({ bundle: 'ash', key: 'files.newFolder' }, 'New Folder...'), '新建文件夹...');
-		assert.equal(
-			localize({ bundle: 'ash', key: 'files.deleteConfirm' }, 'Permanently delete {0}?', 'old.ts'),
-			'永久删除 old.ts？',
-		);
-		assert.equal(
-			localize(
-				'workbench.explorerDecoratedFile',
-				'{0}, {1}',
-				'link',
-				localize('workbench.explorerSymbolicLink', 'Symbolic Link'),
-			),
-			'link，符号链接',
-		);
+		assert.equal(localize({ bundle: 'ash', key: 'files.deleteConfirm' }, 'Permanently delete {0}?', 'old.ts'), '永久删除 old.ts？');
+		assert.equal(localize('workbench.explorerDecoratedFile', '{0}, {1}', 'link', localize('workbench.explorerSymbolicLink', 'Symbolic Link')), 'link，符号链接');
 		assert.equal(localize({ bundle: 'ash', key: 'workbench.downloadFile' }, 'Download File...'), '下载文件...');
 	});
 
@@ -976,10 +650,7 @@ suite('Workbench localization', () => {
 			using picker = controller.createQuickPick();
 			picker.show();
 			assert.equal(dom.window.document.querySelector('[role="dialog"]')?.getAttribute('aria-label'), '快速选择');
-			assert.equal(
-				dom.window.document.querySelector('[role="listbox"]')?.getAttribute('aria-label'),
-				'快速选择结果',
-			);
+			assert.equal(dom.window.document.querySelector('[role="listbox"]')?.getAttribute('aria-label'), '快速选择结果');
 			picker.items = [];
 			assert.equal(dom.window.document.querySelector('.ash-quick-pick-empty')?.textContent, '没有匹配结果');
 		} finally {
@@ -991,8 +662,7 @@ suite('Workbench localization', () => {
 		using localization = new WorkbenchLocalizationService();
 		await localization.whenReady;
 		initializeTestLocalization('zh-CN');
-		const { GotoOffsetAction } =
-			await import('../../../../../editor/standalone/browser/quickAccess/standaloneGotoLineQuickAccess.js');
+		const { GotoOffsetAction } = await import('../../../../../editor/standalone/browser/quickAccess/standaloneGotoLineQuickAccess.js');
 		assert.equal(new GotoOffsetAction().label, '转到字符偏移量...');
 		assert.equal(localization.translate('ash', 'gotoOffset.input', 'Character offset'), '字符偏移量');
 	});
@@ -1011,17 +681,7 @@ suite('Workbench localization', () => {
 				localize('mergeEditor.useColumns', 'Use Columns'),
 				localize('mergeEditor.acceptRemainingIncoming', 'Accept Remaining Incoming'),
 			],
-			[
-				'保留当前删除结果',
-				'保留传入删除结果',
-				'上一个冲突',
-				'下一个冲突',
-				'下一个未解决冲突',
-				'采用自动合并结果',
-				'显示共同祖先',
-				'使用横向三栏',
-				'剩余冲突均采用传入版本',
-			],
+			['保留当前删除结果', '保留传入删除结果', '上一个冲突', '下一个冲突', '下一个未解决冲突', '采用自动合并结果', '显示共同祖先', '使用横向三栏', '剩余冲突均采用传入版本'],
 		);
 	});
 
@@ -1079,10 +739,7 @@ suite('Workbench localization', () => {
 			},
 		);
 		await assert.rejects(locale.setLocale({ id: 'zh-CN', label: 'Chinese' }), /disk full/);
-		assert.deepEqual(
-			[configuration.inspect(LocalizationConfiguration.locale).memoryValue, locale.locale, prompted],
-			[undefined, 'en', false],
-		);
+		assert.deepEqual([configuration.inspect(LocalizationConfiguration.locale).memoryValue, locale.locale, prompted], [undefined, 'en', false]);
 	});
 
 	test('browser bootstrap reads the selected local pack before command titles are constructed', async () => {
@@ -1106,9 +763,7 @@ suite('Workbench localization', () => {
 	});
 
 	test('browser bootstrap applies the Ash French example to command metadata and parameterized text', async () => {
-		const catalog = parseLanguagePackCatalog(
-			JSON.parse(await readFile(resolve('localization/examples/fr/localization/package.json'), 'utf8')),
-		);
+		const catalog = parseLanguagePackCatalog(JSON.parse(await readFile(resolve('localization/examples/fr/localization/package.json'), 'utf8')));
 		assert.ok(catalog);
 		await initializeBrowserLocalization(startupConfiguration('fr-CA'), {
 			read: async locale => (locale === 'fr' ? catalog : undefined),
@@ -1116,19 +771,9 @@ suite('Workbench localization', () => {
 				assert.fail('Bootstrap must only read resources');
 			},
 		});
-		const title = localize2(
-			{ bundle: 'ash.settings', key: 'displayLanguage.configure' },
-			'Configure Display Language',
-		);
+		const title = localize2({ bundle: 'ash.settings', key: 'displayLanguage.configure' }, 'Configure Display Language');
 		assert.deepEqual(title, { original: 'Configure Display Language', value: 'Configurer la langue d’affichage' });
-		assert.equal(
-			localize(
-				{ bundle: 'ash.settings', key: 'displayLanguage.restartMessage' },
-				'Restart Ash to use {0}?',
-				'Français',
-			),
-			'Redémarrer Ash pour utiliser Français ?',
-		);
+		assert.equal(localize({ bundle: 'ash.settings', key: 'displayLanguage.restartMessage' }, 'Restart Ash to use {0}?', 'Français'), 'Redémarrer Ash pour utiliser Français ?');
 		assert.equal(localize('untranslated', 'Untranslated {0}', 'message'), 'Untranslated message');
 	});
 
@@ -1144,10 +789,7 @@ suite('Workbench localization', () => {
 					assert.fail('Bootstrap must only read resources');
 				},
 			});
-			assert.equal(
-				commandActionLabel(localize2({ bundle: 'ash.regions', key: 'searchCommands' }, 'Hello Ash')),
-				title,
-			);
+			assert.equal(commandActionLabel(localize2({ bundle: 'ash.regions', key: 'searchCommands' }, 'Hello Ash')), title);
 		});
 	}
 
@@ -1165,10 +807,7 @@ suite('Workbench localization', () => {
 					assert.fail('Bootstrap must only read resources');
 				},
 			});
-			assert.equal(
-				localize({ bundle: 'ash.regions', key: 'searchCommands' }, 'Search commands'),
-				'Search commands',
-			);
+			assert.equal(localize({ bundle: 'ash.regions', key: 'searchCommands' }, 'Search commands'), 'Search commands');
 		});
 	}
 

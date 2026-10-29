@@ -10,12 +10,7 @@ import { URI } from '../../../../base/common/uri.js';
 import type { ISandboxGlobals } from '../../../../base/parts/sandbox/electron-browser/sandboxTypes.js';
 import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import type { IWorkspaceContextApi } from '../../../workspace/common/workspaceIpc.js';
-import {
-	DEVELOPMENT_DIR_PERMISSIONS,
-	READ_DIR_PERMISSIONS,
-	type IWorkspaceTrustApi,
-	type WorkspaceTrustPermission,
-} from '../../../workspace/common/workspaceTrust.js';
+import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, type IWorkspaceTrustApi, type WorkspaceTrustPermission } from '../../../workspace/common/workspaceTrust.js';
 
 suite('workspace trust during directory opening', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -70,13 +65,8 @@ suite('workspace trust during directory opening', () => {
 		};
 	}
 
-	function trustApi(
-		saved: ReadonlyMap<string, readonly WorkspaceTrustPermission[]>,
-		grants: WorkspaceTrustPermission[][],
-	): IWorkspaceTrustApi {
-		const permissionsByPath = new Map(
-			[...saved].map(([path, permissions]) => [URI.file(path).fsPath, permissions]),
-		);
+	function trustApi(saved: ReadonlyMap<string, readonly WorkspaceTrustPermission[]>, grants: WorkspaceTrustPermission[][]): IWorkspaceTrustApi {
+		const permissionsByPath = new Map([...saved].map(([path, permissions]) => [URI.file(path).fsPath, permissions]));
 		return {
 			onDidChangeTrust: Event.None,
 			listDirectories: async () => {
@@ -346,15 +336,7 @@ suite('workspace trust during directory opening', () => {
 				throw new Error('Unexpected environment write');
 			},
 		} as unknown as AppServerProtocolClient;
-		await assert.rejects(
-			host.initializeWorkspace(
-				client,
-				{ requestDirectoryPermissions: async () => 'cancel' },
-				trustApi(new Map(), grants),
-				workspace(['/new']),
-			),
-			isCancellationError,
-		);
+		await assert.rejects(host.initializeWorkspace(client, { requestDirectoryPermissions: async () => 'cancel' }, trustApi(new Map(), grants), workspace(['/new'])), isCancellationError);
 		assert.deepEqual(grants, []);
 	});
 
@@ -371,15 +353,7 @@ suite('workspace trust during directory opening', () => {
 				throw failure;
 			},
 		} as unknown as AppServerProtocolClient;
-		await assert.rejects(
-			host.initializeWorkspace(
-				client,
-				{ requestDirectoryPermissions: async () => 'readOnly' },
-				trustApi(new Map(), grants),
-				workspace(['/new']),
-			),
-			error => error === failure,
-		);
+		await assert.rejects(host.initializeWorkspace(client, { requestDirectoryPermissions: async () => 'readOnly' }, trustApi(new Map(), grants), workspace(['/new'])), error => error === failure);
 		assert.equal(writes, 1);
 		assert.deepEqual(grants, [READ_DIR_PERMISSIONS]);
 	});
@@ -387,12 +361,7 @@ suite('workspace trust during directory opening', () => {
 	test('the IPC boundary rejects unknown capabilities before creating a grant and releases its route', async () => {
 		const grants: WorkspaceTrustPermission[][] = [];
 		const client = {} as AppServerProtocolClient;
-		using registration = host.registerAppServerWorkspaceHost(
-			client,
-			async () => {},
-			{ requestDirectoryPermissions: async () => 'cancel' },
-			trustApi(new Map(), grants),
-		);
+		using registration = host.registerAppServerWorkspaceHost(client, async () => {}, { requestDirectoryPermissions: async () => 'cancel' }, trustApi(new Map(), grants));
 		const completion = new Promise<unknown>(resolve => {
 			reply = resolve;
 		});
@@ -424,12 +393,7 @@ suite('workspace trust during directory opening', () => {
 				writes.push({ path, grant });
 			},
 		};
-		using registration = host.registerAppServerWorkspaceHost(
-			{} as AppServerProtocolClient,
-			async () => {},
-			{ requestDirectoryPermissions: async () => 'cancel' },
-			api,
-		);
+		using registration = host.registerAppServerWorkspaceHost({} as AppServerProtocolClient, async () => {}, { requestDirectoryPermissions: async () => 'cancel' }, api);
 		try {
 			let completion = new Promise<unknown>(resolve => {
 				reply = resolve;

@@ -1,15 +1,6 @@
-import {
-	createLanguageFeatureRequest,
-	isLanguageFeatureRequestCurrent,
-	type LanguageHover,
-} from '../../../common/languages.js';
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageHover } from '../../../common/languages.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
-import {
-	ContentWidgetPositionPreference,
-	type ICodeEditor,
-	type IContentWidget,
-	type IContentWidgetPosition,
-} from '../../../browser/editorBrowser.js';
+import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../browser/editorBrowser.js';
 import { isNonEmptyArray } from '../../../../base/common/arrays.js';
 import './hover.css';
 import { addDisposableListener, h, ModifierKeyEmitter } from '../../../../base/browser/dom.js';
@@ -19,12 +10,7 @@ import { type Position } from '../../../common/core/position.js';
 import { type View } from '../../../browser/view.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { isMacintosh } from '../../../../base/common/platform.js';
-import {
-	HoverParticipantRegistry,
-	type HoverAnchor,
-	type IEditorHoverParticipant,
-	type IRenderedHoverParts,
-} from './hoverTypes.js';
+import { HoverParticipantRegistry, type HoverAnchor, type IEditorHoverParticipant, type IRenderedHoverParts } from './hoverTypes.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -58,9 +44,7 @@ export class ContentHoverController extends Disposable implements IContentWidget
 		this.element.setAttribute('role', 'tooltip');
 		this.element.setAttribute('aria-label', localize('hover.title', 'Editor hover'));
 		this.element.tabIndex = -1;
-		this.participants = HoverParticipantRegistry.getAll().map(Participant =>
-			instantiationService.createInstance(Participant, editor),
-		);
+		this.participants = HoverParticipantRegistry.getAll().map(Participant => instantiationService.createInstance(Participant, editor));
 		editor.addContentWidget(this);
 		this._register(
 			observeResize(this.element, () => {
@@ -91,15 +75,10 @@ export class ContentHoverController extends Disposable implements IContentWidget
 				this.element.remove();
 			}),
 		);
-		this._register(
-			addDisposableListener<PointerEvent>(viewport.domNode.domNode, 'pointermove', event => this.schedule(event)),
-		);
+		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, 'pointermove', event => this.schedule(event)));
 		this._register(
 			addDisposableListener<PointerEvent>(viewport.domNode.domNode, 'pointerleave', event => {
-				if (
-					event.relatedTarget instanceof this.element.ownerDocument.defaultView!.Node &&
-					this.element.contains(event.relatedTarget as Node)
-				) {
+				if (event.relatedTarget instanceof this.element.ownerDocument.defaultView!.Node && this.element.contains(event.relatedTarget as Node)) {
 					return;
 				}
 				this.scheduleHide();
@@ -171,9 +150,7 @@ export class ContentHoverController extends Disposable implements IContentWidget
 		const above = this.editor.getOption(EditorOption.hover).above;
 		return {
 			position: this.hoverPosition,
-			preference: above
-				? [ContentWidgetPositionPreference.ABOVE, ContentWidgetPositionPreference.BELOW]
-				: [ContentWidgetPositionPreference.BELOW, ContentWidgetPositionPreference.ABOVE],
+			preference: above ? [ContentWidgetPositionPreference.ABOVE, ContentWidgetPositionPreference.BELOW] : [ContentWidgetPositionPreference.BELOW, ContentWidgetPositionPreference.ABOVE],
 		};
 	}
 
@@ -216,10 +193,7 @@ export class ContentHoverController extends Disposable implements IContentWidget
 			this.hide();
 			return;
 		}
-		const element =
-			event.target instanceof this.element.ownerDocument.defaultView!.HTMLElement
-				? (event.target as HTMLElement)
-				: undefined;
+		const element = event.target instanceof this.element.ownerDocument.defaultView!.HTMLElement ? (event.target as HTMLElement) : undefined;
 		if (this.anchor?.position.equals(target.position) && this.anchor.target === element) {
 			this.hideTimer.clear();
 			return;
@@ -233,12 +207,7 @@ export class ContentHoverController extends Disposable implements IContentWidget
 		if (!anchor) return;
 		const options = this.editor.getOption(EditorOption.hover);
 		const modifiers = this.modifierKeys.keyStatus;
-		const modifierPressed =
-			this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey'
-				? isMacintosh
-					? modifiers.metaKey
-					: modifiers.ctrlKey
-				: modifiers.altKey;
+		const modifierPressed = this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey' ? (isMacintosh ? modifiers.metaKey : modifiers.ctrlKey) : modifiers.altKey;
 		if (options.enabled === 'off' || (options.enabled === 'onKeyboardModifier' && !modifierPressed)) return;
 		const targetWindow = this.element.ownerDocument.defaultView;
 		if (!targetWindow) return;
@@ -351,12 +320,10 @@ export class ContentHoverController extends Disposable implements IContentWidget
 }
 
 function normalizeLanguageHover(value: LanguageHover): LanguageHover {
-	if (!value || typeof value !== 'object' || !isNonEmptyArray(value.contents))
-		throw new TypeError('Language hover must contain content');
+	if (!value || typeof value !== 'object' || !isNonEmptyArray(value.contents)) throw new TypeError('Language hover must contain content');
 	const contents = value.contents.map(content => {
 		if (typeof content === 'string') return content;
-		if (!content || typeof content !== 'object' || typeof content.value !== 'string')
-			throw new TypeError('Language hover content must contain a string value');
+		if (!content || typeof content !== 'object' || typeof content.value !== 'string') throw new TypeError('Language hover content must contain a string value');
 		return Object.freeze({
 			value: content.value,
 			...(content.language !== undefined ? { language: content.language } : {}),

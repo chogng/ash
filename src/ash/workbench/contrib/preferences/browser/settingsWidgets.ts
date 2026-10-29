@@ -1,9 +1,4 @@
-import {
-	defaultButtonStyles,
-	defaultInputBoxStyles,
-	defaultSelectBoxStyles,
-	defaultToggleStyles,
-} from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultInputBoxStyles, defaultSelectBoxStyles, defaultToggleStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/settingsWidgets.css';
 import { localize, localize2 } from '../../../../nls.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
@@ -21,12 +16,7 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import {
-	IConfigurationService,
-	type IConfigurationOverrides,
-	ConfigurationTarget,
-	getConfigValueInTarget,
-} from '../../../../platform/configuration/common/configuration.js';
+import { IConfigurationService, type IConfigurationOverrides, ConfigurationTarget, getConfigValueInTarget } from '../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { HoverConfiguration } from '../../../../platform/hover/common/hoverService.js';
@@ -47,11 +37,7 @@ import type {
 	SettingValueBinding,
 	SettingsPresentation,
 } from '../../../services/preferences/common/preferences.js';
-import {
-	configurationSettingBinding,
-	SettingModel,
-	type SettingState,
-} from '../../../services/preferences/common/settingsModels.js';
+import { configurationSettingBinding, SettingModel, type SettingState } from '../../../services/preferences/common/settingsModels.js';
 import { SettingsSearchMenu } from './settingsSearchMenu.js';
 import { SettingsTreeIndicatorsLabel } from './settingsEditorSettingIndicators.js';
 
@@ -138,11 +124,7 @@ export class SettingsSearchWidget extends Disposable {
 	}
 
 	private searchLabel(): string {
-		return this.options.localizationService.translate(
-			'ash.settings',
-			'chrome.search',
-			localize2({ bundle: 'ash.settings', key: 'chrome.search' }, 'Search settings').original,
-		);
+		return this.options.localizationService.translate('ash.settings', 'chrome.search', localize2({ bundle: 'ash.settings', key: 'chrome.search' }, 'Search settings').original);
 	}
 }
 
@@ -300,8 +282,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		this.domNode = h(document, 'div');
 		this.domNode.className = `ash-configuration-setting ash-${this.presentation}-setting`;
 		this.domNode.setAttribute('role', 'group');
-		if (kind === 'select' && this.presentation === 'editor')
-			this.domNode.classList.add('ash-editor-setting-select-row');
+		if (kind === 'select' && this.presentation === 'editor') this.domNode.classList.add('ash-editor-setting-select-row');
 		if (kind === 'toggle') this.domNode.classList.add(`ash-${this.presentation}-toggle-setting`);
 		this._register(toDisposable(() => this.domNode.remove()));
 
@@ -312,26 +293,11 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		this.descriptionDomNode = h(document, 'span');
 		this.descriptionDomNode.className = `ash-configuration-setting-description ash-${this.presentation}-setting-description`;
 		const configuredText = options.configurationOverrides?.overrideIdentifier
-			? localize(
-					{ bundle: 'ash.settings', key: 'status.configuredLanguage' },
-					'Configured for {0} in the selected target.',
-					options.configurationOverrides.overrideIdentifier,
-				)
-			: options.configurationTarget === ConfigurationTarget.WORKSPACE ||
-				  options.configurationTarget === ConfigurationTarget.WORKSPACE_FOLDER
-				? localize(
-						{ bundle: 'ash.settings', key: 'status.configuredTarget' },
-						'Configured in the selected target.',
-					)
+			? localize({ bundle: 'ash.settings', key: 'status.configuredLanguage' }, 'Configured for {0} in the selected target.', options.configurationOverrides.overrideIdentifier)
+			: options.configurationTarget === ConfigurationTarget.WORKSPACE || options.configurationTarget === ConfigurationTarget.WORKSPACE_FOLDER
+				? localize({ bundle: 'ash.settings', key: 'status.configuredTarget' }, 'Configured in the selected target.')
 				: undefined;
-		this.indicators = this._register(
-			new SettingsTreeIndicatorsLabel(
-				this.copyDomNode,
-				contextViewProvider,
-				() => configurationService.getValue<number>(HoverConfiguration.delay),
-				configuredText,
-			),
-		);
+		this.indicators = this._register(new SettingsTreeIndicatorsLabel(this.copyDomNode, contextViewProvider, () => configurationService.getValue<number>(HoverConfiguration.delay), configuredText));
 		this.copyDomNode.prepend(this.titleDomNode, this.descriptionDomNode);
 		this.updateCopy(descriptor);
 
@@ -344,35 +310,14 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 						isDefault: () => this.model.isDefault(),
 						reset: () => this.resetSetting(),
 					},
-					editInJSON:
-						descriptor.binding || !options.onOpenSettings
-							? undefined
-							: () => options.onOpenSettings!(this.descriptor.id),
-					onError: (error: unknown) =>
-						this.reportStatus(
-							settingErrorMessage(
-								error,
-								localize(
-									{ bundle: 'ash.settings', key: 'actions.failed' },
-									'Unable to run the setting action.',
-								),
-							),
-							true,
-						),
+					editInJSON: descriptor.binding || !options.onOpenSettings ? undefined : () => options.onOpenSettings!(this.descriptor.id),
+					onError: (error: unknown) => this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'actions.failed' }, 'Unable to run the setting action.')), true),
 					copySettingAsJSON: descriptor.binding
 						? undefined
 						: () => {
 								const setting = this.descriptor.configuration;
-								const inspected = configurationService.inspect(
-									setting.key,
-									options.configurationOverrides,
-								);
-								const value = binding.isDefault?.()
-									? binding.defaultValue
-									: getConfigValueInTarget(
-											inspected,
-											options.configurationTarget ?? ConfigurationTarget.USER_LOCAL,
-										);
+								const inspected = configurationService.inspect(setting.key, options.configurationOverrides);
+								const value = binding.isDefault?.() ? binding.defaultValue : getConfigValueInTarget(inspected, options.configurationTarget ?? ConfigurationTarget.USER_LOCAL);
 								return `${JSON.stringify(setting.key)}: ${JSON.stringify(value, null, 2)}`;
 							},
 				}),
@@ -406,14 +351,12 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 			const document = this.domNode.ownerDocument;
 			if (state.isPending && !this.pendingFocus) {
 				const active = getActiveElement(document);
-				if (active instanceof document.defaultView!.HTMLElement && this.domNode.contains(active))
-					this.pendingFocus = active;
+				if (active instanceof document.defaultView!.HTMLElement && this.domNode.contains(active)) this.pendingFocus = active;
 			}
 			renderState(state);
 			if (!state.isPending && this.pendingFocus) {
 				// Disabling a saving control blurs it. Restore focus only if the user has not moved elsewhere.
-				if (getActiveElement(document) === document.body && this.pendingFocus.isConnected)
-					this.pendingFocus.focus();
+				if (getActiveElement(document) === document.body && this.pendingFocus.isConnected) this.pendingFocus.focus();
 				this.pendingFocus = undefined;
 			}
 		};
@@ -431,13 +374,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		try {
 			await this.model.update(value);
 		} catch (error) {
-			this.reportStatus(
-				settingErrorMessage(
-					error,
-					localize({ bundle: 'ash.settings', key: 'status.saveFailed' }, 'Unable to save the setting.'),
-				),
-				true,
-			);
+			this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'status.saveFailed' }, 'Unable to save the setting.')), true);
 		}
 	}
 
@@ -448,13 +385,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		try {
 			await this.model.reset();
 		} catch (error) {
-			this.reportStatus(
-				settingErrorMessage(
-					error,
-					localize({ bundle: 'ash.settings', key: 'status.resetFailed' }, 'Unable to reset the setting.'),
-				),
-				true,
-			);
+			this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'status.resetFailed' }, 'Unable to reset the setting.')), true);
 			throw error;
 		}
 	}
@@ -468,10 +399,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 	}
 
 	private updateIndicatorDescriptions(): void {
-		const ids = [
-			this.domNode.classList.contains('is-configured') ? this.indicators.configuredDescriptionId : undefined,
-			this.indicators.maturityDescriptionId,
-		].filter(Boolean);
+		const ids = [this.domNode.classList.contains('is-configured') ? this.indicators.configuredDescriptionId : undefined, this.indicators.maturityDescriptionId].filter(Boolean);
 		if (ids.length) this.domNode.setAttribute('aria-describedby', ids.join(' '));
 		else this.domNode.removeAttribute('aria-describedby');
 	}
@@ -491,13 +419,7 @@ class BooleanSettingWidget extends AbstractSettingWidget<IBooleanSetting, boolea
 		super(
 			container,
 			descriptor,
-			descriptor.binding ??
-				configurationSettingBinding(
-					configurationService,
-					descriptor.configuration,
-					options.configurationOverrides,
-					options.configurationTarget,
-				),
+			descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget),
 			options,
 			configurationService,
 			contextViewProvider,
@@ -541,13 +463,7 @@ class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> 
 		super(
 			container,
 			descriptor,
-			descriptor.binding ??
-				configurationSettingBinding(
-					configurationService,
-					descriptor.configuration,
-					options.configurationOverrides,
-					options.configurationTarget,
-				),
+			descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget),
 			options,
 			configurationService,
 			contextViewProvider,
@@ -596,13 +512,7 @@ class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> 
 			this.model.refresh();
 			this.input.value = String(this.model.state.value);
 			this.reportStatus(
-				localize(
-					{ bundle: 'ash.settings', key: 'status.numberRange' },
-					'{0} must be between {1} and {2}.',
-					this.descriptor.title,
-					this.descriptor.minimum,
-					this.descriptor.maximum,
-				),
+				localize({ bundle: 'ash.settings', key: 'status.numberRange' }, '{0} must be between {1} and {2}.', this.descriptor.title, this.descriptor.minimum, this.descriptor.maximum),
 				true,
 			);
 			return;
@@ -626,13 +536,7 @@ class NumberWithOptionsSettingWidget extends AbstractSettingWidget<INumberWithOp
 		super(
 			container,
 			descriptor,
-			descriptor.binding ??
-				configurationSettingBinding(
-					configurationService,
-					descriptor.configuration,
-					options.configurationOverrides,
-					options.configurationTarget,
-				),
+			descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget),
 			options,
 			configurationService,
 			contextViewProvider,
@@ -655,7 +559,11 @@ class NumberWithOptionsSettingWidget extends AbstractSettingWidget<INumberWithOp
 			this.select = this._register(
 				new SelectBox(
 					controls,
-					{ options: [], presentation: 'field', contextViewProvider },
+					{
+						options: [],
+						presentation: 'field',
+						contextViewProvider,
+					},
 					defaultSelectBoxStyles,
 				),
 			);
@@ -685,26 +593,12 @@ class NumberWithOptionsSettingWidget extends AbstractSettingWidget<INumberWithOp
 			'aria-description',
 			[
 				...(descriptor.options.some(option => option.value === null)
-					? [
-							localize(
-								{ bundle: 'ash.settings', key: 'number.automaticHelp' },
-								'Enter a number, or clear the field to use Automatic.',
-							),
-						]
+					? [localize({ bundle: 'ash.settings', key: 'number.automaticHelp' }, 'Enter a number, or clear the field to use Automatic.')]
 					: []),
-				...(this.select
-					? [
-							localize(
-								{ bundle: 'ash.settings', key: 'number.modeHelp' },
-								'Enter a number directly, or use the value mode list for other choices.',
-							),
-						]
-					: []),
+				...(this.select ? [localize({ bundle: 'ash.settings', key: 'number.modeHelp' }, 'Enter a number directly, or use the value mode list for other choices.')] : []),
 			].join(' '),
 		);
-		this.select?.setAriaLabel(
-			localize({ bundle: 'ash.settings', key: 'number.mode' }, '{0}: Value mode', descriptor.title),
-		);
+		this.select?.setAriaLabel(localize({ bundle: 'ash.settings', key: 'number.mode' }, '{0}: Value mode', descriptor.title));
 		this.select?.setOptions([
 			{ value: 'custom', label: localize({ bundle: 'ash.settings', key: 'number.custom' }, 'Custom number') },
 			...descriptor.options.map((option, index) => ({ value: String(index), label: option.label })),
@@ -731,12 +625,7 @@ class NumberWithOptionsSettingWidget extends AbstractSettingWidget<INumberWithOp
 			return;
 		}
 		const value = input.valueAsNumber;
-		if (
-			!Number.isFinite(value) ||
-			value < this.descriptor.minimum ||
-			value > this.descriptor.maximum ||
-			(this.descriptor.integer && !Number.isInteger(value))
-		) {
+		if (!Number.isFinite(value) || value < this.descriptor.minimum || value > this.descriptor.maximum || (this.descriptor.integer && !Number.isInteger(value))) {
 			this.renderState(this.model.state);
 			this.reportStatus(
 				this.descriptor.integer
@@ -747,13 +636,7 @@ class NumberWithOptionsSettingWidget extends AbstractSettingWidget<INumberWithOp
 							this.descriptor.minimum,
 							this.descriptor.maximum,
 						)
-					: localize(
-							{ bundle: 'ash.settings', key: 'status.numberRange' },
-							'{0} must be between {1} and {2}.',
-							this.descriptor.title,
-							this.descriptor.minimum,
-							this.descriptor.maximum,
-						),
+					: localize({ bundle: 'ash.settings', key: 'status.numberRange' }, '{0} must be between {1} and {2}.', this.descriptor.title, this.descriptor.minimum, this.descriptor.maximum),
 				true,
 			);
 			return;
@@ -776,13 +659,7 @@ class SelectSettingWidget extends AbstractSettingWidget<ISelectSetting, string |
 		super(
 			container,
 			descriptor,
-			descriptor.binding ??
-				configurationSettingBinding(
-					configurationService,
-					descriptor.configuration,
-					options.configurationOverrides,
-					options.configurationTarget,
-				),
+			descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget),
 			options,
 			configurationService,
 			contextViewProvider,
@@ -801,9 +678,7 @@ class SelectSettingWidget extends AbstractSettingWidget<ISelectSetting, string |
 				defaultSelectBoxStyles,
 			),
 		);
-		this.select.element.classList.add(
-			this.presentation === 'general' ? 'ash-general-setting-control' : 'ash-editor-setting-select',
-		);
+		this.select.element.classList.add(this.presentation === 'general' ? 'ash-general-setting-control' : 'ash-editor-setting-select');
 		this.select.element.dataset.configurationKey = descriptor.id;
 		this.domNode.append(this.copyDomNode, this.select.element);
 		this.bindState(state => this.renderState(state));
@@ -860,13 +735,7 @@ class TextSettingWidget extends AbstractSettingWidget<ITextSetting, string> {
 		super(
 			container,
 			descriptor,
-			descriptor.binding ??
-				configurationSettingBinding(
-					configurationService,
-					descriptor.configuration,
-					options.configurationOverrides,
-					options.configurationTarget,
-				),
+			descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget),
 			options,
 			configurationService,
 			contextViewProvider,
@@ -977,11 +846,7 @@ class StringMapSuggestions extends Disposable {
 		const inputWidth = this.input.getBoundingClientRect().width;
 		const query = this.input.value.trim().toLocaleLowerCase();
 		this.candidates = Object.entries(this.getProperties())
-			.filter(
-				([key, schema]) =>
-					!schema.doNotSuggest &&
-					[key, schema.description ?? ''].some(text => text.toLocaleLowerCase().includes(query)),
-			)
+			.filter(([key, schema]) => !schema.doNotSuggest && [key, schema.description ?? ''].some(text => text.toLocaleLowerCase().includes(query)))
 			.sort(([left], [right]) => left.localeCompare(right));
 		if (!this.candidates.length) {
 			this.hide();
@@ -1067,12 +932,7 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IHoverService private readonly hoverService: IHoverService,
 	) {
-		const binding = configurationSettingBinding(
-			configurationService,
-			descriptor.configuration,
-			options.configurationOverrides,
-			options.configurationTarget,
-		);
+		const binding = configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget);
 		super(
 			container,
 			descriptor,
@@ -1106,8 +966,7 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 		this.bindState(state => {
 			if (!state.isPending && !sameStringMap(this.renderedValue, state.value)) this.renderRows();
 			this.addButton.enabled = !state.isPending;
-			for (const control of this.rows.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button'))
-				control.disabled = state.isPending;
+			for (const control of this.rows.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button')) control.disabled = state.isPending;
 		});
 	}
 
@@ -1136,29 +995,14 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 			if (sibling !== undefined) {
 				const condition = h(row.ownerDocument, 'span');
 				condition.className = 'ash-pattern-condition';
-				condition.textContent = localize(
-					{ bundle: 'ash.settings', key: 'patterns.when' },
-					'When: {0}',
-					sibling,
-				);
+				condition.textContent = localize({ bundle: 'ash.settings', key: 'patterns.when' }, 'When: {0}', sibling);
 				row.append(condition);
 			}
-			const label =
-				sibling === undefined
-					? pattern
-					: localize(
-							{ bundle: 'ash.settings', key: 'patterns.conditionLabel' },
-							'{0}, when a sibling matches {1}',
-							pattern,
-							sibling,
-						);
+			const label = sibling === undefined ? pattern : localize({ bundle: 'ash.settings', key: 'patterns.conditionLabel' }, '{0}, when a sibling matches {1}', pattern, sibling);
 			row.setAttribute('aria-label', label);
 			row.setAttribute(
 				'aria-description',
-				localize(
-					{ bundle: 'ash.settings', key: 'patterns.rowHelp' },
-					'Press Enter to edit. Press Delete to remove this rule. Use arrow keys to move between rules.',
-				),
+				localize({ bundle: 'ash.settings', key: 'patterns.rowHelp' }, 'Press Enter to edit. Press Delete to remove this rule. Use arrow keys to move between rules.'),
 			);
 			this.rowDisposables.add(this.hoverService.setupDelayedHover(row, { content: label }));
 			const actions = h(row.ownerDocument, 'span');
@@ -1168,16 +1012,11 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 				new ActionBar(actions, {
 					actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 					ariaLabel: label,
-					actionViewItemProvider: action =>
-						new LabelActionViewItem(action, { label: '', ariaLabel: action.label }),
+					actionViewItemProvider: action => new LabelActionViewItem(action, { label: '', ariaLabel: action.label }),
 					actions: [
 						{
 							id: 'workbench.action.editListItem',
-							label: localize(
-								{ bundle: 'ash.settings', key: 'patterns.editLabel' },
-								'Edit rule {0}',
-								pattern,
-							),
+							label: localize({ bundle: 'ash.settings', key: 'patterns.editLabel' }, 'Edit rule {0}', pattern),
 							tooltip: localize({ bundle: 'ash.settings', key: 'patterns.edit' }, 'Edit'),
 							icon: Lxicon.edit,
 							enabled: true,
@@ -1185,11 +1024,7 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 						},
 						{
 							id: 'workbench.action.removeListItem',
-							label: localize(
-								{ bundle: 'ash.settings', key: 'patterns.removeLabel' },
-								'Remove rule {0}',
-								pattern,
-							),
+							label: localize({ bundle: 'ash.settings', key: 'patterns.removeLabel' }, 'Remove rule {0}', pattern),
 							tooltip: this.descriptor.removeLabel,
 							icon: Lxicon.close,
 							enabled: true,
@@ -1209,9 +1044,7 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 						void this.saveRule(pattern);
 					} else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
 						stopEvent(event);
-						const next = (
-							event.key === 'ArrowUp' ? row.previousElementSibling : row.nextElementSibling
-						) as HTMLElement | null;
+						const next = (event.key === 'ArrowUp' ? row.previousElementSibling : row.nextElementSibling) as HTMLElement | null;
 						next?.focus();
 					}
 				}),
@@ -1238,19 +1071,13 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 			const rule = original === undefined ? undefined : this.model.state.value[original];
 			sibling.type = 'text';
 			sibling.value = typeof rule === 'object' && rule !== null && 'when' in rule ? String(rule.when) : '';
-			sibling.placeholder = localize(
-				{ bundle: 'ash.settings', key: 'patterns.sibling' },
-				'When a sibling matches (optional)',
-			);
+			sibling.placeholder = localize({ bundle: 'ash.settings', key: 'patterns.sibling' }, 'When a sibling matches (optional)');
 			sibling.setAttribute('aria-label', sibling.placeholder);
 			editor.append(sibling);
 		}
 		const help = h(document, 'span');
 		help.className = 'ash-pattern-help';
-		help.textContent = localize(
-			{ bundle: 'ash.settings', key: 'patterns.editHelp' },
-			'Use * or ** to match paths. Enter saves; Escape cancels.',
-		);
+		help.textContent = localize({ bundle: 'ash.settings', key: 'patterns.editHelp' }, 'Use * or ** to match paths. Enter saves; Escape cancels.');
 		pattern.setAttribute('aria-description', help.textContent);
 		if (this.conditional)
 			sibling.setAttribute(
@@ -1263,16 +1090,10 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 		editor.append(help);
 		const save = (): void => {
 			const key = pattern.value.trim();
-			const duplicate =
-				key !== original && Object.hasOwn(this.model.state.value, key) && !!this.model.state.value[key];
+			const duplicate = key !== original && Object.hasOwn(this.model.state.value, key) && !!this.model.state.value[key];
 			pattern.setAttribute('aria-invalid', String(!key || duplicate));
 			if (!key || duplicate) {
-				this.reportStatus(
-					duplicate
-						? this.descriptor.duplicateMessage
-						: localize({ bundle: 'ash.settings', key: 'patterns.required' }, 'Enter a path pattern.'),
-					true,
-				);
+				this.reportStatus(duplicate ? this.descriptor.duplicateMessage : localize({ bundle: 'ash.settings', key: 'patterns.required' }, 'Enter a path pattern.'), true);
 				pattern.focus();
 				return;
 			}
@@ -1307,11 +1128,7 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 				if (event.key === 'Escape') {
 					stopEvent(event);
 					cancel();
-				} else if (
-					event.key === 'Enter' &&
-					event.target instanceof document.defaultView!.HTMLInputElement &&
-					!event.isComposing
-				) {
+				} else if (event.key === 'Enter' && event.target instanceof document.defaultView!.HTMLInputElement && !event.isComposing) {
 					stopEvent(event);
 					save();
 				}
@@ -1329,22 +1146,12 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 		const overrides: Record<string, unknown> = Object.assign(Object.create(null), inspected.userLocalValue);
 		// Removing an inherited default requires a false override; deleting its key would reveal it again.
 		if (original !== undefined) {
-			if (
-				inspected.defaultValue &&
-				Object.hasOwn(inspected.defaultValue, original) &&
-				inspected.defaultValue[original]
-			)
-				overrides[original] = false;
+			if (inspected.defaultValue && Object.hasOwn(inspected.defaultValue, original) && inspected.defaultValue[original]) overrides[original] = false;
 			else delete overrides[original];
 		}
 		if (pattern !== undefined) {
 			const rule = sibling ? { when: sibling } : true;
-			if (
-				inspected.defaultValue &&
-				Object.hasOwn(inspected.defaultValue, pattern) &&
-				JSON.stringify(inspected.defaultValue[pattern]) === JSON.stringify(rule)
-			)
-				delete overrides[pattern];
+			if (inspected.defaultValue && Object.hasOwn(inspected.defaultValue, pattern) && JSON.stringify(inspected.defaultValue[pattern]) === JSON.stringify(rule)) delete overrides[pattern];
 			else overrides[pattern] = rule;
 		}
 		try {
@@ -1352,26 +1159,16 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 			this.reportStatus('', false);
 			await this.model.update(overrides);
 			if (this.isDisposed) return;
-			const restoreFocus =
-				this.domNode.contains(this.domNode.ownerDocument.activeElement) ||
-				this.domNode.ownerDocument.activeElement === this.domNode.ownerDocument.body;
+			const restoreFocus = this.domNode.contains(this.domNode.ownerDocument.activeElement) || this.domNode.ownerDocument.activeElement === this.domNode.ownerDocument.body;
 			this.renderRows();
 			if (restoreFocus) this.focusRule(pattern);
 		} catch (error) {
-			if (!this.isDisposed)
-				this.reportStatus(
-					settingErrorMessage(
-						error,
-						localize({ bundle: 'ash.settings', key: 'status.saveFailed' }, 'Unable to save the setting.'),
-					),
-					true,
-				);
+			if (!this.isDisposed) this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'status.saveFailed' }, 'Unable to save the setting.')), true);
 		}
 	}
 
 	private focusRule(pattern?: string): void {
-		const row = [...this.rows.children].find(row => (row as HTMLElement).dataset.pattern === pattern) as
-			HTMLElement | undefined;
+		const row = [...this.rows.children].find(row => (row as HTMLElement).dataset.pattern === pattern) as HTMLElement | undefined;
 		(row ?? this.addButton.domNode).focus();
 	}
 }
@@ -1394,13 +1191,7 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 		super(
 			container,
 			descriptor,
-			descriptor.binding ??
-				configurationSettingBinding(
-					configurationService,
-					descriptor.configuration,
-					options.configurationOverrides,
-					options.configurationTarget,
-				),
+			descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget),
 			options,
 			configurationService,
 			contextViewProvider,
@@ -1432,16 +1223,7 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 					label: localize({ bundle: 'ash.settings', key: 'json.edit' }, 'Edit in settings.json'),
 					onClick: () => {
 						void options.onOpenSettings!(this.descriptor.configuration.key).catch(error =>
-							options.onStatus(
-								settingErrorMessage(
-									error,
-									localize(
-										{ bundle: 'ash.settings', key: 'json.openFailed' },
-										'Unable to open settings.json.',
-									),
-								),
-								true,
-							),
+							options.onStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'json.openFailed' }, 'Unable to open settings.json.')), true),
 						);
 					},
 				}),
@@ -1496,14 +1278,8 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 					keyInput,
 					this.contextViewProvider,
 					() => {
-						const used = [...this.rows.querySelectorAll<HTMLInputElement>('[data-pattern-part="key"]')]
-							.filter(input => input !== keyInput)
-							.map(input => input.value.trim());
-						return Object.fromEntries(
-							Object.entries(this.descriptor.configuration.schema!.properties!).filter(
-								([key]) => !used.includes(key),
-							),
-						);
+						const used = [...this.rows.querySelectorAll<HTMLInputElement>('[data-pattern-part="key"]')].filter(input => input !== keyInput).map(input => input.value.trim());
+						return Object.fromEntries(Object.entries(this.descriptor.configuration.schema!.properties!).filter(([key]) => !used.includes(key)));
 					},
 					key => {
 						keyInput.value = key;
@@ -1522,11 +1298,7 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 			}
 			return Object.fromEntries(
 				[schema, ...(schema.anyOf ?? []), ...(schema.oneOf ?? [])].flatMap(alternative =>
-					(alternative.enum ?? []).flatMap((value, index) =>
-						typeof value === 'string'
-							? [[value, { description: alternative.enumDescriptions?.[index] ?? '' }]]
-							: [],
-					),
+					(alternative.enum ?? []).flatMap((value, index) => (typeof value === 'string' ? [[value, { description: alternative.enumDescriptions?.[index] ?? '' }]] : [])),
 				),
 			);
 		};
@@ -1561,18 +1333,9 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 
 	private updateRowLabels(): void {
 		for (const [index, row] of [...this.rows.children].entries()) {
-			row.querySelector<HTMLInputElement>('[data-pattern-part="key"]')?.setAttribute(
-				'aria-label',
-				`${this.descriptor.keyLabel} ${index + 1}`,
-			);
-			row.querySelector<HTMLInputElement>('[data-pattern-part="value"]')?.setAttribute(
-				'aria-label',
-				`${this.descriptor.valueLabel} ${index + 1}`,
-			);
-			row.querySelector<HTMLButtonElement>('button')?.setAttribute(
-				'aria-label',
-				`${this.descriptor.removeLabel} ${index + 1}`,
-			);
+			row.querySelector<HTMLInputElement>('[data-pattern-part="key"]')?.setAttribute('aria-label', `${this.descriptor.keyLabel} ${index + 1}`);
+			row.querySelector<HTMLInputElement>('[data-pattern-part="value"]')?.setAttribute('aria-label', `${this.descriptor.valueLabel} ${index + 1}`);
+			row.querySelector<HTMLButtonElement>('button')?.setAttribute('aria-label', `${this.descriptor.removeLabel} ${index + 1}`);
 		}
 	}
 
@@ -1597,32 +1360,17 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 				return;
 			}
 			try {
-				value[key] =
-					this.descriptor.structuredValues && /^(?:\{|\[|true$|false$)/u.test(childPatterns)
-						? parseJsonc(childPatterns, key)
-						: childPatterns;
+				value[key] = this.descriptor.structuredValues && /^(?:\{|\[|true$|false$)/u.test(childPatterns) ? parseJsonc(childPatterns, key) : childPatterns;
 			} catch (error) {
 				valueInput.setAttribute('aria-invalid', 'true');
-				this.reportStatus(
-					settingErrorMessage(
-						error,
-						localize({ bundle: 'ash.settings', key: 'status.invalidValue' }, 'Invalid setting value.'),
-					),
-					true,
-				);
+				this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'status.invalidValue' }, 'Invalid setting value.')), true);
 				return;
 			}
 		}
 		try {
 			this.descriptor.configuration.parse(value);
 		} catch (error) {
-			this.reportStatus(
-				settingErrorMessage(
-					error,
-					localize({ bundle: 'ash.settings', key: 'status.invalidValue' }, 'Invalid setting value.'),
-				),
-				true,
-			);
+			this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'status.invalidValue' }, 'Invalid setting value.')), true);
 			return;
 		}
 		if (sameStringMap(value, this.model.state.value)) {
@@ -1647,12 +1395,7 @@ class ComplexSettingWidget extends AbstractSettingWidget<IComplexSetting, unknow
 		super(
 			container,
 			descriptor,
-			configurationSettingBinding(
-				configurationService,
-				descriptor.configuration,
-				options.configurationOverrides,
-				options.configurationTarget,
-			),
+			configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget),
 			options,
 			configurationService,
 			contextViewProvider,
@@ -1666,18 +1409,7 @@ class ComplexSettingWidget extends AbstractSettingWidget<IComplexSetting, unknow
 				onClick: () => {
 					void options
 						.onOpenSettings?.(descriptor.id)
-						.catch(error =>
-							options.onStatus(
-								settingErrorMessage(
-									error,
-									localize(
-										{ bundle: 'ash.settings', key: 'json.openFailed' },
-										'Unable to open settings.json.',
-									),
-								),
-								true,
-							),
-						);
+						.catch(error => options.onStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'json.openFailed' }, 'Unable to open settings.json.')), true));
 				},
 			}),
 		);
@@ -1690,12 +1422,7 @@ class ComplexSettingWidget extends AbstractSettingWidget<IComplexSetting, unknow
 	protected updateControl(_descriptor: IComplexSetting): void {}
 }
 
-export function createSettingWidget(
-	container: HTMLElement,
-	setting: ISetting,
-	options: SettingWidgetOptions,
-	instantiationService: IInstantiationService,
-): SettingWidget {
+export function createSettingWidget(container: HTMLElement, setting: ISetting, options: SettingWidgetOptions, instantiationService: IInstantiationService): SettingWidget {
 	switch (setting.valueType) {
 		case 'boolean':
 			return instantiationService.createInstance(BooleanSettingWidget, container, setting, options);
@@ -1708,16 +1435,7 @@ export function createSettingWidget(
 		case 'text':
 			return instantiationService.createInstance(TextSettingWidget, container, setting, options);
 		case 'stringMap':
-			if (
-				[
-					'files.exclude',
-					'search.exclude',
-					'explorer.autoRevealExclude',
-					'files.readonlyInclude',
-					'files.readonlyExclude',
-					'workbench.localHistory.exclude',
-				].includes(setting.id)
-			) {
+			if (['files.exclude', 'search.exclude', 'explorer.autoRevealExclude', 'files.readonlyInclude', 'files.readonlyExclude', 'workbench.localHistory.exclude'].includes(setting.id)) {
 				return instantiationService.createInstance(ExcludeSettingWidget, container, setting, options);
 			}
 			return instantiationService.createInstance(StringMapSettingWidget, container, setting, options);
@@ -1731,11 +1449,7 @@ function sameStringMap(left: Record<string, unknown> | undefined, right: Record<
 	const leftEntries = Object.entries(left);
 	const rightEntries = Object.entries(right);
 	return (
-		leftEntries.length === rightEntries.length &&
-		leftEntries.every(
-			([key, value], index) =>
-				key === rightEntries[index]?.[0] && JSON.stringify(value) === JSON.stringify(rightEntries[index]?.[1]),
-		)
+		leftEntries.length === rightEntries.length && leftEntries.every(([key, value], index) => key === rightEntries[index]?.[0] && JSON.stringify(value) === JSON.stringify(rightEntries[index]?.[1]))
 	);
 }
 

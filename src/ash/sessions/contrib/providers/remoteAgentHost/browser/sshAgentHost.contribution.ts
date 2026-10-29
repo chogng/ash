@@ -1,19 +1,13 @@
 import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import {
-	IAgentHostConnectionsService,
-	type IAgentHostConnectionInfo,
-} from '../../../../../platform/agentHost/common/agentHostConnectionsService.js';
+import { IAgentHostConnectionsService, type IAgentHostConnectionInfo } from '../../../../../platform/agentHost/common/agentHostConnectionsService.js';
 import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
-import {
-	IRemoteConnectionService,
-	type RemoteConnectionDefinition,
-} from '../../../../../platform/remote/common/remoteConnectionService.js';
+import { IRemoteConnectionService, type RemoteConnectionDefinition } from '../../../../../platform/remote/common/remoteConnectionService.js';
 import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
 import { IAgentHostFileSystemService } from '../../../../../workbench/services/agentHost/common/agentHostFileSystemService.js';
 import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
@@ -54,8 +48,7 @@ export class SSHAgentHostContribution extends Disposable {
 				try {
 					await this.showHosts();
 				} catch (error) {
-					if (!this.isDisposed && !isCancellationError(error))
-						this.notifications.error(error instanceof Error ? error : String(error));
+					if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error));
 				}
 			}),
 		);
@@ -64,9 +57,7 @@ export class SSHAgentHostContribution extends Disposable {
 			title: localize2({ bundle: 'ash.workbench', key: 'agentHosts.manage' }, 'Agents: Manage Connected Hosts'),
 		};
 		this._register(MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command }));
-		this._register(
-			MenusRegistry.appendMenuItem(Menus.SidebarSessionsHeader, { command, group: 'navigation', order: 90 }),
-		);
+		this._register(MenusRegistry.appendMenuItem(Menus.SidebarSessionsHeader, { command, group: 'navigation', order: 90 }));
 	}
 
 	private async showHosts(): Promise<void> {
@@ -83,10 +74,7 @@ export class SSHAgentHostContribution extends Disposable {
 			}));
 		const selected = await this.pick<IQuickPickItem & { readonly info?: IAgentHostConnectionInfo }>(
 			[add, ...items],
-			localize(
-				{ bundle: 'ash.workbench', key: 'agentHosts.select' },
-				'Connect a host, or select a connected host to disconnect',
-			),
+			localize({ bundle: 'ash.workbench', key: 'agentHosts.select' }, 'Connect a host, or select a connected host to disconnect'),
 		);
 		if (!selected || this.isDisposed) {
 			return;
@@ -106,10 +94,7 @@ export class SSHAgentHostContribution extends Disposable {
 				detail: connection.workspace,
 				connection,
 			})),
-			localize(
-				{ bundle: 'ash.workbench', key: 'agentHosts.target' },
-				'Select a saved SSH host to connect in this Agents window',
-			),
+			localize({ bundle: 'ash.workbench', key: 'agentHosts.target' }, 'Select a saved SSH host to connect in this Agents window'),
 		);
 		if (target && !this.isDisposed) {
 			await this.connect(target.connection);
@@ -156,9 +141,7 @@ export class SSHAgentHostContribution extends Disposable {
 
 	private synchronizeScopes(): void {
 		if (this.isDisposed) return;
-		const hosts = this.hosts.connections.filter(
-			info => !info.isAmbient && info.connection && info.remoteConnection,
-		);
+		const hosts = this.hosts.connections.filter(info => !info.isAmbient && info.connection && info.remoteConnection);
 		const desired = new Set(hosts.map(info => info.authority));
 		for (const [authority, resources] of this.scopes) {
 			if (desired.has(authority)) continue;
@@ -177,8 +160,7 @@ export class SSHAgentHostContribution extends Disposable {
 				this.scopeLifetimes.delete(resources);
 				resources.dispose();
 				this.renderer.agentHosts!.disconnect(info.id);
-				if (!isCancellationError(error))
-					this.notifications.error(error instanceof Error ? error : String(error));
+				if (!isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error));
 			}
 		}
 	}

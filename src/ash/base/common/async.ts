@@ -8,9 +8,7 @@ export interface CancelablePromise<T> extends Promise<T> {
 	cancel(): void;
 }
 
-export function createCancelablePromise<T>(
-	callback: (token: CancellationToken) => PromiseLike<T>,
-): CancelablePromise<T> {
+export function createCancelablePromise<T>(callback: (token: CancellationToken) => PromiseLike<T>): CancelablePromise<T> {
 	const source = new CancellationTokenSource();
 	let thenable: PromiseLike<T>;
 	try {
@@ -47,11 +45,7 @@ export function createCancelablePromise<T>(
 
 export function raceCancellation<T>(promise: Promise<T>, token: CancellationToken): Promise<T | undefined>;
 export function raceCancellation<T>(promise: Promise<T>, token: CancellationToken, defaultValue: T): Promise<T>;
-export function raceCancellation<T>(
-	promise: Promise<T>,
-	token: CancellationToken,
-	defaultValue?: T,
-): Promise<T | undefined> {
+export function raceCancellation<T>(promise: Promise<T>, token: CancellationToken, defaultValue?: T): Promise<T | undefined> {
 	return new Promise<T | undefined>((resolve, reject) => {
 		let cancellation: IDisposable | undefined;
 		const release = (): void => {
@@ -63,11 +57,7 @@ export function raceCancellation<T>(
 				try {
 					onUnexpectedError(error);
 				} catch (reportingError) {
-					console.error(
-						'Unexpected error while reporting a cancellation race cleanup error',
-						error,
-						reportingError,
-					);
+					console.error('Unexpected error while reporting a cancellation race cleanup error', error, reportingError);
 				}
 			}
 		};
@@ -99,14 +89,8 @@ export function raceCancellation<T>(
 	});
 }
 
-export function raceCancellationError<T>(
-	promise: PromiseLike<T>,
-	cancellation: AbortSignal | CancellationToken,
-	message = 'Operation cancelled',
-): Promise<T> {
-	const initialCancellation = isCancellationRequested(cancellation)
-		? new CancellationError(message, cancellationReason(cancellation))
-		: undefined;
+export function raceCancellationError<T>(promise: PromiseLike<T>, cancellation: AbortSignal | CancellationToken, message = 'Operation cancelled'): Promise<T> {
+	const initialCancellation = isCancellationRequested(cancellation) ? new CancellationError(message, cancellationReason(cancellation)) : undefined;
 	return new Promise<T>((resolve, reject) => {
 		let subscription: IDisposable | undefined;
 		const release = (): void => {
@@ -118,11 +102,7 @@ export function raceCancellationError<T>(
 				try {
 					onUnexpectedError(error);
 				} catch (reportingError) {
-					console.error(
-						'Unexpected error while reporting rejecting cancellation cleanup error',
-						error,
-						reportingError,
-					);
+					console.error('Unexpected error while reporting rejecting cancellation cleanup error', error, reportingError);
 				}
 			}
 		};
@@ -173,11 +153,7 @@ function subscribeCancellation(cancellation: AbortSignal | CancellationToken, li
 
 function isAbortSignal(cancellation: AbortSignal | CancellationToken): cancellation is AbortSignal {
 	const candidate = cancellation as AbortSignal;
-	return (
-		typeof candidate.aborted === 'boolean' &&
-		typeof candidate.addEventListener === 'function' &&
-		typeof candidate.removeEventListener === 'function'
-	);
+	return typeof candidate.aborted === 'boolean' && typeof candidate.addEventListener === 'function' && typeof candidate.removeEventListener === 'function';
 }
 
 export function rejectIfNotCanceled(error: unknown): undefined {
@@ -420,10 +396,7 @@ export class DeferredPromise<T> {
 
 	private readonly resolvePromise: (value: T | PromiseLike<T>) => void;
 	private readonly rejectPromise: (reason?: unknown) => void;
-	private outcome:
-		| { readonly kind: 'resolved'; readonly value: T }
-		| { readonly kind: 'rejected'; readonly reason: unknown }
-		| undefined;
+	private outcome: { readonly kind: 'resolved'; readonly value: T } | { readonly kind: 'rejected'; readonly reason: unknown } | undefined;
 	readonly p: Promise<T>;
 
 	constructor() {
@@ -468,11 +441,7 @@ export class DeferredPromise<T> {
 	}
 }
 
-export function first<T>(
-	promiseFactories: readonly (() => PromiseLike<T>)[],
-	shouldStop: (value: T) => boolean = value => Boolean(value),
-	defaultValue: T | null = null,
-): Promise<T | null> {
+export function first<T>(promiseFactories: readonly (() => PromiseLike<T>)[], shouldStop: (value: T) => boolean = value => Boolean(value), defaultValue: T | null = null): Promise<T | null> {
 	let index = 0;
 	const next = async (): Promise<T | null> => {
 		if (index >= promiseFactories.length) return defaultValue;
@@ -570,17 +539,11 @@ export interface IdleDeadline {
 
 export function runWhenGlobalIdle(callback: (deadline: IdleDeadline) => void, timeoutMs?: number): IDisposable {
 	const idleGlobal = globalThis as typeof globalThis & {
-		requestIdleCallback?: (
-			callback: (deadline: IdleDeadline) => void,
-			options?: { readonly timeout?: number },
-		) => number;
+		requestIdleCallback?: (callback: (deadline: IdleDeadline) => void, options?: { readonly timeout?: number }) => number;
 		cancelIdleCallback?: (handle: number) => void;
 	};
 	if (idleGlobal.requestIdleCallback && idleGlobal.cancelIdleCallback) {
-		const handle = idleGlobal.requestIdleCallback(
-			callback,
-			timeoutMs === undefined ? undefined : { timeout: timeoutMs },
-		);
+		const handle = idleGlobal.requestIdleCallback(callback, timeoutMs === undefined ? undefined : { timeout: timeoutMs });
 		return toDisposable(() => idleGlobal.cancelIdleCallback?.(handle));
 	}
 	const started = Date.now();

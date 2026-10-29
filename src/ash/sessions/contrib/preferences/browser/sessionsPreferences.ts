@@ -1,9 +1,4 @@
-import {
-	defaultButtonStyles,
-	defaultDialogStyles,
-	defaultInputBoxStyles,
-	defaultCheckboxStyles,
-} from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultDialogStyles, defaultInputBoxStyles, defaultCheckboxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import { ExecutionSettingsModel } from './executionSettingsModel.js';
 import { GitHubSettingsModel } from '../../../../workbench/contrib/github/browser/githubSettingsModel.js';
@@ -15,11 +10,7 @@ import '../../../../workbench/contrib/preferences/browser/media/settingsCard.css
 import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { BrowserContextMenuService } from '../../../../platform/contextview/browser/contextMenuService.js';
-import {
-	ContextView,
-	type ContextViewOptions,
-	type ContextViewHideReason,
-} from '../../../../base/browser/ui/contextview/contextview.js';
+import { ContextView, type ContextViewOptions, type ContextViewHideReason } from '../../../../base/browser/ui/contextview/contextview.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
@@ -40,10 +31,7 @@ import {
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { STARTUP_WINDOW_SETTING } from '../../../../platform/window/common/window.js';
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -55,29 +43,16 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { WorkbenchConfiguration } from '../../../../workbench/common/configuration.js';
 import '../../../../workbench/contrib/preferences/common/settingsEditorColorRegistry.js';
 import { DefaultSettings } from '../../../../workbench/services/preferences/common/settingsModels.js';
-import {
-	SettingsRenderer,
-	SettingsPageRenderer,
-} from '../../../../workbench/contrib/preferences/browser/settingsRenderers.js';
+import { SettingsRenderer, SettingsPageRenderer } from '../../../../workbench/contrib/preferences/browser/settingsRenderers.js';
 import { AdvisorSettingsRenderer } from '../../../../workbench/contrib/preferences/browser/advisorSettingsRenderer.js';
 import { ModelSettingsRenderer } from '../../../../workbench/contrib/preferences/browser/modelSettingsRenderer.js';
 import { DictationSettingsRenderer } from '../../../../workbench/contrib/preferences/browser/dictationSettingsRenderer.js';
 import { SettingsTree } from '../../../../workbench/contrib/preferences/browser/settingsTree.js';
-import {
-	SettingsTreeModel,
-	type SettingsSectionReference,
-	type SettingsSectionField,
-	type SettingsTreeNode,
-} from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
+import { SettingsTreeModel, type SettingsSectionReference, type SettingsSectionField, type SettingsTreeNode } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
 import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
 import { SettingsSearchMenu } from '../../../../workbench/contrib/preferences/browser/settingsSearchMenu.js';
 import type { SettingWidgetOptions } from '../../../../workbench/contrib/preferences/browser/settingsWidgets.js';
-import {
-	IPreferencesService,
-	validateSettingsEditorOptions,
-	type IOpenSettingsOptions,
-	type ISetting,
-} from '../../../../workbench/services/preferences/common/preferences.js';
+import { IPreferencesService, validateSettingsEditorOptions, type IOpenSettingsOptions, type ISetting } from '../../../../workbench/services/preferences/common/preferences.js';
 import { SessionsConfiguration } from '../../../common/configuration.js';
 import { SESSIONS_LAYOUT_SCOPE_SETTING } from '../../../common/chatLayout.js';
 import '../../../common/sessionConfig.js';
@@ -89,8 +64,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 	key: AccessibilityVerbositySettingId.SessionsSettings,
 	defaultValue: true,
 	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean')
-			throw new TypeError('Sessions Settings accessibility verbosity must be boolean');
+		if (typeof value !== 'boolean') throw new TypeError('Sessions Settings accessibility verbosity must be boolean');
 		return value;
 	},
 	setting: {
@@ -100,10 +74,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 			return localize('sessions.settings.verbosityTitle', 'Settings accessibility help');
 		},
 		get description() {
-			return localize(
-				'sessions.settings.verbosityDescription',
-				'Announce how to open accessibility help when this page has focus.',
-			);
+			return localize('sessions.settings.verbosityDescription', 'Announce how to open accessibility help when this page has focus.');
 		},
 	},
 });
@@ -112,24 +83,17 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 	key: AccessibilityVerbositySettingId.ExecutionSettings,
 	defaultValue: true,
 	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean')
-			throw new TypeError('Execution Settings accessibility verbosity must be boolean');
+		if (typeof value !== 'boolean') throw new TypeError('Execution Settings accessibility verbosity must be boolean');
 		return value;
 	},
 	setting: {
 		included: false,
 		valueType: 'boolean',
 		get title() {
-			return localize(
-				{ bundle: 'ash.settings', key: 'execution.verbosityTitle' },
-				'Execution and permissions accessibility help',
-			);
+			return localize({ bundle: 'ash.settings', key: 'execution.verbosityTitle' }, 'Execution and permissions accessibility help');
 		},
 		get description() {
-			return localize(
-				{ bundle: 'ash.settings', key: 'execution.verbosityDescription' },
-				'Announce how to open accessibility help for execution and permissions controls.',
-			);
+			return localize({ bundle: 'ash.settings', key: 'execution.verbosityDescription' }, 'Announce how to open accessibility help for execution and permissions controls.');
 		},
 	},
 });
@@ -207,15 +171,9 @@ export class SessionsPreferences extends Disposable {
 								'Language queries such as @lang:plaintext open language-specific settings in the shared Workbench editor. Workspace and folder settings use that editor too.',
 							) +
 							' ' +
-							localize(
-								{ bundle: 'ash.settings', key: 'number.automaticHelp' },
-								'Enter a number, or clear the field to use Automatic.',
-							) +
+							localize({ bundle: 'ash.settings', key: 'number.automaticHelp' }, 'Enter a number, or clear the field to use Automatic.') +
 							' ' +
-							localize(
-								{ bundle: 'ash.settings', key: 'number.modeHelp' },
-								'Enter a number directly, or use the value mode list for other choices.',
-							) +
+							localize({ bundle: 'ash.settings', key: 'number.modeHelp' }, 'Enter a number directly, or use the value mode list for other choices.') +
 							' ' +
 							localize(
 								{ bundle: 'ash.settings', key: 'editor.switchHelp' },
@@ -246,9 +204,7 @@ export class SessionsPreferences extends Disposable {
 		) {
 			// Sessions owns product preferences; resource and language editing belongs to the shared Workbench pane.
 			const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
-			const jsonEditor =
-				validated.jsonEditor ??
-				this.configurationService.getValue(WorkbenchConfiguration.settingsEditor) === 'json';
+			const jsonEditor = validated.jsonEditor ?? this.configurationService.getValue(WorkbenchConfiguration.settingsEditor) === 'json';
 			this.dialog?.dispose();
 			const inGroup = validated.openToSide || validated.groupId !== undefined;
 			// Revealing Code selects its document group. Settle that layout before opening and focusing the requested pane.
@@ -257,10 +213,7 @@ export class SessionsPreferences extends Disposable {
 			if (jsonEditor && !inGroup) await this.showEditor();
 			return;
 		}
-		if (
-			validated.jsonEditor ??
-			this.configurationService.getValue(WorkbenchConfiguration.settingsEditor) === 'json'
-		) {
+		if (validated.jsonEditor ?? this.configurationService.getValue(WorkbenchConfiguration.settingsEditor) === 'json') {
 			this.dialog?.dispose();
 			const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
 			await preferences.openUserSettings({ ...validated, jsonEditor: true });
@@ -368,8 +321,7 @@ export class SessionsPreferences extends Disposable {
 				getWindow(content),
 				'click',
 				event => {
-					if ((event.target as HTMLElement | null)?.classList?.contains('ash-sessions-settings-dialog'))
-						dialog.dispose();
+					if ((event.target as HTMLElement | null)?.classList?.contains('ash-sessions-settings-dialog')) dialog.dispose();
 				},
 				true,
 			),
@@ -410,10 +362,7 @@ export class SessionsPreferences extends Disposable {
 				await operation();
 				if (showEditor && !this.isDisposed) await this.showEditor();
 			} catch (error) {
-				if (!this.isDisposed)
-					notifications.error(
-						localize('sessions.settings.openFailed', 'Could not open preferences: {0}', String(error)),
-					);
+				if (!this.isDisposed) notifications.error(localize('sessions.settings.openFailed', 'Could not open preferences: {0}', String(error)));
 			}
 		};
 		const openSettingsEditor = (section?: string): Promise<void> => {
@@ -453,12 +402,7 @@ export class SessionsPreferences extends Disposable {
 				'Switch between Settings UI and JSON without changing the default settings editor. Unsaved JSON edits remain in the editor.',
 			),
 		);
-		const managementContent = (
-			id: string,
-			title: string,
-			description: string,
-			fields: readonly SettingsSectionField[],
-		): SettingsPageRenderer =>
+		const managementContent = (id: string, title: string, description: string, fields: readonly SettingsSectionField[]): SettingsPageRenderer =>
 			resources.add(
 				contentServices.createInstance(
 					SettingsSectionRenderer,
@@ -487,9 +431,7 @@ export class SessionsPreferences extends Disposable {
 		};
 		const renderer = resources.add(contentServices.createInstance(SettingsRenderer, list, settingOptions));
 		const modelContent = resources.add(this.instantiationService.createInstance(ModelSettingsRenderer, list));
-		const dictationContent = resources.add(
-			this.instantiationService.createInstance(DictationSettingsRenderer, list),
-		);
+		const dictationContent = resources.add(this.instantiationService.createInstance(DictationSettingsRenderer, list));
 		const customizeContent = resources.add(
 			contentServices.createInstance(
 				SessionsCustomizeContent,
@@ -509,59 +451,34 @@ export class SessionsPreferences extends Disposable {
 			}),
 		);
 		const githubContent = resources.add(
-			contentServices.createInstance(
-				SettingsSectionRenderer,
-				list,
-				githubSettings,
-				AccessibleViewProviderId.GitHubSettings,
-				AccessibilityVerbositySettingId.GitHubSettings,
-			),
+			contentServices.createInstance(SettingsSectionRenderer, list, githubSettings, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings),
 		);
 		const traceSettings = resources.add(contentServices.createInstance(TraceSettingsModel));
 		const traceContent = resources.add(
-			contentServices.createInstance(
-				SettingsSectionRenderer,
-				list,
-				traceSettings,
-				AccessibleViewProviderId.TraceSettings,
-				AccessibilityVerbositySettingId.TraceSettings,
-			),
+			contentServices.createInstance(SettingsSectionRenderer, list, traceSettings, AccessibleViewProviderId.TraceSettings, AccessibilityVerbositySettingId.TraceSettings),
 		);
 		const executionSettings = resources.add(contentServices.createInstance(ExecutionSettingsModel));
 		const executionContent = resources.add(
-			contentServices.createInstance(
-				SettingsSectionRenderer,
-				list,
-				executionSettings,
-				AccessibleViewProviderId.ExecutionSettings,
-				AccessibilityVerbositySettingId.ExecutionSettings,
-			),
+			contentServices.createInstance(SettingsSectionRenderer, list, executionSettings, AccessibleViewProviderId.ExecutionSettings, AccessibilityVerbositySettingId.ExecutionSettings),
 		);
 		const management = new Map<string, SettingsPageRenderer>();
 		const accountTitle = localize('sessions.settings.account', 'Account');
 		management.set(
 			'account',
-			managementContent(
-				'account',
-				accountTitle,
-				localize('sessions.settings.accountDescription', 'Manage connected accounts and sign-in methods.'),
-				[
-					{
-						id: 'manage',
-						kind: 'action',
-						enabled: true,
-						label: localize({ bundle: 'ash', key: 'workbench.manageAccounts' }, 'Manage Accounts'),
-						run: () => {
-							const commands = this.instantiationService.invokeFunction(accessor =>
-								accessor.get(ICommandService),
-							);
-							return handoff(async () => {
-								await commands.executeCommand('workbench.action.manageAccounts');
-							}, false);
-						},
+			managementContent('account', accountTitle, localize('sessions.settings.accountDescription', 'Manage connected accounts and sign-in methods.'), [
+				{
+					id: 'manage',
+					kind: 'action',
+					enabled: true,
+					label: localize({ bundle: 'ash', key: 'workbench.manageAccounts' }, 'Manage Accounts'),
+					run: () => {
+						const commands = this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService));
+						return handoff(async () => {
+							await commands.executeCommand('workbench.action.manageAccounts');
+						}, false);
 					},
-				],
-			),
+				},
+			]),
 		);
 		const shortcutTitle = localize('sessions.settings.shortcuts', 'Keyboard Shortcuts');
 		management.set(
@@ -577,16 +494,9 @@ export class SessionsPreferences extends Disposable {
 					id: textual ? 'json' : 'editor',
 					kind: 'action',
 					enabled: true,
-					label: textual
-						? localize(
-								{ bundle: 'ash', key: 'keybindings.openJson' },
-								'Preferences: Open Keyboard Shortcuts (JSON)',
-							)
-						: shortcutTitle,
+					label: textual ? localize({ bundle: 'ash', key: 'keybindings.openJson' }, 'Preferences: Open Keyboard Shortcuts (JSON)') : shortcutTitle,
 					run: () => {
-						const preferences = this.instantiationService.invokeFunction(accessor =>
-							accessor.get(IPreferencesService),
-						);
+						const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
 						// The UI opens as a modal; switching document entries would retire its host.
 						return handoff(() => preferences.openGlobalKeybindingSettings(textual), textual);
 					},
@@ -596,17 +506,11 @@ export class SessionsPreferences extends Disposable {
 		for (const [id, section, title] of [
 			['browser', 'browser', localize('sessions.settings.browser', 'Browser')],
 			['tab', 'editor-opening', localize('sessions.settings.tab', 'Tab')],
-			[
-				'code-intelligence',
-				'editor-suggestions',
-				localize('sessions.settings.codeIntelligence', 'Code Intelligence'),
-			],
+			['code-intelligence', 'editor-suggestions', localize('sessions.settings.codeIntelligence', 'Code Intelligence')],
 			['environment', 'terminal', localize('sessions.settings.environment', 'Environment')],
 		] as const) {
 			const label = localize('sessions.settings.openSection', 'Open {0} settings', title);
-			const fields: SettingsSectionField[] = [
-				{ id: 'settings', kind: 'action', label, enabled: true, run: () => openSettingsEditor(section) },
-			];
+			const fields: SettingsSectionField[] = [{ id: 'settings', kind: 'action', label, enabled: true, run: () => openSettingsEditor(section) }];
 			if (id === 'code-intelligence')
 				fields.push({
 					id: 'language-servers',
@@ -620,24 +524,12 @@ export class SessionsPreferences extends Disposable {
 				managementContent(
 					id,
 					title,
-					localize(
-						'sessions.settings.sharedDescription',
-						'These preferences are shared with the Workbench. Open the settings editor to view, change, search, or reset them.',
-					),
+					localize('sessions.settings.sharedDescription', 'These preferences are shared with the Workbench. Open the settings editor to view, change, search, or reset them.'),
 					fields,
 				),
 			);
 		}
-		const sections = this.sections(
-			modelContent,
-			dictationContent,
-			customizeContent,
-			advisorContent,
-			githubContent,
-			traceContent,
-			executionContent,
-			management,
-		);
+		const sections = this.sections(modelContent, dictationContent, customizeContent, advisorContent, githubContent, traceContent, executionContent, management);
 		const categories = sections.flatMap(section => section.categories);
 		for (const category of categories) {
 			if (category.content) resources.add(renderer.registerPage(category.content));
@@ -654,8 +546,7 @@ export class SessionsPreferences extends Disposable {
 			new SettingsTreeModel<ISetting | SettingsSectionReference>(
 				id =>
 					// Keep service-only sections out of the local-user filter without creating configuration copies.
-					configurationRegistry.getConfiguration(id) !== undefined &&
-					this.configurationService.inspect(id).userLocalValue !== undefined,
+					configurationRegistry.getConfiguration(id) !== undefined && this.configurationService.inspect(id).userLocalValue !== undefined,
 			),
 		);
 		const tree = resources.add(
@@ -710,39 +601,35 @@ export class SessionsPreferences extends Disposable {
 		}
 		const render = (): void => {
 			const query = new SettingsSearchQuery(searchInput.value);
-			const nodes: readonly SettingsTreeNode<ISetting | SettingsSectionReference>[] = categories.map(
-				(category, index) => ({
-					element: {
-						kind: 'group',
-						id: `sessions.category.${category.id}`,
-						title: category.title,
-						description: '',
-					},
-					children: [
-						...category.settings.map(setting => ({
-							element: {
-								kind: 'item' as const,
-								id: setting.id,
-								title: setting.title,
-								description: setting.description,
-								keywords: [setting.id, ...(setting.keywords ?? [])],
-								tags: setting.tags,
-								value: setting,
-							},
-						})),
-						...(category.content?.getNodes(query) ?? []),
-					],
-				}),
-			);
+			const nodes: readonly SettingsTreeNode<ISetting | SettingsSectionReference>[] = categories.map((category, index) => ({
+				element: {
+					kind: 'group',
+					id: `sessions.category.${category.id}`,
+					title: category.title,
+					description: '',
+				},
+				children: [
+					...category.settings.map(setting => ({
+						element: {
+							kind: 'item' as const,
+							id: setting.id,
+							title: setting.title,
+							description: setting.description,
+							keywords: [setting.id, ...(setting.keywords ?? [])],
+							tags: setting.tags,
+							value: setting,
+						},
+					})),
+					...(category.content?.getNodes(query) ?? []),
+				],
+			}));
 			treeModel.setChildren(nodes);
 			tree.setNavigationTarget(query.isEmpty ? `sessions.category.${categories[activeCategory].id}` : undefined);
 			treeModel.setQuery(query);
 			for (const [index, category] of categories.entries()) {
 				category.content?.setVisible(!query.isEmpty || index === activeCategory);
 			}
-			heading.textContent = query.isEmpty
-				? categories[activeCategory].title
-				: localize('sessions.settings.results', 'Search results');
+			heading.textContent = query.isEmpty ? categories[activeCategory].title : localize('sessions.settings.results', 'Search results');
 			heading.hidden = treeModel.visibleItems.length === 0;
 			empty.hidden = treeModel.visibleItems.length !== 0 || query.isEmpty;
 			for (const [index, button] of buttons.entries()) {
@@ -796,9 +683,9 @@ export class SessionsPreferences extends Disposable {
 					event.stopPropagation();
 					searchInput.value = '';
 				} else if (event.key === 'ArrowDown') {
-					const target = [
-						...pageContent.querySelectorAll<HTMLElement>('button, input, select, textarea, [tabindex="0"]'),
-					].find(element => !element.hasAttribute('disabled') && element.getClientRects().length > 0);
+					const target = [...pageContent.querySelectorAll<HTMLElement>('button, input, select, textarea, [tabindex="0"]')].find(
+						element => !element.hasAttribute('disabled') && element.getClientRects().length > 0,
+					);
 					if (!target) return;
 					event.preventDefault();
 					event.stopPropagation();
@@ -809,13 +696,8 @@ export class SessionsPreferences extends Disposable {
 		resources.add(
 			searchInput.onDidChange(() => {
 				if (new SettingsSearchQuery(searchInput.value).languageFilter) {
-					const preferences = this.instantiationService.invokeFunction(accessor =>
-						accessor.get(IPreferencesService),
-					);
-					void handoff(
-						() => preferences.openUserSettings({ query: searchInput.value, jsonEditor: false }),
-						false,
-					);
+					const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
+					void handoff(() => preferences.openUserSettings({ query: searchInput.value, jsonEditor: false }), false);
 					return;
 				}
 				render();
@@ -884,11 +766,7 @@ export class SessionsPreferences extends Disposable {
 		management: ReadonlyMap<string, SettingsPageRenderer<ISetting | SettingsSectionReference>>,
 	): readonly SettingsSection[] {
 		const defaults = new DefaultSettings();
-		const appearanceSettings: readonly ISetting[] = [
-			SESSIONS_LAYOUT_SCOPE_SETTING,
-			SessionsConfiguration.layoutStyle,
-			SessionsConfiguration.activityBarLocation,
-		].map(id => defaults.get(id));
+		const appearanceSettings: readonly ISetting[] = [SESSIONS_LAYOUT_SCOPE_SETTING, SessionsConfiguration.layoutStyle, SessionsConfiguration.activityBarLocation].map(id => defaults.get(id));
 		// Existing accessibility preferences live under General without changing their stored keys.
 		const generalSettings: readonly ISetting[] = [
 			...defaults.all.filter(setting => setting.id === STARTUP_WINDOW_SETTING).map(setting => setting.id),
@@ -899,13 +777,8 @@ export class SessionsPreferences extends Disposable {
 			AccessibilityVerbositySettingId.ExecutionSettings,
 			AccessibilityVerbositySettingId.ResourceEditor,
 		].map(id => defaults.get(id));
-		const designSettings: readonly ISetting[] = [
-			DesignConfiguration.usePointerCursor,
-			AccessibilityVerbositySettingId.DesignCanvas,
-		].map(id => defaults.get(id));
-		const projectsSettings: readonly ISetting[] = [AccessibilityVerbositySettingId.Projects].map(id =>
-			defaults.get(id),
-		);
+		const designSettings: readonly ISetting[] = [DesignConfiguration.usePointerCursor, AccessibilityVerbositySettingId.DesignCanvas].map(id => defaults.get(id));
+		const projectsSettings: readonly ISetting[] = [AccessibilityVerbositySettingId.Projects].map(id => defaults.get(id));
 		return [
 			{
 				title: localize('sessions.settings.section.basics', 'Basics'),
@@ -944,10 +817,7 @@ export class SessionsPreferences extends Disposable {
 				categories: [
 					{
 						id: 'execution-permissions',
-						title: localize(
-							{ bundle: 'ash.settings', key: 'execution.title' },
-							'Execution and permissions',
-						),
+						title: localize({ bundle: 'ash.settings', key: 'execution.title' }, 'Execution and permissions'),
 						icon: Lxicon.settings,
 						settings: [],
 						content: executionContent,

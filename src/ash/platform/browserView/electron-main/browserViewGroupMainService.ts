@@ -23,8 +23,7 @@ export class BrowserViewGroupMainService extends Disposable implements IBrowserV
 			typeof filter.sandboxSessionId !== 'string' ||
 			filter.sandboxSessionId.length === 0 ||
 			(filter.agentOnly !== undefined && typeof filter.agentOnly !== 'boolean') ||
-			(filter.browserIds !== undefined &&
-				(!Array.isArray(filter.browserIds) || !filter.browserIds.every(id => typeof id === 'string')))
+			(filter.browserIds !== undefined && (!Array.isArray(filter.browserIds) || !filter.browserIds.every(id => typeof id === 'string')))
 		) {
 			throw new TypeError('Invalid browser group filter');
 		}

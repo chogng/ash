@@ -18,10 +18,7 @@ export interface ISystemWideKeybindingRejection {
 }
 
 /** Selects explicit user shortcuts that Electron can register with the operating system. */
-export function selectSystemWideKeybindings(
-	bindings: readonly IUserFriendlyKeybinding[],
-	operatingSystem: OperatingSystem,
-): ISystemWideKeybindingSelection {
+export function selectSystemWideKeybindings(bindings: readonly IUserFriendlyKeybinding[], operatingSystem: OperatingSystem): ISystemWideKeybindingSelection {
 	const candidates: INativeSystemWideKeybinding[] = [];
 	const unsupported: ISystemWideKeybindingRejection[] = [];
 	const duplicates: ISystemWideKeybindingRejection[] = [];
@@ -30,12 +27,7 @@ export function selectSystemWideKeybindings(
 
 	for (const binding of bindings) {
 		if (binding.systemWide !== true || !binding.command) continue;
-		const key =
-			operatingSystem === OperatingSystem.Macintosh
-				? binding.mac
-				: operatingSystem === OperatingSystem.Windows
-					? binding.win
-					: binding.linux;
+		const key = operatingSystem === OperatingSystem.Macintosh ? binding.mac : operatingSystem === OperatingSystem.Windows ? binding.win : binding.linux;
 		const label = key === undefined ? binding.key : key;
 		if (label === null) continue;
 		const rejection = { commandId: binding.command, userSettingsLabel: label };

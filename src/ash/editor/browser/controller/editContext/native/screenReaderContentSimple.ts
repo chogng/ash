@@ -65,11 +65,7 @@ export class SimpleScreenReaderContent extends Disposable implements IScreenRead
 	onFocusChange(focused: boolean): void {
 		this.focused = focused;
 		if (focused) {
-			this.selectionChangeListener.value = addDisposableListener(
-				this.domNode.domNode.ownerDocument,
-				'selectionchange',
-				() => this.handleSelectionChange(),
-			);
+			this.selectionChangeListener.value = addDisposableListener(this.domNode.domNode.ownerDocument, 'selectionchange', () => this.handleSelectionChange());
 			return;
 		}
 		this.selectionChangeListener.clear();
@@ -86,15 +82,15 @@ export class SimpleScreenReaderContent extends Disposable implements IScreenRead
 			return;
 		}
 		this.sync(
-			createScreenReaderContentState(this.model, primarySelection, { pageSize: this.accessibilityPageSize }),
+			createScreenReaderContentState(this.model, primarySelection, {
+				pageSize: this.accessibilityPageSize,
+			}),
 		);
 	}
 
 	updateScrollTop(primarySelection: Selection): void {
 		if (!this.state) return;
-		this.element.scrollTop =
-			screenReaderLineOffsetAtModelOffset(this.state, this.model.offsetAt(primarySelection.getPosition())) *
-			this.lineHeight;
+		this.element.scrollTop = screenReaderLineOffsetAtModelOffset(this.state, this.model.offsetAt(primarySelection.getPosition())) * this.lineHeight;
 	}
 
 	getState(): ScreenReaderContentState | undefined {
@@ -135,16 +131,8 @@ export class SimpleScreenReaderContent extends Disposable implements IScreenRead
 		if (anchorOffset === undefined || activeOffset === undefined) return undefined;
 		const backward = selection.direction === 'backward';
 		return {
-			anchorOffset: modelOffsetAtContentOffset(
-				state,
-				clampScreenReaderOffset(anchorOffset, state.text.length),
-				backward ? 'end' : 'start',
-			),
-			activeOffset: modelOffsetAtContentOffset(
-				state,
-				clampScreenReaderOffset(activeOffset, state.text.length),
-				backward ? 'start' : 'end',
-			),
+			anchorOffset: modelOffsetAtContentOffset(state, clampScreenReaderOffset(anchorOffset, state.text.length), backward ? 'end' : 'start'),
+			activeOffset: modelOffsetAtContentOffset(state, clampScreenReaderOffset(activeOffset, state.text.length), backward ? 'start' : 'end'),
 		};
 	}
 
@@ -184,8 +172,7 @@ export class SimpleScreenReaderContent extends Disposable implements IScreenRead
 		if (
 			!this.state ||
 			!this.focused ||
-			this.context.configuration.options.get(EditorOption.accessibilitySupport) !==
-				AccessibilitySupport.Enabled ||
+			this.context.configuration.options.get(EditorOption.accessibilitySupport) !== AccessibilitySupport.Enabled ||
 			this.viewController.compositionController.composing ||
 			!IME.enabled
 		)

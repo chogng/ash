@@ -46,7 +46,11 @@ export function getTextWordSegments(text: string): readonly TextWordSegment[] {
 	for (const value of text) {
 		const kind = classify(value);
 		if (kind !== activeKind) {
-			result.push({ start: offset, end: offset + value.length, wordLike: kind === TextSegmentKind.Word });
+			result.push({
+				start: offset,
+				end: offset + value.length,
+				wordLike: kind === TextSegmentKind.Word,
+			});
 			activeKind = kind;
 		} else {
 			result[result.length - 1]!.end += value.length;

@@ -3,11 +3,7 @@ import type { IPartsSplash } from '../../../../src/ash/platform/theme/common/the
 import { test, expect } from '../../../automation/test.js';
 
 for (const scheme of ['light', 'dark'] as const) {
-	test(`startup colors survive reload and the decorative splash retires before the Workbench is ready (${scheme})`, async ({
-		application,
-		workbench,
-		target,
-	}, testInfo) => {
+	test(`startup colors survive reload and the decorative splash retires before the Workbench is ready (${scheme})`, async ({ application, workbench, target }, testInfo) => {
 		const page = workbench.page;
 		await workbench.setAppearance(application, scheme === 'light' ? 'dark' : 'light');
 		await workbench.openExplorer();
@@ -43,10 +39,7 @@ for (const scheme of ['light', 'dark'] as const) {
 					const probe = document.createElement('div');
 					probe.style.backgroundColor = part.background;
 					const live = Array.from(document.querySelectorAll<HTMLElement>('.ash-workbench-part')).filter(
-						element =>
-							!element.hidden &&
-							!element.parentElement?.closest('.ash-workbench-part') &&
-							element.getBoundingClientRect().width > 0,
+						element => !element.hidden && !element.parentElement?.closest('.ash-workbench-part') && element.getBoundingClientRect().width > 0,
 					);
 					const style = getComputedStyle(live[index]);
 					return {
@@ -60,9 +53,7 @@ for (const scheme of ['light', 'dark'] as const) {
 							style.getPropertyValue(`border-${side}-style`),
 							style.getPropertyValue(`border-${side}-color`),
 						]),
-						borderRadii: ['top-left', 'top-right', 'bottom-right', 'bottom-left'].map(corner =>
-							style.getPropertyValue(`border-${corner}-radius`),
-						),
+						borderRadii: ['top-left', 'top-right', 'bottom-right', 'bottom-left'].map(corner => style.getPropertyValue(`border-${corner}-radius`)),
 					};
 				}),
 			cached,
@@ -94,9 +85,7 @@ for (const scheme of ['light', 'dark'] as const) {
 									style.getPropertyValue(`border-${side}-style`),
 									style.getPropertyValue(`border-${side}-color`),
 								]),
-								borderRadii: ['top-left', 'top-right', 'bottom-right', 'bottom-left'].map(corner =>
-									style.getPropertyValue(`border-${corner}-radius`),
-								),
+								borderRadii: ['top-left', 'top-right', 'bottom-right', 'bottom-left'].map(corner => style.getPropertyValue(`border-${corner}-radius`)),
 							};
 						});
 						observations.push({
@@ -125,10 +114,7 @@ for (const scheme of ['light', 'dark'] as const) {
 			await page.reload({ waitUntil: 'commit' });
 			if (target.kind === 'browser') {
 				await expect(page.locator('#ash-parts-splash')).toBeVisible();
-				await expect(page.locator('#ash-parts-splash')).toHaveCSS(
-					'background-color',
-					scheme === 'dark' ? 'rgb(30, 30, 30)' : 'rgb(255, 255, 255)',
-				);
+				await expect(page.locator('#ash-parts-splash')).toHaveCSS('background-color', scheme === 'dark' ? 'rgb(30, 30, 30)' : 'rgb(255, 255, 255)');
 				await page.screenshot({ path: testInfo.outputPath('startup-colors.png') });
 			}
 		} finally {
@@ -137,11 +123,7 @@ for (const scheme of ['light', 'dark'] as const) {
 		await workbench.waitForReady();
 		await expect(page.locator('#ash-parts-splash')).toHaveCount(0);
 		await expect(page.locator('.ash-initial-shell-colors')).toHaveCount(0);
-		expect(
-			await page.evaluate(
-				() => (window as unknown as { ashSplashObservations: unknown[] }).ashSplashObservations,
-			),
-		).toEqual([
+		expect(await page.evaluate(() => (window as unknown as { ashSplashObservations: unknown[] }).ashSplashObservations)).toEqual([
 			{
 				background: scheme === 'dark' ? 'rgb(30, 30, 30)' : 'rgb(255, 255, 255)',
 				hidden: 'true',
@@ -160,75 +142,62 @@ for (const scheme of ['light', 'dark'] as const) {
 	});
 }
 
-test(
-	'a failed startup hands the page to the error view and Retry can reopen the Workbench',
-	{ tag: '@browser-ui' },
-	async ({ workbench }) => {
-		const page = workbench.page;
-		await page.route('**/assets/workbench.web.main-*.js', route => route.abort('failed'));
-		await page.reload();
-		await expect(page.getByRole('alert')).toHaveText('Unable to start Ash');
-		await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeFocused();
-		await expect(page.locator('#ash-parts-splash')).toHaveCount(0);
-		await expect(page.locator('.ash-initial-shell-colors')).toHaveCount(0);
-		await page.unroute('**/assets/workbench.web.main-*.js');
-		await page.getByRole('button', { name: 'Retry', exact: true }).click();
-		await workbench.waitForReady();
-	},
-);
+test('a failed startup hands the page to the error view and Retry can reopen the Workbench', { tag: '@browser-ui' }, async ({ workbench }) => {
+	const page = workbench.page;
+	await page.route('**/assets/workbench.web.main-*.js', route => route.abort('failed'));
+	await page.reload();
+	await expect(page.getByRole('alert')).toHaveText('Unable to start Ash');
+	await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeFocused();
+	await expect(page.locator('#ash-parts-splash')).toHaveCount(0);
+	await expect(page.locator('.ash-initial-shell-colors')).toHaveCount(0);
+	await page.unroute('**/assets/workbench.web.main-*.js');
+	await page.getByRole('button', { name: 'Retry', exact: true }).click();
+	await workbench.waitForReady();
+});
 
 async function readSplash(page: Page): Promise<IPartsSplash | undefined> {
 	return page.evaluate(async () => {
-		const bridge = (window as unknown as { ash?: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } })
-			.ash;
+		const bridge = (window as unknown as { ash?: { ipcRenderer: { invoke(channel: string): Promise<unknown> } } }).ash;
 		if (bridge) return (await bridge.ipcRenderer.invoke('ash:theme:readWindowSplash')) as IPartsSplash;
-		const raw = Object.entries(localStorage).find(([key]) =>
-			key.startsWith(`ash.partsSplash:${location.pathname}:`),
-		)?.[1];
+		const raw = Object.entries(localStorage).find(([key]) => key.startsWith(`ash.partsSplash:${location.pathname}:`))?.[1];
 		return raw ? (JSON.parse(raw) as IPartsSplash) : undefined;
 	});
 }
 
-test(
-	'a cache from a different viewport renders colors until the current layout takes over',
-	{ tag: '@browser-ui' },
-	async ({ workbench }, testInfo) => {
-		const page = workbench.page;
-		await expect.poll(async () => (await readSplash(page))?.layoutInfo?.partBounds.length ?? 0).toBeGreaterThan(0);
-		const cached = (await readSplash(page))!;
-		await page.addInitScript(splash => {
-			const key = Object.keys(localStorage).find(key => key.startsWith(`ash.partsSplash:${location.pathname}:`))!;
-			localStorage.setItem(
-				key,
-				JSON.stringify({
-					...splash,
-					layoutInfo: { ...splash.layoutInfo, width: splash.layoutInfo!.width + 100 },
-				}),
-			);
-		}, cached);
-		let release!: () => void;
-		const gate = new Promise<void>(resolve => {
-			release = resolve;
-		});
-		await page.route('**/assets/workbench.web.main-*.js', async route => {
-			await gate;
-			await route.continue();
-		});
-		try {
-			await page.reload({ waitUntil: 'commit' });
-			await expect(page.locator('#ash-parts-splash')).toBeVisible();
-			await expect(page.locator('#ash-parts-splash > div')).toHaveCount(0);
-			await page.screenshot({ path: testInfo.outputPath('viewport-fallback.png') });
-		} finally {
-			release();
-		}
-		await workbench.waitForReady();
-		await expect(page.locator('#ash-parts-splash')).toHaveCount(0);
-		await expect
-			.poll(async () => (await readSplash(page))?.layoutInfo?.width)
-			.toBe(await page.evaluate(() => innerWidth));
-	},
-);
+test('a cache from a different viewport renders colors until the current layout takes over', { tag: '@browser-ui' }, async ({ workbench }, testInfo) => {
+	const page = workbench.page;
+	await expect.poll(async () => (await readSplash(page))?.layoutInfo?.partBounds.length ?? 0).toBeGreaterThan(0);
+	const cached = (await readSplash(page))!;
+	await page.addInitScript(splash => {
+		const key = Object.keys(localStorage).find(key => key.startsWith(`ash.partsSplash:${location.pathname}:`))!;
+		localStorage.setItem(
+			key,
+			JSON.stringify({
+				...splash,
+				layoutInfo: { ...splash.layoutInfo, width: splash.layoutInfo!.width + 100 },
+			}),
+		);
+	}, cached);
+	let release!: () => void;
+	const gate = new Promise<void>(resolve => {
+		release = resolve;
+	});
+	await page.route('**/assets/workbench.web.main-*.js', async route => {
+		await gate;
+		await route.continue();
+	});
+	try {
+		await page.reload({ waitUntil: 'commit' });
+		await expect(page.locator('#ash-parts-splash')).toBeVisible();
+		await expect(page.locator('#ash-parts-splash > div')).toHaveCount(0);
+		await page.screenshot({ path: testInfo.outputPath('viewport-fallback.png') });
+	} finally {
+		release();
+	}
+	await workbench.waitForReady();
+	await expect(page.locator('#ash-parts-splash')).toHaveCount(0);
+	await expect.poll(async () => (await readSplash(page))?.layoutInfo?.width).toBe(await page.evaluate(() => innerWidth));
+});
 
 for (const [scheme, themeId] of [
 	['light', 'ash-light'],
@@ -259,27 +228,17 @@ for (const [scheme, themeId] of [
 				}
 				await expect(workbench.element).toHaveAttribute('data-color-theme', themeId);
 				await expect.poll(async () => (await readSplash(workbenchPage))?.baseTheme).toBe(scheme);
-				await expect
-					.poll(async () => (await readSplash(workbenchPage))?.layoutInfo?.partBounds.length ?? 0)
-					.toBeGreaterThan(0);
+				await expect.poll(async () => (await readSplash(workbenchPage))?.layoutInfo?.partBounds.length ?? 0).toBeGreaterThan(0);
 				const previous = (await readSplash(workbenchPage))!;
 				const sessionPage = await workbench.openAgentsWindow(target.kind);
 				await expect(sessionPage.locator('.ash-sessions-window')).toBeVisible();
 				await expect(sessionPage.locator('#app')).toHaveAttribute('data-color-theme', themeId);
-				await expect
-					.poll(async () =>
-						(await readSplash(sessionPage))?.layoutInfo?.partBounds.some(
-							part => part.backgroundGradient !== undefined,
-						),
-					)
-					.toBe(true);
+				await expect.poll(async () => (await readSplash(sessionPage))?.layoutInfo?.partBounds.some(part => part.backgroundGradient !== undefined)).toBe(true);
 				const snapshot = (await readSplash(sessionPage))!;
 				expect(snapshot.layoutInfo!.width).toBe(await sessionPage.evaluate(() => innerWidth));
 				expect(snapshot.layoutInfo!.height).toBe(await sessionPage.evaluate(() => innerHeight));
 				if (target.kind === 'electron') expect(await readSplash(workbenchPage)).toEqual(previous);
-				const livePaint = await sessionPage
-					.locator('[data-part="titlebar"]')
-					.evaluate(element => getComputedStyle(element).backgroundImage.replace('to right', '90deg'));
+				const livePaint = await sessionPage.locator('[data-part="titlebar"]').evaluate(element => getComputedStyle(element).backgroundImage.replace('to right', '90deg'));
 				expect(livePaint).toContain('linear-gradient');
 				await sessionPage.addInitScript(() => {
 					const paints: string[][] = [];
@@ -288,9 +247,7 @@ for (const [scheme, themeId] of [
 						for (const record of records) {
 							for (const node of record.addedNodes) {
 								if (node instanceof HTMLElement && node.id === 'ash-parts-splash') {
-									paints.push(
-										Array.from(node.children, child => getComputedStyle(child).backgroundImage),
-									);
+									paints.push(Array.from(node.children, child => getComputedStyle(child).backgroundImage));
 								}
 							}
 						}
@@ -302,11 +259,7 @@ for (const [scheme, themeId] of [
 				await expect(sessionPage.locator('.ash-sessions-window')).toBeVisible();
 				await expect(sessionPage.locator('#ash-parts-splash')).toHaveCount(0);
 				await expect(sessionPage.locator('.ash-initial-shell-colors')).toHaveCount(0);
-				expect(
-					await sessionPage.evaluate(() =>
-						(window as unknown as { ashSplashPaints: string[][] }).ashSplashPaints.flat(),
-					),
-				).toContain(livePaint);
+				expect(await sessionPage.evaluate(() => (window as unknown as { ashSplashPaints: string[][] }).ashSplashPaints.flat())).toContain(livePaint);
 				const marks = await sessionPage.evaluate(() => ({
 					shown: performance.getEntriesByName('ash.splash.shown')[0]?.startTime,
 					removed: performance.getEntriesByName('ash.splash.removed')[0]?.startTime,

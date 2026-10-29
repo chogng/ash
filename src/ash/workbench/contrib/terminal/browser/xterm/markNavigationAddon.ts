@@ -24,10 +24,7 @@ export class MarkNavigationAddon extends Disposable implements ITerminalAddon {
 		const available = this.getMarkers()
 			.filter(marker => !marker.isDisposed)
 			.sort((left, right) => left.line - right.line);
-		const target =
-			direction === 'previous'
-				? available.filter(marker => marker.line < line).at(-1)
-				: available.find(marker => marker.line > line);
+		const target = direction === 'previous' ? available.filter(marker => marker.line < line).at(-1) : available.find(marker => marker.line > line);
 		if (target) terminal.scrollToLine(target.line);
 	}
 

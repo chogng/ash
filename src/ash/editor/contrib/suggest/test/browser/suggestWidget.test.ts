@@ -6,17 +6,9 @@ import { h } from '../../../../../base/browser/dom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import {
-	LanguageCompletionDetailsStatus,
-	SuggestModel,
-	type LanguageCompletionSessionOptions,
-} from '../../browser/suggestModel.js';
+import { LanguageCompletionDetailsStatus, SuggestModel, type LanguageCompletionSessionOptions } from '../../browser/suggestModel.js';
 import { LanguageResultAcceptance } from '../../../../common/model/languageResultStore.js';
-import {
-	LanguageCompletionInsertTextFormat,
-	LanguageCompletionItemKind,
-	type LanguageCompletionItem,
-} from '../../../../common/languages.js';
+import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, type LanguageCompletionItem } from '../../../../common/languages.js';
 import { createLanguageCompletionStore, LanguageCompletionService } from '../../browser/suggest.js';
 import { LanguageCompletionProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { Selection } from '../../../../common/core/selection.js';
@@ -78,8 +70,16 @@ test('Completion widget projects named options, focus, ARIA, and content coordin
 			text: option.textContent,
 		})),
 		[
-			{ selected: 'false', focused: false, text: 'Keywordconstdeclaration' },
-			{ selected: 'true', focused: true, text: 'Variableconsoleglobal' },
+			{
+				selected: 'false',
+				focused: false,
+				text: 'Keywordconstdeclaration',
+			},
+			{
+				selected: 'true',
+				focused: true,
+				text: 'Variableconsoleglobal',
+			},
 		],
 	);
 	dom.window.close();
@@ -87,13 +87,8 @@ test('Completion widget projects named options, focus, ARIA, and content coordin
 
 test('File and folder completions use resource icon classes in the Editor widget', () => {
 	using fixture = createFixture('con');
-	accept(fixture.store, fixture.model, 1, [
-		completion('file', 'README.ts', LanguageCompletionItemKind.File),
-		completion('folder', 'src', LanguageCompletionItemKind.Folder),
-	]);
-	const options = [
-		...fixture.suggest.widget.element.querySelectorAll<HTMLElement>('.stanza-editor-completion-option'),
-	];
+	accept(fixture.store, fixture.model, 1, [completion('file', 'README.ts', LanguageCompletionItemKind.File), completion('folder', 'src', LanguageCompletionItemKind.Folder)]);
+	const options = [...fixture.suggest.widget.element.querySelectorAll<HTMLElement>('.stanza-editor-completion-option')];
 	const fileKind = options[0]?.querySelector('.stanza-editor-completion-kind');
 	const folderKind = options[1]?.querySelector('.stanza-editor-completion-kind');
 
@@ -109,10 +104,7 @@ test('File and folder completions use resource icon classes in the Editor widget
 test('Completion keyboard navigation accepts one item before ordinary input routing', () => {
 	const fixture = createFixture('con');
 	using resources = fixture;
-	accept(fixture.store, fixture.model, 1, [
-		completion('constant', 'const', LanguageCompletionItemKind.Keyword),
-		completion('console', 'console', LanguageCompletionItemKind.Variable),
-	]);
+	accept(fixture.store, fixture.model, 1, [completion('constant', 'const', LanguageCompletionItemKind.Keyword), completion('console', 'console', LanguageCompletionItemKind.Variable)]);
 	const down = keyboardEvent(fixture.dom.window, 'ArrowDown');
 	fixture.input.element.dispatchEvent(down);
 	assert.equal(down.defaultPrevented, true);
@@ -135,7 +127,10 @@ test('Typing a declared completion commit character accepts it atomically before
 	const fixture = createFixture('con');
 	using resources = fixture;
 	accept(fixture.store, fixture.model, 1, [
-		{ ...completion('console', 'console', LanguageCompletionItemKind.Variable), commitCharacters: ['.'] },
+		{
+			...completion('console', 'console', LanguageCompletionItemKind.Variable),
+			commitCharacters: ['.'],
+		},
 	]);
 
 	const commit = beforeInput(fixture.dom.window, '.');
@@ -179,17 +174,11 @@ test('Completion snippets route Tab, Shift+Tab, and Escape through Stanza placeh
 	const next = keyboardEvent(fixture.dom.window, 'Tab');
 	fixture.input.element.dispatchEvent(next);
 	assert.equal(next.defaultPrevented, true);
-	assert.deepEqual(
-		fixture.editor.getSelection()!,
-		Selection.fromPositions(new Position(0 + 1, 14 + 1), new Position(0 + 1, 19 + 1)),
-	);
+	assert.deepEqual(fixture.editor.getSelection()!, Selection.fromPositions(new Position(0 + 1, 14 + 1), new Position(0 + 1, 19 + 1)));
 	const previous = keyboardEvent(fixture.dom.window, 'Tab', true);
 	fixture.input.element.dispatchEvent(previous);
 	assert.equal(previous.defaultPrevented, true);
-	assert.deepEqual(
-		fixture.editor.getSelection()!,
-		Selection.fromPositions(new Position(0 + 1, 9 + 1), new Position(0 + 1, 13 + 1)),
-	);
+	assert.deepEqual(fixture.editor.getSelection()!, Selection.fromPositions(new Position(0 + 1, 9 + 1), new Position(0 + 1, 13 + 1)));
 	const escape = keyboardEvent(fixture.dom.window, 'Escape');
 	fixture.input.element.dispatchEvent(escape);
 	assert.equal(escape.defaultPrevented, true);
@@ -232,10 +221,7 @@ test('Escape cancels locally while clicking accepts the selected option', () => 
 	assert.equal(fixture.suggest.widget.visible, false);
 	assert.equal(fixture.store.result, undefined);
 
-	accept(fixture.store, fixture.model, 2, [
-		completion('constant', 'const', LanguageCompletionItemKind.Keyword),
-		completion('continue', 'continue', LanguageCompletionItemKind.Keyword),
-	]);
+	accept(fixture.store, fixture.model, 2, [completion('constant', 'const', LanguageCompletionItemKind.Keyword), completion('continue', 'continue', LanguageCompletionItemKind.Keyword)]);
 	const option = requiredElement<HTMLElement>(fixture.suggest.widget.element, '[data-completion-index="1"]');
 	option.dispatchEvent(mouseEvent(fixture.dom.window, 'mousedown'));
 	option.dispatchEvent(mouseEvent(fixture.dom.window, 'click'));
@@ -255,16 +241,18 @@ test('Completion widget validates ownership and clears its active descendant on 
 	using service = new LanguageCompletionService(model, registry);
 	using otherService = new LanguageCompletionService(otherModel, otherRegistry);
 	using otherSession = new SuggestModel(otherService.results, otherEditor);
-	using editor = createTestCodeEditor({ container, model, lineHeight: 20, contributions: [] });
+	using editor = createTestCodeEditor({
+		container,
+		model,
+		lineHeight: 20,
+		contributions: [],
+	});
 	const viewport = editor.view;
 	editor.setPosition(new Position(0 + 1, 3 + 1));
 	using session = new SuggestModel(service.results, editor);
 	using languages = new LanguageService();
 	const input = viewport.controller;
-	assert.throws(
-		() => new SuggestController(editor, input, service, otherSession, {}, languages),
-		/must share one text model/,
-	);
+	assert.throws(() => new SuggestController(editor, input, service, otherSession, {}, languages), /must share one text model/);
 	using suggest = new SuggestController(editor, input, service, session, {}, languages);
 	assert.equal(input.element.getAttribute('aria-autocomplete'), 'both');
 	suggest.dispose();
@@ -300,7 +288,10 @@ test('Completion widget projects resolved details only for the focused option', 
 		resolver: {
 			resolveCompletionItem: async request => {
 				requests.push(request.itemId);
-				return { detail: 'resolved detail', documentation: 'Resolved documentation' };
+				return {
+					detail: 'resolved detail',
+					documentation: 'Resolved documentation',
+				};
 			},
 		},
 	});
@@ -316,10 +307,7 @@ test('Completion widget projects resolved details only for the focused option', 
 	assert.deepEqual(requests, ['console']);
 	assert.equal(fixture.session.state!.detailsStatus, LanguageCompletionDetailsStatus.Complete);
 	assert.equal(selected.querySelector('.stanza-editor-completion-detail')!.textContent, 'resolved detail');
-	assert.equal(
-		selected.querySelector('.stanza-editor-completion-documentation')!.textContent,
-		'Resolved documentation',
-	);
+	assert.equal(selected.querySelector('.stanza-editor-completion-documentation')!.textContent, 'Resolved documentation');
 	assert.equal(selected.classList.contains('resolving'), false);
 	assert.equal(selected.getAttribute('aria-busy'), null);
 });
@@ -385,30 +373,23 @@ function createFixture(text: string, sessionOptions: LanguageCompletionSessionOp
 	};
 }
 
-function accept(
-	store: ReturnType<typeof createLanguageCompletionStore>,
-	model: TextModel,
-	requestId: number,
-	items: readonly LanguageCompletionItem[],
-): void {
+function accept(store: ReturnType<typeof createLanguageCompletionStore>, model: TextModel, requestId: number, items: readonly LanguageCompletionItem[]): void {
 	assert.equal(
 		store.accept({
 			requestId,
 			textModel: model,
 			modelVersion: model.version,
-			value: { position: new Position(0 + 1, 3 + 1), items, isIncomplete: false },
+			value: {
+				position: new Position(0 + 1, 3 + 1),
+				items,
+				isIncomplete: false,
+			},
 		}),
 		LanguageResultAcceptance.Applied,
 	);
 }
 
-function completion(
-	id: string,
-	label: string,
-	kind: LanguageCompletionItemKind,
-	detail?: string,
-	preselect = false,
-): LanguageCompletionItem {
+function completion(id: string, label: string, kind: LanguageCompletionItemKind, detail?: string, preselect = false): LanguageCompletionItem {
 	return {
 		providerId: 'test',
 		id,
@@ -427,12 +408,7 @@ function editorAt(model: TextModel, position: Position): ReturnType<typeof creat
 	return editor;
 }
 
-function keyboardEvent(
-	targetWindow: typeof browserEnvironment.window,
-	key: string,
-	shiftKey = false,
-	options: KeyboardEventInit = {},
-): KeyboardEvent {
+function keyboardEvent(targetWindow: typeof browserEnvironment.window, key: string, shiftKey = false, options: KeyboardEventInit = {}): KeyboardEvent {
 	return new targetWindow.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,
@@ -443,7 +419,11 @@ function keyboardEvent(
 }
 
 function mouseEvent(targetWindow: typeof browserEnvironment.window, type: string): MouseEvent {
-	return new targetWindow.MouseEvent(type, { bubbles: true, cancelable: true, button: 0 }) as unknown as MouseEvent;
+	return new targetWindow.MouseEvent(type, {
+		bubbles: true,
+		cancelable: true,
+		button: 0,
+	}) as unknown as MouseEvent;
 }
 
 function beforeInput(targetWindow: typeof browserEnvironment.window, data: string): InputEvent {

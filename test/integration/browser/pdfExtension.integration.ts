@@ -1,9 +1,6 @@
 import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
 import { ChatAttachmentsContentPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatAttachmentsContentPart.js';
-import {
-	ChatResponseResourceFileSystemProvider,
-	IChatResponseResourceFileSystemProvider,
-} from '../../../src/ash/workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
+import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystemProvider } from '../../../src/ash/workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
 import { IAgentThreadService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { AccessibleViewRegistry } from '../../../src/ash/platform/accessibility/browser/accessibleViewRegistry.js';
@@ -11,10 +8,7 @@ import { AccessibleViewType } from '../../../src/ash/platform/accessibility/brow
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { TestConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
-import {
-	registerTestComponentServices,
-	createTestFileService,
-} from '../../../src/ash/workbench/test/common/testEditorServices.js';
+import { registerTestComponentServices, createTestFileService } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { InMemoryFileSystemProvider } from '../../../src/ash/platform/files/common/inMemoryFilesystemProvider.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
@@ -22,10 +16,7 @@ import { MainThreadClientEditors } from '../../../src/ash/workbench/api/browser/
 import { loadExtensionEditorModule } from '../../../src/ash/workbench/services/extensions/browser/extensionEditorModules.js';
 import { IExtensionApi, normalizeExtensionCatalog } from '../../../src/ash/platform/extensions/common/extensionApi.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
-import {
-	IExtensionHostApi,
-	type ExtensionHostFleetSnapshot,
-} from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
 import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
 import type { EditorPane } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
@@ -36,11 +27,7 @@ import '../../../src/ash/base/browser/ui/button/button.css';
 import '../../../src/ash/base/browser/ui/toolbar/toolbar.css';
 import { bindTestColorTheme } from '../../fixtures/browser/themeFixture.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
-import {
-	darkColorTheme,
-	highContrastDarkColorTheme,
-	highContrastLightColorTheme,
-} from '../../../src/ash/platform/theme/common/colorTheme.js';
+import { darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 
 const locale = new URLSearchParams(location.search).get('locale') ?? 'en';
 setNlsMessages(locale, locale === 'zh-CN' ? { ash: { ...editorMessages.ash, ...workbenchMessages.ash } } : {});
@@ -56,9 +43,7 @@ await memory.createDirectory(URI.file('/fixture'));
 const bytes = new Uint8Array(await (await fetch('/__pdf_bytes')).arrayBuffer());
 await memory.writeFile(uri, bytes, { create: true, overwrite: true });
 const resources = new ExtensionResourceLoaderService(async request => {
-	const response = await fetch(
-		`/__pdf_resource?generation=${request.generation}&path=${encodeURIComponent(request.path)}`,
-	);
+	const response = await fetch(`/__pdf_resource?generation=${request.generation}&path=${encodeURIComponent(request.path)}`);
 	if (!response.ok) throw new Error('PDF package resource unavailable');
 	return new Uint8Array(await response.arrayBuffer());
 });
@@ -96,8 +81,7 @@ let chat: ChatAttachmentsContentPart | undefined;
 let pane: EditorPane | undefined;
 const container = document.getElementById('viewer')!;
 window.pdfExtensionTest = {
-	available: () =>
-		EditorPanes.getEditorPanesForInput({ resource: uri }).some(pane => pane.id === 'ash.workbench.pdfViewer'),
+	available: () => EditorPanes.getEditorPanesForInput({ resource: uri }).some(pane => pane.id === 'ash.workbench.pdfViewer'),
 	async enable(value: boolean) {
 		enabled = value;
 		const response = await fetch(`/__pdf_extension?locale=${locale}`, {
@@ -122,13 +106,7 @@ window.pdfExtensionTest = {
 		await services.get(IConfigurationService).updateValue('accessibility.verbosity.resourceEditor', enabled);
 	},
 	setTheme(theme: 'dark' | 'hcDark' | 'hcLight') {
-		(services.get(IThemeService) as TestThemeService).setColorTheme(
-			theme === 'hcDark'
-				? highContrastDarkColorTheme
-				: theme === 'hcLight'
-					? highContrastLightColorTheme
-					: darkColorTheme,
-		);
+		(services.get(IThemeService) as TestThemeService).setColorTheme(theme === 'hcDark' ? highContrastDarkColorTheme : theme === 'hcLight' ? highContrastLightColorTheme : darkColorTheme);
 	},
 	previewChat() {
 		chat?.dispose();
@@ -151,21 +129,13 @@ window.pdfExtensionTest = {
 	},
 	accessible(help = false) {
 		return AccessibleViewRegistry.getImplementations()
-			.filter(
-				item =>
-					item.name.startsWith('resource-editor-') &&
-					item.type === (help ? AccessibleViewType.Help : AccessibleViewType.View),
-			)
+			.filter(item => item.name.startsWith('resource-editor-') && item.type === (help ? AccessibleViewType.Help : AccessibleViewType.View))
 			.map(item => item.getProvider(services)?.provideContent() ?? '')
 			.join('');
 	},
 	async saved() {
 		try {
-			return JSON.parse(
-				new TextDecoder().decode(
-					(await memory.readFile(URI.file('/fixture/paper.pdf.ash-annotations.json'))).bytes,
-				),
-			);
+			return JSON.parse(new TextDecoder().decode((await memory.readFile(URI.file('/fixture/paper.pdf.ash-annotations.json'))).bytes));
 		} catch {
 			return undefined;
 		}

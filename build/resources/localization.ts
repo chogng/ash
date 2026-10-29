@@ -30,10 +30,7 @@ export function isLocalizationInput(path: string): boolean {
 
 /** Product-compiled client components keep their existing NLS keys after package extraction. */
 function clientEditorSource(path: string): boolean {
-	return (
-		/^[^/]+\/(?:browser|common)\//u.test(relative(resolve(repository, 'extensions'), path).split(sep).join('/')) &&
-		sourceInput(path, false)
-	);
+	return /^[^/]+\/(?:browser|common)\//u.test(relative(resolve(repository, 'extensions'), path).split(sep).join('/')) && sourceInput(path, false);
 }
 
 function sourceInput(path: string, directory: boolean): boolean {
@@ -93,9 +90,7 @@ export function extractLocalizationMessages(sources: readonly LocalizationSource
 			if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
 				continue;
 			}
-			const serviceImport = /\/localization\/common\/localizationService\.js$/u.test(
-				statement.moduleSpecifier.text,
-			);
+			const serviceImport = /\/localization\/common\/localizationService\.js$/u.test(statement.moduleSpecifier.text);
 			if (!serviceImport && !/\/nls\.js$/u.test(statement.moduleSpecifier.text)) {
 				continue;
 			}
@@ -115,32 +110,15 @@ export function extractLocalizationMessages(sources: readonly LocalizationSource
 		// Color descriptions are declared by the theme owner and translated by its registry.
 		if (input.text.includes('registerColor')) {
 			const inspect = (node: ts.Node): void => {
-				if (
-					ts.isVariableDeclaration(node) &&
-					ts.isIdentifier(node.name) &&
-					node.initializer &&
-					ts.isArrowFunction(node.initializer)
-				) {
+				if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer && ts.isArrowFunction(node.initializer)) {
 					const parameters = node.initializer.parameters.map(parameter => parameter.name.getText(source));
 					const inspectBody = (body: ts.Node): void => {
-						if (
-							ts.isCallExpression(body) &&
-							body.expression.getText(source) === 'registerColor' &&
-							body.arguments[2] &&
-							ts.isObjectLiteralExpression(body.arguments[2])
-						) {
+						if (ts.isCallExpression(body) && body.expression.getText(source) === 'registerColor' && body.arguments[2] && ts.isObjectLiteralExpression(body.arguments[2])) {
 							const description = body.arguments[2].properties.find(
-								property =>
-									(ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) &&
-									property.name.getText(source) === 'description',
+								property => (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) && property.name.getText(source) === 'description',
 							);
-							if (
-								description &&
-								(ts.isPropertyAssignment(description) || ts.isShorthandPropertyAssignment(description))
-							) {
-								const name = ts.isPropertyAssignment(description)
-									? description.initializer.getText(source)
-									: description.name.text;
+							if (description && (ts.isPropertyAssignment(description) || ts.isShorthandPropertyAssignment(description))) {
+								const name = ts.isPropertyAssignment(description) ? description.initializer.getText(source) : description.name.text;
 								const index = parameters.indexOf(name);
 								if (index >= 0) {
 									colorDeclarations.set(node.name.getText(source), index);
@@ -162,32 +140,20 @@ export function extractLocalizationMessages(sources: readonly LocalizationSource
 		}
 		const keyReference = (key: ts.Expression): { prefix: string; parameter: string } | undefined => {
 			if (ts.isIdentifier(key)) return { prefix: '', parameter: key.text };
-			if (
-				ts.isTemplateExpression(key) &&
-				key.templateSpans.length === 1 &&
-				ts.isIdentifier(key.templateSpans[0].expression) &&
-				!key.templateSpans[0].literal.text
-			) {
+			if (ts.isTemplateExpression(key) && key.templateSpans.length === 1 && ts.isIdentifier(key.templateSpans[0].expression) && !key.templateSpans[0].literal.text) {
 				return { prefix: key.head.text, parameter: key.templateSpans[0].expression.text };
 			}
 			return undefined;
 		};
 		const messageCall = (node: ts.CallExpression, services: ReadonlySet<string>): MessageCall | undefined => {
 			const expression = node.expression;
-			if (
-				ts.isPropertyAccessExpression(expression) &&
-				expression.name.text === 'translate' &&
-				services.has(expression.expression.getText(source))
-			) {
+			if (ts.isPropertyAccessExpression(expression) && expression.name.text === 'translate' && services.has(expression.expression.getText(source))) {
 				const bundle = literal(node.arguments[0]);
-				if (bundle && node.arguments[1] && node.arguments[2])
-					return { bundle, key: node.arguments[1], message: node.arguments[2] };
+				if (bundle && node.arguments[1] && node.arguments[2]) return { bundle, key: node.arguments[1], message: node.arguments[2] };
 			}
 			const name = ts.isIdentifier(expression)
 				? names.get(expression.text)
-				: ts.isPropertyAccessExpression(expression) &&
-					  ts.isIdentifier(expression.expression) &&
-					  namespaces.has(expression.expression.text)
+				: ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression) && namespaces.has(expression.expression.text)
 					? expression.name.text
 					: undefined;
 			const offset = name === 'serviceLocalize' ? 1 : 0;
@@ -195,12 +161,8 @@ export function extractLocalizationMessages(sources: readonly LocalizationSource
 			const info = node.arguments[offset];
 			const message = node.arguments[offset + 1];
 			if (!info || !message) return undefined;
-			if (!ts.isObjectLiteralExpression(info))
-				return name === 'serviceLocalize' ? undefined : { bundle: 'ash', key: info, message };
-			const property = (name: string) =>
-				info.properties.find(
-					property => ts.isPropertyAssignment(property) && property.name.getText(source) === name,
-				) as ts.PropertyAssignment | undefined;
+			if (!ts.isObjectLiteralExpression(info)) return name === 'serviceLocalize' ? undefined : { bundle: 'ash', key: info, message };
+			const property = (name: string) => info.properties.find(property => ts.isPropertyAssignment(property) && property.name.getText(source) === name) as ts.PropertyAssignment | undefined;
 			const key = property('key')?.initializer;
 			const bundleProperty = property('bundle');
 			const bundle = bundleProperty ? literal(bundleProperty.initializer) : 'ash';
@@ -214,16 +176,9 @@ export function extractLocalizationMessages(sources: readonly LocalizationSource
 		}
 		// Only follow same-class methods that forward parameters to the NLS API or a
 		// typed localization service. Unrelated methods with the same name are ignored.
-		const visit = (
-			node: ts.Node,
-			services: ReadonlySet<string> = new Set(),
-			wrappers: ReadonlyMap<string, readonly ForwardedCall[]> = new Map(),
-		): void => {
+		const visit = (node: ts.Node, services: ReadonlySet<string> = new Set(), wrappers: ReadonlyMap<string, readonly ForwardedCall[]> = new Map()): void => {
 			if (ts.isObjectLiteralExpression(node)) {
-				const property = (name: string) =>
-					node.properties.find(
-						property => ts.isPropertyAssignment(property) && property.name.getText(source) === name,
-					) as ts.PropertyAssignment | undefined;
+				const property = (name: string) => node.properties.find(property => ts.isPropertyAssignment(property) && property.name.getText(source) === name) as ts.PropertyAssignment | undefined;
 				// View and region descriptors already own both a stable NLS key and
 				// its English fallback; extract that contract without evaluating UI code.
 				for (const [keyProperty, textProperty] of [
@@ -243,24 +198,16 @@ export function extractLocalizationMessages(sources: readonly LocalizationSource
 			if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
 				const classServices = new Set<string>();
 				const isService = (type: ts.TypeNode | undefined): boolean =>
-					!!type &&
-					((ts.isTypeReferenceNode(type) && serviceTypes.has(type.typeName.getText(source))) ||
-						(ts.isUnionTypeNode(type) && type.types.some(isService)));
+					!!type && ((ts.isTypeReferenceNode(type) && serviceTypes.has(type.typeName.getText(source))) || (ts.isUnionTypeNode(type) && type.types.some(isService)));
 				for (const member of node.members) {
-					if (ts.isPropertyDeclaration(member) && isService(member.type))
-						classServices.add(`this.${member.name.getText(source)}`);
+					if (ts.isPropertyDeclaration(member) && isService(member.type)) classServices.add(`this.${member.name.getText(source)}`);
 					if (ts.isConstructorDeclaration(member)) {
 						for (const parameter of member.parameters) {
 							if (isService(parameter.type) && ts.isIdentifier(parameter.name)) {
 								classServices.add(parameter.name.text);
 								if (
 									parameter.modifiers?.some(modifier =>
-										[
-											ts.SyntaxKind.PrivateKeyword,
-											ts.SyntaxKind.ProtectedKeyword,
-											ts.SyntaxKind.PublicKeyword,
-											ts.SyntaxKind.ReadonlyKeyword,
-										].includes(modifier.kind),
+										[ts.SyntaxKind.PrivateKeyword, ts.SyntaxKind.ProtectedKeyword, ts.SyntaxKind.PublicKeyword, ts.SyntaxKind.ReadonlyKeyword].includes(modifier.kind),
 									)
 								)
 									classServices.add(`this.${parameter.name.text}`);
@@ -278,8 +225,7 @@ export function extractLocalizationMessages(sources: readonly LocalizationSource
 						calls: [] as ts.CallExpression[],
 					};
 					const inspect = (body: ts.Node): void => {
-						if (ts.isFunctionLike(body) || ts.isClassDeclaration(body) || ts.isClassExpression(body))
-							return;
+						if (ts.isFunctionLike(body) || ts.isClassDeclaration(body) || ts.isClassExpression(body)) return;
 						if (ts.isCallExpression(body)) method.calls.push(body);
 						ts.forEachChild(body, inspect);
 					};
@@ -293,14 +239,8 @@ export function extractLocalizationMessages(sources: readonly LocalizationSource
 					for (const method of methods) {
 						for (const node of method.calls) {
 							const direct = messageCall(node, classServices);
-							const calls: (MessageCall & { prefix: string })[] = direct
-								? [{ ...direct, prefix: '' }]
-								: [];
-							if (
-								!direct &&
-								ts.isPropertyAccessExpression(node.expression) &&
-								node.expression.expression.kind === ts.SyntaxKind.ThisKeyword
-							) {
+							const calls: (MessageCall & { prefix: string })[] = direct ? [{ ...direct, prefix: '' }] : [];
+							if (!direct && ts.isPropertyAccessExpression(node.expression) && node.expression.expression.kind === ts.SyntaxKind.ThisKeyword) {
 								for (const wrapper of classWrappers.get(node.expression.name.text) ?? []) {
 									if (node.arguments[wrapper.key] && node.arguments[wrapper.message])
 										calls.push({
@@ -324,16 +264,7 @@ export function extractLocalizationMessages(sources: readonly LocalizationSource
 									message,
 								};
 								const declarations = classWrappers.get(method.name) ?? [];
-								if (
-									declarations.some(
-										value =>
-											value.bundle === declaration.bundle &&
-											value.prefix === declaration.prefix &&
-											value.key === key &&
-											value.message === message,
-									)
-								)
-									continue;
+								if (declarations.some(value => value.bundle === declaration.bundle && value.prefix === declaration.prefix && value.key === key && value.message === message)) continue;
 								declarations.push(declaration);
 								classWrappers.set(method.name, declarations);
 								changed = true;
@@ -354,15 +285,8 @@ export function extractLocalizationMessages(sources: readonly LocalizationSource
 					if (index !== undefined) {
 						description = literal(node.arguments[index]);
 					}
-					if (
-						expression.text === 'registerColor' &&
-						node.arguments[2] &&
-						ts.isObjectLiteralExpression(node.arguments[2])
-					) {
-						const property = node.arguments[2].properties.find(
-							property =>
-								ts.isPropertyAssignment(property) && property.name.getText(source) === 'description',
-						);
+					if (expression.text === 'registerColor' && node.arguments[2] && ts.isObjectLiteralExpression(node.arguments[2])) {
+						const property = node.arguments[2].properties.find(property => ts.isPropertyAssignment(property) && property.name.getText(source) === 'description');
 						if (property && ts.isPropertyAssignment(property)) {
 							description = literal(property.initializer);
 						}
@@ -372,16 +296,11 @@ export function extractLocalizationMessages(sources: readonly LocalizationSource
 					}
 				}
 				const call = messageCall(node, services);
-				if (
-					!call &&
-					ts.isPropertyAccessExpression(expression) &&
-					expression.expression.kind === ts.SyntaxKind.ThisKeyword
-				) {
+				if (!call && ts.isPropertyAccessExpression(expression) && expression.expression.kind === ts.SyntaxKind.ThisKeyword) {
 					for (const wrapper of wrappers.get(expression.name.text) ?? []) {
 						const key = literal(node.arguments[wrapper.key]),
 							message = literal(node.arguments[wrapper.message]);
-						if (key && message !== undefined)
-							addMessage(bundles, wrapper.bundle, wrapper.prefix + key, message, input.path);
+						if (key && message !== undefined) addMessage(bundles, wrapper.bundle, wrapper.prefix + key, message, input.path);
 					}
 				}
 				if (call) {
@@ -397,11 +316,7 @@ export function extractLocalizationMessages(sources: readonly LocalizationSource
 	return bundles;
 }
 
-export function validateLocalizationTranslation(
-	english: Bundles,
-	translations: Bundles,
-	locale: string,
-): { missing: readonly string[]; unchanged: number } {
+export function validateLocalizationTranslation(english: Bundles, translations: Bundles, locale: string): { missing: readonly string[]; unchanged: number } {
 	let unchanged = 0;
 	for (const [bundle, messages] of Object.entries(translations)) {
 		for (const [key, message] of Object.entries(messages)) {
@@ -491,22 +406,13 @@ async function generate(check: boolean): Promise<boolean> {
 	// The clients translate these shared product descriptions; their English
 	// originals are owned by protocol metadata and follow its generation lifecycle.
 	for (const id of ['permission', 'guardian'] as const) {
-		addMessage(
-			english,
-			'ash',
-			`slash.${id}.description`,
-			PRODUCT_SLASH_COMMANDS[id].description,
-			'ProductSlashCommands',
-		);
+		addMessage(english, 'ash', `slash.${id}.description`, PRODUCT_SLASH_COMMANDS[id].description, 'ProductSlashCommands');
 	}
 	const languages: LanguageMetadata[] = JSON.parse(await readFile(resolve(resourceRoot, 'languages.json'), 'utf8'));
-	if (languages.length !== 1 || languages[0]?.locale !== 'en')
-		throw new Error('Core localization must contain only English');
+	if (languages.length !== 1 || languages[0]?.locale !== 'en') throw new Error('Core localization must contain only English');
 	const preinstalledIds = await readPreinstalledLanguagePackIds();
 	const languagePacks: LanguagePackSource[] = [];
-	for (const entry of (await readdir(resolve(repository, 'extensions'), { withFileTypes: true })).sort((a, b) =>
-		a.name.localeCompare(b.name),
-	)) {
+	for (const entry of (await readdir(resolve(repository, 'extensions'), { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
 		if (!entry.isDirectory()) continue;
 		const packageRoot = resolve(repository, 'extensions', entry.name);
 		const source = await readFile(resolve(packageRoot, 'package.json'), 'utf8').catch(error => {
@@ -517,18 +423,12 @@ async function generate(check: boolean): Promise<boolean> {
 		const manifest = JSON.parse(source);
 		if (!manifest?.contributes || manifest.contributes.localizations === undefined) continue;
 		const language = validateLanguagePackManifest(manifest, entry.name);
-		if (
-			[...languages, ...languagePacks.map(extension => extension.language)].some(
-				value => value.locale.toLowerCase() === language.locale.toLowerCase(),
-			)
-		) {
+		if ([...languages, ...languagePacks.map(extension => extension.language)].some(value => value.locale.toLowerCase() === language.locale.toLowerCase())) {
 			throw new Error(`Duplicate language pack: ${language.locale}`);
 		}
 		languagePacks.push({ id: `${manifest.publisher}.${manifest.name}`, packageRoot, manifest, language });
 	}
-	const preinstalled = languagePacks.filter(extension =>
-		preinstalledIds.has(`${extension.manifest.publisher}/${extension.manifest.name}`),
-	);
+	const preinstalled = languagePacks.filter(extension => preinstalledIds.has(`${extension.manifest.publisher}/${extension.manifest.name}`));
 	if (preinstalled.length !== preinstalledIds.size) {
 		throw new Error('A preinstalled language pack is missing');
 	}
@@ -544,26 +444,15 @@ async function generate(check: boolean): Promise<boolean> {
 		}
 		if (extension) {
 			const { missing, unchanged } = validateLocalizationTranslation(english, bundles, language.locale);
-			console.log(
-				`Localization ${language.locale}: ${missing.length} missing locale entries; ${unchanged} entries unchanged from source.`,
-			);
+			console.log(`Localization ${language.locale}: ${missing.length} missing locale entries; ${unchanged} entries unchanged from source.`);
 			if (process.argv.includes('--report-missing')) console.log(missing.join('\n'));
 		}
-		const extensionTranslations: Record<
-			string,
-			{ package: Record<string, string>; bundle: Record<string, string> }
-		> = {};
+		const extensionTranslations: Record<string, { package: Record<string, string>; bundle: Record<string, string> }> = {};
 		for (const target of extension?.manifest.contributes.localizations[0].translations ?? []) {
 			if (target.id === 'ash') continue;
 			const translation = JSON.parse(await readFile(resolve(extension!.packageRoot, target.path), 'utf8'));
 			const contents = translation.contents;
-			if (
-				!isRecord(contents) ||
-				![contents.package, contents.bundle].every(
-					messages =>
-						isRecord(messages) && Object.values(messages).every(message => typeof message === 'string'),
-				)
-			) {
+			if (!isRecord(contents) || ![contents.package, contents.bundle].every(messages => isRecord(messages) && Object.values(messages).every(message => typeof message === 'string'))) {
 				throw new Error(`Invalid extension translation: ${target.path}`);
 			}
 			extensionTranslations[target.id] = {
@@ -585,10 +474,7 @@ async function generate(check: boolean): Promise<boolean> {
 	const directory = resolve(repository, '.build/desktop/localization');
 	const header = `// Generated by build/resources/localization.ts. Edit feature NLS declarations or language pack extensions instead.\nimport type { LanguagePackCatalog, PreinstalledLanguagePack } from '../../../src/ash/platform/languagePacks/common/languagePackContract.js';\n`;
 	// Optional catalogs are standalone packages only; hosts import the explicit product defaults.
-	const startupCatalogs = catalogs.filter(
-		catalog =>
-			catalog.locale === 'en' || preinstalled.some(extension => extension.language.locale === catalog.locale),
-	);
+	const startupCatalogs = catalogs.filter(catalog => catalog.locale === 'en' || preinstalled.some(extension => extension.language.locale === catalog.locale));
 	const outputs: { file: string; text: string }[] = [];
 	for (const catalog of startupCatalogs) {
 		const serialized = JSON.stringify(catalog, null, '\t');
@@ -658,13 +544,8 @@ async function generate(check: boolean): Promise<boolean> {
 		file: 'localizationCatalogLoader.ts',
 		text: `${header}\nexport const fallbackLanguagePackCatalog: LanguagePackCatalog = { ...${JSON.stringify(sourceMetadata)}, bundles: {} };\n\nexport async function loadProductLanguagePackCatalog(locale: unknown): Promise<LanguagePackCatalog> {\n\tswitch (locale) {\n${startupCatalogs
 			.filter(catalog => catalog.locale !== 'en')
-			.map(
-				catalog =>
-					`\t\tcase ${JSON.stringify(catalog.locale)}: return (await import('./localizationCatalog.${catalog.locale}.js')).languagePackCatalog;`,
-			)
-			.join(
-				'\n',
-			)}\n\t\tdefault: return (await import('./localizationCatalog.en.js')).languagePackCatalog;\n\t}\n}\n`,
+			.map(catalog => `\t\tcase ${JSON.stringify(catalog.locale)}: return (await import('./localizationCatalog.${catalog.locale}.js')).languagePackCatalog;`)
+			.join('\n')}\n\t\tdefault: return (await import('./localizationCatalog.en.js')).languagePackCatalog;\n\t}\n}\n`,
 	});
 	for (const extension of languagePacks) {
 		const { manifest, language } = extension;
@@ -752,22 +633,12 @@ function validateLanguagePackManifest(manifest: unknown, directory: string): Lan
 	const invalid = (): never => {
 		throw new Error(`Invalid Ash language pack: ${directory}`);
 	};
-	if (
-		!isRecord(manifest) ||
-		!isRecord(manifest.contributes) ||
-		!Array.isArray(manifest.contributes.localizations) ||
-		manifest.contributes.localizations.length !== 1
-	)
-		return invalid();
+	if (!isRecord(manifest) || !isRecord(manifest.contributes) || !Array.isArray(manifest.contributes.localizations) || manifest.contributes.localizations.length !== 1) return invalid();
 	readExtensionUiTargets(manifest.ashUiTargets);
 	const language = manifest.contributes.localizations[0];
 	if (
-		!['publisher', 'name'].every(
-			key => typeof manifest[key] === 'string' && /^[a-z0-9][a-z0-9-]*$/u.test(manifest[key] as string),
-		) ||
-		!['version', 'displayName', 'description', 'license'].every(
-			key => typeof manifest[key] === 'string' && manifest[key],
-		) ||
+		!['publisher', 'name'].every(key => typeof manifest[key] === 'string' && /^[a-z0-9][a-z0-9-]*$/u.test(manifest[key] as string)) ||
+		!['version', 'displayName', 'description', 'license'].every(key => typeof manifest[key] === 'string' && manifest[key]) ||
 		!isRecord(manifest.engines) ||
 		typeof manifest.engines.ash !== 'string' ||
 		manifest.main !== undefined ||
@@ -872,10 +743,7 @@ function sortBundles(bundles: Bundles): Bundles {
 	return Object.fromEntries(
 		Object.entries(bundles)
 			.sort(([a], [b]) => a.localeCompare(b))
-			.map(([bundle, messages]) => [
-				bundle,
-				Object.fromEntries(Object.entries(messages).sort(([a], [b]) => a.localeCompare(b))),
-			]),
+			.map(([bundle, messages]) => [bundle, Object.fromEntries(Object.entries(messages).sort(([a], [b]) => a.localeCompare(b)))]),
 	);
 }
 
@@ -907,9 +775,7 @@ async function readDomains(directory: string): Promise<Bundles> {
 async function readSources(sourceRoot: string): Promise<LocalizationSource[]> {
 	const files: string[] = [];
 	async function collect(directory: string): Promise<void> {
-		for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) =>
-			a.name.localeCompare(b.name),
-		)) {
+		for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
 			const path = resolve(directory, entry.name);
 			if (entry.isDirectory()) {
 				if (sourceInput(path, true)) {
@@ -924,13 +790,7 @@ async function readSources(sourceRoot: string): Promise<LocalizationSource[]> {
 	const sources: LocalizationSource[] = [];
 	// Bound open files while preserving traversal order for conflict diagnostics and generated catalogs.
 	for (let offset = 0; offset < files.length; offset += 32) {
-		sources.push(
-			...(await Promise.all(
-				files
-					.slice(offset, offset + 32)
-					.map(async path => ({ path: relative(sourceRoot, path), text: await readFile(path, 'utf8') })),
-			)),
-		);
+		sources.push(...(await Promise.all(files.slice(offset, offset + 32).map(async path => ({ path: relative(sourceRoot, path), text: await readFile(path, 'utf8') })))));
 	}
 	return sources;
 }

@@ -8,11 +8,7 @@ import { InstantiationService } from '../../../instantiation/common/instantiatio
 import { getSingletonServiceDescriptors } from '../../../instantiation/common/extensions.js';
 import { ServiceCollection } from '../../../instantiation/common/serviceCollection.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import {
-	IMarkdownRendererService,
-	MarkdownRendererService,
-	openLinkFromMarkdown,
-} from '../../browser/markdownRenderer.js';
+import { IMarkdownRendererService, MarkdownRendererService, openLinkFromMarkdown } from '../../browser/markdownRenderer.js';
 import { ensureNoStylesAreLeakedInTestSuite } from '../../../../../../test/unit/documentStyles.js';
 
 suite('Markdown renderer service', () => {
@@ -33,9 +29,7 @@ suite('Markdown renderer service', () => {
 		});
 		const renderer = services.get(IMarkdownRendererService);
 		assert.equal(renderer, services.get(IMarkdownRendererService));
-		const markdown = new MarkdownString(
-			'[allowed](command:ash.open) [blocked](command:ash.delete) [web](https://example.com)',
-		);
+		const markdown = new MarkdownString('[allowed](command:ash.open) [blocked](command:ash.delete) [web](https://example.com)');
 		markdown.isTrusted = { enabledCommands: ['ash.open'] };
 		using result = renderer.render(markdown, { ownerDocument: document });
 		const anchors = result.element.querySelectorAll<HTMLAnchorElement>('a');
@@ -89,9 +83,7 @@ suite('Markdown renderer service', () => {
 
 	test('plain code remains visible before a default renderer is installed', () => {
 		using services = createServices(async () => true);
-		using result = services
-			.get(IMarkdownRendererService)
-			.render({ value: '```unknown\n<content>\n```' }, { ownerDocument: document });
+		using result = services.get(IMarkdownRendererService).render({ value: '```unknown\n<content>\n```' }, { ownerDocument: document });
 		assert.equal(result.element.querySelector('pre > code')?.textContent, '<content>\n');
 	});
 
@@ -114,11 +106,7 @@ suite('Markdown renderer service', () => {
 				return code;
 			},
 		});
-		using result = renderer.render(
-			{ value: '```ts extra\nsource\n```' },
-			{ context, asyncRenderCallback: resolveCompleted },
-			target,
-		);
+		using result = renderer.render({ value: '```ts extra\nsource\n```' }, { context, asyncRenderCallback: resolveCompleted }, target);
 		await completed;
 		assert.equal(result.element, target);
 		assert.equal(target.querySelector('pre > code')?.textContent, 'highlighted source');

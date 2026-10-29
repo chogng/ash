@@ -2,9 +2,7 @@ import { URI } from '../../../base/common/uri.js';
 import type { ExtensionResourceRequest } from '../../extensions/common/extensionApi.js';
 import { createDecorator } from '../../instantiation/common/instantiation.js';
 
-export const IExtensionResourceLoaderService = createDecorator<IExtensionResourceLoaderService>(
-	'extensionResourceLoaderService',
-);
+export const IExtensionResourceLoaderService = createDecorator<IExtensionResourceLoaderService>('extensionResourceLoaderService');
 
 export interface IExtensionResourceLoaderService {
 	readExtensionResource(uri: URI): Promise<string>;

@@ -29,9 +29,7 @@ export class TokenizerSyntaxTokenBackend extends Disposable {
 	private lastProcessedLine = 0;
 	private _tokenCount = 0;
 	private readonly idle = this._register(new MutableDisposable());
-	private readonly changeEmitter = this._register(
-		new Emitter<readonly { fromLineNumber: number; toLineNumber: number }[]>(),
-	);
+	private readonly changeEmitter = this._register(new Emitter<readonly { fromLineNumber: number; toLineNumber: number }[]>());
 	private readonly errorEmitter = this._register(new Emitter<unknown>());
 	public readonly onDidChangeTokens = this.changeEmitter.event;
 	public readonly onDidEncounterError = this.errorEmitter.event;
@@ -51,10 +49,7 @@ export class TokenizerSyntaxTokenBackend extends Disposable {
 	}
 
 	public isCheapToTokenize(lineNumber: number): boolean {
-		return (
-			this.hasAccurateTokensForLine(lineNumber) ||
-			(lineNumber === this.firstInvalidLine && this.model.getLineLength(lineNumber) < 2048)
-		);
+		return this.hasAccurateTokensForLine(lineNumber) || (lineNumber === this.firstInvalidLine && this.model.getLineLength(lineNumber) < 2048);
 	}
 
 	public get tokenCount(): number {
@@ -67,14 +62,7 @@ export class TokenizerSyntaxTokenBackend extends Disposable {
 			return [];
 		}
 		const tokens: LanguageToken[] = [];
-		appendLanguageTokens(
-			tokens,
-			data.tokens,
-			lineNumber,
-			this.model.getLineContent(lineNumber),
-			this.codec,
-			data.rawTokens,
-		);
+		appendLanguageTokens(tokens, data.tokens, lineNumber, this.model.getLineContent(lineNumber), this.codec, data.rawTokens);
 		return tokens;
 	}
 
@@ -144,14 +132,7 @@ export class TokenizerSyntaxTokenBackend extends Disposable {
 				: this.support.tokenize(text, index + 1 < lines.length, state.clone());
 			state = result.endState;
 			const tokens: LanguageToken[] = [];
-			appendLanguageTokens(
-				tokens,
-				result.tokens,
-				index + 1,
-				text,
-				this.codec,
-				'rawTokens' in result ? result.rawTokens : undefined,
-			);
+			appendLanguageTokens(tokens, result.tokens, index + 1, text, this.codec, 'rawTokens' in result ? result.rawTokens : undefined);
 			return tokens;
 		});
 	}
@@ -159,9 +140,7 @@ export class TokenizerSyntaxTokenBackend extends Disposable {
 	private tokenizeLine(lineNumber: number, state: IState, accurate: boolean): TokenizedLine {
 		const text = this.model.getLineContent(lineNumber);
 		const hasEOL = lineNumber < this.model.getLineCount();
-		const result = this.support.tokenizeEncoded
-			? this.support.tokenizeEncoded(text, hasEOL, state.clone())
-			: this.support.tokenize(text, hasEOL, state.clone());
+		const result = this.support.tokenizeEncoded ? this.support.tokenizeEncoded(text, hasEOL, state.clone()) : this.support.tokenize(text, hasEOL, state.clone());
 		const rawTokens = 'rawTokens' in result ? result.rawTokens : undefined;
 		const languageTokens: LanguageToken[] = [];
 		appendLanguageTokens(languageTokens, result.tokens, lineNumber, text, this.codec, rawTokens);
@@ -196,10 +175,7 @@ export class TokenizerSyntaxTokenBackend extends Disposable {
 			previous.inputState.equals(state);
 		const data = reusable ? previous : this.tokenizeLine(line, state, true);
 		this.setLineData(line, data);
-		this.firstInvalidLine =
-			previous?.accurate && line >= this.lastChangedLine && previous.endState.equals(data.endState)
-				? Math.max(line, this.reusableThroughLine) + 1
-				: line + 1;
+		this.firstInvalidLine = previous?.accurate && line >= this.lastChangedLine && previous.endState.equals(data.endState) ? Math.max(line, this.reusableThroughLine) + 1 : line + 1;
 		this.reusableThroughLine = Math.max(this.reusableThroughLine, line);
 		if (this.firstInvalidLine > this.model.getLineCount()) {
 			this.lastChangedLine = 0;
@@ -229,23 +205,14 @@ export class TokenizerSyntaxTokenBackend extends Disposable {
 				this._tokenCount -= this.lineData[line - 1]?.tokenCount ?? 0;
 			}
 			this.lineData = this.lineData.slice(0, start - 1).concat(replacement, this.lineData.slice(end));
-			this.reusableThroughLine =
-				this.reusableThroughLine >= end
-					? this.reusableThroughLine + delta
-					: Math.min(this.reusableThroughLine, start - 1);
-			this.lastChangedLine = Math.max(
-				start + added - 1,
-				this.lastChangedLine >= end ? this.lastChangedLine + delta : this.lastChangedLine,
-			);
+			this.reusableThroughLine = this.reusableThroughLine >= end ? this.reusableThroughLine + delta : Math.min(this.reusableThroughLine, start - 1);
+			this.lastChangedLine = Math.max(start + added - 1, this.lastChangedLine >= end ? this.lastChangedLine + delta : this.lastChangedLine);
 			this.firstInvalidLine = Math.min(this.firstInvalidLine, start);
 		}
 		this.changeEmitter.fire(
 			change.changes.map(entry => ({
 				fromLineNumber: entry.range.startLineNumber,
-				toLineNumber: Math.min(
-					this.model.getLineCount(),
-					entry.range.startLineNumber + entry.text.split('\n').length - 1,
-				),
+				toLineNumber: Math.min(this.model.getLineCount(), entry.range.startLineNumber + entry.text.split('\n').length - 1),
 			})),
 		);
 		this.scheduleBackground();
@@ -266,11 +233,7 @@ export class TokenizerSyntaxTokenBackend extends Disposable {
 			try {
 				do {
 					this.tokenizeNextLine();
-				} while (
-					this.firstInvalidLine <= this.model.getLineCount() &&
-					this.firstInvalidLine - start < 100 &&
-					performance.now() - began < 1
-				);
+				} while (this.firstInvalidLine <= this.model.getLineCount() && this.firstInvalidLine - start < 100 && performance.now() - began < 1);
 				this.changeEmitter.fire([{ fromLineNumber: start, toLineNumber: this.lastProcessedLine }]);
 				this.scheduleBackground();
 			} catch (error) {

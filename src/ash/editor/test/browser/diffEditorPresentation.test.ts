@@ -18,21 +18,13 @@ suite('diff character backgrounds', () => {
 			});
 			await page.evaluate(sideBySide => {
 				window.ashDiffIntegration.setViewMode(sideBySide, false, 900);
-				window.ashDiffIntegration.setComparisonText(
-					'shared\n    .by_index(0)\nlast',
-					'shared\n    .by_name(&name)\nlast',
-				);
+				window.ashDiffIntegration.setComparisonText('shared\n    .by_index(0)\nlast', 'shared\n    .by_name(&name)\nlast');
 			}, sideBySide);
 			await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
-			const original = page.locator(
-				sideBySide ? '#single .original' : '#single .modified .stanza-diff-inline-original-line',
-			);
+			const original = page.locator(sideBySide ? '#single .original' : '#single .modified .stanza-diff-inline-original-line');
 			const modified = page.locator('#single .modified');
 			for (const lineHeight of [24, 36]) {
-				await page.evaluate(
-					lineHeight => window.ashDiffIntegration.setFontOptions({ fontSize: 17, lineHeight }),
-					lineHeight,
-				);
+				await page.evaluate(lineHeight => window.ashDiffIntegration.setFontOptions({ fontSize: 17, lineHeight }), lineHeight);
 				for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light']) {
 					await page.evaluate(theme => window.ashDiffIntegration.setTheme(theme), theme);
 					await assertRowBackgrounds(original.locator('.stanza-diff-inline-removed'), lineHeight);
@@ -58,17 +50,12 @@ suite('diff character backgrounds', () => {
 					window.ashDiffIntegration.setFontOptions({ fontSize: 17, lineHeight: 36 });
 					window.ashDiffIntegration.setWrapping('wordWrapColumn', 24);
 					window.ashDiffIntegration.setTheme('vs');
-					window.ashDiffIntegration.setComparisonText(
-						originalText,
-						originalText.replaceAll('before 😀', 'after 🤖'),
-					);
+					window.ashDiffIntegration.setComparisonText(originalText, originalText.replaceAll('before 😀', 'after 🤖'));
 				},
 				{ sideBySide, originalText },
 			);
 			await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
-			const original = page.locator(
-				sideBySide ? '#single .original' : '#single .modified .stanza-diff-inline-original-line',
-			);
+			const original = page.locator(sideBySide ? '#single .original' : '#single .modified .stanza-diff-inline-original-line');
 			await assertRowBackgrounds(original.locator('.stanza-diff-inline-removed'), 36);
 			await assertRowBackgrounds(page.locator('#single .modified .stanza-diff-inline-added'), 36);
 			if (!sideBySide) {
@@ -139,22 +126,14 @@ suite('diff action visibility', () => {
 			}
 			await revert.focus();
 			await page.keyboard.press('Space');
-			await expect
-				.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText))
-				.toBe('shared\nbefore\nlast');
+			await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toBe('shared\nbefore\nlast');
 			await page.evaluate(() => window.ashDiffIntegration.undo());
 			await expect(revert).toHaveCount(1);
 
 			await page.evaluate(() => window.ashDiffIntegration.setEditorFeatures({ readOnly: true }));
 			await expect(gutter).toBeHidden();
 			await expect(revert).toHaveCount(0);
-			expect(
-				await editor
-					.locator('.stanza-diff-editor-side.modified')
-					.evaluate(
-						node => node.getBoundingClientRect().left - node.parentElement!.getBoundingClientRect().left,
-					),
-			).toBe(0);
+			expect(await editor.locator('.stanza-diff-editor-side.modified').evaluate(node => node.getBoundingClientRect().left - node.parentElement!.getBoundingClientRect().left)).toBe(0);
 
 			await page.evaluate(() =>
 				window.ashDiffIntegration.setEditorFeatures({
@@ -168,9 +147,7 @@ suite('diff action visibility', () => {
 			await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, false, 900));
 			await expect(revert).toHaveCount(1);
 			await expect(gutter).toBeHidden();
-			await page.evaluate(() =>
-				window.ashDiffIntegration.setEditorFeatures({ renderGutterMenu: true, renderMarginRevertIcon: false }),
-			);
+			await page.evaluate(() => window.ashDiffIntegration.setEditorFeatures({ renderGutterMenu: true, renderMarginRevertIcon: false }));
 			await expect(gutter).toBeVisible();
 			await expect(revert).toHaveCount(1);
 			await expect(revert.locator('[data-ash-icon-id="arrow-right"]')).toHaveCount(1);
@@ -186,16 +163,8 @@ async function assertRowBackgrounds(backgrounds: Locator, lineHeight: number): P
 				(nodes, lineHeight) =>
 					nodes.every(node => {
 						const box = node.getBoundingClientRect();
-						const row = node
-							.closest(
-								'.view-overlay-line, .view-line, .ash-diff-original-row, .stanza-diff-inline-original-line',
-							)!
-							.getBoundingClientRect();
-						return (
-							Math.abs(box.height - lineHeight) < 0.5 &&
-							Math.abs(box.top - row.top) < 0.5 &&
-							getComputedStyle(node).backgroundColor !== 'rgba(0, 0, 0, 0)'
-						);
+						const row = node.closest('.view-overlay-line, .view-line, .ash-diff-original-row, .stanza-diff-inline-original-line')!.getBoundingClientRect();
+						return Math.abs(box.height - lineHeight) < 0.5 && Math.abs(box.top - row.top) < 0.5 && getComputedStyle(node).backgroundColor !== 'rgba(0, 0, 0, 0)';
 					}),
 				lineHeight,
 			),

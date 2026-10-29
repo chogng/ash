@@ -50,13 +50,9 @@ export class SessionGroupsService extends Disposable implements ISessionGroupsSe
 		);
 	}
 	private removeArchivedMembership(): void {
-		const archived = new Set(
-			this.sessions.sessions.filter(session => session.status === 'archived').map(session => session.sessionId),
-		);
+		const archived = new Set(this.sessions.sessions.filter(session => session.status === 'archived').map(session => session.sessionId));
 		if (this.groups.some(group => group.sessionIds.some(id => archived.has(id)))) {
-			void this.change(groups =>
-				groups.map(group => ({ ...group, sessionIds: group.sessionIds.filter(id => !archived.has(id)) })),
-			).catch(onUnexpectedError);
+			void this.change(groups => groups.map(group => ({ ...group, sessionIds: group.sessionIds.filter(id => !archived.has(id)) }))).catch(onUnexpectedError);
 		}
 	}
 	get groups(): readonly SessionGroup[] {
@@ -84,8 +80,7 @@ export class SessionGroupsService extends Disposable implements ISessionGroupsSe
 				throw new Error('Invalid saved session group');
 			sections.add(group.sectionId);
 			for (const id of group.sessionIds) {
-				if (typeof id !== 'string' || !id || sessions.has(id))
-					throw new Error('Invalid saved session group membership');
+				if (typeof id !== 'string' || !id || sessions.has(id)) throw new Error('Invalid saved session group membership');
 				sessions.add(id);
 			}
 		}
@@ -93,10 +88,7 @@ export class SessionGroupsService extends Disposable implements ISessionGroupsSe
 		this.state.set(groups as SessionGroup[]);
 		this.changed.fire();
 	}
-	private async change(
-		update: (groups: readonly SessionGroup[]) => readonly SessionGroup[],
-		signal?: AbortSignal,
-	): Promise<void> {
+	private async change(update: (groups: readonly SessionGroup[]) => readonly SessionGroup[], signal?: AbortSignal): Promise<void> {
 		// Serialize writes within the window and read storage anew to incorporate other windows.
 		const next = this.pending.then(async () => {
 			this.assertNotDisposed();
@@ -133,10 +125,7 @@ export class SessionGroupsService extends Disposable implements ISessionGroupsSe
 	async move(sessionId: string, sectionId: string | null, signal?: AbortSignal): Promise<void> {
 		if (!sessionId) throw new Error('Session ID is required');
 		await this.change(groups => {
-			if (
-				sectionId !== null &&
-				this.sessions.sessions.some(session => session.sessionId === sessionId && session.status === 'archived')
-			)
+			if (sectionId !== null && this.sessions.sessions.some(session => session.sessionId === sessionId && session.status === 'archived'))
 				throw new Error('Restore the archived task before assigning a group');
 			if (sectionId !== null) {
 				const target = findGroup(groups, sectionId);
@@ -145,25 +134,16 @@ export class SessionGroupsService extends Disposable implements ISessionGroupsSe
 			}
 			return groups.map(group => ({
 				...group,
-				sessionIds: [
-					...group.sessionIds.filter(id => id !== sessionId),
-					...(group.sectionId === sectionId ? [sessionId] : []),
-				],
+				sessionIds: [...group.sessionIds.filter(id => id !== sessionId), ...(group.sectionId === sectionId ? [sessionId] : [])],
 			}));
 		}, signal);
 	}
 	async reorder(sectionId: string, sessionIds: readonly string[], signal?: AbortSignal): Promise<void> {
 		await this.change(groups => {
 			const group = findGroup(groups, sectionId);
-			if (
-				sessionIds.length !== group.sessionIds.length ||
-				new Set(sessionIds).size !== sessionIds.length ||
-				sessionIds.some(id => !group.sessionIds.includes(id))
-			)
+			if (sessionIds.length !== group.sessionIds.length || new Set(sessionIds).size !== sessionIds.length || sessionIds.some(id => !group.sessionIds.includes(id)))
 				throw new Error('Include each assigned session exactly once');
-			return groups.map(group =>
-				group.sectionId === sectionId ? { ...group, sessionIds: [...sessionIds] } : group,
-			);
+			return groups.map(group => (group.sectionId === sectionId ? { ...group, sessionIds: [...sessionIds] } : group));
 		}, signal);
 	}
 }

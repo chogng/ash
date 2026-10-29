@@ -1,10 +1,5 @@
 import { localize } from '../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 
 import { INotificationsCenter, NotificationsFocusedContext } from './notificationsCenter.js';
@@ -70,16 +65,7 @@ AccessibleViewRegistry.register({
 						if (item.hasActiveProgress) {
 							details.push(
 								item.progress?.total && item.progress.total > 0
-									? localize(
-											'notifications.progressPercent',
-											'{0}% complete',
-											Math.round(
-												Math.max(
-													0,
-													Math.min(1, (item.progress.worked ?? 0) / item.progress.total),
-												) * 100,
-											),
-										)
+									? localize('notifications.progressPercent', '{0}% complete', Math.round(Math.max(0, Math.min(1, (item.progress.worked ?? 0) / item.progress.total)) * 100))
 									: localize('notifications.progressDescription', 'In progress'),
 							);
 						}

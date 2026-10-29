@@ -89,8 +89,7 @@ export class IndexTree<T> extends Disposable {
 	readonly onDidAccept: Event<IndexTreeAcceptEvent<T>> = this._onDidAccept.event;
 	readonly onDidChangeFocus: Event<IndexTreeEvent<T>> = this._onDidChangeFocus.event;
 	readonly onDidChangeSelection: Event<IndexTreeSelectionEvent<T>> = this._onDidChangeSelection.event;
-	readonly onDidChangeCollapseState: Event<IndexTreeCollapseStateChangeEvent<T>> =
-		this._onDidChangeCollapseState.event;
+	readonly onDidChangeCollapseState: Event<IndexTreeCollapseStateChangeEvent<T>> = this._onDidChangeCollapseState.event;
 
 	constructor(container: HTMLElement, rootElement: T, options: IndexTreeOptions<T>) {
 		super();
@@ -104,10 +103,7 @@ export class IndexTree<T> extends Disposable {
 				indent: options.indent,
 				indentGuides: options.indentGuides,
 				expandOnDoubleClick: options.expandOnDoubleClick,
-				expandOnlyOnTwistieClick:
-					typeof expandOnlyOnTwistieClick === 'function'
-						? node => expandOnlyOnTwistieClick(node.element)
-						: expandOnlyOnTwistieClick,
+				expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === 'function' ? node => expandOnlyOnTwistieClick(node.element) : expandOnlyOnTwistieClick,
 				getHeight: options.getHeight ? node => options.getHeight!(node.element) : undefined,
 				dnd: options.dnd ? mapDragAndDrop(options.dnd) : undefined,
 				keyboardNavigationLabelProvider: options.keyboardNavigationLabelProvider,
@@ -116,9 +112,7 @@ export class IndexTree<T> extends Disposable {
 				enableStickyScroll: options.enableStickyScroll,
 				stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
 				renderElement: node => options.renderElement(node.element, node),
-				renderTwistie: options.renderTwistie
-					? (node, state, container) => options.renderTwistie!(node.element, state, container)
-					: undefined,
+				renderTwistie: options.renderTwistie ? (node, state, container) => options.renderTwistie!(node.element, state, container) : undefined,
 			}),
 		);
 		this.element = this.tree.element;
@@ -130,36 +124,15 @@ export class IndexTree<T> extends Disposable {
 					element: node.element,
 					node,
 					collapsed,
-					browserEvent:
-						this.collapseBrowserEvent?.id === node.id ? this.collapseBrowserEvent.event : undefined,
+					browserEvent: this.collapseBrowserEvent?.id === node.id ? this.collapseBrowserEvent.event : undefined,
 				});
 			}),
 		);
-		this._register(
-			this.tree.onPointer(({ element: node, target, browserEvent }) =>
-				this._onPointer.fire({ element: node.element, node, target, browserEvent }),
-			),
-		);
-		this._register(
-			this.tree.onDidDoubleClick(({ element: node, target, browserEvent }) =>
-				this._onDidDoubleClick.fire({ element: node.element, node, target, browserEvent }),
-			),
-		);
-		this._register(
-			this.tree.onDidAccept(({ element: node, browserEvent }) =>
-				this._onDidAccept.fire({ element: node.element, node, browserEvent }),
-			),
-		);
-		this._register(
-			this.tree.onDidChangeFocus(({ element: node, browserEvent }) =>
-				this._onDidChangeFocus.fire({ element: node?.element, node, browserEvent }),
-			),
-		);
-		this._register(
-			this.tree.onDidChangeSelection(({ elements: nodes, browserEvent }) =>
-				this._onDidChangeSelection.fire({ elements: nodes.map(node => node.element), nodes, browserEvent }),
-			),
-		);
+		this._register(this.tree.onPointer(({ element: node, target, browserEvent }) => this._onPointer.fire({ element: node.element, node, target, browserEvent })));
+		this._register(this.tree.onDidDoubleClick(({ element: node, target, browserEvent }) => this._onDidDoubleClick.fire({ element: node.element, node, target, browserEvent })));
+		this._register(this.tree.onDidAccept(({ element: node, browserEvent }) => this._onDidAccept.fire({ element: node.element, node, browserEvent })));
+		this._register(this.tree.onDidChangeFocus(({ element: node, browserEvent }) => this._onDidChangeFocus.fire({ element: node?.element, node, browserEvent })));
+		this._register(this.tree.onDidChangeSelection(({ elements: nodes, browserEvent }) => this._onDidChangeSelection.fire({ elements: nodes.map(node => node.element), nodes, browserEvent })));
 		this._register(
 			this.tree.onDidRequestCollapseChange(({ element: node, expanded, browserEvent }) => {
 				this.collapseBrowserEvent = { id: node.id, event: browserEvent };

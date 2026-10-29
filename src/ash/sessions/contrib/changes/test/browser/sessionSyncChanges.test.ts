@@ -93,14 +93,7 @@ suite('Session Git actions', () => {
 						]
 					: [['git.pull', 'session-worktree']],
 			);
-			assert.deepEqual(
-				errors,
-				interrupt === 'failure'
-					? ['Pull conflict']
-					: interrupt === 'branch'
-						? ['The repository or branch changed. Start the operation again.']
-						: [],
-			);
+			assert.deepEqual(errors, interrupt === 'failure' ? ['Pull conflict'] : interrupt === 'branch' ? ['The repository or branch changed. Start the operation again.'] : []);
 		});
 	}
 });

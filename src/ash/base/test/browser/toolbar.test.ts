@@ -13,7 +13,10 @@ import { AnchorPosition } from '../../common/layout.js';
 test('ToolBar renders primary actions and trails More Actions', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const contextMenuProvider = new TestContextMenuProvider();
-	const toolbar = new ToolBar(dom.window.document.body, { contextMenuProvider, ariaLabel: 'Test actions' });
+	const toolbar = new ToolBar(dom.window.document.body, {
+		contextMenuProvider,
+		ariaLabel: 'Test actions',
+	});
 	toolbar.setActions([action('primary')], [action('secondary')]);
 	dom.window.document.body.append(toolbar.element);
 
@@ -115,8 +118,7 @@ test('ToolBar applies its hover anchor position to primary and More Actions item
 		setupHover(options) {
 			setups.push({
 				position: {
-					hoverPosition:
-						options.anchorPosition === AnchorPosition.Below ? HoverPosition.BELOW : HoverPosition.ABOVE,
+					hoverPosition: options.anchorPosition === AnchorPosition.Below ? HoverPosition.BELOW : HoverPosition.ABOVE,
 				},
 			});
 			return managedHover();
@@ -143,7 +145,9 @@ test('ToolBar applies its hover anchor position to primary and More Actions item
 
 test('ToolBar omits More Actions when secondary actions are empty', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const toolbar = new ToolBar(dom.window.document.body, { contextMenuProvider: new TestContextMenuProvider() });
+	const toolbar = new ToolBar(dom.window.document.body, {
+		contextMenuProvider: new TestContextMenuProvider(),
+	});
 	toolbar.setActions([new Separator(), action('primary'), new Separator()], [new Separator()]);
 
 	const buttons = toolbar.element.querySelectorAll('button');
@@ -160,11 +164,7 @@ test('ToolBar can place More Actions before a named primary action', () => {
 		contextMenuProvider: new TestContextMenuProvider(),
 		moreActionsPlacement: { beforeActionId: 'maximize' },
 	});
-	toolbar.setActions(
-		[action('kill'), action('maximize'), action('close')],
-		[action('clear')],
-		[action('account'), action('manage')],
-	);
+	toolbar.setActions([action('kill'), action('maximize'), action('close')], [action('clear')], [action('account'), action('manage')]);
 
 	assert.deepEqual(
 		[...toolbar.element.querySelectorAll<HTMLElement>('[data-action-id]')].map(item => item.dataset.actionId),
@@ -184,9 +184,22 @@ class TestContextMenuProvider implements IContextMenuProvider {
 }
 
 function action(id: string): IAction {
-	return { id, label: id, tooltip: id, enabled: true, run() {} };
+	return {
+		id,
+		label: id,
+		tooltip: id,
+		enabled: true,
+		run() {},
+	};
 }
 
 function managedHover(): IManagedHover {
-	return { visible: false, show() {}, hide() {}, update() {}, dispose() {}, [Symbol.dispose]() {} };
+	return {
+		visible: false,
+		show() {},
+		hide() {},
+		update() {},
+		dispose() {},
+		[Symbol.dispose]() {},
+	};
 }

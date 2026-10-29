@@ -5,10 +5,7 @@ import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { commandActionLabel } from '../../../../platform/action/common/action.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -52,14 +49,10 @@ for (const [index, themeAction] of themeActions.entries()) {
 			}
 
 			public override run(accessor: ServicesAccessor): void {
-				const setting = Registry.as<IConfigurationRegistry>(Extensions.Configuration).getConfiguration(
-					themeAction.setting,
-				)?.setting;
-				if (setting?.valueType !== 'select')
-					throw new Error(`Theme setting '${themeAction.setting}' has no choices`);
+				const setting = Registry.as<IConfigurationRegistry>(Extensions.Configuration).getConfiguration(themeAction.setting)?.setting;
+				if (setting?.valueType !== 'select') throw new Error(`Theme setting '${themeAction.setting}' has no choices`);
 				const items = setting.options.map(option => {
-					if (typeof option.value !== 'string')
-						throw new TypeError(`Theme choice for '${themeAction.setting}' must be a string`);
+					if (typeof option.value !== 'string') throw new TypeError(`Theme choice for '${themeAction.setting}' must be a string`);
 					return { label: option.label, value: option.value };
 				});
 				const configuration = accessor.get(IConfigurationService);

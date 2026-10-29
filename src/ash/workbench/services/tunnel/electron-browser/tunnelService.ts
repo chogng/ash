@@ -15,8 +15,7 @@ interface Forward {
 	readonly state: 'open' | 'recovering' | 'failed';
 }
 
-type ForwardChange =
-	{ readonly kind: 'upsert'; readonly tunnel: Forward } | { readonly kind: 'removed'; readonly id: string };
+type ForwardChange = { readonly kind: 'upsert'; readonly tunnel: Forward } | { readonly kind: 'removed'; readonly id: string };
 
 /** Owns Desktop tunnel leases above the authenticated Main channel. */
 export class TunnelService extends Disposable implements ITunnelService {
@@ -36,11 +35,7 @@ export class TunnelService extends Disposable implements ITunnelService {
 	constructor(@IMainProcessService mainProcessService: IMainProcessService) {
 		super();
 		this.channel = mainProcessService.getChannel('remotePortForwarding');
-		this._register(
-			this.channel.listen<unknown>('ash:remote:tunnel:changed')(value =>
-				this.acceptChange(validateChange(value)),
-			),
-		);
+		this._register(this.channel.listen<unknown>('ash:remote:tunnel:changed')(value => this.acceptChange(validateChange(value))));
 		this._register(
 			toDisposable(() => {
 				this.forwards.clear();
@@ -68,20 +63,9 @@ export class TunnelService extends Disposable implements ITunnelService {
 		if (!Number.isSafeInteger(remotePort) || remotePort < 1 || remotePort > 65535) {
 			throw new TypeError(localize('tunnel.invalidPort', 'Remote port must be an integer from 1 to 65535.'));
 		}
-		const supportedPrivacy =
-			privacy === undefined || privacy === TunnelPrivacyId.Private || privacy === TunnelPrivacyId.ConstantPrivate;
-		if (
-			!isLoopback(remoteHost) ||
-			!isLoopback(localHost) ||
-			localPort !== undefined ||
-			elevateIfNeeded ||
-			!supportedPrivacy ||
-			protocol !== undefined
-		) {
-			return localize(
-				'tunnel.unsupportedOptions',
-				'SSH forwarding supports private loopback ports with an automatically assigned local port.',
-			);
+		const supportedPrivacy = privacy === undefined || privacy === TunnelPrivacyId.Private || privacy === TunnelPrivacyId.ConstantPrivate;
+		if (!isLoopback(remoteHost) || !isLoopback(localHost) || localPort !== undefined || elevateIfNeeded || !supportedPrivacy || protocol !== undefined) {
+			return localize('tunnel.unsupportedOptions', 'SSH forwarding supports private loopback ports with an automatically assigned local port.');
 		}
 		// The provider is already bound to the authenticated SSH window. A resolver's
 		// address provider cannot replace that host or choose a second connection.
@@ -183,12 +167,7 @@ export class TunnelService extends Disposable implements ITunnelService {
 		this.forwards.delete(change.id);
 		this.references.delete(change.id);
 		this.changed.fire();
-		if (
-			forward &&
-			![...this.forwards.values()].some(
-				candidate => candidate.remoteHost === forward.remoteHost && candidate.remotePort === forward.remotePort,
-			)
-		) {
+		if (forward && ![...this.forwards.values()].some(candidate => candidate.remoteHost === forward.remoteHost && candidate.remotePort === forward.remotePort)) {
 			this.closed.fire({ host: forward.remoteHost, port: forward.remotePort });
 		}
 	}
@@ -263,13 +242,7 @@ function validateChange(value: unknown): ForwardChange {
 	if (value.kind === 'upsert') {
 		return { kind: 'upsert', tunnel: validateForward(value.tunnel) };
 	}
-	if (
-		value.kind === 'removed' &&
-		typeof value.id === 'string' &&
-		value.id.length > 0 &&
-		value.id.length <= 512 &&
-		!/[\0\r\n]/.test(value.id)
-	) {
+	if (value.kind === 'removed' && typeof value.id === 'string' && value.id.length > 0 && value.id.length <= 512 && !/[\0\r\n]/.test(value.id)) {
 		return { kind: 'removed', id: value.id };
 	}
 	throw new TypeError('Invalid Remote tunnel change');

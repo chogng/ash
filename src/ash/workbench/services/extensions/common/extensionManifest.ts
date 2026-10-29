@@ -5,19 +5,11 @@ import type { IKeybindingRule } from '../../../../platform/keybinding/common/key
 import { ExtensionsRegistry } from './extensionsRegistry.js';
 import { localize } from '../../../../nls.js';
 import { validateJsonValue } from '../../../../base/common/jsonValue.js';
-import {
-	ConfigurationScope,
-	type IConfigurationDefaults,
-	type IConfigurationNode,
-	type IConfigurationPropertySchema,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, type IConfigurationDefaults, type IConfigurationNode, type IConfigurationPropertySchema } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { URI } from '../../../../base/common/uri.js';
 import { posix, win32 } from '../../../../base/common/path.js';
 import { validateTokenId, type ColorContribution } from '../../../../platform/theme/common/colorRegistry.js';
-import {
-	getTokenClassificationRegistry,
-	type TokenTypeOrModifierContribution,
-} from '../../../../platform/theme/common/tokenClassificationRegistry.js';
+import { getTokenClassificationRegistry, type TokenTypeOrModifierContribution } from '../../../../platform/theme/common/tokenClassificationRegistry.js';
 import type { ILocalizationContribution } from '../../../../platform/extensions/common/extensions.js';
 
 export interface ExtensionIconContribution {
@@ -153,22 +145,14 @@ export interface ExtensionManifestDescriptor {
 	readonly targetPlatform?: string;
 }
 
-export async function verifyExtensionManifestDigest(extension: {
-	readonly id: string;
-	readonly manifestJson: string;
-	readonly manifestSha256: string;
-}): Promise<void> {
+export async function verifyExtensionManifestDigest(extension: { readonly id: string; readonly manifestJson: string; readonly manifestSha256: string }): Promise<void> {
 	const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(extension.manifestJson));
 	const actual = `sha256:${[...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('')}`;
-	if (actual !== extension.manifestSha256)
-		throw new Error(`Extension '${extension.id}' manifest digest does not match its catalog descriptor`);
+	if (actual !== extension.manifestSha256) throw new Error(`Extension '${extension.id}' manifest digest does not match its catalog descriptor`);
 }
 
 /** Parses and validates the declarative contribution subset owned by Workbench. */
-export function parseExtensionManifest(
-	manifestJson: string,
-	descriptor: ExtensionManifestDescriptor,
-): ExtensionManifest {
+export function parseExtensionManifest(manifestJson: string, descriptor: ExtensionManifestDescriptor): ExtensionManifest {
 	let value: unknown;
 	try {
 		value = JSON.parse(manifestJson);
@@ -182,10 +166,7 @@ export function parseExtensionManifest(
 	if (name !== descriptor.name || publisher !== descriptor.publisher || version !== descriptor.version) {
 		throw new TypeError(`Extension '${descriptor.id}' manifest identity does not match its catalog entry`);
 	}
-	const displayName =
-		typeof manifest.displayName === 'string' && manifest.displayName.trim().length > 0
-			? boundedText(manifest.displayName, 'displayName', 256)
-			: (descriptor.displayName ?? name);
+	const displayName = typeof manifest.displayName === 'string' && manifest.displayName.trim().length > 0 ? boundedText(manifest.displayName, 'displayName', 256) : (descriptor.displayName ?? name);
 	const contributes = manifest.contributes === undefined ? {} : record(manifest.contributes, 'Extension contributes');
 	let themes: readonly ExtensionThemeContribution[] = [];
 	if (manifest.themes !== undefined) {
@@ -206,42 +187,25 @@ export function parseExtensionManifest(
 			breakpoints: parseBreakpointContributions(contributes.breakpoints),
 			terminal: parseTerminalContribution(contributes.terminal, contributes.terminalProfiles),
 			localizations: parseLocalizations(contributes.localizations),
-			configuration: parseConfigurations(
-				contributes.configuration,
-				Object.freeze({ id: descriptor.id, displayName }),
-			),
+			configuration: parseConfigurations(contributes.configuration, Object.freeze({ id: descriptor.id, displayName })),
 			configurationDefaults:
 				contributes.configurationDefaults === undefined
 					? []
 					: [
 							{
-								overrides: validateJsonValue(
-									record(contributes.configurationDefaults, 'contributes.configurationDefaults'),
-								) as Readonly<Record<string, unknown>>,
+								overrides: validateJsonValue(record(contributes.configurationDefaults, 'contributes.configurationDefaults')) as Readonly<Record<string, unknown>>,
 								source: { id: descriptor.id, displayName },
 							},
 						],
 			submenus: parseSubmenus(contributes.submenus, contributes.menus),
 			viewsWelcome: parseViewsWelcome(contributes.viewsWelcome),
 			keybindings: parseKeybindings(contributes.keybindings, descriptor.id),
-			languages: Object.freeze(
-				contributes.languages === undefined ? [] : parseLanguages(contributes.languages, descriptor.id),
-			),
-			grammars: Object.freeze(
-				contributes.grammars === undefined ? [] : parseGrammars(contributes.grammars, descriptor.id),
-			),
-			snippets: Object.freeze(
-				contributes.snippets === undefined ? [] : parseSnippets(contributes.snippets, descriptor.id),
-			),
+			languages: Object.freeze(contributes.languages === undefined ? [] : parseLanguages(contributes.languages, descriptor.id)),
+			grammars: Object.freeze(contributes.grammars === undefined ? [] : parseGrammars(contributes.grammars, descriptor.id)),
+			snippets: Object.freeze(contributes.snippets === undefined ? [] : parseSnippets(contributes.snippets, descriptor.id)),
 			themes: Object.freeze(themes),
-			iconThemes: Object.freeze(
-				contributes.iconThemes === undefined ? [] : parseThemes(contributes.iconThemes, descriptor.id),
-			),
-			productIconThemes: Object.freeze(
-				contributes.productIconThemes === undefined
-					? []
-					: parseThemes(contributes.productIconThemes, descriptor.id),
-			),
+			iconThemes: Object.freeze(contributes.iconThemes === undefined ? [] : parseThemes(contributes.iconThemes, descriptor.id)),
+			productIconThemes: Object.freeze(contributes.productIconThemes === undefined ? [] : parseThemes(contributes.productIconThemes, descriptor.id)),
 			colors: parseColors(contributes.colors, descriptor.id),
 			semanticTokenTypes: parseClassifications(contributes.semanticTokenTypes, true),
 			semanticTokenModifiers: parseClassifications(contributes.semanticTokenModifiers, false),
@@ -249,9 +213,7 @@ export function parseExtensionManifest(
 			customEditors: parseCustomEditors(contributes.customEditors, descriptor.id),
 			problemMatchers: parseProblemContributions(contributes.problemMatchers, 'problemMatchers'),
 			problemPatterns: parseProblemContributions(contributes.problemPatterns, 'problemPatterns'),
-			debuggers: Object.freeze(
-				contributes.debuggers === undefined ? [] : parseDebuggers(contributes.debuggers, descriptor),
-			),
+			debuggers: Object.freeze(contributes.debuggers === undefined ? [] : parseDebuggers(contributes.debuggers, descriptor)),
 		}),
 	});
 }
@@ -260,25 +222,13 @@ function parseKeybindings(value: unknown, extensionId: string): readonly IKeybin
 	if (value === undefined) {
 		return [];
 	}
-	const invalid = () =>
-		new TypeError(
-			localize(
-				{ bundle: 'ash.extensions', key: 'invalidKeybindingContribution' },
-				'Invalid keybinding contribution in {0}.',
-				extensionId,
-			),
-		);
+	const invalid = () => new TypeError(localize({ bundle: 'ash.extensions', key: 'invalidKeybindingContribution' }, 'Invalid keybinding contribution in {0}.', extensionId));
 	if (!Array.isArray(value) || value.length > 4096) {
 		throw invalid();
 	}
 	return value.flatMap(item => {
 		const entry = record(item, 'Keybinding contribution');
-		if (
-			typeof entry.command !== 'string' ||
-			!entry.command.length ||
-			entry.command.length > 256 ||
-			entry.command.startsWith('-')
-		) {
+		if (typeof entry.command !== 'string' || !entry.command.length || entry.command.length > 256 || entry.command.startsWith('-')) {
 			throw invalid();
 		}
 		for (const key of ['key', 'mac', 'linux', 'win']) {
@@ -290,10 +240,7 @@ function parseKeybindings(value: unknown, extensionId: string): readonly IKeybin
 				throw invalid();
 			}
 		}
-		if (
-			entry.when !== undefined &&
-			(typeof entry.when !== 'string' || entry.when.length > 4096 || !ContextKeyExpr.deserialize(entry.when))
-		) {
+		if (entry.when !== undefined && (typeof entry.when !== 'string' || entry.when.length > 4096 || !ContextKeyExpr.deserialize(entry.when))) {
 			throw invalid();
 		}
 		const key = entry[isMacintosh ? 'mac' : isLinux ? 'linux' : 'win'] ?? entry.key;
@@ -348,10 +295,7 @@ function parseLocalizations(value: unknown): readonly ILocalizationContribution[
 	});
 }
 
-function parseConfigurations(
-	value: unknown,
-	extensionInfo: { readonly id: string; readonly displayName: string },
-): readonly IConfigurationNode[] {
+function parseConfigurations(value: unknown, extensionInfo: { readonly id: string; readonly displayName: string }): readonly IConfigurationNode[] {
 	if (value === undefined) return Object.freeze([]);
 	const scopes: Readonly<Record<string, ConfigurationScope>> = {
 		application: ConfigurationScope.APPLICATION,
@@ -364,60 +308,30 @@ function parseConfigurations(
 	const parseNode = (value: unknown): IConfigurationNode => {
 		const node = record(validateJsonValue(value), 'contributes.configuration');
 		const properties: Record<string, IConfigurationPropertySchema> = Object.create(null);
-		for (const [key, value] of Object.entries(
-			node.properties === undefined ? {} : record(node.properties, 'contributes.configuration.properties'),
-		)) {
+		for (const [key, value] of Object.entries(node.properties === undefined ? {} : record(node.properties, 'contributes.configuration.properties'))) {
 			const schema = record(value, `contributes.configuration.properties.${key}`);
-			const scope =
-				schema.scope === undefined
-					? ConfigurationScope.WINDOW
-					: typeof schema.scope === 'string'
-						? scopes[schema.scope]
-						: undefined;
-			if (scope === undefined)
-				throw new TypeError(
-					localize(
-						'configuration.contributedValue',
-						"Setting '{0}' does not match its declared schema.",
-						key,
-					),
-				);
+			const scope = schema.scope === undefined ? ConfigurationScope.WINDOW : typeof schema.scope === 'string' ? scopes[schema.scope] : undefined;
+			if (scope === undefined) throw new TypeError(localize('configuration.contributedValue', "Setting '{0}' does not match its declared schema.", key));
 			if (schema.ashBinding !== undefined) {
 				const binding = record(schema.ashBinding, 'extension setting binding');
-				for (const field of ['readCommand', 'writeCommand', 'property'])
-					requiredString(binding[field], 'extension setting binding ' + field, 256);
+				for (const field of ['readCommand', 'writeCommand', 'property']) requiredString(binding[field], 'extension setting binding ' + field, 256);
 				const setting = record(schema.ashSetting, 'extension setting presentation');
 				requiredString(setting.title, 'setting title', 32768);
 				requiredString(setting.description, 'setting description', 32768);
 				if (setting.valueType === 'number') {
-					if (
-						typeof setting.minimum !== 'number' ||
-						typeof setting.maximum !== 'number' ||
-						setting.minimum > setting.maximum
-					)
-						throw new TypeError('Invalid setting range');
+					if (typeof setting.minimum !== 'number' || typeof setting.maximum !== 'number' || setting.minimum > setting.maximum) throw new TypeError('Invalid setting range');
 				} else if (setting.valueType === 'select') {
-					if (!Array.isArray(setting.options) || setting.options.length > 128)
-						throw new TypeError('Invalid setting options');
+					if (!Array.isArray(setting.options) || setting.options.length > 128) throw new TypeError('Invalid setting options');
 					for (const option of setting.options) {
 						const entry = record(option, 'setting option');
 						requiredString(entry.label, 'setting option label', 32768);
-						if (!['string', 'boolean'].includes(typeof entry.value))
-							throw new TypeError('Invalid setting option value');
+						if (!['string', 'boolean'].includes(typeof entry.value)) throw new TypeError('Invalid setting option value');
 					}
-				} else if (setting.valueType !== 'boolean' && setting.valueType !== 'text')
-					throw new TypeError('Invalid setting presentation');
+				} else if (setting.valueType !== 'boolean' && setting.valueType !== 'text') throw new TypeError('Invalid setting presentation');
 			}
 			properties[key] = Object.freeze({ ...schema, scope }) as IConfigurationPropertySchema;
 		}
-		if (node.allOf !== undefined && !Array.isArray(node.allOf))
-			throw new TypeError(
-				localize(
-					'configuration.contributedValue',
-					"Setting '{0}' does not match its declared schema.",
-					'allOf',
-				),
-			);
+		if (node.allOf !== undefined && !Array.isArray(node.allOf)) throw new TypeError(localize('configuration.contributedValue', "Setting '{0}' does not match its declared schema.", 'allOf'));
 		return Object.freeze({
 			extensionInfo,
 			...(typeof node.id === 'string' ? { id: node.id } : {}),
@@ -427,33 +341,17 @@ function parseConfigurations(
 		});
 	};
 	const nodes = Array.isArray(value) ? value : [value];
-	if (nodes.length > 64)
-		throw new RangeError(
-			localize(
-				'configuration.contributionLimit',
-				'An extension may contribute at most {0} configuration sections.',
-				64,
-			),
-		);
+	if (nodes.length > 64) throw new RangeError(localize('configuration.contributionLimit', 'An extension may contribute at most {0} configuration sections.', 64));
 	return Object.freeze(nodes.map(parseNode));
 }
 
 function parseProblemContributions(value: unknown, field: string): readonly Readonly<Record<string, unknown>>[] {
 	if (value === undefined) return Object.freeze([]);
-	if (!Array.isArray(value) || value.length > 256)
-		throw new TypeError(
-			localize('extensions.problemContributionArray', '{0} must be an array of at most 256 entries', field),
-		);
+	if (!Array.isArray(value) || value.length > 256) throw new TypeError(localize('extensions.problemContributionArray', '{0} must be an array of at most 256 entries', field));
 	return Object.freeze(
 		value.map(item => {
 			const contribution = record(item, field);
-			if (
-				typeof contribution.name !== 'string' ||
-				!contribution.name.trim() ||
-				contribution.name.length > 128 ||
-				contribution.name.startsWith('$') ||
-				/[\x00-\x1f\x7f]/.test(contribution.name)
-			)
+			if (typeof contribution.name !== 'string' || !contribution.name.trim() || contribution.name.length > 128 || contribution.name.startsWith('$') || /[\x00-\x1f\x7f]/.test(contribution.name))
 				throw new TypeError(localize('extensions.problemContributionName', 'Invalid {0} name', field));
 			return Object.freeze(contribution);
 		}),
@@ -469,10 +367,7 @@ function parseCustomEditors(value: unknown, extensionId: string): readonly Exten
 	}
 	const editors = value.map(candidate => {
 		const editor = record(candidate, 'Custom editor');
-		const priorities =
-			typeof editor.priority === 'object' && editor.priority !== null
-				? record(editor.priority, 'Custom editor priorities')
-				: undefined;
+		const priorities = typeof editor.priority === 'object' && editor.priority !== null ? record(editor.priority, 'Custom editor priorities') : undefined;
 		const priority = priorities ? priorities.textEditor : (editor.priority ?? 'default');
 		if (priority !== 'default' && priority !== 'option' && priority !== 'explicit') {
 			throw new TypeError('Invalid custom editor priority');
@@ -482,28 +377,19 @@ function parseCustomEditors(value: unknown, extensionId: string): readonly Exten
 		}
 		const selector = editor.selector.map(candidate => {
 			const selector = record(candidate, 'Custom editor selector');
-			const mimeType =
-				selector.mimeType === undefined
-					? undefined
-					: requiredString(selector.mimeType, 'Custom editor MIME type', 256);
+			const mimeType = selector.mimeType === undefined ? undefined : requiredString(selector.mimeType, 'Custom editor MIME type', 256);
 			if (mimeType !== undefined && !/^[\w.+-]+\/[\w.+-]+$/.test(mimeType)) {
 				throw new TypeError('Invalid custom editor MIME type');
 			}
-			const filenamePattern =
-				selector.filenamePattern === undefined
-					? undefined
-					: requiredString(selector.filenamePattern, 'Custom editor filename pattern', 1024);
-			if (filenamePattern === undefined && mimeType === undefined)
-				throw new TypeError('Custom editor selector requires a filename pattern or MIME type');
+			const filenamePattern = selector.filenamePattern === undefined ? undefined : requiredString(selector.filenamePattern, 'Custom editor filename pattern', 1024);
+			if (filenamePattern === undefined && mimeType === undefined) throw new TypeError('Custom editor selector requires a filename pattern or MIME type');
 			return Object.freeze({
 				...(filenamePattern === undefined ? {} : { filenamePattern }),
 				...(mimeType === undefined ? {} : { mimeType: mimeType.toLowerCase() }),
 			});
 		});
 		return Object.freeze({
-			...(editor.documentType === undefined
-				? {}
-				: { documentType: requiredString(editor.documentType, 'Custom editor document type', 128) }),
+			...(editor.documentType === undefined ? {} : { documentType: requiredString(editor.documentType, 'Custom editor document type', 128) }),
 			viewType: requiredString(editor.viewType, 'Custom editor view type', 256),
 			displayName: requiredString(editor.displayName, 'Custom editor display name', 256),
 			priority,
@@ -517,8 +403,7 @@ function parseCustomEditors(value: unknown, extensionId: string): readonly Exten
 }
 
 function parseLanguages(value: unknown, extensionId: string): readonly ExtensionLanguageContribution[] {
-	if (!Array.isArray(value))
-		throw new TypeError(`Extension '${extensionId}' language contributions must be an array`);
+	if (!Array.isArray(value)) throw new TypeError(`Extension '${extensionId}' language contributions must be an array`);
 	return value.map((candidate, index) => {
 		const language = record(candidate, `Extension '${extensionId}' language ${index}`);
 		const id = languageId(language.id, `Extension '${extensionId}' language ${index} id`);
@@ -526,37 +411,18 @@ function parseLanguages(value: unknown, extensionId: string): readonly Extension
 			id,
 			aliases: parseTextList(language.aliases, `Extension '${extensionId}' language ${index} aliases`),
 			extensions: parseExtensions(language.extensions, extensionId, index),
-			filenames: parseTextList(
-				language.filenames,
-				`Extension '${extensionId}' language ${index} filenames`,
-				true,
-			),
-			filenamePatterns: parseTextList(
-				language.filenamePatterns,
-				`Extension '${extensionId}' language ${index} filename patterns`,
-				true,
-			),
-			mimetypes: parseTextList(
-				language.mimetypes,
-				`Extension '${extensionId}' language ${index} MIME types`,
-				true,
-			),
+			filenames: parseTextList(language.filenames, `Extension '${extensionId}' language ${index} filenames`, true),
+			filenamePatterns: parseTextList(language.filenamePatterns, `Extension '${extensionId}' language ${index} filename patterns`, true),
+			mimetypes: parseTextList(language.mimetypes, `Extension '${extensionId}' language ${index} MIME types`, true),
 			...(language.firstLine === undefined
 				? {}
 				: {
-						firstLine: boundedText(
-							language.firstLine,
-							`Extension '${extensionId}' language ${index} first-line pattern`,
-							1024,
-						),
+						firstLine: boundedText(language.firstLine, `Extension '${extensionId}' language ${index} first-line pattern`, 1024),
 					}),
 			...(language.configuration === undefined
 				? {}
 				: {
-						configuration: normalizeResourcePath(
-							language.configuration,
-							`Extension '${extensionId}' language ${index} configuration`,
-						),
+						configuration: normalizeResourcePath(language.configuration, `Extension '${extensionId}' language ${index} configuration`),
 					}),
 		});
 	});
@@ -575,36 +441,14 @@ function parseGrammars(value: unknown, extensionId: string): readonly ExtensionG
 	return value.map((candidate, index) => {
 		const grammar = record(candidate, `Extension '${extensionId}' grammar ${index}`);
 		const scopeName = scopeNameValue(grammar.scopeName, `Extension '${extensionId}' grammar ${index} scopeName`);
-		const language =
-			grammar.language === undefined
-				? undefined
-				: languageId(grammar.language, `Extension '${extensionId}' grammar ${index} language`);
-		const injectTo =
-			grammar.injectTo === undefined
-				? Object.freeze([])
-				: parseScopes(grammar.injectTo, `Extension '${extensionId}' grammar ${index} injectTo`);
-		const embeddedLanguages =
-			grammar.embeddedLanguages === undefined
-				? undefined
-				: parseScopeMap(grammar.embeddedLanguages, extensionId, index, 'embeddedLanguages', languageId);
-		const tokenTypes =
-			grammar.tokenTypes === undefined
-				? undefined
-				: parseScopeMap(grammar.tokenTypes, extensionId, index, 'tokenTypes', tokenTypeValue, selectorValue);
+		const language = grammar.language === undefined ? undefined : languageId(grammar.language, `Extension '${extensionId}' grammar ${index} language`);
+		const injectTo = grammar.injectTo === undefined ? Object.freeze([]) : parseScopes(grammar.injectTo, `Extension '${extensionId}' grammar ${index} injectTo`);
+		const embeddedLanguages = grammar.embeddedLanguages === undefined ? undefined : parseScopeMap(grammar.embeddedLanguages, extensionId, index, 'embeddedLanguages', languageId);
+		const tokenTypes = grammar.tokenTypes === undefined ? undefined : parseScopeMap(grammar.tokenTypes, extensionId, index, 'tokenTypes', tokenTypeValue, selectorValue);
 		const balancedBracketScopes =
-			grammar.balancedBracketScopes === undefined
-				? undefined
-				: parseBracketScopes(
-						grammar.balancedBracketScopes,
-						`Extension '${extensionId}' grammar ${index} balancedBracketScopes`,
-					);
+			grammar.balancedBracketScopes === undefined ? undefined : parseBracketScopes(grammar.balancedBracketScopes, `Extension '${extensionId}' grammar ${index} balancedBracketScopes`);
 		const unbalancedBracketScopes =
-			grammar.unbalancedBracketScopes === undefined
-				? undefined
-				: parseBracketScopes(
-						grammar.unbalancedBracketScopes,
-						`Extension '${extensionId}' grammar ${index} unbalancedBracketScopes`,
-					);
+			grammar.unbalancedBracketScopes === undefined ? undefined : parseBracketScopes(grammar.unbalancedBracketScopes, `Extension '${extensionId}' grammar ${index} unbalancedBracketScopes`);
 		return Object.freeze({
 			...(language === undefined ? {} : { language }),
 			scopeName,
@@ -623,18 +467,10 @@ function parseSnippets(value: unknown, extensionId: string): readonly ExtensionS
 	return value.map((candidate, index) => {
 		const snippet = record(candidate, `Extension '${extensionId}' snippet ${index}`);
 		const language = snippet.language === undefined ? snippet.languageIds : snippet.language;
-		const languages =
-			typeof language === 'string'
-				? [language]
-				: parseTextList(language, `Extension '${extensionId}' snippet ${index} language`, false);
-		if (languages.length === 0)
-			throw new TypeError(`Extension '${extensionId}' snippet ${index} must declare a language`);
+		const languages = typeof language === 'string' ? [language] : parseTextList(language, `Extension '${extensionId}' snippet ${index} language`, false);
+		if (languages.length === 0) throw new TypeError(`Extension '${extensionId}' snippet ${index} must declare a language`);
 		return Object.freeze({
-			language: Object.freeze(
-				languages.map((value, languageIndex) =>
-					languageId(value, `Extension '${extensionId}' snippet ${index} language ${languageIndex}`),
-				),
-			),
+			language: Object.freeze(languages.map((value, languageIndex) => languageId(value, `Extension '${extensionId}' snippet ${index} language ${languageIndex}`))),
 			path: normalizeResourcePath(snippet.path, `Extension '${extensionId}' snippet ${index} path`),
 		});
 	});
@@ -642,19 +478,14 @@ function parseSnippets(value: unknown, extensionId: string): readonly ExtensionS
 
 /** Portable Extensions themes share the same renderer-owned theme registration path. */
 function parsePortableThemes(manifest: Record<string, unknown>): readonly ExtensionThemeContribution[] {
-	const invalid = (): TypeError =>
-		new TypeError(
-			localize('extensions.themes.invalidPortableManifest', 'The Extensions theme manifest is invalid.'),
-		);
+	const invalid = (): TypeError => new TypeError(localize('extensions.themes.invalidPortableManifest', 'The Extensions theme manifest is invalid.'));
 	if (
 		manifest.schemaVersion !== 1 ||
 		manifest.contributes !== undefined ||
 		!Array.isArray(manifest.themes) ||
 		!manifest.themes.length ||
 		manifest.themes.length > 128 ||
-		Object.keys(manifest).some(
-			key => !['schemaVersion', 'themes', 'name', 'publisher', 'version', 'displayName'].includes(key),
-		)
+		Object.keys(manifest).some(key => !['schemaVersion', 'themes', 'name', 'publisher', 'version', 'displayName'].includes(key))
 	) {
 		throw invalid();
 	}
@@ -684,14 +515,9 @@ function parseThemes(value: unknown, extensionId: string): readonly ExtensionThe
 	if (!Array.isArray(value)) throw new TypeError(`Extension '${extensionId}' theme contributions must be an array`);
 	return value.map((candidate, index) => {
 		const theme = record(candidate, `Extension '${extensionId}' theme ${index}`);
-		const uiTheme =
-			theme.uiTheme === undefined
-				? undefined
-				: extensionUiTheme(theme.uiTheme, `Extension '${extensionId}' theme ${index} uiTheme`);
+		const uiTheme = theme.uiTheme === undefined ? undefined : extensionUiTheme(theme.uiTheme, `Extension '${extensionId}' theme ${index} uiTheme`);
 		return Object.freeze({
-			...(theme.id === undefined
-				? {}
-				: { id: boundedText(theme.id, `Extension '${extensionId}' theme ${index} id`, 256) }),
+			...(theme.id === undefined ? {} : { id: boundedText(theme.id, `Extension '${extensionId}' theme ${index} id`, 256) }),
 			label: requiredString(theme.label, `Extension '${extensionId}' theme ${index} label`, 256),
 			path: normalizeResourcePath(theme.path, `Extension '${extensionId}' theme ${index} path`),
 			...(uiTheme === undefined ? {} : { uiTheme }),
@@ -701,48 +527,26 @@ function parseThemes(value: unknown, extensionId: string): readonly ExtensionThe
 
 function extensionUiTheme(value: unknown, owner: string): string {
 	const uiTheme = boundedText(value, owner, 32);
-	if (uiTheme !== 'vs' && uiTheme !== 'vs-dark' && uiTheme !== 'hc-black' && uiTheme !== 'hc-light')
-		throw new TypeError(`${owner} is invalid`);
+	if (uiTheme !== 'vs' && uiTheme !== 'vs-dark' && uiTheme !== 'hc-black' && uiTheme !== 'hc-light') throw new TypeError(`${owner} is invalid`);
 	return uiTheme;
 }
 
-function parseDebuggers(
-	value: unknown,
-	descriptor: ExtensionManifestDescriptor,
-): readonly ExtensionDebugAdapterContribution[] {
+function parseDebuggers(value: unknown, descriptor: ExtensionManifestDescriptor): readonly ExtensionDebugAdapterContribution[] {
 	const extensionId = descriptor.id;
-	if (!Array.isArray(value))
-		throw new TypeError(`Extension '${extensionId}' debugger contributions must be an array`);
+	if (!Array.isArray(value)) throw new TypeError(`Extension '${extensionId}' debugger contributions must be an array`);
 	if (value.length > 64) throw new RangeError(`Extension '${extensionId}' cannot contribute more than 64 debuggers`);
 	const debuggers = value.map((candidate, index) => {
 		const debuggerContribution = record(candidate, `Extension '${extensionId}' debugger ${index}`);
-		const adapter =
-			debuggerContribution.debugAdapter === undefined
-				? undefined
-				: record(
-						debuggerContribution.debugAdapter,
-						`Extension '${extensionId}' debugger ${index} debugAdapter`,
-					);
+		const adapter = debuggerContribution.debugAdapter === undefined ? undefined : record(debuggerContribution.debugAdapter, `Extension '${extensionId}' debugger ${index} debugAdapter`);
 		const type = languageId(debuggerContribution.type, `Extension '${extensionId}' debugger ${index} type`);
-		const label =
-			debuggerContribution.label === undefined
-				? type
-				: requiredString(debuggerContribution.label, `Extension '${extensionId}' debugger ${index} label`, 256);
-		const variables =
-			debuggerContribution.variables === undefined
-				? undefined
-				: parseDebuggerVariables(debuggerContribution.variables, type);
+		const label = debuggerContribution.label === undefined ? type : requiredString(debuggerContribution.label, `Extension '${extensionId}' debugger ${index} label`, 256);
+		const variables = debuggerContribution.variables === undefined ? undefined : parseDebuggerVariables(debuggerContribution.variables, type);
 		if (adapter) {
-			const argumentsList =
-				adapter.args === undefined ? [] : parseDebuggerArguments(adapter.args, extensionId, index);
+			const argumentsList = adapter.args === undefined ? [] : parseDebuggerArguments(adapter.args, extensionId, index);
 			return Object.freeze({
 				type,
 				label,
-				program: requiredString(
-					adapter.program,
-					`Extension '${extensionId}' debugger ${index} debugAdapter program`,
-					4096,
-				),
+				program: requiredString(adapter.program, `Extension '${extensionId}' debugger ${index} debugAdapter program`, 4096),
 				arguments: Object.freeze(argumentsList),
 				...(variables === undefined ? {} : { variables }),
 			});
@@ -753,72 +557,39 @@ function parseDebuggers(
 			if (debuggerContribution[key] === undefined) continue;
 			const values = record(debuggerContribution[key], `Debugger ${key}`);
 			if (Object.keys(values).length && platform === undefined)
-				throw new Error(
-					localize(
-						'extensions.debugAdapterPlatformUnavailable',
-						"The execution platform for debug adapter '{0}' is unavailable.",
-						type,
-					),
-				);
+				throw new Error(localize('extensions.debugAdapterPlatformUnavailable', "The execution platform for debug adapter '{0}' is unavailable.", type));
 			const selected =
 				(platform === 'darwin' && key === 'osx') ||
 				(platform === 'linux' && key === 'linux') ||
-				(platform === 'win32' &&
-					(key === 'win' ||
-						key === 'windows' ||
-						(key === 'winx86' && descriptor.targetPlatform === 'win32-ia32')));
+				(platform === 'win32' && (key === 'win' || key === 'windows' || (key === 'winx86' && descriptor.targetPlatform === 'win32-ia32')));
 			if (selected) Object.assign(overrides, values);
 		}
 		const executable = { ...debuggerContribution, ...overrides };
-		const program =
-			executable.program === undefined ? undefined : requiredString(executable.program, 'Debugger program', 4096);
-		const runtime =
-			executable.runtime === undefined ? undefined : requiredString(executable.runtime, 'Debugger runtime', 4096);
+		const program = executable.program === undefined ? undefined : requiredString(executable.program, 'Debugger program', 4096);
+		const runtime = executable.runtime === undefined ? undefined : requiredString(executable.runtime, 'Debugger runtime', 4096);
 		const args = executable.args === undefined ? [] : parseDebuggerArguments(executable.args, extensionId, index);
-		const runtimeArgs =
-			executable.runtimeArgs === undefined
-				? []
-				: parseDebuggerArguments(executable.runtimeArgs, extensionId, index);
+		const runtimeArgs = executable.runtimeArgs === undefined ? [] : parseDebuggerArguments(executable.runtimeArgs, extensionId, index);
 		const resolvedProgram = program === undefined ? undefined : debuggerPath(program, descriptor, type, false);
 		return Object.freeze({
 			type,
 			label,
 			...(variables === undefined ? {} : { variables }),
 			program: runtime === undefined ? resolvedProgram : debuggerPath(runtime, descriptor, type, true),
-			arguments: Object.freeze(
-				runtime === undefined
-					? args
-					: [...runtimeArgs, ...(resolvedProgram === undefined ? [] : [resolvedProgram]), ...args],
-			),
+			arguments: Object.freeze(runtime === undefined ? args : [...runtimeArgs, ...(resolvedProgram === undefined ? [] : [resolvedProgram]), ...args]),
 		});
 	});
-	if (new Set(debuggers.map(debuggerContribution => debuggerContribution.type)).size !== debuggers.length)
-		throw new RangeError(`Extension '${extensionId}' debugger types must be unique`);
+	if (new Set(debuggers.map(debuggerContribution => debuggerContribution.type)).size !== debuggers.length) throw new RangeError(`Extension '${extensionId}' debugger types must be unique`);
 	return Object.freeze(debuggers);
 }
 
 function parseDebuggerVariables(value: unknown, type: string): Readonly<Record<string, string>> {
-	const invalid = () =>
-		new TypeError(
-			localize(
-				'extensions.invalidDebuggerVariables',
-				"The command variable mapping for debug adapter '{0}' is invalid.",
-				type,
-			),
-		);
+	const invalid = () => new TypeError(localize('extensions.invalidDebuggerVariables', "The command variable mapping for debug adapter '{0}' is invalid.", type));
 	if (!value || typeof value !== 'object' || Array.isArray(value)) throw invalid();
 	const entries = Object.entries(value);
 	if (
 		entries.length > 64 ||
 		entries.some(
-			([name, command]) =>
-				!name.trim() ||
-				name.length > 256 ||
-				/[\0\r\n{}]/.test(name) ||
-				typeof command !== 'string' ||
-				!command.trim() ||
-				command.length > 256 ||
-				/[\0\r\n]/.test(command),
+			([name, command]) => !name.trim() || name.length > 256 || /[\0\r\n{}]/.test(name) || typeof command !== 'string' || !command.trim() || command.length > 256 || /[\0\r\n]/.test(command),
 		)
 	)
 		throw invalid();
@@ -830,48 +601,25 @@ function debuggerPath(value: string, descriptor: ExtensionManifestDescriptor, ty
 	// file, even when its relative path has no separator.
 	if (runtime && !/[\\/]/.test(value)) return value;
 	const location = descriptor.extensionLocation === undefined ? undefined : URI.parse(descriptor.extensionLocation);
-	const windows =
-		descriptor.targetPlatform?.startsWith('win32-') ||
-		location?.authority ||
-		/^\/[a-z]:\//i.test(location?.path ?? '');
+	const windows = descriptor.targetPlatform?.startsWith('win32-') || location?.authority || /^\/[a-z]:\//i.test(location?.path ?? '');
 	const paths = windows ? win32 : posix;
 	if (paths.isAbsolute(value)) return paths.normalize(value);
-	if (
-		!location ||
-		location.scheme !== 'file' ||
-		!location.path.startsWith('/') ||
-		location.query ||
-		location.fragment
-	) {
-		throw new Error(
-			localize(
-				'extensions.debugAdapterLocationUnavailable',
-				"The installed location for debug adapter '{0}' is unavailable.",
-				type,
-			),
-		);
+	if (!location || location.scheme !== 'file' || !location.path.startsWith('/') || location.query || location.fragment) {
+		throw new Error(localize('extensions.debugAdapterLocationUnavailable', "The installed location for debug adapter '{0}' is unavailable.", type));
 	}
 	let directory = location.path;
 	if (windows) {
-		directory = location.authority
-			? `\\\\${location.authority}${location.path.replaceAll('/', '\\')}`
-			: location.path.replace(/^\/(?=[a-z]:)/i, '').replaceAll('/', '\\');
+		directory = location.authority ? `\\\\${location.authority}${location.path.replaceAll('/', '\\')}` : location.path.replace(/^\/(?=[a-z]:)/i, '').replaceAll('/', '\\');
 	}
 	return paths.normalize(directory + paths.sep + value);
 }
 
 function parseDebuggerArguments(value: unknown, extensionId: string, index: number): readonly string[] {
-	if (!Array.isArray(value))
-		throw new TypeError(`Extension '${extensionId}' debugger ${index} debugAdapter args must be an array`);
-	if (value.length > 128)
-		throw new RangeError(
-			`Extension '${extensionId}' debugger ${index} debugAdapter args cannot contain more than 128 values`,
-		);
+	if (!Array.isArray(value)) throw new TypeError(`Extension '${extensionId}' debugger ${index} debugAdapter args must be an array`);
+	if (value.length > 128) throw new RangeError(`Extension '${extensionId}' debugger ${index} debugAdapter args cannot contain more than 128 values`);
 	return value.map((argument, argumentIndex) => {
 		if (typeof argument !== 'string' || argument.length > 4096 || argument.includes('\0')) {
-			throw new TypeError(
-				`Extension '${extensionId}' debugger ${index} debugAdapter arg ${argumentIndex} is invalid`,
-			);
+			throw new TypeError(`Extension '${extensionId}' debugger ${index} debugAdapter arg ${argumentIndex} is invalid`);
 		}
 		return argument;
 	});
@@ -888,10 +636,7 @@ function parseScopeMap<T>(
 	const object = record(value, `Extension '${extensionId}' grammar ${index} ${field}`);
 	const entries = Object.entries(object).map(
 		([scope, mapped]) =>
-			[
-				parseKey(scope, `Extension '${extensionId}' grammar ${index} ${field} scope`),
-				parseValue(mapped, `Extension '${extensionId}' grammar ${index} ${field} value`, 128),
-			] as const,
+			[parseKey(scope, `Extension '${extensionId}' grammar ${index} ${field} scope`), parseValue(mapped, `Extension '${extensionId}' grammar ${index} ${field} value`, 128)] as const,
 	);
 	return Object.freeze(Object.fromEntries(entries));
 }
@@ -905,13 +650,7 @@ function tokenTypeValue(value: unknown, owner: string): 'string' | 'other' | 'co
 }
 
 function selectorValue(value: string, owner: string): string {
-	if (
-		typeof value !== 'string' ||
-		value.length === 0 ||
-		value.length > 512 ||
-		/[\r\n]/u.test(value) ||
-		value.trim() !== value
-	) {
+	if (typeof value !== 'string' || value.length === 0 || value.length > 512 || /[\r\n]/u.test(value) || value.trim() !== value) {
 		throw new TypeError(`${owner} is invalid`);
 	}
 	return value;
@@ -928,20 +667,14 @@ function parseBracketScopes(value: unknown, owner: string): readonly string[] {
 	const scopes = parseTextList(value, owner);
 	const normalized = scopes.map(scope => {
 		if (scope === '*') return scope;
-		if (!/^[A-Za-z0-9][A-Za-z0-9._+*-]*$/u.test(scope))
-			throw new TypeError(`${owner} contains an invalid scope selector`);
+		if (!/^[A-Za-z0-9][A-Za-z0-9._+*-]*$/u.test(scope)) throw new TypeError(`${owner} contains an invalid scope selector`);
 		return scope;
 	});
 	if (new Set(normalized).size !== normalized.length) throw new RangeError(`${owner} must be unique`);
 	return Object.freeze(normalized);
 }
 
-function parseTextList(
-	value: unknown,
-	owner: string,
-	caseInsensitive = false,
-	requireUnique = true,
-): readonly string[] {
+function parseTextList(value: unknown, owner: string, caseInsensitive = false, requireUnique = true): readonly string[] {
 	if (value === undefined) return Object.freeze([]);
 	if (!Array.isArray(value)) throw new TypeError(`${owner} must be an array`);
 	const values = value.map(candidate => {
@@ -967,21 +700,14 @@ function scopeNameValue(value: unknown, owner: string): string {
 function normalizeResourcePath(value: unknown, owner: string): string {
 	let path = boundedText(value, owner, 1024);
 	while (path.startsWith('./')) path = path.slice(2);
-	if (
-		path.length === 0 ||
-		path.includes('\\') ||
-		path.startsWith('/') ||
-		path.includes(':') ||
-		path.split('/').some(segment => segment.length === 0 || segment === '.' || segment === '..')
-	) {
+	if (path.length === 0 || path.includes('\\') || path.startsWith('/') || path.includes(':') || path.split('/').some(segment => segment.length === 0 || segment === '.' || segment === '..')) {
 		throw new TypeError(`${owner} must be a safe relative path`);
 	}
 	return path;
 }
 
 function record(value: unknown, owner: string): Record<string, unknown> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value))
-		throw new TypeError(`${owner} must be an object`);
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError(`${owner} must be an object`);
 	return value as Record<string, unknown>;
 }
 
@@ -990,8 +716,7 @@ function requiredString(value: unknown, owner: string, maximum: number): string 
 }
 
 function boundedText(value: unknown, owner: string, maximum = 256): string {
-	if (typeof value !== 'string' || value.trim().length === 0 || value.length > maximum || /[\0\r\n]/u.test(value))
-		throw new TypeError(`${owner} is invalid`);
+	if (typeof value !== 'string' || value.trim().length === 0 || value.length > maximum || /[\0\r\n]/u.test(value)) throw new TypeError(`${owner} is invalid`);
 	return value;
 }
 
@@ -1045,10 +770,7 @@ function parseClassifications(value: unknown, allowSuperType: boolean): readonly
 		if (!/^[A-Za-z][\w]*$/u.test(id)) {
 			throw new TypeError('Invalid semantic classification ID');
 		}
-		const superType =
-			allowSuperType && source.superType !== undefined
-				? requiredString(source.superType, 'Semantic super type', 128)
-				: undefined;
+		const superType = allowSuperType && source.superType !== undefined ? requiredString(source.superType, 'Semantic super type', 128) : undefined;
 		if (superType && !/^[A-Za-z][\w]*$/u.test(superType)) {
 			throw new TypeError('Invalid semantic super type');
 		}
@@ -1102,10 +824,7 @@ function parseViewsWelcome(value: unknown): ExtensionManifest['contributes']['vi
 			view: requiredString(entry.view, 'welcome view', 256),
 			contents: welcomeContents(entry.contents),
 			when: entry.when === undefined ? undefined : requiredString(entry.when, 'welcome condition', 2048),
-			precondition:
-				entry.precondition === undefined
-					? undefined
-					: requiredString(entry.precondition, 'welcome precondition', 2048),
+			precondition: entry.precondition === undefined ? undefined : requiredString(entry.precondition, 'welcome precondition', 2048),
 			group: entry.group === undefined ? undefined : requiredString(entry.group, 'welcome group', 256),
 			order: entry.order as number | undefined,
 		};
@@ -1115,8 +834,7 @@ function parseViewsWelcome(value: unknown): ExtensionManifest['contributes']['vi
 }
 
 function welcomeContents(value: unknown): string {
-	if (typeof value !== 'string' || !value.trim() || value.length > 32768 || value.includes('\0'))
-		throw new TypeError('Invalid view welcome contents');
+	if (typeof value !== 'string' || !value.trim() || value.length > 32768 || value.includes('\0')) throw new TypeError('Invalid view welcome contents');
 	return value;
 }
 
@@ -1138,14 +856,8 @@ function parseSubmenus(value: unknown, placements: unknown): ExtensionManifest['
 					const placement = record(value, 'submenu placement');
 					return {
 						menu: requiredString(menu, 'submenu menu', 256),
-						when:
-							placement.when === undefined
-								? undefined
-								: requiredString(placement.when, 'submenu condition', 2048),
-						group:
-							placement.group === undefined
-								? undefined
-								: requiredString(placement.group, 'submenu group', 256),
+						when: placement.when === undefined ? undefined : requiredString(placement.when, 'submenu condition', 2048),
+						group: placement.group === undefined ? undefined : requiredString(placement.group, 'submenu group', 256),
 					};
 				});
 		});
@@ -1153,12 +865,8 @@ function parseSubmenus(value: unknown, placements: unknown): ExtensionManifest['
 	});
 }
 
-function parseTerminalContribution(
-	value: unknown,
-	legacyProfiles: unknown,
-): ExtensionManifest['contributes']['terminal'] {
-	const invalid = () =>
-		new TypeError(localize('terminal.profile.invalidDeclaration', 'Invalid terminal profile contribution.'));
+function parseTerminalContribution(value: unknown, legacyProfiles: unknown): ExtensionManifest['contributes']['terminal'] {
+	const invalid = () => new TypeError(localize('terminal.profile.invalidDeclaration', 'Invalid terminal profile contribution.'));
 	if (value !== undefined && (!value || typeof value !== 'object' || Array.isArray(value))) throw invalid();
 	const terminal = value as Record<string, unknown> | undefined;
 	// Normalize the old Ash input once. Two declarations cannot compete for a
@@ -1167,45 +875,33 @@ function parseTerminalContribution(
 	const profiles = terminal?.profiles === undefined ? legacyProfiles : terminal.profiles;
 	if (profiles === undefined) return Object.freeze({ profiles: Object.freeze([]) });
 	const point = ExtensionsRegistry.getExtensionPoint<ExtensionManifest['contributes']['terminal']>('terminal');
-	if (!point)
-		throw new TypeError(localize('terminal.profile.invalidDeclaration', 'Invalid terminal profile contribution.'));
+	if (!point) throw new TypeError(localize('terminal.profile.invalidDeclaration', 'Invalid terminal profile contribution.'));
 	return point.validate({ profiles });
 }
 
 function parseSpeechProviders(value: unknown): ExtensionManifest['contributes']['speechProviders'] {
 	if (value === undefined) return Object.freeze([]);
-	const point =
-		ExtensionsRegistry.getExtensionPoint<ExtensionManifest['contributes']['speechProviders']>('speechProviders');
-	if (!point)
-		throw new TypeError(localize('speech.providerDeclarationInvalid', 'Invalid speech provider contribution.'));
+	const point = ExtensionsRegistry.getExtensionPoint<ExtensionManifest['contributes']['speechProviders']>('speechProviders');
+	if (!point) throw new TypeError(localize('speech.providerDeclarationInvalid', 'Invalid speech provider contribution.'));
 	return point.validate(value);
 }
 
 function parseDebugVisualizers(value: unknown): ExtensionManifest['contributes']['debugVisualizers'] {
 	if (value === undefined) return Object.freeze([]);
-	if (!Array.isArray(value) || value.length > 32)
-		throw new TypeError(localize('debug.visualizerDeclarationInvalid', 'Invalid debug visualizer declaration.'));
+	if (!Array.isArray(value) || value.length > 32) throw new TypeError(localize('debug.visualizerDeclarationInvalid', 'Invalid debug visualizer declaration.'));
 	const ids = new Set<string>();
 	return Object.freeze(
 		value.map(candidate => {
 			const item = record(candidate, 'contributes.debugVisualizers');
 			const id = requiredString(item.id, 'contributes.debugVisualizers.id', 128);
-			if (
-				!/^[A-Za-z][\w.-]*$/.test(id) ||
-				ids.has(id) ||
-				Object.keys(item).some(key => !['id', 'title', 'command', 'type'].includes(key))
-			)
-				throw new TypeError(
-					localize('debug.visualizerDeclarationInvalid', 'Invalid debug visualizer declaration.'),
-				);
+			if (!/^[A-Za-z][\w.-]*$/.test(id) || ids.has(id) || Object.keys(item).some(key => !['id', 'title', 'command', 'type'].includes(key)))
+				throw new TypeError(localize('debug.visualizerDeclarationInvalid', 'Invalid debug visualizer declaration.'));
 			ids.add(id);
 			return Object.freeze({
 				id,
 				title: requiredString(item.title, 'contributes.debugVisualizers.title', 256),
 				command: requiredString(item.command, 'contributes.debugVisualizers.command', 256),
-				...(item.type === undefined
-					? {}
-					: { type: requiredString(item.type, 'contributes.debugVisualizers.type', 256) }),
+				...(item.type === undefined ? {} : { type: requiredString(item.type, 'contributes.debugVisualizers.type', 256) }),
 			});
 		}),
 	);
@@ -1213,24 +909,16 @@ function parseDebugVisualizers(value: unknown): ExtensionManifest['contributes']
 
 function parseBreakpointContributions(value: unknown): ExtensionManifest['contributes']['breakpoints'] {
 	if (value === undefined) return Object.freeze([]);
-	if (!Array.isArray(value) || value.length > 128)
-		throw new TypeError(localize('debug.breakpointDeclarationInvalid', 'Invalid breakpoint language declaration.'));
+	if (!Array.isArray(value) || value.length > 128) throw new TypeError(localize('debug.breakpointDeclarationInvalid', 'Invalid breakpoint language declaration.'));
 	return Object.freeze(
 		value.map(candidate => {
 			const item = record(candidate, 'contributes.breakpoints');
-			if (Object.keys(item).some(key => key !== 'language' && key !== 'when'))
-				throw new TypeError(
-					localize('debug.breakpointDeclarationInvalid', 'Invalid breakpoint language declaration.'),
-				);
+			if (Object.keys(item).some(key => key !== 'language' && key !== 'when')) throw new TypeError(localize('debug.breakpointDeclarationInvalid', 'Invalid breakpoint language declaration.'));
 			if (item.when !== undefined && (typeof item.when !== 'string' || !ContextKeyExpr.deserialize(item.when)))
-				throw new TypeError(
-					localize('debug.breakpointDeclarationInvalid', 'Invalid breakpoint language declaration.'),
-				);
+				throw new TypeError(localize('debug.breakpointDeclarationInvalid', 'Invalid breakpoint language declaration.'));
 			return Object.freeze({
 				language: languageId(item.language, 'contributes.breakpoints.language'),
-				...(item.when === undefined
-					? {}
-					: { when: requiredString(item.when, 'contributes.breakpoints.when', 1024) }),
+				...(item.when === undefined ? {} : { when: requiredString(item.when, 'contributes.breakpoints.when', 1024) }),
 			});
 		}),
 	);
@@ -1244,13 +932,9 @@ function parseImageEditors(value: unknown): ExtensionManifest['contributes']['im
 		value.map(item => {
 			const entry = record(item, 'image editor');
 			const id = requiredString(entry.id, 'image editor id', 128);
-			if (ids.has(id) || (entry.default !== undefined && typeof entry.default !== 'boolean'))
-				throw new TypeError('Invalid image editor declaration');
+			if (ids.has(id) || (entry.default !== undefined && typeof entry.default !== 'boolean')) throw new TypeError('Invalid image editor declaration');
 			ids.add(id);
-			if (
-				entry.accessibilityHelp !== undefined &&
-				(typeof entry.accessibilityHelp !== 'string' || entry.accessibilityHelp.length > 16384)
-			)
+			if (entry.accessibilityHelp !== undefined && (typeof entry.accessibilityHelp !== 'string' || entry.accessibilityHelp.length > 16384))
 				throw new TypeError('Invalid image editor accessibility help');
 			return Object.freeze({
 				accessibilityHelp: (entry.accessibilityHelp as string) ?? '',
@@ -1273,19 +957,14 @@ function parseCanvases(value: unknown): ExtensionManifest['contributes']['canvas
 	return value.map(item => {
 		const entry = record(item, 'Canvas declaration');
 		const id = requiredString(entry.id, 'Canvas id', 128);
-		if (
-			!/^[A-Za-z0-9._-]+$/.test(id) ||
-			ids.has(id) ||
-			(entry.requiresInput !== undefined && typeof entry.requiresInput !== 'boolean')
-		) {
+		if (!/^[A-Za-z0-9._-]+$/.test(id) || ids.has(id) || (entry.requiresInput !== undefined && typeof entry.requiresInput !== 'boolean')) {
 			throw new TypeError('Invalid Canvas declaration');
 		}
 		ids.add(id);
 		return Object.freeze({
 			id,
 			displayName: requiredString(entry.displayName, 'Canvas name', 256),
-			description:
-				entry.description === undefined ? '' : boundedText(entry.description, 'Canvas description', 4096),
+			description: entry.description === undefined ? '' : boundedText(entry.description, 'Canvas description', 4096),
 			requiresInput: entry.requiresInput === true,
 		});
 	});

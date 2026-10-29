@@ -8,11 +8,7 @@ import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { MULTI_DIFF_EDITOR_ID } from './multiDiffEditorInput.js';
-import {
-	MultiDiffEditor,
-	MultiDiffEditorAllCollapsed,
-	MultiDiffEditorHideUnchangedRegions,
-} from './multiDiffEditor.js';
+import { MultiDiffEditor, MultiDiffEditorAllCollapsed, MultiDiffEditorHideUnchangedRegions } from './multiDiffEditor.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 
@@ -52,13 +48,11 @@ export class MultiDiffGoToFileAction extends Action2 {
 			return Promise.resolve();
 		}
 		const selection = pane?.getControl()?.modifiedEditor.getSelection();
-		return accessor
-			.get(IEditorService)
-			.openEditor(item.goToFile ?? item.modified, {
-				pinned: false,
-				revealIfOpened: true,
-				...(selection ? { selection, selectionSource: TextEditorSelectionSource.JUMP } : {}),
-			});
+		return accessor.get(IEditorService).openEditor(item.goToFile ?? item.modified, {
+			pinned: false,
+			revealIfOpened: true,
+			...(selection ? { selection, selectionSource: TextEditorSelectionSource.JUMP } : {}),
+		});
 	}
 }
 
@@ -105,10 +99,7 @@ export class MultiDiffCollapseAllAction extends Action2 {
 	constructor() {
 		super({
 			id: MultiDiffCollapseAllCommandId,
-			title: localize2(
-				{ bundle: 'ash.workbench', key: 'command.MultiDiffCollapseAllAction' },
-				'Collapse All Diffs',
-			),
+			title: localize2({ bundle: 'ash.workbench', key: 'command.MultiDiffCollapseAllAction' }, 'Collapse All Diffs'),
 			icon: Lxicon.fold,
 			precondition: MultiDiffEditorActive,
 			f1: true,
@@ -140,10 +131,7 @@ export class MultiDiffToggleCollapseUnchangedRegionsAction extends Action2 {
 	constructor() {
 		super({
 			id: MultiDiffToggleCollapseUnchangedRegionsCommandId,
-			title: localize2(
-				{ bundle: 'ash', key: 'toggleCollapseUnchangedRegions' },
-				'Toggle Collapse Unchanged Regions',
-			),
+			title: localize2({ bundle: 'ash', key: 'toggleCollapseUnchangedRegions' }, 'Toggle Collapse Unchanged Regions'),
 			icon: Lxicon.map,
 			precondition: MultiDiffEditorActive,
 			toggled: MultiDiffEditorHideUnchangedRegions.isEqualTo(true),
@@ -160,18 +148,12 @@ export class MultiDiffToggleCollapseAllAction extends Action2 {
 	constructor() {
 		super({
 			id: MultiDiffToggleCollapseAllCommandId,
-			title: localize2(
-				{ bundle: 'ash.workbench', key: 'command.MultiDiffCollapseAllAction' },
-				'Collapse All Diffs',
-			),
+			title: localize2({ bundle: 'ash.workbench', key: 'command.MultiDiffCollapseAllAction' }, 'Collapse All Diffs'),
 			icon: Lxicon.fold,
 			precondition: MultiDiffEditorActive,
 			toggled: {
 				condition: MultiDiffEditorAllCollapsed.isEqualTo(true),
-				tooltip: localize2(
-					{ bundle: 'ash.workbench', key: 'command.MultiDiffExpandAllAction' },
-					'Expand All Diffs',
-				),
+				tooltip: localize2({ bundle: 'ash.workbench', key: 'command.MultiDiffExpandAllAction' }, 'Expand All Diffs'),
 			},
 			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: 'navigation', order: 20 },
 		});
@@ -184,12 +166,7 @@ export class MultiDiffToggleCollapseAllAction extends Action2 {
 
 function activeMultiDiffPane(accessor: ServicesAccessor, context?: unknown): MultiDiffEditor | undefined {
 	const part = accessor.get(IEditorPart);
-	if (
-		typeof context === 'object' &&
-		context !== null &&
-		'groupId' in context &&
-		typeof context.groupId === 'number'
-	) {
+	if (typeof context === 'object' && context !== null && 'groupId' in context && typeof context.groupId === 'number') {
 		part.activateGroup(context.groupId);
 	}
 	const pane = part.activePane;
@@ -197,10 +174,5 @@ function activeMultiDiffPane(accessor: ServicesAccessor, context?: unknown): Mul
 }
 
 function isEditorInput(value: unknown): value is IResourceEditorInput {
-	return (
-		typeof value === 'object' &&
-		value !== null &&
-		'resource' in value &&
-		typeof (value as IResourceEditorInput).resource?.toString === 'function'
-	);
+	return typeof value === 'object' && value !== null && 'resource' in value && typeof (value as IResourceEditorInput).resource?.toString === 'function';
 }

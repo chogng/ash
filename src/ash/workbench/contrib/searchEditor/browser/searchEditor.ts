@@ -30,11 +30,7 @@ import { CODE_EDITOR_ID, type TextResourceEditor } from '../../../browser/parts/
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { SearchResultImpl } from '../../search/browser/searchTreeModel/searchResult.js';
 import { SearchEditorID, InSearchEditor } from './constants.js';
-import {
-	parseSearchEditor,
-	searchEditorLocation,
-	serializeSearchResultForEditor,
-} from './searchEditorSerialization.js';
+import { parseSearchEditor, searchEditorLocation, serializeSearchResultForEditor } from './searchEditorSerialization.js';
 
 /** Query controls own transient input; the shared text editor owns the editable, saved search document. */
 export class SearchEditor extends EditorPane implements IEditorPane {
@@ -121,7 +117,10 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 				ariaLabel: localize('search.options', 'Search options'),
 				highlightToggledItems: true,
 				actionViewItemProvider: action =>
-					new LabelActionViewItem(action, { label: optionLabels[action.id]!, ariaLabel: action.label }),
+					new LabelActionViewItem(action, {
+						label: optionLabels[action.id]!,
+						ariaLabel: action.label,
+					}),
 			}),
 		);
 		form.append(field);
@@ -173,9 +172,7 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 		const updateHint = () =>
 			this.queryInput.setAttribute(
 				'aria-description',
-				this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.Find)
-					? localize('search.helpHint', 'Press Alt+F1 for search accessibility help.')
-					: '',
+				this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.Find) ? localize('search.helpHint', 'Press Alt+F1 for search accessibility help.') : '',
 			);
 		updateHint();
 		this._register(
@@ -224,10 +221,7 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		this.clearInput();
-		await this.textEditor.setInput(
-			{ ...input, editorId: CODE_EDITOR_ID, languageId: 'plaintext', showBreadcrumbs: false },
-			signal,
-		);
+		await this.textEditor.setInput({ ...input, editorId: CODE_EDITOR_ID, languageId: 'plaintext', showBreadcrumbs: false }, signal);
 		this.readQuery();
 		this.inputListeners.add(this.getControl()!.onDidChangeModelContent(() => this.readQuery()));
 		this.inputListeners.add(this.workspace.onDidChangeWorkspace(() => this.controller?.abort()));
@@ -278,10 +272,7 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 			}
 			this.updateOptions();
 		} catch {
-			this.status.textContent = localize(
-				'searchEditor.invalid',
-				'Invalid search document. Restore its Search header before searching again.',
-			);
+			this.status.textContent = localize('searchEditor.invalid', 'Invalid search document. Restore its Search header before searching again.');
 		}
 	}
 
@@ -348,9 +339,7 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 				.filter(Boolean),
 		};
 		const header = serializeSearchResultForEditor(this.query).split('\n', 1)[0]!;
-		control!.executeEdits('searchEditor.query', [
-			{ range: new Range(1, 1, 1, model.getLineMaxColumn(1)), text: header },
-		]);
+		control!.executeEdits('searchEditor.query', [{ range: new Range(1, 1, 1, model.getLineMaxColumn(1)), text: header }]);
 	}
 
 	private async runSearch(): Promise<void> {
@@ -360,10 +349,7 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 		try {
 			query = parseSearchEditor(model.getText());
 		} catch {
-			this.status.textContent = localize(
-				'searchEditor.invalid',
-				'Invalid search document. Restore its Search header before searching again.',
-			);
+			this.status.textContent = localize('searchEditor.invalid', 'Invalid search document. Restore its Search header before searching again.');
 			return;
 		}
 		if (!query.text) {
@@ -388,9 +374,7 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 					pattern: query.text,
 					isRegExp: query.patternKind === 'regex',
 					isWordMatch: query.wholeWord,
-					isCaseSensitive:
-						query.caseSensitivity === 'sensitive' ||
-						(query.caseSensitivity === 'smart' && /\p{Lu}/u.test(query.text)),
+					isCaseSensitive: query.caseSensitivity === 'sensitive' || (query.caseSensitivity === 'smart' && /\p{Lu}/u.test(query.text)),
 				},
 				this.workspace.getWorkspace().folders.map(folder => folder.uri),
 				{
@@ -400,9 +384,7 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 					// Generated search drafts contain the query in their header and must not search themselves.
 					extraFileResources: this.textModels
 						.getModels()
-						.filter(
-							model => model.uri.scheme !== Schemas.untitled || !model.uri.path.endsWith('.code-search'),
-						)
+						.filter(model => model.uri.scheme !== Schemas.untitled || !model.uri.path.endsWith('.code-search'))
 						.map(model => model.uri),
 				},
 			);
@@ -421,22 +403,15 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 			// Keep edits made while the search was running until the user accepts replacing them.
 			if (model.version !== version) {
 				const confirmed = await this.dialogs.confirm({
-					message: localize(
-						'searchEditor.changed',
-						'This search document changed while searching. Replace it with the new results?',
-					),
+					message: localize('searchEditor.changed', 'This search document changed while searching. Replace it with the new results?'),
 					primaryButton: localize('searchEditor.update', 'Update results'),
 				});
 				if (!confirmed.confirmed || controller.signal.aborted || this.isDisposed) {
 					return;
 				}
 			}
-			control.executeEdits('searchEditor.results', [
-				{ range: model.getFullModelRange(), text: serializeSearchResultForEditor(query, result) },
-			]);
-			this.status.textContent = complete.limitHit
-				? localize('search.limitReached', '{0} results (result limit reached)', result.count)
-				: localize('search.results', '{0} results', result.count);
+			control.executeEdits('searchEditor.results', [{ range: model.getFullModelRange(), text: serializeSearchResultForEditor(query, result) }]);
+			this.status.textContent = complete.limitHit ? localize('search.limitReached', '{0} results (result limit reached)', result.count) : localize('search.results', '{0} results', result.count);
 		} catch (error) {
 			if (!this.isDisposed && this.controller === controller) {
 				if (controller.signal.aborted) {

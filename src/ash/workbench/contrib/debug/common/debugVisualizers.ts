@@ -30,12 +30,7 @@ export class DebugVisualizerService implements IDebugVisualizerService {
 		const revision = session.inspectionRevision;
 		const check = (signal: AbortSignal): void => {
 			throwIfCancelled(signal);
-			if (
-				this.debug.getSession(session.id) !== session ||
-				session.state !== 'stopped' ||
-				session.inspectionRevision !== revision
-			)
-				throw new CancellationError();
+			if (this.debug.getSession(session.id) !== session || session.state !== 'stopped' || session.inspectionRevision !== revision) throw new CancellationError();
 		};
 		const visualizers: IDebugVisualization[] = [
 			{
@@ -43,11 +38,7 @@ export class DebugVisualizerService implements IDebugVisualizerService {
 				name: localize('debug.variableTree', 'Variable tree'),
 				visualize: async signal => {
 					let remaining = 256;
-					const visit = async (
-						value: IDebugVariable,
-						depth: number,
-						ancestors: ReadonlySet<number>,
-					): Promise<unknown> => {
+					const visit = async (value: IDebugVariable, depth: number, ancestors: ReadonlySet<number>): Promise<unknown> => {
 						check(signal);
 						const node: {
 							name: string;
@@ -61,8 +52,7 @@ export class DebugVisualizerService implements IDebugVisualizerService {
 							...(value.type ? { type: value.type.slice(0, 256) } : {}),
 						};
 						if (!value.variablesReference || value.presentationHint?.lazy) return node;
-						if (depth >= 4 || remaining <= 0 || ancestors.has(value.variablesReference))
-							return { ...node, truncated: true };
+						if (depth >= 4 || remaining <= 0 || ancestors.has(value.variablesReference)) return { ...node, truncated: true };
 						const path = new Set(ancestors).add(value.variablesReference);
 						const children = await session.variables(value.variablesReference);
 						check(signal);
@@ -82,9 +72,7 @@ export class DebugVisualizerService implements IDebugVisualizerService {
 				},
 			},
 		];
-		for (const { description, value } of this.extensions.getExtensionPointContributions<
-			readonly { id: string; title: string; command: string; type?: string }[]
-		>('debugVisualizers')) {
+		for (const { description, value } of this.extensions.getExtensionPointContributions<readonly { id: string; title: string; command: string; type?: string }[]>('debugVisualizers')) {
 			for (const entry of value) {
 				if (entry.type !== undefined && entry.type !== variable.type) continue;
 				visualizers.push({
@@ -108,15 +96,9 @@ export class DebugVisualizerService implements IDebugVisualizerService {
 							typeof result.content !== 'string' ||
 							result.content.length > 1_048_576 ||
 							new TextEncoder().encode(result.content).byteLength > 1_048_576 ||
-							('languageId' in result &&
-								(typeof result.languageId !== 'string' || result.languageId.length > 128))
+							('languageId' in result && (typeof result.languageId !== 'string' || result.languageId.length > 128))
 						)
-							throw new TypeError(
-								localize(
-									'debug.visualizerResultInvalid',
-									'A debug visualizer must return text content of at most 1 MiB and an optional language ID.',
-								),
-							);
+							throw new TypeError(localize('debug.visualizerResultInvalid', 'A debug visualizer must return text content of at most 1 MiB and an optional language ID.'));
 						return {
 							content: result.content,
 							languageId: 'languageId' in result ? (result.languageId as string) : 'plaintext',

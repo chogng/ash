@@ -38,8 +38,5 @@ test('token colors retain seeded indices and compilation owns its rule values', 
 	const colors = theme.getColorMap();
 	colors.splice(0);
 	assert.equal(Color.Format.CSS.formatHex(theme.getColorMap()[2]!), '#abcdef');
-	assert.throws(
-		() => TokenTheme.createFromRawTokenTheme([{ token: '', foreground: 'invalid' }], []),
-		/Invalid token color/,
-	);
+	assert.throws(() => TokenTheme.createFromRawTokenTheme([{ token: '', foreground: 'invalid' }], []), /Invalid token color/);
 });

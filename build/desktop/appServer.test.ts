@@ -7,46 +7,24 @@ import { join, resolve } from 'node:path';
 import { PassThrough } from 'node:stream';
 import test, { type TestContext } from 'node:test';
 
-import {
-	prepareAppServer,
-	relativeWatchedDirectory,
-	shouldRebuildAppServer,
-	shouldRebuildWorkspaceManifest,
-	watchAppServer,
-} from './appServer.ts';
+import { prepareAppServer, relativeWatchedDirectory, shouldRebuildAppServer, shouldRebuildWorkspaceManifest, watchAppServer } from './appServer.ts';
 import { pythonCommand } from '../python.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
-const protocolDirectories = ['app-server-protocol', 'protocol', 'queue-contract'].map(name =>
-	join(repositoryRoot, 'crates', name),
-);
+const protocolDirectories = ['app-server-protocol', 'protocol', 'queue-contract'].map(name => join(repositoryRoot, 'crates', name));
 
 function mockProtocolDirectories(t: TestContext, directories = () => protocolDirectories) {
-	return t.mock.method(
-		childProcess,
-		'execFile',
-		(
-			_command: string,
-			args: readonly string[],
-			_options: object,
-			callback: (error: Error | null, stdout: string, stderr: string) => void,
-		) => {
-			assert.deepEqual(args, pythonCommand(['-B', 'build/protocol/generate.py', '--source-directories']).args);
-			setImmediate(() => callback(null, JSON.stringify(directories()), ''));
-			return new ChildProcess();
-		},
-	);
+	return t.mock.method(childProcess, 'execFile', (_command: string, args: readonly string[], _options: object, callback: (error: Error | null, stdout: string, stderr: string) => void) => {
+		assert.deepEqual(args, pythonCommand(['-B', 'build/protocol/generate.py', '--source-directories']).args);
+		setImmediate(() => callback(null, JSON.stringify(directories()), ''));
+		return new ChildProcess();
+	});
 }
 
 function mockSourceChanges(t: TestContext) {
 	const listeners = new Map<string, (event: string, file: string) => void>();
 	let revision = 0;
-	t.mock.method(
-		fs,
-		'statSync',
-		() =>
-			({ dev: 1, ino: 1, size: 1, mtimeMs: Date.now() + ++revision, ctimeMs: Date.now() + revision }) as fs.Stats,
-	);
+	t.mock.method(fs, 'statSync', () => ({ dev: 1, ino: 1, size: 1, mtimeMs: Date.now() + ++revision, ctimeMs: Date.now() + revision }) as fs.Stats);
 	t.mock.method(fs, 'watch', (...args: unknown[]) => {
 		listeners.set(args[0] as string, args.at(-1) as (event: string, file: string) => void);
 		return Object.assign(new EventEmitter(), { close() {} });
@@ -72,9 +50,7 @@ function liveChild(reply: (id: number) => object): ChildProcess {
 		stdout.write(`${JSON.stringify({ protocol_version: 1, id: request.id, ...reply(request.id) })}\n`);
 	});
 	stdin.on('finish', () => setImmediate(() => child.emit('close', 0, null)));
-	setImmediate(() =>
-		stdout.write(`${JSON.stringify({ protocol_version: 1, id: null, result: { event: 'ready' } })}\n`),
-	);
+	setImmediate(() => stdout.write(`${JSON.stringify({ protocol_version: 1, id: null, result: { event: 'ready' } })}\n`));
 	return child;
 }
 
@@ -86,24 +62,19 @@ for (const javascriptRuntime of ['host-provided-node', 'packaged-node'] as const
 				t.mock.restoreAll();
 				syncBuiltinESMExports();
 			});
-			t.mock.method(
-				childProcess,
-				'spawn',
-				(command: string, args: readonly string[], options: { stdio: unknown }) => {
-					assert.deepEqual(options.stdio, ['ignore', 'inherit', 'inherit']);
-					commands.push({ command, args: [...args] });
-					const child = new ChildProcess();
-					setImmediate(() => child.emit('close', succeeds ? 0 : 1, null));
-					return child;
-				},
-			);
+			t.mock.method(childProcess, 'spawn', (command: string, args: readonly string[], options: { stdio: unknown }) => {
+				assert.deepEqual(options.stdio, ['ignore', 'inherit', 'inherit']);
+				commands.push({ command, args: [...args] });
+				const child = new ChildProcess();
+				setImmediate(() => child.emit('close', succeeds ? 0 : 1, null));
+				return child;
+			});
 			syncBuiltinESMExports();
 			const preparation = prepareAppServer(javascriptRuntime);
 			if (succeeds) await preparation;
 			else await assert.rejects(preparation, /backend preparation exited with status 1/);
 			const expected = [pythonCommand(['-B', 'build/prepare.py', '--javascript-runtime', javascriptRuntime])];
-			if (succeeds && javascriptRuntime === 'host-provided-node')
-				expected.push(pythonCommand(['-B', 'build/desktop/develop.py', '--select-prepared']));
+			if (succeeds && javascriptRuntime === 'host-provided-node') expected.push(pythonCommand(['-B', 'build/desktop/develop.py', '--select-prepared']));
 			assert.deepEqual(commands, expected);
 		});
 	}
@@ -329,45 +300,37 @@ test('saves consumed by a queued live batch cannot later trigger an empty backen
 	assert.deepEqual(commands, ['build/desktop/develop.py', 'build/desktop/live.py']);
 });
 
-test(
-	'Windows access notifications do not rebuild, while a write with preserved size and mtime does',
-	{ skip: process.platform !== 'win32' },
-	async t => {
-		t.mock.timers.enable({ apis: ['setTimeout'] });
-		const completed = Promise.withResolvers<void>();
-		const commands: string[] = [];
-		mockProtocolDirectories(t);
-		const save = mockSourceChanges(t);
-		let changeTime = 1;
-		t.mock.method(
-			fs,
-			'statSync',
-			() => ({ dev: 1, ino: 1, size: 12, mtimeMs: 1, ctimeMs: changeTime }) as fs.Stats,
-		);
-		t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
-			commands.push(args[1]!);
-			const child = new ChildProcess();
-			setImmediate(() => child.emit('close', 0, null));
-			return child;
-		});
-		syncBuiltinESMExports();
-		const stop = await watchAppServer({ skipInitial: true, onDidBuild: async () => completed.resolve() });
-		t.after(stop);
-		save('diff/src/lib.rs');
-		t.mock.timers.tick(250);
-		await new Promise<void>(resolve => setImmediate(resolve));
-		assert.deepEqual(commands, []);
-		changeTime = Date.now() + 1;
-		save('diff/src/lib.rs');
-		t.mock.timers.tick(250);
-		await completed.promise;
-		assert.deepEqual(commands, ['build/desktop/develop.py']);
-		save('diff/src/lib.rs');
-		t.mock.timers.tick(250);
-		await new Promise<void>(resolve => setImmediate(resolve));
-		assert.equal(commands.length, 1);
-	},
-);
+test('Windows access notifications do not rebuild, while a write with preserved size and mtime does', { skip: process.platform !== 'win32' }, async t => {
+	t.mock.timers.enable({ apis: ['setTimeout'] });
+	const completed = Promise.withResolvers<void>();
+	const commands: string[] = [];
+	mockProtocolDirectories(t);
+	const save = mockSourceChanges(t);
+	let changeTime = 1;
+	t.mock.method(fs, 'statSync', () => ({ dev: 1, ino: 1, size: 12, mtimeMs: 1, ctimeMs: changeTime }) as fs.Stats);
+	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
+		commands.push(args[1]!);
+		const child = new ChildProcess();
+		setImmediate(() => child.emit('close', 0, null));
+		return child;
+	});
+	syncBuiltinESMExports();
+	const stop = await watchAppServer({ skipInitial: true, onDidBuild: async () => completed.resolve() });
+	t.after(stop);
+	save('diff/src/lib.rs');
+	t.mock.timers.tick(250);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual(commands, []);
+	changeTime = Date.now() + 1;
+	save('diff/src/lib.rs');
+	t.mock.timers.tick(250);
+	await completed.promise;
+	assert.deepEqual(commands, ['build/desktop/develop.py']);
+	save('diff/src/lib.rs');
+	t.mock.timers.tick(250);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(commands.length, 1);
+});
 
 test('app-server watcher excludes a custom Cargo target directory inside Rust sources', () => {
 	const sourceRoot = join('/workspace', 'ash', 'crates');
@@ -389,35 +352,28 @@ test('workspace-root watcher accepts only canonical root manifests', () => {
 	assert.equal(shouldRebuildWorkspaceManifest('crates/app-server/Cargo.toml'), false);
 });
 
-test(
-	'macOS backend watching does not subscribe to the repository or its build caches',
-	{ skip: process.platform !== 'darwin' },
-	async t => {
-		const paths: string[] = [];
-		let closed = 0;
-		t.mock.method(fs, 'watch', (file: string) => {
-			paths.push(file);
-			return Object.assign(new EventEmitter(), {
-				close() {
-					closed++;
-				},
-			});
+test('macOS backend watching does not subscribe to the repository or its build caches', { skip: process.platform !== 'darwin' }, async t => {
+	const paths: string[] = [];
+	let closed = 0;
+	t.mock.method(fs, 'watch', (file: string) => {
+		paths.push(file);
+		return Object.assign(new EventEmitter(), {
+			close() {
+				closed++;
+			},
 		});
-		t.after(() => {
-			t.mock.restoreAll();
-			syncBuiltinESMExports();
-		});
+	});
+	t.after(() => {
+		t.mock.restoreAll();
 		syncBuiltinESMExports();
-		const stop = await watchAppServer({ skipInitial: true });
-		t.after(stop);
-		assert.deepEqual(
-			new Set(paths),
-			new Set(['crates', 'sdk/rust', 'Cargo.toml', 'Cargo.lock'].map(file => join(repositoryRoot, file))),
-		);
-		stop();
-		assert.equal(closed, paths.length);
-	},
-);
+	});
+	syncBuiltinESMExports();
+	const stop = await watchAppServer({ skipInitial: true });
+	t.after(stop);
+	assert.deepEqual(new Set(paths), new Set(['crates', 'sdk/rust', 'Cargo.toml', 'Cargo.lock'].map(file => join(repositoryRoot, file))));
+	stop();
+	assert.equal(closed, paths.length);
+});
 
 test('a failed subscription closes previously registered source watches', async t => {
 	const failure = Object.assign(new Error('manifest unavailable'), { code: 'EACCES' });
@@ -520,10 +476,7 @@ for (const succeeds of [true, false]) {
 		assert.deepEqual(
 			{ commands, reloads },
 			{
-				commands: [
-					pythonCommand(['-B', 'build/protocol/generate.py']).args,
-					pythonCommand(['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']).args,
-				],
+				commands: [pythonCommand(['-B', 'build/protocol/generate.py']).args, pythonCommand(['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']).args],
 				reloads: succeeds ? 1 : 0,
 			},
 		);
@@ -551,10 +504,7 @@ for (const javascriptRuntime of ['host-provided-node', 'packaged-node'] as const
 		t.after(stop);
 		save('app-server/src/server/operations.rs');
 		await completed.promise;
-		const expected =
-			javascriptRuntime === 'packaged-node'
-				? ['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']
-				: ['-B', 'build/desktop/develop.py', '--protocol-prepared'];
+		const expected = javascriptRuntime === 'packaged-node' ? ['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node'] : ['-B', 'build/desktop/develop.py', '--protocol-prepared'];
 		assert.deepEqual(commands, [pythonCommand(expected).args]);
 	});
 }
@@ -653,20 +603,11 @@ test('failed dependency discovery blocks the backend and is retried on the next 
 	const completed = Promise.withResolvers<void>();
 	let discoveries = 0;
 	const save = mockSourceChanges(t);
-	t.mock.method(
-		childProcess,
-		'execFile',
-		(
-			_command: string,
-			_args: readonly string[],
-			_options: object,
-			callback: (error: Error | null, stdout: string, stderr: string) => void,
-		) => {
-			const error = ++discoveries === 1 ? new Error('invalid Cargo manifest') : null;
-			setImmediate(() => callback(error, JSON.stringify(protocolDirectories), ''));
-			return new ChildProcess();
-		},
-	);
+	t.mock.method(childProcess, 'execFile', (_command: string, _args: readonly string[], _options: object, callback: (error: Error | null, stdout: string, stderr: string) => void) => {
+		const error = ++discoveries === 1 ? new Error('invalid Cargo manifest') : null;
+		setImmediate(() => callback(error, JSON.stringify(protocolDirectories), ''));
+		return new ChildProcess();
+	});
 	t.mock.method(console, 'error', () => failed.resolve());
 	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
 		commands.push(args[1]!);
@@ -708,11 +649,7 @@ test('failed protocol export is retried before a subsequent business build', asy
 	assert.deepEqual(commands, ['build/protocol/generate.py']);
 	save('app-server/src/server/operations.rs');
 	await completed.promise;
-	assert.deepEqual(commands, [
-		'build/protocol/generate.py',
-		'build/protocol/generate.py',
-		'build/desktop/develop.py',
-	]);
+	assert.deepEqual(commands, ['build/protocol/generate.py', 'build/protocol/generate.py', 'build/desktop/develop.py']);
 });
 
 test('manifest changes refresh the protocol graph before new dependency saves', async t => {
@@ -740,11 +677,5 @@ test('manifest changes refresh the protocol graph before new dependency saves', 
 	save('new-contract/src/lib.rs');
 	await completed.promise;
 	assert.equal(discovery.mock.callCount(), 2);
-	assert.deepEqual(commands, [
-		'build/desktop/develop.py',
-		'build/protocol/generate.py',
-		'build/desktop/develop.py',
-		'build/protocol/generate.py',
-		'build/desktop/develop.py',
-	]);
+	assert.deepEqual(commands, ['build/desktop/develop.py', 'build/protocol/generate.py', 'build/desktop/develop.py', 'build/protocol/generate.py', 'build/desktop/develop.py']);
 });

@@ -32,8 +32,7 @@ export class TextureAtlas extends Disposable {
 		private readonly _colorMap: string[],
 	) {
 		super();
-		if (!Number.isSafeInteger(maxTextureSize) || maxTextureSize < 64)
-			throw new RangeError('WebGPU texture size must be an integer of at least 64 pixels');
+		if (!Number.isSafeInteger(maxTextureSize) || maxTextureSize < 64) throw new RangeError('WebGPU texture size must be an integer of at least 64 pixels');
 		this._allocatorType = options?.allocatorType ?? 'slab';
 		this.pageSize = Math.min(1024 * Math.max(1, Math.floor(getActiveWindow().devicePixelRatio)), maxTextureSize);
 		this._initFirstPage();
@@ -67,35 +66,18 @@ export class TextureAtlas extends Disposable {
 		this._onDidDeleteGlyphs.fire();
 	}
 
-	public getGlyph(
-		rasterizer: IGlyphRasterizer,
-		chars: string,
-		tokenMetadata: number,
-		decorationStyleSetId: number,
-		x: number,
-	): Readonly<ITextureAtlasPageGlyph> {
-		tokenMetadata &= ~(
-			MetadataConsts.LANGUAGEID_MASK |
-			MetadataConsts.TOKEN_TYPE_MASK |
-			MetadataConsts.BALANCED_BRACKETS_MASK
-		);
+	public getGlyph(rasterizer: IGlyphRasterizer, chars: string, tokenMetadata: number, decorationStyleSetId: number, x: number): Readonly<ITextureAtlasPageGlyph> {
+		tokenMetadata &= ~(MetadataConsts.LANGUAGEID_MASK | MetadataConsts.TOKEN_TYPE_MASK | MetadataConsts.BALANCED_BRACKETS_MASK);
 		tokenMetadata |= Math.floor((x % 1) * 10);
 		if (!this._warmedUpRasterizers.has(rasterizer.id)) {
 			this._warmedUpRasterizers.add(rasterizer.id);
 			this._warmUpAtlas(rasterizer);
 		}
-		const pageIndex =
-			this._glyphPageIndex.get(chars, tokenMetadata, decorationStyleSetId, rasterizer.cacheKey) ?? 0;
+		const pageIndex = this._glyphPageIndex.get(chars, tokenMetadata, decorationStyleSetId, rasterizer.cacheKey) ?? 0;
 		return this._tryGetGlyph(pageIndex, rasterizer, chars, tokenMetadata, decorationStyleSetId);
 	}
 
-	private _tryGetGlyph(
-		pageIndex: number,
-		rasterizer: IGlyphRasterizer,
-		chars: string,
-		tokenMetadata: number,
-		decorationStyleSetId: number,
-	): Readonly<ITextureAtlasPageGlyph> {
+	private _tryGetGlyph(pageIndex: number, rasterizer: IGlyphRasterizer, chars: string, tokenMetadata: number, decorationStyleSetId: number): Readonly<ITextureAtlasPageGlyph> {
 		this._glyphPageIndex.set(pageIndex, chars, tokenMetadata, decorationStyleSetId, rasterizer.cacheKey);
 		return (
 			this._pages[pageIndex]!.getGlyph(rasterizer, chars, tokenMetadata, decorationStyleSetId) ??
@@ -105,14 +87,8 @@ export class TextureAtlas extends Disposable {
 		);
 	}
 
-	private _getGlyphFromNewPage(
-		rasterizer: IGlyphRasterizer,
-		chars: string,
-		tokenMetadata: number,
-		decorationStyleSetId: number,
-	): Readonly<ITextureAtlasPageGlyph> {
-		if (this._pages.length >= TextureAtlas.maximumPageCount)
-			throw new RangeError('WebGPU texture atlas exhausted its page limit');
+	private _getGlyphFromNewPage(rasterizer: IGlyphRasterizer, chars: string, tokenMetadata: number, decorationStyleSetId: number): Readonly<ITextureAtlasPageGlyph> {
+		if (this._pages.length >= TextureAtlas.maximumPageCount) throw new RangeError('WebGPU texture atlas exhausted its page limit');
 		const pageIndex = this._pages.length;
 		const page = new TextureAtlasPage(pageIndex, this.pageSize, this._allocatorType, this._colorMap);
 		this._pages.push(page);
@@ -135,14 +111,7 @@ export class TextureAtlas extends Disposable {
 		const queue = (this._warmUpTask.value = createIdleTaskQueue(ownerWindow));
 		for (let code = 33; code <= 126; code++) {
 			queue.enqueue(() => {
-				if (!this.isDisposed)
-					this.getGlyph(
-						rasterizer,
-						String.fromCharCode(code),
-						MetadataConsts.FOREGROUND_MASK & (1 << MetadataConsts.FOREGROUND_OFFSET),
-						0,
-						0,
-					);
+				if (!this.isDisposed) this.getGlyph(rasterizer, String.fromCharCode(code), MetadataConsts.FOREGROUND_MASK & (1 << MetadataConsts.FOREGROUND_OFFSET), 0, 0);
 			});
 		}
 	}

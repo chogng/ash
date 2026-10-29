@@ -7,10 +7,7 @@ import Severity from '../../../../../../base/common/severity.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { TextModel } from '../../../../../../editor/common/model/textModel.js';
 import { IModelService } from '../../../../../../editor/common/services/model.js';
-import {
-	ITextModelService,
-	type IResolvedTextEditorModel,
-} from '../../../../../../editor/common/services/resolverService.js';
+import { ITextModelService, type IResolvedTextEditorModel } from '../../../../../../editor/common/services/resolverService.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService } from '../../../../../../platform/storage/common/storage.js';
 import { MergedEnvironmentVariableCollection } from '../../../../../../platform/terminal/common/environmentVariableCollection.js';
@@ -148,8 +145,7 @@ test('environment details use read-only reference-counted models and keep values
 	const resolver = context.services.createInstance(TextModelResolverService);
 	context.services.registerInstance(ITextModelService, resolver);
 	context.services.registerInstance(IModelService, {
-		createModel: (text: string, _language: unknown, resource: URI) =>
-			owner.add(new TextModel(text, { resource, languageId: 'markdown' })),
+		createModel: (text: string, _language: unknown, resource: URI) => owner.add(new TextModel(text, { resource, languageId: 'markdown' })),
 	} as unknown as IModelService);
 	const opened: { resource: URI; reference: IReference<IResolvedTextEditorModel> }[] = [];
 	context.services.registerInstance(IEditorService, {
@@ -181,22 +177,9 @@ test('environment details use read-only reference-counted models and keep values
 	const second = opened[1]!;
 	assert.match(second.reference.object.textEditorModel.getValue(), /snapshot is unavailable/);
 	assert.doesNotMatch(second.reference.object.textEditorModel.getValue(), /original:/);
-	assert.equal(
-		first.reference.object.textEditorModel.getValue(),
-		content,
-		'An open details editor remains an immutable snapshot',
-	);
-	await assert.rejects(
-		commands.executeCommand(TerminalCommandId.ShowEnvironmentContributions, 'invalid'),
-		/Invalid terminal instance context/,
-	);
-	await assert.rejects(
-		commands.executeCommand(
-			TerminalCommandId.ShowEnvironmentContributions,
-			URI.from({ scheme: 'vscode-terminal', path: '/closed' }),
-		),
-		/This terminal has been closed/,
-	);
+	assert.equal(first.reference.object.textEditorModel.getValue(), content, 'An open details editor remains an immutable snapshot');
+	await assert.rejects(commands.executeCommand(TerminalCommandId.ShowEnvironmentContributions, 'invalid'), /Invalid terminal instance context/);
+	await assert.rejects(commands.executeCommand(TerminalCommandId.ShowEnvironmentContributions, URI.from({ scheme: 'vscode-terminal', path: '/closed' })), /This terminal has been closed/);
 	for (const item of opened) {
 		const model = item.reference.object.textEditorModel;
 		item.reference.dispose();

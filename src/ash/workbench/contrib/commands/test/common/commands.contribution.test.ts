@@ -47,9 +47,7 @@ suite('runCommands', () => {
 	test('forwards arrays as positional arguments and other values as a single argument', async () => {
 		using environment = new CommandEnvironment();
 		const received: unknown[][] = [];
-		using registration = CommandsRegistry.register('test.batch.arguments', (_accessor, ...args) =>
-			received.push([...args]),
-		);
+		using registration = CommandsRegistry.register('test.batch.arguments', (_accessor, ...args) => received.push([...args]));
 		await environment.commands.executeCommand('runCommands', {
 			commands: [
 				'test.batch.arguments',
@@ -69,15 +67,7 @@ suite('runCommands', () => {
 	test('rejects an invalid batch before any command runs', async () => {
 		let calls = 0;
 		using registration = CommandsRegistry.register('test.batch.valid', () => calls++);
-		const invalid = [
-			undefined,
-			null,
-			'command',
-			{},
-			{ commands: 'command' },
-			{ commands: ['test.batch.valid', null] },
-			{ commands: ['test.batch.valid', { command: 3 }] },
-		];
+		const invalid = [undefined, null, 'command', {}, { commands: 'command' }, { commands: ['test.batch.valid', null] }, { commands: ['test.batch.valid', { command: 3 }] }];
 		for (const args of invalid) {
 			using environment = new CommandEnvironment();
 			await environment.commands.executeCommand('runCommands', args);
@@ -128,9 +118,7 @@ suite('runCommands', () => {
 				unknown: 'Unknown command: test.batch.missing',
 			}[failure];
 			assert.deepEqual(
-				environment.notifications.model
-					.getNotifications()
-					.map(item => ({ severity: item.severity, message: item.message })),
+				environment.notifications.model.getNotifications().map(item => ({ severity: item.severity, message: item.message })),
 				[{ severity: Severity.Error, message: expected }],
 			);
 		});
@@ -145,10 +133,7 @@ suite('runCommands', () => {
 			await environment.commands.executeCommand('runCommands', { commands: [] });
 			assert.deepEqual(
 				environment.notifications.model.getNotifications().map(item => item.message),
-				[
-					'“runCommands” 收到的参数类型不正确。请检查传给该命令的参数。',
-					'“runCommands” 没有收到要运行的命令。请在参数的 “commands” 中添加命令。',
-				],
+				['“runCommands” 收到的参数类型不正确。请检查传给该命令的参数。', '“runCommands” 没有收到要运行的命令。请在参数的 “commands” 中添加命令。'],
 			);
 		} finally {
 			resetNlsResolver();

@@ -7,10 +7,7 @@ import { URI } from '../../../../../../base/common/uri.js';
 import { Range } from '../../../../../../editor/common/core/range.js';
 import type { LanguageDocumentSymbol } from '../../../../../../editor/common/languages.js';
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../../nls.js';
-import {
-	IContextKeyService,
-	ContextKeyService,
-} from '../../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextKeyService, ContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../../services/commands/common/commandService.js';
@@ -40,9 +37,7 @@ test('Show All Editors opens the MRU quick access mode and activates the chosen 
 	try {
 		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
 		assert.ok(chinese);
-		setNlsResolver((bundle, key, fallback, parameters) =>
-			formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-		);
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		await import('../../editor.contribution.js');
 		const { ShowAllEditorsCommandId } = await import('../../editorActions.js');
 		const selected = {

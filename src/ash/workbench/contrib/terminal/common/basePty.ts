@@ -1,17 +1,9 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import type {
-	IProcessDataEvent,
-	IProcessProperty,
-	IProcessReadyEvent,
-	ITerminalChildProcess,
-} from '../../../../platform/terminal/common/terminal.js';
+import type { IProcessDataEvent, IProcessProperty, IProcessReadyEvent, ITerminalChildProcess } from '../../../../platform/terminal/common/terminal.js';
 
 /** Owns the child-process event ports; transport and handle lifetime belong to the concrete PTY. */
-export abstract class BasePty<T extends string | IProcessDataEvent = string>
-	extends Disposable
-	implements ITerminalChildProcess
-{
+export abstract class BasePty<T extends string | IProcessDataEvent = string> extends Disposable implements ITerminalChildProcess {
 	private readonly output = this._register(new Emitter<T>());
 	private readonly ready = this._register(new Emitter<IProcessReadyEvent>());
 	private readonly properties = this._register(new Emitter<IProcessProperty>());

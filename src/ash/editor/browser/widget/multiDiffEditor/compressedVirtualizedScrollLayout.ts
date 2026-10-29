@@ -9,11 +9,7 @@ export interface DiffRowLayout {
 }
 
 /** Retains only wrapping exceptions; unwrapped offsets are constant-time arithmetic. */
-export function computeDiffRowLayout(
-	model: DiffModel,
-	lineHeight: number,
-	wrapping?: { readonly fontInfo: FontInfo; readonly column: number },
-): DiffRowLayout {
+export function computeDiffRowLayout(model: DiffModel, lineHeight: number, wrapping?: { readonly fontInfo: FontInfo; readonly column: number }): DiffRowLayout {
 	const rows = model.diff?.rows;
 	const length = rows?.length ?? 0;
 	if (!wrapping || !rows) return { height: length * lineHeight, getOffset: index => index * lineHeight };
@@ -27,7 +23,10 @@ export function computeDiffRowLayout(
 		const batch = Array.from({ length: end - start }, (_, offset) => rows.get(start + offset)!);
 		const compute = (source: typeof model.original, side: 'originalLineIndex' | 'modifiedLineIndex'): number[] => {
 			const computer = factory.createLineBreaksComputer(
-				{ getLineContent: line => source.getLineContent(line), getLineInjectedText: () => null },
+				{
+					getLineContent: line => source.getLineContent(line),
+					getLineInjectedText: () => null,
+				},
 				wrapping.fontInfo,
 				source.getOptions().tabSize,
 				wrapping.column,
@@ -71,11 +70,7 @@ export interface ICompressedVirtualizedItemRange {
 }
 
 /** Keeps the same file and intra-file position visible when item heights change. */
-export function mapScrollAnchor(
-	oldItems: readonly ICompressedVirtualizedItemRange[],
-	newItems: readonly ICompressedVirtualizedItemRange[],
-	scrollTop: number,
-): number {
+export function mapScrollAnchor(oldItems: readonly ICompressedVirtualizedItemRange[], newItems: readonly ICompressedVirtualizedItemRange[], scrollTop: number): number {
 	if (oldItems.length !== newItems.length) throw new RangeError('Scroll anchoring requires stable file order');
 	if (oldItems.length === 0 || scrollTop <= oldItems[0]!.top) return scrollTop;
 

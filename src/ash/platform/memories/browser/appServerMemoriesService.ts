@@ -1,25 +1,12 @@
 import { decodeAppServerRequestParams } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
-import type {
-	Memory as MemoryDto,
-	MemorySummary as MemorySummaryDto,
-	MemoryPolicy as MemoryPolicyDto,
-} from '../../../../../.build/protocol/typescript/index.js';
+import type { Memory as MemoryDto, MemorySummary as MemorySummaryDto, MemoryPolicy as MemoryPolicyDto } from '../../../../../.build/protocol/typescript/index.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
-import type {
-	IMemoriesService,
-	Memory,
-	MemoryPage,
-	MemoryPolicy,
-	MemoryReference,
-	MemoryScope,
-	MemoryScopeEntry,
-	MemorySummary,
-} from '../common/memoriesService.js';
+import type { IMemoriesService, Memory, MemoryPage, MemoryPolicy, MemoryReference, MemoryScope, MemoryScopeEntry, MemorySummary } from '../common/memoriesService.js';
 
 export class AppServerMemoriesService extends Disposable implements IMemoriesService {
 	private readonly changed = this._register(new Emitter<void>());
@@ -70,9 +57,7 @@ export class AppServerMemoriesService extends Disposable implements IMemoriesSer
 
 	public async list(scope: MemoryScope, query?: string, cursor?: string): Promise<MemoryPage> {
 		if (query?.trim()) {
-			const result = await this.client
-				.request(APP_SERVER_METHODS['memory/search'], { scope, query, cursor, limit: 20 })
-				.catch(explain);
+			const result = await this.client.request(APP_SERVER_METHODS['memory/search'], { scope, query, cursor, limit: 20 }).catch(explain);
 			return {
 				memories: result.matches.map(entry => ({
 					id: entry.memoryId,
@@ -84,23 +69,15 @@ export class AppServerMemoriesService extends Disposable implements IMemoriesSer
 				cursor: result.nextCursor ?? undefined,
 			};
 		}
-		const result = await this.client
-			.request(APP_SERVER_METHODS['memory/list'], { scope, cursor, limit: 20 })
-			.catch(explain);
+		const result = await this.client.request(APP_SERVER_METHODS['memory/list'], { scope, cursor, limit: 20 }).catch(explain);
 		return { memories: result.memories.map(summary), cursor: result.nextCursor ?? undefined };
 	}
 
 	public async read(memory: MemorySummary): Promise<Memory> {
-		return record(
-			await this.client
-				.request(APP_SERVER_METHODS['memory/read'], { memoryId: memory.id, scope: memory.scope })
-				.catch(explain),
-		);
+		return record(await this.client.request(APP_SERVER_METHODS['memory/read'], { memoryId: memory.id, scope: memory.scope }).catch(explain));
 	}
 	public async add(scope: MemoryScope, title: string, body: string, commandId: string): Promise<Memory> {
-		const result = await this.client
-			.request(APP_SERVER_METHODS['memory/add'], { commandId, memoryId: commandId, scope, title, body })
-			.catch(explain);
+		const result = await this.client.request(APP_SERVER_METHODS['memory/add'], { commandId, memoryId: commandId, scope, title, body }).catch(explain);
 		this.markMutation(result.catalogRevision);
 		return record(result.memory);
 	}
@@ -148,10 +125,7 @@ export class AppServerMemoriesService extends Disposable implements IMemoriesSer
 		}
 		let decoded: unknown;
 		try {
-			const bytes = Uint8Array.from(
-				atob(reference.slice(7).replaceAll('-', '+').replaceAll('_', '/')),
-				character => character.charCodeAt(0),
-			);
+			const bytes = Uint8Array.from(atob(reference.slice(7).replaceAll('-', '+').replaceAll('_', '/')), character => character.charCodeAt(0));
 			decoded = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
 		} catch {
 			throw new Error('The memory reference is invalid.');
@@ -186,9 +160,7 @@ function explain(error: unknown): never {
 	if (error instanceof AppServerRemoteError) {
 		switch (error.errorName) {
 			case 'MemoryConflict':
-				throw new Error(
-					'This memory changed in another window. Refresh and select it again; your draft has been kept.',
-				);
+				throw new Error('This memory changed in another window. Refresh and select it again; your draft has been kept.');
 			case 'MemoryCursorStale':
 				throw new Error('The memory list changed. Refresh to load the current list.');
 			case 'MemoryNotFound':

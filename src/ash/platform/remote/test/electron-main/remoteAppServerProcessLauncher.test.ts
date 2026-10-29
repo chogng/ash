@@ -4,11 +4,7 @@ import { test } from 'mocha';
 import { AppServerDaemonLauncher } from '../../../../platform/app-server-daemon/electron-main/appServerDaemonLauncher.js';
 import { AppServerProtocolIncompatibleError } from '../../../agentHost/common/appServerProtocolCompatibility.js';
 import { createSshRemoteWorkspaceUri } from '../../../../platform/remote/common/remote.js';
-import {
-	RemoteAppServerProcessLauncher,
-	SshRuntimeProbeError,
-	sshRuntimeProbeArguments,
-} from '../../../../platform/remote/electron-main/remoteAppServerProcessLauncher.js';
+import { RemoteAppServerProcessLauncher, SshRuntimeProbeError, sshRuntimeProbeArguments } from '../../../../platform/remote/electron-main/remoteAppServerProcessLauncher.js';
 
 test('Windows launcher probes PowerShell and passes canonical drive paths to the carrier', async () => {
 	let command = '';
@@ -161,10 +157,7 @@ test('Desktop provisions a missing runtime in Main and re-probes the exact insta
 
 	assert.deepEqual(provisions, ['work-server']);
 	assert.deepEqual(settlements, [2]);
-	assert.deepEqual(probes, [
-		[...sshRuntimeProbeArguments('work-server', 'ash')],
-		[...sshRuntimeProbeArguments('work-server', '/srv/ash/runtime/bin/ash-remote-server')],
-	]);
+	assert.deepEqual(probes, [[...sshRuntimeProbeArguments('work-server', 'ash')], [...sshRuntimeProbeArguments('work-server', '/srv/ash/runtime/bin/ash-remote-server')]]);
 	assert.equal(launcher.options.carrier.environment.ASH_REMOTE_RUNTIME, '/srv/ash/runtime/bin/ash-remote-server');
 });
 
@@ -239,10 +232,7 @@ test('Desktop resolves and activates a persisted exact runtime only around the i
 	assert.equal(launcher.options.carrier.environment.ASH_REMOTE_RUNTIME, '/srv/ash/runtime/one/bin/ash-remote-server');
 
 	await launcher.didInitialize();
-	assert.deepEqual(lifecycle, [
-		'resolve:work-server:/home/ash/project',
-		'activate:work-server:/home/ash/project:/srv/ash/runtime/one/bin/ash-remote-server',
-	]);
+	assert.deepEqual(lifecycle, ['resolve:work-server:/home/ash/project', 'activate:work-server:/home/ash/project:/srv/ash/runtime/one/bin/ash-remote-server']);
 });
 
 test('Desktop selects only a host-verified rollback runtime', async () => {
@@ -289,9 +279,7 @@ test('Desktop provisions once for a typed protocol incompatibility and launches 
 		carrier: createCarrier(),
 		localEnvironment: {},
 		probeRuntime: async (_executable, args) => {
-			const runtime = args.at(-1)?.includes('/srv/ash/runtime/two/bin/ash-remote-server')
-				? '/srv/ash/runtime/two/bin/ash-remote-server'
-				: '/usr/bin/ash-remote-server';
+			const runtime = args.at(-1)?.includes('/srv/ash/runtime/two/bin/ash-remote-server') ? '/srv/ash/runtime/two/bin/ash-remote-server' : '/usr/bin/ash-remote-server';
 			return { exitCode: 0, stdout: `__ASH_REMOTE_RUNTIME_FOUND__:${runtime}\n`, stderr: '' };
 		},
 		provisionRuntime: async host => {
@@ -319,9 +307,7 @@ test('an explicit new startup validation permits protocol provisioning after a f
 		carrier: createCarrier(),
 		localEnvironment: {},
 		probeRuntime: async (_executable, args) => {
-			const runtime = args.at(-1)?.includes('/srv/ash/runtime/two/bin/ash-remote-server')
-				? '/srv/ash/runtime/two/bin/ash-remote-server'
-				: '/usr/bin/ash-remote-server';
+			const runtime = args.at(-1)?.includes('/srv/ash/runtime/two/bin/ash-remote-server') ? '/srv/ash/runtime/two/bin/ash-remote-server' : '/usr/bin/ash-remote-server';
 			return { exitCode: 0, stdout: `__ASH_REMOTE_RUNTIME_FOUND__:${runtime}\n`, stderr: '' };
 		},
 		provisionRuntime: async () => {
@@ -341,10 +327,7 @@ test('an explicit new startup validation permits protocol provisioning after a f
 	assert.equal(provisions, 2);
 });
 
-function createCarrier(
-	spawnProcess: NonNullable<ConstructorParameters<typeof AppServerDaemonLauncher>[0]['spawnProcess']> = () =>
-		({}) as ChildProcessWithoutNullStreams,
-): AppServerDaemonLauncher {
+function createCarrier(spawnProcess: NonNullable<ConstructorParameters<typeof AppServerDaemonLauncher>[0]['spawnProcess']> = () => ({}) as ChildProcessWithoutNullStreams): AppServerDaemonLauncher {
 	return new AppServerDaemonLauncher({
 		executable: '/runtime/ash-app-server-daemon',
 		args: ['connect-selected'],

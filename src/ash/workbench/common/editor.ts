@@ -66,11 +66,7 @@ export interface IEditorPaneWithScrolling extends IEditorPane {
 
 export function isEditorPaneWithScrolling(pane: IEditorPane | undefined): pane is IEditorPaneWithScrolling {
 	const candidate = pane as Partial<IEditorPaneWithScrolling> | undefined;
-	return (
-		typeof candidate?.onDidChangeScroll === 'function' &&
-		typeof candidate.getScrollPosition === 'function' &&
-		typeof candidate.setScrollPosition === 'function'
-	);
+	return typeof candidate?.onDidChangeScroll === 'function' && typeof candidate.getScrollPosition === 'function' && typeof candidate.setScrollPosition === 'function';
 }
 
 export function getEditorWorkingCopies(pane: IEditorPane): readonly IWorkingCopy[] {
@@ -182,14 +178,8 @@ class EditorResourceAccessorImpl {
 		editor: IResourceEditorInput | undefined | null,
 		options: IEditorResourceAccessorOptions & { supportSideBySide: SideBySideEditor.BOTH },
 	): URI | { primary?: URI; secondary?: URI } | undefined;
-	public getOriginalUri(
-		editor: IResourceEditorInput | undefined | null,
-		options: IEditorResourceAccessorOptions,
-	): URI | { primary?: URI; secondary?: URI } | undefined;
-	public getOriginalUri(
-		editor: IResourceEditorInput | undefined | null,
-		options: IEditorResourceAccessorOptions = {},
-	): URI | { primary?: URI; secondary?: URI } | undefined {
+	public getOriginalUri(editor: IResourceEditorInput | undefined | null, options: IEditorResourceAccessorOptions): URI | { primary?: URI; secondary?: URI } | undefined;
+	public getOriginalUri(editor: IResourceEditorInput | undefined | null, options: IEditorResourceAccessorOptions = {}): URI | { primary?: URI; secondary?: URI } | undefined {
 		if (!editor) {
 			return undefined;
 		}
@@ -206,22 +196,13 @@ class EditorResourceAccessorImpl {
 			}
 			if (options.supportSideBySide === SideBySideEditor.ANY) {
 				const sideOptions = { ...options, supportSideBySide: SideBySideEditor.PRIMARY as const };
-				return (
-					this.getOriginalUri(editor.modified, sideOptions) ??
-					this.getOriginalUri(editor.original, sideOptions)
-				);
+				return this.getOriginalUri(editor.modified, sideOptions) ?? this.getOriginalUri(editor.original, sideOptions);
 			}
-			return this.getOriginalUri(
-				options.supportSideBySide === SideBySideEditor.SECONDARY ? editor.original : editor.modified,
-				options,
-			);
+			return this.getOriginalUri(options.supportSideBySide === SideBySideEditor.SECONDARY ? editor.original : editor.modified, options);
 		}
 		const resource = editor.preferredResource ?? editor.resource;
 		const filter = options.filterByScheme;
-		return filter === undefined ||
-			(typeof filter === 'string' ? filter === resource.scheme : filter.includes(resource.scheme))
-			? resource
-			: undefined;
+		return filter === undefined || (typeof filter === 'string' ? filter === resource.scheme : filter.includes(resource.scheme)) ? resource : undefined;
 	}
 }
 
@@ -253,11 +234,7 @@ export function isEditorOpenError(error: unknown): error is IEditorOpenError {
 	return error instanceof Error && Array.isArray((error as IEditorOpenError).actions);
 }
 
-export function createEditorOpenError(
-	messageOrError: string | Error,
-	actions: IAction[],
-	options: IEditorOpenErrorOptions = {},
-): IEditorOpenError {
+export function createEditorOpenError(messageOrError: string | Error, actions: IAction[], options: IEditorOpenErrorOptions = {}): IEditorOpenError {
 	return Object.assign(toError(messageOrError), options, { actions });
 }
 
@@ -278,9 +255,5 @@ export interface IEditorPaneWithSelection extends IEditorPane {
 
 export function isEditorPaneWithSelection(pane: unknown): pane is IEditorPaneWithSelection {
 	const candidate = pane as IEditorPaneWithSelection | undefined;
-	return (
-		typeof candidate?.onDidChangeSelection === 'function' &&
-		typeof candidate.getSelection === 'function' &&
-		typeof candidate.restoreSelection === 'function'
-	);
+	return typeof candidate?.onDidChangeSelection === 'function' && typeof candidate.getSelection === 'function' && typeof candidate.restoreSelection === 'function';
 }

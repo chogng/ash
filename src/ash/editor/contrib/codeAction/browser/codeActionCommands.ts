@@ -1,8 +1,4 @@
-import {
-	EditorAction,
-	registerEditorAction,
-	type ServicesAccessor,
-} from '../../../browser/editorFeatureRegistration.js';
+import { EditorAction, registerEditorAction, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
@@ -10,12 +6,7 @@ import { KeybindingWeight } from '../../../../platform/keybinding/common/keybind
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { HierarchicalKind } from '../../../../base/common/hierarchicalKind.js';
-import {
-	CodeActionAutoApply,
-	CodeActionCommandArgs,
-	CodeActionKind,
-	CodeActionTriggerSource,
-} from '../common/types.js';
+import { CodeActionAutoApply, CodeActionCommandArgs, CodeActionKind, CodeActionTriggerSource } from '../common/types.js';
 import { CodeActionController } from './codeActionController.js';
 
 class QuickFixAction extends EditorAction {
@@ -23,10 +14,7 @@ class QuickFixAction extends EditorAction {
 		super({
 			id: 'editor.action.quickFix',
 			label: localize2('quickfix.trigger.label', 'Quick Fix...'),
-			precondition: ContextKeyExpr.and(
-				EditorContextKeys.writable,
-				EditorContextKeys.hasCodeActionsProvider.isEqualTo(true),
-			),
+			precondition: ContextKeyExpr.and(EditorContextKeys.writable, EditorContextKeys.hasCodeActionsProvider.isEqualTo(true)),
 			kbOpts: {
 				kbExpr: EditorContextKeys.editorTextFocus.isEqualTo(true),
 				primary: KeyMod.CtrlCmd | KeyCode.Period,
@@ -37,10 +25,7 @@ class QuickFixAction extends EditorAction {
 
 	async run(_accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> {
 		editor.focus();
-		await CodeActionController.get(editor)?.manualTriggerAtCurrentPosition(
-			localize('codeAction.empty', 'No code actions available.'),
-			CodeActionTriggerSource.QuickFix,
-		);
+		await CodeActionController.get(editor)?.manualTriggerAtCurrentPosition(localize('codeAction.empty', 'No code actions available.'), CodeActionTriggerSource.QuickFix);
 	}
 }
 
@@ -51,10 +36,7 @@ export class RefactorAction extends EditorAction {
 		super({
 			id: 'editor.action.refactor',
 			label: localize2('refactor.label', 'Refactor...'),
-			precondition: ContextKeyExpr.and(
-				EditorContextKeys.writable,
-				EditorContextKeys.hasCodeActionsProvider.isEqualTo(true),
-			),
+			precondition: ContextKeyExpr.and(EditorContextKeys.writable, EditorContextKeys.hasCodeActionsProvider.isEqualTo(true)),
 			contextMenuOpts: { group: '1_modification', order: 2 },
 			kbOpts: {
 				kbExpr: EditorContextKeys.editorTextFocus.isEqualTo(true),
@@ -88,10 +70,7 @@ export class SourceAction extends EditorAction {
 		super({
 			id: 'editor.action.sourceAction',
 			label: localize2('source.label', 'Source Action...'),
-			precondition: ContextKeyExpr.and(
-				EditorContextKeys.writable,
-				EditorContextKeys.hasCodeActionsProvider.isEqualTo(true),
-			),
+			precondition: ContextKeyExpr.and(EditorContextKeys.writable, EditorContextKeys.hasCodeActionsProvider.isEqualTo(true)),
 			contextMenuOpts: { group: '1_modification', order: 2.1 },
 		});
 	}
@@ -123,10 +102,7 @@ class CodeActionCommand extends EditorAction {
 		super({
 			id: 'editor.action.codeAction',
 			label: localize2('codeAction.genericLabel', 'Code Action...'),
-			precondition: ContextKeyExpr.and(
-				EditorContextKeys.writable,
-				EditorContextKeys.hasCodeActionsProvider.isEqualTo(true),
-			),
+			precondition: ContextKeyExpr.and(EditorContextKeys.writable, EditorContextKeys.hasCodeActionsProvider.isEqualTo(true)),
 		});
 	}
 	async run(_accessor: ServicesAccessor, editor: ICodeEditor, arg: unknown): Promise<void> {
@@ -150,10 +126,7 @@ class OrganizeImportsAction extends EditorAction {
 		super({
 			id: 'editor.action.organizeImports',
 			label: localize2('codeAction.organizeImports', 'Organize Imports'),
-			precondition: ContextKeyExpr.and(
-				EditorContextKeys.writable,
-				EditorContextKeys.hasCodeActionsProvider.isEqualTo(true),
-			),
+			precondition: ContextKeyExpr.and(EditorContextKeys.writable, EditorContextKeys.hasCodeActionsProvider.isEqualTo(true)),
 		});
 	}
 	async run(_accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> {
@@ -173,10 +146,7 @@ class FixAllAction extends EditorAction {
 		super({
 			id: 'editor.action.fixAll',
 			label: localize2('codeAction.fixAll', 'Fix All'),
-			precondition: ContextKeyExpr.and(
-				EditorContextKeys.writable,
-				EditorContextKeys.hasCodeActionsProvider.isEqualTo(true),
-			),
+			precondition: ContextKeyExpr.and(EditorContextKeys.writable, EditorContextKeys.hasCodeActionsProvider.isEqualTo(true)),
 		});
 	}
 	async run(_accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> {

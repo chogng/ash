@@ -1,8 +1,4 @@
-import {
-	type IRuntimeEnvironment,
-	operatingSystemFromNodePlatform,
-	operatingSystemFromUserAgent,
-} from './environment.js';
+import { type IRuntimeEnvironment, operatingSystemFromNodePlatform, operatingSystemFromUserAgent } from './environment.js';
 
 export type { HostOperatingSystem, IRuntimeEnvironment, RuntimeKind } from './environment.js';
 
@@ -39,7 +35,11 @@ const runtimeGlobal = globalThis as IPlatformGlobals;
 function detectEnvironment(): IRuntimeEnvironment {
 	const bridgedEnvironment = runtimeGlobal.ash?.environment;
 	if (bridgedEnvironment) {
-		return { runtime: bridgedEnvironment.runtime, os: bridgedEnvironment.os, arch: bridgedEnvironment.arch };
+		return {
+			runtime: bridgedEnvironment.runtime,
+			os: bridgedEnvironment.os,
+			arch: bridgedEnvironment.arch,
+		};
 	}
 	const sandboxProcess = runtimeGlobal.ash?.process;
 	if (sandboxProcess) {
@@ -60,10 +60,16 @@ function detectEnvironment(): IRuntimeEnvironment {
 	}
 
 	if (runtimeGlobal.navigator) {
-		return { runtime: 'web', os: operatingSystemFromUserAgent(runtimeGlobal.navigator.userAgent) };
+		return {
+			runtime: 'web',
+			os: operatingSystemFromUserAgent(runtimeGlobal.navigator.userAgent),
+		};
 	}
 
-	return { runtime: 'unknown', os: 'unknown' };
+	return {
+		runtime: 'unknown',
+		os: 'unknown',
+	};
 }
 
 /** Runtime and host-OS information detected once for the current environment. */
@@ -80,8 +86,4 @@ export const isWeb = environment.runtime === 'web';
  *
  * Unknown environments use Linux semantics, matching VS Code's fallback.
  */
-export const operatingSystem = isMacintosh
-	? OperatingSystem.Macintosh
-	: isWindows
-		? OperatingSystem.Windows
-		: OperatingSystem.Linux;
+export const operatingSystem = isMacintosh ? OperatingSystem.Macintosh : isWindows ? OperatingSystem.Windows : OperatingSystem.Linux;

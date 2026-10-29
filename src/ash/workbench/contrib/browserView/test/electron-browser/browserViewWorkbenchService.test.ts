@@ -6,12 +6,7 @@ import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import {
-	IBrowserViewService,
-	BrowserViewStorageScope,
-	type BrowserViewEvent,
-	type IBrowserViewInfo,
-} from '../../../../../platform/browserView/common/browserView.js';
+import { IBrowserViewService, BrowserViewStorageScope, type BrowserViewEvent, type IBrowserViewInfo } from '../../../../../platform/browserView/common/browserView.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
@@ -23,11 +18,7 @@ import { BrowserViewWorkbenchService } from '../../electron-browser/browserViewW
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryServiceShape } from '../../../../../platform/telemetry/common/telemetryUtils.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
-import {
-	IQuickInputService,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IBrowserViewWorkbenchService } from '../../common/browserView.js';
 import '../../electron-browser/features/browserTabManagementFeatures.js';
 import { DialogResult } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -73,9 +64,7 @@ suite('Browser Workbench page lifecycle', () => {
 	});
 
 	test('authentication uses translated masked inputs, defaults to no persistence and cancels retired requests', async () => {
-		const chinese = JSON.parse(
-			await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'),
-		);
+		const chinese = JSON.parse(await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'));
 		try {
 			setNlsMessages('zh-CN', chinese);
 			using f = fixture();
@@ -103,19 +92,10 @@ suite('Browser Workbench page lifecycle', () => {
 			}
 			assert.deepEqual(
 				[dialog.request.title, dialog.request.message, dialog.request.inputs, dialog.request.checkbox],
-				[
-					'浏览器身份验证',
-					'登录 https://private.test',
-					[{ placeholder: '用户名' }, { type: 'password', placeholder: '密码' }],
-					{ label: '为此浏览器存储会话记住加密凭据', checked: false },
-				],
+				['浏览器身份验证', '登录 https://private.test', [{ placeholder: '用户名' }, { type: 'password', placeholder: '密码' }], { label: '为此浏览器存储会话记住加密凭据', checked: false }],
 			);
 			dialog.close({ button: DialogResult.Primary, values: ['user', 'secret'], checkboxChecked: true });
-			assert.deepEqual(await answered.promise, [
-				id,
-				'one',
-				{ username: 'user', password: 'secret', remember: true },
-			]);
+			assert.deepEqual(await answered.promise, [id, 'one', { username: 'user', password: 'secret', remember: true }]);
 			f.events.fire({ ...event, requestId: 'two', canRemember: false, storageFailed: true });
 			assert.equal(dialogs.dialogs[0]!.request.checkbox, undefined);
 			assert.match(dialogs.dialogs[0]!.request.detail!, /未加密/);
@@ -133,8 +113,7 @@ suite('Browser Workbench page lifecycle', () => {
 
 	test('new user pages resolve storage preferences, remote isolation and live backend trust', async () => {
 		using f = fixture();
-		const create = () =>
-			f.views.createBrowserView({ initialUrl: 'https://example.test/', owner: { type: 'user' } });
+		const create = () => f.views.createBrowserView({ initialUrl: 'https://example.test/', owner: { type: 'user' } });
 		const first = await create();
 		assert.equal(first.model!.info.session.scope, BrowserViewStorageScope.Global);
 		await f.configuration.updateValue('workbench.browser.dataStorage', 'workspace', ConfigurationTarget.MEMORY);
@@ -218,9 +197,7 @@ suite('Browser Workbench page lifecycle', () => {
 		let included = true;
 		using changed = new Emitter<void>();
 		using filter = f.views.registerContextualFilter({ include: () => included, onDidChange: changed.event });
-		const command = Promise.resolve(
-			f.services.invokeFunction(CommandsRegistry.getCommand('workbench.action.browser.quickOpen')!),
-		);
+		const command = Promise.resolve(f.services.invokeFunction(CommandsRegistry.getCommand('workbench.action.browser.quickOpen')!));
 		await shown.promise;
 		assert.deepEqual(
 			picker.items.map(item => item.label),
@@ -257,10 +234,7 @@ suite('Browser Workbench page lifecycle', () => {
 			owner: { type: 'agent', sessionId: 'background-thread' },
 			session: { scope: BrowserViewStorageScope.Agent, affinity: 'background-thread' },
 		});
-		assert.deepEqual(
-			[calls, f.opened, f.destroyed, input.model?.info.owner],
-			[['background-thread'], [], [], { type: 'agent', sessionId: 'background-thread' }],
-		);
+		assert.deepEqual([calls, f.opened, f.destroyed, input.model?.info.owner], [['background-thread'], [], [], { type: 'agent', sessionId: 'background-thread' }]);
 		assert.equal(f.views.getKnownBrowserViews().get(input.id), input);
 	});
 
@@ -309,10 +283,7 @@ suite('Browser Workbench page lifecycle', () => {
 		});
 		assert.deepEqual([...f.views.getContextualBrowserViews().keys()], [agentId]);
 		assert.deepEqual([...f.views.getContextualBrowserViews({ sandboxSessionId: 'thread-one' }).keys()], []);
-		assert.deepEqual(
-			[...f.views.getContextualBrowserViews({ sandboxSessionId: owner.sessionId }).keys()],
-			[agentId],
-		);
+		assert.deepEqual([...f.views.getContextualBrowserViews({ sandboxSessionId: owner.sessionId }).keys()], [agentId]);
 		allowedId = id;
 		changed.fire();
 		assert.deepEqual([...f.views.getContextualBrowserViews().keys()], [id]);
@@ -358,10 +329,7 @@ suite('Browser Workbench page lifecycle', () => {
 		closed.resolve();
 		await f.editorOpened.promise;
 		const replacement = f.views.getKnownBrowserViews().get(id)!;
-		assert.deepEqual(
-			[original.isDisposed, replacement !== original, replacement.label, f.groupInputs, f.destroyed],
-			[true, true, 'Replacement page', [replacement], []],
-		);
+		assert.deepEqual([original.isDisposed, replacement !== original, replacement.label, f.groupInputs, f.destroyed], [true, true, 'Replacement page', [replacement], []]);
 	});
 
 	test('Workbench shutdown releases an input whose page close is still pending', async () => {
@@ -615,10 +583,7 @@ function fixture() {
 
 import { IFileService } from '../../../../../platform/files/common/files.js';
 
-import {
-	IConfigurationService,
-	ConfigurationTarget,
-} from '../../../../../platform/configuration/common/configuration.js';
+import { IConfigurationService, ConfigurationTarget } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IWorkspaceContextService, WorkbenchState } from '../../../../../platform/workspace/common/workspace.js';
 import { IWorkspaceTrustManagementService } from '../../../../../platform/workspace/common/workspaceTrust.js';

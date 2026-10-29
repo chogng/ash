@@ -2,11 +2,7 @@ import type { Event } from '../../../../base/common/event.js';
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import type { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import {
-	isTextResourceLanguageInput,
-	resolveTextResourceLanguageId,
-	type TextResourceLanguageResolver,
-} from '../../../../platform/language/common/textResourceLanguage.js';
+import { isTextResourceLanguageInput, resolveTextResourceLanguageId, type TextResourceLanguageResolver } from '../../../../platform/language/common/textResourceLanguage.js';
 import {
 	ActiveEditorAvailableEditorIdsContext,
 	ActiveEditorCanRevertContext,
@@ -28,20 +24,11 @@ import {
 	ResourceSchemeContext,
 	ResourceSetContext,
 } from '../../../common/contextkeys.js';
-import type {
-	EditorGroupChangeEvent,
-	EditorGroupState,
-	IEditorStateSource,
-} from '../../../services/editor/common/editorState.js';
+import type { EditorGroupChangeEvent, EditorGroupState, IEditorStateSource } from '../../../services/editor/common/editorState.js';
 import type { IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
 
 import type { IEditorPaneRegistry } from '../../editor.js';
-import {
-	EditorResourceAccessor,
-	SideBySideEditor,
-	type IResourceEditorInput,
-	type IEditorPane,
-} from '../../../common/editor.js';
+import { EditorResourceAccessor, SideBySideEditor, type IResourceEditorInput, type IEditorPane } from '../../../common/editor.js';
 import { isDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 
 export interface EditorContextKeySource extends IEditorStateSource {
@@ -89,9 +76,7 @@ export class EditorContextKeyController extends Disposable {
 			applyEditorContextKeys(this.contextKeyService, keys, this.editorRegistry, this.languageResolver, {
 				input,
 				paneId: state.isModalEditorVisible ? pane?.id : activeEditor?.paneId,
-				isDirty: state.isModalEditorVisible
-					? (workingCopy?.isDirty ?? false)
-					: (activeEditor?.isDirty ?? false),
+				isDirty: state.isModalEditorVisible ? (workingCopy?.isDirty ?? false) : (activeEditor?.isDirty ?? false),
 				isPreview: state.isModalEditorVisible ? false : (activeEditor?.isPreview ?? false),
 				isSticky: state.isModalEditorVisible ? false : (activeEditor?.isSticky ?? false),
 				canRevert: state.isModalEditorVisible ? workingCopy !== undefined : (activeEditor?.canRevert ?? false),
@@ -102,10 +87,7 @@ export class EditorContextKeyController extends Disposable {
 		});
 	}
 
-	private updateWorkingCopyListener(
-		workingCopy: IWorkingCopy | undefined,
-		activeEditorDirty: IContextKey<boolean>,
-	): void {
+	private updateWorkingCopyListener(workingCopy: IWorkingCopy | undefined, activeEditorDirty: IContextKey<boolean>): void {
 		if (workingCopy === this.activeWorkingCopy) return;
 		this.activeWorkingCopy = workingCopy;
 		this.workingCopyListener.value = workingCopy?.onDidChangeDirty(() => {
@@ -181,7 +163,10 @@ function createEditorContextKeyBindings(contextKeyService: IContextKeyService) {
 		resourceExtension: ResourceExtensionContext.bindTo(contextKeyService),
 		resourceSet: ResourceSetContext.bindTo(contextKeyService),
 	};
-	return { ...bindings, all: Object.values(bindings) as readonly Pick<IContextKey<never>, 'reset'>[] };
+	return {
+		...bindings,
+		all: Object.values(bindings) as readonly Pick<IContextKey<never>, 'reset'>[],
+	};
 }
 
 type EditorContextKeyBindings = ReturnType<typeof createEditorContextKeyBindings>;
@@ -205,8 +190,7 @@ function applyEditorContextKeys(
 	languageResolver: TextResourceLanguageResolver | undefined,
 	projection: EditorContextKeyProjection,
 ): void {
-	const resourceInput =
-		projection.input && isDiffEditorInput(projection.input) ? projection.input.modified : projection.input;
+	const resourceInput = projection.input && isDiffEditorInput(projection.input) ? projection.input.modified : projection.input;
 	const resource = EditorResourceAccessor.getOriginalUri(projection.input, {
 		supportSideBySide: SideBySideEditor.PRIMARY,
 	});
@@ -273,10 +257,7 @@ function resourceExtension(filename: string): string {
 	return dot > 0 ? filename.slice(dot) : '';
 }
 
-function resourceLanguageId(
-	input: IResourceEditorInput,
-	resolver: TextResourceLanguageResolver | undefined,
-): string | undefined {
+function resourceLanguageId(input: IResourceEditorInput, resolver: TextResourceLanguageResolver | undefined): string | undefined {
 	if (input.languageId) return input.languageId;
 	return isTextResourceLanguageInput(input, resolver) ? resolveTextResourceLanguageId(input, resolver) : undefined;
 }

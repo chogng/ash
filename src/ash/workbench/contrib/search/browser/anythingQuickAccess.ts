@@ -1,9 +1,4 @@
-import {
-	PickerQuickAccessProvider,
-	type IPickerQuickAccessItem,
-	type FastAndSlowPicks,
-	type Picks,
-} from '../../../../platform/quickinput/browser/pickerQuickAccess.js';
+import { PickerQuickAccessProvider, type IPickerQuickAccessItem, type FastAndSlowPicks, type Picks } from '../../../../platform/quickinput/browser/pickerQuickAccess.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { basename, dirname, extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -65,25 +60,19 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IPick
 			resource,
 			kind,
 			accept: () => {
-				void this.editors
-					.openEditor({ resource }, { pinned: true })
-					.catch(error => this.notifications.error(String(error)));
+				void this.editors.openEditor({ resource }, { pinned: true }).catch(error => this.notifications.error(String(error)));
 			},
 		});
 		const folders = this.workspace.getWorkspace().folders;
 		const seen = new Set<string>();
 		const eligible = (item: IAnythingQuickPickItem): boolean => {
 			const key = extUri.getComparisonKey(item.resource);
-			if (seen.has(key) || !this.files.hasProvider(item.resource) || options.filter?.(item) === false)
-				return false;
+			if (seen.has(key) || !this.files.hasProvider(item.resource) || options.filter?.(item) === false) return false;
 			seen.add(key);
 			return true;
 		};
 		const recent = filterQuickPickItems(
-			[
-				...this.history.getHistory().map(input => itemFor(input.resource)),
-				...this.groups.groups.flatMap(group => group.inputs).map(input => itemFor(input.resource)),
-			],
+			[...this.history.getHistory().map(input => itemFor(input.resource)), ...this.groups.groups.flatMap(group => group.inputs).map(input => itemFor(input.resource))],
 			query,
 		).filter(eligible);
 		const picks: (IQuickPickItem | IQuickPickSeparator)[] = [
@@ -107,30 +96,14 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IPick
 				const isGlob = /[*?{[]/.test(query);
 				const candidates: IAnythingQuickPickItem[] = [];
 				const folder = folders[0]?.uri;
-				const target = query.startsWith('/@browser/')
-					? URI.from({ scheme: Schemas.file, path: query })
-					: (folder ?? URI.from({ scheme: Schemas.file, path: '/' }));
+				const target = query.startsWith('/@browser/') ? URI.from({ scheme: Schemas.file, path: query }) : (folder ?? URI.from({ scheme: Schemas.file, path: '/' }));
 				const resolvedHome = this.paths.resolvedUserHome;
 				// An SSH or browser workspace must not expand ~ against the App Server's OS home.
-				const home =
-					target.scheme === resolvedHome?.scheme &&
-					target.authority === resolvedHome.authority &&
-					!target.path.startsWith('/@browser/')
-						? resolvedHome
-						: undefined;
+				const home = target.scheme === resolvedHome?.scheme && target.authority === resolvedHome.authority && !target.path.startsWith('/@browser/') ? resolvedHome : undefined;
 				const path = await this.paths.getPath(target);
 				if (token.isCancellationRequested) return [];
-				const homePath =
-					query === '~' || query.startsWith('~/') || (path?.sep === '\\' && query.startsWith('~\\'));
-				const expanded =
-					home && homePath
-						? untildify(
-								query,
-								home.authority
-									? `//${home.authority}${home.path}`
-									: home.path.replace(/^\/(?=[a-z]:[\\/])/i, ''),
-							)
-						: query;
+				const homePath = query === '~' || query.startsWith('~/') || (path?.sep === '\\' && query.startsWith('~\\'));
+				const expanded = home && homePath ? untildify(query, home.authority ? `//${home.authority}${home.path}` : home.path.replace(/^\/(?=[a-z]:[\\/])/i, '')) : query;
 				const absolute = !isGlob && path?.isAbsolute(expanded);
 				if (absolute && path) {
 					const normalized = path.normalize(expanded);
@@ -140,8 +113,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IPick
 							: await this.paths.fileURI(normalized);
 					try {
 						const stat = await this.files.stat(resource);
-						if (stat.kind === FileKind.File || (options.includeFolders && stat.kind === FileKind.Directory))
-							candidates.push(itemFor(resource, stat.kind));
+						if (stat.kind === FileKind.File || (options.includeFolders && stat.kind === FileKind.Directory)) candidates.push(itemFor(resource, stat.kind));
 					} catch {
 						// Absolute-path candidates may not exist or may be outside authorized file roots.
 					}
@@ -150,8 +122,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IPick
 					for (const folder of folders) {
 						candidates.push(itemFor(folder.uri, FileKind.Directory));
 						for (const entry of await this.files.readDirectory(folder.uri)) {
-							if (entry.kind === FileKind.Directory)
-								candidates.push(itemFor(entry.resource, FileKind.Directory));
+							if (entry.kind === FileKind.Directory) candidates.push(itemFor(entry.resource, FileKind.Directory));
 						}
 					}
 				}
@@ -164,21 +135,15 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IPick
 								shouldGlobMatchFilePattern: isGlob,
 								sortByScore: !isGlob,
 								maxResults: 100,
-								includePattern: this.configuration.getValue<string>(
-									ContentSearchConfiguration.includePatterns,
-								),
-								excludePattern: this.configuration.getValue<string>(
-									ContentSearchConfiguration.excludePatterns,
-								),
+								includePattern: this.configuration.getValue<string>(ContentSearchConfiguration.includePatterns),
+								excludePattern: this.configuration.getValue<string>(ContentSearchConfiguration.excludePatterns),
 							},
 						),
 						token,
 					);
 					for (const file of found.results) {
 						if (options.includeFolders) {
-							const folder = [...folders]
-								.sort((a, b) => b.uri.path.length - a.uri.path.length)
-								.find(folder => extUri.isEqualOrParent(file.resource, folder.uri));
+							const folder = [...folders].sort((a, b) => b.uri.path.length - a.uri.path.length).find(folder => extUri.isEqualOrParent(file.resource, folder.uri));
 							let parent = dirname(file.resource);
 							while (folder && extUri.isEqualOrParent(parent, folder.uri)) {
 								candidates.push(itemFor(parent, FileKind.Directory));
@@ -193,9 +158,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IPick
 				const eligibleCandidates = candidates
 					.filter(item => {
 						if (absolute || item.kind !== FileKind.Directory || !query) return true;
-						return /[*?{[]/.test(query)
-							? match(query, item.resource.path)
-							: filterQuickPickItems([item], query).length > 0;
+						return /[*?{[]/.test(query) ? match(query, item.resource.path) : filterQuickPickItems([item], query).length > 0;
 					})
 					.filter(eligible);
 				return [
@@ -210,10 +173,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IPick
 						: []),
 				];
 			} catch (error) {
-				if (!token.isCancellationRequested)
-					this.notifications.error(
-						localize('quickAccess.fileSearchFailed', 'Could not search files: {0}', String(error)),
-					);
+				if (!token.isCancellationRequested) this.notifications.error(localize('quickAccess.fileSearchFailed', 'Could not search files: {0}', String(error)));
 				return [];
 			}
 		};

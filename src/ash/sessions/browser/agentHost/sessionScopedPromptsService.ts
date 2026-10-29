@@ -11,38 +11,19 @@ export class SessionScopedPromptsService implements IPromptsService {
 	}
 	getHooks(...[token, sessionId]: Parameters<IPromptsService['getHooks']>): ReturnType<IPromptsService['getHooks']> {
 		this.scope.assertCurrent();
-		return this.scope.services.prompts.getHooks(
-			token,
-			sessionId === undefined ? undefined : this.scope.backendIdentity(sessionId),
-		);
+		return this.scope.services.prompts.getHooks(token, sessionId === undefined ? undefined : this.scope.backendIdentity(sessionId));
 	}
-	findAgentSkills(
-		...[token, sessionId]: Parameters<IPromptsService['findAgentSkills']>
-	): ReturnType<IPromptsService['findAgentSkills']> {
+	findAgentSkills(...[token, sessionId]: Parameters<IPromptsService['findAgentSkills']>): ReturnType<IPromptsService['findAgentSkills']> {
 		this.scope.assertCurrent();
-		return this.scope.services.prompts.findAgentSkills(
-			token,
-			sessionId === undefined ? undefined : this.scope.backendIdentity(sessionId),
-		);
+		return this.scope.services.prompts.findAgentSkills(token, sessionId === undefined ? undefined : this.scope.backendIdentity(sessionId));
 	}
-	readSkillManagement(
-		...[sessionId]: Parameters<IPromptsService['readSkillManagement']>
-	): ReturnType<IPromptsService['readSkillManagement']> {
+	readSkillManagement(...[sessionId]: Parameters<IPromptsService['readSkillManagement']>): ReturnType<IPromptsService['readSkillManagement']> {
 		this.scope.assertCurrent();
-		return this.scope.services.prompts.readSkillManagement(
-			sessionId === undefined ? undefined : this.scope.backendIdentity(sessionId),
-		);
+		return this.scope.services.prompts.readSkillManagement(sessionId === undefined ? undefined : this.scope.backendIdentity(sessionId));
 	}
-	setSkillEnablement(
-		...[skillId, enabled, revision, sessionId]: Parameters<IPromptsService['setSkillEnablement']>
-	): ReturnType<IPromptsService['setSkillEnablement']> {
+	setSkillEnablement(...[skillId, enabled, revision, sessionId]: Parameters<IPromptsService['setSkillEnablement']>): ReturnType<IPromptsService['setSkillEnablement']> {
 		this.scope.assertCurrent();
-		return this.scope.services.prompts.setSkillEnablement(
-			skillId,
-			enabled,
-			revision,
-			sessionId === undefined ? undefined : this.scope.backendIdentity(sessionId),
-		);
+		return this.scope.services.prompts.setSkillEnablement(skillId, enabled, revision, sessionId === undefined ? undefined : this.scope.backendIdentity(sessionId));
 	}
 	registerSkillSource(rootReference: string): Promise<void> {
 		this.scope.assertCurrent();

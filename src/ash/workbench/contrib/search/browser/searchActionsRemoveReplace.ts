@@ -20,10 +20,7 @@ registerAction2(
 				icon: Lxicon.close,
 				keybinding: {
 					weight: KeybindingWeight.WorkbenchContrib,
-					when: ContextKeyExpr.and(
-						SearchContext.SearchViewFocusedKey.isEqualTo(true),
-						SearchContext.FileMatchOrMatchFocusKey.isEqualTo(true),
-					),
+					when: ContextKeyExpr.and(SearchContext.SearchViewFocusedKey.isEqualTo(true), SearchContext.FileMatchOrMatchFocusKey.isEqualTo(true)),
 					primary: KeyCode.Delete,
 					mac: { primary: KeyMod.CtrlCmd | KeyCode.Backspace },
 				},
@@ -54,10 +51,7 @@ registerAction2(
 				const following = previous.slice(focusIndex + 1);
 				const preceding = previous.slice(0, focusIndex).reverse();
 				const candidates = [...following, ...preceding].filter(survives);
-				const next =
-					candidates.find(element => element.kind === focused.kind) ??
-					candidates[0] ??
-					tree.getVisibleElements()[0];
+				const next = candidates.find(element => element.kind === focused.kind) ?? candidates[0] ?? tree.getVisibleElements()[0];
 				if (next) {
 					tree.expandTo(next.id);
 					tree.setFocus(next.id);

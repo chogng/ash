@@ -1,10 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { decodeAppServerResult } from '../../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
-import type {
-	CodebaseConfigureParams,
-	CodebaseStatusResult,
-} from '../../../../../../../.build/protocol/typescript/index.js';
+import type { CodebaseConfigureParams, CodebaseStatusResult } from '../../../../../../../.build/protocol/typescript/index.js';
 import type { ICodebaseApi } from '../../../../../platform/codebase/common/codebaseApi.js';
 import { AppServerCodebaseService } from '../../browser/appServerCodebaseService.js';
 

@@ -36,10 +36,7 @@ export class SnippetSession extends Disposable {
 			throw new TypeError('Language completion snippet session must share its editor text model');
 		}
 		const starts = typeof insertionStartOffsets === 'number' ? [insertionStartOffsets] : insertionStartOffsets;
-		if (
-			starts.length === 0 ||
-			starts.some(start => !Number.isSafeInteger(start) || start < 0 || start > model.getText().length)
-		) {
+		if (starts.length === 0 || starts.some(start => !Number.isSafeInteger(start) || start < 0 || start > model.getText().length)) {
 			this.dispose();
 			throw new RangeError('Snippet insertion offset is outside its text model');
 		}
@@ -54,12 +51,7 @@ export class SnippetSession extends Disposable {
 		try {
 			this.groups = this.trackExpansion(starts, snippet, index => index);
 			this.finalRanges = Object.freeze(
-				starts.map(start =>
-					model.trackRange(
-						Range.fromPositions(model.positionAt(start + finalOffsetWithinInsertion)),
-						TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-					),
-				),
+				starts.map(start => model.trackRange(Range.fromPositions(model.positionAt(start + finalOffsetWithinInsertion)), TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges)),
 			);
 			this._register(
 				toDisposable(() => {
@@ -81,18 +73,7 @@ export class SnippetSession extends Disposable {
 	public merge(starts: readonly number[], snippet: Snippet, finalOffset: number): boolean {
 		const parent = this.groups[this.currentGroupIndex];
 		if (this.isDisposed || !parent || parent.index === 0 || !starts.length) return false;
-		if (
-			!starts.every(start =>
-				parent.ranges.some(tracked =>
-					tracked.range.containsRange(
-						Range.fromPositions(
-							this.model.positionAt(start),
-							this.model.positionAt(start + snippet.text.length),
-						),
-					),
-				),
-			)
-		)
+		if (!starts.every(start => parent.ranges.some(tracked => tracked.range.containsRange(Range.fromPositions(this.model.positionAt(start), this.model.positionAt(start + snippet.text.length))))))
 			return false;
 		let nextId = Math.max(0, ...this.allGroups.map(group => group.index)) + 1;
 		const ids = new Map<number, number>();
@@ -103,12 +84,7 @@ export class SnippetSession extends Disposable {
 		if (!snippet.placeholderGroups.some(group => group.index === 0)) {
 			const final = {
 				index: nextId,
-				ranges: starts.map(start =>
-					this.model.trackRange(
-						Range.fromPositions(this.model.positionAt(start + finalOffset)),
-						TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-					),
-				),
+				ranges: starts.map(start => this.model.trackRange(Range.fromPositions(this.model.positionAt(start + finalOffset)), TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges)),
 			};
 			children.push(final);
 			this.allGroups.push(final);
@@ -119,23 +95,12 @@ export class SnippetSession extends Disposable {
 		return true;
 	}
 
-	private trackExpansion(
-		starts: readonly number[],
-		snippet: Snippet,
-		identity: (index: number) => number,
-	): SnippetTrackedGroup[] {
+	private trackExpansion(starts: readonly number[], snippet: Snippet, identity: (index: number) => number): SnippetTrackedGroup[] {
 		const track = (start: number, end: number) =>
-			this.model.trackRange(
-				Range.fromPositions(this.model.positionAt(start), this.model.positionAt(end)),
-				TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-			);
+			this.model.trackRange(Range.fromPositions(this.model.positionAt(start), this.model.positionAt(end)), TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges);
 		const groups = snippet.placeholderGroups.map(group => ({
 			index: identity(group.index),
-			ranges: starts.flatMap(start =>
-				group.placeholders.map(placeholder =>
-					track(start + placeholder.startOffset, start + placeholder.endOffset),
-				),
-			),
+			ranges: starts.flatMap(start => group.placeholders.map(placeholder => track(start + placeholder.startOffset, start + placeholder.endOffset))),
 			...(group.choices ? { choices: group.choices } : {}),
 		}));
 		this.allGroups.push(...groups);
@@ -188,9 +153,7 @@ export class SnippetSession extends Disposable {
 			this.editor.pushUndoStop();
 			this.currentGroupIndex += 1;
 			this.updateGroupStickiness(-1);
-			this.editor.setSelections(
-				this.finalRanges.map(range => Selection.fromPositions(range.range.getEndPosition())),
-			);
+			this.editor.setSelections(this.finalRanges.map(range => Selection.fromPositions(range.range.getEndPosition())));
 			return true;
 		}
 		this.dispose();
@@ -234,11 +197,7 @@ export class SnippetSession extends Disposable {
 		const group = this.groups[index];
 		if (!group) throw new RangeError('Language completion snippet tabstop index is outside its session');
 		this.updateGroupStickiness(index);
-		this.editor.setSelections(
-			group.ranges.map(range =>
-				Selection.fromPositions(range.range.getStartPosition(), range.range.getEndPosition()),
-			),
-		);
+		this.editor.setSelections(group.ranges.map(range => Selection.fromPositions(range.range.getStartPosition(), range.range.getEndPosition())));
 	}
 
 	private updateGroupStickiness(activeIndex: number): void {
@@ -319,9 +278,7 @@ export class SnippetSession extends Disposable {
 				.filter(transform => transform.index === source.index)
 				.flatMap(transform => {
 					const text = applySnippetTransform(sourceText, transform.transform);
-					return model.getTextInRange(transform.range.range) === text
-						? []
-						: [{ range: transform.range.range, text }];
+					return model.getTextInRange(transform.range.range) === text ? [] : [{ range: transform.range.range, text }];
 				});
 		});
 		if (edits.length) this.editor.executeEdits('snippet.transform', edits);

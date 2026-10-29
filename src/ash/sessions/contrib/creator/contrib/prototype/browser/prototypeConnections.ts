@@ -2,12 +2,7 @@ import { prototypeScrollTargets, prototypeShapeEntries } from '../../../common/m
 import { addDisposableListener, svg } from '../../../../../../base/browser/dom.js';
 import { Disposable } from '../../../../../../base/common/lifecycle.js';
 import { toDesignLocal, type DesignPoint } from '../../../common/core/geometry.js';
-import {
-	flattenPrototypeActions,
-	prototypeFrames,
-	prototypeScrollScope,
-	prototypeVariants,
-} from '../../../common/model/prototype.js';
+import { flattenPrototypeActions, prototypeFrames, prototypeScrollScope, prototypeVariants } from '../../../common/model/prototype.js';
 import type { DesignEditorContributionContext } from '../../../browser/designEditorBrowser.js';
 
 /** The canvas retains its coordinate system; this contribution only owns connection marks and its drag. */
@@ -82,13 +77,8 @@ export class PrototypeConnections extends Disposable {
 					const target = [...entries].reverse().find(entry => {
 						const frame = entry.world;
 						const eligible =
-							[...this.draggedIds].some(id =>
-								prototypeScrollTargets(context.documentController.model.value.shapes, id, false).some(
-									target => target.id === entry.shape.id,
-								),
-							) ||
-							(frame.kind === 'frame' &&
-								(frame.component?.kind === 'main' || (!entry.ancestors.length && !frame.component)));
+							[...this.draggedIds].some(id => prototypeScrollTargets(context.documentController.model.value.shapes, id, false).some(target => target.id === entry.shape.id)) ||
+							(frame.kind === 'frame' && (frame.component?.kind === 'main' || (!entry.ancestors.length && !frame.component)));
 						const local = toDesignLocal(frame, point);
 						return (
 							eligible &&
@@ -101,12 +91,7 @@ export class PrototypeConnections extends Disposable {
 								}
 								const bounds = entries.find(item => item.shape.id === ancestor.id)!.world,
 									pointInParent = toDesignLocal(bounds, point);
-								return (
-									pointInParent.x >= 0 &&
-									pointInParent.y >= 0 &&
-									pointInParent.x <= bounds.width &&
-									pointInParent.y <= bounds.height
-								);
+								return pointInParent.x >= 0 && pointInParent.y >= 0 && pointInParent.x <= bounds.width && pointInParent.y <= bounds.height;
 							}) &&
 							frame.visible !== false &&
 							local.x >= 0 &&
@@ -176,9 +161,7 @@ export class PrototypeConnections extends Disposable {
 				svg(ownerDocument, 'path', {
 					className: source ? 'ash-prototype-wire' : '',
 					attributes: {
-						...(source
-							? { 'data-prototype-source': source, 'data-prototype-interaction': interaction! }
-							: {}),
+						...(source ? { 'data-prototype-source': source, 'data-prototype-interaction': interaction! } : {}),
 						d: `M ${from.x} ${from.y} C ${from.x + bend} ${from.y}, ${to.x - bend} ${to.y}, ${to.x} ${to.y}`,
 					},
 				}),
@@ -211,10 +194,7 @@ export class PrototypeConnections extends Disposable {
 					}
 				}
 			}
-			if (
-				this.context.selection.ids.has(shape.id) &&
-				(prototypeScrollScope(shapes, shape.id) || prototypeVariants(shapes, shape.id).length)
-			) {
+			if (this.context.selection.ids.has(shape.id) && (prototypeScrollScope(shapes, shape.id) || prototypeVariants(shapes, shape.id).length)) {
 				this.marks.append(
 					svg(ownerDocument, 'circle', {
 						className: 'ash-prototype-handle',

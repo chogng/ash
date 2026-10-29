@@ -1,20 +1,8 @@
-import {
-	type Keybinding,
-	type KeybindingEvent,
-	matchesResolvedChord,
-	type ResolvedKeybinding,
-	resolveKeybinding,
-} from '../../../base/common/keybindings.js';
+import { type Keybinding, type KeybindingEvent, matchesResolvedChord, type ResolvedKeybinding, resolveKeybinding } from '../../../base/common/keybindings.js';
 import type { Event } from '../../../base/common/event.js';
 import type { CommandId } from '../../commands/common/commands.js';
 import type { Context } from '../../contextkey/common/contextkey.js';
-import {
-	type IRegisteredKeybindingRule,
-	type KeybindingRegistry,
-	KeybindingsRegistry,
-	KeybindingRuleKind,
-	KeybindingSource,
-} from './keybindingsRegistry.js';
+import { type IRegisteredKeybindingRule, type KeybindingRegistry, KeybindingsRegistry, KeybindingRuleKind, KeybindingSource } from './keybindingsRegistry.js';
 
 export enum KeybindingResolveKind {
 	NoMatch = 'noMatch',
@@ -70,22 +58,29 @@ export class KeybindingResolver {
 		const candidates = this.resolvedRules()
 			.filter(
 				({ rule, keybinding }) =>
-					(!rule.when || rule.when.evaluate(context)) &&
-					keybinding.chords.length >= events.length &&
-					events.every((event, index) => matchesResolvedChord(keybinding.chords[index], event)),
+					(!rule.when || rule.when.evaluate(context)) && keybinding.chords.length >= events.length && events.every((event, index) => matchesResolvedChord(keybinding.chords[index], event)),
 			)
 			.sort(compareResolvedRules);
 		const winner = candidates[0];
 		if (!winner) return { kind: KeybindingResolveKind.NoMatch };
 
 		if (winner.keybinding.chords.length > events.length) {
-			return { kind: KeybindingResolveKind.MoreChordsNeeded, keybinding: winner.keybinding };
+			return {
+				kind: KeybindingResolveKind.MoreChordsNeeded,
+				keybinding: winner.keybinding,
+			};
 		}
 		if (winner.rule.kind === KeybindingRuleKind.Blocker) {
-			return { kind: KeybindingResolveKind.Blocked, keybinding: winner.keybinding };
+			return {
+				kind: KeybindingResolveKind.Blocked,
+				keybinding: winner.keybinding,
+			};
 		}
 		if (winner.rule.kind === KeybindingRuleKind.PassThrough) {
-			return { kind: KeybindingResolveKind.PassThrough, keybinding: winner.keybinding };
+			return {
+				kind: KeybindingResolveKind.PassThrough,
+				keybinding: winner.keybinding,
+			};
 		}
 		return {
 			kind: KeybindingResolveKind.Command,
@@ -103,11 +98,7 @@ export class KeybindingResolver {
 			if (overriddenShortcuts.has(identity)) continue;
 			// An unconditional override suppresses the older shortcut in every scope.
 			if (!candidate.rule.when) overriddenShortcuts.add(identity);
-			if (
-				(candidate.rule.kind === KeybindingRuleKind.Command ||
-					candidate.rule.kind === KeybindingRuleKind.PassThrough) &&
-				candidate.rule.command === command
-			) {
+			if ((candidate.rule.kind === KeybindingRuleKind.Command || candidate.rule.kind === KeybindingRuleKind.PassThrough) && candidate.rule.command === command) {
 				bindings.push(candidate);
 			}
 		}
@@ -118,11 +109,7 @@ export class KeybindingResolver {
 
 	lookupKeybindings(command: CommandId, context: Context): readonly ResolvedKeybinding[] {
 		return this.winningRules(context)
-			.filter(
-				({ rule }) =>
-					(rule.kind === KeybindingRuleKind.Command || rule.kind === KeybindingRuleKind.PassThrough) &&
-					rule.command === command,
-			)
+			.filter(({ rule }) => (rule.kind === KeybindingRuleKind.Command || rule.kind === KeybindingRuleKind.PassThrough) && rule.command === command)
 			.map(({ keybinding }) => keybinding);
 	}
 
@@ -151,23 +138,11 @@ export class KeybindingResolver {
 }
 
 function keybindingIdentity(keybinding: ResolvedKeybinding): string {
-	return keybinding.chords
-		.map(chord =>
-			[
-				chord.kind,
-				chord.key,
-				Number(chord.ctrlKey),
-				Number(chord.shiftKey),
-				Number(chord.altKey),
-				Number(chord.metaKey),
-			].join(':'),
-		)
-		.join(' ');
+	return keybinding.chords.map(chord => [chord.kind, chord.key, Number(chord.ctrlKey), Number(chord.shiftKey), Number(chord.altKey), Number(chord.metaKey)].join(':')).join(' ');
 }
 
 function compareResolvedRules(first: ResolvedRule, second: ResolvedRule): number {
-	const source =
-		(second.rule.source ?? KeybindingSource.Workbench) - (first.rule.source ?? KeybindingSource.Workbench);
+	const source = (second.rule.source ?? KeybindingSource.Workbench) - (first.rule.source ?? KeybindingSource.Workbench);
 	if (source !== 0) return source;
 	const priority = (second.rule.priority ?? 0) - (first.rule.priority ?? 0);
 	return priority !== 0 ? priority : second.rule.order - first.rule.order;

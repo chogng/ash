@@ -4,13 +4,7 @@ import { h } from '../../../../base/browser/dom.js';
 import { localize } from '../../../../nls.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
-import {
-	Disposable,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-	type IDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { Position } from '../../../../editor/common/core/position.js';
 import type { Range } from '../../../../editor/common/core/range.js';
 import type { LanguageDocumentSymbol } from '../../../../editor/common/languages.js';
@@ -23,19 +17,9 @@ import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../platform/act
 import { type IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
 import type { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-	type IRegisteredConfiguration,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import {
-	BreadcrumbsEnabledConfiguration,
-	BreadcrumbsFilePathConfiguration,
-	BreadcrumbsSymbolPathConfiguration,
-	type BreadcrumbsPathMode,
-	type IBreadcrumbsService,
-} from './breadcrumbs.js';
+import { BreadcrumbsEnabledConfiguration, BreadcrumbsFilePathConfiguration, BreadcrumbsSymbolPathConfiguration, type BreadcrumbsPathMode, type IBreadcrumbsService } from './breadcrumbs.js';
 import type { EditorGroupId } from '../../../services/editor/common/editorState.js';
 import { EditorBreadcrumbsControl } from './breadcrumbsControl.js';
 import { BreadcrumbsModel, type FileElement, type SymbolElement } from './breadcrumbsModel.js';
@@ -86,13 +70,7 @@ export class EditorHeaderControl extends Disposable {
 		group: EditorGroupId | undefined,
 		breadcrumbsService: IBreadcrumbsService | undefined,
 		private readonly languageFeatures: ILanguageFeaturesService | undefined,
-		private readonly showSymbolPicker:
-			| ((
-					symbols: readonly LanguageDocumentSymbol[],
-					selected: LanguageDocumentSymbol,
-					reveal: (range: Range) => void,
-			  ) => void)
-			| undefined,
+		private readonly showSymbolPicker: ((symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => void) | undefined,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
@@ -101,18 +79,12 @@ export class EditorHeaderControl extends Disposable {
 		tabsRow.append(actionsContainer);
 		this.toolbar = this._register(
 			actions
-				? new MenuWorkbenchToolBar(
-						actionsContainer,
-						actions.menuService,
-						actions.contextMenuProvider,
-						MenuId.EditorTitle,
-						{
-							highlightToggledItems: true,
-							hoverAnchorPosition: AnchorPosition.Below,
-							contextKeyService: actions.contextKeyService,
-							menuOptions: group === undefined ? undefined : { arg: { groupId: group } },
-						},
-					)
+				? new MenuWorkbenchToolBar(actionsContainer, actions.menuService, actions.contextMenuProvider, MenuId.EditorTitle, {
+						highlightToggledItems: true,
+						hoverAnchorPosition: AnchorPosition.Below,
+						contextKeyService: actions.contextKeyService,
+						menuOptions: group === undefined ? undefined : { arg: { groupId: group } },
+					})
 				: new WorkbenchToolBar(actionsContainer, emptyEditorToolbarContextMenuProvider, {
 						ariaLabel: localize({ bundle: 'ash.regions', key: 'editorActions' }, 'Editor actions'),
 						highlightToggledItems: true,
@@ -120,25 +92,14 @@ export class EditorHeaderControl extends Disposable {
 					}),
 		);
 		this._register(toDisposable(() => actionsContainer.remove()));
-		this.breadcrumbs = this._register(
-			instantiationService.createInstance(
-				EditorBreadcrumbsControl,
-				titleContainer,
-				onSelectBreadcrumb,
-				(element: SymbolElement) => this.selectSymbol(element),
-			),
-		);
-		if (group !== undefined && breadcrumbsService)
-			this._register(breadcrumbsService.register(group, this.breadcrumbs));
-		const configuration = Registry.as<IConfigurationRegistry>(
-			ConfigurationExtensions.Configuration,
-		).getConfiguration(BreadcrumbsEnabledConfiguration) as IRegisteredConfiguration<boolean> | undefined;
+		this.breadcrumbs = this._register(instantiationService.createInstance(EditorBreadcrumbsControl, titleContainer, onSelectBreadcrumb, (element: SymbolElement) => this.selectSymbol(element)));
+		if (group !== undefined && breadcrumbsService) this._register(breadcrumbsService.register(group, this.breadcrumbs));
+		const configuration = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(BreadcrumbsEnabledConfiguration) as
+			IRegisteredConfiguration<boolean> | undefined;
 		if (!configuration) throw new RangeError(`Unknown configuration: ${BreadcrumbsEnabledConfiguration}`);
-		this.breadcrumbsEnabled =
-			configurationService?.getValue<boolean>(BreadcrumbsEnabledConfiguration) ?? configuration.defaultValue;
+		this.breadcrumbsEnabled = configurationService?.getValue<boolean>(BreadcrumbsEnabledConfiguration) ?? configuration.defaultValue;
 		this.filePath = configurationService?.getValue<BreadcrumbsPathMode>(BreadcrumbsFilePathConfiguration) ?? 'on';
-		this.symbolPath =
-			configurationService?.getValue<BreadcrumbsPathMode>(BreadcrumbsSymbolPathConfiguration) ?? 'on';
+		this.symbolPath = configurationService?.getValue<BreadcrumbsPathMode>(BreadcrumbsSymbolPathConfiguration) ?? 'on';
 		this.showEditorType = configurationService?.getValue<boolean>(BreadcrumbsShowEditorTypeConfiguration) ?? true;
 		this.breadcrumbs.setPathModes(this.filePath, this.symbolPath);
 		this.updateBreadcrumbVisibility();
@@ -146,40 +107,23 @@ export class EditorHeaderControl extends Disposable {
 			const updateScrollbar = (): void =>
 				this.breadcrumbs.setScrollbarOptions(
 					configurationService.getValue<EditorTitleScrollbarSizing>(EditorTitleScrollbarSizingConfiguration),
-					configurationService.getValue<EditorTitleScrollbarVisibility>(
-						EditorTitleScrollbarVisibilityConfiguration,
-					),
+					configurationService.getValue<EditorTitleScrollbarVisibility>(EditorTitleScrollbarVisibilityConfiguration),
 				);
 			updateScrollbar();
 			this._register(
 				configurationService.onDidChangeConfiguration(event => {
 					if (event.affectsConfiguration(BreadcrumbsShowEditorTypeConfiguration)) {
-						this.showEditorType = configurationService.getValue<boolean>(
-							BreadcrumbsShowEditorTypeConfiguration,
-						);
+						this.showEditorType = configurationService.getValue<boolean>(BreadcrumbsShowEditorTypeConfiguration);
 						this.updateEditorType();
 					}
-					if (
-						event.affectsConfiguration(EditorTitleScrollbarSizingConfiguration) ||
-						event.affectsConfiguration(EditorTitleScrollbarVisibilityConfiguration)
-					)
-						updateScrollbar();
+					if (event.affectsConfiguration(EditorTitleScrollbarSizingConfiguration) || event.affectsConfiguration(EditorTitleScrollbarVisibilityConfiguration)) updateScrollbar();
 					if (event.affectsConfiguration(BreadcrumbsEnabledConfiguration)) {
-						this.breadcrumbsEnabled = configurationService.getValue<boolean>(
-							BreadcrumbsEnabledConfiguration,
-						);
+						this.breadcrumbsEnabled = configurationService.getValue<boolean>(BreadcrumbsEnabledConfiguration);
 						this.updateBreadcrumbVisibility();
 					}
-					if (
-						event.affectsConfiguration(BreadcrumbsFilePathConfiguration) ||
-						event.affectsConfiguration(BreadcrumbsSymbolPathConfiguration)
-					) {
-						this.filePath = configurationService.getValue<BreadcrumbsPathMode>(
-							BreadcrumbsFilePathConfiguration,
-						);
-						this.symbolPath = configurationService.getValue<BreadcrumbsPathMode>(
-							BreadcrumbsSymbolPathConfiguration,
-						);
+					if (event.affectsConfiguration(BreadcrumbsFilePathConfiguration) || event.affectsConfiguration(BreadcrumbsSymbolPathConfiguration)) {
+						this.filePath = configurationService.getValue<BreadcrumbsPathMode>(BreadcrumbsFilePathConfiguration);
+						this.symbolPath = configurationService.getValue<BreadcrumbsPathMode>(BreadcrumbsSymbolPathConfiguration);
 						this.breadcrumbs.setPathModes(this.filePath, this.symbolPath);
 						this.updateBreadcrumbVisibility();
 					}
@@ -249,39 +193,23 @@ export class EditorHeaderControl extends Disposable {
 					onDidChangeCursorSelection: Event<unknown>;
 			  }>
 			| undefined;
-		if (
-			!control ||
-			typeof control.getModel !== 'function' ||
-			typeof control.getPosition !== 'function' ||
-			typeof control.onDidChangeCursorSelection !== 'function'
-		)
-			return;
+		if (!control || typeof control.getModel !== 'function' || typeof control.getPosition !== 'function' || typeof control.onDidChangeCursorSelection !== 'function') return;
 		const model = control.getModel();
 		if (!model) return;
-		const scheduler = this.symbolListeners.add(
-			new RunOnceScheduler(() => void this.loadSymbols(model, control), 150),
-		);
+		const scheduler = this.symbolListeners.add(new RunOnceScheduler(() => void this.loadSymbols(model, control), 150));
 		this.symbolListeners.add(model.onDidChangeContent(() => scheduler.schedule()));
 		this.symbolListeners.add(model.onDidChangeLanguage(() => scheduler.schedule()));
 		this.symbolListeners.add(this.languageFeatures!.documentSymbolProvider.onDidChange(() => scheduler.schedule()));
-		this.symbolListeners.add(
-			control.onDidChangeCursorSelection(() => this.updateCurrentSymbol(control.getPosition?.() ?? null)),
-		);
+		this.symbolListeners.add(control.onDidChangeCursorSelection(() => this.updateCurrentSymbol(control.getPosition?.() ?? null)));
 		void this.loadSymbols(model, control);
 	}
 
-	private async loadSymbols(
-		model: TextModel,
-		control: { getModel?: () => TextModel | null; getPosition?: () => Position | null },
-	): Promise<void> {
+	private async loadSymbols(model: TextModel, control: { getModel?: () => TextModel | null; getPosition?: () => Position | null }): Promise<void> {
 		const controller = new AbortController();
 		this.symbolRequest.value = toDisposable(() => controller.abort());
 		try {
-			const outline = await OutlineModel.create(
-				this.languageFeatures!.documentSymbolProvider,
-				model,
-				controller.signal,
-				error => console.error('Could not load editor breadcrumb symbols', error),
+			const outline = await OutlineModel.create(this.languageFeatures!.documentSymbolProvider, model, controller.signal, error =>
+				console.error('Could not load editor breadcrumb symbols', error),
 			);
 			if (controller.signal.aborted || control.getModel?.() !== model) return;
 			this.outline = outline;
@@ -306,11 +234,7 @@ export class EditorHeaderControl extends Disposable {
 
 	private updateBreadcrumbVisibility(): void {
 		const wasVisible = this.titleContainer.classList.contains('ash-editor-title-with-breadcrumbs');
-		const visible =
-			this.breadcrumbsEnabled &&
-			!!this.activeInput &&
-			this.activeInput.showBreadcrumbs !== false &&
-			!this.breadcrumbs.domNode.classList.contains('empty');
+		const visible = this.breadcrumbsEnabled && !!this.activeInput && this.activeInput.showBreadcrumbs !== false && !this.breadcrumbs.domNode.classList.contains('empty');
 		this.breadcrumbs.domNode.hidden = !visible;
 		this.titleContainer.classList.toggle('ash-editor-title-with-breadcrumbs', visible);
 		if (visible !== wasVisible) this.heightEmitter.fire();

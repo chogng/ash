@@ -8,8 +8,7 @@ import { connectTraceAppServer } from '../sessions/traceFixture.js';
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
 import { createAppServerSkillOperations } from '../../../../src/ash/platform/agentHost/browser/appServerApi.js';
 
-const instructions =
-	'---\nname: c-review\ndescription: Reviews the synthetic C fixture.\n---\n# C review\n[Guide](references/guide.md)\n';
+const instructions = '---\nname: c-review\ndescription: Reviews the synthetic C fixture.\n---\n# C review\n[Guide](references/guide.md)\n';
 const test = base.extend({
 	testWorkspace: async ({ testWorkspace }, use) => {
 		const root = join(testWorkspace.directory, '.ash', 'skills');
@@ -18,10 +17,7 @@ const test = base.extend({
 		await writeFile(join(root, 'c-review', 'references', 'guide.md'), '[Checks](nested/checks.md)\n');
 		await writeFile(join(root, 'c-review', 'references', 'nested', 'checks.md'), 'C nested reference.\n');
 		await mkdir(join(root, 'c-broken'), { recursive: true });
-		await writeFile(
-			join(root, 'c-broken', 'SKILL.md'),
-			'---\nname: Invalid_Name\ndescription: Broken synthetic fixture.\n---\n',
-		);
+		await writeFile(join(root, 'c-broken', 'SKILL.md'), '---\nname: Invalid_Name\ndescription: Broken synthetic fixture.\n---\n');
 		await use(testWorkspace);
 	},
 });
@@ -47,40 +43,14 @@ test(
 			expect(skill).toBeDefined();
 			expect(before.diagnostics.some(item => item.subject?.includes('c-broken'))).toBe(true);
 			const reference = { id: skill.id, version: { type: 'pinnedDigest' as const, digest: skill.contentDigest } };
-			expect(await backend.readTextResource(reference, 'SKILL.md', new AbortController().signal, sessionId)).toBe(
-				instructions,
-			);
-			expect(
-				await backend.readTextResource(
-					reference,
-					'references/guide.md',
-					new AbortController().signal,
-					sessionId,
-				),
-			).toBe('[Checks](nested/checks.md)\n');
-			expect(
-				await backend.readTextResource(
-					reference,
-					'references/nested/checks.md',
-					new AbortController().signal,
-					sessionId,
-				),
-			).toBe('C nested reference.\n');
+			expect(await backend.readTextResource(reference, 'SKILL.md', new AbortController().signal, sessionId)).toBe(instructions);
+			expect(await backend.readTextResource(reference, 'references/guide.md', new AbortController().signal, sessionId)).toBe('[Checks](nested/checks.md)\n');
+			expect(await backend.readTextResource(reference, 'references/nested/checks.md', new AbortController().signal, sessionId)).toBe('C nested reference.\n');
 			await expect(
-				backend.readTextResource(
-					{ id: skill.id, version: { type: 'pinnedDigest', digest: skill.contentDigest } },
-					'../outside',
-					new AbortController().signal,
-					sessionId,
-				),
+				backend.readTextResource({ id: skill.id, version: { type: 'pinnedDigest', digest: skill.contentDigest } }, '../outside', new AbortController().signal, sessionId),
 			).rejects.toMatchObject({ errorName: 'InvalidParams' });
 			await expect(
-				backend.readTextResource(
-					{ id: skill.id, version: { type: 'pinnedDigest', digest: `sha256:${'0'.repeat(64)}` } },
-					'SKILL.md',
-					new AbortController().signal,
-					sessionId,
-				),
+				backend.readTextResource({ id: skill.id, version: { type: 'pinnedDigest', digest: `sha256:${'0'.repeat(64)}` } }, 'SKILL.md', new AbortController().signal, sessionId),
 			).rejects.toMatchObject({ errorName: 'SkillOperationFailed' });
 			await backend.setEnabled(skill.id, false, before.revision, sessionId);
 			await expect(backend.setEnabled(skill.id, true, before.revision, sessionId)).rejects.toMatchObject({
@@ -103,12 +73,7 @@ test(
 			await testInfo.attach('c-real-skill-snapshot', { path: image, contentType: 'image/png' });
 			const reopened = await workbench.reopenAgentsWindow(application, page);
 			await new QuickAccess(reopened).runCommand('workbench.action.chat.configure.skills');
-			await expect(
-				reopened
-					.locator('[data-view-id="ash.extensions.skills"]')
-					.getByRole('option')
-					.filter({ hasText: 'c-review' }),
-			).toContainText('Disabled');
+			await expect(reopened.locator('[data-view-id="ash.extensions.skills"]').getByRole('option').filter({ hasText: 'c-review' })).toContainText('Disabled');
 		} finally {
 			await connection.close();
 		}
@@ -139,30 +104,17 @@ test(
 				sessionId,
 				threadId,
 			});
-			if (thread.directory?.type !== 'local')
-				throw new Error('The Hook fixture requires its owning local Thread directory');
+			if (thread.directory?.type !== 'local') throw new Error('The Hook fixture requires its owning local Thread directory');
 			if (target.kind === 'electron') {
 				await connection.client.request(APP_SERVER_METHODS['session/dirs/add'], {
 					sessionId,
 					path: thread.directory.root,
-					permissions: [
-						'readFiles',
-						'writeFiles',
-						'browseFiles',
-						'watchFiles',
-						'executeCommands',
-						'loadConfig',
-						'discoverHooks',
-					],
+					permissions: ['readFiles', 'writeFiles', 'browseFiles', 'watchFiles', 'executeCommands', 'loadConfig', 'discoverHooks'],
 				});
 			}
 			await page.locator('.ash-sessions-list-item').filter({ hasText: 'C Hook fixture' }).click();
 			const sources = await connection.client.request(APP_SERVER_METHODS['hook/list'], { sessionId });
-			const source = sources.sources.find(item =>
-				target.kind === 'electron'
-					? item.configPath === join(thread.directory!.root, '.ash', 'config.toml')
-					: item.namespace === 'user',
-			)!;
+			const source = sources.sources.find(item => (target.kind === 'electron' ? item.configPath === join(thread.directory!.root, '.ash', 'config.toml') : item.namespace === 'user'))!;
 			expect(source).toBeDefined();
 			const hookId = `${source.namespace}:hook:c-review`;
 			const hook = {
@@ -195,9 +147,7 @@ test(
 			const edit = declaration.locator('[data-hook-action="edit-hook"]');
 			if (target.kind === 'electron') {
 				await edit.click();
-				const editor = new Editor(
-					page.locator('[data-part=editor]:not(.ash-sessions-chat-grid) .ash-editor-group-content:visible'),
-				);
+				const editor = new Editor(page.locator('[data-part=editor]:not(.ash-sessions-chat-grid) .ash-editor-group-content:visible'));
 				await editor.waitForEditorFocus();
 				await editor.input.press('ControlOrMeta+A');
 				await page.keyboard.insertText(config.replace('enablement = "enabled"', 'enablement = "disabled"'));

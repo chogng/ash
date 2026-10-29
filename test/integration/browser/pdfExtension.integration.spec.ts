@@ -40,9 +40,7 @@ test.beforeAll(async () => {
 });
 test.beforeEach(async ({ page }) => {
 	let generation = 0;
-	await page.route('**/__pdf_bytes', route =>
-		route.fulfill({ body: Buffer.from(pdf()), contentType: 'application/pdf' }),
-	);
+	await page.route('**/__pdf_bytes', route => route.fulfill({ body: Buffer.from(pdf()), contentType: 'application/pdf' }));
 	await page.route('**/__pdf_catalog', route =>
 		route.fulfill({
 			json: {
@@ -59,9 +57,7 @@ test.beforeEach(async ({ page }) => {
 						manifestJson: JSON.stringify(manifest),
 						manifestSha256: hash(JSON.stringify(manifest)),
 						packageSha256: hash(JSON.stringify(compiled.resources)),
-						rendererClient: runtimes.has(page)
-							? { ...compiled.client, runtimeId: 'ash.pdf-viewer' }
-							: undefined,
+						rendererClient: runtimes.has(page) ? { ...compiled.client, runtimeId: 'ash.pdf-viewer' } : undefined,
 					},
 				],
 			},
@@ -70,8 +66,7 @@ test.beforeEach(async ({ page }) => {
 	await page.route('**/__pdf_resource?*', route => {
 		const query = new URL(route.request().url()).searchParams;
 		const content = compiled.resources[query.get('path') ?? ''];
-		if (!runtimes.has(page) || query.get('generation') !== String(generation) || content === undefined)
-			return route.fulfill({ status: 410 });
+		if (!runtimes.has(page) || query.get('generation') !== String(generation) || content === undefined) return route.fulfill({ status: 410 });
 		return route.fulfill({
 			body: content,
 			contentType: query.get('path')?.endsWith('.css') ? 'text/css' : 'text/javascript',
@@ -82,15 +77,7 @@ test.beforeEach(async ({ page }) => {
 		if (!enabled) {
 			await runtimes.get(page)?.dispose();
 			runtimes.delete(page);
-		} else if (!runtimes.has(page))
-			runtimes.set(
-				page,
-				await startClientEditorExtension(
-					'ash-pdf-viewer',
-					'ash.pdf-viewer',
-					new URL(route.request().url()).searchParams.get('locale') ?? 'en',
-				),
-			);
+		} else if (!runtimes.has(page)) runtimes.set(page, await startClientEditorExtension('ash-pdf-viewer', 'ash.pdf-viewer', new URL(route.request().url()).searchParams.get('locale') ?? 'en'));
 		const runtime = runtimes.get(page);
 		await route.fulfill({
 			json: {
@@ -128,9 +115,7 @@ test.afterEach(async ({ page }) => {
 });
 
 for (const locale of ['en', 'zh-CN'])
-	test(`optional PDF package opens, saves, retires and reloads independently in ${locale}`, async ({
-		page,
-	}, testInfo) => {
+	test(`optional PDF package opens, saves, retires and reloads independently in ${locale}`, async ({ page }, testInfo) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto(`/pdfExtension.html?locale=${locale}`);
@@ -150,10 +135,7 @@ for (const locale of ['en', 'zh-CN'])
 			}),
 		).toBe(true);
 		await expect(reader).toHaveAttribute('aria-label', locale === 'zh-CN' ? 'PDF 阅读器' : 'PDF reader');
-		await expect(reader).toHaveAttribute(
-			'aria-description',
-			locale === 'zh-CN' ? /打开无障碍帮助/ : /Open Accessibility Help/,
-		);
+		await expect(reader).toHaveAttribute('aria-description', locale === 'zh-CN' ? /打开无障碍帮助/ : /Open Accessibility Help/);
 		await page.evaluate(() => window.pdfExtensionTest.verbosity(false));
 		await expect(reader).not.toHaveAttribute('aria-description');
 		await page.evaluate(() => window.pdfExtensionTest.verbosity(true));
@@ -162,15 +144,11 @@ for (const locale of ['en', 'zh-CN'])
 		await layer.focus();
 		await layer.press('ArrowRight');
 		expect(await page.evaluate(() => window.pdfExtensionTest.accessible())).toContain('Ash optional PDF Viewer');
-		expect(await page.evaluate(() => window.pdfExtensionTest.accessible(true))).toContain(
-			locale === 'zh-CN' ? '方向键' : 'arrow keys',
-		);
+		expect(await page.evaluate(() => window.pdfExtensionTest.accessible(true))).toContain(locale === 'zh-CN' ? '方向键' : 'arrow keys');
 		await layer.press('Enter');
 		await expect(reader.locator('.ash-pdf-annotation-note')).toHaveCount(1);
 		await reader.locator('[data-action-id="ash.pdf.annotations.save"] button').click();
-		await expect
-			.poll(() => page.evaluate(async () => (await window.pdfExtensionTest.saved())?.annotations.length))
-			.toBe(1);
+		await expect.poll(() => page.evaluate(async () => (await window.pdfExtensionTest.saved())?.annotations.length)).toBe(1);
 		expect(await page.evaluate(() => window.pdfExtensionTest.unchanged())).toBe(true);
 		await page.evaluate(() => window.pdfExtensionTest.open());
 		await expect(reader.locator('.ash-pdf-annotation-note')).toHaveCount(1);
@@ -195,9 +173,7 @@ for (const locale of ['en', 'zh-CN'])
 	});
 
 test('optional PDF rejects modified client bytes before executing the package', async ({ page }) => {
-	await page.route('**/__pdf_resource?*', route =>
-		route.fulfill({ body: 'throw new Error("unverified client executed")', contentType: 'text/javascript' }),
-	);
+	await page.route('**/__pdf_resource?*', route => route.fulfill({ body: 'throw new Error("unverified client executed")', contentType: 'text/javascript' }));
 	await page.goto('/pdfExtension.html');
 	await page.waitForFunction(() => !!window.pdfExtensionTest);
 	await page.evaluate(() => window.pdfExtensionTest.enable(true));
@@ -211,9 +187,7 @@ test('optional PDF rejects modified client bytes before executing the package', 
 	await expect(page.locator('canvas')).toHaveCount(0);
 });
 
-test('Chat uses the optional resource editor for immutable attachment previews and keeps actions without it', async ({
-	page,
-}) => {
+test('Chat uses the optional resource editor for immutable attachment previews and keeps actions without it', async ({ page }) => {
 	await page.goto('/pdfExtension.html');
 	await page.waitForFunction(() => !!window.pdfExtensionTest);
 	await page.evaluate(() => window.pdfExtensionTest.previewChat());
@@ -236,11 +210,7 @@ test('Chat uses the optional resource editor for immutable attachment previews a
 
 /** Text spans, line breaks and page rotation exercise PDF.js layout rather than HTML-only fixtures. */
 function readingPdf(options: { scanned?: boolean; rotated?: boolean } = {}): Uint8Array {
-	const objects = [
-		'<< /Type /Catalog /Pages 2 0 R >>',
-		'<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R] /Count 3 >>',
-		'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-	];
+	const objects = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R] /Count 3 >>', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];
 	for (let page = 1; page <= 3; page++) {
 		const stream = options.scanned
 			? '0 0 0 rg 30 200 100 20 re f'
@@ -265,13 +235,8 @@ function readingPdf(options: { scanned?: boolean; rotated?: boolean } = {}): Uin
 }
 
 for (const locale of ['en', 'zh-CN'])
-	test(`PDF reading preserves selection, matches and annotations through zoom in ${locale}`, async ({
-		page,
-		context,
-	}, testInfo) => {
-		await page.route('**/__pdf_bytes', route =>
-			route.fulfill({ body: Buffer.from(readingPdf()), contentType: 'application/pdf' }),
-		);
+	test(`PDF reading preserves selection, matches and annotations through zoom in ${locale}`, async ({ page, context }, testInfo) => {
+		await page.route('**/__pdf_bytes', route => route.fulfill({ body: Buffer.from(readingPdf()), contentType: 'application/pdf' }));
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto(`/pdfExtension.html?locale=${locale}`);
@@ -311,9 +276,7 @@ for (const locale of ['en', 'zh-CN'])
 		await reader.locator('[data-action-id="ash.pdf.annotations.redo"] button').click();
 		await expect(reader.locator('.ash-pdf-annotation-note')).toHaveCount(1);
 		await reader.locator('[data-action-id="ash.pdf.annotations.save"] button').click();
-		await expect
-			.poll(() => page.evaluate(async () => (await window.pdfExtensionTest.saved())?.annotations.length))
-			.toBe(1);
+		await expect.poll(() => page.evaluate(async () => (await window.pdfExtensionTest.saved())?.annotations.length)).toBe(1);
 
 		await reader.locator('.ash-pdf-pages').focus();
 		await page.keyboard.press(process.platform === 'darwin' ? 'Meta+f' : 'Control+f');
@@ -330,21 +293,11 @@ for (const locale of ['en', 'zh-CN'])
 		await expect(status).toContainText(locale === 'en' ? 'page 3' : '第 3 页');
 		const match = reader.locator('.ash-pdf-search-match.current');
 		await expect(match).toBeInViewport();
-		const originalRatio = await match.evaluate(
-			element =>
-				element.getBoundingClientRect().width /
-				element.parentElement!.parentElement!.getBoundingClientRect().width,
-		);
+		const originalRatio = await match.evaluate(element => element.getBoundingClientRect().width / element.parentElement!.parentElement!.getBoundingClientRect().width);
 		for (const scale of ['1', '2', '0.5', '1.5']) await zoom.selectOption(scale);
 		await expect(reader).not.toHaveAttribute('aria-busy');
 		expect((await firstPage.boundingBox())!.width).toBeCloseTo(630, 0);
-		expect(
-			await match.evaluate(
-				element =>
-					element.getBoundingClientRect().width /
-					element.parentElement!.parentElement!.getBoundingClientRect().width,
-			),
-		).toBeCloseTo(originalRatio, 2);
+		expect(await match.evaluate(element => element.getBoundingClientRect().width / element.parentElement!.parentElement!.getBoundingClientRect().width)).toBeCloseTo(originalRatio, 2);
 		await expect(status).toContainText(locale === 'en' ? 'page 3' : '第 3 页');
 		await search.fill('across lines');
 		await expect(status).toHaveText(locale === 'en' ? '1 of 3 · page 1' : '第 1 / 3 项 · 第 1 页');
@@ -373,17 +326,13 @@ for (const locale of ['en', 'zh-CN'])
 		await expect(reader).not.toHaveAttribute('aria-busy');
 		await reader.getByRole('button', { name: locale === 'en' ? 'Fit width' : '适合宽度', exact: true }).click();
 		await expect(reader).not.toHaveAttribute('aria-busy');
-		expect(
-			await reader.locator('.ash-pdf-pages').evaluate(element => element.scrollWidth - element.clientWidth),
-		).toBeLessThanOrEqual(1);
+		expect(await reader.locator('.ash-pdf-pages').evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
 		expect(await page.evaluate(() => window.pdfExtensionTest.unchanged())).toBe(true);
 		await page.screenshot({ path: testInfo.outputPath(`pdf-reading-${locale}.png`) });
 		await page.evaluate(() => window.pdfExtensionTest.open(true));
 		await zoom.selectOption('2');
 		await expect(reader).not.toHaveAttribute('aria-busy');
-		await reader
-			.getByRole('button', { name: locale === 'en' ? 'Find in PDF' : '在 PDF 中查找', exact: true })
-			.click();
+		await reader.getByRole('button', { name: locale === 'en' ? 'Find in PDF' : '在 PDF 中查找', exact: true }).click();
 		await search.fill('PDF Viewer');
 		await expect(reader.locator('.ash-pdf-search-match')).toHaveCount(3);
 		await page.evaluate(() => window.pdfExtensionTest.enable(false));
@@ -393,9 +342,7 @@ for (const locale of ['en', 'zh-CN'])
 	});
 
 test('PDF search reports image-only pages and keeps rotated text aligned', async ({ page }) => {
-	await page.route('**/__pdf_bytes', route =>
-		route.fulfill({ body: Buffer.from(readingPdf({ scanned: true })), contentType: 'application/pdf' }),
-	);
+	await page.route('**/__pdf_bytes', route => route.fulfill({ body: Buffer.from(readingPdf({ scanned: true })), contentType: 'application/pdf' }));
 	await page.goto('/pdfExtension.html');
 	await page.waitForFunction(() => !!window.pdfExtensionTest);
 	await page.evaluate(async () => {
@@ -405,9 +352,7 @@ test('PDF search reports image-only pages and keeps rotated text aligned', async
 	await page.getByRole('button', { name: 'Find in PDF', exact: true }).click();
 	await page.getByRole('searchbox').fill('anything');
 	await expect(page.locator('.ash-pdf-find-status')).toHaveText('No searchable text in this PDF');
-	await page.route('**/__pdf_bytes', route =>
-		route.fulfill({ body: Buffer.from(readingPdf({ rotated: true })), contentType: 'application/pdf' }),
-	);
+	await page.route('**/__pdf_bytes', route => route.fulfill({ body: Buffer.from(readingPdf({ rotated: true })), contentType: 'application/pdf' }));
 	await page.reload();
 	await page.waitForFunction(() => !!window.pdfExtensionTest);
 	await page.evaluate(async () => {

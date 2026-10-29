@@ -1,19 +1,10 @@
-import type {
-	AgentModelCatalog,
-	AgentModelProviders,
-	AgentModelDefaults,
-	ModelReasoningEffort,
-} from '../../../../platform/agentHost/common/agentModels.js';
+import type { AgentModelCatalog, AgentModelProviders, AgentModelDefaults, ModelReasoningEffort } from '../../../../platform/agentHost/common/agentModels.js';
 import { TaskQueue } from '../../../../base/common/async.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { canceled } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import {
-	IAgentModelsService,
-	type CustomModelProvider,
-	type ModelProviderTestResult,
-} from '../../../../platform/agentHost/common/agentModels.js';
+import { IAgentModelsService, type CustomModelProvider, type ModelProviderTestResult } from '../../../../platform/agentHost/common/agentModels.js';
 import type { ModelPreferencesUpdate } from '../../../../platform/agentHost/common/agentModels.js';
 import type { ApprovalReviewModelSelection } from '../../../../platform/agentHost/common/agentModels.js';
 import { IAppServerApi, IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
@@ -140,12 +131,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 		for (;;) {
 			const generation = this.defaultsGeneration;
 			const defaults = await this.modelApi.readDefaults();
-			if (
-				this.isDisposed ||
-				epoch !== this.connectionEpoch ||
-				connectionGeneration !== this.appServer.connectionGeneration
-			)
-				throw canceled();
+			if (this.isDisposed || epoch !== this.connectionEpoch || connectionGeneration !== this.appServer.connectionGeneration) throw canceled();
 			// Config notifications can trail a successful write. Reread that profile instead of reporting a failed choice.
 			if (generation !== this.defaultsGeneration) continue;
 			if (this.modelDefaults && defaults.revision < this.modelDefaults.revision) throw canceled();
@@ -157,8 +143,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 		const epoch = this.connectionEpoch;
 		const generation = this.appServer.connectionGeneration;
 		return this.selectionUpdates.schedule(async () => {
-			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration)
-				throw canceled();
+			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
 			if (model === undefined) {
 				// Auto inherits the backend model and effort. Clearing model would make that runtime unavailable.
 				// Persist only this existing composer intent until the backend has a separate selection contract.
@@ -166,18 +151,12 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 				return;
 			}
 			const defaults = await this.modelApi.readDefaults();
-			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration)
-				throw canceled();
+			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
 			const same = defaults.model && modelRefIdentity(model) === modelRefIdentity(defaults.model);
-			await this.modelApi.configureDefaults(
-				{ model, ...(!same ? { reasoningEffort: null } : {}) },
-				defaults.revision,
-			);
-			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration)
-				throw canceled();
+			await this.modelApi.configureDefaults({ model, ...(!same ? { reasoningEffort: null } : {}) }, defaults.revision);
+			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
 			await this.readModelDefaults();
-			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration)
-				throw canceled();
+			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
 			this.preferences.rememberSelectedModel(null);
 		});
 	}
@@ -185,17 +164,13 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 		const epoch = this.connectionEpoch;
 		const generation = this.appServer.connectionGeneration;
 		return this.selectionUpdates.schedule(async () => {
-			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration)
-				throw canceled();
+			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
 			const defaults = await this.modelApi.readDefaults();
-			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration)
-				throw canceled();
+			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
 			await this.modelApi.configureDefaults({ model, reasoningEffort: effort ?? null }, defaults.revision);
-			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration)
-				throw canceled();
+			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
 			await this.readModelDefaults();
-			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration)
-				throw canceled();
+			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
 		});
 	}
 	public isModelVisible(model: ModelRef): boolean {
@@ -214,10 +189,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 		return models;
 	}
 	public async listModels(): Promise<readonly ModelCatalogEntry[]> {
-		const [catalog] = await Promise.all([
-			this.listModelCatalog(),
-			this.modelDefaults ? undefined : this.readModelDefaults().catch(() => undefined),
-		]);
+		const [catalog] = await Promise.all([this.listModelCatalog(), this.modelDefaults ? undefined : this.readModelDefaults().catch(() => undefined)]);
 		return catalog.filter(entry => this.isModelVisible(entry.model));
 	}
 
@@ -267,9 +239,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 
 	public async refreshModels(): Promise<readonly ModelCatalogEntry[]> {
 		this.assertNotDisposed();
-		const load =
-			this.modelCatalogLoad ??
-			this.loadModelCatalog(++this.catalogGeneration, this.appServer.connectionGeneration);
+		const load = this.modelCatalogLoad ?? this.loadModelCatalog(++this.catalogGeneration, this.appServer.connectionGeneration);
 		this.modelCatalogLoad = load;
 		const generation = this.catalogGeneration;
 		const connectionGeneration = this.appServer.connectionGeneration;
@@ -280,11 +250,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 				if (this.isDisposed) {
 					throw canceled(error);
 				}
-				if (
-					generation === this.catalogGeneration &&
-					connectionGeneration === this.appServer.connectionGeneration &&
-					this.catalogAttemptRevision === this.catalogRevision
-				) {
+				if (generation === this.catalogGeneration && connectionGeneration === this.appServer.connectionGeneration && this.catalogAttemptRevision === this.catalogRevision) {
 					throw error;
 				}
 			}
@@ -348,11 +314,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 			const revision = this.catalogRevision;
 			this.catalogAttemptRevision = revision;
 			try {
-				const [catalog, providers, account] = await Promise.all([
-					this.modelApi.listModels(),
-					this.modelApi.listProviders(),
-					this.accountState ?? this.accounts.read(),
-				]);
+				const [catalog, providers, account] = await Promise.all([this.modelApi.listModels(), this.modelApi.listProviders(), this.accountState ?? this.accounts.read()]);
 				if (!this.isCurrentCatalogLoad(generation, connectionGeneration)) {
 					break;
 				}
@@ -381,9 +343,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 		const catalog = snapshot.models.map(entry => {
 			const identity = modelRefIdentity(entry.model);
 			if (identities.has(identity)) {
-				throw new Error(
-					`Model catalog contains duplicate entry '${entry.model.provider}/${entry.model.model}'`,
-				);
+				throw new Error(`Model catalog contains duplicate entry '${entry.model.provider}/${entry.model.model}'`);
 			}
 			identities.add(identity);
 			return entry;
@@ -395,8 +355,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 			this.externalScopes.set(scope.connection, scope.identity);
 		}
 		const providerState = JSON.stringify(modelProviderStatuses(providers));
-		const changed =
-			scopeChanged || !sameModelCatalog(this.modelCatalog, catalog) || this.providerState !== providerState;
+		const changed = scopeChanged || !sameModelCatalog(this.modelCatalog, catalog) || this.providerState !== providerState;
 		this.modelCatalog = Object.freeze(catalog);
 		this.providerState = providerState;
 		this.modelAccountConnections = new Set(providers.providers.map(provider => provider.connection));
@@ -415,9 +374,7 @@ function accountCatalogScope(account: AccountState, modelConnections: ReadonlySe
 	return JSON.stringify(
 		account.accounts
 			.filter(entry => !modelConnections || modelConnections.has(entry.provider))
-			.map(entry =>
-				JSON.stringify([entry.provider, entry.accountId, entry.organization, entry.plan, entry.status]),
-			)
+			.map(entry => JSON.stringify([entry.provider, entry.accountId, entry.organization, entry.plan, entry.status]))
 			.sort(),
 	);
 }
@@ -467,9 +424,7 @@ function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly Mo
 				entry.defaultReasoningEffort === candidate.defaultReasoningEffort &&
 				entry.supportedReasoningEfforts?.length === candidate.supportedReasoningEfforts?.length &&
 				(entry.supportedReasoningEfforts?.every(
-					(option, index) =>
-						option.effort === candidate.supportedReasoningEfforts?.[index]?.effort &&
-						option.description === candidate.supportedReasoningEfforts?.[index]?.description,
+					(option, index) => option.effort === candidate.supportedReasoningEfforts?.[index]?.effort && option.description === candidate.supportedReasoningEfforts?.[index]?.description,
 				) ??
 					true)
 			);

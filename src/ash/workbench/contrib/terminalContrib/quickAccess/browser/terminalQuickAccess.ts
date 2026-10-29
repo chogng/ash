@@ -1,19 +1,9 @@
 import { matchesSubString } from '../../../../../base/common/filters.js';
 import { onUnexpectedError } from '../../../../../base/common/errors.js';
 import { localize } from '../../../../../nls.js';
-import {
-	PickerQuickAccessProvider,
-	TriggerAction,
-	type IPickerQuickAccessItem,
-} from '../../../../../platform/quickinput/browser/pickerQuickAccess.js';
+import { PickerQuickAccessProvider, TriggerAction, type IPickerQuickAccessItem } from '../../../../../platform/quickinput/browser/pickerQuickAccess.js';
 import { TerminalLocation } from '../../../../../platform/terminal/common/terminal.js';
-import {
-	ITerminalEditingService,
-	ITerminalEditorService,
-	ITerminalGroupService,
-	ITerminalService,
-	type ITerminalInstance,
-} from '../../../terminal/browser/terminal.js';
+import { ITerminalEditingService, ITerminalEditorService, ITerminalGroupService, ITerminalService, type ITerminalInstance } from '../../../terminal/browser/terminal.js';
 
 /** Projects the window's existing instances; accepting never creates or moves a shell. */
 export class TerminalQuickAccessProvider extends PickerQuickAccessProvider<IPickerQuickAccessItem> {
@@ -59,9 +49,7 @@ export class TerminalQuickAccessProvider extends PickerQuickAccessProvider<IPick
 				return instance.title;
 			},
 			get description() {
-				return instance.target === TerminalLocation.Editor
-					? localize('terminal.quickAccess.editor', 'Editor')
-					: localize('terminal.quickAccess.panel', 'Panel');
+				return instance.target === TerminalLocation.Editor ? localize('terminal.quickAccess.editor', 'Editor') : localize('terminal.quickAccess.panel', 'Panel');
 			},
 			get picked() {
 				return instance === terminals.activeInstance;

@@ -18,10 +18,7 @@ import {
 import { createTestInitializeResult } from '../../../../../platform/agentHost/test/common/testAppServerProtocol.js';
 import { IPlaywrightService } from '../../../../../platform/browserView/common/playwrightService.js';
 import type { BrowserViewEvent } from '../../../../../platform/browserView/common/browserView.js';
-import {
-	BrowserCDPSettingId,
-	BrowserChatToolsSettingId,
-} from '../../../../../platform/browserView/common/browserView.js';
+import { BrowserCDPSettingId, BrowserChatToolsSettingId } from '../../../../../platform/browserView/common/browserView.js';
 import { ConfigurationService } from '../../../../../platform/configuration/common/configurationService.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
@@ -141,11 +138,7 @@ suite('Workbench Playwright service', () => {
 			{ openCanvasSource: async () => ({ url }), acceptCanvasOpen: () => {} } as unknown as IAgentCanvasHost,
 		);
 		await f.client.connect();
-		for (const source of [
-			'file:///private/secret',
-			'http://example.test/',
-			'https://user:password@example.test/',
-		]) {
+		for (const source of ['file:///private/secret', 'http://example.test/', 'https://user:password@example.test/']) {
 			url = source;
 			const result = await f.transport.request('browser/create', {
 				threadId: 'source-thread',
@@ -177,10 +170,7 @@ suite('Workbench Playwright service', () => {
 				operation: { type: 'command', method: 'Target.createTarget', params: { url: 'about:blank' } },
 			},
 		};
-		assert.match(
-			JSON.stringify((await fixture.transport.request('browser/perform', params)).error),
-			/BrowserCDPDisabled/,
-		);
+		assert.match(JSON.stringify((await fixture.transport.request('browser/perform', params)).error), /BrowserCDPDisabled/);
 		assert.deepEqual(calls, []);
 		await fixture.configuration.updateValue(BrowserCDPSettingId, true);
 		assert.deepEqual((await fixture.transport.request('browser/perform', params)).result, {
@@ -189,10 +179,7 @@ suite('Workbench Playwright service', () => {
 			output: '{"result":{"targetId":"chromium-page"}}',
 		});
 		await fixture.configuration.updateValue(BrowserChatToolsSettingId, false);
-		assert.match(
-			JSON.stringify((await fixture.transport.request('browser/perform', params)).error),
-			/BrowserCapabilityUnavailable/,
-		);
+		assert.match(JSON.stringify((await fixture.transport.request('browser/perform', params)).error), /BrowserCapabilityUnavailable/);
 		assert.deepEqual(calls, ['perform']);
 		assert.deepEqual(fixture.transport.preferences.at(-1), { enabled: false, cdpEnabled: true });
 	});
@@ -221,11 +208,7 @@ suite('Workbench Playwright service', () => {
 			networkToken: 'next-authority',
 		});
 		assert.deepEqual(
-			[
-				observed.result,
-				navigated.result,
-				calls.map(call => [call.command, (call.arg as { params: unknown }).params]),
-			],
+			[observed.result, navigated.result, calls.map(call => [call.command, (call.arg as { params: unknown }).params])],
 			[
 				observation,
 				{ targetId },
@@ -266,16 +249,9 @@ suite('Workbench Playwright service', () => {
 		const request = fixture.transport.request('browser/observe', { threadId: 'thread-one', targetId, ...options });
 		const operationId = await started.promise;
 		fixture.transport.emitFrame({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id: 'host-1' } });
-		assert.deepEqual(
-			[(await request).error, cancelled],
-			[{ code: -32800, message: 'Host request cancelled', data: null }, { id: operationId }],
-		);
+		assert.deepEqual([(await request).error, cancelled], [{ code: -32800, message: 'Host request cancelled', data: null }, { id: operationId }]);
 		hold = false;
-		assert.deepEqual(
-			(await fixture.transport.request('browser/observe', { threadId: 'thread-one', targetId, ...options }))
-				.result,
-			observation,
-		);
+		assert.deepEqual((await fixture.transport.request('browser/observe', { threadId: 'thread-one', targetId, ...options })).result, observation);
 		await fixture.playwright.disposeSession('thread-one');
 	});
 
@@ -303,10 +279,7 @@ suite('Workbench Playwright service', () => {
 		const released = fixture.playwright.disposeSession('thread-one');
 		await releaseStarted.promise;
 		assert.equal(fixture.playwright.disposeSession('thread-one'), released);
-		await assert.rejects(
-			fixture.playwright.getObservation('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'thread-one', targetId, options),
-			/being released/,
-		);
+		await assert.rejects(fixture.playwright.getObservation('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'thread-one', targetId, options), /being released/);
 		releaseFinished.resolve();
 		await Promise.all([rejected, released]);
 		assert.deepEqual(calls, ['observe', 'cancel', 'disposeSession']);
@@ -329,41 +302,20 @@ suite('Workbench Playwright service', () => {
 			}
 		});
 		try {
-			const observed = fixture.playwright.getObservation(
-				'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-				'thread-one',
-				targetId,
-				options,
-			);
+			const observed = fixture.playwright.getObservation('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'thread-one', targetId, options);
 			const rejected = assert.rejects(observed, /BrowserRequestCancelled/);
 			fixture.dispose();
 			await Promise.all([released.promise, rejected]);
 			assert.deepEqual(calls, ['observe', 'cancel', 'disposeSession']);
-			assert.throws(
-				() =>
-					fixture.playwright.getObservation(
-						'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-						'thread-one',
-						targetId,
-						options,
-					),
-				/disposed/,
-			);
+			assert.throws(() => fixture.playwright.getObservation('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'thread-one', targetId, options), /disposed/);
 		} finally {
 			fixture.dispose();
 		}
 	});
 
 	test('invalid screenshot content cannot escape the transport adapter', async () => {
-		using fixture = hostFixture(async command =>
-			command === 'observe'
-				? { ...observation, screenshot: { mimeType: 'text/html', dataBase64: 'aGVsbG8=', decodedLength: 5 } }
-				: undefined,
-		);
-		await assert.rejects(
-			fixture.playwright.getObservation('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'thread-one', targetId, options),
-			/screenshot MIME/,
-		);
+		using fixture = hostFixture(async command => (command === 'observe' ? { ...observation, screenshot: { mimeType: 'text/html', dataBase64: 'aGVsbG8=', decodedLength: 5 } } : undefined));
+		await assert.rejects(fixture.playwright.getObservation('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'thread-one', targetId, options), /screenshot MIME/);
 		await fixture.playwright.disposeSession('thread-one');
 	});
 
@@ -371,17 +323,12 @@ suite('Workbench Playwright service', () => {
 		using fixture = hostFixture(async () => null);
 		await fixture.client.connect();
 		await fixture.sharing.call('main', 'setSharing', [targetId, ['thread-one']]);
-		assert.deepEqual(fixture.transport.backendRequests, [
-			{ method: 'browser/sharing/set', params: { targetId, threadIds: ['thread-one'] } },
-		]);
+		assert.deepEqual(fixture.transport.backendRequests, [{ method: 'browser/sharing/set', params: { targetId, threadIds: ['thread-one'] } }]);
 		await assert.rejects(fixture.sharing.call('main', 'setSharing', [targetId, [1]]));
 		await assert.rejects(fixture.sharing.call('main', 'dispose', []), /Invalid browser sharing command/);
 		assert.equal(fixture.transport.backendRequests.length, 1);
 		fixture.dispose();
-		await assert.rejects(
-			fixture.sharing.call('main', 'setSharing', [targetId, []]),
-			/BrowserCapabilityUnavailable/,
-		);
+		await assert.rejects(fixture.sharing.call('main', 'setSharing', [targetId, []]), /BrowserCapabilityUnavailable/);
 	});
 
 	test('Main network requests retain backend authorization and closed pages release their sharing grant', async () => {
@@ -441,12 +388,8 @@ function hostFixture(
 	services.registerInstance(IFileService, files);
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerInstance(IPolicyService, new NullPolicyService());
-	const configuration = resources.add(
-		services.createInstance(ConfigurationService, URI.parse('test:/settings.json')),
-	);
-	services.registerSingleton(IMainProcessService, () =>
-		services.createInstance(TestMainProcessService, call, events.event),
-	);
+	const configuration = resources.add(services.createInstance(ConfigurationService, URI.parse('test:/settings.json')));
+	services.registerSingleton(IMainProcessService, () => services.createInstance(TestMainProcessService, call, events.event));
 	const mainProcessService = services.get(IMainProcessService);
 	const playwright = services.get(IPlaywrightService);
 	const transport = new HostTransport();

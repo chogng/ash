@@ -7,17 +7,11 @@ import { CursorChangeReason, type ICursorPositionChangedEvent } from '../../../.
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
-import {
-	ITextModelService,
-	type IResolvedTextEditorModel,
-} from '../../../../editor/common/services/resolverService.js';
+import { ITextModelService, type IResolvedTextEditorModel } from '../../../../editor/common/services/resolverService.js';
 import type { IEditorDecorationsCollection, ICodeEditorViewState } from '../../../../editor/common/editorCommon.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import {
-	IAccessibleViewService,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { localize } from '../../../../nls.js';
 import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
@@ -25,13 +19,7 @@ import type { ActionViewItem, ActionViewItemOptions } from '../../../../base/bro
 import { DropdownMenuActionViewItem } from '../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
 import type { Icon } from '../../../../base/common/icon.js';
-import {
-	MutableDisposable,
-	DisposableStore,
-	toDisposable,
-	type IDisposable,
-	type IReference,
-} from '../../../../base/common/lifecycle.js';
+import { MutableDisposable, DisposableStore, toDisposable, type IDisposable, type IReference } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { LogLevel } from '../../../../platform/log/common/log.js';
 import { CONTEXT_SAVED_LOGS_AVAILABLE, OPEN_SAVED_LOGS_COMMAND_ID } from '../../../services/output/common/output.js';
@@ -168,9 +156,7 @@ export class OutputViewPane extends ViewPane {
 			);
 		}
 		this.contentElement.append(this.filterBar, this.content);
-		this._register(
-			addDisposableListener(this.filterInput, 'input', () => this.filters.setText(this.filterInput.value)),
-		);
+		this._register(addDisposableListener(this.filterInput, 'input', () => this.filters.setText(this.filterInput.value)));
 		this._register(
 			addDisposableListener(this.filterInput, 'keydown', event => {
 				if (event.key !== 'Escape' || !this.filterInput.value) return;
@@ -225,8 +211,7 @@ export class OutputViewPane extends ViewPane {
 			host.insertBefore(this.filterWidget, inHeader ? this.titleActions.element : null);
 			// Reparent the existing control so its value, caret and keyboard focus survive resizing.
 			focused?.focus({ preventScroll: true });
-			if (focused === this.filterInput)
-				this.filterInput.setSelectionRange(selectionStart, selectionEnd, selectionDirection ?? undefined);
+			if (focused === this.filterInput) this.filterInput.setSelectionRange(selectionStart, selectionEnd, selectionDirection ?? undefined);
 		}
 		this.editor.layout({ width, height: Math.max(0, height - this.filterBar.offsetHeight) });
 	}
@@ -245,10 +230,7 @@ export class OutputViewPane extends ViewPane {
 			const listeners = new DisposableStore();
 			if (channel) {
 				listeners.add(channel.onDidChange(() => this.renderScheduler.schedule()));
-				if (channel.descriptor.logger)
-					listeners.add(
-						channel.descriptor.logger.control.onDidChangeLogLevel(() => this.renderScheduler.schedule()),
-					);
+				if (channel.descriptor.logger) listeners.add(channel.descriptor.logger.control.onDidChangeLogLevel(() => this.renderScheduler.schedule()));
 			}
 			this.activeChannelListener.value = listeners;
 		});
@@ -331,42 +313,20 @@ export class OutputViewPane extends ViewPane {
 		if (titleStateKey !== this.titleStateKey) {
 			this.titleStateKey = titleStateKey;
 			this.titleActions.updateActions(this.createTitleActions(active));
-			this.titleActions.element
-				.querySelector<HTMLElement>(`[data-action-id="${SelectChannelActionId}"]`)
-				?.classList.add('ash-output-channel-picker');
-			const filtered =
-				OutputSeverities.some(severity => !this.filters.isSeverityVisible(severity)) ||
-				categories.some(category => !this.filters.isCategoryVisible(category, active!.id));
+			this.titleActions.element.querySelector<HTMLElement>(`[data-action-id="${SelectChannelActionId}"]`)?.classList.add('ash-output-channel-picker');
+			const filtered = OutputSeverities.some(severity => !this.filters.isSeverityVisible(severity)) || categories.some(category => !this.filters.isCategoryVisible(category, active!.id));
 			this.filterWidget.classList.toggle('filtered', filtered);
-			const filterLabel = filtered
-				? localize('output.filterActive', 'Filter Output (Filters Active)')
-				: localize('output.filter', 'Filter Output');
-			this.filterToolbar.updateActions([
-				this.action(
-					FilterActionId,
-					filterLabel,
-					filterLabel,
-					Lxicon.filter,
-					Boolean(active),
-					undefined,
-					() => undefined,
-				),
-			]);
+			const filterLabel = filtered ? localize('output.filterActive', 'Filter Output (Filters Active)') : localize('output.filter', 'Filter Output');
+			this.filterToolbar.updateActions([this.action(FilterActionId, filterLabel, filterLabel, Lxicon.filter, Boolean(active), undefined, () => undefined)]);
 		}
 		this.filterInput.value = this.filters.text;
 		let description: string | undefined;
 		switch (this.filters.textFilterNotice) {
 			case 'restored':
-				description = localize(
-					'output.filterRestored',
-					'Saved filter restored. Edit or clear to use comma-separated filters.',
-				);
+				description = localize('output.filterRestored', 'Saved filter restored. Edit or clear to use comma-separated filters.');
 				break;
 			case 'unsupported':
-				description = localize(
-					'output.filterUnsupported',
-					'A newer saved filter is preserved. Changes in this window are not saved.',
-				);
+				description = localize('output.filterUnsupported', 'A newer saved filter is preserved. Changes in this window are not saved.');
 				break;
 		}
 		if (description) {
@@ -384,17 +344,13 @@ export class OutputViewPane extends ViewPane {
 		let previousEndedWithCarriageReturn = false;
 		for (const entry of active.entries) {
 			const recordMatches = active.kind === 'log' && this.filters.matches(entry, active.id);
-			const text =
-				previousEndedWithCarriageReturn && entry.text.startsWith('\n') ? entry.text.slice(1) : entry.text;
+			const text = previousEndedWithCarriageReturn && entry.text.startsWith('\n') ? entry.text.slice(1) : entry.text;
 			previousEndedWithCarriageReturn = entry.text.endsWith('\r');
 			const count = (text.match(/\r\n|\r|\n/g) ?? []).length;
 			const end = line + count - (/[\r\n]$/.test(entry.text) || text.length === 0 ? 1 : 0);
 			for (let number = line; number <= end; number++) {
 				// Ordinary output is a stream: one model line may span or share producer writes.
-				const matches =
-					active.kind === 'log'
-						? recordMatches
-						: this.filters.matches({ ...entry, text: model.getLineContent(number) }, active.id);
+				const matches = active.kind === 'log' ? recordMatches : this.filters.matches({ ...entry, text: model.getLineContent(number) }, active.id);
 				visibleLines.set(number, Boolean(visibleLines.get(number)) || matches);
 				severities.set(number, entry.severity);
 			}
@@ -407,11 +363,7 @@ export class OutputViewPane extends ViewPane {
 				return;
 			}
 			if (this.editor.getModel() !== model) this.editor.setModel(model);
-			this.editor.setHiddenAreas(
-				[...visibleLines]
-					.filter(([, visible]) => !visible)
-					.map(([number]) => new Range(number, 1, number, model.getLineMaxColumn(number))),
-			);
+			this.editor.setHiddenAreas([...visibleLines].filter(([, visible]) => !visible).map(([number]) => new Range(number, 1, number, model.getLineMaxColumn(number))));
 			this.decorations.set(
 				[...severities]
 					.filter(([, severity]) => severity === 'error' || severity === 'warning')
@@ -425,17 +377,9 @@ export class OutputViewPane extends ViewPane {
 	}
 
 	private createActionViewItem(action: IAction, options: ActionViewItemOptions): ActionViewItem | undefined {
-		if (action.id === SelectChannelActionId)
-			return new DropdownMenuActionViewItem(
-				action,
-				() => this.channelActions(),
-				this.contextMenuService,
-				options,
-			);
-		if (action.id === FilterActionId)
-			return new DropdownMenuActionViewItem(action, () => this.filterActions(), this.contextMenuService, options);
-		if (action.id === MoreActionId)
-			return new DropdownMenuActionViewItem(action, () => this.moreActions(), this.contextMenuService, options);
+		if (action.id === SelectChannelActionId) return new DropdownMenuActionViewItem(action, () => this.channelActions(), this.contextMenuService, options);
+		if (action.id === FilterActionId) return new DropdownMenuActionViewItem(action, () => this.filterActions(), this.contextMenuService, options);
+		if (action.id === MoreActionId) return new DropdownMenuActionViewItem(action, () => this.moreActions(), this.contextMenuService, options);
 		return undefined;
 	}
 
@@ -444,9 +388,7 @@ export class OutputViewPane extends ViewPane {
 			this.action(
 				SelectChannelActionId,
 				active?.label ?? localize('output.selectChannel', 'Select Output Channel'),
-				active
-					? localize('output.selectNamedChannel', 'Select Output Channel: {0}', active.label)
-					: localize('output.selectChannel', 'Select Output Channel'),
+				active ? localize('output.selectNamedChannel', 'Select Output Channel: {0}', active.label) : localize('output.selectChannel', 'Select Output Channel'),
 				undefined,
 				this.outputService.channels.length > 0,
 				undefined,
@@ -455,9 +397,7 @@ export class OutputViewPane extends ViewPane {
 			this.action(
 				ClearChannelActionId,
 				localize('output.clear', 'Clear Output'),
-				active
-					? localize('output.clearChannel', 'Clear {0}', active.label)
-					: localize('output.clear', 'Clear Output'),
+				active ? localize('output.clearChannel', 'Clear {0}', active.label) : localize('output.clear', 'Clear Output'),
 				Lxicon.clearAll,
 				(active?.entries.length ?? 0) > 0,
 				undefined,
@@ -466,38 +406,20 @@ export class OutputViewPane extends ViewPane {
 			this.action(
 				AutoScrollActionId,
 				localize('output.autoScroll', 'Auto Scroll'),
-				this.autoScroll
-					? localize('output.pauseFollow', 'Pause Following Output')
-					: localize('output.resumeFollow', 'Follow New Output'),
+				this.autoScroll ? localize('output.pauseFollow', 'Pause Following Output') : localize('output.resumeFollow', 'Follow New Output'),
 				Lxicon.follow,
 				Boolean(active),
 				this.autoScroll,
 				() => this.toggleAutoScroll(),
 			),
-			this.action(
-				MoreActionId,
-				localize('output.more', 'More Output Actions'),
-				localize('output.more', 'More Output Actions'),
-				Lxicon.ellipsis,
-				Boolean(active),
-				undefined,
-				() => undefined,
-			),
+			this.action(MoreActionId, localize('output.more', 'More Output Actions'), localize('output.more', 'More Output Actions'), Lxicon.ellipsis, Boolean(active), undefined, () => undefined),
 		];
 	}
 
 	private channelActions(): readonly IAction[] {
 		const activeId = this.outputService.activeChannel?.id;
 		return this.outputService.channels.map(channel =>
-			this.action(
-				`ash.output.channel.${channel.id}`,
-				channel.label,
-				channel.label,
-				undefined,
-				true,
-				channel.id === activeId,
-				() => this.outputService.selectChannel(channel.id),
-			),
+			this.action(`ash.output.channel.${channel.id}`, channel.label, channel.label, undefined, true, channel.id === activeId, () => this.outputService.selectChannel(channel.id)),
 		);
 	}
 
@@ -515,11 +437,7 @@ export class OutputViewPane extends ViewPane {
 				() => this.filters.setMinimumSeverity(severity),
 			),
 		);
-		const logLevel = new SubmenuAction(
-			'ash.output.filter.minimum',
-			localize('output.displayLevel', 'Minimum Display Level'),
-			levelActions,
-		);
+		const logLevel = new SubmenuAction('ash.output.filter.minimum', localize('output.displayLevel', 'Minimum Display Level'), levelActions);
 		const severityActions = OutputSeverities.map(severity =>
 			this.action(
 				`ash.output.filter.severity.${severity}`,
@@ -535,20 +453,11 @@ export class OutputViewPane extends ViewPane {
 			this.action(
 				`ash.output.filter.category.${category}`,
 				category,
-				localize(
-					'output.showCategory',
-					'Show category {0} in this channel. Changing an older saved global choice moves only that category to this channel.',
-					category,
-				),
+				localize('output.showCategory', 'Show category {0} in this channel. Changing an older saved global choice moves only that category to this channel.', category),
 				undefined,
 				true,
 				this.filters.isCategoryVisible(category, channel!.id),
-				() =>
-					this.filters.setCategoryVisible(
-						category,
-						!this.filters.isCategoryVisible(category, channel!.id),
-						channel!.id,
-					),
+				() => this.filters.setCategoryVisible(category, !this.filters.isCategoryVisible(category, channel!.id), channel!.id),
 			),
 		);
 		return [
@@ -557,18 +466,10 @@ export class OutputViewPane extends ViewPane {
 			...severityActions,
 			...(categoryActions.length ? [new Separator(), ...categoryActions] : []),
 			new Separator(),
-			this.action(
-				'ash.output.filter.reset',
-				localize('output.reset', 'Reset Filters'),
-				localize('output.resetTooltip', 'Reset Output Filters'),
-				undefined,
-				true,
-				undefined,
-				() => {
-					this.filterInput.value = '';
-					this.filters.reset();
-				},
-			),
+			this.action('ash.output.filter.reset', localize('output.reset', 'Reset Filters'), localize('output.resetTooltip', 'Reset Output Filters'), undefined, true, undefined, () => {
+				this.filterInput.value = '';
+				this.filters.reset();
+			}),
 		];
 	}
 
@@ -592,30 +493,19 @@ export class OutputViewPane extends ViewPane {
 		return [
 			...(logger
 				? [
-						new SubmenuAction(
-							'ash.output.recordingLevel',
-							localize('output.recordingLevel', 'Set {0} Recording Level', logger.label),
-							[
-								...recordingLevels,
-								new Separator(),
-								this.action(
-									'workbench.action.output.activeOutputLogLevelDefault',
-									localize('logLevelDefault.label', 'Set As Default'),
-									localize(
-										'output.defaultLevelTooltip',
-										'Save this recording level for future windows and loggers',
-									),
-									undefined,
-									logger.control.getLevel() !==
-										this.defaultLogLevels.getDefaultLogLevel(active.descriptor.extensionId),
-									undefined,
-									() =>
-										this.commands.executeCommand(
-											'workbench.action.output.activeOutputLogLevelDefault',
-										),
-								),
-							],
-						),
+						new SubmenuAction('ash.output.recordingLevel', localize('output.recordingLevel', 'Set {0} Recording Level', logger.label), [
+							...recordingLevels,
+							new Separator(),
+							this.action(
+								'workbench.action.output.activeOutputLogLevelDefault',
+								localize('logLevelDefault.label', 'Set As Default'),
+								localize('output.defaultLevelTooltip', 'Save this recording level for future windows and loggers'),
+								undefined,
+								logger.control.getLevel() !== this.defaultLogLevels.getDefaultLogLevel(active.descriptor.extensionId),
+								undefined,
+								() => this.commands.executeCommand('workbench.action.output.activeOutputLogLevelDefault'),
+							),
+						]),
 					]
 				: []),
 			this.action(
@@ -627,14 +517,8 @@ export class OutputViewPane extends ViewPane {
 				undefined,
 				() => this.commands.executeCommand(OPEN_OUTPUT_IN_EDITOR_COMMAND_ID),
 			),
-			this.action(
-				'ash.output.export',
-				localize('output.export', 'Export Output…'),
-				localize('output.exportChannel', 'Export {0}', active.label),
-				Lxicon.download,
-				true,
-				undefined,
-				() => this.commands.executeCommand(EXPORT_OUTPUT_COMMAND_ID),
+			this.action('ash.output.export', localize('output.export', 'Export Output…'), localize('output.exportChannel', 'Export {0}', active.label), Lxicon.download, true, undefined, () =>
+				this.commands.executeCommand(EXPORT_OUTPUT_COMMAND_ID),
 			),
 			...(this.contextKeys.getValue<boolean>(CONTEXT_SAVED_LOGS_AVAILABLE.key)
 				? [
@@ -659,18 +543,13 @@ export class OutputViewPane extends ViewPane {
 	}
 
 	private acceptScrollPosition(): void {
-		const atEnd =
-			this.editor.getContentHeight() - this.editor.getScrollTop() - this.editor.getLayoutInfo().height <= 2;
+		const atEnd = this.editor.getContentHeight() - this.editor.getScrollTop() - this.editor.getLayoutInfo().height <= 2;
 		this.setAutoScroll(atEnd);
 	}
 
 	private handleCursorPosition(event: ICursorPositionChangedEvent): void {
 		// Restoration and content updates also move cursors; only user gestures change reading intent.
-		if (
-			event.reason !== CursorChangeReason.Explicit ||
-			this.changingContent ||
-			!this.configurationService.getValue<boolean>('output.smartScroll.enabled')
-		) {
+		if (event.reason !== CursorChangeReason.Explicit || this.changingContent || !this.configurationService.getValue<boolean>('output.smartScroll.enabled')) {
 			return;
 		}
 		const model = this.editor.getModel();
@@ -697,15 +576,7 @@ export class OutputViewPane extends ViewPane {
 		this.editor.setScrollTop(this.editor.getContentHeight());
 	}
 
-	private action(
-		id: string,
-		label: string,
-		tooltip: string,
-		icon: Icon | undefined,
-		enabled: boolean,
-		checked: boolean | undefined,
-		run: () => unknown,
-	): IAction {
+	private action(id: string, label: string, tooltip: string, icon: Icon | undefined, enabled: boolean, checked: boolean | undefined, run: () => unknown): IAction {
 		return { id, label, tooltip, icon, enabled, checked, run };
 	}
 }

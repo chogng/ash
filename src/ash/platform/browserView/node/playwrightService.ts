@@ -1,24 +1,11 @@
-import {
-	chromium,
-	type Browser,
-	type CDPSession,
-	type ConnectOverCDPTransport,
-	type Page,
-	type Locator,
-	type Frame,
-	type Dialog,
-} from 'playwright-core';
+import { chromium, type Browser, type CDPSession, type ConnectOverCDPTransport, type Page, type Locator, type Frame, type Dialog } from 'playwright-core';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { promiseWithResolvers, raceCancellationError } from '../../../base/common/async.js';
 import { isRecord } from '../../../base/common/types.js';
 import { IBrowserViewGroupService } from '../common/browserViewGroup.js';
 import type { CDPRequest } from '../common/cdp/types.js';
 import type { IPlaywrightService } from '../common/playwrightService.js';
-import type {
-	BrowserViewAction,
-	IBrowserViewObservation,
-	IBrowserViewObservationOptions,
-} from '../common/browserView.js';
+import type { BrowserViewAction, IBrowserViewObservation, IBrowserViewObservationOptions } from '../common/browserView.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
 import { formatMatchedStyles, keyComputedProperties } from '../common/cssHelpers.js';
 import { randomUUID } from 'node:crypto';
@@ -64,10 +51,7 @@ class Connection extends Disposable {
 				}
 				// Playwright's utility world needs isolation, without the universal
 				// access flag that Main forbids for every browser protocol client.
-				const request =
-					message.method === 'Page.createIsolatedWorld' && isRecord(message.params)
-						? { ...message, params: { ...message.params, grantUniveralAccess: false } }
-						: message;
+				const request = message.method === 'Page.createIsolatedWorld' && isRecord(message.params) ? { ...message, params: { ...message.params, grantUniveralAccess: false } } : message;
 				void this.groups.sendCDPMessage(groupId, request as unknown as CDPRequest).catch(error => {
 					transport.onmessage?.({
 						id: message.id,
@@ -171,25 +155,15 @@ class Connection extends Disposable {
 /** Playwright and element operations stay outside Main and renderer lifetimes. */
 export class PlaywrightService extends Disposable implements IPlaywrightService {
 	private readonly connections = this._register(new DisposableMap<string, Connection>());
-	private readonly operations = new Map<
-		string,
-		{ readonly sessionId: string; readonly cancellation: AbortController }
-	>();
+	private readonly operations = new Map<string, { readonly sessionId: string; readonly cancellation: AbortController }>();
 	constructor(@IInstantiationService private readonly instantiationService: IInstantiationService) {
 		super();
 	}
-	public async getObservation(
-		operationId: string,
-		sessionId: string,
-		pageId: string,
-		options: IBrowserViewObservationOptions,
-	): Promise<IBrowserViewObservation> {
+	public async getObservation(operationId: string, sessionId: string, pageId: string, options: IBrowserViewObservationOptions): Promise<IBrowserViewObservation> {
 		return this.run(operationId, sessionId, pageId, async ({ page, cdp }, signal) => {
 			await page.waitForLoadState('load');
 			signal.throwIfAborted();
-			const accessibilityTree = options.includeAccessibilityTree
-				? boundedJson(await cdp.send('Accessibility.getFullAXTree'))
-				: undefined;
+			const accessibilityTree = options.includeAccessibilityTree ? boundedJson(await cdp.send('Accessibility.getFullAXTree')) : undefined;
 			signal.throwIfAborted();
 			let domSnapshot: string | undefined;
 			if (options.includeDomSnapshot) {
@@ -241,12 +215,7 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 			};
 		});
 	}
-	public async performAction(
-		operationId: string,
-		sessionId: string,
-		pageId: string,
-		action: BrowserViewAction,
-	): Promise<string | undefined> {
+	public async performAction(operationId: string, sessionId: string, pageId: string, action: BrowserViewAction): Promise<string | undefined> {
 		if (action.type === 'cdp') {
 			throw new Error('CDP connections belong to Main');
 		}
@@ -255,13 +224,7 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 			if (action.type === 'handleDialog') {
 				// Wait for the actual modal before replying; Electron's dismissal hook must
 				// never cancel a dialog that is still opening under a concurrent click.;
-				const dialog =
-					connected.dialog ??
-					(await raceCancellationError(
-						page.waitForEvent('dialog', { timeout: 5000 }),
-						signal,
-						'BrowserDialogUnavailable',
-					));
+				const dialog = connected.dialog ?? (await raceCancellationError(page.waitForEvent('dialog', { timeout: 5000 }), signal, 'BrowserDialogUnavailable'));
 				if (action.accept) {
 					await dialog.accept(action.promptText ?? undefined);
 				} else {
@@ -350,12 +313,7 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 		}
 		this.connections.deleteAndDispose(id);
 	}
-	private async run<T>(
-		id: string,
-		sessionId: string,
-		pageId: string,
-		execute: (page: ConnectedPage, signal: AbortSignal) => Promise<T>,
-	): Promise<T> {
+	private async run<T>(id: string, sessionId: string, pageId: string, execute: (page: ConnectedPage, signal: AbortSignal) => Promise<T>): Promise<T> {
 		this.assertNotDisposed();
 		if (this.operations.has(id)) {
 			throw new Error('Duplicate browser operation');
@@ -403,14 +361,7 @@ async function nodePoint(cdp: CDPSession, id: string): Promise<{ x: number; y: n
 				"function () { this.scrollIntoView({ block: 'center', inline: 'center' }); const r = this.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }",
 		});
 		const value: unknown = point.result.value;
-		if (
-			point.exceptionDetails ||
-			!isRecord(value) ||
-			typeof value.x !== 'number' ||
-			typeof value.y !== 'number' ||
-			!Number.isFinite(value.x) ||
-			!Number.isFinite(value.y)
-		) {
+		if (point.exceptionDetails || !isRecord(value) || typeof value.x !== 'number' || typeof value.y !== 'number' || !Number.isFinite(value.x) || !Number.isFinite(value.y)) {
 			throw new Error('BrowserNodeUnavailable');
 		}
 		return { x: value.x, y: value.y };
@@ -436,18 +387,14 @@ async function runPageScript(page: Page, cdp: CDPSession, code: string, requestS
 	let calls = 0;
 	let termination: Promise<unknown> | undefined;
 	const terminate = (): void => {
-		termination = Promise.allSettled([
-			cdp.send('Runtime.terminateExecution'),
-			...(scriptSession ? [scriptSession.send('Runtime.terminateExecution')] : []),
-		]);
+		termination = Promise.allSettled([cdp.send('Runtime.terminateExecution'), ...(scriptSession ? [scriptSession.send('Runtime.terminateExecution')] : [])]);
 	};
 
 	signal.addEventListener('abort', terminate, { once: true });
 	let accepting = true;
 	try {
 		const { frameTree } = await cdp.send('Page.getFrameTree');
-		parentContextId = (await cdp.send('Page.createIsolatedWorld', { frameId: frameTree.frame.id, worldName: name }))
-			.executionContextId;
+		parentContextId = (await cdp.send('Page.createIsolatedWorld', { frameId: frameTree.frame.id, worldName: name })).executionContextId;
 		binding = await page.exposeBinding(name, (source, payload: unknown) => {
 			if (!accepting || !frame || source.frame !== frame || typeof payload !== 'string') {
 				throw new Error('Browser script is unavailable');
@@ -484,11 +431,7 @@ async function runPageScript(page: Page, cdp: CDPSession, code: string, requestS
 		});
 		// Electron can attach an out-of-process frame after its initial navigation event.
 		// Resolve the frame from its DOM identity rather than waiting for a missed event.
-		const element = await raceCancellationError(
-			page.waitForSelector(`iframe[name="${name}"]`, { state: 'attached', timeout: 5000 }),
-			signal,
-			'BrowserScriptTimedOut',
-		);
+		const element = await raceCancellationError(page.waitForSelector(`iframe[name="${name}"]`, { state: 'attached', timeout: 5000 }), signal, 'BrowserScriptTimedOut');
 		try {
 			frame = (await element?.contentFrame()) ?? undefined;
 		} finally {
@@ -500,11 +443,7 @@ async function runPageScript(page: Page, cdp: CDPSession, code: string, requestS
 		// Wait for the sandbox document, so an initial about:blank realm cannot select
 		// the parent's terminator before Chromium moves the opaque frame to another process.
 		// The predicate runs in the frame's DOM realm, not in this Node host.
-		const ready = await raceCancellationError(
-			frame.waitForFunction("location.href === 'about:srcdoc'", undefined, { timeout: 5000 }),
-			signal,
-			'BrowserScriptTimedOut',
-		);
+		const ready = await raceCancellationError(frame.waitForFunction("location.href === 'about:srcdoc'", undefined, { timeout: 5000 }), signal, 'BrowserScriptTimedOut');
 		await ready.dispose();
 		try {
 			scriptSession = await page.context().newCDPSession(frame);
@@ -560,48 +499,17 @@ async function runPageScript(page: Page, cdp: CDPSession, code: string, requestS
 	}
 }
 
-async function dispatchScriptCall(
-	page: Page,
-	evaluator: CDPSession,
-	message: Record<string, unknown>,
-	signal: AbortSignal,
-): Promise<unknown> {
-	if (
-		!Array.isArray(message.path) ||
-		message.path.length > 12 ||
-		typeof message.method !== 'string' ||
-		!Array.isArray(message.args) ||
-		message.args.length > 4
-	) {
+async function dispatchScriptCall(page: Page, evaluator: CDPSession, message: Record<string, unknown>, signal: AbortSignal): Promise<unknown> {
+	if (!Array.isArray(message.path) || message.path.length > 12 || typeof message.method !== 'string' || !Array.isArray(message.args) || message.args.length > 4) {
 		throw new TypeError('Invalid browser script call');
 	}
 	let receiver: Page | Locator | Page['mouse'] | Page['keyboard'] = page;
-	const locatorMethods = new Set([
-		'locator',
-		'getByRole',
-		'getByText',
-		'getByLabel',
-		'getByPlaceholder',
-		'getByTestId',
-		'nth',
-		'first',
-		'last',
-		'filter',
-	]);
+	const locatorMethods = new Set(['locator', 'getByRole', 'getByText', 'getByLabel', 'getByPlaceholder', 'getByTestId', 'nth', 'first', 'last', 'filter']);
 	for (const segment of message.path) {
-		if (
-			!isRecord(segment) ||
-			typeof segment.method !== 'string' ||
-			!Array.isArray(segment.args) ||
-			segment.args.length > 3
-		) {
+		if (!isRecord(segment) || typeof segment.method !== 'string' || !Array.isArray(segment.args) || segment.args.length > 3) {
 			throw new TypeError('Invalid browser locator');
 		}
-		if (
-			(segment.method === 'mouse' || segment.method === 'keyboard') &&
-			receiver === page &&
-			segment.args.length === 0
-		) {
+		if ((segment.method === 'mouse' || segment.method === 'keyboard') && receiver === page && segment.args.length === 0) {
 			receiver = page[segment.method];
 			continue;
 		}
@@ -670,20 +578,7 @@ async function dispatchScriptCall(
 		throw new Error('Browser script method is unavailable');
 	}
 	// Bound waits even when script code issues calls without awaiting them.
-	const timeouts = new Set([
-		'click',
-		'hover',
-		'fill',
-		'press',
-		'check',
-		'uncheck',
-		'selectOption',
-		'textContent',
-		'innerText',
-		'getAttribute',
-		'inputValue',
-		'waitFor',
-	]);
+	const timeouts = new Set(['click', 'hover', 'fill', 'press', 'check', 'uncheck', 'selectOption', 'textContent', 'innerText', 'getAttribute', 'inputValue', 'waitFor']);
 	if (receiver !== page && receiver !== page.mouse && receiver !== page.keyboard && timeouts.has(message.method)) {
 		const optionsIndex = ['fill', 'press', 'selectOption', 'getAttribute'].includes(message.method) ? 1 : 0;
 		const options = args[optionsIndex];

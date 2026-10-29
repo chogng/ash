@@ -43,10 +43,7 @@ test('System file source crosses Main IPC and enforces a registered configuratio
 	await policy.initialize();
 	assert.equal(policy.configurationModel.getValue('update.policy'), 'never');
 	await files.writeFile({ resource: file, content: '{ "DesktopUpdateChannel": 42 }' });
-	await assert.rejects(
-		client.updatePolicyDefinitions({ DesktopUpdateChannel: { type: 'string' } }),
-		/Invalid policy value/,
-	);
+	await assert.rejects(client.updatePolicyDefinitions({ DesktopUpdateChannel: { type: 'string' } }), /Invalid policy value/);
 	assert.equal(client.getPolicyValue('DesktopUpdateChannel'), 'never');
 	await files.delete(file, 'error', 'fileOrEmptyDirectory');
 	await client.updatePolicyDefinitions({ DesktopUpdateChannel: { type: 'string' } });
@@ -61,14 +58,8 @@ test('Policy IPC refuses writes, malformed definitions and prototype keys', asyn
 	}
 	using source = new Source();
 	using channel = new PolicyChannel(source);
-	assert.throws(
-		() => channel.call('window:1', 'setPolicy', { DesktopUpdateChannel: 'never' }),
-		/Unknown policy command/,
-	);
-	assert.throws(
-		() => channel.call('window:1', 'updatePolicyDefinitions', { DesktopUpdateChannel: { type: 'object' } }),
-		/Invalid policy/,
-	);
+	assert.throws(() => channel.call('window:1', 'setPolicy', { DesktopUpdateChannel: 'never' }), /Unknown policy command/);
+	assert.throws(() => channel.call('window:1', 'updatePolicyDefinitions', { DesktopUpdateChannel: { type: 'object' } }), /Invalid policy/);
 	assert.throws(() => validatePolicyDefinitions(JSON.parse('{"__proto__":{"type":"string"}}')), /Invalid policy/);
 	assert.equal(source.getPolicyValue('constructor'), undefined);
 });
@@ -144,10 +135,7 @@ test('The production Windows reader can inspect its fixed registry location with
 	}
 	using source = new SystemPolicyService(log);
 	const values = await source.updatePolicyDefinitions({ DesktopUpdateChannel: { type: 'string' } });
-	assert.ok(
-		!Object.hasOwn(values, 'DesktopUpdateChannel') ||
-			['latest', 'stable', 'never'].includes(values.DesktopUpdateChannel as string),
-	);
+	assert.ok(!Object.hasOwn(values, 'DesktopUpdateChannel') || ['latest', 'stable', 'never'].includes(values.DesktopUpdateChannel as string));
 });
 
 test('Unavailable system policy reports its startup error and later recovers through the real configuration owner', async () => {

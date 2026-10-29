@@ -17,37 +17,22 @@ export function parseLanguageConfiguration(value: unknown, owner: string): Langu
 	return Object.freeze({
 		...(document.comments === undefined ? {} : { comments: parseComments(document.comments, `${owner}.comments`) }),
 		...(document.brackets === undefined ? {} : { brackets: parsePairList(document.brackets, `${owner}.brackets`) }),
-		...(document.autoClosingPairs === undefined
-			? {}
-			: { autoClosingPairs: parseAutoClosingPairs(document.autoClosingPairs, `${owner}.autoClosingPairs`) }),
-		...(document.surroundingPairs === undefined
-			? {}
-			: { surroundingPairs: parseSurroundingPairs(document.surroundingPairs, `${owner}.surroundingPairs`) }),
-		...(document.autoCloseBefore === undefined
-			? {}
-			: { autoCloseBefore: boundedString(document.autoCloseBefore, `${owner}.autoCloseBefore`, 512) }),
-		...(document.indentationRules === undefined
-			? {}
-			: { indentationRules: parseIndentationRules(document.indentationRules, `${owner}.indentationRules`) }),
+		...(document.autoClosingPairs === undefined ? {} : { autoClosingPairs: parseAutoClosingPairs(document.autoClosingPairs, `${owner}.autoClosingPairs`) }),
+		...(document.surroundingPairs === undefined ? {} : { surroundingPairs: parseSurroundingPairs(document.surroundingPairs, `${owner}.surroundingPairs`) }),
+		...(document.autoCloseBefore === undefined ? {} : { autoCloseBefore: boundedString(document.autoCloseBefore, `${owner}.autoCloseBefore`, 512) }),
+		...(document.indentationRules === undefined ? {} : { indentationRules: parseIndentationRules(document.indentationRules, `${owner}.indentationRules`) }),
 		...(document.folding === undefined ? {} : { folding: parseFoldingRules(document.folding, `${owner}.folding`) }),
-		...(document.onEnterRules === undefined
-			? {}
-			: { onEnterRules: parseOnEnterRules(document.onEnterRules, `${owner}.onEnterRules`) }),
-		...(document.wordPattern === undefined
-			? {}
-			: { wordPattern: regularExpression(document.wordPattern, `${owner}.wordPattern`) }),
+		...(document.onEnterRules === undefined ? {} : { onEnterRules: parseOnEnterRules(document.onEnterRules, `${owner}.onEnterRules`) }),
+		...(document.wordPattern === undefined ? {} : { wordPattern: regularExpression(document.wordPattern, `${owner}.wordPattern`) }),
 	});
 }
 
 function parseComments(value: unknown, owner: string): CommentRule {
 	const comments = record(value, owner);
-	const lineComment =
-		comments.lineComment === undefined ? undefined : text(comments.lineComment, `${owner}.lineComment`, 64);
+	const lineComment = comments.lineComment === undefined ? undefined : text(comments.lineComment, `${owner}.lineComment`, 64);
 	return Object.freeze({
 		...(lineComment === undefined || lineComment.length === 0 ? {} : { lineComment }),
-		...(comments.blockComment === undefined
-			? {}
-			: { blockComment: parsePair(comments.blockComment, `${owner}.blockComment`) }),
+		...(comments.blockComment === undefined ? {} : { blockComment: parsePair(comments.blockComment, `${owner}.blockComment`) }),
 	});
 }
 
@@ -59,18 +44,12 @@ function parseIndentationRules(value: unknown, owner: string): IndentationRule {
 		...(rules.indentNextLinePattern === undefined
 			? {}
 			: {
-					indentNextLinePattern: optionalRegularExpression(
-						rules.indentNextLinePattern,
-						`${owner}.indentNextLinePattern`,
-					),
+					indentNextLinePattern: optionalRegularExpression(rules.indentNextLinePattern, `${owner}.indentNextLinePattern`),
 				}),
 		...(rules.unIndentedLinePattern === undefined
 			? {}
 			: {
-					unIndentedLinePattern: optionalRegularExpression(
-						rules.unIndentedLinePattern,
-						`${owner}.unIndentedLinePattern`,
-					),
+					unIndentedLinePattern: optionalRegularExpression(rules.unIndentedLinePattern, `${owner}.unIndentedLinePattern`),
 				}),
 	});
 }
@@ -96,11 +75,7 @@ function parseOnEnterRules(value: unknown, owner: string): OnEnterRule[] {
 		return Object.freeze({
 			beforeText: regularExpression(rule.beforeText, `${owner}[${index}].beforeText`),
 			...optionalRegularExpressionProperty(rule.afterText, `${owner}[${index}].afterText`, 'afterText'),
-			...optionalRegularExpressionProperty(
-				rule.previousLineText,
-				`${owner}[${index}].previousLineText`,
-				'previousLineText',
-			),
+			...optionalRegularExpressionProperty(rule.previousLineText, `${owner}[${index}].previousLineText`, 'previousLineText'),
 			action: parseEnterAction(rule.action, `${owner}[${index}].action`),
 		});
 	});
@@ -113,9 +88,7 @@ function parseEnterAction(value: unknown, owner: string): EnterAction {
 	return Object.freeze({
 		indentAction: INDENT_ACTIONS[indent as keyof typeof INDENT_ACTIONS],
 		...(action.appendText === undefined ? {} : { appendText: text(action.appendText, `${owner}.appendText`, 512) }),
-		...(action.removeText === undefined
-			? {}
-			: { removeText: nonNegativeInteger(action.removeText, `${owner}.removeText`) }),
+		...(action.removeText === undefined ? {} : { removeText: nonNegativeInteger(action.removeText, `${owner}.removeText`) }),
 	});
 }
 
@@ -177,23 +150,15 @@ function optionalRegularExpression(value: unknown, owner: string): RegExp | null
 }
 
 function regularExpression(value: unknown, owner: string): RegExp {
-	const { source, flags } =
-		typeof value === 'string'
-			? { source: text(value, owner, 4096), flags: '' }
-			: parseRegularExpressionObject(value, owner);
+	const { source, flags } = typeof value === 'string' ? { source: text(value, owner, 4096), flags: '' } : parseRegularExpressionObject(value, owner);
 	try {
 		return Object.freeze(new RegExp(source, flags));
 	} catch (error) {
-		throw new TypeError(
-			`${owner} is not a valid regular expression: ${error instanceof Error ? error.message : String(error)}`,
-		);
+		throw new TypeError(`${owner} is not a valid regular expression: ${error instanceof Error ? error.message : String(error)}`);
 	}
 }
 
-function parseRegularExpressionObject(
-	value: unknown,
-	owner: string,
-): { readonly source: string; readonly flags: string } {
+function parseRegularExpressionObject(value: unknown, owner: string): { readonly source: string; readonly flags: string } {
 	const expression = record(value, owner);
 	const keys = Object.keys(expression);
 	if (keys.some(key => key !== 'pattern' && key !== 'flags') || expression.pattern === undefined) {
@@ -207,8 +172,7 @@ function parseRegularExpressionObject(
 }
 
 function text(value: unknown, owner: string, maximum: number): string {
-	if (typeof value !== 'string' || value.length > maximum || /[\r\n]/u.test(value))
-		throw new TypeError(`${owner} must be bounded text`);
+	if (typeof value !== 'string' || value.length > maximum || /[\r\n]/u.test(value)) throw new TypeError(`${owner} must be bounded text`);
 	return value;
 }
 
@@ -223,14 +187,12 @@ function boolean(value: unknown, owner: string): boolean {
 }
 
 function nonNegativeInteger(value: unknown, owner: string): number {
-	if (!Number.isSafeInteger(value) || (value as number) < 0)
-		throw new RangeError(`${owner} must be a non-negative integer`);
+	if (!Number.isSafeInteger(value) || (value as number) < 0) throw new RangeError(`${owner} must be a non-negative integer`);
 	return value as number;
 }
 
 function record(value: unknown, owner: string): Record<string, unknown> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value))
-		throw new TypeError(`${owner} must be an object`);
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError(`${owner} must be an object`);
 	return value as Record<string, unknown>;
 }
 

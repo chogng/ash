@@ -1,18 +1,10 @@
 import { SimpleFileDialog } from '../browser/simpleFileDialog.js';
-import {
-	IWorkspaceContextService,
-	getWorkspaceRemoteAuthority,
-} from '../../../../platform/workspace/common/workspace.js';
+import { IWorkspaceContextService, getWorkspaceRemoteAuthority } from '../../../../platform/workspace/common/workspace.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { OpenDialogOptions } from '../../../../base/parts/sandbox/common/electronTypes.js';
 import { localize } from '../../../../nls.js';
-import {
-	IDialogService,
-	type IFileDialogService,
-	type IOpenDialogOptions,
-	type ISaveDialogOptions,
-} from '../../../../platform/dialogs/common/dialogs.js';
+import { IDialogService, type IFileDialogService, type IOpenDialogOptions, type ISaveDialogOptions } from '../../../../platform/dialogs/common/dialogs.js';
 import type { INativeHostApi } from '../../../../platform/native/common/nativeHost.js';
 import { INativeHostService } from '../../../common/services.js';
 import { AbstractFileDialogService } from '../browser/abstractFileDialogService.js';
@@ -61,11 +53,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 	}
 
 	async showOpenDialog(options: IOpenDialogOptions): Promise<readonly URI[] | undefined> {
-		if (
-			options.canSelectFolders &&
-			options.canSelectFiles === false &&
-			getWorkspaceRemoteAuthority(this.workspace.getWorkspace())
-		) {
+		if (options.canSelectFolders && options.canSelectFiles === false && getWorkspaceRemoteAuthority(this.workspace.getWorkspace())) {
 			return this.instantiation.createInstance(SimpleFileDialog).showOpenDialog(options);
 		}
 		this.validateFileSystem(options.availableFileSystems, options.defaultUri);
@@ -96,15 +84,11 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 					}
 				: {}),
 		});
-		return !result.canceled && result.filePaths.length > 0
-			? result.filePaths.map(path => URI.file(path))
-			: undefined;
+		return !result.canceled && result.filePaths.length > 0 ? result.filePaths.map(path => URI.file(path)) : undefined;
 	}
 
 	private validateFileSystem(availableFileSystems: readonly string[] | undefined, defaultUri: URI | undefined): void {
-		if (availableFileSystems && !availableFileSystems.includes('file'))
-			throw new Error('This file dialog supports the file scheme only');
-		if (defaultUri && defaultUri.scheme !== 'file')
-			throw new Error('This file dialog supports the file scheme only');
+		if (availableFileSystems && !availableFileSystems.includes('file')) throw new Error('This file dialog supports the file scheme only');
+		if (defaultUri && defaultUri.scheme !== 'file') throw new Error('This file dialog supports the file scheme only');
 	}
 }

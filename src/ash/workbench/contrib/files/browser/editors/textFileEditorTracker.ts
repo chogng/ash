@@ -6,11 +6,7 @@ import { IFileTextModelService } from '../../../../services/textmodelResolver/co
 
 /** Revalidates visible file models after the window regains focus. */
 export class TextFileEditorTracker extends Disposable {
-	constructor(
-		window: Window,
-		@IEditorService editorService: IEditorService,
-		@IFileTextModelService models: IFileTextModelService,
-	) {
+	constructor(window: Window, @IEditorService editorService: IEditorService, @IFileTextModelService models: IFileTextModelService) {
 		super();
 		this._register(
 			addDisposableListener(window, 'focus', () => {
@@ -20,9 +16,7 @@ export class TextFileEditorTracker extends Disposable {
 					const key = input.resource.toString();
 					if (seen.has(key)) continue;
 					seen.add(key);
-					void models
-						.refresh(input.resource)
-						.catch(error => console.error('Could not refresh open file', error));
+					void models.refresh(input.resource).catch(error => console.error('Could not refresh open file', error));
 				}
 			}),
 		);

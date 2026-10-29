@@ -1,11 +1,6 @@
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
-import {
-	ViewContainerLocation,
-	type WorkbenchViewRegistry,
-	WorkbenchViewContainerId,
-	ViewsRegistry,
-} from '../../../common/views.js';
+import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from '../../../common/views.js';
 import { IMarkerService } from '../../../../platform/markers/common/markers.js';
 import { IStatusbarService } from '../../../services/statusbar/browser/statusbar.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';

@@ -39,24 +39,15 @@ export interface LanguageTokenResult {
 }
 
 export function createLanguageTokenStore(model: TextModel): VersionedLanguageResultStore<LanguageTokenResult> {
-	return new VersionedLanguageResultStore(model, (value, currentModel) =>
-		normalizeLanguageTokenResult(value, range => assertModelRange(currentModel, range, 'Language token'), true),
-	);
+	return new VersionedLanguageResultStore(model, (value, currentModel) => normalizeLanguageTokenResult(value, range => assertModelRange(currentModel, range, 'Language token'), true));
 }
 
-export function createLanguageTokenSnapshotNormalizer(
-	snapshot: TextSnapshot,
-): (value: LanguageTokenResult) => LanguageTokenResult {
+export function createLanguageTokenSnapshotNormalizer(snapshot: TextSnapshot): (value: LanguageTokenResult) => LanguageTokenResult {
 	const lines = snapshot.getText().split('\n');
-	return value =>
-		normalizeLanguageTokenResult(value, range => assertSnapshotRange(lines, range, 'Language token'), false);
+	return value => normalizeLanguageTokenResult(value, range => assertSnapshotRange(lines, range, 'Language token'), false);
 }
 
-function normalizeLanguageTokenResult(
-	value: LanguageTokenResult,
-	validateRange: (range: Range) => void,
-	preserveDelta: boolean,
-): LanguageTokenResult {
+function normalizeLanguageTokenResult(value: LanguageTokenResult, validateRange: (range: Range) => void, preserveDelta: boolean): LanguageTokenResult {
 	if (typeof value !== 'object' || value === null || !Array.isArray(value.tokens)) {
 		throw new TypeError('Language token result must contain a tokens array');
 	}
@@ -88,12 +79,8 @@ function normalizeLanguageTokenResult(
 		if (new Set(modifiers).size !== modifiers.length) {
 			throw new RangeError('Language token modifiers must be unique');
 		}
-		const languageId =
-			token.languageId === undefined
-				? undefined
-				: normalizedIdentifier(token.languageId, 'Language token embedded language ID');
-		if (token.balancedBrackets !== undefined && token.balancedBrackets !== false)
-			throw new TypeError('Language token balanced-bracket metadata can only exclude a range');
+		const languageId = token.languageId === undefined ? undefined : normalizedIdentifier(token.languageId, 'Language token embedded language ID');
+		if (token.balancedBrackets !== undefined && token.balancedBrackets !== false) throw new TypeError('Language token balanced-bracket metadata can only exclude a range');
 		const presentation = token.presentation === undefined ? undefined : normalizePresentation(token.presentation);
 		tokens.push(
 			Object.freeze({
@@ -112,16 +99,14 @@ function normalizeLanguageTokenResult(
 }
 
 function normalizePresentation(value: LanguageTokenPresentation): LanguageTokenPresentation {
-	if (typeof value !== 'object' || value === null)
-		throw new TypeError('Language token presentation must be an object');
+	if (typeof value !== 'object' || value === null) throw new TypeError('Language token presentation must be an object');
 	const foreground = value.foreground === undefined ? undefined : normalizedColor(value.foreground, 'foreground');
 	const background = value.background === undefined ? undefined : normalizedColor(value.background, 'background');
 	let fontStyle: readonly LanguageTokenFontStyle[] | undefined;
 	if (value.fontStyle !== undefined) {
 		if (!Array.isArray(value.fontStyle)) throw new TypeError('Language token font style must be an array');
 		const styles = value.fontStyle.map(style => {
-			if (style !== 'italic' && style !== 'bold' && style !== 'underline' && style !== 'strikethrough')
-				throw new TypeError(`Unsupported language token font style '${String(style)}'`);
+			if (style !== 'italic' && style !== 'bold' && style !== 'underline' && style !== 'strikethrough') throw new TypeError(`Unsupported language token font style '${String(style)}'`);
 			return style;
 		});
 		if (new Set(styles).size !== styles.length) throw new RangeError('Language token font styles must be unique');
@@ -135,8 +120,7 @@ function normalizePresentation(value: LanguageTokenPresentation): LanguageTokenP
 }
 
 function normalizedColor(value: unknown, kind: string): string {
-	if (typeof value !== 'string' || !/^#[0-9a-f]{3,4}(?:[0-9a-f]{3,4})?$/iu.test(value))
-		throw new TypeError(`Language token ${kind} must be a hexadecimal color`);
+	if (typeof value !== 'string' || !/^#[0-9a-f]{3,4}(?:[0-9a-f]{3,4})?$/iu.test(value)) throw new TypeError(`Language token ${kind} must be a hexadecimal color`);
 	return value;
 }
 
@@ -162,12 +146,7 @@ function assertSnapshotRange(lines: readonly string[], range: Range, owner: stri
 }
 
 function assertSnapshotPosition(lines: readonly string[], position: Position, owner: string): void {
-	if (
-		position.lineNumber < 1 ||
-		position.lineNumber > lines.length ||
-		position.column < 1 ||
-		position.column > lines[position.lineNumber - 1]!.length + 1
-	) {
+	if (position.lineNumber < 1 || position.lineNumber > lines.length || position.column < 1 || position.column > lines[position.lineNumber - 1]!.length + 1) {
 		throw new RangeError(`${owner} range is outside its snapshot`);
 	}
 }

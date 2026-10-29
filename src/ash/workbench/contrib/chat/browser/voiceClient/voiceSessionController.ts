@@ -19,13 +19,7 @@ interface IVoiceSessionController {
 	readonly isConnected: boolean;
 	readonly isActive: boolean;
 	setSource(source: AgentVoiceSource | undefined, draftIdentity?: string): void;
-	connect(
-		window: Window & typeof globalThis,
-		select?: (
-			connections: readonly AgentVoiceConnectionChoice[],
-			signal: AbortSignal,
-		) => Promise<AgentVoiceSelection | undefined>,
-	): Promise<void>;
+	connect(window: Window & typeof globalThis, select?: (connections: readonly AgentVoiceConnectionChoice[], signal: AbortSignal) => Promise<AgentVoiceSelection | undefined>): Promise<void>;
 	disconnect(): Promise<void>;
 	stopSpeaking(): Promise<void>;
 }
@@ -57,13 +51,9 @@ export class VoiceSessionController extends Disposable implements IVoiceSessionC
 			this._register(
 				voice.onDidChange(() => {
 					const owned = this.resource !== undefined && voice.state?.resourceId === this.resource;
-					if (owned && this.connectedPreviously && voice.state?.state === 'failed' && voice.state.error)
-						onError(new Error(voice.state.error));
+					if (owned && this.connectedPreviously && voice.state?.state === 'failed' && voice.state.error) onError(new Error(voice.state.error));
 					this.connectedPreviously = owned && voice.state?.state === 'connected';
-					if (
-						!voice.isAvailable ||
-						(!this.stopping && owned && voice.state && ['ended', 'failed'].includes(voice.state.state))
-					) {
+					if (!voice.isAvailable || (!this.stopping && owned && voice.state && ['ended', 'failed'].includes(voice.state.state))) {
 						this.controller?.abort();
 						this.controller = undefined;
 						this.active = undefined;
@@ -79,13 +69,7 @@ export class VoiceSessionController extends Disposable implements IVoiceSessionC
 			);
 			this._register(
 				voice.onDidRequestTask(request => {
-					if (
-						!this.resource &&
-						this.controller &&
-						!this.controller.signal.aborted &&
-						sameSource(request, this.active) &&
-						sameSource(request, this.target)
-					) {
+					if (!this.resource && this.controller && !this.controller.signal.aborted && sameSource(request, this.active) && sameSource(request, this.target)) {
 						if (this.pendingTasks.length < 256) this.pendingTasks.push(request);
 						return;
 					}
@@ -101,27 +85,14 @@ export class VoiceSessionController extends Disposable implements IVoiceSessionC
 			!this.stopping &&
 			(!!this.target || !!this.prepare) &&
 			this.voice?.isAvailable === true &&
-			(!this.voice.state ||
-				['ended', 'failed'].includes(this.voice.state.state) ||
-				this.voice.state.resourceId === this.resource)
+			(!this.voice.state || ['ended', 'failed'].includes(this.voice.state.state) || this.voice.state.resourceId === this.resource)
 		);
 	}
 	public get isActive(): boolean {
-		return (
-			!!this.controller &&
-			(!this.resource ||
-				!!this.stopping ||
-				(this.voice?.state?.resourceId === this.resource &&
-					!['ended', 'failed'].includes(this.voice.state.state)))
-		);
+		return !!this.controller && (!this.resource || !!this.stopping || (this.voice?.state?.resourceId === this.resource && !['ended', 'failed'].includes(this.voice.state.state)));
 	}
 	public get isConnected(): boolean {
-		return (
-			this.isActive &&
-			this.voice?.state?.state === 'connected' &&
-			this.voice.state.resourceId === this.resource &&
-			sameSource(this.voice.state, this.active)
-		);
+		return this.isActive && this.voice?.state?.state === 'connected' && this.voice.state.resourceId === this.resource && sameSource(this.voice.state, this.active);
 	}
 	public get isMuted(): boolean {
 		return this.voice?.state?.muted ?? false;
@@ -150,24 +121,15 @@ export class VoiceSessionController extends Disposable implements IVoiceSessionC
 		if (sameSource(source, this.target) && identity === this.targetIdentity) return;
 		this.targetIdentity = identity;
 		this.target = source ? { ...source } : undefined;
-		if (
-			(this.controller && this.preparing !== this.controller && !this.active) ||
-			(this.active && !sameSource(source, this.active))
-		)
-			void this.disconnect().catch(this.onError);
+		if ((this.controller && this.preparing !== this.controller && !this.active) || (this.active && !sameSource(source, this.active))) void this.disconnect().catch(this.onError);
 	}
 
 	public async connect(
 		window: Window & typeof globalThis,
-		select?: (
-			connections: readonly AgentVoiceConnectionChoice[],
-			signal: AbortSignal,
-		) => Promise<AgentVoiceSelection | undefined>,
+		select?: (connections: readonly AgentVoiceConnectionChoice[], signal: AbortSignal) => Promise<AgentVoiceSelection | undefined>,
 	): Promise<void> {
-		if (!window?.navigator.userActivation?.isActive)
-			throw new Error(localize('chat.voice.userAction', 'Start voice conversation from a user action.'));
-		if (!this.isAvailable || !this.voice)
-			throw new Error(localize('chat.voice.unavailable', 'Voice conversation is unavailable in this host.'));
+		if (!window?.navigator.userActivation?.isActive) throw new Error(localize('chat.voice.userAction', 'Start voice conversation from a user action.'));
+		if (!this.isAvailable || !this.voice) throw new Error(localize('chat.voice.unavailable', 'Voice conversation is unavailable in this host.'));
 		if (this.controller) return;
 		const originalTarget = this.target ? { ...this.target } : undefined;
 		const originalIdentity = this.targetIdentity;
@@ -178,21 +140,9 @@ export class VoiceSessionController extends Disposable implements IVoiceSessionC
 		this.changed.fire();
 		try {
 			const connections = await this.voice.getOptions();
-			if (
-				controller.signal.aborted ||
-				this.isDisposed ||
-				!sameSource(originalTarget, this.target) ||
-				originalIdentity !== this.targetIdentity
-			)
-				throw canceled();
+			if (controller.signal.aborted || this.isDisposed || !sameSource(originalTarget, this.target) || originalIdentity !== this.targetIdentity) throw canceled();
 			const connection = connections.find(connection => connection.connectionId === 'openai') ?? connections[0];
-			if (!connection)
-				throw new Error(
-					localize(
-						'chat.voice.configureProvider',
-						'Configure a supported voice provider with a direct API credential in Models settings.',
-					),
-				);
+			if (!connection) throw new Error(localize('chat.voice.configureProvider', 'Configure a supported voice provider with a direct API credential in Models settings.'));
 			const model = connection.models.find(model => model.modelId === connection.defaultModel);
 			const selection = select
 				? await select(connections, controller.signal)
@@ -201,8 +151,7 @@ export class VoiceSessionController extends Disposable implements IVoiceSessionC
 						modelId: connection.defaultModel,
 						...(model ? { voice: model.defaultVoice } : {}),
 					};
-			if (!selection || controller.signal.aborted || this.isDisposed || originalIdentity !== this.targetIdentity)
-				throw canceled();
+			if (!selection || controller.signal.aborted || this.isDisposed || originalIdentity !== this.targetIdentity) throw canceled();
 			this.preparing = controller;
 			let target: AgentVoiceSource;
 			try {
@@ -284,13 +233,7 @@ export class VoiceSessionController extends Disposable implements IVoiceSessionC
 		this.handled.add(request.delegationId);
 		void Promise.resolve()
 			.then(() => {
-				if (
-					controller.signal.aborted ||
-					request.resourceId !== this.resource ||
-					!sameSource(request, this.target) ||
-					request.mediaEpoch !== voice.state?.mediaEpoch
-				)
-					throw canceled();
+				if (controller.signal.aborted || request.resourceId !== this.resource || !sameSource(request, this.target) || request.mediaEpoch !== voice.state?.mediaEpoch) throw canceled();
 				return this.dispatch(request, controller.signal);
 			})
 			.catch(error => {
@@ -311,11 +254,7 @@ function sameSource(left: AgentVoiceSource | undefined, right: AgentVoiceSource 
 	return left?.sessionId === right?.sessionId && left?.threadId === right?.threadId;
 }
 
-export function pickVoiceConversation(
-	quickInput: IQuickInputService,
-	connections: readonly AgentVoiceConnectionChoice[],
-	signal: AbortSignal,
-): Promise<AgentVoiceSelection | undefined> {
+export function pickVoiceConversation(quickInput: IQuickInputService, connections: readonly AgentVoiceConnectionChoice[], signal: AbortSignal): Promise<AgentVoiceSelection | undefined> {
 	const items = connections.flatMap(connection =>
 		connection.models.flatMap(model =>
 			model.voices.map(voice => ({
@@ -330,15 +269,10 @@ export function pickVoiceConversation(
 	if (signal.aborted) return Promise.resolve(undefined);
 	if (items.length === 1) return Promise.resolve(items[0]!.selection);
 	const resources = new DisposableStore();
-	const picker = resources.add(
-		quickInput.createQuickPick<IQuickPickItem & { readonly selection: AgentVoiceSelection }>(),
-	);
+	const picker = resources.add(quickInput.createQuickPick<IQuickPickItem & { readonly selection: AgentVoiceSelection }>());
 	picker.items = items;
 	picker.sortByLabel = false;
-	picker.placeholder = localize(
-		'chat.voice.selection.hint',
-		'Choose a voice, model and provider for this conversation.',
-	);
+	picker.placeholder = localize('chat.voice.selection.hint', 'Choose a voice, model and provider for this conversation.');
 	picker.ariaLabel = localize('chat.voice.selection.label', 'Voice conversation options');
 	picker.activeItems = [items.find(item => item.picked) ?? items[0]!].filter(Boolean);
 	return new Promise(resolve => {

@@ -1,9 +1,6 @@
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { derived, observableValue, type IObservable } from '../../../../base/common/observable.js';
-import {
-	createServiceIdentifier,
-	IInstantiationService,
-} from '../../../../platform/instantiation/common/instantiation.js';
+import { createServiceIdentifier, IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IAutomationService } from '../../../../workbench/contrib/chat/common/automations/automationService.js';
@@ -25,9 +22,7 @@ export const ISessionsSearchService = createServiceIdentifier<ISessionsSearchSer
 export class SessionsSearchService extends Disposable implements ISessionsSearchService {
 	private readonly active = this._register(new MutableDisposable<SessionsSearchDialog>());
 	private readonly sources = observableValue<readonly IObservable<readonly SearchResult[]>[]>(this, []);
-	private readonly sourceResults = derived(reader =>
-		this.sources.read(reader).flatMap(source => source.read(reader)),
-	);
+	private readonly sourceResults = derived(reader => this.sources.read(reader).flatMap(source => source.read(reader)));
 
 	constructor(
 		@IInstantiationService private readonly instantiation: IInstantiationService,
@@ -52,11 +47,7 @@ export class SessionsSearchService extends Disposable implements ISessionsSearch
 			this.focus();
 			return;
 		}
-		const dialog = this.instantiation.createInstance(
-			SessionsSearchDialog,
-			this.layout.activeContainer,
-			this.sourceResults,
-		);
+		const dialog = this.instantiation.createInstance(SessionsSearchDialog, this.layout.activeContainer, this.sourceResults);
 		this.active.value = dialog;
 		let target;
 		try {

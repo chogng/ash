@@ -5,13 +5,7 @@ import type { ISessionPullRequestChatOptions, ISessionPullRequestCreation } from
 
 class UncertainChatRequestError extends Error {
 	constructor(error: unknown) {
-		super(
-			localize(
-				'sessions.changes.prAgentUncertain',
-				'The agent request could not be confirmed. Check the initiating conversation before sending it again.',
-			),
-			{ cause: error },
-		);
+		super(localize('sessions.changes.prAgentUncertain', 'The agent request could not be confirmed. Check the initiating conversation before sending it again.'), { cause: error });
 	}
 }
 
@@ -23,28 +17,13 @@ export class CreatePullRequestChatRequest {
 		return error instanceof UncertainChatRequestError;
 	}
 
-	public async send(
-		session: ISession,
-		options: ISessionPullRequestChatOptions,
-		creation: ISessionPullRequestCreation,
-		chat: IChat,
-	): Promise<void> {
+	public async send(session: ISession, options: ISessionPullRequestChatOptions, creation: ISessionPullRequestCreation, chat: IChat): Promise<void> {
 		if (!creation.prepareChatRequest) {
-			throw new Error(
-				localize(
-					'sessions.changes.prAgentUnavailable',
-					'This repository cannot prepare a pull request request for the agent.',
-				),
-			);
+			throw new Error(localize('sessions.changes.prAgentUnavailable', 'This repository cannot prepare a pull request request for the agent.'));
 		}
 		const { thread } = await this.chatService.readThread(session.sessionId, chat.threadId);
 		if (session.status === 'archived' || thread.status === 'archived') {
-			throw new Error(
-				localize(
-					'sessions.changes.prReadOnly',
-					'Cannot send a pull request request to an archived conversation.',
-				),
-			);
+			throw new Error(localize('sessions.changes.prReadOnly', 'Cannot send a pull request request to an archived conversation.'));
 		}
 		const text = await creation.prepareChatRequest(createPullRequestMessage(options), options);
 		const submission = {
@@ -84,26 +63,11 @@ export function createPullRequestMessage(options: ISessionPullRequestChatOptions
 			context.baseBranchName,
 		),
 		options.title
-			? localize(
-					'sessions.changes.prAgentDetails',
-					'Title: {0}\nDescription:\n{1}',
-					options.title,
-					options.description ?? '',
-				)
-			: localize(
-					'sessions.changes.prAgentGenerate',
-					'Generate a title and description that summarize the changes.',
-				),
-		localize(
-			'sessions.changes.prAgentPublish',
-			'Review the changes, commit the intended files, and push the source branch as needed. Follow the ordinary permission and approval requirements.',
-		),
+			? localize('sessions.changes.prAgentDetails', 'Title: {0}\nDescription:\n{1}', options.title, options.description ?? '')
+			: localize('sessions.changes.prAgentGenerate', 'Generate a title and description that summarize the changes.'),
+		localize('sessions.changes.prAgentPublish', 'Review the changes, commit the intended files, and push the source branch as needed. Follow the ordinary permission and approval requirements.'),
 		options.autoMergeMethod && !options.draft
-			? localize(
-					'sessions.changes.prAgentAuto',
-					'Enable GitHub auto-merge using {0}. Wait for required checks and approvals; do not bypass them.',
-					options.autoMergeMethod,
-				)
+			? localize('sessions.changes.prAgentAuto', 'Enable GitHub auto-merge using {0}. Wait for required checks and approvals; do not bypass them.', options.autoMergeMethod)
 			: localize('sessions.changes.prAgentManual', 'Do not merge the pull request or enable auto-merge.'),
 	].join('\n\n');
 }

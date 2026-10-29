@@ -15,12 +15,7 @@ import {
 	serializeWorkspaceIdentifier,
 	workbenchStateFromWorkspaceIdentifier,
 } from '../../workspace/common/workspace.js';
-import {
-	defaultWindowState,
-	WindowMode,
-	type IWindowBounds,
-	type IWindowState,
-} from '../../window/electron-main/window.js';
+import { defaultWindowState, WindowMode, type IWindowBounds, type IWindowState } from '../../window/electron-main/window.js';
 import { validateWindowState, type IWindowDisplay } from './windows.js';
 import { WINDOW_MINIMUM_SIZE, type NewWindowDimensions } from '../../window/common/window.js';
 import { getRemoteWorkspacePath, isRemoteResource } from '../../remote/common/remote.js';
@@ -61,14 +56,8 @@ export interface IStatefulWindow {
 	getNormalBounds(): IWindowBounds;
 	setBounds(bounds: IWindowBounds): void;
 	setMinimumSize(width: number, height: number): void;
-	on(
-		event: 'blur' | 'close' | 'move' | 'moved' | 'resize' | 'unmaximize' | 'leave-full-screen',
-		listener: () => void,
-	): void;
-	removeListener(
-		event: 'blur' | 'close' | 'move' | 'moved' | 'resize' | 'unmaximize' | 'leave-full-screen',
-		listener: () => void,
-	): void;
+	on(event: 'blur' | 'close' | 'move' | 'moved' | 'resize' | 'unmaximize' | 'leave-full-screen', listener: () => void): void;
+	removeListener(event: 'blur' | 'close' | 'move' | 'moved' | 'resize' | 'unmaximize' | 'leave-full-screen', listener: () => void): void;
 }
 
 interface IWindowStateRecord {
@@ -143,31 +132,20 @@ export class WindowsStateHandler {
 	getNewWindowState(options: INewWindowStateOptions): IWindowState {
 		const { lastActiveWindow: active, newWindowDimensions } = options;
 		const lastActiveWindow = active?.state;
-		const exactState = this.windowsState.openedWindows.find(windowState =>
-			matchesWindowIdentity(windowState, this.workspace, this.backupPath),
-		);
+		const exactState = this.windowsState.openedWindows.find(windowState => matchesWindowIdentity(windowState, this.workspace, this.backupPath));
 		const candidates = [
 			exactState?.uiState,
-			lastActiveWindow
-				? undefined
-				: (options.lastClosedWindow ??
-					parseWindowsState(this.stateService.getItem(WINDOWS_STATE_STORAGE_KEY)).lastActiveWindow?.uiState),
+			lastActiveWindow ? undefined : (options.lastClosedWindow ?? parseWindowsState(this.stateService.getItem(WINDOWS_STATE_STORAGE_KEY)).lastActiveWindow?.uiState),
 		];
 
 		for (const candidate of candidates) {
 			if (!candidate) {
 				continue;
 			}
-			const restoredState = validateWindowState(
-				candidate,
-				this.displayService.getAllDisplays(),
-				this.workbenchState,
-			);
+			const restoredState = validateWindowState(candidate, this.displayService.getAllDisplays(), this.workbenchState);
 			if (restoredState) {
 				this.lastNormalState =
-					restoredState.mode === WindowMode.Fullscreen && !options.wasRestarted && !options.restoreFullscreen
-						? { ...restoredState, mode: WindowMode.Normal }
-						: restoredState;
+					restoredState.mode === WindowMode.Fullscreen && !options.wasRestarted && !options.restoreFullscreen ? { ...restoredState, mode: WindowMode.Normal } : restoredState;
 				return this.lastNormalState;
 			}
 		}
@@ -180,9 +158,7 @@ export class WindowsStateHandler {
 		} else if (this.platform === 'darwin') {
 			display = this.displayService.getCursorDisplay();
 		} else {
-			display = active
-				? this.displayService.getDisplayMatching(active.bounds)
-				: this.displayService.getPrimaryDisplay();
+			display = active ? this.displayService.getDisplayMatching(active.bounds) : this.displayService.getPrimaryDisplay();
 		}
 		state = {
 			...state,
@@ -259,10 +235,7 @@ export class WindowsStateHandler {
 			const bounds = toBounds(this.lastNormalState);
 			const area = this.lastNormalState.workArea;
 			if (area) {
-				window.setMinimumSize(
-					Math.min(WINDOW_MINIMUM_SIZE.width, area.width),
-					Math.min(WINDOW_MINIMUM_SIZE.height, area.height),
-				);
+				window.setMinimumSize(Math.min(WINDOW_MINIMUM_SIZE.width, area.width), Math.min(WINDOW_MINIMUM_SIZE.height, area.height));
 			}
 			if (bounds && !sameBounds(bounds, window.getBounds())) {
 				window.setBounds(bounds);
@@ -298,11 +271,7 @@ export class WindowsStateHandler {
 				if (!this.lastNormalState) {
 					return;
 				}
-				const state = validateWindowState(
-					this.lastNormalState,
-					this.displayService.getAllDisplays(),
-					this.workbenchState,
-				);
+				const state = validateWindowState(this.lastNormalState, this.displayService.getAllDisplays(), this.workbenchState);
 				if (state) {
 					this.lastNormalState = state;
 					applyPlacement();
@@ -342,9 +311,7 @@ export class WindowsStateHandler {
 
 		const currentWindow = createWindowStateRecord(this.workspace, this.backupPath, uiState);
 		const latestState = parseWindowsState(this.stateService.getItem(this.storageKey));
-		const otherWindows = latestState.openedWindows.filter(
-			windowState => !matchesWindowIdentity(windowState, this.workspace, this.backupPath),
-		);
+		const otherWindows = latestState.openedWindows.filter(windowState => !matchesWindowIdentity(windowState, this.workspace, this.backupPath));
 		const windowsState: IWindowsState = {
 			lastActiveWindow: currentWindow,
 			openedWindows: [currentWindow, ...otherWindows].slice(0, MAX_OPENED_WINDOW_RECORDS),
@@ -354,20 +321,13 @@ export class WindowsStateHandler {
 		if (this.storageKey !== WINDOWS_STATE_STORAGE_KEY) {
 			// Known-window records stay scoped; the first unmatched window follows the last active window of either kind.
 			const sharedState = parseWindowsState(this.stateService.getItem(WINDOWS_STATE_STORAGE_KEY));
-			this.stateService.setItem(
-				WINDOWS_STATE_STORAGE_KEY,
-				serializeWindowsState({ ...sharedState, lastActiveWindow: currentWindow }),
-			);
+			this.stateService.setItem(WINDOWS_STATE_STORAGE_KEY, serializeWindowsState({ ...sharedState, lastActiveWindow: currentWindow }));
 		}
 		await this.stateService.flush();
 	}
 
 	private captureWindowState(window: IStatefulWindow): IWindowState | undefined {
-		const mode = window.isFullScreen()
-			? WindowMode.Fullscreen
-			: window.isMaximized()
-				? WindowMode.Maximized
-				: WindowMode.Normal;
+		const mode = window.isFullScreen() ? WindowMode.Fullscreen : window.isMaximized() ? WindowMode.Maximized : WindowMode.Normal;
 		if (this.lastNormalState?.workArea) {
 			const displays = this.displayService.getAllDisplays();
 			const previousDisplay = displays.find(display => display.id === this.lastNormalState?.displayId);
@@ -379,9 +339,7 @@ export class WindowsStateHandler {
 				}
 			}
 		}
-		const primaryBounds = readBounds(() =>
-			mode === WindowMode.Normal ? window.getBounds() : window.getNormalBounds(),
-		);
+		const primaryBounds = readBounds(() => (mode === WindowMode.Normal ? window.getBounds() : window.getNormalBounds()));
 		const bounds =
 			(mode !== WindowMode.Normal && this.lastNormalState ? toBounds(this.lastNormalState) : primaryBounds) ??
 			readBounds(() => window.getBounds()) ??
@@ -390,20 +348,14 @@ export class WindowsStateHandler {
 			return undefined;
 		}
 
-		const display = this.displayService.getDisplayMatching(
-			mode === WindowMode.Normal ? bounds : window.getBounds(),
-		);
+		const display = this.displayService.getDisplayMatching(mode === WindowMode.Normal ? bounds : window.getBounds());
 		let placement: IWindowState = {
 			mode: WindowMode.Normal,
 			...bounds,
 			displayId: display.id,
 			workArea: { ...display.workArea },
 		};
-		if (
-			mode !== WindowMode.Normal &&
-			this.lastNormalState?.workArea &&
-			display.id !== this.lastNormalState.displayId
-		) {
+		if (mode !== WindowMode.Normal && this.lastNormalState?.workArea && display.id !== this.lastNormalState.displayId) {
 			const adjusted = validateWindowState(this.lastNormalState, [display], this.workbenchState);
 			if (adjusted) {
 				placement = { ...adjusted, mode: WindowMode.Normal };
@@ -447,18 +399,8 @@ export class WindowSessionStateHandler<TEntry extends IWindowSessionEntry> {
 
 	readSession(): IWindowSession<TEntry> | undefined {
 		const value = this.stateService.getItem(WINDOW_SESSION_STATE_KEY);
-		if (
-			!isRecord(value) ||
-			Object.keys(value).sort().join(',') !== 'active,version,windows' ||
-			value.version !== 1 ||
-			!Array.isArray(value.windows)
-		)
-			return undefined;
-		if (
-			!Number.isSafeInteger(value.active) ||
-			(value.active as number) < 0 ||
-			(value.windows.length === 0 ? value.active !== 0 : (value.active as number) >= value.windows.length)
-		)
+		if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'active,version,windows' || value.version !== 1 || !Array.isArray(value.windows)) return undefined;
+		if (!Number.isSafeInteger(value.active) || (value.active as number) < 0 || (value.windows.length === 0 ? value.active !== 0 : (value.active as number) >= value.windows.length))
 			return undefined;
 		const windows: TEntry[] = [];
 		const sessionIds = new Set<string>();
@@ -473,9 +415,7 @@ export class WindowSessionStateHandler<TEntry extends IWindowSessionEntry> {
 			if (candidate.windowSessionId !== undefined) {
 				if (
 					typeof candidate.windowSessionId !== 'string' ||
-					!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(
-						candidate.windowSessionId,
-					) ||
+					!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(candidate.windowSessionId) ||
 					sessionIds.has(candidate.windowSessionId)
 				)
 					return undefined;
@@ -536,12 +476,7 @@ export class WindowSessionStateHandler<TEntry extends IWindowSessionEntry> {
 
 	async saveSession(): Promise<void> {
 		const windows = this.getOpenWindows();
-		const entries =
-			windows.length > 0
-				? windows.map(window => window.entry)
-				: this.lastClosedWindow
-					? [this.lastClosedWindow]
-					: [];
+		const entries = windows.length > 0 ? windows.map(window => window.entry) : this.lastClosedWindow ? [this.lastClosedWindow] : [];
 		const focused = windows.findIndex(window => window.focused);
 		const lastFocused = windows.findIndex(window => window.id === this.lastFocusedWindowId);
 		const active = focused >= 0 ? focused : Math.max(0, lastFocused);
@@ -563,11 +498,7 @@ export class WindowSessionStateHandler<TEntry extends IWindowSessionEntry> {
 	}
 }
 
-function createWindowStateRecord(
-	workspace: IAnyWorkspaceIdentifier,
-	backupPath: string | undefined,
-	uiState: IWindowState,
-): IWindowStateRecord {
+function createWindowStateRecord(workspace: IAnyWorkspaceIdentifier, backupPath: string | undefined, uiState: IWindowState): IWindowStateRecord {
 	if (isWorkspaceIdentifier(workspace)) {
 		return { workspace, uiState };
 	}
@@ -575,22 +506,18 @@ function createWindowStateRecord(
 		return { folderUri: workspace.uri, uiState };
 	}
 	// A new empty window has its own workspace state; a restored backup keeps its backup identity.
-	return { ...(backupPath === undefined ? { emptyWorkspaceId: workspace.id } : { backupPath }), uiState };
+	return {
+		...(backupPath === undefined ? { emptyWorkspaceId: workspace.id } : { backupPath }),
+		uiState,
+	};
 }
 
-function matchesWindowIdentity(
-	state: IWindowStateRecord,
-	workspace: IAnyWorkspaceIdentifier,
-	backupPath: string | undefined,
-): boolean {
+function matchesWindowIdentity(state: IWindowStateRecord, workspace: IAnyWorkspaceIdentifier, backupPath: string | undefined): boolean {
 	if (isWorkspaceIdentifier(workspace)) {
 		return state.workspace?.id === workspace.id;
 	}
 	if (isSingleFolderWorkspaceIdentifier(workspace)) {
-		return (
-			state.folderUri !== undefined &&
-			resourceComparisonKey(state.folderUri) === resourceComparisonKey(workspace.uri)
-		);
+		return state.folderUri !== undefined && resourceComparisonKey(state.folderUri) === resourceComparisonKey(workspace.uri);
 	}
 	return (
 		isEmptyWorkspaceIdentifier(workspace) &&
@@ -608,9 +535,7 @@ function resourceComparisonKey(resource: URI): string {
 function serializeWindowsState(state: IWindowsState): unknown {
 	return {
 		version: WINDOWS_STATE_VERSION,
-		...(state.lastActiveWindow === undefined
-			? {}
-			: { lastActiveWindow: serializeWindowStateRecord(state.lastActiveWindow) }),
+		...(state.lastActiveWindow === undefined ? {} : { lastActiveWindow: serializeWindowStateRecord(state.lastActiveWindow) }),
 		openedWindows: state.openedWindows.map(serializeWindowStateRecord),
 	};
 }
@@ -635,7 +560,12 @@ function serializeWindowStateRecord(state: IWindowStateRecord): unknown {
 function serializeUiState(state: IWindowState): unknown {
 	return {
 		mode: state.mode,
-		bounds: { x: state.x, y: state.y, width: state.width, height: state.height },
+		bounds: {
+			x: state.x,
+			y: state.y,
+			width: state.width,
+			height: state.height,
+		},
 		...(state.displayId === undefined ? {} : { displayId: state.displayId }),
 		...(state.workArea === undefined ? {} : { workArea: state.workArea }),
 	};
@@ -646,13 +576,13 @@ function parseWindowsState(value: unknown): IWindowsState {
 		return { openedWindows: [] };
 	}
 
-	const lastActiveWindow =
-		value.lastActiveWindow === undefined ? undefined : parseWindowStateRecord(value.lastActiveWindow);
-	const openedWindows = value.openedWindows
-		.map(parseWindowStateRecord)
-		.filter((state): state is IWindowStateRecord => state !== undefined);
+	const lastActiveWindow = value.lastActiveWindow === undefined ? undefined : parseWindowStateRecord(value.lastActiveWindow);
+	const openedWindows = value.openedWindows.map(parseWindowStateRecord).filter((state): state is IWindowStateRecord => state !== undefined);
 
-	return { ...(lastActiveWindow === undefined ? {} : { lastActiveWindow }), openedWindows };
+	return {
+		...(lastActiveWindow === undefined ? {} : { lastActiveWindow }),
+		openedWindows,
+	};
 }
 
 function parseWindowStateRecord(value: unknown): IWindowStateRecord | undefined {
@@ -664,11 +594,7 @@ function parseWindowStateRecord(value: unknown): IWindowStateRecord | undefined 
 		return undefined;
 	}
 
-	const identityCount =
-		Number(value.workspaceIdentifier !== undefined) +
-		Number(value.folder !== undefined) +
-		Number(value.backupPath !== undefined) +
-		Number(value.emptyWorkspaceId !== undefined);
+	const identityCount = Number(value.workspaceIdentifier !== undefined) + Number(value.folder !== undefined) + Number(value.backupPath !== undefined) + Number(value.emptyWorkspaceId !== undefined);
 	if (identityCount > 1) {
 		return undefined;
 	}
@@ -685,9 +611,7 @@ function parseWindowStateRecord(value: unknown): IWindowStateRecord | undefined 
 		return isNonEmptyString(value.backupPath) ? { backupPath: value.backupPath, uiState } : undefined;
 	}
 	if (value.emptyWorkspaceId !== undefined) {
-		return isNonEmptyString(value.emptyWorkspaceId)
-			? { emptyWorkspaceId: value.emptyWorkspaceId, uiState }
-			: undefined;
+		return isNonEmptyString(value.emptyWorkspaceId) ? { emptyWorkspaceId: value.emptyWorkspaceId, uiState } : undefined;
 	}
 	return { uiState };
 }
@@ -762,38 +686,42 @@ function parseUiState(value: unknown): IWindowState | undefined {
 		}
 	}
 
-	return { mode, ...bounds, displayId: value.displayId, ...(workArea === undefined ? {} : { workArea }) };
+	return {
+		mode,
+		...bounds,
+		displayId: value.displayId,
+		...(workArea === undefined ? {} : { workArea }),
+	};
 }
 
 function sameBounds(first: IWindowBounds, second: IWindowBounds): boolean {
-	return (
-		first.x === second.x && first.y === second.y && first.width === second.width && first.height === second.height
-	);
+	return first.x === second.x && first.y === second.y && first.width === second.width && first.height === second.height;
 }
 
 function toBounds(state: IWindowState): IWindowBounds | undefined {
 	if (!isFiniteNumber(state.x) || !isFiniteNumber(state.y)) {
 		return undefined;
 	}
-	return { x: state.x, y: state.y, width: state.width, height: state.height };
+	return {
+		x: state.x,
+		y: state.y,
+		width: state.width,
+		height: state.height,
+	};
 }
 
-function readBounds(
-	read: () => { readonly x: unknown; readonly y: unknown; readonly width: unknown; readonly height: unknown },
-): IWindowBounds | undefined {
+function readBounds(read: () => { readonly x: unknown; readonly y: unknown; readonly width: unknown; readonly height: unknown }): IWindowBounds | undefined {
 	try {
 		const bounds = read();
-		if (
-			!isFiniteNumber(bounds.x) ||
-			!isFiniteNumber(bounds.y) ||
-			!isFiniteNumber(bounds.width) ||
-			!isFiniteNumber(bounds.height) ||
-			bounds.width <= 0 ||
-			bounds.height <= 0
-		) {
+		if (!isFiniteNumber(bounds.x) || !isFiniteNumber(bounds.y) || !isFiniteNumber(bounds.width) || !isFiniteNumber(bounds.height) || bounds.width <= 0 || bounds.height <= 0) {
 			return undefined;
 		}
-		return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+		return {
+			x: bounds.x,
+			y: bounds.y,
+			width: bounds.width,
+			height: bounds.height,
+		};
 	} catch {
 		return undefined;
 	}

@@ -47,12 +47,15 @@ test('Folding model tracks line boundaries across edits and removes deleted rang
 
 	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 0 + 1)), text: 'new\n' }]);
 	assert.deepEqual(folding.regions, [
-		{ startLineIndex: 2, endLineIndex: 4, collapsed: true, source: EditorFoldingRangeSource.Provider },
+		{
+			startLineIndex: 2,
+			endLineIndex: 4,
+			collapsed: true,
+			source: EditorFoldingRangeSource.Provider,
+		},
 	]);
 
-	model.applyEdits([
-		{ range: Range.fromPositions(new Position(2 + 1, 0 + 1), new Position(5 + 1, 0 + 1)), text: '' },
-	]);
+	model.applyEdits([{ range: Range.fromPositions(new Position(2 + 1, 0 + 1), new Position(5 + 1, 0 + 1)), text: '' }]);
 	assert.deepEqual(folding.regions, []);
 });
 
@@ -130,9 +133,7 @@ test('Folding memento restores collapsed and manual ranges across provider updat
 		[true, false],
 	);
 
-	model.applyEdits([
-		{ range: Range.fromPositions(new Position(2, 1), new Position(3, 12)), text: 'changed\nchanged end' },
-	]);
+	model.applyEdits([{ range: Range.fromPositions(new Position(2, 1), new Position(3, 12)), text: 'changed\nchanged end' }]);
 	folding.setRanges([]);
 	folding.applyMemento(saved!);
 	assert.deepEqual(folding.regions, []);
@@ -292,15 +293,9 @@ test('Folding targets are merged before publishing one change and ignore lines o
 	folding.setContainingLinesCollapsed([-1, 30, 3], true, { levels: 2, direction: 'down' });
 	assert.equal(changes, 0);
 	folding.setContainingLinesCollapsed([1, 2, 1], true, { levels: 2, direction: 'up' });
-	assert.deepEqual(
-		{ changes, collapsed: folding.regions.map(region => region.collapsed) },
-		{ changes: 1, collapsed: [true, true] },
-	);
+	assert.deepEqual({ changes, collapsed: folding.regions.map(region => region.collapsed) }, { changes: 1, collapsed: [true, true] });
 	folding.setContainingLinesCollapsed([0, 1, 2], false, { levels: 2, direction: 'down' });
-	assert.deepEqual(
-		{ changes, collapsed: folding.regions.map(region => region.collapsed) },
-		{ changes: 2, collapsed: [false, false] },
-	);
+	assert.deepEqual({ changes, collapsed: folding.regions.map(region => region.collapsed) }, { changes: 2, collapsed: [false, false] });
 });
 
 test('Empty explicit line lists use document depth only for downward folding', () => {

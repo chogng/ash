@@ -16,10 +16,7 @@ import { resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { Menus } from '../../../../browser/menus.js';
 import { NEW_FILE_TAB_COMMAND_ID } from '../../../../common/sessionCommands.js';
 import type { IAgentWorkbenchLayoutService } from '../../../../browser/workbench.js';
-import type {
-	DesktopLayoutController,
-	IDesktopLayoutContext,
-} from '../../../layout/browser/desktopLayoutController.js';
+import type { DesktopLayoutController, IDesktopLayoutContext } from '../../../layout/browser/desktopLayoutController.js';
 import { EditorTitleMenuBridgeContribution } from '../../browser/editor.contribution.js';
 
 test('editor contributions follow layout state, serialize Add tab commands and release window registrations', async () => {
@@ -112,14 +109,7 @@ test('editor contributions follow layout state, serialize Add tab commands and r
 	);
 	assert.deepEqual(
 		paletteIds(),
-		[
-			...existingPaletteIds,
-			NEW_FILE_TAB_COMMAND_ID,
-			'workbench.agentSessions.action.viewChanges',
-			'ash.sessions.toggleSidePane',
-			'ash.sessions.toggleDetails',
-			'ash.sessions.showEditor',
-		].sort(),
+		[...existingPaletteIds, NEW_FILE_TAB_COMMAND_ID, 'workbench.agentSessions.action.viewChanges', 'ash.sessions.toggleSidePane', 'ash.sessions.toggleDetails', 'ash.sessions.showEditor'].sort(),
 	);
 
 	await commands.executeCommand('ash.sessions.showEditor');

@@ -7,16 +7,9 @@ import { AgentTraceOutput, IAgentTraceOutput } from './agentTraceOutput.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
-import {
-	createAgentTraceInput,
-	readLastAgentTraceResource,
-	rememberAgentTraceResource,
-} from '../../../../workbench/contrib/chat/browser/chatDebug/chatDebugEditorInput.js';
+import { createAgentTraceInput, readLastAgentTraceResource, rememberAgentTraceResource } from '../../../../workbench/contrib/chat/browser/chatDebug/chatDebugEditorInput.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import {
-	createAgentTraceResource,
-	type AgentTraceLocation,
-} from '../../../../workbench/contrib/chat/browser/chatDebug/chatDebugEditorInput.js';
+import { createAgentTraceResource, type AgentTraceLocation } from '../../../../workbench/contrib/chat/browser/chatDebug/chatDebugEditorInput.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import type { AgentTreeNode } from '../../../services/sessions/common/session.js';
 
@@ -62,11 +55,7 @@ registerAction2(
 			});
 		}
 		public override async run(accessor: ServicesAccessor, source?: unknown): Promise<void> {
-			await openTraceEntry(
-				accessor,
-				readLastAgentTraceResource(accessor.get(IStorageService)) ?? currentTraceResource(accessor),
-				source === 'restore' ? source : undefined,
-			);
+			await openTraceEntry(accessor, readLastAgentTraceResource(accessor.get(IStorageService)) ?? currentTraceResource(accessor), source === 'restore' ? source : undefined);
 		}
 	},
 );
@@ -119,9 +108,7 @@ async function openTraceEntry(accessor: ServicesAccessor, resource: URI, source?
 }
 
 registerSingleton(IAgentTraceOutput, AgentTraceOutput, InstantiationType.Delayed);
-registerWorkbenchContribution('sessions.contrib.agentOutput', WorkbenchPhase.AfterRestored, accessor =>
-	accessor.get(IAgentTraceOutput),
-);
+registerWorkbenchContribution('sessions.contrib.agentOutput', WorkbenchPhase.AfterRestored, accessor => accessor.get(IAgentTraceOutput));
 
 registerAction2(
 	class ShowAgentOutput extends Action2 {

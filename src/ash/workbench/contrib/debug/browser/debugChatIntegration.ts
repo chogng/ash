@@ -1,9 +1,5 @@
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import {
-	IChatContextPickService,
-	picksWithPromiseFn,
-	type IChatContextPickerPickItem,
-} from '../../chat/browser/attachments/chatContextPickService.js';
+import { IChatContextPickService, picksWithPromiseFn, type IChatContextPickerPickItem } from '../../chat/browser/attachments/chatContextPickService.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { localize } from '../../../../nls.js';
@@ -38,32 +34,23 @@ export class DebugChatContextContribution extends Disposable {
 		if (!session || session.state !== 'stopped' || !frame) return [];
 		const revision = session.inspectionRevision;
 		const scopes = await session.inspectFrame(frame.id, 'all');
-		if (
-			this.isDisposed ||
-			this.debug.session !== session ||
-			session.state !== 'stopped' ||
-			session.inspectionRevision !== revision ||
-			this.debug.getViewModel().focusedStackFrame !== frame
-		)
+		if (this.isDisposed || this.debug.session !== session || session.state !== 'stopped' || session.inspectionRevision !== revision || this.debug.getViewModel().focusedStackFrame !== frame)
 			return [];
 		const name = localize('debug.chatFrame', '{0}: {1}', session.name, frame.name);
 		const location = `${frame.source?.path ?? frame.source?.name ?? frame.name}:${frame.lineNumber}:${frame.columnNumber}`;
-		const variables = scopes.flatMap(scope =>
-			scope.variables.map(variable => `${scope.scope.name}.${variable.name} = ${variable.value}`),
-		);
+		const variables = scopes.flatMap(scope => scope.variables.map(variable => `${scope.scope.name}.${variable.name} = ${variable.value}`));
 		const content = [location, ...variables].join('\n').slice(0, 65536);
 		const frameAttachment = snapshot(session, `${revision}:frame:${frame.id}`, name, content);
 		const picks: IChatContextPickerPickItem[] = [
-			{ label: name, detail: location, asAttachment: () => frameAttachment },
+			{
+				label: name,
+				detail: location,
+				asAttachment: () => frameAttachment,
+			},
 		];
 		for (const scope of scopes)
 			for (const variable of scope.variables) {
-				const attachment = debugVariableContext(
-					session,
-					revision,
-					variable,
-					`${frame.id}:${scope.scope.variablesReference}`,
-				);
+				const attachment = debugVariableContext(session, revision, variable, `${frame.id}:${scope.scope.variablesReference}`);
 				picks.push({
 					label: variable.name,
 					description: scope.scope.name,
@@ -72,25 +59,13 @@ export class DebugChatContextContribution extends Disposable {
 				});
 			}
 		const filter = query.toLocaleLowerCase();
-		return picks
-			.filter(pick => `${pick.label} ${pick.description ?? ''}`.toLocaleLowerCase().includes(filter))
-			.slice(0, 256);
+		return picks.filter(pick => `${pick.label} ${pick.description ?? ''}`.toLocaleLowerCase().includes(filter)).slice(0, 256);
 	}
 }
 
-function debugVariableContext(
-	session: IDebugSession,
-	revision: number,
-	variable: IDebugVariable,
-	parent: string,
-): ChatContextAttachment {
+function debugVariableContext(session: IDebugSession, revision: number, variable: IDebugVariable, parent: string): ChatContextAttachment {
 	if (session.state !== 'stopped' || session.inspectionRevision !== revision) throw new CancellationError();
-	return snapshot(
-		session,
-		`${revision}:${parent}:${variable.name}`,
-		variable.name,
-		`${variable.name} = ${variable.value}${variable.type ? `\n${variable.type}` : ''}`,
-	);
+	return snapshot(session, `${revision}:${parent}:${variable.name}`, variable.name, `${variable.name} = ${variable.value}${variable.type ? `\n${variable.type}` : ''}`);
 }
 
 function snapshot(session: IDebugSession, key: string, name: string, content: string): ChatContextAttachment {

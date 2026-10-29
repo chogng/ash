@@ -1,11 +1,5 @@
 import { Emitter, type Event } from '../../base/common/event.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	type IDisposable,
-	toDisposable,
-} from '../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, type IDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import { ContextKeyExpr, type ContextKeyExpression } from '../../platform/contextkey/common/contextkey.js';
 import type { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
 import type { Icon } from '../../base/common/icon.js';
@@ -227,11 +221,7 @@ export class WorkbenchViewRegistry extends Disposable {
 	}
 
 	getViewWelcomeContent(id: string): IViewContentDescriptor[] {
-		return [...(this.welcomeContents.get(id) ?? [])].sort(
-			(left, right) =>
-				(left.group ?? '9_more').localeCompare(right.group ?? '9_more') ||
-				(left.order ?? 5) - (right.order ?? 5),
-		);
+		return [...(this.welcomeContents.get(id) ?? [])].sort((left, right) => (left.group ?? '9_more').localeCompare(right.group ?? '9_more') || (left.order ?? 5) - (right.order ?? 5));
 	}
 
 	private readonly containers = new Map<string, IRegisteredViewContainer>();
@@ -266,10 +256,7 @@ export class WorkbenchViewRegistry extends Disposable {
 		if (this.containers.has(descriptor.id)) {
 			throw new Error(`View container is already registered: ${descriptor.id}`);
 		}
-		if (
-			descriptor.isDefault &&
-			this.getViewContainers(descriptor.location).some(container => container.isDefault)
-		) {
+		if (descriptor.isDefault && this.getViewContainers(descriptor.location).some(container => container.isDefault)) {
 			throw new Error(`Default view container is already registered for ${descriptor.location}`);
 		}
 		const registered: IRegisteredViewContainer = {
@@ -283,9 +270,7 @@ export class WorkbenchViewRegistry extends Disposable {
 					constructor() {
 						super({
 							id: descriptor.id,
-							title: descriptor.localizationKey
-								? localize2(descriptor.localizationKey, descriptor.title)
-								: descriptor.title,
+							title: descriptor.localizationKey ? localize2(descriptor.localizationKey, descriptor.title) : descriptor.title,
 							f1: true,
 						});
 					}
@@ -309,7 +294,10 @@ export class WorkbenchViewRegistry extends Disposable {
 		this.viewActions.deleteAndDispose(descriptor.id);
 		this.containerActions.deleteAndDispose(descriptor.id);
 		if (views.length > 0) {
-			this._onDidDeregisterViews.fire({ container: descriptor, views });
+			this._onDidDeregisterViews.fire({
+				container: descriptor,
+				views,
+			});
 		}
 		this.containers.delete(descriptor.id);
 		this._onDidDeregisterViewContainer.fire(descriptor);
@@ -371,7 +359,10 @@ export class WorkbenchViewRegistry extends Disposable {
 		const container = this.containers.get(containerId)?.descriptor;
 		if (!container) return;
 		this.registerViewActions(container);
-		this._onDidDeregisterViews.fire({ container, views: sortViews(removed) });
+		this._onDidDeregisterViews.fire({
+			container,
+			views: sortViews(removed),
+		});
 	}
 
 	private registerViewActions(container: IViewContainerDescriptor): void {
@@ -395,10 +386,7 @@ export class WorkbenchViewRegistry extends Disposable {
 										? ContextKeyExpr.false()
 										: ContextKeyExpr.and(
 												view.when,
-												ContextKeyExpr.or(
-													ContextKeyExpr.not(getVisibleViewContextKey(view.id)),
-													ContextKeyExpr.greater('viewContainer.visibleViewCount', 1),
-												),
+												ContextKeyExpr.or(ContextKeyExpr.not(getVisibleViewContextKey(view.id)), ContextKeyExpr.greater('viewContainer.visibleViewCount', 1)),
 											),
 								menu: [MenuId.for('ViewsSubMenu'), MenuId.ViewContainerTitleContext].map(id => ({
 									id,
@@ -480,10 +468,7 @@ function sortViews(views: readonly IRegisteredView[]): readonly IViewDescriptor[
 	return [...views].sort(compareRegistered).map(registered => registered.descriptor);
 }
 
-function compareRegistered(
-	left: IRegisteredViewContainer | IRegisteredView,
-	right: IRegisteredViewContainer | IRegisteredView,
-): number {
+function compareRegistered(left: IRegisteredViewContainer | IRegisteredView, right: IRegisteredViewContainer | IRegisteredView): number {
 	const leftOrder = left.descriptor.order ?? Number.MAX_SAFE_INTEGER;
 	const rightOrder = right.descriptor.order ?? Number.MAX_SAFE_INTEGER;
 	return leftOrder - rightOrder || left.registrationOrder - right.registrationOrder;
@@ -523,12 +508,7 @@ export interface IViewDescriptorService {
 	}>;
 	getDefaultViewContainerLocation(container: IViewContainerDescriptor): ViewContainerLocation | null;
 	getViewContainerLocation(container: IViewContainerDescriptor): ViewContainerLocation | null;
-	moveViewContainerToLocation(
-		container: IViewContainerDescriptor,
-		location: ViewContainerLocation,
-		requestedIndex?: number,
-		reason?: string,
-	): void;
+	moveViewContainerToLocation(container: IViewContainerDescriptor, location: ViewContainerLocation, requestedIndex?: number, reason?: string): void;
 	moveViewsToContainer(views: readonly IViewDescriptor[], container: IViewContainerDescriptor): void;
 	moveViewToLocation(view: IViewDescriptor, location: ViewContainerLocation, reason?: string): void;
 	getDefaultContainerById(viewId: string): IViewContainerDescriptor | null;
@@ -540,12 +520,7 @@ export interface IViewDescriptorService {
 	getViewDescriptorById(id: string): IViewDescriptor | null;
 	getViewContainerForView(viewId: string): IViewContainerDescriptor | undefined;
 	getViewContainerModel(containerId: string): IViewContainerModel;
-	moveViewContainer(
-		location: ViewContainerLocation,
-		containerId: string,
-		targetContainerId: string | undefined,
-		position: 'before' | 'after',
-	): void;
+	moveViewContainer(location: ViewContainerLocation, containerId: string, targetContainerId: string | undefined, position: 'before' | 'after'): void;
 	setViewContainerOrder(location: ViewContainerLocation, containerIds: readonly string[]): void;
 }
 

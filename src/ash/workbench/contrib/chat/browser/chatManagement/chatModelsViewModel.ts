@@ -102,14 +102,7 @@ export class ChatModelsViewModel extends Disposable {
 		return this.dirty;
 	}
 	public getVendors(): ILanguageModelProvider['vendor'][] {
-		return [
-			...new Map(
-				[...this.getConfiguredVendors().map(provider => provider.vendor), ...this.vendors].map(vendor => [
-					vendor.vendor,
-					vendor,
-				]),
-			).values(),
-		];
+		return [...new Map([...this.getConfiguredVendors().map(provider => provider.vendor), ...this.vendors].map(vendor => [vendor.vendor, vendor])).values()];
 	}
 
 	public filter(searchValue: string): readonly IViewModelEntry[] {
@@ -169,9 +162,7 @@ export class ChatModelsViewModel extends Disposable {
 	}
 
 	public getModelsForGroup(group: ILanguageModelProviderEntry): ILanguageModel[] {
-		return this.catalog
-			.filter(entry => entry.model.provider === group.vendorEntry.group.vendor)
-			.map(entry => this.model(entry));
+		return this.catalog.filter(entry => entry.model.provider === group.vendorEntry.group.vendor).map(entry => this.model(entry));
 	}
 
 	public toggleModelHidden(entry: ILanguageModelEntry): Promise<void> {
@@ -244,13 +235,10 @@ export class ChatModelsViewModel extends Disposable {
 		const providers: string[] = [];
 		const capabilities: string[] = [];
 		const text = this.query
-			.replace(
-				/@provider:\s*(?:"([^"]*)"|(\S+))/giu,
-				(_match, quoted: string | undefined, plain: string | undefined) => {
-					providers.push((quoted ?? plain ?? '').toLocaleLowerCase());
-					return '';
-				},
-			)
+			.replace(/@provider:\s*(?:"([^"]*)"|(\S+))/giu, (_match, quoted: string | undefined, plain: string | undefined) => {
+				providers.push((quoted ?? plain ?? '').toLocaleLowerCase());
+				return '';
+			})
 			.replace(/@capability:\s*(\S+)/giu, (_match, value: string) => {
 				capabilities.push(value.toLocaleLowerCase());
 				return '';
@@ -266,19 +254,12 @@ export class ChatModelsViewModel extends Disposable {
 			if (providers.length && !providers.some(value => providerText.includes(value))) {
 				continue;
 			}
-			const groupModels = this.catalog
-				.filter(entry => entry.model.provider === provider.group.vendor)
-				.map(entry => this.model(entry));
+			const groupModels = this.catalog.filter(entry => entry.model.provider === provider.group.vendor).map(entry => this.model(entry));
 			const models = groupModels.filter(model => {
-				if (
-					!capabilities.every(
-						capability => capability === 'vision' && model.inputModalities?.includes('image') === true,
-					)
-				) {
+				if (!capabilities.every(capability => capability === 'vision' && model.inputModalities?.includes('image') === true)) {
 					return false;
 				}
-				const searchable =
-					`${model.displayName} ${model.model.provider}/${model.model.model} ${providerText} ${model.inputModalities?.includes('image') ? 'vision' : ''}`.toLocaleLowerCase();
+				const searchable = `${model.displayName} ${model.model.provider}/${model.model.model} ${providerText} ${model.inputModalities?.includes('image') ? 'vision' : ''}`.toLocaleLowerCase();
 				return terms.every(term => searchable.includes(term));
 			});
 			if (!models.length) {

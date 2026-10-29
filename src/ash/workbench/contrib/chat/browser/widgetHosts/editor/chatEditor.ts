@@ -43,8 +43,7 @@ export class ChatEditor extends EditorPane {
 	override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		const view = await this.views.openView<ChatEditorHost>(CHAT_VIEW_ID);
 		signal.throwIfAborted();
-		if (!view || typeof view.attachEditor !== 'function')
-			throw new Error('Chat editor requires its window conversation owner');
+		if (!view || typeof view.attachEditor !== 'function') throw new Error('Chat editor requires its window conversation owner');
 		if (!(input instanceof ChatEditorInput)) throw new TypeError('Invalid Chat editor input');
 		input.closeHandler = {
 			showConfirm: () => true,

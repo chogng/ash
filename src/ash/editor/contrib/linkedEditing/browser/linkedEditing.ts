@@ -38,26 +38,16 @@ export class LinkedEditingContribution extends Disposable {
 		private readonly viewport: View,
 		private readonly providers: LanguageFeatureRegistry<LinkedEditingRangeProvider>,
 		private readonly defaultWordPattern: () => RegExp | undefined,
-		private readonly onError: (error: unknown) => void = error =>
-			console.error('Stanza linked editing failed', error),
+		private readonly onError: (error: unknown) => void = error => console.error('Stanza linked editing failed', error),
 	) {
 		super();
-		if (viewport.textModel !== editor.getModel())
-			throw new TypeError('Linked editing dependencies must share a text model');
+		if (viewport.textModel !== editor.getModel()) throw new TypeError('Linked editing dependencies must share a text model');
 		this._register(
 			addDisposableListener(
 				input,
 				'keydown',
 				event => {
-					if (
-						event.defaultPrevented ||
-						event.isComposing ||
-						!event.shiftKey ||
-						(!event.ctrlKey && !event.metaKey) ||
-						event.altKey ||
-						event.key !== 'F2'
-					)
-						return;
+					if (event.defaultPrevented || event.isComposing || !event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key !== 'F2') return;
 					stopEvent(event);
 					void this.activate();
 				},
@@ -100,17 +90,13 @@ export class LinkedEditingContribution extends Disposable {
 			let result: LinkedEditingRanges | undefined;
 			for (const provider of this.providers.ordered(model)) {
 				try {
-					result =
-						(await Promise.resolve(
-							provider.provideLinkedEditingRanges(model, primary.getPosition(), request.token),
-						)) ?? undefined;
+					result = (await Promise.resolve(provider.provideLinkedEditingRanges(model, primary.getPosition(), request.token))) ?? undefined;
 				} catch (error) {
 					if (request.token.isCancellationRequested) return;
 					this.onError(error);
 					continue;
 				}
-				if (request.token.isCancellationRequested || this.isDisposed || model.getVersionId() !== version)
-					return;
+				if (request.token.isCancellationRequested || this.isDisposed || model.getVersionId() !== version) return;
 				if (result) break;
 			}
 
@@ -144,23 +130,10 @@ export class LinkedEditingContribution extends Disposable {
 	}
 
 	private onDidChangeContent(change: TextModelChange): void {
-		if (
-			this.syncing ||
-			!this.isActive ||
-			change.reason !== TextModelChangeReason.Edit ||
-			change.changes.length === 0
-		)
-			return;
+		if (this.syncing || !this.isActive || change.reason !== TextModelChangeReason.Edit || change.changes.length === 0) return;
 		const model = this.viewport.textModel;
-		const changedRanges = change.changes.map(item =>
-			Range.fromPositions(
-				model.positionAt(item.rangeOffset),
-				model.positionAt(item.rangeOffset + item.text.length),
-			),
-		);
-		const source = this.trackedRanges.find(candidate =>
-			changedRanges.every(range => candidate.range.containsRange(range)),
-		);
+		const changedRanges = change.changes.map(item => Range.fromPositions(model.positionAt(item.rangeOffset), model.positionAt(item.rangeOffset + item.text.length)));
+		const source = this.trackedRanges.find(candidate => changedRanges.every(range => candidate.range.containsRange(range)));
 		if (!source) return;
 		const token = ++this.syncToken;
 		queueMicrotask(() => {

@@ -18,17 +18,11 @@ registerAction2(
 				title: localize2('search.cancelCommand', 'Search: Cancel Search'),
 				icon: Lxicon.close,
 				f1: true,
-				precondition: ContextKeyExpr.or(
-					SearchStateKey.isEqualTo(SearchUIState.Searching),
-					SearchStateKey.isEqualTo(SearchUIState.SlowSearch),
-				),
+				precondition: ContextKeyExpr.or(SearchStateKey.isEqualTo(SearchUIState.Searching), SearchStateKey.isEqualTo(SearchUIState.SlowSearch)),
 				keybinding: {
 					weight: KeybindingWeight.WorkbenchContrib,
 					primary: KeyCode.Escape,
-					when: ContextKeyExpr.and(
-						SearchContext.SearchViewFocusedKey.isEqualTo(true),
-						SearchContext.SearchResultListFocusedKey.isEqualTo(true),
-					),
+					when: ContextKeyExpr.and(SearchContext.SearchViewFocusedKey.isEqualTo(true), SearchContext.SearchResultListFocusedKey.isEqualTo(true)),
 				},
 			});
 		}
@@ -98,10 +92,7 @@ registerAction2(
 				title: localize2('search.expandAllCommand', 'Search: Expand All'),
 				icon: Lxicon.chevronDown,
 				f1: true,
-				precondition: ContextKeyExpr.and(
-					SearchContext.HasSearchResults.isEqualTo(true),
-					SearchContext.ViewHasSomeCollapsibleKey.isEqualTo(false),
-				),
+				precondition: ContextKeyExpr.and(SearchContext.HasSearchResults.isEqualTo(true), SearchContext.ViewHasSomeCollapsibleKey.isEqualTo(false)),
 			});
 		}
 

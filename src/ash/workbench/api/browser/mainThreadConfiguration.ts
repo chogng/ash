@@ -1,21 +1,11 @@
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { Disposable, DisposableMap } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
-import {
-	IConfigurationService,
-	type IConfigurationChange,
-} from '../../../platform/configuration/common/configuration.js';
-import {
-	IExtensionHostApi,
-	type ExtensionHostFleetSnapshot,
-	type JsonValue,
-} from '../../../platform/agentHost/common/extensionHostApi.js';
+import { IConfigurationService, type IConfigurationChange } from '../../../platform/configuration/common/configuration.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
-import {
-	Extensions,
-	type IJSONContributionRegistry,
-} from '../../../platform/jsonschemas/common/jsonContributionRegistry.js';
+import { Extensions, type IJSONContributionRegistry } from '../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 
 /** ConfigurationService owns values; this bridge retains only ordered, fenced deliveries. */
 export class MainThreadConfiguration extends Disposable {
@@ -130,14 +120,7 @@ class ConfigurationObserver extends Disposable {
 		if (this.controller.signal.aborted) return;
 		if (++this.pending > 64) {
 			this.controller.abort();
-			this.reportError(
-				new Error(
-					localize(
-						{ bundle: 'ash.workbench', key: 'configurationEventsOverflow' },
-						'Extension configuration event queue exceeded 64 pending events.',
-					),
-				),
-			);
+			this.reportError(new Error(localize({ bundle: 'ash.workbench', key: 'configurationEventsOverflow' }, 'Extension configuration event queue exceeded 64 pending events.')));
 			return;
 		}
 		this.queue = this.queue

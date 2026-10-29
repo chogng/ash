@@ -97,8 +97,7 @@ class DocumentLineProjection {
 	}
 
 	public finish(): LineDocumentSnapshot {
-		if (this.lines.length === 0)
-			this.lines.push({ id: this.allocateLineId(`${this.document.id}:line`, 0), text: '' });
+		if (this.lines.length === 0) this.lines.push({ id: this.allocateLineId(`${this.document.id}:line`, 0), text: '' });
 		return createLineDocumentSnapshot({
 			lines: this.lines,
 			marks: this.marks,
@@ -123,11 +122,7 @@ class DocumentLineProjection {
 		return line;
 	}
 
-	private appendInlineLines(
-		owner: DocumentNode,
-		content: readonly DocumentNode[],
-		ancestors: readonly DocumentNode[],
-	): void {
+	private appendInlineLines(owner: DocumentNode, content: readonly DocumentNode[], ancestors: readonly DocumentNode[]): void {
 		let lineIndex = 0;
 		let lineId = this.allocateLineId(owner.id, lineIndex);
 		let text = '';
@@ -155,8 +150,7 @@ class DocumentLineProjection {
 					text += segment;
 					for (let markIndex = 0; markIndex < child.marks.length; markIndex += 1) {
 						const mark = child.marks[markIndex]!;
-						if (segment.length > 0)
-							pendingMarks.push(this.createMark(child.id, mark, markIndex, lineId, start, text.length));
+						if (segment.length > 0) pendingMarks.push(this.createMark(child.id, mark, markIndex, lineId, start, text.length));
 					}
 					if (segmentIndex < segments.length - 1) startNextLine();
 				}
@@ -188,23 +182,14 @@ class DocumentLineProjection {
 				attrs: {
 					nodeId: node.id,
 					...toSemanticAttributes(
-						node.attrs.styleId !== undefined && (node.type === 'paragraph' || node.type === 'heading')
-							? resolveDocumentParagraphAttributes(this.document, node)
-							: node.attrs,
+						node.attrs.styleId !== undefined && (node.type === 'paragraph' || node.type === 'heading') ? resolveDocumentParagraphAttributes(this.document, node) : node.attrs,
 					),
 				},
 			});
 		}
 	}
 
-	private createMark(
-		textNodeId: string,
-		mark: DocumentMark,
-		markIndex: number,
-		lineId: LineId,
-		start: number,
-		end: number,
-	): PersistentMark {
+	private createMark(textNodeId: string, mark: DocumentMark, markIndex: number, lineId: LineId, start: number, end: number): PersistentMark {
 		return {
 			id: `${textNodeId}:mark:${markIndex}:${lineId}`,
 			kind: mark.type,
@@ -233,11 +218,7 @@ function isLegacyTextLine(node: DocumentNode): boolean {
 }
 
 function isBlockAtom(node: DocumentNode): boolean {
-	return (
-		node.type === 'imageBlock' ||
-		node.type === 'horizontalRule' ||
-		(typeof node.attrs.src === 'string' && node.content.every(child => child.text === undefined))
-	);
+	return node.type === 'imageBlock' || node.type === 'horizontalRule' || (typeof node.attrs.src === 'string' && node.content.every(child => child.text === undefined));
 }
 
 function blockAtomKind(node: DocumentNode): string {

@@ -51,10 +51,7 @@ process.stdin.on('end', () => { fs.appendFileSync(root + '/lifecycle', 'stop:' +
 			assert.deepEqual(events, ['connected']);
 			await owner.setRemoteAccess(mode('second'), LogLevel.Info, workspace);
 			await owner.setRemoteAccess(INACTIVE_TUNNEL_MODE, LogLevel.Info);
-			assert.equal(
-				await readFile(join(workspace, 'lifecycle'), 'utf8'),
-				'start:first\nstop:first\nstart:second\nstop:second\n',
-			);
+			assert.equal(await readFile(join(workspace, 'lifecycle'), 'utf8'), 'start:first\nstop:first\nstart:second\nstop:second\n');
 			assert.equal(owner.getStatus().connectionState, 'disconnected');
 			const started = new Promise<void>(resolve => {
 				const subscription = owner.onDidOutput(() => {

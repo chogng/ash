@@ -12,10 +12,7 @@ import { SyncDescriptor } from '../../../../../platform/instantiation/common/des
 import { OperatingSystem } from '../../../../../base/common/platform.js';
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../configuration/test/common/testServices.js';
-import {
-	ConfigurationTarget,
-	IConfigurationService,
-} from '../../../../../platform/configuration/common/configuration.js';
+import { ConfigurationTarget, IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { BrowserPathService } from '../../../path/browser/pathService.js';
@@ -100,29 +97,19 @@ suite('ConfigurationResolverService', () => {
 			services.registerInstance(IEditorService, {
 				...emptyEditorServiceState,
 				activeEditor: {
-					resource: root.withEncodedPath(
-						root.toEncodedComponents().path + '/' + child.split('/').map(encodeURIComponent).join('/'),
-					),
+					resource: root.withEncodedPath(root.toEncodedComponents().path + '/' + child.split('/').map(encodeURIComponent).join('/')),
 				},
 			} as unknown as IEditorService);
 			services.registerInstance(ICodeEditorService, {
 				getActiveCodeEditor: () => undefined,
 			} as unknown as ICodeEditorService);
 			const resolver = services.get(IConfigurationResolverService);
-			assert.deepEqual(
-				await resolver.resolveAsync(workspace.getWorkspace().folders[0], [
-					'${file}',
-					'${relativeFile}',
-					'${relativeFileDirname}',
-					'${fileDirname}',
-				]),
-				[
-					file,
-					relative,
-					child.includes('/') ? 'src' : '.',
-					child.includes('/') ? file.slice(0, -8) : file.slice(0, -child.length - 1),
-				],
-			);
+			assert.deepEqual(await resolver.resolveAsync(workspace.getWorkspace().folders[0], ['${file}', '${relativeFile}', '${relativeFileDirname}', '${fileDirname}']), [
+				file,
+				relative,
+				child.includes('/') ? 'src' : '.',
+				child.includes('/') ? file.slice(0, -8) : file.slice(0, -child.length - 1),
+			]);
 		});
 	}
 
@@ -152,12 +139,7 @@ suite('ConfigurationResolverService', () => {
 			),
 		);
 		services.registerSingleton(ICommandService, () => new CommandService(services));
-		assert.equal(
-			await services
-				.get(IConfigurationResolverService)
-				.resolveAsync(workspace.getWorkspace().folders[0], '${env:PATH}'),
-			'/session/bin',
-		);
+		assert.equal(await services.get(IConfigurationResolverService).resolveAsync(workspace.getWorkspace().folders[0], '${env:PATH}'), '/session/bin');
 	});
 
 	for (const os of [OperatingSystem.Windows, OperatingSystem.Linux, OperatingSystem.Macintosh]) {
@@ -191,14 +173,8 @@ suite('ConfigurationResolverService', () => {
 				EMPTY: '',
 			});
 			assert.equal(
-				await resolver.resolveWithEnvironment(
-					environment,
-					undefined,
-					'${env:Path}/${env:PATH}/${env:ABSENT}/${env:MISSING}/${env:EMPTY}/${command:untouched}',
-				),
-				os === OperatingSystem.Windows
-					? 'chosen/chosen////${command:untouched}'
-					: 'chosen/////${command:untouched}',
+				await resolver.resolveWithEnvironment(environment, undefined, '${env:Path}/${env:PATH}/${env:ABSENT}/${env:MISSING}/${env:EMPTY}/${command:untouched}'),
+				os === OperatingSystem.Windows ? 'chosen/chosen////${command:untouched}' : 'chosen/////${command:untouched}',
 			);
 			assert.deepEqual(environment, { Path: '${env:TARGET}', TARGET: 'chosen', ABSENT: undefined, EMPTY: '' });
 		});
@@ -286,10 +262,7 @@ suite('ConfigurationResolverService', () => {
 			commands++;
 			return 'late';
 		});
-		const pending = resolver.resolveWithInteraction(undefined, [
-			'${pendingTarget}',
-			'${command:resolver.contribution.later}',
-		]);
+		const pending = resolver.resolveWithInteraction(undefined, ['${pendingTarget}', '${command:resolver.contribution.later}']);
 		await entered.p;
 		workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
 		assert.equal(await pending, undefined);
@@ -302,10 +275,7 @@ suite('ConfigurationResolverService', () => {
 			using resources = new DisposableStore();
 			using workspace = new TestWorkspaceService({ id: 'inputs', uri: URI.file('/work/project') });
 			const registry = new ConfigurationRegistry();
-			const wrap = (command: string) =>
-				key.endsWith('.inputs')
-					? [{ id: 'target', type: 'command', command }]
-					: { inputs: [{ id: 'target', type: 'command', command }] };
+			const wrap = (command: string) => (key.endsWith('.inputs') ? [{ id: 'target', type: 'command', command }] : { inputs: [{ id: 'target', type: 'command', command }] });
 			registry.registerConfiguration({
 				key,
 				defaultValue: wrap('resolver.inputs.default'),
@@ -332,26 +302,10 @@ suite('ConfigurationResolverService', () => {
 				{ id: 'resolver.inputs.user', handler: () => 'user-target' },
 			]);
 			const resolver = services.get(IConfigurationResolverService);
-			assert.deepEqual(
-				await resolver.resolveWithInteractionReplace(
-					undefined,
-					{ program: '${input:target}' },
-					'resolverInputs',
-					undefined,
-					ConfigurationTarget.DEFAULT,
-				),
-				{ program: 'default-target' },
-			);
-			assert.deepEqual(
-				await resolver.resolveWithInteraction(
-					undefined,
-					'${input:target}',
-					'resolverInputs',
-					undefined,
-					ConfigurationTarget.USER,
-				),
-				new Map([['input:target', 'user-target']]),
-			);
+			assert.deepEqual(await resolver.resolveWithInteractionReplace(undefined, { program: '${input:target}' }, 'resolverInputs', undefined, ConfigurationTarget.DEFAULT), {
+				program: 'default-target',
+			});
+			assert.deepEqual(await resolver.resolveWithInteraction(undefined, '${input:target}', 'resolverInputs', undefined, ConfigurationTarget.USER), new Map([['input:target', 'user-target']]));
 		});
 	}
 
@@ -403,12 +357,7 @@ suite('ConfigurationResolverService', () => {
 			const resolver = services.get(IConfigurationResolverService);
 			const input = Object.freeze({
 				program: '${workspaceFolder}/app',
-				args: Object.freeze([
-					'${workspaceFolderBasename}',
-					'${workspaceFolder} ${workspaceFolder}',
-					'${unknown}',
-					'${command:run}',
-				]),
+				args: Object.freeze(['${workspaceFolderBasename}', '${workspaceFolder} ${workspaceFolder}', '${unknown}', '${command:run}']),
 				nested: Object.freeze({ cwd: '${workspaceFolder}', count: 3, enabled: false, empty: null }),
 			});
 			assert.deepEqual(await resolver.resolveAsync(workspace.getWorkspace().folders[0], input), {
@@ -417,13 +366,7 @@ suite('ConfigurationResolverService', () => {
 				nested: { cwd: path, count: 3, enabled: false, empty: null },
 			});
 			assert.equal(input.nested.cwd, '${workspaceFolder}');
-			assert.deepEqual(
-				await resolver.resolveAsync(workspace.getWorkspace().folders[0], [
-					'${workspaceRoot}',
-					'${workspaceRootFolderName}',
-				]),
-				[path, 'project folder'],
-			);
+			assert.deepEqual(await resolver.resolveAsync(workspace.getWorkspace().folders[0], ['${workspaceRoot}', '${workspaceRootFolderName}']), [path, 'project folder']);
 			assert.deepEqual(
 				[...resolver.resolvableVariables],
 				[
@@ -475,10 +418,7 @@ suite('ConfigurationResolverService', () => {
 				),
 			);
 			services.registerSingleton(ICommandService, () => new CommandService(services));
-			const location =
-				os === OperatingSystem.Windows
-					? URI.from({ scheme: Schemas.file, path: '/C:/Extensions/installed folder' })
-					: URI.file('/extensions/installed folder');
+			const location = os === OperatingSystem.Windows ? URI.from({ scheme: Schemas.file, path: '/C:/Extensions/installed folder' }) : URI.file('/extensions/installed folder');
 			const manifestJson = JSON.stringify({ name: 'fixture', publisher: 'acme', version: '1.0.0' });
 			const extension = {
 				id: 'acme.fixture',
@@ -508,8 +448,7 @@ suite('ConfigurationResolverService', () => {
 			);
 			services.registerInstance(IExtensionService, extensions);
 			const resolver = services.get(IConfigurationResolverService);
-			const expected =
-				os === OperatingSystem.Windows ? 'C:\\Extensions\\installed folder' : '/extensions/installed folder';
+			const expected = os === OperatingSystem.Windows ? 'C:\\Extensions\\installed folder' : '/extensions/installed folder';
 			assert.deepEqual(
 				await resolver.resolveAsync(undefined, {
 					program: '${extensionInstallFolder:ACME.FIXTURE}',
@@ -518,10 +457,7 @@ suite('ConfigurationResolverService', () => {
 				{ program: expected, args: [expected] },
 			);
 			assert.equal(scans, 1, 'repeated references borrow the current catalog without rescanning');
-			assert.equal(
-				(await extensions.getExtension('Acme.Fixture'))?.extensionLocation?.toString(),
-				location.toString(),
-			);
+			assert.equal((await extensions.getExtension('Acme.Fixture'))?.extensionLocation?.toString(), location.toString());
 			enabled = false;
 			await extensions.reload();
 			using localization = toDisposable(resetNlsResolver);
@@ -568,10 +504,7 @@ suite('ConfigurationResolverService', () => {
 		});
 		const pending = services
 			.get(IConfigurationResolverService)
-			.resolveWithInteractionReplace(
-				workspace.getWorkspace().folders[0],
-				'${extensionInstallFolder:acme.fixture} ${command:resolver.test.afterExtensions}',
-			);
+			.resolveWithInteractionReplace(workspace.getWorkspace().folders[0], '${extensionInstallFolder:acme.fixture} ${command:resolver.test.afterExtensions}');
 		await entered.p;
 		workspace.updateWorkspace({ id: 'after', uri: URI.file('/after') });
 		assert.equal(await pending, undefined);
@@ -581,9 +514,7 @@ suite('ConfigurationResolverService', () => {
 	});
 
 	test('uses folder names for selectors and reads the current workspace at each call', async () => {
-		let folders: readonly IWorkspaceFolder[] = [
-			{ id: 'server', uri: createSshRemoteWorkspaceUri('build', '/srv/server'), name: 'Server', index: 0 },
-		];
+		let folders: readonly IWorkspaceFolder[] = [{ id: 'server', uri: createSshRemoteWorkspaceUri('build', '/srv/server'), name: 'Server', index: 0 }];
 		const workspace: IWorkspaceContextService = {
 			onDidChangeWorkspace: Event.None,
 			onDidChangeWorkspaceFolders: Event.None,
@@ -605,14 +536,8 @@ suite('ConfigurationResolverService', () => {
 		);
 		services.registerSingleton(ICommandService, () => new CommandService(services));
 		const resolver = services.get(IConfigurationResolverService);
-		assert.equal(
-			await resolver.resolveAsync(undefined, '${workspaceFolder:Server}/${workspaceFolderBasename:Server}'),
-			'/srv/server/server',
-		);
-		assert.equal(
-			await resolver.resolveAsync(undefined, '${workspaceRoot:Server}/${workspaceRootFolderName:Server}'),
-			'/srv/server/server',
-		);
+		assert.equal(await resolver.resolveAsync(undefined, '${workspaceFolder:Server}/${workspaceFolderBasename:Server}'), '/srv/server/server');
+		assert.equal(await resolver.resolveAsync(undefined, '${workspaceRoot:Server}/${workspaceRootFolderName:Server}'), '/srv/server/server');
 		folders = [{ ...folders[0]!, uri: createSshRemoteWorkspaceUri('build', '/srv/new') }];
 		assert.equal(await resolver.resolveAsync(undefined, '${workspaceFolder:Server}'), '/srv/new');
 		await assert.rejects(resolver.resolveAsync(undefined, '${workspaceFolder:Missing}'));
@@ -649,10 +574,7 @@ suite('ConfigurationResolverService', () => {
 				...getSingletonServiceDescriptors(),
 			),
 		);
-		assert.throws(
-			() => services.get(IConfigurationResolverService).resolveAsync(undefined, ''),
-			/Unknown service: workspaceContextService/,
-		);
+		assert.throws(() => services.get(IConfigurationResolverService).resolveAsync(undefined, ''), /Unknown service: workspaceContextService/);
 	});
 
 	test('requires the command service before the registered resolver can resolve configuration', () => {
@@ -667,10 +589,7 @@ suite('ConfigurationResolverService', () => {
 				[IWorkspaceContextService, workspace],
 			),
 		);
-		assert.throws(
-			() => services.get(IConfigurationResolverService).resolveAsync(undefined, ''),
-			/Unknown service: commandService/,
-		);
+		assert.throws(() => services.get(IConfigurationResolverService).resolveAsync(undefined, ''), /Unknown service: commandService/);
 	});
 });
 
@@ -698,22 +617,16 @@ test('ConfigurationResolverService resolves each command reference once per invo
 	};
 	const resolver = services.get(IConfigurationResolverService);
 	const folder = workspace.getWorkspace().folders[0];
-	assert.deepEqual(
-		await resolver.resolveWithInteractionReplace(folder, source, 'launch', { alias: 'resolver.test.value' }),
-		{ cwd: '/project', values: ['value-1-/project', 'value-1-/project/value-2-/project'] },
-	);
+	assert.deepEqual(await resolver.resolveWithInteractionReplace(folder, source, 'launch', { alias: 'resolver.test.value' }), {
+		cwd: '/project',
+		values: ['value-1-/project', 'value-1-/project/value-2-/project'],
+	});
 	assert.deepEqual(seen, [
 		{ ...source, cwd: '/project' },
 		{ ...source, cwd: '/project' },
 	]);
 	assert.equal(source.cwd, '${workspaceFolder}');
-	assert.deepEqual(
-		await resolver.resolveWithInteractionReplace(
-			folder,
-			'${command:resolver.test.value} ${command:resolver.test.value}',
-		),
-		'value-3-/project value-3-/project',
-	);
+	assert.deepEqual(await resolver.resolveWithInteractionReplace(folder, '${command:resolver.test.value} ${command:resolver.test.value}'), 'value-3-/project value-3-/project');
 });
 
 test('ConfigurationResolverService rejects non-string command results in the selected language and stops on cancellation', async () => {
@@ -747,13 +660,7 @@ test('ConfigurationResolverService rejects non-string command results in the sel
 	await assert.rejects(resolver.resolveWithInteractionReplace(undefined, '${command:resolver.test.invalid}'), {
 		message: '命令“resolver.test.invalid”必须返回字符串，才能解析配置变量。',
 	});
-	assert.equal(
-		await resolver.resolveWithInteractionReplace(
-			undefined,
-			'${command:resolver.test.cancel}/${command:resolver.test.later}',
-		),
-		undefined,
-	);
+	assert.equal(await resolver.resolveWithInteractionReplace(undefined, '${command:resolver.test.cancel}/${command:resolver.test.later}'), undefined);
 	assert.equal(later, 0);
 	assert.equal(await resolver.resolveWithInteractionReplace(undefined, '${command:resolver.test.later}'), '');
 });
@@ -790,12 +697,7 @@ test('ConfigurationResolverService stops pending interactions when the workspace
 			},
 		},
 	]);
-	const pending = services
-		.get(IConfigurationResolverService)
-		.resolveWithInteractionReplace(
-			workspace.getWorkspace().folders[0],
-			'${command:resolver.test.pending} ${command:resolver.test.later}',
-		);
+	const pending = services.get(IConfigurationResolverService).resolveWithInteractionReplace(workspace.getWorkspace().folders[0], '${command:resolver.test.pending} ${command:resolver.test.later}');
 	await entered.p;
 	workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/after') });
 	void finish.complete('pending');
@@ -820,10 +722,7 @@ test('ConfigurationResolverService preserves backslashes in Remote folder basena
 	);
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	const resolver = services.get(IConfigurationResolverService);
-	assert.equal(
-		await resolver.resolveAsync(workspace.getWorkspace().folders[0], '${workspaceFolderBasename}'),
-		'project\\folder',
-	);
+	assert.equal(await resolver.resolveAsync(workspace.getWorkspace().folders[0], '${workspaceFolderBasename}'), 'project\\folder');
 });
 
 function inputServices(
@@ -834,17 +733,7 @@ function inputServices(
 	const dom = new JSDOM('<!doctype html><body><button>Editor</button></body>');
 	owner.add(installTestElementHeights(dom.window.document));
 	owner.add(toDisposable(() => dom.window.close()));
-	for (const name of [
-		'window',
-		'document',
-		'Node',
-		'Element',
-		'HTMLElement',
-		'Event',
-		'MouseEvent',
-		'KeyboardEvent',
-		'navigator',
-	] as const) {
+	for (const name of ['window', 'document', 'Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent', 'navigator'] as const) {
 		const previous = Object.getOwnPropertyDescriptor(globalThis, name);
 		Object.defineProperty(globalThis, name, { configurable: true, value: dom.window[name] });
 		owner.add(
@@ -875,10 +764,7 @@ function inputServices(
 	return {
 		services,
 		document,
-		press: key =>
-			document.activeElement!.dispatchEvent(
-				new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
-			),
+		press: key => document.activeElement!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })),
 	};
 }
 
@@ -905,15 +791,11 @@ for (const resource of [URI.file('/inputs'), createSshRemoteWorkspaceUri('build'
 				default: 'release',
 			},
 		];
-		const { services, document, press } = inputServices(owner, workspace, [
-			[URI.joinPath(resource, '.vscode/tasks.json'), JSON.stringify({ inputs })],
-		]);
+		const { services, document, press } = inputServices(owner, workspace, [[URI.joinPath(resource, '.vscode/tasks.json'), JSON.stringify({ inputs })]]);
 		const editor = document.querySelector('button')!;
 		editor.focus();
 		const source = { command: '${input:name}/${input:mode}/${input:name}' };
-		const pending = services
-			.get(IConfigurationResolverService)
-			.resolveWithInteractionReplace(workspace.getWorkspace().folders[0], source, 'tasks');
+		const pending = services.get(IConfigurationResolverService).resolveWithInteractionReplace(workspace.getWorkspace().folders[0], source, 'tasks');
 		const prompt = await waitForPrompt(document);
 		assert.equal(document.activeElement, prompt);
 		assert.equal(prompt.value, 'before');
@@ -940,17 +822,13 @@ test('ConfigurationResolverService scopes command inputs to launch.json and reev
 		[
 			URI.joinPath(root.uri, '.vscode/launch.json'),
 			JSON.stringify({
-				inputs: [
-					{ id: 'value', type: 'command', command: 'resolver.test.input', args: { selection: 'launch' } },
-				],
+				inputs: [{ id: 'value', type: 'command', command: 'resolver.test.input', args: { selection: 'launch' } }],
 			}),
 		],
 		[
 			URI.joinPath(root.uri, '.vscode/tasks.json'),
 			JSON.stringify({
-				inputs: [
-					{ id: 'value', type: 'command', command: 'resolver.test.input', args: { selection: 'tasks' } },
-				],
+				inputs: [{ id: 'value', type: 'command', command: 'resolver.test.input', args: { selection: 'tasks' } }],
 			}),
 		],
 	]);
@@ -971,27 +849,17 @@ for (const cancellation of ['escape', 'workspace', 'dispose', 'pick'] as const) 
 		using owner = new DisposableStore();
 		using workspace = new TestWorkspaceService({ id: 'inputs', uri: URI.file('/inputs') });
 		const folder = workspace.getWorkspace().folders[0]!;
-		const input =
-			cancellation === 'pick'
-				? { id: 'value', type: 'pickString', description: 'Value', options: ['one'] }
-				: { id: 'value', type: 'promptString', description: 'Value' };
-		const { services, document, press } = inputServices(owner, workspace, [
-			[URI.joinPath(folder.uri, '.vscode/tasks.json'), JSON.stringify({ inputs: [input] })],
-		]);
+		const input = cancellation === 'pick' ? { id: 'value', type: 'pickString', description: 'Value', options: ['one'] } : { id: 'value', type: 'promptString', description: 'Value' };
+		const { services, document, press } = inputServices(owner, workspace, [[URI.joinPath(folder.uri, '.vscode/tasks.json'), JSON.stringify({ inputs: [input] })]]);
 		let called = false;
 		using command = CommandsRegistry.register('resolver.test.afterInput', () => {
 			called = true;
 			return 'late';
 		});
 		const resolver = services.get(IConfigurationResolverService);
-		const pending = resolver.resolveWithInteractionReplace(
-			folder,
-			'${input:value}/${command:resolver.test.afterInput}',
-			'tasks',
-		);
+		const pending = resolver.resolveWithInteractionReplace(folder, '${input:value}/${command:resolver.test.afterInput}', 'tasks');
 		await waitForPrompt(document);
-		if (cancellation === 'workspace' || cancellation === 'pick')
-			workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/other') });
+		if (cancellation === 'workspace' || cancellation === 'pick') workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/other') });
 		else if (cancellation === 'dispose') services.dispose();
 		else press('Escape');
 		assert.equal(await pending, undefined);
@@ -1028,14 +896,7 @@ test('ConfigurationResolverService validates referenced input definitions before
 	});
 	const resolver = services.get(IConfigurationResolverService);
 	for (const id of ['missing', 'duplicate', 'invalid']) {
-		await assert.rejects(
-			resolver.resolveWithInteractionReplace(
-				folder,
-				'${command:resolver.test.early}/${input:' + id + '}',
-				'tasks',
-			),
-			/must have one valid definition/,
-		);
+		await assert.rejects(resolver.resolveWithInteractionReplace(folder, '${command:resolver.test.early}/${input:' + id + '}', 'tasks'), /must have one valid definition/);
 	}
 	assert.equal(called, false);
 	assert.equal(document.querySelector('.ash-quick-pick'), null);
@@ -1046,10 +907,7 @@ test('ConfigurationResolverService retires a pending configured command on works
 	using workspace = new TestWorkspaceService({ id: 'inputs', uri: URI.file('/inputs') });
 	const folder = workspace.getWorkspace().folders[0]!;
 	const { services } = inputServices(owner, workspace, [
-		[
-			URI.joinPath(folder.uri, '.vscode/tasks.json'),
-			JSON.stringify({ inputs: [{ id: 'pending', type: 'command', command: 'resolver.test.pendingInput' }] }),
-		],
+		[URI.joinPath(folder.uri, '.vscode/tasks.json'), JSON.stringify({ inputs: [{ id: 'pending', type: 'command', command: 'resolver.test.pendingInput' }] })],
 	]);
 	const entered = new DeferredPromise<void>();
 	const result = new DeferredPromise<string>();
@@ -1057,9 +915,7 @@ test('ConfigurationResolverService retires a pending configured command on works
 		void entered.complete(undefined);
 		return result.p;
 	});
-	const pending = services
-		.get(IConfigurationResolverService)
-		.resolveWithInteractionReplace(folder, '${input:pending}', 'tasks');
+	const pending = services.get(IConfigurationResolverService).resolveWithInteractionReplace(folder, '${input:pending}', 'tasks');
 	await entered.p;
 	workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/other') });
 	assert.equal(await pending, undefined);
@@ -1160,12 +1016,7 @@ test('ConfigurationResolverService cancels pending host lookup before executing 
 		calls++;
 		return 'started';
 	});
-	const pending = services
-		.get(IConfigurationResolverService)
-		.resolveWithInteractionReplace(
-			workspace.getWorkspace().folders[0],
-			'${env:HOME} ${command:resolver.test.afterEnvironment}',
-		);
+	const pending = services.get(IConfigurationResolverService).resolveWithInteractionReplace(workspace.getWorkspace().folders[0], '${env:HOME} ${command:resolver.test.afterEnvironment}');
 	await entered.p;
 	workspace.updateWorkspace({ id: 'after', uri: URI.file('/after') });
 	assert.equal(await pending, undefined);
@@ -1253,18 +1104,12 @@ test('execution variables use the Windows host paths and scalar configuration sn
 		boolean: 'false',
 		callback: '0',
 	};
-	assert.deepEqual(
-		await resolver.resolveWithInteractionReplace(workspace.getWorkspace().folders[0], source),
-		resolved,
-	);
+	assert.deepEqual(await resolver.resolveWithInteractionReplace(workspace.getWorkspace().folders[0], source), resolved);
 	assert.deepEqual(seen, [{ ...resolved, callback: '${command:resolver.test.hostSnapshot}' }]);
 	await configuration.updateValue('resolver.number', 7);
 	assert.equal(await resolver.resolveAsync(workspace.getWorkspace().folders[0], '${config:resolver.number}'), '7');
 	const share = URI.from({ scheme: Schemas.file, authority: 'build', path: '/share/project' });
-	assert.equal(
-		await resolver.resolveAsync({ uri: share, name: 'Share' }, '${workspaceFolder}'),
-		'\\\\build\\share\\project',
-	);
+	assert.equal(await resolver.resolveAsync({ uri: share, name: 'Share' }, '${workspaceFolder}'), '\\\\build\\share\\project');
 	using localization = toDisposable(resetNlsResolver);
 	initializeTestLocalization('zh-CN');
 	await assert.rejects(resolver.resolveAsync(undefined, '${config:resolver.structured}'), {
@@ -1357,8 +1202,7 @@ test('configuration expressions retain a balanced outer variable argument and le
 		],
 	);
 	const cyclic = ConfigurationResolverExpression.parse('${command:first}');
-	for (const reference of cyclic.unresolved())
-		cyclic.resolve(reference, reference.arg === 'first' ? '${command:second}' : '${command:first}');
+	for (const reference of cyclic.unresolved()) cyclic.resolve(reference, reference.arg === 'first' ? '${command:second}' : '${command:first}');
 	assert.equal(cyclic.toObject(), '${command:first}');
 });
 
@@ -1408,16 +1252,12 @@ test('the real resolver follows nested host and configuration references in keys
 		command: '${command:resolver.nested.first}',
 		cycle: '${config:nested.cycle}',
 	});
-	assert.deepEqual(
-		await services
-			.get(IConfigurationResolverService)
-			.resolveWithInteractionReplace(workspace.getWorkspace().folders[0], source),
-		{ env: { ASH_target: 'A=target' }, command: 'result/target', cycle: '${config:nested.cycle}' },
-	);
-	assert.deepEqual(
-		{ calls, queries },
-		{ calls: ['first', 'second'], queries: [['USER'], ['FINAL'], ['REDIRECTED']] },
-	);
+	assert.deepEqual(await services.get(IConfigurationResolverService).resolveWithInteractionReplace(workspace.getWorkspace().folders[0], source), {
+		env: { ASH_target: 'A=target' },
+		command: 'result/target',
+		cycle: '${config:nested.cycle}',
+	});
+	assert.deepEqual({ calls, queries }, { calls: ['first', 'second'], queries: [['USER'], ['FINAL'], ['REDIRECTED']] });
 	assert.equal(source.command, '${command:resolver.nested.first}');
 });
 
@@ -1426,9 +1266,7 @@ test('configured input replacement values discover later inputs and retain their
 	using workspace = new TestWorkspaceService({ id: 'nested-inputs', uri: URI.file('/nested-inputs') });
 	const folder = workspace.getWorkspace().folders[0]!;
 	const definitions = ['host', 'site', 'tld'].map(id => ({ id, type: 'command', command: `resolver.nested.${id}` }));
-	const { services } = inputServices(owner, workspace, [
-		[URI.joinPath(folder.uri, '.vscode/tasks.json'), JSON.stringify({ inputs: definitions })],
-	]);
+	const { services } = inputServices(owner, workspace, [[URI.joinPath(folder.uri, '.vscode/tasks.json'), JSON.stringify({ inputs: definitions })]]);
 	const calls: string[] = [];
 	for (const [id, result] of Object.entries({
 		host: 'local.${input:site}.${input:tld}',
@@ -1442,10 +1280,7 @@ test('configured input replacement values discover later inputs and retain their
 			}),
 		);
 	const expression = ConfigurationResolverExpression.parse({ 'ASH_${input:host}': '${input:host}' });
-	assert.deepEqual(
-		await services.get(IConfigurationResolverService).resolveWithInteractionReplace(folder, expression, 'tasks'),
-		{ 'ASH_local.example.com': 'local.example.com' },
-	);
+	assert.deepEqual(await services.get(IConfigurationResolverService).resolveWithInteractionReplace(folder, expression, 'tasks'), { 'ASH_local.example.com': 'local.example.com' });
 	assert.deepEqual(calls, ['host', 'site', 'tld']);
 	assert.deepEqual(
 		[...expression.resolved()].map(([reference, data]) => ({ id: reference.arg, definition: data.input })),
@@ -1459,10 +1294,7 @@ test('configuration expressions reject excessive recursive expansion with a loca
 	const expression = ConfigurationResolverExpression.parse('${config:0}');
 	for (const reference of expression.unresolved()) {
 		const index = Number(reference.arg);
-		expression.resolve(
-			reference,
-			index < 24 ? '${config:' + (index + 1) + '}${config:' + (index + 1) + '}' : 'end',
-		);
+		expression.resolve(reference, index < 24 ? '${config:' + (index + 1) + '}${config:' + (index + 1) + '}' : 'end');
 	}
 	assert.throws(() => expression.toObject(), { message: '配置变量展开超出了支持的限制。' });
 });
@@ -1531,15 +1363,10 @@ suite('ConfigurationResolverService execution platform selection', () => {
 				program: 'project',
 				env: { MODE: 'project' },
 			});
-			assert.deepEqual(seen, [
-				{ retained: true, program: 'project', env: { MODE: '${command:resolver.platform.selected}' } },
-			]);
+			assert.deepEqual(seen, [{ retained: true, program: 'project', env: { MODE: '${command:resolver.platform.selected}' } }]);
 			assert.equal(source.program, 'default');
 			assert.equal(source[key].program, '${workspaceFolderBasename}');
-			assert.deepEqual(
-				await resolver.resolveAsync(undefined, { platform: 'default', [key]: { platform: key } }),
-				{ platform: key },
-			);
+			assert.deepEqual(await resolver.resolveAsync(undefined, { platform: 'default', [key]: { platform: key } }), { platform: key });
 			const expression = ConfigurationResolverExpression.parse({
 				env: { windows: '${workspaceFolderBasename}' },
 			});
@@ -1569,10 +1396,7 @@ suite('ConfigurationResolverService execution platform selection', () => {
 		);
 		services.registerSingleton(ICommandService, () => new CommandService(services));
 		const resolver = services.get(IConfigurationResolverService);
-		await assert.rejects(
-			resolver.resolveWithInteractionReplace(undefined, { program: '${command:mustNotRun}', linux: {} }),
-			{ message: '执行主机的路径平台不可用。' },
-		);
+		await assert.rejects(resolver.resolveWithInteractionReplace(undefined, { program: '${command:mustNotRun}', linux: {} }), { message: '执行主机的路径平台不可用。' });
 		host.appServer.operatingSystem = OperatingSystem.Linux;
 		await assert.rejects(resolver.resolveAsync(undefined, { linux: [] }), { message: '“linux”配置必须是对象。' });
 		assert.deepEqual(await resolver.resolveAsync(undefined, { retained: true, osx: {} }), { retained: true });

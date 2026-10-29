@@ -17,23 +17,14 @@ export class MultiRowEditorControl extends EditorTabsControl {
 	private readonly stickyModel: StickyEditorGroupModel;
 	private readonly ordinaryModel: UnstickyEditorGroupModel;
 
-	constructor(
-		container: HTMLElement,
-		delegate: EditorTabsDelegate,
-		model: EditorGroupModel,
-		@IInstantiationService instantiationService: IInstantiationService,
-	) {
+	constructor(container: HTMLElement, delegate: EditorTabsDelegate, model: EditorGroupModel, @IInstantiationService instantiationService: IInstantiationService) {
 		super(container);
 		this.stickyModel = new StickyEditorGroupModel(model);
 		this.ordinaryModel = new UnstickyEditorGroupModel(model);
 		this.domNode.classList.add('ash-multi-row-editor-tabs-control');
-		this.stickyRow = this._register(
-			instantiationService.createInstance(MultiEditorTabsControl, this.domNode, delegate, model),
-		);
+		this.stickyRow = this._register(instantiationService.createInstance(MultiEditorTabsControl, this.domNode, delegate, model));
 		this.stickyRow.domNode.classList.add('ash-sticky-editor-tabs-row');
-		this.ordinaryRow = this._register(
-			instantiationService.createInstance(MultiEditorTabsControl, this.domNode, delegate, model),
-		);
+		this.ordinaryRow = this._register(instantiationService.createInstance(MultiEditorTabsControl, this.domNode, delegate, model));
 		this.ordinaryRow.domNode.classList.add('ash-ordinary-editor-tabs-row');
 		this.stickyRow.domNode.hidden = true;
 		this.ordinaryRow.domNode.hidden = true;
@@ -43,11 +34,7 @@ export class MultiRowEditorControl extends EditorTabsControl {
 		return this.currentRows;
 	}
 
-	setEditors(
-		editors: readonly EditorTabDescriptor[],
-		activeInput: IResourceEditorInput | undefined,
-		selectedIds?: ReadonlySet<string>,
-	): void {
+	setEditors(editors: readonly EditorTabDescriptor[], activeInput: IResourceEditorInput | undefined, selectedIds?: ReadonlySet<string>): void {
 		const descriptors = new Map(editors.map(editor => [editor.input, editor]));
 		const sticky = this.stickyModel.getEditors().map(input => descriptors.get(input)!);
 		const ordinary = this.ordinaryModel.getEditors().map(input => descriptors.get(input)!);

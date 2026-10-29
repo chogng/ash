@@ -111,9 +111,7 @@ export class ModelsManagementEditor extends EditorPane {
 		const offset = this.widget.element.getBoundingClientRect().top - root.getBoundingClientRect().top;
 		this.widget.layout(
 			root.clientHeight - offset - Number.parseFloat(style.paddingBottom || '0'),
-			root.clientWidth -
-				Number.parseFloat(style.paddingLeft || '0') -
-				Number.parseFloat(style.paddingRight || '0'),
+			root.clientWidth - Number.parseFloat(style.paddingLeft || '0') - Number.parseFloat(style.paddingRight || '0'),
 		);
 	}
 }

@@ -197,10 +197,7 @@ test('unrelated imports and dynamic messages do not become localization declarat
 });
 
 test('translations for unknown keys fail the build', () => {
-	assert.throws(
-		() => validateLocalizationTranslation({ ash: { count: '{0} items' } }, { ash: { unknown: '未知' } }, 'zh-CN'),
-		/Unknown translation/,
-	);
+	assert.throws(() => validateLocalizationTranslation({ ash: { count: '{0} items' } }, { ash: { unknown: '未知' } }, 'zh-CN'), /Unknown translation/);
 });
 
 for (const [name, original, translation, valid] of [
@@ -212,8 +209,7 @@ for (const [name, original, translation, valid] of [
 	['renamed parameters', 'Hello {name}', '你好 {other}', false],
 ] as const) {
 	test(`translation validation ${valid ? 'accepts' : 'rejects'} ${name}`, () => {
-		const validate = () =>
-			validateLocalizationTranslation({ ash: { message: original } }, { ash: { message: translation } }, 'zh-CN');
+		const validate = () => validateLocalizationTranslation({ ash: { message: original } }, { ash: { message: translation } }, 'zh-CN');
 		if (valid) {
 			assert.deepEqual(validate(), { missing: [], unchanged: 0 });
 		} else {
@@ -240,11 +236,7 @@ test('theme descriptions are extracted from the owner declarations', () => {
 
 test('explicit source text is covered while absent locale entries remain visible', () => {
 	assert.deepEqual(
-		validateLocalizationTranslation(
-			{ ash: { channel: 'H', product: 'Ash', missing: 'Find', count: '{0} items' } },
-			{ ash: { channel: 'H', product: 'Ash', count: '{0} 项' } },
-			'zh-CN',
-		),
+		validateLocalizationTranslation({ ash: { channel: 'H', product: 'Ash', missing: 'Find', count: '{0} items' } }, { ash: { channel: 'H', product: 'Ash', count: '{0} 项' } }, 'zh-CN'),
 		{ missing: ['ash/missing'], unchanged: 2 },
 	);
 });
@@ -267,9 +259,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		'src/ash/platform/languagePacks/common/languagePackContract.ts': `export const ASH_LOCALIZATION_CATALOG_VERSION = 'ash-1'; export interface LanguagePackCatalog { readonly schemaVersion: 1; readonly locale: string; readonly languageName: string; readonly localizedLanguageName: string; readonly catalogVersion: string; readonly bundles: Readonly<Record<string, Readonly<Record<string, string>>>>; } export interface PreinstalledLanguagePack { readonly id: string; readonly version: string; readonly displayName: string; readonly description: string; readonly catalog: LanguagePackCatalog; }`,
 		'.build/protocol/typescript/ApprovalModes.ts': `export const APPROVAL_MODE_DEFINITIONS = [];`,
 		'.build/protocol/typescript/ProductSlashCommands.ts': `export const PRODUCT_SLASH_COMMANDS = { permission: { description: 'Choose permissions' }, guardian: { description: 'Prepare project background' } };`,
-		'localization/languages.json': JSON.stringify(
-			['en'].map(locale => ({ locale, languageName: locale, localizedLanguageName: locale })),
-		),
+		'localization/languages.json': JSON.stringify(['en'].map(locale => ({ locale, languageName: locale, localizedLanguageName: locale }))),
 		'localization/en/messages.json': '{}',
 		'localization/preinstalled.json': JSON.stringify(['ash/language-pack-zh-cn']),
 		'extensions/language-pack-zh-cn/package.json': JSON.stringify({
@@ -327,11 +317,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		await mkdir(dirname(join(root, file)), { recursive: true });
 		await copyFile(join(repository, file), join(root, file));
 	}
-	await symlink(
-		join(repository, 'node_modules'),
-		join(root, 'node_modules'),
-		process.platform === 'win32' ? 'junction' : 'dir',
-	);
+	await symlink(join(repository, 'node_modules'), join(root, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
 	function run(args: string[]): string {
 		const result = spawnSync(process.execPath, args, {
 			cwd: root,
@@ -361,83 +347,44 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	run(['build/resources/localization.ts']);
 	const generated = join(root, '.build/desktop/localization');
 	const outputs = (await readdir(generated)).sort();
-	assert.deepEqual(outputs, [
-		'extensions',
-		'localizationCatalog.en.ts',
-		'localizationCatalog.zh-CN.ts',
-		'localizationCatalogLoader.ts',
-		'localizationCatalogs.ts',
-		'localizationLanguages.ts',
+	assert.deepEqual(outputs, ['extensions', 'localizationCatalog.en.ts', 'localizationCatalog.zh-CN.ts', 'localizationCatalogLoader.ts', 'localizationCatalogs.ts', 'localizationLanguages.ts']);
+	assert.deepEqual(JSON.parse((await readFile(join(generated, 'localizationLanguages.ts'), 'utf8')).match(/productLanguages = (.+);/)![1]!), [
+		{ locale: 'en', localizedLanguageName: 'en' },
+		{ locale: 'zh-CN', localizedLanguageName: '简体中文' },
 	]);
-	assert.deepEqual(
-		JSON.parse(
-			(await readFile(join(generated, 'localizationLanguages.ts'), 'utf8')).match(
-				/productLanguages = (.+);/,
-			)![1]!,
-		),
-		[
-			{ locale: 'en', localizedLanguageName: 'en' },
-			{ locale: 'zh-CN', localizedLanguageName: '简体中文' },
-		],
-	);
 	const extensionRoot = join(generated, 'extensions/ash.language-pack-zh-cn');
-	assert.deepEqual(JSON.parse(await readFile(join(extensionRoot, 'manifest.json'), 'utf8')).uiTargets, [
-		'ide',
-		'agents',
-	]);
+	assert.deepEqual(JSON.parse(await readFile(join(extensionRoot, 'manifest.json'), 'utf8')).uiTargets, ['ide', 'agents']);
 	const packedCatalog = JSON.parse(await readFile(join(extensionRoot, 'localization/package.json'), 'utf8'));
 	assert.equal(packedCatalog.locale, 'zh-CN');
 	assert.equal(packedCatalog.bundles.ash.packageClient, '包内文档');
 	assert.match(await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'), /Package client/u);
-	assert.doesNotMatch(
-		await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'),
-		/extensionOwned|Extension-owned view/u,
-	);
+	assert.doesNotMatch(await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'), /extensionOwned|Extension-owned view/u);
 	assert.equal(packedCatalog.bundles.ash.extensionOwned, undefined);
 	assert.equal(packedCatalog.bundles.ash.hello, '你好');
-	const frenchCatalog = JSON.parse(
-		await readFile(join(generated, 'extensions/ash.language-pack-fr/localization/package.json'), 'utf8'),
-	);
+	const frenchCatalog = JSON.parse(await readFile(join(generated, 'extensions/ash.language-pack-fr/localization/package.json'), 'utf8'));
 	assert.equal(frenchCatalog.bundles.ash.hello, 'Bonjour');
-	assert.doesNotMatch(
-		await readFile(join(generated, 'localizationCatalogs.ts'), 'utf8'),
-		/Bonjour|language-pack-fr|localizationCatalog.fr/,
-	);
+	assert.doesNotMatch(await readFile(join(generated, 'localizationCatalogs.ts'), 'utf8'), /Bonjour|language-pack-fr|localizationCatalog.fr/);
 	// Remove obsolete compiled catalogs left by the former automatic-preinstall behavior.
 	await writeFile(join(generated, 'localizationCatalog.fr.ts'), 'export const obsolete = true;');
 	run(['build/resources/localization.ts']);
 	await assert.rejects(stat(join(generated, 'localizationCatalog.fr.ts')), { code: 'ENOENT' });
-	assert.match(
-		await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'),
-		/"slash.permission.description": "Choose permissions"/u,
-	);
+	assert.match(await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'), /"slash.permission.description": "Choose permissions"/u);
 	await writeFile(
 		join(root, '.build/protocol/typescript/ProductSlashCommands.ts'),
 		`export const PRODUCT_SLASH_COMMANDS = { permission: { description: 'Choose next-turn permissions' }, guardian: { description: 'Prepare project background' } };`,
 	);
 	run(['build/resources/localization.ts', '--check']);
-	assert.doesNotMatch(
-		await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'),
-		/Choose next-turn permissions/u,
-	);
+	assert.doesNotMatch(await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'), /Choose next-turn permissions/u);
 	run(['build/resources/localization.ts']);
-	assert.match(
-		await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'),
-		/"slash.permission.description": "Choose next-turn permissions"/u,
-	);
+	assert.match(await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'), /"slash.permission.description": "Choose next-turn permissions"/u);
 	const manifest = JSON.parse(await readFile(join(extensionRoot, 'package.json'), 'utf8'));
 	assert.deepEqual(manifest.engines, { ash: '*' });
 	assert.equal(manifest.main, undefined);
 	assert.equal(manifest.browser, undefined);
 	assert.deepEqual(await readdir(dirname(join(root, entry))), ['localizationCatalogs.ts']);
-	const before = await Promise.all(
-		outputs.map(async file => (await stat(join(generated, file), { bigint: true })).mtimeNs),
-	);
+	const before = await Promise.all(outputs.map(async file => (await stat(join(generated, file), { bigint: true })).mtimeNs));
 	run(['build/resources/localization.ts']);
-	assert.deepEqual(
-		await Promise.all(outputs.map(async file => (await stat(join(generated, file), { bigint: true })).mtimeNs)),
-		before,
-	);
+	assert.deepEqual(await Promise.all(outputs.map(async file => (await stat(join(generated, file), { bigint: true })).mtimeNs)), before);
 	for (const target of ['main', 'test']) {
 		const output = `.build/desktop/${target}`;
 		run([
@@ -505,14 +452,8 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 			extensions: [{ id: 'ash/language-pack-zh-cn', catalog: packedCatalog }],
 		});
 	}
-	await writeFile(
-		join(root, 'src/ash/feature.ts'),
-		`import { localize } from './nls.js'; localize('hello', 'Hello again');`,
-	);
-	await writeFile(
-		join(root, 'src/ash/nested/feature.ts'),
-		`import { localize } from '../nls.js'; localize('hello', 'Hello again');`,
-	);
+	await writeFile(join(root, 'src/ash/feature.ts'), `import { localize } from './nls.js'; localize('hello', 'Hello again');`);
+	await writeFile(join(root, 'src/ash/nested/feature.ts'), `import { localize } from '../nls.js'; localize('hello', 'Hello again');`);
 	run(['build/resources/localization.ts', '--check']);
 	assert.doesNotMatch(await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'), /Hello again/u);
 	run(['build/resources/localization.ts']);
@@ -522,14 +463,9 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	await writeFile(join(root, 'src/ash/code/entry.js'), 'export const entry = 1;');
 	const dormant = join(root, 'src/ash/nested/dormant.ts');
 	const clientDormant = join(root, 'extensions/document-client/common/dormant.ts');
-	await writeFile(
-		clientDormant,
-		`import { localize } from '../../../src/ash/nls.js'; localize('clientDormant', 'Package before');`,
-	);
+	await writeFile(clientDormant, `import { localize } from '../../../src/ash/nls.js'; localize('clientDormant', 'Package before');`);
 	await writeFile(dormant, `import { localize } from '../nls.js'; localize('dormant', 'Before edit');`);
-	const { localizationPlugin } = (await import(
-		pathToFileURL(join(root, 'build/resources/localization.ts')).href
-	)) as typeof import('./localization.ts');
+	const { localizationPlugin } = (await import(pathToFileURL(join(root, 'build/resources/localization.ts')).href)) as typeof import('./localization.ts');
 	const server = await createServer({
 		configFile: false,
 		root: join(root, 'src/ash/code'),
@@ -542,21 +478,14 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	try {
 		await server.listen();
 		const deadline = Date.now() + 5_000;
-		while (
-			(!server.watcher.getWatched()[dirname(dormant)]?.includes('dormant.ts') ||
-				!server.watcher.getWatched()[dirname(clientDormant)]?.includes('dormant.ts')) &&
-			Date.now() < deadline
-		) {
+		while ((!server.watcher.getWatched()[dirname(dormant)]?.includes('dormant.ts') || !server.watcher.getWatched()[dirname(clientDormant)]?.includes('dormant.ts')) && Date.now() < deadline) {
 			await delay(20);
 		}
 		assert.ok(server.watcher.getWatched()[dirname(dormant)]?.includes('dormant.ts'));
 		await server.environments.client.transformRequest('/entry.js');
 		assert.equal(server.environments.client.moduleGraph.getModuleById(dormant.replaceAll('\\', '/')), undefined);
 		await writeFile(dormant, `import { localize } from '../nls.js'; localize('dormant', 'After edit');`);
-		await writeFile(
-			clientDormant,
-			`import { localize } from '../../../src/ash/nls.js'; localize('clientDormant', 'Package after');`,
-		);
+		await writeFile(clientDormant, `import { localize } from '../../../src/ash/nls.js'; localize('clientDormant', 'Package after');`);
 		const updatedBy = Date.now() + 5_000;
 		let catalog = '';
 		do {
@@ -570,9 +499,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		await server.close();
 	}
 	// Large CJK catalogs remain byte-bounded modules while preserving the same runtime contract.
-	const largeMessages = Object.fromEntries(
-		Array.from({ length: 120 }, (_, index) => [`large.${index}`, '翻译'.repeat(1000)]),
-	);
+	const largeMessages = Object.fromEntries(Array.from({ length: 120 }, (_, index) => [`large.${index}`, '翻译'.repeat(1000)]));
 	await writeFile(
 		join(root, 'src/ash/large.ts'),
 		`import { localize } from './nls.js';\n` +
@@ -580,10 +507,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 				.map(key => `localize(${JSON.stringify(key)}, ${JSON.stringify('English '.repeat(400))});`)
 				.join('\n'),
 	);
-	await writeFile(
-		join(root, 'extensions/language-pack-zh-cn/translations/large.json'),
-		JSON.stringify({ ash: largeMessages }),
-	);
+	await writeFile(join(root, 'extensions/language-pack-zh-cn/translations/large.json'), JSON.stringify({ ash: largeMessages }));
 	run(['build/resources/localization.ts']);
 	const parts = (await readdir(generated)).filter(file => file.startsWith('localizationMessages.zh-CN.'));
 	assert.ok(parts.length >= 5);
@@ -629,10 +553,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	assert.equal(duplicate.error, undefined);
 	assert.notEqual(duplicate.status, 0);
 	assert.match(duplicate.stderr, /English declaration must live in its owning source module: ash\/hello/u);
-	await writeFile(
-		join(root, 'localization/en/messages.json'),
-		JSON.stringify({ ash: { obsolete: 'Unused legacy message' } }),
-	);
+	await writeFile(join(root, 'localization/en/messages.json'), JSON.stringify({ ash: { obsolete: 'Unused legacy message' } }));
 	const legacy = spawnSync(process.execPath, ['build/resources/localization.ts', '--check'], {
 		cwd: root,
 		encoding: 'utf8',
@@ -643,10 +564,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	assert.notEqual(legacy.status, 0);
 	assert.match(legacy.stderr, /English declaration must live in its owning source module: ash\/obsolete/u);
 	await writeFile(join(root, 'localization/en/messages.json'), '{}');
-	await writeFile(
-		join(root, 'extensions/language-pack-zh-cn/translations/messages.json'),
-		JSON.stringify({ ash: { unknown: '未知' } }),
-	);
+	await writeFile(join(root, 'extensions/language-pack-zh-cn/translations/messages.json'), JSON.stringify({ ash: { unknown: '未知' } }));
 	const invalid = spawnSync(process.execPath, ['build/resources/localization.ts', '--check'], {
 		cwd: root,
 		encoding: 'utf8',
@@ -656,10 +574,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	assert.equal(invalid.error, undefined);
 	assert.notEqual(invalid.status, 0);
 	assert.match(invalid.stderr, /Unknown translation: zh-CN\/ash\/unknown/u);
-	await writeFile(
-		join(root, 'src/ash/nested/feature.ts'),
-		`import { localize } from '../nls.js'; localize('hello', 'Conflicting nested message');`,
-	);
+	await writeFile(join(root, 'src/ash/nested/feature.ts'), `import { localize } from '../nls.js'; localize('hello', 'Conflicting nested message');`);
 	const conflicting = spawnSync(process.execPath, ['build/resources/localization.ts', '--check'], {
 		cwd: root,
 		encoding: 'utf8',

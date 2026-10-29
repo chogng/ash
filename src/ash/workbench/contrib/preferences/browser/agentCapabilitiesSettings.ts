@@ -1,15 +1,8 @@
 import './media/agentCapabilitiesSettings.css';
 import { h } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import type {
-	AgentCapabilitiesSnapshot,
-	IAgentCapabilitiesService,
-} from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
-import {
-	workspaceTrustPermissionNames,
-	type WorkspaceTrustEntry,
-	type IWorkspaceTrustApi,
-} from '../../../../platform/workspace/common/workspaceTrust.js';
+import type { AgentCapabilitiesSnapshot, IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { workspaceTrustPermissionNames, type WorkspaceTrustEntry, type IWorkspaceTrustApi } from '../../../../platform/workspace/common/workspaceTrust.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 import type { IAgentExecutionSettingsService } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
@@ -98,9 +91,7 @@ export class AgentCapabilitiesSettings extends Disposable {
 		this.status.textContent = this.label('capabilities.loading', 'Loading capabilities…');
 		try {
 			const catalog = view === 'sandbox' ? await this.capabilities.read() : undefined;
-			const directories = catalog?.directoryGrantsReadable
-				? await this.workspaceTrust.listDirectories()
-				: undefined;
+			const directories = catalog?.directoryGrantsReadable ? await this.workspaceTrust.listDirectories() : undefined;
 			if (version !== this.loadVersion || !this.view) return;
 			this.catalog = catalog;
 			if (directories) this.directories = directories.entries;
@@ -129,11 +120,7 @@ export class AgentCapabilitiesSettings extends Disposable {
 						: this.label('sandbox.files.fullAccess', 'Full access');
 			const network = this.label(
 				`capabilities.sandbox.network.${policy.network}`,
-				policy.network === 'denied'
-					? 'Network denied'
-					: policy.network === 'managed'
-						? 'Managed network'
-						: 'Network allowed',
+				policy.network === 'denied' ? 'Network denied' : policy.network === 'managed' ? 'Managed network' : 'Network allowed',
 			);
 			this.addNote(
 				this.label('sandbox.effective', 'Current backend command policy: {0}; files: {1}; network: {2}.', {
@@ -145,15 +132,10 @@ export class AgentCapabilitiesSettings extends Disposable {
 			this.addNote(
 				policy.hostRead === 'host'
 					? this.label('sandbox.hostRead.host', 'Host files are readable, subject to path restrictions.')
-					: this.label(
-							'sandbox.hostRead.grantedRoots',
-							'Host reads are limited to granted roots and required tooling.',
-						),
+					: this.label('sandbox.hostRead.grantedRoots', 'Host reads are limited to granted roots and required tooling.'),
 			);
-			if (policy.managedConstraints)
-				this.addNote(this.label('sandbox.managed', 'Managed host constraints are applied to this policy.'));
-			if (policy.pathRuleCount)
-				this.addNote(this.label('sandbox.pathRules', 'Resolved path rules: {0}.', { 0: policy.pathRuleCount }));
+			if (policy.managedConstraints) this.addNote(this.label('sandbox.managed', 'Managed host constraints are applied to this policy.'));
+			if (policy.pathRuleCount) this.addNote(this.label('sandbox.pathRules', 'Resolved path rules: {0}.', { 0: policy.pathRuleCount }));
 		}
 		this.addNote(
 			this.label(
@@ -164,10 +146,7 @@ export class AgentCapabilitiesSettings extends Disposable {
 		this.addNote(
 			catalog.localProcessSandboxConfigured
 				? `${this.label('capabilities.sandbox.backends', 'Configured backend candidates:')} ${catalog.sandboxBackends.join(', ')}`
-				: this.label(
-						'capabilities.sandbox.unavailable',
-						'Local process execution is not configured in this environment.',
-					),
+				: this.label('capabilities.sandbox.unavailable', 'Local process execution is not configured in this environment.'),
 		);
 		if (catalog.sandboxDiagnostics.length) {
 			this.addNote(
@@ -199,20 +178,10 @@ export class AgentCapabilitiesSettings extends Disposable {
 		heading.textContent = this.label('capabilities.sandbox.directories', 'Configured directory grants');
 		this.content.append(heading);
 		if (!catalog.directoryGrantsReadable) {
-			this.addNote(
-				this.label(
-					'capabilities.sandbox.hostOnly',
-					'Directory grants can only be inspected by the desktop host.',
-				),
-			);
+			this.addNote(this.label('capabilities.sandbox.hostOnly', 'Directory grants can only be inspected by the desktop host.'));
 			return;
 		}
-		this.addNote(
-			this.label(
-				'capabilities.sandbox.directoryNote',
-				'These saved grants are an upper bound. A session can use a narrower selection, and each tool checks its requested path.',
-			),
-		);
+		this.addNote(this.label('capabilities.sandbox.directoryNote', 'These saved grants are an upper bound. A session can use a narrower selection, and each tool checks its requested path.'));
 		if (this.directories.length === 0) {
 			this.addNote(this.label('capabilities.sandbox.noDirectories', 'No directory grants are configured.'));
 			return;
@@ -224,11 +193,7 @@ export class AgentCapabilitiesSettings extends Disposable {
 			const path = h(this.content.ownerDocument, 'h5');
 			path.textContent = directory.path ?? directory.dir;
 			const permissions = h(this.content.ownerDocument, 'p');
-			permissions.textContent = directory.permissions
-				.map(permission =>
-					this.label(`capabilities.permission.${permission}`, workspaceTrustPermissionNames[permission]),
-				)
-				.join(', ');
+			permissions.textContent = directory.permissions.map(permission => this.label(`capabilities.permission.${permission}`, workspaceTrustPermissionNames[permission])).join(', ');
 			item.append(path, permissions);
 			list.append(item);
 		}

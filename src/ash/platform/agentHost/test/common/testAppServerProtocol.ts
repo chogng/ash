@@ -1,9 +1,4 @@
-import {
-	APP_SERVER_PROTOCOL_MAJOR,
-	APP_SERVER_SCHEMA_HASH,
-	type InitializeResult,
-	type ModelCatalogEntry,
-} from '../../../../../../.build/protocol/typescript/index.js';
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ModelCatalogEntry } from '../../../../../../.build/protocol/typescript/index.js';
 
 /** A complete handshake: protocol additions must update this typed fixture once. */
 export function createTestInitializeResult(): InitializeResult {
@@ -39,14 +34,14 @@ export function createTestInitializeResult(): InitializeResult {
 			extensionManagement: true,
 			mcp: true,
 			mcpOAuth: true,
-			contracts: { github: { version: 1 } },
+			contracts: {
+				github: { version: 1 },
+			},
 		},
 	};
 }
 
-export function createTestModel(
-	entry: Pick<ModelCatalogEntry, 'model' | 'display_name'> & Partial<ModelCatalogEntry>,
-): ModelCatalogEntry {
+export function createTestModel(entry: Pick<ModelCatalogEntry, 'model' | 'display_name'> & Partial<ModelCatalogEntry>): ModelCatalogEntry {
 	return {
 		discovered: false,
 		context_window: null,

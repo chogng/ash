@@ -68,10 +68,7 @@ test('replacement applies capture groups to every occurrence and saves through s
 	]);
 	const replace = new ReplaceService(fixture.models, fixture.service, fixture.workingCopies);
 	const applied = await replace.replace(result.files[0]!.matches, query, '$1!', options);
-	assert.deepEqual(
-		{ applied: applied.isApplied, text: fixture.store.text(resource), errors: applied.saveErrors },
-		{ applied: true, text: '中文😀 needle! needle!', errors: [] },
-	);
+	assert.deepEqual({ applied: applied.isApplied, text: fixture.store.text(resource), errors: applied.saveErrors }, { applied: true, text: '中文😀 needle! needle!', errors: [] });
 	assert.equal(applied.isApplied, true);
 	if (applied.isApplied) {
 		await applied.undo();
@@ -82,19 +79,8 @@ test('replacement applies capture groups to every occurrence and saves through s
 test('replacement rejects stale ranges before changing any resource', async () => {
 	using fixture = new BulkEditTestServices([[resource, 'changed']]);
 	const result = results('needle', [{ start: 0, end: 6 }]);
-	await assert.rejects(
-		new ReplaceService(fixture.models, fixture.service, fixture.workingCopies).replace(
-			result.files[0]!.matches,
-			query,
-			'value',
-			options,
-		),
-		WorkspaceEditConflictError,
-	);
-	assert.deepEqual(
-		{ text: fixture.store.text(resource), saved: fixture.store.saved },
-		{ text: 'changed', saved: [] },
-	);
+	await assert.rejects(new ReplaceService(fixture.models, fixture.service, fixture.workingCopies).replace(result.files[0]!.matches, query, 'value', options), WorkspaceEditConflictError);
+	assert.deepEqual({ text: fixture.store.text(resource), saved: fixture.store.saved }, { text: 'changed', saved: [] });
 });
 
 test('multiline replacement compares normalized previews with CRLF files and undo preserves their EOL', async () => {
@@ -124,16 +110,10 @@ test('replacement preview applies only accepted occurrences and cancellation lea
 	const replace = new ReplaceService(fixture.models, fixture.service, fixture.workingCopies);
 	using preview = fixture.service.setPreviewHandler(async edits => [edits[1]!]);
 	const applied = await replace.replace(result.files[0]!.matches, query, 'value', { ...options, preview: true });
-	assert.deepEqual(
-		{ applied: applied.isApplied, text: fixture.store.text(resource) },
-		{ applied: true, text: 'needle value' },
-	);
+	assert.deepEqual({ applied: applied.isApplied, text: fixture.store.text(resource) }, { applied: true, text: 'needle value' });
 	const controller = new AbortController();
 	controller.abort();
-	await assert.rejects(
-		replace.replace(result.files[0]!.matches, query, 'other', { ...options, signal: controller.signal }),
-		{ name: 'CancellationError' },
-	);
+	await assert.rejects(replace.replace(result.files[0]!.matches, query, 'other', { ...options, signal: controller.signal }), { name: 'CancellationError' });
 	assert.equal(fixture.store.text(resource), 'needle value');
 });
 
@@ -141,12 +121,7 @@ test('multiline regex captures support both disk and normalized browser previews
 	for (const preview of ['first\r\nsecond', 'first\nsecond']) {
 		using fixture = new BulkEditTestServices([[resource, 'first\r\nsecond\r\n']]);
 		const matches = results(preview, [{ start: 0, end: preview.length }]);
-		const applied = await new ReplaceService(fixture.models, fixture.service, fixture.workingCopies).replace(
-			matches.files[0]!.matches,
-			{ ...query, text: '(first)\n(second)' },
-			'$2 $1',
-			options,
-		);
+		const applied = await new ReplaceService(fixture.models, fixture.service, fixture.workingCopies).replace(matches.files[0]!.matches, { ...query, text: '(first)\n(second)' }, '$2 $1', options);
 		assert.equal(applied.isApplied, true);
 		assert.equal(fixture.store.text(resource), 'second first\r\n');
 	}
@@ -155,12 +130,10 @@ test('multiline regex captures support both disk and normalized browser previews
 test('literal replacement preserves dollar tokens and optionally preserves matched letter case', async () => {
 	using fixture = new BulkEditTestServices([[resource, 'NEEDLE']]);
 	const result = results('NEEDLE', [{ start: 0, end: 6 }]);
-	await new ReplaceService(fixture.models, fixture.service, fixture.workingCopies).replace(
-		result.files[0]!.matches,
-		{ ...query, text: 'needle', patternKind: 'literal' },
-		'$1 value',
-		{ ...options, preserveCase: true },
-	);
+	await new ReplaceService(fixture.models, fixture.service, fixture.workingCopies).replace(result.files[0]!.matches, { ...query, text: 'needle', patternKind: 'literal' }, '$1 value', {
+		...options,
+		preserveCase: true,
+	});
 	assert.equal(fixture.store.text(resource), '$1 VALUE');
 });
 
@@ -208,12 +181,7 @@ test('replacement retains an open dirty model on save failure and undo saves its
 	});
 	fixture.store.failNextSave = new Error('Saving failed');
 	const matches = results('needle', [{ start: 0, end: 6 }]);
-	const applied = await new ReplaceService(fixture.models, fixture.service, fixture.workingCopies).replace(
-		matches.files[0]!.matches,
-		query,
-		'value',
-		options,
-	);
+	const applied = await new ReplaceService(fixture.models, fixture.service, fixture.workingCopies).replace(matches.files[0]!.matches, query, 'value', options);
 	assert.equal(applied.isApplied, true);
 	assert.deepEqual(
 		{
@@ -227,10 +195,7 @@ test('replacement retains an open dirty model on save failure and undo saves its
 	if (applied.isApplied) {
 		await applied.undo();
 	}
-	assert.deepEqual(
-		{ model: reference.model.getText(), disk: fixture.store.text(resource), dirty: reference.isDirty },
-		{ model: 'needle', disk: 'needle', dirty: false },
-	);
+	assert.deepEqual({ model: reference.model.getText(), disk: fixture.store.text(resource), dirty: reference.isDirty }, { model: 'needle', disk: 'needle', dirty: false });
 });
 
 test('replacement and undo skip save participants for open working copies', async () => {
@@ -266,12 +231,7 @@ test('replacement and undo skip save participants for open working copies', asyn
 		},
 	});
 	const matches = results('needle', [{ start: 0, end: 6 }]);
-	const applied = await new ReplaceService(fixture.models, fixture.service, fixture.workingCopies).replace(
-		matches.files[0]!.matches,
-		query,
-		'value',
-		options,
-	);
+	const applied = await new ReplaceService(fixture.models, fixture.service, fixture.workingCopies).replace(matches.files[0]!.matches, query, 'value', options);
 	assert.equal(applied.isApplied, true);
 	assert.deepEqual(
 		{
@@ -285,10 +245,7 @@ test('replacement and undo skip save participants for open working copies', asyn
 	if (applied.isApplied) {
 		await applied.undo();
 	}
-	assert.deepEqual(
-		{ model: reference.model.getText(), disk: fixture.store.text(resource), dirty: reference.isDirty },
-		{ model: 'needle', disk: 'needle', dirty: false },
-	);
+	assert.deepEqual({ model: reference.model.getText(), disk: fixture.store.text(resource), dirty: reference.isDirty }, { model: 'needle', disk: 'needle', dirty: false });
 	assert.equal(participantCalls, 0);
 	// Explicit user saves still run the configured cleanup.
 	await reference.save(options.signal);
@@ -330,12 +287,7 @@ test('untitled replacement and undo keep the draft dirty without saving or reque
 		resource: draft,
 		results: [{ previewText: 'needle', rangeLocations: [{ source: range, preview: range }] }],
 	});
-	const applied = await new ReplaceService(fixture.models, fixture.service, fixture.workingCopies).replace(
-		result.files[0]!.matches,
-		query,
-		'value',
-		options,
-	);
+	const applied = await new ReplaceService(fixture.models, fixture.service, fixture.workingCopies).replace(result.files[0]!.matches, query, 'value', options);
 	assert.deepEqual(
 		{
 			applied: applied.isApplied,
@@ -349,8 +301,5 @@ test('untitled replacement and undo keep the draft dirty without saving or reque
 	if (applied.isApplied) {
 		await applied.undo();
 	}
-	assert.deepEqual(
-		{ text: reference.model.getText(), dirty: reference.isDirty, saved: fixture.store.saved },
-		{ text: 'needle', dirty: true, saved: [] },
-	);
+	assert.deepEqual({ text: reference.model.getText(), dirty: reference.isDirty, saved: fixture.store.saved }, { text: 'needle', dirty: true, saved: [] });
 });

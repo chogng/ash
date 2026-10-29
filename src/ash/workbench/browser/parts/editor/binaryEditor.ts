@@ -70,31 +70,14 @@ export class BaseBinaryResourceEditor extends EditorPane implements IEditorPane 
 		const summary = this.requireSummary();
 		this.requireContent();
 		throwIfCancelled(signal, 'Binary editor loading was cancelled');
-		const model = this.instantiationService.createInstance(
-			BinaryEditorModel,
-			input.resource,
-			input.label ?? basename(input.resource),
-			input.initialBytes?.length,
-		);
+		const model = this.instantiationService.createInstance(BinaryEditorModel, input.resource, input.label ?? basename(input.resource), input.initialBytes?.length);
 		try {
 			await raceCancellationError(model.resolve(), signal, 'Binary editor loading was cancelled');
 			const size = model.getSize();
 			if (size !== undefined && size > MAX_BINARY_EDITOR_BYTES) {
-				throw new Error(
-					localize(
-						'binaryEditor.tooLarge',
-						'Binary file is too large to preview ({0})',
-						formatByteCount(size),
-					),
-				);
+				throw new Error(localize('binaryEditor.tooLarge', 'Binary file is too large to preview ({0})', formatByteCount(size)));
 			}
-			const resolved = input.initialBytes
-				? { bytes: input.initialBytes }
-				: await raceCancellationError(
-						this.files.readFileBytes(input.resource),
-						signal,
-						'Binary editor loading was cancelled',
-					);
+			const resolved = input.initialBytes ? { bytes: input.initialBytes } : await raceCancellationError(this.files.readFileBytes(input.resource), signal, 'Binary editor loading was cancelled');
 			throwIfCancelled(signal, 'Binary editor loading was cancelled');
 			// Keep only the preview, rather than retaining a large file's backing buffer.
 			const visible = resolved.bytes.slice(0, MAX_RENDERED_BYTES);
@@ -106,12 +89,7 @@ export class BaseBinaryResourceEditor extends EditorPane implements IEditorPane 
 			this.updateAriaLabel();
 			summary.textContent =
 				resolved.bytes.length > visible.length
-					? localize(
-							'binaryEditor.truncatedSummary',
-							'{0} · read-only hexadecimal preview · first {1}',
-							this.metadata,
-							formatByteCount(visible.length),
-						)
+					? localize('binaryEditor.truncatedSummary', '{0} · read-only hexadecimal preview · first {1}', this.metadata, formatByteCount(visible.length))
 					: localize('binaryEditor.summary', '{0} · read-only hexadecimal preview', this.metadata);
 			// A comparison waits for both byte ranges, avoiding a second full
 			// projection and initial line-width scan when the shorter side is padded.
@@ -170,8 +148,7 @@ export class BaseBinaryResourceEditor extends EditorPane implements IEditorPane 
 
 	public override layout(dimension: IDimension): void {
 		this.dimension = dimension;
-		if (this.content)
-			this.editor.value?.layout({ width: this.content.clientWidth, height: this.content.clientHeight });
+		if (this.content) this.editor.value?.layout({ width: this.content.clientWidth, height: this.content.clientHeight });
 	}
 
 	public override setVisible(visible: boolean): void {
@@ -220,17 +197,8 @@ export class BaseBinaryResourceEditor extends EditorPane implements IEditorPane 
 			flush(16);
 		}
 		projection.deltaDecorations([], decorations);
-		const label =
-			side === 'original'
-				? localize('binaryEditor.original', 'Original')
-				: localize('binaryEditor.modified', 'Modified');
-		this.requireSummary().textContent = localize(
-			'binaryEditor.comparisonSummary',
-			'{0} · {1} · {2} differing bytes in preview (by offset)',
-			label,
-			this.metadata!,
-			changed,
-		);
+		const label = side === 'original' ? localize('binaryEditor.original', 'Original') : localize('binaryEditor.modified', 'Modified');
+		this.requireSummary().textContent = localize('binaryEditor.comparisonSummary', '{0} · {1} · {2} differing bytes in preview (by offset)', label, this.metadata!, changed);
 		editor.updateOptions({
 			ariaLabel: localize(
 				'binaryEditor.comparisonLabel',
@@ -252,12 +220,7 @@ export class BaseBinaryResourceEditor extends EditorPane implements IEditorPane 
 
 	private updateAriaLabel(): void {
 		const model = this.model.value;
-		this.container?.setAttribute(
-			'aria-label',
-			model
-				? localize('binaryEditor.resourceLabel', 'Binary editor: {0}', model.getName())
-				: localize('binaryEditor.label', 'Binary editor'),
-		);
+		this.container?.setAttribute('aria-label', model ? localize('binaryEditor.resourceLabel', 'Binary editor: {0}', model.getName()) : localize('binaryEditor.label', 'Binary editor'));
 	}
 
 	private requireSummary(): HTMLElement {
@@ -276,19 +239,11 @@ export function binaryEditorDescriptor(): IEditorPaneDescriptor {
 		id: BINARY_EDITOR_ID,
 		name: 'Binary Editor',
 		canOpen: input => {
-			if (
-				input.initialBytes === undefined &&
-				input.resource.scheme !== 'file' &&
-				!isRemoteResource(input.resource)
-			)
-				return EditorPaneMatch.None;
-			return input.contentType?.toLowerCase().startsWith('application/octet-stream')
-				? EditorPaneMatch.Default
-				: EditorPaneMatch.Optional;
+			if (input.initialBytes === undefined && input.resource.scheme !== 'file' && !isRemoteResource(input.resource)) return EditorPaneMatch.None;
+			return input.contentType?.toLowerCase().startsWith('application/octet-stream') ? EditorPaneMatch.Default : EditorPaneMatch.Optional;
 		},
 		create: options => {
-			if (!options.instantiationService)
-				throw new Error('Binary editor requires Workbench instantiation services');
+			if (!options.instantiationService) throw new Error('Binary editor requires Workbench instantiation services');
 			return options.instantiationService.createInstance(BaseBinaryResourceEditor, 'standalone');
 		},
 	};
@@ -300,18 +255,10 @@ function renderHexDump(bytes: Uint8Array, length = bytes.length): string {
 		const row = bytes.subarray(offset, offset + 16);
 		const address = offset.toString(16).padStart(8, '0');
 		const count = Math.min(16, length - offset);
-		const hex = Array.from({ length: count }, (_, index) =>
-			row[index] === undefined ? '--' : row[index].toString(16).padStart(2, '0'),
-		)
+		const hex = Array.from({ length: count }, (_, index) => (row[index] === undefined ? '--' : row[index].toString(16).padStart(2, '0')))
 			.join(' ')
 			.padEnd(47, ' ');
-		const ascii = Array.from({ length: count }, (_, index) =>
-			row[index] === undefined
-				? '-'
-				: row[index] >= 0x20 && row[index] <= 0x7e
-					? String.fromCharCode(row[index])
-					: '.',
-		).join('');
+		const ascii = Array.from({ length: count }, (_, index) => (row[index] === undefined ? '-' : row[index] >= 0x20 && row[index] <= 0x7e ? String.fromCharCode(row[index]) : '.')).join('');
 		rows.push(`${address}  ${hex}  |${ascii}|`);
 	}
 	return rows.join('\n');

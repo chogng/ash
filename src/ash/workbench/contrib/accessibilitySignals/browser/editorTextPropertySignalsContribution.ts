@@ -2,10 +2,7 @@ import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
 import type { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
-import {
-	AccessibilitySignal,
-	IAccessibilitySignalService,
-} from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
+import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { IMarkerService, MarkerSeverity } from '../../../../platform/markers/common/markers.js';
 import { IDebugService } from '../../debug/common/debug.js';
 
@@ -41,14 +38,7 @@ export class EditorTextPropertySignalsContribution extends Disposable {
 					const column = position.column;
 					const onLine = markers
 						.read({ resource: model.uri })
-						.filter(
-							marker =>
-								marker.startLineNumber <= line &&
-								marker.endLineNumber >= line &&
-								(marker.endLineNumber > line ||
-									marker.endColumn > 1 ||
-									marker.startLineNumber === line),
-						);
+						.filter(marker => marker.startLineNumber <= line && marker.endLineNumber >= line && (marker.endLineNumber > line || marker.endColumn > 1 || marker.startLineNumber === line));
 					const next = new Map<AccessibilitySignal, string>();
 					for (const severity of [MarkerSeverity.Error, MarkerSeverity.Warning]) {
 						const matched = onLine.filter(marker => marker.severity === severity);
@@ -58,19 +48,11 @@ export class EditorTextPropertySignalsContribution extends Disposable {
 						const atPosition = matched.filter(
 							marker =>
 								(marker.startLineNumber < line || marker.startColumn <= column) &&
-								(marker.endLineNumber > line ||
-									column < marker.endColumn ||
-									(marker.startLineNumber === line &&
-										marker.startColumn === column &&
-										marker.endColumn === column)),
+								(marker.endLineNumber > line || column < marker.endColumn || (marker.startLineNumber === line && marker.startColumn === column && marker.endColumn === column)),
 						);
-						let signal = atPosition.length
-							? AccessibilitySignal.errorAtPosition
-							: AccessibilitySignal.errorOnLine;
+						let signal = atPosition.length ? AccessibilitySignal.errorAtPosition : AccessibilitySignal.errorOnLine;
 						if (severity === MarkerSeverity.Warning) {
-							signal = atPosition.length
-								? AccessibilitySignal.warningAtPosition
-								: AccessibilitySignal.warningOnLine;
+							signal = atPosition.length ? AccessibilitySignal.warningAtPosition : AccessibilitySignal.warningOnLine;
 						}
 						const markerKeys = (atPosition.length ? atPosition : matched).map(marker => [
 							marker.owner,
@@ -85,15 +67,7 @@ export class EditorTextPropertySignalsContribution extends Disposable {
 						const signature = JSON.stringify([model.uri.toString(), line, markerKeys]);
 						next.set(signal, signature);
 					}
-					if (
-						debug.breakpoints.some(
-							point =>
-								'resource' in point &&
-								point.enabled &&
-								point.lineNumber === position.lineNumber &&
-								point.resource.toString() === model.uri.toString(),
-						)
-					) {
+					if (debug.breakpoints.some(point => 'resource' in point && point.enabled && point.lineNumber === position.lineNumber && point.resource.toString() === model.uri.toString())) {
 						next.set(AccessibilitySignal.break, `${model.uri}:${line}`);
 					}
 					for (const [signal, signature] of next) {

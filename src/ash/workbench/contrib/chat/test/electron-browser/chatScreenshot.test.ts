@@ -2,23 +2,14 @@ import assert from 'node:assert/strict';
 import { suite, suiteSetup, suiteTeardown, test } from 'mocha';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../../base/common/event.js';
-import {
-	Keybinding,
-	logicalKey,
-	resolveKeybinding,
-	type ResolvedKeybinding,
-} from '../../../../../base/common/keybindings.js';
+import { Keybinding, logicalKey, resolveKeybinding, type ResolvedKeybinding } from '../../../../../base/common/keybindings.js';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import type { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { ILogService } from '../../../../../platform/log/common/log.js';
-import {
-	GLOBAL_KEYBINDING_UPDATE_CHANNEL,
-	GLOBAL_KEYBINDING_TRIGGER_CHANNEL,
-	type GlobalKeybindingResult,
-} from '../../../../../platform/globalKeybindings/common/globalKeybindings.js';
+import { GLOBAL_KEYBINDING_UPDATE_CHANNEL, GLOBAL_KEYBINDING_TRIGGER_CHANNEL, type GlobalKeybindingResult } from '../../../../../platform/globalKeybindings/common/globalKeybindings.js';
 import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { ImageEditorService } from '../../../../services/imageEditor/browser/imageEditorService.js';
 import type { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
@@ -88,10 +79,7 @@ suite('Chat screenshot shortcut policy', () => {
 		);
 		const notifications = resources.add(new TestNotificationService());
 		let global = false;
-		let binding: ResolvedKeybinding | undefined = resolveKeybinding(
-			Keybinding.single(logicalKey('a', { ctrlKey: true, metaKey: true })),
-			OperatingSystem.Macintosh,
-		);
+		let binding: ResolvedKeybinding | undefined = resolveKeybinding(Keybinding.single(logicalKey('a', { ctrlKey: true, metaKey: true })), OperatingSystem.Macintosh);
 		const queries: unknown[] = [];
 		const commands: string[] = [];
 		const contribution = resources.add(
@@ -188,10 +176,7 @@ suite('Chat screenshot shortcut policy', () => {
 			value.binding = undefined;
 			await value.check();
 			assert.match(value.notifications.model.getNotifications()[0]!.message, /请先设置截图快捷键/);
-			value.binding = resolveKeybinding(
-				Keybinding.chord(logicalKey('k'), logicalKey('c')),
-				OperatingSystem.Macintosh,
-			);
+			value.binding = resolveKeybinding(Keybinding.chord(logicalKey('k'), logicalKey('c')), OperatingSystem.Macintosh);
 			await value.check();
 			assert.match(value.notifications.model.getNotifications()[0]!.message, /此截图快捷键无法全局使用/);
 			response = new Error('Host unavailable');

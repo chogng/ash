@@ -22,16 +22,7 @@ async function fillReplInput(input: Locator, text: string): Promise<void> {
 
 async function expectReplInput(input: Locator, text: string): Promise<void> {
 	await expect
-		.poll(async () =>
-			(
-				await input
-					.page()
-					.locator('.ash-debug-console-form .view-lines > .view-line .stanza-editor-line-text')
-					.allTextContents()
-			)
-				.join('\n')
-				.replace(/\u00a0/g, ' '),
-		)
+		.poll(async () => (await input.page().locator('.ash-debug-console-form .view-lines > .view-line .stanza-editor-line-text').allTextContents()).join('\n').replace(/\u00a0/g, ' '))
 		.toBe(text);
 }
 
@@ -117,10 +108,7 @@ test.beforeEach(async ({ target, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	await mkdir(join(directory, '.vscode'));
 	await writeFile(join(directory, 'debug-adapter.cjs'), adapter);
-	await writeFile(
-		join(directory, 'debug-program.js'),
-		'const answer = 42;\nconsole.log(answer);\nconsole.log("finished");\n',
-	);
+	await writeFile(join(directory, 'debug-program.js'), 'const answer = 42;\nconsole.log(answer);\nconsole.log("finished");\n');
 	await writeFile(join(directory, 'debug-requests.jsonl'), '');
 	await writeFile(
 		join(directory, '.vscode', 'launch.json'),
@@ -135,11 +123,7 @@ test.beforeEach(async ({ target, testWorkspace }) => {
 					missingEnvironment: '${env:ASH_MISSING_VALUE}',
 					debugAdapter: {
 						program: process.execPath,
-						args: [
-							join(directory, 'debug-adapter.cjs'),
-							join(directory, 'debug-program.js'),
-							join(directory, 'debug-requests.jsonl'),
-						],
+						args: [join(directory, 'debug-adapter.cjs'), join(directory, 'debug-program.js'), join(directory, 'debug-requests.jsonl')],
 					},
 				},
 			],
@@ -152,9 +136,7 @@ test(
 	{ tag: ['@browser-app-server', '@electron-app-server'] },
 	async ({ application, workbench, testWorkspace, webAppServer }) => {
 		const directory = testWorkspace.directory;
-		const home =
-			webAppServer?.profileDirectory ??
-			('windows' in application ? await application.evaluate(() => process.env.HOME!) : undefined);
+		const home = webAppServer?.profileDirectory ?? ('windows' in application ? await application.evaluate(() => process.env.HOME!) : undefined);
 		expect(home).toBeTruthy();
 		const configuration = JSON.parse(await readFile(join(directory, '.vscode', 'launch.json'), 'utf8'));
 		Object.assign(configuration.configurations[0], {
@@ -183,13 +165,8 @@ test(
 		await workbench.page.keyboard.press('Shift+End');
 		await workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 		const pane = workbench.page.locator('[data-view-container-id="ash.debug"]');
-		await expect(
-			workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ }),
-		).toContainText('Debug smoke');
-		await workbench.page
-			.locator('[data-part="sidebar"]')
-			.getByRole('button', { name: 'Start Debugging', exact: true })
-			.click();
+		await expect(workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ })).toContainText('Debug smoke');
+		await workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 		await expect(pane.getByRole('status')).toContainText('stopped');
 		await expect
 			.poll(
@@ -220,113 +197,95 @@ test(
 	},
 );
 
-test(
-	'debug startup saves a dirty inactive source before the real adapter reads it',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ workbench, testWorkspace }) => {
-		const directory = testWorkspace.directory;
-		const source = join(directory, 'debug-program.js');
-		const proof = join(directory, 'saved-before-launch.txt');
-		const marker = '// saved before debug';
-		await writeFile(
-			join(directory, 'debug-adapter.cjs'),
-			adapter.replace(
-				"if (request.command === 'launch') event('initialized', {});",
-				`if (request.command === 'launch') { fs.writeFileSync(${JSON.stringify(proof)}, fs.readFileSync(source)); event('initialized', {}); }`,
-			),
-		);
-		await workbench.quickaccess.open('debug-program.js');
-		await workbench.quickaccess.select('debug-program.js');
-		const editor = workbench.editors.groupAt(0).editor;
-		await editor.waitForEditorFocus();
-		await workbench.page.keyboard.press('ControlOrMeta+End');
-		await editor.waitForTypeInEditor(marker);
-		expect(await readFile(source, 'utf8')).not.toContain(marker);
-		await writeFile(join(directory, 'other.txt'), 'another editor\n');
-		await workbench.quickaccess.open('other.txt');
-		await workbench.quickaccess.select('other.txt');
-		await editor.waitForEditorContents(text => text.includes('another editor'));
-		await workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
-		const pane = workbench.page.locator('[data-view-container-id="ash.debug"]');
-		await expect(
-			workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ }),
-		).toContainText('Debug smoke');
-		await workbench.page
-			.locator('[data-part="sidebar"]')
-			.getByRole('button', { name: 'Start Debugging', exact: true })
-			.click();
-		await expect(pane.getByRole('status')).toContainText('stopped');
-		expect(await readFile(proof, 'utf8')).toContain(marker);
-		await editor.waitForEditorContents(text => text.includes(marker));
-		await pane.getByRole('button', { name: 'Stop', exact: true }).click();
-	},
-);
+test('debug startup saves a dirty inactive source before the real adapter reads it', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+	const directory = testWorkspace.directory;
+	const source = join(directory, 'debug-program.js');
+	const proof = join(directory, 'saved-before-launch.txt');
+	const marker = '// saved before debug';
+	await writeFile(
+		join(directory, 'debug-adapter.cjs'),
+		adapter.replace(
+			"if (request.command === 'launch') event('initialized', {});",
+			`if (request.command === 'launch') { fs.writeFileSync(${JSON.stringify(proof)}, fs.readFileSync(source)); event('initialized', {}); }`,
+		),
+	);
+	await workbench.quickaccess.open('debug-program.js');
+	await workbench.quickaccess.select('debug-program.js');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await workbench.page.keyboard.press('ControlOrMeta+End');
+	await editor.waitForTypeInEditor(marker);
+	expect(await readFile(source, 'utf8')).not.toContain(marker);
+	await writeFile(join(directory, 'other.txt'), 'another editor\n');
+	await workbench.quickaccess.open('other.txt');
+	await workbench.quickaccess.select('other.txt');
+	await editor.waitForEditorContents(text => text.includes('another editor'));
+	await workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+	const pane = workbench.page.locator('[data-view-container-id="ash.debug"]');
+	await expect(workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ })).toContainText('Debug smoke');
+	await workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
+	await expect(pane.getByRole('status')).toContainText('stopped');
+	expect(await readFile(proof, 'utf8')).toContain(marker);
+	await editor.waitForEditorContents(text => text.includes(marker));
+	await pane.getByRole('button', { name: 'Stop', exact: true }).click();
+});
 
-test(
-	'debug preLaunchTask waits for background compilation readiness before starting the adapter',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ workbench, testWorkspace }) => {
-		const directory = testWorkspace.directory;
-		await writeFile(
-			join(directory, 'debug-watch.cjs'),
-			"const fs = require('node:fs'); fs.writeFileSync('compiler-pid.txt', String(process.pid)); console.log('BUILD'); console.log('ASH_DEBUG_COMPILER_WAITING'); const timer = setInterval(() => { if (fs.existsSync('release-compiler')) { clearInterval(timer); console.log('debug-program.js(1,1): warning TS1000: Debug compiler warning'); console.log('READY'); setInterval(() => {}, 1000); } }, 40);\n",
-		);
-		await writeFile(
-			join(directory, '.vscode', 'tasks.json'),
-			JSON.stringify({
-				version: '2.0.0',
-				tasks: [
-					{
-						label: 'Debug compiler',
-						type: 'process',
-						command: process.execPath,
-						args: ['debug-watch.cjs'],
-						isBackground: true,
-						problemMatcher: {
-							base: '$tsc',
-							background: { activeOnStart: true, beginsPattern: '^BUILD$', endsPattern: '^READY$' },
-						},
+test('debug preLaunchTask waits for background compilation readiness before starting the adapter', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+	const directory = testWorkspace.directory;
+	await writeFile(
+		join(directory, 'debug-watch.cjs'),
+		"const fs = require('node:fs'); fs.writeFileSync('compiler-pid.txt', String(process.pid)); console.log('BUILD'); console.log('ASH_DEBUG_COMPILER_WAITING'); const timer = setInterval(() => { if (fs.existsSync('release-compiler')) { clearInterval(timer); console.log('debug-program.js(1,1): warning TS1000: Debug compiler warning'); console.log('READY'); setInterval(() => {}, 1000); } }, 40);\n",
+	);
+	await writeFile(
+		join(directory, '.vscode', 'tasks.json'),
+		JSON.stringify({
+			version: '2.0.0',
+			tasks: [
+				{
+					label: 'Debug compiler',
+					type: 'process',
+					command: process.execPath,
+					args: ['debug-watch.cjs'],
+					isBackground: true,
+					problemMatcher: {
+						base: '$tsc',
+						background: { activeOnStart: true, beginsPattern: '^BUILD$', endsPattern: '^READY$' },
 					},
-				],
-			}),
-		);
-		const configuration = JSON.parse(await readFile(join(directory, '.vscode', 'launch.json'), 'utf8'));
-		configuration.configurations[0].preLaunchTask = 'Debug compiler';
-		await writeFile(join(directory, '.vscode', 'launch.json'), JSON.stringify(configuration));
-		const page = workbench.page;
-		await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
-		const pane = page.locator('[data-view-container-id="ash.debug"]');
-		await expect(
-			workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ }),
-		).toContainText('Debug smoke');
-		await workbench.page
-			.locator('[data-part="sidebar"]')
-			.getByRole('button', { name: 'Start Debugging', exact: true })
-			.click();
-		await workbench.quickaccess.runCommand('workbench.action.togglePanel');
-		await page.getByRole('tab', { name: 'Terminal', exact: true }).click();
-		await expect(workbench.terminal.activeInstance).toContainText('ASH_DEBUG_COMPILER_WAITING');
-		expect(await readFile(join(directory, 'debug-requests.jsonl'), 'utf8')).toBe('');
-		await writeFile(join(directory, 'release-compiler'), 'ready');
-		await expect(pane.getByRole('status')).toContainText('stopped');
-		await page.getByRole('tab', { name: 'Problems', exact: true }).click();
-		await expect(page.locator('.ash-problems-results')).toContainText('Debug compiler warning');
-		await pane.getByRole('button', { name: 'Stop', exact: true }).click();
-		await workbench.quickaccess.runCommand('workbench.action.tasks.terminate');
-		const pid = Number(await readFile(join(directory, 'compiler-pid.txt'), 'utf8'));
-		await expect
-			.poll(() => {
-				try {
-					process.kill(pid, 0);
-					return true;
-				} catch (error) {
-					if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false;
-					throw error;
-				}
-			})
-			.toBe(false);
-	},
-);
+				},
+			],
+		}),
+	);
+	const configuration = JSON.parse(await readFile(join(directory, '.vscode', 'launch.json'), 'utf8'));
+	configuration.configurations[0].preLaunchTask = 'Debug compiler';
+	await writeFile(join(directory, '.vscode', 'launch.json'), JSON.stringify(configuration));
+	const page = workbench.page;
+	await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+	const pane = page.locator('[data-view-container-id="ash.debug"]');
+	await expect(workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ })).toContainText('Debug smoke');
+	await workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
+	await workbench.quickaccess.runCommand('workbench.action.togglePanel');
+	await page.getByRole('tab', { name: 'Terminal', exact: true }).click();
+	await expect(workbench.terminal.activeInstance).toContainText('ASH_DEBUG_COMPILER_WAITING');
+	expect(await readFile(join(directory, 'debug-requests.jsonl'), 'utf8')).toBe('');
+	await writeFile(join(directory, 'release-compiler'), 'ready');
+	await expect(pane.getByRole('status')).toContainText('stopped');
+	await page.getByRole('tab', { name: 'Problems', exact: true }).click();
+	await expect(page.locator('.ash-problems-results')).toContainText('Debug compiler warning');
+	await pane.getByRole('button', { name: 'Stop', exact: true }).click();
+	await workbench.quickaccess.runCommand('workbench.action.tasks.terminate');
+	const pid = Number(await readFile(join(directory, 'compiler-pid.txt'), 'utf8'));
+	await expect
+		.poll(() => {
+			try {
+				process.kill(pid, 0);
+				return true;
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false;
+				throw error;
+			}
+		})
+		.toBe(false);
+});
 
 test(
 	'withdrawing an unrelated declarative debugger preserves a launch waiting for its background task',
@@ -355,9 +314,7 @@ test(
 				publisher: 'acme',
 				version: '1.0.0',
 				contributes: {
-					debuggers: [
-						{ type: 'unrelated', label: 'Unrelated', runtime: process.execPath, program: './adapter.cjs' },
-					],
+					debuggers: [{ type: 'unrelated', label: 'Unrelated', runtime: process.execPath, program: './adapter.cjs' }],
 				},
 			}),
 		);
@@ -366,12 +323,9 @@ test(
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 		await installation.getByRole('textbox').fill('unrelated-debug-extension');
-		const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-			installation.getByRole('textbox').press('Enter'),
-		);
+		const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 		expect(installed.message).toContain('Installed acme/unrelated-debug-smoke 1.0.0');
-		const manage = (button: string) =>
-			manageDebugExtension(application, workbench, 'Unrelated debug smoke', button);
+		const manage = (button: string) => manageDebugExtension(application, workbench, 'Unrelated debug smoke', button);
 		await manage('Enable');
 		await manage('Grant permissions');
 		await writeFile(
@@ -408,11 +362,7 @@ test(
 				.locator('[data-part="sidebar"]')
 				.getByRole('button', { name: /^Debug configuration:/ }),
 		).toContainText('Debug smoke');
-		await pane
-			.page()
-			.locator('[data-part="sidebar"]')
-			.getByRole('button', { name: 'Start Debugging', exact: true })
-			.click();
+		await pane.page().locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 		await expect(workbench.terminal.activeInstance).toContainText('RETIREMENT_COMPILER_WAITING');
 		expect(await readFile(join(directory, 'debug-requests.jsonl'), 'utf8')).toBe('');
 		await manage('Disable');
@@ -447,230 +397,184 @@ test(
 	},
 );
 
-test(
-	'debugging routes colliding adapter IDs to their own workspace folders',
-	{ tag: ['@electron-app-server'] },
-	async ({ target, application, testWorkspace }) => {
-		if (!('windows' in application)) return;
-		const folders = ['first', 'second'].map(name => ({ name, directory: join(testWorkspace.directory, name) }));
-		for (const { name, directory } of folders) {
-			await mkdir(join(directory, '.vscode'), { recursive: true });
-			await writeFile(join(directory, 'debug-adapter.cjs'), adapter);
-			await writeFile(
-				join(directory, 'debug-program.js'),
-				`console.log('${name}');\nconsole.log('paused');\nconsole.log('stepped');\n`,
-			);
-			await writeFile(join(directory, 'debug-requests.jsonl'), '');
-			await writeFile(
-				join(directory, '.vscode', 'launch.json'),
-				JSON.stringify({
-					version: '0.2.0',
-					configurations: [
-						{
-							name: `Debug ${name}`,
-							type: 'smoke',
-							request: 'launch',
-							debugAdapter: {
-								program: process.execPath,
-								args: [
-									join(directory, 'debug-adapter.cjs'),
-									join(directory, 'debug-program.js'),
-									join(directory, 'debug-requests.jsonl'),
-								],
-							},
+test('debugging routes colliding adapter IDs to their own workspace folders', { tag: ['@electron-app-server'] }, async ({ target, application, testWorkspace }) => {
+	if (!('windows' in application)) return;
+	const folders = ['first', 'second'].map(name => ({ name, directory: join(testWorkspace.directory, name) }));
+	for (const { name, directory } of folders) {
+		await mkdir(join(directory, '.vscode'), { recursive: true });
+		await writeFile(join(directory, 'debug-adapter.cjs'), adapter);
+		await writeFile(join(directory, 'debug-program.js'), `console.log('${name}');\nconsole.log('paused');\nconsole.log('stepped');\n`);
+		await writeFile(join(directory, 'debug-requests.jsonl'), '');
+		await writeFile(
+			join(directory, '.vscode', 'launch.json'),
+			JSON.stringify({
+				version: '0.2.0',
+				configurations: [
+					{
+						name: `Debug ${name}`,
+						type: 'smoke',
+						request: 'launch',
+						debugAdapter: {
+							program: process.execPath,
+							args: [join(directory, 'debug-adapter.cjs'), join(directory, 'debug-program.js'), join(directory, 'debug-requests.jsonl')],
 						},
-					],
-				}),
-			);
-		}
-		const workspaceFile = join(testWorkspace.directory, 'debug.code-workspace');
-		await writeFile(workspaceFile, JSON.stringify({ folders: folders.map(({ name }) => ({ name, path: name })) }));
-		const opened = application.waitForEvent('window');
-		await application.evaluate(({ app }, file) => {
-			app.emit(
-				'second-instance',
-				{} as never,
-				[process.execPath, app.getAppPath(), '--workspace', file, '--new-window'],
-				process.cwd(),
-				{},
-			);
-		}, workspaceFile);
-		const page = await opened;
-		for (const { directory } of folders) {
-			const prompt = page.getByRole('dialog', { name: 'Ash', exact: true });
-			await expect(prompt.locator('.ash-dialog-detail')).toContainText(directory);
-			await prompt.getByRole('button', { name: 'Trust Folder', exact: true }).click();
-		}
-		const workbench = new Workbench(page);
-		await workbench.waitForReady();
-		// Observe the real transport without changing requests or backend responses.
-		await page.evaluate(() => {
-			const owner = globalThis as typeof globalThis & { debugAdapterBoundary?: DebugAdapterBoundary };
-			const post = MessagePort.prototype.postMessage;
-			const pending = new Map<number, string>();
-			const observers = new Map<MessagePort, EventListener>();
-			const bytes = (value: unknown): Uint8Array | undefined =>
-				value && typeof value === 'object' && 'data' in value && value.data instanceof Uint8Array
-					? value.data
-					: undefined;
-			const state: DebugAdapterBoundary = {
-				starts: [],
-				dispose() {
-					MessagePort.prototype.postMessage = post;
-					for (const [port, observer] of observers) port.removeEventListener('message', observer);
-					delete owner.debugAdapterBoundary;
-				},
-			};
-			MessagePort.prototype.postMessage = function (
-				message: unknown,
-				options?: Transferable[] | StructuredSerializeOptions,
-			) {
-				const data = bytes(message);
-				if (data) {
-					const request = JSON.parse(new TextDecoder().decode(data)) as {
-						id: number;
-						method?: string;
-						params?: { dirId?: string };
-					};
-					if (request.method === 'debug/adapter/start' && request.params?.dirId) {
-						pending.set(request.id, request.params.dirId);
-						if (!observers.has(this)) {
-							const decoder = new TextDecoder();
-							let buffered = '';
-							const observer: EventListener = event => {
-								if (!(event instanceof MessageEvent)) return;
-								const data = bytes(event.data);
-								if (!data) return;
-								buffered += decoder.decode(data, { stream: true });
-								let end: number;
-								while ((end = buffered.indexOf('\n')) >= 0) {
-									const response = JSON.parse(buffered.slice(0, end)) as {
-										id: number;
-										result?: { sessionId?: string };
-									};
-									buffered = buffered.slice(end + 1);
-									const dirId = pending.get(response.id);
-									if (dirId && response.result?.sessionId) {
-										state.starts.push({ dirId, sessionId: response.result.sessionId });
-										pending.delete(response.id);
-									}
+					},
+				],
+			}),
+		);
+	}
+	const workspaceFile = join(testWorkspace.directory, 'debug.code-workspace');
+	await writeFile(workspaceFile, JSON.stringify({ folders: folders.map(({ name }) => ({ name, path: name })) }));
+	const opened = application.waitForEvent('window');
+	await application.evaluate(({ app }, file) => {
+		app.emit('second-instance', {} as never, [process.execPath, app.getAppPath(), '--workspace', file, '--new-window'], process.cwd(), {});
+	}, workspaceFile);
+	const page = await opened;
+	for (const { directory } of folders) {
+		const prompt = page.getByRole('dialog', { name: 'Ash', exact: true });
+		await expect(prompt.locator('.ash-dialog-detail')).toContainText(directory);
+		await prompt.getByRole('button', { name: 'Trust Folder', exact: true }).click();
+	}
+	const workbench = new Workbench(page);
+	await workbench.waitForReady();
+	// Observe the real transport without changing requests or backend responses.
+	await page.evaluate(() => {
+		const owner = globalThis as typeof globalThis & { debugAdapterBoundary?: DebugAdapterBoundary };
+		const post = MessagePort.prototype.postMessage;
+		const pending = new Map<number, string>();
+		const observers = new Map<MessagePort, EventListener>();
+		const bytes = (value: unknown): Uint8Array | undefined => (value && typeof value === 'object' && 'data' in value && value.data instanceof Uint8Array ? value.data : undefined);
+		const state: DebugAdapterBoundary = {
+			starts: [],
+			dispose() {
+				MessagePort.prototype.postMessage = post;
+				for (const [port, observer] of observers) port.removeEventListener('message', observer);
+				delete owner.debugAdapterBoundary;
+			},
+		};
+		MessagePort.prototype.postMessage = function (message: unknown, options?: Transferable[] | StructuredSerializeOptions) {
+			const data = bytes(message);
+			if (data) {
+				const request = JSON.parse(new TextDecoder().decode(data)) as {
+					id: number;
+					method?: string;
+					params?: { dirId?: string };
+				};
+				if (request.method === 'debug/adapter/start' && request.params?.dirId) {
+					pending.set(request.id, request.params.dirId);
+					if (!observers.has(this)) {
+						const decoder = new TextDecoder();
+						let buffered = '';
+						const observer: EventListener = event => {
+							if (!(event instanceof MessageEvent)) return;
+							const data = bytes(event.data);
+							if (!data) return;
+							buffered += decoder.decode(data, { stream: true });
+							let end: number;
+							while ((end = buffered.indexOf('\n')) >= 0) {
+								const response = JSON.parse(buffered.slice(0, end)) as {
+									id: number;
+									result?: { sessionId?: string };
+								};
+								buffered = buffered.slice(end + 1);
+								const dirId = pending.get(response.id);
+								if (dirId && response.result?.sessionId) {
+									state.starts.push({ dirId, sessionId: response.result.sessionId });
+									pending.delete(response.id);
 								}
-							};
-							observers.set(this, observer);
-							this.addEventListener('message', observer);
-						}
+							}
+						};
+						observers.set(this, observer);
+						this.addEventListener('message', observer);
 					}
 				}
-				Reflect.apply(post, this, options === undefined ? [message] : [message, options]);
-			};
-			owner.debugAdapterBoundary = state;
+			}
+			Reflect.apply(post, this, options === undefined ? [message] : [message, options]);
+		};
+		owner.debugAdapterBoundary = state;
+	});
+	try {
+		await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+		const pane = page.locator('[data-view-container-id="ash.debug"]');
+		const configuration = pane
+			.page()
+			.locator('[data-part="sidebar"]')
+			.getByRole('button', { name: /^Debug configuration:/ });
+		const sessions = pane.getByRole('combobox', {
+			name: 'Active debug session',
+			exact: true,
+			includeHidden: true,
 		});
-		try {
-			await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
-			const pane = page.locator('[data-view-container-id="ash.debug"]');
-			const configuration = pane
-				.page()
-				.locator('[data-part="sidebar"]')
-				.getByRole('button', { name: /^Debug configuration:/ });
-			const sessions = pane.getByRole('combobox', {
-				name: 'Active debug session',
-				exact: true,
-				includeHidden: true,
-			});
-			for (const { name } of folders) {
-				await configuration.selectOption({ label: `Debug ${name} — ${name}` });
-				await pane
-					.page()
-					.locator('[data-part="sidebar"]')
-					.getByRole('button', { name: 'Start Debugging', exact: true })
-					.click();
-				const session = sessions.locator('option').filter({ hasText: `Debug ${name} —` });
-				await expect(session).toHaveCount(1);
-				await expect(sessions).toHaveValue((await session.getAttribute('value'))!);
-				await expect(pane.getByRole('status')).toContainText('stopped');
-			}
-			const starts = await page.evaluate(
-				() =>
-					(globalThis as typeof globalThis & { debugAdapterBoundary: DebugAdapterBoundary })
-						.debugAdapterBoundary.starts,
-			);
-			expect(starts).toHaveLength(2);
-			expect(new Set(starts.map(start => start.dirId)).size).toBe(2);
-			expect(new Set(starts.map(start => start.sessionId)).size).toBe(1);
-			await expect(sessions.locator('option')).toHaveCount(2);
-			const commands = async (name: string) =>
-				(await readFile(join(testWorkspace.directory, name, 'debug-requests.jsonl'), 'utf8'))
-					.trim()
-					.split('\n')
-					.map(line => JSON.parse(line).command as string);
-			for (const { name } of folders) {
-				const id = await sessions
-					.locator('option')
-					.filter({ hasText: `Debug ${name} —` })
-					.getAttribute('value');
-				if (name === 'first') await sessions.selectOption(id!);
-				else await expect(sessions).toHaveValue(id!);
-				await pane.getByRole('button', { name: 'Step Over', exact: true }).click();
-				await expect(pane.locator('.ash-debug-frame')).toContainText('debug-program.js:3');
-				await expect
-					.poll(async () => (await commands(name)).filter(command => command === 'next'))
-					.toEqual(['next']);
-				if (name === 'first') expect(await commands('second')).not.toContain('next');
-				await pane.getByRole('button', { name: 'Stop', exact: true }).click();
-				await expect
-					.poll(async () => (await commands(name)).filter(command => command === 'disconnect'))
-					.toEqual(['disconnect']);
-				if (name === 'first') {
-					expect(await commands('second')).not.toContain('disconnect');
-					await expect(sessions.locator('option')).toHaveCount(1);
-				}
-			}
-			await expect(sessions.locator('option')).toHaveCount(0);
-		} finally {
-			await page.evaluate(() =>
-				(
-					globalThis as typeof globalThis & { debugAdapterBoundary?: DebugAdapterBoundary }
-				).debugAdapterBoundary?.dispose(),
-			);
+		for (const { name } of folders) {
+			await configuration.selectOption({ label: `Debug ${name} — ${name}` });
+			await pane.page().locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
+			const session = sessions.locator('option').filter({ hasText: `Debug ${name} —` });
+			await expect(session).toHaveCount(1);
+			await expect(sessions).toHaveValue((await session.getAttribute('value'))!);
+			await expect(pane.getByRole('status')).toContainText('stopped');
 		}
-	},
-);
+		const starts = await page.evaluate(() => (globalThis as typeof globalThis & { debugAdapterBoundary: DebugAdapterBoundary }).debugAdapterBoundary.starts);
+		expect(starts).toHaveLength(2);
+		expect(new Set(starts.map(start => start.dirId)).size).toBe(2);
+		expect(new Set(starts.map(start => start.sessionId)).size).toBe(1);
+		await expect(sessions.locator('option')).toHaveCount(2);
+		const commands = async (name: string) =>
+			(await readFile(join(testWorkspace.directory, name, 'debug-requests.jsonl'), 'utf8'))
+				.trim()
+				.split('\n')
+				.map(line => JSON.parse(line).command as string);
+		for (const { name } of folders) {
+			const id = await sessions
+				.locator('option')
+				.filter({ hasText: `Debug ${name} —` })
+				.getAttribute('value');
+			if (name === 'first') await sessions.selectOption(id!);
+			else await expect(sessions).toHaveValue(id!);
+			await pane.getByRole('button', { name: 'Step Over', exact: true }).click();
+			await expect(pane.locator('.ash-debug-frame')).toContainText('debug-program.js:3');
+			await expect.poll(async () => (await commands(name)).filter(command => command === 'next')).toEqual(['next']);
+			if (name === 'first') expect(await commands('second')).not.toContain('next');
+			await pane.getByRole('button', { name: 'Stop', exact: true }).click();
+			await expect.poll(async () => (await commands(name)).filter(command => command === 'disconnect')).toEqual(['disconnect']);
+			if (name === 'first') {
+				expect(await commands('second')).not.toContain('disconnect');
+				await expect(sessions.locator('option')).toHaveCount(1);
+			}
+		}
+		await expect(sessions.locator('option')).toHaveCount(0);
+	} finally {
+		await page.evaluate(() => (globalThis as typeof globalThis & { debugAdapterBoundary?: DebugAdapterBoundary }).debugAdapterBoundary?.dispose());
+	}
+});
 
 interface DebugAdapterBoundary {
 	readonly starts: { readonly dirId: string; readonly sessionId: string }[];
 	dispose(): void;
 }
 
-test(
-	'debug adapter exit retains every line from a 200 message output burst',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ workbench, testWorkspace }) => {
-		const script = adapter.replace(
-			"if (request.command === 'next') {",
-			`if (request.command === 'continue') {
+test('debug adapter exit retains every line from a 200 message output burst', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+	const script = adapter.replace(
+		"if (request.command === 'next') {",
+		`if (request.command === 'continue') {
     for (let index = 0; index < 200; index++) event('output', { category: 'console', output: 'ASH_DEBUG_TAIL_' + index + '\\n' });
     process.stdout.end(() => process.exit(0));
   }
   if (request.command === 'next') {`,
-		);
-		await writeFile(join(testWorkspace.directory, 'debug-adapter.cjs'), script);
-		const page = workbench.page;
-		await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
-		const pane = page.locator('[data-view-container-id="ash.debug"]');
-		await workbench.page
-			.locator('[data-part="sidebar"]')
-			.getByRole('button', { name: 'Start Debugging', exact: true })
-			.click();
-		await expect(pane.getByRole('status')).toContainText('stopped');
-		await workbench.quickaccess.runCommand('workbench.debug.action.focusRepl');
-		const output = page.getByRole('log', { name: 'Debug Console output', exact: true });
-		await expect(output).toContainText('ASH_DEBUG_READY');
-		await pane.getByRole('button', { name: 'Continue', exact: true }).click();
-		await expect(output).toContainText('ASH_DEBUG_TAIL_199');
-		const lines = (await output.textContent())!.match(/ASH_DEBUG_TAIL_\d+/gu);
-		expect(lines).toEqual(Array.from({ length: 200 }, (_, index) => `ASH_DEBUG_TAIL_${index}`));
-	},
-);
+	);
+	await writeFile(join(testWorkspace.directory, 'debug-adapter.cjs'), script);
+	const page = workbench.page;
+	await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+	const pane = page.locator('[data-view-container-id="ash.debug"]');
+	await workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
+	await expect(pane.getByRole('status')).toContainText('stopped');
+	await workbench.quickaccess.runCommand('workbench.debug.action.focusRepl');
+	const output = page.getByRole('log', { name: 'Debug Console output', exact: true });
+	await expect(output).toContainText('ASH_DEBUG_READY');
+	await pane.getByRole('button', { name: 'Continue', exact: true }).click();
+	await expect(output).toContainText('ASH_DEBUG_TAIL_199');
+	const lines = (await output.textContent())!.match(/ASH_DEBUG_TAIL_\d+/gu);
+	expect(lines).toEqual(Array.from({ length: 200 }, (_, index) => `ASH_DEBUG_TAIL_${index}`));
+});
 
 test(
 	'debugging locates stopped source, edits nested variables by keyboard, refreshes watches, steps and stops',
@@ -679,21 +583,12 @@ test(
 		const page = workbench.page;
 		await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 		const pane = page.locator('[data-view-container-id="ash.debug"]');
-		await expect(
-			page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ }),
-		).toContainText('Debug smoke');
-		await page
-			.locator('[data-part="sidebar"]')
-			.getByRole('button', { name: 'Start Debugging', exact: true })
-			.click();
+		await expect(page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ })).toContainText('Debug smoke');
+		await page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 		await expect(pane.getByRole('status')).toContainText('stopped');
 		await expect(pane.locator('.ash-debug-frame')).toContainText('debug-program.js:2');
-		await workbench.editors
-			.groupAt(0)
-			.editor.waitForEditorContents(content => content.includes('console.log(answer)'));
-		await expect(page.getByRole('tab', { name: 'debug-program.js', exact: true, selected: true })).toContainText(
-			'debug-program.js',
-		);
+		await workbench.editors.groupAt(0).editor.waitForEditorContents(content => content.includes('console.log(answer)'));
+		await expect(page.getByRole('tab', { name: 'debug-program.js', exact: true, selected: true })).toContainText('debug-program.js');
 		await workbench.quickaccess.runCommand('editor.debug.action.toggleBreakpoint');
 		const breakpoint = pane.locator('.ash-debug-breakpoints > li').filter({ hasText: 'debug-program.js:2' });
 		await expect(breakpoint).toBeVisible();
@@ -709,16 +604,12 @@ test(
 				.split('\n')
 				.map(line => JSON.parse(line) as { command: string; arguments?: { breakpoints?: unknown[] } })
 				.filter(request => request.command === 'setBreakpoints');
-		await expect
-			.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints)
-			.toEqual([{ line: 2, condition: 'answer > 0', hitCondition: '>= 2', logMessage: 'answer={answer}' }]);
+		await expect.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints).toEqual([{ line: 2, condition: 'answer > 0', hitCondition: '>= 2', logMessage: 'answer={answer}' }]);
 		await breakpoint.getByRole('checkbox').uncheck();
 		await expect.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints).toEqual([]);
 		await pane.getByRole('button', { name: 'Breakpoints', exact: true }).hover();
 		await pane.getByRole('button', { name: 'Enable All Breakpoints', exact: true }).click();
-		await expect
-			.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints)
-			.toEqual([{ line: 2, condition: 'answer > 0', hitCondition: '>= 2', logMessage: 'answer={answer}' }]);
+		await expect.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints).toEqual([{ line: 2, condition: 'answer > 0', hitCondition: '>= 2', logMessage: 'answer={answer}' }]);
 		await pane.getByRole('button', { name: 'Breakpoints', exact: true }).hover();
 		await pane.getByRole('button', { name: 'Remove All Breakpoints', exact: true }).click();
 		await expect.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints).toEqual([]);
@@ -736,30 +627,20 @@ test(
 		await functionName.fill('main');
 		await pane.getByRole('textbox', { name: 'Expression condition', exact: true }).fill('answer > 0');
 		await functionName.press('Enter');
-		await expect
-			.poll(() => lastArguments('launch'))
-			.toEqual({ environmentIdentity: 'ash', missingEnvironment: '' });
-		await expect
-			.poll(() => lastArguments('setFunctionBreakpoints'))
-			.toEqual({ breakpoints: [{ name: 'main', condition: 'answer > 0' }] });
+		await expect.poll(() => lastArguments('launch')).toEqual({ environmentIdentity: 'ash', missingEnvironment: '' });
+		await expect.poll(() => lastArguments('setFunctionBreakpoints')).toEqual({ breakpoints: [{ name: 'main', condition: 'answer > 0' }] });
 		await pane.getByRole('button', { name: 'Break on data access for answer', exact: true }).click();
 		await pane.getByRole('combobox', { name: 'Break on access', exact: true }).selectOption('readWrite');
 		await pane.getByRole('button', { name: 'Save breakpoint', exact: true }).click();
-		await expect
-			.poll(() => lastArguments('dataBreakpointInfo'))
-			.toEqual({ name: 'answer', variablesReference: 10, frameId: 11 });
-		await expect
-			.poll(() => lastArguments('setDataBreakpoints'))
-			.toEqual({ breakpoints: [{ dataId: 'memory:answer', accessType: 'readWrite' }] });
+		await expect.poll(() => lastArguments('dataBreakpointInfo')).toEqual({ name: 'answer', variablesReference: 10, frameId: 11 });
+		await expect.poll(() => lastArguments('setDataBreakpoints')).toEqual({ breakpoints: [{ dataId: 'memory:answer', accessType: 'readWrite' }] });
 		await pane.getByRole('button', { name: 'Call Stack', exact: true }).hover();
 		await pane.getByRole('button', { name: 'Add Instruction Breakpoint', exact: true }).click();
 		await expect(pane.getByRole('textbox', { name: 'Instruction address', exact: true })).toHaveValue('0x1000');
 		const instructionOffset = pane.getByRole('textbox', { name: 'Instruction byte offset', exact: true });
 		await instructionOffset.fill('-4');
 		await instructionOffset.press('Enter');
-		await expect
-			.poll(() => lastArguments('setInstructionBreakpoints'))
-			.toEqual({ breakpoints: [{ instructionReference: '0x1000', offset: -4 }] });
+		await expect.poll(() => lastArguments('setInstructionBreakpoints')).toEqual({ breakpoints: [{ instructionReference: '0x1000', offset: -4 }] });
 		await pane.getByRole('button', { name: 'Breakpoints', exact: true }).hover();
 		await pane.getByRole('button', { name: 'Disable All Breakpoints', exact: true }).click();
 		for (const command of ['setFunctionBreakpoints', 'setDataBreakpoints', 'setInstructionBreakpoints']) {
@@ -767,9 +648,7 @@ test(
 		}
 		await pane.getByRole('button', { name: 'Breakpoints', exact: true }).hover();
 		await pane.getByRole('button', { name: 'Enable All Breakpoints', exact: true }).click();
-		await expect
-			.poll(() => lastArguments('setInstructionBreakpoints'))
-			.toEqual({ breakpoints: [{ instructionReference: '0x1000', offset: -4 }] });
+		await expect.poll(() => lastArguments('setInstructionBreakpoints')).toEqual({ breakpoints: [{ instructionReference: '0x1000', offset: -4 }] });
 		await pane.getByRole('button', { name: 'Breakpoints', exact: true }).hover();
 		await pane.getByRole('button', { name: 'Remove All Breakpoints', exact: true }).click();
 		for (const command of ['setFunctionBreakpoints', 'setDataBreakpoints', 'setInstructionBreakpoints']) {
@@ -794,9 +673,7 @@ test(
 		await value.fill('invalid');
 		await value.press('Enter');
 		await expect(value).toHaveAttribute('aria-invalid', 'true');
-		await expect(pane.getByRole('alert').filter({ hasText: 'Value must be numeric.' })).toHaveText(
-			'Value must be numeric.',
-		);
+		await expect(pane.getByRole('alert').filter({ hasText: 'Value must be numeric.' })).toHaveText('Value must be numeric.');
 		await expect(value).toBeFocused();
 		await value.fill('43');
 		await value.press('Enter');
@@ -825,10 +702,7 @@ test(
 		const disassembly = page.locator('.ash-disassembly');
 		const instructions = disassembly.getByRole('grid', { name: 'Disassembly', exact: true });
 		await expect(page.getByRole('tab', { name: 'Disassembly', exact: true, selected: true })).toBeVisible();
-		await expect(disassembly.locator('[data-instruction-address="0x1004"]')).toHaveAttribute(
-			'aria-current',
-			'step',
-		);
+		await expect(disassembly.locator('[data-instruction-address="0x1004"]')).toHaveAttribute('aria-current', 'step');
 		await expect
 			.poll(() => lastArguments('disassemble'))
 			.toEqual({
@@ -840,9 +714,7 @@ test(
 			});
 		await instructions.focus();
 		await instructions.press('F9');
-		await expect
-			.poll(() => lastArguments('setInstructionBreakpoints'))
-			.toEqual({ breakpoints: [{ instructionReference: '0x1004', offset: 0 }] });
+		await expect.poll(() => lastArguments('setInstructionBreakpoints')).toEqual({ breakpoints: [{ instructionReference: '0x1004', offset: 0 }] });
 		await instructions.press('F9');
 		await expect.poll(() => lastArguments('setInstructionBreakpoints')).toEqual({ breakpoints: [] });
 		await disassembly.getByRole('button', { name: 'Next instructions', exact: true }).click();
@@ -876,10 +748,7 @@ test(
 		await expect(instructions).toBeFocused();
 		await instructions.press('F10');
 		await expect.poll(() => lastArguments('next')).toEqual({ threadId: 7, granularity: 'instruction' });
-		await expect(disassembly.locator('[data-instruction-address="0x1008"]')).toHaveAttribute(
-			'aria-current',
-			'step',
-		);
+		await expect(disassembly.locator('[data-instruction-address="0x1008"]')).toHaveAttribute('aria-current', 'step');
 		await expect(page.getByRole('tab', { name: 'Disassembly', exact: true, selected: true })).toBeVisible();
 		await pane.getByRole('button', { name: 'Stop', exact: true }).click();
 		await expect(disassembly.getByRole('status')).toHaveText('Pause debugging to view disassembly.');
@@ -890,13 +759,11 @@ test(
 			.trim()
 			.split('\n')
 			.map(line => JSON.parse(line) as { command: string; arguments?: unknown });
-		expect(requests.filter(request => request.command === 'setVariable').map(request => request.arguments)).toEqual(
-			[
-				{ variablesReference: 10, name: 'answer', value: 'invalid' },
-				{ variablesReference: 10, name: 'answer', value: '43' },
-				{ variablesReference: 20, name: 'child', value: '2' },
-			],
-		);
+		expect(requests.filter(request => request.command === 'setVariable').map(request => request.arguments)).toEqual([
+			{ variablesReference: 10, name: 'answer', value: 'invalid' },
+			{ variablesReference: 10, name: 'answer', value: '43' },
+			{ variablesReference: 20, name: 'child', value: '2' },
+		]);
 		expect(requests.some(request => request.command === 'disconnect')).toBe(true);
 	},
 );
@@ -928,11 +795,7 @@ test(
 						request: 'launch',
 						debugAdapter: {
 							program: process.execPath,
-							args: [
-								'${workspaceFolder}/debug-adapter.cjs',
-								'${workspaceFolder}/debug-program.js',
-								'${workspaceFolder}/debug-requests.jsonl',
-							],
+							args: ['${workspaceFolder}/debug-adapter.cjs', '${workspaceFolder}/debug-program.js', '${workspaceFolder}/debug-requests.jsonl'],
 						},
 						nameArgument: '${input:name}',
 						repeated: '${input:name}',
@@ -949,34 +812,20 @@ test(
 				.locator('[data-part="sidebar"]')
 				.getByRole('button', { name: /^Debug configuration:/ }),
 		).toContainText('Debug inputs');
-		await pane
-			.page()
-			.locator('[data-part="sidebar"]')
-			.getByRole('button', { name: 'Start Debugging', exact: true })
-			.click();
-		const prompt = page
-			.getByRole('dialog', { name: 'Debug input name', exact: true })
-			.getByRole('textbox', { name: 'Debug input name', exact: true });
+		await pane.page().locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
+		const prompt = page.getByRole('dialog', { name: 'Debug input name', exact: true }).getByRole('textbox', { name: 'Debug input name', exact: true });
 		await expect(prompt).toBeFocused();
 		await prompt.press('Escape');
 		await expect(prompt).not.toBeVisible();
 		expect(await readFile(join(directory, 'debug-requests.jsonl'), 'utf8')).toBe('');
 		await expect(pane.getByRole('status', { includeHidden: true })).toBeHidden();
-		await expect(
-			pane.page().locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }),
-		).toBeFocused();
+		await expect(pane.page().locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true })).toBeFocused();
 
-		await pane
-			.page()
-			.locator('[data-part="sidebar"]')
-			.getByRole('button', { name: 'Start Debugging', exact: true })
-			.click();
+		await pane.page().locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 		await expect(prompt).toHaveValue('initial');
 		await prompt.fill('${workspaceFolder}');
 		await prompt.press('Enter');
-		const pick = page
-			.getByRole('dialog', { name: 'Debug build mode', exact: true })
-			.getByRole('combobox', { name: 'Debug build mode', exact: true });
+		const pick = page.getByRole('dialog', { name: 'Debug build mode', exact: true }).getByRole('combobox', { name: 'Debug build mode', exact: true });
 		await expect(pick).toBeFocused();
 		await pick.press('Enter');
 		await expect(pane.getByRole('status')).toContainText('stopped');
@@ -1028,11 +877,7 @@ test(
 						request: 'launch',
 						debugAdapter: {
 							program: process.execPath,
-							args: [
-								'${workspaceFolder}/debug-adapter.cjs',
-								'${workspaceFolder}/debug-program.js',
-								'${workspaceFolder}/debug-requests.jsonl',
-							],
+							args: ['${workspaceFolder}/debug-adapter.cjs', '${workspaceFolder}/debug-program.js', '${workspaceFolder}/debug-requests.jsonl'],
 						},
 						preLaunchTask: '${defaultBuildTask}',
 					},
@@ -1042,10 +887,7 @@ test(
 		const page = workbench.page;
 		await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 		const pane = page.locator('[data-view-container-id="ash.debug"]');
-		const start = pane
-			.page()
-			.locator('[data-part="sidebar"]')
-			.getByRole('button', { name: 'Start Debugging', exact: true });
+		const start = pane.page().locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true });
 		await expect(
 			pane
 				.page()
@@ -1054,9 +896,7 @@ test(
 		).toContainText('Default build selection');
 		const initialTerminals = await workbench.terminal.instances.count();
 		await start.click();
-		const picker = page
-			.getByRole('dialog', { name: 'Select a build task', exact: true })
-			.getByRole('combobox', { name: 'Select a build task', exact: true });
+		const picker = page.getByRole('dialog', { name: 'Select a build task', exact: true }).getByRole('combobox', { name: 'Select a build task', exact: true });
 		await expect(picker).toBeFocused();
 		expect(await readFile(join(directory, 'selected-builds.jsonl'), 'utf8')).toBe('');
 		await picker.press('Escape');
@@ -1129,11 +969,7 @@ test(
 			linux: { platformValue: 'linux', wrongPlatform: '${command:acme.debugProvider.mustNotRun}' },
 			debugAdapter: {
 				program: process.execPath,
-				args: [
-					join(directory, 'debug-adapter.cjs'),
-					join(directory, 'debug-program.js'),
-					join(directory, 'debug-requests.jsonl'),
-				],
+				args: [join(directory, 'debug-adapter.cjs'), join(directory, 'debug-program.js'), join(directory, 'debug-requests.jsonl')],
 			},
 		};
 		await writeEditorExtensionFixture(
@@ -1171,9 +1007,7 @@ exports.activate = function(context) {
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 		await installation.getByRole('textbox').fill('debug-extension');
-		const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-			installation.getByRole('textbox').press('Enter'),
-		);
+		const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 		expect(installed.message).toContain('Installed acme/debug-provider-smoke 1.0.0');
 		const manage = async (button: string): Promise<void> => {
 			await workbench.dialogs.confirm(application, 'Debug provider smoke', button, async () => {
@@ -1208,11 +1042,7 @@ exports.activate = function(context) {
 				.locator('[data-part="sidebar"]')
 				.getByRole('button', { name: /^Debug configuration:/ }),
 		).toContainText('Provider smoke');
-		await pane
-			.page()
-			.locator('[data-part="sidebar"]')
-			.getByRole('button', { name: 'Start Debugging', exact: true })
-			.click();
+		await pane.page().locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 		await expect(pane.getByRole('status')).toContainText('stopped');
 		const requests = (await readFile(join(directory, 'debug-requests.jsonl'), 'utf8'))
 			.trim()
@@ -1281,11 +1111,7 @@ test(
 		const page = workbench.page;
 		const descriptor = {
 			program: process.execPath,
-			arguments: [
-				join(directory, 'debug-adapter.cjs'),
-				join(directory, 'debug-program.js'),
-				join(directory, 'debug-requests.jsonl'),
-			],
+			arguments: [join(directory, 'debug-adapter.cjs'), join(directory, 'debug-program.js'), join(directory, 'debug-requests.jsonl')],
 		};
 		for (const type of ['redirect-source', 'redirect-target']) {
 			const root = join(directory, type);
@@ -1337,9 +1163,7 @@ exports.activate = function(context) {
 			await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 			const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 			await installation.getByRole('textbox').fill(type);
-			const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-				installation.getByRole('textbox').press('Enter'),
-			);
+			const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 			expect(installed.message).toContain(`Installed acme/${type} 1.0.0`);
 			for (const button of ['Enable', 'Grant permissions']) {
 				await workbench.dialogs.confirm(application, type, button, async () => {
@@ -1373,11 +1197,7 @@ exports.activate = function(context) {
 				.locator('[data-part="sidebar"]')
 				.getByRole('button', { name: /^Debug configuration:/ }),
 		).toContainText('Redirect dormant owner');
-		await pane
-			.page()
-			.locator('[data-part="sidebar"]')
-			.getByRole('button', { name: 'Start Debugging', exact: true })
-			.click();
+		await pane.page().locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 		await expect(pane.getByRole('status')).toContainText('stopped');
 		const requests = (await readFile(join(directory, 'debug-requests.jsonl'), 'utf8'))
 			.trim()
@@ -1477,22 +1297,13 @@ exports.activate = function(context) {
  );}`,
 		);
 		const peer = adapter
-			.replace(
-				"  if (request.command === 'launch') event('initialized', {});",
-				"  if (request.command === 'launch') { event('builderReady', null); event('initialized', {}); }",
-			)
+			.replace("  if (request.command === 'launch') event('initialized', {});", "  if (request.command === 'launch') { event('builderReady', null); event('initialized', {}); }")
 			.replace(
 				"  if (request.command === 'next') {",
 				"  if (request.command === 'next') { event('breakpoint', line === 2 ? { reason: 'new', breakpoint: { id: 777, source: { path: source }, line: 5, verified: true } } : { reason: 'removed', breakpoint: { id: 777, verified: false } });",
 			);
 		expect(peer).not.toBe(adapter);
-		await writeFile(
-			join(directory, 'debug-adapter.cjs'),
-			"require('node:fs').writeFileSync(" +
-				JSON.stringify(join(directory, 'debug-events-pid.txt')) +
-				', String(process.pid));\n' +
-				peer,
-		);
+		await writeFile(join(directory, 'debug-adapter.cjs'), "require('node:fs').writeFileSync(" + JSON.stringify(join(directory, 'debug-events-pid.txt')) + ', String(process.pid));\n' + peer);
 		const configuration = JSON.parse(await readFile(join(directory, '.vscode', 'launch.json'), 'utf8'));
 		configuration.configurations[0].type = 'event-observer';
 		await writeFile(join(directory, '.vscode', 'launch.json'), JSON.stringify(configuration));
@@ -1500,27 +1311,18 @@ exports.activate = function(context) {
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 		await installation.getByRole('textbox').fill('debug-events-extension');
-		const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-			installation.getByRole('textbox').press('Enter'),
-		);
+		const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 		expect(installed.message).toContain('Installed acme/debug-events-smoke 1.0.0');
 		const manage = (button: string) => manageDebugExtension(application, workbench, 'Debug events smoke', button);
 		await manage('Enable');
 		await manage('Grant permissions');
 		await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 		const pane = page.locator('[data-view-container-id="ash.debug"]');
-		await expect(
-			workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ }),
-		).toContainText('Debug smoke');
-		await workbench.page
-			.locator('[data-part="sidebar"]')
-			.getByRole('button', { name: 'Start Debugging', exact: true })
-			.click();
+		await expect(workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ })).toContainText('Debug smoke');
+		await workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 		await expect(pane.getByRole('status')).toContainText('stopped');
 		const pid = Number(await readFile(join(directory, 'debug-events-pid.txt'), 'utf8'));
-		await workbench.editors
-			.groupAt(0)
-			.editor.waitForEditorContents(content => content.includes('console.log(answer)'));
+		await workbench.editors.groupAt(0).editor.waitForEditorContents(content => content.includes('console.log(answer)'));
 		await workbench.quickaccess.runCommand('editor.debug.action.toggleBreakpoint');
 		await expect(page.locator('.ash-notification', { hasText: 'DEBUG_BREAKPOINTS:1:0:0' })).toBeVisible();
 		const breakpointRequests = async () =>
@@ -1529,9 +1331,7 @@ exports.activate = function(context) {
 				.split('\n')
 				.map(line => JSON.parse(line) as { command: string; arguments?: { breakpoints?: unknown[] } })
 				.filter(request => request.command === 'setBreakpoints');
-		await expect
-			.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints)
-			.toEqual([{ line: 2 }]);
+		await expect.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints).toEqual([{ line: 2 }]);
 		await pane.getByRole('button', { name: 'Breakpoints', exact: true }).hover();
 		await pane.getByRole('button', { name: 'Remove All Breakpoints', exact: true }).click();
 		await expect(page.locator('.ash-notification', { hasText: 'DEBUG_BREAKPOINTS:0:1:0' })).toBeVisible();
@@ -1545,15 +1345,17 @@ exports.activate = function(context) {
 		await expect(pane.locator('.ash-debug-breakpoint', { hasText: 'debug-program.js:5' })).toHaveCount(0);
 		expect((await breakpointRequests()).length).toBe(sentBreakpointUpdates);
 		await pane.getByRole('button', { name: 'Stop', exact: true }).click();
-		await expect(
-			page.locator('.ash-notification', { hasText: 'DEBUG_EVENTS:custom,start,active,end' }),
-		).toBeVisible();
+		await expect(page.locator('.ash-notification', { hasText: 'DEBUG_EVENTS:custom,start,active,end' })).toBeVisible();
 		const trackerNotice = page.locator('.ash-notification', { hasText: 'DEBUG_TRACKER:' });
 		await expect(trackerNotice).toBeVisible();
 		const trackerText = await trackerNotice.innerText();
-		const tracker = JSON.parse(
-			trackerText.slice(trackerText.indexOf('DEBUG_TRACKER:') + 'DEBUG_TRACKER:'.length).split('\n')[0],
-		) as { phases: string[]; received: string[]; sent: string[]; code: number | null; signalUnknown: boolean };
+		const tracker = JSON.parse(trackerText.slice(trackerText.indexOf('DEBUG_TRACKER:') + 'DEBUG_TRACKER:'.length).split('\n')[0]) as {
+			phases: string[];
+			received: string[];
+			sent: string[];
+			code: number | null;
+			signalUnknown: boolean;
+		};
 		expect(tracker.phases).toEqual(['start', 'stop', 'exit']);
 		expect(tracker.received[0]).toBe('initialize');
 		expect(tracker.received).toContain('launch');
@@ -1603,9 +1405,7 @@ for (const transport of ['server', 'pipe', 'debugServer'] as const) {
 					while (true) {
 						const headerEnd = buffer.indexOf('\r\n\r\n');
 						if (headerEnd < 0) return;
-						const length = Number(
-							/Content-Length: (\d+)/i.exec(buffer.subarray(0, headerEnd).toString())![1],
-						);
+						const length = Number(/Content-Length: (\d+)/i.exec(buffer.subarray(0, headerEnd).toString())![1]);
 						const end = headerEnd + 4 + length;
 						if (buffer.length < end) return;
 						const request = JSON.parse(buffer.subarray(headerEnd + 4, end).toString()) as {
@@ -1621,15 +1421,9 @@ for (const transport of ['server', 'pipe', 'debugServer'] as const) {
 							request_seq: request.seq,
 							command: request.command,
 							success: true,
-							body:
-								request.command === 'initialize'
-									? { supportsConfigurationDoneRequest: true }
-									: request.command === 'threads'
-										? { threads: [] }
-										: {},
+							body: request.command === 'initialize' ? { supportsConfigurationDoneRequest: true } : request.command === 'threads' ? { threads: [] } : {},
 						});
-						if (request.command === 'configurationDone')
-							send({ type: 'event', event: 'stopped', body: { reason: 'pause' } });
+						if (request.command === 'configurationDone') send({ type: 'event', event: 'stopped', body: { reason: 'pause' } });
 						if (request.command === 'disconnect') send({ type: 'event', event: 'terminated', body: {} });
 					}
 				});
@@ -1701,23 +1495,13 @@ exports.activate = function(context) {
 					exact: true,
 				});
 				await installation.getByRole('textbox').fill('debug-network');
-				const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-					installation.getByRole('textbox').press('Enter'),
-				);
+				const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 				expect(installed.message).toContain('Installed acme/debug-network 1.0.0');
-				for (const button of ['Enable', 'Grant permissions'])
-					await manageDebugExtension(application, workbench, 'Debug network', button);
+				for (const button of ['Enable', 'Grant permissions']) await manageDebugExtension(application, workbench, 'Debug network', button);
 				await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 				const pane = page.locator('[data-view-container-id="ash.debug"]');
-				await expect(
-					workbench.page
-						.locator('[data-part="sidebar"]')
-						.getByRole('button', { name: /^Debug configuration:/ }),
-				).toContainText('Debug network');
-				await workbench.page
-					.locator('[data-part="sidebar"]')
-					.getByRole('button', { name: 'Start Debugging', exact: true })
-					.click();
+				await expect(workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ })).toContainText('Debug network');
+				await workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 				await expect(pane.getByRole('status')).toContainText('stopped');
 				expect(requests).toEqual(expect.arrayContaining(['initialize', 'launch', 'configurationDone']));
 				await pane.getByRole('button', { name: 'Stop', exact: true }).click();
@@ -1847,44 +1631,27 @@ exports.activate = function(context) {
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 		await installation.getByRole('textbox').fill('debug-inline');
-		const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-			installation.getByRole('textbox').press('Enter'),
-		);
+		const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 		expect(installed.message).toContain('Installed acme/debug-inline 1.0.0');
-		for (const button of ['Enable', 'Grant permissions'])
-			await manageDebugExtension(application, workbench, 'Debug inline', button);
+		for (const button of ['Enable', 'Grant permissions']) await manageDebugExtension(application, workbench, 'Debug inline', button);
 		await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 		const pane = page.locator('[data-view-container-id="ash.debug"]');
-		await expect(
-			workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ }),
-		).toContainText('Debug inline');
-		await workbench.page
-			.locator('[data-part="sidebar"]')
-			.getByRole('button', { name: 'Start Debugging', exact: true })
-			.click();
+		await expect(workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ })).toContainText('Debug inline');
+		await workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 		await expect(pane.getByRole('status')).toContainText('stopped');
-		await workbench.editors
-			.groupAt(0)
-			.editor.waitForEditorContents(contents => contents.includes('const generated = true;'));
+		await workbench.editors.groupAt(0).editor.waitForEditorContents(contents => contents.includes('const generated = true;'));
 		await expect(page.locator('.ash-notification', { hasText: 'DEBUG_SOURCE_READ' })).toBeVisible();
 		await expect(page.locator('.ash-notification', { hasText: 'DEBUG_STACK_FRAME' })).toBeVisible();
 		await workbench.editors.groupAt(0).editor.input.focus();
 		await page.keyboard.insertText('forbidden edit');
-		await workbench.editors
-			.groupAt(0)
-			.editor.waitForEditorContents(contents => contents === 'const generated = true;');
+		await workbench.editors.groupAt(0).editor.waitForEditorContents(contents => contents === 'const generated = true;');
 		await pane.getByRole('button', { name: 'Stop', exact: true }).click();
 		await expect(page.locator('.ash-notification', { hasText: 'DEBUG_STACK_CLEAR' })).toBeVisible();
 		const notice = page.locator('.ash-notification', { hasText: 'INLINE_RELEASE:' });
 		await expect(notice).toBeVisible();
 		const commands = await notice.innerText();
-		for (const command of ['initialize', 'launch', 'configurationDone', 'source', 'disconnect'])
-			expect(commands).toContain(command);
-		await expect(
-			workbench.page
-				.locator('[data-part="sidebar"]')
-				.getByRole('button', { name: 'Start Debugging', exact: true }),
-		).toBeEnabled();
+		for (const command of ['initialize', 'launch', 'configurationDone', 'source', 'disconnect']) expect(commands).toContain(command);
+		await expect(workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true })).toBeEnabled();
 	},
 );
 
@@ -1926,13 +1693,7 @@ test(
 							args: ['base'],
 							[platform]: {
 								program: './adapter.cjs',
-								args: [
-									join(directory, 'debug-program.js'),
-									join(directory, 'debug-requests.jsonl'),
-									'',
-									'$HOME',
-									'${extensionInstallFolder:acme.declarative-debug}',
-								],
+								args: [join(directory, 'debug-program.js'), join(directory, 'debug-requests.jsonl'), '', '$HOME', '${extensionInstallFolder:acme.declarative-debug}'],
 							},
 						},
 					],
@@ -1955,9 +1716,7 @@ test(
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 		await installation.getByRole('textbox').fill('declarative-debug-extension');
-		const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-			installation.getByRole('textbox').press('Enter'),
-		);
+		const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 		expect(installed.message).toContain('Installed acme/declarative-debug-smoke 1.0.0');
 		const manage = async (button: string): Promise<void> => {
 			await workbench.dialogs.confirm(application, 'Declarative debug smoke', button, async () => {
@@ -1978,11 +1737,7 @@ test(
 				.locator('[data-part="sidebar"]')
 				.getByRole('button', { name: /^Debug configuration:/ }),
 		).toContainText('Declarative Debug');
-		await pane
-			.page()
-			.locator('[data-part="sidebar"]')
-			.getByRole('button', { name: 'Start Debugging', exact: true })
-			.click();
+		await pane.page().locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 		try {
 			await expect(pane.getByRole('status')).toContainText('stopped');
 		} catch (error) {
@@ -1993,20 +1748,12 @@ test(
 					content: await readFile(join(directory, name), 'utf8').catch(() => '<missing>'),
 				})),
 			);
-			await test
-				.info()
-				.attach('declarative-debug-io', { body: JSON.stringify(evidence), contentType: 'application/json' });
+			await test.info().attach('declarative-debug-io', { body: JSON.stringify(evidence), contentType: 'application/json' });
 			throw error;
 		}
 		const result = JSON.parse(await readFile(join(directory, 'declarative-debug-result.json'), 'utf8'));
 		expect(result.program.endsWith(join('debugger', 'adapter.cjs'))).toBe(true);
-		expect(result.args).toEqual([
-			join(directory, 'debug-program.js'),
-			join(directory, 'debug-requests.jsonl'),
-			'',
-			'$HOME',
-			result.program.slice(0, -'adapter.cjs'.length - 1),
-		]);
+		expect(result.args).toEqual([join(directory, 'debug-program.js'), join(directory, 'debug-requests.jsonl'), '', '$HOME', result.program.slice(0, -'adapter.cjs'.length - 1)]);
 		expect(result.runtimeArgs).toEqual(['--no-warnings']);
 		await pane.getByRole('button', { name: 'Stop', exact: true }).click();
 		await expect
@@ -2109,10 +1856,7 @@ test(
 			}),
 		);
 		await mkdir(join(bootstrapRoot, 'l10n'));
-		await writeFile(
-			join(bootstrapRoot, 'l10n', 'bundle.l10n.zh-cn.json'),
-			JSON.stringify({ 'Target {0}': '目标 {0}' }),
-		);
+		await writeFile(join(bootstrapRoot, 'l10n', 'bundle.l10n.zh-cn.json'), JSON.stringify({ 'Target {0}': '目标 {0}' }));
 		await writeFile(
 			join(bootstrapRoot, 'extension.cjs'),
 			`const v = require('@ash/sdk'); const message = v.l10n.t('Target {0}', 'worker'); exports.activate = context => context.subscriptions.push(v.commands.register('acme.debugAlias.bootstrap', () => {
@@ -2182,13 +1926,7 @@ exports.activate = async context => {
 							args: ['base'],
 							[platform]: {
 								program: './adapter.cjs',
-								args: [
-									join(directory, 'debug-program.js'),
-									join(directory, 'debug-requests.jsonl'),
-									'',
-									'$HOME',
-									'${command:PickProcess}',
-								],
+								args: [join(directory, 'debug-program.js'), join(directory, 'debug-requests.jsonl'), '', '$HOME', '${command:PickProcess}'],
 							},
 						},
 					],
@@ -2240,9 +1978,7 @@ exports.activate = async context => {
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 		await installation.getByRole('textbox').fill('alias-debug-extension');
-		const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-			installation.getByRole('textbox').press('Enter'),
-		);
+		const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 		expect(installed.message).toContain('Installed acme/alias-debug-smoke 1.0.0');
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const bootstrapInstallation = page.getByRole('dialog', {
@@ -2250,9 +1986,7 @@ exports.activate = async context => {
 			exact: true,
 		});
 		await bootstrapInstallation.getByRole('textbox').fill('bootstrap-debug-extension');
-		const bootstrapInstalled = await workbench.dialogs.expectMessage(application, 'Information', () =>
-			bootstrapInstallation.getByRole('textbox').press('Enter'),
-		);
+		const bootstrapInstalled = await workbench.dialogs.expectMessage(application, 'Information', () => bootstrapInstallation.getByRole('textbox').press('Enter'));
 		expect(bootstrapInstalled.message).toContain('Installed acme/bootstrap-debug-smoke 1.0.0');
 		const manage = async (button: string, title = 'Alias debug smoke') => {
 			return workbench.dialogs.confirm(application, title, button, async () => {
@@ -2275,67 +2009,37 @@ exports.activate = async context => {
 				.locator('[data-part="sidebar"]')
 				.getByRole('button', { name: /^Debug configuration:/ }),
 		).toContainText('Alias Debug');
-		await pane
-			.page()
-			.locator('[data-part="sidebar"]')
-			.getByRole('button', { name: 'Start Debugging', exact: true })
-			.click();
+		await pane.page().locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 		try {
 			await expect(pane.getByRole('status')).toContainText('stopped');
 		} catch (error) {
-			const files = [
-				'alias-debug-result.json',
-				'debug-requests.jsonl',
-				'node-startup-error.txt',
-				'node-startup-proof.txt',
-				'node-bootstrap-pid.txt',
-			];
+			const files = ['alias-debug-result.json', 'debug-requests.jsonl', 'node-startup-error.txt', 'node-startup-proof.txt', 'node-bootstrap-pid.txt'];
 			const evidence = await Promise.all(
 				files.map(async name => ({
 					name,
 					content: await readFile(join(directory, name), 'utf8').catch(() => '<missing>'),
 				})),
 			);
-			await test
-				.info()
-				.attach('alias-debug-io', { body: JSON.stringify(evidence), contentType: 'application/json' });
+			await test.info().attach('alias-debug-io', { body: JSON.stringify(evidence), contentType: 'application/json' });
 			throw error;
 		}
 		const nodeProof = JSON.parse(await readFile(join(directory, 'node-host-proof.json'), 'utf8'));
 		expect(nodeProof).toMatchObject({ network: 'Node network', child: 'Node child', buffer: 'Node Buffer' });
 		const hostPids = [nodeProof.pid, Number(await readFile(join(directory, 'node-bootstrap-pid.txt'), 'utf8'))];
 		expect(hostPids.every(pid => Number.isSafeInteger(pid) && pid > 0)).toBe(true);
-		await expect(
-			page
-				.getByLabel('Notifications', { exact: true })
-				.getByText('Node activation reached Workbench', { exact: true }),
-		).toBeVisible();
-		await expect(
-			page
-				.getByLabel('Notifications', { exact: true })
-				.getByText('Node background reached Workbench', { exact: true }),
-		).toBeVisible();
-		expect(await readFile(join(directory, 'node-startup-proof.txt'), 'utf8')).toBe(
-			'nested activation reached editor API',
-		);
+		await expect(page.getByLabel('Notifications', { exact: true }).getByText('Node activation reached Workbench', { exact: true })).toBeVisible();
+		await expect(page.getByLabel('Notifications', { exact: true }).getByText('Node background reached Workbench', { exact: true })).toBeVisible();
+		expect(await readFile(join(directory, 'node-startup-proof.txt'), 'utf8')).toBe('nested activation reached editor API');
 		expect(JSON.parse(await readFile(join(directory, 'node-localization-proof.json'), 'utf8'))).toEqual({
 			language: 'en',
 			message: 'Target worker',
 			bundle: null,
 			uri: null,
 		});
-		await expect
-			.poll(() => readFile(join(directory, 'node-background-proof.txt'), 'utf8').catch(() => ''))
-			.toBe('picked-1');
+		await expect.poll(() => readFile(join(directory, 'node-background-proof.txt'), 'utf8').catch(() => '')).toBe('picked-1');
 		const result = JSON.parse(await readFile(join(directory, 'alias-debug-result.json'), 'utf8'));
 		expect(result.program.endsWith(join('debugger', 'adapter.cjs'))).toBe(true);
-		expect(result.args).toEqual([
-			join(directory, 'debug-program.js'),
-			join(directory, 'debug-requests.jsonl'),
-			'',
-			'$HOME',
-			'picked-1',
-		]);
+		expect(result.args).toEqual([join(directory, 'debug-program.js'), join(directory, 'debug-requests.jsonl'), '', '$HOME', 'picked-1']);
 		expect(result.runtimeArgs).toEqual(['--no-warnings']);
 		expect(result.buildRuns).toBe(1);
 		await pane.getByRole('button', { name: 'Stop', exact: true }).click();
@@ -2363,11 +2067,7 @@ exports.activate = async context => {
 			)
 			.toEqual({ current: 'none', captured: 'allEditorsInActiveGroup', parent: true, unrelated: false });
 		await settings.press('Escape');
-		await pane
-			.page()
-			.locator('[data-part="sidebar"]')
-			.getByRole('button', { name: 'Start Debugging', exact: true })
-			.click();
+		await pane.page().locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 		await expect(pane.getByRole('status')).toContainText('stopped');
 		const second = JSON.parse(await readFile(join(directory, 'alias-debug-result.json'), 'utf8'));
 		expect(second.args.at(-1)).toBe('picked-2');
@@ -2411,9 +2111,7 @@ exports.activate = async context => {
 		}
 		await workbench.quickaccess.runCommand('acme.debugAlias.bootstrap');
 		await expect
-			.poll(() =>
-				readFile(join(directory, 'node-localization-proof.json'), 'utf8').then(text => JSON.parse(text)),
-			)
+			.poll(() => readFile(join(directory, 'node-localization-proof.json'), 'utf8').then(text => JSON.parse(text)))
 			.toMatchObject({ language: 'zh-CN', message: '目标 worker', bundle: { 'Target {0}': '目标 {0}' } });
 		const translated = JSON.parse(await readFile(join(directory, 'node-localization-proof.json'), 'utf8'));
 		expect(translated.uri).toMatch(/\/l10n\/bundle\.l10n\.zh-cn\.json$/);
@@ -2520,9 +2218,7 @@ exports.activate = function(context) {
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 		await installation.getByRole('textbox').fill('debug-session-options');
-		const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-			installation.getByRole('textbox').press('Enter'),
-		);
+		const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 		expect(installed.message).toContain('Installed acme/debug-session-options 1.0.0');
 		for (const button of ['Enable', 'Grant permissions']) {
 			await manageDebugExtension(application, workbench, 'Debug session options', button);
@@ -2537,9 +2233,7 @@ exports.activate = function(context) {
 		await workbench.quickaccess.runCommand('workbench.action.debug.start');
 		await expect(page.locator('.ash-notification', { hasText: 'DEBUG_HIERARCHY_READY' })).toBeVisible();
 		await workbench.quickaccess.runCommand('workbench.debug.action.focusRepl');
-		const consoleSelection = page.locator(
-			'[data-view-id="workbench.panel.debugConsole"] select[aria-label="Debug Console session"]',
-		);
+		const consoleSelection = page.locator('[data-view-id="workbench.panel.debugConsole"] select[aria-label="Debug Console session"]');
 		await expect(consoleSelection.locator('option')).toHaveCount(1);
 		await expect(consoleSelection).toContainText('Parent');
 		await expect(consoleSelection).toBeHidden();
@@ -2551,10 +2245,7 @@ exports.activate = function(context) {
 		await expression.press('Enter');
 		await expect(output).toContainText('Child_ANSWER');
 		await workbench.quickaccess.runCommand('workbench.action.debug.stop');
-		for (const name of ['Parent', 'Child'])
-			await expect(
-				page.locator('.ash-notification', { hasText: 'DEBUG_HIERARCHY_RELEASE:' + name }),
-			).toBeVisible();
+		for (const name of ['Parent', 'Child']) await expect(page.locator('.ash-notification', { hasText: 'DEBUG_HIERARCHY_RELEASE:' + name })).toBeVisible();
 		await expect(expression).toHaveAttribute('aria-readonly', 'true');
 		await expect(output).toContainText('Child_ANSWER');
 	},
@@ -2644,9 +2335,7 @@ exports.activate = function(context) {
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 		await installation.getByRole('textbox').fill('debug-reverse-start');
-		const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-			installation.getByRole('textbox').press('Enter'),
-		);
+		const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 		expect(installed.message).toContain('Installed acme/debug-reverse 1.0.0');
 		for (const button of ['Enable', 'Grant permissions']) {
 			await manageDebugExtension(application, workbench, 'Debug reverse request', button);
@@ -2663,9 +2352,7 @@ exports.activate = function(context) {
 		await workbench.quickaccess.runCommand('workbench.debug.action.focusRepl');
 		const selection = page.getByRole('combobox', { name: 'Debug Console session', exact: true });
 		await expect(selection.locator('option')).toHaveCount(2);
-		await expect(selection).toHaveValue(
-			(await selection.locator('option', { hasText: 'ReverseChild' }).getAttribute('value')) ?? '',
-		);
+		await expect(selection).toHaveValue((await selection.locator('option', { hasText: 'ReverseChild' }).getAttribute('value')) ?? '');
 		const output = page.getByRole('log', { name: 'Debug Console output', exact: true });
 		await expect(output).toContainText('ReverseChild_OUTPUT');
 		const expression = page.getByRole('textbox', { name: 'Debug Console expression', exact: true });
@@ -2673,12 +2360,8 @@ exports.activate = function(context) {
 		await expression.press('Enter');
 		await expect(output).toContainText('ReverseChild_ANSWER');
 		await workbench.quickaccess.runCommand('workbench.action.debug.stop');
-		await expect(
-			page.locator('.ash-notification', { hasText: 'DEBUG_REVERSE_RELEASE:ReverseChild' }),
-		).toBeVisible();
-		await expect(
-			page.locator('.ash-notification', { hasText: 'DEBUG_REVERSE_RELEASE:ReverseParent' }),
-		).toBeVisible();
+		await expect(page.locator('.ash-notification', { hasText: 'DEBUG_REVERSE_RELEASE:ReverseChild' })).toBeVisible();
+		await expect(page.locator('.ash-notification', { hasText: 'DEBUG_REVERSE_RELEASE:ReverseParent' })).toBeVisible();
 		await expect(expression).toHaveAttribute('aria-readonly', 'true');
 	},
 );
@@ -2728,11 +2411,7 @@ test(
 							label: 'Empty descriptor',
 							debugAdapter: {
 								program: process.execPath,
-								args: [
-									join(directory, 'debug-adapter.cjs'),
-									join(directory, 'debug-program.js'),
-									join(directory, 'debug-requests.jsonl'),
-								],
+								args: [join(directory, 'debug-adapter.cjs'), join(directory, 'debug-program.js'), join(directory, 'debug-requests.jsonl')],
 							},
 						},
 					],
@@ -2740,10 +2419,7 @@ test(
 			}),
 		);
 		const mustNotRun = join(directory, 'task-must-not-run');
-		await writeFile(
-			join(directory, 'task-must-not-run.cjs'),
-			`require('node:fs').writeFileSync(${JSON.stringify(mustNotRun)}, 'started');`,
-		);
+		await writeFile(join(directory, 'task-must-not-run.cjs'), `require('node:fs').writeFileSync(${JSON.stringify(mustNotRun)}, 'started');`);
 		await writeFile(
 			join(directory, '.vscode', 'tasks.json'),
 			JSON.stringify({
@@ -2766,11 +2442,7 @@ test(
 			preLaunchTask: 'Must not run',
 			debugAdapter: {
 				program: process.execPath,
-				args: [
-					join(directory, 'debug-adapter.cjs'),
-					join(directory, 'debug-program.js'),
-					join(directory, 'debug-requests.jsonl'),
-				],
+				args: [join(directory, 'debug-adapter.cjs'), join(directory, 'debug-program.js'), join(directory, 'debug-requests.jsonl')],
 			},
 		};
 		await writeEditorExtensionFixture(
@@ -2832,11 +2504,7 @@ exports.activate = function(context) {
 					label: 'Empty descriptor',
 					debugAdapter: {
 						program: process.execPath,
-						args: [
-							join(directory, 'debug-adapter.cjs'),
-							join(directory, 'debug-program.js'),
-							join(directory, 'debug-requests.jsonl'),
-						],
+						args: [join(directory, 'debug-adapter.cjs'), join(directory, 'debug-program.js'), join(directory, 'debug-requests.jsonl')],
 					},
 				},
 				{ type: 'cancel-provider', label: 'Cancellation provider' },
@@ -2848,9 +2516,7 @@ exports.activate = function(context) {
 			exact: true,
 		});
 		await installation.getByRole('textbox').fill('debug-cancellation');
-		const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-			installation.getByRole('textbox').press('Enter'),
-		);
+		const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 		expect(installed.message).toContain('Installed acme/debug-cancellation 1.0.0');
 		const manage = async (button: string): Promise<void> => {
 			await manageDebugExtension(application, workbench, 'Debug cancellation', button);
@@ -2866,9 +2532,7 @@ exports.activate = function(context) {
 			}),
 		);
 		await workbench.quickaccess.runCommand('workbench.action.debug.start');
-		await expect(
-			workbench.page.locator('.ash-notification', { hasText: 'ASH_DEBUG_CANCELLATION_ACTIVATED' }),
-		).toBeVisible();
+		await expect(workbench.page.locator('.ash-notification', { hasText: 'ASH_DEBUG_CANCELLATION_ACTIVATED' })).toBeVisible();
 		await workbench.quickaccess.open('debug-program.js');
 		await workbench.quickaccess.select('debug-program.js');
 		const group = workbench.editors.groupAt(0);
@@ -2878,9 +2542,7 @@ exports.activate = function(context) {
 			for (const outcome of ['undefined', 'null']) {
 				const name = `${phase}.${outcome}`;
 				await workbench.quickaccess.runCommand('acme.debugCancellation.' + name);
-				await expect(
-					workbench.page.locator('.ash-notification', { hasText: 'ASH_DEBUG_CANCEL_' + name }),
-				).toBeVisible();
+				await expect(workbench.page.locator('.ash-notification', { hasText: 'ASH_DEBUG_CANCEL_' + name })).toBeVisible();
 				const launchTab = group.tabs.filter({ hasText: 'launch.json' });
 				if (outcome === 'null') {
 					await expect(launchTab).toHaveAttribute('aria-selected', 'true');
@@ -2888,10 +2550,7 @@ exports.activate = function(context) {
 					await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
 				} else {
 					await expect(launchTab).toHaveCount(0);
-					await expect(group.tabs.filter({ hasText: 'debug-program.js' })).toHaveAttribute(
-						'aria-selected',
-						'true',
-					);
+					await expect(group.tabs.filter({ hasText: 'debug-program.js' })).toHaveAttribute('aria-selected', 'true');
 				}
 				expect(await readFile(join(directory, 'debug-requests.jsonl'), 'utf8')).toBe('');
 				await expect
@@ -2910,14 +2569,10 @@ exports.activate = function(context) {
 		}
 		for (const outcome of ['undefined', 'null']) {
 			await workbench.quickaccess.runCommand('acme.debugCancellation.descriptor.' + outcome);
-			await expect(
-				workbench.page.locator('.ash-notification', { hasText: 'ASH_DEBUG_EMPTY_DESCRIPTOR_' + outcome }),
-			).toBeVisible();
+			await expect(workbench.page.locator('.ash-notification', { hasText: 'ASH_DEBUG_EMPTY_DESCRIPTOR_' + outcome })).toBeVisible();
 		}
 		await workbench.quickaccess.runCommand('acme.debugCancellation.error');
-		await expect(
-			workbench.page.locator('.ash-notification', { hasText: 'ASH_DEBUG_ERROR_RECOVERED' }),
-		).toBeVisible();
+		await expect(workbench.page.locator('.ash-notification', { hasText: 'ASH_DEBUG_ERROR_RECOVERED' })).toBeVisible();
 		expect(await readFile(join(directory, 'debug-requests.jsonl'), 'utf8')).toBe('');
 		await expect
 			.poll(async () => {
@@ -3010,19 +2665,12 @@ developerEnvironmentTest(
 			.trim()
 			.split('\n')
 			.map(line => JSON.parse(line));
-		expect(requests.find(request => request.command === 'launch').arguments.developerCredential).toBe(
-			'ash-synthetic-developer-key',
-		);
+		expect(requests.find(request => request.command === 'launch').arguments.developerCredential).toBe('ash-synthetic-developer-key');
 	},
 );
 
 /** Exercise the retained details editor; only permission review and uninstall use dialogs. */
-async function manageDebugExtension(
-	application: PlaywrightApplication,
-	workbench: Workbench,
-	label: string,
-	action: string,
-): Promise<void> {
+async function manageDebugExtension(application: PlaywrightApplication, workbench: Workbench, label: string, action: string): Promise<void> {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
 	const search = page.getByRole('searchbox', { name: 'Search extensions', exact: true });
@@ -3034,22 +2682,13 @@ async function manageDebugExtension(
 		.filter({ has: page.getByText(label, { exact: true }) })
 		.click();
 	await plugins.press('Enter');
-	const editor = page
-		.locator('.ash-extension-editor')
-		.filter({ has: page.getByRole('heading', { name: label, exact: true }) });
+	const editor = page.locator('.ash-extension-editor').filter({ has: page.getByRole('heading', { name: label, exact: true }) });
 	const click = () => editor.getByRole('button', { name: action, exact: true }).click();
 	if (action === 'Enable' || action === 'Disable') {
 		await click();
-		await expect(
-			editor.getByRole('button', { name: action === 'Enable' ? 'Disable' : 'Enable', exact: true }),
-		).toBeEnabled();
+		await expect(editor.getByRole('button', { name: action === 'Enable' ? 'Disable' : 'Enable', exact: true })).toBeEnabled();
 	} else {
-		await workbench.dialogs.confirm(
-			application,
-			action === 'Uninstall' ? 'Uninstall extension' : label,
-			action,
-			click,
-		);
+		await workbench.dialogs.confirm(application, action === 'Uninstall' ? 'Uninstall extension' : label, action, click);
 		if (action === 'Uninstall') await expect(editor.getByRole('status')).toHaveText('Uninstalled');
 		else
 			await expect(
@@ -3070,10 +2709,7 @@ test(
 				ashWebWorkbenchHost?: { workspace: { id: string } };
 				ash?: { ipcRenderer: { invoke(channel: string): Promise<{ id: string }> } };
 			};
-			return (
-				host.ashWebWorkbenchHost?.workspace.id ??
-				(await host.ash!.ipcRenderer.invoke('ash:workspace:context:read')).id
-			);
+			return host.ashWebWorkbenchHost?.workspace.id ?? (await host.ash!.ipcRenderer.invoke('ash:workspace:context:read')).id;
 		});
 		const identity = { scope: StorageScope.WORKSPACE, id: workspaceId };
 		const source = pathToFileURL(join(testWorkspace.directory, 'debug-program.js')).toString();
@@ -3087,20 +2723,12 @@ test(
 			seedStorageOnNextLoad(application, workbench.page, identity, {
 				'memento/debug.workspace': { value: legacy, target: StorageTarget.USER },
 			});
-		const profile =
-			webAppServer?.profileDirectory ??
-			('windows' in application
-				? join(await application.evaluate(({ app }) => app.getPath('userData')), 'profile')
-				: undefined);
+		const profile = webAppServer?.profileDirectory ?? ('windows' in application ? join(await application.evaluate(({ app }) => app.getPath('userData')), 'profile') : undefined);
 		if (!profile) throw new Error('Debug persistence acceptance requires its App Server profile');
-		const saved = ():
-			| { breakpoints: { id: string; enabled: boolean; condition?: string }[]; watchExpressions: string[] }
-			| undefined => {
+		const saved = (): { breakpoints: { id: string; enabled: boolean; condition?: string }[]; watchExpressions: string[] } | undefined => {
 			const database = new DatabaseSync(join(profile, 'state.sqlite3'), { readOnly: true });
 			try {
-				const record = database
-					.prepare('SELECT document FROM debug_workspaces WHERE workspace_id = ?')
-					.get(workspaceId) as { document: string } | undefined;
+				const record = database.prepare('SELECT document FROM debug_workspaces WHERE workspace_id = ?').get(workspaceId) as { document: string } | undefined;
 				return record ? JSON.parse(record.document) : undefined;
 			} finally {
 				database.close();
@@ -3116,19 +2744,10 @@ test(
 			return pane;
 		};
 		let pane = await open();
-		await expect(
-			pane.locator('.ash-debug-breakpoints > li').filter({ hasText: 'debug-program.js:2' }),
-		).toBeVisible();
+		await expect(pane.locator('.ash-debug-breakpoints > li').filter({ hasText: 'debug-program.js:2' })).toBeVisible();
 		await expect.poll(() => saved()?.watchExpressions).toEqual(['answer']);
-		await expect
-			.poll(
-				async () =>
-					(await readStorageEntries(application, workbench.page, identity))['memento/debug.workspace'],
-			)
-			.toBeUndefined();
-		expect(saved()?.breakpoints).toEqual([
-			{ id: `${source}:2`, enabled: false, condition: 'answer > 0', resource: source, lineNumber: 2 },
-		]);
+		await expect.poll(async () => (await readStorageEntries(application, workbench.page, identity))['memento/debug.workspace']).toBeUndefined();
+		expect(saved()?.breakpoints).toEqual([{ id: `${source}:2`, enabled: false, condition: 'answer > 0', resource: source, lineNumber: 2 }]);
 		await pane.getByRole('button', { name: 'Watch', exact: true }).hover();
 		await pane.getByRole('button', { name: 'Add watch expression', exact: true }).click();
 		await pane.getByRole('textbox', { name: 'Add watch expression', exact: true }).fill('answer + 1');
@@ -3139,23 +2758,12 @@ test(
 		({ application, workbench } = await reloadWorkbench());
 		pane = await open();
 		await expect(pane.locator('.ash-debug-watch-value')).toHaveCount(2);
-		await expect
-			.poll(
-				async () =>
-					(await readStorageEntries(application, workbench.page, identity))['memento/debug.workspace'],
-			)
-			.toBeUndefined();
+		await expect.poll(async () => (await readStorageEntries(application, workbench.page, identity))['memento/debug.workspace']).toBeUndefined();
 		expect(saved()?.watchExpressions).toEqual(['answer', 'answer + 1']);
-		await pane
-			.locator('.ash-debug-breakpoints > li')
-			.filter({ hasText: 'debug-program.js:2' })
-			.getByRole('button', { name: 'Remove breakpoint', exact: true })
-			.click();
+		await pane.locator('.ash-debug-breakpoints > li').filter({ hasText: 'debug-program.js:2' }).getByRole('button', { name: 'Remove breakpoint', exact: true }).click();
 		await pane.locator('.ash-debug-watch-remove').first().click();
 		await pane.locator('.ash-debug-watch-remove').first().click();
-		await expect
-			.poll(() => ({ points: saved()?.breakpoints, watches: saved()?.watchExpressions }))
-			.toEqual({ points: [], watches: [] });
+		await expect.poll(() => ({ points: saved()?.breakpoints, watches: saved()?.watchExpressions })).toEqual({ points: [], watches: [] });
 		({ application, workbench } = await reloadWorkbench());
 		pane = await open();
 		await expect(pane.locator('.ash-debug-breakpoints > li')).toHaveCount(0);
@@ -3163,104 +2771,92 @@ test(
 	},
 );
 
-test(
-	'Debug live exception filters and structured output are owned by Rust',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ workbench, testWorkspace }) => {
-		const directory = testWorkspace.directory;
-		const stopped = "event('stopped', { reason: 'breakpoint', threadId: 7, allThreadsStopped: true });";
-		const peer = adapter
-			.replace(
-				'supportsConfigurationDoneRequest: true,',
-				"supportsConfigurationDoneRequest: true, exceptionBreakpointFilters: [{filter:'uncaught',label:'Uncaught',default:true},{filter:'caught',label:'Caught',default:false}],",
-			)
-			.replace(
-				'let success = true;',
-				"let success = !(request.command === 'setExceptionBreakpoints' && args.filters.includes('caught'));",
-			)
-			.replace(
-				"message: 'Value must be numeric.'",
-				"message: request.command === 'setExceptionBreakpoints' ? 'Filter refused.' : 'Value must be numeric.'",
-			)
-			.replace(
-				stopped,
-				stopped +
-					String.raw`
+test('Debug live exception filters and structured output are owned by Rust', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+	const directory = testWorkspace.directory;
+	const stopped = "event('stopped', { reason: 'breakpoint', threadId: 7, allThreadsStopped: true });";
+	const peer = adapter
+		.replace(
+			'supportsConfigurationDoneRequest: true,',
+			"supportsConfigurationDoneRequest: true, exceptionBreakpointFilters: [{filter:'uncaught',label:'Uncaught',default:true},{filter:'caught',label:'Caught',default:false}],",
+		)
+		.replace('let success = true;', "let success = !(request.command === 'setExceptionBreakpoints' && args.filters.includes('caught'));")
+		.replace("message: 'Value must be numeric.'", "message: request.command === 'setExceptionBreakpoints' ? 'Filter refused.' : 'Value must be numeric.'")
+		.replace(
+			stopped,
+			stopped +
+				String.raw`
     event('output', {group:'startCollapsed',output:'RUST_GROUP\n'});
     event('output', {category:'stderr',output:'RUST_OBJECT',variablesReference:20,source:{name:'debug-program.js',path:source},line:2,column:1,data:{owner:'rust'}});
     event('output', {group:'end'});
     event('output', {output:'part '});
     event('output', {output:'line\n'});
 `,
-			);
-		await writeFile(join(directory, 'debug-adapter.cjs'), peer);
-		const page = workbench.page;
-		await workbench.quickaccess.runCommand('workbench.action.debug.start');
-		const pane = page.locator('[data-view-container-id="ash.debug"]');
-		await expect(pane.getByRole('status')).toContainText('stopped');
-		const uncaught = pane.getByRole('checkbox', { name: 'Uncaught', exact: true });
-		const caught = pane.getByRole('checkbox', { name: 'Caught', exact: true });
-		const selections = async () =>
-			(await readFile(join(directory, 'debug-requests.jsonl'), 'utf8'))
-				.trim()
-				.split('\n')
-				.map(line => JSON.parse(line) as { command: string; arguments?: { filters?: string[] } })
-				.filter(request => request.command === 'setExceptionBreakpoints');
-		await expect(uncaught).toBeChecked();
-		await uncaught.uncheck();
-		await expect.poll(async () => (await selections()).at(-1)?.arguments?.filters).toEqual([]);
-		await expect(uncaught).not.toBeChecked();
-		await caught.check();
-		await expect(page.getByRole('region', { name: 'Notifications', exact: true })).toContainText('Filter refused.');
-		await expect(caught).not.toBeChecked();
-		await expect(pane.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
-		await uncaught.check();
-		await expect.poll(async () => (await selections()).at(-1)?.arguments?.filters).toEqual(['uncaught']);
-		await expect(uncaught).toBeChecked();
-		await workbench.quickaccess.runCommand('workbench.debug.action.focusRepl');
-		const output = page.getByRole('log', { name: 'Debug Console output', exact: true });
-		const tree = output.getByRole('tree', { name: 'Debug Console output', exact: true });
-		const group = output.getByRole('treeitem').filter({ hasText: 'RUST_GROUP' });
-		await expect(group).toBeVisible();
-		await group.locator('.ash-tree-twistie').click();
-		await expect(group).toHaveAttribute('aria-expanded', 'true');
-		await tree.press('ArrowLeft');
-		await expect(group).toHaveAttribute('aria-expanded', 'false');
-		await tree.press('ArrowRight');
-		const object = output.getByRole('treeitem').filter({ hasText: 'RUST_OBJECT' });
-		await object.locator('.ash-tree-twistie').click();
-		await expect(object).toHaveAttribute('aria-expanded', 'true');
-		await expect(output).toContainText('child: 1');
-		await expect(output).toContainText('"owner": "rust"');
-		const source = output.getByRole('button', { name: 'debug-program.js:2', exact: true });
-		await source.focus();
-		await source.press('Enter');
-		await workbench.editors
-			.groupAt(0)
-			.editor.waitForEditorContents(content => content.includes('console.log(answer)'));
-		const joinedLine = output.locator('.ash-repl-entry').filter({ hasText: /^part line/ });
-		await expect(joinedLine).toBeVisible();
-		const chunkTops = await joinedLine.evaluate(element => {
-			const text = document.createTreeWalker(element, NodeFilter.SHOW_TEXT).nextNode()!;
-			const range = document.createRange();
-			range.setStart(text, 0);
-			range.setEnd(text, 4);
-			const first = range.getBoundingClientRect().top;
-			range.setStart(text, 5);
-			range.setEnd(text, 9);
-			return [first, range.getBoundingClientRect().top];
-		});
-		expect(chunkTops[0]).toBe(chunkTops[1]);
-		await uncaught.uncheck();
-		await expect.poll(async () => (await selections()).at(-1)?.arguments?.filters).toEqual([]);
-		await workbench.quickaccess.runCommand('workbench.action.debug.stop');
-		await workbench.quickaccess.runCommand('workbench.action.debug.start');
-		await expect(pane.getByRole('status')).toContainText('stopped');
-		await expect(uncaught).not.toBeChecked();
-		await expect.poll(async () => (await selections()).at(-1)?.arguments?.filters).toEqual([]);
-		await workbench.quickaccess.runCommand('workbench.action.debug.stop');
-	},
-);
+		);
+	await writeFile(join(directory, 'debug-adapter.cjs'), peer);
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.debug.start');
+	const pane = page.locator('[data-view-container-id="ash.debug"]');
+	await expect(pane.getByRole('status')).toContainText('stopped');
+	const uncaught = pane.getByRole('checkbox', { name: 'Uncaught', exact: true });
+	const caught = pane.getByRole('checkbox', { name: 'Caught', exact: true });
+	const selections = async () =>
+		(await readFile(join(directory, 'debug-requests.jsonl'), 'utf8'))
+			.trim()
+			.split('\n')
+			.map(line => JSON.parse(line) as { command: string; arguments?: { filters?: string[] } })
+			.filter(request => request.command === 'setExceptionBreakpoints');
+	await expect(uncaught).toBeChecked();
+	await uncaught.uncheck();
+	await expect.poll(async () => (await selections()).at(-1)?.arguments?.filters).toEqual([]);
+	await expect(uncaught).not.toBeChecked();
+	await caught.check();
+	await expect(page.getByRole('region', { name: 'Notifications', exact: true })).toContainText('Filter refused.');
+	await expect(caught).not.toBeChecked();
+	await expect(pane.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
+	await uncaught.check();
+	await expect.poll(async () => (await selections()).at(-1)?.arguments?.filters).toEqual(['uncaught']);
+	await expect(uncaught).toBeChecked();
+	await workbench.quickaccess.runCommand('workbench.debug.action.focusRepl');
+	const output = page.getByRole('log', { name: 'Debug Console output', exact: true });
+	const tree = output.getByRole('tree', { name: 'Debug Console output', exact: true });
+	const group = output.getByRole('treeitem').filter({ hasText: 'RUST_GROUP' });
+	await expect(group).toBeVisible();
+	await group.locator('.ash-tree-twistie').click();
+	await expect(group).toHaveAttribute('aria-expanded', 'true');
+	await tree.press('ArrowLeft');
+	await expect(group).toHaveAttribute('aria-expanded', 'false');
+	await tree.press('ArrowRight');
+	const object = output.getByRole('treeitem').filter({ hasText: 'RUST_OBJECT' });
+	await object.locator('.ash-tree-twistie').click();
+	await expect(object).toHaveAttribute('aria-expanded', 'true');
+	await expect(output).toContainText('child: 1');
+	await expect(output).toContainText('"owner": "rust"');
+	const source = output.getByRole('button', { name: 'debug-program.js:2', exact: true });
+	await source.focus();
+	await source.press('Enter');
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(content => content.includes('console.log(answer)'));
+	const joinedLine = output.locator('.ash-repl-entry').filter({ hasText: /^part line/ });
+	await expect(joinedLine).toBeVisible();
+	const chunkTops = await joinedLine.evaluate(element => {
+		const text = document.createTreeWalker(element, NodeFilter.SHOW_TEXT).nextNode()!;
+		const range = document.createRange();
+		range.setStart(text, 0);
+		range.setEnd(text, 4);
+		const first = range.getBoundingClientRect().top;
+		range.setStart(text, 5);
+		range.setEnd(text, 9);
+		return [first, range.getBoundingClientRect().top];
+	});
+	expect(chunkTops[0]).toBe(chunkTops[1]);
+	await uncaught.uncheck();
+	await expect.poll(async () => (await selections()).at(-1)?.arguments?.filters).toEqual([]);
+	await workbench.quickaccess.runCommand('workbench.action.debug.stop');
+	await workbench.quickaccess.runCommand('workbench.action.debug.start');
+	await expect(pane.getByRole('status')).toContainText('stopped');
+	await expect(uncaught).not.toBeChecked();
+	await expect.poll(async () => (await selections()).at(-1)?.arguments?.filters).toEqual([]);
+	await workbench.quickaccess.runCommand('workbench.action.debug.stop');
+});
 
 test(
 	'Debug Console filters, workspace history and DAP completions use the production owners',
@@ -3301,10 +2897,7 @@ test(
 				);
 		const page = workbench.page;
 		await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
-		await page
-			.locator('[data-part="sidebar"]')
-			.getByRole('button', { name: 'Start Debugging', exact: true })
-			.click();
+		await page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 		const pane = page.locator('[data-view-container-id="ash.debug"]');
 		await expect(pane.getByRole('status')).toContainText('stopped');
 		await pane.getByRole('button', { name: 'main debug-program.js:2', exact: true }).click();
@@ -3327,24 +2920,11 @@ test(
 		await input.press('ArrowDown');
 		await input.press('Enter');
 		await expectReplInput(input, 'answer');
-		expect(
-			(await requests()).filter(
-				request => request.command === 'evaluate' && request.arguments?.context === 'repl',
-			),
-		).toEqual([]);
-		expect((await requests()).filter(request => request.command === 'completions').at(-1)?.arguments).toMatchObject(
-			{ text: 'an', column: 3, line: 1, frameId: 11 },
-		);
+		expect((await requests()).filter(request => request.command === 'evaluate' && request.arguments?.context === 'repl')).toEqual([]);
+		expect((await requests()).filter(request => request.command === 'completions').at(-1)?.arguments).toMatchObject({ text: 'an', column: 3, line: 1, frameId: 11 });
 		await input.press('Enter');
 		await expect(output).toContainText('42');
-		await expect
-			.poll(
-				async () =>
-					(await requests())
-						.filter(request => request.command === 'evaluate' && request.arguments?.context === 'repl')
-						.at(-1)?.arguments?.frameId,
-			)
-			.toBe(11);
+		await expect.poll(async () => (await requests()).filter(request => request.command === 'evaluate' && request.arguments?.context === 'repl').at(-1)?.arguments?.frameId).toBe(11);
 		await fillReplInput(input, 'draft');
 		await input.press('ArrowUp');
 		await expectReplInput(input, 'answer');
@@ -3356,13 +2936,9 @@ test(
 		const resumed = await reloadWorkbench();
 		const restoredDebugPane = resumed.workbench.page.locator('[data-view-container-id="ash.debug"]');
 		// The selected activity tab toggles a restored sidebar closed when clicked again.
-		if (!(await restoredDebugPane.isVisible()))
-			await resumed.workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+		if (!(await restoredDebugPane.isVisible())) await resumed.workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 		await expect(restoredDebugPane).toBeVisible();
-		await resumed.workbench.page
-			.locator('[data-part="sidebar"]')
-			.getByRole('button', { name: 'Start Debugging', exact: true })
-			.click();
+		await resumed.workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 		await expect(restoredDebugPane.getByRole('status')).toContainText('stopped');
 		await restoredDebugPane.getByRole('button', { name: 'main debug-program.js:2', exact: true }).click();
 		await resumed.workbench.quickaccess.runCommand('workbench.debug.action.focusRepl');
@@ -3391,12 +2967,7 @@ test(
 		expect(multiline).toMatchObject({ text: 'answer +\n😀an', line: 2, column: 5, frameId: 11 });
 		await restoredInput.press('Enter');
 		await expect
-			.poll(
-				async () =>
-					(await requests())
-						.filter(request => request.command === 'evaluate' && request.arguments?.context === 'repl')
-						.at(-1)?.arguments,
-			)
+			.poll(async () => (await requests()).filter(request => request.command === 'evaluate' && request.arguments?.context === 'repl').at(-1)?.arguments)
 			.toMatchObject({ expression: 'answer +\nanswer', frameId: 11 });
 		await resumed.workbench.quickaccess.runCommand('workbench.action.debug.stop');
 	},
@@ -3405,178 +2976,146 @@ test(
 // The disposable SSH host runs on this machine, but has a separate profile,
 // transport and backend process. This exercises Remote routing without relying
 // on a developer's SSH configuration or another machine's availability.
-test(
-	'SSH Desktop Debug routes inspection and multiline REPL through the remote Rust owner',
-	{ tag: ['@electron-app-server', '@darwin'] },
-	async ({ testWorkspace }, testInfo) => {
-		test.setTimeout(180_000);
-		const packageRoot = developmentAshPackagePath(process.env.ASH_SMOKE_DESKTOP_DIRECTORY ?? resolve('.'));
-		const fixture = await createSshFixture(join(packageRoot, 'bin/ash-app-server-daemon'));
-		const directory = testWorkspace.directory;
-		const ownership = join(directory, 'remote-debug-owner.json');
-		await writeFile(
-			join(directory, 'debug-adapter.cjs'),
-			`require('node:fs').writeFileSync(${JSON.stringify(ownership)}, JSON.stringify({ pid: process.pid, profile: process.env.ASH_HOME }));\n` +
-				adapter,
-		);
-		let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
-		try {
-			desktop = await launchElectron({
-				appServerMode: 'required',
-				userDataDirectory: join(fixture.root, 'desktop'),
-				workspaceDirectory: directory,
-				workspacePermissions: 'development',
-				startupTimeout: 60_000,
-				extraArgs: [`--remote-ssh=${fixture.host}`],
-				environment: {
-					...process.env,
-					ASH_SSH_PATH: fixture.ssh,
-					ASH_REMOTE_ASH_PATH: join(packageRoot, 'bin/ash-remote-server'),
-				},
-			});
-			const { workbench } = desktop.driver;
-			const page = workbench.page;
-			await page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
-			await expect(page.locator('[data-statusbar-item-id="ash.status.remote"]')).toHaveAttribute(
-				'aria-label',
-				`Remote connection to SSH host ${fixture.host} is ready`,
-			);
-			await workbench.quickaccess.runCommand('workbench.action.debug.start');
-			const pane = page.locator('[data-view-container-id="ash.debug"]');
-			await expect(pane.getByRole('status')).toContainText('stopped');
-			await expect(pane.locator('.ash-debug-variables')).toContainText('answer = 42');
-			await expect(pane.locator('.ash-debug-variables')).toContainText('object = Object');
-			await pane.getByRole('button', { name: 'main debug-program.js:2', exact: true }).click();
-			const owner = JSON.parse(await readFile(ownership, 'utf8')) as { pid: number; profile: string };
-			expect(await realpath(owner.profile)).toBe(await realpath(join(fixture.root, 'remote-profile')));
-			expect(() => process.kill(owner.pid, 0)).not.toThrow();
-			await workbench.quickaccess.runCommand('workbench.debug.action.focusRepl');
-			const input = page.getByRole('textbox', { name: 'Debug Console expression', exact: true });
-			await fillReplInput(input, 'answer +');
-			await input.press('Shift+Enter');
-			await page.keyboard.insertText('1');
-			await expectReplInput(input, 'answer +\n1');
-			await input.press('Enter');
-			await expect(page.getByRole('log', { name: 'Debug Console output', exact: true })).toContainText('42');
-			const sourceLink = page
-				.getByRole('log', { name: 'Debug Console output', exact: true })
-				.getByRole('link', { name: /debug-program\.js:3:1$/ });
-			await expect(sourceLink).toBeVisible();
-			await sourceLink.press('Enter');
-			await expect(page.locator('[data-statusbar-item-id="ash.status.editor.cursor"]')).toContainText(
-				'Ln 3, Col 1',
-			);
-			const requests = () =>
-				readFile(join(directory, 'debug-requests.jsonl'), 'utf8').then(text =>
-					text
-						.trim()
-						.split('\n')
-						.map(
-							line =>
-								JSON.parse(line) as {
-									command: string;
-									arguments?: { expression?: string; context?: string; frameId?: number };
-								},
-						),
-				);
-			await expect
-				.poll(
-					async () =>
-						(await requests())
-							.filter(request => request.command === 'evaluate' && request.arguments?.context === 'repl')
-							.at(-1)?.arguments,
-				)
-				.toMatchObject({ expression: 'answer +\n1', frameId: 11 });
-			await workbench.quickaccess.runCommand('workbench.action.debug.stop');
-			await expect(input).toHaveAttribute('aria-readonly', 'true');
-			await expect
-				.poll(() => {
-					try {
-						process.kill(owner.pid, 0);
-						return false;
-					} catch {
-						return true;
-					}
-				})
-				.toBe(true);
-			await testInfo.attach('remote-debug-owner', {
-				body: JSON.stringify({ ...owner, adapterReclaimed: true, multilineFrame: 11 }),
-				contentType: 'application/json',
-			});
-		} finally {
-			try {
-				if (desktop) {
-					try {
-						const path = testInfo.outputPath('trace.zip');
-						await desktop.driver.workbench.page.context().tracing.stop({ path });
-						await testInfo.attach('trace', { path, contentType: 'application/zip' });
-					} finally {
-						await desktop.close();
-					}
-				}
-			} finally {
-				await fixture.close();
-			}
-		}
-	},
-);
-
-test(
-	'Debug Console text file links locate real source and retain the originating resource after stop',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ workbench }) => {
+test('SSH Desktop Debug routes inspection and multiline REPL through the remote Rust owner', { tag: ['@electron-app-server', '@darwin'] }, async ({ testWorkspace }, testInfo) => {
+	test.setTimeout(180_000);
+	const packageRoot = developmentAshPackagePath(process.env.ASH_SMOKE_DESKTOP_DIRECTORY ?? resolve('.'));
+	const fixture = await createSshFixture(join(packageRoot, 'bin/ash-app-server-daemon'));
+	const directory = testWorkspace.directory;
+	const ownership = join(directory, 'remote-debug-owner.json');
+	await writeFile(
+		join(directory, 'debug-adapter.cjs'),
+		`require('node:fs').writeFileSync(${JSON.stringify(ownership)}, JSON.stringify({ pid: process.pid, profile: process.env.ASH_HOME }));\n` + adapter,
+	);
+	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
+	try {
+		desktop = await launchElectron({
+			appServerMode: 'required',
+			userDataDirectory: join(fixture.root, 'desktop'),
+			workspaceDirectory: directory,
+			workspacePermissions: 'development',
+			startupTimeout: 60_000,
+			extraArgs: [`--remote-ssh=${fixture.host}`],
+			environment: {
+				...process.env,
+				ASH_SSH_PATH: fixture.ssh,
+				ASH_REMOTE_ASH_PATH: join(packageRoot, 'bin/ash-remote-server'),
+			},
+		});
+		const { workbench } = desktop.driver;
 		const page = workbench.page;
+		await page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
+		await expect(page.locator('[data-statusbar-item-id="ash.status.remote"]')).toHaveAttribute('aria-label', `Remote connection to SSH host ${fixture.host} is ready`);
 		await workbench.quickaccess.runCommand('workbench.action.debug.start');
-		await expect(page.locator('[data-view-container-id="ash.debug"]').getByRole('status')).toContainText('stopped');
+		const pane = page.locator('[data-view-container-id="ash.debug"]');
+		await expect(pane.getByRole('status')).toContainText('stopped');
+		await expect(pane.locator('.ash-debug-variables')).toContainText('answer = 42');
+		await expect(pane.locator('.ash-debug-variables')).toContainText('object = Object');
+		await pane.getByRole('button', { name: 'main debug-program.js:2', exact: true }).click();
+		const owner = JSON.parse(await readFile(ownership, 'utf8')) as { pid: number; profile: string };
+		expect(await realpath(owner.profile)).toBe(await realpath(join(fixture.root, 'remote-profile')));
+		expect(() => process.kill(owner.pid, 0)).not.toThrow();
 		await workbench.quickaccess.runCommand('workbench.debug.action.focusRepl');
-		const output = page.getByRole('log', { name: 'Debug Console output', exact: true });
-		const link = output.getByRole('link', { name: /debug-program\.js:3:1$/ });
-		await expect(output).toContainText('ANSI smoke');
-		await expect(output.locator('.ash-debug-ansi').filter({ hasText: /^ANSI smoke$/ })).toBeVisible();
-		await expect(link).toBeVisible();
-		await link.press('Enter');
-		await expect(page.getByRole('tab', { name: 'debug-program.js', exact: true, selected: true })).toBeVisible();
+		const input = page.getByRole('textbox', { name: 'Debug Console expression', exact: true });
+		await fillReplInput(input, 'answer +');
+		await input.press('Shift+Enter');
+		await page.keyboard.insertText('1');
+		await expectReplInput(input, 'answer +\n1');
+		await input.press('Enter');
+		await expect(page.getByRole('log', { name: 'Debug Console output', exact: true })).toContainText('42');
+		const sourceLink = page.getByRole('log', { name: 'Debug Console output', exact: true }).getByRole('link', { name: /debug-program\.js:3:1$/ });
+		await expect(sourceLink).toBeVisible();
+		await sourceLink.press('Enter');
 		await expect(page.locator('[data-statusbar-item-id="ash.status.editor.cursor"]')).toContainText('Ln 3, Col 1');
-		await expect(page.locator('.stanza-editor .ash-debug-stack-frame')).toHaveCount(1);
+		const requests = () =>
+			readFile(join(directory, 'debug-requests.jsonl'), 'utf8').then(text =>
+				text
+					.trim()
+					.split('\n')
+					.map(
+						line =>
+							JSON.parse(line) as {
+								command: string;
+								arguments?: { expression?: string; context?: string; frameId?: number };
+							},
+					),
+			);
+		await expect
+			.poll(async () => (await requests()).filter(request => request.command === 'evaluate' && request.arguments?.context === 'repl').at(-1)?.arguments)
+			.toMatchObject({ expression: 'answer +\n1', frameId: 11 });
 		await workbench.quickaccess.runCommand('workbench.action.debug.stop');
-		await expect(page.locator('.stanza-editor .ash-debug-stack-frame')).toHaveCount(0);
-		await expect(link).toBeVisible();
-		await link.press('Enter');
-		await expect(page.locator('[data-statusbar-item-id="ash.status.editor.cursor"]')).toContainText('Ln 3, Col 1');
-		await workbench.quickaccess.runCommand('workbench.debug.panel.action.clearReplAction');
-		await expect(output.getByRole('link')).toHaveCount(0);
-	},
-);
+		await expect(input).toHaveAttribute('aria-readonly', 'true');
+		await expect
+			.poll(() => {
+				try {
+					process.kill(owner.pid, 0);
+					return false;
+				} catch {
+					return true;
+				}
+			})
+			.toBe(true);
+		await testInfo.attach('remote-debug-owner', {
+			body: JSON.stringify({ ...owner, adapterReclaimed: true, multilineFrame: 11 }),
+			contentType: 'application/json',
+		});
+	} finally {
+		try {
+			if (desktop) {
+				try {
+					const path = testInfo.outputPath('trace.zip');
+					await desktop.driver.workbench.page.context().tracing.stop({ path });
+					await testInfo.attach('trace', { path, contentType: 'application/zip' });
+				} finally {
+					await desktop.close();
+				}
+			}
+		} finally {
+			await fixture.close();
+		}
+	}
+});
+
+test('Debug Console text file links locate real source and retain the originating resource after stop', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.debug.start');
+	await expect(page.locator('[data-view-container-id="ash.debug"]').getByRole('status')).toContainText('stopped');
+	await workbench.quickaccess.runCommand('workbench.debug.action.focusRepl');
+	const output = page.getByRole('log', { name: 'Debug Console output', exact: true });
+	const link = output.getByRole('link', { name: /debug-program\.js:3:1$/ });
+	await expect(output).toContainText('ANSI smoke');
+	await expect(output.locator('.ash-debug-ansi').filter({ hasText: /^ANSI smoke$/ })).toBeVisible();
+	await expect(link).toBeVisible();
+	await link.press('Enter');
+	await expect(page.getByRole('tab', { name: 'debug-program.js', exact: true, selected: true })).toBeVisible();
+	await expect(page.locator('[data-statusbar-item-id="ash.status.editor.cursor"]')).toContainText('Ln 3, Col 1');
+	await expect(page.locator('.stanza-editor .ash-debug-stack-frame')).toHaveCount(1);
+	await workbench.quickaccess.runCommand('workbench.action.debug.stop');
+	await expect(page.locator('.stanza-editor .ash-debug-stack-frame')).toHaveCount(0);
+	await expect(link).toBeVisible();
+	await link.press('Enter');
+	await expect(page.locator('[data-statusbar-item-id="ash.status.editor.cursor"]')).toContainText('Ln 3, Col 1');
+	await workbench.quickaccess.runCommand('workbench.debug.panel.action.clearReplAction');
+	await expect(output.getByRole('link')).toHaveCount(0);
+});
 
 test(
 	'hidden Call Stack survives reload while service-owned source navigation follows real pauses',
 	{ tag: ['@browser-app-server', '@electron-app-server'] },
 	async ({ application, workbench, reloadWorkbench }) => {
-		if (!(await workbench.page.locator('[data-view-container-id="ash.debug"]').isVisible()))
-			await workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
-		await expect(
-			workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ }),
-		).toContainText('Debug smoke');
-		const openViews = () =>
-			workbench.page
-				.locator('[data-part="sidebar"] .ash-pane-composite-title')
-				.getByRole('button', { name: 'More Actions', exact: true })
-				.click();
+		if (!(await workbench.page.locator('[data-view-container-id="ash.debug"]').isVisible())) await workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+		await expect(workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ })).toContainText('Debug smoke');
+		const openViews = () => workbench.page.locator('[data-part="sidebar"] .ash-pane-composite-title').getByRole('button', { name: 'More Actions', exact: true }).click();
 		const items = await workbench.menus.inspect(application, openViews);
 		const path = items.some(item => item.label === 'Call Stack') ? ['Call Stack'] : ['Views', 'Call Stack'];
 		await workbench.menus.select(application, openViews, path);
 		await expect(workbench.page.locator('[data-view-id="workbench.debug.callStackView"]')).toHaveCount(0);
 		({ application, workbench } = await reloadWorkbench());
 		const page = workbench.page;
-		if (!(await page.locator('[data-view-container-id="ash.debug"]').isVisible()))
-			await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+		if (!(await page.locator('[data-view-container-id="ash.debug"]').isVisible())) await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 		const pane = page.locator('[data-view-container-id="ash.debug"]');
 		await expect(pane).toBeVisible();
 		await expect(pane.locator('[data-view-id="workbench.debug.callStackView"]')).toHaveCount(0);
-		await page
-			.locator('[data-part="sidebar"]')
-			.getByRole('button', { name: 'Start Debugging', exact: true })
-			.click();
+		await page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 		await expect(pane.getByRole('status')).toContainText('stopped');
 		await expect(pane.locator('.ash-debug-variables')).toContainText('answer = 42');
 		const editor = workbench.editors.groupAt(0).editor;
@@ -3591,157 +3130,130 @@ test(
 		await workbench.quickaccess.runCommand('workbench.debug.action.focusCallStackView');
 		await expect(pane.locator('[data-view-id="workbench.debug.callStackView"]')).toBeVisible();
 		({ application, workbench } = await reloadWorkbench());
-		if (!(await workbench.page.locator('[data-view-container-id="ash.debug"]').isVisible()))
-			await workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+		if (!(await workbench.page.locator('[data-view-container-id="ash.debug"]').isVisible())) await workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 		await expect(workbench.page.locator('[data-view-id="workbench.debug.callStackView"]')).toBeVisible();
 	},
 );
 
-test(
-	'Debug memory, loaded scripts and exception details use the real Desktop inspection ports',
-	{ tag: ['@electron-app-server'] },
-	async ({ workbench, testWorkspace }) => {
-		const directory = testWorkspace.directory;
-		const script = adapter
-			.replace(
-				'supportsConfigurationDoneRequest: true,',
-				'supportsReadMemoryRequest: true, supportsWriteMemoryRequest: true, supportsLoadedSourcesRequest: true, supportsExceptionInfoRequest: true, supportsConfigurationDoneRequest: true,',
-			)
-			.replace("let answer = '42';", "let answer = '42'; let memory = Buffer.from([0, 255]);")
-			.replace(
-				"{ name: 'answer', value: answer, variablesReference: 0 }",
-				"{ name: 'answer', value: answer, variablesReference: 0, memoryReference: 'answer' }",
-			)
-			.replace("reason: 'breakpoint'", "reason: 'exception'")
-			.replace(
-				"  send({ type: 'response', request_seq:",
-				`  if (request.command === 'loadedSources') body = { sources: [{ name: 'generated.js', sourceReference: 25 }] };
+test('Debug memory, loaded scripts and exception details use the real Desktop inspection ports', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+	const directory = testWorkspace.directory;
+	const script = adapter
+		.replace(
+			'supportsConfigurationDoneRequest: true,',
+			'supportsReadMemoryRequest: true, supportsWriteMemoryRequest: true, supportsLoadedSourcesRequest: true, supportsExceptionInfoRequest: true, supportsConfigurationDoneRequest: true,',
+		)
+		.replace("let answer = '42';", "let answer = '42'; let memory = Buffer.from([0, 255]);")
+		.replace("{ name: 'answer', value: answer, variablesReference: 0 }", "{ name: 'answer', value: answer, variablesReference: 0, memoryReference: 'answer' }")
+		.replace("reason: 'breakpoint'", "reason: 'exception'")
+		.replace(
+			"  send({ type: 'response', request_seq:",
+			`  if (request.command === 'loadedSources') body = { sources: [{ name: 'generated.js', sourceReference: 25 }] };
   if (request.command === 'source') body = { content: 'const generated = 25;', mimeType: 'text/javascript' };
   if (request.command === 'exceptionInfo') body = { exceptionId: 'SmokeError', description: 'Invalid debug input', breakMode: 'always', details: { stackTrace: 'at main (debug-program.js:2)' } };
   if (request.command === 'readMemory') body = { address: '0x1000', data: memory.subarray(args.offset, args.offset + args.count).toString('base64'), unreadableBytes: 0 };
   if (request.command === 'writeMemory') { memory = Buffer.from(args.data, 'base64'); body = { bytesWritten: memory.length }; }
   send({ type: 'response', request_seq:`,
-			);
-		await writeFile(join(directory, 'debug-adapter.cjs'), script);
-		const page = workbench.page;
-		await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
-		await page
-			.locator('[data-part="sidebar"]')
-			.getByRole('button', { name: 'Start Debugging', exact: true })
-			.click();
-		const pane = page.locator('[data-view-container-id="ash.debug"]');
-		await expect(pane.getByRole('status')).toContainText('stopped');
-		await expect(page.getByRole('region', { name: 'Debug exception details' })).toContainText('SmokeError');
-		await page.getByRole('button', { name: 'Close exception details' }).click();
-		await pane.getByRole('button', { name: 'View memory', exact: true }).click();
-		const count = page.getByRole('textbox', { name: 'Byte count (1–4096)', exact: true });
-		await count.fill('2');
-		await count.press('Enter');
-		const editor = workbench.editors.groupAt(0).editor;
-		await editor.waitForEditorContents(content => content.trim() === '00 ff');
-		await editor.waitForEditorFocus();
-		await page.keyboard.press('ControlOrMeta+A');
-		await page.keyboard.insertText('01 fe');
-		await workbench.quickaccess.runCommand('workbench.action.files.save');
-		const requests = async () =>
-			(await readFile(join(directory, 'debug-requests.jsonl'), 'utf8'))
-				.trim()
-				.split('\n')
-				.map(line => JSON.parse(line));
-		await expect
-			.poll(async () => (await requests()).find(request => request.command === 'writeMemory')?.arguments)
-			.toEqual({ memoryReference: 'answer', offset: 0, data: 'Af4=', allowPartial: false });
-		await workbench.quickaccess.runCommand('workbench.action.debug.showLoadedScripts');
-		await workbench.quickaccess.items.filter({ hasText: 'generated.js' }).click();
-		await editor.waitForEditorContents(content => content.includes('const generated = 25;'));
-		await expect
-			.poll(async () => (await requests()).some(request => request.command === 'exceptionInfo'))
-			.toBe(true);
-		await pane.getByRole('button', { name: 'Stop', exact: true }).click();
-	},
-);
-
-test(
-	'installed Ash command visualizer renders a paused variable snapshot in a read-only editor',
-	{ tag: ['@electron-app-server', '@darwin'] },
-	async ({ workbench, application, testWorkspace }) => {
-		const root = join(testWorkspace.directory, 'visualizer-extension');
-		await mkdir(join(root, '.ash-plugin'), { recursive: true });
-		await writeFile(
-			join(root, '.ash-plugin', 'plugin.json'),
-			JSON.stringify({
-				schemaVersion: 1,
-				id: 'acme/debug-visualizer',
-				version: '1.0.0',
-				displayName: 'Visualizer smoke',
-				compatibility: { ash: '>=0.1.0' },
-				contributions: {
-					editorExtensions: [
-						{
-							id: 'visualizer',
-							runtime: 'javascript',
-							api: 'ash',
-							entrypoint: 'extension.js',
-							runtimeApiVersion: 1,
-							activationEvents: [{ type: 'onCommand', id: 'acme.visualizer.format' }],
-							capabilities: ['command'],
-						},
-					],
-				},
-				permissions: [{ type: 'directory', access: 'read' }],
-			}),
 		);
-		await writeEditorExtensionFixture(
-			root,
-			`const { commands } = require('@ash/sdk');
+	await writeFile(join(directory, 'debug-adapter.cjs'), script);
+	const page = workbench.page;
+	await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+	await page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
+	const pane = page.locator('[data-view-container-id="ash.debug"]');
+	await expect(pane.getByRole('status')).toContainText('stopped');
+	await expect(page.getByRole('region', { name: 'Debug exception details' })).toContainText('SmokeError');
+	await page.getByRole('button', { name: 'Close exception details' }).click();
+	await pane.getByRole('button', { name: 'View memory', exact: true }).click();
+	const count = page.getByRole('textbox', { name: 'Byte count (1–4096)', exact: true });
+	await count.fill('2');
+	await count.press('Enter');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorContents(content => content.trim() === '00 ff');
+	await editor.waitForEditorFocus();
+	await page.keyboard.press('ControlOrMeta+A');
+	await page.keyboard.insertText('01 fe');
+	await workbench.quickaccess.runCommand('workbench.action.files.save');
+	const requests = async () =>
+		(await readFile(join(directory, 'debug-requests.jsonl'), 'utf8'))
+			.trim()
+			.split('\n')
+			.map(line => JSON.parse(line));
+	await expect
+		.poll(async () => (await requests()).find(request => request.command === 'writeMemory')?.arguments)
+		.toEqual({ memoryReference: 'answer', offset: 0, data: 'Af4=', allowPartial: false });
+	await workbench.quickaccess.runCommand('workbench.action.debug.showLoadedScripts');
+	await workbench.quickaccess.items.filter({ hasText: 'generated.js' }).click();
+	await editor.waitForEditorContents(content => content.includes('const generated = 25;'));
+	await expect.poll(async () => (await requests()).some(request => request.command === 'exceptionInfo')).toBe(true);
+	await pane.getByRole('button', { name: 'Stop', exact: true }).click();
+});
+
+test('installed Ash command visualizer renders a paused variable snapshot in a read-only editor', { tag: ['@electron-app-server', '@darwin'] }, async ({ workbench, application, testWorkspace }) => {
+	const root = join(testWorkspace.directory, 'visualizer-extension');
+	await mkdir(join(root, '.ash-plugin'), { recursive: true });
+	await writeFile(
+		join(root, '.ash-plugin', 'plugin.json'),
+		JSON.stringify({
+			schemaVersion: 1,
+			id: 'acme/debug-visualizer',
+			version: '1.0.0',
+			displayName: 'Visualizer smoke',
+			compatibility: { ash: '>=0.1.0' },
+			contributions: {
+				editorExtensions: [
+					{
+						id: 'visualizer',
+						runtime: 'javascript',
+						api: 'ash',
+						entrypoint: 'extension.js',
+						runtimeApiVersion: 1,
+						activationEvents: [{ type: 'onCommand', id: 'acme.visualizer.format' }],
+						capabilities: ['command'],
+					},
+				],
+			},
+			permissions: [{ type: 'directory', access: 'read' }],
+		}),
+	);
+	await writeEditorExtensionFixture(
+		root,
+		`const { commands } = require('@ash/sdk');
 exports.activate = context => { context.subscriptions.push(commands.register('acme.visualizer.format', value => {
  if (value.variable.name !== 'answer' || !value.sessionId) throw Error('Missing paused variable identity');
  return { content: 'visualized answer = ' + value.variable.value, languageId: 'plaintext' };
 })); };`,
-		);
-		const packagePath = join(root, 'package.json');
-		const manifest = JSON.parse(await readFile(packagePath, 'utf8'));
-		manifest.contributes.debugVisualizers = [
-			{ id: 'answer', title: 'Smoke visualization', command: 'acme.visualizer.format' },
-		];
-		await writeFile(packagePath, JSON.stringify(manifest));
-		const page = workbench.page;
-		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
-		const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
-		await installation.getByRole('textbox').fill('visualizer-extension');
-		const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-			installation.getByRole('textbox').press('Enter'),
-		);
-		expect(installed.message).toContain('Installed acme/debug-visualizer 1.0.0');
-		for (const button of ['Enable', 'Grant permissions']) {
-			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-			const search = page.getByRole('searchbox', { name: 'Search extensions', exact: true });
-			await search.fill('@installed Visualizer smoke');
-			await search.press('Enter');
-			const plugins = page.getByRole('listbox', { name: 'Plugins', exact: true });
-			await plugins.locator('[data-package-id="acme/debug-visualizer"]').click();
-			await plugins.press('Enter');
-			const details = page.locator('.ash-extension-editor').filter({ hasText: 'acme/debug-visualizer' });
-			const click = () => details.getByRole('button', { name: button, exact: true }).click();
-			if (button === 'Grant permissions')
-				await workbench.dialogs.confirm(application, 'Visualizer smoke', button, click);
-			else {
-				await click();
-				await expect(details.getByRole('button', { name: 'Disable', exact: true })).toBeVisible();
-			}
+	);
+	const packagePath = join(root, 'package.json');
+	const manifest = JSON.parse(await readFile(packagePath, 'utf8'));
+	manifest.contributes.debugVisualizers = [{ id: 'answer', title: 'Smoke visualization', command: 'acme.visualizer.format' }];
+	await writeFile(packagePath, JSON.stringify(manifest));
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('ash.extensions.installLocal');
+	const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
+	await installation.getByRole('textbox').fill('visualizer-extension');
+	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
+	expect(installed.message).toContain('Installed acme/debug-visualizer 1.0.0');
+	for (const button of ['Enable', 'Grant permissions']) {
+		await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
+		const search = page.getByRole('searchbox', { name: 'Search extensions', exact: true });
+		await search.fill('@installed Visualizer smoke');
+		await search.press('Enter');
+		const plugins = page.getByRole('listbox', { name: 'Plugins', exact: true });
+		await plugins.locator('[data-package-id="acme/debug-visualizer"]').click();
+		await plugins.press('Enter');
+		const details = page.locator('.ash-extension-editor').filter({ hasText: 'acme/debug-visualizer' });
+		const click = () => details.getByRole('button', { name: button, exact: true }).click();
+		if (button === 'Grant permissions') await workbench.dialogs.confirm(application, 'Visualizer smoke', button, click);
+		else {
+			await click();
+			await expect(details.getByRole('button', { name: 'Disable', exact: true })).toBeVisible();
 		}
-		await workbench.quickaccess.runCommand('workbench.action.debug.start');
-		await expect(page.locator('[data-view-container-id="ash.debug"]').getByRole('status')).toContainText('stopped');
-		await workbench.quickaccess.runCommand('workbench.action.debug.visualizeVariable');
-		await workbench.quickaccess.items.filter({ hasText: 'answer' }).click();
-		await workbench.quickaccess.items.filter({ hasText: 'Smoke visualization' }).click();
-		await workbench.editors
-			.groupAt(0)
-			.editor.waitForEditorContents(content => content.includes('visualized answer = 42'));
-		await expect(workbench.editors.groupAt(0).editor.element.getByRole('textbox')).toHaveAttribute(
-			'aria-readonly',
-			'true',
-		);
-		await workbench.quickaccess.runCommand('workbench.action.debug.stop');
-	},
-);
+	}
+	await workbench.quickaccess.runCommand('workbench.action.debug.start');
+	await expect(page.locator('[data-view-container-id="ash.debug"]').getByRole('status')).toContainText('stopped');
+	await workbench.quickaccess.runCommand('workbench.action.debug.visualizeVariable');
+	await workbench.quickaccess.items.filter({ hasText: 'answer' }).click();
+	await workbench.quickaccess.items.filter({ hasText: 'Smoke visualization' }).click();
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(content => content.includes('visualized answer = 42'));
+	await expect(workbench.editors.groupAt(0).editor.element.getByRole('textbox')).toHaveAttribute('aria-readonly', 'true');
+	await workbench.quickaccess.runCommand('workbench.action.debug.stop');
+});

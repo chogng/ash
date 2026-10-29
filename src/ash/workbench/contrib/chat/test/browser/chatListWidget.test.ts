@@ -25,10 +25,7 @@ import { AccessibleViewType } from '../../../../../platform/accessibility/browse
 import { PromptLanguageFeaturesProvider } from '../../browser/promptSyntax/promptFileContributions.js';
 import { IModelService } from '../../../../../editor/common/services/model.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
-import {
-	AccessibilitySupport,
-	IAccessibilityService,
-} from '../../../../../platform/accessibility/common/accessibility.js';
+import { AccessibilitySupport, IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { getWindows } from '../../../../../base/browser/window.js';
 import { PixelRatio } from '../../../../../base/browser/pixelRatio.js';
 import { FontMeasurements } from '../../../../../editor/browser/config/fontMeasurements.js';
@@ -43,10 +40,7 @@ import { readFileSync } from 'node:fs';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { suite, suiteSetup, test } from 'mocha';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
-import {
-	createCodeEditorServices,
-	registerCodeEditorServices,
-} from '../../../../../editor/test/browser/testCodeEditor.js';
+import { createCodeEditorServices, registerCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { chatTranscriptListItems } from '../../browser/widget/chatListItems.js';
@@ -91,10 +85,7 @@ test('Workbench and Cowork tips use injected Markdown opening and preserve dismi
 	let visible = true;
 	const tips = {
 		onDidDismissTip: dismissed.event,
-		getWelcomeTip: () =>
-			visible
-				? { id: 'documentation', content: new MarkdownString('[Docs](https://example.com/tip)') }
-				: undefined,
+		getWelcomeTip: () => (visible ? { id: 'documentation', content: new MarkdownString('[Docs](https://example.com/tip)') } : undefined),
 		dismissTip: () => {
 			visible = false;
 			dismissed.fire();
@@ -138,10 +129,7 @@ suite('Chat hidden response resources', () => {
 		getWindows();
 		const window = browserEnvironment.window as unknown as Window;
 		PixelRatio.getInstance(window);
-		FontMeasurements.readFontInfo(
-			window,
-			BareFontInfo._create('monospace', 'normal', 14, 'normal', 'normal', 20, 0, 1, true),
-		);
+		FontMeasurements.readFontInfo(window, BareFontInfo._create('monospace', 'normal', 14, 'normal', 'normal', 20, 0, 1, true));
 	});
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('hidden response code blocks release documents and restore selection with current content', () => {
@@ -394,11 +382,7 @@ test('streaming tool content preserves disclosure focus, failure state and resto
 	assert.equal(document.activeElement, summary);
 	const provider = services.invokeFunction(accessor =>
 		AccessibleViewRegistry.getImplementations()
-			.filter(
-				implementation =>
-					implementation.type === AccessibleViewType.View &&
-					implementation.name.startsWith('chatTranscript-'),
-			)
+			.filter(implementation => implementation.type === AccessibleViewType.View && implementation.name.startsWith('chatTranscript-'))
 			.map(implementation => implementation.getProvider(accessor))
 			.find(provider => provider !== undefined)!,
 	);
@@ -407,11 +391,7 @@ test('streaming tool content preserves disclosure focus, failure state and resto
 	assert.equal(document.activeElement, summary);
 	const help = services.invokeFunction(accessor =>
 		AccessibleViewRegistry.getImplementations()
-			.filter(
-				implementation =>
-					implementation.type === AccessibleViewType.Help &&
-					implementation.name.startsWith('chatTranscript-'),
-			)
+			.filter(implementation => implementation.type === AccessibleViewType.Help && implementation.name.startsWith('chatTranscript-'))
 			.map(implementation => implementation.getProvider(accessor))
 			.find(provider => provider !== undefined)!,
 	);
@@ -468,9 +448,7 @@ test('streaming Markdown reuses static blocks and code editors, then releases re
 	widget.render([{ id: 'reply', type: 'agentMessage', text: `${text}\nconst b = 2;`, transient: true }]);
 	assert.equal(widget.element.querySelector('p'), paragraph);
 	assert.equal(widget.element.querySelector('.stanza-editor'), code);
-	widget.render([
-		{ id: 'reply', type: 'agentMessage', text: `${text}\nconst b = 2;\n\x60\x60\x60\n\nDone.`, transient: false },
-	]);
+	widget.render([{ id: 'reply', type: 'agentMessage', text: `${text}\nconst b = 2;\n\x60\x60\x60\n\nDone.`, transient: false }]);
 	assert.equal(widget.element.querySelector('p'), paragraph);
 	assert.equal(widget.element.querySelector('.stanza-editor'), code);
 	widget.render([{ id: 'reply', type: 'agentMessage', text: 'Replacement', transient: false }]);
@@ -578,17 +556,13 @@ test('streamed memory references retain their buttons, code editor and focus as 
 	const text = 'memory:first\n\n```ts\nconst a = 1;\n```';
 	widget.render([{ id: 'reply', type: 'agentMessage', text, transient: true }]);
 	const code = widget.element.querySelector('.ash-chat-code-block')!;
-	const button = [...widget.element.querySelectorAll('button')].find(
-		button => button.textContent === 'Open memory reference 1',
-	)!;
+	const button = [...widget.element.querySelectorAll('button')].find(button => button.textContent === 'Open memory reference 1')!;
 	button.focus();
 	widget.render([{ id: 'reply', type: 'agentMessage', text: text + '\n\nmemory:second', transient: false }]);
 	assert.equal(widget.element.querySelector('.ash-chat-code-block'), code);
 	assert.equal(document.activeElement, button);
 	button.click();
-	const second = [...widget.element.querySelectorAll('button')].find(
-		button => button.textContent === 'Open memory reference 2',
-	)!;
+	const second = [...widget.element.querySelectorAll('button')].find(button => button.textContent === 'Open memory reference 2')!;
 	second.click();
 	assert.deepEqual(opened, ['memory:first', 'memory:second']);
 	widget.render([]);
@@ -641,9 +615,7 @@ test('Skill resource content provider shares readonly models and cancels a late 
 						delayed = signal;
 						return pending.p;
 					}
-					return path === 'SKILL.md'
-						? '---\nname: review\ndescription: Review changes\n---\n[Guide](references/guide.md)'
-						: 'Read the guide.';
+					return path === 'SKILL.md' ? '---\nname: review\ndescription: Review changes\n---\n[Guide](references/guide.md)' : 'Read the guide.';
 				},
 			},
 			{
@@ -658,10 +630,7 @@ test('Skill resource content provider shares readonly models and cancels a late 
 	using contribution = services.createInstance(PromptLanguageFeaturesProvider);
 	const [skill] = await prompts.findAgentSkills(CancellationToken.None, 'session');
 	const resolver = services.get(ITextModelService);
-	const [first, second] = await Promise.all([
-		resolver.createModelReference(skill.uri),
-		resolver.createModelReference(skill.uri),
-	]);
+	const [first, second] = await Promise.all([resolver.createModelReference(skill.uri), resolver.createModelReference(skill.uri)]);
 	assert.equal(first.object.isReadonly(), true);
 	assert.equal(first.object.textEditorModel, second.object.textEditorModel);
 	first.dispose();
@@ -721,11 +690,7 @@ for (const classPrefix of ['ash-chat', 'ash-cowork']) {
 		const provider = resources.add(
 			services.invokeFunction(accessor =>
 				AccessibleViewRegistry.getImplementations()
-					.filter(
-						implementation =>
-							implementation.type === AccessibleViewType.View &&
-							implementation.name.startsWith('chatTranscript-'),
-					)
+					.filter(implementation => implementation.type === AccessibleViewType.View && implementation.name.startsWith('chatTranscript-'))
 					.map(implementation => implementation.getProvider(accessor))
 					.find(candidate => candidate !== undefined)!,
 			),
@@ -857,9 +822,7 @@ suite('chatRenderer browser component', () => {
 		...Array.from({ length: 12 }, (_, index): IChatListItem => ({
 			id: `reading-${index}`,
 			type: 'agentMessage',
-			text:
-				`Section ${index}.\n\n` +
-				Array.from({ length: 4 }, (_, line) => `Paragraph ${index}.${line}.`).join('\n\n'),
+			text: `Section ${index}.\n\n` + Array.from({ length: 4 }, (_, line) => `Paragraph ${index}.${line}.`).join('\n\n'),
 			transient: false,
 		})),
 	];
@@ -879,10 +842,7 @@ suite('chatRenderer browser component', () => {
 			observer.observe(history, { attributes: true, childList: true, characterData: true, subtree: true });
 			try {
 				for (let index = 0; index < 20; index++) {
-					window.ashChatTranscriptIntegration.renderItems([
-						items[0],
-						{ ...items[1], text: `Increment ${index}` },
-					]);
+					window.ashChatTranscriptIntegration.renderItems([items[0], { ...items[1], text: `Increment ${index}` }]);
 				}
 				await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 				return records.length;
@@ -892,14 +852,7 @@ suite('chatRenderer browser component', () => {
 		}, items);
 		expect(changes).toBe(0);
 		await expect(page.locator('[data-item-id="stream"]')).toContainText('Increment 19');
-		await page.evaluate(
-			items =>
-				window.ashChatTranscriptIntegration.renderItems([
-					items[0],
-					{ ...items[1], text: 'Now with code.\n\n```typescript\nconst added = 19;\n```' },
-				]),
-			items,
-		);
+		await page.evaluate(items => window.ashChatTranscriptIntegration.renderItems([items[0], { ...items[1], text: 'Now with code.\n\n```typescript\nconst added = 19;\n```' }]), items);
 		await expect(page.locator('[data-item-id="stream"] .ash-chat-code-block')).toContainText('const added = 19;');
 	});
 
@@ -907,9 +860,7 @@ suite('chatRenderer browser component', () => {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html');
 		await page.evaluate(() => {
-			window.ashChatTranscriptIntegration.renderItems([
-				{ id: 'reply', type: 'agentMessage', text: 'Before hiding', transient: true },
-			]);
+			window.ashChatTranscriptIntegration.renderItems([{ id: 'reply', type: 'agentMessage', text: 'Before hiding', transient: true }]);
 			window.ashChatTranscriptIntegration.setTranscriptVisible(false);
 		});
 		const changes = await page.evaluate(async () => {
@@ -919,9 +870,7 @@ suite('chatRenderer browser component', () => {
 			observer.observe(root, { childList: true, characterData: true, subtree: true });
 			try {
 				for (let index = 0; index < 20; index++) {
-					window.ashChatTranscriptIntegration.renderItems([
-						{ id: 'reply', type: 'agentMessage', text: `Hidden ${index}`, transient: index < 19 },
-					]);
+					window.ashChatTranscriptIntegration.renderItems([{ id: 'reply', type: 'agentMessage', text: `Hidden ${index}`, transient: index < 19 }]);
 				}
 				await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 				return records.length;
@@ -953,9 +902,7 @@ suite('chatRenderer browser component', () => {
 		// raises the renderer's high-water mark on every session reconstruction.
 		expect(firstFrameModels).toBeLessThan(12);
 		await expect(page.locator('article[data-item-id]')).toHaveCount(60);
-		await expect
-			.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().codeModelCount))
-			.toBeLessThan(12);
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().codeModelCount)).toBeLessThan(12);
 		const viewport = page.locator('.ash-chat-list-widget .ash-scrollbar-viewport');
 		await viewport.evaluate(element => {
 			element.scrollTop = 0;
@@ -968,9 +915,7 @@ suite('chatRenderer browser component', () => {
 			element.scrollTop = element.scrollHeight;
 		});
 		await expect(first).toBeFocused();
-		await expect
-			.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().codeModelCount))
-			.toBeLessThan(12);
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().codeModelCount)).toBeLessThan(12);
 		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().selection)).toEqual(selection);
 		await viewport.evaluate(element => {
 			element.scrollTop = 0;
@@ -995,10 +940,7 @@ suite('chatRenderer browser component', () => {
 			composer.style.cssText = 'flex:0 0 220px';
 			host.append(composer);
 		});
-		const paragraphs = Array.from(
-			{ length: 32 },
-			(_, index) => `Response section ${index}. ${'Synthetic reading content. '.repeat(8)}`,
-		).join('\n\n');
+		const paragraphs = Array.from({ length: 32 }, (_, index) => `Response section ${index}. ${'Synthetic reading content. '.repeat(8)}`).join('\n\n');
 		const response: IChatListItem = { id: 'reply', type: 'agentMessage', text: code, transient: true };
 		const pendingMedia: IChatListItem = {
 			id: 'media',
@@ -1014,13 +956,9 @@ suite('chatRenderer browser component', () => {
 		await page.keyboard.press('ControlOrMeta+A');
 		const selection = () =>
 			block.locator('.stanza-editor-input').evaluate(element => {
-				const context = (
-					element as HTMLElement & { editContext?: { selectionStart: number; selectionEnd: number } }
-				).editContext;
+				const context = (element as HTMLElement & { editContext?: { selectionStart: number; selectionEnd: number } }).editContext;
 				const input = element as HTMLTextAreaElement;
-				return context
-					? { start: context.selectionStart, end: context.selectionEnd }
-					: { start: input.selectionStart, end: input.selectionEnd };
+				return context ? { start: context.selectionStart, end: context.selectionEnd } : { start: input.selectionStart, end: input.selectionEnd };
 			});
 		const selected = await selection();
 		expect(selected).toEqual({ start: 0, end: 'const value = 1;'.length });
@@ -1033,9 +971,7 @@ suite('chatRenderer browser component', () => {
 		const streamed = { ...response, text: code + '\n\n' + paragraphs };
 		await page.evaluate(items => window.ashChatTranscriptIntegration.renderItems(items), [pendingMedia, streamed]);
 		await expect(page.locator('[data-item-id="reply"]')).toContainText('Response section 31.');
-		await expect
-			.poll(() => viewport.evaluate(element => element.scrollHeight - element.scrollTop - element.clientHeight))
-			.toBe(0);
+		await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.scrollTop - element.clientHeight)).toBe(0);
 		expect(await selection()).toEqual(selected);
 		await expect(copy).toBeFocused();
 		const paragraph = page.locator('[data-item-id="reply"] p').filter({ hasText: /^Response section 12\./u });
@@ -1045,9 +981,7 @@ suite('chatRenderer browser component', () => {
 			},
 			await paragraph.elementHandle(),
 		);
-		await expect
-			.poll(() => viewport.evaluate(element => element.scrollHeight - element.scrollTop - element.clientHeight))
-			.toBeGreaterThan(100);
+		await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.scrollTop - element.clientHeight)).toBeGreaterThan(100);
 		const top = await paragraph.evaluate(element => element.getBoundingClientRect().top);
 		const png = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwHwQBEPgD/U6VwW8AAAAASUVORK5CYII=';
 		const media = {
@@ -1056,26 +990,11 @@ suite('chatRenderer browser component', () => {
 			transient: false,
 		};
 		await page.evaluate(items => window.ashChatTranscriptIntegration.renderItems(items), [media, streamed]);
-		await page.evaluate(
-			items => window.ashChatTranscriptIntegration.renderItems(items),
-			[media, { ...streamed, text: streamed.text.replace('= 1', '= 2'), transient: false }],
-		);
-		await expect
-			.poll(() =>
-				page
-					.getByRole('img', { name: 'Synthetic response media', exact: true })
-					.evaluate(element => (element as HTMLImageElement).naturalWidth),
-			)
-			.toBe(2);
+		await page.evaluate(items => window.ashChatTranscriptIntegration.renderItems(items), [media, { ...streamed, text: streamed.text.replace('= 1', '= 2'), transient: false }]);
+		await expect.poll(() => page.getByRole('img', { name: 'Synthetic response media', exact: true }).evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(2);
 		await expect(block.locator('.view-lines')).toContainText('const value = 2;');
-		await expect
-			.poll(async () =>
-				Math.abs((await paragraph.evaluate(element => element.getBoundingClientRect().top)) - top),
-			)
-			.toBeLessThanOrEqual(1);
-		expect(
-			await viewport.evaluate(element => element.scrollHeight - element.scrollTop - element.clientHeight),
-		).toBeGreaterThan(100);
+		await expect.poll(async () => Math.abs((await paragraph.evaluate(element => element.getBoundingClientRect().top)) - top)).toBeLessThanOrEqual(1);
+		expect(await viewport.evaluate(element => element.scrollHeight - element.scrollTop - element.clientHeight)).toBeGreaterThan(100);
 		expect(await editor.evaluate((element, previous) => element === previous, original)).toBe(true);
 		expect(await selection()).toEqual(selected);
 		await expect(copy).toBeFocused();
@@ -1089,10 +1008,7 @@ suite('chatRenderer browser component', () => {
 			const errors: string[] = [];
 			page.on('pageerror', error => errors.push(error.message));
 			await page.goto(`/chatTranscript.html?locale=${locale}`);
-			await page.evaluate(
-				text => window.ashChatTranscriptIntegration.stream(text, false),
-				`Original.\n\n${code}`,
-			);
+			await page.evaluate(text => window.ashChatTranscriptIntegration.stream(text, false), `Original.\n\n${code}`);
 			const block = page.locator('[data-item-id="stream"] .ash-chat-code-block');
 			const editor = block.locator('.stanza-editor');
 			const original = await editor.elementHandle();
@@ -1102,17 +1018,12 @@ suite('chatRenderer browser component', () => {
 			const copy = block.getByRole('button', { name: locale === 'en' ? 'Copy' : '复制', exact: true });
 			await copy.focus();
 			await expect(copy).toBeFocused();
-			await page.evaluate(
-				text => window.ashChatTranscriptIntegration.stream(text, true),
-				`Correction.\n\n${code.replace('= 1', '= 2')}`,
-			);
+			await page.evaluate(text => window.ashChatTranscriptIntegration.stream(text, true), `Correction.\n\n${code.replace('= 1', '= 2')}`);
 			expect(await editor.evaluate((element, previous) => element === previous, original)).toBe(true);
 			await expect(copy).toBeFocused();
 			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().selection)).toEqual(selection);
 			await copy.press('Enter');
-			await expect
-				.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied))
-				.toBe('const value = 2;');
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe('const value = 2;');
 			await page.evaluate(() => window.ashChatTranscriptIntegration.remove());
 			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().editorCount)).toBe(1);
 			await original?.dispose();
@@ -1135,10 +1046,7 @@ suite('chatRenderer browser component', () => {
 			selection.removeAllRanges();
 			selection.addRange(range);
 		});
-		await page.evaluate(
-			text => window.ashChatTranscriptIntegration.stream(text, true),
-			`Inserted explanation.\n\n${originalText}`,
-		);
+		await page.evaluate(text => window.ashChatTranscriptIntegration.stream(text, true), `Inserted explanation.\n\n${originalText}`);
 		const selected = page.locator('[data-item-id="stream"] p').nth(1);
 		expect(await selected.evaluate((element, previous) => element === previous, original)).toBe(true);
 		expect(await page.evaluate(() => document.getSelection()!.toString())).toBe('Selected paragraph.');
@@ -1161,16 +1069,8 @@ suite('chatRenderer browser component', () => {
 		const media = page.locator('.ash-chat-media');
 		await expect(media).toBeVisible();
 		await media.getByRole('button', { name: 'Load image', exact: true }).click();
-		await expect
-			.poll(() => media.locator('img').evaluate(element => (element as HTMLImageElement).naturalWidth))
-			.toBe(2);
-		await page.evaluate(
-			item =>
-				window.ashChatTranscriptIntegration.renderItems([
-					{ ...item, text: item.text + '\n\nDone.', transient: false },
-				]),
-			item,
-		);
+		await expect.poll(() => media.locator('img').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(2);
+		await page.evaluate(item => window.ashChatTranscriptIntegration.renderItems([{ ...item, text: item.text + '\n\nDone.', transient: false }]), item);
 		await expect(media).toHaveCount(0);
 		expect(await editor.evaluate((element, previous) => element === previous, original)).toBe(true);
 		await original?.dispose();
@@ -1195,26 +1095,17 @@ suite('chatRenderer browser component', () => {
 			const target = document.querySelector('[data-item-id="reading-4"]')!;
 			element.scrollTop += target.getBoundingClientRect().top - element.getBoundingClientRect().top + 20;
 		});
-		await expect
-			.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.readingState().shouldFollow))
-			.toBe(false);
-		const position = () =>
-			page.locator('[data-item-id="reading-4"]').evaluate(element => element.getBoundingClientRect().top);
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.readingState().shouldFollow)).toBe(false);
+		const position = () => page.locator('[data-item-id="reading-4"]').evaluate(element => element.getBoundingClientRect().top);
 		const top = await position();
 		const before = await viewport.evaluate(element => element.scrollTop);
 		await page
 			.locator('.ash-chat-media')
 			.getByRole('button', { name: 'Load image', exact: true })
 			.evaluate(element => (element as HTMLButtonElement).click());
-		await expect
-			.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.mediaState().requests.length))
-			.toBe(1);
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.mediaState().requests.length)).toBe(1);
 		await page.evaluate(() => window.ashChatTranscriptIntegration.finishMedia());
-		await expect
-			.poll(() =>
-				page.locator('.ash-chat-media img').evaluate(element => (element as HTMLImageElement).naturalWidth),
-			)
-			.toBe(2);
+		await expect.poll(() => page.locator('.ash-chat-media img').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(2);
 		await expect.poll(position).toBe(top);
 		expect(await viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(before);
 		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.readingState().shouldFollow)).toBe(false);
@@ -1230,9 +1121,7 @@ suite('chatRenderer browser component', () => {
 			window.ashChatTranscriptIntegration.renderItems(rows);
 		}, rows);
 		const viewport = page.locator('.ash-chat-list-widget .ash-scrollbar-viewport');
-		await expect
-			.poll(() => viewport.evaluate(element => element.scrollHeight - element.scrollTop - element.clientHeight))
-			.toBe(0);
+		await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.scrollTop - element.clientHeight)).toBe(0);
 		await page.locator('.ash-chat-media img').evaluate(element => {
 			element.style.width = '300px';
 			element.style.height = '400px';
@@ -1241,18 +1130,10 @@ suite('chatRenderer browser component', () => {
 			.locator('.ash-chat-media')
 			.getByRole('button', { name: 'Load image', exact: true })
 			.evaluate(element => (element as HTMLButtonElement).click());
-		await expect
-			.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.mediaState().requests.length))
-			.toBe(1);
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.mediaState().requests.length)).toBe(1);
 		await page.evaluate(() => window.ashChatTranscriptIntegration.finishMedia());
-		await expect
-			.poll(() =>
-				page.locator('.ash-chat-media img').evaluate(element => (element as HTMLImageElement).naturalWidth),
-			)
-			.toBe(2);
-		await expect
-			.poll(() => viewport.evaluate(element => element.scrollHeight - element.scrollTop - element.clientHeight))
-			.toBe(0);
+		await expect.poll(() => page.locator('.ash-chat-media img').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(2);
+		await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.scrollTop - element.clientHeight)).toBe(0);
 		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.readingState().shouldFollow)).toBe(true);
 	});
 
@@ -1290,13 +1171,7 @@ suite('chatRenderer browser component', () => {
 		});
 		await expect(page.locator('.ash-chat-code-block .stanza-editor-input')).toBeFocused();
 		await page.evaluate(() => window.ashChatTranscriptIntegration.setTranscriptVisible(false));
-		await page.evaluate(
-			item =>
-				window.ashChatTranscriptIntegration.renderItems([
-					{ ...item, text: item.text + '\n\nFinished.', transient: false },
-				]),
-			item,
-		);
+		await page.evaluate(item => window.ashChatTranscriptIntegration.renderItems([{ ...item, text: item.text + '\n\nFinished.', transient: false }]), item);
 		await page.evaluate(() => window.ashChatTranscriptIntegration.setTranscriptVisible(true));
 		await expect(page.locator('.ash-chat-markdown-part')).toContainText('Finished.');
 		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.readingState().shouldFollow)).toBe(true);
@@ -1306,22 +1181,15 @@ suite('chatRenderer browser component', () => {
 		const { page } = browserTests;
 
 		await page.goto('/chatTranscript.html');
-		const wrapping = rows.map(item =>
-			item.id.startsWith('reading-')
-				? { ...item, text: item.text + '\n\n' + 'Long wrapping content in this response. '.repeat(10) }
-				: item,
-		);
+		const wrapping = rows.map(item => (item.id.startsWith('reading-') ? { ...item, text: item.text + '\n\n' + 'Long wrapping content in this response. '.repeat(10) } : item));
 		await page.evaluate(rows => window.ashChatTranscriptIntegration.renderItems(rows), wrapping);
 		const viewport = page.locator('.ash-chat-list-widget .ash-scrollbar-viewport');
 		await viewport.evaluate(element => {
 			const target = document.querySelector('[data-item-id="reading-4"]')!;
 			element.scrollTop += target.getBoundingClientRect().top - element.getBoundingClientRect().top + 20;
 		});
-		await expect
-			.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.readingState().shouldFollow))
-			.toBe(false);
-		const position = () =>
-			page.locator('[data-item-id="reading-4"]').evaluate(element => element.getBoundingClientRect().top);
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.readingState().shouldFollow)).toBe(false);
+		const position = () => page.locator('[data-item-id="reading-4"]').evaluate(element => element.getBoundingClientRect().top);
 		const top = await position();
 		const before = await viewport.evaluate(element => element.scrollTop);
 		await page.locator('main').evaluate(element => {
@@ -1370,12 +1238,7 @@ suite('chatRenderer browser component', () => {
 			{ type: 'cancelled' as const, reason: 'literal cancellation' },
 		]) {
 			const isError = status.type === 'denied' || status.type === 'failed';
-			const text =
-				status.type === 'denied' || status.type === 'cancelled'
-					? status.reason
-					: status.type === 'failed'
-						? status.message
-						: '';
+			const text = status.type === 'denied' || status.type === 'cancelled' ? status.reason : status.type === 'failed' ? status.message : '';
 			await page.evaluate(item => window.ashChatTranscriptIntegration.renderItems([item]), {
 				...item,
 				text,
@@ -1387,9 +1250,7 @@ suite('chatRenderer browser component', () => {
 			expect(await summary.evaluate((element, previous) => element === previous, original)).toBe(true);
 			await expect(summary).toBeFocused();
 			expect(await disclosure.evaluate(element => (element as HTMLDetailsElement).open)).toBe(true);
-			expect(await disclosure.evaluate(element => element.closest('article')!.classList.contains('error'))).toBe(
-				isError,
-			);
+			expect(await disclosure.evaluate(element => element.closest('article')!.classList.contains('error'))).toBe(isError);
 			await expect(disclosure.locator('p')).toHaveText(text);
 			await expect(disclosure.locator('img')).toHaveCount(0);
 		}

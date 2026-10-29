@@ -59,11 +59,7 @@ export class DocumentCollaborationController extends Disposable {
 		this._register(connection);
 		this._register(
 			model.onDidChangeBlocks(change => {
-				if (
-					this.synchronizingModel ||
-					(change.origin !== 'user' && change.origin !== 'undo' && change.origin !== 'redo')
-				)
-					return;
+				if (this.synchronizingModel || (change.origin !== 'user' && change.origin !== 'undo' && change.origin !== 'redo')) return;
 				const envelope = this.synchronizer.dispatchLocal(change.transaction);
 				if (envelope) this.submit(envelope);
 			}),
@@ -120,11 +116,7 @@ export class DocumentCollaborationController extends Disposable {
 			.submit(envelope, document, new AbortController().signal)
 			.then(
 				outcome => this.acceptSubmitOutcome(outcome),
-				error =>
-					this.setState(
-						'error',
-						error instanceof Error ? error.message : 'Submitting a collaboration update failed',
-					),
+				error => this.setState('error', error instanceof Error ? error.message : 'Submitting a collaboration update failed'),
 			)
 			.finally(() => {
 				this.submitting = false;
@@ -135,11 +127,7 @@ export class DocumentCollaborationController extends Disposable {
 	private publishPresence(selection: DocumentTextModel['selection']): void {
 		if (this.isDisposed || this._state !== 'connected') return;
 		void this.connection.updatePresence(selection, new AbortController().signal).catch(error => {
-			if (!this.isDisposed)
-				this.setState(
-					'error',
-					error instanceof Error ? error.message : 'Publishing collaboration presence failed',
-				);
+			if (!this.isDisposed) this.setState('error', error instanceof Error ? error.message : 'Publishing collaboration presence failed');
 		});
 	}
 
@@ -179,21 +167,11 @@ export class DocumentCollaborationController extends Disposable {
 		const document = this.model.document;
 		const remote = documentTransactionOnly(update.transaction);
 		const pending = this.synchronizer.pending;
-		const canPreserveHistory =
-			serializeDocument(document, this.model.schema) ===
-			serializeDocument(this.synchronizer.document, this.model.schema);
-		const projection =
-			canPreserveHistory && pending
-				? rebaseDocumentTransaction(this.synchronizer.canonicalDocument, this.model.schema, remote, pending)
-				: undefined;
+		const canPreserveHistory = serializeDocument(document, this.model.schema) === serializeDocument(this.synchronizer.document, this.model.schema);
+		const projection = canPreserveHistory && pending ? rebaseDocumentTransaction(this.synchronizer.canonicalDocument, this.model.schema, remote, pending) : undefined;
 		this.synchronizer.receiveRemote(update);
 		if (!canPreserveHistory) return;
-		if (
-			projection &&
-			serializeDocument(projection.document, this.model.schema) !==
-				serializeDocument(this.synchronizer.document, this.model.schema)
-		)
-			return;
+		if (projection && serializeDocument(projection.document, this.model.schema) !== serializeDocument(this.synchronizer.document, this.model.schema)) return;
 		const transaction = projection?.transaction ?? remote;
 		if (transaction.steps.length === 0) return;
 		this.model.rebaseHistory(entries => rebaseDocumentHistory(document, this.model.schema, entries, transaction));
@@ -212,10 +190,7 @@ export class DocumentCollaborationController extends Disposable {
 			this.setState('connected');
 			this.confirmedEmitter.fire(this.synchronizer.canonicalDocument);
 		} catch (error) {
-			this.setState(
-				'resyncRequired',
-				error instanceof Error ? error.message : 'Local updates require a manual collaboration resync',
-			);
+			this.setState('resyncRequired', error instanceof Error ? error.message : 'Local updates require a manual collaboration resync');
 		}
 	}
 
@@ -226,11 +201,7 @@ export class DocumentCollaborationController extends Disposable {
 	}
 
 	private synchronizeModel(): void {
-		if (
-			serializeDocument(this.model.document, this.model.schema) ===
-			serializeDocument(this.synchronizer.document, this.model.schema)
-		)
-			return;
+		if (serializeDocument(this.model.document, this.model.schema) === serializeDocument(this.synchronizer.document, this.model.schema)) return;
 		this.synchronizingModel = true;
 		try {
 			this.model.resetBlocks(this.synchronizer.document);
@@ -242,9 +213,7 @@ export class DocumentCollaborationController extends Disposable {
 	private setState(state: DocumentCollaborationState, message?: string): void {
 		if (this._state === state && message === undefined) return;
 		this._state = state;
-		this.stateEmitter.fire(
-			Object.freeze({ state, roomId: this.connection.roomId, ...(message === undefined ? {} : { message }) }),
-		);
+		this.stateEmitter.fire(Object.freeze({ state, roomId: this.connection.roomId, ...(message === undefined ? {} : { message }) }));
 	}
 }
 

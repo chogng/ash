@@ -44,12 +44,7 @@ export class ChatTipService extends Disposable implements IChatTipService {
 		if (this.dismissedTip.get() === AttachmentTipId) return undefined;
 		return {
 			id: AttachmentTipId,
-			content: new MarkdownString(
-				localize(
-					'chat.tip.attachFiles',
-					'Tip: Attach text files or images with the + button. You can also paste or drop images into your message.',
-				),
-			),
+			content: new MarkdownString(localize('chat.tip.attachFiles', 'Tip: Attach text files or images with the + button. You can also paste or drop images into your message.')),
 		};
 	}
 

@@ -36,14 +36,7 @@ export interface IIssueFormService {
 	readonly onDidChange: Event<IssueReporterState>;
 	readonly state: IssueReporterState;
 	initialize(data: IssueReporterData): Promise<void>;
-	update(
-		data: Partial<
-			Pick<
-				IssueReporterState,
-				'issueType' | 'issueTitle' | 'issueBody' | 'includeSystemInfo' | 'includeExtensions'
-			>
-		>,
-	): void;
+	update(data: Partial<Pick<IssueReporterState, 'issueType' | 'issueTitle' | 'issueBody' | 'includeSystemInfo' | 'includeExtensions'>>): void;
 	searchGitHubIssues(): Promise<void>;
 	cancelSearch(): void;
 	reset(): void;

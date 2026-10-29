@@ -10,10 +10,7 @@ import { ICommandService, CommandsRegistry } from '../../../../platform/commands
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
-import {
-	readLocalRepositories,
-	type LocalRepository,
-} from '../../../../workbench/contrib/github/common/localRepository.js';
+import { readLocalRepositories, type LocalRepository } from '../../../../workbench/contrib/github/common/localRepository.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 
@@ -99,11 +96,7 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 		const generation = this.generation;
 		const selected = this.sessions.activeSelection;
 		const workspace = selected?.kind === 'session' ? selected.active.session.workspace : undefined;
-		if (
-			this.statusOwner !== this.owner ||
-			!workspace ||
-			!CommandsRegistry.hasCommand('git.getRepositoryContexts')
-		) {
+		if (this.statusOwner !== this.owner || !workspace || !CommandsRegistry.hasCommand('git.getRepositoryContexts')) {
 			this.status.textContent = '';
 			this.status.hidden = true;
 			this.statusOwner = this.owner;
@@ -112,13 +105,10 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 			return;
 		}
 		const root = sessionWorkspaceUri(workspace);
-		const current = (): boolean =>
-			!this.isDisposed && request === this.statusRequest && generation === this.generation;
+		const current = (): boolean => !this.isDisposed && request === this.statusRequest && generation === this.generation;
 		try {
 			const repositories = (await readLocalRepositories(this.commands)).filter(
-				repository =>
-					extUriBiasedIgnorePathCase.isEqualOrParent(repository.root, root) ||
-					extUriBiasedIgnorePathCase.isEqualOrParent(root, repository.root),
+				repository => extUriBiasedIgnorePathCase.isEqualOrParent(repository.root, root) || extUriBiasedIgnorePathCase.isEqualOrParent(root, repository.root),
 			);
 			if (!current()) {
 				return;
@@ -128,24 +118,12 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 					const upstream = repository.head.upstream;
 					return [
 						`${repository.label}: ${repository.head.name || (repository.head.type === 'detached' ? localize('sessions.changes.detached', 'Detached HEAD') : localize('sessions.changes.noBranch', 'No branch'))}`,
-						upstream
-							? localize(
-									'sessions.changes.trackingCounts',
-									'{0}: {1} incoming · {2} outgoing',
-									upstream.name,
-									upstream.behind,
-									upstream.ahead,
-								)
-							: undefined,
+						upstream ? localize('sessions.changes.trackingCounts', '{0}: {1} incoming · {2} outgoing', upstream.name, upstream.behind, upstream.ahead) : undefined,
 						repository.uncommittedChanges === undefined
 							? undefined
 							: repository.uncommittedChanges === 1
 								? localize('sessions.changes.uncommittedOne', '1 uncommitted file')
-								: localize(
-										'sessions.changes.uncommittedCount',
-										'{0} uncommitted files',
-										repository.uncommittedChanges,
-									),
+								: localize('sessions.changes.uncommittedCount', '{0} uncommitted files', repository.uncommittedChanges),
 					]
 						.filter(Boolean)
 						.join(' · ');
@@ -154,10 +132,7 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 			this.status.hidden = !this.status.textContent;
 		} catch {
 			if (current()) {
-				this.status.textContent = localize(
-					'sessions.changes.repositoryStatusError',
-					'Repository status is unavailable.',
-				);
+				this.status.textContent = localize('sessions.changes.repositoryStatusError', 'Repository status is unavailable.');
 				this.status.hidden = false;
 			}
 		} finally {
@@ -169,14 +144,7 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 
 	private update(): void {
 		const selected = this.sessions.activeSelection;
-		const owner =
-			selected?.kind === 'session'
-				? JSON.stringify([
-						selected.active.session.sessionId,
-						selected.active.threadId,
-						selected.active.session.workspace,
-					])
-				: undefined;
+		const owner = selected?.kind === 'session' ? JSON.stringify([selected.active.session.sessionId, selected.active.threadId, selected.active.session.workspace]) : undefined;
 		if (owner !== this.owner) {
 			this.owner = owner;
 			this.generation++;
@@ -188,8 +156,7 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 			[this.publish, CommandsRegistry.hasCommand('git.publish')],
 			[this.workingTree, CommandsRegistry.hasCommand('git.openChangesSource')],
 		] as const) {
-			button.domNode.hidden =
-				!hasWorkspace || !available || !CommandsRegistry.hasCommand('git.getRepositoryContexts');
+			button.domNode.hidden = !hasWorkspace || !available || !CommandsRegistry.hasCommand('git.getRepositoryContexts');
 			button.enabled = !this.running;
 		}
 	}
@@ -199,9 +166,7 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 			return repositories[0];
 		}
 		if (!repositories.length) {
-			throw new Error(
-				localize('sessions.changes.noRepository', 'No Git repository is available in this session directory.'),
-			);
+			throw new Error(localize('sessions.changes.noRepository', 'No Git repository is available in this session directory.'));
 		}
 		const picker = this.input.createQuickPick<{
 			label: string;
@@ -214,10 +179,7 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 			description: repository.path,
 			repository,
 		}));
-		picker.ariaLabel = picker.placeholder = localize(
-			'sessions.changes.chooseRepository',
-			'Choose a session repository',
-		);
+		picker.ariaLabel = picker.placeholder = localize('sessions.changes.chooseRepository', 'Choose a session repository');
 		return new Promise(resolve => {
 			let result: LocalRepository | undefined;
 			this.picker.add(toDisposable(() => resolve(result)));
@@ -247,9 +209,7 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 		this.update();
 		try {
 			const repositories = (await readLocalRepositories(this.commands)).filter(
-				repository =>
-					extUriBiasedIgnorePathCase.isEqualOrParent(repository.root, root) ||
-					extUriBiasedIgnorePathCase.isEqualOrParent(root, repository.root),
+				repository => extUriBiasedIgnorePathCase.isEqualOrParent(repository.root, root) || extUriBiasedIgnorePathCase.isEqualOrParent(root, repository.root),
 			);
 			if (!current()) {
 				return;
@@ -259,9 +219,7 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 				return;
 			}
 			const verify = async (): Promise<boolean> => {
-				const fresh = (await readLocalRepositories(this.commands)).find(
-					candidate => candidate.id === repository.id,
-				);
+				const fresh = (await readLocalRepositories(this.commands)).find(candidate => candidate.id === repository.id);
 				if (!current()) {
 					return false;
 				}
@@ -272,12 +230,7 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 					fresh.head.name !== repository.head.name ||
 					JSON.stringify(fresh.remotes) !== JSON.stringify(repository.remotes)
 				) {
-					throw new Error(
-						localize(
-							'sessions.changes.repositoryChanged',
-							'The repository or branch changed. Start the operation again.',
-						),
-					);
+					throw new Error(localize('sessions.changes.repositoryChanged', 'The repository or branch changed. Start the operation again.'));
 				}
 				return true;
 			};
@@ -294,11 +247,7 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 					this.notifications.info(localize('sessions.changes.synced', 'Synchronized {0}.', repository.label));
 				}
 			} else {
-				await this.commands.executeCommand(
-					command,
-					repository.id,
-					...(command === 'git.openChangesSource' ? ['uncommitted'] : []),
-				);
+				await this.commands.executeCommand(command, repository.id, ...(command === 'git.openChangesSource' ? ['uncommitted'] : []));
 			}
 		} catch (error) {
 			if (current()) {

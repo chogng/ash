@@ -25,8 +25,7 @@ suite('changes browser component', () => {
 					animation.currentTime = 120;
 				}
 				const width = element.getAnimations()[0]!.effect as KeyframeEffect;
-				const digits = element.querySelector('.ash-animated-counter-value')!.getAnimations()[0]!
-					.effect as KeyframeEffect;
+				const digits = element.querySelector('.ash-animated-counter-value')!.getAnimations()[0]!.effect as KeyframeEffect;
 				return {
 					width: width.getKeyframes().map(frame => Number.parseFloat(String(frame.width))),
 					digits: digits.getKeyframes().map(frame => frame.transform),
@@ -61,8 +60,7 @@ suite('changes browser component', () => {
 				from: direction === 'topToBottom' ? 'translateY(100%)' : 'translateY(-100%)',
 			});
 			await page.evaluate(() => {
-				for (const animation of document.querySelector('#counter')!.getAnimations({ subtree: true }))
-					animation.finish();
+				for (const animation of document.querySelector('#counter')!.getAnimations({ subtree: true })) animation.finish();
 			});
 			await expect(counter.locator('.ash-animated-counter-outgoing')).toHaveCount(0);
 			expect((await counter.boundingBox())!.width).toBeCloseTo(previousWidth, 1);
@@ -77,8 +75,7 @@ suite('changes browser component', () => {
 		await page.evaluate(() => {
 			window.ashChangesIntegration.counter(1);
 			window.ashChangesIntegration.updateCounter(99);
-			for (const animation of document.querySelector('#counter')!.getAnimations({ subtree: true }))
-				animation.pause();
+			for (const animation of document.querySelector('#counter')!.getAnimations({ subtree: true })) animation.pause();
 		});
 		const counter = page.locator('#counter .ash-animated-counter');
 		await expect(counter.locator('.ash-animated-counter-outgoing')).toHaveCount(1);
@@ -155,9 +152,7 @@ suite('changes browser component', () => {
 			await page.evaluate(() => window.ashChangesIntegration.multipleTurns());
 			await expect(summary).toHaveText(locale === 'en' ? '2 files +6 −4' : '2 个文件 +6 −4');
 			await expect.poll(() => summary.locator('.ash-animated-counter-outgoing').count()).toBe(0);
-			expect(await page.evaluate(() => window.ashChangesIntegration.content())).toContain(
-				locale === 'en' ? '2 files +6 −4' : '2 个文件 +6 −4',
-			);
+			expect(await page.evaluate(() => window.ashChangesIntegration.content())).toContain(locale === 'en' ? '2 files +6 −4' : '2 个文件 +6 −4');
 		});
 
 	for (const locale of ['en', 'zh-CN'] as const)
@@ -167,17 +162,13 @@ suite('changes browser component', () => {
 			const errors: string[] = [];
 			page.on('pageerror', error => errors.push(error.message));
 			await page.goto(`/changes.html?locale=${locale}&multiple=1`);
-			await expect
-				.poll(async () => ({ ready: await page.locator('body').getAttribute('data-ready'), errors }))
-				.toEqual({ ready: 'true', errors: [] });
+			await expect.poll(async () => ({ ready: await page.locator('body').getAttribute('data-ready'), errors })).toEqual({ ready: 'true', errors: [] });
 			await expect(page.getByRole('treeitem')).toHaveCount(2);
 			const turn = page.getByRole('combobox', { name: locale === 'en' ? 'Changes from Turn' : '选择回合更改' });
 			const reviewed = locale === 'en' ? 'Reviewed' : '已审阅';
 			await turn.selectOption('second');
 			await page.getByRole('treeitem').click();
-			await page
-				.getByRole('button', { name: locale === 'en' ? 'Mark reviewed' : '标记已审阅', exact: true })
-				.click();
+			await page.getByRole('button', { name: locale === 'en' ? 'Mark reviewed' : '标记已审阅', exact: true }).click();
 			await page.evaluate(() => window.ashChangesIntegration.selectSession('other'));
 			await expect(turn).toBeEnabled();
 			await turn.selectOption('change');
@@ -204,9 +195,7 @@ suite('changes browser component', () => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto('/changes.html?multiple=1');
-		await expect
-			.poll(async () => ({ ready: await page.locator('body').getAttribute('data-ready'), errors }))
-			.toEqual({ ready: 'true', errors: [] });
+		await expect.poll(async () => ({ ready: await page.locator('body').getAttribute('data-ready'), errors })).toEqual({ ready: 'true', errors: [] });
 		await expect(page.getByRole('treeitem')).toHaveCount(2);
 		await page.getByRole('combobox', { name: 'Changes from Turn' }).selectOption('second');
 		await page.getByRole('combobox', { name: 'Changes view mode' }).selectOption('tree');
@@ -234,9 +223,7 @@ suite('changes browser component', () => {
 			const reviewed = locale === 'en' ? 'Reviewed' : '已审阅';
 			await turn.selectOption('second');
 			await page.getByRole('treeitem').click();
-			await page
-				.getByRole('button', { name: locale === 'en' ? 'Mark reviewed' : '标记已审阅', exact: true })
-				.click();
+			await page.getByRole('button', { name: locale === 'en' ? 'Mark reviewed' : '标记已审阅', exact: true }).click();
 			await page.evaluate(() => {
 				window.ashChangesIntegration.holdRefresh('old', true);
 				window.ashChangesIntegration.selectSession('other');
@@ -297,9 +284,7 @@ suite('changes browser component', () => {
 			const reviewed = locale === 'en' ? 'Reviewed' : '已审阅';
 			await turn.selectOption('second');
 			await page.getByRole('treeitem').click();
-			await page
-				.getByRole('button', { name: locale === 'en' ? 'Mark reviewed' : '标记已审阅', exact: true })
-				.click();
+			await page.getByRole('button', { name: locale === 'en' ? 'Mark reviewed' : '标记已审阅', exact: true }).click();
 			await expect(page.getByRole('treeitem')).toContainText(reviewed);
 			await page.evaluate(() => window.ashChangesIntegration.rebuild());
 			await expect(turn).toHaveValue('second');
@@ -387,9 +372,7 @@ suite('changes browser component', () => {
 			await expect(turn).toBeEnabled();
 			await expect(turn).toHaveValue('second');
 			await page.evaluate(() => window.ashChangesIntegration.fail(true));
-			await expect(
-				page.getByRole('button', { name: locale === 'en' ? 'Retry loading changes' : '重新加载更改' }),
-			).toBeVisible();
+			await expect(page.getByRole('button', { name: locale === 'en' ? 'Retry loading changes' : '重新加载更改' })).toBeVisible();
 			await expect(turn).toBeDisabled();
 			await page.evaluate(() => window.ashChangesIntegration.fail(false));
 			await expect(turn).toBeEnabled();
@@ -439,9 +422,7 @@ suite('changes browser component', () => {
 			});
 			await review.focus();
 			await page.keyboard.press('Space');
-			await expect
-				.poll(() => page.evaluate(() => window.ashChangesIntegration.reviews()))
-				.toEqual([{ resource: 'ash-session-changes:/session?thread=thread', changesetId: 'second' }]);
+			await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.reviews())).toEqual([{ resource: 'ash-session-changes:/session?thread=thread', changesetId: 'second' }]);
 			await turn.selectOption('');
 			await review.click();
 			await expect
@@ -567,16 +548,12 @@ suite('changes browser component', () => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto('/changes.html');
-		await expect
-			.poll(async () => ({ ready: await page.locator('body').getAttribute('data-ready'), errors }))
-			.toEqual({ ready: 'true', errors: [] });
+		await expect.poll(async () => ({ ready: await page.locator('body').getAttribute('data-ready'), errors })).toEqual({ ready: 'true', errors: [] });
 		const tree = page.getByRole('tree', { name: 'Changes' });
 		const file = page.getByRole('treeitem');
 		await expect(file).toHaveCount(1);
 		await expect(page.locator('.ash-sessions-changes-summary')).toHaveText('1 file +3 −2');
-		await expect(page.locator('.ash-sessions-changes-repository-status')).toContainText(
-			'origin/feature: 1 incoming · 2 outgoing · 3 uncommitted files',
-		);
+		await expect(page.locator('.ash-sessions-changes-repository-status')).toContainText('origin/feature: 1 incoming · 2 outgoing · 3 uncommitted files');
 		await expect(page.locator('.ash-sessions-changes-summary')).toHaveCSS('font-size', '11px');
 		await tree.focus();
 		await tree.press('ArrowDown');
@@ -611,16 +588,11 @@ suite('changes browser component', () => {
 		await checks.press('Enter');
 		await page.evaluate(() => window.ashChangesIntegration.visible(false));
 		await page.evaluate(() => window.ashChangesIntegration.visible(true));
-		await expect(page.getByRole('button', { name: 'Checks', exact: true })).toHaveAttribute(
-			'aria-expanded',
-			'false',
-		);
+		await expect(page.getByRole('button', { name: 'Checks', exact: true })).toHaveAttribute('aria-expanded', 'false');
 		await page.getByRole('button', { name: 'Checks', exact: true }).press('Enter');
 		await expect(checks).toHaveAttribute('aria-expanded', 'true');
 		await page.getByRole('button', { name: 'Sync changes', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashChangesIntegration.gitCalls()))
-			.toEqual(['git.pull:repository', 'git.push:repository']);
+		await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.gitCalls())).toEqual(['git.pull:repository', 'git.push:repository']);
 		await page.evaluate(() => window.ashChangesIntegration.setLocale());
 		await expect(page.locator('.ash-sessions-changes-summary')).toHaveText('1 个文件 +3 −2');
 	});
@@ -653,9 +625,7 @@ suite('changes browser component', () => {
 			await expect(form).toHaveCSS('border-radius', '12px');
 		}
 		await page.setViewportSize({ width: 320, height: 600 });
-		await expect
-			.poll(() => form.evaluate(element => element.getBoundingClientRect().right <= window.innerWidth))
-			.toBe(true);
+		await expect.poll(() => form.evaluate(element => element.getBoundingClientRect().right <= window.innerWidth)).toBe(true);
 		await form.getByRole('textbox', { name: 'Title', exact: true }).fill('Reviewed change');
 		await form.getByRole('textbox', { name: 'Description', exact: true }).fill('Why this change is needed');
 		await form.getByRole('textbox', { name: 'Target branch' }).fill('release');
@@ -699,9 +669,7 @@ suite('changes browser component', () => {
 		await expect(form.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('feature');
 		await page.evaluate(() => window.ashChangesIntegration.branch('other'));
 		await form.getByRole('button', { name: 'Create pull request' }).click();
-		await expect(form.getByRole('status')).toHaveText(
-			'The branch, remote or account changed. Reopen the pull request form.',
-		);
+		await expect(form.getByRole('status')).toHaveText('The branch, remote or account changed. Reopen the pull request form.');
 		await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.created())).toEqual([]);
 		await page.evaluate(() => window.ashChangesIntegration.accountChanged());
 		await expect(form).toBeHidden();
@@ -714,9 +682,7 @@ suite('changes browser component', () => {
 		await page.goto('/changes.html?locale=zh-CN');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await expect(page.getByRole('link', { name: 'Tests · 失败 · team/repo #7' })).toBeVisible();
-		await expect(page.locator('.ash-sessions-changes-repository-status')).toContainText(
-			'origin/feature：1 个传入 · 2 个传出 · 3 个未提交文件',
-		);
+		await expect(page.locator('.ash-sessions-changes-repository-status')).toContainText('origin/feature：1 个传入 · 2 个传出 · 3 个未提交文件');
 		await page.getByRole('combobox', { name: '更改视图模式' }).selectOption('tree');
 		await expect(page.getByRole('treeitem')).toHaveCount(4);
 		await page.getByRole('button', { name: '创建拉取请求', exact: true }).click();

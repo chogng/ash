@@ -25,9 +25,7 @@ test('DecorationsService merges async completion notifications and skips unchang
 	});
 	const resources = ['first', 'second', 'third'].map(name => URI.file(`/workspace/${name}`));
 	const notifications: boolean[][] = [];
-	using listener = decorations.onDidChangeDecorations(event =>
-		notifications.push(resources.map(resource => event.affectsResource(resource))),
-	);
+	using listener = decorations.onDidChangeDecorations(event => notifications.push(resources.map(resource => event.affectsResource(resource))));
 	const initial = new DeferredPromise<void>();
 	using initialListener = decorations.onDidChangeDecorations(() => {
 		initialListener.dispose();
@@ -208,16 +206,12 @@ test('DecorationsService combines provider descriptions and bubbles only opted-i
 	using ignored = decorations.registerDecorationsProvider({
 		label: 'Ignore',
 		onDidChange: Event.None,
-		provideDecorations: resource =>
-			resource.path === child.path ? { color: 'description.foreground', tooltip: 'Ignored' } : undefined,
+		provideDecorations: resource => (resource.path === child.path ? { color: 'description.foreground', tooltip: 'Ignored' } : undefined),
 	});
 	using marker = decorations.registerDecorationsProvider({
 		label: 'Problems',
 		onDidChange: updates.event,
-		provideDecorations: resource =>
-			resource.path === child.path
-				? { weight: 10, color: 'error.foreground', letter: '!', tooltip: 'Error', bubble: true }
-				: undefined,
+		provideDecorations: resource => (resource.path === child.path ? { weight: 10, color: 'error.foreground', letter: '!', tooltip: 'Error', bubble: true } : undefined),
 	});
 	using file = decorations.getDecoration(child, false)!;
 	assert.equal(file.tooltip, 'Error • Ignored');

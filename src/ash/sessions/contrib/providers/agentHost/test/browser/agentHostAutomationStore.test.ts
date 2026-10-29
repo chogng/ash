@@ -4,12 +4,7 @@ import { DeferredPromise } from '../../../../../../base/common/async.js';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
 import { observableValue } from '../../../../../../base/common/observable.js';
-import type {
-	Automation,
-	AutomationRun,
-	AutomationRunResult,
-	IAutomationBackendService,
-} from '../../../../../../platform/agentHost/common/automation.js';
+import type { Automation, AutomationRun, AutomationRunResult, IAutomationBackendService } from '../../../../../../platform/agentHost/common/automation.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { IRendererHostService, type IRendererHost } from '../../../../../../platform/renderer/common/rendererHost.js';
 import { AgentHostAutomationStore } from '../../browser/agentHostAutomationStore.js';
@@ -17,10 +12,7 @@ import { AgentHostAutomationStore } from '../../browser/agentHostAutomationStore
 function fixture() {
 	const resources = new DisposableStore();
 	const changes = resources.add(new Emitter<void>());
-	const connection = observableValue<'connected' | 'connecting' | 'disconnected'>(
-		'automation connection',
-		'connected',
-	);
+	const connection = observableValue<'connected' | 'connecting' | 'disconnected'>('automation connection', 'connected');
 	const automation: Automation = {
 		id: 'automation',
 		revision: 1,
@@ -112,9 +104,7 @@ for (const operation of ['create', 'update'] as const) {
 		};
 		const current = value.store.automations.get()[0]!;
 		const saving =
-			operation === 'create'
-				? value.store.createAutomation({ ...current, name: 'Saved on old connection' })
-				: value.store.updateAutomation(current.id, { name: 'Saved on old connection' });
+			operation === 'create' ? value.store.createAutomation({ ...current, name: 'Saved on old connection' }) : value.store.updateAutomation(current.id, { name: 'Saved on old connection' });
 		const replacement = {
 			...value.automation,
 			revision: 3,
@@ -256,10 +246,7 @@ test('PR follow-up pause preserves the backend condition and rejects generic edi
 		writes.push({ definition, status });
 		return { ...plan, definition, status, revision: 2 };
 	};
-	await assert.rejects(
-		value.store.updateAutomation(descriptor.id, { prompt: 'Unconditional repair' }),
-		/PR follow-up controls/,
-	);
+	await assert.rejects(value.store.updateAutomation(descriptor.id, { prompt: 'Unconditional repair' }), /PR follow-up controls/);
 	assert.deepEqual(writes, []);
 	await value.store.updateAutomation(descriptor.id, { enabled: false });
 	assert.deepEqual(writes, [{ definition: plan.definition, status: 'paused' }]);

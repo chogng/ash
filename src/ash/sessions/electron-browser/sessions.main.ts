@@ -33,11 +33,7 @@ import { Menus } from '../browser/menus.js';
 import { TitlebarPart } from '../browser/parts/titlebarPart.js';
 import { bindWindowControlTheme } from '../../workbench/electron-browser/parts/titlebar/titlebarPart.js';
 import { RETURN_TO_WORKBENCH_CHANNEL } from '../common/windowNavigation.js';
-import {
-	AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL,
-	AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL,
-	AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL,
-} from '../../platform/window/common/window.js';
+import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL } from '../../platform/window/common/window.js';
 import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { ElectronLifecycleService } from '../../workbench/services/lifecycle/electron-browser/lifecycleService.js';
 import { NativeHostColorSchemeService } from '../../workbench/services/themes/electron-browser/nativeHostColorSchemeService.js';
@@ -51,11 +47,7 @@ import { ISecretStorageService } from '../../platform/secrets/common/secrets.js'
 import { SecretStorageService } from '../../workbench/services/secrets/electron-browser/secretStorageService.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { ElectronIPCMainProcessService } from '../../platform/ipc/electron-browser/mainProcessService.js';
-import {
-	WINDOW_FULLSCREEN_CHANGED_CHANNEL,
-	WINDOW_OPERATION_CHANNEL,
-	WINDOW_ZOOM_CHANGED_CHANNEL,
-} from '../../platform/window/common/window.js';
+import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../platform/window/common/window.js';
 import { createWorkspaceContextApi } from '../../platform/workspace/electron-browser/workspaceContextApi.js';
 import { parseWorkspace } from '../../platform/workspace/common/workspace.js';
 import { selectionFromWorkspace } from '../browser/workspaceSelection.js';
@@ -108,15 +100,8 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 	sessions.add(toDisposable(() => handoffSubscription.dispose()));
 	const permissionDialog = sessions.add(new DirectoryPermissionDialog(container));
 	const transcriptionServices = sessions.add(new InstantiationService());
-	const profileServices = sessions.add(
-		new InstantiationService(
-			new ServiceCollection(...getSingletonServiceDescriptors().filter(([id]) => id === IPlaywrightService)),
-		),
-	);
-	const serviceCollection = new ServiceCollection([
-		IWorkbenchEnvironmentService,
-		new ElectronWorkbenchEnvironmentService(),
-	]);
+	const profileServices = sessions.add(new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors().filter(([id]) => id === IPlaywrightService))));
+	const serviceCollection = new ServiceCollection([IWorkbenchEnvironmentService, new ElectronWorkbenchEnvironmentService()]);
 	let logger: NativeLogService;
 	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
 	let documentClient: AppServerProtocolClient | undefined;
@@ -126,34 +111,18 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			throw new TypeError('Invalid Main IPC window ID');
 		}
 		// Release automation dependencies before their Main IPC connection during window shutdown.
-		profileServices.registerSingleton(IMainProcessService, () =>
-			profileServices.createInstance(ElectronIPCMainProcessService, windowId as number),
-		);
+		profileServices.registerSingleton(IMainProcessService, () => profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
 		const mainProcessService = profileServices.get(IMainProcessService);
-		const environment = new ElectronWorkbenchEnvironmentService(
-			await mainProcessService.getChannel('logger').call('getDefaultLogLevels'),
-		);
+		const environment = new ElectronWorkbenchEnvironmentService(await mainProcessService.getChannel('logger').call('getDefaultLogLevels'));
 		profileServices.registerInstance(IWorkbenchEnvironmentService, environment);
 		const playwrightService = profileServices.get(IPlaywrightService);
 		serviceCollection.set(IMainProcessService, mainProcessService);
-		serviceCollection.set(
-			ISecretStorageService,
-			sessions.add(profileServices.createInstance(SecretStorageService)),
-		);
+		serviceCollection.set(ISecretStorageService, sessions.add(profileServices.createInstance(SecretStorageService)));
 		serviceCollection.set(IWorkbenchEnvironmentService, environment);
-		serviceCollection.set(
-			IPolicyService,
-			sessions.add(new PolicyChannelClient(mainProcessService.getChannel('policy'))),
-		);
+		serviceCollection.set(IPolicyService, sessions.add(new PolicyChannelClient(mainProcessService.getChannel('policy'))));
 		serviceCollection.set(IPlaywrightService, playwrightService);
-		serviceCollection.set(
-			IBrowserPasswordService,
-			ProxyChannel.toService<IBrowserPasswordService>(mainProcessService.getChannel('browserPasswords')),
-		);
-		serviceCollection.set(
-			IBrowserViewService,
-			ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName)),
-		);
+		serviceCollection.set(IBrowserPasswordService, ProxyChannel.toService<IBrowserPasswordService>(mainProcessService.getChannel('browserPasswords')));
+		serviceCollection.set(IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName)));
 		logger = sessions.add(profileServices.createInstance(NativeLogService, 'agents'));
 		serviceCollection.set(ILoggerService, logger);
 		api = await createElectronRendererApi(
@@ -162,8 +131,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					documentClient = client;
 					return {};
 				},
-				(_client, _appServer, localClient) =>
-					registerLocalTranscriptionService(transcriptionServices, localClient),
+				(_client, _appServer, localClient) => registerLocalTranscriptionService(transcriptionServices, localClient),
 			],
 			{ browser: true, textDocuments: true, appTools: true, agentHosts: true },
 			permissionDialog,
@@ -179,12 +147,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		sessions.add(profileFiles.registerProvider(api.userDataHome.scheme, api.localFiles));
 		profileServices.registerInstance(IFileService, profileFiles);
 		const { loadUserThemes } = await import('../../workbench/services/themes/browser/workbenchThemeService.js');
-		sessions.add(
-			await loadUserThemes(
-				profileServices,
-				URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes'),
-			),
-		);
+		sessions.add(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));
 		const setFullscreen = (fullscreen: boolean): void => {
 			container.classList.toggle('ash-sessions-fullscreen', fullscreen);
 		};
@@ -216,15 +179,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			await createSessionsWorkbench({
 				serviceCollection,
 				createAppToolsHost: documentClient
-					? services =>
-							new AppServerAppToolsHost(
-								documentClient!,
-								services.createInstance(
-									AppToolsHost,
-									container.ownerDocument,
-									services.get(IUpdateService),
-								),
-							)
+					? services => new AppServerAppToolsHost(documentClient!, services.createInstance(AppToolsHost, container.ownerDocument, services.get(IUpdateService)))
 					: undefined,
 				createBrowserHost: documentClient
 					? services =>
@@ -318,11 +273,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					sessions.add(
 						lifecycleService.onWillShutdown(event =>
 							event.join(
-								logger
-									.flush()
-									.catch(error =>
-										console.error('Could not flush Agents logs during shutdown', error),
-									),
+								logger.flush().catch(error => console.error('Could not flush Agents logs during shutdown', error)),
 								'Agents logs flush',
 							),
 						),
@@ -330,17 +281,14 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					return lifecycleService;
 				},
 				nativeHostApi: api.nativeHost,
-				createAuxiliaryWindowService: (opener, root, services) =>
-					services.createInstance(ElectronAuxiliaryWindowService, opener, root),
+				createAuxiliaryWindowService: (opener, root, services) => services.createInstance(ElectronAuxiliaryWindowService, opener, root),
 				keyboardLayoutProvider: api.keyboardLayout,
 				userKeyboardLayoutApi: api.userKeyboardLayout,
 				returnToWorkbench: () => {
 					void invoke<void>(RETURN_TO_WORKBENCH_CHANNEL).catch(onUnexpectedError);
 				},
-				createUserDataFileSystemProvider: async () =>
-					new FileUserDataProvider(api.localFiles, api.userDataHome),
-				createContextMenuService: services =>
-					services.createInstance(ElectronContextMenuService, api.nativeContextMenu),
+				createUserDataFileSystemProvider: async () => new FileUserDataProvider(api.localFiles, api.userDataHome),
+				createContextMenuService: services => services.createInstance(ElectronContextMenuService, api.nativeContextMenu),
 				createHostColorSchemeService: services => {
 					const colors = services.createInstance(NativeHostColorSchemeService, hostColorScheme);
 					void colors.initialize().catch(onUnexpectedError);
@@ -351,11 +299,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 						// Publish this window's menu so switching focus never dispatches Workbench-only actions here.
 						sessions.add(services.createInstance(NativeMenubarControl, Menus.MenubarMainMenu));
 					}
-					return services.createInstance(
-						TitlebarPart,
-						titlebarContainer,
-						isMacintosh ? 'actions-only' : 'application-menu',
-					);
+					return services.createInstance(TitlebarPart, titlebarContainer, isMacintosh ? 'actions-only' : 'application-menu');
 				},
 				container,
 			}),

@@ -76,8 +76,7 @@ class PixelRatioFacade {
 
 function readPixelRatio(targetWindow: Window): number {
 	const value = targetWindow.devicePixelRatio;
-	if (!Number.isFinite(value) || value <= 0)
-		throw new RangeError('Window device pixel ratio must be finite and positive');
+	if (!Number.isFinite(value) || value <= 0) throw new RangeError('Window device pixel ratio must be finite and positive');
 	return value;
 }
 

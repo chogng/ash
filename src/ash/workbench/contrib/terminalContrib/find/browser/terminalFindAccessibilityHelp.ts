@@ -1,10 +1,5 @@
 import { localize } from '../../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IAccessibleViewImplementation } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ITerminalService } from '../../../terminal/browser/terminal.js';
@@ -33,10 +28,7 @@ export class TerminalFindAccessibilityHelp implements IAccessibleViewImplementat
 			{ type: AccessibleViewType.Help },
 			() =>
 				[
-					localize(
-						'terminal.find.help.overview',
-						'Find searches this terminal’s retained screen and scrollback. The result count is announced when it changes.',
-					),
+					localize('terminal.find.help.overview', 'Find searches this terminal’s retained screen and scrollback. The result count is announced when it changes.'),
 					localize(
 						'terminal.find.help.navigation',
 						'Type a search term. Enter moves to the next match; Shift+Enter moves to the previous match. <keybinding:workbench.action.terminal.findNext> and <keybinding:workbench.action.terminal.findPrevious> also navigate matches.',

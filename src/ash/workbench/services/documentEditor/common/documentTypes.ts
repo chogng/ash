@@ -3,11 +3,7 @@ import type { ChannelReference } from '../../../../platform/collab/common/channe
 import type { URI } from '../../../../base/common/uri.js';
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import type {
-	ITextModelResourceService,
-	TextModelBlockInput,
-	TextModelWorkingCopyReference,
-} from '../../textmodelResolver/common/textModelResourceService.js';
+import type { ITextModelResourceService, TextModelBlockInput, TextModelWorkingCopyReference } from '../../textmodelResolver/common/textModelResourceService.js';
 import type { IEditorPane } from '../../../common/editor.js';
 import type { CallDocument } from '../../../../platform/call/common/callService.js';
 
@@ -19,10 +15,7 @@ export interface IDocumentCollaborationEditor extends IEditorPane {
 
 export function isDocumentCollaborationEditor(pane: IEditorPane | undefined): pane is IDocumentCollaborationEditor {
 	const candidate = pane as Partial<IDocumentCollaborationEditor> | undefined;
-	return (
-		typeof candidate?.getCollaborationDocument === 'function' &&
-		typeof candidate.joinCollaborationDocument === 'function'
-	);
+	return typeof candidate?.getCollaborationDocument === 'function' && typeof candidate.joinCollaborationDocument === 'function';
 }
 
 export interface DocumentType {
@@ -46,13 +39,7 @@ class DocumentTypeRegistry {
 		const mediaType = input.contentType?.split(';', 1)[0].trim().toLowerCase();
 		return (
 			this.find(input) !== undefined ||
-			[...this.reservations].some(types =>
-				types.some(
-					type =>
-						mediaType === type.contentType ||
-						type.extensions.some(extension => input.resource.path.toLowerCase().endsWith(extension)),
-				),
-			)
+			[...this.reservations].some(types => types.some(type => mediaType === type.contentType || type.extensions.some(extension => input.resource.path.toLowerCase().endsWith(extension))))
 		);
 	}
 
@@ -93,13 +80,8 @@ class DocumentTypeRegistry {
 
 export const DocumentTypes = new DocumentTypeRegistry();
 
-export interface IDocumentEditorTextModelService extends ITextModelResourceService<
-	TextModelBlockInput,
-	TextModelWorkingCopyReference
-> {
+export interface IDocumentEditorTextModelService extends ITextModelResourceService<TextModelBlockInput, TextModelWorkingCopyReference> {
 	/** A remote authority saved this exact snapshot; newer local edits remain dirty. */
 	acceptCollaborationSnapshot(resource: URI, document: DocumentNode): void;
 }
-export const IDocumentEditorTextModelService = createServiceIdentifier<IDocumentEditorTextModelService>(
-	'documentEditorTextModelService',
-);
+export const IDocumentEditorTextModelService = createServiceIdentifier<IDocumentEditorTextModelService>('documentEditorTextModelService');

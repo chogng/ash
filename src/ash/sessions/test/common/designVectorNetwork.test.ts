@@ -3,11 +3,7 @@ import { test } from 'mocha';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { DocumentCommands } from '../../contrib/creator/common/commands/documentCommands.js';
 import { DesignModel } from '../../contrib/creator/common/model/designModel.js';
-import {
-	documentFromShapes,
-	parseDesignDocument,
-	serializeDesignDocument,
-} from '../../contrib/creator/common/model/document.js';
+import { documentFromShapes, parseDesignDocument, serializeDesignDocument } from '../../contrib/creator/common/model/document.js';
 import { designPathContours, type DesignPath } from '../../contrib/creator/common/model/designVector.js';
 import {
 	connectDesignNetwork,
@@ -20,11 +16,7 @@ import {
 } from '../../contrib/creator/common/model/designVectorNetwork.js';
 import { cubicBezierPoint } from '../../contrib/creator/common/core/geometry.js';
 import { hitTestDesignShapes } from '../../contrib/creator/common/model/hitTest.js';
-import {
-	intersectDesignNetwork,
-	mergeDesignNetworkVertices,
-	simplifyDesignNetwork,
-} from '../../contrib/creator/common/model/designVectorTopology.js';
+import { intersectDesignNetwork, mergeDesignNetworkVertices, simplifyDesignNetwork } from '../../contrib/creator/common/model/designVectorTopology.js';
 import type { DesignVectorNetwork } from '../../contrib/creator/common/model/designVectorNetwork.js';
 
 const square = (): DesignPath => ({
@@ -45,10 +37,7 @@ const square = (): DesignPath => ({
 		[0, 1],
 	].map(([x, y]) => ({ x, y, incoming: { x, y }, outgoing: { x, y } })),
 });
-const lines = (
-	points: readonly (readonly [number, number])[],
-	edges: readonly (readonly [number, number])[],
-): DesignVectorNetwork => ({
+const lines = (points: readonly (readonly [number, number])[], edges: readonly (readonly [number, number])[]): DesignVectorNetwork => ({
 	vertices: points.map(([x, y]) => ({ x, y })),
 	edges: edges.map(([start, end]) => ({
 		id: generateUuid(),
@@ -92,31 +81,13 @@ test('Crossings become one shared junction independent of intersection order, wi
 			const t = i / 20,
 				part = t <= 0.5 ? left : right,
 				u = t <= 0.5 ? t * 2 : (t - 0.5) * 2;
-			const expected = cubicBezierPoint(
-					network.vertices[edge.start],
-					edge.outgoing,
-					edge.incoming,
-					network.vertices[edge.end],
-					t,
-				),
-				actual = cubicBezierPoint(
-					result.vertices[part.start],
-					part.outgoing,
-					part.incoming,
-					result.vertices[part.end],
-					u,
-				);
+			const expected = cubicBezierPoint(network.vertices[edge.start], edge.outgoing, edge.incoming, network.vertices[edge.end], t),
+				actual = cubicBezierPoint(result.vertices[part.start], part.outgoing, part.incoming, result.vertices[part.end], u);
 			assert.ok(Math.hypot(actual.x - expected.x, actual.y - expected.y) < 1e-10);
 		}
 	}
 	const moved = moveDesignNetworkVertices(result, new Set([6]), 0.1, 0.2);
-	assert.equal(
-		moved.edges.filter(
-			(edge, i) =>
-				edge.outgoing.x !== result.edges[i].outgoing.x || edge.incoming.x !== result.edges[i].incoming.x,
-		).length,
-		6,
-	);
+	assert.equal(moved.edges.filter((edge, i) => edge.outgoing.x !== result.edges[i].outgoing.x || edge.incoming.x !== result.edges[i].incoming.x).length, 6);
 });
 
 test('Endpoint intersections reuse anchors, multiple cuts stay exact and subdivision retains region paint', () => {
@@ -137,9 +108,7 @@ test('Endpoint intersections reuse anchors, multiple cuts stay exact and subdivi
 	);
 	const curve = {
 		...network,
-		edges: network.edges.map((edge, i) =>
-			i ? edge : { ...edge, outgoing: { x: 1 / 3, y: 0.5 }, incoming: { x: 2 / 3, y: 0.5 } },
-		),
+		edges: network.edges.map((edge, i) => (i ? edge : { ...edge, outgoing: { x: 1 / 3, y: 0.5 }, incoming: { x: 2 / 3, y: 0.5 } })),
 	};
 	const result = intersectDesignNetwork(curve, [
 		{ first: { edge: 0, time: 0.75 }, second: { edge: 2, time: 0.5 } },
@@ -151,19 +120,11 @@ test('Endpoint intersections reuse anchors, multiple cuts stay exact and subdivi
 		region = designNetworkRegions(base)[0];
 	const painted = { ...base, regionFills: { [region.key]: '#0088ff' }, unfilledRegions: [region.key] };
 	const crossed = connectDesignNetwork(painted, 1, 3);
-	const subdivided = intersectDesignNetwork(
-		crossed,
-		[{ first: { edge: 4, time: 0.5 }, second: { edge: 5, time: 0.5 } }],
-		painted,
-	).network;
+	const subdivided = intersectDesignNetwork(crossed, [{ first: { edge: 4, time: 0.5 }, second: { edge: 5, time: 0.5 } }], painted).network;
 	assert.equal(designNetworkRegions(subdivided).length, 4);
 	assert.equal(designNetworkRegions(subdivided).filter(region => !region.filled).length, 2);
 	assert.deepEqual(Object.values(subdivided.regionFills!), ['#0088ff', '#0088ff']);
-	assert.doesNotThrow(() =>
-		parseDesignDocument(
-			serializeDesignDocument(documentFromShapes([withDesignVectorNetwork(square(), subdivided)])),
-		),
-	);
+	assert.doesNotThrow(() => parseDesignDocument(serializeDesignDocument(documentFromShapes([withDesignVectorNetwork(square(), subdivided)]))));
 	const tee = lines(
 		[
 			[0, 0],
@@ -176,9 +137,7 @@ test('Endpoint intersections reuse anchors, multiple cuts stay exact and subdivi
 			[2, 3],
 		],
 	);
-	const joined = intersectDesignNetwork(tee, [
-		{ first: { edge: 0, time: 0.5 }, second: { edge: 1, time: 0 } },
-	]).network;
+	const joined = intersectDesignNetwork(tee, [{ first: { edge: 0, time: 0.5 }, second: { edge: 1, time: 0 } }]).network;
 	assert.equal(joined.vertices.length, 4);
 	assert.equal(joined.edges.filter(edge => edge.start === 2 || edge.end === 2).length, 3);
 });
@@ -230,9 +189,7 @@ test('Merging moves incident handles, removes collapsed straight segments and re
 		).network.edges.length,
 		0,
 	);
-	assert.doesNotThrow(() =>
-		parseDesignDocument(serializeDesignDocument(documentFromShapes([withDesignVectorNetwork(square(), loop)]))),
-	);
+	assert.doesNotThrow(() => parseDesignDocument(serializeDesignDocument(documentFromShapes([withDesignVectorNetwork(square(), loop)]))));
 });
 
 test('Partially overlapping segments share their overlap exactly once despite different cubic parameter speeds', () => {
@@ -255,16 +212,10 @@ test('Partially overlapping segments share their overlap exactly once despite di
 	assert.equal(result.vertices.length, 4);
 	assert.equal(result.edges.length, 3);
 	assert.equal(
-		result.edges.filter(
-			edge =>
-				Math.min(result.vertices[edge.start].x, result.vertices[edge.end].x) === 0.5 &&
-				Math.max(result.vertices[edge.start].x, result.vertices[edge.end].x) === 1,
-		).length,
+		result.edges.filter(edge => Math.min(result.vertices[edge.start].x, result.vertices[edge.end].x) === 0.5 && Math.max(result.vertices[edge.start].x, result.vertices[edge.end].x) === 1).length,
 		1,
 	);
-	assert.doesNotThrow(() =>
-		parseDesignDocument(serializeDesignDocument(documentFromShapes([withDesignVectorNetwork(square(), result)]))),
-	);
+	assert.doesNotThrow(() => parseDesignDocument(serializeDesignDocument(documentFromShapes([withDesignVectorNetwork(square(), result)]))));
 });
 
 test('Simplification removes redundant anchors but protects junctions, endpoints, corners and painted holes', () => {
@@ -287,21 +238,12 @@ test('Simplification removes redundant anchors but protects junctions, endpoints
 	);
 	assert.equal(simplifyDesignNetwork(network, 100, 100, 0).network, network);
 	const result = simplifyDesignNetwork(network, 100, 100, 0.5);
-	assert.deepEqual(result.network.vertices, [
-		network.vertices[0],
-		network.vertices[2],
-		network.vertices[4],
-		network.vertices[5],
-	]);
+	assert.deepEqual(result.network.vertices, [network.vertices[0], network.vertices[2], network.vertices[4], network.vertices[5]]);
 	assert.equal(result.network.edges.length, 3);
 	assert.equal(result.network.edges.filter(edge => edge.start === 1 || edge.end === 1).length, 3);
 	const base = toDesignVectorNetwork(square()),
 		key = designNetworkRegions(base)[0].key;
-	const split = splitDesignNetworkEdge(
-		{ ...base, regionFills: { [key]: '#0022ff' }, unfilledRegions: [key] },
-		0,
-		0.3,
-	);
+	const split = splitDesignNetworkEdge({ ...base, regionFills: { [key]: '#0022ff' }, unfilledRegions: [key] }, 0, 0.3);
 	const simplified = simplifyDesignNetwork(split, 200, 100, 0.5).network;
 	assert.equal(simplified.vertices.length, 4);
 	assert.equal(designNetworkRegions(simplified).length, 1);
@@ -365,20 +307,8 @@ test('Simplification reunites subdivided cubic curves without flattening their h
 	const a = original.edges[0],
 		b = simplified.edges[0];
 	for (let i = 0; i <= 100; i++) {
-		const expected = cubicBezierPoint(
-				original.vertices[a.start],
-				a.outgoing,
-				a.incoming,
-				original.vertices[a.end],
-				i / 100,
-			),
-			actual = cubicBezierPoint(
-				simplified.vertices[b.start],
-				b.outgoing,
-				b.incoming,
-				simplified.vertices[b.end],
-				i / 100,
-			);
+		const expected = cubicBezierPoint(original.vertices[a.start], a.outgoing, a.incoming, original.vertices[a.end], i / 100),
+			actual = cubicBezierPoint(simplified.vertices[b.start], b.outgoing, b.incoming, simplified.vertices[b.end], i / 100);
 		assert.ok(Math.hypot((actual.x - expected.x) * 400, (actual.y - expected.y) * 150) < 1e-5);
 	}
 });
@@ -447,9 +377,7 @@ test('Splitting a network curve keeps its exact cubic and connectivity', () => {
 	const base = toDesignVectorNetwork(square());
 	const network = {
 		...base,
-		edges: base.edges.map((edge, i) =>
-			i ? edge : { ...edge, outgoing: { x: 0.2, y: -0.7 }, incoming: { x: 0.8, y: 0.4 } },
-		),
+		edges: base.edges.map((edge, i) => (i ? edge : { ...edge, outgoing: { x: 0.2, y: -0.7 }, incoming: { x: 0.8, y: 0.4 } })),
 	};
 	const split = splitDesignNetworkEdge(network, 0, 0.3),
 		edge = network.edges[0],
@@ -462,10 +390,7 @@ test('Splitting a network curve keeps its exact cubic and connectivity', () => {
 	for (let i = 0; i <= 20; i++) {
 		const t = i / 20,
 			expected = cubicBezierPoint(a, edge.outgoing, edge.incoming, b, t);
-		const actual =
-			t <= 0.3
-				? cubicBezierPoint(a, left.outgoing, left.incoming, middle, t / 0.3)
-				: cubicBezierPoint(middle, right.outgoing, right.incoming, b, (t - 0.3) / 0.7);
+		const actual = t <= 0.3 ? cubicBezierPoint(a, left.outgoing, left.incoming, middle, t / 0.3) : cubicBezierPoint(middle, right.outgoing, right.incoming, b, (t - 0.3) / 0.7);
 		assert.ok(Math.hypot(expected.x - actual.x, expected.y - actual.y) < 1e-10);
 	}
 });
@@ -473,10 +398,7 @@ test('Splitting a network curve keeps its exact cubic and connectivity', () => {
 test('Network document round-trip, deletion, cut and undo preserve topology and reject conflicting geometry', () => {
 	using model = new DesignModel();
 	const commands = new DocumentCommands(model);
-	const path = withDesignVectorNetwork(
-		square(),
-		connectDesignNetwork(toDesignVectorNetwork(square()), 0, { x: -0.5, y: -0.5 }),
-	);
+	const path = withDesignVectorNetwork(square(), connectDesignNetwork(toDesignVectorNetwork(square()), 0, { x: -0.5, y: -0.5 }));
 	model.replace(documentFromShapes([path]));
 	const serialized = serializeDesignDocument(model.value),
 		raw = JSON.parse(serialized);
@@ -540,9 +462,7 @@ test('Network conversion preserves compound holes and region paint through subdi
 	const divided = connectDesignNetwork({ ...base, unfilledRegions: [key], regionFills: { [key]: '#0088ff' } }, 0, 2);
 	assert.equal(designNetworkRegions(divided).filter(region => region.filled).length, 0);
 	assert.deepEqual(Object.values(divided.regionFills!), ['#0088ff', '#0088ff']);
-	assert.doesNotThrow(() =>
-		parseDesignDocument(serializeDesignDocument(documentFromShapes([withDesignVectorNetwork(square(), divided)]))),
-	);
+	assert.doesNotThrow(() => parseDesignDocument(serializeDesignDocument(documentFromShapes([withDesignVectorNetwork(square(), divided)]))));
 });
 
 test('Network mirroring survives conversion and all handles remain serializable', async () => {
@@ -590,7 +510,5 @@ test('Network topology supports parallel curved edges and keeps compound contour
 	const network = toDesignVectorNetwork({ ...source, subpaths: [second] });
 	assert.equal(designNetworkRegions(network).length, 2);
 	assert.deepEqual(Object.values(network.regionFills!), ['#0022cc']);
-	assert.doesNotThrow(() =>
-		parseDesignDocument(serializeDesignDocument(documentFromShapes([withDesignVectorNetwork(source, network)]))),
-	);
+	assert.doesNotThrow(() => parseDesignDocument(serializeDesignDocument(documentFromShapes([withDesignVectorNetwork(source, network)]))));
 });

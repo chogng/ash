@@ -41,21 +41,9 @@ test('clean removes outputs and tool caches while preserving dependencies and li
 		await writeFile(join(root, file), 'keep');
 	}
 	await copyFile(join(import.meta.dirname, 'clean.ts'), join(root, 'build/clean.ts'));
-	await symlink(
-		join(root, 'external'),
-		join(root, 'build/linked'),
-		process.platform === 'win32' ? 'junction' : 'dir',
-	);
-	await symlink(
-		join(root, 'external'),
-		join(root, '.build/linked'),
-		process.platform === 'win32' ? 'junction' : 'dir',
-	);
-	await symlink(
-		join(root, 'external'),
-		join(root, '.build/desktop/linked'),
-		process.platform === 'win32' ? 'junction' : 'dir',
-	);
+	await symlink(join(root, 'external'), join(root, 'build/linked'), process.platform === 'win32' ? 'junction' : 'dir');
+	await symlink(join(root, 'external'), join(root, '.build/linked'), process.platform === 'win32' ? 'junction' : 'dir');
+	await symlink(join(root, 'external'), join(root, '.build/desktop/linked'), process.platform === 'win32' ? 'junction' : 'dir');
 	for (let attempt = 0; attempt < 2; attempt++) {
 		const result = spawnSync(process.execPath, [join(root, 'build/clean.ts')], {
 			cwd: tmpdir(),

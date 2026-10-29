@@ -26,34 +26,16 @@ export function setupTerminalMenus(): void {
 		});
 	}
 	for (const [id, title, group, order] of [
-		[
-			TerminalCommandId.ConfigureTerminalSettings,
-			localize2('terminal.configureSettings', 'Configure Terminal Settings'),
-			'3_configure',
-			1,
-		],
-		[
-			TerminalCommandId.SelectDefaultProfile,
-			localize2('terminal.title.selectDefaultProfile', 'Select Default Profile'),
-			'3_configure',
-			2,
-		],
+		[TerminalCommandId.ConfigureTerminalSettings, localize2('terminal.configureSettings', 'Configure Terminal Settings'), '3_configure', 1],
+		[TerminalCommandId.SelectDefaultProfile, localize2('terminal.title.selectDefaultProfile', 'Select Default Profile'), '3_configure', 2],
 		['workbench.action.tasks.runTask', localize2('terminal.runTask', 'Run Task...'), '4_tasks', 1],
-		[
-			'workbench.action.tasks.configureTaskRunner',
-			localize2('terminal.configureTasks', 'Configure Tasks...'),
-			'4_tasks',
-			2,
-		],
+		['workbench.action.tasks.configureTaskRunner', localize2('terminal.configureTasks', 'Configure Tasks...'), '4_tasks', 2],
 	] as const) {
 		MenusRegistry.appendMenuItem(MenuId.TerminalNewDropdownContext, {
 			command: {
 				id,
 				title,
-				precondition:
-					id !== TerminalCommandId.ConfigureTerminalSettings
-						? AppServerAvailableContext.isEqualTo(true)
-						: undefined,
+				precondition: id !== TerminalCommandId.ConfigureTerminalSettings ? AppServerAvailableContext.isEqualTo(true) : undefined,
 			},
 			group,
 			order,
@@ -110,20 +92,13 @@ export function setupTerminalMenus(): void {
 			title: localize2('terminal.title.new', 'New Terminal'),
 			tooltip: localize('terminal.title.new', 'New Terminal'),
 			icon: newTerminalIcon,
-			precondition: ContextKeyExpr.and(
-				AppServerAvailableContext.isEqualTo(true),
-				TerminalCreatingContext.isEqualTo(false),
-			),
+			precondition: ContextKeyExpr.and(AppServerAvailableContext.isEqualTo(true), TerminalCreatingContext.isEqualTo(false)),
 		},
 		alt: {
 			id: TerminalCommandId.Split,
 			title: localize2('terminal.group.splitMenu', 'Split Terminal'),
 			icon: Lxicon.splitHorizontal,
-			precondition: ContextKeyExpr.and(
-				TerminalHasActiveInstanceContext.isEqualTo(true),
-				TerminalCreatingContext.isEqualTo(false),
-				TerminalActiveInstanceStateContext.isEqualTo('running'),
-			),
+			precondition: ContextKeyExpr.and(TerminalHasActiveInstanceContext.isEqualTo(true), TerminalCreatingContext.isEqualTo(false), TerminalActiveInstanceStateContext.isEqualTo('running')),
 		},
 		group: 'navigation',
 		order: 10,
@@ -133,10 +108,7 @@ export function setupTerminalMenus(): void {
 			id: TerminalCommandId.Split,
 			title: localize2('terminal.group.splitMenu', 'Split Terminal'),
 			icon: Lxicon.splitHorizontal,
-			precondition: ContextKeyExpr.and(
-				TerminalCreatingContext.isEqualTo(false),
-				TerminalActiveInstanceStateContext.isEqualTo('running'),
-			),
+			precondition: ContextKeyExpr.and(TerminalCreatingContext.isEqualTo(false), TerminalActiveInstanceStateContext.isEqualTo('running')),
 		},
 		when: TerminalViewInlineActionsContext.isEqualTo(true),
 		group: 'navigation',
@@ -149,10 +121,7 @@ export function setupTerminalMenus(): void {
 			tooltip: localize('terminal.title.relaunch', 'Relaunch Terminal'),
 			icon: Lxicon.history,
 		},
-		when: ContextKeyExpr.and(
-			TerminalHasActiveInstanceContext.isEqualTo(true),
-			ContextKeyExpr.notEquals(TerminalActiveInstanceStateContext.key, 'reconnecting'),
-		),
+		when: ContextKeyExpr.and(TerminalHasActiveInstanceContext.isEqualTo(true), ContextKeyExpr.notEquals(TerminalActiveInstanceStateContext.key, 'reconnecting')),
 		group: '1_terminal',
 		order: 20,
 	});

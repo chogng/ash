@@ -2,14 +2,7 @@ import { Range } from '../../core/range.js';
 import { type LanguageToken } from '../../tokens/languageTokens.js';
 import { TokenizationRegistry, type ILanguageIdCodec, type Token } from '../../languages.js';
 import { Color } from '../../../../base/common/color.js';
-import {
-	ColorId,
-	FontStyle,
-	type LanguageId,
-	MetadataConsts,
-	StandardTokenType,
-	TokenMetadata,
-} from '../../encodedTokenAttributes.js';
+import { ColorId, FontStyle, type LanguageId, MetadataConsts, StandardTokenType, TokenMetadata } from '../../encodedTokenAttributes.js';
 
 export interface ITokenThemeRule {
 	token: string;
@@ -201,21 +194,10 @@ export function appendLanguageTokens(
 			...(style & FontStyle.Strikethrough ? ['strikethrough' as const] : []),
 		];
 		const languageId = codec.decodeLanguageId(TokenMetadata.getLanguageId(metadata));
-		const standardType =
-			type === StandardTokenType.Comment
-				? 'comment'
-				: type === StandardTokenType.String
-					? 'string'
-					: type === StandardTokenType.RegEx
-						? 'regexp'
-						: 'other';
+		const standardType = type === StandardTokenType.Comment ? 'comment' : type === StandardTokenType.String ? 'string' : type === StandardTokenType.RegEx ? 'regexp' : 'other';
 		const presentation = {
-			foreground:
-				foreground === ColorId.None ? undefined : Color.Format.CSS.formatHexA(colors[foreground]!, true),
-			background:
-				background === ColorId.None || background === ColorId.DefaultBackground
-					? undefined
-					: Color.Format.CSS.formatHexA(colors[background]!, true),
+			foreground: foreground === ColorId.None ? undefined : Color.Format.CSS.formatHexA(colors[foreground]!, true),
+			background: background === ColorId.None || background === ColorId.DefaultBackground ? undefined : Color.Format.CSS.formatHexA(colors[background]!, true),
 			fontStyle,
 		};
 		while (rawTokens?.[rawIndex + 1] && rawTokens[rawIndex + 1]!.offset <= start) rawIndex++;
@@ -224,10 +206,7 @@ export function appendLanguageTokens(
 			const rawToken = rawTokens?.[rawIndex];
 			target.push({
 				range: new Range(lineNumber, from + 1, lineNumber, to + 1),
-				tokenType:
-					rawToken && rawToken.offset <= from && rawToken.language === languageId && rawToken.type
-						? rawToken.type
-						: standardType,
+				tokenType: rawToken && rawToken.offset <= from && rawToken.language === languageId && rawToken.type ? rawToken.type : standardType,
 				modifiers: [],
 				languageId,
 				...(TokenMetadata.containsBalancedBrackets(metadata) ? {} : { balancedBrackets: false as const }),

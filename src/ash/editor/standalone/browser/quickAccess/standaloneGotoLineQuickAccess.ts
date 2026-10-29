@@ -38,7 +38,11 @@ export class GotoOffsetAction extends EditorAction {
 	public static readonly ID = 'editor.action.gotoOffset';
 
 	constructor() {
-		super({ id: GotoOffsetAction.ID, label: localize2('gotoOffset', 'Go to Offset...'), precondition: undefined });
+		super({
+			id: GotoOffsetAction.ID,
+			label: localize2('gotoOffset', 'Go to Offset...'),
+			precondition: undefined,
+		});
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {

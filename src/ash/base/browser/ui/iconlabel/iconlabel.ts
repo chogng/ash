@@ -87,11 +87,7 @@ export class IconLabel extends Disposable {
 		this.setLabel(options.label, options.description, options);
 	}
 
-	setLabel(
-		label: string | readonly string[] | undefined,
-		description?: string,
-		options?: IconLabelValueOptions,
-	): void {
+	setLabel(label: string | readonly string[] | undefined, description?: string, options?: IconLabelValueOptions): void {
 		this.setIcon(
 			options?.hideIcon ? undefined : options?.icon,
 			options?.hideIcon ? undefined : options?.renderIcon,
@@ -101,50 +97,25 @@ export class IconLabel extends Disposable {
 		);
 
 		this.updateClasses(options);
-		this.labelContainer.classList.toggle(
-			'disabled',
-			options?.disabledCommand === true || options?.extraClasses?.includes('disabled') === true,
-		);
-		const ariaLabel =
-			options?.ariaLabel ?? (typeof options?.title === 'string' ? getIconAriaLabel(options.title) : undefined);
+		this.labelContainer.classList.toggle('disabled', options?.disabledCommand === true || options?.extraClasses?.includes('disabled') === true);
+		const ariaLabel = options?.ariaLabel ?? (typeof options?.title === 'string' ? getIconAriaLabel(options.title) : undefined);
 		if (ariaLabel !== undefined) this.element.setAttribute('aria-label', ariaLabel);
 		else this.element.removeAttribute('aria-label');
 
 		const supportIcons = options?.supportIcons ?? this.supportIcons;
 		const separator = options?.separator ?? '/';
-		const escapedName = normalizeLabel(
-			label ?? '',
-			options?.matches,
-			options?.labelEscapeNewLines === true,
-			separator,
-		);
-		const escapedDescription = normalizeLabel(
-			description,
-			options?.descriptionMatches,
-			options?.labelEscapeNewLines === true,
-		);
+		const escapedName = normalizeLabel(label ?? '', options?.matches, options?.labelEscapeNewLines === true, separator);
+		const escapedDescription = normalizeLabel(description, options?.descriptionMatches, options?.labelEscapeNewLines === true);
 		this.renderName(escapedName.value ?? '', supportIcons, escapedName.matches, separator, options?.domId);
-		this.renderDescription(
-			typeof escapedDescription.value === 'string' ? escapedDescription.value : undefined,
-			escapedDescription.matches,
-			supportIcons,
-			options?.descriptionTitle,
-		);
+		this.renderDescription(typeof escapedDescription.value === 'string' ? escapedDescription.value : undefined, escapedDescription.matches, supportIcons, options?.descriptionTitle);
 		this.renderSuffix(options?.suffix);
 		this.renderSuffixIcon(options?.suffixIcon);
 		this.setHover(this.titleHover, this.element, options?.title);
 	}
 
 	/** Replaces the current icon while keeping the label nodes stable. */
-	setIcon(
-		icon: Icon | undefined,
-		renderIcon: ((container: HTMLSpanElement) => void) | undefined = undefined,
-		reserveIconSpace = false,
-		hideIcon = false,
-		iconPath?: URI,
-	): void {
-		if (Number(!!icon) + Number(!!renderIcon) + Number(!!iconPath) > 1)
-			throw new TypeError('IconLabel accepts one icon source');
+	setIcon(icon: Icon | undefined, renderIcon: ((container: HTMLSpanElement) => void) | undefined = undefined, reserveIconSpace = false, hideIcon = false, iconPath?: URI): void {
+		if (Number(!!icon) + Number(!!renderIcon) + Number(!!iconPath) > 1) throw new TypeError('IconLabel accepts one icon source');
 		this.iconElement.replaceChildren();
 		this.iconElement.className = 'ash-icon-label-icon';
 		this.iconElement.removeAttribute('style');
@@ -165,13 +136,7 @@ export class IconLabel extends Disposable {
 		this.setLabel('');
 	}
 
-	private renderName(
-		label: string | readonly string[],
-		supportIcons: boolean,
-		matches: readonly IMatch[] | undefined,
-		separator: string,
-		domId: string | undefined,
-	): void {
+	private renderName(label: string | readonly string[], supportIcons: boolean, matches: readonly IMatch[] | undefined, separator: string, domId: string | undefined): void {
 		this.labelElement.replaceChildren();
 		const labels = typeof label === 'string' ? [label] : (label ?? ['']);
 		this.labelElement.classList.toggle('multiple', typeof label !== 'string');
@@ -207,12 +172,7 @@ export class IconLabel extends Disposable {
 		}
 	}
 
-	private renderDescription(
-		description: string | undefined,
-		matches: readonly IMatch[] | undefined,
-		supportIcons: boolean,
-		title: HoverContent,
-	): void {
+	private renderDescription(description: string | undefined, matches: readonly IMatch[] | undefined, supportIcons: boolean, title: HoverContent): void {
 		if (description !== undefined || this.descriptionElement) {
 			const element = (this.descriptionElement ??= this.createDescriptionElement());
 			element.replaceChildren();
@@ -264,12 +224,7 @@ export class IconLabel extends Disposable {
 
 	private updateClasses(options: IconLabelValueOptions | undefined): void {
 		for (const className of this.appliedClasses) this.element.classList.remove(className);
-		const classes = [
-			...(options?.extraClasses ?? []),
-			...(options?.bold ? ['bold'] : []),
-			...(options?.italic ? ['italic'] : []),
-			...(options?.strikethrough ? ['strikethrough'] : []),
-		];
+		const classes = [...(options?.extraClasses ?? []), ...(options?.bold ? ['bold'] : []), ...(options?.italic ? ['italic'] : []), ...(options?.strikethrough ? ['strikethrough'] : [])];
 		this.appliedClasses = classes;
 		this.element.classList.add(...classes);
 	}
@@ -282,12 +237,7 @@ export class IconLabel extends Disposable {
 	}
 }
 
-function appendTextWithMatches(
-	container: HTMLElement,
-	text: string,
-	start: number,
-	matches: readonly IMatch[] | undefined,
-): void {
+function appendTextWithMatches(container: HTMLElement, text: string, start: number, matches: readonly IMatch[] | undefined): void {
 	if (!text) return;
 	if (!matches || matches.length === 0) {
 		container.textContent = text;

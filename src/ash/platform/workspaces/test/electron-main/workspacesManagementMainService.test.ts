@@ -1,9 +1,5 @@
 import { createSshRemoteWorkspaceUri } from '../../../remote/common/remote.js';
-import {
-	getWorkspaceRemoteAuthority,
-	serializeWorkspaceIdentifier,
-	parseWorkspaceIdentifier,
-} from '../../../workspace/common/workspace.js';
+import { getWorkspaceRemoteAuthority, serializeWorkspaceIdentifier, parseWorkspaceIdentifier } from '../../../workspace/common/workspace.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, rename, rm, realpath, symlink } from 'node:fs/promises';
@@ -14,10 +10,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
 import { WorkspaceContextMainService } from '../../../window/electron-main/window.js';
 import { validateWorkspaceEdit } from '../../../workspace/common/workspaceIpc.js';
-import {
-	WorkspaceEditingMainService,
-	WorkspacesManagementMainService,
-} from '../../electron-main/workspacesManagementMainService.js';
+import { WorkspaceEditingMainService, WorkspacesManagementMainService } from '../../electron-main/workspacesManagementMainService.js';
 import { getSingleFolderWorkspaceIdentifier, getWorkspaceIdentifier } from '../../node/workspaces.js';
 import { parseWorkspace, serializeWorkspace } from '../../../workspace/common/workspace.js';
 
@@ -123,8 +116,7 @@ test('empty edits and duplicate roots preserve the single-folder workspace ident
 test('unchanged folder edits preserve workspace metadata bytes', async () => {
 	await using f = await fixture();
 	const config = join(f.root, 'team.code-workspace');
-	const source =
-		'{\n "folders": [\n  // Keep root metadata\n  {"path":"first"}\n ],\n "settings":{"editor.tabSize":3}\n}\n';
+	const source = '{\n "folders": [\n  // Keep root metadata\n  {"path":"first"}\n ],\n "settings":{"editor.tabSize":3}\n}\n';
 	await writeFile(config, source);
 	const identifier = getWorkspaceIdentifier(URI.file(config));
 	f.context.updateWorkspace(identifier, await f.manager.resolveWorkspace(identifier));
@@ -161,14 +153,8 @@ test('filesystem roots retain a nonempty folder label through editing, IPC and r
 test('saving elsewhere rebases roots while retaining JSONC, settings and extension metadata', async () => {
 	await using f = await fixture();
 	const original = join(f.root, 'team.code-workspace');
-	await writeFile(
-		original,
-		'{\n // Keep this comment\n "folders": [{"path":"first","name":"Client"}],\n "settings":{"editor.tabSize":3},"extensions":{"recommendations":["team.tool"]}\n}\n',
-	);
-	f.context.updateWorkspace(
-		getWorkspaceIdentifier(URI.file(original)),
-		await f.manager.resolveWorkspace(getWorkspaceIdentifier(URI.file(original))),
-	);
+	await writeFile(original, '{\n // Keep this comment\n "folders": [{"path":"first","name":"Client"}],\n "settings":{"editor.tabSize":3},"extensions":{"recommendations":["team.tool"]}\n}\n');
+	f.context.updateWorkspace(getWorkspaceIdentifier(URI.file(original)), await f.manager.resolveWorkspace(getWorkspaceIdentifier(URI.file(original))));
 	const target = join(f.root, 'saved', 'team.ash-workspace');
 	await f.editing.edit({ operation: 'save', path: target });
 	const saved = await readFile(target, 'utf8');
@@ -194,11 +180,7 @@ test('real filesystem aliases deduplicate Unicode roots and survive saving to a 
 	await writeFile(
 		original,
 		JSON.stringify({
-			folders: [
-				{ path: '入口', name: 'API' },
-				{ path: '服务 API #🦀', name: 'Duplicate' },
-				{ uri: URI.file(f.second).toString() },
-			],
+			folders: [{ path: '入口', name: 'API' }, { path: '服务 API #🦀', name: 'Duplicate' }, { uri: URI.file(f.second).toString() }],
 		}),
 	);
 	const resolved = await f.manager.resolveWorkspace(getWorkspaceIdentifier(URI.file(original)));
@@ -344,18 +326,11 @@ test('renderer startup can read workspace configuration while window replacement
 		const result = (await Promise.race([
 			read,
 			new Promise<never>((_resolve, reject) => {
-				deadline = setTimeout(
-					() => reject(new Error('Renderer startup configuration read waited for window readiness')),
-					5000,
-				);
+				deadline = setTimeout(() => reject(new Error('Renderer startup configuration read waited for window readiness')), 5000);
 			}),
 		])) as { content: string };
 		assert.equal(result.content, source);
-		assert.equal(
-			await readFile(config.fsPath, 'utf8'),
-			source,
-			'metadata writes still wait for the window transition',
-		);
+		assert.equal(await readFile(config.fsPath, 'utf8'), source, 'metadata writes still wait for the window transition');
 	} finally {
 		clearTimeout(deadline);
 		finishOpening();
@@ -441,10 +416,7 @@ test('Remote root edits preserve one authority and persist URI entries without r
 	assert.equal(getWorkspaceRemoteAuthority(reopened), 'ssh+test-host');
 	await f.editing.edit({ operation: 'folders', index: 0, deleteCount: 2, folders: [] });
 	assert.equal(getWorkspaceRemoteAuthority(f.context.getResolvedWorkspace()), 'ssh+test-host');
-	assert.equal(
-		getWorkspaceRemoteAuthority(parseWorkspaceIdentifier(serializeWorkspaceIdentifier(f.context.getWorkspace()))),
-		'ssh+test-host',
-	);
+	assert.equal(getWorkspaceRemoteAuthority(parseWorkspaceIdentifier(serializeWorkspaceIdentifier(f.context.getWorkspace()))), 'ssh+test-host');
 });
 
 test('Remote root edits reject local and foreign authorities and roll back a backend rejection', async () => {
@@ -456,16 +428,10 @@ test('Remote root edits reject local and foreign authorities and roll back a bac
 	const current = f.context.getResolvedWorkspace();
 	const original = await readFile(current.configuration!.fsPath, 'utf8');
 	for (const uri of [URI.file(f.first), createSshRemoteWorkspaceUri('other-host', '/remote-only/server')]) {
-		await assert.rejects(
-			f.editing.edit({ operation: 'folders', index: 2, deleteCount: 0, folders: [{ uri: uri.toString() }] }),
-			/remote host/,
-		);
+		await assert.rejects(f.editing.edit({ operation: 'folders', index: 2, deleteCount: 0, folders: [{ uri: uri.toString() }] }), /remote host/);
 	}
 	f.reject(new Error('Remote backend rejected folder update'));
-	await assert.rejects(
-		f.editing.edit({ operation: 'folders', index: 0, deleteCount: 1, folders: [] }),
-		/Remote backend rejected/,
-	);
+	await assert.rejects(f.editing.edit({ operation: 'folders', index: 0, deleteCount: 1, folders: [] }), /Remote backend rejected/);
 	assert.equal(f.context.getResolvedWorkspace(), current);
 	assert.equal(await readFile(current.configuration!.fsPath, 'utf8'), original);
 });

@@ -164,11 +164,7 @@ class PdfPageView implements PdfRenderedPage {
 		canvas.className = 'ash-pdf-page-canvas';
 		canvas.setAttribute('aria-hidden', 'true');
 		// Large pages and high zoom must not exceed browser canvas limits. CSS retains the requested size.
-		const ratio = Math.min(
-			this.element.ownerDocument.defaultView?.devicePixelRatio ?? 1,
-			Math.sqrt(16_777_216 / (this.width * this.height)),
-			8192 / Math.max(this.width, this.height),
-		);
+		const ratio = Math.min(this.element.ownerDocument.defaultView?.devicePixelRatio ?? 1, Math.sqrt(16_777_216 / (this.width * this.height)), 8192 / Math.max(this.width, this.height));
 		canvas.width = Math.max(1, Math.floor(this.width * ratio));
 		canvas.height = Math.max(1, Math.floor(this.height * ratio));
 		canvas.style.width = `${this.width}px`;

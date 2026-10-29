@@ -3,14 +3,7 @@ import { registerEditorContribution } from '../../../browser/editorFeatureRegist
 import { StickyScrollController } from './stickyScrollController.js';
 import { TextEditorCapability } from '../../textEditorCapabilities.js';
 import { registerAction2 } from '../../../../platform/actions/common/actions.js';
-import {
-	FocusStickyScroll,
-	GoToStickyScrollLine,
-	SelectEditor,
-	SelectNextStickyScrollLine,
-	SelectPreviousStickyScrollLine,
-	ToggleStickyScroll,
-} from './stickyScrollActions.js';
+import { FocusStickyScroll, GoToStickyScrollLine, SelectEditor, SelectNextStickyScrollLine, SelectPreviousStickyScrollLine, ToggleStickyScroll } from './stickyScrollActions.js';
 
 onActivate(() => registerAction2(ToggleStickyScroll));
 onActivate(() => registerAction2(FocusStickyScroll));
@@ -25,13 +18,7 @@ registerEditorContribution({
 		if (context.kind !== 'text' || context.model.largeFile.tooLargeForTokenization) {
 			return;
 		}
-		const controller = context.instantiationService.createInstance(
-			StickyScrollController,
-			context.editor,
-			context.view,
-			context.getService(TextEditorCapability.folding),
-			context.onLanguageError,
-		);
+		const controller = context.instantiationService.createInstance(StickyScrollController, context.editor, context.view, context.getService(TextEditorCapability.folding), context.onLanguageError);
 		void controller.stickyScrollCandidateProvider.update();
 		return controller;
 	},

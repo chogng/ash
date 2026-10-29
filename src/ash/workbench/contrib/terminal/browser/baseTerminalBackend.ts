@@ -1,24 +1,13 @@
 import type { ITerminalProcessOwnership } from '../../../services/terminal/common/terminal.js';
 import type { AgentHostPty } from './agentHostPty.js';
-import type {
-	ITerminalProcessCreateOptions,
-	ITerminalProcessCreation,
-} from '../../../../platform/terminal/common/terminal.js';
+import type { ITerminalProcessCreateOptions, ITerminalProcessCreation } from '../../../../platform/terminal/common/terminal.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import {
-	ITerminalProcessService,
-	type TerminalProcessConnectionState,
-} from '../../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, type TerminalProcessConnectionState } from '../../../../platform/terminal/common/terminal.js';
 
 /** One window's execution-host lifecycle. Concrete backends own their process handles. */
 export abstract class BaseTerminalBackend extends Disposable {
-	abstract createProcess(
-		options: ITerminalProcessCreateOptions,
-		id: number,
-		attached?: ITerminalProcessCreation,
-		ownership?: ITerminalProcessOwnership,
-	): Promise<AgentHostPty>;
+	abstract createProcess(options: ITerminalProcessCreateOptions, id: number, attached?: ITerminalProcessCreation, ownership?: ITerminalProcessOwnership): Promise<AgentHostPty>;
 	private state: TerminalProcessConnectionState = 'ready';
 	private revision = 0;
 	private readonly changed = this._register(new Emitter<TerminalProcessConnectionState>());

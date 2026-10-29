@@ -28,19 +28,14 @@ const { SubmenuAction } = await import('../../../../../base/common/actions.js');
 const { formatNlsMessage } = await import('../../../../../nls.js');
 const { Emitter, Event } = await import('../../../../../base/common/event.js');
 const { IAccountService: AccountServiceId } = await import('../../../../../platform/accounts/common/accountService.js');
-const { IContextMenuService: ContextMenuServiceId } =
-	await import('../../../../../platform/contextview/browser/contextView.js');
-const { IConfigurationService: ConfigurationServiceId } =
-	await import('../../../../../platform/configuration/common/configuration.js');
-const { AnchorAlignment, AnchorAxisAlignment } =
-	await import('../../../../../base/browser/ui/contextview/contextview.js');
+const { IContextMenuService: ContextMenuServiceId } = await import('../../../../../platform/contextview/browser/contextView.js');
+const { IConfigurationService: ConfigurationServiceId } = await import('../../../../../platform/configuration/common/configuration.js');
+const { AnchorAlignment, AnchorAxisAlignment } = await import('../../../../../base/browser/ui/contextview/contextview.js');
 const { ILogService: LogServiceId } = await import('../../../../../platform/log/common/log.js');
 const { IStorageService: StorageServiceId } = await import('../../../../../platform/storage/common/storage.js');
 const { BrowserStorageService } = await import('../../../../services/storage/browser/storageService.js');
-const { ILocalizationService: LocalizationServiceId } =
-	await import('../../../../services/localization/common/localizationService.js');
-const { IGitHubConnectionService: GitHubConnectionServiceId } =
-	await import('../../../../services/accounts/common/gitHubConnectionService.js');
+const { ILocalizationService: LocalizationServiceId } = await import('../../../../services/localization/common/localizationService.js');
+const { IGitHubConnectionService: GitHubConnectionServiceId } = await import('../../../../services/accounts/common/gitHubConnectionService.js');
 const { IMenuService, MenuId, MenusRegistry } = await import('../../../../../platform/actions/common/actions.js');
 const { MenuService } = await import('../../../../../platform/actions/common/menuService.js');
 const { ICommandService, CommandsRegistry } = await import('../../../../../platform/commands/common/commands.js');
@@ -130,8 +125,7 @@ test('Activity Bar global actions open account and management menus', async () =
 	let manageLabel = 'Manage';
 	const localization: ILocalizationService = {
 		whenReady: Promise.resolve(),
-		translate: (_bundle, key, fallback, parameters) =>
-			key === 'workbench.manage' ? manageLabel : formatNlsMessage(fallback, parameters),
+		translate: (_bundle, key, fallback, parameters) => (key === 'workbench.manage' ? manageLabel : formatNlsMessage(fallback, parameters)),
 	};
 	services.registerInstance(LocalizationServiceId, localization);
 	const logService: ILogService = { trace() {}, debug() {}, info() {}, warn() {}, error() {} };
@@ -165,12 +159,8 @@ test('Activity Bar global actions open account and management menus', async () =
 	);
 	const bar = disposables.add(services.createInstance(GlobalCompositeBar, ownerDocument.body));
 	await Promise.resolve();
-	const accountsButton = bar.domNode.querySelector<HTMLButtonElement>(
-		'[data-action-id="ash.activityBar.accounts"] button',
-	);
-	const manageButton = bar.domNode.querySelector<HTMLButtonElement>(
-		'[data-action-id="ash.activityBar.manage"] button',
-	);
+	const accountsButton = bar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.activityBar.accounts"] button');
+	const manageButton = bar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.activityBar.manage"] button');
 	assert.ok(accountsButton);
 	assert.ok(manageButton);
 	accountsButton.click();
@@ -190,10 +180,7 @@ test('Activity Bar global actions open account and management menus', async () =
 	);
 	await actions[1].actions[0]?.run();
 	await actions[3]?.run();
-	assert.deepEqual(
-		{ loggedOutProviders, manageAccountsOpened },
-		{ loggedOutProviders: ['github'], manageAccountsOpened: 1 },
-	);
+	assert.deepEqual({ loggedOutProviders, manageAccountsOpened }, { loggedOutProviders: ['github'], manageAccountsOpened: 1 });
 	accountState = { revision: 2n, accounts: [] };
 	accountsChanged.fire(accountState);
 	closeMenu(false);
@@ -247,12 +234,7 @@ test('Activity Bar global actions open account and management menus', async () =
 	closeMenu(false);
 	manageLabel = '管理';
 	localizationChanged.fire();
-	assert.equal(
-		bar.domNode
-			.querySelector<HTMLButtonElement>('[data-action-id="ash.activityBar.manage"] button')
-			?.getAttribute('aria-label'),
-		'Manage',
-	);
+	assert.equal(bar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.activityBar.manage"] button')?.getAttribute('aria-label'), 'Manage');
 	const toggleAccounts = bar.getContextMenuActions()[0];
 	assert.equal(toggleAccounts?.checked, true);
 	toggleAccounts?.run();

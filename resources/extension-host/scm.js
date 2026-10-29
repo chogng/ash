@@ -107,10 +107,7 @@ export function createSCMApi(runtime, request, invoke, retain, stateRequest = re
 		pending = Promise.resolve()
 			.then(async () => {
 				const current = revision;
-				await stateRequest(
-					{ operation: 'scmUpdate', registrationId, revision: current, providers: snapshot() },
-					'done',
-				);
+				await stateRequest({ operation: 'scmUpdate', registrationId, revision: current, providers: snapshot() }, 'done');
 				return current;
 			})
 			.then(
@@ -152,12 +149,7 @@ export function createSCMApi(runtime, request, invoke, retain, stateRequest = re
 					const provider = entry.provider;
 					if (payload.value !== undefined) {
 						const inputRevision = payload.inputRevision ?? entry.inputRevision;
-						if (
-							typeof payload.value !== 'string' ||
-							payload.value.length > 32768 ||
-							!Number.isSafeInteger(inputRevision) ||
-							inputRevision < 0
-						)
+						if (typeof payload.value !== 'string' || payload.value.length > 32768 || !Number.isSafeInteger(inputRevision) || inputRevision < 0)
 							throw new TypeError('Invalid SCM input revision');
 						if (inputRevision >= entry.inputRevision) {
 							provider.input.value = payload.value;
@@ -194,33 +186,19 @@ export function createSCMApi(runtime, request, invoke, retain, stateRequest = re
 							break;
 						}
 						case 'statusBar': {
-							const command = provider.statusBarCommands.find(
-								command => command.id === payload.commandId,
-							);
+							const command = provider.statusBarCommands.find(command => command.id === payload.commandId);
 							if (!command?.run) throw new Error('SCM status command is no longer available');
 							await command.run();
 							break;
 						}
 						case 'decoration':
-							return serial(
-								(await entry.decorations?.provideDecorations(
-									entry.parseUri(payload.resource),
-									sdkToken(_context.cancellationToken),
-								)) ?? null,
-							);
+							return serial((await entry.decorations?.provideDecorations(entry.parseUri(payload.resource), sdkToken(_context.cancellationToken))) ?? null);
 						case 'quickDiff': {
 							const controller = new AbortController();
-							const listener = _context.cancellationToken.onCancellationRequested(() =>
-								controller.abort(),
-							);
+							const listener = _context.cancellationToken.onCancellationRequested(() => controller.abort());
 							if (_context.cancellationToken.isCancellationRequested) controller.abort();
 							try {
-								return serial(
-									(await entry.quickDiff?.provideOriginalResource(
-										entry.parseUri(payload.resource),
-										controller.signal,
-									)) ?? null,
-								);
+								return serial((await entry.quickDiff?.provideOriginalResource(entry.parseUri(payload.resource), controller.signal)) ?? null);
 							} finally {
 								listener.dispose();
 							}
@@ -237,11 +215,7 @@ export function createSCMApi(runtime, request, invoke, retain, stateRequest = re
 								'resolveHistoryItemChatContext',
 								'resolveHistoryItemChangeRangeChatContext',
 							];
-							if (
-								!provider.historyProvider ||
-								!allowed.includes(payload.methodName) ||
-								typeof provider.historyProvider[payload.methodName] !== 'function'
-							)
+							if (!provider.historyProvider || !allowed.includes(payload.methodName) || typeof provider.historyProvider[payload.methodName] !== 'function')
 								throw new Error('SCM history method is unavailable');
 							const args = payload.arguments.map(value => (value === null ? undefined : value));
 							if (payload.methodName === 'resolveHistoryItemChangeContents') {
@@ -256,11 +230,8 @@ export function createSCMApi(runtime, request, invoke, retain, stateRequest = re
 							return serial((await provider.historyProvider[payload.methodName](...args)) ?? null);
 						}
 						case 'merge': {
-							if (!provider.mergeProvider || !['resolve', 'complete'].includes(payload.methodName))
-								throw new Error('SCM merge method is unavailable');
-							return serial(
-								(await provider.mergeProvider[payload.methodName](...payload.arguments)) ?? null,
-							);
+							if (!provider.mergeProvider || !['resolve', 'complete'].includes(payload.methodName)) throw new Error('SCM merge method is unavailable');
+							return serial((await provider.mergeProvider[payload.methodName](...payload.arguments)) ?? null);
 						}
 						default:
 							throw new Error('Unknown SCM callback');
@@ -273,8 +244,7 @@ export function createSCMApi(runtime, request, invoke, retain, stateRequest = re
 	const api = Object.freeze({
 		initialize: ensureRegistration,
 		registerSCMProvider(provider, options = {}) {
-			if (disposed || !provider || typeof provider.id !== 'string' || !provider.id || providers.has(provider.id))
-				throw new TypeError('SCM provider needs a unique identity');
+			if (disposed || !provider || typeof provider.id !== 'string' || !provider.id || providers.has(provider.id)) throw new TypeError('SCM provider needs a unique identity');
 			ensureRegistration();
 			const entry = {
 				provider,
@@ -292,10 +262,8 @@ export function createSCMApi(runtime, request, invoke, retain, stateRequest = re
 			const listeners = [provider.onDidChangeResources(publish)];
 			if (provider.historyProvider) {
 				listeners.push(provider.historyProvider.historyItemRef.onDidChange(publish));
-				if (provider.historyProvider.historyItemRemoteRef)
-					listeners.push(provider.historyProvider.historyItemRemoteRef.onDidChange(publish));
-				if (provider.historyProvider.historyItemBaseRef)
-					listeners.push(provider.historyProvider.historyItemBaseRef.onDidChange(publish));
+				if (provider.historyProvider.historyItemRemoteRef) listeners.push(provider.historyProvider.historyItemRemoteRef.onDidChange(publish));
+				if (provider.historyProvider.historyItemBaseRef) listeners.push(provider.historyProvider.historyItemBaseRef.onDidChange(publish));
 				listeners.push(
 					provider.historyProvider.onDidChange(() => {
 						++entry.historyRevision;

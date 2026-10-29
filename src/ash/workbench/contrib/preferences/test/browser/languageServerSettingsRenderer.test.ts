@@ -7,10 +7,7 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
-import {
-	IAccessibleViewService,
-	AccessibleViewType,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -23,10 +20,7 @@ import {
 	type LanguageServerConfiguration,
 	type LanguageServerSnapshot,
 } from '../../../../../platform/language/common/languageServerService.js';
-import {
-	IExtensionManagementService,
-	OPEN_EXTENSIONS_COMMAND_ID,
-} from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
+import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
 import type { RemoteConnectionState } from '../../../../../platform/remote/common/remote.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -100,17 +94,12 @@ class SettingsFixture extends DisposableStore {
 				this.commands.push([id, ...args]);
 			},
 		} as unknown as ICommandService);
-		this.services.registerInstance(
-			IWorkspaceContextService,
-			this.add(new TestWorkspaceService({ id: 'test', folders: [] })),
-		);
+		this.services.registerInstance(IWorkspaceContextService, this.add(new TestWorkspaceService({ id: 'test', folders: [] })));
 		this.services.registerInstance(ILocalizationService, {
 			whenReady: Promise.resolve(),
 			translate: (bundle, key, text, parameters) => {
 				const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === this.locale)!;
-				return (catalog.bundles[bundle]?.[key] ?? text).replace(/\{(\d+)\}/gu, (match, index: string) =>
-					String(parameters?.[index] ?? match),
-				);
+				return (catalog.bundles[bundle]?.[key] ?? text).replace(/\{(\d+)\}/gu, (match, index: string) => String(parameters?.[index] ?? match));
 			},
 		});
 		this.services.registerInstance(IAppServerRemoteAgentService, {
@@ -174,14 +163,7 @@ test('Language server Settings saves and resets the backend profile at the read 
 	fixture.edit('Executable path (optional)', '/host/program with spaces');
 	fixture.button('Save server configuration').click();
 	await settle();
-	assert.deepEqual(fixture.writes, [
-		[
-			'save',
-			'rust-analyzer',
-			{ mode: 'enabled', executable: '/host/program with spaces' } satisfies LanguageServerConfiguration,
-			7,
-		],
-	]);
+	assert.deepEqual(fixture.writes, [['save', 'rust-analyzer', { mode: 'enabled', executable: '/host/program with spaces' } satisfies LanguageServerConfiguration, 7]]);
 	assert.equal(fixture.button('Use default configuration').disabled, false);
 	fixture.button('Use default configuration').click();
 	await settle();
@@ -221,10 +203,7 @@ test('Installation changes and disconnects discard late language server reads', 
 	await pending.complete(fixture.snapshot);
 	await settle();
 	assert.equal(fixture.button('Save server configuration').disabled, true);
-	assert.equal(
-		fixture.root.querySelector('[role="status"]')!.textContent,
-		'Installed packages changed. Refresh before saving.',
-	);
+	assert.equal(fixture.root.querySelector('[role="status"]')!.textContent, 'Installed packages changed. Refresh before saving.');
 	fixture.button('Refresh').click();
 	await settle();
 	fixture.edit('Executable path (optional)', '/unsaved');
@@ -249,14 +228,9 @@ test('Language server Settings searches server metadata, localizes Chinese, and 
 	const field = fixture.field('语言 ID');
 	assert.equal(field.value, 'rust');
 	assert.ok(fixture.button('保存服务器配置'));
-	assert.equal(
-		fixture.content.domNode.querySelector('[role="status"]')?.textContent,
-		'有 1 个可用服务器。匹配语言的文档需要时才会启动。',
-	);
+	assert.equal(fixture.content.domNode.querySelector('[role="status"]')?.textContent, '有 1 个可用服务器。匹配语言的文档需要时才会启动。');
 	field.focus();
-	const implementation = AccessibleViewRegistry.getImplementations().find(
-		entry => entry.name.startsWith('language-server-settings-') && entry.type === AccessibleViewType.Help,
-	)!;
+	const implementation = AccessibleViewRegistry.getImplementations().find(entry => entry.name.startsWith('language-server-settings-') && entry.type === AccessibleViewType.Help)!;
 	const provider = fixture.services.invokeFunction(accessor => implementation.getProvider(accessor))!;
 	assert.match(provider.provideContent(), /语言服务器[\s\S]*输出/);
 	assert.match(provider.provideContent(), /Rust 支持默认启用[\s\S]*停用服务器后不会安装/);
@@ -273,10 +247,7 @@ test('Finding language servers opens Extensions with an exact executable route a
 	fixture.edit('Language ID', 'python');
 	fixture.button('Find language servers in Extensions').click();
 	await settle();
-	assert.deepEqual(fixture.commands, [
-		['workbench.action.closeActiveEditor'],
-		[OPEN_EXTENSIONS_COMMAND_ID, { languageId: 'python', capabilityKind: 'executable' }],
-	]);
+	assert.deepEqual(fixture.commands, [['workbench.action.closeActiveEditor'], [OPEN_EXTENSIONS_COMMAND_ID, { languageId: 'python', capabilityKind: 'executable' }]]);
 });
 
 test('A save finishing after Settings is hidden does not move keyboard focus back to the form', async () => {
@@ -302,9 +273,7 @@ test('custom language server JSON configuration round-trips and malformed drafts
 	await settle();
 	fixture.edit('Server ID', 'custom-python');
 	fixture.edit('Executable path (optional)', '/tools/server');
-	const advanced = fixture.root.querySelector<HTMLTextAreaElement>(
-		'textarea[aria-label="Advanced configuration (JSON)"]',
-	)!;
+	const advanced = fixture.root.querySelector<HTMLTextAreaElement>('textarea[aria-label="Advanced configuration (JSON)"]')!;
 	assert.ok(advanced);
 	advanced.value =
 		'{"languageIds":["python"],"args":["--stdio"],"environment":{"EXAMPLE":"value"},"initializationOptions":{"features":true},"settings":{"python":{"analysis":{"typeCheckingMode":"strict"}}}}';

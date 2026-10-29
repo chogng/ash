@@ -40,10 +40,7 @@ export class ToggleTabFocusModeAction extends Action2 {
 		TabFocus.setTabFocusMode(movesFocus);
 		alert(
 			movesFocus
-				? nls.localize(
-						'toggle.tabMovesFocus.on',
-						'Pressing Tab will now move focus to the next focusable element',
-					)
+				? nls.localize('toggle.tabMovesFocus.on', 'Pressing Tab will now move focus to the next focusable element')
 				: nls.localize('toggle.tabMovesFocus.off', 'Pressing Tab will now insert the tab character'),
 		);
 	}

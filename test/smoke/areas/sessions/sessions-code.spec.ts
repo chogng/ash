@@ -48,9 +48,7 @@ test(
 			.click();
 		await commands.runCommand('editor.action.formatDocument');
 		await editor.input.press('ControlOrMeta+S');
-		await expect
-			.poll(async () => (await readUserSettings(page)).content)
-			.toMatch(/\n\s+(?:\/\* 💡 \*\/\s*)?"editor.fontSize"\s*:\s*\d+/u);
+		await expect.poll(async () => (await readUserSettings(page)).content).toMatch(/\n\s+(?:\/\* 💡 \*\/\s*)?"editor.fontSize"\s*:\s*\d+/u);
 		expect((await readUserSettings(page)).content).toContain('// shared JSON extension');
 		expect((await readUserSettings(page)).content).toContain('/* 💡 */');
 		await replace('{ "editor.fontSize": "invalid" }');
@@ -71,9 +69,7 @@ for (const locale of ['en', 'zh-CN']) {
 		async ({ target, workbench, restartWorkbench }) => {
 			if (locale === 'zh-CN') {
 				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-				const language = workbench.page
-					.getByRole('dialog', { name: 'Select Display Language' })
-					.getByRole('combobox');
+				const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 				await language.fill('简体中文');
 				await language.press('Enter');
 				({ workbench } = await restartWorkbench());
@@ -83,21 +79,11 @@ for (const locale of ['en', 'zh-CN']) {
 					? { code: '代码', browser: '浏览器', tabs: '浏览器标签页', newTab: '打开新的浏览器标签页' }
 					: { code: 'Code', browser: 'Browser', tabs: 'Browser tabs', newTab: 'Open new browser tab' };
 			const page = await workbench.openAgentsWindow(target.kind);
-			await page
-				.locator('.ash-window-mode-control')
-				.getByRole('button', { name: copy.code, exact: true })
-				.click();
+			await page.locator('.ash-window-mode-control').getByRole('button', { name: copy.code, exact: true }).click();
 			await installMainChannelTestClient(page);
 			const commands = new QuickAccess(page);
 			const tabs = page.getByRole('tab', { name: copy.browser, exact: true });
-			const readPages = () =>
-				page.evaluate(() =>
-					globalThis.ashTestMainProcess.call<readonly IBrowserViewInfo[]>(
-						'browserView',
-						'getBrowserViews',
-						[],
-					),
-				);
+			const readPages = () => page.evaluate(() => globalThis.ashTestMainProcess.call<readonly IBrowserViewInfo[]>('browserView', 'getBrowserViews', []));
 			await commands.runCommand('workbench.action.browser.open');
 			await expect(tabs).toHaveCount(1);
 			await commands.runCommand('workbench.action.browser.quickOpen');
@@ -143,10 +129,7 @@ test('Code Sessions runs Quick Diff commands through its editor services', async
 	await expect(editor.locator('.ash-quick-diff-peek')).toHaveCount(0);
 });
 
-test('Code Sessions starts with dialog dependencies and confirms closing a dirty editor', async ({
-	target,
-	workbench,
-}) => {
+test('Code Sessions starts with dialog dependencies and confirms closing a dirty editor', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	const commands = new QuickAccess(page);
@@ -170,11 +153,7 @@ test('Code Sessions starts with dialog dependencies and confirms closing a dirty
 	await expect(tab).toHaveCount(0);
 });
 
-test('Code sessions restore editor tabs through Back, Forward and reopening without focusing the editor', async ({
-	application,
-	target,
-	workbench,
-}) => {
+test('Code sessions restore editor tabs through Back, Forward and reopening without focusing the editor', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	let navigation = page.locator('.ash-sessions-activity-content');
 	let editors = page.locator('[data-part="editor"]');
@@ -205,11 +184,7 @@ test('Code sessions restore editor tabs through Back, Forward and reopening with
 	await expect(editors.getByRole('tab', { name: 'Untitled-2', exact: true })).toBeVisible();
 });
 
-test('Code panel stays below the main region and retains its views across session layouts', async ({
-	application,
-	target,
-	workbench,
-}) => {
+test('Code panel stays below the main region and retains its views across session layouts', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	let navigation = page.locator('.ash-sessions-activity-content');
 	let panel = page.locator('[data-part="panel"]');
@@ -247,84 +222,62 @@ test('Code panel stays below the main region and retains its views across sessio
 	await expect(toggle).toHaveCount(0);
 });
 
-focusTest(
-	'Code connects layout commands to View, Add tab and the panel shortcut',
-	async ({ application, target, workbench }) => {
-		const page = await workbench.openAgentsWindow(target.kind);
-		const navigation = page.locator('.ash-sessions-activity-content');
-		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-		const editor = page.locator('[data-part="editor"]');
-		const title = editor.locator('.ash-editor-title-control:visible');
-		const content = editor.locator('.ash-editor-group:visible > .ash-editor-group-content');
-		const panel = page.locator('[data-part="panel"]');
-		const menus = new Menus(page);
-		const selectViewAction = (name: string): Promise<void> => menus.selectApplication(application, ['View', name]);
-		const addChangesTab = (): Promise<void> =>
-			menus.select(application, () => title.getByRole('button', { name: 'Add tab', exact: true }).click(), [
-				'Open Changes tab',
-			]);
-		await expect(content).toBeHidden();
-		await selectViewAction('Toggle details');
-		await expect(content).toBeVisible();
-		await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
-		await selectViewAction('Toggle details');
-		await expect(page.locator('[data-part="auxiliarybar"]')).toBeVisible();
-		await selectViewAction('Hide editor');
-		await expect(content).toBeHidden();
-		await selectViewAction('Show editor');
-		await expect(content).toBeVisible();
-		const view = await menus.inspectApplication(application, ['View']);
-		expect(view.find(item => item.label === 'Hide editor')?.enabled).toBe(true);
-		expect(view.some(item => item.label === 'Show editor')).toBe(false);
-		await selectViewAction('Toggle Code panel');
-		await expect(panel).toBeVisible();
-		await page.keyboard.press('Control+`');
-		await expect(panel).toBeHidden();
-		await addChangesTab();
-		const changes = title.getByRole('tab', { name: 'Changes', exact: true });
-		await expect(changes).toHaveAttribute('aria-selected', 'true');
-		await changes.press('Delete');
-		await expect(changes).toHaveCount(0);
-		await addChangesTab();
-		await expect(changes).toHaveAttribute('aria-selected', 'true');
-		await selectViewAction('Hide editor');
-		await expect(content).toBeHidden();
-		const commands = new QuickAccess(page);
-		await commands.open('>ash.sessions.hideEditor');
-		await expect(
-			commands.items.filter({
-				has: page
-					.locator('.ash-quick-pick-row-description')
-					.getByText('ash.sessions.hideEditor', { exact: true }),
-			}),
-		).toHaveCount(0);
-		await commands.close();
-		await commands.runCommand('ash.sessions.showEditor');
-		await expect(content).toBeVisible();
-		await selectViewAction('Hide editor');
-		await expect(content).toBeHidden();
-		await selectViewAction('Open Files tab');
-		await expect(content).toBeVisible();
-		await expect(title.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
-		await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
-		const codeActions = [
-			'Toggle Code panel',
-			'Toggle Code side panel',
-			'Toggle details',
-			'Hide editor',
-			'Show editor',
-			'Open Files tab',
-			'Open Changes tab',
-		];
-		await expect
-			.poll(async () =>
-				(await menus.inspectApplication(application, ['View'])).filter(item =>
-					codeActions.includes(item.label),
-				),
-			)
-			.toEqual([]);
-	},
-);
+focusTest('Code connects layout commands to View, Add tab and the panel shortcut', async ({ application, target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	const navigation = page.locator('.ash-sessions-activity-content');
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	const editor = page.locator('[data-part="editor"]');
+	const title = editor.locator('.ash-editor-title-control:visible');
+	const content = editor.locator('.ash-editor-group:visible > .ash-editor-group-content');
+	const panel = page.locator('[data-part="panel"]');
+	const menus = new Menus(page);
+	const selectViewAction = (name: string): Promise<void> => menus.selectApplication(application, ['View', name]);
+	const addChangesTab = (): Promise<void> => menus.select(application, () => title.getByRole('button', { name: 'Add tab', exact: true }).click(), ['Open Changes tab']);
+	await expect(content).toBeHidden();
+	await selectViewAction('Toggle details');
+	await expect(content).toBeVisible();
+	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
+	await selectViewAction('Toggle details');
+	await expect(page.locator('[data-part="auxiliarybar"]')).toBeVisible();
+	await selectViewAction('Hide editor');
+	await expect(content).toBeHidden();
+	await selectViewAction('Show editor');
+	await expect(content).toBeVisible();
+	const view = await menus.inspectApplication(application, ['View']);
+	expect(view.find(item => item.label === 'Hide editor')?.enabled).toBe(true);
+	expect(view.some(item => item.label === 'Show editor')).toBe(false);
+	await selectViewAction('Toggle Code panel');
+	await expect(panel).toBeVisible();
+	await page.keyboard.press('Control+`');
+	await expect(panel).toBeHidden();
+	await addChangesTab();
+	const changes = title.getByRole('tab', { name: 'Changes', exact: true });
+	await expect(changes).toHaveAttribute('aria-selected', 'true');
+	await changes.press('Delete');
+	await expect(changes).toHaveCount(0);
+	await addChangesTab();
+	await expect(changes).toHaveAttribute('aria-selected', 'true');
+	await selectViewAction('Hide editor');
+	await expect(content).toBeHidden();
+	const commands = new QuickAccess(page);
+	await commands.open('>ash.sessions.hideEditor');
+	await expect(
+		commands.items.filter({
+			has: page.locator('.ash-quick-pick-row-description').getByText('ash.sessions.hideEditor', { exact: true }),
+		}),
+	).toHaveCount(0);
+	await commands.close();
+	await commands.runCommand('ash.sessions.showEditor');
+	await expect(content).toBeVisible();
+	await selectViewAction('Hide editor');
+	await expect(content).toBeHidden();
+	await selectViewAction('Open Files tab');
+	await expect(content).toBeVisible();
+	await expect(title.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
+	const codeActions = ['Toggle Code panel', 'Toggle Code side panel', 'Toggle details', 'Hide editor', 'Show editor', 'Open Files tab', 'Open Changes tab'];
+	await expect.poll(async () => (await menus.inspectApplication(application, ['View'])).filter(item => codeActions.includes(item.label))).toEqual([]);
+});
 
 test('Code shares its tabs across all four editor and Details states', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
@@ -382,9 +335,7 @@ test('Code shares its tabs across all four editor and Details states', async ({ 
 	const comparison = editor.locator('.ash-sessions-changes-editor');
 	await comparison.focus();
 	await page.keyboard.press('Alt+F2');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(
-		'Changes appear after the agent edits files.',
-	);
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue('Changes appear after the agent edits files.');
 	await page.keyboard.press('Escape');
 	await expect(comparison).toBeFocused();
 	let commands = new QuickAccess(page);
@@ -410,12 +361,7 @@ test('Code shares its tabs across all four editor and Details states', async ({ 
 test.describe('Sessions from an Electron Workbench', () => {
 	test.skip(({ target }) => target.kind === 'browser', 'The browser Sessions page has its own launch test below.');
 
-	test('Sessions Code reuses Files and Changes and retains its Workbench editor across pages', async ({
-		application,
-		target,
-		workbench,
-		testWorkspace,
-	}) => {
+	test('Sessions Code reuses Files and Changes and retains its Workbench editor across pages', async ({ application, target, workbench, testWorkspace }) => {
 		if (target.appServerMode === 'required') {
 			await mkdir(join(testWorkspace.directory, 'nested'), { recursive: true });
 			await writeFile(join(testWorkspace.directory, 'nested', 'child.ts'), 'export const child = 1;\n');
@@ -477,149 +423,125 @@ test.describe('Sessions from an Electron Workbench', () => {
 	});
 });
 
-browserTest(
-	'Browser Sessions production embedder owns its container and releases both ready and opening instances',
-	{ tag: ['@browser-ui'] },
-	async ({ page }) => {
-		browserTest.skip(
-			process.env.ASH_PLAYWRIGHT_SERVER === 'development',
-			'Exercises exported production assets; development uses the generated Vite host.',
-		);
-		const failures: string[] = [];
-		page.on('pageerror', error => failures.push((error.stack ?? error.message).slice(0, 5000)));
-		await page.goto('/browser/sessions/sessions.html');
-		await expect(page.locator('[data-action-id="sessions.newSession"] button')).toBeVisible();
-		const moduleUrl = await page.evaluate(
-			() =>
-				performance
-					.getEntriesByType('resource')
-					.find(entry => /\/sessions\.web\.main\.internal-[^/]+\.js$/u.test(entry.name))?.name,
-		);
-		expect(moduleUrl).toBeTruthy();
-		// Production extracts imported CSS into entry stylesheets; the embedder must load them too.
-		const stylesheets = await page
-			.locator('link[rel="stylesheet"]')
-			.evaluateAll(links =>
-				links.map(link => `<link rel="stylesheet" href="${(link as HTMLLinkElement).href}">`).join(''),
-			);
-		await page.route('**/browser/sessions/embedder.html', route =>
-			route.fulfill({
-				contentType: 'text/html',
-				body: `<!doctype html><html><head>${stylesheets}<style>body { margin: 0; } #sessions-host { position: fixed; inset: 0; }</style></head><body><main id="app">Host content</main><section id="sessions-host"></section></body></html>`,
-			}),
-		);
-		await page.goto('/browser/sessions/embedder.html');
-		const mount = async (closeDuringStartup: boolean): Promise<void> => {
-			await page.evaluate(
-				async ({ moduleUrl, closeDuringStartup }) => {
-					const { create } = await import(moduleUrl!);
-					const container = document.getElementById('sessions-host')!;
-					const lifetime = create(container, {
-						id: 'code-sessions',
-						label: 'Code Sessions',
-						titlebarActionId: 'ash.code.open-sessions',
-						workbenchRelativePath: '../workbench/workbench.html',
+browserTest('Browser Sessions production embedder owns its container and releases both ready and opening instances', { tag: ['@browser-ui'] }, async ({ page }) => {
+	browserTest.skip(process.env.ASH_PLAYWRIGHT_SERVER === 'development', 'Exercises exported production assets; development uses the generated Vite host.');
+	const failures: string[] = [];
+	page.on('pageerror', error => failures.push((error.stack ?? error.message).slice(0, 5000)));
+	await page.goto('/browser/sessions/sessions.html');
+	await expect(page.locator('[data-action-id="sessions.newSession"] button')).toBeVisible();
+	const moduleUrl = await page.evaluate(() => performance.getEntriesByType('resource').find(entry => /\/sessions\.web\.main\.internal-[^/]+\.js$/u.test(entry.name))?.name);
+	expect(moduleUrl).toBeTruthy();
+	// Production extracts imported CSS into entry stylesheets; the embedder must load them too.
+	const stylesheets = await page.locator('link[rel="stylesheet"]').evaluateAll(links => links.map(link => `<link rel="stylesheet" href="${(link as HTMLLinkElement).href}">`).join(''));
+	await page.route('**/browser/sessions/embedder.html', route =>
+		route.fulfill({
+			contentType: 'text/html',
+			body: `<!doctype html><html><head>${stylesheets}<style>body { margin: 0; } #sessions-host { position: fixed; inset: 0; }</style></head><body><main id="app">Host content</main><section id="sessions-host"></section></body></html>`,
+		}),
+	);
+	await page.goto('/browser/sessions/embedder.html');
+	const mount = async (closeDuringStartup: boolean): Promise<void> => {
+		await page.evaluate(
+			async ({ moduleUrl, closeDuringStartup }) => {
+				const { create } = await import(moduleUrl!);
+				const container = document.getElementById('sessions-host')!;
+				const lifetime = create(container, {
+					id: 'code-sessions',
+					label: 'Code Sessions',
+					titlebarActionId: 'ash.code.open-sessions',
+					workbenchRelativePath: '../workbench/workbench.html',
+				});
+				if (closeDuringStartup) {
+					const observer = new MutationObserver(() => {
+						if (!container.querySelector('.ash-sessions-window')) {
+							return;
+						}
+						container.dataset.mounted = 'true';
+						observer.disconnect();
 					});
-					if (closeDuringStartup) {
-						const observer = new MutationObserver(() => {
-							if (!container.querySelector('.ash-sessions-window')) {
-								return;
-							}
-							container.dataset.mounted = 'true';
-							observer.disconnect();
-						});
-						observer.observe(container, { childList: true });
-						lifetime.dispose();
-					} else {
-						document.addEventListener(
-							'close-sessions',
-							() => {
-								lifetime.dispose();
-								lifetime.dispose();
-							},
-							{ once: true },
-						);
-					}
-				},
-				{ moduleUrl, closeDuringStartup },
-			);
-		};
-		await mount(false);
-		const container = page.locator('#sessions-host');
-		await expect(container.locator('[data-action-id="sessions.newSession"] button')).toBeVisible();
-		await expect(page.locator('#app')).toHaveText('Host content');
-		await page.evaluate(() => document.dispatchEvent(new Event('close-sessions')));
-		await expect(container).toBeEmpty();
-		await mount(true);
-		await expect(container).toHaveAttribute('data-mounted', 'true');
-		await expect(container).toBeEmpty();
-		await expect(page.locator('#app')).toHaveText('Host content');
-		expect(failures).toEqual([]);
-	},
-);
-
-browserTest(
-	'Browser Sessions Code shows Files and Changes and retains the selected view across pages and reload',
-	{ tag: ['@browser-ui'] },
-	async ({ page }) => {
-		const failures: string[] = [];
-		page.on('pageerror', error => failures.push(error.message));
-		await page.goto('/browser/sessions/sessions.html');
-		const navigation = page.locator('.ash-sessions-activity-content');
-		const auxiliary = page.locator('[data-part="auxiliarybar"]');
-		const tabs = page.locator('[data-part="editor"] .ash-editor-title-control');
-		await expect(auxiliary).toBeHidden();
-		await expect(page.getByText('Session details', { exact: true })).toHaveCount(0);
-		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-		await expect(tabs.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
-		await expect(
-			auxiliary.locator('[data-view-id="sessions.files.explorer.empty"]').getByRole('status'),
-		).toHaveText('Folders and files will appear here.');
-		await expect(auxiliary.locator('[data-view-id="ash.explorer"]')).toHaveCount(0);
-		const emptyMessage = auxiliary.locator('.ash-sessions-files-empty-message');
-		expect(await emptyMessage.evaluate(element => getComputedStyle(element).fontSize)).toBe('12px');
-		await page.keyboard.press('ControlOrMeta+Shift+E');
-		await expect(auxiliary.locator('[data-view-id="sessions.files.explorer.empty"]')).toBeFocused();
-		await page.keyboard.press('Alt+F1');
-		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(
-			/Files follow the selected session directory[\s\S]*Collapse folders/u,
+					observer.observe(container, { childList: true });
+					lifetime.dispose();
+				} else {
+					document.addEventListener(
+						'close-sessions',
+						() => {
+							lifetime.dispose();
+							lifetime.dispose();
+						},
+						{ once: true },
+					);
+				}
+			},
+			{ moduleUrl, closeDuringStartup },
 		);
-		await page.keyboard.press('Escape');
-		await expect(auxiliary.locator('[data-view-id="sessions.files.explorer.empty"]')).toBeFocused();
-		// This empty, disconnected embedder uses the host's bootstrap palette.
-		// Installed extension themes are covered by the connected theme scenarios.
-		for (const [scheme, colorScheme, forcedColors] of [
-			['light', 'light', 'none'],
-			['dark', 'dark', 'none'],
-			['hcDark', 'dark', 'active'],
-			['hcLight', 'light', 'active'],
-		] as const) {
-			await page.emulateMedia({ colorScheme, forcedColors });
-			await page.goto('/browser/workbench/workbench.html');
-			await new Workbench(page).waitForReady();
-			await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', scheme);
-			await page.goto('/browser/sessions/sessions.html');
-			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-			await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', scheme);
-			const colors = await emptyMessage.evaluate(element => ({
-				text: getComputedStyle(element).color,
-				background: getComputedStyle(element.closest('.ash-sessions-files-empty-view')!).backgroundColor,
-			}));
-			expect(colors.background).not.toBe('rgba(0, 0, 0, 0)');
-			expect(colors.text).not.toBe(colors.background);
-		}
-		await tabs.getByRole('tab', { name: 'Changes', exact: true }).click();
-		await expect(auxiliary.getByRole('status')).toHaveText('Changes appear after the agent edits files.');
-		await expect(auxiliary.getByRole('button', { name: 'Review all changes', exact: true })).toBeDisabled();
-		await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
-		await expect(auxiliary).toBeHidden();
+	};
+	await mount(false);
+	const container = page.locator('#sessions-host');
+	await expect(container.locator('[data-action-id="sessions.newSession"] button')).toBeVisible();
+	await expect(page.locator('#app')).toHaveText('Host content');
+	await page.evaluate(() => document.dispatchEvent(new Event('close-sessions')));
+	await expect(container).toBeEmpty();
+	await mount(true);
+	await expect(container).toHaveAttribute('data-mounted', 'true');
+	await expect(container).toBeEmpty();
+	await expect(page.locator('#app')).toHaveText('Host content');
+	expect(failures).toEqual([]);
+});
+
+browserTest('Browser Sessions Code shows Files and Changes and retains the selected view across pages and reload', { tag: ['@browser-ui'] }, async ({ page }) => {
+	const failures: string[] = [];
+	page.on('pageerror', error => failures.push(error.message));
+	await page.goto('/browser/sessions/sessions.html');
+	const navigation = page.locator('.ash-sessions-activity-content');
+	const auxiliary = page.locator('[data-part="auxiliarybar"]');
+	const tabs = page.locator('[data-part="editor"] .ash-editor-title-control');
+	await expect(auxiliary).toBeHidden();
+	await expect(page.getByText('Session details', { exact: true })).toHaveCount(0);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(tabs.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await expect(auxiliary.locator('[data-view-id="sessions.files.explorer.empty"]').getByRole('status')).toHaveText('Folders and files will appear here.');
+	await expect(auxiliary.locator('[data-view-id="ash.explorer"]')).toHaveCount(0);
+	const emptyMessage = auxiliary.locator('.ash-sessions-files-empty-message');
+	expect(await emptyMessage.evaluate(element => getComputedStyle(element).fontSize)).toBe('12px');
+	await page.keyboard.press('ControlOrMeta+Shift+E');
+	await expect(auxiliary.locator('[data-view-id="sessions.files.explorer.empty"]')).toBeFocused();
+	await page.keyboard.press('Alt+F1');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Files follow the selected session directory[\s\S]*Collapse folders/u);
+	await page.keyboard.press('Escape');
+	await expect(auxiliary.locator('[data-view-id="sessions.files.explorer.empty"]')).toBeFocused();
+	// This empty, disconnected embedder uses the host's bootstrap palette.
+	// Installed extension themes are covered by the connected theme scenarios.
+	for (const [scheme, colorScheme, forcedColors] of [
+		['light', 'light', 'none'],
+		['dark', 'dark', 'none'],
+		['hcDark', 'dark', 'active'],
+		['hcLight', 'light', 'active'],
+	] as const) {
+		await page.emulateMedia({ colorScheme, forcedColors });
+		await page.goto('/browser/workbench/workbench.html');
+		await new Workbench(page).waitForReady();
+		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', scheme);
+		await page.goto('/browser/sessions/sessions.html');
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-		await expect(tabs.getByRole('tab', { name: 'Changes', exact: true })).toHaveAttribute('aria-selected', 'true');
-		await page.setViewportSize({ width: 1_000, height: 760 });
-		await expect(auxiliary).toBeVisible();
-		await page.reload();
-		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-		await expect(tabs.getByRole('tab', { name: 'Changes', exact: true })).toHaveAttribute('aria-selected', 'true');
-		expect(failures).toEqual([]);
-	},
-);
+		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', scheme);
+		const colors = await emptyMessage.evaluate(element => ({
+			text: getComputedStyle(element).color,
+			background: getComputedStyle(element.closest('.ash-sessions-files-empty-view')!).backgroundColor,
+		}));
+		expect(colors.background).not.toBe('rgba(0, 0, 0, 0)');
+		expect(colors.text).not.toBe(colors.background);
+	}
+	await tabs.getByRole('tab', { name: 'Changes', exact: true }).click();
+	await expect(auxiliary.getByRole('status')).toHaveText('Changes appear after the agent edits files.');
+	await expect(auxiliary.getByRole('button', { name: 'Review all changes', exact: true })).toBeDisabled();
+	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
+	await expect(auxiliary).toBeHidden();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(tabs.getByRole('tab', { name: 'Changes', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await page.setViewportSize({ width: 1_000, height: 760 });
+	await expect(auxiliary).toBeVisible();
+	await page.reload();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(tabs.getByRole('tab', { name: 'Changes', exact: true })).toHaveAttribute('aria-selected', 'true');
+	expect(failures).toEqual([]);
+});

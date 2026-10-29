@@ -79,10 +79,8 @@ class Transport implements AppServerTransport {
 			}
 			result = record(0);
 		} else if (request.method === 'backup/move') {
-			if (this.mode === 'legacy')
-				error = { code: -32601, message: 'MethodNotFound', data: { kind: 'MethodNotFound' } };
-			else if (this.mode === 'failed')
-				error = { code: -32003, message: 'BackupRevisionConflict', data: { kind: 'BackupRevisionConflict' } };
+			if (this.mode === 'legacy') error = { code: -32601, message: 'MethodNotFound', data: { kind: 'MethodNotFound' } };
+			else if (this.mode === 'failed') error = { code: -32003, message: 'BackupRevisionConflict', data: { kind: 'BackupRevisionConflict' } };
 			else result = { backups: [{ resource: 'untitled:note-0', revision: 'moved' }] };
 		} else if (request.method === 'backup/list') {
 			result = { backups: [record(0), record(1)] };
@@ -123,11 +121,7 @@ test('backup shutdown writes wait for replacement initialization and preserve th
 	await client.connect();
 	client.disconnect();
 	const resource = URI.parse(record(0).content.resource);
-	const writing = new AppServerBackupService(client, 'editor').store(
-		{ id: 'workspace', folders: [] },
-		{ ...record(0).content, resource },
-		'previous',
-	);
+	const writing = new AppServerBackupService(client, 'editor').store({ id: 'workspace', folders: [] }, { ...record(0).content, resource }, 'previous');
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.equal(transport.requests.filter(request => request.method === 'backup/write').length, 0);
 	await client.connect();
@@ -152,14 +146,7 @@ test('a backup write with a lost reply fails and is never replayed after reconne
 	await client.connect();
 	transport.onWrite = () => transport.closeAfterWrite();
 	const backups = new AppServerBackupService(client, 'editor');
-	await assert.rejects(
-		backups.store(
-			{ id: 'workspace', folders: [] },
-			{ ...record(0).content, resource: URI.parse(record(0).content.resource) },
-			'previous',
-		),
-		/Lost backup write reply/,
-	);
+	await assert.rejects(backups.store({ id: 'workspace', folders: [] }, { ...record(0).content, resource: URI.parse(record(0).content.resource) }, 'previous'), /Lost backup write reply/);
 	await client.connect();
 	assert.equal((await backups.list('workspace')).length, 2);
 	assert.equal(transport.requests.filter(request => request.method === 'backup/write').length, 1);
@@ -211,10 +198,7 @@ for (const mode of ['stalled', 'failed'] as const) {
 		const client = new AppServerProtocolClient(transport);
 		try {
 			await client.connect();
-			await assert.rejects(
-				new AppServerBackupService(client, 'editor').list('workspace'),
-				error => error instanceof BackupError && error.code === 'failed',
-			);
+			await assert.rejects(new AppServerBackupService(client, 'editor').list('workspace'), error => error instanceof BackupError && error.code === 'failed');
 			assert.equal(transport.requests.filter(request => request.method === 'backup/listPage').length, 2);
 		} finally {
 			client.dispose();
@@ -228,11 +212,9 @@ test('Backup migration uses one generated transaction request and revives only m
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
 	const resource = URI.parse('untitled:note-0');
-	const moved = await new AppServerBackupService(client, 'editor').move(
-		'old',
-		{ id: 'new', folders: [URI.file('/root')], configuration: URI.file('/team.ash-workspace') },
-		[{ resource, revision: 'source' }],
-	);
+	const moved = await new AppServerBackupService(client, 'editor').move('old', { id: 'new', folders: [URI.file('/root')], configuration: URI.file('/team.ash-workspace') }, [
+		{ resource, revision: 'source' },
+	]);
 	assert.deepEqual(moved, [{ resource, revision: 'moved' }]);
 	assert.deepEqual(
 		transport.requests.slice(1).map(({ method, params }) => ({ method, params })),
@@ -261,12 +243,8 @@ for (const mode of ['legacy', 'failed'] as const)
 		const client = new AppServerProtocolClient(transport);
 		using cleanup = toDisposable(() => client.dispose());
 		await client.connect();
-		await assert.rejects(
-			new AppServerBackupService(client, 'editor').move('old', { id: 'new', folders: [] }, []),
-			error =>
-				mode === 'legacy'
-					? error instanceof AppServerRemoteError && error.code === -32601
-					: error instanceof BackupError && error.code === 'conflict',
+		await assert.rejects(new AppServerBackupService(client, 'editor').move('old', { id: 'new', folders: [] }, []), error =>
+			mode === 'legacy' ? error instanceof AppServerRemoteError && error.code === -32601 : error instanceof BackupError && error.code === 'conflict',
 		);
 		assert.deepEqual(
 			transport.requests.slice(1).map(request => request.method),

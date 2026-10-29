@@ -1,40 +1,20 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
-import {
-	getWindows,
-	onDidRegisterWindow,
-	onWillUnregisterWindow,
-	type IRegisteredWindow,
-} from '../../../../base/browser/window.js';
+import { getWindows, onDidRegisterWindow, onWillUnregisterWindow, type IRegisteredWindow } from '../../../../base/browser/window.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { raceCancellation, RunOnceScheduler } from '../../../../base/common/async.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	toDisposable,
-	type IDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { isLinux } from '../../../../base/common/platform.js';
 import { localize2 } from '../../../../nls.js';
 import { type ICodeEditor, MouseTargetType } from '../../../../editor/browser/editorBrowser.js';
-import {
-	EditorAction,
-	EditorContributionInstantiation,
-	registerEditorAction,
-	registerEditorContribution,
-	type ServicesAccessor,
-} from '../../../../editor/browser/editorExtensions.js';
+import { EditorAction, EditorContributionInstantiation, registerEditorAction, registerEditorContribution, type ServicesAccessor } from '../../../../editor/browser/editorExtensions.js';
 import { EditorOption } from '../../../../editor/common/config/editorOptions.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { Handler } from '../../../../editor/common/editorCommon.js';
 import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.js';
-import {
-	CodeEditorStateFlag,
-	EditorStateCancellationTokenSource,
-} from '../../../../editor/contrib/editorState/browser/editorState.js';
+import { CodeEditorStateFlag, EditorStateCancellationTokenSource } from '../../../../editor/contrib/editorState/browser/editorState.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 
 /** Owns selection clipboard synchronization for one desktop editor. */
@@ -47,9 +27,7 @@ export class SelectionClipboard extends Disposable {
 		@IClipboardService private readonly clipboard: IClipboardService,
 	) {
 		super();
-		this.pendingWrite = this._register(
-			new RunOnceScheduler(() => void this.writeSelection().catch(onUnexpectedError), 100),
-		);
+		this.pendingWrite = this._register(new RunOnceScheduler(() => void this.writeSelection().catch(onUnexpectedError), 100));
 		this._register(
 			editor.onDidChangeCursorSelection(event => {
 				if (!editor.getOption(EditorOption.selectionClipboard) || event.source === 'restoreState') {
@@ -62,10 +40,7 @@ export class SelectionClipboard extends Disposable {
 		this._register(editor.onDidChangeModel(() => this.pendingWrite.cancel()));
 		this._register(
 			editor.onDidChangeConfiguration(event => {
-				if (
-					event.hasChanged(EditorOption.selectionClipboard) &&
-					!editor.getOption(EditorOption.selectionClipboard)
-				) {
+				if (event.hasChanged(EditorOption.selectionClipboard) && !editor.getOption(EditorOption.selectionClipboard)) {
 					this.pendingWrite.cancel();
 				}
 			}),
@@ -103,12 +78,7 @@ export class SelectionClipboard extends Disposable {
 	private async writeSelection(): Promise<void> {
 		const model = this.editor.getModel();
 		const selections = this.editor.getSelections();
-		if (
-			this.isDisposed ||
-			!this.editor.getOption(EditorOption.selectionClipboard) ||
-			!model ||
-			!selections?.length
-		) {
+		if (this.isDisposed || !this.editor.getOption(EditorOption.selectionClipboard) || !model || !selections?.length) {
 			return;
 		}
 		let length = 0;
@@ -123,20 +93,12 @@ export class SelectionClipboard extends Disposable {
 			}
 		}
 		const ordered = [...selections].sort(Range.compareRangesUsingStarts);
-		await this.clipboard.writeText(
-			ordered.map(selection => model.getValueInRange(selection)).join(model.getEOL()),
-			'selection',
-		);
+		await this.clipboard.writeText(ordered.map(selection => model.getValueInRange(selection)).join(model.getEOL()), 'selection');
 	}
 }
 
 function acceptsMiddlePaste(type: MouseTargetType | undefined): boolean {
-	return (
-		type !== MouseTargetType.CONTENT_WIDGET &&
-		type !== MouseTargetType.OVERLAY_WIDGET &&
-		type !== MouseTargetType.SCROLLBAR &&
-		type !== MouseTargetType.OUTSIDE_EDITOR
-	);
+	return type !== MouseTargetType.CONTENT_WIDGET && type !== MouseTargetType.OVERLAY_WIDGET && type !== MouseTargetType.SCROLLBAR && type !== MouseTargetType.OUTSIDE_EDITOR;
 }
 
 class PasteSelectionClipboardAction extends EditorAction {
@@ -153,25 +115,13 @@ class PasteSelectionClipboardAction extends EditorAction {
 	}
 }
 
-async function pasteSelection(
-	editor: ICodeEditor,
-	clipboard: IClipboardService,
-	requireEnabled = false,
-): Promise<void> {
-	if (
-		!editor.hasModel() ||
-		editor.getOption(EditorOption.readOnly) ||
-		editor.inComposition ||
-		(requireEnabled && !editor.getOption(EditorOption.selectionClipboard))
-	) {
+async function pasteSelection(editor: ICodeEditor, clipboard: IClipboardService, requireEnabled = false): Promise<void> {
+	if (!editor.hasModel() || editor.getOption(EditorOption.readOnly) || editor.inComposition || (requireEnabled && !editor.getOption(EditorOption.selectionClipboard))) {
 		return;
 	}
 	editor.focus();
 	using resources = new DisposableStore();
-	const request = new EditorStateCancellationTokenSource(
-		editor,
-		CodeEditorStateFlag.Value | CodeEditorStateFlag.Selection,
-	);
+	const request = new EditorStateCancellationTokenSource(editor, CodeEditorStateFlag.Value | CodeEditorStateFlag.Selection);
 	resources.add(toDisposable(() => request.dispose(true)));
 	resources.add(editor.onDidBlurEditorText(() => request.cancel()));
 	resources.add(editor.onDidCompositionStart(() => request.cancel()));
@@ -179,9 +129,7 @@ async function pasteSelection(
 		editor.onDidChangeConfiguration(event => {
 			if (
 				(event.hasChanged(EditorOption.readOnly) && editor.getOption(EditorOption.readOnly)) ||
-				(requireEnabled &&
-					event.hasChanged(EditorOption.selectionClipboard) &&
-					!editor.getOption(EditorOption.selectionClipboard))
+				(requireEnabled && event.hasChanged(EditorOption.selectionClipboard) && !editor.getOption(EditorOption.selectionClipboard))
 			) {
 				request.cancel();
 			}
@@ -201,8 +149,7 @@ class LinuxSelectionClipboardPastePreventer extends Disposable {
 			listeners.set(
 				window.id,
 				addDisposableListener(window.window.document, 'mouseup', event => {
-					if (event.button === 1 && configuration.getValue<boolean>('editor.selectionClipboard') === false)
-						event.preventDefault();
+					if (event.button === 1 && configuration.getValue<boolean>('editor.selectionClipboard') === false) event.preventDefault();
 				}),
 			);
 		};
@@ -213,10 +160,8 @@ class LinuxSelectionClipboardPastePreventer extends Disposable {
 }
 
 if (isLinux) {
-	registerWorkbenchContribution(
-		'workbench.contrib.linuxSelectionClipboardPastePreventer',
-		WorkbenchPhase.BlockRestore,
-		accessor => accessor.get(IInstantiationService).createInstance(LinuxSelectionClipboardPastePreventer),
+	registerWorkbenchContribution('workbench.contrib.linuxSelectionClipboardPastePreventer', WorkbenchPhase.BlockRestore, accessor =>
+		accessor.get(IInstantiationService).createInstance(LinuxSelectionClipboardPastePreventer),
 	);
 	registerEditorContribution(SelectionClipboard.ID, SelectionClipboard, EditorContributionInstantiation.Eager);
 	registerEditorAction(PasteSelectionClipboardAction);

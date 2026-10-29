@@ -1,9 +1,6 @@
 import { lstatSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import {
-	APP_SERVER_PROTOCOL_MAJOR,
-	APP_SERVER_SCHEMA_HASH,
-} from '../../../../../.build/protocol/typescript/protocol.js';
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH } from '../../../../../.build/protocol/typescript/protocol.js';
 import { developmentArtifactsPath, developmentAshPackagePath } from '../../environment/node/developmentArtifacts.js';
 
 export interface AppServerDaemonPackageLocation {
@@ -36,10 +33,7 @@ export function packagedAppServerSha256(location: AppServerDaemonPackageLocation
 	return packagedComponentSha256(location, 'appServer');
 }
 
-function packagedComponentSha256(
-	location: AppServerDaemonPackageLocation,
-	component: 'appServer' | 'appServerDaemon',
-): string | undefined {
+function packagedComponentSha256(location: AppServerDaemonPackageLocation, component: 'appServer' | 'appServerDaemon'): string | undefined {
 	if (!location.isPackaged) return undefined;
 	const packageRoot = appServerPackageRoot(location);
 	const metadataPath = join(packageRoot, 'ash-package.json');
@@ -50,9 +44,7 @@ function packagedComponentSha256(
 	const metadata = JSON.parse(readFileSync(metadataPath, 'utf8')) as AshPackageMetadata;
 	const expectedEntrypoint = `bin/${location.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server'}`;
 	const digest = metadata.components?.[component]?.binarySha256;
-	const protocolMatchesDesktop =
-		metadata.protocol?.major === APP_SERVER_PROTOCOL_MAJOR &&
-		metadata.protocol.schemaHash === APP_SERVER_SCHEMA_HASH;
+	const protocolMatchesDesktop = metadata.protocol?.major === APP_SERVER_PROTOCOL_MAJOR && metadata.protocol.schemaHash === APP_SERVER_SCHEMA_HASH;
 	if (
 		metadata.layoutVersion !== 2 ||
 		metadata.entrypoint !== expectedEntrypoint ||
@@ -70,11 +62,7 @@ function packagedComponentSha256(
 
 /** Resolves the profile-scoped App Server daemon from the canonical Desktop package layout. */
 export function appServerDaemonExecutablePath(location: AppServerDaemonPackageLocation): string {
-	return join(
-		appServerPackageRoot(location),
-		'bin',
-		location.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon',
-	);
+	return join(appServerPackageRoot(location), 'bin', location.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon');
 }
 
 function appServerPackageRoot(location: AppServerDaemonPackageLocation): string {
@@ -89,9 +77,5 @@ export function developmentAppServerGenerationPath(appPath: string): string {
 
 /** Resolves the managed App Server executable independently of its lifecycle command carrier. */
 export function appServerExecutablePath(location: AppServerDaemonPackageLocation): string {
-	return join(
-		appServerPackageRoot(location),
-		'bin',
-		location.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server',
-	);
+	return join(appServerPackageRoot(location), 'bin', location.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server');
 }

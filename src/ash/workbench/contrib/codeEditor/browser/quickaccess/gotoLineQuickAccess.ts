@@ -7,10 +7,7 @@ import { parseStanzaGotoLocation } from '../../../../../editor/contrib/quickAcce
 import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { TextEditorSelectionSource } from '../../../../../platform/editor/common/editor.js';
-import {
-	QuickAccessRegistry,
-	type IQuickAccessProvider,
-} from '../../../../../platform/quickinput/common/quickAccess.js';
+import { QuickAccessRegistry, type IQuickAccessProvider } from '../../../../../platform/quickinput/common/quickAccess.js';
 import type { IQuickPick, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { EditorsVisibleContext } from '../../../../common/contextkeys.js';
 
@@ -37,10 +34,7 @@ export class GotoLineQuickAccessProvider implements IQuickAccessProvider {
 
 		const initialState = editor.saveViewState();
 		let accepted = false;
-		const isCurrent = (): boolean =>
-			this.codeEditorService.listCodeEditors().includes(editor) &&
-			editor.getModel() === model &&
-			!model.isDisposed();
+		const isCurrent = (): boolean => this.codeEditorService.listCodeEditors().includes(editor) && editor.getModel() === model && !model.isDisposed();
 		resources.add(
 			toDisposable(() => {
 				if (!accepted && isCurrent()) editor.restoreViewState(initialState);
@@ -53,12 +47,7 @@ export class GotoLineQuickAccessProvider implements IQuickAccessProvider {
 				const { lineNumber, column } = result.location.position;
 				picker.items = [
 					{
-						label: localize(
-							'gotoLineQuickAccess.location',
-							'Press Enter to go to line {0}, column {1}.',
-							lineNumber,
-							column,
-						),
+						label: localize('gotoLineQuickAccess.location', 'Press Enter to go to line {0}, column {1}.', lineNumber, column),
 						alwaysShow: true,
 					},
 				];
@@ -67,16 +56,8 @@ export class GotoLineQuickAccessProvider implements IQuickAccessProvider {
 				picker.items = [
 					{
 						label: picker.value.startsWith('::')
-							? localize(
-									'gotoLineQuickAccess.offsetPrompt',
-									'Type a character offset from 1 to {0}.',
-									model.getValueLength(),
-								)
-							: localize(
-									'gotoLineQuickAccess.linePrompt',
-									'Type a line number from 1 to {0} and an optional column.',
-									model.getLineCount(),
-								),
+							? localize('gotoLineQuickAccess.offsetPrompt', 'Type a character offset from 1 to {0}.', model.getValueLength())
+							: localize('gotoLineQuickAccess.linePrompt', 'Type a line number from 1 to {0} and an optional column.', model.getLineCount()),
 						alwaysShow: true,
 					},
 				];
@@ -132,10 +113,7 @@ registerAction2(GotoLineAction);
 QuickAccessRegistry.register({
 	prefix: GotoLineQuickAccessProvider.GO_TO_LINE_PREFIX,
 	get placeholder() {
-		return localize(
-			'gotoLineQuickAccess.placeholder',
-			'Type a line number and optional column (e.g. :42:5), or ::1024 for a character offset. Negative values count backwards.',
-		);
+		return localize('gotoLineQuickAccess.placeholder', 'Type a line number and optional column (e.g. :42:5), or ::1024 for a character offset. Negative values count backwards.');
 	},
 	get helpLabel() {
 		return localize('status.editor.gotoLine', 'Go to Line/Column');

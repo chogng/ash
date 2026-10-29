@@ -17,10 +17,7 @@ test('URI parses and canonicalizes absolute hierarchical resources', () => {
 
 test('URI.parse assigns file to scheme-less input and strict mode requires a scheme', () => {
 	assert.equal(URI.parse('./item.txt').toString(), 'file:///item.txt');
-	assert.equal(
-		URI.parse('//server/share/item.txt?rev=2#anchor').toString(),
-		'file://server/share/item.txt?rev=2#anchor',
-	);
+	assert.equal(URI.parse('//server/share/item.txt?rev=2#anchor').toString(), 'file://server/share/item.txt?rev=2#anchor');
 	assert.equal(URI.parse('?rev=2#anchor').toString(), 'file:///?rev=2#anchor');
 	assert.equal(URI.parse('').toString(), 'file:///');
 	assert.throws(() => URI.parse('./item.txt', true), /scheme is missing/);
@@ -30,10 +27,7 @@ test('URI.parse assigns file to scheme-less input and strict mode requires a sch
 
 test('URI.from applies the same scheme rule to decoded components', () => {
 	assert.equal(URI.from({ scheme: '', path: 'item.txt' }).toString(), 'file:///item.txt');
-	assert.equal(
-		URI.from({ scheme: '', authority: 'server', path: '/share/item.txt' }).toString(),
-		'file://server/share/item.txt',
-	);
+	assert.equal(URI.from({ scheme: '', authority: 'server', path: '/share/item.txt' }).toString(), 'file://server/share/item.txt');
 	assert.throws(() => URI.from({ scheme: '' }, true), /scheme is missing/);
 	assert.throws(() => URI.from({ scheme: '', path: '//server/share' }), /without an authority/);
 });
@@ -163,10 +157,7 @@ test('URI.with changes decoded components while retaining unchanged encoded boun
 	assert.equal(resource.with({}), resource);
 	assert.equal(resource.with({ query: 'next=中' }).toString(), 'ash://workspace/a%2Fb?next=%E4%B8%AD#x%23y');
 	assert.equal(resource.with({ query: null, fragment: null }).toString(), 'ash://workspace/a%2Fb');
-	assert.equal(
-		resource.with({ scheme: 'other', authority: 'host', path: '/new ?#' }).toString(),
-		'other://host/new%20%3F%23?key=a%26b#x%23y',
-	);
+	assert.equal(resource.with({ scheme: 'other', authority: 'host', path: '/new ?#' }).toString(), 'other://host/new%20%3F%23?key=a%26b#x%23y');
 	assert.throws(() => resource.with({ authority: 'host', path: 'relative' }), TypeError);
 });
 
@@ -236,9 +227,7 @@ for (const os of ['windows', 'mac', 'linux'] as const) {
 			sharePath: windows ? '\\\\server\\share\\item.txt' : '//server/share/item.txt',
 			driveParent: windows ? 'file:///C:/item.txt?rev=1#anchor' : 'file:///item.txt?rev=1#anchor',
 			shareParent: windows ? 'file://server/share/item.txt?rev=1#anchor' : 'file://server/item.txt?rev=1#anchor',
-			backslashChild: windows
-				? 'file:///C:/workspace/nested/item.txt?rev=1#anchor'
-				: 'file:///C:/workspace/nested%5Citem.txt?rev=1#anchor',
+			backslashChild: windows ? 'file:///C:/workspace/nested/item.txt?rev=1#anchor' : 'file:///C:/workspace/nested%5Citem.txt?rev=1#anchor',
 			// URI dirname retains drive roots even when a renderer runs on another OS.
 			driveRoot: 'file:///C:/',
 			driveRootParent: 'file:///C:/?rev=1#anchor',
@@ -266,33 +255,21 @@ test('URI.with encodes a decoded path and keeps the other components', () => {
 
 	assert.equal(child.toString(), 'ash://workspace/root/hello%20world.txt?rev=2#anchor');
 	assert.equal(parent.toString(), 'ash://workspace/root?rev=2#anchor');
-	assert.equal(
-		parent.with({ path: '/root/bad%ZZ.txt' }).toString(),
-		'ash://workspace/root/bad%25ZZ.txt?rev=2#anchor',
-	);
+	assert.equal(parent.with({ path: '/root/bad%ZZ.txt' }).toString(), 'ash://workspace/root/bad%25ZZ.txt?rev=2#anchor');
 });
 
 test('URI.joinPathSegment preserves components and encodes one child name', () => {
 	const parent = URI.parse('ash://workspace/root?rev=2#anchor');
 	const child = parent.joinPathSegment('hello %中?#.txt');
 	assert.equal(child.toString(), 'ash://workspace/root/hello%20%25%E4%B8%AD%3F%23.txt?rev=2#anchor');
-	assert.deepEqual(
-		[child.scheme, child.authority, child.path, child.query, child.fragment],
-		['ash', 'workspace', '/root/hello %中?#.txt', 'rev=2', 'anchor'],
-	);
+	assert.deepEqual([child.scheme, child.authority, child.path, child.query, child.fragment], ['ash', 'workspace', '/root/hello %中?#.txt', 'rev=2', 'anchor']);
 	assert.equal(URI.file('/tmp/root/').joinPathSegment('a b').toString(), 'file:///tmp/root/a%20b');
 	assert.equal(URI.file('/tmp/root').joinPathSegment('..').toString(), isWindows ? 'file:///tmp' : 'file:///tmp/');
-	const directories = [
-		...(isWindows ? [URI.file('C:\\project\\src'), URI.file('\\\\server\\share\\src')] : []),
-		URI.parse('vscode-remote://ssh-remote+host/workspace?rev=1#anchor'),
-	];
+	const directories = [...(isWindows ? [URI.file('C:\\project\\src'), URI.file('\\\\server\\share\\src')] : []), URI.parse('vscode-remote://ssh-remote+host/workspace?rev=1#anchor')];
 	for (const directory of directories) {
 		for (const name of ['plain.txt', 'a % 中.txt', 'question?#.txt']) {
 			const base = directory.path.endsWith('/') ? directory.path.slice(0, -1) : directory.path;
-			assert.equal(
-				directory.joinPathSegment(name).toString(),
-				directory.with({ path: `${base}/${name}` }).toString(),
-			);
+			assert.equal(directory.joinPathSegment(name).toString(), directory.with({ path: `${base}/${name}` }).toString());
 		}
 	}
 });

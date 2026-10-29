@@ -86,9 +86,7 @@ export class BrowserWorkspacesService extends Disposable implements IWorkspacesS
 	public async removeRecentlyOpened(paths: readonly URI[]): Promise<void> {
 		const current = this.recentlyOpened;
 		this.store({
-			workspaces: current.workspaces.filter(
-				recent => !paths.some(path => extUriBiasedIgnorePathCase.isEqual(path, recentWorkspaceUri(recent))),
-			),
+			workspaces: current.workspaces.filter(recent => !paths.some(path => extUriBiasedIgnorePathCase.isEqual(path, recentWorkspaceUri(recent)))),
 		});
 	}
 
@@ -98,12 +96,7 @@ export class BrowserWorkspacesService extends Disposable implements IWorkspacesS
 
 	private store(recents: IRecentlyOpened): void {
 		this.recentlyOpened = recents;
-		this.storage.store(
-			RECENTLY_OPENED_STORAGE_KEY,
-			JSON.stringify(toStoreData(recents)),
-			StorageScope.PROFILE,
-			StorageTarget.USER,
-		);
+		this.storage.store(RECENTLY_OPENED_STORAGE_KEY, JSON.stringify(toStoreData(recents)), StorageScope.PROFILE, StorageTarget.USER);
 		this.storage.remove(LEGACY_RECENT_WORKSPACES_STORAGE_KEY, StorageScope.PROFILE);
 	}
 }

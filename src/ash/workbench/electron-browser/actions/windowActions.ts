@@ -46,9 +46,7 @@ async function switchWindow(accessor: ServicesAccessor): Promise<void> {
 	picker.items = windows.map(window => ({
 		windowId: window.id,
 		label: window.title || localize({ bundle: 'ash', key: 'workbench.untitledWindow' }, 'Untitled Window'),
-		description: window.current
-			? localize({ bundle: 'ash', key: 'workbench.currentWindow' }, 'Current window')
-			: undefined,
+		description: window.current ? localize({ bundle: 'ash', key: 'workbench.currentWindow' }, 'Current window') : undefined,
 		className: window.current ? 'ash-window-switch-current' : undefined,
 	}));
 	picker.placeholder = localize({ bundle: 'ash', key: 'workbench.switchWindowPlaceholder' }, 'Select a window');
@@ -170,9 +168,7 @@ export class ZoomResetAction extends Action2 {
 		const configuration = accessor.get(IConfigurationService);
 		return applyWindowZoom(
 			accessor,
-			configuration.getValue<boolean>(WINDOW_ZOOM_PER_WINDOW_SETTING) === false
-				? 0
-				: (configuration.getValue<number>(WINDOW_ZOOM_LEVEL_SETTING) ?? 0),
+			configuration.getValue<boolean>(WINDOW_ZOOM_PER_WINDOW_SETTING) === false ? 0 : (configuration.getValue<number>(WINDOW_ZOOM_LEVEL_SETTING) ?? 0),
 			target === mainWindow ? undefined : target.name,
 		);
 	}
@@ -216,10 +212,7 @@ export class ToggleWindowAlwaysOnTopAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.toggleWindowAlwaysOnTop',
-			title: localize2(
-				{ bundle: 'ash', key: 'workbench.toggleWindowAlwaysOnTop' },
-				'Toggle Window Always on Top',
-			),
+			title: localize2({ bundle: 'ash', key: 'workbench.toggleWindowAlwaysOnTop' }, 'Toggle Window Always on Top'),
 			f1: true,
 		});
 	}
@@ -241,10 +234,7 @@ export class EnableWindowAlwaysOnTopAction extends Action2 {
 			icon: Lxicon.pinned,
 			menu: {
 				id: MenuId.LayoutControlMenu,
-				when: ContextKeyExpr.and(
-					IsAuxiliaryWindowContext.isEqualTo(true),
-					IsWindowAlwaysOnTopContext.isEqualTo(false),
-				),
+				when: ContextKeyExpr.and(IsAuxiliaryWindowContext.isEqualTo(true), IsWindowAlwaysOnTopContext.isEqualTo(false)),
 				group: 'navigation',
 				order: 1,
 			},
@@ -266,10 +256,7 @@ export class DisableWindowAlwaysOnTopAction extends Action2 {
 			icon: Lxicon.unpin,
 			menu: {
 				id: MenuId.LayoutControlMenu,
-				when: ContextKeyExpr.and(
-					IsAuxiliaryWindowContext.isEqualTo(true),
-					IsWindowAlwaysOnTopContext.isEqualTo(true),
-				),
+				when: ContextKeyExpr.and(IsAuxiliaryWindowContext.isEqualTo(true), IsWindowAlwaysOnTopContext.isEqualTo(true)),
 				group: 'navigation',
 				order: 1,
 			},
@@ -342,10 +329,7 @@ export class MoveWindowTabToNewWindowAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.moveWindowTabToNewWindow',
-			title: localize2(
-				{ bundle: 'ash', key: 'workbench.moveWindowTabToNewWindow' },
-				'Move Window Tab to New Window',
-			),
+			title: localize2({ bundle: 'ash', key: 'workbench.moveWindowTabToNewWindow' }, 'Move Window Tab to New Window'),
 			f1: isMacintosh,
 		});
 	}

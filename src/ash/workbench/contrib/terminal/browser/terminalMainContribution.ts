@@ -2,15 +2,9 @@ import { Disposable, DisposableStore, MutableDisposable } from '../../../../base
 import { CancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
-import {
-	ITerminalProcessService,
-	type ICreateContributedTerminalProfileOptions,
-} from '../../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, type ICreateContributedTerminalProfileOptions } from '../../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import {
-	IEmbedderTerminalService,
-	type EmbedderTerminal,
-} from '../../../services/terminal/common/embedderTerminalService.js';
+import { IEmbedderTerminalService, type EmbedderTerminal } from '../../../services/terminal/common/embedderTerminalService.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import type { IWorkbenchContribution } from '../../../common/contributions.js';
 import { ITerminalService } from './terminal.js';
@@ -87,14 +81,15 @@ export class TerminalMainContribution extends Disposable implements IWorkbenchCo
 			}),
 		);
 		registration.add(
-			this.profiles.registerInternalContributedProfile({ extensionIdentifier: 'ash.agent-host', id, title }),
+			this.profiles.registerInternalContributedProfile({
+				extensionIdentifier: 'ash.agent-host',
+				id,
+				title,
+			}),
 		);
 	}
 
-	private async createAshCodeTerminal(
-		options: ICreateContributedTerminalProfileOptions,
-		generation: number,
-	): Promise<number> {
+	private async createAshCodeTerminal(options: ICreateContributedTerminalProfileOptions, generation: number): Promise<number> {
 		const assertCurrent = (): void => {
 			if (this.isDisposed || generation !== this.generation) throw new CancellationError();
 		};
@@ -119,22 +114,14 @@ export class TerminalMainContribution extends Disposable implements IWorkbenchCo
 		}
 	}
 
-	private async createAgentTerminal(
-		options: ICreateContributedTerminalProfileOptions,
-		title: string,
-		generation: number,
-	): Promise<number> {
+	private async createAgentTerminal(options: ICreateContributedTerminalProfileOptions, title: string, generation: number): Promise<number> {
 		const assertCurrent = (): void => {
 			if (this.isDisposed || generation !== this.generation) throw new CancellationError();
 		};
 		assertCurrent();
 		const os = this.processes.operatingSystem;
 		if (os === undefined) throw new CancellationError();
-		const resource = URI.isUri(options.cwd)
-			? options.cwd
-			: typeof options.cwd === 'string'
-				? URI.file(options.cwd)
-				: undefined;
+		const resource = URI.isUri(options.cwd) ? options.cwd : typeof options.cwd === 'string' ? URI.file(options.cwd) : undefined;
 		const folder = resource ? (this.workspace.getWorkspaceFolder(resource) ?? undefined) : undefined;
 		const scope = terminalExecutionScope(this.workspace.getWorkspace());
 		const profile = await this.resolver.getDefaultProfile({

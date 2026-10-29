@@ -5,29 +5,15 @@ import { Keybinding, logicalKey, resolveKeybinding } from '../../../../base/comm
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { operatingSystem, OperatingSystem } from '../../../../base/common/platform.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
-import {
-	Action2,
-	MenuId,
-	MenuItemAction,
-	MenusRegistry,
-	registerAction2,
-	SubmenuItemAction,
-} from '../../../../platform/actions/common/actions.js';
+import { Action2, MenuId, MenuItemAction, MenusRegistry, registerAction2, SubmenuItemAction } from '../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../platform/actions/common/menuService.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { ContextKeyService } from '../../../contextkey/browser/contextKeyService.js';
-import {
-	createServiceIdentifier,
-	type ServicesAccessor,
-} from '../../../../platform/instantiation/common/instantiation.js';
+import { createServiceIdentifier, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import { KeybindingResolver } from '../../../../platform/keybinding/common/keybindingResolver.js';
-import {
-	KeybindingRuleKind,
-	KeybindingWeight,
-	KeybindingsRegistry,
-} from '../../../../platform/keybinding/common/keybindingsRegistry.js';
+import { KeybindingRuleKind, KeybindingWeight, KeybindingsRegistry } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { CommandService } from '../../../../workbench/services/commands/common/commandService.js';
 
 test('registerAction2 connects command execution and menu placement', async () => {
@@ -40,8 +26,14 @@ test('registerAction2 connects command execution and menu placement', async () =
 			super({
 				id: 'test.actions.registered',
 				title: 'Registered action',
-				menu: { id: menuId, group: 'navigation', order: 10 },
-				keybinding: { primary: Keybinding.single(logicalKey('r', { ctrlKey: true })) },
+				menu: {
+					id: menuId,
+					group: 'navigation',
+					order: 10,
+				},
+				keybinding: {
+					primary: Keybinding.single(logicalKey('r', { ctrlKey: true })),
+				},
 				f1: true,
 			});
 		}
@@ -64,7 +56,9 @@ test('registerAction2 connects command execution and menu placement', async () =
 		}).lookupKeybinding('test.actions.registered', contexts),
 	);
 
-	const groups = menus.getMenuActions(menuId, { shouldForwardArgs: true });
+	const groups = menus.getMenuActions(menuId, {
+		shouldForwardArgs: true,
+	});
 	assert.equal(groups.length, 1);
 	assert.equal(groups[0][0], 'navigation');
 	assert.equal(groups[0][1][0].label, 'Registered action');
@@ -180,9 +174,7 @@ test('registerAction2 accepts independently conditioned keybinding contributions
 		},
 	);
 
-	const rules = KeybindingsRegistry.getKeybindings().flatMap(rule =>
-		rule.kind === KeybindingRuleKind.Command && rule.command === commandId ? [rule] : [],
-	);
+	const rules = KeybindingsRegistry.getKeybindings().flatMap(rule => (rule.kind === KeybindingRuleKind.Command && rule.command === commandId ? [rule] : []));
 	assert.equal(rules.length, 2);
 	assert.deepEqual(
 		rules.map(rule => rule.args),
@@ -202,7 +194,10 @@ test('registerAction2 routes VS Code numeric keybindings through the canonical r
 				super({
 					id: commandId,
 					title: 'Numeric keybinding',
-					keybinding: { primary: KeyMod.CtrlCmd | KeyCode.KeyM, weight: KeybindingWeight.EditorContrib },
+					keybinding: {
+						primary: KeyMod.CtrlCmd | KeyCode.KeyM,
+						weight: KeybindingWeight.EditorContrib,
+					},
 				});
 			}
 
@@ -210,9 +205,7 @@ test('registerAction2 routes VS Code numeric keybindings through the canonical r
 		},
 	);
 
-	const rule = KeybindingsRegistry.getKeybindings().find(
-		candidate => candidate.kind === KeybindingRuleKind.Command && candidate.command === commandId,
-	);
+	const rule = KeybindingsRegistry.getKeybindings().find(candidate => candidate.kind === KeybindingRuleKind.Command && candidate.command === commandId);
 	assert.ok(rule);
 	const resolved = resolveKeybinding(rule.keybinding, operatingSystem).chords[0];
 	assert.deepEqual(
@@ -259,22 +252,15 @@ test('registerAction2 preserves commands and secondary shortcuts when zero disab
 			}
 		},
 	);
-	const rules = KeybindingsRegistry.getKeybindings().filter(
-		rule => rule.kind === KeybindingRuleKind.Command && rule.command === commandId,
-	);
+	const rules = KeybindingsRegistry.getKeybindings().filter(rule => rule.kind === KeybindingRuleKind.Command && rule.command === commandId);
 	assert.equal(rules.length, 1);
 	assert.equal(resolveKeybinding(rules[0]!.keybinding, operatingSystem).chords[0].key, 'k');
 	using services = new InstantiationService();
-	assert.equal(
-		await services.invokeFunction(accessor => CommandsRegistry.getCommand(commandId)!(accessor)),
-		'command remains available',
-	);
+	assert.equal(await services.invokeFunction(accessor => CommandsRegistry.getCommand(commandId)!(accessor)), 'command remains available');
 	registration.dispose();
 	assert.equal(CommandsRegistry.getCommand(commandId), undefined);
 	assert.equal(
-		KeybindingsRegistry.getKeybindings().some(
-			rule => rule.kind === KeybindingRuleKind.Command && rule.command === commandId,
-		),
+		KeybindingsRegistry.getKeybindings().some(rule => rule.kind === KeybindingRuleKind.Command && rule.command === commandId),
 		false,
 	);
 });
@@ -326,9 +312,21 @@ test('menu actions react to visibility, enablement, and toggle context', () => {
 	assert.equal(action.enabled, true);
 	assert.equal(action.checked, true);
 	assert.deepEqual(changes, [
-		{ isStructuralChange: true, isEnablementChange: false, isToggleChange: false },
-		{ isStructuralChange: false, isEnablementChange: true, isToggleChange: false },
-		{ isStructuralChange: false, isEnablementChange: false, isToggleChange: true },
+		{
+			isStructuralChange: true,
+			isEnablementChange: false,
+			isToggleChange: false,
+		},
+		{
+			isStructuralChange: false,
+			isEnablementChange: true,
+			isToggleChange: false,
+		},
+		{
+			isStructuralChange: false,
+			isEnablementChange: false,
+			isToggleChange: true,
+		},
 	]);
 
 	contexts.setContext('test.unrelated', true);
@@ -350,9 +348,7 @@ test('menu actions react to alternate enablement and toggle context', () => {
 		}),
 	);
 	const contexts = registrations.add(new ContextKeyService());
-	const menu = registrations.add(
-		new MenuService(new CommandService(new InstantiationService()), contexts).createMenu(menuId),
-	);
+	const menu = registrations.add(new MenuService(new CommandService(new InstantiationService()), contexts).createMenu(menuId));
 	const changes: Array<[boolean, boolean, boolean]> = [];
 	registrations.add(
 		menu.onDidChange(event => {
@@ -437,10 +433,18 @@ test('menu change events include context keys used by nested submenus', () => {
 	const rootMenu = new MenuId('test.actions.nested-root');
 	const childMenu = new MenuId('test.actions.nested-child');
 
-	registrations.add(MenusRegistry.appendMenuItem(rootMenu, { title: 'Nested', submenu: childMenu }));
+	registrations.add(
+		MenusRegistry.appendMenuItem(rootMenu, {
+			title: 'Nested',
+			submenu: childMenu,
+		}),
+	);
 	registrations.add(
 		MenusRegistry.appendMenuItem(childMenu, {
-			command: { id: 'test.actions.nested-command', title: 'Nested command' },
+			command: {
+				id: 'test.actions.nested-command',
+				title: 'Nested command',
+			},
 			when: ContextKeyExpr.has('test.nested-visible'),
 		}),
 	);
@@ -471,21 +475,39 @@ test('menu service sorts groups and resolves submenus', () => {
 
 	registrations.add(
 		MenusRegistry.appendMenuItem(rootMenu, {
-			command: { id: commandIds[1], title: 'First' },
+			command: {
+				id: commandIds[1],
+				title: 'First',
+			},
 			group: 'primary',
 			order: 1,
 		}),
 	);
 	registrations.add(
 		MenusRegistry.appendMenuItem(rootMenu, {
-			command: { id: commandIds[0], title: 'Navigation' },
+			command: {
+				id: commandIds[0],
+				title: 'Navigation',
+			},
 			group: 'navigation',
 			order: 100,
 		}),
 	);
-	registrations.add(MenusRegistry.appendMenuItem(childMenu, { command: { id: commandIds[2], title: 'Second' } }));
 	registrations.add(
-		MenusRegistry.appendMenuItem(rootMenu, { title: 'More', submenu: childMenu, group: 'primary', order: 2 }),
+		MenusRegistry.appendMenuItem(childMenu, {
+			command: {
+				id: commandIds[2],
+				title: 'Second',
+			},
+		}),
+	);
+	registrations.add(
+		MenusRegistry.appendMenuItem(rootMenu, {
+			title: 'More',
+			submenu: childMenu,
+			group: 'primary',
+			order: 2,
+		}),
 	);
 
 	const commands = new CommandService(new InstantiationService());
@@ -518,7 +540,9 @@ test('menu service does not read titles of actions hidden by context', () => {
 		}),
 	);
 	registrations.add(
-		MenusRegistry.appendMenuItem(menuId, { command: { id: 'test.actions.visible', title: 'Visible' } }),
+		MenusRegistry.appendMenuItem(menuId, {
+			command: { id: 'test.actions.visible', title: 'Visible' },
+		}),
 	);
 	const contexts = registrations.add(new ContextKeyService());
 	const menus = new MenuService(new CommandService(new InstantiationService()), contexts);
@@ -550,7 +574,10 @@ test('registered menu actions retain their startup labels without language-chang
 	);
 	registrations.add(
 		MenusRegistry.appendMenuItem(childMenuId, {
-			command: { id: commandId, title: localize2({ bundle: 'ash.test', key: 'command' }, 'Open') },
+			command: {
+				id: commandId,
+				title: localize2({ bundle: 'ash.test', key: 'command' }, 'Open'),
+			},
 		}),
 	);
 	let locale = 'en';
@@ -607,10 +634,7 @@ test('action registration retains parameter schemas and constraints for command 
 	using commands = new CommandService(services);
 	const registration = registerAction2(ValidatedAction);
 	try {
-		assert.deepEqual(
-			CommandsRegistry.getCommands().get('test.actions.metadata')!.metadata,
-			new ValidatedAction().desc.metadata,
-		);
+		assert.deepEqual(CommandsRegistry.getCommands().get('test.actions.metadata')!.metadata, new ValidatedAction().desc.metadata);
 		assert.equal(await commands.executeCommand('test.actions.metadata', 4), 4);
 		await assert.rejects(commands.executeCommand('test.actions.metadata', 'four'), TypeError);
 	} finally {

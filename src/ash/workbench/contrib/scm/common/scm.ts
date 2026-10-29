@@ -69,8 +69,7 @@ export interface ISCMStatusBarCommand {
 	run?(): unknown;
 }
 
-export type ISCMConflictContent =
-	{ readonly kind: 'missing' } | { readonly kind: 'binary' } | { readonly kind: 'text'; readonly text: string };
+export type ISCMConflictContent = { readonly kind: 'missing' } | { readonly kind: 'binary' } | { readonly kind: 'text'; readonly text: string };
 
 export interface ISCMConflictFile {
 	readonly stageIds: readonly (string | null)[];
@@ -81,17 +80,11 @@ export interface ISCMConflictFile {
 	readonly result: ISCMConflictContent;
 }
 
-export type ISCMConflictResolution =
-	{ readonly kind: 'edited'; readonly text: string } | { readonly kind: 'current' } | { readonly kind: 'incoming' };
+export type ISCMConflictResolution = { readonly kind: 'edited'; readonly text: string } | { readonly kind: 'current' } | { readonly kind: 'incoming' };
 
 export interface ISCMConflictProvider {
 	resolve(path: string): Promise<ISCMConflictFile>;
-	complete(
-		path: string,
-		stageIds: readonly (string | null)[],
-		resultObjectId: string | null,
-		resolution: ISCMConflictResolution,
-	): Promise<void>;
+	complete(path: string, stageIds: readonly (string | null)[], resultObjectId: string | null, resolution: ISCMConflictResolution): Promise<void>;
 	errorMessage(error: unknown): string;
 }
 

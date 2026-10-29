@@ -35,9 +35,7 @@ export function createChatCommandCompletionProvider(catalog: SlashCommandCatalog
 						Object.freeze({
 							id: command.name,
 							label: `/${command.name}`,
-							labelMatchIndices: matchedCharacterIndices(command.name, query).map(
-								position => position + 1,
-							),
+							labelMatchIndices: matchedCharacterIndices(command.name, query).map(position => position + 1),
 							kind: LanguageCompletionItemKind.Function,
 							range,
 							insertText: `/${command.name} `,
@@ -80,10 +78,7 @@ export function createChatSkillCompletionProvider(
 				return emptyCompletionResult();
 			}
 			const matches = catalog.matching(token.query);
-			const range = Range.fromPositions(
-				new Position(request.position.lineNumber, token.startColumn + 1),
-				new Position(request.position.lineNumber, token.endColumn + 1),
-			);
+			const range = Range.fromPositions(new Position(request.position.lineNumber, token.startColumn + 1), new Position(request.position.lineNumber, token.endColumn + 1));
 			return Object.freeze({
 				items: Object.freeze(
 					matches.map((skill, index) =>
@@ -106,10 +101,7 @@ export function createChatSkillCompletionProvider(
 	});
 }
 
-function activeSkillToken(
-	line: string,
-	cursorColumn: number,
-): { readonly query: string; readonly startColumn: number; readonly endColumn: number } | undefined {
+function activeSkillToken(line: string, cursorColumn: number): { readonly query: string; readonly startColumn: number; readonly endColumn: number } | undefined {
 	if (cursorColumn > line.length) {
 		return undefined;
 	}

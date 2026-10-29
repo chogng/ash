@@ -15,17 +15,9 @@ import { InMemoryConfigurationService } from '../../../configuration/common/inMe
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { IExtensionManagementService } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { WebLanguagePacksService } from '../../browser/languagePacks.js';
-import {
-	parseLanguagePackCatalog,
-	parseLanguagePackIndexEntry,
-	resolveLanguagePackCatalog,
-} from '../../common/languagePackCatalog.js';
+import { parseLanguagePackCatalog, parseLanguagePackIndexEntry, resolveLanguagePackCatalog } from '../../common/languagePackCatalog.js';
 import type { LanguagePackCatalog } from '../../common/languagePackContract.js';
-import {
-	builtinLanguagePackCatalogs,
-	preinstalledLanguagePacks,
-	productLanguagePackCatalogs,
-} from '../../../../workbench/services/localization/common/localizationCatalogs.js';
+import { builtinLanguagePackCatalogs, preinstalledLanguagePacks, productLanguagePackCatalogs } from '../../../../workbench/services/localization/common/localizationCatalogs.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -71,7 +63,12 @@ test('Extensions localization capability resources become installed language pac
 	await service.whenReady;
 	assert.deepEqual(
 		(await service.getInstalledLanguages()).find(locale => locale.id === 'fr'),
-		{ id: 'fr', label: 'Français', description: 'French', extensionId: 'example/localization-fr-0' },
+		{
+			id: 'fr',
+			label: 'Français',
+			description: 'French',
+			extensionId: 'example/localization-fr-0',
+		},
 	);
 });
 
@@ -129,8 +126,7 @@ function createExtensions(catalogs: readonly LanguagePackCatalog[]): IExtensionM
 		listBuiltInProviders: async () => ({ revision: 1, canChangeEnablement: false, providers: [] }),
 		setBuiltInProviderEnabled: () => Promise.reject(new Error('unused')),
 		listEditorExtensions: () => Promise.reject(new Error('Execution policy is outside this language-pack fixture')),
-		setEditorExtensionPolicy: () =>
-			Promise.reject(new Error('Execution policy is outside this language-pack fixture')),
+		setEditorExtensionPolicy: () => Promise.reject(new Error('Execution policy is outside this language-pack fixture')),
 		acquireCapability: async id => ({
 			lease: { id, capability: { id }, installationId: id.replace('capability', 'installation') },
 			spec: { kind: 'localization' as const, contractVersion: '1', catalog: { id: 'catalog.json' } },
@@ -138,9 +134,7 @@ function createExtensions(catalogs: readonly LanguagePackCatalog[]): IExtensionM
 		releaseCapability: async () => {},
 		openResource: async lease => ({
 			mediaType: 'application/json',
-			dataBase64: Buffer.from(JSON.stringify(catalogs[Number(lease.split('.').at(-1))]), 'utf8').toString(
-				'base64',
-			),
+			dataBase64: Buffer.from(JSON.stringify(catalogs[Number(lease.split('.').at(-1))]), 'utf8').toString('base64'),
 		}),
 	};
 }
@@ -282,7 +276,11 @@ test('installation changes refresh language resources even while startup sync is
 				void saved.complete();
 			},
 		},
-		{ _serviceBrand: undefined, isConnectionMetered: true, onDidChangeIsConnectionMetered: Event.None },
+		{
+			_serviceBrand: undefined,
+			isConnectionMetered: true,
+			onDidChangeIsConnectionMetered: Event.None,
+		},
 	);
 	await service.whenReady;
 	installedChanges.fire();
@@ -378,9 +376,7 @@ test('a failed resource save preserves the published installed language catalog'
 });
 
 test('the Ash French example package loads through the localization capability', async () => {
-	const catalog = parseLanguagePackCatalog(
-		JSON.parse(await readFile(resolve('localization/examples/fr/localization/package.json'), 'utf8')),
-	)!;
+	const catalog = parseLanguagePackCatalog(JSON.parse(await readFile(resolve('localization/examples/fr/localization/package.json'), 'utf8')))!;
 	assert.ok(catalog);
 	const saved: LanguagePackCatalog[] = [];
 	using service = createService(createExtensions([catalog]), {
@@ -494,14 +490,8 @@ test('the preinstalled Chinese extension can update independently and uninstall 
 	const store = createTestLanguagePackStore();
 	using service = createService(extensions, store);
 	await service.whenReady;
-	assert.equal(
-		(await service.getInstalledLanguages()).find(pack => pack.id === 'zh-CN')?.extensionId,
-		'ash.language-pack-zh-cn@official',
-	);
-	assert.equal(
-		(await resolveLanguagePackCatalog('zh-CN', productLanguagePackCatalogs, store)).bundles.ash.greeting,
-		'更新后的语言包',
-	);
+	assert.equal((await service.getInstalledLanguages()).find(pack => pack.id === 'zh-CN')?.extensionId, 'ash.language-pack-zh-cn@official');
+	assert.equal((await resolveLanguagePackCatalog('zh-CN', productLanguagePackCatalogs, store)).bundles.ash.greeting, '更新后的语言包');
 	assert.deepEqual(
 		(await store.readIndex()).map(({ extensionId, version, locale }) => ({ extensionId, version, locale })),
 		[{ extensionId: 'ash.language-pack-zh-cn@official', version: '1.1.0', locale: 'zh-CN' }],
@@ -534,21 +524,9 @@ test('development reloads prefer current source translations while installed loc
 		['fr', french],
 	]);
 	const store = { read: async (locale: string) => catalogs.get(locale) };
-	assert.equal(
-		(await resolveLanguagePackCatalog('zh-CN', productLanguagePackCatalogs, store)).bundles['ash.settings'][
-			'categories.editor-fonts.label'
-		],
-		'字体与排版',
-	);
-	assert.equal(
-		(await resolveLanguagePackCatalog('ZH_cn', productLanguagePackCatalogs, store, { preferStartupCatalogs: true }))
-			.bundles['ash.settings']['categories.editor-fonts.label'],
-		'字体',
-	);
-	assert.equal(
-		await resolveLanguagePackCatalog('fr-CA', productLanguagePackCatalogs, store, { preferStartupCatalogs: true }),
-		french,
-	);
+	assert.equal((await resolveLanguagePackCatalog('zh-CN', productLanguagePackCatalogs, store)).bundles['ash.settings']['categories.editor-fonts.label'], '字体与排版');
+	assert.equal((await resolveLanguagePackCatalog('ZH_cn', productLanguagePackCatalogs, store, { preferStartupCatalogs: true })).bundles['ash.settings']['categories.editor-fonts.label'], '字体');
+	assert.equal(await resolveLanguagePackCatalog('fr-CA', productLanguagePackCatalogs, store, { preferStartupCatalogs: true }), french);
 });
 
 test('uninstall removes a language provider from startup resources and falls back to English', async () => {
@@ -582,10 +560,7 @@ test('English remains the fallback even when an installed provider declares Engl
 	using service = createService(createExtensions([catalog]), store);
 	await service.whenReady;
 	assert.deepEqual(await store.readIndex(), []);
-	assert.deepEqual(
-		await resolveLanguagePackCatalog('en', productLanguagePackCatalogs, store),
-		builtinLanguagePackCatalogs[0],
-	);
+	assert.deepEqual(await resolveLanguagePackCatalog('en', productLanguagePackCatalogs, store), builtinLanguagePackCatalogs[0]);
 });
 
 test('extension translation resources stay pinned to the startup version until restart', async () => {
@@ -614,10 +589,7 @@ test('extension translation resources stay pinned to the startup version until r
 	await service.whenReady;
 	const uri = await service.getBuiltInExtensionTranslationsUri('ASH.GIT', 'zh-CN');
 	assert.ok(uri);
-	assert.deepEqual(
-		JSON.parse(uri.path.slice('application/json,'.length)).contents,
-		updated.extensionTranslations['ash.git'],
-	);
+	assert.deepEqual(JSON.parse(uri.path.slice('application/json,'.length)).contents, updated.extensionTranslations['ash.git']);
 	assert.equal(await service.getBuiltInExtensionTranslationsUri('ash.git', 'en'), undefined);
 	assert.equal(await service.getBuiltInExtensionTranslationsUri('unknown.extension', 'zh-CN'), undefined);
 });
@@ -631,11 +603,7 @@ test('startup index accepts source-qualified package identities and rejects dama
 		digest: `sha256:${'a'.repeat(64)}`,
 		catalog,
 	};
-	for (const extensionId of [
-		'ash.language-pack-zh-cn@official',
-		'language_zh@custom-source',
-		'ash/language-pack-zh-cn',
-	]) {
+	for (const extensionId of ['ash.language-pack-zh-cn@official', 'language_zh@custom-source', 'ash/language-pack-zh-cn']) {
 		assert.equal(parseLanguagePackIndexEntry({ ...entry, extensionId })?.extensionId, extensionId);
 	}
 	for (const extensionId of ['../other', 'pack@other/source', 'pack@@source', 'x'.repeat(161)]) {
@@ -695,10 +663,7 @@ test('extension translations wait only for the pinned local index while installe
 			},
 		]);
 		const uri = await readingFrench;
-		assert.deepEqual(
-			JSON.parse(uri!.path.slice('application/json,'.length)).contents,
-			catalog.extensionTranslations!.example,
-		);
+		assert.deepEqual(JSON.parse(uri!.path.slice('application/json,'.length)).contents, catalog.extensionTranslations!.example);
 		const chinese = await service.getBuiltInExtensionTranslationsUri('ash.git', 'zh-CN');
 		assert.ok(chinese?.path.includes('分支'));
 		assert.equal(ready, false, 'Neither translation needs the pending installed-package synchronization');

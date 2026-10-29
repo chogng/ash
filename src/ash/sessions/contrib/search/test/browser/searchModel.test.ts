@@ -4,10 +4,7 @@ import { Event } from '../../../../../base/common/event.js';
 import { observableValue } from '../../../../../base/common/observable.js';
 import type { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import type { ISession } from '../../../../services/sessions/common/session.js';
-import type {
-	IAutomationService,
-	AutomationCatalogueState,
-} from '../../../../../workbench/contrib/chat/common/automations/automationService.js';
+import type { IAutomationService, AutomationCatalogueState } from '../../../../../workbench/contrib/chat/common/automations/automationService.js';
 import type { IAutomationDescriptor } from '../../../../../workbench/contrib/chat/common/automations/automation.js';
 import type { IProjectsService, ProjectsState } from '../../../projects/browser/projectsService.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';

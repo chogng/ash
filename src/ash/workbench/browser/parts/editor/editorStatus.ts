@@ -9,14 +9,7 @@ import { Schemas } from '../../../../base/common/network.js';
 import { isEditorPaneWithStatus } from '../../../common/editor.js';
 import './media/editorstatus.css';
 import { addDisposableListener, h, isHTMLElement } from '../../../../base/browser/dom.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-	type IDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
@@ -31,12 +24,7 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import type { IWorkbenchContribution } from '../../../common/contributions.js';
 
 import type { IEditorPart } from './editorPart.js';
-import {
-	StatusbarAlignment,
-	type IStatusbarEntry,
-	type IStatusbarEntryAccessor,
-	type IStatusbarService,
-} from '../../../services/statusbar/browser/statusbar.js';
+import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from '../../../services/statusbar/browser/statusbar.js';
 
 /** Projects the active editor's cursor, format, language, and save state. */
 export class EditorStatusContribution extends Disposable implements IWorkbenchContribution {
@@ -98,10 +86,7 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 			{
 				text: localize('status.editor.screenReaderMode', 'Screen Reader Mode'),
 				ariaLabel: localize('status.editor.screenReaderAria', 'Screen reader mode enabled. Open explanation'),
-				tooltip: localize(
-					'status.editor.screenReaderTooltip',
-					'Screen reader mode is enabled. Open explanation',
-				),
+				tooltip: localize('status.editor.screenReaderTooltip', 'Screen reader mode is enabled. Open explanation'),
 				run: () => this.showScreenReaderExplanation(),
 			},
 			'ash.status.editor.screenReaderMode',
@@ -174,13 +159,7 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 			const modified = diff.getModifiedEditor();
 			// Retain the selected side while focus moves to a status action or picker.
 			const previous = this.activeControl;
-			this.activeControl = original.hasTextFocus()
-				? original
-				: modified.hasTextFocus()
-					? modified
-					: previous === original || previous === modified
-						? previous
-						: modified;
+			this.activeControl = original.hasTextFocus() ? original : modified.hasTextFocus() ? modified : previous === original || previous === modified ? previous : modified;
 		} else {
 			this.activeControl = registered.find(editor => editor === control);
 		}
@@ -217,14 +196,8 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 		const line = position?.lineNumber ?? status?.lineNumber;
 		const column = position && editor ? editor.getStatusbarColumn(position) : status?.columnNumber;
 		const count = selections?.length ?? status?.selectionCount ?? 1;
-		const selected =
-			model && selections
-				? selections.reduce((total, selection) => total + model.getValueLengthInRange(selection), 0)
-				: 0;
-		let cursorText =
-			line !== undefined && column !== undefined
-				? localize('status.editor.position', 'Ln {0}, Col {1}', line, column)
-				: undefined;
+		const selected = model && selections ? selections.reduce((total, selection) => total + model.getValueLengthInRange(selection), 0) : 0;
+		let cursorText = line !== undefined && column !== undefined ? localize('status.editor.position', 'Ln {0}, Col {1}', line, column) : undefined;
 		if (count > 1) {
 			cursorText = localize('status.editor.selections', '{0} selections', count);
 		}
@@ -266,8 +239,7 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 			'ash.status.editor.indentation',
 			50,
 		);
-		const encodingSupport =
-			model && this.models.getModel(model.uri) === model ? this.models.getEncodingSupport(model.uri) : undefined;
+		const encodingSupport = model && this.models.getModel(model.uri) === model ? this.models.getEncodingSupport(model.uri) : undefined;
 		const fileEncoding = encodingSupport?.getEncoding();
 		const encoding = fileEncoding
 			? getEncodingLabel(fileEncoding)
@@ -353,10 +325,7 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 						ariaLabel: stateText,
 						...(workingCopy?.hasExternalChange
 							? {
-									tooltip: localize(
-										'status.editor.conflictTooltip',
-										'The file changed on disk while this editor has unsaved changes.',
-									),
+									tooltip: localize('status.editor.conflictTooltip', 'The file changed on disk while this editor has unsaved changes.'),
 								}
 							: {}),
 					}
@@ -399,12 +368,7 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 					]
 				: []),
 		];
-		const item = await pickStatusItem(
-			this.quickInput,
-			items,
-			localize('status.editor.selectIndentation', 'Select Indentation'),
-			this.pickerResources,
-		);
+		const item = await pickStatusItem(this.quickInput, items, localize('status.editor.selectIndentation', 'Select Indentation'), this.pickerResources);
 		if (!item || this.isDisposed || this.activeControl !== editor || editor.getModel() !== model) {
 			return;
 		}
@@ -425,12 +389,7 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 		await this.commands.executeCommand(item.id, size);
 	}
 
-	private setEntry(
-		slot: MutableDisposable<IStatusbarEntryAccessor>,
-		entry: IStatusbarEntry | undefined,
-		id: string,
-		priority: number,
-	): void {
+	private setEntry(slot: MutableDisposable<IStatusbarEntryAccessor>, entry: IStatusbarEntry | undefined, id: string, priority: number): void {
 		if (!entry) {
 			slot.clear();
 			return;
@@ -440,12 +399,7 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 	}
 }
 
-function pickStatusItem<T extends IQuickPickItem>(
-	quickInput: IQuickInputService,
-	items: readonly T[],
-	label: string,
-	owner?: DisposableStore,
-): Promise<T | undefined> {
+function pickStatusItem<T extends IQuickPickItem>(quickInput: IQuickInputService, items: readonly T[], label: string, owner?: DisposableStore): Promise<T | undefined> {
 	return new Promise(resolve => {
 		const resources = new DisposableStore();
 		owner?.add(resources);
@@ -500,28 +454,19 @@ export class ChangeLanguageAction extends Action2 {
 			if (typeof language !== 'string') {
 				throw new TypeError('Language mode must be a string');
 			}
-			languageId = languages.isRegisteredLanguageId(language)
-				? language
-				: (languages.getLanguageIdByLanguageName(language) ?? undefined);
+			languageId = languages.isRegisteredLanguageId(language) ? language : (languages.getLanguageIdByLanguageName(language) ?? undefined);
 			if (!languageId) {
 				throw new RangeError(`Unknown language mode: ${language}`);
 			}
 		} else {
 			const item = await pickStatusItem(
 				accessor.get(IQuickInputService),
-				languages
-					.getSortedRegisteredLanguageNames()
-					.map(item => ({ label: item.languageName, languageId: item.languageId })),
+				languages.getSortedRegisteredLanguageNames().map(item => ({ label: item.languageName, languageId: item.languageId })),
 				localize('status.editor.selectLanguage', 'Select Language Mode'),
 			);
 			languageId = item?.languageId;
 		}
-		if (
-			languageId &&
-			!model.isDisposed() &&
-			editor.getModel() === model &&
-			(editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor()) === editor
-		) {
+		if (languageId && !model.isDisposed() && editor.getModel() === model && (editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor()) === editor) {
 			model.setLanguage(languageId);
 			editor.focus();
 		}
@@ -551,13 +496,7 @@ export class ChangeEOLAction extends Action2 {
 			],
 			localize('status.editor.selectEOL', 'Select End of Line Sequence'),
 		);
-		if (
-			!item ||
-			model.isDisposed() ||
-			editor.getModel() !== model ||
-			editor.getOption(EditorOption.readOnly) ||
-			(editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor()) !== editor
-		) {
+		if (!item || model.isDisposed() || editor.getModel() !== model || editor.getOption(EditorOption.readOnly) || (editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor()) !== editor) {
 			return;
 		}
 		model.pushStackElement();
@@ -591,10 +530,7 @@ export class ChangeEncodingAction extends Action2 {
 		const dialogs = accessor.get(IDialogService);
 		const notifications = accessor.get(INotificationService);
 		const isCurrent = () =>
-			!model.isDisposed() &&
-			editor.getModel() === model &&
-			models.getModel(model.uri) === model &&
-			(editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor()) === editor;
+			!model.isDisposed() && editor.getModel() === model && models.getModel(model.uri) === model && (editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor()) === editor;
 		const modes = [
 			...(model.uri.scheme !== Schemas.untitled
 				? [
@@ -604,29 +540,17 @@ export class ChangeEncodingAction extends Action2 {
 						},
 					]
 				: []),
-			...(!editor.getOption(EditorOption.readOnly)
-				? [{ label: localize('status.editor.saveEncoding', 'Save with Encoding'), mode: EncodingMode.Encode }]
-				: []),
+			...(!editor.getOption(EditorOption.readOnly) ? [{ label: localize('status.editor.saveEncoding', 'Save with Encoding'), mode: EncodingMode.Encode }] : []),
 		];
 		if (modes.length === 0) return;
-		const choice = await pickStatusItem(
-			quickInput,
-			modes,
-			localize('status.editor.selectEncodingAction', 'Select an Encoding Action'),
-			pickerLifetime,
-		);
+		const choice = await pickStatusItem(quickInput, modes, localize('status.editor.selectEncodingAction', 'Select an Encoding Action'), pickerLifetime);
 		if (!choice || !isCurrent()) return;
 		const picks: (IQuickPickItem & { id: string })[] = [];
 		if (choice.mode === EncodingMode.Decode) {
 			const controller = new AbortController();
 			pickerLifetime.add(toDisposable(() => controller.abort()));
 			try {
-				const content = await accessor
-					.get(ITextFileService)
-					.resolve(
-						{ resource: model.uri, languageId: model.getLanguageId(), autoGuessEncoding: true },
-						controller.signal,
-					);
+				const content = await accessor.get(ITextFileService).resolve({ resource: model.uri, languageId: model.getLanguageId(), autoGuessEncoding: true }, controller.signal);
 				if (!isCurrent()) return;
 				picks.push({
 					id: content.encoding,
@@ -638,34 +562,16 @@ export class ChangeEncodingAction extends Action2 {
 			}
 		}
 		for (const [id, info] of Object.entries(SUPPORTED_ENCODINGS)) {
-			if (
-				info.hidden ||
-				(choice.mode === EncodingMode.Decode && info.encodeOnly) ||
-				picks.some(pick => pick.id === id)
-			)
-				continue;
+			if (info.hidden || (choice.mode === EncodingMode.Decode && info.encodeOnly) || picks.some(pick => pick.id === id)) continue;
 			picks.push({
 				label: getEncodingLabel(id),
 				id,
 				description: id,
-				detail:
-					id === support.getEncoding()
-						? localize('status.editor.currentEncoding', 'Current Encoding')
-						: undefined,
+				detail: id === support.getEncoding() ? localize('status.editor.currentEncoding', 'Current Encoding') : undefined,
 			});
 		}
-		const encoding = await pickStatusItem(
-			quickInput,
-			picks,
-			localize('status.editor.selectEncoding', 'Select File Encoding'),
-			pickerLifetime,
-		);
-		if (
-			!encoding ||
-			!isCurrent() ||
-			(choice.mode === EncodingMode.Encode && editor.getOption(EditorOption.readOnly))
-		)
-			return;
+		const encoding = await pickStatusItem(quickInput, picks, localize('status.editor.selectEncoding', 'Select File Encoding'), pickerLifetime);
+		if (!encoding || !isCurrent() || (choice.mode === EncodingMode.Encode && editor.getOption(EditorOption.readOnly))) return;
 		try {
 			if (choice.mode === EncodingMode.Decode) {
 				const copy = copies.get(model.uri).find(copy => copy.isDirty);
@@ -677,13 +583,7 @@ export class ChangeEncodingAction extends Action2 {
 						detail: localize('status.editor.reopenDirtyDetail', 'Your unsaved changes will be discarded.'),
 						primaryButton: localize('status.editor.reopenConfirm', 'Reopen'),
 					});
-					if (
-						!result.confirmed ||
-						!isCurrent() ||
-						model.getVersionId() !== version ||
-						support.getEncoding() !== previousEncoding
-					)
-						return;
+					if (!result.confirmed || !isCurrent() || model.getVersionId() !== version || support.getEncoding() !== previousEncoding) return;
 					await copy.revert(new AbortController().signal);
 					if (!isCurrent()) return;
 				}

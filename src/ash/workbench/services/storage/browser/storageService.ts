@@ -28,9 +28,7 @@ export function migrateBrowserStorage(backend: Storage): void {
 	// Current storage wins over the retired Code namespace. Archives are never read by the adapter.
 	for (const applicationId of ['code']) {
 		const prefix = `ash.${applicationId}.storage.`;
-		const keys = Array.from({ length: backend.length }, (_, index) => backend.key(index)!).filter(key =>
-			key.startsWith(prefix),
-		);
+		const keys = Array.from({ length: backend.length }, (_, index) => backend.key(index)!).filter(key => key.startsWith(prefix));
 		for (const sourceKey of keys) {
 			const original = backend.getItem(sourceKey)!;
 			const source = parseStoredDocument(original);
@@ -104,9 +102,7 @@ export class BrowserStorageService extends Disposable implements IStorageService
 			this.entries.set(scope, this.load(scope));
 		}
 
-		this._register(
-			addDisposableListener(this.ownerWindow, 'storage', (event: StorageEvent) => this.handleStorageEvent(event)),
-		);
+		this._register(addDisposableListener(this.ownerWindow, 'storage', (event: StorageEvent) => this.handleStorageEvent(event)));
 
 		if (flushInterval > 0) {
 			this._register(
@@ -209,7 +205,12 @@ export class BrowserStorageService extends Disposable implements IStorageService
 			const before = previous.get(key);
 			const after = next.get(key);
 			if (before?.value === after?.value && before?.target === after?.target) continue;
-			this._onDidChangeValue.fire({ key, scope: StorageScope.WORKSPACE, target: after?.target, external: true });
+			this._onDidChangeValue.fire({
+				key,
+				scope: StorageScope.WORKSPACE,
+				target: after?.target,
+				external: true,
+			});
 		}
 	}
 
@@ -268,7 +269,12 @@ export class BrowserStorageService extends Disposable implements IStorageService
 			const before = previous.get(key);
 			const after = next.get(key);
 			if (before?.value === after?.value && before?.target === after?.target) continue;
-			this._onDidChangeValue.fire({ key, scope, target: after?.target, external: true });
+			this._onDidChangeValue.fire({
+				key,
+				scope,
+				target: after?.target,
+				external: true,
+			});
 		}
 	}
 
@@ -309,7 +315,10 @@ function readLocalStorage(ownerWindow: Window, onError: (error: unknown) => void
 }
 
 function serializeStoredDocument(entries: ReadonlyMap<string, StoredEntry>): string {
-	return JSON.stringify({ version: 1, entries: Object.fromEntries(entries) } satisfies StoredDocument);
+	return JSON.stringify({
+		version: 1,
+		entries: Object.fromEntries(entries),
+	} satisfies StoredDocument);
 }
 
 function parseStoredDocument(value: string): Map<string, StoredEntry> {

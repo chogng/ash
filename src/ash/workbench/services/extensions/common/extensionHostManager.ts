@@ -1,9 +1,4 @@
-import {
-	IExtensionHostApi,
-	type ExtensionHostRuntime,
-	type ExtensionHostRemoteAuthorityResolverRegistration,
-	type JsonValue,
-} from '../../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostRuntime, type ExtensionHostRemoteAuthorityResolverRegistration, type JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import {
 	ManagedRemoteConnection,
 	WebSocketRemoteConnection,
@@ -33,26 +28,17 @@ export class ExtensionHostManager {
 		if (isRecord(result.error)) {
 			const error = result.error;
 			if (
-				!Object.values(RemoteAuthorityResolverErrorCode).includes(
-					error.code as RemoteAuthorityResolverErrorCode,
-				) ||
+				!Object.values(RemoteAuthorityResolverErrorCode).includes(error.code as RemoteAuthorityResolverErrorCode) ||
 				typeof error.message !== 'string' ||
 				error.message.length > 4096 ||
 				typeof error.handled !== 'boolean'
 			) {
 				throw new TypeError('Invalid Remote authority error');
 			}
-			throw new RemoteAuthorityResolverError(
-				error.message,
-				error.code as RemoteAuthorityResolverErrorCode,
-				error.handled,
-			);
+			throw new RemoteAuthorityResolverError(error.message, error.code as RemoteAuthorityResolverErrorCode, error.handled);
 		}
 		const token = result.connectionToken;
-		if (
-			token !== null &&
-			(typeof token !== 'string' || token.length > 8192 || /[\u0000-\u001f\u007f]/.test(token))
-		) {
+		if (token !== null && (typeof token !== 'string' || token.length > 8192 || /[\u0000-\u001f\u007f]/.test(token))) {
 			throw new TypeError('Invalid Remote authority token');
 		}
 		let connectTo;
@@ -111,14 +97,10 @@ export class ExtensionHostManager {
 
 	private invokeResolver(remoteAuthority: string, operation: string, payload: JsonValue): Promise<JsonValue> {
 		const registration = this.runtime.registrations.find(
-			(entry): entry is ExtensionHostRemoteAuthorityResolverRegistration =>
-				entry.kind === 'remoteAuthorityResolver' && remoteAuthority.startsWith(`${entry.authorityPrefix}+`),
+			(entry): entry is ExtensionHostRemoteAuthorityResolverRegistration => entry.kind === 'remoteAuthorityResolver' && remoteAuthority.startsWith(`${entry.authorityPrefix}+`),
 		);
 		if (!registration || this.runtime.lifecycle !== 'ready' || this.runtime.incarnation === undefined) {
-			throw new RemoteAuthorityResolverError(
-				'No local resolver is available',
-				RemoteAuthorityResolverErrorCode.NoResolverFound,
-			);
+			throw new RemoteAuthorityResolverError('No local resolver is available', RemoteAuthorityResolverErrorCode.NoResolverFound);
 		}
 		return this.api.invoke(
 			{
@@ -139,10 +121,7 @@ function readResolvedOptions(value: JsonValue | undefined): ResolvedOptions | un
 	if (value === undefined) {
 		return undefined;
 	}
-	if (
-		!isRecord(value) ||
-		Object.keys(value).some(key => !['extensionHostEnv', 'isTrusted', 'authenticationSession'].includes(key))
-	) {
+	if (!isRecord(value) || Object.keys(value).some(key => !['extensionHostEnv', 'isTrusted', 'authenticationSession'].includes(key))) {
 		throw new TypeError('Invalid resolver options');
 	}
 	const options: {
@@ -163,10 +142,7 @@ function readResolvedOptions(value: JsonValue | undefined): ResolvedOptions | un
 		}
 		options.extensionHostEnv = {};
 		for (const [key, entry] of Object.entries(env)) {
-			if (
-				!/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(key) ||
-				(entry !== null && (typeof entry !== 'string' || entry.length > 8192 || entry.includes('\0')))
-			) {
+			if (!/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(key) || (entry !== null && (typeof entry !== 'string' || entry.length > 8192 || entry.includes('\0')))) {
 				throw new TypeError('Invalid resolver environment entry');
 			}
 			Object.defineProperty(options.extensionHostEnv, key, { value: entry, enumerable: true });
@@ -177,10 +153,7 @@ function readResolvedOptions(value: JsonValue | undefined): ResolvedOptions | un
 		if (
 			!isRecord(session) ||
 			Object.keys(session).some(key => !['id', 'providerId'].includes(key)) ||
-			[session.id, session.providerId].some(
-				entry =>
-					typeof entry !== 'string' || !entry || entry.length > 1024 || /[\u0000-\u001f\u007f]/.test(entry),
-			)
+			[session.id, session.providerId].some(entry => typeof entry !== 'string' || !entry || entry.length > 1024 || /[\u0000-\u001f\u007f]/.test(entry))
 		) {
 			throw new TypeError('Invalid resolver authentication session');
 		}

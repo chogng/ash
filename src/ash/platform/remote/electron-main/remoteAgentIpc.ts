@@ -18,14 +18,10 @@ export interface IRemoteAgentRecoveryMainService {
 }
 
 /** Projects connection metadata without exposing SSH credentials or native process details. */
-export function remoteAgentConnection(
-	supervisor: AppServerConnectionRelay,
-	workspace: IAnyWorkspaceIdentifier,
-): RemoteAgentConnection {
+export function remoteAgentConnection(supervisor: AppServerConnectionRelay, workspace: IAnyWorkspaceIdentifier): RemoteAgentConnection {
 	const remoteAuthority = getWorkspaceRemoteAuthority(workspace);
 	if (!remoteAuthority) return Object.freeze({ kind: 'local', generation: supervisor.generation });
-	if (!remoteAuthority.startsWith('ssh+'))
-		return Object.freeze({ kind: 'remote', generation: supervisor.generation, authority: remoteAuthority });
+	if (!remoteAuthority.startsWith('ssh+')) return Object.freeze({ kind: 'remote', generation: supervisor.generation, authority: remoteAuthority });
 	const authority = createSshRemoteAuthority(remoteAuthority.slice(4));
 	return Object.freeze({
 		kind: 'ssh',
@@ -50,8 +46,7 @@ export function remoteAgentIpcRoutes(
 			channel: REMOTE_AGENT_RECONNECT_CHANNEL,
 			validate: emptyParams,
 			invoke: () => {
-				if (!getWorkspaceRemoteAuthority(getWorkspace()))
-					throw new Error('Remote reconnect requires an SSH Remote Workspace');
+				if (!getWorkspaceRemoteAuthority(getWorkspace())) throw new Error('Remote reconnect requires an SSH Remote Workspace');
 				if (!recovery) throw new Error('Remote reconnect is not available for this connection');
 				return recovery.reconnect();
 			},
@@ -60,8 +55,7 @@ export function remoteAgentIpcRoutes(
 			channel: REMOTE_AGENT_RUNTIME_ROLLBACK_CHANNEL,
 			validate: emptyParams,
 			invoke: () => {
-				if (!getWorkspaceRemoteAuthority(getWorkspace()))
-					throw new Error('Remote runtime rollback requires an SSH Remote Workspace');
+				if (!getWorkspaceRemoteAuthority(getWorkspace())) throw new Error('Remote runtime rollback requires an SSH Remote Workspace');
 				if (!recovery) throw new Error('Remote runtime rollback is not available for this connection');
 				return recovery.rollback();
 			},

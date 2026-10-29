@@ -28,11 +28,7 @@ import { BrowserLifecycleService } from '../services/lifecycle/browser/lifecycle
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { EMPTY_WORKSPACE_ID_KEY } from '../services/host/browser/browserHostService.js';
 import { URI } from '../../base/common/uri.js';
-import {
-	IWorkspaceContextService,
-	parseWorkspaceIdentifier,
-	type IAnyWorkspaceIdentifier,
-} from '../../platform/workspace/common/workspace.js';
+import { IWorkspaceContextService, parseWorkspaceIdentifier, type IAnyWorkspaceIdentifier } from '../../platform/workspace/common/workspace.js';
 import { BrowserWorkbenchEnvironmentService } from '../services/environment/browser/environmentService.js';
 import { createWebUpdateProvider } from '../services/update/browser/updateService.js';
 
@@ -44,24 +40,13 @@ export async function createWebWorkbench(options: IWebWorkbenchConstructionOptio
 
 	const userFiles = await IndexedDBFileSystemProvider.create(ownerWindow.indexedDB, Schemas.vscodeUserData);
 	try {
-		await migrateLegacyBrowserSettings(
-			ownerWindow.indexedDB,
-			userFiles,
-			URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }),
-		);
-		const identifier =
-			options.workspace ??
-			(options.browserFileSystemProvider
-				? getBrowserWorkspaceIdentifier(ownerWindow)
-				: getEmptyWorkspaceIdentifier());
+		await migrateLegacyBrowserSettings(ownerWindow.indexedDB, userFiles, URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }));
+		const identifier = options.workspace ?? (options.browserFileSystemProvider ? getBrowserWorkspaceIdentifier(ownerWindow) : getEmptyWorkspaceIdentifier());
 		let workspace = options.webWorkspaceClient?.getInitialWorkspace?.() ?? workspaceFromIdentifier(identifier);
 		if (workspace.configuration && options.browserFileSystemProvider) {
 			const resource = workspace.configuration;
 			const provider = resource.scheme === Schemas.vscodeUserData ? userFiles : options.browserFileSystemProvider;
-			const document = parseJsonc(
-				new TextDecoder('utf-8', { fatal: true }).decode((await provider.readFile(resource)).bytes),
-				resource.toString(),
-			);
+			const document = parseJsonc(new TextDecoder('utf-8', { fatal: true }).decode((await provider.readFile(resource)).bytes), resource.toString());
 			const folders = toWorkspaceFolders(parseStoredWorkspaceFolders(document, resource.toString()), resource);
 			for (const folder of folders) await options.browserFileSystemProvider.getDirectoryHandle(folder.uri);
 			workspace = {
@@ -80,8 +65,7 @@ export async function createWebWorkbench(options: IWebWorkbenchConstructionOptio
 			createURLService: services => services.createInstance(BrowserURLService, options.urlCallbackProvider),
 			createTextDocumentHost: options.createTextDocumentHost,
 			createStorageService: async storageOptions => new BrowserStorageService(storageOptions),
-			createWorkingCopyBackupService: (_services, workspaceId) =>
-				new IndexedDbWorkingCopyBackupService(workspaceId),
+			createWorkingCopyBackupService: (_services, workspaceId) => new IndexedDbWorkingCopyBackupService(workspaceId),
 			createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),
 			createUserDataFileSystemProvider: async () => userFiles,
 			defaultLayout: options.defaultLayout,
@@ -92,9 +76,7 @@ export async function createWebWorkbench(options: IWebWorkbenchConstructionOptio
 				options.browserFileSystemProvider || options.webWorkspaceClient?.updateWorkspace
 					? services => {
 							const lifetime = new DisposableStore();
-							const support = EnterMultiRootWorkspaceSupportContext.bindTo(
-								services.get(IContextKeyService),
-							);
+							const support = EnterMultiRootWorkspaceSupportContext.bindTo(services.get(IContextKeyService));
 							support.set(true);
 							lifetime.add(toDisposable(() => support.reset()));
 							services.get(IWorkspaceEditingService);
@@ -102,8 +84,7 @@ export async function createWebWorkbench(options: IWebWorkbenchConstructionOptio
 								services.get(IWorkspaceContextService).onDidChangeWorkspace(({ workspace }) => {
 									const url = new URL(ownerWindow.location.href);
 									const folder = workspace.configuration ? undefined : workspace.folders[0];
-									if (workspace.configuration)
-										url.searchParams.set('workspace', workspace.configuration.toString());
+									if (workspace.configuration) url.searchParams.set('workspace', workspace.configuration.toString());
 									else url.searchParams.delete('workspace');
 									if (folder) {
 										url.searchParams.set('folder', folder.uri.toString());
@@ -117,12 +98,10 @@ export async function createWebWorkbench(options: IWebWorkbenchConstructionOptio
 						}
 					: undefined,
 			container: options.container,
-			createLifecycleService: services =>
-				services.createInstance(BrowserLifecycleService, { ownerWindow, onError: onUnexpectedError }),
+			createLifecycleService: services => services.createInstance(BrowserLifecycleService, { ownerWindow, onError: onUnexpectedError }),
 			workspace,
 			createContextMenuService: services => services.createInstance(BrowserContextMenuService),
-			createTitleService: (container, productName, groups, services) =>
-				services.createInstance(BrowserTitleService, container, productName, createBrowserTitlebarPart, groups),
+			createTitleService: (container, productName, groups, services) => services.createInstance(BrowserTitleService, container, productName, createBrowserTitlebarPart, groups),
 		});
 	} catch (error) {
 		userFiles.dispose();
@@ -168,10 +147,7 @@ export async function startWebWorkbench(
 	workbench.add(hostLifetime);
 	try {
 		const api = host?.api ?? createDisconnectedRendererApi();
-		const browserFileSystemProvider =
-			!host && WebFileSystemAccess.supported(window) && globalThis.indexedDB
-				? new HTMLFileSystemProvider(globalThis.indexedDB, window)
-				: undefined;
+		const browserFileSystemProvider = !host && WebFileSystemAccess.supported(window) && globalThis.indexedDB ? new HTMLFileSystemProvider(globalThis.indexedDB, window) : undefined;
 		const instance = await createWebWorkbench({
 			...options,
 			webviewEndpoint: host?.webviewEndpoint,

@@ -6,40 +6,21 @@ import { observableFromEvent, type IObservable, type IReader } from '../../../..
 import { extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { URI } from '../../../../../base/common/uri.js';
-import {
-	IBulkEditService,
-	ResourceFileEdit,
-	ResourceTextEdit,
-	type IBulkEditResult,
-	ResourceEdit,
-	WorkspaceEditConflictError,
-} from '../../../../../editor/browser/services/bulkEditService.js';
+import { IBulkEditService, ResourceFileEdit, ResourceTextEdit, type IBulkEditResult, ResourceEdit, WorkspaceEditConflictError } from '../../../../../editor/browser/services/bulkEditService.js';
 import type { LanguageWorkspaceEdit, LanguageWorkspaceEditEntry } from '../../../../../editor/common/languages.js';
 import { ITextModelResourceService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { localize } from '../../../../../nls.js';
-import {
-	IChatEditingService,
-	type IChatEditReviewSession,
-	type IModifiedFileEntry,
-	type IModifiedFileEntryChangeHunk,
-} from '../../common/editing/chatEditingService.js';
+import { IChatEditingService, type IChatEditReviewSession, type IModifiedFileEntry, type IModifiedFileEntryChangeHunk } from '../../common/editing/chatEditingService.js';
 import { ChatEditingModifiedDocumentEntry } from './chatEditingModifiedDocumentEntry.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { ChatEditSource, ChatEditOutcome } from '../../../../services/chat/common/chatService.js';
 import { autoAcceptDelaySetting } from '../../common/constants.js';
-import {
-	AccessibilitySignal,
-	IAccessibilitySignalService,
-} from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
+import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { FileNotFoundError, IFileService } from '../../../../../platform/files/common/files.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
-import {
-	ChatEditingSessionStorage,
-	type StoredFileReview,
-	type StoredReviewEntry,
-} from './chatEditingSessionStorage.js';
+import { ChatEditingSessionStorage, type StoredFileReview, type StoredReviewEntry } from './chatEditingSessionStorage.js';
 
 interface ReviewTurn {
 	readonly source: ChatEditSource;
@@ -58,11 +39,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 	public readonly onDidChange = this.changed.event;
 	private readonly reviews = this._register(new DisposableMap<string, IModifiedFileEntry>());
 	private readonly sessions = this._register(new DisposableMap<string, ChatEditReviewSession>());
-	public readonly editingSessionsObs: IObservable<readonly IChatEditReviewSession[]> = observableFromEvent(
-		this,
-		this.onDidChange,
-		() => [...this.sessions].map(([, session]) => session),
-	);
+	public readonly editingSessionsObs: IObservable<readonly IChatEditReviewSession[]> = observableFromEvent(this, this.onDidChange, () => [...this.sessions].map(([, session]) => session));
 	private readonly operations = new TaskQueue();
 	private applyingEdits = false;
 	private readonly autoAcceptChanged = this._register(new Emitter<IModifiedFileEntry>());
@@ -133,11 +110,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 		return [...this.reviews].map(([, entry]) => entry);
 	}
 
-	public applyEdits(
-		edit: LanguageWorkspaceEdit,
-		signal: AbortSignal,
-		source: ChatEditSource,
-	): Promise<IBulkEditResult> {
+	public applyEdits(edit: LanguageWorkspaceEdit, signal: AbortSignal, source: ChatEditSource): Promise<IBulkEditResult> {
 		return this.operations.schedule(async () => {
 			try {
 				return await this.applyEdit(edit, signal, source);
@@ -147,11 +120,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 		});
 	}
 
-	private async applyEdit(
-		edit: LanguageWorkspaceEdit,
-		signal: AbortSignal,
-		source: ChatEditSource,
-	): Promise<IBulkEditResult> {
+	private async applyEdit(edit: LanguageWorkspaceEdit, signal: AbortSignal, source: ChatEditSource): Promise<IBulkEditResult> {
 		this.assertNotDisposed();
 		signal.throwIfAborted();
 		const edits = ResourceEdit.convert(edit);
@@ -161,11 +130,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 			const fileEdits = edits.filter((edit): edit is ResourceFileEdit => edit instanceof ResourceFileEdit);
 			const resources = new Map<string, URI>();
 			for (const edit of edits) {
-				for (const resource of edit instanceof ResourceTextEdit
-					? [edit.resource]
-					: edit instanceof ResourceFileEdit
-						? [edit.oldResource, edit.newResource]
-						: []) {
+				for (const resource of edit instanceof ResourceTextEdit ? [edit.resource] : edit instanceof ResourceFileEdit ? [edit.oldResource, edit.newResource] : []) {
 					if (resource) {
 						resources.set(extUriBiasedIgnorePathCase.getComparisonKey(resource), resource);
 					}
@@ -173,17 +138,11 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 			}
 			const previous = new Map<string, IModifiedFileEntry>();
 			for (const [key, entry] of this.reviews) {
-				if (
-					entry.resources.some(resource =>
-						resources.has(extUriBiasedIgnorePathCase.getComparisonKey(resource)),
-					)
-				) {
+				if (entry.resources.some(resource => resources.has(extUriBiasedIgnorePathCase.getComparisonKey(resource)))) {
 					previous.set(key, entry);
 				}
 			}
-			const atomic =
-				fileEdits.length > 0 ||
-				[...previous.values()].some(entry => entry instanceof ChatEditingFileOperationEntry);
+			const atomic = fileEdits.length > 0 || [...previous.values()].some(entry => entry instanceof ChatEditingFileOperationEntry);
 			const turns = new Map<string, ReviewTurn>();
 			for (const entry of previous.values()) {
 				for (const [key, outcome] of this.entryReviews.get(entry)?.turns ?? []) {
@@ -202,11 +161,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 					if (entry instanceof ChatEditingModifiedDocumentEntry) {
 						entry.beginAgentEdit(
 							edits
-								.filter(
-									(edit): edit is ResourceTextEdit =>
-										edit instanceof ResourceTextEdit &&
-										extUriBiasedIgnorePathCase.isEqual(edit.resource, entry.modifiedURI),
-								)
+								.filter((edit): edit is ResourceTextEdit => edit instanceof ResourceTextEdit && extUriBiasedIgnorePathCase.isEqual(edit.resource, entry.modifiedURI))
 								.map(edit => edit.textEdit),
 						);
 						documents.add(entry);
@@ -234,13 +189,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 						this.reviews.set(key, entry);
 					}
 					entry.beginAgentEdit(
-						edits
-							.filter(
-								(edit): edit is ResourceTextEdit =>
-									edit instanceof ResourceTextEdit &&
-									extUriBiasedIgnorePathCase.isEqual(edit.resource, resource),
-							)
-							.map(edit => edit.textEdit),
+						edits.filter((edit): edit is ResourceTextEdit => edit instanceof ResourceTextEdit && extUriBiasedIgnorePathCase.isEqual(edit.resource, resource)).map(edit => edit.textEdit),
 					);
 					documents.add(entry);
 				}
@@ -257,9 +206,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 						}
 					} else if (entry instanceof ChatEditingModifiedDocumentEntry) {
 						const snapshot = entry.createSnapshot();
-						const bom = originalFiles.get(snapshot.resource.toString())?.startsWith('\uFEFF')
-							? '\uFEFF'
-							: '';
+						const bom = originalFiles.get(snapshot.resource.toString())?.startsWith('\uFEFF') ? '\uFEFF' : '';
 						originalFiles.set(snapshot.resource.toString(), bom + snapshot.original);
 					}
 				}
@@ -303,11 +250,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 			if (result.isApplied) {
 				void this.signals.playSignal(AccessibilitySignal.chatEditModifiedFile);
 				for (const entry of this.entries) {
-					if (
-						entry.resources.some(resource =>
-							resources.has(extUriBiasedIgnorePathCase.getComparisonKey(resource)),
-						)
-					) {
+					if (entry.resources.some(resource => resources.has(extUriBiasedIgnorePathCase.getComparisonKey(resource)))) {
 						const entryTurns = atomic ? new Map(turns) : new Map(this.entryReviews.get(entry)?.turns);
 						entryTurns.set(JSON.stringify([source.threadId, source.turnId]), {
 							source,
@@ -334,9 +277,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 	}
 
 	public acceptEntry(entry: IModifiedFileEntry, hunk?: IModifiedFileEntryChangeHunk): Promise<void> {
-		const contributors = new Set(
-			[...(this.entryReviews.get(entry)?.turns.values() ?? [])].map(turn => turn.source.threadId),
-		);
+		const contributors = new Set([...(this.entryReviews.get(entry)?.turns.values() ?? [])].map(turn => turn.source.threadId));
 		this.cancelAutoAccept(entry);
 		return this.operations.schedule(async () => {
 			this.requireEntry(entry, contributors);
@@ -350,9 +291,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 	}
 
 	public rejectEntry(entry: IModifiedFileEntry, hunk?: IModifiedFileEntryChangeHunk): Promise<void> {
-		const contributors = new Set(
-			[...(this.entryReviews.get(entry)?.turns.values() ?? [])].map(turn => turn.source.threadId),
-		);
+		const contributors = new Set([...(this.entryReviews.get(entry)?.turns.values() ?? [])].map(turn => turn.source.threadId));
 		this.cancelAutoAccept(entry);
 		return this.operations.schedule(async () => {
 			this.requireEntry(entry, contributors);
@@ -366,9 +305,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 	}
 
 	public retrySaveEntry(entry: IModifiedFileEntry): Promise<void> {
-		const contributors = new Set(
-			[...(this.entryReviews.get(entry)?.turns.values() ?? [])].map(turn => turn.source.threadId),
-		);
+		const contributors = new Set([...(this.entryReviews.get(entry)?.turns.values() ?? [])].map(turn => turn.source.threadId));
 		this.cancelAutoAccept(entry);
 		return this.operations.schedule(async () => {
 			this.requireEntry(entry, contributors);
@@ -394,18 +331,11 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 			query: new URLSearchParams({ threadId }).toString(),
 		});
 		const entries = observableFromEvent(this, this.onDidChange, () => this.entriesForThread(threadId));
-		this.sessions.set(
-			threadId,
-			new ChatEditReviewSession(resource, entries, (accept, resources) =>
-				this.decideSession(threadId, accept, resources),
-			),
-		);
+		this.sessions.set(threadId, new ChatEditReviewSession(resource, entries, (accept, resources) => this.decideSession(threadId, accept, resources)));
 	}
 
 	private entriesForThread(threadId: string): readonly IModifiedFileEntry[] {
-		return this.entries.filter(entry =>
-			[...(this.entryReviews.get(entry)?.turns.values() ?? [])].some(turn => turn.source.threadId === threadId),
-		);
+		return this.entries.filter(entry => [...(this.entryReviews.get(entry)?.turns.values() ?? [])].some(turn => turn.source.threadId === threadId));
 	}
 
 	private synchronizeSessions(): void {
@@ -428,25 +358,12 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 	private async decideSession(threadId: string, accept: boolean, resources: readonly URI[]): Promise<void> {
 		const select = (): readonly IModifiedFileEntry[] => {
 			const entries = this.entriesForThread(threadId).filter(
-				entry =>
-					resources.length === 0 ||
-					entry.resources.some(resource =>
-						resources.some(selected => extUriBiasedIgnorePathCase.isEqual(selected, resource)),
-					),
+				entry => resources.length === 0 || entry.resources.some(resource => resources.some(selected => extUriBiasedIgnorePathCase.isEqual(selected, resource))),
 			);
 			// Validate the whole selection before changing anything. A shared baseline
 			// cannot be decided by one chat without also deciding another chat's edits.
-			if (
-				entries.some(entry =>
-					[...this.entryReviews.get(entry)!.turns.values()].some(turn => turn.source.threadId !== threadId),
-				)
-			) {
-				throw new Error(
-					localize(
-						'chatEditing.sharedReview',
-						'These changes include edits from other chats. Review the shared file or change set separately.',
-					),
-				);
+			if (entries.some(entry => [...this.entryReviews.get(entry)!.turns.values()].some(turn => turn.source.threadId !== threadId))) {
+				throw new Error(localize('chatEditing.sharedReview', 'These changes include edits from other chats. Review the shared file or change set separately.'));
 			}
 			return entries;
 		};
@@ -477,12 +394,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 
 	private requireEntry(entry: IModifiedFileEntry, contributors: ReadonlySet<string>): void {
 		this.assertNotDisposed();
-		if (
-			!this.entries.includes(entry) ||
-			[...(this.entryReviews.get(entry)?.turns.values() ?? [])].some(
-				turn => !contributors.has(turn.source.threadId),
-			)
-		) {
+		if (!this.entries.includes(entry) || [...(this.entryReviews.get(entry)?.turns.values() ?? [])].some(turn => !contributors.has(turn.source.threadId))) {
 			throw new Error(localize('chatEditing.stale', 'The change has changed. Review it again.'));
 		}
 	}
@@ -526,21 +438,13 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 	private startCountdown(entry: IModifiedFileEntry, review: EntryReview): void {
 		const delay = this.configuration.getValue<number>(autoAcceptDelaySetting);
 		review.revision++;
-		review.deadline =
-			delay > 0 &&
-			!entry.hasPendingSave &&
-			!review.cancelled &&
-			[...review.turns.values()].every(turn => turn.outcome === 'completed')
-				? Date.now() + delay * 1000
-				: undefined;
+		review.deadline = delay > 0 && !entry.hasPendingSave && !review.cancelled && [...review.turns.values()].every(turn => turn.outcome === 'completed') ? Date.now() + delay * 1000 : undefined;
 		this.autoAcceptChanged.fire(entry);
 	}
 
 	private scheduleTick(): void {
 		this.countdown.cancel();
-		const deadlines = [...this.entryReviews.values()].flatMap(review =>
-			review.deadline === undefined ? [] : [review.deadline],
-		);
+		const deadlines = [...this.entryReviews.values()].flatMap(review => (review.deadline === undefined ? [] : [review.deadline]));
 		if (deadlines.length > 0) {
 			this.countdown.schedule(Math.max(0, Math.min(1000, Math.min(...deadlines) - Date.now())));
 		}
@@ -602,9 +506,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 	}
 
 	private reportStorageError(error: unknown): void {
-		this.notifications.error(
-			localize('chatEditing.storageFailed', 'Could not restore or save Agent reviews: {0}', String(error)),
-		);
+		this.notifications.error(localize('chatEditing.storageFailed', 'Could not restore or save Agent reviews: {0}', String(error)));
 	}
 
 	private async saveReviews(): Promise<void> {
@@ -633,21 +535,14 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 					resource: snapshot.resource.toString(),
 					original: snapshot.original,
 					current: snapshot.current,
-					...(snapshot.pendingSaveSource === undefined
-						? {}
-						: { pendingSaveSource: snapshot.pendingSaveSource }),
+					...(snapshot.pendingSaveSource === undefined ? {} : { pendingSaveSource: snapshot.pendingSaveSource }),
 					sources,
 				};
 			}
 			if (entry instanceof ChatEditingFileOperationEntry && entry.fileSnapshots) {
 				return { kind: 'files', files: entry.fileSnapshots, sources };
 			}
-			throw new Error(
-				localize(
-					'chatEditing.noRecovery',
-					'The file operation has no recovery snapshot. Review it before closing the window.',
-				),
-			);
+			throw new Error(localize('chatEditing.noRecovery', 'The file operation has no recovery snapshot. Review it before closing the window.'));
 		});
 		await this.persistence.storeState({ version: 1, entries });
 		this.savedRevision = revision;
@@ -687,9 +582,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 							resource,
 							original: snapshot.original,
 							current: snapshot.current,
-							...(snapshot.pendingSaveSource === undefined
-								? {}
-								: { pendingSaveSource: snapshot.pendingSaveSource }),
+							...(snapshot.pendingSaveSource === undefined ? {} : { pendingSaveSource: snapshot.pendingSaveSource }),
 						},
 					);
 					if (document.hunks.length === 0 && !document.hasPendingSave) {
@@ -712,12 +605,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 				}
 				this.reviews.set(key, entry);
 				this.entryReviews.set(entry, {
-					turns: new Map(
-						snapshot.sources.map(source => [
-							JSON.stringify([source.threadId, source.turnId]),
-							{ source, outcome: source.outcome },
-						]),
-					),
+					turns: new Map(snapshot.sources.map(source => [JSON.stringify([source.threadId, source.turnId]), { source, outcome: source.outcome }])),
 					cancelled: true,
 					deadline: undefined,
 					revision: 0,
@@ -740,10 +628,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 		for (const file of files) {
 			if ((await this.readFile(URI.parse(file.resource))) !== file.current) {
 				throw new WorkspaceEditConflictError(
-					localize(
-						'chatEditing.recoveryConflict',
-						'A file changed after the Agent edit. Its changes were kept; review the file before rejecting this change set.',
-					),
+					localize('chatEditing.recoveryConflict', 'A file changed after the Agent edit. Its changes were kept; review the file before rejecting this change set.'),
 				);
 			}
 		}
@@ -766,12 +651,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 		if (entries.length > 0) {
 			const result = await this.bulkEdits.apply({ entries }, { showPreview: false });
 			if (!result.isApplied) {
-				throw new Error(
-					localize(
-						'chatEditing.restoreCancelled',
-						'The change set was not restored. It remains available for review.',
-					),
-				);
+				throw new Error(localize('chatEditing.restoreCancelled', 'The change set was not restored. It remains available for review.'));
 			}
 		}
 	}
@@ -792,15 +672,11 @@ class ChatEditReviewSession extends Disposable implements IChatEditReviewSession
 	}
 
 	public getEntry(uri: URI): IModifiedFileEntry | undefined {
-		return this.entries
-			.get()
-			.find(entry => entry.resources.some(resource => extUriBiasedIgnorePathCase.isEqual(resource, uri)));
+		return this.entries.get().find(entry => entry.resources.some(resource => extUriBiasedIgnorePathCase.isEqual(resource, uri)));
 	}
 
 	public readEntry(uri: URI, reader: IReader): IModifiedFileEntry | undefined {
-		return this.entries
-			.read(reader)
-			.find(entry => entry.resources.some(resource => extUriBiasedIgnorePathCase.isEqual(resource, uri)));
+		return this.entries.read(reader).find(entry => entry.resources.some(resource => extUriBiasedIgnorePathCase.isEqual(resource, uri)));
 	}
 
 	public async accept(...uris: URI[]): Promise<void> {
@@ -864,10 +740,7 @@ class ChatEditingFileOperationEntry extends Disposable implements IModifiedFileE
 		this.changed.fire();
 		try {
 			if (!this.reverted) {
-				const documents = this.remaining.filter(
-					(entry): entry is ChatEditingModifiedDocumentEntry =>
-						entry instanceof ChatEditingModifiedDocumentEntry,
-				);
+				const documents = this.remaining.filter((entry): entry is ChatEditingModifiedDocumentEntry => entry instanceof ChatEditingModifiedDocumentEntry);
 				for (const entry of documents) {
 					entry.beginRestore();
 				}
@@ -891,10 +764,6 @@ class ChatEditingFileOperationEntry extends Disposable implements IModifiedFileE
 		this.complete();
 	}
 	public getAccessibleContent(): string {
-		return localize(
-			'chatEditing.atomicFiles',
-			'Atomic file operation affecting:\n{0}',
-			this.resources.map(resource => resource.fsPath).join('\n'),
-		);
+		return localize('chatEditing.atomicFiles', 'Atomic file operation affecting:\n{0}', this.resources.map(resource => resource.fsPath).join('\n'));
 	}
 }

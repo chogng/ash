@@ -56,12 +56,7 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 		this._register(options.model.onDidChangeBlocks(() => this.refreshDirty()));
 		this._register(
 			options.textFiles.onDidChangeFiles(event => {
-				if (
-					this.resource.scheme === 'untitled' ||
-					(event.resources &&
-						!event.resources.some(resource => resource.toString() === this.resource.toString()))
-				)
-					return;
+				if (this.resource.scheme === 'untitled' || (event.resources && !event.resources.some(resource => resource.toString() === this.resource.toString()))) return;
 				if (this.isDirty) {
 					this.setExternalChange(true);
 					return;
@@ -143,13 +138,7 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 		if (type && DocumentTypes.find({ resource })?.id !== type.id) {
 			// Renaming must not turn a structured working copy into a plain-text view.
 			// Explicit conversion commands create the destination's actual format.
-			throw new Error(
-				localize(
-					'document.saveAs.type',
-					'Save this document with a supported extension ({0}). Use an explicit conversion command to change formats.',
-					type.extensions.join(', '),
-				),
-			);
+			throw new Error(localize('document.saveAs.type', 'Save this document with a supported extension ({0}). Use an explicit conversion command to change formats.', type.extensions.join(', ')));
 		}
 		const serialized = this.options.codec.serialize(this.options.model.document);
 		await this.options.textFiles.save({ resource, text: serialized }, signal);
@@ -177,10 +166,7 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 
 	private async reloadCleanDocument(): Promise<void> {
 		try {
-			const content = await this.options.textFiles.resolve(
-				{ resource: this.resource },
-				new AbortController().signal,
-			);
+			const content = await this.options.textFiles.resolve({ resource: this.resource }, new AbortController().signal);
 			if (this.isDirty) {
 				this.setExternalChange(true);
 				return;

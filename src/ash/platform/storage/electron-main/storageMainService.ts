@@ -5,19 +5,10 @@ import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
 import { StorageScope, WillSaveStateReason, type IWillSaveStateEvent } from '../common/storage.js';
-import {
-	storageIdentityKey,
-	validateStorageEntries,
-	validateStorageSnapshot,
-	type IStorageIdentity,
-	type IStorageEntry,
-	type IStorageSnapshot,
-} from '../common/storageIpc.js';
+import { storageIdentityKey, validateStorageEntries, validateStorageSnapshot, type IStorageIdentity, type IStorageEntry, type IStorageSnapshot } from '../common/storageIpc.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
-export const IApplicationStorageMainService = createServiceIdentifier<IApplicationStorageMainService>(
-	'applicationStorageMainService',
-);
+export const IApplicationStorageMainService = createServiceIdentifier<IApplicationStorageMainService>('applicationStorageMainService');
 
 /** The application owns this writer; domain participants enqueue their final keys before it closes. */
 export interface IApplicationStorageMainService extends IDisposable {
@@ -94,10 +85,7 @@ export class StorageMainService extends Disposable implements IApplicationStorag
 		return this.run(async () => this.storages.get(storageIdentityKey(identity)));
 	}
 
-	public getItems(
-		identity: IStorageIdentity,
-		legacy?: Readonly<Record<string, IStorageEntry>>,
-	): Promise<IStorageSnapshot> {
+	public getItems(identity: IStorageIdentity, legacy?: Readonly<Record<string, IStorageEntry>>): Promise<IStorageSnapshot> {
 		return this.run(async () => {
 			const key = storageIdentityKey(identity);
 			const existing = this.storages.get(key);
@@ -119,11 +107,7 @@ export class StorageMainService extends Disposable implements IApplicationStorag
 		});
 	}
 
-	public updateItems(
-		identity: IStorageIdentity,
-		key: string,
-		entry: IStorageEntry | null,
-	): Promise<IStorageSnapshot> {
+	public updateItems(identity: IStorageIdentity, key: string, entry: IStorageEntry | null): Promise<IStorageSnapshot> {
 		return this.run(async () => {
 			const identityKey = storageIdentityKey(identity);
 			const current = this.storages.get(identityKey);
@@ -248,13 +232,7 @@ function migrateStorage(candidates: readonly unknown[]): ReadonlyMap<string, ISt
 	return storages;
 }
 
-function sameEntries(
-	left: Readonly<Record<string, IStorageEntry>>,
-	right: Readonly<Record<string, IStorageEntry>>,
-): boolean {
+function sameEntries(left: Readonly<Record<string, IStorageEntry>>, right: Readonly<Record<string, IStorageEntry>>): boolean {
 	const keys = Object.keys(left);
-	return (
-		keys.length === Object.keys(right).length &&
-		keys.every(key => left[key]!.value === right[key]?.value && left[key]!.target === right[key]?.target)
-	);
+	return keys.length === Object.keys(right).length && keys.every(key => left[key]!.value === right[key]?.value && left[key]!.target === right[key]?.target);
 }

@@ -19,10 +19,7 @@ suite('Browser style observations', () => {
 		assert.ok(result.rulesText.includes('font-family: system-ui'));
 		assert.ok(result.rulesText.includes('content: ";:"'));
 		assert.ok(!result.rulesText.includes('margin') && !result.rulesText.includes('display'));
-		assert.equal(
-			filterInheritableDeclarations('margin: 1px; font-family: "semi;colon"; --image: url("data:a;b");'),
-			'font-family: "semi;colon"; --image: url("data:a;b");',
-		);
+		assert.equal(filterInheritableDeclarations('margin: 1px; font-family: "semi;colon"; --image: url("data:a;b");'), 'font-family: "semi;colon"; --image: url("data:a;b");');
 	});
 
 	test('box compaction leaves incomplete and variable-dependent declarations intact', () => {

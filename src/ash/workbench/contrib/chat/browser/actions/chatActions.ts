@@ -19,10 +19,7 @@ export function registerChatActions(): void {
 			}
 
 			override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
-				const invalid = localize(
-					'chat.edit.invalid',
-					'Choose an accepted request and enter a non-empty message before sending.',
-				);
+				const invalid = localize('chat.edit.invalid', 'Choose an accepted request and enter a non-empty message before sending.');
 				if (!context || typeof context !== 'object') throw new TypeError(invalid);
 				const value = context as Record<string, unknown>;
 				for (const key of ['sessionId', 'threadId', 'turnId', 'itemId', 'text', 'commandId']) {
@@ -33,11 +30,7 @@ export function registerChatActions(): void {
 				const revision = navigation.revision;
 				const result = await accessor.get(IChatService).rewriteRequest(options);
 				const active = navigation.getActiveConversation();
-				if (
-					navigation.revision === revision &&
-					active?.sessionId === options.sessionId &&
-					active.threadId === options.threadId
-				) {
+				if (navigation.revision === revision && active?.sessionId === options.sessionId && active.threadId === options.threadId) {
 					await navigation.openConversation(result.sessionId, result.threadId);
 				}
 			}
@@ -82,11 +75,7 @@ export function registerChatActions(): void {
 						title: localize('chat.title.new', 'New Chat'),
 					});
 					const active = navigation.getActiveConversation();
-					if (
-						navigation.revision === revision &&
-						active?.sessionId === sessionId &&
-						active.threadId === threadId
-					) {
+					if (navigation.revision === revision && active?.sessionId === sessionId && active.threadId === threadId) {
 						await navigation.openConversation(result.session.sessionId, result.threadId);
 					}
 				})();
@@ -111,10 +100,7 @@ export function registerChatActions(): void {
 
 			async run(accessor: ServicesAccessor): Promise<void> {
 				const history = accessor.get(IMessageHistoryService);
-				if (!history)
-					throw new Error(
-						localize('chat.history.unavailable', 'Input history is unavailable on this connection.'),
-					);
+				if (!history) throw new Error(localize('chat.history.unavailable', 'Input history is unavailable on this connection.'));
 				await history.clear();
 			}
 		},

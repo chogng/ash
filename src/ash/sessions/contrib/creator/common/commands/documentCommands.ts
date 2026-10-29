@@ -6,13 +6,7 @@ import { mapPrototypeActions } from '../model/prototype.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { designBounds, type DesignFrame, toDesignLocal, type DesignPoint } from '../core/geometry.js';
 import { getDesignShapeEntries } from '../model/hitTest.js';
-import {
-	flattenDesignShapes,
-	type DesignAsset,
-	type DesignAutoLayout,
-	type DesignShape,
-	type DesignShapeGeometry,
-} from '../model/document.js';
+import { flattenDesignShapes, type DesignAsset, type DesignAutoLayout, type DesignShape, type DesignShapeGeometry } from '../model/document.js';
 import type { DesignModel } from '../model/designModel.js';
 import { PrototypeCommands } from './prototypeCommands.js';
 import { ResourceCommands } from './resourceCommands.js';
@@ -78,22 +72,11 @@ export class DocumentCommands {
 			shape.kind === 'frame'
 				? undefined
 				: getDesignShapeEntries(this.model.value.shapes)
-						.filter(
-							entry =>
-								entry.shape.kind === 'frame' &&
-								!entry.shape.instance &&
-								entry.shape.component?.kind !== 'set' &&
-								!this.components.isInstanceChild(entry.shape.id),
-						)
+						.filter(entry => entry.shape.kind === 'frame' && !entry.shape.instance && entry.shape.component?.kind !== 'set' && !this.components.isInstanceChild(entry.shape.id))
 						.reverse()
 						.find(entry => {
 							const point = toDesignLocal(entry.world, center);
-							return (
-								point.x >= 0 &&
-								point.y >= 0 &&
-								point.x <= entry.world.width &&
-								point.y <= entry.world.height
-							);
+							return point.x >= 0 && point.y >= 0 && point.x <= entry.world.width && point.y <= entry.world.height;
 						});
 		if (!frame) {
 			this.model.applyEdit([...this.model.value.shapes, shape], assets);
@@ -136,9 +119,7 @@ export class DocumentCommands {
 			if (current.id === frame.shape.id && current.kind === 'frame') {
 				return { ...current, children: [...current.children, child] };
 			}
-			return current.kind === 'frame' || current.kind === 'group'
-				? { ...current, children: current.children.map(insert) }
-				: current;
+			return current.kind === 'frame' || current.kind === 'group' ? { ...current, children: current.children.map(insert) } : current;
 		};
 		this.model.applyEdit(this.model.value.shapes.map(insert), assets);
 	}
@@ -164,12 +145,7 @@ export class DocumentCommands {
 		const updates = new Map(shapes.map(shape => [shape.id, shape]));
 		const update = (current: DesignShape): DesignShape => {
 			let shape = updates.get(current.id) ?? current;
-			if (
-				shape.kind === 'text' &&
-				current.kind === 'text' &&
-				shape.text !== current.text &&
-				shape.textRuns === current.textRuns
-			) {
+			if (shape.kind === 'text' && current.kind === 'text' && shape.text !== current.text && shape.textRuns === current.textRuns) {
 				shape = { ...shape, textRuns: updateDesignText(current, shape.text).textRuns };
 			}
 			if (shape.kind === 'frame' || shape.kind === 'group') {
@@ -201,10 +177,7 @@ export class DocumentCommands {
 			if (updated.kind === 'text') {
 				updated = {
 					...updated,
-					textAutoResize:
-						field === 'width' && (updated.textAutoResize === 'width' || updated.textAutoResize === 'height')
-							? 'height'
-							: 'none',
+					textAutoResize: field === 'width' && (updated.textAutoResize === 'width' || updated.textAutoResize === 'height') ? 'height' : 'none',
 				};
 			}
 			if (updated.sizing) {
@@ -227,38 +200,24 @@ export class DocumentCommands {
 
 	/** Root selections exclude descendants so a selected subtree is never edited twice. */
 	private selectedEntries(ids: ReadonlySet<string>) {
-		return getDesignShapeEntries(this.model.value.shapes).filter(
-			entry => ids.has(entry.shape.id) && !entry.ancestors.some(id => ids.has(id)),
-		);
+		return getDesignShapeEntries(this.model.value.shapes).filter(entry => ids.has(entry.shape.id) && !entry.ancestors.some(id => ids.has(id)));
 	}
 
 	public duplicate(ids: ReadonlySet<string>): readonly string[] {
 		const entries = this.selectedEntries(ids);
-		if (
-			entries.length === 1 &&
-			entries[0].parent?.kind === 'frame' &&
-			entries[0].parent.component?.kind === 'set'
-		) {
+		if (entries.length === 1 && entries[0].parent?.kind === 'frame' && entries[0].parent.component?.kind === 'set') {
 			const id = this.components.addVariant(entries[0].shape.id);
 			return id ? [id] : [];
 		}
 		const selected = new Set(
 			this.selectedEntries(ids)
-				.filter(
-					entry =>
-						!this.components.isInstanceChild(entry.shape.id) &&
-						(entry.parent?.kind !== 'frame' || entry.parent.component?.kind !== 'set'),
-				)
+				.filter(entry => !this.components.isInstanceChild(entry.shape.id) && (entry.parent?.kind !== 'frame' || entry.parent.component?.kind !== 'set'))
 				.map(entry => entry.shape.id),
 		);
 		const copies: string[] = [];
 		const cloneIds = new Map(
 			entries
-				.filter(
-					entry =>
-						selected.has(entry.shape.id) &&
-						!(entry.shape.kind === 'frame' && entry.shape.component?.kind === 'main'),
-				)
+				.filter(entry => selected.has(entry.shape.id) && !(entry.shape.kind === 'frame' && entry.shape.component?.kind === 'main'))
 				.flatMap(entry => flattenDesignShapes([entry.shape]))
 				.map(shape => [shape.id, generateUuid()]),
 		);
@@ -272,25 +231,18 @@ export class DocumentCommands {
 								...interaction,
 								actions: mapPrototypeActions(interaction.actions, action => ({
 									...action,
-									...(action.destination
-										? { destination: cloneIds.get(action.destination) ?? action.destination }
-										: {}),
+									...(action.destination ? { destination: cloneIds.get(action.destination) ?? action.destination } : {}),
 								})),
 							})),
 						}
 					: {}),
 			};
-			return copy.kind === 'frame' || copy.kind === 'group'
-				? { ...copy, children: copy.children.map(clone) }
-				: copy;
+			return copy.kind === 'frame' || copy.kind === 'group' ? { ...copy, children: copy.children.map(clone) } : copy;
 		};
 		const duplicate = (shapes: readonly DesignShape[]): readonly DesignShape[] =>
 			shapes.flatMap<DesignShape>(shape => {
 				if (selected.has(shape.id)) {
-					const copy =
-						shape.kind === 'frame' && shape.component?.kind === 'main'
-							? this.components.makeInstance(shape)
-							: clone(shape);
+					const copy = shape.kind === 'frame' && shape.component?.kind === 'main' ? this.components.makeInstance(shape) : clone(shape);
 					copies.push(copy.id);
 					return [
 						shape,
@@ -326,22 +278,12 @@ export class DocumentCommands {
 				.map(entry => entry.shape.id),
 		);
 		const reorder = (shapes: readonly DesignShape[]): readonly DesignShape[] => {
-			const result = shapes.map(shape =>
-				shape.kind === 'frame' && !selected.has(shape.id)
-					? { ...shape, children: reorder(shape.children) }
-					: shape,
-			);
+			const result = shapes.map(shape => (shape.kind === 'frame' && !selected.has(shape.id) ? { ...shape, children: reorder(shape.children) } : shape));
 			if (order === 'front') {
-				return [
-					...result.filter(shape => !selected.has(shape.id)),
-					...result.filter(shape => selected.has(shape.id)),
-				];
+				return [...result.filter(shape => !selected.has(shape.id)), ...result.filter(shape => selected.has(shape.id))];
 			}
 			if (order === 'back') {
-				return [
-					...result.filter(shape => selected.has(shape.id)),
-					...result.filter(shape => !selected.has(shape.id)),
-				];
+				return [...result.filter(shape => selected.has(shape.id)), ...result.filter(shape => !selected.has(shape.id))];
 			}
 			if (order === 'forward') {
 				for (let index = result.length - 2; index >= 0; index--) {
@@ -366,31 +308,19 @@ export class DocumentCommands {
 		const layout = entries[0]?.parent?.kind === 'frame' ? entries[0].parent.autoLayout : undefined;
 		return (
 			entries.length >= minimum &&
-			entries.every(
-				entry => entry.parent?.id === entries[0].parent?.id && !this.components.isInstanceChild(entry.shape.id),
-			) &&
-			(!layout ||
-				entries.every(entry => entry.shape.layoutPositioning === 'absolute') ||
-				(minimum === 1 && layout?.direction === 'grid')) &&
+			entries.every(entry => entry.parent?.id === entries[0].parent?.id && !this.components.isInstanceChild(entry.shape.id)) &&
+			(!layout || entries.every(entry => entry.shape.layoutPositioning === 'absolute') || (minimum === 1 && layout?.direction === 'grid')) &&
 			(entries.length > 1 || !!entries[0].parent)
 		);
 	}
 
-	public align(
-		ids: ReadonlySet<string>,
-		axis: 'horizontal' | 'vertical',
-		alignment: 'start' | 'center' | 'end',
-	): void {
+	public align(ids: ReadonlySet<string>, axis: 'horizontal' | 'vertical', alignment: 'start' | 'center' | 'end'): void {
 		if (!this.canArrange(ids)) {
 			return;
 		}
 		const entries = this.selectedEntries(ids);
 		const shapes = entries.map(entry => entry.shape);
-		if (
-			entries[0].parent?.kind === 'frame' &&
-			entries[0].parent.autoLayout?.direction === 'grid' &&
-			entries.some(entry => entry.shape.layoutPositioning !== 'absolute')
-		) {
+		if (entries[0].parent?.kind === 'frame' && entries[0].parent.autoLayout?.direction === 'grid' && entries.some(entry => entry.shape.layoutPositioning !== 'absolute')) {
 			this.updateShapes(shapes.map(shape => ({ ...shape, gridCell: { ...shape.gridCell, [axis]: alignment } })));
 			return;
 		}
@@ -412,12 +342,7 @@ export class DocumentCommands {
 				const box = designBounds([shape]);
 				return {
 					...shape,
-					[position]:
-						shape[position] +
-						bounds[position] +
-						bounds[size] * fraction -
-						box[position] -
-						box[size] * fraction,
+					[position]: shape[position] + bounds[position] + bounds[size] * fraction - box[position] - box[size] * fraction,
 				};
 			}),
 		);
@@ -434,9 +359,7 @@ export class DocumentCommands {
 			.sort((a, b) => a.bounds[position] - b.bounds[position]);
 		const first = shapes[0].bounds;
 		const last = shapes.at(-1)!.bounds;
-		const gap =
-			(last[position] + last[size] - first[position] - shapes.reduce((sum, item) => sum + item.bounds[size], 0)) /
-			(shapes.length - 1);
+		const gap = (last[position] + last[size] - first[position] - shapes.reduce((sum, item) => sum + item.bounds[size], 0)) / (shapes.length - 1);
 		let cursor = first[position];
 		this.updateShapes(
 			shapes.map(({ shape, bounds }) => {
@@ -513,11 +436,7 @@ export class DocumentCommands {
 			})),
 		};
 		const selected = new Set(children.map(shape => shape.id));
-		this.editSiblings(entries[0].parent?.id, siblings =>
-			siblings.flatMap(shape =>
-				shape.id === children.at(-1)!.id ? [frame] : selected.has(shape.id) ? [] : [shape],
-			),
-		);
+		this.editSiblings(entries[0].parent?.id, siblings => siblings.flatMap(shape => (shape.id === children.at(-1)!.id ? [frame] : selected.has(shape.id) ? [] : [shape])));
 		return id;
 	}
 
@@ -526,10 +445,7 @@ export class DocumentCommands {
 		return (
 			entries.length >= 2 &&
 			entries.every(
-				entry =>
-					entry.parent?.id === entries[0].parent?.id &&
-					!this.components.isInstanceChild(entry.shape.id) &&
-					(entry.parent?.kind !== 'frame' || entry.parent.component?.kind !== 'set'),
+				entry => entry.parent?.id === entries[0].parent?.id && !this.components.isInstanceChild(entry.shape.id) && (entry.parent?.kind !== 'frame' || entry.parent.component?.kind !== 'set'),
 			)
 		);
 	}
@@ -547,17 +463,8 @@ export class DocumentCommands {
 		return this.combine(ids, booleanOperation);
 	}
 
-	public flatten(
-		ids: ReadonlySet<string>,
-		contours: (shape: DesignShape) => readonly DesignPathContour[],
-		converted?: ReadonlyMap<string, DesignShape>,
-	): string | undefined {
-		if (
-			!this.canGroup(ids) ||
-			(converted
-				? [...ids].some(id => !converted.get(id) || !isDesignVector(converted.get(id)!))
-				: !this.canCombine(ids))
-		) {
+	public flatten(ids: ReadonlySet<string>, contours: (shape: DesignShape) => readonly DesignPathContour[], converted?: ReadonlyMap<string, DesignShape>): string | undefined {
+		if (!this.canGroup(ids) || (converted ? [...ids].some(id => !converted.get(id) || !isDesignVector(converted.get(id)!)) : !this.canCombine(ids))) {
 			return undefined;
 		}
 		return this.combine(ids, 'union', contours, converted);
@@ -591,20 +498,12 @@ export class DocumentCommands {
 						...(appearance.effects ? { effects: appearance.effects } : {}),
 						...(appearance.bindings
 							? {
-									bindings: Object.fromEntries(
-										Object.entries(appearance.bindings).filter(
-											([key]) => key === 'fill' || key === 'opacity',
-										),
-									),
+									bindings: Object.fromEntries(Object.entries(appearance.bindings).filter(([key]) => key === 'fill' || key === 'opacity')),
 								}
 							: {}),
 						...(appearance.styleBindings
 							? {
-									styleBindings: Object.fromEntries(
-										Object.entries(appearance.styleBindings).filter(
-											([key]) => key === 'fill' || key === 'effect',
-										),
-									),
+									styleBindings: Object.fromEntries(Object.entries(appearance.styleBindings).filter(([key]) => key === 'fill' || key === 'effect')),
 								}
 							: {}),
 					}
@@ -693,18 +592,8 @@ export class DocumentCommands {
 			const dy = (child.y + child.height / 2) * scale - group.height / 2;
 			const geometry = {
 				...child,
-				x:
-					group.x +
-					group.width / 2 +
-					dx * Math.cos(radians) -
-					dy * Math.sin(radians) -
-					(child.width * scale) / 2,
-				y:
-					group.y +
-					group.height / 2 +
-					dx * Math.sin(radians) +
-					dy * Math.cos(radians) -
-					(child.height * scale) / 2,
+				x: group.x + group.width / 2 + dx * Math.cos(radians) - dy * Math.sin(radians) - (child.width * scale) / 2,
+				y: group.y + group.height / 2 + dx * Math.sin(radians) + dy * Math.cos(radians) - (child.height * scale) / 2,
 				width: child.width * scale,
 				height: child.height * scale,
 				rotation: child.rotation + group.rotation,
@@ -717,18 +606,8 @@ export class DocumentCommands {
 						const dy = (frame.y + child.height / 2) * scale - group.height / 2;
 						return {
 							...frame,
-							x:
-								group.x +
-								group.width / 2 +
-								dx * Math.cos(radians) -
-								dy * Math.sin(radians) -
-								(child.width * scale) / 2,
-							y:
-								group.y +
-								group.height / 2 +
-								dx * Math.sin(radians) +
-								dy * Math.cos(radians) -
-								(child.height * scale) / 2,
+							x: group.x + group.width / 2 + dx * Math.cos(radians) - dy * Math.sin(radians) - (child.width * scale) / 2,
+							y: group.y + group.height / 2 + dx * Math.sin(radians) + dy * Math.cos(radians) - (child.height * scale) / 2,
 							rotation: frame.rotation + group.rotation,
 						};
 					}),
@@ -749,19 +628,14 @@ export class DocumentCommands {
 		return children.map(child => child.id);
 	}
 
-	private editSiblings(
-		parentId: string | undefined,
-		edit: (shapes: readonly DesignShape[]) => readonly DesignShape[],
-	): void {
+	private editSiblings(parentId: string | undefined, edit: (shapes: readonly DesignShape[]) => readonly DesignShape[]): void {
 		const update = (shape: DesignShape): DesignShape => {
 			if (shape.kind !== 'frame' && shape.kind !== 'group') {
 				return shape;
 			}
 			return { ...shape, children: shape.id === parentId ? edit(shape.children) : shape.children.map(update) };
 		};
-		this.model.applyEdit(
-			parentId === undefined ? edit(this.model.value.shapes) : this.model.value.shapes.map(update),
-		);
+		this.model.applyEdit(parentId === undefined ? edit(this.model.value.shapes) : this.model.value.shapes.map(update));
 	}
 
 	public removeShapes(ids: ReadonlySet<string>): void {

@@ -3,15 +3,8 @@ import '../../../base/browser/ui/dropdown/dropdown.css';
 import type { IContextMenuProvider } from '../../../base/browser/contextmenu.js';
 import { addDisposableListener, stopEvent, h } from '../../../base/browser/dom.js';
 import { observeElementSize } from '../../../base/browser/observer.js';
-import {
-	ActionViewItem,
-	ButtonActionViewItem,
-	type ActionViewItemOptions,
-} from '../../../base/browser/ui/actionbar/actionViewItems.js';
-import {
-	DropdownMenuActionViewItem,
-	type DropdownMenuActions,
-} from '../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
+import { ActionViewItem, ButtonActionViewItem, type ActionViewItemOptions } from '../../../base/browser/ui/actionbar/actionViewItems.js';
+import { DropdownMenuActionViewItem, type DropdownMenuActions } from '../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import type { IAction } from '../../../base/common/actions.js';
 import { Emitter } from '../../../base/common/event.js';
 import { DisposableStore, MutableDisposable } from '../../../base/common/lifecycle.js';
@@ -47,7 +40,10 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 		contextMenuProvider: IContextMenuProvider,
 		options: IDropdownWithPrimaryActionViewItemOptions = {},
 	) {
-		const viewItemOptions = { buttonStyles: defaultButtonStyles, ...options };
+		const viewItemOptions = {
+			buttonStyles: defaultButtonStyles,
+			...options,
+		};
 		super(primaryAction, viewItemOptions);
 		this.contextMenuProvider = contextMenuProvider;
 		this.viewItemOptions = viewItemOptions;
@@ -132,12 +128,7 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 			this.changeDropdownVisibilityEmitter.fire(false);
 		}
 		this.dropdownVisibilityListener.clear();
-		const item = new DropdownMenuActionViewItem(
-			dropdownAction,
-			dropdownActions,
-			this.contextMenuProvider,
-			this.viewItemOptions,
-		);
+		const item = new DropdownMenuActionViewItem(dropdownAction, dropdownActions, this.contextMenuProvider, this.viewItemOptions);
 		this.dropdownItem.value = item;
 		this.dropdownVisibilityListener.value = item.onDidChangeVisibility(visible => {
 			this.dropdownVisible = visible;

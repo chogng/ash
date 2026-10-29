@@ -15,10 +15,7 @@ import { TextModel } from '../../../../editor/common/model/textModel.js';
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import {
-	IContextKeyService,
-	type IScopedContextKeyService,
-} from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextKeyService, type IScopedContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IMenuService, MenuId, type IMenu } from '../../../../platform/actions/common/actions.js';
 import { ISCMViewService, type ISCMInput, type ISCMRepository } from '../common/scm.js';
@@ -171,10 +168,7 @@ export class SCMInputWidget extends Disposable {
 		const padding = this.editor.getOption(EditorOption.padding);
 		// Content height includes the viewport; the last line's bottom also lets the input shrink after deletion.
 		const contentHeight = this.editor.getBottomForLineNumber(this.model.lineCount) + padding.bottom;
-		return Math.min(
-			10 * lineHeight + padding.top + padding.bottom,
-			Math.max(lineHeight + padding.top + padding.bottom, contentHeight),
-		);
+		return Math.min(10 * lineHeight + padding.top + padding.bottom, Math.max(lineHeight + padding.top + padding.bottom, contentHeight));
 	}
 
 	public layout(): void {
@@ -207,24 +201,13 @@ export class SCMInputWidget extends Disposable {
 		const running = this.runningAction !== undefined;
 		const action = this.getInputAction();
 		const provider = this.boundRepository?.provider;
-		this.actionButton.label = running
-			? localize('scm.input.stop', 'Stop generating commit message')
-			: (action?.label ?? localize('scm.input.generate', 'Generate commit message'));
+		this.actionButton.label = running ? localize('scm.input.stop', 'Stop generating commit message') : (action?.label ?? localize('scm.input.generate', 'Generate commit message'));
 		this.actionButton.icon = running ? Lxicon.stopCircle : Lxicon.sparkle;
 		this.actionButton.enabled = running
 			? !this.runningAction!.token.isCancellationRequested
-			: !!action?.enabled &&
-				!!provider &&
-				this.boundInput?.enabled === true &&
-				!provider.isBusy &&
-				provider.groups.some(group => group.resources.length > 0);
+			: !!action?.enabled && !!provider && this.boundInput?.enabled === true && !provider.isBusy && provider.groups.some(group => group.resources.length > 0);
 		this.actionButton.setTitle(
-			running
-				? this.actionButton.label
-				: action?.tooltip ||
-						(action
-							? this.actionButton.label
-							: localize('scm.input.generatorUnavailable', 'No commit message generator configured')),
+			running ? this.actionButton.label : action?.tooltip || (action ? this.actionButton.label : localize('scm.input.generatorUnavailable', 'No commit message generator configured')),
 		);
 		this.domNode.setAttribute('aria-busy', String(running));
 	}

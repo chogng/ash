@@ -5,11 +5,7 @@ import { localize } from '../../../../nls.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IRendererHostService, type IRendererHost } from '../../../../platform/renderer/common/rendererHost.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import type {
-	SymphonyControl,
-	SymphonyMessage,
-	SymphonySnapshot,
-} from '../../../../platform/symphony/common/symphonyService.js';
+import type { SymphonyControl, SymphonyMessage, SymphonySnapshot } from '../../../../platform/symphony/common/symphonyService.js';
 
 export const SymphonyNavigationId = 'sessions.navigation.symphony';
 export const SymphonyMonitorResource = URI.from({ scheme: 'ash-symphony', path: '/monitor' });
@@ -105,10 +101,7 @@ export class SymphonyService extends Disposable implements ISymphonyService {
 		if (!backend) {
 			this.view.set({
 				...this.view.get(),
-				error: localize(
-					'symphony.unavailable',
-					'Connect Ash to an App Server with Symphony support to schedule tasks.',
-				),
+				error: localize('symphony.unavailable', 'Connect Ash to an App Server with Symphony support to schedule tasks.'),
 			});
 			return;
 		}
@@ -118,18 +111,14 @@ export class SymphonyService extends Disposable implements ISymphonyService {
 			if (this.isDisposed || generation !== this.selectionGeneration) {
 				return;
 			}
-			const selected = snapshot.conversations.some(item => item.id === this.selected)
-				? this.selected
-				: snapshot.conversations[0]?.id;
+			const selected = snapshot.conversations.some(item => item.id === this.selected) ? this.selected : snapshot.conversations[0]?.id;
 			this.selected = selected;
 			this.view.set({ ...this.view.get(), ...snapshot, selected, error: this.commandError });
 			const feed = selected ? await backend.messages(selected) : undefined;
 			if (this.isDisposed || generation !== this.selectionGeneration || selected !== this.selected) {
 				return;
 			}
-			const conversations = feed
-				? snapshot.conversations.map(item => (item.id === selected ? feed.conversation : item))
-				: snapshot.conversations;
+			const conversations = feed ? snapshot.conversations.map(item => (item.id === selected ? feed.conversation : item)) : snapshot.conversations;
 			this.view.set({
 				...this.view.get(),
 				conversations,

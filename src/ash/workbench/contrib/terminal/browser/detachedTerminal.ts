@@ -30,10 +30,7 @@ export class DetachedTerminal extends Disposable {
 		const input = this.xterm.raw.textarea;
 		if (input) {
 			input.readOnly = true;
-			input.setAttribute(
-				'aria-label',
-				localize('terminal.chat.previewInput', 'Saved terminal output (read only)'),
-			);
+			input.setAttribute('aria-label', localize('terminal.chat.previewInput', 'Saved terminal output (read only)'));
 		}
 	}
 }

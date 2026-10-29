@@ -6,11 +6,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import type { ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';
 import { modelRefIdentity } from '../../../services/chat/common/modelCatalog.js';
-import {
-	ModelCatalogConfiguration,
-	isModelVisibleByDefault,
-	type ModelVisibilityPreference,
-} from '../common/languageModelsConfiguration.js';
+import { ModelCatalogConfiguration, isModelVisibleByDefault, type ModelVisibilityPreference } from '../common/languageModelsConfiguration.js';
 import type { ILanguageModelsConfigurationService } from '../common/languageModelsConfiguration.js';
 
 export const ChatModelPreferences = Object.freeze({
@@ -52,18 +48,11 @@ export class LanguageModelsConfigurationService extends Disposable implements IL
 			}),
 		);
 	}
-	public getDefaultNewChatModel(
-		models: readonly ModelCatalogEntry[],
-		savedModel?: ModelRef | null,
-	): ModelRef | undefined {
+	public getDefaultNewChatModel(models: readonly ModelCatalogEntry[], savedModel?: ModelRef | null): ModelRef | undefined {
 		const configured = this.configuration.getValue<string>(this.preferences.defaultModelSetting).trim();
 		const remembered = this.storage.get(this.preferences.selectedModelStorageKey, StorageScope.PROFILE);
 		// Backend snapshots replace legacy manual remembrance; Auto is an intent to inherit that configured runtime.
-		const backendDefault = savedModel
-			? `${savedModel.provider}/${savedModel.model}`
-			: savedModel === null
-				? 'auto'
-				: remembered;
+		const backendDefault = savedModel ? `${savedModel.provider}/${savedModel.model}` : savedModel === null ? 'auto' : remembered;
 		const defaultChoice = remembered?.toLowerCase() === 'auto' ? remembered : backendDefault;
 		for (const requested of [configured, defaultChoice]) {
 			if (!requested) {
@@ -72,9 +61,7 @@ export class LanguageModelsConfigurationService extends Disposable implements IL
 			if (requested.toLowerCase() === 'auto') {
 				return undefined;
 			}
-			const match = models.find(
-				entry => `${entry.model.provider}/${entry.model.model}`.toLowerCase() === requested.toLowerCase(),
-			);
+			const match = models.find(entry => `${entry.model.provider}/${entry.model.model}`.toLowerCase() === requested.toLowerCase());
 			if (match) {
 				return match.model;
 			}
@@ -107,9 +94,7 @@ export class LanguageModelsConfigurationService extends Disposable implements IL
 			if (visible === this.isModelVisible(model)) {
 				return;
 			}
-			const models = [...this.modelVisibility.values()].filter(
-				candidate => modelRefIdentity(candidate) !== identity,
-			);
+			const models = [...this.modelVisibility.values()].filter(candidate => modelRefIdentity(candidate) !== identity);
 			if (visible !== isModelVisibleByDefault(model)) {
 				models.push(visible ? { ...model, visible: true } : { ...model });
 			}
@@ -130,12 +115,6 @@ export class LanguageModelsConfigurationService extends Disposable implements IL
 	}
 }
 
-function sameVisibility(
-	left: ReadonlyMap<string, ModelVisibilityPreference>,
-	right: ReadonlyMap<string, ModelVisibilityPreference>,
-): boolean {
-	return (
-		left.size === right.size &&
-		[...left].every(([key, model]) => right.has(key) && right.get(key)!.visible === model.visible)
-	);
+function sameVisibility(left: ReadonlyMap<string, ModelVisibilityPreference>, right: ReadonlyMap<string, ModelVisibilityPreference>): boolean {
+	return left.size === right.size && [...left].every(([key, model]) => right.has(key) && right.get(key)!.visible === model.visible);
 }

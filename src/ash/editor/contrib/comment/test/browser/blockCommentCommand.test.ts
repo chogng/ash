@@ -28,9 +28,7 @@ test('Block Comment runs through the canonical editor action', () => {
 		lineHeight: 20,
 	});
 	editor.setSelection(Selection.fromPositions(new Position(1, 7), new Position(1, 11)));
-	const action = [...EditorExtensionsRegistry.getEditorActions()].find(
-		candidate => candidate.id === 'editor.action.blockComment',
-	);
+	const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.blockComment');
 	assert.ok(action);
 
 	editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
@@ -52,9 +50,7 @@ test('Block Comment leaves languages without a block comment pair unchanged', ()
 		languageConfigurationService: configurations,
 		lineHeight: 20,
 	});
-	const action = [...EditorExtensionsRegistry.getEditorActions()].find(
-		candidate => candidate.id === 'editor.action.blockComment',
-	);
+	const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.blockComment');
 	assert.ok(action);
 
 	editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));

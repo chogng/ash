@@ -1,10 +1,5 @@
 export interface IPropertyData {
-	classification:
-		| 'SystemMetaData'
-		| 'CallstackOrException'
-		| 'CustomerContent'
-		| 'PublicNonPersonalData'
-		| 'EndUserPseudonymizedInformation';
+	classification: 'SystemMetaData' | 'CallstackOrException' | 'CustomerContent' | 'PublicNonPersonalData' | 'EndUserPseudonymizedInformation';
 	purpose: 'PerformanceAndHealth' | 'FeatureInsight' | 'BusinessInsight';
 	comment: string;
 	isMeasurement?: boolean;

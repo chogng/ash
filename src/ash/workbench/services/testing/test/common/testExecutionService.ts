@@ -1,19 +1,7 @@
-import {
-	type DebugSessionState,
-	type IDebugConfiguration,
-	type IDebugService,
-	type IDebugSession,
-} from '../../../../contrib/debug/common/debug.js';
+import { type DebugSessionState, type IDebugConfiguration, type IDebugService, type IDebugSession } from '../../../../contrib/debug/common/debug.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
-import {
-	type ITestExecutionService,
-	type TestDebugLaunch,
-	type TestItem,
-	type TestResult,
-	type TestSnapshot,
-	type TestUpdate,
-} from '../../../../../platform/testing/common/testExecutionService.js';
+import { type ITestExecutionService, type TestDebugLaunch, type TestItem, type TestResult, type TestSnapshot, type TestUpdate } from '../../../../../platform/testing/common/testExecutionService.js';
 
 /** Controlled backend boundary; notifications intentionally precede start responses. */
 export class TestExecutionService extends Disposable implements ITestExecutionService {
@@ -168,9 +156,7 @@ export class TestExecutionService extends Disposable implements ITestExecutionSe
 		},
 	): void {
 		const before = this.snapshots.get(id)!;
-		const results = change.result
-			? [...before.results.filter(result => result.testId !== change.result!.testId), change.result]
-			: before.results;
+		const results = change.result ? [...before.results.filter(result => result.testId !== change.result!.testId), change.result] : before.results;
 		const snapshot = {
 			...before,
 			status: change.status ?? before.status,

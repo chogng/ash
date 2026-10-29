@@ -1,17 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import {
-	ParseErrorCode,
-	SyntaxKind,
-	createScanner,
-	findNodeAtLocation,
-	findNodeAtOffset,
-	getLocation,
-	getNodePath,
-	getNodeValue,
-	parse,
-	parseTree,
-} from '../../common/json.js';
+import { ParseErrorCode, SyntaxKind, createScanner, findNodeAtLocation, findNodeAtOffset, getLocation, getNodePath, getNodeValue, parse, parseTree } from '../../common/json.js';
 import { getParseErrorMessage } from '../../common/jsonErrorMessages.js';
 
 test('JSON compatibility scanner exposes VS Code style tokens and decoded values', () => {

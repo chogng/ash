@@ -2,12 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { suiteTeardown, test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import {
-	darkColorTheme,
-	highContrastDarkColorTheme,
-	highContrastLightColorTheme,
-	lightColorTheme,
-} from '../../../platform/theme/common/colorTheme.js';
+import { darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { colorCssVariable } from '../../../platform/theme/common/colorUtils.js';
 import { ColorScheme } from '../../../platform/theme/common/theme.js';
 import { StandaloneThemeService } from '../../standalone/browser/standaloneThemeService.js';
@@ -102,7 +97,10 @@ test('themes created before the editor loads include its color contributions', (
 		],
 		{ encoding: 'utf8', windowsHide: true, timeout: 10_000 },
 	);
-	assert.deepEqual(JSON.parse(result), { registeredBefore: false, after: '#000000' });
+	assert.deepEqual(JSON.parse(result), {
+		registeredBefore: false,
+		after: '#000000',
+	});
 });
 
 test('standalone themes default to the built-in light theme', () => {
@@ -175,23 +173,19 @@ test('standalone themes preserve overrides for later contributions and stop noti
 	overrides['editor.background'] = '#ffffff';
 	const changes: string[] = [];
 	using listener = service.onDidColorThemeChange(value => changes.push(value.getColorCss('test.standaloneLate')!));
-	registerColor(
-		'test.standaloneLate',
-		{ dark: 'editor.background', light: '#abcdef', hcDark: 'editor.background', hcLight: '#000000' },
-		{ description: 'Late standalone test.', owner: 'test' },
-	);
+	registerColor('test.standaloneLate', { dark: 'editor.background', light: '#abcdef', hcDark: 'editor.background', hcLight: '#000000' }, { description: 'Late standalone test.', owner: 'test' });
 	assert.deepEqual(
 		{ before: before['test.standaloneLate'], value: theme.colors['test.standaloneLate'], changes },
-		{ before: undefined, value: '#101010', changes: ['#101010'] },
+		{
+			before: undefined,
+			value: '#101010',
+			changes: ['#101010'],
+		},
 	);
 	assert.equal(theme.getColorCss('editor.background'), '#101010');
 	assert.equal(theme.colorEntries, theme.colorEntries);
 	service.dispose();
-	registerColor(
-		'test.standaloneAfterDispose',
-		{ dark: '#000000', light: '#ffffff', hcDark: '#000000', hcLight: '#ffffff' },
-		{ description: 'Disposed standalone test.', owner: 'test' },
-	);
+	registerColor('test.standaloneAfterDispose', { dark: '#000000', light: '#ffffff', hcDark: '#000000', hcLight: '#ffffff' }, { description: 'Disposed standalone test.', owner: 'test' });
 	assert.deepEqual(changes, ['#101010']);
 });
 
@@ -243,10 +237,7 @@ test('standalone themes track forced colors without losing the selected theme', 
 });
 
 test('editor identifiers retain their CSS variables', () => {
-	assert.equal(
-		colorCssVariable(editorMultiCursorSecondaryBackground),
-		'--ash-editorMultiCursor-secondary-background',
-	);
+	assert.equal(colorCssVariable(editorMultiCursorSecondaryBackground), '--ash-editorMultiCursor-secondary-background');
 	assert.equal(colorCssVariable(editorLineHighlight), '--ash-editor-lineHighlightBackground');
 	assert.equal(colorCssVariable(editorInactiveLineHighlight), '--ash-editor-inactiveLineHighlightBackground');
 	assert.equal(colorCssVariable(editorLineHighlightBorder), '--ash-editor-lineHighlightBorder');
@@ -282,7 +273,12 @@ test('editor ruler colors preserve the editor theme contract', () => {
 			hcDark: highContrastDarkColorTheme.colors[editorRuler],
 			hcLight: highContrastLightColorTheme.colors[editorRuler],
 		},
-		{ dark: '#5a5a5a', light: '#d3d3d3', hcDark: '#ffffff', hcLight: '#292929' },
+		{
+			dark: '#5a5a5a',
+			light: '#d3d3d3',
+			hcDark: '#ffffff',
+			hcLight: '#292929',
+		},
 	);
 });
 
@@ -327,9 +323,7 @@ test('standalone container registration follows schemes and restores host metada
 		assert.equal(host.style.getPropertyValue('--ash-editor-background'), 'hotpink');
 		assert.equal(host.style.getPropertyPriority('--ash-editor-background'), 'important');
 		assert.equal(
-			browserEnvironment.window
-				.getComputedStyle(browserEnvironment.window.document.documentElement)
-				.getPropertyValue('--ash-editor-background'),
+			browserEnvironment.window.getComputedStyle(browserEnvironment.window.document.documentElement).getPropertyValue('--ash-editor-background'),
 			theme.getColorCss('editor.background'),
 		);
 	}
@@ -339,12 +333,7 @@ test('standalone container registration follows schemes and restores host metada
 	assert.equal(host.getAttribute('data-color-scheme'), null);
 	assert.deepEqual([...host.classList], ['host-class', 'hc-light']);
 	service.dispose();
-	assert.equal(
-		browserEnvironment.window
-			.getComputedStyle(browserEnvironment.window.document.documentElement)
-			.getPropertyValue('--ash-editor-background'),
-		'',
-	);
+	assert.equal(browserEnvironment.window.getComputedStyle(browserEnvironment.window.document.documentElement).getPropertyValue('--ash-editor-background'), '');
 });
 
 test('standalone editors in another document share theme styles until the last container releases them', () => {

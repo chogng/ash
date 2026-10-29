@@ -93,8 +93,7 @@ try {
 		for (const output of outputs) {
 			if (!(await readFile(output.path)).equals(output.bytes)) stale.push(output.path);
 		}
-		if (stale.length)
-			throw new Error(`macOS icon outputs are stale. Run pnpm macos-icon:generate:\n${stale.join('\n')}`);
+		if (stale.length) throw new Error(`macOS icon outputs are stale. Run pnpm macos-icon:generate:\n${stale.join('\n')}`);
 		console.log('Validated macOS Dock and menu bar icon outputs.');
 	} else {
 		for (const output of outputs) await writeFile(output.path, output.bytes);

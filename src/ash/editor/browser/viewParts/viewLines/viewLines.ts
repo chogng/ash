@@ -6,10 +6,7 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { resolveSemanticTokenPresentation } from '../../../common/services/semanticTokensStyling.js';
 import type { IColorTheme } from '../../../../platform/theme/common/themeService.js';
-import {
-	type EditorVisualLine,
-	type EditorVisualLineProjection,
-} from '../../../common/viewModel/modelLineProjection.js';
+import { type EditorVisualLine, type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { Position } from '../../../common/core/position.js';
 import { PositionAffinity } from '../../../common/model.js';
 import { Range } from '../../../common/core/range.js';
@@ -42,15 +39,7 @@ import { ViewLine, type ResolvedSemanticToken, type SemanticTokenSource } from '
 import { DomReadingContext } from './domReadingContext.js';
 import { ViewLineOptions } from './viewLineOptions.js';
 import { ViewLayer } from '../../view/viewLayer.js';
-import {
-	FloatHorizontalRange,
-	HorizontalPosition,
-	HorizontalRange,
-	type IViewLines,
-	LineVisibleRanges,
-	type RestrictedRenderingContext,
-	type VisibleRanges,
-} from '../../view/renderingContext.js';
+import { FloatHorizontalRange, HorizontalPosition, HorizontalRange, type IViewLines, LineVisibleRanges, type RestrictedRenderingContext, type VisibleRanges } from '../../view/renderingContext.js';
 import { ViewPart } from '../../view/viewPart.js';
 import { type ViewGpuContext } from '../../gpu/viewGpuContext.js';
 import { type EditorLineRange, type TextMeasurer } from '../../../common/viewModel.js';
@@ -84,8 +73,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 	private lastViewportData: ViewportData | undefined;
 	private _maxLineWidth = 0;
 	private contentRevision = 0;
-	private horizontalRevealRequest:
-		{ readonly range: Range; readonly minimalReveal: boolean; readonly scrollType: ScrollType } | undefined;
+	private horizontalRevealRequest: { readonly range: Range; readonly minimalReveal: boolean; readonly scrollType: ScrollType } | undefined;
 
 	constructor(context: ViewContext, options: ViewLinesOptions) {
 		super(context);
@@ -94,8 +82,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 		this.semanticTokenSource = options.semanticTokenSource;
 		this.semanticHighlightingEnabled = options.semanticHighlightingEnabled;
 		this._viewLineOptions = new ViewLineOptions(options.configuration, options.themeType);
-		if (!Number.isSafeInteger(options.tabSize) || options.tabSize < 1)
-			throw new RangeError('Stanza view-line tab size must be a positive safe integer');
+		if (!Number.isSafeInteger(options.tabSize) || options.tabSize < 1) throw new RangeError('Stanza view-line tab size must be a positive safe integer');
 		this.viewGpuContext = options.viewGpuContext;
 		this.textMeasurer = options.textMeasurer;
 		this.lineWidths = this._register(
@@ -115,8 +102,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 				readProjectionRevision: options.readProjectionRevision,
 				readContentRevision: () => this.contentRevision,
 				lineRenderer: {
-					createLine: visualLineIndex =>
-						new ViewLine(this.domNode.domNode, visualLineIndex, this._viewLineOptions, options.tabSize),
+					createLine: visualLineIndex => new ViewLine(this.domNode.domNode, visualLineIndex, this._viewLineOptions, options.tabSize),
 					getDomNode: line => line.getDomNode(),
 					isDirty: line => line.isDirty,
 					renderLine: (line, visualLine) => {
@@ -138,11 +124,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 			}),
 		);
 		this.domNode = new FastDomNode(this._visibleLines.domNode);
-		this._register(
-			options.configuration.onDidChange(() =>
-				this._onOptionsMaybeChanged(options.configuration, this._context.theme.type),
-			),
-		);
+		this._register(options.configuration.onDidChange(() => this._onOptionsMaybeChanged(options.configuration, this._context.theme.type)));
 	}
 
 	public override dispose(): void {
@@ -246,21 +228,10 @@ export class ViewLines extends ViewPart implements IViewLines {
 					scrollTop = boxBottom - viewport.height;
 					break;
 				case VerticalRevealType.NearTop:
-					scrollTop =
-						boxTop -
-						Math.max(
-							5 * this._context.configuration.options.get(EditorOption.lineHeight),
-							viewport.height * 0.2,
-						);
+					scrollTop = boxTop - Math.max(5 * this._context.configuration.options.get(EditorOption.lineHeight), viewport.height * 0.2);
 					break;
 				case VerticalRevealType.NearTopIfOutsideViewport:
-					scrollTop = outside
-						? boxTop -
-							Math.max(
-								5 * this._context.configuration.options.get(EditorOption.lineHeight),
-								viewport.height * 0.2,
-							)
-						: viewportTop;
+					scrollTop = outside ? boxTop - Math.max(5 * this._context.configuration.options.get(EditorOption.lineHeight), viewport.height * 0.2) : viewportTop;
 					break;
 				default:
 					if (boxTop < viewportTop) scrollTop = boxTop;
@@ -307,17 +278,9 @@ export class ViewLines extends ViewPart implements IViewLines {
 		if (!line || !visualLine) return null;
 		const textElement = row.firstElementChild as HTMLElement | null;
 		if (!textElement) return null;
-		const part =
-			textElement === spanNode
-				? (textElement.children[offset] ?? textElement.children[offset - 1])
-				: directChildOf(textElement, spanNode);
+		const part = textElement === spanNode ? (textElement.children[offset] ?? textElement.children[offset - 1]) : directChildOf(textElement, spanNode);
 		if (!isHTMLElement(part)) return null;
-		const partOffset =
-			textElement === spanNode
-				? part === textElement.children[offset]
-					? 0
-					: (part.textContent?.length ?? 0)
-				: Math.min(offset, part.textContent?.length ?? 0);
+		const partOffset = textElement === spanNode ? (part === textElement.children[offset] ? 0 : (part.textContent?.length ?? 0)) : Math.min(offset, part.textContent?.length ?? 0);
 		const column = line.getColumnOfNodeOffset(part, partOffset);
 		if (column < 1) return null;
 		return new Position(lineNumber, column);
@@ -330,8 +293,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 
 	private _getLineNumberFor(domNode: HTMLElement): number {
 		const visualLineIndex = Number(domNode.dataset.lineIndex);
-		if (!Number.isSafeInteger(visualLineIndex) || visualLineIndex < 0)
-			throw new RangeError('View line DOM node has an invalid line index');
+		if (!Number.isSafeInteger(visualLineIndex) || visualLineIndex < 0) throw new RangeError('View line DOM node has an invalid line index');
 		return visualLineIndex + 1;
 	}
 
@@ -373,11 +335,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 		const width =
 			options.get(EditorOption.wrappingInfo).wrappingColumn > 0
 				? 0
-				: Math.ceil(
-						options.get(EditorOption.layoutInfo).contentLeft +
-							Math.max(this.lineWidths.maximumLineWidth, this._maxLineWidth) +
-							this.textMeasurer.horizontalPadding,
-					);
+				: Math.ceil(options.get(EditorOption.layoutInfo).contentLeft + Math.max(this.lineWidths.maximumLineWidth, this._maxLineWidth) + this.textMeasurer.horizontalPadding);
 		// The bounded model scan estimates unseen rows. Rendered widths include
 		// injected text and styled spans and must survive later estimate updates.
 		this._context.viewLayout.setMaxLineWidth(width);
@@ -389,36 +347,23 @@ export class ViewLines extends ViewPart implements IViewLines {
 		if (renderedLineRange.endLineIndexExclusive <= renderedLineRange.startLineIndex) return null;
 		const visibleRange = Range.intersectRanges(
 			range,
-			new Range(
-				renderedLineRange.startLineIndex + 1,
-				1,
-				renderedLineRange.endLineIndexExclusive,
-				this._context.viewModel.getLineMaxColumn(renderedLineRange.endLineIndexExclusive),
-			),
+			new Range(renderedLineRange.startLineIndex + 1, 1, renderedLineRange.endLineIndexExclusive, this._context.viewModel.getLineMaxColumn(renderedLineRange.endLineIndexExclusive)),
 		);
 		if (!visibleRange) return null;
 		const result: LineVisibleRanges[] = [];
 		// Match offscreen selection geometry after font metrics change. A width
 		// captured during construction would create false corners at viewport edges.
 		const newlineWidth = includeNewLines ? this.textMeasurer.measureLineWidth(' ') : 0;
-		let nextModelLineNumber = includeNewLines
-			? this._context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(
-					new Position(visibleRange.startLineNumber, 1),
-				).lineNumber
-			: 0;
+		let nextModelLineNumber = includeNewLines ? this._context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(new Position(visibleRange.startLineNumber, 1)).lineNumber : 0;
 		for (let lineNumber = visibleRange.startLineNumber; lineNumber <= visibleRange.endLineNumber; lineNumber += 1) {
 			const currentModelLineNumber = nextModelLineNumber;
 			if (includeNewLines && lineNumber < originalEndLineNumber) {
-				nextModelLineNumber = this._context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(
-					new Position(lineNumber + 1, 1),
-				).lineNumber;
+				nextModelLineNumber = this._context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(new Position(lineNumber + 1, 1)).lineNumber;
 			}
 			if (this.isGpuLine(lineNumber)) continue;
 			const startColumn = lineNumber === visibleRange.startLineNumber ? visibleRange.startColumn : 1;
 			const continuesInNextLine = lineNumber !== originalEndLineNumber;
-			const endColumn = continuesInNextLine
-				? this._context.viewModel.getLineMaxColumn(lineNumber)
-				: visibleRange.endColumn;
+			const endColumn = continuesInNextLine ? this._context.viewModel.getLineMaxColumn(lineNumber) : visibleRange.endColumn;
 			const visibleRanges = this._visibleRangesForLineRange(lineNumber, startColumn, endColumn);
 			if (!visibleRanges) continue;
 			const lineRanges = visibleRanges.ranges.map(range => new FloatHorizontalRange(range.left, range.width));
@@ -429,23 +374,12 @@ export class ViewLines extends ViewPart implements IViewLines {
 					if (this._lineIsRenderedRTL(lineNumber)) lastRange.left -= newlineWidth;
 				}
 			}
-			result.push(
-				new LineVisibleRanges(
-					visibleRanges.outsideRenderedLine,
-					lineNumber,
-					HorizontalRange.from(lineRanges),
-					continuesInNextLine,
-				),
-			);
+			result.push(new LineVisibleRanges(visibleRanges.outsideRenderedLine, lineNumber, HorizontalRange.from(lineRanges), continuesInNextLine));
 		}
 		return result.length > 0 ? result : null;
 	}
 
-	private _visibleRangesForLineRange(
-		lineNumber: number,
-		startColumn: number,
-		endColumn: number,
-	): VisibleRanges | null {
+	private _visibleRangesForLineRange(lineNumber: number, startColumn: number, endColumn: number): VisibleRanges | null {
 		const line = this._visibleLines.renderedLines.get(lineNumber - 1);
 		if (!line) return null;
 		return line.getVisibleRangesForRange(lineNumber, startColumn, endColumn, readingContext(line));
@@ -469,12 +403,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 		// also lets several token/decorations updates share one frame snapshot.
 		let changed = false;
 		for (const [lineIndex, line] of this._visibleLines.renderedLines) {
-			if (
-				event &&
-				!event.ranges.some(
-					range => lineIndex + 1 >= range.fromLineNumber && lineIndex + 1 <= range.toLineNumber,
-				)
-			) {
+			if (event && !event.ranges.some(range => lineIndex + 1 >= range.fromLineNumber && lineIndex + 1 <= range.toLineNumber)) {
 				continue;
 			}
 			line.onTokensChanged();
@@ -521,8 +450,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 	}
 
 	private _ensureMaxLineWidth(lineWidth: number): void {
-		if (!Number.isFinite(lineWidth) || lineWidth < 0)
-			throw new RangeError('View line width must be finite and non-negative');
+		if (!Number.isFinite(lineWidth) || lineWidth < 0) throw new RangeError('View line width must be finite and non-negative');
 		this._maxLineWidth = Math.max(this._maxLineWidth, lineWidth);
 	}
 
@@ -530,30 +458,19 @@ export class ViewLines extends ViewPart implements IViewLines {
 		return this.semanticTokenSource?.getLineTokens(visualLine.logicalLineIndex) ?? [];
 	}
 
-	private projectLineText(
-		line: ViewLine,
-		visualLine: EditorVisualLine,
-		tokens: readonly ResolvedSemanticToken[],
-	): void {
+	private projectLineText(line: ViewLine, visualLine: EditorVisualLine, tokens: readonly ResolvedSemanticToken[]): void {
 		const viewLineNumber = visualLine.visualLineIndex + 1;
 		const lineData = this.lastViewportData!.getViewLineRenderingData(viewLineNumber);
 		// Resolving the setting merges configuration layers. All tokens on this line
 		// share that decision, regardless of which syntax backend produced them.
-		const semanticHighlightingEnabled =
-			tokens.length > 0 && this.semanticHighlightingEnabled(this._context.theme.value);
+		const semanticHighlightingEnabled = tokens.length > 0 && this.semanticHighlightingEnabled(this._context.theme.value);
 		const inlineDecorations = [...lineData.inlineDecorations];
 		if (this._context.theme.value.getColor(editorSelectionForeground)) {
 			const lineRange = new Range(viewLineNumber, 1, viewLineNumber, lineData.content.length + 1);
 			for (const state of this._context.viewModel.getCursorStates()) {
 				const selectedRange = Range.intersectRanges(lineRange, state.viewState.selection);
 				if (selectedRange && !selectedRange.isEmpty()) {
-					inlineDecorations.push(
-						new InlineDecoration(
-							selectedRange,
-							'stanza-editor-selected-text',
-							InlineDecorationType.Regular,
-						),
-					);
+					inlineDecorations.push(new InlineDecoration(selectedRange, 'stanza-editor-selected-text', InlineDecorationType.Regular));
 				}
 			}
 		}
@@ -561,11 +478,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 			lineData.content,
 			projectSemanticTokens(tokens, visualLine).map(token => ({
 				...token,
-				syntaxPresentation: resolveSemanticTokenPresentation(
-					token,
-					this._context.theme.value,
-					semanticHighlightingEnabled,
-				),
+				syntaxPresentation: resolveSemanticTokenPresentation(token, this._context.theme.value, semanticHighlightingEnabled),
 			})),
 			0,
 			inlineDecorations,
@@ -578,11 +491,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 		if (!request) return;
 		const visualLineNumber = request.range.startLineNumber;
 		if (visualLineNumber < viewportData.startLineNumber || visualLineNumber > viewportData.endLineNumber) return;
-		const ranges = this._visibleRangesForLineRange(
-			visualLineNumber,
-			request.range.startColumn,
-			request.range.endColumn,
-		);
+		const ranges = this._visibleRangesForLineRange(visualLineNumber, request.range.startColumn, request.range.endColumn);
 		if (!ranges || ranges.ranges.length === 0) return;
 		this.horizontalRevealRequest = undefined;
 		let boxStart = Math.min(...ranges.ranges.map(range => range.left));
@@ -592,9 +501,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 			boxEnd += this._context.configuration.options.get(EditorOption.revealHorizontalRightPadding);
 		}
 		const viewport = this._context.viewLayout.getCurrentViewport();
-		const verticalScrollbarWidth = this._context.configuration.options.get(
-			EditorOption.layoutInfo,
-		).verticalScrollbarWidth;
+		const verticalScrollbarWidth = this._context.configuration.options.get(EditorOption.layoutInfo).verticalScrollbarWidth;
 		const viewportEnd = viewport.left + viewport.width - verticalScrollbarWidth;
 		let scrollLeft = viewport.left;
 		if (boxStart < viewport.left) scrollLeft = boxStart;
@@ -607,9 +514,7 @@ function revealRange(event: ViewRevealRangeRequestEvent): Range | null {
 	if (event.range) return event.range;
 	const selections = event.selections;
 	if (!selections || selections.length === 0) return null;
-	return selections
-		.slice(1)
-		.reduce((range, selection) => Range.plusRange(range, selection), Range.lift(selections[0]));
+	return selections.slice(1).reduce((range, selection) => Range.plusRange(range, selection), Range.lift(selections[0]));
 }
 
 function readingContext(line: ViewLine): DomReadingContext {
@@ -627,43 +532,28 @@ function directChildOf(parent: HTMLElement, descendant: HTMLElement): HTMLElemen
 
 const EMPTY_LINE_INDEXES: ReadonlySet<number> = new Set();
 
-function projectSemanticTokens(
-	tokens: readonly ResolvedSemanticToken[],
-	line: EditorVisualLine,
-): readonly ResolvedSemanticToken[] {
+function projectSemanticTokens(tokens: readonly ResolvedSemanticToken[], line: EditorVisualLine): readonly ResolvedSemanticToken[] {
 	const data = line.projectionData;
 	if (!data) return clipSemanticTokens(tokens, line.startColumn, line.endColumn);
 	const outputLineIndex = line.outputLineIndex!;
 	return tokens.flatMap(token => {
 		// Split at injections so hints retain their own styling even inside a token.
 		// The projection owner handles wrapping and continuation indentation.
-		const boundaries = [
-			token.startColumn,
-			...(data.injectionOffsets ?? []).filter(offset => offset > token.startColumn && offset < token.endColumn),
-			token.endColumn,
-		];
+		const boundaries = [token.startColumn, ...(data.injectionOffsets ?? []).filter(offset => offset > token.startColumn && offset < token.endColumn), token.endColumn];
 		const projected: ResolvedSemanticToken[] = [];
 		for (let index = 0; index + 1 < boundaries.length; index++) {
 			const start = data.translateToOutputPosition(boundaries[index]!, PositionAffinity.Right);
 			const end = data.translateToOutputPosition(boundaries[index + 1]!, PositionAffinity.Left);
 			if (outputLineIndex < start.outputLineIndex || outputLineIndex > end.outputLineIndex) continue;
-			const startColumn =
-				outputLineIndex === start.outputLineIndex
-					? start.outputOffset
-					: data.getMinOutputOffset(outputLineIndex);
-			const endColumn =
-				outputLineIndex === end.outputLineIndex ? end.outputOffset : data.getMaxOutputOffset(outputLineIndex);
+			const startColumn = outputLineIndex === start.outputLineIndex ? start.outputOffset : data.getMinOutputOffset(outputLineIndex);
+			const endColumn = outputLineIndex === end.outputLineIndex ? end.outputOffset : data.getMaxOutputOffset(outputLineIndex);
 			if (endColumn > startColumn) projected.push({ ...token, startColumn, endColumn });
 		}
 		return projected;
 	});
 }
 
-function clipSemanticTokens(
-	tokens: readonly ResolvedSemanticToken[],
-	startColumn: number,
-	endColumn: number,
-): readonly ResolvedSemanticToken[] {
+function clipSemanticTokens(tokens: readonly ResolvedSemanticToken[], startColumn: number, endColumn: number): readonly ResolvedSemanticToken[] {
 	return Object.freeze(
 		tokens.flatMap(token => {
 			const start = Math.max(token.startColumn, startColumn);
@@ -798,9 +688,7 @@ export class LineWidthIndex extends Disposable {
 			const oldLineCount = group.oldEndLineIndex - group.oldStartLineIndex + 1;
 			const newLineCount = oldLineCount + group.lineDelta;
 			const newStartLineIndex = group.oldStartLineIndex + cumulativeLineDelta;
-			const newWidths = Array.from({ length: newLineCount }, (_, index) =>
-				this.measure(newStartLineIndex + index),
-			);
+			const newWidths = Array.from({ length: newLineCount }, (_, index) => this.measure(newStartLineIndex + index));
 			measured.push({ ...group, newWidths });
 			cumulativeLineDelta += group.lineDelta;
 		}
@@ -885,10 +773,7 @@ export class LineWidthIndex extends Disposable {
 	}
 
 	private get initialScanLineCount(): number {
-		return Math.min(
-			this.model.lineCount,
-			this.initialMeasurement?.maximumMeasuredLineCount ?? this.model.lineCount,
-		);
+		return Math.min(this.model.lineCount, this.initialMeasurement?.maximumMeasuredLineCount ?? this.model.lineCount);
 	}
 
 	private measure(lineIndex: number): number {
@@ -914,9 +799,7 @@ export class LineWidthIndex extends Disposable {
 	}
 }
 
-function readInitialMeasurement(
-	value: LineWidthInitialMeasurementOptions | undefined,
-): ResolvedInitialMeasurement | undefined {
+function readInitialMeasurement(value: LineWidthInitialMeasurementOptions | undefined): ResolvedInitialMeasurement | undefined {
 	if (value === undefined) return undefined;
 	if (!value || typeof value.schedule !== 'function') {
 		throw new TypeError('Stanza initial line measurement requires a scheduler');
@@ -946,14 +829,9 @@ function groupAffectedLines(change: TextModelChange): AffectedLineGroup[] {
 		.map(contentChange => ({
 			oldStartLineIndex: contentChange.range.startLineNumber - 1,
 			oldEndLineIndex: contentChange.range.endLineNumber - 1,
-			lineDelta:
-				lineFeedCount(contentChange.text) -
-				(contentChange.range.getEndPosition().lineNumber - contentChange.range.getStartPosition().lineNumber),
+			lineDelta: lineFeedCount(contentChange.text) - (contentChange.range.getEndPosition().lineNumber - contentChange.range.getStartPosition().lineNumber),
 		}))
-		.sort(
-			(left, right) =>
-				left.oldStartLineIndex - right.oldStartLineIndex || left.oldEndLineIndex - right.oldEndLineIndex,
-		);
+		.sort((left, right) => left.oldStartLineIndex - right.oldStartLineIndex || left.oldEndLineIndex - right.oldEndLineIndex);
 	const groups: AffectedLineGroup[] = [];
 	for (const effect of effects) {
 		const previous = groups.at(-1);

@@ -55,12 +55,7 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 						id: `chatgpt:${conversation.id}`,
 						category: 'sessions',
 						title: conversation.title,
-						description: [
-							'ChatGPT',
-							state.projects.find(project => project.id === conversation.projectId)?.title,
-						]
-							.filter(Boolean)
-							.join(' · '),
+						description: ['ChatGPT', state.projects.find(project => project.id === conversation.projectId)?.title].filter(Boolean).join(' · '),
 						icon: Lxicon.openai,
 						target: {
 							kind: 'contributed',

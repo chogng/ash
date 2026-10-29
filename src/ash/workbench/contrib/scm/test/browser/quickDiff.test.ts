@@ -10,11 +10,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import {
-	IQuickDiffEditorControllerService,
-	IQuickDiffModelService,
-	IQuickDiffService,
-} from '../../common/quickDiff.js';
+import { IQuickDiffEditorControllerService, IQuickDiffModelService, IQuickDiffService } from '../../common/quickDiff.js';
 import { IDiffService } from '../../../../services/diff/common/diffService.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { type CancellationToken } from '../../../../../base/common/cancellation.js';
@@ -39,10 +35,7 @@ test('Quick Diff resolves registered window services and rejects a missing diff 
 	assert.throws(() => incomplete.get(IQuickDiffModelService), /diffService/);
 	using services = new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors()));
 	services.registerInstance(IConfigurationService, configuration);
-	services.registerInstance(
-		IDiffService,
-		new DiffService(new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => new DiffTestPort()))),
-	);
+	services.registerInstance(IDiffService, new DiffService(new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => new DiffTestPort()))));
 	const quickDiffService = services.get(IQuickDiffService);
 	let requests = 0;
 	using registration = quickDiffService.addProvider({
@@ -72,11 +65,7 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 	using quickDiffService = new QuickDiffService();
 	using providerRegistration = quickDiffService.addProvider(provider);
 	using configuration = new InMemoryConfigurationService();
-	using modelService = new QuickDiffModelService(
-		quickDiffService,
-		new DiffService(new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => new DiffTestPort()))),
-		configuration,
-	);
+	using modelService = new QuickDiffModelService(quickDiffService, new DiffService(new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => new DiffTestPort()))), configuration);
 	using model = new TextModel('same\nnew\nlast', { resource: URI.file('/workspace/src/file.ts') });
 	const firstReference = modelService.createModelReference(URI.file('/workspace/src/file.ts'), model);
 	const secondReference = modelService.createModelReference(URI.file('/workspace/src/file.ts'), model);
@@ -96,10 +85,7 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 	const decorations = model.getAllDecorations();
 
 	assert.deepEqual(
-		decorations.map(decoration => [
-			decoration.options.linesDecorationsClassName,
-			decoration.range.getStartPosition().lineNumber,
-		]),
+		decorations.map(decoration => [decoration.options.linesDecorationsClassName, decoration.range.getStartPosition().lineNumber]),
 		[
 			['ash-quick-diff-gutter ash-quick-diff-modified', 2],
 			['ash-quick-diff-gutter ash-quick-diff-deleted', 3],
@@ -107,11 +93,7 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 	);
 	assert.ok(decorations.every(decoration => decoration.options.overviewRuler && decoration.options.minimap));
 	assert.equal(editor.getLineDecorations(2)?.length, 1);
-	assert.deepEqual(
-		otherEditor.getLineDecorations(2),
-		[],
-		'Git decorations do not leak into another editor sharing the working copy',
-	);
+	assert.deepEqual(otherEditor.getLineDecorations(2), [], 'Git decorations do not leak into another editor sharing the working copy');
 	await configuration.updateValue('scm.diffDecorations', 'none');
 	assert.deepEqual(editor.getLineDecorations(2), []);
 	await configuration.updateValue('scm.diffDecorations', 'gutter');
@@ -147,20 +129,12 @@ test('Quick Diff whitespace option inherits Diff settings without refetching the
 		},
 	});
 	using configuration = new InMemoryConfigurationService();
-	using modelService = new QuickDiffModelService(
-		quickDiffService,
-		new DiffService(new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => new DiffTestPort()))),
-		configuration,
-	);
+	using modelService = new QuickDiffModelService(quickDiffService, new DiffService(new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => new DiffTestPort()))), configuration);
 	using model = new TextModel('word ', { resource: URI.file('/workspace/whitespace.ts') });
 	using reference = modelService.createModelReference(URI.file('/workspace/whitespace.ts'), model);
 	await waitFor(() => reference.object.state.changes.length === 1);
 	await configuration.updateValue('scm.diffDecorationsIgnoreTrimWhitespace', 'inherit');
-	await waitFor(
-		() =>
-			reference.object.state.comparisons[0]?.model.state.kind === 'ready' &&
-			reference.object.state.changes.length === 0,
-	);
+	await waitFor(() => reference.object.state.comparisons[0]?.model.state.kind === 'ready' && reference.object.state.changes.length === 0);
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, {
 		overrideIdentifier: 'typescript',
 	});
@@ -170,11 +144,7 @@ test('Quick Diff whitespace option inherits Diff settings without refetching the
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, true, {
 		overrideIdentifier: 'typescript',
 	});
-	await waitFor(
-		() =>
-			reference.object.state.comparisons[0]?.model.state.kind === 'ready' &&
-			reference.object.state.changes.length === 0,
-	);
+	await waitFor(() => reference.object.state.comparisons[0]?.model.state.kind === 'ready' && reference.object.state.changes.length === 0);
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false);
 	assert.equal(reference.object.state.changes.length, 0);
 	model.setLanguage('javascript');
@@ -205,12 +175,7 @@ test('Quick Diff passes its standard one-second computation limit to the diff pr
 		{
 			createComputationService: () => ({
 				onDidChange: Event.None,
-				async computeDiff(
-					_original: ITextModel,
-					_modified: ITextModel,
-					options: IDocumentDiffProviderOptions,
-					_token: CancellationToken,
-				) {
+				async computeDiff(_original: ITextModel, _modified: ITextModel, options: IDocumentDiffProviderOptions, _token: CancellationToken) {
 					limits.push(options.maxComputationTimeMs);
 					return { identical: false, quitEarly: false, changes: [], moves: [] };
 				},
@@ -241,24 +206,16 @@ test('Registered Quick Diff creates after first render and releases decorations 
 		Object.defineProperty(globalThis, name, { configurable: true, value });
 	}
 	try {
-		const { CodeEditorWidget } =
-			await import('../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js');
+		const { CodeEditorWidget } = await import('../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js');
 		const { createTestCodeEditor } = await import('../../../../../editor/test/browser/testCodeEditor.js');
-		const { QuickDiffEditorController, QuickDiffEditorControllerService } =
-			await import('../../browser/quickDiffWidget.js');
+		const { QuickDiffEditorController, QuickDiffEditorControllerService } = await import('../../browser/quickDiffWidget.js');
 		await import('../../browser/quickDiff.contribution.js');
 		const fixture = baselineFixture();
 		const provider = fixture.provider;
 		using quickDiffService = new QuickDiffService();
 		using providerRegistration = quickDiffService.addProvider(provider);
 		using configuration = new InMemoryConfigurationService();
-		using modelService = new QuickDiffModelService(
-			quickDiffService,
-			new DiffService(
-				new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => new DiffTestPort())),
-			),
-			configuration,
-		);
+		using modelService = new QuickDiffModelService(quickDiffService, new DiffService(new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => new DiffTestPort()))), configuration);
 		using controllers = new QuickDiffEditorControllerService();
 		await configuration.updateValue('scm.diffDecorations', 'all');
 		using services = new InstantiationService();
@@ -283,15 +240,7 @@ test('Registered Quick Diff creates after first render and releases decorations 
 			onContributionError,
 		});
 		assert.deepEqual(fixture.requests, [], 'deferred construction must not fetch during attach');
-		await waitFor(
-			() =>
-				errors.length > 0 ||
-				model
-					.getAllDecorations()
-					.some(decoration =>
-						decoration.options.linesDecorationsClassName?.includes('ash-quick-diff-gutter'),
-					),
-		);
+		await waitFor(() => errors.length > 0 || model.getAllDecorations().some(decoration => decoration.options.linesDecorationsClassName?.includes('ash-quick-diff-gutter')));
 		assert.deepEqual(errors, []);
 		const controller = editor.getContribution('workbench.contrib.quickDiffEditorController');
 		assert.ok(controller instanceof QuickDiffEditorController);
@@ -303,11 +252,7 @@ test('Registered Quick Diff creates after first render and releases decorations 
 			onContributionError,
 		});
 		assert.equal(diffEditor.getContribution('workbench.contrib.quickDiffEditorController'), null);
-		assert.deepEqual(
-			diffEditor.getLineDecorations(2),
-			[],
-			'registered Quick Diff skips diff editor internals even with a shared working copy',
-		);
+		assert.deepEqual(diffEditor.getLineDecorations(2), [], 'registered Quick Diff skips diff editor internals even with a shared working copy');
 		editor.getDomNode().dispatchEvent(new dom.window.FocusEvent('focusin'));
 		assert.equal(controllers.activeController, controller);
 		assert.deepEqual(errors, []);

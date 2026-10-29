@@ -1,11 +1,7 @@
 import type { ITerminalProcessOwnership } from '../../../../services/terminal/common/terminal.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
-import {
-	ITerminalProcessService,
-	type ITerminalProcessCreateOptions,
-	type ITerminalProcessCreation,
-} from '../../../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, type ITerminalProcessCreateOptions, type ITerminalProcessCreation } from '../../../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { terminalExecutionScope, terminalExecutionScopesEqual, type ITerminalExecutionScope } from './terminal.js';
 
@@ -29,11 +25,7 @@ export class RemoteTerminalChannelClient extends Disposable {
 		const scope = terminalExecutionScope(this.workspace.getWorkspace());
 		const revision = this.revision;
 		const creation = attached ?? (await this.processes.create(options));
-		if (
-			this.isDisposed ||
-			revision !== this.revision ||
-			!terminalExecutionScopesEqual(scope, terminalExecutionScope(this.workspace.getWorkspace()))
-		) {
+		if (this.isDisposed || revision !== this.revision || !terminalExecutionScopesEqual(scope, terminalExecutionScope(this.workspace.getWorkspace()))) {
 			if (ownership?.canTerminate !== false)
 				await this.processes.close({
 					terminalId: creation.terminalId,
@@ -46,10 +38,6 @@ export class RemoteTerminalChannelClient extends Disposable {
 
 	assertAuthority(scope: ITerminalExecutionScope): void {
 		// A terminal can outlive a folder change on the same host, but never change hosts.
-		if (
-			this.isDisposed ||
-			scope.remoteAuthority !== terminalExecutionScope(this.workspace.getWorkspace()).remoteAuthority
-		)
-			throw new CancellationError();
+		if (this.isDisposed || scope.remoteAuthority !== terminalExecutionScope(this.workspace.getWorkspace()).remoteAuthority) throw new CancellationError();
 	}
 }

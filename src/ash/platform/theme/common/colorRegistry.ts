@@ -79,12 +79,7 @@ export class ColorRegistry extends Disposable {
 			validation.colors.set(id, contribution);
 		}
 		validation.publishCatalog();
-		for (const scheme of [
-			ColorScheme.Dark,
-			ColorScheme.Light,
-			ColorScheme.HighContrastDark,
-			ColorScheme.HighContrastLight,
-		]) {
+		for (const scheme of [ColorScheme.Dark, ColorScheme.Light, ColorScheme.HighContrastDark, ColorScheme.HighContrastLight]) {
 			validation.resolve(scheme);
 		}
 		this.colors.clear();
@@ -119,17 +114,13 @@ export class ColorRegistry extends Disposable {
 		return this.catalog;
 	}
 
-	resolve(
-		scheme: ColorScheme,
-		overrides: Readonly<Record<string, ColorValue>> = {},
-	): readonly ResolvedColorContribution[] {
+	resolve(scheme: ColorScheme, overrides: Readonly<Record<string, ColorValue>> = {}): readonly ResolvedColorContribution[] {
 		const cache = new Map<string, Color | null>();
 		const resolving: string[] = [];
 		const resolveIdentifier = (id: string): Color | null => {
 			if (cache.has(id)) return cache.get(id) ?? null;
 			const cycleStart = resolving.indexOf(id);
-			if (cycleStart >= 0)
-				throw new Error(`Color token cycle: ${[...resolving.slice(cycleStart), id].join(' -> ')}`);
+			if (cycleStart >= 0) throw new Error(`Color token cycle: ${[...resolving.slice(cycleStart), id].join(' -> ')}`);
 			const contribution = this.colors.get(id);
 			if (!contribution) throw new Error(`Unknown color token reference: ${id}`);
 			resolving.push(id);
@@ -145,11 +136,7 @@ export class ColorRegistry extends Disposable {
 		for (const id of Object.keys(overrides)) {
 			if (!this.colors.has(id)) throw new Error(`Unknown color token override: ${id}`);
 		}
-		return Object.freeze(
-			this.getColors().map(contribution =>
-				Object.freeze({ ...contribution, value: resolveIdentifier(contribution.id) }),
-			),
-		);
+		return Object.freeze(this.getColors().map(contribution => Object.freeze({ ...contribution, value: resolveIdentifier(contribution.id) })));
 	}
 }
 

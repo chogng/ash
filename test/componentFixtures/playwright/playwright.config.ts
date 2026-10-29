@@ -3,9 +3,7 @@ import { defineConfig } from '@playwright/test';
 import { readFixtureOptions } from '../cssOrderShared.mts';
 
 const options = readFixtureOptions();
-const runDirectory =
-	process.env.ASH_EDITOR_BROWSER_RUN_DIRECTORY ??
-	resolve(import.meta.dirname, '../../../.build/desktop/playwright/component-fixtures');
+const runDirectory = process.env.ASH_EDITOR_BROWSER_RUN_DIRECTORY ?? resolve(import.meta.dirname, '../../../.build/desktop/playwright/component-fixtures');
 
 export default defineConfig({
 	testDir: './tests',

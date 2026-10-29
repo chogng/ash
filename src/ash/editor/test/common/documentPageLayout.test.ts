@@ -1,42 +1,22 @@
 import { documentPageDimensions } from '../../../../../extensions/academy/common/model/documentPageLayout.js';
-import {
-	createSplitBlockCommand,
-	createSplitListItemCommand,
-} from '../../../../../extensions/academy/common/commands/documentCommands.js';
-import {
-	serializeDocumentTransaction,
-	deserializeDocumentTransaction,
-} from '../../../../../extensions/academy/common/model/documentTransactionSerialization.js';
+import { createSplitBlockCommand, createSplitListItemCommand } from '../../../../../extensions/academy/common/commands/documentCommands.js';
+import { serializeDocumentTransaction, deserializeDocumentTransaction } from '../../../../../extensions/academy/common/model/documentTransactionSerialization.js';
 import type { DocumentAttributes } from '../../../../../extensions/academy/common/model/document.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { createDefaultDocumentSchema } from '../../../../../extensions/academy/common/model/documentSchema.js';
 import { DocumentTextModel } from '../../../../../extensions/academy/common/model/documentTextModel.js';
 import { DocumentTransaction } from '../../../../../extensions/academy/common/model/documentTransaction.js';
-import {
-	serializeDocument,
-	deserializeDocument,
-} from '../../../../../extensions/academy/common/model/documentSerialization.js';
-import {
-	createAcademyDocumentSchema,
-	createEmptyAcademyDocument,
-} from '../../../../../extensions/academy/browser/contrib/academy/common/schema.js';
+import { serializeDocument, deserializeDocument } from '../../../../../extensions/academy/common/model/documentSerialization.js';
+import { createAcademyDocumentSchema, createEmptyAcademyDocument } from '../../../../../extensions/academy/browser/contrib/academy/common/schema.js';
 
 for (const academy of [false, true]) {
 	test(`Page settings validate, persist and undo atomically in ${academy ? 'Academy' : 'general'} documents`, () => {
 		const schema = academy ? createAcademyDocumentSchema() : createDefaultDocumentSchema();
-		const initial = academy
-			? createEmptyAcademyDocument(schema)
-			: schema.createDocument([schema.createNode('paragraph')]);
+		const initial = academy ? createEmptyAcademyDocument(schema) : schema.createDocument([schema.createNode('paragraph')]);
 		using model = DocumentTextModel.create(schema, initial);
 		const version = model.getVersionId();
-		for (const attrs of [
-			{ pageSize: 'unknown' },
-			{ pageMargin: '72' },
-			{ pageMargin: 0 },
-			{ pageMargin: 145 },
-			{ pageMargin: NaN },
-		] as readonly DocumentAttributes[]) {
+		for (const attrs of [{ pageSize: 'unknown' }, { pageMargin: '72' }, { pageMargin: 0 }, { pageMargin: 145 }, { pageMargin: NaN }] as readonly DocumentAttributes[]) {
 			assert.throws(() => model.dispatch(new DocumentTransaction().setNodeAttributes(initial.id, attrs)));
 			assert.deepEqual(model.document, initial);
 			assert.equal(model.getVersionId(), version);
@@ -84,13 +64,7 @@ for (const academy of [false, true]) {
 			assert.throws(() => model.dispatchRemote(new DocumentTransaction().setNodeAttributes(initial.id, attrs)));
 		}
 		for (const key of ['pageBreakBefore', 'keepTogether', 'keepWithNext', 'widowControl']) {
-			assert.throws(() =>
-				model.dispatch(
-					new DocumentTransaction()
-						.replaceText('text', 0, 2, 'changed')
-						.setNodeAttributes('body', { [key]: 'true' }),
-				),
-			);
+			assert.throws(() => model.dispatch(new DocumentTransaction().replaceText('text', 0, 2, 'changed').setNodeAttributes('body', { [key]: 'true' })));
 		}
 		assert.deepEqual(model.document, initial);
 		assert.equal(model.getVersionId(), version);
@@ -147,18 +121,12 @@ test('Enter keeps the original manual page boundary without propagating it to th
 			content: [schema.createText('left右', { id: `t${list}` })],
 		});
 		const item = schema.createNode('listItem', { content: [paragraph] });
-		const initial = schema.createDocument(
-			list ? [schema.createNode('bulletList', { content: [item] })] : [paragraph],
-		);
+		const initial = schema.createDocument(list ? [schema.createNode('bulletList', { content: [item] })] : [paragraph]);
 		using model = DocumentTextModel.create(schema, initial);
-		const command = list
-			? createSplitListItemCommand(schema, initial, item.id, paragraph.id, `t${list}`, 4)
-			: createSplitBlockCommand(schema, initial, paragraph.id, `t${list}`, 4);
+		const command = list ? createSplitListItemCommand(schema, initial, item.id, paragraph.id, `t${list}`, 4) : createSplitBlockCommand(schema, initial, paragraph.id, `t${list}`, 4);
 		assert.ok(command);
 		model.dispatch(command.transaction);
-		const paragraphs = list
-			? model.document.content[0]!.content.map(item => item.content[0]!)
-			: model.document.content;
+		const paragraphs = list ? model.document.content[0]!.content.map(item => item.content[0]!) : model.document.content;
 		assert.deepEqual(
 			paragraphs.map(node => node.attrs),
 			[{ pageBreakBefore: true, keepTogether: true }, { keepTogether: true }],

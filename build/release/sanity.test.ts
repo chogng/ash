@@ -4,14 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import {
-	releaseAsset,
-	releaseMatrix,
-	verifyArchive,
-	verifyAttestation,
-	verifyDescriptor,
-	type ReleaseIdentity,
-} from './sanity.ts';
+import { releaseAsset, releaseMatrix, verifyArchive, verifyAttestation, verifyDescriptor, type ReleaseIdentity } from './sanity.ts';
 
 const { publicKey, privateKey } = generateKeyPairSync('ed25519');
 const key = publicKey.export({ format: 'der', type: 'spki' }).subarray(-32).toString('hex');
@@ -47,15 +40,9 @@ test('every distributed target gets its own OS and CPU runtime check', () => {
 	);
 	for (const product of ['ash-code', 'ash-app-server'] as const) {
 		assert.equal(matrix.filter(row => row.product === product).length, 6);
-		assert.equal(
-			matrix.find(row => row.product === product && row.target === 'aarch64-pc-windows-msvc')?.runner,
-			'windows-11-arm',
-		);
+		assert.equal(matrix.find(row => row.product === product && row.target === 'aarch64-pc-windows-msvc')?.runner, 'windows-11-arm');
 	}
-	assert.throws(
-		() => releaseAsset({ ...identity, product: 'ash-desktop', target: 'aarch64-pc-windows-msvc' }),
-		/Unsupported/,
-	);
+	assert.throws(() => releaseAsset({ ...identity, product: 'ash-desktop', target: 'aarch64-pc-windows-msvc' }), /Unsupported/);
 	assert.throws(() => releaseAsset({ ...identity, version: '../1.2.3' }), /release version/);
 });
 

@@ -75,16 +75,10 @@ test('aggregate, test and typecheck commands prepare inputs once and stop on pre
 		}
 	`,
 	);
-	await writeFile(
-		join(directory, 'build/builtin/extensions.ts'),
-		`process.argv[2] = 'extensions'; await import('../../record.ts');`,
-	);
+	await writeFile(join(directory, 'build/builtin/extensions.ts'), `process.argv[2] = 'extensions'; await import('../../record.ts');`);
 	await mkdir(join(directory, 'node_modules/.bin'), { recursive: true });
 	const checker = join(directory, 'node_modules/.bin/bun');
-	await writeFile(
-		checker,
-		`#!/usr/bin/env node\nprocess.exitCode = require('node:child_process').spawnSync(process.execPath, ['record.ts', 'automation'], { stdio: 'inherit' }).status;\n`,
-	);
+	await writeFile(checker, `#!/usr/bin/env node\nprocess.exitCode = require('node:child_process').spawnSync(process.execPath, ['record.ts', 'automation'], { stdio: 'inherit' }).status;\n`);
 	await chmod(checker, 0o755);
 	await writeFile(`${checker}.cmd`, `@"${process.execPath}" "%~dp0../../record.ts" automation\r\n`);
 	const pnpm = process.env.npm_execpath;
@@ -93,43 +87,11 @@ test('aggregate, test and typecheck commands prepare inputs once and stop on pre
 	const executable = script ? process.execPath : pnpm;
 	const prefix = script ? [pnpm] : [];
 	for (const [command, expected, failure] of [
-		[
-			'build',
-			[
-				'electron-runtime',
-				'electron-dependencies',
-				'protocol',
-				'localization',
-				'common',
-				'extensions',
-				'icons',
-				'desktop-build',
-			],
-			'',
-		],
+		['build', ['electron-runtime', 'electron-dependencies', 'protocol', 'localization', 'common', 'extensions', 'icons', 'desktop-build'], ''],
 		['build', ['electron-runtime'], 'electron-runtime'],
 		['build', ['electron-runtime', 'electron-dependencies'], 'electron-dependencies'],
-		[
-			'test:main',
-			[
-				'styles',
-				'tools',
-				'output',
-				'protocol',
-				'localization',
-				'common',
-				'extensions',
-				'icons',
-				'unit',
-				'unit-runner',
-			],
-			'',
-		],
-		[
-			'test:main',
-			['styles', 'tools', 'output', 'protocol', 'localization', 'common', 'extensions', 'icons', 'unit'],
-			'unit',
-		],
+		['test:main', ['styles', 'tools', 'output', 'protocol', 'localization', 'common', 'extensions', 'icons', 'unit', 'unit-runner'], ''],
+		['test:main', ['styles', 'tools', 'output', 'protocol', 'localization', 'common', 'extensions', 'icons', 'unit'], 'unit'],
 		['test:main', ['styles'], 'styles'],
 		['test:browser:integration', ['protocol'], 'protocol'],
 		['test:unit', ['output', 'protocol', 'localization', 'common', 'extensions', 'icons', 'unit'], ''],
@@ -139,18 +101,10 @@ test('aggregate, test and typecheck commands prepare inputs once and stop on pre
 		['test:editor:unit:no-compile', ['editor-reuse'], ''],
 		['build:prepared', ['desktop-build'], ''],
 		['test:editor:unit', ['output', 'protocol', 'localization', 'common', 'extensions', 'icons', 'editor'], ''],
-		[
-			'test:extensions',
-			['output', 'protocol', 'localization', 'common', 'extensions', 'icons', 'extension-tests'],
-			'',
-		],
+		['test:extensions', ['output', 'protocol', 'localization', 'common', 'extensions', 'icons', 'extension-tests'], ''],
 		['test:browser:integration', ['protocol', 'localization', 'common', 'extensions', 'icons', 'browser'], ''],
 		['test:editor:browser', ['protocol', 'localization', 'common', 'extensions', 'icons', 'editor-browser'], ''],
-		[
-			'test:editor:browser:build',
-			['protocol', 'localization', 'common', 'extensions', 'icons', 'browser-build'],
-			'',
-		],
+		['test:editor:browser:build', ['protocol', 'localization', 'common', 'extensions', 'icons', 'browser-build'], ''],
 		['prepare:extensions', ['protocol', 'localization', 'extensions'], ''],
 		['typecheck:protocol', ['protocol', 'protocol-check'], ''],
 		['localization:check', ['protocol', 'localization-check'], ''],
@@ -178,71 +132,23 @@ test('aggregate, test and typecheck commands prepare inputs once and stop on pre
 	}
 
 	const workflow = await readFile(resolve(import.meta.dirname, '../../.github/workflows/frontend.yml'), 'utf8');
-	const smokeSteps = workflow
-		.slice(workflow.indexOf('      - name: Check sources and build Desktop and Web on every platform'))
-		.split('      - name: ');
-	const checkedBuild = [
-		'protocol',
-		'localization',
-		'common',
-		'extensions',
-		'icons',
-		'renderer',
-		'automation',
-		'electron-runtime',
-		'electron-dependencies',
-		'desktop-build',
-		'bundle-web',
-	];
+	const smokeSteps = workflow.slice(workflow.indexOf('      - name: Check sources and build Desktop and Web on every platform')).split('      - name: ');
+	const checkedBuild = ['protocol', 'localization', 'common', 'extensions', 'icons', 'renderer', 'automation', 'electron-runtime', 'electron-dependencies', 'desktop-build', 'bundle-web'];
 	for (const [surface, failure, expected] of [
-		[
-			'browser',
-			'',
-			[
-				...checkedBuild,
-				'browser',
-				'browser-ui-tests',
-				'bundle-web-full',
-				'backend-web',
-				'browser-connected-tests',
-			],
-		],
+		['browser', '', [...checkedBuild, 'browser', 'browser-ui-tests', 'bundle-web-full', 'backend-web', 'browser-connected-tests']],
 		// CI invokes connected Electron smoke tests separately for the general suite and mock Agent Task coverage.
-		[
-			'electron',
-			'',
-			[
-				...checkedBuild,
-				'backend',
-				'electron-ui-tests',
-				'bundle-web-full',
-				'electron-connected-tests',
-				'electron-connected-tests',
-			],
-		],
+		['electron', '', [...checkedBuild, 'backend', 'electron-ui-tests', 'bundle-web-full', 'electron-connected-tests', 'electron-connected-tests']],
 		['browser', 'renderer', ['protocol', 'localization', 'common', 'extensions', 'icons', 'renderer']],
 		['electron', 'backend', [...checkedBuild, 'backend']],
-		[
-			'electron',
-			'electron-connected-tests',
-			[...checkedBuild, 'backend', 'electron-ui-tests', 'bundle-web-full', 'electron-connected-tests'],
-		],
+		['electron', 'electron-connected-tests', [...checkedBuild, 'backend', 'electron-ui-tests', 'bundle-web-full', 'electron-connected-tests']],
 	] as const) {
 		await writeFile(join(directory, 'operations.jsonl'), '');
 		const commands = smokeSteps
-			.filter(
-				step =>
-					step.startsWith('Check sources and build Desktop and Web on every platform') ||
-					step.includes(`if: matrix.surface == '${surface}'`),
-			)
+			.filter(step => step.startsWith('Check sources and build Desktop and Web on every platform') || step.includes(`if: matrix.surface == '${surface}'`))
 			.flatMap(step => {
 				const run = step.match(/^        run: (.+)$/m)?.[1];
 				assert.ok(run, step);
-				return run === '|'
-					? [...step.matchAll(/^          ((?:pnpm |node |\.\/node_modules\/\.bin\/bun ).+)$/gm)].map(
-							match => match[1],
-						)
-					: [run];
+				return run === '|' ? [...step.matchAll(/^          ((?:pnpm |node |\.\/node_modules\/\.bin\/bun ).+)$/gm)].map(match => match[1]) : [run];
 			});
 		let status: number | null = 0;
 		for (const command of commands) {

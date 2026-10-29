@@ -1,15 +1,5 @@
 import { withProcessRun } from '../../build/processes.ts';
-import {
-	constants,
-	copyFileSync,
-	cpSync,
-	existsSync,
-	globSync,
-	mkdirSync,
-	mkdtempSync,
-	readFileSync,
-	rmSync,
-} from 'node:fs';
+import { constants, copyFileSync, cpSync, existsSync, globSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { availableParallelism, tmpdir } from 'node:os';
 import { dirname, resolve, sep } from 'node:path';
 import { startBrowserUnitServer } from './browser/server.ts';
@@ -25,24 +15,16 @@ interface Selection {
 }
 
 const desktopDirectory = resolve(import.meta.dirname, '../..');
-const compiledDirectory = resolve(
-	process.env.ASH_UNIT_TEST_OUTPUT_DIRECTORY ?? resolve(desktopDirectory, '.build/desktop/test'),
-);
+const compiledDirectory = resolve(process.env.ASH_UNIT_TEST_OUTPUT_DIRECTORY ?? resolve(desktopDirectory, '.build/desktop/test'));
 
 export async function runUnitTests(patterns: readonly string[], editorEnvironment: boolean): Promise<void> {
 	const requiredVersion = readFileSync(resolve(desktopDirectory, '.nvmrc'), 'utf8').trim();
 	if (process.versions.node.split('.')[0] !== requiredVersion.split('.')[0]) {
-		throw new Error(
-			`Unit tests require the Node major version specified in .nvmrc (${requiredVersion}); found ${process.version}.`,
-		);
+		throw new Error(`Unit tests require the Node major version specified in .nvmrc (${requiredVersion}); found ${process.version}.`);
 	}
 	// Reject invalid filters before creating a snapshot of the complete compiler output.
 	const selection = parseSelection(process.argv.slice(process.argv[2] === '--' ? 3 : 2));
-	const preloads = [
-		'test/unit/ignore-css-imports.ts',
-		'test/unit/theme-resources.ts',
-		...(editorEnvironment ? ['test/unit/editor-environment.ts'] : []),
-	];
+	const preloads = ['test/unit/ignore-css-imports.ts', 'test/unit/theme-resources.ts', ...(editorEnvironment ? ['test/unit/editor-environment.ts'] : [])];
 	// Keep this run's modules alive when another invocation cleans the compiler output.
 	const outputDirectory = mkdtempSync(resolve(desktopDirectory, '.build/desktop/test-run-'));
 	try {
@@ -70,12 +52,7 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 			});
 		}
 		if (selection.affected) {
-			const plan = planAffectedTests(
-				desktopDirectory,
-				selection.affected,
-				[...new Set(names.map(name => name.replaceAll('\\', '/')))].sort(),
-				{ preloads },
-			);
+			const plan = planAffectedTests(desktopDirectory, selection.affected, [...new Set(names.map(name => name.replaceAll('\\', '/')))].sort(), { preloads });
 			process.stdout.write(`Unit test impact: ${plan.full ? 'full suite' : 'selected files'}; ${plan.reason}\n`);
 			names = [...plan.files];
 		}
@@ -94,9 +71,7 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 		const resultDirectory = mkdtempSync(resolve(tmpdir(), 'ash-unit-results-'));
 		try {
 			await withProcessRun(desktopDirectory, async (run, environment) => {
-				const browserServer = files.some(file => /unit\/browser\/context\.js/u.test(readFileSync(file, 'utf8')))
-					? await startBrowserUnitServer(run, environment)
-					: undefined;
+				const browserServer = files.some(file => /unit\/browser\/context\.js/u.test(readFileSync(file, 'utf8'))) ? await startBrowserUnitServer(run, environment) : undefined;
 				const testEnvironment = browserServer
 					? {
 							...environment,
@@ -166,9 +141,7 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 		}
 
 		if (process.exitCode === 130 || process.exitCode === 143) return;
-		process.stdout.write(
-			`Mocha: ${executedTests} tests executed across ${files.length} files; ${failed.length} failed files\n`,
-		);
+		process.stdout.write(`Mocha: ${executedTests} tests executed across ${files.length} files; ${failed.length} failed files\n`);
 		if (failed.length > 0) {
 			process.stderr.write(`Failed test files:\n${failed.join('\n')}\n`);
 			process.exitCode = 1;
@@ -208,8 +181,7 @@ function parseSelection(args: readonly string[]): Selection {
 				runGlob = value;
 				break;
 			case '--affected': {
-				if (affected || !value.trim() || value.startsWith('--'))
-					throw new Error('--affected requires one base revision.');
+				if (affected || !value.trim() || value.startsWith('--')) throw new Error('--affected requires one base revision.');
 				affected = value;
 				break;
 			}
@@ -234,7 +206,6 @@ function parseSelection(args: readonly string[]): Selection {
 		index += 1;
 	}
 	if (runs.length > 0 && runGlob) throw new Error('--run and --runGlob cannot be combined');
-	if (affected && (runs.length > 0 || runGlob))
-		throw new Error('--affected cannot be combined with --run or --runGlob');
+	if (affected && (runs.length > 0 || runGlob)) throw new Error('--affected cannot be combined with --run or --runGlob');
 	return { runs, runGlob, affected, grep, timeout, workers };
 }

@@ -14,9 +14,7 @@ suite('Session Changes editor restoration', () => {
 			query: new URLSearchParams({ thread: 'thread&peer=2' }).toString(),
 		});
 		const input = new SessionChangesEditorInput(resource, { kind: 'id', id: 'capture #2' });
-		const restored = EditorInputSerializers.deserialize(
-			JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input))),
-		);
+		const restored = EditorInputSerializers.deserialize(JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input))));
 		assert.ok(restored instanceof SessionChangesEditorInput);
 		assert.equal(restored.resource.toString(), input.resource.toString());
 		assert.equal(restored.sessionResource.toString(), resource.toString());

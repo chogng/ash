@@ -10,21 +10,13 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { observableValue } from '../../../../../base/common/observable.js';
-import type {
-	Automation,
-	AutomationDefinition,
-	AutomationRun,
-	IAutomationBackendService,
-} from '../../../../../platform/agentHost/common/automation.js';
+import type { Automation, AutomationDefinition, AutomationRun, IAutomationBackendService } from '../../../../../platform/agentHost/common/automation.js';
 import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService, Severity } from '../../../../../platform/notification/common/notification.js';
 import { TestNotificationService } from '../../../../../workbench/services/notification/test/common/testNotificationService.js';
 import { IAutomationService } from '../../../../../workbench/contrib/chat/common/automations/automationService.js';
-import {
-	SessionsProvidersService,
-	ISessionsProvidersService,
-} from '../../../../services/sessions/browser/sessionsProvidersService.js';
+import { SessionsProvidersService, ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import type { ISessionsProvider } from '../../../../services/sessions/common/sessionsProvider.js';
 import { AgentHostAutomationStore } from '../../../providers/agentHost/browser/agentHostAutomationStore.js';
 import { ProviderAutomationService } from '../../browser/providerAutomationService.js';
@@ -43,10 +35,7 @@ import { Menus } from '../../../../browser/menus.js';
 import { StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { AUTOMATIONS_CUSTOM_VIEW_ID } from '../../../sessions/browser/automationsConstants.js';
 import '../../../sessions/browser/sessions.contribution.js';
-import {
-	AutomationsCardsWidget,
-	AutomationsCustomViewContribution,
-} from '../../../sessions/browser/views/automationsView.js';
+import { AutomationsCardsWidget, AutomationsCustomViewContribution } from '../../../sessions/browser/views/automationsView.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IAutomationDialogService } from '../../../../../workbench/contrib/chat/common/automations/automationDialogService.js';
@@ -151,9 +140,7 @@ function fixture() {
 		const scope = resources.add(new InstantiationService());
 		scope.registerInstance(IRendererHostService, { automation: backend } as unknown as IRendererHost);
 		const store = resources.add(scope.createInstance(AgentHostAutomationStore, id, connection));
-		const registration = resources.add(
-			registry.registerProvider({ id, label: id, order: 0, automations: store } as unknown as ISessionsProvider),
-		);
+		const registration = resources.add(registry.registerProvider({ id, label: id, order: 0, automations: store } as unknown as ISessionsProvider));
 		return {
 			backend,
 			store,
@@ -241,10 +228,7 @@ test('Reviewed edits reject changed revisions and changes cannot transfer an aut
 		const host = value.host('one');
 		await host.store.refresh();
 		const captured = host.store.automations.get()[0]!;
-		await assert.rejects(
-			value.facade.updateAutomation(captured.id, { target: { ...captured.target, providerId: 'two' } }),
-			/another provider/,
-		);
+		await assert.rejects(value.facade.updateAutomation(captured.id, { target: { ...captured.target, providerId: 'two' } }), /another provider/);
 		host.setPlans([
 			{
 				id: 'same-id',
@@ -325,9 +309,7 @@ test('A failed history read retains cached rows without hiding successfully read
 		};
 		host.setHistory([previous]);
 		await host.store.refresh();
-		host.setPlans([
-			{ ...original, revision: 2, definition: { ...original.definition, title: 'Fresh definition' } },
-		]);
+		host.setPlans([{ ...original, revision: 2, definition: { ...original.definition, title: 'Fresh definition' } }]);
 		host.backend.runs = async () => {
 			throw new Error('History unavailable');
 		};
@@ -539,9 +521,7 @@ test('Catalogue and history ordering changes retain card identity and keyboard f
 		value.services.registerInstance(IAutomationDialogService, { showAutomationDialog: async () => undefined });
 		value.services.registerInstance(IAutomationRunner, value.services.createInstance(AutomationRunner));
 		value.services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
-		const widget = value.resources.add(
-			value.services.createInstance(AutomationsCardsWidget, browserEnvironment.window.document.body),
-		);
+		const widget = value.resources.add(value.services.createInstance(AutomationsCardsWidget, browserEnvironment.window.document.body));
 		browserEnvironment.window.document.body.append(widget.element);
 		const oldTitle = widget.element.querySelector<HTMLButtonElement>('h3 button')!;
 		oldTitle.focus();
@@ -575,9 +555,7 @@ test('Catalogue and history ordering changes retain card identity and keyboard f
 		host.setHistory([row('newer-run', 2), row('older-run', 1)]);
 		await host.store.refresh();
 		assert.deepEqual(
-			[...widget.element.querySelectorAll('[data-run-id]')].map(
-				element => JSON.parse(element.getAttribute('data-run-id')!)[1],
-			),
+			[...widget.element.querySelectorAll('[data-run-id]')].map(element => JSON.parse(element.getAttribute('data-run-id')!)[1]),
 			['newer-run', 'older-run'],
 		);
 		assert.equal(widget.element.querySelectorAll('[data-run-id]')[1], oldRow);
@@ -645,12 +623,7 @@ test('Automations entry opens a Custom View and never registers a Panel in eithe
 				flushInterval: 0,
 			}),
 		);
-		storage.store(
-			'sessions.activeCustomView',
-			AUTOMATIONS_CUSTOM_VIEW_ID,
-			StorageScope.WORKSPACE,
-			StorageTarget.MACHINE,
-		);
+		storage.store('sessions.activeCustomView', AUTOMATIONS_CUSTOM_VIEW_ID, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		const custom = value.resources.add(new CustomViewService(new NullLoggerService(), storage));
 		value.services.registerInstance(ICustomViewService, custom);
 		using commands = new CommandService(value.services);
@@ -720,10 +693,7 @@ test('An offline automation host does not suppress another host failure or dupli
 				flushInterval: 0,
 			}),
 		);
-		value.services.registerInstance(
-			ICustomViewService,
-			value.resources.add(new CustomViewService(new NullLoggerService(), storage)),
-		);
+		value.services.registerInstance(ICustomViewService, value.resources.add(new CustomViewService(new NullLoggerService(), storage)));
 		value.services.registerInstance(ICommandService, value.resources.add(new CommandService(value.services)));
 		const offline = value.host('offline');
 		const online = value.host('online');
@@ -770,12 +740,8 @@ suite('automations browser component', () => {
 			await expect(existing).toContainText(zh ? '每 60 分钟' : 'Every 60 minutes');
 			await expect(existing).toContainText(zh ? '运行目录：/saved' : 'Runs in /saved');
 			await expect(page.locator('.ash-automation-summary')).toContainText(zh ? '1 项需要输入' : '1 need input');
-			await expect(page.locator('.ash-automation-run[data-status="needsInput"]')).toContainText(
-				zh ? '需要输入' : 'Needs input',
-			);
-			await page
-				.locator('[data-part="customview"]')
-				.screenshot({ path: browserTests.info.outputPath('automations-overview.png') });
+			await expect(page.locator('.ash-automation-run[data-status="needsInput"]')).toContainText(zh ? '需要输入' : 'Needs input');
+			await page.locator('[data-part="customview"]').screenshot({ path: browserTests.info.outputPath('automations-overview.png') });
 			await page.getByRole('button', { name: zh ? '新建自动化' : 'New automation', exact: true }).press('Enter');
 			const dialog = page.getByRole('dialog');
 			const name = dialog.getByLabel(zh ? '名称' : 'Name', { exact: true });
@@ -801,9 +767,7 @@ suite('automations browser component', () => {
 			expect(style.color).not.toBe('rgba(0, 0, 0, 0)');
 			expect(style.width).toBeGreaterThan(0);
 			await dialog.screenshot({ path: browserTests.info.outputPath('automation-dialog.png') });
-			await dialog
-				.getByRole('button', { name: zh ? '保存自动化' : 'Save automation', exact: true })
-				.press('Enter');
+			await dialog.getByRole('button', { name: zh ? '保存自动化' : 'Save automation', exact: true }).press('Enter');
 			await expect(dialog).toHaveCount(0);
 			expect(await page.evaluate(() => window.ashAutomations.saved[0]?.directory)).toBe('/captured');
 			await expect(page.getByRole('button', { name: 'Keyboard review', exact: true })).toBeVisible();
@@ -833,18 +797,10 @@ suite('automations browser component', () => {
 			await dialog.screenshot({ path: browserTests.info.outputPath('automation-dialog-narrow.png') });
 			await page.keyboard.press('Escape');
 			await expect(dialog).toHaveCount(0);
-			expect(
-				await page
-					.locator('.ash-custom-view-page')
-					.evaluate(element => element.scrollWidth <= element.clientWidth),
-			).toBe(true);
-			await page
-				.locator('[data-part="customview"]')
-				.screenshot({ path: browserTests.info.outputPath('automations-cards.png') });
+			expect(await page.locator('.ash-custom-view-page').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+			await page.locator('[data-part="customview"]').screenshot({ path: browserTests.info.outputPath('automations-cards.png') });
 			await page.getByRole('button', { name: zh ? '打开对话' : 'Open conversation', exact: true }).press('Enter');
-			await expect
-				.poll(() => page.evaluate(() => window.ashAutomations.opened))
-				.toEqual([['background-session', 'background-thread']]);
+			await expect.poll(() => page.evaluate(() => window.ashAutomations.opened)).toEqual([['background-session', 'background-thread']]);
 			await expect(page.locator('[data-part="customview"]')).toBeHidden();
 			expect(await page.evaluate(() => window.ashAutomations.stops())).toBe(1);
 			await page.evaluate(() => window.ashAutomations.reopen());
@@ -912,14 +868,10 @@ suite('automations browser component', () => {
 		await dialog.getByRole('button', { name: '保存自动化', exact: true }).click();
 		await expect(dialog).toHaveCount(0);
 		await expect(page.getByRole('button', { name: 'Saved once', exact: true })).toBeEnabled();
-		await expect(
-			page.getByText('无法刷新运行历史。当前显示上次可用的历史，可使用“刷新”重试。', { exact: true }),
-		).toBeVisible();
+		await expect(page.getByText('无法刷新运行历史。当前显示上次可用的历史，可使用“刷新”重试。', { exact: true })).toBeVisible();
 		expect(await page.evaluate(() => window.ashAutomations.saved.length)).toBe(1);
 		await page.evaluate(() => window.ashAutomations.retryHistory());
-		await expect(
-			page.getByText('无法刷新运行历史。当前显示上次可用的历史，可使用“刷新”重试。', { exact: true }),
-		).toBeHidden();
+		await expect(page.getByText('无法刷新运行历史。当前显示上次可用的历史，可使用“刷新”重试。', { exact: true })).toBeHidden();
 		expect(await page.evaluate(() => window.ashAutomations.saved.length)).toBe(1);
 	});
 
@@ -954,9 +906,7 @@ suite('automations browser component', () => {
 		await page.getByRole('button', { name: 'Run now', exact: true }).click();
 		await expect(page.locator('.ash-automation-history')).toContainText('Pending');
 		await page.evaluate(() => window.ashAutomations.failRun());
-		await expect
-			.poll(() => page.evaluate(() => window.ashAutomations.errors))
-			.toEqual(['Automation Scheduled review: Could not create session']);
+		await expect.poll(() => page.evaluate(() => window.ashAutomations.errors)).toEqual(['Automation Scheduled review: Could not create session']);
 		await expect(page.locator('.ash-automation-history')).toContainText('Failed');
 	});
 
@@ -995,10 +945,7 @@ suite('automations browser component', () => {
 		await filters.getByRole('button', { name: '已暂停', exact: true }).press('Enter');
 		await expect(cards).toHaveCount(1);
 		await expect(cards).toHaveAttribute('aria-label', 'Daily briefing');
-		await expect(filters.getByRole('button', { name: '已暂停', exact: true })).toHaveAttribute(
-			'aria-pressed',
-			'true',
-		);
+		await expect(filters.getByRole('button', { name: '已暂停', exact: true })).toHaveAttribute('aria-pressed', 'true');
 		const search = page.getByRole('searchbox', { name: '搜索自动化' });
 		await search.fill('missing');
 		await expect(cards).toHaveCount(0);
@@ -1017,20 +964,12 @@ suite('automations browser component', () => {
 			container: getComputedStyle(element.closest('.ash-automation-search')!).outlineStyle,
 		}));
 		expect(focusStyle).toEqual({ input: 'none', container: 'solid' });
-		await page
-			.locator('[data-part="customview"]')
-			.screenshot({ path: browserTests.info.outputPath('automations-designed-page.png') });
+		await page.locator('[data-part="customview"]').screenshot({ path: browserTests.info.outputPath('automations-designed-page.png') });
 		await page.setViewportSize({ width: 360, height: 740 });
-		await expect
-			.poll(() =>
-				page.locator('.ash-custom-view-page').evaluate(element => element.scrollWidth <= element.clientWidth),
-			)
-			.toBe(true);
+		await expect.poll(() => page.locator('.ash-custom-view-page').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 		const bounds = await cards.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().x));
 		expect(bounds[0]).toBe(bounds[1]);
-		await page
-			.locator('[data-part="customview"]')
-			.screenshot({ path: browserTests.info.outputPath('automations-designed-narrow.png') });
+		await page.locator('[data-part="customview"]').screenshot({ path: browserTests.info.outputPath('automations-designed-narrow.png') });
 		await filters.getByRole('button', { name: '已启用', exact: true }).press('Enter');
 		await cards.getByRole('button', { name: '暂停', exact: true }).press('Enter');
 		await expect(cards).toHaveCount(0);
@@ -1046,15 +985,11 @@ suite('automations browser component', () => {
 		await expect(page.getByRole('heading', { name: '创建第一项自动化' })).toBeVisible();
 		const template = page.getByRole('button', { name: '每日简报', exact: true });
 		await expect(template).toBeFocused();
-		await page
-			.locator('[data-part="customview"]')
-			.screenshot({ path: browserTests.info.outputPath('automations-designed-empty.png') });
+		await page.locator('[data-part="customview"]').screenshot({ path: browserTests.info.outputPath('automations-designed-empty.png') });
 		await template.press('Enter');
 		const dialog = page.getByRole('dialog');
 		await expect(dialog.getByLabel('名称', { exact: true })).toHaveValue('每日简报');
-		await expect(dialog.getByLabel('指令', { exact: true })).toHaveValue(
-			'查看此项目的近期活动，总结进展、指出阻碍，并建议接下来的优先事项。',
-		);
+		await expect(dialog.getByLabel('指令', { exact: true })).toHaveValue('查看此项目的近期活动，总结进展、指出阻碍，并建议接下来的优先事项。');
 		await expect(dialog.getByLabel('计划', { exact: true })).toHaveValue('daily');
 		await expect(dialog.getByLabel('时间', { exact: true })).toHaveValue('09:00');
 		expect(await page.evaluate(() => window.ashAutomations.saved)).toEqual([]);
@@ -1081,9 +1016,7 @@ suite('automations browser component', () => {
 		const details = page.getByRole('region', { name: '自动化详情' });
 		await expect(details).toContainText('Updated instructions');
 		await expect(details.locator('dd').nth(2)).toHaveText('2');
-		await page
-			.locator('[data-part="customview"]')
-			.screenshot({ path: browserTests.info.outputPath('automation-task-details.png') });
+		await page.locator('[data-part="customview"]').screenshot({ path: browserTests.info.outputPath('automation-task-details.png') });
 		await details.locator('.ash-automation-detail-history button').press('Enter');
 		await expect(details.getByRole('heading', { name: 'Scheduled review', exact: true })).toBeFocused();
 		await expect(details).toContainText('Review changes');
@@ -1093,17 +1026,11 @@ suite('automations browser component', () => {
 		await expect(details.getByRole('list')).toContainText('src/scheduler.test.ts · +24 −0');
 		expect(await page.evaluate(() => window.ashAutomations.opened)).toEqual([]);
 		expect((await page.evaluate(() => window.ashAutomations.help())).view).toContain('Added regression coverage');
-		await page
-			.locator('[data-part="customview"]')
-			.screenshot({ path: browserTests.info.outputPath('automation-run-result.png') });
+		await page.locator('[data-part="customview"]').screenshot({ path: browserTests.info.outputPath('automation-run-result.png') });
 		await page.setViewportSize({ width: 360, height: 740 });
-		expect(
-			await page.locator('.ash-custom-view-page').evaluate(element => element.scrollWidth <= element.clientWidth),
-		).toBe(true);
+		expect(await page.locator('.ash-custom-view-page').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 		await details.locator('.ash-automation-result').scrollIntoViewIfNeeded();
-		await page
-			.locator('[data-part="customview"]')
-			.screenshot({ path: browserTests.info.outputPath('automation-run-narrow.png') });
+		await page.locator('[data-part="customview"]').screenshot({ path: browserTests.info.outputPath('automation-run-narrow.png') });
 		await details.getByRole('button', { name: '返回任务详情', exact: true }).press('Enter');
 		await details.getByRole('button', { name: '返回自动化列表', exact: true }).press('Enter');
 		await expect(title).toBeFocused();
@@ -1168,12 +1095,8 @@ suite('automations browser component', () => {
 			await page.goto(`/automations.html?hosts=1&locale=${locale}&theme=${theme}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 			const chinese = locale === 'zh-CN';
-			const prompt = chinese
-				? '连接宿主，或选择已连接宿主以断开连接'
-				: 'Connect a host, or select a connected host to disconnect';
-			const targetPrompt = chinese
-				? '选择要在此 Agents 窗口中连接的已保存 SSH 宿主'
-				: 'Select a saved SSH host to connect in this Agents window';
+			const prompt = chinese ? '连接宿主，或选择已连接宿主以断开连接' : 'Connect a host, or select a connected host to disconnect';
+			const targetPrompt = chinese ? '选择要在此 Agents 窗口中连接的已保存 SSH 宿主' : 'Select a saved SSH host to connect in this Agents window';
 			await page.getByRole('button', { name: chinese ? '新建自动化' : 'New automation', exact: true }).click();
 			const initialForm = page.getByRole('dialog');
 			// An unowned destination is unsafe even when only one Automation provider is available.
@@ -1195,13 +1118,9 @@ suite('automations browser component', () => {
 				await expect(targets).toHaveCount(0);
 				await expect.poll(() => page.evaluate(() => window.ashAutomations.connectedHosts())).toContain(name);
 				await expect(page.getByRole('article', { name: `Shared review · ${name}`, exact: true })).toBeVisible();
-				await expect(page.getByRole('article', { name: `Shared review · ${name}`, exact: true })).toContainText(
-					name,
-				);
+				await expect(page.getByRole('article', { name: `Shared review · ${name}`, exact: true })).toContainText(name);
 			}
-			await expect(
-				page.getByRole('article', { name: 'Scheduled review · Local host', exact: true }),
-			).toBeVisible();
+			await expect(page.getByRole('article', { name: 'Scheduled review · Local host', exact: true })).toBeVisible();
 			const accessible = await page.evaluate(() => window.ashAutomations.help());
 			expect(accessible.help).toContain(chinese ? '切换宿主' : 'Changing hosts');
 			expect(accessible.view).toContain('Shared review · build-b');
@@ -1225,11 +1144,7 @@ suite('automations browser component', () => {
 			await input.press('Enter');
 			await expect(page.getByRole('article', { name: 'Shared review · build-a', exact: true })).toHaveCount(0);
 			await expect(page.getByRole('article', { name: 'Shared review · build-b', exact: true })).toBeVisible();
-			expect(await page.evaluate(() => window.ashAutomations.hostChanges)).toEqual([
-				'open:build-a',
-				'open:build-b',
-				'close:build-a',
-			]);
+			expect(await page.evaluate(() => window.ashAutomations.hostChanges)).toEqual(['open:build-a', 'open:build-b', 'close:build-a']);
 			await page.evaluate(() => {
 				void window.ashAutomations.manageHosts();
 			});

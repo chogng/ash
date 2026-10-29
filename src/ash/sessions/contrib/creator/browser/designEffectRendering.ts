@@ -1,12 +1,6 @@
 import { designPaints } from '../common/model/designPaint.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
-import {
-	designEffects,
-	designEffectMaxBlur,
-	designEffectPadding,
-	supportsDesignShadowSpread,
-	type DesignEffect,
-} from '../common/model/designEffects.js';
+import { designEffects, designEffectMaxBlur, designEffectPadding, supportsDesignShadowSpread, type DesignEffect } from '../common/model/designEffects.js';
 import type { DesignShape } from '../common/model/document.js';
 import { renderDesignPlusDarker } from './designPaintRendering.js';
 
@@ -18,11 +12,7 @@ interface Bounds {
 }
 const ns = 'http://www.w3.org/2000/svg';
 
-function svg<K extends keyof SVGElementTagNameMap>(
-	document: Document,
-	tag: K,
-	attributes: Record<string, number | string> = {},
-): SVGElementTagNameMap[K] {
+function svg<K extends keyof SVGElementTagNameMap>(document: Document, tag: K, attributes: Record<string, number | string> = {}): SVGElementTagNameMap[K] {
 	const node = document.createElementNS(ns, tag);
 	for (const [key, value] of Object.entries(attributes)) {
 		node.setAttribute(key, String(value));
@@ -38,11 +28,7 @@ function artwork(source: SVGGraphicsElement): SVGGraphicsElement {
 	const ids = new Map(nodes.filter(node => node.id).map(node => [node.id, `effect-${generateUuid()}`]));
 	for (const node of nodes) {
 		for (const attribute of [...node.attributes]) {
-			if (
-				attribute.name.startsWith('data-') ||
-				attribute.name.startsWith('aria-') ||
-				['tabindex', 'role'].includes(attribute.name)
-			) {
+			if (attribute.name.startsWith('data-') || attribute.name.startsWith('aria-') || ['tabindex', 'role'].includes(attribute.name)) {
 				node.removeAttribute(attribute.name);
 			} else if (attribute.name === 'id') {
 				node.id = ids.get(attribute.value)!;
@@ -80,10 +66,7 @@ export function designEffectGeometry(base: SVGGraphicsElement, shape: DesignShap
 				continue;
 			}
 			const stroke = node.hasAttribute('data-design-stroke');
-			if (
-				node.getAttribute('fill') !== 'none' &&
-				['rect', 'ellipse', 'path', 'svg', 'g'].includes(node.tagName)
-			) {
+			if (node.getAttribute('fill') !== 'none' && ['rect', 'ellipse', 'path', 'svg', 'g'].includes(node.tagName)) {
 				node.setAttribute('fill', hasFill || stroke ? '#ffffff' : 'none');
 			}
 			if (node.hasAttribute('stroke')) {
@@ -101,12 +84,7 @@ export function designEffectGeometry(base: SVGGraphicsElement, shape: DesignShap
 	return geometry;
 }
 
-function shadowLayer(
-	geometry: SVGGraphicsElement,
-	shape: DesignShape,
-	effect: Extract<DesignEffect, { type: 'drop-shadow' | 'inner-shadow' }>,
-	bounds: Bounds,
-): SVGGraphicsElement {
+function shadowLayer(geometry: SVGGraphicsElement, shape: DesignShape, effect: Extract<DesignEffect, { type: 'drop-shadow' | 'inner-shadow' }>, bounds: Bounds): SVGGraphicsElement {
 	const document = geometry.ownerDocument,
 		group = svg(document, 'g', { 'data-design-effect': effect.type });
 	const filter = svg(document, 'filter', {
@@ -117,9 +95,7 @@ function shadowLayer(
 	});
 	const inner = effect.type === 'inner-shadow';
 	const spread = supportsDesignShadowSpread(shape) ? (effect.spread ?? 0) : 0;
-	filter.append(
-		svg(document, 'feGaussianBlur', { in: 'SourceAlpha', stdDeviation: effect.blur / 2, result: 'blur' }),
-	);
+	filter.append(svg(document, 'feGaussianBlur', { in: 'SourceAlpha', stdDeviation: effect.blur / 2, result: 'blur' }));
 	filter.append(svg(document, 'feOffset', { in: 'blur', dx: effect.x, dy: effect.y, result: 'offset' }));
 	if (inner) {
 		filter.append(svg(document, 'feFlood', { 'flood-color': '#ffffff', result: 'opaque' }));
@@ -213,13 +189,7 @@ function blurFilter(document: Document, shape: DesignShape, effect: DesignEffect
 		x: shape.x + progressive.end.x * shape.width,
 		y: shape.y + progressive.end.y * shape.height,
 	};
-	if (
-		!progressive ||
-		!start ||
-		!end ||
-		progressive.startBlur === effect.blur ||
-		Math.hypot(end.x - start.x, end.y - start.y) < 1e-6
-	) {
+	if (!progressive || !start || !end || progressive.startBlur === effect.blur || Math.hypot(end.x - start.x, end.y - start.y) < 1e-6) {
 		filter.append(svg(document, 'feGaussianBlur', { stdDeviation: effect.blur / 2 }));
 		return filter;
 	}
@@ -240,14 +210,8 @@ function blurFilter(document: Document, shape: DesignShape, effect: DesignEffect
 			x2: end.x,
 			y2: end.y,
 		});
-		for (const [position, opacity] of [
-			...(index > 0 ? [[(index - 1) / steps, 0]] : []),
-			[index / steps, 1],
-			...(index < steps ? [[(index + 1) / steps, 0]] : []),
-		]) {
-			gradient.append(
-				svg(document, 'stop', { offset: position, 'stop-color': '#ffffff', 'stop-opacity': opacity }),
-			);
+		for (const [position, opacity] of [...(index > 0 ? [[(index - 1) / steps, 0]] : []), [index / steps, 1], ...(index < steps ? [[(index + 1) / steps, 0]] : [])]) {
+			gradient.append(svg(document, 'stop', { offset: position, 'stop-color': '#ffffff', 'stop-opacity': opacity }));
 		}
 		mask.append(gradient, svg(document, 'rect', { ...bounds, fill: 'url(#weight)' }));
 		const url = `data:image/svg+xml,${encodeURIComponent(new document.defaultView!.XMLSerializer().serializeToString(mask))}`;
@@ -284,13 +248,7 @@ function blurFilter(document: Document, shape: DesignShape, effect: DesignEffect
 /** Background blur samples the scene without previous background blurs. Serializing the
  * backdrop also makes SVG export independent of CSS backdrop-filter support. */
 
-function backgroundLayer(
-	geometry: SVGGraphicsElement,
-	backdrop: readonly SVGGraphicsElement[],
-	shape: DesignShape,
-	effect: DesignEffect,
-	bounds: Bounds,
-): SVGGraphicsElement {
+function backgroundLayer(geometry: SVGGraphicsElement, backdrop: readonly SVGGraphicsElement[], shape: DesignShape, effect: DesignEffect, bounds: Bounds): SVGGraphicsElement {
 	const document = geometry.ownerDocument,
 		layer = svg(document, 'g', { 'data-design-background-blur': '' });
 	const source = svg(document, 'svg', {
@@ -355,11 +313,7 @@ export function applyDesignEffects(
 			painted.removeAttribute(key);
 		}
 	}
-	const extra = Math.max(
-		designEffectPadding({ ...shape, rotation: 0 }),
-		...effects.map(effect => designEffectMaxBlur(effect) * 2),
-		1,
-	);
+	const extra = Math.max(designEffectPadding({ ...shape, rotation: 0 }), ...effects.map(effect => designEffectMaxBlur(effect) * 2), 1);
 	const area = {
 		x: bounds.x - extra,
 		y: bounds.y - extra,
@@ -381,8 +335,7 @@ export function applyDesignEffects(
 			strokes.append(stroke);
 		}
 		if (painted.tagName === 'path' || painted.querySelector('path[stroke]')) {
-			const path =
-				painted.tagName === 'path' ? painted : painted.querySelector<SVGGraphicsElement>('path[stroke]')!;
+			const path = painted.tagName === 'path' ? painted : painted.querySelector<SVGGraphicsElement>('path[stroke]')!;
 			const stroke = artwork(path);
 			stroke.setAttribute('fill', 'none');
 			path.removeAttribute('stroke');
@@ -408,16 +361,8 @@ export function applyDesignEffects(
 
 /** Express the ancestor backdrop in a container's child coordinate system. */
 
-export function designChildBackdrop(
-	shape: Extract<DesignShape, { kind: 'frame' | 'group' }>,
-	backdrop: readonly SVGGraphicsElement[],
-	document: Document,
-): SVGGraphicsElement[] {
-	if (
-		(shape.opacity ?? 1) < 1 ||
-		(shape.blendMode && shape.blendMode !== 'pass-through') ||
-		designEffects(shape).some(effect => effect.visible !== false && effect.type === 'layer-blur')
-	) {
+export function designChildBackdrop(shape: Extract<DesignShape, { kind: 'frame' | 'group' }>, backdrop: readonly SVGGraphicsElement[], document: Document): SVGGraphicsElement[] {
+	if ((shape.opacity ?? 1) < 1 || (shape.blendMode && shape.blendMode !== 'pass-through') || designEffects(shape).some(effect => effect.visible !== false && effect.type === 'layer-blur')) {
 		return [];
 	}
 	const width = shape.kind === 'group' ? shape.contentWidth : shape.width;

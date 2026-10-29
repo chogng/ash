@@ -4,21 +4,11 @@ import { localize2 } from '../../../../../nls.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
-import {
-	IInstantiationService,
-	type ServicesAccessor,
-} from '../../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
-import {
-	ITerminalService,
-	type ITerminalContribution,
-	type ITerminalInstance,
-} from '../../../terminal/browser/terminal.js';
-import {
-	registerTerminalContribution,
-	type ITerminalContributionContext,
-} from '../../../terminal/browser/terminalExtensions.js';
+import { ITerminalService, type ITerminalContribution, type ITerminalInstance } from '../../../terminal/browser/terminal.js';
+import { registerTerminalContribution, type ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
 
 import { TERMINAL_VIEW_ID } from '../../../terminal/common/terminal.js';
 import { TerminalContextKeys } from '../../../terminal/common/terminalContextKey.js';
@@ -58,10 +48,7 @@ export class TerminalFindContribution extends Disposable implements ITerminalCon
 registerTerminalContribution(TerminalFindContribution.ID, TerminalFindContribution);
 AccessibleViewRegistry.register(new TerminalFindAccessibilityHelp());
 
-const focused = ContextKeyExpr.or(
-	TerminalContextKeys.focus.isEqualTo(true),
-	TerminalContextKeys.findFocus.isEqualTo(true),
-);
+const focused = ContextKeyExpr.or(TerminalContextKeys.focus.isEqualTo(true), TerminalContextKeys.findFocus.isEqualTo(true));
 
 registerAction2(
 	class TerminalFindFocusAction extends Action2 {
@@ -81,11 +68,7 @@ registerAction2(
 		public override async run(accessor: ServicesAccessor): Promise<void> {
 			await accessor.get(IViewsService).openView(TERMINAL_VIEW_ID);
 			const instance = accessor.get(ITerminalService).activeInstance;
-			if (
-				instance &&
-				(await instance.xtermReadyPromise) &&
-				accessor.get(ITerminalService).activeInstance === instance
-			) {
+			if (instance && (await instance.xtermReadyPromise) && accessor.get(ITerminalService).activeInstance === instance) {
 				const widget = TerminalFindContribution.get(instance)?.findWidget;
 				widget?.reveal(widget.isVisible() ? undefined : instance.xterm?.raw.getSelection() || undefined);
 			}
@@ -160,20 +143,14 @@ for (const action of actions) {
 					keybinding: {
 						primary: action.key,
 						mac: action.mac,
-						when: navigation
-							? focused
-							: ContextKeyExpr.and(focused, TerminalContextKeys.findVisible.isEqualTo(true)),
+						when: navigation ? focused : ContextKeyExpr.and(focused, TerminalContextKeys.findVisible.isEqualTo(true)),
 						weight: KeybindingWeight.WorkbenchContrib,
 					},
 				});
 			}
 			public override async run(accessor: ServicesAccessor): Promise<void> {
 				const instance = accessor.get(ITerminalService).activeInstance;
-				if (
-					!instance?.xterm ||
-					!(await instance.xtermReadyPromise) ||
-					accessor.get(ITerminalService).activeInstance !== instance
-				) {
+				if (!instance?.xterm || !(await instance.xtermReadyPromise) || accessor.get(ITerminalService).activeInstance !== instance) {
 					return;
 				}
 				const contribution = TerminalFindContribution.get(instance);

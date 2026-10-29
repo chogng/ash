@@ -8,11 +8,7 @@ import { AppServerRemoteError } from '../../../agentHost/common/appServerError.j
 test('App local Git sends typed clone and cancellation requests with the same operation identity', async () => {
 	const requests: unknown[] = [];
 	const connection = {
-		request: async (
-			definition: { method: 'git/cloneTo' | 'git/cloneTo/cancel' },
-			params: unknown,
-			options: unknown,
-		) => {
+		request: async (definition: { method: 'git/cloneTo' | 'git/cloneTo/cancel' }, params: unknown, options: unknown) => {
 			decodeAppServerRequestParams(definition.method, params);
 			requests.push([definition.method, params, options]);
 			return {};
@@ -87,9 +83,7 @@ test('Session repository contexts use the captured connection and retain typed m
 			remotes: [{ name: 'origin' }],
 		},
 	]);
-	assert.deepEqual(calls, [
-		['git/repositoryContexts', { sessionDirectory: { sessionId: 'same-session', path: '/historical' } }],
-	]);
+	assert.deepEqual(calls, [['git/repositoryContexts', { sessionDirectory: { sessionId: 'same-session', path: '/historical' } }]]);
 });
 
 test('repository reads retire on caller cancellation or connection replacement and cannot publish late snapshots', async () => {

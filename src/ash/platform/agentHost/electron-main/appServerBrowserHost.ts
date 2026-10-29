@@ -3,14 +3,7 @@ import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { raceCancellationError } from '../../../base/common/async.js';
 import { isRecord } from '../../../base/common/types.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
-import type {
-	BrowserCreateParams,
-	BrowserObserveParams,
-	BrowserPerformParams,
-	BrowserPerformResult,
-	BrowserCloseParams,
-	BrowserListParams,
-} from '../../../../../.build/protocol/typescript/index.js';
+import type { BrowserCreateParams, BrowserObserveParams, BrowserPerformParams, BrowserPerformResult, BrowserCloseParams, BrowserListParams } from '../../../../../.build/protocol/typescript/index.js';
 import { IBrowserViewMainService } from '../../browserView/electron-main/browserViewMainService.js';
 import type { BrowserView } from '../../browserView/electron-main/browserView.js';
 import { IPlaywrightService } from '../../browserView/common/playwrightService.js';
@@ -52,11 +45,7 @@ export class AppServerBrowserHost extends Disposable {
 				} else if (event.type === 'closed') {
 					const sessionId = this.hostedTargets.get(event.targetId);
 					this.hostedTargets.delete(event.targetId);
-					if (
-						sessionId &&
-						this.sessions.has(sessionId) &&
-						![...this.hostedTargets.values()].includes(sessionId)
-					) {
+					if (sessionId && this.sessions.has(sessionId) && ![...this.hostedTargets.values()].includes(sessionId)) {
 						this.sessions.delete(sessionId);
 						void this.playwright.disposeSession(sessionId).catch(() => {});
 						void this.cdp.disposeSession(sessionId).catch(() => {});
@@ -132,9 +121,7 @@ export class AppServerBrowserHost extends Disposable {
 			sessionId: params.canvas.sessionId,
 			instanceId: params.canvas.instanceId,
 			title: params.canvas.title,
-			...(params.canvas.definition
-				? { extensionId: params.canvas.definition.extensionId, canvasId: params.canvas.definition.canvasId }
-				: {}),
+			...(params.canvas.definition ? { extensionId: params.canvas.definition.extensionId, canvasId: params.canvas.definition.canvasId } : {}),
 		};
 		const existing =
 			params.canvas &&
@@ -144,17 +131,11 @@ export class AppServerBrowserHost extends Disposable {
 					info.canvas?.sessionId === params.canvas!.sessionId &&
 					(info.owner.type === 'agent' ? info.owner.sessionId : info.canvas.threadId) === params.threadId,
 			);
-		if (
-			existing &&
-			(existing.owner.type !== 'agent' ||
-				existing.canvas?.extensionId !== canvas?.extensionId ||
-				existing.canvas?.canvasId !== canvas?.canvasId)
-		) {
+		if (existing && (existing.owner.type !== 'agent' || existing.canvas?.extensionId !== canvas?.extensionId || existing.canvas?.canvasId !== canvas?.canvasId)) {
 			throw new Error('CanvasInstanceAlreadyOwned');
 		}
 		const retained = existing ? this.views.tryGetBrowserView(existing.id) : undefined;
-		const view =
-			retained ?? (await this.views.createTarget('about:blank', params.threadId, signal, undefined, canvas));
+		const view = retained ?? (await this.views.createTarget('about:blank', params.threadId, signal, undefined, canvas));
 		if (signal.aborted) {
 			if (!retained) {
 				view.dispose();
@@ -201,9 +182,7 @@ export class AppServerBrowserHost extends Disposable {
 				throw new Error('BrowserNetworkIsolationRequired');
 			}
 			this.sessions.add(params.threadId);
-			const targets = (await this.views.getBrowserViews()).filter(
-				info => info.owner.type === 'agent' && info.owner.sessionId === params.threadId,
-			);
+			const targets = (await this.views.getBrowserViews()).filter(info => info.owner.type === 'agent' && info.owner.sessionId === params.threadId);
 			const result = await this.cdp.perform(
 				params.threadId,
 				view,
@@ -235,23 +214,11 @@ export class AppServerBrowserHost extends Disposable {
 		if (params.action.type === 'navigate') {
 			await view.loadURL(params.action.url, signal, params.networkToken ?? null);
 		} else {
-			output = await this.automate(
-				view,
-				params.threadId,
-				signal,
-				id => this.playwright.performAction(id, params.threadId, view.id, params.action),
-				params.networkToken ?? null,
-			);
+			output = await this.automate(view, params.threadId, signal, id => this.playwright.performAction(id, params.threadId, view.id, params.action), params.networkToken ?? null);
 		}
 		return { targetId: view.id, ...(output === undefined ? {} : { output }) };
 	}
-	private automate<T>(
-		view: BrowserView,
-		sessionId: string,
-		signal: AbortSignal,
-		execute: (id: string) => Promise<T>,
-		networkToken?: string | null,
-	): Promise<T> {
+	private automate<T>(view: BrowserView, sessionId: string, signal: AbortSignal, execute: (id: string) => Promise<T>, networkToken?: string | null): Promise<T> {
 		return view.runOperation(
 			signal,
 			async operationSignal => {
@@ -282,20 +249,12 @@ export class AppServerBrowserHost extends Disposable {
 			this.hostedTargets.delete(params.targetId);
 		}
 	}
-	private target(
-		id: string,
-		sessionId: string,
-		requestSignal: AbortSignal,
-	): { view: BrowserView; signal: AbortSignal } {
+	private target(id: string, sessionId: string, requestSignal: AbortSignal): { view: BrowserView; signal: AbortSignal } {
 		this.assertEnabled();
 		const view = this.views.validateAgentAccess(id, sessionId);
 		return {
 			view,
-			signal: AbortSignal.any([
-				requestSignal,
-				this.cancellation.signal,
-				this.views.agentAccessSignal(id, sessionId),
-			]),
+			signal: AbortSignal.any([requestSignal, this.cancellation.signal, this.views.agentAccessSignal(id, sessionId)]),
 		};
 	}
 	/** Retiring a connection closes its pages without disturbing pages opened by the user. */
@@ -348,11 +307,7 @@ export class AppServerBrowserHost extends Disposable {
 		};
 		const run = async (
 			value: unknown,
-			execute: (
-				params: unknown,
-				context: { signal: AbortSignal },
-				decode: typeof decodeAppServerServerRequestParams,
-			) => unknown | Promise<unknown>,
+			execute: (params: unknown, context: { signal: AbortSignal }, decode: typeof decodeAppServerServerRequestParams) => unknown | Promise<unknown>,
 		): Promise<unknown> => {
 			this.assertNotDisposed();
 			const request = operation(value);
@@ -367,8 +322,7 @@ export class AppServerBrowserHost extends Disposable {
 				// Most windows never run a browser tool. Keep its schema out of Main's
 				// idle heap, but validate every request before touching browser state.
 				const operation = async () => {
-					const { decodeAppServerServerRequestParams: decode } =
-						await import('../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js');
+					const { decodeAppServerServerRequestParams: decode } = await import('../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js');
 					signal.throwIfAborted();
 					this.assertNotDisposed();
 					return execute(request.params, { signal }, decode);
@@ -383,12 +337,7 @@ export class AppServerBrowserHost extends Disposable {
 			{
 				channel: 'configure',
 				validate: value => {
-					if (
-						!isRecord(value) ||
-						Object.keys(value).length !== 2 ||
-						typeof value.enabled !== 'boolean' ||
-						typeof value.cdpEnabled !== 'boolean'
-					) {
+					if (!isRecord(value) || Object.keys(value).length !== 2 || typeof value.enabled !== 'boolean' || typeof value.cdpEnabled !== 'boolean') {
 						throw new TypeError('Invalid browser configuration');
 					}
 					return { enabled: value.enabled, cdpEnabled: value.cdpEnabled };
@@ -403,13 +352,7 @@ export class AppServerBrowserHost extends Disposable {
 			{
 				channel: 'disposeSession',
 				validate: value => {
-					if (
-						!isRecord(value) ||
-						Object.keys(value).length !== 1 ||
-						typeof value.threadId !== 'string' ||
-						!value.threadId ||
-						value.threadId.length > 512
-					) {
+					if (!isRecord(value) || Object.keys(value).length !== 1 || typeof value.threadId !== 'string' || !value.threadId || value.threadId.length > 512) {
 						throw new TypeError('Invalid browser session');
 					}
 					return value.threadId;
@@ -418,23 +361,14 @@ export class AppServerBrowserHost extends Disposable {
 					this.assertNotDisposed();
 					const sessionId = value as string;
 					if (this.sessions.delete(sessionId)) {
-						await Promise.all([
-							this.playwright.disposeSession(sessionId),
-							this.cdp.disposeSession(sessionId),
-						]);
+						await Promise.all([this.playwright.disposeSession(sessionId), this.cdp.disposeSession(sessionId)]);
 					}
 				},
 			},
 			{
 				channel: 'network',
 				validate: value => {
-					if (
-						!isRecord(value) ||
-						Object.keys(value).length !== 3 ||
-						typeof value.targetId !== 'string' ||
-						typeof value.requestId !== 'string' ||
-						typeof value.allowed !== 'boolean'
-					) {
+					if (!isRecord(value) || Object.keys(value).length !== 3 || typeof value.targetId !== 'string' || typeof value.requestId !== 'string' || typeof value.allowed !== 'boolean') {
 						throw new TypeError('Invalid browser network response');
 					}
 					return value;
@@ -455,28 +389,24 @@ export class AppServerBrowserHost extends Disposable {
 							this.assertEnabled();
 						}
 						// Revoking a closed page still acknowledges release of the backend's grant record.
-						if (sharing.threadIds.length || this.views.tryGetBrowserView(sharing.targetId))
-							await this.views.setSharing(sharing.targetId, sharing.threadIds);
+						if (sharing.threadIds.length || this.views.tryGetBrowserView(sharing.targetId)) await this.views.setSharing(sharing.targetId, sharing.threadIds);
 						return null;
 					}),
 			},
 			{
 				channel: 'create',
 				validate: operation,
-				invoke: value =>
-					run(value, (params, context, decode) => this.create(decode('browser/create', params), context)),
+				invoke: value => run(value, (params, context, decode) => this.create(decode('browser/create', params), context)),
 			},
 			{
 				channel: 'observe',
 				validate: operation,
-				invoke: value =>
-					run(value, (params, context, decode) => this.observe(decode('browser/observe', params), context)),
+				invoke: value => run(value, (params, context, decode) => this.observe(decode('browser/observe', params), context)),
 			},
 			{
 				channel: 'perform',
 				validate: operation,
-				invoke: value =>
-					run(value, (params, context, decode) => this.perform(decode('browser/perform', params), context)),
+				invoke: value => run(value, (params, context, decode) => this.perform(decode('browser/perform', params), context)),
 			},
 			{
 				channel: 'close',

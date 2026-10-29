@@ -28,8 +28,7 @@ export const enum TerminalSettingId {
 	EnableMultiLinePasteWarning = 'terminal.integrated.enableMultiLinePasteWarning',
 }
 
-export type TerminalProcessConnectionState =
-	'stopped' | 'starting' | 'initializing' | 'ready' | 'stopping' | 'crashed' | 'restarting';
+export type TerminalProcessConnectionState = 'stopped' | 'starting' | 'initializing' | 'ready' | 'stopping' | 'crashed' | 'restarting';
 
 export interface ITerminalProcessProfile {
 	readonly profileId: string;
@@ -126,9 +125,7 @@ export interface IExtensionTerminalProfile {
 	readonly options?: ICreateContributedTerminalProfileOptions;
 }
 
-export type TerminalProcessExecution =
-	| { readonly type: 'process'; readonly program: string; readonly args: TerminalArguments }
-	| { readonly type: 'shell'; readonly commandLine: string };
+export type TerminalProcessExecution = { readonly type: 'process'; readonly program: string; readonly args: TerminalArguments } | { readonly type: 'shell'; readonly commandLine: string };
 
 export interface ITerminalProcessCreateOptions {
 	/** Installed atomically before startup output is read. */
@@ -213,14 +210,7 @@ export type TerminalShellIntegrationEvent =
 	| { readonly type: 'outputGap' }
 	| { readonly type: 'processReady'; readonly isWindowsPty: boolean; readonly shellType?: TerminalShellType }
 	| {
-			readonly type:
-				| 'promptStart'
-				| 'commandStart'
-				| 'continuationStart'
-				| 'continuationEnd'
-				| 'rightPromptStart'
-				| 'rightPromptEnd'
-				| 'commandStorageDisabled';
+			readonly type: 'promptStart' | 'commandStart' | 'continuationStart' | 'continuationEnd' | 'rightPromptStart' | 'rightPromptEnd' | 'commandStorageDisabled';
 	  }
 	| {
 			readonly type: 'commandExecuted';
@@ -335,16 +325,10 @@ export interface ITerminalProcessService {
 	detach?(terminalId: string): Promise<ITerminalReconnectLease>;
 	/** Called only after every reload shutdown participant has completed successfully. */
 	prepareForReload?(): void;
-	attach?(
-		lease: ITerminalReconnectLease,
-		dimensions: { readonly rows: number; readonly cols: number },
-		profile: ITerminalProcessProfile,
-	): Promise<ITerminalProcessCreation>;
+	attach?(lease: ITerminalReconnectLease, dimensions: { readonly rows: number; readonly cols: number }, profile: ITerminalProcessProfile): Promise<ITerminalProcessCreation>;
 	write(options: ITerminalProcessWriteOptions): Promise<void>;
 	sendSignal(options: ITerminalProcessCloseOptions & { readonly signal: TerminalProcessSignal }): Promise<void>;
-	setAutoReplies(
-		options: ITerminalProcessCloseOptions & { readonly rules: readonly ITerminalAutoReply[] },
-	): Promise<void>;
+	setAutoReplies(options: ITerminalProcessCloseOptions & { readonly rules: readonly ITerminalAutoReply[] }): Promise<void>;
 	resize(options: ITerminalProcessResizeOptions): Promise<void>;
 	read(options: ITerminalProcessReadOptions): Promise<ITerminalProcessReadResult>;
 	close(options: ITerminalProcessCloseOptions): Promise<void>;
@@ -462,16 +446,12 @@ export interface ITerminalCommandBuffer {
 	readonly cursorY: number;
 	readonly cursorX: number;
 	readonly length: number;
-	getLine(
-		line: number,
-	):
+	getLine(line: number):
 		| {
 				readonly isWrapped: boolean;
 				readonly length: number;
 				translateToString(trimRight?: boolean, startColumn?: number, endColumn?: number): string;
-				getCell(
-					column: number,
-				): { getChars(): string; getWidth(): number; isDim(): number; isItalic(): number } | undefined;
+				getCell(column: number): { getChars(): string; getWidth(): number; isDim(): number; isItalic(): number } | undefined;
 		  }
 		| undefined;
 }

@@ -1,12 +1,7 @@
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Colors } from '../../common/colorRegistry.js';
-import {
-	noFileIconTheme,
-	defaultProductIconTheme,
-	type IColorTheme,
-	type IThemeService,
-} from '../../common/themeService.js';
+import { noFileIconTheme, defaultProductIconTheme, type IColorTheme, type IThemeService } from '../../common/themeService.js';
 
 export class TestThemeService extends Disposable implements IThemeService {
 	private readonly changed = this._register(new Emitter<IColorTheme>());

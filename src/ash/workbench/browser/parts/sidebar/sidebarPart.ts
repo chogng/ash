@@ -11,10 +11,7 @@ import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.
 import { ViewContainerLocation, type IViewContainerDescriptor } from '../../../common/views.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import type { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import type {
-	ILocalizationService,
-	LocalizationKey,
-} from '../../../services/localization/common/localizationService.js';
+import type { ILocalizationService, LocalizationKey } from '../../../services/localization/common/localizationService.js';
 import { localize2 } from '../../../../nls.js';
 import type { IViewDescriptorService } from '../../../common/views.js';
 import { PaneCompositePart, type PaneCompositeTitleActions } from '../paneCompositePart.js';
@@ -87,13 +84,9 @@ export class SidebarPart extends PaneCompositePart {
 				localizationService: options.localizationService,
 				id: options.id ?? 'sidebar',
 				location,
-				ariaLabel:
-					options.ariaLabel ??
-					localize2({ bundle: 'ash.regions', key: 'primarySidebar' }, 'Primary sidebar').original,
+				ariaLabel: options.ariaLabel ?? localize2({ bundle: 'ash.regions', key: 'primarySidebar' }, 'Primary sidebar').original,
 				ariaLabelKey: options.ariaLabelKey,
-				viewsAriaLabel:
-					options.viewsAriaLabel ??
-					localize2({ bundle: 'ash.regions', key: 'primarySidebarViews' }, 'Primary side bar views').original,
+				viewsAriaLabel: options.viewsAriaLabel ?? localize2({ bundle: 'ash.regions', key: 'primarySidebarViews' }, 'Primary side bar views').original,
 				viewsAriaLabelKey: options.viewsAriaLabelKey,
 				compositeBarContainerFilter: options.compositeBarContainerFilter,
 				compositeBarVisible: options.compositeBarVisible,
@@ -122,9 +115,7 @@ export class SidebarPart extends PaneCompositePart {
 		}
 		// Sessions supplies its own navigation bar and deliberately disables this selector.
 		if (location === ViewContainerLocation.Sidebar && options.compositeBarVisible !== false) {
-			this.visibleViewContainersTracker = this._register(
-				instantiationService.createInstance(VisibleViewContainersTracker, location),
-			);
+			this.visibleViewContainersTracker = this._register(instantiationService.createInstance(VisibleViewContainersTracker, location));
 			this._register(
 				this.visibleViewContainersTracker.onDidChange(({ before, after }) => {
 					if (before > 1 !== after > 1) {
@@ -149,9 +140,7 @@ export class SidebarPart extends PaneCompositePart {
 		const sash = this.layoutService.getSideBarPosition() === Position.LEFT ? sashes.right : sashes.left;
 		if (!sash) return;
 		sash.element.classList.add('ash-primary-sidebar-sash');
-		this.boundarySashPresentation.value = toDisposable(() =>
-			sash.element.classList.remove('ash-primary-sidebar-sash'),
-		);
+		this.boundarySashPresentation.value = toDisposable(() => sash.element.classList.remove('ash-primary-sidebar-sash'));
 	}
 
 	public setActivityBarLocation(location: ActivityBarPosition): void {
@@ -176,10 +165,7 @@ export class SidebarPart extends PaneCompositePart {
 		}
 		const isTop = this.activityBarLocation === ActivityBarPosition.TOP;
 		const isBottom = this.activityBarLocation === ActivityBarPosition.BOTTOM;
-		const hide =
-			(isTop || isBottom) &&
-			this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarAutoHide) &&
-			this.visibleViewContainersTracker.visibleCount <= 1;
+		const hide = (isTop || isBottom) && this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarAutoHide) && this.visibleViewContainersTracker.visibleCount <= 1;
 		const restoreFocus = hide && this.compositeBar.domNode.contains(this.domNode.ownerDocument.activeElement);
 		this.topCompositeBarDomNode!.hidden = !isTop || hide;
 		this.bottomCompositeBarDomNode!.hidden = !isBottom || hide;
@@ -199,9 +185,7 @@ export class SidebarPart extends PaneCompositePart {
 
 	override showComposite(compositeId: string, focus = false): void {
 		super.showComposite(compositeId, focus);
-		this.activeTitleListener.value = this.getComposite(compositeId)?.onTitleAreaUpdate(() =>
-			this.updateActiveTitle(),
-		);
+		this.activeTitleListener.value = this.getComposite(compositeId)?.onTitleAreaUpdate(() => this.updateActiveTitle());
 		this.updateActiveTitle();
 	}
 

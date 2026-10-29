@@ -13,30 +13,19 @@ suite('OutlineModel', () => {
 		using model = new TextModel('x\n'.repeat(5000), { languageId: 'typescript' });
 		using features = new LanguageFeaturesService();
 		using provider = features.documentSymbolProvider.register('*', {
-			provideDocumentSymbols: () =>
-				Array.from({ length: 5000 }, (_, index) => symbol(`item${index}`, index + 1, 1, index + 1, 2)),
+			provideDocumentSymbols: () => Array.from({ length: 5000 }, (_, index) => symbol(`item${index}`, index + 1, 1, index + 1, 2)),
 		});
 		const timer = setTimeout(() => model.applyEdits([{ range: new Range(1, 1, 1, 1), text: 'y' }]), 0);
 		try {
 			assert.equal(
-				await OutlineModel.create(
-					features.documentSymbolProvider,
-					model,
-					new AbortController().signal,
-					error => {
-						throw error;
-					},
-				),
+				await OutlineModel.create(features.documentSymbolProvider, model, new AbortController().signal, error => {
+					throw error;
+				}),
 				null,
 			);
-			const current = await OutlineModel.create(
-				features.documentSymbolProvider,
-				model,
-				new AbortController().signal,
-				error => {
-					throw error;
-				},
-			);
+			const current = await OutlineModel.create(features.documentSymbolProvider, model, new AbortController().signal, error => {
+				throw error;
+			});
 			assert.equal(current?.version, model.version);
 			assert.equal(current?.asListOfDocumentSymbols().length, 5000);
 		} finally {
@@ -50,26 +39,17 @@ suite('OutlineModel', () => {
 			provideDocumentSymbols: () => [symbol('second', 1, 7, 1, 13)],
 		});
 		using second = features.documentSymbolProvider.register('*', {
-			provideDocumentSymbols: () => [
-				{ ...symbol('first', 1, 1, 2, 7), children: [symbol('nested', 2, 1, 2, 7)] },
-			],
+			provideDocumentSymbols: () => [{ ...symbol('first', 1, 1, 2, 7), children: [symbol('nested', 2, 1, 2, 7)] }],
 		});
 		const errors: unknown[] = [];
-		const outline = await OutlineModel.create(
-			features.documentSymbolProvider,
-			model,
-			new AbortController().signal,
-			error => errors.push(error),
-		);
+		const outline = await OutlineModel.create(features.documentSymbolProvider, model, new AbortController().signal, error => errors.push(error));
 		assert.ok(outline);
 		assert.deepEqual(
 			{
 				groups: outline.children.size,
 				topLevel: outline.getTopLevelSymbols().map(entry => entry.name),
 				flattened: outline.asListOfDocumentSymbols().map(entry => entry.name),
-				parents: [...outline.children.values()].every(group =>
-					[...group.children.values()].every(entry => entry.parent === group),
-				),
+				parents: [...outline.children.values()].every(group => [...group.children.values()].every(entry => entry.parent === group)),
 				errors,
 			},
 			{
@@ -95,8 +75,7 @@ suite('OutlineModel', () => {
 			});
 		const first = await create();
 		const second = await create();
-		const ids = (outline: OutlineModel) =>
-			[...outline.children.values()].flatMap(group => [...group.children.keys()]);
+		const ids = (outline: OutlineModel) => [...outline.children.values()].flatMap(group => [...group.children.keys()]);
 		assert.ok(first && second);
 		const actual = ids(first);
 		assert.equal(actual.length, names.length);
@@ -117,8 +96,7 @@ suite('OutlineModel', () => {
 		using features = new LanguageFeaturesService();
 		const pending: Array<(symbols: readonly LanguageDocumentSymbol[]) => void> = [];
 		const provider = {
-			provideDocumentSymbols: () =>
-				new Promise<readonly LanguageDocumentSymbol[]>(resolve => pending.push(resolve)),
+			provideDocumentSymbols: () => new Promise<readonly LanguageDocumentSymbol[]>(resolve => pending.push(resolve)),
 		};
 		using first = features.documentSymbolProvider.register('*', provider);
 		using second = features.documentSymbolProvider.register('*', provider);
@@ -138,14 +116,9 @@ suite('OutlineModel', () => {
 		const provider = { provideDocumentSymbols: () => [symbol('first', 1, 1, 1, 6)] };
 		using first = features.documentSymbolProvider.register('*', provider);
 		using second = features.documentSymbolProvider.register('*', provider);
-		const outline = await OutlineModel.create(
-			features.documentSymbolProvider,
-			model,
-			new AbortController().signal,
-			error => {
-				throw error;
-			},
-		);
+		const outline = await OutlineModel.create(features.documentSymbolProvider, model, new AbortController().signal, error => {
+			throw error;
+		});
 		assert.equal(outline?.children.size, 2);
 	});
 
@@ -162,26 +135,12 @@ suite('OutlineModel', () => {
 			},
 		});
 		const errors: unknown[] = [];
-		const outline = await OutlineModel.create(
-			features.documentSymbolProvider,
-			model,
-			new AbortController().signal,
-			error => errors.push(error),
-		);
-		assert.deepEqual(
-			{ symbols: outline?.getTopLevelSymbols().map(entry => entry.name), errors },
-			{ symbols: ['first'], errors: [failure] },
-		);
+		const outline = await OutlineModel.create(features.documentSymbolProvider, model, new AbortController().signal, error => errors.push(error));
+		assert.deepEqual({ symbols: outline?.getTopLevelSymbols().map(entry => entry.name), errors }, { symbols: ['first'], errors: [failure] });
 	});
 });
 
-function symbol(
-	name: string,
-	startLine: number,
-	startColumn: number,
-	endLine: number,
-	endColumn: number,
-): LanguageDocumentSymbol {
+function symbol(name: string, startLine: number, startColumn: number, endLine: number, endColumn: number): LanguageDocumentSymbol {
 	const range = new Range(startLine, startColumn, endLine, endColumn);
 	return { name, kind: 'function', range, selectionRange: range };
 }

@@ -75,26 +75,10 @@ export class GotoLineController extends Disposable {
 		this.element.hidden = false;
 		this.element.classList.add('visible');
 		const current = this.viewModel.getSelections()[0]!.getPosition();
-		this.input.value =
-			mode === 'offset'
-				? String(this.viewport.textModel.offsetAt(current) + 1)
-				: `${current.lineNumber}:${current.column}`;
-		this.element.setAttribute(
-			'aria-label',
-			mode === 'offset'
-				? localize('gotoOffset.dialog', 'Go to Offset')
-				: localize('gotoLine.dialog', 'Go to Line or Column'),
-		);
-		this.input.setAttribute(
-			'aria-label',
-			mode === 'offset'
-				? localize('gotoOffset.input', 'Character offset')
-				: localize('gotoLine.input', 'Line number and optional column'),
-		);
-		this.input.placeholder =
-			mode === 'offset'
-				? localize('gotoOffset.placeholder', 'Offset')
-				: localize('gotoLine.placeholder', 'Line[:Column]');
+		this.input.value = mode === 'offset' ? String(this.viewport.textModel.offsetAt(current) + 1) : `${current.lineNumber}:${current.column}`;
+		this.element.setAttribute('aria-label', mode === 'offset' ? localize('gotoOffset.dialog', 'Go to Offset') : localize('gotoLine.dialog', 'Go to Line or Column'));
+		this.input.setAttribute('aria-label', mode === 'offset' ? localize('gotoOffset.input', 'Character offset') : localize('gotoLine.input', 'Line number and optional column'));
+		this.input.placeholder = mode === 'offset' ? localize('gotoOffset.placeholder', 'Offset') : localize('gotoLine.placeholder', 'Line[:Column]');
 		this.position();
 		this.preview();
 		this.input.focus({ preventScroll: true });
@@ -125,15 +109,11 @@ export class GotoLineController extends Disposable {
 			this.close();
 			return;
 		}
-		if (event.target !== this.input || event.key !== 'Enter' || event.ctrlKey || event.metaKey || event.altKey)
-			return;
+		if (event.target !== this.input || event.key !== 'Enter' || event.ctrlKey || event.metaKey || event.altKey) return;
 		const result = this.readResult();
 		if (result.kind !== 'location') return;
 		stopEvent(event);
-		this.viewModel.setSelections(
-			this.inputMode === 'offset' ? 'editor.action.gotoOffset' : 'editor.action.gotoLine',
-			[Selection.fromPositions(result.location.position)],
-		);
+		this.viewModel.setSelections(this.inputMode === 'offset' ? 'editor.action.gotoOffset' : 'editor.action.gotoLine', [Selection.fromPositions(result.location.position)]);
 		this.viewport.revealPosition(result.location.position);
 		this.initialScrollPosition = undefined;
 		this.close();
@@ -148,10 +128,7 @@ export class GotoLineController extends Disposable {
 	}
 
 	private readResult(): GotoLocationParseResult {
-		return parseStanzaGotoLocation(
-			this.viewport.textModel,
-			this.inputMode === 'offset' ? `::${this.input.value}` : this.input.value,
-		);
+		return parseStanzaGotoLocation(this.viewport.textModel, this.inputMode === 'offset' ? `::${this.input.value}` : this.input.value);
 	}
 
 	private position(): void {
@@ -173,12 +150,7 @@ registerEditorContribution({
 });
 
 /** Identifies Ctrl+G on Windows/Linux and Command+G on macOS. */
-export function isStanzaGotoLineChord(
-	event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey'>,
-	targetOperatingSystem: OperatingSystem,
-): boolean {
+export function isStanzaGotoLineChord(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey'>, targetOperatingSystem: OperatingSystem): boolean {
 	if (event.shiftKey || event.altKey || event.key.toLowerCase() !== 'g') return false;
-	return targetOperatingSystem === OperatingSystem.Macintosh
-		? event.metaKey && !event.ctrlKey
-		: event.ctrlKey && !event.metaKey;
+	return targetOperatingSystem === OperatingSystem.Macintosh ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
 }

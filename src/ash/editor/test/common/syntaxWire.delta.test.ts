@@ -1,12 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
-import {
-	LanguageDiagnosticSeverity,
-	SYNTAX_DIAGNOSTIC_LANE,
-	SYNTAX_TOKEN_LANE,
-	type SyntaxLane,
-	type SyntaxResult,
-} from '../../common/languages.js';
+import { LanguageDiagnosticSeverity, SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, type SyntaxLane, type SyntaxResult } from '../../common/languages.js';
 import { testTokens, testDiagnostics } from './testSyntaxProvider.js';
 import { Position } from '../../common/core/position.js';
 import { Range } from '../../common/core/range.js';
@@ -54,7 +48,11 @@ test('Syntax wire decodes large delta insertions without exceeding the argument 
 test('Syntax wire preserves metadata-only token changes and removals in deltas', () => {
 	using model = new TextModel('first\nsecond');
 	const snapshot = model.createVersionedSnapshot();
-	const first: LanguageToken = { range: new Range(1, 1, 1, 6), tokenType: 'variable', modifiers: [] };
+	const first: LanguageToken = {
+		range: new Range(1, 1, 1, 6),
+		tokenType: 'variable',
+		modifiers: [],
+	};
 	const second: LanguageToken = { ...first, range: new Range(2, 1, 2, 7) };
 	const variants: readonly LanguageToken[] = [
 		{ ...first, languageId: 'javascript' },
@@ -101,12 +99,7 @@ test('Syntax wire deltas stay equal to full results across random edits', () => 
 			const encoded = syntaxWireCodec.encodeResult(lane, result, snapshot, serverStates.get(lane)) as {
 				readonly kind: string;
 			};
-			const decoded = syntaxWireCodec.decodeResult(
-				lane,
-				structuredClone(encoded),
-				snapshot,
-				clientStates.get(lane),
-			);
+			const decoded = syntaxWireCodec.decodeResult(lane, structuredClone(encoded), snapshot, clientStates.get(lane));
 			assert.deepEqual(serializeResult(decoded), serializeResult(result));
 			if (encoded.kind === 'delta') deltaCount += 1;
 			const serverState = Object.freeze({ requestId, snapshot, result });
@@ -120,10 +113,7 @@ test('Syntax wire deltas stay equal to full results across random edits', () => 
 		const removedLength = Math.min(randomInteger(4), length - startOffset);
 		model.applyEdits([
 			{
-				range: Range.fromPositions(
-					model.positionAt(startOffset),
-					model.positionAt(startOffset + removedLength),
-				),
+				range: Range.fromPositions(model.positionAt(startOffset), model.positionAt(startOffset + removedLength)),
 				text: insertions[randomInteger(insertions.length)]!,
 			},
 		]);
@@ -143,7 +133,10 @@ test('Syntax wire rejects missing bases and inconsistent delta metadata', () => 
 	const firstResult = syntaxResult(SYNTAX_TOKEN_LANE, firstSnapshot);
 	const base = Object.freeze({ requestId: 7, snapshot: firstSnapshot, result: firstResult });
 	model.applyEdits([
-		{ range: Range.fromPositions(model.positionAt(model.getText().length)), text: '\nreturn value;' },
+		{
+			range: Range.fromPositions(model.positionAt(model.getText().length)),
+			text: '\nreturn value;',
+		},
 	]);
 	const snapshot = model.createVersionedSnapshot();
 
@@ -151,7 +144,11 @@ test('Syntax wire rejects missing bases and inconsistent delta metadata', () => 
 		() =>
 			syntaxWireCodec.decodeResult(
 				SYNTAX_TOKEN_LANE,
-				{ kind: 'delta', baseRequestId: 7, splices: [] },
+				{
+					kind: 'delta',
+					baseRequestId: 7,
+					splices: [],
+				},
 				snapshot,
 				undefined,
 			),
@@ -164,7 +161,14 @@ test('Syntax wire rejects missing bases and inconsistent delta metadata', () => 
 				{
 					kind: 'delta',
 					baseRequestId: 7,
-					splices: [{ startItemIndex: 0, deleteItemCount: 0, lineDelta: 0, items: [] }],
+					splices: [
+						{
+							startItemIndex: 0,
+							deleteItemCount: 0,
+							lineDelta: 0,
+							items: [],
+						},
+					],
 				},
 				snapshot,
 				base,
@@ -178,7 +182,14 @@ test('Syntax wire rejects missing bases and inconsistent delta metadata', () => 
 				{
 					kind: 'delta',
 					baseRequestId: 7,
-					splices: [{ startItemIndex: 99, deleteItemCount: 0, lineDelta: 1, items: [] }],
+					splices: [
+						{
+							startItemIndex: 99,
+							deleteItemCount: 0,
+							lineDelta: 1,
+							items: [],
+						},
+					],
 				},
 				snapshot,
 				base,
@@ -199,10 +210,7 @@ test('Syntax wire uses full fallback when a delta cannot reduce item transfer', 
 	};
 
 	assert.equal(encoded.kind, 'full');
-	assert.deepEqual(
-		serializeResult(syntaxWireCodec.decodeResult(SYNTAX_TOKEN_LANE, encoded, snapshot, base)),
-		serializeResult(second),
-	);
+	assert.deepEqual(serializeResult(syntaxWireCodec.decodeResult(SYNTAX_TOKEN_LANE, encoded, snapshot, base)), serializeResult(second));
 });
 
 test('Syntax wire bounds a one-line edit independently of document token count', () => {
@@ -212,7 +220,10 @@ test('Syntax wire bounds a one-line edit independently of document token count',
 	const first = syntaxResult(SYNTAX_TOKEN_LANE, firstSnapshot);
 	const base = Object.freeze({ requestId: 1, snapshot: firstSnapshot, result: first });
 	model.applyEdits([
-		{ range: Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 5 + 1)), text: 'let' },
+		{
+			range: Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 5 + 1)),
+			text: 'let',
+		},
 	]);
 	const snapshot = model.createVersionedSnapshot();
 	const current = syntaxResult(SYNTAX_TOKEN_LANE, snapshot);
@@ -236,12 +247,12 @@ test('Syntax wire isolates two distant edits into multiple item splices', () => 
 	const first = syntaxResult(SYNTAX_TOKEN_LANE, firstSnapshot);
 	const base = Object.freeze({ requestId: 1, snapshot: firstSnapshot, result: first });
 	model.applyEdits([
-		{ range: Range.fromPositions(new Position(100 + 1, 0 + 1), new Position(100 + 1, 5 + 1)), text: 'let' },
 		{
-			range: Range.fromPositions(
-				new Position(900 + 1, lines[900]!.length - 4 + 1),
-				new Position(900 + 1, lines[900]!.length - 1 + 1),
-			),
+			range: Range.fromPositions(new Position(100 + 1, 0 + 1), new Position(100 + 1, 5 + 1)),
+			text: 'let',
+		},
+		{
+			range: Range.fromPositions(new Position(900 + 1, lines[900]!.length - 4 + 1), new Position(900 + 1, lines[900]!.length - 1 + 1)),
 			text: '901',
 		},
 	]);
@@ -275,12 +286,7 @@ test('Syntax wire multi-splices stay exact across repeated disjoint transactions
 			readonly kind: string;
 			readonly splices?: readonly unknown[];
 		};
-		const decoded = syntaxWireCodec.decodeResult(
-			SYNTAX_TOKEN_LANE,
-			structuredClone(encoded),
-			snapshot,
-			clientState,
-		);
+		const decoded = syntaxWireCodec.decodeResult(SYNTAX_TOKEN_LANE, structuredClone(encoded), snapshot, clientState);
 		assert.deepEqual(serializeResult(decoded), serializeResult(result));
 		if ((encoded.splices?.length ?? 0) >= 2) multiSpliceCount += 1;
 		serverState = Object.freeze({ requestId, snapshot, result });
@@ -296,10 +302,7 @@ test('Syntax wire multi-splices stay exact across repeated disjoint transactions
 		);
 	}
 
-	assert.ok(
-		multiSpliceCount >= 35,
-		`Expected most disjoint transactions to retain multiple splices, got ${multiSpliceCount}`,
-	);
+	assert.ok(multiSpliceCount >= 35, `Expected most disjoint transactions to retain multiple splices, got ${multiSpliceCount}`);
 
 	function randomInteger(limit: number): number {
 		seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0;
@@ -307,13 +310,8 @@ test('Syntax wire multi-splices stay exact across repeated disjoint transactions
 	}
 });
 
-function syntaxResult(
-	lane: typeof SYNTAX_TOKEN_LANE | typeof SYNTAX_DIAGNOSTIC_LANE,
-	snapshot: TextSnapshot,
-): SyntaxResult {
-	return lane === SYNTAX_TOKEN_LANE
-		? Object.freeze({ lane, value: testTokens(snapshot) })
-		: Object.freeze({ lane, value: testDiagnostics(snapshot) });
+function syntaxResult(lane: typeof SYNTAX_TOKEN_LANE | typeof SYNTAX_DIAGNOSTIC_LANE, snapshot: TextSnapshot): SyntaxResult {
+	return lane === SYNTAX_TOKEN_LANE ? Object.freeze({ lane, value: testTokens(snapshot) }) : Object.freeze({ lane, value: testDiagnostics(snapshot) });
 }
 
 function tokenResult(tokenType: string): SyntaxResult {
@@ -339,9 +337,7 @@ function serializeResult(result: SyntaxResult): unknown {
 		items: items.map(item => ({
 			start: [item.range.getStartPosition().lineNumber, item.range.getStartPosition().column],
 			end: [item.range.getEndPosition().lineNumber, item.range.getEndPosition().column],
-			...('tokenType' in item
-				? { tokenType: item.tokenType, modifiers: item.modifiers }
-				: { severity: item.severity, message: item.message, code: item.code, source: item.source }),
+			...('tokenType' in item ? { tokenType: item.tokenType, modifiers: item.modifiers } : { severity: item.severity, message: item.message, code: item.code, source: item.source }),
 		})),
 	};
 }

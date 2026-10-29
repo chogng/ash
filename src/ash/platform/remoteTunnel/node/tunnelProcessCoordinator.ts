@@ -154,24 +154,11 @@ export class TunnelProcessCoordinator extends Disposable implements ITunnelProce
 	}
 
 	private launch(relay: string, workspaceRoot: string, generation: number): Run {
-		const child = spawn(
-			this.options.executable,
-			[
-				'--relay',
-				relay,
-				'--ssh',
-				this.options.sshExecutable,
-				'--backend',
-				this.options.backendExecutable,
-				'--assets',
-				this.options.assets,
-			],
-			{
-				env: { ...this.options.environment, ASH_WORKSPACE_ROOT: workspaceRoot },
-				stdio: ['pipe', 'pipe', 'pipe'],
-				windowsHide: true,
-			},
-		);
+		const child = spawn(this.options.executable, ['--relay', relay, '--ssh', this.options.sshExecutable, '--backend', this.options.backendExecutable, '--assets', this.options.assets], {
+			env: { ...this.options.environment, ASH_WORKSPACE_ROOT: workspaceRoot },
+			stdio: ['pipe', 'pipe', 'pipe'],
+			windowsHide: true,
+		});
 		let resolveReady!: () => void;
 		let rejectReady!: (error: Error) => void;
 		const ready = new Promise<void>((resolve, reject) => {

@@ -2,11 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import type {
-	IExtensionHostApi,
-	ExtensionHostFleetSnapshot,
-	JsonValue,
-} from '../../../../platform/agentHost/common/extensionHostApi.js';
+import type { IExtensionHostApi, ExtensionHostFleetSnapshot, JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import type { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import type { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import type { IThemeService } from '../../../../platform/theme/common/themeService.js';
@@ -66,9 +62,7 @@ function fixture(payload: JsonValue) {
 					lifecycle: 'ready',
 					incarnation: 1,
 					activationGeneration: 1,
-					registrations: enabled
-						? [{ kind: 'dataChannel', registrationId: 'editor', channelId: 'image.editor.v1' }]
-						: [],
+					registrations: enabled ? [{ kind: 'dataChannel', registrationId: 'editor', channelId: 'image.editor.v1' }] : [],
 				},
 			],
 		} as unknown as ExtensionHostFleetSnapshot);

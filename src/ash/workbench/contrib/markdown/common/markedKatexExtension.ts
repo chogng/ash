@@ -14,15 +14,7 @@ interface MathContent {
 
 /** Reads delimiters without consuming incomplete formulas or treating currency/jQuery as math. */
 function readMath(source: string, previous = ''): MathContent | undefined {
-	const opening = source.startsWith('\\(')
-		? '\\('
-		: source.startsWith('\\[')
-			? '\\['
-			: source.startsWith('$$')
-				? '$$'
-				: source.startsWith('$')
-					? '$'
-					: undefined;
+	const opening = source.startsWith('\\(') ? '\\(' : source.startsWith('\\[') ? '\\[' : source.startsWith('$$') ? '$$' : source.startsWith('$') ? '$' : undefined;
 	if (!opening) {
 		return undefined;
 	}
@@ -72,10 +64,7 @@ function readMath(source: string, previous = ''): MathContent | undefined {
 /** Only complete CommonMark math fences become formulas during streaming. */
 function readMathFence(source: string): MathContent | undefined {
 	const opening = /^ {0,3}(`{3,}|~{3,})[^\S\r\n]*math(?:[^\S\r\n]+[^\r\n]*)?\r?\n/u.exec(source);
-	if (
-		!opening ||
-		(opening[1][0] === '`' && opening[0].slice(opening[1].length + source.indexOf(opening[1])).includes('`'))
-	) {
+	if (!opening || (opening[1][0] === '`' && opening[0].slice(opening[1].length + source.indexOf(opening[1])).includes('`'))) {
 		return undefined;
 	}
 	let start = opening[0].length;

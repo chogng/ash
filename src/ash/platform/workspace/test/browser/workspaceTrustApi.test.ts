@@ -5,15 +5,8 @@ import { Emitter } from '../../../../base/common/event.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import type { ServerNotification } from '../../../../../../.build/protocol/typescript/index.js';
-import {
-	createAppServerWorkspaceTrustApi,
-	createDisconnectedWorkspaceTrustApi,
-} from '../../browser/workspaceTrustApi.js';
-import {
-	DEVELOPMENT_DIR_PERMISSIONS,
-	READ_DIR_PERMISSIONS,
-	type WorkspaceTrustPermission,
-} from '../../common/workspaceTrust.js';
+import { createAppServerWorkspaceTrustApi, createDisconnectedWorkspaceTrustApi } from '../../browser/workspaceTrustApi.js';
+import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, type WorkspaceTrustPermission } from '../../common/workspaceTrust.js';
 
 test('workspace trust reads exact capabilities and persists only explicit revision-checked grants', async () => {
 	using notifications = new Emitter<ServerNotification>();
@@ -41,12 +34,7 @@ test('workspace trust reads exact capabilities and persists only explicit revisi
 		},
 	} as unknown as AppServerProtocolClient);
 	assert.deepEqual(await api.readDirectory('/alias'), { dir: 'canonical-dir', permissions: undefined });
-	for (const exact of [
-		[],
-		READ_DIR_PERMISSIONS,
-		[...READ_DIR_PERMISSIONS, 'executeCommands'] as const,
-		DEVELOPMENT_DIR_PERMISSIONS,
-	]) {
+	for (const exact of [[], READ_DIR_PERMISSIONS, [...READ_DIR_PERMISSIONS, 'executeCommands'] as const, DEVELOPMENT_DIR_PERMISSIONS]) {
 		permissions = exact;
 		assert.deepEqual(await api.readDirectory('/alias'), { dir: 'canonical-dir', permissions: exact });
 	}
@@ -67,10 +55,7 @@ test('workspace trust reads exact capabilities and persists only explicit revisi
 	const before = requests.length;
 	await api.persistGrant('/alias', { type: 'config' });
 	assert.equal(requests.length, before);
-	await assert.rejects(
-		api.persistGrant('/alias', { type: 'host', permissions: selected }),
-		/Invalid directory grant/,
-	);
+	await assert.rejects(api.persistGrant('/alias', { type: 'host', permissions: selected }), /Invalid directory grant/);
 	assert.equal(requests.length, before);
 	failure = new Error('Revision conflict');
 	await assert.rejects(api.persistGrant('/alias', grant), error => error === failure);

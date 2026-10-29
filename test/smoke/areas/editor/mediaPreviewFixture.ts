@@ -70,9 +70,7 @@ export async function createMediaPreviewFixture(
 	if (browserFiles) {
 		await page.evaluate(
 			async files => {
-				const folder = await (
-					await navigator.storage.getDirectory()
-				).getDirectoryHandle(`media-retry-${crypto.randomUUID()}`, { create: true });
+				const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(`media-retry-${crypto.randomUUID()}`, { create: true });
 				for (const file of files) {
 					const writer = await (await folder.getFileHandle(file.name, { create: true })).createWritable();
 					await writer.write(Uint8Array.from(atob(file.encoded), character => character.charCodeAt(0)));
@@ -197,10 +195,7 @@ export async function createMediaPreviewFixture(
 				send(text);
 			};
 			const postMessage = MessagePort.prototype.postMessage;
-			MessagePort.prototype.postMessage = function (
-				message: { frame?: string },
-				transfer: Transferable[] | StructuredSerializeOptions = [],
-			): void {
+			MessagePort.prototype.postMessage = function (message: { frame?: string }, transfer: Transferable[] | StructuredSerializeOptions = []): void {
 				if (!message?.frame) {
 					Reflect.apply(postMessage, this, [message, transfer]);
 					return;
@@ -293,9 +288,7 @@ export async function createMediaPreviewFixture(
 	};
 }
 
-export async function mediaPreviewEvidence(
-	page: Page,
-): Promise<{
+export async function mediaPreviewEvidence(page: Page): Promise<{
 	created: string[];
 	revoked: string[];
 	reads: string[];

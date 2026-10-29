@@ -45,10 +45,8 @@ export class BrowserWorkerClientPort extends Disposable {
 	private attach(worker: Worker): void {
 		this.worker = worker;
 		const handleMessage = (event: MessageEvent<unknown>): void => this.messageEmitter.fire(event.data);
-		const handleError = (event: ErrorEvent): void =>
-			this.failureEmitter.fire(event.error ?? new Error(event.message));
-		const handleMessageError = (): void =>
-			this.failureEmitter.fire(new TypeError('Worker returned an unreadable message'));
+		const handleError = (event: ErrorEvent): void => this.failureEmitter.fire(event.error ?? new Error(event.message));
+		const handleMessageError = (): void => this.failureEmitter.fire(new TypeError('Worker returned an unreadable message'));
 		this._register(addDisposableListener(worker, 'message', handleMessage));
 		this._register(addDisposableListener(worker, 'error', handleError));
 		this._register(addDisposableListener(worker, 'messageerror', handleMessageError));

@@ -3,11 +3,7 @@ import { TaskQueue } from '../../../../base/common/async.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { URI } from '../../../../base/common/uri.js';
-import {
-	MarkerSeverity,
-	type IMarkerService,
-	type IResourceMarker,
-} from '../../../../platform/markers/common/markers.js';
+import { MarkerSeverity, type IMarkerService, type IResourceMarker } from '../../../../platform/markers/common/markers.js';
 import type { ProblemMatcher } from './problemMatcher.js';
 
 interface MatcherState {
@@ -46,11 +42,7 @@ export class WatchingProblemCollector extends Disposable {
 		private readonly markers: IMarkerService,
 		runId: string,
 		private readonly isOpen: (resource: URI) => boolean,
-		private readonly searchFile?: (
-			file: string,
-			matcher: ProblemMatcher,
-			signal: AbortSignal,
-		) => Promise<URI | undefined>,
+		private readonly searchFile?: (file: string, matcher: ProblemMatcher, signal: AbortSignal) => Promise<URI | undefined>,
 	) {
 		super();
 		this.states = matchers.map(matcher => ({
@@ -191,17 +183,7 @@ export class WatchingProblemCollector extends Disposable {
 			state.loopFields ??= { ...state.fields };
 			state.fields = { ...state.loopFields };
 		}
-		for (const key of [
-			'file',
-			'location',
-			'line',
-			'character',
-			'endLine',
-			'endCharacter',
-			'message',
-			'severity',
-			'code',
-		] as const) {
+		for (const key of ['file', 'location', 'line', 'character', 'endLine', 'endCharacter', 'message', 'severity', 'code'] as const) {
 			const index = pattern[key];
 			if (index !== undefined && match[index] !== undefined) {
 				state.fields[key] = match[index]!.trim();
@@ -224,11 +206,7 @@ export class WatchingProblemCollector extends Disposable {
 
 	private publishMarker(state: MatcherState, marker: IResourceMarker): void {
 		const open = this.isOpen(marker.resource);
-		if (
-			(state.matcher.applyTo === 'openDocuments' && !open) ||
-			(state.matcher.applyTo === 'closedDocuments' && open)
-		)
-			return;
+		if ((state.matcher.applyTo === 'openDocuments' && !open) || (state.matcher.applyTo === 'closedDocuments' && open)) return;
 		state.markers.push(marker);
 		this.updateMarkers(state.owner);
 		this.problemsEmitter.fire();
@@ -253,10 +231,7 @@ export class WatchingProblemCollector extends Disposable {
 			.scheduleSkipIfCleared(async () => {
 				if (this.isDisposed || version !== state.version || this.searchController.signal.aborted) return;
 				if (!this.searchFile) throw new Error('Search file location requires a file search owner');
-				const resource =
-					this.resolvedFiles.get(key) ??
-					(await this.searchFile(file, state.matcher, this.searchController.signal)) ??
-					marker.resource;
+				const resource = this.resolvedFiles.get(key) ?? (await this.searchFile(file, state.matcher, this.searchController.signal)) ?? marker.resource;
 				if (this.isDisposed || version !== state.version || this.searchController.signal.aborted) return;
 				this.resolvedFiles.set(key, resource);
 				this.publishMarker(state, { ...marker, resource });
@@ -280,16 +255,9 @@ export class WatchingProblemCollector extends Disposable {
 		}
 		const absolute = /^[a-z]:[\\/]|^[\\/]/i.test(fields.file);
 		const prefix = state.matcher.filePrefix;
-		const base =
-			prefix === undefined
-				? this.root
-				: /^[a-z]:[\\/]|^[\\/]/i.test(prefix)
-					? this.pathResource(prefix)
-					: URI.joinPath(this.root, prefix);
+		const base = prefix === undefined ? this.root : /^[a-z]:[\\/]|^[\\/]/i.test(prefix) ? this.pathResource(prefix) : URI.joinPath(this.root, prefix);
 		const resource =
-			state.matcher.fileLocation === 'absolute' ||
-			state.matcher.fileLocation === 'search' ||
-			(state.matcher.fileLocation === 'autoDetect' && absolute)
+			state.matcher.fileLocation === 'absolute' || state.matcher.fileLocation === 'search' || (state.matcher.fileLocation === 'autoDetect' && absolute)
 				? this.pathResource(fields.file)
 				: URI.joinPath(base, fields.file.replaceAll('\\', '/'));
 		const fileOnly = state.matcher.pattern[0].kind === 'file';
@@ -301,11 +269,7 @@ export class WatchingProblemCollector extends Disposable {
 			if (fields.location ? !/\d/.test(fields.location) : !fields.line) return undefined;
 			const location = fields.location ? fields.location.split(',') : undefined;
 			const startColumn = location ? location[1] : fields.character || undefined;
-			const lastColumn = location
-				? location.length > 3
-					? location[3]
-					: undefined
-				: fields.endCharacter || undefined;
+			const lastColumn = location ? (location.length > 3 ? location[3] : undefined) : fields.endCharacter || undefined;
 			const lastLine = location ? (location.length > 3 ? location[2] : undefined) : fields.endLine || undefined;
 			// Compiler positions are untrusted strings. Normalize them at this boundary
 			// so one malformed diagnostic cannot discard the owner's marker batch.
@@ -342,10 +306,7 @@ export class WatchingProblemCollector extends Disposable {
 						? MarkerSeverity.Error
 						: severity === 'warning' || severity === 'warn' || fields.severity === 'W'
 							? MarkerSeverity.Warning
-							: severity === 'info' ||
-								  severity === 'note' ||
-								  severity === 'hint' ||
-								  fields.severity === 'I'
+							: severity === 'info' || severity === 'note' || severity === 'hint' || fields.severity === 'I'
 								? MarkerSeverity.Info
 								: state.matcher.severity,
 				source: state.matcher.source,
@@ -358,8 +319,6 @@ export class WatchingProblemCollector extends Disposable {
 		// Absolute fallback interprets a relative filename at the filesystem root,
 		// rather than borrowing the task folder when search has no result.
 		const absolute = /^[a-z]:[\\/]|^[\\/]/i.test(path) ? path : '/' + path;
-		return this.root.scheme === Schemas.file
-			? URI.file(absolute)
-			: this.root.with({ path: absolute.replaceAll('\\', '/') });
+		return this.root.scheme === Schemas.file ? URI.file(absolute) : this.root.with({ path: absolute.replaceAll('\\', '/') });
 	}
 }

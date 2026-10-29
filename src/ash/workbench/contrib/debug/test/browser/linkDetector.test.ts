@@ -14,11 +14,7 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
-import {
-	IEditorService,
-	type EditorOpenOptions,
-	type EditorOpenTarget,
-} from '../../../../services/editor/common/editorService.js';
+import { IEditorService, type EditorOpenOptions, type EditorOpenTarget } from '../../../../services/editor/common/editorService.js';
 import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
@@ -47,11 +43,7 @@ suite('Debug Console text links', () => {
 		);
 		for (const link of row.links()) key(link, 'Enter');
 		await settle();
-		assert.deepEqual(f.external, [
-			'https://example.test/a(b)',
-			'https://two.test/path?q=a#b',
-			'mailto:me@example.test',
-		]);
+		assert.deepEqual(f.external, ['https://example.test/a(b)', 'https://two.test/path?q=a#b', 'mailto:me@example.test']);
 	});
 
 	test('does not turn commands, scripts, data or malformed URLs into executable links', () => {
@@ -124,30 +116,9 @@ suite('Debug Console text links', () => {
 		['Windows path', 'file:///C:/work', 'C:\\work\\main.ts:12:2', 'file:///C:/work/main.ts', 12, 2],
 		['file URI', 'file:///workspace', 'file:///workspace/main.ts:10:5', 'file:///workspace/main.ts', 10, 5],
 		['escaped file URI', 'file:///workspace', 'file:///workspace/a%20b.ts:2', 'file:///workspace/a%20b.ts', 2, 1],
-		[
-			'Remote absolute path',
-			'ash-remote://ssh+links/workspace',
-			'/workspace/main.ts:3:6',
-			'ash-remote://ssh+links/workspace/main.ts',
-			3,
-			6,
-		],
-		[
-			'Remote relative path',
-			'ash-remote://ssh+links/workspace',
-			'src/main.ts:4:2',
-			'ash-remote://ssh+links/workspace/src/main.ts',
-			4,
-			2,
-		],
-		[
-			'Remote file URI',
-			'ash-remote://ssh+links/workspace',
-			'file:///workspace/main.ts:5:2',
-			'ash-remote://ssh+links/workspace/main.ts',
-			5,
-			2,
-		],
+		['Remote absolute path', 'ash-remote://ssh+links/workspace', '/workspace/main.ts:3:6', 'ash-remote://ssh+links/workspace/main.ts', 3, 6],
+		['Remote relative path', 'ash-remote://ssh+links/workspace', 'src/main.ts:4:2', 'ash-remote://ssh+links/workspace/src/main.ts', 4, 2],
+		['Remote file URI', 'ash-remote://ssh+links/workspace', 'file:///workspace/main.ts:5:2', 'ash-remote://ssh+links/workspace/main.ts', 5, 2],
 	] as const) {
 		test(`opens an existing ${name} through its captured authority and selection`, async () => {
 			using f = fixture(URI.parse(root));
@@ -165,9 +136,7 @@ suite('Debug Console text links', () => {
 					};
 				};
 			} else {
-				await f.files.createDirectory(
-					resource.with({ path: resource.path.slice(0, resource.path.lastIndexOf('/')) }),
-				);
+				await f.files.createDirectory(resource.with({ path: resource.path.slice(0, resource.path.lastIndexOf('/')) }));
 				await f.files.writeFile({ resource, content: 'source' }, { create: true, overwrite: true });
 			}
 			const row = f.render(text);
@@ -251,12 +220,7 @@ function fixture(root = URI.file('/workspace')) {
 		focusActiveEditor() {},
 	};
 	const services = workbenchInstantiationService(resources).createChild(
-		new ServiceCollection(
-			[IFileService, files],
-			[IWorkspaceContextService, workspace],
-			[IEditorService, editors],
-			[INotificationService, notifications],
-		),
+		new ServiceCollection([IFileService, files], [IWorkspaceContextService, workspace], [IEditorService, editors], [INotificationService, notifications]),
 	);
 	registerCodeEditorServices(services);
 	const openers = services.get(IOpenerService);
@@ -277,12 +241,7 @@ function fixture(root = URI.file('/workspace')) {
 		external,
 		render(text: string, type = DebugLinkHoverBehavior.Rich, withFolder = true) {
 			const store = resources.add(new DisposableStore());
-			const element = detector.linkify(
-				text,
-				{ type, store },
-				true,
-				withFolder ? workspace.getWorkspace().folders[0] : undefined,
-			);
+			const element = detector.linkify(text, { type, store }, true, withFolder ? workspace.getWorkspace().folders[0] : undefined);
 			document.body.append(element);
 			resources.add(toDisposable(() => element.remove()));
 			return { element, store, links: () => [...element.querySelectorAll<HTMLElement>('[role=link]')] };

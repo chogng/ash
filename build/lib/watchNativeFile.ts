@@ -1,11 +1,7 @@
 import { watch, type FSWatcher, type WatchEventType } from 'node:fs';
 
 /** Watches one inode and rebinds after replacement, without watching its parent tree. */
-export function watchNativeFile(
-	path: string,
-	onChange: (event: WatchEventType) => void,
-	onError: (error: Error) => void,
-): Pick<FSWatcher, 'close'> {
+export function watchNativeFile(path: string, onChange: (event: WatchEventType) => void, onError: (error: Error) => void): Pick<FSWatcher, 'close'> {
 	let watcher: FSWatcher | undefined;
 	let retry: ReturnType<typeof setTimeout> | undefined;
 	let closed = false;

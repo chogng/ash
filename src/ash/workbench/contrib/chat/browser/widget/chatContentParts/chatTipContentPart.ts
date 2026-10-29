@@ -16,12 +16,7 @@ export class ChatTipContentPart extends DomWidget {
 		return this.domNode;
 	}
 
-	constructor(
-		document: Document,
-		tip: IChatTip,
-		dismiss: () => void,
-		@IMarkdownRendererService markdownRenderer: IMarkdownRendererService,
-	) {
+	constructor(document: Document, tip: IChatTip, dismiss: () => void, @IMarkdownRendererService markdownRenderer: IMarkdownRendererService) {
 		super();
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-chat-input-tip';

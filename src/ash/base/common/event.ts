@@ -1,11 +1,4 @@
-import {
-	AbstractDisposable,
-	Disposable,
-	DisposableStore,
-	noneDisposable,
-	toDisposable,
-	type IDisposable,
-} from './lifecycle.js';
+import { AbstractDisposable, Disposable, DisposableStore, noneDisposable, toDisposable, type IDisposable } from './lifecycle.js';
 import { onUnexpectedError } from './errors.js';
 
 export interface Event<T> {
@@ -43,8 +36,7 @@ export namespace Event {
 	}
 
 	export function map<T, R>(event: Event<T>, transform: (value: T) => R): Event<R> {
-		return (listener, thisArgs, disposables) =>
-			event(value => listener.call(thisArgs, transform(value)), undefined, disposables);
+		return (listener, thisArgs, disposables) => event(value => listener.call(thisArgs, transform(value)), undefined, disposables);
 	}
 
 	export function any<T>(...events: Event<T>[]): Event<T>;
@@ -197,9 +189,7 @@ export class Emitter<T> extends AbstractDisposable {
 
 	constructor(private readonly options: EmitterOptions = {}) {
 		super();
-		this.deliveryQueue = options.deliveryQueue
-			? (options.deliveryQueue as EventDeliveryQueueImpl)
-			: new EventDeliveryQueueImpl();
+		this.deliveryQueue = options.deliveryQueue ? (options.deliveryQueue as EventDeliveryQueueImpl) : new EventDeliveryQueueImpl();
 	}
 
 	public fire(event: T): void {

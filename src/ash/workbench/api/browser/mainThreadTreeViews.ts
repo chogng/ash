@@ -12,12 +12,7 @@ import { IInstantiationService } from '../../../platform/instantiation/common/in
 import { SyncDescriptor } from '../../../platform/instantiation/common/descriptors.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { TreeView, TreeViewPane } from '../../browser/parts/views/treeView.js';
-import {
-	IViewDescriptorService,
-	TreeItemCollapsibleState,
-	ViewContainerLocation,
-	type ITreeItem,
-} from '../../common/views.js';
+import { IViewDescriptorService, TreeItemCollapsibleState, ViewContainerLocation, type ITreeItem } from '../../common/views.js';
 import type { ExtensionApiIssue } from './mainThreadExtensionApi.js';
 
 interface TreeBinding extends DisposableStore {
@@ -49,10 +44,7 @@ export class MainThreadTreeViews extends Disposable {
 			}
 			for (const registration of runtime.registrations) {
 				if (registration.kind === 'treeDataProvider') {
-					active.set(
-						`${runtime.id}\0${registration.registrationId}`,
-						JSON.stringify([runtime.incarnation, runtime.activationGeneration, registration]),
-					);
+					active.set(`${runtime.id}\0${registration.registrationId}`, JSON.stringify([runtime.incarnation, runtime.activationGeneration, registration]));
 				}
 			}
 		}
@@ -94,14 +86,8 @@ export class MainThreadTreeViews extends Disposable {
 		return issues;
 	}
 
-	private createBinding(
-		registration: ExtensionHostTreeDataProviderRegistration,
-		source: ExtensionClientSource,
-		identity: string,
-	): TreeBinding {
-		const container = registration.containerId
-			? this.descriptors.getViewContainerById(registration.containerId)
-			: this.descriptors.getDefaultViewContainer(ViewContainerLocation.Sidebar);
+	private createBinding(registration: ExtensionHostTreeDataProviderRegistration, source: ExtensionClientSource, identity: string): TreeBinding {
+		const container = registration.containerId ? this.descriptors.getViewContainerById(registration.containerId) : this.descriptors.getDefaultViewContainer(ViewContainerLocation.Sidebar);
 		if (!container) {
 			throw new Error(`No container for tree view: ${registration.viewId}`);
 		}
@@ -142,17 +128,11 @@ export class MainThreadTreeViews extends Disposable {
 		};
 		tree.dataProvider = {
 			getChildren: async (parent, signal) => {
-				const response = await invoke(
-					{ method: 'children', ...(parent ? { handle: parent.handle } : {}) },
-					signal,
-				);
+				const response = await invoke({ method: 'children', ...(parent ? { handle: parent.handle } : {}) }, signal);
 				const items = parseTreeItems(response);
 				const handles = new Set(items.map(item => item.handle));
 				for (const item of items) {
-					if (
-						(records.has(item.handle) && records.get(item.handle)!.parentHandle !== parent?.handle) ||
-						item.handle === parent?.handle
-					) {
+					if ((records.has(item.handle) && records.get(item.handle)!.parentHandle !== parent?.handle) || item.handle === parent?.handle) {
 						throw new TypeError('Tree items must have one acyclic parent');
 					}
 				}
@@ -178,10 +158,7 @@ export class MainThreadTreeViews extends Disposable {
 				validationMessage: value =>
 					value.length > 32768 || value.includes('\0')
 						? {
-								content: localize(
-									'treeView.invalidName',
-									'The name is too long or contains a null character.',
-								),
+								content: localize('treeView.invalidName', 'The name is too long or contains a null character.'),
 								severity: Severity.Error,
 							}
 						: null,
@@ -206,11 +183,7 @@ export class MainThreadTreeViews extends Disposable {
 		};
 		binding.add(
 			tree.onDidChangeCheckboxState(items => {
-				void Promise.all(
-					items.map(item =>
-						invoke({ method: 'checkbox', handle: item.handle, isChecked: item.checkbox!.isChecked }),
-					),
-				)
+				void Promise.all(items.map(item => invoke({ method: 'checkbox', handle: item.handle, isChecked: item.checkbox!.isChecked })))
 					.catch(error => {
 						if (!lifetime.signal.aborted) {
 							this.notifications.error(error);
@@ -263,18 +236,11 @@ export class MainThreadTreeViews extends Disposable {
 		if (input.method !== 'treeViewChanged') {
 			return false;
 		}
-		if (
-			Object.keys(input).some(key => key !== 'method' && key !== 'registrationId') ||
-			typeof input.registrationId !== 'string'
-		) {
+		if (Object.keys(input).some(key => key !== 'method' && key !== 'registrationId') || typeof input.registrationId !== 'string') {
 			throw new TypeError('Invalid tree change notification');
 		}
 		const binding = this.bindings.get(`${source.extensionId}\0${input.registrationId}`);
-		if (
-			!binding ||
-			binding.source.activationGeneration !== source.activationGeneration ||
-			binding.source.incarnation !== source.incarnation
-		) {
+		if (!binding || binding.source.activationGeneration !== source.activationGeneration || binding.source.incarnation !== source.incarnation) {
 			throw new Error('Tree provider has retired');
 		}
 		void binding.tree.refresh();
@@ -295,21 +261,7 @@ function parseTreeItems(value: JsonValue): ITreeItem[] {
 		if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
 			throw new TypeError('Invalid tree item');
 		}
-		if (
-			Object.keys(raw).some(
-				key =>
-					![
-						'handle',
-						'label',
-						'description',
-						'tooltip',
-						'collapsibleState',
-						'checkboxState',
-						'editable',
-						'command',
-					].includes(key),
-			)
-		) {
+		if (Object.keys(raw).some(key => !['handle', 'label', 'description', 'tooltip', 'collapsibleState', 'checkboxState', 'editable', 'command'].includes(key))) {
 			throw new TypeError('Unknown tree item field');
 		}
 		if (typeof raw.handle !== 'string' || !raw.handle || raw.handle.length > 1024 || handles.has(raw.handle)) {
@@ -319,11 +271,7 @@ function parseTreeItems(value: JsonValue): ITreeItem[] {
 		if (
 			typeof raw.label !== 'string' ||
 			raw.label.length > 4096 ||
-			![
-				TreeItemCollapsibleState.None,
-				TreeItemCollapsibleState.Collapsed,
-				TreeItemCollapsibleState.Expanded,
-			].includes(raw.collapsibleState as number)
+			![TreeItemCollapsibleState.None, TreeItemCollapsibleState.Collapsed, TreeItemCollapsibleState.Expanded].includes(raw.collapsibleState as number)
 		) {
 			throw new TypeError('Invalid tree label or collapse state');
 		}
@@ -332,10 +280,7 @@ function parseTreeItems(value: JsonValue): ITreeItem[] {
 				throw new TypeError(`Invalid tree ${key}`);
 			}
 		}
-		if (
-			(raw.checkboxState !== undefined && raw.checkboxState !== 0 && raw.checkboxState !== 1) ||
-			(raw.editable !== undefined && typeof raw.editable !== 'boolean')
-		) {
+		if ((raw.checkboxState !== undefined && raw.checkboxState !== 0 && raw.checkboxState !== 1) || (raw.editable !== undefined && typeof raw.editable !== 'boolean')) {
 			throw new TypeError('Invalid tree checkbox or editing state');
 		}
 		let command: ITreeItem['command'];

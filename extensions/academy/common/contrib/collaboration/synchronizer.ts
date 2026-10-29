@@ -4,11 +4,7 @@ import { validateDocumentSelection } from '../../core/documentSelection.js';
 import { freezeDocumentNode, type DocumentNode } from '../../model/document.js';
 import { DocumentSchema } from '../../model/documentSchema.js';
 import { applyDocumentTransaction, DocumentTransaction, type DocumentStep } from '../../model/documentTransaction.js';
-import type {
-	DocumentCollaborationAcknowledgement,
-	DocumentCollaborationEnvelope,
-	DocumentCollaborationRemoteEnvelope,
-} from '../../services/documentCollaborationService.js';
+import type { DocumentCollaborationAcknowledgement, DocumentCollaborationEnvelope, DocumentCollaborationRemoteEnvelope } from '../../services/documentCollaborationService.js';
 import { rebaseDocumentTransaction } from './rebase.js';
 
 export interface DocumentCollaborationSynchronizerOptions {
@@ -47,11 +43,9 @@ export class DocumentCollaborationSynchronizer extends Disposable {
 
 	constructor(options: DocumentCollaborationSynchronizerOptions) {
 		super();
-		if (typeof options.clientId !== 'string' || options.clientId.trim().length === 0)
-			throw new TypeError('A collaboration client id is required');
+		if (typeof options.clientId !== 'string' || options.clientId.trim().length === 0) throw new TypeError('A collaboration client id is required');
 		const version = options.version ?? 0;
-		if (!Number.isSafeInteger(version) || version < 0)
-			throw new RangeError('A collaboration document version must be a non-negative safe integer');
+		if (!Number.isSafeInteger(version) || version < 0) throw new RangeError('A collaboration document version must be a non-negative safe integer');
 		const document = freezeDocumentNode(options.document);
 		options.schema.validate(document);
 		this.schema = options.schema;
@@ -95,9 +89,7 @@ export class DocumentCollaborationSynchronizer extends Disposable {
 	/** Snapshot produced by the exact in-flight update, excluding later local typing. */
 	get inFlightDocument(): DocumentNode | undefined {
 		this.assertNotDisposed();
-		return this._inFlight
-			? applySynchronizerTransaction(this._canonicalDocument, this.schema, this._inFlight.transaction).document
-			: undefined;
+		return this._inFlight ? applySynchronizerTransaction(this._canonicalDocument, this.schema, this._inFlight.transaction).document : undefined;
 	}
 
 	get pendingSequence(): number | undefined {
@@ -134,13 +126,10 @@ export class DocumentCollaborationSynchronizer extends Disposable {
 	receiveRemote(envelope: DocumentCollaborationRemoteEnvelope): DocumentCollaborationSynchronizationChange {
 		this.assertNotDisposed();
 		this.validateRemoteEnvelope(envelope);
-		if (envelope.clientId === this.clientId)
-			throw new DocumentCollaborationError('A local update must be acknowledged, not received as remote');
+		if (envelope.clientId === this.clientId) throw new DocumentCollaborationError('A local update must be acknowledged, not received as remote');
 		const remote = applySynchronizerTransaction(this._canonicalDocument, this.schema, envelope.transaction);
 		const local = this.pending;
-		const rebased = local
-			? rebaseDocumentTransaction(this._canonicalDocument, this.schema, local, envelope.transaction)
-			: undefined;
+		const rebased = local ? rebaseDocumentTransaction(this._canonicalDocument, this.schema, local, envelope.transaction) : undefined;
 		this._canonicalDocument = remote.document;
 		this._document = rebased?.document ?? remote.document;
 		this._inFlight = undefined;
@@ -153,29 +142,21 @@ export class DocumentCollaborationSynchronizer extends Disposable {
 	acknowledge(envelope: DocumentCollaborationAcknowledgement): DocumentCollaborationSynchronizationChange {
 		this.assertNotDisposed();
 		this.validateRemoteEnvelope(envelope);
-		if (envelope.clientId !== this.clientId)
-			throw new DocumentCollaborationError('Only the local client can acknowledge its own update');
-		if (!this._inFlight || envelope.sequence !== this._inFlight.sequence)
-			throw new DocumentCollaborationError('The acknowledgement does not match the current in-flight update');
+		if (envelope.clientId !== this.clientId) throw new DocumentCollaborationError('Only the local client can acknowledge its own update');
+		if (!this._inFlight || envelope.sequence !== this._inFlight.sequence) throw new DocumentCollaborationError('The acknowledgement does not match the current in-flight update');
 		const committed = applySynchronizerTransaction(this._canonicalDocument, this.schema, envelope.transaction);
 		this._canonicalDocument = committed.document;
 		this._version = envelope.version;
 		this._inFlight = undefined;
-		this._document = this._buffer
-			? applySynchronizerTransaction(committed.document, this.schema, this._buffer).document
-			: committed.document;
+		this._document = this._buffer ? applySynchronizerTransaction(committed.document, this.schema, this._buffer).document : committed.document;
 		return this.emitChange({ kind: 'acknowledged', envelope, droppedSteps: [] });
 	}
 
 	/** Replaces the canonical snapshot only when no local intent would be lost. */
 	replaceSnapshot(document: DocumentNode, version: number): void {
 		this.assertNotDisposed();
-		if (this.pending)
-			throw new DocumentCollaborationError(
-				'Cannot replace a collaboration snapshot while local updates are pending',
-			);
-		if (!Number.isSafeInteger(version) || version < 0)
-			throw new RangeError('A collaboration document version must be a non-negative safe integer');
+		if (this.pending) throw new DocumentCollaborationError('Cannot replace a collaboration snapshot while local updates are pending');
+		if (!Number.isSafeInteger(version) || version < 0) throw new RangeError('A collaboration document version must be a non-negative safe integer');
 		const normalized = freezeDocumentNode(document);
 		this.schema.validate(normalized);
 		this._canonicalDocument = normalized;
@@ -197,18 +178,12 @@ export class DocumentCollaborationSynchronizer extends Disposable {
 
 	private validateRemoteEnvelope(envelope: DocumentCollaborationRemoteEnvelope): void {
 		if (!envelope || typeof envelope !== 'object') throw new TypeError('A collaboration envelope is required');
-		if (typeof envelope.clientId !== 'string' || envelope.clientId.trim().length === 0)
-			throw new TypeError('A collaboration envelope requires a client id');
-		if (!Number.isSafeInteger(envelope.sequence) || envelope.sequence < 1)
-			throw new RangeError('A collaboration envelope sequence must be a positive safe integer');
+		if (typeof envelope.clientId !== 'string' || envelope.clientId.trim().length === 0) throw new TypeError('A collaboration envelope requires a client id');
+		if (!Number.isSafeInteger(envelope.sequence) || envelope.sequence < 1) throw new RangeError('A collaboration envelope sequence must be a positive safe integer');
 		if (!Number.isSafeInteger(envelope.baseVersion) || envelope.baseVersion !== this._version)
-			throw new DocumentCollaborationError(
-				`Collaboration update is based on version ${envelope.baseVersion}, expected ${this._version}`,
-			);
-		if (!Number.isSafeInteger(envelope.version) || envelope.version <= envelope.baseVersion)
-			throw new DocumentCollaborationError('A collaboration update must advance the document version');
-		if (!(envelope.transaction instanceof DocumentTransaction))
-			throw new TypeError('A collaboration envelope requires a Stanza transaction');
+			throw new DocumentCollaborationError(`Collaboration update is based on version ${envelope.baseVersion}, expected ${this._version}`);
+		if (!Number.isSafeInteger(envelope.version) || envelope.version <= envelope.baseVersion) throw new DocumentCollaborationError('A collaboration update must advance the document version');
+		if (!(envelope.transaction instanceof DocumentTransaction)) throw new TypeError('A collaboration envelope requires a Stanza transaction');
 	}
 
 	private emitChange(options: {
@@ -236,20 +211,13 @@ export class DocumentCollaborationError extends Error {
 	}
 }
 
-function applySynchronizerTransaction(
-	document: DocumentNode,
-	schema: DocumentSchema,
-	transaction: DocumentTransaction,
-): { readonly document: DocumentNode } {
+function applySynchronizerTransaction(document: DocumentNode, schema: DocumentSchema, transaction: DocumentTransaction): { readonly document: DocumentNode } {
 	const applied = applyDocumentTransaction(document, schema, transaction);
 	if (transaction.selection) validateDocumentSelection(applied.document, transaction.selection);
 	return applied;
 }
 
-function composeTransactions(
-	first: DocumentTransaction | undefined,
-	second: DocumentTransaction | undefined,
-): DocumentTransaction | undefined {
+function composeTransactions(first: DocumentTransaction | undefined, second: DocumentTransaction | undefined): DocumentTransaction | undefined {
 	if (!first) return second;
 	if (!second) return first;
 	return new DocumentTransaction([...first.steps, ...second.steps], {

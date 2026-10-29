@@ -11,27 +11,14 @@ import { CommandsRegistry, ICommandService } from '../../../../../platform/comma
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IDialogService, type IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import { FileKind, IFileService } from '../../../../../platform/files/common/files.js';
-import {
-	GitHubError,
-	GitHubErrorCode,
-	IGitHubService,
-	type GitHubShareLink,
-	type GitHubRemoteRepository,
-} from '../../../../../platform/github/common/githubService.js';
+import { GitHubError, GitHubErrorCode, IGitHubService, type GitHubShareLink, type GitHubRemoteRepository } from '../../../../../platform/github/common/githubService.js';
 import { decodeAppServerRequestParams } from '../../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import type { AppServerProtocolClient } from '../../../../../platform/agentHost/browser/appServerProtocolClient.js';
-import {
-	AppServerGitHubService,
-	createDisconnectedGitHubService,
-} from '../../../../../platform/github/browser/appServerGitHubService.js';
+import { AppServerGitHubService, createDisconnectedGitHubService } from '../../../../../platform/github/browser/appServerGitHubService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import {
-	IQuickInputService,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
@@ -61,9 +48,7 @@ const repository = () => ({
 		upstream: { name: 'origin/remote-feature', ahead: 0, behind: 0 },
 	},
 	uncommittedChanges: 0,
-	remotes: [
-		{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'alice', repository: 'test' } },
-	],
+	remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'alice', repository: 'test' } }],
 });
 
 /** Script choices at the public Quick Input boundary; actions still own their sequencing. */
@@ -94,9 +79,7 @@ function setup(resources: DisposableStore) {
 	const pickerTitles: string[] = [];
 	const github: IGitHubService = {
 		...createDisconnectedGitHubService(),
-		listAccounts: async () => [
-			{ id: 'account', host: 'github.com', login: 'alice', status: 'ready', credentialRevision: 1n },
-		],
+		listAccounts: async () => [{ id: 'account', host: 'github.com', login: 'alice', status: 'ready', credentialRevision: 1n }],
 		searchRepositories: async () => ({ items: [remote], nextPage: null }),
 		listRepositoryBranches: async () => ({
 			items: [
@@ -152,12 +135,7 @@ function setup(resources: DisposableStore) {
 		executeCommand: async (id: string, ...args: unknown[]) => {
 			requests.push({ id, args });
 			if (id === 'git.getRepositoryContexts') return contexts;
-			if (
-				id === 'git.executeRepositoryCommand' &&
-				(args[1] as { kind: string }).kind === 'publishBranch' &&
-				pushFailure
-			)
-				throw new Error('push rejected');
+			if (id === 'git.executeRepositoryCommand' && (args[1] as { kind: string }).kind === 'publishBranch' && pushFailure) throw new Error('push rejected');
 			return null;
 		},
 	} as ICommandService);
@@ -220,8 +198,7 @@ function setup(resources: DisposableStore) {
 		disableProtection: () => {
 			protection = false;
 		},
-		run: (id: string, ...args: unknown[]) =>
-			services.invokeFunction(accessor => CommandsRegistry.getCommand(id)!(accessor, ...args)),
+		run: (id: string, ...args: unknown[]) => services.invokeFunction(accessor => CommandsRegistry.getCommand(id)!(accessor, ...args)),
 	};
 }
 
@@ -231,11 +208,7 @@ for (const fail of [false, true]) {
 		using registration = CommandsRegistry.register('git.getRepositoryContexts', () => undefined);
 		const fixture = setup(resources);
 		if (fail) fixture.failPush();
-		if (fail)
-			await assert.rejects(
-				fixture.run('github.publish') as Promise<void>,
-				/created at https:\/\/github.com\/alice\/test.*Do not create/s,
-			);
+		if (fail) await assert.rejects(fixture.run('github.publish') as Promise<void>, /created at https:\/\/github.com\/alice\/test.*Do not create/s);
 		else await fixture.run('github.publish');
 		assert.deepEqual(fixture.creates, [['account', 'test', '', 'private']]);
 		const mutations = fixture.requests.filter(request => request.id === 'git.executeRepositoryCommand');
@@ -281,10 +254,7 @@ test('repository search selection feeds the default branch and selected protocol
 	const fixture = setup(resources);
 	await fixture.run('github.clone');
 	assert.deepEqual(fixture.requests, [{ id: 'git.clone', args: [remote.sshUrl, 'main', 'account'] }]);
-	assert.deepEqual(fixture.pickerTitles, [
-		'Search GitHub repositories or paste a repository URL',
-		'Choose a branch to clone',
-	]);
+	assert.deepEqual(fixture.pickerTitles, ['Search GitHub repositories or paste a repository URL', 'Choose a branch to clone']);
 });
 
 test('sharing prefers the tracked GitHub remote and uses the displayed selection with an exclusive end line', async () => {
@@ -335,10 +305,7 @@ test('the production protection hook honors exclusions, opt-out and provider fai
 	fixture.github.readBranchProtection = async () => {
 		throw new Error('rules unavailable');
 	};
-	await assert.rejects(
-		fixture.run('github.isBranchProtected', 'main', remotes) as Promise<boolean>,
-		/rules unavailable/,
-	);
+	await assert.rejects(fixture.run('github.isBranchProtected', 'main', remotes) as Promise<boolean>, /rules unavailable/);
 	fixture.disableProtection();
 	assert.equal(await fixture.run('github.isBranchProtected', 'main', remotes), false);
 });
@@ -365,9 +332,7 @@ test('closing repository search on account changes cancels reads and never clone
 			release = resolve;
 		});
 	};
-	const pending = services.invokeFunction(accessor =>
-		CommandsRegistry.getCommand('github.clone')!(accessor),
-	) as Promise<void>;
+	const pending = services.invokeFunction(accessor => CommandsRegistry.getCommand('github.clone')!(accessor)) as Promise<void>;
 	await entered;
 	changes.fire(undefined as never);
 	await pending;
@@ -400,10 +365,7 @@ test('repository transport validates anonymous links and keeps lost create repli
 	);
 	assert.ok(!('accountId' in sent[0]!.params));
 	assert.deepEqual(sent[0]!.params.repository, remote.repository);
-	await assert.rejects(
-		github.createRepository('account', 'repo', '', 'private'),
-		error => error instanceof GitHubError && error.code === GitHubErrorCode.SubmissionUncertain,
-	);
+	await assert.rejects(github.createRepository('account', 'repo', '', 'private'), error => error instanceof GitHubError && error.code === GitHubErrorCode.SubmissionUncertain);
 	assert.equal(sent.filter(request => request.method === 'github/repository/create').length, 1);
 });
 

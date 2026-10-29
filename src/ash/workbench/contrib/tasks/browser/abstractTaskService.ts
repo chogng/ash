@@ -2,10 +2,7 @@ import { TaskQuickPick } from './taskQuickPick.js';
 import { getTemplates, type ITaskEntry } from '../common/taskTemplates.js';
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
-import {
-	IInstantiationService,
-	type ServicesAccessor,
-} from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import type { TerminalTaskSystem } from './terminalTaskSystem.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IPathService } from '../../../../platform/path/common/pathService.js';
@@ -23,13 +20,7 @@ import { IQuickInputService, type IQuickPickItem } from '../../../../platform/qu
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { URI } from '../../../../base/common/uri.js';
-import {
-	FileKind,
-	FileNotFoundError,
-	FileSystemProviderErrorCode,
-	toFileSystemProviderErrorCode,
-	IFileService,
-} from '../../../../platform/files/common/files.js';
+import { FileKind, FileNotFoundError, FileSystemProviderErrorCode, toFileSystemProviderErrorCode, IFileService } from '../../../../platform/files/common/files.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { ITaskService } from '../common/taskService.js';
@@ -49,11 +40,7 @@ import {
 	RUN_TASK_COMMAND_ID,
 	TERMINATE_TASK_COMMAND_ID,
 } from '../common/tasks.js';
-import {
-	IOutputService,
-	type IOutputChannel,
-	type OutputEntrySeverity,
-} from '../../../services/output/common/output.js';
+import { IOutputService, type IOutputChannel, type OutputEntrySeverity } from '../../../services/output/common/output.js';
 import {
 	cargoWorkspaceTasks,
 	parseShellExecution,
@@ -138,14 +125,11 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
-		this.output = this._register(
-			outputService.createChannel({ id: 'tasks', label: 'Tasks', kind: 'log', source: 'core' }),
-		);
+		this.output = this._register(outputService.createChannel({ id: 'tasks', label: 'Tasks', kind: 'log', source: 'core' }));
 		resolver.contributeVariable('defaultBuildTask', () => this.resolveDefaultBuildTask());
 		this._register(
 			fileService.onDidChangeFiles(event => {
-				if ((this.loaded || this.activeRefresh !== undefined) && affectsTaskConfiguration(event.resources))
-					void this.refresh().catch(error => this.reportError(error));
+				if ((this.loaded || this.activeRefresh !== undefined) && affectsTaskConfiguration(event.resources)) void this.refresh().catch(error => this.reportError(error));
 			}),
 		);
 		this._register(
@@ -192,9 +176,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		return [...this.retainedRuns.values()].map(entry => entry.run);
 	}
 	private pruneRuns(): void {
-		const completed = [...this.retainedRuns]
-			.filter(([, entry]) => entry.completedAt !== undefined)
-			.sort(([, a], [, b]) => a.completedAt! - b.completedAt!);
+		const completed = [...this.retainedRuns].filter(([, entry]) => entry.completedAt !== undefined).sort(([, a], [, b]) => a.completedAt! - b.completedAt!);
 		let count = completed.length;
 		for (const [id, entry] of completed) {
 			if (Date.now() - entry.completedAt! > 3_600_000 || count > 100) {
@@ -211,28 +193,12 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		this.assertNotDisposed();
 		if (signal.aborted) throw new CancellationError();
 		const existing = this.activeRuns.filter(run => run.task.id === task.id);
-		if (
-			existing.length >= (task.runOptions?.instanceLimit ?? 1) &&
-			['silent', 'warn'].includes(task.runOptions?.instancePolicy ?? 'prompt')
-		) {
+		if (existing.length >= (task.runOptions?.instanceLimit ?? 1) && ['silent', 'warn'].includes(task.runOptions?.instancePolicy ?? 'prompt')) {
 			if (task.runOptions?.instancePolicy === 'warn')
-				this.notifications.warn(
-					localize(
-						'tasks.instanceLimitReached',
-						"Task '{0}' has reached its limit of {1} running instance(s).",
-						task.label,
-						task.runOptions?.instanceLimit ?? 1,
-					),
-				);
+				this.notifications.warn(localize('tasks.instanceLimitReached', "Task '{0}' has reached its limit of {1} running instance(s).", task.label, task.runOptions?.instanceLimit ?? 1));
 			return existing[0]!;
 		}
-		if (this.activeRuns.length >= 32)
-			throw new Error(
-				localize(
-					'tasks.agentRunLimit',
-					'This window already has 32 running tasks. Wait for a task to finish before starting another.',
-				),
-			);
+		if (this.activeRuns.length >= 32) throw new Error(localize('tasks.agentRunLimit', 'This window already has 32 running tasks. Wait for a task to finish before starting another.'));
 		const controller = new AbortController();
 		const emitter = new Emitter<TaskRunStatus>();
 		const readyEmitter = new Emitter<void>();
@@ -273,8 +239,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			},
 			onDidChangeStatus: emitter.event,
 			completion: completion.p,
-			readOutput: (cursor, limit) =>
-				current ? current.readOutput(cursor, limit) : readTaskOutput(preparationError, 0, cursor, limit),
+			readOutput: (cursor, limit) => (current ? current.readOutput(cursor, limit) : readTaskOutput(preparationError, 0, cursor, limit)),
 		};
 		const bindRun = (value: ITaskRun): void => {
 			if (current === value) return;
@@ -291,15 +256,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		};
 		const abort = (): void => controller.abort();
 		signal.addEventListener('abort', abort, { once: true });
-		const operation = this.dispatch(
-			task,
-			controller.signal,
-			false,
-			undefined,
-			expectedRevision,
-			run.runId,
-			bindRun,
-		);
+		const operation = this.dispatch(task, controller.signal, false, undefined, expectedRevision, run.runId, bindRun);
 		this.retainedRuns.set(run.runId, { run, dispatch: { controller, operation } });
 		this.latestRun = run;
 		this.stateEmitter.fire(run);
@@ -343,13 +300,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		const current = resolveKnownTask(task, this.currentTasks);
 		const rootFolder = this.workspace.getWorkspace().folders.find(folder => folder.id === current.dirId);
 		const rules = rootFolder ? await this.paths.getPath(rootFolder.uri) : undefined;
-		if (!rules)
-			throw new Error(
-				localize(
-					'tasks.agentLocalTaskRequired',
-					'Agent task execution requires a task in a local workspace folder.',
-				),
-			);
+		if (!rules) throw new Error(localize('tasks.agentLocalTaskRequired', 'Agent task execution requires a task in a local workspace folder.'));
 		const [rootPath, folderBasename] = await Promise.all([
 			this.resolver.resolveWithEnvironment({}, rootFolder!, '${workspaceFolder}'),
 			this.resolver.resolveWithEnvironment({}, rootFolder!, '${workspaceFolderBasename}'),
@@ -359,19 +310,10 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		const visiting = new Set<string>();
 		const visited = new Set<string>();
 		const visit = (candidate: IWorkspaceTask): void => {
-			if (visiting.has(candidate.id))
-				throw new Error(
-					localize('tasks.dependencyCycle', "Task '{0}' has a circular dependency.", candidate.label),
-				);
+			if (visiting.has(candidate.id)) throw new Error(localize('tasks.dependencyCycle', "Task '{0}' has a circular dependency.", candidate.label));
 			if (visited.has(candidate.id)) return;
 			const folder = this.workspace.getWorkspace().folders.find(folder => candidate.dirId === folder.id);
-			if (!folder || folder.uri.scheme !== 'file')
-				throw new Error(
-					localize(
-						'tasks.agentLocalTaskRequired',
-						'Agent task execution requires a task in a local workspace folder.',
-					),
-				);
+			if (!folder || folder.uri.scheme !== 'file') throw new Error(localize('tasks.agentLocalTaskRequired', 'Agent task execution requires a task in a local workspace folder.'));
 			const configuration = JSON.stringify({
 				command: candidate.command,
 				execution: candidate.execution,
@@ -383,22 +325,11 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 				candidate.providerId ||
 				candidate.execution?.type === 'custom' ||
 				candidate.unsupportedFeatures?.length ||
-				[...configuration.matchAll(/\$\{([^}]+)\}/g)].some(
-					match => !['workspaceFolder', 'workspaceFolderBasename'].includes(match[1]!),
-				)
+				[...configuration.matchAll(/\$\{([^}]+)\}/g)].some(match => !['workspaceFolder', 'workspaceFolderBasename'].includes(match[1]!))
 			) {
-				throw new Error(
-					localize(
-						'tasks.agentStaticTaskRequired',
-						"Task '{0}' needs an extension or interactive variables. Use the Run Task command to run it.",
-						candidate.label,
-					),
-				);
+				throw new Error(localize('tasks.agentStaticTaskRequired', "Task '{0}' needs an extension or interactive variables. Use the Run Task command to run it.", candidate.label));
 			}
-			const resolve = (value: string): string =>
-				value
-					.replaceAll('${workspaceFolder}', rootPath)
-					.replaceAll('${workspaceFolderBasename}', folderBasename);
+			const resolve = (value: string): string => value.replaceAll('${workspaceFolder}', rootPath).replaceAll('${workspaceFolderBasename}', folderBasename);
 			visiting.add(candidate.id);
 			for (const dependency of taskDependencies(candidate, this.currentTasks)) visit(dependency);
 			visiting.delete(candidate.id);
@@ -454,9 +385,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			// to this Task owner and must settle on workspace retirement or disposal.
 			resources.add(toDisposable(() => finish()));
 			try {
-				const picker = resources.add(
-					this.quickInput.createQuickPick<IQuickPickItem & { task: IWorkspaceTask }>(),
-				);
+				const picker = resources.add(this.quickInput.createQuickPick<IQuickPickItem & { task: IWorkspaceTask }>());
 				picker.placeholder = picker.ariaLabel = localize('tasks.selectBuildTaskLabel', 'Select a build task');
 				const update = (catalog: readonly IWorkspaceTask[]): void => {
 					picker.items = candidates(catalog).map(task => ({
@@ -508,8 +437,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			this._register(
 				system.onDidStateChange(run => {
 					const retained = this.retainedRuns.get(run.runId);
-					if (retained && run.status !== 'running' && retained.completedAt === undefined)
-						retained.completedAt = Date.now();
+					if (retained && run.status !== 'running' && retained.completedAt === undefined) retained.completedAt = Date.now();
 					this.pruneRuns();
 					this.stateEmitter.fire(retained?.run ?? run);
 				}),
@@ -553,9 +481,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		return this.waitForCurrentRefresh(operation);
 	}
 
-	private async waitForCurrentRefresh(
-		operation: Promise<readonly IWorkspaceTask[]>,
-	): Promise<readonly IWorkspaceTask[]> {
+	private async waitForCurrentRefresh(operation: Promise<readonly IWorkspaceTask[]>): Promise<readonly IWorkspaceTask[]> {
 		let tasks = await operation;
 		// File watchers and activation may replace discovery while a command is waiting.
 		// Returning the last good catalog would let that command select removed tasks.
@@ -576,14 +502,9 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			} finally {
 				if (this.activatingProviders === controller) this.activatingProviders = undefined;
 			}
-			if (controller.signal.aborted || generation !== this.refreshGeneration || this.isDisposed)
-				return this.currentTasks;
+			if (controller.signal.aborted || generation !== this.refreshGeneration || this.isDisposed) return this.currentTasks;
 			const providerSnapshot = [...this.providers.values()].map(entry => entry.provider);
-			this.log(
-				'debug',
-				'discovery',
-				`Refreshing workspace tasks from configuration and ${providerSnapshot.length} provider(s).`,
-			);
+			this.log('debug', 'discovery', `Refreshing workspace tasks from configuration and ${providerSnapshot.length} provider(s).`);
 			const [folderGroups, providerGroups] = await Promise.all([
 				Promise.all(
 					folders.map(async folder => {
@@ -601,15 +522,13 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			]);
 			const discovered = folderGroups.flat();
 			const providerTasks = providerGroups.flat();
-			if (controller.signal.aborted || generation !== this.refreshGeneration || this.isDisposed)
-				return this.currentTasks;
+			if (controller.signal.aborted || generation !== this.refreshGeneration || this.isDisposed) return this.currentTasks;
 			this.loaded = true;
 			this.setTasks(mergeTasks(discovered, providerTasks));
 			this.log('information', 'discovery', `Discovered ${this.currentTasks.length} workspace task(s).`);
 			return this.currentTasks;
 		} catch (error) {
-			if (controller.signal.aborted || generation !== this.refreshGeneration || this.isDisposed)
-				return this.currentTasks;
+			if (controller.signal.aborted || generation !== this.refreshGeneration || this.isDisposed) return this.currentTasks;
 			this.log('error', 'discovery', `Task discovery failed: ${errorMessage(error)}`);
 			throw error;
 		} finally {
@@ -622,10 +541,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 	}
 
 	async rerun(terminalInstanceId: string): Promise<ITaskRun | undefined> {
-		const previous =
-			this.lastRun?.terminalId === terminalInstanceId
-				? this.lastRun
-				: this.activeRuns.find(run => run.terminalId === terminalInstanceId);
+		const previous = this.lastRun?.terminalId === terminalInstanceId ? this.lastRun : this.activeRuns.find(run => run.terminalId === terminalInstanceId);
 		if (!previous) return undefined;
 		const authority = this.providedRuns.get(previous);
 		const run = await this.dispatch(previous.task, authority, authority !== undefined, previous);
@@ -636,16 +552,9 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 	async runProvidedTask(ownerId: string, task: TaskProviderTask, signal: AbortSignal): Promise<ITaskRun> {
 		this.assertNotDisposed();
 		const provided = projectProviderTask(ownerId, task);
-		const folder = URI.isUri(provided.scope)
-			? this.workspace.getWorkspace().folders.find(folder => folder.uri.toString() === provided.scope!.toString())
-			: undefined;
-		if (URI.isUri(provided.scope) && !folder)
-			throw new Error('Extension task scope is outside the current workspace');
-		const run = await this.dispatch(
-			Object.freeze({ ...provided, extensionTaskId: task.id, ...(folder ? { dirId: folder.id } : {}) }),
-			signal,
-			true,
-		);
+		const folder = URI.isUri(provided.scope) ? this.workspace.getWorkspace().folders.find(folder => folder.uri.toString() === provided.scope!.toString()) : undefined;
+		if (URI.isUri(provided.scope) && !folder) throw new Error('Extension task scope is outside the current workspace');
+		const run = await this.dispatch(Object.freeze({ ...provided, extensionTaskId: task.id, ...(folder ? { dirId: folder.id } : {}) }), signal, true);
 		this.providedRuns.set(run, signal);
 		return run;
 	}
@@ -666,21 +575,11 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		const contributions = this.extensions.reload();
 		await (signal ? raceCancellationError(contributions, signal) : contributions);
 		if (workspaceGeneration !== this.workspaceGeneration || this.isDisposed)
-			throw new Error(
-				localize(
-					'tasks.configurationChanged',
-					'Task configuration changed while preparing the task. The task was not started. Run the task again.',
-				),
-			);
+			throw new Error(localize('tasks.configurationChanged', 'Task configuration changed while preparing the task. The task was not started. Run the task again.'));
 		const refresh = this.refresh();
 		const tasks = await (signal ? raceCancellationError(refresh, signal) : refresh);
 		if (workspaceGeneration !== this.workspaceGeneration || this.isDisposed)
-			throw new Error(
-				localize(
-					'tasks.configurationChanged',
-					'Task configuration changed while preparing the task. The task was not started. Run the task again.',
-				),
-			);
+			throw new Error(localize('tasks.configurationChanged', 'Task configuration changed while preparing the task. The task was not started. Run the task again.'));
 		const generation = this.catalogGeneration;
 		const terminalConfiguration = JSON.stringify(this.configuration.getValue('terminal'));
 		const currentTask = provided
@@ -697,71 +596,31 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		const pending = new Map<string, Promise<ITaskRun>>();
 		const graph = new Map<string, readonly IWorkspaceTask[]>();
 		const resolvedTasks = new Map<string, IWorkspaceTask>();
-		const previousRuns = new Map(
-			previous
-				? [previous, ...(this.dependencyRuns.get(previous) ?? [])].map(run => [run.task.id, run] as const)
-				: [],
-		);
+		const previousRuns = new Map(previous ? [previous, ...(this.dependencyRuns.get(previous) ?? [])].map(run => [run.task.id, run] as const) : []);
 		const visiting = new Set<string>();
 		const assertCurrent = (): void => {
 			if (signal?.aborted) throw new CancellationError();
-			if (
-				expectedRevision !== undefined &&
-				JSON.stringify(this.configuration.getValue('terminal')) !== terminalConfiguration
-			)
-				throw new Error(
-					localize(
-						'tasks.agentRevisionChanged',
-						'The task configuration changed after review. Discover the task again before running it.',
-					),
-				);
-			if (controller.signal.aborted && controller.signal.reason instanceof CancellationError)
-				throw controller.signal.reason;
-			if (
-				controller.signal.aborted ||
-				generation !== this.catalogGeneration ||
-				workspaceGeneration !== this.workspaceGeneration ||
-				this.isDisposed
-			)
-				throw new Error(
-					localize(
-						'tasks.configurationChanged',
-						'Task configuration changed while preparing the task. The task was not started. Run the task again.',
-					),
-				);
+			if (expectedRevision !== undefined && JSON.stringify(this.configuration.getValue('terminal')) !== terminalConfiguration)
+				throw new Error(localize('tasks.agentRevisionChanged', 'The task configuration changed after review. Discover the task again before running it.'));
+			if (controller.signal.aborted && controller.signal.reason instanceof CancellationError) throw controller.signal.reason;
+			if (controller.signal.aborted || generation !== this.catalogGeneration || workspaceGeneration !== this.workspaceGeneration || this.isDisposed)
+				throw new Error(localize('tasks.configurationChanged', 'Task configuration changed while preparing the task. The task was not started. Run the task again.'));
 		};
 		const validate = async (candidate: IWorkspaceTask): Promise<void> => {
-			if (visiting.has(candidate.id))
-				throw new Error(
-					localize('tasks.dependencyCycle', "Task '{0}' has a circular dependency.", candidate.label),
-				);
+			if (visiting.has(candidate.id)) throw new Error(localize('tasks.dependencyCycle', "Task '{0}' has a circular dependency.", candidate.label));
 			if (graph.has(candidate.id)) return;
-			if (
-				candidate.definition &&
-				candidate.unsupportedFeatures?.some(feature => feature === `type:${candidate.definition!.type}`)
-			) {
-				const providers = [...this.providers.values()]
-					.map(value => value.provider)
-					.filter(provider => provider.type === candidate.definition!.type && provider.resolveTask);
+			if (candidate.definition && candidate.unsupportedFeatures?.some(feature => feature === `type:${candidate.definition!.type}`)) {
+				const providers = [...this.providers.values()].map(value => value.provider).filter(provider => provider.type === candidate.definition!.type && provider.resolveTask);
 				if (providers.length === 1) {
-					const value = await raceCancellationError(
-						Promise.resolve(providers[0]!.resolveTask!(candidate, controller.signal)),
-						controller.signal,
-					);
+					const value = await raceCancellationError(Promise.resolve(providers[0]!.resolveTask!(candidate, controller.signal)), controller.signal);
 					assertCurrent();
 					if (value) {
-						if (
-							value.definition &&
-							JSON.stringify(value.definition) !== JSON.stringify(candidate.definition)
-						)
-							throw new TypeError('resolveTask must preserve the task definition');
+						if (value.definition && JSON.stringify(value.definition) !== JSON.stringify(candidate.definition)) throw new TypeError('resolveTask must preserve the task definition');
 						const provided = projectProviderTask(providers[0]!.id, value);
 						// A definition-only extension Task can explicitly select a group
 						// without carrying a tasks.json presence flag or a default flag.
 						const preserveGroup =
-							candidate.configuration?.groupIsConfigured === true ||
-							candidate.groupIsDefault !== undefined ||
-							(candidate.configuration === undefined && candidate.group !== 'other');
+							candidate.configuration?.groupIsConfigured === true || candidate.groupIsDefault !== undefined || (candidate.configuration === undefined && candidate.group !== 'other');
 						candidate = Object.freeze({
 							...candidate,
 							...provided,
@@ -778,14 +637,10 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 							cwd: candidate.cwd ?? provided.cwd,
 							runOptions: candidate.runOptions ?? provided.runOptions,
 							presentation:
-								candidate.presentation === undefined && provided.presentation === undefined
-									? undefined
-									: Object.freeze({ ...provided.presentation, ...candidate.presentation }),
+								candidate.presentation === undefined && provided.presentation === undefined ? undefined : Object.freeze({ ...provided.presentation, ...candidate.presentation }),
 							isBackground: candidate.isBackground ?? provided.isBackground,
 							problemMatchers: candidate.problemMatchers ?? provided.problemMatchers,
-							unsupportedFeatures: candidate.unsupportedFeatures.filter(
-								feature => feature !== `type:${candidate.definition!.type}`,
-							),
+							unsupportedFeatures: candidate.unsupportedFeatures.filter(feature => feature !== `type:${candidate.definition!.type}`),
 							environment: Object.freeze({ ...provided.environment, ...candidate.environment }),
 						});
 					}
@@ -827,53 +682,28 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 					while (true) {
 						const instances = this.taskInstances(candidate.id);
 						if (instances.length < (candidate.runOptions?.instanceLimit ?? 1)) break;
-						const policy =
-							candidate.id === currentTask.id
-								? (candidate.runOptions?.instancePolicy ?? 'prompt')
-								: 'silent';
+						const policy = candidate.id === currentTask.id ? (candidate.runOptions?.instancePolicy ?? 'prompt') : 'silent';
 						if (policy === 'silent' || policy === 'warn') {
 							if (expectedRevision !== undefined && candidate.id === currentTask.id)
-								throw new Error(
-									localize(
-										'tasks.agentAlreadyRunning',
-										"Task '{0}' is already running. Use tasks_list to find and inspect its Run ID.",
-										candidate.label,
-									),
-								);
+								throw new Error(localize('tasks.agentAlreadyRunning', "Task '{0}' is already running. Use tasks_list to find and inspect its Run ID.", candidate.label));
 							if (policy === 'warn')
 								this.notifications.warn(
-									localize(
-										'tasks.instanceLimitReached',
-										"Task '{0}' has reached its limit of {1} running instance(s).",
-										candidate.label,
-										candidate.runOptions?.instanceLimit ?? 1,
-									),
+									localize('tasks.instanceLimitReached', "Task '{0}' has reached its limit of {1} running instance(s).", candidate.label, candidate.runOptions?.instanceLimit ?? 1),
 								);
 							// Joining another graph never transfers cancellation or rollback ownership.
 							const instance = instances.find(value => value.run?.status === 'running') ?? instances[0]!;
 							return {
-								operation: instance.run
-									? Promise.resolve(instance.run)
-									: raceCancellationError(instance.reservation!.operation, controller.signal),
+								operation: instance.run ? Promise.resolve(instance.run) : raceCancellationError(instance.reservation!.operation, controller.signal),
 							};
 						}
-						const selected =
-							policy === 'prompt'
-								? await this.selectInstance(candidate, instances, controller.signal)
-								: policy === 'terminateNewest'
-									? instances.at(-1)!
-									: instances[0]!;
+						const selected = policy === 'prompt' ? await this.selectInstance(candidate, instances, controller.signal) : policy === 'terminateNewest' ? instances.at(-1)! : instances[0]!;
 						assertCurrent();
 						if (!selected) continue;
 						// The selected instance may have completed while its picker was open.
 						if (!this.taskInstances(candidate.id).some(value => value.order === selected.order)) continue;
 						if (selected.run) await this.terminate(selected.run);
 						else selected.reservation!.cancel();
-						await raceCancellationError(
-							selected.reservation?.completion ??
-								Promise.resolve(selected.run!.completion).then(() => undefined),
-							controller.signal,
-						);
+						await raceCancellationError(selected.reservation?.completion ?? Promise.resolve(selected.run!.completion).then(() => undefined), controller.signal);
 						assertCurrent();
 					}
 					const reservations = this.pendingRuns.get(candidate.id) ?? new Set<TaskReservation>();
@@ -884,14 +714,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 							const status = await waitForTask(run, controller.signal);
 							assertCurrent();
 							if (status !== 'succeeded' || run.hasErrors)
-								throw new Error(
-									localize(
-										'tasks.dependencyFailed',
-										"Dependency '{0}' of task '{1}' failed.",
-										dependency.label,
-										candidate.label,
-									),
-								);
+								throw new Error(localize('tasks.dependencyFailed', "Dependency '{0}' of task '{1}' failed.", dependency.label, candidate.label));
 						};
 						const dependencies = graph.get(candidate.id)!;
 						if (candidate.dependsOrder === 'sequence') {
@@ -900,9 +723,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 							await Promise.all(dependencies.map(wait));
 						}
 						assertCurrent();
-						const folder = this.workspace
-							.getWorkspace()
-							.folders.find(folder => candidate.dirId === undefined || folder.id === candidate.dirId);
+						const folder = this.workspace.getWorkspace().folders.find(folder => candidate.dirId === undefined || folder.id === candidate.dirId);
 						if (!folder) throw new Error(`Task '${candidate.label}' has no available workspace folder`);
 						const run = await this.getTaskSystem().run(
 							candidate,
@@ -933,8 +754,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 						)
 						.finally(() => {
 							reservations.delete(reservation);
-							if (reservations.size === 0 && this.pendingRuns.get(candidate.id) === reservations)
-								this.pendingRuns.delete(candidate.id);
+							if (reservations.size === 0 && this.pendingRuns.get(candidate.id) === reservations) this.pendingRuns.delete(candidate.id);
 						});
 					// Dependency awaits yield before execution publishes a run.
 					reservation = {
@@ -948,8 +768,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 					return { operation };
 				} finally {
 					void admitted.complete(undefined);
-					if (this.capacityDecisions.get(candidate.id) === decision)
-						this.capacityDecisions.delete(candidate.id);
+					if (this.capacityDecisions.get(candidate.id) === decision) this.capacityDecisions.delete(candidate.id);
 				}
 			})();
 			const operation = admission.then(value => value.operation);
@@ -958,12 +777,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		};
 		try {
 			if (expectedRevision !== undefined && (await this.describe(currentTask)).revision !== expectedRevision)
-				throw new Error(
-					localize(
-						'tasks.agentRevisionChanged',
-						'The task configuration changed after review. Discover the task again before running it.',
-					),
-				);
+				throw new Error(localize('tasks.agentRevisionChanged', 'The task configuration changed after review. Discover the task again before running it.'));
 			assertCurrent();
 			await validate(currentTask);
 			const run = await execute(currentTask);
@@ -993,22 +807,15 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			order: reservation.order,
 		}));
 		for (const run of this.taskSystem?.activeRuns ?? []) {
-			if (run.task.id === taskId && !instances.some(instance => instance.run === run))
-				instances.push({ run, reservation: undefined, order: this.runOrder.get(run)! });
+			if (run.task.id === taskId && !instances.some(instance => instance.run === run)) instances.push({ run, reservation: undefined, order: this.runOrder.get(run)! });
 		}
 		return instances.sort((first, second) => first.order - second.order);
 	}
 
-	private selectInstance(
-		task: IWorkspaceTask,
-		instances: readonly TaskInstance[],
-		signal: AbortSignal,
-	): Promise<TaskInstance | null> {
+	private selectInstance(task: IWorkspaceTask, instances: readonly TaskInstance[], signal: AbortSignal): Promise<TaskInstance | null> {
 		return new Promise((resolve, reject) => {
 			const resources = new DisposableStore();
-			const picker = resources.add(
-				this.quickInput.createQuickPick<IQuickPickItem & { instance: TaskInstance }>(),
-			);
+			const picker = resources.add(this.quickInput.createQuickPick<IQuickPickItem & { instance: TaskInstance }>());
 			let settled = false;
 			const finish = (instance?: TaskInstance | null): void => {
 				if (settled) return;
@@ -1018,11 +825,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 				if (instance === undefined) reject(new CancellationError());
 				else resolve(instance);
 			};
-			picker.ariaLabel = picker.placeholder = localize(
-				'tasks.selectInstanceToTerminate',
-				"Task '{0}' is at its instance limit. Select an instance to terminate and restart.",
-				task.label,
-			);
+			picker.ariaLabel = picker.placeholder = localize('tasks.selectInstanceToTerminate', "Task '{0}' is at its instance limit. Select an instance to terminate and restart.", task.label);
 			picker.items = instances.map((instance, index) => ({
 				instance,
 				label: localize('tasks.runningInstance', '{0} — instance {1}', task.label, index + 1),
@@ -1100,8 +903,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		const ids = new Set<string>();
 		for (const provider of normalized) {
 			const existing = this.providers.get(provider.id);
-			if (ids.has(provider.id) || (existing && existing.owner !== owner))
-				throw new Error(`Task provider '${provider.id}' is already registered`);
+			if (ids.has(provider.id) || (existing && existing.owner !== owner)) throw new Error(`Task provider '${provider.id}' is already registered`);
 			ids.add(provider.id);
 		}
 		const changed = new Set(this.deleteProviderOwner(owner));
@@ -1126,8 +928,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		for (const dispatch of this.dispatches) dispatch.abort();
 		for (const run of this.activeRuns) {
 			const providerId = run.task.providerId ?? taskProviderId(run.task);
-			if (providerId && changedProviders.has(providerId) && run.task.execution?.type === 'custom')
-				void this.terminate(run).catch(error => this.reportError(error));
+			if (providerId && changedProviders.has(providerId) && run.task.execution?.type === 'custom') void this.terminate(run).catch(error => this.reportError(error));
 		}
 		const refresh = this.loaded || this.activeRefresh !== undefined;
 		if (this.loaded)
@@ -1163,14 +964,10 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			contributions.map(contribution => {
 				const provided = projectProviderTask(provider.id, contribution);
 				const scope = provided.scope;
-				const folder = URI.isUri(scope)
-					? this.workspace.getWorkspace().folders.find(folder => folder.uri.toString() === scope.toString())
-					: undefined;
-				if (URI.isUri(scope) && !folder)
-					throw new Error('Extension task scope is outside the current workspace');
+				const folder = URI.isUri(scope) ? this.workspace.getWorkspace().folders.find(folder => folder.uri.toString() === scope.toString()) : undefined;
+				if (URI.isUri(scope) && !folder) throw new Error('Extension task scope is outside the current workspace');
 				const task = folder ? Object.freeze({ ...provided, dirId: folder.id }) : provided;
-				if (ids.has(task.id))
-					throw new Error(`Task provider '${provider.id}' returned duplicate task '${contribution.id}'`);
+				if (ids.has(task.id)) throw new Error(`Task provider '${provider.id}' returned duplicate task '${contribution.id}'`);
 				ids.add(task.id);
 				return task;
 			}),
@@ -1199,17 +996,9 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 	private async discoverWorkspaceTasks(root: URI): Promise<readonly IWorkspaceTask[]> {
 		const discovered: IWorkspaceTask[] = [];
 		const tasksJson = await this.readOptional(childResource(root, '.vscode/tasks.json'));
-		if (tasksJson !== undefined)
-			discovered.push(
-				...parseWorkspaceTasks(
-					tasksJson,
-					await this.paths.getOperatingSystem(root),
-					this.resolver.resolvableVariables,
-				),
-			);
+		if (tasksJson !== undefined) discovered.push(...parseWorkspaceTasks(tasksJson, await this.paths.getOperatingSystem(root), this.resolver.resolvableVariables));
 		const packageJson = await this.readOptional(childResource(root, 'package.json'));
-		if (packageJson !== undefined)
-			discovered.push(...parsePackageTasks(packageJson, await this.packageManager(root)));
+		if (packageJson !== undefined) discovered.push(...parsePackageTasks(packageJson, await this.packageManager(root)));
 		if (await this.exists(childResource(root, 'Cargo.toml'))) discovered.push(...cargoWorkspaceTasks());
 		return Object.freeze(discovered);
 	}
@@ -1246,45 +1035,28 @@ function childResource(root: URI, relativePath: string): URI {
 }
 
 function affectsTaskConfiguration(resources: readonly URI[] | undefined): boolean {
-	return (
-		resources === undefined ||
-		resources.some(resource =>
-			/\/(?:tasks\.json|package\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.toml)$/i.test(resource.path),
-		)
-	);
+	return resources === undefined || resources.some(resource => /\/(?:tasks\.json|package\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.toml)$/i.test(resource.path));
 }
 
 function deduplicateTasks(tasks: readonly IWorkspaceTask[]): readonly IWorkspaceTask[] {
 	const unique = new Map<string, IWorkspaceTask>();
 	for (const task of tasks) if (!unique.has(task.id)) unique.set(task.id, task);
-	return Object.freeze(
-		[...unique.values()].sort(
-			(left, right) => taskOrder(left.group) - taskOrder(right.group) || left.label.localeCompare(right.label),
-		),
-	);
+	return Object.freeze([...unique.values()].sort((left, right) => taskOrder(left.group) - taskOrder(right.group) || left.label.localeCompare(right.label)));
 }
 
-function mergeTasks(
-	discovered: readonly IWorkspaceTask[],
-	provided: readonly IWorkspaceTask[],
-): readonly IWorkspaceTask[] {
+function mergeTasks(discovered: readonly IWorkspaceTask[], provided: readonly IWorkspaceTask[]): readonly IWorkspaceTask[] {
 	const merged = new Map(deduplicateTasks(discovered).map(task => [task.id, task]));
 	for (const task of provided) {
 		if (merged.has(task.id)) throw new Error(`Workspace task '${task.id}' is already registered`);
 		merged.set(task.id, task);
 	}
-	return Object.freeze(
-		[...merged.values()].sort(
-			(left, right) => taskOrder(left.group) - taskOrder(right.group) || left.label.localeCompare(right.label),
-		),
-	);
+	return Object.freeze([...merged.values()].sort((left, right) => taskOrder(left.group) - taskOrder(right.group) || left.label.localeCompare(right.label)));
 }
 
 function normalizeTaskProvider(provider: TaskProvider): TaskProvider {
 	if (!provider || typeof provider !== 'object') throw new TypeError('Task provider must be an object');
 	const id = normalizeText(provider.id, 'Task provider ID', 256);
-	if (typeof provider.provideTasks !== 'function')
-		throw new TypeError(`Task provider '${id}' must implement provideTasks`);
+	if (typeof provider.provideTasks !== 'function') throw new TypeError(`Task provider '${id}' must implement provideTasks`);
 	const type = provider.type === undefined ? undefined : normalizeText(provider.type, 'Task provider type', 256);
 	return Object.freeze({
 		id,
@@ -1293,27 +1065,19 @@ function normalizeTaskProvider(provider: TaskProvider): TaskProvider {
 		...(provider.resolveTask === undefined
 			? {}
 			: {
-					resolveTask: (task: IWorkspaceTask, signal: AbortSignal) =>
-						provider.resolveTask!.call(provider, task, signal),
+					resolveTask: (task: IWorkspaceTask, signal: AbortSignal) => provider.resolveTask!.call(provider, task, signal),
 				}),
 	});
 }
 
 function projectProviderTask(providerId: string, contribution: TaskProviderTask): IWorkspaceTask {
-	if (!contribution || typeof contribution !== 'object')
-		throw new TypeError(`Task provider '${providerId}' returned an invalid task`);
+	if (!contribution || typeof contribution !== 'object') throw new TypeError(`Task provider '${providerId}' returned an invalid task`);
 	const id = normalizeText(contribution.id, `Task provider '${providerId}' task ID`, 256);
 	const label = normalizeText(contribution.label, `Task provider '${providerId}' task label`, 256);
 	const execution = contribution.execution;
 	if (execution?.type === 'process') {
 		normalizeText(execution.program, 'Task process', 32768, false);
-		if (
-			!Array.isArray(execution.args) ||
-			execution.args.length > 1024 ||
-			execution.args.some(
-				argument => typeof argument !== 'string' || argument.length > 32768 || argument.includes('\0'),
-			)
-		)
+		if (!Array.isArray(execution.args) || execution.args.length > 1024 || execution.args.some(argument => typeof argument !== 'string' || argument.length > 32768 || argument.includes('\0')))
 			throw new TypeError('Invalid task process arguments');
 	} else if (execution?.type === 'shell') {
 		parseShellExecution(execution);
@@ -1322,32 +1086,18 @@ function projectProviderTask(providerId: string, contribution: TaskProviderTask)
 	} else if (execution !== undefined) {
 		throw new TypeError('Unknown task execution type');
 	}
-	const shellCommand =
-		execution?.type === 'shell'
-			? (execution.commandLine ??
-				(typeof execution.command === 'string' ? execution.command : execution.command.value))
-			: undefined;
-	const unresolved =
-		contribution.command === undefined && execution === undefined && contribution.definition !== undefined;
+	const shellCommand = execution?.type === 'shell' ? (execution.commandLine ?? (typeof execution.command === 'string' ? execution.command : execution.command.value)) : undefined;
+	const unresolved = contribution.command === undefined && execution === undefined && contribution.definition !== undefined;
 	const command = normalizeText(
-		contribution.command ??
-			(execution?.type === 'process'
-				? execution.program
-				: (shellCommand ?? (execution?.type === 'custom' || unresolved ? label : ''))),
+		contribution.command ?? (execution?.type === 'process' ? execution.program : (shellCommand ?? (execution?.type === 'custom' || unresolved ? label : ''))),
 		`Task provider '${providerId}' task command`,
 		32768,
 		false,
 	);
-	if (!(['build', 'test', 'clean', 'rebuild', 'run', 'other'] as const).includes(contribution.group))
-		throw new TypeError(`Task provider '${providerId}' task '${id}' has an invalid group`);
-	if (contribution.groupIsDefault !== undefined && typeof contribution.groupIsDefault !== 'boolean')
-		throw new TypeError('Task groupIsDefault must be a boolean');
-	const environment =
-		contribution.environment === undefined ? undefined : parseTaskEnvironment(contribution.environment);
-	const detail =
-		contribution.detail === undefined
-			? undefined
-			: normalizeText(contribution.detail, `Task provider '${providerId}' task detail`, 4096, false);
+	if (!(['build', 'test', 'clean', 'rebuild', 'run', 'other'] as const).includes(contribution.group)) throw new TypeError(`Task provider '${providerId}' task '${id}' has an invalid group`);
+	if (contribution.groupIsDefault !== undefined && typeof contribution.groupIsDefault !== 'boolean') throw new TypeError('Task groupIsDefault must be a boolean');
+	const environment = contribution.environment === undefined ? undefined : parseTaskEnvironment(contribution.environment);
+	const detail = contribution.detail === undefined ? undefined : normalizeText(contribution.detail, `Task provider '${providerId}' task detail`, 4096, false);
 	const normalizedExecution =
 		execution?.type === 'shell'
 			? parseShellExecution(execution)
@@ -1357,24 +1107,14 @@ function projectProviderTask(providerId: string, contribution: TaskProviderTask)
 					? undefined
 					: Object.freeze({ ...execution });
 	const cwd = contribution.cwd === undefined ? undefined : normalizeText(contribution.cwd, 'Task cwd', 32768, false);
-	if (
-		contribution.definition !== undefined &&
-		(!contribution.definition ||
-			typeof contribution.definition !== 'object' ||
-			typeof contribution.definition.type !== 'string')
-	)
+	if (contribution.definition !== undefined && (!contribution.definition || typeof contribution.definition !== 'object' || typeof contribution.definition.type !== 'string'))
 		throw new TypeError('Task definition requires a type');
-	if (contribution.isBackground !== undefined && typeof contribution.isBackground !== 'boolean')
-		throw new TypeError('Task isBackground must be a boolean');
-	if (contribution.problemMatchers !== undefined && !Array.isArray(contribution.problemMatchers))
-		throw new TypeError('Task problemMatchers must be an array');
+	if (contribution.isBackground !== undefined && typeof contribution.isBackground !== 'boolean') throw new TypeError('Task isBackground must be a boolean');
+	if (contribution.problemMatchers !== undefined && !Array.isArray(contribution.problemMatchers)) throw new TypeError('Task problemMatchers must be an array');
 	const scope = contribution.scope;
-	if (scope !== undefined && scope !== 1 && scope !== 2 && !URI.isUri(scope))
-		throw new TypeError('Invalid task scope');
-	const extensionSource =
-		contribution.source === undefined ? undefined : normalizeText(contribution.source, 'Task source', 256, false);
-	const unsupportedFeatures =
-		scope === 1 ? ['scope:global'] : unresolved ? [`type:${contribution.definition!.type}`] : undefined;
+	if (scope !== undefined && scope !== 1 && scope !== 2 && !URI.isUri(scope)) throw new TypeError('Invalid task scope');
+	const extensionSource = contribution.source === undefined ? undefined : normalizeText(contribution.source, 'Task source', 256, false);
+	const unsupportedFeatures = scope === 1 ? ['scope:global'] : unresolved ? [`type:${contribution.definition!.type}`] : undefined;
 	return Object.freeze({
 		scope,
 		extensionSource,
@@ -1387,39 +1127,24 @@ function projectProviderTask(providerId: string, contribution: TaskProviderTask)
 		group: contribution.group,
 		groupIsDefault: contribution.groupIsDefault,
 		runOptions: contribution.runOptions === undefined ? undefined : parseTaskRunOptions(contribution.runOptions),
-		presentation:
-			contribution.presentation === undefined
-				? undefined
-				: parseTaskPresentationOptions(contribution.presentation),
+		presentation: contribution.presentation === undefined ? undefined : parseTaskPresentationOptions(contribution.presentation),
 		execution: normalizedExecution,
 		definition: contribution.definition,
 		cwd,
 		isBackground: contribution.isBackground,
-		problemMatchers:
-			contribution.problemMatchers === undefined ? undefined : Object.freeze([...contribution.problemMatchers]),
+		problemMatchers: contribution.problemMatchers === undefined ? undefined : Object.freeze([...contribution.problemMatchers]),
 		...(environment === undefined ? {} : { environment }),
 		...(detail === undefined ? {} : { detail }),
 	});
 }
 
 function normalizeText(value: string, owner: string, maximum: number, trim = true): string {
-	if (typeof value !== 'string' || value.trim().length === 0 || value.length > maximum || value.includes('\0'))
-		throw new TypeError(`${owner} must contain 1 to ${maximum} characters without NUL`);
+	if (typeof value !== 'string' || value.trim().length === 0 || value.length > maximum || value.includes('\0')) throw new TypeError(`${owner} must contain 1 to ${maximum} characters without NUL`);
 	return trim ? value.trim() : value;
 }
 
 function taskOrder(group: IWorkspaceTask['group']): number {
-	return group === 'build'
-		? 0
-		: group === 'test'
-			? 1
-			: group === 'run'
-				? 2
-				: group === 'clean'
-					? 3
-					: group === 'rebuild'
-						? 4
-						: 5;
+	return group === 'build' ? 0 : group === 'test' ? 1 : group === 'run' ? 2 : group === 'clean' ? 3 : group === 'rebuild' ? 4 : 5;
 }
 
 function taskListsEqual(left: readonly IWorkspaceTask[], right: readonly IWorkspaceTask[]): boolean {
@@ -1428,8 +1153,7 @@ function taskListsEqual(left: readonly IWorkspaceTask[], right: readonly IWorksp
 
 function resolveKnownTask(task: IWorkspaceTask, tasks: readonly IWorkspaceTask[]): IWorkspaceTask {
 	const current = tasks.find(candidate => candidate.id === task.id);
-	if (!current || current.command !== task.command)
-		throw new Error('Task is no longer present in the current workspace configuration');
+	if (!current || current.command !== task.command) throw new Error('Task is no longer present in the current workspace configuration');
 	return current;
 }
 
@@ -1439,20 +1163,8 @@ function errorMessage(error: unknown): string {
 
 function taskDependencies(task: IWorkspaceTask, tasks: readonly IWorkspaceTask[]): readonly IWorkspaceTask[] {
 	return (task.dependsOn ?? []).map(reference => {
-		const matches = tasks.filter(
-			value =>
-				(value.id === reference || value.label === reference) &&
-				(value.dirId === task.dirId || value.dirId === undefined),
-		);
-		if (matches.length !== 1)
-			throw new Error(
-				localize(
-					'tasks.dependencyUnavailable',
-					"Dependency '{0}' of task '{1}' is missing or ambiguous.",
-					reference,
-					task.label,
-				),
-			);
+		const matches = tasks.filter(value => (value.id === reference || value.label === reference) && (value.dirId === task.dirId || value.dirId === undefined));
+		if (matches.length !== 1) throw new Error(localize('tasks.dependencyUnavailable', "Dependency '{0}' of task '{1}' is missing or ambiguous.", reference, task.label));
 		return matches[0]!;
 	});
 }
@@ -1481,10 +1193,7 @@ registerAction2(
 				precondition: AppServerAvailableContext.isEqualTo(true),
 				menu: { id: MenuId.MenubarRunMenu, group: '2_tasks', order: 1 },
 				keybinding: {
-					primary: Keybinding.chord(
-						logicalKey('k', { primaryKey: true }),
-						logicalKey('t', { primaryKey: true }),
-					),
+					primary: Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('t', { primaryKey: true })),
 				},
 			});
 		}
@@ -1537,21 +1246,14 @@ function runTaskCommand(accessor: ServicesAccessor, group?: 'build' | 'test'): v
 	const notifications = accessor.get(INotificationService);
 	const editors = group ? accessor.get(IEditorService) : undefined;
 	const workspace = group ? accessor.get(IWorkspaceContextService) : undefined;
-	const candidates = (
-		catalog: readonly IWorkspaceTask[],
-	): { tasks: readonly IWorkspaceTask[]; isDefault: boolean } => {
+	const candidates = (catalog: readonly IWorkspaceTask[]): { tasks: readonly IWorkspaceTask[]; isDefault: boolean } => {
 		if (!group) return { tasks: catalog, isDefault: false };
 		const grouped = catalog.filter(task => task.group === group);
 		const resource = editors!.activeEditor?.resource;
 		const folder = resource && workspace!.getWorkspaceFolder(resource);
 		if (folder && resource) {
 			const relative = resource.path.slice(folder.uri.path.replace(/\/+$/, '').length + 1).toLowerCase();
-			const matching = grouped.filter(
-				task =>
-					task.dirId === folder.id &&
-					typeof task.groupIsDefault === 'string' &&
-					match(task.groupIsDefault.toLowerCase(), relative),
-			);
+			const matching = grouped.filter(task => task.dirId === folder.id && typeof task.groupIsDefault === 'string' && match(task.groupIsDefault.toLowerCase(), relative));
 			if (matching.length) return { tasks: matching, isDefault: true };
 		}
 		const defaults = grouped.filter(task => task.groupIsDefault === true);
@@ -1565,18 +1267,10 @@ function runTaskCommand(accessor: ServicesAccessor, group?: 'build' | 'test'): v
 			const available = selection.tasks;
 			if (selection.isDefault && available.length === 1) return run(available[0]!);
 			if (available.length === 0) {
-				if (group)
-					notifications.info(
-						group === 'build'
-							? localize('tasks.noBuildTask', 'No build task is available.')
-							: localize('tasks.noTestTask', 'No test task is available.'),
-					);
+				if (group) notifications.info(group === 'build' ? localize('tasks.noBuildTask', 'No build task is available.') : localize('tasks.noTestTask', 'No test task is available.'));
 				return commands.executeCommand('workbench.action.tasks.configureTaskRunner');
 			}
-			const picker = instantiation.createInstance(
-				TaskQuickPick,
-				(catalog: readonly IWorkspaceTask[]) => candidates(catalog).tasks,
-			);
+			const picker = instantiation.createInstance(TaskQuickPick, (catalog: readonly IWorkspaceTask[]) => candidates(catalog).tasks);
 			const placeholder =
 				group === 'build'
 					? localize('tasks.selectBuildTask', 'Select the build task to run')
@@ -1636,10 +1330,7 @@ registerAction2(
 			const picker = accessor.get(IQuickInputService).createQuickPick<TaskRunQuickPickItem>();
 			const disposables = new DisposableStore();
 			disposables.add(picker);
-			picker.ariaLabel = picker.placeholder = localize(
-				'tasks.selectTerminateTask',
-				'Select a running task to terminate',
-			);
+			picker.ariaLabel = picker.placeholder = localize('tasks.selectTerminateTask', 'Select a running task to terminate');
 			picker.items = tasks.activeRuns.map(run => ({
 				run,
 				label: run.task.label,
@@ -1693,10 +1384,7 @@ registerAction2(
 			await tasks.refresh();
 			let selectedTask: IWorkspaceTask | null | undefined;
 			if (tasks.tasks.length) {
-				using picker = instantiation.createInstance(
-					TaskQuickPick,
-					(catalog: readonly IWorkspaceTask[]) => catalog,
-				);
+				using picker = instantiation.createInstance(TaskQuickPick, (catalog: readonly IWorkspaceTask[]) => catalog);
 				selectedTask = await picker.show(localize('tasks.configure.selectTask', 'Select a task to configure'), {
 					label: localize('tasks.configure.createFile', 'Create tasks.json file from template'),
 					task: null,
@@ -1710,58 +1398,33 @@ registerAction2(
 					? folders[0]
 					: await commands.executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [
 							{
-								placeHolder: localize(
-									'tasks.configure.selectFolder',
-									'Select a workspace folder to configure tasks.',
-								),
+								placeHolder: localize('tasks.configure.selectFolder', 'Select a workspace folder to configure tasks.'),
 							},
 						]));
-			if (
-				!folder ||
-				!workspace
-					.getWorkspace()
-					.folders.some(
-						current => current.id === folder.id && current.uri.toString() === folder.uri.toString(),
-					)
-			)
-				return;
+			if (!folder || !workspace.getWorkspace().folders.some(current => current.id === folder.id && current.uri.toString() === folder.uri.toString())) return;
 			const resource = URI.joinPath(folder.uri, '.vscode', 'tasks.json');
 			try {
 				await files.stat(resource);
 			} catch (error) {
-				if (
-					!(error instanceof FileNotFoundError) &&
-					toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileNotFound
-				)
-					throw error;
+				if (!(error instanceof FileNotFoundError) && toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileNotFound) throw error;
 				let content: string;
 				if (selectedTask) {
 					const definition =
 						selectedTask.configuration?.task ??
-						(selectedTask.definition
-							? { ...selectedTask.definition, label: selectedTask.label }
-							: { label: selectedTask.label, type: 'shell', command: selectedTask.command });
+						(selectedTask.definition ? { ...selectedTask.definition, label: selectedTask.label } : { label: selectedTask.label, type: 'shell', command: selectedTask.command });
 					content = JSON.stringify({ version: '2.0.0', tasks: [definition] }, null, '\t') + '\n';
 				} else {
 					const template = await selectTaskTemplate(quickInput);
 					if (!template) return;
 					content = template.content;
 				}
-				if (
-					!workspace
-						.getWorkspace()
-						.folders.some(
-							current => current.id === folder.id && current.uri.toString() === folder.uri.toString(),
-						)
-				)
-					return;
+				if (!workspace.getWorkspace().folders.some(current => current.id === folder.id && current.uri.toString() === folder.uri.toString())) return;
 				await files.createDirectory(URI.joinPath(folder.uri, '.vscode'));
 				try {
 					// Conditional creation preserves a file written while folder selection or I/O was pending.
 					await files.writeFile({ resource, content }, { create: true, overwrite: false });
 				} catch (error) {
-					if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileExists)
-						throw error;
+					if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileExists) throw error;
 				}
 			}
 			await editors.openEditor({ resource }, { pinned: true, ignoreError: true });

@@ -6,11 +6,7 @@ import { WebWorkerDescriptor } from '../../../../platform/webWorker/browser/webW
 import { diffWorkerChannel } from '../../../common/diff/diffWorker.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
-import type {
-	IDocumentDiff,
-	IDocumentDiffProvider,
-	IDocumentDiffProviderOptions,
-} from '../../../common/diff/documentDiffProvider.js';
+import type { IDocumentDiff, IDocumentDiffProvider, IDocumentDiffProviderOptions } from '../../../common/diff/documentDiffProvider.js';
 import type { ITextModel } from '../../../common/model.js';
 import { WorkerDiffComputationService } from '../../services/workerDiffComputationService.js';
 
@@ -20,8 +16,7 @@ export interface IDiffProviderFactoryService {
 	createDiffProvider(): IDocumentDiffProvider & IDisposable;
 }
 
-export const IDiffProviderFactoryService =
-	createServiceIdentifier<IDiffProviderFactoryService>('diffProviderFactoryService');
+export const IDiffProviderFactoryService = createServiceIdentifier<IDiffProviderFactoryService>('diffProviderFactoryService');
 
 /** Creates independently cancellable editor providers over the host's Worker transport. */
 export class WorkerBasedDiffProviderFactoryService extends Disposable implements IDiffProviderFactoryService {
@@ -87,12 +82,7 @@ class WorkerBasedDocumentDiffProvider extends Disposable implements IDocumentDif
 		);
 	}
 
-	async computeDiff(
-		original: ITextModel,
-		modified: ITextModel,
-		options: IDocumentDiffProviderOptions,
-		cancellationToken: CancellationToken,
-	): Promise<IDocumentDiff> {
+	async computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, cancellationToken: CancellationToken): Promise<IDocumentDiff> {
 		this.assertNotDisposed();
 		const source = new CancellationTokenSource(cancellationToken);
 		this.pending.add(source);

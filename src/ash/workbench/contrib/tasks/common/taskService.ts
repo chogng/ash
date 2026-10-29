@@ -1,14 +1,7 @@
 import type { Event } from '../../../../base/common/event.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import type {
-	ITaskDescription,
-	ITaskRun,
-	IWorkspaceTask,
-	TaskProvider,
-	TaskProviderRegistration,
-	TaskProviderTask,
-} from './tasks.js';
+import type { ITaskDescription, ITaskRun, IWorkspaceTask, TaskProvider, TaskProviderRegistration, TaskProviderTask } from './tasks.js';
 
 /** Discovers workspace tasks and executes only a caller-selected task. */
 export interface ITaskService extends IDisposable {

@@ -4,13 +4,7 @@ import { DeferredPromise } from '../../../base/common/async.js';
 import { CancellationError } from '../../../base/common/errors.js';
 import { URI } from '../../../base/common/uri.js';
 import { Schemas } from '../../../base/common/network.js';
-import {
-	type IRemoteAuthorityResolverService,
-	type IRemoteConnectionData,
-	type ResolvedAuthority,
-	type ResolvedOptions,
-	type ResolverResult,
-} from '../common/remoteAuthorityResolver.js';
+import { type IRemoteAuthorityResolverService, type IRemoteConnectionData, type ResolvedAuthority, type ResolvedOptions, type ResolverResult } from '../common/remoteAuthorityResolver.js';
 
 /** A window owns the published address and any callers waiting for its local resolver. */
 export class RemoteAuthorityResolverService extends Disposable implements IRemoteAuthorityResolverService {
@@ -104,10 +98,7 @@ export class RemoteAuthorityResolverService extends Disposable implements IRemot
 		}
 	}
 
-	private startCanonicalRequest(
-		key: string,
-		request: { uri: URI; result: DeferredPromise<URI>; started: boolean },
-	): void {
+	private startCanonicalRequest(key: string, request: { uri: URI; result: DeferredPromise<URI>; started: boolean }): void {
 		const provider = this.canonicalProvider;
 		if (!provider || request.started) {
 			return;

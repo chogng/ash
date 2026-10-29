@@ -40,10 +40,7 @@ test('Problems status projects and updates workspace error and warning counts', 
 	assert.equal(await statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.run?.(), true);
 	assert.deepEqual(focusedViews, ['ash.problems']);
 
-	markerService.changeAll('fixture', [
-		marker(resource, MarkerSeverity.Warning, 'fifth'),
-		marker(resource, MarkerSeverity.Warning, 'sixth'),
-	]);
+	markerService.changeAll('fixture', [marker(resource, MarkerSeverity.Warning, 'fifth'), marker(resource, MarkerSeverity.Warning, 'sixth')]);
 	assert.deepEqual(
 		statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.segments?.map(segment => segment.text),
 		['0', '2'],
@@ -52,10 +49,7 @@ test('Problems status projects and updates workspace error and warning counts', 
 
 	try {
 		initializeTestLocalization('zh-CN');
-		markerService.changeAll('fixture', [
-			marker(resource, MarkerSeverity.Error, 'error'),
-			marker(resource, MarkerSeverity.Warning, 'warning'),
-		]);
+		markerService.changeAll('fixture', [marker(resource, MarkerSeverity.Error, 'error'), marker(resource, MarkerSeverity.Warning, 'warning')]);
 		assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.tooltip, '错误：1，警告：1');
 		assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.ariaLabel, '错误：1，警告：1');
 		markerService.changeAll('fixture', []);

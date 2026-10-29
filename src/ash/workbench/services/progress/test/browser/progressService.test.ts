@@ -6,27 +6,14 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { CommandRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import {
-	INotificationService,
-	NotificationPriority,
-	NotificationsFilter,
-} from '../../../../../platform/notification/common/notification.js';
-import {
-	ProgressLocation,
-	type IProgress,
-	type IProgressStep,
-} from '../../../../../platform/progress/common/progress.js';
+import { INotificationService, NotificationPriority, NotificationsFilter } from '../../../../../platform/notification/common/notification.js';
+import { ProgressLocation, type IProgress, type IProgressStep } from '../../../../../platform/progress/common/progress.js';
 import { CommandService } from '../../../commands/common/commandService.js';
 import { TestNotificationService } from '../../../notification/test/common/testNotificationService.js';
 import { IStatusbarService, StatusbarAlignment } from '../../../statusbar/browser/statusbar.js';
 import { ProgressService } from '../../browser/progressService.js';
 import { IViewsService } from '../../../views/common/viewsService.js';
-import {
-	IViewDescriptorService,
-	ViewContainerLocation,
-	WorkbenchViewContainerId,
-	type IViewContainerDescriptor,
-} from '../../../../common/views.js';
+import { IViewDescriptorService, ViewContainerLocation, WorkbenchViewContainerId, type IViewContainerDescriptor } from '../../../../common/views.js';
 import { IPaneCompositePartService } from '../../../panecomposite/browser/panecomposite.js';
 import type { IProgressIndicator, IProgressRunner } from '../../../../../platform/progress/common/progress.js';
 
@@ -60,13 +47,7 @@ class ProgressFixture extends Disposable {
 	}
 }
 
-for (const location of [
-	'view',
-	'container',
-	ProgressLocation.Explorer,
-	ProgressLocation.Scm,
-	ProgressLocation.Extensions,
-]) {
+for (const location of ['view', 'container', ProgressLocation.Explorer, ProgressLocation.Scm, ProgressLocation.Extensions]) {
 	test(`view progress routes ${location} without a notification and follows the producer`, async () => {
 		using fixture = new ProgressFixture();
 		const id =
@@ -112,10 +93,7 @@ test('unopened views run without acquiring UI; invalid locations fail before sta
 	fixture.registeredViews.add('unopened');
 	assert.equal(await fixture.progress.withProgress({ location: 'unopened' }, async () => 42), 42);
 	assert.deepEqual(fixture.notifications.model.getNotifications(), []);
-	assert.throws(
-		() => fixture.progress.withProgress({ location: 'missing' }, async () => assert.fail('Task must not start')),
-		/Bad progress location/,
-	);
+	assert.throws(() => fixture.progress.withProgress({ location: 'missing' }, async () => assert.fail('Task must not start')), /Bad progress location/);
 });
 
 test('view progress cleans up on synchronous errors, rejection and service disposal', async () => {
@@ -154,13 +132,10 @@ test('view progress cleans up on synchronous errors, rejection and service dispo
 test('notification progress updates the owning model and follows task completion', async () => {
 	using fixture = new ProgressFixture();
 	const completion = new DeferredPromise<string>();
-	const pending = fixture.progress.withProgress(
-		{ location: ProgressLocation.Notification, title: 'Indexing', total: 3 },
-		progress => {
-			progress.report({ increment: 1, message: 'Reading files' });
-			return completion.p;
-		},
-	);
+	const pending = fixture.progress.withProgress({ location: ProgressLocation.Notification, title: 'Indexing', total: 3 }, progress => {
+		progress.report({ increment: 1, message: 'Reading files' });
+		return completion.p;
+	});
 	const notification = fixture.notifications.model.getNotifications()[0]!;
 	assert.equal(notification.message, 'Indexing: Reading files');
 	assert.deepEqual(notification.progress, { total: 3, worked: 1 });
@@ -204,14 +179,11 @@ test('window progress activates its command and resumes earlier work after the l
 	const first = new DeferredPromise<void>();
 	const second = new DeferredPromise<void>();
 	let report!: IProgress<IProgressStep>;
-	const pendingFirst = fixture.progress.withProgress(
-		{ location: ProgressLocation.Window, title: 'rust-analyzer', command: 'test.log' },
-		progress => {
-			report = progress;
-			progress.report({ message: 'Indexing 68%' });
-			return first.p;
-		},
-	);
+	const pendingFirst = fixture.progress.withProgress({ location: ProgressLocation.Window, title: 'rust-analyzer', command: 'test.log' }, progress => {
+		report = progress;
+		progress.report({ message: 'Indexing 68%' });
+		return first.p;
+	});
 	const entry = fixture.statusbar.getEntries(StatusbarAlignment.Left)[0]!;
 	assert.equal(entry.id, 'status.progress');
 	assert.equal(entry.entry.text, 'rust-analyzer: Indexing 68%');
@@ -219,17 +191,11 @@ test('window progress activates its command and resumes earlier work after the l
 	await entry.entry.run?.();
 	assert.equal(reveals, 1);
 	assert.deepEqual(fixture.notifications.model.getNotifications(), []);
-	const pendingSecond = fixture.progress.withProgress(
-		{ location: ProgressLocation.Window, title: 'typescript-language-server', command: 'test.log' },
-		progress => {
-			progress.report({ message: 'Loading project' });
-			return second.p;
-		},
-	);
-	assert.equal(
-		fixture.statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text,
-		'typescript-language-server: Loading project',
-	);
+	const pendingSecond = fixture.progress.withProgress({ location: ProgressLocation.Window, title: 'typescript-language-server', command: 'test.log' }, progress => {
+		progress.report({ message: 'Loading project' });
+		return second.p;
+	});
+	assert.equal(fixture.statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, 'typescript-language-server: Loading project');
 	await second.complete(undefined);
 	await pendingSecond;
 	report.report({ message: 'Checking 10%' });
@@ -248,22 +214,16 @@ test('a task at its numeric total cannot hide unfinished window progress while i
 	let index!: IProgress<IProgressStep>;
 	let indexingSettled = false;
 	let scanningSettled = false;
-	const first = fixture.progress.withProgress(
-		{ location: ProgressLocation.Window, title: 'Indexing', command: 'test.log', total: 100 },
-		progress => {
-			index = progress;
-			progress.report({ message: 'crate-a', increment: 20 });
-			return indexing.p;
-		},
-	);
-	const second = fixture.progress.withProgress(
-		{ location: ProgressLocation.Window, title: 'Roots Scanned', command: 'test.log', total: 100 },
-		progress => {
-			scan = progress;
-			progress.report({ message: '1/2', increment: 50 });
-			return scanning.p;
-		},
-	);
+	const first = fixture.progress.withProgress({ location: ProgressLocation.Window, title: 'Indexing', command: 'test.log', total: 100 }, progress => {
+		index = progress;
+		progress.report({ message: 'crate-a', increment: 20 });
+		return indexing.p;
+	});
+	const second = fixture.progress.withProgress({ location: ProgressLocation.Window, title: 'Roots Scanned', command: 'test.log', total: 100 }, progress => {
+		scan = progress;
+		progress.report({ message: '1/2', increment: 50 });
+		return scanning.p;
+	});
 	void first.then(() => {
 		indexingSettled = true;
 	});
@@ -289,10 +249,7 @@ test('a task at its numeric total cannot hide unfinished window progress while i
 test('silent notification progress retains history and exposes a window entry', async () => {
 	using fixture = new ProgressFixture();
 	const completion = new DeferredPromise<void>();
-	const pending = fixture.progress.withProgress(
-		{ location: ProgressLocation.Notification, title: 'Silent task', priority: NotificationPriority.SILENT },
-		() => completion.p,
-	);
+	const pending = fixture.progress.withProgress({ location: ProgressLocation.Notification, title: 'Silent task', priority: NotificationPriority.SILENT }, () => completion.p);
 	assert.equal(fixture.notifications.model.getNotifications()[0]?.priority, NotificationPriority.SILENT);
 	assert.equal(fixture.statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, 'Silent task');
 	await completion.complete(undefined);
@@ -302,9 +259,7 @@ test('silent notification progress retains history and exposes a window entry', 
 test('task failure and service disposal release presentations without settling the producer', async () => {
 	using fixture = new ProgressFixture();
 	await assert.rejects(
-		fixture.progress.withProgress({ location: ProgressLocation.Notification, title: 'Loading' }, () =>
-			Promise.reject(new Error('operation failed')),
-		),
+		fixture.progress.withProgress({ location: ProgressLocation.Notification, title: 'Loading' }, () => Promise.reject(new Error('operation failed'))),
 		/operation failed/,
 	);
 	assert.deepEqual(fixture.notifications.model.getNotifications(), []);
@@ -372,10 +327,7 @@ for (const early of [false, true])
 				opens++;
 			});
 			const completion = new DeferredPromise<void>();
-			const pending = fixture.progress.withProgress(
-				{ location: ProgressLocation.Window, title: 'Loading workspace' },
-				() => completion.p,
-			);
+			const pending = fixture.progress.withProgress({ location: ProgressLocation.Window, title: 'Loading workspace' }, () => completion.p);
 			assert.deepEqual(fixture.notifications.model.getNotifications(), []);
 			if (early) {
 				await completion.complete(undefined);
@@ -404,10 +356,7 @@ for (const early of [false, true])
 test('hidden notification progress moves to the status bar and follows visibility without ending the task', async () => {
 	using fixture = new ProgressFixture();
 	const completion = new DeferredPromise<void>();
-	const pending = fixture.progress.withProgress(
-		{ location: ProgressLocation.Notification, title: 'Build' },
-		() => completion.p,
-	);
+	const pending = fixture.progress.withProgress({ location: ProgressLocation.Notification, title: 'Build' }, () => completion.p);
 	const item = fixture.notifications.model.getNotifications()[0]!;
 	item.updateVisibility(true);
 	assert.equal(fixture.statusbar.getEntries(StatusbarAlignment.Left).length, 0);
@@ -426,10 +375,7 @@ test('source-muted progress retains the structured source and appears as silent 
 	const source = { id: 'compiler', label: 'Compiler' };
 	fixture.notifications.setFilter({ ...source, filter: NotificationsFilter.ERROR });
 	const completion = new DeferredPromise<void>();
-	const pending = fixture.progress.withProgress(
-		{ location: ProgressLocation.Notification, title: 'Compile', source },
-		() => completion.p,
-	);
+	const pending = fixture.progress.withProgress({ location: ProgressLocation.Notification, title: 'Compile', source }, () => completion.p);
 	assert.equal(fixture.notifications.model.getNotifications()[0]?.sourceId, source.id);
 	assert.equal(fixture.notifications.model.getNotifications()[0]?.priority, NotificationPriority.SILENT);
 	assert.equal(fixture.statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, 'Compile');
@@ -442,14 +388,11 @@ test('notification progress reports deltas when totals or only the message chang
 	using fixture = new ProgressFixture();
 	const completion = new DeferredPromise<void>();
 	let reporter!: IProgress<IProgressStep>;
-	const pending = fixture.progress.withProgress(
-		{ location: ProgressLocation.Notification, title: 'Index', total: 4 },
-		progress => {
-			reporter = progress;
-			progress.report({ increment: 1 });
-			return completion.p;
-		},
-	);
+	const pending = fixture.progress.withProgress({ location: ProgressLocation.Notification, title: 'Index', total: 4 }, progress => {
+		reporter = progress;
+		progress.report({ increment: 1 });
+		return completion.p;
+	});
 	reporter.report({ increment: 1 });
 	reporter.report({ message: 'Reading' });
 	assert.deepEqual(fixture.notifications.model.getNotifications()[0]?.progress, { total: 4, worked: 2 });

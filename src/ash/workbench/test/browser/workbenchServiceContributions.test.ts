@@ -2,10 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { createServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
-import {
-	WorkbenchServiceContributionRegistry,
-	type WorkbenchServiceContributionContext,
-} from '../../browser/workbenchServiceContributions.js';
+import { WorkbenchServiceContributionRegistry, type WorkbenchServiceContributionContext } from '../../browser/workbenchServiceContributions.js';
 
 test('Workbench service contributions install by declared dependency topology', () => {
 	const first = createServiceIdentifier<{ readonly value: string }>('testFirst');
@@ -39,14 +36,8 @@ test('Workbench service contributions reject duplicate and unresolved ownership'
 	const missing = createServiceIdentifier<object>('testMissing');
 	const registry = new WorkbenchServiceContributionRegistry();
 	registry.register({ service: first, dependencies: [missing], install: () => ({}) });
-	assert.throws(
-		() => registry.register({ service: first, dependencies: [], install: () => ({}) }),
-		/more than once/u,
-	);
-	assert.throws(
-		() => registry.install(context(new InstantiationService())),
-		/missing or cyclic dependencies.*testDuplicate.*testMissing/u,
-	);
+	assert.throws(() => registry.register({ service: first, dependencies: [], install: () => ({}) }), /more than once/u);
+	assert.throws(() => registry.install(context(new InstantiationService())), /missing or cyclic dependencies.*testDuplicate.*testMissing/u);
 });
 
 function context(container: InstantiationService): WorkbenchServiceContributionContext {

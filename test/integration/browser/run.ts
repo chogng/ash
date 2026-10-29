@@ -9,13 +9,7 @@ import sirv from 'sirv';
 const desktopDirectory = resolve(import.meta.dirname, '../../..');
 const editorOnly = process.argv[2] === '--editor';
 const playwrightArgs = playwrightArguments(process.argv.slice(editorOnly ? 3 : 2));
-const testArgs = [
-	'node_modules/@playwright/test/cli.js',
-	'test',
-	'--config',
-	'test/integration/browser/playwright.config.ts',
-	...playwrightArgs,
-];
+const testArgs = ['node_modules/@playwright/test/cli.js', 'test', '--config', 'test/integration/browser/playwright.config.ts', ...playwrightArgs];
 await withProcessRun(desktopDirectory, async (run, environment) => {
 	const testEnv = {
 		...environment,
@@ -49,50 +43,26 @@ await withProcessRun(desktopDirectory, async (run, environment) => {
 		}
 		for (const line of prepared.output.trim().split(/\r?\n/u)) {
 			const artifact = JSON.parse(line) as { reason: string; target?: { name: string }; executable?: unknown };
-			if (
-				artifact.reason === 'compiler-artifact' &&
-				artifact.target?.name === 'ash-git-extension' &&
-				typeof artifact.executable === 'string'
-			)
-				gitExecutable = artifact.executable;
+			if (artifact.reason === 'compiler-artifact' && artifact.target?.name === 'ash-git-extension' && typeof artifact.executable === 'string') gitExecutable = artifact.executable;
 		}
 		if (!gitExecutable) throw new Error('Cargo did not report the Git extension test executable');
 	}
 	let backendPackageRoot: string | undefined;
-	if (
-		files.length === 0 ||
-		files.some(file =>
-			/(?:treeSitter|tokenization|themes|textModel|markdownEditor|chatgptweb)\.integration\.spec\.[jt]s$/u.test(
-				file,
-			),
-		)
-	) {
+	if (files.length === 0 || files.some(file => /(?:treeSitter|tokenization|themes|textModel|markdownEditor|chatgptweb)\.integration\.spec\.[jt]s$/u.test(file))) {
 		// Reuse the invoking package manager. A Windows command shim cannot be
 		// launched directly through spawn, and its script may live outside PATH.
 		const packageManager = environment.npm_execpath;
 		if (!packageManager) throw new Error('Run browser integration tests through the owning package script.');
 		const isScript = /\.[cm]?js$/.test(packageManager);
-		const prepared = await run.command(
-			isScript ? process.execPath : packageManager,
-			[...(isScript ? [packageManager] : []), 'run', 'prepare:backend'],
-			testEnv,
-		);
+		const prepared = await run.command(isScript ? process.execPath : packageManager, [...(isScript ? [packageManager] : []), 'run', 'prepare:backend'], testEnv);
 		if (prepared.code !== 0) {
 			process.exitCode = prepared.code;
 			return;
 		}
 		const target = `${process.arch === 'arm64' ? 'aarch64' : 'x86_64'}-${process.platform === 'darwin' ? 'apple-darwin' : process.platform === 'win32' ? 'pc-windows-msvc' : 'unknown-linux-gnu'}`;
-		const metadata = JSON.parse(
-			readFileSync(
-				resolve(
-					desktopDirectory,
-					'.build/runtime/dev/store-v1',
-					target,
-					'host-provided-node/dev-small/prepare-inputs.json',
-				),
-				'utf8',
-			),
-		) as { packageRoot: string };
+		const metadata = JSON.parse(readFileSync(resolve(desktopDirectory, '.build/runtime/dev/store-v1', target, 'host-provided-node/dev-small/prepare-inputs.json'), 'utf8')) as {
+			packageRoot: string;
+		};
 		backendPackageRoot = metadata.packageRoot;
 	}
 	const outputParent = resolve(desktopDirectory, '.build/desktop');
@@ -114,11 +84,7 @@ await withProcessRun(desktopDirectory, async (run, environment) => {
 				dereference: true,
 				mode: constants.COPYFILE_FICLONE,
 			});
-			syntaxExecutable = resolve(
-				runtimeDirectory,
-				'bin',
-				`ash-app-server${process.platform === 'win32' ? '.exe' : ''}`,
-			);
+			syntaxExecutable = resolve(runtimeDirectory, 'bin', `ash-app-server${process.platform === 'win32' ? '.exe' : ''}`);
 			if (process.platform === 'win32') {
 				// Loading the copied Windows image can block CreateProcess. Complete
 				// that startup work before the browser starts its bridge deadline.
@@ -129,18 +95,7 @@ await withProcessRun(desktopDirectory, async (run, environment) => {
 				}
 			}
 		}
-		const build = await run.command(
-			process.execPath,
-			[
-				'node_modules/vite/bin/vite.js',
-				'build',
-				'--config',
-				'test/integration/browser/vite.config.ts',
-				'--outDir',
-				assetsDirectory,
-			],
-			testEnv,
-		);
+		const build = await run.command(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', 'test/integration/browser/vite.config.ts', '--outDir', assetsDirectory], testEnv);
 		if (build.code !== 0) {
 			exitCode = build.code;
 		} else {
@@ -153,8 +108,7 @@ await withProcessRun(desktopDirectory, async (run, environment) => {
 				});
 			});
 			const address = server.address();
-			if (!address || typeof address === 'string')
-				throw new Error('Editor browser server requires a TCP address');
+			if (!address || typeof address === 'string') throw new Error('Editor browser server requires a TCP address');
 			const serverUrl = `http://127.0.0.1:${address.port}`;
 			console.log(`Browser integration server: ${serverUrl}
 	Browser integration results: ${resultsDirectory}`);

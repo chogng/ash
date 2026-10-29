@@ -57,12 +57,7 @@ test('Tree-sitter resolves capture styles directly through the current theme, in
 		],
 	);
 
-	themes.setColorTheme(
-		parseUserColorTheme(
-			'{"semanticTokenColors":{"function":{"foreground":"#445566","italic":true}}}',
-			'replacement-theme',
-		),
-	);
+	themes.setColorTheme(parseUserColorTheme('{"semanticTokenColors":{"function":{"foreground":"#445566","italic":true}}}', 'replacement-theme'));
 	backend.resetStyles();
 	assert.deepEqual(
 		backend.getLanguageTokens(1).map(token => token.presentation),

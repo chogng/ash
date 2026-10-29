@@ -111,12 +111,10 @@ export class ConfigurationResolverExpression<T> {
 					? reference.id
 					: reference.name === 'selectedText'
 						? replacement
-						: (cache.get(reference.id) ??
-							this.substitute(replacement, new Set([...trail, reference.id]), cache));
+						: (cache.get(reference.id) ?? this.substitute(replacement, new Set([...trail, reference.id]), cache));
 			// Cache completed expansions; unresolved cycles depend on the current trail.
 			if (!resolved.includes('${')) cache.set(reference.id, resolved);
-			if (result.length + reference.start - position + resolved.length > 4 * 1024 * 1024)
-				throw expansionLimitError();
+			if (result.length + reference.start - position + resolved.length > 4 * 1024 * 1024) throw expansionLimitError();
 			result += value.slice(position, reference.start) + resolved;
 			position = reference.end;
 		}
@@ -128,9 +126,7 @@ export class ConfigurationResolverExpression<T> {
 		if (typeof value === 'string') return transform(value);
 		if (Array.isArray(value)) return value.map(item => this.map(item, transform));
 		if (value !== null && typeof value === 'object') {
-			return Object.fromEntries(
-				Object.entries(value).map(([key, item]) => [transform(key), this.map(item, transform)]),
-			);
+			return Object.fromEntries(Object.entries(value).map(([key, item]) => [transform(key), this.map(item, transform)]));
 		}
 		// CustomExecution callbacks retain their owner and callable identity.
 		return value;
@@ -138,10 +134,5 @@ export class ConfigurationResolverExpression<T> {
 }
 
 function expansionLimitError(): RangeError {
-	return new RangeError(
-		localize(
-			'configurationResolver.expansionLimit',
-			'The configuration variable expansion exceeds the supported limit.',
-		),
-	);
+	return new RangeError(localize('configurationResolver.expansionLimit', 'The configuration variable expansion exceeds the supported limit.'));
 }

@@ -27,10 +27,7 @@ suite('Customization marketplace continuations', () => {
 			{
 				id: 'source',
 				sourceId: 'source',
-				query: async options =>
-					options.cursor
-						? { items: [resource('source', 'first'), resource('source', 'second')] }
-						: { items: [resource('source', 'first')], nextCursor: 'two' },
+				query: async options => (options.cursor ? { items: [resource('source', 'first'), resource('source', 'second')] } : { items: [resource('source', 'first')], nextCursor: 'two' }),
 			},
 		]);
 		const page = await service.query({ sourceIds: ['source'], pageSize: 2 }, CancellationToken.None);
@@ -96,19 +93,10 @@ suite('Customization marketplace continuations', () => {
 		]);
 		const request = { sourceIds: ['source'], pageSize: 1 };
 		const first = await service.query(request, CancellationToken.None);
-		await assert.rejects(
-			service.query({ ...request, query: 'changed', cursor: first.nextCursor }, CancellationToken.None),
-			/expired or changed/,
-		);
-		await assert.rejects(
-			service.query({ ...request, cursor: { token: 'forged' } }, CancellationToken.None),
-			/expired or changed/,
-		);
+		await assert.rejects(service.query({ ...request, query: 'changed', cursor: first.nextCursor }, CancellationToken.None), /expired or changed/);
+		await assert.rejects(service.query({ ...request, cursor: { token: 'forged' } }, CancellationToken.None), /expired or changed/);
 		await service.query({ ...request, cursor: first.nextCursor }, CancellationToken.None);
-		await assert.rejects(
-			service.query({ ...request, cursor: first.nextCursor }, CancellationToken.None),
-			/expired or changed/,
-		);
+		await assert.rejects(service.query({ ...request, cursor: first.nextCursor }, CancellationToken.None), /expired or changed/);
 	});
 
 	test('unselected sources perform no work and known totals combine across physical registries', async () => {
@@ -138,10 +126,7 @@ suite('Customization marketplace continuations', () => {
 			{
 				id: 'source',
 				sourceId: 'source',
-				query: async options =>
-					options.cursor
-						? { items: [resource('source', 'one'), resource('source', 'one')], nextCursor: 'cycle' }
-						: { items: [], nextCursor: 'cycle' },
+				query: async options => (options.cursor ? { items: [resource('source', 'one'), resource('source', 'one')], nextCursor: 'cycle' } : { items: [], nextCursor: 'cycle' }),
 			},
 		]);
 		const page = await service.query({ sourceIds: ['source'], pageSize: 3 }, CancellationToken.None);

@@ -21,14 +21,7 @@ import { TestNotificationService } from '../../../workbench/services/notificatio
 
 test('Sessions and Workbench menus keep product commands separate while sharing menu interaction', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
-	using globals = installEditorTestDom(browser, [
-		'Node',
-		'Element',
-		'HTMLElement',
-		'Event',
-		'MouseEvent',
-		'KeyboardEvent',
-	]);
+	using globals = installEditorTestDom(browser, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
 	using services = new InstantiationService();
 	using commands = new CommandService(services);
 	using contextKeys = new ContextKeyService();
@@ -74,8 +67,7 @@ test('Sessions and Workbench menus keep product commands separate while sharing 
 		titlebarMenuId: Menus.TitleBarLeftLayout,
 	});
 	using workbenchMenubar = new BrowserMenubarControl(browser.window.document.body, menus, contextMenus);
-	const menuButton = (): HTMLButtonElement =>
-		menubar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.applicationMenu"] button')!;
+	const menuButton = (): HTMLButtonElement => menubar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.applicationMenu"] button')!;
 	try {
 		menuButton().click();
 		assert.deepEqual(
@@ -92,9 +84,7 @@ test('Sessions and Workbench menus keep product commands separate while sharing 
 			false,
 		);
 		contextMenus.hideContextMenu();
-		workbenchMenubar.domNode
-			.querySelector<HTMLButtonElement>('[data-action-id="ash.applicationMenu"] button')!
-			.click();
+		workbenchMenubar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.applicationMenu"] button')!.click();
 		const workbenchFileActions = shownActions[0];
 		assert.ok(workbenchFileActions instanceof SubmenuAction);
 		assert.deepEqual(
@@ -124,10 +114,7 @@ test('Sessions and Workbench menus keep product commands separate while sharing 
 		]);
 		assert.equal(menuButton().getAttribute('aria-expanded'), 'false');
 		assert.deepEqual(
-			[...menubar.domNode.querySelectorAll('button')].map(button => [
-				button.getAttribute('aria-label'),
-				button.getAttribute('aria-pressed'),
-			]),
+			[...menubar.domNode.querySelectorAll('button')].map(button => [button.getAttribute('aria-label'), button.getAttribute('aria-pressed')]),
 			[
 				['Application menu', null],
 				['Toggle', 'true'],

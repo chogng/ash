@@ -2,40 +2,20 @@ import { DocumentTextModel } from '../../../../../extensions/academy/common/mode
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Position } from '../../common/core/position.js';
-import {
-	createDefaultDocumentSchema,
-	DocumentSchema,
-} from '../../../../../extensions/academy/common/model/documentSchema.js';
+import { createDefaultDocumentSchema, DocumentSchema } from '../../../../../extensions/academy/common/model/documentSchema.js';
 import {
 	createDeleteReferenceCommand,
 	createInsertCitationCommand,
 	createInsertReferenceCommand,
 	createUpdateReferenceCommand,
 } from '../../../../../extensions/academy/browser/contrib/citation/common/citationCommands.js';
-import {
-	buildReferenceIndex,
-	createReferenceIndexPlugin,
-	REFERENCE_INDEX_KEY,
-} from '../../../../../extensions/academy/browser/contrib/citation/common/references.js';
-import {
-	createAcademyDocumentSchema,
-	createEmptyAcademyDocument,
-} from '../../../../../extensions/academy/browser/contrib/academy/common/schema.js';
+import { buildReferenceIndex, createReferenceIndexPlugin, REFERENCE_INDEX_KEY } from '../../../../../extensions/academy/browser/contrib/citation/common/references.js';
+import { createAcademyDocumentSchema, createEmptyAcademyDocument } from '../../../../../extensions/academy/browser/contrib/academy/common/schema.js';
 import { TextModel } from '../../common/model/textModel.js';
-import {
-	createDocumentDecoration,
-	DocumentDecorationSet,
-} from '../../../../../extensions/academy/common/model/documentDecoration.js';
+import { createDocumentDecoration, DocumentDecorationSet } from '../../../../../extensions/academy/common/model/documentDecoration.js';
 import { buildDocumentOutline } from '../../../../../extensions/academy/common/model/documentOutline.js';
-import {
-	documentContentSize,
-	documentNodeSize,
-	documentPointToPosition,
-} from '../../../../../extensions/academy/common/core/documentPosition.js';
-import {
-	createDocumentPlugin,
-	DocumentPluginKey,
-} from '../../../../../extensions/academy/common/model/documentPlugin.js';
+import { documentContentSize, documentNodeSize, documentPointToPosition } from '../../../../../extensions/academy/common/core/documentPosition.js';
+import { createDocumentPlugin, DocumentPluginKey } from '../../../../../extensions/academy/common/model/documentPlugin.js';
 import {
 	documentSelectionToText,
 	extractDocumentFragment,
@@ -45,16 +25,9 @@ import {
 	serializeDocument,
 	serializeDocumentFragment,
 } from '../../../../../extensions/academy/common/model/documentSerialization.js';
-import {
-	allSelection,
-	nodeSelection,
-	textSelection,
-} from '../../../../../extensions/academy/common/core/documentSelection.js';
+import { allSelection, nodeSelection, textSelection } from '../../../../../extensions/academy/common/core/documentSelection.js';
 import { DocumentTransaction } from '../../../../../extensions/academy/common/model/documentTransaction.js';
-import {
-	deserializeDocumentTransaction,
-	serializeDocumentTransaction,
-} from '../../../../../extensions/academy/common/model/documentTransactionSerialization.js';
+import { deserializeDocumentTransaction, serializeDocumentTransaction } from '../../../../../extensions/academy/common/model/documentTransactionSerialization.js';
 import {
 	createDeleteInlineSelectionCommand,
 	createDeleteNodeSelectionCommand,
@@ -86,14 +59,8 @@ test('DocumentSchema creates and validates block, inline, and code-block nodes',
 	assert.equal(document.content[1]?.attrs.language, 'typescript');
 	schema.validate(document);
 	assert.throws(() => schema.createNode('heading', { attrs: { level: 7 } }), /between 1 and 6/);
-	assert.throws(
-		() => schema.createNode('paragraph', { content: [schema.createNode('codeBlock')] }),
-		/cannot contain/,
-	);
-	assert.throws(
-		() => schema.createNode('codeBlock', { content: [schema.createText('one'), schema.createText('two')] }),
-		/content does not match/,
-	);
+	assert.throws(() => schema.createNode('paragraph', { content: [schema.createNode('codeBlock')] }), /cannot contain/);
+	assert.throws(() => schema.createNode('codeBlock', { content: [schema.createText('one'), schema.createText('two')] }), /content does not match/);
 });
 
 test('TextModel updates plugin state across edits, history, and reset', () => {
@@ -121,11 +88,7 @@ test('TextModel updates plugin state across edits, history, and reset', () => {
 	assert.deepEqual(model.getPluginState(key), { origins: [], selections: [], versions: [1] });
 	model.setSelection(textSelection({ nodeId: 'text-1', offset: 5 }));
 	assert.deepEqual(model.getPluginState(key), { origins: [], selections: ['text'], versions: [1] });
-	const change = model.dispatch(
-		new DocumentTransaction()
-			.replaceText('text-1', 5, 5, '!')
-			.withSelection(textSelection({ nodeId: 'text-1', offset: 6 })),
-	);
+	const change = model.dispatch(new DocumentTransaction().replaceText('text-1', 5, 5, '!').withSelection(textSelection({ nodeId: 'text-1', offset: 6 })));
 	assert.ok(change);
 	assert.deepEqual(model.getPluginState(key), { origins: ['user'], selections: ['text'], versions: [1, 2] });
 
@@ -142,10 +105,7 @@ test('TextModel updates plugin state across edits, history, and reset', () => {
 		versions: [1, 2, 3, 4],
 	});
 
-	const resetDocument = schema.createDocument(
-		[schema.createNode('paragraph', { content: [schema.createText('Reset')] })],
-		'reset-document',
-	);
+	const resetDocument = schema.createDocument([schema.createNode('paragraph', { content: [schema.createText('Reset')] })], 'reset-document');
 	model.resetBlocks(resetDocument);
 	assert.deepEqual(model.getPluginState(key), {
 		origins: ['user', 'undo', 'redo', 'reset'],
@@ -166,10 +126,7 @@ test('TextModel keeps document and plugin state unchanged when a plugin rejects 
 	using model = DocumentTextModel.create(schema, createDocument(schema), { plugins: [plugin] });
 	const before = model.document;
 
-	assert.throws(
-		() => model.dispatch(new DocumentTransaction().replaceText('text-1', 0, 0, 'X')),
-		/plugin rejected change/,
-	);
+	assert.throws(() => model.dispatch(new DocumentTransaction().replaceText('text-1', 0, 0, 'X')), /plugin rejected change/);
 	assert.equal(model.document, before);
 	assert.equal(model.version, 1);
 	assert.equal(model.canUndoBlocks, false);
@@ -218,14 +175,8 @@ test('DocumentTransaction metadata survives builder methods and history merging'
 		apply: (value, context) => [...value, context.transaction.getMeta<string>(metaKey)],
 	});
 	using model = DocumentTextModel.create(schema, createDocument(schema), { plugins: [plugin] });
-	const first = new DocumentTransaction()
-		.replaceText('text-1', 5, 5, '!')
-		.withMeta(metaKey, 'first')
-		.withHistoryGroup('typing');
-	const second = new DocumentTransaction()
-		.replaceText('text-1', 6, 6, '?')
-		.withMeta(metaKey, 'second')
-		.withHistoryGroup('typing');
+	const first = new DocumentTransaction().replaceText('text-1', 5, 5, '!').withMeta(metaKey, 'first').withHistoryGroup('typing');
+	const second = new DocumentTransaction().replaceText('text-1', 6, 6, '?').withMeta(metaKey, 'second').withHistoryGroup('typing');
 	assert.equal(first.withSelection(textSelection({ nodeId: 'text-1', offset: 6 })).getMeta<string>(metaKey), 'first');
 	assert.equal(
 		new DocumentTransaction([], {
@@ -313,16 +264,9 @@ test('Stanza maps decoration ranges through one transaction and drops ranges wit
 	assert.deepEqual(mapped.get('cross')?.from, { nodeId: 'text-1', offset: 6 });
 	assert.equal(mapped.get('cross')?.attrs.source, 'reference');
 
-	const removed = decorations.map(
-		document,
-		schema,
-		new DocumentTransaction().deleteNode('text-1').deleteNode('text-2'),
-	);
+	const removed = decorations.map(document, schema, new DocumentTransaction().deleteNode('text-1').deleteNode('text-2'));
 	assert.equal(removed.size, 0);
-	assert.throws(
-		() => decorations.add(createDocumentDecoration({ id: 'hit', from: { nodeId: 'text-1', offset: 0 } })),
-		/Duplicate document decoration/,
-	);
+	assert.throws(() => decorations.add(createDocumentDecoration({ id: 'hit', from: { nodeId: 'text-1', offset: 0 } })), /Duplicate document decoration/);
 });
 
 test('Stanza converts nested text points to absolute positions', () => {
@@ -357,10 +301,7 @@ test('Stanza converts nested text points to absolute positions', () => {
 	assert.equal(documentNodeSize(document, schema), 31);
 	assert.equal(documentPointToPosition(document, schema, { nodeId: 'text-nested', offset: 3 }), 12);
 	assert.equal(documentPointToPosition(document, schema, { nodeId: 'text-cell', offset: 4 }), 25);
-	assert.throws(
-		() => documentPointToPosition(document, schema, { nodeId: 'image-1', offset: 0 }),
-		/must target a text node/,
-	);
+	assert.throws(() => documentPointToPosition(document, schema, { nodeId: 'image-1', offset: 0 }), /must target a text node/);
 });
 
 test('TextModel applies text transactions and preserves transaction-level undo', () => {
@@ -368,11 +309,7 @@ test('TextModel applies text transactions and preserves transaction-level undo',
 	using model = DocumentTextModel.create(schema, createDocument(schema));
 	model.setSelection(textSelection({ nodeId: 'text-1', offset: 5 }));
 
-	const change = model.dispatch(
-		new DocumentTransaction()
-			.replaceText('text-1', 5, 5, ' structured')
-			.withSelection(textSelection({ nodeId: 'text-1', offset: 16 })),
-	);
+	const change = model.dispatch(new DocumentTransaction().replaceText('text-1', 5, 5, ' structured').withSelection(textSelection({ nodeId: 'text-1', offset: 16 })));
 
 	assert.ok(change);
 	assert.equal(model.document.content[0]?.content[0]?.text, 'Hello structured');
@@ -509,9 +446,7 @@ test('DocumentSchema supports child groups, cardinality, and valid multi-step as
 		content: [defaultSchema.createNode('paragraph', { content: [defaultSchema.createText('assembled')] })],
 	});
 	using model = DocumentTextModel.create(defaultSchema, defaultSchema.createDocument([], 'assembly-document'));
-	model.dispatch(
-		new DocumentTransaction().insertNode('assembly-document', 0, emptyList).insertNode(emptyList.id, 0, item),
-	);
+	model.dispatch(new DocumentTransaction().insertNode('assembly-document', 0, emptyList).insertNode(emptyList.id, 0, item));
 	assert.equal(model.document.content[0]?.content[0]?.content[0]?.content[0]?.text, 'assembled');
 });
 
@@ -529,8 +464,7 @@ test('DocumentSchema expresses the Stanza group, typed-block, and line hierarchy
 				groups: ['stanza-block'],
 				content: [{ type: 'captionLine', max: 1 }],
 				validateAttributes: attrs => {
-					if (typeof attrs.src !== 'string' || attrs.src.length === 0)
-						throw new TypeError('Image blocks require a source');
+					if (typeof attrs.src !== 'string' || attrs.src.length === 0) throw new TypeError('Image blocks require a source');
 				},
 			},
 			richLine: { kind: 'line', content: [{ type: 'text', max: 1 }] },
@@ -540,7 +474,9 @@ test('DocumentSchema expresses the Stanza group, typed-block, and line hierarchy
 		},
 	});
 	const line = (type: 'richLine' | 'codeLine' | 'captionLine', text: string) =>
-		schema.createNode(type, { content: text.length > 0 ? [schema.createText(text)] : [] });
+		schema.createNode(type, {
+			content: text.length > 0 ? [schema.createText(text)] : [],
+		});
 	const group = schema.createNode('group', {
 		content: [
 			schema.createNode('textBlock', { content: [line('richLine', 'First'), line('richLine', 'Second')] }),
@@ -602,21 +538,14 @@ test('DocumentSchema expresses the Stanza group, typed-block, and line hierarchy
 	model.onDidChangeContent(change => textChanges.push(change));
 	const firstCodeText = group.content[2]!.content[0]!.content[0]!;
 	const textBeforeEdit = model.getText();
-	model.dispatch(
-		new DocumentTransaction().replaceText(firstCodeText.id, 0, firstCodeText.text!.length, 'let value = 2;'),
-	);
+	model.dispatch(new DocumentTransaction().replaceText(firstCodeText.id, 0, firstCodeText.text!.length, 'let value = 2;'));
 	assert.equal(model.getLineContent(3 + 1), 'let value = 2;');
 	assert.equal(model.version, 2);
 	assert.equal(textChanges[0]?.reason, 'extension');
 	assert.ok((textChanges[0]?.changes[0]?.rangeOffset ?? 0) > 0);
 	assert.ok((textChanges[0]?.changes[0]?.rangeLength ?? textBeforeEdit.length) < textBeforeEdit.length);
 	const textEdit = textChanges[0]!.changes[0]!;
-	assert.equal(
-		textBeforeEdit.slice(0, textEdit.rangeOffset) +
-			textEdit.text +
-			textBeforeEdit.slice(textEdit.rangeOffset + textEdit.rangeLength),
-		model.getText(),
-	);
+	assert.equal(textBeforeEdit.slice(0, textEdit.rangeOffset) + textEdit.text + textBeforeEdit.slice(textEdit.rangeOffset + textEdit.rangeLength), model.getText());
 	const textBeforeAttributeChange = model.getText();
 	model.dispatch(new DocumentTransaction().setNodeAttributes(group.content[2]!.id, { language: 'rust' }));
 	assert.equal(model.version, 3);
@@ -629,10 +558,7 @@ test('DocumentSchema expresses the Stanza group, typed-block, and line hierarchy
 	assert.equal(textChanges[1]?.changes[0]?.rangeLength, textBeforeAttributeChange.length);
 	assert.equal(textChanges[1]?.changes[0]?.text, textBeforeAttributeChange);
 	assert.throws(() => model.reset('detached text'), /must use the extension transaction owner/);
-	assert.throws(
-		() => schema.createDocument([schema.createNode('codeBlock', { content: [line('codeLine', 'orphan')] })]),
-		/cannot contain 'codeBlock'/,
-	);
+	assert.throws(() => schema.createDocument([schema.createNode('codeBlock', { content: [line('codeLine', 'orphan')] })]), /cannot contain 'codeBlock'/);
 });
 
 test('TextModel projects nested schema nodes as orthogonal line facets', () => {
@@ -647,9 +573,10 @@ test('TextModel projects nested schema nodes as orthogonal line facets', () => {
 
 	assert.equal(model.getLineId(0), 'paragraph-1');
 	assert.deepEqual(
-		model.lineDocument.facets
-			.forLine('paragraph-1')
-			.map(facet => ({ kind: facet.kind, nodeId: facet.attrs.nodeId })),
+		model.lineDocument.facets.forLine('paragraph-1').map(facet => ({
+			kind: facet.kind,
+			nodeId: facet.attrs.nodeId,
+		})),
 		[
 			{ kind: 'bulletList', nodeId: 'list-1' },
 			{ kind: 'listItem', nodeId: 'list-item-1' },
@@ -741,10 +668,7 @@ test('Stanza Academy schema composes title, abstract, and section wrappers', () 
 		content: [schema.createNode('paragraph', { content: [schema.createText('Summary')] })],
 	});
 	const section = schema.createNode('section', {
-		content: [
-			schema.createNode('heading', { content: [schema.createText('Introduction')] }),
-			schema.createNode('paragraph', { content: [schema.createText('Body')] }),
-		],
+		content: [schema.createNode('heading', { content: [schema.createText('Introduction')] }), schema.createNode('paragraph', { content: [schema.createText('Body')] })],
 	});
 	const document = schema.createDocument([title, abstract, section]);
 	assert.equal(document.content[2]?.type, 'section');
@@ -820,21 +744,11 @@ test('Academy citation nodes insert, select, delete, and export as inline atoms'
 	const schema = createAcademyDocumentSchema();
 	const paragraph = schema.createNode('paragraph', {
 		id: 'citation-paragraph',
-		content: [
-			schema.createText('Read ', { id: 'citation-before' }),
-			schema.createText('now', { id: 'citation-after' }),
-		],
+		content: [schema.createText('Read ', { id: 'citation-before' }), schema.createText('now', { id: 'citation-after' })],
 	});
 	const document = schema.createDocument([paragraph], 'citation-document');
 	using model = DocumentTextModel.create(schema, document);
-	const command = createInsertCitationCommand(
-		schema,
-		model.document,
-		paragraph.id,
-		textSelection({ nodeId: 'citation-before', offset: 5 }),
-		'smith-2024',
-		'[Smith 2024]',
-	);
+	const command = createInsertCitationCommand(schema, model.document, paragraph.id, textSelection({ nodeId: 'citation-before', offset: 5 }), 'smith-2024', '[Smith 2024]');
 	assert.ok(command);
 	model.dispatch(command.transaction);
 
@@ -936,14 +850,7 @@ test('Citation insertion trims keys and reference insertion rejects normalized d
 	const selection = textSelection({ nodeId: 'trim-body', offset: 4 });
 	assert.equal(createInsertCitationCommand(schema, model.document, paragraph.id, selection, ' \t '), undefined);
 	assert.equal(createInsertReferenceCommand(schema, model.document, ' \n ', 'Blank'), undefined);
-	const citation = createInsertCitationCommand(
-		schema,
-		model.document,
-		paragraph.id,
-		selection,
-		' smith \t',
-		'[Explicit]',
-	);
+	const citation = createInsertCitationCommand(schema, model.document, paragraph.id, selection, ' smith \t', '[Explicit]');
 	assert.ok(citation);
 	assert.ok(model.dispatch(citation.transaction));
 	assert.equal(model.document.content[0]?.content.find(node => node.type === 'citation')?.attrs.key, 'smith');
@@ -973,12 +880,7 @@ test('Reference rename updates all nested citation keys atomically and preserves
 	const body = schema.createNode('blockquote', {
 		content: [
 			schema.createNode('paragraph', {
-				content: [
-					schema.createText('Keep', { marks: [{ type: 'strong', attrs: {} }] }),
-					explicit,
-					implicit,
-					unrelated,
-				],
+				content: [schema.createText('Keep', { marks: [{ type: 'strong', attrs: {} }] }), explicit, implicit, unrelated],
 			}),
 		],
 	});
@@ -1045,19 +947,14 @@ test('Reference label-only edits preserve keys and reject blank, missing, collid
 	const schema = createAcademyDocumentSchema();
 	const reference = schema.createNode('reference', {
 		attrs: { key: 'old' },
-		content: [
-			schema.createNode('paragraph', { id: 'label-only-paragraph', content: [schema.createText('Before')] }),
-		],
+		content: [schema.createNode('paragraph', { id: 'label-only-paragraph', content: [schema.createText('Before')] })],
 	});
 	const other = schema.createNode('reference', {
 		attrs: { key: ' occupied ' },
 		content: [schema.createNode('paragraph')],
 	});
 	const citation = schema.createNode('citation', { attrs: { key: 'old', label: '' } });
-	const document = schema.createDocument([
-		schema.createNode('bibliography', { content: [reference, other] }),
-		schema.createNode('paragraph', { content: [citation] }),
-	]);
+	const document = schema.createDocument([schema.createNode('bibliography', { content: [reference, other] }), schema.createNode('paragraph', { content: [citation] })]);
 	using model = DocumentTextModel.create(schema, document);
 	const before = model.document;
 	for (const [key, newKey] of [
@@ -1068,8 +965,7 @@ test('Reference label-only edits preserve keys and reject blank, missing, collid
 	]) {
 		assert.equal(createUpdateReferenceCommand(schema, model.document, key, newKey, 'Changed'), undefined);
 	}
-	for (const key of ['', ' \t ', 'missing'])
-		assert.equal(createDeleteReferenceCommand(schema, model.document, key), undefined);
+	for (const key of ['', ' \t ', 'missing']) assert.equal(createDeleteReferenceCommand(schema, model.document, key), undefined);
 	assert.equal(model.document, before);
 	assert.equal(model.version, 1);
 	assert.equal(model.canUndoBlocks, false);
@@ -1111,10 +1007,7 @@ test('Reference key-only edits preserve formatted label runs and empty labels st
 		attrs: { key: 'empty' },
 		content: [schema.createNode('paragraph')],
 	});
-	using model = DocumentTextModel.create(
-		schema,
-		schema.createDocument([schema.createNode('bibliography', { content: [reference, empty] })]),
-	);
+	using model = DocumentTextModel.create(schema, schema.createDocument([schema.createNode('bibliography', { content: [reference, empty] })]));
 	const update = createUpdateReferenceCommand(schema, model.document, 'old', 'new', 'Styled entry');
 	assert.ok(update);
 	model.dispatch(update.transaction);
@@ -1137,10 +1030,7 @@ test('Reference deletion keeps remaining definitions and last deletion leaves un
 	});
 	const bibliography = schema.createNode('bibliography', { content: [first, last] });
 	const paragraph = schema.createNode('paragraph', {
-		content: [
-			schema.createNode('citation', { attrs: { key: 'first', label: '[First]' } }),
-			schema.createNode('citation', { attrs: { key: 'last' } }),
-		],
+		content: [schema.createNode('citation', { attrs: { key: 'first', label: '[First]' } }), schema.createNode('citation', { attrs: { key: 'last' } })],
 	});
 	const document = schema.createDocument([bibliography, paragraph]);
 	using model = DocumentTextModel.create(schema, document, { plugins: [createReferenceIndexPlugin()] });
@@ -1153,10 +1043,7 @@ test('Reference deletion keeps remaining definitions and last deletion leaves un
 	const beforeLast = model.document;
 	const deleteLast = createDeleteReferenceCommand(schema, beforeLast, ' last ');
 	assert.ok(deleteLast);
-	const decoded = deserializeDocumentTransaction(
-		serializeDocumentTransaction(deleteLast.transaction, schema),
-		schema,
-	);
+	const decoded = deserializeDocumentTransaction(serializeDocumentTransaction(deleteLast.transaction, schema), schema);
 	assert.ok(model.dispatch(decoded));
 	assert.deepEqual(model.document.content, [paragraph]);
 	assert.deepEqual(model.getPluginState(REFERENCE_INDEX_KEY)?.unresolvedKeys, ['first', 'last']);
@@ -1179,9 +1066,7 @@ test('References reuse a bibliography inside a section and last deletion keeps i
 			content: [schema.createNode('paragraph')],
 		});
 		const bibliography = schema.createNode('bibliography', { content: [reference] });
-		const document = schema.createDocument([
-			inSection ? schema.createNode('documentSection', { content: [bibliography] }) : bibliography,
-		]);
+		const document = schema.createDocument([inSection ? schema.createNode('documentSection', { content: [bibliography] }) : bibliography]);
 		using model = DocumentTextModel.create(schema, document);
 		const append = createInsertReferenceCommand(schema, model.document, 'two', 'Second');
 		assert.ok(append);
@@ -1214,12 +1099,7 @@ test('TextModel handles insertion, attributes, movement, and deletion as one his
 	});
 	using model = DocumentTextModel.create(schema, document);
 
-	model.dispatch(
-		new DocumentTransaction()
-			.insertNode('document-1', 1, secondParagraph)
-			.setNodeAttributes('paragraph-1', { alignment: 'center' })
-			.moveNode('paragraph-2', 'document-1', 0),
-	);
+	model.dispatch(new DocumentTransaction().insertNode('document-1', 1, secondParagraph).setNodeAttributes('paragraph-1', { alignment: 'center' }).moveNode('paragraph-2', 'document-1', 0));
 
 	assert.deepEqual(
 		model.document.content.slice(0, 2).map(node => node.id),
@@ -1239,15 +1119,7 @@ test('TextModel rejects invalid transactions without partial mutation', () => {
 	using model = DocumentTextModel.create(schema, createDocument(schema));
 	const before = serializeDocument(model.document, schema);
 
-	assert.throws(
-		() =>
-			model.dispatch(
-				new DocumentTransaction()
-					.replaceText('text-1', 0, 100, 'invalid')
-					.setNodeAttributes('paragraph-1', { alignment: 'left' }),
-			),
-		/must satisfy/,
-	);
+	assert.throws(() => model.dispatch(new DocumentTransaction().replaceText('text-1', 0, 100, 'invalid').setNodeAttributes('paragraph-1', { alignment: 'left' })), /must satisfy/);
 	assert.equal(serializeDocument(model.document, schema), before);
 	assert.equal(model.canUndoBlocks, false);
 });
@@ -1260,10 +1132,7 @@ test('Block documents round-trip through a versioned serialization envelope', ()
 
 	assert.deepEqual(decoded, document);
 	assert.deepEqual(JSON.parse(encoded), { format: 'ash.document', version: 2, documentType: 'general', document });
-	assert.throws(
-		() => deserializeDocument('{"format":"ash.document","version":99}', schema),
-		DocumentSerializationError,
-	);
+	assert.throws(() => deserializeDocument('{"format":"ash.document","version":99}', schema), DocumentSerializationError);
 	assert.throws(() => deserializeDocument('not json', schema), DocumentSerializationError);
 });
 
@@ -1284,10 +1153,7 @@ test('Document v2 rejects a conflicting kind even when both schemas accept the t
 		other.validate(document);
 		assert.throws(() => deserializeDocument(encoded, other), /Structured document type/u);
 		for (const documentType of [undefined, null, 'unknown', 1, {}]) {
-			assert.throws(
-				() => deserializeDocument({ ...JSON.parse(encoded), documentType }, schema),
-				DocumentSerializationError,
-			);
+			assert.throws(() => deserializeDocument({ ...JSON.parse(encoded), documentType }, schema), DocumentSerializationError);
 		}
 	}
 });
@@ -1314,10 +1180,7 @@ test('Legacy Academy documents upgrade on serialization without losing IDs, attr
 		documentType: 'academy',
 	});
 	assert.throws(() => deserializeDocument({ ...legacy, documentType: 'general' }, schema), /Legacy/u);
-	assert.throws(
-		() => deserializeDocument({ ...legacy, document: { ...document, content: [{ type: 'unknown' }] } }, schema),
-		DocumentSerializationError,
-	);
+	assert.throws(() => deserializeDocument({ ...legacy, document: { ...document, content: [{ type: 'unknown' }] } }, schema), DocumentSerializationError);
 });
 
 test('Stanza serializes every transaction step and preserves transport metadata', () => {
@@ -1352,7 +1215,10 @@ test('Stanza serializes every transaction step and preserves transport metadata'
 test('TextModel applies remote transactions outside local history', () => {
 	const schema = createDefaultDocumentSchema();
 	const key = new DocumentPluginKey<readonly string[]>('remote-origins');
-	const plugin = createDocumentPlugin(key, { init: () => [], apply: (value, context) => [...value, context.origin] });
+	const plugin = createDocumentPlugin(key, {
+		init: () => [],
+		apply: (value, context) => [...value, context.origin],
+	});
 	using model = DocumentTextModel.create(schema, createDocument(schema), { plugins: [plugin] });
 	model.dispatch(new DocumentTransaction().replaceText('text-1', 0, 0, 'L'));
 	assert.equal(model.canUndoBlocks, true);
@@ -1382,31 +1248,15 @@ test('Stanza converts inline and cross-block selections into clipboard text', ()
 	const schema = createDefaultDocumentSchema();
 	const first = schema.createNode('paragraph', {
 		id: 'paragraph-1',
-		content: [
-			schema.createText('A', { id: 'text-1' }),
-			schema.createNode('hardBreak', { id: 'break-1' }),
-			schema.createText('B', { id: 'text-2' }),
-		],
+		content: [schema.createText('A', { id: 'text-1' }), schema.createNode('hardBreak', { id: 'break-1' }), schema.createText('B', { id: 'text-2' })],
 	});
 	const second = schema.createNode('paragraph', {
 		id: 'paragraph-2',
 		content: [schema.createText('C', { id: 'text-3' })],
 	});
 	const document = schema.createDocument([first, second], 'document-1');
-	assert.equal(
-		documentSelectionToText(
-			document,
-			textSelection({ nodeId: 'text-1', offset: 0 }, { nodeId: 'text-2', offset: 1 }),
-		),
-		'A\nB',
-	);
-	assert.equal(
-		documentSelectionToText(
-			document,
-			textSelection({ nodeId: 'text-1', offset: 0 }, { nodeId: 'text-3', offset: 1 }),
-		),
-		'A\nB\nC',
-	);
+	assert.equal(documentSelectionToText(document, textSelection({ nodeId: 'text-1', offset: 0 }, { nodeId: 'text-2', offset: 1 })), 'A\nB');
+	assert.equal(documentSelectionToText(document, textSelection({ nodeId: 'text-1', offset: 0 }, { nodeId: 'text-3', offset: 1 })), 'A\nB\nC');
 });
 
 test('Stanza supports whole-document clipboard text, fragments, replacement, and deletion', () => {
@@ -1449,25 +1299,14 @@ test('Stanza supports whole-document clipboard text, fragments, replacement, and
 	);
 	assert.notEqual(model.document.content[0]?.id, source.content[0]?.id);
 
-	const replace = createReplaceTextCommand(
-		schema,
-		model.document,
-		model.document.content[0]!.id,
-		allSelection(),
-		'A\nB',
-	);
+	const replace = createReplaceTextCommand(schema, model.document, model.document.content[0]!.id, allSelection(), 'A\nB');
 	assert.ok(replace);
 	model.dispatch(replace.transaction);
 	assert.deepEqual(
 		model.document.content.map(node => node.content[0]?.text ?? ''),
 		['A', 'B'],
 	);
-	const clear = createDeleteInlineSelectionCommand(
-		schema,
-		model.document,
-		model.document.content[0]!.id,
-		allSelection(),
-	);
+	const clear = createDeleteInlineSelectionCommand(schema, model.document, model.document.content[0]!.id, allSelection());
 	assert.ok(clear);
 	model.dispatch(clear.transaction);
 	assert.equal(model.document.content.length, 1);
@@ -1490,11 +1329,7 @@ test('Stanza extracts, serializes, and inserts structured clipboard fragments', 
 		],
 	});
 	const sourceDocument = schema.createDocument([sourceParagraph], 'source-document');
-	const fragment = extractDocumentFragment(
-		schema,
-		sourceDocument,
-		textSelection({ nodeId: 'source-text-1', offset: 0 }, { nodeId: 'source-text-2', offset: 1 }),
-	);
+	const fragment = extractDocumentFragment(schema, sourceDocument, textSelection({ nodeId: 'source-text-1', offset: 0 }, { nodeId: 'source-text-2', offset: 1 }));
 	assert.ok(fragment);
 	assert.deepEqual(
 		fragment.content[0]?.content.map(node => node.type),
@@ -1509,13 +1344,7 @@ test('Stanza extracts, serializes, and inserts structured clipboard fragments', 
 		content: [schema.createText('Target', { id: 'target-text' })],
 	});
 	using model = DocumentTextModel.create(schema, schema.createDocument([target], 'target-document'));
-	const insert = createInsertFragmentCommand(
-		schema,
-		model.document,
-		'target-paragraph',
-		textSelection({ nodeId: 'target-text', offset: 3 }),
-		decoded,
-	);
+	const insert = createInsertFragmentCommand(schema, model.document, 'target-paragraph', textSelection({ nodeId: 'target-text', offset: 3 }), decoded);
 	assert.ok(insert);
 	model.dispatch(insert.transaction);
 	assert.deepEqual(
@@ -1524,12 +1353,5 @@ test('Stanza extracts, serializes, and inserts structured clipboard fragments', 
 	);
 	assert.notEqual(model.document.content[0]?.content[1]?.id, 'source-text-1');
 	assert.equal(model.document.content[0]?.content[1]?.marks[0]?.type, 'strong');
-	assert.throws(
-		() =>
-			deserializeDocumentFragment(
-				'{"format":"ash.document.fragment","version":1,"content":[{"id":"bad","type":"unknown","attrs":{},"content":[],"marks":[]}]}',
-				schema,
-			),
-		/fragment/,
-	);
+	assert.throws(() => deserializeDocumentFragment('{"format":"ash.document.fragment","version":1,"content":[{"id":"bad","type":"unknown","attrs":{},"content":[],"marks":[]}]}', schema), /fragment/);
 });

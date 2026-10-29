@@ -3,25 +3,9 @@ import { test } from 'mocha';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { DesignModel } from '../../contrib/creator/common/model/designModel.js';
 import { DocumentCommands } from '../../contrib/creator/common/commands/documentCommands.js';
-import {
-	documentFromShapes,
-	flattenDesignShapes,
-	parseDesignDocument,
-	serializeDesignDocument,
-	type DesignShape,
-} from '../../contrib/creator/common/model/document.js';
-import {
-	defaultPrototypeTransition,
-	type PrototypeFrame,
-	type PrototypeInteraction,
-	type PrototypeStep,
-} from '../../contrib/creator/common/model/prototype.js';
-import {
-	PrototypePlayback,
-	prototypeProgress,
-	samplePrototypeTransition,
-	smartAnimate,
-} from '../../contrib/creator/common/model/prototypePlayback.js';
+import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/creator/common/model/document.js';
+import { defaultPrototypeTransition, type PrototypeFrame, type PrototypeInteraction, type PrototypeStep } from '../../contrib/creator/common/model/prototype.js';
+import { PrototypePlayback, prototypeProgress, samplePrototypeTransition, smartAnimate } from '../../contrib/creator/common/model/prototypePlayback.js';
 
 function screen(name: string, children: readonly DesignShape[] = []): PrototypeFrame {
 	return {
@@ -51,17 +35,11 @@ function box(name: string, x = 0): DesignShape {
 		fill: '#000000',
 	};
 }
-function interaction(
-	action: PrototypeStep['action'],
-	destination?: string,
-	changes: Partial<PrototypeStep> = {},
-): PrototypeInteraction {
+function interaction(action: PrototypeStep['action'], destination?: string, changes: Partial<PrototypeStep> = {}): PrototypeInteraction {
 	return {
 		id: generateUuid(),
 		trigger: 'click',
-		actions: [
-			{ action, ...(destination ? { destination } : {}), transition: defaultPrototypeTransition, ...changes },
-		],
+		actions: [{ action, ...(destination ? { destination } : {}), transition: defaultPrototypeTransition, ...changes }],
 	};
 }
 function execute(player: PrototypePlayback, interaction: PrototypeInteraction, sourceId?: string): boolean {
@@ -83,9 +61,7 @@ test('Prototype commands create branched wires and a flow in one edit, save immu
 	model.redo();
 	commands.prototype.connect(new Set([a.children[1].id]), c.id);
 	assert.deepEqual(parseDesignDocument(serializeDesignDocument(model.value)), model.value);
-	assert.ok(
-		Object.isFrozen((model.value.shapes[0] as PrototypeFrame).children[0].interactions![0].actions[0].transition),
-	);
+	assert.ok(Object.isFrozen((model.value.shapes[0] as PrototypeFrame).children[0].interactions![0].actions[0].transition));
 	commands.removeShapes(new Set([b.id]));
 	assert.equal((model.value.shapes[0] as PrototypeFrame).children[0].interactions?.length, 0);
 	model.undo();
@@ -159,15 +135,7 @@ test('Prototype file boundary rejects invalid actions, durations, triggers, URLs
 	const items = wire.artifacts[document.artifactId].objects[source.id].interactions;
 	items.push(items[0]);
 	assert.throws(() => parseDesignDocument(JSON.stringify(wire)), /prototype/iu);
-	assert.throws(
-		() =>
-			parseDesignDocument(
-				serializeDesignDocument(
-					documentFromShapes([screen('Root', [{ ...screen('Nested'), flowStart: 'Invalid' }])]),
-				),
-			),
-		/prototype/iu,
-	);
+	assert.throws(() => parseDesignDocument(serializeDesignDocument(documentFromShapes([screen('Root', [{ ...screen('Nested'), flowStart: 'Invalid' }])]))), /prototype/iu);
 });
 
 test('Prototype instances inherit interactions and retain explicit overrides across main changes', () => {
@@ -258,21 +226,9 @@ test('Prototype overlay placement and input exclude hidden subtrees and covered 
 
 test('Smart Animate matches hierarchy and names, interpolates geometry and color, and dissolves unmatched layers', () => {
 	const from = screen('A', [box('Button', 0), box('Removed')]);
-	const to = screen('B', [
-		{ ...box('Button', 100), width: 160, rotation: 90, fill: '#ffffff', opacity: 0.5 },
-		box('Added'),
-	]);
+	const to = screen('B', [{ ...box('Button', 100), width: 160, rotation: 90, fill: '#ffffff', opacity: 0.5 }, box('Added')]);
 	const sampled = smartAnimate(from, to, 0.5) as PrototypeFrame;
-	assert.deepEqual(
-		[
-			sampled.children[0].x,
-			sampled.children[0].width,
-			sampled.children[0].rotation,
-			sampled.children[0].fill,
-			sampled.children[0].opacity,
-		],
-		[50, 120, 45, '#808080ff', 0.75],
-	);
+	assert.deepEqual([sampled.children[0].x, sampled.children[0].width, sampled.children[0].rotation, sampled.children[0].fill, sampled.children[0].opacity], [50, 120, 45, '#808080ff', 0.75]);
 	assert.deepEqual(
 		sampled.children.slice(1).map(shape => [shape.name, shape.opacity]),
 		[
@@ -280,11 +236,7 @@ test('Smart Animate matches hierarchy and names, interpolates geometry and color
 			['Removed', 0.5],
 		],
 	);
-	const nested = smartAnimate(
-		screen('A', [screen('Old parent', [box('Same')])]),
-		screen('B', [screen('New parent', [box('Same', 100)])]),
-		0.5,
-	) as PrototypeFrame;
+	const nested = smartAnimate(screen('A', [screen('Old parent', [box('Same')])]), screen('B', [screen('New parent', [box('Same', 100)])]), 0.5) as PrototypeFrame;
 	assert.equal(nested.children.length, 2);
 	assert.equal((nested.children[0] as PrototypeFrame).children[0].x, 100);
 });
@@ -293,16 +245,9 @@ test('Prototype transitions have stable endpoints, directional displacement and 
 	const a = { ...screen('A'), x: 0, y: 0 },
 		b = { ...screen('B'), x: 0, y: 0 };
 	for (const type of ['instant', 'dissolve', 'smart', 'moveIn', 'moveOut', 'push', 'slideIn', 'slideOut'] as const) {
-		assert.deepEqual(samplePrototypeTransition(a, b, { ...defaultPrototypeTransition, type }, 1), [
-			{ shape: b, x: 0, y: 0, opacity: 1 },
-		]);
+		assert.deepEqual(samplePrototypeTransition(a, b, { ...defaultPrototypeTransition, type }, 1), [{ shape: b, x: 0, y: 0, opacity: 1 }]);
 	}
-	const push = samplePrototypeTransition(
-		a,
-		b,
-		{ ...defaultPrototypeTransition, type: 'push', easing: 'linear' },
-		0.5,
-	);
+	const push = samplePrototypeTransition(a, b, { ...defaultPrototypeTransition, type: 'push', easing: 'linear' }, 0.5);
 	assert.deepEqual(
 		push.map(layer => [layer.x, layer.y]),
 		[
@@ -336,15 +281,7 @@ test('Prototype draft links remain inert until a URL is entered and nested desti
 	const document = documentFromShapes([home]);
 	assert.deepEqual(parseDesignDocument(serializeDesignDocument(document)), document);
 	assert.equal(execute(new PrototypePlayback(document.shapes, home.id), home.interactions[0]), false);
-	assert.throws(
-		() =>
-			parseDesignDocument(
-				serializeDesignDocument(
-					documentFromShapes([{ ...home, interactions: [interaction('navigate', nested.id)] }]),
-				),
-			),
-		/prototype/iu,
-	);
+	assert.throws(() => parseDesignDocument(serializeDesignDocument(documentFromShapes([{ ...home, interactions: [interaction('navigate', nested.id)] }]))), /prototype/iu);
 });
 
 test('Interactive components change only the triggered instance, retain text overrides and restore temporary variants', () => {
@@ -380,18 +317,10 @@ test('Interactive components change only the triggered instance, retain text ove
 	assert.equal(changed.instance?.componentId, secondId);
 	assert.equal(changed.fill, '#ff0000');
 	assert.equal((changed.children[0] as typeof label).text, 'Custom');
-	assert.equal(
-		(flattenDesignShapes([player.activeFrame]).find(shape => shape.id === anotherId) as PrototypeFrame).instance
-			?.componentId,
-		first.id,
-	);
+	assert.equal((flattenDesignShapes([player.activeFrame]).find(shape => shape.id === anotherId) as PrototypeFrame).instance?.componentId, first.id);
 	assert.equal(player.canBack, false);
 	player.restore(snapshot);
-	assert.equal(
-		(flattenDesignShapes([player.activeFrame]).find(shape => shape.id === instanceId) as PrototypeFrame).instance
-			?.componentId,
-		first.id,
-	);
+	assert.equal((flattenDesignShapes([player.activeFrame]).find(shape => shape.id === instanceId) as PrototypeFrame).instance?.componentId, first.id);
 	assert.equal(serializeDesignDocument(model.value), saved);
 });
 
@@ -407,10 +336,7 @@ test('Deleting a prototype destination does not turn inherited interactions into
 	model.replace(documentFromShapes([main, target]));
 	const id = commands.components.createInstance(main.id)!;
 	commands.removeShapes(new Set([target.id]));
-	assert.equal(
-		model.value.shapes.find(shape => shape.id === id)?.overrides?.includes('interactions') ?? false,
-		false,
-	);
+	assert.equal(model.value.shapes.find(shape => shape.id === id)?.overrides?.includes('interactions') ?? false, false);
 	commands.prototype.setInteractions(main.id, [interaction('back')]);
 	assert.equal(model.value.shapes.find(shape => shape.id === id)!.interactions![0].actions[0].action, 'back');
 });
@@ -430,11 +356,7 @@ test('Prototype flow starting points belong to placed instances and survive main
 });
 
 test('Prototype expressions follow precedence, preserve variable identities and reject coercion or executable syntax', async () => {
-	const {
-		parsePrototypeExpression: parse,
-		evaluatePrototypeExpression: evaluate,
-		formatPrototypeExpression: format,
-	} = await import('../../contrib/creator/common/model/prototypeExpression.js');
+	const { parsePrototypeExpression: parse, evaluatePrototypeExpression: evaluate, formatPrototypeExpression: format } = await import('../../contrib/creator/common/model/prototypeExpression.js');
 	const { variables } = prototypeResources();
 	const calc = (text: string) => evaluate(parse(text, variables), id => (id === variables[0].id ? 3 : undefined));
 	assert.equal(calc('count + 2 * 4'), 11);
@@ -507,8 +429,7 @@ function prototypeResources() {
 }
 
 test('Prototype chains evaluate conditions after prior writes and yield animations in order', async () => {
-	const { parsePrototypeExpression: parse } =
-		await import('../../contrib/creator/common/model/prototypeExpression.js');
+	const { parsePrototypeExpression: parse } = await import('../../contrib/creator/common/model/prototypeExpression.js');
 	const resources = prototypeResources(),
 		a = screen('Home'),
 		b = screen('Cart'),
@@ -553,8 +474,7 @@ test('Prototype chains evaluate conditions after prior writes and yield animatio
 });
 
 test('Prototype writes and modes update bindings and aliases across navigation, reset only on restart or snapshot restore', async () => {
-	const { parsePrototypeExpression: parse } =
-		await import('../../contrib/creator/common/model/prototypeExpression.js');
+	const { parsePrototypeExpression: parse } = await import('../../contrib/creator/common/model/prototypeExpression.js');
 	const resources = prototypeResources(),
 		collection = resources.collections[0],
 		variable = resources.variables[0];
@@ -596,8 +516,7 @@ test('Prototype writes and modes update bindings and aliases across navigation, 
 });
 
 test('Prototype conditionals use the first matching branch, nest, and keep missing references or invalid results inert', async () => {
-	const { parsePrototypeExpression: parse } =
-		await import('../../contrib/creator/common/model/prototypeExpression.js');
+	const { parsePrototypeExpression: parse } = await import('../../contrib/creator/common/model/prototypeExpression.js');
 	const resources = prototypeResources(),
 		a = screen('Home'),
 		b = screen('Yes'),
@@ -605,10 +524,7 @@ test('Prototype conditionals use the first matching branch, nest, and keep missi
 	const nested: PrototypeStep = {
 		action: 'conditional',
 		transition: defaultPrototypeTransition,
-		branches: [
-			{ condition: parse('count > 0', resources.variables), actions: [interaction('navigate', b.id).actions[0]] },
-			{ actions: [interaction('navigate', c.id).actions[0]] },
-		],
+		branches: [{ condition: parse('count > 0', resources.variables), actions: [interaction('navigate', b.id).actions[0]] }, { actions: [interaction('navigate', c.id).actions[0]] }],
 	};
 	const player = new PrototypePlayback([a, b, c], a.id, resources);
 	const actions: PrototypeStep[] = [
@@ -645,8 +561,7 @@ test('Prototype conditionals use the first matching branch, nest, and keep missi
 });
 
 test('Prototype action trees round trip, freeze, remap conditional wires on duplication, and remove only deleted target actions', async () => {
-	const { parsePrototypeExpression: parse } =
-		await import('../../contrib/creator/common/model/prototypeExpression.js');
+	const { parsePrototypeExpression: parse } = await import('../../contrib/creator/common/model/prototypeExpression.js');
 	const resources = prototypeResources(),
 		b = screen('Target'),
 		c = screen('Other');
@@ -760,8 +675,7 @@ test('Prototype persistence migrates single actions and rejects malformed action
 });
 
 test('Custom springs handle under, critical and over damping, preserve overshoot and derive mass-dependent duration', async () => {
-	const { springProgress, prototypeTransitionDuration } =
-		await import('../../contrib/creator/common/model/prototypePlayback.js');
+	const { springProgress, prototypeTransitionDuration } = await import('../../contrib/creator/common/model/prototypePlayback.js');
 	const base = { mass: 1, stiffness: 100, damping: 8, initialVelocity: 0 };
 	assert.equal(springProgress(0, base), 0);
 	assert.ok(springProgress(0.35, base) > 1);
@@ -839,15 +753,9 @@ test('Deleting a referenced variable mode leaves a saveable inert action and und
 	commands.resources.deleteMode(collection.id, modeId);
 	const saved = serializeDesignDocument(model.value);
 	assert.deepEqual(JSON.parse(serializeDesignDocument(parseDesignDocument(saved))), JSON.parse(saved));
-	assert.equal(
-		[...new PrototypePlayback(model.value.shapes, a.id, model.value.resources).run(trigger)][0].failed,
-		true,
-	);
+	assert.equal([...new PrototypePlayback(model.value.shapes, a.id, model.value.resources).run(trigger)][0].failed, true);
 	model.undo();
-	assert.equal(
-		[...new PrototypePlayback(model.value.shapes, a.id, model.value.resources).run(trigger)][0].failed,
-		undefined,
-	);
+	assert.equal([...new PrototypePlayback(model.value.shapes, a.id, model.value.resources).run(trigger)][0].failed, undefined);
 });
 
 test('Prototype scrolling clamps both axes, separates nested viewports, and chains unused wheel distance', () => {
@@ -867,13 +775,7 @@ test('Prototype scrolling clamps both axes, separates nested viewports, and chai
 	assert.equal(player.scrollBy(inner.id, { x: 900, y: 600 }), true);
 	assert.deepEqual(player.scrollOffset(inner.id), { x: 380, y: 340 });
 	assert.deepEqual(player.scrollOffset(outer.id), { x: 0, y: 260 });
-	assert.deepEqual(
-		[
-			(player.scene.children[0] as PrototypeFrame).children[0].x,
-			(player.scene.children[0] as PrototypeFrame).children[0].y,
-		],
-		[120, 60],
-	);
+	assert.deepEqual([(player.scene.children[0] as PrototypeFrame).children[0].x, (player.scene.children[0] as PrototypeFrame).children[0].y], [120, 60]);
 	player.scrollBy(inner.id, { x: -900, y: -1000 });
 	assert.deepEqual(player.scrollOffset(inner.id), { x: 0, y: 0 });
 	assert.deepEqual(player.scrollOffset(outer.id), { x: 0, y: 0 });
@@ -954,8 +856,7 @@ test('Scroll to resolves nested viewports, scaled groups and conditional chains 
 		true,
 	);
 	const player = new PrototypePlayback([page], page.id);
-	const action = interaction('scrollTo', target.id, { transition: { ...defaultPrototypeTransition, type: 'scroll' } })
-		.actions[0];
+	const action = interaction('scrollTo', target.id, { transition: { ...defaultPrototypeTransition, type: 'scroll' } }).actions[0];
 	const chain = {
 		...interaction('back'),
 		actions: [
@@ -1069,10 +970,7 @@ test('Auto layout excludes absolute fixed layers from flow and hug sizes and app
 	};
 	model.replace(documentFromShapes([page]));
 	commands.prototype.setScroll(fixed.id, { scrollPosition: 'fixed' });
-	assert.equal(
-		flattenDesignShapes(model.value.shapes).find(shape => shape.id === fixed.id)!.scrollPosition,
-		'scroll',
-	);
+	assert.equal(flattenDesignShapes(model.value.shapes).find(shape => shape.id === fixed.id)!.scrollPosition, 'scroll');
 	commands.prototype.setScroll(fixed.id, { layoutPositioning: 'absolute', scrollPosition: 'fixed' });
 	const current = model.value.shapes[0] as PrototypeFrame;
 	assert.equal(current.height, 60);
@@ -1197,8 +1095,5 @@ test('Moving a scroll target across screens removes the invalid wire and undo re
 	assert.equal((model.value.shapes[0] as PrototypeFrame).children[0].interactions!.length, 0);
 	assert.deepEqual(parseDesignDocument(serializeDesignDocument(model.value)), model.value);
 	model.undo();
-	assert.equal(
-		(model.value.shapes[0] as PrototypeFrame).children[0].interactions![0].actions[0].destination,
-		target.id,
-	);
+	assert.equal((model.value.shapes[0] as PrototypeFrame).children[0].interactions![0].actions[0].destination, target.id);
 });

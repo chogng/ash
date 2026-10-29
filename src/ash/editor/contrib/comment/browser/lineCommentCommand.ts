@@ -2,11 +2,7 @@ import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { Selection } from '../../../common/core/selection.js';
 import { type ISingleEditOperation } from '../../../common/core/editOperation.js';
-import {
-	type ICursorStateComputerData,
-	type IEditOperationBuilder,
-	type ICommand,
-} from '../../../common/editorCommon.js';
+import { type ICursorStateComputerData, type IEditOperationBuilder, type ICommand } from '../../../common/editorCommon.js';
 import { type ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
 import { type ITextModel } from '../../../common/model.js';
 import { BlockCommentCommand } from './blockCommentCommand.js';
@@ -68,8 +64,7 @@ export class LineCommentCommand implements ICommand {
 		languageConfigurationService: ILanguageConfigurationService,
 		languageId: string,
 	): IPreflightData {
-		const noIndent =
-			languageConfigurationService.getLanguageConfiguration(languageId).comments?.lineCommentNoIndent === true;
+		const noIndent = languageConfigurationService.getLanguageConfiguration(languageId).comments?.lineCommentNoIndent === true;
 		let shouldRemoveComments = type !== Type.ForceAdd;
 		let hasContent = false;
 		for (let index = 0; index < lines.length; index += 1) {
@@ -90,8 +85,7 @@ export class LineCommentCommand implements ICommand {
 			const commented = text.startsWith(data.commentStr, data.commentStrOffset);
 			if (type === Type.ForceRemove && !commented) data.ignore = true;
 			if (type === Type.Toggle && !commented) shouldRemoveComments = false;
-			if (commented && insertSpace && text[data.commentStrOffset + data.commentStr.length] === ' ')
-				data.commentStrLength += 1;
+			if (commented && insertSpace && text[data.commentStrOffset + data.commentStr.length] === ' ') data.commentStrLength += 1;
 		}
 		if (type === Type.Toggle && !hasContent) {
 			shouldRemoveComments = false;
@@ -120,27 +114,14 @@ export class LineCommentCommand implements ICommand {
 			commentStrOffset: 0,
 			commentStrLength: token.length,
 		}));
-		return LineCommentCommand._analyzeLines(
-			type,
-			insertSpace,
-			model,
-			lines,
-			startLineNumber,
-			ignoreEmptyLines,
-			ignoreFirstLine,
-			languageConfigurationService,
-			languageId,
-		);
+		return LineCommentCommand._analyzeLines(type, insertSpace, model, lines, startLineNumber, ignoreEmptyLines, ignoreFirstLine, languageConfigurationService, languageId);
 	}
 
 	public getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
 		let selection = this.selection;
 		if (selection.startLineNumber < selection.endLineNumber && selection.endColumn === 1) {
 			this.moveEndPositionDown = true;
-			selection = selection.setEndPosition(
-				selection.endLineNumber - 1,
-				model.getLineMaxColumn(selection.endLineNumber - 1),
-			);
+			selection = selection.setEndPosition(selection.endLineNumber - 1, model.getLineMaxColumn(selection.endLineNumber - 1));
 		}
 		const data = LineCommentCommand._gatherPreflightData(
 			this.type,
@@ -153,15 +134,11 @@ export class LineCommentCommand implements ICommand {
 			this.languageConfigurationService,
 		);
 		if (!data.supported) {
-			new BlockCommentCommand(selection, this.insertSpace, this.languageConfigurationService).getEditOperations(
-				model,
-				builder,
-			);
+			new BlockCommentCommand(selection, this.insertSpace, this.languageConfigurationService).getEditOperations(model, builder);
 			return;
 		}
 		this.selectionId = builder.trackSelection(selection);
-		if (!data.shouldRemoveComments)
-			LineCommentCommand._normalizeInsertionPoint(model, data.lines, selection.startLineNumber, this.indentSize);
+		if (!data.shouldRemoveComments) LineCommentCommand._normalizeInsertionPoint(model, data.lines, selection.startLineNumber, this.indentSize);
 		const operations = data.shouldRemoveComments
 			? LineCommentCommand._createRemoveLineCommentsOperations(data.lines, selection.startLineNumber)
 			: data.lines.flatMap((line, index) =>
@@ -169,9 +146,7 @@ export class LineCommentCommand implements ICommand {
 						? []
 						: [
 								{
-									range: Range.fromPositions(
-										new Position(selection.startLineNumber + index, line.commentStrOffset + 1),
-									),
+									range: Range.fromPositions(new Position(selection.startLineNumber + index, line.commentStrOffset + 1)),
 									text: line.commentStr + (this.insertSpace ? ' ' : ''),
 								},
 							],
@@ -185,63 +160,38 @@ export class LineCommentCommand implements ICommand {
 		return result;
 	}
 
-	public static _createRemoveLineCommentsOperations(
-		lines: ILinePreflightData[],
-		startLineNumber: number,
-	): ISingleEditOperation[] {
+	public static _createRemoveLineCommentsOperations(lines: ILinePreflightData[], startLineNumber: number): ISingleEditOperation[] {
 		return lines.flatMap((line, index) =>
 			line.ignore
 				? []
 				: [
 						{
-							range: new Range(
-								startLineNumber + index,
-								line.commentStrOffset + 1,
-								startLineNumber + index,
-								line.commentStrOffset + line.commentStrLength + 1,
-							),
+							range: new Range(startLineNumber + index, line.commentStrOffset + 1, startLineNumber + index, line.commentStrOffset + line.commentStrLength + 1),
 							text: '',
 						},
 					],
 		);
 	}
 
-	public static _normalizeInsertionPoint(
-		model: ISimpleModel,
-		lines: IInsertionPoint[],
-		startLineNumber: number,
-		indentSize: number,
-	): void {
+	public static _normalizeInsertionPoint(model: ISimpleModel, lines: IInsertionPoint[], startLineNumber: number, indentSize: number): void {
 		let minimum = Number.POSITIVE_INFINITY;
 		for (let index = 0; index < lines.length; index += 1) {
 			if (lines[index]!.ignore) continue;
-			minimum = Math.min(
-				minimum,
-				visibleColumn(
-					model.getLineContent(startLineNumber + index),
-					lines[index]!.commentStrOffset,
-					indentSize,
-				),
-			);
+			minimum = Math.min(minimum, visibleColumn(model.getLineContent(startLineNumber + index), lines[index]!.commentStrOffset, indentSize));
 		}
 		if (!Number.isFinite(minimum)) return;
 		minimum = Math.floor(minimum / indentSize) * indentSize;
 		for (let index = 0; index < lines.length; index += 1) {
 			const line = lines[index]!;
 			if (line.ignore) continue;
-			line.commentStrOffset = offsetAtVisibleColumn(
-				model.getLineContent(startLineNumber + index),
-				minimum,
-				indentSize,
-			);
+			line.commentStrOffset = offsetAtVisibleColumn(model.getLineContent(startLineNumber + index), minimum, indentSize);
 		}
 	}
 }
 
 function visibleColumn(text: string, offset: number, indentSize: number): number {
 	let column = 0;
-	for (let index = 0; index < offset; index += 1)
-		column = text[index] === '\t' ? column + indentSize - (column % indentSize) : column + 1;
+	for (let index = 0; index < offset; index += 1) column = text[index] === '\t' ? column + indentSize - (column % indentSize) : column + 1;
 	return column;
 }
 

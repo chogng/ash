@@ -57,13 +57,14 @@ test('core commands select all', () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('one\n  two\nthree');
-	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+	using viewport = new View({
+		container,
+		model,
+		lineHeight: 20,
+		textMeasurer: new FixedTextMeasurer(),
+	});
 	const selections = viewport.testViewModel;
-	viewport.testViewModel.setCursorStates(
-		'test',
-		CursorChangeReason.NotSet,
-		CursorState.fromModelSelections([Selection.fromPositions(new Position(0 + 1, 0 + 1))]),
-	);
+	viewport.testViewModel.setCursorStates('test', CursorChangeReason.NotSet, CursorState.fromModelSelections([Selection.fromPositions(new Position(0 + 1, 0 + 1))]));
 	viewport.layout({ width: 400, height: 100 });
 	const input = viewport.controller;
 	using commands = installCoreTextEditorCommands(input.element, viewport, viewport.testViewModel);
@@ -88,15 +89,9 @@ test('line selection remains an independent editor extension', () => {
 	const first = keyboardEvent(dom.window, 'l', { ctrlKey: true });
 	editor.controller.element.dispatchEvent(first);
 	assert.equal(first.defaultPrevented, true);
-	assert.deepEqual(
-		editor.getSelections()![0]!,
-		Selection.fromPositions(new Position(0 + 1, 0 + 1), new Position(1 + 1, 0 + 1)),
-	);
+	assert.deepEqual(editor.getSelections()![0]!, Selection.fromPositions(new Position(0 + 1, 0 + 1), new Position(1 + 1, 0 + 1)));
 	editor.controller.element.dispatchEvent(keyboardEvent(dom.window, 'l', { ctrlKey: true }));
-	assert.deepEqual(
-		editor.getSelections()![0]!,
-		Selection.fromPositions(new Position(0 + 1, 0 + 1), new Position(2 + 1, 0 + 1)),
-	);
+	assert.deepEqual(editor.getSelections()![0]!, Selection.fromPositions(new Position(0 + 1, 0 + 1), new Position(2 + 1, 0 + 1)));
 
 	dom.window.close();
 });
@@ -112,17 +107,10 @@ test('keyboard word navigation consumes standard WordOperations boundaries', () 
 		textMeasurer: new FixedTextMeasurer(),
 	});
 	viewport.layout({ width: 400, height: 100 });
-	viewport.testViewModel.setCursorStates(
-		'test',
-		CursorChangeReason.NotSet,
-		CursorState.fromModelSelections([Selection.fromPositions(new Position(1, 11))]),
-	);
-	using navigation = new KeyboardNavigationController(
-		viewport,
-		viewport.testViewModel,
-		viewport.controller.userInputEvents,
-		{ operatingSystem: OperatingSystem.Macintosh },
-	);
+	viewport.testViewModel.setCursorStates('test', CursorChangeReason.NotSet, CursorState.fromModelSelections([Selection.fromPositions(new Position(1, 11))]));
+	using navigation = new KeyboardNavigationController(viewport, viewport.testViewModel, viewport.controller.userInputEvents, {
+		operatingSystem: OperatingSystem.Macintosh,
+	});
 
 	viewport.controller.element.focus();
 	viewport.controller.element.dispatchEvent(keyboardEvent(dom.window, 'ArrowLeft', { altKey: true }));
@@ -150,18 +138,11 @@ test('core commands reject dependencies from different text models', () => {
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 	});
-	assert.throws(
-		() => installCoreTextEditorCommands(input, viewport, otherViewport.testViewModel),
-		/must share one text model/,
-	);
+	assert.throws(() => installCoreTextEditorCommands(input, viewport, otherViewport.testViewModel), /must share one text model/);
 	dom.window.close();
 });
 
-function keyboardEvent(
-	targetWindow: typeof browserEnvironment.window,
-	key: string,
-	options: KeyboardEventInit = {},
-): KeyboardEvent {
+function keyboardEvent(targetWindow: typeof browserEnvironment.window, key: string, options: KeyboardEventInit = {}): KeyboardEvent {
 	return new targetWindow.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,

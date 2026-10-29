@@ -1,9 +1,4 @@
-import {
-	Disposable,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-} from '../../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { IChatTipService } from '../../chatTipService.js';
 import { ChatTipContentPart } from '../chatContentParts/chatTipContentPart.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
@@ -42,16 +37,10 @@ export class ChatInputTipPresenter extends Disposable {
 		if (this.part.value) return;
 		const scope = new DisposableStore();
 		this.part.value = scope;
-		const parts = ChatTipContentPart.instantiateObservable(
-			this.instantiation,
-			scope,
-			this.options.container.ownerDocument,
-			tip,
-			() => {
-				this.options.focusInput();
-				this.tips.dismissTip();
-			},
-		);
+		const parts = ChatTipContentPart.instantiateObservable(this.instantiation, scope, this.options.container.ownerDocument, tip, () => {
+			this.options.focusInput();
+			this.tips.dismissTip();
+		});
 		const render = (part: ChatTipContentPart): void => {
 			const previous = this.currentPart;
 			const hadFocus = previous?.domNode.contains(this.options.container.ownerDocument.activeElement);

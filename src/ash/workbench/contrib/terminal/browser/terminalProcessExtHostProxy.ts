@@ -52,11 +52,7 @@ export class TerminalProcessExtHostProxy extends BasePty {
 				throw new CancellationError();
 			}
 		}
-		const result = await this.invoke(
-			'openTaskTerminal',
-			{ ptyId: this.ptyId, dimensions: { columns: this.cols, rows: this.rows } },
-			this.controller.signal,
-		);
+		const result = await this.invoke('openTaskTerminal', { ptyId: this.ptyId, dimensions: { columns: this.cols, rows: this.rows } }, this.controller.signal);
 		if (this.closed) throw new CancellationError();
 		this.handleReady({ pid: -1, cwd: '' });
 		this.consume(result);
@@ -110,10 +106,7 @@ export class TerminalProcessExtHostProxy extends BasePty {
 				if (this.closed) {
 					throw new CancellationError();
 				}
-				const result = await raceCancellationError(
-					this.invoke(operation, { ...payload, ptyId }, this.controller.signal),
-					this.controller.signal,
-				);
+				const result = await raceCancellationError(this.invoke(operation, { ...payload, ptyId }, this.controller.signal), this.controller.signal);
 				if (this.closed) {
 					throw new CancellationError();
 				}
@@ -165,14 +158,7 @@ export class TerminalProcessExtHostProxy extends BasePty {
 				this.bufferer.flushBuffer(this.id);
 				this.handleDidChangeProperty({ type: ProcessPropertyType.Title, value: text(event.name, 256) });
 			} else if (event.type === 'close') {
-				if (
-					event.code !== null &&
-					(typeof event.code !== 'number' ||
-						!Number.isSafeInteger(event.code) ||
-						event.code < 0 ||
-						event.code > 2147483647)
-				)
-					throw invalid();
+				if (event.code !== null && (typeof event.code !== 'number' || !Number.isSafeInteger(event.code) || event.code < 0 || event.code > 2147483647)) throw invalid();
 				this.finish(event.code === null ? undefined : (event.code as number));
 			} else throw invalid();
 		}
@@ -185,28 +171,15 @@ export class TerminalProcessExtHostProxy extends BasePty {
 }
 
 function invalid(): TypeError {
-	return new TypeError(
-		localize('terminal.profile.invalidProviderResult', 'Invalid terminal profile provider response.'),
-	);
+	return new TypeError(localize('terminal.profile.invalidProviderResult', 'Invalid terminal profile provider response.'));
 }
 
 function record(value: unknown, keys?: readonly string[]): Record<string, JsonValue> {
-	if (
-		!value ||
-		typeof value !== 'object' ||
-		Array.isArray(value) ||
-		(keys && Object.keys(value).some(key => !keys.includes(key)))
-	)
-		throw invalid();
+	if (!value || typeof value !== 'object' || Array.isArray(value) || (keys && Object.keys(value).some(key => !keys.includes(key)))) throw invalid();
 	return value as Record<string, JsonValue>;
 }
 
 function text(value: unknown, maximum: number, allowEmpty = false): string {
-	if (
-		typeof value !== 'string' ||
-		value.length > maximum ||
-		(!allowEmpty && (!value || /[\u0000-\u001f\u007f]/.test(value)))
-	)
-		throw invalid();
+	if (typeof value !== 'string' || value.length > maximum || (!allowEmpty && (!value || /[\u0000-\u001f\u007f]/.test(value)))) throw invalid();
 	return value;
 }

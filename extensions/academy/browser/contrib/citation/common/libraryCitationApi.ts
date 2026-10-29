@@ -1,16 +1,8 @@
 import { localize } from 'ash:editor/nls.js';
 import type { EditorExtensionOperationContext } from '../../../widget/richTextEditor/richTextEditorWidget.js';
-import {
-	DocumentTransaction,
-	applyDocumentTransaction,
-	type DocumentStep,
-} from '../../../../common/model/documentTransaction.js';
+import { DocumentTransaction, applyDocumentTransaction, type DocumentStep } from '../../../../common/model/documentTransaction.js';
 import { findDocumentNode, type DocumentNode } from '../../../../common/model/document.js';
-import {
-	createInsertCitationCommand,
-	createInsertReferenceCommand,
-	createUpdateReferenceCommand,
-} from './citationCommands.js';
+import { createInsertCitationCommand, createInsertReferenceCommand, createUpdateReferenceCommand } from './citationCommands.js';
 import { buildReferenceIndex } from './references.js';
 import { textSelection } from '../../../../common/core/documentSelection.js';
 
@@ -49,16 +41,8 @@ export function runLibraryCitationOperation(context: EditorExtensionOperationCon
 				const node = findDocumentNode(document, reference.nodeId)?.node;
 				return node?.attrs.libraryId === request.libraryId && node.attrs.libraryEntryId === value.id;
 			});
-			if (
-				matches.length > 1 ||
-				(matches[0] && initial.filter(reference => reference.key === matches[0].key).length > 1)
-			)
-				throw new Error(
-					localize(
-						'document.library.ambiguous',
-						'Resolve duplicate linked bibliography entries before updating citations.',
-					),
-				);
+			if (matches.length > 1 || (matches[0] && initial.filter(reference => reference.key === matches[0].key).length > 1))
+				throw new Error(localize('document.library.ambiguous', 'Resolve duplicate linked bibliography entries before updating citations.'));
 			return [value.id, matches[0]];
 		}),
 	);
@@ -74,19 +58,8 @@ export function runLibraryCitationOperation(context: EditorExtensionOperationCon
 	let temporary = 0;
 	for (const value of request.references) {
 		const linked = linkedEntries.get(value.id);
-		if (
-			initial.some(
-				reference =>
-					reference.key === value.key && reference.nodeId !== linked?.nodeId && !moving.has(reference.nodeId),
-			)
-		)
-			throw new Error(
-				localize(
-					'document.library.keyConflict',
-					'Reference key {0} already belongs to another entry.',
-					value.key,
-				),
-			);
+		if (initial.some(reference => reference.key === value.key && reference.nodeId !== linked?.nodeId && !moving.has(reference.nodeId)))
+			throw new Error(localize('document.library.keyConflict', 'Reference key {0} already belongs to another entry.', value.key));
 		if (linked && moving.has(linked.nodeId)) {
 			let key: string;
 			do {
@@ -101,26 +74,10 @@ export function runLibraryCitationOperation(context: EditorExtensionOperationCon
 			const node = findDocumentNode(document, reference.nodeId)?.node;
 			return node?.attrs.libraryId === request.libraryId && node.attrs.libraryEntryId === value.id;
 		});
-		if (matches.length > 1)
-			throw new Error(
-				localize(
-					'document.library.ambiguous',
-					'Resolve duplicate linked bibliography entries before updating citations.',
-				),
-			);
+		if (matches.length > 1) throw new Error(localize('document.library.ambiguous', 'Resolve duplicate linked bibliography entries before updating citations.'));
 		const linked = matches[0];
-		if (
-			buildReferenceIndex(document).references.some(
-				reference => reference.key === value.key && reference.nodeId !== linked?.nodeId,
-			)
-		)
-			throw new Error(
-				localize(
-					'document.library.keyConflict',
-					'Reference key {0} already belongs to another entry.',
-					value.key,
-				),
-			);
+		if (buildReferenceIndex(document).references.some(reference => reference.key === value.key && reference.nodeId !== linked?.nodeId))
+			throw new Error(localize('document.library.keyConflict', 'Reference key {0} already belongs to another entry.', value.key));
 		if (linked) {
 			const command = createUpdateReferenceCommand(model.schema, document, linked.key, value.key, value.text);
 			if (command) {
@@ -129,10 +86,7 @@ export function runLibraryCitationOperation(context: EditorExtensionOperationCon
 			}
 		} else if (request.operation === 'insert') {
 			const command = createInsertReferenceCommand(model.schema, document, value.key, value.text);
-			if (!command)
-				throw new Error(
-					localize('document.library.unsupported', 'This document cannot accept a bibliography entry.'),
-				);
+			if (!command) throw new Error(localize('document.library.unsupported', 'This document cannot accept a bibliography entry.'));
 			add(command);
 			const entry = buildReferenceIndex(document).references.find(reference => reference.key === value.key)!;
 			const node = findDocumentNode(document, entry.nodeId)!.node;
@@ -153,21 +107,9 @@ export function runLibraryCitationOperation(context: EditorExtensionOperationCon
 		// An empty editable block has a DOM caret but no text node for the model's
 		// text selection. Use its boundary only while preparing this insertion.
 		if (!selection && block?.content.length === 0) selection = textSelection({ nodeId: block.id, offset: 0 });
-		if (!selection)
-			throw new Error(
-				localize(
-					'document.library.noSelection',
-					'Place the caret in the Academy document before inserting a citation.',
-				),
-			);
+		if (!selection) throw new Error(localize('document.library.noSelection', 'Place the caret in the Academy document before inserting a citation.'));
 		const command = createInsertCitationCommand(model.schema, document, context.blockId, selection, value.key);
-		if (!command)
-			throw new Error(
-				localize(
-					'document.library.noSelection',
-					'Place the caret in the Academy document before inserting a citation.',
-				),
-			);
+		if (!command) throw new Error(localize('document.library.noSelection', 'Place the caret in the Academy document before inserting a citation.'));
 		add(command);
 		selection = command.transaction.selection;
 	}
@@ -193,8 +135,7 @@ export function runLibraryCitationOperation(context: EditorExtensionOperationCon
 	};
 }
 function parseRequest(value: unknown): Request {
-	const invalid = () =>
-		new TypeError(localize('document.library.invalid', 'The citation request is invalid or incompatible.'));
+	const invalid = () => new TypeError(localize('document.library.invalid', 'The citation request is invalid or incompatible.'));
 	if (
 		!record(value) ||
 		value.version !== 1 ||
@@ -232,10 +173,5 @@ function record(value: unknown): value is Record<string, any> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 function text(value: unknown, max: number): value is string {
-	return (
-		typeof value === 'string' &&
-		value.trim().length > 0 &&
-		value.length <= max &&
-		!/[\u0000-\u001f\u007f]/u.test(value)
-	);
+	return typeof value === 'string' && value.trim().length > 0 && value.length <= max && !/[\u0000-\u001f\u007f]/u.test(value);
 }

@@ -20,11 +20,7 @@ test('ordinary product tests exclude external Codex authentication even when the
 test('a real-model scenario opts into one canonical auth directory while retaining an isolated product home', async () => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-auth-source-'));
 	try {
-		const environment = createTestEnvironment(
-			join(root, 'isolated'),
-			{ HOME: '/host-home', CODEX_HOME: '/unselected-auth' },
-			root,
-		);
+		const environment = createTestEnvironment(join(root, 'isolated'), { HOME: '/host-home', CODEX_HOME: '/unselected-auth' }, root);
 		assert.equal(environment.HOME, join(root, 'isolated'));
 		assert.equal(environment.CODEX_HOME, await realpath(root));
 		assert.throws(() => createTestEnvironment(root, {}, '.'), /absolute/);

@@ -2,11 +2,7 @@ import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { matchesSubString } from '../../../../base/common/filters.js';
 import { localize } from '../../../../nls.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import {
-	PickerQuickAccessProvider,
-	type IPickerQuickAccessItem,
-	type Picks,
-} from '../../../../platform/quickinput/browser/pickerQuickAccess.js';
+import { PickerQuickAccessProvider, type IPickerQuickAccessItem, type Picks } from '../../../../platform/quickinput/browser/pickerQuickAccess.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { DEBUG_CONSOLE_VIEW_ID, IDebugService } from '../common/debug.js';
 import { DEBUG_CONSOLE_QUICK_ACCESS_PREFIX } from './debugCommands.js';
@@ -34,9 +30,7 @@ export class DebugConsoleQuickAccess extends PickerQuickAccessProvider<IPickerQu
 					accept: (_mods, event) => {
 						if (!model.sessions.some(candidate => candidate.id === session.id)) return;
 						model.selectSession(session.id);
-						void this.views
-							.openView(DEBUG_CONSOLE_VIEW_ID, !event.inBackground)
-							.catch(error => this.notifications.error(error));
+						void this.views.openView(DEBUG_CONSOLE_VIEW_ID, !event.inBackground).catch(error => this.notifications.error(error));
 					},
 				} satisfies IPickerQuickAccessItem,
 			];

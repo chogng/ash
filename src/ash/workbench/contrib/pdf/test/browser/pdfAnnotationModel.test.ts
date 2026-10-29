@@ -6,12 +6,7 @@ import { emptyPdfAnnotationDocument } from '../../../../../../../extensions/pdf-
 test('PDF annotation model tracks mutations, undo/redo, and the saved revision', () => {
 	const model = new PdfAnnotationModel();
 	model.restore({ document: emptyPdfAnnotationDocument(), revision: 'initial' });
-	const highlight = model.addHighlight(
-		1,
-		{ x: 0.1, y: 0.2, width: 0.3, height: 0.15 },
-		'#f6c945',
-		new Date('2026-08-08T00:00:00.000Z'),
-	);
+	const highlight = model.addHighlight(1, { x: 0.1, y: 0.2, width: 0.3, height: 0.15 }, '#f6c945', new Date('2026-08-08T00:00:00.000Z'));
 
 	assert.equal(model.isDirty, true);
 	assert.equal(model.canUndo, true);

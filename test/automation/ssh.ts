@@ -48,8 +48,7 @@ export async function createSshFixture(daemon: string, address = '127.0.0.1') {
 	};
 	const close = async (): Promise<void> => {
 		disconnect();
-		if (gateway.listening)
-			await new Promise<void>((resolve, reject) => gateway.close(error => (error ? reject(error) : resolve())));
+		if (gateway.listening) await new Promise<void>((resolve, reject) => gateway.close(error => (error ? reject(error) : resolve())));
 		try {
 			if (sshd) await execute(daemon, ['stop'], { env: { ...process.env, ASH_HOME: profile }, timeout: 30_000 });
 		} finally {
@@ -64,8 +63,7 @@ export async function createSshFixture(daemon: string, address = '127.0.0.1') {
 	try {
 		await mkdir(profile);
 		await mkdir(join(root, 'codex'));
-		for (const name of ['host', 'client'])
-			await execute('/usr/bin/ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', join(root, name)]);
+		for (const name of ['host', 'client']) await execute('/usr/bin/ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', join(root, name)]);
 		const reservation = createServer();
 		await new Promise<void>(resolve => reservation.listen(0, '127.0.0.1', resolve));
 		sshdPort = (reservation.address() as import('node:net').AddressInfo).port;
@@ -102,10 +100,7 @@ export async function createSshFixture(daemon: string, address = '127.0.0.1') {
 			gateway.listen(0, address, resolve);
 		});
 		const port = (gateway.address() as import('node:net').AddressInfo).port;
-		await writeFile(
-			join(root, 'known_hosts'),
-			`[${address}]:${port} ${await readFile(join(root, 'host.pub'), 'utf8')}`,
-		);
+		await writeFile(join(root, 'known_hosts'), `[${address}]:${port} ${await readFile(join(root, 'host.pub'), 'utf8')}`);
 		await writeFile(
 			join(root, 'ssh_config'),
 			[
@@ -127,8 +122,7 @@ export async function createSshFixture(daemon: string, address = '127.0.0.1') {
 		await writeFile(ssh, `#!/bin/sh\nexec /usr/bin/ssh -F ${quote(join(root, 'ssh_config'))} "$@"\n`, {
 			mode: 0o700,
 		});
-		const run = async (command: string): Promise<string> =>
-			(await execute(ssh, ['ash-desktop-fixture', command], { timeout: 15_000 })).stdout;
+		const run = async (command: string): Promise<string> => (await execute(ssh, ['ash-desktop-fixture', command], { timeout: 15_000 })).stdout;
 		await expect
 			.poll(
 				async () => {

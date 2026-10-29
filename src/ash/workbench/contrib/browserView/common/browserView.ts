@@ -23,8 +23,7 @@ import type { EditorOpenOptions } from '../../../services/editor/common/editorSe
 
 export const BrowserViewEditorId = 'workbench.editor.browser';
 
-export const IBrowserViewWorkbenchService =
-	createServiceIdentifier<IBrowserViewWorkbenchService>('browserViewWorkbenchService');
+export const IBrowserViewWorkbenchService = createServiceIdentifier<IBrowserViewWorkbenchService>('browserViewWorkbenchService');
 
 export interface IBrowserViewFilterContext {
 	readonly sandboxSessionId?: string;
@@ -53,10 +52,7 @@ export interface IBrowserViewWorkbenchService {
 	registerContextualFilter(filter: IBrowserViewContextualFilter): IDisposable;
 	registerOpenHandler(handler: IBrowserViewOpenHandler): IDisposable;
 	getOrCreateLazy(data: IBrowserEditorInputData): BrowserEditorInput;
-	createBrowserView(
-		options: IBrowserViewWorkbenchCreateOptions,
-		source?: IntegratedBrowserOpenSource,
-	): Promise<BrowserEditorInput>;
+	createBrowserView(options: IBrowserViewWorkbenchCreateOptions, source?: IntegratedBrowserOpenSource): Promise<BrowserEditorInput>;
 }
 
 export interface IBrowserViewModel extends IDisposable {
@@ -110,12 +106,7 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 		this.currentState = viewInfo.state;
 		this._register(
 			service.onDidEvent(event => {
-				const id =
-					event.type === 'created'
-						? event.info.id
-						: event.type === 'stateChanged'
-							? event.state.targetId
-							: event.targetId;
+				const id = event.type === 'created' ? event.info.id : event.type === 'stateChanged' ? event.state.targetId : event.targetId;
 				if (id !== this.id || this.isClosed) {
 					return;
 				}

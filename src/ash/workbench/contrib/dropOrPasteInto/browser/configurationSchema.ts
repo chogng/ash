@@ -7,20 +7,13 @@ import { ILanguageFeaturesService } from '../../../../editor/common/services/lan
 import { pasteAsPreferenceConfig } from '../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
 import { dropAsPreferenceConfig } from '../../../../editor/contrib/dropOrPasteInto/browser/dropIntoEditorController.js';
 import { localize } from '../../../../nls.js';
-import {
-	ConfigurationScope,
-	type IConfigurationKeyDefinition,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, type IConfigurationKeyDefinition } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { type IWorkbenchContribution } from '../../../common/contributions.js';
 
 const pasteKinds: string[] = [];
 const dropKinds: string[] = [];
 
-function preferenceDefinition(
-	key: string,
-	kinds: readonly string[],
-	description: () => string,
-): IConfigurationKeyDefinition<readonly string[]> {
+function preferenceDefinition(key: string, kinds: readonly string[], description: () => string): IConfigurationKeyDefinition<readonly string[]> {
 	return {
 		key,
 		defaultValue: [],
@@ -48,18 +41,8 @@ function preferenceDefinition(
 }
 
 export const editorConfiguration = [
-	preferenceDefinition(pasteAsPreferenceConfig, pasteKinds, () =>
-		localize(
-			'dropOrPaste.pastePreferences',
-			'Preferred paste edit kinds, in order. The first available matching edit is used.',
-		),
-	),
-	preferenceDefinition(dropAsPreferenceConfig, dropKinds, () =>
-		localize(
-			'dropOrPaste.dropPreferences',
-			'Preferred drop edit kinds, in order. The first available matching edit is used.',
-		),
-	),
+	preferenceDefinition(pasteAsPreferenceConfig, pasteKinds, () => localize('dropOrPaste.pastePreferences', 'Preferred paste edit kinds, in order. The first available matching edit is used.')),
+	preferenceDefinition(dropAsPreferenceConfig, dropKinds, () => localize('dropOrPaste.dropPreferences', 'Preferred drop edit kinds, in order. The first available matching edit is used.')),
 ];
 
 /** Provider declarations supply suggestions; unregistered kinds remain valid user preferences. */
@@ -68,22 +51,15 @@ export class DropOrPasteSchemaContribution extends Disposable implements IWorkbe
 
 	private readonly schemaChanged = this._register(new Emitter<void>());
 
-	constructor(
-		@ILanguageFeaturesService features: ILanguageFeaturesService,
-		@IKeybindingService keybindings: IKeybindingService,
-	) {
+	constructor(@ILanguageFeaturesService features: ILanguageFeaturesService, @IKeybindingService keybindings: IKeybindingService) {
 		super();
 		const updatePaste = (): void => {
-			const kinds = features.documentPasteEditProvider
-				.allNoModel()
-				.flatMap(provider => provider.providedPasteEditKinds.map(kind => kind.value));
+			const kinds = features.documentPasteEditProvider.allNoModel().flatMap(provider => provider.providedPasteEditKinds.map(kind => kind.value));
 			pasteKinds.splice(0, pasteKinds.length, ...new Set(kinds));
 			this.schemaChanged.fire();
 		};
 		const updateDrop = (): void => {
-			const kinds = features.documentDropEditProvider
-				.allNoModel()
-				.flatMap(provider => provider.providedDropEditKinds?.map(kind => kind.value) ?? []);
+			const kinds = features.documentDropEditProvider.allNoModel().flatMap(provider => provider.providedDropEditKinds?.map(kind => kind.value) ?? []);
 			dropKinds.splice(0, dropKinds.length, ...new Set(kinds));
 		};
 		this._register(features.documentPasteEditProvider.onDidChange(updatePaste));

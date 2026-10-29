@@ -16,13 +16,7 @@ import {
 	type ITextModelSaveCompletionParticipant,
 	type TextModelSaveCompletion,
 } from '../common/textModelResourceService.js';
-import {
-	TextResourceConflictError,
-	type TextResourceChangeEvent,
-	type TextResourceContent,
-	type TextResourceResolveRequest,
-	type ITextResourceStore,
-} from '../common/textResourceStore.js';
+import { TextResourceConflictError, type TextResourceChangeEvent, type TextResourceContent, type TextResourceResolveRequest, type ITextResourceStore } from '../common/textResourceStore.js';
 import { ModelService } from '../../../../editor/common/services/modelService.js';
 import { createPieceTreeTextBuffer } from '../../../../editor/common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js';
 import { EndOfLineSequence, EndOfLinePreference } from '../../../../editor/common/model.js';
@@ -119,9 +113,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	);
 	private readonly modelAdded = this._register(new Emitter<TextModel>());
 	private readonly modelRemoved = this._register(new Emitter<TextModel>());
-	private readonly modelLanguageChanged = this._register(
-		new Emitter<{ readonly model: TextModel; readonly oldLanguageId: string }>(),
-	);
+	private readonly modelLanguageChanged = this._register(new Emitter<{ readonly model: TextModel; readonly oldLanguageId: string }>());
 	private readonly encodingChanged = this._register(new Emitter<URI>());
 	public readonly onDidChangeEncoding = this.encodingChanged.event;
 	public readonly onModelAdded = this.modelAdded.event;
@@ -137,12 +129,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 
 	public getEncodingSupport(resource: URI): IEncodingSupport | undefined {
 		const entry = this.findEntry(resource)?.[1];
-		if (
-			!entry ||
-			entry.encoding === undefined ||
-			(resource.scheme !== Schemas.file && resource.scheme !== Schemas.untitled && entry.revision === undefined)
-		)
-			return undefined;
+		if (!entry || entry.encoding === undefined || (resource.scheme !== Schemas.file && resource.scheme !== Schemas.untitled && entry.revision === undefined)) return undefined;
 		return {
 			getEncoding: () => entry.encoding,
 			setEncoding: (encoding, mode) => this.setEncoding(entry, encoding, mode),
@@ -161,31 +148,17 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			if (entry.resource.scheme !== Schemas.untitled) await this.save(entry, new AbortController().signal);
 			return;
 		}
-		if (entry.dirty)
-			throw new Error(
-				localize('files.encodingDirty', 'Save or revert your changes before reopening with an encoding.'),
-			);
+		if (entry.dirty) throw new Error(localize('files.encodingDirty', 'Save or revert your changes before reopening with an encoding.'));
 		const lifetime = this.reference(entry.resource.toString(), entry);
 		const operation = entry.saveQueue.then(async () => {
 			this.ensureEntryAlive(entry);
-			if (entry.dirty)
-				throw new Error(
-					localize('files.encodingDirty', 'Save or revert your changes before reopening with an encoding.'),
-				);
+			if (entry.dirty) throw new Error(localize('files.encodingDirty', 'Save or revert your changes before reopening with an encoding.'));
 			const version = entry.model.version;
 			const previousEncoding = entry.encoding;
-			const content = await this.resourceStore.resolve(
-				{ resource: entry.resource, encoding },
-				new AbortController().signal,
-			);
+			const content = await this.resourceStore.resolve({ resource: entry.resource, encoding }, new AbortController().signal);
 			this.ensureEntryAlive(entry);
 			if (entry.dirty || entry.model.version !== version || entry.encoding !== previousEncoding)
-				throw new Error(
-					localize(
-						'files.encodingChangedDuringRead',
-						'The document changed while reopening. Your changes were preserved.',
-					),
-				);
+				throw new Error(localize('files.encodingChangedDuringRead', 'The document changed while reopening. Your changes were preserved.'));
 			this.applyFileContent(entry, content, 'revert');
 			this.setExternalChange(entry, false);
 		});
@@ -198,9 +171,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	}
 
 	public hasPendingSaveRecovery(resource?: URI): boolean {
-		const states = resource
-			? this.findSaveRecoveries(resource).map(([, state]) => state)
-			: this.saveRecovery.values();
+		const states = resource ? this.findSaveRecoveries(resource).map(([, state]) => state) : this.saveRecovery.values();
 		for (const state of states) if (state && (state.pending > 0 || state.unresolved)) return true;
 		return false;
 	}
@@ -249,21 +220,12 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		if (options.maintenance && typeof options.maintenance.schedule !== 'function') {
 			throw new TypeError('Text model maintenance requires a scheduler');
 		}
-		if (
-			!resourceStore ||
-			typeof resourceStore.resolve !== 'function' ||
-			typeof resourceStore.save !== 'function' ||
-			typeof resourceStore.onDidChange !== 'function'
-		) {
+		if (!resourceStore || typeof resourceStore.resolve !== 'function' || typeof resourceStore.save !== 'function' || typeof resourceStore.onDidChange !== 'function') {
 			throw new TypeError('Text model service requires a text resource store');
 		}
 	}
 
-	async acquire(
-		input: TextModelInput,
-		signal: AbortSignal,
-		options?: TextModelAcquireOptions,
-	): Promise<TextModelReference> {
+	async acquire(input: TextModelInput, signal: AbortSignal, options?: TextModelAcquireOptions): Promise<TextModelReference> {
 		this.ensureAlive();
 		validateInput(input);
 		throwIfCancelled(signal, 'Text model acquisition was cancelled');
@@ -280,10 +242,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		const content = await this.resolveContent(
 			{
 				resource,
-				languageId:
-					input.languageId ??
-					this.options.languageService?.guessLanguageIdByFilepathOrFirstLine(resource) ??
-					undefined,
+				languageId: input.languageId ?? this.options.languageService?.guessLanguageIdByFilepathOrFirstLine(resource) ?? undefined,
 				...(input.initialText === undefined ? {} : { bootstrapText: input.initialText }),
 				...(input.readFile === undefined ? {} : { readFile: input.readFile }),
 				...(input.encoding === undefined ? {} : { encoding: input.encoding }),
@@ -319,12 +278,9 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 							onDidChangeSyntaxBackend: this.options.onDidChangeSyntaxBackend,
 							languageIdCodec: this.options.languageService.languageIdCodec,
 							syntaxProviderRegistry: this.options.languageFeaturesService.syntaxProvider,
-							documentSemanticTokensProvider:
-								this.options.languageFeaturesService.documentSemanticTokensProvider,
+							documentSemanticTokensProvider: this.options.languageFeaturesService.documentSemanticTokensProvider,
 							...(this.options.syntaxService ? { syntaxService: this.options.syntaxService } : {}),
-							...(this.options.onDidChangeLanguageSupport
-								? { onDidChangeLanguageSupport: this.options.onDidChangeLanguageSupport }
-								: {}),
+							...(this.options.onDidChangeLanguageSupport ? { onDidChangeLanguageSupport: this.options.onDidChangeLanguageSupport } : {}),
 						},
 					}
 				: {}),
@@ -346,9 +302,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 					this.refreshDirty(entry);
 				}
 			}),
-			languageChangeListener: model.onDidChangeLanguage(event =>
-				this.modelLanguageChanged.fire({ model, oldLanguageId: event.oldLanguage }),
-			),
+			languageChangeListener: model.onDidChangeLanguage(event => this.modelLanguageChanged.fire({ model, oldLanguageId: event.oldLanguage })),
 			fileChangeListener: this.resourceStore.onDidChange(event => this.acceptFileChange(entry, event)),
 			// Untitled content has no persisted baseline, including caller supplied initial text.
 			savedText: resource.scheme === Schemas.untitled ? '' : model.getText(),
@@ -387,12 +341,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		super.disposeCore();
 	}
 
-	private async acquireReference(
-		key: string,
-		entry: TextModelEntry,
-		signal: AbortSignal,
-		options?: TextModelAcquireOptions,
-	): Promise<TextModelReference> {
+	private async acquireReference(key: string, entry: TextModelEntry, signal: AbortSignal, options?: TextModelAcquireOptions): Promise<TextModelReference> {
 		const reference = this.reference(key, entry);
 		try {
 			// Ordinary callers receive lexical support before the viewport. Hidden
@@ -444,10 +393,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		const languageId = entry.model.getLanguageId();
 		const encoding = entry.encoding;
 		// Save As runs against the destination so providers receive its URI and inferred language.
-		using target = await this.acquire(
-			{ resource, initialText: text, ...(languageId === 'plaintext' ? {} : { languageId }) },
-			signal,
-		);
+		using target = await this.acquire({ resource, initialText: text, ...(languageId === 'plaintext' ? {} : { languageId }) }, signal);
 		const targetEntry = this.findEntry(target.resource)?.[1];
 		if (targetEntry && encoding !== undefined) {
 			targetEntry.encoding = encoding;
@@ -470,17 +416,9 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		// A queued save owns the model until its participants and write finish, even if the pane closes.
 		const key = entry.resource.toString();
 		const exactRecovery = this.saveRecovery.get(key);
-		const recoveries: [string, SaveRecoveryState][] = exactRecovery
-			? [[key, exactRecovery]]
-			: this.findSaveRecoveries(entry.resource);
+		const recoveries: [string, SaveRecoveryState][] = exactRecovery ? [[key, exactRecovery]] : this.findSaveRecoveries(entry.resource);
 		if (recoveries.length > 1)
-			throw new Error(
-				localize(
-					'files.ambiguousSaveRecovery',
-					'Cannot save {0} because its file system identity matches multiple pending recovery records.',
-					entry.resource.toString(),
-				),
-			);
+			throw new Error(localize('files.ambiguousSaveRecovery', 'Cannot save {0} because its file system identity matches multiple pending recovery records.', entry.resource.toString()));
 		const existingRecovery = recoveries[0];
 		const recoveryKey = existingRecovery?.[0] ?? key;
 		let recovery = existingRecovery?.[1];
@@ -512,10 +450,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 					try {
 						for (const participant of this.saveParticipants) {
 							throwIfCancelled(signal, 'Text model save was cancelled');
-							await raceCancellationError(
-								participant.participate(entry.model, options.reason ?? SaveReason.EXPLICIT, signal),
-								signal,
-							);
+							await raceCancellationError(participant.participate(entry.model, options.reason ?? SaveReason.EXPLICIT, signal), signal);
 						}
 					} finally {
 						if (!entry.model.isDisposed()) entry.model.pushStackElement();
@@ -626,12 +561,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		throwIfCancelled(signal, 'Text model revert was cancelled');
 		this.ensureEntryAlive(entry);
 		if (entry.model.version !== version || entry.encoding !== encoding)
-			throw new Error(
-				localize(
-					'files.encodingChangedDuringRead',
-					'The document changed while reopening. Your changes were preserved.',
-				),
-			);
+			throw new Error(localize('files.encodingChangedDuringRead', 'The document changed while reopening. Your changes were preserved.'));
 		this.applyFileContent(entry, content, 'revert');
 		this.setExternalChange(entry, false);
 	}
@@ -651,12 +581,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	}
 
 	private acceptFileChange(entry: TextModelEntry, event: TextResourceChangeEvent): void {
-		if (
-			entry.disposed ||
-			(event.resources &&
-				!event.resources.some(resource => this.uriIdentity.extUri.isEqual(resource, entry.resource)))
-		)
-			return;
+		if (entry.disposed || (event.resources && !event.resources.some(resource => this.uriIdentity.extUri.isEqual(resource, entry.resource)))) return;
 		// Watcher events are invalidations, including workspace rescans and our own writes.
 		void this.refreshEntry(entry, 'fileChange').catch(error => console.error('Could not refresh open file', error));
 	}
@@ -676,8 +601,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			}
 			return entry.refresh.promise;
 		}
-		if (entry.disposed || entry.dirty || entry.isSnapshot || entry.resource.scheme === Schemas.untitled)
-			return Promise.resolve();
+		if (entry.disposed || entry.dirty || entry.isSnapshot || entry.resource.scheme === Schemas.untitled) return Promise.resolve();
 		const observedSaveQueue = entry.saveQueue;
 		const refresh: TextModelRefresh = {
 			controller: new AbortController(),
@@ -721,13 +645,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			signal,
 		);
 		throwIfCancelled(signal);
-		if (
-			entry.disposed ||
-			entry.dirty ||
-			entry.model.version !== observedVersion ||
-			entry.saveQueue !== observedSaveQueue
-		)
-			return;
+		if (entry.disposed || entry.dirty || entry.model.version !== observedVersion || entry.saveQueue !== observedSaveQueue) return;
 		if (content.revision !== undefined && content.revision === entry.revision) {
 			this.setExternalChange(entry, false);
 			return;
@@ -736,10 +654,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		let text: string;
 		try {
 			const lastLine = buffer.getLineCount();
-			text = buffer.getValueInRange(
-				new Range(1, 1, lastLine, buffer.getLineLength(lastLine) + 1),
-				EndOfLinePreference.TextDefined,
-			);
+			text = buffer.getValueInRange(new Range(1, 1, lastLine, buffer.getLineLength(lastLine) + 1), EndOfLinePreference.TextDefined);
 		} finally {
 			buffer.dispose();
 		}
@@ -757,10 +672,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		const buffer = createPieceTreeTextBuffer(modelText(content), entry.model.getOptions().defaultEOL);
 		try {
 			const lastLine = buffer.getLineCount();
-			entry.savedText = buffer.getValueInRange(
-				new Range(1, 1, lastLine, buffer.getLineLength(lastLine) + 1),
-				EndOfLinePreference.TextDefined,
-			);
+			entry.savedText = buffer.getValueInRange(new Range(1, 1, lastLine, buffer.getLineLength(lastLine) + 1), EndOfLinePreference.TextDefined);
 			entry.revision = content.revision;
 			entry.encoding = content.encoding;
 			entry.savedEncoding = content.encoding;
@@ -805,10 +717,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		entry.model.dispose();
 	}
 
-	private async resolveContent(
-		request: TextResourceResolveRequest,
-		signal: AbortSignal,
-	): Promise<TextResourceContent> {
+	private async resolveContent(request: TextResourceResolveRequest, signal: AbortSignal): Promise<TextResourceContent> {
 		// A caller-specific read can carry a narrower authorization scope. It must
 		// perform its own check and cannot join another caller's file operation.
 		if (request.readFile) return this.resourceStore.resolve(request, signal);
@@ -869,13 +778,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	}
 
 	private ambiguousIdentityError(resource: URI): Error {
-		return new Error(
-			localize(
-				'files.ambiguousIdentity',
-				'The file system identity for {0} matches multiple open documents. Close the duplicate documents before reopening.',
-				resource.toString(),
-			),
-		);
+		return new Error(localize('files.ambiguousIdentity', 'The file system identity for {0} matches multiple open documents. Close the duplicate documents before reopening.', resource.toString()));
 	}
 
 	private ensureAlive(): void {
@@ -889,25 +792,19 @@ function firstLine(text: string): string {
 }
 
 /** Returns a browser model service with the renderer's idle maintenance policy. */
-export function createBrowserTextModelService(
-	resourceStore: ITextResourceStore,
-	instantiationService: IInstantiationService,
-	options: BrowserTextModelServiceOptions = {},
-): BrowserTextModelService {
+export function createBrowserTextModelService(resourceStore: ITextResourceStore, instantiationService: IInstantiationService, options: BrowserTextModelServiceOptions = {}): BrowserTextModelService {
 	return instantiationService.createInstance(BrowserTextModelService, resourceStore, {
 		...options,
-		maintenance: { schedule: callback => runWhenWindowIdle(window, () => callback(), 250) },
+		maintenance: {
+			schedule: callback => runWhenWindowIdle(window, () => callback(), 250),
+		},
 	} satisfies BrowserTextModelServiceOptions);
 }
 
 const modelServices = new WeakMap<ITextResourceStore, BrowserTextModelService>();
 
 /** Shares model ownership for every pane backed by one resource store. */
-export function getBrowserTextModelService(
-	resourceStore: ITextResourceStore,
-	instantiationService: IInstantiationService,
-	options: BrowserTextModelServiceOptions = {},
-): BrowserTextModelService {
+export function getBrowserTextModelService(resourceStore: ITextResourceStore, instantiationService: IInstantiationService, options: BrowserTextModelServiceOptions = {}): BrowserTextModelService {
 	const existing = modelServices.get(resourceStore);
 	if (existing) return existing;
 	const service = createBrowserTextModelService(resourceStore, instantiationService, options);

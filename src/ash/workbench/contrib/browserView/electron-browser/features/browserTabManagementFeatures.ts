@@ -1,11 +1,7 @@
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
-import {
-	BrowserViewStorageScope,
-	BrowserViewCommandId,
-	normalizeBrowserViewUrl,
-} from '../../../../../platform/browserView/common/browserView.js';
+import { BrowserViewStorageScope, BrowserViewCommandId, normalizeBrowserViewUrl } from '../../../../../platform/browserView/common/browserView.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { filterQuickPickItems } from '../../../../../platform/quickinput/browser/quickInputList.js';
@@ -21,10 +17,7 @@ registerAction2(
 		constructor() {
 			super({
 				id: BrowserViewCommandId.QuickOpen,
-				title: localize2(
-					{ bundle: 'ash.workbench', key: 'browser.quickOpenAction' },
-					'Browser: Quick Open Browser Tab…',
-				),
+				title: localize2({ bundle: 'ash.workbench', key: 'browser.quickOpenAction' }, 'Browser: Quick Open Browser Tab…'),
 				f1: true,
 			});
 		}
@@ -38,10 +31,7 @@ registerAction2(
 			using listeners = new DisposableStore();
 			using labels = new DisposableStore();
 			picker.ariaLabel = localize({ bundle: 'ash.workbench', key: 'browser.tabs' }, 'Browser tabs');
-			picker.placeholder = localize(
-				{ bundle: 'ash.workbench', key: 'browser.tabSearch' },
-				'Search browser tabs by title or address',
-			);
+			picker.placeholder = localize({ bundle: 'ash.workbench', key: 'browser.tabSearch' }, 'Search browser tabs by title or address');
 			picker.sortByLabel = false;
 			const newTab: BrowserTabPick = {
 				label: localize({ bundle: 'ash.workbench', key: 'browser.newTab' }, 'Open new browser tab'),
@@ -110,10 +100,7 @@ for (const id of [BrowserViewCommandId.Open, BrowserViewCommandId.NewTab]) {
 					id,
 					title:
 						id === BrowserViewCommandId.Open
-							? localize2(
-									{ bundle: 'ash.workbench', key: 'command.OpenBrowser' },
-									'Browser: Open Browser',
-								)
+							? localize2({ bundle: 'ash.workbench', key: 'command.OpenBrowser' }, 'Browser: Open Browser')
 							: localize2({ bundle: 'ash.workbench', key: 'browser.newTabCommand' }, 'Browser: New Tab'),
 					f1: true,
 				});
@@ -122,12 +109,10 @@ for (const id of [BrowserViewCommandId.Open, BrowserViewCommandId.NewTab]) {
 				if (url !== undefined && typeof url !== 'string') {
 					throw new TypeError('Invalid browser address');
 				}
-				await accessor
-					.get(IBrowserViewWorkbenchService)
-					.createBrowserView({
-						initialUrl: normalizeBrowserViewUrl(url ?? 'about:blank'),
-						owner: { type: 'user' },
-					});
+				await accessor.get(IBrowserViewWorkbenchService).createBrowserView({
+					initialUrl: normalizeBrowserViewUrl(url ?? 'about:blank'),
+					owner: { type: 'user' },
+				});
 			}
 		},
 	);
@@ -142,18 +127,14 @@ registerAction2(
 			});
 		}
 		override async run(accessor: ServicesAccessor): Promise<void> {
-			const files = await accessor
-				.get(IFileDialogService)
-				.showOpenDialog({
-					canSelectFiles: true,
-					canSelectFolders: false,
-					canSelectMany: false,
-					availableFileSystems: ['file'],
-				});
+			const files = await accessor.get(IFileDialogService).showOpenDialog({
+				canSelectFiles: true,
+				canSelectFolders: false,
+				canSelectMany: false,
+				availableFileSystems: ['file'],
+			});
 			if (files?.[0]) {
-				await accessor
-					.get(IBrowserViewWorkbenchService)
-					.createBrowserView({ initialUrl: files[0].toString(), owner: { type: 'user' } });
+				await accessor.get(IBrowserViewWorkbenchService).createBrowserView({ initialUrl: files[0].toString(), owner: { type: 'user' } });
 			}
 		}
 	},
@@ -166,14 +147,8 @@ for (const id of [BrowserViewCommandId.CloseAll, BrowserViewCommandId.CloseAllIn
 					id,
 					title:
 						id === BrowserViewCommandId.CloseAll
-							? localize2(
-									{ bundle: 'ash.workbench', key: 'browser.closeAllCommand' },
-									'Browser: Close All Tabs',
-								)
-							: localize2(
-									{ bundle: 'ash.workbench', key: 'browser.closeGroupCommand' },
-									'Browser: Close Tabs in Group',
-								),
+							? localize2({ bundle: 'ash.workbench', key: 'browser.closeAllCommand' }, 'Browser: Close All Tabs')
+							: localize2({ bundle: 'ash.workbench', key: 'browser.closeGroupCommand' }, 'Browser: Close Tabs in Group'),
 					f1: true,
 				});
 			}
@@ -201,23 +176,18 @@ registerAction2(
 		constructor() {
 			super({
 				id: BrowserViewCommandId.OpenExternal,
-				title: localize2(
-					{ bundle: 'ash.workbench', key: 'browser.externalCommand' },
-					'Browser: Open in System Browser',
-				),
+				title: localize2({ bundle: 'ash.workbench', key: 'browser.externalCommand' }, 'Browser: Open in System Browser'),
 				f1: true,
 			});
 		}
 		override async run(accessor: ServicesAccessor): Promise<void> {
 			const input = accessor.get(IEditorService).activeEditor;
 			if (input instanceof BrowserEditorInput && input.model && /^https?:/u.test(input.model.state.url)) {
-				await accessor
-					.get(IOpenerService)
-					.open(URI.parse(input.model.state.url), {
-						openExternal: true,
-						allowContributedOpeners: false,
-						allowCommands: false,
-					});
+				await accessor.get(IOpenerService).open(URI.parse(input.model.state.url), {
+					openExternal: true,
+					allowContributedOpeners: false,
+					allowCommands: false,
+				});
 			}
 		}
 	},

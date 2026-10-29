@@ -43,10 +43,7 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 				compositeBarVisible: false,
 				viewDescriptorService: descriptors,
 				contextKeyService: contextKeys,
-				openComposite: (id, preserveFocus) =>
-					instantiationService.invokeFunction(accessor =>
-						accessor.get(IViewsService).openViewContainer(id, !preserveFocus),
-					),
+				openComposite: (id, preserveFocus) => instantiationService.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
 			},
 			themeService,
 			storage,

@@ -34,10 +34,7 @@ import { IUpdateService } from '../../../../platform/update/common/updateService
 import { BrowserUpdateService } from '../../../services/update/browser/updateService.js';
 import { IElevatedFileService } from '../../../services/files/common/elevatedFileService.js';
 import { BrowserElevatedFileService } from '../../../services/files/browser/elevatedFileService.js';
-import {
-	IAccessibilitySignalService,
-	AccessibilitySignalService,
-} from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
+import { IAccessibilitySignalService, AccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 
 registerSingleton(IHostService, new SyncDescriptor(BrowserHostService, [{}], true));
 registerSingleton(IRemoteAuthorityResolverService, RemoteAuthorityResolverService, InstantiationType.Delayed);

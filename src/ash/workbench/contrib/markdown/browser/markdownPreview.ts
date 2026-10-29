@@ -2,11 +2,7 @@ import { DEFAULT_FONT_FAMILY } from '../../../../base/browser/fonts.js';
 import { getWindow, h } from '../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { dirname } from '../../../../base/common/resources.js';
-import {
-	isSafeMarkdownLink,
-	renderWorkbenchMarkdown,
-	sanitizeMarkdownHtmlToString,
-} from '../../../../base/browser/markdownRenderer.js';
+import { isSafeMarkdownLink, renderWorkbenchMarkdown, sanitizeMarkdownHtmlToString } from '../../../../base/browser/markdownRenderer.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -159,7 +155,10 @@ export class MarkdownPreview extends Disposable {
 		};
 		const parserHtml = renderWorkbenchMarkdown(markdownContent, true);
 		const safeHtml = sanitizeMarkdownHtmlToString(
-			{ ownerDocument: this.ownerDocument, markdown: markdownContent },
+			{
+				ownerDocument: this.ownerDocument,
+				markdown: markdownContent,
+			},
 			parserHtml,
 		);
 		const content = h(mainWindow.document, 'template');
@@ -170,11 +169,7 @@ export class MarkdownPreview extends Disposable {
 				image.setAttribute('src', asWebviewUri(URI.parse(source)).toString());
 			}
 		}
-		this.webview.setHtml(
-			`<style>${PREVIEW_STYLE}</style>` +
-				`<main class="ash-markdown-preview">${content.innerHTML}</main>` +
-				`<script>${LINK_BRIDGE_SCRIPT}</script>`,
-		);
+		this.webview.setHtml(`<style>${PREVIEW_STYLE}</style>` + `<main class="ash-markdown-preview">${content.innerHTML}</main>` + `<script>${LINK_BRIDGE_SCRIPT}</script>`);
 	}
 
 	focus(): void {
@@ -200,5 +195,8 @@ function validateOpenLinkMessage(message: unknown, baseUri?: URI): OpenLinkMessa
 	) {
 		return undefined;
 	}
-	return { type: 'openLink', href: candidate.href };
+	return {
+		type: 'openLink',
+		href: candidate.href,
+	};
 }

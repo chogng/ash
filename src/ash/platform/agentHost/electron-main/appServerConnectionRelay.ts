@@ -5,12 +5,7 @@ import type { WebContents } from 'electron/main';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
-import {
-	createCancelablePromise,
-	disposableTimeout,
-	TaskQueue,
-	type CancelablePromise,
-} from '../../../base/common/async.js';
+import { createCancelablePromise, disposableTimeout, TaskQueue, type CancelablePromise } from '../../../base/common/async.js';
 import type { CancellationToken } from '../../../base/common/cancellation.js';
 import { CancellationError } from '../../../base/common/errors.js';
 import { isRecord } from '../../../base/common/types.js';
@@ -21,8 +16,7 @@ import { ChildProcessJsonlTransport, DEFAULT_MAX_JSONL_FRAME_BYTES } from '../no
 
 /** Owns one renderer's connection carrier; the carrier connects to the shared profile daemon. */
 export class AppServerConnectionRelay extends Disposable {
-	private connectionOptions:
-		{ readonly enabled: false } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher };
+	private connectionOptions: { readonly enabled: false } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher };
 	private readonly transport = this._register(new MutableDisposable<ChildProcessJsonlTransport>());
 	private readonly portResources = this._register(new MutableDisposable<IDisposable>());
 	private readonly changes = this._register(new Emitter<AppServerConnectionState>());
@@ -40,9 +34,7 @@ export class AppServerConnectionRelay extends Disposable {
 	private startPromise: CancelablePromise<void> | undefined;
 
 	constructor(
-		options:
-			| { readonly enabled: false }
-			| { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher },
+		options: { readonly enabled: false } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher },
 		private readonly connection: AppServerConnectionTarget = 'workspace',
 	) {
 		super();
@@ -54,14 +46,12 @@ export class AppServerConnectionRelay extends Disposable {
 		return appServerConnectionChannel(this.connection);
 	}
 
-	public get options():
-		{ readonly enabled: false } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher } {
+	public get options(): { readonly enabled: false } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher } {
 		return this.connectionOptions;
 	}
 
 	public replaceProcessLauncher(processLauncher: IAppServerProcessLauncher): void {
-		if (!this.options.enabled || this.state !== 'stopped')
-			throw new Error('App Server launcher can only change while stopped');
+		if (!this.options.enabled || this.state !== 'stopped') throw new Error('App Server launcher can only change while stopped');
 		this.connectionOptions = { enabled: true, processLauncher };
 	}
 
@@ -127,12 +117,7 @@ export class AppServerConnectionRelay extends Disposable {
 			}
 			const initializeTimeoutMs = this.options.processLauncher.initializeTimeoutMs ?? 15_000;
 			ready = new Promise<void>((resolve, reject) => {
-				resources.add(
-					disposableTimeout(
-						() => reject(new Error('Renderer initialization timed out')),
-						initializeTimeoutMs,
-					),
-				);
+				resources.add(disposableTimeout(() => reject(new Error('Renderer initialization timed out')), initializeTimeoutMs));
 				resources.add(token.onCancellationRequested(() => reject(new CancellationError())));
 				resources.add(
 					this.onStateChange(state => {
@@ -149,12 +134,7 @@ export class AppServerConnectionRelay extends Disposable {
 			});
 			// A new document already acquires its own port. Restarting its initial client
 			// would interrupt that initialization; only wake the document we stopped.
-			if (
-				this.nonce === undefined &&
-				this.acquiredNavigation === navigationGeneration &&
-				this.navigationGeneration === navigationGeneration &&
-				this.pendingAcquisitions === 0
-			) {
+			if (this.nonce === undefined && this.acquiredNavigation === navigationGeneration && this.navigationGeneration === navigationGeneration && this.pendingAcquisitions === 0) {
 				this.renderer.send(`${this.channelPrefix}:restart`);
 			}
 		});
@@ -183,13 +163,9 @@ export class AppServerConnectionRelay extends Disposable {
 		return this.transport.value?.diagnostics() ?? this.diagnostic;
 	}
 
-	public routes(
-		renderer: WebContents,
-		metadata: () => { workspaceId: string; workspaceRoot: string },
-	): readonly IpcRoute<unknown, unknown>[] {
+	public routes(renderer: WebContents, metadata: () => { workspaceId: string; workspaceRoot: string }): readonly IpcRoute<unknown, unknown>[] {
 		this.renderer = renderer;
-		const processLauncher = (): IAppServerProcessLauncher | undefined =>
-			this.options.enabled ? this.options.processLauncher : undefined;
+		const processLauncher = (): IAppServerProcessLauncher | undefined => (this.options.enabled ? this.options.processLauncher : undefined);
 		const reset = (): void => {
 			if (!this.isDisposed) {
 				void this.stop();
@@ -249,22 +225,14 @@ export class AppServerConnectionRelay extends Disposable {
 							this.assertNotDisposed();
 							// Validation can outlive a document or a Renderer acquisition timeout.
 							// Only the latest request may attach a port or stop its predecessor.
-							if (
-								this.acquisitionRevision !== acquisitionRevision ||
-								this.navigationGeneration !== navigationGeneration ||
-								processLauncher() !== launcher
-							) {
+							if (this.acquisitionRevision !== acquisitionRevision || this.navigationGeneration !== navigationGeneration || processLauncher() !== launcher) {
 								throw new CancellationError();
 							}
 							if (this.nonce !== undefined) {
 								await this.stopConnection();
 							}
 							this.assertNotDisposed();
-							if (
-								this.acquisitionRevision !== acquisitionRevision ||
-								this.navigationGeneration !== navigationGeneration ||
-								processLauncher() !== launcher
-							) {
+							if (this.acquisitionRevision !== acquisitionRevision || this.navigationGeneration !== navigationGeneration || processLauncher() !== launcher) {
 								throw new CancellationError();
 							}
 							let transport = this.transport.value;
@@ -315,11 +283,7 @@ export class AppServerConnectionRelay extends Disposable {
 							received: value.received,
 						});
 					}
-					if (
-						value.kind === 'missingCapability' &&
-						typeof value.name === 'string' &&
-						value.name.length < 128
-					) {
+					if (value.kind === 'missingCapability' && typeof value.name === 'string' && value.name.length < 128) {
 						return new AppServerProtocolIncompatibleError({ kind: value.kind, name: value.name });
 					}
 					throw new Error('Invalid runtime incompatibility');

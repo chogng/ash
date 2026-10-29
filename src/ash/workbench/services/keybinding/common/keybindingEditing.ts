@@ -37,24 +37,14 @@ export class KeybindingsEditingService extends Disposable implements IKeybinding
 		return this.edit(item, 'remove');
 	}
 
-	private edit(
-		item: ResolvedKeybindingItem,
-		operation: 'add' | 'edit' | 'remove',
-		key?: string,
-		when?: string,
-	): Promise<void> {
+	private edit(item: ResolvedKeybindingItem, operation: 'add' | 'edit' | 'remove', key?: string, when?: string): Promise<void> {
 		this.assertNotDisposed();
 		const result = this.pending.then(async () => {
 			const resource = this.profiles.currentProfile.keybindingsResource;
 			await this.files.createFile(resource, 'ignore');
 			using reference = await this.models.acquire({ resource, languageId: 'jsonc' }, this.lifetime.signal);
 			if (reference.isDirty) {
-				throw new Error(
-					localize(
-						{ bundle: 'ash', key: 'keybindings.saveFirst' },
-						'Save keybindings.json before changing a shortcut in the Keyboard Shortcuts editor.',
-					),
-				);
+				throw new Error(localize({ bundle: 'ash', key: 'keybindings.saveFirst' }, 'Save keybindings.json before changing a shortcut in the Keyboard Shortcuts editor.'));
 			}
 			const model = reference.model;
 			let source = model.getValue();
@@ -78,12 +68,7 @@ export class KeybindingsEditingService extends Disposable implements IKeybinding
 			} else {
 				const identity = item.userBinding;
 				if (!identity || JSON.stringify(bindings[identity.index]) !== JSON.stringify(identity.entry)) {
-					throw new Error(
-						localize(
-							{ bundle: 'ash', key: 'keybindings.changed' },
-							'This shortcut changed. Select it again before editing.',
-						),
-					);
+					throw new Error(localize({ bundle: 'ash', key: 'keybindings.changed' }, 'This shortcut changed. Select it again before editing.'));
 				}
 				if (operation === 'remove') {
 					source = applyEdits(source, setProperty(source, [identity.index], undefined, formatting));

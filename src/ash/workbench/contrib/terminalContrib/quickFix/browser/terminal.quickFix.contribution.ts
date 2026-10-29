@@ -11,10 +11,7 @@ import { Action2, registerAction2 } from '../../../../../platform/actions/common
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
-import {
-	TerminalCapability,
-	type ITerminalCommand,
-} from '../../../../../platform/terminal/common/capabilities/capabilities.js';
+import { TerminalCapability, type ITerminalCommand } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { PromptInputState } from '../../../../../platform/terminal/common/capabilities/commandDetection/promptInputModel.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { ITerminalService } from '../../../terminal/browser/terminal.js';
@@ -32,14 +29,7 @@ const enum TerminalQuickFixCommandId {
 
 /** Suggestions only use a completed command's retained output, never the live screen. */
 function commandFixes(command: ITerminalCommand | undefined): string[] {
-	if (
-		!command ||
-		command.wasReplayed ||
-		command.exitCode === undefined ||
-		command.exitCode === 0 ||
-		command.command.length > 4096 ||
-		/[\x00-\x08\x0a-\x1f\x7f;&|<>`$()]/u.test(command.command)
-	)
+	if (!command || command.wasReplayed || command.exitCode === undefined || command.exitCode === 0 || command.command.length > 4096 || /[\x00-\x08\x0a-\x1f\x7f;&|<>`$()]/u.test(command.command))
 		return [];
 	const invocation = /^\s*git[ \t]+([a-z][a-z0-9-]*)([ \t]+[^\r\n]*)?$/u.exec(command.command);
 	if (!invocation) return [];
@@ -52,9 +42,7 @@ function commandFixes(command: ITerminalCommand | undefined): string[] {
 		multipleMatches: true,
 	});
 	if (typo?.regexMatch[1] === invocation[1]) {
-		const header = typo.outputLines.findIndex(line =>
-			/^The most similar commands? (?:is|are)\s*$/u.test(line.trim()),
-		);
+		const header = typo.outputLines.findIndex(line => /^The most similar commands? (?:is|are)\s*$/u.test(line.trim()));
 		if (header >= 0) {
 			for (const line of typo.outputLines.slice(header + 1, header + 7)) {
 				if (!line.trim()) continue;
@@ -76,12 +64,8 @@ function commandFixes(command: ITerminalCommand | undefined): string[] {
 			for (const line of upstream.outputLines) {
 				// Only a literal, single Git invocation is eligible. Shell operators,
 				// escapes, substitutions and control characters in output are rejected.
-				const candidate =
-					/^[ \t]*git push --set-upstream ([\p{L}\p{N}][\p{L}\p{N}._/-]{0,255}) ([\p{L}\p{N}][\p{L}\p{N}._/-]{0,255})[ \t]*$/u.exec(
-						line,
-					);
-				if (candidate && candidate[2] === upstream.regexMatch[1])
-					fixes.add(`git push --set-upstream ${candidate[1]} ${candidate[2]}`);
+				const candidate = /^[ \t]*git push --set-upstream ([\p{L}\p{N}][\p{L}\p{N}._/-]{0,255}) ([\p{L}\p{N}][\p{L}\p{N}._/-]{0,255})[ \t]*$/u.exec(line);
+				if (candidate && candidate[2] === upstream.regexMatch[1]) fixes.add(`git push --set-upstream ${candidate[1]} ${candidate[2]}`);
 			}
 		}
 	}
@@ -108,20 +92,14 @@ registerAction2(
 			const terminals = accessor.get(ITerminalService);
 			const instance = terminals.activeInstance;
 			const screen = instance?.xterm;
-			if (!instance || instance.isReadOnly || instance.state !== 'running' || !screen || screen.isDisposed)
-				return;
+			if (!instance || instance.isReadOnly || instance.state !== 'running' || !screen || screen.isDisposed) return;
 			const detection = instance.capabilities?.get(TerminalCapability.CommandDetection);
 			const command = detection?.commands.at(-1);
 			const processId = instance.processId;
 			const prompt = detection?.promptInputModel;
 			const workspace = accessor.get(IWorkspaceContextService);
 			const emptyInput = (): boolean =>
-				!!prompt &&
-				prompt.state === PromptInputState.Input &&
-				prompt.value === '' &&
-				prompt.cursorIndex === 0 &&
-				prompt.ghostTextIndex < 0 &&
-				screen.raw.buffer.active.type === 'normal';
+				!!prompt && prompt.state === PromptInputState.Input && prompt.value === '' && prompt.cursorIndex === 0 && prompt.ghostTextIndex < 0 && screen.raw.buffer.active.type === 'normal';
 			using lifetime = new DisposableStore();
 			const picker = lifetime.add(accessor.get(IQuickInputService).createQuickPick<QuickFixPick>());
 			picker.ariaLabel = localize('terminal.quickFix.aria', 'Terminal Quick Fixes');
@@ -130,17 +108,11 @@ registerAction2(
 				label,
 				fix: { label, terminalCommand: label },
 				description: localize('terminal.quickFix.insert', 'Insert command'),
-				detail: localize(
-					'terminal.quickFix.detail',
-					'Review the inserted command, then press Enter to run it.',
-				),
+				detail: localize('terminal.quickFix.detail', 'Review the inserted command, then press Enter to run it.'),
 			}));
 			const builtInItems = picker.items;
 			picker.placeholder = !emptyInput()
-				? localize(
-						'terminal.quickFix.inputNotEmpty',
-						'Quick fixes require an empty shell prompt; current input is preserved',
-					)
+				? localize('terminal.quickFix.inputNotEmpty', 'Quick fixes require an empty shell prompt; current input is preserved')
 				: fixes.length
 					? localize('terminal.quickFix.choose', 'Select a fix to insert without running it')
 					: localize('terminal.quickFix.empty', 'No quick fixes for the latest failed command');
@@ -177,13 +149,7 @@ registerAction2(
 			const extensionService = accessor.get(IExtensionService);
 			const providers = accessor.get(ITerminalQuickFixService);
 			const opener = accessor.get(IOpenerService);
-			if (
-				command &&
-				!command.wasReplayed &&
-				command.exitCode !== undefined &&
-				emptyInput() &&
-				!detection?.executingCommandObject
-			) {
+			if (command && !command.wasReplayed && command.exitCode !== undefined && emptyInput() && !detection?.executingCommandObject) {
 				picker.busy = true;
 				void extensionService
 					.activateByEvent('onTerminal:terminalQuickFixProvider', request.signal)
@@ -191,8 +157,7 @@ registerAction2(
 					.then(results => {
 						if (retired || request.signal.aborted || !emptyInput() || !results.length) return;
 						picker.items = [...picker.items, ...results.map(fix => ({ label: fix.label, fix }))];
-						if (picker.items.length)
-							picker.placeholder = localize('terminal.quickFix.chooseAction', 'Choose a quick fix');
+						if (picker.items.length) picker.placeholder = localize('terminal.quickFix.chooseAction', 'Choose a quick fix');
 					})
 					.catch(() => undefined)
 					.finally(() => {
@@ -231,10 +196,8 @@ registerAction2(
 				picker.items.includes(selected) &&
 				(!builtInItems.includes(selected) || commandFixes(command).includes(selected.label))
 			) {
-				if (selected.fix.terminalCommand !== undefined)
-					await instance.sendText(selected.fix.terminalCommand, selected.fix.shouldExecute === true, true);
-				else if (selected.fix.uri)
-					await opener.open(selected.fix.uri, { fromUserGesture: true, allowCommands: false });
+				if (selected.fix.terminalCommand !== undefined) await instance.sendText(selected.fix.terminalCommand, selected.fix.shouldExecute === true, true);
+				else if (selected.fix.uri) await opener.open(selected.fix.uri, { fromUserGesture: true, allowCommands: false });
 				else await selected.fix.run?.();
 			}
 			if (current()) instance.xterm?.focus();

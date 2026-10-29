@@ -34,12 +34,7 @@ export class BaseSecretStorageService extends Disposable implements ISecretStora
 	}
 	async set(key: string, value: string): Promise<void> {
 		this.validateKey(key);
-		if (
-			typeof value !== 'string' ||
-			value.length > 1024 * 1024 ||
-			(!this.values.has(key) && this.values.size >= 64)
-		)
-			throw new Error('Invalid secret storage value');
+		if (typeof value !== 'string' || value.length > 1024 * 1024 || (!this.values.has(key) && this.values.size >= 64)) throw new Error('Invalid secret storage value');
 		this.values.set(key, value);
 		this.changed.fire(key);
 	}
@@ -58,8 +53,7 @@ export class BaseSecretStorageService extends Disposable implements ISecretStora
 }
 
 /** Current profile storage observation; availability never reveals saved credentials. */
-export type SecretStorageStatus =
-	'available' | 'unavailable' | 'accessDenied' | 'keyMissing' | 'corrupted' | 'migrationFailed' | 'failure';
+export type SecretStorageStatus = 'available' | 'unavailable' | 'accessDenied' | 'keyMissing' | 'corrupted' | 'migrationFailed' | 'failure';
 
 export type SecretStorageMode = 'encrypted' | 'file';
 
@@ -81,35 +75,20 @@ export function secretStorageMessage(status: SecretStorageStatus): string {
 		case 'available':
 			return localize('credentials.storage.available', 'Credential storage is available.');
 		case 'unavailable':
-			return localize(
-				'credentials.storage.unavailable',
-				'System credential storage is unavailable. Start or unlock your system keyring, then retry.',
-			);
+			return localize('credentials.storage.unavailable', 'System credential storage is unavailable. Start or unlock your system keyring, then retry.');
 		case 'accessDenied':
 			return localize(
 				'credentials.storage.accessDenied',
 				'Credential storage access was denied. Check profile permissions or use Authorize system keyring to request access. Background operations do not show system dialogs.',
 			);
 		case 'keyMissing':
-			return localize(
-				'credentials.storage.keyMissing',
-				'The encryption key is missing. Restore the original system keyring entry. Your encrypted credentials have been preserved.',
-			);
+			return localize('credentials.storage.keyMissing', 'The encryption key is missing. Restore the original system keyring entry. Your encrypted credentials have been preserved.');
 		case 'corrupted':
-			return localize(
-				'credentials.storage.corrupted',
-				'Stored credentials could not be decrypted. Restore the original keyring entry or a matching backup. Your files have been preserved.',
-			);
+			return localize('credentials.storage.corrupted', 'Stored credentials could not be decrypted. Restore the original keyring entry or a matching backup. Your files have been preserved.');
 		case 'migrationFailed':
-			return localize(
-				'credentials.storage.migrationFailed',
-				'Credential storage migration could not finish. Check profile access and retry. Remaining original files have been preserved.',
-			);
+			return localize('credentials.storage.migrationFailed', 'Credential storage migration could not finish. Check profile access and retry. Remaining original files have been preserved.');
 		case 'failure':
-			return localize(
-				'credentials.storage.failure',
-				'Credential storage could not be accessed. Check your system keyring and profile permissions, then retry.',
-			);
+			return localize('credentials.storage.failure', 'Credential storage could not be accessed. Check your system keyring and profile permissions, then retry.');
 	}
 }
 
@@ -122,5 +101,4 @@ export interface ISecretStorageStatusService {
 	setStorageMode(mode: SecretStorageMode): Promise<SecretStorageState>;
 }
 
-export const ISecretStorageStatusService =
-	createServiceIdentifier<ISecretStorageStatusService>('secretStorageStatusService');
+export const ISecretStorageStatusService = createServiceIdentifier<ISecretStorageStatusService>('secretStorageStatusService');

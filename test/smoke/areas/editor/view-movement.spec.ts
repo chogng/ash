@@ -4,12 +4,7 @@ import { expect, test } from '../../../automation/test.js';
 test.use({ openWorkspace: false });
 
 /** Chromium's native drag protocol keeps Electron icon drags observable across window reloads. */
-async function dragElectronView(
-	page: Page,
-	source: Locator,
-	target: Locator,
-	position: { x: number; y: number },
-): Promise<void> {
+async function dragElectronView(page: Page, source: Locator, target: Locator, position: { x: number; y: number }): Promise<void> {
 	await expect(source).toBeVisible();
 	await expect(target).toBeVisible();
 	const from = (await source.boundingBox())!;
@@ -64,36 +59,22 @@ async function dragElectronView(
 	}
 }
 
-test('individual views detach, merge, persist across reload and restore their defaults', async ({
-	workbench,
-	application,
-	reloadWorkbench,
-	target,
-}) => {
+test('individual views detach, merge, persist across reload and restore their defaults', async ({ workbench, application, reloadWorkbench, target }) => {
 	let page = workbench.page;
 	const dragView = (source: Locator, destination: Locator, position: { x: number; y: number }) =>
-		target.kind === 'electron'
-			? dragElectronView(page, source, destination, position)
-			: source.dragTo(destination, { targetPosition: position });
+		target.kind === 'electron' ? dragElectronView(page, source, destination, position) : source.dragTo(destination, { targetPosition: position });
 	const timeline = () => page.locator('[data-part="sidebar"] [data-view-id="timeline"]');
 	const right = () => page.locator('[data-part="auxiliarybar"]');
 	await page.locator('[data-part="activitybar"]').getByRole('tab', { name: 'Explorer', exact: true }).click();
 	if (await right().isHidden()) await workbench.quickaccess.runCommand('workbench.action.toggleAuxiliaryBar');
 	const header = timeline().locator('.ash-pane-view-header');
-	await expect(header.getByRole('button', { name: 'Timeline', exact: true })).toHaveAttribute(
-		'aria-description',
-		/Move View/u,
-	);
+	await expect(header.getByRole('button', { name: 'Timeline', exact: true })).toHaveAttribute('aria-description', /Move View/u);
 	const rail = () => page.locator('[data-part="activitybar"]');
 	await dragView(header, rail(), { x: 20, y: 420 });
 	const primary = page.locator('[data-part="sidebar"] [data-view-container-id^="workbench.views.service."]');
 	await expect(primary.locator('[data-view-id="timeline"]')).toBeVisible();
 	const primaryId = (await primary.getAttribute('data-view-container-id'))!;
-	await dragView(
-		rail().locator(`[data-action-id="${primaryId}"]`),
-		right().locator('.ash-pane-composite-title').first(),
-		{ x: 180, y: 12 },
-	);
+	await dragView(rail().locator(`[data-action-id="${primaryId}"]`), right().locator('.ash-pane-composite-title').first(), { x: 180, y: 12 });
 	const standalone = right().locator('[data-view-container-id^="workbench.views.service."]');
 	await expect(standalone.locator('[data-view-id="timeline"]')).toBeVisible();
 	const id = (await standalone.getAttribute('data-view-container-id'))!;
@@ -122,15 +103,9 @@ test('individual views detach, merge, persist across reload and restore their de
 	});
 	await expect(panel.locator('[data-view-id="timeline"] .ash-pane-view-header')).toBeVisible();
 	await expect(panel.locator('[data-view-id="outline"] .ash-pane-view-header')).toBeVisible();
-	await workbench.menus.select(
-		application,
-		() =>
-			panel
-				.locator('[data-view-id="outline"] .ash-pane-view-header')
-				.getByRole('button', { name: 'Outline', exact: true })
-				.press('Shift+F10'),
-		['Reset Location'],
-	);
+	await workbench.menus.select(application, () => panel.locator('[data-view-id="outline"] .ash-pane-view-header').getByRole('button', { name: 'Outline', exact: true }).press('Shift+F10'), [
+		'Reset Location',
+	]);
 	await expect(page.locator('[data-part="sidebar"] [data-view-id="outline"]')).toBeVisible();
 	await expect(panel.locator('[data-view-id="outline"]')).toHaveCount(0);
 	await workbench.quickaccess.runCommand('workbench.action.resetViewLocations');

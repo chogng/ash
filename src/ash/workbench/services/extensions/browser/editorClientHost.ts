@@ -17,13 +17,7 @@ import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
 import { ToolBar } from '../../../../base/browser/ui/toolbar/toolbar.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Emitter } from '../../../../base/common/event.js';
-import {
-	Disposable,
-	DisposableStore,
-	MutableDisposable,
-	combinedDisposable,
-	toDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, combinedDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { lexer } from '../../../../base/common/marked/marked.js';
 import { clamp, isFiniteNumber, isNonNegativeSafeInteger, isSafeInteger } from '../../../../base/common/numbers.js';
@@ -37,11 +31,7 @@ import { TextModel } from '../../../../editor/common/model/textModel.js';
 import { localize } from '../../../../nls.js';
 import { IDialogService, IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import {
-	defaultButtonStyles,
-	defaultInputBoxStyles,
-	defaultSelectBoxStyles,
-} from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultInputBoxStyles, defaultSelectBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { FileKind, IFileService } from '../../../../platform/files/common/files.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';

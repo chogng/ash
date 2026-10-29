@@ -58,9 +58,7 @@ export class TextModelHistory {
 		this.reset();
 		this.undoStack.push(...snapshot.undo.map(cloneEntry));
 		this.redoStack.push(...snapshot.redo.map(cloneEntry));
-		this.historyTextUnits = this.undoStack
-			.concat(this.redoStack)
-			.reduce((total, entry) => total + entry.textUnits, 0);
+		this.historyTextUnits = this.undoStack.concat(this.redoStack).reduce((total, entry) => total + entry.textUnits, 0);
 		this.stackElementOpen = false;
 		this.trim();
 	}
@@ -119,23 +117,14 @@ export class TextModelHistory {
 		return this.takeUndo();
 	}
 
-	findUndoEntry(
-		historyGroup: UndoRedoGroup | undefined,
-		accepts: (entry: TextModelHistoryEntry) => boolean,
-	): TextModelHistoryEntry | undefined {
+	findUndoEntry(historyGroup: UndoRedoGroup | undefined, accepts: (entry: TextModelHistoryEntry) => boolean): TextModelHistoryEntry | undefined {
 		if (this.redoStack.length > 0) return undefined;
 		const previous = this.undoStack[this.undoStack.length - 1];
-		const canAppend =
-			this.stackElementOpen && (historyGroup === undefined || previous?.historyGroup === historyGroup);
+		const canAppend = this.stackElementOpen && (historyGroup === undefined || previous?.historyGroup === historyGroup);
 		return previous && canAppend && accepts(previous) ? previous : undefined;
 	}
 
-	replaceUndoEntry(
-		previous: TextModelHistoryEntry,
-		edits: readonly OffsetTextEdit[],
-		textChanges: readonly TextChange[],
-		afterCursorState: Selection[] | null = previous.afterCursorState,
-	): void {
+	replaceUndoEntry(previous: TextModelHistoryEntry, edits: readonly OffsetTextEdit[], textChanges: readonly TextChange[], afterCursorState: Selection[] | null = previous.afterCursorState): void {
 		if (this.undoStack[this.undoStack.length - 1] !== previous) {
 			throw new Error('Only the latest undo entry can be replaced');
 		}
@@ -168,19 +157,7 @@ export class TextModelHistory {
 		afterCursorState: Selection[] | null = null,
 		textChanges: readonly TextChange[] = [],
 	): void {
-		this.push(
-			this.undoStack,
-			edits,
-			transactionId,
-			alternativeVersionId,
-			editsEOL,
-			eol,
-			historyGroup,
-			lineIds,
-			beforeCursorState,
-			afterCursorState,
-			textChanges,
-		);
+		this.push(this.undoStack, edits, transactionId, alternativeVersionId, editsEOL, eol, historyGroup, lineIds, beforeCursorState, afterCursorState, textChanges);
 		this.stackElementOpen = true;
 		this.trim();
 	}
@@ -197,19 +174,7 @@ export class TextModelHistory {
 		afterCursorState: Selection[] | null = null,
 		textChanges: readonly TextChange[] = [],
 	): void {
-		this.push(
-			this.redoStack,
-			edits,
-			transactionId,
-			alternativeVersionId,
-			editsEOL,
-			eol,
-			historyGroup,
-			lineIds,
-			beforeCursorState,
-			afterCursorState,
-			textChanges,
-		);
+		this.push(this.redoStack, edits, transactionId, alternativeVersionId, editsEOL, eol, historyGroup, lineIds, beforeCursorState, afterCursorState, textChanges);
 		this.stackElementOpen = false;
 		this.trim();
 	}
@@ -251,18 +216,7 @@ export class TextModelHistory {
 		afterCursorState: Selection[] | null = null,
 		textChanges: readonly TextChange[] = [],
 	): void {
-		const entry = createEntry(
-			edits,
-			transactionId,
-			alternativeVersionId,
-			editsEOL,
-			eol,
-			historyGroup,
-			lineIds,
-			beforeCursorState,
-			afterCursorState,
-			textChanges,
-		);
+		const entry = createEntry(edits, transactionId, alternativeVersionId, editsEOL, eol, historyGroup, lineIds, beforeCursorState, afterCursorState, textChanges);
 		stack.push(entry);
 		this.historyTextUnits += entry.textUnits;
 	}
@@ -284,15 +238,8 @@ export class TextModelHistory {
 	}
 
 	private trim(): void {
-		while (
-			this.undoStack.length + this.redoStack.length > this.transactionLimit ||
-			this.historyTextUnits > this.textUnitLimit
-		) {
-			if (
-				this.protectedGroup &&
-				this.undoStack.length === 1 &&
-				this.undoStack[0].historyGroup === this.protectedGroup
-			) {
+		while (this.undoStack.length + this.redoStack.length > this.transactionLimit || this.historyTextUnits > this.textUnitLimit) {
+			if (this.protectedGroup && this.undoStack.length === 1 && this.undoStack[0].historyGroup === this.protectedGroup) {
 				break;
 			}
 			const stack = this.undoStack.length > 0 ? this.undoStack : this.redoStack;
@@ -322,11 +269,7 @@ function createEntry(
 ): TextModelHistoryEntry {
 	return Object.freeze({
 		edits: Object.freeze(edits.map(edit => Object.freeze({ ...edit }))),
-		textChanges: Object.freeze(
-			textChanges.map(
-				change => new TextChange(change.oldPosition, change.oldText, change.newPosition, change.newText),
-			),
-		),
+		textChanges: Object.freeze(textChanges.map(change => new TextChange(change.oldPosition, change.oldText, change.newPosition, change.newText))),
 		textUnits: edits.reduce((total, edit) => total + edit.text.length, 0),
 		transactionId,
 		alternativeVersionId,

@@ -27,10 +27,7 @@ test('Rust settings preserve server constraints, localize metadata and apply onl
 				'rust-analyzer.numThreads': {
 					default: null,
 					markdownDescription: 'Worker threads.',
-					anyOf: [
-						{ type: 'null' },
-						{ type: 'string', enum: ['physical'], enumDescriptions: ['Physical cores'] },
-					],
+					anyOf: [{ type: 'null' }, { type: 'string', enum: ['physical'], enumDescriptions: ['Physical cores'] }],
 				},
 			},
 		},
@@ -45,10 +42,7 @@ test('Rust settings preserve server constraints, localize metadata and apply onl
 		scope: 'resource',
 	});
 	assert.equal((properties['rust-analyzer.cachePriming.enable'] as { default: boolean }).default, false);
-	assert.deepEqual((properties['rust-analyzer.check.command'] as { enumDescriptions: string[] }).enumDescriptions, [
-		'%check.command.enum.0%',
-		'%check.command.enum.1%',
-	]);
+	assert.deepEqual((properties['rust-analyzer.check.command'] as { enumDescriptions: string[] }).enumDescriptions, ['%check.command.enum.0%', '%check.command.enum.1%']);
 	assert.equal(messages['check.command.enum.1'], 'Lint');
 	assert.equal(messages['numThreads.anyOf.1.enum.0'], 'Physical cores');
 	assert.match(messages['cachePriming.enable.description'], /does not save analysis to disk/u);

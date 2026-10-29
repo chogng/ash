@@ -51,9 +51,7 @@ export class TrustedDomainService extends Disposable implements ITrustedDomainSe
 		// The parser validates the complete candidate before either storage or live trust changes.
 		this.parseRules(content);
 		if (expectedContent !== undefined && this.source !== expectedContent) {
-			throw new Error(
-				localize('url.trust.conflict', 'Trusted domains changed. Reload the document before saving.'),
-			);
+			throw new Error(localize('url.trust.conflict', 'Trusted domains changed. Reload the document before saving.'));
 		}
 		this.storage.store(storageKey, content, StorageScope.APPLICATION, StorageTarget.USER);
 		await this.storage.flush();
@@ -71,13 +69,7 @@ export class TrustedDomainService extends Disposable implements ITrustedDomainSe
 	}
 
 	private parseRules(content: string): readonly string[] {
-		const invalidDocument = () =>
-			new TypeError(
-				localize(
-					'url.trust.invalidDocument',
-					'Trusted domains must be a JSONC array of at most 1024 domain patterns, within 64 KiB.',
-				),
-			);
+		const invalidDocument = () => new TypeError(localize('url.trust.invalidDocument', 'Trusted domains must be a JSONC array of at most 1024 domain patterns, within 64 KiB.'));
 		if (VSBuffer.fromString(content).byteLength > 65_536) throw invalidDocument();
 		const errors: ParseError[] = [];
 		const value: unknown = parse(content, errors, { allowTrailingComma: true });
@@ -89,9 +81,7 @@ export class TrustedDomainService extends Disposable implements ITrustedDomainSe
 				if (typeof rule !== 'string') throw new TypeError();
 				return normalizeURLPattern(rule);
 			} catch {
-				throw new TypeError(
-					localize('url.trust.invalidPattern', 'Invalid trusted domain pattern: {0}', String(rule)),
-				);
+				throw new TypeError(localize('url.trust.invalidPattern', 'Invalid trusted domain pattern: {0}', String(rule)));
 			}
 		});
 		return Object.freeze([...new Set(rules)]);

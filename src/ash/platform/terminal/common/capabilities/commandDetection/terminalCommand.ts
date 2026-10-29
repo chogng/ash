@@ -68,26 +68,14 @@ export class TerminalCommand implements ITerminalCommand {
 		if (!this.marker || this.marker.isDisposed || !this.executedMarker || this.executedMarker.isDisposed) {
 			return this.command;
 		}
-		return readBufferRange(
-			this.terminal,
-			this.marker.line,
-			this.startX ?? 0,
-			this.executedMarker.line,
-			this.executedX ?? 0,
-		).replace(/\n$/, '');
+		return readBufferRange(this.terminal, this.marker.line, this.startX ?? 0, this.executedMarker.line, this.executedX ?? 0).replace(/\n$/, '');
 	}
 
 	getOutput(): string | undefined {
 		if (!this.executedMarker || !this.endMarker || this.executedMarker.isDisposed || this.endMarker.isDisposed) {
 			return undefined;
 		}
-		return readBufferRange(
-			this.terminal,
-			this.executedMarker.line,
-			this.executedX ?? 0,
-			this.endMarker.line,
-			this.endColumn,
-		).replace(/\n$/, '');
+		return readBufferRange(this.terminal, this.executedMarker.line, this.executedX ?? 0, this.endMarker.line, this.endColumn).replace(/\n$/, '');
 	}
 
 	hasOutput(): boolean {
@@ -122,15 +110,11 @@ export class TerminalCommand implements ITerminalCommand {
 	}
 
 	getPromptRowCount(): number {
-		return this.promptStartMarker && this.marker
-			? Math.max(1, this.marker.line - this.promptStartMarker.line + 1)
-			: 1;
+		return this.promptStartMarker && this.marker ? Math.max(1, this.marker.line - this.promptStartMarker.line + 1) : 1;
 	}
 
 	getCommandRowCount(): number {
-		return this.marker && this.executedMarker
-			? Math.max(1, this.executedMarker.line - this.marker.line + (this.executedX ? 1 : 0))
-			: 1;
+		return this.marker && this.executedMarker ? Math.max(1, this.executedMarker.line - this.marker.line + (this.executedX ? 1 : 0)) : 1;
 	}
 
 	serialize(isCommandStorageDisabled: boolean): ISerializedTerminalCommand {
@@ -154,16 +138,10 @@ export class TerminalCommand implements ITerminalCommand {
 		};
 	}
 
-	static deserialize(
-		terminal: ITerminalCommandScreen,
-		value: ISerializedTerminalCommand,
-		disabled: boolean,
-	): TerminalCommand | undefined {
+	static deserialize(terminal: ITerminalCommandScreen, value: ISerializedTerminalCommand, disabled: boolean): TerminalCommand | undefined {
 		const buffer = terminal.buffer.normal;
 		const marker = (line: number | undefined): Marker | undefined =>
-			line !== undefined && line >= 0 && line < buffer.length
-				? terminal.registerMarker(line - buffer.baseY - buffer.cursorY)
-				: undefined;
+			line !== undefined && line >= 0 && line < buffer.length ? terminal.registerMarker(line - buffer.baseY - buffer.cursorY) : undefined;
 		const start = marker(value.startLine);
 		if (!start) {
 			return undefined;
@@ -186,13 +164,7 @@ function liveLine(marker: Marker | undefined): number | undefined {
 }
 
 /** Reads cell ranges while joining physical wraps and preserving intentional line breaks. */
-export function readBufferRange(
-	terminal: ITerminalCommandScreen,
-	startLine: number,
-	startX: number,
-	endLine: number,
-	endX: number,
-): string {
+export function readBufferRange(terminal: ITerminalCommandScreen, startLine: number, startX: number, endLine: number, endX: number): string {
 	const buffer = terminal.buffer.normal;
 	const result: string[] = [];
 	for (let line = Math.max(0, startLine); line <= Math.min(buffer.length - 1, endLine); line++) {
@@ -203,9 +175,7 @@ export function readBufferRange(
 		if (line > startLine && !row.isWrapped) {
 			result.push('\n');
 		}
-		result.push(
-			row.translateToString(true, line === startLine ? startX : 0, line === endLine ? endX : terminal.cols),
-		);
+		result.push(row.translateToString(true, line === startLine ? startX : 0, line === endLine ? endX : terminal.cols));
 	}
 	return result.join('');
 }
@@ -265,31 +235,14 @@ export class PartialTerminalCommand implements ICurrentPartialCommand {
 		this.elapsed = this.started ? Math.max(0, Date.now() - this.started) : 0;
 	}
 	getPromptRowCount(): number {
-		return this.promptStartMarker && this.commandStartMarker
-			? Math.max(1, this.commandStartMarker.line - this.promptStartMarker.line + 1)
-			: 1;
+		return this.promptStartMarker && this.commandStartMarker ? Math.max(1, this.commandStartMarker.line - this.promptStartMarker.line + 1) : 1;
 	}
 	getCommandRowCount(): number {
-		return this.commandStartMarker && this.commandExecutedMarker
-			? Math.max(
-					1,
-					this.commandExecutedMarker.line - this.commandStartMarker.line + (this.commandExecutedX ? 1 : 0),
-				)
-			: 1;
+		return this.commandStartMarker && this.commandExecutedMarker ? Math.max(1, this.commandExecutedMarker.line - this.commandStartMarker.line + (this.commandExecutedX ? 1 : 0)) : 1;
 	}
 
-	promoteToFullCommand(
-		cwd: string | undefined,
-		exitCode: number | undefined,
-		ignoreCommandLine: boolean,
-		markProperties: IMarkProperties | undefined,
-	): TerminalCommand | undefined {
-		if (
-			!this.commandStartMarker ||
-			this.commandStartMarker.isDisposed ||
-			this.isInvalid ||
-			(!this.command && !ignoreCommandLine)
-		) {
+	promoteToFullCommand(cwd: string | undefined, exitCode: number | undefined, ignoreCommandLine: boolean, markProperties: IMarkProperties | undefined): TerminalCommand | undefined {
+		if (!this.commandStartMarker || this.commandStartMarker.isDisposed || this.isInvalid || (!this.command && !ignoreCommandLine)) {
 			return undefined;
 		}
 		return new TerminalCommand(this.terminal, {

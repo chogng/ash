@@ -2,10 +2,7 @@ import { ActionViewItem } from '../../../base/browser/ui/actionbar/actionViewIte
 import { appendIcon } from '../../../base/browser/ui/lxicons/lxicon.js';
 import type { IAction } from '../../../base/common/actions.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
-import {
-	ActionWidgetDropdown,
-	type IActionWidgetDropdownOptions,
-} from '../../actionWidget/browser/actionWidgetDropdown.js';
+import { ActionWidgetDropdown, type IActionWidgetDropdownOptions } from '../../actionWidget/browser/actionWidgetDropdown.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
 
 /** ActionBar presentation; the dropdown owns trigger input and menu visibility. */
@@ -15,10 +12,7 @@ export class ActionWidgetDropdownActionViewItem extends ActionViewItem {
 
 	constructor(
 		action: IAction,
-		private readonly actionWidgetOptions: Omit<
-			IActionWidgetDropdownOptions,
-			'label' | 'ariaLabel' | 'labelRenderer'
-		>,
+		private readonly actionWidgetOptions: Omit<IActionWidgetDropdownOptions, 'label' | 'ariaLabel' | 'labelRenderer'>,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super(action);

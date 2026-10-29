@@ -21,9 +21,7 @@ export function createAppServerContentSearchApi(connection: AppServerProtocolCli
 	};
 }
 
-export function createAppServerContentSearchConfigurationApi(
-	connection: AppServerProtocolClient,
-): IContentSearchConfigurationService {
+export function createAppServerContentSearchConfigurationApi(connection: AppServerProtocolClient): IContentSearchConfigurationService {
 	return {
 		read: async () => {
 			const result = await appServerRequest(connection, 'config/read', {});
@@ -39,9 +37,7 @@ export function createAppServerContentSearchConfigurationApi(
 	};
 }
 
-export function createDisconnectedContentSearchConfigurationApi(
-	unavailable: UnavailableOperation,
-): IContentSearchConfigurationService {
+export function createDisconnectedContentSearchConfigurationApi(unavailable: UnavailableOperation): IContentSearchConfigurationService {
 	return {
 		read: () => unavailable('contentSearchConfiguration.read'),
 		configure: () => unavailable('contentSearchConfiguration.configure'),

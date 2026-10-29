@@ -4,27 +4,13 @@ import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
-import {
-	Action2,
-	IMenuService,
-	MenuId,
-	MenuItemAction,
-	MenusRegistry,
-} from '../../../../platform/actions/common/actions.js';
+import { Action2, IMenuService, MenuId, MenuItemAction, MenusRegistry } from '../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import {
-	IInstantiationService,
-	type ServicesAccessor,
-} from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
-import {
-	PickerQuickAccessProvider,
-	TriggerAction,
-	type IPickerQuickAccessItem,
-	type Picks,
-} from '../../../../platform/quickinput/browser/pickerQuickAccess.js';
+import { PickerQuickAccessProvider, TriggerAction, type IPickerQuickAccessItem, type Picks } from '../../../../platform/quickinput/browser/pickerQuickAccess.js';
 import type { IQuickPickSeparator } from '../../../../platform/quickinput/common/quickInput.js';
 import { CommandsHistory } from '../../../../platform/quickinput/browser/commandsQuickAccess.js';
 import { filterQuickPickItems } from '../../../../platform/quickinput/browser/quickInputList.js';
@@ -77,8 +63,7 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 	protected override _getPicks(query: string): Picks<ICommandQuickPickItem> {
 		const { editor, history, menu } = this;
 		// A preview can close while the picker is open; the service owns editor registration.
-		const editorActions =
-			editor && this.codeEditorService.listCodeEditors().includes(editor) ? editor.getSupportedActions() : [];
+		const editorActions = editor && this.codeEditorService.listCodeEditors().includes(editor) ? editor.getSupportedActions() : [];
 		const editorCommands = editorActions.map(action => {
 			const keybinding = this.keybindingService.lookupKeybinding(action.id);
 			return {
@@ -99,17 +84,10 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 				const keybinding = this.keybindingService.lookupKeybinding(action.id);
 				const category = action.item.category;
 				const title = action.item.title;
-				const label = category
-					? localize('quickAccess.categoryTitle', '{0}: {1}', commandActionLabel(category), action.label)
-					: action.label;
+				const label = category ? localize('quickAccess.categoryTitle', '{0}: {1}', commandActionLabel(category), action.label) : action.label;
 				const originalTitle = typeof title === 'string' ? title : title.original;
 				const original = category
-					? localize2(
-							'quickAccess.categoryTitle',
-							'{0}: {1}',
-							typeof category === 'string' ? category : category.original,
-							originalTitle,
-						).original
+					? localize2('quickAccess.categoryTitle', '{0}: {1}', typeof category === 'string' ? category : category.original, originalTitle).original
 					: typeof title === 'string'
 						? undefined
 						: originalTitle;
@@ -124,17 +102,9 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 		const normalizedQuery = query.toLocaleLowerCase();
 		const commands = [...filterQuickPickItems([...editorCommands, ...globalCommands], query)];
 		commands.sort((left, right) => {
-			const leftExact =
-				query.length > 0 &&
-				[left.label, left.detail].some(label => label?.toLocaleLowerCase() === normalizedQuery);
-			const rightExact =
-				query.length > 0 &&
-				[right.label, right.detail].some(label => label?.toLocaleLowerCase() === normalizedQuery);
-			return (
-				Number(rightExact) - Number(leftExact) ||
-				(history.peek(right.commandId) ?? 0) - (history.peek(left.commandId) ?? 0) ||
-				left.label.localeCompare(right.label)
-			);
+			const leftExact = query.length > 0 && [left.label, left.detail].some(label => label?.toLocaleLowerCase() === normalizedQuery);
+			const rightExact = query.length > 0 && [right.label, right.detail].some(label => label?.toLocaleLowerCase() === normalizedQuery);
+			return Number(rightExact) - Number(leftExact) || (history.peek(right.commandId) ?? 0) - (history.peek(left.commandId) ?? 0) || left.label.localeCompare(right.label);
 		});
 		const picks: (ICommandQuickPickItem | IQuickPickSeparator)[] = [];
 		let section: boolean | undefined;
@@ -144,9 +114,7 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 				if (recent || section !== undefined) {
 					picks.push({
 						type: 'separator',
-						label: recent
-							? localize('quickAccess.recentlyUsed', 'recently used')
-							: localize('quickAccess.otherCommands', 'other commands'),
+						label: recent ? localize('quickAccess.recentlyUsed', 'recently used') : localize('quickAccess.otherCommands', 'other commands'),
 					});
 				}
 				section = recent;
@@ -159,25 +127,14 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 					acceptedHistory.push(command.commandId);
 					void this.commandService.executeCommand(command.commandId).catch((error: unknown) => {
 						if (isCancellationError(error)) return;
-						void this.dialogService
-							.error(
-								localize(
-									'quickAccess.commandFailed',
-									"Command '{0}' resulted in an error",
-									command.label,
-								),
-								getErrorMessage(error),
-							)
-							.catch(onUnexpectedError);
+						void this.dialogService.error(localize('quickAccess.commandFailed', "Command '{0}' resulted in an error", command.label), getErrorMessage(error)).catch(onUnexpectedError);
 					});
 				},
 				trigger: buttonIndex => {
 					if (buttonIndex === 0) {
 						// Restore the displaced focus before Preferences opens and focuses its editor.
 						this.quickInputService.currentQuickInput?.hide();
-						void this.preferencesService
-							.openGlobalKeybindingSettings(false, { query: `@command:${command.commandId}` })
-							.catch(onUnexpectedError);
+						void this.preferencesService.openGlobalKeybindingSettings(false, { query: `@command:${command.commandId}` }).catch(onUnexpectedError);
 						return TriggerAction.CLOSE_PICKER;
 					}
 					history.remove(command.commandId);
@@ -219,15 +176,10 @@ export class ClearCommandHistoryAction extends Action2 {
 	public override async run(accessor: ServicesAccessor): Promise<void> {
 		const configuration = accessor.get(IConfigurationService);
 		if (CommandsHistory.getConfiguredCommandHistoryLength(configuration) === 0) return;
-		const { confirmed } = await accessor
-			.get(IDialogService)
-			.confirm({
-				message: localize(
-					'quickAccess.confirmClearHistory',
-					'Do you want to clear the history of recently used commands?',
-				),
-				primaryButton: localize('quickAccess.clearHistoryButton', 'Clear'),
-			});
+		const { confirmed } = await accessor.get(IDialogService).confirm({
+			message: localize('quickAccess.confirmClearHistory', 'Do you want to clear the history of recently used commands?'),
+			primaryButton: localize('quickAccess.clearHistoryButton', 'Clear'),
+		});
 		if (confirmed) CommandsHistory.clearHistory(configuration, accessor.get(IStorageService));
 	}
 }

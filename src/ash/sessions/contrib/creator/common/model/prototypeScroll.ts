@@ -19,16 +19,11 @@ export function prototypePath(shapes: readonly DesignShape[], id: string): reado
 	return [];
 }
 export function prototypeScrollFrames(shapes: readonly DesignShape[]): readonly PrototypeFrame[] {
-	return flattenDesignShapes(shapes).filter(
-		(shape): shape is PrototypeFrame =>
-			shape.kind === 'frame' && !!shape.overflowDirection && shape.overflowDirection !== 'none',
-	);
+	return flattenDesignShapes(shapes).filter((shape): shape is PrototypeFrame => shape.kind === 'frame' && !!shape.overflowDirection && shape.overflowDirection !== 'none');
 }
 function localPoint(shape: DesignShape, point: DesignPoint): DesignPoint {
 	const local = toDesignLocal(shape, point);
-	return shape.kind === 'group'
-		? { x: (local.x * shape.contentWidth) / shape.width, y: (local.y * shape.contentHeight) / shape.height }
-		: local;
+	return shape.kind === 'group' ? { x: (local.x * shape.contentWidth) / shape.width, y: (local.y * shape.contentHeight) / shape.height } : local;
 }
 function parentPoint(shape: DesignShape, point: DesignPoint): DesignPoint {
 	const x = (shape.kind === 'group' ? (point.x * shape.width) / shape.contentWidth : point.x) - shape.width / 2;
@@ -56,24 +51,15 @@ export function prototypeScrollRange(frame: PrototypeFrame): DesignPoint {
 			return [];
 		}
 		const own = corners(shape);
-		if (
-			shape.kind === 'group' ||
-			(shape.kind === 'frame' && !shape.clip && (!shape.overflowDirection || shape.overflowDirection === 'none'))
-		) {
+		if (shape.kind === 'group' || (shape.kind === 'frame' && !shape.clip && (!shape.overflowDirection || shape.overflowDirection === 'none'))) {
 			return [...own, ...shape.children.flatMap(extent).map(point => parentPoint(shape, point))];
 		}
 		return own;
 	};
 	const points = frame.children.flatMap(extent);
 	return {
-		x:
-			frame.overflowDirection === 'horizontal' || frame.overflowDirection === 'both'
-				? Math.max(0, ...points.map(point => point.x - frame.width))
-				: 0,
-		y:
-			frame.overflowDirection === 'vertical' || frame.overflowDirection === 'both'
-				? Math.max(0, ...points.map(point => point.y - frame.height))
-				: 0,
+		x: frame.overflowDirection === 'horizontal' || frame.overflowDirection === 'both' ? Math.max(0, ...points.map(point => point.x - frame.width)) : 0,
+		y: frame.overflowDirection === 'vertical' || frame.overflowDirection === 'both' ? Math.max(0, ...points.map(point => point.y - frame.height)) : 0,
 	};
 }
 export function prototypeScrollOffset(frame: PrototypeFrame, positions: PrototypeScrollPositions): DesignPoint {
@@ -91,24 +77,17 @@ export function applyPrototypeScroll(frame: PrototypeFrame, positions: Prototype
 		}
 		const scrolls = shape.kind === 'frame' && shape.overflowDirection && shape.overflowDirection !== 'none';
 		const offset = scrolls ? prototypeScrollOffset(shape as PrototypeFrame, positions) : zero;
-		const viewport: Viewport | undefined = scrolls
-			? { origin: zero, compensation: offset, vertical: shape.overflowDirection !== 'horizontal', owner: true }
-			: inherited;
+		const viewport: Viewport | undefined = scrolls ? { origin: zero, compensation: offset, vertical: shape.overflowDirection !== 'horizontal', owner: true } : inherited;
 		const height = shape.kind === 'group' ? shape.contentHeight : shape.height;
 		const children = shape.children.map(child => {
 			let x = child.x - offset.x,
 				y = child.y - offset.y;
-			const fixed =
-				child.scrollPosition === 'fixed' &&
-				(!('autoLayout' in shape) || !shape.autoLayout || child.layoutPositioning === 'absolute');
+			const fixed = child.scrollPosition === 'fixed' && (!('autoLayout' in shape) || !shape.autoLayout || child.layoutPositioning === 'absolute');
 			if (viewport && fixed) {
 				x += viewport.compensation.x;
 				y += viewport.compensation.y;
 			} else if (viewport?.vertical && child.scrollPosition === 'sticky') {
-				y += Math.max(
-					0,
-					Math.min(viewport.origin.y - y, viewport.owner ? Infinity : height - child.height - y),
-				);
+				y += Math.max(0, Math.min(viewport.origin.y - y, viewport.owner ? Infinity : height - child.height - y));
 			}
 			const placed = { ...child, x, y };
 			let next: Viewport | undefined;
@@ -130,21 +109,14 @@ export function applyPrototypeScroll(frame: PrototypeFrame, positions: Prototype
 		});
 		return {
 			...shape,
-			children: [
-				...children.filter(child => child.scrollPosition !== 'fixed'),
-				...children.filter(child => child.scrollPosition === 'fixed'),
-			],
+			children: [...children.filter(child => child.scrollPosition !== 'fixed'), ...children.filter(child => child.scrollPosition === 'fixed')],
 		};
 	};
 	return visit(frame) as PrototypeFrame;
 }
 
 /** Picker targets are direct children of scrolling frames; wires may target deeper descendants. */
-export function prototypeScrollTargets(
-	shapes: readonly DesignShape[],
-	source: string,
-	direct = true,
-): readonly DesignShape[] {
+export function prototypeScrollTargets(shapes: readonly DesignShape[], source: string, direct = true): readonly DesignShape[] {
 	const owner = prototypeScrollScope(shapes, source);
 	if (!owner) {
 		return [];
@@ -154,35 +126,20 @@ export function prototypeScrollTargets(
 		return (
 			shape.id !== source &&
 			path.every(item => item.visible !== false) &&
-			path
-				.slice(0, -1)
-				.some(
-					(item, index) =>
-						item.kind === 'frame' &&
-						!!item.overflowDirection &&
-						item.overflowDirection !== 'none' &&
-						(!direct || index === path.length - 2),
-				)
+			path.slice(0, -1).some((item, index) => item.kind === 'frame' && !!item.overflowDirection && item.overflowDirection !== 'none' && (!direct || index === path.length - 2))
 		);
 	});
 }
 
 /** Resolve inner viewports first so ancestors scroll to the target's resulting visual position. */
-export function prototypeScrollTo(
-	frame: PrototypeFrame,
-	target: string,
-	positions: PrototypeScrollPositions,
-): PrototypeScrollPositions {
+export function prototypeScrollTo(frame: PrototypeFrame, target: string, positions: PrototypeScrollPositions): PrototypeScrollPositions {
 	const path = prototypePath([frame], target);
 	if (!path.length || path.some(shape => shape.visible === false) || path.at(-1)?.scrollPosition === 'fixed') {
 		return positions;
 	}
 	let result = positions;
 	for (const ancestor of path.slice(0, -1).reverse()) {
-		if (
-			ancestor.scrollPosition === 'fixed' &&
-			(ancestor.kind !== 'frame' || !ancestor.overflowDirection || ancestor.overflowDirection === 'none')
-		) {
+		if (ancestor.scrollPosition === 'fixed' && (ancestor.kind !== 'frame' || !ancestor.overflowDirection || ancestor.overflowDirection === 'none')) {
 			break;
 		}
 		if (ancestor.kind !== 'frame' || !ancestor.overflowDirection || ancestor.overflowDirection === 'none') {
@@ -248,9 +205,7 @@ export function prototypeScrollVector(path: readonly DesignShape[], delta: Desig
 }
 
 /** Wires can reach descendants inside groups without changing the editor's group selection contract. */
-export function prototypeShapeEntries(
-	shapes: readonly DesignShape[],
-): readonly { shape: DesignShape; world: DesignShape; ancestors: readonly DesignShape[] }[] {
+export function prototypeShapeEntries(shapes: readonly DesignShape[]): readonly { shape: DesignShape; world: DesignShape; ancestors: readonly DesignShape[] }[] {
 	return flattenDesignShapes(shapes).map(shape => {
 		const ancestors = prototypePath(shapes, shape.id).slice(0, -1);
 		let center = { x: shape.x + shape.width / 2, y: shape.y + shape.height / 2 },

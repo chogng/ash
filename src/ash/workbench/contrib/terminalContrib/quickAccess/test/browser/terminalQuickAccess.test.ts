@@ -6,27 +6,13 @@ import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { CommandsRegistry } from '../../../../../../platform/commands/common/commands.js';
-import {
-	TriggerAction,
-	type IPickerQuickAccessItem,
-} from '../../../../../../platform/quickinput/browser/pickerQuickAccess.js';
+import { TriggerAction, type IPickerQuickAccessItem } from '../../../../../../platform/quickinput/browser/pickerQuickAccess.js';
 import { QuickAccessRegistry } from '../../../../../../platform/quickinput/common/quickAccess.js';
-import {
-	IQuickInputService,
-	QuickInputType,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, QuickInputType, type IQuickPick, type IQuickPickItem } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { TerminalLocation } from '../../../../../../platform/terminal/common/terminal.js';
 import { CommandService } from '../../../../../services/commands/common/commandService.js';
-import {
-	ITerminalEditingService,
-	ITerminalEditorService,
-	ITerminalGroupService,
-	ITerminalService,
-	type ITerminalInstance,
-} from '../../../../terminal/browser/terminal.js';
+import { ITerminalEditingService, ITerminalEditorService, ITerminalGroupService, ITerminalService, type ITerminalInstance } from '../../../../terminal/browser/terminal.js';
 import { TerminalQuickAccessProvider } from '../../browser/terminalQuickAccess.js';
 import '../../browser/terminal.quickAccess.contribution.js';
 
@@ -111,8 +97,7 @@ suite('Terminal Quick Access', () => {
 			onDidTriggerItemButton: Event.None,
 		} as unknown as IQuickPick<IPickerQuickAccessItem>;
 		using showing = provider.provide(picker, CancellationToken.None);
-		const items = (): IPickerQuickAccessItem[] =>
-			picker.items.filter((item): item is IPickerQuickAccessItem => !('type' in item));
+		const items = (): IPickerQuickAccessItem[] => picker.items.filter((item): item is IPickerQuickAccessItem => !('type' in item));
 		assert.deepEqual(
 			items().map(item => [item.label, item.description, item.picked]),
 			[
@@ -128,14 +113,8 @@ suite('Terminal Quick Access', () => {
 		oldPanel.accept!({ ctrlCmd: false, alt: false, shift: false }, { inBackground: false });
 		assert.deepEqual(effects, [panel, ['panel', true]]);
 		effects.length = 0;
-		assert.equal(
-			await oldEditor.trigger!(0, { ctrlCmd: false, alt: false, shift: false }),
-			TriggerAction.REFRESH_PICKER,
-		);
-		assert.equal(
-			await oldEditor.trigger!(1, { ctrlCmd: false, alt: false, shift: false }),
-			TriggerAction.REFRESH_PICKER,
-		);
+		assert.equal(await oldEditor.trigger!(0, { ctrlCmd: false, alt: false, shift: false }), TriggerAction.REFRESH_PICKER);
+		assert.equal(await oldEditor.trigger!(1, { ctrlCmd: false, alt: false, shift: false }), TriggerAction.REFRESH_PICKER);
 		assert.deepEqual(effects, [
 			['rename', editor],
 			['close', editor],

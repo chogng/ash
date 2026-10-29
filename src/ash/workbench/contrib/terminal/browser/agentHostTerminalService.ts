@@ -5,11 +5,7 @@ import { terminalExecutionScope } from '../common/remote/terminal.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import {
-	ITerminalProcessService,
-	type ITerminalProcessCreation,
-	type ITerminalProcessCreateOptions,
-} from '../../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, type ITerminalProcessCreation, type ITerminalProcessCreateOptions } from '../../../../platform/terminal/common/terminal.js';
 import { AgentHostPty } from './agentHostPty.js';
 import { BaseTerminalBackend } from './baseTerminalBackend.js';
 
@@ -43,15 +39,9 @@ export class AgentHostTerminalService extends BaseTerminalBackend {
 		);
 	}
 
-	async createProcess(
-		options: ITerminalProcessCreateOptions,
-		id: number,
-		attached?: ITerminalProcessCreation,
-		ownership?: ITerminalProcessOwnership,
-	): Promise<AgentHostPty> {
+	async createProcess(options: ITerminalProcessCreateOptions, id: number, attached?: ITerminalProcessCreation, ownership?: ITerminalProcessOwnership): Promise<AgentHostPty> {
 		if (this.isDisposed) throw new CancellationError();
-		const kind =
-			terminalExecutionScope(this.workspace.getWorkspace()).remoteAuthority === undefined ? 'local' : 'remote';
+		const kind = terminalExecutionScope(this.workspace.getWorkspace()).remoteAuthority === undefined ? 'local' : 'remote';
 		const ctor = factories.get(kind);
 		if (ctor) {
 			let backend = this.backends.get(kind);

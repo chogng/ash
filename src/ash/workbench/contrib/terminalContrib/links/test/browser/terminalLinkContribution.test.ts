@@ -21,11 +21,7 @@ import { InstantiationService } from '../../../../../../platform/instantiation/c
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
 import { IPathService } from '../../../../../../platform/path/common/pathService.js';
-import {
-	IQuickInputService,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
 import { TerminalCapability } from '../../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
@@ -40,10 +36,7 @@ import { ITerminalLinkProviderService } from '../../browser/links.js';
 import { TerminalLinkProviderService } from '../../browser/terminalLinkProviderService.js';
 import { ISearchService, type IFileQuery, type ISearchComplete } from '../../../../../services/search/common/search.js';
 import { Registry } from '../../../../../../platform/registry/common/platform.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../../../platform/configuration/common/configurationRegistry.js';
 import '../../../../terminal/common/terminalConfiguration.js';
 import type { CancellationToken } from '../../../../../../base/common/cancellation.js';
 import { IHostService } from '../../../../../services/host/browser/host.js';
@@ -111,8 +104,7 @@ function fixture(
 		hasAppServer: true,
 		appServer: {
 			...api.appServer,
-			operatingSystem:
-				cwd.startsWith('C:') && root.scheme === 'file' ? OperatingSystem.Windows : OperatingSystem.Linux,
+			operatingSystem: cwd.startsWith('C:') && root.scheme === 'file' ? OperatingSystem.Windows : OperatingSystem.Linux,
 			userHome: '/home/fixture',
 		},
 	});
@@ -225,8 +217,7 @@ function fixture(
 		initialCwd: cwd,
 		onDidChangeState: states.event,
 		capabilities: {
-			get: (id: TerminalCapability) =>
-				id === TerminalCapability.CommandDetection ? { getCwdForLine: () => historicalCwd } : undefined,
+			get: (id: TerminalCapability) => (id === TerminalCapability.CommandDetection ? { getCwdForLine: () => historicalCwd } : undefined),
 		},
 	} as unknown as ITerminalInstance;
 	const contribution = lifetime.add(services.createInstance(TerminalLinkContribution, { instance }));
@@ -343,9 +334,7 @@ test('Terminal directory links reveal the command directory through the existing
 		assert.equal(links?.length, 1);
 		links![0]!.activate({} as MouseEvent, links![0]!.text);
 		await f.didFocusExplorer.p;
-		assert.deepEqual(f.revealed, [
-			{ resource: root.with({ path: '/project/original/src' }).toString(), reveal: 'force' },
-		]);
+		assert.deepEqual(f.revealed, [{ resource: root.with({ path: '/project/original/src' }).toString(), reveal: 'force' }]);
 		assert.deepEqual(f.openedViews, ['ash.explorer']);
 		assert.equal(f.explorerFocuses, 1);
 		assert.deepEqual(f.opened, []);
@@ -620,9 +609,7 @@ test('Terminal file links use the execution home and decode file URI paths', asy
 		const selected = f.contribution.showLinkQuickpick();
 		f.accept(0);
 		await selected;
-		assert.deepEqual(f.opened, [
-			{ resource, selection: { startLineNumber: 4, startColumn: 2, endLineNumber: 4, endColumn: 2 } },
-		]);
+		assert.deepEqual(f.opened, [{ resource, selection: { startLineNumber: 4, startColumn: 2, endLineNumber: 4, endColumn: 2 } }]);
 	}
 });
 
@@ -702,14 +689,7 @@ test('terminal resolver keeps drive, UNC and literal POSIX paths on their execut
 	for (const link of ['D:relative.ts', '\\\\?\\GLOBALROOT\\Device', '~/missing-home.ts']) {
 		assert.equal(await resolver.resolveLink({ initialCwd: 'C:\\work', os: OperatingSystem.Windows }, link), null);
 	}
-	assert.equal(
-		await resolver.resolveLink(
-			{ initialCwd: 'C:\\work', os: OperatingSystem.Windows },
-			'file:///C:/work/file.ts#fragment',
-			URI.parse('file:///C:/work/file.ts#fragment'),
-		),
-		null,
-	);
+	assert.equal(await resolver.resolveLink({ initialCwd: 'C:\\work', os: OperatingSystem.Windows }, 'file:///C:/work/file.ts#fragment', URI.parse('file:///C:/work/file.ts#fragment')), null);
 	assert.equal(resources.length, count, 'Invalid or unavailable paths must not reach the file provider');
 });
 
@@ -1017,9 +997,7 @@ test('Terminal external history links load incrementally with four requests and 
 	lifetime.add(
 		f.providers.registerLinkProvider({
 			provideLinks: async (_instance, line) => {
-				const result = new DeferredPromise<
-					import('../../../../terminal/browser/terminal.js').ITerminalLink[]
-				>();
+				const result = new DeferredPromise<import('../../../../terminal/browser/terminal.js').ITerminalLink[]>();
 				pending.push({ line, result });
 				return result.p;
 			},
@@ -1036,9 +1014,7 @@ test('Terminal external history links load incrementally with four requests and 
 	);
 	const finish = async (index: number) => {
 		const request = pending[index]!;
-		await request.result.complete([
-			{ startIndex: 0, length: request.line.length, label: `external ${request.line}`, activate() {} },
-		]);
+		await request.result.complete([{ startIndex: 0, length: request.line.length, label: `external ${request.line}`, activate() {} }]);
 		await new Promise<void>(resolve => setImmediate(resolve));
 	};
 	await finish(0);
@@ -1104,10 +1080,7 @@ test('Terminal reachability activates lazy link providers once while keeping bui
 		await pending.p;
 		lifetime.add(
 			f.providers.registerLinkProvider({
-				provideLinks: async (_instance, line) =>
-					line === 'JOB-123'
-						? [{ startIndex: 0, length: 7, label: 'Lazy job', activate: text => activated.push(text) }]
-						: [],
+				provideLinks: async (_instance, line) => (line === 'JOB-123' ? [{ startIndex: 0, length: 7, label: 'Lazy job', activate: text => activated.push(text) }] : []),
 			}),
 		);
 	});

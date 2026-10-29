@@ -19,10 +19,7 @@ export class StorageDatabaseChannel implements IServerChannel {
 		const identity = validateStorageIdentity(arg.identity);
 		switch (command) {
 			case 'getItems':
-				return (await this.storage.getItems(
-					identity,
-					arg.legacy === undefined ? undefined : validateStorageEntries(arg.legacy),
-				)) as T;
+				return (await this.storage.getItems(identity, arg.legacy === undefined ? undefined : validateStorageEntries(arg.legacy))) as T;
 			case 'updateItems': {
 				if (typeof arg.key !== 'string' || !arg.key.trim()) {
 					throw new TypeError('Invalid storage key');

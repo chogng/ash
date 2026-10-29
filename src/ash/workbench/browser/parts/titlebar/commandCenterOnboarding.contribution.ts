@@ -8,10 +8,7 @@ registerOnboardingTryout({
 		return localize('onboarding.commandCenter.tryoutTitle', 'Open Search commands');
 	},
 	get description() {
-		return localize(
-			'onboarding.commandCenter.tryoutDescription',
-			'Open the command search. No command runs until you choose one.',
-		);
+		return localize('onboarding.commandCenter.tryoutDescription', 'Open the command search. No command runs until you choose one.');
 	},
 	presentation: { kind: 'command', commandId: ShowAllCommandsCommandId },
 });

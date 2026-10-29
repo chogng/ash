@@ -61,18 +61,14 @@ export class ChatViewTitleControl extends Disposable {
 					.catch(onUnexpectedError)
 					.finally(() => {
 						this.titleButton.setAttribute('aria-expanded', 'false');
-						if (ownerDocument.activeElement === ownerDocument.body && this.titleButton.isConnected)
-							this.titleButton.focus();
+						if (ownerDocument.activeElement === ownerDocument.body && this.titleButton.isConnected) this.titleButton.focus();
 					});
 			}),
 		);
-		this._register(
-			addDisposableListener(this.titleButton, 'contextmenu', event => this.showTitleContextMenu(event)),
-		);
+		this._register(addDisposableListener(this.titleButton, 'contextmenu', event => this.showTitleContextMenu(event)));
 		this._register(
 			addDisposableListener(this.titleButton, 'keydown', event => {
-				if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))
-					this.showTitleContextMenu(event);
+				if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) this.showTitleContextMenu(event);
 			}),
 		);
 		this.update(undefined);

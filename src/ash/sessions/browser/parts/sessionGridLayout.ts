@@ -1,13 +1,5 @@
 import { scheduleAtNextAnimationFrame, isHTMLElement, type IDimension } from '../../../base/browser/dom.js';
-import {
-	Direction,
-	SerializableGrid,
-	Sizing,
-	type GridDescriptor,
-	type ISerializableView,
-	type IView,
-	type SerializedGridDescriptor,
-} from '../../../base/browser/ui/grid/grid.js';
+import { Direction, SerializableGrid, Sizing, type GridDescriptor, type ISerializableView, type IView, type SerializedGridDescriptor } from '../../../base/browser/ui/grid/grid.js';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
@@ -106,9 +98,7 @@ export class SessionGridLayout extends Disposable {
 					const reordered = previous.length === next.length && previous.every(item => next.includes(item));
 					const replacements = previous.filter(item => !next.includes(item));
 					const additions = next.filter(item => !previous.includes(item));
-					const bindings = new Map(
-						previous.filter(item => next.includes(item)).map(item => [item.entry.id, item]),
-					);
+					const bindings = new Map(previous.filter(item => next.includes(item)).map(item => [item.entry.id, item]));
 					for (const [index, item] of replacements.entries()) {
 						if (additions[index]) bindings.set(item.entry.id, additions[index]!);
 					}
@@ -138,8 +128,7 @@ export class SessionGridLayout extends Disposable {
 	}
 
 	layout(width: number, height: number): void {
-		if (this.savedLayout && (this.dimension?.width !== width || this.dimension?.height !== height))
-			this.restorePending = true;
+		if (this.savedLayout && (this.dimension?.width !== width || this.dimension?.height !== height)) this.restorePending = true;
 		this.dimension = { width, height };
 		this.changing = true;
 		try {
@@ -169,54 +158,31 @@ export class SessionGridLayout extends Disposable {
 		const focused = this.element.ownerDocument.activeElement;
 		const restore = isHTMLElement(focused) && this.element.contains(focused);
 		update();
-		if (restore && focused.isConnected && focused.ownerDocument.activeElement !== focused)
-			focused.focus({ preventScroll: true });
+		if (restore && focused.isConnected && focused.ownerDocument.activeElement !== focused) focused.focus({ preventScroll: true });
 	}
 
 	private captureLayout(): void {
-		if (
-			this.changing ||
-			this.restorePending ||
-			this.restoring ||
-			!this.dimension?.width ||
-			!this.dimension.height ||
-			this.items.some(item => item.entry.id === 'empty')
-		)
-			return;
+		if (this.changing || this.restorePending || this.restoring || !this.dimension?.width || !this.dimension.height || this.items.some(item => item.entry.id === 'empty')) return;
 		this.savedLayout = this.grid.value!.serialize() as SessionGridNode;
 		this.saveState();
 	}
 
 	private saveState(): void {
 		if (this.changing || this.restorePending || this.restoring || !this.savedLayout) return;
-		this.storage.store(
-			this.storageKey,
-			JSON.stringify({ version: 3, layout: this.savedLayout }),
-			StorageScope.WORKSPACE,
-			StorageTarget.MACHINE,
-		);
+		this.storage.store(this.storageKey, JSON.stringify({ version: 3, layout: this.savedLayout }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		this.storage.remove('sessions.gridState.chat', StorageScope.WORKSPACE);
 		this.storage.remove('sessions.gridState.code', StorageScope.WORKSPACE);
 	}
 
 	private scheduleRestore(): void {
-		if (
-			!this.visible ||
-			!this.restorePending ||
-			!this.dimension?.width ||
-			!this.dimension.height ||
-			this.restoreFrame.value
-		)
-			return;
+		if (!this.visible || !this.restorePending || !this.dimension?.width || !this.dimension.height || this.restoreFrame.value) return;
 		this.restoreFrame.value = scheduleAtNextAnimationFrame(this.element.ownerDocument.defaultView!, () => {
 			this.restoreFrame.clear();
 			if (this.items.some(item => item.entry.id === 'empty')) return;
 			this.changing = true;
 			try {
 				if (this.legacyWidths) {
-					const widths = this.items.map(
-						item => this.legacyWidths!.get(item.entry.id) ?? this.grid.value!.getViewSize(item).width,
-					);
+					const widths = this.items.map(item => this.legacyWidths!.get(item.entry.id) ?? this.grid.value!.getViewSize(item).width);
 					const total = widths.reduce((sum, width) => sum + width, 0);
 					this.savedLayout = {
 						type: 'branch',
@@ -294,10 +260,7 @@ function horizontalLayout(items: readonly SessionGridItem[], width: number): Gri
 	};
 }
 
-function bindLayout(
-	node: SessionGridNode,
-	bindings: ReadonlyMap<string, SessionGridItem>,
-): GridDescriptor<SessionGridItem> | undefined {
+function bindLayout(node: SessionGridNode, bindings: ReadonlyMap<string, SessionGridItem>): GridDescriptor<SessionGridItem> | undefined {
 	if (node.type === 'leaf') {
 		const view = bindings.get(node.data.id);
 		return view ? { type: 'leaf', view, size: node.size, priority: node.priority } : undefined;
@@ -321,10 +284,7 @@ function scaleLayout(node: GridDescriptor<SessionGridItem>, dimension: IDimensio
 		children: node.children.map(child => {
 			const size = total > 0 ? (child.size / total) * available : available / node.children.length;
 			return {
-				...scaleLayout(
-					child,
-					horizontal ? { width: size, height: dimension.height } : { width: dimension.width, height: size },
-				),
+				...scaleLayout(child, horizontal ? { width: size, height: dimension.height } : { width: dimension.width, height: size }),
 				size,
 			};
 		}),
@@ -332,25 +292,14 @@ function scaleLayout(node: GridDescriptor<SessionGridItem>, dimension: IDimensio
 }
 
 function renameLayout(node: SessionGridNode, renames: ReadonlyMap<string, string>): SessionGridNode {
-	return node.type === 'leaf'
-		? { ...node, data: { id: renames.get(node.data.id) ?? node.data.id } }
-		: { ...node, children: node.children.map(child => renameLayout(child, renames)) };
+	return node.type === 'leaf' ? { ...node, data: { id: renames.get(node.data.id) ?? node.data.id } } : { ...node, children: node.children.map(child => renameLayout(child, renames)) };
 }
 
 function parseStoredWidths(value: unknown): ReadonlyMap<string, number> {
-	if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.widths) || !value.widths.length)
-		throw new TypeError('Invalid stored Sessions grid state');
+	if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.widths) || !value.widths.length) throw new TypeError('Invalid stored Sessions grid state');
 	const widths = new Map<string, number>();
 	for (const entry of value.widths) {
-		if (
-			!isRecord(entry) ||
-			typeof entry.id !== 'string' ||
-			!entry.id.length ||
-			widths.has(entry.id) ||
-			typeof entry.width !== 'number' ||
-			!Number.isFinite(entry.width) ||
-			entry.width <= 0
-		)
+		if (!isRecord(entry) || typeof entry.id !== 'string' || !entry.id.length || widths.has(entry.id) || typeof entry.width !== 'number' || !Number.isFinite(entry.width) || entry.width <= 0)
 			throw new TypeError('Invalid stored Sessions pane width');
 		widths.set(entry.id, entry.width);
 	}
@@ -359,12 +308,10 @@ function parseStoredWidths(value: unknown): ReadonlyMap<string, number> {
 
 /** Version 2 encoded editor groups. Migration resolves them once into Session identities. */
 function parseStoredLayout(value: unknown): SessionGridNode {
-	if (!isRecord(value) || (value.version !== 2 && value.version !== 3))
-		throw new TypeError('Invalid stored Sessions grid state');
+	if (!isRecord(value) || (value.version !== 2 && value.version !== 3)) throw new TypeError('Invalid stored Sessions grid state');
 	const groups = new Map<string, string>();
 	if (value.version === 2) {
-		if (!Array.isArray(value.groups) || !value.groups.length)
-			throw new TypeError('Invalid stored Sessions grid bindings');
+		if (!Array.isArray(value.groups) || !value.groups.length) throw new TypeError('Invalid stored Sessions grid bindings');
 		const ids = new Set<string>();
 		for (const binding of value.groups) {
 			if (
@@ -394,14 +341,9 @@ function parseStoredLayout(value: unknown): SessionGridNode {
 		)
 			throw new TypeError('Invalid stored Sessions grid geometry');
 		if (node.type === 'leaf') {
-			const reference = isRecord(node.data)
-				? value.version === 2
-					? node.data.groupId
-					: node.data.id
-				: undefined;
+			const reference = isRecord(node.data) ? (value.version === 2 ? node.data.groupId : node.data.id) : undefined;
 			const id = typeof reference === 'string' && value.version === 2 ? groups.get(reference) : reference;
-			if (typeof id !== 'string' || !id.length || seen.has(id) || typeof node.visible !== 'boolean')
-				throw new TypeError('Invalid stored Sessions grid reference');
+			if (typeof id !== 'string' || !id.length || seen.has(id) || typeof node.visible !== 'boolean') throw new TypeError('Invalid stored Sessions grid reference');
 			seen.add(id);
 			return { type: 'leaf', data: { id }, size: node.size, priority: node.priority, visible: node.visible };
 		}
@@ -422,7 +364,6 @@ function parseStoredLayout(value: unknown): SessionGridNode {
 		};
 	};
 	const layout = visit(value.layout);
-	if (value.version === 2 && seen.size !== groups.size)
-		throw new TypeError('Incomplete stored Sessions grid bindings');
+	if (value.version === 2 && seen.size !== groups.size) throw new TypeError('Incomplete stored Sessions grid bindings');
 	return layout;
 }

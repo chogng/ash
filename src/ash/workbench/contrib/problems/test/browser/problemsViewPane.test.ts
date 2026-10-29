@@ -13,10 +13,7 @@ import { Position } from '../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { MarkerSeverity } from '../../../../../platform/markers/common/markers.js';
 import { MarkerService } from '../../../../../platform/markers/common/markerService.js';
-import {
-	type EditorOpenOptions,
-	type IEditorService,
-} from '../../../../../workbench/services/editor/common/editorService.js';
+import { type EditorOpenOptions, type IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
 
 test('ProblemsViewPane filters diagnostics and opens the selected range', async () => {
@@ -59,37 +56,20 @@ test('ProblemsViewPane filters diagnostics and opens the selected range', async 
 	};
 
 	try {
-		const { ProblemsViewPane } =
-			await import('../../../../../workbench/contrib/problems/browser/problemsViewPane.js');
-		using pane = new ProblemsViewPane(
-			browser.window.document.body,
-			{ id: 'ash.problems', title: 'Problems' },
-			markerService,
-			editorService,
-			workspace,
-			contextMenus,
-			clipboard,
-		);
+		const { ProblemsViewPane } = await import('../../../../../workbench/contrib/problems/browser/problemsViewPane.js');
+		using pane = new ProblemsViewPane(browser.window.document.body, { id: 'ash.problems', title: 'Problems' }, markerService, editorService, workspace, contextMenus, clipboard);
 		browser.window.document.body.append(pane.element);
 		const titleControls = pane.partTitleProjection.actions!;
 		browser.window.document.body.append(titleControls);
 		assert.equal(pane.element.querySelector('.ash-problems-controls'), null);
-		const filterAction = titleControls.querySelector<HTMLButtonElement>(
-			"[data-action-id='ash.problems.filter'] button",
-		)!;
+		const filterAction = titleControls.querySelector<HTMLButtonElement>("[data-action-id='ash.problems.filter'] button")!;
 		assert.equal(filterAction.getAttribute('aria-haspopup'), 'menu');
 		assert.equal(pane.element.querySelectorAll('.ash-problems-item').length, 3);
 		assert.equal(pane.element.querySelector('.ash-problems-status')?.textContent, '3 problems in the workspace.');
 		assert.ok(titleControls.querySelector('.ash-problems-filter')!.contains(filterAction));
 		titleControls.querySelector<HTMLButtonElement>("[data-action-id='ash.problems.collapseAll'] button")!.click();
-		assert.ok(
-			[...pane.element.querySelectorAll<HTMLButtonElement>('.ash-problems-file-heading')].every(
-				heading => heading.getAttribute('aria-expanded') === 'false',
-			),
-		);
-		assert.ok(
-			[...pane.element.querySelectorAll<HTMLUListElement>('.ash-problems-file-items')].every(rows => rows.hidden),
-		);
+		assert.ok([...pane.element.querySelectorAll<HTMLButtonElement>('.ash-problems-file-heading')].every(heading => heading.getAttribute('aria-expanded') === 'false'));
+		assert.ok([...pane.element.querySelectorAll<HTMLUListElement>('.ash-problems-file-items')].every(rows => rows.hidden));
 		const heading = pane.element.querySelector<HTMLButtonElement>('.ash-problems-file-heading')!;
 		heading.click();
 		assert.equal(heading.getAttribute('aria-expanded'), 'true');
@@ -126,20 +106,14 @@ test('ProblemsViewPane filters diagnostics and opens the selected range', async 
 		pane.element.querySelector<HTMLButtonElement>('.ash-problems-item.error .ash-problems-item-button')!.click();
 		await Promise.resolve();
 		assert.equal(opened?.input.resource.toString(), main.toString());
-		assert.deepEqual(
-			opened?.options?.selection,
-			Range.fromPositions(new Position(1 + 1, 0 + 1), new Position(1 + 1, 4 + 1)),
-		);
+		assert.deepEqual(opened?.options?.selection, Range.fromPositions(new Position(1 + 1, 0 + 1), new Position(1 + 1, 4 + 1)));
 		assert.equal(focusCount, 1);
 
 		markerService.changeAll('fixture', []);
 		assert.equal(pane.element.querySelectorAll('.ash-problems-item').length, 0);
 		assert.equal(pane.element.querySelector('.ash-problems-status')?.textContent, 'No problems detected.');
 		workspace.updateWorkspace({ id: 'empty' });
-		assert.equal(
-			pane.element.querySelector('.ash-problems-status')?.textContent,
-			'Open a folder to view project diagnostics.',
-		);
+		assert.equal(pane.element.querySelector('.ash-problems-status')?.textContent, 'Open a folder to view project diagnostics.');
 
 		initializeTestLocalization('zh-CN');
 		markerService.changeAll('fixture', [marker(main, MarkerSeverity.Error, 'cannot find value', 1)]);
@@ -147,10 +121,7 @@ test('ProblemsViewPane filters diagnostics and opens the selected range', async 
 		assert.equal(pane.element.querySelector('.ash-problems-location')?.textContent, '[第 2 行，第 1 列]');
 		filter.value = 'missing';
 		filter.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
-		assert.equal(
-			pane.element.querySelector('.ash-problems-status')?.textContent,
-			'没有匹配当前筛选条件的问题（共 1 个）。',
-		);
+		assert.equal(pane.element.querySelector('.ash-problems-status')?.textContent, '没有匹配当前筛选条件的问题（共 1 个）。');
 		const clear = pane.element.querySelector<HTMLButtonElement>('.ash-problems-status-row button')!;
 		assert.equal(clear.hidden, false);
 		clear.click();
@@ -165,10 +136,7 @@ test('ProblemsViewPane filters diagnostics and opens the selected range', async 
 		assert.equal(pane.element.querySelector('.ash-problems-status')?.textContent, '打开文件夹以查看项目诊断。');
 		workspace.updateWorkspace({ id: 'project', uri: URI.file('/project') });
 		assert.equal(pane.element.querySelector('.ash-problems-status')?.textContent, '当前没有问题。');
-		assert.equal(
-			titleControls.querySelector<HTMLButtonElement>("[data-action-id='ash.problems.copy'] button")!.disabled,
-			true,
-		);
+		assert.equal(titleControls.querySelector<HTMLButtonElement>("[data-action-id='ash.problems.copy'] button")!.disabled, true);
 		markerService.changeAll('fixture', [marker(main, MarkerSeverity.Error, 'cannot find value', 1)]);
 		copyFailure = true;
 		titleControls.querySelector<HTMLButtonElement>("[data-action-id='ash.problems.copy'] button")!.click();
@@ -211,7 +179,6 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
 		MouseEvent: browser.window.MouseEvent,
 		navigator: browser.window.navigator,
 	};
-	for (const [name, value] of Object.entries(globals))
-		Object.defineProperty(globalThis, name, { configurable: true, value });
+	for (const [name, value] of Object.entries(globals)) Object.defineProperty(globalThis, name, { configurable: true, value });
 	return Object.keys(globals);
 }

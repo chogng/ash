@@ -56,17 +56,11 @@ test('core edit algebra applies, composes, and inverts string edits', () => {
 	assert.equal(second.apply(first.apply('abcdef')), 'aYZef');
 	assert.equal(composed.apply('abcdef'), 'aYZef');
 	assert.equal(composed.inverse('abcdef').apply(composed.apply('abcdef')), 'abcdef');
-	assert.equal(
-		StringEdit.create([StringReplacement.insert(0, 'a'), StringReplacement.insert(1, 'b')]).apply(''),
-		'ab',
-	);
+	assert.equal(StringEdit.create([StringReplacement.insert(0, 'a'), StringReplacement.insert(1, 'b')]).apply(''), 'ab');
 });
 
 test('array edits share the same composition algebra as string edits', () => {
-	const first = ArrayEdit.create([
-		new ArrayReplacement(new OffsetRange(1, 3), ['X']),
-		new ArrayReplacement(new OffsetRange(4, 5), ['Y', 'Z']),
-	]);
+	const first = ArrayEdit.create([new ArrayReplacement(new OffsetRange(1, 3), ['X']), new ArrayReplacement(new OffsetRange(4, 5), ['Y', 'Z'])]);
 	const second = ArrayEdit.replace(new OffsetRange(1, 2), ['A', 'B']);
 	const source = ['0', '1', '2', '3', '4', '5'];
 	const composed = first.compose(second);
@@ -93,10 +87,7 @@ test('text edits map coordinate ranges and preserve multiline text', () => {
 	const edit = TextEdit.replace(Range.fromPositions(position(0, 1), position(0, 3)), 'X\nY');
 	assert.equal(edit.apply(source), 'aX\nYha\nbeta');
 	assert.deepEqual(edit.getNewRanges(), [Range.fromPositions(position(0, 1), position(1, 1))]);
-	assert.deepEqual(
-		edit.mapRange(Range.fromPositions(position(0, 0), position(0, 5))),
-		Range.fromPositions(position(0, 0), position(1, 3)),
-	);
+	assert.deepEqual(edit.mapRange(Range.fromPositions(position(0, 0), position(0, 5))), Range.fromPositions(position(0, 0), position(1, 3)));
 	const second = TextEdit.replace(Range.fromPositions(position(1, 0), position(1, 1)), 'Z');
 	assert.equal(edit.compose(second).apply(source), 'aX\nZha\nbeta');
 });
@@ -111,14 +102,8 @@ test('line edits replace line spans and can invert against original lines', () =
 	assert.equal(new LineReplacement(new LineRange(2, 3), []).toSingleEdit(source).replace(source.value), 'A\nD');
 	assert.equal(new LineReplacement(new LineRange(2, 4), []).toSingleEdit(source).replace(source.value), 'A');
 	assert.equal(new LineReplacement(new LineRange(1, 2), []).toSingleEdit(source).replace(source.value), 'b\nD');
-	assert.equal(
-		new LineReplacement(new LineRange(2, 4), ['B', 'C']).toSingleEdit(source).replace(source.value),
-		'A\nB\nC',
-	);
-	assert.equal(
-		new LineReplacement(new LineRange(4, 4), ['E']).toSingleEdit(source).replace(source.value),
-		'A\nb\nD\nE',
-	);
+	assert.equal(new LineReplacement(new LineRange(2, 4), ['B', 'C']).toSingleEdit(source).replace(source.value), 'A\nB\nC');
+	assert.equal(new LineReplacement(new LineRange(4, 4), ['E']).toSingleEdit(source).replace(source.value), 'A\nb\nD\nE');
 });
 
 test('text changes round-trip through the compact binary shape', () => {

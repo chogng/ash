@@ -27,12 +27,14 @@ export type GridOptions = GridViewOptions;
 
 export type Direction = 'up' | 'right' | 'down' | 'left';
 
-export const Direction = { Up: 'up', Right: 'right', Down: 'down', Left: 'left' } as const;
+export const Direction = {
+	Up: 'up',
+	Right: 'right',
+	Down: 'down',
+	Left: 'left',
+} as const;
 
-export type Sizing =
-	| { readonly type: 'distribute' }
-	| { readonly type: 'split' }
-	| { readonly type: 'invisible'; readonly cachedVisibleSize: number };
+export type Sizing = { readonly type: 'distribute' } | { readonly type: 'split' } | { readonly type: 'invisible'; readonly cachedVisibleSize: number };
 
 export const Sizing = {
 	Distribute: { type: 'distribute' } as const,
@@ -95,19 +97,14 @@ export class Grid<TView extends IView = IView> extends Disposable {
 
 	constructor(gridView: GridView);
 	constructor(container: HTMLElement, descriptor: GridDescriptor<TView>, options?: GridOptions);
-	constructor(
-		containerOrGridView: HTMLElement | GridView,
-		...descriptorAndOptions: [] | [descriptor: GridDescriptor<TView>, options?: GridOptions]
-	) {
+	constructor(containerOrGridView: HTMLElement | GridView, ...descriptorAndOptions: [] | [descriptor: GridDescriptor<TView>, options?: GridOptions]) {
 		super();
 		if (containerOrGridView instanceof GridView) {
 			this.gridview = this._register(containerOrGridView);
 		} else {
 			const descriptor = descriptorAndOptions[0];
 			if (!descriptor) throw new TypeError('Grid descriptor is required');
-			this.gridview = this._register(
-				new GridView(containerOrGridView, descriptor, descriptorAndOptions[1] ?? {}),
-			);
+			this.gridview = this._register(new GridView(containerOrGridView, descriptor, descriptorAndOptions[1] ?? {}));
 		}
 		for (const view of this.gridview.getViews()) {
 			this.views.add(view as TView);
@@ -232,16 +229,15 @@ export class SerializableGrid<TView extends ISerializableView> extends Grid<TVie
 function toGridViewSizing(sizing: number | Sizing, referenceLocation: GridLocation): GridViewSizing {
 	if (typeof sizing === 'number') return sizing;
 	if (sizing.type === 'split') {
-		return { type: 'split', index: referenceLocation[referenceLocation.length - 1]! };
+		return {
+			type: 'split',
+			index: referenceLocation[referenceLocation.length - 1]!,
+		};
 	}
 	return sizing;
 }
 
-function getRelativeLocation(
-	rootOrientation: 'horizontal' | 'vertical',
-	location: GridLocation,
-	direction: Direction,
-): GridLocation {
+function getRelativeLocation(rootOrientation: 'horizontal' | 'vertical', location: GridLocation, direction: Direction): GridLocation {
 	const parentDepth = location.length - 1;
 	const parentOrientation = parentDepth % 2 === 0 ? rootOrientation : orthogonal(rootOrientation);
 	const directionOrientation = direction === 'left' || direction === 'right' ? 'horizontal' : 'vertical';

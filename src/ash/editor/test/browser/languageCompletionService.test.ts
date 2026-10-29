@@ -20,10 +20,7 @@ import {
 	LanguageCompletionItemKind,
 	LanguageCompletionInsertTextFormat,
 } from '../../common/languages.js';
-import {
-	LanguageRequestCancellationReason,
-	LanguageRequestStatus,
-} from '../../common/model/languageRequestCoordinator.js';
+import { LanguageRequestCancellationReason, LanguageRequestStatus } from '../../common/model/languageRequestCoordinator.js';
 import { Position } from '../../common/core/position.js';
 import { Range } from '../../common/core/range.js';
 import { TextModel } from '../../common/model/textModel.js';
@@ -58,10 +55,20 @@ test('Completion service runs providers concurrently and merges deterministicall
 	using service = new LanguageCompletionService(model, registry);
 	const request = service.request('typescript', new Position(0 + 1, 3 + 1), createLanguageCompletionInvokeContext());
 	assert.deepEqual(started, ['first', 'second']);
-	second.resolve({ items: [item('same', 'console', true)], isIncomplete: true });
-	first.resolve({ items: [item('same', 'const', true)], isIncomplete: false });
+	second.resolve({
+		items: [item('same', 'console', true)],
+		isIncomplete: true,
+	});
+	first.resolve({
+		items: [item('same', 'const', true)],
+		isIncomplete: false,
+	});
 
-	assert.deepEqual(await request, { status: LanguageRequestStatus.Applied, requestId: 1, modelVersion: 1 });
+	assert.deepEqual(await request, {
+		status: LanguageRequestStatus.Applied,
+		requestId: 1,
+		modelVersion: 1,
+	});
 	assert.deepEqual(
 		service.results.result!.value.items.map(entry => ({
 			providerId: entry.providerId,
@@ -70,8 +77,18 @@ test('Completion service runs providers concurrently and merges deterministicall
 			preselect: entry.preselect,
 		})),
 		[
-			{ providerId: 'first', id: 'same', label: 'const', preselect: true },
-			{ providerId: 'second', id: 'same', label: 'console', preselect: undefined },
+			{
+				providerId: 'first',
+				id: 'same',
+				label: 'const',
+				preselect: true,
+			},
+			{
+				providerId: 'second',
+				id: 'same',
+				label: 'console',
+				preselect: undefined,
+			},
 		],
 	);
 	assert.equal(service.results.result!.value.isIncomplete, true);
@@ -109,11 +126,7 @@ test('Trigger characters filter providers while invoke and refresh call all', as
 	using model = new TextModel('con');
 	using service = new LanguageCompletionService(model, registry);
 
-	await service.request(
-		'typescript',
-		new Position(0 + 1, 3 + 1),
-		createLanguageCompletionTriggerCharacterContext('.'),
-	);
+	await service.request('typescript', new Position(0 + 1, 3 + 1), createLanguageCompletionTriggerCharacterContext('.'));
 	assert.deepEqual(
 		calls.map(call => call.id),
 		['dot'],
@@ -145,14 +158,7 @@ test('Provider failures and invalid snapshots are isolated from healthy results'
 	);
 	using invalidRegistration = registry.register(
 		provider('invalid', () => ({
-			items: [
-				item(
-					'invalid',
-					'invalid',
-					false,
-					Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 4 + 1)),
-				),
-			],
+			items: [item('invalid', 'invalid', false, Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 4 + 1)))],
 			isIncomplete: false,
 		})),
 	);
@@ -163,11 +169,7 @@ test('Provider failures and invalid snapshots are isolated from healthy results'
 		onProviderError: (providerId, error) => errors.push({ providerId, error }),
 	});
 
-	const outcome = await service.request(
-		'typescript',
-		new Position(0 + 1, 3 + 1),
-		createLanguageCompletionInvokeContext(),
-	);
+	const outcome = await service.request('typescript', new Position(0 + 1, 3 + 1), createLanguageCompletionInvokeContext());
 
 	assert.equal(outcome.status, LanguageRequestStatus.Applied);
 	assert.deepEqual(
@@ -198,7 +200,12 @@ test('Model changes cancel provider work without reporting an external failure',
 	});
 	const request = service.request('typescript', new Position(0 + 1, 3 + 1), createLanguageCompletionInvokeContext());
 
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 3 + 1)), text: 's' }]);
+	model.applyEdits([
+		{
+			range: Range.fromPositions(new Position(0 + 1, 3 + 1)),
+			text: 's',
+		},
+	]);
 
 	assert.equal(observedSignal!.aborted, true);
 	assert.deepEqual(await request, {
@@ -217,7 +224,10 @@ test('Provider request flows through store, session, acceptance, and undo', asyn
 		provider('typescript', request => {
 			assert.equal(request.snapshot.getText(), 'con');
 			assert.equal(Position.compare(request.position, new Position(0 + 1, 3 + 1)), 0);
-			return { items: [item('console', 'console', true)], isIncomplete: false };
+			return {
+				items: [item('console', 'console', true)],
+				isIncomplete: false,
+			};
 		}),
 	);
 	using model = new TextModel('con');
@@ -248,7 +258,12 @@ test('Completion service disposal owns neither registry nor model', () => {
 		registry.getProviders('typescript', createLanguageCompletionInvokeContext()).map(entry => entry.id),
 		['one'],
 	);
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 3 + 1)), text: '!' }]);
+	model.applyEdits([
+		{
+			range: Range.fromPositions(new Position(0 + 1, 3 + 1)),
+			text: '!',
+		},
+	]);
 	assert.equal(model.getText(), 'con!');
 });
 
@@ -274,29 +289,31 @@ test('Suggest rejects malformed snippet providers while keeping valid completion
 	await service.request('typescript', new Position(1, 4), createLanguageCompletionInvokeContext());
 
 	assert.deepEqual(
-		{ failures, items: service.results.result?.value.items.map(item => item.label) },
+		{
+			failures,
+			items: service.results.result?.value.items.map(item => item.label),
+		},
 		{ failures: ['invalid'], items: ['console'] },
 	);
 });
 
-function provider(
-	id: string,
-	provideCompletions: LanguageCompletionProvider['provideCompletions'],
-	triggerCharacters: readonly string[] = [],
-): LanguageCompletionProvider {
-	return { id, languageIds: ['typescript'], triggerCharacters, provideCompletions };
+function provider(id: string, provideCompletions: LanguageCompletionProvider['provideCompletions'], triggerCharacters: readonly string[] = []): LanguageCompletionProvider {
+	return {
+		id,
+		languageIds: ['typescript'],
+		triggerCharacters,
+		provideCompletions,
+	};
 }
 
 function result(label: string): LanguageCompletionProviderResult {
-	return { items: [item(label, label)], isIncomplete: false };
+	return {
+		items: [item(label, label)],
+		isIncomplete: false,
+	};
 }
 
-function item(
-	id: string,
-	label: string,
-	preselect = false,
-	range = Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 3 + 1)),
-): LanguageCompletionProviderItem {
+function item(id: string, label: string, preselect = false, range = Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 3 + 1))): LanguageCompletionProviderItem {
 	return {
 		id,
 		label,

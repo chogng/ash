@@ -62,8 +62,7 @@ export class TimelineService extends Disposable implements ITimelineService {
 
 	public registerTimelineProvider(provider: TimelineProvider): IDisposable {
 		this.assertNotDisposed();
-		if (!provider.id || this.providers.has(provider.id))
-			throw new Error(`Timeline provider is already registered or has an empty ID: ${provider.id}`);
+		if (!provider.id || this.providers.has(provider.id)) throw new Error(`Timeline provider is already registered or has an empty ID: ${provider.id}`);
 		const registration: ProviderRegistration = { provider, resources: new DisposableStore(), requests: new Set() };
 		this.providers.set(provider.id, registration);
 		if (provider.onDidChange)
@@ -90,38 +89,22 @@ export class TimelineService extends Disposable implements ITimelineService {
 		this.providersChanged.fire({ removed: [id] });
 	}
 
-	public getTimeline(
-		id: string,
-		uri: URI,
-		options: TimelineOptions,
-		tokenSource: CancellationTokenSource,
-	): TimelineRequest | undefined {
+	public getTimeline(id: string, uri: URI, options: TimelineOptions, tokenSource: CancellationTokenSource): TimelineRequest | undefined {
 		this.assertNotDisposed();
 		const registration = this.providers.get(id);
 		if (!registration || tokenSource.token.isCancellationRequested) return undefined;
 		const { provider } = registration;
 		const schemes = typeof provider.scheme === 'string' ? [provider.scheme] : provider.scheme;
 		if (!schemes.includes('*') && !schemes.includes(uri.scheme)) return undefined;
-		if (typeof options.limit === 'number' && (!Number.isSafeInteger(options.limit) || options.limit < 1))
-			throw new RangeError('Timeline page size must be a positive integer');
+		if (typeof options.limit === 'number' && (!Number.isSafeInteger(options.limit) || options.limit < 1)) throw new RangeError('Timeline page size must be a positive integer');
 		registration.requests.add(tokenSource);
 		const provided = Promise.resolve()
-			.then(() =>
-				tokenSource.token.isCancellationRequested
-					? undefined
-					: provider.provideTimeline(uri, options, tokenSource.token),
-			)
+			.then(() => (tokenSource.token.isCancellationRequested ? undefined : provider.provideTimeline(uri, options, tokenSource.token)))
 			.then(timeline => {
-				if (tokenSource.token.isCancellationRequested || this.providers.get(id) !== registration || !timeline)
-					return undefined;
+				if (tokenSource.token.isCancellationRequested || this.providers.get(id) !== registration || !timeline) return undefined;
 				const handles = new Set<string>();
 				for (const item of timeline.items) {
-					if (
-						typeof item.handle !== 'string' ||
-						handles.has(item.handle) ||
-						typeof item.label !== 'string' ||
-						!Number.isFinite(item.timestamp)
-					)
+					if (typeof item.handle !== 'string' || handles.has(item.handle) || typeof item.label !== 'string' || !Number.isFinite(item.timestamp))
 						throw new TypeError(`Invalid timeline item from ${id}`);
 					handles.add(item.handle);
 				}

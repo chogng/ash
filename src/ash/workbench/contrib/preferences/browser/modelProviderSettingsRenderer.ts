@@ -1,9 +1,4 @@
-import {
-	defaultButtonStyles,
-	defaultInputBoxStyles,
-	defaultSelectBoxStyles,
-	defaultToggleStyles,
-} from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultInputBoxStyles, defaultSelectBoxStyles, defaultToggleStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/modelProviderSettingsRenderer.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -59,13 +54,7 @@ export class ProviderApiKeyInput extends Disposable {
 			this.input.onDidBlur(() => {
 				void this.save().catch(error => {
 					if (!this.isDisposed) {
-						this.notifications.error(
-							localize(
-								'models.keys.saveError',
-								'Could not update API key: {0}',
-								error instanceof Error ? error.message : String(error),
-							),
-						);
+						this.notifications.error(localize('models.keys.saveError', 'Could not update API key: {0}', error instanceof Error ? error.message : String(error)));
 					}
 				});
 			}),
@@ -129,14 +118,8 @@ export class ProviderApiKeyInput extends Disposable {
 				error instanceof SecretStorageError
 					? error.message
 					: this.dirty
-						? localize(
-								'models.keys.saveFailed',
-								'Could not save API key. Change the field or leave it again to retry.',
-							)
-						: localize(
-								'chat.providerKeys.refreshFailed',
-								'API key saved, but models could not be refreshed',
-							),
+						? localize('models.keys.saveFailed', 'Could not save API key. Change the field or leave it again to retry.')
+						: localize('chat.providerKeys.refreshFailed', 'API key saved, but models could not be refreshed'),
 			);
 			throw error;
 		} finally {
@@ -167,10 +150,7 @@ export class ModelProviderSettingsRenderer extends Disposable {
 	private readonly saveModel: Button;
 	private readonly cancel: Button;
 	private readonly tableResources = this._register(new DisposableStore());
-	private readonly rowControls = new Map<
-		string,
-		{ toggle: Switch; status: HTMLElement; edit: Button; remove?: Button }
-	>();
+	private readonly rowControls = new Map<string, { toggle: Switch; status: HTMLElement; edit: Button; remove?: Button }>();
 	private structure = '';
 	private editing = false;
 	private savingModel = false;
@@ -270,10 +250,7 @@ export class ModelProviderSettingsRenderer extends Disposable {
 		table.append(head, this.modelBody);
 		this.empty = h(document, 'p');
 		this.empty.className = 'ash-chat-models-note';
-		this.empty.textContent = localize(
-			'models.provider.notLoaded',
-			'Test models fetches the endpoint list when this table is empty.',
-		);
+		this.empty.textContent = localize('models.provider.notLoaded', 'Test models fetches the endpoint list when this table is empty.');
 		this.editor = h(document, 'div');
 		this.editor.className = 'ash-chat-models-editor';
 		this.editor.hidden = true;
@@ -348,11 +325,7 @@ export class ModelProviderSettingsRenderer extends Disposable {
 				void (async () => {
 					try {
 						await this.saveProvider();
-						await this.viewModel.addModel(
-							this.modelId.value.trim(),
-							Number(this.contextWindow.value),
-							this.upstreamModel.value.trim() || undefined,
-						);
+						await this.viewModel.addModel(this.modelId.value.trim(), Number(this.contextWindow.value), this.upstreamModel.value.trim() || undefined);
 						this.closeEditor();
 					} catch (error) {
 						this.viewModel.report(error);
@@ -379,9 +352,7 @@ export class ModelProviderSettingsRenderer extends Disposable {
 				void this.viewModel.refresh(before);
 			}),
 		);
-		this._register(
-			addDisposableListener(this.key.input.inputElement, 'input', () => this.viewModel.invalidateTests()),
-		);
+		this._register(addDisposableListener(this.key.input.inputElement, 'input', () => this.viewModel.invalidateTests()));
 		this._register(this.viewModel.onDidChange(() => this.render()));
 	}
 
@@ -412,9 +383,7 @@ export class ModelProviderSettingsRenderer extends Disposable {
 			this.viewModel.message,
 			...this.viewModel.rows.map(row => {
 				const status = this.rowControls.get(row.id)?.status.textContent ?? '';
-				const enabled = this.viewModel.isEnabled(row.id)
-					? localize('models.provider.enabled', 'Enabled')
-					: localize('models.provider.disabled', 'Disabled');
+				const enabled = this.viewModel.isEnabled(row.id) ? localize('models.provider.enabled', 'Enabled') : localize('models.provider.disabled', 'Disabled');
 				return `${row.name}, ${row.id}, ${enabled}, ${status}${row.contextWindow ? `, ${localize('models.provider.contextTokens', '{0} tokens', row.contextWindow.toLocaleString())}` : ''}${row.upstreamModel ? `, ${row.upstreamModel}` : ''}`;
 			}),
 		]
@@ -491,16 +460,7 @@ export class ModelProviderSettingsRenderer extends Disposable {
 
 	private render(): void {
 		const busy = this.viewModel.busy || this.savingModel;
-		for (const control of [
-			this.name,
-			this.baseUrl,
-			this.format,
-			this.test,
-			this.refresh,
-			this.add,
-			this.cancel,
-			this.saveModel,
-		]) {
+		for (const control of [this.name, this.baseUrl, this.format, this.test, this.refresh, this.add, this.cancel, this.saveModel]) {
 			control.enabled = !busy;
 		}
 		this.key.setEnabled(this.credentialStorageAvailable && !busy);
@@ -513,9 +473,7 @@ export class ModelProviderSettingsRenderer extends Disposable {
 		this.feedback.textContent = this.viewModel.message;
 		this.feedback.classList.toggle('is-error', this.viewModel.isError);
 		this.empty.hidden = !!this.viewModel.rows.length;
-		const structure = JSON.stringify(
-			this.viewModel.rows.map(row => [row.id, row.name, row.contextWindow, row.manual, row.upstreamModel]),
-		);
+		const structure = JSON.stringify(this.viewModel.rows.map(row => [row.id, row.name, row.contextWindow, row.manual, row.upstreamModel]));
 		if (structure !== this.structure) {
 			this.structure = structure;
 			this.tableResources.clear();
@@ -553,9 +511,7 @@ export class ModelProviderSettingsRenderer extends Disposable {
 		const name = h(document, 'span');
 		name.textContent = model.name;
 		const detail = h(document, 'small');
-		detail.textContent = model.contextWindow
-			? `${model.id} · ${localize('models.provider.contextTokens', '{0} tokens', model.contextWindow.toLocaleString())}`
-			: model.id;
+		detail.textContent = model.contextWindow ? `${model.id} · ${localize('models.provider.contextTokens', '{0} tokens', model.contextWindow.toLocaleString())}` : model.id;
 		if (model.upstreamModel) {
 			detail.textContent += ` → ${model.upstreamModel}`;
 		}
@@ -697,8 +653,7 @@ class ProviderModelsViewModel extends Disposable {
 		) {
 			return;
 		}
-		const connectionChanged =
-			value.baseUrl !== this.provider.baseUrl || value.apiFormat !== this.provider.apiFormat;
+		const connectionChanged = value.baseUrl !== this.provider.baseUrl || value.apiFormat !== this.provider.apiFormat;
 		this.configuration = { ...this.provider, ...value };
 		if (connectionChanged) {
 			this.discovered = [];
@@ -746,10 +701,7 @@ class ProviderModelsViewModel extends Disposable {
 		}
 		const config = {
 			...this.provider,
-			models: [
-				...this.provider.models.filter(model => model.id !== id),
-				{ id, contextWindow, ...(upstreamModel ? { upstreamModel } : {}) },
-			],
+			models: [...this.provider.models.filter(model => model.id !== id), { id, contextWindow, ...(upstreamModel ? { upstreamModel } : {}) }],
 		};
 		this._busy = true;
 		this.changed.fire();
@@ -799,14 +751,7 @@ class ProviderModelsViewModel extends Disposable {
 			} catch {
 				throw new Error(localize('models.provider.urlInvalid', 'Enter a valid HTTP or HTTPS base URL.'));
 			}
-			if (
-				!['http:', 'https:'].includes(url.protocol) ||
-				!url.hostname ||
-				url.username ||
-				url.password ||
-				url.search ||
-				url.hash
-			) {
+			if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password || url.search || url.hash) {
 				throw new Error(localize('models.provider.urlInvalid', 'Enter a valid HTTP or HTTPS base URL.'));
 			}
 			await this.models.saveCustomModelProvider(config);
@@ -832,9 +777,7 @@ class ProviderModelsViewModel extends Disposable {
 				await this.discover();
 			}
 			if (!this.items.length) {
-				throw new Error(
-					localize('models.provider.empty', 'The endpoint returned no models. Add a model ID manually.'),
-				);
+				throw new Error(localize('models.provider.empty', 'The endpoint returned no models. Add a model ID manually.'));
 			}
 			const generation = this.generation;
 			const provider = this.provider;
@@ -845,13 +788,7 @@ class ProviderModelsViewModel extends Disposable {
 					return;
 				}
 				row.status = 'testing';
-				this._message = localize(
-					'models.provider.progress',
-					'Testing {0} of {1}: {2}',
-					index + 1,
-					rows.length,
-					row.id,
-				);
+				this._message = localize('models.provider.progress', 'Testing {0} of {1}: {2}', index + 1, rows.length, row.id);
 				this.changed.fire();
 				try {
 					const result = await this.models.testProviderModel(provider, row.id);
@@ -872,13 +809,7 @@ class ProviderModelsViewModel extends Disposable {
 				}
 				this.changed.fire();
 			}
-			this._message = localize(
-				'models.provider.summary',
-				'{0}: {1} of {2} models passed.',
-				provider.name,
-				passed,
-				rows.length,
-			);
+			this._message = localize('models.provider.summary', '{0}: {1} of {2} models passed.', provider.name, passed, rows.length);
 			this._error = passed !== rows.length;
 			if (this._error) {
 				this.notifications.warn(this._message);

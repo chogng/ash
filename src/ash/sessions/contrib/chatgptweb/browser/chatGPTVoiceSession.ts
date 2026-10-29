@@ -36,9 +36,7 @@ export class ChatGPTVoiceSession extends Disposable {
 			if (this.isDisposed) {
 				return;
 			}
-			const error = new Error(
-				localize('sessions.chatgpt.voiceDisconnected', 'The ChatGPT voice connection ended.'),
-			);
+			const error = new Error(localize('sessions.chatgpt.voiceDisconnected', 'The ChatGPT voice connection ended.'));
 			void this.ready.error(error);
 			onClosed(error);
 		};
@@ -67,14 +65,7 @@ export class ChatGPTVoiceSession extends Disposable {
 			this.audio.srcObject = new window.MediaStream([event.track]);
 			void this.audio.play().catch(() => {
 				if (!this.isDisposed) {
-					onClosed(
-						new Error(
-							localize(
-								'sessions.chatgpt.voicePlaybackBlocked',
-								'Audio playback was blocked. Start voice again from its button.',
-							),
-						),
-					);
+					onClosed(new Error(localize('sessions.chatgpt.voicePlaybackBlocked', 'Audio playback was blocked. Start voice again from its button.')));
 				}
 			});
 		};
@@ -94,10 +85,7 @@ export class ChatGPTVoiceSession extends Disposable {
 		);
 	}
 
-	async connect(
-		negotiate: (sdp: string, signal: AbortSignal) => Promise<string>,
-		signal: AbortSignal,
-	): Promise<void> {
+	async connect(negotiate: (sdp: string, signal: AbortSignal) => Promise<string>, signal: AbortSignal): Promise<void> {
 		signal.throwIfAborted();
 		const abort = (): void => this.dispose();
 		signal.addEventListener('abort', abort, { once: true });
@@ -120,9 +108,7 @@ export class ChatGPTVoiceSession extends Disposable {
 			startup.throwIfAborted();
 			const track = this.microphone.getAudioTracks()[0];
 			if (!track) {
-				throw new Error(
-					localize('sessions.chatgpt.voiceMicrophoneMissing', 'No microphone audio track is available.'),
-				);
+				throw new Error(localize('sessions.chatgpt.voiceMicrophoneMissing', 'No microphone audio track is available.'));
 			}
 			this.peer.addTrack(track, this.microphone);
 			this.peer.addTransceiver('video', { direction: 'sendonly' });

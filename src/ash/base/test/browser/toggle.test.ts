@@ -32,8 +32,13 @@ test('Toggle and Checkbox expose shared native boolean state', () => {
 
 test('Switch projects the shared state as a switch control', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	using toggle = new Toggle(dom.window.document.body, { ariaLabel: 'Generic toggle' });
-	using switchControl = new Switch(dom.window.document.body, { ariaLabel: 'Reduce motion', checked: true });
+	using toggle = new Toggle(dom.window.document.body, {
+		ariaLabel: 'Generic toggle',
+	});
+	using switchControl = new Switch(dom.window.document.body, {
+		ariaLabel: 'Reduce motion',
+		checked: true,
+	});
 	dom.window.document.body.append(toggle.element, switchControl.element);
 
 	assert.equal(toggle.input.getAttribute('role'), null);
@@ -148,9 +153,7 @@ suite('Checkbox rendering', () => {
 			x: (await trailing.boundingBox())!.x + 2,
 			y: (await trailing.boundingBox())!.y + 2,
 		});
-		expect((await page.locator('#before .ash-toggle-content').boundingBox())!.x).toBeLessThan(
-			(await trailing.boundingBox())!.x,
-		);
+		expect((await page.locator('#before .ash-toggle-content').boundingBox())!.x).toBeLessThan((await trailing.boundingBox())!.x);
 		await page.evaluate(() => window.ashToggleIntegration.dispose());
 		await expect(page.locator('.ash-toggle')).toHaveCount(0);
 	});

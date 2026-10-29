@@ -12,8 +12,7 @@ import type { DocumentCollaborationRoomRole } from '../../../services/documentCo
 import { addDisposableListener, h, fragment as createFragment } from '../../../../base/browser/dom.js';
 import type { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 
-export type CollaborationToolbarState =
-	'unavailable' | 'inactive' | 'connecting' | 'connected' | 'resyncRequired' | 'error';
+export type CollaborationToolbarState = 'unavailable' | 'inactive' | 'connecting' | 'connected' | 'resyncRequired' | 'error';
 
 export interface CollaborationStartResult {
 	readonly roomId: string;
@@ -25,10 +24,7 @@ export interface CollaborationContributionOptions {
 	readonly fixedRoom?: () => string | undefined;
 	readonly onStart: (roomId: string | undefined) => Promise<CollaborationStartResult>;
 	readonly onStop: () => void;
-	readonly onInvite: (
-		displayName: string,
-		role: DocumentCollaborationRoomRole,
-	) => Promise<DocumentCollaborationInvite>;
+	readonly onInvite: (displayName: string, role: DocumentCollaborationRoomRole) => Promise<DocumentCollaborationInvite>;
 	readonly onListMembers: () => Promise<readonly DocumentCollaborationMember[]>;
 	readonly onRotateMemberAccessToken: (principalId: string) => Promise<DocumentCollaborationInvite>;
 	readonly onRevokeMember: (principalId: string) => Promise<void>;
@@ -152,21 +148,8 @@ export class CollaborationContribution extends Disposable {
 			),
 		];
 		if (connected && this.canManageMembers) {
-			actions.push(
-				createAction('inviteCollaborator', 'Invite collaborator', 'Create a room invitation', true, false, () =>
-					this.createInvite(),
-				),
-			);
-			actions.push(
-				createAction(
-					'manageCollaborators',
-					'Manage collaborators',
-					'View, rotate, or revoke active room members',
-					true,
-					false,
-					() => this.manageCollaborators(),
-				),
-			);
+			actions.push(createAction('inviteCollaborator', 'Invite collaborator', 'Create a room invitation', true, false, () => this.createInvite()));
+			actions.push(createAction('manageCollaborators', 'Manage collaborators', 'View, rotate, or revoke active room members', true, false, () => this.manageCollaborators()));
 		}
 		this.toolbar.setActions(actions);
 		this.status.textContent = this.statusText();
@@ -185,23 +168,14 @@ export class CollaborationContribution extends Disposable {
 				return this.message ? `${connected} — ${this.message}` : connected;
 			}
 			case 'resyncRequired':
-				return this.roomId
-					? `Room ${this.roomId}: ${this.message ?? 'rejoin required'}`
-					: (this.message ?? 'Collaboration requires a resync');
+				return this.roomId ? `Room ${this.roomId}: ${this.message ?? 'rejoin required'}` : (this.message ?? 'Collaboration requires a resync');
 			case 'error':
-				return this.roomId
-					? `Room ${this.roomId}: ${this.message ?? 'collaboration failed'}`
-					: (this.message ?? 'Collaboration failed');
+				return this.roomId ? `Room ${this.roomId}: ${this.message ?? 'collaboration failed'}` : (this.message ?? 'Collaboration failed');
 		}
 	}
 
 	private isCurrentRoom(roomId: string, principalId: string | undefined): boolean {
-		return (
-			!this.isDisposed &&
-			this._state === 'connected' &&
-			this.roomId === roomId &&
-			this.principalId === principalId
-		);
+		return !this.isDisposed && this._state === 'connected' && this.roomId === roomId && this.principalId === principalId;
 	}
 
 	private async toggle(): Promise<void> {
@@ -397,13 +371,7 @@ export class CollaborationContribution extends Disposable {
 	}
 
 	private async revokeMember(member: DocumentCollaborationMember): Promise<void> {
-		if (
-			this._state !== 'connected' ||
-			!this.roomId ||
-			!this.canManageMembers ||
-			member.principalId === this.principalId
-		)
-			return;
+		if (this._state !== 'connected' || !this.roomId || !this.canManageMembers || member.principalId === this.principalId) return;
 		const roomId = this.roomId;
 		const principalId = this.principalId;
 		const decision = await this.dialogs.confirm({ message: `Revoke ${member.displayName}'s room access?` });
@@ -465,14 +433,7 @@ export class CollaborationContribution extends Disposable {
 	}
 }
 
-function createAction(
-	id: string,
-	label: string,
-	tooltip: string,
-	enabled: boolean,
-	checked: boolean,
-	run: () => void,
-): IAction {
+function createAction(id: string, label: string, tooltip: string, enabled: boolean, checked: boolean, run: () => void): IAction {
 	return { id, label, tooltip, icon: Lxicon.agent, enabled, checked, run };
 }
 

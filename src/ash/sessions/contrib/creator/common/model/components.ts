@@ -1,35 +1,16 @@
 import type { DesignTextMeasurer } from './designText.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
-import {
-	getDesignOverrideFields,
-	getDesignOverrideValue,
-	copyDesignOverride,
-	flattenDesignShapes,
-	type DesignOverride,
-	type DesignShape,
-} from './document.js';
+import { getDesignOverrideFields, getDesignOverrideValue, copyDesignOverride, flattenDesignShapes, type DesignOverride, type DesignShape } from './document.js';
 import { designStyleFields } from './designResources.js';
 import { resolveDesignLayout } from './layout.js';
 
 type Frame = Extract<DesignShape, { kind: 'frame' }>;
-const placement = [
-	'x',
-	'y',
-	'rotation',
-	'constraints',
-	'sizing',
-	'gridCell',
-	'layoutPositioning',
-	'scrollPosition',
-] as const;
+const placement = ['x', 'y', 'rotation', 'constraints', 'sizing', 'gridCell', 'layoutPositioning', 'scrollPosition'] as const;
 const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
 /** Capture direct edits before layout changes derived geometry. Explicit reset/swap commands supply their own override list. */
-export function recordDesignOverrides(
-	shapes: readonly DesignShape[],
-	previous: readonly DesignShape[],
-): readonly DesignShape[] {
+export function recordDesignOverrides(shapes: readonly DesignShape[], previous: readonly DesignShape[]): readonly DesignShape[] {
 	const before = new Map(flattenDesignShapes(previous).map(shape => [shape.id, shape]));
 	const visit = (shape: DesignShape, inherited: boolean): DesignShape => {
 		const old = before.get(shape.id);
@@ -49,9 +30,7 @@ export function recordDesignOverrides(
 				updated = { ...shape, overrides: [...overrides] };
 			}
 		}
-		return updated.kind === 'frame' || updated.kind === 'group'
-			? { ...updated, children: updated.children.map(child => visit(child, inherited || root)) }
-			: updated;
+		return updated.kind === 'frame' || updated.kind === 'group' ? { ...updated, children: updated.children.map(child => visit(child, inherited || root)) } : updated;
 	};
 	return shapes.map(shape => visit(shape, false));
 }
@@ -59,11 +38,7 @@ export function recordDesignOverrides(
 /** The main tree owns inherited values; instance objects own only placement and listed overrides.
  * Materialized children keep stable IDs for selection, undo, orphan recovery, canvas and exports.
  */
-export function resolveDesignComponents(
-	shapes: readonly DesignShape[],
-	libraryShapes: readonly DesignShape[] = [],
-	measureText?: DesignTextMeasurer,
-): readonly DesignShape[] {
+export function resolveDesignComponents(shapes: readonly DesignShape[], libraryShapes: readonly DesignShape[] = [], measureText?: DesignTextMeasurer): readonly DesignShape[] {
 	const objects = new Map(flattenDesignShapes([...shapes, ...libraryShapes]).map(shape => [shape.id, shape]));
 	const cache = new Map<string, DesignShape>();
 	const active = new Set<string>();
@@ -73,9 +48,7 @@ export function resolveDesignComponents(
 			return cached;
 		}
 		if (active.has(shape.id)) {
-			throw new TypeError(
-				localize('sessions.design.componentCycle', 'A component cannot contain an instance of itself.'),
-			);
+			throw new TypeError(localize('sessions.design.componentCycle', 'A component cannot contain an instance of itself.'));
 		}
 		active.add(shape.id);
 		let result = shape;
@@ -86,11 +59,7 @@ export function resolveDesignComponents(
 				result = inherit(source, shape, true);
 				// Free-frame constraints are relative to the source dimensions, not the
 				// instance's last rendered bounds. This avoids cumulative resize drift.
-				result = resolveDesignLayout(
-					[result],
-					[{ ...result, width: source.width, height: source.height }],
-					measureText,
-				)[0];
+				result = resolveDesignLayout([result], [{ ...result, width: source.width, height: source.height }], measureText)[0];
 			}
 		} else if (shape.kind === 'frame' || shape.kind === 'group') {
 			result = { ...shape, children: shape.children.map(resolve) };
@@ -152,10 +121,7 @@ export function resolveDesignComponents(
 			}
 			if (!overrides.includes('styleBindings')) {
 				for (const [kind, fields] of Object.entries(designStyleFields)) {
-					if (
-						(fields as readonly string[]).includes(field) &&
-						!(overrides as readonly string[]).includes(`styleBindings:${kind}`)
-					) {
+					if ((fields as readonly string[]).includes(field) && !(overrides as readonly string[]).includes(`styleBindings:${kind}`)) {
 						Reflect.deleteProperty(styles, kind);
 					}
 				}
@@ -208,18 +174,13 @@ export function remapDesignInstance(instance: Frame, source: Frame, previousSour
 			const { sourceId: _source, ...rest } = result;
 			result = { ...rest, ...(current.sourceId ? { sourceId: current.sourceId } : {}) } as typeof result;
 		}
-		if (
-			(current.kind === 'frame' || current.kind === 'group') &&
-			(target.kind === 'frame' || target.kind === 'group')
-		) {
+		if ((current.kind === 'frame' || current.kind === 'group') && (target.kind === 'frame' || target.kind === 'group')) {
 			const oldLayers = oldSource?.kind === 'frame' || oldSource?.kind === 'group' ? oldSource.children : [];
 			const remaining = [...current.children];
 			const children = target.children.flatMap(child => {
 				const index = remaining.findIndex(candidate => {
 					const original = oldLayers.find(layer => layer.id === candidate.sourceId) ?? candidate;
-					return (
-						original.kind === child.kind && (original.name ?? original.kind) === (child.name ?? child.kind)
-					);
+					return original.kind === child.kind && (original.name ?? original.kind) === (child.name ?? child.kind);
 				});
 				if (index < 0) {
 					return [];
@@ -250,9 +211,7 @@ export function detachDesignInstance(shape: Frame, shapes: readonly DesignShape[
 			...(source?.sourceId ? { sourceId: source.sourceId } : {}),
 			overrides: [...new Set([...(source?.overrides ?? []), ...(node.overrides ?? [])])],
 		};
-		return updated.kind === 'frame' || updated.kind === 'group'
-			? { ...updated, children: updated.children.map(unwrap) }
-			: updated;
+		return updated.kind === 'frame' || updated.kind === 'group' ? { ...updated, children: updated.children.map(unwrap) } : updated;
 	};
 	const detach = (node: DesignShape, root: boolean): DesignShape => {
 		const { sourceId: _source, overrides: _overrides, ...rest } = node;
@@ -260,9 +219,7 @@ export function detachDesignInstance(shape: Frame, shapes: readonly DesignShape[
 			const source = node.sourceId ? objects.get(node.sourceId) : undefined;
 			return {
 				...rest,
-				overrides: [...new Set([...(source?.overrides ?? []), ...(node.overrides ?? [])])].filter(
-					field => field !== 'instance',
-				),
+				overrides: [...new Set([...(source?.overrides ?? []), ...(node.overrides ?? [])])].filter(field => field !== 'instance'),
 				children: node.overrides?.includes('instance') ? rest.children : rest.children.map(unwrap),
 			};
 		}
@@ -281,11 +238,7 @@ export function detachDesignInstance(shape: Frame, shapes: readonly DesignShape[
 export function resetDesignOverrides(shape: DesignShape, field?: DesignOverride): DesignShape {
 	const updated = {
 		...shape,
-		overrides: field
-			? (shape.overrides ?? []).filter(value => value !== field && !(field === 'text' && value === 'textRuns'))
-			: [],
+		overrides: field ? (shape.overrides ?? []).filter(value => value !== field && !(field === 'text' && value === 'textRuns')) : [],
 	};
-	return updated.kind === 'frame' || updated.kind === 'group'
-		? { ...updated, children: updated.children.map(child => resetDesignOverrides(child, field)) }
-		: updated;
+	return updated.kind === 'frame' || updated.kind === 'group' ? { ...updated, children: updated.children.map(child => resetDesignOverrides(child, field)) } : updated;
 }

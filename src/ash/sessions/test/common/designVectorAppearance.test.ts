@@ -1,30 +1,12 @@
-import {
-	designEndpointContours,
-	designPathEndpoints,
-	designStrokeLayers,
-} from '../../contrib/creator/common/model/designVectorStroke.js';
+import { designEndpointContours, designPathEndpoints, designStrokeLayers } from '../../contrib/creator/common/model/designVectorStroke.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { DocumentCommands } from '../../contrib/creator/common/commands/documentCommands.js';
 import { DesignModel } from '../../contrib/creator/common/model/designModel.js';
-import {
-	documentFromShapes,
-	parseDesignDocument,
-	serializeDesignDocument,
-} from '../../contrib/creator/common/model/document.js';
-import {
-	designPathFillContours,
-	designPathStrokeContours,
-	designShapeContours,
-	fitDesignPathBounds,
-	type DesignPath,
-} from '../../contrib/creator/common/model/designVector.js';
-import {
-	connectDesignNetwork,
-	toDesignVectorNetwork,
-	withDesignVectorNetwork,
-} from '../../contrib/creator/common/model/designVectorNetwork.js';
+import { documentFromShapes, parseDesignDocument, serializeDesignDocument } from '../../contrib/creator/common/model/document.js';
+import { designPathFillContours, designPathStrokeContours, designShapeContours, fitDesignPathBounds, type DesignPath } from '../../contrib/creator/common/model/designVector.js';
+import { connectDesignNetwork, toDesignVectorNetwork, withDesignVectorNetwork } from '../../contrib/creator/common/model/designVectorNetwork.js';
 import {
 	designVariableStrokeContours,
 	designWidthAt,
@@ -116,9 +98,7 @@ test('Corner radii and width points round-trip with immutable atomic history and
 		{ widthPoints: [{ ...source.widthPoints![0], width: -1 }] },
 		{ widthPoints: [source.widthPoints![0], source.widthPoints![0]] },
 	]) {
-		assert.throws(() =>
-			parseDesignDocument(JSON.stringify({ ...model.value, shapes: [{ ...source, ...change }] })),
-		);
+		assert.throws(() => parseDesignDocument(JSON.stringify({ ...model.value, shapes: [{ ...source, ...change }] })));
 	}
 	const network = withDesignVectorNetwork(path, toDesignVectorNetwork(path));
 	assert.deepEqual(parseDesignDocument(serializeDesignDocument(documentFromShapes([network]))).shapes[0], network);
@@ -244,9 +224,7 @@ test('Width points survive contour splitting and reversal, and branching restore
 		source = line(),
 		path = {
 			...source,
-			widthPoints: source.widthPoints!.map(point =>
-				point.position === 0.5 ? { ...point, position: 0.25 } : point,
-			),
+			widthPoints: source.widthPoints!.map(point => (point.position === 0.5 ? { ...point, position: 0.25 } : point)),
 		};
 	model.replace(documentFromShapes([path]));
 	commands.vector.insertNode(path, 0, 0, 0.3);
@@ -308,24 +286,13 @@ test('Corner smoothing preserves editable radii and uses tangent cubic transitio
 	assert.ok(Math.abs(nodes[0].y * source.height - 32) < 1e-8);
 	assert.ok(Math.abs(nodes[0].outgoing.x - nodes[0].x) < 1e-10);
 	assert.ok(Math.abs(nodes[1].incoming.x - nodes[0].x) < 1e-10);
-	assert.deepEqual(
-		designPathStrokeContours({ ...box(1000), cornerSmoothing: 1 }),
-		designPathStrokeContours(box(1000)),
-	);
+	assert.deepEqual(designPathStrokeContours({ ...box(1000), cornerSmoothing: 1 }), designPathStrokeContours(box(1000)));
 	assert.deepEqual(designPathStrokeContours({ ...source, cornerSmoothing: 0 }), designPathStrokeContours(source));
 	for (const amount of [0.01, 0.6, 1]) {
 		const contour = designPathStrokeContours({ ...source, cornerSmoothing: amount })[0];
 		assert.ok(
 			contour.nodes.every(node =>
-				[node, node.incoming, node.outgoing].every(
-					p =>
-						Number.isFinite(p.x) &&
-						Number.isFinite(p.y) &&
-						p.x >= -1e-8 &&
-						p.y >= -1e-8 &&
-						p.x <= 1 + 1e-8 &&
-						p.y <= 1 + 1e-8,
-				),
+				[node, node.incoming, node.outgoing].every(p => Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= -1e-8 && p.y >= -1e-8 && p.x <= 1 + 1e-8 && p.y <= 1 + 1e-8),
 			),
 		);
 	}
@@ -346,14 +313,8 @@ test('Inside and outside strokes partition mixed paths and preserve open strokes
 		],
 	);
 	assert.equal(hitTestDesignShapes([{ ...path, subpaths: [] }], { x: -8, y: 50 }), undefined);
-	assert.equal(
-		hitTestDesignShapes([{ ...path, subpaths: [], strokeAlignment: 'outside' }], { x: -18, y: 50 })?.id,
-		path.id,
-	);
-	assert.equal(
-		hitTestDesignShapes([{ ...path, subpaths: [], strokeAlignment: 'center' }], { x: -18, y: 50 }),
-		undefined,
-	);
+	assert.equal(hitTestDesignShapes([{ ...path, subpaths: [], strokeAlignment: 'outside' }], { x: -18, y: 50 })?.id, path.id);
+	assert.equal(hitTestDesignShapes([{ ...path, subpaths: [], strokeAlignment: 'center' }], { x: -18, y: 50 }), undefined);
 	assert.deepEqual(
 		designStrokeLayers({ ...path, widthPoints: line().widthPoints }).map(layer => [layer.width, layer.alignment]),
 		[[20, 'center']],
@@ -389,10 +350,7 @@ test('Endpoint styles and smoothing persist, reverse with anchors, and width pro
 	commands.vector.setEndpoints(source, [designPathEndpoints(source)[1]], 'diamond-arrow');
 	const arrow = model.value.shapes[0] as DesignPath;
 	assert.equal(arrow.nodes[1].endpoint, 'diamond-arrow');
-	assert.deepEqual(
-		JSON.parse(serializeDesignDocument(parseDesignDocument(serializeDesignDocument(model.value)))),
-		JSON.parse(serializeDesignDocument(model.value)),
-	);
+	assert.deepEqual(JSON.parse(serializeDesignDocument(parseDesignDocument(serializeDesignDocument(model.value)))), JSON.parse(serializeDesignDocument(model.value)));
 	commands.vector.reverse(arrow, 0);
 	const reversed = model.value.shapes[0] as DesignPath;
 	assert.equal(reversed.nodes[0].endpoint, 'diamond-arrow');
@@ -400,10 +358,7 @@ test('Endpoint styles and smoothing persist, reverse with anchors, and width pro
 	commands.vector.update(withDesignVectorNetwork(reversed, toDesignVectorNetwork(reversed)));
 	const network = model.value.shapes[0] as DesignPath;
 	assert.equal(designPathEndpoints(network)[0].style, 'diamond-arrow');
-	assert.deepEqual(
-		JSON.parse(serializeDesignDocument(parseDesignDocument(serializeDesignDocument(model.value)))),
-		JSON.parse(serializeDesignDocument(model.value)),
-	);
+	assert.deepEqual(JSON.parse(serializeDesignDocument(parseDesignDocument(serializeDesignDocument(model.value)))), JSON.parse(serializeDesignDocument(model.value)));
 	commands.vector.update({ ...network, widthPoints: line().widthPoints });
 	const dynamic = model.value.shapes[0] as DesignPath;
 	assert.equal(dynamic.strokeAlignment, 'center');
@@ -425,11 +380,7 @@ test('Persistence rejects invalid smoothing, alignment and endpoint properties o
 		{ strokeAlignment: 'left' },
 		{ nodes: [{ ...source.nodes[0], endpoint: 'invalid' }, source.nodes[1]] },
 	]) {
-		assert.throws(() =>
-			parseDesignDocument(
-				JSON.stringify({ ...documentFromShapes([source]), shapes: [{ ...source, ...change }] }),
-			),
-		);
+		assert.throws(() => parseDesignDocument(JSON.stringify({ ...documentFromShapes([source]), shapes: [{ ...source, ...change }] })));
 	}
 	const network = toDesignVectorNetwork(source);
 	assert.throws(() =>
@@ -466,8 +417,5 @@ test('Solid arrow tips trim only the rendered stroke body and leave saved anchor
 	assert.equal(designPathEndpoints(curve)[1].point.y, 0);
 	assert.equal(designStrokeLayers({ ...source, strokeWidth: 1000 })[0].contours.length, 0);
 	assert.equal(designEndpointContours({ ...source, strokeWidth: 1000 }).length, 1);
-	assert.equal(
-		designEndpointContours({ ...source, nodes: line().nodes, strokeCap: 'round', dashArray: [10, 20] }).length,
-		0,
-	);
+	assert.equal(designEndpointContours({ ...source, nodes: line().nodes, strokeCap: 'round', dashArray: [10, 20] }).length, 0);
 });

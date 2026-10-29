@@ -8,10 +8,7 @@ import { createScreenPermissionGuide } from './permissionGuide.js';
 const lifetime = new DisposableStore();
 let editor: ScreenshotEditor | undefined;
 let completion: { resolve(value: boolean): void; reject(error: Error): void } | undefined;
-const permissionResults = new Map<
-	ImageEditorPermissionAction,
-	{ resolve(value: boolean): void; reject(error: Error): void }
->();
+const permissionResults = new Map<ImageEditorPermissionAction, { resolve(value: boolean): void; reject(error: Error): void }>();
 let initialized = false;
 lifetime.add(
 	addDisposableListener(window, 'message', event => {
@@ -28,10 +25,7 @@ lifetime.add(
 		} else if (event.data.type === 'initialize' && !initialized) {
 			initialized = true;
 			void open(event.data as ImageEditorInput).catch(error => {
-				parent.postMessage(
-					{ type: 'complete', result: { kind: 'error', message: String(error).slice(0, 4096) } },
-					'*',
-				);
+				parent.postMessage({ type: 'complete', result: { kind: 'error', message: String(error).slice(0, 4096) } }, '*');
 			});
 		}
 	}),
@@ -77,26 +71,19 @@ async function open(input: ImageEditorInput): Promise<void> {
 		'large-radius': metrics.largeRadius,
 		shadow: input.theme.shadow,
 	};
-	for (const [key, value] of Object.entries(appearance))
-		document.documentElement.style.setProperty(`--snapshot-${key}`, value);
-	for (const [index, value] of metrics.spacing.entries())
-		document.documentElement.style.setProperty(`--snapshot-spacing-${index + 1}`, value);
+	for (const [key, value] of Object.entries(appearance)) document.documentElement.style.setProperty(`--snapshot-${key}`, value);
+	for (const [index, value] of metrics.spacing.entries()) document.documentElement.style.setProperty(`--snapshot-spacing-${index + 1}`, value);
 	document.documentElement.dataset.colorScheme = input.colorScheme;
 	if (input.permission) {
 		lifetime.add(
-			createScreenPermissionGuide(
-				document,
-				input.permission,
-				state?.accessibilityHints !== false,
-				(action: ImageEditorPermissionAction) => {
-					// A native drag must start while the mouse is held, even if opening Settings is still pending.
-					if (permissionResults.has(action)) return Promise.resolve(false);
-					return new Promise<boolean>((resolve, reject) => {
-						permissionResults.set(action, { resolve, reject });
-						parent.postMessage({ type: 'permission', action }, '*');
-					});
-				},
-			),
+			createScreenPermissionGuide(document, input.permission, state?.accessibilityHints !== false, (action: ImageEditorPermissionAction) => {
+				// A native drag must start while the mouse is held, even if opening Settings is still pending.
+				if (permissionResults.has(action)) return Promise.resolve(false);
+				return new Promise<boolean>((resolve, reject) => {
+					permissionResults.set(action, { resolve, reject });
+					parent.postMessage({ type: 'permission', action }, '*');
+				});
+			}),
 		);
 		parent.postMessage({ type: 'ready' }, '*');
 		return;
@@ -107,9 +94,7 @@ async function open(input: ImageEditorInput): Promise<void> {
 		accessibilityHints: state?.accessibilityHints !== false,
 		help: state?.help ?? '',
 		selectEntire: !!input.code,
-		description: input.code
-			? input.code.lines.map(line => line.map(token => token.text).join('')).join('\n')
-			: undefined,
+		description: input.code ? input.code.lines.map(line => line.map(token => token.text).join('')).join('\n') : undefined,
 		complete: (result: ImageEditorCompletion) =>
 			new Promise<boolean>((resolve, reject) => {
 				completion = { resolve, reject };

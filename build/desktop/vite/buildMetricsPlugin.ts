@@ -38,8 +38,7 @@ export function buildMetricsPlugin(): Plugin {
 					visit(entry.fileName);
 					const chunks = [...files].sort().map(file => {
 						const output = bundle[file];
-						if (output.type !== 'chunk')
-							throw new Error(`Static JavaScript dependency is not a chunk: ${file}`);
+						if (output.type !== 'chunk') throw new Error(`Static JavaScript dependency is not a chunk: ${file}`);
 						return {
 							file,
 							bytes: Buffer.byteLength(output.code),
@@ -66,10 +65,7 @@ export function buildMetricsPlugin(): Plugin {
 					.filter(output => output.fileName !== 'build-metrics.json')
 					.map(output => ({
 						file: output.fileName,
-						bytes:
-							typeof output.source === 'string'
-								? Buffer.byteLength(output.source)
-								: output.source.byteLength,
+						bytes: typeof output.source === 'string' ? Buffer.byteLength(output.source) : output.source.byteLength,
 					}))
 					.sort((a, b) => a.file.localeCompare(b.file));
 				this.emitFile({

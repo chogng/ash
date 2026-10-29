@@ -33,10 +33,7 @@ suite('SidebarPart boundary sashes', () => {
 		using configuration = new InMemoryConfigurationService();
 		assert.equal(configuration.getValue(WorkbenchConfiguration.activityBarAutoHide), false);
 		await configuration.updateValue(WorkbenchConfiguration.activityBarAutoHide, true);
-		await assert.rejects(
-			configuration.updateValue(WorkbenchConfiguration.activityBarAutoHide, 'true'),
-			/must be true or false/,
-		);
+		await assert.rejects(configuration.updateValue(WorkbenchConfiguration.activityBarAutoHide, 'true'), /must be true or false/);
 		assert.equal(configuration.getValue(WorkbenchConfiguration.activityBarAutoHide), true);
 		await configuration.updateValue(WorkbenchConfiguration.activityBarAutoHide, undefined);
 		assert.equal(configuration.getValue(WorkbenchConfiguration.activityBarAutoHide), false);
@@ -59,10 +56,7 @@ suite('SidebarPart boundary sashes', () => {
 		const right = resources.add(new Sash(container, 'vertical'));
 		const replacement = resources.add(new Sash(container, 'vertical'));
 		const states: boolean[][] = [];
-		const record = () =>
-			states.push(
-				[left, right, replacement].map(sash => sash.element.classList.contains('ash-primary-sidebar-sash')),
-			);
+		const record = () => states.push([left, right, replacement].map(sash => sash.element.classList.contains('ash-primary-sidebar-sash')));
 		sidebar.setBoundarySashes({ left, right });
 		record();
 		position = Position.RIGHT;

@@ -48,9 +48,7 @@ test('local history captures successful saves, honors exclusion and retention, a
 		services.registerInstance(ITextFileService, textFiles);
 		services.registerInstance(ILogService, new NullLoggerService());
 		services.registerInstance(ILifecycleService, { onWillShutdown: shutdown.event } as ILifecycleService);
-		services.registerSingleton(IWorkingCopyHistoryService, () =>
-			services.createInstance(WorkingCopyHistoryService),
-		);
+		services.registerSingleton(IWorkingCopyHistoryService, () => services.createInstance(WorkingCopyHistoryService));
 		using tracker = services.createInstance(WorkingCopyHistoryTracker);
 		const history = services.get(IWorkingCopyHistoryService);
 		const resource = URI.file(join(directory, 'main.ts'));
@@ -68,10 +66,7 @@ test('local history captures successful saves, honors exclusion and retention, a
 		await Promise.all(joining);
 		assert.equal(joining.length, 1);
 		const entries = await history.getEntries(resource, CancellationToken.None);
-		assert.deepEqual(
-			await Promise.all(entries.map(async entry => (await files.readFile(entry.location)).content)),
-			['third', 'second'],
-		);
+		assert.deepEqual(await Promise.all(entries.map(async entry => (await files.readFile(entry.location)).content)), ['third', 'second']);
 		await configuration.updateValue('workbench.localHistory.exclude', { '**/*.ts': true });
 		await textFiles.save({ resource, text: 'excluded' }, new AbortController().signal);
 		await tracker.flush();
@@ -91,10 +86,7 @@ test('local history captures successful saves, honors exclusion and retention, a
 			(await reopened.getEntries(resource, CancellationToken.None)).map(entry => entry.id),
 			entries.map(entry => entry.id),
 		);
-		await assert.rejects(
-			reopened.addEntry({ resource, content: 'cancelled' }, CancellationToken.Cancelled),
-			/cancelled/i,
-		);
+		await assert.rejects(reopened.addEntry({ resource, content: 'cancelled' }, CancellationToken.Cancelled), /cancelled/i);
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}

@@ -8,19 +8,34 @@ import { localize } from '../../nls.js';
 // Sessions keeps black tooltips in every theme; the shared hover defaults belong to Workbench.
 registerColor(
 	'sessions.tooltip.background',
-	{ dark: '#000000', light: '#000000', hcDark: '#000000', hcLight: '#000000' },
+	{
+		dark: '#000000',
+		light: '#000000',
+		hcDark: '#000000',
+		hcLight: '#000000',
+	},
 	{ description: 'Background of tooltips in the Sessions window.', owner: 'sessions' },
 );
 
 registerColor(
 	'sessions.tooltip.foreground',
-	{ dark: '#ffffff', light: '#ffffff', hcDark: '#ffffff', hcLight: '#ffffff' },
+	{
+		dark: '#ffffff',
+		light: '#ffffff',
+		hcDark: '#ffffff',
+		hcLight: '#ffffff',
+	},
 	{ description: 'Text color of tooltips in the Sessions window.', owner: 'sessions' },
 );
 
 registerColor(
 	'sessions.tooltip.border',
-	{ dark: hoverBorder, light: hoverBorder, hcDark: '#ffffff', hcLight: '#ffffff' },
+	{
+		dark: hoverBorder,
+		light: hoverBorder,
+		hcDark: '#ffffff',
+		hcLight: '#ffffff',
+	},
 	{ description: 'Border of tooltips in the Sessions window.', owner: 'sessions' },
 );
 
@@ -38,33 +53,58 @@ export const sessionsAccentGlow = registerColor(
 // Sessions keeps navigation foregrounds stable; hover and selection change the background.
 registerColor(
 	'sessions.activityBar.foreground',
-	{ dark: '#ffffff', light: '#000000', hcDark: '#ffffff', hcLight: '#000000' },
+	{
+		dark: '#ffffff',
+		light: '#000000',
+		hcDark: '#ffffff',
+		hcLight: '#000000',
+	},
 	{ description: 'Activity Bar icon and label color in the Sessions window.', owner: 'sessions.activitybar' },
 );
 
 // Retain the legacy inactive color registration for existing product themes.
 registerColor(
 	'sessions.activityBar.inactiveForeground',
-	{ dark: '#999999', light: '#808080', hcDark: '#ffffff', hcLight: '#000000' },
+	{
+		dark: '#999999',
+		light: '#808080',
+		hcDark: '#ffffff',
+		hcLight: '#000000',
+	},
 	{ description: 'Unselected Activity Bar icon color in the Sessions window.', owner: 'sessions.activitybar' },
 );
 
 registerColor(
 	'sessions.selectionBackground',
-	{ dark: '#303030', light: '#f0f0f0', hcDark: '#333333', hcLight: '#dddddd' },
+	{
+		dark: '#303030',
+		light: '#f0f0f0',
+		hcDark: '#333333',
+		hcLight: '#dddddd',
+	},
 	{ description: 'Selected item background in the Sessions window.', owner: 'sessions' },
 );
 
 // Input cards keep their elevation when a theme changes the shadow of general floating widgets.
 registerColor(
 	'sessions.inputShadow',
-	{ dark: '#00000066', light: '#00000029', hcDark: null, hcLight: null },
+	{
+		dark: '#00000066',
+		light: '#00000029',
+		hcDark: null,
+		hcLight: null,
+	},
 	{ description: 'Shadow around the Sessions input card.', owner: 'sessions.chat' },
 );
 
 registerColor(
 	'sessions.modelPicker.maximumForeground',
-	{ dark: '#bf9aff', light: '#8242e3', hcDark: accentForeground, hcLight: accentForeground },
+	{
+		dark: '#bf9aff',
+		light: '#8242e3',
+		hcDark: accentForeground,
+		hcLight: accentForeground,
+	},
 	{
 		description: localize('sessions.modelPicker.maximumForeground', 'Text color of an emphasized model preset.'),
 		owner: 'sessions.chat',
@@ -73,24 +113,28 @@ registerColor(
 
 registerColor(
 	'sessions.modelPicker.maximumBackground',
-	{ dark: '#a660ff', light: '#924ff7', hcDark: primaryButtonBackground, hcLight: primaryButtonBackground },
 	{
-		description: localize(
-			'sessions.modelPicker.maximumBackground',
-			'Main fill color of an emphasized model preset.',
-		),
+		dark: '#a660ff',
+		light: '#924ff7',
+		hcDark: primaryButtonBackground,
+		hcLight: primaryButtonBackground,
+	},
+	{
+		description: localize('sessions.modelPicker.maximumBackground', 'Main fill color of an emphasized model preset.'),
 		owner: 'sessions.chat',
 	},
 );
 
 registerColor(
 	'sessions.modelPicker.maximumBackgroundAccent',
-	{ dark: '#7777ff', light: '#6670f7', hcDark: primaryButtonBackground, hcLight: primaryButtonBackground },
 	{
-		description: localize(
-			'sessions.modelPicker.maximumBackgroundAccent',
-			'Gradient accent color of an emphasized model preset.',
-		),
+		dark: '#7777ff',
+		light: '#6670f7',
+		hcDark: primaryButtonBackground,
+		hcLight: primaryButtonBackground,
+	},
+	{
+		description: localize('sessions.modelPicker.maximumBackgroundAccent', 'Gradient accent color of an emphasized model preset.'),
 		owner: 'sessions.chat',
 	},
 );

@@ -51,7 +51,12 @@ test('Viewport decoration queries are shared across line rendering data', () => 
 					range: decoration.range,
 					className: decoration.inlineClassName,
 				})),
-				[{ range: new Range(line, 1, line, 4), className: 'viewport-inline' }],
+				[
+					{
+						range: new Range(line, 1, line, 4),
+						className: 'viewport-inline',
+					},
+				],
 			);
 		}
 		assert.equal(model.decorationQueries.length, 1);
@@ -84,10 +89,7 @@ test('Viewport text rendering keeps decoration queries bounded after an update',
 		model.decorationQueries.length = 0;
 		view.render(true, false);
 		assert.ok(view.domNode.domNode.querySelectorAll('.viewport-inline').length > 25);
-		assert.ok(
-			model.decorationQueries.length <= 8,
-			`Expected bounded viewport queries, got ${model.decorationQueries.length}`,
-		);
+		assert.ok(model.decorationQueries.length <= 8, `Expected bounded viewport queries, got ${model.decorationQueries.length}`);
 	} finally {
 		dom.window.close();
 	}
@@ -129,7 +131,12 @@ test('Viewport decoration data refreshes after filtering, edits and wrapping cha
 		assert.equal(read().length, 1);
 		model.deltaDecorations(
 			[id],
-			[{ range: new Range(1, 6, 1, 9), options: { description: 'moved', inlineClassName: 'viewport-moved' } }],
+			[
+				{
+					range: new Range(1, 6, 1, 9),
+					options: { description: 'moved', inlineClassName: 'viewport-moved' },
+				},
+			],
 		);
 		assert.deepEqual(
 			read().map(decoration => decoration.range),
@@ -138,28 +145,14 @@ test('Viewport decoration data refreshes after filtering, edits and wrapping cha
 		model.applyEdits([{ range: new Range(1, 1, 1, 1), text: 'X\n' }]);
 		assert.deepEqual(read(), []);
 		assert.deepEqual(
-			view.testViewModel
-				.getViewportViewLineRenderingData(range, 2)
-				.inlineDecorations.map(decoration => decoration.range),
+			view.testViewModel.getViewportViewLineRenderingData(range, 2).inlineDecorations.map(decoration => decoration.range),
 			[new Range(2, 6, 2, 9)],
 		);
 		view.testConfiguration.updateOptions({ wordWrap: 'on' });
 		view.layout({ width: 70, height: 200 });
-		const wrappedRange = new Range(
-			1,
-			1,
-			view.testViewModel.getLineCount(),
-			view.testViewModel.getLineMaxColumn(view.testViewModel.getLineCount()),
-		);
-		const batched = Array.from(
-			{ length: wrappedRange.endLineNumber },
-			(_, index) =>
-				view.testViewModel.getViewportViewLineRenderingData(wrappedRange, index + 1).inlineDecorations,
-		);
-		const standalone = Array.from(
-			{ length: wrappedRange.endLineNumber },
-			(_, index) => view.testViewModel.getViewLineRenderingData(index + 1).inlineDecorations,
-		);
+		const wrappedRange = new Range(1, 1, view.testViewModel.getLineCount(), view.testViewModel.getLineMaxColumn(view.testViewModel.getLineCount()));
+		const batched = Array.from({ length: wrappedRange.endLineNumber }, (_, index) => view.testViewModel.getViewportViewLineRenderingData(wrappedRange, index + 1).inlineDecorations);
+		const standalone = Array.from({ length: wrappedRange.endLineNumber }, (_, index) => view.testViewModel.getViewLineRenderingData(index + 1).inlineDecorations);
 		assert.deepEqual(batched, standalone);
 	} finally {
 		dom.window.close();
@@ -242,9 +235,18 @@ test('Model decorations project, update, and follow tracked ranges', async () =>
 			lineIndex: element.parentElement?.dataset.lineIndex,
 		})),
 		[
-			{ className: 'findMatch', lineIndex: '0' },
-			{ className: 'findMatch', lineIndex: '1' },
-			{ className: 'squiggly-error', lineIndex: '2' },
+			{
+				className: 'findMatch',
+				lineIndex: '0',
+			},
+			{
+				className: 'findMatch',
+				lineIndex: '1',
+			},
+			{
+				className: 'squiggly-error',
+				lineIndex: '2',
+			},
 		],
 	);
 
@@ -263,12 +265,15 @@ test('Model decorations project, update, and follow tracked ranges', async () =>
 	const warning = requiredElement<HTMLElement>(viewport.domNode.domNode, '.cdr.squiggly-warning');
 	assert.equal(warning.parentElement?.dataset.lineIndex, '1');
 
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 0 + 1)), text: 'X\n' }]);
+	model.applyEdits([
+		{
+			range: Range.fromPositions(new Position(0 + 1, 0 + 1)),
+			text: 'X\n',
+		},
+	]);
 	viewport.render(true, false);
 
-	const trackedMatch = decorationElements(viewport.domNode.domNode).filter(element =>
-		element.classList.contains('findMatch'),
-	);
+	const trackedMatch = decorationElements(viewport.domNode.domNode).filter(element => element.classList.contains('findMatch'));
 	assert.deepEqual(
 		trackedMatch.map(element => element.parentElement?.dataset.lineIndex),
 		['1', '2'],
@@ -368,18 +373,9 @@ test('Line and block decoration parts project standard model options', () => {
 	viewport.layout({ width: 200, height: 60 });
 	viewport.render(true, false);
 
-	const firstLine = requiredElement<HTMLElement>(
-		viewport.domNode.domNode,
-		'.margin-view-overlays .view-overlay-line[data-line-index="0"]',
-	);
-	const secondLine = requiredElement<HTMLElement>(
-		viewport.domNode.domNode,
-		'.margin-view-overlays .view-overlay-line[data-line-index="1"]',
-	);
-	const thirdLine = requiredElement<HTMLElement>(
-		viewport.domNode.domNode,
-		'.margin-view-overlays .view-overlay-line[data-line-index="2"]',
-	);
+	const firstLine = requiredElement<HTMLElement>(viewport.domNode.domNode, '.margin-view-overlays .view-overlay-line[data-line-index="0"]');
+	const secondLine = requiredElement<HTMLElement>(viewport.domNode.domNode, '.margin-view-overlays .view-overlay-line[data-line-index="1"]');
+	const thirdLine = requiredElement<HTMLElement>(viewport.domNode.domNode, '.margin-view-overlays .view-overlay-line[data-line-index="2"]');
 	const lineMarker = requiredElement<HTMLElement>(firstLine, '.stanza-test-line-marker');
 	const firstLineMarker = requiredElement<HTMLElement>(firstLine, '.stanza-test-first-line-marker');
 	const secondMarker = requiredElement<HTMLElement>(secondLine, '.stanza-editor-line-decoration');
@@ -406,10 +402,7 @@ test('Line and block decoration parts project standard model options', () => {
 	const resizedBlock = requiredElement<HTMLElement>(viewport.domNode.domNode, '.stanza-editor-block-decoration');
 	assert.strictEqual(resizedBlock, block);
 	const resizedLayoutInfo = viewport.getLayoutInfo();
-	assert.equal(
-		resizedBlock.style.width,
-		`${resizedLayoutInfo.contentWidth - resizedLayoutInfo.verticalScrollbarWidth + 6}px`,
-	);
+	assert.equal(resizedBlock.style.width, `${resizedLayoutInfo.contentWidth - resizedLayoutInfo.verticalScrollbarWidth + 6}px`);
 	dom.window.close();
 });
 
@@ -449,18 +442,18 @@ test('Quick Diff decorations project into the overview ruler and minimap gutter'
 			metadata: 'deleted',
 		},
 	]);
-	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+	using viewport = new View({
+		container,
+		model,
+		lineHeight: 20,
+		textMeasurer: new FixedTextMeasurer(),
+	});
 	viewport.layout({ width: 300, height: 80 });
 	viewport.render(true, false);
 
 	assert.deepEqual(overviewMarkerColors(minimapPaint), ['#cca700', '#f48771']);
-	assert.deepEqual(overviewCursorColors(minimapPaint), [
-		darkColorTheme.getColor(editorCursorForeground)!.transparent(0.7).toString(),
-	]);
-	assert.equal(
-		requiredElement(viewport.domNode.domNode, '.decorationsOverviewRuler').getAttribute('aria-hidden'),
-		'true',
-	);
+	assert.deepEqual(overviewCursorColors(minimapPaint), [darkColorTheme.getColor(editorCursorForeground)!.transparent(0.7).toString()]);
+	assert.equal(requiredElement(viewport.domNode.domNode, '.decorationsOverviewRuler').getAttribute('aria-hidden'), 'true');
 	assert.deepEqual(minimapMarkers(minimapPaint), [
 		{ fill: '#89d185', top: 2 },
 		{ fill: '#f48771', top: 6 },
@@ -577,9 +570,21 @@ test('Decoration overlays split at soft-wrapped visual line boundaries', () => {
 			width: element.style.width,
 		})),
 		[
-			{ lineIndex: '0', left: `${textLeft + 8}px`, width: '8px' },
-			{ lineIndex: '1', left: `${textLeft}px`, width: '16px' },
-			{ lineIndex: '2', left: `${textLeft}px`, width: '8px' },
+			{
+				lineIndex: '0',
+				left: `${textLeft + 8}px`,
+				width: '8px',
+			},
+			{
+				lineIndex: '1',
+				left: `${textLeft}px`,
+				width: '16px',
+			},
+			{
+				lineIndex: '2',
+				left: `${textLeft}px`,
+				width: '8px',
+			},
 		],
 	);
 
@@ -592,7 +597,12 @@ test('Versioned diagnostics project named severity underlines and invalidate', a
 	using model = new TextModel('abcd\nefgh\nijkl\nmnop');
 	using store = createLanguageDiagnosticStore(model);
 	using bridge = new LanguageDiagnosticDecorationBridge(store);
-	const viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+	const viewport = new View({
+		container,
+		model,
+		lineHeight: 20,
+		textMeasurer: new FixedTextMeasurer(),
+	});
 	viewport.layout({ width: 200, height: 80 });
 	viewport.render(true, false);
 	assert.equal(
@@ -637,10 +647,22 @@ test('Versioned diagnostics project named severity underlines and invalidate', a
 			lineIndex: element.parentElement?.dataset.lineIndex,
 		})),
 		[
-			{ className: 'squiggly-error', lineIndex: '0' },
-			{ className: 'squiggly-warning', lineIndex: '1' },
-			{ className: 'squiggly-info', lineIndex: '2' },
-			{ className: 'squiggly-hint', lineIndex: '3' },
+			{
+				className: 'squiggly-error',
+				lineIndex: '0',
+			},
+			{
+				className: 'squiggly-warning',
+				lineIndex: '1',
+			},
+			{
+				className: 'squiggly-info',
+				lineIndex: '2',
+			},
+			{
+				className: 'squiggly-hint',
+				lineIndex: '3',
+			},
 		],
 	);
 	assert.deepEqual(
@@ -648,7 +670,12 @@ test('Versioned diagnostics project named severity underlines and invalidate', a
 		['language.lexical E100: error', 'warning', 'information', 'hint'],
 	);
 
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 0 + 1)), text: 'X' }]);
+	model.applyEdits([
+		{
+			range: Range.fromPositions(new Position(0 + 1, 0 + 1)),
+			text: 'X',
+		},
+	]);
 	viewport.render(true, false);
 	assert.deepEqual(decorationElements(viewport.domNode.domNode), []);
 	assert.equal(store.result, undefined);
@@ -689,9 +716,7 @@ function decorationClassName(element: HTMLElement): string | undefined {
 	return [...element.classList].find(className => className !== 'cdr');
 }
 
-function hoverMessageValue(
-	message: { readonly value: string } | readonly { readonly value: string }[] | null | undefined,
-): string | undefined {
+function hoverMessageValue(message: { readonly value: string } | readonly { readonly value: string }[] | null | undefined): string | undefined {
 	if (!message) return undefined;
 	return 'value' in message ? message.value : message[0]?.value;
 }
@@ -765,37 +790,23 @@ function recordCanvasPaint(dom: JSDOM): CanvasPaint[] {
 
 function minimapMarkers(paint: readonly CanvasPaint[]): readonly { readonly fill: string; readonly top: number }[] {
 	const frame = paint.filter(entry => entry.kind === 'minimap').at(-1)?.frame;
-	return paint
-		.filter(entry => entry.kind === 'minimap' && entry.frame === frame && entry.width === 3)
-		.map(entry => ({ fill: entry.fill, top: entry.top }));
+	return paint.filter(entry => entry.kind === 'minimap' && entry.frame === frame && entry.width === 3).map(entry => ({ fill: entry.fill, top: entry.top }));
 }
 
 function overviewMarkerColors(paint: readonly CanvasPaint[]): readonly string[] {
 	const frame = paint.filter(entry => entry.kind === 'overview').at(-1)?.frame;
-	return paint
-		.filter(
-			entry =>
-				entry.kind === 'overview' &&
-				entry.frame === frame &&
-				entry.height > 2 &&
-				entry.height < entry.canvasHeight,
-		)
-		.map(entry => entry.fill);
+	return paint.filter(entry => entry.kind === 'overview' && entry.frame === frame && entry.height > 2 && entry.height < entry.canvasHeight).map(entry => entry.fill);
 }
 
 function overviewCursorColors(paint: readonly CanvasPaint[]): readonly string[] {
 	const frame = paint.filter(entry => entry.kind === 'overview').at(-1)?.frame;
-	return paint
-		.filter(entry => entry.kind === 'overview' && entry.frame === frame && entry.height === 2)
-		.map(entry => entry.fill);
+	return paint.filter(entry => entry.kind === 'overview' && entry.frame === frame && entry.height === 2).map(entry => entry.fill);
 }
 
 class DecorationQueryModel extends TextModel {
 	public readonly decorationQueries: Range[] = [];
 
-	public override getDecorationsInRange(
-		...args: Parameters<TextModel['getDecorationsInRange']>
-	): ReturnType<TextModel['getDecorationsInRange']> {
+	public override getDecorationsInRange(...args: Parameters<TextModel['getDecorationsInRange']>): ReturnType<TextModel['getDecorationsInRange']> {
 		this.decorationQueries.push(Range.lift(args[0]));
 		return super.getDecorationsInRange(...args);
 	}

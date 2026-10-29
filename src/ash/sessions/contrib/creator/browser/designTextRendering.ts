@@ -1,9 +1,4 @@
-import {
-	designTextSegments,
-	designTextStyleAt,
-	type DesignTextShape,
-	type DesignTextStyle,
-} from '../common/model/designText.js';
+import { designTextSegments, designTextStyleAt, type DesignTextShape, type DesignTextStyle } from '../common/model/designText.js';
 
 function spacing(value: number | undefined, unit: 'px' | 'percent' | undefined, fallback: string): string {
 	return value === undefined ? fallback : unit === 'percent' ? `${value / 100}em` : `${value}px`;
@@ -68,10 +63,7 @@ export function renderDesignText(document: Document, shape: DesignTextShape, edi
 		Object.assign(paragraph.style, {
 			margin: '0',
 			padding: '0',
-			whiteSpace:
-				shape.textAutoResize === 'width' && shape.sizing?.width !== 'fill' && !shape.sizeLimits?.maxWidth
-					? 'pre'
-					: 'pre-wrap',
+			whiteSpace: shape.textAutoResize === 'width' && shape.sizing?.width !== 'fill' && !shape.sizeLimits?.maxWidth ? 'pre' : 'pre-wrap',
 			textAlign: paragraphStyle.textAlign ?? 'left',
 			textIndent: `${paragraphStyle.paragraphIndent ?? 0}px`,
 			marginTop: index ? `${paragraphStyle.paragraphSpacing ?? 0}px` : '0',
@@ -99,19 +91,12 @@ export function renderDesignText(document: Document, shape: DesignTextShape, edi
 		start += text.length + 1;
 	}
 	if (!editing && shape.textTruncate) {
-		const lineHeight =
-			shape.lineHeight === undefined
-				? shape.fontSize * 1.2
-				: shape.lineHeightUnit === 'percent'
-					? (shape.fontSize * shape.lineHeight) / 100
-					: shape.lineHeight;
+		const lineHeight = shape.lineHeight === undefined ? shape.fontSize * 1.2 : shape.lineHeightUnit === 'percent' ? (shape.fontSize * shape.lineHeight) / 100 : shape.lineHeight;
 		Object.assign(root.style, {
 			overflow: 'hidden',
 			display: '-webkit-box',
 			webkitBoxOrient: 'vertical',
-			webkitLineClamp: String(
-				shape.maxLines ?? Math.max(1, Math.floor(shape.height / Math.max(0.001, lineHeight))),
-			),
+			webkitLineClamp: String(shape.maxLines ?? Math.max(1, Math.floor(shape.height / Math.max(0.001, lineHeight)))),
 		});
 	}
 	return root;
@@ -125,12 +110,7 @@ export function renderDesignTextFrame(document: Document, shape: DesignTextShape
 		flexDirection: 'column',
 		width: '100%',
 		height: '100%',
-		justifyContent:
-			shape.textVerticalAlign === 'center'
-				? 'center'
-				: shape.textVerticalAlign === 'bottom'
-					? 'flex-end'
-					: 'flex-start',
+		justifyContent: shape.textVerticalAlign === 'center' ? 'center' : shape.textVerticalAlign === 'bottom' ? 'flex-end' : 'flex-start',
 		overflow: shape.textTruncate && !editing ? 'hidden' : 'visible',
 	});
 	const text = renderDesignText(document, shape, editing);

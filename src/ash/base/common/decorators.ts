@@ -43,11 +43,7 @@ export interface IDebounceReducer<T> {
  * A reducer accumulates calls from the optional initial value; otherwise the last call's arguments are forwarded.
  * The timer is not tied to the receiver's disposal.
  */
-export function debounce<T>(
-	delay: number,
-	reducer?: IDebounceReducer<T>,
-	initialValueProvider?: () => T,
-): MethodDecorator {
+export function debounce<T>(delay: number, reducer?: IDebounceReducer<T>, initialValueProvider?: () => T): MethodDecorator {
 	return (_target, propertyKey, descriptor) => {
 		if (typeof propertyKey === 'symbol') throw new TypeError('Decorator does not support symbol keys');
 		const property = descriptor as PropertyDescriptor;
@@ -72,11 +68,7 @@ export function debounce<T>(
  * A reducer combines calls from the optional initial value; without a reducer, input arguments are ignored.
  * The decorated method's return value is discarded and pending timers are not tied to disposal.
  */
-export function throttle<T>(
-	delay: number,
-	reducer?: IDebounceReducer<T>,
-	initialValueProvider?: () => T,
-): MethodDecorator {
+export function throttle<T>(delay: number, reducer?: IDebounceReducer<T>, initialValueProvider?: () => T): MethodDecorator {
 	return (_target, propertyKey, descriptor) => {
 		if (typeof propertyKey === 'symbol') throw new TypeError('Decorator does not support symbol keys');
 		const property = descriptor as PropertyDescriptor;

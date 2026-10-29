@@ -4,10 +4,7 @@ import type { IDisposable } from '../../../base/common/lifecycle.js';
 import { derived } from '../../../base/common/observable.js';
 import { wrapInHotClass1 } from './wrapInHotClass.js';
 
-type DisposableConstructor1<TArgument, TServices extends unknown[], TResult extends IDisposable> = new (
-	argument: TArgument,
-	...services: TServices
-) => TResult;
+type DisposableConstructor1<TArgument, TServices extends unknown[], TResult extends IDisposable> = new (argument: TArgument, ...services: TServices) => TResult;
 
 /**
  * Recreates a disposable class when its defining module reloads.

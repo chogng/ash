@@ -3,11 +3,7 @@ import type { INativeHostApi } from '../../../../platform/native/common/nativeHo
 import type { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 
 /** Reveals local file resources, or the first workspace folder when no file is selected. */
-export async function revealResourcesInOS(
-	resources: readonly URI[],
-	nativeHostService: INativeHostApi,
-	workspaceContextService: IWorkspaceContextService,
-): Promise<void> {
+export async function revealResourcesInOS(resources: readonly URI[], nativeHostService: INativeHostApi, workspaceContextService: IWorkspaceContextService): Promise<void> {
 	const targets =
 		resources.length > 0
 			? resources

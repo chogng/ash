@@ -25,10 +25,7 @@ suite('Decorators', () => {
 
 		const first = new Example(null);
 		const second = new Example(2);
-		assert.deepEqual(
-			[first.value(), first.value(), first.label, first.label, first.calls],
-			[null, null, 'null', 'null', 2],
-		);
+		assert.deepEqual([first.value(), first.value(), first.label, first.label, first.calls], [null, null, 'null', 'null', 2]);
 		assert.deepEqual([second.value(), second.label, second.calls], [2, '2', 2]);
 		assert.deepEqual(Object.keys(first).sort(), ['calls', 'result']);
 	});

@@ -10,6 +10,4 @@ export interface ILanguageModelsConfigurationService {
 	isModelVisible(model: ModelRef): boolean;
 	setModelVisible(model: ModelRef, visible: boolean): Promise<void>;
 }
-export const ILanguageModelsConfigurationService = createServiceIdentifier<ILanguageModelsConfigurationService>(
-	'coworkLanguageModelsConfigurationService',
-);
+export const ILanguageModelsConfigurationService = createServiceIdentifier<ILanguageModelsConfigurationService>('coworkLanguageModelsConfigurationService');

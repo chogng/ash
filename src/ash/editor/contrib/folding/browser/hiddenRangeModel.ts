@@ -16,18 +16,12 @@ export class EditorHiddenRangeModel extends Disposable {
 		private readonly folding: EditorFoldingModel,
 	) {
 		super();
-		if (folding.model !== textModel)
-			throw new TypeError('Hidden range and folding models must share one text model');
+		if (folding.model !== textModel) throw new TypeError('Hidden range and folding models must share one text model');
 		this.rebuild();
 		this._register(folding.onDidChange(() => this.rebuild()));
 		this._register(
 			textModel.onDidChangeContent(change => {
-				if (
-					change.changes.some(
-						edit => edit.range.startLineNumber !== edit.range.endLineNumber || /[\r\n]/u.test(edit.text),
-					)
-				)
-					this.rebuild();
+				if (change.changes.some(edit => edit.range.startLineNumber !== edit.range.endLineNumber || /[\r\n]/u.test(edit.text))) this.rebuild();
 			}),
 		);
 	}
@@ -45,21 +39,12 @@ export class EditorHiddenRangeModel extends Disposable {
 			if (start > end) continue;
 			const previous = ranges[ranges.length - 1];
 			if (previous && start <= previous.endLineNumber + 1) {
-				ranges[ranges.length - 1] = new Range(
-					previous.startLineNumber,
-					1,
-					Math.max(previous.endLineNumber, end),
-					1,
-				);
+				ranges[ranges.length - 1] = new Range(previous.startLineNumber, 1, Math.max(previous.endLineNumber, end), 1);
 			} else {
 				ranges.push(new Range(start, 1, end, 1));
 			}
 		}
-		if (
-			ranges.length === this.ranges.length &&
-			ranges.every((range, index) => range.equalsRange(this.ranges[index]))
-		)
-			return;
+		if (ranges.length === this.ranges.length && ranges.every((range, index) => range.equalsRange(this.ranges[index]))) return;
 		this.ranges = ranges;
 		this.changeEmitter.fire();
 	}

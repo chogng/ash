@@ -20,13 +20,7 @@ export const createTextModelFeatures: TextModelFeatureFactory = (model, options)
 			brackets: resources.add(new BracketPairsTextModelPart(model, resolve)),
 			guides: resources.add(new GuidesTextModelPart(model, resolve)),
 			tokenization: resources.add(new TokenizationTextModelPart(model, options.tokenization)),
-			diagnostics: resources.add(
-				new ModelLanguageDiagnostics(
-					model,
-					options.tokenization?.syntaxProviderRegistry,
-					options.languageConfigurationService?.onDidChange,
-				),
-			),
+			diagnostics: resources.add(new ModelLanguageDiagnostics(model, options.tokenization?.syntaxProviderRegistry, options.languageConfigurationService?.onDidChange)),
 			decorations: resources.add(new ColorizedBracketPairsDecorationProvider(model)),
 		});
 		return parts;

@@ -18,10 +18,7 @@ export class ElectronMeteredConnectionService extends Disposable implements IMet
 	private metered = true;
 	private observationQueue: Promise<void> = Promise.resolve();
 
-	constructor(
-		connectionProvider: () => NetworkInformation | undefined,
-		@IMainProcessService mainProcess: IMainProcessService,
-	) {
+	constructor(connectionProvider: () => NetworkInformation | undefined, @IMainProcessService mainProcess: IMainProcessService) {
 		super();
 		const channel = mainProcess.getChannel(METERED_CONNECTION_CHANNEL);
 		let observedChanges = 0;
@@ -39,8 +36,7 @@ export class ElectronMeteredConnectionService extends Disposable implements IMet
 			this.observationQueue = this.observationQueue
 				.catch(() => {})
 				.then(async () => {
-					if (!this.isDisposed)
-						await channel.call(MeteredConnectionCommand.SetIsBrowserConnectionMetered, value);
+					if (!this.isDisposed) await channel.call(MeteredConnectionCommand.SetIsBrowserConnectionMetered, value);
 				});
 			return this.observationQueue;
 		};
@@ -55,9 +51,7 @@ export class ElectronMeteredConnectionService extends Disposable implements IMet
 			// A snapshot reply can arrive after a more recent pushed state.
 			if (generation === observedChanges) this.acceptState(value);
 		});
-		void this.whenConnectionStateInitialized.catch(error =>
-			console.error('Could not initialize network state', error),
-		);
+		void this.whenConnectionStateInitialized.catch(error => console.error('Could not initialize network state', error));
 	}
 
 	get isConnectionMetered(): boolean {
@@ -72,11 +66,4 @@ export class ElectronMeteredConnectionService extends Disposable implements IMet
 	}
 }
 
-registerSingleton(
-	IMeteredConnectionService,
-	new SyncDescriptor(
-		ElectronMeteredConnectionService,
-		[() => (navigator as NavigatorWithConnection).connection],
-		true,
-	),
-);
+registerSingleton(IMeteredConnectionService, new SyncDescriptor(ElectronMeteredConnectionService, [() => (navigator as NavigatorWithConnection).connection], true));

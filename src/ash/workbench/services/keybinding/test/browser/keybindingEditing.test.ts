@@ -81,15 +81,8 @@ test('shortcut list refuses dirty JSON; saving conflicts retain text and the ext
 	const resource = fixture.profiles.currentProfile.keybindingsResource;
 	const signal = new AbortController().signal;
 	using reference = await fixture.models.acquire({ resource, languageId: 'jsonc' }, signal);
-	reference.model.pushEditOperations(
-		null,
-		[{ range: reference.model.getFullModelRange(), text: '// unsaved\n' + source }],
-		null,
-	);
-	await assert.rejects(
-		fixture.services.get(IKeybindingEditingService).editKeybinding(userItem(source), 'ctrl+j', undefined),
-		/Save keybindings.json/u,
-	);
+	reference.model.pushEditOperations(null, [{ range: reference.model.getFullModelRange(), text: '// unsaved\n' + source }], null);
+	await assert.rejects(fixture.services.get(IKeybindingEditingService).editKeybinding(userItem(source), 'ctrl+j', undefined), /Save keybindings.json/u);
 	await fixture.writeSource('[]');
 	await fixture.models.refresh(resource);
 	assert.equal(reference.hasExternalChange, false);

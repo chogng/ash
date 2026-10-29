@@ -17,11 +17,7 @@ import { WorkbenchLocalizationService } from '../../../../services/localization/
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import {
-	IAppServerHookApi,
-	IAppServerSkillApi,
-	type HookSource,
-} from '../../../../../platform/agentHost/common/appServerApi.js';
+import { IAppServerHookApi, IAppServerSkillApi, type HookSource } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
@@ -191,9 +187,7 @@ test('Hook management rejects a late response after its workspace changes and re
 	using resources = new DisposableStore();
 	const pending = new DeferredPromise<readonly HookSource[]>();
 	let reads = 0;
-	const { pane, container, workspace } = setup(resources, () =>
-		++reads === 1 ? pending.p : Promise.reject(new Error('current read failed')),
-	);
+	const { pane, container, workspace } = setup(resources, () => (++reads === 1 ? pending.p : Promise.reject(new Error('current read failed'))));
 	pane.setVisible(true);
 	workspace.updateWorkspace({ id: 'next', folders: [] });
 	await waitForRefresh(container);

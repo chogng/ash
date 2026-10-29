@@ -46,11 +46,7 @@ export class ChecksWidget extends Disposable {
 				onClick: () => {
 					const selected = sessions.activeSelection;
 					if (selected) {
-						viewState.setSectionCollapsed(
-							new SessionChangesEditorInput(selected).resource,
-							'checks',
-							!this.body.hidden,
-						);
+						viewState.setSectionCollapsed(new SessionChangesEditorInput(selected).resource, 'checks', !this.body.hidden);
 					}
 				},
 			}),
@@ -80,14 +76,7 @@ export class ChecksWidget extends Disposable {
 				this.body.replaceChildren();
 				this.body.dataset.signature = signature;
 				if (state.loading && !state.checks.length && !state.error) {
-					const loading = this.entries.add(
-						new LoadingSkeleton(
-							this.body,
-							localize('sessions.changes.checkLoading', 'Loading checks…'),
-							'list',
-							3,
-						),
-					);
+					const loading = this.entries.add(new LoadingSkeleton(this.body, localize('sessions.changes.checkLoading', 'Loading checks…'), 'list', 3));
 					loading.setVisible(true);
 				}
 				if (state.error) {
@@ -101,13 +90,7 @@ export class ChecksWidget extends Disposable {
 				for (const entry of state.checks) {
 					const { pullRequest, check } = entry;
 					const row = h(container.ownerDocument, 'li');
-					const label = localize(
-						'sessions.changes.checkLabel',
-						'{0} · {1} · {2}',
-						check.name,
-						getCheckStateLabel(check),
-						pullRequest,
-					);
+					const label = localize('sessions.changes.checkLabel', '{0} · {1} · {2}', check.name, getCheckStateLabel(check), pullRequest);
 					const link = h(container.ownerDocument, 'a');
 					link.textContent = label;
 					link.title = label;
@@ -116,9 +99,7 @@ export class ChecksWidget extends Disposable {
 						this.entries.add(
 							addDisposableListener(link, 'click', event => {
 								event.preventDefault();
-								void opener
-									.open(check.detailsUrl!)
-									.catch(error => notifications.error(getErrorMessage(error)));
+								void opener.open(check.detailsUrl!).catch(error => notifications.error(getErrorMessage(error)));
 							}),
 						);
 					}
@@ -126,10 +107,7 @@ export class ChecksWidget extends Disposable {
 					if (check.id > 0) {
 						const actions = h(container.ownerDocument, 'div', { className: 'ash-sessions-check-actions' });
 						actions.setAttribute('role', 'group');
-						actions.setAttribute(
-							'aria-label',
-							localize('sessions.changes.checkActions', '{0} actions', check.name),
-						);
+						actions.setAttribute('aria-label', localize('sessions.changes.checkActions', '{0} actions', check.name));
 						row.append(actions);
 						const action = (label: string, invoke: () => Promise<void>, kind?: 'rerun' | 'fix'): Button => {
 							const button = this.entries.add(
@@ -147,20 +125,11 @@ export class ChecksWidget extends Disposable {
 												const code = error instanceof GitHubError ? error.code : undefined;
 												notifications.error(
 													code === GitHubErrorCode.PermissionDenied
-														? localize(
-																'sessions.changes.checkPermission',
-																'Your GitHub account does not have permission for this check operation.',
-															)
+														? localize('sessions.changes.checkPermission', 'Your GitHub account does not have permission for this check operation.')
 														: code === GitHubErrorCode.Conflict
-															? localize(
-																	'sessions.changes.checkChanged',
-																	'The pull request or check changed. Refresh checks before trying again.',
-																)
+															? localize('sessions.changes.checkChanged', 'The pull request or check changed. Refresh checks before trying again.')
 															: code === GitHubErrorCode.SubmissionUncertain
-																? localize(
-																		'sessions.changes.checkUncertain',
-																		'GitHub may have accepted the re-run. Check the full results before trying again.',
-																	)
+																? localize('sessions.changes.checkUncertain', 'GitHub may have accepted the re-run. Check the full results before trying again.')
 																: code
 																	? localize(
 																			'sessions.changes.checkActionFailed',
@@ -170,8 +139,7 @@ export class ChecksWidget extends Disposable {
 												);
 											})
 											.finally(() => {
-												if (row.isConnected)
-													button.enabled = !kind || !model.retryBlocked(entry, kind);
+												if (row.isConnected) button.enabled = !kind || !model.retryBlocked(entry, kind);
 											});
 									},
 								}),
@@ -193,40 +161,22 @@ export class ChecksWidget extends Disposable {
 								output = h(container.ownerDocument, 'pre', { className: 'ash-sessions-check-output' });
 								output.tabIndex = 0;
 								output.setAttribute('role', 'region');
-								output.setAttribute(
-									'aria-label',
-									localize('sessions.changes.checkOutput', '{0} annotations', check.name),
-								);
+								output.setAttribute('aria-label', localize('sessions.changes.checkOutput', '{0} annotations', check.name));
 								row.append(output);
 							}
-							output.textContent =
-								checkDetailsText(details) ||
-								localize('sessions.changes.checkNoAnnotations', 'No annotations were reported.');
+							output.textContent = checkDetailsText(details) || localize('sessions.changes.checkNoAnnotations', 'No annotations were reported.');
 							if (details.actionsJob && check.status === 'completed' && !loadedActions) {
 								loadedActions = true;
 								action(localize('sessions.changes.checkLogs', 'Download logs'), async () => {
 									const url = await model.log(entry);
 									if (row.isConnected) await opener.open(url);
 								});
-								action(
-									localize('sessions.changes.checkRerun', 'Re-run job'),
-									() => model.rerun(entry),
-									'rerun',
-								);
+								action(localize('sessions.changes.checkRerun', 'Re-run job'), () => model.rerun(entry), 'rerun');
 							}
 							output.focus();
 						});
-						if (
-							check.status === 'completed' &&
-							['failure', 'timed_out', 'action_required', 'startup_failure'].includes(
-								check.conclusion ?? '',
-							)
-						) {
-							action(
-								localize('sessions.changes.checkFix', 'Ask agent to fix CI'),
-								() => model.fix(entry),
-								'fix',
-							);
+						if (check.status === 'completed' && ['failure', 'timed_out', 'action_required', 'startup_failure'].includes(check.conclusion ?? '')) {
+							action(localize('sessions.changes.checkFix', 'Ask agent to fix CI'), () => model.fix(entry), 'fix');
 						}
 					}
 					list.append(row);

@@ -5,12 +5,7 @@ import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { URI } from '../../../../../base/common/uri.js';
-import {
-	IBrowserViewService,
-	BrowserViewStorageScope,
-	type IBrowserViewInfo,
-	type BrowserViewEvent,
-} from '../../../../../platform/browserView/common/browserView.js';
+import { IBrowserViewService, BrowserViewStorageScope, type IBrowserViewInfo, type BrowserViewEvent } from '../../../../../platform/browserView/common/browserView.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
@@ -26,29 +21,19 @@ import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { constObservable, observableValue, type IObservable } from '../../../../../base/common/observable.js';
 import { Event } from '../../../../../base/common/event.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import type {
-	ICanvasContext,
-	ICanvasOpenRequest,
-	ICanvasWorkingSets,
-	ICanvasWorkingSetState,
-} from '../../common/canvas.js';
+import type { ICanvasContext, ICanvasOpenRequest, ICanvasWorkingSets, ICanvasWorkingSetState } from '../../common/canvas.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 
 suite('Conversation Canvas presentation', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	test('Canvas presentation descriptions use the non-default client language', async () => {
-		const messages = JSON.parse(
-			await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'),
-		);
+		const messages = JSON.parse(await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'));
 		try {
 			setNlsMessages('zh-CN', messages);
 			using f = fixture([info('one', 'thread-one')]);
 			await settle();
-			assert.equal(
-				(f.opened[0] as CanvasInput).getDescription(),
-				'关闭此标签页会隐藏 Canvas。使用“打开 Canvas”可在其会话旁重新打开。',
-			);
+			assert.equal((f.opened[0] as CanvasInput).getDescription(), '关闭此标签页会隐藏 Canvas。使用“打开 Canvas”可在其会话旁重新打开。');
 		} finally {
 			resetNlsResolver();
 		}
@@ -165,10 +150,7 @@ suite('Conversation Canvas presentation', () => {
 			source: URI.parse(page.state.url),
 		};
 		const canvases = observableValue('test', [canvas]);
-		const requests = observableValue<ReadonlyMap<string, ICanvasOpenRequest>>(
-			'test',
-			new Map([['preview', { id: 'open-1', succeeded: false }]]),
-		);
+		const requests = observableValue<ReadonlyMap<string, ICanvasOpenRequest>>('test', new Map([['preview', { id: 'open-1', succeeded: false }]]));
 		using f = fixture([], undefined, { contexts: constObservable([{ owner, canvases, openRequests: requests }]) });
 		await settle();
 		f.events.fire({ type: 'created', info: page });
@@ -241,10 +223,7 @@ suite('Conversation Canvas presentation', () => {
 				source: URI.parse(page.state.url),
 			},
 		]);
-		const requests = observableValue<ReadonlyMap<string, ICanvasOpenRequest>>(
-			'test',
-			new Map([['preview', { id: 'initial', succeeded: true }]]),
-		);
+		const requests = observableValue<ReadonlyMap<string, ICanvasOpenRequest>>('test', new Map([['preview', { id: 'initial', succeeded: true }]]));
 		using f = fixture([page], undefined, {
 			contexts: constObservable([{ owner, canvases, openRequests: requests }]),
 		});
@@ -347,8 +326,7 @@ function fixture(
 		contexts: contextOptions.contexts ?? constObservable([]),
 		workingSets: contextOptions.workingSets,
 		onDidRemoveOwner: Event.None,
-		getContext: owner =>
-			contextOptions.contexts?.get().find(context => context.owner.chat.toString() === owner.chat.toString()),
+		getContext: owner => contextOptions.contexts?.get().find(context => context.owner.chat.toString() === owner.chat.toString()),
 		getFrontendSessionResource: owner => owner.session,
 		onDidChangeVisibility: visibility.event,
 		isOwnerVisible: owner => visible.has(owner.chat.path.slice(1)),

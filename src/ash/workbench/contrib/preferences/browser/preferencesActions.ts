@@ -10,12 +10,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IPreferencesService, type IOpenSettingsOptions } from '../../../services/preferences/common/preferences.js';
-import {
-	OpenKeyboardShortcutsCommandId,
-	OpenSettingsCommandId,
-	OpenSettingsJsonCommandId,
-	OpenSettingsUICommandId,
-} from '../common/preferences.js';
+import { OpenKeyboardShortcutsCommandId, OpenSettingsCommandId, OpenSettingsJsonCommandId, OpenSettingsUICommandId } from '../common/preferences.js';
 import { ResourceContext } from '../../../common/contextkeys.js';
 import { UserSettingsResource } from '../../../services/preferences/common/settingsEditorInput.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
@@ -40,10 +35,7 @@ registerAction2(
 					primary: Keybinding.single(logicalKey('k', { altKey: true })),
 					mac: { primary: Keybinding.single(logicalKey('k', { primaryKey: true, altKey: true })) },
 					weight: KeybindingWeight.WorkbenchContrib,
-					when: ContextKeyExpr.and(
-						CONTEXT_KEYBINDINGS_EDITOR.isEqualTo(true),
-						CONTEXT_KEYBINDINGS_SEARCH_FOCUS.isEqualTo(true),
-					),
+					when: ContextKeyExpr.and(CONTEXT_KEYBINDINGS_EDITOR.isEqualTo(true), CONTEXT_KEYBINDINGS_SEARCH_FOCUS.isEqualTo(true)),
 				},
 			});
 		}
@@ -84,11 +76,7 @@ registerAction2(
 				keybinding: {
 					primary: Keybinding.single(logicalKey('Escape')),
 					weight: KeybindingWeight.WorkbenchContrib,
-					when: ContextKeyExpr.and(
-						CONTEXT_KEYBINDINGS_EDITOR.isEqualTo(true),
-						CONTEXT_KEYBINDINGS_SEARCH_FOCUS.isEqualTo(true),
-						CONTEXT_KEYBINDINGS_SEARCH_HAS_VALUE.isEqualTo(true),
-					),
+					when: ContextKeyExpr.and(CONTEXT_KEYBINDINGS_EDITOR.isEqualTo(true), CONTEXT_KEYBINDINGS_SEARCH_FOCUS.isEqualTo(true), CONTEXT_KEYBINDINGS_SEARCH_HAS_VALUE.isEqualTo(true)),
 				},
 			});
 		}
@@ -107,8 +95,16 @@ registerAction2(
 				title: localize2({ bundle: 'ash', key: 'workbench.settings' }, 'Ash Settings'),
 				tooltip: localize2({ bundle: 'ash', key: 'workbench.settings' }, 'Ash Settings'),
 				icon: Lxicon.gear,
-				menu: [{ id: MenuId.MenubarFileMenu, group: '5_preferences', order: 1 }],
-				keybinding: { primary: Keybinding.single(logicalKey(',', { primaryKey: true })) },
+				menu: [
+					{
+						id: MenuId.MenubarFileMenu,
+						group: '5_preferences',
+						order: 1,
+					},
+				],
+				keybinding: {
+					primary: Keybinding.single(logicalKey(',', { primaryKey: true })),
+				},
 				f1: true,
 			});
 		}
@@ -135,10 +131,7 @@ registerAction2(
 		constructor() {
 			super({
 				id: OpenKeyboardShortcutsCommandId,
-				title: localize2(
-					{ bundle: 'ash', key: 'workbench.openKeyboardShortcuts' },
-					'Preferences: Open Keyboard Shortcuts',
-				),
+				title: localize2({ bundle: 'ash', key: 'workbench.openKeyboardShortcuts' }, 'Preferences: Open Keyboard Shortcuts'),
 				f1: true,
 				menu: { id: MenuId.MenubarHelpMenu, group: '2_reference', order: 1 },
 			});
@@ -164,10 +157,7 @@ registerAction2(
 		constructor() {
 			super({
 				id: OpenSettingsJsonCommandId,
-				title: localize2(
-					{ bundle: 'ash.settings', key: 'json.openCommand' },
-					'Preferences: Open User Settings (JSON)',
-				),
+				title: localize2({ bundle: 'ash.settings', key: 'json.openCommand' }, 'Preferences: Open User Settings (JSON)'),
 				f1: true,
 			});
 		}
@@ -196,9 +186,7 @@ registerAction2(
 		}
 
 		override run(accessor: ServicesAccessor, ...args: unknown[]): Promise<void> {
-			const groupId = args.length
-				? resolveCommandsContext(args, accessor.get(IEditorGroupsService)).groupedEditors[0]?.group.id
-				: undefined;
+			const groupId = args.length ? resolveCommandsContext(args, accessor.get(IEditorGroupsService)).groupedEditors[0]?.group.id : undefined;
 			return accessor.get(IPreferencesService).openSettings({ jsonEditor: false, groupId });
 		}
 	},
@@ -209,10 +197,7 @@ registerAction2(
 		constructor() {
 			super({
 				id: 'workbench.action.openGlobalKeybindingsFile',
-				title: localize2(
-					{ bundle: 'ash', key: 'keybindings.openJson' },
-					'Preferences: Open Keyboard Shortcuts (JSON)',
-				),
+				title: localize2({ bundle: 'ash', key: 'keybindings.openJson' }, 'Preferences: Open Keyboard Shortcuts (JSON)'),
 				f1: true,
 			});
 		}
@@ -228,10 +213,7 @@ registerAction2(
 		constructor() {
 			super({
 				id: 'workbench.action.chat.showToolCatalog',
-				title: localize2(
-					{ bundle: 'ash.settings', key: 'capabilities.tools.command' },
-					'Developer: Show Agent Tool Catalog',
-				),
+				title: localize2({ bundle: 'ash.settings', key: 'capabilities.tools.command' }, 'Developer: Show Agent Tool Catalog'),
 				f1: true,
 			});
 		}
@@ -241,9 +223,7 @@ registerAction2(
 			const editors = accessor.get(IEditorService);
 			await tools.refresh();
 			const categories: Record<string, IToolData[]> = Object.create(null);
-			for (const tool of [...tools.getAllToolsIncludingDisabled()].sort((left, right) =>
-				left.id.localeCompare(right.id),
-			)) {
+			for (const tool of [...tools.getAllToolsIncludingDisabled()].sort((left, right) => left.id.localeCompare(right.id))) {
 				(categories[tool.category ?? 'unclassified'] ??= []).push(tool);
 			}
 			// A separate immutable resource preserves the inspected snapshot across refreshes.

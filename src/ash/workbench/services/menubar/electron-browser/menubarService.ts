@@ -3,12 +3,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { invoke, subscribe } from '../../../../platform/ipc/electron-browser/rendererIpc.js';
-import {
-	NATIVE_MENUBAR_SELECT_CHANNEL,
-	NATIVE_MENUBAR_UPDATE_CHANNEL,
-	type INativeMenubarData,
-	type INativeMenubarSelection,
-} from '../../../../platform/menubar/common/nativeMenubar.js';
+import { NATIVE_MENUBAR_SELECT_CHANNEL, NATIVE_MENUBAR_UPDATE_CHANNEL, type INativeMenubarData, type INativeMenubarSelection } from '../../../../platform/menubar/common/nativeMenubar.js';
 import { IMenubarService } from '../../../../platform/menubar/electron-browser/menubar.js';
 
 class MenubarService extends Disposable implements IMenubarService {
@@ -23,14 +18,7 @@ class MenubarService extends Disposable implements IMenubarService {
 				return;
 			}
 			const { revision, id } = value;
-			if (
-				typeof revision !== 'number' ||
-				!Number.isSafeInteger(revision) ||
-				revision < 0 ||
-				typeof id !== 'string' ||
-				id.length === 0 ||
-				id.length > 128
-			) {
+			if (typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision < 0 || typeof id !== 'string' || id.length === 0 || id.length > 128) {
 				return;
 			}
 			this.selections.fire({ revision, id });

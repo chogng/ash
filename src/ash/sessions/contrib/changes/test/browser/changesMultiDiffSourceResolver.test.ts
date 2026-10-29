@@ -60,9 +60,7 @@ for (const locale of ['en', 'zh-CN'])
 		const resolver = services.createInstance(ChangesMultiDiffSourceResolver);
 		assert.deepEqual(
 			resolver.sourceActions().map(action => action.label),
-			locale === 'zh-CN'
-				? ['当前轮次', '当前及之前的轮次', '上一轮次']
-				: ['Current Turn', 'Current Turn and Earlier', 'Previous Turn'],
+			locale === 'zh-CN' ? ['当前轮次', '当前及之前的轮次', '上一轮次'] : ['Current Turn', 'Current Turn and Earlier', 'Previous Turn'],
 		);
 		const source = URI.parse('ash-multi-diff:/turn/currentTurn?session=original&thread=thread&changes=capture');
 		const restored = await resolver.resolveDiffSource(URI.parse(source.toString()));

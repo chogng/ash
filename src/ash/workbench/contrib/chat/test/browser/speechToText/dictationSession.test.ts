@@ -108,26 +108,11 @@ function fixture() {
 	const lifetime = new DisposableStore();
 	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside></body>', { pretendToBeVisual: true });
 	lifetime.add(toDisposable(() => dom.window.close()));
-	lifetime.add(
-		installEditorTestDom(dom, [
-			'Node',
-			'Element',
-			'HTMLElement',
-			'HTMLButtonElement',
-			'HTMLCanvasElement',
-			'Event',
-			'InputEvent',
-			'KeyboardEvent',
-			'MouseEvent',
-			'NodeFilter',
-		]),
-	);
+	lifetime.add(installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'HTMLButtonElement', 'HTMLCanvasElement', 'Event', 'InputEvent', 'KeyboardEvent', 'MouseEvent', 'NodeFilter']));
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const model = lifetime.add(new TextModel(''));
 	const otherModel = lifetime.add(new TextModel(''));
-	const editor = lifetime.add(
-		createTestCodeEditor({ container: dom.window.document.querySelector('main')!, model, contributions: [] }),
-	);
+	const editor = lifetime.add(createTestCodeEditor({ container: dom.window.document.querySelector('main')!, model, contributions: [] }));
 	const other = lifetime.add(
 		createTestCodeEditor({
 			container: dom.window.document.querySelector('aside')!,
@@ -279,9 +264,7 @@ suite('Dictation editor binding', () => {
 		await stopDictation();
 		notifyDictationSubmitted(f.editor);
 		notifyDictationSubmitted(f.editor);
-		assert.deepEqual(f.speech.measurements, [
-			{ dictatedText: 'draft', submittedText: 'draft', backend: 'test', surface: 'chat', submitted: true },
-		]);
+		assert.deepEqual(f.speech.measurements, [{ dictatedText: 'draft', submittedText: 'draft', backend: 'test', surface: 'chat', submitted: true }]);
 		await startDictation(f.speech, f.editor, f.window, f.log);
 		f.editor.setModel(f.otherModel);
 		await stopDictation();
@@ -331,10 +314,7 @@ function commandFixture() {
 	services.registerInstance(IKeybindingService, {
 		enableKeybindingHoldMode: () => released.p,
 	} as unknown as IKeybindingService);
-	const run = (id = 'toggleSpeechToText', context?: unknown) =>
-		services.invokeFunction(accessor =>
-			CommandsRegistry.getCommand(`workbench.action.chat.${id}`)!(accessor, context),
-		);
+	const run = (id = 'toggleSpeechToText', context?: unknown) => services.invokeFunction(accessor => CommandsRegistry.getCommand(`workbench.action.chat.${id}`)!(accessor, context));
 	return {
 		...f,
 		services,
@@ -419,9 +399,7 @@ suite('Chat dictation command targeting', () => {
 			});
 			const pending = f.run();
 			await f.run(cancellation);
-			await model.complete({ available: true } as Awaited<
-				ReturnType<ILocalTranscriptionModelService['getModel']>
-			>);
+			await model.complete({ available: true } as Awaited<ReturnType<ILocalTranscriptionModelService['getModel']>>);
 			await pending;
 			assert.equal(f.speech.starts, 0);
 			assert.equal(isDictating(), false);

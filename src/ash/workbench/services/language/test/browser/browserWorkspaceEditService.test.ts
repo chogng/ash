@@ -2,10 +2,7 @@ import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/tes
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { TestDialogService } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
-import {
-	MemoryResourceStore,
-	MemoryFileService,
-} from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
+import { MemoryResourceStore, MemoryFileService } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { isCancellationError } from '../../../../../base/common/errors.js';
@@ -25,14 +22,7 @@ import { BrowserWorkingCopyService } from '../../../workingCopy/browser/browserW
 import { type IWorkingCopy } from '../../../workingCopy/common/workingCopyService.js';
 import { BulkEditService } from '../../../../contrib/bulkEdit/browser/bulkEditService.js';
 import { ResourceTextEdit } from '../../../../../editor/browser/services/bulkEditService.js';
-import {
-	FileKind,
-	FileNotFoundError,
-	type FileDeleteMode,
-	type FileExistingTargetBehavior,
-	type FileMissingTargetBehavior,
-	type IFileService,
-} from '../../../../../platform/files/common/files.js';
+import { FileKind, FileNotFoundError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileService } from '../../../../../platform/files/common/files.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
@@ -63,16 +53,12 @@ test('workspace edits preflight every document before mutating and persist close
 			{
 				kind: 'textDocument',
 				resource: first,
-				edits: [
-					{ range: Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 5 + 1)), text: 'one' },
-				],
+				edits: [{ range: Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 5 + 1)), text: 'one' }],
 			},
 			{
 				kind: 'textDocument',
 				resource: second,
-				edits: [
-					{ range: Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 5 + 1)), text: 'two' },
-				],
+				edits: [{ range: Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 5 + 1)), text: 'two' }],
 			},
 		],
 	});
@@ -175,10 +161,7 @@ test('bulk edit progress follows the committed operations and undo restores thei
 		},
 		{ progress: { report: update => progress.push(update) } },
 	);
-	assert.deepEqual(
-		{ progress, text: [store.text(first), store.text(second)] },
-		{ progress: [{ total: 2, increment: 0 }, { increment: 1 }, { increment: 1 }], text: ['A', 'B'] },
-	);
+	assert.deepEqual({ progress, text: [store.text(first), store.text(second)] }, { progress: [{ total: 2, increment: 0 }, { increment: 1 }, { increment: 1 }], text: ['A', 'B'] });
 	if (!applied.isApplied) throw new Error('Expected the transaction to apply');
 	assert.ok(applied.isApplied);
 	await applied.undo();
@@ -216,7 +199,13 @@ test('bulk edits with unchanged text and ignored file operations report no appli
 			missing: files.has(missing),
 			progress,
 		},
-		{ applied: false, saved: [], text: 'original', missing: false, progress: [{ total: 0, increment: 0 }] },
+		{
+			applied: false,
+			saved: [],
+			text: 'original',
+			missing: false,
+			progress: [{ total: 0, increment: 0 }],
+		},
 	);
 });
 
@@ -543,7 +532,9 @@ test('workspace edits classify caller cancellation before mutating resources', a
 
 	await assert.rejects(
 		service.apply(
-			{ entries: [{ kind: 'create', resource: created, existing: 'error' }] },
+			{
+				entries: [{ kind: 'create', resource: created, existing: 'error' }],
+			},
 			{ token: controller.signal },
 		),
 		error => isCancellationError(error) && error.reason === 'superseded',
@@ -634,8 +625,5 @@ test('workspace edits recheck model versions after asynchronous file operations'
 		}),
 		/stale/,
 	);
-	assert.deepEqual(
-		{ text: reference.model.getText(), created: files.has(created) },
-		{ text: 'original', created: false },
-	);
+	assert.deepEqual({ text: reference.model.getText(), created: files.has(created) }, { text: 'original', created: false });
 });

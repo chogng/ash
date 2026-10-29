@@ -14,6 +14,4 @@ class SplashStorageService implements ISplashStorageService {
 
 registerSingleton(ISplashStorageService, SplashStorageService, InstantiationType.Delayed);
 
-registerWorkbenchContribution(PartsSplash.ID, WorkbenchPhase.BlockStartup, accessor =>
-	accessor.get(IInstantiationService).createInstance(PartsSplash),
-);
+registerWorkbenchContribution(PartsSplash.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(PartsSplash));

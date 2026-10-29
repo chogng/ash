@@ -10,16 +10,8 @@ import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
 import { CommandsRegistry } from '../../../../../../platform/commands/common/commands.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
-import {
-	IQuickInputService,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../../../../platform/quickinput/common/quickInput.js';
-import {
-	TerminalCapability,
-	type ICommandDetectionCapability,
-	type ITerminalCommand,
-} from '../../../../../../platform/terminal/common/capabilities/capabilities.js';
+import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../../platform/quickinput/common/quickInput.js';
+import { TerminalCapability, type ICommandDetectionCapability, type ITerminalCommand } from '../../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { PromptInputState } from '../../../../../../platform/terminal/common/capabilities/commandDetection/promptInputModel.js';
 import { TerminalCommand } from '../../../../../../platform/terminal/common/capabilities/commandDetection/terminalCommand.js';
 import { TerminalCapabilityStore } from '../../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
@@ -29,8 +21,7 @@ import { ITerminalService, type ITerminalInstance } from '../../../../terminal/b
 import '../../browser/terminal.quickFix.contribution.js';
 
 const typoOutput = "git: 'sttatus' is not a git command. See 'git --help'.\n\nThe most similar command is\n\tstatus";
-const upstreamOutput =
-	'fatal: The current branch topic has no upstream branch.\nTo push the current branch and set the remote as upstream, use\n\n    git push --set-upstream origin topic';
+const upstreamOutput = 'fatal: The current branch topic has no upstream branch.\nTo push the current branch and set the remote as upstream, use\n\n    git push --set-upstream origin topic';
 
 function completedCommand(text: string, output: string, exitCode = 1): ITerminalCommand {
 	const lines = [...output.split('\n'), ''];
@@ -56,26 +47,23 @@ function completedCommand(text: string, output: string, exitCode = 1): ITerminal
 			},
 		};
 	};
-	return new TerminalCommand(
-		{ cols: 4096, buffer: { normal: buffer, active: buffer } } as unknown as ITerminalCommandScreen,
-		{
-			command: text,
-			commandLineConfidence: 'high',
-			isTrusted: false,
-			timestamp: 1,
-			duration: 1,
-			id: 'failed',
-			cwd: '/workspace',
-			exitCode,
-			commandStartLineContent: text,
-			markProperties: undefined,
-			startX: 0,
-			executedX: 0,
-			marker: marker(0),
-			executedMarker: marker(0),
-			endMarker: marker(lines.length - 1),
-		},
-	);
+	return new TerminalCommand({ cols: 4096, buffer: { normal: buffer, active: buffer } } as unknown as ITerminalCommandScreen, {
+		command: text,
+		commandLineConfidence: 'high',
+		isTrusted: false,
+		timestamp: 1,
+		duration: 1,
+		id: 'failed',
+		cwd: '/workspace',
+		exitCode,
+		commandStartLineContent: text,
+		markProperties: undefined,
+		startX: 0,
+		executedX: 0,
+		marker: marker(0),
+		executedMarker: marker(0),
+		endMarker: marker(lines.length - 1),
+	});
 }
 
 function fixture(command = completedCommand('git sttatus', typoOutput), initialInput = '') {
@@ -253,11 +241,7 @@ function fixture(command = completedCommand('git sttatus', typoOutput), initialI
 
 for (const [text, output, expected] of [
 	['git sttatus', typoOutput, ['git status']],
-	[
-		'git pu --verbose',
-		"git: 'pu' is not a git command. See 'git --help'.\nThe most similar commands are\n\tpull\n\tpush",
-		['git pull --verbose', 'git push --verbose'],
-	],
+	['git pu --verbose', "git: 'pu' is not a git command. See 'git --help'.\nThe most similar commands are\n\tpull\n\tpush", ['git pull --verbose', 'git push --verbose']],
 	['git push', upstreamOutput, ['git push --set-upstream origin topic']],
 	['git push origin 分支', upstreamOutput.replaceAll('topic', '分支'), ['git push --set-upstream origin 分支']],
 ] as const) {
@@ -292,19 +276,7 @@ test('Terminal Quick Fixes cancellation and existing prompt input never write to
 	}
 });
 
-for (const transition of [
-	'switch',
-	'reconnect',
-	'replace',
-	'exit',
-	'disposeInstance',
-	'startCommand',
-	'finishCommand',
-	'invalidate',
-	'removeCapability',
-	'workspaceChange',
-	'rawInput',
-] as const) {
+for (const transition of ['switch', 'reconnect', 'replace', 'exit', 'disposeInstance', 'startCommand', 'finishCommand', 'invalidate', 'removeCapability', 'workspaceChange', 'rawInput'] as const) {
 	test(`Terminal Quick Fixes rejects a stale choice after ${transition}`, async () => {
 		using state = fixture();
 		const operation = state.run();
@@ -404,9 +376,7 @@ test('Terminal Quick Fixes rejects a provider result delivered after the prompt 
 test('Terminal Quick Fixes cannot execute an already visible action after its provider is revoked', async () => {
 	using state = fixture(completedCommand('tool bad', 'failed'));
 	using registration = state.quickFixes.registerQuickFixProvider('extension/fix', {
-		provideTerminalQuickFixes: async () => [
-			{ label: 'tool good', terminalCommand: 'tool good', shouldExecute: true },
-		],
+		provideTerminalQuickFixes: async () => [{ label: 'tool good', terminalCommand: 'tool good', shouldExecute: true }],
 	});
 	const operation = state.run();
 	await state.waitForItems(items => items.some(item => item.label === 'tool good'));
@@ -441,9 +411,7 @@ test('Terminal Quick Fixes isolates synchronous and asynchronous provider failur
 test('Terminal Quick Fixes does not revive a visible action when its provider is registered again', async () => {
 	using state = fixture(completedCommand('tool bad', 'failed'));
 	const provider: ITerminalQuickFixProvider = {
-		provideTerminalQuickFixes: async () => [
-			{ label: 'tool good', terminalCommand: 'tool good', shouldExecute: true },
-		],
+		provideTerminalQuickFixes: async () => [{ label: 'tool good', terminalCommand: 'tool good', shouldExecute: true }],
 	};
 	using original = state.quickFixes.registerQuickFixProvider('extension/fix', provider);
 	const operation = state.run();
@@ -460,11 +428,7 @@ test('Terminal Quick Fixes discards a pending result from a replaced registratio
 	const pending = new DeferredPromise<readonly import('../../browser/quickFix.js').ITerminalQuickFix[]>();
 	const provider: ITerminalQuickFixProvider = { provideTerminalQuickFixes: () => pending.p };
 	using original = state.quickFixes.registerQuickFixProvider('extension/fix', provider);
-	const operation = state.quickFixes.provideTerminalQuickFixes(
-		state.instance,
-		state.commands[0]!,
-		new AbortController().signal,
-	);
+	const operation = state.quickFixes.provideTerminalQuickFixes(state.instance, state.commands[0]!, new AbortController().signal);
 	original.dispose();
 	using replacement = state.quickFixes.registerQuickFixProvider('extension/fix', provider);
 	await pending.complete([{ label: 'stale', terminalCommand: 'stale', shouldExecute: true }]);
@@ -478,11 +442,7 @@ test('Terminal Quick Fixes invalidates only the revoked registration of a shared
 	};
 	using first = state.quickFixes.registerQuickFixProvider('extension/first', provider);
 	using second = state.quickFixes.registerQuickFixProvider('extension/second', provider);
-	const results = await state.quickFixes.provideTerminalQuickFixes(
-		state.instance,
-		state.commands[0]!,
-		new AbortController().signal,
-	);
+	const results = await state.quickFixes.provideTerminalQuickFixes(state.instance, state.commands[0]!, new AbortController().signal);
 	assert.equal(results.length, 2);
 	first.dispose();
 	assert.deepEqual(
@@ -502,14 +462,7 @@ test('Terminal Quick Fixes does not dispatch a cancelled request', async () => {
 	});
 	const request = new AbortController();
 	request.abort();
-	assert.deepEqual(
-		await quickFixes.provideTerminalQuickFixes(
-			{} as ITerminalInstance,
-			completedCommand('tool bad', 'failed'),
-			request.signal,
-		),
-		[],
-	);
+	assert.deepEqual(await quickFixes.provideTerminalQuickFixes({} as ITerminalInstance, completedCommand('tool bad', 'failed'), request.signal), []);
 	assert.equal(calls, 0);
 });
 
@@ -528,11 +481,7 @@ for (const transition of ['cancel', 'unregister', 'dispose'] as const) {
 			provideTerminalQuickFixes: async () => [{ label: 'healthy', terminalCommand: 'healthy' }],
 		});
 		const request = new AbortController();
-		const operation = state.quickFixes.provideTerminalQuickFixes(
-			state.instance,
-			state.commands[0]!,
-			request.signal,
-		);
+		const operation = state.quickFixes.provideTerminalQuickFixes(state.instance, state.commands[0]!, request.signal);
 		if (transition === 'cancel') request.abort();
 		else if (transition === 'unregister') registration.dispose();
 		else state.quickFixes.dispose();
@@ -549,8 +498,5 @@ for (const transition of ['cancel', 'unregister', 'dispose'] as const) {
 test('Terminal Quick Fixes rejects registration after the window service is disposed', () => {
 	using service = new TerminalQuickFixService();
 	service.dispose();
-	assert.throws(
-		() => service.registerQuickFixProvider('extension/late', { provideTerminalQuickFixes: async () => [] }),
-		isCancellationError,
-	);
+	assert.throws(() => service.registerQuickFixProvider('extension/late', { provideTerminalQuickFixes: async () => [] }), isCancellationError);
 });

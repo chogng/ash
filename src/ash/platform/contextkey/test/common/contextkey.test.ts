@@ -165,5 +165,9 @@ suite('scoped context change isolation', () => {
 });
 
 function fakeNode(parentNode: Node | null = null): Node {
-	return { nodeType: 1, parentNode, getRootNode: () => parentNode?.getRootNode() ?? ({} as Node) } as Node;
+	return {
+		nodeType: 1,
+		parentNode,
+		getRootNode: () => parentNode?.getRootNode() ?? ({} as Node),
+	} as Node;
 }

@@ -1,10 +1,7 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, MutableDisposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
-import {
-	type IDocumentDiffProvider,
-	type IDocumentDiffProviderOptions,
-} from '../../../../editor/common/diff/documentDiffProvider.js';
+import { type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from '../../../../editor/common/diff/documentDiffProvider.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { DiffModel } from '../../../../editor/common/diff/diffModel.js';
 import { LineDiffKind, type LineDiffRows, type LineDiffRow } from '../../../../editor/common/diff/lineDiff.js';
@@ -60,13 +57,7 @@ export class QuickDiffModelService extends Disposable implements IQuickDiffModel
 			entry = {
 				resource,
 				model,
-				quickDiffModel: new QuickDiffModel(
-					resource,
-					model,
-					this.diffService,
-					this.quickDiffService,
-					this.configuration,
-				),
+				quickDiffModel: new QuickDiffModel(resource, model, this.diffService, this.quickDiffService, this.configuration),
 				references: 0,
 			};
 			this.entries.set(model, entry);
@@ -206,20 +197,14 @@ export class QuickDiffModel extends Disposable implements IQuickDiffModel {
 			if (!rows) return false;
 			for (let rowIndex = change.rowStart; rowIndex < change.rowEnd; rowIndex += 1) {
 				const row = rows.get(rowIndex);
-				if (
-					row &&
-					(row.modifiedLineIndex ?? deletionAnchor(rows, rowIndex, this.modified.lineCount)) === lineIndex
-				)
-					return true;
+				if (row && (row.modifiedLineIndex ?? deletionAnchor(rows, rowIndex, this.modified.lineCount)) === lineIndex) return true;
 			}
 			return false;
 		});
 	}
 
 	private diffOptions(): IDocumentDiffProviderOptions {
-		const setting = this.configuration.getValue<ScmDiffDecorationsIgnoreTrimWhitespace>(
-			'scm.diffDecorationsIgnoreTrimWhitespace',
-		);
+		const setting = this.configuration.getValue<ScmDiffDecorationsIgnoreTrimWhitespace>('scm.diffDecorationsIgnoreTrimWhitespace');
 		return {
 			ignoreTrimWhitespace:
 				setting === 'inherit'
@@ -235,28 +220,18 @@ export class QuickDiffModel extends Disposable implements IQuickDiffModel {
 	findNextChange(lineIndex: number, inclusive = false): QuickDiffChange | undefined {
 		validateLineIndex(lineIndex);
 		const changes = this._state.changes;
-		return (
-			changes.find(change => (inclusive ? change.lineIndex >= lineIndex : change.lineIndex > lineIndex)) ??
-			changes[0]
-		);
+		return changes.find(change => (inclusive ? change.lineIndex >= lineIndex : change.lineIndex > lineIndex)) ?? changes[0];
 	}
 
 	findPreviousChange(lineIndex: number, inclusive = false): QuickDiffChange | undefined {
 		validateLineIndex(lineIndex);
 		const changes = this._state.changes;
-		return (
-			[...changes]
-				.reverse()
-				.find(change => (inclusive ? change.lineIndex <= lineIndex : change.lineIndex < lineIndex)) ??
-			changes[changes.length - 1]
-		);
+		return [...changes].reverse().find(change => (inclusive ? change.lineIndex <= lineIndex : change.lineIndex < lineIndex)) ?? changes[changes.length - 1];
 	}
 
 	private rebuildChanges(): void {
 		if (this.isDisposed) return;
-		const changes = this._state.comparisons.flatMap(comparison =>
-			changesForComparison(comparison, this.modified.lineCount),
-		);
+		const changes = this._state.comparisons.flatMap(comparison => changesForComparison(comparison, this.modified.lineCount));
 		changes.sort((left, right) => left.lineIndex - right.lineIndex);
 		this.setState(Object.freeze({ ...this._state, changes: Object.freeze(changes) }));
 	}
@@ -306,6 +281,5 @@ function deletionAnchor(rows: LineDiffRows, rowIndex: number, lineCount: number)
 }
 
 function validateLineIndex(lineIndex: number): void {
-	if (!Number.isSafeInteger(lineIndex) || lineIndex < 0)
-		throw new RangeError('Quick Diff line index must be a non-negative safe integer');
+	if (!Number.isSafeInteger(lineIndex) || lineIndex < 0) throw new RangeError('Quick Diff line index must be a non-negative safe integer');
 }

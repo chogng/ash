@@ -1,8 +1,5 @@
 import { type TextModel } from '../../../common/model/textModel.js';
-import {
-	computeUnicodeHighlights,
-	type UnicodeHighlight,
-} from '../../../common/services/unicodeTextModelHighlighter.js';
+import { computeUnicodeHighlights, type UnicodeHighlight } from '../../../common/services/unicodeTextModelHighlighter.js';
 
 export type { UnicodeHighlight, UnicodeHighlightKind } from '../../../common/services/unicodeTextModelHighlighter.js';
 

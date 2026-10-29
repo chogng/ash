@@ -10,10 +10,7 @@ export interface IOpenEditorOptions {
 	readonly openToSide: boolean;
 }
 
-export function registerOpenEditorListeners(
-	element: HTMLElement,
-	onOpenEditor: (options: IOpenEditorOptions) => void,
-): IDisposable {
+export function registerOpenEditorListeners(element: HTMLElement, onOpenEditor: (options: IOpenEditorOptions) => void): IDisposable {
 	const listeners = new DisposableStore();
 	listeners.add(
 		addDisposableListener(element, 'click', event => {
@@ -39,43 +36,33 @@ export function registerOpenEditorListeners(
 	return listeners;
 }
 
-export function toOpenEditorOptions(
-	event: MouseEvent | StandardMouseEvent,
-	isDoubleClick?: boolean,
-): IOpenEditorOptions;
+export function toOpenEditorOptions(event: MouseEvent | StandardMouseEvent, isDoubleClick?: boolean): IOpenEditorOptions;
 export function toOpenEditorOptions(event: StandardKeyboardEvent): IOpenEditorOptions | undefined;
-export function toOpenEditorOptions(
-	event: MouseEvent | StandardMouseEvent | StandardKeyboardEvent,
-): IOpenEditorOptions | undefined;
-export function toOpenEditorOptions(
-	event: MouseEvent | StandardMouseEvent | StandardKeyboardEvent,
-	isDoubleClick?: boolean,
-): IOpenEditorOptions | undefined {
+export function toOpenEditorOptions(event: MouseEvent | StandardMouseEvent | StandardKeyboardEvent): IOpenEditorOptions | undefined;
+export function toOpenEditorOptions(event: MouseEvent | StandardMouseEvent | StandardKeyboardEvent, isDoubleClick?: boolean): IOpenEditorOptions | undefined {
 	if (event instanceof StandardKeyboardEvent) {
 		if (event.isComposing || event.altGraphKey) return undefined;
 		const hasModifier = event.ctrlKey || event.metaKey || event.altKey || event.shiftKey;
 		const isOpenKey = event.key === 'Enter' && !hasModifier;
-		const isMacOpenKey =
-			isMacintosh &&
-			event.key === 'ArrowDown' &&
-			event.metaKey &&
-			!event.ctrlKey &&
-			!event.altKey &&
-			!event.shiftKey;
+		const isMacOpenKey = isMacintosh && event.key === 'ArrowDown' && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
 		if (isOpenKey || isMacOpenKey) {
-			return { editorOptions: { pinned: true, preserveFocus: false }, openToSide: false };
+			return {
+				editorOptions: { pinned: true, preserveFocus: false },
+				openToSide: false,
+			};
 		}
 		if (event.key === ' ' && !hasModifier) {
-			return { editorOptions: { pinned: false, preserveFocus: true }, openToSide: false };
+			return {
+				editorOptions: { pinned: false, preserveFocus: true },
+				openToSide: false,
+			};
 		}
 		return undefined;
 	}
 
 	return {
 		editorOptions: {
-			pinned:
-				isDoubleClick === true ||
-				(event instanceof StandardMouseEvent ? event.middleButton : event.button === 1),
+			pinned: isDoubleClick === true || (event instanceof StandardMouseEvent ? event.middleButton : event.button === 1),
 			preserveFocus: isDoubleClick !== true,
 		},
 		openToSide: event.ctrlKey || event.metaKey || event.altKey,

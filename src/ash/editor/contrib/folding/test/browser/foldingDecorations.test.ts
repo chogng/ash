@@ -57,10 +57,7 @@ test('FoldingDecorationProvider selects controls, highlights, and editor-owned d
 	});
 	const provider = new FoldingDecorationProvider(editor);
 
-	assert.match(
-		provider.getDecorationOption(true, false, false).firstLineDecorationClassName ?? '',
-		/folding-collapsed/,
-	);
+	assert.match(provider.getDecorationOption(true, false, false).firstLineDecorationClassName ?? '', /folding-collapsed/);
 	assert.equal(provider.getDecorationOption(true, false, false).className, 'folded-background');
 	provider.showFoldingHighlights = false;
 	assert.equal(provider.getDecorationOption(true, false, false).className, undefined);
@@ -70,10 +67,7 @@ test('FoldingDecorationProvider selects controls, highlights, and editor-owned d
 
 	let decorationId = '';
 	provider.changeDecorations(accessor => {
-		decorationId = accessor.addDecoration(
-			model.getFullModelRange(),
-			provider.getDecorationOption(true, false, true),
-		);
+		decorationId = accessor.addDecoration(model.getFullModelRange(), provider.getDecorationOption(true, false, true));
 	});
 	assert.equal(model.getDecorationOptions(decorationId)?.description, 'folding-manually-collapsed');
 	provider.removeDecorations([decorationId]);
@@ -98,21 +92,15 @@ test('Folding contribution projects model ranges through FoldingDecorationProvid
 	const expandedMarker = editor.getDomNode().querySelector<HTMLElement>('.ash-icon-folding-expanded');
 	assert.equal(expandedMarker?.title, 'Collapse range');
 	assert.equal(expandedMarker?.querySelectorAll('.ash-icon').length, 1);
-	expandedMarker?.dispatchEvent(
-		new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, buttons: 1 }),
-	);
+	expandedMarker?.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, buttons: 1 }));
 	assert.ok(model.getAllDecorations().some(decoration => decoration.options.description === 'folding-collapsed'));
 	editor.view.render(true, false);
 	const pointerCollapsedMarker = editor.getDomNode().querySelector<HTMLElement>('.ash-icon-folding-collapsed');
-	pointerCollapsedMarker?.dispatchEvent(
-		new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, buttons: 1 }),
-	);
+	pointerCollapsedMarker?.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, buttons: 1 }));
 	assert.ok(model.getAllDecorations().some(decoration => decoration.options.description === 'folding-expanded'));
 	await editor.getAction('editor.fold')!.run();
 	editor.view.render(true, false);
-	const collapsed = model
-		.getAllDecorations()
-		.find(decoration => decoration.options.description === 'folding-collapsed');
+	const collapsed = model.getAllDecorations().find(decoration => decoration.options.description === 'folding-collapsed');
 	assert.equal(collapsed?.options.afterContentClassName, 'inline-folded');
 	const collapsedMarker = editor.getDomNode().querySelector<HTMLElement>('.ash-icon-folding-collapsed');
 	assert.equal(collapsedMarker?.title, 'Expand folded range');
@@ -146,16 +134,12 @@ test('fold headers stay on their physical line after Enter moves a tracked gutte
 	});
 	editor.layout({ width: 320, height: 120 });
 	editor.view.render(true, false);
-	const firstHeader = () =>
-		model.getAllDecorations().find(decoration => decoration.options.description === 'folding-expanded')?.range
-			.startLineNumber;
+	const firstHeader = () => model.getAllDecorations().find(decoration => decoration.options.description === 'folding-expanded')?.range.startLineNumber;
 	assert.equal(firstHeader(), 1);
 	model.applyOperations([{ range: new Range(1, 2, 1, 2), text: '\n' }]);
 	editor.view.render(true, false);
 	assert.equal(firstHeader(), 1);
-	assert.ok(
-		editor.getDomNode().querySelector('.margin-view-overlays [data-line-index="0"] .ash-icon-folding-expanded'),
-	);
+	assert.ok(editor.getDomNode().querySelector('.margin-view-overlays [data-line-index="0"] .ash-icon-folding-expanded'));
 	await model.undo();
 	editor.view.render(true, false);
 	assert.equal(firstHeader(), 1);

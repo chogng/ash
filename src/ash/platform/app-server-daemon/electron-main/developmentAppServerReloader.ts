@@ -3,14 +3,7 @@ import { readFileSync, unwatchFile, watchFile } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
 import { promisify } from 'node:util';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	type IDisposable,
-	MutableDisposable,
-	toDisposable,
-} from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, type IDisposable, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import type { AppServerConnectionRelay } from '../../agentHost/electron-main/appServerConnectionRelay.js';
 import type { AppServerDaemonLauncher } from './appServerDaemonLauncher.js';
 import type { IDevelopmentAppServerRuntime } from './developmentAppServerRuntime.js';
@@ -49,9 +42,7 @@ export class DevelopmentAppServerReloader extends Disposable {
 	constructor(private readonly options: DevelopmentAppServerReloaderOptions) {
 		super();
 		this.readGeneration = options.readGeneration ?? readDevelopmentAppServerGeneration;
-		this.log =
-			options.log ??
-			((message, error) => (error === undefined ? console.info(message) : console.error(message, error)));
+		this.log = options.log ?? ((message, error) => (error === undefined ? console.info(message) : console.error(message, error)));
 		this._register((options.watchGeneration ?? watchGenerationFile)(options.generationFile, () => this.schedule()));
 		this._register(
 			toDisposable(() => {
@@ -80,16 +71,14 @@ export class DevelopmentAppServerReloader extends Disposable {
 		);
 		resources.add(
 			supervisor.onStateChange(() => {
-				if (this.pendingRuntime.value && this.canRestart())
-					void this.ensureDrain().catch(error => this.log('[app-server] Development restart failed', error));
+				if (this.pendingRuntime.value && this.canRestart()) void this.ensureDrain().catch(error => this.log('[app-server] Development restart failed', error));
 			}),
 		);
 		return toDisposable(() => {
 			// Workspace switches reuse the relay; an older scope must not unregister its replacement.
 			if (this.registrations.get(supervisor) !== resources) return;
 			this.registrations.deleteAndDispose(supervisor);
-			if (this.pendingRuntime.value && this.canRestart())
-				void this.ensureDrain().catch(error => this.log('[app-server] Development restart failed', error));
+			if (this.pendingRuntime.value && this.canRestart()) void this.ensureDrain().catch(error => this.log('[app-server] Development restart failed', error));
 		});
 	}
 
@@ -102,15 +91,10 @@ export class DevelopmentAppServerReloader extends Disposable {
 		if (runtime === this.selectedRuntime.value?.runtime && !this.pendingRuntime.value) return;
 		const carrier = [...this.connections][0];
 		if (!carrier) return;
-		const lease = await (this.options.acquireGeneration?.(carrier.launcher) ??
-			carrier.launcher.acquireDevelopmentRuntime());
+		const lease = await (this.options.acquireGeneration?.(carrier.launcher) ?? carrier.launcher.acquireDevelopmentRuntime());
 		// Pointer reads and lease acquisition can finish out of order while another
 		// build is published. Only the newest reload may choose a pending runtime.
-		if (
-			this.isDisposed ||
-			revision !== this.reloadRevision ||
-			lease.runtime === this.selectedRuntime.value?.runtime
-		) {
+		if (this.isDisposed || revision !== this.reloadRevision || lease.runtime === this.selectedRuntime.value?.runtime) {
 			lease.dispose();
 			return;
 		}
@@ -122,8 +106,7 @@ export class DevelopmentAppServerReloader extends Disposable {
 		if (this.selectedRuntime.value) return;
 		if (!this.selectionPromise) {
 			this.selectionPromise = (async () => {
-				const lease = await (this.options.acquireGeneration?.(launcher) ??
-					launcher.acquireDevelopmentRuntime());
+				const lease = await (this.options.acquireGeneration?.(launcher) ?? launcher.acquireDevelopmentRuntime());
 				if (this.isDisposed) {
 					lease.dispose();
 					this.assertNotDisposed();
@@ -148,9 +131,7 @@ export class DevelopmentAppServerReloader extends Disposable {
 	}
 
 	private canRestart(): boolean {
-		return [...this.connections].every(({ supervisor }) =>
-			['ready', 'crashed', 'stopped'].includes(supervisor.state),
-		);
+		return [...this.connections].every(({ supervisor }) => ['ready', 'crashed', 'stopped'].includes(supervisor.state));
 	}
 
 	private async drain(): Promise<void> {
@@ -178,19 +159,14 @@ export class DevelopmentAppServerReloader extends Disposable {
 				for (const { launcher } of this.connections) launcher.selectDevelopmentRuntime(lease);
 				this.selectedRuntime.value = this.restartingRuntime.clearAndLeak();
 				const carrier = [...this.connections][0];
-				if (running.length > 0 && carrier)
-					await (this.options.restartDaemon ?? restartManagedDaemon)(carrier.launcher);
+				if (running.length > 0 && carrier) await (this.options.restartDaemon ?? restartManagedDaemon)(carrier.launcher);
 			} finally {
 				this.restartingRuntime.clear();
 				this.restartBarrier = undefined;
 				release();
 			}
 			if (this.isDisposed) return;
-			await Promise.all(
-				running
-					.filter(connection => this.connections.has(connection))
-					.map(({ supervisor }) => supervisor.start()),
-			);
+			await Promise.all(running.filter(connection => this.connections.has(connection)).map(({ supervisor }) => supervisor.start()));
 			this.log(`[app-server] Restarted development runtime ${basename(runtime)}`);
 		}
 	}
@@ -238,15 +214,9 @@ export function readDevelopmentAppServerGenerationSync(generationFile: string): 
 function parseDevelopmentAppServerGeneration(generationFile: string, contents: string): string {
 	if (Buffer.byteLength(contents, 'utf8') > 4_096) throw new Error('Development runtime generation is oversized');
 	const value: unknown = JSON.parse(contents);
-	if (!value || typeof value !== 'object' || Array.isArray(value))
-		throw new Error('Development runtime generation is invalid');
+	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Development runtime generation is invalid');
 	const record = value as Record<string, unknown>;
-	if (
-		Object.keys(record).sort().join(',') !== 'runtime,version' ||
-		record.version !== 3 ||
-		typeof record.runtime !== 'string' ||
-		!/^generations\/[a-f0-9]{64}$/u.test(record.runtime)
-	)
+	if (Object.keys(record).sort().join(',') !== 'runtime,version' || record.version !== 3 || typeof record.runtime !== 'string' || !/^generations\/[a-f0-9]{64}$/u.test(record.runtime))
 		throw new Error('Development runtime generation is invalid');
 	const runtime = resolve(dirname(generationFile), record.runtime);
 	// This read is only a change notification. Rust validates the files while

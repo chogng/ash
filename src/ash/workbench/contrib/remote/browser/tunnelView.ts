@@ -76,10 +76,7 @@ export class TunnelPanel extends ViewPane {
 		this.statusElement.setAttribute('role', 'status');
 		this.listElement = h(container.ownerDocument, 'ul');
 		this.listElement.className = 'ash-remote-ports-list';
-		this.listElement.setAttribute(
-			'aria-label',
-			localize({ bundle: 'ash.workbench', key: 'ports.forwarded' }, 'Forwarded ports'),
-		);
+		this.listElement.setAttribute('aria-label', localize({ bundle: 'ash.workbench', key: 'ports.forwarded' }, 'Forwarded ports'));
 		this.contentElement.append(this.formElement, this.statusElement, this.listElement);
 		this.trackBodyMinimum(this.listElement, 22);
 
@@ -103,10 +100,7 @@ export class TunnelPanel extends ViewPane {
 		if (!this.canForward() || this.opening) return;
 		const remotePort = this.portInput.valueAsNumber;
 		if (!Number.isSafeInteger(remotePort) || remotePort < 1 || remotePort > 65535) {
-			this.error = localize(
-				{ bundle: 'ash.workbench', key: 'ports.invalidPort' },
-				'Remote port must be an integer from 1 to 65535.',
-			);
+			this.error = localize({ bundle: 'ash.workbench', key: 'ports.invalidPort' }, 'Remote port must be an integer from 1 to 65535.');
 			this.render();
 			return;
 		}
@@ -117,13 +111,7 @@ export class TunnelPanel extends ViewPane {
 		void Promise.resolve(this.tunnelService.openTunnel(undefined, '127.0.0.1', remotePort))
 			.then(async tunnel => {
 				if (!tunnel || typeof tunnel === 'string') {
-					throw new Error(
-						tunnel ||
-							localize(
-								{ bundle: 'ash.workbench', key: 'ports.forwardFailed' },
-								'Could not forward the remote port.',
-							),
-					);
+					throw new Error(tunnel || localize({ bundle: 'ash.workbench', key: 'ports.forwardFailed' }, 'Could not forward the remote port.'));
 				}
 				if (!this.isCurrentConnection(connectionRevision)) {
 					await tunnel.dispose();
@@ -134,13 +122,7 @@ export class TunnelPanel extends ViewPane {
 			})
 			.catch(error => {
 				if (this.isCurrentConnection(connectionRevision)) {
-					this.error = errorMessage(
-						error,
-						localize(
-							{ bundle: 'ash.workbench', key: 'ports.forwardFailed' },
-							'Could not forward the remote port.',
-						),
-					);
+					this.error = errorMessage(error, localize({ bundle: 'ash.workbench', key: 'ports.forwardFailed' }, 'Could not forward the remote port.'));
 				}
 			})
 			.finally(() => {
@@ -169,13 +151,7 @@ export class TunnelPanel extends ViewPane {
 				},
 				error => {
 					if (this.isCurrentConnection(connectionRevision)) {
-						this.error = errorMessage(
-							error,
-							localize(
-								{ bundle: 'ash.workbench', key: 'ports.stopFailed' },
-								'Could not stop the forwarded port.',
-							),
-						);
+						this.error = errorMessage(error, localize({ bundle: 'ash.workbench', key: 'ports.stopFailed' }, 'Could not stop the forwarded port.'));
 					}
 				},
 			)
@@ -200,13 +176,7 @@ export class TunnelPanel extends ViewPane {
 				},
 				error => {
 					if (this.isCurrentConnection(connectionRevision)) {
-						this.error = errorMessage(
-							error,
-							localize(
-								{ bundle: 'ash.workbench', key: 'ports.stopAllFailed' },
-								'Could not stop all forwarded ports.',
-							),
-						);
+						this.error = errorMessage(error, localize({ bundle: 'ash.workbench', key: 'ports.stopAllFailed' }, 'Could not stop all forwarded ports.'));
 					}
 				},
 			)
@@ -275,10 +245,7 @@ export class TunnelPanel extends ViewPane {
 			},
 			error => {
 				if (!this.isCurrentConnection(connectionRevision) || readRevision !== this.readRevision) return;
-				this.error = errorMessage(
-					error,
-					localize({ bundle: 'ash.workbench', key: 'ports.readFailed' }, 'Could not read forwarded ports.'),
-				);
+				this.error = errorMessage(error, localize({ bundle: 'ash.workbench', key: 'ports.readFailed' }, 'Could not read forwarded ports.'));
 				this.render();
 			},
 		);
@@ -349,24 +316,13 @@ export class TunnelPanel extends ViewPane {
 		stop.textContent = this.closing.has(tunnelKey(tunnel))
 			? localize({ bundle: 'ash.workbench', key: 'ports.stopping' }, 'Stopping…')
 			: localize({ bundle: 'ash.workbench', key: 'ports.stop' }, 'Stop');
-		stop.setAttribute(
-			'aria-label',
-			localize(
-				{ bundle: 'ash.workbench', key: 'ports.stopLabel' },
-				'Stop forwarding remote port {0}',
-				tunnel.tunnelRemotePort,
-			),
-		);
+		stop.setAttribute('aria-label', localize({ bundle: 'ash.workbench', key: 'ports.stopLabel' }, 'Stop forwarding remote port {0}', tunnel.tunnelRemotePort));
 		item.append(endpoints, state, stop);
 		return item;
 	}
 
 	private statusText(remote: boolean, tunnelCount: number): string {
-		if (!remote)
-			return localize(
-				{ bundle: 'ash.workbench', key: 'ports.sshRequired' },
-				'Forwarded ports are available in an SSH Remote Workspace.',
-			);
+		if (!remote) return localize({ bundle: 'ash.workbench', key: 'ports.sshRequired' }, 'Forwarded ports are available in an SSH Remote Workspace.');
 		if (this.error) return this.error;
 		if (this.remoteAgentService.connectionState !== 'connected') {
 			return tunnelCount === 0
@@ -398,11 +354,7 @@ export class TunnelPanel extends ViewPane {
 }
 
 function compareTunnels(first: RemoteTunnel, second: RemoteTunnel): number {
-	return (
-		first.tunnelRemotePort - second.tunnelRemotePort ||
-		(first.tunnelLocalPort ?? 0) - (second.tunnelLocalPort ?? 0) ||
-		first.tunnelRemoteHost.localeCompare(second.tunnelRemoteHost)
-	);
+	return first.tunnelRemotePort - second.tunnelRemotePort || (first.tunnelLocalPort ?? 0) - (second.tunnelLocalPort ?? 0) || first.tunnelRemoteHost.localeCompare(second.tunnelRemoteHost);
 }
 
 function remoteConnectionIdentity(connection: RemoteAgentConnection | undefined): string | undefined {

@@ -1,12 +1,7 @@
 import { IDebugService } from '../../common/debug.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { observableValue } from '../../../../../base/common/observable.js';
-import {
-	isChatContextPickerPickItem,
-	type IChatContextPickerItem,
-	type IChatContextValueItem,
-	type IChatContextPickerPickItem,
-} from '../../../chat/browser/attachments/chatContextPickService.js';
+import { isChatContextPickerPickItem, type IChatContextPickerItem, type IChatContextValueItem, type IChatContextPickerPickItem } from '../../../chat/browser/attachments/chatContextPickService.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 import { StatusbarService } from '../../../../browser/parts/statusbar/statusbarPart.js';
 import assert from 'node:assert/strict';
@@ -25,10 +20,7 @@ import { TestNotificationService } from '../../../../services/notification/test/
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { IStatusbarService } from '../../../../services/statusbar/browser/statusbar.js';
 import { ProgressService } from '../../../../services/progress/browser/progressService.js';
-import {
-	ChatContextPickService,
-	IChatContextPickService,
-} from '../../../../contrib/chat/browser/attachments/chatContextPickService.js';
+import { ChatContextPickService, IChatContextPickService } from '../../../../contrib/chat/browser/attachments/chatContextPickService.js';
 import { TestExtensionService } from '../../../../test/common/testExtensionServices.js';
 import { parseExtensionManifest } from '../../../../services/extensions/common/extensionManifest.js';
 import { canSetBreakpointsIn } from '../../common/breakpoints.js';
@@ -77,18 +69,9 @@ test('Debug memory editor codec preserves raw bytes and rejects stale or conflic
 	assert.deepEqual([...(await files.readFileBytes(resource)).bytes], [0, 255]);
 	const text = await files.readFile(resource, 'utf8');
 	assert.equal(text.content, '00 ff');
-	await files.writeFile(
-		{ resource, content: '01 fe', encoding: 'utf8', expectedRevision: text.revision },
-		{ create: false, overwrite: true },
-	);
+	await files.writeFile({ resource, content: '01 fe', encoding: 'utf8', expectedRevision: text.revision }, { create: false, overwrite: true });
 	assert.deepEqual(writes, [[1, 254]]);
-	await assert.rejects(
-		files.writeFile(
-			{ resource, content: '02 fd', encoding: 'utf8', expectedRevision: text.revision },
-			{ create: false, overwrite: true },
-		),
-		/Memory changed/,
-	);
+	await assert.rejects(files.writeFile({ resource, content: '02 fd', encoding: 'utf8', expectedRevision: text.revision }, { create: false, overwrite: true }), /Memory changed/);
 	await assert.rejects(files.writeFile({ resource, content: 'oops', encoding: 'utf8' }), /hexadecimal/);
 	using invalidations = new Emitter<{ memoryReference: string; offset: number; count: number }>();
 	Object.defineProperty(session, 'onDidInvalidateMemory', { value: invalidations.event });
@@ -152,14 +135,7 @@ test('Debug adapter progress owns real notification lifetime and cancellation re
 			},
 		}),
 	} as unknown as IPaneCompositePartService;
-	using progress = new ProgressService(
-		statusbar,
-		notifications,
-		services.get(ICommandService),
-		views,
-		descriptors,
-		panes,
-	);
+	using progress = new ProgressService(statusbar, notifications, services.get(ICommandService), views, descriptors, panes);
 	using contribution = new DebugProgressContribution(debug, progress, notifications, views);
 	starts.fire({ progressId: 'symbols', title: 'Loading symbols', cancellable: true });
 	updates.fire({ progressId: 'symbols', message: 'Half loaded', percentage: 50 });
@@ -211,10 +187,7 @@ test('Debug visualizers traverse real variable ports and validate extension comm
 		}),
 		descriptor,
 	);
-	extensions.getExtensionPointContributions = <T>(name: string) =>
-		name === 'debugVisualizers'
-			? [{ description: descriptor, value: manifest.contributes.debugVisualizers as T }]
-			: [];
+	extensions.getExtensionPointContributions = <T>(name: string) => (name === 'debugVisualizers' ? [{ description: descriptor, value: manifest.contributes.debugVisualizers as T }] : []);
 	using services = new InstantiationService();
 	using commands = new CommandService(services);
 	const args: unknown[] = [];
@@ -262,9 +235,7 @@ test('Breakpoint language and when declarations are honored when unrestricted po
 		}),
 		descriptor,
 	);
-	extensions.getExtensionPointContributions = <T>() => [
-		{ description: descriptor, value: manifest.contributes.breakpoints as T },
-	];
+	extensions.getExtensionPointContributions = <T>() => [{ description: descriptor, value: manifest.contributes.breakpoints as T }];
 	using configuration = new TestConfigurationService();
 	await configuration.updateValue('debug.allowBreakpointsEverywhere', false);
 	using context = new ContextKeyService();
@@ -285,10 +256,7 @@ test('Debug status color lease ends when the last live session ends', () => {
 	assert.equal(statusbar.style, undefined);
 });
 
-async function readContextPicks(
-	source: IChatContextPickerItem | IChatContextValueItem,
-	query: string,
-): Promise<IChatContextPickerPickItem[]> {
+async function readContextPicks(source: IChatContextPickerItem | IChatContextValueItem, query: string): Promise<IChatContextPickerPickItem[]> {
 	if (source.type !== 'pickerPick') throw new Error('Expected the registered picker contract');
 	const picker = source.asPicker();
 	const cancellation = new CancellationTokenSource();

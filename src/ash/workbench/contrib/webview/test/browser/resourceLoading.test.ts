@@ -23,12 +23,7 @@ suite('Webview resource loading', () => {
 		using fileService = createTestFileService(files);
 		const responses = await Promise.all(
 			expected.map(async ([name]) => {
-				const result = await loadLocalResource(
-					URI.joinPath(root, name),
-					{ roots: [root] },
-					fileService,
-					CancellationToken.None,
-				);
+				const result = await loadLocalResource(URI.joinPath(root, name), { roots: [root] }, fileService, CancellationToken.None);
 				return result.status === 200 ? [name, result.mimeType] : [name, result.status];
 			}),
 		);
@@ -49,12 +44,9 @@ suite('Webview resource loading', () => {
 		const result = await loadLocalResource(file, { roots: [root] }, fileService, CancellationToken.None);
 		using fileService2 = createTestFileService(files);
 		const denied = await Promise.all(
-			[
-				root,
-				URI.parse('file:///workspace/assets-other/icon.svg'),
-				URI.parse('file:///workspace/assets/../secret.svg'),
-				URI.parse('ash-remote://other/workspace/assets/icon.svg'),
-			].map(resource => loadLocalResource(resource, { roots: [root] }, fileService2, CancellationToken.None)),
+			[root, URI.parse('file:///workspace/assets-other/icon.svg'), URI.parse('file:///workspace/assets/../secret.svg'), URI.parse('ash-remote://other/workspace/assets/icon.svg')].map(resource =>
+				loadLocalResource(resource, { roots: [root] }, fileService2, CancellationToken.None),
+			),
 		);
 		assert.deepEqual(
 			{ result, denied: denied.map(response => response.status), reads },
@@ -80,12 +72,7 @@ suite('Webview resource loading', () => {
 			return read(resource);
 		};
 		using fileService = createTestFileService(files);
-		const result = loadLocalResource(
-			file,
-			{ roots: [URI.parse('file:///workspace')] },
-			fileService,
-			cancellation.token,
-		);
+		const result = loadLocalResource(file, { roots: [URI.parse('file:///workspace')] }, fileService, cancellation.token);
 		cancellation.cancel();
 		finish();
 		await assert.rejects(result, { name: 'CancellationError' });
@@ -98,8 +85,7 @@ suite('Webview resource loading', () => {
 			{ uri: uri.toString(), sibling: new URL('./image.svg', uri.toString()).href },
 			{
 				uri: 'https://resources.ash-webview.invalid/ash-remote/assh-example/workspace/space%20dir/style.css',
-				sibling:
-					'https://resources.ash-webview.invalid/ash-remote/assh-example/workspace/space%20dir/image.svg',
+				sibling: 'https://resources.ash-webview.invalid/ash-remote/assh-example/workspace/space%20dir/image.svg',
 			},
 		);
 	});

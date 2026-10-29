@@ -93,17 +93,12 @@ export const designStyleFields = {
 	effect: ['effects'],
 	grid: ['layoutGuide'],
 } as const;
-const color = (value: unknown): value is string =>
-	typeof value === 'string' && /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(value);
+const color = (value: unknown): value is string => typeof value === 'string' && /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(value);
 const number = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
-const name = (value: unknown): value is string =>
-	typeof value === 'string' && value.trim().length > 0 && value.length <= 256;
-const keys = (value: Record<string, unknown>, allowed: readonly string[]): boolean =>
-	Object.keys(value).every(key => allowed.includes(key));
+const name = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0 && value.length <= 256;
+const keys = (value: Record<string, unknown>, allowed: readonly string[]): boolean => Object.keys(value).every(key => allowed.includes(key));
 function fail(): never {
-	throw new TypeError(
-		localize('sessions.design.invalidResources', 'Invalid design resource, binding, or circular variable alias.'),
-	);
+	throw new TypeError(localize('sessions.design.invalidResources', 'Invalid design resource, binding, or circular variable alias.'));
 }
 export function freezeDesignResources<T>(value: T): T {
 	if (value && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -115,30 +110,16 @@ export function freezeDesignResources<T>(value: T): T {
 	return value;
 }
 
-export function getDesignResourceCatalog(
-	resources: DesignResources = emptyDesignResources,
-	enabledOnly = false,
-): Pick<DesignResources, 'collections' | 'variables' | 'styles'> {
+export function getDesignResourceCatalog(resources: DesignResources = emptyDesignResources, enabledOnly = false): Pick<DesignResources, 'collections' | 'variables' | 'styles'> {
 	const libraries = resources.libraries.filter(library => !enabledOnly || library.enabled);
 	return {
-		collections: [
-			...resources.collections,
-			...libraries.flatMap(library => library.document.resources?.collections ?? []),
-		],
-		variables: [
-			...resources.variables,
-			...libraries.flatMap(library => library.document.resources?.variables ?? []),
-		],
+		collections: [...resources.collections, ...libraries.flatMap(library => library.document.resources?.collections ?? [])],
+		variables: [...resources.variables, ...libraries.flatMap(library => library.document.resources?.variables ?? [])],
 		styles: [...resources.styles, ...libraries.flatMap(library => library.document.resources?.styles ?? [])],
 	};
 }
-export function getDesignLibraryShapes(
-	resources: DesignResources = emptyDesignResources,
-	enabledOnly = false,
-): readonly DesignShape[] {
-	return resources.libraries
-		.filter(library => !enabledOnly || library.enabled)
-		.flatMap(library => library.document.shapes);
+export function getDesignLibraryShapes(resources: DesignResources = emptyDesignResources, enabledOnly = false): readonly DesignShape[] {
+	return resources.libraries.filter(library => !enabledOnly || library.enabled).flatMap(library => library.document.shapes);
 }
 
 export function supportsDesignProperty(shape: DesignShape, property: DesignBindableProperty): boolean {
@@ -174,32 +155,20 @@ export function getDesignProperty(shape: DesignShape, property: DesignBindablePr
 	}
 	return Reflect.get(shape, property);
 }
-export function normalizeDesignProperty(
-	property: DesignBindableProperty,
-	value: string | number | boolean,
-): string | number | boolean {
+export function normalizeDesignProperty(property: DesignBindableProperty, value: string | number | boolean): string | number | boolean {
 	if (typeof value === 'number') {
 		if (property === 'opacity') {
 			value = Math.max(0, Math.min(1, value));
 		} else if (property === 'fontWeight') {
 			value = Math.max(1, Math.min(1000, value));
 		} else if (property !== 'letterSpacing') {
-			value = Math.max(
-				['width', 'height', 'fontSize', 'lineHeight', 'strokeWidth', 'maxWidth', 'maxHeight'].includes(property)
-					? 0.001
-					: 0,
-				value,
-			);
+			value = Math.max(['width', 'height', 'fontSize', 'lineHeight', 'strokeWidth', 'maxWidth', 'maxHeight'].includes(property) ? 0.001 : 0, value);
 		}
 	}
 	return value;
 }
 
-export function setDesignProperty(
-	shape: DesignShape,
-	property: DesignBindableProperty,
-	value: string | number | boolean,
-): DesignShape {
+export function setDesignProperty(shape: DesignShape, property: DesignBindableProperty, value: string | number | boolean): DesignShape {
 	if (!supportsDesignProperty(shape, property)) {
 		return shape;
 	}
@@ -251,8 +220,7 @@ export function resolveDesignVariable(
 		return overrides[id];
 	}
 	const mode = modes[collection.id];
-	const value =
-		variable.values[collection.modes.some(candidate => candidate.id === mode) ? mode : collection.defaultMode];
+	const value = variable.values[collection.modes.some(candidate => candidate.id === mode) ? mode : collection.defaultMode];
 	if (typeof value !== 'object') {
 		return value;
 	}
@@ -340,18 +308,13 @@ export function resolveDesignResources(
 			}
 			next = { ...next, sizeLimits: limits };
 		}
-		return next.kind === 'frame' || next.kind === 'group'
-			? { ...next, children: next.children.map(child => visit(child, modes)) }
-			: next;
+		return next.kind === 'frame' || next.kind === 'group' ? { ...next, children: next.children.map(child => visit(child, modes)) } : next;
 	};
 	return shapes.map(shape => visit(shape, resources.modes ?? {}));
 }
 
 /** Direct property edits detach their binding/style. Resolving a resource never passes through this edit detector. */
-export function recordDesignResourceEdits(
-	shapes: readonly DesignShape[],
-	previous: readonly DesignShape[],
-): readonly DesignShape[] {
+export function recordDesignResourceEdits(shapes: readonly DesignShape[], previous: readonly DesignShape[]): readonly DesignShape[] {
 	const before = new Map<string, DesignShape>();
 	const collect = (shape: DesignShape): void => {
 		before.set(shape.id, shape);
@@ -369,9 +332,7 @@ export function recordDesignResourceEdits(
 					...next,
 					bindings: Object.fromEntries(
 						Object.entries(shape.bindings).filter(
-							([key]) =>
-								JSON.stringify(getDesignProperty(shape, key as DesignBindableProperty)) ===
-								JSON.stringify(getDesignProperty(old, key as DesignBindableProperty)),
+							([key]) => JSON.stringify(getDesignProperty(shape, key as DesignBindableProperty)) === JSON.stringify(getDesignProperty(old, key as DesignBindableProperty)),
 						),
 					),
 				};
@@ -381,11 +342,7 @@ export function recordDesignResourceEdits(
 					...next,
 					styleBindings: Object.fromEntries(
 						Object.entries(shape.styleBindings).filter(([kind]) =>
-							designStyleFields[kind as DesignStyleKind].every(
-								field =>
-									JSON.stringify(Reflect.get(shape, field)) ===
-									JSON.stringify(Reflect.get(old, field)),
-							),
+							designStyleFields[kind as DesignStyleKind].every(field => JSON.stringify(Reflect.get(shape, field)) === JSON.stringify(Reflect.get(old, field))),
 						),
 					),
 				};
@@ -437,10 +394,7 @@ export function parseDesignResourceProperties(value: Record<string, unknown>): P
 		value.bindings !== undefined &&
 		(!isRecord(value.bindings) ||
 			Object.entries(value.bindings).some(
-				([property, id]) =>
-					!Object.hasOwn(designPropertyTypes, property) ||
-					!isUuid(id) ||
-					!supportsDesignProperty(value as unknown as DesignShape, property as DesignBindableProperty),
+				([property, id]) => !Object.hasOwn(designPropertyTypes, property) || !isUuid(id) || !supportsDesignProperty(value as unknown as DesignShape, property as DesignBindableProperty),
 			))
 	) {
 		fail();
@@ -449,44 +403,19 @@ export function parseDesignResourceProperties(value: Record<string, unknown>): P
 		value.styleBindings !== undefined &&
 		(!isRecord(value.styleBindings) ||
 			Object.entries(value.styleBindings).some(
-				([kind, id]) =>
-					!Object.hasOwn(designStyleFields, kind) ||
-					!isUuid(id) ||
-					(kind === 'text' && value.kind !== 'text') ||
-					(kind === 'grid' && value.kind !== 'frame'),
+				([kind, id]) => !Object.hasOwn(designStyleFields, kind) || !isUuid(id) || (kind === 'text' && value.kind !== 'text') || (kind === 'grid' && value.kind !== 'frame'),
 			))
 	) {
 		fail();
 	}
-	if (
-		value.variableModes !== undefined &&
-		(!isRecord(value.variableModes) ||
-			Object.entries(value.variableModes).some(([id, mode]) => !isUuid(id) || !isUuid(mode)))
-	) {
+	if (value.variableModes !== undefined && (!isRecord(value.variableModes) || Object.entries(value.variableModes).some(([id, mode]) => !isUuid(id) || !isUuid(mode)))) {
 		fail();
 	}
-	return Object.fromEntries(
-		Object.entries(value).filter(([key]) => resourceShapeKeys.includes(key)),
-	) as Partial<DesignShape>;
+	return Object.fromEntries(Object.entries(value).filter(([key]) => resourceShapeKeys.includes(key))) as Partial<DesignShape>;
 }
-export const resourceShapeKeys = [
-	'opacity',
-	'visible',
-	'fontFamily',
-	'fontWeight',
-	'lineHeight',
-	'letterSpacing',
-	'effects',
-	'layoutGuide',
-	'bindings',
-	'styleBindings',
-	'variableModes',
-];
+export const resourceShapeKeys = ['opacity', 'visible', 'fontFamily', 'fontWeight', 'lineHeight', 'letterSpacing', 'effects', 'layoutGuide', 'bindings', 'styleBindings', 'variableModes'];
 
-export function parseDesignResources(
-	value: unknown,
-	readLibraryDocument: (value: unknown) => DesignDocument,
-): DesignResources {
+export function parseDesignResources(value: unknown, readLibraryDocument: (value: unknown) => DesignDocument): DesignResources {
 	if (
 		!isRecord(value) ||
 		!keys(value, ['collections', 'variables', 'styles', 'libraries', 'modes']) ||
@@ -515,11 +444,7 @@ export function parseDesignResources(
 			}
 			return { id: mode.id, name: mode.name };
 		});
-		if (
-			new Set(modes.map(mode => mode.id)).size !== modes.length ||
-			new Set(modes.map(mode => mode.name)).size !== modes.length ||
-			!modes.some(mode => mode.id === entry.defaultMode)
-		) {
+		if (new Set(modes.map(mode => mode.id)).size !== modes.length || new Set(modes.map(mode => mode.name)).size !== modes.length || !modes.some(mode => mode.id === entry.defaultMode)) {
 			fail();
 		}
 		return { id: entry.id, name: entry.name, modes, defaultMode: entry.defaultMode };
@@ -584,12 +509,7 @@ export function parseDesignResources(
 		if (values.fontSize !== undefined && (!number(values.fontSize) || values.fontSize <= 0)) {
 			fail();
 		}
-		if (
-			entry.bindings &&
-			Object.keys(entry.bindings).some(
-				key => !(designStyleFields[entry.kind as DesignStyleKind] as readonly string[]).includes(key),
-			)
-		) {
+		if (entry.bindings && Object.keys(entry.bindings).some(key => !(designStyleFields[entry.kind as DesignStyleKind] as readonly string[]).includes(key))) {
 			fail();
 		}
 		return entry as unknown as DesignStyle;
@@ -621,10 +541,7 @@ export function parseDesignResources(
 			document,
 		};
 	});
-	if (
-		value.modes !== undefined &&
-		(!isRecord(value.modes) || Object.entries(value.modes).some(([id, mode]) => !isUuid(id) || !isUuid(mode)))
-	) {
+	if (value.modes !== undefined && (!isRecord(value.modes) || Object.entries(value.modes).some(([id, mode]) => !isUuid(id) || !isUuid(mode)))) {
 		fail();
 	}
 	const resources: DesignResources = {
@@ -639,9 +556,7 @@ export function parseDesignResources(
 }
 export function validateDesignResources(resources: DesignResources): void {
 	const catalog = getDesignResourceCatalog(resources);
-	const ids = [...catalog.collections, ...catalog.variables, ...catalog.styles, ...resources.libraries].map(
-		value => value.id,
-	);
+	const ids = [...catalog.collections, ...catalog.variables, ...catalog.styles, ...resources.libraries].map(value => value.id);
 	if (new Set(ids).size !== ids.length) {
 		fail();
 	}
@@ -653,11 +568,7 @@ export function validateDesignResources(resources: DesignResources): void {
 	}
 	for (const variable of catalog.variables) {
 		const collection = catalog.collections.find(collection => collection.id === variable.collectionId);
-		if (
-			!collection ||
-			collection.modes.length !== Object.keys(variable.values).length ||
-			collection.modes.some(mode => !Object.hasOwn(variable.values, mode.id))
-		) {
+		if (!collection || collection.modes.length !== Object.keys(variable.values).length || collection.modes.some(mode => !Object.hasOwn(variable.values, mode.id))) {
 			fail();
 		}
 		for (const value of Object.values(variable.values)) {
@@ -699,10 +610,7 @@ export function validateDesignResources(resources: DesignResources): void {
 		}
 	}
 }
-export function validateDesignShapeResources(
-	shapes: readonly DesignShape[],
-	resources: DesignResources = emptyDesignResources,
-): void {
+export function validateDesignShapeResources(shapes: readonly DesignShape[], resources: DesignResources = emptyDesignResources): void {
 	const catalog = getDesignResourceCatalog(resources);
 	const visit = (shape: DesignShape): void => {
 		for (const [key, id] of Object.entries(shape.bindings ?? {})) {

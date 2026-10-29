@@ -8,37 +8,18 @@ import { setup, suite, suiteSetup, suiteTeardown, teardown, test } from 'mocha';
 import { DeferredPromise, TimeoutTimer } from '../../../../../base/common/async.js';
 import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import {
-	Disposable,
-	DisposableTracker,
-	installDisposableTracker,
-	toDisposable,
-	type IDisposable,
-} from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableTracker, installDisposableTracker, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
-import type {
-	ISocket,
-	SocketCloseEvent,
-	SocketDiagnosticsEventType,
-} from '../../../../../base/parts/ipc/common/ipc.net.js';
+import type { ISocket, SocketCloseEvent, SocketDiagnosticsEventType } from '../../../../../base/parts/ipc/common/ipc.net.js';
 import type { ISandboxGlobals } from '../../../../../base/parts/sandbox/electron-browser/sandboxTypes.js';
 import { createTestInitializeResult } from '../../../../../platform/agentHost/test/common/testAppServerProtocol.js';
 import type { IExtensionHostApi } from '../../../../../platform/agentHost/common/extensionHostApi.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import { LogService } from '../../../../../platform/log/common/logServiceImpl.js';
-import {
-	ManagedRemoteConnection,
-	RemoteConnectionType,
-} from '../../../../../platform/remote/common/remoteAuthorityResolver.js';
-import {
-	IRemoteSocketFactoryService,
-	RemoteSocketFactoryService,
-} from '../../../../../platform/remote/common/remoteSocketFactoryService.js';
-import {
-	REMOTE_AGENT_HOST_CLOSE_CHANNEL,
-	REMOTE_AGENT_HOST_OPEN_CHANNEL,
-} from '../../../../../platform/remote/common/remoteConnectionIpc.js';
+import { ManagedRemoteConnection, RemoteConnectionType } from '../../../../../platform/remote/common/remoteAuthorityResolver.js';
+import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../../../../platform/remote/common/remoteSocketFactoryService.js';
+import { REMOTE_AGENT_HOST_CLOSE_CHANNEL, REMOTE_AGENT_HOST_OPEN_CHANNEL } from '../../../../../platform/remote/common/remoteConnectionIpc.js';
 import type { RemoteAgentConnection } from '../../../../../platform/remote/common/remoteAgentApi.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { installEditorTestDom } from '../../../../../editor/test/browser/editorTestGlobals.js';
@@ -58,11 +39,7 @@ class RemoteEndpoint extends Disposable implements ISocket {
 		const frame = JSON.parse(buffer.toString());
 		if (frame.method === 'initialize') {
 			this.handshakes.push(frame.params);
-			this.data.fire(
-				VSBuffer.fromString(
-					JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: createTestInitializeResult() }) + '\n',
-				),
-			);
+			this.data.fire(VSBuffer.fromString(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: createTestInitializeResult() }) + '\n'));
 		}
 	}
 	end(): void {
@@ -129,9 +106,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 					await beforeWorkspaceRead?.();
 					return {
 						id: 'desktop',
-						folders: [
-							{ id: 'workspace-folder', uri: requestedWorkspace.toString(), name: 'Project', index: 0 },
-						],
+						folders: [{ id: 'workspace-folder', uri: requestedWorkspace.toString(), name: 'Project', index: 0 }],
 					};
 				}
 				if (channel.endsWith(':initialized')) {
@@ -150,10 +125,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 					if (frame.method === 'initialize') {
 						handshakes.push({ channel, params: frame.params });
 						pair.port2.postMessage({
-							data: new TextEncoder().encode(
-								JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: createTestInitializeResult() }) +
-									'\n',
-							),
+							data: new TextEncoder().encode(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: createTestInitializeResult() }) + '\n'),
 						});
 					} else if (frame.method === 'config/directoryGrants/read') {
 						pair.port2.postMessage({
@@ -217,18 +189,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	};
 
 	suiteSetup(async () => {
-		testDom = installEditorTestDom(dom, [
-			'Node',
-			'Element',
-			'HTMLElement',
-			'HTMLButtonElement',
-			'HTMLCanvasElement',
-			'Event',
-			'MouseEvent',
-			'KeyboardEvent',
-			'InputEvent',
-			'NodeFilter',
-		]);
+		testDom = installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'HTMLButtonElement', 'HTMLCanvasElement', 'Event', 'MouseEvent', 'KeyboardEvent', 'InputEvent', 'NodeFilter']);
 		Object.defineProperty(globalThis, 'ash', { configurable: true, value: globals });
 		Service = (await import('../../electron-browser/agentHostService.js')).WorkbenchAgentHostService;
 		createRendererApi = (await import('../../../../electron-browser/rendererApi.js')).createElectronRendererApi;
@@ -277,9 +238,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	function register(services: InstantiationService, logger: LogService): void {
 		services.registerInstance(IWebWorkerService, new WebWorkerService());
 		services.registerInstance(ILogService, logger);
-		services.registerSingleton(IRemoteSocketFactoryService, () =>
-			services.createInstance(RemoteSocketFactoryService),
-		);
+		services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
 	}
 
 	const mainProcess: IMainProcessService = {
@@ -291,10 +250,8 @@ suite('Desktop Workbench Agent Host selection', () => {
 			listen: () => Event.None,
 			call: async <T>(command: string, argument?: unknown): Promise<T> => {
 				let result: unknown;
-				if (name === 'localFilesystem' && ['userDataHome', 'userHome'].includes(command))
-					result = URI.file('/profile').toString();
-				else if (name === 'localFilesystem' && command === 'readFile')
-					result = { bytes: 'e30=', revision: 'settings-1' };
+				if (name === 'localFilesystem' && ['userDataHome', 'userHome'].includes(command)) result = URI.file('/profile').toString();
+				else if (name === 'localFilesystem' && command === 'readFile') result = { bytes: 'e30=', revision: 'settings-1' };
 				else if (name === 'policy' && command === 'updatePolicyDefinitions') result = {};
 				else if (name === 'logger' && command === 'log') {
 					onLog?.(argument as LogEntry);
@@ -332,11 +289,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		const host = await pending;
 		assert.equal(await shared, host);
 		controller.abort();
-		assert.equal(
-			registry.connections.length,
-			1,
-			'completed acquisition is owned by the runtime rather than its caller signal',
-		);
+		assert.equal(registry.connections.length, 1, 'completed acquisition is owned by the runtime rather than its caller signal');
 		const second = await registry.connect(nested, new AbortController().signal);
 		assert.notEqual(host.id, second.id);
 		assert.deepEqual(
@@ -349,10 +302,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		);
 		assert.deepEqual(
 			directoryBindings.slice(1).map(entry => entry.dirs),
-			[
-				[{ id: `agent-host:${host.id}`, path: '/repo', grant: { type: 'config' } }],
-				[{ id: `agent-host:${second.id}`, path: '/repo/nested', grant: { type: 'config' } }],
-			],
+			[[{ id: `agent-host:${host.id}`, path: '/repo', grant: { type: 'config' } }], [{ id: `agent-host:${second.id}`, path: '/repo/nested', grant: { type: 'config' } }]],
 		);
 		registry.disconnect(host.id);
 		assert.deepEqual(
@@ -380,10 +330,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		const registry = renderer.agentHosts!;
 		const opening = new DeferredPromise<void>();
 		beforeHostOpen = () => opening.p;
-		const result = registry.connect(
-			{ name: 'Build', host: 'build', workspace: '/repo' },
-			new AbortController().signal,
-		);
+		const result = registry.connect({ name: 'Build', host: 'build', workspace: '/repo' }, new AbortController().signal);
 		const rejected = assert.rejects(result, { name: 'CancellationError' });
 		const id = registry.connections[0]!.id;
 		registry.disconnect(id);
@@ -415,10 +362,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 			const first = registry.connections[0];
 			if (first) registry.disconnect(first.id);
 		});
-		await assert.rejects(
-			registry.connect({ name: 'Build', host: 'build', workspace: '/repo' }, new AbortController().signal),
-			{ name: 'CancellationError' },
-		);
+		await assert.rejects(registry.connect({ name: 'Build', host: 'build', workspace: '/repo' }, new AbortController().signal), { name: 'CancellationError' });
 		assert.equal(hostOpens.length, 0, 'a retired endpoint cannot send OPEN after its own CLOSE');
 		assert.equal(registry.connections.length, 0);
 	});
@@ -435,10 +379,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 			mainProcess,
 		);
 		const registry = renderer.agentHosts!;
-		const host = await registry.connect(
-			{ name: 'Build', host: 'build', workspace: '/repo' },
-			new AbortController().signal,
-		);
+		const host = await registry.connect({ name: 'Build', host: 'build', workspace: '/repo' }, new AbortController().signal);
 		const generation = host.api.appServer.connectionGeneration;
 		const states: string[] = [];
 		const subscription = host.api.appServer.onConnectionState(state => states.push(state));
@@ -447,9 +388,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		await registry.reconnect(host.id);
 		assert.ok(host.api.appServer.connectionGeneration > generation);
 		assert.equal(directoryBindings.length, count + 1);
-		assert.deepEqual(directoryBindings.at(-1)!.dirs, [
-			{ id: `agent-host:${host.id}`, path: '/repo', grant: { type: 'config' } },
-		]);
+		assert.deepEqual(directoryBindings.at(-1)!.dirs, [{ id: `agent-host:${host.id}`, path: '/repo', grant: { type: 'config' } }]);
 		assert.equal(registry.connections[0]!.host, host);
 		assert.equal(await host.api.appServer.getConnectionState(), 'ready');
 		assert.ok(states.includes('stopped'));
@@ -470,11 +409,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		});
 		ports.at(-1)!.port2.postMessage({ intentional: true });
 		await unavailable.p;
-		assert.equal(
-			registry.connections[0]!.state,
-			'stopped',
-			'carrier state must override a previous directory restoration failure',
-		);
+		assert.equal(registry.connections[0]!.state, 'stopped', 'carrier state must override a previous directory restoration failure');
 		assert.equal(host.api.appServer.recovery!.status, 'unavailable');
 		assert.notEqual(host.api.appServer.recovery!.error, 'restore rejected');
 		failDirectoryBinding = false;
@@ -628,11 +563,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		assert.ok(states.includes('recovering'));
 		assert.ok(directoryBindings.every(binding => binding.channel === 'ash:app-server:acquire'));
 		await recovery.reconnect();
-		assert.equal(
-			acquired.length,
-			acquisitions + 1,
-			'an explicit reconnect after full recovery still replaces the carrier',
-		);
+		assert.equal(acquired.length, acquisitions + 1, 'an explicit reconnect after full recovery still replaces the carrier');
 		assert.ok(renderer.appServer.connectionGeneration > generation);
 	});
 
@@ -654,8 +585,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		const restored = new DeferredPromise<void>();
 		const staleFailure = new DeferredPromise<void>();
 		using deadline = new TimeoutTimer(() => {
-			for (const pending of [entered, carrierSettled, restored, staleFailure])
-				void pending.error(new Error('Workspace restoration did not settle'));
+			for (const pending of [entered, carrierSettled, restored, staleFailure]) void pending.error(new Error('Workspace restoration did not settle'));
 		}, 5_000);
 		let first = true;
 		beforeWorkspaceRead = async () => {
@@ -734,10 +664,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		using services = new InstantiationService();
 		using logger = new LogService({ sinks: [] });
 		register(services, logger);
-		using host = services.createInstance(
-			Service,
-			options({ kind: 'ssh', generation: 1, authority: 'ssh+host', host: 'host' }),
-		);
+		using host = services.createInstance(Service, options({ kind: 'ssh', generation: 1, authority: 'ssh+host', host: 'host' }));
 		assert.equal(await host.connect(), false);
 		assert.deepEqual(acquired, ['ash:app-server:local:acquire']);
 	});
@@ -747,10 +674,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		using services = new InstantiationService();
 		using logger = new LogService({ sinks: [] });
 		register(services, logger);
-		using host = services.createInstance(
-			Service,
-			options({ kind: 'ssh', generation: 1, authority: 'ssh+host', host: 'host' }),
-		);
+		using host = services.createInstance(Service, options({ kind: 'ssh', generation: 1, authority: 'ssh+host', host: 'host' }));
 		await assert.rejects(host.connect(), /remote workspace App Server connection is unavailable/);
 		assert.equal(host.connection, host.localConnection);
 		assert.deepEqual(acquired, ['ash:app-server:local:acquire', 'ash:app-server:acquire']);
@@ -773,12 +697,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		let extensions: IExtensionHostApi | undefined;
 		using host = services.createInstance(Service, {
 			...options({ kind: 'remote', generation: 1, authority: 'fixture+host' }),
-			resolveRemoteAuthority: async (
-				_api: IExtensionHostApi,
-				factories: IRemoteSocketFactoryService,
-				authority: string,
-				attempt: number,
-			) => {
+			resolveRemoteAuthority: async (_api: IExtensionHostApi, factories: IRemoteSocketFactoryService, authority: string, attempt: number) => {
 				resolutions.push({ factories, authority, attempt });
 				return { connectTo: new ManagedRemoteConnection(24), connectionToken: undefined };
 			},
@@ -791,9 +710,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		assert.equal(await host.connect(), true);
 		assert.notEqual(host.client, host.localConnection.client);
 		assert.equal(host.windowExtensions, extensions);
-		assert.deepEqual(resolutions, [
-			{ factories: services.get(IRemoteSocketFactoryService), authority: 'fixture+host', attempt: 1 },
-		]);
+		assert.deepEqual(resolutions, [{ factories: services.get(IRemoteSocketFactoryService), authority: 'fixture+host', attempt: 1 }]);
 		const remoteHandshake = endpoints[0].handshakes[0] as { capabilities: Record<string, unknown> };
 		assert.equal(remoteHandshake.capabilities.appTools, undefined);
 		assert.equal(remoteHandshake.capabilities.directoryGrantsHost, undefined);
@@ -853,42 +770,27 @@ suite('Desktop Workbench Agent Host selection', () => {
 		using services = new InstantiationService();
 		using logger = new LogService({ sinks: [] });
 		register(services, logger);
-		using host = services.createInstance(
-			Service,
-			options({ kind: 'remote', generation: 1, authority: 'fixture+host' }),
-		);
+		using host = services.createInstance(Service, options({ kind: 'remote', generation: 1, authority: 'fixture+host' }));
 		await assert.rejects(host.connect(), /does not provide a local Remote resolver/);
 		assert.equal(host.windowExtensions, undefined);
 	});
 
 	test('production creation rejects a missing socket factory registration', () => {
 		using services = new InstantiationService();
-		assert.throws(
-			() => services.createInstance(Service, options({ kind: 'local', generation: 1 })),
-			/Unknown service: remoteSocketFactoryService/,
-		);
+		assert.throws(() => services.createInstance(Service, options({ kind: 'local', generation: 1 })), /Unknown service: remoteSocketFactoryService/);
 	});
 
 	test('startup connection failures use the selected Chinese language pack', async () => {
-		setNlsMessages(
-			'zh-cn',
-			JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')),
-		);
+		setNlsMessages('zh-cn', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
 		try {
 			disabled.add('ash:app-server:acquire');
 			using services = new InstantiationService();
 			using logger = new LogService({ sinks: [] });
 			register(services, logger);
-			using ssh = services.createInstance(
-				Service,
-				options({ kind: 'ssh', generation: 1, authority: 'ssh+host', host: 'host' }),
-			);
+			using ssh = services.createInstance(Service, options({ kind: 'ssh', generation: 1, authority: 'ssh+host', host: 'host' }));
 			await assert.rejects(ssh.connect(), { message: '远程工作区的 App Server 连接不可用。' });
 			disabled.clear();
-			using remote = services.createInstance(
-				Service,
-				options({ kind: 'remote', generation: 1, authority: 'fixture+host' }),
-			);
+			using remote = services.createInstance(Service, options({ kind: 'remote', generation: 1, authority: 'fixture+host' }));
 			await assert.rejects(remote.connect(), { message: '此窗口未提供本地 Remote 解析器。' });
 		} finally {
 			resetNlsResolver();

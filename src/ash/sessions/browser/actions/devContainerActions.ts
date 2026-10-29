@@ -33,39 +33,24 @@ registerAction2(
 					? workspace
 					: workspace.type === 'provider' && workspace.providerId === 'ash.dev-containers'
 						? { type: 'local' as const, root: workspace.workspace }
-						: await selection.pick(
-								workspace.type === 'multiple' ? workspace.folders : [],
-								target => target.type === 'local',
-							);
+						: await selection.pick(workspace.type === 'multiple' ? workspace.folders : [], target => target.type === 'local');
 			if (!source || source.type !== 'local') {
 				return;
 			}
 			const containers = accessor.get(IDevContainerAgentHostService);
 			const sessions = accessor.get(ISessionsManagementService);
 			const views = accessor.get(IViewsService);
-			await withOperation(
-				accessor.get(IProgressService),
-				localize('sessions.devContainer.connecting', 'Starting Dev Container...'),
-				async token => {
-					if (!(await containers.isAvailable(source.root, token))) {
-						throw new Error(
-							localize(
-								'sessions.devContainer.requirements',
-								'Dev Containers require Docker, the Dev Container CLI, and a workspace with devcontainer.json.',
-							),
-						);
-					}
-					const target = await containers.connect(source.root, token);
-					if (token.isCancellationRequested) {
-						throw canceled();
-					}
-					sessions.createUntitledSession(
-						localize('sessions.devContainer.draft', 'Dev Container Chat'),
-						target,
-					);
-					await views.focusView(CHAT_VIEW_ID);
-				},
-			);
+			await withOperation(accessor.get(IProgressService), localize('sessions.devContainer.connecting', 'Starting Dev Container...'), async token => {
+				if (!(await containers.isAvailable(source.root, token))) {
+					throw new Error(localize('sessions.devContainer.requirements', 'Dev Containers require Docker, the Dev Container CLI, and a workspace with devcontainer.json.'));
+				}
+				const target = await containers.connect(source.root, token);
+				if (token.isCancellationRequested) {
+					throw canceled();
+				}
+				sessions.createUntitledSession(localize('sessions.devContainer.draft', 'Dev Container Chat'), target);
+				await views.focusView(CHAT_VIEW_ID);
+			});
 		}
 	},
 );
@@ -76,10 +61,7 @@ for (const operation of ['stop', 'remove'] as const) {
 			constructor() {
 				super({
 					id: `sessions.devContainer.${operation}`,
-					title:
-						operation === 'stop'
-							? localize2('sessions.devContainer.stop', 'Stop Dev Container...')
-							: localize2('sessions.devContainer.remove', 'Remove Dev Container...'),
+					title: operation === 'stop' ? localize2('sessions.devContainer.stop', 'Stop Dev Container...') : localize2('sessions.devContainer.remove', 'Remove Dev Container...'),
 					category: SessionsCategories.Sessions,
 					f1: true,
 				});
@@ -121,9 +103,7 @@ for (const operation of ['stop', 'remove'] as const) {
 				const choice = await pick(
 					accessor.get(IQuickInputService),
 					localize('sessions.devContainer.select', 'Select a Dev Container workspace'),
-					choices.filter(
-						(item, index) => choices.findIndex(other => other.workspace === item.workspace) === index,
-					),
+					choices.filter((item, index) => choices.findIndex(other => other.workspace === item.workspace) === index),
 				);
 				if (!choice) {
 					return;
@@ -140,25 +120,16 @@ for (const operation of ['stop', 'remove'] as const) {
 						return;
 					}
 				}
-				const title =
-					operation === 'stop'
-						? localize('sessions.devContainer.stopping', 'Stopping Dev Container...')
-						: localize('sessions.devContainer.removing', 'Removing Dev Container...');
+				const title = operation === 'stop' ? localize('sessions.devContainer.stopping', 'Stopping Dev Container...') : localize('sessions.devContainer.removing', 'Removing Dev Container...');
 				await withOperation(accessor.get(IProgressService), title, token =>
-					operation === 'stop'
-						? service.stopContainer(choice.workspace, token)
-						: service.removeContainer(choice.workspace, token),
+					operation === 'stop' ? service.stopContainer(choice.workspace, token) : service.removeContainer(choice.workspace, token),
 				);
 			}
 		},
 	);
 }
 
-function pick<T extends IQuickPickItem>(
-	input: IQuickInputService,
-	placeholder: string,
-	items: readonly T[],
-): Promise<T | undefined> {
+function pick<T extends IQuickPickItem>(input: IQuickInputService, placeholder: string, items: readonly T[]): Promise<T | undefined> {
 	const lifetime = new DisposableStore();
 	const picker = lifetime.add(input.createQuickPick<T>());
 	picker.items = items;
@@ -187,11 +158,7 @@ function pick<T extends IQuickPickItem>(
 	});
 }
 
-async function withOperation<T>(
-	progress: IProgressService,
-	title: string,
-	operation: (token: CancellationToken) => Promise<T>,
-): Promise<T> {
+async function withOperation<T>(progress: IProgressService, title: string, operation: (token: CancellationToken) => Promise<T>): Promise<T> {
 	using cancellation = new CancellationTokenSource();
 	return await progress.withProgress(
 		{ location: ProgressLocation.Notification, title, cancellable: true },

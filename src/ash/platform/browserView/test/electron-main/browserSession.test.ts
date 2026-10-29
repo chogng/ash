@@ -11,10 +11,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
-import {
-	StorageMainService,
-	IApplicationStorageMainService,
-} from '../../../storage/electron-main/storageMainService.js';
+import { StorageMainService, IApplicationStorageMainService } from '../../../storage/electron-main/storageMainService.js';
 import { NullLoggerService, ILogService } from '../../../log/common/log.js';
 import { BrowserSessionHistory } from '../../electron-main/browserSessionHistory.js';
 
@@ -45,10 +42,7 @@ test('local file protocol delegates reads, rejects website initiators and unregi
 		throw new Error('First live reader owns this session');
 	});
 	const response = await handler!(new Request('file:///workspace/index.html'));
-	assert.deepEqual(
-		[response.headers.get('Content-Type'), await response.text(), reads],
-		['text/html', '<title>File preview</title>', ['file:///workspace/index.html']],
-	);
+	assert.deepEqual([response.headers.get('Content-Type'), await response.text(), reads], ['text/html', '<title>File preview</title>', ['file:///workspace/index.html']]);
 	const websiteRequest = Object.assign(new Request('file:///workspace/private.txt'), {
 		initiatorOrigin: 'https://example.test',
 	});
@@ -121,12 +115,9 @@ test('agent requests require current authority for every resource and cannot be 
 	try {
 		const request = (url: string, contentsId = 7) => {
 			const result: boolean[] = [];
-			intercept!(
-				{ url, webContentsId: contentsId, method: 'GET' } as Electron.OnBeforeRequestListenerDetails,
-				response => {
-					result.push(response.cancel ?? false);
-				},
-			);
+			intercept!({ url, webContentsId: contentsId, method: 'GET' } as Electron.OnBeforeRequestListenerDetails, response => {
+				result.push(response.cancel ?? false);
+			});
 			return result;
 		};
 		for (const url of ['https://allowed.test/', 'https://redirect.test/', 'https://allowed.test/script']) {
@@ -289,9 +280,7 @@ test('a remote session retains one SOCKS policy until its last page closes and n
 	const owner = BrowserSession.getOrCreate('remote', BrowserViewStorageScope.Workspace, session);
 	const first = await owner.acquireRemote(tunnels, new AbortController().signal);
 	const second = await owner.acquireRemote(tunnels, new AbortController().signal);
-	assert.deepEqual(policies, [
-		{ mode: 'fixed_servers', proxyRules: 'socks5://127.0.0.1:12345', proxyBypassRules: '<-loopback>' },
-	]);
+	assert.deepEqual(policies, [{ mode: 'fixed_servers', proxyRules: 'socks5://127.0.0.1:12345', proxyBypassRules: '<-loopback>' }]);
 	first.dispose();
 	assert.equal(child.listenerCount('exit'), 1);
 	child.emit('exit', 1);

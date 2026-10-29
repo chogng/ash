@@ -35,15 +35,7 @@ export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 		};
 		win.on('focus', handleFocus);
 		const events: NodeEventEmitter = win;
-		for (const event of [
-			'move',
-			'resize',
-			'maximize',
-			'unmaximize',
-			'enter-full-screen',
-			'leave-full-screen',
-			'always-on-top-changed',
-		] as const) {
+		for (const event of ['move', 'resize', 'maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen', 'always-on-top-changed'] as const) {
 			const changed = (): void => this.stateChanged.fire();
 			events.on(event, changed);
 			this._register(toDisposable(() => events.off(event, changed)));

@@ -6,17 +6,11 @@ import { URI } from '../../../../../base/common/uri.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import {
-	IInstantiationService,
-	createServiceIdentifier,
-} from '../../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, createServiceIdentifier } from '../../../../../platform/instantiation/common/instantiation.js';
 import { InstantiationType, registerSingleton } from '../../../../../platform/instantiation/common/extensions.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../common/contributions.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { localize } from '../../../../../nls.js';
 import { onUnexpectedError } from '../../../../../base/common/errors.js';
 import { IBrowserViewWorkbenchService, type IBrowserViewModel } from '../../common/browserView.js';
@@ -61,18 +55,10 @@ export class BrowserAutoReloadWatcher extends Disposable {
 	}
 	public canReload(): boolean {
 		const url = new URL(this.model.state.url);
-		return (
-			this.model.info.owner.type === 'user' &&
-			(url.protocol === 'file:' ||
-				(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)))
-		);
+		return this.model.info.owner.type === 'user' && (url.protocol === 'file:' || (url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)));
 	}
 	public update(enabled: boolean): void {
-		const signature = JSON.stringify([
-			enabled,
-			this.model.state.url,
-			this.workspace.getWorkspace().folders.map(folder => folder.uri.toString()),
-		]);
+		const signature = JSON.stringify([enabled, this.model.state.url, this.workspace.getWorkspace().folders.map(folder => folder.uri.toString())]);
 		if (signature === this.watchSignature) {
 			return;
 		}
@@ -85,10 +71,7 @@ export class BrowserAutoReloadWatcher extends Disposable {
 			return;
 		}
 		const url = new URL(this.model.state.url);
-		const resources =
-			url.protocol === 'file:'
-				? [URI.parse(url.href).with({ query: '', fragment: '' })]
-				: this.workspace.getWorkspace().folders.map(folder => folder.uri);
+		const resources = url.protocol === 'file:' ? [URI.parse(url.href).with({ query: '', fragment: '' })] : this.workspace.getWorkspace().folders.map(folder => folder.uri);
 		try {
 			for (const resource of resources) {
 				this.watches.add(this.files.watch(resource, { recursive: url.protocol !== 'file:', excludes: [] }));
@@ -97,13 +80,7 @@ export class BrowserAutoReloadWatcher extends Disposable {
 				this.files.onDidChangeFiles(event => {
 					if (
 						!event.resources ||
-						event.resources.some(changed =>
-							resources.some(resource =>
-								url.protocol === 'file:'
-									? extUri.isEqual(changed, resource)
-									: extUri.isEqualOrParent(changed, resource),
-							),
-						)
+						event.resources.some(changed => resources.some(resource => (url.protocol === 'file:' ? extUri.isEqual(changed, resource) : extUri.isEqualOrParent(changed, resource))))
 					) {
 						this.reload.schedule();
 					}
@@ -206,12 +183,7 @@ export class BrowserAutoReloadService extends Disposable implements IBrowserAuto
 	}
 	public isEnabled(id: string): boolean {
 		const model = this.browsers.getKnownBrowserViews().get(id)?.model;
-		return (
-			this.overrides.get(id) ??
-			(!!model &&
-				new URL(model.state.url).protocol === 'file:' &&
-				this.configuration.getValue<boolean>(settingId))
-		);
+		return this.overrides.get(id) ?? (!!model && new URL(model.state.url).protocol === 'file:' && this.configuration.getValue<boolean>(settingId));
 	}
 	public canReload(id: string): boolean {
 		return this.active.get(id)?.canReload() ?? false;
@@ -238,10 +210,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	},
 	setting: {
 		valueType: 'boolean',
-		title: localize(
-			{ bundle: 'ash.workbench', key: 'browser.autoReloadDefault' },
-			'Reload local browser files on change',
-		),
+		title: localize({ bundle: 'ash.workbench', key: 'browser.autoReloadDefault' }, 'Reload local browser files on change'),
 		description: localize(
 			{ bundle: 'ash.workbench', key: 'browser.autoReloadDefaultDescription' },
 			'Automatically reload local file pages when their files change. Local HTTP previews can opt in from Page actions.',

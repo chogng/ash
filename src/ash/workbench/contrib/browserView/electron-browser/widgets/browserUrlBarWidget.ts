@@ -65,13 +65,9 @@ export class BrowserUrlBarWidget extends Disposable {
 			}),
 		);
 	}
-	public mountContributions(
-		contributions: readonly { readonly urlSuggestionProviders: readonly IBrowserUrlSuggestionProvider[] }[],
-	): void {
+	public mountContributions(contributions: readonly { readonly urlSuggestionProviders: readonly IBrowserUrlSuggestionProvider[] }[]): void {
 		this.picker.clear();
-		this.providers = contributions
-			.flatMap(contribution => contribution.urlSuggestionProviders)
-			.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+		this.providers = contributions.flatMap(contribution => contribution.urlSuggestionProviders).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 	}
 	public openUrlPicker(): void {
 		const input = this.host.input;
@@ -82,9 +78,7 @@ export class BrowserUrlBarWidget extends Disposable {
 		const resources = new DisposableStore();
 		this.picker.value = resources;
 		const picker = resources.add(this.quickInput.createQuickPick<IUrlPickerItem>());
-		const cancellation = resources.add(
-			new MutableDisposable<import('../../../../../base/common/lifecycle.js').IDisposable>(),
-		);
+		const cancellation = resources.add(new MutableDisposable<import('../../../../../base/common/lifecycle.js').IDisposable>());
 		let revision = 0;
 		let accepted = false;
 		let escape = false;
@@ -115,31 +109,16 @@ export class BrowserUrlBarWidget extends Disposable {
 			if (!picker.activeItems.length) {
 				picker.activeItems = primary.slice(0, 1);
 			}
-			void Promise.allSettled(
-				this.providers.map(provider => provider.getSuggestions({ text, input }, source.token)),
-			).then(results => {
-				if (
-					source.token.isCancellationRequested ||
-					request !== revision ||
-					this.picker.value !== resources ||
-					this.host.input !== input ||
-					input.model !== model
-				) {
+			void Promise.allSettled(this.providers.map(provider => provider.getSuggestions({ text, input }, source.token))).then(results => {
+				if (source.token.isCancellationRequested || request !== revision || this.picker.value !== resources || this.host.input !== input || input.model !== model) {
 					return;
 				}
 				const items = results.flatMap((result, index) =>
-					result.status === 'fulfilled' && result.value.length
-						? [
-								{ type: 'separator' as const, label: this.providers[index]!.label },
-								...filterQuickPickItems(result.value, text),
-							]
-						: [],
+					result.status === 'fulfilled' && result.value.length ? [{ type: 'separator' as const, label: this.providers[index]!.label }, ...filterQuickPickItems(result.value, text)] : [],
 				);
 				picker.items = [...primary, ...items];
 				const selectedId = picker.activeItems[0]?.id;
-				const retained = selectedId
-					? (picker.items.filter(item => !('type' in item) && item.id === selectedId) as IUrlPickerItem[])
-					: [];
+				const retained = selectedId ? (picker.items.filter(item => !('type' in item) && item.id === selectedId) as IUrlPickerItem[]) : [];
 				picker.activeItems = retained.length ? retained : primary.slice(0, 1);
 			});
 		};
@@ -188,13 +167,7 @@ export class BrowserUrlBarWidget extends Disposable {
 						} else {
 							await this.navigate(text);
 						}
-						if (
-							!this.isDisposed &&
-							this.host.input === input &&
-							input.model === model &&
-							this.inputElement.ownerDocument.activeElement === focused &&
-							this.value === address
-						) {
+						if (!this.isDisposed && this.host.input === input && input.model === model && this.inputElement.ownerDocument.activeElement === focused && this.value === address) {
 							this.host.ensureBrowserFocus();
 						}
 					})

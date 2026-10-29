@@ -16,15 +16,11 @@ export function computeIssueIcon(state: GitHubIssue['state'], stateReason: GitHu
 }
 
 /** Unresolved references keep a collection active until every Issue is known to be closed. */
-export function computeAggregateIssueIcon(
-	issues: readonly (Pick<GitHubIssue, 'state' | 'stateReason'> | undefined)[],
-): ThemeIcon {
+export function computeAggregateIssueIcon(issues: readonly (Pick<GitHubIssue, 'state' | 'stateReason'> | undefined)[]): ThemeIcon {
 	const hasActive = issues.length === 0 || issues.some(issue => issue?.state !== 'closed');
 	if (hasActive) {
 		return computeIssueIcon('open', undefined);
 	}
-	const hasCompleted = issues.some(
-		issue => issue?.stateReason !== 'not_planned' && issue?.stateReason !== 'duplicate',
-	);
+	const hasCompleted = issues.some(issue => issue?.stateReason !== 'not_planned' && issue?.stateReason !== 'duplicate');
 	return computeIssueIcon('closed', hasCompleted ? 'completed' : 'not_planned');
 }

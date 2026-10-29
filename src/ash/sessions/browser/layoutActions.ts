@@ -7,12 +7,7 @@ import { DisposableStore, toDisposable, type IDisposable } from '../../base/comm
 import { MenusRegistry, MenuId, Action2, registerAction2 } from '../../platform/actions/common/actions.js';
 import { CommandsRegistry } from '../../platform/commands/common/commands.js';
 import { RawContextKey, type IContextKeyService } from '../../platform/contextkey/common/contextkey.js';
-import {
-	SideBarVisibleContext,
-	PanelVisibleContext,
-	PanelMaximizedContext,
-	PanelPositionContext,
-} from '../../workbench/common/contextkeys.js';
+import { SideBarVisibleContext, PanelVisibleContext, PanelMaximizedContext, PanelPositionContext } from '../../workbench/common/contextkeys.js';
 import { positionToString } from '../../workbench/services/layout/browser/layoutService.js';
 import { Keybinding, logicalKey } from '../../base/common/keybindings.js';
 import type { ISessionsService } from '../services/sessions/browser/sessionsService.js';
@@ -23,11 +18,7 @@ import { CanGoBackContext, CanGoForwardContext } from '../common/contextkeys.js'
 const sessionTools = new RawContextKey<boolean>('sessions.toolsAvailable', false);
 
 /** Registers window-local commands and derives their menu state from the layout and session owners. */
-export function registerLayoutActions(
-	layout: IAgentWorkbenchLayoutService,
-	sessions: ISessionsService,
-	contextKeys: IContextKeyService,
-): IDisposable {
+export function registerLayoutActions(layout: IAgentWorkbenchLayoutService, sessions: ISessionsService, contextKeys: IContextKeyService): IDisposable {
 	const disposables = new DisposableStore();
 	const sidebarVisible = SideBarVisibleContext.bindTo(contextKeys);
 	const backEnabled = CanGoBackContext.bindTo(contextKeys);
@@ -41,9 +32,7 @@ export function registerLayoutActions(
 			sidebarVisible.set(layout.isPartVisible('sidebar'));
 			backEnabled.set(sessions.canNavigateBack);
 			forwardEnabled.set(sessions.canNavigateForward);
-			codeAvailable.set(
-				(layout.isPartVisible('sessions') || layout.isPanelMaximized()) && layout.isPartAvailable('panel'),
-			);
+			codeAvailable.set((layout.isPartVisible('sessions') || layout.isPanelMaximized()) && layout.isPartAvailable('panel'));
 			panelVisible.set(layout.isPartVisible('panel'));
 			panelMaximized.set(layout.isPanelMaximized());
 			panelPosition.set(positionToString(layout.getPanelPosition()));
@@ -115,18 +104,13 @@ export function registerLayoutActions(
 					});
 				}
 				override async run(accessor: ServicesAccessor): Promise<void> {
-					if (
-						(!layout.isPartVisible('sessions') && !layout.isPanelMaximized()) ||
-						!layout.isPartAvailable('panel')
-					) {
+					if ((!layout.isPartVisible('sessions') && !layout.isPanelMaximized()) || !layout.isPartAvailable('panel')) {
 						return;
 					}
 					if (layout.isPartVisible('panel')) {
 						accessor.get(IPaneCompositePartService).hideActivePaneComposite(ViewContainerLocation.Panel);
 					} else {
-						await accessor
-							.get(IPaneCompositePartService)
-							.openPaneComposite(undefined, ViewContainerLocation.Panel);
+						await accessor.get(IPaneCompositePartService).openPaneComposite(undefined, ViewContainerLocation.Panel);
 					}
 				}
 			},
@@ -144,10 +128,7 @@ export function registerLayoutActions(
 						toggled: {
 							condition: SideBarVisibleContext.isEqualTo(true),
 							title: localize2({ bundle: 'ash', key: 'sessions.navigation.hideSidebar' }, 'Hide sidebar'),
-							tooltip: localize2(
-								{ bundle: 'ash', key: 'sessions.navigation.hideSidebar' },
-								'Hide sidebar',
-							),
+							tooltip: localize2({ bundle: 'ash', key: 'sessions.navigation.hideSidebar' }, 'Hide sidebar'),
 							icon: Lxicon.layoutSidebarLeft2,
 						},
 					},
@@ -158,20 +139,8 @@ export function registerLayoutActions(
 		]),
 	);
 	for (const [id, title, icon, precondition, order] of [
-		[
-			'ash.sessions.back',
-			localize2({ bundle: 'ash', key: 'sessions.navigation.back' }, 'Back'),
-			Lxicon.chevronLeft,
-			CanGoBackContext.isEqualTo(true),
-			1,
-		],
-		[
-			'ash.sessions.forward',
-			localize2({ bundle: 'ash', key: 'sessions.navigation.forward' }, 'Forward'),
-			Lxicon.chevronRight,
-			CanGoForwardContext.isEqualTo(true),
-			2,
-		],
+		['ash.sessions.back', localize2({ bundle: 'ash', key: 'sessions.navigation.back' }, 'Back'), Lxicon.chevronLeft, CanGoBackContext.isEqualTo(true), 1],
+		['ash.sessions.forward', localize2({ bundle: 'ash', key: 'sessions.navigation.forward' }, 'Forward'), Lxicon.chevronRight, CanGoForwardContext.isEqualTo(true), 2],
 	] as const) {
 		const command = { id, title, icon, precondition };
 		disposables.add(

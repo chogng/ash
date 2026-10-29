@@ -8,11 +8,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { TestConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';
-import type {
-	ITerminalInstance,
-	IXtermTerminal,
-	TerminalInstanceState,
-} from '../../../../terminal/browser/terminal.js';
+import type { ITerminalInstance, IXtermTerminal, TerminalInstanceState } from '../../../../terminal/browser/terminal.js';
 import { TerminalExtensionsRegistry } from '../../../../terminal/browser/terminalExtensions.js';
 import { TerminalWidgetManager } from '../../../../terminal/browser/widgets/widgetManager.js';
 import { TerminalResizeDimensionsOverlaySettingId } from '../../common/terminalResizeDimensionsOverlayConfiguration.js';
@@ -38,12 +34,12 @@ function fixture(resources: DisposableStore) {
 		isDisposed: false,
 		attachWidget: widgets.attachWidget.bind(widgets),
 	} as unknown as IXtermTerminal;
-	const definition = TerminalExtensionsRegistry.getTerminalContributions().find(
-		value => value.id === 'terminal.resizeDimensionsOverlay',
-	);
+	const definition = TerminalExtensionsRegistry.getTerminalContributions().find(value => value.id === 'terminal.resizeDimensionsOverlay');
 	assert.ok(definition);
 	const contribution = resources.add(
-		services.createInstance(definition.ctor, { instance: { onDidChangeState: state.event } as ITerminalInstance }),
+		services.createInstance(definition.ctor, {
+			instance: { onDidChangeState: state.event } as ITerminalInstance,
+		}),
 	);
 	contribution.xtermReady!(screen);
 	const label = () => element.querySelector<HTMLSpanElement>('.ash-terminal-resize-dimensions-overlay');

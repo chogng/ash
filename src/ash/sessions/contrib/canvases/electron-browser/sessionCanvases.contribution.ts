@@ -14,16 +14,8 @@ registerSingleton(ISessionCanvasRegistryService, SessionCanvasRegistryService, I
 
 registerWorkbenchContribution('sessions.contrib.canvases', WorkbenchPhase.BlockRestore, accessor => {
 	const resources = new DisposableStore();
-	resources.add(
-		EditorInputSerializers.register(accessor.get(IInstantiationService).createInstance(SessionCanvasSerializer)),
-	);
-	resources.add(
-		registerSessionCanvasActions(
-			accessor.get(ICanvasService),
-			accessor.get(ISessionCanvasRegistryService),
-			accessor.get(ICanvasContextService),
-		),
-	);
+	resources.add(EditorInputSerializers.register(accessor.get(IInstantiationService).createInstance(SessionCanvasSerializer)));
+	resources.add(registerSessionCanvasActions(accessor.get(ICanvasService), accessor.get(ISessionCanvasRegistryService), accessor.get(ICanvasContextService)));
 	return resources;
 });
 import '../../../../workbench/contrib/canvases/electron-browser/canvases.contribution.js';

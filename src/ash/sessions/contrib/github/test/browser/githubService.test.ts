@@ -12,11 +12,7 @@ import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import type { CancellationToken } from '../../../../../base/common/cancellation.js';
 import type { IAccountService, AccountState } from '../../../../../platform/accounts/common/accountService.js';
-import {
-	GitHubIssueState,
-	type IGitHubService,
-	type GitHubPullRequest,
-} from '../../../../../platform/github/common/githubService.js';
+import { GitHubIssueState, type IGitHubService, type GitHubPullRequest } from '../../../../../platform/github/common/githubService.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 // Fixtures expose the public repository-context command consumed by GitHub, independently of Git's runtime.
 interface GitRepository {
@@ -55,11 +51,7 @@ import type { ISession } from '../../../../services/sessions/common/session.js';
 import { GitHubService } from '../../browser/githubService.js';
 import { createDisconnectedRendererApi } from '../../../../../workbench/browser/rendererApi.js';
 import type { IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
-import type {
-	ISessionProviderScope,
-	ISessionProviderScopeService,
-	SessionProviderServices,
-} from '../../../../browser/agentHost/sessionProviderScopeService.js';
+import type { ISessionProviderScope, ISessionProviderScopeService, SessionProviderServices } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { parseSessionIdentity, sessionIdentity } from '../../../../services/sessions/common/sessionIdentity.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
 
@@ -109,9 +101,7 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 		onDidChangeSessionIssues: Event.None,
 		listSessionIssues: async () => [],
 		listSessionPullRequests: async () => [],
-		listAccounts: async () => [
-			{ id: 'account', host: 'github.com', login: 'user', status: 'ready', credentialRevision: 1n },
-		],
+		listAccounts: async () => [{ id: 'account', host: 'github.com', login: 'user', status: 'ready', credentialRevision: 1n }],
 		listPullRequests: async (_repository, state) => ({
 			items: state === GitHubIssueState.Open ? [pullRequest] : [],
 			nextPage: null,
@@ -370,9 +360,7 @@ suite('Session GitHub associations', () => {
 		const rejected = assert.rejects(attaching, { name: 'CancellationError' });
 		await started.p;
 		context.removeHost('remote');
-		await accounts.complete([
-			{ id: 'account', host: 'github.com', login: 'user', status: 'ready', credentialRevision: 1n },
-		]);
+		await accounts.complete([{ id: 'account', host: 'github.com', login: 'user', status: 'ready', credentialRevision: 1n }]);
 		await rejected;
 		assert.deepEqual(writes, []);
 		await assert.rejects(
@@ -401,9 +389,7 @@ suite('Session GitHub associations', () => {
 		});
 		const attaching = context.service.attachPullRequest(scope.identity('session'), pullRequest.url);
 		context.accountChanged.fire({ revision: 2n, accounts: [] });
-		await accounts.complete([
-			{ id: 'account', host: 'github.com', login: 'user', status: 'ready', credentialRevision: 1n },
-		]);
+		await accounts.complete([{ id: 'account', host: 'github.com', login: 'user', status: 'ready', credentialRevision: 1n }]);
 		await attaching;
 		assert.deepEqual(writes, ['session']);
 	});
@@ -425,9 +411,7 @@ suite('Session GitHub associations', () => {
 		});
 		const attaching = context.service.attachPullRequest(scope.identity('session'), pullRequest.url);
 		context.addHost('third', { ...context.host, events: { subscribe: Event.None } });
-		await accounts.complete([
-			{ id: 'account', host: 'github.com', login: 'user', status: 'ready', credentialRevision: 1n },
-		]);
+		await accounts.complete([{ id: 'account', host: 'github.com', login: 'user', status: 'ready', credentialRevision: 1n }]);
 		await attaching;
 		assert.deepEqual(writes, ['session']);
 	});
@@ -436,7 +420,9 @@ suite('Session GitHub associations', () => {
 		let reads = 0;
 		const urls = ['https://github.com/TEAM/Repo/pull/7/', 'https://github.com/team/repo/pull/7'];
 		using context = fixture(
-			{ readPullRequest: async () => ({ ...pullRequest, url: urls[reads++]! }) },
+			{
+				readPullRequest: async () => ({ ...pullRequest, url: urls[reads++]! }),
+			},
 			{
 				graph: async () => ({
 					streamInstanceId: 'stream',
@@ -470,9 +456,7 @@ suite('Session GitHub associations', () => {
 	test('Issue references verify access, reject other resource URLs, and normalize Enterprise identities', async () => {
 		const writes: unknown[] = [];
 		using context = fixture({
-			listAccounts: async () => [
-				{ id: 'enterprise', host: 'ghe.example', login: 'user', status: 'ready', credentialRevision: 1n },
-			],
+			listAccounts: async () => [{ id: 'enterprise', host: 'ghe.example', login: 'user', status: 'ready', credentialRevision: 1n }],
 			readIssue: async (repository, number) => {
 				assert.deepEqual(repository, {
 					accountId: 'enterprise',
@@ -516,9 +500,7 @@ suite('Session GitHub associations', () => {
 		});
 		await context.load();
 		assert.deepEqual(
-			context.service
-				.getSessionIssues('session')
-				.map(entry => ({ reference: entry.reference, url: entry.uri.toString(), issue: entry.issue })),
+			context.service.getSessionIssues('session').map(entry => ({ reference: entry.reference, url: entry.uri.toString(), issue: entry.issue })),
 			[{ reference, url: 'https://github.com/team/repo/issues/11', issue: undefined }],
 		);
 		await context.service.detachIssue('session', reference);
@@ -562,10 +544,7 @@ suite('Session GitHub associations', () => {
 		let signedIn = true;
 		using context = fixture({
 			listSessionIssues: async () => [reference],
-			listAccounts: async () =>
-				signedIn
-					? [{ id: 'account', host: 'github.com', login: 'user', status: 'ready', credentialRevision: 1n }]
-					: [],
+			listAccounts: async () => (signedIn ? [{ id: 'account', host: 'github.com', login: 'user', status: 'ready', credentialRevision: 1n }] : []),
 			readIssue: async (_repository, _number, token) => {
 				await started.complete(token!);
 				return pending.p;
@@ -629,9 +608,7 @@ suite('Session GitHub associations', () => {
 			},
 		});
 		await assert.rejects(context.service.attachPullRequest('session', 'https://github.com/TEAM/Repo/pull/7/files'));
-		await assert.rejects(
-			context.service.attachPullRequest('session', 'https://user:secret@github.com/team/repo/pull/7'),
-		);
+		await assert.rejects(context.service.attachPullRequest('session', 'https://user:secret@github.com/team/repo/pull/7'));
 		assert.deepEqual(writes, []);
 		await context.service.attachPullRequest('session', 'https://github.com/TEAM/Repo/pull/7?view=split#review');
 		assert.deepEqual(writes, [
@@ -755,14 +732,7 @@ suite('Session GitHub associations', () => {
 				},
 			],
 		);
-		assert.deepEqual(reads.sort(), [
-			'checks:1',
-			'checks:2',
-			'pulls:1',
-			'pulls:2',
-			'threads:null',
-			'threads:second',
-		]);
+		assert.deepEqual(reads.sort(), ['checks:1', 'checks:2', 'pulls:1', 'pulls:2', 'threads:null', 'threads:second']);
 	});
 
 	test('a closed or merged branch PR is resolved when there is no open match', async () => {
@@ -818,10 +788,7 @@ suite('Session GitHub associations', () => {
 		let reads = 0;
 		using context = fixture({
 			listPullRequests: async (_repository, state, _page, _token, filter) => ({
-				items:
-					state === GitHubIssueState.Open
-						? [{ ...pullRequest, headBranch: filter?.head?.split(':')[1] ?? 'feature' }]
-						: [],
+				items: state === GitHubIssueState.Open ? [{ ...pullRequest, headBranch: filter?.head?.split(':')[1] ?? 'feature' }] : [],
 				nextPage: null,
 			}),
 			readPullRequest: async () => {
@@ -853,10 +820,7 @@ suite('Session GitHub associations', () => {
 		const pending = new DeferredPromise<GitHubPullRequest>();
 		let signedIn = true;
 		using context = fixture({
-			listAccounts: async () =>
-				signedIn
-					? [{ id: 'account', host: 'github.com', login: 'user', status: 'ready', credentialRevision: 1n }]
-					: [],
+			listAccounts: async () => (signedIn ? [{ id: 'account', host: 'github.com', login: 'user', status: 'ready', credentialRevision: 1n }] : []),
 			readPullRequest: async (_repository, _number, token) => {
 				await started.complete(token!);
 				return pending.p;
@@ -948,18 +912,10 @@ suite('sessionGitHub browser component', () => {
 		await expect(pills).toHaveCount(2);
 		await expect(first).toHaveAccessibleName(/Changes in one · Open/);
 		await expect(sidebar.locator('[data-ash-icon-id="git-pull-request"]')).toHaveCount(1);
-		await expect
-			.poll(() =>
-				pills
-					.locator('.ash-icon')
-					.evaluateAll(elements => elements.map(element => element.getAttribute('aria-hidden'))),
-			)
-			.toEqual(['true', 'true']);
+		await expect.poll(() => pills.locator('.ash-icon').evaluateAll(elements => elements.map(element => element.getAttribute('aria-hidden')))).toEqual(['true', 'true']);
 		await first.focus();
 		await page.keyboard.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashSessionGitHub.opened))
-			.toEqual(['https://github.com/team/one/pull/7']);
+		await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.opened)).toEqual(['https://github.com/team/one/pull/7']);
 		await page.evaluate(() => window.ashSessionGitHub.setAttention('comments'));
 		await expect(first).toHaveAccessibleName(/Unresolved review comments/);
 		await expect(sidebar.locator('[data-ash-icon-id="git-pull-request-comment"]')).toHaveCount(1);
@@ -981,12 +937,7 @@ suite('sessionGitHub browser component', () => {
 		await page.evaluate(() => window.ashSessionGitHub.theme('hc'));
 		await expect(first).toHaveCSS('outline-style', 'solid');
 		await expect(first).toHaveCSS('min-height', '28px');
-		expect(
-			await first.evaluate(
-				element =>
-					element.getBoundingClientRect().right <= element.parentElement!.getBoundingClientRect().right,
-			),
-		).toBe(true);
+		expect(await first.evaluate(element => element.getBoundingClientRect().right <= element.parentElement!.getBoundingClientRect().right)).toBe(true);
 		await page.evaluate(() => window.ashSessionGitHub.changeBranch());
 		await expect(pills).toHaveCount(0);
 		await expect(sidebar.locator('.ash-sessions-list-pr')).toBeHidden();
@@ -1066,13 +1017,7 @@ suite('sessionGitHub browser component', () => {
 		await page.keyboard.press('Escape');
 		await expect(dialog).toHaveCount(0);
 		await expect(attach).toBeFocused();
-		expect(
-			await page.evaluate(() =>
-				window.ashSessionGitHub.requests.filter(
-					request => request.method === 'github/session/pullRequest/attach',
-				),
-			),
-		).toHaveLength(0);
+		expect(await page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/session/pullRequest/attach'))).toHaveLength(0);
 	});
 
 	test('removing a manual attachment retains its current branch association', async function () {
@@ -1088,9 +1033,7 @@ suite('sessionGitHub browser component', () => {
 		await remove.click();
 		await expect(remove).toHaveCount(0);
 		await expect(page.locator('.ash-session-chat-input-pr')).toHaveCount(2);
-		await expect(page.locator('.ash-session-chat-input-pr').filter({ hasText: 'one #7' })).toHaveAccessibleName(
-			/Open$/,
-		);
+		await expect(page.locator('.ash-session-chat-input-pr').filter({ hasText: 'one #7' })).toHaveAccessibleName(/Open$/);
 		await page.reload();
 		await expect(remove).toHaveCount(0);
 		await expect(page.locator('.ash-session-chat-input-pr')).toHaveCount(2);
@@ -1103,22 +1046,13 @@ suite('sessionGitHub browser component', () => {
 		const review = page.getByRole('button', { name: 'Review pull request team/one #7 in Ash', exact: true });
 		await expect(review).toBeVisible();
 		await review.click();
-		expect(await page.evaluate(() => window.ashSessionGitHub.opened)).toContain(
-			'ash-github://github.com/team/one/pull/7',
-		);
-		expect(
-			await page.evaluate(() =>
-				window.ashSessionGitHub.requests.some(request => request.method === 'github/comment/create'),
-			),
-		).toBe(false);
+		expect(await page.evaluate(() => window.ashSessionGitHub.opened)).toContain('ash-github://github.com/team/one/pull/7');
+		expect(await page.evaluate(() => window.ashSessionGitHub.requests.some(request => request.method === 'github/comment/create'))).toBe(false);
 	});
 
 	async function attachIssue(page: import('@playwright/test').Page, number: number): Promise<void> {
 		await page.getByRole('button', { name: 'Attach issue', exact: true }).click();
-		await page
-			.getByRole('dialog', { name: 'Attach an issue to this session' })
-			.getByRole('textbox')
-			.fill(`https://github.com/TEAM/one/issues/${number}`);
+		await page.getByRole('dialog', { name: 'Attach an issue to this session' }).getByRole('textbox').fill(`https://github.com/TEAM/one/issues/${number}`);
 		await page.keyboard.press('Enter');
 		await expect(page.getByRole('dialog')).toHaveCount(0);
 	}
@@ -1141,9 +1075,7 @@ suite('sessionGitHub browser component', () => {
 		const issue = page.locator('.ash-session-chat-input-issue[href$="/11"]');
 		await issue.focus();
 		await page.keyboard.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashSessionGitHub.opened))
-			.toContain('https://github.com/team/one/issues/11');
+		await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.opened)).toContain('https://github.com/team/one/issues/11');
 		await page.evaluate(() => window.ashSessionGitHub.setIssueState(11, 'closed', 'completed'));
 		await expect(summary).toHaveAccessibleName('2 issues · 0 open · 2 closed · 0 unavailable');
 		await expect(summary.locator('[data-ash-icon-id="issue-closed"]')).toHaveCount(1);
@@ -1172,11 +1104,7 @@ suite('sessionGitHub browser component', () => {
 		await expect(page.getByRole('button', { name: 'Attach issue', exact: true })).toBeFocused();
 		await page.reload();
 		await expect(summary).toHaveAccessibleName('1 issues · 0 open · 1 closed · 0 unavailable');
-		expect(
-			await page.evaluate(() =>
-				window.ashSessionGitHub.requests.some(request => request.method === 'github/issue/update'),
-			),
-		).toBe(false);
+		expect(await page.evaluate(() => window.ashSessionGitHub.requests.some(request => request.method === 'github/issue/update'))).toBe(false);
 	});
 
 	test('Issue labels translate and survive narrow layout, theme changes and account invalidation', async function () {
@@ -1197,12 +1125,7 @@ suite('sessionGitHub browser component', () => {
 		await page.keyboard.press('Tab');
 		await expect(issue).toBeFocused();
 		await expect(issue).toHaveCSS('outline-style', 'solid');
-		expect(
-			await issue.evaluate(
-				element =>
-					element.getBoundingClientRect().right <= element.parentElement!.getBoundingClientRect().right,
-			),
-		).toBe(true);
+		expect(await issue.evaluate(element => element.getBoundingClientRect().right <= element.parentElement!.getBoundingClientRect().right)).toBe(true);
 		await page.evaluate(() => window.ashSessionGitHub.signOut());
 		await expect(issue).toHaveAccessibleName(/状态不可用$/);
 		await expect(issue).not.toHaveAccessibleName(/long title/);
@@ -1221,30 +1144,15 @@ suite('sessionGitHub browser component', () => {
 			const { page } = browserTests;
 			const zh = locale === 'zh-CN';
 			await page.goto(`/sessionGitHub.html?checks&locale=${locale}`);
-			const group = page
-				.locator('.ash-sessions-follow-up')
-				.getByRole('group', { name: 'team/one #7', exact: true });
+			const group = page.locator('.ash-sessions-follow-up').getByRole('group', { name: 'team/one #7', exact: true });
 			const start = group.getByRole('button', { name: zh ? '跟进 PR 检查' : 'Follow PR checks', exact: true });
 			await expect(start).toBeVisible();
 			await start.focus();
 			await start.press('Enter');
-			await expect
-				.poll(() =>
-					page.evaluate(
-						() =>
-							window.ashSessionGitHub.requests.filter(request => request.method === 'automation/write')
-								.length,
-					),
-				)
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'automation/write').length)).toBe(1);
 			const stopName = zh ? '停止 PR 跟进' : 'Stop PR follow-up';
-			await expect(group.getByRole('button', { name: stopName, exact: true })).toHaveAttribute(
-				'aria-pressed',
-				'true',
-			);
-			const writes = await page.evaluate(() =>
-				window.ashSessionGitHub.requests.filter(request => request.method === 'automation/write'),
-			);
+			await expect(group.getByRole('button', { name: stopName, exact: true })).toHaveAttribute('aria-pressed', 'true');
+			const writes = await page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'automation/write'));
 			expect(writes).toHaveLength(1);
 			const definition = writes[0]!.params.definition as Record<string, unknown>;
 			expect(definition.session).toEqual({ type: 'continue', sessionId: 'session', threadId: 'thread' });
@@ -1264,12 +1172,8 @@ suite('sessionGitHub browser component', () => {
 			await expect(restored).toBeVisible();
 			await restored.focus();
 			await restored.press('Enter');
-			await expect(
-				group.getByRole('button', { name: zh ? '跟进 PR 检查' : 'Follow PR checks', exact: true }),
-			).toHaveAttribute('aria-pressed', 'false');
-			const stopped = await page.evaluate(() =>
-				window.ashSessionGitHub.requests.filter(request => request.method === 'automation/write'),
-			);
+			await expect(group.getByRole('button', { name: zh ? '跟进 PR 检查' : 'Follow PR checks', exact: true })).toHaveAttribute('aria-pressed', 'false');
+			const stopped = await page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'automation/write'));
 			expect(stopped).toHaveLength(1);
 			expect(stopped[0]!.params.status).toBe('paused');
 			expect(stopped[0]!.params.expectedRevision).toBe(1);
@@ -1288,10 +1192,7 @@ suite('sessionGitHub browser component', () => {
 			const zh = locale === 'zh-CN';
 			await page.waitForFunction(() => Boolean(window.ashSessionGitHub));
 			await page.evaluate(() => window.ashSessionGitHub.theme('highContrast'));
-			const row = page
-				.locator('.ash-sessions-checks li')
-				.filter({ hasText: 'team/one #7' })
-				.filter({ hasText: 'build' });
+			const row = page.locator('.ash-sessions-checks li').filter({ hasText: 'team/one #7' }).filter({ hasText: 'build' });
 			await expect(row).toHaveCount(1);
 			expect(await page.evaluate(() => window.ashSessionGitHub.submissions)).toEqual([]);
 			const annotations = row.getByRole('button', { name: zh ? '读取注释' : 'Read annotations', exact: true });
@@ -1304,22 +1205,10 @@ suite('sessionGitHub browser component', () => {
 			await expect(output).toContainText('<script>untrusted output</script>');
 			expect(await output.locator('script').count()).toBe(0);
 			await row.getByRole('button', { name: zh ? '下载日志' : 'Download logs', exact: true }).click();
-			await expect
-				.poll(() => page.evaluate(() => window.ashSessionGitHub.opened))
-				.toContain('https://productionresults.blob.core.windows.net/logs?sig=fixture');
+			await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.opened)).toContain('https://productionresults.blob.core.windows.net/logs?sig=fixture');
 			await row.getByRole('button', { name: zh ? '重新运行作业' : 'Re-run job', exact: true }).click();
-			await expect
-				.poll(() =>
-					page.evaluate(
-						() =>
-							window.ashSessionGitHub.requests.filter(request => request.method === 'github/check/rerun')
-								.length,
-					),
-				)
-				.toBe(1);
-			await row
-				.getByRole('button', { name: zh ? '请 Agent 修复 CI' : 'Ask agent to fix CI', exact: true })
-				.click();
+			await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/check/rerun').length)).toBe(1);
+			await row.getByRole('button', { name: zh ? '请 Agent 修复 CI' : 'Ask agent to fix CI', exact: true }).click();
 			await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.submissions.length)).toBe(1);
 			const submission = await page.evaluate(() => window.ashSessionGitHub.submissions[0]!);
 			expect(submission).toMatchObject({
@@ -1330,9 +1219,7 @@ suite('sessionGitHub browser component', () => {
 			});
 			expect(submission.text).toContain('Error page 2');
 			expect(submission.text).not.toContain('sig=fixture');
-			const rerun = await page.evaluate(() =>
-				window.ashSessionGitHub.requests.find(request => request.method === 'github/check/rerun')!,
-			);
+			const rerun = await page.evaluate(() => window.ashSessionGitHub.requests.find(request => request.method === 'github/check/rerun')!);
 			expect(rerun.params).toMatchObject({
 				accountId: 'account',
 				repository: { host: 'github.com', owner: 'team', name: 'one' },

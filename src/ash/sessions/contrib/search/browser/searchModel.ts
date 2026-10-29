@@ -1,10 +1,5 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import {
-	derived,
-	observableSignalFromEvent,
-	observableValue,
-	type IObservable,
-} from '../../../../base/common/observable.js';
+import { derived, observableSignalFromEvent, observableValue, type IObservable } from '../../../../base/common/observable.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import { localize } from '../../../../nls.js';
@@ -84,12 +79,8 @@ export class SessionsSearchModel extends Disposable {
 					results.push({
 						id: `session:${session.sessionId}:${thread.threadId}`,
 						category: 'sessions',
-						title:
-							(thread.origin.type === 'root' ? session.title : thread.title || session.title).trim() ||
-							localize('chat.sessions.new', 'New Session'),
-						description: [session.providerLabel, thread.origin.type !== 'root' ? session.title : undefined]
-							.filter(Boolean)
-							.join(' · '),
+						title: (thread.origin.type === 'root' ? session.title : thread.title || session.title).trim() || localize('chat.sessions.new', 'New Session'),
+						description: [session.providerLabel, thread.origin.type !== 'root' ? session.title : undefined].filter(Boolean).join(' · '),
 						icon: Lxicon.chat4,
 						target: { kind: 'session', sessionId: session.sessionId, threadId: thread.threadId },
 					});
@@ -138,11 +129,7 @@ export class SessionsSearchModel extends Disposable {
 				query,
 				category,
 				results: results.filter(
-					result =>
-						(category === 'all' || result.category === category) &&
-						words.every(word =>
-							`${result.title} ${result.description ?? ''}`.toLocaleLowerCase().includes(word),
-						),
+					result => (category === 'all' || result.category === category) && words.every(word => `${result.title} ${result.description ?? ''}`.toLocaleLowerCase().includes(word)),
 				),
 				loading: sessions.state === 'loading' || projectState.loading || scheduleState === 'loading',
 				error: this.error.read(reader),
@@ -163,12 +150,7 @@ export class SessionsSearchModel extends Disposable {
 			this.projects.reload(),
 			this.automations.refresh().catch(() => {
 				if (!this.isDisposed) {
-					this.error.set(
-						localize(
-							'sessions.search.schedulesFailed',
-							'Could not load schedules. Try opening Search again.',
-						),
-					);
+					this.error.set(localize('sessions.search.schedulesFailed', 'Could not load schedules. Try opening Search again.'));
 				}
 			}),
 		]);

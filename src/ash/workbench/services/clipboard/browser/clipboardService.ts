@@ -5,11 +5,7 @@ import { BrowserClipboardService as BaseBrowserClipboardService } from '../../..
 import type { IClipboardItem } from '../../../../platform/clipboard/common/clipboardService.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
-import {
-	Severity,
-	INotificationService,
-	type INotificationHandle,
-} from '../../../../platform/notification/common/notification.js';
+import { Severity, INotificationService, type INotificationHandle } from '../../../../platform/notification/common/notification.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 
 /** Adds window-scoped permission recovery to the browser clipboard adapter. */
@@ -55,10 +51,7 @@ export class BrowserClipboardService extends BaseBrowserClipboardService {
 		return new Promise(resolve => {
 			const handle = this.notificationService.notify({
 				severity: Severity.Error,
-				message: localize(
-					'clipboard.readError',
-					'Unable to read the clipboard. Allow this website to access your clipboard, then retry.',
-				),
+				message: localize('clipboard.readError', 'Unable to read the clipboard. Allow this website to access your clipboard, then retry.'),
 				actions: {
 					primary: [
 						{

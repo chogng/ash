@@ -1,10 +1,6 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
-import {
-	computePullRequestIcon,
-	getHighestPriorityPullRequestIcon,
-	type ChatPullRequestState,
-} from '../../common/chatPullRequest.js';
+import { computePullRequestIcon, getHighestPriorityPullRequestIcon, type ChatPullRequestState } from '../../common/chatPullRequest.js';
 
 suite('Chat pull request icons', () => {
 	const states: readonly [ChatPullRequestState, string, string][] = [
@@ -21,11 +17,7 @@ suite('Chat pull request icons', () => {
 	}
 
 	test('conflicts and failing checks take priority over unresolved comments on open PRs', () => {
-		for (const status of [
-			{ hasMergeConflicts: true },
-			{ hasFailingChecks: true },
-			{ hasMergeConflicts: true, hasFailingChecks: true, hasUnresolvedComments: true },
-		]) {
+		for (const status of [{ hasMergeConflicts: true }, { hasFailingChecks: true }, { hasMergeConflicts: true, hasFailingChecks: true, hasUnresolvedComments: true }]) {
 			assert.deepEqual(computePullRequestIcon('open', status), {
 				id: 'git-pull-request-error',
 				color: { id: 'charts.orange' },
@@ -78,9 +70,6 @@ suite('Chat pull request icons', () => {
 			assert.equal(getHighestPriorityPullRequestIcon([undefined, ...icons.slice(index).reverse()]), icons[index]);
 		}
 		assert.equal(getHighestPriorityPullRequestIcon([undefined]), undefined);
-		assert.equal(
-			getHighestPriorityPullRequestIcon([icons[0], computePullRequestIcon('open', { hasFailingChecks: true })]),
-			icons[0],
-		);
+		assert.equal(getHighestPriorityPullRequestIcon([icons[0], computePullRequestIcon('open', { hasFailingChecks: true })]), icons[0]);
 	});
 });

@@ -36,23 +36,11 @@ suite('ResourceGlobMatcher', () => {
 		services.registerInstance(IConfigurationService, configuration);
 		using matcher = services.createInstance(
 			ResourceGlobMatcher,
-			(folder?: URI): IExpression =>
-				folder?.path === '/first'
-					? { 'src/**': true }
-					: folder?.path === '/first/nested'
-						? { '*.json': true }
-						: { '**/*.log': true },
+			(folder?: URI): IExpression => (folder?.path === '/first' ? { 'src/**': true } : folder?.path === '/first/nested' ? { '*.json': true } : { '**/*.log': true }),
 			() => true,
 		);
 		assert.deepEqual(
-			[
-				'/first/src/main.ts',
-				'/first/nested/main.ts',
-				'/first/nested/config.json',
-				'/second/a.log',
-				'/outside/a.log',
-				'/outside/a.ts',
-			].map(path => matcher.matches(URI.file(path))),
+			['/first/src/main.ts', '/first/nested/main.ts', '/first/nested/config.json', '/second/a.log', '/outside/a.log', '/outside/a.ts'].map(path => matcher.matches(URI.file(path))),
 			[true, false, true, true, true, false],
 		);
 	});
@@ -67,11 +55,7 @@ suite('ResourceGlobMatcher', () => {
 			configuration,
 		);
 		assert.deepEqual(
-			[
-				matcher.matches(URI.file('C:/project/generated/a.ts')),
-				matcher.matches(URI.file('C:/project/src/a.ts')),
-				matcher.matches(URI.from({ scheme: 'test-resource', path: '/remote/a.ts' })),
-			],
+			[matcher.matches(URI.file('C:/project/generated/a.ts')), matcher.matches(URI.file('C:/project/src/a.ts')), matcher.matches(URI.from({ scheme: 'test-resource', path: '/remote/a.ts' }))],
 			[true, true, true],
 		);
 	});
@@ -91,14 +75,7 @@ suite('ResourceGlobMatcher', () => {
 		assert.equal(matcher.matches(URI.file('/first/src/main.ts')), true);
 		await configuration.updateValue('test.expression', { 'src/**': true });
 		workspace.updateWorkspace({ id: 'second', uri: URI.file('/second') });
-		assert.deepEqual(
-			[
-				matcher.matches(URI.file('/first/src/main.ts')),
-				matcher.matches(URI.file('/second/src/main.ts')),
-				changes,
-			],
-			[false, true, 2],
-		);
+		assert.deepEqual([matcher.matches(URI.file('/first/src/main.ts')), matcher.matches(URI.file('/second/src/main.ts')), changes], [false, true, 2]);
 		matcher.dispose();
 		await configuration.updateValue('test.expression', {});
 		assert.equal(changes, 2);

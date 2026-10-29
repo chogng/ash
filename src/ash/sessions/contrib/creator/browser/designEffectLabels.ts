@@ -17,20 +17,8 @@ export function describeDesignEffect(effect: DesignEffect): string {
 		details.push(localize('sessions.design.hidden', 'Hidden'));
 	}
 	if (effect.type === 'drop-shadow' || effect.type === 'inner-shadow') {
-		details.push(
-			localize(
-				'sessions.design.shadowReview',
-				'Shadow: X {0}, Y {1}, blur {2}, color {3}',
-				effect.x,
-				effect.y,
-				effect.blur,
-				effect.color,
-			),
-		);
-		details.push(
-			localize('sessions.design.effectSpreadReview', 'Spread: {0}', effect.spread ?? 0),
-			designBlendLabel(effect.blendMode ?? 'normal'),
-		);
+		details.push(localize('sessions.design.shadowReview', 'Shadow: X {0}, Y {1}, blur {2}, color {3}', effect.x, effect.y, effect.blur, effect.color));
+		details.push(localize('sessions.design.effectSpreadReview', 'Spread: {0}', effect.spread ?? 0), designBlendLabel(effect.blendMode ?? 'normal'));
 		if (effect.type === 'drop-shadow' && effect.showBehind) {
 			details.push(localize('sessions.design.effectShowBehind', 'Show shadow behind transparent areas'));
 		}

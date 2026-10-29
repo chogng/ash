@@ -57,11 +57,7 @@ export function trackChatInputPickerFocus(container: HTMLElement): IDisposable {
 export abstract class ChatInputPickerActionViewItem extends ActionWidgetDropdownActionViewItem {
 	private externalAnchor: HTMLElement | undefined;
 
-	constructor(
-		action: IAction,
-		options: Omit<IActionWidgetDropdownOptions, 'label' | 'ariaLabel' | 'labelRenderer'>,
-		@IInstantiationService instantiationService: IInstantiationService,
-	) {
+	constructor(action: IAction, options: Omit<IActionWidgetDropdownOptions, 'label' | 'ariaLabel' | 'labelRenderer'>, @IInstantiationService instantiationService: IInstantiationService) {
 		super(
 			action,
 			{

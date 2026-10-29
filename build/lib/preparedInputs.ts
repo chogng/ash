@@ -12,22 +12,14 @@ export class PreparedInputs {
 		this.receipt = receipt;
 	}
 
-	prepare(
-		inputs: () => Promise<string>,
-		outputs: () => Promise<string>,
-		generate: () => Promise<boolean>,
-	): Promise<boolean> {
+	prepare(inputs: () => Promise<string>, outputs: () => Promise<string>, generate: () => Promise<boolean>): Promise<boolean> {
 		// Vite runs buildStart hooks concurrently. Share preparation until it settles.
 		return (this.pending ??= this.run(inputs, outputs, generate).finally(() => {
 			this.pending = undefined;
 		}));
 	}
 
-	private async run(
-		inputs: () => Promise<string>,
-		outputs: () => Promise<string>,
-		generate: () => Promise<boolean>,
-	): Promise<boolean> {
+	private async run(inputs: () => Promise<string>, outputs: () => Promise<string>, generate: () => Promise<boolean>): Promise<boolean> {
 		const input = await inputs();
 		const output = await outputs();
 		const receipt = await readJsonCache(this.receipt);
@@ -44,10 +36,7 @@ export class PreparedInputs {
 }
 
 /** Include paths as well as bytes, so additions, deletions and renames invalidate. */
-export async function fingerprintPaths(
-	paths: readonly string[],
-	accepts: (path: string, directory: boolean) => boolean = () => true,
-): Promise<string> {
+export async function fingerprintPaths(paths: readonly string[], accepts: (path: string, directory: boolean) => boolean = () => true): Promise<string> {
 	const hash = createHash('sha256');
 	const files: string[] = [];
 	async function visit(path: string): Promise<void> {
@@ -67,9 +56,7 @@ export async function fingerprintPaths(
 		if (metadata.isDirectory()) {
 			hash.update(JSON.stringify([path, 'directory']));
 			// Match the generators' traversal and avoid following linked directory cycles.
-			for (const entry of (await readdir(path, { withFileTypes: true })).sort((a, b) =>
-				a.name.localeCompare(b.name),
-			)) {
+			for (const entry of (await readdir(path, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
 				if (!entry.isSymbolicLink()) {
 					await visit(resolve(path, entry.name));
 				}
@@ -111,9 +98,7 @@ const fileFingerprints = new Map<string, { signature: string; digest: string }>(
 export async function readJsonCache(path: string): Promise<Record<string, unknown> | undefined> {
 	try {
 		const value: unknown = JSON.parse(await readFile(path, 'utf8'));
-		return value && typeof value === 'object' && !Array.isArray(value)
-			? (value as Record<string, unknown>)
-			: undefined;
+		return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
 	} catch (error) {
 		if (error.code === 'ENOENT' || error instanceof SyntaxError) {
 			return undefined;

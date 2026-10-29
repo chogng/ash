@@ -107,11 +107,7 @@ export class ChatGPTClient {
 			throw this.invalidResponse();
 		}
 		const defaultModelSlug = typeof value.default_model_slug === 'string' ? value.default_model_slug : undefined;
-		const requestModels = new Map(
-			value.models.flatMap(model =>
-				isRecord(model) && typeof model.slug === 'string' ? [[model.slug, model] as const] : [],
-			),
-		);
+		const requestModels = new Map(value.models.flatMap(model => (isRecord(model) && typeof model.slug === 'string' ? [[model.slug, model] as const] : [])));
 		const models: ChatGPTModel[] = [];
 		// versions defines the product menu. models contains internal routing variants,
 		// including Work models that must not become extra ChatGPT picker entries.
@@ -127,41 +123,24 @@ export class ChatGPTClient {
 			) {
 				continue;
 			}
-			const title = [version.display_text_for_intelligence, version.display_text, version.display_text_full].find(
-				text => typeof text === 'string' && text.trim(),
-			);
+			const title = [version.display_text_for_intelligence, version.display_text, version.display_text_full].find(text => typeof text === 'string' && text.trim());
 			if (typeof title !== 'string') {
 				continue;
 			}
 			const presets: ChatGPTModel['presets'][number][] = [];
 			for (const preset of version.intelligence_presets) {
-				if (
-					!isRecord(preset) ||
-					(preset.preset_type !== undefined && preset.preset_type !== 'available') ||
-					preset.disabled === true
-				) {
+				if (!isRecord(preset) || (preset.preset_type !== undefined && preset.preset_type !== 'available') || preset.disabled === true) {
 					continue;
 				}
-				const id =
-					typeof preset.id === 'number' && Number.isSafeInteger(preset.id)
-						? String(preset.id)
-						: typeof preset.id === 'string' && preset.id.trim()
-							? preset.id
-							: undefined;
-				if (
-					id === undefined ||
-					typeof preset.model_slug !== 'string' ||
-					presets.some(option => option.id === id)
-				) {
+				const id = typeof preset.id === 'number' && Number.isSafeInteger(preset.id) ? String(preset.id) : typeof preset.id === 'string' && preset.id.trim() ? preset.id : undefined;
+				if (id === undefined || typeof preset.model_slug !== 'string' || presets.some(option => option.id === id)) {
 					continue;
 				}
 				const requestModel = requestModels.get(preset.model_slug);
 				if (!requestModel) {
 					continue;
 				}
-				const label = [preset.selected_display_title, preset.title].find(
-					text => typeof text === 'string' && text.trim(),
-				);
+				const label = [preset.selected_display_title, preset.title].find(text => typeof text === 'string' && text.trim());
 				if (typeof label !== 'string') {
 					continue;
 				}
@@ -172,9 +151,7 @@ export class ChatGPTClient {
 						!/^[a-z][a-z0-9_-]{0,63}$/u.test(preset.thinking_effort) ||
 						requestModel.configurable_thinking_effort !== true ||
 						!Array.isArray(requestModel.thinking_efforts) ||
-						!requestModel.thinking_efforts.some(
-							effort => isRecord(effort) && effort.thinking_effort === preset.thinking_effort,
-						)
+						!requestModel.thinking_efforts.some(effort => isRecord(effort) && effort.thinking_effort === preset.thinking_effort)
 					) {
 						continue;
 					}
@@ -187,11 +164,7 @@ export class ChatGPTClient {
 			}
 			const modelIds = [
 				...new Set([
-					...(Array.isArray(version.slugs)
-						? version.slugs.filter(
-								(slug): slug is string => typeof slug === 'string' && requestModels.has(slug),
-							)
-						: []),
+					...(Array.isArray(version.slugs) ? version.slugs.filter((slug): slug is string => typeof slug === 'string' && requestModels.has(slug)) : []),
 					...presets.map(preset => preset.model),
 				]),
 			];
@@ -208,20 +181,12 @@ export class ChatGPTClient {
 		}
 		return {
 			models,
-			defaultModel:
-				models.find(model => defaultModelSlug !== undefined && model.modelIds.includes(defaultModelSlug))?.id ??
-				models[0]!.id,
+			defaultModel: models.find(model => defaultModelSlug !== undefined && model.modelIds.includes(defaultModelSlug))?.id ?? models[0]!.id,
 		};
 	}
 
-	async conversations(
-		offset: number,
-		signal: AbortSignal,
-	): Promise<{ items: readonly ChatGPTConversation[]; hasMore: boolean; nextOffset: number }> {
-		const value = await this.json(
-			`/conversations?offset=${offset}&limit=50&order=updated&hide_snorlax=false`,
-			signal,
-		);
+	async conversations(offset: number, signal: AbortSignal): Promise<{ items: readonly ChatGPTConversation[]; hasMore: boolean; nextOffset: number }> {
+		const value = await this.json(`/conversations?offset=${offset}&limit=50&order=updated&hide_snorlax=false`, signal);
 		if (!isRecord(value) || !Array.isArray(value.items)) {
 			throw this.invalidResponse();
 		}
@@ -240,11 +205,7 @@ export class ChatGPTClient {
 		return {
 			items,
 			nextOffset: offset + value.items.length,
-			hasMore:
-				value.items.length > 0 &&
-				(typeof value.total === 'number'
-					? offset + value.items.length < value.total
-					: value.items.length === 50),
+			hasMore: value.items.length > 0 && (typeof value.total === 'number' ? offset + value.items.length < value.total : value.items.length === 50),
 		};
 	}
 
@@ -280,11 +241,7 @@ export class ChatGPTClient {
 				...(cursor ? { cursor } : {}),
 			});
 			const value = await this.json('/gizmos/snorlax/sidebar?' + query, signal);
-			if (
-				!isRecord(value) ||
-				!Array.isArray(value.items) ||
-				(value.cursor != null && typeof value.cursor !== 'string')
-			) {
+			if (!isRecord(value) || !Array.isArray(value.items) || (value.cursor != null && typeof value.cursor !== 'string')) {
 				throw this.invalidResponse();
 			}
 			for (const item of value.items) {
@@ -315,11 +272,7 @@ export class ChatGPTClient {
 		await this.consume(`/conversation/id/${encodeURIComponent(id)}/rename`, signal, 'POST', { title });
 	}
 
-	async updateConversation(
-		id: string,
-		change: { is_starred: boolean } | { is_archived: true } | { gizmo_id: string },
-		signal: AbortSignal,
-	): Promise<void> {
+	async updateConversation(id: string, change: { is_starred: boolean } | { is_archived: true } | { gizmo_id: string }, signal: AbortSignal): Promise<void> {
 		await this.consume(`/conversation/${encodeURIComponent(id)}`, signal, 'PATCH', change);
 	}
 
@@ -339,13 +292,7 @@ export class ChatGPTClient {
 			throw this.invalidResponse();
 		}
 		const url = new URL(value.share_url);
-		if (
-			url.origin !== 'https://chatgpt.com' ||
-			!url.pathname.startsWith('/share/') ||
-			url.username ||
-			url.password ||
-			url.hash
-		) {
+		if (url.origin !== 'https://chatgpt.com' || !url.pathname.startsWith('/share/') || url.username || url.password || url.hash) {
 			throw this.invalidResponse();
 		}
 		return url.href;
@@ -447,10 +394,7 @@ export class ChatGPTClient {
 			signal,
 		});
 		if (!response.ok) {
-			throw new ChatGPTRequestError(
-				response.status,
-				localize('sessions.chatgpt.uploadFailed', 'File upload failed ({0}).', response.status),
-			);
+			throw new ChatGPTRequestError(response.status, localize('sessions.chatgpt.uploadFailed', 'File upload failed ({0}).', response.status));
 		}
 		await response.body?.cancel();
 		for (let attempt = 0; attempt < 20; attempt++) {
@@ -478,15 +422,10 @@ export class ChatGPTClient {
 			}
 			await waitForUpload(signal);
 		}
-		throw new Error(
-			localize('sessions.chatgpt.uploadNotReady', 'The file is still processing. Retry the attachment.'),
-		);
+		throw new Error(localize('sessions.chatgpt.uploadNotReady', 'The file is still processing. Retry the attachment.'));
 	}
 
-	async voice(
-		input: { conversationId?: string; parentId: string; language: string; sdp: string },
-		signal: AbortSignal,
-	): Promise<string> {
+	async voice(input: { conversationId?: string; parentId: string; language: string; sdp: string }, signal: AbortSignal): Promise<string> {
 		const form = new FormData();
 		form.set('sdp', input.sdp);
 		form.set(
@@ -510,14 +449,7 @@ export class ChatGPTClient {
 		);
 		const response = await this.fetcher('/service/realtime/vp?dcid=0', { method: 'POST', body: form, signal });
 		if (!response.ok) {
-			throw new ChatGPTRequestError(
-				response.status,
-				localize(
-					'sessions.chatgpt.voiceRequestFailed',
-					'Could not start ChatGPT voice ({0}).',
-					response.status,
-				),
-			);
+			throw new ChatGPTRequestError(response.status, localize('sessions.chatgpt.voiceRequestFailed', 'Could not start ChatGPT voice ({0}).', response.status));
 		}
 		const answer = await response.text();
 		if (answer.length > 128 * 1024 || !/^v=0\r?\n/u.test(answer)) {
@@ -541,12 +473,7 @@ export class ChatGPTClient {
 				}
 			}
 			if (Date.now() >= deadline) {
-				throw new Error(
-					localize(
-						'sessions.chatgpt.voiceHistoryPending',
-						'The voice conversation has not finished saving. Reload it before sending another message.',
-					),
-				);
+				throw new Error(localize('sessions.chatgpt.voiceHistoryPending', 'The voice conversation has not finished saving. Reload it before sending another message.'));
 			}
 			await waitForUpload(signal);
 		}
@@ -625,18 +552,12 @@ export class ChatGPTClient {
 		}
 		// Verification has its own request. If the user cancels while it runs, no message
 		// POST can be dispatched later by a still-running verification task.
-		const verification: unknown = await (
-			await this.request('/f/conversation', signal, { method: 'POST' }, true)
-		).json();
+		const verification: unknown = await (await this.request('/f/conversation', signal, { method: 'POST' }, true)).json();
 		if (!isRecord(verification) || typeof verification['OpenAI-Sentinel-Chat-Requirements-Token'] !== 'string') {
 			throw this.invalidResponse();
 		}
 		const verificationHeaders: Record<string, string> = {};
-		for (const name of [
-			'OpenAI-Sentinel-Chat-Requirements-Token',
-			'OpenAI-Sentinel-Proof-Token',
-			'OpenAI-Sentinel-Turnstile-Token',
-		]) {
+		for (const name of ['OpenAI-Sentinel-Chat-Requirements-Token', 'OpenAI-Sentinel-Proof-Token', 'OpenAI-Sentinel-Turnstile-Token']) {
 			if (typeof verification[name] === 'string') {
 				verificationHeaders[name] = verification[name];
 			}
@@ -702,12 +623,7 @@ export class ChatGPTClient {
 		});
 	}
 
-	async readResource(
-		resource: string,
-		conversationId: string | undefined,
-		messageId: string,
-		signal: AbortSignal,
-	): Promise<Blob> {
+	async readResource(resource: string, conversationId: string | undefined, messageId: string, signal: AbortSignal): Promise<Blob> {
 		if (resource.startsWith('data:')) {
 			return (await globalThis.fetch(resource, { signal })).blob();
 		}
@@ -742,12 +658,7 @@ export class ChatGPTClient {
 		return (await this.request(path, signal)).json();
 	}
 
-	private async request(
-		path: string,
-		signal: AbortSignal,
-		init: RequestInit = {},
-		headersOnly = false,
-	): Promise<Response> {
+	private async request(path: string, signal: AbortSignal, init: RequestInit = {}, headersOnly = false): Promise<Response> {
 		signal.throwIfAborted();
 		const response = await this.fetcher(`/service${headersOnly ? '/.headers' : ''}/backend-api` + path, {
 			...init,
@@ -766,33 +677,18 @@ export class ChatGPTClient {
 
 	private requestError(status: number): ChatGPTRequestError {
 		if (status === 428) {
-			return new ChatGPTRequestError(
-				status,
-				localize(
-					'sessions.chatgpt.sendVerificationUnavailable',
-					'ChatGPT send verification could not finish. Your message was not sent. Try again later.',
-				),
-			);
+			return new ChatGPTRequestError(status, localize('sessions.chatgpt.sendVerificationUnavailable', 'ChatGPT send verification could not finish. Your message was not sent. Try again later.'));
 		}
 		if (status === 403) {
 			return new ChatGPTRequestError(
 				status,
-				localize(
-					'sessions.chatgpt.verificationRequired',
-					'ChatGPT rejected this request with a verification or access restriction (403). An existing login does not remove this restriction.',
-				),
+				localize('sessions.chatgpt.verificationRequired', 'ChatGPT rejected this request with a verification or access restriction (403). An existing login does not remove this restriction.'),
 			);
 		}
 		if (status === 429) {
-			return new ChatGPTRequestError(
-				status,
-				localize('sessions.chatgpt.rateLimited', 'ChatGPT usage limit reached. Try again later.'),
-			);
+			return new ChatGPTRequestError(status, localize('sessions.chatgpt.rateLimited', 'ChatGPT usage limit reached. Try again later.'));
 		}
-		return new ChatGPTRequestError(
-			status,
-			localize('sessions.chatgpt.requestFailed', 'ChatGPT request failed ({0}).', status),
-		);
+		return new ChatGPTRequestError(status, localize('sessions.chatgpt.requestFailed', 'ChatGPT request failed ({0}).', status));
 	}
 
 	private invalidResponse(): Error {
@@ -808,12 +704,7 @@ export function readChatGPTVoiceUpdate(data: unknown): ChatGPTVoiceUpdate | unde
 	let value: unknown;
 	try {
 		value = JSON.parse(data);
-		if (
-			isRecord(value) &&
-			value.type === 'data_message' &&
-			typeof value.data === 'string' &&
-			value.data.length <= 128 * 1024
-		) {
+		if (isRecord(value) && value.type === 'data_message' && typeof value.data === 'string' && value.data.length <= 128 * 1024) {
 			value = JSON.parse(value.data);
 		}
 	} catch {
@@ -823,8 +714,7 @@ export function readChatGPTVoiceUpdate(data: unknown): ChatGPTVoiceUpdate | unde
 		return undefined;
 	}
 	const payload = value.payload;
-	const id = (value: unknown): string | undefined =>
-		typeof value === 'string' && /^[A-Za-z0-9_-]{1,240}$/u.test(value) ? value : undefined;
+	const id = (value: unknown): string | undefined => (typeof value === 'string' && /^[A-Za-z0-9_-]{1,240}$/u.test(value) ? value : undefined);
 	const conversationId = id(payload.conversation_id);
 	if (value.type === 'startup_telemetry' || value.type === 'conversation_update') {
 		return { conversationId, parentId: id(payload.parent_message_id) };
@@ -842,13 +732,7 @@ export function readChatGPTVoiceUpdate(data: unknown): ChatGPTVoiceUpdate | unde
 }
 
 function readMessage(value: unknown, conversationId: string | undefined): ChatGPTMessage | undefined {
-	if (
-		!isRecord(value) ||
-		typeof value.id !== 'string' ||
-		!isRecord(value.author) ||
-		!['user', 'assistant', 'tool'].includes(value.author.role as string) ||
-		!isRecord(value.content)
-	) {
+	if (!isRecord(value) || typeof value.id !== 'string' || !isRecord(value.author) || !['user', 'assistant', 'tool'].includes(value.author.role as string) || !isRecord(value.content)) {
 		return undefined;
 	}
 	if (isRecord(value.metadata) && value.metadata.is_visually_hidden_from_conversation === true) {
@@ -867,15 +751,7 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 			typeof value.content.text === 'string'
 				? value.content.text
 				: Array.isArray(value.content.parts)
-					? value.content.parts
-							.map(part =>
-								typeof part === 'string'
-									? part
-									: isRecord(part) && typeof part.text === 'string'
-										? part.text
-										: JSON.stringify(part),
-							)
-							.join('\n')
+					? value.content.parts.map(part => (typeof part === 'string' ? part : isRecord(part) && typeof part.text === 'string' ? part.text : JSON.stringify(part))).join('\n')
 					: '';
 		return {
 			id: value.id,
@@ -884,9 +760,7 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 			activity: {
 				kind: result ? 'result' : recipient ? 'call' : 'progress',
 				tool: result ? (typeof value.author.name === 'string' ? value.author.name : undefined) : recipient,
-				failed:
-					['failed', 'error'].includes(value.status as string) ||
-					(isRecord(value.metadata) && value.metadata.is_error === true),
+				failed: ['failed', 'error'].includes(value.status as string) || (isRecord(value.metadata) && value.metadata.is_error === true),
 			},
 		};
 	}
@@ -895,46 +769,21 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 	const resources: ChatGPTResource[] = [];
 	const resourcePart = (part: Record<string, unknown>): ChatGPTResource | undefined => {
 		const uri =
-			['asset_pointer', 'audio_asset_pointer', 'video_asset_pointer', 'url']
-				.map(key => part[key])
-				.find(value => typeof value === 'string') ??
+			['asset_pointer', 'audio_asset_pointer', 'video_asset_pointer', 'url'].map(key => part[key]).find(value => typeof value === 'string') ??
 			(typeof part.file_id === 'string' ? `file-service://${part.file_id}` : undefined);
 		if (typeof uri !== 'string' || uri.length > 8192) return undefined;
-		const name = ['name', 'file_name', 'title', 'alt']
-			.map(key => part[key])
-			.find(value => typeof value === 'string');
-		const mimeType =
-			typeof part.mime_type === 'string'
-				? part.mime_type
-				: typeof part.mimeType === 'string'
-					? part.mimeType
-					: typeof name === 'string'
-						? getMediaOrTextMime(name)
-						: undefined;
+		const name = ['name', 'file_name', 'title', 'alt'].map(key => part[key]).find(value => typeof value === 'string');
+		const mimeType = typeof part.mime_type === 'string' ? part.mime_type : typeof part.mimeType === 'string' ? part.mimeType : typeof name === 'string' ? getMediaOrTextMime(name) : undefined;
 		const type = typeof part.content_type === 'string' ? part.content_type : (mimeType ?? '');
-		const kind = /image/u.test(type)
-			? 'image'
-			: /audio/u.test(type)
-				? 'audio'
-				: /video/u.test(type)
-					? 'video'
-					: mimeType === 'text/html'
-						? 'html'
-						: 'document';
+		const kind = /image/u.test(type) ? 'image' : /audio/u.test(type) ? 'audio' : /video/u.test(type) ? 'video' : mimeType === 'text/html' ? 'html' : 'document';
 		return {
 			uri,
 			kind,
-			name:
-				typeof name === 'string'
-					? name
-					: kind === 'document'
-						? localize('sessions.chatgpt.file', 'File')
-						: localize('sessions.chatgpt.media', 'Media'),
+			name: typeof name === 'string' ? name : kind === 'document' ? localize('sessions.chatgpt.file', 'File') : localize('sessions.chatgpt.media', 'Media'),
 			mimeType,
 		};
 	};
-	const literal = (text: string): string =>
-		escapeMarkdownSyntaxTokens(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+	const literal = (text: string): string => escapeMarkdownSyntaxTokens(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 	const partText = (part: unknown): string => {
 		if (typeof part === 'string') {
 			return part;
@@ -944,10 +793,7 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 		}
 		// Keep mixed text/media parts in source order. Selecting only string parts
 		// used to silently discard an image whenever that same message had a caption.
-		if (
-			['text', 'audio_transcription', 'text_audio'].includes(part.content_type as string) &&
-			typeof part.text === 'string'
-		) {
+		if (['text', 'audio_transcription', 'text_audio'].includes(part.content_type as string) && typeof part.text === 'string') {
 			return part.text;
 		}
 		const resource = resourcePart(part);
@@ -964,9 +810,7 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 				}
 			}
 		}
-		const description = ['text', 'title', 'alt', 'name']
-			.flatMap(key => (typeof part[key] === 'string' ? [literal(part[key])] : []))
-			.join('\n');
+		const description = ['text', 'title', 'alt', 'name'].flatMap(key => (typeof part[key] === 'string' ? [literal(part[key])] : [])).join('\n');
 		return [description, fallback].filter(Boolean).join('\n\n');
 	};
 	let text: string;
@@ -993,12 +837,7 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 			if (!isRecord(attachment)) {
 				continue;
 			}
-			const name =
-				typeof attachment.name === 'string'
-					? attachment.name
-					: typeof attachment.file_name === 'string'
-						? attachment.file_name
-						: '';
+			const name = typeof attachment.name === 'string' ? attachment.name : typeof attachment.file_name === 'string' ? attachment.file_name : '';
 			const resource = resourcePart({ ...attachment, file_id: attachment.file_id ?? attachment.id });
 			if (resource) {
 				resources.push(resource);
@@ -1020,10 +859,7 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 		const ids = [entry.ref_id, ...(Array.isArray(entry.refs) ? entry.refs : [])].flatMap(ref =>
 			typeof ref === 'string'
 				? [ref]
-				: isRecord(ref) &&
-					  typeof ref.turn_index === 'number' &&
-					  typeof ref.ref_type === 'string' &&
-					  typeof ref.ref_index === 'number'
+				: isRecord(ref) && typeof ref.turn_index === 'number' && typeof ref.ref_type === 'string' && typeof ref.ref_index === 'number'
 					? [`turn${ref.turn_index}${ref.ref_type}${ref.ref_index}`]
 					: [],
 		);
@@ -1038,19 +874,14 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 		}
 	};
 	if (isRecord(value.metadata)) {
-		for (const group of Array.isArray(value.metadata.search_result_groups)
-			? value.metadata.search_result_groups
-			: []) {
+		for (const group of Array.isArray(value.metadata.search_result_groups) ? value.metadata.search_result_groups : []) {
 			if (isRecord(group) && Array.isArray(group.entries)) group.entries.forEach(addReference);
 		}
-		for (const reference of Array.isArray(value.metadata.content_references)
-			? value.metadata.content_references
-			: []) {
+		for (const reference of Array.isArray(value.metadata.content_references) ? value.metadata.content_references : []) {
 			if (!isRecord(reference)) continue;
 			addReference(reference);
 			addReference(reference.item);
-			for (const key of ['sources', 'items'])
-				if (Array.isArray(reference[key])) reference[key].forEach(addReference);
+			for (const key of ['sources', 'items']) if (Array.isArray(reference[key])) reference[key].forEach(addReference);
 		}
 	}
 	return {
@@ -1063,10 +894,7 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 }
 
 /** SSE framing is independent of HTTP chunks; delta paths are restricted to ordinary JSON properties. */
-export async function* decodeChatGPTStream(
-	stream: ReadableStream<Uint8Array>,
-	signal: AbortSignal,
-): AsyncGenerator<ChatGPTStreamFrame> {
+export async function* decodeChatGPTStream(stream: ReadableStream<Uint8Array>, signal: AbortSignal): AsyncGenerator<ChatGPTStreamFrame> {
 	const reader = stream.getReader();
 	const cancel = (): void => {
 		void reader.cancel().catch(() => {});
@@ -1097,9 +925,7 @@ export async function* decodeChatGPTStream(
 				}
 			}
 			if (frameBytes > 4 * 1024 * 1024) {
-				throw new Error(
-					localize('sessions.chatgpt.invalidResponse', 'ChatGPT returned an unsupported response.'),
-				);
+				throw new Error(localize('sessions.chatgpt.invalidResponse', 'ChatGPT returned an unsupported response.'));
 			}
 		}
 	};
@@ -1130,25 +956,12 @@ export async function* decodeChatGPTStream(
 					}
 					if (value.error) {
 						throw new Error(
-							localize(
-								'sessions.chatgpt.streamFailed',
-								'ChatGPT could not finish this reply. The message may already have been sent. Reload the conversation before trying again.',
-							),
+							localize('sessions.chatgpt.streamFailed', 'ChatGPT could not finish this reply. The message may already have been sent. Reload the conversation before trying again.'),
 						);
 					}
 					if (value.type === 'resume_conversation_token') {
-						if (
-							typeof value.token !== 'string' ||
-							!value.token ||
-							value.token.length > 16384 ||
-							/[\r\n\0]/u.test(value.token)
-						) {
-							throw new Error(
-								localize(
-									'sessions.chatgpt.invalidResponse',
-									'ChatGPT returned an unsupported response.',
-								),
-							);
+						if (typeof value.token !== 'string' || !value.token || value.token.length > 16384 || /[\r\n\0]/u.test(value.token)) {
+							throw new Error(localize('sessions.chatgpt.invalidResponse', 'ChatGPT returned an unsupported response.'));
 						}
 						yield { resumeToken: value.token };
 						continue;
@@ -1160,12 +973,7 @@ export async function* decodeChatGPTStream(
 							!Array.isArray(value.options) ||
 							!value.options.some(option => isRecord(option) && option.type === 'resume_sse_endpoint')
 						) {
-							throw new Error(
-								localize(
-									'sessions.chatgpt.invalidResponse',
-									'ChatGPT returned an unsupported response.',
-								),
-							);
+							throw new Error(localize('sessions.chatgpt.invalidResponse', 'ChatGPT returned an unsupported response.'));
 						}
 						yield { conversationId: value.conversation_id, handoff: true };
 						continue;
@@ -1191,8 +999,7 @@ export async function* decodeChatGPTStream(
 					} else {
 						snapshot = value;
 					}
-					const conversationId =
-						typeof snapshot.conversation_id === 'string' ? snapshot.conversation_id : undefined;
+					const conversationId = typeof snapshot.conversation_id === 'string' ? snapshot.conversation_id : undefined;
 					const message = readMessage(snapshot.message, conversationId);
 					if (message || conversationId) {
 						yield { conversationId, message };
@@ -1203,10 +1010,7 @@ export async function* decodeChatGPTStream(
 			if (chunk.done) {
 				if (!done) {
 					throw new Error(
-						localize(
-							'sessions.chatgpt.streamFailed',
-							'ChatGPT could not finish this reply. The message may already have been sent. Reload the conversation before trying again.',
-						),
+						localize('sessions.chatgpt.streamFailed', 'ChatGPT could not finish this reply. The message may already have been sent. Reload the conversation before trying again.'),
 					);
 				}
 				break;
@@ -1257,10 +1061,7 @@ function applyDelta(root: Record<string, unknown>, path: string, operation: unkn
 	const key = keys.at(-1)!;
 	// JSON cannot contain sparse arrays or a forged length. Do not let a delta create
 	// either: readMessage joins parts, so a huge sparse length would stall the renderer.
-	if (
-		Array.isArray(target) &&
-		(!/^(?:0|[1-9]\d*)$/u.test(key) || !Number.isSafeInteger(Number(key)) || Number(key) > target.length)
-	) {
+	if (Array.isArray(target) && (!/^(?:0|[1-9]\d*)$/u.test(key) || !Number.isSafeInteger(Number(key)) || Number(key) > target.length)) {
 		return;
 	}
 	const previous: unknown = Reflect.get(target, key);

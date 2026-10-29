@@ -8,13 +8,7 @@ import type { CancellationToken } from '../../../../../base/common/cancellation.
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IAccountService, type AccountState } from '../../../../../platform/accounts/common/accountService.js';
-import {
-	IGitHubService as IGitHubApi,
-	GitHubError,
-	GitHubErrorCode,
-	type GitHubChecks,
-	type GitHubCheckDetails,
-} from '../../../../../platform/github/common/githubService.js';
+import { IGitHubService as IGitHubApi, GitHubError, GitHubErrorCode, type GitHubChecks, type GitHubCheckDetails } from '../../../../../platform/github/common/githubService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { IGitHubService } from '../../../github/browser/githubService.js';
@@ -28,8 +22,7 @@ function fixture(api: Partial<IGitHubApi> = {}, chat: Partial<IChatService> = {}
 	const associations = resources.add(new Emitter<void>());
 	const accounts = resources.add(new Emitter<AccountState>());
 	const services = resources.add(new InstantiationService());
-	if (registerOperations)
-		services.registerSingleton(IChecksOperationService, () => services.createInstance(ChecksOperationService));
+	if (registerOperations) services.registerSingleton(IChecksOperationService, () => services.createInstance(ChecksOperationService));
 	const selected = resources.add(new Emitter<void>());
 	let sessionId = 'session';
 	services.registerInstance(ISessionsService, {
@@ -53,9 +46,7 @@ function fixture(api: Partial<IGitHubApi> = {}, chat: Partial<IChatService> = {}
 	services.registerInstance(IChatService, chat as IChatService);
 	services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event } as unknown as IAccountService);
 	services.registerInstance(IGitHubApi, {
-		listAccounts: async () => [
-			{ id: 'enterprise', host: 'ghe.example', login: 'user', status: 'ready', credentialRevision: 1n },
-		],
+		listAccounts: async () => [{ id: 'enterprise', host: 'ghe.example', login: 'user', status: 'ready', credentialRevision: 1n }],
 		readPullRequest: async () => ({ headCommit: 'reviewed-head' }),
 		...api,
 	} as IGitHubApi);
@@ -129,9 +120,7 @@ suite('Session Changes CI reads', () => {
 			})),
 		);
 		assert.deepEqual(
-			context.model.checksObs
-				.get()
-				.checks.map(entry => [entry.pullRequest, entry.check.name, getCheckStateLabel(entry.check)]),
+			context.model.checksObs.get().checks.map(entry => [entry.pullRequest, entry.check.name, getCheckStateLabel(entry.check)]),
 			[
 				['team/repo #7', 'Build', 'Successful'],
 				['team/repo #7', 'legacy', 'Failed'],
@@ -391,10 +380,7 @@ suite('Session Changes CI actions', () => {
 		});
 		using owner = f.resources;
 		await ready(f.model);
-		const pending = assert.rejects(
-			f.model.details(f.model.checksObs.get().checks[0]!),
-			error => error instanceof Error && (error.name === 'Canceled' || error.name === 'CancellationError'),
-		);
+		const pending = assert.rejects(f.model.details(f.model.checksObs.get().checks[0]!), error => error instanceof Error && (error.name === 'Canceled' || error.name === 'CancellationError'));
 		const token = await started.p;
 		f.accounts.fire({ revision: 2n, accounts: [] });
 		assert.equal(token.isCancellationRequested, true);
@@ -451,10 +437,7 @@ suite('Session Changes CI actions', () => {
 			assert.deepEqual(requests, [], 'Reading checks never submits a message');
 			await f.model.fix(f.model.checksObs.get().checks[0]!);
 			assert.equal(requests.length, 1);
-			const [kind, submission] = requests[0] as [
-				string,
-				{ sessionId: string; threadId: string; expectedSequence: number; text: string },
-			];
+			const [kind, submission] = requests[0] as [string, { sessionId: string; threadId: string; expectedSequence: number; text: string }];
 			assert.equal(kind, running ? 'queue' : 'start');
 			assert.equal(submission.sessionId, 'session');
 			assert.equal(submission.threadId, 'thread');

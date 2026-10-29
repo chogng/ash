@@ -71,22 +71,15 @@ function render(state: RemoteRuntimeInstallProgressState | undefined): void {
 			break;
 		}
 		case 'validatingDownload':
-			showIndeterminate(
-				'Validating downloaded runtime…',
-				'Checking its exact size, SHA-256, archive shape, and package metadata.',
-			);
+			showIndeterminate('Validating downloaded runtime…', 'Checking its exact size, SHA-256, archive shape, and package metadata.');
 			break;
 		case 'downloadComplete':
-			stage.textContent =
-				state.disposition === 'reused' ? 'Cached runtime verified' : 'Runtime download complete';
+			stage.textContent = state.disposition === 'reused' ? 'Cached runtime verified' : 'Runtime download complete';
 			detail.textContent = 'Preparing the authenticated package for SSH installation.';
 			progress.value = 100;
 			break;
 		case 'validatingArtifact':
-			showIndeterminate(
-				'Validating runtime package…',
-				'Checking the signed package metadata and archive integrity.',
-			);
+			showIndeterminate('Validating runtime package…', 'Checking the signed package metadata and archive integrity.');
 			break;
 		case 'probingPlatform':
 			showIndeterminate('Detecting Remote platform…', 'Selecting the compatible Linux or macOS runtime package.');
@@ -99,14 +92,10 @@ function render(state: RemoteRuntimeInstallProgressState | undefined): void {
 			break;
 		}
 		case 'finalizingRemoteInstall':
-			showIndeterminate(
-				'Finalizing Remote installation…',
-				'Verifying and committing the immutable runtime on the Remote host.',
-			);
+			showIndeterminate('Finalizing Remote installation…', 'Verifying and committing the immutable runtime on the Remote host.');
 			break;
 		case 'complete':
-			stage.textContent =
-				state.disposition === 'reused' ? 'Compatible runtime already installed' : 'Remote runtime installed';
+			stage.textContent = state.disposition === 'reused' ? 'Compatible runtime already installed' : 'Remote runtime installed';
 			detail.textContent = 'Ash is verifying the exact executable before starting the Remote App Server.';
 			progress.value = 100;
 			cancel.disabled = true;
@@ -126,10 +115,7 @@ function formatBytes(value: number): string {
 	return `${(value / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
-function requiredElement<TElement extends HTMLElement>(
-	id: string,
-	constructor: abstract new (...args: never[]) => TElement,
-): TElement {
+function requiredElement<TElement extends HTMLElement>(id: string, constructor: abstract new (...args: never[]) => TElement): TElement {
 	const element = document.getElementById(id);
 	if (!(element instanceof constructor)) throw new Error(`Remote runtime installation page is missing #${id}`);
 	return element;

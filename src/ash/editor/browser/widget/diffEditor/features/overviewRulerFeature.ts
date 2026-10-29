@@ -57,18 +57,13 @@ export class OverviewRulerFeature extends Disposable {
 				}),
 			);
 		}
-		this._register(
-			addDisposableListener(this.domNode, 'pointerdown', event =>
-				this.modified.delegateVerticalScrollbarPointerDown(event),
-			),
-		);
+		this._register(addDisposableListener(this.domNode, 'pointerdown', event => this.modified.delegateVerticalScrollbarPointerDown(event)));
 		this._register(
 			addDisposableListener(
 				this.domNode,
 				'wheel',
 				event => {
-					if (this.modified.getOption(EditorOption.scrollbar).handleMouseWheel)
-						this.modified.delegateScrollFromMouseWheelEvent(new StandardWheelEvent(event));
+					if (this.modified.getOption(EditorOption.scrollbar).handleMouseWheel) this.modified.delegateScrollFromMouseWheelEvent(new StandardWheelEvent(event));
 				},
 				{ passive: false },
 			),
@@ -91,11 +86,7 @@ export class OverviewRulerFeature extends Disposable {
 
 	private renderRows(): void {
 		// Text layout changes before the new diff arrives; old rows belong to the old versions.
-		const rows =
-			this.originalVersion === this.original.getModel()!.getVersionId() &&
-			this.modifiedVersion === this.modified.getModel()!.getVersionId()
-				? this.rows
-				: LineDiffRows.empty;
+		const rows = this.originalVersion === this.original.getModel()!.getVersionId() && this.modifiedVersion === this.modified.getModel()!.getVersionId() ? this.rows : LineDiffRows.empty;
 		reset(this.originalLane, createMarkers(this.domNode.ownerDocument, rows, 'original', this.original));
 		reset(this.modifiedLane, createMarkers(this.domNode.ownerDocument, rows, 'modified', this.modified));
 	}
@@ -115,32 +106,20 @@ export class OverviewRulerFeature extends Disposable {
 	public updateViewport(contentHeight: number, scrollTop: number): void {
 		this.root.setLeft(Math.max(0, this.viewportWidth - this.width));
 		this.root.setHeight(this.viewportHeight);
-		const metrics = createScrollbarAxisMetrics(
-			this.viewportHeight,
-			contentHeight,
-			scrollTop,
-			this.viewportHeight,
-			2,
-		);
+		const metrics = createScrollbarAxisMetrics(this.viewportHeight, contentHeight, scrollTop, this.viewportHeight, 2);
 		this.viewportNode.setHeight(metrics.thumbSize);
 		this.viewportNode.setTransform(`translate3d(0, ${metrics.thumbPosition}px, 0)`);
 	}
 }
 
-function createMarkers(
-	ownerDocument: Document,
-	rows: LineDiffRows,
-	side: 'original' | 'modified',
-	editor: CodeEditorWidget,
-): DocumentFragment {
+function createMarkers(ownerDocument: Document, rows: LineDiffRows, side: 'original' | 'modified', editor: CodeEditorWidget): DocumentFragment {
 	const fragment = createFragment(ownerDocument);
 	if (rows.length === 0) return fragment;
 	for (const range of changedRanges(rows, side)) {
 		const marker = h(ownerDocument, 'span');
 		marker.className = `stanza-diff-overview-marker ${side === 'original' ? 'removed' : 'inserted'}`;
 		const first = rows.get(range.startRow)![side === 'original' ? 'originalLineIndex' : 'modifiedLineIndex']! + 1;
-		const last =
-			rows.get(range.endRowExclusive - 1)![side === 'original' ? 'originalLineIndex' : 'modifiedLineIndex']! + 1;
+		const last = rows.get(range.endRowExclusive - 1)![side === 'original' ? 'originalLineIndex' : 'modifiedLineIndex']! + 1;
 		const top = editor.getTopForLineNumber(first);
 		const bottom = editor.getBottomForLineNumber(last);
 		const height = editor.getContentHeight();

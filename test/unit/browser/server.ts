@@ -8,11 +8,7 @@ import type { ProcessRun } from '../../../build/processes.ts';
 export async function startBrowserUnitServer(run: ProcessRun, environment: NodeJS.ProcessEnv) {
 	const root = resolve(import.meta.dirname, '../../..');
 	const assets = mkdtempSync(resolve(root, '.build/desktop/unit-browser-'));
-	const build = await run.command(
-		process.execPath,
-		['node_modules/vite/bin/vite.js', 'build', '--config', 'test/unit/browser/vite.config.ts', '--outDir', assets],
-		environment,
-	);
+	const build = await run.command(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', 'test/unit/browser/vite.config.ts', '--outDir', assets], environment);
 	if (build.code !== 0) {
 		rmSync(assets, { recursive: true, force: true });
 		throw new Error('Browser unit fixture build failed.');

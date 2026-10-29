@@ -6,10 +6,7 @@ import { ObjectTree } from '../../../../../base/browser/ui/tree/objectTree.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
-import {
-	AccessibilityVerbositySettingId,
-	IAccessibleViewService,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IResourceLabelService, type ResourceLabels } from '../../../../browser/labels.js';
@@ -60,7 +57,10 @@ export class OpenEditorsView extends ViewPane {
 				styles: defaultListStyles,
 				findWidgetStyles: defaultFindWidgetStyles,
 				ariaLabel: localize('files.openEditors.title', 'Open Editors'),
-				modelOptions: { defaultCollapseState: 'expanded', identityProvider: { getId: row => row.id } },
+				modelOptions: {
+					defaultCollapseState: 'expanded',
+					identityProvider: { getId: row => row.id },
+				},
 				onWillRender: () => this.rowDisposables.clear(),
 				renderElement: row => this.renderRow(row, document),
 			}),
@@ -180,10 +180,7 @@ export class OpenEditorsView extends ViewPane {
 		const name = row.editor.input.label ?? basenameOrAuthority(row.editor.input.resource);
 		const label = this.rowDisposables.add(this.labels.create(content));
 		label.element.classList.add('ash-open-editors-label');
-		label.setResource(
-			{ resource: row.editor.input.resource, name },
-			{ ariaLabel: name, fileDecorations: { colors: true, badges: true }, reserveIconSpace: true },
-		);
+		label.setResource({ resource: row.editor.input.resource, name }, { ariaLabel: name, fileDecorations: { colors: true, badges: true }, reserveIconSpace: true });
 		if (row.editor.isDirty) {
 			const dirty = h(document, 'span');
 			dirty.className = 'ash-open-editors-dirty';

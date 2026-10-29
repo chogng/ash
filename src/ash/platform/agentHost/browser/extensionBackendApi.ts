@@ -12,10 +12,7 @@ export function createExtensionBackendApi(connection: AppServerProtocolClient): 
 				throw new TypeError('Unknown extension backend route');
 			}
 			const route = method as AppServerMethod;
-			const result = await connection.request(
-				APP_SERVER_METHODS[route],
-				decodeAppServerRequestParams(route, params),
-			);
+			const result = await connection.request(APP_SERVER_METHODS[route], decodeAppServerRequestParams(route, params));
 			signal.throwIfAborted();
 			return normalizeExtensionHostPayload(result);
 		},

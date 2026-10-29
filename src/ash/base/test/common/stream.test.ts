@@ -43,10 +43,7 @@ suite('Streams', () => {
 			}
 			source.end();
 		})();
-		assert.equal(
-			await consumeStream(result, values => values.join('')),
-			Array.from({ length: 20 }, (_, index) => String(index)).join(''),
-		);
+		assert.equal(await consumeStream(result, values => values.join('')), Array.from({ length: 20 }, (_, index) => String(index)).join(''));
 		await producer;
 	});
 });

@@ -15,21 +15,14 @@ export class TerminalConfigurationService extends Disposable implements ITermina
 		super();
 		this._register(
 			configuration.onDidChangeConfiguration(event => {
-				if (
-					event.affectsConfiguration(TERMINAL_CONFIG_SECTION) ||
-					event.affectsConfiguration('editor.fontFamily')
-				)
-					this.changed.fire();
+				if (event.affectsConfiguration(TERMINAL_CONFIG_SECTION) || event.affectsConfiguration('editor.fontFamily')) this.changed.fire();
 			}),
 		);
 	}
 
 	get config(): Readonly<ITerminalConfiguration> {
 		const settings = this.configuration.getValue<ITerminalConfiguration>(TERMINAL_CONFIG_SECTION);
-		const fontFamily =
-			settings.fontFamily ||
-			this.configuration.getValue<string>('editor.fontFamily') ||
-			EDITOR_FONT_DEFAULTS.fontFamily;
+		const fontFamily = settings.fontFamily || this.configuration.getValue<string>('editor.fontFamily') || EDITOR_FONT_DEFAULTS.fontFamily;
 		// A user-selected face may not exist on this host. Keep terminal cells monospaced.
 		return Object.freeze({
 			...settings,

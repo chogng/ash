@@ -105,13 +105,7 @@ export class ColorPicker extends Disposable {
 			});
 			this.domNode.append(
 				this.compactValueInput,
-				h(
-					ownerDocument,
-					'label',
-					{ className: 'ash-color-picker-input-percent' },
-					this.compactAlphaInput,
-					h(ownerDocument, 'span', { attributes: { 'aria-hidden': 'true' } }, '%'),
-				),
+				h(ownerDocument, 'label', { className: 'ash-color-picker-input-percent' }, this.compactAlphaInput, h(ownerDocument, 'span', { attributes: { 'aria-hidden': 'true' } }, '%')),
 			);
 			for (const field of [this.compactValueInput, this.compactAlphaInput]) {
 				this._register(
@@ -156,12 +150,7 @@ export class ColorPicker extends Disposable {
 			panel.setAttribute('aria-modal', 'false');
 		}
 		focusedPickers.set(panel, this);
-		const heading = h(
-			ownerDocument,
-			'div',
-			{ className: 'ash-color-picker-heading' },
-			h(ownerDocument, 'span', {}, localize('colorPicker.title', 'Color picker')),
-		);
+		const heading = h(ownerDocument, 'div', { className: 'ash-color-picker-heading' }, h(ownerDocument, 'span', {}, localize('colorPicker.title', 'Color picker')));
 		if (variant === 'dialog') {
 			this._register(
 				new Button(heading, {
@@ -224,14 +213,7 @@ export class ColorPicker extends Disposable {
 			ownerDocument,
 			'select',
 			{ attributes: { 'aria-label': localize('colorPicker.format', 'Color format') } },
-			...(['hex', 'rgb', 'css', 'hsl', 'hsb'] as const).map(format =>
-				h(
-					ownerDocument,
-					'option',
-					{ properties: { value: format } },
-					format === 'hex' ? 'Hex' : format.toUpperCase(),
-				),
-			),
+			...(['hex', 'rgb', 'css', 'hsl', 'hsb'] as const).map(format => h(ownerDocument, 'option', { properties: { value: format } }, format === 'hex' ? 'Hex' : format.toUpperCase())),
 		);
 		this.valueInput = h(ownerDocument, 'input', {
 			className: 'ash-color-picker-value',
@@ -252,19 +234,8 @@ export class ColorPicker extends Disposable {
 		});
 		this.channelInputs = channels.map(channel => channel.input);
 		this.channelLabels = channels.map(channel => channel.label);
-		this.channelsDomNode = h(
-			ownerDocument,
-			'div',
-			{ className: 'ash-color-picker-channels' },
-			...channels.map(channel => channel.domNode),
-		);
-		this.valuesDomNode = h(
-			ownerDocument,
-			'div',
-			{ className: 'ash-color-picker-values' },
-			this.valueInput,
-			this.channelsDomNode,
-		);
+		this.channelsDomNode = h(ownerDocument, 'div', { className: 'ash-color-picker-channels' }, ...channels.map(channel => channel.domNode));
+		this.valuesDomNode = h(ownerDocument, 'div', { className: 'ash-color-picker-values' }, this.valueInput, this.channelsDomNode);
 		this.messageDomNode = h(ownerDocument, 'div', {
 			className: 'ash-color-picker-message',
 			attributes: { role: 'status' },
@@ -281,13 +252,7 @@ export class ColorPicker extends Disposable {
 				{ className: 'ash-color-picker-fields' },
 				this.formatInput,
 				this.valuesDomNode,
-				h(
-					ownerDocument,
-					'label',
-					{ className: 'ash-color-picker-opacity' },
-					this.alphaNumberInput,
-					h(ownerDocument, 'span', {}, '%'),
-				),
+				h(ownerDocument, 'label', { className: 'ash-color-picker-opacity' }, this.alphaNumberInput, h(ownerDocument, 'span', {}, '%')),
 			),
 			this.messageDomNode,
 			this.palettesDomNode,
@@ -308,13 +273,7 @@ export class ColorPicker extends Disposable {
 				addDisposableListener(input, 'input', () => {
 					const { s, v, a } = this.selectedColor.hsva;
 					const { r, g, b } = this.selectedColor.rgba;
-					this.change(
-						new Color(
-							input === this.hueInput
-								? new HSVA(input.valueAsNumber, s, v, a)
-								: new RGBA(r, g, b, input.valueAsNumber / 100),
-						),
-					);
+					this.change(new Color(input === this.hueInput ? new HSVA(input.valueAsNumber, s, v, a) : new RGBA(r, g, b, input.valueAsNumber / 100)));
 				}),
 			);
 			this._register(
@@ -459,10 +418,7 @@ export class ColorPicker extends Disposable {
 		// A model refresh with no color change must preserve incomplete or invalid field edits.
 		if (this.input && !changed && color.equals(this.selectedColor)) return;
 		// Live document consumers can acknowledge a preview without interrupting its active gesture.
-		const echo =
-			this.changing &&
-			!targetChanged &&
-			Color.Format.CSS.formatHexA(color, true) === Color.Format.CSS.formatHexA(this.selectedColor, true);
+		const echo = this.changing && !targetChanged && Color.Format.CSS.formatHexA(color, true) === Color.Format.CSS.formatHexA(this.selectedColor, true);
 		this.target = target;
 		this.committedColor = color;
 		if (this.input && this.popupVisible) {
@@ -504,15 +460,7 @@ export class ColorPicker extends Disposable {
 				className: 'ash-color-picker-swatches',
 				attributes: { role: 'group', 'aria-label': palette.label },
 			});
-			this.palettesDomNode.append(
-				h(
-					this.domNode.ownerDocument,
-					'div',
-					{ className: 'ash-color-picker-palette' },
-					h(this.domNode.ownerDocument, 'span', {}, palette.label),
-					grid,
-				),
-			);
+			this.palettesDomNode.append(h(this.domNode.ownerDocument, 'div', { className: 'ash-color-picker-palette' }, h(this.domNode.ownerDocument, 'span', {}, palette.label), grid));
 			for (const color of palette.colors) {
 				const value = Color.Format.CSS.formatHexA(color, true).toUpperCase();
 				// The color is the button's accessible name; a managed hover would replace the caller's popup.
@@ -572,16 +520,7 @@ export class ColorPicker extends Disposable {
 	private handlePointer(event: PointerEvent): void {
 		const bounds = this.areaDomNode.getBoundingClientRect();
 		const { h: hue, a } = this.selectedColor.hsva;
-		this.change(
-			new Color(
-				new HSVA(
-					hue,
-					(event.clientX - bounds.left) / bounds.width,
-					1 - (event.clientY - bounds.top) / bounds.height,
-					a,
-				),
-			),
-		);
+		this.change(new Color(new HSVA(hue, (event.clientX - bounds.left) / bounds.width, 1 - (event.clientY - bounds.top) / bounds.height, a)));
 	}
 
 	private change(color: Color): void {
@@ -607,10 +546,7 @@ export class ColorPicker extends Disposable {
 			}
 		} else if (input === this.valueInput || input === this.compactValueInput) {
 			const value = input.value.trim();
-			if (
-				(input === this.compactValueInput || this.format === 'hex') &&
-				/^#?(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/iu.test(value)
-			) {
+			if ((input === this.compactValueInput || this.format === 'hex') && /^#?(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/iu.test(value)) {
 				const hex = value.replace(/^#/u, '');
 				color = Color.Format.CSS.parseHex(`#${hex}`);
 				if (color && (hex.length === 3 || hex.length === 6)) {
@@ -635,10 +571,7 @@ export class ColorPicker extends Disposable {
 		}
 		if (!color) {
 			input.setAttribute('aria-invalid', 'true');
-			const message = localize(
-				'colorPicker.invalid',
-				'Enter a valid color or a number within the displayed range.',
-			);
+			const message = localize('colorPicker.invalid', 'Enter a valid color or a number within the displayed range.');
 			input.setCustomValidity(message);
 			if (this.messageDomNode) {
 				this.messageDomNode.textContent = message;
@@ -647,10 +580,7 @@ export class ColorPicker extends Disposable {
 			return;
 		}
 		const edited = this.editedInputs.delete(input);
-		if (
-			(input === this.compactValueInput || input === this.compactAlphaInput) &&
-			color.equals(this.committedColor)
-		) {
+		if ((input === this.compactValueInput || input === this.compactAlphaInput) && color.equals(this.committedColor)) {
 			// An explicit equal-value edit can override an inherited color; blur must not commit it twice.
 			if (edited) this.commit(color);
 			this.render();
@@ -700,28 +630,19 @@ export class ColorPicker extends Disposable {
 			return;
 		}
 		const { h: hue, s, v, a } = color.hsva;
-		this.panelDomNode.style.setProperty(
-			'--ash-color-picker-hue',
-			Color.Format.CSS.formatHex(new Color(new HSVA(hue, 1, 1, 1))),
-		);
+		this.panelDomNode.style.setProperty('--ash-color-picker-hue', Color.Format.CSS.formatHex(new Color(new HSVA(hue, 1, 1, 1))));
 		this.panelDomNode.style.setProperty('--ash-color-picker-opaque', Color.Format.CSS.formatHex(color));
 		this.panelDomNode.style.setProperty('--ash-color-picker-saturation', `${s * 100}%`);
 		this.panelDomNode.style.setProperty('--ash-color-picker-brightness', `${(1 - v) * 100}%`);
 		this.areaDomNode.setAttribute('aria-valuenow', String(round(s * 100)));
-		this.areaDomNode.setAttribute(
-			'aria-valuetext',
-			localize('colorPicker.areaValue', 'Saturation {0}%, brightness {1}%', round(s * 100), round(v * 100)),
-		);
+		this.areaDomNode.setAttribute('aria-valuetext', localize('colorPicker.areaValue', 'Saturation {0}%, brightness {1}%', round(s * 100), round(v * 100)));
 		this.hueInput.value = String(hue);
 		this.alphaInput.value = this.alphaNumberInput.value = String(round(a * 100));
 		const channels = this.format === 'rgb' || this.format === 'hsl' || this.format === 'hsb';
 		this.valuesDomNode.classList.toggle('channels', channels);
 		this.channelsDomNode.hidden = !channels;
 		this.valueInput.hidden = channels;
-		this.valueInput.value =
-			this.format === 'css'
-				? `rgb(${color.rgba.r} ${color.rgba.g} ${color.rgba.b} / ${color.rgba.a})`
-				: Color.Format.CSS.formatHex(color).slice(1).toUpperCase();
+		this.valueInput.value = this.format === 'css' ? `rgb(${color.rgba.r} ${color.rgba.g} ${color.rgba.b} / ${color.rgba.a})` : Color.Format.CSS.formatHex(color).slice(1).toUpperCase();
 		let labels = ['H', 'S', 'B'];
 		let values = [hue, s * 100, v * 100];
 		let maximums = [360, 100, 100];
@@ -786,10 +707,7 @@ export class ColorPicker extends Disposable {
 		if (!this.panelDomNode) {
 			this.createPanel();
 		}
-		this.setPalettes([
-			...(this.input!.getPalettes?.() ?? []),
-			{ label: localize('colorPicker.recentColors', 'Recent colors'), colors: this.recentColors },
-		]);
+		this.setPalettes([...(this.input!.getPalettes?.() ?? []), { label: localize('colorPicker.recentColors', 'Recent colors'), colors: this.recentColors }]);
 		this.render();
 		this.popupVisible = true;
 		this.swatch!.domNode.setAttribute('aria-expanded', 'true');

@@ -25,10 +25,7 @@ function observeDetails(): void {
 		send.call(this, data);
 	};
 	const post = MessagePort.prototype.postMessage;
-	MessagePort.prototype.postMessage = function (
-		message,
-		options?: Transferable[] | StructuredSerializeOptions,
-	): void {
+	MessagePort.prototype.postMessage = function (message, options?: Transferable[] | StructuredSerializeOptions): void {
 		if (typeof message?.frame === 'string') record(message.frame);
 		post.call(this, message, Array.isArray(options) ? { transfer: options } : options);
 	};
@@ -42,9 +39,7 @@ for (const locale of ['en', 'zh-CN']) {
 			test.setTimeout(240_000);
 			if (locale === 'zh-CN') {
 				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-				const language = workbench.page
-					.getByRole('dialog', { name: 'Select Display Language' })
-					.getByRole('combobox');
+				const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 				await language.fill('简体中文');
 				await language.press('Enter');
 				({ application, workbench } = await restartWorkbench());
@@ -79,9 +74,7 @@ for (const locale of ['en', 'zh-CN']) {
 			const chunk = (delta: unknown, finish: string | null = null): string =>
 				`data: ${JSON.stringify({ id: 'management-fixture', object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
 			const finish = (response: ServerResponse): void => {
-				response.end(
-					chunk({ content: 'Synthetic management answer' }) + chunk({}, 'stop') + 'data: [DONE]\n\n',
-				);
+				response.end(chunk({ content: 'Synthetic management answer' }) + chunk({}, 'stop') + 'data: [DONE]\n\n');
 			};
 			const server = createServer(async (request, response) => {
 				if (request.method === 'GET') {
@@ -95,10 +88,7 @@ for (const locale of ['en', 'zh-CN']) {
 					messages: { role: string; content: unknown }[];
 				};
 				modelRequests.push(body);
-				await writeFile(
-					testInfo.outputPath('model-http-requests.json'),
-					JSON.stringify(modelRequests, null, 2),
-				);
+				await writeFile(testInfo.outputPath('model-http-requests.json'), JSON.stringify(modelRequests, null, 2));
 				// The backend appends environment context after the authored user input.
 				const prompt =
 					body.messages
@@ -214,11 +204,9 @@ for (const locale of ['en', 'zh-CN']) {
 					request: { type: 'forkThread', parentThreadId: root.threadId, title: 'Background branch' },
 				});
 				if (fork.type !== 'thread') throw new Error('Expected management branch');
-				for (let index = 0; index < 14; index++)
-					await create(`management-padding-${index}`, `Padding ${index}`);
+				for (let index = 0; index < 14; index++) await create(`management-padding-${index}`, `Padding ${index}`);
 				const read = async (): Promise<Session> => {
-					const result = (await client.request(APP_SERVER_METHODS['session/catalog/read'], { sessionId }))
-						.session;
+					const result = (await client.request(APP_SERVER_METHODS['session/catalog/read'], { sessionId })).session;
 					if (!result) throw new Error('Management Session disappeared');
 					return result;
 				};
@@ -241,8 +229,7 @@ for (const locale of ['en', 'zh-CN']) {
 						},
 					});
 				};
-				const branchState = async (threadId: string): Promise<string | undefined> =>
-					(await read()).threads.find(thread => thread.threadId === threadId)?.manager?.status;
+				const branchState = async (threadId: string): Promise<string | undefined> => (await read()).threads.find(thread => thread.threadId === threadId)?.manager?.status;
 				let agentsWorkbench = workbench;
 				if (target.kind === 'browser') {
 					const agentsSource = await workbench.page.context().newPage();
@@ -252,13 +239,9 @@ for (const locale of ['en', 'zh-CN']) {
 				}
 				page = await agentsWorkbench.openAgentsWindow(target.kind);
 				await page.evaluate(observeDetails);
-				await page
-					.locator('.ash-sessions-activity-content')
-					.getByRole('button', { name: copy.code, exact: true })
-					.click();
+				await page.locator('.ash-sessions-activity-content').getByRole('button', { name: copy.code, exact: true }).click();
 				await page.locator('[data-action-id="sessions.newSession"] button').click();
-				const active = (): ReturnType<Page['locator']> =>
-					page!.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork)');
+				const active = (): ReturnType<Page['locator']> => page!.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork)');
 				const editor = new Editor(active());
 				await editor.waitForEditorFocus();
 				await page.keyboard.insertText('Keep the unsent management draft');
@@ -272,8 +255,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await search.fill(model.model);
 				await expect(picker.getByRole('menuitemradio')).toHaveCount(1);
 				await search.press('Enter');
-				const row = (): ReturnType<Page['locator']> =>
-					page!.locator('.ash-sessions-list-item').filter({ hasText: 'Background management' });
+				const row = (): ReturnType<Page['locator']> => page!.locator('.ash-sessions-list-item').filter({ hasText: 'Background management' });
 				const status = (): ReturnType<Page['locator']> => row().locator('.ash-sessions-list-management');
 				await expect(status()).toHaveText(copy.idle);
 				await row().focus();
@@ -352,18 +334,8 @@ for (const locale of ['en', 'zh-CN']) {
 				await expect.poll(() => branchState(root.threadId)).toBe('readyForReview');
 				await expect(status()).toHaveText(copy.readyForReview);
 				await preserve();
-				const requests = await page.evaluate(
-					() =>
-						(window as Window & { sessionStateRequests?: { method: string; sessionId?: string }[] })
-							.sessionStateRequests!,
-				);
-				expect(
-					requests.filter(
-						request =>
-							request.sessionId === sessionId &&
-							['session/read', 'session/subscribe', 'session/thread/read'].includes(request.method),
-					),
-				).toEqual([]);
+				const requests = await page.evaluate(() => (window as Window & { sessionStateRequests?: { method: string; sessionId?: string }[] }).sessionStateRequests!);
+				expect(requests.filter(request => request.sessionId === sessionId && ['session/read', 'session/subscribe', 'session/thread/read'].includes(request.method))).toEqual([]);
 				await rowIdentity?.dispose();
 				// A real selected source connection owns user input. The second window
 				// still displays only catalog facts while retaining its unsent draft.
@@ -376,9 +348,7 @@ for (const locale of ['en', 'zh-CN']) {
 					.filter({ hasText: `${copy.thread} ${index + 1}` });
 				await expect(historyRow).toContainText(copy.readyForReview);
 				await historyRow.click();
-				await expect(
-					workbench.page.locator('.ash-chat-view-pane :is(.ash-chat,.ash-cowork):visible'),
-				).toHaveAttribute('data-thread-id', root.threadId);
+				await expect(workbench.page.locator('.ash-chat-view-pane :is(.ash-chat,.ash-cowork):visible')).toHaveAttribute('data-thread-id', root.threadId);
 				await start(root.threadId, 'fixture-question');
 				await expect.poll(() => branchState(root.threadId), { timeout: 30_000 }).toBe('needsInput');
 				await expect(status()).toHaveText(copy.needsInput);
@@ -393,33 +363,18 @@ for (const locale of ['en', 'zh-CN']) {
 				await expect(question.getByRole('option')).toHaveText(['agent', 'ask']);
 				// A headless desktop may have no microphone. Record and dismiss only that
 				// environment notification so it cannot cover the real Stop control.
-				const audioFailure = workbench.page
-					.locator('.ash-notification')
-					.filter({ hasText: 'Microphone enumeration failed' });
+				const audioFailure = workbench.page.locator('.ash-notification').filter({ hasText: 'Microphone enumeration failed' });
 				if (await audioFailure.isVisible()) {
 					await expect(audioFailure).toContainText('audio host rejected the operation');
-					await writeFile(
-						testInfo.outputPath('environment-notifications.json'),
-						JSON.stringify({ audio: await audioFailure.innerText() }, null, 2),
-					);
+					await writeFile(testInfo.outputPath('environment-notifications.json'), JSON.stringify({ audio: await audioFailure.innerText() }, null, 2));
 					await audioFailure.locator('.ash-notification-close').click();
 					await expect(audioFailure).toHaveCount(0);
 				}
 				await workbench.page.locator('[data-action-id="ash.chat.input.interrupt"] button:visible').click();
 				await expect.poll(() => branchState(root.threadId)).toBe('stopped');
 				await expect(status()).toHaveText(copy.stopped);
-				const finalRequests = await page.evaluate(
-					() =>
-						(window as Window & { sessionStateRequests?: { method: string; sessionId?: string }[] })
-							.sessionStateRequests!,
-				);
-				expect(
-					finalRequests.filter(
-						request =>
-							request.sessionId === sessionId &&
-							['session/read', 'session/subscribe', 'session/thread/read'].includes(request.method),
-					),
-				).toEqual([]);
+				const finalRequests = await page.evaluate(() => (window as Window & { sessionStateRequests?: { method: string; sessionId?: string }[] }).sessionStateRequests!);
+				expect(finalRequests.filter(request => request.sessionId === sessionId && ['session/read', 'session/subscribe', 'session/thread/read'].includes(request.method))).toEqual([]);
 				await writeFile(
 					testInfo.outputPath('management-transitions.json'),
 					JSON.stringify(

@@ -1,18 +1,6 @@
 import { isLinux } from '../../../base/common/platform.js';
 import { createHash, randomUUID } from 'node:crypto';
-import {
-	copyFile,
-	link,
-	lstat,
-	mkdir,
-	open,
-	readdir,
-	realpath,
-	rm,
-	rmdir,
-	writeFile,
-	type FileHandle,
-} from 'node:fs/promises';
+import { copyFile, link, lstat, mkdir, open, readdir, realpath, rm, rmdir, writeFile, type FileHandle } from 'node:fs/promises';
 import { constants, watch } from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { Emitter, Event } from '../../../base/common/event.js';
@@ -22,14 +10,7 @@ import { CancellationToken, CancellationTokenSource } from '../../../base/common
 import { canceled } from '../../../base/common/errors.js';
 import { consumeStream, newWriteableStream, type ReadableStreamEvents } from '../../../base/common/stream.js';
 import { parse } from '../../../base/common/glob.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-	type IDisposable,
-} from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { Promises } from '../../../base/node/pfs.js';
 import { readFileIntoStream } from '../common/io.js';
@@ -58,10 +39,7 @@ import {
 } from '../common/files.js';
 
 /** Local file access restricted to the roots granted by the desktop host. */
-export class DiskFileSystemProvider
-	extends Disposable
-	implements IFileSystemProviderWithOpenReadWriteCloseCapability, IFileSystemProviderWithFileReadStreamCapability
-{
+export class DiskFileSystemProvider extends Disposable implements IFileSystemProviderWithOpenReadWriteCloseCapability, IFileSystemProviderWithFileReadStreamCapability {
 	public readonly capabilities =
 		FileSystemProviderCapabilities.FileReadWrite |
 		FileSystemProviderCapabilities.FileFolderCopy |
@@ -181,28 +159,14 @@ export class DiskFileSystemProvider
 								}
 								// Root replacement can produce synthetic names on Windows. A watcher hint
 								// cannot escape its root or turn into an invalid file URI; rescan that root.
-								if (
-									isAbsolute(name) ||
-									name
-										.split(/[\\/]/u)
-										.some(
-											segment =>
-												segment === '..' ||
-												(process.platform === 'win32' && /[<>:"|?*]/u.test(segment)),
-										)
-								) {
+								if (isAbsolute(name) || name.split(/[\\/]/u).some(segment => segment === '..' || (process.platform === 'win32' && /[<>:"|?*]/u.test(segment)))) {
 									this.changes.fire({ resources: [resource] });
 									return;
 								}
 								if (excludes.some(matches => matches(name) || matches(resolve(path, name)))) return;
 								// Publish under the granted URI, including its Windows drive spelling.
 								this.changes.fire({
-									resources: [
-										URI.joinPath(
-											resource,
-											process.platform === 'win32' ? name.replaceAll('\\', '/') : name,
-										),
-									],
+									resources: [URI.joinPath(resource, process.platform === 'win32' ? name.replaceAll('\\', '/') : name)],
 								});
 							},
 						);
@@ -277,13 +241,7 @@ export class DiskFileSystemProvider
 				// host's parent-directory watcher reports it. Bind that entry without polling.
 				resources.add(
 					this.onDidChangeFiles(event => {
-						if (
-							!entryWatch.value &&
-							(!event.resources ||
-								event.resources.some(changed =>
-									extUriBiasedIgnorePathCase.isEqualOrParent(resource, changed),
-								))
-						) {
+						if (!entryWatch.value && (!event.resources || event.resources.some(changed => extUriBiasedIgnorePathCase.isEqualOrParent(resource, changed)))) {
 							void bindEntry().catch(fail);
 						}
 					}),
@@ -293,25 +251,16 @@ export class DiskFileSystemProvider
 				if (dirname(path) !== path) {
 					const parentPath = await realpath(dirname(path));
 					if (resources.isDisposed) return;
-					const parentWatch = watch(
-						parentPath,
-						{ persistent: this.nativeWatchOptions.persistent },
-						(_event, filename) => {
-							if (resources.isDisposed) return;
-							if (filename !== null) {
-								const name = filename.toString();
-								if (
-									process.platform === 'win32'
-										? name.toLowerCase() !== basename(path).toLowerCase()
-										: name !== basename(path)
-								)
-									return;
-								if (excludes.some(matches => matches(name) || matches(path))) return;
-							}
-							this.changes.fire({ resources: [resource] });
-							void bindEntry().catch(fail);
-						},
-					);
+					const parentWatch = watch(parentPath, { persistent: this.nativeWatchOptions.persistent }, (_event, filename) => {
+						if (resources.isDisposed) return;
+						if (filename !== null) {
+							const name = filename.toString();
+							if (process.platform === 'win32' ? name.toLowerCase() !== basename(path).toLowerCase() : name !== basename(path)) return;
+							if (excludes.some(matches => matches(name) || matches(path))) return;
+						}
+						this.changes.fire({ resources: [resource] });
+						void bindEntry().catch(fail);
+					});
 					resources.add(toDisposable(() => parentWatch.close()));
 					parentWatch.on('error', fail);
 					resources.add(toDisposable(() => parentWatch.off('error', fail)));
@@ -349,13 +298,7 @@ export class DiskFileSystemProvider
 			return (await readdir(path, { withFileTypes: true })).map(entry => ({
 				resource: URI.file(resolve(path, entry.name)),
 				name: entry.name,
-				kind: entry.isSymbolicLink()
-					? FileKind.SymbolicLink
-					: entry.isFile()
-						? FileKind.File
-						: entry.isDirectory()
-							? FileKind.Directory
-							: FileKind.Other,
+				kind: entry.isSymbolicLink() ? FileKind.SymbolicLink : entry.isFile() ? FileKind.File : entry.isDirectory() ? FileKind.Directory : FileKind.Other,
 			}));
 		} catch (error) {
 			throw fileError(error, resource);
@@ -379,11 +322,7 @@ export class DiskFileSystemProvider
 		}
 	}
 
-	public readFileStream(
-		resource: URI,
-		options: IFileReadStreamOptions,
-		token: CancellationToken,
-	): ReadableStreamEvents<Uint8Array> {
+	public readFileStream(resource: URI, options: IFileReadStreamOptions, token: CancellationToken): ReadableStreamEvents<Uint8Array> {
 		this.assertNotDisposed();
 		const stream = newWriteableStream<Uint8Array>(null, { highWaterMark: 1 });
 		const cancellation = new CancellationTokenSource(token);
@@ -441,13 +380,7 @@ export class DiskFileSystemProvider
 		return (await entry.handle.read(data, offset, length, position)).bytesRead;
 	}
 
-	public async write(
-		fd: number,
-		position: number,
-		data: Uint8Array,
-		offset: number,
-		length: number,
-	): Promise<number> {
+	public async write(fd: number, position: number, data: Uint8Array, offset: number, length: number): Promise<number> {
 		const entry = this.handles.get(fd);
 		if (!entry) {
 			throw new Error('File descriptor is closed');
@@ -481,11 +414,7 @@ export class DiskFileSystemProvider
 						if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
 						exists = false;
 					}
-					if (exists && !options.overwrite)
-						throw createFileSystemProviderError(
-							`File already exists: ${resource.toString()}`,
-							FileSystemProviderErrorCode.FileExists,
-						);
+					if (exists && !options.overwrite) throw createFileSystemProviderError(`File already exists: ${resource.toString()}`, FileSystemProviderErrorCode.FileExists);
 					if (!exists && !options.create) throw new FileNotFoundError(resource);
 					await mkdir(dirname(path), { recursive: true });
 					const temporary = `${path}.${randomUUID()}.tmp`;
@@ -496,13 +425,7 @@ export class DiskFileSystemProvider
 						try {
 							let offset = 0;
 							while (offset < content.byteLength) {
-								const count = await this.write(
-									descriptor,
-									offset,
-									content,
-									offset,
-									content.byteLength - offset,
-								);
+								const count = await this.write(descriptor, offset, content, offset, content.byteLength - offset);
 								if (count === 0) {
 									throw new Error('File write made no progress');
 								}
@@ -511,10 +434,7 @@ export class DiskFileSystemProvider
 						} finally {
 							await this.close(descriptor);
 						}
-						if (
-							options.expectedRevision !== undefined &&
-							(await this.readFile(resource)).revision !== options.expectedRevision
-						) {
+						if (options.expectedRevision !== undefined && (await this.readFile(resource)).revision !== options.expectedRevision) {
 							throw new FileRevisionConflictError(resource);
 						}
 						if (options.overwrite) await Promises.rename(temporary, path);
@@ -538,8 +458,7 @@ export class DiskFileSystemProvider
 		try {
 			await writeFile(path, '', { flag: existing === 'overwrite' ? 'w' : 'wx' });
 		} catch (error) {
-			if (existing !== 'ignore' || (error as NodeJS.ErrnoException).code !== 'EEXIST')
-				throw fileError(error, resource);
+			if (existing !== 'ignore' || (error as NodeJS.ErrnoException).code !== 'EEXIST') throw fileError(error, resource);
 		}
 		this.changes.fire({ resources: [resource] });
 		return this.stat(resource);
@@ -558,8 +477,7 @@ export class DiskFileSystemProvider
 	public async copy(source: URI, target: URI): Promise<void> {
 		const from = await this.path(source);
 		const to = await this.path(target);
-		if (this.roots.includes(from) || this.roots.includes(to) || to === from || to.startsWith(`${from}${sep}`))
-			throw new Error('Cannot copy a granted root or into itself');
+		if (this.roots.includes(from) || this.roots.includes(to) || to === from || to.startsWith(`${from}${sep}`)) throw new Error('Cannot copy a granted root or into itself');
 		try {
 			await lstat(to);
 			throw createFileSystemProviderError('Copy target already exists', FileSystemProviderErrorCode.FileExists);
@@ -573,8 +491,7 @@ export class DiskFileSystemProvider
 			if (metadata.isDirectory()) {
 				await mkdir(toPath);
 				if (fromPath === from) created = true;
-				for (const entry of await readdir(fromPath))
-					await copyEntry(resolve(fromPath, entry), resolve(toPath, entry));
+				for (const entry of await readdir(fromPath)) await copyEntry(resolve(fromPath, entry), resolve(toPath, entry));
 			} else if (metadata.isFile()) {
 				await copyFile(fromPath, toPath, constants.COPYFILE_EXCL);
 				if (fromPath === from) created = true;
@@ -608,10 +525,7 @@ export class DiskFileSystemProvider
 			}
 			if (exists) {
 				if (existing === 'ignore') return;
-				throw createFileSystemProviderError(
-					'Target directory already exists',
-					FileSystemProviderErrorCode.FileExists,
-				);
+				throw createFileSystemProviderError('Target directory already exists', FileSystemProviderErrorCode.FileExists);
 			}
 			await Promises.rename(from, to).catch(error => {
 				throw fileError(error, target);
@@ -635,33 +549,24 @@ export class DiskFileSystemProvider
 			if (mode === 'fileOrEmptyDirectory' && (await lstat(path)).isDirectory()) await rmdir(path);
 			else await rm(path, { force: missing === 'ignore', recursive: mode === 'recursive' });
 		} catch (error) {
-			if (missing !== 'ignore' || (error as NodeJS.ErrnoException).code !== 'ENOENT')
-				throw fileError(error, resource);
+			if (missing !== 'ignore' || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw fileError(error, resource);
 		}
 		this.changes.fire({ resources: [resource] });
 	}
 
 	private async path(resource: URI): Promise<string> {
-		if (resource.scheme !== 'file' || resource.query || resource.fragment)
-			throw new Error('Expected a local file resource');
+		if (resource.scheme !== 'file' || resource.query || resource.fragment) throw new Error('Expected a local file resource');
 		const path = resolve(resource.fsPath);
 		const root = this.roots.find(candidate => {
 			const child = relative(candidate, path);
 			return child === '' || (!isAbsolute(child) && child !== '..' && !child.startsWith(`..${sep}`));
 		});
-		if (!root)
-			throw createFileSystemProviderError(
-				'File resource is outside the granted roots',
-				FileSystemProviderErrorCode.NoPermissions,
-			);
+		if (!root) throw createFileSystemProviderError('File resource is outside the granted roots', FileSystemProviderErrorCode.NoPermissions);
 		let current = path;
 		while (true) {
 			try {
 				if ((await lstat(current)).isSymbolicLink())
-					throw createFileSystemProviderError(
-						'Symbolic links are not permitted in granted file resources',
-						FileSystemProviderErrorCode.NoPermissions,
-					);
+					throw createFileSystemProviderError('Symbolic links are not permitted in granted file resources', FileSystemProviderErrorCode.NoPermissions);
 			} catch (error) {
 				if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
 			}

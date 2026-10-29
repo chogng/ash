@@ -55,18 +55,10 @@ export class DesignDrawingController extends Disposable implements DesignDrawing
 
 	public begin(point: DesignPoint, modifiers?: { shift: boolean; alt: boolean; tolerance: number }): boolean {
 		const tool = this.host.getTool();
-		if (
-			this.host.getMode() === DesignMode.Code ||
-			this.host.getMode() === DesignMode.Motion ||
-			[DesignTool.Select, DesignTool.Hand].includes(tool)
-		) {
+		if (this.host.getMode() === DesignMode.Code || this.host.getMode() === DesignMode.Motion || [DesignTool.Select, DesignTool.Hand].includes(tool)) {
 			return false;
 		}
-		if (
-			this.isPen &&
-			this.nodes.length >= 2 &&
-			Math.hypot(point.x - this.nodes[0].x, point.y - this.nodes[0].y) <= (modifiers?.tolerance ?? 8)
-		) {
+		if (this.isPen && this.nodes.length >= 2 && Math.hypot(point.x - this.nodes[0].x, point.y - this.nodes[0].y) <= (modifiers?.tolerance ?? 8)) {
 			if (this.draft?.kind === 'path') {
 				this.draft = { ...this.draft, closed: true };
 			}
@@ -138,11 +130,7 @@ export class DesignDrawingController extends Disposable implements DesignDrawing
 				height: Math.max(1, Math.abs(point.y - this.start.y)),
 			};
 		}
-		if (
-			this.draft?.kind === 'text' &&
-			this.start &&
-			Math.hypot(point.x - this.start.x, point.y - this.start.y) > 3
-		) {
+		if (this.draft?.kind === 'text' && this.start && Math.hypot(point.x - this.start.x, point.y - this.start.y) > 3) {
 			this.draft = { ...this.draft, textAutoResize: 'none' };
 		}
 		this.changeEmitter.fire();

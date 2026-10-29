@@ -1,10 +1,4 @@
-import {
-	isCanonicalAbsoluteRemotePath,
-	normalizeCredentialFreeSshHost,
-	type RunRemoteCommand,
-	runRemoteCommand,
-	validLocalCommand,
-} from './remoteCommand.js';
+import { isCanonicalAbsoluteRemotePath, normalizeCredentialFreeSshHost, type RunRemoteCommand, runRemoteCommand, validLocalCommand } from './remoteCommand.js';
 import { normalizeRemoteWorkspacePath } from '../common/remote.js';
 
 export interface RemoteConnectionRuntimeProfile {
@@ -23,8 +17,7 @@ export class RemoteConnectionProfiles {
 	private readonly runCommand: RunRemoteCommand;
 
 	constructor(readonly options: RemoteConnectionProfilesOptions) {
-		if (!validLocalCommand(options.remoteExecutable))
-			throw new Error('Remote profile command executable must be non-empty and contain no control characters');
+		if (!validLocalCommand(options.remoteExecutable)) throw new Error('Remote profile command executable must be non-empty and contain no control characters');
 		this.runCommand = options.runCommand ?? runRemoteCommand;
 	}
 
@@ -33,47 +26,31 @@ export class RemoteConnectionProfiles {
 		return parseProfile(result);
 	}
 
-	async activate(
-		host: string,
-		workspace: string,
-		runtime: string,
-		sshExecutable: string,
-	): Promise<RemoteConnectionRuntimeProfile> {
-		if (!isCanonicalAbsoluteRemotePath(runtime))
-			throw new Error('Verified Remote runtime must be a canonical absolute remote path');
+	async activate(host: string, workspace: string, runtime: string, sshExecutable: string): Promise<RemoteConnectionRuntimeProfile> {
+		if (!isCanonicalAbsoluteRemotePath(runtime)) throw new Error('Verified Remote runtime must be a canonical absolute remote path');
 		const result = await this.invoke('activate', host, workspace, runtime, sshExecutable);
 		const profile = parseProfile(result);
-		if (profile === undefined || profile.activeRuntime !== runtime)
-			throw new Error('Remote profile activation returned an unexpected runtime');
+		if (profile === undefined || profile.activeRuntime !== runtime) throw new Error('Remote profile activation returned an unexpected runtime');
 		return profile;
 	}
 
 	async rollback(host: string, workspace: string, sshExecutable: string): Promise<RemoteConnectionRuntimeProfile> {
-		if (!validLocalCommand(sshExecutable))
-			throw new Error('Remote rollback SSH executable must be non-empty and contain no control characters');
+		if (!validLocalCommand(sshExecutable)) throw new Error('Remote rollback SSH executable must be non-empty and contain no control characters');
 		const result = await this.invoke('rollback', host, workspace, undefined, sshExecutable);
 		const profile = parseProfile(result);
 		if (profile === undefined) throw new Error('Remote profile rollback returned no active runtime');
 		return profile;
 	}
 
-	private async invoke(
-		command: 'get' | 'activate' | 'rollback',
-		host: string,
-		workspace: string,
-		runtime?: string,
-		sshExecutable?: string,
-	) {
+	private async invoke(command: 'get' | 'activate' | 'rollback', host: string, workspace: string, runtime?: string, sshExecutable?: string) {
 		const normalizedHost = normalizeCredentialFreeSshHost(host);
-		if (normalizeRemoteWorkspacePath(workspace) !== workspace)
-			throw new Error('Remote profile Workspace must be a canonical absolute remote path');
+		if (normalizeRemoteWorkspacePath(workspace) !== workspace) throw new Error('Remote profile Workspace must be a canonical absolute remote path');
 		const args = ['profile', command, '--host', normalizedHost, '--dir', workspace];
 		if (runtime !== undefined) args.push('--runtime', runtime);
 		if (sshExecutable !== undefined) args.push('--ssh', sshExecutable);
 		const result = await this.runCommand(this.options.remoteExecutable, args, this.options.environment);
 		if (result.exitCode !== 0) {
-			const diagnostic =
-				result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode ?? 'unknown'}`;
+			const diagnostic = result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode ?? 'unknown'}`;
 			throw new Error(`Remote profile ${command} failed: ${diagnostic}`);
 		}
 		return result.stdout;
@@ -88,24 +65,19 @@ function parseProfile(output: string): RemoteConnectionRuntimeProfile | undefine
 		throw new Error('Remote profile command returned invalid JSON');
 	}
 	if (value === null) return undefined;
-	if (typeof value !== 'object' || Array.isArray(value))
-		throw new Error('Remote profile command returned an invalid record');
+	if (typeof value !== 'object' || Array.isArray(value)) throw new Error('Remote profile command returned an invalid record');
 	const record = value as Record<string, unknown>;
 	const names = Object.keys(record).sort();
 	const activeRuntime = record.activeRuntime;
 	const previousRuntime = record.previousRuntime;
-	if (
-		names.some(name => name !== 'activeRuntime' && name !== 'previousRuntime') ||
-		typeof activeRuntime !== 'string' ||
-		!isCanonicalAbsoluteRemotePath(activeRuntime)
-	) {
+	if (names.some(name => name !== 'activeRuntime' && name !== 'previousRuntime') || typeof activeRuntime !== 'string' || !isCanonicalAbsoluteRemotePath(activeRuntime)) {
 		throw new Error('Remote profile command returned an invalid record');
 	}
-	if (
-		previousRuntime !== undefined &&
-		(typeof previousRuntime !== 'string' || !isCanonicalAbsoluteRemotePath(previousRuntime))
-	) {
+	if (previousRuntime !== undefined && (typeof previousRuntime !== 'string' || !isCanonicalAbsoluteRemotePath(previousRuntime))) {
 		throw new Error('Remote profile command returned an invalid previous runtime');
 	}
-	return Object.freeze({ activeRuntime, ...(previousRuntime === undefined ? {} : { previousRuntime }) });
+	return Object.freeze({
+		activeRuntime,
+		...(previousRuntime === undefined ? {} : { previousRuntime }),
+	});
 }

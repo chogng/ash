@@ -3,12 +3,7 @@ import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { Position } from '../../../common/core/position.js';
 import { USUAL_WORD_SEPARATORS } from '../../../common/core/wordHelper.js';
-import {
-	DocumentHighlightKind,
-	type DocumentHighlight,
-	type DocumentHighlightProvider,
-	type MultiDocumentHighlightProvider,
-} from '../../../common/languages.js';
+import { DocumentHighlightKind, type DocumentHighlight, type DocumentHighlightProvider, type MultiDocumentHighlightProvider } from '../../../common/languages.js';
 import { type ITextModel } from '../../../common/model.js';
 import type { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 
@@ -27,12 +22,7 @@ class TextualDocumentHighlightProvider implements DocumentHighlightProvider, Mul
 		return findHighlights(model, position, token);
 	}
 
-	provideMultiDocumentHighlights(
-		primaryModel: ITextModel,
-		position: Position,
-		otherModels: ITextModel[],
-		token: CancellationToken,
-	): ResourceMap<DocumentHighlight[]> {
+	provideMultiDocumentHighlights(primaryModel: ITextModel, position: Position, otherModels: ITextModel[], token: CancellationToken): ResourceMap<DocumentHighlight[]> {
 		if (primaryModel.isDisposed() || token.isCancellationRequested) return new ResourceMap();
 		const word = primaryModel.getWordAtPosition(position);
 		if (!word) return new ResourceMap();

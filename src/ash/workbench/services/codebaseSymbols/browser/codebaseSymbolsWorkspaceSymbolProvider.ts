@@ -3,24 +3,14 @@ import { Range } from '../../../../editor/common/core/range.js';
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import type { LanguageWorkspaceSymbol, LanguageWorkspaceSymbolProvider } from '../../../../editor/common/languages.js';
 import { workspaceResourceFromPath } from '../../../../platform/workspace/common/workspace.js';
-import type {
-	ICodebaseSymbolsService,
-	CodebaseSymbolsRange,
-} from '../../../../platform/codebaseSymbols/common/codebaseSymbolsService.js';
+import type { ICodebaseSymbolsService, CodebaseSymbolsRange } from '../../../../platform/codebaseSymbols/common/codebaseSymbolsService.js';
 import type { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 
 const MAX_WORKSPACE_SYMBOL_RESULTS = 100;
 
 /** Registers the local syntax declaration projection as one Workspace Symbol provider. */
-export function registerCodebaseSymbolsWorkspaceSymbolProvider(
-	languageFeatures: ILanguageFeaturesService,
-	symbols: ICodebaseSymbolsService,
-	workspace: IWorkspaceContextService,
-) {
-	return languageFeatures.workspaceSymbolProvider.register(
-		'*',
-		new CodebaseSymbolsWorkspaceSymbolProvider(symbols, workspace),
-	);
+export function registerCodebaseSymbolsWorkspaceSymbolProvider(languageFeatures: ILanguageFeaturesService, symbols: ICodebaseSymbolsService, workspace: IWorkspaceContextService) {
+	return languageFeatures.workspaceSymbolProvider.register('*', new CodebaseSymbolsWorkspaceSymbolProvider(symbols, workspace));
 }
 
 class CodebaseSymbolsWorkspaceSymbolProvider implements LanguageWorkspaceSymbolProvider {
@@ -64,8 +54,5 @@ function singleWorkspaceRoot(workspace: IWorkspaceContextService) {
 }
 
 function textRange(range: CodebaseSymbolsRange): Range {
-	return Range.fromPositions(
-		new Position(range.start.lineIndex + 1, range.start.columnIndex + 1),
-		new Position(range.end.lineIndex + 1, range.end.columnIndex + 1),
-	);
+	return Range.fromPositions(new Position(range.start.lineIndex + 1, range.start.columnIndex + 1), new Position(range.end.lineIndex + 1, range.end.columnIndex + 1));
 }

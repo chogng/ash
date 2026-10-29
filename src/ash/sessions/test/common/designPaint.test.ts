@@ -12,13 +12,7 @@ import {
 	withDesignPaintColor,
 	type DesignPaint,
 } from '../../contrib/creator/common/model/designPaint.js';
-import {
-	documentFromShapes,
-	flattenDesignShapes,
-	parseDesignDocument,
-	serializeDesignDocument,
-	type DesignShape,
-} from '../../contrib/creator/common/model/document.js';
+import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/creator/common/model/document.js';
 const rectangle = (): DesignShape => ({
 	id: generateUuid(),
 	kind: 'rectangle',
@@ -29,8 +23,7 @@ const rectangle = (): DesignShape => ({
 	rotation: 0,
 	fill: '#3366ff',
 });
-const gradient = (type: Exclude<DesignPaint['type'], 'solid'> = 'linear') =>
-	createDesignPaint(type, '#ff0000') as Exclude<DesignPaint, { type: 'solid' }>;
+const gradient = (type: Exclude<DesignPaint['type'], 'solid'> = 'linear') => createDesignPaint(type, '#ff0000') as Exclude<DesignPaint, { type: 'solid' }>;
 test('Paint stacks preserve order, empty fills, immutable history and legacy single-color files', () => {
 	using model = new DesignModel();
 	const commands = new DocumentCommands(model),
@@ -109,11 +102,7 @@ test('Persistence rejects invalid paint identities, colors, blend scopes, stops 
 	]) {
 		assert.throws(() => parseDesignPaints(bad), /Invalid design fill/u);
 	}
-	assert.throws(() =>
-		parseDesignDocument(
-			JSON.stringify({ ...documentFromShapes([]), shapes: [{ ...rectangle(), blendMode: 'invalid' }] }),
-		),
-	);
+	assert.throws(() => parseDesignDocument(JSON.stringify({ ...documentFromShapes([]), shapes: [{ ...rectangle(), blendMode: 'invalid' }] })));
 });
 test('Fill styles and library instances retain stacks, inherit updates and isolate local overrides', () => {
 	using source = new DesignModel();
@@ -127,8 +116,7 @@ test('Fill styles and library instances retain stacks, inherit updates and isola
 		component: { kind: 'main' },
 	};
 	source.applyEdit([main]);
-	const find = (model: DesignModel, id: string) =>
-		flattenDesignShapes(model.value.shapes).find(shape => shape.id === id)!;
+	const find = (model: DesignModel, id: string) => flattenDesignShapes(model.value.shapes).find(shape => shape.id === id)!;
 	const style = author.resources.createStyle(find(source, shape.id), 'fill', 'Gradient');
 	using consumer = new DesignModel();
 	const commands = new DocumentCommands(consumer);

@@ -3,12 +3,7 @@ import { test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { IAccountService, type AccountState } from '../../../../../platform/accounts/common/accountService.js';
 import { createDisconnectedGitHubService } from '../../../../../platform/github/browser/appServerGitHubService.js';
-import {
-	GitHubError,
-	GitHubErrorCode,
-	IGitHubService,
-	type GitHubAccount,
-} from '../../../../../platform/github/common/githubService.js';
+import { GitHubError, GitHubErrorCode, IGitHubService, type GitHubAccount } from '../../../../../platform/github/common/githubService.js';
 import type { JsonValue } from '../../../../../base/common/jsonValue.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import type { PolicyValue } from '../../../../../base/common/policy.js';
@@ -21,10 +16,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ConfigurationService } from '../../../../../platform/configuration/common/configurationService.js';
 import { TestConfigurationFiles } from '../../../configuration/test/common/testServices.js';
 import { UserDataProfileService } from '../../../userDataProfile/browser/userDataProfileService.js';
-import {
-	ChatModelPreferences,
-	LanguageModelsConfigurationService,
-} from '../../../../contrib/chat/browser/languageModelsConfigurationService.js';
+import { ChatModelPreferences, LanguageModelsConfigurationService } from '../../../../contrib/chat/browser/languageModelsConfigurationService.js';
 import type { IStorageService } from '../../../../../platform/storage/common/storage.js';
 
 const log = new NullLoggerService();
@@ -53,10 +45,7 @@ function accountServices(events: Emitter<AccountState>): IAccountService {
 	};
 }
 
-function githubServices(
-	read: IGitHubService['readManagedSettings'],
-	list: () => Promise<readonly GitHubAccount[]> = async () => [account],
-): IGitHubService {
+function githubServices(read: IGitHubService['readManagedSettings'], list: () => Promise<readonly GitHubAccount[]> = async () => [account]): IGitHubService {
 	return { ...createDisconnectedGitHubService(), listAccounts: list, readManagedSettings: read };
 }
 
@@ -91,14 +80,7 @@ test('Registered account mappings resolve real provider fields and system policy
 	});
 	using configuration = new PolicyConfiguration(registry, policies, log);
 	await configuration.initialize();
-	assert.deepEqual(
-		[
-			configuration.configurationModel.getValue('ui.managedFeature'),
-			accounts.getPolicyValue('ManagedFeature'),
-			ids,
-		],
-		[false, true, ['first']],
-	);
+	assert.deepEqual([configuration.configurationModel.getValue('ui.managedFeature'), accounts.getPolicyValue('ManagedFeature'), ids], [false, true, ['first']]);
 	system.candidate = {};
 	await system.updatePolicyDefinitions(binding);
 	assert.equal(configuration.configurationModel.getValue('ui.managedFeature'), true);

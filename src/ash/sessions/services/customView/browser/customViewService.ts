@@ -39,8 +39,7 @@ export class CustomViewService extends Disposable implements ICustomViewService 
 	}
 
 	registerCustomView(descriptor: ICustomViewDescriptor, options?: { readonly restore?: boolean }): IDisposable {
-		if (!descriptor.id.trim() || this.descriptors.has(descriptor.id))
-			throw new Error(`Invalid or duplicate custom view: ${descriptor.id}`);
+		if (!descriptor.id.trim() || this.descriptors.has(descriptor.id)) throw new Error(`Invalid or duplicate custom view: ${descriptor.id}`);
 		this.descriptors.set(descriptor.id, descriptor);
 		if (this.desired === descriptor.id) {
 			if (options?.restore === false) this.hideCustomView();

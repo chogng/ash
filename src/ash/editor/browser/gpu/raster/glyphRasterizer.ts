@@ -39,29 +39,15 @@ export class GlyphRasterizer extends Disposable implements IGlyphRasterizer {
 		};
 	}
 
-	public rasterizeGlyph(
-		chars: string,
-		tokenMetadata: number,
-		decorationStyleSetId: number,
-		colorMap: string[],
-	): Readonly<IRasterizedGlyph> {
-		if (
-			this._workGlyphConfig.chars === chars &&
-			this._workGlyphConfig.tokenMetadata === tokenMetadata &&
-			this._workGlyphConfig.decorationStyleSetId === decorationStyleSetId
-		) {
+	public rasterizeGlyph(chars: string, tokenMetadata: number, decorationStyleSetId: number, colorMap: string[]): Readonly<IRasterizedGlyph> {
+		if (this._workGlyphConfig.chars === chars && this._workGlyphConfig.tokenMetadata === tokenMetadata && this._workGlyphConfig.decorationStyleSetId === decorationStyleSetId) {
 			return this._workGlyph;
 		}
 		this._workGlyphConfig = { chars, tokenMetadata, decorationStyleSetId };
 		return this._rasterizeGlyph(chars, tokenMetadata, decorationStyleSetId, colorMap);
 	}
 
-	public _rasterizeGlyph(
-		chars: string,
-		tokenMetadata: number,
-		decorationStyleSetId: number,
-		colorMap: string[],
-	): Readonly<IRasterizedGlyph> {
+	public _rasterizeGlyph(chars: string, tokenMetadata: number, decorationStyleSetId: number, colorMap: string[]): Readonly<IRasterizedGlyph> {
 		if (chars === '') {
 			return {
 				source: this._canvas,
@@ -89,9 +75,7 @@ export class GlyphRasterizer extends Disposable implements IGlyphRasterizer {
 		this._ctx.globalAlpha = decoration?.opacity ?? 1;
 		this._ctx.fillStyle =
 			decoration?.color === undefined
-				? (colorMap[TokenMetadata.getForeground(tokenMetadata)] ??
-					colorMap[ColorId.DefaultForeground] ??
-					'#ffffff')
+				? (colorMap[TokenMetadata.getForeground(tokenMetadata)] ?? colorMap[ColorId.DefaultForeground] ?? '#ffffff')
 				: `#${decoration.color.toString(16).padStart(8, '0')}`;
 		const metrics = this._ctx.measureText(chars);
 		const origin = deviceFontSize;
@@ -99,26 +83,12 @@ export class GlyphRasterizer extends Disposable implements IGlyphRasterizer {
 		this._ctx.fillText(chars, origin + subPixelX, origin);
 		if ((fontStyle & FontStyle.Underline) !== 0) {
 			const thickness = Math.max(1, Math.round((this.fontSize * this.devicePixelRatio) / 12));
-			this._ctx.fillRect(
-				origin,
-				Math.round(origin + metrics.fontBoundingBoxAscent + thickness),
-				Math.ceil(metrics.width),
-				thickness,
-			);
+			this._ctx.fillRect(origin, Math.round(origin + metrics.fontBoundingBoxAscent + thickness), Math.ceil(metrics.width), thickness);
 		}
 		if (decoration?.strikethrough ?? (fontStyle & FontStyle.Strikethrough) !== 0) {
-			const thickness = Math.max(
-				1,
-				Math.round((decoration?.strikethroughThickness ?? this.fontSize / 10) * this.devicePixelRatio),
-			);
-			if (decoration?.strikethroughColor !== undefined)
-				this._ctx.fillStyle = `#${decoration.strikethroughColor.toString(16).padStart(8, '0')}`;
-			this._ctx.fillRect(
-				origin,
-				Math.round(origin + metrics.actualBoundingBoxAscent / 2),
-				Math.ceil(metrics.width),
-				thickness,
-			);
+			const thickness = Math.max(1, Math.round((decoration?.strikethroughThickness ?? this.fontSize / 10) * this.devicePixelRatio));
+			if (decoration?.strikethroughColor !== undefined) this._ctx.fillStyle = `#${decoration.strikethroughColor.toString(16).padStart(8, '0')}`;
+			this._ctx.fillRect(origin, Math.round(origin + metrics.actualBoundingBoxAscent / 2), Math.ceil(metrics.width), thickness);
 		}
 		this._ctx.globalAlpha = 1;
 

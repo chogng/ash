@@ -3,15 +3,7 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
-import type {
-	DebugEvaluateContext,
-	DebugSessionState,
-	IDebugConfiguration,
-	IDebugEvaluateResult,
-	IDebugService,
-	IDebugSession,
-	IDebugStackFrame,
-} from '../../common/debug.js';
+import type { DebugEvaluateContext, DebugSessionState, IDebugConfiguration, IDebugEvaluateResult, IDebugService, IDebugSession, IDebugStackFrame } from '../../common/debug.js';
 import { ReplModel } from '../../common/replModel.js';
 import { mock } from 'node:test';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -28,10 +20,7 @@ suite('Debug Console output batching', () => {
 		mock.timers.enable({ apis: ['setTimeout'] });
 		try {
 			for (let index = 0; index < 200; index++) session.emitOutput(`line-${index}\n`);
-			assert.equal(
-				consoleService.activeSession?.output,
-				Array.from({ length: 200 }, (_, index) => `line-${index}\n`).join(''),
-			);
+			assert.equal(consoleService.activeSession?.output, Array.from({ length: 200 }, (_, index) => `line-${index}\n`).join(''));
 			assert.equal(notifications, 0, 'A DAP batch must not trigger a render per message');
 			mock.timers.tick(16);
 			assert.equal(notifications, 1);
@@ -113,9 +102,7 @@ test('ReplModel never sends a frame belonging to a running or different session'
 	await repl.evaluate('running');
 	const second = debug.addSession();
 	second.state = 'stopped';
-	debug
-		.getViewModel()
-		.setFocus({ id: 9, name: 'other adapter', lineNumber: 1, columnNumber: 1 }, undefined, second, true);
+	debug.getViewModel().setFocus({ id: 9, name: 'other adapter', lineNumber: 1, columnNumber: 1 }, undefined, second, true);
 	// A retained console can still be rendered during a session-selection event.
 	// The focused frame must never escape its actual DebugService session.
 	debug.session = first;
@@ -234,8 +221,7 @@ class FakeDebugSession extends Disposable implements IDebugSession {
 	public async customRequest(): Promise<never> {
 		throw new Error('Custom requests are unsupported in this fixture');
 	}
-	readonly evaluations: Array<{ expression: string; frameId: number | undefined; context: DebugEvaluateContext }> =
-		[];
+	readonly evaluations: Array<{ expression: string; frameId: number | undefined; context: DebugEvaluateContext }> = [];
 	private retainedOutput = '';
 	get output(): string {
 		return this.retainedOutput;
@@ -281,11 +267,7 @@ class FakeDebugSession extends Disposable implements IDebugSession {
 	async completions() {
 		return undefined;
 	}
-	async evaluate(
-		expression: string,
-		frameId: number | undefined,
-		context: DebugEvaluateContext,
-	): Promise<IDebugEvaluateResult> {
+	async evaluate(expression: string, frameId: number | undefined, context: DebugEvaluateContext): Promise<IDebugEvaluateResult> {
 		this.evaluations.push({ expression, frameId, context });
 		this.emitOutput(`> ${expression}\n42 : number\n`);
 		return { result: '42', type: 'number', variablesReference: 0 };
@@ -330,9 +312,7 @@ test('ReplModel evaluates in the selected stack frame including frame zero', asy
 	using model = new ReplModel(debug as unknown as IDebugService);
 	const session = debug.addSession();
 	session.state = 'stopped';
-	debug
-		.getViewModel()
-		.setFocus({ id: 0, name: 'selected', lineNumber: 1, columnNumber: 1 }, undefined, session, true);
+	debug.getViewModel().setFocus({ id: 0, name: 'selected', lineNumber: 1, columnNumber: 1 }, undefined, session, true);
 	await model.evaluate(' answer ');
 	assert.deepEqual(session.evaluations, [{ expression: 'answer', frameId: 0, context: 'repl' }]);
 	assert.match(model.activeSession!.output, /> answer\n42 : number/);

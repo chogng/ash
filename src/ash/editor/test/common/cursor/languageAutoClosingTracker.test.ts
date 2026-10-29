@@ -6,19 +6,12 @@ import { test } from 'mocha';
 import { CursorsController } from '../../../common/cursor/cursor.js';
 import { DeleteOperations } from '../../../common/cursor/cursorDeleteOperations.js';
 import { EditOperationType } from '../../../common/cursorCommon.js';
-import {
-	TestLanguageConfigurationService,
-	registerTestLanguageConfigurations,
-} from '../modes/testLanguageConfigurationService.js';
+import { TestLanguageConfigurationService, registerTestLanguageConfigurations } from '../modes/testLanguageConfigurationService.js';
 import { Selection } from '../../../common/core/selection.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { TextModel } from '../../../common/model/textModel.js';
-import {
-	createTestCursorConfiguration,
-	createTestCursorsController,
-	executeTestDeleteOperation,
-} from '../testCursorConfiguration.js';
+import { createTestCursorConfiguration, createTestCursorsController, executeTestDeleteOperation } from '../testCursorConfiguration.js';
 import { ViewModelEventsCollector } from '../../../common/viewModelEventDispatcher.js';
 
 test('Auto-closing trust follows external edits and rejects a changed closer', () => {
@@ -32,9 +25,7 @@ test('Auto-closing trust follows external edits and rejects a changed closer', (
 	assert.deepEqual(selections.getSelections()[0]!, caret(5));
 	assert.equal(canOvertype(model, selections, new Position(0 + 1, 5 + 1), ')'), true);
 
-	model.applyEdits([
-		{ range: Range.fromPositions(new Position(0 + 1, 5 + 1), new Position(0 + 1, 6 + 1)), text: ']' },
-	]);
+	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 5 + 1), new Position(0 + 1, 6 + 1)), text: ']' }]);
 	assert.equal(canOvertype(model, selections, selections.getSelections()[0]!.getPosition(), ')'), false);
 });
 
@@ -112,11 +103,7 @@ function typeText(selections: CursorsController, text: string): void {
 	selections.type(new ViewModelEventsCollector(), text, 'keyboard');
 }
 
-function executeBackspace(
-	model: TextModel,
-	selections: CursorsController,
-	configurations: TestLanguageConfigurationService,
-): void {
+function executeBackspace(model: TextModel, selections: CursorsController, configurations: TestLanguageConfigurationService): void {
 	const operation = DeleteOperations.deleteLeft(
 		selections.getPrevEditOperationType(),
 		createTestCursorConfiguration(model, configurations),
@@ -128,9 +115,7 @@ function executeBackspace(
 }
 
 function canOvertype(model: TextModel, selections: CursorsController, position: Position, close: string): boolean {
-	return selections
-		.getAutoClosedCharacters()
-		.some(range => Position.equals(range.getStartPosition(), position) && model.getTextInRange(range) === close);
+	return selections.getAutoClosedCharacters().some(range => Position.equals(range.getStartPosition(), position) && model.getTextInRange(range) === close);
 }
 
 function caret(columnIndex: number): Selection {

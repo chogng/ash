@@ -13,11 +13,7 @@ export interface CodeImageOptions {
 }
 
 /** Selection text and syntax styles are immutable input; the extension owns every output pixel. */
-export async function renderCodeImage(
-	document: Document,
-	input: CodeImageSnapshot,
-	options: CodeImageOptions,
-): Promise<Uint8Array> {
+export async function renderCodeImage(document: Document, input: CodeImageSnapshot, options: CodeImageOptions): Promise<Uint8Array> {
 	const canvas = document.createElement('canvas');
 	const context = canvas.getContext('2d')!;
 	const font = `${input.fontSize}px ${input.fontFamily}`;
@@ -37,9 +33,7 @@ export async function renderCodeImage(
 				.join(''),
 		}));
 	});
-	const numbers = options.lineNumbers
-		? context.measureText(String((options.realLineNumbers ? input.firstLine : 1) + lines.length - 1)).width + 24
-		: 0;
+	const numbers = options.lineNumbers ? context.measureText(String((options.realLineNumbers ? input.firstLine : 1) + lines.length - 1)).width + 24 : 0;
 	const header = options.windowControls || options.windowTitle ? 36 : 0;
 	const width = Math.ceil(
 		Math.max(
@@ -58,18 +52,8 @@ export async function renderCodeImage(
 	const height = Math.ceil(lines.length * lineHeight + header + 48 + options.padding * 2);
 	const pixelWidth = Math.ceil(width * options.scale),
 		pixelHeight = Math.ceil(height * options.scale);
-	if (
-		!Number.isFinite(pixelWidth * pixelHeight) ||
-		pixelWidth < 1 ||
-		pixelHeight < 1 ||
-		pixelWidth * pixelHeight > 16_777_216
-	) {
-		throw new Error(
-			localize(
-				'snapshot.code.tooLarge',
-				'The code image is too large. Select fewer lines or lower the resolution scale.',
-			),
-		);
+	if (!Number.isFinite(pixelWidth * pixelHeight) || pixelWidth < 1 || pixelHeight < 1 || pixelWidth * pixelHeight > 16_777_216) {
+		throw new Error(localize('snapshot.code.tooLarge', 'The code image is too large. Select fewer lines or lower the resolution scale.'));
 	}
 	canvas.width = pixelWidth;
 	canvas.height = pixelHeight;
@@ -93,12 +77,7 @@ export async function renderCodeImage(
 	context.textBaseline = 'top';
 	if (options.windowTitle) {
 		context.fillStyle = input.foreground;
-		context.fillText(
-			input.title,
-			options.padding + (options.windowControls ? 90 : 24),
-			options.padding + 14,
-			width - options.padding * 2 - 120,
-		);
+		context.fillText(input.title, options.padding + (options.windowControls ? 90 : 24), options.padding + 14, width - options.padding * 2 - 120);
 	}
 	for (const [index, tokens] of lines.entries()) {
 		const y = options.padding + header + 24 + index * lineHeight;

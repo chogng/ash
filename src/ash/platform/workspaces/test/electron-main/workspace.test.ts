@@ -33,23 +33,12 @@ import {
 	WorkspaceTransitionRecovery,
 	WorkspaceTransitionStatus,
 } from '../../../../platform/workspaces/electron-main/workspaceTransitionMainService.js';
-import {
-	AppServerWorkspaceTransitionAdapter,
-	type IAppServerWorkspaceTransitionHost,
-} from '../../../../platform/workspaces/electron-main/appServerWorkspaceTransition.js';
+import { AppServerWorkspaceTransitionAdapter, type IAppServerWorkspaceTransitionHost } from '../../../../platform/workspaces/electron-main/appServerWorkspaceTransition.js';
 import { AppServerRemoteError } from '../../../agentHost/common/appServerError.js';
 import { WorkspaceContextMainService } from '../../../../platform/window/electron-main/window.js';
-import {
-	WindowsMainService,
-	workspaceContextIpcRoutes,
-} from '../../../../platform/windows/electron-main/windowsMainService.js';
+import { WindowsMainService, workspaceContextIpcRoutes } from '../../../../platform/windows/electron-main/windowsMainService.js';
 import { WorkspacesManagementMainService } from '../../../../platform/workspaces/electron-main/workspacesManagementMainService.js';
-import {
-	getSingleFolderWorkspaceIdentifier,
-	getWorkspaceIdentifier,
-	type IWorkspacePathService,
-	WorkspacePathKind,
-} from '../../../../platform/workspaces/node/workspaces.js';
+import { getSingleFolderWorkspaceIdentifier, getWorkspaceIdentifier, type IWorkspacePathService, WorkspacePathKind } from '../../../../platform/workspaces/node/workspaces.js';
 import { TestWorkspaceService } from '../../../../workbench/services/configuration/test/common/testServices.js';
 
 let windowServices: InstantiationService;
@@ -61,9 +50,7 @@ teardown(() => windowServices.dispose());
 
 function windowsForWorkspacePaths(paths: IWorkspacePathService): WindowsMainService<never> {
 	const services = windowServices.createChild();
-	services.registerSingleton(IWindowsMainService, () =>
-		services.createInstance(WindowsMainService<never>, async () => undefined, process.platform, paths),
-	);
+	services.registerSingleton(IWindowsMainService, () => services.createInstance(WindowsMainService<never>, async () => undefined, process.platform, paths));
 	return services.get(IWindowsMainService) as WindowsMainService<never>;
 }
 
@@ -74,10 +61,7 @@ test('empty Remote workspaces retain their authority through persisted and rende
 		...workspace,
 		folders: [],
 	});
-	assert.throws(
-		() => parseWorkspaceIdentifier({ ...workspace, remoteAuthority: 'ssh+user@host' }),
-		/Remote SSH host/,
-	);
+	assert.throws(() => parseWorkspaceIdentifier({ ...workspace, remoteAuthority: 'ssh+user@host' }), /Remote SSH host/);
 });
 
 test('windows service resolves SSH folders without reading the local filesystem', async () => {
@@ -87,10 +71,7 @@ test('windows service resolves SSH folders without reading the local filesystem'
 			localReads += 1;
 			throw new Error('Remote path must not be read locally');
 		},
-	}).resolveWorkspaceOpenTarget(
-		{ kind: WorkspaceOpenTargetKind.RemoteFolder, path: '/home/ash/project', sshHost: 'work-server' },
-		resolve('launch-root'),
-	);
+	}).resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.RemoteFolder, path: '/home/ash/project', sshHost: 'work-server' }, resolve('launch-root'));
 
 	assert.equal(localReads, 0);
 	assert.ok(isRemoteWorkspaceIdentifier(workspace));
@@ -106,14 +87,14 @@ test('windows service resolves a canonical single-folder identity', async () => 
 	const pathService: IWorkspacePathService = {
 		async resolvePath(path) {
 			requestedPath = path;
-			return { kind: WorkspacePathKind.Directory, path: canonicalPath };
+			return {
+				kind: WorkspacePathKind.Directory,
+				path: canonicalPath,
+			};
 		},
 	};
 
-	const workspace = await windowsForWorkspacePaths(pathService).resolveWorkspaceOpenTarget(
-		{ kind: WorkspaceOpenTargetKind.Automatic, path: 'project' },
-		cwd,
-	);
+	const workspace = await windowsForWorkspacePaths(pathService).resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.Automatic, path: 'project' }, cwd);
 
 	assert.equal(requestedPath, resolve(cwd, 'project'));
 	assert.ok(isSingleFolderWorkspaceIdentifier(workspace));
@@ -130,21 +111,18 @@ test('windows service recognizes explicit workspace files', async () => {
 	const canonicalPath = resolve('canonical', 'team.ash-workspace');
 	const pathService: IWorkspacePathService = {
 		async resolvePath() {
-			return { kind: WorkspacePathKind.File, path: canonicalPath };
+			return {
+				kind: WorkspacePathKind.File,
+				path: canonicalPath,
+			};
 		},
 	};
 
-	const workspace = await windowsForWorkspacePaths(pathService).resolveWorkspaceOpenTarget(
-		{ kind: WorkspaceOpenTargetKind.Workspace, path: 'team.ash-workspace' },
-		resolve('launch-root'),
-	);
+	const workspace = await windowsForWorkspacePaths(pathService).resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.Workspace, path: 'team.ash-workspace' }, resolve('launch-root'));
 
 	assert.ok(isWorkspaceIdentifier(workspace));
 	assert.deepEqual(
-		await windowsForWorkspacePaths(pathService).resolveWorkspaceOpenTarget(
-			{ kind: WorkspaceOpenTargetKind.Automatic, path: 'team.ash-workspace' },
-			resolve('launch-root'),
-		),
+		await windowsForWorkspacePaths(pathService).resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.Automatic, path: 'team.ash-workspace' }, resolve('launch-root')),
 		workspace,
 	);
 	assert.equal(workspace.configPath.toString(), URI.file(canonicalPath).toString());
@@ -157,7 +135,10 @@ test('workspaces service resolves ordered folders from VS Code workspace files',
 	const configPath = resolve('canonical', 'team.code-workspace');
 	const pathService: IWorkspacePathService = {
 		async resolvePath(path) {
-			return { kind: path === configPath ? WorkspacePathKind.File : WorkspacePathKind.Directory, path };
+			return {
+				kind: path === configPath ? WorkspacePathKind.File : WorkspacePathKind.Directory,
+				path,
+			};
 		},
 		async readFile(path) {
 			assert.equal(path, URI.file(configPath).fsPath);
@@ -171,10 +152,7 @@ test('workspaces service resolves ordered folders from VS Code workspace files',
 		},
 	};
 	const service = new WorkspacesManagementMainService(pathService);
-	const identity = await windowsForWorkspacePaths(pathService).resolveWorkspaceOpenTarget(
-		{ kind: WorkspaceOpenTargetKind.Workspace, path: configPath },
-		resolve('launch-root'),
-	);
+	const identity = await windowsForWorkspacePaths(pathService).resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.Workspace, path: configPath }, resolve('launch-root'));
 	assert.ok(isWorkspaceIdentifier(identity));
 
 	const workspace = await service.resolveWorkspace(identity);
@@ -203,7 +181,10 @@ test('loose files and launches without a target remain empty', async () => {
 	const filePath = resolve('canonical', 'notes.txt');
 	const pathService: IWorkspacePathService = {
 		async resolvePath() {
-			return { kind: WorkspacePathKind.File, path: filePath };
+			return {
+				kind: WorkspacePathKind.File,
+				path: filePath,
+			};
 		},
 	};
 	const service = windowsForWorkspacePaths(pathService);
@@ -213,25 +194,19 @@ test('loose files and launches without a target remain empty', async () => {
 	assert.match(firstEmptyWorkspace.id, /^empty-window-[0-9a-f-]{36}$/u);
 	assert.notEqual(firstEmptyWorkspace.id, secondEmptyWorkspace.id);
 	assert.notEqual(firstEmptyWorkspace.id, UNKNOWN_EMPTY_WINDOW_WORKSPACE.id);
-	const looseFileWorkspace = await service.resolveWorkspaceOpenTarget(
-		{ kind: WorkspaceOpenTargetKind.Automatic, path: 'notes.txt' },
-		resolve('launch-root'),
-	);
+	const looseFileWorkspace = await service.resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.Automatic, path: 'notes.txt' }, resolve('launch-root'));
 	assert.match(looseFileWorkspace.id, /^empty-window-[0-9a-f-]{36}$/u);
 	assert.notEqual(looseFileWorkspace.id, firstEmptyWorkspace.id);
 	assert.equal(workbenchStateFromWorkspaceIdentifier(looseFileWorkspace), WorkbenchState.EMPTY);
 	assert.equal(new TestWorkspaceService(looseFileWorkspace).getWorkbenchState(), WorkbenchState.EMPTY);
-	await assert.rejects(
-		service.resolveWorkspaceOpenTarget(
-			{ kind: WorkspaceOpenTargetKind.Folder, path: 'notes.txt' },
-			resolve('launch-root'),
-		),
-		/not a directory/,
-	);
+	await assert.rejects(service.resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.Folder, path: 'notes.txt' }, resolve('launch-root')), /not a directory/);
 });
 
 test('workspace identifier IPC validation revives URIs', () => {
-	const serializedFolder = { id: 'folder-id', uri: URI.file(resolve('project')).toString() };
+	const serializedFolder = {
+		id: 'folder-id',
+		uri: URI.file(resolve('project')).toString(),
+	};
 	const folder = parseWorkspaceIdentifier(serializedFolder);
 	assert.ok(isSingleFolderWorkspaceIdentifier(folder));
 	assert.equal(folder.uri.toString(), serializedFolder.uri);
@@ -239,11 +214,19 @@ test('workspace identifier IPC validation revives URIs', () => {
 
 	assert.throws(() => parseWorkspaceIdentifier({ ...serializedFolder, unexpected: true }), /exactly/);
 	assert.throws(
-		() => parseWorkspaceIdentifier({ id: 'folder-id', uri: 'https://example.com/project' }),
+		() =>
+			parseWorkspaceIdentifier({
+				id: 'folder-id',
+				uri: 'https://example.com/project',
+			}),
 		/file or ash-remote scheme/,
 	);
 	assert.throws(
-		() => parseWorkspaceIdentifier({ id: 'folder-id', uri: `${serializedFolder.uri}?revision=1` }),
+		() =>
+			parseWorkspaceIdentifier({
+				id: 'folder-id',
+				uri: `${serializedFolder.uri}?revision=1`,
+			}),
 		/query or fragment/,
 	);
 	assert.throws(() => parseWorkspaceIdentifier({ id: '' }), /non-empty/);
@@ -255,10 +238,7 @@ test('workspace identifier IPC validation revives URIs', () => {
 	const parsedRemoteFolder = parseWorkspaceIdentifier(remoteFolder);
 	assert.ok(isRemoteWorkspaceIdentifier(parsedRemoteFolder));
 	assert.deepEqual(serializeWorkspaceIdentifier(parsedRemoteFolder), remoteFolder);
-	assert.throws(
-		() => parseWorkspaceIdentifier({ id: 'remote-folder-id', uri: 'ash-remote://ssh+bad%3Bhost/home/ash/project' }),
-		/Remote|SSH|authority|Invalid/,
-	);
+	assert.throws(() => parseWorkspaceIdentifier({ id: 'remote-folder-id', uri: 'ash-remote://ssh+bad%3Bhost/home/ash/project' }), /Remote|SSH|authority|Invalid/);
 	assert.throws(
 		() =>
 			parseWorkspaceIdentifier({
@@ -267,16 +247,8 @@ test('workspace identifier IPC validation revives URIs', () => {
 			}),
 		/canonical resource identity/,
 	);
-	assert.throws(
-		() =>
-			parseWorkspaceIdentifier({ id: 'remote-folder-id', uri: 'ash-remote://ssh+work-server/home//ash/project' }),
-		/canonical/,
-	);
-	assert.throws(
-		() =>
-			parseWorkspaceIdentifier({ id: 'remote-folder-id', uri: 'ash-remote://ssh+work-server/home/ash/project/' }),
-		/canonical/,
-	);
+	assert.throws(() => parseWorkspaceIdentifier({ id: 'remote-folder-id', uri: 'ash-remote://ssh+work-server/home//ash/project' }), /canonical/);
+	assert.throws(() => parseWorkspaceIdentifier({ id: 'remote-folder-id', uri: 'ash-remote://ssh+work-server/home/ash/project/' }), /canonical/);
 });
 
 test('resolved workspace IPC preserves ordered folder identities', () => {
@@ -292,10 +264,7 @@ test('resolved workspace IPC preserves ordered folder identities', () => {
 	const workspace = parseWorkspace(serialized);
 	assert.deepEqual(serializeWorkspace(workspace), serialized);
 	assert.equal(workspace.folders[1]?.id, 'api-id');
-	assert.throws(
-		() => parseWorkspace({ ...serialized, folders: [serialized.folders[1], serialized.folders[0]] }),
-		/indices/,
-	);
+	assert.throws(() => parseWorkspace({ ...serialized, folders: [serialized.folders[1], serialized.folders[0]] }), /indices/);
 });
 
 test('window workspace context exposes its identity through IPC', async () => {
@@ -310,10 +279,7 @@ test('window workspace context exposes its identity through IPC', async () => {
 	assert.equal(route.channel, 'ash:workspace:context:read');
 	assert.equal(route.validate(undefined), undefined);
 	assert.throws(() => route.validate({}), /does not accept parameters/);
-	assert.deepEqual(
-		await route.invoke(undefined),
-		serializeWorkspace(workspaceFromIdentifier(UNKNOWN_EMPTY_WINDOW_WORKSPACE)),
-	);
+	assert.deepEqual(await route.invoke(undefined), serializeWorkspace(workspaceFromIdentifier(UNKNOWN_EMPTY_WINDOW_WORKSPACE)));
 
 	const folder = await new WorkspacesManagementMainService({
 		async resolvePath(path) {
@@ -525,23 +491,13 @@ test('App Server workspace adapter routes only connection recovery into a retry'
 	};
 	const adapter = new AppServerWorkspaceTransitionAdapter(host);
 
+	assert.equal(adapter.classifyRuntimeError(new AppServerRemoteError(-32071, 'Workspace switch is busy', { kind: 'EnvironmentBusy' })), WorkspaceTransitionFailureKind.RuntimeBusy);
 	assert.equal(
-		adapter.classifyRuntimeError(
-			new AppServerRemoteError(-32071, 'Workspace switch is busy', { kind: 'EnvironmentBusy' }),
-		),
-		WorkspaceTransitionFailureKind.RuntimeBusy,
-	);
-	assert.equal(
-		adapter.classifyRuntimeError(
-			new AppServerRemoteError(-32070, 'Workspace switch is unavailable', { kind: 'EnvironmentUnavailable' }),
-		),
+		adapter.classifyRuntimeError(new AppServerRemoteError(-32070, 'Workspace switch is unavailable', { kind: 'EnvironmentUnavailable' })),
 		WorkspaceTransitionFailureKind.RuntimeUnsupported,
 	);
 	state = 'restarting';
-	assert.equal(
-		adapter.classifyRuntimeError(new Error('connection closed')),
-		WorkspaceTransitionFailureKind.RuntimeUnavailable,
-	);
+	assert.equal(adapter.classifyRuntimeError(new Error('connection closed')), WorkspaceTransitionFailureKind.RuntimeUnavailable);
 
 	const workspace = await new WorkspacesManagementMainService({
 		async resolvePath(path) {
@@ -585,11 +541,7 @@ test('Browser temporary workspace identifiers round-trip through URI boundaries 
 	};
 	const restored = parseWorkspaceIdentifier(serializeWorkspaceIdentifier(identifier));
 	assert.equal(workspaceFromIdentifier(restored).configuration?.toString(), identifier.configPath.toString());
-	for (const configPath of [
-		'ash-userdata:/user/settings.json',
-		'ash-userdata:/workspaces/temporary/settings.json',
-		'ash-userdata:/workspaces/../user/workspace.ash-workspace',
-	]) {
+	for (const configPath of ['ash-userdata:/user/settings.json', 'ash-userdata:/workspaces/temporary/settings.json', 'ash-userdata:/workspaces/../user/workspace.ash-workspace']) {
 		assert.throws(() => parseWorkspaceIdentifier({ id: 'invalid', configPath }));
 	}
 });

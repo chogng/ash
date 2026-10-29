@@ -20,10 +20,7 @@ registerAction2(
 
 		public override run(accessor: ServicesAccessor): Promise<void> {
 			const configuration = accessor.get(IConfigurationService);
-			return configuration.updateValue(
-				TerminalStickyScrollSettingId.Enabled,
-				!configuration.getValue<boolean>(TerminalStickyScrollSettingId.Enabled),
-			);
+			return configuration.updateValue(TerminalStickyScrollSettingId.Enabled, !configuration.getValue<boolean>(TerminalStickyScrollSettingId.Enabled));
 		}
 	},
 );

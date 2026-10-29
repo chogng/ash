@@ -3,35 +3,14 @@ import { ILocalizationService } from '../../../../workbench/services/localizatio
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import {
-	workspaceTrustPermissionNames,
-	type WorkspaceTrustSnapshot,
-} from '../../../../platform/workspace/common/workspaceTrust.js';
+import { workspaceTrustPermissionNames, type WorkspaceTrustSnapshot } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import {
-	type ExecutionSettings,
-	type ExecutionSettingsSnapshot,
-} from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
-import {
-	approvalModeDefinition,
-	approvalModeDefinitions,
-} from '../../../../platform/agentHost/common/approvalModes.js';
-import {
-	ISessionProviderScopeService,
-	type ISessionProviderScope,
-} from '../../../browser/agentHost/sessionProviderScopeService.js';
-import type {
-	SettingsSectionField,
-	SettingsSectionModel,
-} from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
+import { type ExecutionSettings, type ExecutionSettingsSnapshot } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
+import { approvalModeDefinition, approvalModeDefinitions } from '../../../../platform/agentHost/common/approvalModes.js';
+import { ISessionProviderScopeService, type ISessionProviderScope } from '../../../browser/agentHost/sessionProviderScopeService.js';
+import type { SettingsSectionField, SettingsSectionModel } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
 
-const readPermissions: readonly WorkspaceTrustPermission[] = [
-	'readFiles',
-	'watchFiles',
-	'browseFiles',
-	'searchFiles',
-	'inspectRepository',
-];
+const readPermissions: readonly WorkspaceTrustPermission[] = ['readFiles', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository'];
 const writePermissions: readonly WorkspaceTrustPermission[] = [...readPermissions, 'writeFiles', 'mutateRepository'];
 const commandPermissions: readonly WorkspaceTrustPermission[] = [...writePermissions, 'executeCommands'];
 
@@ -42,10 +21,7 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 		return localize({ bundle: 'ash.settings', key: 'execution.title' }, 'Execution and permissions');
 	}
 	get description(): string {
-		return localize(
-			{ bundle: 'ash.settings', key: 'execution.description' },
-			'Defaults for ordinary chats and Symphony. Directory grants control which host directories tools can access.',
-		);
+		return localize({ bundle: 'ash.settings', key: 'execution.description' }, 'Defaults for ordinary chats and Symphony. Directory grants control which host directories tools can access.');
 	}
 	get help(): string {
 		return localize(
@@ -125,10 +101,7 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 			}
 			if (this.dirty || this.directoryDirty) {
 				this.stale = true;
-				this.message = localize(
-					{ bundle: 'ash.settings', key: 'execution.changed' },
-					'Backend settings changed. Refresh before saving; refresh discards drafts.',
-				);
+				this.message = localize({ bundle: 'ash.settings', key: 'execution.changed' }, 'Backend settings changed. Refresh before saving; refresh discards drafts.');
 				this.changed.fire();
 			} else {
 				void this.refresh();
@@ -151,8 +124,7 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 		const initial = revision;
 		void host.appServer.getConnectionState().then(
 			state => {
-				if (!this.isDisposed && this.scope === scope && revision === initial)
-					connectionChanged(state === 'ready');
+				if (!this.isDisposed && this.scope === scope && revision === initial) connectionChanged(state === 'ready');
 			},
 			() => {
 				if (!this.isDisposed && this.scope === scope && revision === initial) connectionChanged(false);
@@ -182,10 +154,7 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 			{
 				id: 'approval-description',
 				kind: 'status',
-				text: localize(
-					approvalModeDefinition(this.draft.approvalMode).description.key,
-					approvalModeDefinition(this.draft.approvalMode).description.text,
-				),
+				text: localize(approvalModeDefinition(this.draft.approvalMode).description.key, approvalModeDefinition(this.draft.approvalMode).description.text),
 			},
 			{
 				id: 'files',
@@ -199,16 +168,12 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 					},
 					{
 						value: 'directoryWrite',
-						label: localize(
-							{ bundle: 'ash.settings', key: 'execution.directoryWrite' },
-							'Write in authorized directories',
-						),
+						label: localize({ bundle: 'ash.settings', key: 'execution.directoryWrite' }, 'Write in authorized directories'),
 					},
 				],
 				enabled: editable,
 				setValue: value => {
-					if (value === 'readOnly' || value === 'directoryWrite')
-						this.edit({ ...this.draft, commandFileAccess: value });
+					if (value === 'readOnly' || value === 'directoryWrite') this.edit({ ...this.draft, commandFileAccess: value });
 				},
 			},
 			{
@@ -228,8 +193,7 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 				],
 				enabled: editable,
 				setValue: value => {
-					if (value === 'denied' || value === 'allowed')
-						this.edit({ ...this.draft, commandNetworkAccess: value });
+					if (value === 'denied' || value === 'allowed') this.edit({ ...this.draft, commandNetworkAccess: value });
 				},
 			},
 			{ id: 'saved', kind: 'status', text: this.savedText },
@@ -253,9 +217,7 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 				kind: 'select',
 				label: localize({ bundle: 'ash.settings', key: 'execution.directories' }, 'Saved directory grants'),
 				value: this.directories?.entries.find(entry => entry.path === this.path)?.dir,
-				options:
-					this.directories?.entries.map(entry => ({ value: entry.dir, label: entry.path ?? entry.dir })) ??
-					[],
+				options: this.directories?.entries.map(entry => ({ value: entry.dir, label: entry.path ?? entry.dir })) ?? [],
 				enabled: directoryEditable,
 				setValue: value => {
 					const entry = this.directories?.entries.find(entry => entry.dir === value);
@@ -265,15 +227,9 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 			{
 				id: 'directory',
 				kind: 'text',
-				label: localize(
-					{ bundle: 'ash.settings', key: 'execution.directory' },
-					'Directory path on the App Server host',
-				),
+				label: localize({ bundle: 'ash.settings', key: 'execution.directory' }, 'Directory path on the App Server host'),
 				value: this.path,
-				placeholder: localize(
-					{ bundle: 'ash.settings', key: 'execution.pathPlaceholder' },
-					'Absolute directory path',
-				),
+				placeholder: localize({ bundle: 'ash.settings', key: 'execution.pathPlaceholder' }, 'Absolute directory path'),
 				enabled: directoryEditable,
 				setValue: value => {
 					this.path = value;
@@ -284,10 +240,7 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 			{
 				id: 'directory-access',
 				kind: 'select',
-				label: localize(
-					{ bundle: 'ash.settings', key: 'execution.directoryAccess' },
-					'Directory file and command permissions',
-				),
+				label: localize({ bundle: 'ash.settings', key: 'execution.directoryAccess' }, 'Directory file and command permissions'),
 				value: this.access,
 				options: [
 					{
@@ -300,17 +253,11 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 					},
 					{
 						value: 'commands',
-						label: localize(
-							{ bundle: 'ash.settings', key: 'execution.readWriteCommands' },
-							'Read, write and run commands',
-						),
+						label: localize({ bundle: 'ash.settings', key: 'execution.readWriteCommands' }, 'Read, write and run commands'),
 					},
 					{
 						value: 'custom',
-						label: localize(
-							{ bundle: 'ash.settings', key: 'execution.custom' },
-							'Custom saved permissions',
-						),
+						label: localize({ bundle: 'ash.settings', key: 'execution.custom' }, 'Custom saved permissions'),
 					},
 				],
 				enabled: directoryEditable,
@@ -324,26 +271,15 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 			{
 				id: 'save-directory',
 				kind: 'action',
-				label: localize(
-					{ bundle: 'ash.settings', key: 'execution.saveDirectory' },
-					'Save directory permissions',
-				),
-				enabled:
-					directoryEditable &&
-					this.directoryDirty &&
-					!!this.path.trim() &&
-					this.access !== 'custom' &&
-					!this.stale,
+				label: localize({ bundle: 'ash.settings', key: 'execution.saveDirectory' }, 'Save directory permissions'),
+				enabled: directoryEditable && this.directoryDirty && !!this.path.trim() && this.access !== 'custom' && !this.stale,
 				run: () => this.saveDirectory(false),
 			},
 			{
 				id: 'revoke-directory',
 				kind: 'action',
 				label: localize({ bundle: 'ash.settings', key: 'execution.revokeDirectory' }, 'Revoke directory grant'),
-				enabled:
-					directoryEditable &&
-					!!this.directories?.entries.some(entry => entry.path === this.path) &&
-					!this.stale,
+				enabled: directoryEditable && !!this.directories?.entries.some(entry => entry.path === this.path) && !this.stale,
 				run: () => this.saveDirectory(true),
 			},
 			{
@@ -364,12 +300,7 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 			{
 				id: 'status',
 				kind: 'status',
-				text: this.busy
-					? localize(
-							{ bundle: 'ash.settings', key: 'execution.busy' },
-							'Reading or saving execution settings…',
-						)
-					: this.message,
+				text: this.busy ? localize({ bundle: 'ash.settings', key: 'execution.busy' }, 'Reading or saving execution settings…') : this.message,
 			},
 		];
 	}
@@ -407,39 +338,21 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 			['write', writePermissions],
 			['commands', commandPermissions],
 		] as const) {
-			if (
-				commandPermissions.every(permission => permissions.includes(permission) === preset.includes(permission))
-			)
-				this.access = access;
+			if (commandPermissions.every(permission => permissions.includes(permission) === preset.includes(permission))) this.access = access;
 		}
 		this.directoryDirty = false;
 		this.changed.fire();
 	}
 	private directoryText(): string {
-		if (!this.directories)
-			return localize(
-				{ bundle: 'ash.settings', key: 'execution.directoryUnavailable' },
-				'Directory grants require a connected trusted desktop host.',
-			);
+		if (!this.directories) return localize({ bundle: 'ash.settings', key: 'execution.directoryUnavailable' }, 'Directory grants require a connected trusted desktop host.');
 		const entry = this.directories.entries.find(entry => entry.path === this.path);
 		return entry
 			? localize(
 					{ bundle: 'ash.settings', key: 'execution.directoryCurrent' },
 					'Saved capabilities: {0}',
-					entry.permissions
-						.map(permission =>
-							this.localization.translate(
-								'ash.settings',
-								`capabilities.permission.${permission}`,
-								workspaceTrustPermissionNames[permission],
-							),
-						)
-						.join(', '),
+					entry.permissions.map(permission => this.localization.translate('ash.settings', `capabilities.permission.${permission}`, workspaceTrustPermissionNames[permission])).join(', '),
 				)
-			: localize(
-					{ bundle: 'ash.settings', key: 'execution.directoryNew' },
-					'No saved grant selected. Enter a directory to grant file and command access.',
-				);
+			: localize({ bundle: 'ash.settings', key: 'execution.directoryNew' }, 'No saved grant selected. Enter a directory to grant file and command access.');
 	}
 	private async refresh(preserveDrafts = false): Promise<void> {
 		if (!this.visible || !this.connected || !this.scope) {
@@ -455,14 +368,9 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 			// A notification may follow an already captured config snapshot; publish only after rereading it.
 			while (this.current(generation)) {
 				this.refreshRequested = false;
-				const [snapshot, catalog] = await Promise.all([
-					host.executionSettings.read(),
-					host.agentCapabilities.read(),
-				]);
+				const [snapshot, catalog] = await Promise.all([host.executionSettings.read(), host.agentCapabilities.read()]);
 				if (!this.current(generation)) return;
-				const directories = catalog.directoryGrantsReadable
-					? await host.workspaceTrust.listDirectories()
-					: undefined;
+				const directories = catalog.directoryGrantsReadable ? await host.workspaceTrust.listDirectories() : undefined;
 				if (!this.current(generation)) return;
 				if (this.refreshRequested) continue;
 				const draft = this.draft;
@@ -474,16 +382,10 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 				this.savedText = localize(
 					{ bundle: 'ash.settings', key: 'execution.saved' },
 					'Saved defaults: approval {0}; command files {1}; command network {2}.',
-					localize(
-						approvalModeDefinition(snapshot.settings.approvalMode).label.key,
-						approvalModeDefinition(snapshot.settings.approvalMode).label.text,
-					),
+					localize(approvalModeDefinition(snapshot.settings.approvalMode).label.key, approvalModeDefinition(snapshot.settings.approvalMode).label.text),
 					snapshot.settings.commandFileAccess === 'readOnly'
 						? localize({ bundle: 'ash.settings', key: 'execution.readOnly' }, 'Read only')
-						: localize(
-								{ bundle: 'ash.settings', key: 'execution.directoryWrite' },
-								'Write in authorized directories',
-							),
+						: localize({ bundle: 'ash.settings', key: 'execution.directoryWrite' }, 'Write in authorized directories'),
 					snapshot.settings.commandNetworkAccess === 'denied'
 						? localize({ bundle: 'ash.settings', key: 'execution.denied' }, 'Blocked')
 						: localize({ bundle: 'ash.settings', key: 'execution.allowed' }, 'Allowed'),
@@ -494,8 +396,7 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 				if (!preserveDrafts) {
 					this.path = '';
 					this.access = 'read';
-				} else if (!directoryDirty && directories?.entries.some(entry => entry.path === this.path))
-					this.selectDirectory(this.path);
+				} else if (!directoryDirty && directories?.entries.some(entry => entry.path === this.path)) this.selectDirectory(this.path);
 				if (preserveDrafts) {
 					if (dirty) {
 						this.draft = draft;
@@ -509,11 +410,7 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 			if (!this.current(generation)) return;
 			this.snapshot = undefined;
 			this.directories = undefined;
-			this.message = localize(
-				{ bundle: 'ash.settings', key: 'execution.readFailed' },
-				'Could not read execution settings: {0}',
-				String(error),
-			);
+			this.message = localize({ bundle: 'ash.settings', key: 'execution.readFailed' }, 'Could not read execution settings: {0}', String(error));
 		} finally {
 			if (this.current(generation)) {
 				this.busy = false;
@@ -530,23 +427,14 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 		this.busy = true;
 		this.changed.fire();
 		try {
-			if (
-				draft.approvalMode !== snapshot.settings.approvalMode &&
-				approvalModeDefinition(draft.approvalMode).requiresConfirmation
-			) {
+			if (draft.approvalMode !== snapshot.settings.approvalMode && approvalModeDefinition(draft.approvalMode).requiresConfirmation) {
 				const result = await this.dialogs.confirm({
-					message: localize(
-						{ bundle: 'ash.settings', key: 'execution.confirmBypass' },
-						'Skip most approvals by default?',
-					),
+					message: localize({ bundle: 'ash.settings', key: 'execution.confirmBypass' }, 'Skip most approvals by default?'),
 					detail: localize(
 						{ bundle: 'ash.settings', key: 'execution.confirmBypassDetail' },
 						'New chats and workflows may change files and perform external actions without asking. Directory and network access limits still apply.',
 					),
-					primaryButton: localize(
-						{ bundle: 'ash.settings', key: 'execution.save' },
-						'Save execution defaults',
-					),
+					primaryButton: localize({ bundle: 'ash.settings', key: 'execution.save' }, 'Save execution defaults'),
 				});
 				if (!this.current(generation) || !result.confirmed) return;
 			}
@@ -583,14 +471,8 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 			if (revoke) {
 				if (entry) await workspaceTrust.forgetDirectory(entry.dir, directories.revision);
 			} else {
-				const preset =
-					this.access === 'commands'
-						? commandPermissions
-						: this.access === 'write'
-							? writePermissions
-							: readPermissions;
-				const retained =
-					entry?.permissions.filter(permission => !commandPermissions.includes(permission)) ?? [];
+				const preset = this.access === 'commands' ? commandPermissions : this.access === 'write' ? writePermissions : readPermissions;
+				const retained = entry?.permissions.filter(permission => !commandPermissions.includes(permission)) ?? [];
 				await workspaceTrust.setDirectoryPermissions(path, [...preset, ...retained], directories.revision);
 			}
 			if (this.current(generation)) {
@@ -612,10 +494,6 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 	}
 	private saveFailed(error: unknown): void {
 		this.stale = true;
-		this.message = localize(
-			{ bundle: 'ash.settings', key: 'execution.saveFailed' },
-			'Could not save settings. Refresh before trying again: {0}',
-			String(error),
-		);
+		this.message = localize({ bundle: 'ash.settings', key: 'execution.saveFailed' }, 'Could not save settings. Refresh before trying again: {0}', String(error));
 	}
 }

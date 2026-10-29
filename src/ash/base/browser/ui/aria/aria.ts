@@ -3,18 +3,7 @@ import { Disposable, MutableDisposable, type IDisposable, toDisposable } from '.
 import { scheduleAtNextAnimationFrame } from '../../scheduler.js';
 import { h } from '../../dom.js';
 
-export type AriaRole =
-	| 'alert'
-	| 'button'
-	| 'combobox'
-	| 'dialog'
-	| 'listbox'
-	| 'menu'
-	| 'menuitem'
-	| 'option'
-	| 'status'
-	| 'textbox'
-	| (string & {});
+export type AriaRole = 'alert' | 'button' | 'combobox' | 'dialog' | 'listbox' | 'menu' | 'menuitem' | 'option' | 'status' | 'textbox' | (string & {});
 
 export type AriaAutoComplete = 'none' | 'inline' | 'list' | 'both';
 export type AriaLivePriority = 'polite' | 'assertive';

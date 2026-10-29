@@ -15,9 +15,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 			let modelCalls = 0;
 			const server = createServer(async (request, response) => {
 				if (request.method === 'GET') {
-					response
-						.writeHead(200, { 'content-type': 'application/json' })
-						.end(JSON.stringify({ data: [{ id: 'request-actions-model' }] }));
+					response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: [{ id: 'request-actions-model' }] }));
 					return;
 				}
 				for await (const _chunk of request) {
@@ -76,8 +74,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 				});
 				const sessionId = created.session.sessionId;
 				const root = created.session.threads[0].threadId;
-				const read = async (threadId: string, owner = sessionId) =>
-					(await client.request(methods['session/thread/read'], { sessionId: owner, threadId })).thread;
+				const read = async (threadId: string, owner = sessionId) => (await client.request(methods['session/thread/read'], { sessionId: owner, threadId })).thread;
 				const before = await read(root);
 				await client.request(methods['session/request'], {
 					sessionId,
@@ -96,14 +93,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 					},
 				});
 				await expect.poll(async () => (await read(root)).turns.at(-1)?.status).toBe('completed');
-				await expect
-					.poll(
-						async () =>
-							(
-								await client.request(methods['turnChanges/list'], { sessionId, threadId: root })
-							).changeSets.at(-1)?.captureState,
-					)
-					.toBe('sealed');
+				await expect.poll(async () => (await client.request(methods['turnChanges/list'], { sessionId, threadId: root })).changeSets.at(-1)?.captureState).toBe('sealed');
 				if (agents) {
 					await page
 						.locator('.ash-sessions-activity-content')
@@ -112,18 +102,10 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 					await page.locator('.ash-sessions-list-item').filter({ hasText: 'Request actions source' }).click();
 				} else {
 					await window.quickaccess.runCommand('workbench.action.chat.open');
-					if (!(await page.locator('.ash-chat-sessions-sidebar').isVisible()))
-						await window.quickaccess.runCommand('agentSessions.toggleAgentSessionsSidebar');
-					await page
-						.locator('.ash-chat-sessions-sidebar .ash-agent-session-row')
-						.filter({ hasText: 'Request actions source' })
-						.click();
+					if (!(await page.locator('.ash-chat-sessions-sidebar').isVisible())) await window.quickaccess.runCommand('agentSessions.toggleAgentSessionsSidebar');
+					await page.locator('.ash-chat-sessions-sidebar .ash-agent-session-row').filter({ hasText: 'Request actions source' }).click();
 				}
-				const chat = page.locator(
-					agents
-						? `.ash-sessions-chat-slot.active:visible ${surface === 'Agents Code' ? '.ash-chat' : '.ash-cowork'}`
-						: '.ash-chat-view-pane .ash-chat:visible',
-				);
+				const chat = page.locator(agents ? `.ash-sessions-chat-slot.active:visible ${surface === 'Agents Code' ? '.ash-chat' : '.ash-cowork'}` : '.ash-chat-view-pane .ash-chat:visible');
 				const transcript = chat.locator('.ash-chat-list-widget, .ash-cowork-list-widget');
 				const composer = chat.locator('.ash-chat-input-part');
 				const draft = composer.locator('.stanza-editor-input');
@@ -169,9 +151,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 				expect((await read(peer)).turns).toEqual([]);
 				// History numbers follow the current catalog order, which may put newer chats first.
 				const catalog = (await client.request(methods['session/read'], { sessionId })).session;
-				const rootIndex = catalog.threads
-					.filter(thread => thread.status === 'active')
-					.findIndex(thread => thread.threadId === root);
+				const rootIndex = catalog.threads.filter(thread => thread.status === 'active').findIndex(thread => thread.threadId === root);
 				expect(rootIndex).toBeGreaterThanOrEqual(0);
 				await window.quickaccess.runCommand('workbench.action.chat.showHistory');
 				await page

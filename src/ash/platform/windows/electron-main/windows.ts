@@ -8,12 +8,7 @@ import type { INativeWindowTheme } from '../../native/common/nativeHost.js';
 import { WINDOW_MINIMUM_SIZE } from '../../window/common/window.js';
 import type { WorkbenchState } from '../../workspace/common/workspace.js';
 import type { TitleBarStyleConfiguration } from '../../window/common/window.js';
-import {
-	defaultWindowState,
-	WindowMode,
-	type IWindowBounds,
-	type IWindowState,
-} from '../../window/electron-main/window.js';
+import { defaultWindowState, WindowMode, type IWindowBounds, type IWindowState } from '../../window/electron-main/window.js';
 
 export interface IOpenConfiguration {
 	readonly workspace?: IWorkspaceOpenTarget;
@@ -25,9 +20,7 @@ export interface IOpenConfiguration {
 }
 
 export interface IWindowsMainService {
-	open(
-		configuration: IOpenConfiguration,
-	): Promise<{ readonly whenClosed: Promise<void>; readonly whenFilesClosed: Promise<void> }>;
+	open(configuration: IOpenConfiguration): Promise<{ readonly whenClosed: Promise<void>; readonly whenFilesClosed: Promise<void> }>;
 }
 
 export const IWindowsMainService = createServiceIdentifier<IWindowsMainService>('windowsMainService');
@@ -97,10 +90,7 @@ export function resolveBrowserWindowOptions({
 }
 
 /** Applies saved outer DIP bounds after Windows has selected the window's display. */
-export function restoreWindowBounds(
-	window: { setBounds(bounds: IWindowBounds): void; getBounds(): IWindowBounds },
-	bounds: IWindowBounds,
-): void {
+export function restoreWindowBounds(window: { setBounds(bounds: IWindowBounds): void; getBounds(): IWindowBounds }, bounds: IWindowBounds): void {
 	let requestedWidth = bounds.width;
 	let requestedHeight = bounds.height;
 	for (let attempt = 0; attempt < 4; attempt++) {
@@ -172,14 +162,9 @@ export class WindowControlsOverlay {
 		const { backgroundColor, symbolColor, backdropColor } = this.theme;
 		const backdrop = Color.fromHex(backdropColor);
 		this.apply({
-			color: this.dimmed
-				? Color.Format.CSS.formatHex(backdrop.flatten(Color.fromHex(backgroundColor)))
-				: backgroundColor,
+			color: this.dimmed ? Color.Format.CSS.formatHex(backdrop.flatten(Color.fromHex(backgroundColor))) : backgroundColor,
 			// An opaque high-contrast backdrop must not erase the window buttons.
-			symbolColor:
-				this.dimmed && !backdrop.isOpaque()
-					? Color.Format.CSS.formatHex(backdrop.flatten(Color.fromHex(symbolColor)))
-					: symbolColor,
+			symbolColor: this.dimmed && !backdrop.isOpaque() ? Color.Format.CSS.formatHex(backdrop.flatten(Color.fromHex(symbolColor))) : symbolColor,
 			height: 35,
 		});
 	}
@@ -201,26 +186,13 @@ export function applyWindowState(target: IWindowStateTarget, state: IWindowState
 }
 
 /** Validates and adjusts restored state against the displays available now. */
-export function validateWindowState(
-	state: IWindowState,
-	displays: readonly IWindowDisplay[],
-	workbenchState: WorkbenchState,
-): IWindowState | undefined {
+export function validateWindowState(state: IWindowState, displays: readonly IWindowDisplay[], workbenchState: WorkbenchState): IWindowState | undefined {
 	const { x, y, width: stateWidth, height: stateHeight } = state;
-	if (
-		!isFiniteNumber(x) ||
-		!isFiniteNumber(y) ||
-		!isFiniteNumber(stateWidth) ||
-		!isFiniteNumber(stateHeight) ||
-		stateWidth <= 0 ||
-		stateHeight <= 0
-	) {
+	if (!isFiniteNumber(x) || !isFiniteNumber(y) || !isFiniteNumber(stateWidth) || !isFiniteNumber(stateHeight) || stateWidth <= 0 || stateHeight <= 0) {
 		return undefined;
 	}
 
-	const usableDisplays = displays
-		.map(display => ({ display, area: getWorkingArea(display) }))
-		.filter((entry): entry is { display: IWindowDisplay; area: IWindowBounds } => entry.area !== undefined);
+	const usableDisplays = displays.map(display => ({ display, area: getWorkingArea(display) })).filter((entry): entry is { display: IWindowDisplay; area: IWindowBounds } => entry.area !== undefined);
 	if (usableDisplays.length === 0) {
 		return undefined;
 	}
@@ -235,10 +207,7 @@ export function validateWindowState(
 			return dx * dx + dy * dy;
 		};
 		const target =
-			usableDisplays.find(({ display }) => display.id === state.displayId) ??
-			usableDisplays.reduce((nearest, entry) =>
-				distance(entry.area) < distance(nearest.area) ? entry : nearest,
-			);
+			usableDisplays.find(({ display }) => display.id === state.displayId) ?? usableDisplays.reduce((nearest, entry) => (distance(entry.area) < distance(nearest.area) ? entry : nearest));
 		const { display, area } = target;
 		// User-requested Ash policy: restoring recorded display placement keeps the
 		// whole window in the target work area so controls and content remain reachable.
@@ -286,10 +255,7 @@ export function validateWindowState(
 		};
 	}
 
-	const intersectsCurrentDisplay = usableDisplays.some(
-		({ area }) =>
-			x + stateWidth > area.x && y + stateHeight > area.y && x < area.x + area.width && y < area.y + area.height,
-	);
+	const intersectsCurrentDisplay = usableDisplays.some(({ area }) => x + stateWidth > area.x && y + stateHeight > area.y && x < area.x + area.width && y < area.y + area.height);
 	return intersectsCurrentDisplay ? { ...state } : undefined;
 }
 

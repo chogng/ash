@@ -1,37 +1,23 @@
 import { isHTMLElement } from '../../../../../base/browser/dom.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { registerEditorPane } from '../../../../browser/editor.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import { EditorPaneMatch } from '../../../../browser/parts/editor/editorPane.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import {
-	AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID,
-	CONTEXT_AI_CUSTOMIZATION_MANAGEMENT_EDITOR,
-} from './aiCustomizationManagement.js';
+import { AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID, CONTEXT_AI_CUSTOMIZATION_MANAGEMENT_EDITOR } from './aiCustomizationManagement.js';
 import { AICustomizationManagementEditor } from './aiCustomizationManagementEditor.js';
 import { AICustomizationManagementEditorInput } from './aiCustomizationManagementEditorInput.js';
 
 registerEditorPane({
 	id: AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID,
 	name: localize('hooks.managementTitle', 'Agent Customizations: Hooks'),
-	canOpen: input =>
-		input.resource.scheme === 'ash-customizations' && input.resource.path === '/hooks'
-			? EditorPaneMatch.Default
-			: EditorPaneMatch.None,
+	canOpen: input => (input.resource.scheme === 'ash-customizations' && input.resource.path === '/hooks' ? EditorPaneMatch.Default : EditorPaneMatch.None),
 	create: options => {
 		if (!options.instantiationService) {
 			throw new Error('Hooks management requires Workbench services');

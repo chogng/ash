@@ -249,8 +249,7 @@ export class TextModelResolvedOptions {
 			this.defaultEOL === other.defaultEOL &&
 			this.trimAutoWhitespace === other.trimAutoWhitespace &&
 			this.bracketPairColorizationOptions.enabled === other.bracketPairColorizationOptions.enabled &&
-			this.bracketPairColorizationOptions.independentColorPoolPerBracketType ===
-				other.bracketPairColorizationOptions.independentColorPoolPerBracketType
+			this.bracketPairColorizationOptions.independentColorPoolPerBracketType === other.bracketPairColorizationOptions.independentColorPoolPerBracketType
 		);
 	}
 
@@ -353,18 +352,9 @@ export interface ITextBuffer extends IDisposable {
 	getLineMaxColumn(lineNumber: number): number;
 	getLineFirstNonWhitespaceColumn(lineNumber: number): number;
 	getLineLastNonWhitespaceColumn(lineNumber: number): number;
-	findMatchesLineByLine(
-		searchRange: Range,
-		searchData: SearchData,
-		captureMatches: boolean,
-		limitResultCount: number,
-	): FindMatch[];
+	findMatchesLineByLine(searchRange: Range, searchData: SearchData, captureMatches: boolean, limitResultCount: number): FindMatch[];
 	setEOL(eol: '\n' | '\r\n'): void;
-	applyEdits(
-		rawOperations: ValidAnnotatedEditOperation[],
-		recordTrimAutoWhitespace: boolean,
-		computeUndoEdits: boolean,
-	): ApplyEditsResult;
+	applyEdits(rawOperations: ValidAnnotatedEditOperation[], recordTrimAutoWhitespace: boolean, computeUndoEdits: boolean): ApplyEditsResult;
 	maintainIfNeeded(): boolean;
 	needsMaintenance(): boolean;
 	maintain(): void;
@@ -427,24 +417,9 @@ export interface ITextModel extends IDisposable {
 	removeAllDecorationsWithOwnerId(ownerId: number): void;
 	getDecorationRange(id: string): Range | null;
 	getDecorationOptions(id: string): IModelDecorationOptions | null;
-	getLineDecorations(
-		lineNumber: number,
-		ownerId?: number,
-		filterOutValidation?: boolean,
-		filterFontDecorations?: boolean,
-	): IModelDecoration[];
-	getLinesDecorations(
-		startLineNumber: number,
-		endLineNumber: number,
-		ownerId?: number,
-		filterOutValidation?: boolean,
-		filterFontDecorations?: boolean,
-	): IModelDecoration[];
-	getAllDecorations(
-		ownerId?: number,
-		filterOutValidation?: boolean,
-		filterFontDecorations?: boolean,
-	): IModelDecoration[];
+	getLineDecorations(lineNumber: number, ownerId?: number, filterOutValidation?: boolean, filterFontDecorations?: boolean): IModelDecoration[];
+	getLinesDecorations(startLineNumber: number, endLineNumber: number, ownerId?: number, filterOutValidation?: boolean, filterFontDecorations?: boolean): IModelDecoration[];
+	getAllDecorations(ownerId?: number, filterOutValidation?: boolean, filterFontDecorations?: boolean): IModelDecoration[];
 	getAllMarginDecorations(ownerId?: number): IModelDecoration[];
 	getDecorationsInRange(
 		range: IRange,
@@ -456,22 +431,14 @@ export interface ITextModel extends IDisposable {
 	): IModelDecoration[];
 	getLineInjectedText(lineNumber: number, ownerId?: number): LineInjectedText[];
 	getInjectedTextDecorations(ownerId?: number): IModelDecoration[];
-	getOverviewRulerDecorations(
-		ownerId?: number,
-		filterOutValidation?: boolean,
-		filterFontDecorations?: boolean,
-	): IModelDecoration[];
+	getOverviewRulerDecorations(ownerId?: number, filterOutValidation?: boolean, filterFontDecorations?: boolean): IModelDecoration[];
 	getFontDecorationsInRange(range: IRange, ownerId?: number): IModelDecoration[];
 	getCustomLineHeightsDecorations(ownerId?: number): IModelDecoration[];
 	getCustomLineHeightsDecorationsInRange(range: Range, ownerId?: number): IModelDecoration[];
 	pushStackElement(): void;
 	popStackElement(): void;
 	edit(edit: TextEdit, options?: { reason?: TextModelEditSource }): void;
-	pushEditOperations(
-		beforeCursorState: Selection[] | null,
-		editOperations: IIdentifiedSingleEditOperation[],
-		cursorStateComputer: ICursorStateComputer,
-	): Selection[] | null;
+	pushEditOperations(beforeCursorState: Selection[] | null, editOperations: IIdentifiedSingleEditOperation[], cursorStateComputer: ICursorStateComputer): Selection[] | null;
 	pushEditOperations(
 		beforeCursorState: Selection[] | null,
 		editOperations: IIdentifiedSingleEditOperation[],
@@ -483,18 +450,8 @@ export interface ITextModel extends IDisposable {
 	applyEdits(operations: readonly IIdentifiedSingleEditOperation[], reason: TextModelEditSource): void;
 	applyEdits(operations: readonly IIdentifiedSingleEditOperation[], computeUndoEdits: false): void;
 	applyEdits(operations: readonly IIdentifiedSingleEditOperation[], computeUndoEdits: true): IValidEditOperation[];
-	_applyUndo(
-		changes: TextChange[],
-		eol: EndOfLineSequence,
-		resultingAlternativeVersionId: number,
-		resultingSelection: Selection[] | null,
-	): void;
-	_applyRedo(
-		changes: TextChange[],
-		eol: EndOfLineSequence,
-		resultingAlternativeVersionId: number,
-		resultingSelection: Selection[] | null,
-	): void;
+	_applyUndo(changes: TextChange[], eol: EndOfLineSequence, resultingAlternativeVersionId: number, resultingSelection: Selection[] | null): void;
+	_applyRedo(changes: TextChange[], eol: EndOfLineSequence, resultingAlternativeVersionId: number, resultingSelection: Selection[] | null): void;
 	mightContainRTL(): boolean;
 	mightContainUnusualLineTerminators(): boolean;
 	removeUnusualLineTerminators(selections?: Selection[]): void;
@@ -521,22 +478,8 @@ export interface ITextModel extends IDisposable {
 		captureMatches: boolean,
 		limitResultCount?: number,
 	): FindMatch[];
-	findNextMatch(
-		searchString: string,
-		searchStart: IPosition,
-		isRegex: boolean,
-		matchCase: boolean,
-		wordSeparators: string | null,
-		captureMatches: boolean,
-	): FindMatch | null;
-	findPreviousMatch(
-		searchString: string,
-		searchStart: IPosition,
-		isRegex: boolean,
-		matchCase: boolean,
-		wordSeparators: string | null,
-		captureMatches: boolean,
-	): FindMatch | null;
+	findNextMatch(searchString: string, searchStart: IPosition, isRegex: boolean, matchCase: boolean, wordSeparators: string | null, captureMatches: boolean): FindMatch | null;
+	findPreviousMatch(searchString: string, searchStart: IPosition, isRegex: boolean, matchCase: boolean, wordSeparators: string | null, captureMatches: boolean): FindMatch | null;
 	getLanguageId(): string;
 	setLanguage(languageId: string | ILanguageSelection, source?: string): void;
 	getWordAtPosition(position: IPosition): IWordAtPosition | null;

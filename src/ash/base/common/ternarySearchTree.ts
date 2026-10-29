@@ -15,10 +15,7 @@ export class TernarySearchTree<K, V> {
 
 	private constructor(private readonly segmentsFor: (key: K) => readonly string[]) {}
 
-	static forUris<E>(
-		ignorePathCasing: (key: URI) => boolean = () => false,
-		ignoreQueryAndFragment: (key: URI) => boolean = () => false,
-	): TernarySearchTree<URI, E> {
+	static forUris<E>(ignorePathCasing: (key: URI) => boolean = () => false, ignoreQueryAndFragment: (key: URI) => boolean = () => false): TernarySearchTree<URI, E> {
 		return new TernarySearchTree(resource => {
 			const encoded = resource.toEncodedComponents();
 			const path = encoded.path.replace(/\/+$/u, '');
@@ -27,12 +24,7 @@ export class TernarySearchTree<K, V> {
 			const ignoreCase = ignorePathCasing(resource);
 			if (path) {
 				for (const segment of (absolute ? path.slice(1) : path).split('/')) {
-					segments.push(
-						'/' +
-							(ignoreCase
-								? encodeURIComponent(decodeURIComponent(segment).toLowerCase())
-								: normalizeEncoding(segment)),
-					);
+					segments.push('/' + (ignoreCase ? encodeURIComponent(decodeURIComponent(segment).toLowerCase()) : normalizeEncoding(segment)));
 				}
 			}
 			if (!ignoreQueryAndFragment(resource)) {

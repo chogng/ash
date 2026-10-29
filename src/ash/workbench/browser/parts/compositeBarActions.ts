@@ -21,10 +21,7 @@ export interface IActivityHoverOptions {
 }
 
 /** Window hosts supply their own placement; both products share the inward-facing direction rule. */
-export function getActivityHoverPosition(
-	location: ActivityBarPosition,
-	sideBarLocation: SideBarLocation,
-): HoverPosition {
+export function getActivityHoverPosition(location: ActivityBarPosition, sideBarLocation: SideBarLocation): HoverPosition {
 	switch (location) {
 		case ActivityBarPosition.TOP:
 			return HoverPosition.BELOW;
@@ -175,20 +172,17 @@ export class CompositeActionViewItem extends ActionViewItem {
 		this._register(this.compositeAction.onDidChange(updateSelection));
 		container.id = options.tabId;
 		container.setAttribute('role', 'tab');
-		container.setAttribute(
-			'aria-label',
-			options.badge ? `${options.label}, ${options.badge.description}` : options.label,
-		);
+		container.setAttribute('aria-label', options.badge ? `${options.label}, ${options.badge.description}` : options.label);
 		if (options.panelId) container.setAttribute('aria-controls', options.panelId);
-		this.setupDelayedHover(
-			container,
-			options.badge
-				? `${this.compositeAction.tooltip}, ${options.badge.description}`
-				: this.compositeAction.tooltip,
-		);
+		this.setupDelayedHover(container, options.badge ? `${this.compositeAction.tooltip}, ${options.badge.description}` : this.compositeAction.tooltip);
 		const action = h(container.ownerDocument, 'span');
 		action.className = 'ash-composite-bar-action';
-		const label = this._register(new IconLabel(action, { label: options.label, icon: options.icon }));
+		const label = this._register(
+			new IconLabel(action, {
+				label: options.label,
+				icon: options.icon,
+			}),
+		);
 		container.append(action);
 		// A separate layer keeps focus above badges even when the icon has its own stacking context.
 		const focusRing = h(container.ownerDocument, 'span');
@@ -197,10 +191,17 @@ export class CompositeActionViewItem extends ActionViewItem {
 		container.append(focusRing);
 		if (options.badge && options.badgeEnabled && options.badge.count > 0) {
 			const count = options.badge.count;
-			const countFormat =
-				count >= 1000 ? `${Math.trunc(count / 1000)}K${count % 1000 === 0 ? '' : '+'}` : undefined;
+			const countFormat = count >= 1000 ? `${Math.trunc(count / 1000)}K${count % 1000 === 0 ? '' : '+'}` : undefined;
 			const badge = this._register(
-				new CountBadge(container, { count, countFormat, size: 'small' }, defaultCountBadgeStyles),
+				new CountBadge(
+					container,
+					{
+						count,
+						countFormat,
+						size: 'small',
+					},
+					defaultCountBadgeStyles,
+				),
 			);
 			badge.domNode.classList.add('ash-composite-bar-badge');
 			badge.domNode.classList.toggle('long-count', (countFormat ?? String(count)).length >= 3);
@@ -273,7 +274,12 @@ export class CompositeOverflowActivityActionViewItem extends ActionViewItem {
 		this.setupDelayedHover(container, this.action.tooltip);
 		const action = h(container.ownerDocument, 'span');
 		action.className = 'ash-composite-bar-action';
-		const label = this._register(new IconLabel(action, { label: this.action.label, icon: this.action.icon }));
+		const label = this._register(
+			new IconLabel(action, {
+				label: this.action.label,
+				icon: this.action.icon,
+			}),
+		);
 		container.append(action);
 		this._register(
 			addDisposableListener(container, 'click', event => {
@@ -284,8 +290,7 @@ export class CompositeOverflowActivityActionViewItem extends ActionViewItem {
 		);
 		this._register(
 			addDisposableListener(container, 'keydown', event => {
-				if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'ArrowDown' && event.key !== 'ArrowUp')
-					return;
+				if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
 				event.preventDefault();
 				event.stopPropagation();
 				this.show();

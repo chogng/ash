@@ -1,16 +1,8 @@
 import { getActiveElement } from '../../../../base/browser/dom.js';
 import { localize, localize2 } from '../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -31,27 +23,25 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 registerSingleton(IProjectsService, ProjectsService, InstantiationType.Delayed);
 
 CommandsRegistry.register('sessions.show.projects', (accessor, source) =>
-	accessor
-		.get(ISessionsLayoutService)
-		.openEntry(
-			{
-				id: 'projects',
-				activityContext: 'sessions.activity.projectsSelected',
-				content: 'editor',
-				showEditorTabs: false,
-				restoreCommand: 'sessions.show.projects',
-				focus: 'editor',
-				editorInput: {
-					resource: URI.from({ scheme: 'ash-projects', path: '/page' }),
-					label: localize('projects.title', 'Projects'),
-					showBreadcrumbs: false,
-					readOnly: true,
-					capabilities: EditorInputCapabilities.CannotClose,
-				},
+	accessor.get(ISessionsLayoutService).openEntry(
+		{
+			id: 'projects',
+			activityContext: 'sessions.activity.projectsSelected',
+			content: 'editor',
+			showEditorTabs: false,
+			restoreCommand: 'sessions.show.projects',
+			focus: 'editor',
+			editorInput: {
+				resource: URI.from({ scheme: 'ash-projects', path: '/page' }),
+				label: localize('projects.title', 'Projects'),
+				showBreadcrumbs: false,
+				readOnly: true,
+				capabilities: EditorInputCapabilities.CannotClose,
 			},
-			undefined,
-			source === 'restore' ? { source } : undefined,
-		),
+		},
+		undefined,
+		source === 'restore' ? { source } : undefined,
+	),
 );
 
 registerEditorPane({
@@ -74,8 +64,7 @@ registerAction2(
 		}
 		public override async run(accessor: ServicesAccessor, projectId?: unknown): Promise<void> {
 			if (projectId !== undefined) {
-				if (typeof projectId !== 'string' || !projectId.trim())
-					throw new TypeError(localize('projects.invalidId', 'Choose a valid project.'));
+				if (typeof projectId !== 'string' || !projectId.trim()) throw new TypeError(localize('projects.invalidId', 'Choose a valid project.'));
 				await accessor.get(IProjectsService).openProject(projectId);
 			}
 			await accessor.get(ICommandService).executeCommand('sessions.show.projects');
@@ -88,19 +77,14 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	defaultValue: true,
 	parse(value: unknown): boolean {
 		if (typeof value !== 'boolean') {
-			throw new TypeError(
-				localize('projects.verbosityInvalid', 'Projects accessibility verbosity must be boolean'),
-			);
+			throw new TypeError(localize('projects.verbosityInvalid', 'Projects accessibility verbosity must be boolean'));
 		}
 		return value;
 	},
 	setting: {
 		valueType: 'boolean',
 		title: localize('projects.verbosityTitle', 'Projects accessibility help'),
-		description: localize(
-			'projects.verbosityDescription',
-			'Announce how to open accessibility help when Projects receives focus.',
-		),
+		description: localize('projects.verbosityDescription', 'Announce how to open accessibility help when Projects receives focus.'),
 	},
 });
 

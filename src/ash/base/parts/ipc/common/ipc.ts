@@ -2,13 +2,7 @@ import { VSBuffer, decodeBase64, encodeBase64 } from '../../../common/buffer.js'
 import { CancellationToken, CancellationTokenSource } from '../../../common/cancellation.js';
 import { CancellationError, onUnexpectedError } from '../../../common/errors.js';
 import { Emitter, Event } from '../../../common/event.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	toDisposable,
-	type IDisposable,
-} from '../../../common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../common/lifecycle.js';
 import { isRecord } from '../../../common/types.js';
 
 export interface IChannel {
@@ -111,12 +105,7 @@ function decode(buffer: VSBuffer): Packet {
 		throw new TypeError('Invalid IPC packet');
 	}
 	if (value.format !== undefined) {
-		if (
-			value.type !== 'result' ||
-			value.format !== 'buffer' ||
-			typeof value.data !== 'string' ||
-			value.data.length > 24 * 1024 * 1024
-		) {
+		if (value.type !== 'result' || value.format !== 'buffer' || typeof value.data !== 'string' || value.data.length > 24 * 1024 * 1024) {
 			throw new TypeError('Invalid IPC buffer');
 		}
 		value.data = decodeBase64(value.data);
@@ -140,11 +129,7 @@ function decode(buffer: VSBuffer): Packet {
 		case 'unsubscribe':
 			break;
 		case 'error':
-			if (
-				!isRecord(value.error) ||
-				typeof value.error.name !== 'string' ||
-				typeof value.error.message !== 'string'
-			) {
+			if (!isRecord(value.error) || typeof value.error.name !== 'string' || typeof value.error.message !== 'string') {
 				throw new TypeError('Invalid IPC error');
 			}
 			break;
@@ -195,8 +180,7 @@ export class IPCClient<TContext = string> extends Disposable implements IChannel
 	public getChannel<T extends IChannel>(channelName: string): T {
 		this.assertNotDisposed();
 		return {
-			call: <R>(command: string, arg?: unknown, token = CancellationToken.None) =>
-				this.call<R>(channelName, command, arg, token),
+			call: <R>(command: string, arg?: unknown, token = CancellationToken.None) => this.call<R>(channelName, command, arg, token),
 			listen: <R>(event: string, arg?: unknown) => this.listen<R>(channelName, event, arg),
 		} as T;
 	}
@@ -296,10 +280,7 @@ export class IPCClient<TContext = string> extends Disposable implements IChannel
 				this.finish(packet.id, packet.data, false);
 				return;
 			case 'error': {
-				const error =
-					packet.error.name === 'CancellationError'
-						? new CancellationError()
-						: new Error(packet.error.message);
+				const error = packet.error.name === 'CancellationError' ? new CancellationError() : new Error(packet.error.message);
 				error.name = packet.error.name;
 				const listener = this.listeners.get(packet.id);
 				if (listener) {
@@ -365,11 +346,7 @@ export class IPCClient<TContext = string> extends Disposable implements IChannel
 			if (!channel) {
 				throw new Error(`Unknown IPC channel '${packet.channel}'`);
 			}
-			const subscription = channel.listen(
-				this.context,
-				packet.name,
-				packet.arg,
-			)(data => this.send({ type: 'event', id: packet.id, data }));
+			const subscription = channel.listen(this.context, packet.name, packet.arg)(data => this.send({ type: 'event', id: packet.id, data }));
 			if (this.isDisposed) {
 				subscription.dispose();
 			} else {
@@ -437,10 +414,7 @@ export interface ClientConnectionEvent<TContext = string> extends Client<TContex
 /** Shared channel registrations survive individual renderer connections. */
 export class IPCServer<TContext = string> extends Disposable implements IChannelServer<TContext> {
 	private readonly channels = new Map<string, IServerChannel<TContext>>();
-	private readonly clients = new Map<
-		ClientConnectionEvent<TContext>,
-		{ peer: IPCClient<TContext>; resources: DisposableStore }
-	>();
+	private readonly clients = new Map<ClientConnectionEvent<TContext>, { peer: IPCClient<TContext>; resources: DisposableStore }>();
 	private readonly connectionsChanged = this._register(new Emitter<void>());
 
 	constructor(onDidClientConnect: Event<ClientConnectionEvent<TContext>>) {
@@ -490,9 +464,7 @@ export class IPCServer<TContext = string> extends Disposable implements IChannel
 				(listener, thisArgs, disposables) => {
 					this.assertNotDisposed();
 					const resources = new DisposableStore();
-					const subscriptions = resources.add(
-						new DisposableMap<ClientConnectionEvent<TContext>, IDisposable>(),
-					);
+					const subscriptions = resources.add(new DisposableMap<ClientConnectionEvent<TContext>, IDisposable>());
 					const update = (): void => {
 						for (const connection of subscriptions.keys()) {
 							if (!this.clients.has(connection) || !clientFilter(connection)) {
@@ -503,9 +475,7 @@ export class IPCServer<TContext = string> extends Disposable implements IChannel
 							if (clientFilter(connection) && !subscriptions.has(connection)) {
 								subscriptions.set(
 									connection,
-									peer.getChannel(channelName).listen<R>(event, arg)(value =>
-										listener.call(thisArgs, value),
-									),
+									peer.getChannel(channelName).listen<R>(event, arg)(value => listener.call(thisArgs, value)),
 								);
 							}
 						}

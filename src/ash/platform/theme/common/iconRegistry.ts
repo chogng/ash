@@ -56,11 +56,7 @@ class IconRegistry extends Disposable implements IIconRegistry {
 	public getFonts(): readonly IconFontDefinition[] {
 		return [...this.groups.values()].flatMap(group => group.fonts);
 	}
-	public replaceIcons(
-		owner: symbol,
-		contributions: readonly IconContribution[],
-		fonts: readonly IconFontDefinition[],
-	): void {
+	public replaceIcons(owner: symbol, contributions: readonly IconContribution[], fonts: readonly IconFontDefinition[]): void {
 		const previous = this.groups.get(owner)?.ids ?? [];
 		if (!previous.length && !contributions.length) {
 			return;
@@ -118,15 +114,11 @@ export function getIconRegistry(): IIconRegistry {
 }
 
 /** Resolves product theme glyphs before following a semantic icon's default chain. */
-export function getIconDefinition(
-	icon: Icon,
-	themedDefinitions?: ReadonlyMap<string, IconDefinition>,
-): IconDefinition | undefined {
+export function getIconDefinition(icon: Icon, themedDefinitions?: ReadonlyMap<string, IconDefinition>): IconDefinition | undefined {
 	const visited = new Set<string>();
 	let current = icon;
 	while (true) {
-		if (visited.has(current.id))
-			throw new Error(`Circular icon defaults: ${[...visited, current.id].join(' -> ')}`);
+		if (visited.has(current.id)) throw new Error(`Circular icon defaults: ${[...visited, current.id].join(' -> ')}`);
 		visited.add(current.id);
 		const contribution = registry.getIcon(current.id);
 		if (!contribution) return undefined;
@@ -137,10 +129,7 @@ export function getIconDefinition(
 	}
 }
 
-export function resolveIconDefinition(
-	icon: Icon,
-	themedDefinitions?: ReadonlyMap<string, IconDefinition>,
-): IconDefinition {
+export function resolveIconDefinition(icon: Icon, themedDefinitions?: ReadonlyMap<string, IconDefinition>): IconDefinition {
 	const definition = getIconDefinition(icon, themedDefinitions);
 	if (!definition) throw new ReferenceError(`Unknown icon '${icon.id}'`);
 	return definition;

@@ -2,11 +2,7 @@ import { DeferredPromise } from '../../../base/common/async.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../configuration/common/configuration.js';
-import {
-	METERED_CONNECTION_SETTING_KEY,
-	type IMeteredConnectionService,
-	type MeteredConnectionSettingValue,
-} from '../common/meteredConnection.js';
+import { METERED_CONNECTION_SETTING_KEY, type IMeteredConnectionService, type MeteredConnectionSettingValue } from '../common/meteredConnection.js';
 
 /** Owns one effective network state for every Desktop window and the updater. */
 export class MeteredConnectionMainService extends Disposable implements IMeteredConnectionService {
@@ -46,8 +42,7 @@ export class MeteredConnectionMainService extends Disposable implements IMetered
 		try {
 			const configured = this.configuration.getValue(METERED_CONNECTION_SETTING_KEY);
 			const value = configured === undefined ? 'auto' : configured;
-			if (value !== 'auto' && value !== 'on' && value !== 'off')
-				throw new TypeError('Invalid metered connection setting');
+			if (value !== 'auto' && value !== 'on' && value !== 'off') throw new TypeError('Invalid metered connection setting');
 			const previous = this.isConnectionMetered;
 			this.setting = value;
 			if (previous !== this.isConnectionMetered) this.changes.fire(this.isConnectionMetered);

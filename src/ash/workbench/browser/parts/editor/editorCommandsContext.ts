@@ -19,10 +19,7 @@ export interface IResolvedEditorCommandsContext {
 }
 
 /** Resolves explicit editor command arguments against the currently open groups. */
-export function resolveCommandsContext(
-	commandArgs: readonly unknown[],
-	editorGroups: IEditorGroupsService,
-): IResolvedEditorCommandsContext {
+export function resolveCommandsContext(commandArgs: readonly unknown[], editorGroups: IEditorGroupsService): IResolvedEditorCommandsContext {
 	const grouped = new Map<IEditorGroup, IResourceEditorInput[]>();
 	let preserveFocus = false;
 	let args = commandArgs;
@@ -30,9 +27,7 @@ export function resolveCommandsContext(
 		// Keyboard navigation can focus an inactive tab; the command belongs to that tab.
 		const tab = getActiveDocument().activeElement?.closest<HTMLElement>('.ash-editor-tabs-control .ash-tab');
 		const focused = tab?.dataset.actionId;
-		const group =
-			editorGroups.groups.find(candidate => candidate.editors.some(editor => editor.instanceId === focused)) ??
-			editorGroups.activeGroup;
+		const group = editorGroups.groups.find(candidate => candidate.editors.some(editor => editor.instanceId === focused)) ?? editorGroups.activeGroup;
 		const editorIndex = focused ? group.editors.findIndex(editor => editor.instanceId === focused) : undefined;
 		args = [{ groupId: group.id, ...(editorIndex === undefined ? {} : { editorIndex }) }];
 	}
@@ -43,11 +38,7 @@ export function resolveCommandsContext(
 		}
 		preserveFocus ||= target.preserveFocus;
 		const editors = grouped.get(target.group) ?? [];
-		const selected = target.editor
-			? target.group.selectedInputs.includes(target.editor)
-				? target.group.selectedInputs
-				: [target.editor]
-			: [];
+		const selected = target.editor ? (target.group.selectedInputs.includes(target.editor) ? target.group.selectedInputs : [target.editor]) : [];
 		for (const editor of selected) {
 			if (!editors.some(candidate => extUri.isEqual(candidate.resource, editor.resource))) {
 				editors.push(editor);
@@ -55,13 +46,13 @@ export function resolveCommandsContext(
 		}
 		grouped.set(target.group, editors);
 	}
-	return { groupedEditors: [...grouped].map(([group, editors]) => ({ group, editors })), preserveFocus };
+	return {
+		groupedEditors: [...grouped].map(([group, editors]) => ({ group, editors })),
+		preserveFocus,
+	};
 }
 
-function resolveTarget(
-	argument: unknown,
-	editorGroups: IEditorGroupsService,
-): { group: IEditorGroup; editor: IResourceEditorInput | undefined; preserveFocus: boolean } | undefined {
+function resolveTarget(argument: unknown, editorGroups: IEditorGroupsService): { group: IEditorGroup; editor: IResourceEditorInput | undefined; preserveFocus: boolean } | undefined {
 	if (argument instanceof URI) {
 		for (const group of editorGroups.groups) {
 			const editor = group.inputs.find(input => extUri.isEqual(input.resource, argument));

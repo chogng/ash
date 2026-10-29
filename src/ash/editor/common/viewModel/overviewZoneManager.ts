@@ -192,10 +192,7 @@ export class OverviewZoneManager {
 			}
 
 			const offset1 = this._getVerticalOffsetForLine(zone.startLineNumber);
-			const offset2 =
-				zone.heightInLines === 0
-					? this._getVerticalOffsetForLine(zone.endLineNumber) + lineHeight
-					: offset1 + zone.heightInLines * lineHeight;
+			const offset2 = zone.heightInLines === 0 ? this._getVerticalOffsetForLine(zone.endLineNumber) + lineHeight : offset1 + zone.heightInLines * lineHeight;
 
 			const y1 = Math.floor(heightRatio * offset1);
 			const y2 = Math.floor(heightRatio * offset2);

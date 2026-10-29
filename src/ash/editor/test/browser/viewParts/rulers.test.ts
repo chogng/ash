@@ -5,11 +5,7 @@ import { darkColorTheme, lightColorTheme } from '../../../../platform/theme/comm
 import { EditorTheme } from '../../../common/editorTheme.js';
 import { EditorOption, type IRulerOption } from '../../../common/config/editorOptions.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
-import {
-	type ViewConfigurationChangedEvent,
-	type ViewScrollChangedEvent,
-	type ViewThemeChangedEvent,
-} from '../../../common/viewEvents.js';
+import { type ViewConfigurationChangedEvent, type ViewScrollChangedEvent, type ViewThemeChangedEvent } from '../../../common/viewEvents.js';
 import { type IObjectCollectionBufferEntry } from '../../../browser/gpu/objectCollectionBuffer.js';
 import { type RectangleRendererEntrySpec } from '../../../browser/gpu/rectangleRenderer.js';
 import { type ViewGpuContext } from '../../../browser/gpu/viewGpuContext.js';
@@ -75,10 +71,7 @@ test('Rulers reads canonical configuration and reuses DOM nodes', () => {
 	assert.strictEqual(rulers.domNode.domNode.querySelector('.stanza-editor-ruler'), initial[0]);
 	assert.equal((initial[0] as HTMLElement).style.height, '1000000px');
 	assert.equal(rulers.onConfigurationChanged(configurationChange(EditorOption.lineHeight)), false);
-	assert.equal(
-		rulers.onScrollChanged({ scrollHeightChanged: true, scrollWidthChanged: false } as ViewScrollChangedEvent),
-		true,
-	);
+	assert.equal(rulers.onScrollChanged({ scrollHeightChanged: true, scrollWidthChanged: false } as ViewScrollChangedEvent), true);
 
 	rulers.dispose();
 	assert.equal(dom.window.document.querySelector('main')!.children.length, 0);
@@ -169,10 +162,7 @@ function propertyIndex(name: RectangleRendererEntrySpec[number]['name']): number
 	return ['x', 'y', 'width', 'height', 'red', 'green', 'blue', 'alpha'].indexOf(name);
 }
 
-function configurationState(
-	rulers: readonly IRulerOption[],
-	typicalHalfwidthCharacterWidth: number,
-): { rulers: readonly IRulerOption[]; typicalHalfwidthCharacterWidth: number } {
+function configurationState(rulers: readonly IRulerOption[], typicalHalfwidthCharacterWidth: number): { rulers: readonly IRulerOption[]; typicalHalfwidthCharacterWidth: number } {
 	return { rulers, typicalHalfwidthCharacterWidth };
 }
 
@@ -182,8 +172,7 @@ function testViewContext(state: ReturnType<typeof configurationState>): ViewCont
 			options: {
 				get(option: EditorOption) {
 					if (option === EditorOption.rulers) return state.rulers;
-					if (option === EditorOption.fontInfo)
-						return { typicalHalfwidthCharacterWidth: state.typicalHalfwidthCharacterWidth };
+					if (option === EditorOption.fontInfo) return { typicalHalfwidthCharacterWidth: state.typicalHalfwidthCharacterWidth };
 					throw new RangeError(`Unexpected editor option: ${option}`);
 				},
 			},

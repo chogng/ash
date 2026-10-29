@@ -24,20 +24,14 @@ test('reactive DOM updates class, state, style, and nested children', () => {
 	const live = view.toLiveElement();
 
 	assert.equal(live.element.ownerDocument, ownerDocument);
-	assert.equal(
-		live.element.outerHTML,
-		'<div class="root" aria-expanded="false" hidden="" data-state="idle" style="width: 10px; background-color: red;"><span class="label">Before</span></div>',
-	);
+	assert.equal(live.element.outerHTML, '<div class="root" aria-expanded="false" hidden="" data-state="idle" style="width: 10px; background-color: red;"><span class="label">Before</span></div>');
 
 	active.set(true);
 	label.set('After');
 	width.set('20px');
 	backgroundColor.set('blue');
 
-	assert.equal(
-		live.element.outerHTML,
-		'<div class="root active" aria-expanded="true" data-state="active" style="width: 20px; background-color: blue;"><span class="label">After</span></div>',
-	);
+	assert.equal(live.element.outerHTML, '<div class="root active" aria-expanded="true" data-state="active" style="width: 20px; background-color: blue;"><span class="label">After</span></div>');
 	live.dispose();
 	label.set('Ignored');
 	assert.equal(live.element.textContent, 'After');
@@ -63,7 +57,14 @@ test('reactive DOM projects and removes SVG dataset values', () => {
 	const ownerDocument = new JSDOM('<!doctype html><body></body>').window.document;
 	const n = createReactiveDom(ownerDocument);
 	const state = observableValue<string | undefined>('state', 'ready');
-	const live = n.svg({ dataset: { state } }, n.svgElem('path', { attributes: { d: 'M0 0h16v16z' } })).toLiveElement();
+	const live = n
+		.svg(
+			{
+				dataset: { state },
+			},
+			n.svgElem('path', { attributes: { d: 'M0 0h16v16z' } }),
+		)
+		.toLiveElement();
 
 	assert.equal(live.element.outerHTML, '<svg data-state="ready"><path d="M0 0h16v16z"></path></svg>');
 	state.set(undefined);

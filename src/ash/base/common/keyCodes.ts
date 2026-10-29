@@ -447,31 +447,15 @@ for (let scanCode = ScanCode.None; scanCode < ScanCode.MaxValue; scanCode += 1) 
 /** Legacy DOM keyCode to logical key identity, retained for Electron/browser edge cases. */
 export const EVENT_KEY_CODE_MAP: KeyCode[] = new Array<KeyCode>(230).fill(KeyCode.Unknown);
 /** Native Windows virtual-key name to logical key identity. */
-export const NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE: Readonly<Record<string, KeyCode>> = Object.create(null) as Record<
-	string,
-	KeyCode
->;
+export const NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE: Readonly<Record<string, KeyCode>> = Object.create(null) as Record<string, KeyCode>;
 /** W3C code name to its legacy DOM keyCode when one exists. */
-export const SCAN_CODE_STR_TO_EVENT_KEY_CODE: Readonly<Record<string, number>> = Object.create(null) as Record<
-	string,
-	number
->;
+export const SCAN_CODE_STR_TO_EVENT_KEY_CODE: Readonly<Record<string, number>> = Object.create(null) as Record<string, number>;
 /** Layout-independent physical-to-logical mappings; other entries remain layout-dependent. */
-export const IMMUTABLE_CODE_TO_KEY_CODE: KeyCode[] = new Array<KeyCode>(ScanCode.MaxValue + 1).fill(
-	KeyCode.DependsOnKeyboardLayout,
-);
+export const IMMUTABLE_CODE_TO_KEY_CODE: KeyCode[] = new Array<KeyCode>(ScanCode.MaxValue + 1).fill(KeyCode.DependsOnKeyboardLayout);
 /** Layout-independent logical-to-physical mappings; other entries remain layout-dependent. */
-export const IMMUTABLE_KEY_CODE_TO_CODE: ScanCode[] = new Array<ScanCode>(KeyCode.MaxValue + 1).fill(
-	ScanCode.DependsOnKeyboardLayout,
-);
+export const IMMUTABLE_KEY_CODE_TO_CODE: ScanCode[] = new Array<ScanCode>(KeyCode.MaxValue + 1).fill(ScanCode.DependsOnKeyboardLayout);
 
-function registerKeyIdentity(
-	scanCode: ScanCode,
-	keyCode: KeyCode,
-	eventKeyCode: number,
-	vkey: string,
-	immutable: boolean,
-): void {
+function registerKeyIdentity(scanCode: ScanCode, keyCode: KeyCode, eventKeyCode: number, vkey: string, immutable: boolean): void {
 	const scanCodeName = scanCodeStrings[scanCode];
 	if (eventKeyCode > 0) {
 		EVENT_KEY_CODE_MAP[eventKeyCode] = keyCode;
@@ -492,13 +476,7 @@ function registerKeyIdentity(
 }
 
 for (let index = 0; index < 26; index += 1) {
-	registerKeyIdentity(
-		ScanCode.KeyA + index,
-		KeyCode.KeyA + index,
-		65 + index,
-		`VK_${String.fromCharCode(65 + index)}`,
-		false,
-	);
+	registerKeyIdentity(ScanCode.KeyA + index, KeyCode.KeyA + index, 65 + index, `VK_${String.fromCharCode(65 + index)}`, false);
 }
 for (let digit = 0; digit <= 9; digit += 1) {
 	const scanCode = digit === 0 ? ScanCode.Digit0 : ScanCode.Digit1 + digit - 1;

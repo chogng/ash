@@ -10,9 +10,7 @@ export interface HomeOptions {
 /** Node startup adapter for the path contract owned by crates/utils/home-dir. */
 export function resolveHome(options: HomeOptions = { environment: process.env, userHome: homedir() }): string {
 	if (options.environment.ASH_PROFILE_ROOT !== undefined) {
-		throw new Error(
-			'ASH_PROFILE_ROOT has been replaced by ASH_HOME; remove ASH_PROFILE_ROOT and set ASH_HOME to the same absolute directory to retain your data',
-		);
+		throw new Error('ASH_PROFILE_ROOT has been replaced by ASH_HOME; remove ASH_PROFILE_ROOT and set ASH_HOME to the same absolute directory to retain your data');
 	}
 	const configured = options.environment.ASH_HOME;
 	if (configured === undefined && (!options.userHome || !isAbsoluteDirectory(options.userHome))) {

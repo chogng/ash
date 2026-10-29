@@ -27,12 +27,9 @@ export enum RecommendationsNotificationResult {
 export interface IExtensionRecommendationNotificationService {
 	readonly ignoredRecommendations: readonly string[];
 	hasToIgnoreRecommendationNotifications(): boolean;
-	promptImportantExtensionsInstallNotification(
-		recommendations: IExtensionRecommendations,
-	): Promise<RecommendationsNotificationResult>;
+	promptImportantExtensionsInstallNotification(recommendations: IExtensionRecommendations): Promise<RecommendationsNotificationResult>;
 	promptWorkspaceRecommendations(recommendations: readonly string[], signal?: AbortSignal): Promise<void>;
 	resetIgnoredRecommendations(): void;
 }
 
-export const IExtensionRecommendationNotificationService =
-	createServiceIdentifier<IExtensionRecommendationNotificationService>('extensionRecommendationNotificationService');
+export const IExtensionRecommendationNotificationService = createServiceIdentifier<IExtensionRecommendationNotificationService>('extensionRecommendationNotificationService');

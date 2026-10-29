@@ -50,16 +50,11 @@ export class BrowserZoomService extends Disposable implements IBrowserZoomServic
 	}
 	private get defaultIndex(): number {
 		const label = this.configuration.getValue<string>('workbench.browser.pageZoom');
-		return label === MATCH_WINDOW_ZOOM_LABEL
-			? this.windowZoomIndex
-			: browserZoomFactors.findIndex(factor => `${Math.round(factor * 100)}%` === label);
+		return label === MATCH_WINDOW_ZOOM_LABEL ? this.windowZoomIndex : browserZoomFactors.findIndex(factor => `${Math.round(factor * 100)}%` === label);
 	}
 	public notifyWindowZoomChanged(windowZoomFactor: number): void {
 		const index = browserZoomFactors.reduce<number>(
-			(best, factor, candidate) =>
-				Math.abs(factor - windowZoomFactor) < Math.abs(browserZoomFactors[best]! - windowZoomFactor)
-					? candidate
-					: best,
+			(best, factor, candidate) => (Math.abs(factor - windowZoomFactor) < Math.abs(browserZoomFactors[best]! - windowZoomFactor) ? candidate : best),
 			browserZoomDefaultIndex,
 		);
 		if (index === this.windowZoomIndex) {
@@ -76,13 +71,7 @@ export class BrowserZoomService extends Disposable implements IBrowserZoomServic
 			return {};
 		}
 		const parsed: unknown = JSON.parse(raw);
-		if (
-			!isRecord(parsed) ||
-			Object.values(parsed).some(
-				value =>
-					!Number.isInteger(value) || (value as number) < 0 || (value as number) >= browserZoomFactors.length,
-			)
-		) {
+		if (!isRecord(parsed) || Object.values(parsed).some(value => !Number.isInteger(value) || (value as number) < 0 || (value as number) >= browserZoomFactors.length)) {
 			throw new TypeError('Invalid browser zoom preferences');
 		}
 		return parsed as Record<string, number>;

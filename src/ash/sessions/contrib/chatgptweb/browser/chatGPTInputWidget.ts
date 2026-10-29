@@ -82,8 +82,7 @@ export class ChatGPTInputWidget extends Disposable {
 		picker.hidden = true;
 		this.attachButton = h(container.ownerDocument, 'button');
 		this.attachButton.type = 'button';
-		this.attachButton.className =
-			'ash-button ash-button-standard ash-button-quiet ash-chatgpt-add ash-chat-input-capsule-button';
+		this.attachButton.className = 'ash-button ash-button-standard ash-button-quiet ash-chatgpt-add ash-chat-input-capsule-button';
 		const attachLabel = localize('sessions.chatgpt.attachFiles', 'Attach files');
 		this.attachButton.setAttribute('aria-label', attachLabel);
 		this.attachButton.title = attachLabel;
@@ -108,10 +107,7 @@ export class ChatGPTInputWidget extends Disposable {
 		);
 		this._register(
 			addDisposableListener(this.element, 'dragover', event => {
-				if (
-					!this.attachButton.disabled &&
-					[...(event.dataTransfer?.items ?? [])].some(item => item.kind === 'file')
-				) {
+				if (!this.attachButton.disabled && [...(event.dataTransfer?.items ?? [])].some(item => item.kind === 'file')) {
 					event.preventDefault();
 				}
 			}),
@@ -155,9 +151,7 @@ export class ChatGPTInputWidget extends Disposable {
 				tabFocusMode: true,
 			}),
 		);
-		this.modelPicker = this._register(
-			instantiation.createInstance(ModelPickerWidget, this.element, (model: string) => this.chat.setModel(model)),
-		);
+		this.modelPicker = this._register(instantiation.createInstance(ModelPickerWidget, this.element, (model: string) => this.chat.setModel(model)));
 		const preview = h(container.ownerDocument, 'div');
 		preview.className = 'ash-chatgpt-dictation-preview';
 		preview.setAttribute('aria-hidden', 'true');
@@ -177,8 +171,7 @@ export class ChatGPTInputWidget extends Disposable {
 		);
 		this.updateDictationHost();
 		this.dictationButton = h(container.ownerDocument, 'button');
-		this.dictationButton.className =
-			'ash-button ash-button-standard ash-button-quiet ash-chatgpt-dictation ash-chat-input-capsule-button';
+		this.dictationButton.className = 'ash-button ash-button-standard ash-button-quiet ash-chatgpt-dictation ash-chat-input-capsule-button';
 		this.dictationButton.type = 'button';
 		appendIcon(Lxicon.mic, this.dictationButton);
 		this._register(
@@ -211,8 +204,7 @@ export class ChatGPTInputWidget extends Disposable {
 			}),
 		);
 		this.sendButton = h(container.ownerDocument, 'button');
-		this.sendButton.className =
-			'ash-button ash-button-standard ash-button-primary ash-chatgpt-send ash-chat-input-capsule-button';
+		this.sendButton.className = 'ash-button ash-button-standard ash-button-primary ash-chatgpt-send ash-chat-input-capsule-button';
 		this.sendButton.type = 'button';
 		this.element.append(this.dictationButton, this.sendButton);
 		this._register(
@@ -259,8 +251,7 @@ export class ChatGPTInputWidget extends Disposable {
 				this.inputIdentity = identity;
 				const voiceActive = state.voice !== 'idle';
 				this.editor.setReadOnly(!state.connected || state.busy || state.sending || voiceActive);
-				this.attachButton.disabled =
-					!state.connected || state.busy || state.sending || state.managing || voiceActive;
+				this.attachButton.disabled = !state.connected || state.busy || state.sending || state.managing || voiceActive;
 				const selectedModel = state.models.find(model => model.id === state.model);
 				this.modelPicker.update({
 					models: state.models,
@@ -271,8 +262,7 @@ export class ChatGPTInputWidget extends Disposable {
 							? {
 									levels: selectedModel.presets,
 									selectedLevel: state.modelPreset,
-									emphasized: selectedModel.presets.find(preset => preset.id === state.modelPreset)
-										?.isPro,
+									emphasized: selectedModel.presets.find(preset => preset.id === state.modelPreset)?.isPro,
 									select: value => this.chat.setModelPreset(value),
 								}
 							: undefined,
@@ -290,14 +280,7 @@ export class ChatGPTInputWidget extends Disposable {
 								: '';
 				this.voiceTranscript.hidden = !voiceActive || !state.voiceTranscript.length;
 				this.voiceTranscript.textContent = state.voiceTranscript
-					.map(item =>
-						localize(
-							'sessions.chatgpt.voiceTranscript',
-							'{0}: {1}',
-							item.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT',
-							item.text,
-						),
-					)
+					.map(item => localize('sessions.chatgpt.voiceTranscript', '{0}: {1}', item.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT', item.text))
 					.join('\n');
 				this.renderDictation();
 			}),
@@ -360,10 +343,7 @@ export class ChatGPTInputWidget extends Disposable {
 			row.retry.setAttribute('aria-label', localize('sessions.chatgpt.retryFile', 'Retry {0}', attachment.name));
 			row.retry.hidden = attachment.status !== 'failed';
 			row.retry.disabled = disabled;
-			row.remove.setAttribute(
-				'aria-label',
-				localize('sessions.chatgpt.removeFile', 'Remove {0}', attachment.name),
-			);
+			row.remove.setAttribute('aria-label', localize('sessions.chatgpt.removeFile', 'Remove {0}', attachment.name));
 			row.remove.title = row.remove.getAttribute('aria-label')!;
 			row.remove.disabled = disabled;
 		}
@@ -374,13 +354,7 @@ export class ChatGPTInputWidget extends Disposable {
 		const state = this.chat.state.get();
 		const voiceActive = state.voice !== 'idle';
 		this.sendButton.disabled =
-			!state.sending &&
-			!voiceActive &&
-			(!state.connected ||
-				state.busy ||
-				state.managing ||
-				state.uncertain ||
-				state.attachments.some(attachment => attachment.status !== 'ready'));
+			!state.sending && !voiceActive && (!state.connected || state.busy || state.managing || state.uncertain || state.attachments.some(attachment => attachment.status !== 'ready'));
 		const hasInput = !!state.draft.trim() || state.attachments.length > 0 || this.dictation.isActive;
 		const sendLabel = state.sending
 			? localize('sessions.chatgpt.stop', 'Stop')
@@ -393,18 +367,14 @@ export class ChatGPTInputWidget extends Disposable {
 			this.sendButton.setAttribute('aria-label', sendLabel);
 			this.sendButton.title = sendLabel;
 			this.sendButton.replaceChildren();
-			appendIcon(
-				state.sending || voiceActive ? Lxicon.primitiveSquare : hasInput ? Lxicon.arrowUp : Lxicon.voiceMode,
-				this.sendButton,
-			);
+			appendIcon(state.sending || voiceActive ? Lxicon.primitiveSquare : hasInput ? Lxicon.arrowUp : Lxicon.voiceMode, this.sendButton);
 		}
 	}
 
 	private renderDictation(): void {
 		const state = this.chat.state.get();
 		this.dictationButton.hidden = !this.dictation.showButton;
-		this.dictationButton.disabled =
-			!state.connected || state.busy || state.sending || state.voice !== 'idle' || !this.dictation.action.enabled;
+		this.dictationButton.disabled = !state.connected || state.busy || state.sending || state.voice !== 'idle' || !this.dictation.action.enabled;
 		const label = this.dictation.action.tooltip ?? this.dictation.action.label;
 		this.dictationButton.setAttribute('aria-label', label);
 		this.dictationButton.setAttribute('aria-pressed', String(this.dictation.isActive));
@@ -422,9 +392,7 @@ export class ChatGPTInputWidget extends Disposable {
 
 	private reportDictationError(error: unknown): void {
 		if (!this.isDisposed) {
-			this.notifications.error(
-				localize('sessions.chatgpt.dictationFailed', 'Dictation failed: {0}', String(error)),
-			);
+			this.notifications.error(localize('sessions.chatgpt.dictationFailed', 'Dictation failed: {0}', String(error)));
 		}
 	}
 

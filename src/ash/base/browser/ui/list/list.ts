@@ -3,9 +3,7 @@ import type { DragAndDropData } from '../dnd/dnd.js';
 export type ListScrolling = 'internal' | 'external' | 'managed';
 
 export interface IKeyboardNavigationLabelProvider<T> {
-	getKeyboardNavigationLabel(
-		element: T,
-	): { toString(): string | undefined } | { toString(): string | undefined }[] | undefined;
+	getKeyboardNavigationLabel(element: T): { toString(): string | undefined } | { toString(): string | undefined }[] | undefined;
 }
 
 export interface IListElementRenderDetails {
@@ -67,18 +65,7 @@ export interface ListDragAndDrop<T> {
 		targetSector: ListDragTargetSector | undefined,
 		browserEvent: DragEvent,
 	) => boolean | ListDragOverReaction;
-	onDragLeave?: (
-		data: ListDragData<T>,
-		target: T | undefined,
-		targetIndex: number | undefined,
-		browserEvent: DragEvent,
-	) => void;
-	drop: (
-		data: ListDragData<T>,
-		target: T | undefined,
-		targetIndex: number | undefined,
-		targetSector: ListDragTargetSector | undefined,
-		browserEvent: DragEvent,
-	) => void;
+	onDragLeave?: (data: ListDragData<T>, target: T | undefined, targetIndex: number | undefined, browserEvent: DragEvent) => void;
+	drop: (data: ListDragData<T>, target: T | undefined, targetIndex: number | undefined, targetSector: ListDragTargetSector | undefined, browserEvent: DragEvent) => void;
 	onDragEnd?: (browserEvent: DragEvent) => void;
 }

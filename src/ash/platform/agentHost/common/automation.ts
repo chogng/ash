@@ -10,11 +10,9 @@ export type AutomationSchedule =
 			readonly hour: number;
 			readonly minute: number;
 	  };
-export type AutomationSession =
-	{ readonly type: 'new' } | { readonly type: 'continue'; readonly sessionId: string; readonly threadId: string };
+export type AutomationSession = { readonly type: 'new' } | { readonly type: 'continue'; readonly sessionId: string; readonly threadId: string };
 export type AutomationStatus = 'enabled' | 'paused';
-export type AutomationRunStatus =
-	'pending' | 'running' | 'needsInput' | 'stopping' | 'completed' | 'failed' | 'stopped' | 'skipped';
+export type AutomationRunStatus = 'pending' | 'running' | 'needsInput' | 'stopping' | 'completed' | 'failed' | 'stopped' | 'skipped';
 
 export interface PullRequestChecksCondition {
 	readonly type: 'gitHubChecks';

@@ -3,16 +3,9 @@ import './media/editorTitleControl.css';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-	type IRegisteredConfiguration,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import {
-	EditorTabsModeConfiguration,
-	type EditorTabsMode,
-} from '../../../services/editor/common/editorConfiguration.js';
+import { EditorTabsModeConfiguration, type EditorTabsMode } from '../../../services/editor/common/editorConfiguration.js';
 
 import type { FileElement } from './breadcrumbsModel.js';
 import { EditorHeaderControl, type EditorHeaderActions } from './editorHeaderControl.js';
@@ -61,22 +54,13 @@ export class EditorTitleControl extends Disposable {
 		group: EditorGroupId | undefined,
 		breadcrumbsService: IBreadcrumbsService | undefined,
 		languageFeatures: ILanguageFeaturesService | undefined,
-		showSymbolPicker:
-			| ((
-					symbols: readonly LanguageDocumentSymbol[],
-					selected: LanguageDocumentSymbol,
-					reveal: (range: Range) => void,
-			  ) => void)
-			| undefined,
+		showSymbolPicker: ((symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => void) | undefined,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
 		this.delegate = delegate;
 		this.tabsMode =
-			model.editorLimit === 1
-				? 'single'
-				: (configurationService?.getValue<EditorTabsMode>(EditorTabsModeConfiguration) ??
-					configurationDefault<EditorTabsMode>(EditorTabsModeConfiguration));
+			model.editorLimit === 1 ? 'single' : (configurationService?.getValue<EditorTabsMode>(EditorTabsModeConfiguration) ?? configurationDefault<EditorTabsMode>(EditorTabsModeConfiguration));
 		const ownerDocument = container.ownerDocument;
 		this.domNode = h(ownerDocument, 'div');
 		this.domNode.className = 'ash-editor-title-control';
@@ -135,12 +119,7 @@ export class EditorTitleControl extends Disposable {
 		this.lockIndicator.textContent = locked ? localize('workbench.editorGroupLocked', 'Locked') : '';
 	}
 
-	setEditors(
-		editors: readonly EditorTabDescriptor[],
-		activeInput: IResourceEditorInput | undefined,
-		activePane?: IEditorPane,
-		selectedIds?: ReadonlySet<string>,
-	): void {
+	setEditors(editors: readonly EditorTabDescriptor[], activeInput: IResourceEditorInput | undefined, activePane?: IEditorPane, selectedIds?: ReadonlySet<string>): void {
 		const wasHidden = this.domNode.hidden;
 		this.editors = editors;
 		this.selectedIds = selectedIds;
@@ -148,9 +127,7 @@ export class EditorTitleControl extends Disposable {
 		this.tabs.setEditors(editors, activeInput, selectedIds);
 		this.header.setInput(activeInput, activePane);
 		// Single-content hosts retain their group controls even without an editor.
-		this.domNode.hidden =
-			(this.model.editorLimit !== 1 && editors.length === 0) ||
-			(editors.length === 1 && activePane?.prefersEditorTitleHidden === true);
+		this.domNode.hidden = (this.model.editorLimit !== 1 && editors.length === 0) || (editors.length === 1 && activePane?.prefersEditorTitleHidden === true);
 		if (this.domNode.hidden !== wasHidden) this.heightEmitter.fire();
 	}
 
@@ -159,20 +136,10 @@ export class EditorTitleControl extends Disposable {
 		const firstAction = this.tabsAndActionsDomNode.querySelector(':scope > .ash-editor-title-actions');
 		const control =
 			mode === 'single'
-				? this.instantiationService.createInstance(
-						SingleEditorTabsControl,
-						this.tabsAndActionsDomNode,
-						this.delegate,
-						this.model,
-					)
+				? this.instantiationService.createInstance(SingleEditorTabsControl, this.tabsAndActionsDomNode, this.delegate, this.model)
 				: mode === 'none'
 					? new NoEditorTabsControl(this.tabsAndActionsDomNode)
-					: this.instantiationService.createInstance(
-							MultiRowEditorControl,
-							this.tabsAndActionsDomNode,
-							this.delegate,
-							this.model,
-						);
+					: this.instantiationService.createInstance(MultiRowEditorControl, this.tabsAndActionsDomNode, this.delegate, this.model);
 		this.rowsListener.value =
 			control instanceof MultiRowEditorControl
 				? control.onDidChangeRows(() => {
@@ -180,10 +147,7 @@ export class EditorTitleControl extends Disposable {
 						this.heightEmitter.fire();
 					})
 				: undefined;
-		this.domNode.style.setProperty(
-			'--ash-editor-tab-rows',
-			control instanceof MultiRowEditorControl ? String(control.rowCount) : '1',
-		);
+		this.domNode.style.setProperty('--ash-editor-tab-rows', control instanceof MultiRowEditorControl ? String(control.rowCount) : '1');
 		if (firstAction) this.tabsAndActionsDomNode.insertBefore(control.domNode, firstAction);
 		return control;
 	}
@@ -196,9 +160,7 @@ export class EditorTitleControl extends Disposable {
 }
 
 function configurationDefault<T>(key: string): T {
-	const configuration = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(
-		key,
-	) as IRegisteredConfiguration<T> | undefined;
+	const configuration = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(key) as IRegisteredConfiguration<T> | undefined;
 	if (!configuration) throw new RangeError(`Unknown configuration: ${key}`);
 	return configuration.defaultValue;
 }

@@ -17,12 +17,7 @@ import { IFileService } from '../../../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { normalizeExtensionHostSnapshot } from '../../../../../platform/agentHost/browser/extensionHostProtocol.js';
-import {
-	type ExtensionHostFleetSnapshot,
-	type ExtensionHostInvocationRequest,
-	type IExtensionHostApi,
-	type JsonValue,
-} from '../../../../../platform/agentHost/common/extensionHostApi.js';
+import { type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type IExtensionHostApi, type JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
 
 import { createExtensionBackendApi } from '../../../../../platform/agentHost/browser/extensionBackendApi.js';
 import type { AppServerProtocolClient } from '../../../../../platform/agentHost/browser/appServerProtocolClient.js';
@@ -125,10 +120,7 @@ function snapshot(generation: number, lifecycle: 'dormant' | 'ready'): Extension
 							},
 						}
 					: {}),
-				registrations:
-					lifecycle === 'ready'
-						? [{ kind: 'command', registrationId: 'callback', command: 'lazy.run', title: 'Run' }]
-						: [],
+				registrations: lifecycle === 'ready' ? [{ kind: 'command', registrationId: 'callback', command: 'lazy.run', title: 'Run' }] : [],
 			},
 		],
 	});
@@ -162,9 +154,7 @@ test('invalid client results reject the Worker call instead of stranding its pen
 			super();
 			worker = this;
 		}
-		postMessage(
-			message: BrowserExtensionHostRequest | { type: 'commandResult'; success: boolean; error?: string },
-		): void {
+		postMessage(message: BrowserExtensionHostRequest | { type: 'commandResult'; success: boolean; error?: string }): void {
 			if (message.type === 'commandResult') {
 				void replied.complete(message);
 				return;
@@ -341,21 +331,14 @@ test('browser refresh preserves unchanged Workers and pending calls, and cleans 
 							data: {
 								id: message.id,
 								success: true,
-								result: [
-									{ kind: 'dataChannel', registrationId: 'test.image', channelId: 'image.editor.v1' },
-									status,
-								],
+								result: [{ kind: 'dataChannel', registrationId: 'test.image', channelId: 'image.editor.v1' }, status],
 							},
 						}),
 					);
 				} else if (message.type === 'deactivate') {
 					order.push('deactivate');
-					this.dispatchEvent(
-						new MessageEvent('message', { data: { type: 'releaseWebviewResource', url: urls.at(-1) } }),
-					);
-					this.dispatchEvent(
-						new MessageEvent('message', { data: { id: message.id, success: true, result: null } }),
-					);
+					this.dispatchEvent(new MessageEvent('message', { data: { type: 'releaseWebviewResource', url: urls.at(-1) } }));
+					this.dispatchEvent(new MessageEvent('message', { data: { id: message.id, success: true, result: null } }));
 				} else if (message.type === 'invoke') {
 					finishInvocation = () =>
 						this.dispatchEvent(
@@ -452,18 +435,13 @@ test('browser refresh preserves unchanged Workers and pending calls, and cleans 
 		assert.equal(await (await fetch(urls[0]!)).text(), 'style');
 		finishInvocation!();
 		assert.equal(await pending, 'completed');
-		assert.equal(
-			(await api.list()).extensions.find(runtime => runtime.id === original.id)!.registrations.length,
-			2,
-		);
+		assert.equal((await api.list()).extensions.find(runtime => runtime.id === original.id)!.registrations.length, 2);
 		activeWorker!.dispatchEvent(
 			new MessageEvent('message', {
 				data: { type: 'registrationsChanged', snapshot: { revision: 1, registrations: [status] } },
 			}),
 		);
-		assert.deepEqual((await api.list()).extensions.find(runtime => runtime.id === original.id)!.registrations, [
-			status,
-		]);
+		assert.deepEqual((await api.list()).extensions.find(runtime => runtime.id === original.id)!.registrations, [status]);
 		activeWorker!.dispatchEvent(
 			new MessageEvent('message', {
 				data: {
@@ -475,11 +453,7 @@ test('browser refresh preserves unchanged Workers and pending calls, and cleans 
 				},
 			}),
 		);
-		assert.deepEqual(
-			(await api.list()).extensions.find(runtime => runtime.id === original.id)!.registrations,
-			[status],
-			'an old transport revision cannot revive a retired registration',
-		);
+		assert.deepEqual((await api.list()).extensions.find(runtime => runtime.id === original.id)!.registrations, [status], 'an old transport revision cannot revive a retired registration');
 		activeWorker!.dispatchEvent(
 			new MessageEvent('message', {
 				data: {
@@ -502,16 +476,10 @@ test('browser refresh preserves unchanged Workers and pending calls, and cleans 
 			'consumed registration messages cannot roll back later acknowledged status-bar state',
 		);
 		digest = `sha256:${'b'.repeat(64)}`;
-		const replacement = (await api.reconcile('restartFailed')).extensions.find(
-			runtime => runtime.id === original.id,
-		)!;
+		const replacement = (await api.reconcile('restartFailed')).extensions.find(runtime => runtime.id === original.id)!;
 		assert.equal(replacement.lifecycle, 'ready');
 		assert.notEqual(replacement.activationGeneration, original.activationGeneration);
-		assert.deepEqual(
-			catalogReads,
-			['cached', 'cached', 'cached', 'cached'],
-			'each reconciliation reads current backend packages without repeating source discovery',
-		);
+		assert.deepEqual(catalogReads, ['cached', 'cached', 'cached', 'cached'], 'each reconciliation reads current backend packages without repeating source discovery');
 		assert.deepEqual(order, ['activate', 'deactivate', 'terminate', 'activate']);
 		await assert.rejects(fetch(urls[0]!));
 		await assert.rejects(api.invoke(invocation, new AbortController().signal), /retired activation/);
@@ -535,18 +503,11 @@ test('disablement during activation retires the Worker before publishing its con
 	class WorkerFixture extends EventTarget {
 		postMessage(message: BrowserExtensionHostRequest): void {
 			if (message.type === 'deactivate') {
-				queueMicrotask(() =>
-					this.dispatchEvent(
-						new MessageEvent('message', { data: { id: message.id, success: true, result: null } }),
-					),
-				);
+				queueMicrotask(() => this.dispatchEvent(new MessageEvent('message', { data: { id: message.id, success: true, result: null } })));
 				return;
 			}
 			assert.equal(message.type, 'activate');
-			reply = () =>
-				this.dispatchEvent(
-					new MessageEvent('message', { data: { id: message.id, success: true, result: [] } }),
-				);
+			reply = () => this.dispatchEvent(new MessageEvent('message', { data: { id: message.id, success: true, result: [] } }));
 			void started.complete();
 		}
 		terminate(): void {
@@ -688,9 +649,7 @@ for (const id of ['external.ssh']) {
 						failure: null,
 						stderr: '',
 						outputEvents: [],
-						registrations: [
-							{ kind: 'remoteConnectionResolver', registrationId: 'ssh', authorityPrefix: 'ssh' },
-						],
+						registrations: [{ kind: 'remoteConnectionResolver', registrationId: 'ssh', authorityPrefix: 'ssh' }],
 					},
 				],
 			});
@@ -717,9 +676,7 @@ test('the backend product SSH resolver uses the same remote host invocation path
 					failure: null,
 					stderr: '',
 					outputEvents: [],
-					registrations: [
-						{ kind: 'remoteConnectionResolver', registrationId: 'remote:ssh', authorityPrefix: 'ssh' },
-					],
+					registrations: [{ kind: 'remoteConnectionResolver', registrationId: 'remote:ssh', authorityPrefix: 'ssh' }],
 				},
 			],
 		});

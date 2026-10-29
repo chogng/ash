@@ -8,11 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'mocha';
 import { URI } from '../../../../base/common/uri.js';
-import {
-	ConfigurationRegistry,
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationRegistry, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { InMemoryConfigurationService } from '../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 
@@ -51,8 +47,7 @@ test('extension language defaults merge atomically, respect user overrides and w
 	const second = { overrides: { '[markdown]': { 'wrap.column': 100 } } };
 	const changes: unknown[] = [];
 	using listener = service.onDidChangeConfiguration(event => {
-		if (event.affectsConfiguration('wrap', { overrideIdentifier: 'markdown' }))
-			changes.push(service.getValue('wrap', { overrideIdentifier: 'markdown' }));
+		if (event.affectsConfiguration('wrap', { overrideIdentifier: 'markdown' })) changes.push(service.getValue('wrap', { overrideIdentifier: 'markdown' }));
 	});
 	registry.deltaConfiguration({ addedDefaults: [first, second] });
 	assert.deepEqual(service.getValue('wrap', { overrideIdentifier: 'markdown' }), { mode: 'on', column: 100 });
@@ -91,16 +86,7 @@ test('workbench change events index ancestor and descendant sections without mat
 	await service.updateValue('editor.options', { fontSize: 16 });
 	await service.updateValue('editorial.enabled', false);
 
-	const sections = [
-		'editor',
-		'editor.options',
-		'editor.option',
-		'editor.options.fontSize',
-		'editorial',
-		'',
-		'editor.',
-		'Editor',
-	];
+	const sections = ['editor', 'editor.options', 'editor.option', 'editor.options.fontSize', 'editorial', '', 'editor.', 'Editor'];
 	assert.deepEqual(
 		events.map(event => sections.map(section => event.affectsConfiguration(section))),
 		[
@@ -112,11 +98,7 @@ test('workbench change events index ancestor and descendant sections without mat
 		events.map(event => [...event.affectedKeys]),
 		[['editor.options'], ['editorial.enabled']],
 	);
-	assert.equal(
-		events[0]!.affectsConfiguration('editor.options.fontSize'),
-		true,
-		'an older event retains its own index',
-	);
+	assert.equal(events[0]!.affectsConfiguration('editor.options.fontSize'), true, 'an older event retains its own index');
 });
 
 test('configuration tags are validated before replacing live registrations', () => {
@@ -139,10 +121,7 @@ test('configuration tags are validated before replacing live registrations', () 
 	);
 	assert.deepEqual(registry.getConfiguration('test.active')?.tags, ['preview']);
 	assert.equal(registry.getConfiguration('test.invalid'), undefined);
-	assert.throws(
-		() => registry.registerConfiguration({ key: 'test.invalid', defaultValue: false, parse: Boolean, tags: [' '] }),
-		/Configuration tags/,
-	);
+	assert.throws(() => registry.registerConfiguration({ key: 'test.invalid', defaultValue: false, parse: Boolean, tags: [' '] }), /Configuration tags/);
 });
 
 test('reused configuration reads observe new layers inside change listeners and preserve language overrides', async () => {
@@ -176,11 +155,9 @@ test('reused configuration reads observe new layers inside change listeners and 
 
 test('contributed configuration replacement updates live values atomically and preserves stored user settings', async () => {
 	const registry = new ConfigurationRegistry();
-	const source =
-		'// preserved user settings\n{"contributed.value":"saved","[typescript]":{"contributed.value":"typed"}}\n';
+	const source = '// preserved user settings\n{"contributed.value":"saved","[typescript]":{"contributed.value":"typed"}}\n';
 	using service = new WorkbenchConfigurationService({ registry, source: source });
-	const changes: { keys: string[]; source: ConfigurationTarget; valueAffected: boolean; sectionAffected: boolean }[] =
-		[];
+	const changes: { keys: string[]; source: ConfigurationTarget; valueAffected: boolean; sectionAffected: boolean }[] = [];
 	using listener = service.onDidChangeConfiguration(event => {
 		changes.push({
 			keys: [...event.affectedKeys].sort(),
@@ -216,10 +193,7 @@ test('contributed configuration replacement updates live values atomically and p
 		},
 	};
 	registry.updateConfigurations({ add: [second], remove: [first] });
-	assert.deepEqual(
-		{ value: service.getValue('contributed.value'), count: service.getValue('contributed.count') },
-		{ value: 'saved', count: 9 },
-	);
+	assert.deepEqual({ value: service.getValue('contributed.value'), count: service.getValue('contributed.count') }, { value: 'saved', count: 9 });
 	registry.updateConfigurations({ add: [], remove: [second] });
 	assert.equal(service.getValue('contributed.value'), 'saved');
 	assert.equal(service.getConfigurationData().userLocal.keys.includes('contributed.value'), true);
@@ -305,15 +279,10 @@ test('configuration parser validates persisted JSONC independently of transport'
 
 test('configuration parser preserves slash-containing keys in settings and language overrides', () => {
 	const parser = new ConfigurationModelParser('settings', new NullLoggerService());
-	parser.parse(
-		'{ "js/ts.tsdk.path": "./node_modules/typescript/lib", "[typescript]": { "js/ts.tsdk.path": "./custom/typescript/lib" } }',
-	);
+	parser.parse('{ "js/ts.tsdk.path": "./node_modules/typescript/lib", "[typescript]": { "js/ts.tsdk.path": "./custom/typescript/lib" } }');
 	assert.deepEqual(parser.errors, []);
 	assert.equal(parser.configurationModel.getValue('js/ts.tsdk.path'), './node_modules/typescript/lib');
-	assert.equal(
-		parser.configurationModel.override('typescript').getValue('js/ts.tsdk.path'),
-		'./custom/typescript/lib',
-	);
+	assert.equal(parser.configurationModel.override('typescript').getValue('js/ts.tsdk.path'), './custom/typescript/lib');
 	assert.deepEqual(parser.configurationModel.getValue('js/ts'), { tsdk: { path: './node_modules/typescript/lib' } });
 });
 
@@ -340,8 +309,7 @@ test('workbench configuration reloads and edits slash-containing contributed set
 	const key = 'js/ts.tsdk.path';
 	const registry = new ConfigurationRegistry();
 	registry.updateConfigurations({ add: [{ properties: { [key]: { type: 'string', default: '' } } }], remove: [] });
-	const source =
-		'// Keep the SDK explanation.\n{ "js/ts.tsdk.path": "./node_modules/typescript/lib", "editor.fontSize": 16, }\n';
+	const source = '// Keep the SDK explanation.\n{ "js/ts.tsdk.path": "./node_modules/typescript/lib", "editor.fontSize": 16, }\n';
 	using files = new TestConfigurationFiles(source);
 	using service = new WorkbenchConfigurationService({ files, registry });
 	await service.reloadConfiguration();
@@ -402,8 +370,7 @@ test('workbench configuration preserves editable JSONC source through file-servi
 	});
 	using service = new WorkbenchConfigurationService({ registry });
 	const initial = await service.read();
-	const source =
-		'{\n\t// Keep this user explanation.\n\t"editor.fontSize": 16,\n\t"extension.unregistered": true,\n}\n';
+	const source = '{\n\t// Keep this user explanation.\n\t"editor.fontSize": 16,\n\t"extension.unregistered": true,\n}\n';
 	const saved = await service.write(source);
 	assert.equal(saved.source, source);
 	assert.notEqual(saved.revision, initial.revision);
@@ -471,18 +438,17 @@ test('workbench configuration preserves combined override blocks in data and ins
 			return value as number;
 		},
 	});
-	using api = new TestConfigurationFiles(
-		'{ "editor.tabSize": 2, "[typescript][javascript]": { "editor.tabSize": 8 } }\n',
-	);
+	using api = new TestConfigurationFiles('{ "editor.tabSize": 2, "[typescript][javascript]": { "editor.tabSize": 8 } }\n');
 	using service = new WorkbenchConfigurationService({ files: api, registry });
 	await service.reloadConfiguration();
 
 	assert.deepEqual(service.getConfigurationData().userLocal, {
-		contents: { editor: { tabSize: 2 }, '[typescript][javascript]': { 'editor.tabSize': 8 } },
+		contents: {
+			editor: { tabSize: 2 },
+			'[typescript][javascript]': { 'editor.tabSize': 8 },
+		},
 		keys: [tabSize, '[typescript][javascript]'],
-		overrides: [
-			{ identifiers: ['typescript', 'javascript'], keys: [tabSize], contents: { editor: { tabSize: 8 } } },
-		],
+		overrides: [{ identifiers: ['typescript', 'javascript'], keys: [tabSize], contents: { editor: { tabSize: 8 } } }],
 	});
 	assert.deepEqual(service.keys().user, [tabSize, '[typescript][javascript]']);
 	assert.deepEqual(service.inspect<number>(tabSize, { overrideIdentifier: 'typescript' }), {
@@ -491,17 +457,20 @@ test('workbench configuration preserves combined override blocks in data and ins
 		userLocalValue: 8,
 		value: 8,
 		default: { value: 4 },
-		user: { value: 2, override: 8, overrides: [{ identifiers: ['typescript', 'javascript'], value: 8 }] },
-		userLocal: { value: 2, override: 8, overrides: [{ identifiers: ['typescript', 'javascript'], value: 8 }] },
+		user: {
+			value: 2,
+			override: 8,
+			overrides: [{ identifiers: ['typescript', 'javascript'], value: 8 }],
+		},
+		userLocal: {
+			value: 2,
+			override: 8,
+			overrides: [{ identifiers: ['typescript', 'javascript'], value: 8 }],
+		},
 		overrideIdentifiers: ['typescript', 'javascript'],
 	});
 
-	await service.updateValue(
-		tabSize,
-		6,
-		{ overrideIdentifiers: ['javascript', 'typescript', 'javascript'] },
-		ConfigurationTarget.USER_LOCAL,
-	);
+	await service.updateValue(tabSize, 6, { overrideIdentifiers: ['javascript', 'typescript', 'javascript'] }, ConfigurationTarget.USER_LOCAL);
 	assert.equal(service.getValue<number>(tabSize, { overrideIdentifier: 'javascript' }), 6);
 	assert.match((await service.read()).source, /"\[typescript\]\[javascript\]"\s*:\s*\{\s*"editor\.tabSize"\s*:\s*6/u);
 	assert.doesNotMatch((await service.read()).source, /"\[javascript\]"\s*:/u);
@@ -512,9 +481,7 @@ test('workbench saved settings use the same language precedence for reads, inspe
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({ key: 'editor.tabSize', defaultValue: 4, parse: value => Number(value) });
 	using service = new WorkbenchConfigurationService({ registry });
-	await service.write(
-		'{ "editor.tabSize": 8, "[typescript]": { "editor.tabSize": 2 }, "[typescript][javascript]": { "editor.tabSize": 6 } }',
-	);
+	await service.write('{ "editor.tabSize": 8, "[typescript]": { "editor.tabSize": 2 }, "[typescript][javascript]": { "editor.tabSize": 6 } }');
 	assert.deepEqual(
 		[
 			service.getValue('editor.tabSize'),
@@ -550,9 +517,7 @@ test('workbench structured settings merge defaults, saved values and language va
 		parse: value => value as { colors?: { foreground?: string; background?: string }; rulers?: number[] },
 	});
 	using service = new WorkbenchConfigurationService({ registry });
-	await service.write(
-		'{ "editor.options": { "colors": { "foreground": "white" } }, "[typescript]": { "editor.options": { "rulers": [100] } } }',
-	);
+	await service.write('{ "editor.options": { "colors": { "foreground": "white" } }, "[typescript]": { "editor.options": { "rulers": [100] } } }');
 	assert.deepEqual(service.getValue('editor.options', { overrideIdentifier: 'typescript' }), {
 		colors: { foreground: 'white', background: 'black' },
 		rulers: [100],
@@ -565,16 +530,10 @@ test('workbench structured settings merge defaults, saved values and language va
 	const events: import('../../common/configuration.js').IConfigurationChangeEvent[] = [];
 	using listener = service.onDidChangeConfiguration(event => events.push(event));
 	await service.updateValue('editor.options', { colors: { foreground: 'green' } });
-	assert.equal(
-		events[0]!.affectsConfiguration('editor.options.colors.foreground', { overrideIdentifier: 'typescript' }),
-		true,
-	);
+	assert.equal(events[0]!.affectsConfiguration('editor.options.colors.foreground', { overrideIdentifier: 'typescript' }), true);
 	assert.equal(events[0]!.affectsConfiguration('editor.options.rulers', { overrideIdentifier: 'typescript' }), false);
 	await service.updateValue('editor.options', { colors: { foreground: 'green' }, rulers: [120] });
-	assert.equal(
-		events[0]!.affectsConfiguration('editor.options.colors.foreground', { overrideIdentifier: 'typescript' }),
-		true,
-	);
+	assert.equal(events[0]!.affectsConfiguration('editor.options.colors.foreground', { overrideIdentifier: 'typescript' }), true);
 	assert.deepEqual(before.userLocal.contents, {
 		editor: { options: { colors: { foreground: 'white' } } },
 		'[typescript]': { 'editor.options': { rulers: [100] } },
@@ -595,20 +554,9 @@ test('workbench configuration accepts resource reads and rejects unsupported wri
 
 	await service.updateValue(tabSize, 6, ConfigurationTarget.USER);
 	assert.equal(service.getValue<number>(tabSize), 6);
-	await assert.rejects(
-		service.updateValue(tabSize, 8, ConfigurationTarget.WORKSPACE),
-		/Unable to write editor\.tabSize to target 5/u,
-	);
+	await assert.rejects(service.updateValue(tabSize, 8, ConfigurationTarget.WORKSPACE), /Unable to write editor\.tabSize to target 5/u);
 	await assert.rejects(service.updateValue(tabSize, 8, 99 as ConfigurationTarget), /target is invalid/u);
-	await assert.rejects(
-		service.updateValue(
-			tabSize,
-			8,
-			{ resource: URI.parse('file:///workspace/file.ts') },
-			ConfigurationTarget.USER_LOCAL,
-		),
-		/does not support resource overrides/u,
-	);
+	await assert.rejects(service.updateValue(tabSize, 8, { resource: URI.parse('file:///workspace/file.ts') }, ConfigurationTarget.USER_LOCAL), /does not support resource overrides/u);
 	assert.equal(service.getValue(tabSize, { resource: URI.parse('file:///workspace/file.ts') }), 6);
 	assert.equal(service.getValue(tabSize, { resource: URI.parse('output:/window') }), 6);
 	assert.equal(service.inspect(tabSize, { resource: URI.parse('output:/window') }).value, 6);
@@ -659,7 +607,10 @@ test('workbench configuration applies the startup snapshot before services choos
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({ key: 'window.menuStyle', defaultValue: 'inherit', parse: value => value });
 	registry.registerConfiguration({ key: 'window.titleBarStyle', defaultValue: 'custom', parse: value => value });
-	const snapshot = { revision: 3, document: { version: 1, source: '{ "window.titleBarStyle": "system" }' } };
+	const snapshot = {
+		revision: 3,
+		document: { version: 1, source: '{ "window.titleBarStyle": "system" }' },
+	};
 	using service = new WorkbenchConfigurationService({
 		registry,
 		files: new TestConfigurationFiles(snapshot.document.source),

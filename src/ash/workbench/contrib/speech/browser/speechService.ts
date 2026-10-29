@@ -30,8 +30,7 @@ export interface ISpeechProviderDescriptor {
 ExtensionsRegistry.registerExtensionPoint<readonly ISpeechProviderDescriptor[]>({
 	extensionPoint: 'speechProviders',
 	validate: value => {
-		if (!Array.isArray(value) || value.length > 16)
-			throw new TypeError(localize('speech.providerDeclarationInvalid', 'Invalid speech provider contribution.'));
+		if (!Array.isArray(value) || value.length > 16) throw new TypeError(localize('speech.providerDeclarationInvalid', 'Invalid speech provider contribution.'));
 		const names = new Set<string>();
 		return Object.freeze(
 			value.map(candidate => {
@@ -44,13 +43,10 @@ ExtensionsRegistry.registerExtensionPoint<readonly ISpeechProviderDescriptor[]>(
 					candidate.name.length > 256 ||
 					/\s/u.test(candidate.name) ||
 					names.has(candidate.name) ||
-					(candidate.description !== undefined &&
-						(typeof candidate.description !== 'string' || candidate.description.length > 512)) ||
+					(candidate.description !== undefined && (typeof candidate.description !== 'string' || candidate.description.length > 512)) ||
 					Object.keys(candidate).some(key => key !== 'name' && key !== 'description')
 				)
-					throw new TypeError(
-						localize('speech.providerDeclarationInvalid', 'Invalid speech provider contribution.'),
-					);
+					throw new TypeError(localize('speech.providerDeclarationInvalid', 'Invalid speech provider contribution.'));
 				names.add(candidate.name);
 				return Object.freeze({
 					name: candidate.name,
@@ -123,11 +119,7 @@ export class SpeechService extends Disposable implements ISpeechService {
 		return this.providers.size > 0 || this.hasDeclaredProvider;
 	}
 	private get hasDeclaredProvider(): boolean {
-		return (
-			this.extensions
-				?.getExtensionPointContributions<readonly ISpeechProviderDescriptor[]>('speechProviders')
-				.some(contribution => contribution.value.length > 0) === true
-		);
+		return this.extensions?.getExtensionPointContributions<readonly ISpeechProviderDescriptor[]>('speechProviders').some(contribution => contribution.value.length > 0) === true;
 	}
 
 	constructor(
@@ -169,10 +161,7 @@ export class SpeechService extends Disposable implements ISpeechService {
 
 	public registerSpeechProvider(identifier: string, provider: ISpeechProvider): IDisposable {
 		this.assertNotDisposed();
-		if (this.providers.has(identifier) || this.providers.size >= 16)
-			throw new Error(
-				localize('speech.providerDuplicate', 'Speech provider registration is duplicate or exceeds the limit.'),
-			);
+		if (this.providers.has(identifier) || this.providers.size >= 16) throw new Error(localize('speech.providerDuplicate', 'Speech provider registration is duplicate or exceeds the limit.'));
 		const entry = { provider };
 		this.providers.set(identifier, entry);
 		this.providerChanged.fire();
@@ -187,22 +176,13 @@ export class SpeechService extends Disposable implements ISpeechService {
 
 	private selectProvider(): ProviderEntry {
 		this.assertNotDisposed();
-		if (this.providers.size === 0)
-			throw new Error(localize('speech.providerMissing', 'No speech extension provider is available.'));
+		if (this.providers.size === 0) throw new Error(localize('speech.providerMissing', 'No speech extension provider is available.'));
 		if (this.providers.size !== 1)
-			throw new Error(
-				localize(
-					'speech.providerMultiple',
-					'Multiple speech providers are active. Disable the providers you do not want to use before starting speech.',
-				),
-			);
+			throw new Error(localize('speech.providerMultiple', 'Multiple speech providers are active. Disable the providers you do not want to use before starting speech.'));
 		return this.providers.values().next().value!;
 	}
 
-	private leaseProvider(
-		entry: ProviderEntry,
-		token: CancellationToken,
-	): { readonly lifetime: DisposableStore; readonly source: CancellationTokenSource } {
+	private leaseProvider(entry: ProviderEntry, token: CancellationToken): { readonly lifetime: DisposableStore; readonly source: CancellationTokenSource } {
 		if (token.isCancellationRequested) throw canceled();
 		const lifetime = new DisposableStore();
 		const source = new CancellationTokenSource();
@@ -225,9 +205,7 @@ export class SpeechService extends Disposable implements ISpeechService {
 		const lease = this.leaseProvider(entry, token);
 		try {
 			const session = entry.provider.createTextToSpeechSession(lease.source.token, {
-				language: speechLanguageConfigToLanguage(
-					this.configuration?.getValue(SPEECH_LANGUAGE_CONFIG) ?? 'auto',
-				),
+				language: speechLanguageConfigToLanguage(this.configuration?.getValue(SPEECH_LANGUAGE_CONFIG) ?? 'auto'),
 			});
 			if (lease.source.token.isCancellationRequested) throw canceled();
 			this.ttsCount++;
@@ -274,25 +252,11 @@ export class SpeechService extends Disposable implements ISpeechService {
 				}),
 			);
 			this.keywordStarted.fire();
-			if (lease.lifetime.isDisposed)
-				return token.isCancellationRequested
-					? KeywordRecognitionStatus.Canceled
-					: KeywordRecognitionStatus.Stopped;
+			if (lease.lifetime.isDisposed) return token.isCancellationRequested ? KeywordRecognitionStatus.Canceled : KeywordRecognitionStatus.Stopped;
 			return await new Promise<KeywordRecognitionStatus>(resolve => {
-				lease.lifetime.add(
-					toDisposable(() =>
-						resolve(
-							token.isCancellationRequested
-								? KeywordRecognitionStatus.Canceled
-								: KeywordRecognitionStatus.Stopped,
-						),
-					),
-				);
+				lease.lifetime.add(toDisposable(() => resolve(token.isCancellationRequested ? KeywordRecognitionStatus.Canceled : KeywordRecognitionStatus.Stopped)));
 				const listener = session.onDidChange(event => {
-					if (
-						event.status === KeywordRecognitionStatus.Recognized ||
-						event.status === KeywordRecognitionStatus.Stopped
-					) {
+					if (event.status === KeywordRecognitionStatus.Recognized || event.status === KeywordRecognitionStatus.Stopped) {
 						resolve(event.status);
 						lease.lifetime.dispose();
 					}
@@ -309,8 +273,7 @@ export class SpeechService extends Disposable implements ISpeechService {
 
 	public async createSpeechToTextSession(token: CancellationToken, _context?: string): Promise<ISpeechToTextSession> {
 		this.assertNotDisposed();
-		if (!this.hasSpeechProvider)
-			throw new Error(localize('speech.providerMissing', 'No speech extension provider is available.'));
+		if (!this.hasSpeechProvider) throw new Error(localize('speech.providerMissing', 'No speech extension provider is available.'));
 		if (this.hasActiveSpeechToTextSession) {
 			throw new Error(localize('dictation.alreadyActive', 'Dictation is already active'));
 		}
@@ -347,10 +310,7 @@ export class SpeechService extends Disposable implements ISpeechService {
 		};
 	}
 
-	private async activateProvider(
-		token: CancellationToken,
-		kind: 'speechToText' | 'textToSpeech' | 'keywordRecognition',
-	): Promise<void> {
+	private async activateProvider(token: CancellationToken, kind: 'speechToText' | 'textToSpeech' | 'keywordRecognition'): Promise<void> {
 		if (token.isCancellationRequested || this.isDisposed) throw canceled();
 		const controller = new AbortController();
 		using cancellation = token.onCancellationRequested(() => controller.abort());
@@ -359,8 +319,7 @@ export class SpeechService extends Disposable implements ISpeechService {
 		try {
 			await this.extensions!.activateByEvent('onSpeech', controller.signal);
 			if (controller.signal.aborted || this.isDisposed) throw canceled();
-			if (!this.providers.size)
-				throw new Error(localize('speech.providerMissing', 'No speech extension provider is available.'));
+			if (!this.providers.size) throw new Error(localize('speech.providerMissing', 'No speech extension provider is available.'));
 		} catch (error) {
 			if (controller.signal.aborted || this.isDisposed) throw canceled();
 			throw error;
@@ -412,8 +371,7 @@ export class SpeechService extends Disposable implements ISpeechService {
 		try {
 			// Recording is published before acquisition so commands can cancel immediately.
 			// A synchronous cancellation from that notification must never open media afterwards.
-			if (recording.cancelled || recording.stopping || this.recording !== recording || this.isDisposed)
-				throw canceled();
+			if (recording.cancelled || recording.stopping || this.recording !== recording || this.isDisposed) throw canceled();
 			if (this.hasDeclaredProvider) {
 				await this.activateProvider(CancellationToken.None, 'speechToText');
 				if (recording.cancelled || this.recording !== recording || this.isDisposed) throw canceled();
@@ -424,9 +382,7 @@ export class SpeechService extends Disposable implements ISpeechService {
 				const source = new CancellationTokenSource();
 				recording.lifetime.add(toDisposable(() => source.dispose(true)));
 				const session = entry.provider.createSpeechToTextSession(source.token, {
-					language: speechLanguageConfigToLanguage(
-						this.configuration?.getValue(SPEECH_LANGUAGE_CONFIG) ?? 'auto',
-					),
+					language: speechLanguageConfigToLanguage(this.configuration?.getValue(SPEECH_LANGUAGE_CONFIG) ?? 'auto'),
 				});
 				if (source.token.isCancellationRequested) throw canceled();
 				recording.handle = {
@@ -445,19 +401,11 @@ export class SpeechService extends Disposable implements ISpeechService {
 							this.started.fire();
 							this.stateChanged.fire();
 						}
-					} else if (
-						event.status === SpeechToTextStatus.Recognizing ||
-						event.status === SpeechToTextStatus.Recognized
-					) {
-						this.receiveTranscript(
-							recording,
-							event.text ?? '',
-							event.status === SpeechToTextStatus.Recognized,
-						);
+					} else if (event.status === SpeechToTextStatus.Recognizing || event.status === SpeechToTextStatus.Recognized) {
+						this.receiveTranscript(recording, event.text ?? '', event.status === SpeechToTextStatus.Recognized);
 						return;
 					}
-					if (recording.subscribed && event.status !== SpeechToTextStatus.Stopped)
-						recording.events.fire(event);
+					if (recording.subscribed && event.status !== SpeechToTextStatus.Stopped) recording.events.fire(event);
 					else if (event.status === SpeechToTextStatus.Error) recording.pendingError = event;
 					if (event.status === SpeechToTextStatus.Stopped || event.status === SpeechToTextStatus.Error) {
 						if (!recording.stopping) {

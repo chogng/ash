@@ -22,9 +22,7 @@ export function toolSetLabel(set: IToolSet): string {
 		local: localize('chat.tools.local', 'Built-in tools'),
 		mcp: localize('chat.tools.mcp', 'MCP tools'),
 	};
-	return set.sourceId
-		? localize('chat.tools.sourceGroup', '{0}: {1}', labels[set.source], set.sourceId)
-		: labels[set.source];
+	return set.sourceId ? localize('chat.tools.sourceGroup', '{0}: {1}', labels[set.source], set.sourceId) : labels[set.source];
 }
 
 export function createToolSelectionAttachment(disabled: readonly string[]): ChatContextAttachment {
@@ -49,10 +47,7 @@ export function showToolsPicker(
 	const picker = resources.add(quickInput.createQuickPick<ToolPick>());
 	resources.add(toDisposable(() => picker.hide()));
 	const disabled = new Set(currentDisabled);
-	picker.placeholder = localize(
-		'chat.tools.configureHint',
-		'Search tools; Enter toggles a tool or set. Choose Apply to save for this chat.',
-	);
+	picker.placeholder = localize('chat.tools.configureHint', 'Search tools; Enter toggles a tool or set. Choose Apply to save for this chat.');
 	picker.ariaLabel = localize('chat.tools.configureLabel', 'Configure tools');
 	return new Promise(resolve => {
 		let settled = false;
@@ -70,21 +65,10 @@ export function showToolsPicker(
 			const active = retainActive ? picker.activeItems[0] : undefined;
 			const state = (names: readonly string[]): string => {
 				const count = names.filter(name => !disabled.has(name)).length;
-				return count === names.length
-					? localize('chat.tools.enabled', 'Enabled')
-					: count === 0
-						? localize('chat.tools.disabled', 'Disabled')
-						: localize('chat.tools.mixed', 'Partly enabled');
+				return count === names.length ? localize('chat.tools.enabled', 'Enabled') : count === 0 ? localize('chat.tools.disabled', 'Disabled') : localize('chat.tools.mixed', 'Partly enabled');
 			};
 			const items: ToolPick[] = [];
-			const browserTools = tools
-				.filter(
-					tool =>
-						tool.source === 'local' &&
-						tool.exposure !== 'hidden' &&
-						browserChatToolReferenceNames.includes(tool.id),
-				)
-				.map(tool => tool.id);
+			const browserTools = tools.filter(tool => tool.source === 'local' && tool.exposure !== 'hidden' && browserChatToolReferenceNames.includes(tool.id)).map(tool => tool.id);
 			if (browserTools.length) {
 				items.push({
 					key: 'browser',
@@ -115,10 +99,7 @@ export function showToolsPicker(
 					names: [tool.id],
 				});
 			}
-			const visible: ToolPick[] = [
-				...filterQuickPickItems(items, picker.value),
-				{ key: 'apply', label: localize('chat.tools.apply', 'Apply tool selection'), alwaysShow: true },
-			];
+			const visible: ToolPick[] = [...filterQuickPickItems(items, picker.value), { key: 'apply', label: localize('chat.tools.apply', 'Apply tool selection'), alwaysShow: true }];
 			picker.items = visible;
 			const retained = active && visible.find(item => item.key === active.key);
 			if (retained) picker.activeItems = [retained];
@@ -132,12 +113,7 @@ export function showToolsPicker(
 
 				if (!item.names) {
 					if (disabled.size > 4096) {
-						status(
-							localize(
-								'chat.tools.selectionLimit',
-								'Select at most 4096 disabled tools. Enable some tools before applying.',
-							),
-						);
+						status(localize('chat.tools.selectionLimit', 'Select at most 4096 disabled tools. Enable some tools before applying.'));
 						return;
 					}
 					finish([...disabled].sort());
@@ -151,16 +127,7 @@ export function showToolsPicker(
 						disabled.add(name);
 					}
 				}
-				status(
-					localize(
-						'chat.tools.changed',
-						'{0}: {1}',
-						item.label,
-						enable
-							? localize('chat.tools.enabled', 'Enabled')
-							: localize('chat.tools.disabled', 'Disabled'),
-					),
-				);
+				status(localize('chat.tools.changed', '{0}: {1}', item.label, enable ? localize('chat.tools.enabled', 'Enabled') : localize('chat.tools.disabled', 'Disabled')));
 				render();
 			}),
 		);

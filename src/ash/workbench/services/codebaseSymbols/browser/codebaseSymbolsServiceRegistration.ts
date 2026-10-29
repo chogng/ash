@@ -11,13 +11,7 @@ registerWorkbenchServiceContribution({
 	dependencies: [ICodebaseSymbolsApi, ILanguageFeaturesService, IWorkspaceContextService],
 	install: context => {
 		const service = new AppServerCodebaseSymbolsService(context.container.get(ICodebaseSymbolsApi));
-		context.register(
-			registerCodebaseSymbolsWorkspaceSymbolProvider(
-				context.container.get(ILanguageFeaturesService),
-				service,
-				context.container.get(IWorkspaceContextService),
-			),
-		);
+		context.register(registerCodebaseSymbolsWorkspaceSymbolProvider(context.container.get(ILanguageFeaturesService), service, context.container.get(IWorkspaceContextService)));
 		return service;
 	},
 });

@@ -25,8 +25,7 @@ const run = promisify(execFile);
 
 /** Creates an isolated folder and text file for App Server-backed UI tests. */
 export async function createTestWorkspace(options: TestWorkspaceOptions = {}): Promise<TestWorkspace> {
-	if (options.gitMergeConflict && !options.gitRepository)
-		throw new Error('A merge conflict requires a Git test repository');
+	if (options.gitMergeConflict && !options.gitRepository) throw new Error('A merge conflict requires a Git test repository');
 	// The backend canonicalizes workspace roots, including macOS's /var symlink.
 	// Protocol requests and editor resources must use that same path identity.
 	const directory = await realpath(await mkdtemp(join(tmpdir(), 'ash-playwright-workspace-')));
@@ -37,11 +36,7 @@ export async function createTestWorkspace(options: TestWorkspaceOptions = {}): P
 	const largeFile = join(directory, 'large.ts');
 	const pdfFile = join(directory, 'paper.pdf');
 	await writeFile(file, 'const value = 1;\n', 'utf8');
-	await writeFile(
-		rustManifest,
-		'[package]\nname = "ash-smoke-workspace"\nversion = "0.1.0"\nedition = "2024"\n\n[[bin]]\nname = "ash-smoke-workspace"\npath = "main.rs"\n',
-		'utf8',
-	);
+	await writeFile(rustManifest, '[package]\nname = "ash-smoke-workspace"\nversion = "0.1.0"\nedition = "2024"\n\n[[bin]]\nname = "ash-smoke-workspace"\npath = "main.rs"\n', 'utf8');
 	await writeFile(rustFile, 'fn main() {\n    let message = String::from("hello");\n    message.\n}\n', 'utf8');
 	await writeFile(academyFile, createAcademyDocument(), 'utf8');
 	if (options.includeLargeFile) await writeFile(largeFile, 'let value = 1;\n'.repeat(300_001), 'utf8');
@@ -59,27 +54,16 @@ export async function createTestWorkspace(options: TestWorkspaceOptions = {}): P
 			await run('git', ['switch', '-c', 'topic'], { cwd: directory });
 			await writeFile(file, 'const value = 2;\n');
 			await run('git', ['add', 'main.ts'], { cwd: directory });
-			await run(
-				'git',
-				['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Topic'],
-				{ cwd: directory },
-			);
+			await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Topic'], { cwd: directory });
 			await run('git', ['switch', 'main'], { cwd: directory });
 			await writeFile(file, 'const value = 3;\n');
 			await run('git', ['add', 'main.ts'], { cwd: directory });
-			await run(
-				'git',
-				['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Main'],
-				{ cwd: directory },
-			);
+			await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Main'], { cwd: directory });
 			const rejected = await run('git', ['merge', 'topic'], { cwd: directory }).then(
 				() => false,
 				() => true,
 			);
-			if (
-				!rejected ||
-				!(await run('git', ['ls-files', '--unmerged', 'main.ts'], { cwd: directory })).stdout.trim()
-			) {
+			if (!rejected || !(await run('git', ['ls-files', '--unmerged', 'main.ts'], { cwd: directory })).stdout.trim()) {
 				throw new Error('Test repository did not produce a merge conflict');
 			}
 		}
@@ -98,9 +82,7 @@ function createAcademyDocument(): string {
 		content: [schema.createNode('heading', { content: [schema.createText('Academy draft')] })],
 	});
 	const abstract = schema.createNode('abstract', {
-		content: [
-			schema.createNode('paragraph', { content: [schema.createText('A structured document for editor tests.')] }),
-		],
+		content: [schema.createNode('paragraph', { content: [schema.createText('A structured document for editor tests.')] })],
 	});
 	const source = schema.createNode('codeBlock', {
 		attrs: { language: 'typescript' },

@@ -10,13 +10,7 @@ import { Menu } from '../../../../base/browser/ui/menu/menu.js';
 import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
 import { List } from '../../../../base/browser/ui/list/listWidget.js';
 import { ObjectTree } from '../../../../base/browser/ui/tree/objectTree.js';
-import {
-	defaultButtonStyles,
-	defaultInputBoxStyles,
-	defaultListStyles,
-	defaultMenuStyles,
-	defaultSelectBoxStyles,
-} from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultInputBoxStyles, defaultListStyles, defaultMenuStyles, defaultSelectBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { defineComponentFixture, defineThemedFixtureGroup } from './fixtureUtils.js';
 
 export default defineThemedFixtureGroup(
@@ -89,9 +83,7 @@ export default defineThemedFixtureGroup(
 				list.splice(0, 0, ['Selected item', 'Other item']);
 				list.setSelection([0]);
 				select.show();
-				const popup = document
-					.querySelector<HTMLElement>('.ash-select-box-list')!
-					.closest<HTMLElement>('.ash-context-view')!;
+				const popup = document.querySelector<HTMLElement>('.ash-select-box-list')!.closest<HTMLElement>('.ash-context-view')!;
 				return [container, popup];
 			},
 		}),

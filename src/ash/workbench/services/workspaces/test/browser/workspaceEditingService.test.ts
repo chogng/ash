@@ -19,28 +19,16 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
-import {
-	IWorkspaceContextService,
-	WorkbenchState,
-	type IWorkspaceFolder,
-} from '../../../../../platform/workspace/common/workspace.js';
+import { IWorkspaceContextService, WorkbenchState, type IWorkspaceFolder } from '../../../../../platform/workspace/common/workspace.js';
 import type { WorkspaceEditRequest } from '../../../../../platform/workspace/common/workspaceIpc.js';
 import { IWorkspaceEditingService } from '../../common/workspaceEditing.js';
 import { CommandService } from '../../../commands/common/commandService.js';
-import {
-	ADD_ROOT_FOLDER_COMMAND_ID,
-	PICK_WORKSPACE_FOLDER_COMMAND_ID,
-	SET_ROOT_FOLDER_COMMAND_ID,
-} from '../../../../browser/actions/workspaceCommands.js';
+import { ADD_ROOT_FOLDER_COMMAND_ID, PICK_WORKSPACE_FOLDER_COMMAND_ID, SET_ROOT_FOLDER_COMMAND_ID } from '../../../../browser/actions/workspaceCommands.js';
 import { REMOVE_ROOT_FOLDER_COMMAND_ID } from '../../../../contrib/files/browser/fileConstants.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import assert from 'node:assert/strict';
 import { test, setup, teardown } from 'mocha';
-import {
-	AddRootFolderAction,
-	RemoveRootFolderAction,
-	SaveWorkspaceAsAction,
-} from '../../../../browser/actions/workspaceActions.js';
+import { AddRootFolderAction, RemoveRootFolderAction, SaveWorkspaceAsAction } from '../../../../browser/actions/workspaceActions.js';
 import { initializeTestLocalization } from '../../../localization/test/common/localizationTestUtils.js';
 import { WorkspaceEditingService } from '../../electron-browser/workspaceEditingService.js';
 import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
@@ -60,12 +48,10 @@ ensureNoDisposablesAreLeakedInTestSuite();
 test('local workspace management uses the Chinese client translations', async () => {
 	await initializeTestLocalization('zh-CN');
 	try {
-		const titles = [new AddRootFolderAction(), new RemoveRootFolderAction(), new SaveWorkspaceAsAction()].map(
-			action => {
-				const title = action.desc.title;
-				return typeof title === 'string' ? title : title.value;
-			},
-		);
+		const titles = [new AddRootFolderAction(), new RemoveRootFolderAction(), new SaveWorkspaceAsAction()].map(action => {
+			const title = action.desc.title;
+			return typeof title === 'string' ? title : title.value;
+		});
 		assert.deepEqual(titles, ['将文件夹添加到工作区...', '从工作区移除文件夹...', '将工作区另存为...']);
 	} finally {
 		resetNlsResolver();
@@ -84,13 +70,7 @@ test('folder validation keeps dirty files accessible until saved or reverted', a
 	const copies = {
 		getAll: () => [{ resource: URI.file('/second/src/unsaved.ts'), isDirty: dirty }],
 	} as unknown as IWorkingCopyService;
-	using editing = new WorkspaceEditingService(
-		{ getWorkspace: async () => ({}), onDidChange: () => ({ dispose() {} }) },
-		context,
-		{} as IFileDialogService,
-		copies,
-		{} as IHostService,
-	);
+	using editing = new WorkspaceEditingService({ getWorkspace: async () => ({}), onDidChange: () => ({ dispose() {} }) }, context, {} as IFileDialogService, copies, {} as IHostService);
 	assert.throws(() => editing.validateFolders([first.uri]), /Save or revert/);
 	assert.doesNotThrow(() => editing.validateFolders([first.uri, second.uri]));
 	assert.throws(() => editing.validateFolders([URI.file('/')]), /Save or revert/);
@@ -121,13 +101,7 @@ test('enterWorkspace waits for Desktop host acceptance and rejects a dirty curre
 			return accepted.p;
 		},
 	} as unknown as IHostService;
-	using editing = new WorkspaceEditingService(
-		{ getWorkspace: async () => ({}), onDidChange: Event.None },
-		context,
-		{} as IFileDialogService,
-		copies,
-		host,
-	);
+	using editing = new WorkspaceEditingService({ getWorkspace: async () => ({}), onDidChange: Event.None }, context, {} as IFileDialogService, copies, host);
 	await assert.rejects(editing.enterWorkspace(target), /Save or revert/);
 	assert.deepEqual(opened, []);
 	dirty = false;
@@ -141,11 +115,7 @@ test('enterWorkspace waits for Desktop host acceptance and rejects a dirty curre
 
 // Command tests use the actual desktop editing adapter. The fake host is the
 // process boundary, so assertions observe the submitted operation and accepted state.
-function commandServices(
-	context: TestWorkspaceService,
-	dialogs: Partial<IFileDialogService>,
-	submitted: WorkspaceEditRequest[],
-) {
+function commandServices(context: TestWorkspaceService, dialogs: Partial<IFileDialogService>, submitted: WorkspaceEditRequest[]) {
 	const services = new InstantiationService();
 	services.registerInstance(IWorkspaceContextService, context);
 	services.registerInstance(IFileDialogService, dialogs as IFileDialogService);
@@ -178,9 +148,7 @@ test('add-root action executes the shared command and submits one host edit', as
 	using commands = new CommandService(services);
 	services.registerInstance(ICommandService, commands);
 	await new AddRootFolderAction().run(services);
-	assert.deepEqual(submitted, [
-		{ operation: 'folders', index: 1, deleteCount: 0, folders: [{ uri: URI.file('/second').toString() }] },
-	]);
+	assert.deepEqual(submitted, [{ operation: 'folders', index: 1, deleteCount: 0, folders: [{ uri: URI.file('/second').toString() }] }]);
 	assert.deepEqual(context.getWorkspace().folders, [root], 'renderer waits for the accepted host notification');
 });
 
@@ -261,10 +229,7 @@ for (const scheme of ['file', 'ash-remote'])
 		context.updateWorkspace({ id: 'empty', folders: [] });
 		assert.equal(await replaced, undefined);
 		assert.equal(disposed, 4);
-		await assert.rejects(
-			commands.executeCommand(PICK_WORKSPACE_FOLDER_COMMAND_ID, { placeHolder: 'invalid' }),
-			/arguments/,
-		);
+		await assert.rejects(commands.executeCommand(PICK_WORKSPACE_FOLDER_COMMAND_ID, { placeHolder: 'invalid' }), /arguments/);
 	});
 
 test('Explorer remove command targets only selected roots and keeps the renderer unchanged until commit', async () => {
@@ -277,10 +242,7 @@ test('Explorer remove command targets only selected roots and keeps the renderer
 	const submitted: WorkspaceEditRequest[] = [];
 	using services = commandServices(context, {}, submitted);
 	using commands = new CommandService(services);
-	await commands.executeCommand(REMOVE_ROOT_FOLDER_COMMAND_ID, roots[1]!.uri, [
-		roots[1]!.uri,
-		URI.file('/one/child'),
-	]);
+	await commands.executeCommand(REMOVE_ROOT_FOLDER_COMMAND_ID, roots[1]!.uri, [roots[1]!.uri, URI.file('/one/child')]);
 	assert.deepEqual(submitted, [
 		{
 			operation: 'folders',
@@ -310,8 +272,7 @@ test('WorkspaceService publishes granular events from one committed immutable co
 	listeners.add(
 		context.onDidChangeWorkspaceFolders(event => {
 			assert.ok(Object.isFrozen(context.getWorkspace()));
-			for (const folder of [...event.added, ...event.changed])
-				assert.ok(context.getWorkspace().folders.includes(folder));
+			for (const folder of [...event.added, ...event.changed]) assert.ok(context.getWorkspace().folders.includes(folder));
 			deltas.push({
 				added: event.added.map(folder => folder.id),
 				removed: event.removed.map(folder => folder.id),
@@ -357,9 +318,7 @@ test('set-root command replaces the displayed roots through the same editing own
 	using services = commandServices(context, { showOpenDialog: async () => [URI.file('/replacement')] }, submitted);
 	using commands = new CommandService(services);
 	await commands.executeCommand(SET_ROOT_FOLDER_COMMAND_ID);
-	assert.deepEqual(submitted, [
-		{ operation: 'folders', index: 0, deleteCount: 1, folders: [{ uri: URI.file('/replacement').toString() }] },
-	]);
+	assert.deepEqual(submitted, [{ operation: 'folders', index: 0, deleteCount: 1, folders: [{ uri: URI.file('/replacement').toString() }] }]);
 });
 
 async function browserWorkspaceFixture() {
@@ -430,9 +389,7 @@ test('enterWorkspace reads an existing Browser configuration without rewriting i
 	const fixture = await browserWorkspaceFixture();
 	using resources = fixture.resources;
 	const target = URI.joinPath(fixture.first, 'existing.code-workspace');
-	const content =
-		'// existing workspace\n' +
-		JSON.stringify({ folders: [{ uri: fixture.second.toString(), name: 'Server' }], settings: { preserve: true } });
+	const content = '// existing workspace\n' + JSON.stringify({ folders: [{ uri: fixture.second.toString(), name: 'Server' }], settings: { preserve: true } });
 	const original = await fixture.files.writeFile({ resource: target, content }, { create: true, overwrite: false });
 	await fixture.editing.enterWorkspace(target);
 	const workspace = fixture.context.getWorkspace();
@@ -504,10 +461,7 @@ test('Browser external workspace edits use the same owner and retain accepted ro
 	using resources = fixture.resources;
 	await fixture.editing.addFolders([{ uri: fixture.second }]);
 	const resource = fixture.context.getWorkspace().configuration!;
-	await fixture.files.writeFile(
-		{ resource, content: JSON.stringify({ folders: [{ uri: fixture.second.toString() }] }) },
-		{ create: false, overwrite: true },
-	);
+	await fixture.files.writeFile({ resource, content: JSON.stringify({ folders: [{ uri: fixture.second.toString() }] }) }, { create: false, overwrite: true });
 	await waitForWorkspaceCondition(() => fixture.context.getWorkspace().folders.length === 1);
 	assert.equal(fixture.context.getWorkspace().folders[0]?.uri.toString(), fixture.second.toString());
 	const accepted = fixture.context.getWorkspace();
@@ -530,10 +484,7 @@ test('Browser metadata operations reject dirty configuration and retain it witho
 	const current = fixture.context.getWorkspace();
 	const previous = (await fixture.files.readFile(current.configuration!)).content;
 	fixture.setDirty(current.configuration!);
-	await assert.rejects(
-		fixture.editing.saveAndEnterWorkspace(URI.joinPath(fixture.first, 'dirty.ash-workspace')),
-		/Save or revert/,
-	);
+	await assert.rejects(fixture.editing.saveAndEnterWorkspace(URI.joinPath(fixture.first, 'dirty.ash-workspace')), /Save or revert/);
 	assert.equal(fixture.context.getWorkspace(), current);
 	assert.equal((await fixture.files.readFile(current.configuration!)).content, previous);
 });
@@ -559,10 +510,7 @@ test('server enterWorkspace validates dirty folder ownership before publishing a
 	const target = URI.joinPath(first, 'team.ash-workspace');
 	await files.createDirectory(first);
 	await files.createDirectory(second);
-	await files.writeFile(
-		{ resource: target, content: JSON.stringify({ folders: [{ path: '../second', name: 'Server' }] }) },
-		{ create: true, overwrite: false },
-	);
+	await files.writeFile({ resource: target, content: JSON.stringify({ folders: [{ path: '../second', name: 'Server' }] }) }, { create: true, overwrite: false });
 	const context = resources.add(new TestWorkspaceService({ id: 'first', uri: first }));
 	let published = 0;
 	let dirty = true;
@@ -668,11 +616,7 @@ for (const failure of ['beforePublication', 'afterPublication', 'confirmation'] 
 						updateWorkspace: async workspace => {
 							if (failure === 'beforePublication') throw new Error('storage preparation failed');
 							context.updateWorkspace(workspace);
-							if (failure === 'afterPublication')
-								throw new WorkspaceTransitionCommittedError(
-									'post-publication state restore failed',
-									new Error('backup flush failed'),
-								);
+							if (failure === 'afterPublication') throw new WorkspaceTransitionCommittedError('post-publication state restore failed', new Error('backup flush failed'));
 						},
 					},
 				},
@@ -683,14 +627,9 @@ for (const failure of ['beforePublication', 'afterPublication', 'confirmation'] 
 			),
 		);
 		editing = resources.add(
-			new BrowserWorkspaceEditingService(
-				context,
-				{} as IFileDialogService,
-				{ getAll: () => [], get: () => [] } as unknown as IWorkingCopyService,
-				host,
-				files,
-				{ error: () => undefined } as unknown as INotificationService,
-			),
+			new BrowserWorkspaceEditingService(context, {} as IFileDialogService, { getAll: () => [], get: () => [] } as unknown as IWorkingCopyService, host, files, {
+				error: () => undefined,
+			} as unknown as INotificationService),
 		);
 		await assert.rejects(editing.saveAndEnterWorkspace(target));
 		if (failure === 'beforePublication') {

@@ -4,10 +4,7 @@ import { EventEmitter, once } from 'node:events';
 import { test } from 'mocha';
 import { PassThrough, Writable } from 'node:stream';
 import { DeferredPromise } from '../../../../base/common/async.js';
-import {
-	ChildProcessJsonlTransport,
-	type ChildProcessJsonlTransportOptions,
-} from '../../node/childProcessJsonlTransport.js';
+import { ChildProcessJsonlTransport, type ChildProcessJsonlTransportOptions } from '../../node/childProcessJsonlTransport.js';
 class FakeChildProcess extends EventEmitter {
 	stdin: Writable = new PassThrough();
 	readonly stdout = new PassThrough();

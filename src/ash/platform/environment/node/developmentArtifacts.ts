@@ -5,20 +5,8 @@ export function developmentArtifactsPath(appPath: string, ...segments: readonly 
 	return resolve(appPath, '.build', 'desktop', ...segments);
 }
 
-export function developmentAshPackagePath(
-	appPath: string,
-	runtime: 'host-provided-node' | 'packaged-node' = 'host-provided-node',
-): string {
-	const developmentRoot = resolve(
-		appPath,
-		'.build',
-		'runtime',
-		'dev',
-		'store-v1',
-		developmentHostTarget(),
-		runtime,
-		'dev-small',
-	);
+export function developmentAshPackagePath(appPath: string, runtime: 'host-provided-node' | 'packaged-node' = 'host-provided-node'): string {
+	const developmentRoot = resolve(appPath, '.build', 'runtime', 'dev', 'store-v1', developmentHostTarget(), runtime, 'dev-small');
 	const manifestDirectory = resolve(developmentRoot, 'manifests');
 	const manifestName = readdirSync(manifestDirectory)
 		.filter(name => /^\d{20}\.json$/u.test(name))
@@ -28,15 +16,11 @@ export function developmentAshPackagePath(
 	const manifestPath = resolve(manifestDirectory, manifestName);
 	const manifest: unknown = JSON.parse(readFileSync(manifestPath, 'utf8'));
 	const sequence = Number(manifestName.slice(0, 20));
-	if (!isPackageManifest(manifest, sequence))
-		throw new Error(`Invalid Ash development package manifest: ${manifestPath}`);
+	if (!isPackageManifest(manifest, sequence)) throw new Error(`Invalid Ash development package manifest: ${manifestPath}`);
 	return resolve(developmentRoot, ...manifest.directory.split('/'));
 }
 
-function developmentHostTarget(
-	platform: NodeJS.Platform = process.platform,
-	architecture: string = process.arch,
-): string {
+function developmentHostTarget(platform: NodeJS.Platform = process.platform, architecture: string = process.arch): string {
 	const targets: Readonly<Record<string, string>> = {
 		'darwin-arm64': 'aarch64-apple-darwin',
 		'darwin-x64': 'x86_64-apple-darwin',
@@ -50,10 +34,7 @@ function developmentHostTarget(
 	return target;
 }
 
-function isPackageManifest(
-	value: unknown,
-	sequence: number,
-): value is { readonly formatVersion: 1; readonly sequence: number; readonly directory: string } {
+function isPackageManifest(value: unknown, sequence: number): value is { readonly formatVersion: 1; readonly sequence: number; readonly directory: string } {
 	return (
 		typeof value === 'object' &&
 		value !== null &&

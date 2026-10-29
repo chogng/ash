@@ -12,12 +12,7 @@ import { InlayHintsController } from '../../../../../editor/contrib/inlayHints/b
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import {
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	IAccessibleViewService,
-	type IAccessibleViewContentProvider,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewProviderId, AccessibleViewType, IAccessibleViewService, type IAccessibleViewContentProvider } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import '../../browser/inlayHintsAccessibilty.js';

@@ -85,12 +85,7 @@ export interface DocumentPasteEditProvider {
 	readonly copyMimeTypes: readonly string[];
 	readonly pasteMimeTypes: readonly string[];
 	readonly providedPasteEditKinds: readonly HierarchicalKind[];
-	prepareDocumentPaste?(
-		model: model.ITextModel,
-		ranges: readonly IRange[],
-		dataTransfer: IReadonlyVSDataTransfer,
-		token: CancellationToken,
-	): Promise<IReadonlyVSDataTransfer | undefined>;
+	prepareDocumentPaste?(model: model.ITextModel, ranges: readonly IRange[], dataTransfer: IReadonlyVSDataTransfer, token: CancellationToken): Promise<IReadonlyVSDataTransfer | undefined>;
 	provideDocumentPasteEdits?(
 		model: model.ITextModel,
 		ranges: readonly IRange[],
@@ -119,12 +114,7 @@ export interface DocumentDropEditProvider {
 	readonly id?: string;
 	readonly dropMimeTypes?: readonly string[];
 	readonly providedDropEditKinds?: readonly HierarchicalKind[];
-	provideDocumentDropEdits(
-		model: model.ITextModel,
-		position: IPosition,
-		dataTransfer: IReadonlyVSDataTransfer,
-		token: CancellationToken,
-	): ProviderResult<DocumentDropEditsSession>;
+	provideDocumentDropEdits(model: model.ITextModel, position: IPosition, dataTransfer: IReadonlyVSDataTransfer, token: CancellationToken): ProviderResult<DocumentDropEditsSession>;
 	resolveDocumentDropEdit?(edit: DocumentDropEdit, token: CancellationToken): Promise<DocumentDropEdit>;
 }
 
@@ -190,10 +180,7 @@ export interface LanguageSemanticTokensRequest {
 }
 
 export interface LanguageSemanticTokensProvider {
-	provideSemanticTokens(
-		request: LanguageSemanticTokensRequest,
-		signal: AbortSignal,
-	): LanguageTokenResult | undefined | PromiseLike<LanguageTokenResult | undefined>;
+	provideSemanticTokens(request: LanguageSemanticTokensRequest, signal: AbortSignal): LanguageTokenResult | undefined | PromiseLike<LanguageTokenResult | undefined>;
 }
 
 /** @internal */
@@ -217,28 +204,14 @@ export interface FormattingOptions {
 export interface DocumentFormattingEditProvider {
 	readonly extensionId?: ExtensionIdentifier;
 	readonly displayName?: string;
-	provideDocumentFormattingEdits(
-		model: model.ITextModel,
-		options: FormattingOptions,
-		token: CancellationToken,
-	): ProviderResult<TextEdit[]>;
+	provideDocumentFormattingEdits(model: model.ITextModel, options: FormattingOptions, token: CancellationToken): ProviderResult<TextEdit[]>;
 }
 
 export interface DocumentRangeFormattingEditProvider {
 	readonly extensionId?: ExtensionIdentifier;
 	readonly displayName?: string;
-	provideDocumentRangeFormattingEdits(
-		model: model.ITextModel,
-		range: Range,
-		options: FormattingOptions,
-		token: CancellationToken,
-	): ProviderResult<TextEdit[]>;
-	provideDocumentRangesFormattingEdits?(
-		model: model.ITextModel,
-		ranges: Range[],
-		options: FormattingOptions,
-		token: CancellationToken,
-	): ProviderResult<TextEdit[]>;
+	provideDocumentRangeFormattingEdits(model: model.ITextModel, range: Range, options: FormattingOptions, token: CancellationToken): ProviderResult<TextEdit[]>;
+	provideDocumentRangesFormattingEdits?(model: model.ITextModel, ranges: Range[], options: FormattingOptions, token: CancellationToken): ProviderResult<TextEdit[]>;
 }
 
 export interface LanguageFormattingOptions extends Readonly<FormattingOptions> {
@@ -248,13 +221,7 @@ export interface LanguageFormattingOptions extends Readonly<FormattingOptions> {
 export interface OnTypeFormattingEditProvider {
 	readonly extensionId?: ExtensionIdentifier;
 	autoFormatTriggerCharacters: string[];
-	provideOnTypeFormattingEdits(
-		model: model.ITextModel,
-		position: Position,
-		ch: string,
-		options: FormattingOptions,
-		token: CancellationToken,
-	): ProviderResult<TextEdit[]>;
+	provideOnTypeFormattingEdits(model: model.ITextModel, position: Position, ch: string, options: FormattingOptions, token: CancellationToken): ProviderResult<TextEdit[]>;
 }
 
 /** @internal */
@@ -267,9 +234,7 @@ export interface IInplaceReplaceSupportResult {
 export abstract class TextEdit {
 	static asEditOperation(edit: TextEdit): ISingleEditOperation {
 		const range = Range.lift(edit.range);
-		return range.isEmpty()
-			? EditOperation.insert(range.getStartPosition(), edit.text)
-			: EditOperation.replace(range, edit.text);
+		return range.isEmpty() ? EditOperation.insert(range.getStartPosition(), edit.text) : EditOperation.replace(range, edit.text);
 	}
 
 	static isTextEdit(thing: unknown): thing is TextEdit {
@@ -302,11 +267,7 @@ export interface IColorInformation {
 /** A provider of colors for editor models. */
 export interface DocumentColorProvider {
 	provideDocumentColors(model: model.ITextModel, token: CancellationToken): ProviderResult<IColorInformation[]>;
-	provideColorPresentations(
-		model: model.ITextModel,
-		colorInfo: IColorInformation,
-		token: CancellationToken,
-	): ProviderResult<IColorPresentation[]>;
+	provideColorPresentations(model: model.ITextModel, colorInfo: IColorInformation, token: CancellationToken): ProviderResult<IColorPresentation[]>;
 }
 
 export enum DocumentHighlightKind {
@@ -326,29 +287,16 @@ export interface MultiDocumentHighlight {
 }
 
 export interface DocumentHighlightProvider {
-	provideDocumentHighlights(
-		model: model.ITextModel,
-		position: Position,
-		token: CancellationToken,
-	): ProviderResult<DocumentHighlight[]>;
+	provideDocumentHighlights(model: model.ITextModel, position: Position, token: CancellationToken): ProviderResult<DocumentHighlight[]>;
 }
 
 export interface MultiDocumentHighlightProvider {
 	readonly selector: LanguageSelector;
-	provideMultiDocumentHighlights(
-		primaryModel: model.ITextModel,
-		position: Position,
-		otherModels: model.ITextModel[],
-		token: CancellationToken,
-	): ProviderResult<Map<URI, DocumentHighlight[]>>;
+	provideMultiDocumentHighlights(primaryModel: model.ITextModel, position: Position, otherModels: model.ITextModel[], token: CancellationToken): ProviderResult<Map<URI, DocumentHighlight[]>>;
 }
 
 export interface LinkedEditingRangeProvider {
-	provideLinkedEditingRanges(
-		model: model.ITextModel,
-		position: Position,
-		token: CancellationToken,
-	): ProviderResult<LinkedEditingRanges>;
+	provideLinkedEditingRanges(model: model.ITextModel, position: Position, token: CancellationToken): ProviderResult<LinkedEditingRanges>;
 }
 
 export interface LinkedEditingRanges {
@@ -399,10 +347,7 @@ export class ProviderId {
 
 /** @internal */
 export class VersionedExtensionId {
-	public static tryCreate(
-		extensionId: string | undefined,
-		version: string | undefined,
-	): VersionedExtensionId | undefined {
+	public static tryCreate(extensionId: string | undefined, version: string | undefined): VersionedExtensionId | undefined {
 		if (!extensionId || !version) {
 			return undefined;
 		}
@@ -528,33 +473,15 @@ export interface LanguageHierarchyFollowupRequest extends LanguageFeatureRequest
 }
 
 export interface LanguageCallHierarchyProvider {
-	prepareCallHierarchy(
-		request: LanguageHierarchyRequest,
-		signal: AbortSignal,
-	): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
-	provideIncomingCalls(
-		request: LanguageHierarchyFollowupRequest,
-		signal: AbortSignal,
-	): readonly LanguageCallHierarchyEntry[] | Promise<readonly LanguageCallHierarchyEntry[]>;
-	provideOutgoingCalls(
-		request: LanguageHierarchyFollowupRequest,
-		signal: AbortSignal,
-	): readonly LanguageCallHierarchyEntry[] | Promise<readonly LanguageCallHierarchyEntry[]>;
+	prepareCallHierarchy(request: LanguageHierarchyRequest, signal: AbortSignal): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
+	provideIncomingCalls(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): readonly LanguageCallHierarchyEntry[] | Promise<readonly LanguageCallHierarchyEntry[]>;
+	provideOutgoingCalls(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): readonly LanguageCallHierarchyEntry[] | Promise<readonly LanguageCallHierarchyEntry[]>;
 }
 
 export interface LanguageTypeHierarchyProvider {
-	prepareTypeHierarchy(
-		request: LanguageHierarchyRequest,
-		signal: AbortSignal,
-	): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
-	provideSupertypes(
-		request: LanguageHierarchyFollowupRequest,
-		signal: AbortSignal,
-	): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
-	provideSubtypes(
-		request: LanguageHierarchyFollowupRequest,
-		signal: AbortSignal,
-	): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
+	prepareTypeHierarchy(request: LanguageHierarchyRequest, signal: AbortSignal): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
+	provideSupertypes(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
+	provideSubtypes(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
 }
 
 export enum CodeActionTriggerType {
@@ -590,15 +517,8 @@ export interface LanguageCodeActionProvider {
 	provideCodeActions(
 		request: LanguageCodeActionRequest,
 		signal: AbortSignal,
-	):
-		| readonly LanguageCodeAction[]
-		| LanguageCodeActionList
-		| Promise<readonly LanguageCodeAction[] | LanguageCodeActionList>;
-	resolveCodeAction?(
-		action: LanguageCodeAction,
-		request: LanguageCodeActionRequest,
-		signal: AbortSignal,
-	): LanguageCodeAction | Promise<LanguageCodeAction>;
+	): readonly LanguageCodeAction[] | LanguageCodeActionList | Promise<readonly LanguageCodeAction[] | LanguageCodeActionList>;
+	resolveCodeAction?(action: LanguageCodeAction, request: LanguageCodeActionRequest, signal: AbortSignal): LanguageCodeAction | Promise<LanguageCodeAction>;
 }
 
 export interface LanguageColorRequest extends LanguageFeatureRequest {
@@ -612,14 +532,8 @@ export interface LanguageColorPresentationRequest extends LanguageFeatureRequest
 }
 
 export interface LanguageColorProvider {
-	provideDocumentColors(
-		request: LanguageColorRequest,
-		signal: AbortSignal,
-	): readonly IColorInformation[] | undefined | Promise<readonly IColorInformation[] | undefined>;
-	provideColorPresentations(
-		request: LanguageColorPresentationRequest,
-		signal: AbortSignal,
-	): readonly IColorPresentation[] | undefined | Promise<readonly IColorPresentation[] | undefined>;
+	provideDocumentColors(request: LanguageColorRequest, signal: AbortSignal): readonly IColorInformation[] | undefined | Promise<readonly IColorInformation[] | undefined>;
+	provideColorPresentations(request: LanguageColorPresentationRequest, signal: AbortSignal): readonly IColorPresentation[] | undefined | Promise<readonly IColorPresentation[] | undefined>;
 }
 
 export type LanguageSymbolKind = string | number;
@@ -699,26 +613,17 @@ export function nestDocumentSymbols(values: readonly LanguageDocumentSymbol[]): 
 	}
 	const symbols = [...values].sort(
 		(a, b) =>
-			a.range.startLineNumber - b.range.startLineNumber ||
-			a.range.startColumn - b.range.startColumn ||
-			b.range.endLineNumber - a.range.endLineNumber ||
-			b.range.endColumn - a.range.endColumn,
+			a.range.startLineNumber - b.range.startLineNumber || a.range.startColumn - b.range.startColumn || b.range.endLineNumber - a.range.endLineNumber || b.range.endColumn - a.range.endColumn,
 	);
 	const roots: SymbolNode[] = [];
 	const stack: SymbolNode[] = [];
 	for (const symbol of symbols) {
-		while (
-			stack.length &&
-			(!stack.at(-1)!.symbol.range.containsRange(symbol.range) ||
-				stack.at(-1)!.symbol.range.equalsRange(symbol.range))
-		)
-			stack.pop();
+		while (stack.length && (!stack.at(-1)!.symbol.range.containsRange(symbol.range) || stack.at(-1)!.symbol.range.equalsRange(symbol.range))) stack.pop();
 		const node: SymbolNode = { symbol, children: [] };
 		(stack.at(-1)?.children ?? roots).push(node);
 		stack.push(node);
 	}
-	const freeze = ({ symbol, children }: SymbolNode): LanguageDocumentSymbol =>
-		children.length ? Object.freeze({ ...symbol, children: Object.freeze(children.map(freeze)) }) : symbol;
+	const freeze = ({ symbol, children }: SymbolNode): LanguageDocumentSymbol => (children.length ? Object.freeze({ ...symbol, children: Object.freeze(children.map(freeze)) }) : symbol);
 	return Object.freeze(roots.map(freeze));
 }
 
@@ -727,10 +632,7 @@ export interface LanguageDocumentSymbolRequest extends LanguageFeatureRequest {
 }
 
 export interface LanguageDocumentSymbolProvider {
-	provideDocumentSymbols(
-		request: LanguageDocumentSymbolRequest,
-		signal: AbortSignal,
-	): readonly LanguageDocumentSymbol[] | Promise<readonly LanguageDocumentSymbol[]>;
+	provideDocumentSymbols(request: LanguageDocumentSymbolRequest, signal: AbortSignal): readonly LanguageDocumentSymbol[] | Promise<readonly LanguageDocumentSymbol[]>;
 }
 
 export type LanguageFoldingRangeKind = 'comment' | 'imports' | 'region';
@@ -749,10 +651,7 @@ export interface LanguageFoldingRangeRequest extends LanguageFeatureRequest {
 export interface LanguageFoldingRangeProvider {
 	/** Stable identity for selecting a provider independently of registration order. */
 	readonly id?: string;
-	provideFoldingRanges(
-		request: LanguageFoldingRangeRequest,
-		signal: AbortSignal,
-	): readonly LanguageFoldingRange[] | Promise<readonly LanguageFoldingRange[]>;
+	provideFoldingRanges(request: LanguageFoldingRangeRequest, signal: AbortSignal): readonly LanguageFoldingRange[] | Promise<readonly LanguageFoldingRange[]>;
 }
 
 export interface LanguageLocationRequest extends LanguageFeatureRequest {
@@ -765,38 +664,23 @@ export interface LanguageReferenceRequest extends LanguageLocationRequest {
 }
 
 export interface LanguageDefinitionProvider {
-	provideDefinition(
-		request: LanguageLocationRequest,
-		signal: AbortSignal,
-	): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
+	provideDefinition(request: LanguageLocationRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
 }
 
 export interface LanguageDeclarationProvider {
-	provideDeclaration(
-		request: LanguageLocationRequest,
-		signal: AbortSignal,
-	): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
+	provideDeclaration(request: LanguageLocationRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
 }
 
 export interface LanguageImplementationProvider {
-	provideImplementation(
-		request: LanguageLocationRequest,
-		signal: AbortSignal,
-	): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
+	provideImplementation(request: LanguageLocationRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
 }
 
 export interface LanguageTypeDefinitionProvider {
-	provideTypeDefinition(
-		request: LanguageLocationRequest,
-		signal: AbortSignal,
-	): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
+	provideTypeDefinition(request: LanguageLocationRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
 }
 
 export interface LanguageReferenceProvider {
-	provideReferences(
-		request: LanguageReferenceRequest,
-		signal: AbortSignal,
-	): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
+	provideReferences(request: LanguageReferenceRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
 }
 
 export type LanguageHoverContent = string | { readonly value: string; readonly language?: string };
@@ -812,10 +696,7 @@ export interface LanguageHoverRequest extends LanguageFeatureRequest {
 }
 
 export interface LanguageHoverProvider {
-	provideHover(
-		request: LanguageHoverRequest,
-		signal: AbortSignal,
-	): LanguageHover | undefined | Promise<LanguageHover | undefined>;
+	provideHover(request: LanguageHoverRequest, signal: AbortSignal): LanguageHover | undefined | Promise<LanguageHover | undefined>;
 }
 
 export type LanguageInlayHintKind = 'type' | 'parameter' | 'other';
@@ -837,10 +718,7 @@ export interface LanguageInlayHintsRequest extends LanguageFeatureRequest {
 }
 
 export interface LanguageInlayHintsProvider {
-	provideInlayHints(
-		request: LanguageInlayHintsRequest,
-		signal: AbortSignal,
-	): readonly LanguageInlayHint[] | Promise<readonly LanguageInlayHint[]>;
+	provideInlayHints(request: LanguageInlayHintsRequest, signal: AbortSignal): readonly LanguageInlayHint[] | Promise<readonly LanguageInlayHint[]>;
 }
 
 export interface LanguageInlineCompletionItem {
@@ -859,10 +737,7 @@ export interface LanguageInlineCompletionsRequest extends LanguageFeatureRequest
 }
 
 export interface LanguageInlineCompletionsProvider {
-	provideInlineCompletions(
-		request: LanguageInlineCompletionsRequest,
-		signal: AbortSignal,
-	): readonly LanguageInlineCompletionItem[] | Promise<readonly LanguageInlineCompletionItem[]>;
+	provideInlineCompletions(request: LanguageInlineCompletionsRequest, signal: AbortSignal): readonly LanguageInlineCompletionItem[] | Promise<readonly LanguageInlineCompletionItem[]>;
 }
 
 export interface LanguageParameterInformation {
@@ -888,19 +763,15 @@ export interface LanguageParameterHintsRequest extends LanguageFeatureRequest {
 	readonly context: LanguageParameterHintsContext;
 }
 
-export type LanguageParameterHintsContext = (
-	| { readonly kind: 'invoke' }
-	| { readonly kind: 'triggerCharacter'; readonly triggerCharacter: string }
-	| { readonly kind: 'contentChange' }
-) & { readonly isRetrigger?: boolean; readonly activeSignatureHelp?: LanguageParameterHints };
+export type LanguageParameterHintsContext = ({ readonly kind: 'invoke' } | { readonly kind: 'triggerCharacter'; readonly triggerCharacter: string } | { readonly kind: 'contentChange' }) & {
+	readonly isRetrigger?: boolean;
+	readonly activeSignatureHelp?: LanguageParameterHints;
+};
 
 export interface LanguageParameterHintsProvider {
 	readonly signatureHelpTriggerCharacters?: readonly string[];
 	readonly signatureHelpRetriggerCharacters?: readonly string[];
-	provideParameterHints(
-		request: LanguageParameterHintsRequest,
-		signal: AbortSignal,
-	): LanguageParameterHints | undefined | Promise<LanguageParameterHints | undefined>;
+	provideParameterHints(request: LanguageParameterHintsRequest, signal: AbortSignal): LanguageParameterHints | undefined | Promise<LanguageParameterHints | undefined>;
 }
 
 export interface LanguageRenameRequest extends LanguageFeatureRequest {
@@ -915,14 +786,8 @@ export interface LanguageRenamePreparation {
 }
 
 export interface LanguageRenameProvider {
-	prepareRename?(
-		request: LanguageRenameRequest,
-		signal: AbortSignal,
-	): LanguageRenamePreparation | undefined | Promise<LanguageRenamePreparation | undefined>;
-	provideRenameEdits(
-		request: LanguageRenameRequest,
-		signal: AbortSignal,
-	): LanguageWorkspaceEdit | Promise<LanguageWorkspaceEdit>;
+	prepareRename?(request: LanguageRenameRequest, signal: AbortSignal): LanguageRenamePreparation | undefined | Promise<LanguageRenamePreparation | undefined>;
+	provideRenameEdits(request: LanguageRenameRequest, signal: AbortSignal): LanguageWorkspaceEdit | Promise<LanguageWorkspaceEdit>;
 }
 
 export interface LanguageSelectionRangeRequest extends LanguageFeatureRequest {
@@ -931,10 +796,7 @@ export interface LanguageSelectionRangeRequest extends LanguageFeatureRequest {
 }
 
 export interface LanguageSelectionRangeProvider {
-	provideSelectionRanges(
-		request: LanguageSelectionRangeRequest,
-		signal: AbortSignal,
-	): readonly Range[] | Promise<readonly Range[]>;
+	provideSelectionRanges(request: LanguageSelectionRangeRequest, signal: AbortSignal): readonly Range[] | Promise<readonly Range[]>;
 }
 
 export interface ILink {
@@ -954,18 +816,11 @@ export interface LanguageLinkRequest extends LanguageFeatureRequest {
 }
 
 export interface LanguageLinkProvider {
-	provideLinks(
-		request: LanguageLinkRequest,
-		signal: AbortSignal,
-	): readonly LanguageLink[] | Promise<readonly LanguageLink[]>;
+	provideLinks(request: LanguageLinkRequest, signal: AbortSignal): readonly LanguageLink[] | Promise<readonly LanguageLink[]>;
 }
 
 /** Creates a request from the model's current snapshot and a caller-owned cancellation signal. */
-export function createLanguageFeatureRequest(
-	model: TextModel,
-	languageId: string,
-	signal: AbortSignal,
-): LanguageFeatureRequest {
+export function createLanguageFeatureRequest(model: TextModel, languageId: string, signal: AbortSignal): LanguageFeatureRequest {
 	return Object.freeze({
 		model,
 		snapshot: model.createVersionedSnapshot(),
@@ -977,12 +832,7 @@ export function createLanguageFeatureRequest(
 
 /** Returns whether a provider result may still be applied to the request's model. */
 export function isLanguageFeatureRequestCurrent(request: LanguageFeatureRequest): boolean {
-	return (
-		!request.signal.aborted &&
-		!request.model.isDisposed() &&
-		request.model.version === request.snapshot.version &&
-		request.model.getLanguageId() === request.modelLanguageId
-	);
+	return !request.signal.aborted && !request.model.isDisposed() && request.model.version === request.snapshot.version && request.model.getLanguageId() === request.modelLanguageId;
 }
 
 /** Text replacements for one exact resource snapshot. */
@@ -1021,8 +871,7 @@ export interface LanguageDeleteFileEdit {
 	readonly mode: LanguageDeleteMode;
 }
 
-export type LanguageWorkspaceEditEntry =
-	LanguageTextDocumentEdit | LanguageCreateFileEdit | LanguageRenameFileEdit | LanguageDeleteFileEdit;
+export type LanguageWorkspaceEditEntry = LanguageTextDocumentEdit | LanguageCreateFileEdit | LanguageRenameFileEdit | LanguageDeleteFileEdit;
 
 /** One language-server edit spanning one or more text resources. */
 export interface LanguageWorkspaceEdit {
@@ -1030,18 +879,14 @@ export interface LanguageWorkspaceEdit {
 }
 
 export function normalizeLanguageWorkspaceEdit(edit: LanguageWorkspaceEdit): LanguageWorkspaceEdit {
-	if (!edit || typeof edit !== 'object' || !Array.isArray(edit.entries))
-		throw new TypeError('Language workspace edit must contain ordered entries');
+	if (!edit || typeof edit !== 'object' || !Array.isArray(edit.entries)) throw new TypeError('Language workspace edit must contain ordered entries');
 	const entries = edit.entries.map(entry => {
 		if (!entry || typeof entry !== 'object') throw new TypeError('Language workspace edit entry must be an object');
 		switch (entry.kind) {
 			case 'textDocument':
-				if (!entry.resource || !Array.isArray(entry.edits))
-					throw new TypeError('Language document edit requires a resource and text edits');
-				if (entry.version !== undefined && (!Number.isSafeInteger(entry.version) || entry.version < 1))
-					throw new RangeError('Language document edit version must be a positive safe integer');
-				if (entry.expectedText !== undefined && typeof entry.expectedText !== 'string')
-					throw new TypeError('Language document edit expected text must be text');
+				if (!entry.resource || !Array.isArray(entry.edits)) throw new TypeError('Language document edit requires a resource and text edits');
+				if (entry.version !== undefined && (!Number.isSafeInteger(entry.version) || entry.version < 1)) throw new RangeError('Language document edit version must be a positive safe integer');
+				if (entry.expectedText !== undefined && typeof entry.expectedText !== 'string') throw new TypeError('Language document edit expected text must be text');
 				return Object.freeze({
 					kind: entry.kind,
 					resource: entry.resource,
@@ -1050,8 +895,7 @@ export function normalizeLanguageWorkspaceEdit(edit: LanguageWorkspaceEdit): Lan
 					edits: Object.freeze([...entry.edits]),
 				});
 			case 'create':
-				if (entry.contents !== undefined && typeof entry.contents !== 'string')
-					throw new TypeError('Workspace create contents must be text');
+				if (entry.contents !== undefined && typeof entry.contents !== 'string') throw new TypeError('Workspace create contents must be text');
 				return Object.freeze({
 					kind: entry.kind,
 					resource: requireResource(entry.resource, 'create target'),
@@ -1066,10 +910,8 @@ export function normalizeLanguageWorkspaceEdit(edit: LanguageWorkspaceEdit): Lan
 					existing: existingBehavior(entry.existing),
 				});
 			case 'delete':
-				if (entry.missing !== 'error' && entry.missing !== 'ignore')
-					throw new TypeError('Language delete missing-target behavior is invalid');
-				if (entry.mode !== 'fileOrEmptyDirectory' && entry.mode !== 'recursive')
-					throw new TypeError('Language delete mode is invalid');
+				if (entry.missing !== 'error' && entry.missing !== 'ignore') throw new TypeError('Language delete missing-target behavior is invalid');
+				if (entry.mode !== 'fileOrEmptyDirectory' && entry.mode !== 'recursive') throw new TypeError('Language delete mode is invalid');
 				return Object.freeze({
 					kind: entry.kind,
 					resource: requireResource(entry.resource, 'delete target'),
@@ -1084,14 +926,12 @@ export function normalizeLanguageWorkspaceEdit(edit: LanguageWorkspaceEdit): Lan
 }
 
 function requireResource(resource: URI, name: string): URI {
-	if (!resource || typeof resource.toString !== 'function')
-		throw new TypeError(`Language workspace ${name} requires a resource`);
+	if (!resource || typeof resource.toString !== 'function') throw new TypeError(`Language workspace ${name} requires a resource`);
 	return resource;
 }
 
 function existingBehavior(value: LanguageExistingTargetBehavior): LanguageExistingTargetBehavior {
-	if (value !== 'error' && value !== 'overwrite' && value !== 'ignore')
-		throw new TypeError('Language workspace existing-target behavior is invalid');
+	if (value !== 'error' && value !== 'overwrite' && value !== 'ignore') throw new TypeError('Language workspace existing-target behavior is invalid');
 	return value;
 }
 
@@ -1114,10 +954,7 @@ export interface LanguageCompletionIncompleteRefreshContext {
 	readonly kind: LanguageCompletionTriggerKind.IncompleteRefresh;
 }
 
-export type LanguageCompletionContext =
-	| LanguageCompletionInvokeContext
-	| LanguageCompletionTriggerCharacterContext
-	| LanguageCompletionIncompleteRefreshContext;
+export type LanguageCompletionContext = LanguageCompletionInvokeContext | LanguageCompletionTriggerCharacterContext | LanguageCompletionIncompleteRefreshContext;
 
 export interface LanguageCompletionRequest {
 	readonly languageId: string;
@@ -1157,18 +994,9 @@ export interface LanguageCompletionProvider {
 	readonly id: string;
 	readonly languageIds: readonly string[];
 	readonly triggerCharacters?: readonly string[];
-	provideCompletions(
-		request: LanguageCompletionProviderRequest,
-		signal: AbortSignal,
-	): LanguageCompletionProviderResult | undefined | PromiseLike<LanguageCompletionProviderResult | undefined>;
-	resolveCompletionItem?(
-		request: LanguageCompletionProviderResolveRequest,
-		signal: AbortSignal,
-	): LanguageCompletionItemDetails | undefined | PromiseLike<LanguageCompletionItemDetails | undefined>;
-	executeCompletionCommand?(
-		request: LanguageCompletionProviderCommandRequest,
-		signal: AbortSignal,
-	): void | PromiseLike<void>;
+	provideCompletions(request: LanguageCompletionProviderRequest, signal: AbortSignal): LanguageCompletionProviderResult | undefined | PromiseLike<LanguageCompletionProviderResult | undefined>;
+	resolveCompletionItem?(request: LanguageCompletionProviderResolveRequest, signal: AbortSignal): LanguageCompletionItemDetails | undefined | PromiseLike<LanguageCompletionItemDetails | undefined>;
+	executeCompletionCommand?(request: LanguageCompletionProviderCommandRequest, signal: AbortSignal): void | PromiseLike<void>;
 }
 
 export interface LanguageCompletionProviderMetadata {
@@ -1190,18 +1018,9 @@ export interface LanguageCompletionProviderCatalogSource {
 }
 
 export interface RegisteredLanguageCompletionProvider extends LanguageCompletionProviderMetadata {
-	provideCompletions(
-		request: LanguageCompletionProviderRequest,
-		signal: AbortSignal,
-	): LanguageCompletionProviderResult | undefined | PromiseLike<LanguageCompletionProviderResult | undefined>;
-	resolveCompletionItem?(
-		request: LanguageCompletionProviderResolveRequest,
-		signal: AbortSignal,
-	): LanguageCompletionItemDetails | undefined | PromiseLike<LanguageCompletionItemDetails | undefined>;
-	executeCompletionCommand?(
-		request: LanguageCompletionProviderCommandRequest,
-		signal: AbortSignal,
-	): void | PromiseLike<void>;
+	provideCompletions(request: LanguageCompletionProviderRequest, signal: AbortSignal): LanguageCompletionProviderResult | undefined | PromiseLike<LanguageCompletionProviderResult | undefined>;
+	resolveCompletionItem?(request: LanguageCompletionProviderResolveRequest, signal: AbortSignal): LanguageCompletionItemDetails | undefined | PromiseLike<LanguageCompletionItemDetails | undefined>;
+	executeCompletionCommand?(request: LanguageCompletionProviderCommandRequest, signal: AbortSignal): void | PromiseLike<void>;
 }
 
 /** One caller-owned provider set that can be atomically replaced. */
@@ -1213,11 +1032,12 @@ export function createLanguageCompletionInvokeContext(): LanguageCompletionInvok
 	return INVOKE_CONTEXT;
 }
 
-export function createLanguageCompletionTriggerCharacterContext(
-	triggerCharacter: string,
-): LanguageCompletionTriggerCharacterContext {
+export function createLanguageCompletionTriggerCharacterContext(triggerCharacter: string): LanguageCompletionTriggerCharacterContext {
 	assertTriggerCharacter(triggerCharacter);
-	return Object.freeze({ kind: LanguageCompletionTriggerKind.TriggerCharacter, triggerCharacter });
+	return Object.freeze({
+		kind: LanguageCompletionTriggerKind.TriggerCharacter,
+		triggerCharacter,
+	});
 }
 
 export function createLanguageCompletionIncompleteRefreshContext(): LanguageCompletionIncompleteRefreshContext {
@@ -1229,33 +1049,29 @@ export function assertLanguageCompletionRequest(request: LanguageCompletionReque
 		throw new TypeError('Language completion request must be an object');
 	}
 	assertLanguageId(request.languageId);
-	if (request.resource !== undefined && typeof request.resource.toString !== 'function')
-		throw new TypeError('Language completion resource must be a URI');
+	if (request.resource !== undefined && typeof request.resource.toString !== 'function') throw new TypeError('Language completion resource must be a URI');
 	assertLanguageCompletionContext(request.context);
 }
 
-export function languageCompletionProviderMatches(
-	provider: LanguageCompletionProviderMetadata,
-	languageId: string,
-	context: LanguageCompletionContext,
-): boolean {
+export function languageCompletionProviderMatches(provider: LanguageCompletionProviderMetadata, languageId: string, context: LanguageCompletionContext): boolean {
 	assertProviderMetadata(provider);
 	assertLanguageId(languageId);
 	assertLanguageCompletionContext(context);
 	return (
 		(provider.languageIds.includes('*') || provider.languageIds.includes(languageId)) &&
-		(context.kind !== LanguageCompletionTriggerKind.TriggerCharacter ||
-			provider.triggerCharacters.includes(context.triggerCharacter))
+		(context.kind !== LanguageCompletionTriggerKind.TriggerCharacter || provider.triggerCharacters.includes(context.triggerCharacter))
 	);
 }
 
-const INVOKE_CONTEXT = Object.freeze({ kind: LanguageCompletionTriggerKind.Invoke });
+const INVOKE_CONTEXT = Object.freeze({
+	kind: LanguageCompletionTriggerKind.Invoke,
+});
 
-const INCOMPLETE_REFRESH_CONTEXT = Object.freeze({ kind: LanguageCompletionTriggerKind.IncompleteRefresh });
+const INCOMPLETE_REFRESH_CONTEXT = Object.freeze({
+	kind: LanguageCompletionTriggerKind.IncompleteRefresh,
+});
 
-export function normalizeCompletionProvider(
-	provider: LanguageCompletionProvider,
-): RegisteredLanguageCompletionProvider {
+export function normalizeCompletionProvider(provider: LanguageCompletionProvider): RegisteredLanguageCompletionProvider {
 	if (typeof provider !== 'object' || provider === null) {
 		throw new TypeError('Language completion provider must be an object');
 	}
@@ -1288,12 +1104,8 @@ export function normalizeCompletionProvider(
 		languageIds: Object.freeze(languageIds),
 		triggerCharacters: Object.freeze(triggerCharacters),
 		provideCompletions: provider.provideCompletions.bind(provider),
-		...(provider.resolveCompletionItem === undefined
-			? {}
-			: { resolveCompletionItem: provider.resolveCompletionItem.bind(provider) }),
-		...(provider.executeCompletionCommand === undefined
-			? {}
-			: { executeCompletionCommand: provider.executeCompletionCommand.bind(provider) }),
+		...(provider.resolveCompletionItem === undefined ? {} : { resolveCompletionItem: provider.resolveCompletionItem.bind(provider) }),
+		...(provider.executeCompletionCommand === undefined ? {} : { executeCompletionCommand: provider.executeCompletionCommand.bind(provider) }),
 	});
 }
 
@@ -1320,13 +1132,8 @@ export function assertLanguageCompletionContext(context: LanguageCompletionConte
 		assertTriggerCharacter(context.triggerCharacter);
 		return;
 	}
-	if (
-		context.kind !== LanguageCompletionTriggerKind.Invoke &&
-		context.kind !== LanguageCompletionTriggerKind.IncompleteRefresh
-	) {
-		throw new TypeError(
-			`Unknown language completion trigger kind '${(context as LanguageCompletionContext).kind}'`,
-		);
+	if (context.kind !== LanguageCompletionTriggerKind.Invoke && context.kind !== LanguageCompletionTriggerKind.IncompleteRefresh) {
+		throw new TypeError(`Unknown language completion trigger kind '${(context as LanguageCompletionContext).kind}'`);
 	}
 }
 
@@ -1363,19 +1170,10 @@ export interface SyntaxProvider {
 	readonly languageIds: readonly string[];
 	readonly tokenPriority?: number;
 	readonly diagnosticPriority?: number;
-	provideTokens?(
-		request: SyntaxProviderRequest,
-		signal: AbortSignal,
-	): LanguageTokenResult | undefined | PromiseLike<LanguageTokenResult | undefined>;
+	provideTokens?(request: SyntaxProviderRequest, signal: AbortSignal): LanguageTokenResult | undefined | PromiseLike<LanguageTokenResult | undefined>;
 	/** Returns tokens relative to the proposed lines without changing document state. */
-	provideTokensForLines?(
-		request: SyntaxTokenizationRequest,
-		signal: AbortSignal,
-	): LanguageTokenResult | undefined | PromiseLike<LanguageTokenResult | undefined>;
-	provideDiagnostics?(
-		request: SyntaxProviderRequest,
-		signal: AbortSignal,
-	): LanguageDiagnosticResult | undefined | PromiseLike<LanguageDiagnosticResult | undefined>;
+	provideTokensForLines?(request: SyntaxTokenizationRequest, signal: AbortSignal): LanguageTokenResult | undefined | PromiseLike<LanguageTokenResult | undefined>;
+	provideDiagnostics?(request: SyntaxProviderRequest, signal: AbortSignal): LanguageDiagnosticResult | undefined | PromiseLike<LanguageDiagnosticResult | undefined>;
 	synchronizeDocument?(synchronization: LanguageWorkerDocumentSynchronization): void;
 }
 
@@ -1397,13 +1195,8 @@ export function assertSyntaxRequest(request: SyntaxRequest): void {
 	assertLanguageId(request.languageId);
 	if (request.tokenize !== undefined) {
 		const { lineNumber, lines } = request.tokenize;
-		if (!Number.isSafeInteger(lineNumber) || lineNumber < 1)
-			throw new RangeError('Tokenization start line must be positive');
-		if (
-			!Array.isArray(lines) ||
-			lines.length === 0 ||
-			lines.some(line => typeof line !== 'string' || /[\r\n]/.test(line))
-		) {
+		if (!Number.isSafeInteger(lineNumber) || lineNumber < 1) throw new RangeError('Tokenization start line must be positive');
+		if (!Array.isArray(lines) || lines.length === 0 || lines.some(line => typeof line !== 'string' || /[\r\n]/.test(line))) {
 			throw new TypeError('Tokenization requires non-empty lines without line endings');
 		}
 	}
@@ -1427,28 +1220,17 @@ export function normalizeSyntaxProvider(provider: SyntaxProvider): RegisteredSyn
 	if (provider.provideTokens !== undefined && typeof provider.provideTokens !== 'function') {
 		throw new TypeError('Syntax provider provideTokens must be a function');
 	}
-	if (
-		provider.provideTokensForLines !== undefined &&
-		(typeof provider.provideTokensForLines !== 'function' || !provider.provideTokens)
-	) {
+	if (provider.provideTokensForLines !== undefined && (typeof provider.provideTokensForLines !== 'function' || !provider.provideTokens)) {
 		throw new TypeError('Syntax provider provideTokensForLines requires a token provider and must be a function');
 	}
-	if (
-		provider.tokenPriority !== undefined &&
-		(!Number.isSafeInteger(provider.tokenPriority) || !provider.provideTokens)
-	) {
+	if (provider.tokenPriority !== undefined && (!Number.isSafeInteger(provider.tokenPriority) || !provider.provideTokens)) {
 		throw new TypeError('Syntax provider token priority requires a token provider and must be a safe integer');
 	}
 	if (provider.provideDiagnostics !== undefined && typeof provider.provideDiagnostics !== 'function') {
 		throw new TypeError('Syntax provider provideDiagnostics must be a function');
 	}
-	if (
-		provider.diagnosticPriority !== undefined &&
-		(!Number.isSafeInteger(provider.diagnosticPriority) || !provider.provideDiagnostics)
-	) {
-		throw new TypeError(
-			'Syntax provider diagnostic priority requires a diagnostic provider and must be a safe integer',
-		);
+	if (provider.diagnosticPriority !== undefined && (!Number.isSafeInteger(provider.diagnosticPriority) || !provider.provideDiagnostics)) {
+		throw new TypeError('Syntax provider diagnostic priority requires a diagnostic provider and must be a safe integer');
 	}
 	if (provider.synchronizeDocument !== undefined && typeof provider.synchronizeDocument !== 'function') {
 		throw new TypeError('Syntax provider synchronizeDocument must be a function');
@@ -1462,15 +1244,9 @@ export function normalizeSyntaxProvider(provider: SyntaxProvider): RegisteredSyn
 		tokenPriority: provider.tokenPriority ?? 0,
 		diagnosticPriority: provider.diagnosticPriority ?? 0,
 		...(provider.provideTokens === undefined ? {} : { provideTokens: provider.provideTokens.bind(provider) }),
-		...(provider.provideTokensForLines === undefined
-			? {}
-			: { provideTokensForLines: provider.provideTokensForLines.bind(provider) }),
-		...(provider.provideDiagnostics === undefined
-			? {}
-			: { provideDiagnostics: provider.provideDiagnostics.bind(provider) }),
-		...(provider.synchronizeDocument === undefined
-			? {}
-			: { synchronizeDocument: provider.synchronizeDocument.bind(provider) }),
+		...(provider.provideTokensForLines === undefined ? {} : { provideTokensForLines: provider.provideTokensForLines.bind(provider) }),
+		...(provider.provideDiagnostics === undefined ? {} : { provideDiagnostics: provider.provideDiagnostics.bind(provider) }),
+		...(provider.synchronizeDocument === undefined ? {} : { synchronizeDocument: provider.synchronizeDocument.bind(provider) }),
 	});
 }
 
@@ -1558,10 +1334,7 @@ export interface LanguageCompletionResolveRequest {
 }
 
 export interface LanguageCompletionItemResolver {
-	resolveCompletionItem(
-		request: LanguageCompletionResolveRequest,
-		signal: AbortSignal,
-	): Promise<LanguageCompletionItemDetails>;
+	resolveCompletionItem(request: LanguageCompletionResolveRequest, signal: AbortSignal): Promise<LanguageCompletionItemDetails>;
 }
 
 export type LanguageCompletionResultNormalizer = (value: LanguageCompletionResult) => LanguageCompletionResult;
@@ -1570,19 +1343,12 @@ export const LANGUAGE_COMPLETION_LANE = 'completion';
 
 export type LanguageCompletionLane = typeof LANGUAGE_COMPLETION_LANE;
 
-export type LanguageCompletionWorker = LanguageWorker<
-	LanguageCompletionLane,
-	LanguageCompletionRequest,
-	LanguageCompletionResult
->;
+export type LanguageCompletionWorker = LanguageWorker<LanguageCompletionLane, LanguageCompletionRequest, LanguageCompletionResult>;
 
 export type LanguageCompletionWorkerFactory = () => LanguageCompletionWorker;
 
 /** Validates provider output against an immutable captured model snapshot. */
-export function normalizeLanguageCompletionSnapshotResult(
-	value: LanguageCompletionResult,
-	snapshot: TextSnapshot,
-): LanguageCompletionResult {
+export function normalizeLanguageCompletionSnapshotResult(value: LanguageCompletionResult, snapshot: TextSnapshot): LanguageCompletionResult {
 	return createLanguageCompletionSnapshotNormalizer(snapshot)(value);
 }
 
@@ -1617,9 +1383,7 @@ export function normalizeLanguageCompletionItemDetails(value: unknown): Language
 	});
 }
 
-export function normalizeLanguageCompletionResolveRequest(
-	value: LanguageCompletionResolveRequest,
-): LanguageCompletionResolveRequest {
+export function normalizeLanguageCompletionResolveRequest(value: LanguageCompletionResolveRequest): LanguageCompletionResolveRequest {
 	if (typeof value !== 'object' || value === null) {
 		throw new TypeError('Language completion resolve request must be an object');
 	}
@@ -1666,11 +1430,7 @@ export function normalizeLanguageCompletionResult(
 		identities.add(identity);
 		assertNonEmptyText(item.label, 'Language completion item label');
 		const labelMatchIndices = normalizeCompletionMatchIndices(item.labelMatchIndices, item.label, 'label');
-		const detailMatchIndices = normalizeCompletionMatchIndices(
-			item.detailMatchIndices,
-			item.detail ?? '',
-			'detail',
-		);
+		const detailMatchIndices = normalizeCompletionMatchIndices(item.detailMatchIndices, item.detail ?? '', 'detail');
 		if (!Object.values(LanguageCompletionItemKind).includes(item.kind)) {
 			throw new TypeError(`Unknown language completion item kind '${item.kind}'`);
 		}
@@ -1678,10 +1438,7 @@ export function normalizeLanguageCompletionResult(
 		if (typeof item.insertText !== 'string') {
 			throw new TypeError('Language completion insertText must be a string');
 		}
-		if (
-			item.insertTextFormat !== undefined &&
-			!Object.values(LanguageCompletionInsertTextFormat).includes(item.insertTextFormat)
-		) {
+		if (item.insertTextFormat !== undefined && !Object.values(LanguageCompletionInsertTextFormat).includes(item.insertTextFormat)) {
 			throw new TypeError(`Unknown language completion insert text format '${item.insertTextFormat}'`);
 		}
 		assertOptionalText(item.detail, 'Language completion item detail');
@@ -1692,11 +1449,7 @@ export function normalizeLanguageCompletionResult(
 			throw new TypeError('Language completion item preselect must be a boolean');
 		}
 		const commitCharacters = normalizeCommitCharacters(item.commitCharacters);
-		const additionalTextEdits = normalizeAdditionalTextEdits(
-			item.additionalTextEdits,
-			item.range,
-			validateAdditionalRange,
-		);
+		const additionalTextEdits = normalizeAdditionalTextEdits(item.additionalTextEdits, item.range, validateAdditionalRange);
 		const command = normalizeCompletionCommand(item.command);
 		if (item.hasDeferredDetails !== undefined && typeof item.hasDeferredDetails !== 'boolean') {
 			throw new TypeError('Language completion item hasDeferredDetails must be a boolean');
@@ -1728,14 +1481,14 @@ export function normalizeLanguageCompletionResult(
 			...(item.hasDeferredDetails === undefined ? {} : { hasDeferredDetails: item.hasDeferredDetails }),
 		});
 	});
-	return Object.freeze({ position: value.position, items: Object.freeze(items), isIncomplete: value.isIncomplete });
+	return Object.freeze({
+		position: value.position,
+		items: Object.freeze(items),
+		isIncomplete: value.isIncomplete,
+	});
 }
 
-function normalizeCompletionMatchIndices(
-	indices: readonly number[] | undefined,
-	text: string,
-	field: string,
-): readonly number[] | undefined {
+function normalizeCompletionMatchIndices(indices: readonly number[] | undefined, text: string, field: string): readonly number[] | undefined {
 	if (indices === undefined) return undefined;
 	if (!Array.isArray(indices)) throw new TypeError(`Language completion ${field} match indices must be an array`);
 	const length = [...text].length;
@@ -1751,15 +1504,12 @@ function normalizeCompletionMatchIndices(
 
 function normalizeCompletionCommand(value: unknown): LanguageCompletionCommand | undefined {
 	if (value === undefined) return undefined;
-	if (typeof value !== 'object' || value === null || Array.isArray(value))
-		throw new TypeError('Language completion command must be an object');
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError('Language completion command must be an object');
 	const command = value as Record<string, unknown>;
-	if (Object.keys(command).some(key => key !== 'id' && key !== 'title' && key !== 'arguments'))
-		throw new TypeError('Language completion command contains unsupported fields');
+	if (Object.keys(command).some(key => key !== 'id' && key !== 'title' && key !== 'arguments')) throw new TypeError('Language completion command contains unsupported fields');
 	assertIdentifier(command.id, 'Language completion command ID');
 	assertNonEmptyText(command.title, 'Language completion command title');
-	if (!Array.isArray(command.arguments))
-		throw new TypeError('Language completion command arguments must be an array');
+	if (!Array.isArray(command.arguments)) throw new TypeError('Language completion command arguments must be an array');
 	return Object.freeze({
 		id: command.id,
 		title: command.title,
@@ -1775,16 +1525,10 @@ function assertSnapshotCompletionRange(lines: readonly string[], position: Posit
 	}
 	assertSnapshotPosition(lines, range.getStartPosition());
 	assertSnapshotPosition(lines, range.getEndPosition());
-	if (
-		range.getStartPosition().lineNumber !== position.lineNumber ||
-		range.getEndPosition().lineNumber !== position.lineNumber
-	) {
+	if (range.getStartPosition().lineNumber !== position.lineNumber || range.getEndPosition().lineNumber !== position.lineNumber) {
 		throw new RangeError('Language completion item range must stay on the trigger line');
 	}
-	if (
-		Position.compare(range.getStartPosition(), position) > 0 ||
-		Position.compare(range.getEndPosition(), position) < 0
-	) {
+	if (Position.compare(range.getStartPosition(), position) > 0 || Position.compare(range.getEndPosition(), position) < 0) {
 		throw new RangeError('Language completion item range must contain the trigger position');
 	}
 }
@@ -1801,12 +1545,7 @@ function assertSnapshotPosition(lines: readonly string[], position: Position): v
 	if (!(position instanceof Position)) {
 		throw new TypeError('Language completion position must be a Position');
 	}
-	if (
-		position.lineNumber < 1 ||
-		position.lineNumber > lines.length ||
-		position.column < 1 ||
-		position.column > lines[position.lineNumber - 1]!.length + 1
-	) {
+	if (position.lineNumber < 1 || position.lineNumber > lines.length || position.column < 1 || position.column > lines[position.lineNumber - 1]!.length + 1) {
 		throw new RangeError('Language completion position is outside its snapshot');
 	}
 }
@@ -1835,11 +1574,7 @@ function normalizeCommitCharacters(value: unknown): readonly string[] | undefine
 	return Object.freeze(characters);
 }
 
-function normalizeAdditionalTextEdits(
-	value: unknown,
-	primaryRange: Range,
-	validateRange: (range: Range) => void,
-): readonly LanguageCompletionTextEdit[] | undefined {
+function normalizeAdditionalTextEdits(value: unknown, primaryRange: Range, validateRange: (range: Range) => void): readonly LanguageCompletionTextEdit[] | undefined {
 	if (value === undefined) return undefined;
 	if (!Array.isArray(value)) throw new TypeError('Language completion additional text edits must be an array');
 	const edits = value.map(edit => {
@@ -1863,14 +1598,9 @@ function normalizeAdditionalTextEdits(
 	return Object.freeze(edits);
 }
 
-function assertNonOverlappingCompletionEditRanges(
-	primaryRange: Range,
-	edits: readonly LanguageCompletionTextEdit[],
-): void {
+function assertNonOverlappingCompletionEditRanges(primaryRange: Range, edits: readonly LanguageCompletionTextEdit[]): void {
 	const ranges = [primaryRange, ...edits.map(edit => edit.range)].sort(
-		(left, right) =>
-			Position.compare(left.getStartPosition(), right.getStartPosition()) ||
-			Position.compare(left.getEndPosition(), right.getEndPosition()),
+		(left, right) => Position.compare(left.getStartPosition(), right.getStartPosition()) || Position.compare(left.getEndPosition(), right.getEndPosition()),
 	);
 	for (let index = 1; index < ranges.length; index += 1) {
 		const previous = ranges[index - 1]!;
@@ -1912,14 +1642,8 @@ export interface LanguageWorkspaceSymbol {
 }
 
 export interface LanguageWorkspaceSymbolProvider {
-	provideWorkspaceSymbols(
-		query: string,
-		signal: AbortSignal,
-	): readonly LanguageWorkspaceSymbol[] | Promise<readonly LanguageWorkspaceSymbol[]>;
-	resolveWorkspaceSymbol?(
-		symbol: LanguageWorkspaceSymbol,
-		signal: AbortSignal,
-	): LanguageWorkspaceSymbol | Promise<LanguageWorkspaceSymbol>;
+	provideWorkspaceSymbols(query: string, signal: AbortSignal): readonly LanguageWorkspaceSymbol[] | Promise<readonly LanguageWorkspaceSymbol[]>;
+	resolveWorkspaceSymbol?(symbol: LanguageWorkspaceSymbol, signal: AbortSignal): LanguageWorkspaceSymbol | Promise<LanguageWorkspaceSymbol>;
 }
 
 export enum LanguageDiagnosticSeverity {
@@ -1943,20 +1667,12 @@ export interface LanguageDiagnosticResult {
 	readonly diagnostics: readonly LanguageDiagnostic[];
 }
 
-export function createLanguageDiagnosticSnapshotNormalizer(
-	snapshot: TextSnapshot,
-): (value: LanguageDiagnosticResult) => LanguageDiagnosticResult {
+export function createLanguageDiagnosticSnapshotNormalizer(snapshot: TextSnapshot): (value: LanguageDiagnosticResult) => LanguageDiagnosticResult {
 	const lines = snapshot.getText().split('\n');
-	return value =>
-		normalizeLanguageDiagnosticResult(value, range =>
-			assertDiagnosticSnapshotRange(lines, range, 'Language diagnostic'),
-		);
+	return value => normalizeLanguageDiagnosticResult(value, range => assertDiagnosticSnapshotRange(lines, range, 'Language diagnostic'));
 }
 
-export function normalizeLanguageDiagnosticResult(
-	value: LanguageDiagnosticResult,
-	validateRange: (range: Range) => void,
-): LanguageDiagnosticResult {
+export function normalizeLanguageDiagnosticResult(value: LanguageDiagnosticResult, validateRange: (range: Range) => void): LanguageDiagnosticResult {
 	if (typeof value !== 'object' || value === null || !Array.isArray(value.diagnostics)) {
 		throw new TypeError('Language diagnostic result must contain a diagnostics array');
 	}
@@ -1972,8 +1688,7 @@ export function normalizeLanguageDiagnosticResult(
 			throw new TypeError('Language diagnostic message must not be empty');
 		}
 		if (diagnostic.code !== undefined) assertDiagnosticCode(diagnostic.code);
-		if (diagnostic.source !== undefined)
-			assertDiagnosticIdentifier(diagnostic.source, 'Language diagnostic source');
+		if (diagnostic.source !== undefined) assertDiagnosticIdentifier(diagnostic.source, 'Language diagnostic source');
 		return Object.freeze({
 			range: diagnostic.range,
 			severity: diagnostic.severity,
@@ -1992,12 +1707,7 @@ function assertDiagnosticSnapshotRange(lines: readonly string[], range: Range, o
 }
 
 function assertDiagnosticSnapshotPosition(lines: readonly string[], position: Position, owner: string): void {
-	if (
-		position.lineNumber < 1 ||
-		position.lineNumber > lines.length ||
-		position.column < 1 ||
-		position.column > lines[position.lineNumber - 1]!.length + 1
-	) {
+	if (position.lineNumber < 1 || position.lineNumber > lines.length || position.column < 1 || position.column > lines[position.lineNumber - 1]!.length + 1) {
 		throw new RangeError(`${owner} range is outside its snapshot`);
 	}
 }
@@ -2061,11 +1771,7 @@ export type SyntaxWorkerFactory = () => SyntaxWorker;
 /** Wraps the default worker without bypassing its provider and synchronization lifecycle. */
 export type SyntaxWorkerDecorator = (fallback: SyntaxWorker) => SyntaxWorker;
 
-export type SyntaxProviderErrorHandler = (
-	providerId: string,
-	operation: SyntaxProviderOperation,
-	error: unknown,
-) => void;
+export type SyntaxProviderErrorHandler = (providerId: string, operation: SyntaxProviderOperation, error: unknown) => void;
 
 export interface LanguageTokenSyntaxResult {
 	readonly lane: typeof SYNTAX_TOKEN_LANE;
@@ -2083,8 +1789,7 @@ export interface LanguageTokenizationSyntaxResult {
 	readonly value: LanguageTokenResult | null;
 }
 
-export type SyntaxResult =
-	LanguageTokenSyntaxResult | LanguageDiagnosticSyntaxResult | LanguageTokenizationSyntaxResult;
+export type SyntaxResult = LanguageTokenSyntaxResult | LanguageDiagnosticSyntaxResult | LanguageTokenizationSyntaxResult;
 
 export interface SyntaxServiceOptions {
 	readonly workerFactory?: SyntaxWorkerFactory;

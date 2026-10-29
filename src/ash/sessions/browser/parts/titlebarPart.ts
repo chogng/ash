@@ -15,10 +15,7 @@ import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../platform/action
 import { WebTitlebarPart } from '../../../workbench/browser/parts/titlebar/titlebarPart.js';
 import { BrowserMenubarControl } from '../../../workbench/browser/parts/titlebar/menubarControl.js';
 import { Menus } from '../menus.js';
-import {
-	createServiceIdentifier,
-	IInstantiationService,
-} from '../../../platform/instantiation/common/instantiation.js';
+import { createServiceIdentifier, IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { WindowModeControl } from './titlebar/windowModeControl.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
@@ -48,9 +45,7 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 
 	public override get minimumHeight(): number {
 		// Align this row with the whole-pixel center of macOS inset window buttons.
-		return environment.runtime === 'electron' && environment.os === 'mac'
-			? Math.max(super.minimumHeight, 36)
-			: super.minimumHeight;
+		return environment.runtime === 'electron' && environment.os === 'mac' ? Math.max(super.minimumHeight, 36) : super.minimumHeight;
 	}
 
 	constructor(
@@ -81,7 +76,11 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 				menuService,
 				contextMenus,
 				undefined,
-				{ presentation, applicationMenuId: Menus.MenubarMainMenu, titlebarMenuId: Menus.TitleBarLeftLayout },
+				{
+					presentation,
+					applicationMenuId: Menus.MenubarMainMenu,
+					titlebarMenuId: Menus.TitleBarLeftLayout,
+				},
 				titlebarContext,
 			),
 		);
@@ -91,9 +90,7 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 			contextKeys.onDidChangeContext(event => {
 				if (event.affectsSome(modeKeys)) listener(event);
 			});
-		const activeMode = observableFromEvent(this, modeChanged, () =>
-			contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code' ? ('code' as const) : ('agents' as const),
-		);
+		const activeMode = observableFromEvent(this, modeChanged, () => (contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code' ? ('code' as const) : ('agents' as const)));
 		const modeHost = h(container.ownerDocument, 'div');
 		modeHost.className = 'ash-sessions-workspace-mode';
 		left.append(modeHost);
@@ -106,9 +103,7 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 		const updateModeVisibility = (): void => {
 			const visible = contextKeys.getValue<boolean>(SideBarVisibleContext.key) !== false;
 			if (!visible && modeHost.contains(container.ownerDocument.activeElement)) {
-				menubar.domNode
-					.querySelector<HTMLElement>('[data-action-id="ash.sessions.toggleSidebar"] button')
-					?.focus();
+				menubar.domNode.querySelector<HTMLElement>('[data-action-id="ash.sessions.toggleSidebar"] button')?.focus();
 			}
 			modeHost.hidden = !visible;
 		};
@@ -123,9 +118,7 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 			// Keep the expanded constraint while the mode control is hidden with navigation.
 			if (modeHost.hidden) return;
 			const ownerWindow = container.ownerDocument.defaultView!;
-			const children = Array.from(left.children).filter(
-				child => ownerWindow.getComputedStyle(child).display !== 'none',
-			);
+			const children = Array.from(left.children).filter(child => ownerWindow.getComputedStyle(child).display !== 'none');
 			const style = ownerWindow.getComputedStyle(left);
 			const pixels = (value: string): number => Number.parseFloat(value) || 0;
 			const width = Math.ceil(

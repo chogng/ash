@@ -72,11 +72,7 @@ test('Stanza external HTML clipboard discards executable content and unsafe URLs
 test('Stanza external HTML clipboard preserves nested block containers without flattening them', () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
 	const schema = createDefaultDocumentSchema();
-	const fragment = createDocumentFragmentFromHtml(
-		environment.window.document,
-		schema,
-		'<div>Before<p>Paragraph</p><div>After</div></div>',
-	);
+	const fragment = createDocumentFragmentFromHtml(environment.window.document, schema, '<div>Before<p>Paragraph</p><div>After</div></div>');
 
 	assert.ok(fragment);
 	assert.deepEqual(
@@ -95,9 +91,6 @@ test('Stanza external HTML clipboard rejects empty and unbounded input', () => {
 	const schema = createDefaultDocumentSchema();
 
 	assert.equal(createDocumentFragmentFromHtml(environment.window.document, schema, ''), undefined);
-	assert.equal(
-		createDocumentFragmentFromHtml(environment.window.document, schema, '<p>'.padEnd(1_000_001, 'x')),
-		undefined,
-	);
+	assert.equal(createDocumentFragmentFromHtml(environment.window.document, schema, '<p>'.padEnd(1_000_001, 'x')), undefined);
 	environment.window.close();
 });

@@ -28,8 +28,7 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 	if (watch) {
 		environment.ASH_DEV_LAUNCHER = '1';
 		environment.ASH_HOME ??= resolve(sourceRoot, '.build/desktop/dev/profile');
-		if (!args.some(argument => argument === '--user-data-dir' || argument.startsWith('--user-data-dir=')))
-			args.push(`--user-data-dir=${resolve(sourceRoot, '.build/desktop/dev/user-data')}`);
+		if (!args.some(argument => argument === '--user-data-dir' || argument.startsWith('--user-data-dir='))) args.push(`--user-data-dir=${resolve(sourceRoot, '.build/desktop/dev/user-data')}`);
 	} else {
 		delete environment.ASH_DEV_LAUNCHER;
 	}
@@ -62,9 +61,7 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 		if (inspector) {
 			// js-debug can suppress the runtime's Inspector stderr. Publish from the
 			// launcher instead; attach owns waiting for the new process to listen.
-			child.once('spawn', () =>
-				console.log(`Ash Electron debug target: ${inspector.slice(inspector.indexOf('=') + 1)}`),
-			);
+			child.once('spawn', () => console.log(`Ash Electron debug target: ${inspector.slice(inspector.indexOf('=') + 1)}`));
 		}
 		child.on('message', message => {
 			if (message === 'ash:dev:ready') {
@@ -101,10 +98,7 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 					return;
 				}
 				process.exitCode = watch && !ready ? 1 : (code ?? 1);
-				if (watch && !ready)
-					console.error(
-						'[host] Electron exited before startup completed. Check the startup errors and whether this development profile is already running.',
-					);
+				if (watch && !ready) console.error('[host] Electron exited before startup completed. Check the startup errors and whether this development profile is already running.');
 				await stop();
 			})().catch(fail);
 		});

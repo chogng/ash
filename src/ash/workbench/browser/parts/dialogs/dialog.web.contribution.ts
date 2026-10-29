@@ -2,14 +2,9 @@ import { environment } from '../../../../base/common/platform.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IDialogHandler, IDialogOutcome } from '../../../../platform/dialogs/common/dialogs.js';
 import { IDialogsModel, IWorkbenchDialogHandler, type IDialogViewItem } from '../../../common/dialogs.js';
-import {
-	registerWorkbenchContribution,
-	WorkbenchPhase,
-	type IWorkbenchContribution,
-} from '../../../common/contributions.js';
+import { registerWorkbenchContribution, WorkbenchPhase, type IWorkbenchContribution } from '../../../common/contributions.js';
 
-type DialogPresentationOutcome =
-	{ readonly kind: 'result'; readonly result: IDialogOutcome } | { readonly kind: 'error'; readonly error: unknown };
+type DialogPresentationOutcome = { readonly kind: 'result'; readonly result: IDialogOutcome } | { readonly kind: 'error'; readonly error: unknown };
 
 /** Presents a window's dialog requests in queue order. */
 export class DialogHandlerContribution extends Disposable implements IWorkbenchContribution {
@@ -46,10 +41,7 @@ export class DialogHandlerContribution extends Disposable implements IWorkbenchC
 		void this.show(active);
 	}
 
-	private async show(active: {
-		readonly item: IDialogViewItem;
-		readonly controller: AbortController;
-	}): Promise<void> {
+	private async show(active: { readonly item: IDialogViewItem; readonly controller: AbortController }): Promise<void> {
 		let outcome: DialogPresentationOutcome;
 		try {
 			outcome = {

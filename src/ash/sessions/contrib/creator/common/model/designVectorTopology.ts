@@ -1,11 +1,6 @@
 import { localize } from '../../../../../nls.js';
 import { cubicBezierPoint, type DesignPoint } from '../core/geometry.js';
-import {
-	designNetworkRegionAt,
-	designNetworkRegions,
-	splitDesignNetworkEdge,
-	type DesignVectorNetwork,
-} from './designVectorNetwork.js';
+import { designNetworkRegionAt, designNetworkRegions, splitDesignNetworkEdge, type DesignVectorNetwork } from './designVectorNetwork.js';
 
 type Edge = DesignVectorNetwork['edges'][number];
 type Cubic = readonly [DesignPoint, DesignPoint, DesignPoint, DesignPoint];
@@ -25,24 +20,15 @@ function equivalentEdges(a: Edge, b: Edge, vertices: DesignVectorNetwork['vertic
 	if (!forward && !reverse) {
 		return false;
 	}
-	if (
-		distance(a.outgoing, forward ? b.outgoing : b.incoming) < 1e-9 &&
-		distance(a.incoming, forward ? b.incoming : b.outgoing) < 1e-9
-	) {
+	if (distance(a.outgoing, forward ? b.outgoing : b.incoming) < 1e-9 && distance(a.incoming, forward ? b.incoming : b.outgoing) < 1e-9) {
 		return true;
 	}
 	// Collinear cubics may describe the same line with different parameter speeds after subdivision.
-	return [a.outgoing, a.incoming, b.outgoing, b.incoming].every(
-		point => lineDistance(point, vertices[a.start], vertices[a.end]) < 1e-10,
-	);
+	return [a.outgoing, a.incoming, b.outgoing, b.incoming].every(point => lineDistance(point, vertices[a.start], vertices[a.end]) < 1e-10);
 }
 
 /** Boundary identity survives edge replacement. Newly subdivided faces inherit the paint beneath them. */
-function retainPaint(
-	before: DesignVectorNetwork,
-	after: DesignVectorNetwork,
-	replacements: ReadonlyMap<string, readonly string[]>,
-): DesignVectorNetwork {
+function retainPaint(before: DesignVectorNetwork, after: DesignVectorNetwork, replacements: ReadonlyMap<string, readonly string[]>): DesignVectorNetwork {
 	if (!before.unfilledRegions?.length && !Object.keys(before.regionFills ?? {}).length) {
 		return after;
 	}
@@ -77,11 +63,7 @@ function retainPaint(
 }
 
 /** Coalesce anchors, carrying their incident handles. Curved loops retain a second anchor; only zero-length edges disappear. */
-export function mergeDesignNetworkVertices(
-	network: DesignVectorNetwork,
-	indices: ReadonlySet<number>,
-	target?: number,
-): DesignNetworkEdit {
+export function mergeDesignNetworkVertices(network: DesignVectorNetwork, indices: ReadonlySet<number>, target?: number): DesignNetworkEdit {
 	const selected = [...indices].filter(index => !!network.vertices[index]);
 	if (selected.length < 2) {
 		return { network, vertices: new Map(network.vertices.map((_, i) => [i, i])) };
@@ -147,22 +129,13 @@ export function mergeDesignNetworkVertices(
 		}
 	}
 	if (vertices.length > 10000 || edges.length > 10000) {
-		throw new Error(
-			localize(
-				'sessions.design.networkComplexity',
-				'This edit exceeds the vector point or segment limit. Simplify the path first.',
-			),
-		);
+		throw new Error(localize('sessions.design.networkComplexity', 'This edit exceeds the vector point or segment limit. Simplify the path first.'));
 	}
 	return { network: retainPaint(network, { vertices, edges }, replacements), vertices: mapping };
 }
 
 /** Split exact cubics at every hit before identifying shared anchors, so crossing order cannot change the geometry. */
-export function intersectDesignNetwork(
-	network: DesignVectorNetwork,
-	intersections: readonly DesignVectorIntersection[],
-	paintSource = network,
-): DesignNetworkEdit {
+export function intersectDesignNetwork(network: DesignVectorNetwork, intersections: readonly DesignVectorIntersection[], paintSource = network): DesignNetworkEdit {
 	if (!intersections.length) {
 		return { network, vertices: new Map(network.vertices.map((_, i) => [i, i])) };
 	}
@@ -190,15 +163,7 @@ export function intersectDesignNetwork(
 			return same.vertex;
 		}
 		const vertex = vertices.length;
-		vertices.push(
-			cubicBezierPoint(
-				network.vertices[edge.start],
-				edge.outgoing,
-				edge.incoming,
-				network.vertices[edge.end],
-				time,
-			),
-		);
+		vertices.push(cubicBezierPoint(network.vertices[edge.start], edge.outgoing, edge.incoming, network.vertices[edge.end], time));
 		parents.push(vertex);
 		entries.push({ time, vertex });
 		cuts.set(index, entries);
@@ -210,12 +175,7 @@ export function intersectDesignNetwork(
 		parents[Math.max(a, b)] = Math.min(a, b);
 	}
 	if (vertices.length > 10000 || network.edges.length + vertices.length - network.vertices.length > 10000) {
-		throw new Error(
-			localize(
-				'sessions.design.networkComplexity',
-				'This edit exceeds the vector point or segment limit. Simplify the path first.',
-			),
-		);
+		throw new Error(localize('sessions.design.networkComplexity', 'This edit exceeds the vector point or segment limit. Simplify the path first.'));
 	}
 	const mapping = new Map<number, number>(),
 		compact: DesignVectorNetwork['vertices'][number][] = [];
@@ -234,11 +194,7 @@ export function intersectDesignNetwork(
 			previous = 0;
 		const ids: string[] = [];
 		for (const cut of [...(cuts.get(index) ?? [])].sort((a, b) => a.time - b.time)) {
-			const split = splitDesignNetworkEdge(
-				{ vertices, edges: [remaining] },
-				0,
-				(cut.time - previous) / (1 - previous),
-			);
+			const split = splitDesignNetworkEdge({ vertices, edges: [remaining] }, 0, (cut.time - previous) / (1 - previous));
 			const left = { ...split.edges[0], end: cut.vertex },
 				right = { ...split.edges[1], start: cut.vertex };
 			edges.push({ ...left, start: mapping.get(left.start)!, end: mapping.get(left.end)! });
@@ -292,12 +248,7 @@ export function intersectDesignNetwork(
 		}
 	}
 	if (compact.length > 10000 || deduplicated.length > 10000) {
-		throw new Error(
-			localize(
-				'sessions.design.networkComplexity',
-				'This edit exceeds the vector point or segment limit. Simplify the path first.',
-			),
-		);
+		throw new Error(localize('sessions.design.networkComplexity', 'This edit exceeds the vector point or segment limit. Simplify the path first.'));
 	}
 	return {
 		network: retainPaint(paintSource, { vertices: compact, edges: deduplicated }, replacements),
@@ -313,10 +264,7 @@ function lineDistance(point: DesignPoint, a: DesignPoint, b: DesignPoint): numbe
 	return distance(point, { x: a.x + t * dx, y: a.y + t * dy });
 }
 function flattenCurve(curve: Cubic, tolerance: number, depth = 0): DesignPoint[] {
-	if (
-		depth >= 10 ||
-		Math.max(lineDistance(curve[1], curve[0], curve[3]), lineDistance(curve[2], curve[0], curve[3])) <= tolerance
-	) {
+	if (depth >= 10 || Math.max(lineDistance(curve[1], curve[0], curve[3]), lineDistance(curve[2], curve[0], curve[3])) <= tolerance) {
 		return [curve[0], curve[3]];
 	}
 	const mid = (a: DesignPoint, b: DesignPoint) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
@@ -326,10 +274,7 @@ function flattenCurve(curve: Cubic, tolerance: number, depth = 0): DesignPoint[]
 		d = mid(a, b),
 		e = mid(b, c),
 		f = mid(d, e);
-	return [
-		...flattenCurve([curve[0], a, d, f], tolerance, depth + 1).slice(0, -1),
-		...flattenCurve([f, e, c, curve[3]], tolerance, depth + 1),
-	];
+	return [...flattenCurve([curve[0], a, d, f], tolerance, depth + 1).slice(0, -1), ...flattenCurve([f, e, c, curve[3]], tolerance, depth + 1)];
 }
 function fitCurve(points: readonly DesignPoint[], incoming: DesignPoint, outgoing: DesignPoint): Cubic {
 	const a = points[0],
@@ -394,10 +339,7 @@ function reuniteCurve(left: Cubic, right: Cubic): Cubic | undefined {
 	// Recover an exact subdivision before trying an approximation; this also retains endpoint tangents.
 	for (let i = 0; i <= 8; i++) {
 		const u = i / 8;
-		if (
-			distance(cubicBezierPoint(...curve, u * t), cubicBezierPoint(...left, u)) > 1e-7 ||
-			distance(cubicBezierPoint(...curve, t + u * (1 - t)), cubicBezierPoint(...right, u)) > 1e-7
-		) {
+		if (distance(cubicBezierPoint(...curve, u * t), cubicBezierPoint(...left, u)) > 1e-7 || distance(cubicBezierPoint(...curve, t + u * (1 - t)), cubicBezierPoint(...right, u)) > 1e-7) {
 			return undefined;
 		}
 	}
@@ -405,13 +347,7 @@ function reuniteCurve(left: Cubic, right: Cubic): Cubic | undefined {
 }
 
 /** Simplify only degree-two anchors. Original samples, not the previous approximation, bound cumulative error in design pixels. */
-export function simplifyDesignNetwork(
-	network: DesignVectorNetwork,
-	width: number,
-	height: number,
-	tolerance: number,
-	heal?: ReadonlySet<number>,
-): DesignNetworkEdit {
+export function simplifyDesignNetwork(network: DesignVectorNetwork, width: number, height: number, tolerance: number, heal?: ReadonlySet<number>): DesignNetworkEdit {
 	if (!heal && tolerance <= 0) {
 		return { network, vertices: new Map(network.vertices.map((_, i) => [i, i])) };
 	}
@@ -425,15 +361,7 @@ export function simplifyDesignNetwork(
 	for (const edge of edges.values()) {
 		incident[edge.start].add(edge.id);
 		incident[edge.end].add(edge.id);
-		samples.set(
-			edge.id,
-			flattenCurve(
-				[network.vertices[edge.start], edge.outgoing, edge.incoming, network.vertices[edge.end]].map(
-					pixels,
-				) as unknown as Cubic,
-				precision,
-			),
-		);
+		samples.set(edge.id, flattenCurve([network.vertices[edge.start], edge.outgoing, edge.incoming, network.vertices[edge.end]].map(pixels) as unknown as Cubic, precision));
 	}
 	const removed = new Set<number>();
 	for (let pass = 0; pass < 3; pass++) {
@@ -455,36 +383,18 @@ export function simplifyDesignNetwork(
 				continue;
 			}
 			// Subdivide straight samples too, otherwise two-segment corners have no interior error probes.
-			const dense = points.flatMap((point, i) =>
-				i ? [{ x: (point.x + points[i - 1].x) / 2, y: (point.y + points[i - 1].y) / 2 }, point] : [point],
-			);
+			const dense = points.flatMap((point, i) => (i ? [{ x: (point.x + points[i - 1].x) / 2, y: (point.y + points[i - 1].y) / 2 }, point] : [point]));
 			const startHandle = pixels(first.end === vertex ? first.outgoing : first.incoming),
 				endHandle = pixels(second.start === vertex ? second.incoming : second.outgoing);
 			const curve =
 				reuniteCurve(
-					[
-						pixels(network.vertices[a]),
-						startHandle,
-						pixels(first.end === vertex ? first.incoming : first.outgoing),
-						pixels(network.vertices[vertex]),
-					],
-					[
-						pixels(network.vertices[vertex]),
-						pixels(second.start === vertex ? second.outgoing : second.incoming),
-						endHandle,
-						pixels(network.vertices[b]),
-					],
+					[pixels(network.vertices[a]), startHandle, pixels(first.end === vertex ? first.incoming : first.outgoing), pixels(network.vertices[vertex])],
+					[pixels(network.vertices[vertex]), pixels(second.start === vertex ? second.outgoing : second.incoming), endHandle, pixels(network.vertices[b])],
 				) ?? fitCurve(dense, startHandle, endHandle);
 			if (!heal) {
 				const approximation = flattenCurve(curve, precision);
 				const within = (from: readonly DesignPoint[], to: readonly DesignPoint[]) =>
-					from.every(point =>
-						to
-							.slice(1)
-							.some(
-								(end, i) => lineDistance(point, to[i], end) <= Math.max(0, tolerance - precision * 2),
-							),
-					);
+					from.every(point => to.slice(1).some((end, i) => lineDistance(point, to[i], end) <= Math.max(0, tolerance - precision * 2)));
 				if (!within(dense, approximation) || !within(approximation, dense)) {
 					continue;
 				}

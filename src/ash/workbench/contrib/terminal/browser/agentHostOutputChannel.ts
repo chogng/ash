@@ -37,9 +37,7 @@ export class AgentHostOutputChannel extends Disposable implements IWorkbenchCont
 							commandId: data.commandId,
 							status: data.status,
 							exitCode: data.exitCode,
-							...(data.isTrusted && !instance.shellIntegration?.commandStorageDisabled
-								? { command: data.command }
-								: {}),
+							...(data.isTrusted && !instance.shellIntegration?.commandStorageDisabled ? { command: data.command } : {}),
 						}),
 					});
 				}),

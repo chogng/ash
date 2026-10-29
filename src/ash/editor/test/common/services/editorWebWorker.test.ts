@@ -98,16 +98,13 @@ test('Editor worker reduces formatting replacements without changing their resul
 	using worker = new EditorWorker();
 	const range = Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, model.length + 1));
 
-	const result = await run(
-		worker,
-		model,
-		1,
-		EDITOR_WORKER_MINIMAL_EDITS_LANE,
-		Object.freeze({ edits: [{ range, text: 'This is line One' }] }),
-	);
+	const result = await run(worker, model, 1, EDITOR_WORKER_MINIMAL_EDITS_LANE, Object.freeze({ edits: [{ range, text: 'This is line One' }] }));
 
 	assert.deepEqual(result, [
-		{ range: Range.fromPositions(new Position(0 + 1, 13 + 1), new Position(0 + 1, 14 + 1)), text: 'O' },
+		{
+			range: Range.fromPositions(new Position(0 + 1, 13 + 1), new Position(0 + 1, 14 + 1)),
+			text: 'O',
+		},
 	]);
 });
 
@@ -155,17 +152,8 @@ test('Editor worker navigates an explicitly selected number without a matching w
 	});
 });
 
-function run(
-	worker: EditorWorker,
-	model: TextModel,
-	requestId: number,
-	lane: EditorWorkerLane,
-	payload: EditorWorkerRequest,
-): ReturnType<EditorWorker['run']> {
-	return worker.run(
-		Object.freeze({ requestId, lane, payload, snapshot: model.createVersionedSnapshot() }),
-		new AbortController().signal,
-	);
+function run(worker: EditorWorker, model: TextModel, requestId: number, lane: EditorWorkerLane, payload: EditorWorkerRequest): ReturnType<EditorWorker['run']> {
+	return worker.run(Object.freeze({ requestId, lane, payload, snapshot: model.createVersionedSnapshot() }), new AbortController().signal);
 }
 
 test('a single formatting response with overlapping edits is rejected without changing the model', async () => {
@@ -200,9 +188,7 @@ test('Unicode warnings retain UTF-16 positions, line-local confusables, controls
 test('Unicode candidate scan covers every warning category and checks cancellation without matches', () => {
 	const invisible = [0, 1, 8, 11, 12, 14, 31, 0x00ad, 0x061c, 0x200b, 0x200c, 0x200d, 0x2060, 0xfeff];
 	const bidi = [0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069];
-	using model = new TextModel(
-		'ascii' + String.fromCodePoint(...invisible, ...bidi) + '\n\u03b1\u0430\nA\u03b1\u0430',
-	);
+	using model = new TextModel('ascii' + String.fromCodePoint(...invisible, ...bidi) + '\n\u03b1\u0430\nA\u03b1\u0430');
 	const highlights = computeUnicodeHighlights(model.createVersionedSnapshot());
 	assert.deepEqual(
 		highlights.map(item => item.kind),

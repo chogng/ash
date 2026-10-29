@@ -31,16 +31,11 @@ export class DataSource implements AsyncTreeDataSource<TypeHierarchyModel, Type>
 		if (element instanceof TypeHierarchyModel) {
 			return element.roots.map(item => new Type(item, element, undefined));
 		}
-		const items =
-			this.getDirection() === TypeHierarchyDirection.Supertypes
-				? await element.model.provideSupertypes(element.item)
-				: await element.model.provideSubtypes(element.item);
+		const items = this.getDirection() === TypeHierarchyDirection.Supertypes ? await element.model.provideSupertypes(element.item) : await element.model.provideSubtypes(element.item);
 		return items.map(item => new Type(item, element.model, element));
 	}
 }
 
 function itemIdentity(item: LanguageHierarchyItem): string {
-	return (
-		item.resource.toString() + '\0' + item.selectionRange.startLineNumber + ':' + item.selectionRange.startColumn
-	);
+	return item.resource.toString() + '\0' + item.selectionRange.startLineNumber + ':' + item.selectionRange.startColumn;
 }

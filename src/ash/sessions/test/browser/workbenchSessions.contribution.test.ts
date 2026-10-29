@@ -1,7 +1,4 @@
-import {
-	ISessionsProvidersService,
-	SessionsProvidersService,
-} from '../../services/sessions/browser/sessionsProvidersService.js';
+import { ISessionsProvidersService, SessionsProvidersService } from '../../services/sessions/browser/sessionsProvidersService.js';
 import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
@@ -21,10 +18,7 @@ import { DeferredPromise } from '../../../base/common/async.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../workbench/common/contributions.js';
 import type { MultiDiffEditorInput } from '../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
-import {
-	IMultiDiffSourceResolverService,
-	MultiDiffSourceResolverService,
-} from '../../../workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
+import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { IChatService, type TurnChangeSetSummary } from '../../../workbench/services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
@@ -168,10 +162,7 @@ test('provider-qualified navigation never opens an equal host-local ID on the am
 	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
 	services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(descriptor));
 	const navigation = services.get(IChatSessionNavigationService);
-	await assert.rejects(
-		navigation.openConversation('same-session', 'same-thread', 'ssh-agent-host:other'),
-		/another Agent host/,
-	);
+	await assert.rejects(navigation.openConversation('same-session', 'same-thread', 'ssh-agent-host:other'), /another Agent host/);
 	assert.equal(opened, 0);
 });
 
@@ -324,10 +315,7 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 	const changesInput = opened.pop()!;
 	assert.equal(changesInput.label, 'Conversation Changes');
 	assert.equal(changesInput.items[0]?.original.initialText, 'before');
-	await assert.rejects(
-		() => createThreadMultiDiffEditorInput(chat, 'session', 'thread', 'stale'),
-		/conversation changed/,
-	);
+	await assert.rejects(() => createThreadMultiDiffEditorInput(chat, 'session', 'thread', 'stale'), /conversation changed/);
 	assert.equal(changesInput.items[0]?.modified.initialText, 'after');
 	await assert.rejects(async () => openChanges(services, 'session', 'unknown-thread'), /no longer available/);
 	await assert.rejects(async () => openChanges(services, undefined, 'thread'), /require a conversation/);
@@ -343,9 +331,7 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 	opened.pop();
 	assert.equal(opened.length, 1);
 
-	const restored = EditorInputSerializers.deserialize(
-		EditorInputSerializers.serialize(input),
-	) as MultiDiffEditorInput;
+	const restored = EditorInputSerializers.deserialize(EditorInputSerializers.serialize(input)) as MultiDiffEditorInput;
 	assert.deepEqual(restored.source, input.source);
 	summaries.push({ ...summaries[1]!, changeSetId: 'three', turnId: 'turn-three', revision: 3 });
 	const resolved = await resolvers.resolve(restored.resource);
@@ -374,11 +360,7 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 	assert.equal(opened[1]?.items[0]?.modified.initialText, 'selected');
 	await resolvers.primaryRepositoryAction(opened[1]!)?.run();
 	assert.deepEqual(commits, ['prepared']);
-	const direct = await createTurnMultiDiffEditorInput(
-		chat,
-		{ session: { sessionId: 'session' }, threadId: 'thread' } as never,
-		'currentTurn',
-	);
+	const direct = await createTurnMultiDiffEditorInput(chat, { session: { sessionId: 'session' }, threadId: 'thread' } as never, 'currentTurn');
 	assert.equal(direct.items[0]?.original.initialText, 'middle');
 });
 

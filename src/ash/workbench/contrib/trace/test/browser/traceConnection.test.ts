@@ -85,15 +85,7 @@ test('trace endpoint accepts numeric loopback only and never embeds authenticati
 	const token = 'a'.repeat(64);
 	assert.equal(traceEndpoint('ws://127.0.0.1:4319/', token).href, 'ws://127.0.0.1:4319/');
 	assert.equal(traceEndpoint('ws://[::1]:4319/', token).hostname, '[::1]');
-	for (const address of [
-		'wss://example.test/',
-		'ws://example.test/',
-		'ws://localhost/',
-		'ws://127.0.0.1/?token=x',
-		'ws://x@127.0.0.1/',
-		'ws://127.0.0.1/traces',
-		'ws://127.0.0.1/#x',
-	]) {
+	for (const address of ['wss://example.test/', 'ws://example.test/', 'ws://localhost/', 'ws://127.0.0.1/?token=x', 'ws://x@127.0.0.1/', 'ws://127.0.0.1/traces', 'ws://127.0.0.1/#x']) {
 		assert.throws(() => traceEndpoint(address, token));
 	}
 	assert.throws(

@@ -2,21 +2,12 @@ import { CancellationToken } from '../../../base/common/cancellation.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import type { URI } from '../../../base/common/uri.js';
 import { ExternalUriOpenerPriority } from '../../../editor/common/languages.js';
-import {
-	IExtensionHostApi,
-	type ExtensionHostFleetSnapshot,
-	type ExtensionHostInvocationRequest,
-	type JsonValue,
-} from '../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { ILogService } from '../../../platform/log/common/log.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../common/contributions.js';
 import { updateContributedOpeners } from '../../contrib/externalUriOpener/common/configuration.js';
-import {
-	IExternalUriOpenerService,
-	type IExternalOpenerProvider,
-	type IExternalUriOpener,
-} from '../../contrib/externalUriOpener/common/externalUriOpenerService.js';
+import { IExternalUriOpenerService, type IExternalOpenerProvider, type IExternalUriOpener } from '../../contrib/externalUriOpener/common/externalUriOpenerService.js';
 
 interface OpenerRegistration extends DisposableStore {
 	readonly identity: string;
@@ -108,11 +99,7 @@ export class MainThreadUriOpeners extends Disposable implements IExternalOpenerP
 				}
 			} catch (error) {
 				if (!this.isDisposed && epoch === this.connectionEpoch) {
-					this.logService.error(
-						'externalUriOpener',
-						'Could not read extension URL opener registrations',
-						error,
-					);
+					this.logService.error('externalUriOpener', 'Could not read extension URL opener registrations', error);
 				}
 			}
 		}
@@ -147,13 +134,7 @@ export class MainThreadUriOpeners extends Disposable implements IExternalOpenerP
 					id,
 					label: registration.label,
 					canOpen: async (uri, token) => {
-						const result = await this.invoke(
-							request,
-							controller.signal,
-							'canOpenExternalUri',
-							{ uri: uri.toString() },
-							token,
-						);
+						const result = await this.invoke(request, controller.signal, 'canOpenExternalUri', { uri: uri.toString() }, token);
 						if (
 							result !== ExternalUriOpenerPriority.None &&
 							result !== ExternalUriOpenerPriority.Option &&
@@ -165,13 +146,7 @@ export class MainThreadUriOpeners extends Disposable implements IExternalOpenerP
 						return result;
 					},
 					openExternalUri: async (uri, ctx, token) => {
-						const result = await this.invoke(
-							request,
-							controller.signal,
-							'openExternalUri',
-							{ resolvedUri: uri.toString(), sourceUri: ctx.sourceUri.toString() },
-							token,
-						);
+						const result = await this.invoke(request, controller.signal, 'openExternalUri', { resolvedUri: uri.toString(), sourceUri: ctx.sourceUri.toString() }, token);
 						if (typeof result !== 'boolean') {
 							throw new TypeError(`External URI opener '${id}' returned an invalid open result`);
 						}
@@ -200,10 +175,7 @@ export class MainThreadUriOpeners extends Disposable implements IExternalOpenerP
 	}
 
 	private async invoke(
-		identity: Pick<
-			ExtensionHostInvocationRequest,
-			'extensionId' | 'registrationId' | 'incarnation' | 'activationGeneration'
-		>,
+		identity: Pick<ExtensionHostInvocationRequest, 'extensionId' | 'registrationId' | 'incarnation' | 'activationGeneration'>,
 		generation: AbortSignal,
 		operation: string,
 		payload: JsonValue,
@@ -216,10 +188,7 @@ export class MainThreadUriOpeners extends Disposable implements IExternalOpenerP
 		}
 		const signal = AbortSignal.any([generation, controller.signal]);
 		signal.throwIfAborted();
-		const result = await this.api.invoke(
-			{ ...identity, operation, payload, deadlineUnixMillis: Date.now() + this.invocationTimeoutMillis },
-			signal,
-		);
+		const result = await this.api.invoke({ ...identity, operation, payload, deadlineUnixMillis: Date.now() + this.invocationTimeoutMillis }, signal);
 		signal.throwIfAborted();
 		return result;
 	}
@@ -228,8 +197,6 @@ export class MainThreadUriOpeners extends Disposable implements IExternalOpenerP
 registerWorkbenchContribution('workbench.contrib.extensionUriOpeners', WorkbenchPhase.BlockRestore, accessor => {
 	const openers = accessor.get(IInstantiationService).createInstance(MainThreadUriOpeners, 30_000);
 	const logService = accessor.get(ILogService);
-	void openers
-		.start()
-		.catch(error => logService.error('externalUriOpener', 'Could not start extension URL openers', error));
+	void openers.start().catch(error => logService.error('externalUriOpener', 'Could not start extension URL openers', error));
 	return openers;
 });

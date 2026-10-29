@@ -20,15 +20,9 @@ test('a TypeScript author installs the packed Ash SDK and builds outside the che
 		let npm: string | undefined;
 		// pnpm can hardlink Node into node_modules/.bin, which has no adjacent npm.
 		const node = await realpath(process.env.npm_node_execpath ?? process.execPath);
-		for (const bin of [
-			dirname(node),
-			dirname(process.execPath),
-			...(process.env.PATH ?? '').split(delimiter).filter(Boolean),
-		]) {
+		for (const bin of [dirname(node), dirname(process.execPath), ...(process.env.PATH ?? '').split(delimiter).filter(Boolean)]) {
 			try {
-				npm = await realpath(
-					resolve(bin, process.platform === 'win32' ? 'node_modules/npm/bin/npm-cli.js' : 'npm'),
-				);
+				npm = await realpath(resolve(bin, process.platform === 'win32' ? 'node_modules/npm/bin/npm-cli.js' : 'npm'));
 				break;
 			} catch (error) {
 				if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
@@ -36,45 +30,18 @@ test('a TypeScript author installs the packed Ash SDK and builds outside the che
 		}
 		assert.ok(npm, 'The independent author installation test requires npm on PATH');
 		const runNpm = (args: string[], cwd: string) =>
-			execFileSync(
-				process.execPath,
-				[
-					npm,
-					...args,
-					'--offline',
-					'--ignore-scripts',
-					'--no-audit',
-					'--no-fund',
-					'--cache',
-					join(directory, 'cache'),
-				],
-				{ cwd, encoding: 'utf8', timeout: 30_000 },
-			);
-		const packed = JSON.parse(
-			runNpm(['pack', join(repository, 'sdk/typescript'), '--json', '--pack-destination', artifacts], directory),
-		) as { filename: string; files: { path: string }[] }[];
+			execFileSync(process.execPath, [npm, ...args, '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--cache', join(directory, 'cache')], { cwd, encoding: 'utf8', timeout: 30_000 });
+		const packed = JSON.parse(runNpm(['pack', join(repository, 'sdk/typescript'), '--json', '--pack-destination', artifacts], directory)) as { filename: string; files: { path: string }[] }[];
 		assert.equal(packed.length, 1);
 		const archive = join(artifacts, packed[0].filename);
-		await writeFile(
-			join(project, 'package.json'),
-			JSON.stringify({ name: 'independent-ash-extension', version: '1.0.0', private: true, type: 'module' }),
-		);
+		await writeFile(join(project, 'package.json'), JSON.stringify({ name: 'independent-ash-extension', version: '1.0.0', private: true, type: 'module' }));
 		runNpm(['install', archive, '--package-lock=false'], project);
 		const installed = join(project, 'node_modules/@ash/sdk');
-		assert.equal(
-			await realpath(installed),
-			join(await realpath(project), 'node_modules/@ash/sdk'),
-			'the author receives a package copy, not a link into the Ash checkout',
-		);
+		assert.equal(await realpath(installed), join(await realpath(project), 'node_modules/@ash/sdk'), 'the author receives a package copy, not a link into the Ash checkout');
 		const manifest = JSON.parse(await readFile(join(installed, 'package.json'), 'utf8'));
 		assert.equal(manifest.name, '@ash/sdk');
 		assert.deepEqual(Object.keys(manifest.dependencies ?? {}), [], 'the author does not install Ash internals');
-		assert(
-			!packed[0].files.some(file =>
-				/(?:^|\/)(?:Cargo\.(?:toml|lock)|crates|resources\/extension-host)(?:\/|$)/u.test(file.path),
-			),
-			'Rust and host implementations stay in the Ash product',
-		);
+		assert(!packed[0].files.some(file => /(?:^|\/)(?:Cargo\.(?:toml|lock)|crates|resources\/extension-host)(?:\/|$)/u.test(file.path)), 'Rust and host implementations stay in the Ash product');
 		await writeFile(
 			join(project, 'extension.ts'),
 			`import * as ash from '@ash/sdk';

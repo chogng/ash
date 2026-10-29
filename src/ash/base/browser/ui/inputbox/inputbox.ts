@@ -74,16 +74,13 @@ export class InputBox<Flexible extends boolean = false> extends Disposable {
 				if (value !== undefined) this.element.style.setProperty(property, value);
 			}
 		}
-		if (options.presentation === 'field' || options.presentation === 'compact')
-			this.element.classList.add('ash-input-box-field');
+		if (options.presentation === 'field' || options.presentation === 'compact') this.element.classList.add('ash-input-box-field');
 		if (options.presentation === 'compact') this.element.classList.add('ash-input-box-compact');
 		this._register(toDisposable(() => this.element.remove()));
 
 		this.maxHeight = Math.max(24, options.flexibleMaxHeight ?? 134);
 		// The element type follows the same generic option used to choose its DOM tag; default consumers remain inputs.
-		this.inputElement = (
-			options.flexibleHeight ? h(ownerDocument, 'textarea') : h(ownerDocument, 'input')
-		) as InputElement<Flexible>;
+		this.inputElement = (options.flexibleHeight ? h(ownerDocument, 'textarea') : h(ownerDocument, 'input')) as InputElement<Flexible>;
 		if ('step' in this.inputElement) {
 			this.inputElement.type = options.type ?? 'text';
 		}
@@ -147,11 +144,7 @@ export class InputBox<Flexible extends boolean = false> extends Disposable {
 				}),
 			);
 			// Browser selection and caret reveal remain authoritative and are mirrored by the managed scrollbar.
-			this._register(
-				addDisposableListener(this.inputElement, 'scroll', () =>
-					scrollable.setScrollPositionNow({ scrollTop: this.inputElement.scrollTop }),
-				),
-			);
+			this._register(addDisposableListener(this.inputElement, 'scroll', () => scrollable.setScrollPositionNow({ scrollTop: this.inputElement.scrollTop })));
 			if (targetWindow.ResizeObserver) {
 				const scheduled = this._register(new MutableDisposable());
 				// Height changes must leave the observer delivery cycle; disposal cancels pending layout.
@@ -318,10 +311,7 @@ export interface IHistoryInputOptions<Flexible extends boolean = false> extends 
 	readonly showHistoryHint?: () => boolean;
 }
 
-export class HistoryInputBox<Flexible extends boolean = false>
-	extends InputBox<Flexible>
-	implements IHistoryNavigationWidget
-{
+export class HistoryInputBox<Flexible extends boolean = false> extends InputBox<Flexible> implements IHistoryNavigationWidget {
 	private readonly navigator: HistoryNavigator<string>;
 	private draft = '';
 	private navigating = false;

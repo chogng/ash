@@ -13,13 +13,8 @@ export function createRemoteConnectionApi(): IRemoteConnectionApi {
 		available: true,
 		list: () => invoke<readonly RemoteConnectionDefinition[]>(REMOTE_CONNECTION_LIST_CHANNEL),
 		save: connection => invoke<RemoteConnectionDefinition>(REMOTE_CONNECTION_SAVE_CHANNEL, { connection }),
-		update: (originalName, connection) =>
-			invoke<RemoteConnectionDefinition>(REMOTE_CONNECTION_UPDATE_CHANNEL, { originalName, connection }),
+		update: (originalName, connection) => invoke<RemoteConnectionDefinition>(REMOTE_CONNECTION_UPDATE_CHANNEL, { originalName, connection }),
 		remove: name => invoke<RemoteConnectionDefinition | undefined>(REMOTE_CONNECTION_REMOVE_CHANNEL, { name }),
-		connect: (name, expectedConnection) =>
-			invoke<void>(
-				REMOTE_CONNECTION_CONNECT_CHANNEL,
-				expectedConnection ? { name, expectedConnection } : { name },
-			),
+		connect: (name, expectedConnection) => invoke<void>(REMOTE_CONNECTION_CONNECT_CHANNEL, expectedConnection ? { name, expectedConnection } : { name }),
 	};
 }

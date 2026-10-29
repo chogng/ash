@@ -19,8 +19,7 @@ export interface AgentCapabilitiesSnapshot {
 export interface SandboxDiagnostic {
 	readonly backend: string;
 	readonly network: 'denied' | 'allowed' | 'managed';
-	readonly readiness:
-		{ readonly type: 'ready' } | { readonly type: 'unsupported' | 'unavailable'; readonly reason: string };
+	readonly readiness: { readonly type: 'ready' } | { readonly type: 'unsupported' | 'unavailable'; readonly reason: string };
 }
 
 /** Ash environment diagnostics and connection support, independent of the tool catalog. */

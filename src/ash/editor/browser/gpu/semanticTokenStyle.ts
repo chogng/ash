@@ -24,24 +24,13 @@ export class SemanticTokenStyleResolver {
 		if (presentation.fontStyle !== undefined) {
 			let flags = FontStyle.None;
 			for (const style of presentation.fontStyle) {
-				flags |=
-					style === 'italic'
-						? FontStyle.Italic
-						: style === 'bold'
-							? FontStyle.Bold
-							: style === 'underline'
-								? FontStyle.Underline
-								: FontStyle.Strikethrough;
+				flags |= style === 'italic' ? FontStyle.Italic : style === 'bold' ? FontStyle.Bold : style === 'underline' ? FontStyle.Underline : FontStyle.Strikethrough;
 			}
-			tokenMetadata =
-				(tokenMetadata & ~MetadataConsts.FONT_STYLE_MASK) | (flags << MetadataConsts.FONT_STYLE_OFFSET);
+			tokenMetadata = (tokenMetadata & ~MetadataConsts.FONT_STYLE_MASK) | (flags << MetadataConsts.FONT_STYLE_OFFSET);
 		}
 		return {
 			tokenMetadata,
-			color:
-				presentation.foreground === undefined
-					? undefined
-					: Color.Format.CSS.parse(presentation.foreground)?.toNumber32Bit(),
+			color: presentation.foreground === undefined ? undefined : Color.Format.CSS.parse(presentation.foreground)?.toNumber32Bit(),
 		};
 	}
 }

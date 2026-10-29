@@ -5,11 +5,7 @@ import { assertLanguageId } from '../../../common/languages/language.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 
 /** Computes structural folds from model brackets and configured region markers. */
-export function computeEditorLanguageFoldingRanges(
-	model: TextModel,
-	languageId: string,
-	configurations: ILanguageConfigurationService,
-): readonly EditorFoldingRange[] {
+export function computeEditorLanguageFoldingRanges(model: TextModel, languageId: string, configurations: ILanguageConfigurationService): readonly EditorFoldingRange[] {
 	assertLanguageId(languageId);
 	if (!configurations || typeof configurations.getLanguageConfiguration !== 'function') {
 		throw new TypeError('Language folding requires language configurations');
@@ -21,11 +17,7 @@ export function computeEditorLanguageFoldingRanges(
 	const blockComment = configuration.comments;
 	model.bracketPairs.getBracketPairsInRange(model.getFullModelRange()).forEach(pair => {
 		if (pair.closingBracketRange && isFoldOpeningToken(model.getValueInRange(pair.openingBracketRange))) {
-			appendRange(
-				ranges,
-				pair.openingBracketRange.startLineNumber - 1,
-				pair.closingBracketRange.startLineNumber - 1,
-			);
+			appendRange(ranges, pair.openingBracketRange.startLineNumber - 1, pair.closingBracketRange.startLineNumber - 1);
 		}
 	});
 	for (let lineIndex = 0; lineIndex < model.lineCount; lineIndex += 1) {
@@ -35,8 +27,7 @@ export function computeEditorLanguageFoldingRanges(
 			for (let index = 0; index < tokens.getCount(); index++) {
 				if (tokens.getStandardTokenType(index) !== StandardTokenType.Comment) continue;
 				const text = line.slice(tokens.getStartOffset(index), tokens.getEndOffset(index));
-				if (commentStart === undefined && text.startsWith(blockComment.blockCommentStartToken))
-					commentStart = lineIndex;
+				if (commentStart === undefined && text.startsWith(blockComment.blockCommentStartToken)) commentStart = lineIndex;
 				if (commentStart !== undefined && text.endsWith(blockComment.blockCommentEndToken)) {
 					appendRange(ranges, commentStart, lineIndex);
 					commentStart = undefined;
@@ -61,20 +52,16 @@ function matchesMarker(pattern: RegExp | undefined, line: string): boolean {
 }
 
 /** Merges independently-derived provider ranges while retaining only nested or disjoint spans. */
-export function mergeEditorFoldingRanges(
-	...sources: readonly (readonly EditorFoldingRange[])[]
-): readonly EditorFoldingRange[] {
+export function mergeEditorFoldingRanges(...sources: readonly (readonly EditorFoldingRange[])[]): readonly EditorFoldingRange[] {
 	if (sources.some(source => !Array.isArray(source))) throw new TypeError('Folding range sources must be arrays');
-	const ranges = sources
-		.flat()
-		.map(range =>
-			Object.freeze({
-				startLineIndex: range.startLineIndex,
-				endLineIndex: range.endLineIndex,
-				collapsed: false,
-				source: EditorFoldingRangeSource.Provider,
-			}),
-		);
+	const ranges = sources.flat().map(range =>
+		Object.freeze({
+			startLineIndex: range.startLineIndex,
+			endLineIndex: range.endLineIndex,
+			collapsed: false,
+			source: EditorFoldingRangeSource.Provider,
+		}),
+	);
 	return Object.freeze(normalizeFoldingRanges(ranges));
 }
 
@@ -84,20 +71,12 @@ function isFoldOpeningToken(token: string): boolean {
 
 function appendRange(ranges: EditorFoldingRange[], startLineIndex: number, endLineIndex: number): void {
 	if (endLineIndex <= startLineIndex) return;
-	ranges.push(
-		Object.freeze({ startLineIndex, endLineIndex, collapsed: false, source: EditorFoldingRangeSource.Provider }),
-	);
+	ranges.push(Object.freeze({ startLineIndex, endLineIndex, collapsed: false, source: EditorFoldingRangeSource.Provider }));
 }
 
 function normalizeFoldingRanges(ranges: readonly EditorFoldingRange[]): readonly EditorFoldingRange[] {
 	const ordered = [...ranges]
-		.filter(
-			range =>
-				Number.isSafeInteger(range.startLineIndex) &&
-				Number.isSafeInteger(range.endLineIndex) &&
-				range.startLineIndex >= 0 &&
-				range.endLineIndex > range.startLineIndex,
-		)
+		.filter(range => Number.isSafeInteger(range.startLineIndex) && Number.isSafeInteger(range.endLineIndex) && range.startLineIndex >= 0 && range.endLineIndex > range.startLineIndex)
 		.sort((left, right) => left.startLineIndex - right.startLineIndex || right.endLineIndex - left.endLineIndex);
 	const result: EditorFoldingRange[] = [];
 	const active: EditorFoldingRange[] = [];
@@ -107,12 +86,7 @@ function normalizeFoldingRanges(ranges: readonly EditorFoldingRange[]): readonly
 		if (enclosing && range.startLineIndex === enclosing.startLineIndex) continue;
 		if (enclosing && range.endLineIndex > enclosing.endLineIndex) continue;
 		const previous = result.at(-1);
-		if (
-			previous &&
-			previous.startLineIndex === range.startLineIndex &&
-			previous.endLineIndex === range.endLineIndex
-		)
-			continue;
+		if (previous && previous.startLineIndex === range.startLineIndex && previous.endLineIndex === range.endLineIndex) continue;
 		const normalized = Object.freeze({ ...range, collapsed: false, source: EditorFoldingRangeSource.Provider });
 		result.push(normalized);
 		active.push(normalized);

@@ -1,9 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
-import {
-	RemoteRuntimeInstaller,
-	remoteRuntimeArtifactFromEnvironment,
-} from '../../../../platform/remote/electron-main/remoteRuntimeInstaller.js';
+import { RemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from '../../../../platform/remote/electron-main/remoteRuntimeInstaller.js';
 
 const artifact = Object.freeze({
 	archivePath: '/cache/ash-package.tar.gz',
@@ -77,10 +74,7 @@ test('Electron Main delegates installation to the shared ash remote command', as
 
 test('artifact environment override is all-or-nothing and rejects unsupported targets', () => {
 	assert.equal(remoteRuntimeArtifactFromEnvironment({}), undefined);
-	assert.throws(
-		() => remoteRuntimeArtifactFromEnvironment({ ASH_REMOTE_RUNTIME_ARCHIVE: '/cache/runtime.tar.gz' }),
-		/Incomplete Remote runtime artifact override/,
-	);
+	assert.throws(() => remoteRuntimeArtifactFromEnvironment({ ASH_REMOTE_RUNTIME_ARCHIVE: '/cache/runtime.tar.gz' }), /Incomplete Remote runtime artifact override/);
 	assert.throws(
 		() =>
 			remoteRuntimeArtifactFromEnvironment({
@@ -126,12 +120,8 @@ test('installer decodes fragmented structured progress without mixing it with th
 		onProgress: event => progress.push(event),
 		runCommand: async (_executable, commandArgs, _environment, observer) => {
 			args = commandArgs;
-			observer?.onStderrData(
-				'{"kind":"remoteRuntimeInstallProgress","phase":"validatingArtifact"}\n{"kind":"remoteRuntimeInstallProgress","phase":"upload',
-			);
-			observer?.onStderrData(
-				'ing","transferredBytes":2048,"totalBytes":4096}\nplain diagnostic\n{"kind":"remoteRuntimeInstallProgress","phase":"complete","disposition":"installed"}\n',
-			);
+			observer?.onStderrData('{"kind":"remoteRuntimeInstallProgress","phase":"validatingArtifact"}\n{"kind":"remoteRuntimeInstallProgress","phase":"upload');
+			observer?.onStderrData('ing","transferredBytes":2048,"totalBytes":4096}\nplain diagnostic\n{"kind":"remoteRuntimeInstallProgress","phase":"complete","disposition":"installed"}\n');
 			return { exitCode: 0, stdout: '/srv/ash/runtime/bin/ash-remote-server\n', stderr: '' };
 		},
 	});
@@ -139,11 +129,7 @@ test('installer decodes fragmented structured progress without mixing it with th
 	await installer.install('build-linux');
 
 	assert.deepEqual(args.slice(-2), ['--progress', 'json-lines']);
-	assert.deepEqual(progress, [
-		{ phase: 'validatingArtifact' },
-		{ phase: 'uploading', transferredBytes: 2048, totalBytes: 4096 },
-		{ phase: 'complete', disposition: 'installed' },
-	]);
+	assert.deepEqual(progress, [{ phase: 'validatingArtifact' }, { phase: 'uploading', transferredBytes: 2048, totalBytes: 4096 }, { phase: 'complete', disposition: 'installed' }]);
 });
 
 test('installer fails closed on malformed structured progress', async () => {
@@ -173,9 +159,7 @@ test('installer passes request-scoped cancellation and progress to its local com
 		artifact,
 		runCommand: async (_executable, _args, _environment, observer) => {
 			observedSignal = observer?.signal;
-			observer?.onStderrData(
-				'{"kind":"remoteRuntimeInstallProgress","phase":"complete","disposition":"reused"}\n',
-			);
+			observer?.onStderrData('{"kind":"remoteRuntimeInstallProgress","phase":"complete","disposition":"reused"}\n');
 			return { exitCode: 0, stdout: '/srv/ash/runtime/bin/ash-remote-server\n', stderr: '' };
 		},
 	});

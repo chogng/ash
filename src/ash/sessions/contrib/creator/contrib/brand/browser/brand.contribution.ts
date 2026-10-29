@@ -9,17 +9,13 @@ import type { DesignShape } from '../../../common/model/document.js';
 
 class BrandWorkspace extends CreatorCanvasWorkspace {
 	private createVariants(): void {
-		const frame = this.document.model.value.shapes.find(
-			shape => shape.kind === 'frame' && this.editor.selection.ids.has(shape.id),
-		);
+		const frame = this.document.model.value.shapes.find(shape => shape.kind === 'frame' && this.editor.selection.ids.has(shape.id));
 		if (frame?.kind !== 'frame') {
 			return;
 		}
 		const clone = (shape: DesignShape): DesignShape => {
 			const copy = { ...shape, id: generateUuid() };
-			return copy.kind === 'frame' || copy.kind === 'group'
-				? { ...copy, children: copy.children.map(clone) }
-				: copy;
+			return copy.kind === 'frame' || copy.kind === 'group' ? { ...copy, children: copy.children.map(clone) } : copy;
 		};
 		const right = Math.max(...this.document.model.value.shapes.map(shape => shape.x + shape.width));
 		const variants = [
@@ -57,22 +53,14 @@ class BrandWorkspace extends CreatorCanvasWorkspace {
 	}
 	protected override getModeActions(): readonly IAction[] {
 		return [
-			this.action('square', localize('sessions.creator.brand.square', 'Square asset'), () =>
-				this.addFrame(1080, 1080),
-			),
-			this.action('portrait', localize('sessions.creator.brand.portrait', 'Portrait asset'), () =>
-				this.addFrame(1080, 1920),
-			),
-			this.action('landscape', localize('sessions.creator.brand.landscape', 'Landscape asset'), () =>
-				this.addFrame(1200, 628),
-			),
+			this.action('square', localize('sessions.creator.brand.square', 'Square asset'), () => this.addFrame(1080, 1080)),
+			this.action('portrait', localize('sessions.creator.brand.portrait', 'Portrait asset'), () => this.addFrame(1080, 1920)),
+			this.action('landscape', localize('sessions.creator.brand.landscape', 'Landscape asset'), () => this.addFrame(1200, 628)),
 			this.action(
 				'variants',
 				localize('sessions.creator.brand.variants', 'Create size variants'),
 				() => this.createVariants(),
-				this.document.model.value.shapes.some(
-					shape => shape.kind === 'frame' && this.editor.selection.ids.has(shape.id),
-				),
+				this.document.model.value.shapes.some(shape => shape.kind === 'frame' && this.editor.selection.ids.has(shape.id)),
 			),
 		];
 	}
@@ -87,6 +75,5 @@ registerCreatorMode({
 		'sessions.creator.brand.help',
 		'Choose Square asset, Portrait asset or Landscape asset to start a marketing layout. Select a frame and choose Create size variants to create three editable copies with proportional content. Undo removes the whole batch. Import images through the canvas tools.',
 	),
-	create: (instantiation, ownerDocument) =>
-		instantiation.createInstance(BrandWorkspace, ownerDocument, CreatorMode.Brand),
+	create: (instantiation, ownerDocument) => instantiation.createInstance(BrandWorkspace, ownerDocument, CreatorMode.Brand),
 });

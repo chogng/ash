@@ -20,9 +20,7 @@ export class RemoteExtensionRecoveryContribution extends Disposable implements I
 				const previous = previousState;
 				previousState = state;
 				if (state !== 'connected' || previous === undefined || previous === 'connected') return;
-				void options.extensionService
-					.reload()
-					.catch(error => console.error('Declarative extension refresh after remote recovery failed', error));
+				void options.extensionService.reload().catch(error => console.error('Declarative extension refresh after remote recovery failed', error));
 			}),
 		);
 	}

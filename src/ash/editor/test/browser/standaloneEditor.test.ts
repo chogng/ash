@@ -48,10 +48,7 @@ Object.defineProperty(browserEnvironment.window, 'matchMedia', {
 	configurable: true,
 	value: (query: string) => {
 		if (query === '(forced-colors: active)') return forcedColors;
-		assert.ok(
-			['(prefers-reduced-motion: reduce)', '(prefers-reduced-transparency: reduce)'].includes(query) ||
-				/^\(resolution: [\d.]+dppx\)$/u.test(query),
-		);
+		assert.ok(['(prefers-reduced-motion: reduce)', '(prefers-reduced-transparency: reduce)'].includes(query) || /^\(resolution: [\d.]+dppx\)$/u.test(query));
 		return Object.assign(new browserEnvironment.window.EventTarget(), { matches: false, media: query });
 	},
 });
@@ -64,9 +61,7 @@ class TestWorker extends browserEnvironment.window.EventTarget {
 			onMessage: this.incoming.event,
 			send: message => {
 				const data = structuredClone(message);
-				queueMicrotask(() =>
-					this.dispatchEvent(new browserEnvironment.window.MessageEvent('message', { data })),
-				);
+				queueMicrotask(() => this.dispatchEvent(new browserEnvironment.window.MessageEvent('message', { data })));
 			},
 			dispose() {},
 			[Symbol.dispose]() {},
@@ -93,11 +88,7 @@ class TestResizeObserver {
 	unobserve(): void {}
 	disconnect(): void {}
 }
-const installedGlobals = installEditorTestDom(
-	browserEnvironment,
-	['Node', 'Element', 'HTMLElement', 'Event', 'InputEvent'],
-	{ ResizeObserver: TestResizeObserver, Worker: TestWorker },
-);
+const installedGlobals = installEditorTestDom(browserEnvironment, ['Node', 'Element', 'HTMLElement', 'Event', 'InputEvent'], { ResizeObserver: TestResizeObserver, Worker: TestWorker });
 
 const stanza = await import('../../editor.main.js');
 
@@ -125,11 +116,7 @@ test('standalone service collection honors explicit first-scope overrides', () =
 test('standalone language identity and editing rules require host registration', () => {
 	using services = new StandaloneServiceCollection({});
 	const resource = URI.file('/project/main.ts');
-	using model = services.modelService.createModel(
-		'const value = 1;',
-		services.languageService.createByFilepathOrFirstLine(resource),
-		resource,
-	);
+	using model = services.modelService.createModel('const value = 1;', services.languageService.createByFilepathOrFirstLine(resource), resource);
 	assert.deepEqual(services.languageService.getRegisteredLanguageIds(), ['plaintext']);
 	assert.equal(model.getLanguageId(), 'plaintext');
 	assert.equal(services.languageConfigurationService.getLanguageConfiguration('typescript').comments, null);
@@ -139,10 +126,7 @@ test('standalone language identity and editing rules require host registration',
 		comments: { lineComment: '//' },
 	});
 	assert.equal(model.getLanguageId(), 'typescript');
-	assert.equal(
-		services.languageConfigurationService.getLanguageConfiguration('typescript').comments?.lineCommentToken,
-		'//',
-	);
+	assert.equal(services.languageConfigurationService.getLanguageConfiguration('typescript').comments?.lineCommentToken, '//');
 
 	configuration.dispose();
 	language.dispose();
@@ -156,20 +140,11 @@ test('standalone services leave formatter policy with the active Code owner', as
 	const second: DocumentFormattingEditProvider = { provideDocumentFormattingEdits: () => [] };
 	const providers = [first, second];
 	using host = FormattingConflicts.setFormatterSelector(async choices => choices[1]);
-	assert.strictEqual(
-		await FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.File),
-		second,
-	);
+	assert.strictEqual(await FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.File), second);
 	using services = new StandaloneServiceCollection({});
-	assert.strictEqual(
-		await FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.File),
-		second,
-	);
+	assert.strictEqual(await FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.File), second);
 	services.dispose();
-	assert.strictEqual(
-		await FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.File),
-		second,
-	);
+	assert.strictEqual(await FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.File), second);
 });
 
 test('standalone initialization defers callbacks and releases registrations across initialization', () => {
@@ -203,12 +178,7 @@ test('standalone initialization defers callbacks and releases registrations acro
 test('standalone language activation is once per language and exposes independent descriptions', () => {
 	const calls: string[] = [];
 	using resources = new DisposableStore();
-	resources.add(
-		stanza.languages.registerLanguages([
-			{ description: { id: 'activate-first', extensions: ['.first'] } },
-			{ description: { id: 'activate-second' } },
-		]),
-	);
+	resources.add(stanza.languages.registerLanguages([{ description: { id: 'activate-first', extensions: ['.first'] } }, { description: { id: 'activate-second' } }]));
 	resources.add(stanza.languages.onLanguageEncountered('activate-first', () => calls.push('basic')));
 	resources.add(stanza.languages.onLanguage('activate-first', () => calls.push('rich')));
 	resources.add(stanza.languages.onLanguage('activate-second', () => calls.push('changed')));
@@ -216,9 +186,7 @@ test('standalone language activation is once per language and exposes independen
 	removed.dispose();
 	const descriptions = stanza.languages.getLanguages();
 	descriptions.find(language => language.id === 'activate-first')!.extensions!.push('.mutated');
-	assert.deepEqual(stanza.languages.getLanguages().find(language => language.id === 'activate-first')!.extensions, [
-		'.first',
-	]);
+	assert.deepEqual(stanza.languages.getLanguages().find(language => language.id === 'activate-first')!.extensions, ['.first']);
 	const model = resources.add(stanza.editor.createModel('alpha', 'activate-first'));
 	resources.add(stanza.editor.createModel('beta', 'activate-first'));
 	stanza.editor.setModelLanguage(model, 'activate-second');
@@ -286,10 +254,7 @@ test('standalone Monarch registrations own lazy tokenizer creation, replacement 
 	const tokenizer = (await TokenizationRegistry.getOrCreate('monarch-registration'))!;
 	assert.equal(await TokenizationRegistry.getOrCreate('monarch-registration'), tokenizer);
 	assert.equal(calls, 1);
-	assert.equal(
-		tokenizer.tokenize('word', false, tokenizer.getInitialState()).tokens[0]!.type,
-		'identifier.monarch-registration',
-	);
+	assert.equal(tokenizer.tokenize('word', false, tokenizer.getInitialState()).tokens[0]!.type, 'identifier.monarch-registration');
 	assert.throws(
 		() =>
 			stanza.languages.setMonarchTokensProvider('monarch-registration', {
@@ -304,21 +269,14 @@ test('standalone Monarch registrations own lazy tokenizer creation, replacement 
 	lazy.dispose();
 	assert.throws(() => tokenizer.tokenize('word', false, tokenizer.getInitialState()), /disposed/i);
 	const current = TokenizationRegistry.get('monarch-registration')!;
-	assert.equal(
-		current.tokenize('word', false, current.getInitialState()).tokens[0]!.type,
-		'string.monarch-registration',
-	);
+	assert.equal(current.tokenize('word', false, current.getInitialState()).tokens[0]!.type, 'string.monarch-registration');
 	replacement.dispose();
 	assert.equal(TokenizationRegistry.get('monarch-registration'), null);
 });
 
 test('standalone colorization escapes markup, expands tabs and creates no model or worker', async () => {
 	using resources = new DisposableStore();
-	resources.add(
-		stanza.languages.registerLanguages([
-			{ description: { id: 'colorize-test', mimetypes: ['text/colorize-test'] } },
-		]),
-	);
+	resources.add(stanza.languages.registerLanguages([{ description: { id: 'colorize-test', mimetypes: ['text/colorize-test'] } }]));
 	resources.add(
 		stanza.languages.setMonarchTokensProvider('colorize-test', {
 			tokenizer: {
@@ -391,7 +349,10 @@ test('standalone Markdown service highlights an alias in the output document wit
 		});
 		using result = StandaloneServices.get(IMarkdownRendererService).render(
 			{ value: '```MarkdownTest\nword <img>\n```' },
-			{ ownerDocument: dom.window.document, asyncRenderCallback: resolveCompleted },
+			{
+				ownerDocument: dom.window.document,
+				asyncRenderCallback: resolveCompleted,
+			},
 		);
 		await completed;
 		const code = result.element.querySelector('pre > code')!;
@@ -399,10 +360,7 @@ test('standalone Markdown service highlights an alias in the output document wit
 		assert.equal(code.textContent?.replaceAll('\u00a0', ' '), 'word <img>');
 		assert.equal(code.querySelector('img'), null);
 		assert.equal(code.firstElementChild?.getAttribute('style'), 'color: #123456;');
-		assert.deepEqual(
-			{ models: stanza.editor.getModels().length, workers: createdWorkerCount },
-			{ models, workers },
-		);
+		assert.deepEqual({ models: stanza.editor.getModels().length, workers: createdWorkerCount }, { models, workers });
 	} finally {
 		dom.window.close();
 		stanza.editor.setTheme('ash-light');
@@ -420,10 +378,7 @@ test('standalone theme APIs register, select, and project a named theme', () => 
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const editor = stanza.editor.create(container, { value: 'theme', theme: 'standalone-test' });
 	assert.equal(container.getAttribute('data-color-theme'), 'standalone-test');
-	assert.equal(
-		dom.window.getComputedStyle(dom.window.document.documentElement).getPropertyValue('--ash-editor-background'),
-		'#101010',
-	);
+	assert.equal(dom.window.getComputedStyle(dom.window.document.documentElement).getPropertyValue('--ash-editor-background'), '#101010');
 
 	stanza.editor.setTheme('ash-light');
 	assert.equal(container.getAttribute('data-color-theme'), 'ash-light');
@@ -432,19 +387,11 @@ test('standalone theme APIs register, select, and project a named theme', () => 
 });
 
 test('standalone public API keeps compiled theme snapshots internal', () => {
-	for (const exportName of [
-		'lightColorTheme',
-		'darkColorTheme',
-		'highContrastLightColorTheme',
-		'highContrastDarkColorTheme',
-	]) {
+	for (const exportName of ['lightColorTheme', 'darkColorTheme', 'highContrastLightColorTheme', 'highContrastDarkColorTheme']) {
 		assert.equal(exportName in stanza, false);
 	}
 	assert.equal(stanza.editor.ContentWidgetPositionPreference.EXACT, stanza.ContentWidgetPositionPreference.EXACT);
-	assert.equal(
-		stanza.editor.OverlayWidgetPositionPreference.TOP_CENTER,
-		stanza.OverlayWidgetPositionPreference.TOP_CENTER,
-	);
+	assert.equal(stanza.editor.OverlayWidgetPositionPreference.TOP_CENTER, stanza.OverlayWidgetPositionPreference.TOP_CENTER);
 	assert.equal(stanza.editor.PositionAffinity.LeftOfInjectedText, stanza.PositionAffinity.LeftOfInjectedText);
 });
 
@@ -466,7 +413,13 @@ test('standalone editors can start without allocating a model or worker and atta
 			createdModels,
 			workers: createdWorkerCount - workers,
 		},
-		{ model: null, value: '', state: null, createdModels: [], workers: 0 },
+		{
+			model: null,
+			value: '',
+			state: null,
+			createdModels: [],
+			workers: 0,
+		},
 	);
 	assert.deepEqual(stanza.editor.getModels(), models);
 	assert.ok(stanza.editor.getEditors().includes(editor));
@@ -536,10 +489,7 @@ test('standalone on-type providers retain triggers, model arguments, and registr
 	const registry = StandaloneServices.get(ILanguageFeaturesService).onTypeFormattingEditProvider;
 	assert.deepEqual(registry.ordered(model), [provider]);
 	assert.deepEqual(provider.autoFormatTriggerCharacters, [';', '}']);
-	assert.deepEqual(
-		await registry.ordered(model)[0]!.provideOnTypeFormattingEdits(model, position, ';', options, source.token),
-		[{ range: new stanza.Range(1, 1, 1, 7), text: 'ALPHA;' }],
-	);
+	assert.deepEqual(await registry.ordered(model)[0]!.provideOnTypeFormattingEdits(model, position, ';', options, source.token), [{ range: new stanza.Range(1, 1, 1, 7), text: 'ALPHA;' }]);
 	registration.dispose();
 	assert.deepEqual(registry.ordered(model), []);
 });
@@ -548,19 +498,19 @@ test('standalone languages API replaces one language generation without stale re
 	const changes: string[] = [];
 	using listener = stanza.languages.onDidChangeLanguages(event => changes.push(event.languageId));
 	using descriptions = stanza.languages.registerLanguages([
-		{ description: { id: 'stanza-generation-a', extensions: ['.generation-a'] } },
+		{
+			description: { id: 'stanza-generation-a', extensions: ['.generation-a'] },
+		},
 	]);
 
-	assert.equal(
-		stanza.languages.resolveLanguageId({ resource: URI.parse('file:///sample.generation-a') }),
-		'stanza-generation-a',
-	);
-	descriptions.replace([{ description: { id: 'stanza-generation-b', extensions: ['.generation-b'] } }]);
+	assert.equal(stanza.languages.resolveLanguageId({ resource: URI.parse('file:///sample.generation-a') }), 'stanza-generation-a');
+	descriptions.replace([
+		{
+			description: { id: 'stanza-generation-b', extensions: ['.generation-b'] },
+		},
+	]);
 	assert.equal(stanza.languages.resolveLanguageId({ resource: URI.parse('file:///sample.generation-a') }), undefined);
-	assert.equal(
-		stanza.languages.resolveLanguageId({ resource: URI.parse('file:///sample.generation-b') }),
-		'stanza-generation-b',
-	);
+	assert.equal(stanza.languages.resolveLanguageId({ resource: URI.parse('file:///sample.generation-b') }), 'stanza-generation-b');
 	assert.deepEqual(changes, ['stanza-generation-a', 'stanza-generation-a', 'stanza-generation-b']);
 });
 
@@ -582,8 +532,12 @@ test('standalone language events preserve listener context and dispose with the 
 });
 
 test('standalone languages API replaces provider batches atomically', () => {
-	const first = { provideHover: () => ({ contents: ['first'] }) };
-	const second = { provideHover: () => ({ contents: ['second'] }) };
+	const first = {
+		provideHover: () => ({ contents: ['first'] }),
+	};
+	const second = {
+		provideHover: () => ({ contents: ['second'] }),
+	};
 	using model = new stanza.TextModel('', { languageId: 'stanza-batch' });
 	using batch = stanza.languages.registerProviderBatch({ hovers: [{ selector: 'stanza-batch', provider: first }] });
 	const providers = StandaloneServices.get(ILanguageFeaturesService).hoverProvider;
@@ -602,32 +556,20 @@ test('standalone languages API feeds the shared editor registries', async () => 
 		provideHover: () => ({ contents: ['Public hover'] }),
 	});
 	const services = StandaloneServices.initialize();
-	assert.equal(
-		services.languageService.resolveLanguageId({ resource: URI.parse('file:///sample.stanza-public') }),
-		'stanza-public-test',
-	);
-	assert.equal(
-		services.languageConfigurationService.getLanguageConfiguration('stanza-public-test').comments?.lineCommentToken,
-		'//',
-	);
-	using model = stanza.editor.createModel(
-		'answer',
-		'stanza-public-test',
-		URI.parse('inmemory://stanza/public-api.stanza-public'),
-	);
+	assert.equal(services.languageService.resolveLanguageId({ resource: URI.parse('file:///sample.stanza-public') }), 'stanza-public-test');
+	assert.equal(services.languageConfigurationService.getLanguageConfiguration('stanza-public-test').comments?.lineCommentToken, '//');
+	using model = stanza.editor.createModel('answer', 'stanza-public-test', URI.parse('inmemory://stanza/public-api.stanza-public'));
 	assert.equal(model instanceof stanza.TextModel, true);
 	if (!(model instanceof stanza.TextModel)) throw new Error('Expected the standalone model implementation');
 	const signal = new AbortController().signal;
 	assert.deepEqual(
-		await services.languageFeaturesService.hoverProvider
-			.ordered(model)[0]!
-			.provideHover(
-				{
-					...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
-					position: new stanza.Position(1, 2),
-				},
-				signal,
-			),
+		await services.languageFeaturesService.hoverProvider.ordered(model)[0]!.provideHover(
+			{
+				...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
+				position: new stanza.Position(1, 2),
+			},
+			signal,
+		),
 		{ contents: ['Public hover'] },
 	);
 });
@@ -672,19 +614,14 @@ test('standalone completion providers execute in a live editor', async () => {
 });
 
 test('standalone API registers URI and language identity with model lifecycle events', () => {
-	using descriptions = stanza.languages.registerLanguages([
-		{ description: { id: 'typescript', extensions: ['.ts'] } },
-		{ description: { id: 'javascript', extensions: ['.js'] } },
-	]);
+	using descriptions = stanza.languages.registerLanguages([{ description: { id: 'typescript', extensions: ['.ts'] } }, { description: { id: 'javascript', extensions: ['.js'] } }]);
 	const resource = URI.parse('inmemory://stanza/registry.ts');
 	const created: string[] = [];
 	const disposed: string[] = [];
 	const languages: string[] = [];
 	using createListener = stanza.editor.onDidCreateModel(model => created.push(model.uri.toString()));
 	using disposeListener = stanza.editor.onWillDisposeModel(model => disposed.push(model.uri.toString()));
-	using languageListener = stanza.editor.onDidChangeModelLanguage(event =>
-		languages.push(`${event.oldLanguage}->${event.model.getLanguageId()}`),
-	);
+	using languageListener = stanza.editor.onDidChangeModelLanguage(event => languages.push(`${event.oldLanguage}->${event.model.getLanguageId()}`));
 
 	const model = stanza.editor.createModel('const value = 1;', 'typescript', resource);
 	assert.equal(stanza.editor.getModel(resource), model);
@@ -704,21 +641,9 @@ test('standalone createModel infers language from URI or first line unless langu
 		{ description: { id: 'stanza-uri-inferred', extensions: ['.stanza-inferred'] } },
 		{ description: { id: 'stanza-first-line-inferred', firstLine: '^#!.*\\bstanza-inferred\\b' } },
 	]);
-	using uriModel = stanza.editor.createModel(
-		'plain content',
-		undefined,
-		URI.parse('inmemory://stanza/model.stanza-inferred'),
-	);
-	using firstLineModel = stanza.editor.createModel(
-		'#!/usr/bin/env stanza-inferred\nplain content',
-		undefined,
-		URI.parse('inmemory://stanza/script'),
-	);
-	using explicitModel = stanza.editor.createModel(
-		'#!/usr/bin/env stanza-inferred',
-		'plaintext',
-		URI.parse('inmemory://stanza/explicit.stanza-inferred'),
-	);
+	using uriModel = stanza.editor.createModel('plain content', undefined, URI.parse('inmemory://stanza/model.stanza-inferred'));
+	using firstLineModel = stanza.editor.createModel('#!/usr/bin/env stanza-inferred\nplain content', undefined, URI.parse('inmemory://stanza/script'));
+	using explicitModel = stanza.editor.createModel('#!/usr/bin/env stanza-inferred', 'plaintext', URI.parse('inmemory://stanza/explicit.stanza-inferred'));
 
 	assert.equal(uriModel.getLanguageId(), 'stanza-uri-inferred');
 	assert.equal(firstLineModel.getLanguageId(), 'stanza-first-line-inferred');
@@ -835,7 +760,14 @@ test('standalone creation event exposes an assembled editor and caller-owned mod
 	const editor = stanza.editor.create(container, { model, placeholder: 'Start typing' });
 
 	assert.deepEqual(observations, [
-		{ model, registered: true, mounted: true, placeholder: true, find: true, theme: 'ash-light' },
+		{
+			model,
+			registered: true,
+			mounted: true,
+			placeholder: true,
+			find: true,
+			theme: 'ash-light',
+		},
 	]);
 	editor.dispose();
 	assert.equal(model.isDisposed(), false);
@@ -931,9 +863,7 @@ test('standalone editor releases an implicit model on switch and retains caller-
 		assert.ok(owned);
 		const root = editor.getDomNode();
 		const modelEvents: string[] = [];
-		using listener = editor.onDidChangeModel(event =>
-			modelEvents.push(`${event.oldModelUrl?.toString()}->${event.newModelUrl?.toString()}`),
-		);
+		using listener = editor.onDidChangeModel(event => modelEvents.push(`${event.oldModelUrl?.toString()}->${event.newModelUrl?.toString()}`));
 		editor.setModel(caller);
 		assert.deepEqual(
 			{
@@ -955,11 +885,7 @@ test('standalone editor releases an implicit model on switch and retains caller-
 		assert.equal(editor.getModel(), null);
 		assert.equal(caller.isDisposed(), false);
 		editor.setModel(caller);
-		assert.deepEqual(modelEvents, [
-			`${ownedResource}->${caller.uri}`,
-			`${caller.uri}->undefined`,
-			`undefined->${caller.uri}`,
-		]);
+		assert.deepEqual(modelEvents, [`${ownedResource}->${caller.uri}`, `${caller.uri}->undefined`, `undefined->${caller.uri}`]);
 	} finally {
 		editor.dispose();
 		assert.equal(createdWorkerCount, terminatedWorkerCount);
@@ -991,16 +917,8 @@ test('standalone editor rejects an unregistered replacement without disturbing i
 test('standalone editors keep caller-owned models and selections isolated when one switches', () => {
 	const dom = createTestDom('<!doctype html><body><main></main><aside></aside></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const firstModel = stanza.editor.createModel(
-		'shared',
-		'plaintext',
-		URI.parse('inmemory://stanza/switch-shared.txt'),
-	);
-	const secondModel = stanza.editor.createModel(
-		'other',
-		'plaintext',
-		URI.parse('inmemory://stanza/switch-other.txt'),
-	);
+	const firstModel = stanza.editor.createModel('shared', 'plaintext', URI.parse('inmemory://stanza/switch-shared.txt'));
+	const secondModel = stanza.editor.createModel('other', 'plaintext', URI.parse('inmemory://stanza/switch-other.txt'));
 	const switching = stanza.editor.create(dom.window.document.querySelector<HTMLElement>('main')!, {
 		model: firstModel,
 	});
@@ -1017,16 +935,18 @@ test('standalone editors keep caller-owned models and selections isolated when o
 				firstDisposed: firstModel.isDisposed(),
 				secondDisposed: secondModel.isDisposed(),
 			},
-			{ switchingValue: 'other', stayingValue: 'still shared', firstDisposed: false, secondDisposed: false },
+			{
+				switchingValue: 'other',
+				stayingValue: 'still shared',
+				firstDisposed: false,
+				secondDisposed: false,
+			},
 		);
 		switching.setValue('changed other');
 		assert.equal(staying.getValue(), 'still shared');
 		switching.setPosition(new stanza.Position(1, 5));
 		staying.setPosition(new stanza.Position(1, 2));
-		assert.deepEqual(
-			{ switchingColumn: switching.getPosition()?.column, stayingColumn: staying.getPosition()?.column },
-			{ switchingColumn: 5, stayingColumn: 2 },
-		);
+		assert.deepEqual({ switchingColumn: switching.getPosition()?.column, stayingColumn: staying.getPosition()?.column }, { switchingColumn: 5, stayingColumn: 2 });
 	} finally {
 		switching.dispose();
 		staying.dispose();
@@ -1041,17 +961,10 @@ test('standalone editors keep caller-owned models and selections isolated when o
 test('standalone editor rejects unregistered models and conflicting model options', () => {
 	const dom = createTestDom('<!doctype html><body><main></main></body>');
 	const model = new stanza.TextModel('unregistered');
-	assert.throws(
-		() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>('main')!, { model }),
-		/not registered/,
-	);
+	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>('main')!, { model }), /not registered/);
 	model.dispose();
 
-	const registered = stanza.editor.createModel(
-		'registered',
-		'plaintext',
-		URI.parse('inmemory://stanza/conflict.txt'),
-	);
+	const registered = stanza.editor.createModel('registered', 'plaintext', URI.parse('inmemory://stanza/conflict.txt'));
 	assert.throws(
 		() =>
 			stanza.editor.create(dom.window.document.querySelector<HTMLElement>('main')!, {
@@ -1063,15 +976,7 @@ test('standalone editor rejects unregistered models and conflicting model option
 	registered.dispose();
 	const lateConfigurations = new TestLanguageConfigurationService();
 	const lateOverride = new LanguageFeaturesService();
-	assert.throws(
-		() =>
-			stanza.editor.create(
-				dom.window.document.querySelector<HTMLElement>('main')!,
-				{},
-				{ languageFeaturesService: lateOverride },
-			),
-		/already initialized/,
-	);
+	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>('main')!, {}, { languageFeaturesService: lateOverride }), /already initialized/);
 	lateOverride.dispose();
 	lateConfigurations.dispose();
 	dom.window.close();
@@ -1086,13 +991,9 @@ suite('standalone browser component', () => {
 		try {
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareProductFormatting('type'));
 			await page.keyboard.type(';');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value))
-				.toBe('ALPHA;');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('ALPHA;');
 			await page.keyboard.press('ControlOrMeta+z');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value))
-				.toBe('alpha');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('alpha');
 		} finally {
 			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		}
@@ -1105,13 +1006,9 @@ suite('standalone browser component', () => {
 		try {
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareProductFormatting('type'));
 			await page.keyboard.press('Enter');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value))
-				.toBe('ALPHA\n');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('ALPHA\n');
 			await page.keyboard.press('ControlOrMeta+z');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value))
-				.toBe('alpha');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('alpha');
 		} finally {
 			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		}
@@ -1127,40 +1024,22 @@ suite('standalone browser component', () => {
 					window.ashStandaloneIntegration.setActionMenuLanguage(locale);
 					window.ashStandaloneIntegration.prepareProductFormatting('choice');
 				}, locale);
-				const formatted = page.evaluate(() =>
-					window.ashStandaloneIntegration.runLineAction('editor.action.formatDocument'),
-				);
+				const formatted = page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.formatDocument'));
 				const picker = page.locator('.ash-quick-pick:visible');
 				const input = picker.getByRole('combobox');
-				await expect(input).toHaveAttribute(
-					'placeholder',
-					locale === 'zh-CN' ? '选择格式化程序' : 'Select a Formatter',
-				);
+				await expect(input).toHaveAttribute('placeholder', locale === 'zh-CN' ? '选择格式化程序' : 'Select a Formatter');
 				await input.fill(locale === 'zh-CN' ? '配置默认格式化程序' : 'Configure Default Formatter');
 				await input.press('Enter');
-				await expect(input).toHaveAttribute(
-					'placeholder',
-					locale === 'zh-CN'
-						? '选择 plaintext 的默认格式化程序'
-						: 'Select the Default Formatter for plaintext',
-				);
+				await expect(input).toHaveAttribute('placeholder', locale === 'zh-CN' ? '选择 plaintext 的默认格式化程序' : 'Select the Default Formatter for plaintext');
 				await input.fill('Second formatter');
 				await input.press('Enter');
 				await formatted;
 				await expect(picker).toHaveCount(0);
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing()))
-					.toMatchObject({ value: 'SECOND', focused: true });
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).toMatchObject({ value: 'SECOND', focused: true });
 				await page.keyboard.press('ControlOrMeta+z');
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value))
-					.toBe('alpha');
-				await page.evaluate(() =>
-					window.ashStandaloneIntegration.runLineAction('editor.action.formatDocument'),
-				);
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value))
-					.toBe('SECOND');
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('alpha');
+				await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.formatDocument'));
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('SECOND');
 				await expect(picker).toHaveCount(0);
 			} finally {
 				await page.evaluate(() => window.ashStandaloneIntegration.dispose());
@@ -1187,9 +1066,7 @@ suite('standalone browser component', () => {
 		await page.mouse.move(900, 600);
 		await expect(track).toHaveCSS('opacity', '0');
 		await input.press('PageDown');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometry().logicalTop))
-			.toBeGreaterThan(0);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometry().logicalTop)).toBeGreaterThan(0);
 		await expect(track).toHaveCSS('opacity', '1');
 		await expect(track).toHaveCSS('opacity', '0');
 		await expect(input).toBeFocused();
@@ -1200,22 +1077,12 @@ suite('standalone browser component', () => {
 		await track.press('ArrowDown');
 		await expect(track).toBeFocused();
 		await track.press('End');
-		await expect
-			.poll(() =>
-				track.evaluate(
-					element => element.getAttribute('aria-valuenow') === element.getAttribute('aria-valuemax'),
-				),
-			)
-			.toBe(true);
+		await expect.poll(() => track.evaluate(element => element.getAttribute('aria-valuenow') === element.getAttribute('aria-valuemax'))).toBe(true);
 		await track.press('Home');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometry().logicalTop))
-			.toBe(0);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometry().logicalTop)).toBe(0);
 		await editor.hover();
 		await page.mouse.wheel(0, 180);
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometry().logicalTop))
-			.toBeGreaterThan(0);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometry().logicalTop)).toBeGreaterThan(0);
 		await page.mouse.move(900, 600);
 		await page.clock.runFor(800);
 		await input.focus();
@@ -1244,38 +1111,24 @@ suite('standalone browser component', () => {
 		await page.goto('/standalone.html');
 		expect(errors).toEqual([]);
 		const input = page.locator('#caller > .stanza-editor .stanza-editor-input').first();
-		for (const command of [
-			'Go to Definition',
-			'Go to Declaration',
-			'Go to Type Definition',
-			'Go to Implementations',
-			'Go to References',
-		]) {
+		for (const command of ['Go to Definition', 'Go to Declaration', 'Go to Type Definition', 'Go to Implementations', 'Go to References']) {
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
 			await input.press('Shift+F10');
 			await page.getByRole('menuitem', { name: command, exact: true }).click();
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().selection))
-				.toBe('[1,7 -> 1,11]');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().selection)).toBe('[1,7 -> 1,11]');
 			await expect(input).toBeFocused();
 		}
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
 		await input.press('Shift+F10');
-		await expect(
-			page.getByRole('menuitem', { name: 'Rename Symbol', exact: true }).locator('.ash-menu-keybinding'),
-		).toBeVisible();
+		await expect(page.getByRole('menuitem', { name: 'Rename Symbol', exact: true }).locator('.ash-menu-keybinding')).toBeVisible();
 		await page.getByRole('menuitem', { name: 'Rename Symbol', exact: true }).click();
 		const rename = page.getByRole('textbox', { name: 'New symbol name', exact: true });
 		await expect(rename).toBeFocused();
 		await rename.fill('gamma');
 		await rename.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value))
-			.toBe('gamma beta alpha');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('gamma beta alpha');
 		await input.press('ControlOrMeta+z');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value))
-			.toBe('alpha beta alpha');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('alpha beta alpha');
 		for (const [command, value] of [
 			['Format Document', 'formatted'],
 			['Format Selection', 'selection beta alpha'],
@@ -1283,9 +1136,7 @@ suite('standalone browser component', () => {
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
 			await input.press('Shift+F10');
 			await page.getByRole('menuitem', { name: command, exact: true }).click();
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value))
-				.toBe(value);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe(value);
 			await expect(input).toBeFocused();
 		}
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
@@ -1317,13 +1168,9 @@ suite('standalone browser component', () => {
 		await input.press('Shift+F10');
 		await page.getByRole('menuitem', { name: 'Change All Occurrences', exact: true }).click();
 		await page.keyboard.insertText('gamma');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value))
-			.toBe('gamma beta gamma');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('gamma beta gamma');
 		await input.press('ControlOrMeta+z');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value))
-			.toBe('alpha beta alpha');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('alpha beta alpha');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(false));
 		await input.press('Shift+F10');
 		await page.getByRole('menuitem', { name: 'Copy As', exact: true }).click();
@@ -1348,14 +1195,10 @@ suite('standalone browser component', () => {
 			const actions = page.locator('.ash-action-widget').getByRole('menuitem');
 			await expect(actions).toHaveCount(1);
 			await page.getByRole('menuitem', { name: `Apply ${kind}`, exact: true }).click();
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value))
-				.toBe(`${kind} beta alpha`);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe(`${kind} beta alpha`);
 			await expect(input).toBeFocused();
 			await input.press('ControlOrMeta+z');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value))
-				.toBe('alpha beta alpha');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('alpha beta alpha');
 		}
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
@@ -1398,9 +1241,7 @@ suite('standalone browser component', () => {
 				await expect(page.getByRole('menuitem', { name: 'Refactor...', exact: true })).toHaveCount(0);
 				await expect(page.getByRole('menuitem', { name: 'Source Action...', exact: true })).toHaveCount(0);
 			}
-			await expect(page.getByRole('menuitem', { name: 'Go to Definition', exact: true })).toHaveCount(
-				change === 'readonly' || change === 'selection' ? 1 : 0,
-			);
+			await expect(page.getByRole('menuitem', { name: 'Go to Definition', exact: true })).toHaveCount(change === 'readonly' || change === 'selection' ? 1 : 0);
 			await page.keyboard.press('Escape');
 			await expect(input).toBeFocused();
 		}
@@ -1478,9 +1319,7 @@ suite('standalone browser component', () => {
 		await page.locator('#caller .stanza-editor-input').focus();
 		await expect(editor).toHaveCSS('outline-style', 'solid');
 		await expect(editor).toHaveCSS('outline-color', /^rgb/);
-		expect(
-			await editor.evaluate(node => getComputedStyle(node).getPropertyValue('--ash-focusBorder').trim()),
-		).not.toBe('');
+		expect(await editor.evaluate(node => getComputedStyle(node).getPropertyValue('--ash-focusBorder').trim())).not.toBe('');
 		await page.evaluate(() => (document.activeElement as HTMLElement).blur());
 		await expect(editor).toHaveCSS('outline-style', 'none');
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
@@ -1522,10 +1361,7 @@ suite('standalone browser component', () => {
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('plain'));
-		await expect(page.locator('#caller .stanza-editor-token').filter({ hasText: 'alpha' })).toHaveCSS(
-			'color',
-			'rgb(18, 52, 86)',
-		);
+		await expect(page.locator('#caller .stanza-editor-token').filter({ hasText: 'alpha' })).toHaveCSS('color', 'rgb(18, 52, 86)');
 		const input = page.locator('#caller .stanza-editor-input');
 		await input.focus();
 		await page.keyboard.press('F1');
@@ -1569,10 +1405,7 @@ suite('standalone browser component', () => {
 
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('monarch'));
-		await expect(page.locator('#caller .stanza-editor-token').filter({ hasText: 'alpha' })).toHaveCSS(
-			'color',
-			'rgb(18, 52, 86)',
-		);
+		await expect(page.locator('#caller .stanza-editor-token').filter({ hasText: 'alpha' })).toHaveCSS('color', 'rgb(18, 52, 86)');
 		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.inspectTokens'));
 		const inspector = page.locator('#caller .stanza-editor-inspect-tokens');
 		await expect(inspector).toContainText('entity.member');
@@ -1582,10 +1415,7 @@ suite('standalone browser component', () => {
 
 		await page.reload();
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('monarch-embedded'));
-		await expect(page.locator('#caller .stanza-editor-token').filter({ hasText: 'alpha' })).toHaveCSS(
-			'color',
-			'rgb(18, 52, 86)',
-		);
+		await expect(page.locator('#caller .stanza-editor-token').filter({ hasText: 'alpha' })).toHaveCSS('color', 'rgb(18, 52, 86)');
 		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.inspectTokens'));
 		const embeddedInspector = page.locator('#caller .stanza-editor-inspect-tokens');
 		await page.evaluate(() => window.ashStandaloneIntegration.setTokenInspectionPosition(3));
@@ -1692,9 +1522,7 @@ suite('standalone browser component', () => {
 
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareTokenTheme('lazy'));
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readTokenTheme().factoryCalls))
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readTokenTheme().factoryCalls)).toBe(1);
 			if (removed) {
 				await page.evaluate(() => window.ashStandaloneIntegration.removeTokenProvider());
 			}
@@ -1751,10 +1579,7 @@ suite('standalone browser component', () => {
 		await query.fill('editor.action.gotoOffset');
 		await expect(picker.locator('.ash-quick-pick-row-label')).toHaveCount(1);
 		await page.keyboard.press('Enter');
-		await expect(page.locator('#caller .stanza-editor-goto-line-input')).toHaveAttribute(
-			'aria-label',
-			'Character offset',
-		);
+		await expect(page.locator('#caller .stanza-editor-goto-line-input')).toHaveAttribute('aria-label', 'Character offset');
 		await page.keyboard.press('Escape');
 		await expect(input).toBeFocused();
 		await page.keyboard.press('F1');
@@ -1825,9 +1650,7 @@ suite('standalone browser component', () => {
 		await page.keyboard.press('Enter');
 		await expect(picker).toHaveCount(0);
 		await expect(input).toBeFocused();
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).selection).toBe(
-			'[1,7 -> 1,13]',
-		);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).selection).toBe('[1,7 -> 1,13]');
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 
@@ -1844,17 +1667,12 @@ suite('standalone browser component', () => {
 		await expect(picker).toHaveCount(1);
 		await expect(picker).toHaveAttribute('aria-label', 'Quick Access Help');
 		await expect(picker.locator('.ash-quick-pick-row-label')).toHaveText('? Go to Line/Column...');
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests()))[0]?.aborted).toBe(
-			true,
-		);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests()))[0]?.aborted).toBe(true);
 		await picker.getByRole('combobox').fill('>editor.action.gotoOffset');
 		await expect(picker).toHaveAttribute('aria-label', 'Command Palette');
 		await expect(picker.locator('.ash-quick-pick-row-label')).toHaveText('Go to Offset...');
 		await page.keyboard.press('Enter');
-		await expect(page.locator('#caller .stanza-editor-goto-line-input')).toHaveAttribute(
-			'aria-label',
-			'Character offset',
-		);
+		await expect(page.locator('#caller .stanza-editor-goto-line-input')).toHaveAttribute('aria-label', 'Character offset');
 		await page.keyboard.press('Escape');
 		await expect(input).toBeFocused();
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
@@ -1871,9 +1689,7 @@ suite('standalone browser component', () => {
 			calls: ['key'],
 			registered: true,
 		});
-		expect(await page.evaluate(() => window.ashStandaloneIntegration.runStandaloneCommand('payload'))).toBe(
-			'payload',
-		);
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.runStandaloneCommand('payload'))).toBe('payload');
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneCommands())).toEqual({
 			calls: ['key', 'alias:payload'],
 			registered: true,
@@ -1902,17 +1718,10 @@ suite('standalone browser component', () => {
 		await page.keyboard.press('F7');
 		await page.keyboard.press('F8');
 		await page.keyboard.press('F5');
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneCommands())).calls).toEqual([
-			'alias:batch',
-			'alias:single',
-		]);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneCommands())).calls).toEqual(['alias:batch', 'alias:single']);
 		await page.evaluate(() => window.ashStandaloneIntegration.setDynamicKeybindingContext(false));
 		await page.keyboard.press('F8');
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneCommands())).calls).toEqual([
-			'alias:batch',
-			'alias:single',
-			'key',
-		]);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneCommands())).calls).toEqual(['alias:batch', 'alias:single', 'key']);
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 
@@ -1940,12 +1749,7 @@ suite('standalone browser component', () => {
 		await picker.getByRole('combobox').fill('Standalone test action');
 		await expect(picker.locator('.ash-quick-pick-row-label')).toHaveText('Standalone test action');
 		await page.keyboard.press('Enter');
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneAction())).calls).toEqual([
-			'caller:key',
-			'caller:direct',
-			'caller:command',
-			'caller:key',
-		]);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneAction())).calls).toEqual(['caller:key', 'caller:direct', 'caller:command', 'caller:key']);
 		await page.evaluate(() => window.ashStandaloneIntegration.releaseStandaloneAction());
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.readStandaloneAction())).toEqual({
 			calls: ['caller:key', 'caller:direct', 'caller:command', 'caller:key'],
@@ -2029,20 +1833,13 @@ suite('standalone browser component', () => {
 				await page.goto('/standalone.html');
 				await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('completion'));
 				await page.keyboard.press('Control+Space');
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length))
-					.toBe(1);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
 				if (reason === 'escape') {
 					await page.keyboard.press('Escape');
 				} else {
-					await page.evaluate(
-						reason => window.ashStandaloneIntegration.changeContributionState(reason),
-						reason,
-					);
+					await page.evaluate(reason => window.ashStandaloneIntegration.changeContributionState(reason), reason);
 				}
-				expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([
-					{ languageId: 'typescript', aborted: true },
-				]);
+				expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([{ languageId: 'typescript', aborted: true }]);
 				await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
 				await expect(page.locator('#caller .stanza-editor-completion:not([hidden])')).toHaveCount(0);
 				await expect(page.locator('#caller .stanza-editor-input[aria-activedescendant]')).toHaveCount(0);
@@ -2055,17 +1852,13 @@ suite('standalone browser component', () => {
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('completion'));
 			await page.keyboard.press('Control+Space');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length))
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
 			await expect(page.locator('#caller .stanza-editor-completion')).toBeVisible();
 			await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('provider'));
 			await expect(page.locator('#caller .stanza-editor-completion')).toBeHidden();
 			await page.keyboard.press('Enter');
-			expect(
-				(await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).value,
-			).not.toContain('result');
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).value).not.toContain('result');
 		});
 
 		for (const scrolled of [false, true]) {
@@ -2074,14 +1867,9 @@ suite('standalone browser component', () => {
 
 				await page.goto('/standalone.html');
 				await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('completion'));
-				await page.evaluate(
-					scrolled => window.ashStandaloneIntegration.prepareCompletionGeometry(scrolled),
-					scrolled,
-				);
+				await page.evaluate(scrolled => window.ashStandaloneIntegration.prepareCompletionGeometry(scrolled), scrolled);
 				await page.keyboard.press('Control+Space');
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length))
-					.toBe(1);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
 				await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
 				await expect(page.locator('#caller .stanza-editor-completion')).toBeVisible();
 				const geometry = await page.evaluate(() => window.ashStandaloneIntegration.readCompletionGeometry());
@@ -2099,106 +1887,38 @@ suite('standalone browser component', () => {
 					const { page } = browserTests;
 
 					await page.goto(initiallyOff ? '/standalone.html?contributionsOff' : '/standalone.html');
-					await page.evaluate(
-						kind => window.ashStandaloneIntegration.prepareContributionRequests(kind),
-						kind,
-					);
+					await page.evaluate(kind => window.ashStandaloneIntegration.prepareContributionRequests(kind), kind);
 					if (initiallyOff) {
-						expect(
-							await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests()),
-						).toEqual([]);
+						expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([]);
 						await page.evaluate(
-							kind =>
-								window.ashStandaloneIntegration.updateContributionOptions(
-									kind === 'colors'
-										? { colorDecorators: true }
-										: { occurrencesHighlight: 'singleFile' },
-								),
+							kind => window.ashStandaloneIntegration.updateContributionOptions(kind === 'colors' ? { colorDecorators: true } : { occurrencesHighlight: 'singleFile' }),
 							kind,
 						);
 					}
 					if (kind === 'highlights' && !initiallyOff) await page.keyboard.press('ArrowRight');
-					await expect
-						.poll(() =>
-							page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length),
-						)
-						.toBe(1);
+					await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
 					await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
-					await expect
-						.poll(() =>
-							page.evaluate(
-								kind => window.ashStandaloneIntegration.readContributionDecorations()[kind],
-								kind,
-							),
-						)
-						.toBe(2);
-					await page.evaluate(
-						kind =>
-							window.ashStandaloneIntegration.updateContributionOptions(
-								kind === 'colors' ? { colorDecorators: false } : { occurrencesHighlight: 'off' },
-							),
-						kind,
-					);
-					expect(
-						await page.evaluate(
-							kind => window.ashStandaloneIntegration.readContributionDecorations()[kind],
-							kind,
-						),
-					).toBe(0);
+					await expect.poll(() => page.evaluate(kind => window.ashStandaloneIntegration.readContributionDecorations()[kind], kind)).toBe(2);
+					await page.evaluate(kind => window.ashStandaloneIntegration.updateContributionOptions(kind === 'colors' ? { colorDecorators: false } : { occurrencesHighlight: 'off' }), kind);
+					expect(await page.evaluate(kind => window.ashStandaloneIntegration.readContributionDecorations()[kind], kind)).toBe(0);
 					await page.keyboard.press('ArrowRight');
 					await page.evaluate(
 						kind =>
-							window.ashStandaloneIntegration.updateContributionOptions(
-								kind === 'colors'
-									? { colorDecorators: true, colorDecoratorsLimit: 1 }
-									: { occurrencesHighlight: 'singleFile' },
-							),
+							window.ashStandaloneIntegration.updateContributionOptions(kind === 'colors' ? { colorDecorators: true, colorDecoratorsLimit: 1 } : { occurrencesHighlight: 'singleFile' }),
 						kind,
 					);
-					await expect
-						.poll(() =>
-							page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length),
-						)
-						.toBe(2);
-					await page.evaluate(
-						kind =>
-							window.ashStandaloneIntegration.updateContributionOptions(
-								kind === 'colors' ? { colorDecorators: false } : { occurrencesHighlight: 'off' },
-							),
-						kind,
-					);
-					expect(
-						(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests()))[1]!
-							.aborted,
-					).toBe(true);
+					await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(2);
+					await page.evaluate(kind => window.ashStandaloneIntegration.updateContributionOptions(kind === 'colors' ? { colorDecorators: false } : { occurrencesHighlight: 'off' }), kind);
+					expect((await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests()))[1]!.aborted).toBe(true);
 					await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(1));
-					expect(
-						await page.evaluate(
-							kind => window.ashStandaloneIntegration.readContributionDecorations()[kind],
-							kind,
-						),
-					).toBe(0);
+					expect(await page.evaluate(kind => window.ashStandaloneIntegration.readContributionDecorations()[kind], kind)).toBe(0);
 					await page.evaluate(
-						kind =>
-							window.ashStandaloneIntegration.updateContributionOptions(
-								kind === 'colors' ? { colorDecorators: true } : { occurrencesHighlight: 'singleFile' },
-							),
+						kind => window.ashStandaloneIntegration.updateContributionOptions(kind === 'colors' ? { colorDecorators: true } : { occurrencesHighlight: 'singleFile' }),
 						kind,
 					);
-					await expect
-						.poll(() =>
-							page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length),
-						)
-						.toBe(3);
+					await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(3);
 					await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(2));
-					await expect
-						.poll(() =>
-							page.evaluate(
-								kind => window.ashStandaloneIntegration.readContributionDecorations()[kind],
-								kind,
-							),
-						)
-						.toBe(kind === 'colors' ? 1 : 2);
+					await expect.poll(() => page.evaluate(kind => window.ashStandaloneIntegration.readContributionDecorations()[kind], kind)).toBe(kind === 'colors' ? 1 : 2);
 				});
 			}
 		}
@@ -2210,37 +1930,22 @@ suite('standalone browser component', () => {
 				await page.goto(initiallyOff ? '/standalone.html?contributionsOff' : '/standalone.html');
 				await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('folding'));
 				if (initiallyOff) {
-					expect(
-						await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests()),
-					).toEqual([]);
-					await page.evaluate(() =>
-						window.ashStandaloneIntegration.updateContributionOptions({ folding: true }),
-					);
+					expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([]);
+					await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ folding: true }));
 				}
-				await page.evaluate(() =>
-					window.ashStandaloneIntegration.updateContributionOptions({ showFoldingControls: 'always' }),
-				);
+				await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ showFoldingControls: 'always' }));
 				await expect(page.locator('#caller .ash-icon-folding-expanded').first()).toBeVisible();
 				await expect(page.locator('#caller .ash-icon-folding-expanded .ash-icon').first()).toBeVisible();
 				await page.locator('#caller .ash-icon-folding-expanded').first().click();
 				await expect(page.locator('#caller .view-line[data-logical-line-index="1"]')).toHaveCount(0);
-				await page.evaluate(() =>
-					window.ashStandaloneIntegration.updateContributionOptions({ folding: false }),
-				);
-				expect(
-					(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).every(
-						request => request.aborted,
-					),
-				).toBe(true);
+				await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ folding: false }));
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).every(request => request.aborted)).toBe(true);
 				await page.evaluate(async () => {
 					const requests = window.ashStandaloneIntegration.readContributionRequests();
-					for (let index = 0; index < requests.length; index++)
-						await window.ashStandaloneIntegration.finishContributionRequest(index);
+					for (let index = 0; index < requests.length; index++) await window.ashStandaloneIntegration.finishContributionRequest(index);
 				});
 				await expect(page.locator('#caller .view-line[data-logical-line-index="1"]')).toHaveCount(1);
-				expect(
-					(await page.evaluate(() => window.ashStandaloneIntegration.readContributionDecorations())).folding,
-				).toBe(0);
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.readContributionDecorations())).folding).toBe(0);
 				await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ folding: true }));
 				await expect(page.locator('#caller .ash-icon-folding-expanded').first()).toBeVisible();
 				await page.locator('#caller .ash-icon-folding-expanded').first().click();
@@ -2260,9 +1965,7 @@ suite('standalone browser component', () => {
 				const buttons = page.locator('#caller .stanza-editor-sticky-scroll-item');
 				if (initiallyOff) {
 					await expect(buttons).toHaveCount(0);
-					await page.evaluate(() =>
-						window.ashStandaloneIntegration.updateContributionOptions({ stickyScroll: { enabled: true } }),
-					);
+					await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ stickyScroll: { enabled: true } }));
 				}
 				await expect(buttons).toHaveCount(2);
 				await expect(buttons.last()).toBeInViewport();
@@ -2275,19 +1978,13 @@ suite('standalone browser component', () => {
 						focused: document.activeElement === element,
 					})),
 				).toEqual({ connected: true, focused: true });
-				await page.evaluate(() =>
-					window.ashStandaloneIntegration.updateContributionOptions({ stickyScroll: { maxLineCount: 1 } }),
-				);
+				await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ stickyScroll: { maxLineCount: 1 } }));
 				await expect(buttons).toHaveCount(1);
 				await expect(buttons.first()).toHaveText('function outer() {');
 				expect(await button!.evaluate(element => document.activeElement === element)).toBe(true);
-				await page.evaluate(() =>
-					window.ashStandaloneIntegration.updateContributionOptions({ stickyScroll: { enabled: false } }),
-				);
+				await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ stickyScroll: { enabled: false } }));
 				await expect(buttons).toHaveCount(0);
-				expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(
-					true,
-				);
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(true);
 				await page.evaluate(() =>
 					window.ashStandaloneIntegration.updateContributionOptions({
 						stickyScroll: { enabled: true, maxLineCount: 5 },
@@ -2304,41 +2001,27 @@ suite('standalone browser component', () => {
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareStickyHeaders());
 			const buttons = page.locator('#caller .stanza-editor-sticky-scroll-item');
 			await expect(buttons).toHaveCount(2);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runStickyCommand('editor.action.focusStickyScroll'),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runStickyCommand('editor.action.focusStickyScroll'));
 			await expect(buttons.last()).toBeFocused();
 			await page.keyboard.press('ArrowUp');
 			await expect(buttons.first()).toBeFocused();
 			await page.keyboard.press('ArrowDown');
 			await expect(buttons.last()).toBeFocused();
 			await page.keyboard.press('Escape');
-			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(
-				true,
-			);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runStickyCommand('editor.action.focusStickyScroll'),
-			);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(true);
+			await page.evaluate(() => window.ashStandaloneIntegration.runStickyCommand('editor.action.focusStickyScroll'));
 			await page.keyboard.press('Enter');
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readStickyState())).line).toBe(2);
-			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(
-				true,
-			);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(true);
 			await page.evaluate(() => window.ashStandaloneIntegration.scrollSticky(200));
 			await expect(buttons).toHaveCount(2);
 			await buttons.first().click();
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readStickyState())).line).toBe(1);
 			await page.evaluate(() => window.ashStandaloneIntegration.scrollSticky(200));
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runStickyCommand('editor.action.focusStickyScroll'),
-			);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runStickyCommand('editor.action.toggleStickyScroll'),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runStickyCommand('editor.action.focusStickyScroll'));
+			await page.evaluate(() => window.ashStandaloneIntegration.runStickyCommand('editor.action.toggleStickyScroll'));
 			await expect(buttons).toHaveCount(0);
-			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(
-				true,
-			);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(true);
 		});
 
 		test('sticky scroll uses declaration lines, live line height and horizontal scroll options', async function () {
@@ -2346,21 +2029,14 @@ suite('standalone browser component', () => {
 
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareStickySymbols());
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length))
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length)).toBe(1);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
 			const buttons = page.locator('#caller .stanza-editor-sticky-scroll-item');
 			await expect(buttons).toHaveText(['class Outer {', '  method() {']);
 			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ lineHeight: 28 }));
-			await expect
-				.poll(() => buttons.first().evaluate(element => element.getBoundingClientRect().height))
-				.toBe(28);
+			await expect.poll(() => buttons.first().evaluate(element => element.getBoundingClientRect().height)).toBe(28);
 			await page.evaluate(() => window.ashStandaloneIntegration.scrollSticky(200, 80));
-			await expect(buttons.first().locator('.stanza-editor-sticky-scroll-text')).toHaveCSS(
-				'text-indent',
-				'-80px',
-			);
+			await expect(buttons.first().locator('.stanza-editor-sticky-scroll-text')).toHaveCSS('text-indent', '-80px');
 			await page.evaluate(() =>
 				window.ashStandaloneIntegration.updateContributionOptions({
 					stickyScroll: { scrollWithEditor: false },
@@ -2369,9 +2045,7 @@ suite('standalone browser component', () => {
 			await expect(buttons.first().locator('.stanza-editor-sticky-scroll-text')).toHaveCSS('text-indent', '0px');
 			for (const theme of ['ash-high-contrast-dark', 'ash-high-contrast-light']) {
 				await page.evaluate(theme => window.ashStandaloneIntegration.setStickyTheme(theme), theme);
-				await page.evaluate(() =>
-					window.ashStandaloneIntegration.runStickyCommand('editor.action.focusStickyScroll'),
-				);
+				await page.evaluate(() => window.ashStandaloneIntegration.runStickyCommand('editor.action.focusStickyScroll'));
 				await expect(buttons.last()).toBeFocused();
 				const focus = await buttons.last().evaluate(element => {
 					const style = getComputedStyle(element);
@@ -2392,18 +2066,11 @@ suite('standalone browser component', () => {
 
 				await page.goto('/standalone.html');
 				await page.evaluate(() => window.ashStandaloneIntegration.prepareStickySymbols());
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length))
-					.toBe(1);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length)).toBe(1);
 				await page.evaluate(reason => window.ashStandaloneIntegration.changeLanguageRequest(reason), reason);
-				expect(
-					(await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests()))[0]!.aborted,
-				).toBe(true);
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests()))[0]!.aborted).toBe(true);
 				await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
-				await expect(page.locator('#caller .stanza-editor-sticky-scroll-item')).not.toHaveText([
-					'class Outer {',
-					'  method() {',
-				]);
+				await expect(page.locator('#caller .stanza-editor-sticky-scroll-item')).not.toHaveText(['class Outer {', '  method() {']);
 			});
 		}
 
@@ -2429,10 +2096,7 @@ suite('standalone browser component', () => {
 				window.ashStandaloneIntegration.updateContributionOptions({ folding: false });
 				return window.ashStandaloneIntegration.changeStickySources('empty');
 			});
-			await expect(page.locator('#caller .stanza-editor-sticky-scroll-text')).toHaveText([
-				'function outer() {',
-				'  function inner() {',
-			]);
+			await expect(page.locator('#caller .stanza-editor-sticky-scroll-text')).toHaveText(['function outer() {', '  function inner() {']);
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readStickyState())).hidden).toEqual([]);
 		});
 
@@ -2448,13 +2112,8 @@ suite('standalone browser component', () => {
 			await expect(buttons).toHaveCount(2);
 			const state = await page.evaluate(() => window.ashStandaloneIntegration.readStickyState());
 			await page.evaluate(end => window.ashStandaloneIntegration.scrollSticky(end * 20 - 30), state.ends[1]!);
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readStickyState().offset))
-				.toBe(-10);
-			await expect(page.locator('#caller .stanza-editor-sticky-scroll-row').last()).toHaveCSS(
-				'clip-path',
-				'inset(10px 0px 0px)',
-			);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readStickyState().offset)).toBe(-10);
+			await expect(page.locator('#caller .stanza-editor-sticky-scroll-row').last()).toHaveCSS('clip-path', 'inset(10px 0px 0px)');
 			await page.evaluate(end => window.ashStandaloneIntegration.scrollSticky(end * 20 - 20), state.ends[1]!);
 			await expect(buttons).toHaveCount(1);
 			await page.evaluate(() => {
@@ -2482,9 +2141,7 @@ suite('standalone browser component', () => {
 			const retained = await header.elementHandle();
 			await page.evaluate(() => window.ashStandaloneIntegration.setStickySyntax('#654321'));
 			await expect(token).toHaveCSS('color', 'rgb(101, 67, 33)');
-			expect(await retained!.evaluate(element => element.isConnected && document.activeElement === element)).toBe(
-				true,
-			);
+			expect(await retained!.evaluate(element => element.isConnected && document.activeElement === element)).toBe(true);
 			await page.evaluate(() => {
 				window.ashStandaloneIntegration.setStickySyntax(null);
 				window.ashStandaloneIntegration.setSemanticProvider('variable');
@@ -2509,9 +2166,7 @@ suite('standalone browser component', () => {
 			await headers.first().focus();
 			await page.evaluate(() => window.ashStandaloneIntegration.layoutContribution(590, 20));
 			await expect(headers).toHaveCount(0);
-			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(
-				true,
-			);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(true);
 			await page.evaluate(() => window.ashStandaloneIntegration.layoutContribution(590, 180));
 			await expect(headers).toHaveCount(2);
 		});
@@ -2521,9 +2176,7 @@ suite('standalone browser component', () => {
 
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareStickySymbols());
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length))
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length)).toBe(1);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
 			const numbers = page.locator('#caller .stanza-editor-sticky-scroll-number');
 			await expect(numbers).toHaveText(['2', '4']);
@@ -2535,13 +2188,9 @@ suite('standalone browser component', () => {
 				window.ashStandaloneIntegration.moveGutterCaret(20, 1);
 			});
 			await expect(numbers).toHaveText(['18', '16']);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.updateContributionOptions({ lineNumbers: 'off' }),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ lineNumbers: 'off' }));
 			await expect(numbers).toHaveText(['', '']);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.updateContributionOptions({ lineNumbers: line => `L${line}` }),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ lineNumbers: line => `L${line}` }));
 			await expect(numbers).toHaveText(['L2', 'L4']);
 		});
 
@@ -2559,9 +2208,7 @@ suite('standalone browser component', () => {
 			expect(
 				await folds.last().evaluate(element => {
 					const icon = element.querySelector('.ash-icon');
-					return (
-						icon !== null && getComputedStyle(icon, '::before').color === getComputedStyle(element).color
-					);
+					return icon !== null && getComputedStyle(icon, '::before').color === getComputedStyle(element).color;
 				}),
 			).toBe(true);
 			const expandedIcon = await folds.last().locator('.ash-icon').getAttribute('data-ash-icon-id');
@@ -2569,21 +2216,15 @@ suite('standalone browser component', () => {
 			await expect(folds.last()).toHaveAttribute('aria-expanded', 'false');
 			await expect(folds.last().locator('.ash-icon')).toHaveCount(1);
 			expect(await folds.last().locator('.ash-icon').getAttribute('data-ash-icon-id')).not.toBe(expandedIcon);
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readStickyState().hidden))
-				.toEqual([[3, 83]]);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readStickyState().hidden)).toEqual([[3, 83]]);
 			await folds.last().focus();
 			await page.keyboard.press('Enter');
 			await expect(folds.last()).toHaveAttribute('aria-expanded', 'true');
 			await expect(folds.last()).toBeFocused();
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readStickyState().hidden))
-				.toEqual([]);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readStickyState().hidden)).toEqual([]);
 			await page.keyboard.press('Space');
 			await expect(folds.last()).toHaveAttribute('aria-expanded', 'false');
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.updateContributionOptions({ showFoldingControls: 'never' }),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ showFoldingControls: 'never' }));
 			await expect(folds.last()).toBeHidden();
 			await expect(page.locator('#caller .stanza-editor-sticky-scroll-item').last()).toBeFocused();
 		});
@@ -2605,9 +2246,7 @@ suite('standalone browser component', () => {
 			await expect(page.locator('#caller .stanza-editor-sticky-scroll-folding').last()).toBeHidden();
 			await page.keyboard.up('Shift');
 			await expect(header).toHaveText('  function inner() {');
-			expect(await retained!.evaluate(element => element.isConnected && document.activeElement === element)).toBe(
-				true,
-			);
+			expect(await retained!.evaluate(element => element.isConnected && document.activeElement === element)).toBe(true);
 			await header.click({ modifiers: ['Shift'] });
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readStickyState())).line).toBe(end);
 		});
@@ -2620,28 +2259,19 @@ suite('standalone browser component', () => {
 				await page.evaluate(modifier => {
 					window.ashStandaloneIntegration.prepareLanguageRequest('definition');
 					window.ashStandaloneIntegration.prepareStickyHeaders();
-					if (modifier === 'Alt')
-						window.ashStandaloneIntegration.updateContributionOptions({ multiCursorModifier: 'ctrlCmd' });
+					if (modifier === 'Alt') window.ashStandaloneIntegration.updateContributionOptions({ multiCursorModifier: 'ctrlCmd' });
 				}, modifier);
 				const point = await stickyDefinitionPoint(page);
 				await page.keyboard.down(modifier);
 				await page.mouse.click(point.x, point.y);
 				await page.keyboard.up(modifier);
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readDefinitionPosition()))
-					.toEqual({ lineNumber: 2, column: point.column });
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readDefinitionPosition())).toEqual({ lineNumber: 2, column: point.column });
 				await page.evaluate(() => {
-					const index = window.ashStandaloneIntegration
-						.readLanguageRequests()
-						.findIndex(request => !request.aborted);
+					const index = window.ashStandaloneIntegration.readLanguageRequests().findIndex(request => !request.aborted);
 					return window.ashStandaloneIntegration.finishLanguageRequest(index);
 				});
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition()))
-					.toEqual({ lineNumber: 1, column: 13 });
-				expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(
-					true,
-				);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition())).toEqual({ lineNumber: 1, column: 13 });
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(true);
 			});
 
 			test(`sticky scroll ${modifier} hover underlines definitions without moving the selection`, async function () {
@@ -2651,46 +2281,27 @@ suite('standalone browser component', () => {
 				await page.evaluate(modifier => {
 					window.ashStandaloneIntegration.prepareLanguageRequest('definition');
 					window.ashStandaloneIntegration.prepareStickyHeaders();
-					window.ashStandaloneIntegration.setStickyTheme(
-						modifier === 'Alt' ? 'ash-high-contrast-light' : 'ash-high-contrast-dark',
-					);
-					if (modifier === 'Alt')
-						window.ashStandaloneIntegration.updateContributionOptions({ multiCursorModifier: 'ctrlCmd' });
+					window.ashStandaloneIntegration.setStickyTheme(modifier === 'Alt' ? 'ash-high-contrast-light' : 'ash-high-contrast-dark');
+					if (modifier === 'Alt') window.ashStandaloneIntegration.updateContributionOptions({ multiCursorModifier: 'ctrlCmd' });
 				}, modifier);
 				const point = await stickyDefinitionPoint(page);
 				const selection = await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition());
 				await page.mouse.move(point.x, point.y);
 				expect(await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toEqual([]);
 				await page.keyboard.down(modifier);
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length))
-					.toBe(1);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length)).toBe(1);
 				await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
 				const token = page.locator('#caller .stanza-editor-sticky-scroll-text > span').last();
 				await expect(token).toHaveCSS('text-decoration-line', 'underline');
-				expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition())).toEqual(
-					selection,
-				);
+				expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition())).toEqual(selection);
 				await page.mouse.move(point.x + 1, point.y);
-				expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).length).toBe(
-					1,
-				);
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).length).toBe(1);
 				await page.keyboard.up(modifier);
 				await expect(token).toHaveCSS('text-decoration-line', 'none');
 			});
 		}
 
-		for (const reason of [
-			'pointer',
-			'modifier',
-			'text',
-			'language',
-			'provider',
-			'model',
-			'dispose',
-			'layout',
-			'option',
-		] as const) {
+		for (const reason of ['pointer', 'modifier', 'text', 'language', 'provider', 'model', 'dispose', 'layout', 'option'] as const) {
 			test(`sticky scroll definition hover cancels on ${reason} and rejects its late result`, async function () {
 				const { page } = browserTests;
 
@@ -2702,9 +2313,7 @@ suite('standalone browser component', () => {
 				const point = await stickyDefinitionPoint(page);
 				await page.mouse.move(point.x, point.y);
 				await page.keyboard.down('ControlOrMeta');
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length))
-					.toBe(1);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length)).toBe(1);
 				if (reason === 'pointer') {
 					await page.mouse.move(0, 0);
 				} else if (reason === 'modifier') {
@@ -2712,18 +2321,11 @@ suite('standalone browser component', () => {
 				} else if (reason === 'layout') {
 					await page.evaluate(() => window.ashStandaloneIntegration.layoutContribution(590));
 				} else if (reason === 'option') {
-					await page.evaluate(() =>
-						window.ashStandaloneIntegration.updateContributionOptions({ multiCursorModifier: 'ctrlCmd' }),
-					);
+					await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ multiCursorModifier: 'ctrlCmd' }));
 				} else {
-					await page.evaluate(
-						reason => window.ashStandaloneIntegration.changeLanguageRequest(reason),
-						reason,
-					);
+					await page.evaluate(reason => window.ashStandaloneIntegration.changeLanguageRequest(reason), reason);
 				}
-				expect(
-					(await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests()))[0]!.aborted,
-				).toBe(true);
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests()))[0]!.aborted).toBe(true);
 				await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
 				await expect(page.locator('#caller .stanza-editor-sticky-scroll.definition-link')).toHaveCount(0);
 			});
@@ -2740,14 +2342,10 @@ suite('standalone browser component', () => {
 			const point = await stickyDefinitionPoint(page);
 			await page.keyboard.down('ControlOrMeta');
 			await page.mouse.move(point.x, point.y);
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length))
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length)).toBe(1);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
 			await expect(page.locator('#caller .stanza-editor-sticky-scroll.definition-link')).toHaveCount(0);
-			await expect(page.locator('#caller .stanza-editor-sticky-scroll-text').last()).toHaveText(
-				'  function inner() {',
-			);
+			await expect(page.locator('#caller .stanza-editor-sticky-scroll-text').last()).toHaveText('  function inner() {');
 		});
 
 		test('sticky scroll definition navigation cancels when its source editor changes model', async function () {
@@ -2764,21 +2362,9 @@ suite('standalone browser component', () => {
 				.locator('span')
 				.first()
 				.click({ modifiers: ['ControlOrMeta'] });
-			await expect
-				.poll(() =>
-					page.evaluate(
-						() =>
-							window.ashStandaloneIntegration.readLanguageRequests().filter(request => !request.aborted)
-								.length,
-					),
-				)
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().filter(request => !request.aborted).length)).toBe(1);
 			await page.evaluate(() => window.ashStandaloneIntegration.changeLanguageRequest('model'));
-			expect(
-				(await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).every(
-					request => request.aborted,
-				),
-			).toBe(true);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).every(request => request.aborted)).toBe(true);
 			const position = await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition());
 			await page.evaluate(async () => {
 				for (const [index] of window.ashStandaloneIntegration.readLanguageRequests().entries()) {
@@ -2815,9 +2401,7 @@ suite('standalone browser component', () => {
 				ownedEnabled: true,
 				inChordMode: false,
 			});
-			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(
-				true,
-			);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(true);
 		});
 
 		test('sticky scroll menu uses the active theme, reports action errors and dispatches registered chords', async function () {
@@ -2856,18 +2440,12 @@ suite('standalone browser component', () => {
 			await expect.poll(() => notificationErrors).toContain('Sticky command failed');
 			await page.evaluate(() => window.ashStandaloneIntegration.runStickyCommand('editor.action.selectEditor'));
 			await page.keyboard.press('F9');
-			expect((await page.evaluate(() => window.ashStandaloneIntegration.readStickyMenu())).inChordMode).toBe(
-				true,
-			);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readStickyMenu())).inChordMode).toBe(true);
 			await page.keyboard.press('Escape');
-			expect((await page.evaluate(() => window.ashStandaloneIntegration.readStickyMenu())).inChordMode).toBe(
-				false,
-			);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readStickyMenu())).inChordMode).toBe(false);
 			await page.keyboard.press('F9');
 			await page.keyboard.press('F10');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readStickyMenu().callerEnabled))
-				.toBe(false);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readStickyMenu().callerEnabled)).toBe(false);
 		});
 
 		test('sticky scroll menu closes with its model and respects the contextmenu option', async function () {
@@ -2895,17 +2473,13 @@ suite('standalone browser component', () => {
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('completion'));
 			await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('language'));
 			await page.keyboard.press('Control+Space');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests()))
-				.toEqual([{ languageId: 'javascript', aborted: false }]);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([{ languageId: 'javascript', aborted: false }]);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
 			await expect(page.locator('#caller .stanza-editor-completion')).toContainText('completion: javascript');
 			await page.keyboard.press('Escape');
 			await page.keyboard.type('z');
 			await expect(page.locator('#caller .stanza-editor-completion:not([hidden])')).toHaveCount(0);
-			expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toHaveLength(
-				1,
-			);
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toHaveLength(1);
 		});
 
 		test('folding cancels old language requests and queries the current language after edits', async function () {
@@ -2913,28 +2487,16 @@ suite('standalone browser component', () => {
 
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('folding'));
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length))
-				.toBeGreaterThan(0);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBeGreaterThan(0);
 			const count = await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length);
 			await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('language'));
-			await expect
-				.poll(() =>
-					page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().at(-1)?.languageId),
-				)
-				.toBe('javascript');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().at(-1)?.languageId)).toBe('javascript');
 			const requests = await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests());
 			expect(requests.slice(0, count).every(request => request.aborted)).toBe(true);
 			expect(requests.slice(count).every(request => request.languageId === 'javascript')).toBe(true);
 			await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('edit'));
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length))
-				.toBeGreaterThan(requests.length);
-			expect(
-				(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests()))
-					.slice(count)
-					.every(request => request.languageId === 'javascript'),
-			).toBe(true);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBeGreaterThan(requests.length);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).slice(count).every(request => request.languageId === 'javascript')).toBe(true);
 		});
 
 		for (const reason of ['language', 'provider', 'dispose'] as const) {
@@ -2945,19 +2507,13 @@ suite('standalone browser component', () => {
 				await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('links'));
 				const point = await page.evaluate(() => window.ashStandaloneIntegration.contributionPoint(3));
 				await page.mouse.move(point.x, point.y);
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length))
-					.toBe(1);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
 				await page.mouse.move(point.x + 1, point.y);
-				expect(
-					await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests()),
-				).toHaveLength(1);
+				expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toHaveLength(1);
 				await page.evaluate(reason => window.ashStandaloneIntegration.changeContributionState(reason), reason);
 				const expected = [{ languageId: 'typescript', aborted: true }];
 				if (reason === 'language') expected.push({ languageId: 'javascript', aborted: false });
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests()))
-					.toEqual(expected);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual(expected);
 				await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
 				await expect(page.locator('#caller .stanza-editor-link-target')).toHaveCount(0);
 			});
@@ -2971,24 +2527,18 @@ suite('standalone browser component', () => {
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('links'));
 			const point = await page.evaluate(() => window.ashStandaloneIntegration.contributionPoint(3));
 			await page.mouse.move(point.x, point.y);
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length))
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
 			await expect(page.locator('#caller .stanza-editor-link-target')).toHaveCount(1);
 			await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('language'));
 			await page.mouse.click(point.x, point.y);
 			expect(await page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks())).toEqual([]);
 			await page.mouse.move(point.x + 1, point.y);
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length))
-				.toBe(2);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(2);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(1));
 			await expect(page.locator('#caller .stanza-editor-link-target')).toHaveCount(1);
 			await page.mouse.click(point.x + 1, point.y);
-			expect(await page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks())).toEqual([
-				'https://example.invalid/javascript',
-			]);
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks())).toEqual(['https://example.invalid/javascript']);
 			await page.keyboard.up('ControlOrMeta');
 		});
 
@@ -2997,20 +2547,14 @@ suite('standalone browser component', () => {
 
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('codelens'));
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length))
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
 			await expect(page.locator('#caller .stanza-editor-codelens')).toHaveText('lens: typescript');
 			await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('language'));
 			await expect(page.locator('#caller .stanza-editor-codelens')).toHaveCount(0);
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length))
-				.toBe(2);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(2);
 			await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('off'));
-			expect(
-				(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests()))[1]!.aborted,
-			).toBe(true);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests()))[1]!.aborted).toBe(true);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(1));
 			await expect(page.locator('#caller .stanza-editor-codelens')).toHaveCount(0);
 		});
@@ -3022,17 +2566,13 @@ suite('standalone browser component', () => {
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('codelens'));
 			expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([]);
 			await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('on'));
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length))
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
 			await expect(page.locator('#caller .stanza-editor-codelens')).toHaveText('lens: typescript');
 			await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('off'));
 			await expect(page.locator('#caller .stanza-editor-codelens')).toHaveCount(0);
 			await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('on'));
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length))
-				.toBe(2);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(2);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(1));
 			await expect(page.locator('#caller .stanza-editor-codelens')).toHaveText('lens: typescript');
 		});
@@ -3043,9 +2583,7 @@ suite('standalone browser component', () => {
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('hover'));
 			await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('selection'));
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readSelectionHighlights()))
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readSelectionHighlights())).toBe(1);
 			const state = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
 			await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('off'));
 			expect(await page.evaluate(() => window.ashStandaloneIntegration.readSelectionHighlights())).toBe(0);
@@ -3078,9 +2616,7 @@ suite('standalone browser component', () => {
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.registerBundledThemes());
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareInlayRequests());
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length))
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(1);
 			await page.evaluate(() =>
 				window.ashStandaloneIntegration.finishInlayRequest(0, 'parameter:', {
 					paddingLeft: true,
@@ -3112,15 +2648,8 @@ suite('standalone browser component', () => {
 			});
 			expect(geometry.label).toBe('\u00a0parameter:\u00a0');
 			expect(geometry.valueLeft).toBeGreaterThanOrEqual(geometry.hintRight - 1);
-			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).value).toBe(
-				'call(value)',
-			);
-			for (const theme of [
-				'ash-dark',
-				'ash-light',
-				'ash-high-contrast-dark',
-				'ash-high-contrast-light',
-			] as const) {
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).value).toBe('call(value)');
+			for (const theme of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light'] as const) {
 				await page.evaluate(theme => window.ashStandaloneIntegration.setActionMenuTheme(theme), theme);
 				await expect(hint).toBeVisible();
 				await testInfo.attach(theme, {
@@ -3130,13 +2659,9 @@ suite('standalone browser component', () => {
 			}
 			await page.mouse.click(geometry.valueLeft + 1, geometry.top + geometry.height / 2);
 			await page.keyboard.type('x');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value))
-				.toBe('call(xvalue)');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('call(xvalue)');
 			await page.keyboard.press('ControlOrMeta+z');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value))
-				.toBe('call(value)');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('call(value)');
 		});
 
 		teardown(async function () {
@@ -3154,9 +2679,7 @@ suite('standalone browser component', () => {
 					window.ashStandaloneIntegration.updateContributionOptions({ inlayHints: { enabled: mode } });
 					window.ashStandaloneIntegration.prepareInlayRequests();
 				}, mode);
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length))
-					.toBe(1);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(1);
 				await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'value:'));
 				const hint = page.locator('#caller .stanza-editor-inlay-hint');
 				await expect(hint).toBeVisible({ visible: mode !== 'offUnlessPressed' });
@@ -3206,9 +2729,7 @@ suite('standalone browser component', () => {
 			expect(box!.height).toBeGreaterThan(0);
 			await expect(hint).toHaveCount(1);
 			expect(await page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests())).toHaveLength(1);
-			expect(await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).toEqual(
-				editorState,
-			);
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).toEqual(editorState);
 		});
 
 		test('edits clear old hints immediately and coalesce requests for the latest text', async function () {
@@ -3216,29 +2737,15 @@ suite('standalone browser component', () => {
 
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareInlayRequests());
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length))
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(1);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'old:'));
 			await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveText('old:');
 			await page.evaluate(() => window.ashStandaloneIntegration.changeInlayState('text'));
 			await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveCount(0);
-			await expect
-				.poll(() =>
-					page.evaluate(() =>
-						window.ashStandaloneIntegration.readInlayRequests().map(request => request.text),
-					),
-				)
-				.toEqual(['call(value)', 'bacall(value)']);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().map(request => request.text))).toEqual(['call(value)', 'bacall(value)']);
 			await page.evaluate(() => window.ashStandaloneIntegration.changeInlayState('language'));
 			await expect
-				.poll(() =>
-					page.evaluate(() =>
-						window.ashStandaloneIntegration
-							.readInlayRequests()
-							.map(request => [request.languageId, request.aborted]),
-					),
-				)
+				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().map(request => [request.languageId, request.aborted])))
 				.toEqual([
 					['plaintext', false],
 					['plaintext', true],
@@ -3260,9 +2767,7 @@ suite('standalone browser component', () => {
 			});
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareInlayRequests());
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length))
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(1);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'obsolete:'));
 			await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveText('obsolete:');
 			await page.evaluate(() => window.ashStandaloneIntegration.changeInlayState('shrink'));
@@ -3276,9 +2781,7 @@ suite('standalone browser component', () => {
 
 				await page.goto('/standalone.html');
 				await page.evaluate(() => window.ashStandaloneIntegration.prepareInlayRequests());
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length))
-					.toBe(1);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(1);
 				await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'visible:'));
 				await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveText('visible:');
 				await page.evaluate(reason => window.ashStandaloneIntegration.changeInlayState(reason), reason);
@@ -3297,13 +2800,9 @@ suite('standalone browser component', () => {
 
 				await page.goto('/standalone.html');
 				await page.evaluate(() => window.ashStandaloneIntegration.prepareInlayRequests());
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length))
-					.toBe(1);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(1);
 				await page.evaluate(reason => window.ashStandaloneIntegration.changeInlayState(reason), reason);
-				expect(
-					(await page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests()))[0]!.aborted,
-				).toBe(true);
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests()))[0]!.aborted).toBe(true);
 				await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'late:'));
 				await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveCount(0);
 			});
@@ -3316,16 +2815,12 @@ suite('standalone browser component', () => {
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareInlayRequests());
 			expect(await page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests())).toEqual([]);
 			await page.evaluate(() => window.ashStandaloneIntegration.changeInlayState('on'));
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length))
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(1);
 			await page.evaluate(() => {
 				window.ashStandaloneIntegration.changeInlayState('off');
 				window.ashStandaloneIntegration.changeInlayState('on');
 			});
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length))
-				.toBe(2);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(2);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(1, 'enabled:'));
 			await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'cancelled:'));
 			await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveText('enabled:');
@@ -3343,9 +2838,7 @@ suite('standalone browser component', () => {
 				window.ashStandaloneIntegration.prepareInlayRequests();
 				window.ashStandaloneIntegration.addBrokenInlayProvider();
 			});
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length))
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(1);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'healthy:'));
 			await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveText('healthy:');
 			expect(errors.some(message => message.includes('inlay provider failed'))).toBe(true);
@@ -3360,17 +2853,13 @@ suite('standalone browser component', () => {
 		const input = page.locator('#caller .stanza-editor-input');
 		await input.focus();
 		await page.keyboard.press('ControlOrMeta+Home');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLinkAtCursor()))
-			.toBe('https://resolved.test');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLinkAtCursor())).toBe('https://resolved.test');
 		await page.keyboard.press('F1');
 		const picker = page.locator('#caller .ash-quick-pick');
 		await picker.getByRole('combobox').fill('Open Link');
 		await expect(picker.locator('.ash-quick-pick-row-label').filter({ hasText: /^Open Link$/u })).toBeVisible();
 		await page.keyboard.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks()))
-			.toEqual(['https://resolved.test/']);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks())).toEqual(['https://resolved.test/']);
 		await expect(input).toBeFocused();
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
@@ -3380,10 +2869,7 @@ suite('standalone browser component', () => {
 
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareLinks());
-		const link = page
-			.locator('#caller .view-line > span > span')
-			.filter({ hasText: 'https://example.test/path' })
-			.first();
+		const link = page.locator('#caller .view-line > span > span').filter({ hasText: 'https://example.test/path' }).first();
 		await expect(link).toBeVisible();
 		const bounds = await link.boundingBox();
 		expect(bounds).not.toBeNull();
@@ -3394,9 +2880,7 @@ suite('standalone browser component', () => {
 		await page.keyboard.down('ControlOrMeta');
 		await expect(page.locator('#caller .stanza-editor-link-target')).toHaveCount(1);
 		await page.mouse.click(point.x, point.y);
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks()))
-			.toEqual(['https://example.test/path']);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks())).toEqual(['https://example.test/path']);
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareClipboard('plain text'));
 		await expect(page.locator('#caller .stanza-editor-link-target')).toHaveCount(0);
 		await page.keyboard.up('ControlOrMeta');
@@ -3421,18 +2905,13 @@ suite('standalone browser component', () => {
 		await page.keyboard.up('ControlOrMeta');
 		await expect(page.locator('#caller .stanza-editor-link-target')).toHaveCount(0);
 		const second = await page.evaluate(() => window.ashStandaloneIntegration.contributionPoint(23));
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.updateContributionOptions({ multiCursorModifier: 'ctrlCmd' }),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ multiCursorModifier: 'ctrlCmd' }));
 		await page.keyboard.down('Alt');
 		await page.mouse.move(second.x, second.y);
 		await expect(page.locator('#caller .stanza-editor-link-target')).toHaveCount(1);
 		await page.mouse.click(second.x, second.y);
 		await page.keyboard.up('Alt');
-		expect(await page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks())).toEqual([
-			'https://resolved.test/',
-			'https://two.test/',
-		]);
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks())).toEqual(['https://resolved.test/', 'https://two.test/']);
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 
@@ -3443,13 +2922,9 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('links'));
 		const point = await page.evaluate(() => window.ashStandaloneIntegration.contributionPoint(3));
 		await page.mouse.move(point.x, point.y);
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length))
-			.toBe(1);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
 		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ links: false }));
-		expect(
-			(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests()))[0]!.aborted,
-		).toBe(true);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests()))[0]!.aborted).toBe(true);
 		await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
 		await page.keyboard.down('ControlOrMeta');
 		await page.mouse.click(point.x + 1, point.y);
@@ -3493,9 +2968,11 @@ suite('standalone browser component', () => {
 			const { page } = browserTests;
 
 			await page.goto('/standalone.html');
-			expect(
-				await page.evaluate(enabled => window.ashStandaloneIntegration.runTextDrop(enabled), enabled),
-			).toEqual({ value: enabled ? 'alpha dropped' : 'alpha', dragOverHandled: enabled, dropHandled: enabled });
+			expect(await page.evaluate(enabled => window.ashStandaloneIntegration.runTextDrop(enabled), enabled)).toEqual({
+				value: enabled ? 'alpha dropped' : 'alpha',
+				dragOverHandled: enabled,
+				dropHandled: enabled,
+			});
 			if (enabled) {
 				await page.keyboard.press('ControlOrMeta+z');
 				expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
@@ -3509,24 +2986,15 @@ suite('standalone browser component', () => {
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareBrackets('echo echo echo', [2]));
 		await page.keyboard.press('ControlOrMeta+d');
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual([
-			'[1,1 -> 1,5]',
-		]);
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.runLineAction('editor.action.addSelectionToNextFindMatch'),
-		);
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual([
-			'[1,1 -> 1,5]',
-			'[1,6 -> 1,10]',
-		]);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual(['[1,1 -> 1,5]']);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.addSelectionToNextFindMatch'));
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual(['[1,1 -> 1,5]', '[1,6 -> 1,10]']);
 		await page.keyboard.press('ControlOrMeta+Shift+l');
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toHaveLength(3);
 		await page.keyboard.type('X');
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('X X X');
 		await page.keyboard.press('ControlOrMeta+z');
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe(
-			'echo echo echo',
-		);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('echo echo echo');
 	});
 
 	test('cursor actions share line-end and adjacent cursor operations', async function () {
@@ -3534,26 +3002,16 @@ suite('standalone browser component', () => {
 
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareMulticursor());
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.runLineAction('editor.action.insertCursorAtEndOfEachLineSelected'),
-		);
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual([
-			'[1,6 -> 1,6]',
-			'[2,5 -> 2,5]',
-		]);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.insertCursorAtEndOfEachLineSelected'));
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual(['[1,6 -> 1,6]', '[2,5 -> 2,5]']);
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareBrackets('alpha\nbeta\ngamma', [2]));
 		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.insertCursorBelow'));
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toHaveLength(2);
 		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.insertCursorAbove'));
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe(
-			'alpha\nbeta\ngamma',
-		);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha\nbeta\ngamma');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareBrackets('echo echo', [2]));
 		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.selectHighlights'));
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual([
-			'[1,1 -> 1,5]',
-			'[1,6 -> 1,10]',
-		]);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual(['[1,1 -> 1,5]', '[1,6 -> 1,10]']);
 	});
 
 	test('multicursor registration handles line-end cursors and one undoable edit', async function () {
@@ -3562,10 +3020,7 @@ suite('standalone browser component', () => {
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareMulticursor());
 		await page.keyboard.press('Alt+Shift+i');
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual([
-			'[1,6 -> 1,6]',
-			'[2,5 -> 2,5]',
-		]);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual(['[1,6 -> 1,6]', '[2,5 -> 2,5]']);
 		await page.keyboard.type('X');
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alphaX\nbetaX');
 		await page.keyboard.press('ControlOrMeta+z');
@@ -3578,15 +3033,9 @@ suite('standalone browser component', () => {
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareBrackets('(one) [two]', [1, 7]));
 		await page.keyboard.press('ControlOrMeta+Shift+Backslash');
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual([
-			'[1,5 -> 1,5]',
-			'[1,11 -> 1,11]',
-		]);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual(['[1,5 -> 1,5]', '[1,11 -> 1,11]']);
 		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.jumpToBracket'));
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual([
-			'[1,1 -> 1,1]',
-			'[1,7 -> 1,7]',
-		]);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual(['[1,1 -> 1,1]', '[1,7 -> 1,7]']);
 	});
 
 	test('model bracket decorations reach the viewport and follow per-editor color settings', async function () {
@@ -3596,13 +3045,9 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareBrackets('{([])}', [1]));
 		const colors = page.locator('#caller .view-line [class*="stanza-editor-bracket-level-"]');
 		await expect(colors).toHaveCount(6);
-		expect(
-			await colors.evaluateAll(elements =>
-				elements.map(element =>
-					[...element.classList].find(value => value.startsWith('stanza-editor-bracket-level-')),
-				),
-			),
-		).toEqual([1, 2, 3, 3, 2, 1].map(level => `stanza-editor-bracket-level-${level}`));
+		expect(await colors.evaluateAll(elements => elements.map(element => [...element.classList].find(value => value.startsWith('stanza-editor-bracket-level-'))))).toEqual(
+			[1, 2, 3, 3, 2, 1].map(level => `stanza-editor-bracket-level-${level}`),
+		);
 		await page.evaluate(() => window.ashStandaloneIntegration.configureBracketColors(false, false));
 		await expect(colors).toHaveCount(0);
 		await page.evaluate(() => window.ashStandaloneIntegration.configureBracketColors(true, true));
@@ -3667,9 +3112,7 @@ suite('standalone browser component', () => {
 		expect(await guides.last().evaluate(element => element.closest('[aria-hidden="true"]') !== null)).toBe(true);
 		await page.mouse.click(bounds!.x, bounds!.y + 10);
 		await page.keyboard.type('x');
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).value).toBe(
-			'root\n\tchild\nx\n    sibling\nroot',
-		);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).value).toBe('root\n\tchild\nx\n    sibling\nroot');
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(true);
 		await page.evaluate(() => window.ashStandaloneIntegration.configureGuides({ guides: { indentation: false } }));
 		await expect(page.locator('#caller .stanza-editor-indent-guide')).toHaveCount(0);
@@ -3688,9 +3131,7 @@ suite('standalone browser component', () => {
 		const levelTwo = page.locator('#caller .stanza-editor-bracket-guide.stanza-editor-guide-level-2');
 		await expect(levelOne).toHaveCount(6);
 		await expect(levelTwo).toHaveCount(3);
-		await expect(
-			page.locator('#caller .view-overlay-line[data-line-index="2"] .stanza-editor-indent-guide'),
-		).toHaveCount(0);
+		await expect(page.locator('#caller .view-overlay-line[data-line-index="2"] .stanza-editor-indent-guide')).toHaveCount(0);
 		await expect(levelTwo.first()).toHaveClass(/active/);
 		await expect(levelOne.first()).toHaveCSS('border-left-width', '1px');
 		await expect(levelTwo.first()).toHaveCSS('border-left-width', '1px');
@@ -3701,11 +3142,7 @@ suite('standalone browser component', () => {
 					top: (element as HTMLElement).style.top,
 				})),
 			),
-		).toEqual([
-			{ height: 10, top: '10px' },
-			...Array(4).fill({ height: 20, top: '0px' }),
-			{ height: 10, top: '0px' },
-		]);
+		).toEqual([{ height: 10, top: '10px' }, ...Array(4).fill({ height: 20, top: '0px' }), { height: 10, top: '0px' }]);
 		const horizontal = page.locator('#caller .stanza-editor-bracket-guide-horizontal.stanza-editor-guide-level-2');
 		await expect(horizontal).toHaveCSS('border-top-width', '1px');
 		expect((await horizontal.boundingBox())!.width).toBeGreaterThan(0);
@@ -3765,16 +3202,10 @@ suite('standalone browser component', () => {
 		});
 		const rows = page.locator('#caller .view-line');
 		await expect.poll(() => rows.count()).toBeGreaterThan(1);
-		await expect(
-			page.locator('#caller .view-overlay-line[data-line-index="1"] .stanza-editor-indent-guide'),
-		).toHaveCount(2);
+		await expect(page.locator('#caller .view-overlay-line[data-line-index="1"] .stanza-editor-indent-guide')).toHaveCount(2);
 		await page.evaluate(() => window.ashStandaloneIntegration.configureGuides({ wrappingIndent: 'none' }));
-		await expect(
-			page.locator('#caller .view-overlay-line[data-line-index="1"] .stanza-editor-indent-guide'),
-		).toHaveCount(0);
-		await expect(
-			page.locator('#caller .view-overlay-line[data-line-index="0"] .stanza-editor-indent-guide'),
-		).toHaveCount(2);
+		await expect(page.locator('#caller .view-overlay-line[data-line-index="1"] .stanza-editor-indent-guide')).toHaveCount(0);
+		await expect(page.locator('#caller .view-overlay-line[data-line-index="0"] .stanza-editor-indent-guide')).toHaveCount(2);
 	});
 
 	test('bracket guides follow block indentation without crossing function text', async function () {
@@ -3788,23 +3219,15 @@ suite('standalone browser component', () => {
 		const vertical = page.locator('#caller .stanza-editor-bracket-guide');
 		await expect(vertical).toHaveCount(3);
 		await expect(vertical.first()).toHaveClass(/active/);
-		const row = page
-			.locator('#caller .view-overlay-line[data-line-index="0"]')
-			.filter({ has: page.locator('.stanza-editor-bracket-guide') });
+		const row = page.locator('#caller .view-overlay-line[data-line-index="0"]').filter({ has: page.locator('.stanza-editor-bracket-guide') });
 		const horizontal = page.locator('#caller .stanza-editor-bracket-guide-horizontal');
 		await expect(horizontal).toHaveCount(1);
 		const opening = (await row.boundingBox())!;
 		const connector = (await horizontal.boundingBox())!;
 		expect(connector.y + connector.height).toBeCloseTo(opening.y + opening.height);
-		const columns = await vertical.evaluateAll(elements =>
-			elements.map(element => element.getBoundingClientRect().x),
-		);
+		const columns = await vertical.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().x));
 		expect(columns).toEqual([columns[0], columns[0], columns[0]]);
-		const text = (await page
-			.locator('#caller .view-line')
-			.nth(1)
-			.locator('.stanza-editor-line-text')
-			.boundingBox())!;
+		const text = (await page.locator('#caller .view-line').nth(1).locator('.stanza-editor-line-text').boundingBox())!;
 		expect(columns[1]).toBeCloseTo(text.x);
 		const indent = await page
 			.locator('#caller .view-overlay-line[data-line-index="1"] .stanza-editor-indent-guide')
@@ -3813,15 +3236,11 @@ suite('standalone browser component', () => {
 	});
 
 	suite('scroll geometry separation', () => {
-		async function readAfterFrames(
-			page: Page,
-		): Promise<ReturnType<typeof window.ashStandaloneIntegration.readScrollGeometry>> {
+		async function readAfterFrames(page: Page): Promise<ReturnType<typeof window.ashStandaloneIntegration.readScrollGeometry>> {
 			return page.evaluate(
 				() =>
 					new Promise<ReturnType<typeof window.ashStandaloneIntegration.readScrollGeometry>>(resolve => {
-						requestAnimationFrame(() =>
-							requestAnimationFrame(() => resolve(window.ashStandaloneIntegration.readScrollGeometry())),
-						);
+						requestAnimationFrame(() => requestAnimationFrame(() => resolve(window.ashStandaloneIntegration.readScrollGeometry())));
 					}),
 			);
 		}
@@ -3835,10 +3254,7 @@ suite('standalone browser component', () => {
 				try {
 					await page.evaluate(() => window.ashStandaloneIntegration.prepareScrollGeometry(3));
 					const before = await readAfterFrames(page);
-					const immediate = await page.evaluate(
-						mode => window.ashStandaloneIntegration.appendAndReveal(mode),
-						mode,
-					);
+					const immediate = await page.evaluate(mode => window.ashStandaloneIntegration.appendAndReveal(mode), mode);
 					const settled = await readAfterFrames(page);
 					await testInfo.attach('scroll-geometry.json', {
 						body: JSON.stringify(
@@ -3846,9 +3262,7 @@ suite('standalone browser component', () => {
 								before,
 								immediate,
 								settled,
-								events: await page.evaluate(() =>
-									window.ashStandaloneIntegration.readScrollGeometryEvents(),
-								),
+								events: await page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometryEvents()),
 							},
 							null,
 							2,
@@ -3910,9 +3324,7 @@ suite('standalone browser component', () => {
 								before,
 								open,
 								settled,
-								events: await page.evaluate(() =>
-									window.ashStandaloneIntegration.readScrollGeometryEvents(),
-								),
+								events: await page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometryEvents()),
 							},
 							null,
 							2,
@@ -3933,9 +3345,7 @@ suite('standalone browser component', () => {
 
 		await page.goto('/standalone.html');
 		await page.evaluate(() => {
-			window.ashStandaloneIntegration.prepareGuides(
-				['{', '    child', '}', ...Array(50).fill('tail')].join('\n'),
-			);
+			window.ashStandaloneIntegration.prepareGuides(['{', '    child', '}', ...Array(50).fill('tail')].join('\n'));
 			window.ashStandaloneIntegration.configureGuides({
 				showFoldingControls: 'always',
 				scrollBeyondLastLine: false,
@@ -3985,10 +3395,7 @@ suite('standalone browser component', () => {
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareBrackets('(one) [two]', [1, 7]));
 			if (entry === 'shortcut') await page.keyboard.press('ControlOrMeta+Alt+Backspace');
-			else
-				await page.evaluate(() =>
-					window.ashStandaloneIntegration.runLineAction('editor.action.removeBrackets'),
-				);
+			else await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.removeBrackets'));
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('one two');
 			await page.keyboard.press('ControlOrMeta+z');
 			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({
@@ -4005,10 +3412,7 @@ suite('standalone browser component', () => {
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareBrackets('(value) keep', [1, [13, 9]]));
 			if (entry === 'shortcut') await page.keyboard.press('ControlOrMeta+Alt+Backspace');
-			else
-				await page.evaluate(() =>
-					window.ashStandaloneIntegration.runLineAction('editor.action.removeBrackets'),
-				);
+			else await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.removeBrackets'));
 			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({
 				value: 'value keep',
 				selections: ['[1,1 -> 1,1]', '[1,11 -> 1,7]'],
@@ -4030,9 +3434,7 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.removeBrackets'));
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('(one)');
 		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.jumpToBracket'));
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual([
-			'[1,5 -> 1,5]',
-		]);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual(['[1,5 -> 1,5]']);
 	});
 
 	test('document formatting uses a range-only provider and remains undoable', async function () {
@@ -4070,25 +3472,13 @@ suite('standalone browser component', () => {
 			const { page } = browserTests;
 
 			await page.goto('/standalone.html');
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.prepareLineComment({ insertSpace: false, value: 'alpha' }),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareLineComment({ insertSpace: false, value: 'alpha' }));
 			await page.keyboard.press(kind === 'line' ? 'ControlOrMeta+/' : 'Alt+Shift+a');
-			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe(
-				kind === 'line' ? '//alpha' : '/*alpha*/',
-			);
-			await page.evaluate(
-				kind =>
-					window.ashStandaloneIntegration.runLineAction(
-						kind === 'line' ? 'editor.action.commentLine' : 'editor.action.blockComment',
-					),
-				kind,
-			);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe(kind === 'line' ? '//alpha' : '/*alpha*/');
+			await page.evaluate(kind => window.ashStandaloneIntegration.runLineAction(kind === 'line' ? 'editor.action.commentLine' : 'editor.action.blockComment'), kind);
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
 			await page.keyboard.press('ControlOrMeta+z');
-			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe(
-				kind === 'line' ? '//alpha' : '/*alpha*/',
-			);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe(kind === 'line' ? '//alpha' : '/*alpha*/');
 		});
 
 		for (const mode of ['readonly', 'unsupported'] as const) {
@@ -4117,9 +3507,7 @@ suite('standalone browser component', () => {
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareLineComment({ value: 'alpha\n\nbeta' }));
 		await page.keyboard.press('ControlOrMeta+/');
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe(
-			'// alpha\n\n// beta',
-		);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('// alpha\n\n// beta');
 	});
 
 	test('transpose letters keeps a selected primary range while editing a secondary caret', async function () {
@@ -4150,10 +3538,7 @@ suite('standalone browser component', () => {
 			['Right', '014235', '[1,4 -> 1,6]'],
 		] as const) {
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareMoveSelectedText());
-			await page.evaluate(
-				id => window.ashStandaloneIntegration.runLineAction(id),
-				`editor.action.moveCarret${direction}Action`,
-			);
+			await page.evaluate(id => window.ashStandaloneIntegration.runLineAction(id), `editor.action.moveCarret${direction}Action`);
 			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({
 				value,
 				selections: [selection],
@@ -4184,10 +3569,7 @@ suite('standalone browser component', () => {
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareLineCopy(true));
 			const before = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
-			await page.evaluate(
-				id => window.ashStandaloneIntegration.runLineAction(id),
-				`editor.action.copyLines${direction}Action`,
-			);
+			await page.evaluate(id => window.ashStandaloneIntegration.runLineAction(id), `editor.action.copyLines${direction}Action`);
 			const delta = direction === 'Down' ? 1 : 0;
 			const copied = {
 				value: 'head\ntail\ntail\n\n',
@@ -4210,10 +3592,7 @@ suite('standalone browser component', () => {
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareLineCopy());
 			await page.keyboard.type('X');
 			const before = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
-			await page.evaluate(
-				id => window.ashStandaloneIntegration.runLineAction(id),
-				`editor.action.copyLines${direction}Action`,
-			);
+			await page.evaluate(id => window.ashStandaloneIntegration.runLineAction(id), `editor.action.copyLines${direction}Action`);
 			const copied = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
 			const delta = direction === 'Down' ? 1 : 0;
 			expect(copied).toEqual({
@@ -4226,19 +3605,13 @@ suite('standalone browser component', () => {
 			await page.keyboard.press('ControlOrMeta+z');
 			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(before);
 			await page.keyboard.press('ControlOrMeta+z');
-			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe(
-				'alpha\nbeta\ngamma',
-			);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha\nbeta\ngamma');
 			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 			expect(errors).toEqual([]);
 		});
 	}
 
-	for (const id of [
-		'editor.action.duplicateSelection',
-		'editor.action.moveLinesDownAction',
-		'editor.action.sortLinesDescending',
-	]) {
+	for (const id of ['editor.action.duplicateSelection', 'editor.action.moveLinesDownAction', 'editor.action.sortLinesDescending']) {
 		test(`${id} has its own undo step between typing operations`, async function () {
 			const { page } = browserTests;
 
@@ -4278,16 +3651,10 @@ suite('standalone browser component', () => {
 		await expect(page.locator('#caller .stanza-editor-selection')).toHaveCount(2);
 		await expect(input).toBeFocused();
 		await page.keyboard.type('X');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value))
-			.toBe('fXond');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('fXond');
 		await page.keyboard.press('ControlOrMeta+z');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value))
-			.toBe('first\nsecond');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().selection))
-			.toBe('[1,2 -> 2,4]');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('first\nsecond');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().selection)).toBe('[1,2 -> 2,4]');
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		expect(errors).toEqual([]);
 	});
@@ -4348,9 +3715,7 @@ suite('standalone browser component', () => {
 			await input.focus();
 			await page.keyboard.press('ControlOrMeta+End');
 			await page.keyboard.type('!');
-			await expect
-				.poll(() => page.evaluate(name => window.ashStandaloneIntegration.state(name).value, kind))
-				.toBe(`${kind}!`);
+			await expect.poll(() => page.evaluate(name => window.ashStandaloneIntegration.state(name).value, kind)).toBe(`${kind}!`);
 		}
 
 		await page.evaluate(() => window.ashStandaloneIntegration.releaseCaller());
@@ -4399,9 +3764,7 @@ suite('standalone browser component', () => {
 		await page.keyboard.press('ControlOrMeta+End');
 		await page.keyboard.type('!');
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.getOwnedValue())).toBe('caller!');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.toBe('caller!');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('caller!');
 
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.detachOwned())).toEqual({
 			modelIsNull: true,
@@ -4414,9 +3777,7 @@ suite('standalone browser component', () => {
 		await page.locator('#owned .stanza-editor-input').focus();
 		await page.keyboard.press('ControlOrMeta+End');
 		await page.keyboard.type('?');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.toBe('caller!?');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('caller!?');
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.events.length)).toBe(2);
 		await page.evaluate(() => window.ashStandaloneIntegration.releaseOwned());
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.state('caller').disposed)).toBe(false);
@@ -4430,9 +3791,7 @@ suite('standalone browser component', () => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.stack ?? error.message));
 		await page.goto('/standalone.html');
-		expect(
-			(await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller,
-		).toBe(true);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller).toBe(true);
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.tryOverlappingSurrogateEdits())).toEqual({
 			rejected: true,
 			value: 'a📚b',
@@ -4453,9 +3812,7 @@ suite('standalone browser component', () => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.stack ?? error.message));
 		await page.goto('/standalone.html');
-		expect(
-			(await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller,
-		).toBe(true);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller).toBe(true);
 		const result = await page.evaluate(() => window.ashStandaloneIntegration.resetSameValue());
 		expect(result).toEqual({
 			beforeVersion: result.beforeVersion,
@@ -4476,9 +3833,7 @@ suite('standalone browser component', () => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.stack ?? error.message));
 		await page.goto('/standalone.html');
-		expect(
-			(await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller,
-		).toBe(true);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller).toBe(true);
 		const input = page.locator('#caller .stanza-editor-input');
 		const before = await page.evaluate(() => window.ashStandaloneIntegration.prepareSelectionUndo());
 		expect(before.ownedSelections).toEqual(['[2,3 -> 2,3]']);
@@ -4494,7 +3849,11 @@ suite('standalone browser component', () => {
 		expect(edited.value).toBe('A\nB');
 		expect(edited.callerSelections).toEqual(['[1,2 -> 1,2]', '[2,2 -> 2,2]']);
 		expect(edited.ownedSelections).toHaveLength(1);
-		expect({ caller: edited.callerFocused, owned: edited.ownedFocused, activeInput: edited.activeInput }).toEqual({
+		expect({
+			caller: edited.callerFocused,
+			owned: edited.ownedFocused,
+			activeInput: edited.activeInput,
+		}).toEqual({
 			caller: true,
 			owned: false,
 			activeInput: 'caller',
@@ -4543,9 +3902,9 @@ suite('standalone browser component', () => {
 			const errors: string[] = [];
 			page.on('pageerror', error => errors.push(error.message));
 			await page.goto('/standalone.html');
-			expect(
-				await page.evaluate(kind => window.ashStandaloneIntegration.runDisposedLanguageRequest(kind), kind),
-			).toEqual(kind === 'queuedParameterHints' ? { calls: 0, aborted: false } : { calls: 1, aborted: true });
+			expect(await page.evaluate(kind => window.ashStandaloneIntegration.runDisposedLanguageRequest(kind), kind)).toEqual(
+				kind === 'queuedParameterHints' ? { calls: 0, aborted: false } : { calls: 1, aborted: true },
+			);
 			expect(errors).toEqual([]);
 		});
 	}
@@ -4571,14 +3930,9 @@ suite('standalone browser component', () => {
 				await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
 				// The trigger action returns when its provider finishes; dispatch without waiting for it.
 				await page.evaluate(global => {
-					void window.ashStandaloneIntegration.runParameterHintCommand(
-						'editor.action.triggerParameterHints',
-						global,
-					);
+					void window.ashStandaloneIntegration.runParameterHintCommand('editor.action.triggerParameterHints', global);
 				}, global);
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length))
-					.toBe(1);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
 				await page.evaluate(
 					signatures =>
 						window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints', {
@@ -4595,29 +3949,18 @@ suite('standalone browser component', () => {
 					visible: true,
 					multiple: true,
 				});
-				await page.evaluate(
-					global => window.ashStandaloneIntegration.runParameterHintCommand('showNextParameterHint', global),
-					global,
-				);
+				await page.evaluate(global => window.ashStandaloneIntegration.runParameterHintCommand('showNextParameterHint', global), global);
 				await expect(active).toHaveText('call(last)');
-				await page.evaluate(
-					global => window.ashStandaloneIntegration.runParameterHintCommand('showPrevParameterHint', global),
-					global,
-				);
+				await page.evaluate(global => window.ashStandaloneIntegration.runParameterHintCommand('showPrevParameterHint', global), global);
 				await expect(active).toHaveText('call(other)');
-				await page.evaluate(
-					global => window.ashStandaloneIntegration.runParameterHintCommand('closeParameterHints', global),
-					global,
-				);
+				await page.evaluate(global => window.ashStandaloneIntegration.runParameterHintCommand('closeParameterHints', global), global);
 				await expect(dialog).toBeHidden();
 				expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintContext())).toEqual({
 					supported: true,
 					visible: false,
 					multiple: false,
 				});
-				expect(
-					await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length),
-				).toBe(1);
+				expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
 				await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
 			});
 		}
@@ -4629,11 +3972,7 @@ suite('standalone browser component', () => {
 				await page.goto('/standalone.html');
 				await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
 				await page.keyboard.press('ControlOrMeta+Shift+Space');
-				await page.evaluate(
-					signatures =>
-						window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints', { signatures }),
-					signatures,
-				);
+				await page.evaluate(signatures => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints', { signatures }), signatures);
 				const before = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
 				const dialog = page.getByRole('dialog', { name: 'Parameter hints' });
 				const nodes = await dialog.evaluateHandle(element => [...element.children]);
@@ -4653,9 +3992,7 @@ suite('standalone browser component', () => {
 					}
 					expect(await nodes.evaluate(nodes => nodes.every(node => node.isConnected))).toBe(true);
 					expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(before);
-					expect(
-						await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length),
-					).toBe(1);
+					expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
 					await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
 					await page.keyboard.press('Shift+Escape');
 					await expect(dialog).toBeHidden();
@@ -4704,9 +4041,7 @@ suite('standalone browser component', () => {
 			await expect(page.getByRole('dialog', { name: 'Parameter hints' })).toBeVisible();
 			await page.keyboard.press('ArrowUp');
 			await expect(page.locator('#caller .stanza-editor-parameter-hints')).toBeHidden();
-			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).not.toEqual(
-				before.selections,
-			);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).not.toEqual(before.selections);
 		});
 
 		test('the close signature command cancels a request before hints are visible', async function () {
@@ -4715,27 +4050,13 @@ suite('standalone browser component', () => {
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
 			await page.keyboard.press('ControlOrMeta+Shift+Space');
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runParameterHintCommand('closeParameterHints', true),
-			);
-			expect(
-				(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))[0]!.aborted,
-			).toBe(true);
+			await page.evaluate(() => window.ashStandaloneIntegration.runParameterHintCommand('closeParameterHints', true));
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))[0]!.aborted).toBe(true);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
 			await expect(page.locator('#caller .stanza-editor-parameter-hints')).toBeHidden();
 		});
 
-		for (const reason of [
-			'text',
-			'selection',
-			'language',
-			'provider',
-			'off',
-			'model',
-			'contribution',
-			'dispose',
-			'blur',
-		] as const) {
+		for (const reason of ['text', 'selection', 'language', 'provider', 'off', 'model', 'contribution', 'dispose', 'blur'] as const) {
 			test(`${reason} cancels pending parameter hints and rejects late results`, async function () {
 				const { page } = browserTests;
 
@@ -4746,17 +4067,9 @@ suite('standalone browser component', () => {
 				await page.goto('/standalone.html');
 				await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
 				await page.keyboard.press('ControlOrMeta+Shift+Space');
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length))
-					.toBe(1);
-				await page.evaluate(
-					reason => window.ashStandaloneIntegration.changeParameterHintsState(reason),
-					reason,
-				);
-				expect(
-					(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))[0]!
-						.aborted,
-				).toBe(true);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
+				await page.evaluate(reason => window.ashStandaloneIntegration.changeParameterHintsState(reason), reason);
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))[0]!.aborted).toBe(true);
 				await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
 				await expect(page.locator('#caller .stanza-editor-parameter-hints')).toBeHidden();
 				if (reason === 'blur') await expect(page.locator('#owned .stanza-editor-input')).toBeFocused();
@@ -4773,9 +4086,7 @@ suite('standalone browser component', () => {
 				await page.evaluate(reason => window.ashStandaloneIntegration.queueParameterHints(reason), reason);
 				// Allow both microtask and timer-based triggers to run before inspecting provider calls.
 				await page.evaluate(() => new Promise<void>(resolve => setTimeout(resolve, 20)));
-				expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests())).toEqual(
-					[],
-				);
+				expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests())).toEqual([]);
 				await expect(page.locator('#caller .stanza-editor-parameter-hints')).toBeHidden();
 			});
 		}
@@ -4790,13 +4101,9 @@ suite('standalone browser component', () => {
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
 			await page.keyboard.press('ControlOrMeta+Shift+Space');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length))
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
 			await page.keyboard.press('Escape');
-			expect(
-				(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))[0]!.aborted,
-			).toBe(true);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))[0]!.aborted).toBe(true);
 			await page.keyboard.press('ControlOrMeta+Shift+Space');
 			await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(1, 'hints'));
 			await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'error'));
@@ -4814,9 +4121,7 @@ suite('standalone browser component', () => {
 			await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
 			const dialog = page.getByRole('dialog', { name: 'Parameter hints' });
 			await expect(dialog).toBeVisible();
-			await expect(dialog.locator('.stanza-editor-parameter-hints-signature.active')).toHaveText(
-				'call(value): plaintext',
-			);
+			await expect(dialog.locator('.stanza-editor-parameter-hints-signature.active')).toHaveText('call(value): plaintext');
 			await expect(dialog.locator('strong')).toHaveText('value');
 			const position = await dialog.evaluate(element => ({
 				left: parseFloat((element as HTMLElement).style.left),
@@ -4901,9 +4206,7 @@ suite('standalone browser component', () => {
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
 			await page.keyboard.type('(');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length))
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
 			await page.evaluate(() =>
 				window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints', {
 					signatures: [
@@ -4916,13 +4219,9 @@ suite('standalone browser component', () => {
 			await page.evaluate(() => window.ashStandaloneIntegration.runParameterHintCommand('showNextParameterHint'));
 
 			await page.keyboard.type('a');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length))
-				.toBe(2);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(2);
 			await page.keyboard.type('b');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length))
-				.toBe(3);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(3);
 			const requests = await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests());
 			expect(requests[1]!.aborted).toBe(true);
 			expect(requests[2]!.context).toMatchObject({
@@ -4943,13 +4242,9 @@ suite('standalone browser component', () => {
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
 			await page.keyboard.type('(');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length))
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
 			await page.keyboard.type('a');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length))
-				.toBe(2);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(2);
 			const requests = await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests());
 			expect(requests[0]!.aborted).toBe(true);
 			expect(requests[1]!).toMatchObject({ position: '(1,7)', context: { kind: 'contentChange' } });
@@ -4957,9 +4252,7 @@ suite('standalone browser component', () => {
 			await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
 			await expect(page.getByRole('dialog', { name: 'Parameter hints' })).toBeVisible();
 			await page.keyboard.type('b');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length))
-				.toBe(3);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(3);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(2, 'empty'));
 			await expect(page.locator('#caller .stanza-editor-parameter-hints')).toBeHidden();
 		});
@@ -4973,9 +4266,7 @@ suite('standalone browser component', () => {
 				window.ashStandaloneIntegration.shareParameterHintsModel();
 			});
 			await page.keyboard.type('(');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length))
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
 			await expect(page.locator('#caller .stanza-editor-parameter-hints')).toBeVisible();
 			await expect(page.locator('#owned .stanza-editor-parameter-hints')).toBeHidden();
@@ -4990,9 +4281,7 @@ suite('standalone browser component', () => {
 				window.ashStandaloneIntegration.changeParameterHintsState('language');
 			});
 			await page.keyboard.press('ControlOrMeta+Shift+Space');
-			expect(
-				(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))[0]!.languageId,
-			).toBe('typescript');
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))[0]!.languageId).toBe('typescript');
 			await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
 			await expect(page.getByRole('dialog', { name: 'Parameter hints' })).toContainText('typescript');
 		});
@@ -5007,10 +4296,7 @@ suite('standalone browser component', () => {
 				await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
 				await expect(page.getByRole('dialog', { name: 'Parameter hints' })).toBeVisible();
 				await page.keyboard.press('ControlOrMeta+Shift+Space');
-				await page.evaluate(
-					outcome => window.ashStandaloneIntegration.finishParameterHintRequest(1, outcome),
-					outcome,
-				);
+				await page.evaluate(outcome => window.ashStandaloneIntegration.finishParameterHintRequest(1, outcome), outcome);
 				await expect(page.locator('#caller .stanza-editor-parameter-hints')).toBeHidden();
 			});
 		}
@@ -5024,17 +4310,7 @@ suite('standalone browser component', () => {
 		});
 
 		for (const phase of ['prepare', 'edit'] as const) {
-			for (const reason of [
-				'text',
-				'selection',
-				'language',
-				'provider',
-				'readonly',
-				'model',
-				'contribution',
-				'dispose',
-				'blur',
-			] as const) {
+			for (const reason of ['text', 'selection', 'language', 'provider', 'readonly', 'model', 'contribution', 'dispose', 'blur'] as const) {
 				test(`${reason} cancels ${phase} and rejects its late rename`, async function () {
 					const { page } = browserTests;
 
@@ -5049,19 +4325,11 @@ suite('standalone browser component', () => {
 						await input.fill('result');
 						await input.press('Enter');
 					}
-					await expect
-						.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests().length))
-						.toBe(1);
+					await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests().length)).toBe(1);
 					await page.evaluate(reason => window.ashStandaloneIntegration.changeRenameState(reason), reason);
-					await expect
-						.poll(() =>
-							page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests()[0]!.aborted),
-						)
-						.toBe(true);
+					await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests()[0]!.aborted)).toBe(true);
 					await page.evaluate(() => window.ashStandaloneIntegration.finishRenameRequest(0, 'edit'));
-					expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(
-						reason === 'text' ? 'changed' : 'value',
-					);
+					expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(reason === 'text' ? 'changed' : 'value');
 					await expect(page.locator('#caller .stanza-editor-rename')).toBeHidden();
 					if (reason === 'blur') await expect(page.locator('#owned .stanza-editor-input')).toBeFocused();
 					expect(errors).toEqual([]);
@@ -5081,18 +4349,14 @@ suite('standalone browser component', () => {
 					await input.fill('result');
 					await input.press('Enter');
 				}
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests().length))
-					.toBe(1);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests().length)).toBe(1);
 				await page.evaluate(async () => {
 					window.ashStandaloneIntegration.changeRenameState('blur');
 					await window.ashStandaloneIntegration.finishRenameRequest(0, 'edit');
 				});
 				await expect(page.locator('#owned .stanza-editor-input')).toBeFocused();
 				await expect(page.locator('#caller .stanza-editor-rename')).toBeHidden();
-				expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(
-					'value',
-				);
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
 			});
 		}
 
@@ -5107,9 +4371,7 @@ suite('standalone browser component', () => {
 			await expect(input).toBeFocused();
 			await expect(input).toHaveValue('value');
 			await input.click();
-			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).selection).toBe(
-				before.selection,
-			);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).selection).toBe(before.selection);
 			await input.fill('result');
 			await input.press('Enter');
 			await input.press('Enter');
@@ -5149,19 +4411,13 @@ suite('standalone browser component', () => {
 					await input.fill('first');
 					await input.press('Enter');
 				}
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests().length))
-					.toBe(1);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests().length)).toBe(1);
 				await page.keyboard.press('Escape');
-				expect(
-					(await page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests()))[0]!.aborted,
-				).toBe(true);
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests()))[0]!.aborted).toBe(true);
 				await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
 				await page.keyboard.press('F2');
 				if (phase === 'prepare') {
-					await expect
-						.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests().length))
-						.toBe(2);
+					await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests().length)).toBe(2);
 					await page.evaluate(() => window.ashStandaloneIntegration.finishRenameRequest(1, 'edit'));
 				}
 				await input.fill('second');
@@ -5169,11 +4425,8 @@ suite('standalone browser component', () => {
 				await expect(input).toBeFocused();
 				await expect(input).toHaveValue('second');
 				await input.press('Enter');
-				if (phase === 'edit')
-					await page.evaluate(() => window.ashStandaloneIntegration.finishRenameRequest(1, 'edit'));
-				expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(
-					'second',
-				);
+				if (phase === 'edit') await page.evaluate(() => window.ashStandaloneIntegration.finishRenameRequest(1, 'edit'));
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('second');
 				expect(errors).toEqual([]);
 			});
 		}
@@ -5212,26 +4465,15 @@ suite('standalone browser component', () => {
 				const input = page.getByRole('textbox', { name: 'New symbol name' });
 				await input.fill('result');
 				await input.press('Enter');
-				await page.evaluate(
-					outcome => window.ashStandaloneIntegration.finishRenameRequest(0, outcome),
-					outcome,
-				);
-				expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(
-					'value',
-				);
+				await page.evaluate(outcome => window.ashStandaloneIntegration.finishRenameRequest(0, outcome), outcome);
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
 				await expect(page.locator('#caller .stanza-editor-rename')).not.toHaveAttribute('aria-busy');
 				if (outcome === 'empty') {
 					await expect(input).toBeHidden();
 					expect(errors).toEqual([]);
 				} else {
 					await expect(input).toBeEditable();
-					expect(
-						errors.some(message =>
-							message.includes(
-								outcome === 'stale' ? 'requested document version' : 'rename request failed',
-							),
-						),
-					).toBe(true);
+					expect(errors.some(message => message.includes(outcome === 'stale' ? 'requested document version' : 'rename request failed'))).toBe(true);
 				}
 			});
 		}
@@ -5258,13 +4500,7 @@ suite('standalone browser component', () => {
 				window.ashStandaloneIntegration.changeRenameState('language');
 			});
 			await page.keyboard.press('F2');
-			await expect
-				.poll(() =>
-					page.evaluate(() =>
-						window.ashStandaloneIntegration.readRenameRequests().map(request => request.languageId),
-					),
-				)
-				.toEqual(['typescript']);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests().map(request => request.languageId))).toEqual(['typescript']);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishRenameRequest(0, 'edit'));
 			const input = page.getByRole('textbox', { name: 'New symbol name' });
 			await input.fill('result');
@@ -5281,47 +4517,23 @@ suite('standalone browser component', () => {
 		});
 
 		for (const phase of ['query', 'resolve'] as const) {
-			for (const reason of [
-				'text',
-				'selection',
-				'language',
-				'provider',
-				'readonly',
-				'model',
-				'contribution',
-				'dispose',
-			] as const) {
+			for (const reason of ['text', 'selection', 'language', 'provider', 'readonly', 'model', 'contribution', 'dispose'] as const) {
 				test(`${reason} cancels ${phase} and rejects its late edit`, async function () {
 					const { page } = browserTests;
 
 					const errors: string[] = [];
 					page.on('pageerror', error => errors.push(error.message));
 					await page.goto('/standalone.html');
-					await page.evaluate(
-						phase => window.ashStandaloneIntegration.prepareCodeActionRequests(phase),
-						phase,
-					);
+					await page.evaluate(phase => window.ashStandaloneIntegration.prepareCodeActionRequests(phase), phase);
 					await page.keyboard.press('ControlOrMeta+.');
 					if (phase === 'resolve') {
 						await page.getByRole('menuitem', { name: 'Replace value' }).click();
 					}
-					await expect
-						.poll(() =>
-							page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests().length),
-						)
-						.toBe(1);
-					await page.evaluate(
-						reason => window.ashStandaloneIntegration.changeCodeActionState(reason),
-						reason,
-					);
-					expect(
-						(await page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests()))[0]!
-							.aborted,
-					).toBe(true);
+					await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests().length)).toBe(1);
+					await page.evaluate(reason => window.ashStandaloneIntegration.changeCodeActionState(reason), reason);
+					expect((await page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests()))[0]!.aborted).toBe(true);
 					await page.evaluate(() => window.ashStandaloneIntegration.finishCodeActionRequest(0, 'edit'));
-					expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(
-						reason === 'text' ? 'changed' : 'value',
-					);
+					expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(reason === 'text' ? 'changed' : 'value');
 					await expect(page.locator('.ash-action-widget')).toBeHidden();
 					expect(errors).toEqual([]);
 				});
@@ -5334,8 +4546,7 @@ suite('standalone browser component', () => {
 
 				await page.goto('/standalone.html');
 				await page.evaluate(() => window.ashStandaloneIntegration.prepareCodeActionRequests('resolve'));
-				const version = (await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing()))
-					.version;
+				const version = (await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).version;
 				await page.keyboard.press('ControlOrMeta+.');
 				const action = page.getByRole('menuitem', { name: 'Replace value' });
 				if (activation === 'double click') {
@@ -5356,15 +4567,11 @@ suite('standalone browser component', () => {
 				]);
 				await expect(page.locator('.ash-action-widget')).toHaveAttribute('aria-busy', 'true');
 				await page.evaluate(() => window.ashStandaloneIntegration.finishCodeActionRequest(0, 'edit'));
-				expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(
-					'result',
-				);
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('result');
 				await expect(page.locator('.ash-action-widget')).toBeHidden();
 				await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
 				await page.keyboard.press('ControlOrMeta+z');
-				expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(
-					'value',
-				);
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
 			});
 		}
 
@@ -5374,13 +4581,9 @@ suite('standalone browser component', () => {
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareCodeActionRequests('query'));
 			await page.keyboard.press('ControlOrMeta+.');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests().length))
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests().length)).toBe(1);
 			await page.keyboard.press('Escape');
-			expect(
-				(await page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests()))[0]!.aborted,
-			).toBe(true);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests()))[0]!.aborted).toBe(true);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishCodeActionRequest(0, 'edit'));
 			await expect(page.locator('.ash-action-widget')).toBeHidden();
 			await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
@@ -5398,9 +4601,7 @@ suite('standalone browser component', () => {
 			await page.keyboard.press('ControlOrMeta+.');
 			await page.getByRole('menuitem', { name: 'Replace value' }).click();
 			await page.keyboard.press('Escape');
-			expect(
-				(await page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests()))[0]!.aborted,
-			).toBe(true);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests()))[0]!.aborted).toBe(true);
 			await page.keyboard.press('ControlOrMeta+.');
 			const action = page.getByRole('menuitem', { name: 'Replace value' });
 			await expect(action).toBeFocused();
@@ -5424,26 +4625,15 @@ suite('standalone browser component', () => {
 				await page.evaluate(() => window.ashStandaloneIntegration.prepareCodeActionRequests('resolve'));
 				await page.keyboard.press('ControlOrMeta+.');
 				await page.getByRole('menuitem', { name: 'Replace value' }).click();
-				await page.evaluate(
-					outcome => window.ashStandaloneIntegration.finishCodeActionRequest(0, outcome),
-					outcome,
-				);
-				expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(
-					'value',
-				);
+				await page.evaluate(outcome => window.ashStandaloneIntegration.finishCodeActionRequest(0, outcome), outcome);
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
 				await expect(page.locator('.ash-action-widget[aria-busy="true"]')).toHaveCount(0);
 				if (outcome === 'disabled') {
 					await expect(page.locator('.ash-action-widget')).toBeHidden();
 					expect(errors).toEqual([]);
 				} else {
 					await expect(page.getByRole('menuitem', { name: 'Replace value' })).toBeVisible();
-					expect(
-						errors.some(message =>
-							message.includes(
-								outcome === 'stale' ? 'requested document version' : 'code action resolve failed',
-							),
-						),
-					).toBe(true);
+					expect(errors.some(message => message.includes(outcome === 'stale' ? 'requested document version' : 'code action resolve failed'))).toBe(true);
 				}
 			});
 		}
@@ -5457,13 +4647,7 @@ suite('standalone browser component', () => {
 				window.ashStandaloneIntegration.changeCodeActionState('language');
 			});
 			await page.keyboard.press('ControlOrMeta+.');
-			await expect
-				.poll(() =>
-					page.evaluate(() =>
-						window.ashStandaloneIntegration.readCodeActionRequests().map(request => request.languageId),
-					),
-				)
-				.toEqual(['typescript']);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests().map(request => request.languageId))).toEqual(['typescript']);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishCodeActionRequest(0, 'edit'));
 			await page.getByRole('menuitem', { name: 'Replace value' }).click();
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('result');
@@ -5623,16 +4807,19 @@ suite('standalone browser component', () => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.stack ?? error.message));
 		await page.goto('/standalone.html');
-		expect(
-			(await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller,
-		).toBe(true);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller).toBe(true);
 		const initial = await page.evaluate(() => window.ashStandaloneIntegration.prepareLineIdentity());
 		expect({
 			value: initial.value,
 			lineCount: initial.ids.length,
 			longLineIndex: initial.longLineIndex,
 			longLineEnd: initial.longLineEnd,
-		}).toEqual({ value: 'a\nlonger', lineCount: 2, longLineIndex: 1, longLineEnd: [2, 7] });
+		}).toEqual({
+			value: 'a\nlonger',
+			lineCount: 2,
+			longLineIndex: 1,
+			longLineEnd: [2, 7],
+		});
 		const input = page.locator('#caller .stanza-editor-input');
 		await input.focus();
 		const split = await page.evaluate(() => window.ashStandaloneIntegration.splitLineIdentity());
@@ -5690,9 +4877,7 @@ suite('standalone browser component', () => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto('/standalone.html');
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.enableCompletionNavigation('${1:name}(${2:value})$TM_SELECTED_TEXT$0'),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.enableCompletionNavigation('${1:name}(${2:value})$TM_SELECTED_TEXT$0'));
 		const input = page.locator('#caller .stanza-editor-input');
 		await input.focus();
 		await page.keyboard.press('Control+Space');
@@ -5738,10 +4923,7 @@ suite('standalone browser component', () => {
 			const errors: string[] = [];
 			page.on('pageerror', error => errors.push(error.message));
 			await page.goto('/standalone.html');
-			await page.evaluate(
-				snippet => window.ashStandaloneIntegration.enableCompletionNavigation(snippet),
-				snippet,
-			);
+			await page.evaluate(snippet => window.ashStandaloneIntegration.enableCompletionNavigation(snippet), snippet);
 			await page.locator('#caller .stanza-editor-input').focus();
 			await page.keyboard.press('Control+Space');
 			await expect(page.locator('#caller .stanza-editor-completion-option')).toHaveCount(2);
@@ -5796,9 +4978,7 @@ suite('standalone browser component', () => {
 			column: 4,
 		});
 		await page.keyboard.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.toBe('conconsole');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('conconsole');
 		await page.evaluate(() => {
 			window.ashStandaloneIntegration.updateContributionOptions({ fontSize: 24, lineHeight: 32 });
 			window.ashStandaloneIntegration.enableCompletionNavigation();
@@ -5806,8 +4986,7 @@ suite('standalone browser component', () => {
 		await input.focus();
 		await page.keyboard.press('Control+Space');
 		await expect(options).toHaveCount(2);
-		for (const option of await options.all())
-			expect((await option.boundingBox())!.height).toBeGreaterThanOrEqual(32);
+		for (const option of await options.all()) expect((await option.boundingBox())!.height).toBeGreaterThanOrEqual(32);
 		await page.keyboard.press('Escape');
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		expect(errors).toEqual([]);
@@ -5854,7 +5033,12 @@ suite('standalone browser component', () => {
 			version: typed.version,
 			selection: typed.selection,
 			focused: typed.focused,
-		}).toEqual({ value: 'firXst\nsecond', version: undone.version + 1, selection: '[1,5 -> 1,5]', focused: true });
+		}).toEqual({
+			value: 'firXst\nsecond',
+			version: undone.version + 1,
+			selection: '[1,5 -> 1,5]',
+			focused: true,
+		});
 		await expect(page.locator('#caller .view-line').first()).toContainText('firXst');
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		expect(errors).toEqual([]);
@@ -5879,10 +5063,7 @@ suite('standalone browser component', () => {
 		});
 		expect(character.text.startsWith('alpha beta')).toBe(true);
 		expect(character.box).toBeTruthy();
-		await page.mouse.dblclick(
-			character.box!.x + character.box!.width / 4,
-			character.box!.y + character.box!.height / 2,
-		);
+		await page.mouse.dblclick(character.box!.x + character.box!.width / 4, character.box!.y + character.box!.height / 2);
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.readPointerSelection())).toEqual({
 			value: 'alpha beta\nsecond line',
 			version: before.version,
@@ -5901,9 +5082,7 @@ suite('standalone browser component', () => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.stack ?? error.message));
 		await page.goto('/standalone.html');
-		expect(
-			(await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller,
-		).toBe(true);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller).toBe(true);
 		await page.evaluate(() => window.ashStandaloneIntegration.preparePointerSelection());
 		const before = await page.evaluate(() => window.ashStandaloneIntegration.readPointerSelection());
 		await expect(page.locator('#caller .view-line > span')).toHaveText(['alpha beta', 'second line']);
@@ -5956,9 +5135,7 @@ suite('standalone browser component', () => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.stack ?? error.message));
 		await page.goto('/standalone.html');
-		expect(
-			(await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller,
-		).toBe(true);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller).toBe(true);
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareMultiCursor());
 		await expect(page.locator('#caller .view-line > span')).toHaveText(['abcd', 'efgh']);
 		const lines = await page.evaluate(() =>
@@ -6078,20 +5255,10 @@ suite('standalone browser component', () => {
 		await page.goto('/standalone.html');
 		const initial = await page.evaluate(() => window.ashStandaloneIntegration.prepareVisibleRows());
 		expect(initial.lineCount).toBe(80);
-		await expect(page.locator('#caller .view-line > span')).toHaveText([
-			'line-00',
-			'line-01',
-			'line-02',
-			'line-03',
-			'line-04',
-		]);
+		await expect(page.locator('#caller .view-line > span')).toHaveText(['line-00', 'line-01', 'line-02', 'line-03', 'line-04']);
 		await expect(page.locator('#caller .stanza-editor-row-layer.view-overlays > div')).toHaveCount(5);
 		const result = await page.evaluate(async () => {
-			const layers = [
-				...document.querySelectorAll<HTMLElement>(
-					'#caller .view-lines, #caller .stanza-editor-row-layer.view-overlays',
-				),
-			];
+			const layers = [...document.querySelectorAll<HTMLElement>('#caller .view-lines, #caller .stanza-editor-row-layer.view-overlays')];
 			const tracked = layers.map(layer => {
 				const before = new Map<number, HTMLElement>();
 				for (const child of layer.children) {
@@ -6136,9 +5303,7 @@ suite('standalone browser component', () => {
 					overlap: overlap.length,
 					stable: overlap.every(index => before.get(index) === after.get(index)),
 					removedOverlap: overlap.filter(index => removed.has(before.get(index)!)).length,
-					staleDetached: [...before]
-						.filter(([index]) => !after.has(index))
-						.every(([, row]) => !row.isConnected),
+					staleDetached: [...before].filter(([index]) => !after.has(index)).every(([, row]) => !row.isConnected),
 				};
 			});
 			return { scrollTop, snapshots };
@@ -6219,21 +5384,13 @@ suite('standalone browser component', () => {
 		await expect(page.locator('#caller .ash-gutter-probe')).toHaveCount(1);
 		const readGeometry = async () =>
 			page.evaluate(() => {
-				const firstRows = [
-					...document.querySelectorAll<HTMLElement>('#caller .view-line[data-logical-line-index="0"]'),
-				];
-				const secondRow = document.querySelector<HTMLElement>(
-					'#caller .view-line[data-logical-line-index="1"]',
-				);
+				const firstRows = [...document.querySelectorAll<HTMLElement>('#caller .view-line[data-logical-line-index="0"]')];
+				const secondRow = document.querySelector<HTMLElement>('#caller .view-line[data-logical-line-index="1"]');
 				const caret = document.querySelector<HTMLElement>('#caller .stanza-editor-caret.primary');
 				const glyphs = [...document.querySelectorAll<HTMLElement>('#caller .ash-gutter-probe')];
-				const numberRows = [
-					...document.querySelectorAll<HTMLElement>('#caller .margin-view-overlays .view-overlay-line'),
-				];
+				const numberRows = [...document.querySelectorAll<HTMLElement>('#caller .margin-view-overlays .view-overlay-line')];
 				if (!firstRows.length || !secondRow || !caret) {
-					throw new Error(
-						`Cursor and gutter rows are unavailable: first=${firstRows.length}, second=${Boolean(secondRow)}, caret=${Boolean(caret)}`,
-					);
+					throw new Error(`Cursor and gutter rows are unavailable: first=${firstRows.length}, second=${Boolean(secondRow)}, caret=${Boolean(caret)}`);
 				}
 				return {
 					wrappedRows: firstRows.length,
@@ -6311,10 +5468,7 @@ suite('standalone browser component', () => {
 			expect(originalCaret).not.toBeNull();
 			const node = await zone.elementHandle();
 			const height = unit === 'pixels' ? 40 : 2;
-			const expanded = await page.evaluate(
-				value => window.ashStandaloneIntegration.resizeViewZone(value, 1),
-				height,
-			);
+			const expanded = await page.evaluate(value => window.ashStandaloneIntegration.resizeViewZone(value, 1), height);
 			expect(expanded).toEqual({
 				version: initial.version,
 				lineTop: initial.lineTop + 40,
@@ -6328,14 +5482,9 @@ suite('standalone browser component', () => {
 			await expect(margin).toHaveCSS('height', '40px');
 			await expect.poll(async () => (await block.boundingBox())?.height).toBe(originalBlock!.height + 40);
 			await expect.poll(async () => (await caret.boundingBox())?.y).toBe(originalCaret!.y + 40);
-			expect(await node!.evaluate(element => element === document.querySelector('#caller .ash-zone-probe'))).toBe(
-				true,
-			);
+			expect(await node!.evaluate(element => element === document.querySelector('#caller .ash-zone-probe'))).toBe(true);
 
-			const moved = await page.evaluate(
-				value => window.ashStandaloneIntegration.resizeViewZone(value, 2),
-				height,
-			);
+			const moved = await page.evaluate(value => window.ashStandaloneIntegration.resizeViewZone(value, 2), height);
 			expect(moved.lineTop).toBe(initial.lineTop);
 			await expect.poll(async () => (await caret.boundingBox())?.y).toBe(originalCaret!.y);
 			await expect.poll(async () => (await block.boundingBox())?.y).toBe(originalBlock!.y);
@@ -6397,12 +5546,7 @@ suite('standalone browser component', () => {
 			first: ['caller'],
 			second: ['owned'],
 			afterClear: ['owned'],
-			events: [
-				['inmemory://stanza/caller.txt'],
-				['inmemory://stanza/owned.txt'],
-				['inmemory://stanza/caller.txt'],
-				['inmemory://stanza/owned.txt'],
-			],
+			events: [['inmemory://stanza/caller.txt'], ['inmemory://stanza/owned.txt'], ['inmemory://stanza/caller.txt'], ['inmemory://stanza/owned.txt']],
 		});
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
@@ -6432,26 +5576,15 @@ suite('standalone browser component', () => {
 
 		await page.goto('/standalone.html');
 		for (const [command, args, text] of [
-			[
-				'editor.action.codeAction',
-				{ kind: 'refactor.extract', apply: 'ifSingle' },
-				'refactor.extract beta alpha',
-			],
+			['editor.action.codeAction', { kind: 'refactor.extract', apply: 'ifSingle' }, 'refactor.extract beta alpha'],
 			['editor.action.organizeImports', undefined, 'source.organizeImports beta alpha'],
 		] as const) {
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
-			await page.evaluate(([command, args]) => window.ashStandaloneIntegration.runFoldingCommand(command, args), [
-				command,
-				args,
-			] as const);
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value))
-				.toBe(text);
+			await page.evaluate(([command, args]) => window.ashStandaloneIntegration.runFoldingCommand(command, args), [command, args] as const);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe(text);
 			await expect(page.locator('.ash-action-widget')).toHaveCount(0);
 			await page.keyboard.press('ControlOrMeta+z');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value))
-				.toBe('alpha beta alpha');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('alpha beta alpha');
 		}
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
@@ -6477,9 +5610,7 @@ suite('standalone browser component', () => {
 			});
 			await name.fill('renamed');
 			await name.press('ControlOrMeta+Enter');
-			const apply = page
-				.locator('#action-preview-pane')
-				.getByRole('button', { name: outcome === 'cancel' ? '应用所选修改' : 'Apply selected', exact: true });
+			const apply = page.locator('#action-preview-pane').getByRole('button', { name: outcome === 'cancel' ? '应用所选修改' : 'Apply selected', exact: true });
 			await expect(apply).toBeEnabled();
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
 			if (outcome === 'accept') {
@@ -6487,9 +5618,7 @@ suite('standalone browser component', () => {
 			} else {
 				await page.locator('#action-preview-pane').getByRole('button', { name: '取消', exact: true }).click();
 			}
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-				.toBe(outcome === 'accept' ? 'renamed' : 'value');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe(outcome === 'accept' ? 'renamed' : 'value');
 			await expect(name).toBeHidden();
 			expect(errors).toEqual([]);
 			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
@@ -6516,9 +5645,7 @@ suite('standalone browser component', () => {
 		await page.keyboard.press('Escape');
 		// Product language changes recreate the editor; this fixture creates that editor after loading the catalog.
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareCodeActionPreview());
-		await expect(
-			page.locator('#action-preview-editor').getByRole('button', { name: '显示代码操作', exact: true }),
-		).toBeVisible();
+		await expect(page.locator('#action-preview-editor').getByRole('button', { name: '显示代码操作', exact: true })).toBeVisible();
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 
@@ -6545,9 +5672,7 @@ suite('standalone browser component', () => {
 			await page.keyboard.down(trigger);
 			await page.mouse.click(point.x, point.y);
 			await page.keyboard.up(trigger);
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().selection))
-				.toBe('[1,7 -> 1,11]');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().selection)).toBe('[1,7 -> 1,11]');
 		}
 		expect(errors).toEqual([]);
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
@@ -6571,14 +5696,9 @@ suite('standalone browser component', () => {
 		await lightbulb.click();
 		await expect(page.locator('.ash-action-widget').getByRole('menuitem')).toHaveCount(4);
 		await page.getByRole('menuitem', { name: 'Apply quickfix', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value))
-			.toBe('quickfix beta alpha');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('quickfix beta alpha');
 		await expect(input).toBeFocused();
-		await page.evaluate(
-			mode => window.ashStandaloneIntegration.updateContributionOptions({ lightbulb: { enabled: mode } }),
-			ShowLightbulbIconMode.Off,
-		);
+		await page.evaluate(mode => window.ashStandaloneIntegration.updateContributionOptions({ lightbulb: { enabled: mode } }), ShowLightbulbIconMode.Off);
 		await expect(lightbulb).not.toBeVisible();
 		expect(errors).toEqual([]);
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
@@ -6601,13 +5721,9 @@ suite('standalone browser component', () => {
 		await expect(results.nth(1)).toBeFocused();
 		await page.keyboard.press('Enter');
 		await expect(results).toHaveCount(0);
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readMultiCursor().selections))
-			.toEqual(['[2,1 -> 2,6]']);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readMultiCursor().selections)).toEqual(['[2,1 -> 2,6]']);
 		await page.keyboard.press('F12');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readMultiCursor().selections))
-			.toEqual(['[1,1 -> 1,6]']);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readMultiCursor().selections)).toEqual(['[1,1 -> 1,6]']);
 		await page.keyboard.press('Escape');
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
@@ -6644,18 +5760,14 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.setMinimapColor('#ff0000'));
 		await expect
 			.poll(async () => {
-				const [red, green, blue] = await page.evaluate(() =>
-					window.ashStandaloneIntegration.readMinimapPixel(),
-				);
+				const [red, green, blue] = await page.evaluate(() => window.ashStandaloneIntegration.readMinimapPixel());
 				return red > green && red > blue && green === blue;
 			})
 			.toBe(true);
 		await page.evaluate(() => window.ashStandaloneIntegration.setMinimapColor('#0000ff'));
 		await expect
 			.poll(async () => {
-				const [red, green, blue] = await page.evaluate(() =>
-					window.ashStandaloneIntegration.readMinimapPixel(),
-				);
+				const [red, green, blue] = await page.evaluate(() => window.ashStandaloneIntegration.readMinimapPixel());
 				return blue > red && blue > green && red === green;
 			})
 			.toBe(true);
@@ -6693,9 +5805,7 @@ suite('standalone browser component', () => {
 		await page.locator('#caller .ash-icon-folding-collapsed').first().click();
 		await expect(zone).toHaveCSS('top', '80px');
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerVersion())).toBe(version);
-		expect(
-			await node!.evaluate(element => element === document.querySelector('#caller .ash-folded-zone-probe')),
-		).toBe(true);
+		expect(await node!.evaluate(element => element === document.querySelector('#caller .ash-folded-zone-probe'))).toBe(true);
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		expect(await node!.evaluate(element => element.isConnected)).toBe(false);
 		await node!.dispose();
@@ -6728,9 +5838,7 @@ suite('standalone browser component', () => {
 		await expect(zone).toHaveAttribute('data-computed-height', '40');
 		await expect(zone).toHaveAttribute('data-top', '80');
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerVersion())).toBe(version);
-		expect(
-			await node!.evaluate(element => element === document.querySelector('#caller .ash-folded-zone-probe')),
-		).toBe(true);
+		expect(await node!.evaluate(element => element === document.querySelector('#caller .ash-folded-zone-probe'))).toBe(true);
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		expect(await node!.evaluate(element => element.isConnected)).toBe(false);
 		await node!.dispose();
@@ -6744,10 +5852,7 @@ suite('standalone browser component', () => {
 			const errors: string[] = [];
 			page.on('pageerror', error => errors.push(error.message));
 			await page.goto('/standalone.html');
-			const version = await page.evaluate(
-				value => window.ashStandaloneIntegration.prepareFoldedViewZone(value),
-				showInHiddenAreas,
-			);
+			const version = await page.evaluate(value => window.ashStandaloneIntegration.prepareFoldedViewZone(value), showInHiddenAreas);
 			const zone = page.locator('#caller .ash-folded-zone-probe');
 			const margin = page.locator('#caller .ash-folded-zone-margin-probe');
 			const block = page.locator('#caller .ash-folded-block-probe');
@@ -6791,9 +5896,7 @@ suite('standalone browser component', () => {
 			await page.evaluate(() => window.ashStandaloneIntegration.scrollVisibleRows(0));
 			await expect(block).toHaveCSS('height', showInHiddenAreas ? '140px' : '100px');
 			await expect(inline).toHaveText(['klmno', 'pqrst']);
-			expect(
-				await node!.evaluate(element => element === document.querySelector('#caller .ash-folded-zone-probe')),
-			).toBe(true);
+			expect(await node!.evaluate(element => element === document.querySelector('#caller .ash-folded-zone-probe'))).toBe(true);
 
 			await page.evaluate(() => window.ashStandaloneIntegration.resizeViewZone(0, 2));
 			await expect(zone).toBeHidden();
@@ -6805,9 +5908,7 @@ suite('standalone browser component', () => {
 			await expect(block).toHaveCSS('height', '180px');
 			await expect(hidden).toHaveText('x');
 			await expect(zone).toHaveAttribute('data-top', '120');
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.updateContributionOptions({ wordWrapColumn: 10 }),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ wordWrapColumn: 10 }));
 			await expect(block).toHaveCSS('height', '140px');
 			await expect(inline).toHaveText(['klmnopqrst']);
 			await expect(zone).toHaveAttribute('data-top', '80');
@@ -6873,11 +5974,17 @@ suite('standalone browser component', () => {
 		await page.keyboard.press('Control+Shift+.');
 		await expect
 			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy()))
-			.toEqual({ value: 'flag false', selections: ['[1,6 -> 1,11]'] });
+			.toEqual({
+				value: 'flag false',
+				selections: ['[1,6 -> 1,11]'],
+			});
 		await page.keyboard.press('Control+Shift+,');
 		await expect
 			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy()))
-			.toEqual({ value: 'flag true', selections: ['[1,6 -> 1,10]'] });
+			.toEqual({
+				value: 'flag true',
+				selections: ['[1,6 -> 1,10]'],
+			});
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		expect(errors).toEqual([]);
 	});
@@ -6893,9 +6000,7 @@ suite('standalone browser component', () => {
 		const node = await root.elementHandle();
 		const version = await page.evaluate(() => window.ashStandaloneIntegration.getCallerVersion());
 		for (const enabled of [false, true, false]) {
-			expect(
-				await page.evaluate(value => window.ashStandaloneIntegration.updateRenderingOptions(value), enabled),
-			).toBe(version);
+			expect(await page.evaluate(value => window.ashStandaloneIntegration.updateRenderingOptions(value), enabled)).toBe(version);
 			await expect(minimap).toBeVisible({ visible: enabled });
 			await expect(root).toHaveCSS('font-size', enabled ? '18px' : '14px');
 			await expect(root).toHaveClass(enabled ? /stanza-editor-mouse-copy/ : /stanza-editor-mouse-default/);
@@ -6906,9 +6011,7 @@ suite('standalone browser component', () => {
 				await expect(root).not.toHaveClass(/word-wrapped/);
 			}
 		}
-		expect(await node!.evaluate(element => element === document.querySelector('#caller .stanza-editor'))).toBe(
-			true,
-		);
+		expect(await node!.evaluate(element => element === document.querySelector('#caller .stanza-editor'))).toBe(true);
 		await node!.dispose();
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		expect(errors).toEqual([]);
@@ -6925,18 +6028,12 @@ suite('standalone browser component', () => {
 		expect(after.lines).toBe(10);
 		expect(after.layout.lineNumbersWidth).toBe(Math.round(2 * after.digitWidth));
 		expect(after.layout.contentLeft).toBeGreaterThan(before.layout.contentLeft);
-		await expect(page.locator('#caller .line-numbers').last()).toHaveCSS(
-			'width',
-			`${after.layout.lineNumbersWidth}px`,
-		);
+		await expect(page.locator('#caller .line-numbers').last()).toHaveCSS('width', `${after.layout.lineNumbersWidth}px`);
 		await page.keyboard.press('ControlOrMeta+z');
 		const undone = await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration());
 		expect(undone.lines).toBe(9);
 		expect(undone.layout.lineNumbersWidth).toBe(before.layout.lineNumbersWidth);
-		await expect(page.locator('#caller .line-numbers').last()).toHaveCSS(
-			'width',
-			`${before.layout.lineNumbersWidth}px`,
-		);
+		await expect(page.locator('#caller .line-numbers').last()).toHaveCSS('width', `${before.layout.lineNumbersWidth}px`);
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 
@@ -6947,10 +6044,7 @@ suite('standalone browser component', () => {
 			const errors: string[] = [];
 			page.on('pageerror', error => errors.push(error.stack ?? error.message));
 			await page.goto('/standalone.html');
-			await page.evaluate(
-				size => window.ashStandaloneIntegration.prepareLineCountConfiguration(1000, size),
-				size,
-			);
+			await page.evaluate(size => window.ashStandaloneIntegration.prepareLineCountConfiguration(1000, size), size);
 			const initial = await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration());
 			expect(initial.layout.minimap.minimapIsSampling).toBe(true);
 			await page.evaluate(() => window.ashStandaloneIntegration.foldConfigurationLines(true));
@@ -6958,37 +6052,16 @@ suite('standalone browser component', () => {
 			expect(folded.viewLines).toBe(2);
 			expect(folded.layout.minimap.minimapIsSampling).toBe(false);
 			await page.evaluate(() => window.ashStandaloneIntegration.foldConfigurationLines(false));
-			expect(
-				(await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration())).layout
-					.minimap,
-			).toEqual(initial.layout.minimap);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration())).layout.minimap).toEqual(initial.layout.minimap);
 
-			await page.evaluate(
-				size => window.ashStandaloneIntegration.prepareLineCountConfiguration(80, size, 'content '.repeat(30)),
-				size,
-			);
+			await page.evaluate(size => window.ashStandaloneIntegration.prepareLineCountConfiguration(80, size, 'content '.repeat(30)), size);
 			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ wordWrap: 'on' }));
-			await expect
-				.poll(
-					async () =>
-						(await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration())).layout
-							.minimap.minimapIsSampling,
-				)
-				.toBe(true);
+			await expect.poll(async () => (await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration())).layout.minimap.minimapIsSampling).toBe(true);
 			const wrapped = await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration());
 			expect(wrapped.viewLines).toBeGreaterThan(wrapped.lines);
-			await expect(page.locator('#caller .minimap')).toHaveCSS(
-				'width',
-				`${wrapped.layout.minimap.minimapWidth}px`,
-			);
+			await expect(page.locator('#caller .minimap')).toHaveCSS('width', `${wrapped.layout.minimap.minimapWidth}px`);
 			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ wordWrap: 'off' }));
-			await expect
-				.poll(
-					async () =>
-						(await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration()))
-							.viewLines,
-				)
-				.toBe(80);
+			await expect.poll(async () => (await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration())).viewLines).toBe(80);
 			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 			expect(errors).toEqual([]);
 		});
@@ -6999,9 +6072,7 @@ suite('standalone browser component', () => {
 
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.configureAccessibility(true, 'auto'));
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.prepareLineCountConfiguration(1, 'fit', 'x'.repeat(20000)),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareLineCountConfiguration(1, 'fit', 'x'.repeat(20000)));
 		const wrapped = await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration());
 		expect(wrapped.layout.isWordWrapMinified).toBe(true);
 		expect(wrapped.viewLines).toBeGreaterThan(1);
@@ -7043,12 +6114,10 @@ suite('standalone browser component', () => {
 			[false, 'auto', false],
 			[false, 'on', true],
 		] as const) {
-			expect(
-				await page.evaluate(
-					([host, option]) => window.ashStandaloneIntegration.configureAccessibility(host, option),
-					[host, option] as const,
-				),
-			).toEqual({ support: enabled ? 2 : 1, indent: enabled ? 0 : 2 });
+			expect(await page.evaluate(([host, option]) => window.ashStandaloneIntegration.configureAccessibility(host, option), [host, option] as const)).toEqual({
+				support: enabled ? 2 : 1,
+				indent: enabled ? 0 : 2,
+			});
 			await expect(mirror).toHaveAttribute('aria-hidden', enabled ? 'false' : 'true');
 			await expect(input).toBeFocused();
 		}
@@ -7066,12 +6135,7 @@ suite('standalone browser component', () => {
 			const { page } = browserTests;
 
 			await page.goto('/standalone.html');
-			expect(
-				await page.evaluate(
-					([before, after]) => window.ashStandaloneIntegration.runUnicodeFormatting(before!, after!),
-					[original, formatted],
-				),
-			).toBe(formatted);
+			expect(await page.evaluate(([before, after]) => window.ashStandaloneIntegration.runUnicodeFormatting(before!, after!), [original, formatted])).toBe(formatted);
 			await page.keyboard.press('ControlOrMeta+z');
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe(original);
 			await page.keyboard.press('ControlOrMeta+Shift+z');
@@ -7085,9 +6149,7 @@ suite('standalone browser component', () => {
 
 			await page.goto('/standalone.html');
 			const value = await page.evaluate(change => window.ashStandaloneIntegration.runFormatting(change), change);
-			expect(value).toBe(
-				change === 'eol' ? '\r\n' : change === 'none' ? 'ALPHA' : change === 'model' ? 'owned' : 'alpha',
-			);
+			expect(value).toBe(change === 'eol' ? '\r\n' : change === 'none' ? 'ALPHA' : change === 'model' ? 'owned' : 'alpha');
 			if (change === 'eol') {
 				await page.keyboard.press('ControlOrMeta+z');
 				expect(await page.evaluate(() => window.ashStandaloneIntegration.readEOL())).toBe('\n');
@@ -7111,9 +6173,7 @@ suite('standalone browser component', () => {
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareDeferredFormatting());
 			await page.keyboard.press('ControlOrMeta+Shift+i');
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readDeferredFormatting()))
-				.toEqual({ aborted: [false], value: 'alpha' });
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readDeferredFormatting())).toEqual({ aborted: [false], value: 'alpha' });
 			if (cancel === 'escape') {
 				await page.keyboard.press('Escape');
 			} else {
@@ -7121,13 +6181,9 @@ suite('standalone browser component', () => {
 					void window.ashStandaloneIntegration.runLineAction('editor.action.formatDocument');
 				});
 			}
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readDeferredFormatting()))
-				.toEqual({ aborted: cancel === 'escape' ? [true] : [true, false], value: 'alpha' });
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readDeferredFormatting())).toEqual({ aborted: cancel === 'escape' ? [true] : [true, false], value: 'alpha' });
 			await page.evaluate(() => window.ashStandaloneIntegration.finishDeferredFormatting());
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readDeferredFormatting().value))
-				.toBe(cancel === 'escape' ? 'alpha' : 'ALPHA');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readDeferredFormatting().value)).toBe(cancel === 'escape' ? 'alpha' : 'ALPHA');
 			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		});
 	}
@@ -7137,10 +6193,7 @@ suite('standalone browser component', () => {
 			const { page } = browserTests;
 
 			await page.goto('/standalone.html');
-			const result = await page.evaluate(
-				mode => window.ashStandaloneIntegration.runSelectionFormatting(mode),
-				mode,
-			);
+			const result = await page.evaluate(mode => window.ashStandaloneIntegration.runSelectionFormatting(mode), mode);
 			const original = 'alpha\nbeta\ngamma';
 			if (mode === 'cancel' || mode === 'readonly') {
 				expect(result.value).toBe(original);
@@ -7160,10 +6213,7 @@ suite('standalone browser component', () => {
 			const { page } = browserTests;
 
 			await page.goto('/standalone.html');
-			const result = await page.evaluate(
-				cancel => window.ashStandaloneIntegration.runOverlappingFormatting(cancel),
-				cancel,
-			);
+			const result = await page.evaluate(cancel => window.ashStandaloneIntegration.runOverlappingFormatting(cancel), cancel);
 			expect(result).toEqual({
 				value: cancel ? 'alpha\nbeta\ngamma' : 'ALPHA\nBETA\nGAMMA',
 				ranges: ['[1,1 -> 1,6]', '[3,1 -> 3,6]', '[1,1 -> 3,6]'],
@@ -7172,35 +6222,20 @@ suite('standalone browser component', () => {
 			expect(await page.evaluate(() => window.ashStandaloneIntegration.readEOL())).toBe('\n');
 			if (!cancel) {
 				await page.keyboard.press('ControlOrMeta+z');
-				expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy().value)).toBe(
-					'alpha\nbeta\ngamma',
-				);
+				expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy().value)).toBe('alpha\nbeta\ngamma');
 			}
 		});
 	}
 
-	for (const outcome of [
-		'second',
-		'empty',
-		'decline',
-		'error',
-		'cancel',
-		'silent',
-		'languageChoice',
-		'languageResult',
-	] as const) {
+	for (const outcome of ['second', 'empty', 'decline', 'error', 'cancel', 'silent', 'languageChoice', 'languageResult'] as const) {
 		test(`formatter selection honors ${outcome} without running another provider`, async function () {
 			const { page } = browserTests;
 
 			await page.goto('/standalone.html');
-			const result = await page.evaluate(
-				outcome => window.ashStandaloneIntegration.runFormatterChoice(outcome),
-				outcome,
-			);
+			const result = await page.evaluate(outcome => window.ashStandaloneIntegration.runFormatterChoice(outcome), outcome);
 			expect(result).toEqual({
 				value: outcome === 'second' || outcome === 'silent' ? 'SELECTED' : 'alpha',
-				calls:
-					outcome === 'decline' || outcome === 'cancel' || outcome === 'languageChoice' ? [] : ['selected'],
+				calls: outcome === 'decline' || outcome === 'cancel' || outcome === 'languageChoice' ? [] : ['selected'],
 				modes: [outcome === 'silent' ? 2 : 1],
 				errors: outcome === 'error' ? ['formatter failed'] : [],
 			});
@@ -7219,26 +6254,16 @@ suite('standalone browser component', () => {
 		await page.keyboard.type('abc');
 		await page.clock.runFor(600);
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).requests).toEqual([]);
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.updateContributionOptions({ inlineSuggest: { enabled: true } }),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ inlineSuggest: { enabled: true } }));
 		await page.keyboard.type('d');
 		await page.clock.runFor(600);
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).requests).toHaveLength(
-			1,
-		);
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.updateContributionOptions({ inlineSuggest: { enabled: false } }),
-		);
-		expect(
-			(await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).requests[0]!.aborted,
-		).toBe(true);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).requests).toHaveLength(1);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ inlineSuggest: { enabled: false } }));
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).requests[0]!.aborted).toBe(true);
 		await page.evaluate(() => window.ashStandaloneIntegration.finishInlineRequest(0));
 		await expect(page.locator('#caller .stanza-editor-inline-completion')).toBeHidden();
 		await page.keyboard.press('Control+Alt+Space');
-		expect(
-			(await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).requests[1]!.kind,
-		).toBe('explicit');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).requests[1]!.kind).toBe('explicit');
 		await page.evaluate(() => window.ashStandaloneIntegration.finishInlineRequest(1));
 		await expect(page.locator('#caller .stanza-editor-inline-completion')).toBeVisible();
 		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ readOnly: true }));
@@ -7285,9 +6310,7 @@ suite('standalone browser component', () => {
 						// These absolute siblings share a stacking context; the last one paints on top.
 						await expect(current).toHaveCSS('z-index', 'auto');
 						await expect(ordinary.first()).toHaveCSS('z-index', 'auto');
-						await expect(page.locator('#caller .view-overlays .cdr').last()).toHaveClass(
-							/\bcurrentFindMatch\b/,
-						);
+						await expect(page.locator('#caller .view-overlays .cdr').last()).toHaveClass(/\bcurrentFindMatch\b/);
 					}
 					await search.press('Enter');
 					await expect(result).toHaveText('2 of 2');
@@ -7316,9 +6339,7 @@ suite('standalone browser component', () => {
 				window.ashStandaloneIntegration.prepareFindHighlights(false);
 				window.ashStandaloneIntegration.invokeLanguageAction('actions.find');
 			});
-			const search = page
-				.locator('#caller .stanza-editor-find-widget')
-				.getByRole('textbox', { name: 'Find', exact: true });
+			const search = page.locator('#caller .stanza-editor-find-widget').getByRole('textbox', { name: 'Find', exact: true });
 			await search.fill('alpha');
 			for (const className of ['findMatch', 'currentFindMatch']) {
 				const highlight = page.locator(`#caller .view-overlays .cdr.${className}`);
@@ -7344,9 +6365,7 @@ suite('standalone browser component', () => {
 		await find.getByRole('textbox', { name: 'Find', exact: true }).fill('alpha');
 		await expect(find.locator('.stanza-editor-find-result')).toHaveText('1 of 1');
 		await page.keyboard.press('Escape');
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.invokeLanguageAction('editor.action.startFindReplaceAction'),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.invokeLanguageAction('editor.action.startFindReplaceAction'));
 		await expect(find.getByRole('textbox', { name: 'Replace', exact: true })).toBeVisible();
 		await page.keyboard.press('Escape');
 		await page.evaluate(() => window.ashStandaloneIntegration.invokeLanguageAction('editor.fold'));
@@ -7361,9 +6380,7 @@ suite('standalone browser component', () => {
 		await expect(location).toBeHidden();
 		await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
 		await page.keyboard.type('X');
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(
-			'alpha\n  child\neXnd',
-		);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('alpha\n  child\neXnd');
 		await page.evaluate(() => window.ashStandaloneIntegration.invokeLanguageAction('editor.action.gotoOffset'));
 		await expect(location).toBeFocused();
 		await expect(location).toHaveAttribute('aria-label', 'Character offset');
@@ -7372,9 +6389,7 @@ suite('standalone browser component', () => {
 		await expect(location).toBeHidden();
 		await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
 		await page.keyboard.type('Y');
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(
-			'alpha\nY  child\neXnd',
-		);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('alpha\nY  child\neXnd');
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 
@@ -7386,9 +6401,7 @@ suite('standalone browser component', () => {
 			window.ashStandaloneIntegration.prepareContributionRequests('completion');
 			window.ashStandaloneIntegration.invokeLanguageAction('editor.action.triggerSuggest');
 		});
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length))
-			.toBe(1);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
 		await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
 		await expect(page.locator('#caller .stanza-editor-completion')).toBeVisible();
 		await page.keyboard.press('Escape');
@@ -7396,27 +6409,17 @@ suite('standalone browser component', () => {
 			window.ashStandaloneIntegration.prepareInlineRequests();
 			window.ashStandaloneIntegration.invokeLanguageAction('editor.action.inlineSuggest.trigger');
 		});
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests().requests.length))
-			.toBe(1);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests().requests.length)).toBe(1);
 		await page.evaluate(() => window.ashStandaloneIntegration.finishInlineRequest(0));
 		const ghost = page.locator('#caller .stanza-editor-inline-completion');
 		await expect(ghost).toBeVisible();
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.invokeLanguageAction('editor.action.inlineSuggest.hide'),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.invokeLanguageAction('editor.action.inlineSuggest.hide'));
 		await expect(ghost).toBeHidden();
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('');
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.invokeLanguageAction('editor.action.inlineSuggest.trigger'),
-		);
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests().requests.length))
-			.toBe(2);
+		await page.evaluate(() => window.ashStandaloneIntegration.invokeLanguageAction('editor.action.inlineSuggest.trigger'));
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests().requests.length)).toBe(2);
 		await page.evaluate(() => window.ashStandaloneIntegration.finishInlineRequest(1));
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.invokeLanguageAction('editor.action.inlineSuggest.commit'),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.invokeLanguageAction('editor.action.inlineSuggest.commit'));
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(' suggestion');
 		await expect(ghost).toBeHidden();
 		await page.keyboard.press('ControlOrMeta+z');
@@ -7501,9 +6504,7 @@ suite('standalone browser component', () => {
 				await page.evaluate(reason => window.ashStandaloneIntegration.cancelInlineRequests(reason), reason);
 				await page.clock.runFor(1_000);
 				const state = await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests());
-				expect(state.requests).toEqual(
-					queued ? [] : [{ kind: 'automatic', text: 'abc', languageId: 'plaintext', aborted: true }],
-				);
+				expect(state.requests).toEqual(queued ? [] : [{ kind: 'automatic', text: 'abc', languageId: 'plaintext', aborted: true }]);
 				expect(state.delay).toBe(50);
 				if (!queued) {
 					await page.evaluate(() => window.ashStandaloneIntegration.finishInlineRequest(0));
@@ -7524,7 +6525,11 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareLanguageWorkers());
 		await expect
 			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageWorkers()))
-			.toEqual({ tokens: [], diagnostics: [], current: true });
+			.toEqual({
+				tokens: [],
+				diagnostics: [],
+				current: true,
+			});
 		await page.keyboard.press('Control+Space');
 		await expect(page.locator('#caller .stanza-editor-completion-option')).toHaveCount(2);
 		await expect(page.locator('#caller .stanza-editor-completion-option')).toContainText(['alpha', 'alphabet']);
@@ -7638,17 +6643,11 @@ suite('standalone browser component', () => {
 			const ghost = page.locator('#caller .stanza-editor-inline-completion');
 			await expect(ghost).toBeVisible();
 			expect(await ghost.textContent()).toBe(scenario.repaired);
-			expect(await page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe(
-				scenario.value,
-			);
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe(scenario.value);
 			await page.keyboard.press('Alt+Enter');
-			expect(await page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe(
-				'/* accepted */ ' + scenario.result,
-			);
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('/* accepted */ ' + scenario.result);
 			await page.keyboard.press('ControlOrMeta+z');
-			expect(await page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe(
-				scenario.value,
-			);
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe(scenario.value);
 			await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
 			expect(errors).toEqual([]);
 			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
@@ -7678,15 +6677,11 @@ suite('standalone browser component', () => {
 		await hue.press('ArrowRight');
 		await expect(picker.getByRole('combobox', { name: 'Document color format' })).toHaveValue('#00ff0080');
 		await picker.getByRole('button', { name: 'Apply', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.toBe('const color = #00ff0080;');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #00ff0080;');
 		await expect(picker).toBeHidden();
 		await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
 		await page.keyboard.press('ControlOrMeta+z');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.toBe('const color = #ff000080;');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #ff000080;');
 		await page.locator('#caller .colorpicker-color-decoration').click();
 		await expect(picker).toBeVisible();
 		await expect(picker).toHaveAttribute('data-retained', 'true');
@@ -7733,22 +6728,12 @@ suite('standalone browser component', () => {
 		await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
 		await page.mouse.down();
 		await page.mouse.move(bounds!.x + bounds!.width / 2 + 1, bounds!.y + bounds!.height / 2);
-		expect(
-			await area.evaluate(element =>
-				element.hasPointerCapture(Number((element as HTMLElement).dataset.pointerId)),
-			),
-		).toBe(true);
+		expect(await area.evaluate(element => element.hasPointerCapture(Number((element as HTMLElement).dataset.pointerId)))).toBe(true);
 		await page.keyboard.press('Escape');
 		await expect(picker).toBeHidden();
-		expect(
-			await picker
-				.locator('.ash-color-picker-area')
-				.evaluate(element => element.hasPointerCapture(Number((element as HTMLElement).dataset.pointerId))),
-		).toBe(false);
+		expect(await picker.locator('.ash-color-picker-area').evaluate(element => element.hasPointerCapture(Number((element as HTMLElement).dataset.pointerId)))).toBe(false);
 		await page.mouse.up();
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.toBe('const color = #ff000080;');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #ff000080;');
 		await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
@@ -7758,9 +6743,7 @@ suite('standalone browser component', () => {
 
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareClipboard('color: token;', [[1, 8, 1, 13]]));
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.runLineAction('editor.action.showOrFocusStandaloneColorPicker'),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.showOrFocusStandaloneColorPicker'));
 		const picker = page.locator('.stanza-editor-color-picker').first();
 		await expect(picker).toBeVisible();
 		const documentFormat = picker.getByRole('combobox', { name: 'Document color format' });
@@ -7769,20 +6752,12 @@ suite('standalone browser component', () => {
 		await picker.getByRole('textbox', { name: 'Color value' }).fill('00ff00');
 		await picker.getByRole('textbox', { name: 'Color value' }).press('Enter');
 		await expect(documentFormat).toHaveValue('#00ff00');
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.runLineAction('editor.action.showOrFocusStandaloneColorPicker'),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.showOrFocusStandaloneColorPicker'));
 		await expect(picker.getByRole('slider', { name: 'Saturation and brightness' })).toBeFocused();
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.runLineAction('editor.action.insertColorWithStandaloneColorPicker'),
-		);
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.toBe('color: #00ff00;');
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.insertColorWithStandaloneColorPicker'));
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('color: #00ff00;');
 		await page.keyboard.press('ControlOrMeta+z');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.toBe('color: token;');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('color: token;');
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 
@@ -7820,9 +6795,7 @@ suite('standalone browser component', () => {
 		}
 		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ readOnly: true }));
 		await expect(picker).toBeHidden();
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.toBe('const color = #ff000080;');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #ff000080;');
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 
@@ -7842,13 +6815,9 @@ suite('standalone browser component', () => {
 		await expect(picker).toBeVisible();
 		await picker.getByRole('combobox', { name: 'Document color format' }).selectOption('#ffffff');
 		await picker.getByRole('button', { name: 'Apply', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.toBe('#ffffff #ffffff');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('#ffffff #ffffff');
 		await page.keyboard.press('ControlOrMeta+z');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.toBe('one two');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('one two');
 		await page.evaluate(() => {
 			window.ashStandaloneIntegration.prepareColorPicker();
 			window.ashStandaloneIntegration.updateContributionOptions({ colorDecoratorsActivatedOn: 'hover' });
@@ -7857,9 +6826,7 @@ suite('standalone browser component', () => {
 		await swatch.hover();
 		await expect(picker).toBeVisible();
 		await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.updateContributionOptions({ colorDecoratorsActivatedOn: 'click' }),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ colorDecoratorsActivatedOn: 'click' }));
 		await expect(picker).toBeHidden();
 		await swatch.click();
 		await expect(picker).toBeVisible();
@@ -7886,44 +6853,30 @@ suite('standalone browser component', () => {
 			(element as HTMLInputElement).value = '119';
 			element.dispatchEvent(new Event('input', { bubbles: true }));
 		});
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.toBe('const color = #ff000080;');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #ff000080;');
 		await hue.press('ArrowRight');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.toBe('const color = #00ff0080;');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #00ff0080;');
 		await expect(picker).toBeVisible();
 		const format = picker.getByRole('combobox', { name: 'Document color format' });
 		await expect(format).toBeEnabled();
 		await format.selectOption('rgba(0, 255, 0, 0.502)');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.toBe('const color = rgba(0, 255, 0, 0.502);');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = rgba(0, 255, 0, 0.502);');
 		await expect(format).toBeEnabled();
 		await format.selectOption('#00ff0080');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.toBe('const color = #00ff0080;');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #00ff0080;');
 		const area = picker.getByRole('slider', { name: 'Saturation and brightness' });
 		const bounds = (await area.boundingBox())!;
 		await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
 		await page.mouse.down();
 		await page.mouse.move(bounds.x + bounds.width / 4, bounds.y + bounds.height / 4);
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.toBe('const color = #00ff0080;');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #00ff0080;');
 		await page.mouse.up();
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.not.toBe('const color = #00ff0080;');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).not.toBe('const color = #00ff0080;');
 		await expect(picker).toBeVisible();
 		await area.press('Escape');
 		await expect(hover).toHaveCount(0);
 		await page.keyboard.press('ControlOrMeta+z');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.toBe('const color = #00ff0080;');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #00ff0080;');
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		expect(errors).toEqual([]);
 	});
@@ -7939,25 +6892,19 @@ suite('standalone browser component', () => {
 		await value.fill('00ff0080');
 		await value.press('Enter');
 		await expect(picker.getByRole('combobox', { name: 'Document color format' })).toHaveValue('#00ff0080');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.toBe('const color = #ff000080;');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #ff000080;');
 		const area = picker.getByRole('slider', { name: 'Saturation and brightness' });
 		await area.focus();
 		await area.press('Enter');
 		await expect(picker).toBeHidden();
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.toBe('const color = #00ff0080;');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #00ff0080;');
 		await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
 		await page.keyboard.press('ControlOrMeta+z');
 		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.showHover'));
 		const hoverPicker = page.locator('.stanza-editor-hover.interactive .stanza-editor-color-picker');
 		await expect(hoverPicker.getByRole('slider', { name: 'Saturation and brightness' })).toBeFocused();
 		await expect(page.getByRole('region', { name: 'Editor hover' })).toBeVisible();
-		await expect(page.locator('#caller .stanza-editor-accessibility-status')).toHaveText(
-			'Press Alt+F1 for color picker help.',
-		);
+		await expect(page.locator('#caller .stanza-editor-accessibility-status')).toHaveText('Press Alt+F1 for color picker help.');
 		await page.keyboard.press('Escape');
 		await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
@@ -7968,22 +6915,17 @@ suite('standalone browser component', () => {
 
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareColorPicker());
-		const colors = await page.evaluate(() =>
-			window.ashStandaloneIntegration.executeColorCommand('_executeDocumentColorProvider'),
-		);
+		const colors = await page.evaluate(() => window.ashStandaloneIntegration.executeColorCommand('_executeDocumentColorProvider'));
 		expect(colors).toEqual([
 			{
 				range: { startLineNumber: 1, startColumn: 15, endLineNumber: 1, endColumn: 24 },
 				color: [1, 0, 0, 128 / 255],
 			},
 		]);
-		const formats = (await page.evaluate(() =>
-			window.ashStandaloneIntegration.executeColorCommand(
-				'_executeColorPresentationProvider',
-				[0, 1, 0, 1],
-				[1, 15, 1, 24],
-			),
-		)) as { label: string; textEdit: { text: string } }[];
+		const formats = (await page.evaluate(() => window.ashStandaloneIntegration.executeColorCommand('_executeColorPresentationProvider', [0, 1, 0, 1], [1, 15, 1, 24]))) as {
+			label: string;
+			textEdit: { text: string };
+		}[];
 		expect(formats.map(format => [format.label, format.textEdit.text])).toEqual([
 			['rgb(0, 255, 0)', 'rgb(0, 255, 0)'],
 			['hsl(120, 100%, 50%)', 'hsl(120, 100%, 50%)'],
@@ -7992,11 +6934,7 @@ suite('standalone browser component', () => {
 		expect(
 			await page.evaluate(async () => {
 				try {
-					await window.ashStandaloneIntegration.executeColorCommand(
-						'_executeColorPresentationProvider',
-						[2, 0, 0, 1],
-						[1, 15, 1, 24],
-					);
+					await window.ashStandaloneIntegration.executeColorCommand('_executeColorPresentationProvider', [2, 0, 0, 1], [1, 15, 1, 24]);
 					return '';
 				} catch (error) {
 					return (error as Error).message;
@@ -8013,9 +6951,7 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareColorPicker());
 		const otherValue = await page.evaluate(() => window.ashStandaloneIntegration.state('owned').value);
 		await page.locator('#owned .stanza-editor-input').focus();
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.runLineAction('editor.action.showOrFocusStandaloneColorPicker'),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.showOrFocusStandaloneColorPicker'));
 		const picker = page.locator('.stanza-editor-color-picker:not([hidden])');
 		const opacity = picker.getByRole('slider', { name: 'Opacity', exact: true });
 		await opacity.focus();
@@ -8023,9 +6959,7 @@ suite('standalone browser component', () => {
 		await expect(picker.getByRole('combobox', { name: 'Document color format' })).toHaveValue('#ff000000');
 		await opacity.press('Enter');
 		await expect(picker).toHaveCount(0);
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value))
-			.toBe('const color = #ff000000;');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #ff000000;');
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.state('owned').value)).toBe(otherValue);
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
@@ -8044,19 +6978,13 @@ suite('standalone browser component', () => {
 		await page.mouse.move(point.x, point.y);
 		await page.clock.runFor(1000);
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toEqual([]);
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.updateContributionOptions({ hover: { enabled: 'on' } }),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ hover: { enabled: 'on' } }));
 		await page.clock.runFor(899);
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toEqual([]);
 		await page.clock.runFor(1);
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toHaveLength(1);
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.updateContributionOptions({ hover: { enabled: 'off' } }),
-		);
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests()))[0]!.aborted).toBe(
-			true,
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ hover: { enabled: 'off' } }));
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests()))[0]!.aborted).toBe(true);
 		await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
 		const hover = page.locator('.stanza-editor-hover').first();
 		await expect(hover).toBeHidden();
@@ -8099,20 +7027,14 @@ suite('standalone browser component', () => {
 			const input = page.locator('#caller .stanza-editor-input');
 			const lines = page.locator('#caller .view-line');
 			await input.focus();
-			await expect(page.locator('#caller .stanza-editor-line-decoration.ash-icon-folding-expanded')).toHaveCount(
-				1,
-			);
+			await expect(page.locator('#caller .stanza-editor-line-decoration.ash-icon-folding-expanded')).toHaveCount(1);
 			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold'));
 			await expect(lines).toHaveCount(3);
 			await expect(page.locator('#caller .view-line[data-logical-line-index="1"]')).toHaveCount(0);
 			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfoldAll'));
 			await page.evaluate(() => window.ashStandaloneIntegration.selectFoldingProvider('test.second'));
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readFoldingProviderRanges()))
-				.toEqual([[2, 4]]);
-			await expect(page.locator('#caller .stanza-editor-line-decoration.ash-icon-folding-expanded')).toHaveCount(
-				1,
-			);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readFoldingProviderRanges())).toEqual([[2, 4]]);
+			await expect(page.locator('#caller .stanza-editor-line-decoration.ash-icon-folding-expanded')).toHaveCount(1);
 			await page.evaluate(() => {
 				window.ashStandaloneIntegration.setFoldingSelections([[2, 1, 2, 1]]);
 			});
@@ -8122,16 +7044,10 @@ suite('standalone browser component', () => {
 			await expect(input).toBeFocused();
 			await page.evaluate(() => window.ashStandaloneIntegration.selectFoldingProvider('test.unavailable'));
 			await expect(lines).toHaveCount(5);
-			await expect(page.locator('#caller .stanza-editor-line-decoration.ash-icon-folding-expanded')).toHaveCount(
-				0,
-			);
+			await expect(page.locator('#caller .stanza-editor-line-decoration.ash-icon-folding-expanded')).toHaveCount(0);
 			await page.evaluate(() => window.ashStandaloneIntegration.selectFoldingProvider(null));
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readFoldingProviderRanges()))
-				.toEqual([[1, 3]]);
-			await expect(page.locator('#caller .stanza-editor-line-decoration.ash-icon-folding-expanded')).toHaveCount(
-				1,
-			);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readFoldingProviderRanges())).toEqual([[1, 3]]);
+			await expect(page.locator('#caller .stanza-editor-line-decoration.ash-icon-folding-expanded')).toHaveCount(1);
 			await expect(input).toBeFocused();
 		});
 
@@ -8179,23 +7095,15 @@ suite('standalone browser component', () => {
 			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfoldAll'));
 			await expect(lines).toHaveCount(9);
 			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ folding: false }));
-			expect(
-				(await page.evaluate(() => window.ashStandaloneIntegration.readFoldingCommandState())).supported,
-			).toBe(false);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readFoldingCommandState())).supported).toBe(false);
 			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.foldAll'));
 			await expect(lines).toHaveCount(9);
 			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ folding: true }));
-			expect(
-				(await page.evaluate(() => window.ashStandaloneIntegration.readFoldingCommandState())).supported,
-			).toBe(true);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readFoldingCommandState())).supported).toBe(true);
 			await page.evaluate(() => window.ashStandaloneIntegration.setFoldingModelAttached(false));
-			expect(
-				(await page.evaluate(() => window.ashStandaloneIntegration.readFoldingCommandState())).supported,
-			).toBe(false);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readFoldingCommandState())).supported).toBe(false);
 			await page.evaluate(() => window.ashStandaloneIntegration.setFoldingModelAttached(true));
-			expect(
-				(await page.evaluate(() => window.ashStandaloneIntegration.readFoldingCommandState())).supported,
-			).toBe(true);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readFoldingCommandState())).supported).toBe(true);
 			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.foldAll'));
 			await expect(lines).toHaveCount(3);
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(text);
@@ -8220,10 +7128,7 @@ suite('standalone browser component', () => {
 			});
 			await expect(page.locator('#caller .view-line')).toHaveCount(8);
 			for (let level = 3; level <= 7; level++) {
-				await page.evaluate(
-					level => window.ashStandaloneIntegration.runLineAction(`editor.foldLevel${level}`),
-					level,
-				);
+				await page.evaluate(level => window.ashStandaloneIntegration.runLineAction(`editor.foldLevel${level}`), level);
 			}
 			await expect(page.locator('#caller .view-line')).toHaveCount(8);
 		});
@@ -8240,17 +7145,10 @@ suite('standalone browser component', () => {
 				]);
 				window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation' });
 			}, value);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runLineAction('editor.createFoldingRangeFromSelection'),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.createFoldingRangeFromSelection'));
 			await expect(page.locator('#caller .view-line')).toHaveCount(4);
-			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual([
-				'[1,1 -> 1,1]',
-				'[5,1 -> 5,1]',
-			]);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runLineAction('editor.removeManualFoldingRanges'),
-			);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual(['[1,1 -> 1,1]', '[5,1 -> 5,1]']);
+			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.removeManualFoldingRanges'));
 			await expect(page.locator('#caller .view-line')).toHaveCount(7);
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(value);
 		});
@@ -8284,14 +7182,10 @@ suite('standalone browser component', () => {
 			const input = page.locator('#caller .stanza-editor-input');
 			await input.focus();
 			const lines = page.locator('#caller .view-line');
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runLineAction('editor.fold', { levels: 2, selectionLines: [4] }),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { levels: 2, selectionLines: [4] }));
 			await expect(lines).toHaveCount(6);
 			await expect(page.locator('#caller .view-line[data-logical-line-index="2"]')).toHaveCount(1);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runLineAction('editor.unfold', { levels: 1, selectionLines: [4] }),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfold', { levels: 1, selectionLines: [4] }));
 			await expect(lines).toHaveCount(8);
 			await expect(page.locator('#caller .view-line[data-logical-line-index="6"]')).toHaveCount(0);
 			await page.evaluate(() =>
@@ -8310,13 +7204,9 @@ suite('standalone browser component', () => {
 				}),
 			);
 			await expect(lines).toHaveCount(6);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runLineAction('editor.unfold', { selectionLines: [0] }),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfold', { selectionLines: [0] }));
 			await expect(lines).toHaveCount(8);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runLineAction('editor.unfold', { selectionLines: [1] }),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfold', { selectionLines: [1] }));
 			await expect(lines).toHaveCount(9);
 			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({
 				value: text,
@@ -8334,9 +7224,7 @@ suite('standalone browser component', () => {
 				window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation' });
 			}, text);
 			const lines = page.locator('#caller .view-line');
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runLineAction('editor.fold', { levels: 0, selectionLines: [1, 2, 1] }),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { levels: 0, selectionLines: [1, 2, 1] }));
 			await expect(lines).toHaveCount(8);
 			await page.evaluate(() =>
 				window.ashStandaloneIntegration.runLineAction('editor.fold', {
@@ -8345,13 +7233,9 @@ suite('standalone browser component', () => {
 				}),
 			);
 			await expect(lines).toHaveCount(8);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runLineAction('editor.fold', { selectionLines: [1] }),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { selectionLines: [1] }));
 			await expect(lines).toHaveCount(6);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runLineAction('editor.unfold', { levels: 0, selectionLines: [0] }),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfold', { levels: 0, selectionLines: [0] }));
 			await expect(lines).toHaveCount(8);
 			await page.evaluate(() =>
 				window.ashStandaloneIntegration.runLineAction('editor.fold', {
@@ -8360,9 +7244,7 @@ suite('standalone browser component', () => {
 				}),
 			);
 			await expect(lines).toHaveCount(8);
-			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual([
-				'[5,1 -> 5,1]',
-			]);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual(['[5,1 -> 5,1]']);
 		});
 
 		test('custom keybindings deliver folding arguments through the command service', async function () {
@@ -8382,9 +7264,7 @@ suite('standalone browser component', () => {
 			await page.keyboard.press('F9');
 			await page.keyboard.press('F10');
 			await expect(page.locator('#caller .view-line')).toHaveCount(6);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runLineAction('editor.unfold', { selectionLines: [4] }),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfold', { selectionLines: [4] }));
 			await expect(page.locator('#caller .view-line')).toHaveCount(8);
 			await expect(input).toBeFocused();
 		});
@@ -8400,18 +7280,7 @@ suite('standalone browser component', () => {
 			const rejected = await page.evaluate(async () => {
 				const errors: string[] = [];
 				for (const command of ['editor.fold', 'editor.unfold']) {
-					for (const args of [
-						null,
-						false,
-						0,
-						'',
-						[],
-						'invalid',
-						{ levels: '2' },
-						{ levels: NaN },
-						{ direction: 2 },
-						{ selectionLines: [0, '4'] },
-					]) {
+					for (const args of [null, false, 0, '', [], 'invalid', { levels: '2' }, { levels: NaN }, { direction: 2 }, { selectionLines: [0, '4'] }]) {
 						try {
 							await window.ashStandaloneIntegration.runLineAction(command, args);
 							errors.push('accepted');
@@ -8425,9 +7294,7 @@ suite('standalone browser component', () => {
 			expect(rejected).toEqual(Array(20).fill('TypeError'));
 			const lines = page.locator('#caller .view-line');
 			await expect(lines).toHaveCount(9);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runLineAction('editor.fold', { selectionLines: [] }),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { selectionLines: [] }));
 			await page.evaluate(() =>
 				window.ashStandaloneIntegration.runLineAction('editor.fold', {
 					levels: 10,
@@ -8436,13 +7303,9 @@ suite('standalone browser component', () => {
 				}),
 			);
 			await expect(lines).toHaveCount(9);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runLineAction('editor.fold', { levels: 2, selectionLines: [] }),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { levels: 2, selectionLines: [] }));
 			await expect(lines).toHaveCount(3);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runLineAction('editor.unfold', { levels: 3, selectionLines: [] }),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfold', { levels: 3, selectionLines: [] }));
 			await expect(lines).toHaveCount(9);
 		});
 
@@ -8455,22 +7318,12 @@ suite('standalone browser component', () => {
 				window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation' });
 			}, text);
 			await page.locator('#caller .stanza-editor-input').focus();
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runFoldingCommand('editor.fold', { levels: 2, selectionLines: [4] }),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runFoldingCommand('editor.fold', { levels: 2, selectionLines: [4] }));
 			await expect(page.locator('#caller .view-line')).toHaveCount(6);
 			const errors = await page.evaluate(async () => {
 				const rejected: string[] = [];
 				for (const command of ['editor.fold', 'editor.unfold']) {
-					for (const args of [
-						null,
-						false,
-						0,
-						'',
-						{ levels: '2' },
-						{ direction: false },
-						{ selectionLines: [null] },
-					]) {
+					for (const args of [null, false, 0, '', { levels: '2' }, { direction: false }, { selectionLines: [null] }]) {
 						try {
 							await window.ashStandaloneIntegration.runFoldingCommand(command, args);
 							rejected.push('accepted');
@@ -8483,9 +7336,7 @@ suite('standalone browser component', () => {
 			});
 			expect(errors).toEqual(Array(14).fill('TypeError'));
 			await expect(page.locator('#caller .view-line')).toHaveCount(6);
-			await page.evaluate(() =>
-				window.ashStandaloneIntegration.runFoldingCommand('editor.unfold', { levels: 2, selectionLines: [4] }),
-			);
+			await page.evaluate(() => window.ashStandaloneIntegration.runFoldingCommand('editor.unfold', { levels: 2, selectionLines: [4] }));
 			await expect(page.locator('#caller .view-line')).toHaveCount(9);
 			await page.evaluate(() => window.ashStandaloneIntegration.runFoldingCommand('editor.fold'));
 			await expect(page.locator('#caller .view-line')).toHaveCount(6);
@@ -8496,11 +7347,7 @@ suite('standalone browser component', () => {
 			const { page } = browserTests;
 
 			await page.goto('/standalone.html');
-			const metadata = await page.evaluate(() =>
-				['editor.fold', 'editor.unfold'].map(command =>
-					window.ashStandaloneIntegration.readFoldingMetadata(command),
-				),
-			);
+			const metadata = await page.evaluate(() => ['editor.fold', 'editor.unfold'].map(command => window.ashStandaloneIntegration.readFoldingMetadata(command)));
 			expect(metadata.map(entry => entry.description)).toEqual([
 				{ original: 'Collapse the selected folding ranges.', value: 'Collapse the selected folding ranges.' },
 				{ original: 'Expand the selected folding ranges.', value: 'Expand the selected folding ranges.' },
@@ -8512,10 +7359,7 @@ suite('standalone browser component', () => {
 					type: 'object',
 					properties: {
 						levels: index === 0 ? { type: 'number' } : { type: 'number', default: 1 },
-						direction:
-							index === 0
-								? { type: 'string', enum: ['up', 'down'] }
-								: { type: 'string', enum: ['up', 'down'], default: 'down' },
+						direction: index === 0 ? { type: 'string', enum: ['up', 'down'] } : { type: 'string', enum: ['up', 'down'], default: 'down' },
 						selectionLines: { type: 'array', items: { type: 'number' } },
 					},
 				});
@@ -8535,48 +7379,30 @@ suite('standalone browser component', () => {
 			window.ashStandaloneIntegration.prepareContributionRequests('folding');
 		});
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([]);
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'auto' }),
-		);
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length))
-			.toBeGreaterThan(0);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'auto' }));
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBeGreaterThan(0);
 		await page.evaluate(async () => {
 			window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation' });
 			const requests = window.ashStandaloneIntegration.readContributionRequests();
-			for (let index = 0; index < requests.length; index++)
-				await window.ashStandaloneIntegration.finishContributionRequest(index);
+			for (let index = 0; index < requests.length; index++) await window.ashStandaloneIntegration.finishContributionRequest(index);
 		});
-		expect(
-			(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).every(
-				request => request.aborted,
-			),
-		).toBe(true);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).every(request => request.aborted)).toBe(true);
 		await page.evaluate(() => {
 			document.getElementById('caller')!.style.height = '600px';
 			window.ashStandaloneIntegration.layoutContribution(640, 600);
-			window.ashStandaloneIntegration.prepareClipboard(
-				Array.from({ length: 12 }, (_, index) => `section${index}\n  child`).join('\n'),
-			);
+			window.ashStandaloneIntegration.prepareClipboard(Array.from({ length: 12 }, (_, index) => `section${index}\n  child`).join('\n'));
 		});
 		const controls = page.locator('#caller .stanza-editor-line-decoration.ash-icon-folding-expanded');
 		await expect(controls).toHaveCount(12);
 		await controls.last().click();
 		await expect(page.locator('#caller .view-line[data-logical-line-index="23"]')).toHaveCount(0);
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 1 }),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 1 }));
 		await expect(controls).toHaveCount(10);
 		await expect(page.locator('#caller .view-line[data-logical-line-index="23"]')).toHaveCount(1);
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 12 }),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 12 }));
 		await expect(controls).toHaveCount(12);
 		await page.evaluate(() => {
-			window.ashStandaloneIntegration.prepareClipboard(
-				'first\n  inner\n    child\n' +
-					Array.from({ length: 10 }, (_, index) => `section${index}\n  child`).join('\n'),
-			);
+			window.ashStandaloneIntegration.prepareClipboard('first\n  inner\n    child\n' + Array.from({ length: 10 }, (_, index) => `section${index}\n  child`).join('\n'));
 			window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 11 });
 		});
 		await expect(controls).toHaveCount(11);
@@ -8598,19 +7424,13 @@ suite('standalone browser component', () => {
 				} else {
 					await page.keyboard.press('ControlOrMeta+Shift+ArrowRight');
 				}
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests()))
-					.toEqual([{ languageId: 'plaintext', aborted: false }]);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toEqual([{ languageId: 'plaintext', aborted: false }]);
 				await page.evaluate(reason => window.ashStandaloneIntegration.changeLanguageRequest(reason), reason);
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests()))
-					.toEqual([{ languageId: 'plaintext', aborted: true }]);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toEqual([{ languageId: 'plaintext', aborted: true }]);
 				const before = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
 				await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
 				await expect(page.locator('.stanza-editor-hover:not([hidden])')).toHaveCount(0);
-				expect(await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).toEqual(
-					before,
-				);
+				expect(await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).toEqual(before);
 				await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 			});
 		}
@@ -8626,16 +7446,12 @@ suite('standalone browser component', () => {
 			} else {
 				await page.keyboard.press('ControlOrMeta+Shift+ArrowRight');
 			}
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests()))
-				.toEqual([{ languageId: 'typescript', aborted: false }]);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toEqual([{ languageId: 'typescript', aborted: false }]);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
 			if (kind === 'hover') {
 				await expect(page.locator('.stanza-editor-hover').first()).toHaveText('hover: typescript');
 			} else {
-				expect(
-					(await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).selection,
-				).toBe('[1,1 -> 1,13]');
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).selection).toBe('[1,1 -> 1,13]');
 			}
 			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		});
@@ -8655,21 +7471,15 @@ suite('standalone browser component', () => {
 				await page.goto('/standalone.html');
 				await page.evaluate(kind => window.ashStandaloneIntegration.prepareLanguageRequest(kind), kind);
 				await page.keyboard.press(shortcut);
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().slice(0, 1)))
-					.toEqual([{ languageId: 'plaintext', aborted: false }]);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().slice(0, 1))).toEqual([{ languageId: 'plaintext', aborted: false }]);
 				await page.evaluate(reason => window.ashStandaloneIntegration.changeLanguageRequest(reason), reason);
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().slice(0, 1)))
-					.toEqual([{ languageId: 'plaintext', aborted: true }]);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().slice(0, 1))).toEqual([{ languageId: 'plaintext', aborted: true }]);
 				if (reason === 'blur' && kind === 'symbols') {
 					await expect(page.locator('#owned .stanza-editor-input')).toBeFocused();
 				}
 				const before = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
 				await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
-				expect(await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).toEqual(
-					before,
-				);
+				expect(await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).toEqual(before);
 				await expect(page.locator('#caller .stanza-editor-peek-view, #caller .ash-quick-pick')).toHaveCount(0);
 				await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 			});
@@ -8681,28 +7491,18 @@ suite('standalone browser component', () => {
 			await page.evaluate(kind => window.ashStandaloneIntegration.prepareLanguageRequest(kind), kind);
 			await page.evaluate(() => window.ashStandaloneIntegration.changeLanguageRequest('language'));
 			await page.keyboard.press(shortcut);
-			await expect
-				.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().slice(0, 1)))
-				.toEqual([{ languageId: 'typescript', aborted: false }]);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().slice(0, 1))).toEqual([{ languageId: 'typescript', aborted: false }]);
 			await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
 			if (kind === 'definition') {
-				expect(
-					(await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).selection,
-				).toBe('[1,7 -> 1,13]');
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).selection).toBe('[1,7 -> 1,13]');
 			} else if (kind === 'symbols') {
 				await expect(page.locator('#caller .ash-quick-pick-row-label')).toHaveText('second');
 			} else {
 				await expect(page.locator('#caller .stanza-editor-language-hierarchy-item')).toHaveText('root');
 				await page.locator('#caller .stanza-editor-language-hierarchy-expand').first().click();
-				await expect
-					.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests()))
-					.toHaveLength(2);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toHaveLength(2);
 				await page.keyboard.press('Escape');
-				expect(
-					(await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).every(
-						request => request.aborted,
-					),
-				).toBe(true);
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).every(request => request.aborted)).toBe(true);
 				await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(1));
 				await expect(page.locator('#caller .stanza-editor-peek-view')).toHaveCount(0);
 			}
@@ -8727,9 +7527,7 @@ suite('standalone browser component', () => {
 		await page.keyboard.press('Enter');
 		await expect(picker).toHaveCount(0);
 		await expect(input).toBeFocused();
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).selection).toBe(
-			'[1,7 -> 1,13]',
-		);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).selection).toBe('[1,7 -> 1,13]');
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 
@@ -8744,9 +7542,7 @@ suite('standalone browser component', () => {
 		await expect(picker.locator('.ash-quick-pick-row-label')).toHaveText(['first', 'second']);
 		await picker.getByRole('combobox', { name: 'Go to Symbol' }).fill('second');
 		await page.keyboard.press('Enter');
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).selection).toBe(
-			'[1,7 -> 1,13]',
-		);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).selection).toBe('[1,7 -> 1,13]');
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 
@@ -8757,9 +7553,7 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareMultipleDocumentSymbols());
 		const input = page.locator('#caller .stanza-editor-input');
 		await input.focus();
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readDocumentSymbolCommand()))
-			.toEqual(['first', 'second']);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readDocumentSymbolCommand())).toEqual(['first', 'second']);
 		await expect(input).toBeFocused();
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
@@ -8773,20 +7567,12 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 20)));
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests())).toEqual([]);
 		await page.keyboard.type('[');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length))
-			.toBe(1);
-		expect(
-			(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))[0]!.context,
-		).toEqual({ kind: 'triggerCharacter', triggerCharacter: '[', isRetrigger: false });
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))[0]!.context).toEqual({ kind: 'triggerCharacter', triggerCharacter: '[', isRetrigger: false });
 		await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
 		await page.keyboard.type(':');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length))
-			.toBe(2);
-		expect(
-			(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))[1]!.context,
-		).toMatchObject({
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(2);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))[1]!.context).toMatchObject({
 			kind: 'triggerCharacter',
 			triggerCharacter: ':',
 			isRetrigger: true,
@@ -8804,9 +7590,7 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 20)));
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests())).toEqual([]);
 		await page.keyboard.press('ControlOrMeta+Shift+Space');
-		await expect
-			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length))
-			.toBe(1);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 
@@ -8815,28 +7599,17 @@ suite('standalone browser component', () => {
 			const { page } = browserTests;
 
 			await page.goto('/standalone.html');
-			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageActions()))[kind]).toBe(
-				false,
-			);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageActions()))[kind]).toBe(false);
 			await page.evaluate(kind => {
 				if (kind === 'rename') window.ashStandaloneIntegration.prepareRenameRequests('prepare');
 				else window.ashStandaloneIntegration.prepareCodeActionRequests('query');
 				window.ashStandaloneIntegration.changeLanguageRequest('blur');
 			}, kind);
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageActions()))[kind]).toBe(true);
-			await page.evaluate(
-				kind => window.ashStandaloneIntegration.invokeLanguageAction(`editor.action.${kind}`),
-				kind,
-			);
+			await page.evaluate(kind => window.ashStandaloneIntegration.invokeLanguageAction(`editor.action.${kind}`), kind);
 			await expect
 				.poll(() =>
-					page.evaluate(
-						kind =>
-							kind === 'rename'
-								? window.ashStandaloneIntegration.readRenameRequests().length
-								: window.ashStandaloneIntegration.readCodeActionRequests().length,
-						kind,
-					),
+					page.evaluate(kind => (kind === 'rename' ? window.ashStandaloneIntegration.readRenameRequests().length : window.ashStandaloneIntegration.readCodeActionRequests().length), kind),
 				)
 				.toBe(1);
 			if (kind === 'rename') {
@@ -8852,21 +7625,10 @@ suite('standalone browser component', () => {
 				if (kind === 'rename') window.ashStandaloneIntegration.changeRenameState('readonly');
 				else window.ashStandaloneIntegration.changeCodeActionState('readonly');
 			}, kind);
-			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageActions()))[kind]).toBe(
-				false,
-			);
-			await page.evaluate(
-				kind => window.ashStandaloneIntegration.invokeLanguageAction(`editor.action.${kind}`),
-				kind,
-			);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageActions()))[kind]).toBe(false);
+			await page.evaluate(kind => window.ashStandaloneIntegration.invokeLanguageAction(`editor.action.${kind}`), kind);
 			expect(
-				await page.evaluate(
-					kind =>
-						kind === 'rename'
-							? window.ashStandaloneIntegration.readRenameRequests().length
-							: window.ashStandaloneIntegration.readCodeActionRequests().length,
-					kind,
-				),
+				await page.evaluate(kind => (kind === 'rename' ? window.ashStandaloneIntegration.readRenameRequests().length : window.ashStandaloneIntegration.readCodeActionRequests().length), kind),
 			).toBe(1);
 			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 		});
@@ -8974,9 +7736,7 @@ suite('standalone browser component', () => {
 			await page.keyboard.press('ControlOrMeta+.');
 			const root = page.locator('.ash-action-widget');
 			await expect(root.getByRole('menuitem', { name: 'Replace value with result' })).toBeFocused();
-			await expect(
-				root.getByRole('button', { name: outcome === 'cancel' ? '预览' : 'Preview', exact: true }),
-			).toBeEnabled();
+			await expect(root.getByRole('button', { name: outcome === 'cancel' ? '预览' : 'Preview', exact: true })).toBeEnabled();
 			if (outcome === 'accept') await root.getByRole('button', { name: 'Preview', exact: true }).click();
 			else await page.keyboard.press('ControlOrMeta+Enter');
 			const pane = page.locator('#action-preview-pane');
@@ -8984,22 +7744,14 @@ suite('standalone browser component', () => {
 			await expect(apply).toBeEnabled();
 			await expect(root).toHaveCount(0);
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
-			if (outcome === 'change')
-				await page.evaluate(() => window.ashStandaloneIntegration.changeCodeActionState('text'));
-			else
-				await pane
-					.getByRole('button', { name: outcome === 'accept' ? 'Apply selected' : '取消', exact: true })
-					.click();
+			if (outcome === 'change') await page.evaluate(() => window.ashStandaloneIntegration.changeCodeActionState('text'));
+			else await pane.getByRole('button', { name: outcome === 'accept' ? 'Apply selected' : '取消', exact: true }).click();
 			await expect(apply).toBeDisabled();
-			expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(
-				outcome === 'accept' ? 'result' : outcome === 'change' ? 'changed' : 'value',
-			);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(outcome === 'accept' ? 'result' : outcome === 'change' ? 'changed' : 'value');
 			if (outcome === 'accept') {
 				await page.locator('#action-preview-editor .stanza-editor-input').focus();
 				await page.keyboard.press('ControlOrMeta+z');
-				expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(
-					'value',
-				);
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
 			}
 			expect(errors).toEqual([]);
 		});
@@ -9110,10 +7862,7 @@ suite('standalone browser component', () => {
 		await expect(all).toHaveAttribute('aria-selected', 'true');
 		await page.keyboard.press('Enter');
 		await expect(quickFix).toHaveAttribute('aria-selected', 'true');
-		await expect(root.getByRole('tabpanel')).toHaveAttribute(
-			'aria-labelledby',
-			(await quickFix.getAttribute('id')) as string,
-		);
+		await expect(root.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', (await quickFix.getAttribute('id')) as string);
 		await expect(root.locator('.ash-action-widget-header')).toHaveCount(0);
 		await page.keyboard.press('ArrowDown');
 		await expect(root.getByRole('menuitem', { name: 'First action', exact: true })).toBeFocused();
@@ -9155,9 +7904,7 @@ suite('standalone browser component', () => {
 				editor.element.evaluate(root => {
 					return [...root.querySelectorAll<HTMLElement>('.cdr.word-highlight-text')].map(highlight => {
 						const lineIndex = highlight.parentElement!.dataset.lineIndex;
-						const text = root.querySelector(
-							`.view-lines > .view-line[data-line-index="${lineIndex}"] > .stanza-editor-line-text`,
-						)!;
+						const text = root.querySelector(`.view-lines > .view-line[data-line-index="${lineIndex}"] > .stanza-editor-line-text`)!;
 						const walker = document.createTreeWalker(text, NodeFilter.SHOW_TEXT);
 						let symbol: DOMRect | undefined;
 						for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -9172,10 +7919,7 @@ suite('standalone browser component', () => {
 						const background = highlight.getBoundingClientRect();
 						return {
 							lineIndex,
-							aligned:
-								symbol !== undefined &&
-								Math.abs(background.left - symbol.left) < 1 &&
-								Math.abs(background.right - symbol.right) < 1,
+							aligned: symbol !== undefined && Math.abs(background.left - symbol.left) < 1 && Math.abs(background.right - symbol.right) < 1,
 						};
 					});
 				}),
@@ -9199,18 +7943,13 @@ suite('standalone browser component', () => {
 		const canvas = editor.element.locator('.minimap canvas');
 		const minimap = editor.element.locator('.minimap');
 		await expect(minimap).toHaveCSS('overflow', 'hidden');
-		await expect(minimap).toHaveCSS(
-			'background-color',
-			await editor.element.evaluate(element => getComputedStyle(element).backgroundColor),
-		);
+		await expect(minimap).toHaveCSS('background-color', await editor.element.evaluate(element => getComputedStyle(element).backgroundColor));
 		const readPixels = () =>
 			canvas.evaluate(element => {
 				const canvas = element as HTMLCanvasElement;
 				return Array.from(canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data);
 			});
-		await expect
-			.poll(async () => (await readPixels()).some((value, index) => index % 4 === 3 && value > 0))
-			.toBe(true);
+		await expect.poll(async () => (await readPixels()).some((value, index) => index % 4 === 3 && value > 0)).toBe(true);
 		const original = await readPixels();
 		await page.keyboard.press('ControlOrMeta+Home');
 		for (let index = 0; index < 4; index++) {
@@ -9248,11 +7987,7 @@ suite('standalone browser component', () => {
 		await scrollable.evaluate(element => {
 			element.scrollLeft = 0;
 		});
-		await expect
-			.poll(() =>
-				scrollable.evaluate(element => element.scrollWidth > element.clientWidth && element.scrollLeft === 0),
-			)
-			.toBe(true);
+		await expect.poll(() => scrollable.evaluate(element => element.scrollWidth > element.clientWidth && element.scrollLeft === 0)).toBe(true);
 		await expect.poll(async () => (await readShadow()).shadow).not.toBe('none');
 		expect(await readShadow()).toMatchObject({ content: '""', pointerEvents: 'none', left: '-6px' });
 		await minimap.evaluate(element => element.style.setProperty('--ash-minimap-shadow', '#123456'));
@@ -9268,9 +8003,7 @@ suite('standalone browser component', () => {
 		await scrollable.evaluate(element => {
 			element.scrollLeft = element.scrollWidth;
 		});
-		await expect
-			.poll(() => scrollable.evaluate(element => element.scrollLeft + element.clientWidth >= element.scrollWidth))
-			.toBe(true);
+		await expect.poll(() => scrollable.evaluate(element => element.scrollLeft + element.clientWidth >= element.scrollWidth)).toBe(true);
 		await expect.poll(async () => (await readShadow()).shadow).toBe('none');
 		await scrollable.evaluate(element => {
 			element.scrollLeft = 0;
@@ -9384,10 +8117,7 @@ suite('standalone browser component', () => {
 					// Test browser paint order even though the selection background ignores pointer input.
 					(element as HTMLElement).style.pointerEvents = 'auto';
 					try {
-						const stack = document.elementsFromPoint(
-							rect.left + rect.width / 2,
-							rect.top + rect.height / 2,
-						);
+						const stack = document.elementsFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
 						const textIndex = stack.findIndex(node => node.closest('.view-lines'));
 						return textIndex >= 0 && stack.indexOf(element) > textIndex;
 					} finally {
@@ -9478,13 +8208,7 @@ suite('standalone browser component', () => {
 				await page.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2 + 20);
 				await expect(vertical).toHaveClass(/\bactive\b/u);
 				await expect(vertical).toHaveCSS('background-color', 'rgb(18, 52, 86)');
-				await expect
-					.poll(() =>
-						editor.element
-							.locator(':scope > .ash-smooth-scrollable')
-							.evaluate(element => element.scrollTop),
-					)
-					.toBeGreaterThan(0);
+				await expect.poll(() => editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(0);
 			} finally {
 				await page.mouse.up();
 			}
@@ -9511,19 +8235,10 @@ suite('standalone browser component', () => {
 		await expect(page.locator('body')).toHaveClass(/\bmodern-ui\b/u);
 		await expect(slider).toHaveCSS('border-radius', '4px');
 		await page.keyboard.press('ControlOrMeta+Home');
-		await expect
-			.poll(async () => (await slider.boundingBox())!.y - (await thumb.boundingBox())!.y)
-			.toBeCloseTo(0, 1);
+		await expect.poll(async () => (await slider.boundingBox())!.y - (await thumb.boundingBox())!.y).toBeCloseTo(0, 1);
 		await page.keyboard.press('ControlOrMeta+End');
 		await expect
-			.poll(() =>
-				editor.element
-					.locator(':scope > .ash-smooth-scrollable')
-					.evaluate(
-						element =>
-							element.scrollTop > 0 && element.scrollTop === element.scrollHeight - element.clientHeight,
-					),
-			)
+			.poll(() => editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop > 0 && element.scrollTop === element.scrollHeight - element.clientHeight))
 			.toBe(true);
 		await expect
 			.poll(async () => {
@@ -9540,11 +8255,7 @@ suite('standalone browser component', () => {
 		await page.mouse.down();
 		await page.mouse.move(box.x + box.width / 2, root.y - box.height);
 		await page.mouse.up();
-		await expect
-			.poll(() =>
-				editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop),
-			)
-			.toBe(0);
+		await expect.poll(() => editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(0);
 		await expect(editor.element.locator('.stanza-editor-input')).toBeFocused();
 	});
 
@@ -9643,9 +8354,7 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareGuides(''));
 		const editor = new Editor(page.locator('#caller'));
 		await editor.waitForEditorFocus();
-		await page.keyboard.insertText(
-			Array.from({ length: 160 }, (_, index) => `line-${index + 1} ${'text '.repeat(40)}`).join('\n'),
-		);
+		await page.keyboard.insertText(Array.from({ length: 160 }, (_, index) => `line-${index + 1} ${'text '.repeat(40)}`).join('\n'));
 		await editor.input.press('ControlOrMeta+Home');
 		const scrollContainer = editor.element.locator(':scope > .ash-smooth-scrollable');
 		await expect.poll(() => scrollContainer.evaluate(element => element.scrollTop)).toBe(0);
@@ -9657,19 +8366,14 @@ suite('standalone browser component', () => {
 				editor.element.evaluate(root => {
 					const bounds = root.getBoundingClientRect();
 					const rows = [...root.querySelectorAll<HTMLElement>('.view-lines > .view-line')].filter(
-						row =>
-							row.getBoundingClientRect().top >= bounds.top &&
-							row.getBoundingClientRect().bottom <= bounds.bottom,
+						row => row.getBoundingClientRect().top >= bounds.top && row.getBoundingClientRect().bottom <= bounds.bottom,
 					);
 					return {
 						hasVisibleLines: rows.length > 0,
 						aligned: rows.every(row => {
-							const number = root.querySelector<HTMLElement>(
-								`.margin-view-overlays > .view-overlay-line[data-line-index="${row.dataset.lineIndex}"]`,
-							)!;
+							const number = root.querySelector<HTMLElement>(`.margin-view-overlays > .view-overlay-line[data-line-index="${row.dataset.lineIndex}"]`)!;
 							return (
-								number.querySelector('.line-numbers')!.textContent ===
-									String(Number(row.dataset.lineIndex) + 1) &&
+								number.querySelector('.line-numbers')!.textContent === String(Number(row.dataset.lineIndex) + 1) &&
 								number.getBoundingClientRect().top === row.getBoundingClientRect().top
 							);
 						}),
@@ -9680,28 +8384,25 @@ suite('standalone browser component', () => {
 			.toEqual({ hasVisibleLines: true, aligned: true, scrollTop: 0 });
 		const lineIndex = await editor.element.evaluate(root => {
 			const bounds = root.getBoundingClientRect();
-			return [...root.querySelectorAll<HTMLElement>('.view-lines > .view-line')].find(
-				row => row.getBoundingClientRect().top >= bounds.top,
-			)!.dataset.lineIndex!;
+			return [...root.querySelectorAll<HTMLElement>('.view-lines > .view-line')].find(row => row.getBoundingClientRect().top >= bounds.top)!.dataset.lineIndex!;
 		});
 		// Gutter overlays ignore pointer events; the editor resolves the clicked
 		// position through its hit-test controller rather than a number element handler.
-		const numberBounds = (await editor.element
-			.locator(`.margin-view-overlays > .view-overlay-line[data-line-index="${lineIndex}"] .line-numbers`)
-			.boundingBox())!;
+		const numberBounds = (await editor.element.locator(`.margin-view-overlays > .view-overlay-line[data-line-index="${lineIndex}"] .line-numbers`).boundingBox())!;
 		await page.mouse.click(numberBounds.x + numberBounds.width / 2, numberBounds.y + numberBounds.height / 2);
 		// Line-number clicks select the complete source line. Collapse that selection
 		// to its start before editing, and verify the selected row independently.
 		const clickedLine = Number(lineIndex) + 1;
 		await expect
 			.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing()))
-			.toMatchObject({ selection: `[${clickedLine},1 -> ${clickedLine + 1},1]`, focused: true });
+			.toMatchObject({
+				selection: `[${clickedLine},1 -> ${clickedLine + 1},1]`,
+				focused: true,
+			});
 		await page.keyboard.press('ArrowLeft');
 		await page.keyboard.press('Home');
 		await page.keyboard.insertText('!');
-		await expect(
-			editor.element.locator(`.view-lines > .view-line[data-line-index="${lineIndex}"] .stanza-editor-line-text`),
-		).toHaveText(`!line-${Number(lineIndex) + 1} ${'text '.repeat(40)}`);
+		await expect(editor.element.locator(`.view-lines > .view-line[data-line-index="${lineIndex}"] .stanza-editor-line-text`)).toHaveText(`!line-${Number(lineIndex) + 1} ${'text '.repeat(40)}`);
 		await expect(editor.input).toBeFocused();
 	});
 
@@ -9806,21 +8507,15 @@ suite('standalone browser component', () => {
 			await expect
 				.poll(() =>
 					editor.element.locator('canvas.decorationsOverviewRuler').evaluate((element: HTMLCanvasElement) => {
-						const pixels = element
-							.getContext('2d')!
-							.getImageData(2, Math.floor(element.height / 2), 1, 1).data;
+						const pixels = element.getContext('2d')!.getImageData(2, Math.floor(element.height / 2), 1, 1).data;
 						const probe = document.createElement('canvas').getContext('2d')!;
 						probe.fillStyle = getComputedStyle(element.closest('.stanza-editor')!).backgroundColor;
 						probe.fillRect(0, 0, 1, 1);
-						return (
-							Array.from(pixels).join(',') === Array.from(probe.getImageData(0, 0, 1, 1).data).join(',')
-						);
+						return Array.from(pixels).join(',') === Array.from(probe.getImageData(0, 0, 1, 1).data).join(',');
 					}),
 				)
 				.toBe(true);
-			await expect
-				.poll(() => minimap.evaluate(element => getComputedStyle(element, '::after').boxShadow))
-				.toBe(shadow);
+			await expect.poll(() => minimap.evaluate(element => getComputedStyle(element, '::after').boxShadow)).toBe(shadow);
 			await minimap.hover();
 			await expect(slider).toHaveCSS('background-color', hover);
 			await vertical.hover();
@@ -9831,13 +8526,7 @@ suite('standalone browser component', () => {
 			try {
 				await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2 + 20);
 				await expect(thumb).toHaveCSS('background-color', active);
-				await expect
-					.poll(() =>
-						editor.element
-							.locator(':scope > .ash-smooth-scrollable')
-							.evaluate(element => element.scrollTop),
-					)
-					.toBeGreaterThan(0);
+				await expect.poll(() => editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(0);
 			} finally {
 				await page.mouse.up();
 			}
@@ -9861,18 +8550,14 @@ suite('standalone browser component', () => {
 		const { page } = browserTests;
 
 		await page.goto('/standalone.html');
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.enableCompletionNavigation('${1:outer} ${2:tail} $0'),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.enableCompletionNavigation('${1:outer} ${2:tail} $0'));
 		const input = page.locator('#caller .stanza-editor-input');
 		await input.focus();
 		await page.keyboard.press('Control+Space');
 		await expect(page.locator('#caller .stanza-editor-completion-option')).toHaveCount(2);
 		await page.keyboard.press('Enter');
 		await page.keyboard.press('ArrowRight');
-		await page.evaluate(() =>
-			window.ashStandaloneIntegration.enableCompletionNavigation('(${1:inner}+$1)-${2:end}', false),
-		);
+		await page.evaluate(() => window.ashStandaloneIntegration.enableCompletionNavigation('(${1:inner}+$1)-${2:end}', false));
 		await page.keyboard.press('Control+Space');
 		await expect(page.locator('#caller .stanza-editor-completion-option')).toHaveCount(2);
 		await page.keyboard.press('Enter');

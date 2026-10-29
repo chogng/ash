@@ -1,12 +1,7 @@
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { h } from '../../../../../base/browser/dom.js';
-import {
-	BrowserEditor,
-	BrowserEditorContribution,
-	BrowserWidgetLocation,
-	type IBrowserEditorWidget,
-} from '../browserEditor.js';
+import { BrowserEditor, BrowserEditorContribution, BrowserWidgetLocation, type IBrowserEditorWidget } from '../browserEditor.js';
 import type { IBrowserViewModel } from '../../common/browserView.js';
 import { BrowserHistoryFeature } from './browserHistoryFeature.js';
 import { BrowserPermissionsFeature } from './browserPermissionsFeature.js';
@@ -17,10 +12,7 @@ import { BrowserRemoteIndicatorContribution } from './browserRemoteFeatures.js';
 import { IBrowserAutoReloadService } from './browserAutoReloadFeatures.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import {
-	BrowserElementSelectionMode,
-	BrowserViewStorageScope,
-} from '../../../../../platform/browserView/common/browserView.js';
+import { BrowserElementSelectionMode, BrowserViewStorageScope } from '../../../../../platform/browserView/common/browserView.js';
 import { ContextKeyExpr, RawContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
 import type { IAction } from '../../../../../base/common/actions.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
@@ -32,13 +24,7 @@ import { DropdownWithPrimaryActionViewItem } from '../../../../../platform/actio
 import type { IBrowserViewState } from '../../../../../platform/browserView/common/browserView.js';
 import { BrowserUrlBarWidget, type IBrowserUrlBarHost, type IUrlPickerItem } from '../widgets/browserUrlBarWidget.js';
 import { BrowserSearchFeatures } from './browserSearchFeatures.js';
-import {
-	BROWSER_SEARCH_NONE,
-	BrowserSearchEngineId,
-	BrowserSearchEngineSettingId,
-	buildSearchUrl,
-	resolveAddressBarInputType,
-} from '../../common/browserSearch.js';
+import { BROWSER_SEARCH_NONE, BrowserSearchEngineId, BrowserSearchEngineSettingId, buildSearchUrl, resolveAddressBarInputType } from '../../common/browserSearch.js';
 
 export const CONTEXT_BROWSER_CAN_GO_BACK = new RawContextKey<boolean>('browserCanGoBack', false);
 export const CONTEXT_BROWSER_CAN_GO_FORWARD = new RawContextKey<boolean>('browserCanGoForward', false);
@@ -70,10 +56,7 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 			getPlaceholder: () =>
 				this.configuration.getValue<string>(BrowserSearchEngineSettingId) === BROWSER_SEARCH_NONE
 					? localize({ bundle: 'ash.workbench', key: 'browser.enterAddress' }, 'Enter a URL')
-					: localize(
-							{ bundle: 'ash.workbench', key: 'browser.enterAddressOrSearch' },
-							'Search or enter a URL',
-						),
+					: localize({ bundle: 'ash.workbench', key: 'browser.enterAddressOrSearch' }, 'Search or enter a URL'),
 		};
 	}
 	constructor(
@@ -92,21 +75,21 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 		container.append(navigation);
 		this.toolbar = this._register(
 			new WorkbenchToolBar(navigation, menus, {
-				ariaLabel: localize(
-					{ bundle: 'ash.workbench', key: 'browser.navigationToolbar' },
-					'Browser navigation',
-				),
+				ariaLabel: localize({ bundle: 'ash.workbench', key: 'browser.navigationToolbar' }, 'Browser navigation'),
 				actionViewItemProvider: (action, options) => {
 					if (action.id !== 'browser.reload' || !this.editor.model || this.editor.model.state.loading) {
 						return undefined;
 					}
-					const label = localize(
-						{ bundle: 'ash.workbench', key: 'browser.reloadMenu' },
-						'More Reload Actions',
-					);
+					const label = localize({ bundle: 'ash.workbench', key: 'browser.reloadMenu' }, 'More Reload Actions');
 					return new DropdownWithPrimaryActionViewItem(
 						action,
-						{ id: 'browser.reloadMenu', label, tooltip: label, enabled: true, run: () => {} },
+						{
+							id: 'browser.reloadMenu',
+							label,
+							tooltip: label,
+							enabled: true,
+							run: () => {},
+						},
 						() => this.getReloadActions(),
 						menus,
 						options,
@@ -138,16 +121,8 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 		this.history = this._register(instantiation.createInstance(BrowserHistoryFeature, this.report));
 		this.zoom = this._register(instantiation.createInstance(BrowserEditorZoomSupport, this.report));
 		this.emulation = this._register(instantiation.createInstance(BrowserEditorEmulationSupport));
-		this.favorites = this._register(
-			instantiation.createInstance(BrowserFavoritesFeature, () => this.setPageActions(), this.report),
-		);
-		this.permissions = this._register(
-			instantiation.createInstance(
-				BrowserPermissionsFeature,
-				(message: string) => editor.setStatus(message),
-				this.report,
-			),
-		);
+		this.favorites = this._register(instantiation.createInstance(BrowserFavoritesFeature, () => this.setPageActions(), this.report));
+		this.permissions = this._register(instantiation.createInstance(BrowserPermissionsFeature, (message: string) => editor.setStatus(message), this.report));
 		this.address.mountContributions([this.history, this.favorites]);
 		this.remoteIndicator = this._register(new BrowserRemoteIndicatorContribution(container));
 		const sharing = h(container.ownerDocument, 'div');
@@ -250,12 +225,7 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 		}
 		const focused = this.address.inputElement.ownerDocument.activeElement;
 		await model.loadURL(url);
-		if (
-			!this.isDisposed &&
-			this.host.input?.model === model &&
-			this.address.value === text &&
-			this.address.inputElement.ownerDocument.activeElement === focused
-		) {
+		if (!this.isDisposed && this.host.input?.model === model && this.address.value === text && this.address.inputElement.ownerDocument.activeElement === focused) {
 			this.host.ensureBrowserFocus();
 		}
 	}
@@ -263,9 +233,7 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 		this.address.previewUrl(this.editor.model?.state.url ?? '');
 		const back = localize({ bundle: 'ash.workbench', key: 'browser.back' }, 'Back');
 		const forward = localize({ bundle: 'ash.workbench', key: 'browser.forward' }, 'Forward');
-		const reload = state?.loading
-			? localize({ bundle: 'ash.workbench', key: 'browser.stop' }, 'Stop')
-			: localize({ bundle: 'ash.workbench', key: 'browser.reload' }, 'Reload');
+		const reload = state?.loading ? localize({ bundle: 'ash.workbench', key: 'browser.stop' }, 'Stop') : localize({ bundle: 'ash.workbench', key: 'browser.reload' }, 'Reload');
 		let reloadIcon = Lxicon.refresh;
 		if (state?.loading) {
 			reloadIcon = Lxicon.close;
@@ -303,11 +271,7 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 		];
 		this.actions = actions.map((action, index) => {
 			const previous = this.actions[index];
-			return previous?.label === action.label &&
-				previous.enabled === action.enabled &&
-				previous.icon === action.icon
-				? previous
-				: action;
+			return previous?.label === action.label && previous.enabled === action.enabled && previous.icon === action.icon ? previous : action;
 		});
 		this.toolbar.setActions(this.actions);
 	}
@@ -394,10 +358,7 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 					label: localize({ bundle: 'ash.workbench', key: 'browser.devToolsAction' }, 'Developer Tools'),
 					enabled: !!this.editor.model,
 					tooltip: '',
-					run: () =>
-						this.commands
-							.executeCommand('workbench.action.browser.toggleDevTools')
-							.catch(error => this.report(error)),
+					run: () => this.commands.executeCommand('workbench.action.browser.toggleDevTools').catch(error => this.report(error)),
 				},
 				{
 					id: 'browser.clearStorage',
@@ -406,9 +367,7 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 					tooltip: '',
 					run: () =>
 						this.commands
-							.executeCommand(
-								`workbench.action.browser.clear${this.editor.model!.info.session.scope[0]!.toUpperCase() + this.editor.model!.info.session.scope.slice(1)}Storage`,
-							)
+							.executeCommand(`workbench.action.browser.clear${this.editor.model!.info.session.scope[0]!.toUpperCase() + this.editor.model!.info.session.scope.slice(1)}Storage`)
 							.catch(error => this.report(error)),
 				},
 				{
@@ -416,15 +375,11 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 					label: localize({ bundle: 'ash.workbench', key: 'browser.find' }, 'Find in Page'),
 					enabled: !!this.editor.model,
 					tooltip: '',
-					run: () =>
-						this.commands.executeCommand(BrowserViewCommandId.ShowFind).catch(error => this.report(error)),
+					run: () => this.commands.executeCommand(BrowserViewCommandId.ShowFind).catch(error => this.report(error)),
 				},
 				{
 					id: 'browser.selectElement',
-					label: localize(
-						{ bundle: 'ash.workbench', key: 'browser.selectElement' },
-						'Select Element for Chat',
-					),
+					label: localize({ bundle: 'ash.workbench', key: 'browser.selectElement' }, 'Select Element for Chat'),
 					enabled: !!this.editor.model,
 					tooltip: '',
 					run: () =>
@@ -460,9 +415,7 @@ export class BrowserNavigationFeatures extends BrowserEditorContribution {
 				{
 					id: 'browser.history',
 					label: localize({ bundle: 'ash.workbench', key: 'browser.history' }, 'History'),
-					enabled:
-						this.editor.model?.info.session.scope === BrowserViewStorageScope.Workspace ||
-						this.editor.model?.info.session.scope === BrowserViewStorageScope.Global,
+					enabled: this.editor.model?.info.session.scope === BrowserViewStorageScope.Workspace || this.editor.model?.info.session.scope === BrowserViewStorageScope.Global,
 					tooltip: '',
 					run: () => this.history.show().catch(error => this.report(error)),
 				},
@@ -498,10 +451,7 @@ for (const command of [
 	},
 	{
 		id: BrowserViewCommandId.HardReload,
-		title: localize2(
-			{ bundle: 'ash.workbench', key: 'browser.hardReloadCommand' },
-			'Browser: Reload Without Cache',
-		),
+		title: localize2({ bundle: 'ash.workbench', key: 'browser.hardReloadCommand' }, 'Browser: Reload Without Cache'),
 		run: (model: import('../../common/browserView.js').IBrowserViewModel) => model.reload(true),
 	},
 ]) {
@@ -523,12 +473,7 @@ for (const command of [
 					keybinding:
 						command.id === BrowserViewCommandId.GoBack || command.id === BrowserViewCommandId.GoForward
 							? {
-									primary: Keybinding.single(
-										logicalKey(
-											command.id === BrowserViewCommandId.GoBack ? 'ArrowLeft' : 'ArrowRight',
-											{ altKey: true },
-										),
-									),
+									primary: Keybinding.single(logicalKey(command.id === BrowserViewCommandId.GoBack ? 'ArrowLeft' : 'ArrowRight', { altKey: true })),
 									mac: {
 										primary: Keybinding.single(
 											logicalKey(command.id === BrowserViewCommandId.GoBack ? '[' : ']', {
@@ -556,9 +501,7 @@ for (const command of [
 								},
 				});
 			}
-			override async run(
-				accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor,
-			): Promise<void> {
+			override async run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): Promise<void> {
 				const input = accessor.get(IEditorService).activeEditor;
 				const model = input instanceof BrowserEditorInput ? input.model : undefined;
 				if (!model) {
@@ -580,17 +523,12 @@ registerAction2(
 		constructor() {
 			super({
 				id: BrowserViewCommandId.FocusUrlInput,
-				title: localize2(
-					{ bundle: 'ash.workbench', key: 'browser.focusAddressCommand' },
-					'Browser: Focus Address Bar',
-				),
+				title: localize2({ bundle: 'ash.workbench', key: 'browser.focusAddressCommand' }, 'Browser: Focus Address Bar'),
 				f1: true,
 				precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId),
 			});
 		}
-		override run(
-			accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor,
-		): void {
+		override run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): void {
 			const pane = accessor.get(IEditorPart).activePane;
 			if (pane?.id === BrowserViewEditorId) {
 				pane.focus();

@@ -6,12 +6,7 @@ import { type DetailedLineRangeMapping } from './rangeMapping.js';
 
 /** Computes a document diff from two caller-owned text models. */
 export interface IDocumentDiffProvider {
-	computeDiff(
-		original: ITextModel,
-		modified: ITextModel,
-		options: IDocumentDiffProviderOptions,
-		cancellationToken: CancellationToken,
-	): Promise<IDocumentDiff>;
+	computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, cancellationToken: CancellationToken): Promise<IDocumentDiff>;
 	readonly onDidChange: Event<void>;
 }
 

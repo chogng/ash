@@ -3,13 +3,7 @@ import { test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
-import {
-	IAccountService,
-	type AccountLoginMethod,
-	type AccountLoginChallenge,
-	type AccountLoginCompletion,
-	type AccountState,
-} from '../../../../../platform/accounts/common/accountService.js';
+import { IAccountService, type AccountLoginMethod, type AccountLoginChallenge, type AccountLoginCompletion, type AccountState } from '../../../../../platform/accounts/common/accountService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
@@ -57,7 +51,13 @@ for (const host of ['github.com', 'ghe.example']) {
 			whenReady: Promise.resolve(),
 			translate: (_bundle: string, _key: string, fallback: string) => fallback,
 		});
-		services.registerInstance(ILogService, { trace() {}, debug() {}, info() {}, warn() {}, error() {} });
+		services.registerInstance(ILogService, {
+			trace() {},
+			debug() {},
+			info() {},
+			warn() {},
+			error() {},
+		});
 		const connection = disposables.add(services.createInstance(GitHubConnectionService));
 
 		const connecting = connection.connect(host);
@@ -66,12 +66,13 @@ for (const host of ['github.com', 'ghe.example']) {
 		finishStart({ type: 'browser', loginId: 'github-login', authorizationUrl: 'https://github.example/authorize' });
 		await connecting;
 
-		assert.deepEqual(methods, [
-			host === 'github.com' ? { type: 'gitHubBrowser' } : { type: 'gitHubEnterpriseBrowser', host },
-		]);
+		assert.deepEqual(methods, [host === 'github.com' ? { type: 'gitHubBrowser' } : { type: 'gitHubEnterpriseBrowser', host }]);
 		assert.deepEqual(
 			{ isConnecting: connection.isConnecting, announcements },
-			{ isConnecting: false, announcements: ['GitHub account connected.'] },
+			{
+				isConnecting: false,
+				announcements: ['GitHub account connected.'],
+			},
 		);
 	});
 }

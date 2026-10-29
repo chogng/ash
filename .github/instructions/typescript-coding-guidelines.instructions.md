@@ -7,7 +7,7 @@ applyTo: "**/src/ash/**"
 
 ## Formatting
 
-- Use the repository-pinned `bun fmt` through `pnpm format:ts:fix [file|directory ...]`; `.prettierrc.toml` owns tabs, single quotes, semicolons, 120-column wrapping and trailing commas. Let the formatter wrap imports, signatures and expressions; do not maintain competing manual layout rules or reformat unrelated files.
+- Use the repository-pinned `bun fmt` through `pnpm format:ts:fix [file|directory ...]`; `.prettierrc.toml` owns tabs, single quotes, semicolons, 200-column wrapping and trailing commas. Preserve multiline object literals; let the formatter wrap imports, signatures and expressions. Do not maintain competing manual layout rules or reformat unrelated files.
 - Always use braces with the opening brace on the same line.
 
 ## Naming

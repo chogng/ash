@@ -1,8 +1,4 @@
-import {
-	createLanguageFeatureRequest,
-	isLanguageFeatureRequestCurrent,
-	type LanguageInlayHint,
-} from '../../../common/languages.js';
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageInlayHint } from '../../../common/languages.js';
 import './media/inlayHints.css';
 import { registerEditorContribution } from '../../../browser/editorFeatureRegistration.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -12,10 +8,7 @@ import { addDisposableListener, ModifierKeyEmitter } from '../../../../base/brow
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
-import {
-	ILanguageFeatureDebounceService,
-	type IFeatureDebounceInformation,
-} from '../../../common/services/languageFeatureDebounce.js';
+import { ILanguageFeatureDebounceService, type IFeatureDebounceInformation } from '../../../common/services/languageFeatureDebounce.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { StopWatch } from '../../../../base/common/stopwatch.js';
 import { Range } from '../../../common/core/range.js';
@@ -49,8 +42,7 @@ export class InlayHintsController extends Disposable {
 		@ILanguageFeatureDebounceService debounceService: ILanguageFeatureDebounceService,
 	) {
 		super();
-		if (editor.getModel() !== viewport.textModel)
-			throw new TypeError('Inlay hint dependencies must share one text model');
+		if (editor.getModel() !== viewport.textModel) throw new TypeError('Inlay hint dependencies must share one text model');
 		this.decorations = editor.createDecorationsCollection();
 		this.debounce = debounceService.for(languageFeaturesService.inlayHintsProvider, 'Inlay hints', {
 			min: 25,
@@ -62,10 +54,7 @@ export class InlayHintsController extends Disposable {
 		this._register(toDisposable(() => this.clear()));
 		this._register(
 			addDisposableListener<PointerEvent>(viewport.domNode.domNode, 'pointerover', event => {
-				const element =
-					event.target instanceof viewport.domNode.domNode.ownerDocument.defaultView!.HTMLElement
-						? event.target
-						: undefined;
+				const element = event.target instanceof viewport.domNode.domNode.ownerDocument.defaultView!.HTMLElement ? event.target : undefined;
 				if (!element?.classList.contains('stanza-editor-inlay-hint')) return;
 				const target = viewport.getNearestTargetAtClientPoint(event);
 				const hint = target?.injectedText?.options.attachedData;
@@ -89,8 +78,7 @@ export class InlayHintsController extends Disposable {
 	private schedule(): void {
 		this.clear();
 		const model = this.viewport.textModel;
-		if (this.isDisposed || model.isDisposed() || this.editor.getOption(EditorOption.inlayHints).enabled === 'off')
-			return;
+		if (this.isDisposed || model.isDisposed() || this.editor.getOption(EditorOption.inlayHints).enabled === 'off') return;
 		if (this.languageFeaturesService.inlayHintsProvider.has(model)) {
 			this.scheduler.schedule(this.debounce.get(model));
 		}
@@ -98,9 +86,7 @@ export class InlayHintsController extends Disposable {
 
 	/** Returns only the current model revision's hints, including hints hidden by a modifier. */
 	public getInlayHintsForLine(line: number): readonly LanguageInlayHint[] {
-		return this.hints
-			.filter(hint => hint.position.lineNumber === line)
-			.sort((left, right) => left.position.column - right.position.column);
+		return this.hints.filter(hint => hint.position.lineNumber === line).sort((left, right) => left.position.column - right.position.column);
 	}
 
 	private async refresh(): Promise<void> {
@@ -144,8 +130,7 @@ export class InlayHintsController extends Disposable {
 	private render(): void {
 		const mode = this.editor.getOption(EditorOption.inlayHints).enabled;
 		const pressed = this.modifierKeys.keyStatus.ctrlKey && this.modifierKeys.keyStatus.altKey;
-		const visible =
-			mode === 'on' || (mode === 'offUnlessPressed' && pressed) || (mode === 'onUnlessPressed' && !pressed);
+		const visible = mode === 'on' || (mode === 'offUnlessPressed' && pressed) || (mode === 'onUnlessPressed' && !pressed);
 		if (this.rendered === this.hints && this.visible === visible) return;
 		this.rendered = this.hints;
 		this.visible = visible;
@@ -180,13 +165,7 @@ export class InlayHintsController extends Disposable {
 }
 
 function normalizeLanguageInlayHint(hint: LanguageInlayHint): LanguageInlayHint {
-	if (
-		!hint ||
-		!Number.isSafeInteger(hint.position?.lineNumber) ||
-		!Number.isSafeInteger(hint.position?.column) ||
-		hint.position.lineNumber < 1 ||
-		hint.position.column < 1
-	) {
+	if (!hint || !Number.isSafeInteger(hint.position?.lineNumber) || !Number.isSafeInteger(hint.position?.column) || hint.position.lineNumber < 1 || hint.position.column < 1) {
 		throw new TypeError('Inlay hint has invalid position');
 	}
 	return Object.freeze({
@@ -196,7 +175,10 @@ function normalizeLanguageInlayHint(hint: LanguageInlayHint): LanguageInlayHint 
 				? hint.label
 				: Object.freeze(
 						hint.label.map(part =>
-							Object.freeze({ value: part.value, ...(part.location ? { location: part.location } : {}) }),
+							Object.freeze({
+								value: part.value,
+								...(part.location ? { location: part.location } : {}),
+							}),
 						),
 					),
 		...(hint.kind ? { kind: hint.kind } : {}),
@@ -210,11 +192,6 @@ registerEditorContribution({
 	id: InlayHintsController.ID,
 	install: context => {
 		if (context.kind !== 'text' || context.model.largeFile.tooLargeForTokenization) return;
-		return context.instantiationService.createInstance(
-			InlayHintsController,
-			context.view,
-			context.editor,
-			context.onLanguageError,
-		);
+		return context.instantiationService.createInstance(InlayHintsController, context.view, context.editor, context.onLanguageError);
 	},
 });

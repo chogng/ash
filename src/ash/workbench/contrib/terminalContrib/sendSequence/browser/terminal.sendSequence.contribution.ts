@@ -21,10 +21,7 @@ registerAction2(
 				f1: true,
 				precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
 				metadata: {
-					description: localize(
-						'terminal.sendSequence.description',
-						'Send text or control characters to the active terminal without adding Enter.',
-					),
+					description: localize('terminal.sendSequence.description', 'Send text or control characters to the active terminal without adding Enter.'),
 					args: [
 						{
 							name: 'args',
@@ -41,19 +38,8 @@ registerAction2(
 			// Keybindings and extension commands are untyped inputs. Do not turn malformed
 			// arguments into an unexpected prompt, especially when no terminal is running.
 			if (args !== undefined) {
-				if (
-					!args ||
-					typeof args !== 'object' ||
-					Array.isArray(args) ||
-					!('text' in args) ||
-					typeof args.text !== 'string'
-				) {
-					throw new TypeError(
-						localize(
-							'terminal.sendSequence.invalidArgs',
-							'Send Sequence requires an object with a string text property.',
-						),
-					);
+				if (!args || typeof args !== 'object' || Array.isArray(args) || !('text' in args) || typeof args.text !== 'string') {
+					throw new TypeError(localize('terminal.sendSequence.invalidArgs', 'Send Sequence requires an object with a string text property.'));
 				}
 				text = args.text;
 			}
@@ -85,34 +71,21 @@ registerAction2(
 				!instance.isReadOnly;
 
 			if (!text) {
-				text = await accessor
-					.get(IQuickInputService)
-					.input(
-						{
-							title: localize('terminal.sendSequence.title', 'Terminal: Send Sequence'),
-							placeHolder: localize(
-								'terminal.sendSequence.placeholder',
-								'Enter text or control characters (\\n, \\r, \\xNN)',
-							),
-						},
-						cancellation.token,
-					);
+				text = await accessor.get(IQuickInputService).input(
+					{
+						title: localize('terminal.sendSequence.title', 'Terminal: Send Sequence'),
+						placeHolder: localize('terminal.sendSequence.placeholder', 'Enter text or control characters (\\n, \\r, \\xNN)'),
+					},
+					cancellation.token,
+				);
 				if (!text || !canSend()) return;
 				// Decode only prompted text. Command arguments already contain their intended
 				// characters; decoding must not reinterpret a hex-encoded backslash.
-				text = text.replace(/\\(?:n|r|x[0-9a-fA-F]{2})/g, escape =>
-					escape === '\\n'
-						? '\n'
-						: escape === '\\r'
-							? '\r'
-							: String.fromCharCode(Number.parseInt(escape.slice(2), 16)),
-				);
+				text = text.replace(/\\(?:n|r|x[0-9a-fA-F]{2})/g, escape => (escape === '\\n' ? '\n' : escape === '\\r' ? '\r' : String.fromCharCode(Number.parseInt(escape.slice(2), 16))));
 			}
 			const shellEnvironment = instance.capabilities?.get(TerminalCapability.ShellEnvDetection)?.env;
 			const resolution =
-				shellEnvironment?.isTrusted && shellEnvironment.value !== undefined
-					? resolver.resolveWithEnvironment(shellEnvironment.value, folder, text)
-					: resolver.resolveAsync(folder, text);
+				shellEnvironment?.isTrusted && shellEnvironment.value !== undefined ? resolver.resolveWithEnvironment(shellEnvironment.value, folder, text) : resolver.resolveAsync(folder, text);
 			const resolved = await raceCancellation(resolution, cancellation.token);
 			if (resolved === undefined || !canSend()) return;
 			await instance.sendText(resolved, false);

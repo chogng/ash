@@ -1,12 +1,7 @@
 import './media/editorquickaccess.css';
 import { basename } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
-import {
-	PickerQuickAccessProvider,
-	TriggerAction,
-	type IPickerQuickAccessItem,
-	type Picks,
-} from '../../../../platform/quickinput/browser/pickerQuickAccess.js';
+import { PickerQuickAccessProvider, TriggerAction, type IPickerQuickAccessItem, type Picks } from '../../../../platform/quickinput/browser/pickerQuickAccess.js';
 import { filterQuickPickItems } from '../../../../platform/quickinput/browser/quickInputList.js';
 import type { EditorIdentifier } from '../../../services/editor/common/editorState.js';
 import { IEditorPart } from './editorPart.js';
@@ -32,9 +27,7 @@ export class AllEditorsByMostRecentlyUsedQuickAccess extends PickerQuickAccessPr
 	}
 
 	protected override _getPicks(filter: string): Picks<EditorQuickPickItem> {
-		const editorState = new Map(
-			this.editorPart.groups.flatMap(group => group.editors.map(editor => [editor.instanceId, editor] as const)),
-		);
+		const editorState = new Map(this.editorPart.groups.flatMap(group => group.editors.map(editor => [editor.instanceId, editor] as const)));
 		return filterQuickPickItems(
 			this.getEditors().map(editor => ({
 				editor,
@@ -50,16 +43,10 @@ export class AllEditorsByMostRecentlyUsedQuickAccess extends PickerQuickAccessPr
 					}
 					return TriggerAction.REFRESH_PICKER;
 				},
-				className: editorState.get(editor.instanceId)?.isDirty
-					? 'ash-editor-quick-pick-item dirty'
-					: 'ash-editor-quick-pick-item',
+				className: editorState.get(editor.instanceId)?.isDirty ? 'ash-editor-quick-pick-item dirty' : 'ash-editor-quick-pick-item',
 				buttons: [{ id: 'close', label: localize('workbench.closeEditor', 'Close') }],
 				label: editorInputLabel(editor.input),
-				description: localize(
-					'workbench.editorGroupNumber',
-					'Group {0}',
-					this.editorPart.groups.findIndex(group => group.id === editor.groupId) + 1,
-				),
+				description: localize('workbench.editorGroupNumber', 'Group {0}', this.editorPart.groups.findIndex(group => group.id === editor.groupId) + 1),
 				detail: editor.input.resource.toString(),
 			})),
 			filter,

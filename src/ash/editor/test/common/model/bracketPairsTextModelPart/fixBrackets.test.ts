@@ -11,18 +11,10 @@ const codec: ILanguageIdCodec = {
 	decodeLanguageId: id => (id === 1 ? 'typescript' : 'embedded'),
 };
 
-function segment(
-	text: string,
-	type = StandardTokenType.Other,
-	language = 'typescript',
-	balanced = true,
-): { text: string; metadata: number } {
+function segment(text: string, type = StandardTokenType.Other, language = 'typescript', balanced = true): { text: string; metadata: number } {
 	return {
 		text,
-		metadata:
-			codec.encodeLanguageId(language) |
-			(type << MetadataConsts.TOKEN_TYPE_OFFSET) |
-			(balanced ? MetadataConsts.BALANCED_BRACKETS_MASK : 0),
+		metadata: codec.encodeLanguageId(language) | (type << MetadataConsts.TOKEN_TYPE_OFFSET) | (balanced ? MetadataConsts.BALANCED_BRACKETS_MASK : 0),
 	};
 }
 
@@ -37,11 +29,7 @@ test('completion bracket repair handles nested missing and unexpected brackets w
 		['({})', '({})'],
 		['call(\n[1', 'call(\n[1])'],
 	]) {
-		assert.equal(
-			fixBracketsInLine(LineTokens.createFromTextAndMetadata([segment(before!)], codec), configurations),
-			after,
-			before,
-		);
+		assert.equal(fixBracketsInLine(LineTokens.createFromTextAndMetadata([segment(before!)], codec), configurations), after, before);
 	}
 });
 
@@ -91,9 +79,6 @@ test('completion bracket repair prefers the longest configured bracket at an off
 			['<!--', '-->'],
 		],
 	});
-	const tokens = LineTokens.createFromTextAndMetadata(
-		[segment('<!-- text', StandardTokenType.Other, 'embedded')],
-		codec,
-	);
+	const tokens = LineTokens.createFromTextAndMetadata([segment('<!-- text', StandardTokenType.Other, 'embedded')], codec);
 	assert.equal(fixBracketsInLine(tokens, configurations), '<!-- text-->');
 });

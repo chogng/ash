@@ -72,11 +72,7 @@ function createScreen(
 	decorations.activate(terminal);
 	for (const { key } of lines) {
 		const [process, commandId = key] = key.split(':');
-		decorations.registerCommandDecoration(
-			{ commandId, status: 'running', exitCode: undefined },
-			Number(process) || 0,
-			terminal.registerMarker(0)!,
-		);
+		decorations.registerCommandDecoration({ commandId, status: 'running', exitCode: undefined }, Number(process) || 0, terminal.registerMarker(0)!);
 	}
 	const navigation = lifetime.add(new MarkNavigationAddon(() => decorations.markers));
 	navigation.activate(terminal);

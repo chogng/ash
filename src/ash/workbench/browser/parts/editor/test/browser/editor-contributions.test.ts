@@ -18,10 +18,7 @@ import { InMemoryConfigurationService } from '../../../../../../platform/configu
 import { BrowserWorkingCopyService } from '../../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import type { IWorkingCopy } from '../../../../../services/workingCopy/common/workingCopyService.js';
 import { StatusbarAlignment } from '../../../../../services/statusbar/browser/statusbar.js';
-import {
-	EditorAutoSaveConfiguration,
-	EditorAutoSaveDelayConfiguration,
-} from '../../../../../services/editor/common/editorConfiguration.js';
+import { EditorAutoSaveConfiguration, EditorAutoSaveDelayConfiguration } from '../../../../../services/editor/common/editorConfiguration.js';
 import { EditorPane } from '../../editorPane.js';
 
 import type { IEditorPart } from '../../editorPart.js';
@@ -37,8 +34,7 @@ import { ICommandService } from '../../../../../../platform/commands/common/comm
 import { registerAction2 } from '../../../../../../platform/actions/common/actions.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../../services/localization/common/localizationCatalogs.js';
-const { createCodeEditorServices, createTestCodeEditor } =
-	await import('../../../../../../editor/test/browser/testCodeEditor.js');
+const { createCodeEditorServices, createTestCodeEditor } = await import('../../../../../../editor/test/browser/testCodeEditor.js');
 await import('../../../../../../editor/editor.code.all.js');
 registerAction2(ChangeLanguageAction);
 registerAction2(ChangeEOLAction);
@@ -288,16 +284,7 @@ test('EditorStatusContribution explains screen reader mode and restores focus', 
 		onDidChangeEditors: Event.None,
 	} as unknown as IEditorPart;
 	using statusbar = new StatusbarService();
-	using contribution = new EditorStatusContribution(
-		editorPart,
-		statusbar,
-		accessibility,
-		emptyCodeEditors,
-		emptyCommands,
-		testLanguages,
-		emptyQuickInput,
-		emptyFileModels,
-	);
+	using contribution = new EditorStatusContribution(editorPart, statusbar, accessibility, emptyCodeEditors, emptyCommands, testLanguages, emptyQuickInput, emptyFileModels);
 	assert.equal(statusTexts(statusbar).length, 0);
 
 	optimized = true;
@@ -312,9 +299,7 @@ test('EditorStatusContribution explains screen reader mode and restores focus', 
 	assert.equal(dom.window.document.activeElement?.textContent, 'Close');
 	assert.match(dialog?.textContent ?? '', /Screen reader optimization/);
 	assert.equal(dialog?.getAttribute('aria-labelledby'), dialog?.querySelector('h2')?.id);
-	(dialog?.querySelector('button') as HTMLButtonElement).dispatchEvent(
-		new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-	);
+	(dialog?.querySelector('button') as HTMLButtonElement).dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(dom.window.document.querySelector('.ash-screen-reader-explanation'), null);
 	assert.equal(dom.window.document.activeElement, previous);
 
@@ -482,8 +467,7 @@ test('Editor status actions update the real model and clear when the active edit
 	} as unknown as IEditorPart;
 	using statusbar = new StatusbarService();
 	using contribution = services.createInstance(EditorStatusContribution, editorPart, statusbar);
-	const entry = (suffix: string) =>
-		statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === `ash.status.editor.${suffix}`)!.entry;
+	const entry = (suffix: string) => statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === `ash.status.editor.${suffix}`)!.entry;
 	assert.equal(entry('eol').text, 'CRLF');
 	model.updateOptions({ tabSize: 4, indentSize: 4, insertSpaces: false });
 	editor.setSelection(new Range(1, 2, 1, 2));
@@ -491,9 +475,7 @@ test('Editor status actions update the real model and clear when the active edit
 	assert.equal(entry('indentation').text, 'Tab Size: 4');
 	editor.setSelection(new Range(1, 2, 1, 4));
 	assert.equal(entry('cursor').text, 'Ln 1, Col 7 (2 selected)');
-	using language = services
-		.get(ILanguageService)
-		.registerLanguage({ id: 'status-language', aliases: ['Status Language'] });
+	using language = services.get(ILanguageService).registerLanguage({ id: 'status-language', aliases: ['Status Language'] });
 	await services.get(ICommandService).executeCommand(ChangeLanguageAction.ID, 'status-language');
 	assert.equal(model.getLanguageId(), 'status-language');
 	assert.equal(entry('language').text, 'Status Language');
@@ -513,14 +495,10 @@ test('Editor status actions update the real model and clear when the active edit
 
 	const changeIndentation = Promise.resolve(entry('indentation').run!());
 	const indentInput = globalThis.document.querySelector<HTMLInputElement>('.ash-quick-input-host input')!;
-	indentInput.dispatchEvent(
-		new globalThis.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
-	);
+	indentInput.dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 	await Promise.resolve();
 	const sizeInput = globalThis.document.querySelector<HTMLInputElement>('.ash-quick-input-host input')!;
-	sizeInput.dispatchEvent(
-		new globalThis.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }),
-	);
+	sizeInput.dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
 	sizeInput.dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 	await changeIndentation;
 	assert.equal(model.getOptions().insertSpaces, true);
@@ -536,9 +514,7 @@ test('Editor status actions update the real model and clear when the active edit
 	using replacement = new TextModel('\uFEFFreplacement');
 	editor.setModel(replacement);
 	assert.equal(entry('encoding').text, 'UTF-8 with BOM');
-	globalThis.document
-		.querySelector<HTMLInputElement>('.ash-quick-input-host input')!
-		.dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+	globalThis.document.querySelector<HTMLInputElement>('.ash-quick-input-host input')!.dispatchEvent(new globalThis.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 	await staleChange;
 	assert.equal(model.getEOL(), '\r\n');
 	assert.equal(replacement.getEOL(), '\n');
@@ -584,10 +560,7 @@ test('Editor status uses the Chinese language pack', () => {
 		emptyFileModels,
 	);
 	assert.ok(statusTexts(statusbar).includes('行 4，列 9'));
-	assert.equal(
-		statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === 'ash.status.editor.eol')?.entry.tooltip,
-		'选择行尾序列',
-	);
+	assert.equal(statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === 'ash.status.editor.eol')?.entry.tooltip, '选择行尾序列');
 	workingCopy.markDirty();
 	assert.deepEqual(statusTexts(statusbar), ['TypeScript', 'LF', 'UTF-8', '行 4，列 9']);
 	workingCopy.setExternalChange(true);

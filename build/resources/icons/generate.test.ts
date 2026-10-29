@@ -7,8 +7,7 @@ import { join, resolve } from 'node:path';
 import test from 'node:test';
 import { checkIcons, generateIcons, type IconOutputs } from './generate.ts';
 
-const addSvg =
-	'<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path stroke="black" d="M2.5 8h11M8 2.5v11"/></svg>\n';
+const addSvg = '<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path stroke="black" d="M2.5 8h11M8 2.5v11"/></svg>\n';
 
 function outputs(root: string): IconOutputs {
 	return {
@@ -18,11 +17,7 @@ function outputs(root: string): IconOutputs {
 }
 
 /** Models the resource toolchain publishing a font and its matching source fingerprints. */
-async function prepareFont(
-	sourceDirectory: string,
-	codepoints: Record<string, string>,
-	color: Record<string, string> = {},
-): Promise<void> {
+async function prepareFont(sourceDirectory: string, codepoints: Record<string, string>, color: Record<string, string> = {}): Promise<void> {
 	await generateIcons({ sourceDirectory, outputs: { manifestFile: join(sourceDirectory, 'manifest.json') } });
 	const sources: Record<string, string> = {};
 	for (const file of await readdir(sourceDirectory)) {
@@ -49,9 +44,7 @@ test('the resource catalog tracks SVG changes and canonicalizes artwork without 
 	await writeFile(join(sourceDirectory, 'close.svg'), addSvg.replace('black', 'red'));
 	await generateIcons({ sourceDirectory, outputs: catalog });
 	assert.deepEqual(
-		JSON.parse(await readFile(catalog.manifestFile, 'utf8')).icons.map(
-			({ id, rendering }: { id: string; rendering: string }) => ({ id, rendering }),
-		),
+		JSON.parse(await readFile(catalog.manifestFile, 'utf8')).icons.map(({ id, rendering }: { id: string; rendering: string }) => ({ id, rendering })),
 		[
 			{ id: 'add', rendering: 'symbolic' },
 			{ id: 'close', rendering: 'multicolor' },
@@ -109,12 +102,6 @@ test('runtime generation rejects missing or stale font inputs instead of emittin
 test('product icon generation rejects linked or active SVG content', async t => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-product-icons-'));
 	t.after(() => rm(root, { recursive: true, force: true }));
-	await writeFile(
-		join(root, 'linked.svg'),
-		'<svg viewBox="0 0 16 16"><a href="https://example.test"><path d="M0 0h1v1z"/></a></svg>',
-	);
-	await assert.rejects(
-		generateIcons({ sourceDirectory: root, outputs: { manifestFile: join(root, 'manifest.json') } }),
-		/unsupported active or external content/,
-	);
+	await writeFile(join(root, 'linked.svg'), '<svg viewBox="0 0 16 16"><a href="https://example.test"><path d="M0 0h1v1z"/></a></svg>');
+	await assert.rejects(generateIcons({ sourceDirectory: root, outputs: { manifestFile: join(root, 'manifest.json') } }), /unsupported active or external content/);
 });

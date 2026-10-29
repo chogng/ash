@@ -12,12 +12,7 @@ import { MeteredConnectionChannel } from '../../electron-main/meteredConnectionC
 import { MeteredConnectionMainService } from '../../electron-main/meteredConnectionMainService.js';
 import { UpdateMainService } from '../../../update/electron-main/updateMainService.js';
 import { Registry } from '../../../registry/common/platform.js';
-import {
-	ConfigurationRegistry,
-	ConfigurationScope,
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../configuration/common/configurationRegistry.js';
+import { ConfigurationRegistry, ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../configuration/common/configurationRegistry.js';
 import { setNlsMessages, resetNlsResolver } from '../../../../nls.js';
 import chineseMessages from '../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { DefaultSettings } from '../../../../workbench/services/preferences/common/settingsModels.js';
@@ -43,10 +38,7 @@ suite('Desktop metered connection policy', () => {
 		using main = services.createInstance(MeteredConnectionMainService);
 		const channel = new MeteredConnectionChannel(main);
 		const observed: boolean[] = [];
-		using subscription = channel.listen<boolean>(
-			'window:2',
-			MeteredConnectionCommand.OnDidChangeIsConnectionMetered,
-		)(value => observed.push(value));
+		using subscription = channel.listen<boolean>('window:2', MeteredConnectionCommand.OnDidChangeIsConnectionMetered)(value => observed.push(value));
 		let initialized = false;
 		const initialState = channel.call('window:2', MeteredConnectionCommand.IsConnectionMetered).then(value => {
 			initialized = true;
@@ -54,18 +46,9 @@ suite('Desktop metered connection policy', () => {
 		});
 		await Promise.resolve();
 		assert.equal(initialized, false);
-		await assert.rejects(
-			channel.call('window:1', MeteredConnectionCommand.SetIsBrowserConnectionMetered, 'true'),
-			/boolean/,
-		);
-		await assert.rejects(
-			channel.call('window:1', MeteredConnectionCommand.IsConnectionMetered, {}),
-			/no arguments/,
-		);
-		assert.throws(
-			() => channel.listen('window:1', MeteredConnectionCommand.OnDidChangeIsConnectionMetered, {}),
-			/no arguments/,
-		);
+		await assert.rejects(channel.call('window:1', MeteredConnectionCommand.SetIsBrowserConnectionMetered, 'true'), /boolean/);
+		await assert.rejects(channel.call('window:1', MeteredConnectionCommand.IsConnectionMetered, {}), /no arguments/);
+		assert.throws(() => channel.listen('window:1', MeteredConnectionCommand.OnDidChangeIsConnectionMetered, {}), /no arguments/);
 		await channel.call('window:1', MeteredConnectionCommand.SetIsBrowserConnectionMetered, true);
 		assert.equal(await initialState, true);
 		await configuration.updateValue('network.meteredConnection', 'off');
@@ -74,10 +57,7 @@ suite('Desktop metered connection policy', () => {
 		await channel.call('window:1', MeteredConnectionCommand.SetIsBrowserConnectionMetered, false);
 		assert.equal(main.isConnectionMetered, true);
 		await configuration.updateValue('network.meteredConnection', undefined);
-		assert.deepEqual(
-			{ state: main.isConnectionMetered, observed },
-			{ state: false, observed: [true, false, true, false] },
-		);
+		assert.deepEqual({ state: main.isConnectionMetered, observed }, { state: false, observed: [true, false, true, false] });
 	});
 
 	test('uses initialized configuration and responds to subsequent changes', async () => {
@@ -123,10 +103,7 @@ suite('Desktop metered connection policy', () => {
 		assert.equal(await update.checkAutomatically('latest'), undefined);
 		assert.deepEqual(calls, ['stable']);
 		await channel.call('window:2', MeteredConnectionCommand.SetIsBrowserConnectionMetered, false);
-		assert.deepEqual(
-			await Promise.all([update.checkAutomatically('latest'), update.checkAutomatically('latest')]),
-			[{ status: 'current', version: '1' }, undefined],
-		);
+		assert.deepEqual(await Promise.all([update.checkAutomatically('latest'), update.checkAutomatically('latest')]), [{ status: 'current', version: '1' }, undefined]);
 		assert.deepEqual(calls, ['stable', 'latest']);
 		await configuration.updateValue('network.meteredConnection', 'on');
 		assert.deepEqual(await update.checkForUpdates('stable'), { status: 'current', version: '1' });
@@ -135,19 +112,14 @@ suite('Desktop metered connection policy', () => {
 	test('required configuration and network dependencies fail during service creation', () => {
 		using services = new InstantiationService();
 		assert.throws(() => services.createInstance(MeteredConnectionMainService), /configurationService/);
-		assert.throws(
-			() => services.createInstance(UpdateMainService, async () => {}, { isPackaged: false }),
-			/meteredConnectionService/,
-		);
+		assert.throws(() => services.createInstance(UpdateMainService, async () => {}, { isPackaged: false }), /meteredConnectionService/);
 	});
 
 	test('the application setting validates values and presents its Chinese labels', async () => {
 		setNlsMessages('zh-CN', chineseMessages);
 		try {
 			await import('../../common/meteredConnection.config.contribution.js');
-			const configuration = Registry.as<IConfigurationRegistry>(Extensions.Configuration).getConfiguration(
-				'network.meteredConnection',
-			)!;
+			const configuration = Registry.as<IConfigurationRegistry>(Extensions.Configuration).getConfiguration('network.meteredConnection')!;
 			assert.equal(configuration.scope, ConfigurationScope.APPLICATION);
 			assert.equal(configuration.defaultValue, 'auto');
 			assert.equal(configuration.setting?.title, '按流量计费的网络');

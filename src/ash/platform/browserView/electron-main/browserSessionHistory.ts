@@ -3,17 +3,8 @@ import { isRecord } from '../../../base/common/types.js';
 import { IApplicationStorageMainService } from '../../storage/electron-main/storageMainService.js';
 import { StorageScope, StorageTarget } from '../../storage/common/storage.js';
 import { ILogService } from '../../log/common/log.js';
-import {
-	BrowserHistoryStore,
-	type IBrowserHistoryItemHandle,
-	type ISerializedBrowserHistoryEntriesSnapshot,
-	type ISerializedBrowserFaviconsSnapshot,
-} from '../common/browserHistory.js';
-import {
-	BrowserViewStorageScope,
-	normalizeBrowserViewUrl,
-	type IBrowserViewStorageKeys,
-} from '../common/browserView.js';
+import { BrowserHistoryStore, type IBrowserHistoryItemHandle, type ISerializedBrowserHistoryEntriesSnapshot, type ISerializedBrowserFaviconsSnapshot } from '../common/browserHistory.js';
+import { BrowserViewStorageScope, normalizeBrowserViewUrl, type IBrowserViewStorageKeys } from '../common/browserView.js';
 import type { BrowserSession } from './browserSession.js';
 
 export interface IBrowserSessionHistory {
@@ -40,13 +31,9 @@ export class BrowserSessionHistory extends BrowserHistoryStore implements IBrows
 		@IApplicationStorageMainService private readonly storage: IApplicationStorageMainService,
 		@ILogService private readonly logService: ILogService,
 	) {
-		const persistent =
-			session.storageScope === BrowserViewStorageScope.Global ||
-			session.storageScope === BrowserViewStorageScope.Workspace;
+		const persistent = session.storageScope === BrowserViewStorageScope.Global || session.storageScope === BrowserViewStorageScope.Workspace;
 		super(persistent ? 200 : 0);
-		this.storageKeys = persistent
-			? { history: `browser.history.entries.${session.id}`, favicons: `browser.history.favicons.${session.id}` }
-			: {};
+		this.storageKeys = persistent ? { history: `browser.history.entries.${session.id}`, favicons: `browser.history.favicons.${session.id}` } : {};
 		this._register(this.entries.onDidChange(() => this.changed('history')));
 		this._register(this.favicons.onDidChange(() => this.changed('favicons')));
 		this._register(storage.onWillSaveState(() => this.saveInBackground()));
@@ -62,9 +49,7 @@ export class BrowserSessionHistory extends BrowserHistoryStore implements IBrows
 			const snapshot = await this.storage.getItems(applicationStorage);
 			const favicons = decodeFavicons(snapshot.entries[this.storageKeys.favicons!]?.value);
 			this.favicons.hydrate(favicons);
-			this.entries.hydrate(
-				decodeEntries(snapshot.entries[this.storageKeys.history]?.value, favicons, this.entries.maxEntries),
-			);
+			this.entries.hydrate(decodeEntries(snapshot.entries[this.storageKeys.history]?.value, favicons, this.entries.maxEntries));
 		}
 		this.loaded = true;
 	}
@@ -103,22 +88,13 @@ export class BrowserSessionHistory extends BrowserHistoryStore implements IBrows
 		for (const part of this.dirty) {
 			const key = this.storageKeys[part]!;
 			const snapshot = part === 'history' ? this.entries.serialize() : this.favicons.serialize();
-			const empty =
-				part === 'history'
-					? this.entries.items.length === 0
-					: Object.keys(this.favicons.serialize().map).length === 0;
+			const empty = part === 'history' ? this.entries.items.length === 0 : Object.keys(this.favicons.serialize().map).length === 0;
 			try {
 				writes.push(
-					this.storage
-						.updateItems(
-							applicationStorage,
-							key,
-							empty ? null : { value: JSON.stringify(snapshot), target: StorageTarget.MACHINE },
-						)
-						.catch(error => {
-							this.dirty.add(part);
-							throw error;
-						}),
+					this.storage.updateItems(applicationStorage, key, empty ? null : { value: JSON.stringify(snapshot), target: StorageTarget.MACHINE }).catch(error => {
+						this.dirty.add(part);
+						throw error;
+					}),
 				);
 				this.dirty.delete(part);
 			} catch (error) {
@@ -131,9 +107,7 @@ export class BrowserSessionHistory extends BrowserHistoryStore implements IBrows
 	}
 
 	private saveInBackground(): void {
-		void this.flushNow().catch(error =>
-			this.logService.error('browserHistory', 'Failed to save browser history', error),
-		);
+		void this.flushNow().catch(error => this.logService.error('browserHistory', 'Failed to save browser history', error));
 	}
 
 	protected override disposeCore(): void {
@@ -159,12 +133,7 @@ function decodeFavicons(raw: string | undefined): ISerializedBrowserFaviconsSnap
 	const map: Record<string, string> = Object.create(null);
 	if (isRecord(value)) {
 		for (const [hash, image] of Object.entries(value)) {
-			if (
-				/^[0-9a-f]{40}$/.test(hash) &&
-				typeof image === 'string' &&
-				image.startsWith('data:image/') &&
-				image.length <= 64 * 1024
-			) {
+			if (/^[0-9a-f]{40}$/.test(hash) && typeof image === 'string' && image.startsWith('data:image/') && image.length <= 64 * 1024) {
 				map[hash] = image;
 			}
 		}
@@ -172,11 +141,7 @@ function decodeFavicons(raw: string | undefined): ISerializedBrowserFaviconsSnap
 	return { map };
 }
 
-function decodeEntries(
-	raw: string | undefined,
-	favicons: ISerializedBrowserFaviconsSnapshot,
-	maxEntries: number,
-): ISerializedBrowserHistoryEntriesSnapshot {
+function decodeEntries(raw: string | undefined, favicons: ISerializedBrowserFaviconsSnapshot, maxEntries: number): ISerializedBrowserHistoryEntriesSnapshot {
 	const value = parse(raw)?.items;
 	const items: ISerializedBrowserHistoryEntriesSnapshot['items'][number][] = [];
 	const ids = new Set<number>();
@@ -209,9 +174,7 @@ function decodeEntries(
 				time: entry.time,
 				title: entry.title,
 				...(entry.explicit === true ? { explicit: true } : {}),
-				...(typeof entry.icon === 'string' && Object.hasOwn(favicons.map, entry.icon)
-					? { icon: entry.icon }
-					: {}),
+				...(typeof entry.icon === 'string' && Object.hasOwn(favicons.map, entry.icon) ? { icon: entry.icon } : {}),
 			});
 		} catch {
 			/* Invalid persisted URLs cannot become navigation suggestions. */

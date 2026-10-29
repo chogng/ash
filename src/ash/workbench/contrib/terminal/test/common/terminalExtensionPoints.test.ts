@@ -16,9 +16,7 @@ suite('Terminal extension point production pipeline', () => {
 
 	for (const shape of ['standard', 'legacy'] as const)
 		test(`publishes the ${shape} declaration through one terminal owner and withdraws it on catalog replacement`, async () => {
-			const profiles = [
-				{ id: 'shell', title: '中文 Shell', icon: 'terminal-git-bash', color: 'terminal.ansiGreen' },
-			];
+			const profiles = [{ id: 'shell', title: '中文 Shell', icon: 'terminal-git-bash', color: 'terminal.ansiGreen' }];
 			const manifestJson = JSON.stringify({
 				name: 'shell',
 				publisher: 'acme',
@@ -28,9 +26,7 @@ suite('Terminal extension point production pipeline', () => {
 			const manifestSha256 = `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`;
 			let installed = true;
 			const api: IExtensionApi = {
-				resources: new ExtensionResourceLoaderService(async () =>
-					assert.fail('The terminal declaration must not read executable resources'),
-				),
+				resources: new ExtensionResourceLoaderService(async () => assert.fail('The terminal declaration must not read executable resources')),
 				list: async () => ({
 					generation: installed ? 1 : 2,
 					diagnostics: [],
@@ -54,9 +50,7 @@ suite('Terminal extension point production pipeline', () => {
 			using extensions = new TestExtensionService(api);
 			using contributions = new TerminalContributionService(extensions);
 			const changes: string[][] = [];
-			using listener = contributions.onDidChangeTerminalProfiles(profiles =>
-				changes.push(profiles.map(profile => profile.id)),
-			);
+			using listener = contributions.onDidChangeTerminalProfiles(profiles => changes.push(profiles.map(profile => profile.id)));
 			await extensions.start();
 			assert.equal(contributions.terminalProfiles[0]?.extensionIdentifier, 'acme.shell');
 			assert.equal(contributions.terminalProfiles[0]?.title, '中文 Shell');
@@ -69,9 +63,7 @@ suite('Terminal extension point production pipeline', () => {
 		});
 
 	test('manifest decoding uses the registered point before declarations reach a provider', () => {
-		const descriptor = { id: 'acme.shell', name: 'shell', publisher: 'acme', version: '1.0.0' } as Parameters<
-			typeof parseExtensionManifest
-		>[1];
+		const descriptor = { id: 'acme.shell', name: 'shell', publisher: 'acme', version: '1.0.0' } as Parameters<typeof parseExtensionManifest>[1];
 		for (const profiles of [
 			[
 				{ id: 'same', title: 'First' },
@@ -82,22 +74,13 @@ suite('Terminal extension point production pipeline', () => {
 			[{ id: 'shell', title: 'Shell', icon: 'file://untrusted' }],
 		]) {
 			for (const contributes of [{ terminal: { profiles } }, { terminalProfiles: profiles }]) {
-				assert.throws(
-					() =>
-						parseExtensionManifest(
-							JSON.stringify({ name: 'shell', publisher: 'acme', version: '1.0.0', contributes }),
-							descriptor,
-						),
-					/Invalid terminal profile contribution/,
-				);
+				assert.throws(() => parseExtensionManifest(JSON.stringify({ name: 'shell', publisher: 'acme', version: '1.0.0', contributes }), descriptor), /Invalid terminal profile contribution/);
 			}
 		}
 	});
 
 	test('rejects malformed terminal containers and competing standard and legacy declarations', () => {
-		const descriptor = { id: 'acme.shell', name: 'shell', publisher: 'acme', version: '1.0.0' } as Parameters<
-			typeof parseExtensionManifest
-		>[1];
+		const descriptor = { id: 'acme.shell', name: 'shell', publisher: 'acme', version: '1.0.0' } as Parameters<typeof parseExtensionManifest>[1];
 		const profiles = [{ id: 'shell', title: 'Shell' }];
 		for (const terminal of [null, [], 'invalid', { profiles: null }, { profiles }]) {
 			assert.throws(
@@ -130,9 +113,7 @@ suite('Terminal extension point production pipeline', () => {
 	test('invalid declaration diagnostics use the selected non-default language', () => {
 		initializeTestLocalization('zh-CN');
 		try {
-			const descriptor = { id: 'acme.shell', name: 'shell', publisher: 'acme', version: '1.0.0' } as Parameters<
-				typeof parseExtensionManifest
-			>[1];
+			const descriptor = { id: 'acme.shell', name: 'shell', publisher: 'acme', version: '1.0.0' } as Parameters<typeof parseExtensionManifest>[1];
 			assert.throws(
 				() =>
 					parseExtensionManifest(

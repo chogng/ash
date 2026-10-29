@@ -1,11 +1,6 @@
 import '../../../../../editor/test/browser/testEditorDom.js';
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
-import {
-	type IFileSystemProvider,
-	type IFileWriteOptions,
-	type IFileWriteResult,
-	FileSystemProviderCapabilities,
-} from '../../../../../platform/files/common/files.js';
+import { type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { IContextKeyService, ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { TestEditorService } from './bulkEditTestServices.js';
@@ -87,11 +82,7 @@ test('bulk edit preview follows ordered create and text operations without mutat
 	};
 
 	try {
-		using preview = await previewEdits(
-			edit,
-			{ files, models, workingCopies: emptyWorkingCopies() },
-			new AbortController().signal,
-		);
+		using preview = await previewEdits(edit, { files, models, workingCopies: emptyWorkingCopies() }, new AbortController().signal);
 
 		assert.equal(preview.canApply, true);
 		assert.equal(
@@ -121,9 +112,7 @@ test('bulk edit preview reports invalid ranges without clamping or mutating the 
 	try {
 		using preview = await previewEdits(
 			{
-				entries: [
-					{ kind: 'textDocument', resource, edits: [{ range: new Range(2, 1, 2, 2), text: 'invalid' }] },
-				],
+				entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(2, 1, 2, 2), text: 'invalid' }] }],
 			},
 			{ files, models, workingCopies: emptyWorkingCopies() },
 			new AbortController().signal,
@@ -158,10 +147,7 @@ test('conflict detection covers both rename resources, model mutations and dispo
 	services.registerInstance(IFileTextModelService, models);
 	try {
 		using reference = await models.acquire({ resource: text });
-		using detector = services.createInstance(ConflictDetector, [
-			new ResourceFileEdit(source, target),
-			new ResourceTextEdit(text, { range: new Range(1, 1, 1, 1), text: 'new' }),
-		]);
+		using detector = services.createInstance(ConflictDetector, [new ResourceFileEdit(source, target), new ResourceTextEdit(text, { range: new Range(1, 1, 1, 1), text: 'new' })]);
 		files.notify(URI.file('/workspace/unrelated.ts'));
 		assert.equal(detector.hasConflicts(), false);
 		files.notify(target);
@@ -225,8 +211,7 @@ for (const outcome of ['accept', 'conflict', 'cancel', 'dispose', 'abort', 'repl
 					return pane;
 				},
 				getViewWithId: () => pane,
-				getVisibleViewContainer: () =>
-					selectedPanelId ? { id: selectedPanelId, location: ViewContainerLocation.Panel } : null,
+				getVisibleViewContainer: () => (selectedPanelId ? { id: selectedPanelId, location: ViewContainerLocation.Panel } : null),
 				openViewContainer: async (id: string) => {
 					selectedPanelId = id;
 					return null;
@@ -261,10 +246,7 @@ for (const outcome of ['accept', 'conflict', 'cancel', 'dispose', 'abort', 'repl
 			];
 			const ready = waitForInput();
 			const controller = new AbortController();
-			const pending = bulkEdits.apply(
-				{ entries: [{ kind: 'textDocument', resource, expectedText: 'ab', edits }] },
-				{ showPreview: true, token: controller.signal },
-			);
+			const pending = bulkEdits.apply({ entries: [{ kind: 'textDocument', resource, expectedText: 'ab', edits }] }, { showPreview: true, token: controller.signal });
 			await ready;
 			assert.equal(selectedPanelId, WorkbenchViewContainerId.BulkEdit);
 			assert.equal(contextKeys.contextMatchesRules(descriptor.when), true);
@@ -273,11 +255,7 @@ for (const outcome of ['accept', 'conflict', 'cancel', 'dispose', 'abort', 'repl
 				.getProvider(services);
 			assert.match(provider!.provideContent(), /Press Escape to cancel/);
 			provider!.dispose();
-			assert.ok(
-				AccessibleViewRegistry.getImplementations().some(
-					provider => provider.type === AccessibleViewType.View && provider.name === 'bulk-edit-preview-view',
-				),
-			);
+			assert.ok(AccessibleViewRegistry.getImplementations().some(provider => provider.type === AccessibleViewType.View && provider.name === 'bulk-edit-preview-view'));
 			if (outcome === 'accept') {
 				pane.element.querySelector<HTMLInputElement>('input[data-text-edit-index="0"]')!.click();
 				pane.accept();
@@ -293,24 +271,16 @@ for (const outcome of ['accept', 'conflict', 'cancel', 'dispose', 'abort', 'repl
 				else if (outcome === 'abort') controller.abort();
 				else if (outcome === 'replace') {
 					const replacementReady = waitForInput();
-					const replacement = bulkEdits.apply(
-						{ entries: [{ kind: 'textDocument', resource, expectedText: 'ab', edits }] },
-						{ showPreview: true },
-					);
+					const replacement = bulkEdits.apply({ entries: [{ kind: 'textDocument', resource, expectedText: 'ab', edits }] }, { showPreview: true });
 					await replacementReady;
 					assert.equal(enabled(), true);
 					assert.equal(selectedPanelId, WorkbenchViewContainerId.BulkEdit);
 					pane.discard();
 					assert.equal((await replacement).isApplied, false);
 				} else {
-					pane.element.dispatchEvent(
-						new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-					);
+					pane.element.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 				}
-				assert.deepEqual(
-					{ applied: (await pending).isApplied, text: models.getModel(resource)!.getText() },
-					{ applied: false, text: outcome === 'conflict' ? 'changed' : 'ab' },
-				);
+				assert.deepEqual({ applied: (await pending).isApplied, text: models.getModel(resource)!.getText() }, { applied: false, text: outcome === 'conflict' ? 'changed' : 'ab' });
 			}
 			assert.equal(enabled(), false);
 			assert.equal(selectedPanelId, previousPanelId);
@@ -365,8 +335,7 @@ class PreviewTextModelService extends Disposable implements IFileTextModelServic
 	async acquire(input: { readonly resource: URI; readonly initialText?: string }): Promise<TextModelReference> {
 		const key = input.resource.toString();
 		const existing = this.persistentModels.get(key);
-		const model =
-			existing ?? new TextModel(input.initialText ?? this.resources.get(key) ?? '', { resource: input.resource });
+		const model = existing ?? new TextModel(input.initialText ?? this.resources.get(key) ?? '', { resource: input.resource });
 		const persistent = this.persistentResources.has(key);
 		if (persistent) this.persistentModels.set(key, model);
 		if (!existing && persistent) this.modelAdded.fire(model);
@@ -380,8 +349,7 @@ class PreviewTextModelService extends Disposable implements IFileTextModelServic
 			onDidChangeExternalChange: emptyEvent,
 			save: async (signal, options) => {
 				if (!options?.skipSaveParticipants) {
-					for (const participant of this.participants)
-						await participant.participate(model, options?.reason ?? SaveReason.EXPLICIT, signal);
+					for (const participant of this.participants) await participant.participate(model, options?.reason ?? SaveReason.EXPLICIT, signal);
 				}
 				for (const participant of this.completions) {
 					const complete = await participant.prepare(model, signal, { retry: false, acknowledge: () => {} });
@@ -413,8 +381,7 @@ class PreviewTextModelService extends Disposable implements IFileTextModelServic
 }
 
 class PreviewFileService extends Disposable implements IFileSystemProvider {
-	public readonly capabilities =
-		FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
 	public readonly onDidChangeCapabilities = Event.None;
 	public watch(): IDisposable {
 		return Disposable.None;

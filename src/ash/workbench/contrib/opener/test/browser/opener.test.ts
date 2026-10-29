@@ -12,11 +12,7 @@ import { StandaloneCodeEditorService } from '../../../../../editor/standalone/br
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import {
-	IFileService,
-	FileSystemProviderErrorCode,
-	createFileSystemProviderError,
-} from '../../../../../platform/files/common/files.js';
+import { IFileService, FileSystemProviderErrorCode, createFileSystemProviderError } from '../../../../../platform/files/common/files.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -161,9 +157,7 @@ suite('link browser component', () => {
 		await input.press('Enter');
 		await expect(chooser).toHaveCount(0);
 		await expect(link).toBeFocused();
-		expect(await page.evaluate(() => window.ashLinkIntegration.contributed)).toEqual([
-			'Second viewer:https://example.test/docs',
-		]);
+		expect(await page.evaluate(() => window.ashLinkIntegration.contributed)).toEqual(['Second viewer:https://example.test/docs']);
 
 		await link.press('Enter');
 		await expect(chooser).toBeVisible();
@@ -174,15 +168,11 @@ suite('link browser component', () => {
 
 		await link.press('Enter');
 		await chooser.getByRole('option', { name: '在默认浏览器中打开', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashLinkIntegration.opened))
-			.toEqual(['https://example.test/docs']);
+		await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.opened)).toEqual(['https://example.test/docs']);
 		await link.focus();
 		await link.press('Enter');
 		await chooser.getByRole('option', { name: '配置默认打开方式...', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashLinkIntegration.settingsRevealed))
-			.toEqual(['workbench.externalUriOpeners']);
+		await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.settingsRevealed)).toEqual(['workbench.externalUriOpeners']);
 		await expect(chooser).toHaveCount(0);
 	});
 
@@ -197,13 +187,9 @@ suite('link browser component', () => {
 		await link.press('Enter');
 		await link.press('Space');
 		await link.click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashLinkIntegration.opened))
-			.toEqual(Array(3).fill('https://example.test/docs'));
+		await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.opened)).toEqual(Array(3).fill('https://example.test/docs'));
 		await page.getByRole('button', { name: 'Custom action', exact: true }).click();
-		expect(await page.evaluate(() => window.ashLinkIntegration.customOpened)).toEqual([
-			'https://example.test/custom',
-		]);
+		expect(await page.evaluate(() => window.ashLinkIntegration.customOpened)).toEqual(['https://example.test/custom']);
 		await page.evaluate(() => window.ashLinkIntegration.blockOpening());
 		await link.click();
 		expect(await page.evaluate(() => window.ashLinkIntegration.opened)).toHaveLength(3);
@@ -231,9 +217,7 @@ suite('link browser component', () => {
 		await expect(link).toHaveAttribute('aria-disabled', 'false');
 		await expect(link).toHaveAttribute('tabindex', '3');
 		await link.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashLinkIntegration.opened))
-			.toEqual(['https://example.test/updated']);
+		await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.opened)).toEqual(['https://example.test/updated']);
 	});
 
 	test('managed link hover updates, clears and is released with its control', async function () {
@@ -298,9 +282,7 @@ suite('link browser component', () => {
 			});
 		}
 		await page.mouse.move(0, 0);
-		expect(await page.locator('#custom-link .ash-link').evaluate(element => getComputedStyle(element).color)).toBe(
-			'rgb(255, 128, 128)',
-		);
+		expect(await page.locator('#custom-link .ash-link').evaluate(element => getComputedStyle(element).color)).toBe('rgb(255, 128, 128)');
 	});
 
 	test('Output editor links open their reported position from the keyboard', async function () {
@@ -312,9 +294,7 @@ suite('link browser component', () => {
 		await editor.focus();
 		await page.keyboard.press('ControlOrMeta+Home');
 		await page.evaluate(() => window.ashLinkIntegration.runOpenLink());
-		await expect
-			.poll(() => page.evaluate(() => window.ashLinkIntegration.files))
-			.toEqual([{ resource: 'file:///workspace/src/main.ts', line: 12, column: 7 }]);
+		await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.files)).toEqual([{ resource: 'file:///workspace/src/main.ts', line: 12, column: 7 }]);
 		await page.evaluate(() => window.ashLinkIntegration.disposeOutput());
 		await expect(page.locator('#output .ash-view-pane')).toHaveCount(0);
 	});
@@ -340,13 +320,9 @@ suite('link browser component', () => {
 		const input = page.locator('#live-output-editor .stanza-editor-input');
 		await input.focus();
 		await page.keyboard.insertText('must not change');
-		expect((await page.evaluate(() => window.ashLinkIntegration.getOutputState())).editorText).not.toContain(
-			'must not change',
-		);
+		expect((await page.evaluate(() => window.ashLinkIntegration.getOutputState())).editorText).not.toContain('must not change');
 		await page.evaluate(() => window.ashLinkIntegration.clearOutput());
-		await expect
-			.poll(() => page.evaluate(() => window.ashLinkIntegration.getOutputState()))
-			.toEqual({ panelText: '', editorText: '', sameModel: true, readonly: true });
+		await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.getOutputState())).toEqual({ panelText: '', editorText: '', sameModel: true, readonly: true });
 		await page.evaluate(() => {
 			window.ashLinkIntegration.disposeOutput();
 			window.ashLinkIntegration.appendOutput();
@@ -436,9 +412,7 @@ suite('link browser component', () => {
 			const page = await context.newPage();
 			await page.goto('/link.html');
 			await page.getByRole('button', { name: 'Documentation', exact: true }).tap();
-			await expect
-				.poll(() => page.evaluate(() => window.ashLinkIntegration.opened))
-				.toEqual(['https://example.test/docs']);
+			await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.opened)).toEqual(['https://example.test/docs']);
 		} finally {
 			await context.close();
 		}
@@ -451,23 +425,13 @@ suite('link browser component', () => {
 			await page.goto('/link.html');
 			await page.evaluate(cowork => window.ashLinkIntegration.commandLink(true, false, cowork), cowork);
 			await page.getByRole('link', { name: 'Run linked commands', exact: true }).click();
-			await expect
-				.poll(() => page.evaluate(() => window.ashLinkIntegration.commandCalls))
-				.toEqual([{ text: '%20 中文' }, 'first finished', 'second']);
+			await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.commandCalls)).toEqual([{ text: '%20 中文' }, 'first finished', 'second']);
 			await page.evaluate(cowork => window.ashLinkIntegration.commandLink(true, true, cowork), cowork);
 			const link = page.getByRole('link', { name: 'Run linked commands', exact: true });
 			await link.focus();
 			await link.press('Enter');
-			await expect(page.locator('#command-link').getByRole('alert')).toHaveText(
-				'Unknown command: test.link.missing',
-			);
-			expect(await page.evaluate(() => window.ashLinkIntegration.commandCalls)).toEqual([
-				{ text: '%20 中文' },
-				'first finished',
-				'second',
-				{ text: '%20 中文' },
-				'first finished',
-			]);
+			await expect(page.locator('#command-link').getByRole('alert')).toHaveText('Unknown command: test.link.missing');
+			expect(await page.evaluate(() => window.ashLinkIntegration.commandCalls)).toEqual([{ text: '%20 中文' }, 'first finished', 'second', { text: '%20 中文' }, 'first finished']);
 			expect(await page.evaluate(() => window.ashLinkIntegration.opened)).toEqual([]);
 			await expect(page).toHaveURL(/\/link.html$/u);
 		});

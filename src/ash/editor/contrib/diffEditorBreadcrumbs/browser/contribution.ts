@@ -5,10 +5,7 @@ import { LineRange } from '../../../common/core/ranges/lineRange.js';
 import { type LanguageDocumentSymbol, type LanguageSymbolKind } from '../../../common/languages.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
-import {
-	HideUnchangedRegionsFeature,
-	type IDiffEditorBreadcrumbsSource,
-} from '../../../browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js';
+import { HideUnchangedRegionsFeature, type IDiffEditorBreadcrumbsSource } from '../../../browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js';
 import { OutlineModel } from '../../documentSymbols/browser/outlineModel.js';
 
 interface BreadcrumbItem {
@@ -38,11 +35,7 @@ class DiffEditorBreadcrumbsSource extends Disposable implements IDiffEditorBread
 	public getBreadcrumbItems(range: LineRange, reader: IReader): BreadcrumbItem[] {
 		const symbols = this.outline.read(reader)?.asListOfDocumentSymbols() ?? [];
 		return symbols
-			.filter(
-				symbol =>
-					range.contains(symbol.range.startLineNumber) &&
-					symbol.range.endLineNumber >= range.endLineNumberExclusive,
-			)
+			.filter(symbol => range.contains(symbol.range.startLineNumber) && symbol.range.endLineNumber >= range.endLineNumberExclusive)
 			.sort(byWiderRangeFirst)
 			.map(toBreadcrumbItem);
 	}
@@ -60,12 +53,7 @@ class DiffEditorBreadcrumbsSource extends Disposable implements IDiffEditorBread
 		const request = new AbortController();
 		this.activeRequest = request;
 		this.outline.set(undefined, undefined);
-		void OutlineModel.create(
-			this.languageFeaturesService.documentSymbolProvider,
-			this.textModel,
-			request.signal,
-			onUnexpectedExternalError,
-		).then(
+		void OutlineModel.create(this.languageFeaturesService.documentSymbolProvider, this.textModel, request.signal, onUnexpectedExternalError).then(
 			outline => {
 				if (!request.signal.aborted && !this.isDisposed) this.outline.set(outline ?? undefined, undefined);
 			},
@@ -77,17 +65,11 @@ class DiffEditorBreadcrumbsSource extends Disposable implements IDiffEditorBread
 }
 
 function byWiderRangeFirst(left: LanguageDocumentSymbol, right: LanguageDocumentSymbol): number {
-	return (
-		right.range.endLineNumber -
-		right.range.startLineNumber -
-		(left.range.endLineNumber - left.range.startLineNumber)
-	);
+	return right.range.endLineNumber - right.range.startLineNumber - (left.range.endLineNumber - left.range.startLineNumber);
 }
 
 function toBreadcrumbItem(symbol: LanguageDocumentSymbol): BreadcrumbItem {
 	return { name: symbol.name, kind: symbol.kind, startLineNumber: symbol.range.startLineNumber };
 }
 
-HideUnchangedRegionsFeature.setBreadcrumbsSourceFactory((textModel, instantiationService) =>
-	instantiationService.createInstance(DiffEditorBreadcrumbsSource, textModel),
-);
+HideUnchangedRegionsFeature.setBreadcrumbsSourceFactory((textModel, instantiationService) => instantiationService.createInstance(DiffEditorBreadcrumbsSource, textModel));

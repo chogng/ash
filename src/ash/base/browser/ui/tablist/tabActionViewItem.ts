@@ -53,12 +53,7 @@ export class TabActionViewItem<T> extends ActionViewItem {
 	private closeAction: IAction | undefined;
 	private readonly toolbar = this._register(new MutableDisposable<ActionBar>());
 
-	constructor(
-		action: TabAction<T>,
-		onClose: ((value: T) => void) | undefined,
-		closeActionIcon: Icon | undefined,
-		draggable: boolean,
-	) {
+	constructor(action: TabAction<T>, onClose: ((value: T) => void) | undefined, closeActionIcon: Icon | undefined, draggable: boolean) {
 		super(action, { draggable });
 		this.tabAction = action;
 		this.onClose = onClose;
@@ -87,9 +82,7 @@ export class TabActionViewItem<T> extends ActionViewItem {
 		if (item.renderLabel) {
 			this._register(item.renderLabel(tab));
 		} else {
-			this.label = this._register(
-				new IconLabel(tab, { label: item.label, icon: item.icon, description: item.description }),
-			);
+			this.label = this._register(new IconLabel(tab, { label: item.label, icon: item.icon, description: item.description }));
 		}
 		container.append(tab);
 
@@ -104,19 +97,10 @@ export class TabActionViewItem<T> extends ActionViewItem {
 			}),
 		);
 		if (this.onClose || this.tabAction.select) {
-			tab.setAttribute(
-				'aria-keyshortcuts',
-				[this.onClose ? 'Delete' : '', this.tabAction.select ? 'Control+Space Shift+Space' : '']
-					.filter(Boolean)
-					.join(' '),
-			);
+			tab.setAttribute('aria-keyshortcuts', [this.onClose ? 'Delete' : '', this.tabAction.select ? 'Control+Space Shift+Space' : ''].filter(Boolean).join(' '));
 			this._register(
 				addDisposableListener(tab, 'keydown', event => {
-					if (
-						this.tabAction.select &&
-						event.key === ' ' &&
-						(event.ctrlKey || event.metaKey || event.shiftKey)
-					) {
+					if (this.tabAction.select && event.key === ' ' && (event.ctrlKey || event.metaKey || event.shiftKey)) {
 						event.preventDefault();
 						event.stopPropagation();
 						this.tabAction.select(this.tabAction.tab.value, event);
@@ -180,11 +164,7 @@ export class TabActionViewItem<T> extends ActionViewItem {
 			this.hover?.update(this.tabAction.tooltip);
 		}
 		this.rendered = item;
-		if (
-			this.label &&
-			previous &&
-			(previous.label !== item.label || previous.description !== item.description || previous.icon !== item.icon)
-		) {
+		if (this.label && previous && (previous.label !== item.label || previous.description !== item.description || previous.icon !== item.icon)) {
 			this.label.setLabel(item.label, item.description, { icon: item.icon });
 		}
 		if (
@@ -196,14 +176,7 @@ export class TabActionViewItem<T> extends ActionViewItem {
 		) {
 			return;
 		}
-		if (
-			this.onClose &&
-			!item.primaryAction &&
-			(!this.closeAction ||
-				previous?.primaryAction ||
-				previous?.label !== item.label ||
-				previous.closeActionTooltip !== item.closeActionTooltip)
-		) {
+		if (this.onClose && !item.primaryAction && (!this.closeAction || previous?.primaryAction || previous?.label !== item.label || previous.closeActionTooltip !== item.closeActionTooltip)) {
 			this.closeAction = closeTabAction(this.tabAction, this.onClose, this.closeActionIcon);
 		}
 		const primaryAction = item.primaryAction ?? this.closeAction;

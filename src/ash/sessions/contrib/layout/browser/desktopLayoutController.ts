@@ -52,28 +52,14 @@ export class DesktopLayoutController extends BaseLayoutController {
 		@ILifecycleService lifecycle: ILifecycleService,
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
-		super(
-			panes,
-			sessions,
-			management,
-			editor,
-			editors,
-			workspace,
-			layout,
-			storage,
-			notifications,
-			lifecycle,
-			instantiation,
-		);
+		super(panes, sessions, management, editor, editors, workspace, layout, storage, notifications, lifecycle, instantiation);
 		this.tabs = this._register(instantiation.createInstance(DesktopDockedTabsCoordinator, pageGroupId));
 		this.detailPanel = instantiation.createInstance(DesktopDetailPanelCoordinator);
 		const lastOpen = storage.get(lastOpenKey, StorageScope.PROFILE);
 		if (lastOpen !== undefined) {
 			const profile: unknown = JSON.parse(lastOpen);
 			if (!isRecord(profile) || typeof profile.editor !== 'boolean' || typeof profile.details !== 'boolean') {
-				throw new TypeError(
-					localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'),
-				);
+				throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 			}
 			this.closedProfile = { documents: profile.editor, details: profile.details };
 		}
@@ -185,9 +171,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 			!this.context.isSessionContent ||
 			(this.context.isDocumentContent &&
 				this.editors.visibleEditors.length > 0 &&
-				(this.layout.isPartVisible('editor') ||
-					!this.editors.activeEditor ||
-					!this.tabs.isManaged(this.editors.activeEditor)))
+				(this.layout.isPartVisible('editor') || !this.editors.activeEditor || !this.tabs.isManaged(this.editors.activeEditor)))
 		);
 	}
 	protected override isEditorAutoVisibilitySuppressed(): boolean {
@@ -204,10 +188,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 		this.editor.setGroupVisible(this.pageGroupId, false);
 		this.editor.activateGroup(this.documentGroups[0]!.id);
 	}
-	protected override async onSessionRestored(
-		selection: SessionsViewSelection,
-		_hasSavedEditors: boolean,
-	): Promise<void> {
+	protected override async onSessionRestored(selection: SessionsViewSelection, _hasSavedEditors: boolean): Promise<void> {
 		if (!this.context.isDocumentContent) {
 			return;
 		}
@@ -278,12 +259,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 				documents: this.documentsVisible,
 				details: this.layout.isPartVisible('auxiliarybar'),
 			};
-			this.storage.store(
-				lastOpenKey,
-				JSON.stringify({ editor: this.closedProfile.documents, details: this.closedProfile.details }),
-				StorageScope.PROFILE,
-				StorageTarget.MACHINE,
-			);
+			this.storage.store(lastOpenKey, JSON.stringify({ editor: this.closedProfile.documents, details: this.closedProfile.details }), StorageScope.PROFILE, StorageTarget.MACHINE);
 			this.setDocumentsVisible(false);
 			this.layout.hidePart('auxiliarybar');
 			this.layout.focus();

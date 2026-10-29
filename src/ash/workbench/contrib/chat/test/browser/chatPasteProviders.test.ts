@@ -13,12 +13,7 @@ import { createChatFileAttachments } from '../../browser/widget/input/editor/cha
 import { URI } from '../../../../../base/common/uri.js';
 
 // File preparation uses only the resolver's in-memory image port in this suite.
-const resolver = new ChatAttachmentResolveService(
-	{} as IFileService,
-	{} as IWorkingCopyService,
-	{} as IFileSearchService,
-	{} as IWorkspaceContextService,
-);
+const resolver = new ChatAttachmentResolveService({} as IFileService, {} as IWorkingCopyService, {} as IFileSearchService, {} as IWorkspaceContextService);
 
 test('native text drops retain their real source URI alongside the captured bytes', async () => {
 	const dropped = file('Captured original bytes', 'source.ts');
@@ -41,12 +36,7 @@ function file(content: string | Uint8Array, name = 'notes.txt', type = 'text/pla
 }
 
 test('File context preserves valid UTF-8 including the literal replacement character', async () => {
-	const attachments = await createChatFileAttachments(
-		[file('line one\n literal \uFFFD')],
-		new AbortController().signal,
-		() => true,
-		resolver,
-	);
+	const attachments = await createChatFileAttachments([file('line one\n literal \uFFFD')], new AbortController().signal, () => true, resolver);
 	assert.equal(attachments.length, 1);
 	assert.equal(attachments[0]!.kind, 'file');
 	assert.deepEqual(await attachments[0]!.resolve(), { name: 'notes.txt', content: 'line one\n literal \uFFFD' });
@@ -60,12 +50,7 @@ for (const [name, bytes, message] of [
 ] as const) {
 	test(`File context rejects ${name} before any batch is returned`, async () => {
 		await assert.rejects(
-			createChatFileAttachments(
-				[file('valid'), file(bytes, name)],
-				new AbortController().signal,
-				() => true,
-				resolver,
-			),
+			createChatFileAttachments([file('valid'), file(bytes, name)], new AbortController().signal, () => true, resolver),
 			message,
 		);
 	});
@@ -73,20 +58,10 @@ for (const [name, bytes, message] of [
 
 test('A text-only model rejects images but can prepare a following text batch', async () => {
 	await assert.rejects(
-		createChatFileAttachments(
-			[file(new Uint8Array([1]), 'image.png', 'image/png')],
-			new AbortController().signal,
-			() => false,
-			resolver,
-		),
+		createChatFileAttachments([file(new Uint8Array([1]), 'image.png', 'image/png')], new AbortController().signal, () => false, resolver),
 		/does not support images/u,
 	);
-	const attachments = await createChatFileAttachments(
-		[file('following text')],
-		new AbortController().signal,
-		() => false,
-		resolver,
-	);
+	const attachments = await createChatFileAttachments([file('following text')], new AbortController().signal, () => false, resolver);
 	assert.deepEqual(await attachments[0]!.resolve(), { name: 'notes.txt', content: 'following text' });
 });
 
@@ -101,12 +76,7 @@ test('Cancelling file reads rejects preparation before returning draft context',
 for (const type of ['', 'application/octet-stream', 'image/png']) {
 	test(`Image files with MIME '${type}' are rejected before reads when the model lacks image support`, async () => {
 		await assert.rejects(
-			createChatFileAttachments(
-				[file(new Uint8Array([1]), 'capture.PNG', type)],
-				new AbortController().signal,
-				() => false,
-				resolver,
-			),
+			createChatFileAttachments([file(new Uint8Array([1]), 'capture.PNG', type)], new AbortController().signal, () => false, resolver),
 			/does not support images/u,
 		);
 	});
@@ -127,19 +97,14 @@ for (const change of ['model', 'cancellation'] as const) {
 		const decoded = new DeferredPromise<Awaited<ReturnType<typeof resolver.resolveImageAttachContext>>>();
 		const controller = new AbortController();
 		let supportsImages = true;
-		const preparing = createChatFileAttachments(
-			[file('Captured text'), file(new Uint8Array([1]), 'capture.PNG', '')],
-			controller.signal,
-			() => supportsImages,
-			{
-				resolveImageAttachContext: async (images, signal) => {
-					assert.equal(images[0]!.mimeType, 'image/png');
-					assert.ok(signal);
-					await started.complete();
-					return decoded.p;
-				},
+		const preparing = createChatFileAttachments([file('Captured text'), file(new Uint8Array([1]), 'capture.PNG', '')], controller.signal, () => supportsImages, {
+			resolveImageAttachContext: async (images, signal) => {
+				assert.equal(images[0]!.mimeType, 'image/png');
+				assert.ok(signal);
+				await started.complete();
+				return decoded.p;
 			},
-		);
+		});
 		await started.p;
 		if (change === 'model') supportsImages = false;
 		else controller.abort();

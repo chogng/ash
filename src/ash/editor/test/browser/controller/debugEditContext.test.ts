@@ -15,9 +15,7 @@ test('DebugEditContext delegates browser state and clears its diagnostic markers
 		public characterBoundsRangeStart = 0;
 		private bounds: DOMRect[] = [];
 
-		constructor(
-			options: { readonly text?: string; readonly selectionStart?: number; readonly selectionEnd?: number } = {},
-		) {
+		constructor(options: { readonly text?: string; readonly selectionStart?: number; readonly selectionEnd?: number } = {}) {
 			super();
 			this.text = options.text ?? '';
 			this.selectionStart = options.selectionStart ?? 0;

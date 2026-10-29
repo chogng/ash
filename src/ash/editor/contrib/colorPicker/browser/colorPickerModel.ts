@@ -29,8 +29,7 @@ export class ColorPickerModel extends Disposable {
 
 	set colorPresentations(colorPresentations: IColorPresentation[]) {
 		this._colorPresentations = colorPresentations;
-		if (colorPresentations.length > 0 && this.presentationIndex > colorPresentations.length - 1)
-			this.presentationIndex = 0;
+		if (colorPresentations.length > 0 && this.presentationIndex > colorPresentations.length - 1) this.presentationIndex = 0;
 		this._onDidChangePresentation.fire(this.presentation);
 	}
 
@@ -78,9 +77,7 @@ export class ColorPickerModel extends Disposable {
 		}
 
 		if (presentationIndex === -1) {
-			const originalTextPrefix = originalText.trim().startsWith('#')
-				? '#'
-				: originalText.split('(')[0]!.trim().toLowerCase();
+			const originalTextPrefix = originalText.trim().startsWith('#') ? '#' : originalText.split('(')[0]!.trim().toLowerCase();
 			for (let i = 0; i < this.colorPresentations.length; i++) {
 				if (this.colorPresentations[i]!.label.toLowerCase().startsWith(originalTextPrefix)) {
 					presentationIndex = i;

@@ -31,17 +31,11 @@ suite('CountBadge', () => {
 		});
 		try {
 			using badge = new CountBadge(browser.window.document.body, { count: 6, titleFormat: '{0} changes' });
-			assert.deepEqual(
-				{ text: badge.domNode.textContent, description: badge.domNode.getAttribute('aria-label') },
-				{ text: '6', description: '6 changes' },
-			);
+			assert.deepEqual({ text: badge.domNode.textContent, description: badge.domNode.getAttribute('aria-label') }, { text: '6', description: '6 changes' });
 			const root = badge.domNode;
 			badge.setCount(1234);
 			assert.equal(badge.domNode, root);
-			assert.deepEqual(
-				{ text: root.textContent, description: root.getAttribute('aria-label') },
-				{ text: '1234', description: '1234 changes' },
-			);
+			assert.deepEqual({ text: root.textContent, description: root.getAttribute('aria-label') }, { text: '1234', description: '1234 changes' });
 			badge.setCount(0);
 			assert.deepEqual(descriptions, ['6 changes', '1234 changes', '0 changes']);
 			badge.dispose();

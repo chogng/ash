@@ -2,11 +2,7 @@ import './testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import {
-	SemanticTokenPresentation,
-	createLanguageTokenStore,
-	type LanguageToken,
-} from '../../common/tokens/languageTokens.js';
+import { SemanticTokenPresentation, createLanguageTokenStore, type LanguageToken } from '../../common/tokens/languageTokens.js';
 import { LanguageTokenLineIndex, StyledTokenSource } from '../../common/tokens/languageTokenLineIndex.js';
 import { LanguageResultAcceptance } from '../../common/model/languageResultStore.js';
 import { Position } from '../../common/core/position.js';
@@ -64,16 +60,10 @@ test('Same-version token replacement rerenders visible text and model edits clea
 	});
 	viewport.layout({ width: 200, height: 20 });
 	viewport.render(true, false);
-	const textElement = requiredElement<HTMLElement>(
-		requiredLine(viewport.domNode.domNode, 0),
-		'.stanza-editor-line-text',
-	);
+	const textElement = requiredElement<HTMLElement>(requiredLine(viewport.domNode.domNode, 0), '.stanza-editor-line-text');
 	assert.equal(textElement.textContent, '<tag> value');
 	assert.equal(textElement.querySelector('tag'), null);
-	assert.equal(
-		requiredElement(textElement, '.stanza-editor-token').classList.contains(SemanticTokenPresentation.String),
-		true,
-	);
+	assert.equal(requiredElement(textElement, '.stanza-editor-token').classList.contains(SemanticTokenPresentation.String), true);
 
 	acceptTokens(store, model, 2, [token(0, 6, 11, 'variable')]);
 	viewport.render(true, false);
@@ -83,10 +73,20 @@ test('Same-version token replacement rerenders visible text and model edits clea
 			className: element.className,
 			text: element.textContent,
 		})),
-		[{ className: 'stanza-editor-token token-variable', text: 'value' }],
+		[
+			{
+				className: 'stanza-editor-token token-variable',
+				text: 'value',
+			},
+		],
 	);
 
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 0 + 1)), text: 'X' }]);
+	model.applyEdits([
+		{
+			range: Range.fromPositions(new Position(0 + 1, 0 + 1)),
+			text: 'X',
+		},
+	]);
 	assert.equal(store.result, undefined);
 	viewport.render(true, false);
 	assert.equal(textElement.textContent, 'X<tag> value');
@@ -100,7 +100,10 @@ test('Viewport clips semantic token spans to every soft-wrapped text fragment', 
 	using model = new TextModel('abcdef');
 	using store = createLanguageTokenStore(model);
 	acceptTokens(store, model, 1, [
-		{ ...token(0, 1, 5, 'keyword'), presentation: { foreground: '#123456', fontStyle: ['italic'] } },
+		{
+			...token(0, 1, 5, 'keyword'),
+			presentation: { foreground: '#123456', fontStyle: ['italic'] },
+		},
 	]);
 	using index = new LanguageTokenLineIndex(store);
 	using source = new StyledTokenSource(index, 'semantic');
@@ -118,9 +121,18 @@ test('Viewport clips semantic token spans to every soft-wrapped text fragment', 
 	viewport.render(true, false);
 
 	assert.deepEqual(lineTokenFragments(viewport.domNode.domNode), [
-		{ lineIndex: '0', text: 'b' },
-		{ lineIndex: '1', text: 'cd' },
-		{ lineIndex: '2', text: 'e' },
+		{
+			lineIndex: '0',
+			text: 'b',
+		},
+		{
+			lineIndex: '1',
+			text: 'cd',
+		},
+		{
+			lineIndex: '2',
+			text: 'e',
+		},
 	]);
 	assert.deepEqual(
 		[...viewport.domNode.domNode.querySelectorAll<HTMLElement>('.stanza-editor-token')].map(element => ({
@@ -167,7 +179,12 @@ test('Viewport rejects cross-model token sources and owns none of their common s
 
 	acceptTokens(store, model, 1, [token(0, 0, 5, 'keyword')]);
 	assert.equal(index.getLineTokens(0).length, 1);
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 5 + 1)), text: '!' }]);
+	model.applyEdits([
+		{
+			range: Range.fromPositions(new Position(0 + 1, 5 + 1)),
+			text: '!',
+		},
+	]);
 	assert.equal(model.getText(), 'alpha!');
 	dom.window.close();
 });
@@ -223,24 +240,21 @@ test('Viewport resolves semantic tokens only for virtualized lines', () => {
 	dom.window.close();
 });
 
-function acceptTokens(
-	store: ReturnType<typeof createLanguageTokenStore>,
-	model: TextModel,
-	requestId: number,
-	tokens: readonly LanguageToken[],
-): void {
+function acceptTokens(store: ReturnType<typeof createLanguageTokenStore>, model: TextModel, requestId: number, tokens: readonly LanguageToken[]): void {
 	assert.equal(
-		store.accept({ requestId, textModel: model, modelVersion: model.version, value: { tokens } }),
+		store.accept({
+			requestId,
+			textModel: model,
+			modelVersion: model.version,
+			value: { tokens },
+		}),
 		LanguageResultAcceptance.Applied,
 	);
 }
 
 function token(lineIndex: number, startColumn: number, endColumn: number, tokenType: string): LanguageToken {
 	return {
-		range: Range.fromPositions(
-			new Position(lineIndex + 1, startColumn + 1),
-			new Position(lineIndex + 1, endColumn + 1),
-		),
+		range: Range.fromPositions(new Position(lineIndex + 1, startColumn + 1), new Position(lineIndex + 1, endColumn + 1)),
 		tokenType,
 		modifiers: [],
 	};
@@ -251,14 +265,10 @@ function lines(count: number): string[] {
 }
 
 function renderedTokenLines(root: ParentNode): string[] {
-	return [...root.querySelectorAll('.stanza-editor-token')].map(
-		element => (element.parentElement?.parentElement as HTMLElement).dataset.lineIndex!,
-	);
+	return [...root.querySelectorAll('.stanza-editor-token')].map(element => (element.parentElement?.parentElement as HTMLElement).dataset.lineIndex!);
 }
 
-function lineTokenFragments(
-	root: ParentNode,
-): { readonly lineIndex: string | undefined; readonly text: string | null }[] {
+function lineTokenFragments(root: ParentNode): { readonly lineIndex: string | undefined; readonly text: string | null }[] {
 	return [...root.querySelectorAll<HTMLElement>('.stanza-editor-token')].map(element => ({
 		lineIndex: element.parentElement?.parentElement?.dataset.lineIndex,
 		text: element.textContent,

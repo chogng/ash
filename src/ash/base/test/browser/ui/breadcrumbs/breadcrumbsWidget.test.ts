@@ -1,11 +1,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import {
-	BreadcrumbsItem,
-	BreadcrumbsWidget,
-	type IBreadcrumbsWidgetStyles,
-} from '../../../../browser/ui/breadcrumbs/breadcrumbsWidget.js';
+import { BreadcrumbsItem, BreadcrumbsWidget, type IBreadcrumbsWidgetStyles } from '../../../../browser/ui/breadcrumbs/breadcrumbsWidget.js';
 import { Lxicon } from '../../../../common/lxicons.js';
 import { toDisposable } from '../../../../common/lifecycle.js';
 
@@ -38,17 +34,10 @@ suite('BreadcrumbsWidget', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		const pending = new Set<() => void>();
 		try {
-			using widget = new BreadcrumbsWidget(
-				dom.window.document.body,
-				3,
-				undefined,
-				Lxicon.chevronRight,
-				styles,
-				(_window, callback) => {
-					pending.add(callback);
-					return toDisposable(() => pending.delete(callback));
-				},
-			);
+			using widget = new BreadcrumbsWidget(dom.window.document.body, 3, undefined, Lxicon.chevronRight, styles, (_window, callback) => {
+				pending.add(callback);
+				return toDisposable(() => pending.delete(callback));
+			});
 			const viewport = dom.window.document.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
 			let reads = 0;
 			Object.defineProperty(viewport, 'clientWidth', {
@@ -101,9 +90,7 @@ suite('BreadcrumbsWidget', () => {
 			assert.equal(dom.window.document.activeElement?.getAttribute('aria-pressed'), 'true');
 			widget.setEnabled(false);
 			widget.setFocused(last);
-			dom.window.document
-				.querySelectorAll('button')[1]!
-				.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+			dom.window.document.querySelectorAll('button')[1]!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
 			assert.deepEqual(selected, [first]);
 			assert.equal(dom.window.document.querySelectorAll('button:disabled').length, 2);
 		} finally {
@@ -123,16 +110,10 @@ suite('BreadcrumbsWidget', () => {
 			const replacement = new LabelItem('new.ts');
 			widget.setItems([duplicate, replacement]);
 			assert.equal(dom.window.document.querySelector('button'), retained);
-			assert.deepEqual(
-				[first.disposeCount, last.disposeCount, duplicate.disposeCount, replacement.disposeCount],
-				[0, 1, 1, 0],
-			);
+			assert.deepEqual([first.disposeCount, last.disposeCount, duplicate.disposeCount, replacement.disposeCount], [0, 1, 1, 0]);
 			widget.dispose();
 			widget.dispose();
-			assert.deepEqual(
-				[first.disposeCount, replacement.disposeCount, dom.window.document.body.childElementCount],
-				[1, 1, 0],
-			);
+			assert.deepEqual([first.disposeCount, replacement.disposeCount, dom.window.document.body.childElementCount], [1, 1, 0]);
 		} finally {
 			dom.window.close();
 		}
@@ -142,17 +123,10 @@ suite('BreadcrumbsWidget', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		const operations: string[] = [];
 		try {
-			const widget = new BreadcrumbsWidget(
-				dom.window.document.body,
-				3,
-				undefined,
-				Lxicon.chevronRight,
-				styles,
-				() => {
-					operations.push('scheduled');
-					return toDisposable(() => operations.push('cancelled'));
-				},
-			);
+			const widget = new BreadcrumbsWidget(dom.window.document.body, 3, undefined, Lxicon.chevronRight, styles, () => {
+				operations.push('scheduled');
+				return toDisposable(() => operations.push('cancelled'));
+			});
 			const first = new LabelItem('first');
 			widget.setItems([first, new LabelItem('last')]);
 			widget.revealLast();

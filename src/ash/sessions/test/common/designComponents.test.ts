@@ -3,13 +3,7 @@ import { test } from 'mocha';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { DocumentCommands } from '../../contrib/creator/common/commands/documentCommands.js';
 import { DesignModel } from '../../contrib/creator/common/model/designModel.js';
-import {
-	documentFromShapes,
-	flattenDesignShapes,
-	parseDesignDocument,
-	serializeDesignDocument,
-	type DesignShape,
-} from '../../contrib/creator/common/model/document.js';
+import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/creator/common/model/document.js';
 import { hitTestDesignShapes } from '../../contrib/creator/common/model/hitTest.js';
 
 type Frame = Extract<DesignShape, { kind: 'frame' }>;
@@ -261,10 +255,7 @@ test('Design component schema rejects malformed metadata, variant conflicts and 
 	assert.throws(() => validate([{ ...source, sourceId: generateUuid() }]), TypeError);
 	assert.throws(() => validate([{ ...source, overrides: ['fill'] }]), TypeError);
 	assert.throws(() => validate([{ ...source, instance: { componentId: source.id } }]), TypeError);
-	assert.throws(
-		() => validate([{ ...source, component: { kind: 'main', variant: { State: 'Default' } } }]),
-		TypeError,
-	);
+	assert.throws(() => validate([{ ...source, component: { kind: 'main', variant: { State: 'Default' } } }]), TypeError);
 	const recursive: Frame = {
 		...source,
 		children: [{ ...main([]), component: undefined, instance: { componentId: source.id } }],
@@ -273,10 +264,7 @@ test('Design component schema rejects malformed metadata, variant conflicts and 
 	const set: Frame = { ...main([]), component: { kind: 'set', properties: ['State'] }, children: [source] };
 	assert.throws(() => validate([set]), TypeError);
 	const variant: Frame = { ...source, component: { kind: 'main', variant: { State: 'Default' } } };
-	assert.throws(
-		() => validate([{ ...set, children: [variant, { ...variant, id: generateUuid(), children: [] }] }]),
-		TypeError,
-	);
+	assert.throws(() => validate([{ ...set, children: [variant, { ...variant, id: generateUuid(), children: [] }] }]), TypeError);
 });
 
 test('Design nested instance swaps reset to their outer source and cannot push recursive definitions', () => {

@@ -89,16 +89,10 @@ test('failed rejection preserves its review source through a restart and retries
 	await first.agent('agent');
 	first.failSave = true;
 	await assert.rejects(first.entry.reject(), /injected rejection save failure/);
-	assert.deepEqual(
-		{ disk: first.disk, text: first.model.getText(), completed: first.complete },
-		{ disk: 'agent', text: 'original', completed: 0 },
-	);
+	assert.deepEqual({ disk: first.disk, text: first.model.getText(), completed: first.complete }, { disk: 'agent', text: 'original', completed: 0 });
 	using reopened = fixture(first.disk, first.entry.createSnapshot());
 	assert.equal(reopened.model.getText(), 'original');
-	assert.deepEqual(
-		{ hunks: reopened.entry.hunks.length, pendingSave: reopened.entry.hasPendingSave },
-		{ hunks: 0, pendingSave: true },
-	);
+	assert.deepEqual({ hunks: reopened.entry.hunks.length, pendingSave: reopened.entry.hasPendingSave }, { hunks: 0, pendingSave: true });
 	assert.deepEqual(first.entry.createSnapshot(), {
 		resource,
 		original: 'original',
@@ -107,22 +101,12 @@ test('failed rejection preserves its review source through a restart and retries
 	});
 	assert.equal(reopened.disk, 'agent');
 	await reopened.entry.reject();
-	assert.deepEqual(
-		{ disk: reopened.disk, text: reopened.model.getText(), completed: reopened.complete },
-		{ disk: 'original', text: 'original', completed: 1 },
-	);
+	assert.deepEqual({ disk: reopened.disk, text: reopened.model.getText(), completed: reopened.complete }, { disk: 'original', text: 'original', completed: 1 });
 });
 
 test('restoring the owning model backup keeps a failed rejection retryable even with no remaining hunks', async () => {
-	using reopened = fixture(
-		'agent',
-		{ resource, original: 'original', current: 'original', pendingSaveSource: 'agent' },
-		'original',
-	);
-	assert.deepEqual(
-		{ hunks: reopened.entry.hunks.length, pendingSave: reopened.entry.hasPendingSave, disk: reopened.disk },
-		{ hunks: 0, pendingSave: true, disk: 'agent' },
-	);
+	using reopened = fixture('agent', { resource, original: 'original', current: 'original', pendingSaveSource: 'agent' }, 'original');
+	assert.deepEqual({ hunks: reopened.entry.hunks.length, pendingSave: reopened.entry.hasPendingSave, disk: reopened.disk }, { hunks: 0, pendingSave: true, disk: 'agent' });
 	await reopened.entry.reject();
 	assert.equal(reopened.disk, 'original');
 	assert.equal(reopened.complete, 1);
@@ -156,10 +140,7 @@ test('saving in the editor finishes a failed rejection without a second review d
 	await assert.rejects(current.entry.reject());
 	current.failSave = false;
 	await current.reference.save(new AbortController().signal);
-	assert.deepEqual(
-		{ disk: current.disk, pendingSave: current.entry.hasPendingSave, completed: current.complete },
-		{ disk: 'original', pendingSave: false, completed: 1 },
-	);
+	assert.deepEqual({ disk: current.disk, pendingSave: current.entry.hasPendingSave, completed: current.complete }, { disk: 'original', pendingSave: false, completed: 1 });
 });
 
 test('user edits after a failed rejection survive retry and retain the recovery baseline', async () => {
@@ -199,9 +180,7 @@ test('accepting dirty Agent changes saves user edits and keeps the review retrya
 	using current = fixture();
 	await current.agent('agent');
 	const end = current.model.getPositionAt(current.model.getText().length);
-	current.model.applyOperations([
-		{ range: new Range(end.lineNumber, end.column, end.lineNumber, end.column), text: '\nuser note' },
-	]);
+	current.model.applyOperations([{ range: new Range(end.lineNumber, end.column, end.lineNumber, end.column), text: '\nuser note' }]);
 	assert.equal(current.entry.hunks.length, 1);
 	current.failSave = true;
 	await assert.rejects(current.entry.accept(), /injected rejection save failure/);
@@ -213,14 +192,17 @@ test('accepting dirty Agent changes saves user edits and keeps the review retrya
 			hunks: current.entry.hunks.length,
 			busy: current.entry.isBusy,
 		},
-		{ disk: 'agent', text: 'agent\nuser note', completed: 0, hunks: 1, busy: false },
+		{
+			disk: 'agent',
+			text: 'agent\nuser note',
+			completed: 0,
+			hunks: 1,
+			busy: false,
+		},
 	);
 	current.failSave = false;
 	await current.entry.accept();
-	assert.deepEqual(
-		{ disk: current.disk, text: current.model.getText(), completed: current.complete },
-		{ disk: 'agent\nuser note', text: 'agent\nuser note', completed: 1 },
-	);
+	assert.deepEqual({ disk: current.disk, text: current.model.getText(), completed: current.complete }, { disk: 'agent\nuser note', text: 'agent\nuser note', completed: 1 });
 });
 
 test('restarting a failed hunk rejection restores only that unsaved decision', async () => {
@@ -266,10 +248,7 @@ test('rejecting all after a failed hunk save still rejects the remaining Agent c
 	await assert.rejects(current.entry.reject(current.entry.hunks[0]));
 	current.failSave = false;
 	await current.entry.reject();
-	assert.deepEqual(
-		{ disk: current.disk, hunks: current.entry.hunks.length, completed: current.complete },
-		{ disk: 'first\nseparator\nlast', hunks: 0, completed: 1 },
-	);
+	assert.deepEqual({ disk: current.disk, hunks: current.entry.hunks.length, completed: current.complete }, { disk: 'first\nseparator\nlast', hunks: 0, completed: 1 });
 });
 
 async function deferredSaveFixture() {
@@ -339,9 +318,7 @@ async function deferredSaveFixture() {
 		},
 		append(text: string) {
 			const end = editor.model.getPositionAt(editor.model.getText().length);
-			editor.model.applyOperations([
-				{ range: new Range(end.lineNumber, end.column, end.lineNumber, end.column), text },
-			]);
+			editor.model.applyOperations([{ range: new Range(end.lineNumber, end.column, end.lineNumber, end.column), text }]);
 		},
 		dispose: () => lifetime.dispose(),
 		[Symbol.dispose]: () => lifetime.dispose(),
@@ -366,14 +343,17 @@ test('Accept retains a new Agent hunk delivered while its captured text is savin
 			dirty: current.reference.isDirty,
 			hunks: current.entry.hunks.length,
 		},
-		{ completed: 0, disk: 'agent A\nuser note', text: 'agent B\nuser note', dirty: true, hunks: 1 },
+		{
+			completed: 0,
+			disk: 'agent A\nuser note',
+			text: 'agent B\nuser note',
+			dirty: true,
+			hunks: 1,
+		},
 	);
 	assert.equal(current.entry.hunks[0].modifiedText, 'agent B\n');
 	await current.entry.accept();
-	assert.deepEqual(
-		{ completed: current.complete, disk: current.disk, dirty: current.reference.isDirty },
-		{ completed: 1, disk: 'agent B\nuser note', dirty: false },
-	);
+	assert.deepEqual({ completed: current.complete, disk: current.disk, dirty: current.reference.isDirty }, { completed: 1, disk: 'agent B\nuser note', dirty: false });
 });
 
 test('Accept retains newer unsaved user text when an older write completes', async () => {
@@ -394,13 +374,16 @@ test('Accept retains newer unsaved user text when an older write completes', asy
 			dirty: current.reference.isDirty,
 			hunks: current.entry.hunks.length,
 		},
-		{ completed: 0, disk: 'agent\nfirst note', text: 'agent\nfirst note\nsecond note', dirty: true, hunks: 1 },
+		{
+			completed: 0,
+			disk: 'agent\nfirst note',
+			text: 'agent\nfirst note\nsecond note',
+			dirty: true,
+			hunks: 1,
+		},
 	);
 	await current.entry.accept();
-	assert.deepEqual(
-		{ completed: current.complete, disk: current.disk, dirty: current.reference.isDirty },
-		{ completed: 1, disk: 'agent\nfirst note\nsecond note', dirty: false },
-	);
+	assert.deepEqual({ completed: current.complete, disk: current.disk, dirty: current.reference.isDirty }, { completed: 1, disk: 'agent\nfirst note\nsecond note', dirty: false });
 });
 
 test('Accept cannot retire a new Agent operation that has not changed the model yet', async () => {
@@ -414,10 +397,7 @@ test('Accept cannot retire a new Agent operation that has not changed the model 
 	current.entry.beginAgentEdit([edit]);
 	await write.release.complete();
 	await accepting;
-	assert.deepEqual(
-		{ completed: current.complete, busy: current.entry.isBusy, dirty: current.reference.isDirty },
-		{ completed: 0, busy: true, dirty: false },
-	);
+	assert.deepEqual({ completed: current.complete, busy: current.entry.isBusy, dirty: current.reference.isDirty }, { completed: 0, busy: true, dirty: false });
 	current.model.applyOperations([edit]);
 	current.entry.endAgentEdit();
 	assert.equal(current.entry.hunks.length, 1);
@@ -460,10 +440,7 @@ test('Accept retains the review when a newer Agent operation preserves the same 
 	current.entry.endAgentEdit();
 	await write.release.complete();
 	await accepting;
-	assert.deepEqual(
-		{ completed: current.complete, dirty: current.reference.isDirty, hunks: current.entry.hunks.length },
-		{ completed: 0, dirty: false, hunks: 1 },
-	);
+	assert.deepEqual({ completed: current.complete, dirty: current.reference.isDirty, hunks: current.entry.hunks.length }, { completed: 0, dirty: false, hunks: 1 });
 	await current.entry.accept();
 	assert.equal(current.complete, 1);
 });
@@ -505,14 +482,17 @@ test('a rejected review stays retryable when user text arrives after its save ca
 			pending: current.entry.hasPendingSave,
 			hunks: current.entry.hunks.length,
 		},
-		{ completed: 0, disk: 'original', dirty: true, pending: true, hunks: 0 },
+		{
+			completed: 0,
+			disk: 'original',
+			dirty: true,
+			pending: true,
+			hunks: 0,
+		},
 	);
 	assert.equal(current.entry.createSnapshot().pendingSaveSource, 'agent');
 	await current.entry.retrySave();
-	assert.deepEqual(
-		{ completed: current.complete, disk: current.disk, dirty: current.reference.isDirty },
-		{ completed: 1, disk: 'original\nnew user note', dirty: false },
-	);
+	assert.deepEqual({ completed: current.complete, disk: current.disk, dirty: current.reference.isDirty }, { completed: 1, disk: 'original\nnew user note', dirty: false });
 });
 
 test('retrying a failed rejection keeps later user text pending until its own save is acknowledged', async () => {
@@ -537,11 +517,13 @@ test('retrying a failed rejection keeps later user text pending until its own sa
 			dirty: current.reference.isDirty,
 			pending: current.entry.hasPendingSave,
 		},
-		{ completed: 0, disk: 'original', dirty: true, pending: true },
+		{
+			completed: 0,
+			disk: 'original',
+			dirty: true,
+			pending: true,
+		},
 	);
 	await current.entry.retrySave();
-	assert.deepEqual(
-		{ completed: current.complete, disk: current.disk, dirty: current.reference.isDirty },
-		{ completed: 1, disk: 'original\nnew user note', dirty: false },
-	);
+	assert.deepEqual({ completed: current.complete, disk: current.disk, dirty: current.reference.isDirty }, { completed: 1, disk: 'original\nnew user note', dirty: false });
 });

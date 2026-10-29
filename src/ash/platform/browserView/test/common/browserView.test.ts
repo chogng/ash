@@ -51,29 +51,47 @@ test('browser view validators admit secure and loopback navigation', () => {
 	assert.equal(normalizeBrowserViewUrl('about:blank'), 'about:blank');
 	assert.equal(normalizeBrowserViewUrl('file:///workspace/index.html'), 'file:///workspace/index.html');
 	assert.deepEqual(validateBrowserViewCreateRequest({ targetId, options }), { targetId, options });
-	assert.deepEqual(validateBrowserViewNavigateRequest({ targetId, url: 'https://example.com' }), {
-		targetId,
-		url: 'https://example.com/',
-	});
+	assert.deepEqual(
+		validateBrowserViewNavigateRequest({
+			targetId,
+			url: 'https://example.com',
+		}),
+		{
+			targetId,
+			url: 'https://example.com/',
+		},
+	);
 });
 
 test('browser view validators reject privileged URLs and malformed geometry', () => {
-	for (const url of [
-		'http://example.com',
-		'file://remote/secret.txt',
-		'javascript:alert(1)',
-		'https://user:password@example.com',
-	]) {
+	for (const url of ['http://example.com', 'file://remote/secret.txt', 'javascript:alert(1)', 'https://user:password@example.com']) {
 		assert.throws(() => normalizeBrowserViewUrl(url));
 	}
 	assert.throws(() =>
-		validateBrowserViewCreateRequest({ targetId, url: 'https://example.com', preload: 'unsafe.js' }),
+		validateBrowserViewCreateRequest({
+			targetId,
+			url: 'https://example.com',
+			preload: 'unsafe.js',
+		}),
 	);
-	assert.throws(() => validateBrowserViewLayoutRequest({ targetId, bounds: { x: 0, y: 0, width: 0, height: 600 } }));
 	assert.throws(() =>
-		validateBrowserViewLayoutRequest({ targetId, bounds: { x: 0.5, y: 0, width: 800, height: 600 } }),
+		validateBrowserViewLayoutRequest({
+			targetId,
+			bounds: { x: 0, y: 0, width: 0, height: 600 },
+		}),
 	);
-	assert.throws(() => validateBrowserViewVisibilityRequest({ targetId: 'not-a-target', visible: true }));
+	assert.throws(() =>
+		validateBrowserViewLayoutRequest({
+			targetId,
+			bounds: { x: 0.5, y: 0, width: 800, height: 600 },
+		}),
+	);
+	assert.throws(() =>
+		validateBrowserViewVisibilityRequest({
+			targetId: 'not-a-target',
+			visible: true,
+		}),
+	);
 });
 
 test('browser view proxies preserve validated commands, subscriptions and backend sharing across IPC', async () => {
@@ -204,17 +222,8 @@ test('browser view proxies preserve validated commands, subscriptions and backen
 	for (const index of [-1, 17, 1.5, Infinity]) {
 		await assert.rejects(proxy.setBrowserZoomIndex(targetId, index), /Invalid browser zoom/);
 	}
-	for (const device of [
-		{ width: 0 },
-		{ height: 8193 },
-		{ deviceScaleFactor: Infinity },
-		{ userAgent: 'a\nb' },
-		{ unknown: true },
-	]) {
-		await assert.rejects(
-			channel.call('window:1', 'setDeviceEmulation', [targetId, device]),
-			/Invalid browser device/,
-		);
+	for (const device of [{ width: 0 }, { height: 8193 }, { deviceScaleFactor: Infinity }, { userAgent: 'a\nb' }, { unknown: true }]) {
+		await assert.rejects(channel.call('window:1', 'setDeviceEmulation', [targetId, device]), /Invalid browser device/);
 	}
 
 	const subscription = proxy.onDidEvent(event => received.push(event));

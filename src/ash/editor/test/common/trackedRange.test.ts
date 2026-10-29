@@ -7,8 +7,7 @@ import { type TrackedRange } from '../../common/model/trackedRange.js';
 import { TrackedRangeStickiness } from '../../common/model.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
-const range = (startColumn: number, endColumn: number): Range =>
-	Range.fromPositions(position(0, startColumn), position(0, endColumn));
+const range = (startColumn: number, endColumn: number): Range => Range.fromPositions(position(0, startColumn), position(0, endColumn));
 
 test('TrackedRange applies explicit insertion-edge stickiness', () => {
 	using model = new TextModel('abcd');
@@ -30,7 +29,13 @@ test('TrackedRange applies explicit insertion-edge stickiness', () => {
 			end: model.getTextInRange(end.range),
 			neither: model.getTextInRange(neither.range),
 		},
-		{ text: 'aXbcYd', both: 'XbcY', start: 'Xbc', end: 'bcY', neither: 'bc' },
+		{
+			text: 'aXbcYd',
+			both: 'XbcY',
+			start: 'Xbc',
+			end: 'bcY',
+			neither: 'bc',
+		},
 	);
 });
 
@@ -52,14 +57,29 @@ test('Collapsed tracked ranges stay ordered at inserted text', () => {
 		Object.fromEntries(
 			[...tracked].map(([stickiness, trackedRange]) => [
 				stickiness,
-				{ range: trackedRange.range, text: model.getTextInRange(trackedRange.range) },
+				{
+					range: trackedRange.range,
+					text: model.getTextInRange(trackedRange.range),
+				},
 			]),
 		),
 		{
-			[TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges]: { range: range(1, 2), text: 'X' },
-			[TrackedRangeStickiness.GrowsOnlyWhenTypingBefore]: { range: range(1, 1), text: '' },
-			[TrackedRangeStickiness.GrowsOnlyWhenTypingAfter]: { range: range(2, 2), text: '' },
-			[TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges]: { range: range(2, 2), text: '' },
+			[TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges]: {
+				range: range(1, 2),
+				text: 'X',
+			},
+			[TrackedRangeStickiness.GrowsOnlyWhenTypingBefore]: {
+				range: range(1, 1),
+				text: '',
+			},
+			[TrackedRangeStickiness.GrowsOnlyWhenTypingAfter]: {
+				range: range(2, 2),
+				text: '',
+			},
+			[TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges]: {
+				range: range(2, 2),
+				text: '',
+			},
 		},
 	);
 
@@ -78,8 +98,20 @@ test('TrackedRange resolves replacement containment deterministically', () => {
 	model.applyEdits([{ range: range(1, 5), text: 'Z' }]);
 
 	assert.deepEqual(
-		{ text: model.getText(), both: both.range, start: start.range, end: end.range, neither: neither.range },
-		{ text: 'aZf', both: range(1, 2), start: range(1, 1), end: range(2, 2), neither: range(2, 2) },
+		{
+			text: model.getText(),
+			both: both.range,
+			start: start.range,
+			end: end.range,
+			neither: neither.range,
+		},
+		{
+			text: 'aZf',
+			both: range(1, 2),
+			start: range(1, 1),
+			end: range(2, 2),
+			neither: range(2, 2),
+		},
 	);
 });
 
@@ -100,10 +132,7 @@ test('TrackedRange updates before events and follows undo and redo', () => {
 
 test('TrackedRange validates model positions and disposal', () => {
 	const model = new TextModel('abc');
-	assert.throws(
-		() => model.trackRange(Range.fromPositions(position(1, 0)), TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges),
-		/lineNumber/,
-	);
+	assert.throws(() => model.trackRange(Range.fromPositions(position(1, 0)), TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges), /lineNumber/);
 
 	const explicitlyDisposed = model.trackRange(range(0, 1), TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges);
 	explicitlyDisposed.dispose();
@@ -116,10 +145,7 @@ test('TrackedRange validates model positions and disposal', () => {
 
 test('TrackedRange rejects unknown stickiness', () => {
 	using model = new TextModel('abc');
-	assert.throws(
-		() => model.trackRange(range(0, 1), 'invalid' as unknown as TrackedRangeStickiness),
-		/Unknown tracked range stickiness/,
-	);
+	assert.throws(() => model.trackRange(range(0, 1), 'invalid' as unknown as TrackedRangeStickiness), /Unknown tracked range stickiness/);
 });
 
 for (const stickiness of [
@@ -138,13 +164,14 @@ for (const stickiness of [
 		]);
 		assert.deepEqual(
 			{ text: model.getText(), collapsed: collapsed.range, expanded: expanded.range },
-			{ text: 'aXXbcYd', collapsed: range(3, 3), expanded: range(3, 6) },
+			{
+				text: 'aXXbcYd',
+				collapsed: range(3, 3),
+				expanded: range(3, 6),
+			},
 		);
 		model.undo();
-		assert.deepEqual(
-			{ text: model.getText(), collapsed: collapsed.range },
-			{ text: 'abcd', collapsed: range(1, 1) },
-		);
+		assert.deepEqual({ text: model.getText(), collapsed: collapsed.range }, { text: 'abcd', collapsed: range(1, 1) });
 		model.redo();
 		assert.equal(model.getText(), 'aXXbcYd');
 		assert.ok(model.isValidRange(collapsed.range));
@@ -162,6 +189,10 @@ test('forced and ordinary marker movement remain independent in the same replace
 	]);
 	assert.deepEqual(
 		{ text: model.getText(), forced: forced.range, ordinary: ordinary.range },
-		{ text: 'aXXdYYf', forced: range(3, 3), ordinary: range(4, 4) },
+		{
+			text: 'aXXdYYf',
+			forced: range(3, 3),
+			ordinary: range(4, 4),
+		},
 	);
 });

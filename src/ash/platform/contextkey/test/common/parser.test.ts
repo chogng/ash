@@ -90,7 +90,10 @@ test('membership observes changes to both the selected value and its collection'
 	context.setContext('language', 'typescript');
 	assert.deepEqual(
 		{ keys: [...expression.keys()].sort(), results },
-		{ keys: ['language', 'supported'], results: [false, true, false, true] },
+		{
+			keys: ['language', 'supported'],
+			results: [false, true, false, true],
+		},
 	);
 });
 
@@ -107,18 +110,7 @@ test('membership excludes inherited object properties and keeps non-file strings
 
 test('parser resets diagnostics after invalid and empty resources', () => {
 	const parser = new Parser();
-	for (const source of [
-		'focused &&',
-		'(focused',
-		'language not supported',
-		'path =~ /[/',
-		'path =~ /x/ii',
-		'x = y',
-		"language == 'unfinished",
-		'!focused == true',
-		'!!focused',
-		'',
-	]) {
+	for (const source of ['focused &&', '(focused', 'language not supported', 'path =~ /[/', 'path =~ /x/ii', 'x = y', "language == 'unfinished", '!focused == true', '!!focused', '']) {
 		assert.equal(parser.parse(source), undefined, source);
 		assert.ok(parser.lexingErrors.length + parser.parsingErrors.length > 0, source);
 		assert.ok(parser.parse('true'));
@@ -133,12 +125,7 @@ test('parser resets diagnostics after invalid and empty resources', () => {
 
 test('deserialization distinguishes absent, malformed and false conditions', () => {
 	assert.deepEqual(
-		[
-			ContextKeyExpr.deserialize(null),
-			ContextKeyExpr.deserialize(undefined),
-			ContextKeyExpr.deserialize(''),
-			ContextKeyExpr.deserialize('true false'),
-		],
+		[ContextKeyExpr.deserialize(null), ContextKeyExpr.deserialize(undefined), ContextKeyExpr.deserialize(''), ContextKeyExpr.deserialize('true false')],
 		[undefined, undefined, undefined, undefined],
 	);
 	using context = new ContextKeyService();

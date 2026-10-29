@@ -55,11 +55,7 @@ export class ColorDetector extends Disposable {
 		this._register(service.onDidChange(refreshProviders));
 		this._register(
 			editor.onDidChangeConfiguration(event => {
-				if (
-					event.hasChanged(EditorOption.colorDecorators) ||
-					event.hasChanged(EditorOption.colorDecoratorsLimit) ||
-					event.hasChanged(EditorOption.defaultColorDecorators)
-				) {
+				if (event.hasChanged(EditorOption.colorDecorators) || event.hasChanged(EditorOption.colorDecoratorsLimit) || event.hasChanged(EditorOption.defaultColorDecorators)) {
 					refreshProviders();
 				}
 			}),
@@ -91,48 +87,42 @@ export class ColorDetector extends Disposable {
 			return;
 		}
 		const request = (this.request = new AbortController());
-		void this.service
-			.provideDocumentColors(
-				this.model.getLanguageId(),
-				this.editor.getOption(EditorOption.defaultColorDecorators),
-				request.signal,
-			)
-			.then(
-				colors => {
-					if (request.signal.aborted || this.isDisposed) return;
-					this.colorDecorationClassRefs.clear();
-					this.decorations.replaceAll(
-						colors.slice(0, this.editor.getOption(EditorOption.colorDecoratorsLimit)).map(data => {
-							const ref = this.colorDecorationClassRefs.add(
-								this.dynamicCssRules.createClassNameRef({
-									backgroundColor: colorToCss(data.information.color),
-								}),
-							);
-							return {
-								range: data.information.range,
-								stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-								options: {
-									description: 'colorDetector',
-									before: {
-										content: '\u00a0',
-										inlineClassName: `${ref.className} colorpicker-color-decoration`,
-										inlineClassNameAffectsLetterSpacing: true,
-										attachedData: ColorDecorationInjectedTextMarker,
-										widthInEm: 1.2,
-									},
-									hoverMessage: { value: this.model.getTextInRange(data.information.range) },
+		void this.service.provideDocumentColors(this.model.getLanguageId(), this.editor.getOption(EditorOption.defaultColorDecorators), request.signal).then(
+			colors => {
+				if (request.signal.aborted || this.isDisposed) return;
+				this.colorDecorationClassRefs.clear();
+				this.decorations.replaceAll(
+					colors.slice(0, this.editor.getOption(EditorOption.colorDecoratorsLimit)).map(data => {
+						const ref = this.colorDecorationClassRefs.add(
+							this.dynamicCssRules.createClassNameRef({
+								backgroundColor: colorToCss(data.information.color),
+							}),
+						);
+						return {
+							range: data.information.range,
+							stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+							options: {
+								description: 'colorDetector',
+								before: {
+									content: '\u00a0',
+									inlineClassName: `${ref.className} colorpicker-color-decoration`,
+									inlineClassNameAffectsLetterSpacing: true,
+									attachedData: ColorDecorationInjectedTextMarker,
+									widthInEm: 1.2,
 								},
-								metadata: data,
-							};
-						}),
-					);
-					const limit = this.editor.getOption(EditorOption.colorDecoratorsLimit);
-					this.limitReporter.update(colors.length, colors.length > limit ? limit : false);
-				},
-				error => {
-					if (!request.signal.aborted) this.onError(error);
-				},
-			);
+								hoverMessage: { value: this.model.getTextInRange(data.information.range) },
+							},
+							metadata: data,
+						};
+					}),
+				);
+				const limit = this.editor.getOption(EditorOption.colorDecoratorsLimit);
+				this.limitReporter.update(colors.length, colors.length > limit ? limit : false);
+			},
+			error => {
+				if (!request.signal.aborted) this.onError(error);
+			},
+		);
 	}
 
 	private scheduleRefresh(delay: number): void {
@@ -175,12 +165,7 @@ export class DecoratorLimitReporter extends Disposable {
 	}
 }
 
-function colorToCss(color: {
-	readonly red: number;
-	readonly green: number;
-	readonly blue: number;
-	readonly alpha: number;
-}): string {
+function colorToCss(color: { readonly red: number; readonly green: number; readonly blue: number; readonly alpha: number }): string {
 	return `rgba(${Math.round(color.red * 255)}, ${Math.round(color.green * 255)}, ${Math.round(color.blue * 255)}, ${color.alpha})`;
 }
 

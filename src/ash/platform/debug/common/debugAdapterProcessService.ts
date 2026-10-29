@@ -2,10 +2,7 @@ import { type IDisposable } from '../../../base/common/lifecycle.js';
 import { type AppServerConnectionState } from '../../agentHost/common/appServerApi.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
-export type DebugAdapterConnection =
-	| { readonly type: 'client' }
-	| { readonly type: 'server'; readonly port: number; readonly host?: string }
-	| { readonly type: 'namedPipe'; readonly path: string };
+export type DebugAdapterConnection = { readonly type: 'client' } | { readonly type: 'server'; readonly port: number; readonly host?: string } | { readonly type: 'namedPipe'; readonly path: string };
 
 export type IDebugAdapterProcessStartOptions = { readonly dirId?: string; readonly arguments: readonly string[] } & (
 	| {
@@ -47,19 +44,12 @@ export interface IDebugAdapterProcessReadResult {
 /** Platform contract for connection-owned Rust DAP clients and their transports. */
 export interface IDebugAdapterProcessService {
 	readWorkspaceState(workspaceId: string, legacy?: DebugWorkspaceState): Promise<DebugWorkspaceResult>;
-	editWorkspaceState(
-		workspaceId: string,
-		revision: number,
-		edits: readonly DebugWorkspaceEdit[],
-	): Promise<DebugWorkspaceResult>;
+	editWorkspaceState(workspaceId: string, revision: number, edits: readonly DebugWorkspaceEdit[]): Promise<DebugWorkspaceResult>;
 
 	prepareSession(id: string, noDebug: boolean | undefined): Promise<DebugSessionRelation>;
 	reserveSession(options: DebugSessionAdmission): Promise<DebugSessionRelation>;
 	manageSession(id: string, action: 'read' | 'route' | 'end'): Promise<DebugSessionRelation>;
-	readConsole(
-		id: string,
-		options?: { readonly clear?: boolean; readonly diagnostic?: string },
-	): Promise<DebugConsoleSnapshot>;
+	readConsole(id: string, options?: { readonly clear?: boolean; readonly diagnostic?: string }): Promise<DebugConsoleSnapshot>;
 	start(options: IDebugAdapterProcessStartOptions): Promise<string>;
 	send(sessionId: string, message: unknown): Promise<void>;
 	read(sessionId: string, afterSequence: number, maxMessages: number): Promise<IDebugAdapterProcessReadResult>;
@@ -80,15 +70,10 @@ export interface IDebugAdapterProcessService {
 }
 
 /** Request pairing and deadlines belong to the Rust client, independently of view reads. */
-export type DebugAdapterResponseResult =
-	| { readonly state: 'pending' }
-	| { readonly state: 'complete'; readonly response: unknown }
-	| { readonly state: 'failed'; readonly message: string };
+export type DebugAdapterResponseResult = { readonly state: 'pending' } | { readonly state: 'complete'; readonly response: unknown } | { readonly state: 'failed'; readonly message: string };
 
 /** Debug composition registers its selected capability; undefined means the host cannot launch DAP processes. */
-export const IDebugAdapterProcessService = createServiceIdentifier<IDebugAdapterProcessService | undefined>(
-	'debugAdapterProcessService',
-);
+export const IDebugAdapterProcessService = createServiceIdentifier<IDebugAdapterProcessService | undefined>('debugAdapterProcessService');
 
 export interface DebugSessionInitializeOptions {
 	readonly publicId: string;
@@ -105,8 +90,7 @@ export interface DebugSessionSnapshot {
 	readonly executionRevision: number;
 	readonly inspectionRevision: number;
 	readonly state: 'starting' | 'running' | 'stopped' | 'terminated' | 'error';
-	readonly phase:
-		'uninitialized' | 'initializing' | 'awaitingInitialized' | 'configuring' | 'launching' | 'active' | 'ended';
+	readonly phase: 'uninitialized' | 'initializing' | 'awaitingInitialized' | 'configuring' | 'launching' | 'active' | 'ended';
 	readonly reason: string | null;
 	readonly stoppedThreadId: number | null;
 	readonly capabilities: {
@@ -163,8 +147,7 @@ export interface DebugBreakpointIntent {
 	readonly hitCondition?: string;
 	readonly logMessage?: string;
 }
-export type DebugBreakpointUnsupported =
-	'conditional' | 'hitConditional' | 'logPoint' | 'function' | 'data' | 'instruction';
+export type DebugBreakpointUnsupported = 'conditional' | 'hitConditional' | 'logPoint' | 'function' | 'data' | 'instruction';
 export interface DebugBreakpointBinding {
 	readonly intent: DebugBreakpointIntent;
 	readonly verified: boolean;
@@ -214,10 +197,7 @@ export type DebugInspectionValue =
 			}[];
 	  };
 export type DebugInspectionResult =
-	| { readonly state: 'pending' }
-	| { readonly state: 'complete'; readonly value: DebugInspectionValue }
-	| { readonly state: 'failed'; readonly message: string }
-	| { readonly state: 'invalidated' };
+	{ readonly state: 'pending' } | { readonly state: 'complete'; readonly value: DebugInspectionValue } | { readonly state: 'failed'; readonly message: string } | { readonly state: 'invalidated' };
 
 /** Durable definitions have no adapter verification or session-owned address. */
 export interface DebugBreakpointDefinition {

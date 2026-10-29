@@ -32,11 +32,7 @@ export class ChatLayoutPresentation extends Disposable {
 		return this.state.get().mode;
 	}
 
-	constructor(
-		startupDesktop: boolean,
-		isPhoneLayout: IObservable<boolean>,
-		@IConfigurationService configuration: IConfigurationService,
-	) {
+	constructor(startupDesktop: boolean, isPhoneLayout: IObservable<boolean>, @IConfigurationService configuration: IConfigurationService) {
 		super();
 		const changed = observableSignalFromEvent(this, listener =>
 			configuration.onDidChangeConfiguration(event => {
@@ -97,11 +93,6 @@ export class ChatLayoutContext extends Disposable {
 
 	public isCurrent(snapshot: IChatLayoutSnapshot): boolean {
 		const current = this.state.get();
-		return (
-			!this.isDisposed &&
-			this.presentation.isCurrent(current.presentation) &&
-			snapshot.generation === current.generation &&
-			chatLayoutOwnersEqual(snapshot.owner, current.owner)
-		);
+		return !this.isDisposed && this.presentation.isCurrent(current.presentation) && snapshot.generation === current.generation && chatLayoutOwnersEqual(snapshot.owner, current.owner);
 	}
 }

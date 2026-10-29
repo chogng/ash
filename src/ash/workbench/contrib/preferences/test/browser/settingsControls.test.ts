@@ -21,11 +21,7 @@ suite('table browser component', () => {
 					name: locale === 'zh-CN' ? '重试凭据存储' : 'Retry credential storage',
 				});
 				await expect(retry).toBeVisible();
-				await expect(
-					root
-						.getByRole('status')
-						.filter({ hasText: locale === 'zh-CN' ? '访问被拒绝' : 'access was denied' }),
-				).toBeVisible();
+				await expect(root.getByRole('status').filter({ hasText: locale === 'zh-CN' ? '访问被拒绝' : 'access was denied' })).toBeVisible();
 				await expect(key).toBeDisabled();
 				await expect(key).toHaveValue('••••••••');
 				await retry.focus();
@@ -70,12 +66,7 @@ suite('table browser component', () => {
 							.poll(() =>
 								grid.evaluate(element => ({
 									overflow: element.scrollWidth > element.clientWidth,
-									headerWidth: Math.round(
-										[...element.querySelectorAll('[role="columnheader"]')].reduce(
-											(width, header) => width + header.getBoundingClientRect().width,
-											0,
-										),
-									),
+									headerWidth: Math.round([...element.querySelectorAll('[role="columnheader"]')].reduce((width, header) => width + header.getBoundingClientRect().width, 0)),
 								})),
 							)
 							.toEqual({ overflow: width === 340, headerWidth });
@@ -143,13 +134,9 @@ suite('table browser component', () => {
 		await separator.focus();
 		const before = await grid.getByRole('columnheader').first().boundingBox();
 		await page.keyboard.press('ArrowRight');
-		await expect
-			.poll(async () => (await grid.getByRole('columnheader').first().boundingBox())!.width)
-			.not.toBe(before!.width);
+		await expect.poll(async () => (await grid.getByRole('columnheader').first().boundingBox())!.width).not.toBe(before!.width);
 		const widths = await grid.evaluate(element => {
-			const headers = [...element.querySelectorAll('[role="columnheader"]')].map(
-				node => node.getBoundingClientRect().width,
-			);
+			const headers = [...element.querySelectorAll('[role="columnheader"]')].map(node => node.getBoundingClientRect().width);
 			const cells = [...element.querySelectorAll('.ash-table-row')][0]!.querySelectorAll('[role="gridcell"]');
 			return [headers, [...cells].map(node => node.getBoundingClientRect().width)];
 		});
@@ -159,12 +146,7 @@ suite('table browser component', () => {
 		});
 		await expect.poll(() => grid.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
 		await page.goto('/table.html?locale=zh-CN');
-		await expect(page.getByRole('grid', { name: '本地听写模型' }).getByRole('columnheader')).toHaveText([
-			'模型',
-			'大小',
-			'状态',
-			'操作',
-		]);
+		await expect(page.getByRole('grid', { name: '本地听写模型' }).getByRole('columnheader')).toHaveText(['模型', '大小', '状态', '操作']);
 		await page.evaluate(() => window.ashTableIntegration.dispose());
 		await expect(page.getByRole('grid')).toHaveCount(0);
 	});
@@ -188,43 +170,27 @@ suite('table browser component', () => {
 				name: locale === 'zh-CN' ? '使用加密存储' : 'Use encrypted storage',
 			});
 			await expect(authorize).toBeVisible();
-			await expect
-				.poll(() => page.evaluate(() => [...window.ashTableIntegration.credentialOperations]))
-				.toEqual([]);
+			await expect.poll(() => page.evaluate(() => [...window.ashTableIntegration.credentialOperations])).toEqual([]);
 			await authorize.focus();
 			await page.keyboard.press('Enter');
 			await expect(root.locator('input[type="password"]')).toBeEnabled();
 			await expect(file).toBeFocused();
-			await expect
-				.poll(() => page.evaluate(() => [...window.ashTableIntegration.credentialOperations]))
-				.toEqual(['authorize']);
+			await expect.poll(() => page.evaluate(() => [...window.ashTableIntegration.credentialOperations])).toEqual(['authorize']);
 			await page.keyboard.press('Enter');
 			const confirmation = page.getByRole('dialog');
-			await expect(confirmation).toContainText(
-				locale === 'zh-CN' ? '不加密保存凭据' : 'Store credentials without encryption',
-			);
-			await confirmation
-				.getByRole('button', { name: locale === 'zh-CN' ? '取消' : 'Cancel', exact: true })
-				.click();
+			await expect(confirmation).toContainText(locale === 'zh-CN' ? '不加密保存凭据' : 'Store credentials without encryption');
+			await confirmation.getByRole('button', { name: locale === 'zh-CN' ? '取消' : 'Cancel', exact: true }).click();
 			await expect(file).toBeFocused();
-			await expect
-				.poll(() => page.evaluate(() => [...window.ashTableIntegration.credentialOperations]))
-				.toEqual(['authorize']);
+			await expect.poll(() => page.evaluate(() => [...window.ashTableIntegration.credentialOperations])).toEqual(['authorize']);
 			await file.click();
-			await confirmation
-				.getByRole('button', { name: locale === 'zh-CN' ? '使用文件存储' : 'Use file storage', exact: true })
-				.click();
+			await confirmation.getByRole('button', { name: locale === 'zh-CN' ? '使用文件存储' : 'Use file storage', exact: true }).click();
 			await expect(encrypted).toBeVisible();
 			await expect(encrypted).toBeFocused();
-			await expect(
-				root.getByRole('status').filter({ hasText: locale === 'zh-CN' ? '未加密形式' : 'without encryption' }),
-			).toBeVisible();
+			await expect(root.getByRole('status').filter({ hasText: locale === 'zh-CN' ? '未加密形式' : 'without encryption' })).toBeVisible();
 			await expect(root.locator('input[type="password"]')).toHaveValue('••••••••');
 			await page.keyboard.press('Enter');
 			await expect(file).toBeVisible();
-			await expect
-				.poll(() => page.evaluate(() => [...window.ashTableIntegration.credentialOperations]))
-				.toEqual(['authorize', 'file', 'encrypted']);
+			await expect.poll(() => page.evaluate(() => [...window.ashTableIntegration.credentialOperations])).toEqual(['authorize', 'file', 'encrypted']);
 		});
 	}
 
@@ -246,9 +212,7 @@ suite('table browser component', () => {
 			await page.getByRole('option', { name: 'ripgrep', exact: true }).press('End');
 			await page.keyboard.press('Enter');
 			await expect(engine).toHaveText('ripgrep');
-			await expect(root.getByRole('status')).toHaveText(
-				locale === 'zh-CN' ? '搜索引擎已保存。' : 'Search engine saved.',
-			);
+			await expect(root.getByRole('status')).toHaveText(locale === 'zh-CN' ? '搜索引擎已保存。' : 'Search engine saved.');
 			expect(await page.evaluate(() => window.ashTableIntegration.searchSaved)).toEqual(['ripgrep']);
 			await root.getByRole('button', { name: locale === 'zh-CN' ? '刷新' : 'Refresh', exact: true }).click();
 			await expect(engine).toHaveText('ripgrep');

@@ -40,10 +40,7 @@ test('Default effort labels use the active Chinese NLS catalog', () => {
 	setNlsMessages('zh-CN', { ash: { 'chat.modelPicker.defaultEffort': '默认', 'chat.modelPicker.effortHigh': '高' } });
 	try {
 		assert.deepEqual(
-			modelPickerEffortOptions(
-				{ ...entry, defaultReasoningEffort: undefined, supportedReasoningEfforts: [{ effort: 'high' }] },
-				undefined,
-			).map(option => option.label),
+			modelPickerEffortOptions({ ...entry, defaultReasoningEffort: undefined, supportedReasoningEfforts: [{ effort: 'high' }] }, undefined).map(option => option.label),
 			['默认', '高'],
 		);
 	} finally {

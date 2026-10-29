@@ -48,10 +48,7 @@ class MakeWorkspace extends CreatorCanvasWorkspace {
 		this.contentDomNode.append(this.previewDomNode);
 		const refresh = (): void => {
 			if (this.visible) {
-				this.previewDomNode.srcdoc = generateDesignCode(
-					this.document.model.value,
-					this.document.getEmbeddedImageSources(),
-				);
+				this.previewDomNode.srcdoc = generateDesignCode(this.document.model.value, this.document.getEmbeddedImageSources());
 			}
 		};
 		this._register(this.document.model.onDidChange(refresh));
@@ -65,36 +62,26 @@ class MakeWorkspace extends CreatorCanvasWorkspace {
 					content: generateDesignCode(this.document.model.value, this.document.getEmbeddedImageSources()),
 				}),
 			),
-			this.action('edit', localize('sessions.creator.make.edit', 'Edit canvas'), () =>
-				this.editor.setMode(DesignMode.Design),
-			),
-			this.action('code', localize('sessions.creator.make.code', 'View code'), () =>
-				this.editor.setMode(DesignMode.Code),
-			),
+			this.action('edit', localize('sessions.creator.make.edit', 'Edit canvas'), () => this.editor.setMode(DesignMode.Design)),
+			this.action('code', localize('sessions.creator.make.code', 'View code'), () => this.editor.setMode(DesignMode.Code)),
 		];
 	}
 	public override setVisible(visible: boolean): void {
 		this.visible = visible;
 		super.setVisible(visible);
 		// Hidden previews release their execution context; source and the unsent prompt stay in the workspace.
-		this.previewDomNode.srcdoc = visible
-			? generateDesignCode(this.document.model.value, this.document.getEmbeddedImageSources())
-			: '';
+		this.previewDomNode.srcdoc = visible ? generateDesignCode(this.document.model.value, this.document.getEmbeddedImageSources()) : '';
 	}
 }
 
 registerCreatorMode({
 	id: CreatorMode.Make,
 	title: getCreatorModeTitle(CreatorMode.Make),
-	description: localize(
-		'sessions.creator.make.description',
-		'View generated code, run a preview and continue with an Agent.',
-	),
+	description: localize('sessions.creator.make.description', 'View generated code, run a preview and continue with an Agent.'),
 	icon: Lxicon.code,
 	help: localize(
 		'sessions.creator.make.help',
 		'View code shows generated HTML, CSS and scene JSON. Edit canvas returns to visual editing and updates the running preview. Describe what to build and choose Build with Agent to prepare a Code conversation with the current HTML attached; review and send the request there.',
 	),
-	create: (instantiation, ownerDocument) =>
-		instantiation.createInstance(MakeWorkspace, ownerDocument, CreatorMode.Make),
+	create: (instantiation, ownerDocument) => instantiation.createInstance(MakeWorkspace, ownerDocument, CreatorMode.Make),
 });

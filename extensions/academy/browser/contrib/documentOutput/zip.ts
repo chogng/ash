@@ -11,14 +11,7 @@ function crc(bytes: Uint8Array): number {
 	return (value ^ 0xffffffff) >>> 0;
 }
 function nameValid(name: string): boolean {
-	return (
-		!!name &&
-		name.length < 500 &&
-		!name.startsWith('/') &&
-		!name.includes('\\') &&
-		!name.includes(':') &&
-		!name.split('/').some(part => !part || part === '.' || part === '..')
-	);
+	return !!name && name.length < 500 && !name.startsWith('/') && !name.includes('\\') && !name.includes(':') && !name.split('/').some(part => !part || part === '.' || part === '..');
 }
 export function zipFiles(files: ReadonlyMap<string, Uint8Array>): Uint8Array {
 	let offset = 0;
@@ -78,12 +71,7 @@ export async function unzipFiles(bytes: Uint8Array, signal: AbortSignal): Promis
 	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 	let end = bytes.length - 22;
 	while (end >= Math.max(0, bytes.length - 65557) && view.getUint32(end, true) !== 0x06054b50) end--;
-	if (
-		end < Math.max(0, bytes.length - 65557) ||
-		view.getUint32(end, true) !== 0x06054b50 ||
-		view.getUint16(end + 4, true) ||
-		view.getUint16(end + 6, true)
-	)
+	if (end < Math.max(0, bytes.length - 65557) || view.getUint32(end, true) !== 0x06054b50 || view.getUint16(end + 4, true) || view.getUint16(end + 6, true))
 		throw new TypeError('Invalid ZIP directory');
 	const count = view.getUint16(end + 10, true),
 		directorySize = view.getUint32(end + 12, true);
@@ -94,8 +82,7 @@ export async function unzipFiles(bytes: Uint8Array, signal: AbortSignal): Promis
 		names = new Set<string>();
 	for (let index = 0; index < count; index++) {
 		signal.throwIfAborted();
-		if (position + 46 > end || view.getUint32(position, true) !== 0x02014b50)
-			throw new TypeError('Invalid ZIP entry');
+		if (position + 46 > end || view.getUint32(position, true) !== 0x02014b50) throw new TypeError('Invalid ZIP entry');
 		const flags = view.getUint16(position + 8, true),
 			method = view.getUint16(position + 10, true),
 			checksum = view.getUint32(position + 16, true);

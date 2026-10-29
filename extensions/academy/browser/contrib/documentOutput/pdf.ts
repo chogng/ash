@@ -3,11 +3,7 @@ import type { DocumentNode } from '../../../common/model/document.js';
 import { localize } from 'ash:editor/nls.js';
 
 /** Capture synchronously before any await; further editing cannot change this output version. */
-export function exportDocumentPdf(
-	source: HTMLElement,
-	document: DocumentNode,
-	signal: AbortSignal,
-): Promise<Uint8Array> {
+export function exportDocumentPdf(source: HTMLElement, document: DocumentNode, signal: AbortSignal): Promise<Uint8Array> {
 	signal.throwIfAborted();
 	const owner = source.ownerDocument,
 		root = owner.createElement('div');
@@ -16,8 +12,7 @@ export function exportDocumentPdf(
 	const scope = source.closest<HTMLElement>('[data-ash-editor-client]')?.dataset.ashEditorClient;
 	if (scope) root.dataset.ashEditorClient = scope;
 	const sourceStyle = owner.defaultView!.getComputedStyle(source);
-	for (const property of sourceStyle)
-		if (property.startsWith('--')) root.style.setProperty(property, sourceStyle.getPropertyValue(property));
+	for (const property of sourceStyle) if (property.startsWith('--')) root.style.setProperty(property, sourceStyle.getPropertyValue(property));
 	root.style.cssText += 'position:fixed;left:-100000px;top:0;pointer-events:none;';
 	root.style.font = sourceStyle.font;
 	root.style.color = sourceStyle.color;
@@ -42,18 +37,12 @@ export function exportDocumentPdf(
 	};
 	for (const node of document.content) {
 		if (node.type.startsWith('review')) continue;
-		const element = [...source.querySelectorAll<HTMLElement>('[data-node-id]')].find(
-			element => element.dataset.nodeId === node.id,
-		);
-		if (!element)
-			throw new Error(
-				localize('document.pdf.layoutRequired', 'The document must be laid out before exporting PDF.'),
-			);
+		const element = [...source.querySelectorAll<HTMLElement>('[data-node-id]')].find(element => element.dataset.nodeId === node.id);
+		if (!element) throw new Error(localize('document.pdf.layoutRequired', 'The document must be laid out before exporting PDF.'));
 		if (node.type === 'documentSection') {
 			const wrapper = owner.createElement('div');
 			wrapper.dataset.nodeId = node.id;
-			for (const child of (element.querySelector('.ash-document-page-flow') ?? element).children)
-				wrapper.append(copy(child as HTMLElement));
+			for (const child of (element.querySelector('.ash-document-page-flow') ?? element).children) wrapper.append(copy(child as HTMLElement));
 			content.append(wrapper);
 		} else content.append(copy(element));
 	}
@@ -69,14 +58,7 @@ export function exportDocumentPdf(
 							...node,
 							attrs: {
 								...node.attrs,
-								pageSize:
-									node.attrs.pageSize === 'letter'
-										? 'letter'
-										: node.attrs.pageSize === 'a4'
-											? 'a4'
-											: document.attrs.pageSize === 'letter'
-												? 'letter'
-												: 'a4',
+								pageSize: node.attrs.pageSize === 'letter' ? 'letter' : node.attrs.pageSize === 'a4' ? 'a4' : document.attrs.pageSize === 'letter' ? 'letter' : 'a4',
 							},
 						}
 					: node,
@@ -105,17 +87,14 @@ export function exportDocumentPdf(
 				signal.throwIfAborted();
 			}
 			view.layout();
-			const pages = [...root.querySelectorAll<HTMLElement>('.ash-document-page')].map(page =>
-				page.getBoundingClientRect(),
-			);
+			const pages = [...root.querySelectorAll<HTMLElement>('.ash-document-page')].map(page => page.getBoundingClientRect());
 			if (pages.length > 256) throw new RangeError('PDF exceeds 256 pages');
 			const origin = root.getBoundingClientRect();
 			// The SVG image has no access to the host stylesheets. Freeze the newly
 			// created page shells and geometry as well as the original body elements.
 			for (const element of [root, ...root.querySelectorAll<HTMLElement>('*')]) {
 				const computed = owner.defaultView!.getComputedStyle(element);
-				for (const property of computed)
-					element.style.setProperty(property, computed.getPropertyValue(property));
+				for (const property of computed) element.style.setProperty(property, computed.getPropertyValue(property));
 			}
 			const serialized = root.cloneNode(true) as HTMLElement;
 			// Remove both physical and logical offscreen insets. Keeping a computed
@@ -148,11 +127,7 @@ export function exportDocumentPdf(
 					context.fillRect(0, 0, canvas.width, canvas.height);
 					context.drawImage(image, 0, 0);
 					const blob = await new Promise<Blob>((resolve, reject) =>
-						canvas.toBlob(
-							value => (value ? resolve(value) : reject(new Error('PDF page could not be rendered'))),
-							'image/jpeg',
-							0.95,
-						),
+						canvas.toBlob(value => (value ? resolve(value) : reject(new Error('PDF page could not be rendered'))), 'image/jpeg', 0.95),
 					);
 					const bytes = new Uint8Array(await blob.arrayBuffer());
 					size += bytes.length;
@@ -177,9 +152,7 @@ export function exportDocumentPdf(
 	})();
 }
 
-function createPdf(
-	pages: readonly { width: number; height: number; bytes: Uint8Array; pixelWidth: number; pixelHeight: number }[],
-): Uint8Array {
+function createPdf(pages: readonly { width: number; height: number; bytes: Uint8Array; pixelWidth: number; pixelHeight: number }[]): Uint8Array {
 	const encode = (value: string) => new TextEncoder().encode(value);
 	const chunks: Uint8Array[] = [encode('%PDF-1.4\n')],
 		offsets = [0];
@@ -192,19 +165,11 @@ function createPdf(
 		}
 	};
 	object(1, [encode('<< /Type /Catalog /Pages 2 0 R >>')]);
-	object(2, [
-		encode(
-			`<< /Type /Pages /Count ${pages.length} /Kids [${pages.map((_, index) => `${3 + index * 3} 0 R`).join(' ')}] >>`,
-		),
-	]);
+	object(2, [encode(`<< /Type /Pages /Count ${pages.length} /Kids [${pages.map((_, index) => `${3 + index * 3} 0 R`).join(' ')}] >>`)]);
 	for (const [index, page] of pages.entries()) {
 		const id = 3 + index * 3,
 			content = encode(`q ${page.width} 0 0 ${page.height} 0 0 cm /Im0 Do Q`);
-		object(id, [
-			encode(
-				`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${page.width} ${page.height}] /Resources << /XObject << /Im0 ${id + 2} 0 R >> >> /Contents ${id + 1} 0 R >>`,
-			),
-		]);
+		object(id, [encode(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${page.width} ${page.height}] /Resources << /XObject << /Im0 ${id + 2} 0 R >> >> /Contents ${id + 1} 0 R >>`)]);
 		object(id + 1, [encode(`<< /Length ${content.length} >>\nstream\n`), content, encode('\nendstream')]);
 		object(id + 2, [
 			encode(

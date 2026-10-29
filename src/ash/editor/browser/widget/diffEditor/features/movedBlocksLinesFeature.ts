@@ -78,16 +78,12 @@ export class MovedBlocksLinesFeature extends Disposable {
 	}
 
 	public update(enabled: boolean, selectedMove?: MovedText): void {
-		const lostHeaderFocus =
-			!selectedMove && this.comparisonDomNode.contains(this.domNode.ownerDocument.activeElement);
+		const lostHeaderFocus = !selectedMove && this.comparisonDomNode.contains(this.domNode.ownerDocument.activeElement);
 		this.enabled = enabled;
 		this.selectedMove = selectedMove;
 		this.comparisonDomNode.hidden = !selectedMove;
 		this.closeButton.label = localize('diffEditor.stopComparingMovedCode', 'Stop comparing moved code');
-		this.comparisonDomNode.setAttribute(
-			'aria-label',
-			localize('diffEditor.movedComparison', 'Moved code comparison'),
-		);
+		this.comparisonDomNode.setAttribute('aria-label', localize('diffEditor.movedComparison', 'Moved code comparison'));
 		if (selectedMove) {
 			const mapping = selectedMove.lineRangeMapping;
 			this.comparisonLabel.textContent = localize(
@@ -164,19 +160,12 @@ export class MovedBlocksLinesFeature extends Disposable {
 
 	private positionLinks(): void {
 		for (const { move, path, button } of this.links) {
-			const source =
-				this.original.getTopForLineNumber(move.lineRangeMapping.original.startLineNumber) -
-				this.original.getScrollTop();
-			const target =
-				this.modified.getTopForLineNumber(move.lineRangeMapping.modified.startLineNumber) -
-				this.modified.getScrollTop();
+			const source = this.original.getTopForLineNumber(move.lineRangeMapping.original.startLineNumber) - this.original.getScrollTop();
+			const target = this.modified.getTopForLineNumber(move.lineRangeMapping.modified.startLineNumber) - this.modified.getScrollTop();
 			const middle = this.width / 2;
 			const originalCenter = source + this.original.getOption(EditorOption.lineHeight) / 2;
 			const modifiedCenter = target + this.modified.getOption(EditorOption.lineHeight) / 2;
-			path.setAttribute(
-				'd',
-				`M 0 ${originalCenter} C ${middle} ${originalCenter} ${middle} ${modifiedCenter} ${this.width} ${modifiedCenter}`,
-			);
+			path.setAttribute('d', `M 0 ${originalCenter} C ${middle} ${originalCenter} ${middle} ${modifiedCenter} ${this.width} ${modifiedCenter}`);
 			button.hidden = target < 0 || target >= this.height;
 			button.style.top = `${target}px`;
 		}

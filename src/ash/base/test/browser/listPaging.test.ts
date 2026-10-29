@@ -48,7 +48,10 @@ test('PagedList resolves only rendered placeholders and preserves attached actio
 		using list = new PagedList(
 			'History',
 			dom.window.document.body,
-			{ getHeight: () => 20, getTemplateId: () => 'commit' },
+			{
+				getHeight: () => 20,
+				getTemplateId: () => 'commit',
+			},
 			[renderer],
 			{ mouseSupport: false, keyboardSupport: false },
 		);
@@ -69,10 +72,7 @@ test('PagedList resolves only rendered placeholders and preserves attached actio
 		resolved.push('Commit 50', 'Commit 51', 'Commit 52', 'Commit 53', 'Commit 54');
 		lengthChanged.fire(resolved.length);
 		await pending.complete('Commit 50');
-		assert.deepEqual(
-			{ reads, length: list.widget.items.length, scrollTop: viewport.scrollTop },
-			{ reads: 1, length: 55, scrollTop: 960 },
-		);
+		assert.deepEqual({ reads, length: list.widget.items.length, scrollTop: viewport.scrollTop }, { reads: 1, length: 55, scrollTop: 960 });
 		assert.equal(dom.window.document.activeElement, action);
 		assert.equal(list.widget.row(48)!.querySelector('button'), action);
 		assert.equal(list.widget.row(50)!.textContent, 'Commit 50');
@@ -108,7 +108,10 @@ test('PagedList cancels obsolete resolutions and disposes templates when its mod
 		using list = new PagedList(
 			'Items',
 			dom.window.document.body,
-			{ getHeight: () => 20, getTemplateId: () => 'item' },
+			{
+				getHeight: () => 20,
+				getTemplateId: () => 'item',
+			},
 			[renderer],
 		);
 		const viewport = list.widget.domNode.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
@@ -170,7 +173,10 @@ test('PagedList keeps failed placeholders available for an explicit retry', asyn
 		using list = new PagedList(
 			'Items',
 			dom.window.document.body,
-			{ getHeight: () => (reads > 1 ? 40 : 20), getTemplateId: () => 'item' },
+			{
+				getHeight: () => (reads > 1 ? 40 : 20),
+				getTemplateId: () => 'item',
+			},
 			[renderer],
 			{
 				role: 'tree',
@@ -205,15 +211,10 @@ test('PagedList keeps failed placeholders available for an explicit retry', asyn
 		assert.deepEqual({ reads, text: list.widget.row(0)!.textContent }, { reads: 2, text: 'Loaded' });
 		const row = list.widget.row(0)!;
 		assert.deepEqual(
-			['role', 'aria-label', 'aria-level', 'aria-setsize', 'aria-posinset', 'aria-expanded'].map(name =>
-				row.getAttribute(name),
-			),
+			['role', 'aria-label', 'aria-level', 'aria-setsize', 'aria-posinset', 'aria-expanded'].map(name => row.getAttribute(name)),
 			['treeitem', 'Loaded', '2', '1', '1', 'false'],
 		);
-		assert.deepEqual(
-			{ height: list.widget.getElementHeight(0), style: row.style.height },
-			{ height: 40, style: '40px' },
-		);
+		assert.deepEqual({ height: list.widget.getElementHeight(0), style: row.style.height }, { height: 40, style: '40px' });
 	} finally {
 		dom.window.close();
 	}
@@ -243,7 +244,10 @@ test('PagedList cancels hidden row requests and resolves them again when the vie
 		using list = new PagedList(
 			'Items',
 			dom.window.document.body,
-			{ getHeight: () => 20, getTemplateId: () => 'item' },
+			{
+				getHeight: () => 20,
+				getTemplateId: () => 'item',
+			},
 			[renderer],
 			{ mouseSupport: false, keyboardSupport: false },
 		);

@@ -18,10 +18,7 @@ import type {
 	IDebugAdapterProcessService,
 } from '../../../../../platform/debug/common/debugAdapterProcessService.js';
 
-type TransportFixture = Pick<
-	IDebugAdapterProcessService,
-	'start' | 'send' | 'read' | 'close' | 'getConnectionState' | 'onConnectionState'
->;
+type TransportFixture = Pick<IDebugAdapterProcessService, 'start' | 'send' | 'read' | 'close' | 'getConnectionState' | 'onConnectionState'>;
 type ManagedMessage = { sequence: number; direction: 'incoming' | 'outgoing'; message: unknown };
 
 /** Simulates the App Server request boundary around existing deterministic DAP
@@ -76,8 +73,7 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 	const consoleIds = () => [...new Set([...relations.values()].map(value => value.consoleId))];
 	const consoles = new Map<string, DebugConsoleSnapshot>();
 	const exceptions = new Map<string, DebugExceptionsSnapshot>();
-	const consoleFor = (id: string): DebugConsoleSnapshot =>
-		consoles.get(relations.get(id)?.consoleId ?? id) ?? { revision: 0, entries: [] };
+	const consoleFor = (id: string): DebugConsoleSnapshot => consoles.get(relations.get(id)?.consoleId ?? id) ?? { revision: 0, entries: [] };
 	const append = (id: string, output: string, body: Partial<DebugConsoleEntry> = {}): void => {
 		const key = relations.get(id)?.consoleId ?? id;
 		const old = consoleFor(id);
@@ -101,14 +97,10 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 	const end = (id: string): DebugSessionRelation => {
 		const value = relations.get(id);
 		if (!value) throw new Error('Fixture session admission not found');
-		const descendants = [...relations.values()]
-			.filter(candidate => candidate.parentId === id)
-			.flatMap(child => [...end(child.id).descendants, child.id]);
+		const descendants = [...relations.values()].filter(candidate => candidate.parentId === id).flatMap(child => [...end(child.id).descendants, child.id]);
 		const result = { ...value, ended: true, descendants };
 		relations.set(id, result);
-		for (const [runtimeId, state] of sessions)
-			if (descendants.includes(state.publicId) && state.runtime.phase !== 'ended')
-				update(runtimeId, { state: 'terminated', phase: 'ended' });
+		for (const [runtimeId, state] of sessions) if (descendants.includes(state.publicId) && state.runtime.phase !== 'ended') update(runtimeId, { state: 'terminated', phase: 'ended' });
 		return result;
 	};
 
@@ -132,9 +124,7 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 		supportsCancelRequest: value.supportsCancelRequest === true,
 		completionTriggerCharacters: (value.completionTriggerCharacters as string[] | undefined) ?? ['.'],
 		exceptionBreakpointFilters:
-			(
-				value.exceptionBreakpointFilters as { filter: string; label: string; default?: boolean }[] | undefined
-			)?.map(value => ({ ...value, default: value.default === true })) ?? [],
+			(value.exceptionBreakpointFilters as { filter: string; label: string; default?: boolean }[] | undefined)?.map(value => ({ ...value, default: value.default === true })) ?? [],
 	});
 	const update = (id: string, patch: Partial<DebugSessionSnapshot>) => {
 		const state = session(id);
@@ -144,8 +134,7 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 			inspectionRevision: state.epoch,
 			revision: state.runtime.revision + 1,
 		};
-		if (patch.phase === 'ended' && relations.has(state.publicId) && !relations.get(state.publicId)!.ended)
-			end(state.publicId);
+		if (patch.phase === 'ended' && relations.has(state.publicId) && !relations.get(state.publicId)!.ended) end(state.publicId);
 	};
 	const accept = (id: string, input: IDebugAdapterProcessReadResult): void => {
 		const state = session(id);
@@ -160,11 +149,7 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 			if (response.type === 'event') {
 				if (['stopped', 'continued', 'invalidated'].includes(response.event ?? '')) state.epoch++;
 				if (response.event === 'invalidated') update(id, {});
-				if (response.event === 'breakpoint')
-					acceptBreakpoint(
-						id,
-						(response.body ?? {}) as unknown as { reason: string; breakpoint: Record<string, unknown> },
-					);
+				if (response.event === 'breakpoint') acceptBreakpoint(id, (response.body ?? {}) as unknown as { reason: string; breakpoint: Record<string, unknown> });
 				if (response.event === 'output') {
 					const body = response.body as unknown as {
 						output?: string;
@@ -187,8 +172,7 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 						reason: null,
 						executionRevision: state.runtime.executionRevision + 1,
 					});
-				if (response.event === 'terminated' || response.event === 'exited')
-					update(id, { state: 'terminated', phase: 'ended' });
+				if (response.event === 'terminated' || response.event === 'exited') update(id, { state: 'terminated', phase: 'ended' });
 				if (response.event === 'capabilities') {
 					Object.assign(state.rawCapabilities, response.body?.capabilities);
 					update(id, { capabilities: capabilities(state.rawCapabilities) });
@@ -204,22 +188,15 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 						body?: { result?: string; type?: string; variablesReference?: number };
 						message?: string;
 					};
-					append(
-						state.publicId,
-						`${value.success ? (value.body?.result ?? '') + (value.body?.type ? ` : ${value.body.type}` : '') : (value.message ?? 'Evaluation failed')}\n`,
-						{
-							kind: 'evaluation',
-							category: value.success ? 'console' : 'stderr',
-							variablesReference: value.body?.variablesReference ?? null,
-						},
-					);
+					append(state.publicId, `${value.success ? (value.body?.result ?? '') + (value.body?.type ? ` : ${value.body.type}` : '') : (value.message ?? 'Evaluation failed')}\n`, {
+						kind: 'evaluation',
+						category: value.success ? 'console' : 'stderr',
+						variablesReference: value.body?.variablesReference ?? null,
+					});
 				}
 				if ((response as { success?: boolean }).success && request) {
 					if (request.command === 'disconnect') update(id, { state: 'terminated', phase: 'ended' });
-					else if (
-						['continue', 'next', 'stepIn', 'stepOut', 'restart'].includes(request.command) &&
-						request.revision === state.runtime.executionRevision
-					)
+					else if (['continue', 'next', 'stepIn', 'stepOut', 'restart'].includes(request.command) && request.revision === state.runtime.executionRevision)
 						update(id, {
 							state: 'running',
 							reason: null,
@@ -303,8 +280,7 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 			if (legacy) {
 				const receipt = JSON.stringify(legacy);
 				if (current?.receipt === receipt) return { status: 'current', snapshot: current.snapshot };
-				if (current && JSON.stringify(current.snapshot.state) !== receipt)
-					return { status: 'conflict', snapshot: current.snapshot };
+				if (current && JSON.stringify(current.snapshot.state) !== receipt) return { status: 'conflict', snapshot: current.snapshot };
 				current = { snapshot: current?.snapshot ?? { revision: 1, state: structuredClone(legacy) }, receipt };
 				workspaces.set(id, current);
 			}
@@ -383,8 +359,7 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 				update(id, { capabilities: capabilities(state.rawCapabilities) });
 				state.launch = request(id, options.request, options.arguments);
 				void state.launch.catch(error => update(id, { state: 'error', phase: 'ended', reason: String(error) }));
-				while (!state.initialized && state.runtime.phase !== 'ended')
-					await new Promise(resolve => setTimeout(resolve, 1));
+				while (!state.initialized && state.runtime.phase !== 'ended') await new Promise(resolve => setTimeout(resolve, 1));
 				if (state.runtime.phase !== 'ended') update(id, { phase: 'configuring' });
 			};
 			void task().catch(error => update(id, { state: 'error', phase: 'ended', reason: String(error) }));
@@ -394,15 +369,8 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 			update(id, { phase: 'launching' });
 			const task = async () => {
 				const filters = state.runtime.capabilities.exceptionBreakpointFilters;
-				const selected = [
-					...new Set(
-						(exceptionFilters ?? filters.filter(filter => filter.default).map(filter => filter.filter))
-							.map(filter => filter.trim())
-							.filter(Boolean),
-					),
-				];
-				if (!state.noDebug && selected.some(filter => !filters.some(candidate => candidate.filter === filter)))
-					throw new Error('Invalid exception filter');
+				const selected = [...new Set((exceptionFilters ?? filters.filter(filter => filter.default).map(filter => filter.filter)).map(filter => filter.trim()).filter(Boolean))];
+				if (!state.noDebug && selected.some(filter => !filters.some(candidate => candidate.filter === filter))) throw new Error('Invalid exception filter');
 				await request(id, 'setExceptionBreakpoints', { filters: state.noDebug ? [] : selected });
 				exceptions.set(id, {
 					version: 1,
@@ -411,8 +379,7 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 					filters: selected,
 					error: null,
 				});
-				if (state.rawCapabilities.supportsConfigurationDoneRequest === true)
-					await request(id, 'configurationDone');
+				if (state.rawCapabilities.supportsConfigurationDoneRequest === true) await request(id, 'configurationDone');
 				await state.launch;
 				if (state.runtime.phase !== 'ended')
 					update(id, {
@@ -425,14 +392,7 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 		setExceptionBreakpoints: async (id, filters) => {
 			const state = session(id);
 			const selected = [...new Set(filters.map(filter => filter.trim()).filter(Boolean))];
-			if (
-				!state.noDebug &&
-				selected.some(
-					filter =>
-						!state.runtime.capabilities.exceptionBreakpointFilters.some(value => value.filter === filter),
-				)
-			)
-				throw new Error('Invalid exception filter');
+			if (!state.noDebug && selected.some(filter => !state.runtime.capabilities.exceptionBreakpointFilters.some(value => value.filter === filter))) throw new Error('Invalid exception filter');
 			await request(id, 'setExceptionBreakpoints', { filters: state.noDebug ? [] : selected });
 			const version = (exceptions.get(id)?.version ?? 0) + 1;
 			exceptions.set(id, {
@@ -455,9 +415,7 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 				bindings: intents.map(
 					intent =>
 						(() => {
-							const oldPoint = old.find(
-								value => JSON.stringify(value.intent) === JSON.stringify(intent) && !value.removed,
-							);
+							const oldPoint = old.find(value => JSON.stringify(value.intent) === JSON.stringify(intent) && !value.removed);
 							return oldPoint ? { ...oldPoint, created: false } : undefined;
 						})() ?? {
 							intent,
@@ -475,13 +433,8 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 			state.bpQueue = state.bpQueue
 				.then(async () => {
 					if (state.closed) return;
-					const groups = new Map<
-						string,
-						{ source?: unknown; command: string; points: DebugBreakpointIntent[] }
-					>();
-					for (const [key, location] of state.sources)
-						if (location.kind === 'source')
-							groups.set(key, { source: location.source, command: 'setBreakpoints', points: [] });
+					const groups = new Map<string, { source?: unknown; command: string; points: DebugBreakpointIntent[] }>();
+					for (const [key, location] of state.sources) if (location.kind === 'source') groups.set(key, { source: location.source, command: 'setBreakpoints', points: [] });
 					const caps = state.runtime.capabilities;
 					for (const intent of intents) {
 						const location = intent.location;
@@ -518,8 +471,7 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 										? 'setDataBreakpoints'
 										: 'setInstructionBreakpoints';
 						const key = location.kind === 'source' ? JSON.stringify(location.source) : command;
-						if (location.kind === 'source')
-							groups.set(key, groups.get(key) ?? { command, source: location.source, points: [] });
+						if (location.kind === 'source') groups.set(key, groups.get(key) ?? { command, source: location.source, points: [] });
 						const unsupported: DebugBreakpointUnsupported | null =
 							intent.condition && !caps.supportsConditionalBreakpoints
 								? 'conditional'
@@ -531,18 +483,13 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 											? 'function'
 											: location.kind === 'data' && !caps.supportsDataBreakpoints
 												? 'data'
-												: location.kind === 'instruction' &&
-													  !caps.supportsInstructionBreakpoints
+												: location.kind === 'instruction' && !caps.supportsInstructionBreakpoints
 													? 'instruction'
 													: null;
 						if (unsupported) {
 							state.bp = {
 								...state.bp,
-								bindings: state.bp.bindings.map(value =>
-									value.intent.id === intent.id
-										? { ...value, unsupported, pending: false, verified: false, protocol: null }
-										: value,
-								),
+								bindings: state.bp.bindings.map(value => (value.intent.id === intent.id ? { ...value, unsupported, pending: false, verified: false, protocol: null } : value)),
 								revision: state.bp.revision + 1,
 							};
 							continue;
@@ -569,12 +516,9 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 							...state.bp,
 							revision: state.bp.revision + 1,
 							bindings: state.bp.bindings.map(binding => {
-								const index = group.points.findIndex(
-									point => JSON.stringify(point) === JSON.stringify(binding.intent),
-								);
+								const index = group.points.findIndex(point => JSON.stringify(point) === JSON.stringify(binding.intent));
 								if (index < 0) return binding;
-								const protocol = values?.[index] as
-									{ verified?: boolean; message?: string } | undefined;
+								const protocol = values?.[index] as { verified?: boolean; message?: string } | undefined;
 								return {
 									...binding,
 									pending: false,
@@ -671,11 +615,7 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 		getConnectionState: transport.getConnectionState.bind(transport),
 		onConnectionState: transport.onConnectionState.bind(transport),
 	};
-	const request = async (
-		id: string,
-		command: string,
-		args?: unknown,
-	): Promise<{ body?: Record<string, unknown> }> => {
+	const request = async (id: string, command: string, args?: unknown): Promise<{ body?: Record<string, unknown> }> => {
 		if (session(id).closed) throw new Error('Fixture session closed');
 		const request = await managed.startRequest(id, command, args);
 		while (!session(id).closed) {
@@ -717,13 +657,7 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 		if (!protocol) return;
 		let matched = false;
 		let bindings = state.bp.bindings.map(binding => {
-			if (
-				protocol.id === undefined ||
-				!binding.intent.enabled ||
-				binding.removed ||
-				(binding.protocol as { id?: unknown } | null)?.id !== protocol.id
-			)
-				return binding;
+			if (protocol.id === undefined || !binding.intent.enabled || binding.removed || (binding.protocol as { id?: unknown } | null)?.id !== protocol.id) return binding;
 			matched = true;
 			return {
 				...binding,
@@ -738,33 +672,17 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 			for (const binding of bindings) {
 				if (binding.removed && binding.intent.location.kind === 'source') {
 					const key = JSON.stringify(binding.intent.location.source);
-					if (
-						!bindings.some(
-							point =>
-								!point.removed &&
-								point.intent.location.kind === 'source' &&
-								JSON.stringify(point.intent.location.source) === key,
-						)
-					)
-						state.sources.delete(key);
+					if (!bindings.some(point => !point.removed && point.intent.location.kind === 'source' && JSON.stringify(point.intent.location.source) === key)) state.sources.delete(key);
 				}
 			}
 		const inputSource = protocol.source as { path?: string; sourceReference?: number } | undefined;
 		const source = inputSource
 			? {
 					...(inputSource.path === undefined ? {} : { path: inputSource.path }),
-					...(inputSource.sourceReference === undefined
-						? {}
-						: { sourceReference: inputSource.sourceReference }),
+					...(inputSource.sourceReference === undefined ? {} : { sourceReference: inputSource.sourceReference }),
 				}
 			: undefined;
-		if (
-			!matched &&
-			event.reason === 'new' &&
-			source &&
-			(source.path || source.sourceReference) &&
-			Number.isSafeInteger(protocol.line)
-		) {
+		if (!matched && event.reason === 'new' && source && (source.path || source.sourceReference) && Number.isSafeInteger(protocol.line)) {
 			const intent: DebugBreakpointIntent = {
 				id: `${state.publicId}:adapter-breakpoint-${bindings.length}`,
 				enabled: true,
@@ -797,10 +715,7 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 		if (query.kind === 'stack') {
 			const threads = (await request(id, 'threads')).body?.threads as { id: number }[];
 			const selected = threads.find(thread => thread.id === query.threadId) ?? threads[0];
-			const frames = selected
-				? ((await request(id, 'stackTrace', { threadId: selected.id, startFrame: 0, levels: 100 })).body
-						?.stackFrames as unknown[])
-				: [];
+			const frames = selected ? ((await request(id, 'stackTrace', { threadId: selected.id, startFrame: 0, levels: 100 })).body?.stackFrames as unknown[]) : [];
 			return { kind: 'stack', threads, frames, threadId: selected?.id ?? null };
 		}
 		if (query.kind === 'frame') {
@@ -814,11 +729,7 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 				scopes: await Promise.all(
 					scopes.map(async scope => ({
 						scope,
-						variables:
-							scope === initial
-								? ((await request(id, 'variables', { variablesReference: scope.variablesReference }))
-										.body?.variables as unknown[])
-								: [],
+						variables: scope === initial ? ((await request(id, 'variables', { variablesReference: scope.variablesReference })).body?.variables as unknown[]) : [],
 						variablesLoaded: scope === initial,
 						error: null,
 					})),
@@ -828,8 +739,7 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 		if (query.kind === 'variables')
 			return {
 				kind: 'variables',
-				variables: (await request(id, 'variables', { variablesReference: query.variablesReference })).body
-					?.variables as unknown[],
+				variables: (await request(id, 'variables', { variablesReference: query.variablesReference })).body?.variables as unknown[],
 			};
 		return {
 			kind: 'watch',
@@ -857,10 +767,7 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 	return Object.assign(transport, managed);
 }
 
-function applyWorkspaceEdit(
-	state: { -readonly [K in keyof DebugWorkspaceState]: DebugWorkspaceState[K] },
-	edit: DebugWorkspaceEdit,
-): void {
+function applyWorkspaceEdit(state: { -readonly [K in keyof DebugWorkspaceState]: DebugWorkspaceState[K] }, edit: DebugWorkspaceEdit): void {
 	if (edit.kind === 'clearBreakpoints') {
 		state.breakpoints = [];
 		state.functionBreakpoints = [];
@@ -869,23 +776,14 @@ function applyWorkspaceEdit(
 		state.breakpoints = state.breakpoints.map(point => ({ ...point, enabled: edit.enabled }));
 		state.functionBreakpoints = state.functionBreakpoints.map(point => ({ ...point, enabled: edit.enabled }));
 		state.dataBreakpoints = state.dataBreakpoints.map(point => ({ ...point, enabled: edit.enabled }));
-	} else if (edit.kind === 'source')
-		state.breakpoints = [...state.breakpoints.filter(point => point.id !== edit.point.id), edit.point];
-	else if (edit.kind === 'function')
-		state.functionBreakpoints = [
-			...state.functionBreakpoints.filter(point => point.id !== edit.point.id),
-			edit.point,
-		];
-	else if (edit.kind === 'data')
-		state.dataBreakpoints = [...state.dataBreakpoints.filter(point => point.id !== edit.point.id), edit.point];
+	} else if (edit.kind === 'source') state.breakpoints = [...state.breakpoints.filter(point => point.id !== edit.point.id), edit.point];
+	else if (edit.kind === 'function') state.functionBreakpoints = [...state.functionBreakpoints.filter(point => point.id !== edit.point.id), edit.point];
+	else if (edit.kind === 'data') state.dataBreakpoints = [...state.dataBreakpoints.filter(point => point.id !== edit.point.id), edit.point];
 	else if (edit.kind === 'remove') {
 		state.breakpoints = state.breakpoints.filter(point => !edit.ids.includes(point.id));
 		state.functionBreakpoints = state.functionBreakpoints.filter(point => !edit.ids.includes(point.id));
 		state.dataBreakpoints = state.dataBreakpoints.filter(point => !edit.ids.includes(point.id));
-	} else if (edit.kind === 'addWatch')
-		state.watchExpressions = [...new Set([...state.watchExpressions, edit.expression])];
-	else if (edit.kind === 'removeWatch')
-		state.watchExpressions = state.watchExpressions.filter(value => value !== edit.expression);
-	else if (edit.kind === 'exceptions')
-		state.exceptionBreakpoints = { ...state.exceptionBreakpoints, [edit.adapterType]: [...edit.filters] };
+	} else if (edit.kind === 'addWatch') state.watchExpressions = [...new Set([...state.watchExpressions, edit.expression])];
+	else if (edit.kind === 'removeWatch') state.watchExpressions = state.watchExpressions.filter(value => value !== edit.expression);
+	else if (edit.kind === 'exceptions') state.exceptionBreakpoints = { ...state.exceptionBreakpoints, [edit.adapterType]: [...edit.filters] };
 }

@@ -26,11 +26,7 @@ export enum EditorCursorNavigationMode {
 }
 
 export interface VisualCursorNavigationRequest {
-	readonly command:
-		| EditorCursorNavigationCommand.LineUp
-		| EditorCursorNavigationCommand.LineDown
-		| EditorCursorNavigationCommand.PageUp
-		| EditorCursorNavigationCommand.PageDown;
+	readonly command: EditorCursorNavigationCommand.LineUp | EditorCursorNavigationCommand.LineDown | EditorCursorNavigationCommand.PageUp | EditorCursorNavigationCommand.PageDown;
 	readonly mode: EditorCursorNavigationMode;
 	readonly pageLineCount: number;
 	readonly preferredHorizontalOffsets?: readonly number[];
@@ -57,27 +53,10 @@ export function navigateStanzaVisualCursors(
 	geometry?: VisualCursorGeometry,
 ): VisualCursorNavigationResult {
 	validateRequest(model, projection, selections, request, measureTextWidth);
-	const preferredHorizontalOffsets = resolvePreferredHorizontalOffsets(
-		model,
-		projection,
-		selections,
-		request.preferredHorizontalOffsets,
-		measureTextWidth,
-		geometry,
-	);
+	const preferredHorizontalOffsets = resolvePreferredHorizontalOffsets(model, projection, selections, request.preferredHorizontalOffsets, measureTextWidth, geometry);
 	const navigated = selections.map((selection, index) => {
-		const target = visualVerticalTarget(
-			model,
-			projection,
-			selection.getPosition(),
-			lineDelta(request),
-			preferredHorizontalOffsets[index]!,
-			measureTextWidth,
-			geometry,
-		);
-		return request.mode === EditorCursorNavigationMode.Extend
-			? Selection.fromPositions(selection.getSelectionStart(), target)
-			: Selection.fromPositions(target);
+		const target = visualVerticalTarget(model, projection, selection.getPosition(), lineDelta(request), preferredHorizontalOffsets[index]!, measureTextWidth, geometry);
+		return request.mode === EditorCursorNavigationMode.Extend ? Selection.fromPositions(selection.getSelectionStart(), target) : Selection.fromPositions(target);
 	});
 	return normalizeResult(navigated, 0, preferredHorizontalOffsets);
 }
@@ -96,22 +75,12 @@ function visualVerticalTarget(
 	if (targetVisualLineIndex === currentVisualLineIndex) return position;
 	const visualLine = projection.lineAt(targetVisualLineIndex)!;
 	const browserTarget = geometry?.getNearestPosition(targetVisualLineIndex, preferredHorizontalOffset);
-	if (
-		browserTarget &&
-		browserTarget.lineNumber - 1 === visualLine.logicalLineIndex &&
-		browserTarget.column - 1 >= visualLine.startColumn &&
-		browserTarget.column - 1 <= visualLine.endColumn
-	) {
+	if (browserTarget && browserTarget.lineNumber - 1 === visualLine.logicalLineIndex && browserTarget.column - 1 >= visualLine.startColumn && browserTarget.column - 1 <= visualLine.endColumn) {
 		return browserTarget;
 	}
-	const text = model
-		.getLineContent(visualLine.logicalLineIndex + 1)
-		.slice(visualLine.startColumn, visualLine.endColumn);
+	const text = model.getLineContent(visualLine.logicalLineIndex + 1).slice(visualLine.startColumn, visualLine.endColumn);
 	const textOffset = Math.max(0, preferredHorizontalOffset - (visualLine.wrappedTextIndentWidth ?? 0));
-	return new Position(
-		visualLine.logicalLineIndex + 1,
-		visualLine.startColumn + nearestCursorColumn(text, textOffset, measureTextWidth) + 1,
-	);
+	return new Position(visualLine.logicalLineIndex + 1, visualLine.startColumn + nearestCursorColumn(text, textOffset, measureTextWidth) + 1);
 }
 
 function resolvePreferredHorizontalOffsets(
@@ -130,22 +99,13 @@ function resolvePreferredHorizontalOffsets(
 			const visualLine = projection.lineAt(projection.visualLineIndexAt(selection.getPosition()))!;
 			return (
 				geometry?.getHorizontalOffset(selection.getPosition()) ??
-				(visualLine.wrappedTextIndentWidth ?? 0) +
-					measureTextWidth(
-						model
-							.getLineContent(visualLine.logicalLineIndex + 1)
-							.slice(visualLine.startColumn, selection.getPosition().column - 1),
-					)
+				(visualLine.wrappedTextIndentWidth ?? 0) + measureTextWidth(model.getLineContent(visualLine.logicalLineIndex + 1).slice(visualLine.startColumn, selection.getPosition().column - 1))
 			);
 		}),
 	);
 }
 
-function nearestCursorColumn(
-	text: string,
-	horizontalOffset: number,
-	measureTextWidth: (text: string) => number,
-): number {
+function nearestCursorColumn(text: string, horizontalOffset: number, measureTextWidth: (text: string) => number): number {
 	const boundaries = getTextGraphemeBoundaries(text);
 	let low = 0;
 	let high = boundaries.length - 1;
@@ -177,11 +137,7 @@ function lineDelta(request: VisualCursorNavigationRequest): number {
 	}
 }
 
-function normalizeResult(
-	selections: readonly Selection[],
-	primaryIndex: number,
-	preferredHorizontalOffsets: readonly number[],
-): VisualCursorNavigationResult {
+function normalizeResult(selections: readonly Selection[], primaryIndex: number, preferredHorizontalOffsets: readonly number[]): VisualCursorNavigationResult {
 	const normalized: Selection[] = [];
 	const normalizedOffsets: number[] = [];
 	const sourceToNormalized: number[] = [];
@@ -205,11 +161,7 @@ function normalizeResult(
 
 function primaryFirst(selections: readonly Selection[], primaryIndex: number): readonly Selection[] {
 	if (primaryIndex === 0) return Object.freeze([...selections]);
-	return Object.freeze([
-		selections[primaryIndex]!,
-		...selections.slice(0, primaryIndex),
-		...selections.slice(primaryIndex + 1),
-	]);
+	return Object.freeze([selections[primaryIndex]!, ...selections.slice(0, primaryIndex), ...selections.slice(primaryIndex + 1)]);
 }
 
 function validateRequest(
@@ -236,17 +188,14 @@ function validateRequest(
 	}
 	if (
 		request.preferredHorizontalOffsets &&
-		(request.preferredHorizontalOffsets.length !== selections.length ||
-			request.preferredHorizontalOffsets.some(offset => !Number.isFinite(offset) || offset < 0))
+		(request.preferredHorizontalOffsets.length !== selections.length || request.preferredHorizontalOffsets.some(offset => !Number.isFinite(offset) || offset < 0))
 	) {
 		throw new RangeError('Visual cursor navigation preferred horizontal offsets must match selections');
 	}
 	for (const selection of selections) model.offsetAt(selection.getPosition());
 }
 
-function isVisualVerticalCommand(
-	command: EditorCursorNavigationCommand,
-): command is VisualCursorNavigationRequest['command'] {
+function isVisualVerticalCommand(command: EditorCursorNavigationCommand): command is VisualCursorNavigationRequest['command'] {
 	return (
 		command === EditorCursorNavigationCommand.LineUp ||
 		command === EditorCursorNavigationCommand.LineDown ||
@@ -256,8 +205,5 @@ function isVisualVerticalCommand(
 }
 
 function selectionsEqual(left: Selection, right: Selection): boolean {
-	return (
-		Position.compare(left.getSelectionStart(), right.getSelectionStart()) === 0 &&
-		Position.compare(left.getPosition(), right.getPosition()) === 0
-	);
+	return Position.compare(left.getSelectionStart(), right.getSelectionStart()) === 0 && Position.compare(left.getPosition(), right.getPosition()) === 0;
 }

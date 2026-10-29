@@ -123,9 +123,7 @@ test('browser folder selection registers the chosen directory once', async () =>
 		},
 	);
 
-	assert.deepEqual(await service.showOpenDialog({ canSelectFiles: false, canSelectFolders: true }), [
-		URI.file('/@browser/notes'),
-	]);
+	assert.deepEqual(await service.showOpenDialog({ canSelectFiles: false, canSelectFolders: true }), [URI.file('/@browser/notes')]);
 	assert.deepEqual(registered, [handle]);
 });
 
@@ -202,10 +200,7 @@ test('browser Save As selects a directory and reads the file name from a dialog'
 		() => dialogs,
 	);
 
-	assert.deepEqual(
-		await service.pickFileToSave(URI.file('/Untitled-1')),
-		URI.file('/@browser/notes/draft with spaces.txt'),
-	);
+	assert.deepEqual(await service.pickFileToSave(URI.file('/Untitled-1')), URI.file('/@browser/notes/draft with spaces.txt'));
 	assert.deepEqual(inputs, ['Untitled-1']);
 });
 
@@ -242,9 +237,7 @@ test('server folder selection navigates directories before returning the chosen 
 	const client = {
 		async list(path: string) {
 			listed.push(path);
-			return path === ''
-				? { path: '/work', parent: null, directories: [{ name: 'notes', path: '/work/notes' }] }
-				: { path: '/work/notes', parent: '/work', directories: [] };
+			return path === '' ? { path: '/work', parent: null, directories: [{ name: 'notes', path: '/work/notes' }] } : { path: '/work/notes', parent: '/work', directories: [] };
 		},
 		async authorize() {
 			throw new Error('Authorization is owned by workspace opening');
@@ -291,9 +284,7 @@ test('server folder selection navigates directories before returning the chosen 
 		},
 	);
 
-	assert.deepEqual(await service.showOpenDialog({ canSelectFiles: false, canSelectFolders: true }), [
-		URI.file('/work/notes'),
-	]);
+	assert.deepEqual(await service.showOpenDialog({ canSelectFiles: false, canSelectFolders: true }), [URI.file('/work/notes')]);
 	assert.deepEqual(listed, ['', '/work/notes']);
 });
 
@@ -305,9 +296,7 @@ test('browser Open File browses the current workspace and returns the chosen fil
 	const files = {
 		async readDirectory(resource: URI) {
 			listed.push(resource);
-			return resource.toString() === root.toString()
-				? [{ resource: notes, name: 'notes', kind: FileKind.Directory }]
-				: [{ resource: paper, name: 'paper.md', kind: FileKind.File }];
+			return resource.toString() === root.toString() ? [{ resource: notes, name: 'notes', kind: FileKind.Directory }] : [{ resource: paper, name: 'paper.md', kind: FileKind.File }];
 		},
 	} as unknown as IFileService;
 	const quickInput = {
@@ -463,9 +452,7 @@ test('server folder dialog selects folders across directory navigation', async (
 	} as unknown as IQuickInputService;
 	const client = {
 		list: async (path: string) =>
-			path === '' || path === '/work'
-				? { path: '/work', parent: null, directories: [{ path: '/work/other', name: 'other' }] }
-				: { path: '/work/other', parent: '/work', directories: [] },
+			path === '' || path === '/work' ? { path: '/work', parent: null, directories: [{ path: '/work/other', name: 'other' }] } : { path: '/work/other', parent: '/work', directories: [] },
 		authorize: async () => {
 			throw new Error('Not needed');
 		},
@@ -484,10 +471,7 @@ test('server folder dialog selects folders across directory navigation', async (
 			throw new Error('No message expected');
 		},
 	);
-	assert.deepEqual(
-		await service.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, canSelectMany: true }),
-		[URI.file('/work'), URI.file('/work/other')],
-	);
+	assert.deepEqual(await service.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, canSelectMany: true }), [URI.file('/work'), URI.file('/work/other')]);
 	assert.ok(shown[3]?.includes('Done (2)'));
 });
 
@@ -532,10 +516,7 @@ test('browser Save As applies the chosen filter and custom dialog labels', async
 	);
 	assert.equal(inputs, 2);
 	assert.equal(messages.length, 1);
-	await assert.rejects(
-		service.showOpenDialog({ canSelectFiles: true, availableFileSystems: ['other'] }),
-		/file scheme only/,
-	);
+	await assert.rejects(service.showOpenDialog({ canSelectFiles: true, availableFileSystems: ['other'] }), /file scheme only/);
 });
 
 test('browser document open chooses an authorized folder without replacing the workspace', async () => {
@@ -675,10 +656,7 @@ test('server Save As rejects Windows aliases before touching disk and accepts th
 		OperatingSystem.Windows,
 	);
 	assert.equal((await service.showSaveDialog({}))?.path, '/C:/work/corrected.txt');
-	assert.deepEqual(
-		{ messages, checked },
-		{ messages: ['Enter a valid file name for the target file system.'], checked: ['/C:/work/corrected.txt'] },
-	);
+	assert.deepEqual({ messages, checked }, { messages: ['Enter a valid file name for the target file system.'], checked: ['/C:/work/corrected.txt'] });
 });
 
 for (const { label, os, resource, path } of [
@@ -757,10 +735,7 @@ for (const { label, os, resource, path } of [
 			},
 			() => dialogs,
 		);
-		assert.deepEqual(
-			await service.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, defaultUri: resource }),
-			[resource],
-		);
+		assert.deepEqual(await service.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, defaultUri: resource }), [resource]);
 		assert.deepEqual(listed, [path]);
 		services.registerInstance(IFileDialogService, service);
 		using workspace = new BrowserHostService(
@@ -772,10 +747,7 @@ for (const { label, os, resource, path } of [
 		);
 		const picked = await service.showOpenDialog({ canSelectFiles: false, canSelectFolders: true });
 		await workspace.openWindow([{ folderUri: picked![0]! }]);
-		assert.deepEqual(
-			{ listed, authorized, activated },
-			{ listed: [path, home, path], authorized: [path], activated: true },
-		);
+		assert.deepEqual({ listed, authorized, activated }, { listed: [path, home, path], authorized: [path], activated: true });
 	});
 }
 
@@ -783,24 +755,15 @@ const serviceFixtures = new DisposableStore();
 afterEach(() => serviceFixtures.clear());
 suiteTeardown(() => serviceFixtures.dispose());
 
-function createFileDialogService(
-	host: ConstructorParameters<typeof FileDialogService>[0],
-	dialogs: () => IDialogService,
-	os: OperatingSystem = OperatingSystem.Linux,
-): FileDialogService {
+function createFileDialogService(host: ConstructorParameters<typeof FileDialogService>[0], dialogs: () => IDialogService, os: OperatingSystem = OperatingSystem.Linux): FileDialogService {
 	return createServices(os).createInstance(FileDialogService, host, dialogs);
 }
 
 function createServices(os: OperatingSystem, userHome?: string): InstantiationService {
 	const api = createDisconnectedRendererApi();
-	const services = serviceFixtures.add(
-		new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors())),
-	);
+	const services = serviceFixtures.add(new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors())));
 	services.registerInstance(IHostService, new TestHostService());
-	services.registerInstance(
-		IWorkspaceContextService,
-		serviceFixtures.add(new TestWorkspaceService({ id: 'dialog-test', folders: [] })),
-	);
+	services.registerInstance(IWorkspaceContextService, serviceFixtures.add(new TestWorkspaceService({ id: 'dialog-test', folders: [] })));
 	services.registerInstance(IRendererHostService, {
 		...api,
 		hasAppServer: true,

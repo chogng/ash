@@ -79,11 +79,7 @@ class ProviderExtUri extends ExtUri {
 	private comparisonKeys = new WeakMap<URI, { full?: string; withoutFragment?: string }>();
 
 	constructor(private readonly files: IFileService) {
-		super(uri =>
-			files.hasProvider(uri) && !files.hasCapability(uri, FileSystemProviderCapabilities.PathCaseSensitive)
-				? ResourcePathCasing.Insensitive
-				: ResourcePathCasing.Sensitive,
-		);
+		super(uri => (files.hasProvider(uri) && !files.hasCapability(uri, FileSystemProviderCapabilities.PathCaseSensitive) ? ResourcePathCasing.Insensitive : ResourcePathCasing.Sensitive));
 	}
 
 	public override getComparisonKey(uri: URI): string {
@@ -99,9 +95,7 @@ class ProviderExtUri extends ExtUri {
 		const cached = this.comparisonKeys.get(uri);
 		if (cached?.withoutFragment !== undefined) return cached.withoutFragment;
 		const identity = this.files.getPathIdentity(uri);
-		const key = identity
-			? extUri.getComparisonKeyIgnoringFragment(identity.comparisonResource)
-			: super.getComparisonKeyIgnoringFragment(uri);
+		const key = identity ? extUri.getComparisonKeyIgnoringFragment(identity.comparisonResource) : super.getComparisonKeyIgnoringFragment(uri);
 		this.comparisonKeys.set(uri, { ...cached, withoutFragment: key });
 		return key;
 	}
@@ -115,11 +109,7 @@ class ProviderExtUri extends ExtUri {
 	public override isEqualOrParent(base: URI, parent: URI, ignoreFragment = false): boolean {
 		const identity = this.files.getPathIdentity(base);
 		return identity
-			? extUri.isEqualOrParent(
-					identity.comparisonResource,
-					this.files.getPathIdentity(parent)?.comparisonResource ?? parent,
-					ignoreFragment,
-				)
+			? extUri.isEqualOrParent(identity.comparisonResource, this.files.getPathIdentity(parent)?.comparisonResource ?? parent, ignoreFragment)
 			: super.isEqualOrParent(base, parent, ignoreFragment);
 	}
 }

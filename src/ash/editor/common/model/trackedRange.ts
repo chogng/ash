@@ -31,7 +31,11 @@ export class TrackedRangeCollection extends Disposable {
 		if (!isTrackedRangeStickiness(stickiness)) {
 			throw new TypeError('Unknown tracked range stickiness');
 		}
-		const record: TrackedRangeRecord = { startOffset, endOffset, stickiness };
+		const record: TrackedRangeRecord = {
+			startOffset,
+			endOffset,
+			stickiness,
+		};
 		const trackedRange = new TrackedRangeHandle(record, this.positionAt, () => this.handles.deleteAndLeak(record));
 		return this.handles.set(record, trackedRange);
 	}
@@ -86,12 +90,8 @@ function mapTrackedRange(
 ): { readonly startOffset: number; readonly endOffset: number } {
 	const mappedBefore = mapOffset(startOffset, OffsetAffinity.Before, changes);
 	const mappedAfter = mapOffset(endOffset, OffsetAffinity.After, changes);
-	const growsAtStart =
-		stickiness === TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges ||
-		stickiness === TrackedRangeStickiness.GrowsOnlyWhenTypingBefore;
-	const growsAtEnd =
-		stickiness === TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges ||
-		stickiness === TrackedRangeStickiness.GrowsOnlyWhenTypingAfter;
+	const growsAtStart = stickiness === TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges || stickiness === TrackedRangeStickiness.GrowsOnlyWhenTypingBefore;
+	const growsAtEnd = stickiness === TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges || stickiness === TrackedRangeStickiness.GrowsOnlyWhenTypingAfter;
 
 	if (startOffset === endOffset) {
 		const before = mapOffset(startOffset, OffsetAffinity.Before, changes);
@@ -100,19 +100,31 @@ function mapTrackedRange(
 			return { startOffset: before, endOffset: after };
 		}
 		const collapsedOffset = growsAtStart ? before : after;
-		return { startOffset: collapsedOffset, endOffset: collapsedOffset };
+		return {
+			startOffset: collapsedOffset,
+			endOffset: collapsedOffset,
+		};
 	}
 
 	const mappedStart = growsAtStart ? mappedBefore : mapOffset(startOffset, OffsetAffinity.After, changes);
 	const mappedEnd = growsAtEnd ? mappedAfter : mapOffset(endOffset, OffsetAffinity.Before, changes);
 	if (mappedStart <= mappedEnd) {
-		return { startOffset: mappedStart, endOffset: mappedEnd };
+		return {
+			startOffset: mappedStart,
+			endOffset: mappedEnd,
+		};
 	}
 	if (growsAtStart && growsAtEnd) {
-		return { startOffset: mappedEnd, endOffset: mappedStart };
+		return {
+			startOffset: mappedEnd,
+			endOffset: mappedStart,
+		};
 	}
 	const collapsedOffset = growsAtStart ? mappedEnd : mappedStart;
-	return { startOffset: collapsedOffset, endOffset: collapsedOffset };
+	return {
+		startOffset: collapsedOffset,
+		endOffset: collapsedOffset,
+	};
 }
 
 function isTrackedRangeStickiness(value: TrackedRangeStickiness): boolean {
@@ -135,11 +147,7 @@ function mapOffset(offset: number, affinity: OffsetAffinity, changes: readonly I
 			continue;
 		}
 		if (startOffset === endOffset) {
-			return (
-				startOffset +
-				cumulativeDelta +
-				(change.forceMoveMarkers || affinity === OffsetAffinity.After ? change.text.length : 0)
-			);
+			return startOffset + cumulativeDelta + (change.forceMoveMarkers || affinity === OffsetAffinity.After ? change.text.length : 0);
 		}
 		if (offset === endOffset) {
 			cumulativeDelta += change.text.length - change.rangeLength;
@@ -148,11 +156,7 @@ function mapOffset(offset: number, affinity: OffsetAffinity, changes: readonly I
 		if (offset === startOffset) {
 			return startOffset + cumulativeDelta + (change.forceMoveMarkers ? change.text.length : 0);
 		}
-		return (
-			startOffset +
-			cumulativeDelta +
-			(change.forceMoveMarkers || affinity === OffsetAffinity.After ? change.text.length : 0)
-		);
+		return startOffset + cumulativeDelta + (change.forceMoveMarkers || affinity === OffsetAffinity.After ? change.text.length : 0);
 	}
 	return offset + cumulativeDelta;
 }

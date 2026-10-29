@@ -23,21 +23,16 @@ test('getBrowserFeatures distinguishes supported browser engines and hosts', () 
 		isAndroid: false,
 		isIOS: false,
 	});
-	assert.deepEqual(
-		getBrowserFeatures(
-			'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/138.0 Electron/37.0 Safari/537.36',
-		),
-		{
-			isFirefox: false,
-			isWebKit: true,
-			isChrome: true,
-			isSafari: false,
-			isWebkitWebView: false,
-			isElectron: true,
-			isAndroid: true,
-			isIOS: false,
-		},
-	);
+	assert.deepEqual(getBrowserFeatures('Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/138.0 Electron/37.0 Safari/537.36'), {
+		isFirefox: false,
+		isWebKit: true,
+		isChrome: true,
+		isSafari: false,
+		isWebkitWebView: false,
+		isElectron: true,
+		isAndroid: true,
+		isIOS: false,
+	});
 	assert.equal(getBrowserFeatures('AppleWebKit/605.1.15').isWebkitWebView, true);
 	assert.equal(
 		getBrowserFeatures({

@@ -27,26 +27,13 @@ export namespace SCMHistoryItemUri {
 
 	/** This URI crosses persistence and clipboard boundaries; names and composite IDs are never identities. */
 	export function fromUri(resource: URI | undefined): Source | undefined {
-		if (
-			!resource ||
-			resource.scheme !== Schemas.internal ||
-			resource.authority !== 'scm-history' ||
-			resource.fragment ||
-			(resource.path !== '/commit' && resource.path !== '/change')
-		)
+		if (!resource || resource.scheme !== Schemas.internal || resource.authority !== 'scm-history' || resource.fragment || (resource.path !== '/commit' && resource.path !== '/change'))
 			return undefined;
 		try {
 			const value: unknown = JSON.parse(resource.query);
 			if (!value || typeof value !== 'object') return undefined;
 			const { repositoryId, revision, baseRevision, path } = value as Record<string, unknown>;
-			if (
-				typeof repositoryId !== 'string' ||
-				!repositoryId ||
-				typeof revision !== 'string' ||
-				!revision ||
-				(baseRevision !== undefined && typeof baseRevision !== 'string')
-			)
-				return undefined;
+			if (typeof repositoryId !== 'string' || !repositoryId || typeof revision !== 'string' || !revision || (baseRevision !== undefined && typeof baseRevision !== 'string')) return undefined;
 			if (resource.path === '/change' ? typeof path !== 'string' || !path : path !== undefined) return undefined;
 			return { repositoryId, revision, baseRevision, path: path as string | undefined };
 		} catch {
@@ -140,10 +127,7 @@ export interface SCMHistoryItemChangeViewModelTreeElement {
 	readonly type: 'historyItemChangeViewModel';
 }
 
-export type ISCMHistoryItemContent =
-	| { readonly kind: 'text'; readonly text: string }
-	| { readonly kind: 'missing' }
-	| { readonly kind: 'binary'; readonly bytes?: Uint8Array };
+export type ISCMHistoryItemContent = { readonly kind: 'text'; readonly text: string } | { readonly kind: 'missing' } | { readonly kind: 'binary'; readonly bytes?: Uint8Array };
 
 export interface ISCMHistoryItemChangeContents {
 	readonly parentId: string | undefined;
@@ -165,20 +149,10 @@ export interface ISCMHistoryProvider {
 	readonly historyItemBaseRef?: IObservable<ISCMHistoryItemRef | undefined>;
 	refresh(): void;
 	provideHistoryItems(options: ISCMHistoryOptions): Promise<readonly ISCMHistoryItem[] | undefined>;
-	provideHistoryItemChanges(
-		historyItemId: string,
-		historyItemParentId: string | undefined,
-	): Promise<readonly ISCMHistoryItemChange[] | undefined>;
-	resolveHistoryItemChangeContents(
-		historyItemId: string,
-		change: ISCMHistoryItemChange,
-	): Promise<ISCMHistoryItemChangeContents>;
+	provideHistoryItemChanges(historyItemId: string, historyItemParentId: string | undefined): Promise<readonly ISCMHistoryItemChange[] | undefined>;
+	resolveHistoryItemChangeContents(historyItemId: string, change: ISCMHistoryItemChange): Promise<ISCMHistoryItemChangeContents>;
 	resolveHistoryItemChatContext(historyItemId: string): Promise<string | undefined>;
-	resolveHistoryItemChangeRangeChatContext(
-		historyItemId: string,
-		historyItemParentId: string,
-		path: string,
-	): Promise<string | undefined>;
+	resolveHistoryItemChangeRangeChatContext(historyItemId: string, historyItemParentId: string, path: string): Promise<string | undefined>;
 }
 
 /** Keeps comparison direction and editor identity separate from one commit's own changes. */

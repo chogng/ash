@@ -9,13 +9,7 @@ import {
 	type IConfigurationSettingSchema,
 	type IRegisteredConfiguration,
 } from '../../../../platform/configuration/common/configurationRegistry.js';
-import {
-	ConfigurationTarget,
-	getConfigValueInTarget,
-	merge,
-	type IConfigurationOverrides,
-	type IConfigurationService,
-} from '../../../../platform/configuration/common/configuration.js';
+import { ConfigurationTarget, getConfigValueInTarget, merge, type IConfigurationOverrides, type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import type {
 	IBooleanSetting,
@@ -131,12 +125,7 @@ export function configurationSettingBinding<T>(
 	const configuredValue = (): Readonly<T> | undefined => {
 		const value = inspect();
 		if (!address.overrideIdentifier) return getConfigValueInTarget(value, target);
-		const layer =
-			target === ConfigurationTarget.WORKSPACE_FOLDER
-				? value.workspaceFolder
-				: target === ConfigurationTarget.WORKSPACE
-					? value.workspace
-					: value.userLocal;
+		const layer = target === ConfigurationTarget.WORKSPACE_FOLDER ? value.workspaceFolder : target === ConfigurationTarget.WORKSPACE ? value.workspace : value.userLocal;
 		return layer?.override;
 	};
 	return {
@@ -145,11 +134,7 @@ export function configurationSettingBinding<T>(
 		onDidChange: listener =>
 			configurationService.onDidChangeConfiguration(event => {
 				// Catalog withdrawal can notify configuration consumers before the editor releases controls.
-				if (
-					event.affectsConfiguration(configuration.key) &&
-					configurationService.keys().default.includes(configuration.key)
-				)
-					listener();
+				if (event.affectsConfiguration(configuration.key) && configurationService.keys().default.includes(configuration.key)) listener();
 			}),
 		getValue: () => {
 			const value = inspect();
@@ -172,18 +157,14 @@ export function configurationSettingBinding<T>(
 export class DefaultSettings {
 	private readonly settings = new Map<string, ISetting>();
 
-	constructor(
-		registry: IConfigurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration),
-	) {
+	constructor(registry: IConfigurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)) {
 		for (const configuration of registry.getRegisteredConfigurations()) {
-			const numeric =
-				!configuration.setting && configuration.source ? contributedNumberSetting(configuration) : undefined;
+			const numeric = !configuration.setting && configuration.source ? contributedNumberSetting(configuration) : undefined;
 			if (numeric) {
 				this.settings.set(configuration.key, numeric);
 				continue;
 			}
-			const schema =
-				configuration.setting ?? (configuration.source ? contributedSettingSchema(configuration) : undefined);
+			const schema = configuration.setting ?? (configuration.source ? contributedSettingSchema(configuration) : undefined);
 			if (schema) {
 				this.settings.set(configuration.key, registeredSetting(configuration, schema));
 			} else if (configuration.source) {
@@ -226,11 +207,7 @@ function contributedNumberSetting(configuration: IRegisteredConfiguration): INum
 					value: null,
 					label: localize({ bundle: 'ash.settings', key: 'number.automatic' }, 'Automatic'),
 				});
-			} else if (
-				type === 'string' &&
-				branch.enum?.length &&
-				branch.enum.every(value => typeof value === 'string')
-			) {
+			} else if (type === 'string' && branch.enum?.length && branch.enum.every(value => typeof value === 'string')) {
 				for (const [index, value] of branch.enum.entries()) {
 					options.push({ value: value as string, label: branch.enumDescriptions?.[index] ?? String(value) });
 				}
@@ -247,9 +224,7 @@ function contributedNumberSetting(configuration: IRegisteredConfiguration): INum
 		minimum: Math.max(schema.minimum ?? -Number.MAX_VALUE, numeric.minimum ?? -Number.MAX_VALUE),
 		maximum: Math.min(schema.maximum ?? Number.MAX_VALUE, numeric.maximum ?? Number.MAX_VALUE),
 		integer: numeric.type === 'integer',
-		options: options.filter(
-			(option, index) => options.findIndex(candidate => candidate.value === option.value) === index,
-		),
+		options: options.filter((option, index) => options.findIndex(candidate => candidate.value === option.value) === index),
 	};
 }
 
@@ -305,15 +280,7 @@ function registeredSetting(configuration: IRegisteredConfiguration, schema: ICon
 		tags: configuration.tags,
 		title: schema.title,
 		description: schema.description,
-		keywords: configuration.source
-			? [
-					...new Set([
-						configuration.source.id,
-						configuration.source.displayName ?? '',
-						...(schema.keywords ?? []),
-					]),
-				]
-			: schema.keywords,
+		keywords: configuration.source ? [...new Set([configuration.source.id, configuration.source.displayName ?? '', ...(schema.keywords ?? [])])] : schema.keywords,
 	};
 	switch (schema.valueType) {
 		case 'boolean':

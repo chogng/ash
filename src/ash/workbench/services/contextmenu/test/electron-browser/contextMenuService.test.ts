@@ -16,17 +16,8 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { Event } from '../../../../../base/common/event.js';
 import { DisposableTracker, installDisposableTracker } from '../../../../../base/common/lifecycle.js';
-import {
-	AnchorAlignment,
-	AnchorAxisAlignment,
-	ContextViewHideReason,
-	type ContextViewOptions,
-} from '../../../../../base/browser/ui/contextview/contextview.js';
-import type {
-	INativeContextMenuApi,
-	INativeContextMenuRequest,
-	INativeContextMenuResult,
-} from '../../../../../base/parts/contextmenu/common/contextmenu.js';
+import { AnchorAlignment, AnchorAxisAlignment, ContextViewHideReason, type ContextViewOptions } from '../../../../../base/browser/ui/contextview/contextview.js';
+import type { INativeContextMenuApi, INativeContextMenuRequest, INativeContextMenuResult } from '../../../../../base/parts/contextmenu/common/contextmenu.js';
 import { IMenuService } from '../../../../../platform/actions/common/actions.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -55,9 +46,7 @@ test('system menus retain scoped shortcut hints, chord labels and delegate overr
 		['copy', single],
 		['copyPath', chord],
 	] as const) {
-		lifetime.add(
-			registry.registerKeybindingRule({ command, keybinding, when: ContextKeyExpr.has('explorerFocus') }),
-		);
+		lifetime.add(registry.registerKeybindingRule({ command, keybinding, when: ContextKeyExpr.has('explorerFocus') }));
 	}
 	const keybindings = {
 		inChordMode: false,
@@ -478,12 +467,7 @@ class SystemMenuFixture extends Disposable {
 		this._register(this.menus.onDidHideContextMenu(() => this.events.push('hide')));
 	}
 
-	show(
-		label: string,
-		token?: CancellationToken,
-		selected: IAction = menuAction(label),
-		onHide?: () => void,
-	): Promise<boolean> {
+	show(label: string, token?: CancellationToken, selected: IAction = menuAction(label), onHide?: () => void): Promise<boolean> {
 		const ended = promiseWithResolvers<boolean>();
 		this.menus.showContextMenu({
 			getAnchor: () => ({ x: 10, y: 20, targetWindow: this.document.defaultView! }),
@@ -545,10 +529,7 @@ test('already canceled system requests do not display or disturb the current pop
 	using fixture = new SystemMenuFixture();
 	const existing = fixture.show('Existing');
 	assert.equal(await fixture.show('Canceled', CancellationToken.Cancelled), true);
-	assert.deepEqual(
-		{ popups: fixture.popups.length, closes: fixture.closeRequests, hidden: fixture.hidden },
-		{ popups: 1, closes: 0, hidden: [{ label: 'Canceled', cancelled: true }] },
-	);
+	assert.deepEqual({ popups: fixture.popups.length, closes: fixture.closeRequests, hidden: fixture.hidden }, { popups: 1, closes: 0, hidden: [{ label: 'Canceled', cancelled: true }] });
 	fixture.popups[0].finish({});
 	await existing;
 });
@@ -602,7 +583,11 @@ test('an IPC close acknowledgment cannot free a system slot before the popup cal
 		fixture.show('Still closing');
 		assert.deepEqual(
 			{ popups: fixture.popups.length, hidden: [...fixture.hidden], events: [...fixture.events] },
-			{ popups: 1, hidden: [{ label: 'Still closing', cancelled: true }], events: ['show'] },
+			{
+				popups: 1,
+				hidden: [{ label: 'Still closing', cancelled: true }],
+				events: ['show'],
+			},
 		);
 	} finally {
 		for (const popup of fixture.popups) {
@@ -638,7 +623,13 @@ test('canceling a system menu preserves its replacement before the popup result 
 			events: fixture.events,
 			runs,
 		},
-		{ visible: true, label: 'Replacement', hidden: [{ label: 'Old', cancelled: true }], events: ['show'], runs: 0 },
+		{
+			visible: true,
+			label: 'Replacement',
+			hidden: [{ label: 'Old', cancelled: true }],
+			events: ['show'],
+			runs: 0,
+		},
 	);
 	fixture.menus.hideContextMenu();
 	assert.equal(view.hidden, true);
@@ -657,10 +648,7 @@ test('a system request canceled by the show event never executes a late selectio
 	});
 	await ended;
 	fixture.popups[0].finish({ selectedId: 'action-1' });
-	assert.deepEqual(
-		{ runs, closes: fixture.closeRequests, hidden: fixture.hidden },
-		{ runs: 0, closes: 1, hidden: [{ label: 'Old', cancelled: true }] },
-	);
+	assert.deepEqual({ runs, closes: fixture.closeRequests, hidden: fixture.hidden }, { runs: 0, closes: 1, hidden: [{ label: 'Old', cancelled: true }] });
 });
 
 test('a failed system close keeps the real slot occupied but allows a later close to retry', async () => {
@@ -686,17 +674,11 @@ test('a failed system close keeps the real slot occupied but allows a later clos
 	assert.equal(await fixture.show('Still occupied'), true);
 	fixture.menus.hideContextMenu();
 	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.deepEqual(
-		{ closes: fixture.closeRequests, popups: fixture.popups.length, hidden: fixture.hidden },
-		{ closes: 2, popups: 1, hidden: [{ label: 'Still occupied', cancelled: true }] },
-	);
+	assert.deepEqual({ closes: fixture.closeRequests, popups: fixture.popups.length, hidden: fixture.hidden }, { closes: 2, popups: 1, hidden: [{ label: 'Still occupied', cancelled: true }] });
 	fixture.popups[0].finish({});
 	await old;
 	const next = fixture.show('Next');
-	assert.deepEqual(
-		{ closes: fixture.closeRequests, popups: fixture.popups.length, errors: errors.map(args => args[1]) },
-		{ closes: 2, popups: 2, errors: [failure] },
-	);
+	assert.deepEqual({ closes: fixture.closeRequests, popups: fixture.popups.length, errors: errors.map(args => args[1]) }, { closes: 2, popups: 2, errors: [failure] });
 	fixture.popups[1].finish({});
 	await next;
 });
@@ -711,10 +693,7 @@ test('a system hide callback can open a successor without losing visibility or i
 	fixture.popups[0].finish({});
 	await old;
 	source.cancel();
-	assert.deepEqual(
-		{ popups: fixture.popups.length, closes: fixture.closeRequests, events: fixture.events },
-		{ popups: 2, closes: 0, events: ['show'] },
-	);
+	assert.deepEqual({ popups: fixture.popups.length, closes: fixture.closeRequests, events: fixture.events }, { popups: 2, closes: 0, events: ['show'] });
 	fixture.popups[1].finish({});
 	await next;
 	assert.deepEqual(fixture.events, ['show', 'hide']);
@@ -732,10 +711,7 @@ test('a browser hide callback keeps its reentrant successor visible in the Elect
 		onHide: () => fixture.showBrowser('Reentrant'),
 	});
 	source.cancel();
-	assert.deepEqual(
-		{ label: fixture.document.querySelector('[role="menuitem"]')?.textContent, events: fixture.events },
-		{ label: 'Reentrant', events: ['show'] },
-	);
+	assert.deepEqual({ label: fixture.document.querySelector('[role="menuitem"]')?.textContent, events: fixture.events }, { label: 'Reentrant', events: ['show'] });
 	fixture.menus.hideContextMenu();
 	assert.deepEqual(fixture.events, ['show', 'hide']);
 });

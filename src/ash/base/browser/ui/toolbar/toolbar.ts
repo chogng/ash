@@ -61,12 +61,7 @@ export class ToolBar extends Disposable {
 				actionViewItemOptions,
 				actionViewItemProvider: (action, actionOptions) => {
 					if (action === this.moreActions) {
-						return new MoreActionsViewItem(
-							action,
-							() => this.secondaryActions,
-							options.contextMenuProvider,
-							actionOptions,
-						);
+						return new MoreActionsViewItem(action, () => this.secondaryActions, options.contextMenuProvider, actionOptions);
 					}
 					return options.actionViewItemProvider?.(action, actionOptions);
 				},
@@ -76,11 +71,7 @@ export class ToolBar extends Disposable {
 		this.element.classList.add('ash-toolbar', `ash-toolbar-${options.presentation ?? 'default'}`);
 	}
 
-	setActions(
-		primaryActions: readonly IAction[],
-		secondaryActions: readonly IAction[] = [],
-		trailingActions: readonly IAction[] = [],
-	): void {
+	setActions(primaryActions: readonly IAction[], secondaryActions: readonly IAction[] = [], trailingActions: readonly IAction[] = []): void {
 		const primary = cleanSeparators(primaryActions);
 		this.secondaryActions = cleanSeparators(secondaryActions);
 		this.trailingActions = cleanSeparators(trailingActions);
@@ -92,11 +83,7 @@ export class ToolBar extends Disposable {
 	}
 
 	/** Refreshes retained action slots when their ordering and presence are unchanged. */
-	protected updateActions(
-		primaryActions: readonly IAction[],
-		secondaryActions: readonly IAction[] = [],
-		trailingActions: readonly IAction[] = [],
-	): void {
+	protected updateActions(primaryActions: readonly IAction[], secondaryActions: readonly IAction[] = [], trailingActions: readonly IAction[] = []): void {
 		const primary = cleanSeparators(primaryActions);
 		this.secondaryActions = cleanSeparators(secondaryActions);
 		this.trailingActions = cleanSeparators(trailingActions);

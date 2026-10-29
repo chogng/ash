@@ -4,20 +4,8 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import type { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
-import type {
-	EditorOpenOptions,
-	EditorOpenTarget,
-	IEditorService,
-	ISaveAllEditorsOptions,
-	ISaveEditorsOptions,
-	ISaveEditorsResult,
-} from '../common/editorService.js';
-import {
-	GroupDirection,
-	type IEditorGroup,
-	type IEditorGroupsService,
-	type IFindGroupScope,
-} from '../common/editorGroupsService.js';
+import type { EditorOpenOptions, EditorOpenTarget, IEditorService, ISaveAllEditorsOptions, ISaveEditorsOptions, ISaveEditorsResult } from '../common/editorService.js';
+import { GroupDirection, type IEditorGroup, type IEditorGroupsService, type IFindGroupScope } from '../common/editorGroupsService.js';
 import type { EditorGroupId, EditorGroupState, EditorPartChangeEvent, EditorPartState } from '../common/editorState.js';
 
 /** Projects the Editor Part into the resource-oriented Workbench editor contract. */
@@ -66,19 +54,14 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 
 	get visibleEditors(): readonly IResourceEditorInput[] {
 		const state = this.editorPart.getEditorState();
-		const editors = this.editorPart.groups.flatMap(group =>
-			this.editorPart.isGroupVisible(group.id) && group.activeInput ? [group.activeInput] : [],
-		);
+		const editors = this.editorPart.groups.flatMap(group => (this.editorPart.isGroupVisible(group.id) && group.activeInput ? [group.activeInput] : []));
 		if (state.isModalEditorVisible && this.editorPart.activeInput) editors.unshift(this.editorPart.activeInput);
 		return Object.freeze(editors);
 	}
 
 	get visibleEditorPanes(): readonly IEditorPane[] {
-		const panes = this.editorPart.groups.flatMap(group =>
-			this.editorPart.isGroupVisible(group.id) && group.activePane ? [group.activePane] : [],
-		);
-		if (this.editorPart.isModalEditorVisible && this.editorPart.activePane)
-			panes.unshift(this.editorPart.activePane);
+		const panes = this.editorPart.groups.flatMap(group => (this.editorPart.isGroupVisible(group.id) && group.activePane ? [group.activePane] : []));
+		if (this.editorPart.isModalEditorVisible && this.editorPart.activePane) panes.unshift(this.editorPart.activePane);
 		return panes;
 	}
 
@@ -117,11 +100,7 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 		return this.groups.length;
 	}
 
-	async openEditor(
-		input: IResourceEditorInput,
-		options?: EditorOpenOptions,
-		target?: EditorOpenTarget,
-	): Promise<void> {
+	async openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<void> {
 		try {
 			await this.editorPart.openEditor(input, options, target);
 		} catch (error) {
@@ -137,10 +116,7 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 		this.editorPart.focus();
 	}
 
-	async save(
-		editors: IEditorIdentifier | readonly IEditorIdentifier[],
-		options?: ISaveEditorsOptions,
-	): Promise<ISaveEditorsResult> {
+	async save(editors: IEditorIdentifier | readonly IEditorIdentifier[], options?: ISaveEditorsOptions): Promise<ISaveEditorsResult> {
 		const saved: IResourceEditorInput[] = [];
 		let success = true;
 		for (const { editor, groupId } of Array.isArray(editors) ? editors : [editors as IEditorIdentifier]) {
@@ -161,12 +137,7 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 		// participants and read-only recovery even when their group is hidden.
 		const editors = this.editorPart.groups.flatMap(group =>
 			group.editors
-				.filter(
-					editor =>
-						editor.isDirty &&
-						(!excludeSticky || !editor.isSticky) &&
-						(includeUntitled || editor.input.resource.scheme !== Schemas.untitled),
-				)
+				.filter(editor => editor.isDirty && (!excludeSticky || !editor.isSticky) && (includeUntitled || editor.input.resource.scheme !== Schemas.untitled))
 				.map(editor => ({ editor: editor.input, groupId: group.id })),
 		);
 		return this.save(editors, saveOptions);
@@ -185,11 +156,7 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 		}
 		const visibleEditorSignature = this.getVisibleEditorSignature();
 		const panes = this.visibleEditorPanes;
-		if (
-			visibleEditorSignature !== this.visibleEditorSignature ||
-			panes.length !== this.lastVisiblePanes.length ||
-			panes.some((pane, index) => pane !== this.lastVisiblePanes[index])
-		) {
+		if (visibleEditorSignature !== this.visibleEditorSignature || panes.length !== this.lastVisiblePanes.length || panes.some((pane, index) => pane !== this.lastVisiblePanes[index])) {
 			this.lastVisiblePanes = panes;
 			this.visibleEditorSignature = visibleEditorSignature;
 			this.visibleEditorsChangeEmitter.fire();

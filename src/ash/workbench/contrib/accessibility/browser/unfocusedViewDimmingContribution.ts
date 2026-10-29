@@ -23,10 +23,7 @@ export class UnfocusedViewDimmingContribution extends Disposable implements IWor
 		this._register(sheet.registration);
 		this._register(
 			configuration.onDidChangeConfiguration(event => {
-				if (
-					event.affectsConfiguration(AccessibilityWorkbenchSettingId.DimUnfocusedEnabled) ||
-					event.affectsConfiguration(AccessibilityWorkbenchSettingId.DimUnfocusedOpacity)
-				) {
+				if (event.affectsConfiguration(AccessibilityWorkbenchSettingId.DimUnfocusedEnabled) || event.affectsConfiguration(AccessibilityWorkbenchSettingId.DimUnfocusedOpacity)) {
 					this.update();
 				}
 			}),

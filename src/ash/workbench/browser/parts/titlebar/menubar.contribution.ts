@@ -15,6 +15,11 @@ const applicationMenus = [
 MenusRegistry.appendMenuItems(
 	applicationMenus.map(([title, submenu], index) => ({
 		id: MenuId.MenubarMainMenu,
-		item: { title, submenu, group: 'navigation', order: index + 1 },
+		item: {
+			title,
+			submenu,
+			group: 'navigation',
+			order: index + 1,
+		},
 	})),
 );

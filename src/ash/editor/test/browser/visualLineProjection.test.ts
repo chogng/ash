@@ -4,10 +4,7 @@ import { JSDOM } from 'jsdom';
 import { toDisposable } from '../../../base/common/lifecycle.js';
 import { EditorLineWrapping, WrappingIndent } from '../../common/config/editorOptions.js';
 import { FontInfo } from '../../common/config/fontInfo.js';
-import {
-	ViewModelLinesFromModelAsIs,
-	ViewModelLinesFromProjectedModel,
-} from '../../common/viewModel/viewModelLines.js';
+import { ViewModelLinesFromModelAsIs, ViewModelLinesFromProjectedModel } from '../../common/viewModel/viewModelLines.js';
 import { DOMLineBreaksComputerFactory } from '../../browser/view/domLineBreaksComputer.js';
 import { TextModel } from '../../common/model/textModel.js';
 import { Position } from '../../common/core/position.js';
@@ -76,20 +73,17 @@ test('A collapsed view range stays outside injected text without selecting its r
 	const modelEnd = new Position(1, 6);
 	const viewEnd = coordinates.convertModelPositionToViewPosition(modelEnd, PositionAffinity.Right);
 	assert.deepEqual(viewEnd, new Position(1, 7));
-	assert.deepEqual(
-		coordinates.validateViewRange(Range.fromPositions(viewEnd), Range.fromPositions(modelEnd)),
-		Range.fromPositions(viewEnd),
-	);
+	assert.deepEqual(coordinates.validateViewRange(Range.fromPositions(viewEnd), Range.fromPositions(modelEnd)), Range.fromPositions(viewEnd));
 });
 
 test('DOM wrapping reserves injected control widths instead of measuring their placeholder glyphs', () => {
 	using model = new TextModel('abcd');
-	const injections = [
-		new LineInjectedText(1, 1, 2, { content: '\uFFFC', widthInEm: 2 }, 0),
-		new LineInjectedText(1, 1, 4, { content: '\uFFFC', widthInEm: 2 }, 1),
-	];
+	const injections = [new LineInjectedText(1, 1, 2, { content: '\uFFFC', widthInEm: 2 }, 0), new LineInjectedText(1, 1, 4, { content: '\uFFFC', widthInEm: 2 }, 1)];
 	const computer = createFactory(new FixedTextMeasurer()).createLineBreaksComputer(
-		{ getLineContent: line => model.getLineContent(line), getLineInjectedText: () => injections },
+		{
+			getLineContent: line => model.getLineContent(line),
+			getLineInjectedText: () => injections,
+		},
 		TEST_FONT_INFO,
 		4,
 		4,
@@ -115,7 +109,10 @@ test('DOM wrapping reuses one canvas for a batch of long lines and preserves wor
 	using model = new TextModel(`abc defgh\n${'abc '.repeat(250)}`);
 	const factory = DOMLineBreaksComputerFactory.create(dom.window as unknown as Window);
 	const computer = factory.createLineBreaksComputer(
-		{ getLineContent: line => model.getLineContent(line), getLineInjectedText: () => null },
+		{
+			getLineContent: line => model.getLineContent(line),
+			getLineInjectedText: () => null,
+		},
 		new FontInfo(TEST_FONT_INFO, true),
 		4,
 		6,
@@ -156,7 +153,10 @@ test('browser visual-line projection wraps at grapheme boundaries and rebuilds a
 	);
 
 	model.applyEdits([
-		{ range: Range.fromPositions(new Position(1 + 1, 0 + 1), new Position(1 + 1, 0 + 1)), text: 'qq' },
+		{
+			range: Range.fromPositions(new Position(1 + 1, 0 + 1), new Position(1 + 1, 0 + 1)),
+			text: 'qq',
+		},
 	]);
 	assert.equal(changes, 1);
 	assert.equal(projection.projection.visualLineCount, 6);
@@ -248,10 +248,7 @@ test('view-model lines expose wrapped cursor rows and convert positions through 
 	);
 	assert.deepEqual(coordinates.convertViewPositionToModelPosition(new Position(2, 2)), new Position(1, 4));
 	assert.deepEqual(coordinates.convertModelPositionToViewPosition(new Position(1, 3)), new Position(2, 1));
-	assert.deepEqual(
-		coordinates.convertModelPositionToViewPosition(new Position(1, 3), PositionAffinity.Left),
-		new Position(1, 3),
-	);
+	assert.deepEqual(coordinates.convertModelPositionToViewPosition(new Position(1, 3), PositionAffinity.Left), new Position(1, 3));
 	assert.equal(coordinates.getModelLineViewLineCount(1), 3);
 	assert.deepEqual(
 		lines.getViewLinesData(1, 4, [true, false, true, true]).map(line => line?.content ?? null),
@@ -270,19 +267,25 @@ test('model-as-is view-model lines preserve one view row per model row', () => {
 	assert.equal(lines.getViewLineContent(2), 'second');
 	assert.equal(lines.getViewLineData(1).content, 'first');
 	assert.deepEqual(computer.finalize(), [null, null]);
-	assert.deepEqual(
-		lines.createCoordinatesConverter().convertViewPositionToModelPosition(new Position(2, 3)),
-		new Position(2, 3),
-	);
+	assert.deepEqual(lines.createCoordinatesConverter().convertViewPositionToModelPosition(new Position(2, 3)), new Position(2, 3));
 });
 
 test('browser visual-line projection validates its public wrapping inputs', () => {
 	using model = new TextModel('text');
 	assert.throws(
-		() => createViewModelLines(model, new FixedTextMeasurer(), { wrapping: 'invalid' as EditorLineWrapping }),
+		() =>
+			createViewModelLines(model, new FixedTextMeasurer(), {
+				wrapping: 'invalid' as EditorLineWrapping,
+			}),
 		/wrapping mode/,
 	);
-	assert.throws(() => createViewModelLines(model, new FixedTextMeasurer(), { wrapWidth: -1 }), /wrap width/);
+	assert.throws(
+		() =>
+			createViewModelLines(model, new FixedTextMeasurer(), {
+				wrapWidth: -1,
+			}),
+		/wrap width/,
+	);
 	assert.throws(
 		() =>
 			createViewModelLines(model, new FixedTextMeasurer(), {
@@ -371,7 +374,12 @@ test('browser visual-line projection restarts an incomplete wrapped scan after a
 		},
 	});
 
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 3 + 1)), text: 'd' }]);
+	model.applyEdits([
+		{
+			range: Range.fromPositions(new Position(0 + 1, 3 + 1)),
+			text: 'd',
+		},
+	]);
 	assert.equal(projection.complete, false);
 	assert.deepEqual(
 		projection.projection.lines.map(line => ({ logical: line.logicalLineIndex, end: line.endColumn })),
@@ -414,22 +422,16 @@ class CountingTextMeasurer extends FixedTextMeasurer {
 	}
 }
 
-function createViewModelLines(
-	model: TextModel,
-	measurer: TextMeasurer,
-	options: ConstructorParameters<typeof ViewModelLinesFromProjectedModel>[4] = {},
-): ViewModelLinesFromProjectedModel {
+function createViewModelLines(model: TextModel, measurer: TextMeasurer, options: ConstructorParameters<typeof ViewModelLinesFromProjectedModel>[4] = {}): ViewModelLinesFromProjectedModel {
 	return new ViewModelLinesFromProjectedModel(model, createFactory(measurer), TEST_FONT_INFO, 4, options);
 }
 
-function computeWrappedIndent(
-	model: TextModel,
-	measurer: TextMeasurer,
-	wrapWidth: number,
-	wrappingIndent: WrappingIndent,
-): number {
+function computeWrappedIndent(model: TextModel, measurer: TextMeasurer, wrapWidth: number, wrappingIndent: WrappingIndent): number {
 	const computer = createFactory(measurer).createLineBreaksComputer(
-		{ getLineContent: lineNumber => model.getLineContent(lineNumber), getLineInjectedText: () => null },
+		{
+			getLineContent: lineNumber => model.getLineContent(lineNumber),
+			getLineInjectedText: () => null,
+		},
 		TEST_FONT_INFO,
 		4,
 		wrapWidth / TEST_FONT_INFO.typicalHalfwidthCharacterWidth,
@@ -488,10 +490,7 @@ test('unwrapped views keep 100000 lines lazy across content changes and still ho
 	}
 
 	using injected = new TextModel('abc');
-	injected.deltaDecorations(
-		[],
-		[{ range: new Range(1, 2, 1, 2), options: { description: 'unwrapped-injection', after: { content: 'XX' } } }],
-	);
+	injected.deltaDecorations([], [{ range: new Range(1, 2, 1, 2), options: { description: 'unwrapped-injection', after: { content: 'XX' } } }]);
 	using lines = createViewModelLines(injected, new FixedTextMeasurer(), { wrapping: EditorLineWrapping.Off });
 	assert.equal(lines.getViewLineContent(1), 'aXXbc', 'injected text keeps the measured path with wrapping off');
 });
@@ -518,10 +517,7 @@ test('unwrapped 100000-line views measure sparse injected rows without scanning 
 		assert.equal(lines.getViewLineContent(40_000), 'aXXbc');
 		assert.equal(lines.getViewLineContent(100_000), 'Yabc');
 		const coordinates = lines.createCoordinatesConverter();
-		assert.deepEqual(
-			coordinates.convertViewPositionToModelPosition(new Position(40_000, 5)),
-			new Position(40_000, 3),
-		);
+		assert.deepEqual(coordinates.convertViewPositionToModelPosition(new Position(40_000, 5)), new Position(40_000, 3));
 		reads = 0;
 		model.applyOperations([{ range: new Range(1, 1, 1, 1), text: 'new' }]);
 		assert.ok(reads < 15, `editing another line read ${reads} lines`);
@@ -529,10 +525,7 @@ test('unwrapped 100000-line views measure sparse injected rows without scanning 
 		lines.setHiddenAreas([new Range(2, 1, 4, 1)]);
 		assert.equal(lines.getViewLineCount(), 99_997);
 		assert.equal(lines.getViewLineContent(39_997), 'aXXbc');
-		assert.deepEqual(
-			lines.createCoordinatesConverter().convertViewPositionToModelPosition(new Position(39_997, 5)),
-			new Position(40_000, 3),
-		);
+		assert.deepEqual(lines.createCoordinatesConverter().convertViewPositionToModelPosition(new Position(39_997, 5)), new Position(40_000, 3));
 	} finally {
 		model.getLineContent = original;
 	}

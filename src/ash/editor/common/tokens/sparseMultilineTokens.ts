@@ -61,24 +61,14 @@ export class SparseMultilineTokens {
 		if (!deltaRange) {
 			return deltaRange;
 		}
-		return new Range(
-			this._startLineNumber + deltaRange.startLineNumber,
-			deltaRange.startColumn,
-			this._startLineNumber + deltaRange.endLineNumber,
-			deltaRange.endColumn,
-		);
+		return new Range(this._startLineNumber + deltaRange.startLineNumber, deltaRange.startColumn, this._startLineNumber + deltaRange.endLineNumber, deltaRange.endColumn);
 	}
 
 	public removeTokens(range: Range): void {
 		const startLineIndex = range.startLineNumber - this._startLineNumber;
 		const endLineIndex = range.endLineNumber - this._startLineNumber;
 
-		this._startLineNumber += this._tokens.removeTokens(
-			startLineIndex,
-			range.startColumn - 1,
-			endLineIndex,
-			range.endColumn - 1,
-		);
+		this._startLineNumber += this._tokens.removeTokens(startLineIndex, range.startColumn - 1, endLineIndex, range.endColumn - 1);
 		this._updateEndLineNumber();
 	}
 
@@ -89,44 +79,18 @@ export class SparseMultilineTokens {
 		const startLineIndex = range.startLineNumber - this._startLineNumber;
 		const endLineIndex = range.endLineNumber - this._startLineNumber;
 
-		const [a, b, bDeltaLine] = this._tokens.split(
-			startLineIndex,
-			range.startColumn - 1,
-			endLineIndex,
-			range.endColumn - 1,
-		);
-		return [
-			new SparseMultilineTokens(this._startLineNumber, a),
-			new SparseMultilineTokens(this._startLineNumber + bDeltaLine, b),
-		];
+		const [a, b, bDeltaLine] = this._tokens.split(startLineIndex, range.startColumn - 1, endLineIndex, range.endColumn - 1);
+		return [new SparseMultilineTokens(this._startLineNumber, a), new SparseMultilineTokens(this._startLineNumber + bDeltaLine, b)];
 	}
 
 	public applyEdit(range: IRange, text: string): void {
 		const [eolCount, firstLineLength, lastLineLength] = countEOL(text);
-		this.acceptEdit(
-			range,
-			eolCount,
-			firstLineLength,
-			lastLineLength,
-			text.length > 0 ? text.charCodeAt(0) : CharCode.Null,
-		);
+		this.acceptEdit(range, eolCount, firstLineLength, lastLineLength, text.length > 0 ? text.charCodeAt(0) : CharCode.Null);
 	}
 
-	public acceptEdit(
-		range: IRange,
-		eolCount: number,
-		firstLineLength: number,
-		lastLineLength: number,
-		firstCharCode: number,
-	): void {
+	public acceptEdit(range: IRange, eolCount: number, firstLineLength: number, lastLineLength: number, firstCharCode: number): void {
 		this._acceptDeleteRange(range);
-		this._acceptInsertText(
-			new Position(range.startLineNumber, range.startColumn),
-			eolCount,
-			firstLineLength,
-			lastLineLength,
-			firstCharCode,
-		);
+		this._acceptInsertText(new Position(range.startLineNumber, range.startColumn), eolCount, firstLineLength, lastLineLength, firstCharCode);
 		this._updateEndLineNumber();
 	}
 
@@ -166,23 +130,11 @@ export class SparseMultilineTokens {
 
 			this._tokens.acceptDeleteRange(range.startColumn - 1, 0, 0, lastLineIndex, range.endColumn - 1);
 		} else {
-			this._tokens.acceptDeleteRange(
-				0,
-				firstLineIndex,
-				range.startColumn - 1,
-				lastLineIndex,
-				range.endColumn - 1,
-			);
+			this._tokens.acceptDeleteRange(0, firstLineIndex, range.startColumn - 1, lastLineIndex, range.endColumn - 1);
 		}
 	}
 
-	private _acceptInsertText(
-		position: Position,
-		eolCount: number,
-		firstLineLength: number,
-		lastLineLength: number,
-		firstCharCode: number,
-	): void {
+	private _acceptInsertText(position: Position, eolCount: number, firstLineLength: number, lastLineLength: number, firstCharCode: number): void {
 		if (eolCount === 0 && firstLineLength === 0) {
 			// Nothing to insert
 			return;
@@ -203,14 +155,7 @@ export class SparseMultilineTokens {
 			return;
 		}
 
-		this._tokens.acceptInsertText(
-			lineIndex,
-			position.column - 1,
-			eolCount,
-			firstLineLength,
-			lastLineLength,
-			firstCharCode,
-		);
+		this._tokens.acceptInsertText(lineIndex, position.column - 1, eolCount, firstLineLength, lastLineLength, firstCharCode);
 	}
 
 	public reportIfInvalid(model: ITextModel): void {
@@ -237,9 +182,7 @@ class SparseMultilineTokensStorage {
 	public toString(startLineNumber: number): string {
 		const pieces: string[] = [];
 		for (let i = 0; i < this._tokenCount; i++) {
-			pieces.push(
-				`(${this._getDeltaLine(i) + startLineNumber},${this._getStartCharacter(i)}-${this._getEndCharacter(i)})`,
-			);
+			pieces.push(`(${this._getDeltaLine(i) + startLineNumber},${this._getStartCharacter(i)}-${this._getEndCharacter(i)})`);
 		}
 		return `[${pieces.join(',')}]`;
 	}
@@ -333,8 +276,7 @@ class SparseMultilineTokensStorage {
 			const tokenMetadata = tokens[srcOffset + 3];
 
 			if (
-				(tokenDeltaLine > startDeltaLine ||
-					(tokenDeltaLine === startDeltaLine && tokenEndCharacter >= startChar)) &&
+				(tokenDeltaLine > startDeltaLine || (tokenDeltaLine === startDeltaLine && tokenEndCharacter >= startChar)) &&
 				(tokenDeltaLine < endDeltaLine || (tokenDeltaLine === endDeltaLine && tokenStartCharacter <= endChar))
 			) {
 				hasDeletedTokens = true;
@@ -362,12 +304,7 @@ class SparseMultilineTokensStorage {
 		return firstDeltaLine;
 	}
 
-	public split(
-		startDeltaLine: number,
-		startChar: number,
-		endDeltaLine: number,
-		endChar: number,
-	): [SparseMultilineTokensStorage, SparseMultilineTokensStorage, number] {
+	public split(startDeltaLine: number, startChar: number, endDeltaLine: number, endChar: number): [SparseMultilineTokensStorage, SparseMultilineTokensStorage, number] {
 		const tokens = this._tokens;
 		const tokenCount = this._tokenCount;
 		const aTokens: number[] = [];
@@ -382,14 +319,8 @@ class SparseMultilineTokensStorage {
 			const tokenEndCharacter = tokens[srcOffset + 2];
 			const tokenMetadata = tokens[srcOffset + 3];
 
-			if (
-				tokenDeltaLine > startDeltaLine ||
-				(tokenDeltaLine === startDeltaLine && tokenEndCharacter >= startChar)
-			) {
-				if (
-					tokenDeltaLine < endDeltaLine ||
-					(tokenDeltaLine === endDeltaLine && tokenStartCharacter <= endChar)
-				) {
+			if (tokenDeltaLine > startDeltaLine || (tokenDeltaLine === startDeltaLine && tokenEndCharacter >= startChar)) {
+				if (tokenDeltaLine < endDeltaLine || (tokenDeltaLine === endDeltaLine && tokenStartCharacter <= endChar)) {
 					// this token is touching the range
 					continue;
 				} else {
@@ -409,20 +340,10 @@ class SparseMultilineTokensStorage {
 			destTokens[destOffset++] = tokenMetadata;
 		}
 
-		return [
-			new SparseMultilineTokensStorage(new Uint32Array(aTokens)),
-			new SparseMultilineTokensStorage(new Uint32Array(bTokens)),
-			destFirstDeltaLine,
-		];
+		return [new SparseMultilineTokensStorage(new Uint32Array(aTokens)), new SparseMultilineTokensStorage(new Uint32Array(bTokens)), destFirstDeltaLine];
 	}
 
-	public acceptDeleteRange(
-		horizontalShiftForFirstLineTokens: number,
-		startDeltaLine: number,
-		startCharacter: number,
-		endDeltaLine: number,
-		endCharacter: number,
-	): void {
+	public acceptDeleteRange(horizontalShiftForFirstLineTokens: number, startDeltaLine: number, startCharacter: number, endDeltaLine: number, endCharacter: number): void {
 		// This is a bit complex, here are the cases I used to think about this:
 		//
 		// 1. The token starts before the deletion range
@@ -477,10 +398,7 @@ class SparseMultilineTokensStorage {
 			let tokenEndCharacter = tokens[srcOffset + 2];
 			const tokenMetadata = tokens[srcOffset + 3];
 
-			if (
-				tokenDeltaLine < startDeltaLine ||
-				(tokenDeltaLine === startDeltaLine && tokenEndCharacter <= startCharacter)
-			) {
+			if (tokenDeltaLine < startDeltaLine || (tokenDeltaLine === startDeltaLine && tokenEndCharacter <= startCharacter)) {
 				// 1a. The token is completely before the deletion range
 				// => nothing to do
 				newTokenCount++;
@@ -511,10 +429,7 @@ class SparseMultilineTokensStorage {
 					hasDeletedTokens = true;
 					continue;
 				}
-			} else if (
-				tokenDeltaLine < endDeltaLine ||
-				(tokenDeltaLine === endDeltaLine && tokenStartCharacter < endCharacter)
-			) {
+			} else if (tokenDeltaLine < endDeltaLine || (tokenDeltaLine === endDeltaLine && tokenStartCharacter < endCharacter)) {
 				// 3a, 3b, 3c
 				if (tokenDeltaLine === endDeltaLine && tokenEndCharacter > endCharacter) {
 					// 3c. The token starts inside the deletion range, and ends after the deletion range
@@ -561,14 +476,7 @@ class SparseMultilineTokensStorage {
 		this._tokenCount = newTokenCount;
 	}
 
-	public acceptInsertText(
-		deltaLine: number,
-		character: number,
-		eolCount: number,
-		firstLineLength: number,
-		lastLineLength: number,
-		firstCharCode: number,
-	): void {
+	public acceptInsertText(deltaLine: number, character: number, eolCount: number, firstLineLength: number, lastLineLength: number, firstCharCode: number): void {
 		// Here are the cases I used to think about this:
 		//
 		// 1. The token is completely before the insertion point
@@ -608,11 +516,7 @@ class SparseMultilineTokensStorage {
 				} else {
 					continue;
 				}
-			} else if (
-				tokenDeltaLine === deltaLine &&
-				tokenStartCharacter < character &&
-				character < tokenEndCharacter
-			) {
+			} else if (tokenDeltaLine === deltaLine && tokenStartCharacter < character && character < tokenEndCharacter) {
 				// 3. The token contains the insertion point
 				if (eolCount === 0) {
 					// => just expand the end character
@@ -670,9 +574,7 @@ class SparseMultilineTokensStorage {
 				});
 			} else if (this._getEndCharacter(i) > model.getLineLength(lineNumber)) {
 				SparseMultilineTokensStorage._rateLimiter.runIfNotLimited(() => {
-					console.error(
-						'Invalid Semantic Tokens Data From Extension: end character > model.getLineLength(lineNumber)',
-					);
+					console.error('Invalid Semantic Tokens Data From Extension: end character > model.getLineLength(lineNumber)');
 				});
 			}
 		}

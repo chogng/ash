@@ -15,10 +15,7 @@ import { IContextKeyService } from '../../../../../platform/contextkey/browser/c
 import { RawContextKey, type IContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
-import {
-	createMultiDiffEditorInput,
-	type MultiDiffEditorInputItem,
-} from '../../../multiDiffEditor/browser/multiDiffEditorInput.js';
+import { createMultiDiffEditorInput, type MultiDiffEditorInputItem } from '../../../multiDiffEditor/browser/multiDiffEditorInput.js';
 import { getErrorMessage } from '../../../../../base/common/errors.js';
 import './bulkEdit.css';
 
@@ -73,32 +70,12 @@ export class BulkEditPane extends ViewPane {
 		const document = container.ownerDocument;
 		const toolbar = h(document, 'div');
 		toolbar.className = 'ash-bulk-edit-toolbar';
-		this.selectAllButton = this.createButton(
-			document,
-			localize('bulkEdit.selectAll', 'Select all'),
-			'ash-bulk-edit-select-all',
-		).domNode;
-		this.applyButton = this.createButton(
-			document,
-			localize('bulkEdit.applySelected', 'Apply selected'),
-			'ash-bulk-edit-apply',
-		).domNode;
-		this.cancelButton = this.createButton(
-			document,
-			localize('bulkEdit.cancel', 'Cancel'),
-			'ash-bulk-edit-cancel',
-		).domNode;
-		this.groupButtonControl = this.createButton(
-			document,
-			localize('bulkEdit.groupByType', 'Group by type'),
-			'ash-bulk-edit-group',
-		);
+		this.selectAllButton = this.createButton(document, localize('bulkEdit.selectAll', 'Select all'), 'ash-bulk-edit-select-all').domNode;
+		this.applyButton = this.createButton(document, localize('bulkEdit.applySelected', 'Apply selected'), 'ash-bulk-edit-apply').domNode;
+		this.cancelButton = this.createButton(document, localize('bulkEdit.cancel', 'Cancel'), 'ash-bulk-edit-cancel').domNode;
+		this.groupButtonControl = this.createButton(document, localize('bulkEdit.groupByType', 'Group by type'), 'ash-bulk-edit-group');
 		this.groupButton = this.groupButtonControl.domNode;
-		this.previewButton = this.createButton(
-			document,
-			localize('bulkEdit.openDiff', 'Open changes'),
-			'ash-bulk-edit-open-diff',
-		).domNode;
+		this.previewButton = this.createButton(document, localize('bulkEdit.openDiff', 'Open changes'), 'ash-bulk-edit-open-diff').domNode;
 		toolbar.append(this.selectAllButton, this.groupButton, this.previewButton, this.applyButton, this.cancelButton);
 		this.statusElement = h(document, 'div');
 		this.statusElement.className = 'ash-bulk-edit-status';
@@ -112,11 +89,7 @@ export class BulkEditPane extends ViewPane {
 		this._register(addDisposableListener(this.selectAllButton, 'click', () => this.selectAll()));
 		this._register(addDisposableListener(this.applyButton, 'click', () => this.accept()));
 		this._register(addDisposableListener(this.cancelButton, 'click', () => this.discard()));
-		this._register(
-			addDisposableListener(this.groupButton, 'click', () =>
-				this.groupsByFile ? this.groupByType() : this.groupByFile(),
-			),
-		);
+		this._register(addDisposableListener(this.groupButton, 'click', () => (this.groupsByFile ? this.groupByType() : this.groupByFile())));
 		this._register(
 			addDisposableListener(this.previewButton, 'click', () => {
 				void this.openPreview().catch(error => {
@@ -180,11 +153,7 @@ export class BulkEditPane extends ViewPane {
 			this.activePreview = {
 				resolve: value => {
 					abortListener.dispose();
-					if (
-						isHTMLElement(previousFocus) &&
-						previousFocus.isConnected &&
-						!this.element.contains(previousFocus)
-					) {
+					if (isHTMLElement(previousFocus) && previousFocus.isConnected && !this.element.contains(previousFocus)) {
 						previousFocus.focus();
 					}
 					resolve(value);
@@ -225,14 +194,7 @@ export class BulkEditPane extends ViewPane {
 	public accept(): void {
 		const model = this.model;
 		const active = this.activePreview;
-		if (
-			!model ||
-			!active ||
-			!model.canApply ||
-			model.conflicts.hasConflicts() ||
-			model.checked.checkedCount === 0 ||
-			model.hasSelectionDependencyError()
-		) {
+		if (!model || !active || !model.canApply || model.conflicts.hasConflicts() || model.checked.checkedCount === 0 || model.hasSelectionDependencyError()) {
 			return;
 		}
 		this.activePreview = undefined;
@@ -251,23 +213,13 @@ export class BulkEditPane extends ViewPane {
 		}
 		const target = element as HTMLInputElement;
 		const index = Number(target.dataset.bulkEditIndex);
-		this.model.updateChecked(
-			index,
-			target.checked,
-			target.dataset.textEditIndex === undefined ? undefined : Number(target.dataset.textEditIndex),
-		);
+		this.model.updateChecked(index, target.checked, target.dataset.textEditIndex === undefined ? undefined : Number(target.dataset.textEditIndex));
 	}
 
 	private render(): void {
 		const model = this.model;
 		this.enabledContext.set(model !== undefined);
-		this.checkedContext.set(
-			model !== undefined &&
-				this.model!.checked.checkedCount > 0 &&
-				model.canApply &&
-				!model.conflicts?.hasConflicts() &&
-				!this.model!.hasSelectionDependencyError(),
-		);
+		this.checkedContext.set(model !== undefined && this.model!.checked.checkedCount > 0 && model.canApply && !model.conflicts?.hasConflicts() && !this.model!.hasSelectionDependencyError());
 		this.categoriesContext.set(model !== undefined && new Set(model.entries.map(entry => entry.kind)).size > 1);
 		this.groupingContext.set(this.groupsByFile);
 		if (!model) {
@@ -287,33 +239,16 @@ export class BulkEditPane extends ViewPane {
 		this.statusElement.textContent =
 			errors === 0
 				? localize('bulkEdit.ready', '{0} edits ready · {1} selected', model.entries.length, selected)
-				: localize(
-						'bulkEdit.errors',
-						'{0} edits cannot be applied; resolve the problem before continuing.',
-						errors,
-					);
+				: localize('bulkEdit.errors', '{0} edits cannot be applied; resolve the problem before continuing.', errors);
 		this.selectAllButton.disabled = model.entries.every(entry => entry.error !== undefined);
 		const dependencyError = this.model!.hasSelectionDependencyError();
-		if (dependencyError)
-			this.statusElement.textContent = localize(
-				'bulkEdit.selectionDependency',
-				'Selected changes depend on excluded replacements. Select the preceding changes to continue.',
-			);
-		if (model.conflicts?.hasConflicts())
-			this.statusElement.textContent = localize(
-				'bulkEdit.conflict',
-				'Files changed during preview. Cancel and run the refactoring again.',
-			);
-		this.applyButton.disabled =
-			!model.canApply || model.conflicts?.hasConflicts() === true || selected === 0 || dependencyError;
+		if (dependencyError) this.statusElement.textContent = localize('bulkEdit.selectionDependency', 'Selected changes depend on excluded replacements. Select the preceding changes to continue.');
+		if (model.conflicts?.hasConflicts()) this.statusElement.textContent = localize('bulkEdit.conflict', 'Files changed during preview. Cancel and run the refactoring again.');
+		this.applyButton.disabled = !model.canApply || model.conflicts?.hasConflicts() === true || selected === 0 || dependencyError;
 		this.cancelButton.disabled = false;
 		this.groupButton.disabled = false;
-		this.previewButton.disabled = !model.entries.some(
-			entry => entry.before !== undefined && entry.after !== undefined && !entry.error,
-		);
-		this.groupButtonControl.label = this.groupsByFile
-			? localize('bulkEdit.groupByType', 'Group by type')
-			: localize('bulkEdit.groupByFile', 'Group by file');
+		this.previewButton.disabled = !model.entries.some(entry => entry.before !== undefined && entry.after !== undefined && !entry.error);
+		this.groupButtonControl.label = this.groupsByFile ? localize('bulkEdit.groupByType', 'Group by type') : localize('bulkEdit.groupByFile', 'Group by file');
 		if (this.renderedModel !== model || this.renderedGrouping !== this.groupsByFile) {
 			if (this.renderedModel !== model) {
 				this.rowResources.clear();
@@ -321,12 +256,7 @@ export class BulkEditPane extends ViewPane {
 			const previousFocus = this.element.ownerDocument.activeElement;
 			const existingEntries =
 				this.renderedModel === model
-					? new Map(
-							[...this.listElement.querySelectorAll<HTMLLIElement>('.ash-bulk-edit-entry')].map(item => [
-								Number(item.dataset.bulkEditEntryIndex),
-								item,
-							]),
-						)
+					? new Map([...this.listElement.querySelectorAll<HTMLLIElement>('.ash-bulk-edit-entry')].map(item => [Number(item.dataset.bulkEditEntryIndex), item]))
 					: new Map<number, HTMLLIElement>();
 			this.renderedModel = model;
 			this.renderedGrouping = this.groupsByFile;
@@ -352,15 +282,9 @@ export class BulkEditPane extends ViewPane {
 		for (const checkbox of this.listElement.querySelectorAll<HTMLInputElement>('input[data-bulk-edit-index]')) {
 			const index = Number(checkbox.dataset.bulkEditIndex);
 			const editIndex = checkbox.dataset.textEditIndex;
-			checkbox.checked =
-				this.model!.isChecked(index) &&
-				(editIndex === undefined || this.model!.selectedTextIndices(index)?.has(Number(editIndex)) === true);
+			checkbox.checked = this.model!.isChecked(index) && (editIndex === undefined || this.model!.selectedTextIndices(index)?.has(Number(editIndex)) === true);
 			const entry = model.edit.entries[index];
-			checkbox.indeterminate =
-				editIndex === undefined &&
-				entry?.kind === 'textDocument' &&
-				this.model!.isChecked(index) &&
-				this.model!.selectedTextIndices(index)!.size < entry.edits.length;
+			checkbox.indeterminate = editIndex === undefined && entry?.kind === 'textDocument' && this.model!.isChecked(index) && this.model!.selectedTextIndices(index)!.size < entry.edits.length;
 		}
 		for (const content of this.listElement.querySelectorAll<HTMLElement>('pre[data-preview-index]')) {
 			const index = Number(content.dataset.previewIndex);
@@ -368,12 +292,7 @@ export class BulkEditPane extends ViewPane {
 			const before = model.entries.find(entry => entry.index === index)?.before;
 			if (entry?.kind !== 'textDocument' || before === undefined) continue;
 			using snapshot = new TextModel(before);
-			snapshot.applyEdits(
-				entry.edits.filter(
-					(_edit, editIndex) =>
-						this.model!.isChecked(index) && this.model!.selectedTextIndices(index)?.has(editIndex),
-				),
-			);
+			snapshot.applyEdits(entry.edits.filter((_edit, editIndex) => this.model!.isChecked(index) && this.model!.selectedTextIndices(index)?.has(editIndex)));
 			content.textContent = `- ${clipText(before)}\n+ ${clipText(snapshot.getText())}`;
 		}
 		this.updateAccessibilityHint();
@@ -391,21 +310,14 @@ export class BulkEditPane extends ViewPane {
 		checkbox.checked = this.model!.isChecked(entry.index);
 		checkbox.disabled = entry.error !== undefined;
 		checkbox.dataset.bulkEditIndex = String(entry.index);
-		checkbox.setAttribute(
-			'aria-label',
-			localize('bulkEdit.selectResource', 'Select {0}', resourceLabel(entry.resource)),
-		);
+		checkbox.setAttribute('aria-label', localize('bulkEdit.selectResource', 'Select {0}', resourceLabel(entry.resource)));
 		const kind = h(document, 'span');
 		kind.className = 'ash-bulk-edit-kind';
 		kind.textContent = kindLabel(entry.kind);
 		const resource = h(document, 'span');
 		resource.className = 'ash-bulk-edit-resource';
-		resource.textContent = entry.secondaryResource
-			? `${resourceLabel(entry.resource)} → ${resourceLabel(entry.secondaryResource)}`
-			: resourceLabel(entry.resource);
-		resource.title = entry.secondaryResource
-			? `${entry.resource.toString()} → ${entry.secondaryResource.toString()}`
-			: entry.resource.toString();
+		resource.textContent = entry.secondaryResource ? `${resourceLabel(entry.resource)} → ${resourceLabel(entry.secondaryResource)}` : resourceLabel(entry.resource);
+		resource.title = entry.secondaryResource ? `${entry.resource.toString()} → ${entry.secondaryResource.toString()}` : entry.resource.toString();
 		header.append(checkbox, kind, resource);
 		const detail = h(document, 'div');
 		detail.className = 'ash-bulk-edit-detail';
@@ -421,16 +333,7 @@ export class BulkEditPane extends ViewPane {
 				checkbox.type = 'checkbox';
 				checkbox.dataset.bulkEditIndex = String(entry.index);
 				checkbox.dataset.textEditIndex = String(index);
-				label.append(
-					checkbox,
-					localize(
-						'bulkEdit.replacement',
-						'Line {0}, column {1}: {2}',
-						textEdit.range.startLineNumber,
-						textEdit.range.startColumn,
-						textEdit.text,
-					),
-				);
+				label.append(checkbox, localize('bulkEdit.replacement', 'Line {0}, column {1}: {2}', textEdit.range.startLineNumber, textEdit.range.startColumn, textEdit.text));
 				replacements.append(label);
 			});
 			item.append(replacements);
@@ -500,25 +403,14 @@ export class BulkEditPane extends ViewPane {
 		}
 		const items: MultiDiffEditorInputItem[] = [];
 		for (const preview of model.entries) {
-			if (
-				(index !== undefined && preview.index !== index) ||
-				preview.error ||
-				preview.before === undefined ||
-				preview.after === undefined
-			) {
+			if ((index !== undefined && preview.index !== index) || preview.error || preview.before === undefined || preview.after === undefined) {
 				continue;
 			}
 			const entry = model.edit.entries[preview.index]!;
 			let after = this.model!.isChecked(preview.index) ? preview.after : preview.before;
 			if (entry.kind === 'textDocument') {
 				using snapshot = new TextModel(preview.before);
-				snapshot.applyEdits(
-					entry.edits.filter(
-						(_edit, editIndex) =>
-							this.model!.isChecked(preview.index) &&
-							this.model!.selectedTextIndices(preview.index)?.has(editIndex),
-					),
-				);
+				snapshot.applyEdits(entry.edits.filter((_edit, editIndex) => this.model!.isChecked(preview.index) && this.model!.selectedTextIndices(preview.index)?.has(editIndex)));
 				after = snapshot.getText();
 			}
 			const path = `/${this.previewId}/${preview.index}`;
@@ -562,24 +454,10 @@ export class BulkEditPane extends ViewPane {
 				let after = entry.after;
 				if (textEdit?.kind === 'textDocument' && entry.before !== undefined) {
 					using snapshot = new TextModel(entry.before);
-					snapshot.applyEdits(
-						textEdit.edits.filter(
-							(_edit, index) =>
-								this.model!.isChecked(entry.index) &&
-								this.model!.selectedTextIndices(entry.index)?.has(index),
-						),
-					);
+					snapshot.applyEdits(textEdit.edits.filter((_edit, index) => this.model!.isChecked(entry.index) && this.model!.selectedTextIndices(entry.index)?.has(index)));
 					after = snapshot.getText();
 				}
-				return [
-					entry.resource.toString(),
-					entry.secondaryResource?.toString(),
-					entry.error ?? entry.detail,
-					entry.before,
-					after,
-				]
-					.filter(value => value !== undefined)
-					.join('\n');
+				return [entry.resource.toString(), entry.secondaryResource?.toString(), entry.error ?? entry.detail, entry.before, after].filter(value => value !== undefined).join('\n');
 			}),
 		].join('\n\n');
 	}
@@ -587,15 +465,9 @@ export class BulkEditPane extends ViewPane {
 	private updateAccessibilityHint(): void {
 		const hint =
 			this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.BulkEditPreview) !== false
-				? localize(
-						'bulkEdit.helpHint',
-						'Press Alt+F1 for refactor preview help. Press Alt+F2 to read all changes.',
-					)
+				? localize('bulkEdit.helpHint', 'Press Alt+F1 for refactor preview help. Press Alt+F2 to read all changes.')
 				: undefined;
-		for (const element of [
-			this.contentElement,
-			...this.contentElement.querySelectorAll<HTMLElement>('button, input, summary'),
-		]) {
+		for (const element of [this.contentElement, ...this.contentElement.querySelectorAll<HTMLElement>('button, input, summary')]) {
 			if (hint) element.setAttribute('aria-description', hint);
 			else element.removeAttribute('aria-description');
 		}

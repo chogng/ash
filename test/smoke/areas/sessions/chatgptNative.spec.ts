@@ -16,10 +16,7 @@ async function installService(application: ElectronApplication): Promise<void> {
 			const path = process.getBuiltinModule('path');
 			const home = path.join(process.env.HOME!, '.codex');
 			await fs.mkdir(home, { recursive: true });
-			await fs.writeFile(
-				path.join(home, 'auth.json'),
-				JSON.stringify({ auth_mode: 'chatgpt', tokens: { access_token: 'synthetic-test-login' } }),
-			);
+			await fs.writeFile(path.join(home, 'auth.json'), JSON.stringify({ auth_mode: 'chatgpt', tokens: { access_token: 'synthetic-test-login' } }));
 			let sends = 0;
 			let step = 0;
 			let reply: ReadableStreamDefaultController<Uint8Array> | undefined;
@@ -35,9 +32,7 @@ async function installService(application: ElectronApplication): Promise<void> {
 				const id = `reply-live-${sends}`;
 				live[id] = { parent: userId, message: message(id, 'assistant', text) };
 				head = id;
-				return new TextEncoder().encode(
-					`data: ${JSON.stringify({ conversation_id: 'fixture-live', message: live[id]!.message })}\n\n`,
-				);
+				return new TextEncoder().encode(`data: ${JSON.stringify({ conversation_id: 'fixture-live', message: live[id]!.message })}\n\n`);
 			};
 			globalThis.ashNativeFixture = {
 				get sends() {
@@ -45,9 +40,7 @@ async function installService(application: ElectronApplication): Promise<void> {
 				},
 				advance() {
 					step++;
-					reply!.enqueue(
-						chunk(step === 1 ? 'First chunk, second chunk' : 'First chunk, second chunk, complete'),
-					);
+					reply!.enqueue(chunk(step === 1 ? 'First chunk, second chunk' : 'First chunk, second chunk, complete'));
 					if (step === 2) {
 						// The server continuation can be a hidden leaf after the visible reply.
 						const id = `leaf-${sends}`;
@@ -70,20 +63,16 @@ async function installService(application: ElectronApplication): Promise<void> {
 						return new Response(null, { status: 404 });
 					}
 					if (url.pathname === '/sentinel-fixture.js') {
-						return new Response(
-							'export const api = { finalizeChatRequirements: async () => ({ chatRequirementsToken: "synthetic-proof" }) };',
-							{ headers: { 'Content-Type': 'text/javascript' } },
-						);
+						return new Response('export const api = { finalizeChatRequirements: async () => ({ chatRequirementsToken: "synthetic-proof" }) };', {
+							headers: { 'Content-Type': 'text/javascript' },
+						});
 					}
-					return new Response(
-						'<!doctype html><title>ChatGPT verification fixture</title><script type="module" src="/sentinel-fixture.js"></script>',
-						{ headers: { 'Content-Type': 'text/html' } },
-					);
+					return new Response('<!doctype html><title>ChatGPT verification fixture</title><script type="module" src="/sentinel-fixture.js"></script>', {
+						headers: { 'Content-Type': 'text/html' },
+					});
 				});
 				storage.fetch = async (input, init) => {
-					const url = new URL(
-						typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
-					);
+					const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
 					if (url.hostname !== 'chatgpt.com') {
 						throw new Error('Unexpected fixture origin');
 					}
@@ -119,11 +108,7 @@ async function installService(application: ElectronApplication): Promise<void> {
 								question: { parent: null, message: message('question', 'user', 'History question') },
 								answer: {
 									parent: 'question',
-									message: message(
-										'answer',
-										'assistant',
-										first ? 'History one answer' : 'History two answer',
-									),
+									message: message('answer', 'assistant', first ? 'History one answer' : 'History two answer'),
 								},
 							},
 						});
@@ -139,10 +124,7 @@ async function installService(application: ElectronApplication): Promise<void> {
 					}
 					if (url.pathname.endsWith('/f/conversation') && init?.method === 'POST') {
 						const request = JSON.parse(String(init.body));
-						if (
-							sends &&
-							(request.conversation_id !== 'fixture-live' || request.parent_message_id !== head)
-						) {
+						if (sends && (request.conversation_id !== 'fixture-live' || request.parent_message_id !== head)) {
 							return Response.json({ error: 'Wrong continuation' }, { status: 400 });
 						}
 						userId = request.messages[0].id;
@@ -178,10 +160,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		test(
 			'opens by default, retains the existing login, streams followups and restores history and drafts',
 			{ tag: ['@electron-ui', '@electron-app-server'] },
-			async (
-				{ application: initialApplication, workbench: initialWorkbench, target, restartWorkbench },
-				testInfo,
-			) => {
+			async ({ application: initialApplication, workbench: initialWorkbench, target, restartWorkbench }, testInfo) => {
 				let application = initialApplication as ElectronApplication;
 				let workbench = initialWorkbench;
 				if (locale === 'zh-CN') {
@@ -197,10 +176,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				const page = await workbench.openAgentsWindow(target.kind);
 				const commands = new QuickAccess(page);
 				await expect(page.locator('[data-action-id="sessions.open.chatgpt"]')).toHaveCount(0);
-				await expect(page.locator('[data-action-id="sessions.newSession"] button')).toHaveAttribute(
-					'aria-current',
-					'page',
-				);
+				await expect(page.locator('[data-action-id="sessions.newSession"] button')).toHaveAttribute('aria-current', 'page');
 				const editor = page.locator('.ash-chatgpt-widget');
 				await expect(editor).toBeVisible();
 				await expect(page.locator('.ash-chat2-editor, .ash-web-bridge')).toHaveCount(0);
@@ -215,9 +191,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await editor.getByRole('button', { name: locale === 'en' ? 'Send' : '发送', exact: true }).click();
 				const answer = editor.locator('.ash-chatgpt-turn.assistant').last();
 				await expect(answer).toContainText('First chunk');
-				await expect(
-					editor.getByRole('button', { name: locale === 'en' ? 'Stop' : '停止', exact: true }),
-				).toBeVisible();
+				await expect(editor.getByRole('button', { name: locale === 'en' ? 'Stop' : '停止', exact: true })).toBeVisible();
 				await page
 					.locator('[data-action-id="sessions.newSession"]')
 					.getByRole('button', { name: locale === 'en' ? 'New' : '新建', exact: true })
@@ -230,9 +204,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await application.evaluate(() => globalThis.ashNativeFixture.advance());
 				await expect(answer).toContainText('First chunk, second chunk, complete');
 				await composer.waitForEditorContents(text => text.trim() === '');
-				await expect(
-					editor.getByRole('button', { name: locale === 'en' ? 'Stop' : '停止', exact: true }),
-				).toBeHidden();
+				await expect(editor.getByRole('button', { name: locale === 'en' ? 'Stop' : '停止', exact: true })).toBeHidden();
 				await expect(editor.locator('.ash-chatgpt-error')).toBeHidden();
 				for (const mode of ['complete', 'stop', 'voice-recovery'] as const) {
 					if (mode === 'voice-recovery') {
@@ -270,24 +242,18 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					await expect(editor.locator('.ash-chatgpt-turn.assistant')).toHaveCount(count);
 					await expect(answer).toContainText('First chunk');
 					if (mode === 'stop') {
-						await editor
-							.getByRole('button', { name: locale === 'en' ? 'Stop' : '停止', exact: true })
-							.click();
+						await editor.getByRole('button', { name: locale === 'en' ? 'Stop' : '停止', exact: true }).click();
 					} else {
 						await application.evaluate(() => globalThis.ashNativeFixture.advance());
 						await application.evaluate(() => globalThis.ashNativeFixture.advance());
 						await expect(answer).toContainText('First chunk, second chunk, complete');
 					}
-					await expect(
-						editor.getByRole('button', { name: locale === 'en' ? 'Stop' : '停止', exact: true }),
-					).toBeHidden();
+					await expect(editor.getByRole('button', { name: locale === 'en' ? 'Stop' : '停止', exact: true })).toBeHidden();
 					await expect(editor.locator('.ash-chatgpt-error')).toBeHidden();
 					await composer.waitForEditorContents(text => text.trim() === '');
 				}
 				const history = page.locator('.ash-chatgpt-navigation');
-				await expect(
-					history.getByRole('button', { name: locale === 'en' ? 'New chat' : '新聊天', exact: true }),
-				).toHaveCount(0);
+				await expect(history.getByRole('button', { name: locale === 'en' ? 'New chat' : '新聊天', exact: true })).toHaveCount(0);
 				await history.getByRole('button', { name: 'First native history', exact: true }).click();
 				await expect(editor).toContainText('History one answer');
 				await composer.waitForEditorFocus();
@@ -319,11 +285,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await history.getByRole('button', { name: 'First native history', exact: true }).click();
 				await input.focus();
 				await page.keyboard.press('Alt+F1');
-				await expect(page.locator('.ash-accessible-view-content')).toHaveValue(
-					locale === 'en'
-						? /Use New at the top of the sidebar to start a chat/u
-						: /使用侧栏顶部的“新建”开始聊天/u,
-				);
+				await expect(page.locator('.ash-accessible-view-content')).toHaveValue(locale === 'en' ? /Use New at the top of the sidebar to start a chat/u : /使用侧栏顶部的“新建”开始聊天/u);
 				await page.keyboard.press('Escape');
 				await testInfo.attach(`chatgpt-entry-${locale}`, {
 					body: await page.screenshot(),
@@ -348,13 +310,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					await expect(page.locator(entry.content)).toBeVisible();
 					await expect(editor).toBeHidden();
 					await expect(history).toBeVisible();
-					expect(await history.evaluate((element, retained) => element === retained, retainedHistory)).toBe(
-						true,
-					);
+					expect(await history.evaluate((element, retained) => element === retained, retainedHistory)).toBe(true);
 					await expect(pinned).toHaveAttribute('aria-expanded', 'false');
-					await expect(
-						history.getByRole('button', { name: 'First native history', exact: true }),
-					).toHaveAttribute('aria-current', 'page');
+					await expect(history.getByRole('button', { name: 'First native history', exact: true })).toHaveAttribute('aria-current', 'page');
 					await expect(viewport).toHaveJSProperty('scrollTop', 96);
 					if (entry.action === 'sessions.open.creator') {
 						await page
@@ -363,9 +321,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 							.click();
 						await expect(page.locator('.ash-sessions-design-view')).toBeVisible();
 						await expect(history).toBeVisible();
-						expect(
-							await history.evaluate((element, retained) => element === retained, retainedHistory),
-						).toBe(true);
+						expect(await history.evaluate((element, retained) => element === retained, retainedHistory)).toBe(true);
 					}
 					await history.getByRole('button', { name: 'First native history', exact: true }).click();
 					await expect(editor).toBeVisible();
@@ -385,22 +341,15 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				let restored = await workbench.reopenAgentsWindow(application, page);
 				await expect(restored.locator('.ash-chatgpt-widget')).toContainText('History one answer');
 				await expect(restored.locator('[data-action-id="sessions.open.chatgpt"]')).toHaveCount(0);
-				await expect(restored.locator('[data-action-id="sessions.newSession"] button')).toHaveAttribute(
-					'aria-current',
-					'page',
-				);
+				await expect(restored.locator('[data-action-id="sessions.newSession"] button')).toHaveAttribute('aria-current', 'page');
 				for (const entry of pages) {
 					await restored.locator(`[data-action-id="${entry.action}"] button`).click();
 					restored = await workbench.reopenAgentsWindow(application, restored);
 					await expect(restored.locator(entry.content)).toBeVisible();
 					const restoredHistory = restored.locator('.ash-chatgpt-navigation');
 					await expect(restoredHistory).toBeVisible();
-					await expect(
-						restoredHistory.locator('[data-group="pinned"] .ash-pane-view-header-button'),
-					).toHaveAttribute('aria-expanded', 'false');
-					await expect(
-						restoredHistory.getByRole('button', { name: 'First native history', exact: true }),
-					).toHaveAttribute('aria-current', 'page');
+					await expect(restoredHistory.locator('[data-group="pinned"] .ash-pane-view-header-button')).toHaveAttribute('aria-expanded', 'false');
+					await expect(restoredHistory.getByRole('button', { name: 'First native history', exact: true })).toHaveAttribute('aria-current', 'page');
 					await restoredHistory.getByRole('button', { name: 'First native history', exact: true }).click();
 					await expect(restored.locator('.ash-chatgpt-widget')).toContainText('History one answer');
 					await new Editor(restored.locator('.ash-chatgpt-widget')).waitForEditorFocus();

@@ -24,16 +24,10 @@ export function documentPointToPosition(document: DocumentNode, schema: Document
 	return position;
 }
 
-function findPointPosition(
-	node: DocumentNode,
-	schema: DocumentSchema,
-	point: DocumentPoint,
-	start: number,
-): number | undefined {
+function findPointPosition(node: DocumentNode, schema: DocumentSchema, point: DocumentPoint, start: number): number | undefined {
 	if (node.id === point.nodeId) {
 		if (node.text === undefined) throw new RangeError(`Document point '${point.nodeId}' must target a text node`);
-		if (!isNonNegativeSafeInteger(point.offset) || point.offset > node.text.length)
-			throw new RangeError(`Document point offset must be between 0 and ${node.text.length}`);
+		if (!isNonNegativeSafeInteger(point.offset) || point.offset > node.text.length) throw new RangeError(`Document point offset must be between 0 and ${node.text.length}`);
 		return start + point.offset;
 	}
 	if (node.text !== undefined || schema.isLeafNode(node)) return undefined;

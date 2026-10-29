@@ -11,9 +11,7 @@ const fontRamp = [10, 11, 12, 13, 18, 26];
 /** Advisory checks identify design decisions; they never rewrite CSS or fail a build. */
 export function validateDesignTokens(contents: string): DesignTokenSuggestion[] {
 	const suggestions: DesignTokenSuggestion[] = [];
-	const source = contents.replace(/\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, value =>
-		' '.repeat(value.length),
-	);
+	const source = contents.replace(/\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, value => ' '.repeat(value.length));
 	for (const match of source.matchAll(/(?:^|[;{}])\s*([\w-]+)\s*:\s*([^;{}]+)/g)) {
 		const property = match[1]!.toLowerCase();
 		const value = match[2]!.trim().replace(/\s*!important\s*$/i, '');
@@ -26,17 +24,10 @@ export function validateDesignTokens(contents: string): DesignTokenSuggestion[] 
 			continue;
 		}
 		const lengths = [...value.matchAll(/(?:^|\s)(\d+(?:\.\d+)?)px(?=\s|\/|$)/g)].map(length => Number(length[1]));
-		if (
-			/^(?:padding|margin)(?:-(?:top|right|bottom|left|inline|block|inline-start|inline-end|block-start|block-end))?$|^(?:gap|row-gap|column-gap)$/.test(
-				property,
-			)
-		) {
+		if (/^(?:padding|margin)(?:-(?:top|right|bottom|left|inline|block|inline-start|inline-end|block-start|block-end))?$|^(?:gap|row-gap|column-gap)$/.test(property)) {
 			const offRamp = lengths.filter(length => !spacingRamp.includes(length));
 			if (offRamp.length > 0) {
-				add(
-					'spacing',
-					`${property}: ${value} is off the spacing ramp; review against ${spacingRamp.join(', ')}px`,
-				);
+				add('spacing', `${property}: ${value} is off the spacing ramp; review against ${spacingRamp.join(', ')}px`);
 			}
 		} else if (property === 'font-weight') {
 			if (/^\d+$|^(?:normal|bold)$/.test(value)) {
@@ -46,40 +37,18 @@ export function validateDesignTokens(contents: string): DesignTokenSuggestion[] 
 			}
 		} else if (property === 'font-size' && lengths.length === 1) {
 			const block = source.lastIndexOf('{', match.index);
-			const selector = source.slice(
-				Math.max(source.lastIndexOf('}', block - 1), source.lastIndexOf('{', block - 1)) + 1,
-				block,
-			);
+			const selector = source.slice(Math.max(source.lastIndexOf('}', block - 1), source.lastIndexOf('{', block - 1)) + 1, block);
 			if (/\.lxicon(?:[\s.:#\[]|$|-)/.test(selector)) {
-				const token =
-					lengths[0] === 12
-						? '--ash-lxiconFontSize-compact'
-						: lengths[0] === 18
-							? '--ash-lxiconFontSize-large'
-							: '--ash-lxiconFontSize';
+				const token = lengths[0] === 12 ? '--ash-lxiconFontSize-compact' : lengths[0] === 18 ? '--ash-lxiconFontSize-large' : '--ash-lxiconFontSize';
 				add('icon', `font-size: ${value}; use var(${token}) and review the icon size and glyph`);
 			} else {
-				const detail = fontRamp.includes(lengths[0]!)
-					? 'choose a heading, body, or label role'
-					: 'review the type ramp and choose a heading, body, or label role';
+				const detail = fontRamp.includes(lengths[0]!) ? 'choose a heading, body, or label role' : 'review the type ramp and choose a heading, body, or label role';
 				add('font-size', `font-size: ${value}; ${detail}`);
 			}
-		} else if (
-			/^border(?:-(?:top-left|top-right|bottom-left|bottom-right|start-start|start-end|end-start|end-end))?-radius$/.test(
-				property,
-			) &&
-			lengths.some(length => length > 0)
-		) {
-			const detail = lengths.every(length => radiusRamp.includes(length))
-				? 'choose a radius token by surface tier'
-				: 'review the radius ramp and surface tier';
+		} else if (/^border(?:-(?:top-left|top-right|bottom-left|bottom-right|start-start|start-end|end-start|end-end))?-radius$/.test(property) && lengths.some(length => length > 0)) {
+			const detail = lengths.every(length => radiusRamp.includes(length)) ? 'choose a radius token by surface tier' : 'review the radius ramp and surface tier';
 			add('radius', `${property}: ${value}; ${detail}; use the circle token for pills`);
-		} else if (
-			/^(?:border(?:-(?:top|right|bottom|left|inline|block|inline-start|inline-end|block-start|block-end))?(?:-width)?|outline(?:-width)?)$/.test(
-				property,
-			) &&
-			lengths.includes(1)
-		) {
+		} else if (/^(?:border(?:-(?:top|right|bottom|left|inline|block|inline-start|inline-end|block-start|block-end))?(?:-width)?|outline(?:-width)?)$/.test(property) && lengths.includes(1)) {
 			add('stroke', `${property}: ${value}; use var(--ash-strokeThickness) for a standard 1px stroke`);
 		}
 	}

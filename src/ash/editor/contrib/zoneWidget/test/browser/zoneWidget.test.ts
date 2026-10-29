@@ -58,14 +58,7 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 			top: '40px',
 			height: '40px',
 			contentHeight: 100,
-			classes: [
-				'stanza-editor-zone-widget',
-				'peek-widget',
-				'test-widget',
-				'show-frame',
-				'show-arrow',
-				'stanza-editor-view-zone',
-			],
+			classes: ['stanza-editor-zone-widget', 'peek-widget', 'test-widget', 'show-frame', 'show-arrow', 'stanza-editor-view-zone'],
 			layout: { heightInPixels: 22, widthInPixels: 89 },
 			frameColor: '#123456',
 			arrowColor: '#654321',
@@ -76,7 +69,10 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 	viewport.render(true, false);
 	assert.deepEqual(
 		{ height: widget.domNode.style.height, layout: widget.layouts.at(-1) },
-		{ height: '40px', layout: { heightInPixels: 22, widthInPixels: 122 } },
+		{
+			height: '40px',
+			layout: { heightInPixels: 22, widthInPixels: 122 },
+		},
 	);
 	editor.layout({ width: 200, height: 100 });
 
@@ -84,7 +80,10 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 	viewport.render(true, false);
 	assert.deepEqual(
 		{ position: widget.position, top: widget.domNode.style.top },
-		{ position: new Position(2 + 1, 2 + 1), top: '60px' },
+		{
+			position: new Position(2 + 1, 2 + 1),
+			top: '60px',
+		},
 	);
 
 	widget.updatePositionAndHeight(new Position(0 + 1, 1 + 1), 1);
@@ -118,7 +117,12 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 			hidden: widget.domNode.hidden,
 			contentHeight: viewport.viewportLayout.contentSize.height,
 		},
-		{ position: undefined, parent: null, hidden: true, contentHeight: 100 },
+		{
+			position: undefined,
+			parent: null,
+			hidden: true,
+			contentHeight: 100,
+		},
 	);
 	dom.window.close();
 });
@@ -171,7 +175,10 @@ test('ZoneWidget preserves selection on request and exposes an enabled resize sa
 	viewport.render(true, false);
 	assert.deepEqual(
 		{ height: widget.domNode.style.height, layout: widget.layouts.at(-1) },
-		{ height: '160px', layout: { heightInPixels: 160, widthInPixels: 89 } },
+		{
+			height: '160px',
+			layout: { heightInPixels: 160, widthInPixels: 89 },
+		},
 	);
 	dom.window.close();
 });

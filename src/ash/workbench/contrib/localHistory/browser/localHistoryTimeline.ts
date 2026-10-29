@@ -4,13 +4,7 @@ import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import {
-	ITimelineService,
-	type Timeline,
-	type TimelineChangeEvent,
-	type TimelineOptions,
-	type TimelineProvider,
-} from '../../timeline/common/timeline.js';
+import { ITimelineService, type Timeline, type TimelineChangeEvent, type TimelineOptions, type TimelineProvider } from '../../timeline/common/timeline.js';
 import { IWorkingCopyHistoryService } from '../../../services/workingCopy/common/workingCopyHistory.js';
 
 /** Publishes the existing saved snapshots without introducing another history store. */
@@ -31,19 +25,14 @@ export class LocalHistoryTimeline extends Disposable implements TimelineProvider
 		super();
 		const update = (): void => {
 			this.registration.clear();
-			if (configuration.getValue<boolean>('workbench.localHistory.enabled'))
-				this.registration.value = timeline.registerTimelineProvider(this);
+			if (configuration.getValue<boolean>('workbench.localHistory.enabled')) this.registration.value = timeline.registerTimelineProvider(this);
 		};
 		this._register(
 			configuration.onDidChangeConfiguration(event => {
 				if (event.affectsConfiguration('workbench.localHistory.enabled')) update();
 			}),
 		);
-		this._register(
-			history.onDidAddEntry(({ entry }) =>
-				this.changed.fire({ id: this.id, uri: entry.workingCopy.resource, reset: true }),
-			),
-		);
+		this._register(history.onDidAddEntry(({ entry }) => this.changed.fire({ id: this.id, uri: entry.workingCopy.resource, reset: true })));
 		update();
 	}
 
@@ -62,12 +51,7 @@ export class LocalHistoryTimeline extends Disposable implements TimelineProvider
 				label: localize('timeline.localHistory.saved', 'File Saved'),
 				description: new Date(entry.timestamp).toLocaleString(),
 				timestamp: entry.timestamp,
-				tooltip: localize(
-					'timeline.localHistory.entry',
-					'{0} — {1}',
-					entry.workingCopy.name,
-					new Date(entry.timestamp).toLocaleString(),
-				),
+				tooltip: localize('timeline.localHistory.entry', '{0} — {1}', entry.workingCopy.name, new Date(entry.timestamp).toLocaleString()),
 				command: {
 					id: 'workbench.action.localHistory.open',
 					title: localize('timeline.localHistory.compare', 'Compare with File'),

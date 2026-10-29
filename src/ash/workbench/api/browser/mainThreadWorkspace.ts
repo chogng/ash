@@ -2,11 +2,7 @@ import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { Disposable, DisposableMap } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
-import {
-	IExtensionHostApi,
-	type ExtensionHostFleetSnapshot,
-	type JsonValue,
-} from '../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
 
 /** WorkspaceContextService commits window identities; the bridge owns delivery lifetimes only. */
@@ -101,14 +97,7 @@ class WorkspaceObserver extends Disposable {
 		if (this.controller.signal.aborted) return;
 		if (++this.pending > 64) {
 			this.controller.abort();
-			this.reportError(
-				new Error(
-					localize(
-						{ bundle: 'ash.workbench', key: 'workspaceEventsOverflow' },
-						'Extension workspace event queue exceeded 64 pending events.',
-					),
-				),
-			);
+			this.reportError(new Error(localize({ bundle: 'ash.workbench', key: 'workspaceEventsOverflow' }, 'Extension workspace event queue exceeded 64 pending events.')));
 			return;
 		}
 		this.queue = this.queue

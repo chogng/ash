@@ -40,8 +40,7 @@ export class ElectronLifecycleService extends BrowserLifecycleService {
 					await this.shutdown(reason);
 				} catch (error) {
 					document.body.inert = false;
-					if (focusSource instanceof HTMLElement && focusSource.isConnected)
-						focusSource.focus({ preventScroll: true });
+					if (focusSource instanceof HTMLElement && focusSource.isConnected) focusSource.focus({ preventScroll: true });
 					if (error instanceof ShutdownVetoError) {
 						this.logService.info('lifecycle', 'Renderer vetoed window shutdown', { token, reason });
 						await invoke<void>(WINDOW_CLOSE_RESPONSE_CHANNEL, { kind: 'vetoed', token });
@@ -51,10 +50,7 @@ export class ElectronLifecycleService extends BrowserLifecycleService {
 					await invoke<void>(WINDOW_CLOSE_RESPONSE_CHANNEL, {
 						kind: 'failed',
 						token,
-						message: localize(
-							{ bundle: 'ash', key: 'workbench.closeSaveFailed' },
-							'The window could not close because its state was not saved.',
-						),
+						message: localize({ bundle: 'ash', key: 'workbench.closeSaveFailed' }, 'The window could not close because its state was not saved.'),
 					});
 					return;
 				}
@@ -63,17 +59,13 @@ export class ElectronLifecycleService extends BrowserLifecycleService {
 				await invoke<void>(WINDOW_CLOSE_RESPONSE_CHANNEL, { kind: 'complete', token });
 			})().catch(error => console.error('Failed to complete window close request', error));
 		};
-		const closeRequests = subscribe<number>(WINDOW_PREPARE_CLOSE_CHANNEL, token =>
-			handleRequest(token, 'windowClose'),
-		);
+		const closeRequests = subscribe<number>(WINDOW_PREPARE_CLOSE_CHANNEL, token => handleRequest(token, 'windowClose'));
 		const subscription = this._register(toDisposable(() => closeRequests.dispose()));
 		const quitRequests = subscribe<number>(WINDOW_PREPARE_QUIT_CHANNEL, token => handleRequest(token, 'quit'));
 		this._register(toDisposable(() => quitRequests.dispose()));
 		const loadRequests = subscribe<number>(WINDOW_PREPARE_LOAD_CHANNEL, token => handleRequest(token, 'load'));
 		this._register(toDisposable(() => loadRequests.dispose()));
-		const reloadRequests = subscribe<number>(WINDOW_PREPARE_RELOAD_CHANNEL, token =>
-			handleRequest(token, 'reload'),
-		);
+		const reloadRequests = subscribe<number>(WINDOW_PREPARE_RELOAD_CHANNEL, token => handleRequest(token, 'reload'));
 		this._register(toDisposable(() => reloadRequests.dispose()));
 		try {
 			await invoke<void>(WINDOW_CLOSE_RESPONSE_CHANNEL, { kind: 'ready' });

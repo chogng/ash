@@ -15,22 +15,14 @@ import { IEnvironmentVariableService } from '../../../terminal/common/environmen
 import type { IQuickPick, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { ShellQuoting } from '../../common/tasks.js';
-import {
-	ITerminalContributionService,
-	ITerminalProfileResolverService,
-	ITerminalProfileService,
-} from '../../../terminal/common/terminal.js';
+import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../terminal/common/terminal.js';
 import { TerminalProfileService } from '../../../terminal/browser/terminalProfileService.js';
 import { BrowserTerminalProfileResolverService } from '../../../terminal/browser/terminalProfileResolverService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IFileSearchService, type FileSearchResult } from '../../../../../platform/search/common/fileSearch.js';
 import { BrowserFileSearchService } from '../../../../../platform/search/browser/browserFileSearchService.js';
 import { MainThreadTask } from '../../../../api/browser/mainThreadTask.js';
-import {
-	IExtensionHostApi,
-	type ExtensionHostFleetSnapshot,
-	type JsonValue,
-} from '../../../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
 import { registerTestExtensionService } from '../../../../test/common/testExtensionServices.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -49,21 +41,12 @@ import { TestWorkspaceService } from '../../../../services/configuration/test/co
 import { ConfigurationResolverService } from '../../../../services/configurationResolver/browser/configurationResolverService.js';
 import { IConfigurationResolverService } from '../../../../services/configurationResolver/common/configurationResolver.js';
 import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
-import {
-	type IFileSystemProvider,
-	type IFileWriteOptions,
-	type IFileChangeEvent,
-	FileSystemProviderCapabilities,
-} from '../../../../../platform/files/common/files.js';
+import { type IFileSystemProvider, type IFileWriteOptions, type IFileChangeEvent, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
-import {
-	registerTestTerminalCreationServices,
-	registerTestWorkbenchInteractionServices,
-	workbenchInstantiationService,
-} from '../../../../test/browser/workbenchTestServices.js';
+import { registerTestTerminalCreationServices, registerTestWorkbenchInteractionServices, workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { DisposableStore, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { IOutputService } from '../../../../services/output/common/output.js';
 import assert from 'node:assert/strict';
@@ -72,25 +55,13 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { resetNlsResolver } from '../../../../../nls.js';
-import {
-	ITerminalProcessService,
-	type IShellLaunchConfig,
-	type ITerminalProcessReadResult,
-	type TerminalProcessExecution,
-} from '../../../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, type IShellLaunchConfig, type ITerminalProcessReadResult, type TerminalProcessExecution } from '../../../../../platform/terminal/common/terminal.js';
 import { TerminalService } from '../../../terminal/browser/terminalService.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
-import {
-	FileKind,
-	FileNotFoundError,
-	type IFileBytes,
-	IFileService,
-	type IFileStat,
-	type IFileWriteResult,
-} from '../../../../../platform/files/common/files.js';
+import { FileKind, FileNotFoundError, type IFileBytes, IFileService, type IFileStat, type IFileWriteResult } from '../../../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import {
 	type ITerminalCommandStatusEvent,
@@ -178,11 +149,7 @@ suite('Workspace task progress signals', () => {
 			await tasks.terminate(quick);
 			mock.timers.tick(10000);
 			assert.deepEqual(cues, ['started', 'stopped'], 'short tasks never start a cue');
-			assert.deepEqual(
-				results,
-				['accessibility.signals.taskCompleted'],
-				'cancellation does not announce success or failure',
-			);
+			assert.deepEqual(results, ['accessibility.signals.taskCompleted'], 'cancellation does not announce success or failure');
 			const failed = await tasks.run(tasks.tasks[0]);
 			const failedTerminal = terminals.instances.find(terminal => terminal.id === failed.terminalId)!;
 			failedTerminal.command({ commandId: 'failed', status: 'running', exitCode: undefined });
@@ -282,10 +249,7 @@ test('TaskService discovers tasks, creates a shell execution, and tracks its exi
 	const terminal = terminals.instances[0] as FakeTerminalInstance;
 	assert.equal(run.terminalId, terminal.id);
 	assert.equal(terminal.title, 'Task: Lint');
-	assert.deepEqual(
-		{ execution: terminal.execution, writes: terminal.writes },
-		{ execution: { type: 'shell', commandLine: 'cargo lint' }, writes: [] },
-	);
+	assert.deepEqual({ execution: terminal.execution, writes: terminal.writes }, { execution: { type: 'shell', commandLine: 'cargo lint' }, writes: [] });
 	assert.equal(run.status, 'running');
 	terminal.command({ commandId: 'command-1', status: 'running', exitCode: undefined });
 	terminal.command({ commandId: 'command-1', status: 'failed', exitCode: 2 });
@@ -334,9 +298,7 @@ test('TaskService atomically owns dynamic providers and merges their tasks on re
 		],
 	);
 	const revokedTask = service.tasks.find(task => task.source === 'extension')!;
-	registration.replace([
-		{ id: 'demo.provider', provideTasks: () => [{ id: 'run', label: 'Run', command: 'demo', group: 'run' }] },
-	]);
+	registration.replace([{ id: 'demo.provider', provideTasks: () => [{ id: 'run', label: 'Run', command: 'demo', group: 'run' }] }]);
 	assert.deepEqual(
 		service.tasks.map(task => task.id),
 		['vscode:0:build'],
@@ -348,10 +310,7 @@ test('TaskService atomically owns dynamic providers and merges their tasks on re
 		['vscode:0:build', 'extension:demo.provider:run'],
 	);
 
-	assert.throws(
-		() => service.registerTaskProvider({ id: 'demo.provider', provideTasks: () => [] }),
-		/already registered/,
-	);
+	assert.throws(() => service.registerTaskProvider({ id: 'demo.provider', provideTasks: () => [] }), /already registered/);
 	assert.deepEqual(
 		service.tasks.map(task => task.id),
 		['vscode:0:build', 'extension:demo.provider:run'],
@@ -383,9 +342,7 @@ test('TaskService retains the last good task set when a provider refresh fails',
 	};
 	using terminals = new FakeTerminalService();
 	using resources = new DisposableStore();
-	using service = taskServices(resources, new FakeFileService(root, {}), workspace, terminals).createInstance(
-		TaskService,
-	);
+	using service = taskServices(resources, new FakeFileService(root, {}), workspace, terminals).createInstance(TaskService);
 	let fail = false;
 	using registration = service.registerTaskProvider({
 		id: 'stable',
@@ -414,8 +371,7 @@ test('concurrent dispatch shares one pending task and a canceled joiner does not
 	using service = taskServices(
 		resources,
 		new FakeFileService(URI.file('/workspace'), {
-			'.vscode/tasks.json':
-				'{"version":"2.0.0","tasks":[{"label":"Check","command":"check","runOptions":{"instancePolicy":"silent"}}]}',
+			'.vscode/tasks.json': '{"version":"2.0.0","tasks":[{"label":"Check","command":"check","runOptions":{"instancePolicy":"silent"}}]}',
 		}),
 		workspace,
 		terminals,
@@ -491,8 +447,7 @@ test('a failed current refresh rejects a superseded dispatch instead of using th
 });
 
 class FakeFileService implements IFileSystemProvider {
-	public readonly capabilities =
-		FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
 	public readonly onDidChangeCapabilities = Event.None;
 	public watch(): IDisposable {
 		return Disposable.None;
@@ -572,13 +527,7 @@ class FakeTerminalService extends Disposable implements ITerminalService {
 	readonly onDidChangeInstances = Event.None;
 	readonly onDidChangeActiveInstance = Event.None;
 	async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> {
-		const terminal = this._register(
-			new FakeTerminalInstance(
-				`terminal-${this.instances.length + 1}`,
-				options.dirId ?? 'folder',
-				options.title ?? 'Terminal',
-			),
-		);
+		const terminal = this._register(new FakeTerminalInstance(`terminal-${this.instances.length + 1}`, options.dirId ?? 'folder', options.title ?? 'Terminal'));
 		terminal.execution = options.execution;
 		this.instances.push(terminal);
 		this.activeInstance = terminal;
@@ -601,9 +550,7 @@ class FakeTerminalInstance extends Disposable implements ITerminalInstance {
 	): Promise<import('../../../../../platform/terminal/common/terminal.js').IProcessPropertyMap[T]> {
 		throw new Error('No OS process in task fixture');
 	}
-	async serializeState(): Promise<
-		import('../../../../services/terminal/common/terminal.js').ITerminalSerializedState
-	> {
+	async serializeState(): Promise<import('../../../../services/terminal/common/terminal.js').ITerminalSerializedState> {
 		throw new Error('No process checkpoint in task fixture');
 	}
 	private static nextInstanceId = 1;
@@ -627,9 +574,7 @@ class FakeTerminalInstance extends Disposable implements ITerminalInstance {
 	state: TerminalInstanceState = 'running';
 	exitCode: number | undefined;
 	private readonly commandEmitter = this._register(new Emitter<ITerminalCommandStatusEvent>());
-	private readonly dataEmitter = this._register(
-		new Emitter<import('../../../../../platform/terminal/common/terminal.js').IProcessDataEvent>(),
-	);
+	private readonly dataEmitter = this._register(new Emitter<import('../../../../../platform/terminal/common/terminal.js').IProcessDataEvent>());
 	private readonly exitEmitter = this._register(new Emitter<number | undefined>());
 	readonly onDidWriteData = this.dataEmitter.event;
 	readonly onDidChangeCommandStatus = this.commandEmitter.event;
@@ -690,10 +635,7 @@ function testRendererHost(os = OperatingSystem.Linux) {
 
 function testPathService(workspace: IWorkspaceContextService, os = OperatingSystem.Linux): BrowserPathService {
 	const host = createDisconnectedRendererApi();
-	return new BrowserPathService(
-		{ ...host, hasAppServer: true, appServer: { ...host.appServer, operatingSystem: os } },
-		workspace,
-	);
+	return new BrowserPathService({ ...host, hasAppServer: true, appServer: { ...host.appServer, operatingSystem: os } }, workspace);
 }
 
 function registerTaskProfiles(services: InstantiationService): void {
@@ -717,50 +659,23 @@ function registerTaskProfiles(services: InstantiationService): void {
 		delete: () => {},
 		registerCollectionProvider: () => Disposable.None,
 	});
-	services.registerSingleton(
-		ITerminalProfileResolverService,
-		() => services.createInstance(BrowserTerminalProfileResolverService),
-		{ instantiation: InstantiationType.Delayed },
-	);
+	services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService), { instantiation: InstantiationType.Delayed });
 }
 
-async function resolveTaskProfile(
-	selection: import('../../../../../platform/terminal/common/terminal.js').TerminalProcessProfileSelection,
-) {
-	const profileId =
-		selection.type === 'profile'
-			? selection.profileId
-			: selection.type === 'custom'
-				? `custom:${selection.name}`
-				: 'shell';
+async function resolveTaskProfile(selection: import('../../../../../platform/terminal/common/terminal.js').TerminalProcessProfileSelection) {
+	const profileId = selection.type === 'profile' ? selection.profileId : selection.type === 'custom' ? `custom:${selection.name}` : 'shell';
 	return {
 		profile: {
 			profileId,
 			title: selection.type === 'custom' ? selection.name : profileId,
 			isDefault: selection.type === 'default',
 		},
-		executable:
-			selection.type === 'custom'
-				? selection.path[0]!
-				: profileId === 'command-prompt'
-					? 'C:\\Windows\\cmd.exe'
-					: `/bin/${profileId === 'shell' ? 'sh' : profileId}`,
-		args:
-			selection.type === 'custom'
-				? typeof selection.args === 'string'
-					? selection.args
-					: [...selection.args]
-				: [],
+		executable: selection.type === 'custom' ? selection.path[0]! : profileId === 'command-prompt' ? 'C:\\Windows\\cmd.exe' : `/bin/${profileId === 'shell' ? 'sh' : profileId}`,
+		args: selection.type === 'custom' ? (typeof selection.args === 'string' ? selection.args : [...selection.args]) : [],
 	};
 }
 
-function taskServices(
-	owner: DisposableStore,
-	files: IFileSystemProvider,
-	workspace: IWorkspaceContextService,
-	terminals: ITerminalService,
-	os = OperatingSystem.Linux,
-): InstantiationService {
+function taskServices(owner: DisposableStore, files: IFileSystemProvider, workspace: IWorkspaceContextService, terminals: ITerminalService, os = OperatingSystem.Linux): InstantiationService {
 	const parent = workbenchInstantiationService(owner);
 	registerTestWorkbenchInteractionServices(owner, parent);
 	const services = parent.createChild(
@@ -783,9 +698,7 @@ function taskServices(
 						cols: 80,
 					}),
 					getEnvironment: async () => ({ HOME: '/execution/home' }),
-					listProfiles: async () => [
-						{ profileId: 'command-prompt', title: 'Command Prompt', isDefault: true },
-					],
+					listProfiles: async () => [{ profileId: 'command-prompt', title: 'Command Prompt', isDefault: true }],
 					setAutoReplies: async () => {},
 					sendSignal: async () => {},
 					resolveProfile: resolveTaskProfile,
@@ -832,15 +745,8 @@ suite('Task shell profiles through execution owners', () => {
 			],
 		};
 		const fakeTerminals = owner.add(new FakeTerminalService());
-		const parent = taskServices(
-			owner,
-			new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }),
-			workspace,
-			fakeTerminals,
-			os,
-		);
-		const creations: import('../../../../../platform/terminal/common/terminal.js').ITerminalProcessCreateOptions[] =
-			[];
+		const parent = taskServices(owner, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }), workspace, fakeTerminals, os);
+		const creations: import('../../../../../platform/terminal/common/terminal.js').ITerminalProcessCreateOptions[] = [];
 		const reads = new Map<string, DeferredPromise<ITerminalProcessReadResult>>();
 		const closes: string[] = [];
 		const processes: ITerminalProcessService = {
@@ -887,23 +793,20 @@ suite('Task shell profiles through execution owners', () => {
 		services.registerInstance(ITerminalService, terminals);
 		const tasks = owner.add(services.createInstance(TaskService));
 		const configuration = services.get(IConfigurationService);
-		const platform =
-			os === OperatingSystem.Windows ? 'windows' : os === OperatingSystem.Macintosh ? 'osx' : 'linux';
+		const platform = os === OperatingSystem.Windows ? 'windows' : os === OperatingSystem.Macintosh ? 'osx' : 'linux';
 		const finish = async (run: ITaskRun) => {
 			const terminalId = `task-${run.processId}`;
-			await reads
-				.get(terminalId)!
-				.complete({
-					terminalId,
-					chunks: [],
-					nextSequence: 0,
-					commandEvents: [],
-					nextCommandSequence: 0,
-					commandEventGap: false,
-					outputGap: false,
-					exited: true,
-					exitCode: 0,
-				});
+			await reads.get(terminalId)!.complete({
+				terminalId,
+				chunks: [],
+				nextSequence: 0,
+				commandEvents: [],
+				nextCommandSequence: 0,
+				commandEventGap: false,
+				outputGap: false,
+				exited: true,
+				exitCode: 0,
+			});
 			await run.completion;
 		};
 		return { tasks, terminals, configuration, processes, creations, closes, platform, workspace, finish };
@@ -933,15 +836,9 @@ suite('Task shell profiles through execution owners', () => {
 					execution: {
 						type: 'process',
 						program: executable,
-						args:
-							os === OperatingSystem.Windows
-								? "-NoLogo -Command compiler 'two words' '$HOME'"
-								: ['-l', '-c', "compiler 'two words' '$HOME'"],
+						args: os === OperatingSystem.Windows ? "-NoLogo -Command compiler 'two words' '$HOME'" : ['-l', '-c', "compiler 'two words' '$HOME'"],
 					},
-					env:
-						os === OperatingSystem.Windows
-							? { MODE: 'task', PROFILE: 'first', REMOVED: null }
-							: { MODE: '/execution/home', PROFILE: 'first', REMOVED: null, mode: 'task' },
+					env: os === OperatingSystem.Windows ? { MODE: 'task', PROFILE: 'first', REMOVED: null } : { MODE: '/execution/home', PROFILE: 'first', REMOVED: null, mode: 'task' },
 				},
 			);
 			await finish(first);
@@ -1008,12 +905,7 @@ suite('Task shell profiles through execution owners', () => {
 			const { tasks, terminals, configuration, creations, closes, platform, finish } = assemble(owner, os, {
 				env: taskEnvironment,
 			});
-			owner.add(
-				CommandsRegistry.register(
-					'tasks.environment.literal',
-					() => '${command:tasks.environment.literal}-$HOME',
-				),
-			);
+			owner.add(CommandsRegistry.register('tasks.environment.literal', () => '${command:tasks.environment.literal}-$HOME'));
 			await configuration.updateValue(`terminal.integrated.env.${platform}`, {
 				Mode: 'global',
 				Path: '${env:HOME}/global',
@@ -1155,12 +1047,7 @@ suite('Task shell profiles through execution owners', () => {
 				GLOBAL_ONLY: 'inherited',
 				TASK_ONLY: '/execution/home',
 			});
-			assert.deepEqual(
-				creations[0].execution,
-				kind === 'shell'
-					? { type: 'process', program: 'C:\\explicit\\cmd.exe', args: '/c compiler' }
-					: execution,
-			);
+			assert.deepEqual(creations[0].execution, kind === 'shell' ? { type: 'process', program: 'C:\\explicit\\cmd.exe', args: '/c compiler' } : execution);
 			await finish(run);
 		});
 	}
@@ -1256,11 +1143,7 @@ suite('Task shell profiles through execution owners', () => {
 	for (const [shell, prefix, expected] of [
 		['cmd', '/d /s /c', '/d /s /c compiler "two words" "$HOME"'],
 		['cmd', '/title "ignore /c value"', '/title "ignore /c value" /d /c compiler "two words" "$HOME"'],
-		[
-			'cmd',
-			String.raw`/title "ignore \" /c value"`,
-			String.raw`/title "ignore \" /c value" /d /c compiler "two words" "$HOME"`,
-		],
+		['cmd', String.raw`/title "ignore \" /c value"`, String.raw`/title "ignore \" /c value" /d /c compiler "two words" "$HOME"`],
 		['cmd', '  /d   "/C"  ', '  /d   "/C"   compiler "two words" "$HOME"'],
 		['pwsh', '-NoLogo -Command', "-NoLogo -Command compiler 'two words' '$HOME'"],
 		['pwsh', '', "-Command compiler 'two words' '$HOME'"],
@@ -1428,11 +1311,7 @@ suite('Task shell profiles through execution owners', () => {
 			path: 'C:\\tools\\pwsh.exe',
 			args: ['-Title', 'two "quotes" and a tail\\', '-Command'],
 		});
-		const second = await tasks.runProvidedTask(
-			'raw',
-			{ ...task, execution: { type: 'shell', command: 'compiler', args: [] } },
-			new AbortController().signal,
-		);
+		const second = await tasks.runProvidedTask('raw', { ...task, execution: { type: 'shell', command: 'compiler', args: [] } }, new AbortController().signal);
 		assert.deepEqual(creations[1].execution, {
 			type: 'process',
 			program: 'C:\\tools\\pwsh.exe',
@@ -1459,14 +1338,10 @@ suite('Task shell profiles through execution owners', () => {
 			const started: ITaskRun[] = [];
 			owner.add(tasks.onDidStartTask(run => started.push(run)));
 			const pending = tasks.run(task, cancellation.signal);
-			const rejected = assert.rejects(
-				pending,
-				invalidation === 'backend rejection' ? /Execution environment unavailable/ : isCancellationError,
-			);
+			const rejected = assert.rejects(pending, invalidation === 'backend rejection' ? /Execution environment unavailable/ : isCancellationError);
 			await entered.p;
 			if (invalidation === 'cancel') cancellation.abort();
-			if (invalidation === 'workspace')
-				workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
+			if (invalidation === 'workspace') workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
 			await release.complete();
 			await rejected;
 			assert.deepEqual({ creations, started, runs: tasks.activeRuns }, { creations: [], started: [], runs: [] });
@@ -1509,10 +1384,7 @@ suite('Task shell profiles through execution owners', () => {
 			new AbortController().signal,
 		);
 		await opened.p;
-		assert.deepEqual(
-			{ creations, opens, status: run.status, output: run.readOutput(0, 100).text },
-			{ creations: [], opens: 1, status: 'running', output: 'custom output' },
-		);
+		assert.deepEqual({ creations, opens, status: run.status, output: run.readOutput(0, 100).text }, { creations: [], opens: 1, status: 'running', output: 'custom output' });
 		await tasks.terminate(run);
 		assert.equal(closes, 1);
 	});
@@ -1531,8 +1403,7 @@ suite('Task shell profiles through execution owners', () => {
 					await entered.complete(undefined);
 					await release.p;
 				}
-				if (invalidation === 'backend rejection' && selection.type === 'custom')
-					throw new Error('Executable unavailable on execution host');
+				if (invalidation === 'backend rejection' && selection.type === 'custom') throw new Error('Executable unavailable on execution host');
 				return resolveTaskProfile(selection);
 			};
 			const task = (await tasks.refresh()).find(task => task.label === 'Shell')!;
@@ -1540,14 +1411,10 @@ suite('Task shell profiles through execution owners', () => {
 			const started: ITaskRun[] = [];
 			owner.add(tasks.onDidStartTask(run => started.push(run)));
 			const pending = tasks.run(task, cancellation.signal);
-			const rejected = assert.rejects(
-				pending,
-				invalidation === 'backend rejection' ? /Executable unavailable/ : isCancellationError,
-			);
+			const rejected = assert.rejects(pending, invalidation === 'backend rejection' ? /Executable unavailable/ : isCancellationError);
 			await entered.p;
 			if (invalidation === 'cancel') cancellation.abort();
-			if (invalidation === 'workspace')
-				workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
+			if (invalidation === 'workspace') workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
 			await release.complete(undefined);
 			await rejected;
 			assert.deepEqual({ creations, started, runs: tasks.activeRuns }, { creations: [], started: [], runs: [] });
@@ -1581,12 +1448,7 @@ for (const canceled of [false, true]) {
 				},
 			],
 		};
-		const baseServices = taskServices(
-			resources,
-			new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }),
-			workspace,
-			terminals,
-		);
+		const baseServices = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }), workspace, terminals);
 		const requested = new DeferredPromise<void>();
 		const reply = new DeferredPromise<FileSearchResult>();
 		let searchSignal: AbortSignal | undefined;
@@ -1627,9 +1489,7 @@ for (const canceled of [false, true]) {
 		}
 		assert.equal(completed, false);
 		void reply.complete({
-			matches: [
-				{ path: 'search[work]/nested/main.ts', resource: URI.file('/workspace/search[work]/nested/main.ts') },
-			],
+			matches: [{ path: 'search[work]/nested/main.ts', resource: URI.file('/workspace/search[work]/nested/main.ts') }],
 			totalMatches: 1,
 		});
 		await termination;
@@ -1644,9 +1504,7 @@ for (const canceled of [false, true]) {
 			},
 			{
 				status: canceled ? 'canceled' : 'succeeded',
-				diagnostics: canceled
-					? []
-					: [{ path: '/workspace/search[work]/nested/main.ts', message: 'nested diagnostic' }],
+				diagnostics: canceled ? [] : [{ path: '/workspace/search[work]/nested/main.ts', message: 'nested diagnostic' }],
 			},
 		);
 	});
@@ -1675,12 +1533,7 @@ test('background search readiness waits for diagnostics before launching a depen
 			{ label: 'After search', command: 'after', dependsOn: 'Watch' },
 		],
 	};
-	const baseServices = taskServices(
-		resources,
-		new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }),
-		workspace,
-		terminals,
-	);
+	const baseServices = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }), workspace, terminals);
 	const requested = new DeferredPromise<void>();
 	const reply = new DeferredPromise<FileSearchResult>();
 	const search: IFileSearchService = {
@@ -1742,12 +1595,7 @@ test('search failure waits for terminal release before completing a failed task'
 			},
 		],
 	};
-	const baseServices = taskServices(
-		resources,
-		new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }),
-		workspace,
-		terminals,
-	);
+	const baseServices = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }), workspace, terminals);
 	const lookup = new DeferredPromise<FileSearchResult>();
 	const closeRequested = new DeferredPromise<void>();
 	const closeAcknowledged = new DeferredPromise<void>();
@@ -1808,12 +1656,7 @@ test('search matcher rejects a directory outside the workspace before process cr
 			},
 		],
 	};
-	using tasks = taskServices(
-		resources,
-		new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }),
-		workspace,
-		terminals,
-	).createInstance(TaskService);
+	using tasks = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }), workspace, terminals).createInstance(TaskService);
 	const [task] = await tasks.refresh();
 	await assert.rejects(tasks.run(task!), { message: '问题匹配器搜索目录“/outside”不在当前工作区内。' });
 	assert.equal(terminals.instances.length, 0);
@@ -1849,12 +1692,7 @@ test('TaskService selects the execution host platform before resolving command, 
 			},
 		],
 	};
-	const services = taskServices(
-		resources,
-		new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }),
-		workspace,
-		terminals,
-	);
+	const services = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }), workspace, terminals);
 	const paths = services.get(IPathService);
 	const hostPaths = Object.create(paths) as IPathService;
 	hostPaths.getOperatingSystem = async resource => {
@@ -1877,9 +1715,7 @@ test('TaskService selects the execution host platform before resolving command, 
 			cwd: '/workspace/linux',
 			execution: { type: 'process', program: '/workspace/linux-adapter', args: ['', '/execution/home', '$HOME'] },
 			initialText: {
-				text: formatMessageForTerminal(
-					'Executing task: "/workspace/linux-adapter" "" "/execution/home" "$HOME"',
-				),
+				text: formatMessageForTerminal('Executing task: "/workspace/linux-adapter" "" "/execution/home" "$HOME"'),
 				trailingNewLine: false,
 			},
 			waitOnExit: 'Terminal will be reused by tasks, press any key to close it.',
@@ -1918,10 +1754,7 @@ test('TaskService discovers tasks without terminal execution and rejects dispatc
 		}),
 	);
 	const [task] = await tasks.refresh();
-	assert.deepEqual(
-		{ active: tasks.activeRuns, last: tasks.lastRun, tasks: tasks.tasks.map(task => task.label) },
-		{ active: [], last: undefined, tasks: ['Build'] },
-	);
+	assert.deepEqual({ active: tasks.activeRuns, last: tasks.lastRun, tasks: tasks.tasks.map(task => task.label) }, { active: [], last: undefined, tasks: ['Build'] });
 	assert.ok(parent.get(IOutputService).getChannel('tasks'));
 	await assert.rejects(tasks.run(task!), /Unknown service: terminalService/);
 	assert.deepEqual(events, []);
@@ -2048,10 +1881,7 @@ suite('TaskService terminal availability', () => {
 				finished = true;
 			});
 			const failure = new Error('task prepare rejected');
-			const result =
-				outcome === 'acknowledge'
-					? run
-					: assert.rejects(run, outcome === 'cancel' ? isCancellationError : error => error === failure);
+			const result = outcome === 'acknowledge' ? run : assert.rejects(run, outcome === 'cancel' ? isCancellationError : error => error === failure);
 			await submitted.p;
 			assert.equal(finished, false);
 			if (outcome === 'acknowledge') void acknowledgement.complete(undefined);
@@ -2178,14 +2008,17 @@ suite('TaskService terminal availability', () => {
 				}),
 			);
 			await assert.rejects(tasks.run(tasks.tasks[0]), {
-				message:
-					persistence === 'reconnectable'
-						? '终端不可用，任务尚未启动。请重新运行任务。'
-						: 'The terminal is unavailable. The task was not started. Run the task again.',
+				message: persistence === 'reconnectable' ? '终端不可用，任务尚未启动。请重新运行任务。' : 'The terminal is unavailable. The task was not started. Run the task again.',
 			});
 			assert.deepEqual(
 				{ calls, starts, active: tasks.activeRuns, last: tasks.lastRun, terminals: terminals.instances },
-				{ calls: ['close:task-process'], starts: 0, active: [], last: undefined, terminals: [] },
+				{
+					calls: ['close:task-process'],
+					starts: 0,
+					active: [],
+					last: undefined,
+					terminals: [],
+				},
 			);
 		});
 	}
@@ -2194,11 +2027,7 @@ suite('TaskService terminal availability', () => {
 suite('Task terminal reuse policies', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	function assemble(
-		owner: DisposableStore,
-		panel: 'shared' | 'dedicated' | 'new' | undefined,
-		presentation: { reveal?: 'always' | 'silent' | 'never'; close?: boolean } = {},
-	) {
+	function assemble(owner: DisposableStore, panel: 'shared' | 'dedicated' | 'new' | undefined, presentation: { reveal?: 'always' | 'silent' | 'never'; close?: boolean } = {}) {
 		const services = workbenchInstantiationService(owner);
 		registerTestWorkbenchInteractionServices(owner, services);
 		const workspace = services.get(IWorkspaceContextService) as TestWorkspaceService;
@@ -2215,12 +2044,7 @@ suite('Task terminal reuse policies', () => {
 				presentation: { panel, ...presentation },
 			})),
 		};
-		services.registerInstance(
-			IFileService,
-			owner.add(
-				createTestFileService(new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) })),
-			),
-		);
+		services.registerInstance(IFileService, owner.add(createTestFileService(new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }))));
 		services.registerInstance(IPathService, testPathService(workspace));
 		services.registerInstance(ILogService, new NullLoggerService());
 		services.registerInstance(IMarkerService, owner.add(new MarkerService()));
@@ -2267,10 +2091,7 @@ suite('Task terminal reuse policies', () => {
 		});
 		services.registerInstance(IRendererHostService, testRendererHost());
 		services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
-		services.registerInstance(
-			IConfigurationResolverService,
-			owner.add(services.createInstance(ConfigurationResolverService)),
-		);
+		services.registerInstance(IConfigurationResolverService, owner.add(services.createInstance(ConfigurationResolverService)));
 		registerTaskProfiles(services);
 
 		registerTestTerminalCreationServices(services);
@@ -2280,19 +2101,17 @@ suite('Task terminal reuse policies', () => {
 		const tasks = owner.add(services.createInstance(TaskService));
 		const finish = async (run: ITaskRun): Promise<void> => {
 			const id = `process-${run.processId! - 1000}`;
-			void children
-				.get(id)!
-				.complete({
-					terminalId: id,
-					commandEventGap: false,
-					chunks: [],
-					nextSequence: 0,
-					commandEvents: [],
-					nextCommandSequence: 0,
-					exited: true,
-					exitCode: 0,
-					outputGap: false,
-				});
+			void children.get(id)!.complete({
+				terminalId: id,
+				commandEventGap: false,
+				chunks: [],
+				nextSequence: 0,
+				commandEvents: [],
+				nextCommandSequence: 0,
+				exited: true,
+				exitCode: 0,
+				outputGap: false,
+			});
 			assert.ok(run.completion);
 			await run.completion;
 		};
@@ -2317,19 +2136,13 @@ suite('Task terminal reuse policies', () => {
 		const close = terminals.closeTerminal(terminals.instances[0]!);
 		try {
 			await requested.p;
-			assert.deepEqual(
-				{ status: run.status, completed, active: tasks.activeRuns.length },
-				{ status: 'running', completed: false, active: 1 },
-			);
+			assert.deepEqual({ status: run.status, completed, active: tasks.activeRuns.length }, { status: 'running', completed: false, active: 1 });
 		} finally {
 			void released.complete();
 			await close;
 		}
 		await run.completion;
-		assert.deepEqual(
-			{ status: run.status, completed, active: tasks.activeRuns.length, terminals: terminals.instances.length },
-			{ status: 'canceled', completed: true, active: 0, terminals: 0 },
-		);
+		assert.deepEqual({ status: run.status, completed, active: tasks.activeRuns.length, terminals: terminals.instances.length }, { status: 'canceled', completed: true, active: 0, terminals: 0 });
 		const next = await tasks.run(task);
 		assert.notEqual(next.runId, run.runId);
 		await tasks.terminate(next);
@@ -2373,10 +2186,7 @@ suite('Task terminal reuse policies', () => {
 		});
 		try {
 			await terminals.closeTerminal(terminals.instances[0]!);
-			assert.deepEqual(
-				{ status: run.status, completed, closes, active: tasks.activeRuns.length },
-				{ status: 'canceled', completed: false, closes: 1, active: 0 },
-			);
+			assert.deepEqual({ status: run.status, completed, closes, active: tasks.activeRuns.length }, { status: 'canceled', completed: false, closes: 1, active: 0 });
 		} finally {
 			void released.complete();
 		}
@@ -2438,12 +2248,7 @@ suite('Task terminal reuse policies', () => {
 						{ env: { TASK: 'Second' }, cwd: '/workspace/second' },
 						{ env: { TASK: 'First' }, cwd: '/workspace/first' },
 					],
-					closed:
-						effectivePanel === 'shared'
-							? ['process-1', 'process-2']
-							: panel === 'dedicated'
-								? ['process-1']
-								: [],
+					closed: effectivePanel === 'shared' ? ['process-1', 'process-2'] : panel === 'dedicated' ? ['process-1'] : [],
 				},
 			);
 		});
@@ -2488,10 +2293,7 @@ suite('Task terminal reuse policies', () => {
 		const firstTerminal = terminals.activeInstance!;
 		await finish(first);
 		await requested.p;
-		assert.deepEqual(
-			{ status: first.status, closed, instances: terminals.instances.length },
-			{ status: 'succeeded', closed: ['process-1'], instances: 1 },
-		);
+		assert.deepEqual({ status: first.status, closed, instances: terminals.instances.length }, { status: 'succeeded', closed: ['process-1'], instances: 1 });
 		const second = await tasks.run(catalog[1]!);
 		const secondTerminal = terminals.activeInstance!;
 		assert.notEqual(second.terminalId, first.terminalId);
@@ -2503,10 +2305,7 @@ suite('Task terminal reuse policies', () => {
 		);
 		await finish(second);
 		await secondTerminal.close();
-		assert.deepEqual(
-			{ closed, instances: terminals.instances.length },
-			{ closed: ['process-1', 'process-2'], instances: 0 },
-		);
+		assert.deepEqual({ closed, instances: terminals.instances.length }, { closed: ['process-1', 'process-2'], instances: 0 });
 	});
 
 	test('a custom release acknowledgment controls reuse and a retained custom screen can host the next process task', async () => {
@@ -2568,10 +2367,7 @@ suite('Task terminal reuse policies', () => {
 		);
 		await finish(second);
 		const customAgain = await tasks.run(catalog.find(task => task.label === 'Custom')!);
-		assert.deepEqual(
-			{ id: customAgain.terminalId, pid: customAgain.processId, previousPid: second.processId },
-			{ id: custom.terminalId, pid: undefined, previousPid: 1002 },
-		);
+		assert.deepEqual({ id: customAgain.terminalId, pid: customAgain.processId, previousPid: second.processId }, { id: custom.terminalId, pid: undefined, previousPid: 1002 });
 		exited.fire(0);
 		await customAgain.completion;
 	});
@@ -2622,14 +2418,8 @@ suite('TaskService configuration capabilities', () => {
 				}),
 			);
 			await assert.rejects(service.run(service.tasks[0]), /任务“Check”尚未启动，因为 Ash 尚不支持/);
-			assert.deepEqual(
-				{ terminals: terminals.instances, active: service.activeRuns, last: service.lastRun, starts },
-				{ terminals: [], active: [], last: undefined, starts: 0 },
-			);
-			assert.doesNotMatch(
-				services.get(IOutputService).getChannel('tasks')?.getText() ?? '',
-				/must-not-appear-in-logs/,
-			);
+			assert.deepEqual({ terminals: terminals.instances, active: service.activeRuns, last: service.lastRun, starts }, { terminals: [], active: [], last: undefined, starts: 0 });
+			assert.doesNotMatch(services.get(IOutputService).getChannel('tasks')?.getText() ?? '', /must-not-appear-in-logs/);
 
 			contents['.vscode/tasks.json'] = JSON.stringify({
 				version: '2.0.0',
@@ -2667,15 +2457,9 @@ suite('TaskService configuration capabilities', () => {
 			getWorkbenchState: () => 2,
 			getWorkspaceFolder: () => null,
 		};
-		using service = taskServices(
-			resources,
-			new FakeFileService(root, contents),
-			workspace,
-			terminals,
-		).createInstance(TaskService);
+		using service = taskServices(resources, new FakeFileService(root, contents), workspace, terminals).createInstance(TaskService);
 		const task = (await service.refresh())[0];
-		contents['.vscode/tasks.json'] =
-			'{"version":"2.0.0","tasks":[{"label":"Check","command":"check","runOptions":{"runOn":"unknown"}}]}';
+		contents['.vscode/tasks.json'] = '{"version":"2.0.0","tasks":[{"label":"Check","command":"check","runOptions":{"runOn":"unknown"}}]}';
 		await assert.rejects(service.run(task), /runOptions.runOn/);
 		contents['.vscode/tasks.json'] = '{ invalid json';
 		await assert.rejects(service.refresh());
@@ -2840,13 +2624,7 @@ suite('TaskService configuration resolution', () => {
 					},
 				],
 			};
-			using service = taskServices(
-				resources,
-				new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }),
-				workspace,
-				terminals,
-				os,
-			).createInstance(TaskService);
+			using service = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }), workspace, terminals, os).createInstance(TaskService);
 			await service.run((await service.refresh())[0]!);
 			assert.deepEqual(
 				creates.map(({ execution, cwd, env }) => ({ execution, cwd, env })),
@@ -2894,10 +2672,7 @@ suite('TaskService configuration resolution', () => {
 			terminals,
 		).createInstance(TaskService);
 		await assert.rejects(service.run((await service.refresh())[0]!));
-		assert.deepEqual(
-			{ terminals: terminals.instances, runs: service.activeRuns, last: service.lastRun },
-			{ terminals: [], runs: [], last: undefined },
-		);
+		assert.deepEqual({ terminals: terminals.instances, runs: service.activeRuns, last: service.lastRun }, { terminals: [], runs: [], last: undefined });
 	});
 });
 
@@ -2948,10 +2723,7 @@ test('TaskService admits only registered contributed variables and resolves them
 	assert.deepEqual(unknown?.unsupportedFeatures, ['command']);
 	assert.equal(calls, 0);
 	const run = await tasks.run(contributed!);
-	assert.deepEqual(
-		{ execution: terminals.instances[0]?.execution, calls },
-		{ execution: { type: 'process', program: '/chosen', args: ['/chosen'] }, calls: 1 },
-	);
+	assert.deepEqual({ execution: terminals.instances[0]?.execution, calls }, { execution: { type: 'process', program: '/chosen', args: ['/chosen'] }, calls: 1 });
 	await tasks.terminate(run);
 	await assert.rejects(tasks.run(unknown!), /does not yet support: command/);
 	assert.equal(terminals.instances.length, 1);
@@ -3017,8 +2789,7 @@ test('TaskService cancels dispatch when the workspace changes during configurati
 		get resolvableVariables() {
 			return resolver.resolvableVariables;
 		},
-		resolveWithEnvironment: (environment, folder, value) =>
-			resolver.resolveWithEnvironment(environment, folder, value),
+		resolveWithEnvironment: (environment, folder, value) => resolver.resolveWithEnvironment(environment, folder, value),
 		resolveWithInteraction: async (folder, config, section, variables, target) => {
 			const result = await resolver.resolveWithInteraction(folder, config, section, variables, target);
 			void entered.complete(undefined);
@@ -3027,13 +2798,9 @@ test('TaskService cancels dispatch when the workspace changes during configurati
 		},
 		contributeVariable: (variable, resolution) => resolver.contributeVariable(variable, resolution),
 		resolveAsync: (folder, config) => resolver.resolveAsync(folder, config),
-		resolveWithInteractionReplace: (folder, config, section, variables, target) =>
-			resolver.resolveWithInteractionReplace(folder, config, section, variables, target),
+		resolveWithInteractionReplace: (folder, config, section, variables, target) => resolver.resolveWithInteractionReplace(folder, config, section, variables, target),
 	};
-	const dispatchServices = services.createChild(
-		new ServiceCollection([IConfigurationResolverService, delayedResolver]),
-		resources,
-	);
+	const dispatchServices = services.createChild(new ServiceCollection([IConfigurationResolverService, delayedResolver]), resources);
 	using service = dispatchServices.createInstance(TaskService);
 	const task = (await service.refresh())[0]!;
 	const dispatch = assert.rejects(service.run(task), isCancellationError);
@@ -3066,12 +2833,7 @@ test('TaskService resolves command variables once and reevaluates them for a new
 		assert.deepEqual(value, ['${command:tasks.test.target}']);
 		return `target-${++calls}`;
 	});
-	using service = taskServices(
-		resources,
-		new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': JSON.stringify(input) }),
-		workspace,
-		terminals,
-	).createInstance(TaskService);
+	using service = taskServices(resources, new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': JSON.stringify(input) }), workspace, terminals).createInstance(TaskService);
 	const task = (await service.refresh())[0]!;
 	assert.deepEqual(task.unsupportedFeatures, []);
 	const first = await service.run(task);
@@ -3097,8 +2859,7 @@ test('TaskService does not publish a run or create a terminal when command resol
 	using service = taskServices(
 		resources,
 		new FakeFileService(URI.file('/workspace'), {
-			'.vscode/tasks.json':
-				'{"version":"2.0.0","tasks":[{"label":"Cancel","command":"${command:tasks.test.cancel}"}]}',
+			'.vscode/tasks.json': '{"version":"2.0.0","tasks":[{"label":"Cancel","command":"${command:tasks.test.cancel}"}]}',
 		}),
 		workspace,
 		terminals,
@@ -3108,10 +2869,7 @@ test('TaskService does not publish a run or create a terminal when command resol
 		starts++;
 	});
 	await assert.rejects(service.run((await service.refresh())[0]!), isCancellationError);
-	assert.deepEqual(
-		{ starts, terminals: terminals.instances.length, runs: service.activeRuns.length, last: service.lastRun },
-		{ starts: 0, terminals: 0, runs: 0, last: undefined },
-	);
+	assert.deepEqual({ starts, terminals: terminals.instances.length, runs: service.activeRuns.length, last: service.lastRun }, { starts: 0, terminals: 0, runs: 0, last: undefined });
 });
 
 test('TaskService rejects an empty resolved command before terminal creation in the selected language', async () => {
@@ -3124,8 +2882,7 @@ test('TaskService rejects an empty resolved command before terminal creation in 
 	using service = taskServices(
 		resources,
 		new FakeFileService(URI.file('/workspace'), {
-			'.vscode/tasks.json':
-				'{"version":"2.0.0","tasks":[{"label":"Empty","command":"${command:tasks.test.empty}"}]}',
+			'.vscode/tasks.json': '{"version":"2.0.0","tasks":[{"label":"Empty","command":"${command:tasks.test.empty}"}]}',
 		}),
 		workspace,
 		terminals,
@@ -3133,10 +2890,7 @@ test('TaskService rejects an empty resolved command before terminal creation in 
 	await assert.rejects(service.run((await service.refresh())[0]!), {
 		message: '解析后的任务命令为空，或包含无效字符。',
 	});
-	assert.deepEqual(
-		{ terminals: terminals.instances.length, runs: service.activeRuns.length },
-		{ terminals: 0, runs: 0 },
-	);
+	assert.deepEqual({ terminals: terminals.instances.length, runs: service.activeRuns.length }, { terminals: 0, runs: 0 });
 });
 
 for (const cause of ['workspace', 'dispose'] as const) {
@@ -3195,12 +2949,7 @@ test('TaskService resolves configured command inputs at dispatch, reevaluates re
 		inputs: [{ id: 'target', type: 'command', command: 'tasks.test.input', args: { target: 'release' } }],
 		tasks: [{ label: 'Configured', command: 'build ${input:target} ${input:target}', detail: '${input:unused}' }],
 	};
-	const services = taskServices(
-		resources,
-		new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(input) }),
-		workspace,
-		terminals,
-	);
+	const services = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(input) }), workspace, terminals);
 	const dom = new JSDOM('<!doctype html><body></body>');
 	resources.add(toDisposable(() => dom.window.close()));
 	const context = resources.add(new ContextKeyService());
@@ -3246,16 +2995,9 @@ test('TaskService resolves inherited and overridden environment values before te
 	const input = {
 		version: '2.0.0',
 		options: { env: { MODE: 'default', HOME_COPY: '${env:HOME}' } },
-		tasks: [
-			{ label: 'Environment', command: 'build', options: { env: { MODE: 'task', ROOT: '${workspaceFolder}' } } },
-		],
+		tasks: [{ label: 'Environment', command: 'build', options: { env: { MODE: 'task', ROOT: '${workspaceFolder}' } } }],
 	};
-	const services = taskServices(
-		resources,
-		new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(input) }),
-		workspace,
-		terminals,
-	);
+	const services = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(input) }), workspace, terminals);
 	const creations: ITerminalCreateOptions[] = [];
 	const create = terminals.createTerminal.bind(terminals);
 	terminals.createTerminal = async options => {
@@ -3353,12 +3095,7 @@ test('shell task arguments are quoted after variable resolution and explicit she
 		creations.push(options);
 		return create(options);
 	};
-	using service = taskServices(
-		resources,
-		new FakeFileService(URI.file('/workspace'), contents),
-		workspace,
-		terminals,
-	).createInstance(TaskService);
+	using service = taskServices(resources, new FakeFileService(URI.file('/workspace'), contents), workspace, terminals).createInstance(TaskService);
 	const run = await service.run((await service.refresh())[0]);
 	assert.deepEqual(
 		{
@@ -3372,10 +3109,7 @@ test('shell task arguments are quoted after variable resolution and explicit she
 			execution: {
 				type: 'process',
 				program: '/bin/sh',
-				args: [
-					'-c',
-					"'/workspace/tool with spaces' '' 'literal $(touch injected)' '$HOME' \"$HOME\" two\\ words 'one'\"'\"'two'",
-				],
+				args: ['-c', "'/workspace/tool with spaces' '' 'literal $(touch injected)' '$HOME' \"$HOME\" two\\ words 'one'\"'\"'two'"],
 			},
 			cwd: '/workspace/child',
 			env: { MODE: '/execution/home' },
@@ -3487,12 +3221,7 @@ test('process tasks resolve literal arguments and cwd into a process spawn witho
 			},
 		],
 	};
-	const services = taskServices(
-		resources,
-		new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': JSON.stringify(input) }),
-		workspace,
-		terminals,
-	);
+	const services = taskServices(resources, new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': JSON.stringify(input) }), workspace, terminals);
 	const creations: ITerminalCreateOptions[] = [];
 	const create = terminals.createTerminal.bind(terminals);
 	terminals.createTerminal = async options => {
@@ -3526,16 +3255,10 @@ test('process tasks resolve literal arguments and cwd into a process spawn witho
 		['/execution/home/sources/file.ts'],
 	);
 	(terminals.instances[0] as FakeTerminalInstance).exit(7);
-	assert.deepEqual(
-		{ status: run.status, exitCode: run.exitCode, active: service.activeRuns },
-		{ status: 'failed', exitCode: 7, active: [] },
-	);
+	assert.deepEqual({ status: run.status, exitCode: run.exitCode, active: service.activeRuns }, { status: 'failed', exitCode: 7, active: [] });
 	const unknown = await service.run(service.tasks[0]);
 	terminals.instances.find(terminal => terminal.id === unknown.terminalId)!.exit(undefined);
-	assert.deepEqual(
-		{ status: unknown.status, exitCode: unknown.exitCode, active: service.activeRuns },
-		{ status: 'completed', exitCode: undefined, active: [] },
-	);
+	assert.deepEqual({ status: unknown.status, exitCode: unknown.exitCode, active: service.activeRuns }, { status: 'completed', exitCode: undefined, active: [] });
 });
 
 test('background matcher readiness starts a dependent task and termination closes its background process', async () => {
@@ -3559,12 +3282,7 @@ test('background matcher readiness starts a dependent task and termination close
 			{ label: 'Launch', command: 'launch', dependsOn: 'Watch' },
 		],
 	};
-	const services = taskServices(
-		resources,
-		new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': JSON.stringify(input) }),
-		workspace,
-		terminals,
-	);
+	const services = taskServices(resources, new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': JSON.stringify(input) }), workspace, terminals);
 	using service = services.createInstance(TaskService);
 	await service.refresh();
 	const watchStarted = new DeferredPromise<void>();
@@ -3588,7 +3306,10 @@ test('background matcher readiness starts a dependent task and termination close
 				.read()
 				.map(marker => [marker.resource.path, marker.message, marker.startLineNumber, marker.startColumn]),
 		},
-		{ labels: ['Task: Watch', 'Task: Launch'], markers: [['/workspace/file.ts', 'warning', 2, 3]] },
+		{
+			labels: ['Task: Watch', 'Task: Launch'],
+			markers: [['/workspace/file.ts', 'warning', 2, 3]],
+		},
 	);
 	await service.terminate(run);
 	assert.deepEqual(
@@ -3608,12 +3329,7 @@ test('task graph validation rejects cycles before creating any terminal', async 
 			{ label: 'B', command: 'b', dependsOn: 'A' },
 		],
 	};
-	using service = taskServices(
-		resources,
-		new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': JSON.stringify(input) }),
-		workspace,
-		terminals,
-	).createInstance(TaskService);
+	using service = taskServices(resources, new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': JSON.stringify(input) }), workspace, terminals).createInstance(TaskService);
 	await assert.rejects(service.run((await service.refresh())[0]!), /circular dependency/);
 	assert.deepEqual(terminals.instances, []);
 });
@@ -3633,12 +3349,7 @@ test('configured provider tasks resolve only at dispatch and preserve their defi
 			},
 		],
 	};
-	using service = taskServices(
-		resources,
-		new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': JSON.stringify(input) }),
-		workspace,
-		terminals,
-	).createInstance(TaskService);
+	using service = taskServices(resources, new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': JSON.stringify(input) }), workspace, terminals).createInstance(TaskService);
 	const creations: ITerminalCreateOptions[] = [];
 	const create = terminals.createTerminal.bind(terminals);
 	terminals.createTerminal = async options => {
@@ -3649,10 +3360,7 @@ test('configured provider tasks resolve only at dispatch and preserve their defi
 	using registration = service.registerTaskProvider(
 		createExtensionHostTaskProvider(
 			'builder-provider',
-			async (
-				operation,
-				payload,
-			): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
+			async (operation, payload): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
 				if (operation === 'provideTasks') return { tasks: [] };
 				assert.equal(operation, 'resolveTask');
 				calls++;
@@ -3703,12 +3411,7 @@ test('dependency diagnostics prevent the parent task and retain errors in Proble
 			{ label: 'Launch', command: 'launch', dependsOn: 'Compile' },
 		],
 	};
-	const services = taskServices(
-		resources,
-		new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': JSON.stringify(input) }),
-		workspace,
-		terminals,
-	);
+	const services = taskServices(resources, new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': JSON.stringify(input) }), workspace, terminals);
 	using service = services.createInstance(TaskService);
 	using listener = service.onDidStartTask(run => {
 		if (run.task.label === 'Compile') {
@@ -3718,10 +3421,7 @@ test('dependency diagnostics prevent the parent task and retain errors in Proble
 		}
 	});
 	await service.refresh();
-	await assert.rejects(
-		service.run(service.tasks.find(task => task.label === 'Launch')!),
-		/Dependency 'Compile'.*failed/,
-	);
+	await assert.rejects(service.run(service.tasks.find(task => task.label === 'Launch')!), /Dependency 'Compile'.*failed/);
 	assert.deepEqual(
 		{
 			terminals: terminals.instances.length,
@@ -3738,12 +3438,7 @@ test('CustomExecution opens after task listeners, receives input and resize, and
 	using resources = new DisposableStore();
 	using placeholderTerminals = new FakeTerminalService();
 	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
-	const parent = taskServices(
-		resources,
-		new FakeFileService(URI.file('/workspace'), {}),
-		workspace,
-		placeholderTerminals,
-	);
+	const parent = taskServices(resources, new FakeFileService(URI.file('/workspace'), {}), workspace, placeholderTerminals);
 	const services = parent.createChild(
 		new ServiceCollection([
 			ITerminalProcessService,
@@ -3825,11 +3520,7 @@ test('CustomExecution opens after task listeners, receives input and resize, and
 	});
 	const output: string[] = [];
 	using start = service.onDidStartTask(run => {
-		resources.add(
-			terminals.instances
-				.find(instance => instance.id === run.terminalId)!
-				.onDidWriteData(event => output.push(event.data)),
-		);
+		resources.add(terminals.instances.find(instance => instance.id === run.terminalId)!.onDidWriteData(event => output.push(event.data)));
 	});
 	const run = await service.run((await service.refresh())[0]!);
 	const instance = terminals.instances[0];
@@ -3840,12 +3531,7 @@ test('CustomExecution opens after task listeners, receives input and resize, and
 	assert.deepEqual(
 		{ calls, output, status: run.status },
 		{
-			calls: [
-				['open', { columns: 80, rows: 24 }],
-				['input', 'hello\r'],
-				['resize', { columns: 90, rows: 30 }],
-				['close'],
-			],
+			calls: [['open', { columns: 80, rows: 24 }], ['input', 'hello\r'], ['resize', { columns: 90, rows: 30 }], ['close']],
 			output: ['first line\n'],
 			status: 'canceled',
 		},
@@ -3856,12 +3542,7 @@ test('Extension Host CustomExecution streams ordered events without a shell and 
 	using resources = new DisposableStore();
 	using placeholderTerminals = new FakeTerminalService();
 	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
-	const parent = taskServices(
-		resources,
-		new FakeFileService(URI.file('/workspace'), {}),
-		workspace,
-		placeholderTerminals,
-	);
+	const parent = taskServices(resources, new FakeFileService(URI.file('/workspace'), {}), workspace, placeholderTerminals);
 	const services = parent.createChild(
 		new ServiceCollection([
 			ITerminalProcessService,
@@ -3911,10 +3592,7 @@ test('Extension Host CustomExecution streams ordered events without a shell and 
 	using registration = service.registerTaskProvider(
 		createExtensionHostTaskProvider(
 			'custom-host',
-			async (
-				operation,
-				payload,
-			): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
+			async (operation, payload): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
 				operations.push(operation);
 				if (operation === 'provideTasks')
 					return {
@@ -3955,13 +3633,7 @@ test('Extension Host CustomExecution streams ordered events without a shell and 
 		),
 	);
 	const output: string[] = [];
-	using start = service.onDidStartTask(run =>
-		resources.add(
-			terminals.instances
-				.find(instance => instance.id === run.terminalId)!
-				.onDidWriteData(event => output.push(event.data)),
-		),
-	);
+	using start = service.onDidStartTask(run => resources.add(terminals.instances.find(instance => instance.id === run.terminalId)!.onDidWriteData(event => output.push(event.data))));
 	const run = await service.run((await service.refresh())[0]!);
 	await opened.p;
 	await terminals.instances[0].sendText('hello', true);
@@ -4135,10 +3807,7 @@ test('configured task queries retain presentation and expose boolean TaskGroup d
 			throw error;
 		}),
 	);
-	const response = await bridge.handle(
-		{ operation: 'fetchTasks', taskType: null, version: null },
-		new AbortController().signal,
-	);
+	const response = await bridge.handle({ operation: 'fetchTasks', taskType: null, version: null }, new AbortController().signal);
 	assert.equal(response.result, 'tasks');
 	if (response.result !== 'tasks') throw new Error('Expected task catalog');
 	assert.deepEqual(
@@ -4168,15 +3837,7 @@ test('configured task queries retain presentation and expose boolean TaskGroup d
 	assert.equal(terminals.instances.length, 0);
 });
 
-for (const placement of [
-	'task',
-	'taskPlain',
-	'defaults',
-	'taskPlatform',
-	'defaultsPlatform',
-	'unconfigured',
-	'provided',
-] as const) {
+for (const placement of ['task', 'taskPlain', 'defaults', 'taskPlatform', 'defaultsPlatform', 'unconfigured', 'provided'] as const) {
 	test(`resolving an extension task preserves group precedence through execution (${placement})`, async () => {
 		using resources = new DisposableStore();
 		const services = workbenchInstantiationService(resources);
@@ -4199,12 +3860,7 @@ for (const placement of [
 			...(placement === 'defaults' ? { group } : {}),
 			...(placement === 'defaultsPlatform' ? { linux: { group } } : {}),
 		};
-		services.registerInstance(
-			IFileService,
-			resources.add(
-				createTestFileService(new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) })),
-			),
-		);
+		services.registerInstance(IFileService, resources.add(createTestFileService(new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }))));
 		services.registerInstance(
 			IPathService,
 			new BrowserPathService(
@@ -4264,10 +3920,7 @@ for (const placement of [
 		});
 		services.registerInstance(IRendererHostService, testRendererHost());
 		services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
-		services.registerInstance(
-			IConfigurationResolverService,
-			resources.add(services.createInstance(ConfigurationResolverService)),
-		);
+		services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 		registerTaskProfiles(services);
 		registerTestTerminalCreationServices(services);
 		services.registerInstance(ITerminalService, resources.add(services.createInstance(TerminalService)));
@@ -4333,14 +3986,7 @@ suite('Extension task execution lifecycle', () => {
 			if (provided === 'custom' && retireObserver) continue;
 			test(`queries and executes the canonical catalog and waits for process release with observer retirement ${retireObserver} and provided Task ${provided}`, async () => {
 				const customExecution = provided === 'custom' || provided === 'fetched-custom';
-				const group =
-					provided === 'edited'
-						? 'rebuild'
-						: provided === 'custom'
-							? 'clean'
-							: retireObserver
-								? 'test'
-								: 'build';
+				const group = provided === 'edited' ? 'rebuild' : provided === 'custom' ? 'clean' : retireObserver ? 'test' : 'build';
 				const groupIsDefault = !retireObserver;
 				using resources = new DisposableStore();
 				const services = workbenchInstantiationService(resources);
@@ -4354,10 +4000,7 @@ suite('Extension task execution lifecycle', () => {
 						{ id: 'second', uri: URI.file('/workspace/second'), name: 'Second', index: 1 },
 					],
 				});
-				services.registerInstance(
-					IFileService,
-					resources.add(createTestFileService(new FakeFileService(root, {}))),
-				);
+				services.registerInstance(IFileService, resources.add(createTestFileService(new FakeFileService(root, {}))));
 				services.registerInstance(IPathService, testPathService(workspace));
 				services.registerInstance(ILogService, new NullLoggerService());
 				services.registerInstance(IMarkerService, resources.add(new MarkerService()));
@@ -4411,10 +4054,7 @@ suite('Extension task execution lifecycle', () => {
 				services.registerInstance(ITerminalProcessService, processes);
 				services.registerInstance(IRendererHostService, testRendererHost());
 				services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
-				services.registerInstance(
-					IConfigurationResolverService,
-					resources.add(services.createInstance(ConfigurationResolverService)),
-				);
+				services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 				registerTaskProfiles(services);
 				registerTestTerminalCreationServices(services);
 				services.registerInstance(ITerminalService, resources.add(services.createInstance(TerminalService)));
@@ -4425,23 +4065,14 @@ suite('Extension task execution lifecycle', () => {
 						createExtensionHostTaskProvider(
 							'builder',
 							async (operation, payload): Promise<JsonValue> => {
-								if (
-									provided === 'fetched-custom' &&
-									operation !== 'provideTasks' &&
-									operation !== 'resolveTask'
-								) {
+								if (provided === 'fetched-custom' && operation !== 'provideTasks' && operation !== 'resolveTask') {
 									producerCalls.push(operation);
 									if (operation === 'createTaskTerminal') {
-										assert.deepEqual(
-											JSON.parse(
-												JSON.stringify((payload as { definition: JsonValue }).definition),
-											),
-											{
-												type: 'builder',
-												folder: retireObserver ? '/workspace/second' : '/workspace',
-												target: 'edited',
-											},
-										);
+										assert.deepEqual(JSON.parse(JSON.stringify((payload as { definition: JsonValue }).definition)), {
+											type: 'builder',
+											folder: retireObserver ? '/workspace/second' : '/workspace',
+											target: 'edited',
+										});
 										return { ptyId: 'producer-custom', acceptsInput: true };
 									}
 									if (operation === 'closeTaskTerminal') {
@@ -4464,12 +4095,7 @@ suite('Extension task execution lifecycle', () => {
 									).task;
 									assert.equal(task.execution, undefined);
 									assert.equal(task.source, 'Builder source');
-									assert.deepEqual(
-										JSON.parse(JSON.stringify(task.scope)),
-										retireObserver
-											? { uri: 'file:///workspace/second', name: 'Second', index: 1 }
-											: 2,
-									);
+									assert.deepEqual(JSON.parse(JSON.stringify(task.scope)), retireObserver ? { uri: 'file:///workspace/second', name: 'Second', index: 1 } : 2);
 									return {
 										task: {
 											id: 'resolved',
@@ -4493,10 +4119,7 @@ suite('Extension task execution lifecycle', () => {
 											groupIsDefault,
 											runOptions: { reevaluateOnRerun: false },
 											definition: { type: 'builder' },
-											execution:
-												provided === 'fetched-custom'
-													? { type: 'custom', id: 'watch' }
-													: { type: 'process', program: 'compiler', args: ['$HOME', ''] },
+											execution: provided === 'fetched-custom' ? { type: 'custom', id: 'watch' } : { type: 'process', program: 'compiler', args: ['$HOME', ''] },
 										},
 									],
 								};
@@ -4511,17 +4134,9 @@ suite('Extension task execution lifecycle', () => {
 				services.registerInstance(IExtensionHostApi, {
 					...createDisconnectedRendererApi().extensionHost,
 					invoke: async (invocation): Promise<JsonValue> => {
-						if (provided === 'fetched-custom')
-							assert.equal(
-								invocation.operation,
-								'taskEvent',
-								'the caller observer never receives the producer PTY callback',
-							);
+						if (provided === 'fetched-custom') assert.equal(invocation.operation, 'taskEvent', 'the caller observer never receives the producer PTY callback');
 						if (invocation.operation === 'createTaskTerminal') {
-							assert.equal(
-								(invocation.payload as { definition: { folder: string } }).definition.folder,
-								'/workspace',
-							);
+							assert.equal((invocation.payload as { definition: { folder: string } }).definition.folder, '/workspace');
 							return { ptyId: 'custom-1', acceptsInput: true };
 						}
 						if (invocation.operation === 'closeTaskTerminal') {
@@ -4536,9 +4151,7 @@ suite('Extension task execution lifecycle', () => {
 					},
 				});
 				const errors: unknown[] = [];
-				const bridge = resources.add(
-					services.createInstance(MainThreadTask, 5000, (error: unknown) => errors.push(error)),
-				);
+				const bridge = resources.add(services.createInstance(MainThreadTask, 5000, (error: unknown) => errors.push(error)));
 				const snapshot = (incarnation: number): ExtensionHostFleetSnapshot => ({
 					generation: incarnation,
 					extensions: [
@@ -4559,15 +4172,9 @@ suite('Extension task execution lifecycle', () => {
 				});
 				bridge.update(snapshot(1));
 				const signal = new AbortController().signal;
-				const empty = await bridge.handle(
-					{ operation: 'fetchTasks', taskType: 'builder', version: '1.0.0' },
-					signal,
-				);
+				const empty = await bridge.handle({ operation: 'fetchTasks', taskType: 'builder', version: '1.0.0' }, signal);
 				assert.deepEqual(empty, { result: 'tasks', sequence: 0, tasks: [], executions: [] });
-				const catalog = await bridge.handle(
-					{ operation: 'fetchTasks', taskType: 'builder', version: null },
-					signal,
-				);
+				const catalog = await bridge.handle({ operation: 'fetchTasks', taskType: 'builder', version: null }, signal);
 				assert.equal(catalog.result, 'tasks');
 				if (catalog.result !== 'tasks') throw new Error('Expected task catalog');
 				assert.equal(catalog.tasks.length, 1);
@@ -4597,14 +4204,7 @@ suite('Extension task execution lifecycle', () => {
 						group: 'build',
 						execution: { type: 'custom', id: 'invalid' },
 					};
-					await assert.rejects(
-						bridge.handle(
-							{ operation: 'executeTask', taskId: 'removed-custom', task: snapshot },
-							signal,
-							source,
-						),
-						/current custom catalog execution/,
-					);
+					await assert.rejects(bridge.handle({ operation: 'executeTask', taskId: 'removed-custom', task: snapshot }, signal, source), /current custom catalog execution/);
 					await assert.rejects(
 						bridge.handle(
 							{
@@ -4656,10 +4256,7 @@ suite('Extension task execution lifecycle', () => {
 													: {
 															type: 'process',
 															program: 'compiler',
-															args:
-																provided === 'edited'
-																	? ['$HOME', 'two words', '']
-																	: ['$HOME', ''],
+															args: provided === 'edited' ? ['$HOME', 'two words', ''] : ['$HOME', ''],
 														},
 											}),
 								},
@@ -4691,10 +4288,7 @@ suite('Extension task execution lifecycle', () => {
 					assert.equal(producerCalls.filter(operation => operation === 'createTaskTerminal').length, 1);
 				}
 				const executionId = (execution.execution as { id: string }).id;
-				const termination =
-					provided && retireObserver
-						? (bridge.update(snapshot(2)), Promise.resolve({ result: 'done' }))
-						: bridge.handle({ operation: 'terminateTask', executionId }, signal);
+				const termination = provided && retireObserver ? (bridge.update(snapshot(2)), Promise.resolve({ result: 'done' })) : bridge.handle({ operation: 'terminateTask', executionId }, signal);
 				await releaseRequested.p;
 				assert.equal(tasks.lastRun?.status, 'canceled');
 				assert.equal(
@@ -4718,10 +4312,8 @@ suite('Extension task execution lifecycle', () => {
 							.filter(({ event }) => (event as { type: string }).type !== 'snapshot')
 							.every(
 								({ event }) =>
-									(event as { execution: { task: { group: string; groupIsDefault: boolean } } })
-										.execution.task.group === group &&
-									(event as { execution: { task: { groupIsDefault: boolean } } }).execution.task
-										.groupIsDefault === groupIsDefault,
+									(event as { execution: { task: { group: string; groupIsDefault: boolean } } }).execution.task.group === group &&
+									(event as { execution: { task: { groupIsDefault: boolean } } }).execution.task.groupIsDefault === groupIsDefault,
 							),
 					);
 					assert.deepEqual(
@@ -4740,14 +4332,10 @@ suite('Extension task execution lifecycle', () => {
 									[1, 'end'],
 								],
 					);
-					assert.equal(
-						(events.at(-1)!.event as { execution: { id: string; active: boolean } }).execution.id,
-						executionId,
-					);
+					assert.equal((events.at(-1)!.event as { execution: { id: string; active: boolean } }).execution.id, executionId);
 				}
 				assert.deepEqual(errors, []);
-				if (provided === 'fetched-custom')
-					assert.equal(producerCalls.filter(operation => operation === 'closeTaskTerminal').length, 1);
+				if (provided === 'fetched-custom') assert.equal(producerCalls.filter(operation => operation === 'closeTaskTerminal').length, 1);
 				bridge.clear();
 			});
 		}
@@ -4837,10 +4425,7 @@ suite('Task rerun variable policy through the execution owners', () => {
 				});
 				services.registerInstance(IRendererHostService, testRendererHost());
 				services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
-				services.registerInstance(
-					IConfigurationResolverService,
-					resources.add(services.createInstance(ConfigurationResolverService)),
-				);
+				services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 				registerTaskProfiles(services);
 				registerTestTerminalCreationServices(services);
 				const terminals = resources.add(services.createInstance(TerminalService));
@@ -4865,13 +4450,9 @@ suite('Task rerun variable policy through the execution owners', () => {
 								}
 							: { type: 'process' as const, program: 'compiler', args: configured.args },
 				};
-				if (kind === 'custom')
-					resources.add(tasks.registerTaskProvider({ id: 'rerun', provideTasks: () => [task] }));
+				if (kind === 'custom') resources.add(tasks.registerTaskProvider({ id: 'rerun', provideTasks: () => [task] }));
 				const authority = new AbortController();
-				const first =
-					kind === 'provided'
-						? await tasks.runProvidedTask('explicit', task, authority.signal)
-						: await tasks.run((await tasks.refresh())[0]);
+				const first = kind === 'provided' ? await tasks.runProvidedTask('explicit', task, authority.signal) : await tasks.run((await tasks.refresh())[0]);
 				await tasks.terminate(first);
 				if (kind === 'configured') {
 					// Current literals and newly introduced variables still come from the
@@ -4900,10 +4481,7 @@ suite('Task rerun variable policy through the execution owners', () => {
 					assert.deepEqual(launches[1], {
 						type: 'process',
 						program: 'compiler',
-						args:
-							kind === 'configured'
-								? ['updated', `mode-${index}`, literal, 'new-variable']
-								: ['old', `mode-${index}`, literal],
+						args: kind === 'configured' ? ['updated', `mode-${index}`, literal, 'new-variable'] : ['old', `mode-${index}`, literal],
 					});
 				}
 				assert.equal(commandCalls, index);
@@ -5016,10 +4594,7 @@ suite('Task instance limits through the execution owners', () => {
 				});
 				services.registerInstance(IRendererHostService, testRendererHost());
 				services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
-				services.registerInstance(
-					IConfigurationResolverService,
-					resources.add(services.createInstance(ConfigurationResolverService)),
-				);
+				services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 				registerTaskProfiles(services);
 				registerTestTerminalCreationServices(services);
 				const terminals = resources.add(services.createInstance(TerminalService));
@@ -5248,7 +4823,11 @@ suite('Task instance policies through the execution owners', () => {
 			}),
 		);
 		services.registerInstance(IQuickInputService, quickInput);
-		const peer = { creations: 0, closed: [] as string[], close: async (_id: string): Promise<void> => {} };
+		const peer = {
+			creations: 0,
+			closed: [] as string[],
+			close: async (_id: string): Promise<void> => {},
+		};
 		services.registerInstance(ITerminalProcessService, {
 			operatingSystem: OperatingSystem.Linux,
 			setAutoReplies: async () => {},
@@ -5290,10 +4869,7 @@ suite('Task instance policies through the execution owners', () => {
 		});
 		services.registerInstance(IRendererHostService, testRendererHost());
 		services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
-		services.registerInstance(
-			IConfigurationResolverService,
-			owner.add(services.createInstance(ConfigurationResolverService)),
-		);
+		services.registerInstance(IConfigurationResolverService, owner.add(services.createInstance(ConfigurationResolverService)));
 		registerTaskProfiles(services);
 
 		registerTestTerminalCreationServices(services);
@@ -5356,19 +4932,10 @@ suite('Task instance policies through the execution owners', () => {
 			// the fourth dispatch creates process 3 and there is no process 3 to close.
 			const canceledBeforeSpawn = instancePolicy === 'terminateNewest' && peer.creations === 3;
 			if (canceledBeforeSpawn) assert.ok(isCancellationError(thirdResult.error));
-			assert.deepEqual(
-				peer.closed,
-				instancePolicy === 'terminateOldest'
-					? ['policy-1', 'policy-2']
-					: canceledBeforeSpawn
-						? ['policy-2']
-						: ['policy-2', 'policy-3'],
-			);
+			assert.deepEqual(peer.closed, instancePolicy === 'terminateOldest' ? ['policy-1', 'policy-2'] : canceledBeforeSpawn ? ['policy-2'] : ['policy-2', 'policy-3']);
 			assert.deepEqual(
 				tasks.activeRuns.map(run => run.terminalId),
-				instancePolicy === 'terminateOldest'
-					? [thirdResult.run!.terminalId, fourthRun.terminalId]
-					: [first.terminalId, fourthRun.terminalId],
+				instancePolicy === 'terminateOldest' ? [thirdResult.run!.terminalId, fourthRun.terminalId] : [first.terminalId, fourthRun.terminalId],
 			);
 			assert.equal(peer.creations, canceledBeforeSpawn ? 3 : 4);
 			assert.equal(second.status, 'canceled');
@@ -5389,9 +4956,7 @@ suite('Task instance policies through the execution owners', () => {
 				{
 					created: peer.creations,
 					closed: peer.closed,
-					messages: (services.get(INotificationService) as NotificationService).model
-						.getNotifications()
-						.map(item => item.message),
+					messages: (services.get(INotificationService) as NotificationService).model.getNotifications().map(item => item.message),
 				},
 				{
 					created: 1,
@@ -5403,13 +4968,7 @@ suite('Task instance policies through the execution owners', () => {
 		});
 	}
 
-	for (const selection of [
-		'accept',
-		'escape',
-		'caller cancellation',
-		'workspace replacement',
-		'instance completion',
-	] as const) {
+	for (const selection of ['accept', 'escape', 'caller cancellation', 'workspace replacement', 'instance completion'] as const) {
 		test(`the default policy uses the real keyboard picker and handles ${selection}`, async () => {
 			using resources = new DisposableStore();
 			using localization = toDisposable(resetNlsResolver);
@@ -5420,25 +4979,17 @@ suite('Task instance policies through the execution owners', () => {
 			const second = await tasks.run(task);
 			const cancellation = new AbortController();
 			const next = tasks.run(task, cancellation.signal);
-			const rejected =
-				selection === 'escape' || selection === 'caller cancellation' || selection === 'workspace replacement'
-					? assert.rejects(next, isCancellationError)
-					: undefined;
+			const rejected = selection === 'escape' || selection === 'caller cancellation' || selection === 'workspace replacement' ? assert.rejects(next, isCancellationError) : undefined;
 			const input = await pickerInput(resources, dom);
-			assert.equal(
-				input.getAttribute('aria-label'),
-				'任务“Policy”已达到实例上限。请选择要终止并重新启动的实例。',
-			);
+			assert.equal(input.getAttribute('aria-label'), '任务“Policy”已达到实例上限。请选择要终止并重新启动的实例。');
 			assert.equal(peer.creations, 2);
 			if (selection === 'accept') {
 				input.value = '实例 2';
 				input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 				input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-			} else if (selection === 'escape')
-				input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+			} else if (selection === 'escape') input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 			else if (selection === 'caller cancellation') cancellation.abort();
-			else if (selection === 'workspace replacement')
-				workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
+			else if (selection === 'workspace replacement') workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
 			else await tasks.terminate(first);
 			if (rejected) await rejected;
 			else assert.equal((await next).status, 'running');
@@ -5453,10 +5004,7 @@ suite('Task instance policies through the execution owners', () => {
 							? { created: 2, closed: ['policy-1', 'policy-2'] }
 							: { created: 2, closed: [] },
 			);
-			assert.equal(
-				second.status,
-				selection === 'accept' || selection === 'workspace replacement' ? 'canceled' : 'running',
-			);
+			assert.equal(second.status, selection === 'accept' || selection === 'workspace replacement' ? 'canceled' : 'running');
 			for (const run of tasks.activeRuns) await tasks.terminate(run);
 		});
 	}
@@ -5546,10 +5094,7 @@ suite('Agent Task runs through the shared execution owner', () => {
 			void waiting.catch(() => undefined);
 			assert.equal(await run.completion, exitCode);
 			const expected = exitCode === 0 ? 'succeeded' : 'failed';
-			assert.deepEqual(
-				{ status: run.status, waited: await waiting, statuses },
-				{ status: expected, waited: expected, statuses: [expected] },
-			);
+			assert.deepEqual({ status: run.status, waited: await waiting, statuses }, { status: expected, waited: expected, statuses: [expected] });
 		});
 	}
 
@@ -5573,32 +5118,21 @@ suite('Agent Task runs through the shared execution owner', () => {
 		const waiting = waitForTask(run, waitingController.signal);
 		void waiting.catch(() => undefined);
 		assert.equal(await run.completion, undefined);
-		assert.deepEqual(
-			{ status: run.status, waited: await waiting, statuses },
-			{ status: 'succeeded', waited: 'succeeded', statuses: ['succeeded'] },
-		);
+		assert.deepEqual({ status: run.status, waited: await waiting, statuses }, { status: 'succeeded', waited: 'succeeded', statuses: ['succeeded'] });
 	});
 
 	for (const catalogSource of ['configuration', 'provider'] as const) {
 		test(`${catalogSource} refresh retains instance capacity until canceled process release is acknowledged`, async () => {
 			using resources = new DisposableStore();
 			const configuration = { label: 'Limited', command: 'limited', runOptions: { instancePolicy: 'silent' } };
-			const { service, terminals, documents } = assemble(
-				resources,
-				catalogSource === 'configuration' ? [configuration] : [],
-			);
+			const { service, terminals, documents } = assemble(resources, catalogSource === 'configuration' ? [configuration] : []);
 			const providerTask: TaskProviderTask = {
 				...configuration,
 				id: 'limited',
 				group: 'build',
 				runOptions: { instancePolicy: 'silent' },
 			};
-			const registration =
-				catalogSource === 'provider'
-					? resources.add(
-							service.registerTaskProviders([{ id: 'limited', provideTasks: () => [providerTask] }]),
-						)
-					: undefined;
+			const registration = catalogSource === 'provider' ? resources.add(service.registerTaskProviders([{ id: 'limited', provideTasks: () => [providerTask] }])) : undefined;
 			const first = await service.run((await service.refresh())[0]!);
 			const closing = new DeferredPromise<void>();
 			const release = new DeferredPromise<void>();
@@ -5611,10 +5145,7 @@ suite('Agent Task runs through the shared execution owner', () => {
 			const stopping = service.terminate(first);
 			try {
 				await closing.p;
-				if (registration)
-					registration.replace([
-						{ id: 'limited', provideTasks: () => [{ ...providerTask, detail: 'Updated detail' }] },
-					]);
+				if (registration) registration.replace([{ id: 'limited', provideTasks: () => [{ ...providerTask, detail: 'Updated detail' }] }]);
 				else
 					documents['.vscode/tasks.json'] = JSON.stringify({
 						version: '2.0.0',
@@ -5622,11 +5153,7 @@ suite('Agent Task runs through the shared execution owner', () => {
 					});
 				const task = (await service.refresh())[0]!;
 				assert.equal(await service.run(task), first);
-				assert.equal(
-					terminals.instances.length,
-					1,
-					'pending release still occupies the configured instance limit',
-				);
+				assert.equal(terminals.instances.length, 1, 'pending release still occupies the configured instance limit');
 				void release.complete(undefined);
 				await stopping;
 				const replacement = await service.run(task);
@@ -5642,9 +5169,7 @@ suite('Agent Task runs through the shared execution owner', () => {
 
 	test('isolates concurrent diagnostics and clears only completed runs when the same task runs again', async () => {
 		using resources = new DisposableStore();
-		const { service, terminals, services, workspace } = assemble(resources, [
-			{ label: 'Compile', command: 'compile', problemMatcher: '$tsc', runOptions: { instanceLimit: 2 } },
-		]);
+		const { service, terminals, services, workspace } = assemble(resources, [{ label: 'Compile', command: 'compile', problemMatcher: '$tsc', runOptions: { instanceLimit: 2 } }]);
 		const task = (await service.refresh())[0]!;
 		const markers = services.get(IMarkerService);
 		const first = await service.run(task);
@@ -5672,9 +5197,7 @@ suite('Agent Task runs through the shared execution owner', () => {
 			['Second failure'],
 			'rerun clears completed diagnostics but preserves the other live run',
 		);
-		terminals.instances
-			.find(terminal => terminal.id === third.terminalId)!
-			.output('third.ts(1,2): error TS1002: Third failure\n');
+		terminals.instances.find(terminal => terminal.id === third.terminalId)!.output('third.ts(1,2): error TS1002: Third failure\n');
 		assert.deepEqual(
 			markers
 				.read()
@@ -5686,9 +5209,7 @@ suite('Agent Task runs through the shared execution owner', () => {
 		await service.terminate(third);
 		const fourth = await service.run(task);
 		assert.deepEqual(markers.read(), [], 'a sequential rerun clears all completed diagnostics for this task');
-		terminals.instances
-			.find(terminal => terminal.id === fourth.terminalId)!
-			.output('fourth.ts(1,2): error TS1003: Fourth failure\n');
+		terminals.instances.find(terminal => terminal.id === fourth.terminalId)!.output('fourth.ts(1,2): error TS1003: Fourth failure\n');
 		await service.terminate(fourth);
 		workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
 		assert.deepEqual(markers.read(), [], 'workspace retirement clears every run diagnostic owner');
@@ -5753,9 +5274,7 @@ suite('Agent Task runs through the shared execution owner', () => {
 
 	test('joins a silent task at capacity by its original Run ID without adding a second execution', async () => {
 		using resources = new DisposableStore();
-		const { service, terminals } = assemble(resources, [
-			{ label: 'Check', command: 'check', runOptions: { instancePolicy: 'silent' } },
-		]);
+		const { service, terminals } = assemble(resources, [{ label: 'Check', command: 'check', runOptions: { instancePolicy: 'silent' } }]);
 		const task = (await service.refresh())[0]!;
 		const first = await service.run(task);
 		const description = await service.describe(task);
@@ -5979,21 +5498,14 @@ test('multi-root shell tasks resolve profiles and configured environment in thei
 		version: '2.0.0',
 		tasks: [{ label: 'Second shell', type: 'shell', command: 'build', presentation: { reveal: 'never' } }],
 	};
-	const services = taskServices(
-		resources,
-		new FakeFileService(URI.file('/workspaces'), { 'second/.vscode/tasks.json': JSON.stringify(document) }),
-		workspace,
-		terminals,
-	);
+	const services = taskServices(resources, new FakeFileService(URI.file('/workspaces'), { 'second/.vscode/tasks.json': JSON.stringify(document) }), workspace, terminals);
 	const routes: (string | undefined)[] = [];
 	const processes = services.get(ITerminalProcessService);
 	processes.getEnvironment = async (_profile, dirId) => {
 		routes.push(dirId);
 		return { HOME: '/second-home' };
 	};
-	await services
-		.get(IConfigurationService)
-		.updateValue('terminal.integrated.env.linux', { SELECTED: '${workspaceFolder}' });
+	await services.get(IConfigurationService).updateValue('terminal.integrated.env.linux', { SELECTED: '${workspaceFolder}' });
 	const creations: ITerminalCreateOptions[] = [];
 	const create = terminals.createTerminal.bind(terminals);
 	terminals.createTerminal = async options => {
@@ -6071,10 +5583,7 @@ suite('Configured task automatic launch and split groups', () => {
 		]);
 		await tasks.refresh();
 		await assert.rejects(tasks.run(tasks.tasks[0]!), /nu/);
-		assert.deepEqual(
-			{ starts: tasks.runs.length, terminals: terminals.instances.length },
-			{ starts: 0, terminals: 0 },
-		);
+		assert.deepEqual({ starts: tasks.runs.length, terminals: terminals.instances.length }, { starts: 0, terminals: 0 });
 	});
 
 	test('automatic tasks require the user policy and trust, then run once across catalog refreshes', async () => {
@@ -6121,9 +5630,7 @@ suite('Configured task automatic launch and split groups', () => {
 
 	test('policy refresh after start publication preserves a run while terminal reveal is pending', async () => {
 		using owner = new DisposableStore();
-		const { services, tasks, terminals } = assemble(owner, [
-			{ label: 'Automatic', command: 'auto', runOptions: { runOn: 'folderOpen' } },
-		]);
+		const { services, tasks, terminals } = assemble(owner, [{ label: 'Automatic', command: 'auto', runOptions: { runOn: 'folderOpen' } }]);
 		services.registerInstance(
 			IWorkspaceTrustManagementService,
 			owner.add(
@@ -6158,9 +5665,7 @@ suite('Configured task automatic launch and split groups', () => {
 
 	test('revoking automatic launch during variable interaction cancels preparation before terminal creation', async () => {
 		using owner = new DisposableStore();
-		const { services, tasks, terminals } = assemble(owner, [
-			{ label: 'Automatic', command: '${command:tasks.automatic.wait}', runOptions: { runOn: 'folderOpen' } },
-		]);
+		const { services, tasks, terminals } = assemble(owner, [{ label: 'Automatic', command: '${command:tasks.automatic.wait}', runOptions: { runOn: 'folderOpen' } }]);
 		const entered = new DeferredPromise<void>();
 		const result = new DeferredPromise<string>();
 		owner.add(

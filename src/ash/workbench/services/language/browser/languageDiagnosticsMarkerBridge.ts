@@ -1,9 +1,5 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import {
-	MarkerSeverity,
-	type IMarkerService,
-	type IResourceMarker,
-} from '../../../../platform/markers/common/markers.js';
+import { MarkerSeverity, type IMarkerService, type IResourceMarker } from '../../../../platform/markers/common/markers.js';
 import type { ILanguageDiagnosticsService } from '../common/languageDiagnosticsService.js';
 
 const LanguageDiagnosticsOwner = 'language';

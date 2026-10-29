@@ -14,11 +14,7 @@ export interface PaneCompositeEvent {
 export interface IPaneCompositePartService {
 	readonly onDidPaneCompositeOpen: Event<PaneCompositeEvent>;
 	readonly onDidPaneCompositeClose: Event<PaneCompositeEvent>;
-	openPaneComposite(
-		id: string | undefined,
-		viewContainerLocation: ViewContainerLocation,
-		focus?: boolean,
-	): Promise<IPaneComposite | undefined>;
+	openPaneComposite(id: string | undefined, viewContainerLocation: ViewContainerLocation, focus?: boolean): Promise<IPaneComposite | undefined>;
 	getActivePaneComposite(viewContainerLocation: ViewContainerLocation): IPaneComposite | undefined;
 	getProgressIndicator(id: string, viewContainerLocation: ViewContainerLocation): IProgressIndicator | undefined;
 	getPartId(viewContainerLocation: ViewContainerLocation): WorkbenchPartId;

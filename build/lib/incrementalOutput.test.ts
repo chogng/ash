@@ -30,11 +30,12 @@ test('unit compilation reuses outputs, restores transitive emits and removes del
 	await writeFile(join(root, 'src/removed.test.ts'), 'export const value = 2;');
 	const compile = async () => {
 		await prepareIncrementalOutput(config);
-		const result = spawnSync(
-			process.execPath,
-			[resolve(import.meta.dirname, '../../node_modules/@ash/typescript-compiler/bin/tsc'), '-p', config],
-			{ cwd: root, encoding: 'utf8', windowsHide: true, timeout: 10_000 },
-		);
+		const result = spawnSync(process.execPath, [resolve(import.meta.dirname, '../../node_modules/@ash/typescript-compiler/bin/tsc'), '-p', config], {
+			cwd: root,
+			encoding: 'utf8',
+			windowsHide: true,
+			timeout: 10_000,
+		});
 		assert.ifError(result.error);
 		assert.equal(result.status, 0, result.stdout + result.stderr);
 	};

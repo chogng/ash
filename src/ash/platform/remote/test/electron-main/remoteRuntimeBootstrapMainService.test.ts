@@ -92,19 +92,9 @@ test('Remote runtime bootstrap delegates exact profile operations', async () => 
 		connectionProfiles: profiles,
 	});
 	try {
-		assert.equal(
-			await service.processLauncher.options.resolveRuntime?.('build-linux', '/workspace/project'),
-			'/opt/ash/active/bin/ash-remote-server',
-		);
-		await service.processLauncher.options.activateRuntime?.(
-			'build-linux',
-			'/workspace/project',
-			'/opt/ash/new/bin/ash-remote-server',
-		);
-		assert.equal(
-			await service.processLauncher.options.rollbackRuntime?.('build-linux', '/workspace/project', 'custom-ssh'),
-			'/opt/ash/previous/bin/ash-remote-server',
-		);
+		assert.equal(await service.processLauncher.options.resolveRuntime?.('build-linux', '/workspace/project'), '/opt/ash/active/bin/ash-remote-server');
+		await service.processLauncher.options.activateRuntime?.('build-linux', '/workspace/project', '/opt/ash/new/bin/ash-remote-server');
+		assert.equal(await service.processLauncher.options.rollbackRuntime?.('build-linux', '/workspace/project', 'custom-ssh'), '/opt/ash/previous/bin/ash-remote-server');
 		assert.deepEqual(calls, [
 			'get:build-linux:/workspace/project',
 			'activate:build-linux:/workspace/project:/opt/ash/new/bin/ash-remote-server',
@@ -141,9 +131,5 @@ test('Remote runtime progress logger bounds download and upload chatter separate
 		'Remote runtime installation: uploaded 11%',
 		'Remote runtime installation',
 	]);
-	assert.deepEqual(structured, [
-		{ phase: 'downloadingCatalog' },
-		{ phase: 'validatingArtifact' },
-		{ phase: 'complete', disposition: 'installed' },
-	]);
+	assert.deepEqual(structured, [{ phase: 'downloadingCatalog' }, { phase: 'validatingArtifact' }, { phase: 'complete', disposition: 'installed' }]);
 });

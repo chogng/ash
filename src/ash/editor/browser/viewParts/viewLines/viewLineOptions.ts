@@ -29,8 +29,7 @@ export class ViewLineOptions {
 		this.spaceWidth = fontInfo.spaceWidth;
 		this.middotWidth = fontInfo.middotWidth;
 		this.wsmiddotWidth = fontInfo.wsmiddotWidth;
-		this.useMonospaceOptimizations =
-			fontInfo.isTrusted && fontInfo.isMonospace && !options.get(EditorOption.disableMonospaceOptimizations);
+		this.useMonospaceOptimizations = fontInfo.isTrusted && fontInfo.isMonospace && !options.get(EditorOption.disableMonospaceOptimizations);
 		this.canUseHalfwidthRightwardsArrow = fontInfo.canUseHalfwidthRightwardsArrow;
 		this.lineHeight = options.get(EditorOption.lineHeight);
 		this.stopRenderingLineAfter = options.get(EditorOption.stopRenderingLineAfter);

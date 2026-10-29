@@ -65,20 +65,14 @@ export class TerminalTabbedView extends Disposable {
 					return;
 				}
 				if (!Array.isArray(resources) || resources.length !== 1 || typeof resources[0] !== 'string') return;
-				const source = this.terminalService.instances.find(
-					candidate => candidate.resource?.toString() === resources[0],
-				);
+				const source = this.terminalService.instances.find(candidate => candidate.resource?.toString() === resources[0]);
 				const pane = (event.target as HTMLElement).closest<HTMLElement>('.ash-terminal-group-pane');
-				const target = this.terminalService.instances.find(
-					candidate => candidate.id === pane?.dataset.instanceId,
-				);
+				const target = this.terminalService.instances.find(candidate => candidate.id === pane?.dataset.instanceId);
 				if (!source || !target || source === target || !this.groups.getGroupForInstance(source)) return;
 				event.preventDefault();
 				event.stopPropagation();
 				const bounds = pane!.getBoundingClientRect();
-				const before = isHorizontal(layoutService.getPanelPosition())
-					? event.clientX < bounds.left + bounds.width / 2
-					: event.clientY < bounds.top + bounds.height / 2;
+				const before = isHorizontal(layoutService.getPanelPosition()) ? event.clientX < bounds.left + bounds.width / 2 : event.clientY < bounds.top + bounds.height / 2;
 				this.groups.moveInstance(source, target, before ? 'before' : 'after');
 			}),
 		);
@@ -86,22 +80,9 @@ export class TerminalTabbedView extends Disposable {
 		this.splitView = this._register(new SplitView(host, 'horizontal'));
 		this.element = this.splitView.element;
 		this.element.classList.add('ash-terminal-tabs-layout');
-		this.splitView.addView(
-			splitViewItem(this.terminalContainer, MIN_TERMINAL_WIDTH, Number.POSITIVE_INFINITY, 'high'),
-			{ type: 'distribute' },
-		);
-		this.splitView.addView(
-			splitViewItem(
-				this.tabList.element,
-				TerminalTabsListSizes.NarrowViewWidth,
-				TerminalTabsListSizes.MaximumWidth,
-				'low',
-			),
-			this.savedTabsWidth(),
-		);
-		this.splitView
-			.getSash(TERMINAL_VIEW_INDEX)
-			?.element.setAttribute('aria-label', localize('terminal.tabs.resize', 'Resize terminal instance list'));
+		this.splitView.addView(splitViewItem(this.terminalContainer, MIN_TERMINAL_WIDTH, Number.POSITIVE_INFINITY, 'high'), { type: 'distribute' });
+		this.splitView.addView(splitViewItem(this.tabList.element, TerminalTabsListSizes.NarrowViewWidth, TerminalTabsListSizes.MaximumWidth, 'low'), this.savedTabsWidth());
+		this.splitView.getSash(TERMINAL_VIEW_INDEX)?.element.setAttribute('aria-label', localize('terminal.tabs.resize', 'Resize terminal instance list'));
 		this._register(this.splitView.onDidChangeViewSizes(() => this.updateTabsWidth()));
 		parentElement.append(this.element);
 		this._register(terminalService.onDidChangeInstances(() => this.updateVisibility()));
@@ -131,9 +112,7 @@ export class TerminalTabbedView extends Disposable {
 		this.keyboardHover.value = lifetime;
 		const document = this.terminalContainer.ownerDocument;
 		const focusSource = document.activeElement as HTMLElement | null;
-		const card = lifetime.add(
-			this.instantiation.createInstance(TerminalInstanceHover, this.terminalContainer, instance),
-		);
+		const card = lifetime.add(this.instantiation.createInstance(TerminalInstanceHover, this.terminalContainer, instance));
 		lifetime.add(
 			card.onDidHide(() => {
 				this.keyboardHover.clear();
@@ -144,10 +123,7 @@ export class TerminalTabbedView extends Disposable {
 	}
 
 	private updateVisibility(): void {
-		this.splitView.setViewVisible(
-			TABS_VIEW_INDEX,
-			this.terminalService.instances.filter(instance => instance.target !== TerminalLocation.Editor).length > 1,
-		);
+		this.splitView.setViewVisible(TABS_VIEW_INDEX, this.terminalService.instances.filter(instance => instance.target !== TerminalLocation.Editor).length > 1);
 		this.updateTabsWidth();
 	}
 
@@ -170,21 +146,12 @@ export class TerminalTabbedView extends Disposable {
 			this.snapping = false;
 		}
 		this.updateTabsPresentation(snappedWidth);
-		if (this.initialized)
-			this.storage.store(
-				TerminalStorageKeys.TabsListWidthHorizontal,
-				Math.round(snappedWidth),
-				StorageScope.WORKSPACE,
-				StorageTarget.MACHINE,
-			);
+		if (this.initialized) this.storage.store(TerminalStorageKeys.TabsListWidthHorizontal, Math.round(snappedWidth), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	}
 
 	private savedTabsWidth(): number {
 		const width = this.storage.getNumber(TerminalStorageKeys.TabsListWidthHorizontal, StorageScope.WORKSPACE);
-		return width !== undefined &&
-			Number.isFinite(width) &&
-			width >= TerminalTabsListSizes.NarrowViewWidth &&
-			width <= TerminalTabsListSizes.MaximumWidth
+		return width !== undefined && Number.isFinite(width) && width >= TerminalTabsListSizes.NarrowViewWidth && width <= TerminalTabsListSizes.MaximumWidth
 			? width
 			: TerminalTabsListSizes.DefaultWidth;
 	}
@@ -195,11 +162,12 @@ export class TerminalTabbedView extends Disposable {
 	}
 }
 
-function splitViewItem(
-	element: HTMLElement,
-	minimumSize: number,
-	maximumSize: number,
-	priority: 'high' | 'low',
-): ISplitViewView {
-	return { element, minimumSize, maximumSize, priority, layout() {} };
+function splitViewItem(element: HTMLElement, minimumSize: number, maximumSize: number, priority: 'high' | 'low'): ISplitViewView {
+	return {
+		element,
+		minimumSize,
+		maximumSize,
+		priority,
+		layout() {},
+	};
 }

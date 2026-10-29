@@ -5,12 +5,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import { encodeBase64, VSBuffer } from '../../../../base/common/buffer.js';
 import type { ExtensionsPackageSummary } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
-import {
-	EditorInputSerializers,
-	requireRecord,
-	requireString,
-	optionalString,
-} from '../../../services/editor/common/editorInputSerializer.js';
+import { EditorInputSerializers, requireRecord, requireString, optionalString } from '../../../services/editor/common/editorInputSerializer.js';
 import { EditorInput } from '../../../common/editor/editorInput.js';
 
 export enum ExtensionsInputSource {
@@ -33,9 +28,7 @@ export function getExtensionFallbackIcon(id: string, source = ExtensionsInputSou
 	};
 	const words = name.split('-');
 	const abbreviation = Object.hasOwn(abbreviations, name) ? abbreviations[name] : undefined;
-	const letters = (abbreviation ?? (words.length > 1 ? words.map(word => word[0]).join('') : name.slice(0, 4)))
-		.replace(/[^a-z0-9]/giu, '')
-		.toUpperCase();
+	const letters = (abbreviation ?? (words.length > 1 ? words.map(word => word[0]).join('') : name.slice(0, 4))).replace(/[^a-z0-9]/giu, '').toUpperCase();
 	const artwork =
 		name === 'bazel'
 			? '<path d="m24 72 34-34m-9-12 21 21m-25-13 9-9 17 17-9 9" fill="none" stroke="GrayText" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>'
@@ -149,11 +142,7 @@ export class ExtensionsCapabilityInput extends EditorInput {
 	}
 
 	public getName(): string {
-		return this.target.kind === 'skill'
-			? this.target.name
-			: this.target.kind === 'connector'
-				? this.target.connectorId
-				: this.target.serverId;
+		return this.target.kind === 'skill' ? this.target.name : this.target.kind === 'connector' ? this.target.connectorId : this.target.serverId;
 	}
 }
 

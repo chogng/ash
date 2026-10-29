@@ -1,11 +1,5 @@
 import { decodeBase64, encodeBase64, VSBuffer } from '../../../../base/common/buffer.js';
-import type {
-	IDebugMemoryRead,
-	IDebugExceptionInfo,
-	IDebugExceptionDetails,
-	IDebugProgressStart,
-	IDebugProgressUpdate,
-} from '../common/debug.js';
+import type { IDebugMemoryRead, IDebugExceptionInfo, IDebugExceptionDetails, IDebugProgressStart, IDebugProgressUpdate } from '../common/debug.js';
 import type { CancellationToken } from '../../../../base/common/cancellation.js';
 import type { Position } from '../../../../editor/common/core/position.js';
 import { RawDebugSession } from './rawDebugSession.js';
@@ -54,11 +48,7 @@ import {
 	type DebugSessionSnapshot,
 	type IDebugAdapterProcessService,
 } from '../../../../platform/debug/common/debugAdapterProcessService.js';
-import {
-	getRemoteWorkspacePath,
-	isRemoteResource,
-	withRemoteWorkspacePath,
-} from '../../../../platform/remote/common/remote.js';
+import { getRemoteWorkspacePath, isRemoteResource, withRemoteWorkspacePath } from '../../../../platform/remote/common/remote.js';
 
 interface DapResponse {
 	readonly seq: number;
@@ -83,9 +73,7 @@ export interface DebugSessionStartOptions {
 	readonly admitted?: boolean;
 	readonly id?: string;
 	readonly createDebugAdapterTrackers?: (session: IDebugSession) => PromiseLike<readonly IDebugAdapterTracker[]>;
-	readonly createDebugAdapterDescriptor?: (
-		session: IDebugSession,
-	) => PromiseLike<IDebugConfiguration['adapter'] | null>;
+	readonly createDebugAdapterDescriptor?: (session: IDebugSession) => PromiseLike<IDebugConfiguration['adapter'] | null>;
 	readonly configuration: IDebugConfiguration;
 	readonly sessionOptions?: IDebugSessionOptions;
 	readonly onWillStart?: (session: IDebugSession) => void;
@@ -99,16 +87,9 @@ export interface DebugSessionStartOptions {
 	readonly workspace?: URI;
 	readonly runInTerminal?: (argumentsValue: unknown) => Promise<Readonly<Record<string, unknown>>>;
 	readonly startDebugging?: (argumentsValue: unknown) => Promise<void>;
-	readonly updateBreakpoints?: (
-		updates: readonly { readonly id: string; readonly verified: boolean; readonly message?: string }[],
-	) => void;
+	readonly updateBreakpoints?: (updates: readonly { readonly id: string; readonly verified: boolean; readonly message?: string }[]) => void;
 	/** The catalog owner inserts without notifying; verification publishes after the protocol binding exists. */
-	readonly addBreakpoint?: (
-		source: IDebugSource,
-		line: number,
-		column?: number,
-		id?: string,
-	) => IDebugBreakpoint | undefined;
+	readonly addBreakpoint?: (source: IDebugSource, line: number, column?: number, id?: string) => IDebugBreakpoint | undefined;
 	readonly removeBreakpoint?: (id: string) => void;
 	readonly exceptionBreakpoints?: () => readonly string[] | undefined;
 }
@@ -118,54 +99,31 @@ export class DebugSession extends Disposable implements IDebugSession {
 	private readonly progressStarts = this._register(new Emitter<IDebugProgressStart>());
 	private readonly progressUpdates = this._register(new Emitter<IDebugProgressUpdate>());
 	private readonly progressEnds = this._register(new Emitter<{ progressId: string }>());
-	private readonly memoryChanges = this._register(
-		new Emitter<{ memoryReference: string; offset: number; count: number }>(),
-	);
+	private readonly memoryChanges = this._register(new Emitter<{ memoryReference: string; offset: number; count: number }>());
 	readonly onDidInvalidateMemory = this.memoryChanges.event;
-	private readonly loadedSourceChanges = this._register(
-		new Emitter<{ reason: 'new' | 'changed' | 'removed'; source: IDebugSource }>(),
-	);
+	private readonly loadedSourceChanges = this._register(new Emitter<{ reason: 'new' | 'changed' | 'removed'; source: IDebugSource }>());
 	readonly onDidProgressStart = this.progressStarts.event;
 	readonly onDidProgressUpdate = this.progressUpdates.event;
 	readonly onDidProgressEnd = this.progressEnds.event;
 	readonly onDidLoadedSource = this.loadedSourceChanges.event;
 
 	async loadedSources(): Promise<readonly IDebugSource[]> {
-		if (!this.capabilities.supportsLoadedSourcesRequest)
-			throw new Error(
-				localize('debug.loadedSourcesUnsupported', 'The debug adapter does not support loaded sources.'),
-			);
+		if (!this.capabilities.supportsLoadedSourcesRequest) throw new Error(localize('debug.loadedSourcesUnsupported', 'The debug adapter does not support loaded sources.'));
 		const body = record((await this.request('loadedSources')).body, 'loadedSources body');
 		const entries = array(body.sources, 'loaded sources');
-		if (entries.length > 4096)
-			throw new RangeError(
-				localize('debug.loadedSourcesLimit', 'The debug adapter returned too many loaded sources.'),
-			);
-		return Object.freeze(
-			entries.map((value, index) => source(value, `sources[${index}]`, this.workspace) ?? invalidLoadedSource()),
-		);
+		if (entries.length > 4096) throw new RangeError(localize('debug.loadedSourcesLimit', 'The debug adapter returned too many loaded sources.'));
+		return Object.freeze(entries.map((value, index) => source(value, `sources[${index}]`, this.workspace) ?? invalidLoadedSource()));
 	}
 
 	async readMemory(memoryReference: string, offset: number, count: number): Promise<IDebugMemoryRead> {
 		this.checkMemory(memoryReference, offset, count, false);
-		const body = record(
-			(await this.request('readMemory', { memoryReference, offset, count })).body,
-			'readMemory body',
-		);
+		const body = record((await this.request('readMemory', { memoryReference, offset, count })).body, 'readMemory body');
 		const encoded = body.data === undefined ? '' : string(body.data, 'memory data');
 		if (encoded.length > 5464 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded))
-			throw new TypeError(
-				localize('debug.invalidMemoryData', 'The debug adapter returned invalid memory bytes.'),
-			);
+			throw new TypeError(localize('debug.invalidMemoryData', 'The debug adapter returned invalid memory bytes.'));
 		const data = decodeBase64(encoded).buffer;
-		const unreadableBytes =
-			body.unreadableBytes === undefined
-				? 0
-				: positiveInteger(body.unreadableBytes, 'unreadable memory bytes', true);
-		if (data.length + unreadableBytes > count)
-			throw new RangeError(
-				localize('debug.invalidMemoryData', 'The debug adapter returned invalid memory bytes.'),
-			);
+		const unreadableBytes = body.unreadableBytes === undefined ? 0 : positiveInteger(body.unreadableBytes, 'unreadable memory bytes', true);
+		if (data.length + unreadableBytes > count) throw new RangeError(localize('debug.invalidMemoryData', 'The debug adapter returned invalid memory bytes.'));
 		return { address: string(body.address, 'memory address'), data, unreadableBytes };
 	}
 
@@ -182,14 +140,8 @@ export class DebugSession extends Disposable implements IDebugSession {
 			).body ?? {},
 			'writeMemory body',
 		);
-		const written =
-			body.bytesWritten === undefined
-				? data.length
-				: positiveInteger(body.bytesWritten, 'written memory bytes', true);
-		if (written > data.length || (body.offset !== undefined && body.offset !== 0))
-			throw new RangeError(
-				localize('debug.invalidMemoryData', 'The debug adapter returned invalid memory bytes.'),
-			);
+		const written = body.bytesWritten === undefined ? data.length : positiveInteger(body.bytesWritten, 'written memory bytes', true);
+		if (written > data.length || (body.offset !== undefined && body.offset !== 0)) throw new RangeError(localize('debug.invalidMemoryData', 'The debug adapter returned invalid memory bytes.'));
 		return written;
 	}
 
@@ -204,33 +156,15 @@ export class DebugSession extends Disposable implements IDebugSession {
 			count < 1 ||
 			count > 4096
 		)
-			throw new TypeError(
-				localize(
-					'debug.invalidMemoryRange',
-					'A memory request requires a reference and between 1 and 4096 bytes.',
-				),
-			);
-		if (
-			this.state !== 'stopped' ||
-			!(write ? this.capabilities.supportsWriteMemoryRequest : this.capabilities.supportsReadMemoryRequest)
-		)
-			throw new Error(
-				localize('debug.memoryUnavailable', 'Pause a debug adapter that supports this memory operation first.'),
-			);
+			throw new TypeError(localize('debug.invalidMemoryRange', 'A memory request requires a reference and between 1 and 4096 bytes.'));
+		if (this.state !== 'stopped' || !(write ? this.capabilities.supportsWriteMemoryRequest : this.capabilities.supportsReadMemoryRequest))
+			throw new Error(localize('debug.memoryUnavailable', 'Pause a debug adapter that supports this memory operation first.'));
 	}
 
 	async exceptionInfo(threadId: number): Promise<IDebugExceptionInfo> {
 		if (this.state !== 'stopped' || !this.capabilities.supportsExceptionInfoRequest)
-			throw new Error(
-				localize(
-					'debug.exceptionInfoUnsupported',
-					'Exception details require a paused adapter with exception-info support.',
-				),
-			);
-		const body = record(
-			(await this.request('exceptionInfo', { threadId: integer(threadId, 'exception thread') })).body,
-			'exceptionInfo body',
-		);
+			throw new Error(localize('debug.exceptionInfoUnsupported', 'Exception details require a paused adapter with exception-info support.'));
+		const body = record((await this.request('exceptionInfo', { threadId: integer(threadId, 'exception thread') })).body, 'exceptionInfo body');
 		return {
 			exceptionId: string(body.exceptionId, 'exception id'),
 			breakMode: string(body.breakMode, 'exception break mode'),
@@ -252,9 +186,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 		return this.sessionOptions.parentSession;
 	}
 	private readonly stateEmitter = this._register(new Emitter<DebugSessionState>());
-	private readonly customEventEmitter = this._register(
-		new Emitter<{ readonly event: string; readonly body?: unknown }>(),
-	);
+	private readonly customEventEmitter = this._register(new Emitter<{ readonly event: string; readonly body?: unknown }>());
 	private readonly exceptionsEmitter = this._register(new Emitter<readonly string[]>());
 	private exceptions: DebugExceptionsSnapshot = {
 		version: 0,
@@ -296,8 +228,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 	private readonly threadEmitter = this._register(new Emitter<number | undefined>());
 	readonly onDidChangeThread = this.threadEmitter.event;
 	private runtime: DebugSessionSnapshot | undefined;
-	private stackInspection:
-		{ revision: number; threadId: number | undefined; result: Promise<IDebugStackInspection> } | undefined;
+	private stackInspection: { revision: number; threadId: number | undefined; result: Promise<IDebugStackInspection> } | undefined;
 	get inspectionRevision(): number {
 		return this.runtime?.inspectionRevision ?? 0;
 	}
@@ -345,21 +276,15 @@ export class DebugSession extends Disposable implements IDebugSession {
 
 	getDebugProtocolBreakpoint(breakpointId: string): unknown {
 		this.assertNotDisposed();
-		const binding =
-			this.breakpointSnapshot?.version === this.breakpointVersion
-				? this.breakpointSnapshot.bindings.find(point => point.intent.id === breakpointId)
-				: undefined;
-		return binding && !binding.pending && !binding.removed && binding.intent.enabled
-			? (binding.protocol ?? undefined)
-			: undefined;
+		const binding = this.breakpointSnapshot?.version === this.breakpointVersion ? this.breakpointSnapshot.bindings.find(point => point.intent.id === breakpointId) : undefined;
+		return binding && !binding.pending && !binding.removed && binding.intent.enabled ? (binding.protocol ?? undefined) : undefined;
 	}
 
 	async customRequest(command: string, args?: unknown): Promise<unknown> {
 		this.assertNotDisposed();
 		if (this.processClose) throw new CancellationError();
 		if (this.state === 'terminated' || this.state === 'error') throw new Error('Debug session has ended');
-		if (!command || command.length > 256 || command.includes('\0'))
-			throw new TypeError('Invalid Debug Adapter command');
+		if (!command || command.length > 256 || command.includes('\0')) throw new TypeError('Invalid Debug Adapter command');
 		return (await this.request(command, args)).body;
 	}
 	get output(): string {
@@ -446,18 +371,12 @@ export class DebugSession extends Disposable implements IDebugSession {
 						parentId: options.sessionOptions?.parentSession?.id ?? null,
 						lifecycleManagedByParent: options.sessionOptions?.lifecycleManagedByParent ?? false,
 						mergeConsole: options.sessionOptions?.consoleMode === 1,
-						noDebug:
-							options.sessionOptions?.noDebug ??
-							(typeof options.resolvedConfiguration.arguments.noDebug === 'boolean'
-								? options.resolvedConfiguration.arguments.noDebug
-								: null),
+						noDebug: options.sessionOptions?.noDebug ?? (typeof options.resolvedConfiguration.arguments.noDebug === 'boolean' ? options.resolvedConfiguration.arguments.noDebug : null),
 					});
 			if (relation.ended) throw new CancellationError();
 			const prepared = await options.processService.prepareSession(
 				session.id,
-				typeof options.resolvedConfiguration.arguments.noDebug === 'boolean'
-					? options.resolvedConfiguration.arguments.noDebug
-					: undefined,
+				typeof options.resolvedConfiguration.arguments.noDebug === 'boolean' ? options.resolvedConfiguration.arguments.noDebug : undefined,
 			);
 			session.consoleId = prepared.consoleId;
 			session.retainedConsoles = prepared.consoleIds;
@@ -465,21 +384,9 @@ export class DebugSession extends Disposable implements IDebugSession {
 			options.onWillStart?.(session);
 			let adapter = options.resolvedConfiguration.adapter;
 			if (!adapter) {
-				if (!options.createDebugAdapterDescriptor)
-					throw new Error(
-						localize(
-							'debug.adapterDescriptorUnavailable',
-							'The Debug Adapter factory did not provide an adapter.',
-						),
-					);
+				if (!options.createDebugAdapterDescriptor) throw new Error(localize('debug.adapterDescriptorUnavailable', 'The Debug Adapter factory did not provide an adapter.'));
 				adapter = (await options.createDebugAdapterDescriptor(session)) ?? undefined;
-				if (!adapter)
-					throw new Error(
-						localize(
-							'debug.adapterDescriptorUnavailable',
-							'The Debug Adapter factory did not provide an adapter.',
-						),
-					);
+				if (!adapter) throw new Error(localize('debug.adapterDescriptorUnavailable', 'The Debug Adapter factory did not provide an adapter.'));
 				session._resolvedConfiguration = Object.freeze({ ...session.resolvedConfiguration, adapter });
 			}
 			session.transport = new RawDebugSession(options.processService, adapter.inline);
@@ -494,8 +401,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 				throw new CancellationError();
 			}
 			session.trackers = trackers;
-			for (const tracker of trackers)
-				session.trackerDisposables.set(tracker, session._register(toDisposable(() => tracker.dispose())));
+			for (const tracker of trackers) session.trackerDisposables.set(tracker, session._register(toDisposable(() => tracker.dispose())));
 			await session.callTrackers(tracker => tracker.onWillStartSession?.());
 			if (session.isDisposed) {
 				throw new CancellationError();
@@ -573,14 +479,10 @@ export class DebugSession extends Disposable implements IDebugSession {
 		const revision = this.inspectionRevision;
 		threadId ??= this.threadId;
 		if (threadId !== undefined) threadId = integer(threadId, 'threadId');
-		if (this.stackInspection?.revision === revision && this.stackInspection.threadId === threadId)
-			return this.stackInspection.result;
+		if (this.stackInspection?.revision === revision && this.stackInspection.threadId === threadId) return this.stackInspection.result;
 		// Adapters can allocate fresh frame IDs for every stackTrace. The editor
 		// and Call Stack must share one observation of the selected paused thread.
-		const result = this.transport!.inspect(
-			{ kind: 'stack', ...(threadId === undefined ? {} : { threadId }) },
-			revision,
-		)
+		const result = this.transport!.inspect({ kind: 'stack', ...(threadId === undefined ? {} : { threadId }) }, revision)
 			.then(result => {
 				if (result.kind !== 'stack') throw new TypeError('Invalid stack inspection result');
 				const threads = result.threads.map(thread);
@@ -602,10 +504,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 		return result;
 	}
 
-	async inspectFrame(
-		frameId: number,
-		scopes: 'initial' | 'all' = 'initial',
-	): Promise<readonly IDebugScopeInspection[]> {
+	async inspectFrame(frameId: number, scopes: 'initial' | 'all' = 'initial'): Promise<readonly IDebugScopeInspection[]> {
 		const revision = this.runtime?.inspectionRevision ?? 0;
 		const result = await this.transport!.inspect({ kind: 'frame', frameId: integer(frameId, 'frameId') }, revision);
 		if (result.kind !== 'frame') throw new TypeError('Invalid frame inspection result');
@@ -616,9 +515,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 			try {
 				inspections.push({
 					scope: descriptor,
-					variables: load
-						? await this.variables(descriptor.variablesReference, revision)
-						: entry.variables.map(variable),
+					variables: load ? await this.variables(descriptor.variablesReference, revision) : entry.variables.map(variable),
 					variablesLoaded: entry.variablesLoaded || load,
 					...(entry.error === null ? {} : { error: entry.error }),
 				});
@@ -634,15 +531,9 @@ export class DebugSession extends Disposable implements IDebugSession {
 		return inspections;
 	}
 
-	async evaluateWatchExpressions(
-		expressions: readonly string[],
-		frameId?: number,
-	): Promise<readonly IDebugWatchResult[]> {
+	async evaluateWatchExpressions(expressions: readonly string[], frameId?: number): Promise<readonly IDebugWatchResult[]> {
 		if (!expressions.length) return [];
-		const result = await this.transport!.inspect(
-			{ kind: 'watch', expressions, ...(frameId === undefined ? {} : { frameId: integer(frameId, 'frameId') }) },
-			this.runtime?.inspectionRevision ?? 0,
-		);
+		const result = await this.transport!.inspect({ kind: 'watch', expressions, ...(frameId === undefined ? {} : { frameId: integer(frameId, 'frameId') }) }, this.runtime?.inspectionRevision ?? 0);
 		if (result.kind !== 'watch') throw new TypeError('Invalid Watch inspection result');
 		return result.values.map(value => {
 			if (value.error !== null) return { expression: value.expression, error: value.error };
@@ -676,10 +567,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 	async stackTrace(threadId?: number): Promise<readonly IDebugStackFrame[]> {
 		const selectedThreadId = threadId === undefined ? await this.requireThreadId() : integer(threadId, 'threadId');
 		this.setSelectedThread(selectedThreadId);
-		const body = record(
-			(await this.request('stackTrace', { threadId: selectedThreadId, startFrame: 0, levels: 100 })).body,
-			'stackTrace body',
-		);
+		const body = record((await this.request('stackTrace', { threadId: selectedThreadId, startFrame: 0, levels: 100 })).body, 'stackTrace body');
 		return array(body.stackFrames, 'stackFrames').map((value, index) => ({
 			...stackFrame(value, index, this.workspace),
 			threadId: selectedThreadId,
@@ -687,10 +575,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 	}
 
 	async scopes(frameId: number): Promise<readonly IDebugScope[]> {
-		const body = record(
-			(await this.request('scopes', { frameId: integer(frameId, 'frameId') })).body,
-			'scopes body',
-		);
+		const body = record((await this.request('scopes', { frameId: integer(frameId, 'frameId') })).body, 'scopes body');
 		return array(body.scopes, 'scopes').map((value, index) => scope(value, index));
 	}
 
@@ -705,20 +590,13 @@ export class DebugSession extends Disposable implements IDebugSession {
 
 	async setVariable(variablesReference: number, name: string, value: string): Promise<IDebugVariable> {
 		if (!this._capabilities.supportsSetVariable) {
-			throw new Error(
-				localize('debug.setVariableUnsupported', 'The debug adapter does not support changing variables.'),
-			);
+			throw new Error(localize('debug.setVariableUnsupported', 'The debug adapter does not support changing variables.'));
 		}
 		if (this._state !== 'stopped') {
 			throw new Error(localize('debug.setVariableNotStopped', 'Pause execution before changing a variable.'));
 		}
 		if (value.length > 32_768 || value.includes('\0')) {
-			throw new TypeError(
-				localize(
-					'debug.invalidVariableValue',
-					'The variable value must contain at most 32768 characters and no null characters.',
-				),
-			);
+			throw new TypeError(localize('debug.invalidVariableValue', 'The variable value must contain at most 32768 characters and no null characters.'));
 		}
 		const body = record(
 			(
@@ -731,20 +609,12 @@ export class DebugSession extends Disposable implements IDebugSession {
 			'setVariable body',
 		);
 		// In a setVariable response an omitted child reference denotes a scalar.
-		return variable(
-			{ ...body, name, variablesReference: body.variablesReference === undefined ? 0 : body.variablesReference },
-			0,
-		);
+		return variable({ ...body, name, variablesReference: body.variablesReference === undefined ? 0 : body.variablesReference }, 0);
 	}
 
-	async evaluate(
-		expression: string,
-		frameId: number | undefined,
-		context: DebugEvaluateContext,
-	): Promise<IDebugEvaluateResult> {
+	async evaluate(expression: string, frameId: number | undefined, context: DebugEvaluateContext): Promise<IDebugEvaluateResult> {
 		const normalized = expression.trim();
-		if (!normalized || normalized.length > 32_768 || normalized.includes('\0'))
-			throw new TypeError('Debug expression must contain 1 to 32768 characters');
+		if (!normalized || normalized.length > 32_768 || normalized.includes('\0')) throw new TypeError('Debug expression must contain 1 to 32768 characters');
 		const body = record(
 			(
 				await this.request('evaluate', {
@@ -763,30 +633,14 @@ export class DebugSession extends Disposable implements IDebugSession {
 		});
 	}
 
-	async completions(
-		frameId: number | undefined,
-		threadId: number,
-		text: string,
-		position: Position,
-		token: CancellationToken,
-	): Promise<IDebugCompletionsResponse | undefined> {
-		if (!this._capabilities.supportsCompletionsRequest || token.isCancellationRequested || this.processClose)
-			return undefined;
-		if (text.length > 32_768 || text.includes('\0'))
-			throw new TypeError(
-				localize(
-					'debug.invalidCompletionText',
-					'Completion text must contain at most 32768 characters and no null characters.',
-				),
-			);
+	async completions(frameId: number | undefined, threadId: number, text: string, position: Position, token: CancellationToken): Promise<IDebugCompletionsResponse | undefined> {
+		if (!this._capabilities.supportsCompletionsRequest || token.isCancellationRequested || this.processClose) return undefined;
+		if (text.length > 32_768 || text.includes('\0')) throw new TypeError(localize('debug.invalidCompletionText', 'Completion text must contain at most 32768 characters and no null characters.'));
 		integer(threadId, 'threadId');
 		const lines = text.split(/\r\n|\r|\n/);
 		const line = positiveInteger(position.lineNumber, 'completion line');
 		const column = positiveInteger(position.column, 'completion column');
-		if (line > lines.length || column > lines[line - 1]!.length + 1)
-			throw new TypeError(
-				localize('debug.invalidCompletionPosition', 'The completion position is outside the input text.'),
-			);
+		if (line > lines.length || column > lines[line - 1]!.length + 1) throw new TypeError(localize('debug.invalidCompletionPosition', 'The completion position is outside the input text.'));
 		const epoch = this.runtime?.inspectionRevision;
 		const selectedThread = this._threadId;
 		let value: unknown;
@@ -794,7 +648,12 @@ export class DebugSession extends Disposable implements IDebugSession {
 			value = await raceCancellation(
 				this.transport!.request(
 					'completions',
-					{ text, line, column, ...(frameId === undefined ? {} : { frameId: integer(frameId, 'frameId') }) },
+					{
+						text,
+						line,
+						column,
+						...(frameId === undefined ? {} : { frameId: integer(frameId, 'frameId') }),
+					},
 					token,
 					this._capabilities.supportsCancelRequest,
 				),
@@ -804,30 +663,16 @@ export class DebugSession extends Disposable implements IDebugSession {
 			// Rust can invalidate the request before the observation reader has
 			// published that execution change to this facade.
 			if (!this.processClose) await this.readAdapterPage(true);
-			if (token.isCancellationRequested || this.processClose || epoch !== this.runtime?.inspectionRevision)
-				return undefined;
+			if (token.isCancellationRequested || this.processClose || epoch !== this.runtime?.inspectionRevision) return undefined;
 			throw error;
 		}
 		if (!value || token.isCancellationRequested || this.processClose) return undefined;
 		await this.readAdapterPage(true);
-		if (
-			token.isCancellationRequested ||
-			this.processClose ||
-			epoch !== this.runtime?.inspectionRevision ||
-			selectedThread !== this._threadId
-		)
-			return undefined;
+		if (token.isCancellationRequested || this.processClose || epoch !== this.runtime?.inspectionRevision || selectedThread !== this._threadId) return undefined;
 		const reply = response(record(value, 'completions response'));
-		if (!reply.success)
-			throw new Error(
-				reply.message ||
-					localize('debug.completionsFailed', 'The debug adapter could not provide completions.'),
-			);
+		if (!reply.success) throw new Error(reply.message || localize('debug.completionsFailed', 'The debug adapter could not provide completions.'));
 		const targets = array(record(reply.body, 'completions body').targets, 'completion targets');
-		if (targets.length > 4096)
-			throw new TypeError(
-				localize('debug.tooManyCompletions', 'The debug adapter returned too many completions.'),
-			);
+		if (targets.length > 4096) throw new TypeError(localize('debug.tooManyCompletions', 'The debug adapter returned too many completions.'));
 		return {
 			body: { targets: targets.map((target, index) => completionItem(target, index, lines[line - 1]!, column)) },
 		};
@@ -835,10 +680,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 
 	async source(sourceValue: IDebugSource): Promise<IDebugSourceContent> {
 		const sourceReference = positiveInteger(sourceValue.sourceReference, 'sourceReference');
-		const body = record(
-			(await this.request('source', { source: sourceValue, sourceReference })).body,
-			'source body',
-		);
+		const body = record((await this.request('source', { source: sourceValue, sourceReference })).body, 'source body');
 		return Object.freeze({
 			content: string(body.content, 'source content'),
 			...(typeof body.mimeType === 'string' ? { mimeType: body.mimeType } : {}),
@@ -849,32 +691,17 @@ export class DebugSession extends Disposable implements IDebugSession {
 		this.acceptExceptions(await this.transport!.setExceptionBreakpoints(filters));
 	}
 
-	async dataBreakpointInfo(
-		name: string,
-		variablesReference?: number,
-		frameId?: number,
-	): Promise<IDataBreakpointInfoResponse> {
-		if (!this._capabilities.supportsDataBreakpoints)
-			throw new Error(
-				localize('debug.unsupportedDataBreakpoints', 'Debug Adapter does not support data breakpoints'),
-			);
-		if (this._state !== 'stopped')
-			throw new Error(
-				localize(
-					'debug.dataRequiresPause',
-					'Data breakpoints require the paused session that identified the variable.',
-				),
-			);
+	async dataBreakpointInfo(name: string, variablesReference?: number, frameId?: number): Promise<IDataBreakpointInfoResponse> {
+		if (!this._capabilities.supportsDataBreakpoints) throw new Error(localize('debug.unsupportedDataBreakpoints', 'Debug Adapter does not support data breakpoints'));
+		if (this._state !== 'stopped') throw new Error(localize('debug.dataRequiresPause', 'Data breakpoints require the paused session that identified the variable.'));
 		const argumentsValue: Record<string, unknown> = { name: string(name, 'data breakpoint name') };
-		if (variablesReference !== undefined)
-			argumentsValue.variablesReference = positiveInteger(variablesReference, 'variablesReference');
+		if (variablesReference !== undefined) argumentsValue.variablesReference = positiveInteger(variablesReference, 'variablesReference');
 		if (frameId !== undefined) argumentsValue.frameId = integer(frameId, 'frameId');
 		const response = await this.request('dataBreakpointInfo', argumentsValue);
 		const body = record(response.body, 'dataBreakpointInfo');
 		const dataId = body.dataId === null ? null : string(body.dataId, 'dataId');
 		const accessTypes = body.accessTypes === undefined ? ['write'] : array(body.accessTypes, 'accessTypes');
-		if (!accessTypes.every(type => type === 'read' || type === 'write' || type === 'readWrite'))
-			throw new TypeError('Invalid data breakpoint access types');
+		if (!accessTypes.every(type => type === 'read' || type === 'write' || type === 'readWrite')) throw new TypeError('Invalid data breakpoint access types');
 		return {
 			dataId,
 			description: string(body.description, 'description'),
@@ -883,16 +710,9 @@ export class DebugSession extends Disposable implements IDebugSession {
 		};
 	}
 
-	async disassemble(
-		memoryReference: string,
-		offset: number,
-		instructionOffset: number,
-		instructionCount: number,
-	): Promise<readonly IDisassembledInstruction[]> {
+	async disassemble(memoryReference: string, offset: number, instructionOffset: number, instructionCount: number): Promise<readonly IDisassembledInstruction[]> {
 		if (!this._capabilities.supportsDisassembleRequest) {
-			throw new Error(
-				localize('debug.disassemblyUnsupported', 'The debug adapter does not support disassembly.'),
-			);
+			throw new Error(localize('debug.disassemblyUnsupported', 'The debug adapter does not support disassembly.'));
 		}
 		if (this._state !== 'stopped') {
 			throw new Error(localize('debug.disassemblyRequiresPause', 'Pause debugging to view disassembly.'));
@@ -900,13 +720,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 		if (!memoryReference.trim() || memoryReference.includes('\0') || memoryReference.length > 32_768) {
 			throw new TypeError('Invalid disassembly memory reference');
 		}
-		if (
-			!Number.isSafeInteger(offset) ||
-			!Number.isSafeInteger(instructionOffset) ||
-			!Number.isSafeInteger(instructionCount) ||
-			instructionCount <= 0 ||
-			instructionCount > 200
-		) {
+		if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(instructionOffset) || !Number.isSafeInteger(instructionCount) || instructionCount <= 0 || instructionCount > 200) {
 			throw new TypeError('Disassembly offsets must be integers and instruction count must be between 1 and 200');
 		}
 		const response = await this.request('disassemble', {
@@ -974,9 +788,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 		const intents = points.flatMap(point => {
 			// Reuse only the adapter's last location while text is dirty. Enablement
 			// and expressions still come from the catalog, so Disable applies at once.
-			const binding = deferred?.has(point.id)
-				? this.breakpointSnapshot?.bindings.find(binding => binding.intent.id === point.id && !binding.removed)
-				: undefined;
+			const binding = deferred?.has(point.id) ? this.breakpointSnapshot?.bindings.find(binding => binding.intent.id === point.id && !binding.removed) : undefined;
 			const location = deferred?.has(point.id) ? binding?.intent.location : this.breakpointLocation(point);
 			return location
 				? [
@@ -986,9 +798,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 							location,
 							...(point.condition === undefined ? {} : { condition: point.condition }),
 							...(point.hitCondition === undefined ? {} : { hitCondition: point.hitCondition }),
-							...('resource' in point && point.logMessage !== undefined
-								? { logMessage: point.logMessage }
-								: {}),
+							...('resource' in point && point.logMessage !== undefined ? { logMessage: point.logMessage } : {}),
 						},
 					]
 				: [];
@@ -1013,13 +823,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 			if (resource.scheme === 'debug') {
 				const query = new URLSearchParams(resource.query);
 				const reference = query.get('ref');
-				if (
-					query.get('session') !== this.id ||
-					!reference ||
-					!/^[1-9]\d*$/.test(reference) ||
-					!Number.isSafeInteger(Number(reference))
-				)
-					return undefined;
+				if (query.get('session') !== this.id || !reference || !/^[1-9]\d*$/.test(reference) || !Number.isSafeInteger(Number(reference))) return undefined;
 				return {
 					kind: 'source',
 					source: { sourceReference: Number(reference) },
@@ -1058,21 +862,14 @@ export class DebugSession extends Disposable implements IDebugSession {
 	}
 
 	private acceptBreakpoints(snapshot: DebugBreakpointsSnapshot): void {
-		if (
-			snapshot.version < this.breakpointVersion ||
-			(this.breakpointSnapshot && snapshot.revision <= this.breakpointSnapshot.revision)
-		)
-			return;
+		if (snapshot.version < this.breakpointVersion || (this.breakpointSnapshot && snapshot.revision <= this.breakpointSnapshot.revision)) return;
 		const previous = this.breakpointSnapshot;
 		this.breakpointSnapshot = snapshot;
 		const updates = [];
 		for (const binding of snapshot.bindings) {
 			if (this.deferredBreakpointIds?.().has(binding.intent.id)) continue;
 			if (!binding.applicable || binding.pending) continue;
-			const before =
-				previous?.version === snapshot.version
-					? previous.bindings.find(point => point.intent.id === binding.intent.id)
-					: undefined;
+			const before = previous?.version === snapshot.version ? previous.bindings.find(point => point.intent.id === binding.intent.id) : undefined;
 			if (binding.removed) {
 				if (!before?.removed) this.removeBreakpoint?.(binding.intent.id);
 				continue;
@@ -1080,12 +877,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 			if (binding.created && !before?.created && binding.intent.location.kind === 'source') {
 				const location = binding.intent.location;
 				const protocol = record(binding.protocol, 'Debug breakpoint');
-				this.addBreakpoint?.(
-					source(protocol.source ?? location.source, 'breakpoint source', this.workspace)!,
-					location.line,
-					location.column,
-					binding.intent.id,
-				);
+				this.addBreakpoint?.(source(protocol.source ?? location.source, 'breakpoint source', this.workspace)!, location.line, location.column, binding.intent.id);
 			}
 
 			if (
@@ -1099,11 +891,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 				updates.push({
 					id: binding.intent.id,
 					verified: binding.verified,
-					...(binding.unsupported
-						? { message: unsupportedBreakpoint(binding.unsupported) }
-						: binding.message === null
-							? {}
-							: { message: binding.message }),
+					...(binding.unsupported ? { message: unsupportedBreakpoint(binding.unsupported) } : binding.message === null ? {} : { message: binding.message }),
 				});
 		}
 		if (updates.length) this.updateBreakpoints?.(updates);
@@ -1114,18 +902,11 @@ export class DebugSession extends Disposable implements IDebugSession {
 	}
 
 	private async disconnectOnce(): Promise<void> {
-		if (
-			!this.isDisposed &&
-			this._state !== 'terminated' &&
-			this._state !== 'error' &&
-			!(await this.processService.manageSession(this.id, 'read').catch(() => undefined))?.ended
-		) {
+		if (!this.isDisposed && this._state !== 'terminated' && this._state !== 'error' && !(await this.processService.manageSession(this.id, 'read').catch(() => undefined))?.ended) {
 			try {
 				await this.request('disconnect', {
 					restart: false,
-					...(this._capabilities.supportsTerminate
-						? { terminateDebuggee: this.configuration.request === 'launch' }
-						: {}),
+					...(this._capabilities.supportsTerminate ? { terminateDebuggee: this.configuration.request === 'launch' } : {}),
 				});
 			} catch (error) {
 				this.emitOutput(`Debug disconnect failed: ${getErrorMessage(error)}\n`);
@@ -1159,11 +940,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 	private async waitForInitialization(phase: DebugSessionSnapshot['phase']): Promise<void> {
 		while (!this.isDisposed) {
 			if (this.runtime?.phase === phase) return;
-			if (this.runtime?.phase === 'ended')
-				throw new Error(
-					this.runtime.reason ??
-						localize('debug.initializationEnded', 'The debug session ended during initialization.'),
-				);
+			if (this.runtime?.phase === 'ended') throw new Error(this.runtime.reason ?? localize('debug.initializationEnded', 'The debug session ended during initialization.'));
 			if (this.processClose) throw new CancellationError();
 			await timeout(POLL_DELAY_MS);
 		}
@@ -1172,12 +949,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 
 	private async threadCommand(command: string, granularity?: DebugSteppingGranularity): Promise<void> {
 		if (granularity && !this._capabilities.supportsSteppingGranularity) {
-			throw new Error(
-				localize(
-					'debug.instructionStepUnsupported',
-					'The debug adapter does not support instruction stepping.',
-				),
-			);
+			throw new Error(localize('debug.instructionStepUnsupported', 'The debug adapter does not support instruction stepping.'));
 		}
 		await this.request(command, {
 			threadId: await this.requireThreadId(),
@@ -1186,8 +958,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 	}
 
 	private acceptExceptions(snapshot: DebugExceptionsSnapshot): void {
-		if (snapshot.version < this.exceptions.version || snapshot.appliedVersion < this.exceptions.appliedVersion)
-			return;
+		if (snapshot.version < this.exceptions.version || snapshot.appliedVersion < this.exceptions.appliedVersion) return;
 		const changed = snapshot.appliedVersion !== this.exceptions.appliedVersion;
 		this.exceptions = snapshot;
 		if (changed) this.exceptionsEmitter.fire(snapshot.appliedFilters);
@@ -1196,13 +967,11 @@ export class DebugSession extends Disposable implements IDebugSession {
 	private acceptRuntime(snapshot: DebugSessionSnapshot): void {
 		if (this.runtime && snapshot.revision <= this.runtime.revision) return;
 		const previous = this.runtime;
-		if (previous?.inspectionRevision !== snapshot.inspectionRevision || snapshot.state !== 'stopped')
-			this.stackInspection = undefined;
+		if (previous?.inspectionRevision !== snapshot.inspectionRevision || snapshot.state !== 'stopped') this.stackInspection = undefined;
 		this.runtime = snapshot;
 		this._capabilities = Object.freeze(snapshot.capabilities);
 		this._reason = snapshot.reason ?? undefined;
-		if (snapshot.state === 'stopped' && previous?.executionRevision !== snapshot.executionRevision)
-			this.setSelectedThread(snapshot.stoppedThreadId ?? undefined);
+		if (snapshot.state === 'stopped' && previous?.executionRevision !== snapshot.executionRevision) this.setSelectedThread(snapshot.stoppedThreadId ?? undefined);
 		// A fresh pause can have the same enum and thread as the last pause.
 		// Publish its new inspection lifetime even when running was not observed.
 		const unchangedState = this._state === snapshot.state;
@@ -1227,11 +996,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 		if (!this.transport || !this.adapterStarted) throw new Error('Debug Adapter has not started');
 		const value = response(record(await this.transport.request(command, args), 'DAP response'));
 		// Publish the backend model before callers act on a successful control request.
-		if (
-			!this.processClose &&
-			['continue', 'next', 'stepIn', 'stepOut', 'restart', 'disconnect', 'terminate'].includes(command)
-		)
-			await this.readAdapterPage(true);
+		if (!this.processClose && ['continue', 'next', 'stepIn', 'stepOut', 'restart', 'disconnect', 'terminate'].includes(command)) await this.readAdapterPage(true);
 		if (!value.success) throw new Error(value.message || `Debug Adapter '${value.command}' request failed`);
 		return value;
 	}
@@ -1268,22 +1033,10 @@ export class DebugSession extends Disposable implements IDebugSession {
 							this._store.delete(disposable);
 							disposable.dispose();
 						}
-						this.emitOutput(
-							localize(
-								'debug.adapterTrackerTimedOut',
-								'Debug Adapter tracker timed out and was disabled.',
-							) + '\n',
-						);
+						this.emitOutput(localize('debug.adapterTrackerTimedOut', 'Debug Adapter tracker timed out and was disabled.') + '\n');
 					}
 				} catch (error) {
-					if (!signal.aborted)
-						this.emitOutput(
-							localize(
-								'debug.adapterTrackerFailed',
-								'Debug Adapter tracker failed: {0}',
-								getErrorMessage(error),
-							) + '\n',
-						);
+					if (!signal.aborted) this.emitOutput(localize('debug.adapterTrackerFailed', 'Debug Adapter tracker failed: {0}', getErrorMessage(error)) + '\n');
 				} finally {
 					clearTimeout(timer);
 					if (cancel) signal.removeEventListener('abort', cancel);
@@ -1299,12 +1052,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 		if (this.queuedTrackerMessages >= 2048) {
 			this.trackerMessagesStopped = true;
 			this.trackerMessages.clearPending();
-			this.emitOutput(
-				localize(
-					'debug.adapterTrackerQueueExceeded',
-					'Debug Adapter tracker message queue exceeded its limit; message observation stopped.',
-				) + '\n',
-			);
+			this.emitOutput(localize('debug.adapterTrackerQueueExceeded', 'Debug Adapter tracker message queue exceeded its limit; message observation stopped.') + '\n');
 			return;
 		}
 		this.queuedTrackerMessages++;
@@ -1330,9 +1078,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 			return;
 		}
 		this.trackerErrorReported = true;
-		await this.callTrackers(tracker =>
-			tracker.onError?.(error instanceof Error ? error : new Error(getErrorMessage(error))),
-		);
+		await this.callTrackers(tracker => tracker.onError?.(error instanceof Error ? error : new Error(getErrorMessage(error))));
 	}
 
 	private async stopTrackers(): Promise<void> {
@@ -1344,21 +1090,13 @@ export class DebugSession extends Disposable implements IDebugSession {
 		if (!this.isDisposed) {
 			const deadline = timeout(TRACKER_CALLBACK_TIMEOUT_MS);
 			try {
-				const drained = await Promise.race([
-					this.trackerMessages.scheduleSkipIfCleared(() => {}).then(() => true),
-					deadline.then(() => false),
-				]);
+				const drained = await Promise.race([this.trackerMessages.scheduleSkipIfCleared(() => {}).then(() => true), deadline.then(() => false)]);
 				if (!drained) {
 					// A backlog of individually timely callbacks must not accumulate
 					// into an unbounded stop. Keep only the current callback in order.
 					this.trackerMessages.clearPending();
 					await this.trackerMessages.scheduleSkipIfCleared(() => {});
-					this.emitOutput(
-						localize(
-							'debug.adapterTrackerShutdownBacklog',
-							'Pending Debug Adapter tracker observations were skipped to finish stopping the session.',
-						) + '\n',
-					);
+					this.emitOutput(localize('debug.adapterTrackerShutdownBacklog', 'Pending Debug Adapter tracker observations were skipped to finish stopping the session.') + '\n');
 				}
 			} finally {
 				deadline.cancel();
@@ -1414,29 +1152,17 @@ export class DebugSession extends Disposable implements IDebugSession {
 			if (read.outputGap) throw new Error('Debug Adapter output exceeded the retained buffer');
 			this.readSequence = read.nextSequence;
 			for (const entry of read.messages) {
-				if (entry.direction === 'outgoing')
-					this.trackMessage(tracker => tracker.onWillReceiveMessage?.(entry.message));
+				if (entry.direction === 'outgoing') this.trackMessage(tracker => tracker.onWillReceiveMessage?.(entry.message));
 				else {
 					this.trackMessage(tracker => tracker.onDidSendMessage?.(entry.message));
 					if (deliverEvents && !this.processClose) this.acceptMessage(entry.message);
 				}
 			}
 			if (read.exceptions) this.acceptExceptions(read.exceptions);
-			if (read.consoleRevision !== undefined && read.consoleRevision !== this.consoleSnapshot.revision)
-				this.acceptConsole(await this.processService.readConsole(this.id));
-			if (
-				deliverEvents &&
-				!this.processClose &&
-				read.breakpointRevision !== undefined &&
-				read.breakpointRevision !== this.breakpointSnapshot?.revision
-			)
+			if (read.consoleRevision !== undefined && read.consoleRevision !== this.consoleSnapshot.revision) this.acceptConsole(await this.processService.readConsole(this.id));
+			if (deliverEvents && !this.processClose && read.breakpointRevision !== undefined && read.breakpointRevision !== this.breakpointSnapshot?.revision)
 				this.acceptBreakpoints(await transport.readBreakpoints());
-			if (
-				deliverEvents &&
-				!this.processClose &&
-				read.session &&
-				(read.session.phase !== 'ended' || read.messages.length < 128)
-			) {
+			if (deliverEvents && !this.processClose && read.session && (read.session.phase !== 'ended' || read.messages.length < 128)) {
 				if (read.session.phase === 'ended') this.adapterExitCode = read.exitCode ?? undefined;
 				this.acceptRuntime(read.session);
 			}
@@ -1456,30 +1182,16 @@ export class DebugSession extends Disposable implements IDebugSession {
 	}
 
 	private acceptEvent(eventValue: DapEvent): void {
-		const body =
-			eventValue.body && typeof eventValue.body === 'object' ? (eventValue.body as Record<string, unknown>) : {};
+		const body = eventValue.body && typeof eventValue.body === 'object' ? (eventValue.body as Record<string, unknown>) : {};
 		if (eventValue.event === 'output') return;
-		if (
-			eventValue.event === 'progressStart' ||
-			eventValue.event === 'progressUpdate' ||
-			eventValue.event === 'progressEnd'
-		) {
+		if (eventValue.event === 'progressStart' || eventValue.event === 'progressUpdate' || eventValue.event === 'progressEnd') {
 			const progressId = string(body.progressId, 'progress id');
-			if (!progressId || progressId.length > 256)
-				throw new TypeError(localize('debug.invalidProgressId', 'Invalid debug progress ID.'));
+			if (!progressId || progressId.length > 256) throw new TypeError(localize('debug.invalidProgressId', 'Invalid debug progress ID.'));
 			if (eventValue.event === 'progressEnd') this.progressEnds.fire({ progressId });
 			else {
 				const percentage = body.percentage === undefined ? undefined : body.percentage;
-				if (
-					percentage !== undefined &&
-					(typeof percentage !== 'number' ||
-						!Number.isFinite(percentage) ||
-						percentage < 0 ||
-						percentage > 100)
-				)
-					throw new TypeError(
-						localize('debug.invalidProgressPercentage', 'Invalid debug progress percentage.'),
-					);
+				if (percentage !== undefined && (typeof percentage !== 'number' || !Number.isFinite(percentage) || percentage < 0 || percentage > 100))
+					throw new TypeError(localize('debug.invalidProgressPercentage', 'Invalid debug progress percentage.'));
 				const update = {
 					progressId,
 					...(typeof body.message === 'string' ? { message: body.message.slice(0, 4096) } : {}),
@@ -1505,9 +1217,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 		}
 		if (eventValue.event === 'loadedSource') {
 			if (body.reason !== 'new' && body.reason !== 'changed' && body.reason !== 'removed')
-				throw new TypeError(
-					localize('debug.invalidLoadedSourceReason', 'Invalid loaded-source change reason.'),
-				);
+				throw new TypeError(localize('debug.invalidLoadedSourceReason', 'Invalid loaded-source change reason.'));
 			this.loadedSourceChanges.fire({
 				reason: body.reason,
 				source: source(body.source, 'loaded source', this.workspace) ?? invalidLoadedSource(),
@@ -1515,8 +1225,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 			return;
 		}
 
-		if (['initialized', 'capabilities', 'stopped', 'continued', 'terminated', 'exited'].includes(eventValue.event))
-			return;
+		if (['initialized', 'capabilities', 'stopped', 'continued', 'terminated', 'exited'].includes(eventValue.event)) return;
 		if (eventValue.event === 'breakpoint') return;
 		if (['thread', 'process', 'module', 'invalidated'].includes(eventValue.event)) return;
 		this.customEventEmitter.fire({
@@ -1547,9 +1256,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 				success: false,
 				command,
 				message: getErrorMessage(error),
-			}).catch(sendError =>
-				this.emitOutput(`Could not answer Debug Adapter request: ${getErrorMessage(sendError)}\n`),
-			);
+			}).catch(sendError => this.emitOutput(`Could not answer Debug Adapter request: ${getErrorMessage(sendError)}\n`));
 		}
 	}
 
@@ -1592,8 +1299,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 			// Admit retained observations before the stop hook, without waiting
 			// for tracker callbacks or delivering new reverse requests on shutdown.
 			try {
-				for (let page = 0; page < 4; page++)
-					if ((await this.readAdapterPage(false)).messages.length < 128) break;
+				for (let page = 0; page < 4; page++) if ((await this.readAdapterPage(false)).messages.length < 128) break;
 			} catch {
 				/* Transport failure must not prevent close acknowledgement. */
 			}
@@ -1637,16 +1343,11 @@ function stackFrame(value: unknown, index: number, workspace: URI | undefined): 
 		name: string(frame.name, `stackFrames[${index}].name`),
 		lineNumber: positiveInteger(frame.line, `stackFrames[${index}].line`, true),
 		columnNumber: positiveInteger(frame.column, `stackFrames[${index}].column`, true),
-		...(frame.source === undefined
-			? {}
-			: { source: source(frame.source, `stackFrames[${index}].source`, workspace) }),
+		...(frame.source === undefined ? {} : { source: source(frame.source, `stackFrames[${index}].source`, workspace) }),
 		...(frame.instructionPointerReference === undefined
 			? {}
 			: {
-					instructionPointerReference: string(
-						frame.instructionPointerReference,
-						'instructionPointerReference',
-					),
+					instructionPointerReference: string(frame.instructionPointerReference, 'instructionPointerReference'),
 				}),
 	};
 }
@@ -1682,10 +1383,7 @@ function scope(value: unknown, index: number): IDebugScope {
 
 function variable(value: unknown, index: number): IDebugVariable {
 	const input = record(value, `variables[${index}]`);
-	const hint =
-		input.presentationHint === undefined
-			? undefined
-			: record(input.presentationHint, `variables[${index}].presentationHint`);
+	const hint = input.presentationHint === undefined ? undefined : record(input.presentationHint, `variables[${index}].presentationHint`);
 	return {
 		name: string(input.name, `variables[${index}].name`),
 		value: string(input.value, `variables[${index}].value`),
@@ -1698,9 +1396,7 @@ function variable(value: unknown, index: number): IDebugVariable {
 						...(hint.attributes === undefined
 							? {}
 							: {
-									attributes: array(hint.attributes, 'presentationHint.attributes').map(attribute =>
-										string(attribute, 'presentationHint attribute'),
-									),
+									attributes: array(hint.attributes, 'presentationHint.attributes').map(attribute => string(attribute, 'presentationHint attribute')),
 								}),
 						...(hint.lazy === undefined ? {} : { lazy: boolean(hint.lazy, 'presentationHint.lazy') }),
 					},
@@ -1710,8 +1406,7 @@ function variable(value: unknown, index: number): IDebugVariable {
 }
 
 function record(value: unknown, path: string): Record<string, unknown> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value))
-		throw new TypeError(`${path} must be an object`);
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError(`${path} must be an object`);
 	return value as Record<string, unknown>;
 }
 function array(value: unknown, path: string): readonly unknown[] {
@@ -1727,13 +1422,11 @@ function boolean(value: unknown, path: string): boolean {
 	return value;
 }
 function positiveInteger(value: unknown, path: string, allowZero = false): number {
-	if (!Number.isSafeInteger(value) || (allowZero ? (value as number) < 0 : (value as number) <= 0))
-		throw new TypeError(`${path} must be ${allowZero ? 'non-negative' : 'positive'}`);
+	if (!Number.isSafeInteger(value) || (allowZero ? (value as number) < 0 : (value as number) <= 0)) throw new TypeError(`${path} must be ${allowZero ? 'non-negative' : 'positive'}`);
 	return value as number;
 }
 function integer(value: unknown, path: string): number {
-	if (!Number.isSafeInteger(value))
-		throw new TypeError(localize('debug.invalidIdentifier', '{0} must be an integer.', path));
+	if (!Number.isSafeInteger(value)) throw new TypeError(localize('debug.invalidIdentifier', '{0} must be an integer.', path));
 	return value as number;
 }
 
@@ -1742,9 +1435,7 @@ function sourceResource(workspace: URI | undefined, adapterPath: string): URI | 
 		try {
 			return adapterPath.startsWith('/') && !adapterPath.startsWith('//')
 				? URI.from({ scheme: Schemas.file, path: adapterPath })
-				: URI.file(
-						/^(?:[a-z]:[\\/]|\\\\)/i.test(adapterPath) ? adapterPath.replaceAll('\\', '/') : adapterPath,
-					);
+				: URI.file(/^(?:[a-z]:[\\/]|\\\\)/i.test(adapterPath) ? adapterPath.replaceAll('\\', '/') : adapterPath);
 		} catch {
 			return undefined;
 		}
@@ -1760,26 +1451,17 @@ function sourceResource(workspace: URI | undefined, adapterPath: string): URI | 
 function unsupportedBreakpoint(reason: DebugBreakpointUnsupported): string {
 	switch (reason) {
 		case 'conditional':
-			return localize(
-				'debug.unsupportedConditionalBreakpoints',
-				'Debug Adapter does not support conditional breakpoints',
-			);
+			return localize('debug.unsupportedConditionalBreakpoints', 'Debug Adapter does not support conditional breakpoints');
 		case 'hitConditional':
 			return localize('debug.unsupportedHitConditions', 'Debug Adapter does not support hit conditions');
 		case 'logPoint':
 			return localize('debug.unsupportedLogpoints', 'Debug Adapter does not support logpoints');
 		case 'function':
-			return localize(
-				'debug.unsupportedFunctionBreakpoints',
-				'Debug Adapter does not support function breakpoints',
-			);
+			return localize('debug.unsupportedFunctionBreakpoints', 'Debug Adapter does not support function breakpoints');
 		case 'data':
 			return localize('debug.unsupportedDataBreakpoints', 'Debug Adapter does not support data breakpoints');
 		case 'instruction':
-			return localize(
-				'debug.unsupportedInstructionBreakpoints',
-				'Debug Adapter does not support instruction breakpoints',
-			);
+			return localize('debug.unsupportedInstructionBreakpoints', 'Debug Adapter does not support instruction breakpoints');
 	}
 }
 
@@ -1791,43 +1473,22 @@ function completionItem(value: unknown, index: number, line: string, column: num
 		if (input[key] === undefined) return undefined;
 		const result = string(input[key], `completion ${key}`);
 		if (result.length > 32_768 || result.includes('\0')) {
-			throw new TypeError(
-				localize(
-					'debug.invalidCompletionField',
-					'The debug adapter returned an invalid completion field: {0}.',
-					key,
-				),
-			);
+			throw new TypeError(localize('debug.invalidCompletionField', 'The debug adapter returned an invalid completion field: {0}.', key));
 		}
 		return result;
 	};
-	if (label.length > 32_768 || label.includes('\0'))
-		throw new TypeError(
-			localize('debug.invalidCompletionLabel', 'The debug adapter returned an invalid completion label.'),
-		);
+	if (label.length > 32_768 || label.includes('\0')) throw new TypeError(localize('debug.invalidCompletionLabel', 'The debug adapter returned an invalid completion label.'));
 	const text = optionalText('text');
 	const sortText = optionalText('sortText');
 	const detail = optionalText('detail');
 	const type = optionalText('type');
 	const start = input.start === undefined ? undefined : positiveInteger(input.start, 'completion start');
 	const length = input.length === undefined ? undefined : positiveInteger(input.length, 'completion length', true);
-	const selectionStart =
-		input.selectionStart === undefined
-			? undefined
-			: positiveInteger(input.selectionStart, 'completion selectionStart', true);
-	const selectionLength =
-		input.selectionLength === undefined
-			? undefined
-			: positiveInteger(input.selectionLength, 'completion selectionLength', true);
+	const selectionStart = input.selectionStart === undefined ? undefined : positiveInteger(input.selectionStart, 'completion selectionStart', true);
+	const selectionLength = input.selectionLength === undefined ? undefined : positiveInteger(input.selectionLength, 'completion selectionLength', true);
 	const insertion = text || label;
-	if (
-		(start ?? column) > line.length + 1 ||
-		(start ?? column) - 1 + (length ?? 0) > line.length ||
-		(selectionStart ?? insertion.length) + (selectionLength ?? 0) > insertion.length
-	)
-		throw new TypeError(
-			localize('debug.invalidCompletionRange', 'The debug adapter returned an invalid completion edit range.'),
-		);
+	if ((start ?? column) > line.length + 1 || (start ?? column) - 1 + (length ?? 0) > line.length || (selectionStart ?? insertion.length) + (selectionLength ?? 0) > insertion.length)
+		throw new TypeError(localize('debug.invalidCompletionRange', 'The debug adapter returned an invalid completion edit range.'));
 	return Object.freeze({
 		label,
 		...(text === undefined ? {} : { text }),

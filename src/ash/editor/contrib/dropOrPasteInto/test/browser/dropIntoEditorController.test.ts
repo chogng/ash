@@ -52,7 +52,11 @@ test('DropIntoEditorController inserts plain text at the hit position', async ()
 
 	assert.deepEqual(
 		{ handled: drop.defaultPrevented, value: model.getText(), position: editor.getPosition() },
-		{ handled: true, value: 'alpha dropped', position: new Position(1, 14) },
+		{
+			handled: true,
+			value: 'alpha dropped',
+			position: new Position(1, 14),
+		},
 	);
 });
 
@@ -78,7 +82,11 @@ test('Disabled drop-into-editor leaves text drops to the host', () => {
 
 	assert.deepEqual(
 		{ dragOverHandled: dragOver.defaultPrevented, dropHandled: drop.defaultPrevented, value: model.getText() },
-		{ dragOverHandled: false, dropHandled: false, value: 'alpha' },
+		{
+			dragOverHandled: false,
+			dropHandled: false,
+			value: 'alpha',
+		},
 	);
 });
 
@@ -145,7 +153,13 @@ test('File and HTML-only drops remain available to the host', () => {
 			value: model.getText(),
 			fileReads,
 		},
-		{ fileDragOverHandled: false, fileDropHandled: false, htmlDropHandled: false, value: 'alpha', fileReads: 0 },
+		{
+			fileDragOverHandled: false,
+			fileDropHandled: false,
+			htmlDropHandled: false,
+			value: 'alpha',
+			fileReads: 0,
+		},
 	);
 });
 
@@ -164,8 +178,7 @@ test('URI-list drop inserts file paths and external URIs before duplicate plain 
 	const dataTransfer = {
 		types: ['text/uri-list', 'text/plain'],
 		files: [],
-		getData: (type: string) =>
-			type === 'text/uri-list' ? '# resources\nfile:///workspace/one.rs\nhttps://example.test/two' : 'duplicate',
+		getData: (type: string) => (type === 'text/uri-list' ? '# resources\nfile:///workspace/one.rs\nhttps://example.test/two' : 'duplicate'),
 	};
 	const drop = transferDropEvent(dom.window, dataTransfer);
 
@@ -173,7 +186,13 @@ test('URI-list drop inserts file paths and external URIs before duplicate plain 
 	const expected = `alpha${URI.parse('file:///workspace/one.rs').fsPath} https://example.test/two`;
 	await waitFor(() => model.getText() === expected);
 
-	assert.deepEqual({ handled: drop.defaultPrevented, value: model.getText() }, { handled: true, value: expected });
+	assert.deepEqual(
+		{ handled: drop.defaultPrevented, value: model.getText() },
+		{
+			handled: true,
+			value: expected,
+		},
+	);
 });
 
 test('A language drop provider participates in sorting and the post-drop selector', async () => {
@@ -189,9 +208,7 @@ test('A language drop provider participates in sorting and the post-drop selecto
 		providedDropEditKinds: [kind],
 		provideDocumentDropEdits() {
 			return {
-				edits: [
-					{ title: 'Insert Custom Drop', kind, insertText: 'pending', yieldTo: [{ mimeType: 'text/plain' }] },
-				],
+				edits: [{ title: 'Insert Custom Drop', kind, insertText: 'pending', yieldTo: [{ mimeType: 'text/plain' }] }],
 				dispose() {
 					disposedSessions += 1;
 				},
@@ -201,10 +218,7 @@ test('A language drop provider participates in sorting and the post-drop selecto
 			return { ...edit, insertText: 'CUSTOM' };
 		},
 	};
-	using registration = features.documentDropEditProvider.register(
-		{ language: 'plaintext', hasAccessToAllModels: true },
-		provider,
-	);
+	using registration = features.documentDropEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
 	using editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
@@ -223,9 +237,7 @@ test('A language drop provider participates in sorting and the post-drop selecto
 	assert.equal(drop.defaultPrevented, true);
 	selector.querySelector<HTMLButtonElement>('button')!.click();
 	assert.equal(dom.window.document.querySelectorAll('[role=menuitem]').length, 2);
-	const custom = [...dom.window.document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(
-		option => option.textContent === 'Insert Custom Drop',
-	);
+	const custom = [...dom.window.document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(option => option.textContent === 'Insert Custom Drop');
 	assert.ok(custom);
 	custom.click();
 	await waitFor(() => model.getText() === 'alphaCUSTOM');
@@ -250,10 +262,7 @@ test('A dropped snippet selects its placeholder and Tab reaches its final stop',
 			};
 		},
 	};
-	using registration = features.documentDropEditProvider.register(
-		{ language: 'plaintext', hasAccessToAllModels: true },
-		provider,
-	);
+	using registration = features.documentDropEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
 	using editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
@@ -268,21 +277,17 @@ test('A dropped snippet selects its placeholder and Tab reaches its final stop',
 	const input = editor.controller.editContext.domNode.domNode;
 	const tab = new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
 	input.dispatchEvent(tab);
-	assert.deepEqual(
-		{ handled: tab.defaultPrevented, position: editor.getPosition() },
-		{ handled: true, position: new Position(1, 12) },
-	);
+	assert.deepEqual({ handled: tab.defaultPrevented, position: editor.getPosition() }, { handled: true, position: new Position(1, 12) });
 });
 
-function textDropEvent(
-	targetWindow: typeof browserEnvironment.window,
-	text: string,
-	clientX = 0,
-	clientY = 0,
-): DragEvent {
+function textDropEvent(targetWindow: typeof browserEnvironment.window, text: string, clientX = 0, clientY = 0): DragEvent {
 	return transferDropEvent(
 		targetWindow,
-		{ types: ['text/plain'], files: [], getData: type => (type === 'text/plain' ? text : '') },
+		{
+			types: ['text/plain'],
+			files: [],
+			getData: type => (type === 'text/plain' ? text : ''),
+		},
 		clientX,
 		clientY,
 	);
@@ -294,13 +299,7 @@ interface TestDataTransfer {
 	getData(type: string): string;
 }
 
-function transferDropEvent(
-	targetWindow: typeof browserEnvironment.window,
-	dataTransfer: TestDataTransfer,
-	clientX = 80,
-	clientY = 10,
-	type = 'drop',
-): DragEvent {
+function transferDropEvent(targetWindow: typeof browserEnvironment.window, dataTransfer: TestDataTransfer, clientX = 80, clientY = 10, type = 'drop'): DragEvent {
 	const items = [
 		...dataTransfer.types
 			.filter(mimeType => mimeType !== 'Files')

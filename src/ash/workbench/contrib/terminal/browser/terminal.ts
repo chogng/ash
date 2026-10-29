@@ -20,20 +20,11 @@ import type {
 } from '../../../../platform/terminal/common/terminal.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import type { ITerminalStatusList } from './terminalStatusList.js';
-import type {
-	ITerminalCapabilityStore,
-	ITerminalCommand,
-} from '../../../../platform/terminal/common/capabilities/capabilities.js';
+import type { ITerminalCapabilityStore, ITerminalCommand } from '../../../../platform/terminal/common/capabilities/capabilities.js';
 import type { ITerminalSerializedState } from '../../../services/terminal/common/terminal.js';
-import type {
-	ITerminalProcessCreation,
-	ITerminalReconnectLease,
-} from '../../../../platform/terminal/common/terminal.js';
+import type { ITerminalProcessCreation, ITerminalReconnectLease } from '../../../../platform/terminal/common/terminal.js';
 import type { ITerminalTabLayoutInfoById } from '../../../../platform/terminal/common/terminal.js';
-import type {
-	IExtensionTerminalProfile,
-	ITerminalProfile as IShellProfile,
-} from '../../../../platform/terminal/common/terminal.js';
+import type { IExtensionTerminalProfile, ITerminalProfile as IShellProfile } from '../../../../platform/terminal/common/terminal.js';
 import type { EditorGroupId } from '../../../services/editor/common/editorState.js';
 
 /** Provider coordinates refer to UTF-16 offsets in the complete wrapped output line. */
@@ -154,10 +145,7 @@ export type ICreateTerminalOptions = Omit<Partial<ITerminalCreateOptions>, 'conf
 };
 
 export type ITerminalLocationOptions =
-	| TerminalLocation
-	| TerminalEditorLocation
-	| { readonly parentTerminal: ITerminalInstance | Promise<ITerminalInstance> }
-	| { readonly splitActiveTerminal: boolean };
+	TerminalLocation | TerminalEditorLocation | { readonly parentTerminal: ITerminalInstance | Promise<ITerminalInstance> } | { readonly splitActiveTerminal: boolean };
 
 /** Captures a group in the main or an auxiliary editor part. */
 export interface TerminalEditorLocation {
@@ -169,12 +157,7 @@ export interface TerminalEditorLocation {
 export class TerminalTransferError extends Error {
 	declare readonly rollbackLease: ITerminalReconnectLease | undefined;
 	constructor(lease: ITerminalReconnectLease | undefined) {
-		super(
-			localize(
-				'terminal.windowTransfer.targetFailed',
-				'Could not initialize the terminal in its destination window.',
-			),
-		);
+		super(localize('terminal.windowTransfer.targetFailed', 'Could not initialize the terminal in its destination window.'));
 		this.name = 'TerminalTransferError';
 		Object.defineProperty(this, 'rollbackLease', { value: lease });
 	}
@@ -242,9 +225,7 @@ export interface IXtermTerminal extends IDisposable {
 	readonly onDidChangeFindResults: Event<ISearchResultChangeEvent>;
 	readonly onDidRequestRunCommand: Event<{ command: ITerminalCommand; noNewLine?: boolean }>;
 	readonly findResult: ISearchResultChangeEvent | undefined;
-	attachWidget(
-		widget: IDisposable & { readonly id: string; attach(container: HTMLElement): void },
-	): IDisposable | undefined;
+	attachWidget(widget: IDisposable & { readonly id: string; attach(container: HTMLElement): void }): IDisposable | undefined;
 	setVisible(visible: boolean): void;
 	focus(): void;
 	fit(): void;
@@ -267,11 +248,7 @@ export interface ITerminalContribution extends IDisposable {
 /** Reads the retained terminal screen without changing the active terminal or focus. */
 export interface ITerminalView extends IView {
 	focusHover(): void;
-	getTerminalOutput(
-		instance: ITerminalInstance,
-		maxCharacters: number,
-		signal: AbortSignal,
-	): Promise<string | undefined>;
+	getTerminalOutput(instance: ITerminalInstance, maxCharacters: number, signal: AbortSignal): Promise<string | undefined>;
 }
 
 /** Workbench service contract for terminal instances and active-instance selection. */
@@ -305,11 +282,7 @@ export interface ITerminalGroup extends IDisposable {
 	readonly onInstancesChanged: Event<void>;
 	addInstance(instance: ITerminalInstance): void;
 	removeInstance(instance: ITerminalInstance): void;
-	moveInstance(
-		instances: ITerminalInstance | readonly ITerminalInstance[],
-		index: number,
-		position: 'before' | 'after',
-	): void;
+	moveInstance(instances: ITerminalInstance | readonly ITerminalInstance[], index: number, position: 'before' | 'after'): void;
 	attachToElement(element: HTMLElement): void;
 	setVisible(visible: boolean): void;
 	layout(width: number, height: number): void;
@@ -343,10 +316,7 @@ export const enum TerminalDataTransfers {
 /** Editor operations for the same window-owned terminal instances. */
 export interface ITerminalEditorService {
 	openEditor(instance: ITerminalInstance, editorOptions?: TerminalEditorLocation): Promise<void>;
-	splitInstance(
-		instanceToSplit: ITerminalInstance,
-		shellLaunchConfig?: ICreateTerminalOptions['config'],
-	): Promise<ITerminalInstance>;
+	splitInstance(instanceToSplit: ITerminalInstance, shellLaunchConfig?: ICreateTerminalOptions['config']): Promise<ITerminalInstance>;
 	detachInstance(instance: ITerminalInstance): Promise<void>;
 	getInstanceFromResource(resource: URI): ITerminalInstance | undefined;
 }
@@ -364,5 +334,4 @@ export interface ITerminalConfigurationService extends IDisposable {
 	readonly onConfigChanged: Event<void>;
 }
 
-export const ITerminalConfigurationService =
-	createServiceIdentifier<ITerminalConfigurationService>('terminalConfigurationService');
+export const ITerminalConfigurationService = createServiceIdentifier<ITerminalConfigurationService>('terminalConfigurationService');

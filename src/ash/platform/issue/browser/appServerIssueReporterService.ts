@@ -51,9 +51,7 @@ export class AppServerIssueReporterService implements IIssueReporterService {
 			const issue = await appServerRequest(this.connection, 'issueReporter/submit', { title, body });
 			return { number: issue.number, html_url: issue.url, title: issue.title, state: issue.state };
 		} catch (error) {
-			throw error instanceof AppServerRemoteError
-				? reporterError(error)
-				: new IssueReporterError('submissionUncertain');
+			throw error instanceof AppServerRemoteError ? reporterError(error) : new IssueReporterError('submissionUncertain');
 		}
 	}
 

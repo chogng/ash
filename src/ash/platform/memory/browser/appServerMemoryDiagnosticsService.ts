@@ -4,11 +4,7 @@ import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
-import type {
-	IMemoryDiagnosticsService,
-	MemoryDiagnosticSummary,
-	MemoryObservation,
-} from '../common/memoryDiagnosticsService.js';
+import type { IMemoryDiagnosticsService, MemoryDiagnosticSummary, MemoryObservation } from '../common/memoryDiagnosticsService.js';
 
 export class AppServerMemoryDiagnosticsService extends Disposable implements IMemoryDiagnosticsService {
 	private readonly changed = this._register(new Emitter<void>());
@@ -45,9 +41,7 @@ export class AppServerMemoryDiagnosticsService extends Disposable implements IMe
 				const sessionId = this.sessionId;
 				this.invalidate();
 				if (sessionId && client.state === 'ready') {
-					void client
-						.request(APP_SERVER_METHODS['memoryDiagnostics/stop'], { sessionId })
-						.catch(error => console.warn('Memory diagnostic cleanup failed', error));
+					void client.request(APP_SERVER_METHODS['memoryDiagnostics/stop'], { sessionId }).catch(error => console.warn('Memory diagnostic cleanup failed', error));
 				}
 			}),
 		);
@@ -178,12 +172,7 @@ export class AppServerMemoryDiagnosticsService extends Disposable implements IMe
 					throw new Error('Memory diagnostic connection changed during export.');
 				}
 				const decoded = Uint8Array.from(atob(chunk.dataBase64), character => character.charCodeAt(0));
-				if (
-					chunk.offset !== offset ||
-					decoded.length === 0 ||
-					decoded.length !== chunk.decodedLength ||
-					offset + decoded.length > bytes.length
-				) {
+				if (chunk.offset !== offset || decoded.length === 0 || decoded.length !== chunk.decodedLength || offset + decoded.length > bytes.length) {
 					throw new Error('Invalid memory report chunk.');
 				}
 				bytes.set(decoded, offset);
@@ -274,10 +263,7 @@ function summarize(report: MemoryReport): MemoryDiagnosticSummary {
 		targets: report.targets.map(target => ({
 			label: `${words(target.origin)} / ${words(target.role)} / PID ${target.processId ?? 'unavailable'}`,
 			samples: target.samples,
-			metrics: target.latest.metrics.map(
-				metric =>
-					`${words(metric.kind)}: ${metric.value === null ? words(metric.unavailable ?? 'unavailable') : metric.value.toLocaleString('en-US')}`,
-			),
+			metrics: target.latest.metrics.map(metric => `${words(metric.kind)}: ${metric.value === null ? words(metric.unavailable ?? 'unavailable') : metric.value.toLocaleString('en-US')}`),
 			findings: target.trends.map(trend => `${words(trend.kind)}: ${words(trend.finding)}`),
 		})),
 	};

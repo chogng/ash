@@ -49,11 +49,7 @@ export class BrowserPasswordMainService extends Disposable implements IBrowserPa
 	}
 
 	private async available(): Promise<boolean> {
-		return (
-			this.memoryEntries !== undefined ||
-			((await this.encryption.isEncryptionAvailable()) &&
-				(await this.encryption.getKeyStorageProvider()) !== KnownStorageProvider.basicText)
-		);
+		return this.memoryEntries !== undefined || ((await this.encryption.isEncryptionAvailable()) && (await this.encryption.getKeyStorageProvider()) !== KnownStorageProvider.basicText);
 	}
 	async canSave(): Promise<boolean> {
 		return this.saveEnabled && (await this.available());
@@ -112,9 +108,7 @@ export class BrowserPasswordMainService extends Disposable implements IBrowserPa
 			}
 			return {
 				available: true,
-				entries: entries.sort(
-					(a, b) => a.origin.localeCompare(b.origin) || a.username.localeCompare(b.username),
-				),
+				entries: entries.sort((a, b) => a.origin.localeCompare(b.origin) || a.username.localeCompare(b.username)),
 				corrupted,
 			};
 		});
@@ -264,8 +258,7 @@ export function browserPasswordChannel(service: IBrowserPasswordService): IServe
 			if (!Array.isArray(args)) {
 				throw new TypeError('Invalid password command');
 			}
-			const validId =
-				typeof args[0] === 'string' && /^browser\.passwords\.[a-f0-9]{64}\.[a-f0-9]{64}$/u.test(args[0]);
+			const validId = typeof args[0] === 'string' && /^browser\.passwords\.[a-f0-9]{64}\.[a-f0-9]{64}$/u.test(args[0]);
 			if (command === 'readState' && args.length === 0) {
 				return (await service.readState()) as T;
 			}

@@ -20,10 +20,7 @@ registerAction2(
 				f1: true,
 				precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
 				metadata: {
-					description: localize(
-						'terminal.sendSignal.description',
-						'Send a process signal to the active terminal’s foreground command.',
-					),
+					description: localize('terminal.sendSignal.description', 'Send a process signal to the active terminal’s foreground command.'),
 					args: [
 						{
 							name: 'args',
@@ -42,19 +39,8 @@ registerAction2(
 		override async run(accessor: ServicesAccessor, args?: unknown): Promise<void> {
 			let signal: string | undefined;
 			if (args !== undefined) {
-				if (
-					!args ||
-					typeof args !== 'object' ||
-					Array.isArray(args) ||
-					!('signal' in args) ||
-					typeof args.signal !== 'string'
-				) {
-					throw new TypeError(
-						localize(
-							'terminal.sendSignal.invalidArgs',
-							'Send Signal requires an object with a string signal property.',
-						),
-					);
+				if (!args || typeof args !== 'object' || Array.isArray(args) || !('signal' in args) || typeof args.signal !== 'string') {
+					throw new TypeError(localize('terminal.sendSignal.invalidArgs', 'Send Signal requires an object with a string signal property.'));
 				}
 				signal = args.signal;
 			}
@@ -64,10 +50,7 @@ registerAction2(
 			if (signal === undefined) {
 				using lifetime = new DisposableStore();
 				const picker = lifetime.add(accessor.get(IQuickInputService).createQuickPick());
-				picker.placeholder = localize(
-					'terminal.sendSignal.placeholder',
-					'Select a signal to send to the foreground command',
-				);
+				picker.placeholder = localize('terminal.sendSignal.placeholder', 'Select a signal to send to the foreground command');
 				picker.ariaLabel = picker.placeholder;
 				picker.items = [
 					{ label: 'SIGINT', description: localize('terminal.sendSignal.interrupt', 'Interrupt command') },
@@ -104,15 +87,7 @@ registerAction2(
 					picker.show();
 				});
 				if (!retired && terminals.activeInstance === instance) instance.xterm?.focus();
-				if (
-					!signal ||
-					retired ||
-					terminals.activeInstance !== instance ||
-					!terminals.instances.includes(instance) ||
-					instance.state !== 'running' ||
-					instance.isReadOnly
-				)
-					return;
+				if (!signal || retired || terminals.activeInstance !== instance || !terminals.instances.includes(instance) || instance.state !== 'running' || instance.isReadOnly) return;
 			}
 			await instance.sendSignal(signal);
 		}

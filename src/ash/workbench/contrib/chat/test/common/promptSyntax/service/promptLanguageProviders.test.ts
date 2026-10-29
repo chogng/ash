@@ -1,8 +1,5 @@
 import { DeferredPromise } from '../../../../../../../base/common/async.js';
-import {
-	createTestLanguageModelToolsService,
-	type ToolCatalogFixture,
-} from '../../tools/testLanguageModelToolsService.js';
+import { createTestLanguageModelToolsService, type ToolCatalogFixture } from '../../tools/testLanguageModelToolsService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { URI } from '../../../../../../../base/common/uri.js';
@@ -119,26 +116,13 @@ test('Skill draft diagnostics explain syntax and schema without accepting or exe
 	const parser = new PromptFileParser();
 	const validator = new PromptValidator();
 	const uri = URI.file('/skills/review/SKILL.md');
-	const invalid = validator.validate(
-		parser.parse(
-			uri,
-			'---\nname: review\ndescription: [one, two]\nmetadata:\n  owner: [team]\nmodel: unknown\n---',
-		),
-	);
+	const invalid = validator.validate(parser.parse(uri, '---\nname: review\ndescription: [one, two]\nmetadata:\n  owner: [team]\nmodel: unknown\n---'));
 	assert.deepEqual(
 		invalid.map(error => error.code),
 		['textField', 'metadataShape', 'unknownField'],
 	);
 	assert.deepEqual(invalid[0]!.range, new Range(3, 14, 3, 24));
-	assert.deepEqual(
-		validator.validate(
-			parser.parse(
-				uri,
-				'---\nname: review\ndescription: >-\n  Review changes.\nmetadata: { owner: editor }\n---',
-			),
-		),
-		[],
-	);
+	assert.deepEqual(validator.validate(parser.parse(uri, '---\nname: review\ndescription: >-\n  Review changes.\nmetadata: { owner: editor }\n---')), []);
 	assert.deepEqual(
 		validator.validate(parser.parse(uri, '---\n---')).map(error => error.code),
 		['requiredField', 'requiredField'],

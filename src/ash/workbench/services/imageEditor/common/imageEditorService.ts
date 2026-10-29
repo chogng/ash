@@ -46,11 +46,7 @@ export interface IImageEditorService {
 	readonly available: boolean;
 	readonly accessibilityHelp: string;
 	register(provider: ImageEditorProvider): IDisposable;
-	resolve(
-		source: 'screen' | 'selection',
-		signal: AbortSignal,
-		id?: string,
-	): Promise<{ readonly view: ImageEditorView; readonly displayName: string; readonly signal: AbortSignal }>;
+	resolve(source: 'screen' | 'selection', signal: AbortSignal, id?: string): Promise<{ readonly view: ImageEditorView; readonly displayName: string; readonly signal: AbortSignal }>;
 	capture(signal: AbortSignal, options?: ImageEditorOptions): Promise<VSBuffer | undefined>;
 	show(options: ImageEditorOptions, signal: AbortSignal): Promise<void>;
 	registerAttachmentHandler(handler: (capture: ImageEditorCapture) => Promise<void>): IDisposable;

@@ -6,10 +6,7 @@ import * as ts from 'typescript';
 import { findDesktopRoot } from './testPaths.js';
 
 test('Academy collaboration contracts erase all host dependencies at runtime', () => {
-	const file = resolve(
-		findDesktopRoot(import.meta.dirname),
-		'extensions/academy/common/services/documentCollaborationService.ts',
-	);
+	const file = resolve(findDesktopRoot(import.meta.dirname), 'extensions/academy/common/services/documentCollaborationService.ts');
 	const emitted = ts.transpileModule(readFileSync(file, 'utf8'), {
 		compilerOptions: { module: ts.ModuleKind.ESNext, verbatimModuleSyntax: true },
 	}).outputText;
@@ -18,11 +15,7 @@ test('Academy collaboration contracts erase all host dependencies at runtime', (
 	assert.ok(
 		module.statements.every(
 			statement =>
-				ts.isExportDeclaration(statement) &&
-				!statement.moduleSpecifier &&
-				statement.exportClause &&
-				ts.isNamedExports(statement.exportClause) &&
-				statement.exportClause.elements.length === 0,
+				ts.isExportDeclaration(statement) && !statement.moduleSpecifier && statement.exportClause && ts.isNamedExports(statement.exportClause) && statement.exportClause.elements.length === 0,
 		),
 		emitted,
 	);

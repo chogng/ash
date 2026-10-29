@@ -13,7 +13,10 @@ test('python command honors the configured interpreter', () => {
 			arguments_,
 			host('linux', { PYTHON: '/tools/python' }, () => true),
 		),
-		{ command: '/tools/python', args: arguments_ },
+		{
+			command: '/tools/python',
+			args: arguments_,
+		},
 	);
 });
 
@@ -25,7 +28,10 @@ test('Unix Node tools reuse the initialized repository Python before host interp
 				arguments_,
 				host(platform, {}, path => path === repositoryPython || path.startsWith('/opt/homebrew/')),
 			),
-			{ command: repositoryPython, args: arguments_ },
+			{
+				command: repositoryPython,
+				args: arguments_,
+			},
 		);
 	}
 });
@@ -37,7 +43,10 @@ test('python command selects Homebrew Python on Apple Silicon', () => {
 			arguments_,
 			host('darwin', {}, path => path === homebrewPython),
 		),
-		{ command: homebrewPython, args: arguments_ },
+		{
+			command: homebrewPython,
+			args: arguments_,
+		},
 	);
 });
 
@@ -64,16 +73,9 @@ test('Python startup errors remain handled while process ownership is being coll
 		syncBuiltinESMExports();
 	});
 	syncBuiltinESMExports();
-	await assert.rejects(
-		runPython([], { cwd: resolve(import.meta.dirname, '..'), operation: 'Python fixture' }),
-		error => error === failure,
-	);
+	await assert.rejects(runPython([], { cwd: resolve(import.meta.dirname, '..'), operation: 'Python fixture' }), error => error === failure);
 });
 
-function host(
-	platform: NodeJS.Platform,
-	environment: NodeJS.ProcessEnv = {},
-	fileExists: (path: string) => boolean = () => false,
-): PythonHost {
+function host(platform: NodeJS.Platform, environment: NodeJS.ProcessEnv = {}, fileExists: (path: string) => boolean = () => false): PythonHost {
 	return { platform, environment, fileExists };
 }

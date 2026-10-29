@@ -8,8 +8,7 @@ import { ProcessExplorerEditorInput } from '../browser/processExplorerEditorInpu
 registerEditorPane({
 	id: ProcessExplorerEditorInput.ID,
 	name: localize('processExplorer.title', 'Process Explorer'),
-	canOpen: input =>
-		input.editorId === ProcessExplorerEditorInput.ID ? EditorPaneMatch.Default : EditorPaneMatch.None,
+	canOpen: input => (input.editorId === ProcessExplorerEditorInput.ID ? EditorPaneMatch.Default : EditorPaneMatch.None),
 	create: options => {
 		if (!options.instantiationService) {
 			throw new Error('Process Explorer requires Workbench services');

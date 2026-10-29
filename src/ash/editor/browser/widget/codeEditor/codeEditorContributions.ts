@@ -1,20 +1,9 @@
 import { addDisposableListener, getWindow, runWhenWindowIdle } from '../../../../base/browser/dom.js';
-import {
-	DisposableMap,
-	DisposableStore,
-	Disposable,
-	type IDisposable,
-	toDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { type IEditorContribution } from '../../../common/editorCommon.js';
 import { type ICodeEditor } from '../../editorBrowser.js';
-import {
-	EditorContributionInstantiation,
-	type EditorContributionRegistration,
-	type TextEditorContributionConfigurationContext,
-	type TextEditorContributionContext,
-} from '../../editorExtensions.js';
+import { EditorContributionInstantiation, type EditorContributionRegistration, type TextEditorContributionConfigurationContext, type TextEditorContributionContext } from '../../editorExtensions.js';
 
 interface PendingCodeEditorContribution {
 	readonly id: string;
@@ -58,10 +47,7 @@ export class CodeEditorContributions extends Disposable {
 	}
 
 	/** The initial batch configures model services before the View is constructed. */
-	configure(
-		descriptions: readonly EditorContributionRegistration[],
-		context: TextEditorContributionConfigurationContext,
-	): void {
+	configure(descriptions: readonly EditorContributionRegistration[], context: TextEditorContributionConfigurationContext): void {
 		this.assertNotDisposed();
 		if (this.descriptions) throw new Error('Code editor contributions have already been configured');
 		this.configurationContext = context;
@@ -74,8 +60,7 @@ export class CodeEditorContributions extends Disposable {
 		this.assertNotDisposed();
 		validateDescriptions(descriptions);
 		const context = this.configurationContext;
-		if (!context || !this.descriptions)
-			throw new ReferenceError('Code editor contributions have not been configured');
+		if (!context || !this.descriptions) throw new ReferenceError('Code editor contributions have not been configured');
 		const added: EditorContributionRegistration[] = [];
 		try {
 			for (const description of descriptions) {
@@ -88,9 +73,7 @@ export class CodeEditorContributions extends Disposable {
 				scope?.ids.add(description.id);
 				added.push(description);
 				if (!('ctor' in description) && description.configure) {
-					const configuration = scope
-						? scope.add(new DisposableStore())
-						: context.register(new DisposableStore());
+					const configuration = scope ? scope.add(new DisposableStore()) : context.register(new DisposableStore());
 					this.configurations.set(description.id, configuration);
 					description.configure({
 						...context,
@@ -113,10 +96,7 @@ export class CodeEditorContributions extends Disposable {
 		// Configure the complete batch before any controller reads another contribution's service.
 		for (const description of added) this.schedule(description);
 		for (const description of added) {
-			const phase =
-				'ctor' in description
-					? description.instantiation
-					: (description.instantiation ?? EditorContributionInstantiation.Eager);
+			const phase = 'ctor' in description ? description.instantiation : (description.instantiation ?? EditorContributionInstantiation.Eager);
 			if (this.completedInstantiation.has(phase)) this.instantiateById(description.id);
 		}
 	}
@@ -199,35 +179,12 @@ export class CodeEditorContributions extends Disposable {
 
 		const domNode = editor.getDomNode();
 		if (!domNode) throw new ReferenceError('Code editor contributions require an editor DOM node');
-		for (const type of [
-			'pointerdown',
-			'wheel',
-			'contextmenu',
-			'dragover',
-			'drop',
-			'keydown',
-			'beforeinput',
-			'compositionstart',
-			'paste',
-			'cut',
-		] as const) {
-			this.interactionListeners.add(
-				addDisposableListener(domNode, type, () => this.onBeforeInteractionEvent(), true),
-			);
+		for (const type of ['pointerdown', 'wheel', 'contextmenu', 'dragover', 'drop', 'keydown', 'beforeinput', 'compositionstart', 'paste', 'cut'] as const) {
+			this.interactionListeners.add(addDisposableListener(domNode, type, () => this.onBeforeInteractionEvent(), true));
 		}
 		const targetWindow = getWindow(domNode);
-		this.interactionListeners.add(
-			runWhenWindowIdle(targetWindow, () =>
-				this.instantiateSome(EditorContributionInstantiation.BeforeFirstInteraction),
-			),
-		);
-		this._register(
-			runWhenWindowIdle(
-				targetWindow,
-				() => this.instantiateSome(EditorContributionInstantiation.Eventually),
-				5_000,
-			),
-		);
+		this.interactionListeners.add(runWhenWindowIdle(targetWindow, () => this.instantiateSome(EditorContributionInstantiation.BeforeFirstInteraction)));
+		this._register(runWhenWindowIdle(targetWindow, () => this.instantiateSome(EditorContributionInstantiation.Eventually), 5_000));
 	}
 
 	saveViewState(): { [key: string]: unknown } {
@@ -264,11 +221,7 @@ export class CodeEditorContributions extends Disposable {
 	onAfterModelAttached(): IDisposable {
 		const domNode = this.editor?.getDomNode();
 		if (!domNode) return Disposable.None;
-		return runWhenWindowIdle(
-			getWindow(domNode),
-			() => this.instantiateSome(EditorContributionInstantiation.AfterFirstRender),
-			50,
-		);
+		return runWhenWindowIdle(getWindow(domNode), () => this.instantiateSome(EditorContributionInstantiation.AfterFirstRender), 50);
 	}
 
 	private instantiateSome(instantiation: EditorContributionInstantiation): void {
@@ -317,8 +270,7 @@ export class CodeEditorContributions extends Disposable {
 		try {
 			const instance = pending.create();
 			if (instance === undefined) return;
-			if (!instance || typeof instance.dispose !== 'function')
-				throw new TypeError(`Code editor contribution '${id}' did not return a disposable`);
+			if (!instance || typeof instance.dispose !== 'function') throw new TypeError(`Code editor contribution '${id}' did not return a disposable`);
 			const resources = this.resources.get(id);
 			if (!resources || resources.isDisposed) {
 				instance.dispose();
@@ -327,10 +279,7 @@ export class CodeEditorContributions extends Disposable {
 			// Preserve the installation order when the controller is already owned.
 			if (!resources.has(instance)) resources.add(instance);
 			this.instances.set(id, instance);
-			if (
-				pending.instantiation !== EditorContributionInstantiation.Eager &&
-				(typeof instance.saveViewState === 'function' || typeof instance.restoreViewState === 'function')
-			) {
+			if (pending.instantiation !== EditorContributionInstantiation.Eager && (typeof instance.saveViewState === 'function' || typeof instance.restoreViewState === 'function')) {
 				console.warn(`Editor contribution '${id}' should be eager because it owns view state.`);
 			}
 		} catch (error) {
@@ -346,8 +295,7 @@ function validateDescriptions(descriptions: readonly EditorContributionRegistrat
 			!description?.id?.trim() ||
 			('ctor' in description
 				? !description.ctor || !isInstantiation(description.instantiation)
-				: !(description.configure || description.install) ||
-					(description.instantiation !== undefined && !isInstantiation(description.instantiation)))
+				: !(description.configure || description.install) || (description.instantiation !== undefined && !isInstantiation(description.instantiation)))
 		) {
 			throw new TypeError('Code editor contribution is invalid');
 		}

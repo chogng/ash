@@ -13,21 +13,13 @@ import {
 	createAgentTraceResource,
 	type AgentTraceLocation,
 } from '../chatDebug/chatDebugEditorInput.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { EditorPaneMatch } from '../../../../browser/parts/editor/editorPane.js';
@@ -47,20 +39,14 @@ export function registerChatOpenAgentDebugPanelAction(): void {
 				});
 			}
 			override async run(accessor: ServicesAccessor, target?: string | AgentTraceLocation): Promise<void> {
-				await openAgentTrace(
-					accessor,
-					createAgentTraceResource(
-						target ?? accessor.get(IChatSessionNavigationService).getActiveConversation(),
-					),
-				);
+				await openAgentTrace(accessor, createAgentTraceResource(target ?? accessor.get(IChatSessionNavigationService).getActiveConversation()));
 			}
 		},
 	);
 	registerEditorPane({
 		id: chatDebugEditorId,
 		name: localize('chatDebugInputName', 'Agent Debug Logs'),
-		canOpen: input =>
-			input.resource.scheme === 'ash-agent-trace' ? EditorPaneMatch.Default : EditorPaneMatch.None,
+		canOpen: input => (input.resource.scheme === 'ash-agent-trace' ? EditorPaneMatch.Default : EditorPaneMatch.None),
 		create: async options => {
 			if (!options.instantiationService) {
 				throw new Error('Execution Trace requires Workbench services');
@@ -92,19 +78,14 @@ export function registerChatOpenAgentDebugPanelAction(): void {
 		defaultValue: true,
 		parse: value => {
 			if (typeof value !== 'boolean') {
-				throw new TypeError(
-					localize('agentTrace.invalidVerbosity', 'Trace accessibility verbosity must be boolean.'),
-				);
+				throw new TypeError(localize('agentTrace.invalidVerbosity', 'Trace accessibility verbosity must be boolean.'));
 			}
 			return value;
 		},
 		setting: {
 			valueType: 'boolean',
 			title: localize('agentTrace.verbosity', 'Agent Debug Logs accessibility help'),
-			description: localize(
-				'agentTrace.verbosityDescription',
-				'Announce keyboard help when Agent Debug Logs receives focus.',
-			),
+			description: localize('agentTrace.verbosityDescription', 'Announce keyboard help when Agent Debug Logs receives focus.'),
 		},
 	});
 
@@ -171,10 +152,7 @@ export function registerChatOpenAgentDebugPanelAction(): void {
 				});
 			}
 			public override async run(accessor: ServicesAccessor): Promise<void> {
-				await openAgentTrace(
-					accessor,
-					readLastAgentTraceResource(accessor.get(IStorageService)) ?? createAgentTraceResource(),
-				);
+				await openAgentTrace(accessor, readLastAgentTraceResource(accessor.get(IStorageService)) ?? createAgentTraceResource());
 			}
 		},
 	);

@@ -1,16 +1,6 @@
 import './links.css';
-import {
-	EditorAction,
-	registerEditorAction,
-	registerEditorContribution,
-	type ServicesAccessor,
-} from '../../../browser/editorFeatureRegistration.js';
-import {
-	addDisposableListener,
-	stopEvent,
-	ModifierKeyEmitter,
-	type IModifierKeyStatus,
-} from '../../../../base/browser/dom.js';
+import { EditorAction, registerEditorAction, registerEditorContribution, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
+import { addDisposableListener, stopEvent, ModifierKeyEmitter, type IModifierKeyStatus } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
@@ -25,10 +15,7 @@ import { type View } from '../../../browser/view.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { localize2 } from '../../../../nls.js';
-import {
-	ILanguageFeatureDebounceService,
-	type IFeatureDebounceInformation,
-} from '../../../common/services/languageFeatureDebounce.js';
+import { ILanguageFeatureDebounceService, type IFeatureDebounceInformation } from '../../../common/services/languageFeatureDebounce.js';
 import { StopWatch } from '../../../../base/common/stopwatch.js';
 
 /** Resolves document links and opens them through the editor's service scope. */
@@ -64,8 +51,7 @@ export class LinkDetector extends Disposable {
 		this._register(this.modifierKeys.event(() => this.updateLinkClass()));
 		this._register(
 			editor.onDidChangeConfiguration(event => {
-				if (event.hasChanged(EditorOption.links) || event.hasChanged(EditorOption.multiCursorModifier))
-					this.invalidate();
+				if (event.hasChanged(EditorOption.links) || event.hasChanged(EditorOption.multiCursorModifier)) this.invalidate();
 			}),
 		);
 		this._register(
@@ -75,45 +61,25 @@ export class LinkDetector extends Disposable {
 				this.dirtyBuiltinLines.clear();
 			}),
 		);
-		this._register(
-			addDisposableListener<PointerEvent>(viewport.domNode.domNode, 'pointermove', event => this.update(event)),
-		);
+		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, 'pointermove', event => this.update(event)));
 		this._register(addDisposableListener(viewport.domNode.domNode, 'pointerleave', () => this.clearHover()));
 		this._register(
 			addDisposableListener<PointerEvent>(viewport.domNode.domNode, 'pointerdown', event => {
-				if (
-					event.button !== 0 ||
-					!this.editor.getOption(EditorOption.links) ||
-					!this.isTrigger(event) ||
-					event.getModifierState('AltGraph')
-				)
-					return;
+				if (event.button !== 0 || !this.editor.getOption(EditorOption.links) || !this.isTrigger(event) || event.getModifierState('AltGraph')) return;
 				const target = viewport.getNearestTargetAtClientPoint({
 					clientX: event.clientX,
 					clientY: event.clientY,
 				});
-				const link =
-					target?.kind === 'text'
-						? this.links?.find(link => link.range.containsPosition(target.position))
-						: undefined;
+				const link = target?.kind === 'text' ? this.links?.find(link => link.range.containsPosition(target.position)) : undefined;
 				if (!link) return;
 				stopEvent(event);
-				const openToSide =
-					this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey'
-						? event.altKey
-						: isMacintosh
-							? event.metaKey
-							: event.ctrlKey;
+				const openToSide = this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey' ? event.altKey : isMacintosh ? event.metaKey : event.ctrlKey;
 				this.openLinkOccurrence(link, openToSide, true);
 			}),
 		);
 		this._register(
 			viewport.textModel.onDidChangeContent(change => {
-				if (
-					change.changes.some(
-						edit => edit.range.startLineNumber !== edit.range.endLineNumber || /[\r\n]/u.test(edit.text),
-					)
-				) {
+				if (change.changes.some(edit => edit.range.startLineNumber !== edit.range.endLineNumber || /[\r\n]/u.test(edit.text))) {
 					this.builtinLinks = undefined;
 					this.dirtyBuiltinLines.clear();
 				} else {
@@ -135,23 +101,20 @@ export class LinkDetector extends Disposable {
 
 	public openLinkOccurrence(occurrence: LanguageLink, openToSide: boolean, fromUserGesture = false): void {
 		void this.openerService
-			.open(occurrence.target, { openToSide, fromUserGesture, allowContributedOpeners: true })
+			.open(occurrence.target, {
+				openToSide,
+				fromUserGesture,
+				allowContributedOpeners: true,
+			})
 			.catch(this.onError);
 	}
 
 	private isTrigger(event: IModifierKeyStatus): boolean {
-		return this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey'
-			? isMacintosh
-				? event.metaKey
-				: event.ctrlKey
-			: event.altKey;
+		return this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey' ? (isMacintosh ? event.metaKey : event.ctrlKey) : event.altKey;
 	}
 
 	private updateLinkClass(): void {
-		this.viewport.domNode.domNode.classList.toggle(
-			'stanza-editor-link-target',
-			this.activeLink !== undefined && this.isTrigger(this.modifierKeys.keyStatus),
-		);
+		this.viewport.domNode.domNode.classList.toggle('stanza-editor-link-target', this.activeLink !== undefined && this.isTrigger(this.modifierKeys.keyStatus));
 	}
 
 	private update(event: PointerEvent): void {
@@ -180,9 +143,7 @@ export class LinkDetector extends Disposable {
 			if (request.signal.aborted) return;
 			this.debounceInformation.update(this.viewport.textModel, stopwatch.elapsed());
 			this.links = links;
-			this.activeLink = this.hoverPosition
-				? this.links.find(link => link.range.containsPosition(this.hoverPosition!))
-				: undefined;
+			this.activeLink = this.hoverPosition ? this.links.find(link => link.range.containsPosition(this.hoverPosition!)) : undefined;
 			this.updateLinkClass();
 		} catch (error) {
 			if (!request.signal.aborted) this.onError(error);
@@ -224,11 +185,7 @@ export class LinkDetector extends Disposable {
 		const providerRanges = links.map(link => link.range).sort(Range.compareRangesUsingStarts);
 		let providerIndex = 0;
 		for (const link of detected) {
-			while (
-				providerIndex < providerRanges.length &&
-				Position.compare(providerRanges[providerIndex].getEndPosition(), link.range.getStartPosition()) <= 0
-			)
-				providerIndex++;
+			while (providerIndex < providerRanges.length && Position.compare(providerRanges[providerIndex].getEndPosition(), link.range.getStartPosition()) <= 0) providerIndex++;
 			const candidate = providerRanges[providerIndex];
 			if (!candidate || !Range.areIntersecting(candidate, link.range)) links.push(link);
 		}
@@ -312,12 +269,7 @@ registerEditorContribution({
 	id: LinkDetector.ID,
 	install: context => {
 		if (context.kind !== 'text') return;
-		return context.instantiationService.createInstance(
-			LinkDetector,
-			context.view,
-			context.editor,
-			context.onLanguageError,
-		);
+		return context.instantiationService.createInstance(LinkDetector, context.view, context.editor, context.onLanguageError);
 	},
 });
 registerEditorAction(OpenLinkAction);

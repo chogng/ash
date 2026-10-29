@@ -25,9 +25,7 @@ test('Binary diff keeps both byte previews and metadata through working-set seri
 	const restored = EditorInputSerializers.deserialize(EditorInputSerializers.serialize(input));
 	assert.equal(binaryDiffEditorDescriptor().canOpen(restored), EditorPaneMatch.Default);
 	using services = new InstantiationService();
-	services.registerSingleton(IFileService, () =>
-		createTestFileService(new BinaryEditorTestFileSystemProvider(new Uint8Array([0x48, 0x69, 0x00, 0xff]))),
-	);
+	services.registerSingleton(IFileService, () => createTestFileService(new BinaryEditorTestFileSystemProvider(new Uint8Array([0x48, 0x69, 0x00, 0xff]))));
 	registerTestComponentServices(services, dom.window.document);
 	registerCodeEditorServices(services);
 	const pane = binaryDiffEditorDescriptor().create({ instantiationService: services });
@@ -59,9 +57,7 @@ test('historical binary comparisons restore immutable bytes without a filesystem
 				readOnly: true,
 			},
 		);
-		const restored = EditorInputSerializers.deserialize(
-			JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input))),
-		);
+		const restored = EditorInputSerializers.deserialize(JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input))));
 		using services = new InstantiationService();
 		registerTestComponentServices(services, dom.window.document);
 		registerCodeEditorServices(services);
@@ -84,10 +80,7 @@ test('historical binary comparisons restore immutable bytes without a filesystem
 				.map(decoration => decoration.range.toString()),
 			['[1,14 -> 1,19]', '[1,62 -> 1,64]'],
 		);
-		assert.match(
-			dom.window.document.querySelector('.ash-binary-editor-summary')!.textContent!,
-			/Original.*2 differing bytes/,
-		);
+		assert.match(dom.window.document.querySelector('.ash-binary-editor-summary')!.textContent!, /Original.*2 differing bytes/);
 		initializeTestLocalization('zh-CN');
 		try {
 			await pane.setInput(restored, new AbortController().signal);

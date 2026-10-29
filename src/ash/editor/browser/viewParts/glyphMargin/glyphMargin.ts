@@ -51,23 +51,14 @@ export class VisibleLineDecorationsToRender {
 }
 
 export abstract class DedupOverlay extends DynamicViewOverlay {
-	protected _render(
-		visibleStartLineNumber: number,
-		visibleEndLineNumber: number,
-		decorations: DecorationToRender[],
-	): VisibleLineDecorationsToRender[] {
+	protected _render(visibleStartLineNumber: number, visibleEndLineNumber: number, decorations: DecorationToRender[]): VisibleLineDecorationsToRender[] {
 		const output: VisibleLineDecorationsToRender[] = [];
 		for (let lineNumber = visibleStartLineNumber; lineNumber <= visibleEndLineNumber; lineNumber += 1) {
 			output[lineNumber - visibleStartLineNumber] = new VisibleLineDecorationsToRender();
 		}
 		if (decorations.length === 0) return output;
 
-		decorations.sort(
-			(left, right) =>
-				left.className.localeCompare(right.className) ||
-				left.startLineNumber - right.startLineNumber ||
-				left.endLineNumber - right.endLineNumber,
-		);
+		decorations.sort((left, right) => left.className.localeCompare(right.className) || left.startLineNumber - right.startLineNumber || left.endLineNumber - right.endLineNumber);
 		let previousClassName: string | null = null;
 		let previousEndLineIndex = 0;
 		for (const decoration of decorations) {
@@ -81,14 +72,7 @@ export abstract class DedupOverlay extends DynamicViewOverlay {
 				previousEndLineIndex = endLineIndex;
 			}
 			for (let lineIndex = startLineIndex; lineIndex <= previousEndLineIndex; lineIndex += 1) {
-				output[lineIndex]!.add(
-					new LineDecorationToRender(
-						decoration.className,
-						decoration.zIndex,
-						decoration.tooltip,
-						decoration.icon,
-					),
-				);
+				output[lineIndex]!.add(new LineDecorationToRender(decoration.className, decoration.zIndex, decoration.tooltip, decoration.icon));
 			}
 		}
 		return output;
@@ -181,12 +165,7 @@ export class GlyphMarginWidgets extends ViewPart {
 	public setWidgetPosition(widget: IGlyphMarginWidget, preference: IGlyphMarginWidgetPosition): boolean {
 		const data = this.widgets.get(widget.getId());
 		if (!data || data.widget !== widget) return false;
-		if (
-			data.preference.lane === preference.lane &&
-			data.preference.zIndex === preference.zIndex &&
-			Range.equalsRange(data.preference.range, preference.range)
-		)
-			return false;
+		if (data.preference.lane === preference.lane && data.preference.zIndex === preference.zIndex && Range.equalsRange(data.preference.range, preference.range)) return false;
 		data.preference = preference;
 		this.setShouldRender();
 		return true;
@@ -207,17 +186,11 @@ export class GlyphMarginWidgets extends ViewPart {
 		for (const data of this.widgets.values()) data.renderInfo = null;
 		const candidates: PreparedGlyphCandidate[] = [];
 		for (const data of this.widgets.values()) {
-			const viewRange = this._context.viewModel.coordinatesConverter.convertModelRangeToViewRange(
-				Range.lift(data.preference.range),
-			);
+			const viewRange = this._context.viewModel.coordinatesConverter.convertModelRangeToViewRange(Range.lift(data.preference.range));
 			const lineNumber = Math.max(viewRange.startLineNumber, context.visibleRange.startLineNumber);
 			if (lineNumber > viewRange.endLineNumber || lineNumber > context.visibleRange.endLineNumber) continue;
-			const modelPosition = this._context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(
-				new Position(lineNumber, 1),
-			);
-			const laneIndex = this._context.viewModel.glyphLanes
-				.getLanesAtLine(modelPosition.lineNumber)
-				.indexOf(data.preference.lane);
+			const modelPosition = this._context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(new Position(lineNumber, 1));
+			const laneIndex = this._context.viewModel.glyphLanes.getLanesAtLine(modelPosition.lineNumber).indexOf(data.preference.lane);
 			candidates.push({ kind: 'widget', lineNumber, laneIndex, zIndex: data.preference.zIndex, data });
 		}
 		for (const decoration of context.getDecorationsInViewport()) {
@@ -227,12 +200,8 @@ export class GlyphMarginWidgets extends ViewPart {
 			const end = Math.min(decoration.range.endLineNumber, context.visibleRange.endLineNumber);
 			const lane = decoration.options.glyphMargin?.position ?? GlyphMarginLane.Center;
 			for (let lineNumber = start; lineNumber <= end; lineNumber += 1) {
-				const modelPosition = this._context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(
-					new Position(lineNumber, 1),
-				);
-				const laneIndex = this._context.viewModel.glyphLanes
-					.getLanesAtLine(modelPosition.lineNumber)
-					.indexOf(lane);
+				const modelPosition = this._context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(new Position(lineNumber, 1));
+				const laneIndex = this._context.viewModel.glyphLanes.getLanesAtLine(modelPosition.lineNumber).indexOf(lane);
 				candidates.push({
 					kind: 'decoration',
 					lineNumber,
@@ -251,8 +220,7 @@ export class GlyphMarginWidgets extends ViewPart {
 		}
 		const prepared: PreparedModelDecoration[] = [];
 		for (const candidate of winners.values()) {
-			if (candidate.kind === 'widget')
-				candidate.data.renderInfo = { lineNumber: candidate.lineNumber, laneIndex: candidate.laneIndex };
+			if (candidate.kind === 'widget') candidate.data.renderInfo = { lineNumber: candidate.lineNumber, laneIndex: candidate.laneIndex };
 			else prepared.push(candidate);
 		}
 		this.preparedModelDecorations = prepared;
@@ -275,11 +243,7 @@ export class GlyphMarginWidgets extends ViewPart {
 			return;
 		}
 		data.domNode.setDisplay('block');
-		data.domNode.setTop(
-			context.viewportData.relativeVerticalOffset[
-				data.renderInfo.lineNumber - context.viewportData.startLineNumber
-			] ?? 0,
-		);
+		data.domNode.setTop(context.viewportData.relativeVerticalOffset[data.renderInfo.lineNumber - context.viewportData.startLineNumber] ?? 0);
 		data.domNode.setLeft(this.glyphMarginLeft + data.renderInfo.laneIndex * this.lineHeight);
 		data.domNode.setWidth(laneWidth);
 		data.domNode.setHeight(this.lineHeight);
@@ -290,21 +254,14 @@ export class GlyphMarginWidgets extends ViewPart {
 			const decoration = this.preparedModelDecorations[index];
 			const node = this.modelDecorationNodes[index] ?? this.createModelDecorationNode();
 			// Hit testing consumes the semantic lane, not the current visual lane index.
-			node.setClassName(
-				`cgmr stanza-editor-glyph-margin-decoration stanza-editor-glyph-margin-lane ${decoration.className}`,
-			);
+			node.setClassName(`cgmr stanza-editor-glyph-margin-decoration stanza-editor-glyph-margin-lane ${decoration.className}`);
 			node.setAttribute('data-glyph-margin-lane', String(decoration.lane));
-			node.setTop(
-				context.viewportData.relativeVerticalOffset[
-					decoration.lineNumber - context.viewportData.startLineNumber
-				] ?? 0,
-			);
+			node.setTop(context.viewportData.relativeVerticalOffset[decoration.lineNumber - context.viewportData.startLineNumber] ?? 0);
 			node.setLeft(this.glyphMarginLeft + decoration.laneIndex * this.lineHeight);
 			node.setWidth(laneWidth);
 			node.setHeight(context.getLineHeightForLineNumber(decoration.lineNumber));
 		}
-		while (this.modelDecorationNodes.length > this.preparedModelDecorations.length)
-			this.modelDecorationNodes.pop()?.domNode.remove();
+		while (this.modelDecorationNodes.length > this.preparedModelDecorations.length) this.modelDecorationNodes.pop()?.domNode.remove();
 	}
 
 	private createModelDecorationNode(): FastDomNode<HTMLDivElement> {
@@ -357,10 +314,5 @@ interface PreparedModelDecoration {
 }
 
 function comparePreparedGlyphCandidates(left: PreparedGlyphCandidate, right: PreparedGlyphCandidate): number {
-	return (
-		left.lineNumber - right.lineNumber ||
-		left.laneIndex - right.laneIndex ||
-		right.zIndex - left.zIndex ||
-		(left.kind === right.kind ? 0 : left.kind === 'widget' ? -1 : 1)
-	);
+	return left.lineNumber - right.lineNumber || left.laneIndex - right.laneIndex || right.zIndex - left.zIndex || (left.kind === right.kind ? 0 : left.kind === 'widget' ? -1 : 1);
 }

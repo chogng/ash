@@ -1,13 +1,7 @@
 import { ipcMain, type IpcMainEvent, type WebContents } from 'electron/main';
 import { VSBuffer } from '../../../common/buffer.js';
 import { Emitter } from '../../../common/event.js';
-import {
-	DisposableMap,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-	type IDisposable,
-} from '../../../common/lifecycle.js';
+import { DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../common/lifecycle.js';
 import { IPCServer, type ClientConnectionEvent } from '../common/ipc.js';
 
 interface RendererConnection {

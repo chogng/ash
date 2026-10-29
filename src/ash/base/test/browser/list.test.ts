@@ -127,9 +127,7 @@ test('List range selection retains its anchor through pointer, keyboard and row 
 		assert.deepEqual(list.selection, ['Second', 'Third', 'Fourth']);
 		click(2, { shiftKey: true });
 		assert.deepEqual(list.selection, ['Second', 'Third']);
-		list.element.dispatchEvent(
-			new dom.window.KeyboardEvent('keydown', { key: 'ArrowUp', shiftKey: true, bubbles: true }),
-		);
+		list.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowUp', shiftKey: true, bubbles: true }));
 		assert.deepEqual(list.selection, ['Second']);
 		list.splice(0, 0, ['Inserted']);
 		click(4, { shiftKey: true });
@@ -426,9 +424,7 @@ test('ListView renders only the managed viewport while preserving logical positi
 	assert.ok(view.element.querySelectorAll(':scope > .ash-list-row').length < 100);
 	viewport.scrollTop = 1_100;
 	viewport.dispatchEvent(new dom.window.Event('scroll'));
-	const indexes = [...view.element.querySelectorAll<HTMLElement>(':scope > .ash-list-row')].map(row =>
-		Number(row.dataset.index),
-	);
+	const indexes = [...view.element.querySelectorAll<HTMLElement>(':scope > .ash-list-row')].map(row => Number(row.dataset.index));
 	assert.ok(indexes.includes(50));
 	assert.equal(view.indexAt(1_100), 50);
 	view.dispose();
@@ -500,10 +496,7 @@ test('ListView leaves attached rows untouched during scrolling but refreshes cha
 		observer.observe(first, { attributes: true, childList: true, subtree: true });
 		try {
 			view.scrollBy(8);
-			assert.deepEqual(
-				{ mutations: observer.takeRecords().length, updates, row: view.row(0) },
-				{ mutations: 0, updates: 0, row: first },
-			);
+			assert.deepEqual({ mutations: observer.takeRecords().length, updates, row: view.row(0) }, { mutations: 0, updates: 0, row: first });
 			items[0]!.expanded = true;
 			view.rerender(0);
 			assert.equal(first.getAttribute('aria-expanded'), 'true');
@@ -650,10 +643,7 @@ test('List Home and End reveal the focused row even when its focus and selection
 		viewport.dispatchEvent(new dom.window.Event('scroll'));
 		assert.equal(list.row(index), undefined);
 		list.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key }));
-		assert.deepEqual(
-			{ index: list.activeIndex, selection: list.selection, scrollTop: list.scrollTop },
-			{ index, selection: [String(index)], scrollTop },
-		);
+		assert.deepEqual({ index: list.activeIndex, selection: list.selection, scrollTop: list.scrollTop }, { index, selection: [String(index)], scrollTop });
 		assert.ok(list.row(index));
 	}
 	dom.window.close();
@@ -873,8 +863,7 @@ test('List DnD keeps feedback across nested leave events and clears an actual le
 
 function createDndList(
 	dom: JSDOM,
-	callbacks: Pick<NonNullable<ConstructorParameters<typeof List<string>>[1]['dnd']>, 'onDragOver' | 'drop'> &
-		Partial<NonNullable<ConstructorParameters<typeof List<string>>[1]['dnd']>>,
+	callbacks: Pick<NonNullable<ConstructorParameters<typeof List<string>>[1]['dnd']>, 'onDragOver' | 'drop'> & Partial<NonNullable<ConstructorParameters<typeof List<string>>[1]['dnd']>>,
 ): List<string> {
 	return new List<string>(dom.window.document.body, {
 		dnd: { getDragURI: item => `ash://${item}`, ...callbacks },

@@ -15,29 +15,15 @@ import { InputBox } from '../../../../../base/browser/ui/inputbox/inputbox.js';
 import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
-import {
-	constObservable,
-	autorun,
-	observableSignalFromEvent,
-	observableValue,
-	transaction,
-} from '../../../../../base/common/observable.js';
+import { constObservable, autorun, observableSignalFromEvent, observableValue, transaction } from '../../../../../base/common/observable.js';
 import { getNLSLanguage, localize, localize2 } from '../../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import {
-	Severity,
-	INotificationService,
-	type INotificationHandle,
-} from '../../../../../platform/notification/common/notification.js';
+import { Severity, INotificationService, type INotificationHandle } from '../../../../../platform/notification/common/notification.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
-import type {
-	IAutomationDescriptor,
-	IAutomationRun,
-	IAutomationSchedule,
-} from '../../../../../workbench/contrib/chat/common/automations/automation.js';
+import type { IAutomationDescriptor, IAutomationRun, IAutomationSchedule } from '../../../../../workbench/contrib/chat/common/automations/automation.js';
 import { IAutomationService } from '../../../../../workbench/contrib/chat/common/automations/automationService.js';
 import { IAutomationDialogService } from '../../../../../workbench/contrib/chat/common/automations/automationDialogService.js';
 import { IAutomationRunner } from '../../../../../workbench/contrib/chat/common/automations/automationRunner.js';
@@ -72,9 +58,7 @@ interface RunRow {
 	readonly stop: Button;
 }
 
-type AutomationSelection =
-	| { readonly kind: 'plan'; readonly id: string }
-	| { readonly kind: 'run'; readonly id: string; readonly planId?: string };
+type AutomationSelection = { readonly kind: 'plan'; readonly id: string } | { readonly kind: 'run'; readonly id: string; readonly planId?: string };
 
 /** Keeps card identity and focus stable while provider-owned snapshots change. */
 export class AutomationsCardsWidget extends Disposable {
@@ -165,26 +149,11 @@ export class AutomationsCardsWidget extends Disposable {
 		empty.append(
 			emptyIcon,
 			h(document, 'h3', {}, localize('automations.emptyTitle', 'Create your first automation')),
-			h(
-				document,
-				'p',
-				{},
-				localize(
-					'automations.emptyDescription',
-					'Give your agent a task and a schedule. Start from a template, or create your own.',
-				),
-			),
+			h(document, 'p', {}, localize('automations.emptyDescription', 'Give your agent a task and a schedule. Start from a template, or create your own.')),
 		);
 		this.templates = this.createTemplates(empty);
 		const noMatches = h(document, 'div', { className: 'ash-automation-no-matches' });
-		noMatches.append(
-			h(
-				document,
-				'p',
-				{ attributes: { role: 'status' } },
-				localize('automations.noMatches', 'No automations match your filters.'),
-			),
-		);
+		noMatches.append(h(document, 'p', { attributes: { role: 'status' } }, localize('automations.noMatches', 'No automations match your filters.')));
 		this._register(
 			new Button(noMatches, {
 				...defaultButtonStyles,
@@ -200,9 +169,7 @@ export class AutomationsCardsWidget extends Disposable {
 			}),
 		);
 		plansSection.append(plansHeader, controls, empty, this.plans, noMatches);
-		const planLoading = this._register(
-			new LoadingSkeleton(plansSection, localize('automations.loading', 'Loading automations…'), 'cards', 4),
-		);
+		const planLoading = this._register(new LoadingSkeleton(plansSection, localize('automations.loading', 'Loading automations…'), 'cards', 4));
 		const historySection = h(document, 'section', {
 			className: 'ash-automation-history-section',
 			attributes: { 'aria-label': localize('automations.history', 'Run history') },
@@ -211,48 +178,32 @@ export class AutomationsCardsWidget extends Disposable {
 		const heading = h(document, 'h2', {}, localize('automations.history', 'Run history'));
 		historyHeader.append(
 			heading,
-			h(
-				document,
-				'p',
-				{ className: 'ash-automation-section-description' },
-				localize('automations.historyHint', 'Review results and pick up where your agent left off.'),
-			),
+			h(document, 'p', { className: 'ash-automation-section-description' }, localize('automations.historyHint', 'Review results and pick up where your agent left off.')),
 		);
 		const historyMessage = h(document, 'p', { className: 'ash-automation-notice', attributes: { role: 'status' } });
 		const historyEmpty = h(
 			document,
 			'p',
 			{ className: 'ash-automation-empty-history' },
-			localize(
-				'automations.emptyHistory',
-				'No runs yet. Run an automation now or wait for its next scheduled time.',
-			),
+			localize('automations.emptyHistory', 'No runs yet. Run an automation now or wait for its next scheduled time.'),
 		);
 		this.history = h(document, 'div', { className: 'ash-automation-history' });
 		historySection.append(historyHeader, historyMessage, historyEmpty, this.history);
-		const historyLoading = this._register(
-			new LoadingSkeleton(historySection, localize('sessions.loadingHistory', 'Loading history…'), 'list', 3),
-		);
+		const historyLoading = this._register(new LoadingSkeleton(historySection, localize('sessions.loadingHistory', 'Loading history…'), 'list', 3));
 		const overview = h(document, 'div', { className: 'ash-automation-overview' });
 		const notificationPreference = h(document, 'label', { className: 'ash-automation-notification-preference' });
 		const notifySuccess = h(document, 'input', { properties: { type: 'checkbox' } });
-		notificationPreference.append(
-			notifySuccess,
-			h(document, 'span', {}, localize('automations.notifySuccess', 'Notify when an automation completes')),
-		);
+		notificationPreference.append(notifySuccess, h(document, 'span', {}, localize('automations.notifySuccess', 'Notify when an automation completes')));
 		const configurationChanged = observableSignalFromEvent(this, configuration.onDidChangeConfiguration);
 		this._register(
 			autorun(reader => {
 				configurationChanged.read(reader);
-				notifySuccess.checked =
-					configuration.getValue<boolean>('sessions.automations.notifyOnSuccess') === true;
+				notifySuccess.checked = configuration.getValue<boolean>('sessions.automations.notifyOnSuccess') === true;
 			}),
 		);
 		this._register(
 			addDisposableListener(notifySuccess, 'change', () => {
-				void configuration
-					.updateValue('sessions.automations.notifyOnSuccess', notifySuccess.checked)
-					.catch(error => this.notifications.error(String(error)));
+				void configuration.updateValue('sessions.automations.notifyOnSuccess', notifySuccess.checked).catch(error => this.notifications.error(String(error)));
 			}),
 		);
 		this.attention = h(document, 'section', {
@@ -276,16 +227,12 @@ export class AutomationsCardsWidget extends Disposable {
 		);
 		this._register(
 			CommandsRegistry.register('sessions.automations.openRun', (_accessor, id) => {
-				if (typeof id === 'string' && this.automations.runs.get().some(run => run.id === id))
-					this.openDetails({ kind: 'run', id });
+				if (typeof id === 'string' && this.automations.runs.get().some(run => run.id === id)) this.openDetails({ kind: 'run', id });
 			}),
 		);
 		this._register(
 			addDisposableListener(this.element, 'focusin', event => {
-				if (
-					!this.element.contains(event.relatedTarget as Node) &&
-					configuration.getValue<boolean>(AccessibilityVerbositySettingId.Automations)
-				)
+				if (!this.element.contains(event.relatedTarget as Node) && configuration.getValue<boolean>(AccessibilityVerbositySettingId.Automations))
 					status(localize('automations.helpHint', 'Press Alt+F1 for Automations keyboard help.'));
 			}),
 		);
@@ -309,12 +256,7 @@ export class AutomationsCardsWidget extends Disposable {
 				for (const template of this.templates) template.enabled = canCreate;
 				for (const item of filterButtons) item.button.checked = filter === item.value;
 				historyMessage.textContent =
-					historyState === 'error'
-						? localize(
-								'automations.historyRefreshFailed',
-								'Run history could not be refreshed. Showing the last available history. Use Refresh to try again.',
-							)
-						: '';
+					historyState === 'error' ? localize('automations.historyRefreshFailed', 'Run history could not be refreshed. Showing the last available history. Use Refresh to try again.') : '';
 				historyMessage.hidden = !historyMessage.textContent;
 				this.message.textContent =
 					state === 'loading'
@@ -322,10 +264,7 @@ export class AutomationsCardsWidget extends Disposable {
 						: state === 'error'
 							? localize('automations.loadFailed', 'Could not load automations.')
 							: state === 'unavailable'
-								? localize(
-										'automations.unavailable',
-										'The owning automation host is unavailable. Saved results may be out of date.',
-									)
+								? localize('automations.unavailable', 'The owning automation host is unavailable. Saved results may be out of date.')
 								: '';
 				this.message.hidden = !this.message.textContent || state === 'loading';
 				planLoading.setVisible(state === 'loading' && !plans.length);
@@ -366,30 +305,21 @@ export class AutomationsCardsWidget extends Disposable {
 		const templates = [
 			{
 				name: localize('automations.template.briefing', 'Daily briefing'),
-				prompt: localize(
-					'automations.template.briefingPrompt',
-					'Review recent activity in this project. Summarize progress, flag blockers, and suggest the next priorities.',
-				),
+				prompt: localize('automations.template.briefingPrompt', 'Review recent activity in this project. Summarize progress, flag blockers, and suggest the next priorities.'),
 				weekdays: [1, 2, 3, 4, 5, 6, 7],
 				hour: 9,
 				icon: Lxicon.calendar,
 			},
 			{
 				name: localize('automations.template.review', 'Review changes'),
-				prompt: localize(
-					'automations.template.reviewPrompt',
-					'Review recent code changes for bugs and missing tests. Summarize actionable findings with file references.',
-				),
+				prompt: localize('automations.template.reviewPrompt', 'Review recent code changes for bugs and missing tests. Summarize actionable findings with file references.'),
 				weekdays: [1, 2, 3, 4, 5],
 				hour: 18,
 				icon: Lxicon.code,
 			},
 			{
 				name: localize('automations.template.recap', 'Weekly recap'),
-				prompt: localize(
-					'automations.template.recapPrompt',
-					'Summarize this week’s project activity, completed work, and unresolved questions. Suggest priorities for next week.',
-				),
+				prompt: localize('automations.template.recapPrompt', 'Summarize this week’s project activity, completed work, and unresolved questions. Suggest priorities for next week.'),
 				weekdays: [5],
 				hour: 17,
 				icon: Lxicon.check,
@@ -484,10 +414,7 @@ export class AutomationsCardsWidget extends Disposable {
 						label: '',
 						onClick: () => {
 							const current = this.automations.getAutomation(plan.id);
-							if (current)
-								void this.perform(plan.id, () =>
-									this.automations.updateAutomation(plan.id, { enabled: !current.enabled }),
-								);
+							if (current) void this.perform(plan.id, () => this.automations.updateAutomation(plan.id, { enabled: !current.enabled }));
 						},
 					}),
 				);
@@ -511,22 +438,12 @@ export class AutomationsCardsWidget extends Disposable {
 			}
 			card.title.label = plan.name;
 			card.title.setTitle(plan.name);
-			const host =
-				providers.find(provider => provider.id === plan.target.providerId)?.label ??
-				localize('automations.hostOffline', 'Host unavailable');
-			card.element.setAttribute(
-				'aria-label',
-				multipleHosts ? localize('automations.hostedTitle', '{0} · {1}', plan.name, host) : plan.name,
-			);
-			card.state.textContent = plan.enabled
-				? localize('automations.enabled', 'Enabled')
-				: localize('automations.paused', 'Paused');
+			const host = providers.find(provider => provider.id === plan.target.providerId)?.label ?? localize('automations.hostOffline', 'Host unavailable');
+			card.element.setAttribute('aria-label', multipleHosts ? localize('automations.hostedTitle', '{0} · {1}', plan.name, host) : plan.name);
+			card.state.textContent = plan.enabled ? localize('automations.enabled', 'Enabled') : localize('automations.paused', 'Paused');
 			card.element.dataset.enabled = String(plan.enabled);
 			card.element.hidden =
-				(filter !== 'all' && plan.enabled !== (filter === 'enabled')) ||
-				![plan.name, plan.prompt, plan.target.directory, host].some(value =>
-					value.toLocaleLowerCase().includes(query),
-				);
+				(filter !== 'all' && plan.enabled !== (filter === 'enabled')) || ![plan.name, plan.prompt, plan.target.directory, host].some(value => value.toLocaleLowerCase().includes(query));
 			card.prompt.textContent = plan.prompt;
 			card.schedule.textContent = this.scheduleLabel(plan.schedule);
 			card.directory.textContent = multipleHosts
@@ -536,14 +453,8 @@ export class AutomationsCardsWidget extends Disposable {
 			card.detail.textContent =
 				plan.nextRunAt === null
 					? localize('automations.noScheduledRun', 'No scheduled run')
-					: localize(
-							'automations.nextRun',
-							'Next {0}',
-							new Date(plan.nextRunAt).toLocaleString(getNLSLanguage()),
-						);
-			card.pause.label = plan.enabled
-				? localize('automations.pause', 'Pause')
-				: localize('automations.enable', 'Enable');
+					: localize('automations.nextRun', 'Next {0}', new Date(plan.nextRunAt).toLocaleString(getNLSLanguage()));
+			card.pause.label = plan.enabled ? localize('automations.pause', 'Pause') : localize('automations.enable', 'Enable');
 			const idle = !this.pending.has(plan.id);
 			card.pause.enabled = idle && this.automations.canUpdateAutomation(plan.id);
 			card.run.enabled = idle && this.automations.canRunAutomation(plan.id);
@@ -595,14 +506,7 @@ export class AutomationsCardsWidget extends Disposable {
 						label: localize('automations.openConversation', 'Open conversation'),
 						onClick: () => {
 							const current = this.automations.runs.get().find(item => item.id === run.id);
-							if (current?.sessionId && current.threadId)
-								void this.perform(run.id, () =>
-									this.navigation.openConversation(
-										current.sessionId!,
-										current.threadId!,
-										current.providerId,
-									),
-								);
+							if (current?.sessionId && current.threadId) void this.perform(run.id, () => this.navigation.openConversation(current.sessionId!, current.threadId!, current.providerId));
 						},
 					}),
 				);
@@ -621,12 +525,8 @@ export class AutomationsCardsWidget extends Disposable {
 				row = { lifetime, element, title, details, state, time, text, open, stop };
 				this.rows.set(run.id, row);
 			}
-			const host =
-				providers.find(provider => provider.id === run.providerId)?.label ??
-				localize('automations.hostOffline', 'Host unavailable');
-			const title = multipleHosts
-				? localize('automations.hostedTitle', '{0} · {1}', run.definition.name, host)
-				: run.definition.name;
+			const host = providers.find(provider => provider.id === run.providerId)?.label ?? localize('automations.hostOffline', 'Host unavailable');
+			const title = multipleHosts ? localize('automations.hostedTitle', '{0} · {1}', run.definition.name, host) : run.definition.name;
 			row.details.label = title;
 			row.details.domNode.setAttribute('aria-label', localize('automations.viewRun', 'View run: {0}', title));
 			row.details.setTitle(title);
@@ -636,10 +536,7 @@ export class AutomationsCardsWidget extends Disposable {
 			row.time.textContent = new Date(run.scheduledAt).toLocaleString(getNLSLanguage());
 			row.text.textContent = run.message ?? '';
 			row.text.hidden = !run.message;
-			row.open.label =
-				run.status === 'needsInput'
-					? localize('automations.continueChat', 'Continue in Chat')
-					: localize('automations.openConversation', 'Open conversation');
+			row.open.label = run.status === 'needsInput' ? localize('automations.continueChat', 'Continue in Chat') : localize('automations.openConversation', 'Open conversation');
 			row.open.domNode.hidden = !run.sessionId || !run.threadId;
 			row.stop.domNode.hidden = !this.automations.canStopRun(run);
 			row.stop.enabled = row.open.enabled = !this.pending.has(run.id);
@@ -672,12 +569,7 @@ export class AutomationsCardsWidget extends Disposable {
 				});
 				this.attentionItems.set(run.id, button);
 			}
-			button.label = localize(
-				'automations.attentionItem',
-				'{0} · {1}',
-				run.definition.name,
-				automationRunStatusLabel(run.status),
-			);
+			button.label = localize('automations.attentionItem', '{0} · {1}', run.definition.name, automationRunStatusLabel(run.status));
 		}
 		this.attention.hidden = items.length === 0;
 	}
@@ -699,13 +591,9 @@ export class AutomationsCardsWidget extends Disposable {
 		lifetime.add(
 			new Button(this.details, {
 				...defaultButtonStyles,
-				label:
-					selected.kind === 'run' && selected.planId
-						? localize('automations.backToTask', 'Back to automation')
-						: localize('automations.backToList', 'Back to automations'),
+				label: selected.kind === 'run' && selected.planId ? localize('automations.backToTask', 'Back to automation') : localize('automations.backToList', 'Back to automations'),
 				onClick: () => {
-					if (selected.kind === 'run' && selected.planId)
-						this.openDetails({ kind: 'plan', id: selected.planId });
+					if (selected.kind === 'run' && selected.planId) this.openDetails({ kind: 'plan', id: selected.planId });
 					else {
 						this.selection.set(undefined, undefined);
 						if (this.returnFocus?.isConnected) this.returnFocus.focus();
@@ -722,14 +610,7 @@ export class AutomationsCardsWidget extends Disposable {
 		const facts = h(document, 'dl', { className: 'ash-automation-facts' });
 		const prompt = h(document, 'p', { className: 'ash-automation-prompt' });
 		const notice = h(document, 'p', { className: 'ash-automation-notice', attributes: { role: 'status' } });
-		this.details.append(
-			header,
-			actions,
-			notice,
-			facts,
-			h(document, 'h3', {}, localize('automations.instructions', 'Instructions')),
-			prompt,
-		);
+		this.details.append(header, actions, notice, facts, h(document, 'h3', {}, localize('automations.instructions', 'Instructions')), prompt);
 		const fact = (label: string): HTMLElement => {
 			const value = h(document, 'dd');
 			const group = h(document, 'div');
@@ -750,10 +631,7 @@ export class AutomationsCardsWidget extends Disposable {
 					presentation: 'secondary',
 					onClick: () => {
 						const plan = this.automations.getAutomation(selected.id);
-						if (plan)
-							void this.perform('edit:' + plan.id, () =>
-								this.dialogs.showAutomationDialog({ existing: plan }),
-							);
+						if (plan) void this.perform('edit:' + plan.id, () => this.dialogs.showAutomationDialog({ existing: plan }));
 					},
 				}),
 			);
@@ -795,10 +673,7 @@ export class AutomationsCardsWidget extends Disposable {
 					label: '',
 					onClick: () => {
 						const plan = this.automations.getAutomation(selected.id);
-						if (plan)
-							void this.perform(plan.id, () =>
-								this.automations.updateAutomation(plan.id, { enabled: !plan.enabled }),
-							);
+						if (plan) void this.perform(plan.id, () => this.automations.updateAutomation(plan.id, { enabled: !plan.enabled }));
 					},
 				}),
 			);
@@ -815,15 +690,7 @@ export class AutomationsCardsWidget extends Disposable {
 			);
 			this.details.append(h(document, 'h3', {}, localize('automations.history', 'Run history')));
 			const history = h(document, 'div', { className: 'ash-automation-detail-history' });
-			const empty = h(
-				document,
-				'p',
-				{},
-				localize(
-					'automations.emptyHistory',
-					'No runs yet. Run an automation now or wait for its next scheduled time.',
-				),
-			);
+			const empty = h(document, 'p', {}, localize('automations.emptyHistory', 'No runs yet. Run an automation now or wait for its next scheduled time.'));
 			this.details.append(history, empty);
 			const links = new Map<string, Button>();
 			lifetime.add(
@@ -838,35 +705,21 @@ export class AutomationsCardsWidget extends Disposable {
 					const runs = this.automations.runs.read(reader).filter(run => run.automationId === selected.id);
 					const providers = this.automations.availableProviders.read(reader);
 					heading.textContent = plan?.name ?? localize('automations.deleted', 'Deleted automation');
-					state.textContent = plan?.enabled
-						? localize('automations.enabled', 'Enabled')
-						: localize('automations.paused', 'Paused');
+					state.textContent = plan?.enabled ? localize('automations.enabled', 'Enabled') : localize('automations.paused', 'Paused');
 					prompt.textContent = plan?.prompt ?? '';
 					directory.textContent = plan?.target.directory ?? '';
 					schedule.textContent = plan ? this.scheduleLabel(plan.schedule) : '';
 					revision.textContent = plan ? String(plan.revision) : '';
-					next.textContent = plan?.nextRunAt
-						? new Date(plan.nextRunAt).toLocaleString(getNLSLanguage())
-						: localize('automations.noScheduledRun', 'No scheduled run');
+					next.textContent = plan?.nextRunAt ? new Date(plan.nextRunAt).toLocaleString(getNLSLanguage()) : localize('automations.noScheduledRun', 'No scheduled run');
 					const provider = providers.find(provider => provider.id === plan?.target.providerId);
 					host.textContent = provider?.label ?? localize('automations.hostOffline', 'Host unavailable');
-					edit.enabled =
-						!plan?.kind &&
-						this.automations.canUpdateAutomation(selected.id) &&
-						!this.pending.has('edit:' + selected.id);
+					edit.enabled = !plan?.kind && this.automations.canUpdateAutomation(selected.id) && !this.pending.has('edit:' + selected.id);
 					run.enabled = this.automations.canRunAutomation(selected.id) && !this.pending.has(selected.id);
 					duplicate.enabled = !plan?.kind && !!provider && !this.pending.has('duplicate:' + selected.id);
-					pause.label = plan?.enabled
-						? localize('automations.pause', 'Pause')
-						: localize('automations.enable', 'Enable');
+					pause.label = plan?.enabled ? localize('automations.pause', 'Pause') : localize('automations.enable', 'Enable');
 					pause.enabled = this.automations.canUpdateAutomation(selected.id) && !this.pending.has(selected.id);
-					notice.textContent = runs.some(
-						run => !['completed', 'failed', 'stopped', 'skipped'].includes(run.status),
-					)
-						? localize(
-								'automations.alreadyRunning',
-								'This automation has an unfinished run. Open its details to review it or stop it before starting another run.',
-							)
+					notice.textContent = runs.some(run => !['completed', 'failed', 'stopped', 'skipped'].includes(run.status))
+						? localize('automations.alreadyRunning', 'This automation has an unfinished run. Open its details to review it or stop it before starting another run.')
 						: '';
 					notice.hidden = !notice.textContent;
 					empty.hidden = runs.length > 0;
@@ -930,49 +783,14 @@ export class AutomationsCardsWidget extends Disposable {
 					const result = await this.automations.readRunResult(run);
 					if (current !== generation) return;
 					output.textContent = result.output;
-					resultState.textContent = result.output
-						? ''
-						: localize('automations.noResult', 'No final response has been recorded for this run.');
+					resultState.textContent = result.output ? '' : localize('automations.noResult', 'No final response has been recorded for this run.');
 					resultState.hidden = !!result.output;
-					if (result.files === undefined)
-						files.append(
-							h(
-								document,
-								'li',
-								{},
-								localize(
-									'automations.filesUnavailable',
-									'File changes could not be loaded. Refresh the result to try again.',
-								),
-							),
-						);
-					else if (!result.files.length)
-						files.append(
-							h(document, 'li', {}, localize('automations.noFiles', 'No recorded file changes.')),
-						);
-					else
-						for (const file of result.files)
-							files.append(
-								h(
-									document,
-									'li',
-									{},
-									localize(
-										'automations.fileSummary',
-										'{0} · +{1} −{2}',
-										file.path,
-										file.additions,
-										file.deletions,
-									),
-								),
-							);
+					if (result.files === undefined) files.append(h(document, 'li', {}, localize('automations.filesUnavailable', 'File changes could not be loaded. Refresh the result to try again.')));
+					else if (!result.files.length) files.append(h(document, 'li', {}, localize('automations.noFiles', 'No recorded file changes.')));
+					else for (const file of result.files) files.append(h(document, 'li', {}, localize('automations.fileSummary', '{0} · +{1} −{2}', file.path, file.additions, file.deletions)));
 				} catch (error) {
 					if (current === generation)
-						resultState.textContent = localize(
-							'automations.resultFailed',
-							'Could not load the result: {0}',
-							error instanceof Error ? error.message : String(error),
-						);
+						resultState.textContent = localize('automations.resultFailed', 'Could not load the result: {0}', error instanceof Error ? error.message : String(error));
 				}
 			};
 			const refresh = lifetime.add(
@@ -991,10 +809,7 @@ export class AutomationsCardsWidget extends Disposable {
 					label: localize('automations.openConversation', 'Open conversation'),
 					onClick: () => {
 						const run = this.automations.runs.get().find(run => run.id === selected.id);
-						if (run?.sessionId && run.threadId)
-							void this.perform(run.id, () =>
-								this.navigation.openConversation(run.sessionId!, run.threadId!, run.providerId),
-							);
+						if (run?.sessionId && run.threadId) void this.perform(run.id, () => this.navigation.openConversation(run.sessionId!, run.threadId!, run.providerId));
 					},
 				}),
 			);
@@ -1025,35 +840,25 @@ export class AutomationsCardsWidget extends Disposable {
 					this.automations.availableProviders.read(reader);
 					this.automations.automations.read(reader);
 					this.pendingChanged.read(reader);
-					heading.textContent =
-						run?.definition.name ?? localize('automations.runUnavailable', 'Run unavailable');
+					heading.textContent = run?.definition.name ?? localize('automations.runUnavailable', 'Run unavailable');
 					state.textContent = run ? automationRunStatusLabel(run.status) : '';
 					prompt.textContent = run?.definition.prompt ?? '';
 					directory.textContent = run?.definition.target.directory ?? '';
 					schedule.textContent = run ? this.scheduleLabel(run.definition.schedule) : '';
 					revision.textContent = run ? String(run.revision) : '';
-					const time = (value: number | null | undefined) =>
-						value == null ? '—' : new Date(value).toLocaleString(getNLSLanguage());
+					const time = (value: number | null | undefined) => (value == null ? '—' : new Date(value).toLocaleString(getNLSLanguage()));
 					scheduled.textContent = time(run?.scheduledAt);
 					started.textContent = time(run?.startedAt);
 					finished.textContent = time(run?.finishedAt);
 					notice.textContent =
 						run?.message ??
-						(run?.status === 'needsInput'
-							? localize(
-									'automations.inputNeeded',
-									'This run is waiting for your input. Open its conversation to review the request and respond.',
-								)
-							: '');
+						(run?.status === 'needsInput' ? localize('automations.inputNeeded', 'This run is waiting for your input. Open its conversation to review the request and respond.') : '');
 					notice.hidden = !notice.textContent;
 					open.hidden = !run?.sessionId || !run.threadId;
 					stop.hidden = !run || !this.automations.canStopRun(run);
 					stop.enabled = open.enabled = !this.pending.has(selected.id);
 					retry.hidden = !run || !['completed', 'failed', 'stopped', 'skipped'].includes(run.status);
-					retry.enabled =
-						!!run &&
-						this.automations.canRunAutomation(run.automationId) &&
-						!this.pending.has(run.automationId);
+					retry.enabled = !!run && this.automations.canRunAutomation(run.automationId) && !this.pending.has(run.automationId);
 					refresh.enabled = !!run && this.automations.canCreateAutomation(run.providerId);
 					const key = run ? `${run.id}:${run.status}:${run.turnId}:${run.finishedAt}` : '';
 					if (run && key !== resultKey) {
@@ -1073,11 +878,7 @@ export class AutomationsCardsWidget extends Disposable {
 	private scheduleLabel(schedule: IAutomationSchedule): string {
 		switch (schedule.type) {
 			case 'once':
-				return localize(
-					'automations.scheduleOnce',
-					'Once · {0}',
-					new Date(schedule.at).toLocaleString(getNLSLanguage()),
-				);
+				return localize('automations.scheduleOnce', 'Once · {0}', new Date(schedule.at).toLocaleString(getNLSLanguage()));
 			case 'interval':
 				return localize('automations.scheduleInterval', 'Every {0} minutes', schedule.minutes);
 			case 'weekly': {
@@ -1093,18 +894,10 @@ export class AutomationsCardsWidget extends Disposable {
 				const dayLabel =
 					schedule.weekdays.length === 7
 						? localize('automations.everyDay', 'Every day')
-						: schedule.weekdays.length === 5 &&
-							  [1, 2, 3, 4, 5].every(day => schedule.weekdays.includes(day))
+						: schedule.weekdays.length === 5 && [1, 2, 3, 4, 5].every(day => schedule.weekdays.includes(day))
 							? localize('automations.weekdays', 'Weekdays')
 							: schedule.weekdays.map(day => days[day - 1]).join(', ');
-				return localize(
-					'automations.scheduleWeekly',
-					'{0} · {1}:{2} ({3})',
-					dayLabel,
-					String(schedule.hour).padStart(2, '0'),
-					String(schedule.minute).padStart(2, '0'),
-					schedule.timezone,
-				);
+				return localize('automations.scheduleWeekly', '{0} · {1}:{2} ({3})', dayLabel, String(schedule.hour).padStart(2, '0'), String(schedule.minute).padStart(2, '0'), schedule.timezone);
 			}
 		}
 	}
@@ -1149,12 +942,7 @@ export class AutomationsCardsWidget extends Disposable {
 
 export class AutomationsCustomView extends AbstractCustomView {
 	readonly title = constObservable(localize('automations.title', 'Automations'));
-	override readonly description = constObservable(
-		localize(
-			'automations.pageDescription',
-			'Let your agent handle recurring work. Manage schedules and pick up the results here.',
-		),
-	);
+	override readonly description = constObservable(localize('automations.pageDescription', 'Let your agent handle recurring work. Manage schedules and pick up the results here.'));
 	private widget: AutomationsCardsWidget | undefined;
 
 	constructor(@IInstantiationService private readonly instantiation: IInstantiationService) {
@@ -1222,9 +1010,7 @@ export class AutomationsCustomViewContribution extends Disposable {
 						.getProviders()
 						.filter(
 							provider =>
-								provider.automations &&
-								provider.automations.catalogueState.read(reader) === 'ready' &&
-								(provider.automations.historyState?.read(reader) ?? 'ready') === 'ready',
+								provider.automations && provider.automations.catalogueState.read(reader) === 'ready' && (provider.automations.historyState?.read(reader) ?? 'ready') === 'ready',
 						)
 						.map(provider => provider.id),
 				);
@@ -1247,17 +1033,11 @@ export class AutomationsCustomViewContribution extends Disposable {
 							? Severity.Error
 							: run.status === 'needsInput'
 								? Severity.Warning
-								: run.status === 'completed' &&
-									  configuration.getValue<boolean>('sessions.automations.notifyOnSuccess') === true
+								: run.status === 'completed' && configuration.getValue<boolean>('sessions.automations.notifyOnSuccess') === true
 									? Severity.Info
 									: undefined;
 					if (severity === undefined) continue;
-					const message = localize(
-						'automations.runFailed',
-						'Automation {0}: {1}',
-						run.definition.name,
-						run.message ?? automationRunStatusLabel(run.status),
-					);
+					const message = localize('automations.runFailed', 'Automation {0}: {1}', run.definition.name, run.message ?? automationRunStatusLabel(run.status));
 					const notice = notifications.notify({
 						severity,
 						message,

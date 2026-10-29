@@ -25,10 +25,7 @@ suite('sessionsCreator browser component', () => {
 					sessionsContent.evaluate(content => {
 						const contentBounds = content.getBoundingClientRect();
 						const viewBounds = content.querySelector('.ash-sessions-chat-view')!.getBoundingClientRect();
-						return [
-							Math.round(viewBounds.y - contentBounds.y),
-							Math.round(viewBounds.height - contentBounds.height),
-						];
+						return [Math.round(viewBounds.y - contentBounds.y), Math.round(viewBounds.height - contentBounds.height)];
 					}),
 				)
 				.toEqual([0, 0]);
@@ -47,26 +44,17 @@ suite('sessionsCreator browser component', () => {
 			);
 			const navigation = page.locator('.ash-sessions-activity-content');
 			if (session === 2) {
-				await page
-					.locator('.ash-window-mode-control')
-					.getByRole('button', { name: 'Chat / Agents', exact: true })
-					.click();
+				await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 				await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
 			}
 			if (session === 1) {
-				await page
-					.locator('.ash-window-mode-control')
-					.getByRole('button', { name: 'Code', exact: true })
-					.click();
+				await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 			} else {
 				await navigation.getByRole('button', { name: /^New(?:\.|$)/u }).click();
 			}
 			const chat = page.locator('.ash-sessions-chat-slot :is(.ash-chat,.ash-cowork):visible').first();
 			await expect(chat.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)')).toBeVisible();
-			await expect(chat.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)')).toHaveAttribute(
-				'aria-busy',
-				'false',
-			);
+			await expect(chat.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)')).toHaveAttribute('aria-busy', 'false');
 			if (session === 2) {
 				await chat.getByRole('button', { name: 'Dismiss tip', exact: true }).click();
 			}
@@ -78,19 +66,10 @@ suite('sessionsCreator browser component', () => {
 				};
 				document.addEventListener('ash-integration-composer-sampling-complete', finish, { once: true });
 				const sample = (): void => {
-					const composer = document.querySelector(
-						'.ash-sessions-chat-slot.active :is(.ash-sessions-chat-input,.ash-sessions-cowork-input):not([hidden])',
-					)!;
+					const composer = document.querySelector('.ash-sessions-chat-slot.active :is(.ash-sessions-chat-input,.ash-sessions-cowork-input):not([hidden])')!;
 					const card = composer.querySelector(':is(.ash-chat-input-container,.ash-cowork-input-container)')!;
 					const rect = composer.getBoundingClientRect();
-					samples.push([
-						rect.x,
-						rect.y,
-						rect.width,
-						rect.height,
-						card.getBoundingClientRect().y,
-						card.getBoundingClientRect().height,
-					]);
+					samples.push([rect.x, rect.y, rect.width, rect.height, card.getBoundingClientRect().y, card.getBoundingClientRect().height]);
 				};
 				const observer = new MutationObserver(sample);
 				observer.observe(document.querySelector('[data-part="sessions"]')!, { childList: true, subtree: true });
@@ -108,15 +87,10 @@ suite('sessionsCreator browser component', () => {
 			for (let click = 0; click < 6; click++) {
 				await page.locator('[data-action-id="sessions.newSession"] button').click();
 			}
-			await expect(chat.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)')).toHaveAttribute(
-				'aria-busy',
-				'false',
-			);
+			await expect(chat.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)')).toHaveAttribute('aria-busy', 'false');
 			await page.evaluate(() => document.dispatchEvent(new Event('ash-integration-composer-sampling-complete')));
 			const samples = await sampling;
-			const changes = samples
-				.slice(1)
-				.filter((sample, index) => sample.some((value, axis) => Math.abs(value - samples[index]![axis]!) > 1));
+			const changes = samples.slice(1).filter((sample, index) => sample.some((value, axis) => Math.abs(value - samples[index]![axis]!) > 1));
 			expect(changes, JSON.stringify([...new Set(samples.map(sample => JSON.stringify(sample)))])).toEqual([]);
 		}
 	});

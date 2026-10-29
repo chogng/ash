@@ -4,18 +4,11 @@ import type { IContextMenuDelegate } from '../../../../../base/browser/contextme
 import { IContextMenuService, IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import {
-	ILanguageServerService,
-	type LanguageServerControl,
-	type LanguageServerSnapshot,
-} from '../../../../../platform/language/common/languageServerService.js';
+import { ILanguageServerService, type LanguageServerControl, type LanguageServerSnapshot } from '../../../../../platform/language/common/languageServerService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
-import {
-	registerTestWorkbenchInteractionServices,
-	workbenchInstantiationService,
-} from '../../../../test/browser/workbenchTestServices.js';
+import { registerTestWorkbenchInteractionServices, workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { DisposableStore, Disposable } from '../../../../../base/common/lifecycle.js';
 import { IOutputService } from '../../../output/common/output.js';
 import assert from 'node:assert/strict';
@@ -116,14 +109,8 @@ test('language-server status service publishes channels and only projects active
 			done: false,
 		},
 	});
-	assert.equal(
-		statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text,
-		'rust-analyzer: Indexing (50%): 1/2 files',
-	);
-	assert.equal(
-		statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.tooltip,
-		'rust-analyzer: Indexing (50%): 1/2 files',
-	);
+	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, 'rust-analyzer: Indexing (50%): 1/2 files');
+	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.tooltip, 'rust-analyzer: Indexing (50%): 1/2 files');
 	events.fire({
 		method: 'language/serverProgress',
 		params: {
@@ -135,10 +122,7 @@ test('language-server status service publishes channels and only projects active
 			done: false,
 		},
 	});
-	assert.equal(
-		statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text,
-		'rust-analyzer: Indexing (68%): 2/3 files',
-	);
+	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, 'rust-analyzer: Indexing (68%): 2/3 files');
 	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.id, 'status.progress');
 	await statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.run?.();
 	assert.deepEqual(reveals, [['language-server.rust-analyzer', 'take']]);
@@ -175,10 +159,7 @@ for (const multiRoot of [false, true]) {
 		using resources = new DisposableStore();
 		const services = workbenchInstantiationService(resources);
 		const output = services.get(IOutputService);
-		const folders = [
-			{ id: '3dad1685'.repeat(8), name: 'ash', uri: URI.file('/ash'), index: 0 },
-			...(multiRoot ? [{ id: 'api', name: 'api', uri: URI.file('/api'), index: 1 }] : []),
-		];
+		const folders = [{ id: '3dad1685'.repeat(8), name: 'ash', uri: URI.file('/ash'), index: 0 }, ...(multiRoot ? [{ id: 'api', name: 'api', uri: URI.file('/api'), index: 1 }] : [])];
 		using workspace = new TestWorkspaceService({ id: 'output-labels', folders });
 		using service = createService(services, events, { workspace });
 		for (const folder of folders) {
@@ -224,10 +205,7 @@ test('progress keeps the server and directory visible when concurrent tasks fini
 			done: false,
 		},
 	});
-	assert.equal(
-		statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text,
-		'rust-analyzer — backend: Indexing (68%)',
-	);
+	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, 'rust-analyzer — backend: Indexing (68%)');
 	events.fire({
 		method: 'language/serverProgress',
 		params: {
@@ -239,10 +217,7 @@ test('progress keeps the server and directory visible when concurrent tasks fini
 			done: false,
 		},
 	});
-	assert.equal(
-		statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text,
-		'typescript-language-server: Loading project +1 more',
-	);
+	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, 'typescript-language-server: Loading project +1 more');
 
 	events.fire({
 		method: 'language/serverProgress',
@@ -257,10 +232,7 @@ test('progress keeps the server and directory visible when concurrent tasks fini
 		},
 	});
 	await Promise.resolve();
-	assert.equal(
-		statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text,
-		'typescript-language-server: Loading project',
-	);
+	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, 'typescript-language-server: Loading project');
 	await statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.run?.();
 	assert.equal(output.activeChannel?.label, 'typescript-language-server');
 	events.fire({
@@ -298,10 +270,7 @@ test('progress localizes the presentation while preserving the server-provided t
 				done: false,
 			},
 		});
-		assert.equal(
-			statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text,
-			'rust-analyzer：Indexing（68%）：2/3 items (demo)',
-		);
+		assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, 'rust-analyzer：Indexing（68%）：2/3 items (demo)');
 	} finally {
 		resetNlsResolver();
 	}
@@ -313,12 +282,7 @@ test('root scanning retains counts and current paths until the server ends the o
 	const services = workbenchInstantiationService(resources);
 	const statusbar = services.get(IStatusbarService);
 	using service = createService(services, events);
-	const progress = (
-		message: string | null,
-		percentage: number | null,
-		title: string | null = null,
-		done = false,
-	): void =>
+	const progress = (message: string | null, percentage: number | null, title: string | null = null, done = false): void =>
 		events.fire({
 			method: 'language/serverProgress',
 			params: { server: 'rust-analyzer', token: 'rustAnalyzer/Roots Scanned', title, message, percentage, done },
@@ -348,13 +312,7 @@ test('completed scanning yields to indexing and checking before its end notifica
 	const services = workbenchInstantiationService(resources);
 	const statusbar = services.get(IStatusbarService);
 	using service = createService(services, events);
-	const progress = (
-		token: string,
-		title: string | null,
-		message: string | null,
-		percentage: number | null,
-		done = false,
-	): void =>
+	const progress = (token: string, title: string | null, message: string | null, percentage: number | null, done = false): void =>
 		events.fire({
 			method: 'language/serverProgress',
 			params: { server: 'rust-analyzer', token, title, message, percentage, done },
@@ -545,8 +503,7 @@ function createService(
 	const scope = services.createChild();
 	scope.registerInstance(IServerEventApi, events);
 	if (options.workspace) scope.registerInstance(IWorkspaceContextService, options.workspace);
-	else
-		scope.registerSingleton(IWorkspaceContextService, () => new TestWorkspaceService({ id: 'empty', folders: [] }));
+	else scope.registerSingleton(IWorkspaceContextService, () => new TestWorkspaceService({ id: 'empty', folders: [] }));
 	scope.registerInstance(ILanguageServerService, {
 		read: options.read ?? (async () => ({ revision: 0, configurations: {}, servers: [] })),
 		control: async request => {
@@ -729,9 +686,7 @@ test('catalog refresh removes disabled or uninstalled servers without deleting t
 	const services = workbenchInstantiationService(resources);
 	const events = new FakeServerEvents();
 	using folders = workspace();
-	let servers: LanguageServerSnapshot['servers'] = [
-		{ id: 'fixture', languageIds: ['demo'], state: { type: 'ready' } },
-	];
+	let servers: LanguageServerSnapshot['servers'] = [{ id: 'fixture', languageIds: ['demo'], state: { type: 'ready' } }];
 	let actions: readonly IAction[] = [];
 	using service = createService(services, events, {
 		workspace: folders,

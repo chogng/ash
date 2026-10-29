@@ -1,11 +1,6 @@
 import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { localize, localize2 } from '../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
@@ -18,14 +13,8 @@ import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
-import {
-	IInstantiationService,
-	type ServicesAccessor,
-} from '../../../../platform/instantiation/common/instantiation.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { type PaneCompositeOptions } from '../../../browser/panecomposite.js';
@@ -38,12 +27,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { type ExtensionsOpenOptions } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { ViewContainerLocation, type IViewDescriptor, type WorkbenchViewRegistry } from '../../../common/views.js';
-import {
-	ExtensionsListView,
-	SkillsViewPane,
-	McpServersViewPane,
-	RecommendedExtensionsView,
-} from './extensionsViews.js';
+import { ExtensionsListView, SkillsViewPane, McpServersViewPane, RecommendedExtensionsView } from './extensionsViews.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import './media/extensionsViewlet.css';
 
@@ -59,10 +43,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	setting: {
 		valueType: 'boolean',
 		title: localize({ bundle: 'ash.extensions', key: 'verbosityTitle' }, 'Extensions accessibility help'),
-		description: localize(
-			{ bundle: 'ash.extensions', key: 'verbosityDescription' },
-			'Announce keyboard help when Extensions receives focus.',
-		),
+		description: localize({ bundle: 'ash.extensions', key: 'verbosityDescription' }, 'Announce keyboard help when Extensions receives focus.'),
 	},
 });
 
@@ -93,17 +74,7 @@ export class ExtensionsViewPaneContainer extends FilterViewPaneContainer {
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		const filterChanged = new Emitter<string[]>();
-		super(
-			container,
-			{ ...options, mergeViewWithContainerWhenSingleView: false },
-			filterChanged.event,
-			storage,
-			theme,
-			menus,
-			configuration,
-			instantiationService,
-			contextKeys,
-		);
+		super(container, { ...options, mergeViewWithContainerWhenSingleView: false }, filterChanged.event, storage, theme, menus, configuration, instantiationService, contextKeys);
 		this.filterChanged = this._register(filterChanged);
 		filterChanged.fire(['skills', 'plugins', 'mcp', 'recommended']);
 		this.element.classList.add('ash-extensions-view-container');
@@ -137,10 +108,7 @@ export class ExtensionsViewPaneContainer extends FilterViewPaneContainer {
 										enabled: true,
 										checked: filter.token
 											? this.readSearch().token === filter.token
-											: !this.readSearch().token &&
-												this.contextKeys.contextMatchesRules(
-													ContextKeyExpr.has('extensionsMarketplaceVisible'),
-												),
+											: !this.readSearch().token && this.contextKeys.contextMatchesRules(ContextKeyExpr.has('extensionsMarketplaceVisible')),
 										run: () =>
 											this.open({
 												mode: 'browse',
@@ -170,9 +138,7 @@ export class ExtensionsViewPaneContainer extends FilterViewPaneContainer {
 				if (this.updatingSearch) {
 					return;
 				}
-				this.searchOptions = this.search.value.trim()
-					? { ...this.searchOptions, mode: this.searchOptions.mode === 'builtIn' ? 'builtIn' : undefined }
-					: {};
+				this.searchOptions = this.search.value.trim() ? { ...this.searchOptions, mode: this.searchOptions.mode === 'builtIn' ? 'builtIn' : undefined } : {};
 				this.searchScheduler.schedule();
 			}),
 		);
@@ -190,12 +156,7 @@ export class ExtensionsViewPaneContainer extends FilterViewPaneContainer {
 					void this.applySearch();
 				} else if (event.key === 'ArrowDown') {
 					event.preventDefault();
-					const pane =
-						(this.searchOptions.view
-							? this.getView(`ash.extensions.${this.searchOptions.view}`)
-							: undefined) ??
-						this.panes.find(pane => pane.isExpanded()) ??
-						this.panes[0];
+					const pane = (this.searchOptions.view ? this.getView(`ash.extensions.${this.searchOptions.view}`) : undefined) ?? this.panes.find(pane => pane.isExpanded()) ?? this.panes[0];
 					pane?.setExpanded(true);
 					pane?.focus();
 				}
@@ -210,11 +171,7 @@ export class ExtensionsViewPaneContainer extends FilterViewPaneContainer {
 				when: ContextKeyExpr.has('extensionsSearchFocused'),
 				getProvider: () => {
 					const focused = this.element.ownerDocument.activeElement;
-					if (
-						!this.isVisible() ||
-						!(focused instanceof HTMLElement) ||
-						!this.searchRegion.contains(focused)
-					) {
+					if (!this.isVisible() || !(focused instanceof HTMLElement) || !this.searchRegion.contains(focused)) {
 						return undefined;
 					}
 					return new AccessibleContentProvider(
@@ -258,9 +215,7 @@ export class ExtensionsViewPaneContainer extends FilterViewPaneContainer {
 
 	private readSearch(): { readonly token: string; readonly query: string } {
 		const raw = this.search.value.trim();
-		const match = /^(@installed|@skills|@plugins|@connections|@connectors|@builtin|@recommended)(?:\s+|$)/iu.exec(
-			raw,
-		);
+		const match = /^(@installed|@skills|@plugins|@connections|@connectors|@builtin|@recommended)(?:\s+|$)/iu.exec(raw);
 		const token = match?.[1].toLowerCase() ?? '';
 		return {
 			token: token === '@connectors' ? '@connections' : token,
@@ -295,10 +250,7 @@ export class ExtensionsViewPaneContainer extends FilterViewPaneContainer {
 		// Pane changes can reuse the previous content allocation; measure the host to subtract the search row once.
 		super.layout({
 			...dimension,
-			height: Math.max(
-				0,
-				(this.element.clientHeight || dimension.height) - (this.searchRegion?.offsetHeight ?? 0),
-			),
+			height: Math.max(0, (this.element.clientHeight || dimension.height) - (this.searchRegion?.offsetHeight ?? 0)),
 		});
 	}
 
@@ -308,17 +260,9 @@ export class ExtensionsViewPaneContainer extends FilterViewPaneContainer {
 
 	public async open(options: ExtensionsOpenOptions = {}): Promise<void> {
 		this.searchOptions = options;
-		const installed =
-			options.mode === 'installed' ||
-			options.mode === 'builtIn' ||
-			(!!options.view && options.view !== 'extensions' && options.mode !== 'browse');
+		const installed = options.mode === 'installed' || options.mode === 'builtIn' || (!!options.view && options.view !== 'extensions' && options.mode !== 'browse');
 		this.updatingSearch = true;
-		this.search.value =
-			options.mode === 'builtIn'
-				? `@builtin ${options.query ?? ''}`.trimEnd()
-				: installed && options.query
-					? `@installed ${options.query}`
-					: (options.query ?? '');
+		this.search.value = options.mode === 'builtIn' ? `@builtin ${options.query ?? ''}`.trimEnd() : installed && options.query ? `@installed ${options.query}` : (options.query ?? '');
 		this.updatingSearch = false;
 		this.searchScheduler.cancel();
 		this.search.focus();
@@ -338,11 +282,7 @@ export class ExtensionsViewPaneContainer extends FilterViewPaneContainer {
 					if (pane instanceof RecommendedExtensionsView) {
 						return pane.refreshRecommendations();
 					}
-					if (
-						pane instanceof ExtensionsListView ||
-						pane instanceof SkillsViewPane ||
-						pane instanceof McpServersViewPane
-					) {
+					if (pane instanceof ExtensionsListView || pane instanceof SkillsViewPane || pane instanceof McpServersViewPane) {
 						return pane.refresh();
 					}
 					return Promise.resolve();
@@ -375,35 +315,14 @@ export class ExtensionsViewPaneContainer extends FilterViewPaneContainer {
 					'@recommended': 'recommended',
 				} as Record<string, string>
 			)[token] ?? 'all';
-		const marketplace =
-			!installed &&
-			!builtIn &&
-			(raw.length > 0 ||
-				this.searchOptions.mode === 'browse' ||
-				!!this.searchOptions.capabilityKind ||
-				!!this.searchOptions.languageId);
-		const category =
-			marketplace && (this.searchOptions.view === 'skills' || this.searchOptions.view === 'mcp')
-				? this.searchOptions.view
-				: 'view';
-		const searchPlugins =
-			marketplace &&
-			this.searchOptions.mode !== 'browse' &&
-			category === 'view' &&
-			!!query &&
-			!this.searchOptions.capabilityKind &&
-			!this.searchOptions.languageId;
+		const marketplace = !installed && !builtIn && (raw.length > 0 || this.searchOptions.mode === 'browse' || !!this.searchOptions.capabilityKind || !!this.searchOptions.languageId);
+		const category = marketplace && (this.searchOptions.view === 'skills' || this.searchOptions.view === 'mcp') ? this.searchOptions.view : 'view';
+		const searchPlugins = marketplace && this.searchOptions.mode !== 'browse' && category === 'view' && !!query && !this.searchOptions.capabilityKind && !this.searchOptions.languageId;
 		const marketplaceCategories = searchPlugins ? [category, 'plugins'] : [category];
 		this.contextKeys.bufferChangeEvents(() => {
 			this.contextKeys.setContext('extensionsMarketplaceVisible', marketplace);
 		});
-		this.filterChanged.fire(
-			marketplace
-				? marketplaceCategories
-				: installedCategory === 'all'
-					? ['skills', 'plugins', 'mcp', 'recommended']
-					: [installedCategory],
-		);
+		this.filterChanged.fire(marketplace ? marketplaceCategories : installedCategory === 'all' ? ['skills', 'plugins', 'mcp', 'recommended'] : [installedCategory]);
 		if (marketplace) {
 			// Installed providers must remain manageable even when the registry has no match.
 			if (searchPlugins) {
@@ -414,45 +333,26 @@ export class ExtensionsViewPaneContainer extends FilterViewPaneContainer {
 				}
 			}
 			const pane = this.getView(`ash.extensions.${category}`);
-			if (
-				pane instanceof ExtensionsListView ||
-				pane instanceof SkillsViewPane ||
-				pane instanceof McpServersViewPane
-			) {
+			if (pane instanceof ExtensionsListView || pane instanceof SkillsViewPane || pane instanceof McpServersViewPane) {
 				await pane.open({ ...this.searchOptions, mode: 'browse', query });
 			}
 		} else {
 			for (const pane of this.panes) {
-				if (
-					pane instanceof ExtensionsListView ||
-					pane instanceof SkillsViewPane ||
-					pane instanceof McpServersViewPane ||
-					pane instanceof RecommendedExtensionsView
-				) {
+				if (pane instanceof ExtensionsListView || pane instanceof SkillsViewPane || pane instanceof McpServersViewPane || pane instanceof RecommendedExtensionsView) {
 					pane.setSearch(query);
 				}
 			}
-			const target = this.getView(
-				`ash.extensions.${installedCategory === 'all' ? (this.searchOptions.view ?? 'plugins') : installedCategory}`,
-			);
+			const target = this.getView(`ash.extensions.${installedCategory === 'all' ? (this.searchOptions.view ?? 'plugins') : installedCategory}`);
 			if (builtIn && target instanceof ExtensionsListView) {
 				await target.open({ mode: 'builtIn', query });
-			} else if (
-				target &&
-				(this.searchOptions.view ||
-					this.searchOptions.mode === 'installed' ||
-					installedCategory !== 'all' ||
-					!raw)
-			) {
+			} else if (target && (this.searchOptions.view || this.searchOptions.mode === 'installed' || installedCategory !== 'all' || !raw)) {
 				target.setExpanded(true);
 			}
 		}
 	}
 
 	protected override getFilterOn(viewDescriptor: IViewDescriptor): string | undefined {
-		return viewDescriptor.id.startsWith('ash.extensions.')
-			? viewDescriptor.id.slice('ash.extensions.'.length)
-			: undefined;
+		return viewDescriptor.id.startsWith('ash.extensions.') ? viewDescriptor.id.slice('ash.extensions.'.length) : undefined;
 	}
 
 	protected override setFilter(viewDescriptor: IViewDescriptor): void {
@@ -474,10 +374,7 @@ export async function openExtensionsView(views: IViewsService, options: Extensio
 }
 
 /** Both product hosts use the same capability panes with their own view registry and location. */
-export function registerExtensionsViewContainer(
-	registry: WorkbenchViewRegistry,
-	location = ViewContainerLocation.Sidebar,
-): DisposableStore {
+export function registerExtensionsViewContainer(registry: WorkbenchViewRegistry, location = ViewContainerLocation.Sidebar): DisposableStore {
 	const registrations = new DisposableStore();
 	registrations.add(
 		registerAction2(

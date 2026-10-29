@@ -2,11 +2,7 @@ import './media/sectionHeaders.css';
 import { StandardTokenType } from '../../../common/encodedTokenAttributes.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
-import {
-	findSectionHeaders,
-	type SectionHeader,
-	type FindSectionHeaderOptions,
-} from '../../../common/services/findSectionHeaders.js';
+import { findSectionHeaders, type SectionHeader, type FindSectionHeaderOptions } from '../../../common/services/findSectionHeaders.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type View } from '../../../browser/view.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
@@ -36,15 +32,12 @@ export class SectionHeadersController extends Disposable {
 		private readonly readOptions: () => Omit<FindSectionHeaderOptions, 'foldingRules'>,
 	) {
 		super();
-		if (model !== viewport.textModel)
-			throw new TypeError('Stanza section header dependencies must share a text model');
+		if (model !== viewport.textModel) throw new TypeError('Stanza section header dependencies must share a text model');
 		this.decorations = editor.createDecorationsCollection();
 		this._register(
 			toDisposable(() => {
 				this.decorations.clear();
-				for (const line of viewport.domNode.domNode.querySelectorAll<HTMLElement>(
-					'.view-line.section-header',
-				)) {
+				for (const line of viewport.domNode.domNode.querySelectorAll<HTMLElement>('.view-line.section-header')) {
 					line.classList.remove('section-header', 'section-header-separator');
 					line.removeAttribute('data-section-header');
 				}
@@ -125,12 +118,7 @@ export class SectionHeadersController extends Disposable {
 		// markers. Without a map, retain the bounded visible-chunk scan.
 		if (minimap.enabled) windows.splice(0, windows.length, { start: 0, end: this.model.getLineCount() });
 		const key = windows.map(window => `${window.start}:${window.end}`).join(',');
-		if (
-			!this.cached ||
-			this.cached.version !== this.model.version ||
-			this.cached.windows !== key ||
-			this.cached.rules !== configuration.foldingRules
-		) {
+		if (!this.cached || this.cached.version !== this.model.version || this.cached.windows !== key || this.cached.rules !== configuration.foldingRules) {
 			const headers = windows.flatMap(({ start, end }) =>
 				findSectionHeaders(
 					{
@@ -151,15 +139,8 @@ export class SectionHeadersController extends Disposable {
 		}
 		// Tokens can change whether a candidate is a comment; they do not change
 		// the candidate text. Layout/token notifications never rescan the file.
-		const accepted = this.cached.headers.filter(
-			header =>
-				!header.shouldBeInComments || this.isComment(header.range.startLineNumber, header.range.startColumn),
-		);
-		const mapHeaders = minimap.enabled
-			? accepted.filter(header =>
-					header.shouldBeInComments ? minimap.showMarkSectionHeaders : minimap.showRegionSectionHeaders,
-				)
-			: [];
+		const accepted = this.cached.headers.filter(header => !header.shouldBeInComments || this.isComment(header.range.startLineNumber, header.range.startColumn));
+		const mapHeaders = minimap.enabled ? accepted.filter(header => (header.shouldBeInComments ? minimap.showMarkSectionHeaders : minimap.showRegionSectionHeaders)) : [];
 		const decorationKey = JSON.stringify(mapHeaders);
 		if (decorationKey !== this.decorationKey) {
 			this.decorationKey = decorationKey;
@@ -172,9 +153,7 @@ export class SectionHeadersController extends Disposable {
 							color: undefined,
 							position: MinimapPosition.Inline,
 							sectionHeaderText: header.text,
-							sectionHeaderStyle: header.hasSeparatorLine
-								? MinimapSectionHeaderStyle.Underlined
-								: MinimapSectionHeaderStyle.Normal,
+							sectionHeaderStyle: header.hasSeparatorLine ? MinimapSectionHeaderStyle.Underlined : MinimapSectionHeaderStyle.Normal,
 						},
 					},
 				})),

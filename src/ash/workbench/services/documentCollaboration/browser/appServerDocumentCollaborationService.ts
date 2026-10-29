@@ -32,8 +32,7 @@ export class AppServerDocumentCollaborationService extends Disposable implements
 	) {
 		super();
 		const subscription = events.subscribe(event => {
-			if (event.method !== 'document/collaboration/update' && event.method !== 'document/collaboration/presence')
-				return;
+			if (event.method !== 'document/collaboration/update' && event.method !== 'document/collaboration/presence') return;
 			const connections = this.connections.get(event.params.roomId);
 			if (!connections) return;
 			for (const connection of connections) {
@@ -55,11 +54,7 @@ export class AppServerDocumentCollaborationService extends Disposable implements
 		throwIfCancelled(signal, 'Opening a Stanza collaboration room was cancelled');
 		const snapshot = decodeSnapshot(opened.snapshot, input.codec);
 		const connection = new AppServerDocumentCollaborationConnection(this, input.codec, opened.clientId, snapshot);
-		const roomConnections = getOrSet(
-			this.connections,
-			connection.roomId,
-			new Set<AppServerDocumentCollaborationConnection>(),
-		);
+		const roomConnections = getOrSet(this.connections, connection.roomId, new Set<AppServerDocumentCollaborationConnection>());
 		roomConnections.add(connection);
 		try {
 			connection.acceptPresence(await this.api.readPresence({ roomId: connection.roomId }));
@@ -107,11 +102,7 @@ export class AppServerDocumentCollaborationService extends Disposable implements
 		}
 	}
 
-	async updatePresence(
-		connection: AppServerDocumentCollaborationConnection,
-		selection: DocumentSelection | undefined,
-		signal: AbortSignal,
-	): Promise<void> {
+	async updatePresence(connection: AppServerDocumentCollaborationConnection, selection: DocumentSelection | undefined, signal: AbortSignal): Promise<void> {
 		throwIfCancelled(signal, 'Publishing Stanza collaboration presence was cancelled');
 		await this.api.publishPresence({
 			roomId: connection.roomId,
@@ -160,11 +151,7 @@ class AppServerDocumentCollaborationConnection extends Disposable implements Doc
 		return this._currentPresence;
 	}
 
-	submit(
-		envelope: DocumentCollaborationEnvelope,
-		document: DocumentNode,
-		signal: AbortSignal,
-	): Promise<DocumentCollaborationSubmitOutcome> {
+	submit(envelope: DocumentCollaborationEnvelope, document: DocumentNode, signal: AbortSignal): Promise<DocumentCollaborationSubmitOutcome> {
 		if (this.isDisposed) return Promise.reject(new ReferenceError('Stanza collaboration connection is disposed'));
 		return this.service.submit(this, envelope, document, signal);
 	}
@@ -174,32 +161,20 @@ class AppServerDocumentCollaborationConnection extends Disposable implements Doc
 		return this.service.updatePresence(this, selection, signal);
 	}
 
-	createInvite(
-		_displayName: string,
-		_role: DocumentCollaborationRoomRole,
-		_signal: AbortSignal,
-	): Promise<DocumentCollaborationInvite> {
-		return Promise.reject(
-			new Error('The local App Server collaboration authority does not manage remote room members'),
-		);
+	createInvite(_displayName: string, _role: DocumentCollaborationRoomRole, _signal: AbortSignal): Promise<DocumentCollaborationInvite> {
+		return Promise.reject(new Error('The local App Server collaboration authority does not manage remote room members'));
 	}
 
 	listMembers(_signal: AbortSignal): Promise<readonly DocumentCollaborationMember[]> {
-		return Promise.reject(
-			new Error('The local App Server collaboration authority does not manage remote room members'),
-		);
+		return Promise.reject(new Error('The local App Server collaboration authority does not manage remote room members'));
 	}
 
 	rotateMemberAccessToken(_principalId: string, _signal: AbortSignal): Promise<DocumentCollaborationInvite> {
-		return Promise.reject(
-			new Error('The local App Server collaboration authority does not manage remote room members'),
-		);
+		return Promise.reject(new Error('The local App Server collaboration authority does not manage remote room members'));
 	}
 
 	revokeMember(_principalId: string, _signal: AbortSignal): Promise<void> {
-		return Promise.reject(
-			new Error('The local App Server collaboration authority does not manage remote room members'),
-		);
+		return Promise.reject(new Error('The local App Server collaboration authority does not manage remote room members'));
 	}
 
 	acceptUpdate(value: AppServerDocumentCollaborationUpdate): void {
@@ -216,10 +191,7 @@ class AppServerDocumentCollaborationConnection extends Disposable implements Doc
 	}
 }
 
-function decodeSnapshot(
-	value: AppServerDocumentCollaborationSnapshot,
-	codec: DocumentCodec,
-): DocumentCollaborationSnapshot {
+function decodeSnapshot(value: AppServerDocumentCollaborationSnapshot, codec: DocumentCodec): DocumentCollaborationSnapshot {
 	return Object.freeze({
 		roomId: value.roomId,
 		version: validateProtocolInteger(value.version, 'version', 0),
@@ -227,10 +199,7 @@ function decodeSnapshot(
 	});
 }
 
-function decodeUpdate(
-	value: AppServerDocumentCollaborationUpdate,
-	codec: DocumentCodec,
-): DocumentCollaborationRemoteEnvelope {
+function decodeUpdate(value: AppServerDocumentCollaborationUpdate, codec: DocumentCodec): DocumentCollaborationRemoteEnvelope {
 	return Object.freeze({
 		clientId: value.clientId,
 		sequence: validateProtocolInteger(value.sequence, 'sequence', 1),
@@ -246,11 +215,7 @@ function decodePresence(value: AppServerDocumentCollaborationPresenceSnapshot): 
 } {
 	return Object.freeze({
 		generation: validateProtocolInteger(value.generation, 'presence generation', 0),
-		presences: Object.freeze(
-			value.presences.map(presence =>
-				Object.freeze({ clientId: presence.clientId, selection: decodeSelection(presence.selection) }),
-			),
-		),
+		presences: Object.freeze(value.presences.map(presence => Object.freeze({ clientId: presence.clientId, selection: decodeSelection(presence.selection) }))),
 	});
 }
 
@@ -290,8 +255,7 @@ function decodePoint(value: unknown, name: string): { readonly nodeId: string; r
 }
 
 function expectRecord(value: unknown, name: string): Readonly<Record<string, unknown>> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value))
-		throw new TypeError(`${name} must be an object`);
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError(`${name} must be an object`);
 	return value as Readonly<Record<string, unknown>>;
 }
 
@@ -301,7 +265,6 @@ function expectString(value: unknown, name: string): string {
 }
 
 function validateProtocolInteger(value: unknown, name: string, minimum: number): number {
-	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum)
-		throw new TypeError(`Stanza collaboration ${name} must be a safe integer greater than or equal to ${minimum}`);
+	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum) throw new TypeError(`Stanza collaboration ${name} must be a safe integer greater than or equal to ${minimum}`);
 	return value;
 }

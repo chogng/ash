@@ -4,14 +4,7 @@ import { isRecord } from '../../../base/common/types.js';
 import type { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
 import { LogLevel } from '../../log/common/log.js';
 import { localize } from '../../../nls.js';
-import {
-	INACTIVE_TUNNEL_MODE,
-	TunnelStates,
-	type ActiveTunnelMode,
-	type IRemoteTunnelService,
-	type TunnelMode,
-	type TunnelStatus,
-} from '../common/remoteTunnel.js';
+import { INACTIVE_TUNNEL_MODE, TunnelStates, type ActiveTunnelMode, type IRemoteTunnelService, type TunnelMode, type TunnelStatus } from '../common/remoteTunnel.js';
 import { ITunnelProcessCoordinator } from './tunnelProcessCoordinator.js';
 
 /** Standard status facade above the sole application helper coordinator. */
@@ -74,12 +67,7 @@ export class RemoteTunnelService extends Disposable implements IRemoteTunnelServ
 		this.assertNotDisposed();
 		const validated = validateMode(mode);
 		if (!validated.active || !this.workspaceRoot) {
-			throw new Error(
-				localize(
-					{ bundle: 'ash.workbench', key: 'remoteTunnel.localWorkspace' },
-					'Open a local folder before enabling remote tunnel access.',
-				),
-			);
+			throw new Error(localize({ bundle: 'ash.workbench', key: 'remoteTunnel.localWorkspace' }, 'Open a local folder before enabling remote tunnel access.'));
 		}
 		this.mode = validated;
 		this.modeChanged.fire(this.mode);
@@ -106,18 +94,11 @@ export class RemoteTunnelService extends Disposable implements IRemoteTunnelServ
 					}
 					if (mode.active) {
 						if (!root) {
-							throw new Error(
-								localize(
-									{ bundle: 'ash.workbench', key: 'remoteTunnel.localWorkspace' },
-									'Open a local folder before enabling remote tunnel access.',
-								),
-							);
+							throw new Error(localize({ bundle: 'ash.workbench', key: 'remoteTunnel.localWorkspace' }, 'Open a local folder before enabling remote tunnel access.'));
 						}
 						this.workspaceRoot = root;
 					}
-					return (await (command === 'initialize'
-						? this.initialize(mode)
-						: this.startTunnel(mode as ActiveTunnelMode))) as T;
+					return (await (command === 'initialize' ? this.initialize(mode) : this.startTunnel(mode as ActiveTunnelMode))) as T;
 				}
 				if (argument !== undefined) {
 					throw new TypeError('Tunnel operation takes no arguments');
@@ -169,12 +150,7 @@ function validateMode(value: unknown): TunnelMode {
 	if (value.active === false && Object.keys(value).length === 1) {
 		return INACTIVE_TUNNEL_MODE;
 	}
-	if (
-		value.active !== true ||
-		value.asService !== false ||
-		Object.keys(value).length !== 3 ||
-		!isRecord(value.session)
-	) {
+	if (value.active !== true || value.asService !== false || Object.keys(value).length !== 3 || !isRecord(value.session)) {
 		throw new TypeError('Unsupported tunnel mode');
 	}
 	const session = value.session;

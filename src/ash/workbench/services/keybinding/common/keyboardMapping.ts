@@ -1,17 +1,8 @@
 import { CharCode } from '../../../../base/common/charCode.js';
-import {
-	IMMUTABLE_CODE_TO_KEY_CODE,
-	KeyCode,
-	KeyCodeUtils,
-	NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE,
-	ScanCodeUtils,
-} from '../../../../base/common/keyCodes.js';
+import { IMMUTABLE_CODE_TO_KEY_CODE, KeyCode, KeyCodeUtils, NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE, ScanCodeUtils } from '../../../../base/common/keyCodes.js';
 import type { KeybindingEvent, ResolvedKeybindingChord } from '../../../../base/common/keybindings.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
-import type {
-	IKeyboardMapping,
-	IKeyboardMappingEntry,
-} from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
+import type { IKeyboardMapping, IKeyboardMappingEntry } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
 
 const emptyMappingEntry: IKeyboardMappingEntry = Object.freeze({
 	value: '',
@@ -174,10 +165,7 @@ export function findKeyboardMappingCodes(
 	const matches: string[] = [];
 	for (const [code, entry] of Object.entries(mapping)) {
 		const nativeKeyCode = entry.vkey ? NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE[entry.vkey] : undefined;
-		if (
-			(nativeKeyCode !== undefined && nativeKeyCode === targetKeyCode) ||
-			(entry.value && entry.value.toLocaleLowerCase('en-US') === normalizedKey)
-		) {
+		if ((nativeKeyCode !== undefined && nativeKeyCode === targetKeyCode) || (entry.value && entry.value.toLocaleLowerCase('en-US') === normalizedKey)) {
 			matches.push(code);
 		}
 	}
@@ -209,9 +197,7 @@ export function findKeyboardMappingCandidates(
 	operatingSystem: OperatingSystem,
 ): readonly IKeyboardMappingCandidate[] {
 	if (operatingSystem === OperatingSystem.Windows) {
-		const nativeMatches = Object.entries(mapping).filter(
-			([, entry]) => entry.vkey !== undefined && NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE[entry.vkey] === keyCode,
-		);
+		const nativeMatches = Object.entries(mapping).filter(([, entry]) => entry.vkey !== undefined && NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE[entry.vkey] === keyCode);
 		if (nativeMatches.length > 0) {
 			return nativeMatches.map(([code, entry]) => ({
 				code,
@@ -254,7 +240,12 @@ export function findKeyboardMappingCandidates(
 		const code = `Key${key.toLocaleUpperCase('en-US')}`;
 		const entry = mapping[code];
 		if (entry) {
-			matches.push({ code, ...modifiers, label: key, isDeadKey: false });
+			matches.push({
+				code,
+				...modifiers,
+				label: key,
+				isDeadKey: false,
+			});
 		}
 	}
 	return matches;
@@ -324,11 +315,7 @@ function currentValue(entry: IKeyboardMappingEntry, event: KeybindingEvent): str
 
 function isCombiningCharacter(value: string): boolean {
 	const code = value.charCodeAt(0);
-	return (
-		value.length === 1 &&
-		code >= CharCode.U_Combining_Grave_Accent &&
-		code <= CharCode.U_Combining_Latin_Small_Letter_X
-	);
+	return value.length === 1 && code >= CharCode.U_Combining_Grave_Accent && code <= CharCode.U_Combining_Latin_Small_Letter_X;
 }
 
 function spacingAccent(value: string): string {

@@ -1,10 +1,6 @@
 import { packager } from '@electron/packager';
 import { writeApplicationChecksums } from './host.ts';
-import {
-	ignoreApplicationFile,
-	prepareProductionDependencyWorkspace,
-	productionDependencyDeployOptions,
-} from './packageApplication.ts';
+import { ignoreApplicationFile, prepareProductionDependencyWorkspace, productionDependencyDeployOptions } from './packageApplication.ts';
 import { pruneElectronLocales } from './packageLocales.ts';
 import { prepareElectronAddons } from './addons.ts';
 import { spawn } from 'node:child_process';
@@ -25,10 +21,7 @@ const python = join(repositoryRoot, 'scripts', '.venv', 'Scripts', 'python.exe')
 const [command, ...arguments_] = process.argv.slice(2);
 if (command === 'bundle') await bundle(parseOptions(arguments_, ['--backend-package', '--output', '--remote-release']));
 else if (command === 'installer') await installer(parseOptions(arguments_, ['--bundle', '--output']));
-else
-	throw new Error(
-		'Usage: package-win32.ts bundle [--backend-package DIR] [--output DIR] | installer [--bundle DIR] [--output DIR]',
-	);
+else throw new Error('Usage: package-win32.ts bundle [--backend-package DIR] [--output DIR] | installer [--bundle DIR] [--output DIR]');
 
 function parseOptions(args: string[], allowed: readonly string[]): Map<string, string> {
 	const options = new Map<string, string>();
@@ -65,8 +58,7 @@ async function bundle(options: Map<string, string>): Promise<void> {
 
 async function assembleBundle(stage: string, bundlePath: string, options: Map<string, string>): Promise<void> {
 	const remoteRelease = options.get('--remote-release') ?? process.env.ASH_REMOTE_RELEASE_BINDING;
-	if (!remoteRelease)
-		throw new Error('Remote release binding is required: --remote-release FILE or ASH_REMOTE_RELEASE_BINDING');
+	if (!remoteRelease) throw new Error('Remote release binding is required: --remote-release FILE or ASH_REMOTE_RELEASE_BINDING');
 	const updatePublicKey = requireUpdatePublicKey();
 	const destination = dirname(bundlePath);
 	const appStage = join(stage, 'app');
@@ -82,9 +74,7 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
 	}
 	await cp(join(repositoryRoot, 'resources', 'tray'), join(appStage, 'resources', 'tray'), { recursive: true });
 
-	const electronMetadata = JSON.parse(
-		await readFile(join(appRoot, 'node_modules', 'electron', 'package.json'), 'utf8'),
-	);
+	const electronMetadata = JSON.parse(await readFile(join(appRoot, 'node_modules', 'electron', 'package.json'), 'utf8'));
 	await lstat(python);
 	process.env.NODE_GYP_FORCE_PYTHON = python;
 	await prepareElectronAddons(appStage);
@@ -127,8 +117,7 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
 		ignore: path => ignoreApplicationFile(path),
 		afterExtract: [pruneElectronLocales],
 	});
-	if (packagePaths.length !== 1 || resolve(packagePaths[0]) !== bundlePath)
-		throw new Error('Electron packager returned an unexpected bundle path');
+	if (packagePaths.length !== 1 || resolve(packagePaths[0]) !== bundlePath) throw new Error('Electron packager returned an unexpected bundle path');
 
 	const resources = join(bundlePath, 'resources');
 	for (const entry of await readdir(backend)) {
@@ -136,19 +125,7 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
 		await cp(join(backend, entry), join(resources, entry), { recursive: true, errorOnExist: true, force: false });
 	}
 	const updateArtifact = join(stage, 'update-host.json');
-	await run(
-		python,
-		[
-			'-B',
-			join(repositoryRoot, 'build', 'release', 'symbols.py'),
-			'build-update-host',
-			'--target',
-			'x86_64-pc-windows-msvc',
-			'--artifact-file',
-			updateArtifact,
-		],
-		repositoryRoot,
-	);
+	await run(python, ['-B', join(repositoryRoot, 'build', 'release', 'symbols.py'), 'build-update-host', '--target', 'x86_64-pc-windows-msvc', '--artifact-file', updateArtifact], repositoryRoot);
 	const updateHost: string = JSON.parse(await readFile(updateArtifact, 'utf8')).binary;
 	await cp(updateHost, join(resources, 'bin', 'ash-update-host.exe'), { errorOnExist: true, force: false });
 	if (process.env.ASH_SYMBOLS_DIR) {
@@ -221,14 +198,8 @@ async function validateBackend(path: string, electronVersion: string): Promise<v
 		throw new Error(`Backend does not match this Windows desktop build: ${path}`);
 	}
 	await lstat(join(path, metadata.entrypoint));
-	for (const relative of [
-		'ash-resources/node',
-		'ash-resources/licenses/node',
-		'bin/ash-remote-server.exe',
-		'ash-remote-runtimes',
-	]) {
-		if (await exists(join(path, relative)))
-			throw new Error(`Desktop backend contains a separately distributed runtime: ${relative}`);
+	for (const relative of ['ash-resources/node', 'ash-resources/licenses/node', 'bin/ash-remote-server.exe', 'ash-remote-runtimes']) {
+		if (await exists(join(path, relative))) throw new Error(`Desktop backend contains a separately distributed runtime: ${relative}`);
 	}
 }
 
@@ -255,8 +226,7 @@ async function validateBundle(path: string): Promise<void> {
 
 function requireUpdatePublicKey(): string {
 	const key = process.env.ASH_UPDATE_PUBLIC_KEY;
-	if (!key || !/^[a-fA-F0-9]{64}$/u.test(key))
-		throw new Error('ASH_UPDATE_PUBLIC_KEY must be a 64-digit Ed25519 public key');
+	if (!key || !/^[a-fA-F0-9]{64}$/u.test(key)) throw new Error('ASH_UPDATE_PUBLIC_KEY must be a 64-digit Ed25519 public key');
 	return key.toLowerCase();
 }
 
@@ -271,22 +241,14 @@ async function installer(options: Map<string, string>): Promise<void> {
 	const metadata = JSON.parse(await readFile(join(appRoot, 'package.json'), 'utf8'));
 	await run(
 		compiler,
-		[
-			`/DBundleDir=${bundle}`,
-			`/DAppVersion=${metadata.version}`,
-			`/DAppUserId=${AshApplicationId}`,
-			`/DIconPath=${icon}`,
-			`/O${output}`,
-			join(import.meta.dirname, 'win32', 'ash.iss'),
-		],
+		[`/DBundleDir=${bundle}`, `/DAppVersion=${metadata.version}`, `/DAppUserId=${AshApplicationId}`, `/DIconPath=${icon}`, `/O${output}`, join(import.meta.dirname, 'win32', 'ash.iss')],
 		repositoryRoot,
 	);
 	console.log(`Packaged Windows installer: ${join(output, `AshSetup-${metadata.version}-win32-x64.exe`)}`);
 }
 
 function requireWindows(): void {
-	if (process.platform !== 'win32' || process.arch !== 'x64')
-		throw new Error('Windows x64 packaging requires a Windows x64 host');
+	if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('Windows x64 packaging requires a Windows x64 host');
 }
 
 async function exists(path: string): Promise<boolean> {

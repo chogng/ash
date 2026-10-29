@@ -11,12 +11,7 @@ import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { DictationConfiguration } from '../../chat/common/constants.js';
-import {
-	ILocalTranscriptionModelService,
-	isModelPreparing,
-	DictationModelState,
-	type ILocalTranscriptionModelSnapshot,
-} from '../../../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionModelService, isModelPreparing, DictationModelState, type ILocalTranscriptionModelSnapshot } from '../../../../platform/localTranscription/common/localTranscription.js';
 import { LocalTranscriptionModelStatus, modelProgressText } from './localTranscriptionModelStatus.js';
 
 interface ModelCell {
@@ -96,17 +91,12 @@ export class LocalTranscriptionModelControls extends Disposable {
 				const template: CellTemplate = { resources, use, install, cancel, uninstall, model: undefined };
 				resources.add(
 					use.onDidClick(() => {
-						void this.perform(template.model!.model, () =>
-							this.configurationService.updateValue(DictationConfiguration.model, template.model!.model),
-						);
+						void this.perform(template.model!.model, () => this.configurationService.updateValue(DictationConfiguration.model, template.model!.model));
 					}),
 				);
 				resources.add(
 					install.onDidClick(() => {
-						void this.perform(
-							template.model!.model,
-							() => this.localTranscription.prepareModel(template.model!.model, () => {}).completed,
-						);
+						void this.perform(template.model!.model, () => this.localTranscription.prepareModel(template.model!.model, () => {}).completed);
 					}),
 				);
 				resources.add(
@@ -123,13 +113,7 @@ export class LocalTranscriptionModelControls extends Disposable {
 						const model = template.model!.model;
 						if (!this.confirmingRemoval.has(model)) {
 							this.confirmingRemoval.add(model);
-							this.status.setMessage(
-								localize(
-									'dictation.model.uninstallDetail',
-									'Uninstall {0}? The original import directory is kept.',
-									model,
-								),
-							);
+							this.status.setMessage(localize('dictation.model.uninstallDetail', 'Uninstall {0}? The original import directory is kept.', model));
 							this.table.rerender();
 							return;
 						}
@@ -205,10 +189,7 @@ export class LocalTranscriptionModelControls extends Disposable {
 				inputBoxStyles: defaultInputBoxStyles,
 				presentation: 'field',
 				ariaLabel: localize('dictation.model.source', 'Prepared Paraformer model directory'),
-				placeholder: localize(
-					'dictation.model.sourcePlaceholder',
-					'Absolute directory containing dictation-model.json',
-				),
+				placeholder: localize('dictation.model.sourcePlaceholder', 'Absolute directory containing dictation-model.json'),
 			}),
 		);
 		this.modelSource.inputElement.id = generateUuid();
@@ -230,14 +211,7 @@ export class LocalTranscriptionModelControls extends Disposable {
 		this._register(
 			this.importModelButton.onDidClick(() => {
 				const model = this.model;
-				void this.perform(
-					model,
-					() =>
-						this.localTranscription.importPackage(
-							{ model, sourcePath: this.modelSource.value.trim() },
-							() => {},
-						).completed,
-				);
+				void this.perform(model, () => this.localTranscription.importPackage({ model, sourcePath: this.modelSource.value.trim() }, () => {}).completed);
 			}),
 		);
 		this._register(
@@ -273,9 +247,7 @@ export class LocalTranscriptionModelControls extends Disposable {
 			localize('dictation.model.table', 'Local dictation models'),
 			...Array.from({ length: this.table.length }, (_, index) => {
 				const model = this.table.row(index);
-				return ['name', 'size', 'status']
-					.map(column => this.cellText({ model, column: column as ModelCell['column'] }))
-					.join(' · ');
+				return ['name', 'size', 'status'].map(column => this.cellText({ model, column: column as ModelCell['column'] })).join(' · ');
 			}),
 		].join('\n');
 	}
@@ -293,15 +265,9 @@ export class LocalTranscriptionModelControls extends Disposable {
 	}
 
 	private updateImport(): void {
-		const selected = Array.from({ length: this.table.length }, (_, index) => this.table.row(index)).find(
-			model => model.model === this.model,
-		);
+		const selected = Array.from({ length: this.table.length }, (_, index) => this.table.row(index)).find(model => model.model === this.model);
 		this.importModelButton.enabled =
-			this.localTranscription.isSupported &&
-			!this.pending.has(this.model) &&
-			!isModelPreparing(selected?.status) &&
-			!selected?.available &&
-			!!this.modelSource.value.trim();
+			this.localTranscription.isSupported && !this.pending.has(this.model) && !isModelPreparing(selected?.status) && !selected?.available && !!this.modelSource.value.trim();
 		this.modelSource.enabled = this.localTranscription.isSupported && !this.pending.has(this.model);
 	}
 
@@ -315,9 +281,7 @@ export class LocalTranscriptionModelControls extends Disposable {
 		try {
 			const inventory = await this.localTranscription.listModels();
 			// A configured imported package can have been removed outside Ash; keep its real status visible.
-			const models = inventory.some(model => model.model === this.model)
-				? inventory
-				: [...inventory, await this.localTranscription.getModel(this.model)];
+			const models = inventory.some(model => model.model === this.model) ? inventory : [...inventory, await this.localTranscription.getModel(this.model)];
 			if (version !== this.modelStatusVersion || this.isDisposed) {
 				return;
 			}
@@ -345,16 +309,12 @@ export class LocalTranscriptionModelControls extends Disposable {
 		template.install.hidden = cell.column !== 'actions' || model.available || preparing;
 		template.cancel.hidden = cell.column !== 'actions' || !preparing;
 		template.uninstall.hidden = cell.column !== 'actions' || !model.available;
-		template.use.label = selected
-			? localize('dictation.model.current', 'Current')
-			: localize('dictation.model.use', 'Use model');
+		template.use.label = selected ? localize('dictation.model.current', 'Current') : localize('dictation.model.use', 'Use model');
 		template.use.enabled = enabled && !selected && !preparing;
 		template.install.enabled = enabled && model.model === DEFAULT_LOCAL_TRANSCRIPTION_MODEL;
 		template.cancel.enabled = this.localTranscription.isSupported;
 		template.uninstall.enabled = enabled && !preparing;
-		template.uninstall.label = this.confirmingRemoval.has(model.model)
-			? localize('dictation.model.confirmUninstall', 'Confirm uninstall')
-			: localize('dictation.model.uninstall', 'Uninstall');
+		template.uninstall.label = this.confirmingRemoval.has(model.model) ? localize('dictation.model.confirmUninstall', 'Confirm uninstall') : localize('dictation.model.uninstall', 'Uninstall');
 	}
 
 	private cellText(cell: ModelCell): string {
@@ -363,9 +323,7 @@ export class LocalTranscriptionModelControls extends Disposable {
 			case 'name':
 				return model.model;
 			case 'size':
-				return model.available
-					? localize('dictation.model.size', '{0} MiB', (model.sizeBytes / (1024 * 1024)).toFixed(1))
-					: '—';
+				return model.available ? localize('dictation.model.size', '{0} MiB', (model.sizeBytes / (1024 * 1024)).toFixed(1)) : '—';
 			case 'status':
 				if (isModelPreparing(model.status) || model.status?.state === DictationModelState.Error) {
 					return modelProgressText(model.status!);

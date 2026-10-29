@@ -164,7 +164,10 @@ function installDomGlobals(dom: JSDOM): readonly string[] {
 		navigator: dom.window.navigator,
 	};
 	for (const [name, value] of Object.entries(globals)) {
-		Object.defineProperty(globalThis, name, { configurable: true, value });
+		Object.defineProperty(globalThis, name, {
+			configurable: true,
+			value,
+		});
 	}
 	return Object.keys(globals);
 }
@@ -203,19 +206,14 @@ test('View welcome content follows context, preserves focus, runs commands and r
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const installedGlobals = installDomGlobals(dom);
 	try {
-		const { ViewPane, ViewWelcomeController } =
-			await import('../../../../../../workbench/browser/parts/views/viewPane.js');
+		const { ViewPane, ViewWelcomeController } = await import('../../../../../../workbench/browser/parts/views/viewPane.js');
 		const { WorkbenchViewRegistry } = await import('../../../../../../workbench/common/views.js');
-		const { ContextKeyService, IContextKeyService } =
-			await import('../../../../../../platform/contextkey/browser/contextKeyService.js');
+		const { ContextKeyService, IContextKeyService } = await import('../../../../../../platform/contextkey/browser/contextKeyService.js');
 		const { ContextKeyExpr } = await import('../../../../../../platform/contextkey/common/contextkey.js');
-		const { InstantiationService } =
-			await import('../../../../../../platform/instantiation/common/instantiationService.js');
+		const { InstantiationService } = await import('../../../../../../platform/instantiation/common/instantiationService.js');
 		const { registerCodeEditorServices } = await import('../../../../../../editor/test/browser/testCodeEditor.js');
-		const { CommandRegistry, ICommandService } =
-			await import('../../../../../../platform/commands/common/commands.js');
-		const { CommandService } =
-			await import('../../../../../../workbench/services/commands/common/commandService.js');
+		const { CommandRegistry, ICommandService } = await import('../../../../../../platform/commands/common/commands.js');
+		const { CommandService } = await import('../../../../../../workbench/services/commands/common/commandService.js');
 		class WelcomePane extends ViewPane {
 			public empty = true;
 			constructor(container: HTMLElement) {

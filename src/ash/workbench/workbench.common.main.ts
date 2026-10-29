@@ -85,9 +85,7 @@ registerCollabViews();
 registerCallView();
 
 registerWorkbenchContribution('code.contrib.appServerSyntax', WorkbenchPhase.BlockStartup, accessor =>
-	accessor.get(IRendererHostService).hasAppServer
-		? new AppServerSyntaxProviders(accessor.get(ILanguageFeaturesService), accessor.get(ISyntaxApi))
-		: Disposable.None,
+	accessor.get(IRendererHostService).hasAppServer ? new AppServerSyntaxProviders(accessor.get(ILanguageFeaturesService), accessor.get(ISyntaxApi)) : Disposable.None,
 );
 
 registerSingleton(IWebWorkerService, WebWorkerService, InstantiationType.Delayed);

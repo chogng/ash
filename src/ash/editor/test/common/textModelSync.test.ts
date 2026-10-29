@@ -2,29 +2,17 @@ import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
-import {
-	createLanguageCompletionInvokeContext,
-	type LanguageCompletionRequest,
-	LanguageCompletionItemKind,
-	LANGUAGE_COMPLETION_LANE,
-	type LanguageCompletionWorker,
-} from '../../common/languages.js';
+import { createLanguageCompletionInvokeContext, type LanguageCompletionRequest, LanguageCompletionItemKind, LANGUAGE_COMPLETION_LANE, type LanguageCompletionWorker } from '../../common/languages.js';
 import { LanguageCompletionProviderRegistry } from '../../common/languageFeatureRegistry.js';
 import { LanguageCompletionProviderWorker, LanguageCompletionService } from '../../contrib/suggest/browser/suggest.js';
-import {
-	languageCompletionWireCodec,
-	createLanguageWordCompletionProvider,
-} from '../../common/services/editorWebWorker.js';
+import { languageCompletionWireCodec, createLanguageWordCompletionProvider } from '../../common/services/editorWebWorker.js';
 import { LanguageRequestStatus, type LanguageWorkerRequest } from '../../common/model/languageRequestCoordinator.js';
 import { Position } from '../../common/core/position.js';
 import { Range } from '../../common/core/range.js';
 import { TextModel } from '../../common/model/textModel.js';
 import { type TextModelChange } from '../../common/core/textChange.js';
 import { WebWorkerRemoteError, type WebWorkerClientPort } from '../../../base/common/worker/webWorker.js';
-import {
-	WorkerTextModelSyncClient,
-	WorkerTextModelSyncServer,
-} from '../../common/services/textModelSync/textModelSync.impl.js';
+import { WorkerTextModelSyncClient, WorkerTextModelSyncServer } from '../../common/services/textModelSync/textModelSync.impl.js';
 
 test('Completion service crosses a structured-clone worker boundary', async () => {
 	const text = 'console\nconst connection = con';
@@ -33,11 +21,7 @@ test('Completion service crosses a structured-clone worker boundary', async () =
 	using remoteRegistry = new LanguageCompletionProviderRegistry();
 	using remoteRegistration = remoteRegistry.register(createLanguageWordCompletionProvider());
 	const [clientPort, serverPort] = createPortPair();
-	using server = new WorkerTextModelSyncServer(
-		serverPort,
-		languageCompletionWireCodec,
-		new LanguageCompletionProviderWorker(remoteRegistry),
-	);
+	using server = new WorkerTextModelSyncServer(serverPort, languageCompletionWireCodec, new LanguageCompletionProviderWorker(remoteRegistry));
 	using service = new LanguageCompletionService(model, localRegistry, {
 		workerFactory: () => new WorkerTextModelSyncClient(clientPort, languageCompletionWireCodec),
 	});
@@ -67,26 +51,21 @@ test('Completion wire synchronizes model changes and then references the mirror'
 	using remoteRegistry = new LanguageCompletionProviderRegistry();
 	using remoteRegistration = remoteRegistry.register(createLanguageWordCompletionProvider());
 	const [clientPort, serverPort] = createPortPair();
-	using server = new WorkerTextModelSyncServer(
-		serverPort,
-		languageCompletionWireCodec,
-		new LanguageCompletionProviderWorker(remoteRegistry),
-	);
+	using server = new WorkerTextModelSyncServer(serverPort, languageCompletionWireCodec, new LanguageCompletionProviderWorker(remoteRegistry));
 	using service = new LanguageCompletionService(model, localRegistry, {
 		workerFactory: () => new WorkerTextModelSyncClient(clientPort, languageCompletionWireCodec),
 	});
 	const firstPosition = new Position(0 + 1, model.getText().length + 1);
-	assert.equal(
-		(await service.request('plaintext', firstPosition, createLanguageCompletionInvokeContext())).status,
-		LanguageRequestStatus.Applied,
-	);
+	assert.equal((await service.request('plaintext', firstPosition, createLanguageCompletionInvokeContext())).status, LanguageRequestStatus.Applied);
 
-	model.applyEdits([{ range: Range.fromPositions(firstPosition), text: 'p' }]);
+	model.applyEdits([
+		{
+			range: Range.fromPositions(firstPosition),
+			text: 'p',
+		},
+	]);
 	const secondPosition = new Position(0 + 1, model.getText().length + 1);
-	assert.equal(
-		(await service.request('plaintext', secondPosition, createLanguageCompletionInvokeContext())).status,
-		LanguageRequestStatus.Applied,
-	);
+	assert.equal((await service.request('plaintext', secondPosition, createLanguageCompletionInvokeContext())).status, LanguageRequestStatus.Applied);
 
 	assert.deepEqual(
 		service.results.result!.value.items.map(item => item.label),
@@ -110,11 +89,7 @@ test('A skipped model version makes the next wire request send a full snapshot',
 	using registry = new LanguageCompletionProviderRegistry();
 	using registration = registry.register(createLanguageWordCompletionProvider());
 	const [clientPort, serverPort] = createPortPair();
-	using server = new WorkerTextModelSyncServer(
-		serverPort,
-		languageCompletionWireCodec,
-		new LanguageCompletionProviderWorker(registry),
-	);
+	using server = new WorkerTextModelSyncServer(serverPort, languageCompletionWireCodec, new LanguageCompletionProviderWorker(registry));
 	using client = new WorkerTextModelSyncClient(clientPort, languageCompletionWireCodec);
 	await client.run(request(model, 1), new AbortController().signal);
 	let skipped: TextModelChange | undefined;
@@ -178,10 +153,7 @@ test('Remote failures and invalid DTO results reject in the client realm', async
 		new TestCompletionWorker(async () => {
 			throw new TypeError('provider host exploded');
 		}),
-		error =>
-			error instanceof WebWorkerRemoteError &&
-			error.remoteName === 'TypeError' &&
-			error.message === 'provider host exploded',
+		error => error instanceof WebWorkerRemoteError && error.remoteName === 'TypeError' && error.message === 'provider host exploded',
 	);
 	await assertRemoteFailure(
 		new TestCompletionWorker(async request => ({
@@ -225,10 +197,7 @@ test('Completion service replaces a failed wire worker on the next request', asy
 	});
 	const position = new Position(0 + 1, model.getText().length + 1);
 
-	await assert.rejects(
-		service.request('typescript', position, createLanguageCompletionInvokeContext()),
-		/first worker failed/,
-	);
+	await assert.rejects(service.request('typescript', position, createLanguageCompletionInvokeContext()), /first worker failed/);
 	const outcome = await service.request('typescript', position, createLanguageCompletionInvokeContext());
 
 	assert.equal(outcome.status, LanguageRequestStatus.Applied);
@@ -264,7 +233,13 @@ test('Wire rejects inconsistent snapshots and unsupported protocol responses', a
 	using client = new WorkerTextModelSyncClient(clientPort, languageCompletionWireCodec);
 	using model = new TextModel('value');
 	const pending = client.run(request(model, 1), new AbortController().signal);
-	peerPort.send({ protocol: 'ash.text-model', version: 2, kind: 'result', requestId: 1, result: {} });
+	peerPort.send({
+		protocol: 'ash.text-model',
+		version: 2,
+		kind: 'result',
+		requestId: 1,
+		result: {},
+	});
 
 	await assert.rejects(pending, /Unsupported worker protocol version/);
 });
@@ -274,11 +249,7 @@ test('Invalid incremental synchronization drops the mirror and poisons its clien
 	using registry = new LanguageCompletionProviderRegistry();
 	using registration = registry.register(createLanguageWordCompletionProvider());
 	const [clientPort, serverPort] = createPortPair();
-	using server = new WorkerTextModelSyncServer(
-		serverPort,
-		languageCompletionWireCodec,
-		new LanguageCompletionProviderWorker(registry),
-	);
+	using server = new WorkerTextModelSyncServer(serverPort, languageCompletionWireCodec, new LanguageCompletionProviderWorker(registry));
 	using client = new WorkerTextModelSyncClient(clientPort, languageCompletionWireCodec);
 	await client.run(request(model, 1), new AbortController().signal);
 
@@ -318,10 +289,7 @@ test('Wire ports fail pending requests and validate service factory options', as
 	);
 });
 
-async function assertRemoteFailure(
-	worker: LanguageCompletionWorker,
-	predicate: (error: unknown) => boolean,
-): Promise<void> {
+async function assertRemoteFailure(worker: LanguageCompletionWorker, predicate: (error: unknown) => boolean): Promise<void> {
 	const [clientPort, serverPort] = createPortPair();
 	using server = new WorkerTextModelSyncServer(serverPort, languageCompletionWireCodec, worker);
 	using client = new WorkerTextModelSyncClient(clientPort, languageCompletionWireCodec);
@@ -329,10 +297,7 @@ async function assertRemoteFailure(
 	await assert.rejects(client.run(request(model, 1), new AbortController().signal), predicate);
 }
 
-function request(
-	model: TextModel,
-	requestId: number,
-): LanguageWorkerRequest<typeof LANGUAGE_COMPLETION_LANE, LanguageCompletionRequest> {
+function request(model: TextModel, requestId: number): LanguageWorkerRequest<typeof LANGUAGE_COMPLETION_LANE, LanguageCompletionRequest> {
 	return Object.freeze({
 		requestId,
 		lane: LANGUAGE_COMPLETION_LANE,
@@ -414,18 +379,12 @@ class MemoryWirePort extends Disposable implements WebWorkerClientPort {
 
 class TestCompletionWorker extends Disposable implements LanguageCompletionWorker {
 	constructor(
-		private readonly runRequest: (
-			request: LanguageWorkerRequest<typeof LANGUAGE_COMPLETION_LANE, LanguageCompletionRequest>,
-			signal: AbortSignal,
-		) => ReturnType<LanguageCompletionWorker['run']>,
+		private readonly runRequest: (request: LanguageWorkerRequest<typeof LANGUAGE_COMPLETION_LANE, LanguageCompletionRequest>, signal: AbortSignal) => ReturnType<LanguageCompletionWorker['run']>,
 	) {
 		super();
 	}
 
-	run(
-		request: LanguageWorkerRequest<typeof LANGUAGE_COMPLETION_LANE, LanguageCompletionRequest>,
-		signal: AbortSignal,
-	): ReturnType<LanguageCompletionWorker['run']> {
+	run(request: LanguageWorkerRequest<typeof LANGUAGE_COMPLETION_LANE, LanguageCompletionRequest>, signal: AbortSignal): ReturnType<LanguageCompletionWorker['run']> {
 		return this.runRequest(request, signal);
 	}
 }

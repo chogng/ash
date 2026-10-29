@@ -17,12 +17,7 @@ export class MultiDiffEditorLogger {
 		this.logService.trace('multiDiffEditor', 'comparison state changed', { itemId, state });
 	}
 
-	public layoutChanged(
-		before: readonly ICompressedVirtualizedItemRange[],
-		after: readonly ICompressedVirtualizedItemRange[],
-		scrollTopBefore: number,
-		scrollTopAfter: number,
-	): void {
+	public layoutChanged(before: readonly ICompressedVirtualizedItemRange[], after: readonly ICompressedVirtualizedItemRange[], scrollTopBefore: number, scrollTopAfter: number): void {
 		const beforeHeight = before.length > 0 ? before.at(-1)!.top + before.at(-1)!.height : 0;
 		const afterHeight = after.length > 0 ? after.at(-1)!.top + after.at(-1)!.height : 0;
 		if (beforeHeight === afterHeight && scrollTopBefore === scrollTopAfter) return;

@@ -98,24 +98,14 @@ export abstract class ViewPane extends Pane implements IView {
 	}
 
 	/** Includes fixed controls in the body constraint while retaining an independent content viewport. */
-	protected trackBodyMinimum(
-		scrollableContent: HTMLElement,
-		minimumContentHeight: number,
-		enabled: () => boolean = () => true,
-	): void {
+	protected trackBodyMinimum(scrollableContent: HTMLElement, minimumContentHeight: number, enabled: () => boolean = () => true): void {
 		const minimumBodyHeight = this.minimumBodySize;
 		const update = this._register(
 			new AnimationFrameScheduler(getWindow(this.element), () => {
 				if (!this.isBodyVisible()) {
 					return;
 				}
-				const reservedHeight = enabled()
-					? Math.max(
-							0,
-							Math.max(this.contentElement.clientHeight, this.contentElement.scrollHeight) -
-								scrollableContent.offsetHeight,
-						)
-					: 0;
+				const reservedHeight = enabled() ? Math.max(0, Math.max(this.contentElement.clientHeight, this.contentElement.scrollHeight) - scrollableContent.offsetHeight) : 0;
 				this.minimumBodySize = Math.max(minimumBodyHeight, minimumContentHeight + reservedHeight);
 			}),
 		);
@@ -165,9 +155,7 @@ export abstract class ViewPane extends Pane implements IView {
 		super.setHeaderActionsHost(host);
 		if (!host || !actions) return;
 		// The Part owns the renderer; this View keeps the scope and focus tracker on the lent action root.
-		const focused = actions.contains(actions.ownerDocument.activeElement)
-			? (actions.ownerDocument.activeElement as HTMLElement)
-			: undefined;
+		const focused = actions.contains(actions.ownerDocument.activeElement) ? (actions.ownerDocument.activeElement as HTMLElement) : undefined;
 		this.headerActionsElement.append(actions);
 		actions.setAttribute('aria-label', this.headerActionsElement.getAttribute('aria-label') ?? this.paneTitle);
 		focused?.focus();
@@ -179,9 +167,7 @@ export abstract class ViewPane extends Pane implements IView {
 		const actionId = (activeElement as HTMLElement).closest<HTMLElement>('[data-action-id]')?.dataset.actionId;
 		if (!actionId) return undefined;
 		return () => {
-			const entry = [...this.headerActionsElement.querySelectorAll<HTMLElement>('[data-action-id]')].find(
-				element => element.dataset.actionId === actionId,
-			);
+			const entry = [...this.headerActionsElement.querySelectorAll<HTMLElement>('[data-action-id]')].find(element => element.dataset.actionId === actionId);
 			// Revealing the pane's focus actions must precede focusing a control hidden until focus enters it.
 			if (entry && this.isHeaderVisible()) this.element.focus();
 			entry?.querySelector<HTMLElement>('button:not(:disabled), [tabindex]')?.focus();
@@ -209,20 +195,11 @@ export abstract class ViewPane extends Pane implements IView {
 		super(container, { ...options, headerActionsVisibility });
 		this.element.classList.add('ash-view-pane');
 		// Pane owns collapse visibility; this variant bypasses its hover/focus reveal.
-		this.element.classList.toggle(
-			'show-actions',
-			options.showActions === ViewPaneShowActions.WhenExpanded ||
-				options.showActions === ViewPaneShowActions.Always,
-		);
+		this.element.classList.toggle('show-actions', options.showActions === ViewPaneShowActions.WhenExpanded || options.showActions === ViewPaneShowActions.Always);
 		this.element.dataset.viewId = options.id;
 		this.headerElement.draggable = options.canMoveView === true;
 		if (options.canMoveView)
-			this.headerElement
-				.querySelector('button')
-				?.setAttribute(
-					'aria-description',
-					localize('views.moveViewHint', 'Drag to move this view, or use Move View in the Command Palette.'),
-				);
+			this.headerElement.querySelector('button')?.setAttribute('aria-description', localize('views.moveViewHint', 'Drag to move this view, or use Move View in the Command Palette.'));
 		this.element.hidden = true;
 	}
 
@@ -276,11 +253,7 @@ export abstract class FilterViewPane extends ViewPane {
 	protected readonly filterContainer: HTMLElement;
 	private bodyDimension: { height: number; width: number } | undefined;
 
-	constructor(
-		container: HTMLElement,
-		options: IFilterViewPaneOptions,
-		@IInstantiationService instantiationService: IInstantiationService,
-	) {
+	constructor(container: HTMLElement, options: IFilterViewPaneOptions, @IInstantiationService instantiationService: IInstantiationService) {
 		super(container, options);
 		this.element.classList.add('ash-filter-view-pane');
 		this.filterWidget = this._register(instantiationService.createInstance(FilterWidget, options.filterOptions));
@@ -296,9 +269,7 @@ export abstract class FilterViewPane extends ViewPane {
 	}
 
 	shouldShowFilterInHeader(): boolean {
-		return (
-			this.bodyDimension !== undefined && (this.bodyDimension.width >= 600 || this.bodyDimension.height <= 100)
-		);
+		return this.bodyDimension !== undefined && (this.bodyDimension.width >= 600 || this.bodyDimension.height <= 100);
 	}
 
 	protected override layoutBody(height: number, width: number): void {
@@ -393,11 +364,7 @@ export class ViewWelcomeController extends Disposable {
 	public update(): void {
 		if (this.isDisposed) return;
 		const contents = this.registry.getViewWelcomeContent(this.delegate.id);
-		let selected = contents.filter(
-			descriptor =>
-				descriptor.when !== 'default' &&
-				this.contextKeyService.contextMatchesRules(descriptor.when, this.container),
-		);
+		let selected = contents.filter(descriptor => descriptor.when !== 'default' && this.contextKeyService.contextMatchesRules(descriptor.when, this.container));
 		if (selected.length === 0) selected = contents.filter(descriptor => descriptor.when === 'default');
 		const enabled = this.delegate.shouldShowWelcome() && selected.length > 0;
 		const hadFocus = this.domNode.contains(this.domNode.ownerDocument.activeElement);
@@ -406,10 +373,7 @@ export class ViewWelcomeController extends Disposable {
 		this.domNode.classList.toggle('hidden', !enabled);
 		this.container.classList.toggle('welcome', enabled);
 		if (!enabled) selected = [];
-		if (
-			selected.length !== this.descriptors.length ||
-			selected.some((descriptor, index) => descriptor !== this.descriptors[index])
-		) {
+		if (selected.length !== this.descriptors.length || selected.some((descriptor, index) => descriptor !== this.descriptors[index])) {
 			this.renderedContent.clear();
 			this.buttons.length = 0;
 			this.scrollable.replaceChildren();
@@ -452,19 +416,12 @@ export class ViewWelcomeController extends Disposable {
 	}
 
 	private async open(target: string, descriptor: IViewContentDescriptor): Promise<void> {
-		if (!this.enabled || !this.contextKeyService.contextMatchesRules(descriptor.precondition, this.container))
-			return;
+		if (!this.enabled || !this.contextKeyService.contextMatchesRules(descriptor.precondition, this.container)) return;
 		try {
 			// Only registered product content reaches this renderer; command links retain their existing host owner.
 			await this.openerService.open(target, { allowCommands: true, fromUserGesture: true });
 		} catch (error) {
-			this.notifications.error(
-				localize(
-					'view.welcome.actionFailed',
-					'Could not complete the action: {0}',
-					error instanceof Error ? error.message : String(error),
-				),
-			);
+			this.notifications.error(localize('view.welcome.actionFailed', 'Could not complete the action: {0}', error instanceof Error ? error.message : String(error)));
 		}
 	}
 }

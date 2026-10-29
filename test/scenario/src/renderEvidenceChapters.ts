@@ -70,21 +70,12 @@ function installedToolCandidates(executable: string): string[] {
 			candidates.push(join(localAppData, 'Microsoft', 'WinGet', 'Links', executable));
 			const packages = join(localAppData, 'Microsoft', 'WinGet', 'Packages');
 			for (const packageName of readDirectories(packages).filter(name => /ffmpeg/iu.test(name))) {
-				for (const build of readDirectories(join(packages, packageName)))
-					candidates.push(join(packages, packageName, build, 'bin', executable));
+				for (const build of readDirectories(join(packages, packageName))) candidates.push(join(packages, packageName, build, 'bin', executable));
 			}
 		}
-		candidates.push(
-			join(process.env.ProgramData ?? '', 'chocolatey', 'bin', executable),
-			join(process.env.ProgramFiles ?? '', 'ffmpeg', 'bin', executable),
-		);
+		candidates.push(join(process.env.ProgramData ?? '', 'chocolatey', 'bin', executable), join(process.env.ProgramFiles ?? '', 'ffmpeg', 'bin', executable));
 	} else {
-		candidates.push(
-			`/opt/homebrew/opt/ffmpeg-full/bin/${executable}`,
-			`/opt/homebrew/bin/${executable}`,
-			`/usr/local/bin/${executable}`,
-			`/usr/bin/${executable}`,
-		);
+		candidates.push(`/opt/homebrew/opt/ffmpeg-full/bin/${executable}`, `/opt/homebrew/bin/${executable}`, `/usr/local/bin/${executable}`, `/usr/bin/${executable}`);
 	}
 	return candidates.filter(existsSync);
 }
@@ -105,11 +96,7 @@ export function renderChapters(runRoot: string): void {
 	const videoStartedAt = Date.parse(manifest.videoStartedAt ?? '');
 	const rawVideos = (manifest.artifacts?.videos ?? []).filter(video => extname(video).toLowerCase() === '.webm');
 	if (rawVideos.length !== 1) {
-		console.log(
-			rawVideos.length
-				? `The run has ${rawVideos.length} recordings; one caption timeline cannot represent multiple windows.`
-				: 'No recorded video is available.',
-		);
+		console.log(rawVideos.length ? `The run has ${rawVideos.length} recordings; one caption timeline cannot represent multiple windows.` : 'No recorded video is available.');
 		return;
 	}
 	if (!Number.isFinite(videoStartedAt)) {
@@ -120,10 +107,7 @@ export function renderChapters(runRoot: string): void {
 	if (!font) throw new Error('No caption font could be found. Set CHAPTER_FONT to a TrueType font.');
 	const ffmpeg = resolveVideoTool('ffmpeg');
 	const ffprobe = resolveVideoTool('ffprobe');
-	if (!ffmpeg || !ffprobe)
-		throw new Error(
-			`${[!ffmpeg && 'ffmpeg', !ffprobe && 'ffprobe'].filter(Boolean).join(' and ')} could not be found`,
-		);
+	if (!ffmpeg || !ffprobe) throw new Error(`${[!ffmpeg && 'ffmpeg', !ffprobe && 'ffprobe'].filter(Boolean).join(' and ')} could not be found`);
 
 	const inputPath = join(runRoot, rawVideos[0]!);
 	const outputRelative = 'videos/annotated.mp4';
@@ -133,29 +117,14 @@ export function renderChapters(runRoot: string): void {
 		const fontCopy = join(workDirectory, 'font.ttf');
 		writeFileSync(fontCopy, readFileSync(font));
 		const probe = JSON.parse(
-			execFileSync(
-				ffprobe,
-				[
-					'-v',
-					'error',
-					'-select_streams',
-					'v:0',
-					'-show_entries',
-					'stream=width,height',
-					'-show_entries',
-					'format=duration',
-					'-of',
-					'json',
-					inputPath,
-				],
-				{ encoding: 'utf8' },
-			),
+			execFileSync(ffprobe, ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-show_entries', 'format=duration', '-of', 'json', inputPath], {
+				encoding: 'utf8',
+			}),
 		) as { streams?: { width?: number; height?: number }[]; format?: { duration?: string } };
 		const width = Number(probe.streams?.[0]?.width);
 		const height = Number(probe.streams?.[0]?.height);
 		const duration = Number(probe.format?.duration);
-		if (!Number.isInteger(width) || !Number.isInteger(height) || !Number.isFinite(duration) || duration <= 0)
-			throw new Error('The recorded video could not be probed.');
+		if (!Number.isInteger(width) || !Number.isInteger(height) || !Number.isFinite(duration) || duration <= 0) throw new Error('The recorded video could not be probed.');
 
 		const margin = Math.round(width * 0.02);
 		const eyebrowSize = Math.max(12, Math.round(height * 0.02));
@@ -205,25 +174,12 @@ export function renderChapters(runRoot: string): void {
 		const titleLines = Math.max(1, ...captions.map(caption => caption.title.length));
 		const detailLines = Math.max(0, ...captions.map(caption => caption.details.length));
 		const gap = Math.round(height * 0.008);
-		let bandHeight =
-			margin +
-			lineHeight(eyebrowSize) +
-			gap +
-			titleLines * lineHeight(titleSize) +
-			(detailLines ? gap + detailLines * lineHeight(detailSize) : 0) +
-			margin;
+		let bandHeight = margin + lineHeight(eyebrowSize) + gap + titleLines * lineHeight(titleSize) + (detailLines ? gap + detailLines * lineHeight(detailSize) : 0) + margin;
 		bandHeight += bandHeight % 2;
 		const filters = [`[0:v]pad=${width}:${height + bandHeight}:0:${bandHeight}:color=0x0D1117[base]`];
 		let label = 'base';
 		let textIndex = 0;
-		const draw = (
-			lines: readonly string[],
-			size: number,
-			y: number,
-			color: string,
-			caption: Caption,
-			align: 'left' | 'right',
-		): void => {
+		const draw = (lines: readonly string[], size: number, y: number, color: string, caption: Caption, align: 'left' | 'right'): void => {
 			if (!lines.length || caption.to <= caption.from + 0.05) return;
 			const name = `text-${textIndex++}.txt`;
 			writeFileSync(join(workDirectory, name), lines.join('\n'));
@@ -322,15 +278,10 @@ export function tryRenderChapters(runRoot: string): void {
 	try {
 		renderChapters(runRoot);
 	} catch (error) {
-		console.warn(
-			`Unable to render evidence captions: ${error instanceof Error ? error.message : String(error)}. The raw recording is unaffected.`,
-		);
+		console.warn(`Unable to render evidence captions: ${error instanceof Error ? error.message : String(error)}. The raw recording is unaffected.`);
 	}
 }
 
-if (
-	import.meta.url === pathToFileURL(process.argv[1] ?? '').href &&
-	basename(process.argv[1] ?? '') === 'renderEvidenceChapters.js'
-) {
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href && basename(process.argv[1] ?? '') === 'renderEvidenceChapters.js') {
 	tryRenderChapters(resolve(process.argv[2] ?? process.env.RUN_ROOT ?? '.'));
 }

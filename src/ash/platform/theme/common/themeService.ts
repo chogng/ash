@@ -45,11 +45,7 @@ export interface IPartsSplashPartBounds {
 
 /** Persistence and IPC accept only resolved, opaque colors, never arbitrary CSS. */
 export function validatePartsSplash(value: unknown): IPartsSplash {
-	if (
-		!isRecord(value) ||
-		!Object.values(ColorScheme).includes(value.baseTheme as ColorScheme) ||
-		!isRecord(value.colorInfo)
-	) {
+	if (!isRecord(value) || !Object.values(ColorScheme).includes(value.baseTheme as ColorScheme) || !isRecord(value.colorInfo)) {
 		throw new TypeError('Invalid window splash');
 	}
 	const { background, foreground } = value.colorInfo;
@@ -63,14 +59,7 @@ export function validatePartsSplash(value: unknown): IPartsSplash {
 	}
 	if (value.layoutInfo !== undefined) {
 		const layout = value.layoutInfo;
-		if (
-			!isRecord(layout) ||
-			layout.version !== 2 ||
-			!validSize(layout.width) ||
-			!validSize(layout.height) ||
-			!Array.isArray(layout.partBounds) ||
-			layout.partBounds.length > 16
-		) {
+		if (!isRecord(layout) || layout.version !== 2 || !validSize(layout.width) || !validSize(layout.height) || !Array.isArray(layout.partBounds) || layout.partBounds.length > 16) {
 			throw new TypeError('Invalid window splash layout');
 		}
 		const width = layout.width;
@@ -93,12 +82,7 @@ export function validatePartsSplash(value: unknown): IPartsSplash {
 				throw new TypeError('Invalid window splash part bounds');
 			}
 			const borderRadii = part.borderRadii.map((radius: unknown): readonly [number, number] => {
-				if (
-					!Array.isArray(radius) ||
-					radius.length !== 2 ||
-					!validOffset(radius[0]) ||
-					!validOffset(radius[1])
-				) {
+				if (!Array.isArray(radius) || radius.length !== 2 || !validOffset(radius[0]) || !validOffset(radius[1])) {
 					throw new TypeError('Invalid window splash corner radius');
 				}
 				return [radius[0], radius[1]];
@@ -110,18 +94,7 @@ export function validatePartsSplash(value: unknown): IPartsSplash {
 					border.width > 4 ||
 					!validSplashColor(border.color) ||
 					typeof border.style !== 'string' ||
-					![
-						'none',
-						'hidden',
-						'solid',
-						'dotted',
-						'dashed',
-						'double',
-						'groove',
-						'ridge',
-						'inset',
-						'outset',
-					].includes(border.style)
+					!['none', 'hidden', 'solid', 'dotted', 'dashed', 'double', 'groove', 'ridge', 'inset', 'outset'].includes(border.style)
 				) {
 					throw new TypeError('Invalid window splash border');
 				}
@@ -143,13 +116,7 @@ export function validatePartsSplash(value: unknown): IPartsSplash {
 					throw new TypeError('Invalid window splash gradient');
 				}
 				const stops = gradient.stops.map((stop: unknown) => {
-					if (
-						!isRecord(stop) ||
-						!validSplashColor(stop.color) ||
-						typeof stop.offset !== 'number' ||
-						!Number.isFinite(stop.offset) ||
-						Math.abs(stop.offset) > 65536
-					) {
+					if (!isRecord(stop) || !validSplashColor(stop.color) || typeof stop.offset !== 'number' || !Number.isFinite(stop.offset) || Math.abs(stop.offset) > 65536) {
 						throw new TypeError('Invalid window splash gradient stop');
 					}
 					return { color: stop.color, offset: stop.offset };

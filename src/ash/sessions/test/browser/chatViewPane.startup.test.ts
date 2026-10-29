@@ -6,10 +6,7 @@ import { IImageEditorService } from '../../../workbench/services/imageEditor/com
 import { ImageEditorService } from '../../../workbench/services/imageEditor/browser/imageEditorService.js';
 import type { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
-import {
-	IChatSpeechToTextService,
-	ChatSpeechToTextService,
-} from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
+import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { UserDataProfileService } from '../../../workbench/services/userDataProfile/browser/userDataProfileService.js';
 import { TestConfigurationFiles } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
@@ -51,25 +48,9 @@ import type {
 	ThreadTranscriptUpdateEnvelope,
 	ThreadUpdateEnvelope,
 } from '../../../workbench/services/chat/common/chatService.js';
-import {
-	Position,
-	type IWorkbenchLayoutService,
-	type WorkbenchPartId,
-	type WorkbenchPartVisibilityChangeEvent,
-} from '../../../workbench/services/layout/browser/layoutService.js';
-import type {
-	ApprovalMode,
-	IActiveSessionThread,
-	ISession,
-	IUntitledChatSession,
-	ModelRef,
-	SessionId,
-	ThreadId,
-} from '../../services/sessions/common/session.js';
-import type {
-	ISessionsManagementService,
-	SessionsManagementState,
-} from '../../services/sessions/common/sessionsManagement.js';
+import { Position, type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from '../../../workbench/services/layout/browser/layoutService.js';
+import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from '../../services/sessions/common/session.js';
+import type { ISessionsManagementService, SessionsManagementState } from '../../services/sessions/common/sessionsManagement.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../platform/renderer/common/dictation.js';
@@ -232,9 +213,7 @@ class PendingSessionService implements ISessionsManagementService {
 	private _activeUntitledSessionId: string | undefined;
 
 	readonly onDidChange = this._onDidChange.event;
-	readonly materializedSessions = observableValue<
-		ReadonlyMap<string, { readonly sessionId: SessionId; readonly threadId: ThreadId }>
-	>(this, new Map());
+	readonly materializedSessions = observableValue<ReadonlyMap<string, { readonly sessionId: SessionId; readonly threadId: ThreadId }>>(this, new Map());
 	readonly sessions: readonly ISession[] = [];
 	readonly active: IActiveSessionThread | undefined = undefined;
 	readonly state: SessionsManagementState = 'loading';
@@ -289,10 +268,7 @@ class PendingSessionService implements ISessionsManagementService {
 	discardUntitledSession(_untitledSessionId: string): void {}
 	setUntitledSessionModel(_untitledSessionId: string, _model: ModelRef): void {}
 	setUntitledSessionDefaultModel(_untitledSessionId: string, _model: ModelRef | undefined): void {}
-	setUntitledSessionAgent(
-		_untitledSessionId: string,
-		_agent: import('../../../workbench/services/chat/common/chatService.js').ChatAgent | undefined,
-	): void {}
+	setUntitledSessionAgent(_untitledSessionId: string, _agent: import('../../../workbench/services/chat/common/chatService.js').ChatAgent | undefined): void {}
 	materializeUntitledSession(_untitledSessionId: string): Promise<IActiveSessionThread> {
 		return Promise.reject(new Error('Backend is unavailable'));
 	}
@@ -397,13 +373,11 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		onDidChangeInteractionOffer: Event.None,
 		onDidUpdateThread: neverEvent<ThreadUpdateEnvelope>(),
 		onDidUpdateThreadTranscript: neverEvent<ThreadTranscriptUpdateEnvelope>(),
-		onDidUpdateGoal:
-			neverEvent<import('../../../workbench/services/chat/common/chatService.js').ThreadGoalUpdate>(),
+		onDidUpdateGoal: neverEvent<import('../../../workbench/services/chat/common/chatService.js').ThreadGoalUpdate>(),
 		onDidBecomeReady: neverEvent<void>(),
 		onDidChangeModels: neverEvent<void>(),
 		onDidChangeQueue: neverEvent<void>(),
-		onDidUpdateTurnChanges:
-			neverEvent<import('../../../workbench/services/chat/common/chatService.js').TurnChangesUpdate>(),
+		onDidUpdateTurnChanges: neverEvent<import('../../../workbench/services/chat/common/chatService.js').TurnChangesUpdate>(),
 		discoverProviderModels: () => pending,
 		listModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		getDefaultNewChatModel: () => undefined,
@@ -434,8 +408,7 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 			throw new Error('Checkpoint restore is not configured in this fixture');
 		},
 		readThread: (_sessionId: SessionId, _threadId: ThreadId) => pending as Promise<ThreadRead>,
-		subscribeThread: (_sessionId: SessionId, _threadId: ThreadId, _afterSequence: number) =>
-			pending as Promise<ThreadSubscription>,
+		subscribeThread: (_sessionId: SessionId, _threadId: ThreadId, _afterSequence: number) => pending as Promise<ThreadSubscription>,
 		unsubscribeThread: (_sessionId: SessionId, _threadId: ThreadId) => pending as Promise<void>,
 		startTurn: () => pending as Promise<void>,
 		queueTurn: () => pending as Promise<void>,
@@ -462,7 +435,13 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 function emptyMenuService(): IMenuService {
 	const menu = Object.assign(
 		toDisposable(() => {}),
-		{ onDidChange: () => toDisposable(() => {}), getActions: () => [] },
+		{
+			onDidChange: () => toDisposable(() => {}),
+			getActions: () => [],
+		},
 	) satisfies IMenu;
-	return { createMenu: () => menu, getMenuActions: () => [] };
+	return {
+		createMenu: () => menu,
+		getMenuActions: () => [],
+	};
 }

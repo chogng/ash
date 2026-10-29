@@ -1,7 +1,4 @@
-import {
-	AccessibilitySignal,
-	IAccessibilitySignalService,
-} from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
+import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { EditSources } from '../../../common/textModelEditSource.js';
 import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -12,12 +9,7 @@ import { TextDecorationCollection } from '../../../common/model/decorationCollec
 import { type View } from '../../../browser/view.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { CodeActionTriggerType } from '../../../common/languages.js';
-import {
-	CodeActionAutoApply,
-	CodeActionTriggerSource,
-	type CodeActionItem,
-	type CodeActionFilter,
-} from '../common/types.js';
+import { CodeActionAutoApply, CodeActionTriggerSource, type CodeActionItem, type CodeActionFilter } from '../common/types.js';
 import { CodeActionModel, CodeActionsState } from './codeActionModel.js';
 import { CodeActionKeybindingResolver } from './codeActionKeybindingResolver.js';
 import { toMenuItems } from './codeActionMenu.js';
@@ -47,12 +39,7 @@ export class CodeActionController extends Disposable {
 		private readonly editor: ICodeEditor,
 		private readonly viewport: View,
 		private readonly diagnostics: TextDecorationCollection<languages.LanguageDiagnostic>,
-		private readonly applyWorkspaceEdit:
-			| ((
-					edit: languages.LanguageWorkspaceEdit,
-					options?: IBulkEditOptions,
-			  ) => void | boolean | Promise<void | boolean>)
-			| undefined,
+		private readonly applyWorkspaceEdit: ((edit: languages.LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>) | undefined,
 		private readonly onError: (error: unknown) => void,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IActionWidgetService private readonly actionWidgetService: IActionWidgetService,
@@ -70,10 +57,7 @@ export class CodeActionController extends Disposable {
 			this.model.onDidChangeState(state => {
 				this.hideMenu();
 				this.lightbulb.hide();
-				if (
-					state.type === CodeActionsState.Type.Triggered &&
-					state.trigger.type === CodeActionTriggerType.Auto
-				) {
+				if (state.type === CodeActionsState.Type.Triggered && state.trigger.type === CodeActionTriggerType.Auto) {
 					void state.actions
 						.then(actions => {
 							if (this.model.state === state) {
@@ -86,11 +70,10 @@ export class CodeActionController extends Disposable {
 		);
 		this._register(
 			this.lightbulb.onClick(trigger => {
-				void this.manualTriggerAtCurrentPosition(
-					localize('codeAction.empty', 'No code actions available.'),
-					CodeActionTriggerSource.Lightbulb,
-					{ ...trigger.filter, includeSourceActions: true },
-				).catch(onError);
+				void this.manualTriggerAtCurrentPosition(localize('codeAction.empty', 'No code actions available.'), CodeActionTriggerSource.Lightbulb, {
+					...trigger.filter,
+					includeSourceActions: true,
+				}).catch(onError);
 			}),
 		);
 		this._register(toDisposable(() => this.close()));
@@ -113,14 +96,14 @@ export class CodeActionController extends Disposable {
 		this._register(editor.onDidLayoutChange(() => this.close()));
 	}
 
-	public async manualTriggerAtCurrentPosition(
-		notAvailableMessage: string,
-		triggerAction: CodeActionTriggerSource,
-		filter?: CodeActionFilter,
-		autoApply = CodeActionAutoApply.Never,
-	): Promise<void> {
+	public async manualTriggerAtCurrentPosition(notAvailableMessage: string, triggerAction: CodeActionTriggerSource, filter?: CodeActionFilter, autoApply = CodeActionAutoApply.Never): Promise<void> {
 		this.close();
-		const state = this.model.trigger({ type: CodeActionTriggerType.Invoke, triggerAction, filter, autoApply });
+		const state = this.model.trigger({
+			type: CodeActionTriggerType.Invoke,
+			triggerAction,
+			filter,
+			autoApply,
+		});
 		if (!state) {
 			return;
 		}
@@ -136,11 +119,7 @@ export class CodeActionController extends Disposable {
 				return;
 			}
 			this.actions = actions.allActions;
-			if (
-				actions.validActions.length > 0 &&
-				(autoApply === CodeActionAutoApply.First ||
-					(autoApply === CodeActionAutoApply.IfSingle && actions.validActions.length === 1))
-			) {
+			if (actions.validActions.length > 0 && (autoApply === CodeActionAutoApply.First || (autoApply === CodeActionAutoApply.IfSingle && actions.validActions.length === 1))) {
 				await this.apply(actions.validActions[0]!);
 				return;
 			}
@@ -195,10 +174,7 @@ export class CodeActionController extends Disposable {
 			{ showFilter: true },
 			groups.size > 1
 				? {
-						tabs: [
-							{ id: 'all', label: localize('codeAction.allActions', 'All actions') },
-							...groupEntries.map(([title], index) => ({ id: String(index), label: title })),
-						],
+						tabs: [{ id: 'all', label: localize('codeAction.allActions', 'All actions') }, ...groupEntries.map(([title], index) => ({ id: String(index), label: title }))],
 						initialTab: 'all',
 						createActionList: id => ({ items: id === 'all' ? items : groupEntries[Number(id)]![1] }),
 					}
@@ -208,20 +184,11 @@ export class CodeActionController extends Disposable {
 
 	private async apply(entry: CodeActionItem, preview = false): Promise<void> {
 		const context = this.context;
-		if (
-			!entry ||
-			!context ||
-			!languages.isLanguageFeatureRequestCurrent(context) ||
-			entry.action.disabledReason !== undefined
-		)
-			return;
+		if (!entry || !context || !languages.isLanguageFeatureRequestCurrent(context) || entry.action.disabledReason !== undefined) return;
 		let editDispatched = false;
 		let applied = false;
 		try {
-			const resolved =
-				entry.action.edit || !entry.provider.resolveCodeAction
-					? entry.action
-					: (await entry.resolve(context)).action;
+			const resolved = entry.action.edit || !entry.provider.resolveCodeAction ? entry.action : (await entry.resolve(context)).action;
 			if (!languages.isLanguageFeatureRequestCurrent(context)) return;
 			if (resolved.disabledReason !== undefined) {
 				this.viewport.announceAccessibilityStatus(resolved.disabledReason);
@@ -229,9 +196,7 @@ export class CodeActionController extends Disposable {
 				return;
 			}
 			if (!resolved.edit) {
-				this.viewport.announceAccessibilityStatus(
-					localize('codeAction.noEdit', '{0} has no text edit.', resolved.title),
-				);
+				this.viewport.announceAccessibilityStatus(localize('codeAction.noEdit', '{0} has no text edit.', resolved.title));
 				this.close();
 				return;
 			}
@@ -248,17 +213,13 @@ export class CodeActionController extends Disposable {
 				// Dismissing the menu hands focus to the preview without cancelling its version-bound request.
 				this.actionWidgetService.hide(false);
 				editDispatched = true;
-				applied = (await this.bulkEditService.apply(resolved.edit, { ...options, token: context.signal }))
-					.isApplied;
+				applied = (await this.bulkEditService.apply(resolved.edit, { ...options, token: context.signal })).isApplied;
 			} else if (this.applyWorkspaceEdit) {
 				editDispatched = true;
 				applied = (await this.applyWorkspaceEdit(resolved.edit, options)) === true;
 			} else {
-				const documentEdit = resolved.edit.entries.find(
-					edit => edit.kind === 'textDocument' && edit.resource.toString() === context.resource.toString(),
-				);
-				if (resolved.edit.entries.length !== 1 || !documentEdit || documentEdit.kind !== 'textDocument')
-					throw new Error('This editor host cannot apply a multi-resource code action');
+				const documentEdit = resolved.edit.entries.find(edit => edit.kind === 'textDocument' && edit.resource.toString() === context.resource.toString());
+				if (resolved.edit.entries.length !== 1 || !documentEdit || documentEdit.kind !== 'textDocument') throw new Error('This editor host cannot apply a multi-resource code action');
 				if (documentEdit.version !== undefined && documentEdit.version !== context.snapshot.version) {
 					throw new Error('Code action edit does not match the requested document version');
 				}

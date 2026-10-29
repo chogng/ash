@@ -91,11 +91,7 @@ class BaseNavigationAction extends Action2 {
 
 for (const [id, title, direction] of [
 	['workbench.action.navigateLeft', localize2('navigateLeft', 'Navigate to the View on the Left'), Direction.Left],
-	[
-		'workbench.action.navigateRight',
-		localize2('navigateRight', 'Navigate to the View on the Right'),
-		Direction.Right,
-	],
+	['workbench.action.navigateRight', localize2('navigateRight', 'Navigate to the View on the Right'), Direction.Right],
 	['workbench.action.navigateUp', localize2('navigateUp', 'Navigate to the View Above'), Direction.Up],
 	['workbench.action.navigateDown', localize2('navigateDown', 'Navigate to the View Below'), Direction.Down],
 ] as const) {

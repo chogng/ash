@@ -24,11 +24,7 @@ test('LineWidthIndex matches full scans across random transactions', () => {
 		} else {
 			applyRandomTransaction(model, random);
 		}
-		assert.equal(
-			index.maximumLineWidth,
-			fullScanMaximum(model, measurer),
-			`maximum width diverged at iteration ${iteration}`,
-		);
+		assert.equal(index.maximumLineWidth, fullScanMaximum(model, measurer), `maximum width diverged at iteration ${iteration}`);
 	}
 });
 
@@ -70,7 +66,12 @@ test('LineWidthIndex restarts an incomplete scan after an edit', () => {
 	});
 	using listener = model.onDidChangeContent(change => index.applyModelChange(change));
 
-	model.applyEdits([{ range: Range.fromPositions(model.positionAt(0), model.positionAt(1)), text: 'xxxxxxxx' }]);
+	model.applyEdits([
+		{
+			range: Range.fromPositions(model.positionAt(0), model.positionAt(1)),
+			text: 'xxxxxxxx',
+		},
+	]);
 	scheduler.runAll();
 
 	assert.equal(index.complete, true);
@@ -147,21 +148,11 @@ function fullScanMaximum(model: TextModel, measurer: TextMeasurer): number {
 function applyRandomTransaction(model: TextModel, random: () => number): void {
 	const length = model.createVersionedSnapshot().length;
 	const edits =
-		random() < 0.35 && length >= 4
-			? [
-					randomEdit(model, random, 0, Math.floor(length / 2)),
-					randomEdit(model, random, Math.floor(length / 2) + 1, length),
-				]
-			: [randomEdit(model, random, 0, length)];
+		random() < 0.35 && length >= 4 ? [randomEdit(model, random, 0, Math.floor(length / 2)), randomEdit(model, random, Math.floor(length / 2) + 1, length)] : [randomEdit(model, random, 0, length)];
 	model.applyEdits(edits);
 }
 
-function randomEdit(
-	model: TextModel,
-	random: () => number,
-	minimumOffset: number,
-	maximumOffset: number,
-): { readonly range: Range; readonly text: string } {
+function randomEdit(model: TextModel, random: () => number, minimumOffset: number, maximumOffset: number): { readonly range: Range; readonly text: string } {
 	const first = randomInteger(random, minimumOffset, maximumOffset);
 	const second = randomInteger(random, minimumOffset, maximumOffset);
 	const startOffset = Math.min(first, second);

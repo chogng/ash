@@ -46,20 +46,12 @@ test('DomEmitter tracks its Emitter as one leaf-owned resource', () => {
 class CountingEventTarget extends EventTarget {
 	public nativeListenerCount = 0;
 
-	public override addEventListener(
-		type: string,
-		callback: EventListenerOrEventListenerObject | null,
-		options?: boolean | AddEventListenerOptions,
-	): void {
+	public override addEventListener(type: string, callback: EventListenerOrEventListenerObject | null, options?: boolean | AddEventListenerOptions): void {
 		this.nativeListenerCount += 1;
 		super.addEventListener(type, callback, options);
 	}
 
-	public override removeEventListener(
-		type: string,
-		callback: EventListenerOrEventListenerObject | null,
-		options?: boolean | EventListenerOptions,
-	): void {
+	public override removeEventListener(type: string, callback: EventListenerOrEventListenerObject | null, options?: boolean | EventListenerOptions): void {
 		this.nativeListenerCount -= 1;
 		super.removeEventListener(type, callback, options);
 	}

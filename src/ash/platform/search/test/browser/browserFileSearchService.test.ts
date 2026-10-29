@@ -58,10 +58,7 @@ test('browser path discovery stops a superseded directory scan', async () => {
 			return [{ resource: URI.joinPath(directory, 'nested'), name: 'nested', kind: FileKind.Directory }];
 		},
 	});
-	await assert.rejects(
-		service.glob(folder, { includePatterns: [], excludePatterns: [], maxResults: 100 }, controller.signal),
-		isCancellationError,
-	);
+	await assert.rejects(service.glob(folder, { includePatterns: [], excludePatterns: [], maxResults: 100 }, controller.signal), isCancellationError);
 	assert.equal(reads, 1);
 });
 
@@ -104,10 +101,7 @@ test('browser fuzzy discovery skips generated directories and stops cancelled sc
 			return [{ resource: URI.joinPath(directory, 'late.ts'), name: 'late.ts', kind: FileKind.File }];
 		},
 	});
-	await assert.rejects(
-		service.fuzzy(folder, { query: 'late', maxResults: 1 }, controller.signal),
-		isCancellationError,
-	);
+	await assert.rejects(service.fuzzy(folder, { query: 'late', maxResults: 1 }, controller.signal), isCancellationError);
 	assert.deepEqual(visited, [folder.resource.path, folder.resource.path + '/src']);
 });
 

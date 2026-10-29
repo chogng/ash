@@ -14,19 +14,12 @@ export async function resolveAppServerLanguageDirAccess(
 ): Promise<AppServerLanguageDirAccess> {
 	const workspace = workspaceContext.getWorkspace();
 	// Browser handle identities cannot authorize a server process to read the local directory.
-	if (
-		workspace.folders.length === 0 ||
-		workspace.folders.some(folder => folder.uri.scheme !== 'file' || folder.uri.path.startsWith('/@browser/'))
-	)
+	if (workspace.folders.length === 0 || workspace.folders.some(folder => folder.uri.scheme !== 'file' || folder.uri.path.startsWith('/@browser/')))
 		return { workspaceId: workspace.id, allowed: false };
 	if (!checkWorkspaceTrust) return { workspaceId: workspace.id, allowed: true };
-	const permissions = await Promise.all(
-		workspace.folders.map(async folder => (await workspaceTrust.getUriTrustInfo(folder.uri)).permissions),
-	);
+	const permissions = await Promise.all(workspace.folders.map(async folder => (await workspaceTrust.getUriTrustInfo(folder.uri)).permissions));
 	return {
 		workspaceId: workspace.id,
-		allowed: permissions.every(
-			entry => entry?.includes('useLanguageServices') && entry.includes('executeCommands'),
-		),
+		allowed: permissions.every(entry => entry?.includes('useLanguageServices') && entry.includes('executeCommands')),
 	};
 }

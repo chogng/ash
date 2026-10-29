@@ -7,11 +7,7 @@ import type { UriComponents } from '../../../../../../base/common/uri.js';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
 import { Disposable } from '../../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
-import {
-	AgentsWindowInvitationState,
-	type AgentHostEditorUpdate,
-	type IAgentHostEditorState,
-} from '../../../../../../platform/chat/common/agentsWindowInvitation.js';
+import { AgentsWindowInvitationState, type AgentHostEditorUpdate, type IAgentHostEditorState } from '../../../../../../platform/chat/common/agentsWindowInvitation.js';
 import { buildOpenSessionLinkUri } from '../../../../../../platform/agentHost/common/openSessionLink.js';
 import { IAppServerApi } from '../../../../../../platform/agentHost/common/appServerApi.js';
 import { ChatAIDisabledSettingId } from '../../../../../../platform/chat/common/chatSettings.js';
@@ -22,11 +18,7 @@ import { InstantiationService } from '../../../../../../platform/instantiation/c
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
 import type { INativeHostApi, IOpenAgentsWindowOptions } from '../../../../../../platform/native/common/nativeHost.js';
 import { INativeHostService } from '../../../../../common/services.js';
-import {
-	IChatService,
-	type Thread,
-	type ThreadUpdateEnvelope,
-} from '../../../../../services/chat/common/chatService.js';
+import { IChatService, type Thread, type ThreadUpdateEnvelope } from '../../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../../services/chat/common/chatSessionNavigationService.js';
 import { IHostService } from '../../../../../services/host/browser/host.js';
 import { TestNotificationService } from '../../../../../services/notification/test/common/testNotificationService.js';
@@ -42,9 +34,7 @@ class Fixture extends Disposable {
 			lastAgentsWindowSessionCreated: undefined,
 		}),
 	);
-	readonly submitted = this._register(
-		new Emitter<{ sessionId: string; threadId: string; isNewSession: boolean; requestSequence: number }>(),
-	);
+	readonly submitted = this._register(new Emitter<{ sessionId: string; threadId: string; isNewSession: boolean; requestSequence: number }>());
 	readonly updates = this._register(new Emitter<ThreadUpdateEnvelope>());
 	readonly focus = this._register(new Emitter<boolean>());
 	readonly connection = this._register(new Emitter<'ready' | 'stopped'>());
@@ -107,19 +97,14 @@ class Fixture extends Disposable {
 			onDidChangeFocus: this.focus.event,
 		} as IHostService);
 		this.services.registerInstance(IAppServerApi, {
-			onConnectionState: (listener: Parameters<IAppServerApi['onConnectionState']>[0]) =>
-				this.connection.event(listener),
+			onConnectionState: (listener: Parameters<IAppServerApi['onConnectionState']>[0]) => this.connection.event(listener),
 		} as unknown as IAppServerApi);
 		this.services.registerInstance(INativeHostService, {
 			getAgentHostEditorState: async () => this.state.getState(),
-			onDidChangeAgentHostEditorState: (listener: (state: IAgentHostEditorState) => void) =>
-				this.state.onDidChange(listener),
+			onDidChangeAgentHostEditorState: (listener: (state: IAgentHostEditorState) => void) => this.state.onDidChange(listener),
 			updateAgentHostEditorState: async (update: AgentHostEditorUpdate) => this.state.update(1, update),
 			claimAgentsWindowInvitation: async (resource: UriComponents) => {
-				const invitation = this.state.claim(
-					1,
-					buildOpenSessionLinkUri('session', new URLSearchParams(resource.query).get('threadId')!, 'local'),
-				);
+				const invitation = this.state.claim(1, buildOpenSessionLinkUri('session', new URLSearchParams(resource.query).get('threadId')!, 'local'));
 				await this.claimGate?.p;
 				return invitation;
 			},
@@ -145,16 +130,7 @@ class Fixture extends Disposable {
 
 suite('Desktop Agents invitation', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
-	for (const action of [
-		'ack',
-		'failure',
-		'dismiss',
-		'transfer',
-		'disable',
-		'blur',
-		'lateClaim',
-		'changedSelection',
-	] as const) {
+	for (const action of ['ack', 'failure', 'dismiss', 'transfer', 'disable', 'blur', 'lateClaim', 'changedSelection'] as const) {
 		test(`real contribution preserves ownership through ${action}`, async () => {
 			mock.timers.enable({ apis: ['setTimeout'] });
 			try {
@@ -176,11 +152,7 @@ suite('Desktop Agents invitation', () => {
 				}
 				const notification = fixture.notifications.model.getNotifications()[0]!;
 				assert.ok(notification);
-				assert.equal(
-					fixture.state.getState().lastShown,
-					undefined,
-					'inserting notification history is not an impression',
-				);
+				assert.equal(fixture.state.getState().lastShown, undefined, 'inserting notification history is not an impression');
 				notification.updateVisibility(true);
 				notification.updateVisibility(true);
 				assert.deepEqual(fixture.state.getState().lastShown, { timestamp: 86_400_000, editorSessionCount: 1 });

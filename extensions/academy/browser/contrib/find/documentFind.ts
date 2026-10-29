@@ -5,18 +5,9 @@ import { createDocumentDecoration } from '../../../common/model/documentDecorati
 import type { DocumentNode } from '../../../common/model/document.js';
 import { selectionsEqual, type DocumentSelection } from '../../../common/core/documentSelection.js';
 import { localize } from 'ash:editor/nls.js';
-import type {
-	DocumentFormattingContribution,
-	DocumentFormattingState,
-	DocumentEditorContributionContext,
-} from '../../documentContributions.js';
+import type { DocumentFormattingContribution, DocumentFormattingState, DocumentEditorContributionContext } from '../../documentContributions.js';
 import { DocumentFormattingControls } from '../../widget/documentFormattingControls.js';
-import {
-	createReplaceDocumentMatchesCommand,
-	findDocumentText,
-	getDocumentFindMatchIndex,
-	type DocumentFindMatch,
-} from '../../../common/commands/documentFindCommands.js';
+import { createReplaceDocumentMatchesCommand, findDocumentText, getDocumentFindMatchIndex, type DocumentFindMatch } from '../../../common/commands/documentFindCommands.js';
 
 /** View-local search intent; results are always recomputed from the current immutable document. */
 export class DocumentFindContribution extends DocumentFormattingControls implements DocumentFormattingContribution {
@@ -50,9 +41,7 @@ export class DocumentFindContribution extends DocumentFormattingControls impleme
 		this.previous = this.addButton(localize('document.find.previous', 'Previous match'), () => this.navigate(-1));
 		this.next = this.addButton(localize('document.find.next', 'Next match'), () => this.navigate(1));
 		this.replace = this.addButton(localize('document.find.replace', 'Replace'), () => this.runReplace(false));
-		this.replaceAll = this.addButton(localize('document.find.replaceAll', 'Replace all'), () =>
-			this.runReplace(true),
-		);
+		this.replaceAll = this.addButton(localize('document.find.replaceAll', 'Replace all'), () => this.runReplace(true));
 		this.addButton(localize('document.find.close', 'Close find'), () => this.close());
 		this.count = h(this.element.ownerDocument, 'span');
 		this.count.setAttribute('role', 'status');
@@ -91,21 +80,13 @@ export class DocumentFindContribution extends DocumentFormattingControls impleme
 				id: `find-${index}`,
 				from: match.selection.anchor,
 				to: match.selection.head,
-				className: selectionsEqual(match.selection, selection)
-					? 'stanza-document-find-current'
-					: 'stanza-document-find-match',
+				className: selectionsEqual(match.selection, selection) ? 'stanza-document-find-current' : 'stanza-document-find-match',
 			}),
 		);
 	}
 
 	handleKeydown(event: KeyboardEvent): void {
-		if (
-			!event.defaultPrevented &&
-			!event.isComposing &&
-			(event.ctrlKey || event.metaKey) &&
-			!event.altKey &&
-			event.key.toLowerCase() === 'f'
-		) {
+		if (!event.defaultPrevented && !event.isComposing && (event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'f') {
 			event.preventDefault();
 			this.open();
 		}
@@ -160,12 +141,7 @@ export class DocumentFindContribution extends DocumentFormattingControls impleme
 		this.context.runDocumentCommand((schema, document, _blockId, selection) => {
 			const matches = findDocumentText(document, query, options);
 			const selected = matches[getDocumentFindMatchIndex(document, matches, selection, 1, true)];
-			return createReplaceDocumentMatchesCommand(
-				schema,
-				document,
-				all ? matches : selected ? [selected] : [],
-				replacement,
-			);
+			return createReplaceDocumentMatchesCommand(schema, document, all ? matches : selected ? [selected] : [], replacement);
 		});
 	}
 }

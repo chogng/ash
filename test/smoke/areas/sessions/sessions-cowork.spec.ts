@@ -1,10 +1,7 @@
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 
-test('Cowork shares Chat input operations with model settings on the right and no mode picker', async ({
-	target,
-	workbench,
-}) => {
+test('Cowork shares Chat input operations with model settings on the right and no mode picker', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const composer = page.locator('.ash-sessions-cowork-input');
 	const card = composer.locator('.ash-chat-input-container');
@@ -16,9 +13,7 @@ test('Cowork shares Chat input operations with model settings on the right and n
 	await expect(composer.locator('[data-action-id="ash.chat.input.mode"]')).toHaveCount(0);
 	await expect(composer.getByRole('button', { name: /^Permissions:/u })).toHaveCount(0);
 	await expect(card.locator('[data-action-id="ash.chat.input.model"]')).toHaveCount(1);
-	await expect(actions.locator('[data-action-id="ash.chat.input.attach"] button')).toHaveAccessibleName(
-		'Add context',
-	);
+	await expect(actions.locator('[data-action-id="ash.chat.input.attach"] button')).toHaveAccessibleName('Add context');
 	await expect(actions.locator('[data-action-id="ash.chat.input.voice"] button')).toBeDisabled();
 	await expect(model).toBeVisible();
 	await model.focus();
@@ -51,11 +46,7 @@ test('Cowork shares Chat input operations with model settings on the right and n
 	await editor.waitForEditorFocus();
 });
 
-test('Cowork shared input toolbar and help use the Chinese display language', async ({
-	target,
-	workbench,
-	restartWorkbench,
-}) => {
+test('Cowork shared input toolbar and help use the Chinese display language', async ({ target, workbench, restartWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 	await language.fill('简体中文');
@@ -75,11 +66,7 @@ test('Cowork shared input toolbar and help use the Chinese display language', as
 	await editor.waitForEditorFocus();
 });
 
-test('Cowork and Code retain separate editors while transferring the selected draft and attachments', async ({
-	application,
-	target,
-	workbench,
-}) => {
+test('Cowork and Code retain separate editors while transferring the selected draft and attachments', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const conversation = page.locator('[data-part="sessions"]');
@@ -90,9 +77,7 @@ test('Cowork and Code retain separate editors while transferring the selected dr
 	await page.keyboard.insertText('Prepare a presentation');
 	const coworkInput = await editor.input.elementHandle();
 	const composer = conversation.locator('.ash-sessions-cowork-input');
-	await composer
-		.locator('input[type="file"]')
-		.setInputFiles({ name: 'brief.txt', mimeType: 'text/plain', buffer: Buffer.from('Presentation brief') });
+	await composer.locator('input[type="file"]').setInputFiles({ name: 'brief.txt', mimeType: 'text/plain', buffer: Buffer.from('Presentation brief') });
 	await expect(composer.locator('.ash-chat-code-reference')).toHaveText('brief.txt');
 	const identity = await conversation.locator('.ash-cowork').getAttribute('data-untitled-session-id');
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
@@ -125,8 +110,6 @@ test('Cowork and Code retain separate editors while transferring the selected dr
 	await coworkInput?.dispose();
 	page = await workbench.reopenAgentsWindow(application, page);
 	await expect(page.locator('[data-part="sessions"] .ash-cowork')).toBeVisible();
-	await new Editor(page.locator('[data-part="sessions"]')).waitForEditorContents(
-		text => text === 'Updated presentation brief brief.txt ',
-	);
+	await new Editor(page.locator('[data-part="sessions"]')).waitForEditorContents(text => text === 'Updated presentation brief brief.txt ');
 	await expect(page.locator('.ash-sessions-cowork-input .ash-chat-code-reference')).toHaveText('brief.txt');
 });

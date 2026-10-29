@@ -1,9 +1,4 @@
-import type {
-	ExtensionClientSource,
-	ExtensionHostInitialization,
-	ExtensionStatusBarEntry,
-	JsonValue,
-} from '../../../platform/agentHost/common/extensionHostApi.js';
+import type { ExtensionClientSource, ExtensionHostInitialization, ExtensionStatusBarEntry, JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 
 export interface ExtensionDocumentSnapshot {
 	readonly uri: string;
@@ -142,8 +137,4 @@ export interface ExtensionDiagnosticEntry {
 	}[];
 }
 
-export type ExtensionClientHandler = (
-	operation: ExtensionClientOperation,
-	signal: AbortSignal,
-	source: ExtensionClientSource,
-) => Promise<ExtensionClientResult>;
+export type ExtensionClientHandler = (operation: ExtensionClientOperation, signal: AbortSignal, source: ExtensionClientSource) => Promise<ExtensionClientResult>;

@@ -28,12 +28,7 @@ test('browser socket preserves byte boundaries and closes failed and established
 			};
 		},
 	});
-	const connecting = factory.connect(
-		new WebSocketRemoteConnection('::1', 9000),
-		'/ash/app-server',
-		'connectionToken=capability',
-		'test',
-	);
+	const connecting = factory.connect(new WebSocketRemoteConnection('::1', 9000), '/ash/app-server', 'connectionToken=capability', 'test');
 	opened.fire();
 	using socket = await connecting;
 	assert.equal(url, 'ws://[::1]:9000/ash/app-server?connectionToken=capability');

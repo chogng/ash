@@ -40,10 +40,7 @@ test('commit links share a request and discard a late result after the final lin
 	resolver.retain([]);
 	complete(commit);
 	await Promise.all([first, second]);
-	assert.deepEqual(
-		{ reads, canceled: token.isCancellationRequested, value: value.get() },
-		{ reads: 1, canceled: true, value: undefined },
-	);
+	assert.deepEqual({ reads, canceled: token.isCancellationRequested, value: value.get() }, { reads: 1, canceled: true, value: undefined });
 });
 
 test('commit metadata is delivered through the observable used by the provider', async () => {

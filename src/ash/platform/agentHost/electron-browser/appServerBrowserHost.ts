@@ -1,9 +1,6 @@
 import { generateUuid } from '../../../base/common/uuid.js';
 import { APP_SERVER_SERVER_REQUESTS, APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
-import {
-	decodeAppServerRequestParams,
-	decodeAppServerServerRequestResult,
-} from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
+import { decodeAppServerRequestParams, decodeAppServerServerRequestResult } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type { AppServerProtocolClient } from '../browser/appServerProtocolClient.js';
@@ -73,19 +70,13 @@ export function registerAppServerBrowserHost(
 		}
 	};
 	const canvasReady = (): void => {
-		if (
-			configuration.getValue<boolean>(CanvasesEnabledSettingId) === false ||
-			configuration.getValue<boolean>(ChatAIDisabledSettingId) === true
-		) {
+		if (configuration.getValue<boolean>(CanvasesEnabledSettingId) === false || configuration.getValue<boolean>(ChatAIDisabledSettingId) === true) {
 			throw new Error('CanvasCapabilityUnavailable');
 		}
 	};
 	handlers.add(
 		configuration.onDidChangeConfiguration(event => {
-			if (
-				event.affectsConfiguration(BrowserChatToolsSettingId) ||
-				event.affectsConfiguration(BrowserCDPSettingId)
-			) {
+			if (event.affectsConfiguration(BrowserChatToolsSettingId) || event.affectsConfiguration(BrowserCDPSettingId)) {
 				applyPreference();
 			}
 		}),
@@ -141,10 +132,7 @@ export function registerAppServerBrowserHost(
 			if (params.threadIds.length) sharedPages.add(params.targetId);
 			else sharedPages.delete(params.targetId);
 			try {
-				return decodeAppServerServerRequestResult(
-					'browser/sharing/set',
-					await call(context.signal, playwrightService, id => channel.call('sharing', { id, params })),
-				);
+				return decodeAppServerServerRequestResult('browser/sharing/set', await call(context.signal, playwrightService, id => channel.call('sharing', { id, params })));
 			} catch (error) {
 				sharedPages.delete(params.targetId);
 				throw error;
@@ -155,10 +143,7 @@ export function registerAppServerBrowserHost(
 		client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], async (params, context) => {
 			await ready();
 			if (!params.canvas) {
-				return decodeAppServerServerRequestResult(
-					'browser/create',
-					await call(context.signal, playwrightService, id => channel.call('create', { id, params })),
-				);
+				return decodeAppServerServerRequestResult('browser/create', await call(context.signal, playwrightService, id => channel.call('create', { id, params })));
 			}
 			canvasReady();
 			const request = {
@@ -174,18 +159,14 @@ export function registerAppServerBrowserHost(
 				if (!canvases) {
 					throw new Error('CanvasCapabilityUnavailable');
 				}
-				const source = await canvases.openCanvasSource(
-					{ ...request, definition: params.canvas.definition },
-					context.signal,
-				);
+				const source = await canvases.openCanvasSource({ ...request, definition: params.canvas.definition }, context.signal);
 				presentation = source;
 				const url = new URL(source.url);
 				if (
 					url.username ||
 					url.password ||
 					source.url.length > 8192 ||
-					(url.protocol !== 'https:' &&
-						!(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)))
+					(url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)))
 				) {
 					throw new Error('CanvasSourceDenied');
 				}
@@ -197,10 +178,7 @@ export function registerAppServerBrowserHost(
 				};
 			}
 			context.signal.throwIfAborted();
-			const result = decodeAppServerServerRequestResult(
-				'browser/create',
-				await call(context.signal, playwrightService, id => channel.call('create', { id, params: resolved })),
-			);
+			const result = decodeAppServerServerRequestResult('browser/create', await call(context.signal, playwrightService, id => channel.call('create', { id, params: resolved })));
 			canvases?.acceptCanvasOpen(request, { ...state, succeeded: true }, presentation);
 			return result;
 		}),
@@ -220,18 +198,13 @@ export function registerAppServerBrowserHost(
 	handlers.add(
 		client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/list'], async (params, context) => {
 			await ready();
-			return decodeAppServerServerRequestResult(
-				'browser/list',
-				await call(context.signal, playwrightService, id => channel.call('list', { id, params })),
-			);
+			return decodeAppServerServerRequestResult('browser/list', await call(context.signal, playwrightService, id => channel.call('list', { id, params })));
 		}),
 	);
 	handlers.add(
 		client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/observe'], async (params, context) => {
 			await ready();
-			return call(context.signal, playwrightService, id =>
-				playwrightService.getObservation(id, params.threadId, params.targetId, params, params.networkToken),
-			);
+			return call(context.signal, playwrightService, id => playwrightService.getObservation(id, params.threadId, params.targetId, params, params.networkToken));
 		}),
 	);
 	handlers.add(
@@ -241,20 +214,9 @@ export function registerAppServerBrowserHost(
 				if (configuration.getValue<boolean>(BrowserCDPSettingId) !== true) {
 					throw new Error('BrowserCDPDisabled');
 				}
-				return decodeAppServerServerRequestResult(
-					'browser/perform',
-					await call(context.signal, playwrightService, id => channel.call('perform', { id, params })),
-				);
+				return decodeAppServerServerRequestResult('browser/perform', await call(context.signal, playwrightService, id => channel.call('perform', { id, params })));
 			}
-			const output = await call(context.signal, playwrightService, id =>
-				playwrightService.performAction(
-					id,
-					params.threadId,
-					params.action.targetId,
-					params.action,
-					params.networkToken,
-				),
-			);
+			const output = await call(context.signal, playwrightService, id => playwrightService.performAction(id, params.threadId, params.action.targetId, params.action, params.networkToken));
 			return { targetId: params.action.targetId, ...(output === undefined ? {} : { output }) };
 		}),
 	);
@@ -262,27 +224,18 @@ export function registerAppServerBrowserHost(
 		client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/close'], async (params, context) => {
 			await ready();
 			await canvases?.closeCanvasSource(params.threadId, params.targetId, context.signal);
-			return decodeAppServerServerRequestResult(
-				'browser/close',
-				await call(context.signal, playwrightService, id => channel.call('close', { id, params })),
-			);
+			return decodeAppServerServerRequestResult('browser/close', await call(context.signal, playwrightService, id => channel.call('close', { id, params })));
 		}),
 	);
 	applyPreference();
 	return handlers;
 }
 
-async function call<T>(
-	signal: AbortSignal,
-	playwrightService: IPlaywrightService,
-	execute: (id: string) => Promise<T>,
-): Promise<T> {
+async function call<T>(signal: AbortSignal, playwrightService: IPlaywrightService, execute: (id: string) => Promise<T>): Promise<T> {
 	const id = generateUuid();
 	signal.throwIfAborted();
 	const cancel = (): void => {
-		void playwrightService
-			.cancelOperation(id)
-			.catch(error => console.error('Browser operation cancellation failed', error));
+		void playwrightService.cancelOperation(id).catch(error => console.error('Browser operation cancellation failed', error));
 	};
 	signal.addEventListener('abort', cancel, { once: true });
 	try {

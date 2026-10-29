@@ -4,14 +4,7 @@ import { Position } from '../../common/core/position.js';
 import { Range } from '../../common/core/range.js';
 import { type IViewLayout } from '../../common/viewModel.js';
 import { type ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
-import {
-	HorizontalPosition,
-	HorizontalRange,
-	LineVisibleRanges,
-	RenderingContext,
-	RestrictedRenderingContext,
-	type IViewLines,
-} from '../../browser/view/renderingContext.js';
+import { HorizontalPosition, HorizontalRange, LineVisibleRanges, RenderingContext, RestrictedRenderingContext, type IViewLines } from '../../browser/view/renderingContext.js';
 
 const visibleRange = new Range(2, 1, 4, 8);
 const viewportData = {
@@ -81,10 +74,7 @@ test('RenderingContext combines DOM and GPU line geometry', () => {
 
 test('rendering geometry keeps original coordinates and rounded DOM coordinates', () => {
 	const position = new HorizontalPosition(false, 12.6);
-	const ranges = [
-		new LineVisibleRanges(false, 8, [new HorizontalRange(10.4, 3.7)], true),
-		new LineVisibleRanges(false, 3, [new HorizontalRange(2.2, 5.8)], false),
-	];
+	const ranges = [new LineVisibleRanges(false, 8, [new HorizontalRange(10.4, 3.7)], true), new LineVisibleRanges(false, 3, [new HorizontalRange(2.2, 5.8)], false)];
 
 	assert.deepEqual({ left: position.left, originalLeft: position.originalLeft }, { left: 13, originalLeft: 12.6 });
 	assert.deepEqual(ranges[0]?.ranges[0], new HorizontalRange(10, 4));

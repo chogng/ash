@@ -16,7 +16,10 @@ test('visual selection geometry splits one logical range across wrapped fragment
 		model,
 		selections,
 		projection,
-		{ startLineIndex: 0, endLineIndexExclusive: 4 },
+		{
+			startLineIndex: 0,
+			endLineIndexExclusive: 4,
+		},
 		10,
 		new FixedTextMeasurer(),
 	);
@@ -27,7 +30,14 @@ test('visual selection geometry splits one logical range across wrapped fragment
 		{ selectionIndex: 0, visualLineIndex: 2, left: 10, width: 30 },
 		{ selectionIndex: 0, visualLineIndex: 3, left: 10, width: 10 },
 	]);
-	assert.deepEqual(geometry.carets, [{ selectionIndex: 0, visualLineIndex: 3, left: 20, primary: true }]);
+	assert.deepEqual(geometry.carets, [
+		{
+			selectionIndex: 0,
+			visualLineIndex: 3,
+			left: 20,
+			primary: true,
+		},
+	]);
 });
 
 test('visual selection geometry offsets continuation rows by their wrapping indent', () => {
@@ -38,13 +48,30 @@ test('visual selection geometry offsets continuation rows by their wrapping inde
 		model,
 		selections,
 		projection,
-		{ startLineIndex: 0, endLineIndexExclusive: 3 },
+		{
+			startLineIndex: 0,
+			endLineIndexExclusive: 3,
+		},
 		10,
 		new FixedTextMeasurer(),
 	);
 
-	assert.deepEqual(geometry.selections, [{ selectionIndex: 0, visualLineIndex: 1, left: 30, width: 20 }]);
-	assert.deepEqual(geometry.carets, [{ selectionIndex: 0, visualLineIndex: 1, left: 30, primary: true }]);
+	assert.deepEqual(geometry.selections, [
+		{
+			selectionIndex: 0,
+			visualLineIndex: 1,
+			left: 30,
+			width: 20,
+		},
+	]);
+	assert.deepEqual(geometry.carets, [
+		{
+			selectionIndex: 0,
+			visualLineIndex: 1,
+			left: 30,
+			primary: true,
+		},
+	]);
 });
 
 test('visual selection geometry rejects a projection from another model version', () => {

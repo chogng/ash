@@ -1,10 +1,6 @@
 import { packager } from '@electron/packager';
 import { writeApplicationChecksums } from './host.ts';
-import {
-	ignoreApplicationFile,
-	prepareProductionDependencyWorkspace,
-	productionDependencyDeployOptions,
-} from './packageApplication.ts';
+import { ignoreApplicationFile, prepareProductionDependencyWorkspace, productionDependencyDeployOptions } from './packageApplication.ts';
 import { pruneElectronLocales } from './packageLocales.ts';
 import { prepareElectronAddons } from './addons.ts';
 import { spawn } from 'node:child_process';
@@ -23,14 +19,11 @@ const target = arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin'
 if (process.platform !== 'darwin' || !arch) throw new Error('macOS packaging requires a macOS arm64 or x64 host');
 const options = parseOptions(process.argv.slice(2));
 const remoteRelease = options.remoteRelease ?? process.env.ASH_REMOTE_RELEASE_BINDING;
-if (!remoteRelease)
-	throw new Error('Remote release binding is required: --remote-release FILE or ASH_REMOTE_RELEASE_BINDING');
+if (!remoteRelease) throw new Error('Remote release binding is required: --remote-release FILE or ASH_REMOTE_RELEASE_BINDING');
 const signingIdentity = process.env.ASH_MACOS_SIGNING_IDENTITY;
 const updatePublicKey = process.env.ASH_UPDATE_PUBLIC_KEY;
-if (!updatePublicKey || !/^[a-fA-F0-9]{64}$/u.test(updatePublicKey))
-	throw new Error('ASH_UPDATE_PUBLIC_KEY must be a 64-digit Ed25519 public key');
-if (!options.unsigned && !signingIdentity)
-	throw new Error('ASH_MACOS_SIGNING_IDENTITY is required; use --unsigned only for local testing');
+if (!updatePublicKey || !/^[a-fA-F0-9]{64}$/u.test(updatePublicKey)) throw new Error('ASH_UPDATE_PUBLIC_KEY must be a 64-digit Ed25519 public key');
+if (!options.unsigned && !signingIdentity) throw new Error('ASH_MACOS_SIGNING_IDENTITY is required; use --unsigned only for local testing');
 const destination = options.output ?? outputRoot;
 const bundlePath = join(destination, `Ash-darwin-${arch}`, 'Ash.app');
 if (await exists(bundlePath)) throw new Error(`Bundle already exists: ${bundlePath}`);
@@ -52,9 +45,7 @@ try {
 	await cp(join(repositoryRoot, 'resources', 'tray'), join(appStage, 'resources', 'tray'), { recursive: true });
 	await mkdir(join(appStage, 'resources', 'darwin'), { recursive: true });
 	await cp(join(repositoryRoot, 'resources', 'darwin', 'ash.png'), join(appStage, 'resources', 'darwin', 'ash.png'));
-	const electronMetadata = JSON.parse(
-		await readFile(join(appRoot, 'node_modules', 'electron', 'package.json'), 'utf8'),
-	);
+	const electronMetadata = JSON.parse(await readFile(join(appRoot, 'node_modules', 'electron', 'package.json'), 'utf8'));
 	await prepareElectronAddons(appStage);
 	await writeApplicationChecksums(appStage);
 
@@ -102,15 +93,7 @@ try {
 	const updateArtifact = join(stage, 'update-host.json');
 	await run(
 		process.env.PYTHON ?? 'python3',
-		[
-			'-B',
-			join(repositoryRoot, 'build', 'release', 'symbols.py'),
-			'build-update-host',
-			'--target',
-			target,
-			'--artifact-file',
-			updateArtifact,
-		],
+		['-B', join(repositoryRoot, 'build', 'release', 'symbols.py'), 'build-update-host', '--target', target, '--artifact-file', updateArtifact],
 		repositoryRoot,
 	);
 	const updateHost: string = JSON.parse(await readFile(updateArtifact, 'utf8')).binary;
@@ -120,29 +103,13 @@ try {
 	if (process.env.ASH_SYMBOLS_DIR) {
 		await run(
 			process.env.PYTHON ?? 'python3',
-			[
-				'-B',
-				join(repositoryRoot, 'build', 'release', 'symbols.py'),
-				'collect',
-				'--binary',
-				updateHost,
-				'--staged',
-				join(updateBin, 'ash-update-host'),
-				'--target',
-				target,
-			],
+			['-B', join(repositoryRoot, 'build', 'release', 'symbols.py'), 'collect', '--binary', updateHost, '--staged', join(updateBin, 'ash-update-host'), '--target', target],
 			repositoryRoot,
 		);
 	}
 	const updateKeyFile = join(stage, 'update-public-key');
 	await writeFile(updateKeyFile, `${updatePublicKey.toLowerCase()}\n`, { flag: 'wx' });
-	const resources = [
-		...(await readdir(backend))
-			.filter(entry => entry !== '.lease' && entry !== 'bin')
-			.map(entry => join(backend, entry)),
-		updateBin,
-		updateKeyFile,
-	];
+	const resources = [...(await readdir(backend)).filter(entry => entry !== '.lease' && entry !== 'bin').map(entry => join(backend, entry)), updateBin, updateKeyFile];
 	await mkdir(destination, { recursive: true });
 	const packages = await packager({
 		dir: appStage,
@@ -153,10 +120,7 @@ try {
 		platform: 'darwin',
 		arch,
 		electronVersion: electronMetadata.version,
-		icon: [
-			join(repositoryRoot, 'resources', 'darwin', 'ash.icns'),
-			join(repositoryRoot, 'resources', 'darwin', 'ash.icon'),
-		],
+		icon: [join(repositoryRoot, 'resources', 'darwin', 'ash.icns'), join(repositoryRoot, 'resources', 'darwin', 'ash.icon')],
 		asar: false,
 		prune: false,
 		derefSymlinks: true,
@@ -165,8 +129,7 @@ try {
 		ignore: path => ignoreApplicationFile(path),
 		afterExtract: [pruneElectronLocales],
 	});
-	if (packages.length !== 1 || resolve(packages[0]) !== dirname(bundlePath))
-		throw new Error('Electron packager returned an unexpected bundle path');
+	if (packages.length !== 1 || resolve(packages[0]) !== dirname(bundlePath)) throw new Error('Electron packager returned an unexpected bundle path');
 	for (const file of [
 		'Contents/MacOS/Ash',
 		'Contents/Resources/app/package.json',
@@ -184,49 +147,23 @@ try {
 		'Contents/Resources/update-public-key',
 	])
 		await lstat(join(bundlePath, file));
-	if (
-		!(await readFile(join(bundlePath, 'Contents', 'Resources', 'electron.icns'))).equals(
-			await readFile(join(repositoryRoot, 'resources', 'darwin', 'ash.icns')),
-		)
-	) {
+	if (!(await readFile(join(bundlePath, 'Contents', 'Resources', 'electron.icns'))).equals(await readFile(join(repositoryRoot, 'resources', 'darwin', 'ash.icns')))) {
 		throw new Error('The packaged macOS Dock icon does not match Ash artwork');
 	}
 	if (!options.unsigned) {
 		// Embedded signatures change helper bytes. Refresh their identity, then seal the containing app again.
 		await run(
 			process.env.PYTHON ?? 'python3',
-			[
-				'-B',
-				join(repositoryRoot, 'build', 'sign.py'),
-				'--package-dir',
-				join(bundlePath, 'Contents', 'Resources'),
-				'--target',
-				target,
-				'--verify-only',
-			],
+			['-B', join(repositoryRoot, 'build', 'sign.py'), '--package-dir', join(bundlePath, 'Contents', 'Resources'), '--target', target, '--verify-only'],
 			repositoryRoot,
 		);
-		await run(
-			'codesign',
-			[
-				'--force',
-				'--sign',
-				signingIdentity!,
-				'--timestamp',
-				'--options',
-				'runtime',
-				'--preserve-metadata=entitlements,requirements,flags',
-				bundlePath,
-			],
-			repositoryRoot,
-		);
+		await run('codesign', ['--force', '--sign', signingIdentity!, '--timestamp', '--options', 'runtime', '--preserve-metadata=entitlements,requirements,flags', bundlePath], repositoryRoot);
 		await run('codesign', ['--verify', '--deep', '--strict', '--verbose=2', bundlePath], repositoryRoot);
 	}
 	console.log(`Packaged macOS application: ${bundlePath}`);
 } finally {
 	const [root, directory] = await Promise.all([realpath(buildRoot), realpath(stage)]);
-	if (dirname(directory) !== root || !basename(directory).startsWith('package-darwin-'))
-		throw new Error(`Packaging stage is outside the build directory: ${directory}`);
+	if (dirname(directory) !== root || !basename(directory).startsWith('package-darwin-')) throw new Error(`Packaging stage is outside the build directory: ${directory}`);
 	await rm(directory, { recursive: true, force: true });
 }
 
@@ -286,14 +223,8 @@ async function validateBackend(path: string, electronVersion: string): Promise<v
 		throw new Error(`Backend does not match this macOS desktop build: ${path}`);
 	}
 	await lstat(join(path, metadata.entrypoint));
-	for (const relative of [
-		'ash-resources/node',
-		'ash-resources/licenses/node',
-		'bin/ash-remote-server',
-		'ash-remote-runtimes',
-	]) {
-		if (await exists(join(path, relative)))
-			throw new Error(`Desktop backend contains a separately distributed runtime: ${relative}`);
+	for (const relative of ['ash-resources/node', 'ash-resources/licenses/node', 'bin/ash-remote-server', 'ash-remote-runtimes']) {
+		if (await exists(join(path, relative))) throw new Error(`Desktop backend contains a separately distributed runtime: ${relative}`);
 	}
 }
 
@@ -318,10 +249,6 @@ async function run(program: string, args: string[], cwd: string): Promise<void> 
 	await new Promise<void>((done, fail) => {
 		const child = spawn(program, args, { cwd, stdio: 'inherit', windowsHide: true });
 		child.once('error', fail);
-		child.once('close', (code, signal) =>
-			code === 0
-				? done()
-				: fail(new Error(`${program} ${signal ? `stopped by ${signal}` : `exited with status ${code}`}`)),
-		);
+		child.once('close', (code, signal) => (code === 0 ? done() : fail(new Error(`${program} ${signal ? `stopped by ${signal}` : `exited with status ${code}`}`))));
 	});
 }

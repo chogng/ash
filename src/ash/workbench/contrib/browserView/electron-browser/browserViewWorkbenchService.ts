@@ -1,18 +1,7 @@
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	toDisposable,
-	type IDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { extUri } from '../../../../base/common/resources.js';
-import {
-	IBrowserViewService,
-	type BrowserViewEvent,
-	type IBrowserViewCreateOptions,
-	type IBrowserViewInfo,
-} from '../../../../platform/browserView/common/browserView.js';
+import { IBrowserViewService, type BrowserViewEvent, type IBrowserViewCreateOptions, type IBrowserViewInfo } from '../../../../platform/browserView/common/browserView.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { IEditorService, type EditorOpenOptions } from '../../../services/editor/common/editorService.js';
@@ -34,17 +23,10 @@ import { VSBuffer, encodeBase64 } from '../../../../base/common/buffer.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import {
-	IWorkspaceContextService,
-	getWorkspaceRemoteAuthority,
-	WorkbenchState,
-} from '../../../../platform/workspace/common/workspace.js';
+import { IWorkspaceContextService, getWorkspaceRemoteAuthority, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
 import { IWorkspaceTrustManagementService } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { BrowserViewStorageScope } from '../../../../platform/browserView/common/browserView.js';
-import {
-	logBrowserOpen,
-	type IntegratedBrowserOpenSource,
-} from '../../../../platform/browserView/common/browserViewTelemetry.js';
+import { logBrowserOpen, type IntegratedBrowserOpenSource } from '../../../../platform/browserView/common/browserViewTelemetry.js';
 
 /** Owns renderer inputs and reconnects them to pages which can outlive a renderer reload. */
 export class BrowserViewWorkbenchService extends Disposable implements IBrowserViewWorkbenchService {
@@ -88,12 +70,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		);
 		this._register(
 			editorPart.onDidChangeEditors(event => {
-				if (
-					event.kind !== 'groupChanged' ||
-					event.event.kind !== 'editorClosed' ||
-					event.event.reason === 'move' ||
-					event.event.reason === 'reset'
-				) {
+				if (event.kind !== 'groupChanged' || event.event.kind !== 'editorClosed' || event.event.reason === 'move' || event.event.reason === 'reset') {
 					return;
 				}
 				const input = event.event.editor.input;
@@ -104,16 +81,10 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 				if (this.inputs.get(id) !== input) {
 					return;
 				}
-				if (
-					editorPart.groups.some(group =>
-						group.inputs.some(candidate => extUri.isEqual(candidate.resource, input.resource)),
-					)
-				) {
+				if (editorPart.groups.some(group => group.inputs.some(candidate => extUri.isEqual(candidate.resource, input.resource)))) {
 					return;
 				}
-				void service
-					.destroyBrowserView(id)
-					.catch(error => console.error('Failed to close browser page', error));
+				void service.destroyBrowserView(id).catch(error => console.error('Failed to close browser page', error));
 			}),
 		);
 	}
@@ -153,10 +124,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		return new Map(
 			[...this.inputs].filter(([, input]) => {
 				const owner = input.model?.info.owner;
-				if (
-					context.sandboxSessionId !== undefined &&
-					(owner?.type !== 'agent' || owner.sessionId !== context.sandboxSessionId)
-				) {
+				if (context.sandboxSessionId !== undefined && (owner?.type !== 'agent' || owner.sessionId !== context.sandboxSessionId)) {
 					return false;
 				}
 				return [...this.filters].every(filter => filter.include(input, context));
@@ -200,10 +168,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		return input;
 	}
 
-	public async createBrowserView(
-		request: IBrowserViewWorkbenchCreateOptions,
-		source?: IntegratedBrowserOpenSource,
-	): Promise<BrowserEditorInput> {
+	public async createBrowserView(request: IBrowserViewWorkbenchCreateOptions, source?: IntegratedBrowserOpenSource): Promise<BrowserEditorInput> {
 		await this.initialize();
 		const options: IBrowserViewCreateOptions = {
 			...request,
@@ -227,10 +192,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 			if (this.inputs.get(id) !== input) {
 				throw new Error('BrowserTargetUnavailable');
 			}
-			logBrowserOpen(
-				this.telemetry,
-				source ?? (options.initialUrl === 'about:blank' ? 'commandWithoutUrl' : 'commandWithUrl'),
-			);
+			logBrowserOpen(this.telemetry, source ?? (options.initialUrl === 'about:blank' ? 'commandWithoutUrl' : 'commandWithUrl'));
 			return input;
 		} catch (error) {
 			if (this.inputs.get(id) === input) {
@@ -242,9 +204,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		}
 	}
 
-	private async defaultStorage(
-		owner: IBrowserViewCreateOptions['owner'],
-	): Promise<IBrowserViewCreateOptions['session']> {
+	private async defaultStorage(owner: IBrowserViewCreateOptions['owner']): Promise<IBrowserViewCreateOptions['session']> {
 		if (owner.type === 'agent') {
 			throw new Error('Agent browser storage requires an explicit Thread');
 		}
@@ -257,24 +217,13 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		}
 		const configured = this.configuration.getValue<string>('workbench.browser.dataStorage');
 		const remote = getWorkspaceRemoteAuthority(this.workspace.getWorkspace());
-		const scope =
-			configured === 'default'
-				? remote
-					? BrowserViewStorageScope.Workspace
-					: BrowserViewStorageScope.Global
-				: configured;
-		if (
-			scope === BrowserViewStorageScope.Ephemeral ||
-			(scope === BrowserViewStorageScope.Workspace && this.workspace.getWorkbenchState() === WorkbenchState.EMPTY)
-		) {
+		const scope = configured === 'default' ? (remote ? BrowserViewStorageScope.Workspace : BrowserViewStorageScope.Global) : configured;
+		if (scope === BrowserViewStorageScope.Ephemeral || (scope === BrowserViewStorageScope.Workspace && this.workspace.getWorkbenchState() === WorkbenchState.EMPTY)) {
 			return { scope: BrowserViewStorageScope.Ephemeral };
 		}
 		// A remote connection cannot join local global cookies. Main also isolates its proxy partition.
 		return {
-			scope:
-				scope === BrowserViewStorageScope.Global && !remote
-					? BrowserViewStorageScope.Global
-					: BrowserViewStorageScope.Workspace,
+			scope: scope === BrowserViewStorageScope.Global && !remote ? BrowserViewStorageScope.Global : BrowserViewStorageScope.Workspace,
 		};
 	}
 
@@ -310,32 +259,16 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 				event.type === 'passwordSaveRequested'
 					? this.dialogs.show({
 							kind: 'confirmation',
-							title: event.update
-								? localize('browser.passwords.updateTitle', 'Update website password')
-								: localize('browser.passwords.saveTitle', 'Save website password'),
-							message: localize(
-								'browser.passwords.saveMessage',
-								'Save the password for {0} on {1}?',
-								event.username,
-								event.origin,
-							),
-							detail: localize(
-								'browser.passwords.saveDetail',
-								'The password is encrypted on this device. Manage saved accounts in Settings > Workbench > Browser.',
-							),
-							primaryButton: event.update
-								? localize('browser.passwords.update', 'Update password')
-								: localize('browser.passwords.save', 'Save password'),
+							title: event.update ? localize('browser.passwords.updateTitle', 'Update website password') : localize('browser.passwords.saveTitle', 'Save website password'),
+							message: localize('browser.passwords.saveMessage', 'Save the password for {0} on {1}?', event.username, event.origin),
+							detail: localize('browser.passwords.saveDetail', 'The password is encrypted on this device. Manage saved accounts in Settings > Workbench > Browser.'),
+							primaryButton: event.update ? localize('browser.passwords.update', 'Update password') : localize('browser.passwords.save', 'Save password'),
 							cancelButton: localize('browser.passwords.notNow', 'Not now'),
 						})
 					: this.dialogs.show({
 							kind: 'choice',
 							title: localize('browser.passwords.chooseTitle', 'Choose a saved account'),
-							message: localize(
-								'browser.passwords.chooseMessage',
-								'Choose an account for {0}.',
-								event.origin,
-							),
+							message: localize('browser.passwords.chooseMessage', 'Choose an account for {0}.', event.origin),
 							buttons: event.accounts.map(account => account.username),
 							cancelButton: localize('browser.passwords.notNow', 'Not now'),
 						});
@@ -346,18 +279,12 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 						return;
 					}
 					if (event.type === 'passwordSaveRequested') {
-						await this.service.respondToPasswordSave(
-							event.targetId,
-							event.requestId,
-							outcome.button === DialogResult.Primary,
-						);
+						await this.service.respondToPasswordSave(event.targetId, event.requestId, outcome.button === DialogResult.Primary);
 					} else {
 						await this.service.respondToPasswordFill(
 							event.targetId,
 							event.requestId,
-							outcome.button === DialogResult.Cancel
-								? null
-								: (event.accounts[outcome.buttonIndex ?? 0]?.id ?? null),
+							outcome.button === DialogResult.Cancel ? null : (event.accounts[outcome.buttonIndex ?? 0]?.id ?? null),
 						);
 					}
 				})
@@ -371,11 +298,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 				kind: 'input',
 				title: localize({ bundle: 'ash.workbench', key: 'browser.auth.title' }, 'Browser authentication'),
 				message: event.isProxy
-					? localize(
-							{ bundle: 'ash.workbench', key: 'browser.auth.proxy' },
-							'Sign in to proxy {0}',
-							event.origin,
-						)
+					? localize({ bundle: 'ash.workbench', key: 'browser.auth.proxy' }, 'Sign in to proxy {0}', event.origin)
 					: localize({ bundle: 'ash.workbench', key: 'browser.auth.site' }, 'Sign in to {0}', event.origin),
 				detail: [
 					event.realm,
@@ -397,10 +320,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 				],
 				checkbox: event.canRemember
 					? {
-							label: localize(
-								{ bundle: 'ash.workbench', key: 'browser.auth.remember' },
-								'Remember encrypted credentials for this browser session',
-							),
+							label: localize({ bundle: 'ash.workbench', key: 'browser.auth.remember' }, 'Remember encrypted credentials for this browser session'),
 							checked: false,
 						}
 					: undefined,
@@ -438,10 +358,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 			const handle = this.dialogs.show({
 				kind: 'message',
 				severity: DialogSeverity.Warning,
-				message: localize(
-					{ bundle: 'ash.workbench', key: 'browser.auth.saveFailed' },
-					'Credentials could not be saved securely. This sign-in will continue without saving them.',
-				),
+				message: localize({ bundle: 'ash.workbench', key: 'browser.auth.saveFailed' }, 'Credentials could not be saved securely. This sign-in will continue without saving them.'),
 			});
 			void handle.result.catch(() => {});
 		} else if (event.type === 'fileRequested') {
@@ -467,12 +384,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 			const handle = this.dialogs.show({
 				kind: 'confirmation',
 				title: localize({ bundle: 'ash.workbench', key: 'browser.permissionTitle' }, 'Website permission'),
-				message: localize(
-					{ bundle: 'ash.workbench', key: 'browser.permissionDescription' },
-					'{0} requests access to {1}.',
-					event.origin,
-					permissionLabel(event.permission),
-				),
+				message: localize({ bundle: 'ash.workbench', key: 'browser.permissionDescription' }, '{0} requests access to {1}.', event.origin, permissionLabel(event.permission)),
 				primaryButton: localize({ bundle: 'ash.workbench', key: 'browser.allow' }, 'Allow'),
 				cancelButton: localize({ bundle: 'ash.workbench', key: 'browser.deny' }, 'Deny'),
 			});
@@ -482,11 +394,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 					if (!this.permissionDialogs.delete(event.requestId)) {
 						return;
 					}
-					await this.service.respondToPermission(
-						event.targetId,
-						event.requestId,
-						outcome.button === DialogResult.Primary,
-					);
+					await this.service.respondToPermission(event.targetId, event.requestId, outcome.button === DialogResult.Primary);
 				})
 				.catch(error => console.error('Browser permission response failed', error));
 		} else if (event.type === 'permissionRequestClosed') {
@@ -539,10 +447,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 					if (!parent) {
 						throw new Error('BrowserTargetUnavailable');
 					}
-					return this.createBrowserView(
-						{ initialUrl: event.url, owner: parent.owner, session: parent.session },
-						'browserLinkForeground',
-					);
+					return this.createBrowserView({ initialUrl: event.url, owner: parent.owner, session: parent.session }, 'browserLinkForeground');
 				})
 				.catch(error => console.error('Failed to open browser popup', error));
 		}

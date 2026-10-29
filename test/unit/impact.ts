@@ -15,14 +15,14 @@ interface Snapshot {
 }
 
 /** Local feedback only: filesystem scans and computed loads need the full CI suites. */
-export function planAffectedTests(
-	root: string,
-	base: string,
-	tests: readonly string[],
-	options: { head?: string; preloads?: readonly string[] } = {},
-): TestPlan {
+export function planAffectedTests(root: string, base: string, tests: readonly string[], options: { head?: string; preloads?: readonly string[] } = {}): TestPlan {
 	const git = (args: string[], input?: string): Buffer =>
-		execFileSync('git', args, { cwd: root, input, maxBuffer: 256 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] });
+		execFileSync('git', args, {
+			cwd: root,
+			input,
+			maxBuffer: 256 * 1024 * 1024,
+			stdio: ['pipe', 'pipe', 'pipe'],
+		});
 	// Resolve user input before it can become an option to another Git command.
 	const revision = git(['rev-parse', '--verify', '--end-of-options', `${base}^{commit}`])
 		.toString()
@@ -36,19 +36,13 @@ export function planAffectedTests(
 		.toString()
 		.trim();
 	const split = (value: Buffer): string[] => value.toString().split('\0').filter(Boolean);
-	const changed = new Set(
-		split(git(['diff', '--name-only', '--no-renames', '-z', comparison, ...(target ? [target] : []), '--'])),
-	);
+	const changed = new Set(split(git(['diff', '--name-only', '--no-renames', '-z', comparison, ...(target ? [target] : []), '--'])));
 	if (!target) for (const path of split(git(['ls-files', '--others', '--exclude-standard', '-z']))) changed.add(path);
 	const full = (reason: string): TestPlan => ({ files: tests, full: true, reason });
 	if (changed.size === 0) return full('no changed inputs; running the complete suite');
 	// The dependency graph cannot describe toolchains, generated contracts, preload code,
 	// packages or test data loaded through arbitrary filesystem paths.
-	const outside = [...changed].find(
-		path =>
-			/(?:^|\/)(?:package(?:-lock)?|tsconfig[^/]*)\.json$/u.test(path) ||
-			!/^(?:src\/|extensions\/).*\.(?:[cm]?tsx?|[cm]?jsx?|css|json)$/u.test(path),
-	);
+	const outside = [...changed].find(path => /(?:^|\/)(?:package(?:-lock)?|tsconfig[^/]*)\.json$/u.test(path) || !/^(?:src\/|extensions\/).*\.(?:[cm]?tsx?|[cm]?jsx?|css|json)$/u.test(path));
 	if (outside) return full(`input outside the source graph: ${outside}`);
 
 	try {
@@ -86,35 +80,20 @@ export function planAffectedTests(
 				const text = tree.read(file);
 				const facts = ts.preProcessFile(text, true, true);
 				if (/\b(?:import|require)\s*\((?!\s*['"])/u.test(text)) opaque.add(file);
-				const references = [...facts.importedFiles, ...facts.referencedFiles].map(
-					reference => reference.fileName,
-				);
+				const references = [...facts.importedFiles, ...facts.referencedFiles].map(reference => reference.fileName);
 				if (preloads.has(file)) {
 					// The preload loads compiled modules under its `src/ash` output root.
 					// Read its literal entry paths so its implementation remains the owner.
-					for (const match of text.matchAll(
-						/['"]((?:base|platform|workbench|sessions|editor|code)\/[^'"]+\.js)['"]/gu,
-					)) {
+					for (const match of text.matchAll(/['"]((?:base|platform|workbench|sessions|editor|code)\/[^'"]+\.js)['"]/gu)) {
 						references.push(relative(dirname(file), `src/ash/${match[1]}`).replaceAll('\\', '/'));
 					}
 				}
 				for (const reference of references) {
-					if (/^(?:node:)?(?:fs(?:\/|$)|child_process$|worker_threads$|vm$)/u.test(reference))
-						opaque.add(file);
-					const module = ts.resolveModuleName(
-						reference,
-						resolve(root, file),
-						compiler.options,
-						host,
-						cache,
-					).resolvedModule;
+					if (/^(?:node:)?(?:fs(?:\/|$)|child_process$|worker_threads$|vm$)/u.test(reference)) opaque.add(file);
+					const module = ts.resolveModuleName(reference, resolve(root, file), compiler.options, host, cache).resolvedModule;
 					// CSS and other assets use ambient declarations, rather than TS modules.
 					const asset = local(resolve(root, dirname(file), reference));
-					const target = module
-						? local(module.resolvedFileName)
-						: reference.startsWith('.') && tree.paths.has(asset)
-							? asset
-							: undefined;
+					const target = module ? local(module.resolvedFileName) : reference.startsWith('.') && tree.paths.has(asset) ? asset : undefined;
 					if (!target) continue;
 					let parents = importers.get(target);
 					if (!parents) importers.set(target, (parents = new Set()));
@@ -147,9 +126,7 @@ export function planAffectedTests(
 		if (affected.size === 0) return full('no known affected tests; running the complete suite');
 		// Architecture tests inspect source text and directories instead of importing the
 		// implementation, so runtime or type import edges cannot select them reliably.
-		const files = tests.filter(
-			(path, index) => affected.has(sources[index]) || path.startsWith('test/architecture/'),
-		);
+		const files = tests.filter((path, index) => affected.has(sources[index]) || path.startsWith('test/architecture/'));
 		if (files.length > tests.length / 2) return full('more than half of the test files are affected');
 		return {
 			files,
@@ -167,9 +144,7 @@ export function planAffectedTests(
 			const [, kind, oid] = record.slice(0, tab).split(' ');
 			if (kind === 'blob') entries.set(record.slice(tab + 1), oid);
 		}
-		const ids = [
-			...new Set([...entries].filter(([path]) => /\.(?:[cm]?[jt]sx?|json)$/u.test(path)).map(([, oid]) => oid)),
-		];
+		const ids = [...new Set([...entries].filter(([path]) => /\.(?:[cm]?[jt]sx?|json)$/u.test(path)).map(([, oid]) => oid))];
 		const contents = git(['cat-file', '--batch'], ids.join('\n') + '\n');
 		const blobs = new Map<string, string>();
 		let offset = 0;
@@ -177,14 +152,7 @@ export function planAffectedTests(
 			const end = contents.indexOf(10, offset);
 			const [actual, kind, size] = contents.subarray(offset, end).toString().split(' ');
 			const length = Number(size);
-			if (
-				actual !== oid ||
-				kind !== 'blob' ||
-				!Number.isSafeInteger(length) ||
-				length < 0 ||
-				end < offset ||
-				end + length + 1 >= contents.length
-			)
+			if (actual !== oid || kind !== 'blob' || !Number.isSafeInteger(length) || length < 0 || end < offset || end + length + 1 >= contents.length)
 				throw new Error('incomplete Git source snapshot');
 			offset = end + 1;
 			blobs.set(oid, contents.subarray(offset, offset + length).toString());

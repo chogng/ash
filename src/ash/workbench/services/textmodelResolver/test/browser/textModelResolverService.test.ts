@@ -54,10 +54,7 @@ test('document symbol command resolves a closed Workbench resource and releases 
 	services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 	using commands = new CommandService(services, CommandsRegistry);
 
-	const symbols = await commands.executeCommand<readonly LanguageDocumentSymbol[]>(
-		'_executeDocumentSymbolProvider',
-		resource,
-	);
+	const symbols = await commands.executeCommand<readonly LanguageDocumentSymbol[]>('_executeDocumentSymbolProvider', resource);
 	assert.deepEqual(
 		symbols.map(item => item.name),
 		['first', 'second'],

@@ -23,8 +23,7 @@ export class MeteredConnectionChannel implements IServerChannel {
 	}
 
 	listen<T>(_context: string, event: string, arg?: unknown): Event<T> {
-		if (event !== MeteredConnectionCommand.OnDidChangeIsConnectionMetered)
-			throw new Error(`Unknown metered connection event: ${event}`);
+		if (event !== MeteredConnectionCommand.OnDidChangeIsConnectionMetered) throw new Error(`Unknown metered connection event: ${event}`);
 		if (arg !== undefined) throw new TypeError('Metered connection subscription takes no arguments');
 		return this.service.onDidChangeIsConnectionMetered as Event<T>;
 	}

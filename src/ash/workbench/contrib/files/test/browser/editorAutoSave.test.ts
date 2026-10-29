@@ -7,10 +7,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import type { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import { EditorAutoSave } from '../../../../browser/parts/editor/editorAutoSave.js';
-import {
-	EditorAutoSaveConfiguration,
-	EditorAutoSaveDelayConfiguration,
-} from '../../../../services/editor/common/editorConfiguration.js';
+import { EditorAutoSaveConfiguration, EditorAutoSaveDelayConfiguration } from '../../../../services/editor/common/editorConfiguration.js';
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import type { IWorkingCopy } from '../../../../services/workingCopy/common/workingCopyService.js';
 

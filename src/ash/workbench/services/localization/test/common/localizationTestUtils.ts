@@ -10,11 +10,7 @@ import { IHostService } from '../../../host/browser/host.js';
 import { WorkbenchLocaleService } from '../../browser/localeService.js';
 import type { LanguagePackCatalog } from '../../../../../platform/languagePacks/common/languagePackContract.js';
 import { setNlsMessages } from '../../../../../nls.js';
-import {
-	builtinLanguagePackCatalogs,
-	preinstalledLanguagePacks,
-	productLanguagePackCatalogs,
-} from '../../common/localizationCatalogs.js';
+import { builtinLanguagePackCatalogs, preinstalledLanguagePacks, productLanguagePackCatalogs } from '../../common/localizationCatalogs.js';
 import type { LanguagePackIndexEntry } from '../../../../../platform/languagePacks/common/languagePackContract.js';
 import { IMeteredConnectionService } from '../../../../../platform/meteredConnection/common/meteredConnection.js';
 

@@ -11,11 +11,7 @@ import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
 import type { IMarkdownString } from '../../../../../../base/common/htmlContent.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
-import {
-	IExtensionHostApi,
-	type ExtensionHostFleetSnapshot,
-	type JsonValue,
-} from '../../../../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../../platform/agentHost/common/extensionHostApi.js';
 import { createDisconnectedExtensionHostApi } from '../../../../../../platform/agentHost/browser/extensionHostApi.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { ConfigurationRegistry } from '../../../../../../platform/configuration/common/configurationRegistry.js';
@@ -23,10 +19,7 @@ import { InMemoryConfigurationService } from '../../../../../../platform/configu
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../../platform/instantiation/common/serviceCollection.js';
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
-import {
-	IMarkdownRendererService,
-	MarkdownRendererService,
-} from '../../../../../../platform/markdown/browser/markdownRenderer.js';
+import { IMarkdownRendererService, MarkdownRendererService } from '../../../../../../platform/markdown/browser/markdownRenderer.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import { IHoverService } from '../../../../../../platform/hover/browser/hoverService.js';
 import { ILinkPresentationService } from '../../../../../../platform/dataChannel/common/dataChannel.js';
@@ -53,10 +46,7 @@ const snapshot = (): ExtensionHostFleetSnapshot => ({
 	],
 });
 
-function services(
-	overrides: Partial<IExtensionHostApi> = {},
-	opener: IOpenerService = { open: async () => true } as unknown as IOpenerService,
-): InstantiationService {
+function services(overrides: Partial<IExtensionHostApi> = {}, opener: IOpenerService = { open: async () => true } as unknown as IOpenerService): InstantiationService {
 	const instance = new InstantiationService(new ServiceCollection([IOpenerService, opener]));
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({
@@ -85,8 +75,7 @@ function services(
 
 function fragmentContents(element: HTMLElement): string {
 	const copy = element.cloneNode(true) as HTMLElement;
-	for (const fragment of copy.querySelectorAll('.ash-chat-markdown-fragment'))
-		fragment.replaceWith(...fragment.childNodes);
+	for (const fragment of copy.querySelectorAll('.ash-chat-markdown-fragment')) fragment.replaceWith(...fragment.childNodes);
 	return copy.innerHTML;
 }
 
@@ -140,9 +129,7 @@ suite('Shared chat Markdown rendering', () => {
 			value: prose + String.raw`\$escaped\$ \\(escaped\\) \\[escaped\\] $x$ \(y\)`,
 		});
 		assert.deepEqual(
-			[...inline.element.querySelectorAll<HTMLElement>('.ash-katex-container')].map(
-				element => element.dataset.latex,
-			),
+			[...inline.element.querySelectorAll<HTMLElement>('.ash-katex-container')].map(element => element.dataset.latex),
 			['x', 'y'],
 		);
 	});
@@ -185,8 +172,7 @@ suite('Shared chat Markdown rendering', () => {
 						? [
 								{
 									source: text,
-									display:
-										(opening === '$$' && end < 20_000) || opening === '\\[' ? 'block' : 'inline',
+									display: (opening === '$$' && end < 20_000) || opening === '\\[' ? 'block' : 'inline',
 								},
 							]
 						: [];
@@ -203,18 +189,12 @@ suite('Shared chat Markdown rendering', () => {
 	});
 
 	for (const [name, source] of [
-		[
-			'paragraphs and incomplete inline syntax',
-			'First **bold** and `code`.\n\nSecond *unfinished\n\nThird [label](https://example.com).',
-		],
+		['paragraphs and incomplete inline syntax', 'First **bold** and `code`.\n\nSecond *unfinished\n\nThird [label](https://example.com).'],
 		['setext heading and rule', 'A title\n======\n\nA paragraph\n\n---\n\nTail.'],
 		['table header and body', 'Intro.\n\n| Name | Value |\n| --- | --- |\n| a | **b** |\n| c | d |\n\nTail.'],
 		['loose nested lists', 'Intro.\n\n- one\n\n  continued\n  - nested\n\n- two\n\nOutside.'],
 		['blockquote and alert', 'Intro.\n\n> [!NOTE]\n> First\n>\n> Second\n\nOutside.'],
-		[
-			'later reference definition',
-			'Read [later] and [label][later].\n\nMiddle.\n\n[later]: https://example.com "Title"\n\nTail.',
-		],
+		['later reference definition', 'Read [later] and [label][later].\n\nMiddle.\n\n[later]: https://example.com "Title"\n\nTail.'],
 		['definition in a blockquote', 'Read [later].\n\n> [later]: https://example.com\n\nTail.'],
 		['display math across paragraphs', 'Intro.\n\n$$\na +\n\nb\n$$\n\nTail.'],
 		['escaped display math across paragraphs', 'Intro.\n\n\\[\na +\n\nb\n\\]\n\nTail.'],
@@ -231,21 +211,11 @@ suite('Shared chat Markdown rendering', () => {
 				using expected = renderer.render(markdown, { fillInIncompleteTokens: true });
 				assert.equal(fragmentContents(part.domNode), expected.element.innerHTML, `${name}, prefix ${end}`);
 			}
-			for (const value of [
-				source,
-				`Inserted.\n\n${source}`,
-				source.replace(/Intro|First|Read/u, 'Corrected'),
-				'Replaced.',
-				'',
-			]) {
+			for (const value of [source, `Inserted.\n\n${source}`, source.replace(/Intro|First|Read/u, 'Corrected'), 'Replaced.', '']) {
 				const markdown = { value, supportThemeIcons: true, supportAlertSyntax: true };
 				part.tryIncrementalUpdate(markdown, false);
 				using expected = renderer.render(markdown);
-				assert.equal(
-					fragmentContents(part.domNode),
-					expected.element.innerHTML,
-					`${name}, correction ${value}`,
-				);
+				assert.equal(fragmentContents(part.domNode), expected.element.innerHTML, `${name}, correction ${value}`);
 			}
 		});
 	}
@@ -338,17 +308,10 @@ suite('Shared chat Markdown rendering', () => {
 		next.element.querySelector('a')!.click();
 		assert.deepEqual(actions, ['https://example.com']);
 		const custom = prefix + '[Custom](demo:resource)';
-		using allowed = renderer.render(
-			{ value: custom },
-			{ sanitizerConfig: { allowedLinkSchemes: { augment: ['demo'] } } },
-		);
+		using allowed = renderer.render({ value: custom }, { sanitizerConfig: { allowedLinkSchemes: { augment: ['demo'] } } });
 		assert.ok(allowed.element.querySelector('a[href="demo:resource"]'));
 		using denied = renderer.render({ value: custom }, {}, allowed.element);
-		assert.equal(
-			denied.element.querySelector('a[href="demo:resource"]'),
-			null,
-			'Changing the sanitizer policy invalidates node reuse',
-		);
+		assert.equal(denied.element.querySelector('a[href="demo:resource"]'), null, 'Changing the sanitizer policy invalidates node reuse');
 	});
 
 	test('large scheduled formulas retain the entire ordered macro scope', async () => {
@@ -400,12 +363,7 @@ suite('Shared chat Markdown rendering', () => {
 		using scope = services();
 		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
 		using part = scope.createInstance(ChatMarkdownContentPart, { ownerDocument: document });
-		for (const value of [
-			'- first\n\nOutside.',
-			'- first\n\n  continuation.',
-			'> quote\n\nOutside.',
-			'> quote\n\n> continuation.',
-		]) {
+		for (const value of ['- first\n\nOutside.', '- first\n\n  continuation.', '> quote\n\nOutside.', '> quote\n\n> continuation.']) {
 			part.tryIncrementalUpdate({ value });
 			using expected = renderer.render({ value });
 			assert.equal(fragmentContents(part.domNode), expected.element.innerHTML, value);
@@ -509,13 +467,7 @@ suite('Shared chat Markdown rendering', () => {
 				},
 			});
 			using renderer = scope.createInstance(ChatContentMarkdownRenderer);
-			for (const value of [
-				...Array.from({ length: 10 }, (_, i) => `$x+${i}$`),
-				'$x+9$',
-				'$x+0$',
-				'$\\gdef\\foo{x}\\foo$ $\\foo$',
-				'$\\gdef\\foo{y}\\foo$ $\\foo$',
-			]) {
+			for (const value of [...Array.from({ length: 10 }, (_, i) => `$x+${i}$`), '$x+9$', '$x+0$', '$\\gdef\\foo{x}\\foo$ $\\foo$', '$\\gdef\\foo{y}\\foo$ $\\foo$']) {
 				using result = renderer.render({ value });
 				await new Promise<void>(resolve => setImmediate(resolve));
 				mock.timers.tick(32);
@@ -567,10 +519,7 @@ suite('Shared chat Markdown rendering', () => {
 		await Promise.all([pending, changedUntil(result.element, () => !!result.element.querySelector('math mfrac'))]);
 		assert.equal(result.element.querySelector('summary')?.textContent, 'Details');
 		assert.ok(result.element.querySelector('math mfrac'));
-		assert.equal(
-			result.element.querySelector('.ash-katex-container')?.getAttribute('data-latex'),
-			'\\frac{a}{b}+\\sqrt{x}',
-		);
+		assert.equal(result.element.querySelector('.ash-katex-container')?.getAttribute('data-latex'), '\\frac{a}{b}+\\sqrt{x}');
 		assert.match(result.element.querySelector('pre')?.textContent ?? '', /highlighted const value = 1;/u);
 	});
 
@@ -774,14 +723,8 @@ suite('Shared chat Markdown rendering', () => {
 		await changedUntil(first.element, () => !!first.element.querySelector('math'));
 		using secondRenderer = scope.createInstance(ChatContentMarkdownRenderer);
 		using second = secondRenderer.render({ value: '$\\isolated$' });
-		await changedUntil(
-			second.element,
-			() => !!second.element.querySelector('[data-math-diagnostic=invalidFormula]'),
-		);
-		assert.match(
-			second.element.querySelector('[data-math-diagnostic]')?.getAttribute('title') ?? '',
-			/This formula could not be rendered/,
-		);
+		await changedUntil(second.element, () => !!second.element.querySelector('[data-math-diagnostic=invalidFormula]'));
+		assert.match(second.element.querySelector('[data-math-diagnostic]')?.getAttribute('title') ?? '', /This formula could not be rendered/);
 		assert.match(second.element.textContent ?? '', /\\isolated/u);
 	});
 
@@ -1022,10 +965,7 @@ suite('Shared chat Markdown rendering', () => {
 		await changedUntil(result.element, () => !!result.element.querySelector('[data-math-diagnostic=outputLimit]'));
 		assert.equal(result.element.querySelectorAll('math').length, 1);
 		assert.equal(result.element.querySelector('[data-math-diagnostic=invalidFormula]')?.textContent, '$bad$');
-		assert.match(
-			result.element.querySelector('[data-math-diagnostic=invalidFormula]')?.getAttribute('title') ?? '',
-			/<img src=x/,
-		);
+		assert.match(result.element.querySelector('[data-math-diagnostic=invalidFormula]')?.getAttribute('title') ?? '', /<img src=x/);
 		assert.equal(result.element.querySelector('[data-math-diagnostic=outputLimit]')?.textContent, '$large$');
 		assert.equal(result.element.querySelector('img,[onerror]'), null);
 	});

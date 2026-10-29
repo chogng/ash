@@ -1,12 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import {
-	createFileDataTransferItem,
-	createStringDataTransferItem,
-	matchesMimeType,
-	UriList,
-	VSDataTransfer,
-} from '../../common/dataTransfer.js';
+import { createFileDataTransferItem, createStringDataTransferItem, matchesMimeType, UriList, VSDataTransfer } from '../../common/dataTransfer.js';
 import { URI } from '../../common/uri.js';
 
 test('VSDataTransfer stores MIME types case-insensitively and preserves item order', async () => {
@@ -33,11 +27,7 @@ test('VSDataTransfer replaces and deletes all items for a MIME type', async () =
 
 test('VSDataTransfer matches exact, wildcard, and file data types', async () => {
 	const transfer = new VSDataTransfer();
-	const file = createFileDataTransferItem(
-		'sample.txt',
-		URI.file('/sample.txt'),
-		async () => new Uint8Array([1, 2, 3]),
-	);
+	const file = createFileDataTransferItem('sample.txt', URI.file('/sample.txt'), async () => new Uint8Array([1, 2, 3]));
 	transfer.append('application/octet-stream', file);
 
 	assert.deepEqual(

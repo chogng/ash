@@ -8,21 +8,11 @@ import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
-import {
-	INotificationService,
-	NotificationPriority,
-	Severity,
-} from '../../../../../../platform/notification/common/notification.js';
+import { INotificationService, NotificationPriority, Severity } from '../../../../../../platform/notification/common/notification.js';
 import { ITerminalLogService, TerminalLocation } from '../../../../../../platform/terminal/common/terminal.js';
 import { TestNotificationService } from '../../../../../services/notification/test/common/testNotificationService.js';
 import { IHostService } from '../../../../../services/host/browser/host.js';
-import {
-	ITerminalEditorService,
-	ITerminalGroupService,
-	ITerminalService,
-	type ITerminalInstance,
-	type IXtermTerminal,
-} from '../../../../terminal/browser/terminal.js';
+import { ITerminalEditorService, ITerminalGroupService, ITerminalService, type ITerminalInstance, type IXtermTerminal } from '../../../../terminal/browser/terminal.js';
 import { TerminalExtensionsRegistry } from '../../../../terminal/browser/terminalExtensions.js';
 import { TerminalNotificationHandler, type IOsc99NotificationHost } from '../../browser/terminalNotificationHandler.js';
 import { TerminalOscNotificationsSettingId } from '../../common/terminalNotificationConfiguration.js';
@@ -116,10 +106,7 @@ test('OSC 99 reports buttons and closes through their original notification, and
 	assert.deepEqual(f.writes, ['\x1b]99;i=buttons;2\x1b\\', '\x1b]99;i=buttons:p=close;\x1b\\']);
 	assert.equal(f.focusCalls(), 1);
 	f.handler.handleSequence('i=q:p=?;');
-	assert.equal(
-		f.writes.at(-1),
-		'\x1b]99;i=q:p=?:a=report,focus:c=1:o=always,unfocused,invisible:p=title,body,buttons,close,alive,?:u=0,1,2:w=1;\x1b\\',
-	);
+	assert.equal(f.writes.at(-1), '\x1b]99;i=q:p=?:a=report,focus:c=1:o=always,unfocused,invisible:p=title,body,buttons,close,alive,?:u=0,1,2:w=1;\x1b\\');
 });
 
 test('OSC 99 protocol close, dismiss and auto-close do not masquerade as button activation; replaced callbacks retire', async () => {
@@ -241,9 +228,7 @@ test('OSC 99 production contribution binds parser and replies to the emitting te
 	services.registerInstance(ITerminalGroupService, { showPanel: async () => {} } as unknown as ITerminalGroupService);
 	services.registerInstance(ITerminalEditorService, {} as ITerminalEditorService);
 	services.registerInstance(ITerminalLogService, { warn: () => {} } as unknown as ITerminalLogService);
-	const definition = TerminalExtensionsRegistry.getTerminalContributions().find(
-		entry => entry.id === 'terminal.oscNotifications',
-	)!;
+	const definition = TerminalExtensionsRegistry.getTerminalContributions().find(entry => entry.id === 'terminal.oscNotifications')!;
 	const contribution = owner.add(services.createInstance(definition.ctor, { instance }));
 	contribution.xtermReady!({
 		raw: {
@@ -292,35 +277,18 @@ suite('terminalNotification browser component', () => {
 				window.ashTerminalInputIntegration.feed('\x1b]99;i=build:d=0:p=buttons;View\u2028Dismiss\x1b\\');
 				window.ashTerminalInputIntegration.feed('\x1b]99;i=build:p=body:a=report:c=1;finished\x1b\\');
 			});
-			await expect
-				.poll(() =>
-					page.evaluate(() => window.ashTerminalOscIntegration.notifications().map(item => item.message)),
-				)
-				.toEqual(['Build: finished']);
+			await expect.poll(() => page.evaluate(() => window.ashTerminalOscIntegration.notifications().map(item => item.message))).toEqual(['Build: finished']);
 			await page.evaluate(() => window.ashTerminalInputIntegration.feed('\x1b]99;i=query:p=alive;\x1b\\'));
-			await expect
-				.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes.join('')))
-				.toContain('\x1b]99;i=query:p=alive;build\x1b\\');
-			const view = page
-				.locator('.ash-notification')
-				.filter({ hasText: 'Build: finished' })
-				.getByRole('button', { name: 'View', exact: true });
+			await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes.join(''))).toContain('\x1b]99;i=query:p=alive;build\x1b\\');
+			const view = page.locator('.ash-notification').filter({ hasText: 'Build: finished' }).getByRole('button', { name: 'View', exact: true });
 			await expect(view).toBeVisible();
 			await view.focus();
 			await page.keyboard.press('Enter');
-			await expect
-				.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes.join('')))
-				.toContain('\x1b]99;i=build;1\x1b\\');
-			await expect
-				.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes.join('')))
-				.toContain('\x1b]99;i=build:p=close;\x1b\\');
-			await page.evaluate(() =>
-				window.ashTerminalInputIntegration.configure('terminal.integrated.enableNotifications', false),
-			);
+			await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes.join(''))).toContain('\x1b]99;i=build;1\x1b\\');
+			await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes.join(''))).toContain('\x1b]99;i=build:p=close;\x1b\\');
+			await page.evaluate(() => window.ashTerminalInputIntegration.configure('terminal.integrated.enableNotifications', false));
 			await page.evaluate(() => window.ashTerminalInputIntegration.feed('\x1b]99;;Disabled\x1b\\discard-check'));
-			await expect
-				.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot()))
-				.toContain('discard-check');
+			await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('discard-check');
 			expect(await page.evaluate(() => window.ashTerminalOscIntegration.notifications())).toEqual([]);
 		});
 	}
@@ -336,24 +304,18 @@ suite('terminalNotification browser component', () => {
 		});
 		await page.getByRole('textbox').last().fill('debug\\r\\nline');
 		await page.keyboard.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot()))
-			.toContain('debug\nline');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('debug\nline');
 		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([]);
 		await page.evaluate(() => {
 			void window.ashTerminalInputIntegration.command('workbench.action.terminal.recordSession');
 		});
 		await expect.poll(() => page.evaluate(() => window.ashTerminalOscIntegration.recording())).toBe(true);
 		await page.evaluate(() => window.ashTerminalOscIntegration.feedActive('recorded real process output\r\n'));
-		await expect
-			.poll(() => page.evaluate(() => window.ashTerminalOscIntegration.snapshotActive()))
-			.toContain('recorded real process output');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalOscIntegration.snapshotActive())).toContain('recorded real process output');
 		await page.evaluate(() => window.ashTerminalOscIntegration.stopRecording());
 		await expect.poll(() => page.evaluate(() => window.ashTerminalClipboardIntegration.copied.length)).toBe(1);
 		const recording = await page.evaluate(() => JSON.parse(window.ashTerminalClipboardIntegration.copied[0]));
-		expect(recording.replay.events.map((entry: { data: string }) => entry.data).join('')).toContain(
-			'recorded real process output',
-		);
+		expect(recording.replay.events.map((entry: { data: string }) => entry.data).join('')).toContain('recorded real process output');
 		expect(recording.truncated).toBe(false);
 	});
 });

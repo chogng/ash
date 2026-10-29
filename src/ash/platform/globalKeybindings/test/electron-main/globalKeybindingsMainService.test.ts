@@ -1,20 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import {
-	GlobalKeybindingsMainService,
-	type IGlobalShortcutRegistry,
-} from '../../electron-main/globalKeybindingsMainService.js';
+import { GlobalKeybindingsMainService, type IGlobalShortcutRegistry } from '../../electron-main/globalKeybindingsMainService.js';
 import type { INativeSystemWideKeybinding } from '../../../native/common/nativeHost.js';
 import { validateSystemWideKeybindings } from '../../../native/common/nativeHost.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { EventEmitter } from 'node:events';
 import type { BrowserWindow } from 'electron';
-import {
-	GLOBAL_KEYBINDING_TRIGGER_CHANNEL,
-	validateGlobalKeybindingRequest,
-	validateGlobalKeybindingResult,
-} from '../../common/globalKeybindings.js';
+import { GLOBAL_KEYBINDING_TRIGGER_CHANNEL, validateGlobalKeybindingRequest, validateGlobalKeybindingResult } from '../../common/globalKeybindings.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -159,10 +152,9 @@ test('unavailable operating-system shortcut reports its user label', () => {
 		},
 	});
 
-	assert.deepEqual(
-		service.updateKeybindings(1, [{ ...binding('Control+Shift+B'), userSettingsLabel: 'ctrl+shift+b' }]),
-		{ failed: ['ctrl+shift+b'] },
-	);
+	assert.deepEqual(service.updateKeybindings(1, [{ ...binding('Control+Shift+B'), userSettingsLabel: 'ctrl+shift+b' }]), {
+		failed: ['ctrl+shift+b'],
+	});
 });
 
 test('system-wide shortcut retains and dispatches arguments after the editor owner closes', async () => {
@@ -179,17 +171,9 @@ test('system-wide shortcut retains and dispatches arguments after the editor own
 			throw error;
 		},
 	});
-	const payload = validateSystemWideKeybindings(
-		JSON.parse(JSON.stringify([{ ...binding('Control+Shift+A'), args }])),
-	);
-	assert.throws(
-		() => validateSystemWideKeybindings([{ ...binding('Control+Shift+A'), args: () => {} }]),
-		/must be an object/,
-	);
-	assert.throws(
-		() => validateSystemWideKeybindings([{ ...binding('Control+Shift+A'), unexpected: true }]),
-		/Invalid system-wide/,
-	);
+	const payload = validateSystemWideKeybindings(JSON.parse(JSON.stringify([{ ...binding('Control+Shift+A'), args }])));
+	assert.throws(() => validateSystemWideKeybindings([{ ...binding('Control+Shift+A'), args: () => {} }]), /must be an object/);
+	assert.throws(() => validateSystemWideKeybindings([{ ...binding('Control+Shift+A'), unexpected: true }]), /Invalid system-wide/);
 	service.updateKeybindings(1, payload);
 	service.updateKeybindings(2, payload);
 	service.removeWindow(1);
@@ -197,7 +181,10 @@ test('system-wide shortcut retains and dispatches arguments after the editor own
 	await Promise.resolve();
 	assert.deepEqual(
 		{ calls, releases: shortcuts.releases },
-		{ calls: [{ windowId: 2, commandId: 'workbench.action.openAgentsWindow', options: args }], releases: [] },
+		{
+			calls: [{ windowId: 2, commandId: 'workbench.action.openAgentsWindow', options: args }],
+			releases: [],
+		},
 	);
 	service.removeWindow(2);
 	assert.deepEqual(shortcuts.releases, ['Control+Shift+A']);

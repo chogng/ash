@@ -1,7 +1,11 @@
 import { mapDragAndDropData, type DragAndDropData } from '../dnd/dnd.js';
 import type { ListDragOverPosition, ListDragTargetSector } from '../list/list.js';
 
-export const TreeVisibility = Object.freeze({ Hidden: 'hidden', Visible: 'visible', Recurse: 'recurse' } as const);
+export const TreeVisibility = Object.freeze({
+	Hidden: 'hidden',
+	Visible: 'visible',
+	Recurse: 'recurse',
+} as const);
 
 export type TreeVisibility = (typeof TreeVisibility)[keyof typeof TreeVisibility];
 export type TreeFilterResult = boolean | TreeVisibility;
@@ -91,19 +95,8 @@ export interface TreeDragAndDrop<T> {
 		targetSector: ListDragTargetSector | undefined,
 		browserEvent: DragEvent,
 	) => boolean | TreeDragOverReaction;
-	onDragLeave?: (
-		data: TreeDragData<T>,
-		target: T | undefined,
-		targetIndex: number | undefined,
-		browserEvent: DragEvent,
-	) => void;
-	drop: (
-		data: TreeDragData<T>,
-		target: T | undefined,
-		targetIndex: number | undefined,
-		targetSector: ListDragTargetSector | undefined,
-		browserEvent: DragEvent,
-	) => void;
+	onDragLeave?: (data: TreeDragData<T>, target: T | undefined, targetIndex: number | undefined, browserEvent: DragEvent) => void;
+	drop: (data: TreeDragData<T>, target: T | undefined, targetIndex: number | undefined, targetSector: ListDragTargetSector | undefined, browserEvent: DragEvent) => void;
 	onDragEnd?: (browserEvent: DragEvent) => void;
 }
 

@@ -8,10 +8,7 @@ export const enum TerminalStorageKeys {
 
 import type { ITerminalReloadState, ITerminalReloadCredentials } from '../../../services/terminal/common/terminal.js';
 import { isRecord } from '../../../../base/common/types.js';
-import {
-	deserializeEnvironmentVariableCollections,
-	serializeEnvironmentVariableCollections,
-} from '../../../../platform/terminal/common/environmentVariableShared.js';
+import { deserializeEnvironmentVariableCollections, serializeEnvironmentVariableCollections } from '../../../../platform/terminal/common/environmentVariableShared.js';
 
 /** Reload state is an untrusted persistence boundary, even in the local profile. */
 export function parseTerminalReloadState(text: string): ITerminalReloadState {
@@ -42,8 +39,7 @@ export function parseTerminalReloadState(text: string): ITerminalReloadState {
 			(entry.processDirId !== undefined && !shortString(entry.processDirId)) ||
 			typeof entry.title !== 'string' ||
 			entry.title.length > 4096 ||
-			(entry.customTitle !== undefined &&
-				(typeof entry.customTitle !== 'string' || entry.customTitle.length > 4096)) ||
+			(entry.customTitle !== undefined && (typeof entry.customTitle !== 'string' || entry.customTitle.length > 4096)) ||
 			(entry.target !== 1 && entry.target !== 2) ||
 			!integer(entry.cols, 1, 512) ||
 			!integer(entry.rows, 1, 512) ||
@@ -59,11 +55,8 @@ export function parseTerminalReloadState(text: string): ITerminalReloadState {
 		}
 		if (entry.launch !== undefined) validateLaunch(entry.launch);
 		if (entry.environmentVariableCollections !== undefined)
-			entry.environmentVariableCollections = serializeEnvironmentVariableCollections(
-				deserializeEnvironmentVariableCollections(entry.environmentVariableCollections),
-			);
-		if (value.kind === 'revive' && entry.launch === undefined)
-			throw new TypeError('Missing terminal revival launch');
+			entry.environmentVariableCollections = serializeEnvironmentVariableCollections(deserializeEnvironmentVariableCollections(entry.environmentVariableCollections));
+		if (value.kind === 'revive' && entry.launch === undefined) throw new TypeError('Missing terminal revival launch');
 		const process = entry.process;
 		if (
 			!isRecord(process) ||
@@ -96,15 +89,11 @@ export function parseTerminalReloadState(text: string): ITerminalReloadState {
 			throw new TypeError('Invalid terminal split checkpoint');
 		}
 		for (const id of group.ids) {
-			if (typeof id !== 'number' || !ids.has(id) || grouped.has(id))
-				throw new TypeError('Invalid terminal split member');
+			if (typeof id !== 'number' || !ids.has(id) || grouped.has(id)) throw new TypeError('Invalid terminal split member');
 			grouped.add(id);
 		}
 	}
-	if (
-		(value.activeId !== undefined && !ids.has(value.activeId as number)) ||
-		(value.focusedId !== undefined && !ids.has(value.focusedId as number))
-	)
+	if ((value.activeId !== undefined && !ids.has(value.activeId as number)) || (value.focusedId !== undefined && !ids.has(value.focusedId as number)))
 		throw new TypeError('Invalid terminal focus checkpoint');
 	return value as unknown as ITerminalReloadState;
 }
@@ -163,8 +152,7 @@ function validateLaunch(value: unknown): void {
 	const profile = value.profile;
 	if (!isRecord(profile)) throw new TypeError('Invalid terminal revival profile');
 	if (profile.type === 'profile') {
-		if (!shortString(profile.profileId) || Object.keys(profile).some(key => !['type', 'profileId'].includes(key)))
-			throw new TypeError('Invalid terminal revival profile');
+		if (!shortString(profile.profileId) || Object.keys(profile).some(key => !['type', 'profileId'].includes(key))) throw new TypeError('Invalid terminal revival profile');
 	} else if (profile.type === 'custom') {
 		if (
 			!safeText(profile.name) ||
@@ -172,23 +160,16 @@ function validateLaunch(value: unknown): void {
 			!profile.path.length ||
 			profile.path.length > 128 ||
 			!profile.path.every(safeText) ||
-			!(
-				safeText(profile.args) ||
-				(Array.isArray(profile.args) && profile.args.length <= 4096 && profile.args.every(safeText))
-			) ||
+			!(safeText(profile.args) || (Array.isArray(profile.args) && profile.args.length <= 4096 && profile.args.every(safeText))) ||
 			Object.keys(profile).some(key => !['type', 'name', 'path', 'args'].includes(key))
 		)
 			throw new TypeError('Invalid terminal revival profile');
-	} else if (profile.type !== 'default' || Object.keys(profile).length !== 1)
-		throw new TypeError('Invalid terminal revival profile');
+	} else if (profile.type !== 'default' || Object.keys(profile).length !== 1) throw new TypeError('Invalid terminal revival profile');
 	if (
 		value.env !== undefined &&
 		(!isRecord(value.env) ||
 			Object.keys(value.env).length > 128 ||
-			Object.entries(value.env).some(
-				([key, entry]) =>
-					!key || key.length > 256 || /[=\0]/u.test(key) || (entry !== null && !safeText(entry)),
-			))
+			Object.entries(value.env).some(([key, entry]) => !key || key.length > 256 || /[=\0]/u.test(key) || (entry !== null && !safeText(entry))))
 	)
 		throw new TypeError('Invalid terminal revival environment');
 }
@@ -196,7 +177,6 @@ function validateLaunch(value: unknown): void {
 /** Desktop installs a stable window-session key before terminal services start. */
 export function parseTerminalReviveStateKey(value: string | undefined): string {
 	if (value === undefined) return TerminalStorageKeys.Revive;
-	if (!/^terminal\.revive\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(value))
-		throw new TypeError('Invalid terminal revival state key');
+	if (!/^terminal\.revive\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(value)) throw new TypeError('Invalid terminal revival state key');
 	return value;
 }

@@ -7,13 +7,7 @@ import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { RunOnceScheduler } from '../../../base/common/async.js';
 import { localize } from '../../../nls.js';
-import {
-	QuickInputType,
-	type IInputOptions,
-	type IQuickInput,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../common/quickInput.js';
+import { QuickInputType, type IInputOptions, type IQuickInput, type IQuickPick, type IQuickPickItem } from '../common/quickInput.js';
 import type { Context } from '../../contextkey/common/contextkey.js';
 import { dispatchQuickInputKeyDown } from './quickInputActions.js';
 import { QuickPick, type BrowserQuickInputHostOptions, type IBrowserQuickInputHost } from './quickInput.js';
@@ -86,11 +80,7 @@ export class QuickInputController extends Disposable {
 				'mousedown',
 				event => {
 					const anchor = this.active instanceof QuickPick ? this.active.anchor : undefined;
-					if (
-						this.active &&
-						!event.composedPath().includes(this.host) &&
-						!(isHTMLElement(anchor) && event.composedPath().includes(anchor))
-					) {
+					if (this.active && !event.composedPath().includes(this.host) && !(isHTMLElement(anchor) && event.composedPath().includes(anchor))) {
 						this.active.hide();
 					}
 				},
@@ -118,18 +108,11 @@ export class QuickInputController extends Disposable {
 		const updateFocus = (): void => {
 			if (!this.active) return;
 			const focused = this.host.ownerDocument.activeElement;
-			const within =
-				isHTMLElement(focused) && this.host.contains(focused) && !focused.closest('button, [role="tab"]');
+			const within = isHTMLElement(focused) && this.host.contains(focused) && !focused.closest('button, [role="tab"]');
 			const field = focused?.tagName === 'INPUT' ? (focused as HTMLInputElement) : undefined;
-			this.callbacks.onFocus?.(
-				within,
-				within &&
-					(!field ||
-						(field.selectionStart === field.selectionEnd && field.selectionEnd === field.value.length)),
-			);
+			this.callbacks.onFocus?.(within, within && (!field || (field.selectionStart === field.selectionEnd && field.selectionEnd === field.value.length)));
 		};
-		for (const event of ['focusin', 'input', 'keyup', 'click'] as const)
-			this._register(addDisposableListener(this.host, event, updateFocus));
+		for (const event of ['focusin', 'input', 'keyup', 'click'] as const) this._register(addDisposableListener(this.host, event, updateFocus));
 		this._register(addDisposableListener(this.host, 'focusout', () => queueMicrotask(updateFocus)));
 		this._register(addDisposableListener(this.host.ownerDocument, 'selectionchange', updateFocus));
 		this._register(
@@ -165,10 +148,7 @@ export class QuickInputController extends Disposable {
 		return quickPick;
 	}
 
-	public input(
-		options: IInputOptions,
-		token: CancellationToken = CancellationToken.None,
-	): Promise<string | undefined> {
+	public input(options: IInputOptions, token: CancellationToken = CancellationToken.None): Promise<string | undefined> {
 		this.assertNotDisposed();
 		if (token.isCancellationRequested) {
 			return Promise.resolve(undefined);
@@ -229,8 +209,7 @@ export class QuickInputController extends Disposable {
 	public setAlignment(alignment: 'top' | 'center' | { top: number; left: number }): void {
 		if (this.active instanceof QuickPick && isHTMLElement(this.active.anchor)) return;
 		this.dragListeners.clear();
-		this.viewState =
-			alignment === 'top' ? undefined : alignment === 'center' ? { top: 0.25, left: 0.5 } : alignment;
+		this.viewState = alignment === 'top' ? undefined : alignment === 'center' ? { top: 0.25, left: 0.5 } : alignment;
 		this.saveViewState();
 		this.layoutActiveInput();
 	}
@@ -242,16 +221,7 @@ export class QuickInputController extends Disposable {
 			const value: unknown = JSON.parse(stored);
 			if (typeof value !== 'object' || value === null) return undefined;
 			const { top, left } = value as Record<string, unknown>;
-			if (
-				typeof top === 'number' &&
-				Number.isFinite(top) &&
-				top >= 0 &&
-				top <= 1 &&
-				typeof left === 'number' &&
-				Number.isFinite(left) &&
-				left >= 0 &&
-				left <= 1
-			) {
+			if (typeof top === 'number' && Number.isFinite(top) && top >= 0 && top <= 1 && typeof left === 'number' && Number.isFinite(left) && left >= 0 && left <= 1) {
 				return { top, left };
 			}
 		} catch {
@@ -262,12 +232,7 @@ export class QuickInputController extends Disposable {
 
 	private saveViewState(): void {
 		if (this.viewState) {
-			this.storageService.store(
-				viewStateStorageKey,
-				JSON.stringify(this.viewState),
-				StorageScope.APPLICATION,
-				StorageTarget.MACHINE,
-			);
+			this.storageService.store(viewStateStorageKey, JSON.stringify(this.viewState), StorageScope.APPLICATION, StorageTarget.MACHINE);
 		} else {
 			this.storageService.remove(viewStateStorageKey, StorageScope.APPLICATION);
 		}
@@ -277,10 +242,7 @@ export class QuickInputController extends Disposable {
 		if (!this.active || !isHTMLElement(target)) return false;
 		if (this.active instanceof QuickPick && isHTMLElement(this.active.anchor)) return false;
 		// Only surface/header whitespace is draggable; fields, tabs and actions keep their input behavior.
-		return (
-			target === this.active.element ||
-			(target.parentElement === this.active.element && target.classList.contains('ash-quick-pick-input'))
-		);
+		return target === this.active.element || (target.parentElement === this.active.element && target.classList.contains('ash-quick-pick-input'));
 	}
 
 	private startDrag(event: MouseEvent): void {
@@ -312,19 +274,11 @@ export class QuickInputController extends Disposable {
 				if (!width || !height) return;
 				const maxLeft = Math.max(0, width - input.element.offsetWidth);
 				const maxTop = Math.max(0, height - input.element.offsetHeight);
-				let left = Math.max(
-					0,
-					Math.min(maxLeft, ((move.clientX - bounds.left) * width) / bounds.width - offsetX),
-				);
-				let top = Math.max(
-					0,
-					Math.min(maxTop, ((move.clientY - bounds.top) * height) / bounds.height - offsetY),
-				);
+				let left = Math.max(0, Math.min(maxLeft, ((move.clientX - bounds.left) * width) / bounds.width - offsetX));
+				let top = Math.max(0, Math.min(maxTop, ((move.clientY - bounds.top) * height) / bounds.height - offsetY));
 				const centerX = Math.round(width / 2) - Math.round(input.element.offsetWidth / 2);
 				const topInset = Number.parseFloat(ownerWindow.getComputedStyle(this.host).paddingTop);
-				const snapTop = [topInset, Math.round(height * 0.25)].find(
-					value => value <= maxTop && Math.abs(top - value) < 20,
-				);
+				const snapTop = [topInset, Math.round(height * 0.25)].find(value => value <= maxTop && Math.abs(top - value) < 20);
 				if (snapTop !== undefined) top = snapTop;
 				if (Math.abs(left - centerX) < 20) left = centerX;
 				this.viewState = { top: top / height, left: (left + input.element.offsetWidth / 2) / width };
@@ -379,8 +333,7 @@ export class QuickInputController extends Disposable {
 			const layout = (): void => quickPick.layout();
 			// Composer content can move a toolbar button without changing the button's own size.
 			const containers: HTMLElement[] = [];
-			for (let container = anchor.parentElement; container; container = container.parentElement)
-				containers.push(container);
+			for (let container = anchor.parentElement; container; container = container.parentElement) containers.push(container);
 			this.visibleListeners.add(observeResize([quickPick.element, anchor, ...containers], layout));
 			this.visibleListeners.add(addDisposableListener(this.host.ownerDocument.defaultView!, 'resize', layout));
 			this.visibleListeners.add(addDisposableListener(this.host.ownerDocument, 'scroll', layout, true));
@@ -400,8 +353,7 @@ export class QuickInputController extends Disposable {
 			this.visibleListeners.add(quickPick.onDidBlur(() => checkFocus.schedule()));
 			this.visibleListeners.add(
 				addDisposableListener(this.host.ownerDocument, 'focusin', event => {
-					if (!event.composedPath().includes(this.host) && !event.composedPath().includes(anchor))
-						quickPick.hide();
+					if (!event.composedPath().includes(this.host) && !event.composedPath().includes(anchor)) quickPick.hide();
 				}),
 			);
 		}
@@ -415,9 +367,7 @@ export class QuickInputController extends Disposable {
 		if (this.active !== quickPick) {
 			return;
 		}
-		const shouldRestoreFocus =
-			this.callbacks.shouldRestoreFocus?.() !== false &&
-			quickPick.element.contains(this.host.ownerDocument.activeElement);
+		const shouldRestoreFocus = this.callbacks.shouldRestoreFocus?.() !== false && quickPick.element.contains(this.host.ownerDocument.activeElement);
 		this.active = undefined;
 		this.dragListeners.clear();
 		this.visibleListeners.clear();

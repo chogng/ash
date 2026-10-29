@@ -32,5 +32,4 @@ export interface IAgentHostConnectionsService {
 	readonly connections: readonly IAgentHostConnectionInfo[];
 }
 
-export const IAgentHostConnectionsService =
-	createDecorator<IAgentHostConnectionsService>('agentHostConnectionsService');
+export const IAgentHostConnectionsService = createDecorator<IAgentHostConnectionsService>('agentHostConnectionsService');

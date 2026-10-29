@@ -44,8 +44,7 @@ export class ExtensionSettingBinding extends Disposable implements SettingValueB
 		if (!CommandsRegistry.hasCommand(binding.readCommand)) return;
 		const result: unknown = await this.commands.executeCommand(binding.readCommand);
 		if (this.isDisposed || generation !== this.generation) return;
-		if (!result || typeof result !== 'object' || !(binding.property in result))
-			throw new TypeError('Extension setting read result is invalid');
+		if (!result || typeof result !== 'object' || !(binding.property in result)) throw new TypeError('Extension setting read result is invalid');
 		this.value = this.configuration.parse((result as Record<string, unknown>)[binding.property]);
 		this.changed.fire();
 	}

@@ -2,11 +2,7 @@ import { localize } from '../../../../nls.js';
 import type { ChatContextAttachment } from '../../../services/chat/common/chatContextService.js';
 
 /** Prepares all image inputs consistently before they become persistent draft entries. */
-export async function createImageAttachment(
-	name: string,
-	data: Uint8Array,
-	mimeType: string,
-): Promise<ChatContextAttachment> {
+export async function createImageAttachment(name: string, data: Uint8Array, mimeType: string): Promise<ChatContextAttachment> {
 	// These are renderer memory/transport bounds, not a model-specific image policy.
 	if (data.byteLength > 20 * 1024 * 1024) {
 		throw new Error(localize('chat.image.tooLarge', '{0} exceeds the 20 MB image limit', name));

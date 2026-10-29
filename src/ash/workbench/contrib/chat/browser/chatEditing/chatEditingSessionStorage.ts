@@ -56,12 +56,7 @@ export class ChatEditingSessionStorage {
 
 	public async storeState(state: StoredSessionState): Promise<void> {
 		if (this.storage.get(storageKey, StorageScope.WORKSPACE) !== this.previous) {
-			throw new Error(
-				localize(
-					'chatEditing.storageConflict',
-					'Another window changed the saved Agent reviews. Local reviews were kept.',
-				),
-			);
+			throw new Error(localize('chatEditing.storageConflict', 'Another window changed the saved Agent reviews. Local reviews were kept.'));
 		}
 		const value = state.entries.length === 0 ? undefined : JSON.stringify(state);
 		if (value !== undefined && value.length > maxContentLength) {
@@ -102,12 +97,7 @@ function validateState(value: unknown): asserts value is StoredSessionState {
 		resources.add(uri.toString());
 	};
 	for (const entry of value.entries) {
-		if (
-			!isRecord(entry) ||
-			!Array.isArray(entry.sources) ||
-			entry.sources.length === 0 ||
-			entry.sources.length > 4096
-		) {
+		if (!isRecord(entry) || !Array.isArray(entry.sources) || entry.sources.length === 0 || entry.sources.length > 4096) {
 			invalid();
 		}
 		const sources = new Set<string>();
@@ -132,11 +122,7 @@ function validateState(value: unknown): asserts value is StoredSessionState {
 		}
 		if (entry.kind === 'text') {
 			claimResource(entry.resource);
-			if (
-				typeof entry.original !== 'string' ||
-				typeof entry.current !== 'string' ||
-				(entry.pendingSaveSource !== undefined && typeof entry.pendingSaveSource !== 'string')
-			) {
+			if (typeof entry.original !== 'string' || typeof entry.current !== 'string' || (entry.pendingSaveSource !== undefined && typeof entry.pendingSaveSource !== 'string')) {
 				invalid();
 			}
 		} else if (entry.kind === 'files') {
@@ -148,10 +134,7 @@ function validateState(value: unknown): asserts value is StoredSessionState {
 					invalid();
 				}
 				claimResource(file.resource);
-				if (
-					(file.original !== null && typeof file.original !== 'string') ||
-					(file.current !== null && typeof file.current !== 'string')
-				) {
+				if ((file.original !== null && typeof file.original !== 'string') || (file.current !== null && typeof file.current !== 'string')) {
 					invalid();
 				}
 			}

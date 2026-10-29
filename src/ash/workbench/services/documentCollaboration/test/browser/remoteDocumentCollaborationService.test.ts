@@ -1,14 +1,8 @@
-import {
-	documentCodec,
-	bindDocumentCodec,
-} from '../../../../../../../extensions/academy/common/model/documentCodec.js';
+import { documentCodec, bindDocumentCodec } from '../../../../../../../extensions/academy/common/model/documentCodec.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import type { DocumentNode } from '../../../../../../../extensions/academy/common/model/document.js';
-import {
-	createDefaultDocumentSchema,
-	type DocumentSchema,
-} from '../../../../../../../extensions/academy/common/model/documentSchema.js';
+import { createDefaultDocumentSchema, type DocumentSchema } from '../../../../../../../extensions/academy/common/model/documentSchema.js';
 import { serializeDocument } from '../../../../../../../extensions/academy/common/model/documentSerialization.js';
 import { DocumentTransaction } from '../../../../../../../extensions/academy/common/model/documentTransaction.js';
 import { serializeDocumentTransaction } from '../../../../../../../extensions/academy/common/model/documentTransactionSerialization.js';
@@ -277,10 +271,7 @@ test('Stanza remote collaboration publishes local presence and projects remote s
 		);
 		const presences: (readonly { readonly clientId: string }[])[] = [];
 		connection.onDidReceivePresence(presence => presences.push(presence));
-		await connection.updatePresence(
-			{ kind: 'text', anchor: { nodeId: 'text-1', offset: 1 }, head: { nodeId: 'text-1', offset: 1 } },
-			new AbortController().signal,
-		);
+		await connection.updatePresence({ kind: 'text', anchor: { nodeId: 'text-1', offset: 1 }, head: { nodeId: 'text-1', offset: 1 } }, new AbortController().signal);
 		await waitFor(() => resolvePresence !== undefined);
 		resolvePresence?.();
 		await waitFor(() => presences.length === 1);
@@ -332,10 +323,7 @@ test('Stanza remote collaboration exposes a viewer room as read-only', async () 
 		);
 		assert.equal(connection.canEdit, false);
 		assert.equal(connection.canManageMembers, false);
-		await assert.rejects(
-			connection.createInvite('Writer', 'editor', new AbortController().signal),
-			/cannot create room invitations/,
-		);
+		await assert.rejects(connection.createInvite('Writer', 'editor', new AbortController().signal), /cannot create room invitations/);
 		await assert.rejects(connection.listMembers(new AbortController().signal), /cannot inspect room members/);
 	} finally {
 		globalThis.fetch = originalFetch;

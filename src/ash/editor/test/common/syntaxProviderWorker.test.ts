@@ -117,7 +117,10 @@ test('Syntax worker selects one token provider and merges diagnostic providers',
 	using registry = new SyntaxProviderRegistry();
 	let ignoredTokenCalls = 0;
 	using first = registry.register(
-		provider('first', { tokens: () => tokenResult('variable'), diagnostics: () => diagnosticResult('first') }),
+		provider('first', {
+			tokens: () => tokenResult('variable'),
+			diagnostics: () => diagnosticResult('first'),
+		}),
 	);
 	using second = registry.register(
 		provider('second', {
@@ -177,11 +180,11 @@ test('Syntax provider failures are isolated by lane and provider', async () => {
 		}),
 	);
 	using healthy = registry.register(
-		provider('healthy', { diagnostics: () => diagnosticResult('healthy diagnostic') }),
+		provider('healthy', {
+			diagnostics: () => diagnosticResult('healthy diagnostic'),
+		}),
 	);
-	using worker = new SyntaxProviderWorker(registry, (providerId, lane, error) =>
-		errors.push({ providerId, lane, error }),
-	);
+	using worker = new SyntaxProviderWorker(registry, (providerId, lane, error) => errors.push({ providerId, lane, error }));
 
 	const tokens = await runLane(worker, model, SYNTAX_TOKEN_LANE);
 	const diagnostics = await runLane(worker, model, SYNTAX_DIAGNOSTIC_LANE);
@@ -212,11 +215,14 @@ test('Syntax provider synchronization failures do not block healthy request lane
 			throw new Error('sync failed');
 		},
 	});
-	using worker = new SyntaxProviderWorker(registry, (providerId, operation) =>
-		errors.push({ providerId, operation }),
-	);
+	using worker = new SyntaxProviderWorker(registry, (providerId, operation) => errors.push({ providerId, operation }));
 	const previousVersion = model.version;
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 5 + 1)), text: '!' }]);
+	model.applyEdits([
+		{
+			range: Range.fromPositions(new Position(0 + 1, 5 + 1)),
+			text: '!',
+		},
+	]);
 	worker.synchronizeDocument({
 		previousVersion,
 		modelVersion: model.version,
@@ -257,18 +263,23 @@ test('Syntax registry validates batches and releases providers independently', (
 	using registry = new SyntaxProviderRegistry();
 	const registration = registry.register(provider('one', { tokens: () => tokenResult('variable') }));
 	assert.throws(
-		() => registry.register(provider('one', { diagnostics: () => diagnosticResult('duplicate') })),
+		() =>
+			registry.register(
+				provider('one', {
+					diagnostics: () => diagnosticResult('duplicate'),
+				}),
+			),
 		/already registered/,
 	);
-	assert.throws(() => registry.register({ id: 'empty', languageIds: ['typescript'] }), /must implement/);
 	assert.throws(
 		() =>
-			registry.registerMany([
-				provider('same', { tokens: () => tokenResult('variable') }),
-				provider('same', { diagnostics: () => diagnosticResult('same') }),
-			]),
-		/already registered/,
+			registry.register({
+				id: 'empty',
+				languageIds: ['typescript'],
+			}),
+		/must implement/,
 	);
+	assert.throws(() => registry.registerMany([provider('same', { tokens: () => tokenResult('variable') }), provider('same', { diagnostics: () => diagnosticResult('same') })]), /already registered/);
 
 	registration.dispose();
 	assert.equal(registry.getTokenProvider('typescript'), undefined);
@@ -277,12 +288,8 @@ test('Syntax registry validates batches and releases providers independently', (
 test('Syntax registry selects the highest token priority and keeps stable ties', () => {
 	using registry = new SyntaxProviderRegistry();
 	using registrations = new DisposableStore();
-	registrations.add(
-		registry.register({ ...provider('baseline', { tokens: () => tokenResult('variable') }), tokenPriority: -10 }),
-	);
-	registrations.add(
-		registry.register({ ...provider('preferred', { tokens: () => tokenResult('type') }), tokenPriority: 100 }),
-	);
+	registrations.add(registry.register({ ...provider('baseline', { tokens: () => tokenResult('variable') }), tokenPriority: -10 }));
+	registrations.add(registry.register({ ...provider('preferred', { tokens: () => tokenResult('type') }), tokenPriority: 100 }));
 	registrations.add(
 		registry.register({
 			...provider('same-priority', { tokens: () => tokenResult('keyword') }),
@@ -401,10 +408,7 @@ async function runLane<T extends typeof SYNTAX_TOKEN_LANE | typeof SYNTAX_DIAGNO
 	model: TextModel,
 	lane: T,
 ): Promise<Extract<import('../../common/languages.js').SyntaxResult, { lane: T }>> {
-	const result = await worker.run(
-		{ requestId: 1, lane, payload: { languageId: 'typescript' }, snapshot: model.createVersionedSnapshot() },
-		new AbortController().signal,
-	);
+	const result = await worker.run({ requestId: 1, lane, payload: { languageId: 'typescript' }, snapshot: model.createVersionedSnapshot() }, new AbortController().signal);
 	assert.equal(result.lane, lane);
 	return result as Extract<import('../../common/languages.js').SyntaxResult, { lane: T }>;
 }
@@ -422,7 +426,10 @@ test('hypothetical tokenization borrows incoming state and cannot replace real c
 			requestId: 2,
 			lane: SYNTAX_TOKENIZE_LANE,
 			snapshot: model.createVersionedSnapshot(),
-			payload: { languageId: 'typescript', tokenize: { lineNumber: 2, lines: ['preview', 'close', 'after'] } },
+			payload: {
+				languageId: 'typescript',
+				tokenize: { lineNumber: 2, lines: ['preview', 'close', 'after'] },
+			},
 		},
 		new AbortController().signal,
 	);
@@ -458,7 +465,10 @@ test('a selected provider without hypothetical tokenization does not borrow anot
 			requestId: 1,
 			lane: SYNTAX_TOKENIZE_LANE,
 			snapshot: model.createVersionedSnapshot(),
-			payload: { languageId: 'typescript', tokenize: { lineNumber: 1, lines: ['open'] } },
+			payload: {
+				languageId: 'typescript',
+				tokenize: { lineNumber: 1, lines: ['open'] },
+			},
 		},
 		new AbortController().signal,
 	);
@@ -481,7 +491,10 @@ test('hypothetical tokens retain an embedded language even when it has no stylin
 			requestId: 1,
 			lane: SYNTAX_TOKENIZE_LANE,
 			snapshot: model.createVersionedSnapshot(),
-			payload: { languageId: 'typescript', tokenize: { lineNumber: 1, lines: ['begin'] } },
+			payload: {
+				languageId: 'typescript',
+				tokenize: { lineNumber: 1, lines: ['begin'] },
+			},
 		},
 		new AbortController().signal,
 	);

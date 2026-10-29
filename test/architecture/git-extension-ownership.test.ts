@@ -8,19 +8,9 @@ import { findDesktopRoot } from './testPaths.js';
 const root = findDesktopRoot(import.meta.dirname);
 test('Git frontend policy is owned by the extension and cannot be imported into core', () => {
 	assert.equal(existsSync(resolve(root, 'src/ash/workbench/contrib/git')), false);
-	const hostContracts = new Set([
-		'src/ash/platform/git/common/localGitService.ts',
-		'src/ash/platform/git/browser/appServerLocalGitService.ts',
-	]);
-	const contract = ts.createSourceFile(
-		'localGitService.ts',
-		readFileSync(resolve(root, 'src/ash/platform/git/common/localGitService.ts'), 'utf8'),
-		ts.ScriptTarget.Latest,
-		true,
-	);
-	const service = contract.statements.find(
-		statement => ts.isInterfaceDeclaration(statement) && statement.name.text === 'ILocalGitService',
-	);
+	const hostContracts = new Set(['src/ash/platform/git/common/localGitService.ts', 'src/ash/platform/git/browser/appServerLocalGitService.ts']);
+	const contract = ts.createSourceFile('localGitService.ts', readFileSync(resolve(root, 'src/ash/platform/git/common/localGitService.ts'), 'utf8'), ts.ScriptTarget.Latest, true);
+	const service = contract.statements.find(statement => ts.isInterfaceDeclaration(statement) && statement.name.text === 'ILocalGitService');
 	assert.ok(service && ts.isInterfaceDeclaration(service));
 	// Session GitHub references can inspect an authorized historical directory without
 	// installing a window Git provider. Repository mutations and frontend policy stay in the extension.
@@ -54,14 +44,8 @@ test('Git frontend policy is owned by the extension and cannot be imported into 
 							? node.arguments[0]
 							: undefined;
 				if (module && ts.isStringLiteral(module) && module.text.startsWith('.')) {
-					const target = relative(
-						root,
-						resolve(dirname(path), module.text.replace(/\.js$/u, '.ts')),
-					).replaceAll('\\', '/');
-					if (
-						/^(?:extensions\/git\/|src\/ash\/workbench\/contrib\/git\/)/u.test(target) ||
-						(target.startsWith('src/ash/platform/git/') && !hostContracts.has(target))
-					)
+					const target = relative(root, resolve(dirname(path), module.text.replace(/\.js$/u, '.ts'))).replaceAll('\\', '/');
+					if (/^(?:extensions\/git\/|src\/ash\/workbench\/contrib\/git\/)/u.test(target) || (target.startsWith('src/ash/platform/git/') && !hostContracts.has(target)))
 						violations.push(relative(root, path));
 				}
 				ts.forEachChild(node, inspectNode);

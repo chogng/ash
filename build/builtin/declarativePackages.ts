@@ -72,14 +72,12 @@ export async function buildDeclarativePackage(source: string, output: string): P
 			capabilities: [{ kind: 'asset', id: `${kind}-resources`, path: kind }],
 			...(languages.length
 				? {
-						languages: languages.map(
-							(language: { id: string; aliases?: string[]; extensions?: string[] }) => ({
-								id: language.id,
-								displayName: language.aliases?.[0] ?? language.id,
-								aliases: language.aliases ?? [],
-								fileExtensions: language.extensions ?? [],
-							}),
-						),
+						languages: languages.map((language: { id: string; aliases?: string[]; extensions?: string[] }) => ({
+							id: language.id,
+							displayName: language.aliases?.[0] ?? language.id,
+							aliases: language.aliases ?? [],
+							fileExtensions: language.extensions ?? [],
+						})),
 					}
 				: {}),
 		};

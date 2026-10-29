@@ -16,13 +16,7 @@ export class ImageSamples {
 			const context = canvas.getContext('2d', { willReadFrequently: true });
 			if (!context) return undefined;
 			context.drawImage(image, 0, 0, canvas.width, canvas.height);
-			return new ImageSamples(
-				width,
-				height,
-				canvas.width,
-				canvas.height,
-				context.getImageData(0, 0, canvas.width, canvas.height).data,
-			);
+			return new ImageSamples(width, height, canvas.width, canvas.height, context.getImageData(0, 0, canvas.width, canvas.height).data);
 		} catch {
 			// A cross-origin image may be displayed without granting access to its pixels.
 			return undefined;

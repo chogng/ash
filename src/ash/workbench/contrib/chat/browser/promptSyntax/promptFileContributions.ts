@@ -34,9 +34,7 @@ export class PromptLanguageFeaturesProvider extends Disposable {
 		@IPromptsService prompts: IPromptsService,
 	) {
 		super();
-		this._register(
-			features.completionProvider.register(instantiationService.createInstance(PromptHeaderAutocompletion)),
-		);
+		this._register(features.completionProvider.register(instantiationService.createInstance(PromptHeaderAutocompletion)));
 		this._register(features.hoverProvider.register(['markdown'], new PromptHoverProvider()));
 		this._register(features.linkProvider.register(['markdown'], new PromptLinkProvider()));
 		this._register(
@@ -53,11 +51,7 @@ export class PromptLanguageFeaturesProvider extends Disposable {
 						if (this.isDisposed || cancellation.token.isCancellationRequested) return null;
 						return (
 							this.modelService.getModel(resource) ??
-							this.modelService.createModel(
-								parsed.content,
-								languages.createByFilepathOrFirstLine(resource, parsed.content.split('\n', 1)[0]),
-								resource,
-							)
+							this.modelService.createModel(parsed.content, languages.createByFilepathOrFirstLine(resource, parsed.content.split('\n', 1)[0]), resource)
 						);
 					} finally {
 						this.readers.delete(cleanup);

@@ -1,9 +1,6 @@
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
-import type {
-	CodebaseSymbolsSearchHitDto,
-	CodebaseSymbolsStatusResult as CodebaseSymbolsStatusDto,
-} from '../../../../../../.build/protocol/typescript/index.js';
+import type { CodebaseSymbolsSearchHitDto, CodebaseSymbolsStatusResult as CodebaseSymbolsStatusDto } from '../../../../../../.build/protocol/typescript/index.js';
 import type { ICodebaseSymbolsApi } from '../../../../platform/codebaseSymbols/common/codebaseSymbolsApi.js';
 import type {
 	ICodebaseSymbolsService,
@@ -25,20 +22,10 @@ export class AppServerCodebaseSymbolsService implements ICodebaseSymbolsService 
 		return status(await raceCancellationError(this.api.status(), signal, 'Symbol-index status was cancelled'));
 	}
 
-	async search(
-		query: string,
-		maxResults: number,
-		signal: AbortSignal = new AbortController().signal,
-	): Promise<CodebaseSymbolsSearchResult> {
-		if (typeof query !== 'string' || VSBuffer.fromString(query).byteLength > MAX_QUERY_BYTES)
-			throw new RangeError('Symbol-index query exceeds its byte limit');
-		if (!Number.isSafeInteger(maxResults) || maxResults < 1 || maxResults > MAX_RESULTS)
-			throw new RangeError('Symbol-index result limit is invalid');
-		const response = await raceCancellationError(
-			this.api.search({ query, maxResults }),
-			signal,
-			'Symbol-index search was cancelled',
-		);
+	async search(query: string, maxResults: number, signal: AbortSignal = new AbortController().signal): Promise<CodebaseSymbolsSearchResult> {
+		if (typeof query !== 'string' || VSBuffer.fromString(query).byteLength > MAX_QUERY_BYTES) throw new RangeError('Symbol-index query exceeds its byte limit');
+		if (!Number.isSafeInteger(maxResults) || maxResults < 1 || maxResults > MAX_RESULTS) throw new RangeError('Symbol-index result limit is invalid');
+		const response = await raceCancellationError(this.api.search({ query, maxResults }), signal, 'Symbol-index search was cancelled');
 		return Object.freeze({
 			status: status(response.status),
 			matches: Object.freeze(response.hits.map(match)),

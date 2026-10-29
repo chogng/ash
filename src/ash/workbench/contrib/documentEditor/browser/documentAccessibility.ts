@@ -9,10 +9,7 @@ import {
 } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -25,13 +22,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	key: AccessibilityVerbositySettingId.Document,
 	defaultValue: true,
 	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean')
-			throw new TypeError(
-				localize(
-					'document.accessibility.invalidVerbosity',
-					'Document accessibility verbosity must be boolean.',
-				),
-			);
+		if (typeof value !== 'boolean') throw new TypeError(localize('document.accessibility.invalidVerbosity', 'Document accessibility verbosity must be boolean.'));
 		return value;
 	},
 	setting: {
@@ -40,10 +31,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize('document.accessibility.verbosityTitle', 'Document accessibility help');
 		},
 		get description() {
-			return localize(
-				'document.accessibility.verbosityDescription',
-				'Announce how to open accessibility help when a document receives focus.',
-			);
+			return localize('document.accessibility.verbosityDescription', 'Announce how to open accessibility help when a document receives focus.');
 		},
 	},
 });
@@ -57,13 +45,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			const editors = accessor.get(IEditorPart);
 			const pane = editors.activePane;
 			const active = getActiveElement(editors.domNode.ownerDocument);
-			if (
-				!(pane instanceof DocumentEditorPane) ||
-				!pane.workingCopy ||
-				!isHTMLElement(active) ||
-				!active.closest('.stanza-structured-editor-pane')
-			)
-				return undefined;
+			if (!(pane instanceof DocumentEditorPane) || !pane.workingCopy || !isHTMLElement(active) || !active.closest('.stanza-structured-editor-pane')) return undefined;
 			const provider = new AccessibleContentProvider(
 				AccessibleViewProviderId.Document,
 				{ type },
@@ -100,17 +82,12 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 }
 
 class DocumentAccessibilityContribution extends Disposable {
-	constructor(
-		@ILayoutService layout: ILayoutService,
-		@IAccessibleViewService views: IAccessibleViewService,
-		@IAccessibilityService accessibility: IAccessibilityService,
-	) {
+	constructor(@ILayoutService layout: ILayoutService, @IAccessibleViewService views: IAccessibleViewService, @IAccessibilityService accessibility: IAccessibilityService) {
 		super();
 		const listeners = this._register(new DisposableMap<HTMLElement, IDisposable>());
 		const synchronize = (): void => {
 			const containers = new Set(layout.containers);
-			for (const container of listeners.keys())
-				if (!containers.has(container)) listeners.deleteAndDispose(container);
+			for (const container of listeners.keys()) if (!containers.has(container)) listeners.deleteAndDispose(container);
 			for (const container of containers) {
 				if (listeners.has(container)) continue;
 				listeners.set(
@@ -118,12 +95,7 @@ class DocumentAccessibilityContribution extends Disposable {
 					addDisposableListener(container, 'focusin', event => {
 						if (!isHTMLElement(event.target)) return;
 						const pane = event.target.closest('.stanza-structured-editor-pane');
-						if (
-							!pane ||
-							(event.relatedTarget instanceof container.ownerDocument.defaultView!.Node &&
-								pane.contains(event.relatedTarget))
-						)
-							return;
+						if (!pane || (event.relatedTarget instanceof container.ownerDocument.defaultView!.Node && pane.contains(event.relatedTarget))) return;
 						if (!accessibility.isScreenReaderOptimized()) return;
 						const hint = views.getOpenAriaHint(AccessibilityVerbositySettingId.Document);
 						if (hint) accessibility.status(hint);

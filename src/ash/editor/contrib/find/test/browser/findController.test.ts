@@ -22,28 +22,14 @@ import { ReplaceWidgetHistory } from '../../browser/replaceWidgetHistory.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { showHistoryKeybindingHint } from '../../../../../platform/history/browser/historyWidgetKeybindingHint.js';
-import {
-	type IStorageService,
-	type StorageValue,
-	StorageScope,
-	StorageTarget,
-} from '../../../../../platform/storage/common/storage.js';
+import { type IStorageService, type StorageValue, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
-const installedGlobals = installEditorTestDom(browserEnvironment, [
-	'Node',
-	'Element',
-	'HTMLElement',
-	'Event',
-	'InputEvent',
-	'MouseEvent',
-	'KeyboardEvent',
-]);
+const installedGlobals = installEditorTestDom(browserEnvironment, ['Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'MouseEvent', 'KeyboardEvent']);
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-const { FindController, FindStartFocusAction, getSelectionSearchString } =
-	await import('../../browser/findController.js');
+const { FindController, FindStartFocusAction, getSelectionSearchString } = await import('../../browser/findController.js');
 
 suiteTeardown(() => {
 	installedGlobals.dispose();
@@ -58,17 +44,11 @@ test('find opens, highlights matches, navigates, and restores focus', () => {
 	assert.equal(fixture.find.getState().isRevealed, true);
 	assert.equal(fixture.searchInput.value, 'alpha');
 	assert.equal(fixture.findElement.querySelector('.stanza-editor-find-result')?.textContent, '1 of 2');
-	assert.equal(
-		fixture.findElement.querySelector('[data-ash-icon-id="find-selection"]')?.getAttribute('aria-hidden'),
-		'true',
-	);
+	assert.equal(fixture.findElement.querySelector('[data-ash-icon-id="find-selection"]')?.getAttribute('aria-hidden'), 'true');
 	assert.deepEqual(
 		fixture.model
 			.getAllDecorations()
-			.filter(
-				decoration =>
-					decoration.options.className === 'findMatch' || decoration.options.className === 'currentFindMatch',
-			)
+			.filter(decoration => decoration.options.className === 'findMatch' || decoration.options.className === 'currentFindMatch')
 			.map(decoration => decoration.range)
 			.sort(Range.compareRangesUsingStarts),
 		[new Range(1, 1, 1, 6), new Range(1, 12, 1, 17)],
@@ -162,11 +142,7 @@ test('selection search string respects single-line, multiline, and non-empty-sel
 	fixture.editor.setSelection(new Range(1, 1, 2, 5));
 
 	assert.deepEqual(
-		[
-			getSelectionSearchString(fixture.editor),
-			getSelectionSearchString(fixture.editor, 'multiple'),
-			getSelectionSearchString(fixture.editor, 'multiple', true),
-		],
+		[getSelectionSearchString(fixture.editor), getSelectionSearchString(fixture.editor, 'multiple'), getSelectionSearchString(fixture.editor, 'multiple', true)],
 		[null, 'alpha\nbeta', 'alpha\nbeta'],
 	);
 	fixture.editor.setSelection(new Range(1, 2, 1, 2));
@@ -204,17 +180,11 @@ test('find rebinds matches and scope when the editor changes models', () => {
 	assert.equal(fixture.find.getState().matchesCount, 1);
 	assert.equal(fixture.searchInput.value, 'alpha');
 	assert.equal(matchDecorationCount(fixture), 0);
-	assert.equal(
-		nextModel.getAllDecorations().filter(decoration => decoration.options.className === 'currentFindMatch').length,
-		1,
-	);
+	assert.equal(nextModel.getAllDecorations().filter(decoration => decoration.options.className === 'currentFindMatch').length, 1);
 
 	fixture.editor.setModel(null);
 	assert.equal(fixture.find.getState().matchesCount, 0);
-	assert.equal(
-		nextModel.getAllDecorations().filter(decoration => decoration.options.className === 'currentFindMatch').length,
-		0,
-	);
+	assert.equal(nextModel.getAllDecorations().filter(decoration => decoration.options.className === 'currentFindMatch').length, 0);
 });
 
 test('next and previous find from the current editor caret', () => {
@@ -242,14 +212,8 @@ test('read-only changes close replace controls and reject replacement', () => {
 	fixture.editor.updateOptions({ readOnly: true });
 	assert.equal(fixture.replaceInput.closest('.stanza-editor-replace-row')?.hasAttribute('hidden'), true);
 	assert.equal(fixture.dom.window.document.activeElement, fixture.searchInput);
-	assert.equal(
-		requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Toggle replace"]').disabled,
-		true,
-	);
-	assert.equal(
-		requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Replace all matches"]').disabled,
-		true,
-	);
+	assert.equal(requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Toggle replace"]').disabled, true);
+	assert.equal(requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Replace all matches"]').disabled, true);
 	assert.equal(fixture.find.replaceAll(), false);
 	assert.equal(fixture.model.getText(), 'alpha alpha');
 });
@@ -330,10 +294,7 @@ test('find options project checked classes and report invalid regular expression
 	assert.equal(wholeWord.classList.contains('checked'), true);
 	assert.equal(matchDecorationCount(fixture), 1);
 
-	const regularExpression = requiredElement<HTMLButtonElement>(
-		fixture.findElement,
-		'[aria-label="Use regular expression"]',
-	);
+	const regularExpression = requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Use regular expression"]');
 	regularExpression.click();
 	setInputValue(fixture.searchInput, '(');
 	assert.equal(regularExpression.classList.contains('checked'), true);
@@ -349,10 +310,7 @@ test('closed find options keep visual and accessible toggle states in sync', () 
 	const state = fixture.find.getState();
 	assert.equal(fixture.editor.getContainerDomNode().querySelector('.stanza-editor-find-options-widget'), null);
 	state.change({ matchCase: true, wholeWord: true, isRegex: true }, false);
-	const options = requiredElement<HTMLElement>(
-		fixture.editor.getContainerDomNode(),
-		'.stanza-editor-find-options-widget',
-	);
+	const options = requiredElement<HTMLElement>(fixture.editor.getContainerDomNode(), '.stanza-editor-find-options-widget');
 	const buttons = [...options.querySelectorAll('button')];
 	const states = () =>
 		buttons.map(button => ({
@@ -377,11 +335,7 @@ test('closed find options keep visual and accessible toggle states in sync', () 
 });
 
 test('find in selection keeps the opening scope through match navigation and supports Alt+L', () => {
-	const fixture = createFixture(
-		'alpha beta alpha beta alpha',
-		new Position(0 + 1, 6 + 1),
-		new Position(0 + 1, 16 + 1),
-	);
+	const fixture = createFixture('alpha beta alpha beta alpha', new Position(0 + 1, 6 + 1), new Position(0 + 1, 16 + 1));
 	using resources = fixture;
 	startFind(fixture);
 	setInputValue(fixture.searchInput, 'alpha');
@@ -405,11 +359,7 @@ test('find in selection keeps the opening scope through match navigation and sup
 });
 
 test('find in selection restricts replace all to its tracked opening scope', () => {
-	const fixture = createFixture(
-		'alpha beta alpha beta alpha',
-		new Position(0 + 1, 6 + 1),
-		new Position(0 + 1, 16 + 1),
-	);
+	const fixture = createFixture('alpha beta alpha beta alpha', new Position(0 + 1, 6 + 1), new Position(0 + 1, 16 + 1));
 	using resources = fixture;
 	startFind(fixture, true);
 	setInputValue(fixture.searchInput, 'alpha');
@@ -434,24 +384,9 @@ test('configured find defaults seed toggles, selection scope, and non-looping na
 	requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Match whole word"]').click();
 
 	assert.equal(fixture.searchInput.value, '');
-	assert.equal(
-		requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Match case"]').classList.contains(
-			'checked',
-		),
-		true,
-	);
-	assert.equal(
-		requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Match whole word"]').classList.contains(
-			'checked',
-		),
-		true,
-	);
-	assert.equal(
-		requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Find in selection"]').classList.contains(
-			'checked',
-		),
-		true,
-	);
+	assert.equal(requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Match case"]').classList.contains('checked'), true);
+	assert.equal(requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Match whole word"]').classList.contains('checked'), true);
+	assert.equal(requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Find in selection"]').classList.contains('checked'), true);
 	setInputValue(fixture.searchInput, 'Alpha');
 	fixture.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, 'Enter'));
 	fixture.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, 'Enter'));
@@ -485,24 +420,10 @@ test('replace current and replace all use isolated undo transactions', () => {
 
 test('find shares queries through its injected clipboard without changing copied text', async () => {
 	using clipboard = new BrowserClipboardService({ readText: async () => 'copied text' } as Clipboard);
-	using first = createFixture(
-		'alpha beta',
-		undefined,
-		undefined,
-		{ globalFindClipboard: true },
-		undefined,
-		clipboard,
-	);
+	using first = createFixture('alpha beta', undefined, undefined, { globalFindClipboard: true }, undefined, clipboard);
 	first.find.setSearchString('beta');
 	assert.equal(await clipboard.readFindText(), 'beta');
-	using second = createFixture(
-		'beta alpha beta',
-		undefined,
-		undefined,
-		{ globalFindClipboard: true, seedSearchStringFromSelection: 'never' },
-		undefined,
-		clipboard,
-	);
+	using second = createFixture('beta alpha beta', undefined, undefined, { globalFindClipboard: true, seedSearchStringFromSelection: 'never' }, undefined, clipboard);
 	const opening = startGlobalFind(second);
 	assert.equal(second.dom.window.document.activeElement, second.searchInput);
 	await opening;
@@ -540,20 +461,12 @@ test('pending global find reads cannot overwrite input, reopen a closed widget, 
 			}
 		}
 		using clipboard = new PendingFindClipboard(undefined);
-		using fixture = createFixture(
-			'alpha beta',
-			undefined,
-			undefined,
-			{ globalFindClipboard: true },
-			undefined,
-			clipboard,
-		);
+		using fixture = createFixture('alpha beta', undefined, undefined, { globalFindClipboard: true }, undefined, clipboard);
 		const opening = startGlobalFind(fixture);
 		if (change === 'input') setInputValue(fixture.searchInput, 'alpha');
 		if (change === 'close') fixture.find.closeFindWidget();
 		if (change === 'model') fixture.editor.setModel(null);
-		if (change === 'disable' || change === 'disable and reenable')
-			fixture.editor.updateOptions({ find: { globalFindClipboard: false } });
+		if (change === 'disable' || change === 'disable and reenable') fixture.editor.updateOptions({ find: { globalFindClipboard: false } });
 		if (change === 'disable and reenable') fixture.editor.updateOptions({ find: { globalFindClipboard: true } });
 		if (change === 'dispose') fixture.find.dispose();
 		if (change === 'new request') await startGlobalFind(fixture, 'newer');
@@ -591,14 +504,7 @@ interface Fixture extends Disposable {
 	readonly find: InstanceType<typeof FindController>;
 }
 
-function createFixture(
-	text: string,
-	anchor = new Position(0 + 1, 0 + 1),
-	active = anchor,
-	options?: IEditorFindOptions,
-	stored?: Map<string, string>,
-	clipboard?: IClipboardService,
-): Fixture {
+function createFixture(text: string, anchor = new Position(0 + 1, 0 + 1), active = anchor, options?: IEditorFindOptions, stored?: Map<string, string>, clipboard?: IClipboardService): Fixture {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const resources = new DisposableStore();
 	resources.add(toDisposable(() => dom.window.close()));
@@ -704,8 +610,7 @@ class TestHistoryStorageService implements IStorageService {
 function startFind(fixture: Fixture, showReplace = false): void {
 	void fixture.find.start({
 		forceRevealReplace: showReplace,
-		seedSearchStringFromSelection:
-			fixture.editor.getOption(EditorOption.find).seedSearchStringFromSelection === 'never' ? 'none' : 'single',
+		seedSearchStringFromSelection: fixture.editor.getOption(EditorOption.find).seedSearchStringFromSelection === 'never' ? 'none' : 'single',
 		seedSearchStringFromNonEmptySelection: false,
 		seedSearchStringFromGlobalClipboard: false,
 		shouldFocus: FindStartFocusAction.FocusFindInput,
@@ -716,12 +621,7 @@ function startFind(fixture: Fixture, showReplace = false): void {
 }
 
 function matchDecorationCount(fixture: Fixture): number {
-	return fixture.model
-		.getAllDecorations()
-		.filter(
-			decoration =>
-				decoration.options.className === 'findMatch' || decoration.options.className === 'currentFindMatch',
-		).length;
+	return fixture.model.getAllDecorations().filter(decoration => decoration.options.className === 'findMatch' || decoration.options.className === 'currentFindMatch').length;
 }
 
 function setInputValue(input: HTMLInputElement, value: string): void {
@@ -729,11 +629,7 @@ function setInputValue(input: HTMLInputElement, value: string): void {
 	input.dispatchEvent(new input.ownerDocument.defaultView!.Event('input', { bubbles: true }));
 }
 
-function keyboardEvent(
-	targetWindow: typeof browserEnvironment.window,
-	key: string,
-	options: KeyboardEventInit = {},
-): KeyboardEvent {
+function keyboardEvent(targetWindow: typeof browserEnvironment.window, key: string, options: KeyboardEventInit = {}): KeyboardEvent {
 	return new targetWindow.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,

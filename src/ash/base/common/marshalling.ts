@@ -8,11 +8,7 @@ export function parse(text: string): unknown {
 			return value;
 		}
 		// Components must not inject URL delimiters when URI.from interpolates them.
-		if (
-			!isUriComponents(value) ||
-			!/^[A-Za-z][A-Za-z\d+.-]*:$/u.test(`${value.scheme}:`) ||
-			/[\x00-\x20\x7f/\\?#@]/u.test(value.authority ?? '')
-		) {
+		if (!isUriComponents(value) || !/^[A-Za-z][A-Za-z\d+.-]*:$/u.test(`${value.scheme}:`) || /[\x00-\x20\x7f/\\?#@]/u.test(value.authority ?? '')) {
 			throw new TypeError('Invalid marshalled URI');
 		}
 

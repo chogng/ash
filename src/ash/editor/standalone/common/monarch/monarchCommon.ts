@@ -42,13 +42,7 @@ export function findRules(lexer: ILexer, state: string): IRule[] | null {
 	}
 }
 
-export function substituteMatches(
-	lexer: ILexerMin,
-	value: string,
-	id: string,
-	matches: string[],
-	state: string,
-): string {
+export function substituteMatches(lexer: ILexerMin, value: string, id: string, matches: string[], state: string): string {
 	const parts = state.split('.');
 	return value.replace(/\$(\$|#|[sS]\d+|\d+|@[\w]+)/g, (_, reference: string) => {
 		if (reference === '$') {

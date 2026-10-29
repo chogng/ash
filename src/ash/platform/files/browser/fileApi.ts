@@ -39,10 +39,7 @@ export function createAppServerFileApi(connection: AppServerProtocolClient): IFi
 			});
 			return {
 				uri: resource.with({ path: URI.file(result.root).path, query: null, fragment: null }),
-				target:
-					result.target.type === 'environment'
-						? result.target
-						: { type: 'session', ...result.target.sessionDirectory },
+				target: result.target.type === 'environment' ? result.target : { type: 'session', ...result.target.sessionDirectory },
 			};
 		},
 		get connectionGeneration() {
@@ -88,9 +85,7 @@ export function createAppServerFileApi(connection: AppServerProtocolClient): IFi
 		readFile: ({ candidateGuessEncodings, ...params }) =>
 			appServerRequest(connection, 'fs/readFile', {
 				...params,
-				...(candidateGuessEncodings === undefined
-					? {}
-					: { candidateGuessEncodings: [...candidateGuessEncodings] }),
+				...(candidateGuessEncodings === undefined ? {} : { candidateGuessEncodings: [...candidateGuessEncodings] }),
 			}),
 		readBinaryFile: params => appServerRequest(connection, 'fs/readBinaryFile', params),
 		writeFile: params => appServerRequest(connection, 'fs/writeFile', params),

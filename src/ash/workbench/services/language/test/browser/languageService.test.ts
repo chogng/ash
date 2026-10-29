@@ -34,21 +34,10 @@ suite('language browser component', () => {
 				await expect(progress).toHaveText(`rust-analyzer: Indexing (${percentage}%): Reading workspace`);
 				await page.evaluate(percentage => window.languageIntegration.updatePeer(percentage), percentage);
 				await expect(peer).toHaveText(`Sync ${percentage}%`);
-				expect(
-					await icon.evaluate((element, animation) => element.getAnimations()[0] === animation, animation),
-				).toBe(true);
-				expect(
-					await peerIcon.evaluate(
-						(element, animation) => element.getAnimations()[0] === animation,
-						peerAnimation,
-					),
-				).toBe(true);
-				expect(await animation.evaluate(animation => animation.currentTime as number)).toBeGreaterThanOrEqual(
-					650,
-				);
-				expect(
-					await peerAnimation.evaluate(animation => animation.currentTime as number),
-				).toBeGreaterThanOrEqual(650);
+				expect(await icon.evaluate((element, animation) => element.getAnimations()[0] === animation, animation)).toBe(true);
+				expect(await peerIcon.evaluate((element, animation) => element.getAnimations()[0] === animation, peerAnimation)).toBe(true);
+				expect(await animation.evaluate(animation => animation.currentTime as number)).toBeGreaterThanOrEqual(650);
+				expect(await peerAnimation.evaluate(animation => animation.currentTime as number)).toBeGreaterThanOrEqual(650);
 				await expect(progress.getByRole('button')).toBeFocused();
 			}
 			await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -113,18 +102,14 @@ suite('language browser component', () => {
 			await expect.poll(() => page.evaluate(() => window.languageIntegration.registered())).toBe(true);
 			await page.evaluate(() => window.languageIntegration.focus());
 			await page.keyboard.press('Control+Space');
-			await expect(
-				page.locator('.stanza-editor-completion-option').filter({ hasText: 'print_from_server' }),
-			).toBeVisible();
+			await expect(page.locator('.stanza-editor-completion-option').filter({ hasText: 'print_from_server' })).toBeVisible();
 			await page.keyboard.press('Escape');
 			await page.getByRole('button', { name: 'Uninstall Python server', exact: true }).click();
 			await expect.poll(() => page.evaluate(() => window.languageIntegration.registered())).toBe(false);
 			const requests = await page.evaluate(() => window.languageIntegration.requests());
 			await page.evaluate(() => window.languageIntegration.focus());
 			await page.keyboard.press('Control+Space');
-			await expect(
-				page.locator('.stanza-editor-completion-option').filter({ hasText: 'print_from_server' }),
-			).toHaveCount(0);
+			await expect(page.locator('.stanza-editor-completion-option').filter({ hasText: 'print_from_server' })).toHaveCount(0);
 			expect(await page.evaluate(() => window.languageIntegration.requests())).toBe(requests);
 			expect(errors).toEqual([]);
 		} finally {

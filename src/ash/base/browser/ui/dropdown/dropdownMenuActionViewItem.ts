@@ -31,9 +31,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 		actions: DropdownMenuActions,
 		contextMenuProvider: IContextMenuProvider,
 		options: ActionViewItemOptions = {},
-		private readonly getAnchorOptions?: (
-			anchor: HTMLElement,
-		) => Pick<IContextMenuDelegate, 'anchorAlignment' | 'anchorAxisAlignment'>,
+		private readonly getAnchorOptions?: (anchor: HTMLElement) => Pick<IContextMenuDelegate, 'anchorAlignment' | 'anchorAxisAlignment'>,
 	) {
 		super(action, options);
 		this.actions = actions;

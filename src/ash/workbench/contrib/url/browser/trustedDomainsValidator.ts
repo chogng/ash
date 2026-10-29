@@ -3,11 +3,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import {
-	DialogSeverity,
-	IDialogService,
-	type IActionPromptButton,
-} from '../../../../platform/dialogs/common/dialogs.js';
+import { DialogSeverity, IDialogService, type IActionPromptButton } from '../../../../platform/dialogs/common/dialogs.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { isURLSafeForTrust } from '../../../../platform/url/common/trustedDomains.js';
@@ -48,14 +44,7 @@ export class OpenerValidatorContributions extends Disposable {
 		if (isURLSafeForTrust(resource)) {
 			buttons.push({
 				label: localize('url.trust.configure', 'Configure Trusted Domains'),
-				run: () =>
-					configureOpenerTrustedDomainsHandler(
-						resource,
-						this.trustedDomains,
-						this.quickInput,
-						this.editors,
-						this.token,
-					),
+				run: () => configureOpenerTrustedDomainsHandler(resource, this.trustedDomains, this.quickInput, this.editors, this.token),
 			});
 		}
 		const decision = await this.dialogs.prompt({

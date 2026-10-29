@@ -64,9 +64,7 @@ for (const [serverName, browserName, port, connected] of [
 				}),
 			);
 			await writeFile(join(extension, 'extension.cjs'), extensionSource);
-			const environment: Record<string, string> = Object.fromEntries(
-				Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
-			);
+			const environment: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
 			environment.ASH_WEB_DEBUG_ENDPOINT = endpointFile;
 			environment.ASH_WEB_APP_SERVER_PROFILE = join(directory, 'b');
 			delete environment.ELECTRON_RUN_AS_NODE;
@@ -95,11 +93,7 @@ for (const [serverName, browserName, port, connected] of [
 				}
 				await application.close();
 				if (connected) {
-					const executable = join(
-						developmentAshPackagePath(repository, 'packaged-node'),
-						'bin',
-						process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon',
-					);
+					const executable = join(developmentAshPackagePath(repository, 'packaged-node'), 'bin', process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon');
 					await promisify(execFile)(executable, ['stop'], {
 						env: { ...environment, ASH_HOME: join(directory, 'b') },
 						windowsHide: true,
@@ -147,22 +141,16 @@ for (const [serverName, browserName, port, connected] of [
 									.filter(session => !session.parentName)
 									.map(session => session.name)
 									.sort(),
-							{ timeout: 60_000 },
+							{
+								timeout: 60_000,
+							},
 						)
 						.toEqual([serverName, browserName].sort());
 				} catch (error) {
 					t.diagnostic(JSON.stringify(await command<DebugState>('state')));
 					throw error;
 				}
-				await expect
-					.poll(
-						async () =>
-							(await command<DebugState>('state')).sessions.some(
-								session => session.parentName === browserName,
-							),
-						{ timeout: 30_000 },
-					)
-					.toBe(true);
+				await expect.poll(async () => (await command<DebugState>('state')).sessions.some(session => session.parentName === browserName), { timeout: 30_000 }).toBe(true);
 				await expect
 					.poll(
 						async () => {
@@ -177,9 +165,7 @@ for (const [serverName, browserName, port, connected] of [
 				const pids = await debugProcessIds(application.process().pid!);
 				assert.ok(pids.length >= 2, JSON.stringify(pids));
 				await command('stop', stopName);
-				await expect
-					.poll(async () => (await command<DebugState>('state')).sessions, { timeout: 10_000 })
-					.toEqual([]);
+				await expect.poll(async () => (await command<DebugState>('state')).sessions, { timeout: 10_000 }).toEqual([]);
 				await expect
 					.poll(
 						() =>
@@ -207,24 +193,12 @@ for (const [serverName, browserName, port, connected] of [
 			});
 			try {
 				await command('start', serverName);
-				await expect
-					.poll(
-						async () =>
-							(await command<DebugState>('state')).output.some(output =>
-								output.includes(`Port ${port} is already in use`),
-							),
-						{ timeout: 30_000 },
-					)
-					.toBe(true);
-				await expect
-					.poll(async () => (await command<DebugState>('state')).sessions, { timeout: 10_000 })
-					.toEqual([]);
+				await expect.poll(async () => (await command<DebugState>('state')).output.some(output => output.includes(`Port ${port} is already in use`)), { timeout: 30_000 }).toBe(true);
+				await expect.poll(async () => (await command<DebugState>('state')).sessions, { timeout: 10_000 }).toEqual([]);
 				assert.equal(occupied.listening, true);
 				assert.deepEqual(await debugProcessIds(application.process().pid!), []);
 			} finally {
-				await new Promise<void>((resolveClose, reject) =>
-					occupied.close(error => (error ? reject(error) : resolveClose())),
-				);
+				await new Promise<void>((resolveClose, reject) => occupied.close(error => (error ? reject(error) : resolveClose())));
 			}
 			await assertPortAvailable(port);
 		},
@@ -274,9 +248,7 @@ async function debugProcessIds(root: number): Promise<number[]> {
 			}
 		}
 	}
-	return processes
-		.filter(child => descendants.has(child.pid) && /node|chrome/i.test(child.name))
-		.map(child => child.pid);
+	return processes.filter(child => descendants.has(child.pid) && /node|chrome/i.test(child.name)).map(child => child.pid);
 }
 
 const extensionSource = String.raw`

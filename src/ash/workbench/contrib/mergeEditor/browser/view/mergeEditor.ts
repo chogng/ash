@@ -3,13 +3,7 @@ import { getWindow, h, type IDimension } from '../../../../../base/browser/dom.j
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { observeElementSize } from '../../../../../base/browser/observer.js';
 import { AnimationFrameScheduler } from '../../../../../base/browser/scheduler.js';
-import {
-	Disposable,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-	type IDisposable,
-} from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { CodeEditorWidget } from '../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
 import type { EditorLayoutInfo } from '../../../../../editor/common/config/editorOptions.js';
@@ -23,20 +17,12 @@ import { localize } from '../../../../../nls.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 
 import type { EditorPanePart } from '../../../../browser/parts/editor/textResourceEditor.js';
-import {
-	MergeEditorModel,
-	type MergeEditorChoice,
-	type MergeEditorHunk,
-	type MergeEditorSide,
-} from '../model/mergeEditorModel.js';
+import { MergeEditorModel, type MergeEditorChoice, type MergeEditorHunk, type MergeEditorSide } from '../model/mergeEditorModel.js';
 import { getAlignments } from './lineAlignment.js';
 import './media/mergeEditor.css';
 
 type SourceSide = Exclude<MergeEditorSide, 'result'>;
-type MergeCodeEditor = Pick<
-	ICodeEditor,
-	'changeViewZones' | 'getTopForLineNumber' | 'getBottomForLineNumber' | 'getModel'
->;
+type MergeCodeEditor = Pick<ICodeEditor, 'changeViewZones' | 'getTopForLineNumber' | 'getBottomForLineNumber' | 'getModel'>;
 type MergeGeometryEditor = Pick<ICodeEditor, 'onDidChangeConfiguration' | 'onDidLayoutChange' | 'getLayoutInfo'>;
 
 interface MergeZone {
@@ -83,8 +69,7 @@ export class MergeEditor extends Disposable {
 	private columnLayout = false;
 	private activeHunk = 0;
 	private syncingScroll = false;
-	private pendingActionFocus:
-		{ readonly index: number; readonly action: MergeEditorChoice | 'markHandled' | 'markUnhandled' } | undefined;
+	private pendingActionFocus: { readonly index: number; readonly action: MergeEditorChoice | 'markHandled' | 'markUnhandled' } | undefined;
 
 	constructor(
 		public readonly resultEditor: MergeResultEditor,
@@ -109,10 +94,7 @@ export class MergeEditor extends Disposable {
 		this._register(toDisposable(() => this.domNode.remove()));
 		const navigation = h(document, 'nav');
 		navigation.className = 'ash-merge-navigation';
-		navigation.setAttribute(
-			'aria-label',
-			localize({ bundle: 'ash', key: 'mergeEditor.conflictNavigation' }, 'Merge conflicts'),
-		);
+		navigation.setAttribute('aria-label', localize({ bundle: 'ash', key: 'mergeEditor.conflictNavigation' }, 'Merge conflicts'));
 		this.previousButton = this._register(
 			new Button(navigation, {
 				...defaultButtonStyles,
@@ -130,10 +112,7 @@ export class MergeEditor extends Disposable {
 		this.previousUnresolvedButton = this._register(
 			new Button(navigation, {
 				...defaultButtonStyles,
-				label: localize(
-					{ bundle: 'ash', key: 'mergeEditor.previousUnresolvedConflict' },
-					'Previous Unresolved',
-				),
+				label: localize({ bundle: 'ash', key: 'mergeEditor.previousUnresolvedConflict' }, 'Previous Unresolved'),
 				onClick: () => this.navigate(-1, true),
 			}),
 		);
@@ -147,20 +126,14 @@ export class MergeEditor extends Disposable {
 		this.acceptRemainingCurrentButton = this._register(
 			new Button(navigation, {
 				...defaultButtonStyles,
-				label: localize(
-					{ bundle: 'ash', key: 'mergeEditor.acceptRemainingCurrent' },
-					'Accept Remaining Current',
-				),
+				label: localize({ bundle: 'ash', key: 'mergeEditor.acceptRemainingCurrent' }, 'Accept Remaining Current'),
 				onClick: () => this.acceptRemaining('current'),
 			}),
 		);
 		this.acceptRemainingIncomingButton = this._register(
 			new Button(navigation, {
 				...defaultButtonStyles,
-				label: localize(
-					{ bundle: 'ash', key: 'mergeEditor.acceptRemainingIncoming' },
-					'Accept Remaining Incoming',
-				),
+				label: localize({ bundle: 'ash', key: 'mergeEditor.acceptRemainingIncoming' }, 'Accept Remaining Incoming'),
 				onClick: () => this.acceptRemaining('incoming'),
 			}),
 		);
@@ -255,8 +228,7 @@ export class MergeEditor extends Disposable {
 		const store = new DisposableStore();
 		this.session.value = store;
 		this.model = model;
-		for (const side of ['base', 'current', 'incoming'] as const)
-			this.sourceEditors.get(side)!.setModel(model[side]);
+		for (const side of ['base', 'current', 'incoming'] as const) this.sourceEditors.get(side)!.setModel(model[side]);
 		this.resultPlaceholderDomNode.hidden = true;
 		store.add(model.onDidChange(() => this.renderHunks()));
 		for (const side of ['base', 'current', 'incoming'] as const) {
@@ -269,8 +241,7 @@ export class MergeEditor extends Disposable {
 		store.add(resultControl.onDidScrollChange(event => this.synchronizeScroll('result', event)));
 		this.trackEditorGeometry(resultControl, store);
 		const decorations = new Map<MergeEditorSide, IEditorDecorationsCollection>();
-		for (const side of ['base', 'current', 'incoming'] as const)
-			decorations.set(side, this.sourceEditors.get(side)!.createDecorationsCollection());
+		for (const side of ['base', 'current', 'incoming'] as const) decorations.set(side, this.sourceEditors.get(side)!.createDecorationsCollection());
 		decorations.set('result', resultControl.createDecorationsCollection());
 		store.add(
 			toDisposable(() => {
@@ -324,9 +295,7 @@ export class MergeEditor extends Disposable {
 		this.domNode.classList.toggle('show-base', this.showBase);
 		this.domNode.classList.toggle('columns', this.columnLayout);
 		this.baseSection.hidden = !this.showBase;
-		this.baseToggleButton.label = this.showBase
-			? localize({ bundle: 'ash', key: 'mergeEditor.hideBase' }, 'Hide Base')
-			: localize({ bundle: 'ash', key: 'mergeEditor.showBase' }, 'Show Base');
+		this.baseToggleButton.label = this.showBase ? localize({ bundle: 'ash', key: 'mergeEditor.hideBase' }, 'Hide Base') : localize({ bundle: 'ash', key: 'mergeEditor.showBase' }, 'Show Base');
 		this.baseToggleButton.checked = this.showBase;
 		this.layoutToggleButton.label = this.columnLayout
 			? localize({ bundle: 'ash', key: 'mergeEditor.useStacked' }, 'Use Stacked Layout')
@@ -373,10 +342,7 @@ export class MergeEditor extends Disposable {
 	private navigate(step: number, unresolvedOnly: boolean): void {
 		const hunks = this.model?.hunks.filter(hunk => !unresolvedOnly || hunk.unresolved);
 		if (!hunks?.length) return;
-		const next =
-			step > 0
-				? (hunks.find(hunk => hunk.index > this.activeHunk) ?? hunks[0])
-				: ([...hunks].reverse().find(hunk => hunk.index < this.activeHunk) ?? hunks.at(-1)!);
+		const next = step > 0 ? (hunks.find(hunk => hunk.index > this.activeHunk) ?? hunks[0]) : ([...hunks].reverse().find(hunk => hunk.index < this.activeHunk) ?? hunks.at(-1)!);
 		this.activeHunk = next.index;
 		this.revealHunk(next);
 	}
@@ -390,8 +356,7 @@ export class MergeEditor extends Disposable {
 			if (side === 'base' && !this.showBase) continue;
 			this.sourceEditors.get(side)!.revealRange(rangeForLines(this.model![side], hunk[side]));
 		}
-		for (const [index, row] of [...this.hunksDomNode.children].entries())
-			row.classList.toggle('active', index === hunk.index);
+		for (const [index, row] of [...this.hunksDomNode.children].entries()) row.classList.toggle('active', index === hunk.index);
 	}
 
 	private renderHunks(): void {
@@ -435,9 +400,7 @@ export class MergeEditor extends Disposable {
 		this.clearZones();
 		const model = this.model;
 		if (!model?.isReady) return;
-		const sides: readonly MergeEditorSide[] = this.showBase
-			? ['base', 'current', 'incoming', 'result']
-			: ['current', 'incoming', 'result'];
+		const sides: readonly MergeEditorSide[] = this.showBase ? ['base', 'current', 'incoming', 'result'] : ['current', 'incoming', 'result'];
 		const specs = new Map<MergeEditorSide, MergeZone[]>(sides.map(side => [side, []]));
 		const added = new Map<MergeEditorSide, number>(sides.map(side => [side, 0]));
 		const actionHeight = 32;
@@ -447,29 +410,20 @@ export class MergeEditor extends Disposable {
 			result: model.getChanges('result'),
 		};
 		for (const hunk of model.hunks) {
-			const top = Math.max(
-				...sides.map(
-					side =>
-						this.topForBoundary(this.editorFor(side)!, model[side], hunk[side].startLineNumber) +
-						added.get(side)!,
-				),
-			);
+			const top = Math.max(...sides.map(side => this.topForBoundary(this.editorFor(side)!, model[side], hunk[side].startLineNumber) + added.get(side)!));
 			for (const side of sides) {
 				const editor = this.editorFor(side)!;
-				const currentTop =
-					this.topForBoundary(editor, model[side], hunk[side].startLineNumber) + added.get(side)!;
+				const currentTop = this.topForBoundary(editor, model[side], hunk[side].startLineNumber) + added.get(side)!;
 				const gap = top - currentTop;
 				if (gap > 0) {
 					specs.get(side)!.push({ afterLineNumber: hunk[side].startLineNumber - 1, heightInPx: gap });
 					added.set(side, added.get(side)! + gap);
 				}
-				specs
-					.get(side)!
-					.push({
-						afterLineNumber: hunk[side].startLineNumber - 1,
-						heightInPx: actionHeight,
-						hunkIndex: hunk.index,
-					});
+				specs.get(side)!.push({
+					afterLineNumber: hunk[side].startLineNumber - 1,
+					heightInPx: actionHeight,
+					hunkIndex: hunk.index,
+				});
 				added.set(side, added.get(side)! + actionHeight);
 			}
 			for (const alignment of getAlignments(hunk, changes, sides)) {
@@ -487,22 +441,15 @@ export class MergeEditor extends Disposable {
 					added.set(side, added.get(side)! + gap);
 				}
 			}
-			const bottom = Math.max(
-				...sides.map(
-					side => this.bottomForRange(this.editorFor(side)!, model[side], hunk[side]) + added.get(side)!,
-				),
-			);
+			const bottom = Math.max(...sides.map(side => this.bottomForRange(this.editorFor(side)!, model[side], hunk[side]) + added.get(side)!));
 			for (const side of sides) {
-				const gap =
-					bottom - this.bottomForRange(this.editorFor(side)!, model[side], hunk[side]) - added.get(side)!;
+				const gap = bottom - this.bottomForRange(this.editorFor(side)!, model[side], hunk[side]) - added.get(side)!;
 				if (gap <= 0) continue;
 				const lines = hunk[side];
-				specs
-					.get(side)!
-					.push({
-						afterLineNumber: (lines.isEmpty ? lines.startLineNumber : lines.endLineNumberExclusive) - 1,
-						heightInPx: gap,
-					});
+				specs.get(side)!.push({
+					afterLineNumber: (lines.isEmpty ? lines.startLineNumber : lines.endLineNumberExclusive) - 1,
+					heightInPx: gap,
+				});
 				added.set(side, added.get(side)! + gap);
 			}
 		}
@@ -531,11 +478,7 @@ export class MergeEditor extends Disposable {
 								// View zones start hidden. Restore keyboard focus only after the
 								// editor paints the replacement actions into a visible zone.
 								onDomNodeTop: () => {
-									if (
-										focusButton &&
-										node.contains(focusButton.domNode) &&
-										node.hasAttribute('data-visible-view-zone')
-									) {
+									if (focusButton && node.contains(focusButton.domNode) && node.hasAttribute('data-visible-view-zone')) {
 										focusButton.focus();
 										focusButton = undefined;
 									}
@@ -554,18 +497,18 @@ export class MergeEditor extends Disposable {
 
 	private renderZoneActions(node: HTMLElement, side: MergeEditorSide, hunk: MergeEditorHunk): Button | undefined {
 		node.setAttribute('role', 'group');
-		node.setAttribute(
-			'aria-label',
-			`${localize({ bundle: 'ash', key: 'mergeEditor.block' }, 'Conflict {0}', hunk.index + 1)} — ${sideLabel(side)}`,
-		);
+		node.setAttribute('aria-label', `${localize({ bundle: 'ash', key: 'mergeEditor.block' }, 'Conflict {0}', hunk.index + 1)} — ${sideLabel(side)}`);
 		let focusButton: Button | undefined;
 		const addAction = (choice: MergeEditorChoice, label: string): void => {
 			const button = this.zoneButtons.add(
-				new Button(node, { ...defaultButtonStyles, label, onClick: () => this.acceptHunk(hunk.index, choice) }),
+				new Button(node, {
+					...defaultButtonStyles,
+					label,
+					onClick: () => this.acceptHunk(hunk.index, choice),
+				}),
 			);
 			this.hunkActionButtons.push(button);
-			if (this.pendingActionFocus?.index === hunk.index && this.pendingActionFocus.action === choice)
-				focusButton = button;
+			if (this.pendingActionFocus?.index === hunk.index && this.pendingActionFocus.action === choice) focusButton = button;
 		};
 		switch (side) {
 			case 'base':
@@ -575,32 +518,21 @@ export class MergeEditor extends Disposable {
 				addAction('current', localize({ bundle: 'ash', key: 'mergeEditor.acceptCurrent' }, 'Accept Current'));
 				break;
 			case 'incoming':
-				addAction(
-					'incoming',
-					localize({ bundle: 'ash', key: 'mergeEditor.acceptIncoming' }, 'Accept Incoming'),
-				);
+				addAction('incoming', localize({ bundle: 'ash', key: 'mergeEditor.acceptIncoming' }, 'Accept Incoming'));
 				break;
 			case 'result': {
 				const state = h(this.domNode.ownerDocument, 'span');
 				state.className = 'ash-merge-inline-state';
 				state.textContent = hunk.unresolved ? resolutionLabel('unresolved') : resolutionLabel(hunk.resolution);
 				node.append(state);
-				if (!this.showBase)
-					addAction('base', localize({ bundle: 'ash', key: 'mergeEditor.useBase' }, 'Use Base'));
+				if (!this.showBase) addAction('base', localize({ bundle: 'ash', key: 'mergeEditor.useBase' }, 'Use Base'));
 				addAction(
 					'both',
 					this.model!.canSmartCombine(hunk.index)
 						? localize({ bundle: 'ash', key: 'mergeEditor.acceptCombination' }, 'Accept Combination')
 						: localize({ bundle: 'ash', key: 'mergeEditor.acceptBoth' }, 'Accept Both'),
 				);
-				if (!this.model!.canSmartCombine(hunk.index))
-					addAction(
-						'bothReversed',
-						localize(
-							{ bundle: 'ash', key: 'mergeEditor.acceptIncomingFirst' },
-							'Accept Both (Incoming First)',
-						),
-					);
+				if (!this.model!.canSmartCombine(hunk.index)) addAction('bothReversed', localize({ bundle: 'ash', key: 'mergeEditor.acceptIncomingFirst' }, 'Accept Both (Incoming First)'));
 				if (hunk.resolution !== 'unresolved') {
 					const markHandled = !hunk.handled;
 					const action = markHandled ? 'markHandled' : 'markUnhandled';
@@ -614,8 +546,7 @@ export class MergeEditor extends Disposable {
 						}),
 					);
 					this.hunkActionButtons.push(button);
-					if (this.pendingActionFocus?.index === hunk.index && this.pendingActionFocus.action === action)
-						focusButton = button;
+					if (this.pendingActionFocus?.index === hunk.index && this.pendingActionFocus.action === action) focusButton = button;
 				}
 				break;
 			}
@@ -624,15 +555,11 @@ export class MergeEditor extends Disposable {
 	}
 
 	private topForBoundary(editor: MergeCodeEditor, model: TextModel, lineNumber: number): number {
-		return lineNumber > model.getLineCount()
-			? editor.getBottomForLineNumber(model.getLineCount())
-			: editor.getTopForLineNumber(lineNumber);
+		return lineNumber > model.getLineCount() ? editor.getBottomForLineNumber(model.getLineCount()) : editor.getTopForLineNumber(lineNumber);
 	}
 
 	private bottomForRange(editor: MergeCodeEditor, model: TextModel, range: LineRange): number {
-		return range.isEmpty
-			? this.topForBoundary(editor, model, range.startLineNumber)
-			: editor.getBottomForLineNumber(Math.min(range.endLineNumberExclusive - 1, model.getLineCount()));
+		return range.isEmpty ? this.topForBoundary(editor, model, range.startLineNumber) : editor.getBottomForLineNumber(Math.min(range.endLineNumberExclusive - 1, model.getLineCount()));
 	}
 
 	private editorFor(side: MergeEditorSide): MergeCodeEditor | undefined {
@@ -689,10 +616,7 @@ export class MergeEditor extends Disposable {
 		for (const side of ['base', 'current', 'incoming', 'result'] as const) {
 			const textModel = model[side];
 			const decorations: IModelDeltaDecoration[] = [];
-			const changes =
-				side === 'base'
-					? [...model.getChanges('current'), ...model.getChanges('incoming')]
-					: model.getChanges(side);
+			const changes = side === 'base' ? [...model.getChanges('current'), ...model.getChanges('incoming')] : model.getChanges(side);
 			for (const change of changes) {
 				const lines = side === 'base' ? change.original : change.modified;
 				const isConflict = model.hunks.some(hunk => hunk[side].intersectsOrTouches(lines));
@@ -713,8 +637,7 @@ export class MergeEditor extends Disposable {
 							range,
 							options: {
 								description: 'merge-inline-change',
-								inlineClassName:
-									side === 'base' ? 'ash-merge-inline-removed' : 'ash-merge-inline-inserted',
+								inlineClassName: side === 'base' ? 'ash-merge-inline-removed' : 'ash-merge-inline-inserted',
 							},
 						});
 				}
@@ -734,10 +657,7 @@ export class MergeEditor extends Disposable {
 		}
 	}
 
-	private synchronizeScroll(
-		source: MergeEditorSide,
-		event: { readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean },
-	): void {
+	private synchronizeScroll(source: MergeEditorSide, event: { readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean }): void {
 		const model = this.model;
 		if (!model?.isReady || this.syncingScroll || (source === 'base' && !this.showBase)) return;
 		const sourceEditor = source === 'result' ? this.resultEditor.getControl() : this.sourceEditors.get(source);
@@ -756,30 +676,11 @@ export class MergeEditor extends Disposable {
 					let targetTop = sourceEditor.getScrollTop();
 					if (!isAlignedConflict) {
 						const mapping = model.getLineMapping(source, side).project(topLine);
-						const sourceStart = this.topForBoundary(
-							sourceEditor,
-							model[source],
-							mapping.inputRange.startLineNumber,
-						);
-						const sourceEnd = this.topForBoundary(
-							sourceEditor,
-							model[source],
-							mapping.inputRange.endLineNumberExclusive,
-						);
-						const targetStart = this.topForBoundary(
-							target,
-							model[side],
-							mapping.outputRange.startLineNumber,
-						);
-						const targetEnd = this.topForBoundary(
-							target,
-							model[side],
-							mapping.outputRange.endLineNumberExclusive,
-						);
-						const fraction = Math.min(
-							1,
-							(sourceEditor.getScrollTop() - sourceStart) / (sourceEnd - sourceStart),
-						);
+						const sourceStart = this.topForBoundary(sourceEditor, model[source], mapping.inputRange.startLineNumber);
+						const sourceEnd = this.topForBoundary(sourceEditor, model[source], mapping.inputRange.endLineNumberExclusive);
+						const targetStart = this.topForBoundary(target, model[side], mapping.outputRange.startLineNumber);
+						const targetEnd = this.topForBoundary(target, model[side], mapping.outputRange.endLineNumberExclusive);
+						const fraction = Math.min(1, (sourceEditor.getScrollTop() - sourceStart) / (sourceEnd - sourceStart));
 						targetTop = targetStart + (targetEnd - targetStart) * fraction;
 					}
 					target.setScrollTop(targetTop);
@@ -803,12 +704,7 @@ export class MergeEditor extends Disposable {
 		this.acceptRemainingIncomingButton.enabled = hasUnresolved;
 		const total = this.model?.isReady ? this.model.hunks.length : 0;
 		const resolved = total - (this.model?.unresolvedCount ?? 0);
-		this.progressNode.textContent = localize(
-			{ bundle: 'ash', key: 'mergeEditor.progress' },
-			'{0} of {1} conflicts resolved',
-			resolved,
-			total,
-		);
+		this.progressNode.textContent = localize({ bundle: 'ash', key: 'mergeEditor.progress' }, '{0} of {1} conflicts resolved', resolved, total);
 	}
 }
 
@@ -838,10 +734,7 @@ function resolutionLabel(resolution: MergeEditorHunk['resolution']): string {
 		case 'both':
 			return localize({ bundle: 'ash', key: 'mergeEditor.resolvedBoth' }, 'Both accepted');
 		case 'bothReversed':
-			return localize(
-				{ bundle: 'ash', key: 'mergeEditor.resolvedBothReversed' },
-				'Both accepted, incoming first',
-			);
+			return localize({ bundle: 'ash', key: 'mergeEditor.resolvedBothReversed' }, 'Both accepted, incoming first');
 		case 'manual':
 			return localize({ bundle: 'ash', key: 'mergeEditor.manualResolution' }, 'Manual resolution');
 	}
@@ -850,18 +743,9 @@ function resolutionLabel(resolution: MergeEditorHunk['resolution']): string {
 function rangeForLines(model: TextModel, lines: LineRange): Range {
 	const start = Math.min(lines.startLineNumber, model.getLineCount());
 	const end = Math.min(lines.endLineNumberExclusive, model.getLineCount());
-	return new Range(
-		start,
-		1,
-		end,
-		lines.endLineNumberExclusive > model.getLineCount() ? model.getLineMaxColumn(end) : 1,
-	);
+	return new Range(start, 1, end, lines.endLineNumberExclusive > model.getLineCount() ? model.getLineMaxColumn(end) : 1);
 }
 
 function sameLineGeometry(previous: EditorLayoutInfo, next: EditorLayoutInfo): boolean {
-	return (
-		previous.width === next.width &&
-		previous.contentWidth === next.contentWidth &&
-		previous.wrappingColumn === next.wrappingColumn
-	);
+	return previous.width === next.width && previous.contentWidth === next.contentWidth && previous.wrappingColumn === next.wrappingColumn;
 }

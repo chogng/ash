@@ -17,16 +17,7 @@ test('Windows drive and UNC workspaces round-trip independently of the client OS
 		assert.equal(getRemoteWorkspacePath(uri), expected);
 		assert.equal(getRemoteWorkspacePath(URI.parse(uri.toString())), expected);
 	}
-	for (const path of [
-		'C:relative',
-		'C:/../project',
-		'C:/NUL.txt',
-		'C:/NUL .txt',
-		'C:/file:stream',
-		'C:/x ',
-		'//server',
-		'C:/x\n',
-	]) {
+	for (const path of ['C:relative', 'C:/../project', 'C:/NUL.txt', 'C:/NUL .txt', 'C:/file:stream', 'C:/x ', '//server', 'C:/x\n']) {
 		assert.throws(() => createSshRemoteWorkspaceUri('windows-dev', path));
 	}
 });
@@ -46,17 +37,11 @@ test('Remote POSIX resource names preserve trailing spaces across adapter round 
 });
 
 test('adapter paths retain Remote ownership and canonical Windows drive spelling', () => {
-	for (const owner of [
-		createSshRemoteWorkspaceUri('windows-dev', 'C:/workspace'),
-		URI.from({ scheme: 'ash-remote', authority: 'team+build', path: '/C:/workspace' }),
-	]) {
+	for (const owner of [createSshRemoteWorkspaceUri('windows-dev', 'C:/workspace'), URI.from({ scheme: 'ash-remote', authority: 'team+build', path: '/C:/workspace' })]) {
 		for (const path of ['c:\\workspace\\源文件.ts', '\\\\server\\share\\源文件.ts']) {
 			const resource = withRemoteWorkspacePath(owner, path);
 			assert.equal(resource.authority, owner.authority);
-			assert.equal(
-				getRemoteWorkspacePath(resource),
-				path.startsWith('c:') ? 'C:/workspace/源文件.ts' : '//server/share/源文件.ts',
-			);
+			assert.equal(getRemoteWorkspacePath(resource), path.startsWith('c:') ? 'C:/workspace/源文件.ts' : '//server/share/源文件.ts');
 		}
 		assert.throws(() => withRemoteWorkspacePath(owner, 'C:relative'));
 	}
@@ -70,21 +55,12 @@ test('Remote Workspace URIs reject non-canonical POSIX paths instead of rewritin
 });
 
 test('extension-resolved folders retain canonical paths without requiring an SSH authority', () => {
-	assert.equal(
-		getRemoteWorkspacePath(URI.parse('ash-remote://team+build/srv/project%20%E4%B8%AD')),
-		'/srv/project 中',
-	);
+	assert.equal(getRemoteWorkspacePath(URI.parse('ash-remote://team+build/srv/project%20%E4%B8%AD')), '/srv/project 中');
 	for (const path of ['/srv//project', '/srv/project/']) {
-		assert.throws(
-			() => getRemoteWorkspacePath(URI.from({ scheme: 'ash-remote', authority: 'team+build', path })),
-			/canonical/,
-		);
+		assert.throws(() => getRemoteWorkspacePath(URI.from({ scheme: 'ash-remote', authority: 'team+build', path })), /canonical/);
 	}
 	// URI parsing normalizes literal dot segments; escaped separators remain part of the decoded path.
 	assert.throws(() => getRemoteWorkspacePath(URI.parse('ash-remote://team+build/srv/..%2Fproject')), /canonical/);
-	assert.throws(
-		() => getRemoteWorkspacePath(URI.parse('ash-remote://team+build/srv/project?ticket=secret')),
-		/query or fragment/,
-	);
+	assert.throws(() => getRemoteWorkspacePath(URI.parse('ash-remote://team+build/srv/project?ticket=secret')), /query or fragment/);
 	assert.throws(() => getRemoteWorkspacePath(URI.parse('ash-remote://ssh+-oBad/srv/project')), /valid OpenSSH/);
 });

@@ -57,10 +57,7 @@ test('Paste admission uses the existing reference model and returns its exact sn
 	using resources = new DisposableStore();
 	const { input, references, target, attachmentModel, routes, inputUri } = setup(resources);
 	using unbound = new InstantiationService();
-	assert.throws(
-		() => unbound.createInstance(ChatWidgetPasteTarget, input, references, attachmentModel),
-		/Unknown service: chatPasteTargetService/u,
-	);
+	assert.throws(() => unbound.createInstance(ChatWidgetPasteTarget, input, references, attachmentModel), /Unknown service: chatPasteTargetService/u);
 	const accepted = target.addAttachments([attachment]);
 	assert.equal(routes.getTarget(inputUri), target);
 	assert.equal(input.value, 'file.ts ');
@@ -139,10 +136,7 @@ suite('Attachment batch admission', () => {
 		const { input, target } = setup(resources);
 		const controller = new AbortController();
 		controller.abort();
-		assert.throws(
-			() => target.addAttachments([attachment, { ...attachment, id: 'another' }], controller.signal),
-			isCancellationError,
-		);
+		assert.throws(() => target.addAttachments([attachment, { ...attachment, id: 'another' }], controller.signal), isCancellationError);
 		assert.equal(input.value, '');
 		assert.deepEqual(target.attachments, []);
 	});
@@ -169,10 +163,7 @@ suite('Attachment batch admission', () => {
 	test('one model replacement cannot republish older captures while its text projection removes another item', async () => {
 		using resources = new DisposableStore();
 		const { input, target, attachmentModel } = setup(resources);
-		const [retained, removed] = target.addAttachments([
-			attachment,
-			{ ...attachment, id: 'removed', name: 'removed.ts' },
-		]);
+		const [retained, removed] = target.addAttachments([attachment, { ...attachment, id: 'removed', name: 'removed.ts' }]);
 		const updated = {
 			...attachment,
 			id: retained!.id,

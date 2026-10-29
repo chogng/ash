@@ -6,10 +6,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
-import type {
-	IWorkingCopyHistoryService,
-	IWorkingCopyHistoryEntry,
-} from '../../../../services/workingCopy/common/workingCopyHistory.js';
+import type { IWorkingCopyHistoryService, IWorkingCopyHistoryEntry } from '../../../../services/workingCopy/common/workingCopyHistory.js';
 import { TimelineService } from '../../../timeline/common/timelineService.js';
 import { LocalHistoryTimeline } from '../../browser/localHistoryTimeline.js';
 import { Event } from '../../../../../base/common/event.js';
@@ -59,11 +56,7 @@ test('LocalHistoryTimeline pages the existing snapshots, refreshes on save, and 
 	using provider = new LocalHistoryTimeline(timeline, history, configuration);
 	assert.equal(context.getValue('timelineHasProvider'), true);
 	const first = await provider.provideTimeline(uri, { limit: 2 }, CancellationToken.None);
-	const second = await provider.provideTimeline(
-		uri,
-		{ limit: 2, cursor: first.paging?.cursor },
-		CancellationToken.None,
-	);
+	const second = await provider.provideTimeline(uri, { limit: 2, cursor: first.paging?.cursor }, CancellationToken.None);
 	assert.deepEqual(
 		{
 			first: first.items.map(item => item.id),
@@ -74,10 +67,7 @@ test('LocalHistoryTimeline pages the existing snapshots, refreshes on save, and 
 		{ first: ['3', '2'], cursor: '2', second: ['1'], done: undefined },
 	);
 	assert.deepEqual(first.items[0].command?.arguments, [uri, '3']);
-	assert.equal(
-		(await provider.provideTimeline(uri, { cursor: 'expired', limit: 2 }, CancellationToken.None)).items.length,
-		0,
-	);
+	assert.equal((await provider.provideTimeline(uri, { cursor: 'expired', limit: 2 }, CancellationToken.None)).items.length, 0);
 	const events: string[] = [];
 	using listener = timeline.onDidChangeTimeline(event => events.push(event.uri!.toString()));
 	changed.fire({ entry: entries[0] });

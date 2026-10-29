@@ -17,11 +17,7 @@ import { REVEAL_IN_EXPLORER_COMMAND_ID } from '../../../files/browser/fileConsta
 import { TerminalCommandId } from '../../../terminal/common/terminal.js';
 import { FOCUS_SEARCH_COMMAND_ID } from '../../../search/common/constants.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
-import {
-	ContentWidgetPositionPreference,
-	type ICodeEditor,
-	type IContentWidget,
-} from '../../../../../editor/browser/editorBrowser.js';
+import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget } from '../../../../../editor/browser/editorBrowser.js';
 import { PositionAffinity } from '../../../../../editor/common/model.js';
 import { ContextViewFocusRestore } from '../../../../../base/browser/ui/contextview/contextview.js';
 import { IContextMenuService, IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
@@ -84,19 +80,10 @@ export class InlineChatAttachmentWidget extends Disposable {
 		let content: IChatAttachmentWidgetInstance | undefined;
 		try {
 			if (attachment.kind === 'file' || attachment.kind === 'codeSelection' || attachment.kind === 'directory') {
-				content = this.fileWidget = instantiation.createInstance(
-					FileAttachmentWidget,
-					attachment,
-					options,
-					host,
-				);
+				content = this.fileWidget = instantiation.createInstance(FileAttachmentWidget, attachment, options, host);
 			} else if (attachment.kind === 'image') {
 				content = instantiation.createInstance(ImageAttachmentWidget, attachment, options, host);
-			} else if (
-				attachment.kind === 'terminal' ||
-				attachment.kind === 'terminalCommand' ||
-				attachment.terminalSnapshot
-			) {
+			} else if (attachment.kind === 'terminal' || attachment.kind === 'terminalCommand' || attachment.terminalSnapshot) {
 				content = instantiation.createInstance(TerminalCommandAttachmentWidget, attachment, options, host);
 			} else if (attachment.kind === 'browserElement') {
 				content = instantiation.createInstance(ElementChatAttachmentWidget, attachment, options, host);
@@ -106,16 +93,11 @@ export class InlineChatAttachmentWidget extends Disposable {
 				content = instantiation.createInstance(SCMHistoryItemChangeAttachmentWidget, attachment, options, host);
 			} else if (attachment.kind === 'instruction') {
 				content = instantiation.createInstance(PromptFileAttachmentWidget, attachment, options, host);
-			} else if (
-				attachment.kind === 'tool' ||
-				attachment.kind === 'toolSet' ||
-				attachment.kind === 'toolSelection'
-			) {
+			} else if (attachment.kind === 'tool' || attachment.kind === 'toolSet' || attachment.kind === 'toolSelection') {
 				content = instantiation.createInstance(ToolSetOrToolItemAttachmentWidget, attachment, options, host);
 			} else {
 				content = registry.createWidget(attachment, options, host);
-				if (!content && attachment.kind === 'sessionReference')
-					throw new Error('Missing Chat reference attachment widget registration');
+				if (!content && attachment.kind === 'sessionReference') throw new Error('Missing Chat reference attachment widget registration');
 				content ??= instantiation.createInstance(DefaultChatAttachmentWidget, attachment, options, host);
 			}
 		} catch (error) {
@@ -165,10 +147,7 @@ export class InlineChatAttachmentWidget extends Disposable {
 
 	get widthInEm(): number {
 		const font = this.editor.getOption(EditorOption.fontInfo);
-		return (
-			(this.attachmentWidget.element.getBoundingClientRect().width ||
-				this.attachment.name.length * font.typicalHalfwidthCharacterWidth + 28) / font.fontSize
-		);
+		return (this.attachmentWidget.element.getBoundingClientRect().width || this.attachment.name.length * font.typicalHalfwidthCharacterWidth + 28) / font.fontSize;
 	}
 
 	setSelected(selected: boolean): void {
@@ -219,22 +198,11 @@ export class DefaultChatAttachmentWidget extends Disposable implements IChatAtta
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
-		const control = this._register(
-			createSourceAttachmentControl(attachment, getDefaultAttachmentIcon(attachment.kind), container),
-		);
+		const control = this._register(createSourceAttachmentControl(attachment, getDefaultAttachmentIcon(attachment.kind), container));
 		this.element = control.element;
 		this.contentHover = control.contentHover;
 		if (attachment.kind === 'symbol' && isAttachmentResource(attachment.resource)) {
-			this._register(
-				instantiation.createInstance(
-					AttachmentResourceActions,
-					control.element,
-					control.source,
-					attachment.resource,
-					false,
-					MenuId.ChatInputSymbolAttachmentContext,
-				),
-			);
+			this._register(instantiation.createInstance(AttachmentResourceActions, control.element, control.source, attachment.resource, false, MenuId.ChatInputSymbolAttachmentContext));
 		}
 		this._register(
 			wireSourceAttachmentActions(
@@ -366,13 +334,7 @@ export class SCMHistoryItemAttachmentWidget extends Disposable implements IChatA
 				attachment,
 				localize('chat.context.openCommitSource', 'Open commit changes for {0}', attachment.name),
 				Lxicon.diffMultiple1,
-				token =>
-					commands.executeCommand(
-						'workbench.scm.action.graph.viewChanges',
-						attachment.resource,
-						attachment.name,
-						token,
-					),
+				token => commands.executeCommand('workbench.scm.action.graph.viewChanges', attachment.resource, attachment.name, token),
 				notifications,
 			);
 		}
@@ -424,13 +386,7 @@ export class SCMHistoryItemChangeAttachmentWidget extends Disposable implements 
 				attachment,
 				localize('chat.context.openHistoryFileSource', 'Open revision file for {0}', attachment.name),
 				Lxicon.goToFile,
-				token =>
-					commands.executeCommand(
-						'workbench.scm.action.graph.openFile',
-						attachment.resource,
-						attachment.name,
-						token,
-					),
+				token => commands.executeCommand('workbench.scm.action.graph.openFile', attachment.resource, attachment.name, token),
 				notifications,
 			);
 		}
@@ -487,15 +443,7 @@ function addAttachmentSourceAction(
 					if (!token.isCancellationRequested) return activate(token);
 				})
 				.catch(error => {
-					if (!token.isCancellationRequested)
-						notifications.error(
-							localize(
-								'chat.context.openFailed',
-								'Could not open {0}: {1}',
-								attachment.name,
-								String(error),
-							),
-						);
+					if (!token.isCancellationRequested) notifications.error(localize('chat.context.openFailed', 'Could not open {0}: {1}', attachment.name, String(error)));
 				})
 				.finally(() => {
 					opening = false;
@@ -524,16 +472,7 @@ export class PromptFileAttachmentWidget extends Disposable implements IChatAttac
 		const control = this._register(createSourceAttachmentControl(attachment, Lxicon.book, container));
 		this.element = control.element;
 		if (isAttachmentResource(attachment.resource)) {
-			this._register(
-				instantiation.createInstance(
-					AttachmentResourceActions,
-					control.element,
-					control.source,
-					attachment.resource,
-					false,
-					MenuId.ChatInputResourceAttachmentContext,
-				),
-			);
+			this._register(instantiation.createInstance(AttachmentResourceActions, control.element, control.source, attachment.resource, false, MenuId.ChatInputResourceAttachmentContext));
 		}
 		control.source.disabled = !attachment.resource;
 		this._register(
@@ -543,10 +482,7 @@ export class PromptFileAttachmentWidget extends Disposable implements IChatAttac
 				control.source,
 				attachment,
 				options,
-				() =>
-					attachment.resource
-						? opener.open(attachment.resource, { fromUserGesture: true, openExternal: false })
-						: undefined,
+				() => (attachment.resource ? opener.open(attachment.resource, { fromUserGesture: true, openExternal: false }) : undefined),
 				this.opened,
 				this.deleted,
 				notifications,
@@ -675,15 +611,7 @@ function wireSourceAttachmentActions(
 						if (!owner.isDisposed) opened.fire();
 					},
 					error => {
-						if (!owner.isDisposed)
-							notifications.error(
-								localize(
-									'chat.context.openFailed',
-									'Could not open {0}: {1}',
-									attachment.name,
-									String(error),
-								),
-							);
+						if (!owner.isDisposed) notifications.error(localize('chat.context.openFailed', 'Could not open {0}: {1}', attachment.name, String(error)));
 					},
 				)
 				.finally(() => {
@@ -727,16 +655,7 @@ export class FileAttachmentWidget extends Disposable implements IChatAttachmentW
 		source.setAttribute('aria-label', localize('chat.context.open', 'Open {0}', attachment.name));
 		chip.append(source);
 		if (isAttachmentResource(attachment.resource)) {
-			this._register(
-				instantiation.createInstance(
-					AttachmentResourceActions,
-					chip,
-					source,
-					attachment.resource,
-					attachment.kind === 'directory',
-					MenuId.ChatInputResourceAttachmentContext,
-				),
-			);
+			this._register(instantiation.createInstance(AttachmentResourceActions, chip, source, attachment.resource, attachment.kind === 'directory', MenuId.ChatInputResourceAttachmentContext));
 		}
 		const label = this._register(new IconLabel(source, { label: attachment.name, reserveIconSpace: true }));
 		label.labelElement.classList.add('ash-chat-code-reference');
@@ -751,8 +670,7 @@ export class FileAttachmentWidget extends Disposable implements IChatAttachmentW
 							const glyph = h(document, 'span');
 							target.append(glyph);
 							if (attachment.kind === 'directory') appendIcon(Lxicon.folder, glyph);
-							else if (resourceIcons.getFileIconTheme().hasFileIcons)
-								resourceIcons.renderFileIcon(resource, glyph);
+							else if (resourceIcons.getFileIconTheme().hasFileIcons) resourceIcons.renderFileIcon(resource, glyph);
 							else appendIcon(Lxicon.file, glyph);
 						},
 				true,
@@ -771,10 +689,7 @@ export class FileAttachmentWidget extends Disposable implements IChatAttachmentW
 					source,
 					attachment,
 					options,
-					() =>
-						attachment.resource
-							? commands.executeCommand(REVEAL_IN_EXPLORER_COMMAND_ID, attachment.resource)
-							: undefined,
+					() => (attachment.resource ? commands.executeCommand(REVEAL_IN_EXPLORER_COMMAND_ID, attachment.resource) : undefined),
 					this.opened,
 					this.deleted,
 					notifications,
@@ -838,10 +753,7 @@ class AttachmentResourceActions extends Disposable {
 				menuId,
 				contextKeyService: context,
 				menuActionOptions: { arg: resource },
-				getAnchor: () =>
-					'clientX' in event
-						? { x: event.clientX, y: event.clientY, targetWindow: element.ownerDocument.defaultView! }
-						: anchor,
+				getAnchor: () => ('clientX' in event ? { x: event.clientX, y: event.clientY, targetWindow: element.ownerDocument.defaultView! } : anchor),
 				autoSelectFirstItem: true,
 				cancellationToken: token,
 			});
@@ -872,13 +784,7 @@ class AttachmentResourceActions extends Disposable {
 }
 
 function isAttachmentResource(resource: URI | undefined): resource is URI {
-	return (
-		!!resource &&
-		(resource.scheme === Schemas.file ||
-			isRemoteResource(resource) ||
-			resource.scheme === Schemas.untitled ||
-			resource.scheme === Schemas.vscodeUserData)
-	);
+	return !!resource && (resource.scheme === Schemas.file || isRemoteResource(resource) || resource.scheme === Schemas.untitled || resource.scheme === Schemas.vscodeUserData);
 }
 
 /** Displays the image already prepared by the attachment owner; no source resource is reread. */
@@ -919,16 +825,7 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 		);
 		source.domNode.classList.add('ash-chat-attachment-source');
 		if (isAttachmentResource(attachment.resource)) {
-			this._register(
-				instantiation.createInstance(
-					AttachmentResourceActions,
-					element,
-					source.domNode,
-					attachment.resource,
-					false,
-					MenuId.ChatInputResourceAttachmentContext,
-				),
-			);
+			this._register(instantiation.createInstance(AttachmentResourceActions, element, source.domNode, attachment.resource, false, MenuId.ChatInputResourceAttachmentContext));
 		}
 		const thumbnail = h(document, 'img');
 		thumbnail.draggable = false;
@@ -963,11 +860,7 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 			if (frame.show()) this.opened.fire();
 			else this.preview.clear();
 		};
-		this._register(
-			wireAttachmentActions(element, source.domNode, attachment.name, options, open, event =>
-				this.deleted.fire(event),
-			),
-		);
+		this._register(wireAttachmentActions(element, source.domNode, attachment.name, options, open, event => this.deleted.fire(event)));
 		const unavailable = () => {
 			if (this.isDisposed) return;
 			loading.clear();
@@ -1035,18 +928,13 @@ export class TerminalCommandAttachmentWidget extends Disposable implements IChat
 		container.append(element);
 		this._register(toDisposable(() => element.remove()));
 		const resource = attachment.resource;
-		const terminalId =
-			resource?.scheme === Schemas.internal && resource.authority === 'terminal'
-				? new URLSearchParams(resource.query).get('id')
-				: undefined;
+		const terminalId = resource?.scheme === Schemas.internal && resource.authority === 'terminal' ? new URLSearchParams(resource.query).get('id') : undefined;
 		const snapshot = attachment.terminalSnapshot;
 		const source = this._register(
 			new Button(element, {
 				...defaultButtonStyles,
 				label: attachment.name,
-				ariaLabel: snapshot
-					? localize('terminal.chat.preview', 'Preview terminal snapshot')
-					: localize('chat.context.open', 'Open {0}', attachment.name),
+				ariaLabel: snapshot ? localize('terminal.chat.preview', 'Preview terminal snapshot') : localize('chat.context.open', 'Open {0}', attachment.name),
 				icon: Lxicon.terminal,
 				enabled: !!(snapshot || terminalId),
 				size: 'small',
@@ -1061,10 +949,7 @@ export class TerminalCommandAttachmentWidget extends Disposable implements IChat
 				await commands.executeCommand(TerminalCommandId.Focus, terminalId);
 				if (!this.isDisposed) this.opened.fire();
 			} catch (error) {
-				if (!this.isDisposed)
-					notifications.error(
-						localize('chat.context.openFailed', 'Could not open {0}: {1}', attachment.name, String(error)),
-					);
+				if (!this.isDisposed) notifications.error(localize('chat.context.openFailed', 'Could not open {0}: {1}', attachment.name, String(error)));
 			} finally {
 				this.opening = false;
 			}
@@ -1121,24 +1006,14 @@ export class TerminalCommandAttachmentWidget extends Disposable implements IChat
 				this.opened.fire();
 				// The mirror receives only frozen text and geometry, after its dialog is laid out.
 				void mirror.render(snapshot).catch(() => {
-					if (!resources.isDisposed)
-						notifications.error(
-							localize('chat.context.previewFailed', 'Preview unavailable: {0}', attachment.name),
-						);
+					if (!resources.isDisposed) notifications.error(localize('chat.context.previewFailed', 'Preview unavailable: {0}', attachment.name));
 				});
 			} catch {
 				this.preview.clear();
-				if (!this.isDisposed)
-					notifications.error(
-						localize('chat.context.previewFailed', 'Preview unavailable: {0}', attachment.name),
-					);
+				if (!this.isDisposed) notifications.error(localize('chat.context.previewFailed', 'Preview unavailable: {0}', attachment.name));
 			}
 		};
-		this._register(
-			wireAttachmentActions(element, source.domNode, attachment.name, options, open, event =>
-				this.deleted.fire(event),
-			),
-		);
+		this._register(wireAttachmentActions(element, source.domNode, attachment.name, options, open, event => this.deleted.fire(event)));
 	}
 }
 
@@ -1167,10 +1042,7 @@ export class ChatReferenceAttachmentWidget extends Disposable implements IChatAt
 		container.append(element);
 		this._register(toDisposable(() => element.remove()));
 		const resource = attachment.resource;
-		const parameters =
-			resource?.scheme === Schemas.internal && resource.authority === 'chat-session'
-				? new URLSearchParams(resource.query)
-				: undefined;
+		const parameters = resource?.scheme === Schemas.internal && resource.authority === 'chat-session' ? new URLSearchParams(resource.query) : undefined;
 		const sessionId = parameters?.get('sessionId');
 		const threadId = parameters?.get('threadId');
 		const source = this._register(
@@ -1191,10 +1063,7 @@ export class ChatReferenceAttachmentWidget extends Disposable implements IChatAt
 				await navigation.openConversation(sessionId, threadId);
 				if (!this.isDisposed) this.opened.fire();
 			} catch (error) {
-				if (!this.isDisposed)
-					notifications.error(
-						localize('chat.context.openFailed', 'Could not open {0}: {1}', attachment.name, String(error)),
-					);
+				if (!this.isDisposed) notifications.error(localize('chat.context.openFailed', 'Could not open {0}: {1}', attachment.name, String(error)));
 			} finally {
 				this.opening = false;
 			}

@@ -101,10 +101,7 @@ export class FindDecorations extends Disposable {
 			})),
 		);
 		for (const scope of this.scopes) scope.dispose();
-		this.scopes =
-			findScopes?.map(range =>
-				this.model.trackRange(range, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges),
-			) ?? [];
+		this.scopes = findScopes?.map(range => this.model.trackRange(range, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges)) ?? [];
 		this.currentMatch = null;
 	}
 

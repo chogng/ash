@@ -19,8 +19,7 @@ export class ClickLinkMouseEvent {
 
 	constructor(source: IEditorMouseEvent, triggerModifier: TriggerModifier, sideModifier: TriggerModifier) {
 		this.target = source.target;
-		this.hasTriggerModifier =
-			source.event[triggerModifier] && !source.event.browserEvent.getModifierState('AltGraph');
+		this.hasTriggerModifier = source.event[triggerModifier] && !source.event.browserEvent.getModifierState('AltGraph');
 		this.hasSideBySideModifier = source.event[sideModifier];
 		this.isNoneOrSingleMouseDown = source.event.detail <= 1;
 		this.isLeftClick = source.event.leftButton;
@@ -33,8 +32,7 @@ export class ClickLinkKeyboardEvent {
 	public readonly keyCodeIsTriggerKey: boolean;
 	public readonly hasTriggerModifier: boolean;
 	constructor(source: IKeyboardEvent, triggerModifier: TriggerModifier) {
-		this.keyCodeIsTriggerKey =
-			source.keyCode === (triggerModifier === 'altKey' ? KeyCode.Alt : isMacintosh ? KeyCode.Meta : KeyCode.Ctrl);
+		this.keyCodeIsTriggerKey = source.keyCode === (triggerModifier === 'altKey' ? KeyCode.Alt : isMacintosh ? KeyCode.Meta : KeyCode.Ctrl);
 		this.hasTriggerModifier = source[triggerModifier];
 	}
 }
@@ -96,11 +94,7 @@ export class ClickLinkGesture extends Disposable {
 		this._register(
 			editor.onKeyDown(event => {
 				const keyboard = new ClickLinkKeyboardEvent(event, this.triggerModifier);
-				if (
-					keyboard.keyCodeIsTriggerKey &&
-					this.lastMouse &&
-					!event.browserEvent.getModifierState('AltGraph')
-				) {
+				if (keyboard.keyCodeIsTriggerKey && this.lastMouse && !event.browserEvent.getModifierState('AltGraph')) {
 					this.move.fire([this.wrap(this.lastMouse), keyboard]);
 				}
 			}),
@@ -122,17 +116,9 @@ export class ClickLinkGesture extends Disposable {
 		);
 	}
 	private get triggerModifier(): TriggerModifier {
-		return this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey'
-			? isMacintosh
-				? 'metaKey'
-				: 'ctrlKey'
-			: 'altKey';
+		return this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey' ? (isMacintosh ? 'metaKey' : 'ctrlKey') : 'altKey';
 	}
 	private wrap(event: IEditorMouseEvent): ClickLinkMouseEvent {
-		return new ClickLinkMouseEvent(
-			event,
-			this.triggerModifier,
-			this.triggerModifier === 'altKey' ? (isMacintosh ? 'metaKey' : 'ctrlKey') : 'altKey',
-		);
+		return new ClickLinkMouseEvent(event, this.triggerModifier, this.triggerModifier === 'altKey' ? (isMacintosh ? 'metaKey' : 'ctrlKey') : 'altKey');
 	}
 }

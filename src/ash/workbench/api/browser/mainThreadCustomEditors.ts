@@ -2,13 +2,7 @@ import { localize } from '../../../nls.js';
 import { match } from '../../../base/common/glob.js';
 import { Event } from '../../../base/common/event.js';
 import { basename } from '../../../base/common/resources.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	toDisposable,
-	type IDisposable,
-} from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
 import type { ExtensionCustomEditorContribution } from '../../services/extensions/common/extensionManifest.js';
 import {
@@ -49,15 +43,10 @@ export class MainThreadCustomEditors extends Disposable {
 	}
 
 	public update(snapshot: ExtensionHostFleetSnapshot): void {
-		const declarations =
-			this.extensions.getExtensionPointContributions<readonly ExtensionCustomEditorContribution[]>(
-				'customEditors',
-			);
+		const declarations = this.extensions.getExtensionPointContributions<readonly ExtensionCustomEditorContribution[]>('customEditors');
 		const entries = snapshot.extensions.flatMap(runtime => {
 			if (runtime.lifecycle === 'ready' && runtime.incarnation !== undefined) {
-				return runtime.registrations.flatMap(registration =>
-					registration.kind === 'customTextEditor' ? [{ runtime, registration }] : [],
-				);
+				return runtime.registrations.flatMap(registration => (registration.kind === 'customTextEditor' ? [{ runtime, registration }] : []));
 			}
 			if (!['dormant', 'starting', 'handshaking'].includes(runtime.lifecycle)) {
 				return [];
@@ -66,10 +55,7 @@ export class MainThreadCustomEditors extends Disposable {
 				.filter(owner => owner.description.id === runtime.id)
 				.flatMap(owner =>
 					owner.value.flatMap(editor => {
-						if (
-							editor.priority === 'explicit' ||
-							!runtime.activation?.events.includes(`onCapability:customEditor:${editor.viewType}`)
-						) {
+						if (editor.priority === 'explicit' || !runtime.activation?.events.includes(`onCapability:customEditor:${editor.viewType}`)) {
 							return [];
 						}
 						const registration: ExtensionHostCustomEditorRegistration = {
@@ -78,9 +64,7 @@ export class MainThreadCustomEditors extends Disposable {
 							viewType: editor.viewType,
 							displayName: editor.displayName,
 							priority: editor.priority,
-							selectors: editor.selector.flatMap(selector =>
-								selector.filenamePattern ? [selector.filenamePattern] : [],
-							),
+							selectors: editor.selector.flatMap(selector => (selector.filenamePattern ? [selector.filenamePattern] : [])),
 						};
 						return [{ runtime, registration }];
 					}),
@@ -94,18 +78,9 @@ export class MainThreadCustomEditors extends Disposable {
 			active.add(registration.viewType);
 		}
 		for (const { runtime, registration } of entries) {
-			const identity = JSON.stringify([
-				runtime.id,
-				runtime.version,
-				runtime.packageDigest,
-				runtime.activationGeneration,
-				registration.viewType,
-			]);
+			const identity = JSON.stringify([runtime.id, runtime.version, runtime.packageDigest, runtime.activationGeneration, registration.viewType]);
 			const previous = this.bindings.get(registration.viewType);
-			if (
-				previous?.identity === identity &&
-				(previous.incarnation === undefined || previous.incarnation === runtime.incarnation)
-			) {
+			if (previous?.identity === identity && (previous.incarnation === undefined || previous.incarnation === runtime.incarnation)) {
 				previous.runtime = runtime;
 				previous.registration = registration;
 				previous.incarnation = runtime.incarnation;
@@ -138,18 +113,9 @@ export class MainThreadCustomEditors extends Disposable {
 									candidate.packageDigest === runtime.packageDigest &&
 									candidate.lifecycle === 'ready',
 							);
-							const actual = current?.registrations.find(
-								candidate =>
-									candidate.kind === 'customTextEditor' &&
-									candidate.viewType === registration.viewType,
-							);
+							const actual = current?.registrations.find(candidate => candidate.kind === 'customTextEditor' && candidate.viewType === registration.viewType);
 							if (!current || actual?.kind !== 'customTextEditor') {
-								throw new TypeError(
-									localize(
-										'extensions.clientEditor.packageUnavailable',
-										'The editor extension package is unavailable.',
-									),
-								);
+								throw new TypeError(localize('extensions.clientEditor.packageUnavailable', 'The editor extension package is unavailable.'));
 							}
 							binding.runtime = current;
 							binding.registration = actual;
@@ -193,14 +159,8 @@ export class MainThreadCustomEditors extends Disposable {
 		const resourceCache = new Map<string, string>();
 		let resourceGeneration: number | undefined;
 		const readResource = async (value: JsonValue | undefined, signal: AbortSignal): Promise<string> => {
-			if (typeof value !== 'string' || value.startsWith('blob:'))
-				return readWebviewResource(value, resourceCache, signal);
-			if (
-				!owner ||
-				!value ||
-				/[\\:\0]/u.test(value) ||
-				value.split('/').some(part => !part || part === '.' || part === '..')
-			) {
+			if (typeof value !== 'string' || value.startsWith('blob:')) return readWebviewResource(value, resourceCache, signal);
+			if (!owner || !value || /[\\:\0]/u.test(value) || value.split('/').some(part => !part || part === '.' || part === '..')) {
 				throw new TypeError('Custom editor resource must be a path in its own package');
 			}
 			const catalog = await this.packages.list('cached');
@@ -232,14 +192,8 @@ export class MainThreadCustomEditors extends Disposable {
 			createInput: input => new CustomEditorInput(input, registration.viewType),
 			canOpen: input => {
 				const path = input.resource.path;
-				const matches = registration.selectors.some(pattern =>
-					match(
-						pattern.toLowerCase(),
-						(pattern.includes('/') ? path : basename(input.resource)).toLowerCase(),
-					),
-				);
-				const languageMatches =
-					input.languageId !== undefined && registration.languageIds?.includes(input.languageId);
+				const matches = registration.selectors.some(pattern => match(pattern.toLowerCase(), (pattern.includes('/') ? path : basename(input.resource)).toLowerCase()));
+				const languageMatches = input.languageId !== undefined && registration.languageIds?.includes(input.languageId);
 				if (!matches && !languageMatches) {
 					return EditorPaneMatch.None;
 				}
@@ -252,52 +206,30 @@ export class MainThreadCustomEditors extends Disposable {
 						viewType: registration.viewType,
 						displayName: registration.displayName,
 						render: async (document, signal) => {
-							const result = await invoke(
-								'resolveCustomTextEditor',
-								{ document: { ...document } },
-								signal,
-							);
-							if (
-								typeof result !== 'object' ||
-								result === null ||
-								Array.isArray(result) ||
-								!('html' in result) ||
-								typeof result.html !== 'string'
-							) {
+							const result = await invoke('resolveCustomTextEditor', { document: { ...document } }, signal);
+							if (typeof result !== 'object' || result === null || Array.isArray(result) || !('html' in result) || typeof result.html !== 'string') {
 								throw new TypeError('Custom editor provider must return HTML');
 							}
 							let html = result.html;
 							if ('resources' in result) {
 								const resources = result.resources;
-								if (
-									!resources ||
-									typeof resources !== 'object' ||
-									Array.isArray(resources) ||
-									Object.keys(resources).sort().join(',') !== 'script,style'
-								) {
+								if (!resources || typeof resources !== 'object' || Array.isArray(resources) || Object.keys(resources).sort().join(',') !== 'script,style') {
 									throw new TypeError('Custom editor resources require a script and stylesheet');
 								}
 								const assets = resources as Readonly<Record<string, JsonValue>>;
-								const [script, style] = await Promise.all([
-									readResource(assets.script, signal),
-									readResource(assets.style, signal),
-								]);
+								const [script, style] = await Promise.all([readResource(assets.script, signal), readResource(assets.style, signal)]);
 								// Resource bytes execute only inside the opaque sandbox, outside the JSON edit channel.
 								html = `<style>${style.replaceAll(/<\/style/gi, '<\\/style')}</style>${html}<script>${script.replaceAll(/<\/script/gi, '<\\/script')}</script>`;
 							}
 							const update = result.update;
-							if ('editable' in result && typeof result.editable !== 'boolean')
-								throw new TypeError('Custom editor editable policy must be boolean');
+							if ('editable' in result && typeof result.editable !== 'boolean') throw new TypeError('Custom editor editable policy must be boolean');
 							const editable = 'editable' in result ? (result.editable as boolean) : undefined;
 							// Readonly policy belongs to the editor model owner, including after configuration changes.
 							return 'update' in result
 								? {
 										html,
 										editable,
-										update:
-											update && typeof update === 'object' && !Array.isArray(update)
-												? { ...update, readOnly: document.readOnly }
-												: update,
+										update: update && typeof update === 'object' && !Array.isArray(update) ? { ...update, readOnly: document.readOnly } : update,
 									}
 								: { html, editable };
 						},
@@ -309,11 +241,7 @@ export class MainThreadCustomEditors extends Disposable {
 	}
 }
 
-async function readWebviewResource(
-	value: JsonValue | undefined,
-	resources: Map<string, string>,
-	signal: AbortSignal,
-): Promise<string> {
+async function readWebviewResource(value: JsonValue | undefined, resources: Map<string, string>, signal: AbortSignal): Promise<string> {
 	if (typeof value !== 'string' || !URL.canParse(value) || new URL(value).protocol !== 'blob:') {
 		throw new TypeError('Custom editor resource must belong to its browser Worker');
 	}

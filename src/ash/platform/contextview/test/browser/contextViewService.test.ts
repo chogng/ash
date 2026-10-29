@@ -12,7 +12,10 @@ for (const [name, value] of Object.entries({
 	document: environment.window.document,
 	Node: environment.window.Node,
 })) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
+	Object.defineProperty(globalThis, name, {
+		configurable: true,
+		value,
+	});
 }
 
 const { BrowserContextViewService } = await import('../../../../platform/contextview/browser/contextViewService.js');
@@ -24,7 +27,13 @@ test('context view service hosts overlays inside its Workbench container', () =>
 	const content = h(environment.window.document, 'div');
 	content.textContent = 'Menu';
 
-	assert.equal(service.show({ anchor: { left: 8, top: 12, width: 0, height: 0 }, content }), true);
+	assert.equal(
+		service.show({
+			anchor: { left: 8, top: 12, width: 0, height: 0 },
+			content,
+		}),
+		true,
+	);
 
 	const contextView = container.querySelector(':scope > .ash-context-view');
 	assert.ok(contextView);

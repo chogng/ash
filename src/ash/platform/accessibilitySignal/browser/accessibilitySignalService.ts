@@ -1,13 +1,7 @@
 import { addDisposableListener, h } from '../../../base/browser/dom.js';
 import { mainWindow } from '../../../base/browser/window.js';
 import { RunOnceScheduler } from '../../../base/common/async.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	toDisposable,
-	type IDisposable,
-} from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
 import { IAccessibilityService } from '../../accessibility/common/accessibility.js';
 import { IConfigurationService } from '../../configuration/common/configuration.js';
@@ -284,8 +278,7 @@ export interface IAccessibilitySignalService {
 	playSignalLoop(signal: AccessibilitySignal, milliseconds: number): IDisposable;
 }
 
-export const IAccessibilitySignalService =
-	createServiceIdentifier<IAccessibilitySignalService>('accessibilitySignalService');
+export const IAccessibilitySignalService = createServiceIdentifier<IAccessibilitySignalService>('accessibilitySignalService');
 
 interface Playback {
 	readonly audio: HTMLAudioElement;
@@ -311,10 +304,7 @@ export class AccessibilitySignalService extends Disposable implements IAccessibi
 		this._register(toDisposable(() => this.loopCounts.clear()));
 		this._register(
 			configurationService.onDidChangeConfiguration(event => {
-				if (
-					event.affectsConfiguration('accessibility.signals') ||
-					event.affectsConfiguration('accessibility.signalOptions.volume')
-				) {
+				if (event.affectsConfiguration('accessibility.signals') || event.affectsConfiguration('accessibility.signalOptions.volume')) {
 					this.updateAudioPolicy();
 				}
 			}),
@@ -370,12 +360,7 @@ export class AccessibilitySignalService extends Disposable implements IAccessibi
 			this.audioResources.add(
 				addDisposableListener(audio, 'error', () => {
 					state.isPlaying = false;
-					this.logService.warn(
-						'accessibilitySignal',
-						'Could not load a signal sound.',
-						fileName,
-						audio.error,
-					);
+					this.logService.warn('accessibilitySignal', 'Could not load a signal sound.', fileName, audio.error);
 				}),
 			);
 		}
@@ -436,11 +421,7 @@ export class AccessibilitySignalService extends Disposable implements IAccessibi
 				continue;
 			}
 			playback.audio.volume = volume;
-			if (
-				volume === 0 ||
-				policy.sound === 'off' ||
-				(policy.sound === 'auto' && !this.accessibilityService.isScreenReaderOptimized())
-			) {
+			if (volume === 0 || policy.sound === 'off' || (policy.sound === 'auto' && !this.accessibilityService.isScreenReaderOptimized())) {
 				this.stopAudio(playback);
 			}
 		}

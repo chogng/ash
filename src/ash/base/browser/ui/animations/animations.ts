@@ -1,5 +1,9 @@
 /** Shared timing defaults for browser UI animations. */
-export const UI_ANIMATION_DURATION = Object.freeze({ fast: 120, normal: 200, slow: 350 });
+export const UI_ANIMATION_DURATION = Object.freeze({
+	fast: 120,
+	normal: 200,
+	slow: 350,
+});
 
 /** Standard easing used for short UI state changes. */
 export const UI_ANIMATION_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
@@ -29,11 +33,7 @@ export function isReducedMotion(element: Element): boolean {
 }
 
 /** Starts a Web Animations API animation when the platform permits motion. */
-export function animateElement(
-	element: HTMLElement,
-	keyframes: Keyframe[] | PropertyIndexedKeyframes,
-	options: UIAnimationOptions = {},
-): Animation | undefined {
+export function animateElement(element: HTMLElement, keyframes: Keyframe[] | PropertyIndexedKeyframes, options: UIAnimationOptions = {}): Animation | undefined {
 	if (options.respectReducedMotion !== false && isReducedMotion(element)) return undefined;
 	if (typeof element.animate !== 'function') return undefined;
 	return element.animate(keyframes, {

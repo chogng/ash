@@ -4,11 +4,7 @@ import { suite, test } from 'mocha';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { Event } from '../../../../../base/common/event.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
-import {
-	DialogResult,
-	IDialogService,
-	type IConfirmationDialogOptions,
-} from '../../../../../platform/dialogs/common/dialogs.js';
+import { DialogResult, IDialogService, type IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import { INotificationService, type INotification } from '../../../../../platform/notification/common/notification.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
@@ -102,9 +98,7 @@ suite('OnboardingTryoutService', () => {
 	test('unavailable setup is offered but never executed', async () => {
 		const fixture = createServices();
 		using services = fixture.services;
-		using command = CommandsRegistry.register('test.onboarding.setup', () =>
-			assert.fail('setup ran automatically'),
-		);
+		using command = CommandsRegistry.register('test.onboarding.setup', () => assert.fail('setup ran automatically'));
 		using tryout = registerOnboardingTryout({
 			id: 'test.setup',
 			title: 'Test',

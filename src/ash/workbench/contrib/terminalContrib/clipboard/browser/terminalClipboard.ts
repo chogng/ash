@@ -5,11 +5,7 @@ import type { ServicesAccessor } from '../../../../../platform/instantiation/com
 import { TerminalSettingId } from '../../../../../platform/terminal/common/terminal.js';
 
 /** Returns the user's decision, including any explicitly requested newline removal. */
-export async function shouldPasteTerminalText(
-	accessor: ServicesAccessor,
-	text: string,
-	bracketedPasteMode: boolean | undefined,
-): Promise<boolean | { modifiedText: string }> {
+export async function shouldPasteTerminalText(accessor: ServicesAccessor, text: string, bracketedPasteMode: boolean | undefined): Promise<boolean | { modifiedText: string }> {
 	if (!/[\r\n]/u.test(text)) return true;
 	const configuration = accessor.get(IConfigurationService);
 	const policy = configuration.getValue<unknown>(TerminalSettingId.EnableMultiLinePasteWarning);
@@ -31,11 +27,7 @@ export async function shouldPasteTerminalText(
 		title: localize('terminal.clipboard.confirmTitle', 'Paste into Terminal'),
 		severity: DialogSeverity.Warning,
 		message: localize('terminal.clipboard.confirmMessage', 'Paste multiple lines into the terminal?'),
-		detail: localize(
-			'terminal.clipboard.confirmDetail',
-			'This text may run commands. Review the beginning of the text before pasting:\n\n{0}',
-			preview,
-		),
+		detail: localize('terminal.clipboard.confirmDetail', 'This text may run commands. Review the beginning of the text before pasting:\n\n{0}', preview),
 		buttons: [
 			{ label: localize('terminal.clipboard.confirmPaste', 'Paste'), run: () => 'original' },
 			{ label: localize('terminal.clipboard.pasteAsOneLine', 'Paste as One Line'), run: () => 'singleLine' },

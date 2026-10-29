@@ -59,17 +59,12 @@ export class ChatImageReveal extends Disposable {
 		this.container.classList.remove('pending');
 		this.origin.container.hidden = true;
 		const bounds = this.image.getBoundingClientRect();
-		const samples =
-			this.motionEnabled && bounds.width && bounds.height
-				? ImageSamples.create(this.image, bounds.width, bounds.height)
-				: undefined;
+		const samples = this.motionEnabled && bounds.width && bounds.height ? ImageSamples.create(this.image, bounds.width, bounds.height) : undefined;
 		if (!samples) {
 			this.effects.clear();
 			return;
 		}
-		const surface = this.effects.add(
-			this.origin.takeSurface?.() ?? this.instantiation.createInstance(GlyphSurface, this.container),
-		);
+		const surface = this.effects.add(this.origin.takeSurface?.() ?? this.instantiation.createInstance(GlyphSurface, this.container));
 		const size = Math.min(this.origin.size ?? 200, this.container.parentElement?.clientWidth || bounds.width);
 		const timing = surface.getRevealTiming(size);
 		const duration = timing.pace.duration - (getWindow(this.container).performance.now() - loadedAt);
@@ -98,10 +93,6 @@ export class ChatImageReveal extends Disposable {
 
 	private get motionEnabled(): boolean {
 		const type = this.themes.getColorTheme().colorScheme;
-		return (
-			!this.accessibility.isMotionReduced() &&
-			type !== ColorScheme.HighContrastDark &&
-			type !== ColorScheme.HighContrastLight
-		);
+		return !this.accessibility.isMotionReduced() && type !== ColorScheme.HighContrastDark && type !== ColorScheme.HighContrastLight;
 	}
 }

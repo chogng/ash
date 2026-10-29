@@ -36,10 +36,7 @@ export function registerDiffEditorCommands(): void {
 			constructor() {
 				super({
 					id: TOGGLE_DIFF_SIDE_BY_SIDE,
-					title: localize2(
-						{ bundle: 'ash.workbench', key: 'command.ToggleDiffLayoutAction' },
-						'Toggle Inline Diff View',
-					),
+					title: localize2({ bundle: 'ash.workbench', key: 'command.ToggleDiffLayoutAction' }, 'Toggle Inline Diff View'),
 					f1: true,
 				});
 			}
@@ -50,31 +47,19 @@ export function registerDiffEditorCommands(): void {
 	);
 
 	for (const [id, title, mode, toggled, order] of [
-		[
-			SET_DIFF_VIEW_MODE_INLINE,
-			localize2({ bundle: 'ash.workbench', key: 'diffView.inline' }, 'Inline'),
-			'inline',
-			ContextKeyExpr.equals('config.diffEditor.renderSideBySide', false),
-			1,
-		],
+		[SET_DIFF_VIEW_MODE_INLINE, localize2({ bundle: 'ash.workbench', key: 'diffView.inline' }, 'Inline'), 'inline', ContextKeyExpr.equals('config.diffEditor.renderSideBySide', false), 1],
 		[
 			SET_DIFF_VIEW_MODE_SIDE_BY_SIDE,
 			localize2({ bundle: 'ash.workbench', key: 'diffView.sideBySide' }, 'Side by Side'),
 			'sideBySide',
-			ContextKeyExpr.and(
-				ContextKeyExpr.equals('config.diffEditor.renderSideBySide', true),
-				ContextKeyExpr.equals('config.diffEditor.useInlineViewWhenSpaceIsLimited', false),
-			),
+			ContextKeyExpr.and(ContextKeyExpr.equals('config.diffEditor.renderSideBySide', true), ContextKeyExpr.equals('config.diffEditor.useInlineViewWhenSpaceIsLimited', false)),
 			2,
 		],
 		[
 			SET_DIFF_VIEW_MODE_AUTOMATIC,
 			localize2({ bundle: 'ash.workbench', key: 'diffView.automatic' }, 'Automatic'),
 			'automatic',
-			ContextKeyExpr.and(
-				ContextKeyExpr.equals('config.diffEditor.renderSideBySide', true),
-				ContextKeyExpr.equals('config.diffEditor.useInlineViewWhenSpaceIsLimited', true),
-			),
+			ContextKeyExpr.and(ContextKeyExpr.equals('config.diffEditor.renderSideBySide', true), ContextKeyExpr.equals('config.diffEditor.useInlineViewWhenSpaceIsLimited', true)),
 			3,
 		],
 	] as const) {
@@ -120,10 +105,7 @@ export function registerDiffEditorCommands(): void {
 			constructor() {
 				super({
 					id: GOTO_PREVIOUS_CHANGE,
-					title: localize2(
-						{ bundle: 'ash.workbench', key: 'command.PreviousChangeAction' },
-						'Go to Previous Change',
-					),
+					title: localize2({ bundle: 'ash.workbench', key: 'command.PreviousChangeAction' }, 'Go to Previous Change'),
 					f1: true,
 					keybinding: { primary: Keybinding.single(logicalKey('f5', { altKey: true, shiftKey: true })) },
 				});
@@ -154,24 +136,13 @@ export function registerDiffEditorCommands(): void {
 	}
 
 	for (const [id, title, operation] of [
-		[
-			DIFF_OPEN_SIDE,
-			localize2({ bundle: 'ash.workbench', key: 'compare.openSide' }, 'Open Active Diff Side'),
-			(service: IDiffEditorCommandsService) => service.openActiveDiffSide(),
-		],
+		[DIFF_OPEN_SIDE, localize2({ bundle: 'ash.workbench', key: 'compare.openSide' }, 'Open Active Diff Side'), (service: IDiffEditorCommandsService) => service.openActiveDiffSide()],
 		[
 			TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE,
-			localize2(
-				{ bundle: 'ash.workbench', key: 'diff.showWhitespace' },
-				'Show Leading/Trailing Whitespace Differences',
-			),
+			localize2({ bundle: 'ash.workbench', key: 'diff.showWhitespace' }, 'Show Leading/Trailing Whitespace Differences'),
 			(service: IDiffEditorCommandsService) => service.toggleDiffIgnoreTrimWhitespace(),
 		],
-		[
-			DIFF_SWAP_SIDES,
-			localize2({ bundle: 'ash.workbench', key: 'diff.swapSides' }, 'Swap Sides'),
-			(service: IDiffEditorCommandsService) => service.swapDiffSides(),
-		],
+		[DIFF_SWAP_SIDES, localize2({ bundle: 'ash.workbench', key: 'diff.swapSides' }, 'Swap Sides'), (service: IDiffEditorCommandsService) => service.swapDiffSides()],
 	] as const) {
 		registerAction2(
 			class DiffOperationAction extends Action2 {
@@ -181,10 +152,7 @@ export function registerDiffEditorCommands(): void {
 						title,
 						f1: true,
 						precondition: diffEditorActive,
-						toggled:
-							id === TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE
-								? ContextKeyExpr.equals('config.diffEditor.ignoreTrimWhitespace', false)
-								: undefined,
+						toggled: id === TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE ? ContextKeyExpr.equals('config.diffEditor.ignoreTrimWhitespace', false) : undefined,
 						menu:
 							id === DIFF_OPEN_SIDE
 								? undefined
@@ -206,12 +174,7 @@ export function registerDiffEditorCommands(): void {
 }
 
 function activateEditorGroup(accessor: ServicesAccessor, context: unknown): void {
-	if (
-		typeof context === 'object' &&
-		context !== null &&
-		'groupId' in context &&
-		typeof context.groupId === 'number'
-	) {
+	if (typeof context === 'object' && context !== null && 'groupId' in context && typeof context.groupId === 'number') {
 		accessor.get(IEditorPart).activateGroup(context.groupId);
 	}
 }

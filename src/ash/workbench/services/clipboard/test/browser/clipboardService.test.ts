@@ -35,10 +35,7 @@ suite('Workbench browser clipboard', () => {
 			},
 		});
 		await fixture.clipboard.writeText('updated');
-		assert.deepEqual(
-			[await fixture.clipboard.readText(), fixture.notifications.model.getNotifications()],
-			['updated', []],
-		);
+		assert.deepEqual([await fixture.clipboard.readText(), fixture.notifications.model.getNotifications()], ['updated', []]);
 	});
 
 	test('retries denied reads and keeps permission help separate from the pending read', async () => {
@@ -58,10 +55,7 @@ suite('Workbench browser clipboard', () => {
 		assert.deepEqual(fixture.opened, [['https://support.google.com/chrome/answer/114662', { openExternal: true }]]);
 		assert.equal(attempts, 1);
 		await prompt.actions!.primary![0]!.run();
-		assert.deepEqual(
-			[await reading, attempts, fixture.notifications.model.getNotifications()],
-			['recovered', 2, []],
-		);
+		assert.deepEqual([await reading, attempts, fixture.notifications.model.getNotifications()], ['recovered', 2, []]);
 	});
 
 	test('a failed retry prompts again and dismissal completes with empty text', async () => {
@@ -121,10 +115,7 @@ suite('Workbench browser clipboard', () => {
 			const added = fixture.nextNotification();
 			const reading = fixture.clipboard.readText();
 			const prompt = await added;
-			assert.deepEqual(
-				[prompt.message, prompt.actions!.primary!.map(action => action.label)],
-				['无法读取剪贴板。请允许此网站访问剪贴板，然后重试。', ['重试', '了解详情']],
-			);
+			assert.deepEqual([prompt.message, prompt.actions!.primary!.map(action => action.label)], ['无法读取剪贴板。请允许此网站访问剪贴板，然后重试。', ['重试', '了解详情']]);
 			fixture.notifications.model.remove(prompt.id);
 			assert.equal(await reading, '');
 		} finally {
@@ -152,10 +143,7 @@ suite('Workbench browser clipboard', () => {
 		const reading = fixture.clipboard.read();
 		const prompt = await added;
 		await prompt.actions!.primary![0]!.run();
-		assert.deepEqual(
-			[await reading, attempts, fixture.notifications.model.getNotifications()],
-			[[{ type: 'text/html', data: new TextEncoder().encode('<b>recovered</b>') }], 2, []],
-		);
+		assert.deepEqual([await reading, attempts, fixture.notifications.model.getNotifications()], [[{ type: 'text/html', data: new TextEncoder().encode('<b>recovered</b>') }], 2, []]);
 	});
 
 	for (const close of ['dismiss', 'dispose']) {
@@ -191,11 +179,7 @@ class ClipboardFixture extends Disposable {
 		const browser = new JSDOM('<!doctype html><body></body>');
 		this._register(toDisposable(() => browser.window.close()));
 		Object.defineProperty(browser.window.navigator, 'clipboard', { value: clipboard });
-		this.services.registerSingleton(
-			IClipboardService,
-			() => this.services.createInstance(BrowserClipboardService),
-			{ instantiation: InstantiationType.Delayed },
-		);
+		this.services.registerSingleton(IClipboardService, () => this.services.createInstance(BrowserClipboardService), { instantiation: InstantiationType.Delayed });
 		this.clipboard = this.services.get(IClipboardService);
 		this.services.registerInstance(ILayoutService, {
 			mainContainer: browser.window.document.body,

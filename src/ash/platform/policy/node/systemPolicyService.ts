@@ -12,10 +12,7 @@ export class SystemPolicyService extends AbstractPolicyService {
 	private readonly cancellation = new AbortController();
 	constructor(
 		log: ILogService,
-		private readonly read: (
-			definitions: IStringDictionary<PolicyDefinition>,
-			signal: AbortSignal,
-		) => Promise<unknown> = readSystemPolicies,
+		private readonly read: (definitions: IStringDictionary<PolicyDefinition>, signal: AbortSignal) => Promise<unknown> = readSystemPolicies,
 		pollInterval = 2000,
 	) {
 		super();
@@ -50,19 +47,11 @@ export class SystemPolicyService extends AbstractPolicyService {
 
 async function run(executable: string, args: string[], signal: AbortSignal): Promise<string> {
 	return new Promise((resolve, reject) => {
-		execFile(
-			executable,
-			args,
-			{ encoding: 'utf8', windowsHide: true, timeout: 10000, maxBuffer: 4 * 1024 * 1024, signal },
-			(error, stdout) => (error ? reject(error) : resolve(stdout)),
-		);
+		execFile(executable, args, { encoding: 'utf8', windowsHide: true, timeout: 10000, maxBuffer: 4 * 1024 * 1024, signal }, (error, stdout) => (error ? reject(error) : resolve(stdout)));
 	});
 }
 
-async function readSystemPolicies(
-	definitions: IStringDictionary<PolicyDefinition>,
-	signal: AbortSignal,
-): Promise<unknown> {
+async function readSystemPolicies(definitions: IStringDictionary<PolicyDefinition>, signal: AbortSignal): Promise<unknown> {
 	if (process.platform === 'win32') {
 		const { readWindowsRegistryPolicies } = await import('./windowsRegistryPolicy.js');
 		signal.throwIfAborted();

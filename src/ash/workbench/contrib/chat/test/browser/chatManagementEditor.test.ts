@@ -5,11 +5,7 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
-import {
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	IAccessibleViewService,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewProviderId, AccessibleViewType, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
@@ -89,9 +85,7 @@ test('Models management command opens the registered editor, reuses it, filters 
 	using resources = new DisposableStore();
 	const { services, root, settings } = setup(resources);
 	const registry = resources.add(new EditorPaneRegistry());
-	resources.add(
-		registry.registerEditorPane(EditorPanes.getEditorPanes().find(pane => pane.id === ModelsManagementEditor.ID)!),
-	);
+	resources.add(registry.registerEditorPane(EditorPanes.getEditorPanes().find(pane => pane.id === ModelsManagementEditor.ID)!));
 	const part = resources.add(services.createInstance(EditorPart, root, { registry }));
 	services.registerInstance(IEditorPart, part);
 	services.registerInstance(IEditorService, resources.add(new BrowserEditorService(part)));
@@ -110,9 +104,7 @@ test('Models management command opens the registered editor, reuses it, filters 
 	await commands.executeCommand(MANAGE_CHAT_COMMAND_ID);
 	assert.equal(part.activePane, pane);
 	assert.equal(root.querySelectorAll('.ash-models-management-editor').length, 1);
-	await services
-		.get(IEditorService)
-		.openEditor(resources.add(new ModelsManagementEditorInput()), { pinned: true }, 'sideGroup');
+	await services.get(IEditorService).openEditor(resources.add(new ModelsManagementEditorInput()), { pinned: true }, 'sideGroup');
 	assert.equal(part.activePane, pane, 'A side-group request reveals the singleton pane');
 	await commands.executeCommand('chat.models.action.clearSearchResults');
 	const search = root.querySelector<HTMLInputElement>('input[type="search"]')!;
@@ -177,10 +169,7 @@ test('A failed model visibility write restores the switch and reports the error 
 	assert.equal(toggle.checked, false);
 	assert.equal(toggle.disabled, false);
 	assert.equal(document.activeElement, toggle);
-	assert.equal(
-		root.querySelector('.ash-models-settings-status[role="alert"]')?.textContent,
-		'Could not save model visibility.',
-	);
+	assert.equal(root.querySelector('.ash-models-settings-status[role="alert"]')?.textContent, 'Could not save model visibility.');
 	assert.equal(notifications.model.getNotifications().at(-1)?.message, 'Could not save model visibility.');
 });
 
@@ -199,9 +188,7 @@ test('Models management uses Chinese labels and accessibility content and restor
 		assert.ok(search);
 		pane.search('older');
 		pane.focus();
-		const implementation = AccessibleViewRegistry.getImplementations().find(
-			candidate => candidate.name.startsWith('chat-models-') && candidate.type === AccessibleViewType.View,
-		);
+		const implementation = AccessibleViewRegistry.getImplementations().find(candidate => candidate.name.startsWith('chat-models-') && candidate.type === AccessibleViewType.View);
 		const provider = services.invokeFunction(implementation!.getProvider.bind(implementation!))!;
 		assert.equal(provider.id, AccessibleViewProviderId.ChatModelConfiguration);
 		assert.equal(provider.provideContent(), 'openai\nOlder OpenAI, openai/older, 关闭');
@@ -222,10 +209,7 @@ test('Models management restoration preserves its input identity, icon and singl
 	assert.equal(input.matches(restored), true);
 	assert.equal(restored.getIcon().id, input.getIcon().id);
 	assert.ok(restored.capabilities & EditorInputCapabilities.Singleton);
-	assert.throws(
-		() => EditorInputSerializers.deserialize({ typeId: snapshot.typeId, value: {} }),
-		/Invalid serialized models management input/,
-	);
+	assert.throws(() => EditorInputSerializers.deserialize({ typeId: snapshot.typeId, value: {} }), /Invalid serialized models management input/);
 });
 
 test('A hidden or disposed catalog ignores pending results and no longer observes model changes', async () => {

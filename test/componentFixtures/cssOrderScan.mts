@@ -12,13 +12,7 @@ async function main(): Promise<void> {
 		return;
 	}
 	const request = parseFixtureArguments(process.argv.slice(2));
-	if (
-		request.explore ||
-		request.screenshots ||
-		request.compare ||
-		request.baselineRef ||
-		request.playwrightArgs.length
-	)
+	if (request.explore || request.screenshots || request.compare || request.baselineRef || request.playwrightArgs.length)
 		throw new Error(`Unexpected scan arguments: ${request.playwrightArgs.join(' ')}`);
 	const directory = await createResultsDirectory('css-order-scan', request.out);
 	await withProcessRun(resolve(import.meta.dirname, '../..'), async (run, environment) => {

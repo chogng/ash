@@ -1,14 +1,8 @@
 import { type IAction } from '../../../../base/common/actions.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
-import {
-	CopyPasteController,
-	pasteAsPreferenceConfig,
-} from '../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
-import {
-	DropIntoEditorController,
-	dropAsPreferenceConfig,
-} from '../../../../editor/contrib/dropOrPasteInto/browser/dropIntoEditorController.js';
+import { CopyPasteController, pasteAsPreferenceConfig } from '../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
+import { DropIntoEditorController, dropAsPreferenceConfig } from '../../../../editor/contrib/dropOrPasteInto/browser/dropIntoEditorController.js';
 import { localize } from '../../../../nls.js';
 import { MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
@@ -31,12 +25,10 @@ export class DropOrPasteIntoCommands extends Disposable implements IWorkbenchCon
 					enabled: true,
 					run: (editor: ICodeEditor) =>
 						editor.invokeWithinContext(accessor =>
-							accessor
-								.get(IPreferencesService)
-								.openUserSettings({
-									jsonEditor: true,
-									revealSetting: { key: pasteAsPreferenceConfig, edit: true },
-								}),
+							accessor.get(IPreferencesService).openUserSettings({
+								jsonEditor: true,
+								revealSetting: { key: pasteAsPreferenceConfig, edit: true },
+							}),
 						),
 				},
 				pasteAsPreferenceConfig,
@@ -51,12 +43,10 @@ export class DropOrPasteIntoCommands extends Disposable implements IWorkbenchCon
 					enabled: true,
 					run: (editor: ICodeEditor) =>
 						editor.invokeWithinContext(accessor =>
-							accessor
-								.get(IPreferencesService)
-								.openUserSettings({
-									jsonEditor: true,
-									revealSetting: { key: dropAsPreferenceConfig, edit: true },
-								}),
+							accessor.get(IPreferencesService).openUserSettings({
+								jsonEditor: true,
+								revealSetting: { key: dropAsPreferenceConfig, edit: true },
+							}),
 						),
 				},
 				dropAsPreferenceConfig,
@@ -65,9 +55,10 @@ export class DropOrPasteIntoCommands extends Disposable implements IWorkbenchCon
 		for (const [action, key] of actions) {
 			this._register(
 				CommandsRegistry.register(action.id, accessor =>
-					accessor
-						.get(IPreferencesService)
-						.openUserSettings({ jsonEditor: true, revealSetting: { key, edit: true } }),
+					accessor.get(IPreferencesService).openUserSettings({
+						jsonEditor: true,
+						revealSetting: { key, edit: true },
+					}),
 				),
 			);
 			this._register(

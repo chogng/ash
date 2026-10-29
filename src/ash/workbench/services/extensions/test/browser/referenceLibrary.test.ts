@@ -3,19 +3,9 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { parseRis, RisParseError } from '../../../../../../../extensions/reference-manager/common/ris.js';
-import {
-	createLibraryEntry,
-	emptyLibrary,
-	importRecords,
-	parseLibrary,
-	replaceEntry,
-	serializeLibrary,
-} from '../../../../../../../extensions/reference-manager/common/library.js';
+import { createLibraryEntry, emptyLibrary, importRecords, parseLibrary, replaceEntry, serializeLibrary } from '../../../../../../../extensions/reference-manager/common/library.js';
 import { runLibraryCitationOperation } from '../../../../../../../extensions/academy/browser/contrib/citation/common/libraryCitationApi.js';
-import {
-	createAcademyDocumentSchema,
-	createEmptyAcademyDocument,
-} from '../../../../../../../extensions/academy/browser/contrib/academy/common/schema.js';
+import { createAcademyDocumentSchema, createEmptyAcademyDocument } from '../../../../../../../extensions/academy/browser/contrib/academy/common/schema.js';
 import { DocumentTextModel } from '../../../../../../../extensions/academy/common/model/documentTextModel.js';
 import { textSelection } from '../../../../../../../extensions/academy/common/core/documentSelection.js';
 import { buildReferenceIndex } from '../../../../../../../extensions/academy/browser/contrib/citation/common/references.js';
@@ -45,14 +35,7 @@ test('RIS parses record boundaries, Unicode, aliases, continuations and repeated
 	assert.deepEqual(records[0].keywords, ['a', 'b']);
 	assert.ok(records[0].fields.some(field => field.tag === 'ZZ' && field.value === 'retained'));
 	assert.ok(Object.isFrozen(records[0]));
-	for (const value of [
-		'',
-		'TI  - outside\n',
-		'TY  - JOUR\n',
-		'TY  - JOUR\nTY  - BOOK\nER  -\n',
-		'TY  - JOUR\ngarbage\nER  -\n',
-	])
-		assert.throws(() => parseRis(value), RisParseError);
+	for (const value of ['', 'TI  - outside\n', 'TY  - JOUR\n', 'TY  - JOUR\nTY  - BOOK\nER  -\n', 'TY  - JOUR\ngarbage\nER  -\n']) assert.throws(() => parseRis(value), RisParseError);
 	assert.equal(parseRis('TY  - GEN\nER  -\n')[0].title, '');
 });
 test('RIS import deduplicates DOI and metadata, preserves IDs and rejects malformed library persistence', () => {
@@ -60,10 +43,7 @@ test('RIS import deduplicates DOI and metadata, preserves IDs and rejects malfor
 	const id = first.library.entries[0].id;
 	assert.equal(first.added, 1);
 	assert.equal(first.library.entries[0].doi, '10.1234/abc');
-	const repeated = importRecords(
-		first.library,
-		parseRis(ris.replace('https://doi.org/10.1234/ABC', 'doi:10.1234/abc')),
-	);
+	const repeated = importRecords(first.library, parseRis(ris.replace('https://doi.org/10.1234/ABC', 'doi:10.1234/abc')));
 	assert.equal(repeated.added, 0);
 	assert.equal(repeated.duplicates, 1);
 	assert.equal(repeated.library.entries[0].id, id);
@@ -107,10 +87,7 @@ test('Academy insertion, identity-based metadata/key update and missing records 
 	assert.equal(index.citations[0].key, 'Renamed2025');
 	assert.ok(model.undoBlocks());
 	assert.deepEqual(model.document, previous);
-	assert.deepEqual(
-		runLibraryCitationOperation(context(), { ...request, operation: 'update', references: [] }).result.missing,
-		['Smith2024'],
-	);
+	assert.deepEqual(runLibraryCitationOperation(context(), { ...request, operation: 'update', references: [] }).result.missing, ['Smith2024']);
 	assert.throws(() =>
 		runLibraryCitationOperation(context(), {
 			...request,
@@ -154,11 +131,7 @@ test('RIS conversion saves a separate library, reindexes working copies and neve
 test('Academy batch key swaps remain atomic and preserve custom citation labels', () => {
 	const schema = createAcademyDocumentSchema();
 	const paragraph = schema.createNode('paragraph', {
-		content: [
-			schema.createText('Body'),
-			schema.createNode('citation', { attrs: { key: 'A', label: 'Custom label' } }),
-			schema.createNode('citation', { attrs: { key: 'B' } }),
-		],
+		content: [schema.createText('Body'), schema.createNode('citation', { attrs: { key: 'A', label: 'Custom label' } }), schema.createNode('citation', { attrs: { key: 'B' } })],
 	});
 	const bibliography = schema.createNode('bibliography', {
 		content: ['A', 'B'].map((key, index) =>
@@ -216,11 +189,7 @@ test('library conflicts preserve dirty data and backups; a reload explicitly ado
 	parent.registerInstance(IFileService, files);
 	parent.registerInstance(IFileDialogService, {} as IFileDialogService);
 	using services = createTestEditorServices(undefined, parent);
-	const copy = services.createInstance(
-		ReferenceLibraryWorkingCopy,
-		{ resource: source },
-		new AbortController().signal,
-	);
+	const copy = services.createInstance(ReferenceLibraryWorkingCopy, { resource: source }, new AbortController().signal);
 	using retained = copy.retain(true);
 	await copy.ready;
 	assert.equal(copy.readOnly, true);
@@ -273,11 +242,7 @@ test('concurrent Save As requests serialize snapshots and retain the final desti
 	parent.registerInstance(IFileService, guarded);
 	parent.registerInstance(IFileDialogService, {} as IFileDialogService);
 	using services = createTestEditorServices(undefined, parent);
-	const copy = services.createInstance(
-		ReferenceLibraryWorkingCopy,
-		{ resource: URI.parse('untitled:library.ash-library') },
-		new AbortController().signal,
-	);
+	const copy = services.createInstance(ReferenceLibraryWorkingCopy, { resource: URI.parse('untitled:library.ash-library') }, new AbortController().signal);
 	using retained = copy.retain();
 	await copy.ready;
 	const signal = new AbortController().signal;

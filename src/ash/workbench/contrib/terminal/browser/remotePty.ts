@@ -1,9 +1,6 @@
 import type { ITerminalProcessOwnership } from '../../../services/terminal/common/terminal.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import {
-	ITerminalProcessService,
-	type ITerminalProcessCreation,
-} from '../../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, type ITerminalProcessCreation } from '../../../../platform/terminal/common/terminal.js';
 import type { ITerminalExecutionScope } from '../common/remote/terminal.js';
 import { RemoteTerminalChannelClient } from '../common/remote/remoteTerminalChannel.js';
 import { AgentHostPty } from './agentHostPty.js';

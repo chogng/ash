@@ -10,19 +10,14 @@ suite('githubReview browser component', () => {
 		await page.getByRole('textbox', { name: 'Owner', exact: true }).fill('team');
 		await page.getByRole('textbox', { name: 'Repository', exact: true }).fill('repo');
 		await page.getByRole('button', { name: 'Load repository', exact: true }).click();
-		await expect(
-			page.getByRole('button', { name: '#7 <img src=x onerror=alert(1)> Review change', exact: true }),
-		).toBeVisible();
+		await expect(page.getByRole('button', { name: '#7 <img src=x onerror=alert(1)> Review change', exact: true })).toBeVisible();
 	}
 	async function openReview(page: Page): Promise<void> {
 		await load(page);
 		await page.getByRole('button', { name: '#7 <img src=x onerror=alert(1)> Review change', exact: true }).click();
 		await expect(page.getByRole('textbox', { name: 'Review summary', exact: true })).toBeEnabled();
 		await expect(page.getByRole('region', { name: 'Modified file', exact: true })).toBeVisible();
-		await expect(page.getByRole('textbox', { name: 'Modified file', exact: true })).toHaveAttribute(
-			'aria-readonly',
-			'true',
-		);
+		await expect(page.getByRole('textbox', { name: 'Modified file', exact: true })).toHaveAttribute('aria-readonly', 'true');
 	}
 
 	test('PR review uses pinned renamed-file models, paginated checks and discussions, and confirms merge', async function () {
@@ -37,32 +32,22 @@ suite('githubReview browser component', () => {
 		const original = page.getByRole('textbox', { name: 'Original file', exact: true });
 		await original.focus();
 		await original.press('ControlOrMeta+Home');
-		await page
-			.getByRole('textbox', { name: 'Comment on selected line', exact: true })
-			.fill('Keep this deletion explained');
+		await page.getByRole('textbox', { name: 'Comment on selected line', exact: true }).fill('Keep this deletion explained');
 		await page.getByRole('button', { name: 'Add line comment to review', exact: true }).click();
 		await page.getByRole('textbox', { name: 'Review summary', exact: true }).fill('Reviewed the exact commit');
 		await page.evaluate(() => {
 			window.ashGitHubReview.close();
 		});
 		await page.evaluate(() => window.ashGitHubReview.open());
-		await expect(page.getByRole('textbox', { name: 'Review summary', exact: true })).toHaveValue(
-			'Reviewed the exact commit',
-		);
+		await expect(page.getByRole('textbox', { name: 'Review summary', exact: true })).toHaveValue('Reviewed the exact commit');
 		await expect(page.locator('.github-draft-comments')).toContainText('Keep this deletion explained');
 		await page.getByRole('button', { name: 'Submit review', exact: true }).click();
 		await expect(page.locator('.github-draft-comments')).toBeEmpty();
 		const requests = await page.evaluate(() => window.ashGitHubReview.requests);
 		const review = requests.find(request => request.method === 'github/pullRequest/review')!;
 		expect(review.params.commit).toBe('a'.repeat(40));
-		expect(review.params.comments).toEqual([
-			{ path: 'new.rs', line: 1, side: 'LEFT', body: 'Keep this deletion explained' },
-		]);
-		expect(
-			requests
-				.filter(request => request.method === 'github/file/read')
-				.map(request => [request.params.commit, request.params.path]),
-		).toContainEqual(['b'.repeat(40), 'old.rs']);
+		expect(review.params.comments).toEqual([{ path: 'new.rs', line: 1, side: 'LEFT', body: 'Keep this deletion explained' }]);
+		expect(requests.filter(request => request.method === 'github/file/read').map(request => [request.params.commit, request.params.path])).toContainEqual(['b'.repeat(40), 'old.rs']);
 		await page.getByRole('button', { name: 'Load more checks', exact: true }).click();
 		await expect(page.locator('.github-checks')).toContainText('integration tests: success');
 		await page.getByRole('button', { name: 'Load more replies', exact: true }).click();
@@ -84,13 +69,10 @@ suite('githubReview browser component', () => {
 		await expect(dialog).toContainText('a'.repeat(40));
 		await dialog.getByRole('button', { name: 'Merge pull request', exact: true }).click();
 		await expect(page.getByRole('button', { name: 'Merge pull request', exact: true })).toBeDisabled();
-		expect(
-			await page.evaluate(
-				() =>
-					window.ashGitHubReview.requests.find(request => request.method === 'github/pullRequest/merge')!
-						.params,
-			),
-		).toMatchObject({ commit: 'a'.repeat(40), method: 'squash' });
+		expect(await page.evaluate(() => window.ashGitHubReview.requests.find(request => request.method === 'github/pullRequest/merge')!.params)).toMatchObject({
+			commit: 'a'.repeat(40),
+			method: 'squash',
+		});
 		expect(errors).toEqual([]);
 	});
 
@@ -104,11 +86,7 @@ suite('githubReview browser component', () => {
 		await page.evaluate(() => window.ashGitHubReview.replaceAccount());
 		await dialog.getByRole('button', { name: 'Merge pull request', exact: true }).click();
 		await expect(page.locator('.github-status')).toContainText('Refresh the PR');
-		expect(
-			await page.evaluate(() =>
-				window.ashGitHubReview.requests.filter(request => request.method === 'github/pullRequest/merge'),
-			),
-		).toEqual([]);
+		expect(await page.evaluate(() => window.ashGitHubReview.requests.filter(request => request.method === 'github/pullRequest/merge'))).toEqual([]);
 	});
 
 	test('a changed head preserves the draft and an uncertain review cannot be repeated', async function () {
@@ -121,10 +99,7 @@ suite('githubReview browser component', () => {
 		await expect(page.locator('.github-status')).toContainText('draft belongs to an earlier commit');
 		await expect(page.getByRole('button', { name: 'Submit review', exact: true })).toBeDisabled();
 		await expect(page.getByRole('textbox', { name: 'Review summary', exact: true })).toHaveValue('Old draft');
-		await page
-			.getByRole('toolbar', { name: 'Review actions', exact: true })
-			.getByRole('button', { name: 'More Actions', exact: true })
-			.click();
+		await page.getByRole('toolbar', { name: 'Review actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click();
 		await page.getByRole('menuitem', { name: 'Discard review draft', exact: true }).click();
 		await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click();
 		await page.getByRole('textbox', { name: 'Review summary', exact: true }).fill('New draft');
@@ -133,13 +108,7 @@ suite('githubReview browser component', () => {
 		await expect(page.locator('.github-status')).toContainText('may have accepted');
 		await page.getByRole('button', { name: 'Refresh', exact: true }).click();
 		await expect(page.getByRole('button', { name: 'Submit review', exact: true })).toBeDisabled();
-		expect(
-			await page.evaluate(
-				() =>
-					window.ashGitHubReview.requests.filter(request => request.method === 'github/pullRequest/review')
-						.length,
-			),
-		).toBe(1);
+		expect(await page.evaluate(() => window.ashGitHubReview.requests.filter(request => request.method === 'github/pullRequest/review').length)).toBe(1);
 	});
 
 	test('account changes cancel pending protocol reads and clear private content', async function () {
@@ -156,11 +125,7 @@ suite('githubReview browser component', () => {
 		await page.evaluate(() => window.ashGitHubReview.release());
 		await expect(page.locator('[data-github-focus="reviewSummary"]')).toHaveValue('');
 		await expect(page.locator('.github-review')).toBeHidden();
-		expect(
-			await page.evaluate(() =>
-				window.ashGitHubReview.requests.some(request => request.method === 'github/cancel'),
-			),
-		).toBe(true);
+		expect(await page.evaluate(() => window.ashGitHubReview.requests.some(request => request.method === 'github/cancel'))).toBe(true);
 	});
 
 	test('issues support create, labels, assignees, edits and comments through the protocol', async function () {
@@ -206,9 +171,7 @@ suite('githubReview browser component', () => {
 		await expect(page.getByRole('textbox', { name: 'Target branch', exact: true })).toHaveValue('main');
 		await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Review fork change');
 		await page.getByRole('textbox', { name: 'Description', exact: true }).fill('Pull request body');
-		await page
-			.getByRole('textbox', { name: 'Source branch (owner:branch for a fork)', exact: true })
-			.fill('contributor:feature');
+		await page.getByRole('textbox', { name: 'Source branch (owner:branch for a fork)', exact: true }).fill('contributor:feature');
 		await page.getByRole('checkbox', { name: 'Draft pull request', exact: true }).check();
 		await page.evaluate(() => window.ashGitHubReview.close());
 		await page.evaluate(() => window.ashGitHubReview.open());
@@ -216,13 +179,11 @@ suite('githubReview browser component', () => {
 		await expect(page.getByRole('checkbox', { name: 'Draft pull request', exact: true })).toBeChecked();
 		await page.getByRole('button', { name: 'Save', exact: true }).click();
 		await expect(page.getByRole('button', { name: '#10 Review fork change', exact: true })).toBeVisible();
-		expect(
-			await page.evaluate(
-				() =>
-					window.ashGitHubReview.requests.find(request => request.method === 'github/pullRequest/create')!
-						.params,
-			),
-		).toMatchObject({ head: 'contributor:feature', base: 'main', draft: true });
+		expect(await page.evaluate(() => window.ashGitHubReview.requests.find(request => request.method === 'github/pullRequest/create')!.params)).toMatchObject({
+			head: 'contributor:feature',
+			base: 'main',
+			draft: true,
+		});
 	});
 
 	test('editing retains its original PR target when selection changes before saving', async function () {
@@ -236,13 +197,7 @@ suite('githubReview browser component', () => {
 		await expect(page.locator('.github-metadata')).toContainText('#8');
 		await expect(page.locator('.github-form')).toContainText('Editing #7');
 		await page.getByRole('button', { name: 'Save', exact: true }).click();
-		expect(
-			await page.evaluate(
-				() =>
-					window.ashGitHubReview.requests.find(request => request.method === 'github/pullRequest/update')!
-						.params,
-			),
-		).toMatchObject({ number: 7, title: 'Edit PR seven' });
+		expect(await page.evaluate(() => window.ashGitHubReview.requests.find(request => request.method === 'github/pullRequest/update')!.params)).toMatchObject({ number: 7, title: 'Edit PR seven' });
 		await expect(page.locator('.github-metadata')).toContainText('#8');
 	});
 
@@ -260,20 +215,12 @@ suite('githubReview browser component', () => {
 		await page.evaluate(() => window.ashGitHubReview.theme('highContrast'));
 		await expect(summary).toBeFocused();
 		expect(await summary.evaluate(element => getComputedStyle(element).outlineStyle)).not.toBe('none');
-		expect(
-			await page.evaluate(() =>
-				window.ashGitHubReview.accessibleContent(
-					'view' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType,
-				),
-			),
-		).toContain('Please explain');
-		expect(
-			await page.evaluate(() =>
-				window.ashGitHubReview.accessibleContent(
-					'help' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType,
-				),
-			),
-		).toContain('草稿仍保留');
+		expect(await page.evaluate(() => window.ashGitHubReview.accessibleContent('view' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType))).toContain(
+			'Please explain',
+		);
+		expect(await page.evaluate(() => window.ashGitHubReview.accessibleContent('help' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType))).toContain(
+			'草稿仍保留',
+		);
 	});
 
 	test('account selection binds Enterprise requests and clears the previous account draft', async function () {
@@ -287,9 +234,7 @@ suite('githubReview browser component', () => {
 		await page.getByRole('button', { name: 'Load repository', exact: true }).click();
 		await page.getByRole('button', { name: '#7 <img src=x onerror=alert(1)> Review change', exact: true }).click();
 		await expect(page.getByRole('textbox', { name: 'Review summary', exact: true })).toHaveValue('');
-		const requests = await page.evaluate(() =>
-			window.ashGitHubReview.requests.filter(request => request.method === 'github/repository/read'),
-		);
+		const requests = await page.evaluate(() => window.ashGitHubReview.requests.filter(request => request.method === 'github/repository/read'));
 		expect(requests.map(request => [request.params.accountId, request.params.repository])).toEqual([
 			['alice', { host: 'github.com', owner: 'team', name: 'repo' }],
 			['ghe.example/42', { host: 'ghe.example', owner: 'team', name: 'repo' }],
@@ -316,9 +261,13 @@ suite('githubReview browser component', () => {
 		await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click();
 		await expect(page.locator('.github-discussions')).not.toContainText('Updated explanation');
 		const requests = await page.evaluate(() => window.ashGitHubReview.requests);
-		expect(
-			requests.find(request => request.method === 'github/pullRequest/reviewers/change')!.params,
-		).toMatchObject({ accountId: 'alice', number: 7, change: 'request', users: ['bob'], teams: ['core'] });
+		expect(requests.find(request => request.method === 'github/pullRequest/reviewers/change')!.params).toMatchObject({
+			accountId: 'alice',
+			number: 7,
+			change: 'request',
+			users: ['bob'],
+			teams: ['core'],
+		});
 		expect(requests.find(request => request.method === 'github/pullRequest/comment/update')!.params).toMatchObject({
 			accountId: 'alice',
 			number: 7,
@@ -347,10 +296,7 @@ suite('githubReview browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashGitHubReview.gitRequests.length)).toBe(1);
 		await chooseLocal(page, 'Push local commits to pull request', 'fork');
 		await expect(page.getByRole('dialog')).toContainText('d'.repeat(40));
-		await page
-			.getByRole('dialog')
-			.getByRole('button', { name: 'Push local commits to pull request', exact: true })
-			.click();
+		await page.getByRole('dialog').getByRole('button', { name: 'Push local commits to pull request', exact: true }).click();
 		await expect.poll(() => page.evaluate(() => window.ashGitHubReview.gitRequests.length)).toBe(2);
 		expect(await page.evaluate(() => window.ashGitHubReview.gitRequests.map(request => request.params))).toEqual([
 			{
@@ -391,23 +337,14 @@ suite('githubReview browser component', () => {
 		await page.getByRole('button', { name: 'Edit review comment', exact: true }).click();
 		await page.evaluate(() => window.ashGitHubReview.replaceAccount());
 		await page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true }).click();
-		expect(
-			await page.evaluate(() =>
-				window.ashGitHubReview.requests.filter(
-					request => request.method === 'github/pullRequest/comment/update',
-				),
-			),
-		).toEqual([]);
+		expect(await page.evaluate(() => window.ashGitHubReview.requests.filter(request => request.method === 'github/pullRequest/comment/update'))).toEqual([]);
 	});
 
 	test('a token connection selects its host account and signing out keeps other accounts connected', async function () {
 		const { page } = browserTests;
 
 		await page.goto('/githubReview.html');
-		await page
-			.getByRole('toolbar', { name: 'Repository actions', exact: true })
-			.getByRole('button', { name: 'More Actions', exact: true })
-			.click();
+		await page.getByRole('toolbar', { name: 'Repository actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click();
 		await page.getByRole('menuitem', { name: 'Connect with token', exact: true }).click();
 		const dialog = page.getByRole('dialog');
 		await dialog.getByPlaceholder('GitHub host', { exact: true }).fill('ghe.other.example');
@@ -415,24 +352,14 @@ suite('githubReview browser component', () => {
 		await token.fill('fixture-only-token');
 		await expect(token).toHaveAttribute('type', 'password');
 		await dialog.getByRole('button', { name: 'Connect', exact: true }).click();
-		await expect(page.getByRole('combobox', { name: 'GitHub account', exact: true })).toContainText(
-			'TokenUser@ghe.other.example',
-		);
-		expect(
-			await page.evaluate(
-				() =>
-					window.ashGitHubReview.requests.find(request => request.method === 'github/account/connect')
-						?.params,
-			),
-		).toMatchObject({ host: 'ghe.other.example', token: 'fixture-only-token' });
-		await page
-			.getByRole('toolbar', { name: 'Repository actions', exact: true })
-			.getByRole('button', { name: 'More Actions', exact: true })
-			.click();
+		await expect(page.getByRole('combobox', { name: 'GitHub account', exact: true })).toContainText('TokenUser@ghe.other.example');
+		expect(await page.evaluate(() => window.ashGitHubReview.requests.find(request => request.method === 'github/account/connect')?.params)).toMatchObject({
+			host: 'ghe.other.example',
+			token: 'fixture-only-token',
+		});
+		await page.getByRole('toolbar', { name: 'Repository actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click();
 		await page.getByRole('menuitem', { name: 'Sign out selected account', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashGitHubReview.loggedOut))
-			.toEqual([{ provider: 'github', accountId: 'ghe.other.example/99' }]);
+		await expect.poll(() => page.evaluate(() => window.ashGitHubReview.loggedOut)).toEqual([{ provider: 'github', accountId: 'ghe.other.example/99' }]);
 		await page.getByRole('combobox', { name: 'GitHub account', exact: true }).click();
 		await expect(page.getByRole('option', { name: 'Alice@github.com', exact: true })).toBeVisible();
 		await expect(page.getByRole('option', { name: 'EnterpriseAlice@ghe.example', exact: true })).toBeVisible();
@@ -452,10 +379,7 @@ suite('githubReview browser component', () => {
 		await expect(page.getByRole('button', { name: 'team/repo · Review requested', exact: true })).toBeVisible();
 		await page.getByRole('button', { name: 'Load more', exact: true }).click();
 		await expect(page.getByRole('button', { name: 'team/repo · Issue mentioned', exact: true })).toBeVisible();
-		await page
-			.getByRole('toolbar', { name: 'List actions', exact: true })
-			.getByRole('button', { name: 'More Actions', exact: true })
-			.click();
+		await page.getByRole('toolbar', { name: 'List actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click();
 		await page.getByRole('menuitem', { name: 'Mark all notifications read', exact: true }).click();
 		await expect(page.locator('.github-metadata')).toContainText('accepted the request');
 		expect(
@@ -480,24 +404,14 @@ suite('githubReview browser component', () => {
 		await page.getByRole('option', { name: 'EnterpriseAlice@ghe.example', exact: true }).click();
 		await expect(page.locator('.github-list')).toBeEmpty();
 		await page.getByRole('button', { name: 'Refresh notifications', exact: true }).click();
-		expect(
-			await page.evaluate(
-				() =>
-					window.ashGitHubReview.requests
-						.filter(request => request.method === 'github/notifications/list')
-						.at(-1)!.params.accountId,
-			),
-		).toBe('ghe.example/42');
+		expect(await page.evaluate(() => window.ashGitHubReview.requests.filter(request => request.method === 'github/notifications/list').at(-1)!.params.accountId)).toBe('ghe.example/42');
 	});
 
 	test('fork creation uses the selected account and displays asynchronous acceptance', async function () {
 		const { page } = browserTests;
 
 		await openReview(page);
-		await page
-			.getByRole('toolbar', { name: 'Repository actions', exact: true })
-			.getByRole('button', { name: 'More Actions', exact: true })
-			.click();
+		await page.getByRole('toolbar', { name: 'Repository actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click();
 		await page.getByRole('menuitem', { name: 'Create fork', exact: true }).click();
 		const dialog = page.getByRole('dialog');
 		await dialog.getByPlaceholder('Organization (optional)').fill('my-team');
@@ -505,17 +419,8 @@ suite('githubReview browser component', () => {
 		await dialog.getByRole('checkbox', { name: 'Copy only the default branch', exact: true }).check();
 		await dialog.getByRole('button', { name: 'Create fork', exact: true }).click();
 		await expect(page.locator('.github-metadata')).toContainText('Fork creation accepted: my-team/my-fork');
-		await expect(page.getByRole('link', { name: 'Open fork on GitHub', exact: true })).toHaveAttribute(
-			'href',
-			'https://github.com/my-team/my-fork',
-		);
-		expect(
-			await page.evaluate(
-				() =>
-					window.ashGitHubReview.requests.find(request => request.method === 'github/repository/fork')!
-						.params,
-			),
-		).toMatchObject({
+		await expect(page.getByRole('link', { name: 'Open fork on GitHub', exact: true })).toHaveAttribute('href', 'https://github.com/my-team/my-fork');
+		expect(await page.evaluate(() => window.ashGitHubReview.requests.find(request => request.method === 'github/repository/fork')!.params)).toMatchObject({
 			accountId: 'alice',
 			repository: { host: 'github.com', owner: 'team', name: 'repo' },
 			organization: 'my-team',
@@ -528,10 +433,7 @@ suite('githubReview browser component', () => {
 		const { page } = browserTests;
 
 		await page.goto('/githubReview.html');
-		await page
-			.getByRole('toolbar', { name: 'Repository actions', exact: true })
-			.getByRole('button', { name: 'More Actions', exact: true })
-			.click();
+		await page.getByRole('toolbar', { name: 'Repository actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click();
 		await page.getByRole('menuitem', { name: 'Sign in to GitHub Enterprise', exact: true }).click();
 		const dialog = page.getByRole('dialog');
 		await dialog.getByPlaceholder('GitHub host').fill('GHE.EXAMPLE');
@@ -546,14 +448,9 @@ suite('githubReview browser component', () => {
 		await page.getByRole('combobox', { name: '资源类型', exact: true }).click();
 		await page.getByRole('option', { name: '通知', exact: true }).click();
 		await page.getByRole('button', { name: '加载仓库', exact: true }).click();
-		await expect(
-			page.getByRole('button', { name: '未读 · team/repo · Review requested', exact: true }),
-		).toBeVisible();
+		await expect(page.getByRole('button', { name: '未读 · team/repo · Review requested', exact: true })).toBeVisible();
 		await expect(page.locator('.github-status')).toContainText('经典令牌');
-		await page
-			.getByRole('toolbar', { name: '仓库操作', exact: true })
-			.getByRole('button', { name: 'More Actions', exact: true })
-			.click();
+		await page.getByRole('toolbar', { name: '仓库操作', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click();
 		await expect(page.getByRole('menuitem', { name: '登录 GitHub Enterprise', exact: true })).toBeVisible();
 	});
 
@@ -565,9 +462,7 @@ suite('githubReview browser component', () => {
 		await page.getByRole('button', { name: 'Request Codex review', exact: true }).click();
 		await expect(page.getByRole('button', { name: 'Request Codex review', exact: true })).toBeDisabled();
 		await expect(page.locator('.github-review')).toContainText('Posted @codex review');
-		const comments = await page.evaluate(() =>
-			window.ashGitHubReview.requests.filter(request => request.method === 'github/comment/create'),
-		);
+		const comments = await page.evaluate(() => window.ashGitHubReview.requests.filter(request => request.method === 'github/comment/create'));
 		expect(comments.map(request => request.params)).toEqual([
 			expect.objectContaining({
 				number: 7,
@@ -594,14 +489,9 @@ suite('githubReview browser component', () => {
 		await expect(page.getByRole('button', { name: 'Browse pull requests', exact: true })).toBeEnabled();
 		await page.getByRole('button', { name: 'Manage official Connector', exact: true }).click();
 		await page.getByRole('button', { name: 'Manage automatic reviews', exact: true }).click();
-		expect(await page.evaluate(() => window.ashGitHubReview.external)).toEqual([
-			'https://github.com/apps/chatgpt-codex-connector',
-			'https://app.chatgpt.com/settings/code-review',
-		]);
+		expect(await page.evaluate(() => window.ashGitHubReview.external)).toEqual(['https://github.com/apps/chatgpt-codex-connector', 'https://app.chatgpt.com/settings/code-review']);
 		await page.getByRole('button', { name: 'Browse pull requests', exact: true }).click();
-		await expect(
-			page.getByRole('button', { name: '#7 <img src=x onerror=alert(1)> Review change', exact: true }),
-		).toBeVisible();
+		await expect(page.getByRole('button', { name: '#7 <img src=x onerror=alert(1)> Review change', exact: true })).toBeVisible();
 	});
 
 	test('account changes cancel pending repository checks and retire their results', async function () {
@@ -645,10 +535,7 @@ suite('githubReview browser component', () => {
 		await refresh.focus();
 		await page.keyboard.press('Enter');
 		await expect(refresh).toBeDisabled();
-		await expect(section.getByRole('status').filter({ hasText: 'Refreshing managed settings' })).toHaveAttribute(
-			'aria-live',
-			'polite',
-		);
+		await expect(section.getByRole('status').filter({ hasText: 'Refreshing managed settings' })).toHaveAttribute('aria-live', 'polite');
 		await page.evaluate(() => window.ashGitHubReview.release());
 		await expect(refresh).toBeEnabled();
 		await expect(section).toContainText('Could not refresh managed settings');
@@ -658,21 +545,12 @@ suite('githubReview browser component', () => {
 		await page.keyboard.press('Enter');
 		await expect(section).toContainText('Managed settings retrieved for Alice@github.com');
 		await expect(section).not.toContainText('Previously accepted settings are retained.');
-		expect(
-			await page.evaluate(
-				() =>
-					window.ashGitHubReview.requests.filter(
-						request => request.method === 'github/account/managedSettings',
-					).length,
-			),
-		).toBe(3);
-		expect(
-			await page.evaluate(() =>
-				window.ashGitHubReview.requests
-					.filter(request => request.method === 'github/account/managedSettings')
-					.map(request => request.params.accountId),
-			),
-		).toEqual(['alice', 'alice', 'alice']);
+		expect(await page.evaluate(() => window.ashGitHubReview.requests.filter(request => request.method === 'github/account/managedSettings').length)).toBe(3);
+		expect(await page.evaluate(() => window.ashGitHubReview.requests.filter(request => request.method === 'github/account/managedSettings').map(request => request.params.accountId))).toEqual([
+			'alice',
+			'alice',
+			'alice',
+		]);
 	});
 
 	test('Chinese managed settings distinguishes first-fetch compatibility refusal and recovers without an update action', async function () {
@@ -695,19 +573,11 @@ suite('githubReview browser component', () => {
 		await expect(section).toContainText('已获取 Alice@github.com 的托管设置');
 		await expect(section).toContainText('最近成功刷新');
 		await refresh.focus();
-		expect(
-			await page.evaluate(() =>
-				window.ashGitHubReview.accessibleContent(
-					'help' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType,
-				),
-			),
-		).toContain('与用于访问仓库的所选账户无关');
-		expect(
-			await page.evaluate(() =>
-				window.ashGitHubReview.accessibleContent(
-					'view' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType,
-				),
-			),
-		).toContain('最近成功刷新');
+		expect(await page.evaluate(() => window.ashGitHubReview.accessibleContent('help' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType))).toContain(
+			'与用于访问仓库的所选账户无关',
+		);
+		expect(await page.evaluate(() => window.ashGitHubReview.accessibleContent('view' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType))).toContain(
+			'最近成功刷新',
+		);
 	});
 });

@@ -97,14 +97,7 @@ export class BrowserOverlayManager extends Disposable {
 				continue;
 			}
 			const candidate = overlay.getBoundingClientRect();
-			if (
-				candidate.width <= 0 ||
-				candidate.height <= 0 ||
-				candidate.right <= bounds.left ||
-				candidate.left >= bounds.right ||
-				candidate.bottom <= bounds.top ||
-				candidate.top >= bounds.bottom
-			) {
+			if (candidate.width <= 0 || candidate.height <= 0 || candidate.right <= bounds.left || candidate.left >= bounds.right || candidate.bottom <= bounds.top || candidate.top >= bounds.bottom) {
 				continue;
 			}
 			const type = [...overlayRoots].find(([selector]) => overlay.matches(selector))![1];
@@ -118,8 +111,7 @@ export class BrowserOverlayManager extends Disposable {
 
 	private isOverlayMutation(record: MutationRecord): boolean {
 		const isOverlay = (node: Node): boolean =>
-			node instanceof this.targetWindow.Element &&
-			(node.matches(overlaySelector) || !!node.closest(overlaySelector) || !!node.querySelector(overlaySelector));
+			node instanceof this.targetWindow.Element && (node.matches(overlaySelector) || !!node.closest(overlaySelector) || !!node.querySelector(overlaySelector));
 		return isOverlay(record.target) || [...record.addedNodes, ...record.removedNodes].some(isOverlay);
 	}
 }

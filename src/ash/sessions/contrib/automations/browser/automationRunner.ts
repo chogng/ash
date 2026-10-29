@@ -4,11 +4,7 @@ import { localize } from '../../../../nls.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { IAutomationDescriptor } from '../../../../workbench/contrib/chat/common/automations/automation.js';
 import { IAutomationService } from '../../../../workbench/contrib/chat/common/automations/automationService.js';
-import type {
-	IAutomationRunner,
-	IAutomationRunOperation,
-	IAutomationRunDispatch,
-} from '../../../../workbench/contrib/chat/common/automations/automationRunner.js';
+import type { IAutomationRunner, IAutomationRunOperation, IAutomationRunDispatch } from '../../../../workbench/contrib/chat/common/automations/automationRunner.js';
 
 /** Manual dispatch and observation only. Session creation and scheduling remain host operations. */
 export class AutomationRunner implements IAutomationRunner {
@@ -65,14 +61,7 @@ export class AutomationRunner implements IAutomationRunner {
 						reason: token.isCancellationRequested ? 'cancelled' : 'error',
 					});
 				if (!token.isCancellationRequested)
-					this.notifications.error(
-						localize(
-							'automations.runFailed',
-							'Automation {0}: {1}',
-							automation.name,
-							error instanceof Error ? error.message : String(error),
-						),
-					);
+					this.notifications.error(localize('automations.runFailed', 'Automation {0}: {1}', automation.name, error instanceof Error ? error.message : String(error)));
 			}
 		})();
 		return { whenDispatched: dispatched.p, whenCompleted };

@@ -12,8 +12,7 @@ import { LIBRARY_EDITOR_ID } from '../common/library.js';
 export const packageId = `${manifest.publisher}.${manifest.name}`;
 export const packageVersion = manifest.version;
 export function getResourceEditor(id: string, createInstance: EditorClientInstantiation) {
-	if (id !== LIBRARY_EDITOR_ID || typeof createInstance !== 'function')
-		throw new TypeError('Incompatible reference library host');
+	if (id !== LIBRARY_EDITOR_ID || typeof createInstance !== 'function') throw new TypeError('Incompatible reference library host');
 	class LibraryPane extends ReferenceLibraryEditor {
 		constructor(
 			signal: AbortSignal,

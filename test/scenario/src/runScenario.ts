@@ -60,9 +60,7 @@ const defaultStepPauseMs = 1_000;
 const commandLine = process.argv.slice(2);
 const options = parseRunnerOptions(commandLine);
 
-export async function runScenario(
-	scenario: Scenario,
-): Promise<{
+export async function runScenario(scenario: Scenario): Promise<{
 	readonly runPath: string;
 	readonly outcome: 'passed' | 'failed' | 'aborted';
 	readonly blockers: readonly ScenarioBlocker[];
@@ -114,9 +112,7 @@ export async function runScenario(
 				const skipped = error instanceof SkipStep;
 				const needs = skipped ? error.needs : undefined;
 				await evidence.step(step.id, step.title, skipped ? 'skipped' : 'failed', message, needs);
-				console.log(
-					`  ${skipped ? 'SKIP' : 'FAIL'} ${step.id} ${step.title}${needs ? ` [needs ${needs}]` : ''}: ${message}`,
-				);
+				console.log(`  ${skipped ? 'SKIP' : 'FAIL'} ${step.id} ${step.title}${needs ? ` [needs ${needs}]` : ''}: ${message}`);
 				if (needs) blockers.push({ id: step.id, title: step.title, needs, reason: message });
 				outcome = skipped ? 'aborted' : 'failed';
 				notes = `${skipped ? 'Skipped' : 'Failed'} at step '${step.id}': ${message}`;
@@ -130,39 +126,26 @@ export async function runScenario(
 		console.error(`Scenario aborted: ${notes}`);
 	}
 
-	if (blockers.length)
-		notes = [notes, ...blockers.map(blocker => `Step '${blocker.id}' needs ${blocker.needs}: ${blocker.reason}`)]
-			.filter(Boolean)
-			.join('\n');
+	if (blockers.length) notes = [notes, ...blockers.map(blocker => `Step '${blocker.id}' needs ${blocker.needs}: ${blocker.reason}`)].filter(Boolean).join('\n');
 	const report = await evidence.finish(outcome, notes);
 	tryRenderChapters(runPath);
 	console.log(`Report: ${report}`);
 	for (const blocker of blockers) {
-		console.log(
-			blocker.needs === 'human'
-				? `Needs a person: ${blocker.id} ${blocker.title} - ${blocker.reason}`
-				: `Needs harness support: ${blocker.id} ${blocker.title} - ${blocker.reason}`,
-		);
+		console.log(blocker.needs === 'human' ? `Needs a person: ${blocker.id} ${blocker.title} - ${blocker.reason}` : `Needs harness support: ${blocker.id} ${blocker.title} - ${blocker.reason}`);
 	}
 	return { runPath, outcome, blockers };
 }
 
 function validateScenario(scenario: Scenario): void {
-	if (!scenario || typeof scenario !== 'object')
-		throw new Error('The scenario module did not export a scenario object.');
+	if (!scenario || typeof scenario !== 'object') throw new Error('The scenario module did not export a scenario object.');
 	if (!scenario.id || !scenario.title) throw new Error("A scenario must declare non-empty 'id' and 'title' fields.");
-	if (
-		scenario.startupTimeout !== undefined &&
-		(!Number.isSafeInteger(scenario.startupTimeout) || scenario.startupTimeout <= 0)
-	) {
+	if (scenario.startupTimeout !== undefined && (!Number.isSafeInteger(scenario.startupTimeout) || scenario.startupTimeout <= 0)) {
 		throw new Error('Scenario startupTimeout must be a positive integer in milliseconds.');
 	}
-	if (!Array.isArray(scenario.steps) || !scenario.steps.length)
-		throw new Error('A scenario must declare at least one step.');
+	if (!Array.isArray(scenario.steps) || !scenario.steps.length) throw new Error('A scenario must declare at least one step.');
 	const ids = new Set<string>();
 	for (const step of scenario.steps) {
-		if (!step?.id || !step.title || typeof step.run !== 'function')
-			throw new Error("Every step must declare an 'id', 'title', and 'run' function.");
+		if (!step?.id || !step.title || typeof step.run !== 'function') throw new Error("Every step must declare an 'id', 'title', and 'run' function.");
 		if (ids.has(step.id)) throw new Error(`Scenario repeats step id '${step.id}'.`);
 		ids.add(step.id);
 	}
@@ -176,15 +159,8 @@ async function loadScenario(path: string): Promise<Scenario> {
 function checkVideoTooling(): void {
 	const missing = (['ffmpeg', 'ffprobe'] as const).filter(tool => !resolveVideoTool(tool));
 	if (!missing.length) return;
-	const install =
-		process.platform === 'win32'
-			? 'winget install Gyan.FFmpeg'
-			: process.platform === 'darwin'
-				? 'brew install ffmpeg-full'
-				: 'sudo apt install ffmpeg';
-	console.warn(
-		`Warning: ${missing.join(' and ')} with caption support could not be found. The raw video, screenshots, trace, and report will still be saved. Install with: ${install}`,
-	);
+	const install = process.platform === 'win32' ? 'winget install Gyan.FFmpeg' : process.platform === 'darwin' ? 'brew install ffmpeg-full' : 'sudo apt install ffmpeg';
+	console.warn(`Warning: ${missing.join(' and ')} with caption support could not be found. The raw video, screenshots, trace, and report will still be saved. Install with: ${install}`);
 }
 
 function wait(milliseconds: number): Promise<void> {
@@ -194,9 +170,7 @@ function wait(milliseconds: number): Promise<void> {
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
 	const scenarioArgument = commandLine.find(argument => !argument.startsWith('--'));
 	if (!scenarioArgument) {
-		console.error(
-			'Usage: node test/scenario/out/runScenario.js <scenario.cjs> [--dev] [--web] [--headless] [--active-window] [--verbose]',
-		);
+		console.error('Usage: node test/scenario/out/runScenario.js <scenario.cjs> [--dev] [--web] [--headless] [--active-window] [--verbose]');
 		process.exit(2);
 	}
 	if (process.env.ASH_SCENARIO_WORKER !== '1') {

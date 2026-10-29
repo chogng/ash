@@ -101,9 +101,7 @@ export class LanguagesRegistry extends Disposable {
 				const name = this.getLanguageName(languageId);
 				return name === null ? [] : [{ languageId, languageName: name }];
 			})
-			.sort((left, right) =>
-				left.languageName.localeCompare(right.languageName, undefined, { sensitivity: 'base' }),
-			);
+			.sort((left, right) => left.languageName.localeCompare(right.languageName, undefined, { sensitivity: 'base' }));
 	}
 
 	getLanguageName(languageId: string): string | null {
@@ -119,11 +117,7 @@ export class LanguagesRegistry extends Disposable {
 			this.getRegisteredLanguageIds().find(
 				languageId =>
 					languageId.toLocaleLowerCase() === normalized ||
-					this.descriptions
-						.get(languageId)
-						?.some(entry =>
-							entry.description.aliases?.some(alias => alias.toLocaleLowerCase() === normalized),
-						),
+					this.descriptions.get(languageId)?.some(entry => entry.description.aliases?.some(alias => alias.toLocaleLowerCase() === normalized)),
 			) ?? null
 		);
 	}
@@ -131,11 +125,7 @@ export class LanguagesRegistry extends Disposable {
 	getLanguageIdByMimeType(mimeType: string | null | undefined): string | null {
 		if (!mimeType) return null;
 		const normalized = mimeType.toLocaleLowerCase();
-		return (
-			this.getRegisteredLanguageIds().find(languageId =>
-				this.descriptions.get(languageId)?.some(entry => entry.description.mimetypes?.includes(normalized)),
-			) ?? null
-		);
+		return this.getRegisteredLanguageIds().find(languageId => this.descriptions.get(languageId)?.some(entry => entry.description.mimetypes?.includes(normalized))) ?? null;
 	}
 
 	resolveLanguageId(input: TextResourceLanguageInput): string | undefined {
@@ -160,8 +150,7 @@ export class LanguagesRegistry extends Disposable {
 	private replace(owner: object, contributions: readonly LanguageDescriptionContribution[]): void {
 		if (!Array.isArray(contributions)) throw new TypeError('Language description contributions must be an array');
 		const entries = contributions.map(contribution => {
-			if (typeof contribution !== 'object' || contribution === null)
-				throw new TypeError('Language description contribution must be an object');
+			if (typeof contribution !== 'object' || contribution === null) throw new TypeError('Language description contribution must be an object');
 			const description = normalizeDescription(contribution.description);
 			return Object.freeze({
 				owner,
@@ -185,8 +174,7 @@ export class LanguagesRegistry extends Disposable {
 	private removeOwner(owner: object): void {
 		const affected = this.ownerLanguageIds(owner);
 		this.deleteOwner(owner);
-		if (!this.isDisposed)
-			for (const languageId of [...affected].sort()) this.changeEmitter.fire(Object.freeze({ languageId }));
+		if (!this.isDisposed) for (const languageId of [...affected].sort()) this.changeEmitter.fire(Object.freeze({ languageId }));
 	}
 
 	private deleteOwner(owner: object): void {
@@ -199,8 +187,7 @@ export class LanguagesRegistry extends Disposable {
 
 	private ownerLanguageIds(owner: object): Set<string> {
 		const languageIds = new Set<string>();
-		for (const [languageId, entries] of this.descriptions)
-			if (entries.some(entry => entry.owner === owner)) languageIds.add(languageId);
+		for (const [languageId, entries] of this.descriptions) if (entries.some(entry => entry.owner === owner)) languageIds.add(languageId);
 		return languageIds;
 	}
 }
@@ -214,8 +201,7 @@ interface LanguageMatch {
 }
 
 function normalizeDescription(description: LanguageDescription): LanguageDescription {
-	if (typeof description !== 'object' || description === null)
-		throw new TypeError('Language description must be an object');
+	if (typeof description !== 'object' || description === null) throw new TypeError('Language description must be an object');
 	assertLanguageId(description.id);
 	return Object.freeze({
 		id: description.id,
@@ -226,15 +212,12 @@ function normalizeDescription(description: LanguageDescription): LanguageDescrip
 		mimetypes: normalizeTextList(description.mimetypes, 'language MIME types', true),
 		...(description.firstLine === undefined ? {} : { firstLine: normalizeFirstLinePattern(description.firstLine) }),
 		...(description.configuration === undefined ? {} : { configuration: description.configuration }),
-		...(description.icon === undefined
-			? {}
-			: { icon: Object.freeze({ light: description.icon.light, dark: description.icon.dark }) }),
+		...(description.icon === undefined ? {} : { icon: Object.freeze({ light: description.icon.light, dark: description.icon.dark }) }),
 	});
 }
 
 function normalizePriority(options: LanguageRegistrationOptions): number {
-	if (typeof options !== 'object' || options === null)
-		throw new TypeError('Language registration options must be an object');
+	if (typeof options !== 'object' || options === null) throw new TypeError('Language registration options must be an object');
 	const priority = options.priority ?? 0;
 	if (!Number.isSafeInteger(priority)) throw new RangeError('Language registration priority must be a safe integer');
 	return priority;
@@ -242,16 +225,11 @@ function normalizePriority(options: LanguageRegistrationOptions): number {
 
 function normalizeExtensions(values: readonly string[] | undefined): readonly string[] {
 	const normalized = normalizeTextList(values, 'language extensions', true).map(value => value.toLowerCase());
-	if (normalized.some(value => !value.startsWith('.')))
-		throw new TypeError('Language extensions must start with a dot');
+	if (normalized.some(value => !value.startsWith('.'))) throw new TypeError('Language extensions must start with a dot');
 	return Object.freeze(normalized);
 }
 
-function normalizeTextList(
-	values: readonly string[] | undefined,
-	owner: string,
-	caseInsensitive = false,
-): readonly string[] {
+function normalizeTextList(values: readonly string[] | undefined, owner: string, caseInsensitive = false): readonly string[] {
 	if (values === undefined) return Object.freeze([]);
 	if (!Array.isArray(values)) throw new TypeError(`${owner} must be an array`);
 	const normalized = values.map(value => {
@@ -268,13 +246,7 @@ function normalizePath(path: string): string {
 	return path.replace(/\\/gu, '/').toLowerCase();
 }
 
-function matchDescription(
-	entry: RegisteredLanguageDescription,
-	path: string,
-	fileName: string,
-	contentType: string | undefined,
-	firstLine: string | undefined,
-): LanguageMatch | undefined {
+function matchDescription(entry: RegisteredLanguageDescription, path: string, fileName: string, contentType: string | undefined, firstLine: string | undefined): LanguageMatch | undefined {
 	const description = entry.description;
 	if (contentType && description.mimetypes?.includes(contentType)) {
 		return match(entry, 4, contentType.length);
@@ -282,16 +254,11 @@ function matchDescription(
 	if (description.filenames?.includes(fileName)) {
 		return match(entry, 3, fileName.length);
 	}
-	const pattern = description.filenamePatterns?.find(
-		value => matchesGlob(value, path) || matchesGlob(value, fileName),
-	);
+	const pattern = description.filenamePatterns?.find(value => matchesGlob(value, path) || matchesGlob(value, fileName));
 	if (pattern) return match(entry, 2, pattern.length);
-	const extension = description.extensions
-		?.filter(value => path.endsWith(value))
-		.sort((left, right) => right.length - left.length)[0];
+	const extension = description.extensions?.filter(value => path.endsWith(value)).sort((left, right) => right.length - left.length)[0];
 	if (extension) return match(entry, 1, extension.length);
-	if (firstLine !== undefined && entry.firstLinePattern?.test(firstLine))
-		return match(entry, 0, description.firstLine?.length ?? 0);
+	if (firstLine !== undefined && entry.firstLinePattern?.test(firstLine)) return match(entry, 0, description.firstLine?.length ?? 0);
 	return undefined;
 }
 
@@ -320,22 +287,12 @@ function match(entry: RegisteredLanguageDescription, rank: number, specificity: 
 }
 
 function compareMatches(left: LanguageMatch, right: LanguageMatch): number {
-	return (
-		left.priority - right.priority ||
-		left.rank - right.rank ||
-		left.specificity - right.specificity ||
-		left.order - right.order
-	);
+	return left.priority - right.priority || left.rank - right.rank || left.specificity - right.specificity || left.order - right.order;
 }
 
-function selectDescription(
-	entries: readonly RegisteredLanguageDescription[] | undefined,
-): RegisteredLanguageDescription | undefined {
+function selectDescription(entries: readonly RegisteredLanguageDescription[] | undefined): RegisteredLanguageDescription | undefined {
 	return entries?.reduce(
-		(best, entry) =>
-			!best || entry.priority > best.priority || (entry.priority === best.priority && entry.order > best.order)
-				? entry
-				: best,
+		(best, entry) => (!best || entry.priority > best.priority || (entry.priority === best.priority && entry.order > best.order) ? entry : best),
 		undefined as RegisteredLanguageDescription | undefined,
 	);
 }

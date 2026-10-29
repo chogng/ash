@@ -44,8 +44,7 @@ suite('App Server MessagePort transport', () => {
 	suiteSetup(async () => {
 		Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
 		Object.defineProperty(globalThis, 'ash', { configurable: true, value: globals });
-		Transport = (await import('../../electron-browser/appServerMessagePortTransport.js'))
-			.AppServerMessagePortTransport;
+		Transport = (await import('../../electron-browser/appServerMessagePortTransport.js')).AppServerMessagePortTransport;
 	});
 	suiteTeardown(() => {
 		if (previousWindow) {
@@ -68,10 +67,7 @@ suite('App Server MessagePort transport', () => {
 	teardown(() => {
 		try {
 			assert.equal(registrations.size, 0);
-			assert.equal(
-				performance.getEntriesByType('mark').filter(mark => mark.name.startsWith('ash.appServer.port-')).length,
-				0,
-			);
+			assert.equal(performance.getEntriesByType('mark').filter(mark => mark.name.startsWith('ash.appServer.port-')).length, 0);
 			tracker.assertNoLeaks();
 		} finally {
 			tracking[Symbol.dispose]();
@@ -88,8 +84,7 @@ suite('App Server MessagePort transport', () => {
 	test('reconnecting keeps only current lease marks and disposing one transport preserves its peer', async () => {
 		const first = new Transport(() => {});
 		using peer = new Transport(() => {}, 'local');
-		const marks = (nonce: string) =>
-			performance.getEntriesByType('mark').filter(mark => mark.name.endsWith(`:${nonce}`));
+		const marks = (nonce: string) => performance.getEntriesByType('mark').filter(mark => mark.name.endsWith(`:${nonce}`));
 		try {
 			const peerReady = peer.acquire();
 			const peerNonce = requests.at(-1)!.nonce;
@@ -104,11 +99,7 @@ suite('App Server MessagePort transport', () => {
 				await ready;
 				assert.equal(marks(previousNonce).length, 2);
 				assert.equal(marks(peerNonce).length, 2);
-				assert.equal(
-					performance.getEntriesByType('mark').filter(mark => mark.name.startsWith('ash.appServer.port-'))
-						.length,
-					4,
-				);
+				assert.equal(performance.getEntriesByType('mark').filter(mark => mark.name.startsWith('ash.appServer.port-')).length, 4);
 			}
 			first.dispose();
 			assert.equal(marks(previousNonce!).length, 0);
@@ -139,14 +130,8 @@ suite('App Server MessagePort transport', () => {
 			const successorNonce = requests.at(-1)!.nonce;
 			acknowledgement.resolve(undefined);
 			await initialized;
-			assert.equal(
-				performance.getEntriesByType('mark').filter(mark => mark.name.endsWith(`:${retiredNonce}`)).length,
-				0,
-			);
-			assert.equal(
-				performance.getEntriesByType('mark').filter(mark => mark.name.endsWith(`:${successorNonce}`)).length,
-				1,
-			);
+			assert.equal(performance.getEntriesByType('mark').filter(mark => mark.name.endsWith(`:${retiredNonce}`)).length, 0);
+			assert.equal(performance.getEntriesByType('mark').filter(mark => mark.name.endsWith(`:${successorNonce}`)).length, 1);
 			requests.at(-1)!.resolve({ enabled: false });
 			await successor;
 		} finally {
@@ -328,9 +313,7 @@ suite('App Server MessagePort transport', () => {
 				try {
 					const closed = new Promise<void>(resolve => channel.port2.once('close', resolve));
 					const encoded = new TextEncoder().encode('你好😀\n');
-					const storage = new Uint8Array(
-						shared ? new SharedArrayBuffer(encoded.length + 4) : new ArrayBuffer(encoded.length + 4),
-					);
+					const storage = new Uint8Array(shared ? new SharedArrayBuffer(encoded.length + 4) : new ArrayBuffer(encoded.length + 4));
 					storage.set(encoded, 2);
 					channel.port2.postMessage({ data: storage.subarray(2, encoded.length + 2) });
 					await closed;
@@ -406,11 +389,7 @@ suite('App Server MessagePort transport', () => {
 				void closed.error(new Error('Main closure was not delivered'));
 			}, 5_000);
 			using close = transport.socket.onClose(event => {
-				notifications.push(
-					event?.type === SocketCloseEventType.NodeSocketCloseEvent && !event.hadError
-						? 'intentional'
-						: 'failed',
-				);
+				notifications.push(event?.type === SocketCloseEventType.NodeSocketCloseEvent && !event.hadError ? 'intentional' : 'failed');
 				void closed.complete();
 			});
 			using end = transport.socket.onEnd(() => notifications.push('EOF'));

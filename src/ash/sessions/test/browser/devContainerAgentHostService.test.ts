@@ -30,9 +30,7 @@ test('Docker service uses the admitted backend capability and retires a cancelle
 		target: { type: 'provider', providerId: 'ash.dev-containers', workspace: 'C:\\project', root: '/workspace' },
 	});
 	await assert.rejects(pending, isCancellationError);
-	assert.deepEqual(calls, [
-		{ providerId: 'ash.dev-containers', request: { operation: 'prepare', workspace: 'C:\\project' } },
-	]);
+	assert.deepEqual(calls, [{ providerId: 'ash.dev-containers', request: { operation: 'prepare', workspace: 'C:\\project' } }]);
 });
 
 test('an unavailable optional Provider has no local execution fallback', async () => {

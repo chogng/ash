@@ -9,32 +9,15 @@ import './editorDictation.css';
 import { h, addDisposableListener } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { Disposable, MutableDisposable } from '../../../../../base/common/lifecycle.js';
-import {
-	ICodeEditor,
-	OverlayWidgetPositionPreference,
-	type IOverlayWidget,
-} from '../../../../../editor/browser/editorBrowser.js';
-import {
-	EditorAction2,
-	EditorContributionInstantiation,
-	registerEditorContribution,
-} from '../../../../../editor/browser/editorExtensions.js';
+import { ICodeEditor, OverlayWidgetPositionPreference, type IOverlayWidget } from '../../../../../editor/browser/editorBrowser.js';
+import { EditorAction2, EditorContributionInstantiation, registerEditorContribution } from '../../../../../editor/browser/editorExtensions.js';
 import { EditorOption } from '../../../../../editor/common/config/editorOptions.js';
 import { MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
-import {
-	IInstantiationService,
-	type ServicesAccessor,
-} from '../../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
-import {
-	IChatSpeechToTextService,
-	ChatSpeechToTextState,
-} from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
-import {
-	DictationInput,
-	DictationAccessibilityHelp,
-} from '../../../chat/browser/speechToText/dictationInputController.js';
+import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
+import { DictationInput, DictationAccessibilityHelp } from '../../../chat/browser/speechToText/dictationInputController.js';
 import { IDictationOnboardingService } from '../../../chat/browser/speechToText/dictationOnboarding.js';
 
 /** Editing and undo remain with the target code editor, including asynchronous finalization. */
@@ -68,9 +51,7 @@ export class EditorDictation extends Disposable {
 					return;
 				}
 				editor.pushUndoStop();
-				editor.executeEdits('dictation', [{ range: selection, text }], inverseEdits =>
-					inverseEdits.map(edit => Selection.fromPositions(edit.range.getEndPosition())),
-				);
+				editor.executeEdits('dictation', [{ range: selection, text }], inverseEdits => inverseEdits.map(edit => Selection.fromPositions(edit.range.getEndPosition())));
 				editor.pushUndoStop();
 			},
 			focus: (): void => editor.focus(),
@@ -80,24 +61,14 @@ export class EditorDictation extends Disposable {
 				DictationInput,
 				target,
 				preview,
-				() =>
-					!this.isDisposed &&
-					!editor.getContainerDomNode().closest('[hidden]') &&
-					!editor.getOption(EditorOption.readOnly),
+				() => !this.isDisposed && !editor.getContainerDomNode().closest('[hidden]') && !editor.getOption(EditorOption.readOnly),
 				async () => {
 					await preferences.openSettings({ section: 'dictation' });
 				},
 				'editor',
 			),
 		);
-		this._register(
-			instantiation.createInstance(
-				DictationAccessibilityHelp,
-				this.session,
-				editor.getContainerDomNode(),
-				controls,
-			),
-		);
+		this._register(instantiation.createInstance(DictationAccessibilityHelp, this.session, editor.getContainerDomNode(), controls));
 		const stop = this._register(
 			new Button(controls, {
 				...defaultButtonStyles,

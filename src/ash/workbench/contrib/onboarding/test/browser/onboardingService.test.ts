@@ -38,17 +38,13 @@ suite('OnboardingScenarioService', () => {
 			} as unknown as IStorageService);
 			using scenario = registerOnboardingScenario({
 				id: 'test.lateTarget',
-				steps: [
-					{ target: 'test.lateTarget.control', title: 'Late target', description: 'Appeared after startup' },
-				],
+				steps: [{ target: 'test.lateTarget.control', title: 'Late target', description: 'Appeared after startup' }],
 			});
 			using service = services.createInstance(OnboardingScenarioService);
 			service.start();
 			await new Promise<void>(resolve => setImmediate(resolve));
 			assert.equal(container.querySelector('[role="dialog"]'), null);
-			using provider = registerOnboardingTargetProvider('test.lateTarget.control', () =>
-				dom.window.document.querySelector<HTMLElement>('#target')!,
-			);
+			using provider = registerOnboardingTargetProvider('test.lateTarget.control', () => dom.window.document.querySelector<HTMLElement>('#target')!);
 			await new Promise<void>(resolve => {
 				const observer = new dom.window.MutationObserver(() => {
 					if (!container.querySelector('[role="dialog"]')) return;
@@ -87,8 +83,7 @@ suite('OnboardingScenarioService', () => {
 			services.registerInstance(IContextKeyService, context);
 			services.registerInstance(ILayoutService, { mainContainer: container } as ILayoutService);
 			services.registerInstance(IStorageService, {
-				getBoolean: (key: string, scope: StorageScope) =>
-					scope === StorageScope.PROFILE && values.get(key) === true,
+				getBoolean: (key: string, scope: StorageScope) => scope === StorageScope.PROFILE && values.get(key) === true,
 				store: (key: string, value: boolean) => {
 					values.set(key, value);
 				},

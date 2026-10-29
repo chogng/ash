@@ -33,11 +33,7 @@ export class OAuthCallbackHost extends Disposable {
 					if (value === undefined) {
 						return undefined;
 					}
-					if (
-						!isRecord(value) ||
-						typeof value.path !== 'string' ||
-						!/^\/mcp-oauth\/[a-f0-9]{64}\/callback$/.test(value.path)
-					) {
+					if (!isRecord(value) || typeof value.path !== 'string' || !/^\/mcp-oauth\/[a-f0-9]{64}\/callback$/.test(value.path)) {
 						throw new Error('Invalid callback path');
 					}
 					return value.path;
@@ -50,9 +46,7 @@ export class OAuthCallbackHost extends Disposable {
 					this.opening++;
 					try {
 						const id = randomUUID();
-						const callback = await LoopbackOAuthCallback.listen(
-							typeof path === 'string' ? path : `/connector-oauth/${id}`,
-						);
+						const callback = await LoopbackOAuthCallback.listen(typeof path === 'string' ? path : `/connector-oauth/${id}`);
 						if (this.isDisposed) {
 							callback.close();
 							throw new Error('Window closed');

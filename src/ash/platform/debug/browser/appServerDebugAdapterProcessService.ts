@@ -36,11 +36,7 @@ export class AppServerDebugAdapterProcessService implements IDebugAdapterProcess
 			...(legacy === undefined ? {} : { legacy: workspaceState(legacy) }),
 		});
 	}
-	editWorkspaceState(
-		workspaceId: string,
-		revision: number,
-		edits: readonly DebugWorkspaceEdit[],
-	): Promise<DebugWorkspaceResult> {
+	editWorkspaceState(workspaceId: string, revision: number, edits: readonly DebugWorkspaceEdit[]): Promise<DebugWorkspaceResult> {
 		return appServerRequest(this.connection, 'debug/workspace/write', {
 			workspaceId,
 			revision,
@@ -65,10 +61,7 @@ export class AppServerDebugAdapterProcessService implements IDebugAdapterProcess
 	manageSession(id: string, action: 'read' | 'route' | 'end'): Promise<DebugSessionRelation> {
 		return appServerRequest(this.connection, 'debug/session/lifecycle', { id, action });
 	}
-	readConsole(
-		id: string,
-		options?: { readonly clear?: boolean; readonly diagnostic?: string },
-	): Promise<DebugConsoleSnapshot> {
+	readConsole(id: string, options?: { readonly clear?: boolean; readonly diagnostic?: string }): Promise<DebugConsoleSnapshot> {
 		return appServerRequest(this.connection, 'debug/session/console', {
 			id,
 			clear: options?.clear ?? false,
@@ -90,9 +83,7 @@ export class AppServerDebugAdapterProcessService implements IDebugAdapterProcess
 	}
 
 	async send(sessionId: string, message: unknown): Promise<void> {
-		await voidResult(
-			appServerRequest(this.connection, 'debug/adapter/send', { ...this.session(sessionId), message }),
-		);
+		await voidResult(appServerRequest(this.connection, 'debug/adapter/send', { ...this.session(sessionId), message }));
 	}
 
 	async initializeSession(sessionId: string, options: DebugSessionInitializeOptions): Promise<void> {
@@ -135,11 +126,7 @@ export class AppServerDebugAdapterProcessService implements IDebugAdapterProcess
 	readBreakpoints(sessionId: string): Promise<DebugBreakpointsSnapshot> {
 		return appServerRequest(this.connection, 'debug/session/breakpoints/read', this.session(sessionId));
 	}
-	async startInspection(
-		sessionId: string,
-		query: DebugInspection,
-		inspectionRevision: number,
-	): Promise<number | undefined> {
+	async startInspection(sessionId: string, query: DebugInspection, inspectionRevision: number): Promise<number | undefined> {
 		const result = await appServerRequest(this.connection, 'debug/session/inspection/start', {
 			...this.session(sessionId),
 			inspectionRevision,
@@ -203,9 +190,7 @@ export class AppServerDebugAdapterProcessService implements IDebugAdapterProcess
 	private session(sessionId: string): { readonly sessionId: string; readonly dirId?: string } {
 		const session = this.sessions.get(sessionId);
 		if (!session) {
-			throw new Error(
-				localize('debug.adapterSessionUnavailable', 'The debug adapter session is no longer available.'),
-			);
+			throw new Error(localize('debug.adapterSessionUnavailable', 'The debug adapter session is no longer available.'));
 		}
 		return session;
 	}
@@ -221,10 +206,7 @@ export class AppServerDebugAdapterProcessService implements IDebugAdapterProcess
 }
 
 /** Code product contribution for the connected Vite renderer host. */
-export function createAppServerDebugAdapterCapability(
-	connection: AppServerProtocolClient,
-	appServer: IAppServerApi,
-): RendererHostCapabilities {
+export function createAppServerDebugAdapterCapability(connection: AppServerProtocolClient, appServer: IAppServerApi): RendererHostCapabilities {
 	return { debugAdapter: new AppServerDebugAdapterProcessService(connection, appServer) };
 }
 
@@ -234,8 +216,6 @@ function workspaceState(state: DebugWorkspaceState) {
 		functionBreakpoints: [...state.functionBreakpoints],
 		dataBreakpoints: state.dataBreakpoints.map(point => ({ ...point, accessTypes: [...point.accessTypes] })),
 		watchExpressions: [...state.watchExpressions],
-		exceptionBreakpoints: Object.fromEntries(
-			Object.entries(state.exceptionBreakpoints).map(([type, filters]) => [type, [...filters]]),
-		),
+		exceptionBreakpoints: Object.fromEntries(Object.entries(state.exceptionBreakpoints).map(([type, filters]) => [type, [...filters]])),
 	};
 }

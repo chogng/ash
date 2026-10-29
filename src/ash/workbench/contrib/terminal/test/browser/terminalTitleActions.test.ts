@@ -1,20 +1,11 @@
 import { TestViewDescriptorService } from '../../../../test/browser/workbenchTestServices.js';
 import { ActivityService } from '../../../../services/activity/browser/activityService.js';
 import { IActivityService } from '../../../../services/activity/common/activity.js';
-import {
-	IChatSpeechToTextService,
-	ChatSpeechToTextService,
-} from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
-import {
-	IVoiceCodeTranscriptionClient,
-	VoiceCodeTranscriptionClient,
-} from '../../../chat/browser/speechToText/voiceCodeTranscriptionClient.js';
+import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
+import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../../../../platform/telemetry/common/telemetryUtils.js';
-import {
-	ILocalTranscriptionService,
-	ILocalTranscriptionModelService,
-} from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { NullLocalTranscriptionService } from '../../../../services/localTranscription/browser/localTranscriptionService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { IEnvironmentVariableService } from '../../common/environmentVariable.js';
@@ -25,11 +16,7 @@ import { IViewsService } from '../../../../services/views/common/viewsService.js
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
 import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
-import {
-	ITerminalContributionService,
-	ITerminalProfileResolverService,
-	ITerminalProfileService,
-} from '../../common/terminal.js';
+import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../common/terminal.js';
 
 import { TerminalProfileService } from '../../browser/terminalProfileService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
@@ -51,10 +38,7 @@ import { IContextMenuService } from '../../../../../platform/contextview/browser
 import type { ITerminalInstance } from '../../browser/terminal.js';
 import { AppServerAvailableContext } from '../../../../common/contextkeys.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import {
-	TestConfigurationService,
-	TestWorkspaceService,
-} from '../../../../services/configuration/test/common/testServices.js';
+import { TestConfigurationService, TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { TerminalContextKeys, TerminalHasActiveInstanceContext } from '../../common/terminalContextKey.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { IHoverService, HoverService } from '../../../../../platform/hover/browser/hoverService.js';
@@ -74,17 +58,19 @@ for (const [name, value] of Object.entries({
 	MouseEvent: browserEnvironment.window.MouseEvent,
 	navigator: browserEnvironment.window.navigator,
 })) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
+	Object.defineProperty(globalThis, name, {
+		configurable: true,
+		value,
+	});
 }
 
-const [{ ContextKeyService }, { MenuService }, { InstantiationService }, { CommandService }, { TerminalTitleActions }] =
-	await Promise.all([
-		import('../../../../../platform/contextkey/browser/contextKeyService.js'),
-		import('../../../../../platform/actions/common/menuService.js'),
-		import('../../../../../platform/instantiation/common/instantiationService.js'),
-		import('../../../../../workbench/services/commands/common/commandService.js'),
-		import('../../../../../workbench/contrib/terminal/browser/terminalView.js'),
-	]);
+const [{ ContextKeyService }, { MenuService }, { InstantiationService }, { CommandService }, { TerminalTitleActions }] = await Promise.all([
+	import('../../../../../platform/contextkey/browser/contextKeyService.js'),
+	import('../../../../../platform/actions/common/menuService.js'),
+	import('../../../../../platform/instantiation/common/instantiationService.js'),
+	import('../../../../../workbench/services/commands/common/commandService.js'),
+	import('../../../../../workbench/contrib/terminal/browser/terminalView.js'),
+]);
 
 suiteTeardown(() => {
 	browserEnvironment.window.close();
@@ -137,12 +123,7 @@ test('Terminal profile menu launches the selected shell profile', async () => {
 				createdProfiles.push(undefined);
 			},
 		},
-		...[
-			'workbench.action.terminal.newInNewWindow',
-			'workbench.action.terminal.openSettings',
-			'workbench.action.tasks.runTask',
-			'workbench.action.tasks.configureTaskRunner',
-		].map(id => ({
+		...['workbench.action.terminal.newInNewWindow', 'workbench.action.terminal.openSettings', 'workbench.action.tasks.runTask', 'workbench.action.tasks.configureTaskRunner'].map(id => ({
 			id,
 			handler: () => {
 				dropdownCommands.push(id);
@@ -175,31 +156,19 @@ test('Terminal profile menu launches the selected shell profile', async () => {
 	using hoverContext = new BrowserContextViewService(ownerDocument.body);
 	using hoverService = new HoverService(configuration, hoverContext, contextMenuService);
 	registryOwner.registerInstance(IHoverService, hoverService);
-	registryOwner.registerSingleton(IEnvironmentVariableService, () =>
-		registryOwner.createInstance(EnvironmentVariableService),
-	);
+	registryOwner.registerSingleton(IEnvironmentVariableService, () => registryOwner.createInstance(EnvironmentVariableService));
 	registryOwner.registerInstance(IKeybindingService, {
 		onDidUpdateKeybindings: Event.None,
 		lookupKeybinding: () => undefined,
 	} as unknown as IKeybindingService);
 	using titleActions = registryOwner.createInstance(TerminalTitleActions, ownerDocument.body);
-	assert.equal(
-		contextKeyService.getValue(TerminalHasActiveInstanceContext.key),
-		true,
-		'An empty toolbar cannot clear the window-active editor terminal',
-	);
+	assert.equal(contextKeyService.getValue(TerminalHasActiveInstanceContext.key), true, 'An empty toolbar cannot clear the window-active editor terminal');
 
 	const commandPromptProfile = { profileId: 'cmd', title: 'Command Prompt', isDefault: true };
 	const powerShellProfile = { profileId: 'pwsh', title: 'PowerShell', isDefault: false };
-	const unavailableProfile = titleActions.element.querySelector<HTMLButtonElement>(
-		'.ash-dropdown-with-primary-dropdown > .ash-button',
-	);
+	const unavailableProfile = titleActions.element.querySelector<HTMLButtonElement>('.ash-dropdown-with-primary-dropdown > .ash-button');
 	assert.ok(unavailableProfile);
-	assert.equal(
-		unavailableProfile.disabled,
-		false,
-		'The menu also offers New Terminal and Select Default Profile before discovery',
-	);
+	assert.equal(unavailableProfile.disabled, false, 'The menu also offers New Terminal and Select Default Profile before discovery');
 	titleActions.setProfiles([commandPromptProfile, powerShellProfile]);
 	ownerDocument.body.append(titleActions.element);
 
@@ -207,9 +176,7 @@ test('Terminal profile menu launches the selected shell profile', async () => {
 	assert.equal(toolbar.getAttribute('role'), 'toolbar');
 	assert.equal(toolbar.classList.contains('highlight-toggled'), true);
 	const splitNewTerminal = toolbar.querySelector<HTMLElement>('.ash-dropdown-with-primary-action-view-item');
-	const profile = splitNewTerminal?.querySelector<HTMLButtonElement>(
-		'.ash-dropdown-with-primary-dropdown > .ash-button',
-	);
+	const profile = splitNewTerminal?.querySelector<HTMLButtonElement>('.ash-dropdown-with-primary-dropdown > .ash-button');
 	assert.ok(splitNewTerminal);
 	assert.ok(profile);
 	assert.equal(profile.disabled, false);
@@ -228,28 +195,17 @@ test('Terminal profile menu launches the selected shell profile', async () => {
 		[...toolbar.querySelectorAll('button')].some(button => button.textContent === 'Maximize Panel'),
 		false,
 	);
-	const currentNewTerminal = [...toolbar.querySelectorAll('button')].find(
-		button => button.textContent === 'New Terminal',
-	);
+	const currentNewTerminal = [...toolbar.querySelectorAll('button')].find(button => button.textContent === 'New Terminal');
 	assert.ok(currentNewTerminal);
 	currentNewTerminal.click();
 	await Promise.resolve();
 	assert.deepEqual(createdProfiles, [undefined]);
 	appServerAvailable.set(false);
-	assert.equal(
-		[...toolbar.querySelectorAll('button')].find(button => button.textContent === 'New Terminal')?.disabled,
-		true,
-	);
+	assert.equal([...toolbar.querySelectorAll('button')].find(button => button.textContent === 'New Terminal')?.disabled, true);
 	appServerAvailable.set(true);
-	assert.equal(
-		[...toolbar.querySelectorAll('button')].find(button => button.textContent === 'New Terminal')?.disabled,
-		false,
-	);
+	assert.equal([...toolbar.querySelectorAll('button')].find(button => button.textContent === 'New Terminal')?.disabled, false);
 	titleActions.setCreating(true);
-	assert.equal(
-		[...toolbar.querySelectorAll('button')].find(button => button.textContent === 'New Terminal')?.disabled,
-		true,
-	);
+	assert.equal([...toolbar.querySelectorAll('button')].find(button => button.textContent === 'New Terminal')?.disabled, true);
 	titleActions.setCreating(false);
 	const activeInstance = {
 		id: 'terminal-1',
@@ -284,16 +240,11 @@ test('Terminal profile menu launches the selected shell profile', async () => {
 	assert.equal(splitCount, 1);
 	assert.equal(toolbar.textContent?.includes('Kill Terminal'), true);
 	assert.equal(toolbar.textContent?.includes('Relaunch Terminal'), false);
-	const killTerminal = [...toolbar.querySelectorAll('[data-action-id]')].find(
-		item => item.getAttribute('data-action-id') === 'workbench.action.terminal.kill',
-	);
+	const killTerminal = [...toolbar.querySelectorAll('[data-action-id]')].find(item => item.getAttribute('data-action-id') === 'workbench.action.terminal.kill');
 	const moreActions = toolbar.querySelector<HTMLElement>("[data-action-id='ash.toolbar.moreActions']");
 	assert.ok(killTerminal);
 	assert.ok(moreActions);
-	assert.equal(
-		killTerminal.compareDocumentPosition(moreActions) & browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING,
-		browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING,
-	);
+	assert.equal(killTerminal.compareDocumentPosition(moreActions) & browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING, browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING);
 	assert.equal(toolbar.querySelector("[data-action-id='workbench.action.toggleMaximizedPanel']"), null);
 	moreActions.querySelector('button')?.click();
 	const clearTerminal = shownProfileActions.find(action => action.id === 'workbench.action.terminal.clear');
@@ -339,20 +290,14 @@ test('Terminal profile menu launches the selected shell profile', async () => {
 		} as ITerminalInstance,
 		'list',
 	);
-	assert.equal(
-		toolbar.textContent?.includes('Relaunch Terminal'),
-		false,
-		'Relaunch is available in the overflow menu',
-	);
+	assert.equal(toolbar.textContent?.includes('Relaunch Terminal'), false, 'Relaunch is available in the overflow menu');
 	titleActions.setActiveInstance(activeInstance, 'title');
 	assert.doesNotThrow(() => titleActions.setActiveInstance(undefined, 'title'));
 	assert.equal(toolbar.querySelector('.ash-terminal-active-action'), null);
 	assert.equal(toolbar.textContent?.includes('Kill Terminal'), false);
 	titleActions.setActiveInstance(activeInstance, 'list');
 
-	const currentProfile = toolbar.querySelector<HTMLButtonElement>(
-		'.ash-dropdown-with-primary-dropdown > .ash-button',
-	);
+	const currentProfile = toolbar.querySelector<HTMLButtonElement>('.ash-dropdown-with-primary-dropdown > .ash-button');
 	assert.ok(currentProfile);
 	currentProfile.click();
 	assert.equal(currentProfile.getAttribute('aria-haspopup'), 'menu');
@@ -378,20 +323,10 @@ test('Terminal profile menu launches the selected shell profile', async () => {
 			'workbench.action.tasks.configureTaskRunner',
 		],
 	);
-	for (const id of [
-		TerminalCommandId.NewInNewWindow,
-		TerminalCommandId.ConfigureTerminalSettings,
-		'workbench.action.tasks.runTask',
-		'workbench.action.tasks.configureTaskRunner',
-	]) {
+	for (const id of [TerminalCommandId.NewInNewWindow, TerminalCommandId.ConfigureTerminalSettings, 'workbench.action.tasks.runTask', 'workbench.action.tasks.configureTaskRunner']) {
 		await shownProfileActions.find(action => action.id === id)!.run();
 	}
-	assert.deepEqual(dropdownCommands, [
-		TerminalCommandId.NewInNewWindow,
-		TerminalCommandId.ConfigureTerminalSettings,
-		'workbench.action.tasks.runTask',
-		'workbench.action.tasks.configureTaskRunner',
-	]);
+	assert.deepEqual(dropdownCommands, [TerminalCommandId.NewInNewWindow, TerminalCommandId.ConfigureTerminalSettings, 'workbench.action.tasks.runTask', 'workbench.action.tasks.configureTaskRunner']);
 	const commandPrompt = shownProfileActions.find(action => action.label.includes('Command Prompt'));
 	const powerShell = shownProfileActions.find(action => action.label.includes('PowerShell'));
 	assert.ok(commandPrompt);
@@ -415,19 +350,13 @@ test('Terminal profile menu launches the selected shell profile', async () => {
 		profiles.map(profile => `${TerminalCommandId.NewWithProfile}.${profile.profileId}`),
 	);
 	for (const profile of extensionProfiles) {
-		await shownProfileActions
-			.find(action => action.id === `${TerminalCommandId.NewWithProfile}.${profile.profileId}`)!
-			.run();
+		await shownProfileActions.find(action => action.id === `${TerminalCommandId.NewWithProfile}.${profile.profileId}`)!.run();
 	}
 	assert.deepEqual(createdProfiles, [undefined, 'pwsh', ...extensionProfiles.map(profile => profile.profileId)]);
 	titleActions.setActiveInstance(undefined, 'title');
 	assert.equal(contextKeyService.getValue(TerminalHasActiveInstanceContext.key), true);
 	titleActions.dispose();
-	assert.equal(
-		contextKeyService.getValue(TerminalHasActiveInstanceContext.key),
-		true,
-		'Disposing the toolbar resets only its local menu context',
-	);
+	assert.equal(contextKeyService.getValue(TerminalHasActiveInstanceContext.key), true, 'Disposing the toolbar resets only its local menu context');
 });
 
 test('Terminal profile menu survives presentation refreshes and restores its dropdown focus', async () => {
@@ -524,22 +453,17 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	const { IWorkspaceContextService } = await import('../../../../../platform/workspace/common/workspace.js');
 	const { IPreferencesService } = await import('../../../../services/preferences/common/preferences.js');
 	const { INotificationService } = await import('../../../../../platform/notification/common/notification.js');
-	const { TestNotificationService } =
-		await import('../../../../services/notification/test/common/testNotificationService.js');
+	const { TestNotificationService } = await import('../../../../services/notification/test/common/testNotificationService.js');
 	const { WorkbenchLayout } = await import('../../../../browser/layout.js');
 	const { Dimension } = await import('../../../../../base/browser/dom.js');
-	const { TestConfigurationService: WorkbenchConfigurationService } =
-		await import('../../../../services/configuration/test/common/testServices.js');
+	const { TestConfigurationService: WorkbenchConfigurationService } = await import('../../../../services/configuration/test/common/testServices.js');
 	const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
 	const { IAccessibleViewService } = await import('../../../../../platform/accessibility/browser/accessibleView.js');
 	const { ISpeechService } = await import('../../../speech/common/speechService.js');
-	const { IVoiceCodeTranscriptionBackendService } =
-		await import('../../../../../platform/renderer/common/dictation.js');
+	const { IVoiceCodeTranscriptionBackendService } = await import('../../../../../platform/renderer/common/dictation.js');
 	const { SpeechService } = await import('../../../speech/browser/speechService.js');
-	const { IDictationOnboardingService, DictationOnboardingService } =
-		await import('../../../chat/browser/speechToText/dictationOnboarding.js');
-	const { WorkbenchViewRegistry, IViewDescriptorService, ViewContainerLocation } =
-		await import('../../../../common/views.js');
+	const { IDictationOnboardingService, DictationOnboardingService } = await import('../../../chat/browser/speechToText/dictationOnboarding.js');
+	const { WorkbenchViewRegistry, IViewDescriptorService, ViewContainerLocation } = await import('../../../../common/views.js');
 	const { ViewDescriptorService } = await import('../../../../services/views/browser/viewDescriptorService.js');
 	const { SyncDescriptor } = await import('../../../../../platform/instantiation/common/descriptors.js');
 	const { PaneComposite } = await import('../../../../browser/panecomposite.js');
@@ -570,10 +494,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	} as unknown as IKeybindingService);
 	services.registerInstance(IMenuService, new MenuService(commandService, context));
 	services.registerInstance(IContextMenuService, contextMenuService);
-	services.registerInstance(
-		IWorkspaceContextService,
-		resources.add(new TestWorkspaceService({ id: 'terminal-title-test', folders: [] })),
-	);
+	services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'terminal-title-test', folders: [] })));
 	// This scenario has no workspace or shell. Any shell acquisition would violate the title lifecycle boundary.
 	services.registerInstance(ITerminalService, {
 		instances: [],
@@ -640,19 +561,14 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	});
 	services.registerInstance(ISpeechService, resources.add(new SpeechService(undefined)));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
-	services.registerSingleton(IVoiceCodeTranscriptionClient, () =>
-		services.createInstance(VoiceCodeTranscriptionClient),
-	);
+	services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
 	services.registerInstance(ITelemetryService, NullTelemetryService);
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 	const localTranscription = resources.add(new NullLocalTranscriptionService());
 	services.registerInstance(ILocalTranscriptionService, localTranscription);
 	services.registerInstance(ILocalTranscriptionModelService, localTranscription);
 	services.registerInstance(ILogService, resources.add(new NullLoggerService()));
-	services.registerInstance(
-		IDictationOnboardingService,
-		resources.add(services.createInstance(DictationOnboardingService)),
-	);
+	services.registerInstance(IDictationOnboardingService, resources.add(services.createInstance(DictationOnboardingService)));
 	services.registerInstance(ILocalizationService, {
 		whenReady: Promise.resolve(),
 		translate: (_bundle, _key, source) => source,
@@ -663,17 +579,10 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 			title: 'Terminal',
 		}),
 	);
-	assert.equal(
-		unhosted.minimumSize,
-		unhosted.minimumBodySize,
-		'A hidden Terminal header must not reserve body space',
-	);
+	assert.equal(unhosted.minimumSize, unhosted.minimumBodySize, 'A hidden Terminal header must not reserve body space');
 	unhosted.setHeaderVisible(true);
 	assert.equal(unhosted.minimumSize, unhosted.minimumBodySize + 28);
-	assert.ok(
-		unhosted.element.querySelector('.ash-pane-view-header-button'),
-		'A host must be able to show the retained header',
-	);
+	assert.ok(unhosted.element.querySelector('.ash-pane-view-header-button'), 'A host must be able to show the retained header');
 	const registry = new WorkbenchViewRegistry();
 	const terminal = { id: 'test.terminal', title: 'Terminal', location: ViewContainerLocation.Panel };
 	const empty = { id: 'test.empty', title: 'Empty', location: ViewContainerLocation.Panel };
@@ -691,8 +600,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	);
 	const descriptors = resources.add(new TestViewDescriptorService({ registry }, context));
 	services.registerInstance(IViewDescriptorService, descriptors);
-	if (!services.has(IActivityService))
-		services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
+	if (!services.has(IActivityService)) services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
 	const panel = resources.add(services.createInstance(PanelPart, browserEnvironment.window.document.body));
 	const create = (descriptor: typeof terminal) =>
 		services.createInstance(PaneComposite, panel.domNode, {
@@ -707,12 +615,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	panel.showComposite(terminal.id);
 	const pane = composite.getView('test.terminalView')!;
 	const toolbar = pane.partTitleProjection!.actions!;
-	assert.equal(
-		panel.domNode.querySelector(
-			'.ash-pane-composite-title-view-actions [role="toolbar"][aria-label="Terminal actions"]',
-		),
-		toolbar,
-	);
+	assert.equal(panel.domNode.querySelector('.ash-pane-composite-title-view-actions [role="toolbar"][aria-label="Terminal actions"]'), toolbar);
 	assert.equal(toolbar.getAttribute('role'), 'toolbar');
 	assert.equal(toolbar.querySelectorAll('[data-action-id="workbench.action.terminal.new"]').length, 1);
 	toolbar.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.terminal.new"] button')!.click();
@@ -722,12 +625,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	assert.equal(toolbar.isConnected, false);
 	panel.showComposite(terminal.id);
 	assert.equal(composite.getView('test.terminalView'), pane);
-	assert.equal(
-		panel.domNode.querySelector(
-			'.ash-pane-composite-title-view-actions [role="toolbar"][aria-label="Terminal actions"]',
-		),
-		toolbar,
-	);
+	assert.equal(panel.domNode.querySelector('.ash-pane-composite-title-view-actions [role="toolbar"][aria-label="Terminal actions"]'), toolbar);
 	panel.dispose();
 	assert.equal(toolbar.isConnected, false);
 });
@@ -834,23 +732,12 @@ suite('Terminal context command lifecycle', () => {
 			['clear', 2],
 			['relaunch', 1, { cols: 80, rows: 24 }],
 		]);
-		for (const invalid of [
-			{ $mid: 15, instanceId: '1' },
-			{ $mid: 15, instanceId: -1 },
-			{ $mid: 1, instanceId: 1 },
-			{ instanceId: 1 },
-		]) {
-			await assert.rejects(
-				commands.executeCommand(TerminalCommandId.Kill, invalid),
-				/Invalid terminal instance context/,
-			);
+		for (const invalid of [{ $mid: 15, instanceId: '1' }, { $mid: 15, instanceId: -1 }, { $mid: 1, instanceId: 1 }, { instanceId: 1 }]) {
+			await assert.rejects(commands.executeCommand(TerminalCommandId.Kill, invalid), /Invalid terminal instance context/);
 		}
 		await commands.executeCommand(TerminalCommandId.Kill, context);
 		assert.deepEqual(effects.at(-1), ['close', 1]);
-		await assert.rejects(
-			commands.executeCommand(TerminalCommandId.Clear, context),
-			/This terminal has been closed/,
-		);
+		await assert.rejects(commands.executeCommand(TerminalCommandId.Clear, context), /This terminal has been closed/);
 		assert.equal(instances.length, 1);
 	});
 
@@ -917,14 +804,7 @@ suite('Terminal context command lifecycle', () => {
 					delegate = value as typeof delegate;
 				},
 			};
-			const show = () =>
-				openContextMenu(
-					menuDom.window as unknown as Window,
-					new menuDom.window.MouseEvent('contextmenu'),
-					{ instanceId: 1 } as ITerminalInstance,
-					menu,
-					service,
-				);
+			const show = () => openContextMenu(menuDom.window as unknown as Window, new menuDom.window.MouseEvent('contextmenu'), { instanceId: 1 } as ITerminalInstance, menu, service);
 			show();
 			const canceled = delegate!.actionRunner;
 			assert.ok(canceled instanceof TerminalContextActionRunner);

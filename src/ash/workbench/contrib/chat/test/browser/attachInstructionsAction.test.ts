@@ -48,17 +48,8 @@ function setup(resources: DisposableStore, initial: RemoteAgentConnection, resou
 }
 
 async function ready(quick: TestQuickInputService): Promise<void> {
-	for (
-		let checkpoint = 0;
-		checkpoint < 8 && (quick.currentQuickInput as IQuickPick<IQuickPickItem> | undefined)?.busy;
-		checkpoint++
-	)
-		await Promise.resolve();
-	assert.equal(
-		(quick.currentQuickInput as IQuickPick<IQuickPickItem> | undefined)?.busy,
-		false,
-		'catalog must settle before keyboard acceptance',
-	);
+	for (let checkpoint = 0; checkpoint < 8 && (quick.currentQuickInput as IQuickPick<IQuickPickItem> | undefined)?.busy; checkpoint++) await Promise.resolve();
+	assert.equal((quick.currentQuickInput as IQuickPick<IQuickPickItem> | undefined)?.busy, false, 'catalog must settle before keyboard acceptance');
 }
 
 function accept(): void {

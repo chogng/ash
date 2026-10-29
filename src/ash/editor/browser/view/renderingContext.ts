@@ -77,11 +77,7 @@ export class RenderingContext extends RestrictedRenderingContext {
 	}
 
 	public visibleRangeForPosition(position: Position): HorizontalPosition | null {
-		return (
-			this.viewLines.visibleRangeForPosition(position) ??
-			this.viewLinesGpu?.visibleRangeForPosition(position) ??
-			null
-		);
+		return this.viewLines.visibleRangeForPosition(position) ?? this.viewLinesGpu?.visibleRangeForPosition(position) ?? null;
 	}
 }
 
@@ -144,21 +140,11 @@ export class VisibleRanges {
 
 export class LineVisibleRanges {
 	public static firstLine(ranges: LineVisibleRanges[] | null): LineVisibleRanges | null {
-		return (
-			ranges?.reduce<LineVisibleRanges | null>(
-				(first, range) => (!first || range.lineNumber < first.lineNumber ? range : first),
-				null,
-			) ?? null
-		);
+		return ranges?.reduce<LineVisibleRanges | null>((first, range) => (!first || range.lineNumber < first.lineNumber ? range : first), null) ?? null;
 	}
 
 	public static lastLine(ranges: LineVisibleRanges[] | null): LineVisibleRanges | null {
-		return (
-			ranges?.reduce<LineVisibleRanges | null>(
-				(last, range) => (!last || range.lineNumber > last.lineNumber ? range : last),
-				null,
-			) ?? null
-		);
+		return ranges?.reduce<LineVisibleRanges | null>((last, range) => (!last || range.lineNumber > last.lineNumber ? range : last), null) ?? null;
 	}
 
 	constructor(

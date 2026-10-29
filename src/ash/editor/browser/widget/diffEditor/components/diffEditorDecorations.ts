@@ -38,35 +38,19 @@ export class DiffEditorDecorations extends Disposable {
 			if (row.originalLineIndex !== undefined) {
 				original.push({
 					range: new Range(row.originalLineIndex + 1, 1, row.originalLineIndex + 1, 1),
-					options: renderIndicators
-						? diffLineDeleteDecorationBackgroundWithIndicator
-						: diffLineDeleteDecorationBackground,
+					options: renderIndicators ? diffLineDeleteDecorationBackgroundWithIndicator : diffLineDeleteDecorationBackground,
 				});
 				if (showInlineChanges) {
-					addInlineDecorations(
-						original,
-						row.originalLineIndex + 1,
-						row.originalChanges,
-						diffDeleteDecoration,
-						diffDeleteDecorationEmpty,
-					);
+					addInlineDecorations(original, row.originalLineIndex + 1, row.originalChanges, diffDeleteDecoration, diffDeleteDecorationEmpty);
 				}
 			}
 			if (row.modifiedLineIndex !== undefined) {
 				modified.push({
 					range: new Range(row.modifiedLineIndex + 1, 1, row.modifiedLineIndex + 1, 1),
-					options: renderIndicators
-						? diffLineAddDecorationBackgroundWithIndicator
-						: diffLineAddDecorationBackground,
+					options: renderIndicators ? diffLineAddDecorationBackgroundWithIndicator : diffLineAddDecorationBackground,
 				});
 				if (showInlineChanges) {
-					addInlineDecorations(
-						modified,
-						row.modifiedLineIndex + 1,
-						row.modifiedChanges,
-						diffAddDecoration,
-						diffAddDecorationEmpty,
-					);
+					addInlineDecorations(modified, row.modifiedLineIndex + 1, row.modifiedChanges, diffAddDecoration, diffAddDecorationEmpty);
 				}
 			}
 		}

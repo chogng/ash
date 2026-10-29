@@ -96,12 +96,7 @@ export class RawDebugSession {
 		throw new CancellationError();
 	}
 
-	async request(
-		command: string,
-		args?: unknown,
-		token?: CancellationToken,
-		supportsCancel = false,
-	): Promise<unknown> {
+	async request(command: string, args?: unknown, token?: CancellationToken, supportsCancel = false): Promise<unknown> {
 		const id = this.sessionId();
 		if (token?.isCancellationRequested) throw new CancellationError();
 		const requestId = await this.processes.startRequest(id, command, args);
@@ -140,16 +135,14 @@ export class RawDebugSession {
 			const input = await this.inline.read(this.inlineSequence, 128);
 			if (this.closed) throw new CancellationError();
 			this.inlineSequence = input.nextSequence;
-			if (input.messages.length || input.stderr || input.exited || input.outputGap || input.protocolError)
-				await this.processes.acceptInput(id, input);
+			if (input.messages.length || input.stderr || input.exited || input.outputGap || input.protocolError) await this.processes.acceptInput(id, input);
 		}
 		const read = await this.processes.read(id, afterSequence, maxMessages);
 		if (this.closed) throw new CancellationError();
 		if (read.outputGap) throw new Error('Debug Adapter output exceeded the retained buffer');
 		if (this.inline) {
 			for (const entry of read.messages) {
-				if (entry.direction === 'outgoing' && read.session?.phase !== 'ended')
-					await this.inline.send(entry.message);
+				if (entry.direction === 'outgoing' && read.session?.phase !== 'ended') await this.inline.send(entry.message);
 			}
 		}
 		return read;
@@ -163,10 +156,7 @@ export class RawDebugSession {
 		this.id = undefined;
 		return (this.closing = Promise.resolve().then(async () => {
 			// Both owners must finish even if one side's close fails.
-			const results = await Promise.allSettled([
-				id ? this.processes.close(id) : Promise.resolve(),
-				this.inline?.close(),
-			]);
+			const results = await Promise.allSettled([id ? this.processes.close(id) : Promise.resolve(), this.inline?.close()]);
 			for (const result of results) if (result.status === 'rejected') throw result.reason;
 		}));
 	}

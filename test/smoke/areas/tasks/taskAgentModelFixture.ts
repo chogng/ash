@@ -23,8 +23,7 @@ export class TaskAgentModelFixture {
 	private action: string | undefined;
 	private directory: string | undefined;
 	private runId: string | undefined;
-	private expected: 'running' | 'denied' | 'failed' | 'revoked' | 'ready' | 'succeeded' | 'preparing' | 'not-ready' =
-		'running';
+	private expected: 'running' | 'denied' | 'failed' | 'revoked' | 'ready' | 'succeeded' | 'preparing' | 'not-ready' = 'running';
 	private selectedLabel = taskLabel;
 	private pageSize: number | undefined;
 	private referenceRead = false;
@@ -37,9 +36,7 @@ export class TaskAgentModelFixture {
 		this.server = createServer(async (request, response) => {
 			try {
 				if (request.method === 'GET') {
-					response
-						.writeHead(200, { 'Content-Type': 'application/json' })
-						.end(JSON.stringify({ data: [{ id: taskModel.model }] }));
+					response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ data: [{ id: taskModel.model }] }));
 					return;
 				}
 				const chunks: Buffer[] = [];
@@ -59,20 +56,9 @@ export class TaskAgentModelFixture {
 					if (this.action !== undefined) this.beginFollowup();
 					this.action = action;
 				}
-				const latest = body.input
-					.filter(
-						item =>
-							item.type === 'function_call_output' &&
-							Number(item.call_id?.split('-').at(-1)) >= this.followupStart,
-					)
-					.at(-1);
-				const call =
-					latest && body.input.find(item => item.type === 'function_call' && item.call_id === latest.call_id);
-				const text =
-					latest &&
-					(typeof latest.output === 'string'
-						? latest.output
-						: latest.output!.map(part => part.text).join(''));
+				const latest = body.input.filter(item => item.type === 'function_call_output' && Number(item.call_id?.split('-').at(-1)) >= this.followupStart).at(-1);
+				const call = latest && body.input.find(item => item.type === 'function_call' && item.call_id === latest.call_id);
+				const text = latest && (typeof latest.output === 'string' ? latest.output : latest.output!.map(part => part.text).join(''));
 				let result;
 				if (text !== undefined) {
 					try {
@@ -97,21 +83,14 @@ export class TaskAgentModelFixture {
 					if (cancel) next('tasks_cancel', target());
 					else if (inspect) next('tasks_status', target());
 					else next('tasks_list', { directory: this.directory });
-				} else if (
-					call?.name === 'tasks_run' &&
-					(this.expected === 'denied' || this.expected === 'revoked') &&
-					typeof result === 'string'
-				) {
+				} else if (call?.name === 'tasks_run' && (this.expected === 'denied' || this.expected === 'revoked') && typeof result === 'string') {
 					// This is the actual Core error output, not an invented failed tool result.
 					answer = 'TASK_REJECTED ' + result;
 				} else {
 					switch (call?.name) {
 						case 'tasks_list': {
-							const task = result.tasks.find(
-								(task: { label: string }) => task.label === this.selectedLabel,
-							);
-							if (!task?.revision || task.unavailableReason)
-								throw new Error('Existing Task unavailable: ' + JSON.stringify(result));
+							const task = result.tasks.find((task: { label: string }) => task.label === this.selectedLabel);
+							if (!task?.revision || task.unavailableReason) throw new Error('Existing Task unavailable: ' + JSON.stringify(result));
 							next('tasks_run', {
 								directory: this.directory,
 								task_id: task.taskId,
@@ -124,46 +103,24 @@ export class TaskAgentModelFixture {
 							next('tasks_status', target());
 							break;
 						case 'tasks_cancel':
-							if (result.runId !== this.runId || result.status !== 'canceled')
-								throw new Error('Cancellation did not affect the original Run');
+							if (result.runId !== this.runId || result.status !== 'canceled') throw new Error('Cancellation did not affect the original Run');
 							next('tasks_status', target());
 							break;
 						case 'tasks_status':
 							if (result.runId !== this.runId) throw new Error('Status returned another Run');
-							if (this.expected === 'not-ready' && result.status === 'running' && result.terminalId)
-								this.statusSamples++;
-							if (this.expected === 'not-ready' && result.ready)
-								throw new Error('Background fixture became ready without an end pattern');
-							if (
-								!cancel &&
-								this.expected === 'preparing' &&
-								result.status === 'running' &&
-								!result.terminalId &&
-								++this.statusSamples >= 3
-							) {
+							if (this.expected === 'not-ready' && result.status === 'running' && result.terminalId) this.statusSamples++;
+							if (this.expected === 'not-ready' && result.ready) throw new Error('Background fixture became ready without an end pattern');
+							if (!cancel && this.expected === 'preparing' && result.status === 'running' && !result.terminalId && ++this.statusSamples >= 3) {
 								answer = 'WAITING ' + this.runId;
-							} else if (
-								(result.status === 'failed' ||
-									result.status === 'canceled' ||
-									result.status === 'succeeded') &&
-								(this.expected === 'failed' || inspect)
-							) {
+							} else if ((result.status === 'failed' || result.status === 'canceled' || result.status === 'succeeded') && (this.expected === 'failed' || inspect)) {
 								next('tasks_output', { ...target(), cursor: this.outputCursor, max_characters: 65536 });
-							} else if (
-								!cancel &&
-								!inspect &&
-								this.expected === 'succeeded' &&
-								result.status === 'succeeded'
-							) {
+							} else if (!cancel && !inspect && this.expected === 'succeeded' && result.status === 'succeeded') {
 								next('tasks_output', { ...target(), cursor: this.outputCursor, max_characters: 65536 });
-							} else if (result.status === 'failed' || result.status === 'succeeded')
-								throw new Error('Fixture Task stopped unexpectedly: ' + JSON.stringify(result));
+							} else if (result.status === 'failed' || result.status === 'succeeded') throw new Error('Fixture Task stopped unexpectedly: ' + JSON.stringify(result));
 							else if (
 								(!cancel &&
 									(!inspect || this.expected === 'not-ready') &&
-									(this.expected === 'running' ||
-										(this.expected === 'ready' && result.ready) ||
-										(this.expected === 'not-ready' && this.statusSamples >= 3)) &&
+									(this.expected === 'running' || (this.expected === 'ready' && result.ready) || (this.expected === 'not-ready' && this.statusSamples >= 3)) &&
 									result.status === 'running' &&
 									result.terminalId) ||
 								(cancel && result.status === 'canceled')
@@ -189,13 +146,11 @@ export class TaskAgentModelFixture {
 									});
 								else answer = 'OUTPUT_COMPLETE ' + this.runId;
 							} else if (cancel && this.expected === 'preparing') answer = 'CANCELED ' + this.runId;
-							else if (this.expected === 'not-ready' && (cancel || result.text.includes(taskMarker)))
-								answer = (cancel ? 'CANCELED ' : 'NOT_READY ') + this.runId;
+							else if (this.expected === 'not-ready' && (cancel || result.text.includes(taskMarker))) answer = (cancel ? 'CANCELED ' : 'NOT_READY ') + this.runId;
 							else if (this.expected === 'succeeded') answer = 'SUCCEEDED ' + this.runId;
 							else if (this.expected === 'failed') answer = 'FAILED ' + this.runId;
 							else if (inspect) answer = 'STOPPED ' + this.runId;
-							else if (result.text.includes(taskMarker))
-								answer = (cancel ? 'CANCELED ' : 'RUNNING ') + this.runId;
+							else if (result.text.includes(taskMarker)) answer = (cancel ? 'CANCELED ' : 'RUNNING ') + this.runId;
 							else {
 								await delay(150);
 								next('tasks_output', { ...target(), cursor: this.outputCursor, max_characters: 65536 });
@@ -218,21 +173,19 @@ export class TaskAgentModelFixture {
 							},
 						]
 					: [{ type: 'function_call', id: 'item-' + id, call_id: id, name, arguments: JSON.stringify(args) }];
-				response
-					.writeHead(200, { 'Content-Type': 'text/event-stream' })
-					.end(
-						'event: response.completed\ndata: ' +
-							JSON.stringify({
-								type: 'response.completed',
-								response: {
-									id,
-									status: 'completed',
-									output,
-									usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
-								},
-							}) +
-							'\n\n',
-					);
+				response.writeHead(200, { 'Content-Type': 'text/event-stream' }).end(
+					'event: response.completed\ndata: ' +
+						JSON.stringify({
+							type: 'response.completed',
+							response: {
+								id,
+								status: 'completed',
+								output,
+								usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
+							},
+						}) +
+						'\n\n',
+				);
 			} catch (error) {
 				this.errors.push(String(error));
 				response.writeHead(500).end(String(error));
@@ -256,9 +209,7 @@ export class TaskAgentModelFixture {
 	selectDirectory(directory: string): void {
 		this.directory = directory;
 	}
-	expectOutcome(
-		outcome: 'running' | 'denied' | 'failed' | 'revoked' | 'ready' | 'succeeded' | 'preparing' | 'not-ready',
-	): void {
+	expectOutcome(outcome: 'running' | 'denied' | 'failed' | 'revoked' | 'ready' | 'succeeded' | 'preparing' | 'not-ready'): void {
 		this.expected = outcome;
 	}
 	beginFollowup(): void {

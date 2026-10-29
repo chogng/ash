@@ -1,20 +1,11 @@
 import type { Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import type {
-	CustomModelProvider,
-	ModelProviderTestResult,
-} from '../../../../platform/agentHost/common/agentModels.js';
+import type { CustomModelProvider, ModelProviderTestResult } from '../../../../platform/agentHost/common/agentModels.js';
 import type { ModelPreferencesUpdate } from '../../../../platform/agentHost/common/agentModels.js';
 import type { ApprovalReviewModelSelection } from '../../../../platform/agentHost/common/agentModels.js';
-import type {
-	ModelRef,
-	ModelProviderCredentialStatus,
-} from '../../../../workbench/services/chat/common/chatService.js';
+import type { ModelRef, ModelProviderCredentialStatus } from '../../../../workbench/services/chat/common/chatService.js';
 import type { ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { localize } from '../../../../nls.js';
 
@@ -33,10 +24,7 @@ export const CoworkModelPreferences = Object.freeze({
 				return localize('cowork.defaultmodel.title', 'Default Cowork model');
 			},
 			get description() {
-				return localize(
-					'cowork.defaultmodel.description',
-					'The model for new Cowork conversations. Enter auto or a provider/model ID.',
-				);
+				return localize('cowork.defaultmodel.description', 'The model for new Cowork conversations. Enter auto or a provider/model ID.');
 			},
 			valueType: 'text',
 			get placeholder() {

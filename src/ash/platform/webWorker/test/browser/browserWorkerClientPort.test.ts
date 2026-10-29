@@ -75,9 +75,7 @@ suite('Browser Worker service', () => {
 
 	test('asynchronous Worker creation failure rejects its pending client requests', async () => {
 		const { WebWorkerClient } = await import('../../../../base/common/worker/webWorker.js');
-		using client = new WebWorkerClient<{ $ready(): void }>(
-			new BrowserWorkerClientPort(Promise.reject(new Error('Worker startup failed'))),
-		);
+		using client = new WebWorkerClient<{ $ready(): void }>(new BrowserWorkerClientPort(Promise.reject(new Error('Worker startup failed'))));
 		await assert.rejects(client.proxy.$ready(), /Worker startup failed/);
 		assert.throws(() => client.proxy, /Worker startup failed/);
 	});

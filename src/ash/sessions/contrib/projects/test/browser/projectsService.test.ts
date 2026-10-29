@@ -7,11 +7,7 @@ import { JSDOM } from 'jsdom';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { URI } from '../../../../../base/common/uri.js';
-import {
-	IProjectService,
-	type Project,
-	type ProjectMaterial,
-} from '../../../../../platform/projects/common/projectService.js';
+import { IProjectService, type Project, type ProjectMaterial } from '../../../../../platform/projects/common/projectService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { type IProjectsService, ProjectsService } from '../../browser/projectsService.js';
 
@@ -156,10 +152,7 @@ suite('Projects browsing', () => {
 		assert.deepEqual(fixture.projectsView.getProjects(), []);
 		await fixture.projectsView.create('delete', 'Delete', '', []);
 		fixture.projectsView.togglePinned('delete');
-		assert.equal(
-			await fixture.projectsView.remove(fixture.projects.find(project => project.id === 'delete')!),
-			true,
-		);
+		assert.equal(await fixture.projectsView.remove(fixture.projects.find(project => project.id === 'delete')!), true);
 		assert.equal(fixture.projectsView.isPinned('delete'), false);
 		assert.equal(fixture.projectsView.state.get().selectedId, undefined);
 		assert.deepEqual(
@@ -175,10 +168,7 @@ suite('Projects browsing', () => {
 			resource: URI.file(`/materials/${name}`),
 			kind: 'file',
 		}));
-		assert.equal(
-			await fixture.projectsView.create('research', 'Research', 'Compare the evidence', materials),
-			true,
-		);
+		assert.equal(await fixture.projectsView.create('research', 'Research', 'Compare the evidence', materials), true);
 		assert.deepEqual(fixture.projectsView.state.get().selected?.materials, materials);
 		using restored = fixture.services.createInstance(ProjectsService);
 		await restored.openProject('research');

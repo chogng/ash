@@ -26,15 +26,7 @@ export class EditorKeybindingCancellationTokenSource extends CancellationTokenSo
 		);
 		this.listeners.add(
 			editor.onKeyDown(event => {
-				if (
-					event.browserEvent.defaultPrevented ||
-					event.isComposing ||
-					event.key !== 'Escape' ||
-					event.ctrlKey ||
-					event.altKey ||
-					event.metaKey ||
-					event.shiftKey
-				) {
+				if (event.browserEvent.defaultPrevented || event.isComposing || event.key !== 'Escape' || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) {
 					return;
 				}
 				if ([...pending].at(-1) !== this) {

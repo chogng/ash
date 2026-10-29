@@ -14,10 +14,7 @@ import {
 	type ILocalTranscriptionResult,
 	type IDictationModelStatus,
 } from '../../../../../platform/localTranscription/common/localTranscription.js';
-import {
-	LocalTranscriptionService,
-	registerLocalTranscriptionService,
-} from '../../electron-browser/localTranscriptionService.js';
+import { LocalTranscriptionService, registerLocalTranscriptionService } from '../../electron-browser/localTranscriptionService.js';
 import { NullLocalTranscriptionService } from '../../browser/localTranscriptionService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
@@ -26,8 +23,7 @@ type ConnectionState = Parameters<Parameters<AppServerProtocolClient['onStateCha
 
 class Client {
 	public state: ConnectionState = 'ready';
-	public readonly requests: { readonly method: string; readonly resourceId: string; readonly backend?: unknown }[] =
-		[];
+	public readonly requests: { readonly method: string; readonly resourceId: string; readonly backend?: unknown }[] = [];
 	public readonly accepted = new DeferredPromise<void>();
 	public readonly stopped = new DeferredPromise<void>();
 	public readonly cancelled = new DeferredPromise<void>();
@@ -51,10 +47,7 @@ class Client {
 		return toDisposable(() => this.states.delete(listener));
 	}
 
-	public async request(
-		method: { readonly method: string },
-		params: { readonly resourceId: string; readonly backend?: unknown },
-	): Promise<unknown> {
+	public async request(method: { readonly method: string }, params: { readonly resourceId: string; readonly backend?: unknown }): Promise<unknown> {
 		if (method.method === 'dictation/model/list') {
 			await this.cacheBarrier?.p;
 			return { models: [], cacheDirectory: 'C:/models', packageVersion: 1 };
@@ -102,10 +95,7 @@ class Fixture extends Disposable {
 
 	constructor() {
 		super();
-		const capabilities = registerLocalTranscriptionService(
-			this.services,
-			this.client as unknown as AppServerProtocolClient,
-		);
+		const capabilities = registerLocalTranscriptionService(this.services, this.client as unknown as AppServerProtocolClient);
 		this.service = this.services.get(ILocalTranscriptionService) as LocalTranscriptionService;
 		this.models = this.services.get(ILocalTranscriptionModelService);
 		assert.equal(capabilities.localTranscription, this.service);
@@ -119,10 +109,7 @@ class Fixture extends Disposable {
 		this.client.emit({ method: 'dictation/transcript', params: { resourceId, text, isFinal } });
 	}
 
-	public modelProgress(
-		stage: { type: 'checking' | 'loading' | 'ready' | 'cancelled' } | { type: 'failed'; error: string },
-		resourceId = this.resourceId,
-	): void {
+	public modelProgress(stage: { type: 'checking' | 'loading' | 'ready' | 'cancelled' } | { type: 'failed'; error: string }, resourceId = this.resourceId): void {
 		this.client.emit({
 			method: 'dictation/model/progress',
 			params: { resourceId, modelId: 'selected-model', stage },
@@ -138,10 +125,7 @@ suite('LocalTranscriptionService', () => {
 		assert.equal(await fixture.models.getCacheDirectory(), 'C:/models');
 		assert.deepEqual(await fixture.service.getModelStatus(), { state: LocalTranscriptionModelState.Idle });
 		await assert.rejects(fixture.service.start({ cacheDir: 'C:/another-cache' }), /managed cache/);
-		await assert.rejects(
-			fixture.service.start({ cacheDir: 'C:/models', runtimeVersion: 'foundry' }),
-			/runtimeVersion/,
-		);
+		await assert.rejects(fixture.service.start({ cacheDir: 'C:/models', runtimeVersion: 'foundry' }), /runtimeVersion/);
 		assert.equal(fixture.client.requests.length, 0);
 		await fixture.service.start({ cacheDir: 'C:/models' });
 		assert.deepEqual(fixture.client.requests[0]?.backend, {
@@ -213,10 +197,7 @@ suite('LocalTranscriptionService', () => {
 		fixture.client.startBarrier = new DeferredPromise<void>();
 		fixture.client.stopBarrier = new DeferredPromise<void>();
 		const progress: IDictationModelStatus[] = [];
-		const operation = fixture.models.importPackage(
-			{ model: 'selected-model', sourcePath: 'C:\\models\\prepared' },
-			status => progress.push(status),
-		);
+		const operation = fixture.models.importPackage({ model: 'selected-model', sourcePath: 'C:\\models\\prepared' }, status => progress.push(status));
 		await fixture.client.accepted.p;
 		fixture.modelProgress({ type: 'loading' }, 'another-resource');
 		fixture.modelProgress({ type: 'loading' });
@@ -277,11 +258,7 @@ suite('LocalTranscriptionService', () => {
 		fixture.modelProgress({ type: 'loading' });
 		await fixture.service.cancel();
 		fixture.modelProgress({ type: 'ready' });
-		assert.deepEqual(progress, [
-			{ state: LocalTranscriptionModelState.Loading },
-			{ state: LocalTranscriptionModelState.Loading },
-			{ state: LocalTranscriptionModelState.Idle },
-		]);
+		assert.deepEqual(progress, [{ state: LocalTranscriptionModelState.Loading }, { state: LocalTranscriptionModelState.Loading }, { state: LocalTranscriptionModelState.Idle }]);
 	});
 	test('production assembly rejects a missing backend registration', () => {
 		using services = new InstantiationService();
@@ -344,10 +321,7 @@ suite('LocalTranscriptionService', () => {
 		fixture.client.beforeStop = () => fixture.transcript('discard me', true);
 		await fixture.client.startBarrier.complete();
 		await Promise.all([started, cancelled]);
-		assert.deepEqual(
-			{ methods: fixture.client.requests.map(request => request.method), results },
-			{ methods: ['dictation/start', 'dictation/cancel'], results: [] },
-		);
+		assert.deepEqual({ methods: fixture.client.requests.map(request => request.method), results }, { methods: ['dictation/start', 'dictation/cancel'], results: [] });
 	});
 
 	test('concurrent stop calls share one backend release', async () => {

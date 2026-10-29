@@ -13,11 +13,7 @@ import { CommandsRegistry } from '../../../../../platform/commands/common/comman
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IOutputService, OUTPUT_VIEW_ID } from '../../../../../workbench/services/output/common/output.js';
 import { IChatDebugService } from '../../../../../workbench/contrib/chat/common/chatDebugService.js';
-import type {
-	AgentTraceDiagnosticEvent,
-	AgentTraceEvent,
-	AgentTracePage,
-} from '../../../../../workbench/contrib/chat/common/chatDebugEvents.js';
+import type { AgentTraceDiagnosticEvent, AgentTraceEvent, AgentTracePage } from '../../../../../workbench/contrib/chat/common/chatDebugEvents.js';
 import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
 import { workbenchInstantiationService } from '../../../../../workbench/test/browser/workbenchTestServices.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
@@ -197,11 +193,7 @@ test('Agent Output reads bounded execution summaries and opens exact saved event
 test('clearing Agent Output preserves durable facts and read positions while newer events keep arriving', async () => {
 	using resources = new DisposableStore();
 	const fixture = setup(resources);
-	await waitFor(
-		() =>
-			fixture.diagnosticReads.length === 1 &&
-			fixture.output.getChannel('agent')!.getText().includes('Model attempt started'),
-	);
+	await waitFor(() => fixture.diagnosticReads.length === 1 && fixture.output.getChannel('agent')!.getText().includes('Model attempt started'));
 	const channel = fixture.output.getChannel('agent')!;
 	channel.clear();
 	fixture.events.push(record(6, 'turnStarted'));

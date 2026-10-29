@@ -13,12 +13,7 @@ import {
 	type DocumentPluginSelectionContext,
 	type DocumentPluginTransactionContext,
 } from './documentPlugin.js';
-import {
-	isDocumentSelectionValid,
-	selectionsEqual,
-	validateDocumentSelection,
-	type DocumentSelection,
-} from '../core/documentSelection.js';
+import { isDocumentSelectionValid, selectionsEqual, validateDocumentSelection, type DocumentSelection } from '../core/documentSelection.js';
 import { freezeDocumentNode, type DocumentMark, type DocumentNode } from './document.js';
 import { DocumentSchema } from './documentSchema.js';
 import { applyDocumentTransaction, DocumentTransaction } from './documentTransaction.js';
@@ -96,8 +91,7 @@ export class TextModelBlockState extends Disposable {
 		const plugins = options.plugins ?? [];
 		const pluginKeys = new Set<DocumentPluginKey<unknown>>();
 		for (const plugin of plugins) {
-			if (pluginKeys.has(plugin.key))
-				throw new TypeError(`Document plugin '${plugin.key.name}' is registered more than once`);
+			if (pluginKeys.has(plugin.key)) throw new TypeError(`Document plugin '${plugin.key.name}' is registered more than once`);
 			pluginKeys.add(plugin.key);
 		}
 		this.plugins = Object.freeze([...plugins]);
@@ -161,15 +155,9 @@ export class TextModelBlockState extends Disposable {
 		for (const plugin of this.plugins) {
 			if (!plugin.decorations) continue;
 			const state = this.pluginStates.get(plugin.key);
-			const decorations = plugin.decorations(
-				state,
-				Object.freeze({ ...context, state }) as DocumentPluginDecorationContext<unknown>,
-			);
+			const decorations = plugin.decorations(state, Object.freeze({ ...context, state }) as DocumentPluginDecorationContext<unknown>);
 			if (decorations === undefined) continue;
-			if (!(decorations instanceof DocumentDecorationSet))
-				throw new TypeError(
-					`Document plugin '${plugin.key.name}' decorations must return a DocumentDecorationSet`,
-				);
+			if (!(decorations instanceof DocumentDecorationSet)) throw new TypeError(`Document plugin '${plugin.key.name}' decorations must return a DocumentDecorationSet`);
 			sources.push(Object.freeze({ key: plugin.key, set: decorations }));
 		}
 		return Object.freeze(sources);
@@ -177,23 +165,16 @@ export class TextModelBlockState extends Disposable {
 
 	dispatch(transaction: DocumentTransaction): TextModelBlockChange | undefined {
 		this.assertNotDisposed();
-		if (transaction.steps.length === 0 && !transaction.selectionSet && !transaction.storedMarksSet)
-			return undefined;
+		if (transaction.steps.length === 0 && !transaction.selectionSet && !transaction.storedMarksSet) return undefined;
 		transaction = trackDocumentTransaction(this.schema, this._document, transaction, this._selection);
 		if (!this.acceptsTransaction(transaction, 'user')) return undefined;
 		if (transaction.steps.length === 0) {
 			const selectionBefore = this._selection;
-			if (transaction.selectionSet && transaction.selection)
-				validateDocumentSelection(this._document, transaction.selection);
+			if (transaction.selectionSet && transaction.selection) validateDocumentSelection(this._document, transaction.selection);
 			const selectionAfter = transaction.selectionSet ? transaction.selection : this._selection;
 			const selectionChanged = !selectionsEqual(selectionBefore, selectionAfter);
 			if (selectionChanged) {
-				this.pluginStates = this.applyPluginSelection(
-					this._document,
-					selectionBefore,
-					selectionAfter,
-					this.version,
-				);
+				this.pluginStates = this.applyPluginSelection(this._document, selectionBefore, selectionAfter, this.version);
 				this._selection = selectionAfter;
 			}
 			if (selectionChanged || transaction.storedMarksSet) this.history.closeGroup();
@@ -210,11 +191,7 @@ export class TextModelBlockState extends Disposable {
 			});
 		}
 		const applied = applyDocumentTransaction(this._document, this.schema, transaction, this._selection);
-		const selectionAfter = transaction.selectionSet
-			? transaction.selection
-			: isDocumentSelectionValid(applied.document, applied.selection)
-				? applied.selection
-				: undefined;
+		const selectionAfter = transaction.selectionSet ? transaction.selection : isDocumentSelectionValid(applied.document, applied.selection) ? applied.selection : undefined;
 		if (transaction.selection) validateDocumentSelection(applied.document, transaction.selection);
 		const change = this.commit(applied.document, transaction, 'user', this._selection, selectionAfter);
 		if (transaction.addToHistory) {
@@ -231,27 +208,17 @@ export class TextModelBlockState extends Disposable {
 	}
 
 	/** Applies an already-transformed remote transaction outside local author history. */
-	dispatchRemote(
-		transaction: DocumentTransaction,
-		historyPolicy: TextModelRemoteHistoryPolicy = TextModelRemoteHistoryPolicy.Clear,
-	): TextModelBlockChange | undefined {
+	dispatchRemote(transaction: DocumentTransaction, historyPolicy: TextModelRemoteHistoryPolicy = TextModelRemoteHistoryPolicy.Clear): TextModelBlockChange | undefined {
 		this.assertNotDisposed();
-		if (transaction.steps.length === 0 && !transaction.selectionSet && !transaction.storedMarksSet)
-			return undefined;
+		if (transaction.steps.length === 0 && !transaction.selectionSet && !transaction.storedMarksSet) return undefined;
 		if (!this.acceptsTransaction(transaction, 'remote')) return undefined;
 		if (transaction.steps.length === 0) {
 			const selectionBefore = this._selection;
-			if (transaction.selectionSet && transaction.selection)
-				validateDocumentSelection(this._document, transaction.selection);
+			if (transaction.selectionSet && transaction.selection) validateDocumentSelection(this._document, transaction.selection);
 			const selectionAfter = transaction.selectionSet ? transaction.selection : this._selection;
 			const selectionChanged = !selectionsEqual(selectionBefore, selectionAfter);
 			if (selectionChanged) {
-				this.pluginStates = this.applyPluginSelection(
-					this._document,
-					selectionBefore,
-					selectionAfter,
-					this.version,
-				);
+				this.pluginStates = this.applyPluginSelection(this._document, selectionBefore, selectionAfter, this.version);
 				this._selection = selectionAfter;
 			}
 			if (transaction.storedMarksSet) this.setStoredMarks(transaction.storedMarks);
@@ -268,11 +235,7 @@ export class TextModelBlockState extends Disposable {
 			});
 		}
 		const applied = applyDocumentTransaction(this._document, this.schema, transaction, this._selection);
-		const selectionAfter = transaction.selectionSet
-			? transaction.selection
-			: isDocumentSelectionValid(applied.document, applied.selection)
-				? applied.selection
-				: undefined;
+		const selectionAfter = transaction.selectionSet ? transaction.selection : isDocumentSelectionValid(applied.document, applied.selection) ? applied.selection : undefined;
 		if (transaction.selection) validateDocumentSelection(applied.document, transaction.selection);
 		const change = this.commit(applied.document, transaction, 'remote', this._selection, selectionAfter);
 		if (transaction.storedMarksSet) this.setStoredMarks(transaction.storedMarks);
@@ -317,13 +280,7 @@ export class TextModelBlockState extends Disposable {
 				return undefined;
 			}
 			const applied = applyDocumentTransaction(this._document, this.schema, entry.transaction);
-			const change = this.commit(
-				applied.document,
-				entry.transaction,
-				'redo',
-				this._selection,
-				entry.selectionAfter,
-			);
+			const change = this.commit(applied.document, entry.transaction, 'redo', this._selection, entry.selectionAfter);
 			this.history.restoreUndo(entry);
 			return change;
 		} catch (error) {
@@ -386,8 +343,7 @@ export class TextModelBlockState extends Disposable {
 		});
 		const nextSnapshot = projectDocumentToLines(this.schema, normalizedDocument);
 		const textCommit = this.host.commit(nextSnapshot);
-		if (textCommit.version !== version)
-			throw new Error('TextModel block reset did not commit exactly one model version');
+		if (textCommit.version !== version) throw new Error('TextModel block reset did not commit exactly one model version');
 		this._document = normalizedDocument;
 		this._selection = undefined;
 		this._storedMarks = undefined;
@@ -432,8 +388,7 @@ export class TextModelBlockState extends Disposable {
 		});
 		const nextSnapshot = projectDocumentToLines(this.schema, document);
 		const textCommit = this.host.commit(nextSnapshot);
-		if (textCommit.version !== version)
-			throw new Error('TextModel block transaction did not commit exactly one model version');
+		if (textCommit.version !== version) throw new Error('TextModel block transaction did not commit exactly one model version');
 		this._document = document;
 		this._selection = selectionAfter;
 		this.pluginStates = pluginStates;
@@ -498,9 +453,7 @@ export class TextModelBlockState extends Disposable {
 
 function cloneMarks(marks: readonly DocumentMark[] | undefined): readonly DocumentMark[] | undefined {
 	if (marks === undefined) return undefined;
-	return Object.freeze(
-		marks.map(mark => Object.freeze({ type: mark.type, attrs: Object.freeze({ ...(mark.attrs ?? {}) }) })),
-	);
+	return Object.freeze(marks.map(mark => Object.freeze({ type: mark.type, attrs: Object.freeze({ ...(mark.attrs ?? {}) }) })));
 }
 
 function marksEqual(left: readonly DocumentMark[] | undefined, right: readonly DocumentMark[] | undefined): boolean {

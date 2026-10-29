@@ -29,23 +29,14 @@ export class OffsetRange implements IOffsetRange {
 		let end = start;
 		while (end < sortedRanges.length && sortedRanges[end]!.start <= range.endExclusive) end += 1;
 		if (start === end) sortedRanges.splice(start, 0, range);
-		else
-			sortedRanges.splice(
-				start,
-				end - start,
-				new OffsetRange(
-					Math.min(range.start, sortedRanges[start]!.start),
-					Math.max(range.endExclusive, sortedRanges[end - 1]!.endExclusive),
-				),
-			);
+		else sortedRanges.splice(start, end - start, new OffsetRange(Math.min(range.start, sortedRanges[start]!.start), Math.max(range.endExclusive, sortedRanges[end - 1]!.endExclusive)));
 	}
 
 	constructor(
 		readonly start: number,
 		readonly endExclusive: number,
 	) {
-		if (!Number.isSafeInteger(start) || !Number.isSafeInteger(endExclusive) || start < 0 || start > endExclusive)
-			throw new RangeError('Invalid offset range');
+		if (!Number.isSafeInteger(start) || !Number.isSafeInteger(endExclusive) || start < 0 || start > endExclusive) throw new RangeError('Invalid offset range');
 	}
 
 	get isEmpty(): boolean {
@@ -153,10 +144,7 @@ export class OffsetRangeSet {
 			this._sortedRanges.splice(
 				start,
 				end - start,
-				new OffsetRange(
-					Math.min(range.start, this._sortedRanges[start].start),
-					Math.max(range.endExclusive, this._sortedRanges[end - 1].endExclusive),
-				),
+				new OffsetRange(Math.min(range.start, this._sortedRanges[start].start), Math.max(range.endExclusive, this._sortedRanges[end - 1].endExclusive)),
 			);
 	}
 

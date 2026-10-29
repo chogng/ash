@@ -11,8 +11,5 @@ test('renderer host capabilities compose empty and independent contributions', (
 
 test('renderer host capabilities reject duplicate owners', () => {
 	const debugAdapter = {} as IDebugAdapterProcessService;
-	assert.throws(
-		() => mergeRendererHostCapabilities([{ debugAdapter }, { debugAdapter }]),
-		/contributed more than once/,
-	);
+	assert.throws(() => mergeRendererHostCapabilities([{ debugAdapter }, { debugAdapter }]), /contributed more than once/);
 });

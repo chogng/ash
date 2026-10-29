@@ -43,11 +43,7 @@ function createFixture(clipboard: IClipboardService, text = 'alpha beta gamma') 
 			}),
 		);
 		editor.layout({ width: 600, height: 120 });
-		const contribution = resources.add(
-			editor
-				.invokeWithinContext(accessor => accessor.get(IInstantiationService))
-				.createInstance(SelectionClipboard, editor),
-		);
+		const contribution = resources.add(editor.invokeWithinContext(accessor => accessor.get(IInstantiationService)).createInstance(SelectionClipboard, editor));
 		return { dom, editor, model, contribution, [Symbol.dispose]: () => resources.dispose() };
 	} catch (error) {
 		resources.dispose();

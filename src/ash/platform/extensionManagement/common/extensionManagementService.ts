@@ -1,8 +1,7 @@
 import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
-export type ExtensionsCapabilityKind =
-	'skill' | 'mcp' | 'connector' | 'theme' | 'language' | 'localization' | 'executable' | 'editorExtension' | 'asset';
+export type ExtensionsCapabilityKind = 'skill' | 'mcp' | 'connector' | 'theme' | 'language' | 'localization' | 'executable' | 'editorExtension' | 'asset';
 
 /** Product windows declared by a package manifest, separate from execution platforms. */
 export enum ExtensionUiTarget {
@@ -213,33 +212,18 @@ export interface IExtensionManagementService {
 	refreshBrowse(query: string, options?: ExtensionsSearchOptions): Promise<ExtensionsBrowseSnapshot>;
 	search(query: string, options?: ExtensionsSearchOptions): Promise<readonly ExtensionsPackageSummary[]>;
 	get(packageId: string, version?: string): Promise<ExtensionsPackageDetails>;
-	download(
-		packageId: string,
-		version?: string,
-	): Promise<{ readonly id: string; readonly package: ExtensionsPackageRef }>;
+	download(packageId: string, version?: string): Promise<{ readonly id: string; readonly package: ExtensionsPackageRef }>;
 	install(packageId: string, version?: string): Promise<ExtensionsInstalledPackage>;
 	update(installationId: string, version?: string): Promise<ExtensionsInstalledPackage>;
 	uninstall(installationId: string, mode?: 'ifUnused' | 'whenUnused'): Promise<void>;
 	listInstalled(): Promise<readonly ExtensionsInstalledPackage[]>;
 	listEditorExtensions(): Promise<ExtensionsEditorExtensions>;
 	listBuiltInProviders(): Promise<ExtensionsBuiltInProviders>;
-	setBuiltInProviderEnabled(
-		id: string,
-		enabled: boolean,
-		expectedRevision: number,
-	): Promise<ExtensionsBuiltInProviders>;
-	setEditorExtensionPolicy(
-		extension: ExtensionsEditorExtensionPolicy,
-		action: ExtensionsEditorExtensionPolicyAction,
-		expectedRevision: number,
-	): Promise<ExtensionsEditorExtensions>;
+	setBuiltInProviderEnabled(id: string, enabled: boolean, expectedRevision: number): Promise<ExtensionsBuiltInProviders>;
+	setEditorExtensionPolicy(extension: ExtensionsEditorExtensionPolicy, action: ExtensionsEditorExtensionPolicyAction, expectedRevision: number): Promise<ExtensionsEditorExtensions>;
 	acquireCapability(capabilityId: string): Promise<ExtensionsAcquiredCapability>;
 	releaseCapability(leaseId: string): Promise<void>;
-	openResource(
-		leaseId: string,
-		resourceId: string,
-	): Promise<{ readonly mediaType: string; readonly dataBase64: string }>;
+	openResource(leaseId: string, resourceId: string): Promise<{ readonly mediaType: string; readonly dataBase64: string }>;
 }
 
-export const IExtensionManagementService =
-	createServiceIdentifier<IExtensionManagementService>('extensionManagementService');
+export const IExtensionManagementService = createServiceIdentifier<IExtensionManagementService>('extensionManagementService');

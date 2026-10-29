@@ -1,12 +1,6 @@
 import { designGradientPosition, designPaints, sampleDesignPaint } from '../../common/model/designPaint.js';
 import { designEffects } from '../../common/model/designEffects.js';
-import {
-	designWidthPointAt,
-	designWidthLocation,
-	nearestDesignWidthLocation,
-	snapDesignWidthPosition,
-	supportsDesignVariableWidth,
-} from '../../common/model/designVariableWidth.js';
+import { designWidthPointAt, designWidthLocation, nearestDesignWidthLocation, snapDesignWidthPosition, supportsDesignVariableWidth } from '../../common/model/designVariableWidth.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import {
 	connectDesignNetwork,
@@ -18,30 +12,14 @@ import {
 	toDesignVectorNetwork,
 	withDesignVectorNetwork,
 } from '../../common/model/designVectorNetwork.js';
-import {
-	getDesignNetworkIntersections,
-	getDesignVectorContours,
-	isDesignVectorGeometryReady,
-	loadDesignVectorGeometry,
-} from '../designVectorGeometry.js';
+import { getDesignNetworkIntersections, getDesignVectorContours, isDesignVectorGeometryReady, loadDesignVectorGeometry } from '../designVectorGeometry.js';
 import { intersectDesignNetwork, mergeDesignNetworkVertices } from '../../common/model/designVectorTopology.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { localize } from '../../../../../nls.js';
-import {
-	designPathContours,
-	designPathEditingContours,
-	nearestDesignPathSegment,
-	moveDesignPathNode,
-	withDesignPathContours,
-} from '../../common/model/designVector.js';
+import { designPathContours, designPathEditingContours, nearestDesignPathSegment, moveDesignPathNode, withDesignPathContours } from '../../common/model/designVector.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
-import {
-	CanvasInputController,
-	CanvasPointerAction,
-	type CanvasInputParticipant,
-	type CanvasPointerInput,
-} from '../../../canvas/browser/canvasInputController.js';
+import { CanvasInputController, CanvasPointerAction, type CanvasInputParticipant, type CanvasPointerInput } from '../../../canvas/browser/canvasInputController.js';
 import type { CanvasViewport } from '../../../canvas/common/canvasViewport.js';
 import type { DesignDocumentController } from '../designDocumentController.js';
 import type { DocumentCommands } from '../../common/commands/documentCommands.js';
@@ -132,25 +110,14 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 				event.preventDefault();
 				event.stopPropagation();
 				const rect = host.viewport.getBoundingClientRect(),
-					placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(
-						entry => entry.shape.id === path.id,
-					)!.world;
-				const local = toDesignLocal(
-						placed,
-						camera.toWorld({ x: event.clientX - rect.left, y: event.clientY - rect.top }),
-					),
+					placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === path.id)!.world;
+				const local = toDesignLocal(placed, camera.toWorld({ x: event.clientX - rect.left, y: event.clientY - rect.top })),
 					scale = placed.width / path.width;
-				const nearest = nearestDesignWidthLocation(
-					path,
-					{ x: local.x / scale, y: local.y / scale },
-					8 / camera.scale / scale,
-				);
+				const nearest = nearestDesignWidthLocation(path, { x: local.x / scale, y: local.y / scale }, 8 / camera.scale / scale);
 				if (!nearest || (path.widthPoints?.length ?? 0) >= 1000) {
 					return;
 				}
-				const existing = path.widthPoints?.find(
-					point => point.contour === nearest.contour && Math.abs(point.position - nearest.position) < 1e-6,
-				);
+				const existing = path.widthPoints?.find(point => point.contour === nearest.contour && Math.abs(point.position - nearest.position) < 1e-6);
 				const point = existing ?? {
 					id: generateUuid(),
 					...nearest,
@@ -171,11 +138,7 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 					return;
 				}
 				const rect = host.viewport.getBoundingClientRect();
-				const shape = hitTestDesignShapes(
-					host.getShapesForHitTesting(),
-					camera.toWorld({ x: event.clientX - rect.left, y: event.clientY - rect.top }),
-					true,
-				);
+				const shape = hitTestDesignShapes(host.getShapesForHitTesting(), camera.toWorld({ x: event.clientX - rect.left, y: event.clientY - rect.top }), true);
 				if (shape?.kind === 'text') {
 					event.preventDefault();
 					host.editText(shape.id);
@@ -218,10 +181,7 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 	}
 	private get selectedShapes(): readonly DesignShape[] {
 		return getDesignShapeEntries(this.documentController.model.value.shapes)
-			.filter(
-				entry =>
-					this.selection.ids.has(entry.shape.id) && !entry.ancestors.some(id => this.selection.ids.has(id)),
-			)
+			.filter(entry => this.selection.ids.has(entry.shape.id) && !entry.ancestors.some(id => this.selection.ids.has(id)))
 			.map(entry => entry.shape);
 	}
 	private get selectedShape(): DesignShape | undefined {
@@ -234,28 +194,16 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 	public canNavigate(): boolean {
 		return !this.drawing.preview;
 	}
-	private async commitConnection(
-		before: Extract<DesignShape, { kind: 'path' }>,
-		after: Extract<DesignShape, { kind: 'path' }>,
-		selected: number,
-	): Promise<void> {
+	private async commitConnection(before: Extract<DesignShape, { kind: 'path' }>, after: Extract<DesignShape, { kind: 'path' }>, selected: number): Promise<void> {
 		const version = this.documentController.model.version;
 		this.connecting = true;
 		try {
 			await loadDesignVectorGeometry();
-			if (
-				this.isDisposed ||
-				version !== this.documentController.model.version ||
-				this.selectedShape?.id !== before.id
-			) {
+			if (this.isDisposed || version !== this.documentController.model.version || this.selectedShape?.id !== before.id) {
 				return;
 			}
 			const network = after.network!,
-				result = intersectDesignNetwork(
-					network,
-					getDesignNetworkIntersections(network, after.width, after.height),
-					toDesignVectorNetwork(before),
-				);
+				result = intersectDesignNetwork(network, getDesignNetworkIntersections(network, after.width, after.height), toDesignVectorNetwork(before));
 			const continuation = this.penVertex;
 			this.commands.vector.update(withDesignVectorNetwork(after, result.network));
 			this.selection.selectNode(0, result.vertices.get(selected) ?? selected);
@@ -271,35 +219,18 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 			this.connecting = false;
 		}
 	}
-	private async insertAtCrossing(
-		path: Extract<DesignShape, { kind: 'path' }>,
-		anchor: DesignPoint,
-		tolerance: number,
-		nearest: { contour: number; segment: number; t: number },
-	): Promise<void> {
+	private async insertAtCrossing(path: Extract<DesignShape, { kind: 'path' }>, anchor: DesignPoint, tolerance: number, nearest: { contour: number; segment: number; t: number }): Promise<void> {
 		const version = this.documentController.model.version;
 		try {
 			await loadDesignVectorGeometry();
-			if (
-				this.isDisposed ||
-				version !== this.documentController.model.version ||
-				this.selectedShape?.id !== path.id ||
-				!this.selection.editingVector ||
-				this.host.getTool() !== DesignTool.Pen
-			) {
+			if (this.isDisposed || version !== this.documentController.model.version || this.selectedShape?.id !== path.id || !this.selection.editingVector || this.host.getTool() !== DesignTool.Pen) {
 				return;
 			}
 			const network = toDesignVectorNetwork(path),
 				hits = getDesignNetworkIntersections(network, path.width, path.height)
 					.map(hit => {
 						const edge = network.edges[hit.first.edge],
-							point = cubicBezierPoint(
-								network.vertices[edge.start],
-								edge.outgoing,
-								edge.incoming,
-								network.vertices[edge.end],
-								hit.first.time,
-							);
+							point = cubicBezierPoint(network.vertices[edge.start], edge.outgoing, edge.incoming, network.vertices[edge.end], hit.first.time);
 						return {
 							hit,
 							point,
@@ -312,35 +243,16 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 				const point = hits[0].point,
 					result = intersectDesignNetwork(
 						network,
-						hits
-							.filter(
-								hit =>
-									Math.hypot(
-										(hit.point.x - point.x) * path.width,
-										(hit.point.y - point.y) * path.height,
-									) < 1e-5,
-							)
-							.map(hit => hit.hit),
+						hits.filter(hit => Math.hypot((hit.point.x - point.x) * path.width, (hit.point.y - point.y) * path.height) < 1e-5).map(hit => hit.hit),
 					);
-				this.commands.vector.update(
-					withDesignVectorNetwork(
-						path,
-						path.network ? result.network : paintDesignNetworkFromPath(path, result.network),
-					),
-				);
+				this.commands.vector.update(withDesignVectorNetwork(path, path.network ? result.network : paintDesignNetworkFromPath(path, result.network)));
 				this.selection.selectNode(
 					0,
-					result.network.vertices.findIndex(
-						vertex =>
-							Math.hypot((vertex.x - point.x) * path.width, (vertex.y - point.y) * path.height) < 1e-5,
-					),
+					result.network.vertices.findIndex(vertex => Math.hypot((vertex.x - point.x) * path.width, (vertex.y - point.y) * path.height) < 1e-5),
 				);
 				status(localize('sessions.design.networkIntersectionInserted', 'Inserted a shared intersection node.'));
 			} else {
-				this.selection.selectNode(
-					path.network ? 0 : nearest.contour,
-					path.network ? network.vertices.length : nearest.segment + 1,
-				);
+				this.selection.selectNode(path.network ? 0 : nearest.contour, path.network ? network.vertices.length : nearest.segment + 1);
 				this.commands.vector.insertNode(path, nearest.contour, nearest.segment, nearest.t);
 			}
 			this.host.render();
@@ -357,26 +269,12 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 		}
 		const { event, point, world } = input;
 		this.host.finishText();
-		if (
-			event.button === 0 &&
-			this.selection.editingBlur &&
-			this.selectedShape &&
-			!this.commands.components.isInstanceChild(this.selectedShape.id)
-		) {
+		if (event.button === 0 && this.selection.editingBlur && this.selectedShape && !this.commands.components.isInstanceChild(this.selectedShape.id)) {
 			const shape = this.selectedShape;
 			const effect = designEffects(shape).find(effect => effect.id === this.selection.effectId);
-			const handle = (event.target as Element | null)
-				?.closest?.('[data-blur-handle]')
-				?.getAttribute('data-blur-handle');
-			if (
-				effect &&
-				'progressive' in effect &&
-				effect.progressive &&
-				(handle === 'start' || handle === 'end' || handle === 'axis')
-			) {
-				const placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(
-					entry => entry.shape.id === shape.id,
-				)!.world;
+			const handle = (event.target as Element | null)?.closest?.('[data-blur-handle]')?.getAttribute('data-blur-handle');
+			if (effect && 'progressive' in effect && effect.progressive && (handle === 'start' || handle === 'end' || handle === 'axis')) {
+				const placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === shape.id)!.world;
 				const local = toDesignLocal(placed, world);
 				if (handle !== 'axis') {
 					this.selection.blurHandle = handle;
@@ -395,12 +293,7 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 				return CanvasPointerAction.Edit;
 			}
 		}
-		if (
-			event.button === 0 &&
-			this.selection.editingGradient &&
-			this.selectedShape &&
-			!this.commands.components.isInstanceChild(this.selectedShape.id)
-		) {
+		if (event.button === 0 && this.selection.editingGradient && this.selectedShape && !this.commands.components.isInstanceChild(this.selectedShape.id)) {
 			const shape = this.selectedShape,
 				paints = designPaints(shape),
 				paint = paints.find(paint => paint.id === this.selection.paintId) ?? paints[0],
@@ -422,17 +315,9 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 				return CanvasPointerAction.Edit;
 			}
 			if (paint && paint.type !== 'solid' && target?.closest?.('[data-gradient-axis]')) {
-				const placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(
-						entry => entry.shape.id === shape.id,
-					)!.world,
+				const placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === shape.id)!.world,
 					local = toDesignLocal(placed, world);
-				const position = Math.max(
-						0,
-						Math.min(
-							1,
-							designGradientPosition(paint, { x: local.x / placed.width, y: local.y / placed.height }),
-						),
-					),
+				const position = Math.max(0, Math.min(1, designGradientPosition(paint, { x: local.x / placed.width, y: local.y / placed.height }))),
 					color =
 						'#' +
 						sampleDesignPaint(paint, position)
@@ -444,11 +329,7 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 				const stop = { id: generateUuid(), position, color },
 					next = {
 						...shape,
-						fills: paints.map(value =>
-							value.id === paint.id
-								? { ...paint, stops: [...paint.stops, stop].sort((a, b) => a.position - b.position) }
-								: value,
-						),
+						fills: paints.map(value => (value.id === paint.id ? { ...paint, stops: [...paint.stops, stop].sort((a, b) => a.position - b.position) } : value)),
 					};
 				this.selection.paintId = paint.id;
 				this.selection.gradientStopId = stop.id;
@@ -479,9 +360,7 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 			!this.commands.components.isInstanceChild(this.selectedShape.id)
 		) {
 			const path = this.selectedShape,
-				placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(
-					entry => entry.shape.id === path.id,
-				)!.world;
+				placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === path.id)!.world;
 			const local = toDesignLocal(placed, world),
 				scale = placed.width / path.width,
 				target = event.target as Element;
@@ -503,18 +382,10 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 				};
 				return CanvasPointerAction.Edit;
 			}
-			const nearest = nearestDesignWidthLocation(
-				path,
-				{ x: local.x / scale, y: local.y / scale },
-				8 / this.camera.scale / scale,
-			);
+			const nearest = nearestDesignWidthLocation(path, { x: local.x / scale, y: local.y / scale }, 8 / this.camera.scale / scale);
 			if (nearest && (path.widthPoints?.length ?? 0) < 1000) {
-				const position = event.ctrlKey
-					? nearest.position
-					: snapDesignWidthPosition(path, nearest.contour, nearest.position, 8 / this.camera.scale / scale);
-				const existing = path.widthPoints?.find(
-					point => point.contour === nearest.contour && Math.abs(point.position - position) < 1e-6,
-				);
+				const position = event.ctrlKey ? nearest.position : snapDesignWidthPosition(path, nearest.contour, nearest.position, 8 / this.camera.scale / scale);
+				const existing = path.widthPoints?.find(point => point.contour === nearest.contour && Math.abs(point.position - position) < 1e-6);
 				const widthPoint = existing ?? {
 					id: generateUuid(),
 					contour: nearest.contour,
@@ -543,33 +414,18 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 			!this.commands.components.isInstanceChild(this.selectedShape.id)
 		) {
 			const path = this.selectedShape,
-				placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(
-					entry => entry.shape.id === path.id,
-				)!.world;
+				placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === path.id)!.world;
 			const local = toDesignLocal(placed, world),
 				scale = placed.width / path.width;
 			const anchor = { x: local.x / placed.width, y: local.y / placed.height };
 			let network = toDesignVectorNetwork(path);
 			const tolerance = 8 / this.camera.scale;
-			const vertex = network.vertices.findIndex(
-				point =>
-					Math.hypot((point.x - anchor.x) * placed.width, (point.y - anchor.y) * placed.height) <= tolerance,
-			);
-			const active =
-				this.penVertex?.id === path.id && this.penVertex.index < network.vertices.length
-					? this.penVertex.index
-					: undefined;
-			const nearest =
-				vertex < 0
-					? nearestDesignPathSegment(path, { x: local.x / scale, y: local.y / scale }, tolerance / scale)
-					: undefined;
+			const vertex = network.vertices.findIndex(point => Math.hypot((point.x - anchor.x) * placed.width, (point.y - anchor.y) * placed.height) <= tolerance);
+			const active = this.penVertex?.id === path.id && this.penVertex.index < network.vertices.length ? this.penVertex.index : undefined;
+			const nearest = vertex < 0 ? nearestDesignPathSegment(path, { x: local.x / scale, y: local.y / scale }, tolerance / scale) : undefined;
 			if (vertex >= 0) {
 				if (active !== undefined && active !== vertex) {
-					void this.commitConnection(
-						path,
-						withDesignVectorNetwork(path, connectDesignNetwork(network, active, vertex)),
-						vertex,
-					);
+					void this.commitConnection(path, withDesignVectorNetwork(path, connectDesignNetwork(network, active, vertex)), vertex);
 					this.penVertex = undefined;
 				} else {
 					this.penVertex = { id: path.id, index: vertex };
@@ -595,8 +451,7 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 						? nearest.contour
 						: designPathContours(path)
 								.slice(0, nearest.contour)
-								.reduce((sum, contour) => sum + contour.nodes.length - (contour.closed ? 0 : 1), 0) +
-							nearest.segment;
+								.reduce((sum, contour) => sum + contour.nodes.length - (contour.closed ? 0 : 1), 0) + nearest.segment;
 					end = network.vertices.length;
 					network = splitDesignNetworkEdge(network, edge, nearest.t);
 				}
@@ -621,11 +476,7 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 			this.host.render();
 			return CanvasPointerAction.Handled;
 		}
-		if (
-			event.button === 0 &&
-			!this.selection.paintingVector &&
-			this.drawing.begin(world, { shift: event.shiftKey, alt: event.altKey, tolerance: 8 / this.camera.scale })
-		) {
+		if (event.button === 0 && !this.selection.paintingVector && this.drawing.begin(world, { shift: event.shiftKey, alt: event.altKey, tolerance: 8 / this.camera.scale })) {
 			this.isDrawing = this.drawing.preview !== undefined;
 			return this.isDrawing ? CanvasPointerAction.Edit : CanvasPointerAction.Handled;
 		}
@@ -639,9 +490,7 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 			path.network &&
 			!this.commands.components.isInstanceChild(path.id)
 		) {
-			const placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(
-				entry => entry.shape.id === path.id,
-			)!.world;
+			const placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === path.id)!.world;
 			const local = toDesignLocal(placed, world),
 				region = designNetworkRegionAt(path.network, { x: local.x / placed.width, y: local.y / placed.height });
 			if (region && !target.classList.contains('ash-sessions-design-path-handle')) {
@@ -651,9 +500,7 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 				} else {
 					unfilledRegions.delete(region.key);
 				}
-				this.commands.vector.update(
-					withDesignVectorNetwork(path, { ...path.network, unfilledRegions: [...unfilledRegions] }),
-				);
+				this.commands.vector.update(withDesignVectorNetwork(path, { ...path.network, unfilledRegions: [...unfilledRegions] }));
 				return CanvasPointerAction.Handled;
 			}
 		}
@@ -669,15 +516,9 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 				contourIndex: Number(target.getAttribute('data-path-contour') ?? 0),
 				nodeIndex: Number(target.getAttribute('data-path-node')),
 				point: target.getAttribute('data-path-point') as PathHandle['point'],
-				edge: target.hasAttribute('data-network-edge')
-					? Number(target.getAttribute('data-network-edge'))
-					: undefined,
+				edge: target.hasAttribute('data-network-edge') ? Number(target.getAttribute('data-network-edge')) : undefined,
 			};
-			if (
-				event.shiftKey ||
-				!this.selection.nodeIndices.has(handle.nodeIndex) ||
-				this.selection.contourIndex !== handle.contourIndex
-			) {
+			if (event.shiftKey || !this.selection.nodeIndices.has(handle.nodeIndex) || this.selection.contourIndex !== handle.contourIndex) {
 				this.selection.selectNode(handle.contourIndex, handle.nodeIndex, event.shiftKey);
 			}
 			this.selection.editingVector = true;
@@ -692,12 +533,7 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 		const shape =
 			event.button === 1 || this.host.getTool() === DesignTool.Hand
 				? undefined
-				: hitTestDesignShapes(
-						this.host.getShapesForHitTesting(),
-						world,
-						event.ctrlKey || event.metaKey,
-						isDesignVectorGeometryReady() ? getDesignVectorContours : undefined,
-					);
+				: hitTestDesignShapes(this.host.getShapesForHitTesting(), world, event.ctrlKey || event.metaKey, isDesignVectorGeometryReady() ? getDesignVectorContours : undefined);
 		if (this.host.getMode() === DesignMode.Motion && shape) {
 			this.select([shape.id]);
 			this.host.render();
@@ -751,9 +587,7 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 			if (!effect || !('progressive' in effect) || !effect.progressive) {
 				return;
 			}
-			const placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(
-				entry => entry.shape.id === path.id,
-			)!.world;
+			const placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === path.id)!.world;
 			const local = toDesignLocal(placed, input.world);
 			const delta = { x: local.x / placed.width - handle.origin.x, y: local.y / placed.height - handle.origin.y };
 			const progressive = { ...effect.progressive };
@@ -790,9 +624,7 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 			if (!paint || paint.type === 'solid') {
 				return;
 			}
-			const placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(
-					entry => entry.shape.id === path.id,
-				)!.world,
+			const placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === path.id)!.world,
 				local = toDesignLocal(placed, input.world),
 				position = { x: local.x / placed.width, y: local.y / placed.height };
 			let next = paint;
@@ -801,9 +633,7 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 					snapped = input.event.ctrlKey ? fraction : Math.round(fraction * 100) / 100;
 				next = {
 					...paint,
-					stops: paint.stops
-						.map(stop => (stop.id === handle.stopId ? { ...stop, position: snapped } : stop))
-						.sort((a, b) => a.position - b.position),
+					stops: paint.stops.map(stop => (stop.id === handle.stopId ? { ...stop, position: snapped } : stop)).sort((a, b) => a.position - b.position),
 				};
 			} else {
 				const index = handle.index!,
@@ -817,17 +647,10 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 					position.y = origin.y + (Math.sin(angle) * length) / placed.height;
 				}
 				const handles = paint.handles.map((point, i) =>
-					index === 0
-						? { x: point.x + position.x - origin.x, y: point.y + position.y - origin.y }
-						: i === index
-							? position
-							: point,
+					index === 0 ? { x: point.x + position.x - origin.x, y: point.y + position.y - origin.y } : i === index ? position : point,
 				) as unknown as typeof paint.handles;
 				const [a, b, c] = handles;
-				if (
-					Math.abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)) < 1e-8 ||
-					handles.some(p => Math.abs(p.x) > 10000 || Math.abs(p.y) > 10000)
-				) {
+				if (Math.abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)) < 1e-8 || handles.some(p => Math.abs(p.x) > 10000 || Math.abs(p.y) > 10000)) {
 					return;
 				}
 				next = { ...paint, handles };
@@ -838,9 +661,7 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 		}
 
 		if (gesture.widthHandle && path.kind === 'path') {
-			const placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(
-				entry => entry.shape.id === path.id,
-			)!.world;
+			const placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === path.id)!.world;
 			const local = toDesignLocal(placed, input.world),
 				scale = placed.width / path.width;
 			const point = { x: local.x / scale, y: local.y / scale },
@@ -853,16 +674,10 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 				if (!nearest || nearest.contour !== active.contour) {
 					return;
 				}
-				const position = input.event.ctrlKey
-					? nearest.position
-					: snapDesignWidthPosition(path, active.contour, nearest.position, 8 / this.camera.scale / scale);
+				const position = input.event.ctrlKey ? nearest.position : snapDesignWidthPosition(path, active.contour, nearest.position, 8 / this.camera.scale / scale);
 				deltaPosition = position - active.position;
 			} else {
-				let width =
-					Math.abs(
-						(point.x - location.point.x) * location.normal.x +
-							(point.y - location.point.y) * location.normal.y,
-					) * 2;
+				let width = Math.abs((point.x - location.point.x) * location.normal.x + (point.y - location.point.y) * location.normal.y) * 2;
 				if (!input.event.ctrlKey) {
 					width = Math.round(width);
 				}
@@ -884,9 +699,7 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 				},
 			];
 		} else if (gesture.marquee && path.kind === 'path') {
-			const placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(
-				entry => entry.shape.id === path.id,
-			)!.world;
+			const placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === path.id)!.world;
 			const x = Math.min(gesture.start.x, input.world.x),
 				y = Math.min(gesture.start.y, input.world.y),
 				width = Math.abs(input.world.x - gesture.start.x),
@@ -894,8 +707,7 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 			this.selectionRect = { x, y, width, height };
 			this.selection.nodeIndices.clear();
 			const angle = (placed.rotation * Math.PI) / 180;
-			for (const [index, node] of designPathEditingContours(path)[this.selection.contourIndex]?.nodes.entries() ??
-				[]) {
+			for (const [index, node] of designPathEditingContours(path)[this.selection.contourIndex]?.nodes.entries() ?? []) {
 				const dx = (node.x - 0.5) * placed.width,
 					dy = (node.y - 0.5) * placed.height;
 				const px = placed.x + placed.width / 2 + dx * Math.cos(angle) - dy * Math.sin(angle),
@@ -905,9 +717,7 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 				}
 			}
 		} else if (gesture.handle && path.kind === 'path') {
-			const placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(
-				entry => entry.shape.id === path.id,
-			)!.world;
+			const placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === path.id)!.world;
 			const local = toDesignLocal(placed, input.world);
 			let position = { x: local.x / placed.width, y: local.y / placed.height };
 			const handle = gesture.handle,
@@ -917,19 +727,12 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 			gesture.mergeTarget = undefined;
 			if (handle.point === 'anchor' && this.selection.nodeIndices.size === 1 && !input.event.altKey) {
 				const network = toDesignVectorNetwork(path),
-					offset = path.network
-						? 0
-						: contours
-								.slice(0, handle.contourIndex)
-								.reduce((sum, contour) => sum + contour.nodes.length, 0);
+					offset = path.network ? 0 : contours.slice(0, handle.contourIndex).reduce((sum, contour) => sum + contour.nodes.length, 0);
 				const target = network.vertices
 					.map((vertex, index) => ({
 						vertex,
 						index,
-						distance: Math.hypot(
-							(vertex.x - position.x) * placed.width,
-							(vertex.y - position.y) * placed.height,
-						),
+						distance: Math.hypot((vertex.x - position.x) * placed.width, (vertex.y - position.y) * placed.height),
 					}))
 					.filter(item => item.index !== offset + handle.nodeIndex && item.distance <= 8 / this.camera.scale)
 					.sort((a, b) => a.distance - b.distance)[0];
@@ -954,38 +757,17 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 				}
 				const network =
 					handle.point === 'anchor'
-						? moveDesignNetworkVertices(
-								path.network,
-								this.selection.nodeIndices,
-								position.x - anchor.x,
-								position.y - anchor.y,
-							)
-						: moveDesignNetworkHandle(
-								path.network,
-								handle.edge!,
-								handle.point,
-								position,
-								path.width,
-								path.height,
-								input.event.altKey,
-							);
+						? moveDesignNetworkVertices(path.network, this.selection.nodeIndices, position.x - anchor.x, position.y - anchor.y)
+						: moveDesignNetworkHandle(path.network, handle.edge!, handle.point, position, path.width, path.height, input.event.altKey);
 				gesture.preview = [withDesignVectorNetwork(path, network)];
 				this.host.render();
 				return;
 			}
 			const nodes = contour.nodes.map((node, index) => {
 				if (handle.point === 'anchor' && this.selection.nodeIndices.has(index)) {
-					return moveDesignPathNode(
-						node,
-						'anchor',
-						{ x: node.x + position.x - anchor.x, y: node.y + position.y - anchor.y },
-						path.width,
-						path.height,
-					);
+					return moveDesignPathNode(node, 'anchor', { x: node.x + position.x - anchor.x, y: node.y + position.y - anchor.y }, path.width, path.height);
 				}
-				return index === handle.nodeIndex
-					? moveDesignPathNode(node, handle.point, position, path.width, path.height, input.event.altKey)
-					: node;
+				return index === handle.nodeIndex ? moveDesignPathNode(node, handle.point, position, path.width, path.height, input.event.altKey) : node;
 			});
 			gesture.preview = [
 				withDesignPathContours(
@@ -1031,20 +813,14 @@ export class DesignInputController extends Disposable implements CanvasInputPart
 					: designPathContours(path)
 							.slice(0, gesture.handle.contourIndex)
 							.reduce((sum, contour) => sum + contour.nodes.length, 0);
-				const result = mergeDesignNetworkVertices(
-					toDesignVectorNetwork(path),
-					new Set([offset + gesture.handle.nodeIndex, gesture.mergeTarget]),
-					gesture.mergeTarget,
-				);
+				const result = mergeDesignNetworkVertices(toDesignVectorNetwork(path), new Set([offset + gesture.handle.nodeIndex, gesture.mergeTarget]), gesture.mergeTarget);
 				if (result.network.edges.length) {
 					this.commands.vector.update(withDesignVectorNetwork(path, result.network));
 					this.selection.selectNode(0, result.vertices.get(gesture.mergeTarget)!);
 				} else {
 					this.commands.removeShapes(new Set([path.id]));
 				}
-				status(
-					localize('sessions.design.networkNodesMerged', 'Nodes merged. Undo restores the separate nodes.'),
-				);
+				status(localize('sessions.design.networkNodesMerged', 'Nodes merged. Undo restores the separate nodes.'));
 			} else if (gesture.connectionSource && path.kind === 'path') {
 				void this.commitConnection(gesture.connectionSource, path, gesture.penVertex!);
 			} else {

@@ -17,11 +17,7 @@ import type { URI } from '../../../../../base/common/uri.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
-import {
-	ChatResponseResourceFileSystemProvider,
-	IChatResponseResourceFileSystemProvider,
-	type IChatResourceAssociateOptions,
-} from '../../common/widget/chatResponseResourceFileSystemProvider.js';
+import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystemProvider, type IChatResourceAssociateOptions } from '../../common/widget/chatResponseResourceFileSystemProvider.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { IAgentThreadService } from '../../../../../platform/agentHost/common/agentService.js';
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
@@ -58,13 +54,9 @@ const image = {
 };
 
 function mount(resources: DisposableStore, services: ReturnType<typeof createTestEditorServices>): ChatListWidget {
-	if (!services.has(IAgentThreadService))
-		services.registerInstance(IAgentThreadService, createDisconnectedRendererApi().thread);
+	if (!services.has(IAgentThreadService)) services.registerInstance(IAgentThreadService, createDisconnectedRendererApi().thread);
 	if (!services.has(IChatResponseResourceFileSystemProvider))
-		services.registerInstance(
-			IChatResponseResourceFileSystemProvider,
-			resources.add(services.createInstance(ChatResponseResourceFileSystemProvider)),
-		);
+		services.registerInstance(IChatResponseResourceFileSystemProvider, resources.add(services.createInstance(ChatResponseResourceFileSystemProvider)));
 	if (!services.has(IEditorService))
 		services.registerInstance(IEditorService, {
 			...emptyEditorServiceState,
@@ -337,11 +329,7 @@ test('correcting a linked resource cancels its original read and suppresses a re
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`renderer feedback presents plan, Advisor, failures and recovery actions in ${locale} without changing provider text`, () => {
-		if (locale === 'zh-CN')
-			setNlsMessages(
-				locale,
-				JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')),
-			);
+		if (locale === 'zh-CN') setNlsMessages(locale, JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
 		try {
 			const plan = chatTranscriptListItem({
 				type: 'turnPlan',
@@ -349,12 +337,7 @@ for (const locale of ['en', 'zh-CN']) {
 				turnId: 'turn',
 				plan: { explanation: '说明 original', steps: [{ step: '用户步骤 original', status: 'inProgress' }] },
 			});
-			assert.equal(
-				plan.text,
-				locale === 'en'
-					? '说明 original\n\n- [ ] **In progress:** 用户步骤 original'
-					: '说明 original\n\n- [ ] **进行中：** 用户步骤 original',
-			);
+			assert.equal(plan.text, locale === 'en' ? '说明 original\n\n- [ ] **In progress:** 用户步骤 original' : '说明 original\n\n- [ ] **进行中：** 用户步骤 original');
 			const raw = 'Provider error <safe> 用户原文';
 			const errors: readonly [TurnError['code'], string, string, string | undefined, string | undefined][] = [
 				['connectionFailed', 'Model error', '模型错误', 'Try again', '重试'],
@@ -419,16 +402,8 @@ for (const locale of ['en', 'zh-CN']) {
 			};
 			const completed = chatTranscriptListItems([call, result])[0];
 			assert.equal(completed.text, raw);
-			assert.equal(
-				completed.label,
-				locale === 'en' ? 'Advisor · provider-I/model-Ω' : '顾问 · provider-I/model-Ω',
-			);
-			assert.equal(
-				completed.detail,
-				locale === 'en'
-					? '问题原文 · Conversation sequence 3 · Tokens: 12 input · unknown output'
-					: '问题原文 · 对话序号 3 · 令牌：输入 12 · 输出 未知',
-			);
+			assert.equal(completed.label, locale === 'en' ? 'Advisor · provider-I/model-Ω' : '顾问 · provider-I/model-Ω');
+			assert.equal(completed.detail, locale === 'en' ? '问题原文 · Conversation sequence 3 · Tokens: 12 input · unknown output' : '问题原文 · 对话序号 3 · 令牌：输入 12 · 输出 未知');
 			const output = chatTranscriptListItem({
 				type: 'toolOutput',
 				entryId: 'orphan',
@@ -481,9 +456,7 @@ test('Opening a stored media row uses immutable read-only response bytes and ret
 	widget.render([{ ...response, content: [image], attachmentSource: source }]);
 	widget.element.querySelector<HTMLButtonElement>('.ash-chat-media > button')!.click();
 	await new Promise(resolve => setTimeout(resolve, 0));
-	const open = [...widget.element.querySelectorAll<HTMLButtonElement>('.ash-chat-media > button')].find(
-		button => button.textContent === 'Open image',
-	)!;
+	const open = [...widget.element.querySelectorAll<HTMLButtonElement>('.ash-chat-media > button')].find(button => button.textContent === 'Open image')!;
 	assert.equal(open.hidden, false);
 	open.click();
 	await new Promise(resolve => setTimeout(resolve, 0));

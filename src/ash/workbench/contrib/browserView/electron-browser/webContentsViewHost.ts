@@ -108,12 +108,7 @@ export class WebContentsViewHost extends Disposable {
 	}
 
 	public tryFocus(): boolean {
-		if (
-			!this.model ||
-			!this.visible ||
-			!this.container ||
-			this.overlays.getOverlappingOverlays(this.container).length > 0
-		) {
+		if (!this.model || !this.visible || !this.container || this.overlays.getOverlappingOverlays(this.container).length > 0) {
 			return false;
 		}
 		this.claim(this.model);
@@ -130,9 +125,7 @@ export class WebContentsViewHost extends Disposable {
 		return !!this.model && WebContentsViewHost.getActiveHost(this.model) === this;
 	}
 	private static getActiveHost(model: IBrowserViewModel): WebContentsViewHost | undefined {
-		return [...presentations.get(model)!.hosts]
-			.reverse()
-			.find(host => host.visible && host.container && !host.isDisposed);
+		return [...presentations.get(model)!.hosts].reverse().find(host => host.visible && host.container && !host.isDisposed);
 	}
 
 	protected override disposeCore(): void {
@@ -163,14 +156,7 @@ export class WebContentsViewHost extends Disposable {
 				const host = WebContentsViewHost.getActiveHost(model);
 				const container = host?.container;
 				const bounds = container?.getBoundingClientRect();
-				const visible = !!(
-					host &&
-					container &&
-					bounds &&
-					bounds.width > 0 &&
-					bounds.height > 0 &&
-					host.overlays.getOverlappingOverlays(container).length === 0
-				);
+				const visible = !!(host && container && bounds && bounds.width > 0 && bounds.height > 0 && host.overlays.getOverlappingOverlays(container).length === 0);
 				if (visible && bounds) {
 					await model.layout({
 						x: Math.round(bounds.x),

@@ -25,14 +25,17 @@ test('Flexible InputBox preserves multiline editing, selection and validation wi
 			changed,
 			invalid: input.inputElement.getAttribute('aria-invalid'),
 		},
-		{ tag: 'TEXTAREA', value: '中文😀\nsecond', selection: [2, 4], changed: ['中文😀\nsecond'], invalid: 'true' },
+		{
+			tag: 'TEXTAREA',
+			value: '中文😀\nsecond',
+			selection: [2, 4],
+			changed: ['中文😀\nsecond'],
+			invalid: 'true',
+		},
 	);
 	numeric.inputElement.valueAsNumber = 3;
 	numeric.step = '2';
-	assert.deepEqual(
-		[numeric.inputElement.tagName, numeric.inputElement.type, numeric.inputElement.valueAsNumber, numeric.step],
-		['INPUT', 'number', 3, '2'],
-	);
+	assert.deepEqual([numeric.inputElement.tagName, numeric.inputElement.type, numeric.inputElement.valueAsNumber, numeric.step], ['INPUT', 'number', 3, '2']);
 	input.dispose();
 	numeric.dispose();
 	dom.window.close();
@@ -57,7 +60,10 @@ test('Flexible history input retains multiline entries and restores the multilin
 
 test('InputBox exposes value, keyboard, focus, and selection behavior', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const inputBox = new InputBox(dom.window.document.body, { placeholder: 'Search', ariaLabel: 'Search commands' });
+	const inputBox = new InputBox(dom.window.document.body, {
+		placeholder: 'Search',
+		ariaLabel: 'Search commands',
+	});
 	dom.window.document.body.append(inputBox.element);
 	const values: string[] = [];
 	const keys: string[] = [];
@@ -91,7 +97,10 @@ test('InputBox exposes value, keyboard, focus, and selection behavior', () => {
 
 test('InputBox owns enabled, read-only, and validation accessibility state', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const inputBox = new InputBox(dom.window.document.body, { enabled: false, readOnly: true });
+	const inputBox = new InputBox(dom.window.document.body, {
+		enabled: false,
+		readOnly: true,
+	});
 
 	assert.equal(inputBox.enabled, false);
 	assert.equal(inputBox.element.classList.contains('is-disabled'), true);
@@ -114,7 +123,10 @@ test('InputBox owns enabled, read-only, and validation accessibility state', () 
 
 test('InputBox supports numeric field presentation', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const inputBox = new InputBox(dom.window.document.body, { type: 'number', presentation: 'field' });
+	const inputBox = new InputBox(dom.window.document.body, {
+		type: 'number',
+		presentation: 'field',
+	});
 
 	assert.equal(inputBox.inputElement.type, 'number');
 	inputBox.step = '1';

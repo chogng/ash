@@ -14,18 +14,9 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import {
-	ConfigurationScope,
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
@@ -43,10 +34,7 @@ import { ActiveEditorContext } from '../../../../workbench/common/contextkeys.js
 registerEditorPane({
 	id: 'sessions.editor.creator',
 	name: 'Artifacts',
-	canOpen: input =>
-		input.resource.scheme === 'ash-creator' && input.resource.path === '/page'
-			? EditorPaneMatch.Default
-			: EditorPaneMatch.None,
+	canOpen: input => (input.resource.scheme === 'ash-creator' && input.resource.path === '/page' ? EditorPaneMatch.Default : EditorPaneMatch.None),
 	create: options => options.instantiationService!.createInstance(CreatorEditorPane),
 });
 
@@ -91,12 +79,8 @@ function openCreator(accessor: ServicesAccessor, workspace?: CreatorMode | 'home
 }
 
 CommandsRegistry.register('sessions.show.creator', accessor => openCreator(accessor, 'home'));
-CommandsRegistry.register('sessions.restore.creator', (accessor, source) =>
-	openCreator(accessor, undefined, source === 'restore' ? source : undefined),
-);
-CommandsRegistry.register('sessions.restore.creatorDesign', (accessor, source) =>
-	openCreator(accessor, CreatorMode.Design, source === 'restore' ? source : undefined),
-);
+CommandsRegistry.register('sessions.restore.creator', (accessor, source) => openCreator(accessor, undefined, source === 'restore' ? source : undefined));
+CommandsRegistry.register('sessions.restore.creatorDesign', (accessor, source) => openCreator(accessor, CreatorMode.Design, source === 'restore' ? source : undefined));
 CommandsRegistry.register('sessions.creator.openMode', (accessor, value) => {
 	if (!Object.values(CreatorMode).includes(value as CreatorMode)) {
 		throw new TypeError(localize('sessions.creator.invalidMode', 'Invalid Artifacts document mode.'));
@@ -109,21 +93,12 @@ function createDocumentOpener(accessor: ServicesAccessor): (resource: URI, sourc
 	const storage = accessor.get(IStorageService);
 	const layout = accessor.get(ISessionsLayoutService);
 	return (resource, source) => {
-		const input = editors.groups
-			.flatMap(group => group.editors.map(editor => editor.input))
-			.find(input => input.resource.toString() === resource.toString()) ?? {
+		const input = editors.groups.flatMap(group => group.editors.map(editor => editor.input)).find(input => input.resource.toString() === resource.toString()) ?? {
 			resource,
 			...(resource.scheme === 'untitled' ? { initialText: '' } : {}),
-			...(resource.path.endsWith('.ash-doc')
-				? { contentType: GENERAL_DOCUMENT_CONTENT_TYPE }
-				: { languageId: 'markdown', contentType: 'text/markdown' }),
+			...(resource.path.endsWith('.ash-doc') ? { contentType: GENERAL_DOCUMENT_CONTENT_TYPE } : { languageId: 'markdown', contentType: 'text/markdown' }),
 		};
-		storage.store(
-			'sessions.creator.activeDocument',
-			resource.toString(),
-			StorageScope.WORKSPACE,
-			StorageTarget.MACHINE,
-		);
+		storage.store('sessions.creator.activeDocument', resource.toString(), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		return layout.openEntry(
 			{
 				id: 'creator.docs',
@@ -149,8 +124,7 @@ CommandsRegistry.register('sessions.creator.newDocument', accessor => {
 		resource: URI.parse('untitled:/document.ash-doc'),
 		contentType: GENERAL_DOCUMENT_CONTENT_TYPE,
 	})?.resolveDocumentProfile;
-	const preference =
-		accessor.get(IConfigurationService).getValue<DocsEditorPreference>(DOCS_EDITOR_SETTING) ?? 'automatic';
+	const preference = accessor.get(IConfigurationService).getValue<DocsEditorPreference>(DOCS_EDITOR_SETTING) ?? 'automatic';
 	const useRich = preference !== 'markdown' && !!richDocuments;
 	if (preference !== 'markdown' && !richDocuments) {
 		recommendRichDocuments(accessor);
@@ -169,19 +143,14 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	defaultValue: 'automatic',
 	parse(value: unknown): DocsEditorPreference {
 		if (value !== 'automatic' && value !== 'rich' && value !== 'markdown') {
-			throw new TypeError(
-				localize('sessions.artifacts.invalidEditor', 'Choose Automatic, Rich document or Markdown for Docs.'),
-			);
+			throw new TypeError(localize('sessions.artifacts.invalidEditor', 'Choose Automatic, Rich document or Markdown for Docs.'));
 		}
 		return value;
 	},
 	setting: {
 		valueType: 'select',
 		title: localize('sessions.artifacts.docsEditor', 'Docs editor'),
-		description: localize(
-			'sessions.artifacts.docsEditorDescription',
-			'Choose how to create Docs. Automatic uses an available rich document extension and otherwise opens Markdown.',
-		),
+		description: localize('sessions.artifacts.docsEditorDescription', 'Choose how to create Docs. Automatic uses an available rich document extension and otherwise opens Markdown.'),
 		options: [
 			{ value: 'automatic', label: localize('sessions.artifacts.automatic', 'Automatic') },
 			{ value: 'rich', label: localize('sessions.artifacts.rich', 'Rich document') },
@@ -209,14 +178,12 @@ registerAction2(
 			})?.resolveDocumentProfile;
 			using store = new DisposableStore();
 			const picker = store.add(
-				accessor
-					.get(IQuickInputService)
-					.createQuickPick<{
-						readonly id: DocsEditorPreference | 'extensions';
-						readonly label: string;
-						readonly detail?: string;
-						readonly picked?: boolean;
-					}>(),
+				accessor.get(IQuickInputService).createQuickPick<{
+					readonly id: DocsEditorPreference | 'extensions';
+					readonly label: string;
+					readonly detail?: string;
+					readonly picked?: boolean;
+				}>(),
 			);
 			picker.placeholder = picker.ariaLabel = localize('sessions.artifacts.chooseEditor', 'Choose Docs editor');
 			picker.items = [
@@ -224,21 +191,13 @@ registerAction2(
 					id: 'automatic',
 					label: localize('sessions.artifacts.automatic', 'Automatic'),
 					picked: current === 'automatic',
-					detail: localize(
-						'sessions.artifacts.automaticDetail',
-						'Use a rich document extension when available, otherwise Markdown.',
-					),
+					detail: localize('sessions.artifacts.automaticDetail', 'Use a rich document extension when available, otherwise Markdown.'),
 				},
 				{
 					id: 'rich',
 					label: localize('sessions.artifacts.rich', 'Rich document'),
 					picked: current === 'rich',
-					detail: richAvailable
-						? undefined
-						: localize(
-								'sessions.artifacts.richUnavailable',
-								'Requires a rich document extension. Markdown stays available while you install one.',
-							),
+					detail: richAvailable ? undefined : localize('sessions.artifacts.richUnavailable', 'Requires a rich document extension. Markdown stays available while you install one.'),
 				},
 				{
 					id: 'markdown',
@@ -283,10 +242,7 @@ registerAction2(
 					id: MenuId.EditorTitle,
 					group: 'navigation',
 					order: 20,
-					when: ContextKeyExpr.or(
-						ActiveEditorContext.isEqualTo('ash.editor.document'),
-						ContextKeyExpr.equals('resourceExtname', '.md'),
-					),
+					when: ContextKeyExpr.or(ActiveEditorContext.isEqualTo('ash.editor.document'), ContextKeyExpr.equals('resourceExtname', '.md')),
 				},
 			});
 		}
@@ -313,9 +269,7 @@ registerAction2(
 				await commands.executeCommand(OPEN_EXTENSIONS_COMMAND_ID, { mode: 'browse', query: 'academy' });
 				return;
 			}
-			await commands.executeCommand(
-				rich ? 'workbench.action.document.export.markdown' : 'workbench.action.document.import.markdown',
-			);
+			await commands.executeCommand(rich ? 'workbench.action.document.export.markdown' : 'workbench.action.document.import.markdown');
 			const converted = editors.activeInput;
 			if (converted && converted !== source) {
 				await openConverted(converted.resource);
@@ -328,11 +282,7 @@ CommandsRegistry.register('sessions.creator.openDocument', (accessor, value) => 
 	const input = accessor
 		.get(IEditorPart)
 		.groups.flatMap(group => group.editors.map(editor => editor.input))
-		.find(
-			input =>
-				input.resource.toString() === value &&
-				(input.contentType === GENERAL_DOCUMENT_CONTENT_TYPE || input.resource.path.endsWith('.md')),
-		);
+		.find(input => input.resource.toString() === value && (input.contentType === GENERAL_DOCUMENT_CONTENT_TYPE || input.resource.path.endsWith('.md')));
 	if (!input) {
 		throw new TypeError(localize('sessions.artifacts.unavailableDocument', 'This document is no longer open.'));
 	}
@@ -372,9 +322,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	defaultValue: true,
 	parse(value: unknown): boolean {
 		if (typeof value !== 'boolean') {
-			throw new TypeError(
-				localize('sessions.creator.verbosityInvalid', 'Artifacts accessibility verbosity must be boolean.'),
-			);
+			throw new TypeError(localize('sessions.creator.verbosityInvalid', 'Artifacts accessibility verbosity must be boolean.'));
 		}
 		return value;
 	},
@@ -384,10 +332,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize('sessions.creator.verbosityTitle', 'Artifacts accessibility help');
 		},
 		get description() {
-			return localize(
-				'sessions.creator.verbosityDescription',
-				'Announce how to open accessibility help in Artifacts.',
-			);
+			return localize('sessions.creator.verbosityDescription', 'Announce how to open accessibility help in Artifacts.');
 		},
 	},
 });

@@ -1,20 +1,10 @@
 import assert from 'node:assert/strict';
 import { setup, teardown, test } from 'mocha';
-import {
-	createServiceIdentifier,
-	createDecorator,
-	refineServiceDecorator,
-	IInstantiationService,
-	type ServicesAccessor,
-} from '../../../../platform/instantiation/common/instantiation.js';
+import { createServiceIdentifier, createDecorator, refineServiceDecorator, IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
-import {
-	getSingletonServiceDescriptors,
-	InstantiationType,
-	registerSingleton,
-} from '../../../../platform/instantiation/common/extensions.js';
+import { getSingletonServiceDescriptors, InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { DisposableStore, DisposableTracker, registerDisposableTracker } from '../../../../base/common/lifecycle.js';
@@ -131,12 +121,7 @@ test('repeated lookup and dependency validation leave resolved delayed proxies u
 	class Consumer {
 		constructor(@IService readonly service: Service) {}
 	}
-	using services = new InstantiationService(
-		new ServiceCollection(
-			[IService, new SyncDescriptor(Service, [], true)],
-			[IConsumer, new SyncDescriptor(Consumer)],
-		),
-	);
+	using services = new InstantiationService(new ServiceCollection([IService, new SyncDescriptor(Service, [], true)], [IConsumer, new SyncDescriptor(Consumer)]));
 	const service = services.get(IService);
 	assert.equal(services.get(IService), service);
 	assert.equal(services.get(IConsumer).service, service);
@@ -166,12 +151,7 @@ test('delayed cyclic owners stay lazy during repeated lookup and dependency vali
 	class Consumer {
 		constructor(@ISecond readonly second: Second) {}
 	}
-	using services = new InstantiationService(
-		new ServiceCollection(
-			[IFirst, new SyncDescriptor(First, [], true)],
-			[ISecond, new SyncDescriptor(Second, [], true)],
-		),
-	);
+	using services = new InstantiationService(new ServiceCollection([IFirst, new SyncDescriptor(First, [], true)], [ISecond, new SyncDescriptor(Second, [], true)]));
 	const first = services.get(IFirst);
 	assert.equal(services.get(IFirst), first);
 	const consumer = services.createInstance(Consumer);
@@ -198,12 +178,7 @@ test('delayed descriptor dependencies can retain each other without recursive co
 			created.push('second');
 		}
 	}
-	using services = new InstantiationService(
-		new ServiceCollection(
-			[IFirst, new SyncDescriptor(First, [], true)],
-			[ISecond, new SyncDescriptor(Second, [], true)],
-		),
-	);
+	using services = new InstantiationService(new ServiceCollection([IFirst, new SyncDescriptor(First, [], true)], [ISecond, new SyncDescriptor(Second, [], true)]));
 	const first = services.get(IFirst);
 	assert.equal(first.value, 'first');
 	assert.deepEqual(created, ['first']);
@@ -228,12 +203,7 @@ test('missing transitive dependencies of delayed services fail before a consumer
 			created++;
 		}
 	}
-	using services = new InstantiationService(
-		new ServiceCollection(
-			[IDependency, new SyncDescriptor(Dependency, [], true)],
-			[IService, new SyncDescriptor(Service, [], true)],
-		),
-	);
+	using services = new InstantiationService(new ServiceCollection([IDependency, new SyncDescriptor(Dependency, [], true)], [IService, new SyncDescriptor(Service, [], true)]));
 	assert.throws(() => services.createInstance(Consumer), /Unknown service: test.delayed.missing/);
 	assert.equal(created, 0);
 });
@@ -244,9 +214,7 @@ test('parent services resolve dependencies from their owner when requested by a 
 	class Service {
 		constructor(@IMessage readonly message: string) {}
 	}
-	using parent = new InstantiationService(
-		new ServiceCollection([IMessage, 'parent'], [IService, new SyncDescriptor(Service)]),
-	);
+	using parent = new InstantiationService(new ServiceCollection([IMessage, 'parent'], [IService, new SyncDescriptor(Service)]));
 	using child = parent.createChild(new ServiceCollection([IMessage, 'child']));
 	assert.equal(child.get(IService).message, 'parent');
 	assert.equal(child.get(IService), parent.get(IService));
@@ -338,12 +306,7 @@ test('constructor service metadata is inherited without changing the base class'
 	services.registerInstance(IMessage, 'base');
 	services.registerInstance(IOther, 'override');
 	assert.deepEqual(
-		[
-			services.createInstance(Base).message,
-			services.createInstance(Inherited).message,
-			services.createInstance(Overridden).message,
-			services.createInstance(Base).message,
-		],
+		[services.createInstance(Base).message, services.createInstance(Inherited).message, services.createInstance(Overridden).message, services.createInstance(Base).message],
 		['base', 'base', 'override', 'base'],
 	);
 });
@@ -426,7 +389,9 @@ test('eager singleton factories are created when a consumer depends on them', ()
 	const serviceId = createServiceIdentifier<string>('test.eager');
 	const container = new InstantiationService();
 	let created = 0;
-	container.registerSingleton(serviceId, () => `value-${++created}`, { instantiation: InstantiationType.Eager });
+	container.registerSingleton(serviceId, () => `value-${++created}`, {
+		instantiation: InstantiationType.Eager,
+	});
 
 	assert.equal(created, 0);
 	assert.equal(container.get(serviceId), 'value-1');

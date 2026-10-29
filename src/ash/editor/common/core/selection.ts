@@ -60,12 +60,7 @@ export class Selection extends Range {
 	 */
 	public readonly positionColumn: number;
 
-	constructor(
-		selectionStartLineNumber: number,
-		selectionStartColumn: number,
-		positionLineNumber: number,
-		positionColumn: number,
-	) {
+	constructor(selectionStartLineNumber: number, selectionStartColumn: number, positionLineNumber: number, positionColumn: number) {
 		super(selectionStartLineNumber, selectionStartColumn, positionLineNumber, positionColumn);
 		this.selectionStartLineNumber = selectionStartLineNumber;
 		this.selectionStartColumn = selectionStartColumn;
@@ -77,17 +72,7 @@ export class Selection extends Range {
 	 * Transform to a human-readable representation.
 	 */
 	public override toString(): string {
-		return (
-			'[' +
-			this.selectionStartLineNumber +
-			',' +
-			this.selectionStartColumn +
-			' -> ' +
-			this.positionLineNumber +
-			',' +
-			this.positionColumn +
-			']'
-		);
+		return '[' + this.selectionStartLineNumber + ',' + this.selectionStartColumn + ' -> ' + this.positionLineNumber + ',' + this.positionColumn + ']';
 	}
 
 	/**
@@ -177,12 +162,7 @@ export class Selection extends Range {
 	 * Create a `Selection` from an `ISelection`.
 	 */
 	public static liftSelection(sel: ISelection): Selection {
-		return new Selection(
-			sel.selectionStartLineNumber,
-			sel.selectionStartColumn,
-			sel.positionLineNumber,
-			sel.positionColumn,
-		);
+		return new Selection(sel.selectionStartLineNumber, sel.selectionStartColumn, sel.positionLineNumber, sel.positionColumn);
 	}
 
 	/**
@@ -222,13 +202,7 @@ export class Selection extends Range {
 	/**
 	 * Create with a direction.
 	 */
-	public static createWithDirection(
-		startLineNumber: number,
-		startColumn: number,
-		endLineNumber: number,
-		endColumn: number,
-		direction: SelectionDirection,
-	): Selection {
+	public static createWithDirection(startLineNumber: number, startColumn: number, endLineNumber: number, endColumn: number, direction: SelectionDirection): Selection {
 		if (direction === SelectionDirection.LTR) {
 			return new Selection(startLineNumber, startColumn, endLineNumber, endColumn);
 		}

@@ -70,9 +70,18 @@ test('TextModel resolves intersecting decorations in model range order', () => {
 	const ids = model.deltaDecorations(
 		[],
 		[
-			{ range: new Range(4, 1, 4, 2), options: { description: 'four', className: 'four' } },
-			{ range: new Range(2, 2, 3, 2), options: { description: 'two-three', className: 'two-three' } },
-			{ range: new Range(1, 1, 1, 2), options: { description: 'one', className: 'one' } },
+			{
+				range: new Range(4, 1, 4, 2),
+				options: { description: 'four', className: 'four' },
+			},
+			{
+				range: new Range(2, 2, 3, 2),
+				options: { description: 'two-three', className: 'two-three' },
+			},
+			{
+				range: new Range(1, 1, 1, 2),
+				options: { description: 'one', className: 'one' },
+			},
 		],
 	);
 
@@ -89,21 +98,9 @@ test('TextModel resolves intersecting decorations in model range order', () => {
 
 test('TextModel decoration owner queries include shared owner zero only', () => {
 	using model = new TextModel('one\ntwo');
-	const [shared] = model.deltaDecorations(
-		[],
-		[{ range: new Range(1, 1, 1, 2), options: { description: 'shared' } }],
-		0,
-	);
-	const [first] = model.deltaDecorations(
-		[],
-		[{ range: new Range(1, 1, 1, 2), options: { description: 'first' } }],
-		1,
-	);
-	const [second] = model.deltaDecorations(
-		[],
-		[{ range: new Range(2, 1, 2, 2), options: { description: 'second' } }],
-		2,
-	);
+	const [shared] = model.deltaDecorations([], [{ range: new Range(1, 1, 1, 2), options: { description: 'shared' } }], 0);
+	const [first] = model.deltaDecorations([], [{ range: new Range(1, 1, 1, 2), options: { description: 'first' } }], 1);
+	const [second] = model.deltaDecorations([], [{ range: new Range(2, 1, 2, 2), options: { description: 'second' } }], 2);
 
 	assert.deepEqual(
 		model.getAllDecorations(1).map(decoration => decoration.id),

@@ -1,8 +1,4 @@
-import {
-	ConfigurationScope,
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { EditorIndentationKind } from '../../../../editor/common/core/misc/indentation.js';
 import { EditorLineWrapping, type IEditorOptions } from '../../../../editor/common/config/editorOptions.js';
@@ -37,11 +33,7 @@ export const CodeEditorConfiguration = Object.freeze({
 				return localize('editor.fontFamily.title', 'Font family');
 			},
 			get description() {
-				return localize(
-					'editor.fontFamily.description',
-					'Use a font family or comma-separated list. Leave empty to use {0}.',
-					EDITOR_FONT_DEFAULTS.fontFamily,
-				);
+				return localize('editor.fontFamily.description', 'Use a font family or comma-separated list. Leave empty to use {0}.', EDITOR_FONT_DEFAULTS.fontFamily);
 			},
 			get placeholder() {
 				return localize('editor.fontFamily.default', 'System default');
@@ -53,8 +45,7 @@ export const CodeEditorConfiguration = Object.freeze({
 		scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
 		defaultValue: EDITOR_FONT_DEFAULTS.fontSize,
 		parse(value: unknown): number {
-			if (Number.isSafeInteger(value) && (value as number) >= 8 && (value as number) <= 40)
-				return value as number;
+			if (Number.isSafeInteger(value) && (value as number) >= 8 && (value as number) <= 40) return value as number;
 			throw new RangeError(`editor.fontSize must be an integer between 8 and 40; received ${String(value)}`);
 		},
 		setting: {
@@ -63,11 +54,7 @@ export const CodeEditorConfiguration = Object.freeze({
 				return localize('editor.fontSize.title', 'Font size');
 			},
 			get description() {
-				return localize(
-					'editor.fontSize.description',
-					'Set the editor text size in pixels. The default is {0}.',
-					EDITOR_FONT_DEFAULTS.fontSize,
-				);
+				return localize('editor.fontSize.description', 'Set the editor text size in pixels. The default is {0}.', EDITOR_FONT_DEFAULTS.fontSize);
 			},
 			minimum: 8,
 			maximum: 40,
@@ -77,15 +64,8 @@ export const CodeEditorConfiguration = Object.freeze({
 		key: 'editor.lineHeight',
 		defaultValue: EDITOR_FONT_DEFAULTS.lineHeight,
 		parse(value: unknown): number {
-			if (Number.isSafeInteger(value) && (value as number) >= 0 && (value as number) <= 80)
-				return value as number;
-			throw new RangeError(
-				localize(
-					'editor.lineHeight.invalid',
-					'Editor line height must be an integer between 0 and 80; received {0}.',
-					String(value),
-				),
-			);
+			if (Number.isSafeInteger(value) && (value as number) >= 0 && (value as number) <= 80) return value as number;
+			throw new RangeError(localize('editor.lineHeight.invalid', 'Editor line height must be an integer between 0 and 80; received {0}.', String(value)));
 		},
 		setting: {
 			valueType: 'number',
@@ -93,10 +73,7 @@ export const CodeEditorConfiguration = Object.freeze({
 				return localize('editor.lineHeight.title', 'Line height');
 			},
 			get description() {
-				return localize(
-					'editor.lineHeight.description',
-					'Set the height of each editor line in pixels. Use 0 to calculate it from the font size. Values below 8 are font-size multipliers.',
-				);
+				return localize('editor.lineHeight.description', 'Set the height of each editor line in pixels. Use 0 to calculate it from the font size. Values below 8 are font-size multipliers.');
 			},
 			minimum: 0,
 			maximum: 80,
@@ -112,10 +89,7 @@ export const CodeEditorConfiguration = Object.freeze({
 				return localize('editor.fontLigatures.title', 'Font ligatures');
 			},
 			get description() {
-				return localize(
-					'editor.fontLigatures.description',
-					'Use programming ligatures when the selected font supports them.',
-				);
+				return localize('editor.fontLigatures.description', 'Use programming ligatures when the selected font supports them.');
 			},
 		},
 	}),
@@ -127,14 +101,10 @@ export const CodeEditorConfiguration = Object.freeze({
 			if (value === 'on' || value === 'off') return value;
 			throw new TypeError(`editor.experimentalGpuAcceleration must be on or off; received ${String(value)}`);
 		},
-		setting: selectSetting(
-			'GPU acceleration',
-			'Draw eligible visible editor text through the experimental WebGPU backend.',
-			[
-				{ value: 'off', label: 'Off' },
-				{ value: 'on', label: 'On' },
-			],
-		),
+		setting: selectSetting('GPU acceleration', 'Draw eligible visible editor text through the experimental WebGPU backend.', [
+			{ value: 'off', label: 'Off' },
+			{ value: 'on', label: 'On' },
+		]),
 	}),
 	wordWrap: configurationRegistry.registerConfiguration<NonNullable<IEditorOptions['wordWrap']>>({
 		key: 'editor.wordWrap',
@@ -147,10 +117,7 @@ export const CodeEditorConfiguration = Object.freeze({
 				return localize('editor.wordWrap.title', 'Word wrap');
 			},
 			get description() {
-				return localize(
-					'editor.wordWrap.description',
-					'Wrap long lines at the viewport, the configured column, or the smaller of both.',
-				);
+				return localize('editor.wordWrap.description', 'Wrap long lines at the viewport, the configured column, or the smaller of both.');
 			},
 			get options() {
 				return [
@@ -168,9 +135,7 @@ export const CodeEditorConfiguration = Object.freeze({
 		defaultValue: 80,
 		parse: value => {
 			if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) return value;
-			throw new TypeError(
-				localize('editor.wordWrapColumn.invalid', 'Word wrap column must be a positive integer.'),
-			);
+			throw new TypeError(localize('editor.wordWrapColumn.invalid', 'Word wrap column must be a positive integer.'));
 		},
 		setting: {
 			valueType: 'number',
@@ -180,10 +145,7 @@ export const CodeEditorConfiguration = Object.freeze({
 				return localize('editor.wordWrapColumn.title', 'Word wrap column');
 			},
 			get description() {
-				return localize(
-					'editor.wordWrapColumn.description',
-					'Maximum column used by column and bounded word wrapping.',
-				);
+				return localize('editor.wordWrapColumn.description', 'Maximum column used by column and bounded word wrapping.');
 			},
 		},
 	}),
@@ -192,28 +154,19 @@ export const CodeEditorConfiguration = Object.freeze({
 		defaultValue: 'same',
 		parse(value: unknown): WrappingIndentSetting {
 			if (value === 'none' || value === 'same' || value === 'indent' || value === 'deepIndent') return value;
-			throw new TypeError(
-				`editor.wrappingIndent must be none, same, indent, or deepIndent; received ${String(value)}`,
-			);
+			throw new TypeError(`editor.wrappingIndent must be none, same, indent, or deepIndent; received ${String(value)}`);
 		},
-		setting: selectSetting(
-			'Wrapping indent',
-			'Choose the indentation applied to continuation rows created by word wrapping.',
-			[
-				{ value: 'none', label: 'None' },
-				{ value: 'same', label: 'Same' },
-				{ value: 'indent', label: 'Indent' },
-				{ value: 'deepIndent', label: 'Deep indent' },
-			],
-		),
+		setting: selectSetting('Wrapping indent', 'Choose the indentation applied to continuation rows created by word wrapping.', [
+			{ value: 'none', label: 'None' },
+			{ value: 'same', label: 'Same' },
+			{ value: 'indent', label: 'Indent' },
+			{ value: 'deepIndent', label: 'Deep indent' },
+		]),
 	}),
-	renderWhitespace: configurationRegistry.registerConfiguration<
-		'none' | 'boundary' | 'selection' | 'trailing' | 'all'
-	>({
+	renderWhitespace: configurationRegistry.registerConfiguration<'none' | 'boundary' | 'selection' | 'trailing' | 'all'>({
 		key: 'editor.renderWhitespace',
 		defaultValue: 'selection',
-		parse: value =>
-			parseEnum(value, 'editor.renderWhitespace', ['none', 'boundary', 'selection', 'trailing', 'all']),
+		parse: value => parseEnum(value, 'editor.renderWhitespace', ['none', 'boundary', 'selection', 'trailing', 'all']),
 		setting: selectSetting('Render whitespace', 'Choose which spaces and tabs are visible in the editor.', [
 			{ value: 'none', label: 'None' },
 			{ value: 'boundary', label: 'Boundary' },
@@ -250,42 +203,25 @@ export const CodeEditorConfiguration = Object.freeze({
 		key: 'editor.guides.bracketPairsHorizontal',
 		defaultValue: true,
 		parse: value => parseBoolean(value, 'editor.guides.bracketPairsHorizontal'),
-		setting: booleanSetting(
-			'Horizontal bracket pair guides',
-			'Show a horizontal guide from the active vertical guide to its closing bracket.',
-		),
+		setting: booleanSetting('Horizontal bracket pair guides', 'Show a horizontal guide from the active vertical guide to its closing bracket.'),
 	}),
 	highlightActiveBracketPairGuide: configurationRegistry.registerConfiguration<boolean>({
 		key: 'editor.guides.highlightActiveBracketPair',
 		defaultValue: true,
 		parse: value => parseBoolean(value, 'editor.guides.highlightActiveBracketPair'),
-		setting: booleanSetting(
-			'Active bracket pair guide',
-			'Emphasize the bracket pair guide containing the primary cursor.',
-		),
+		setting: booleanSetting('Active bracket pair guide', 'Emphasize the bracket pair guide containing the primary cursor.'),
 	}),
 	highlightActiveIndentationGuide: configurationRegistry.registerConfiguration<boolean>({
 		key: 'editor.guides.highlightActiveIndentation',
 		defaultValue: true,
 		parse: value => parseBoolean(value, 'editor.guides.highlightActiveIndentation'),
-		setting: booleanSetting(
-			'Active indentation guide',
-			'Emphasize the indentation guide containing the primary cursor.',
-		),
+		setting: booleanSetting('Active indentation guide', 'Emphasize the indentation guide containing the primary cursor.'),
 	}),
 	bracketPairColorization: 'editor.bracketPairColorization.enabled',
 	cursorStyle: configurationRegistry.registerConfiguration<CursorStyleSetting>({
 		key: 'editor.cursorStyle',
 		defaultValue: 'line',
-		parse: value =>
-			parseEnum(value, 'editor.cursorStyle', [
-				'line',
-				'block',
-				'underline',
-				'line-thin',
-				'block-outline',
-				'underline-thin',
-			]),
+		parse: value => parseEnum(value, 'editor.cursorStyle', ['line', 'block', 'underline', 'line-thin', 'block-outline', 'underline-thin']),
 		setting: selectSetting('Cursor style', 'Choose the shape of editor cursors.', [
 			{ value: 'line', label: 'Line' },
 			{ value: 'block', label: 'Block' },
@@ -321,23 +257,13 @@ export const CodeEditorConfiguration = Object.freeze({
 		key: 'editor.cursorWidth',
 		defaultValue: 0,
 		parse: value => parseNonNegativeInteger(value, 'editor.cursorWidth'),
-		setting: numberSetting(
-			'Cursor width',
-			'Set the line cursor width in pixels; zero uses the editor default.',
-			0,
-			100,
-		),
+		setting: numberSetting('Cursor width', 'Set the line cursor width in pixels; zero uses the editor default.', 0, 100),
 	}),
 	cursorHeight: configurationRegistry.registerConfiguration<number>({
 		key: 'editor.cursorHeight',
 		defaultValue: 0,
 		parse: value => parseNonNegativeInteger(value, 'editor.cursorHeight'),
-		setting: numberSetting(
-			'Cursor height',
-			'Set the cursor height in pixels; zero uses the full line height.',
-			0,
-			100,
-		),
+		setting: numberSetting('Cursor height', 'Set the cursor height in pixels; zero uses the full line height.', 0, 100),
 	}),
 	matchBrackets: configurationRegistry.registerConfiguration<MatchBracketsSetting>({
 		key: 'editor.matchBrackets',
@@ -373,19 +299,13 @@ export const CodeEditorConfiguration = Object.freeze({
 		key: 'editor.renderLineHighlightOnlyWhenFocus',
 		defaultValue: false,
 		parse: value => parseBoolean(value, 'editor.renderLineHighlightOnlyWhenFocus'),
-		setting: booleanSetting(
-			'Highlight current line only when focused',
-			'Hide current-line highlighting while the editor is not focused.',
-		),
+		setting: booleanSetting('Highlight current line only when focused', 'Hide current-line highlighting while the editor is not focused.'),
 	}),
 	unicodeHighlights: configurationRegistry.registerConfiguration<boolean>({
 		key: 'editor.unicodeHighlights',
 		defaultValue: true,
 		parse: value => parseBoolean(value, 'editor.unicodeHighlights'),
-		setting: booleanSetting(
-			'Unicode highlights',
-			'Call attention to invisible or easily confused Unicode characters.',
-		),
+		setting: booleanSetting('Unicode highlights', 'Call attention to invisible or easily confused Unicode characters.'),
 	}),
 	indentationKind: configurationRegistry.registerConfiguration<EditorIndentationKind>({
 		key: 'editor.indentation',
@@ -416,10 +336,7 @@ export const CodeEditorConfiguration = Object.freeze({
 		key: 'files.trimTrailingWhitespaceInRegexAndStrings',
 		defaultValue: true,
 		parse: value => parseBoolean(value, 'files.trimTrailingWhitespaceInRegexAndStrings'),
-		setting: booleanSetting(
-			'Trim trailing whitespace in regexes and strings',
-			'Remove trailing whitespace from multiline strings and regular expressions when saving a file.',
-		),
+		setting: booleanSetting('Trim trailing whitespace in regexes and strings', 'Remove trailing whitespace from multiline strings and regular expressions when saving a file.'),
 	}),
 	findSeedFromSelection: configurationRegistry.registerConfiguration<boolean>({
 		key: 'editor.find.seedSearchStringFromSelection',
@@ -454,10 +371,7 @@ export const CodeEditorConfiguration = Object.freeze({
 				return localize({ bundle: 'ash.editor.find', key: 'globalFindClipboard.title' }, 'Share find text');
 			},
 			get description() {
-				return localize(
-					{ bundle: 'ash.editor.find', key: 'globalFindClipboard.description' },
-					'Share Find queries across editors. On macOS desktop, use the system find pasteboard.',
-				);
+				return localize({ bundle: 'ash.editor.find', key: 'globalFindClipboard.description' }, 'Share Find queries across editors. On macOS desktop, use the system find pasteboard.');
 			},
 		},
 	}),
@@ -465,10 +379,7 @@ export const CodeEditorConfiguration = Object.freeze({
 		key: 'editor.find.autoFindInSelection',
 		defaultValue: false,
 		parse: value => parseBoolean(value, 'editor.find.autoFindInSelection'),
-		setting: booleanSetting(
-			'Find in selection automatically',
-			'Limit Find to the current non-empty selection when the widget opens.',
-		),
+		setting: booleanSetting('Find in selection automatically', 'Limit Find to the current non-empty selection when the widget opens.'),
 	}),
 	findLoop: configurationRegistry.registerConfiguration<boolean>({
 		key: 'editor.find.loop',
@@ -535,9 +446,7 @@ export const CodeEditorConfiguration = Object.freeze({
 		defaultValue: 'clickAndHover',
 		parse(value: unknown): ColorDecoratorsActivatedOnSetting {
 			if (value === 'clickAndHover' || value === 'click' || value === 'hover') return value;
-			throw new TypeError(
-				`editor.colorDecoratorsActivatedOn must be clickAndHover, click, or hover; received ${String(value)}`,
-			);
+			throw new TypeError(`editor.colorDecoratorsActivatedOn must be clickAndHover, click, or hover; received ${String(value)}`);
 		},
 		setting: selectSetting('Color picker activation', 'Choose how color swatches open the color picker.', [
 			{ value: 'clickAndHover', label: 'Click and hover' },
@@ -550,35 +459,22 @@ export const CodeEditorConfiguration = Object.freeze({
 		defaultValue: 500,
 		parse(value: unknown): number {
 			if (Number.isSafeInteger(value) && (value as number) >= 0) return value as number;
-			throw new RangeError(
-				`editor.colorDecoratorsLimit must be a non-negative integer; received ${String(value)}`,
-			);
+			throw new RangeError(`editor.colorDecoratorsLimit must be a non-negative integer; received ${String(value)}`);
 		},
-		setting: numberSetting(
-			'Color decorator limit',
-			'Limit the number of color swatches rendered in one document.',
-			0,
-			1_000_000,
-		),
+		setting: numberSetting('Color decorator limit', 'Limit the number of color swatches rendered in one document.', 0, 1_000_000),
 	}),
 	defaultColorDecorators: configurationRegistry.registerConfiguration<DefaultColorDecoratorsSetting>({
 		key: 'editor.defaultColorDecorators',
 		defaultValue: 'auto',
 		parse(value: unknown): DefaultColorDecoratorsSetting {
 			if (value === 'auto' || value === 'always' || value === 'never') return value;
-			throw new TypeError(
-				`editor.defaultColorDecorators must be auto, always, or never; received ${String(value)}`,
-			);
+			throw new TypeError(`editor.defaultColorDecorators must be auto, always, or never; received ${String(value)}`);
 		},
-		setting: selectSetting(
-			'Default color detection',
-			'Choose when the editor scans CSS color literals without a language provider.',
-			[
-				{ value: 'auto', label: 'Auto' },
-				{ value: 'always', label: 'Always' },
-				{ value: 'never', label: 'Never' },
-			],
-		),
+		setting: selectSetting('Default color detection', 'Choose when the editor scans CSS color literals without a language provider.', [
+			{ value: 'auto', label: 'Auto' },
+			{ value: 'always', label: 'Always' },
+			{ value: 'never', label: 'Never' },
+		]),
 	}),
 	diffIgnoreTrimWhitespace: 'diffEditor.ignoreTrimWhitespace',
 	diffMaxComputationTime: 'diffEditor.maxComputationTime',
@@ -596,10 +492,7 @@ export const CodeEditorConfiguration = Object.freeze({
 				return localize('diffEditor.codeLens.title', 'CodeLens in diff editor');
 			},
 			get description() {
-				return localize(
-					'diffEditor.codeLens.description',
-					'Show provider actions and references in diff editors.',
-				);
+				return localize('diffEditor.codeLens.description', 'Show provider actions and references in diff editors.');
 			},
 		},
 	}),
@@ -623,10 +516,7 @@ export const CodeEditorConfiguration = Object.freeze({
 		key: 'diffEditor.showInlineChanges',
 		defaultValue: true,
 		parse: value => parseBoolean(value, 'diffEditor.showInlineChanges'),
-		setting: booleanSetting(
-			'Inline change highlights',
-			'Highlight the exact changed ranges within modified lines.',
-		),
+		setting: booleanSetting('Inline change highlights', 'Highlight the exact changed ranges within modified lines.'),
 	}),
 	diffRenderSideBySide: configurationRegistry.registerConfiguration<boolean>({
 		key: 'diffEditor.renderSideBySide',
@@ -638,19 +528,13 @@ export const CodeEditorConfiguration = Object.freeze({
 		key: 'diffEditor.useInlineViewWhenSpaceIsLimited',
 		defaultValue: true,
 		parse: value => parseBoolean(value, 'diffEditor.useInlineViewWhenSpaceIsLimited'),
-		setting: booleanSetting(
-			'Inline diff in narrow groups',
-			'Show one column when the comparison is too narrow for two editors.',
-		),
+		setting: booleanSetting('Inline diff in narrow groups', 'Show one column when the comparison is too narrow for two editors.'),
 	}),
 	diffLoopChanges: configurationRegistry.registerConfiguration<boolean>({
 		key: 'diffEditor.loopChanges',
 		defaultValue: true,
 		parse: value => parseBoolean(value, 'diffEditor.loopChanges'),
-		setting: booleanSetting(
-			'Loop through changes',
-			'Wrap change navigation from the final difference to the first.',
-		),
+		setting: booleanSetting('Loop through changes', 'Wrap change navigation from the final difference to the first.'),
 	}),
 	insertFinalNewLine: configurationRegistry.registerConfiguration<boolean>({
 		key: 'files.insertFinalNewline',
@@ -668,11 +552,7 @@ function numberSetting(title: string, description: string, minimum: number, maxi
 	return { valueType: 'number', title, description, minimum, maximum } as const;
 }
 
-function selectSetting<T extends string>(
-	title: string,
-	description: string,
-	options: readonly { readonly value: T; readonly label: string }[],
-) {
+function selectSetting<T extends string>(title: string, description: string, options: readonly { readonly value: T; readonly label: string }[]) {
 	return { valueType: 'select', title, description, options } as const;
 }
 

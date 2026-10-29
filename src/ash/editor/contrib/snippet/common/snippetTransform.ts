@@ -19,9 +19,7 @@ export function createSnippetTransform(pattern: string, format: string, options:
 	try {
 		new RegExp(pattern, options);
 	} catch (error) {
-		throw new SyntaxError(
-			`Language completion snippet transform pattern is invalid: ${error instanceof Error ? error.message : String(error)}`,
-		);
+		throw new SyntaxError(`Language completion snippet transform pattern is invalid: ${error instanceof Error ? error.message : String(error)}`);
 	}
 	return Object.freeze({ pattern, format, options });
 }
@@ -31,9 +29,7 @@ export function applySnippetTransform(value: string, transform: SnippetTransform
 	if (typeof value !== 'string') throw new TypeError('Language completion snippet transform value must be a string');
 	return value.replace(new RegExp(transform.pattern, transform.options), (...arguments_: unknown[]) => {
 		const trailingArgumentCount = typeof arguments_.at(-1) === 'object' ? 3 : 2;
-		const captures = arguments_
-			.slice(0, -trailingArgumentCount)
-			.map(capture => (typeof capture === 'string' ? capture : ''));
+		const captures = arguments_.slice(0, -trailingArgumentCount).map(capture => (typeof capture === 'string' ? capture : ''));
 		return expandTransformFormat(transform.format, captures);
 	});
 }
@@ -44,8 +40,7 @@ function expandTransformFormat(format: string, captures: readonly string[]): str
 		const character = format[offset]!;
 		if (character === '\\') {
 			const escaped = format[offset + 1];
-			if (escaped === undefined)
-				throw new SyntaxError('Language completion snippet transform format must not end with an escape');
+			if (escaped === undefined) throw new SyntaxError('Language completion snippet transform format must not end with an escape');
 			result += escaped;
 			offset += 2;
 			continue;
@@ -77,8 +72,7 @@ function expandTransformFormat(format: string, captures: readonly string[]): str
 function expandBracedCaptureExpression(expression: string, captures: readonly string[]): string {
 	const separator = expression.indexOf(':');
 	const indexText = separator < 0 ? expression : expression.slice(0, separator);
-	if (!/^\d+$/u.test(indexText))
-		throw new SyntaxError('Language completion snippet transform capture must be numeric');
+	if (!/^\d+$/u.test(indexText)) throw new SyntaxError('Language completion snippet transform capture must be numeric');
 	const capture = captureAt(captures, Number(indexText));
 	if (separator < 0) return capture;
 	const directive = expression.slice(separator + 1);
@@ -88,29 +82,22 @@ function expandBracedCaptureExpression(expression: string, captures: readonly st
 	if (directive === '/camelcase') return camelCase(capture);
 	if (directive === '/pascalcase') return pascalCase(capture);
 	if (directive.startsWith('+')) return capture.length > 0 ? expandTransformFormat(directive.slice(1), captures) : '';
-	if (directive.startsWith('-'))
-		return capture.length === 0 ? expandTransformFormat(directive.slice(1), captures) : '';
+	if (directive.startsWith('-')) return capture.length === 0 ? expandTransformFormat(directive.slice(1), captures) : '';
 	if (directive.startsWith('?')) {
 		const condition = splitConditional(directive.slice(1));
-		return capture.length > 0
-			? expandTransformFormat(condition.whenTruthy, captures)
-			: expandTransformFormat(condition.whenFalsy, captures);
+		return capture.length > 0 ? expandTransformFormat(condition.whenTruthy, captures) : expandTransformFormat(condition.whenFalsy, captures);
 	}
 	return capture.length === 0 ? expandTransformFormat(directive, captures) : capture;
 }
 
-function readBracedExpression(
-	format: string,
-	startOffset: number,
-): { readonly text: string; readonly nextOffset: number } {
+function readBracedExpression(format: string, startOffset: number): { readonly text: string; readonly nextOffset: number } {
 	let depth = 0;
 	let text = '';
 	for (let offset = startOffset; offset < format.length; offset += 1) {
 		const character = format[offset]!;
 		if (character === '\\') {
 			const escaped = format[offset + 1];
-			if (escaped === undefined)
-				throw new SyntaxError('Language completion snippet transform format must not end with an escape');
+			if (escaped === undefined) throw new SyntaxError('Language completion snippet transform format must not end with an escape');
 			text += character + escaped;
 			offset += 1;
 			continue;

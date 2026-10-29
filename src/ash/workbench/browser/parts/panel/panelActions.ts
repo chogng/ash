@@ -11,10 +11,7 @@ import { IPaneCompositePartService } from '../../../services/panecomposite/brows
 
 export class TogglePanelAction extends Action2 {
 	public static readonly ID = 'workbench.action.togglePanel';
-	public static readonly LABEL = localize2(
-		{ bundle: 'ash.actions', key: 'togglePanelVisibility' },
-		'Toggle Panel Visibility',
-	);
+	public static readonly LABEL = localize2({ bundle: 'ash.actions', key: 'togglePanelVisibility' }, 'Toggle Panel Visibility');
 	constructor() {
 		super({
 			id: TogglePanelAction.ID,
@@ -28,8 +25,17 @@ export class TogglePanelAction extends Action2 {
 				icon: Lxicon.layoutPanel1,
 			},
 			menu: [
-				{ id: MenuId.TitleBar, when: IsAuxiliaryWindowContext.isEqualTo(false), group: 'navigation', order: 9 },
-				{ id: MenuId.MenubarViewMenu, group: '2_appearance', order: 11 },
+				{
+					id: MenuId.TitleBar,
+					when: IsAuxiliaryWindowContext.isEqualTo(false),
+					group: 'navigation',
+					order: 9,
+				},
+				{
+					id: MenuId.MenubarViewMenu,
+					group: '2_appearance',
+					order: 11,
+				},
 			],
 			f1: true,
 		});
@@ -42,11 +48,7 @@ export class TogglePanelAction extends Action2 {
 		} else {
 			const panes = accessor.get(IPaneCompositePartService);
 			// User-initiated reopening returns input to the retained active view.
-			const panel = await panes.openPaneComposite(
-				panes.getLastActivePaneCompositeId(ViewContainerLocation.Panel),
-				ViewContainerLocation.Panel,
-				true,
-			);
+			const panel = await panes.openPaneComposite(panes.getLastActivePaneCompositeId(ViewContainerLocation.Panel), ViewContainerLocation.Panel, true);
 			if (!panel) layout.showPart('panel');
 		}
 	}
@@ -83,11 +85,7 @@ registerAction2(
 
 		public override async run(accessor: ServicesAccessor): Promise<void> {
 			const panes = accessor.get(IPaneCompositePartService);
-			await panes.openPaneComposite(
-				panes.getLastActivePaneCompositeId(ViewContainerLocation.Panel),
-				ViewContainerLocation.Panel,
-				true,
-			);
+			await panes.openPaneComposite(panes.getLastActivePaneCompositeId(ViewContainerLocation.Panel), ViewContainerLocation.Panel, true);
 		}
 	},
 );
@@ -106,7 +104,11 @@ registerAction2(
 					tooltip: localize2({ bundle: 'ash.actions', key: 'restoreEditorArea' }, 'Restore Editor Area'),
 					icon: Lxicon.screenNormal,
 				},
-				menu: { id: MenuId.PanelTitle, group: 'navigation', order: 40 },
+				menu: {
+					id: MenuId.PanelTitle,
+					group: 'navigation',
+					order: 40,
+				},
 				f1: true,
 			});
 		}

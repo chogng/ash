@@ -31,21 +31,14 @@ registerAction2(
 		constructor() {
 			super({
 				id: ConnectToRemoteCommandId,
-				title: localize2(
-					{ bundle: 'ash.workbench', key: 'command.ConnectToRemoteAction' },
-					'Remote: Connect to Saved SSH Host',
-				),
+				title: localize2({ bundle: 'ash.workbench', key: 'command.ConnectToRemoteAction' }, 'Remote: Connect to Saved SSH Host'),
 				f1: true,
 				precondition: RemoteConnectionsAvailableContext.isEqualTo(true),
 			});
 		}
 
 		override run(accessor: ServicesAccessor): Promise<void> {
-			return showRemoteConnectionPicker(
-				accessor.get(IRemoteConnectionService),
-				accessor.get(IQuickInputService),
-				accessor.get(IDialogService),
-			);
+			return showRemoteConnectionPicker(accessor.get(IRemoteConnectionService), accessor.get(IQuickInputService), accessor.get(IDialogService));
 		}
 	},
 );
@@ -55,10 +48,7 @@ registerAction2(
 		constructor() {
 			super({
 				id: RollbackRemoteRuntimeCommandId,
-				title: localize2(
-					{ bundle: 'ash.workbench', key: 'command.RollbackRemoteRuntimeAction' },
-					'Remote: Roll Back Remote Runtime',
-				),
+				title: localize2({ bundle: 'ash.workbench', key: 'command.RollbackRemoteRuntimeAction' }, 'Remote: Roll Back Remote Runtime'),
 				f1: true,
 				precondition: RemoteConnectionKindContext.isEqualTo('ssh'),
 			});
@@ -78,15 +68,9 @@ registerAction2(
 		constructor() {
 			super({
 				id: ReconnectRemoteCommandId,
-				title: localize2(
-					{ bundle: 'ash.workbench', key: 'command.ReconnectRemoteAction' },
-					'Remote: Reconnect to SSH Host',
-				),
+				title: localize2({ bundle: 'ash.workbench', key: 'command.ReconnectRemoteAction' }, 'Remote: Reconnect to SSH Host'),
 				f1: true,
-				precondition: ContextKeyExpr.and(
-					RemoteConnectionKindContext.isEqualTo('ssh'),
-					RemoteConnectionStateContext.isEqualTo('disconnected'),
-				),
+				precondition: ContextKeyExpr.and(RemoteConnectionKindContext.isEqualTo('ssh'), RemoteConnectionStateContext.isEqualTo('disconnected')),
 			});
 		}
 
@@ -94,11 +78,7 @@ registerAction2(
 			try {
 				await accessor.get(IAppServerRemoteAgentService).reconnect();
 			} catch (error) {
-				await showConnectionError(
-					accessor.get(IDialogService),
-					'Could not reconnect to the Remote Workspace',
-					error,
-				);
+				await showConnectionError(accessor.get(IDialogService), 'Could not reconnect to the Remote Workspace', error);
 			}
 		}
 	},
@@ -109,30 +89,19 @@ registerAction2(
 		constructor() {
 			super({
 				id: ManageRemoteConnectionsCommandId,
-				title: localize2(
-					{ bundle: 'ash.workbench', key: 'command.ManageRemoteConnectionsAction' },
-					'Remote: Manage Saved SSH Hosts',
-				),
+				title: localize2({ bundle: 'ash.workbench', key: 'command.ManageRemoteConnectionsAction' }, 'Remote: Manage Saved SSH Hosts'),
 				f1: true,
 				precondition: RemoteConnectionsAvailableContext.isEqualTo(true),
 			});
 		}
 
 		override run(accessor: ServicesAccessor): Promise<void> {
-			return showRemoteConnectionManager(
-				accessor.get(IRemoteConnectionService),
-				accessor.get(IQuickInputService),
-				accessor.get(IDialogService),
-			);
+			return showRemoteConnectionManager(accessor.get(IRemoteConnectionService), accessor.get(IQuickInputService), accessor.get(IDialogService));
 		}
 	},
 );
 
-export async function showRemoteConnectionPicker(
-	connections: IRemoteConnectionService,
-	quickInput: IQuickInputService,
-	dialogs: IDialogService,
-): Promise<void> {
+export async function showRemoteConnectionPicker(connections: IRemoteConnectionService, quickInput: IQuickInputService, dialogs: IDialogService): Promise<void> {
 	let available: readonly RemoteConnectionDefinition[];
 	try {
 		available = await connections.list();
@@ -173,11 +142,7 @@ export async function showRemoteConnectionPicker(
 	picker.show();
 }
 
-async function connectToRemote(
-	connection: RemoteConnectionDefinition,
-	connections: IRemoteConnectionService,
-	dialogs: IDialogService,
-): Promise<void> {
+async function connectToRemote(connection: RemoteConnectionDefinition, connections: IRemoteConnectionService, dialogs: IDialogService): Promise<void> {
 	try {
 		connection = await connections.resolveConnection(`ssh+${connection.name}`, new AbortController().signal);
 	} catch (error) {

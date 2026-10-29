@@ -11,11 +11,7 @@ import { IVoiceCodeTranscriptionBackendService } from '../../../../../../platfor
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { TestConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';
-import {
-	IVoiceCodeTranscriptionClient,
-	VoiceCodeTranscriptionClient,
-	type IVoiceCodeTranscription,
-} from '../../../browser/speechToText/voiceCodeTranscriptionClient.js';
+import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient, type IVoiceCodeTranscription } from '../../../browser/speechToText/voiceCodeTranscriptionClient.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -84,20 +80,11 @@ class Connection {
 	}
 }
 
-function fixture(
-	owner: DisposableStore,
-	connection: Connection,
-	source = '{"dictation.backend":"cloud","dictation.inputDevice":"mic-2","dictation.language":"zh"}',
-) {
+function fixture(owner: DisposableStore, connection: Connection, source = '{"dictation.backend":"cloud","dictation.inputDevice":"mic-2","dictation.language":"zh"}') {
 	const services = owner.add(new InstantiationService());
-	services.registerInstance(
-		IVoiceCodeTranscriptionBackendService,
-		createAppServerVoiceCodeTranscriptionBackend(connection as unknown as AppServerProtocolClient),
-	);
+	services.registerInstance(IVoiceCodeTranscriptionBackendService, createAppServerVoiceCodeTranscriptionBackend(connection as unknown as AppServerProtocolClient));
 	services.registerSingleton(IConfigurationService, () => new TestConfigurationService({ source }));
-	services.registerSingleton(IVoiceCodeTranscriptionClient, () =>
-		services.createInstance(VoiceCodeTranscriptionClient),
-	);
+	services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
 	return { services, client: services.get(IVoiceCodeTranscriptionClient) };
 }
 async function open(client: IVoiceCodeTranscriptionClient) {
@@ -172,10 +159,7 @@ test('disconnect settles a pending connection while the previous resource is sti
 	client.disconnect();
 	try {
 		// Cancellation must settle before the next task even though backend release is still blocked.
-		assert.equal(
-			await Promise.race([outcome, new Promise(resolve => setImmediate(() => resolve('waiting')))]),
-			'cancelled',
-		);
+		assert.equal(await Promise.race([outcome, new Promise(resolve => setImmediate(() => resolve('waiting')))]), 'cancelled');
 		assert.equal(client.isConnected, false);
 	} finally {
 		await gate.complete();
@@ -296,8 +280,7 @@ test('stop retains backend errors and never publishes failed text', async () => 
 	const failure = new Promise<string>(resolve => owner.add(client.onError(error => resolve(error.detail))));
 	await open(client);
 	client.sendPttStart('turn');
-	connection.onStop = resourceId =>
-		connection.emit({ method: 'dictation/ended', params: { resourceId, error: 'capture failed' } });
+	connection.onStop = resourceId => connection.emit({ method: 'dictation/ended', params: { resourceId, error: 'capture failed' } });
 	client.sendPttEnd('turn');
 	assert.match(await failure, /capture failed/);
 	assert.deepEqual(events, []);
@@ -318,9 +301,7 @@ test('disconnect during acquisition cancels both the pending and late accepted r
 	await cancelled;
 	await client.connect({} as Window & typeof globalThis, '');
 	assert.deepEqual(
-		connection.requests
-			.filter(request => request.method === 'dictation/cancel')
-			.map(request => request.params.resourceId),
+		connection.requests.filter(request => request.method === 'dictation/cancel').map(request => request.params.resourceId),
 		[first.params.resourceId, first.params.resourceId],
 	);
 });

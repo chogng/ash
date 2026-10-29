@@ -5,14 +5,7 @@ import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
 import { URI } from '../../../../../base/common/uri.js';
-import {
-	BackupError,
-	IBackupService,
-	type IBackupContent,
-	type IBackupRecord,
-	type IBackupWorkspace,
-	type IBackupRevision,
-} from '../../../../../platform/backup/common/backup.js';
+import { BackupError, IBackupService, type IBackupContent, type IBackupRecord, type IBackupWorkspace, type IBackupRevision } from '../../../../../platform/backup/common/backup.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
@@ -22,11 +15,7 @@ import type { WorkingCopyBackup } from '../../common/workingCopyBackupService.js
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
-function assemble(
-	services: InstantiationService,
-	backend: IBackupService,
-	context: TestWorkspaceService,
-): WorkingCopyBackupService {
+function assemble(services: InstantiationService, backend: IBackupService, context: TestWorkspaceService): WorkingCopyBackupService {
 	services.registerInstance(IBackupService, backend);
 	services.registerInstance(IWorkspaceContextService, context);
 	services.registerInstance(ILogService, new NullLoggerService());
@@ -70,16 +59,10 @@ test('an editor cannot overwrite or delete an unobserved recovery record', async
 	using context = new TestWorkspaceService({ id: 'one' });
 	const backend = new VersionedBackups();
 	const resource = URI.parse('untitled:/draft');
-	const stored = await backend.store(
-		{ id: 'one', folders: [] },
-		{ resource, format: 'ash.working-copy.v1', content: JSON.stringify({ kind: 'text', content: 'recovery' }) },
-	);
+	const stored = await backend.store({ id: 'one', folders: [] }, { resource, format: 'ash.working-copy.v1', content: JSON.stringify({ kind: 'text', content: 'recovery' }) });
 	using backups = assemble(services, backend, context);
 	await backups.delete(resource);
-	await assert.rejects(
-		backups.store({ resource, kind: 'text', content: 'new unrelated content', updatedAt: 1 }),
-		error => error instanceof BackupError && error.code === 'conflict',
-	);
+	await assert.rejects(backups.store({ resource, kind: 'text', content: 'new unrelated content', updatedAt: 1 }), error => error instanceof BackupError && error.code === 'conflict');
 	assert.deepEqual(await backend.list('one'), [stored]);
 });
 
@@ -139,14 +122,8 @@ test('a saved checkpoint cannot discard a later recovery version from another wr
 	await saving.store(checkpoint);
 	await other.list();
 	await other.store({ ...checkpoint, content: 'newer writer recovery' });
-	await assert.rejects(
-		saving.delete(checkpoint.resource),
-		error => error instanceof BackupError && error.code === 'conflict',
-	);
-	await assert.rejects(
-		saving.store({ ...checkpoint, content: 'retry without observing other writer' }),
-		error => error instanceof BackupError && error.code === 'conflict',
-	);
+	await assert.rejects(saving.delete(checkpoint.resource), error => error instanceof BackupError && error.code === 'conflict');
+	await assert.rejects(saving.store({ ...checkpoint, content: 'retry without observing other writer' }), error => error instanceof BackupError && error.code === 'conflict');
 	assert.equal((await other.list())[0]?.content, 'newer writer recovery');
 });
 
@@ -155,14 +132,8 @@ test('unreadable backup content stays durable while supported backups still rest
 	using context = new TestWorkspaceService({ id: 'one' });
 	const backend = new VersionedBackups();
 	using backups = assemble(services, backend, context);
-	await backend.store(
-		{ id: 'one', folders: [] },
-		{ resource: URI.parse('untitled:/future'), format: 'future.v2', content: 'keep this' },
-	);
-	await backend.store(
-		{ id: 'one', folders: [] },
-		{ resource: URI.parse('untitled:/corrupt'), format: 'ash.working-copy.v1', content: 'invalid json' },
-	);
+	await backend.store({ id: 'one', folders: [] }, { resource: URI.parse('untitled:/future'), format: 'future.v2', content: 'keep this' });
+	await backend.store({ id: 'one', folders: [] }, { resource: URI.parse('untitled:/corrupt'), format: 'ash.working-copy.v1', content: 'invalid json' });
 	await backups.store({ resource: URI.parse('untitled:/valid'), kind: 'text', content: 'restorable', updatedAt: 1 });
 	assert.deepEqual(
 		(await backups.list()).map(backup => backup.content),
@@ -248,10 +219,7 @@ test('disposing the backup service stops a write still waiting for preparation',
 	const backend = new ControlledBackups();
 	using backups = assemble(services, backend, context);
 	const held = backend.holdNext('list');
-	const cancelled = assert.rejects(
-		backups.store({ resource: URI.parse('untitled:/draft'), kind: 'text', content: 'disposed', updatedAt: 1 }),
-		CancellationError,
-	);
+	const cancelled = assert.rejects(backups.store({ resource: URI.parse('untitled:/draft'), kind: 'text', content: 'disposed', updatedAt: 1 }), CancellationError);
 	try {
 		await held.entered.p;
 		backups.dispose();
@@ -289,11 +257,7 @@ class VersionedBackups implements IBackupService {
 	async list(id: string): Promise<readonly IBackupRecord[]> {
 		return [...this.records.entries()].filter(([key]) => key.startsWith(`${id}\0`)).map(([, record]) => record);
 	}
-	async store(
-		workspace: IBackupWorkspace,
-		content: IBackupContent,
-		expectedRevision?: string,
-	): Promise<IBackupRecord> {
+	async store(workspace: IBackupWorkspace, content: IBackupContent, expectedRevision?: string): Promise<IBackupRecord> {
 		const key = `${workspace.id}\0${content.resource.toString()}`;
 		const current = this.records.get(key);
 		if (current?.content.content === content.content && current.content.format === content.format) return current;
@@ -303,21 +267,11 @@ class VersionedBackups implements IBackupService {
 		this.records.set(key, record);
 		return record;
 	}
-	async move(
-		sourceId: string,
-		target: IBackupWorkspace,
-		expected: readonly IBackupRevision[],
-	): Promise<readonly IBackupRevision[]> {
+	async move(sourceId: string, target: IBackupWorkspace, expected: readonly IBackupRevision[]): Promise<readonly IBackupRevision[]> {
 		const prepared = expected.map(record => {
 			const source = this.records.get(`${sourceId}\0${record.resource.toString()}`);
 			const destination = this.records.get(`${target.id}\0${record.resource.toString()}`);
-			if (
-				!source ||
-				source.revision !== record.revision ||
-				(destination &&
-					(destination.content.format !== source.content.format ||
-						destination.content.content !== source.content.content))
-			)
+			if (!source || source.revision !== record.revision || (destination && (destination.content.format !== source.content.format || destination.content.content !== source.content.content)))
 				throw new BackupError('conflict');
 			return destination ?? source;
 		});
@@ -341,9 +295,7 @@ class VersionedBackups implements IBackupService {
 }
 
 class ControlledBackups extends VersionedBackups {
-	private held:
-		| { operation: 'list' | 'store' | 'discard'; entered: DeferredPromise<void>; release: DeferredPromise<void> }
-		| undefined;
+	private held: { operation: 'list' | 'store' | 'discard'; entered: DeferredPromise<void>; release: DeferredPromise<void> } | undefined;
 
 	public holdNext(operation: 'list' | 'store' | 'discard'): {
 		entered: DeferredPromise<void>;
@@ -360,11 +312,7 @@ class ControlledBackups extends VersionedBackups {
 		return result;
 	}
 
-	public override async store(
-		workspace: IBackupWorkspace,
-		content: IBackupContent,
-		expectedRevision?: string,
-	): Promise<IBackupRecord> {
+	public override async store(workspace: IBackupWorkspace, content: IBackupContent, expectedRevision?: string): Promise<IBackupRecord> {
 		const result = await super.store(workspace, content, expectedRevision);
 		await this.wait('store');
 		return result;
@@ -430,14 +378,8 @@ test('failed migration leaves source recovery intact and never overwrites target
 	await assert.rejects(backups.moveBackups({ id: 'new', folders: [] }), BackupError);
 	assert.equal((await backend.list('old')).length, 1);
 	backend.move = move;
-	await backend.store(
-		{ id: 'new', folders: [] },
-		{ resource: draft.resource, format: 'other', content: 'destination' },
-	);
-	await assert.rejects(
-		backups.moveBackups({ id: 'new', folders: [] }),
-		error => error instanceof BackupError && error.code === 'conflict',
-	);
+	await backend.store({ id: 'new', folders: [] }, { resource: draft.resource, format: 'other', content: 'destination' });
+	await assert.rejects(backups.moveBackups({ id: 'new', folders: [] }), error => error instanceof BackupError && error.code === 'conflict');
 	assert.equal((await backend.list('old')).length, 1);
 	assert.equal((await backend.list('new'))[0]?.content.content, 'destination');
 });
@@ -495,10 +437,7 @@ for (const unreadable of [false, true])
 		context.updateWorkspace({ id: 'new' });
 		await backups.delete(resource);
 		assert.deepEqual(await backend.list('new'), [latest]);
-		await assert.rejects(
-			backups.store({ resource, kind: 'text', content: 'unrelated edit', updatedAt: 1 }),
-			BackupError,
-		);
+		await assert.rejects(backups.store({ resource, kind: 'text', content: 'unrelated edit', updatedAt: 1 }), BackupError);
 	});
 
 test('Browser backup migration keeps source and target drafts intact on conflict and moves them on acceptance', async () => {
@@ -514,10 +453,7 @@ test('Browser backup migration keeps source and target drafts intact on conflict
 	await backups.store({ ...draft, content: 'existing target draft' });
 	backups.switchWorkspace('source');
 	await backups.list();
-	await assert.rejects(
-		backups.moveBackups({ id: 'target', folders: [] }),
-		error => error instanceof BackupError && error.code === 'conflict',
-	);
+	await assert.rejects(backups.moveBackups({ id: 'target', folders: [] }), error => error instanceof BackupError && error.code === 'conflict');
 	assert.deepEqual(await backups.list(), [draft]);
 	backups.switchWorkspace('target');
 	assert.equal((await backups.list())[0]?.content, 'existing target draft');

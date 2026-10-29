@@ -3,10 +3,7 @@ import { suite, test } from 'mocha';
 import { URI } from '../../../../../base/common/uri.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import {
-	AgentHostFileSystemProvider,
-	type IRemoteFilesystemConnection,
-} from '../../../../../platform/agentHost/common/agentHostFileSystemProvider.js';
+import { AgentHostFileSystemProvider, type IRemoteFilesystemConnection } from '../../../../../platform/agentHost/common/agentHostFileSystemProvider.js';
 import { createDisconnectedResourceApi } from '../../../../../platform/agentHost/browser/appServerApi.js';
 import { createDisconnectedFileApi } from '../../../../../platform/files/browser/fileApi.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
@@ -21,7 +18,10 @@ const unavailable = (): never => {
 
 function connection(root: URI, content: string): IRemoteFilesystemConnection {
 	return {
-		api: { ...createDisconnectedFileApi(unavailable), readFile: async () => ({ content, revision: 'r1' }) },
+		api: {
+			...createDisconnectedFileApi(unavailable),
+			readFile: async () => ({ content, revision: 'r1' }),
+		},
 		resourceApi: createDisconnectedResourceApi(unavailable),
 		directories: () => [{ uri: root, target: { type: 'environment', dirId: 'root' } }],
 	};
@@ -51,14 +51,8 @@ suite('AgentHostFileSystemService workspace registration', () => {
 			],
 		});
 		using registration = services.createInstance(AgentHostFileSystemService, provider, undefined);
-		assert.equal(
-			(await files.readFile(localRoot.with({ path: '/workspace/main.ts' }), 'utf8')).content,
-			'local-root',
-		);
-		assert.equal(
-			(await files.readFile(remoteRoot.with({ path: '/workspace/main.ts' }), 'utf8')).content,
-			'remote-root',
-		);
+		assert.equal((await files.readFile(localRoot.with({ path: '/workspace/main.ts' }), 'utf8')).content, 'local-root');
+		assert.equal((await files.readFile(remoteRoot.with({ path: '/workspace/main.ts' }), 'utf8')).content, 'remote-root');
 		assert.deepEqual(requests, [
 			{ dirId: 'local-root', path: 'main.ts', encoding: 'utf8' },
 			{ dirId: 'remote-root', path: 'main.ts', encoding: 'utf8' },
@@ -101,17 +95,9 @@ suite('AgentHostFileSystemService workspace registration', () => {
 				overwrite: false,
 			});
 			using previous = files.registerProvider(occupied, existing);
-			assert.throws(
-				() => services.createInstance(AgentHostFileSystemService, incoming, undefined),
-				new RegExp(`already registered: ${occupied}`),
-			);
+			assert.throws(() => services.createInstance(AgentHostFileSystemService, incoming, undefined), new RegExp(`already registered: ${occupied}`));
 			assert.equal((await files.readFile(root.with({ path: '/original.txt' }))).content, 'original');
-			assert.equal(
-				files.hasProvider(
-					URI.from({ scheme: occupied === Schemas.file ? Schemas.ashRemote : Schemas.file, path: '/' }),
-				),
-				false,
-			);
+			assert.equal(files.hasProvider(URI.from({ scheme: occupied === Schemas.file ? Schemas.ashRemote : Schemas.file, path: '/' })), false);
 			assert.equal(incoming.isDisposed, false);
 		});
 	}

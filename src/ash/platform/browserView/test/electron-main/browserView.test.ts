@@ -1,7 +1,4 @@
-import {
-	BrowserPasswordMainService,
-	IBrowserPasswordMainService,
-} from '../../electron-main/browserPasswordMainService.js';
+import { BrowserPasswordMainService, IBrowserPasswordMainService } from '../../electron-main/browserPasswordMainService.js';
 import { browserPasswordChannel } from '../../electron-main/browserPasswordMainService.js';
 import { IConfigurationService } from '../../../configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../configuration/common/inMemoryConfigurationService.js';
@@ -32,10 +29,7 @@ import type { IStorageSnapshot } from '../../../storage/common/storageIpc.js';
 import { StorageScope, StorageTarget } from '../../../storage/common/storage.js';
 import type { ContextMenuParams } from 'electron/main';
 import type { ElectronContextMenu } from '../../../../base/parts/contextmenu/electron-main/contextmenu.js';
-import type {
-	INativeContextMenuRequest,
-	INativeContextMenuResult,
-} from '../../../../base/parts/contextmenu/common/contextmenu.js';
+import type { INativeContextMenuRequest, INativeContextMenuResult } from '../../../../base/parts/contextmenu/common/contextmenu.js';
 import { IClipboardService } from '../../../clipboard/common/clipboardService.js';
 
 suite('Browser form passwords', () => {
@@ -48,10 +42,7 @@ suite('Browser form passwords', () => {
 			},
 		};
 		services.registerInstance(IEncryptionMainService, new Proxy({} as IEncryptionMainService, forbidden));
-		services.registerInstance(
-			IApplicationStorageMainService,
-			new Proxy({} as IApplicationStorageMainService, forbidden),
-		);
+		services.registerInstance(IApplicationStorageMainService, new Proxy({} as IApplicationStorageMainService, forbidden));
 		services.registerInstance(IConfigurationService, configuration);
 		using vault = services.createInstance(BrowserPasswordMainService, true);
 		const value = {
@@ -73,13 +64,7 @@ suite('Browser form passwords', () => {
 	});
 	ensureNoDisposablesAreLeakedInTestSuite();
 	const application = { scope: StorageScope.APPLICATION, id: 'application' };
-	async function page(
-		f: ReturnType<typeof fixture>,
-		scope:
-			| BrowserViewStorageScope.Global
-			| BrowserViewStorageScope.Workspace
-			| BrowserViewStorageScope.Ephemeral = BrowserViewStorageScope.Global,
-	) {
+	async function page(f: ReturnType<typeof fixture>, scope: BrowserViewStorageScope.Global | BrowserViewStorageScope.Workspace | BrowserViewStorageScope.Ephemeral = BrowserViewStorageScope.Global) {
 		await f.manager.getOrCreateBrowserView(id, {
 			initialUrl: 'https://example.test/login',
 			owner: { type: 'user' },
@@ -183,18 +168,11 @@ suite('Browser form passwords', () => {
 		assert.equal((p.sent[1]!.data as { password: string }).password, submitted.password);
 		// A rejected attempt must retain the account for a subsequent password-only retry.
 		for (const password of ['wrong-password', 'replacement-password']) {
-			p.post(
-				'passwordSubmitted',
-				{ action: p.frame.url, username: '', hasUsername: false, password },
-				'b'.repeat(32),
-			);
+			p.post('passwordSubmitted', { action: p.frame.url, username: '', hasUsername: false, password }, 'b'.repeat(32));
 		}
 		p.post('passwordPageState', { action: p.frame.url, hasPasswordForm: false }, 'b'.repeat(32));
 		await settle();
-		const request = f.events.find(
-			(event): event is Extract<BrowserViewEvent, { type: 'passwordSaveRequested' }> =>
-				event.type === 'passwordSaveRequested',
-		)!;
+		const request = f.events.find((event): event is Extract<BrowserViewEvent, { type: 'passwordSaveRequested' }> => event.type === 'passwordSaveRequested')!;
 		assert.equal(request.username, submitted.username);
 		assert.equal(request.update, true);
 		await f.manager.respondToPasswordSave(id, request.requestId, true);
@@ -252,43 +230,23 @@ suite('Browser form passwords', () => {
 			p.post('passwordSubmitted', { ...submitted, password });
 			p.post('passwordPageState', { action: submitted.action, hasPasswordForm: false });
 			await settle();
-			const request = [...f.events]
-				.reverse()
-				.find(
-					(event): event is Extract<BrowserViewEvent, { type: 'passwordSaveRequested' }> =>
-						event.type === 'passwordSaveRequested',
-				)!;
+			const request = [...f.events].reverse().find((event): event is Extract<BrowserViewEvent, { type: 'passwordSaveRequested' }> => event.type === 'passwordSaveRequested')!;
 			assert.ok(request);
 			assert.equal(request.update, password !== submitted.password);
 			assert.doesNotMatch(JSON.stringify(f.events), /synthetic-password|replacement-password/);
 			await f.manager.respondToPasswordSave(id, request.requestId, true);
 		}
 		const snapshot = await f.storage.getItems(application);
-		assert.doesNotMatch(
-			JSON.stringify(snapshot),
-			/synthetic-user|synthetic-password|replacement-password|example\.test/,
-		);
-		const state = (await browserPasswordChannel(p.vault).call('window:1', 'readState', [])) as Awaited<
-			ReturnType<typeof p.vault.readState>
-		>;
+		assert.doesNotMatch(JSON.stringify(snapshot), /synthetic-user|synthetic-password|replacement-password|example\.test/);
+		const state = (await browserPasswordChannel(p.vault).call('window:1', 'readState', [])) as Awaited<ReturnType<typeof p.vault.readState>>;
 		assert.equal(state.entries.length, 1);
 		assert.equal(state.entries[0]!.username, submitted.username);
 		assert.equal('password' in state.entries[0]!, false);
 		p.post('passwordFill', form);
 		await settle();
-		assert.equal(
-			([...p.sent].reverse().find(message => message.command === 'fillPassword')!.data as { password: string })
-				.password,
-			'replacement-password',
-		);
-		await assert.rejects(
-			browserPasswordChannel(p.vault).call('window:1', 'find', [p.session, 'https://example.test']),
-			/Invalid password command/,
-		);
-		await assert.rejects(
-			browserPasswordChannel(p.vault).call('window:1', 'update', [state.entries[0]!.id, 'user', 'bad\npassword']),
-			/Invalid password command/,
-		);
+		assert.equal(([...p.sent].reverse().find(message => message.command === 'fillPassword')!.data as { password: string }).password, 'replacement-password');
+		await assert.rejects(browserPasswordChannel(p.vault).call('window:1', 'find', [p.session, 'https://example.test']), /Invalid password command/);
+		await assert.rejects(browserPasswordChannel(p.vault).call('window:1', 'update', [state.entries[0]!.id, 'user', 'bad\npassword']), /Invalid password command/);
 	});
 
 	test('fill binds the native top frame, document, exact origin and session; navigation cancels account selection', async () => {
@@ -318,12 +276,7 @@ suite('Browser form passwords', () => {
 		p.post('passwordIdentitySubmitted', { action: submitted.action, username: 'first' });
 		p.post('passwordFill', form);
 		await settle();
-		const request = [...f.events]
-			.reverse()
-			.find(
-				(event): event is Extract<BrowserViewEvent, { type: 'passwordFillRequested' }> =>
-					event.type === 'passwordFillRequested',
-			)!;
+		const request = [...f.events].reverse().find((event): event is Extract<BrowserViewEvent, { type: 'passwordFillRequested' }> => event.type === 'passwordFillRequested')!;
 		assert.equal(request.accounts.length, 2);
 		f.contents.emit('did-start-navigation', {}, 'https://other.test/', false, true);
 		p.frame.url = 'https://other.test/';
@@ -490,10 +443,7 @@ suite('Browser view ownership and operations', () => {
 		await f.create();
 		f.manager.tryGetBrowserView(id)!.webContents.executeJavaScriptInIsolatedWorld = async () => 2;
 		let large = false;
-		f.command = async method =>
-			method === 'Page.getLayoutMetrics'
-				? { cssContentSize: { width: 1000, height: large ? 20000 : 2000 } }
-				: { data: 'AA==' };
+		f.command = async method => (method === 'Page.getLayoutMetrics' ? { cssContentSize: { width: 1000, height: large ? 20000 : 2000 } } : { data: 'AA==' });
 		await f.manager.captureScreenshot(id, { fullPage: true });
 		const capture = f.commands.find(command => command.method === 'Page.captureScreenshot')!;
 		assert.deepEqual((capture.params as { clip: unknown }).clip, {
@@ -597,18 +547,9 @@ suite('Browser view ownership and operations', () => {
 		using f = fixture();
 		using host = f.createHost();
 		const canvas = { sessionId: 'session-one', instanceId: 'preview', title: 'Preview' };
-		const first = await host.create(
-			{ threadId: 'thread-one', url: 'https://example.test/first', canvas },
-			{ signal: signal() },
-		);
-		const updated = await host.create(
-			{ threadId: 'thread-one', url: 'https://example.test/second', canvas: { ...canvas, title: 'Updated' } },
-			{ signal: signal() },
-		);
-		const other = await host.create(
-			{ threadId: 'thread-two', url: 'https://example.test/other', canvas },
-			{ signal: signal() },
-		);
+		const first = await host.create({ threadId: 'thread-one', url: 'https://example.test/first', canvas }, { signal: signal() });
+		const updated = await host.create({ threadId: 'thread-one', url: 'https://example.test/second', canvas: { ...canvas, title: 'Updated' } }, { signal: signal() });
+		const other = await host.create({ threadId: 'thread-two', url: 'https://example.test/other', canvas }, { signal: signal() });
 		assert.equal(updated.targetId, first.targetId);
 		assert.notEqual(other.targetId, first.targetId);
 		const pages = await f.manager.getBrowserViews();
@@ -622,10 +563,7 @@ suite('Browser view ownership and operations', () => {
 		f.load = async () => {
 			throw new Error('navigation failed');
 		};
-		await assert.rejects(
-			host.create({ threadId: 'thread-one', url: 'https://example.test/failure', canvas }, { signal: signal() }),
-			/navigation failed/,
-		);
+		await assert.rejects(host.create({ threadId: 'thread-one', url: 'https://example.test/failure', canvas }, { signal: signal() }), /navigation failed/);
 		assert.equal((await f.manager.getBrowserViews()).length, 2);
 		assert.equal(f.events.filter(event => event.type === 'canvasOpened').length, 3);
 	});
@@ -662,10 +600,7 @@ suite('Browser view ownership and operations', () => {
 		const channel = host.getChannel();
 		const requestId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 		await assert.rejects(channel.call('window:1', 'disposeCore', []), /Unknown browser host command/);
-		await assert.rejects(
-			channel.call('window:1', 'observe', { id: 'invalid', params: {} }),
-			/Invalid browser operation/,
-		);
+		await assert.rejects(channel.call('window:1', 'observe', { id: 'invalid', params: {} }), /Invalid browser operation/);
 		await assert.rejects(
 			channel.call('window:1', 'observe', {
 				id: requestId,
@@ -722,10 +657,7 @@ suite('Browser view ownership and operations', () => {
 		// Let the suspended import resume: it must not create a page using the new connection's signal.
 		await new Promise(resolve => setImmediate(resolve));
 		assert.equal(f.children.size, 0);
-		assert.deepEqual(
-			await channel.call('window:1', 'list', { id: requestId, params: { threadId: 'thread-one' } }),
-			{ pages: [] },
-		);
+		assert.deepEqual(await channel.call('window:1', 'list', { id: requestId, params: { threadId: 'thread-one' } }), { pages: [] });
 	});
 
 	test('one id has one page, including simultaneous creation', async () => {
@@ -734,10 +666,7 @@ suite('Browser view ownership and operations', () => {
 			f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', ...agent }),
 			f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://ignored.test/', ...agent }),
 		]);
-		assert.deepEqual(
-			[f.children.size, f.events.filter(e => e.type === 'created').length, (await f.manager.getState(id)).url],
-			[1, 1, 'https://example.test/'],
-		);
+		assert.deepEqual([f.children.size, f.events.filter(e => e.type === 'created').length, (await f.manager.getState(id)).url], [1, 1, 'https://example.test/']);
 	});
 
 	test('preload messages require an owned frame, and picks require a selection mode or an accepted comment', async () => {
@@ -820,10 +749,7 @@ suite('Browser view ownership and operations', () => {
 		await assert.rejects(f.manager.setVisible(id, true), /BrowserTargetNotLaidOut/);
 		await f.manager.layout(id, { x: 2, y: 3, width: 400, height: 300 });
 		await f.manager.setVisible(id, true);
-		assert.deepEqual(
-			[page.view.getBounds(), page.getState().visible],
-			[{ x: 4, y: 6, width: 800, height: 600 }, true],
-		);
+		assert.deepEqual([page.view.getBounds(), page.getState().visible], [{ x: 4, y: 6, width: 800, height: 600 }, true]);
 	});
 
 	test('closing releases the page once, removes listeners and aborts loading observations', async () => {
@@ -835,16 +761,7 @@ suite('Browser view ownership and operations', () => {
 		await f.manager.destroyBrowserView(id);
 		await assert.rejects(pending, /BrowserRequestCancelled/);
 		page.dispose();
-		assert.deepEqual(
-			[
-				f.manager.tryGetBrowserView(id),
-				f.children.size,
-				f.contents.eventNames(),
-				f.events.filter(e => e.type === 'closed').length,
-				f.networkReleases,
-			],
-			[undefined, 0, [], 1, 0],
-		);
+		assert.deepEqual([f.manager.tryGetBrowserView(id), f.children.size, f.contents.eventNames(), f.events.filter(e => e.type === 'closed').length, f.networkReleases], [undefined, 0, [], 1, 0]);
 	});
 
 	test('a destroyed Chromium page leaves the manager immediately', async () => {
@@ -868,10 +785,7 @@ suite('Browser view ownership and operations', () => {
 		const first = host.observe({ threadId: 'thread-one', targetId: id, ...observation }, { signal: signal() });
 		await started.promise;
 		const cancellation = new AbortController();
-		const second = host.observe(
-			{ threadId: 'thread-one', targetId: id, ...observation },
-			{ signal: cancellation.signal },
-		);
+		const second = host.observe({ threadId: 'thread-one', targetId: id, ...observation }, { signal: cancellation.signal });
 		cancellation.abort();
 		await assert.rejects(second, /BrowserRequestCancelled/);
 		const third = host.observe({ threadId: 'thread-one', targetId: id, ...observation }, { signal: signal() });
@@ -896,15 +810,9 @@ suite('Browser view ownership and operations', () => {
 			}
 			return { targetId: pageId, url: f.url, title: f.title, loading: false };
 		};
-		const first = host.observe(
-			{ threadId: 'thread-one', targetId: id, networkToken: 'first-tool', ...observation },
-			{ signal: signal() },
-		);
+		const first = host.observe({ threadId: 'thread-one', targetId: id, networkToken: 'first-tool', ...observation }, { signal: signal() });
 		await started.promise;
-		const second = host.observe(
-			{ threadId: 'thread-one', targetId: sibling.targetId, networkToken: 'second-tool', ...observation },
-			{ signal: signal() },
-		);
+		const second = host.observe({ threadId: 'thread-one', targetId: sibling.targetId, networkToken: 'second-tool', ...observation }, { signal: signal() });
 		await Promise.resolve();
 		await Promise.resolve();
 		assert.deepEqual(order, [id]);
@@ -956,10 +864,7 @@ suite('Browser view ownership and operations', () => {
 			f.url = url;
 		};
 		using host = f.createHost();
-		const observed = host.observe(
-			{ threadId: 'thread-one', targetId: id, ...observation, includeScreenshot: true },
-			{ signal: signal() },
-		);
+		const observed = host.observe({ threadId: 'thread-one', targetId: id, ...observation, includeScreenshot: true }, { signal: signal() });
 		await started.promise;
 		const navigation = f.manager.loadURL(id, 'https://example.test/next');
 		finish.resolve();
@@ -1039,10 +944,7 @@ suite('Browser view ownership and operations', () => {
 		const created = await host.create({ threadId: 'thread-one', url: 'about:blank' }, { signal: signal() });
 		host.reset();
 		host.reset();
-		assert.deepEqual(
-			[f.manager.tryGetBrowserView(created.targetId), f.manager.tryGetBrowserView(id)?.id],
-			[undefined, id],
-		);
+		assert.deepEqual([f.manager.tryGetBrowserView(created.targetId), f.manager.tryGetBrowserView(id)?.id], [undefined, id]);
 	});
 
 	test('retiring the manager releases a pending network owner without creating a page', async () => {
@@ -1103,25 +1005,9 @@ suite('Browser view ownership and operations', () => {
 		const firstSession = f.manager.tryGetBrowserView(first.targetId)!.session;
 		assert.equal(firstSession, f.manager.tryGetBrowserView(sibling.targetId)!.session);
 		assert.notEqual(firstSession, f.manager.tryGetBrowserView(other.targetId)!.session);
-		assert.throws(
-			() =>
-				host.observe(
-					{ threadId: 'thread-two', targetId: first.targetId, ...observation },
-					{ signal: signal() },
-				),
-			/BrowserTargetAccessDenied/,
-		);
-		await assert.rejects(
-			host.perform(
-				{ threadId: 'thread-two', action: { type: 'reload', targetId: first.targetId } },
-				{ signal: signal() },
-			),
-			/BrowserTargetAccessDenied/,
-		);
-		await assert.rejects(
-			host.close({ threadId: 'thread-two', targetId: first.targetId }),
-			/BrowserTargetAccessDenied/,
-		);
+		assert.throws(() => host.observe({ threadId: 'thread-two', targetId: first.targetId, ...observation }, { signal: signal() }), /BrowserTargetAccessDenied/);
+		await assert.rejects(host.perform({ threadId: 'thread-two', action: { type: 'reload', targetId: first.targetId } }, { signal: signal() }), /BrowserTargetAccessDenied/);
+		await assert.rejects(host.close({ threadId: 'thread-two', targetId: first.targetId }), /BrowserTargetAccessDenied/);
 		assert.equal(f.manager.tryGetBrowserView(first.targetId)?.id, first.targetId);
 	});
 
@@ -1133,10 +1019,7 @@ suite('Browser view ownership and operations', () => {
 			owner: { type: 'user' },
 			session: { scope: BrowserViewStorageScope.Workspace },
 		});
-		assert.throws(
-			() => host.observe({ threadId: 'thread-one', targetId: id, ...observation }, { signal: signal() }),
-			/BrowserTargetAccessDenied/,
-		);
+		assert.throws(() => host.observe({ threadId: 'thread-one', targetId: id, ...observation }, { signal: signal() }), /BrowserTargetAccessDenied/);
 		assert.ok([...f.partitions.keys()].every(partition => partition.startsWith('persist:')));
 	});
 });
@@ -1150,15 +1033,9 @@ test('sharing grants only the chosen thread and revocation cancels its operation
 		session: { scope: BrowserViewStorageScope.Workspace },
 	});
 	await f.manager.setSharing(id, ['thread-one']);
-	await assert.rejects(
-		host.perform({ threadId: 'thread-one', action: { type: 'reload', targetId: id } }, { signal: signal() }),
-		/BrowserNetworkIsolationRequired/,
-	);
+	await assert.rejects(host.perform({ threadId: 'thread-one', action: { type: 'reload', targetId: id } }, { signal: signal() }), /BrowserNetworkIsolationRequired/);
 	await assert.rejects(host.close({ threadId: 'thread-one', targetId: id }), /BrowserNetworkIsolationRequired/);
-	assert.throws(
-		() => host.observe({ threadId: 'thread-two', targetId: id, ...observation }, { signal: signal() }),
-		/BrowserTargetAccessDenied/,
-	);
+	assert.throws(() => host.observe({ threadId: 'thread-two', targetId: id, ...observation }, { signal: signal() }), /BrowserTargetAccessDenied/);
 	const started = promiseWithResolvers<void>();
 	const finish = promiseWithResolvers<void>();
 	f.observe = async pageId => {
@@ -1172,10 +1049,7 @@ test('sharing grants only the chosen thread and revocation cancels its operation
 	await assert.rejects(pending, /BrowserRequestCancelled/);
 	assert.equal(f.cancelled.length, 1);
 	finish.resolve();
-	assert.throws(
-		() => host.observe({ threadId: 'thread-one', targetId: id, ...observation }, { signal: signal() }),
-		/BrowserTargetAccessDenied/,
-	);
+	assert.throws(() => host.observe({ threadId: 'thread-one', targetId: id, ...observation }, { signal: signal() }), /BrowserTargetAccessDenied/);
 	assert.ok(f.manager.tryGetBrowserView(id));
 	await f.manager.setSharing(id, ['thread-one']);
 	host.reset();
@@ -1183,11 +1057,7 @@ test('sharing grants only the chosen thread and revocation cancels its operation
 	assert.ok(f.manager.tryGetBrowserView(id));
 });
 
-export function fixture(
-	storageOverride?: IApplicationStorageMainService,
-	provideEncryption = true,
-	useInMemorySecretStorage = false,
-) {
+export function fixture(storageOverride?: IApplicationStorageMainService, provideEncryption = true, useInMemorySecretStorage = false) {
 	const store = new DisposableStore();
 	const events: BrowserViewEvent[] = [];
 	const children = new Set<WebContentsView>();
@@ -1323,10 +1193,7 @@ export function fixture(
 	instantiation.registerInstance(IConfigurationService, passwordConfiguration);
 	// Construct the vault only when encryption is registered, preserving the missing-registration test.
 	if (provideEncryption) {
-		instantiation.registerInstance(
-			IBrowserPasswordMainService,
-			store.add(instantiation.createInstance(BrowserPasswordMainService, useInMemorySecretStorage)),
-		);
+		instantiation.registerInstance(IBrowserPasswordMainService, store.add(instantiation.createInstance(BrowserPasswordMainService, useInMemorySecretStorage)));
 	}
 	const manager = store.add(
 		instantiation.createInstance(BrowserViewMainService, {
@@ -1438,9 +1305,7 @@ export function fixture(
 								f.debugSessions.push(sessionId);
 								return Promise.resolve({ sessionId });
 							}
-							return method === 'Target.getTargetInfo'
-								? Promise.resolve({ targetInfo: { targetId: chromiumId } })
-								: f.command(method, params);
+							return method === 'Target.getTargetInfo' ? Promise.resolve({ targetInfo: { targetId: chromiumId } }) : f.command(method, params);
 						},
 					}),
 				});
@@ -1491,13 +1356,8 @@ suite('Browser authentication', () => {
 	const credentials = { username: 'private-user', password: 'private-password', remember: true };
 	const application = { scope: StorageScope.APPLICATION, id: 'application' };
 	const user = { owner: { type: 'user' as const }, session: { scope: BrowserViewStorageScope.Workspace as const } };
-	const create = (f: ReturnType<typeof fixture>, session = user.session) =>
-		f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', owner: user.owner, session });
-	const challenge = (
-		f: ReturnType<typeof fixture>,
-		firstAuthAttempt = true,
-		overrides: Partial<Electron.AuthInfo> = {},
-	) => {
+	const create = (f: ReturnType<typeof fixture>, session = user.session) => f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', owner: user.owner, session });
+	const challenge = (f: ReturnType<typeof fixture>, firstAuthAttempt = true, overrides: Partial<Electron.AuthInfo> = {}) => {
 		const calls: Array<readonly [string | undefined, string | undefined]> = [];
 		let prevented = false;
 		f.contents.emit(
@@ -1515,13 +1375,7 @@ suite('Browser authentication', () => {
 		return calls;
 	};
 	const prompt = async (f: ReturnType<typeof fixture>) => {
-		const find = () =>
-			[...f.events]
-				.reverse()
-				.find(
-					(event): event is Extract<BrowserViewEvent, { type: 'authenticationRequested' }> =>
-						event.type === 'authenticationRequested',
-				);
+		const find = () => [...f.events].reverse().find((event): event is Extract<BrowserViewEvent, { type: 'authenticationRequested' }> => event.type === 'authenticationRequested');
 		if (find()) {
 			return find()!;
 		}
@@ -1536,11 +1390,7 @@ suite('Browser authentication', () => {
 		});
 	};
 	const response = (f: ReturnType<typeof fixture>, requestId: string, value: typeof credentials | null) =>
-		browserViewChannel(f.manager, { call: async <T>() => null as T, listen: () => Event.None }).call(
-			'window:1',
-			'respondToAuthentication',
-			[id, requestId, value],
-		);
+		browserViewChannel(f.manager, { call: async <T>() => null as T, listen: () => Event.None }).call('window:1', 'respondToAuthentication', [id, requestId, value]);
 
 	test('production page construction requires the Main encryption registration', async () => {
 		using f = fixture(undefined, false);
@@ -1632,9 +1482,7 @@ suite('Browser authentication', () => {
 		}
 		assert.deepEqual(calls, [[undefined, undefined]]);
 		assert.equal(
-			Object.keys((await f.storage.getItems(application)).entries).some(key =>
-				key.startsWith('browser.credentials.'),
-			),
+			Object.keys((await f.storage.getItems(application)).entries).some(key => key.startsWith('browser.credentials.')),
 			false,
 		);
 	});
@@ -1684,9 +1532,7 @@ suite('Browser authentication', () => {
 		const retry = challenge(f, false);
 		const request = await prompt(f);
 		assert.equal(
-			Object.keys((await f.storage.getItems(application)).entries).some(key =>
-				key.startsWith('browser.credentials.'),
-			),
+			Object.keys((await f.storage.getItems(application)).entries).some(key => key.startsWith('browser.credentials.')),
 			false,
 		);
 		await response(f, request.requestId, null);
@@ -1755,10 +1601,7 @@ suite('Browser authentication', () => {
 		await create(f);
 		const calls = challenge(f);
 		const request = await prompt(f);
-		await assert.rejects(
-			response(f, request.requestId, { ...credentials, password: 'bad\nheader' }),
-			/Invalid browser authentication/,
-		);
+		await assert.rejects(response(f, request.requestId, { ...credentials, password: 'bad\nheader' }), /Invalid browser authentication/);
 		f.contents.emit('did-start-navigation', {}, 'https://example.test/next', false, true);
 		await response(f, request.requestId, credentials);
 		assert.deepEqual(calls, [[undefined, undefined]]);
@@ -1773,9 +1616,7 @@ suite('Browser authentication', () => {
 		assert.deepEqual(pending, [[undefined, undefined]]);
 		assert.equal(f.authCacheClears, 1);
 		assert.equal(
-			Object.keys((await f.storage.getItems(application)).entries).some(key =>
-				key.startsWith('browser.credentials.'),
-			),
+			Object.keys((await f.storage.getItems(application)).entries).some(key => key.startsWith('browser.credentials.')),
 			false,
 		);
 	});
@@ -1810,9 +1651,7 @@ suite('Browser webpage context menu', () => {
 	test('keyboard editing menus target the page, retain disabled actions and follow client language and zoom', async () => {
 		using f = fixture();
 		await f.create();
-		f.messages = JSON.parse(
-			await readFile(join(process.cwd(), 'extensions/language-pack-zh-cn/translations/workbench.json'), 'utf8'),
-		)['ash.workbench'];
+		f.messages = JSON.parse(await readFile(join(process.cwd(), 'extensions/language-pack-zh-cn/translations/workbench.json'), 'utf8'))['ash.workbench'];
 		await f.manager.layout(id, { x: 20, y: 30, width: 400, height: 300 });
 		f.popupMenu = async () => ({ selectedId: 'paste' });
 		f.contents.emit('context-menu', {}, context({ isEditable: true, menuSourceType: 'keyboard' }));
@@ -1839,40 +1678,21 @@ suite('Browser webpage context menu', () => {
 		f.popupMenu = async () => ({ selectedId: 'openLink' });
 		f.contents.emit('context-menu', {}, context({ linkURL: 'https://example.test/next' }));
 		await Promise.resolve();
-		assert.ok(
-			f.events.some(
-				event =>
-					event.type === 'openRequested' &&
-					event.targetId === id &&
-					event.url === 'https://example.test/next',
-			),
-		);
+		assert.ok(f.events.some(event => event.type === 'openRequested' && event.targetId === id && event.url === 'https://example.test/next'));
 		await Promise.resolve();
 		f.popupMenu = async () => ({ selectedId: 'copyLink' });
 		f.contents.emit('context-menu', {}, context({ linkURL: 'javascript:alert(1)' }));
 		await Promise.resolve();
-		assert.ok(
-			f.menuRequests
-				.at(-1)!
-				.items.some(item => item.type === 'action' && item.id === 'openLink' && !item.enabled),
-		);
+		assert.ok(f.menuRequests.at(-1)!.items.some(item => item.type === 'action' && item.id === 'openLink' && !item.enabled));
 		assert.deepEqual(f.clipboardWrites, ['javascript:alert(1)']);
 		await Promise.resolve();
 		f.popupMenu = async () => ({ selectedId: 'copyImage' });
-		f.contents.emit(
-			'context-menu',
-			{},
-			context({ mediaType: 'image', hasImageContents: true, srcURL: 'https://example.test/image.png' }),
-		);
+		f.contents.emit('context-menu', {}, context({ mediaType: 'image', hasImageContents: true, srcURL: 'https://example.test/image.png' }));
 		await Promise.resolve();
 		assert.deepEqual(f.imageCopies, [{ x: 12, y: 18 }]);
 		await Promise.resolve();
 		f.popupMenu = async () => ({ selectedId: 'saveImage' });
-		f.contents.emit(
-			'context-menu',
-			{},
-			context({ mediaType: 'image', hasImageContents: true, srcURL: 'blob:https://example.test/image-id' }),
-		);
+		f.contents.emit('context-menu', {}, context({ mediaType: 'image', hasImageContents: true, srcURL: 'blob:https://example.test/image-id' }));
 		await Promise.resolve();
 		assert.deepEqual(f.downloads, ['blob:https://example.test/image-id']);
 	});
@@ -1883,11 +1703,7 @@ suite('Browser webpage context menu', () => {
 		const pending = promiseWithResolvers<INativeContextMenuResult>();
 		f.popupMenu = () => pending.promise;
 		f.contents.emit('context-menu', {}, context({ linkURL: 'https://example.test/next' }));
-		assert.ok(
-			f.menuRequests
-				.at(-1)!
-				.items.some(item => item.type === 'action' && item.id === 'openLink' && !item.enabled),
-		);
+		assert.ok(f.menuRequests.at(-1)!.items.some(item => item.type === 'action' && item.id === 'openLink' && !item.enabled));
 		f.contents.emit('did-start-navigation', {}, 'https://example.test/other', false, true);
 		assert.equal(f.menuCloses, 1);
 		pending.resolve({ selectedId: 'copyLink' });

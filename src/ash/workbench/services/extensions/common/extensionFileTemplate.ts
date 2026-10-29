@@ -57,24 +57,19 @@ export class ExtensionFileTemplateRegistry extends Disposable implements Extensi
 }
 
 function normalizeTemplate(template: ExtensionFileTemplateDefinition): ExtensionFileTemplateDefinition {
-	if (typeof template !== 'object' || template === null)
-		throw new TypeError('Extension file template must be an object');
-	if (typeof template.body !== 'string' || template.body.length > 1024 * 1024)
-		throw new TypeError('Extension file-template body must be bounded text');
+	if (typeof template !== 'object' || template === null) throw new TypeError('Extension file template must be an object');
+	if (typeof template.body !== 'string' || template.body.length > 1024 * 1024) throw new TypeError('Extension file-template body must be bounded text');
 	return Object.freeze({
 		id: boundedText(template.id, 'Extension file-template ID', 512),
 		extensionId: boundedText(template.extensionId, 'Extension file-template extension ID', 256),
 		label: boundedText(template.label, 'Extension file-template label', 256),
 		languageId: boundedText(template.languageId, 'Extension file-template language ID', 128),
 		body: template.body,
-		...(template.description === undefined
-			? {}
-			: { description: boundedText(template.description, 'Extension file-template description', 512) }),
+		...(template.description === undefined ? {} : { description: boundedText(template.description, 'Extension file-template description', 512) }),
 	});
 }
 
 function boundedText(value: unknown, owner: string, maximum: number): string {
-	if (typeof value !== 'string' || value.length === 0 || value.length > maximum || /[\r\n]/u.test(value))
-		throw new TypeError(`${owner} is invalid`);
+	if (typeof value !== 'string' || value.length === 0 || value.length > maximum || /[\r\n]/u.test(value)) throw new TypeError(`${owner} is invalid`);
 	return value;
 }

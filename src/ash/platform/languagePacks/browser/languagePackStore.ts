@@ -11,10 +11,7 @@ export class BrowserLanguagePackStore implements ILanguagePackStore {
 		if (value === undefined) {
 			return undefined;
 		}
-		const catalog =
-			isRecord(value) && 'catalog' in value
-				? parseLanguagePackIndexEntry(value)?.catalog
-				: parseLanguagePackCatalog(value);
+		const catalog = isRecord(value) && 'catalog' in value ? parseLanguagePackIndexEntry(value)?.catalog : parseLanguagePackCatalog(value);
 		if (!catalog || catalog.locale !== locale) {
 			throw new Error(`Invalid display language resource: ${locale}`);
 		}
@@ -34,9 +31,7 @@ export class BrowserLanguagePackStore implements ILanguagePackStore {
 
 	public async readIndex(): Promise<readonly LanguagePackIndexEntry[]> {
 		const values = (await this.transact('readonly', store => store.getAll())) as unknown[];
-		return values
-			.map(parseLanguagePackIndexEntry)
-			.filter((entry): entry is LanguagePackIndexEntry => entry !== undefined);
+		return values.map(parseLanguagePackIndexEntry).filter((entry): entry is LanguagePackIndexEntry => entry !== undefined);
 	}
 
 	public async replace(entries: readonly LanguagePackIndexEntry[]): Promise<void> {
@@ -49,10 +44,7 @@ export class BrowserLanguagePackStore implements ILanguagePackStore {
 		});
 	}
 
-	private async transact(
-		mode: IDBTransactionMode,
-		operation: (store: IDBObjectStore) => IDBRequest,
-	): Promise<unknown> {
+	private async transact(mode: IDBTransactionMode, operation: (store: IDBObjectStore) => IDBRequest): Promise<unknown> {
 		const database = await new Promise<IDBDatabase>((resolve, reject) => {
 			const request = indexedDB.open('ash-language-packs', 1);
 			request.onupgradeneeded = () => request.result.createObjectStore('catalogs', { keyPath: 'locale' });

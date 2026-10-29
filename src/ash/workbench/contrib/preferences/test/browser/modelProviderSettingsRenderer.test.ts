@@ -64,9 +64,7 @@ function setup(resources: DisposableStore, configuration = provider) {
 		},
 		testProviderModel: async (_provider, id) => {
 			calls.probes.push(id);
-			return (
-				source.probe ?? (id === 'rejected' ? { type: 'failed', message: 'Not authorized' } : { type: 'passed' })
-			);
+			return source.probe ?? (id === 'rejected' ? { type: 'failed', message: 'Not authorized' } : { type: 'passed' });
 		},
 		discoverProviderModels: async () => {
 			calls.discovery++;
@@ -77,15 +75,10 @@ function setup(resources: DisposableStore, configuration = provider) {
 		},
 	};
 	services.registerInstance(ILanguageModelsService, models as ILanguageModelsService);
-	const card = resources.add(
-		services.createInstance(ModelProviderSettingsRenderer, document, configuration, false, false),
-	);
+	const card = resources.add(services.createInstance(ModelProviderSettingsRenderer, document, configuration, false, false));
 	document.body.append(card.domNode);
 	resources.add(toDisposable(() => card.domNode.remove()));
-	const button = (label: string): HTMLButtonElement =>
-		[...card.domNode.querySelectorAll('button')].find(
-			button => button.textContent === label || button.getAttribute('aria-label') === label,
-		)!;
+	const button = (label: string): HTMLButtonElement => [...card.domNode.querySelectorAll('button')].find(button => button.textContent === label || button.getAttribute('aria-label') === label)!;
 	return { card, notifications, enabled, calls, source, button };
 }
 
@@ -126,9 +119,7 @@ test('Provider refresh retains manual mappings, discovery membership and visibil
 	button('Delete model available').click();
 	await nextTurn();
 	assert.equal(enabled.has('available'), false);
-	assert.deepEqual(calls.writes.at(-1)?.models, [
-		{ id: 'local-alias', contextWindow: 128000, upstreamModel: 'available' },
-	]);
+	assert.deepEqual(calls.writes.at(-1)?.models, [{ id: 'local-alias', contextWindow: 128000, upstreamModel: 'available' }]);
 	card.domNode.querySelector<HTMLInputElement>('input[aria-label="Enable available"]')!.click();
 	button('Refresh models').click();
 	await nextTurn();

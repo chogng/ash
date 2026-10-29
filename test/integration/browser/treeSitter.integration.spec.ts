@@ -13,24 +13,12 @@ test('Python Rust backend paints syntax and preserves editing and undo', async (
 	await expect
 		.poll(() => page.evaluate(() => window.treeSitterIntegration.state()))
 		.toMatchObject({
-			tokens: expect.arrayContaining([
-				expect.objectContaining({ type: 'string', text: expect.stringContaining('你好🙂') }),
-			]),
+			tokens: expect.arrayContaining([expect.objectContaining({ type: 'string', text: expect.stringContaining('你好🙂') })]),
 		});
 	await page.evaluate(() => window.treeSitterIntegration.edit());
-	await expect
-		.poll(() =>
-			page.evaluate(() =>
-				window.treeSitterIntegration
-					.state()
-					.tokens.some(token => token.type === 'string' && token.text.includes('updated ')),
-			),
-		)
-		.toBe(true);
+	await expect.poll(() => page.evaluate(() => window.treeSitterIntegration.state().tokens.some(token => token.type === 'string' && token.text.includes('updated ')))).toBe(true);
 	await page.evaluate(() => window.treeSitterIntegration.undo());
-	await expect
-		.poll(() => page.evaluate(() => window.treeSitterIntegration.state().text))
-		.toBe('def greet(name):\n    return "你好🙂"\n');
+	await expect.poll(() => page.evaluate(() => window.treeSitterIntegration.state().text)).toBe('def greet(name):\n    return "你好🙂"\n');
 	expect(await page.evaluate(() => window.treeSitterIntegration.state().errors)).toEqual([]);
 	expect(errors).toEqual([]);
 	await page.evaluate(() => window.treeSitterIntegration.dispose());
@@ -43,23 +31,13 @@ test('Disconnected Web keeps local WASM highlighting, editing and undo', async (
 	await expect(page.locator('.stanza-editor-token.token-keyword').filter({ hasText: /^def$/ })).toBeVisible();
 	await page.evaluate(() => window.treeSitterIntegration.edit());
 	await page.evaluate(() => window.treeSitterIntegration.ready());
-	expect(
-		await page.evaluate(() =>
-			window.treeSitterIntegration
-				.state()
-				.tokens.some(token => token.type === 'string' && token.text.includes('updated ')),
-		),
-	).toBe(true);
+	expect(await page.evaluate(() => window.treeSitterIntegration.state().tokens.some(token => token.type === 'string' && token.text.includes('updated ')))).toBe(true);
 	await page.evaluate(() => window.treeSitterIntegration.undo());
-	expect(await page.evaluate(() => window.treeSitterIntegration.state().text)).toBe(
-		'def greet(name):\n    return "你好🙂"\n',
-	);
+	expect(await page.evaluate(() => window.treeSitterIntegration.state().text)).toBe('def greet(name):\n    return "你好🙂"\n');
 	expect(await page.evaluate(() => window.treeSitterIntegration.state().errors)).toEqual([]);
 });
 
-test('Rust disconnect falls back locally and reconnects with the live dirty buffer and undo history', async ({
-	page,
-}) => {
+test('Rust disconnect falls back locally and reconnects with the live dirty buffer and undo history', async ({ page }) => {
 	await page.goto('/treeSitter.html');
 	await expect.poll(() => page.evaluate(() => window.treeSitterIntegration?.state().execution)).toBe('rust');
 	await page.evaluate(() => window.treeSitterIntegration.ready());
@@ -89,8 +67,7 @@ test('100000 lines retain local editing and dirty text through Rust and WASM tra
 	await expect.poll(() => page.evaluate(() => window.treeSitterIntegration?.state().execution)).toBe('rust');
 	await page.evaluate(() => {
 		const lines: string[] = [];
-		for (let index = 0; index < 25000; index++)
-			lines.push(`function item${index}() {`, '  return "value";', '}', '');
+		for (let index = 0; index < 25000; index++) lines.push(`function item${index}() {`, '  return "value";', '}', '');
 		window.treeSitterIntegration.open('javascript', lines.join('\n'));
 	});
 	await page.evaluate(() => window.treeSitterIntegration.ready());
@@ -99,32 +76,16 @@ test('100000 lines retain local editing and dirty text through Rust and WASM tra
 	await expect.poll(() => page.evaluate(() => window.treeSitterIntegration.state().execution)).toBe('worker');
 	await page.evaluate(() => window.treeSitterIntegration.edit());
 	await page.evaluate(() => window.treeSitterIntegration.ready());
-	expect(
-		await page.evaluate(() =>
-			window.treeSitterIntegration
-				.state()
-				.tokens.some(token => token.type === 'string' && token.text.includes('updated ')),
-		),
-	).toBe(true);
+	expect(await page.evaluate(() => window.treeSitterIntegration.state().tokens.some(token => token.type === 'string' && token.text.includes('updated ')))).toBe(true);
 	const version = await page.evaluate(() => window.treeSitterIntegration.state().version);
 	await page.evaluate(() => window.treeSitterIntegration.reconnectBackend());
 	await expect.poll(() => page.evaluate(() => window.treeSitterIntegration.state().execution)).toBe('rust');
 	await page.evaluate(() => window.treeSitterIntegration.ready());
 	expect(await page.evaluate(() => window.treeSitterIntegration.state().version)).toBe(version);
-	expect(
-		await page.evaluate(() =>
-			window.treeSitterIntegration
-				.state()
-				.tokens.some(token => token.type === 'string' && token.text.includes('updated ')),
-		),
-	).toBe(true);
+	expect(await page.evaluate(() => window.treeSitterIntegration.state().tokens.some(token => token.type === 'string' && token.text.includes('updated ')))).toBe(true);
 	await page.evaluate(() => window.treeSitterIntegration.undo());
 	await page.evaluate(() => window.treeSitterIntegration.ready());
-	expect(
-		await page.evaluate(() =>
-			window.treeSitterIntegration.state().text.startsWith('function item0() {\n  return "value";\n}'),
-		),
-	).toBe(true);
+	expect(await page.evaluate(() => window.treeSitterIntegration.state().text.startsWith('function item0() {\n  return "value";\n}'))).toBe(true);
 	expect(await page.evaluate(() => window.treeSitterIntegration.state().errors)).toEqual([]);
 });
 
@@ -141,9 +102,7 @@ for (const sample of samples) {
 				shared: true,
 				execution: 'rust',
 				errors: [],
-				tokens: expect.arrayContaining([
-					expect.objectContaining({ type: sample.tokenType, text: expect.stringContaining(sample.lexeme) }),
-				]),
+				tokens: expect.arrayContaining([expect.objectContaining({ type: sample.tokenType, text: expect.stringContaining(sample.lexeme) })]),
 			});
 		expect(errors).toEqual([]);
 		await page.evaluate(() => window.treeSitterIntegration.dispose());
@@ -197,9 +156,7 @@ test('new project languages retain highlights through offline edits and undo', a
 		await page.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowUp' : 'Control+Home');
 		await page.keyboard.press('Enter');
 		await page.evaluate(() => window.treeSitterIntegration.ready());
-		expect(await page.evaluate(() => window.treeSitterIntegration.state().text.replace(/\r\n/g, '\n'))).toBe(
-			'\n' + original.replace(/\r\n/g, '\n'),
-		);
+		expect(await page.evaluate(() => window.treeSitterIntegration.state().text.replace(/\r\n/g, '\n'))).toBe('\n' + original.replace(/\r\n/g, '\n'));
 		await page.evaluate(() => window.treeSitterIntegration.undo());
 		await page.evaluate(() => window.treeSitterIntegration.ready());
 		expect(await page.evaluate(() => window.treeSitterIntegration.state())).toMatchObject({
@@ -251,9 +208,7 @@ for (const sample of [
 				shared: true,
 				execution: 'rust',
 				errors: [],
-				tokens: expect.arrayContaining([
-					expect.objectContaining({ type: sample.tokenType, text: expect.stringContaining(sample.lexeme) }),
-				]),
+				tokens: expect.arrayContaining([expect.objectContaining({ type: sample.tokenType, text: expect.stringContaining(sample.lexeme) })]),
 			});
 		expect(errors).toEqual([]);
 		await page.evaluate(() => window.treeSitterIntegration.dispose());
@@ -262,9 +217,7 @@ for (const sample of [
 
 for (const backend of ['rust', 'offline'])
 	for (const locale of ['en', 'zh-CN']) {
-		test(`Token inspection reports live embedded captures and restores focus in ${locale} (${backend})`, async ({
-			page,
-		}) => {
+		test(`Token inspection reports live embedded captures and restores focus in ${locale} (${backend})`, async ({ page }) => {
 			const errors: string[] = [];
 			page.on('pageerror', error => errors.push(error.message));
 			await page.goto(`/treeSitter.html?locale=${locale}&backend=${backend}`);
@@ -296,9 +249,7 @@ for (const backend of ['rust', 'offline'])
 			expect(value).not.toContain('No TextMate grammar');
 			await expect(report).toBeFocused();
 			await page.keyboard.press('Tab');
-			await expect(
-				page.getByRole('button', { name: locale === 'en' ? 'Close' : '关闭', exact: true }),
-			).toBeFocused();
+			await expect(page.getByRole('button', { name: locale === 'en' ? 'Close' : '关闭', exact: true })).toBeFocused();
 			await page.keyboard.press('Shift+Tab');
 			await expect(report).toBeFocused();
 			expect(await page.evaluate(() => window.treeSitterIntegration.showInspectionHelp())).toBe(true);
@@ -350,12 +301,8 @@ for (const [index, fixture] of structures.entries()) {
 		await page.evaluate(fixture => window.treeSitterIntegration.open(fixture.language, fixture.text), fixture);
 		const facts = await page.evaluate(() => window.treeSitterIntegration.facts());
 		for (const name of fixture.symbols) expect(facts.symbols.map(symbol => symbol.name)).toContain(name);
-		for (const [start, end] of fixture.folds)
-			expect(facts.folds).toEqual(
-				expect.arrayContaining([expect.objectContaining({ startLineIndex: start, endLineIndex: end })]),
-			);
-		if ('exactSymbols' in fixture && fixture.exactSymbols)
-			expect(facts.symbols.map(symbol => symbol.name)).toEqual(fixture.symbols);
+		for (const [start, end] of fixture.folds) expect(facts.folds).toEqual(expect.arrayContaining([expect.objectContaining({ startLineIndex: start, endLineIndex: end })]));
+		if ('exactSymbols' in fixture && fixture.exactSymbols) expect(facts.symbols.map(symbol => symbol.name)).toEqual(fixture.symbols);
 		if ('noFolds' in fixture && fixture.noFolds) expect(facts.folds).toEqual([]);
 		expect(await page.evaluate(() => window.treeSitterIntegration.state().errors)).toEqual([]);
 		await page.evaluate(() => window.treeSitterIntegration.dispose());

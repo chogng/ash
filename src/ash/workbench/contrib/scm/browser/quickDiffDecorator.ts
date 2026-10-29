@@ -8,18 +8,9 @@ import { type IEditorDecorationsCollection } from '../../../../editor/common/edi
 
 import { type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { warningForeground } from '../../../../platform/theme/common/colors/baseColors.js';
-import {
-	diffInsertedLineMarker,
-	diffRemovedLineMarker,
-} from '../../../../platform/theme/common/colors/editorColors.js';
+import { diffInsertedLineMarker, diffRemovedLineMarker } from '../../../../platform/theme/common/colors/editorColors.js';
 import { type QuickDiffComparison, type QuickDiffModelReference } from '../common/quickDiff.js';
-import {
-	MinimapPosition,
-	OverviewRulerLane,
-	TrackedRangeStickiness,
-	type IModelDecorationOptions,
-	type ITextModel,
-} from '../../../../editor/common/model.js';
+import { MinimapPosition, OverviewRulerLane, TrackedRangeStickiness, type IModelDecorationOptions, type ITextModel } from '../../../../editor/common/model.js';
 
 interface QuickDiffDecorationMetadata {
 	readonly kind: LineDiffKind.Added | LineDiffKind.Modified | LineDiffKind.Removed;
@@ -45,8 +36,7 @@ export class QuickDiffDecorator extends Disposable {
 		this._register(modelReference.object.onDidChange(() => this.rebuild(modelReference.object.state.comparisons)));
 		this._register(
 			configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration('scm.diffDecorations'))
-					this.rebuild(modelReference.object.state.comparisons);
+				if (event.affectsConfiguration('scm.diffDecorations')) this.rebuild(modelReference.object.state.comparisons);
 			}),
 		);
 		this.rebuild(modelReference.object.state.comparisons);
@@ -66,10 +56,14 @@ export class QuickDiffDecorator extends Disposable {
 					}
 				: {}),
 			...(setting === 'all' || setting === 'overview'
-				? { overviewRuler: { color, position: OverviewRulerLane.Left } }
+				? {
+						overviewRuler: { color, position: OverviewRulerLane.Left },
+					}
 				: {}),
 			...(setting === 'all' || setting === 'minimap'
-				? { minimap: { color, position: MinimapPosition.Gutter } }
+				? {
+						minimap: { color, position: MinimapPosition.Gutter },
+					}
 				: {}),
 		};
 	}
@@ -88,10 +82,7 @@ export class QuickDiffDecorator extends Disposable {
 				const kind = decorationKindForRow(row);
 				const current = byLine.get(lineIndex);
 				if (!current || kindPriority(kind) > kindPriority(current.kind)) {
-					byLine.set(
-						lineIndex,
-						Object.freeze({ kind, providerLabels: Object.freeze([comparison.original.label]) }),
-					);
+					byLine.set(lineIndex, Object.freeze({ kind, providerLabels: Object.freeze([comparison.original.label]) }));
 				} else if (!current.providerLabels.includes(comparison.original.label)) {
 					byLine.set(
 						lineIndex,
@@ -108,10 +99,7 @@ export class QuickDiffDecorator extends Disposable {
 				.sort(([left], [right]) => left - right)
 				.map(([lineIndex, metadata]) =>
 					Object.freeze({
-						range: Range.fromPositions(
-							new Position(lineIndex + 1, 0 + 1),
-							new Position(lineIndex + 1, this.model.getLineLength(lineIndex + 1) + 1),
-						),
+						range: Range.fromPositions(new Position(lineIndex + 1, 0 + 1), new Position(lineIndex + 1, this.model.getLineLength(lineIndex + 1) + 1)),
 						options: {
 							...this.resolve(metadata),
 							stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
@@ -181,11 +169,6 @@ function colorForKind(kind: QuickDiffDecorationMetadata['kind']): string {
 }
 
 function hoverText(metadata: QuickDiffDecorationMetadata): string {
-	const kind =
-		metadata.kind === LineDiffKind.Added
-			? 'Added'
-			: metadata.kind === LineDiffKind.Modified
-				? 'Modified'
-				: 'Deleted';
+	const kind = metadata.kind === LineDiffKind.Added ? 'Added' : metadata.kind === LineDiffKind.Modified ? 'Modified' : 'Deleted';
 	return `${kind} relative to ${metadata.providerLabels.join(', ')}`;
 }

@@ -1,21 +1,11 @@
 import { designEndpointContours, designStrokeLayers } from '../common/model/designVectorStroke.js';
 import { designVariableStrokeContours } from '../common/model/designVariableWidth.js';
-import {
-	designNetworkContours,
-	designNetworkRegions,
-	type DesignVectorNetwork,
-} from '../common/model/designVectorNetwork.js';
+import { designNetworkContours, designNetworkRegions, type DesignVectorNetwork } from '../common/model/designVectorNetwork.js';
 import type { DesignVectorIntersection } from '../common/model/designVectorTopology.js';
 import { localize } from '../../../../nls.js';
 import type paper from 'paper';
 import type { DesignShape } from '../common/model/document.js';
-import {
-	designPathData,
-	designPathFillContours,
-	designPathStrokeContours,
-	designShapeContours,
-	type DesignPathContour,
-} from '../common/model/designVector.js';
+import { designPathData, designPathFillContours, designPathStrokeContours, designShapeContours, type DesignPathContour } from '../common/model/designVector.js';
 
 let engine:
 	| {
@@ -45,24 +35,14 @@ export function isDesignVectorGeometryReady(): boolean {
 }
 
 /** Offset is baked only when the user confirms; callers can reuse these contours for a history-free preview. */
-export function offsetDesignVector(
-	shape: DesignShape,
-	amount: number,
-	join: 'miter' | 'round',
-): readonly DesignPathContour[] {
+export function offsetDesignVector(shape: DesignShape, amount: number, join: 'miter' | 'round'): readonly DesignPathContour[] {
 	if (!engine) {
 		return [];
 	}
 	const { scope, offset } = engine;
 	scope.activate();
-	let closed =
-		shape.kind === 'path'
-			? designPathFillContours(shape)
-			: shape.kind === 'group'
-				? getDesignVectorContours(shape)
-				: designShapeContours(shape);
-	let open: readonly DesignPathContour[] =
-		shape.kind === 'path' ? designPathStrokeContours(shape).filter(contour => !contour.closed) : [];
+	let closed = shape.kind === 'path' ? designPathFillContours(shape) : shape.kind === 'group' ? getDesignVectorContours(shape) : designShapeContours(shape);
+	let open: readonly DesignPathContour[] = shape.kind === 'path' ? designPathStrokeContours(shape).filter(contour => !contour.closed) : [];
 	if (shape.kind === 'path' && shape.network) {
 		const regions = designNetworkRegions(shape.network),
 			boundaries = new Set(regions.flatMap(region => region.key.split(',')));
@@ -126,11 +106,7 @@ export function offsetDesignVector(
 }
 
 /** Each Paper child represents exactly one graph edge, including self-crossings and overlap endpoints. */
-export function getDesignNetworkIntersections(
-	network: DesignVectorNetwork,
-	width: number,
-	height: number,
-): readonly DesignVectorIntersection[] {
+export function getDesignNetworkIntersections(network: DesignVectorNetwork, width: number, height: number): readonly DesignVectorIntersection[] {
 	if (!engine) {
 		return [];
 	}
@@ -148,12 +124,7 @@ export function getDesignNetworkIntersections(
 			}
 			const first = { edge: hit.path.index, time: hit.time },
 				second = { edge: other.path.index, time: other.time };
-			const endpoint = (location: typeof first) =>
-				location.time < 1e-8
-					? network.edges[location.edge].start
-					: location.time > 1 - 1e-8
-						? network.edges[location.edge].end
-						: undefined;
+			const endpoint = (location: typeof first) => (location.time < 1e-8 ? network.edges[location.edge].start : location.time > 1 - 1e-8 ? network.edges[location.edge].end : undefined);
 			const a = endpoint(first),
 				b = endpoint(second);
 			return a !== undefined && a === b ? [] : [{ first, second }];
@@ -164,11 +135,7 @@ export function getDesignNetworkIntersections(
 }
 
 /** Results use the input's local box, so the renderer, flatten command and SVG export share cubic geometry. */
-export function getDesignVectorContours(
-	shape: DesignShape,
-	strokeOnly = false,
-	clip?: { x: number; y: number; width: number; height: number },
-): readonly DesignPathContour[] {
+export function getDesignVectorContours(shape: DesignShape, strokeOnly = false, clip?: { x: number; y: number; width: number; height: number }): readonly DesignPathContour[] {
 	if (!engine) {
 		return [];
 	}
@@ -180,10 +147,7 @@ export function getDesignVectorContours(
 	scope.activate();
 	const project = scope.project;
 	const empty = (): paper.PathItem => new scope.Path({ insert: false });
-	const combine = (
-		items: paper.PathItem[],
-		operation: 'unite' | 'subtract' | 'intersect' | 'exclude',
-	): paper.PathItem => {
+	const combine = (items: paper.PathItem[], operation: 'unite' | 'subtract' | 'intersect' | 'exclude'): paper.PathItem => {
 		if (!items.length) {
 			return empty();
 		}
@@ -215,11 +179,7 @@ export function getDesignVectorContours(
 		const parts: paper.PathItem[] = [];
 		for (const path of paths) {
 			const strokes: paper.Path[] = [];
-			const dash = shape.dashArray?.length
-				? shape.dashArray.length % 2
-					? [...shape.dashArray, ...shape.dashArray]
-					: shape.dashArray
-				: undefined;
+			const dash = shape.dashArray?.length ? (shape.dashArray.length % 2 ? [...shape.dashArray, ...shape.dashArray] : shape.dashArray) : undefined;
 			if (dash) {
 				let distance = 0,
 					index = 0;
@@ -248,21 +208,12 @@ export function getDesignVectorContours(
 					index++;
 				}
 				if (distance < path.length - 1e-8) {
-					throw new Error(
-						localize(
-							'sessions.design.vectorComplexDash',
-							'Increase the dash lengths before outlining this path.',
-						),
-					);
+					throw new Error(localize('sessions.design.vectorComplexDash', 'Increase the dash lengths before outlining this path.'));
 				}
 			} else {
 				strokes.push(path.clone({ insert: false }));
 			}
-			if (
-				path.closed &&
-				strokes.length > 1 &&
-				strokes.at(-1)!.lastSegment.point.getDistance(strokes[0].firstSegment.point) < 1e-7
-			) {
+			if (path.closed && strokes.length > 1 && strokes.at(-1)!.lastSegment.point.getDistance(strokes[0].firstSegment.point) < 1e-7) {
 				// A dash crossing the closing seam has one join, not two caps.
 				const last = strokes.pop()!,
 					first = strokes.shift()!;
@@ -294,12 +245,7 @@ export function getDesignVectorContours(
 							new scope.Path({
 								insert: false,
 								closed: true,
-								segments: [
-									anchor.add(across),
-									anchor.add(along).add(across),
-									anchor.add(along).subtract(across),
-									anchor.subtract(across),
-								],
+								segments: [anchor.add(across), anchor.add(along).add(across), anchor.add(along).subtract(across), anchor.subtract(across)],
 							}),
 						);
 					}
@@ -323,18 +269,12 @@ export function getDesignVectorContours(
 			return empty();
 		}
 		if (current.kind === 'group') {
-			const operation = (
-				{ union: 'unite', subtract: 'subtract', intersect: 'intersect', exclude: 'exclude' } as const
-			)[current.booleanOperation ?? 'union'];
+			const operation = ({ union: 'unite', subtract: 'subtract', intersect: 'intersect', exclude: 'exclude' } as const)[current.booleanOperation ?? 'union'];
 			result = combine(
 				current.children.map(child => geometry(child)),
 				operation,
 			);
-			result.scale(
-				current.width / current.contentWidth,
-				current.height / current.contentHeight,
-				new scope.Point(0, 0),
-			);
+			result.scale(current.width / current.contentWidth, current.height / current.contentHeight, new scope.Point(0, 0));
 			result.translate(new scope.Point(current.x, current.y));
 		} else {
 			const contours = current.kind === 'path' ? designPathStrokeContours(current) : designShapeContours(current);
@@ -344,12 +284,7 @@ export function getDesignVectorContours(
 				fillRule: current.kind === 'path' ? (current.fillRule ?? 'nonzero') : 'nonzero',
 			});
 			const fill = new scope.CompoundPath({
-				pathData: designPathData(
-					current.kind === 'path'
-						? designPathFillContours(current)
-						: contours.filter(contour => contour.closed),
-					current,
-				),
+				pathData: designPathData(current.kind === 'path' ? designPathFillContours(current) : contours.filter(contour => contour.closed), current),
 				insert: false,
 				fillRule: source.fillRule,
 			});
@@ -362,10 +297,7 @@ export function getDesignVectorContours(
 					});
 					let stroke = outline(boundary, { ...current, strokeWidth: layer.width });
 					if (layer.alignment !== 'center') {
-						const clipped =
-							layer.alignment === 'inside'
-								? stroke.intersect(boundary, { insert: false })
-								: stroke.subtract(boundary, { insert: false });
+						const clipped = layer.alignment === 'inside' ? stroke.intersect(boundary, { insert: false }) : stroke.subtract(boundary, { insert: false });
 						stroke.remove();
 						stroke = clipped;
 					}

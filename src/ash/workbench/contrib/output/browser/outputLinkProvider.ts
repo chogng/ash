@@ -16,7 +16,9 @@ export class OutputLinkProvider extends Disposable {
 		this._register(
 			languageFeatures.linkProvider.register(
 				{ scheme: 'output' },
-				{ provideLinks: (request, signal) => (signal.aborted ? [] : this.provideLinks(request)) },
+				{
+					provideLinks: (request, signal) => (signal.aborted ? [] : this.provideLinks(request)),
+				},
 			),
 		);
 	}

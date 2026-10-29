@@ -1,9 +1,4 @@
-import {
-	IAdapterManager,
-	createStaticDebugAdapterFactory,
-	type DebugAdapterFactory,
-	type DebugAdapterFactoryRegistration,
-} from '../../../contrib/debug/common/debug.js';
+import { IAdapterManager, createStaticDebugAdapterFactory, type DebugAdapterFactory, type DebugAdapterFactoryRegistration } from '../../../contrib/debug/common/debug.js';
 import type { IExtensionPointUser } from '../common/extensionsRegistry.js';
 import type { ExtensionManifest } from '../common/extensionManifest.js';
 import { localizeManifest } from '../../../../platform/extensionManagement/common/extensionNls.js';
@@ -12,12 +7,7 @@ import { MenusRegistry, type ISubmenuItem } from '../../../../platform/actions/c
 import { extensionMenuId } from '../common/extensionMenus.js';
 import { ViewsRegistry } from '../../../common/views.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
-import {
-	KeybindingsRegistry,
-	KeybindingSource,
-	KeybindingWeight,
-	type IKeybindingRule,
-} from '../../../../platform/keybinding/common/keybindingsRegistry.js';
+import { KeybindingsRegistry, KeybindingSource, KeybindingWeight, type IKeybindingRule } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import {
@@ -26,10 +16,7 @@ import {
 	type IConfigurationNode,
 	type IConfigurationDefaults,
 } from '../../../../platform/configuration/common/configurationRegistry.js';
-import {
-	registerProblemMatcherContributions,
-	type ProblemMatcherContributions,
-} from '../../../contrib/tasks/common/problemMatcher.js';
+import { registerProblemMatcherContributions, type ProblemMatcherContributions } from '../../../contrib/tasks/common/problemMatcher.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
@@ -39,10 +26,7 @@ import { TokenClassificationExtensionPoint } from '../../themes/common/tokenClas
 import type { ColorContribution } from '../../../../platform/theme/common/colorRegistry.js';
 import type { IconContribution, IconFontDefinition } from '../../../../platform/theme/common/iconRegistry.js';
 import type { TokenTypeOrModifierContribution } from '../../../../platform/theme/common/tokenClassificationRegistry.js';
-import {
-	WorkbenchFileIconThemesRegistry,
-	WorkbenchProductIconThemesRegistry,
-} from '../../themes/common/themeExtensionPoints.js';
+import { WorkbenchFileIconThemesRegistry, WorkbenchProductIconThemesRegistry } from '../../themes/common/themeExtensionPoints.js';
 import type { IWorkbenchFileIconTheme, IWorkbenchProductIconTheme } from '../../themes/common/workbenchThemeService.js';
 import { FileIconThemeData } from '../../themes/browser/fileIconThemeData.js';
 import { ProductIconThemeData, loadExtensionFontIcon } from '../../themes/browser/productIconThemeData.js';
@@ -51,10 +35,7 @@ import { Disposable, DisposableStore, toDisposable } from '../../../../base/comm
 import type { LanguageConfiguration } from '../../../../editor/common/languages/languageConfiguration.js';
 import type { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
 import { parseLanguageConfiguration } from './languageConfigurationParser.js';
-import type {
-	LanguageDescriptionContribution,
-	LanguageDescriptionRegistration,
-} from '../../../../editor/common/services/languagesRegistry.js';
+import type { LanguageDescriptionContribution, LanguageDescriptionRegistration } from '../../../../editor/common/services/languagesRegistry.js';
 import type { IAshLanguageService } from '../../../../editor/common/languages/language.js';
 import type {
 	IExtensionApi,
@@ -71,32 +52,11 @@ import { basename } from '../../../../base/common/resources.js';
 import { EditorPanes, getBuiltinEditorPaneFactory, type IEditorPaneDescriptor } from '../../../browser/editor.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { isResourceDiffEditorInput } from '../../../common/editor.js';
-import {
-	ExtensionFileTemplateRegistry,
-	type ExtensionFileTemplateDefinition,
-	type ExtensionFileTemplateSource,
-} from '../common/extensionFileTemplate.js';
+import { ExtensionFileTemplateRegistry, type ExtensionFileTemplateDefinition, type ExtensionFileTemplateSource } from '../common/extensionFileTemplate.js';
 import { toExtensionResourceURI } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
-import {
-	ExtensionThemeRegistry,
-	loadExtensionTheme,
-	type ExtensionThemeDefinition,
-	type ExtensionThemeSource,
-} from '../common/extensionTheme.js';
-import type {
-	ExtensionCatalog,
-	ExtensionDescriptor,
-	ExtensionServiceFailure,
-	ExtensionSnippetActivation,
-	ExtensionSnippetFile,
-	IExtensionService,
-} from '../common/extensionService.js';
-import {
-	ExtensionDebugAdapterRegistry,
-	validateExtensionDebugAdapterDefinitions,
-	type ExtensionDebugAdapterDefinition,
-	type ExtensionDebugAdapterSource,
-} from '../common/extensionDebugAdapter.js';
+import { ExtensionThemeRegistry, loadExtensionTheme, type ExtensionThemeDefinition, type ExtensionThemeSource } from '../common/extensionTheme.js';
+import type { ExtensionCatalog, ExtensionDescriptor, ExtensionServiceFailure, ExtensionSnippetActivation, ExtensionSnippetFile, IExtensionService } from '../common/extensionService.js';
+import { ExtensionDebugAdapterRegistry, validateExtensionDebugAdapterDefinitions, type ExtensionDebugAdapterDefinition, type ExtensionDebugAdapterSource } from '../common/extensionDebugAdapter.js';
 
 export interface AppServerExtensionServiceOptions {
 	readonly api: IExtensionApi;
@@ -154,9 +114,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	private snippetHandler: ((files: readonly ExtensionSnippetFile[]) => ExtensionSnippetActivation) | undefined;
 	private snippetOwnerRevision = 0;
 	private activeSnippetOwnerRevision = 0;
-	private readonly problemMatcherRegistration = this._register(
-		registerProblemMatcherContributions({ matchers: [], patterns: [] }),
-	);
+	private readonly problemMatcherRegistration = this._register(registerProblemMatcherContributions({ matchers: [], patterns: [] }));
 	private readonly debugAdapterFactoryRegistration: DebugAdapterFactoryRegistration;
 	private readonly themeRegistry: ExtensionThemeRegistry;
 	private readonly fileTemplateRegistry: ExtensionFileTemplateRegistry;
@@ -176,8 +134,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	readonly themes: ExtensionThemeSource;
 	readonly fileTemplates: ExtensionFileTemplateSource;
 	readonly debugAdapters: ExtensionDebugAdapterSource;
-	private manifests: readonly { readonly description: ExtensionDescriptor; readonly manifest: ExtensionManifest }[] =
-		[];
+	private manifests: readonly { readonly description: ExtensionDescriptor; readonly manifest: ExtensionManifest }[] = [];
 
 	getExtensionPointContributions<T>(name: string): readonly IExtensionPointUser<T>[] {
 		return this.manifests.flatMap(entry => {
@@ -198,9 +155,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		if (options.api.onDidChange) {
 			this._register(
 				options.api.onDidChange(() => {
-					void this.requestReload('cached').catch(error =>
-						console.error('Extension enablement refresh failed', error),
-					);
+					void this.requestReload('cached').catch(error => console.error('Extension enablement refresh failed', error));
 				}),
 			);
 		}
@@ -253,25 +208,16 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			this.dispose();
 			throw new TypeError('App Server extension service options are required');
 		}
-		if (
-			!options.api ||
-			typeof options.api.list !== 'function' ||
-			typeof options.api.resources?.readExtensionResourceBytes !== 'function'
-		) {
+		if (!options.api || typeof options.api.list !== 'function' || typeof options.api.resources?.readExtensionResourceBytes !== 'function') {
 			this.dispose();
 			throw new TypeError('App Server extension service requires an extension API');
 		}
-		const hasLanguageServices =
-			options.languageService !== undefined || options.languageConfigurationService !== undefined;
+		const hasLanguageServices = options.languageService !== undefined || options.languageConfigurationService !== undefined;
 		if (hasLanguageServices && (!options.languageService || !options.languageConfigurationService)) {
 			this.dispose();
-			throw new TypeError(
-				'App Server extension language contributions require language and configuration services',
-			);
+			throw new TypeError('App Server extension language contributions require language and configuration services');
 		}
-		this.languageRegistration = options.languageService
-			? this._register(options.languageService.registerLanguages([]))
-			: undefined;
+		this.languageRegistration = options.languageService ? this._register(options.languageService.registerLanguages([])) : undefined;
 		this.debugAdapterFactoryRegistration = this._register(adapters.registerFactories([]));
 		if (options.eventApi) {
 			let activationGeneration: number | undefined;
@@ -281,18 +227,12 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					if (event.params.activationGeneration === activationGeneration) return;
 					activationGeneration = event.params.activationGeneration;
 				} else if (event.method === 'extensions/changed') {
-					if (
-						extensionManagementRevision?.instanceId === event.params.instanceId &&
-						event.params.generation <= extensionManagementRevision.generation
-					)
-						return;
+					if (extensionManagementRevision?.instanceId === event.params.instanceId && event.params.generation <= extensionManagementRevision.generation) return;
 					extensionManagementRevision = event.params;
 				} else {
 					return;
 				}
-				void this.requestReload('cached').catch(error =>
-					console.error('Declarative extension refresh failed', error),
-				);
+				void this.requestReload('cached').catch(error => console.error('Declarative extension refresh failed', error));
 			});
 			this._register(toDisposable(() => subscription.dispose()));
 		}
@@ -356,9 +296,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		});
 	}
 
-	public registerSnippetHandler(
-		handler: (files: readonly ExtensionSnippetFile[]) => ExtensionSnippetActivation,
-	): IDisposable {
+	public registerSnippetHandler(handler: (files: readonly ExtensionSnippetFile[]) => ExtensionSnippetActivation): IDisposable {
 		this.assertNotDisposed();
 		if (this.snippetHandler) throw new Error('A snippet contribution owner is already registered');
 		this.snippetHandler = handler;
@@ -396,10 +334,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		const languageConfigurations: LanguageConfigurationContribution[] = [];
 		const snippetResources: ExtensionSnippetFile[] = [];
 		const resources = new Map<string, Promise<Uint8Array>>();
-		const languageConfigurationResources = new Map<
-			string,
-			Promise<ReturnType<typeof parseLanguageConfiguration>>
-		>();
+		const languageConfigurationResources = new Map<string, Promise<ReturnType<typeof parseLanguageConfiguration>>>();
 		const snippetFiles = new Map<string, Promise<string>>();
 		const themes: ExtensionThemeDefinition[] = [];
 		const fileIconThemes: IWorkbenchFileIconTheme[] = [];
@@ -422,8 +357,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			// Frozen package digests identify every resource in this snapshot. An
 			// unchanged scan must preserve factory identities and pending Debug launches.
 			const signature = getNLSLanguage() + '\0' + JSON.stringify(transportCatalog);
-			if (signature === this.activeCatalogSignature && snippetOwnerRevision === this.activeSnippetOwnerRevision)
-				return;
+			if (signature === this.activeCatalogSignature && snippetOwnerRevision === this.activeSnippetOwnerRevision) return;
 			const catalog = projectExtensionCatalog(transportCatalog);
 			const preparedManifests = new Map<string, ExtensionManifest>();
 			const keybindings: IKeybindingRule[] = [];
@@ -434,11 +368,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			// file's open/read/release round trips on the startup critical path.
 			await Promise.all(
 				Array.from({ length: Math.min(8, transportCatalog.extensions.length) }, async () => {
-					while (
-						!this.isDisposed &&
-						preparationFailures.size === 0 &&
-						nextExtension < transportCatalog.extensions.length
-					) {
+					while (!this.isDisposed && preparationFailures.size === 0 && nextExtension < transportCatalog.extensions.length) {
 						const index = nextExtension++;
 						const extension = transportCatalog.extensions[index]!;
 						try {
@@ -449,30 +379,19 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 							const manifest = parseExtensionManifest(manifestJson, extension);
 							preparedManifests.set(extension.id, manifest);
 							const paths = new Set([
-								...(this.options.languageService
-									? manifest.contributes.languages.flatMap(language =>
-											language.configuration ? [language.configuration] : [],
-										)
-									: []),
-								...(this.options.languageService
-									? manifest.contributes.snippets.map(snippet => snippet.path)
-									: []),
+								...(this.options.languageService ? manifest.contributes.languages.flatMap(language => (language.configuration ? [language.configuration] : [])) : []),
+								...(this.options.languageService ? manifest.contributes.snippets.map(snippet => snippet.path) : []),
 								...manifest.contributes.themes.map(theme => theme.path),
 								...manifest.contributes.iconThemes.map(theme => theme.path),
 								...manifest.contributes.productIconThemes.map(theme => theme.path),
-								...manifest.contributes.icons.flatMap(icon =>
-									typeof icon.defaults === 'string' ? [] : [icon.defaults.fontPath],
-								),
+								...manifest.contributes.icons.flatMap(icon => (typeof icon.defaults === 'string' ? [] : [icon.defaults.fontPath])),
 							]);
 							for (const path of paths) {
 								if (this.isDisposed || preparationFailures.size > 0) return;
 								await this.loadResource(resources, catalog.generation, extension.id, path);
 							}
 						} catch (error) {
-							preparationFailures.set(
-								index,
-								Object.freeze({ extension: projectExtensionDescriptor(extension), error }),
-							);
+							preparationFailures.set(index, Object.freeze({ extension: projectExtensionDescriptor(extension), error }));
 						}
 					}
 				}),
@@ -482,11 +401,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			// Resolve independent include chains before ordered materialization and
 			// atomic publication; one theme must not serialize the remaining themes.
 			const preparedThemes = new Map<string, ExtensionThemeDefinition>();
-			const themeLoads = transportCatalog.extensions.flatMap(extension =>
-				preparedManifests
-					.get(extension.id)!
-					.contributes.themes.map((theme, index) => ({ extension, theme, index })),
-			);
+			const themeLoads = transportCatalog.extensions.flatMap(extension => preparedManifests.get(extension.id)!.contributes.themes.map((theme, index) => ({ extension, theme, index })));
 			let nextTheme = 0;
 			await Promise.all(
 				Array.from({ length: Math.min(8, themeLoads.length) }, async () => {
@@ -494,18 +409,10 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 						const position = nextTheme++;
 						const { extension, theme, index } = themeLoads[position]!;
 						try {
-							const definition = await loadExtensionTheme(
-								path => this.loadResource(resources, catalog.generation, extension.id, path),
-								extension.id,
-								theme,
-								index,
-							);
+							const definition = await loadExtensionTheme(path => this.loadResource(resources, catalog.generation, extension.id, path), extension.id, theme, index);
 							preparedThemes.set(`${extension.id}\0${index}`, definition);
 						} catch (error) {
-							preparationFailures.set(
-								position,
-								Object.freeze({ extension: projectExtensionDescriptor(extension), error }),
-							);
+							preparationFailures.set(position, Object.freeze({ extension: projectExtensionDescriptor(extension), error }));
 						}
 					}
 				}),
@@ -517,18 +424,11 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				const manifest = preparedManifests.get(extension.id)!;
 				keybindings.push(
 					...manifest.contributes.keybindings
-						.filter(
-							rule =>
-								extension.sourceKind === 'builtIn' ||
-								(rule.args === undefined && declarativeEditingCommands.has(rule.command)),
-						)
+						.filter(rule => extension.sourceKind === 'builtIn' || (rule.args === undefined && declarativeEditingCommands.has(rule.command)))
 						.map(rule => ({
 							...rule,
 							source: KeybindingSource.Workbench,
-							priority:
-								extension.sourceKind === 'builtIn'
-									? KeybindingWeight.BuiltinExtension
-									: KeybindingWeight.ExternalExtension,
+							priority: extension.sourceKind === 'builtIn' ? KeybindingWeight.BuiltinExtension : KeybindingWeight.ExternalExtension,
 						})),
 				);
 				manifests.push({ description: activeExtension, manifest });
@@ -540,9 +440,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 								{
 									content: entry.contents,
 									when: entry.when ? ContextKeyExpr.deserialize(entry.when) : undefined,
-									precondition: entry.precondition
-										? ContextKeyExpr.deserialize(entry.precondition)
-										: undefined,
+									precondition: entry.precondition ? ContextKeyExpr.deserialize(entry.precondition) : undefined,
 									group: entry.group,
 									order: entry.order,
 								},
@@ -555,8 +453,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					for (const placement of submenu.placements) {
 						const [group, orderText] = (placement.group ?? '').split('@');
 						const order = orderText === undefined ? undefined : Number(orderText);
-						if (order !== undefined && !Number.isFinite(order))
-							throw new TypeError('Invalid submenu order');
+						if (order !== undefined && !Number.isFinite(order)) throw new TypeError('Invalid submenu order');
 						submenus.push({
 							menu: placement.menu,
 							item: {
@@ -580,14 +477,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 						if (key) {
 							const locale = getNLSLanguage() === 'en' ? '' : '.' + getNLSLanguage();
 							const messages = parseJsonc(
-								new TextDecoder().decode(
-									await this.loadResource(
-										resources,
-										catalog.generation,
-										extension.id,
-										`package.nls${locale}.json`,
-									),
-								),
+								new TextDecoder().decode(await this.loadResource(resources, catalog.generation, extension.id, `package.nls${locale}.json`)),
 								'Editor labels',
 							) as Record<string, unknown>;
 							if (typeof messages[key] !== 'string') {
@@ -605,10 +495,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 											...factory.documentType,
 											extensions: editor.selector
 												.map(selector => selector.filenamePattern)
-												.filter(
-													(pattern): pattern is string =>
-														pattern !== undefined && /^\*\.[A-Za-z0-9-]+$/.test(pattern),
-												)
+												.filter((pattern): pattern is string => pattern !== undefined && /^\*\.[A-Za-z0-9-]+$/.test(pattern))
 												.map(pattern => pattern.slice(1).toLowerCase()),
 										},
 									}
@@ -621,21 +508,13 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 								const supported = editor.selector.some(
 									selector =>
 										(selector.filenamePattern !== undefined &&
-											match(
-												selector.filenamePattern.toLowerCase(),
-												(selector.filenamePattern.includes('/')
-													? input.resource.path
-													: basename(input.resource)
-												).toLowerCase(),
-											)) ||
+											match(selector.filenamePattern.toLowerCase(), (selector.filenamePattern.includes('/') ? input.resource.path : basename(input.resource)).toLowerCase())) ||
 										(mediaType !== undefined && selector.mimeType === mediaType),
 								);
 								if (!supported) {
 									return EditorPaneMatch.None;
 								}
-								return editor.priority === 'default'
-									? EditorPaneMatch.Default
-									: EditorPaneMatch.Optional;
+								return editor.priority === 'default' ? EditorPaneMatch.Default : EditorPaneMatch.Optional;
 							},
 						});
 					}
@@ -652,11 +531,8 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 							defaults: { id: icon.defaults },
 						});
 					} else {
-						const loaded = await loadExtensionFontIcon(
-							extension.id + '.' + icon.id,
-							icon.defaults.fontPath,
-							icon.defaults.fontCharacter,
-							path => this.loadResource(resources, catalog.generation, extension.id, path),
+						const loaded = await loadExtensionFontIcon(extension.id + '.' + icon.id, icon.defaults.fontPath, icon.defaults.fontCharacter, path =>
+							this.loadResource(resources, catalog.generation, extension.id, path),
 						);
 						if (this.isDisposed) {
 							return;
@@ -669,13 +545,8 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 						themeContributions.fonts.push(loaded.font);
 					}
 				}
-				if (
-					(manifest.contributes.languages.length > 0 || manifest.contributes.snippets.length > 0) &&
-					!this.options.languageService
-				) {
-					throw new Error(
-						`Extension '${extension.id}' contributes language features but no editor language service is available`,
-					);
+				if ((manifest.contributes.languages.length > 0 || manifest.contributes.snippets.length > 0) && !this.options.languageService) {
+					throw new Error(`Extension '${extension.id}' contributes language features but no editor language service is available`);
 				}
 				for (const language of manifest.contributes.languages) {
 					languages.push({
@@ -692,14 +563,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					});
 					if (language.configuration !== undefined) {
 						const key = `${extension.id}\0${language.configuration}`;
-						const configuration =
-							languageConfigurationResources.get(key) ??
-							this.loadLanguageConfiguration(
-								resources,
-								catalog.generation,
-								extension.id,
-								language.configuration,
-							);
+						const configuration = languageConfigurationResources.get(key) ?? this.loadLanguageConfiguration(resources, catalog.generation, extension.id, language.configuration);
 						languageConfigurationResources.set(key, configuration);
 						const resolvedConfiguration = await configuration;
 						if (this.isDisposed) return;
@@ -712,9 +576,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				}
 				for (const snippet of manifest.contributes.snippets) {
 					const key = `${extension.id}\0${snippet.path}`;
-					const definitions =
-						snippetFiles.get(key) ??
-						this.loadSnippetFile(resources, catalog.generation, extension.id, snippet.path);
+					const definitions = snippetFiles.get(key) ?? this.loadSnippetFile(resources, catalog.generation, extension.id, snippet.path);
 					snippetFiles.set(key, definitions);
 					const content = await definitions;
 					if (this.isDisposed) return;
@@ -742,11 +604,8 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					const bytes = await this.loadResource(resources, catalog.generation, extension.id, theme.path);
 					const directory = theme.path.slice(0, theme.path.lastIndexOf('/') + 1);
 					fileIconThemes.push(
-						await FileIconThemeData.load(
-							theme.id,
-							theme.label,
-							parseJsonc(new TextDecoder().decode(bytes), 'File icon theme ' + theme.id),
-							path => this.loadResource(resources, catalog.generation, extension.id, directory + path),
+						await FileIconThemeData.load(theme.id, theme.label, parseJsonc(new TextDecoder().decode(bytes), 'File icon theme ' + theme.id), path =>
+							this.loadResource(resources, catalog.generation, extension.id, directory + path),
 						),
 					);
 					if (this.isDisposed) {
@@ -754,27 +613,19 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					}
 				}
 				for (const theme of manifest.contributes.productIconThemes) {
-					if (!theme.id || theme.id === 'default')
-						throw new Error('Product icon themes require a non-default ID');
+					if (!theme.id || theme.id === 'default') throw new Error('Product icon themes require a non-default ID');
 					const bytes = await this.loadResource(resources, catalog.generation, extension.id, theme.path);
 					const directory = theme.path.slice(0, theme.path.lastIndexOf('/') + 1);
 					productIconThemes.push(
-						await ProductIconThemeData.load(
-							theme.id,
-							theme.label,
-							parseJsonc(
-								new TextDecoder('utf-8', { fatal: true }).decode(bytes),
-								'Product icon theme ' + theme.id,
-							),
-							path => this.loadResource(resources, catalog.generation, extension.id, directory + path),
+						await ProductIconThemeData.load(theme.id, theme.label, parseJsonc(new TextDecoder('utf-8', { fatal: true }).decode(bytes), 'Product icon theme ' + theme.id), path =>
+							this.loadResource(resources, catalog.generation, extension.id, directory + path),
 						),
 					);
 					if (this.isDisposed) return;
 				}
 				problemMatchers.push(...manifest.contributes.problemMatchers);
 				problemPatterns.push(...manifest.contributes.problemPatterns);
-				for (const debuggerContribution of manifest.contributes.debuggers)
-					debugAdapters.push(Object.freeze({ extensionId: extension.id, ...debuggerContribution }));
+				for (const debuggerContribution of manifest.contributes.debuggers) debugAdapters.push(Object.freeze({ extensionId: extension.id, ...debuggerContribution }));
 			}
 			if (snippetOwnerRevision !== this.snippetOwnerRevision) {
 				this.reloadQueued ??= 'cached';
@@ -789,9 +640,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			const debugAdapterFactories = debugAdapters.flatMap(definition => {
 				if (definition.program === undefined) return [];
 				const previousDefinition = this.debugAdapterRegistry.get(definition.type);
-				const previousExtension = this.catalog.extensions.find(
-					extension => extension.id === definition.extensionId,
-				);
+				const previousExtension = this.catalog.extensions.find(extension => extension.id === definition.extensionId);
 				const nextExtension = catalog.extensions.find(extension => extension.id === definition.extensionId);
 				const retained = this.activeDebugAdapterFactories.find(factory => factory.type === definition.type);
 				// Scan revisions may change while a launch waits for an installation path.
@@ -804,14 +653,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					JSON.stringify(previousDefinition) === JSON.stringify(definition)
 				)
 					return [retained];
-				return [
-					createStaticDebugAdapterFactory(
-						definition.type,
-						definition.label,
-						`declarative:${definition.extensionId}`,
-						{ program: definition.program, arguments: definition.arguments },
-					),
-				];
+				return [createStaticDebugAdapterFactory(definition.type, definition.label, `declarative:${definition.extensionId}`, { program: definition.program, arguments: definition.arguments })];
 			});
 			// A synchronous contribution owner can replace itself or dispose this service.
 			if (this.isDisposed) return;
@@ -823,13 +665,9 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				runWithBufferedEvents(() => {
 					this.editorPaneRegistration.replace(editorPanes);
 					this.submenuRegistrations.clear();
-					for (const submenu of submenus)
-						this.submenuRegistrations.add(
-							MenusRegistry.appendMenuItem(extensionMenuId(submenu.menu), submenu.item),
-						);
+					for (const submenu of submenus) this.submenuRegistrations.add(MenusRegistry.appendMenuItem(extensionMenuId(submenu.menu), submenu.item));
 					this.welcomeRegistrations.clear();
-					for (const args of welcome)
-						this.welcomeRegistrations.add(ViewsRegistry.registerViewWelcomeContent(...args));
+					for (const args of welcome) this.welcomeRegistrations.add(ViewsRegistry.registerViewWelcomeContent(...args));
 					this.replaceContributions(
 						languages,
 						languageConfigurations,
@@ -873,11 +711,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		}
 	}
 
-	private async localizeManifest(
-		extension: TransportExtensionDescriptor,
-		generation: number,
-		resources: Map<string, Promise<Uint8Array>>,
-	): Promise<string> {
+	private async localizeManifest(extension: TransportExtensionDescriptor, generation: number, resources: Map<string, Promise<Uint8Array>>): Promise<string> {
 		if (!extension.manifestJson.includes('%')) {
 			return extension.manifestJson;
 		}
@@ -951,10 +785,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				this.productIconRegistration.replace(this.activeProductIconThemes);
 				this.problemMatcherRegistration.replace(previousProblemContributions);
 			} catch (rollbackError) {
-				throw new AggregateError(
-					[error, rollbackError],
-					'Extension contribution activation and rollback both failed',
-				);
+				throw new AggregateError([error, rollbackError], 'Extension contribution activation and rollback both failed');
 			}
 			throw error;
 		}
@@ -969,8 +800,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	private replaceLanguageConfigurations(contributions: readonly LanguageConfigurationContribution[]): void {
 		const service = this.options.languageConfigurationService;
 		if (!service) {
-			if (contributions.length > 0)
-				throw new Error('Extension language configurations require a language configuration service');
+			if (contributions.length > 0) throw new Error('Extension language configurations require a language configuration service');
 			return;
 		}
 		const next = new DisposableStore();
@@ -1015,29 +845,16 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	): Promise<ReturnType<typeof parseLanguageConfiguration>> {
 		const bytes = await this.loadResource(resources, generation, extensionId, path);
 		const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-		return parseLanguageConfiguration(
-			parseJsonc(text, `Extension '${extensionId}' language configuration '${path}'`),
-			`Extension '${extensionId}' language configuration '${path}'`,
-		);
+		return parseLanguageConfiguration(parseJsonc(text, `Extension '${extensionId}' language configuration '${path}'`), `Extension '${extensionId}' language configuration '${path}'`);
 	}
 
-	private async loadSnippetFile(
-		resources: Map<string, Promise<Uint8Array>>,
-		generation: number,
-		extensionId: string,
-		path: string,
-	): Promise<string> {
+	private async loadSnippetFile(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<string> {
 		const bytes = await this.loadResource(resources, generation, extensionId, path);
 		const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
 		return text;
 	}
 
-	private loadResource(
-		resources: Map<string, Promise<Uint8Array>>,
-		generation: number,
-		extensionId: string,
-		path: string,
-	): Promise<Uint8Array> {
+	private loadResource(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<Uint8Array> {
 		this.assertNotDisposed();
 		const key = `${extensionId}\0${path}`;
 		const cached = resources.get(key);
@@ -1073,14 +890,10 @@ function projectExtensionDescriptor(extension: TransportExtensionDescriptor): Ex
 		version: extension.version,
 		displayName: extension.displayName,
 		sourceKind: extension.sourceKind,
-		...(extension.extensionLocation === undefined
-			? {}
-			: { extensionLocation: URI.parse(extension.extensionLocation) }),
+		...(extension.extensionLocation === undefined ? {} : { extensionLocation: URI.parse(extension.extensionLocation) }),
 		manifestSha256: extension.manifestSha256,
 		packageSha256: extension.packageSha256,
-		...(extension.runtimeBinding === undefined
-			? {}
-			: { runtimeBinding: Object.freeze({ ...extension.runtimeBinding }) }),
+		...(extension.runtimeBinding === undefined ? {} : { runtimeBinding: Object.freeze({ ...extension.runtimeBinding }) }),
 	});
 }
 

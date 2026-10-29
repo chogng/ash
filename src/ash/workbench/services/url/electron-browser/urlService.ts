@@ -37,8 +37,7 @@ export class RelayURLService extends AbstractURLService implements IURLHandler {
 	}
 
 	public override create(options: Partial<UriComponents> = {}): URI {
-		const path =
-			options.authority && options.path && !options.path.startsWith('/') ? `/${options.path}` : options.path;
+		const path = options.authority && options.path && !options.path.startsWith('/') ? `/${options.path}` : options.path;
 		const uri = URI.from({ ...options, scheme: 'ash', path });
 		const url = new URL(uri.toString());
 		url.searchParams.set('windowId', String(this.windowId));
@@ -51,10 +50,7 @@ export class RelayURLService extends AbstractURLService implements IURLHandler {
 		if (uri.scheme !== 'ash' || options?.openExternal) {
 			return false;
 		}
-		return this.mainHandler.handleURL(
-			uri,
-			options ? { trusted: options.trusted, originalUrl: options.originalUrl } : undefined,
-		);
+		return this.mainHandler.handleURL(uri, options ? { trusted: options.trusted, originalUrl: options.originalUrl } : undefined);
 	}
 
 	public async handleURL(uri: URI, options?: IOpenURLOptions): Promise<boolean> {

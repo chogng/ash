@@ -39,16 +39,12 @@ test('shortcut presentation prefers matching command bindings and survives leavi
 			}),
 		);
 	}
-	const label = (scope: string) =>
-		getKeybindingLabel(resolver.lookupKeybinding('test.copy', context(scope))!, KeybindingLabelStyle.UserSettings);
+	const label = (scope: string) => getKeybindingLabel(resolver.lookupKeybinding('test.copy', context(scope))!, KeybindingLabelStyle.UserSettings);
 	assert.equal(label('explorerFocus'), 'ctrl+alt+c');
 	assert.equal(label('editorFocus'), 'ctrl+shift+c');
 	assert.equal(label('menuFocus'), 'ctrl+alt+c');
 	assert.equal(resolver.lookupKeybinding('test.unbound', context('menuFocus')), undefined);
-	assert.deepEqual(
-		resolver.resolve(context('menuFocus'), [keybindingEvent({ key: 'c', control: true, alt: true })]),
-		{ kind: KeybindingResolveKind.NoMatch },
-	);
+	assert.deepEqual(resolver.resolve(context('menuFocus'), [keybindingEvent({ key: 'c', control: true, alt: true })]), { kind: KeybindingResolveKind.NoMatch });
 	assert.deepEqual(resolver.lookupKeybindings('test.copy', context('menuFocus')), []);
 
 	// A command with the same shortcut in another scope must not erase this command's hint.
@@ -61,10 +57,7 @@ test('shortcut presentation prefers matching command bindings and survives leavi
 		}),
 	);
 	assert.equal(label('menuFocus'), 'ctrl+alt+c');
-	assert.equal(
-		resolver.resolve(context('menuFocus'), [keybindingEvent({ key: 'c', control: true, alt: true })]).kind,
-		KeybindingResolveKind.Command,
-	);
+	assert.equal(resolver.resolve(context('menuFocus'), [keybindingEvent({ key: 'c', control: true, alt: true })]).kind, KeybindingResolveKind.Command);
 	registrations.add(
 		registry.registerKeybindingPassThrough({
 			command: 'test.paste',
@@ -72,20 +65,9 @@ test('shortcut presentation prefers matching command bindings and survives leavi
 			when: ContextKeyExpr.has('explorerFocus'),
 		}),
 	);
-	assert.equal(
-		getKeybindingLabel(
-			resolver.lookupKeybinding('test.paste', context('menuFocus'))!,
-			KeybindingLabelStyle.UserSettings,
-		),
-		'ctrl+v',
-	);
-	assert.equal(
-		resolver.resolve(context('explorerFocus'), [keybindingEvent({ key: 'v', control: true })]).kind,
-		KeybindingResolveKind.PassThrough,
-	);
-	registrations.add(
-		registry.registerKeybindingBlocker({ keybinding: parseKeybinding('ctrl+v')!, source: KeybindingSource.User }),
-	);
+	assert.equal(getKeybindingLabel(resolver.lookupKeybinding('test.paste', context('menuFocus'))!, KeybindingLabelStyle.UserSettings), 'ctrl+v');
+	assert.equal(resolver.resolve(context('explorerFocus'), [keybindingEvent({ key: 'v', control: true })]).kind, KeybindingResolveKind.PassThrough);
+	registrations.add(registry.registerKeybindingBlocker({ keybinding: parseKeybinding('ctrl+v')!, source: KeybindingSource.User }));
 	assert.equal(resolver.lookupKeybinding('test.paste', context('menuFocus')), undefined);
 });
 
@@ -135,7 +117,10 @@ test('shared keybinding resolver fixtures match the TypeScript implementation', 
 				registry.registerKeybindingBlocker(contribution);
 			} else {
 				assert.ok(rule.command, `${fixture.name}: command rule has no command`);
-				registry.registerKeybindingRule({ ...contribution, command: rule.command });
+				registry.registerKeybindingRule({
+					...contribution,
+					command: rule.command,
+				});
 			}
 		}
 		const resolver = new KeybindingResolver({
@@ -148,11 +133,7 @@ test('shared keybinding resolver fixtures match the TypeScript implementation', 
 		};
 		const result = resolver.resolve(context, fixture.events.map(keybindingEvent));
 		assert.equal(resultKind(result.kind), fixture.result.kind, fixture.name);
-		assert.equal(
-			result.kind === KeybindingResolveKind.Command ? result.command : undefined,
-			fixture.result.command,
-			fixture.name,
-		);
+		assert.equal(result.kind === KeybindingResolveKind.Command ? result.command : undefined, fixture.result.command, fixture.name);
 	}
 });
 

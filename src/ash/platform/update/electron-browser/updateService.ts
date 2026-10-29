@@ -5,14 +5,7 @@ import type { IChannel } from '../../../base/parts/ipc/common/ipc.js';
 import { IConfigurationService } from '../../configuration/common/configuration.js';
 import { IMeteredConnectionService } from '../../meteredConnection/common/meteredConnection.js';
 import '../../meteredConnection/electron-browser/meteredConnectionService.js';
-import {
-	DESKTOP_UPDATE_POLICY_SETTING,
-	type DesktopUpdatePolicy,
-	type IUpdateService,
-	type UpdateCheckResult,
-	type UpdateReadyResult,
-	type UpdateState,
-} from '../common/updateService.js';
+import { DESKTOP_UPDATE_POLICY_SETTING, type DesktopUpdatePolicy, type IUpdateService, type UpdateCheckResult, type UpdateReadyResult, type UpdateState } from '../common/updateService.js';
 
 /** Desktop renderer adapter for the local signed update host. */
 export class ElectronUpdateService extends Disposable implements IUpdateService {
@@ -47,8 +40,7 @@ export class ElectronUpdateService extends Disposable implements IUpdateService 
 	}
 
 	private acceptState(value: unknown): void {
-		if (value !== 'idle' && value !== 'downloading' && value !== 'ready' && value !== 'installing')
-			throw new TypeError('Invalid update state');
+		if (value !== 'idle' && value !== 'downloading' && value !== 'ready' && value !== 'installing') throw new TypeError('Invalid update state');
 		if (this.isDisposed || value === this.currentState) return;
 		this.currentState = value;
 		this.stateChanges.fire(value);
@@ -76,9 +68,7 @@ export class ElectronUpdateService extends Disposable implements IUpdateService 
 	}
 
 	private policy(): DesktopUpdatePolicy {
-		return (
-			this.configuration.inspect<DesktopUpdatePolicy>(DESKTOP_UPDATE_POLICY_SETTING).userLocalValue ?? 'latest'
-		);
+		return this.configuration.inspect<DesktopUpdatePolicy>(DESKTOP_UPDATE_POLICY_SETTING).userLocalValue ?? 'latest';
 	}
 
 	private channel(): 'latest' | 'stable' {

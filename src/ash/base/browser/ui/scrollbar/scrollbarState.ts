@@ -10,13 +10,7 @@ export interface ScrollbarAxisMetrics {
 	readonly thumbPosition: number;
 }
 
-export function createScrollbarAxisMetrics(
-	viewportSize: number,
-	scrollSize: number,
-	position: number,
-	trackSize: number,
-	minimumThumbSize: number,
-): ScrollbarAxisMetrics {
+export function createScrollbarAxisMetrics(viewportSize: number, scrollSize: number, position: number, trackSize: number, minimumThumbSize: number): ScrollbarAxisMetrics {
 	viewportSize = nonNegativeFinite(viewportSize);
 	scrollSize = Math.max(viewportSize, nonNegativeFinite(scrollSize));
 	const maximumPosition = Math.max(0, scrollSize - viewportSize);
@@ -27,7 +21,15 @@ export function createScrollbarAxisMetrics(
 	const thumbSize = clamp(proportionalSize, minimumThumbSize, trackSize);
 	const thumbTravel = Math.max(0, trackSize - thumbSize);
 	const thumbPosition = maximumPosition === 0 ? 0 : (thumbTravel * position) / maximumPosition;
-	return { viewportSize, scrollSize, position, maximumPosition, trackSize, thumbSize, thumbPosition };
+	return {
+		viewportSize,
+		scrollSize,
+		position,
+		maximumPosition,
+		trackSize,
+		thumbSize,
+		thumbPosition,
+	};
 }
 
 export function clampScrollbarPosition(value: number, maximum: number): number {

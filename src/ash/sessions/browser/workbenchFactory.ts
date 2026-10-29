@@ -1,9 +1,5 @@
 import { IWorkbenchEnvironmentService } from '../../workbench/services/environment/common/environmentService.js';
-import {
-	IDefaultLogLevelsService,
-	DefaultLogLevelsService,
-	readDefaultLogLevels,
-} from '../../workbench/services/log/common/defaultLogLevels.js';
+import { IDefaultLogLevelsService, DefaultLogLevelsService, readDefaultLogLevels } from '../../workbench/services/log/common/defaultLogLevels.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
@@ -53,13 +49,7 @@ export async function createSessionsWorkbench(options: IWorkbenchOptions): Promi
 		if (!options.initialConfiguration) {
 			using files = new FileService();
 			using registration = files.registerProvider(Schemas.vscodeUserData, userDataFiles);
-			using settings = new UserSettings(
-				URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }),
-				{},
-				extUriBiasedIgnorePathCase,
-				files,
-				logger,
-			);
+			using settings = new UserSettings(URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }), {}, extUriBiasedIgnorePathCase, files, logger);
 			options = { ...options, initialConfiguration: (await settings.loadConfiguration()).toJSON() };
 		}
 		return new DesktopWorkbench(options, themes, storage, logger, userDataFiles);

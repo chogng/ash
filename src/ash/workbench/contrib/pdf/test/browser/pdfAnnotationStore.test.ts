@@ -1,24 +1,13 @@
 import { Event } from '../../../../../base/common/event.js';
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
-import {
-	type IFileSystemProvider,
-	type IFileWriteOptions,
-	type IFileWriteResult,
-	FileSystemProviderCapabilities,
-} from '../../../../../platform/files/common/files.js';
+import { type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { toDisposable, Disposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { FileKind, type IFileWriteRequest } from '../../../../../platform/files/common/files.js';
-import {
-	WorkspacePdfAnnotationStore,
-	pdfAnnotationSidecarResource,
-} from '../../../../../../../extensions/pdf-viewer/browser/pdfAnnotationStore.js';
-import {
-	emptyPdfAnnotationDocument,
-	parsePdfAnnotationDocument,
-} from '../../../../../../../extensions/pdf-viewer/common/pdfAnnotations.js';
+import { WorkspacePdfAnnotationStore, pdfAnnotationSidecarResource } from '../../../../../../../extensions/pdf-viewer/browser/pdfAnnotationStore.js';
+import { emptyPdfAnnotationDocument, parsePdfAnnotationDocument } from '../../../../../../../extensions/pdf-viewer/common/pdfAnnotations.js';
 
 test('PDF annotation store returns an empty document when no sidecar exists', async () => {
 	const resource = URI.file('/workspace/paper.pdf');
@@ -54,8 +43,7 @@ test('PDF annotation store reads and conditionally writes its sibling sidecar', 
 });
 
 class TestFileService implements IFileSystemProvider {
-	public readonly capabilities =
-		FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
 	public readonly onDidChangeCapabilities = Event.None;
 	public watch(): IDisposable {
 		return Disposable.None;
@@ -72,9 +60,7 @@ class TestFileService implements IFileSystemProvider {
 		return { resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined };
 	}
 
-	async readDirectory(): Promise<
-		readonly { readonly resource: URI; readonly name: string; readonly kind: FileKind }[]
-	> {
+	async readDirectory(): Promise<readonly { readonly resource: URI; readonly name: string; readonly kind: FileKind }[]> {
 		return this.entries;
 	}
 
@@ -132,16 +118,11 @@ test('provider retirement cancels a sidecar write through the authorized file se
 	files.writeFile = async (_resource, _bytes, _options, signal?: AbortSignal) => {
 		assert.ok(signal);
 		entered();
-		return new Promise((_resolve, reject) =>
-			signal.addEventListener('abort', () => reject(new Error('sidecar write cancelled')), { once: true }),
-		);
+		return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('sidecar write cancelled')), { once: true }));
 	};
 	using service = createTestFileService(files);
 	const store = new WorkspacePdfAnnotationStore(service);
-	const saved = assert.rejects(
-		store.save(URI.file('/workspace/paper.pdf'), emptyPdfAnnotationDocument(), undefined, controller.signal),
-		/cancelled/,
-	);
+	const saved = assert.rejects(store.save(URI.file('/workspace/paper.pdf'), emptyPdfAnnotationDocument(), undefined, controller.signal), /cancelled/);
 	await writing;
 	controller.abort();
 	await saved;

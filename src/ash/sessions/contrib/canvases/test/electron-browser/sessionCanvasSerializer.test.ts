@@ -28,11 +28,7 @@ suite('Session Canvas persistence', () => {
 		const serializer = new SessionCanvasSerializer({
 			restoreCanvasInput: id => (admitted && id === input.serializationId ? input : undefined),
 		} as ICanvasService);
-		assert.equal(
-			serializer.canSerialize(input),
-			true,
-			'intercept unadmitted inputs before the generic URI serializer',
-		);
+		assert.equal(serializer.canSerialize(input), true, 'intercept unadmitted inputs before the generic URI serializer');
 		assert.equal(serializer.serialize(input), null);
 		admitted = true;
 		const value = serializer.serialize(input);
@@ -52,15 +48,7 @@ suite('Session Canvas persistence', () => {
 			},
 		} as unknown as ICanvasService);
 		const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-		for (const value of [
-			undefined,
-			null,
-			[],
-			id,
-			{ version: 2, id },
-			{ version: 1, id: 'canvas:/page' },
-			{ version: 1, id, source: 'https://example.test' },
-		]) {
+		for (const value of [undefined, null, [], id, { version: 2, id }, { version: 1, id: 'canvas:/page' }, { version: 1, id, source: 'https://example.test' }]) {
 			assert.throws(() => serializer.deserialize(value));
 		}
 		assert.equal(lookups, 0);

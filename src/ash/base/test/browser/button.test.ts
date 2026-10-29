@@ -57,8 +57,13 @@ test('Button only installs a Hover for an explicit title', () => {
 			return managedHover();
 		},
 	});
-	using unlabeledHoverButton = new Button(dom.window.document.body, { label: 'Save' });
-	using titledButton = new Button(dom.window.document.body, { label: 'Save', title: 'Save changes' });
+	using unlabeledHoverButton = new Button(dom.window.document.body, {
+		label: 'Save',
+	});
+	using titledButton = new Button(dom.window.document.body, {
+		label: 'Save',
+		title: 'Save changes',
+	});
 
 	assert.deepEqual(contents, ['Save changes']);
 	assert.ok(titledButton.domNode.querySelector('.ash-button-content.ash-icon-label'));
@@ -78,7 +83,11 @@ test('Button only installs a Hover for an explicit title', () => {
 	labelCenteredButton.label = 'Commit changes';
 	assert.equal(labelCenteredButton.label, 'Commit changes');
 
-	using iconButton = new Button(dom.window.document.body, { label: 'Menu', icon: Lxicon.menu, iconOnly: true });
+	using iconButton = new Button(dom.window.document.body, {
+		label: 'Menu',
+		icon: Lxicon.menu,
+		iconOnly: true,
+	});
 	assert.equal(iconButton.domNode.classList.contains('icon-only'), true);
 	assert.equal(iconButton.domNode.getAttribute('aria-label'), 'Menu');
 	iconButton.label = 'Application menu';
@@ -100,7 +109,14 @@ test('Button only installs a Hover for an explicit title', () => {
 });
 
 function managedHover(): IManagedHover {
-	return { visible: false, show() {}, hide() {}, update() {}, dispose() {}, [Symbol.dispose]() {} };
+	return {
+		visible: false,
+		show() {},
+		hide() {},
+		update() {},
+		dispose() {},
+		[Symbol.dispose]() {},
+	};
 }
 
 suite('ButtonWithDropdown', () => {
@@ -218,10 +234,7 @@ suite('Split button rendering', () => {
 			});
 			assert.equal(geometry.height, geometry.arrowHeight);
 			assert.equal(geometry.gap, 0);
-			assert.ok(
-				Math.abs(geometry.iconOffset) < 0.5,
-				'Dropdown icon stays centered when the primary label uses independent centering',
-			);
+			assert.ok(Math.abs(geometry.iconOffset) < 0.5, 'Dropdown icon stays centered when the primary label uses independent centering');
 			assert.equal(geometry.innerRadius, '0px');
 			assert.equal(geometry.arrowRadius, '0px');
 			assert.equal(geometry.border, '1px');
@@ -262,9 +275,7 @@ suite('Split button rendering', () => {
 						const arrow = dropdown!.getBoundingClientRect();
 						return { height: main.height, width: arrow.width, arrowHeight: arrow.height };
 					};
-					const pin = document
-						.querySelector<HTMLButtonElement>('#quiet-toolbar button[aria-label="Pin"]')!
-						.getBoundingClientRect();
+					const pin = document.querySelector<HTMLButtonElement>('#quiet-toolbar button[aria-label="Pin"]')!.getBoundingClientRect();
 					return {
 						standard: measure('#buttons'),
 						small: measure('#small-buttons'),
@@ -276,9 +287,7 @@ suite('Split button rendering', () => {
 			await expect
 				.poll(async () => {
 					const sizes = await dimensions();
-					return [sizes.standard, sizes.small, sizes.filled].every(
-						size => Math.abs(size.width - size.height) < 0.5 && size.height === size.arrowHeight,
-					);
+					return [sizes.standard, sizes.small, sizes.filled].every(size => Math.abs(size.width - size.height) < 0.5 && size.height === size.arrowHeight);
 				})
 				.toBe(true);
 			const initial = await dimensions();
@@ -306,10 +315,7 @@ suite('Split button rendering', () => {
 						square: Math.abs(size.width - size.height) < 0.5 && size.height === size.arrowHeight,
 					}));
 				})
-				.toEqual([
-					expect.objectContaining({ grew: true, square: true }),
-					expect.objectContaining({ grew: true, square: true }),
-				]);
+				.toEqual([expect.objectContaining({ grew: true, square: true }), expect.objectContaining({ grew: true, square: true })]);
 			await page.evaluate(() => window.ashButtonIntegration.refreshToolbarDropdown());
 			await expect
 				.poll(async () => {
@@ -322,8 +328,6 @@ suite('Split button rendering', () => {
 
 	test('localizes the shared dropdown label', async () => {
 		await browser.page.goto('/button.html?locale=zh-CN');
-		await expect(
-			browser.page.locator('#buttons').getByRole('button', { name: '更多操作…', exact: true }),
-		).toBeVisible();
+		await expect(browser.page.locator('#buttons').getByRole('button', { name: '更多操作…', exact: true })).toBeVisible();
 	});
 });

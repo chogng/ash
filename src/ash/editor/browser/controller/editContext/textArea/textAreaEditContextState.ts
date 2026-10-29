@@ -62,10 +62,7 @@ export class TextAreaState {
 
 	isWrittenToTextArea(textArea: ITextAreaWrapper, select: boolean): boolean {
 		if (this.value !== textArea.getValue()) return false;
-		return (
-			!select ||
-			(this.selectionStart === textArea.getSelectionStart() && this.selectionEnd === textArea.getSelectionEnd())
-		);
+		return !select || (this.selectionStart === textArea.getSelectionStart() && this.selectionEnd === textArea.getSelectionEnd());
 	}
 
 	writeToTextArea(reason: string, textArea: ITextAreaWrapper, select: boolean): void {
@@ -78,35 +75,19 @@ export class TextAreaState {
 		const selectionStart = Math.min(this.selectionStart, this.selectionEnd);
 		const selectionEnd = Math.max(this.selectionStart, this.selectionEnd);
 		if (offset <= selectionStart) {
-			return this._finishDeduceEditorPosition(
-				this.selection?.getStartPosition() ?? null,
-				this.value.substring(offset, selectionStart),
-				-1,
-			);
+			return this._finishDeduceEditorPosition(this.selection?.getStartPosition() ?? null, this.value.substring(offset, selectionStart), -1);
 		}
 		if (offset >= selectionEnd) {
-			return this._finishDeduceEditorPosition(
-				this.selection?.getEndPosition() ?? null,
-				this.value.substring(selectionEnd, offset),
-				1,
-			);
+			return this._finishDeduceEditorPosition(this.selection?.getEndPosition() ?? null, this.value.substring(selectionEnd, offset), 1);
 		}
 		const textBeforeOffset = this.value.substring(selectionStart, offset);
 		if (!textBeforeOffset.includes(String.fromCharCode(8230))) {
 			return this._finishDeduceEditorPosition(this.selection?.getStartPosition() ?? null, textBeforeOffset, 1);
 		}
-		return this._finishDeduceEditorPosition(
-			this.selection?.getEndPosition() ?? null,
-			this.value.substring(offset, selectionEnd),
-			-1,
-		);
+		return this._finishDeduceEditorPosition(this.selection?.getEndPosition() ?? null, this.value.substring(offset, selectionEnd), -1);
 	}
 
-	private _finishDeduceEditorPosition(
-		anchor: Position | null,
-		deltaText: string,
-		signum: number,
-	): [Position | null, number, number] {
+	private _finishDeduceEditorPosition(anchor: Position | null, deltaText: string, signum: number): [Position | null, number, number] {
 		let lineFeedCount = 0;
 		for (const character of deltaText) {
 			if (character === '\n') lineFeedCount += 1;
@@ -114,11 +95,7 @@ export class TextAreaState {
 		return [anchor, signum * deltaText.length, lineFeedCount];
 	}
 
-	static deduceInput(
-		previousState: TextAreaState,
-		currentState: TextAreaState,
-		_couldBeEmojiInput: boolean,
-	): ITypeData {
+	static deduceInput(previousState: TextAreaState, currentState: TextAreaState, _couldBeEmojiInput: boolean): ITypeData {
 		if (!previousState) {
 			return { text: '', replacePrevCharCnt: 0, replaceNextCharCnt: 0, positionDelta: 0 };
 		}
@@ -128,11 +105,7 @@ export class TextAreaState {
 			console.log(`CURRENT STATE: ${currentState.toString()}`);
 		}
 
-		const prefixLength = Math.min(
-			commonPrefixLength(previousState.value, currentState.value),
-			previousState.selectionStart,
-			currentState.selectionStart,
-		);
+		const prefixLength = Math.min(commonPrefixLength(previousState.value, currentState.value), previousState.selectionStart, currentState.selectionStart);
 		const suffixLength = Math.min(
 			commonSuffixLength(previousState.value, currentState.value),
 			previousState.value.length - previousState.selectionEnd,
@@ -174,14 +147,8 @@ export class TextAreaState {
 			};
 		}
 
-		const prefixLength = Math.min(
-			commonPrefixLength(previousState.value, currentState.value),
-			previousState.selectionEnd,
-		);
-		const suffixLength = Math.min(
-			commonSuffixLength(previousState.value, currentState.value),
-			previousState.value.length - previousState.selectionEnd,
-		);
+		const prefixLength = Math.min(commonPrefixLength(previousState.value, currentState.value), previousState.selectionEnd);
+		const suffixLength = Math.min(commonSuffixLength(previousState.value, currentState.value), previousState.value.length - previousState.selectionEnd);
 		const previousValue = previousState.value.substring(prefixLength, previousState.value.length - suffixLength);
 		const currentValue = currentState.value.substring(prefixLength, currentState.value.length - suffixLength);
 		return {
@@ -193,12 +160,6 @@ export class TextAreaState {
 	}
 
 	static fromScreenReaderContentState(state: ISimpleScreenReaderContentState) {
-		return new TextAreaState(
-			state.value,
-			state.selectionStart,
-			state.selectionEnd,
-			state.selection,
-			state.newlineCountBeforeSelection,
-		);
+		return new TextAreaState(state.value, state.selectionStart, state.selectionEnd, state.selection, state.newlineCountBeforeSelection);
 	}
 }

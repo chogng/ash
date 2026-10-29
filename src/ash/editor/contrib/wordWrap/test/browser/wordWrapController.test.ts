@@ -47,10 +47,7 @@ test('word-wrap choice follows the model and leaves the editor setting unchanged
 	assert.equal(editor.getOption(EditorOption.wordWrapOverride2), 'on');
 	assert.ok(editor.getOption(EditorOption.wrappingInfo).wrappingColumn > 0);
 	assert.equal(editor.getDomNode().classList.contains('word-wrapped'), true);
-	assert.equal(
-		editor.getDomNode()?.querySelector('.stanza-editor-accessibility-status')?.textContent,
-		'Word wrap on',
-	);
+	assert.equal(editor.getDomNode()?.querySelector('.stanza-editor-accessibility-status')?.textContent, 'Word wrap on');
 	using peer = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('aside')!,
 		model: first,
@@ -69,18 +66,14 @@ test('word-wrap choice follows the model and leaves the editor setting unchanged
 	assert.equal(editor.getOption(EditorOption.wordWrapOverride2), 'on');
 	assert.ok(editor.getOption(EditorOption.wrappingInfo).wrappingColumn > 0);
 
-	const restoredController =
-		editor.getContribution<InstanceType<typeof WordWrapController>>('editor.contrib.wordWrap');
+	const restoredController = editor.getContribution<InstanceType<typeof WordWrapController>>('editor.contrib.wordWrap');
 	assert.ok(restoredController);
 	assert.notEqual(restoredController, controller);
 	restoredController.toggle();
 	assert.equal(editor.getOption(EditorOption.wordWrapOverride2), 'inherit');
 	assert.equal(peer.getOption(EditorOption.wordWrapOverride2), 'inherit');
 	assert.equal(editor.getOption(EditorOption.wrappingInfo).wrappingColumn, -1);
-	assert.equal(
-		editor.getDomNode()?.querySelector('.stanza-editor-accessibility-status')?.textContent,
-		'Word wrap off',
-	);
+	assert.equal(editor.getDomNode()?.querySelector('.stanza-editor-accessibility-status')?.textContent, 'Word wrap off');
 	assert.equal(first.getText(), 'abcdef');
 
 	editor.updateOptions({ wordWrap: 'on' });
@@ -96,11 +89,7 @@ test('word-wrap choice follows the model and leaves the editor setting unchanged
 	assert.equal(unrelated.defaultPrevented, false);
 });
 
-function keydown(
-	targetWindow: typeof browserEnvironment.window,
-	key: string,
-	options: { readonly altKey?: boolean; readonly shiftKey?: boolean } = {},
-): KeyboardEvent {
+function keydown(targetWindow: typeof browserEnvironment.window, key: string, options: { readonly altKey?: boolean; readonly shiftKey?: boolean } = {}): KeyboardEvent {
 	return new targetWindow.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,

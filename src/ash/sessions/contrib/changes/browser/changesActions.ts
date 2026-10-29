@@ -41,20 +41,15 @@ class OpenChangedFileAction extends Action2 {
 		if (!change) {
 			return;
 		}
-		const session = accessor
-			.get(ISessionsManagementService)
-			.sessions.find(session => session.sessionId === change.summary.sessionId);
-		const workspace =
-			session?.chats.find(chat => chat.threadId === change.summary.threadId)?.workspace ?? session?.workspace;
+		const session = accessor.get(ISessionsManagementService).sessions.find(session => session.sessionId === change.summary.sessionId);
+		const workspace = session?.chats.find(chat => chat.threadId === change.summary.threadId)?.workspace ?? session?.workspace;
 		if (!workspace) {
 			return;
 		}
 		const root = sessionWorkspaceUri(workspace);
 		const fileResource = root.with({ path: `${root.path.replace(/\/$/u, '')}/${change.file.path}` });
 		const labels = getChangesEditorLabels(fileResource, accessor.get(ILabelService));
-		await accessor
-			.get(IEditorService)
-			.openEditor({ resource: fileResource, label: labels.label }, { pinned: true });
+		await accessor.get(IEditorService).openEditor({ resource: fileResource, label: labels.label }, { pinned: true });
 	}
 }
 
@@ -87,10 +82,7 @@ class ExpandFullFileAction extends Action2 {
 			title: localize2('sessions.changes.expandFullFile', 'Expand Full File'),
 			menu: {
 				id: MenuId.MultiDiffEditorFileToolbar,
-				when: ContextKeyExpr.and(
-					ContextKeyExpr.equals('activeEditor', SessionChangesEditor.ID),
-					ContextKeyExpr.not('multiDiffEditorFileIsBinary'),
-				),
+				when: ContextKeyExpr.and(ContextKeyExpr.equals('activeEditor', SessionChangesEditor.ID), ContextKeyExpr.not('multiDiffEditorFileIsBinary')),
 				group: 'navigation',
 				order: 23,
 			},
@@ -108,10 +100,7 @@ class CollapseUnchangedRegionsAction extends Action2 {
 			title: localize2('sessions.changes.collapseUnchanged', 'Collapse Unchanged Regions'),
 			menu: {
 				id: MenuId.MultiDiffEditorFileToolbar,
-				when: ContextKeyExpr.and(
-					ContextKeyExpr.equals('activeEditor', SessionChangesEditor.ID),
-					ContextKeyExpr.not('multiDiffEditorFileIsBinary'),
-				),
+				when: ContextKeyExpr.and(ContextKeyExpr.equals('activeEditor', SessionChangesEditor.ID), ContextKeyExpr.not('multiDiffEditorFileIsBinary')),
 				group: 'navigation',
 				order: 24,
 			},
@@ -158,15 +147,9 @@ class PreviewChangesetFileAction extends Action2 {
 			path: `/${change.summary.sessionId}`,
 			query: new URLSearchParams({ thread: change.summary.threadId }).toString(),
 		});
-		const changeset = await accessor
-			.get(ISessionChangesService)
-			.resolveChangeset(sessionResource, change.summary.changeSetId);
+		const changeset = await accessor.get(ISessionChangesService).resolveChangeset(sessionResource, change.summary.changeSetId);
 		const operation = changeset.operations.get().find(operation => operation.id === 'preview');
-		if (
-			operation &&
-			operation.status !== SessionChangesetOperationStatus.Disabled &&
-			operation.status !== SessionChangesetOperationStatus.Running
-		) {
+		if (operation && operation.status !== SessionChangesetOperationStatus.Disabled && operation.status !== SessionChangesetOperationStatus.Running) {
 			await changeset.invokeOperation(operation.id, { kind: 'resource', resource: change.uri });
 		}
 	}

@@ -57,12 +57,7 @@ export class EncryptionMainService implements IEncryptionMainService {
 
 	async isEncryptionAvailable(): Promise<boolean> {
 		try {
-			return (
-				this.storage.isEncryptionAvailable() &&
-				(this.platform !== 'linux' ||
-					this.plainTextRequested ||
-					(await this.getKeyStorageProvider()) !== KnownStorageProvider.basicText)
-			);
+			return this.storage.isEncryptionAvailable() && (this.platform !== 'linux' || this.plainTextRequested || (await this.getKeyStorageProvider()) !== KnownStorageProvider.basicText);
 		} catch {
 			return false;
 		}

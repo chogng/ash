@@ -65,9 +65,7 @@ test('Automation results read only the recorded Turn in a continued conversation
 								},
 								{
 									turnId: 'later',
-									items: [
-										{ type: 'agentMessage', phase: 'final_answer', text: 'Unrelated later result' },
-									],
+									items: [{ type: 'agentMessage', phase: 'final_answer', text: 'Unrelated later result' }],
 								},
 							],
 						},

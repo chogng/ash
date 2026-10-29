@@ -37,9 +37,7 @@ export interface ISessionsConversationPane extends IDisposable {
 	startVoiceConversation(): Promise<void>;
 	addContext(attachment: ChatContextAttachment): void;
 	appendToDraft(text: string): void;
-	captureDraft(): Promise<
-		{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined
-	>;
+	captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined>;
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void;
 	setVisible(visible: boolean): void;
 }
@@ -47,12 +45,7 @@ export interface ISessionsConversationPane extends IDisposable {
 interface ISessionViewOptions {
 	readonly selection: SessionsViewSelection;
 	readonly kind: SessionsConversationKind;
-	readonly createPane: (
-		kind: SessionsConversationKind,
-		container: HTMLElement,
-		panelId: string,
-		selection: SessionsViewSelection,
-	) => ISessionsConversationPane;
+	readonly createPane: (kind: SessionsConversationKind, container: HTMLElement, panelId: string, selection: SessionsViewSelection) => ISessionsConversationPane;
 	readonly activateSelection: (selection: SessionsViewSelection) => void;
 }
 
@@ -98,12 +91,8 @@ export class SessionView extends Disposable implements IView {
 	}
 
 	openSession(selection: SessionsViewSelection): void {
-		const previousThread =
-			this.selection.kind === 'session'
-				? this.selection.active.threadId
-				: this.selection.session.untitledSessionId;
-		const nextThread =
-			selection.kind === 'session' ? selection.active.threadId : selection.session.untitledSessionId;
+		const previousThread = this.selection.kind === 'session' ? this.selection.active.threadId : this.selection.session.untitledSessionId;
+		const nextThread = selection.kind === 'session' ? selection.active.threadId : selection.session.untitledSessionId;
 		if (previousThread !== nextThread) this.selectionRevision++;
 		this.selection = selection;
 		for (const pane of this.panes.values()) this.updatePane(pane);
@@ -145,14 +134,7 @@ export class SessionView extends Disposable implements IView {
 	private getOrCreatePane(kind: SessionsConversationKind): ISessionsConversationPane {
 		let pane = this.panes.get(kind);
 		if (!pane) {
-			pane = this._register(
-				this.options.createPane(
-					kind,
-					this.element,
-					`ash-sessions-conversation-pane-${++nextChatPaneId}`,
-					this.selection,
-				),
-			);
+			pane = this._register(this.options.createPane(kind, this.element, `ash-sessions-conversation-pane-${++nextChatPaneId}`, this.selection));
 			pane.element.setAttribute('role', 'region');
 			pane.setVisible(false);
 			pane.element.remove();
@@ -170,17 +152,12 @@ export class SessionView extends Disposable implements IView {
 
 	private updatePane(pane: ISessionsConversationPane): void {
 		if (this.selection.kind === 'session') {
-			void pane.model
-				.selectThread(this.selection.active)
-				.catch(error => console.error('Failed to select Sessions Chat thread', error));
+			void pane.model.selectThread(this.selection.active).catch(error => console.error('Failed to select Sessions Chat thread', error));
 		} else {
 			pane.model.selectUntitledSession(this.selection.session);
 		}
 		const session = this.selection.kind === 'session' ? this.selection.active.session : this.selection.session;
-		pane.element.setAttribute(
-			'aria-label',
-			session.title.trim() || localize('sessions.conversation.editorName', 'Session'),
-		);
+		pane.element.setAttribute('aria-label', session.title.trim() || localize('sessions.conversation.editorName', 'Session'));
 	}
 }
 
@@ -211,19 +188,10 @@ export class SessionAuxiliaryWindow extends Disposable {
 				'keydown',
 				event => {
 					if (!isHTMLElement(event.target) || !window.container.contains(event.target)) return;
-					if (
-						event.altKey &&
-						!event.ctrlKey &&
-						!event.metaKey &&
-						!event.shiftKey &&
-						(event.key === 'F1' || event.key === 'F2')
-					) {
+					if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && (event.key === 'F1' || event.key === 'F2')) {
 						event.preventDefault();
 						event.stopPropagation();
-						accessibleViews.show(
-							event.key === 'F1' ? AccessibleViewType.Help : AccessibleViewType.View,
-							event.target,
-						);
+						accessibleViews.show(event.key === 'F1' ? AccessibleViewType.Help : AccessibleViewType.View, event.target);
 					}
 				},
 				{ capture: true },

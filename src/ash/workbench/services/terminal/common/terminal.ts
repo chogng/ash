@@ -1,8 +1,4 @@
-import type {
-	ITerminalProcessCreation,
-	ITerminalReconnectLease,
-	ITerminalProcessCreateOptions,
-} from '../../../../platform/terminal/common/terminal.js';
+import type { ITerminalProcessCreation, ITerminalReconnectLease, ITerminalProcessCreateOptions } from '../../../../platform/terminal/common/terminal.js';
 
 /** Construction borrows a transferred process until its destination screen is ready. */
 export interface ITerminalProcessOwnership {

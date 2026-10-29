@@ -1,12 +1,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { URI } from '../../../../base/common/uri.js';
-import {
-	FileKind,
-	FileRevisionConflictError,
-	FileSystemProviderErrorCode,
-	toFileSystemProviderErrorCode,
-} from '../../common/files.js';
+import { FileKind, FileRevisionConflictError, FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../common/files.js';
 import { InMemoryFileSystemProvider } from '../../common/inMemoryFilesystemProvider.js';
 
 suite('InMemoryFileSystemProvider', () => {
@@ -21,19 +16,13 @@ suite('InMemoryFileSystemProvider', () => {
 		const read = await files.readFile(resource);
 		read.bytes[1] = 99;
 		assert.deepEqual((await files.readFile(resource)).bytes, new Uint8Array([1, 2, 3]));
-		await assert.rejects(
-			other.readFile(resource),
-			error => toFileSystemProviderErrorCode(error as Error) === FileSystemProviderErrorCode.FileNotFound,
-		);
+		await assert.rejects(other.readFile(resource), error => toFileSystemProviderErrorCode(error as Error) === FileSystemProviderErrorCode.FileNotFound);
 		await files.writeFile(resource, new Uint8Array([4]), {
 			create: false,
 			overwrite: true,
 			expectedRevision: saved.revision,
 		});
-		await assert.rejects(
-			files.writeFile(resource, bytes, { create: false, overwrite: true, expectedRevision: saved.revision }),
-			FileRevisionConflictError,
-		);
+		await assert.rejects(files.writeFile(resource, bytes, { create: false, overwrite: true, expectedRevision: saved.revision }), FileRevisionConflictError);
 		assert.deepEqual((await files.readFile(resource)).bytes, new Uint8Array([4]));
 	});
 
@@ -49,9 +38,7 @@ suite('InMemoryFileSystemProvider', () => {
 		await files.copy(folder, copy);
 		const moved = URI.file('/sample/moved');
 		await files.rename(copy, moved, 'error');
-		assert.deepEqual(await files.readDirectory(moved), [
-			{ resource: URI.joinPath(moved, 'index.ts'), name: 'index.ts', kind: FileKind.File },
-		]);
+		assert.deepEqual(await files.readDirectory(moved), [{ resource: URI.joinPath(moved, 'index.ts'), name: 'index.ts', kind: FileKind.File }]);
 		assert.equal(new TextDecoder().decode((await files.readFile(URI.joinPath(moved, 'index.ts'))).bytes), 'sample');
 		await assert.rejects(files.delete(moved, 'error', 'fileOrEmptyDirectory'));
 		await files.delete(moved, 'error', 'recursive');
@@ -70,10 +57,7 @@ suite('InMemoryFileSystemProvider', () => {
 		const target = URI.file('/target');
 		await files.createDirectory(source);
 		await files.createFile(target, 'error');
-		await assert.rejects(
-			files.rename(source, target, 'error'),
-			error => toFileSystemProviderErrorCode(error as Error) === FileSystemProviderErrorCode.FileExists,
-		);
+		await assert.rejects(files.rename(source, target, 'error'), error => toFileSystemProviderErrorCode(error as Error) === FileSystemProviderErrorCode.FileExists);
 		await assert.rejects(files.copy(source, URI.joinPath(source, 'nested')));
 		assert.equal((await files.stat(source)).kind, FileKind.Directory);
 		assert.equal((await files.stat(target)).kind, FileKind.File);

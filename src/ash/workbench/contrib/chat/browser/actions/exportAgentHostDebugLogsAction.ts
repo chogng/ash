@@ -10,10 +10,7 @@ import { ILayoutService } from '../../../../../platform/layout/browser/layoutSer
 import { ILoggerService, type ILogFileService } from '../../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IProgressService, ProgressLocation } from '../../../../../platform/progress/common/progress.js';
-import {
-	IChatSessionNavigationService,
-	type IChatSessionConnection,
-} from '../../../../services/chat/common/chatSessionNavigationService.js';
+import { IChatSessionNavigationService, type IChatSessionConnection } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IOutputService } from '../../../../services/output/common/output.js';
 import { IChatDebugService } from '../../common/chatDebugService.js';
 import { diagnosticPayload } from '../../common/chatDebugEvents.js';
@@ -34,15 +31,7 @@ interface BundleFile {
 
 interface CollectionIssue {
 	readonly source: string;
-	readonly reason:
-		| 'unavailable'
-		| 'readFailed'
-		| 'truncated'
-		| 'fileLimit'
-		| 'byteLimit'
-		| 'pageLimit'
-		| 'notRecorded'
-		| 'collectionLimit';
+	readonly reason: 'unavailable' | 'readFailed' | 'truncated' | 'fileLimit' | 'byteLimit' | 'pageLimit' | 'notRecorded' | 'collectionLimit';
 	readonly detail?: string;
 }
 
@@ -105,9 +94,7 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 				return;
 			}
 			if (connectionChanged || generation !== appServer.connectionGeneration) {
-				throw new Error(
-					localize('debugLogs.connectionChanged', 'The App Server connection changed during export.'),
-				);
+				throw new Error(localize('debugLogs.connectionChanged', 'The App Server connection changed during export.'));
 			}
 		};
 		try {
@@ -184,10 +171,7 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 					if (conversation) {
 						await attempt('sessionHostLogs', async () => {
 							await assertBackend();
-							const logs = await sessions.collectDebugLogs(
-								{ sessionId: conversation.sessionId },
-								cancellation.signal,
-							);
+							const logs = await sessions.collectDebugLogs({ sessionId: conversation.sessionId }, cancellation.signal);
 							await assertBackend();
 							processLogsStatus = logs.files.length ? 'collected' : 'unavailable';
 							if (!logs.files.length) issues.push({ source: 'sessionHostLogs', reason: 'unavailable' });
@@ -196,8 +180,7 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 								processLogsStatus = 'partial';
 							}
 							for (const [index, file] of logs.files.entries()) {
-								if (!add(`host/${index + 1}.log`, `sessionHost:${file.name}`, file.bytes))
-									processLogsStatus = 'partial';
+								if (!add(`host/${index + 1}.log`, `sessionHost:${file.name}`, file.bytes)) processLogsStatus = 'partial';
 								if (file.truncated) {
 									issues.push({ source: `sessionHost:${file.name}`, reason: 'truncated' });
 									processLogsStatus = 'partial';
@@ -215,9 +198,7 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 						issues.push({ source: 'hostLogs', reason: 'unavailable' });
 					}
 					// Output owns retained extension/provider log channels. Do not clear or subscribe to them.
-					const logChannels = output.channels.filter(
-						channel => channel.kind === 'log' && !channel.id.startsWith('saved-log.'),
-					);
+					const logChannels = output.channels.filter(channel => channel.kind === 'log' && !channel.id.startsWith('saved-log.'));
 					if (logChannels.length > MaxFiles) issues.push({ source: 'outputLogs', reason: 'fileLimit' });
 					for (const channel of logChannels.slice(0, MaxFiles)) {
 						add(`output/${files.length + 1}.log`, channel.id, channel.getText());
@@ -235,25 +216,17 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 								for (const thread of page.trace.threads) {
 									for (const record of thread.events) {
 										const origin = record.event.origin;
-										if (
-											record.event.type === 'threadCreated' &&
-											isRecord(origin) &&
-											origin.type === 'agentSpawn' &&
-											typeof origin.parentThreadId === 'string'
-										) {
+										if (record.event.type === 'threadCreated' && isRecord(origin) && origin.type === 'agentSpawn' && typeof origin.parentThreadId === 'string') {
 											let children = childThreads.get(origin.parentThreadId);
-											if (!children)
-												childThreads.set(origin.parentThreadId, (children = new Set()));
+											if (!children) childThreads.set(origin.parentThreadId, (children = new Set()));
 											children.add(thread.threadId);
 										}
 									}
 								}
-								if (!add(`session/trace-${pageNumber}.json`, 'sessionTrace', JSON.stringify(page)))
-									break;
+								if (!add(`session/trace-${pageNumber}.json`, 'sessionTrace', JSON.stringify(page))) break;
 								if (!page.hasMore) break;
 								after = page.cursors;
-								if (pageNumber === MaxTracePages)
-									issues.push({ source: 'sessionTrace', reason: 'pageLimit' });
+								if (pageNumber === MaxTracePages) issues.push({ source: 'sessionTrace', reason: 'pageLimit' });
 							}
 						});
 						// Peer chats have independent model bodies. Include only this chat and its recorded subagents.
@@ -273,28 +246,12 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 								const page = await traces.readTraceDiagnostics(conversation.sessionId, after);
 								await assertBackend();
 								if (captureId !== undefined && captureId !== page.diagnostics.captureId) {
-									throw new Error(
-										localize(
-											'debugLogs.captureChanged',
-											'The session evidence capture changed during export.',
-										),
-									);
+									throw new Error(localize('debugLogs.captureChanged', 'The session evidence capture changed during export.'));
 								}
 								captureId = page.diagnostics.captureId;
 								recordingStatus = page.diagnostics.recordingStatus;
-								if (
-									!add(
-										`session/diagnostics-${pageNumber}.json`,
-										'sessionDiagnostics',
-										JSON.stringify(page),
-									)
-								)
-									break;
-								if (
-									page.diagnostics.droppedRecords ||
-									page.diagnostics.pendingRecords ||
-									recordingStatus === 'incomplete'
-								) {
+								if (!add(`session/diagnostics-${pageNumber}.json`, 'sessionDiagnostics', JSON.stringify(page))) break;
+								if (page.diagnostics.droppedRecords || page.diagnostics.pendingRecords || recordingStatus === 'incomplete') {
 									issues.push({ source: 'sessionDiagnostics', reason: 'truncated' });
 								}
 								for (const record of page.diagnostics.events) {
@@ -323,10 +280,7 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 										issues.push({ source: key, reason: 'unavailable' });
 										continue;
 									}
-									if (
-										files.length >= MaxFiles - 1 ||
-										totalBytes + reference.byteLength > MaxDataBytes
-									) {
+									if (files.length >= MaxFiles - 1 || totalBytes + reference.byteLength > MaxDataBytes) {
 										issues.push({
 											source: 'sessionPayloads',
 											reason: files.length >= MaxFiles - 1 ? 'fileLimit' : 'byteLimit',
@@ -337,11 +291,7 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 									const payloadCapture = captureId;
 									await attempt(key, async () => {
 										await assertBackend();
-										const payload = await traces.readTracePayload(
-											conversation.sessionId,
-											payloadCapture,
-											reference.payloadId,
-										);
+										const payload = await traces.readTracePayload(conversation.sessionId, payloadCapture, reference.payloadId);
 										await assertBackend();
 										const path = `session/payloads/${payloads.length}.json`;
 										if (add(path, key, JSON.stringify(payload))) {
@@ -352,8 +302,7 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 								}
 								if (!page.hasMore) break;
 								after = page.cursor;
-								if (pageNumber === MaxTracePages)
-									issues.push({ source: 'sessionDiagnostics', reason: 'pageLimit' });
+								if (pageNumber === MaxTracePages) issues.push({ source: 'sessionDiagnostics', reason: 'pageLimit' });
 							}
 						});
 					}
@@ -371,9 +320,7 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 						coverage: {
 							hostLogs: 'local-main-current-window-and-local-app-server',
 							providerLogs: 'retained-output-log-channels-only',
-							sessionEvidence: conversation
-								? 'session-trace-and-diagnostic-pages'
-								: 'no-active-conversation',
+							sessionEvidence: conversation ? 'session-trace-and-diagnostic-pages' : 'no-active-conversation',
 							sessionHostProcessLogs: conversation ? processLogsStatus : 'no-active-conversation',
 							requestPayloads: {
 								recordingStatus: recordingStatus ?? 'unavailable',
@@ -386,30 +333,14 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 						issues,
 					};
 					const manifestBytes = encoder.encode(JSON.stringify(manifest, undefined, 2));
-					if (manifestBytes.length > MaxManifestBytes)
-						throw new Error(
-							localize(
-								'debugLogs.manifestSize',
-								'The debug log coverage manifest exceeds its size limit.',
-							),
-						);
+					if (manifestBytes.length > MaxManifestBytes) throw new Error(localize('debugLogs.manifestSize', 'The debug log coverage manifest exceeds its size limit.'));
 					files.push({ path: 'manifest.json', bytes: manifestBytes });
 					assertCurrent();
 					const archive = createZip(files);
 					assertCurrent();
-					triggerDownload(
-						new Blob([archive], { type: 'application/zip' }),
-						'ash-agent-host-debug-logs.zip',
-						ownerDocument,
-					);
+					triggerDownload(new Blob([archive], { type: 'application/zip' }), 'ash-agent-host-debug-logs.zip', ownerDocument);
 					if (issues.length) {
-						notifications.warn(
-							localize(
-								'debugLogs.partial',
-								'Debug logs exported with {0} collection issues. See manifest.json for missing or truncated evidence.',
-								issues.length,
-							),
-						);
+						notifications.warn(localize('debugLogs.partial', 'Debug logs exported with {0} collection issues. See manifest.json for missing or truncated evidence.', issues.length));
 					} else {
 						notifications.info(localize('debugLogs.exported', 'Agent Host debug logs exported.'));
 					}
@@ -417,14 +348,7 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 				() => cancellation.abort(),
 			);
 		} catch (error) {
-			if (!isCancellationError(error))
-				notifications.error(
-					localize(
-						'debugLogs.failed',
-						'Could not export Agent Host debug logs: {0}',
-						error instanceof Error ? error.message : String(error),
-					),
-				);
+			if (!isCancellationError(error)) notifications.error(localize('debugLogs.failed', 'Could not export Agent Host debug logs: {0}', error instanceof Error ? error.message : String(error)));
 		} finally {
 			backend?.dispose();
 			connectionListener?.dispose();
@@ -440,21 +364,11 @@ async function collectHostLogs(
 ): Promise<void> {
 	const sources = await logs.list();
 	const currentWindow = sources.find(source => source.currentWindow);
-	const live = sources.filter(
-		source => source.live && (source.currentWindow || source.source === 'main' || source.source === 'app-server'),
-	);
-	const selected = sources.filter(source =>
-		live.some(
-			current =>
-				current.id === source.id ||
-				(current.source === source.source && current.id.split('/')[0] === source.id.split('/')[0]),
-		),
-	);
+	const live = sources.filter(source => source.live && (source.currentWindow || source.source === 'main' || source.source === 'app-server'));
+	const selected = sources.filter(source => live.some(current => current.id === source.id || (current.source === source.source && current.id.split('/')[0] === source.id.split('/')[0])));
 	if (!currentWindow) issues.push({ source: 'currentWindowLog', reason: 'unavailable' });
-	if (!sources.some(source => source.live && source.source === 'main'))
-		issues.push({ source: 'mainLog', reason: 'unavailable' });
-	if (!sources.some(source => source.source === 'app-server'))
-		issues.push({ source: 'localAppServerLog', reason: 'unavailable' });
+	if (!sources.some(source => source.live && source.source === 'main')) issues.push({ source: 'mainLog', reason: 'unavailable' });
+	if (!sources.some(source => source.source === 'app-server')) issues.push({ source: 'localAppServerLog', reason: 'unavailable' });
 	if (selected.length > MaxFiles) issues.push({ source: 'hostLogs', reason: 'fileLimit' });
 	for (const [index, source] of selected.slice(0, MaxFiles).entries()) {
 		await attempt(source.id, async () => {
@@ -469,10 +383,7 @@ async function collectHostLogs(
 function createZip(files: readonly BundleFile[]): Uint8Array<ArrayBuffer> {
 	const encoder = new TextEncoder();
 	const names = files.map(file => encoder.encode(file.path));
-	const length = files.reduce(
-		(size, file, index) => size + 30 + names[index].length + file.bytes.length + 46 + names[index].length,
-		22,
-	);
+	const length = files.reduce((size, file, index) => size + 30 + names[index].length + file.bytes.length + 46 + names[index].length, 22);
 	const bytes = new Uint8Array(length);
 	const view = new DataView(bytes.buffer);
 	const crcTable = new Uint32Array(256);

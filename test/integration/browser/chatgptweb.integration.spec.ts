@@ -5,13 +5,9 @@ import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { expectVisibleFocusOutline } from '../../fixtures/browser/focusOutline.js';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
-const preload = transpileModule(
-	readFileSync(
-		new URL('../../../src/ash/platform/browserView/electron-browser/preload-browserView.ts', import.meta.url),
-		'utf8',
-	),
-	{ compilerOptions: { target: ScriptTarget.ES2022, module: ModuleKind.None } },
-).outputText;
+const preload = transpileModule(readFileSync(new URL('../../../src/ash/platform/browserView/electron-browser/preload-browserView.ts', import.meta.url), 'utf8'), {
+	compilerOptions: { target: ScriptTarget.ES2022, module: ModuleKind.None },
+}).outputText;
 const rule = { origin: 'https://chatgpt.com', selector: '.ash-chatgpt-turn.complete' };
 type TestHost = { configureRendering: (value: typeof rule | undefined) => void };
 // Fake-device flags alone can leave the local ICE candidates hidden.
@@ -34,8 +30,7 @@ async function fixture(page: Page, origin = rule.origin): Promise<void> {
 				ipcRenderer: {
 					send() {},
 					on(_channel: string, listener: (event: unknown, data: unknown) => void) {
-						(window as unknown as TestHost).configureRendering = rule =>
-							listener(undefined, { command: 'contentVisibility', data: rule });
+						(window as unknown as TestHost).configureRendering = rule => listener(undefined, { command: 'contentVisibility', data: rule });
 					},
 				},
 			}),
@@ -46,15 +41,10 @@ async function fixture(page: Page, origin = rule.origin): Promise<void> {
 }
 
 async function configure(page: Page, enabled: boolean): Promise<void> {
-	await page.evaluate(
-		rule => (window as unknown as TestHost).configureRendering(rule ?? undefined),
-		enabled ? rule : null,
-	);
+	await page.evaluate(rule => (window as unknown as TestHost).configureRendering(rule ?? undefined), enabled ? rule : null);
 }
 
-test('ChatGPT scrolling retains geometry, focus, completed replies and restores page styles', async ({
-	page,
-}, testInfo) => {
+test('ChatGPT scrolling retains geometry, focus, completed replies and restores page styles', async ({ page }, testInfo) => {
 	await fixture(page);
 	const first = page.locator('.turn').first();
 	const height = await page.evaluate(() => document.documentElement.scrollHeight);
@@ -69,9 +59,7 @@ test('ChatGPT scrolling retains geometry, focus, completed replies and restores 
 	await expect(last).toBeFocused();
 	await expect(last).toBeInViewport();
 	await testInfo.attach('retained-long-conversation', { body: await page.screenshot(), contentType: 'image/png' });
-	const previousIntrinsicHeight = await first.evaluate(element =>
-		element.style.getPropertyValue('contain-intrinsic-height'),
-	);
+	const previousIntrinsicHeight = await first.evaluate(element => element.style.getPropertyValue('contain-intrinsic-height'));
 	await page.setViewportSize({ width: 700, height: 600 });
 	// Wait for remeasurement; the old containment can survive until the resize event runs.
 	await expect(first).not.toHaveCSS('contain-intrinsic-height', previousIntrinsicHeight);
@@ -280,18 +268,13 @@ test('ChatGPT Send finishes dictation before submitting the final transcript', a
 	await expect(page.locator('.ash-chatgpt-input').getByRole('textbox')).toBeEnabled();
 	await fillMessage(page, 'Draft ');
 	await page.getByRole('button', { name: 'Dictate message', exact: true }).click();
-	await expect(page.getByRole('button', { name: 'Stop dictation', exact: true })).toHaveAttribute(
-		'aria-pressed',
-		'true',
-	);
+	await expect(page.getByRole('button', { name: 'Stop dictation', exact: true })).toHaveAttribute('aria-pressed', 'true');
 	await page.getByRole('button', { name: 'Send', exact: true }).click();
 	await expect.poll(() => submitted).toBe('Draft final words');
 	await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.dictationStops())).toBe(1);
 });
 
-test('ChatGPT uploads images and documents, waits for readiness and preserves attachments on rejection', async ({
-	page,
-}) => {
+test('ChatGPT uploads images and documents, waits for readiness and preserves attachments on rejection', async ({ page }) => {
 	await mockChatGPTRequests(page);
 	const uploads: { name: string; useCase: string; bytes?: Buffer }[] = [];
 	let releaseImage!: () => Promise<void>;
@@ -323,9 +306,7 @@ test('ChatGPT uploads images and documents, waits for readiness and preserves at
 			await route.fulfill({ status: 201, body: '' });
 		}
 	});
-	await page.route('**/service/backend-api/files/*/uploaded', route =>
-		route.fulfill({ json: { status: 'success' } }),
-	);
+	await page.route('**/service/backend-api/files/*/uploaded', route => route.fulfill({ json: { status: 'success' } }));
 	await page.route('**/service/backend-api/f/conversation', async route => {
 		submitted = route.request().postDataJSON();
 		await route.fulfill({ status: 403, json: {} });
@@ -371,9 +352,7 @@ test('ChatGPT uploads images and documents, waits for readiness and preserves at
 	await expect(attachments.getByRole('listitem')).toHaveCount(2);
 });
 
-test('ChatGPT retries failed uploads and keeps removed or old-draft files out of the active draft', async ({
-	page,
-}) => {
+test('ChatGPT retries failed uploads and keeps removed or old-draft files out of the active draft', async ({ page }) => {
 	await mockChatGPTRequests(page);
 	let attempts = 0;
 	let release!: () => Promise<void>;
@@ -391,14 +370,10 @@ test('ChatGPT retries failed uploads and keeps removed or old-draft files out of
 			await route.fulfill({ status: 201, body: '' }).catch(() => {});
 		};
 	});
-	await page.route('**/service/backend-api/files/*/uploaded', route =>
-		route.fulfill({ json: { status: 'success' } }),
-	);
+	await page.route('**/service/backend-api/files/*/uploaded', route => route.fulfill({ json: { status: 'success' } }));
 	await page.goto('/chatgptNavigation.html?locale=en');
 	await expect(page.getByRole('button', { name: 'Attach files', exact: true })).toBeEnabled();
-	await page
-		.locator('input[type=file]')
-		.setInputFiles({ name: 'retry.txt', mimeType: 'text/plain', buffer: Buffer.from('Retry this file') });
+	await page.locator('input[type=file]').setInputFiles({ name: 'retry.txt', mimeType: 'text/plain', buffer: Buffer.from('Retry this file') });
 	await page.getByRole('button', { name: 'Retry retry.txt', exact: true }).click();
 	await expect.poll(() => typeof release).toBe('function');
 	await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
@@ -440,162 +415,146 @@ voiceTest('ChatGPT can stop pending voice negotiation and rejects a late or inva
 	await expect(voice).toBeEnabled();
 });
 
-voiceTest(
-	'ChatGPT WebRTC exchanges audio and releases the microphone on stop and navigation',
-	async ({ context, page }) => {
-		voiceTest.setTimeout(60_000);
-		await context.addInitScript(() => {
-			if (!navigator.mediaDevices) return;
-			const tracks: MediaStreamTrack[] = [];
-			Object.assign(window, { testMediaTracks: tracks });
-			const capture = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-			navigator.mediaDevices.getUserMedia = async constraints => {
-				const stream = await capture(constraints);
-				tracks.push(...stream.getTracks());
-				return stream;
-			};
+voiceTest('ChatGPT WebRTC exchanges audio and releases the microphone on stop and navigation', async ({ context, page }) => {
+	voiceTest.setTimeout(60_000);
+	await context.addInitScript(() => {
+		if (!navigator.mediaDevices) return;
+		const tracks: MediaStreamTrack[] = [];
+		Object.assign(window, { testMediaTracks: tracks });
+		const capture = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+		navigator.mediaDevices.getUserMedia = async constraints => {
+			const stream = await capture(constraints);
+			tracks.push(...stream.getTracks());
+			return stream;
+		};
+	});
+	const peer = await context.newPage();
+	await mockChatGPTRequests(peer);
+	await peer.goto('/chatgptNavigation.html?locale=en');
+	// The remote peer answers the real client's SDP and negotiated data channel;
+	// only the HTTP service boundary is synthetic.
+	const remote = await peer.evaluateHandle(() => {
+		const resources: {
+			peer: RTCPeerConnection;
+			channel: RTCDataChannel;
+			stream: MediaStream;
+			audio: HTMLAudioElement;
+		}[] = [];
+		return {
+			async answer(sdp: string): Promise<string> {
+				const peer = new RTCPeerConnection();
+				const channel = peer.createDataChannel('', { negotiated: true, id: 0 });
+				const audio = document.createElement('audio');
+				audio.autoplay = true;
+				document.body.append(audio);
+				const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+				resources.push({ peer, channel, stream, audio });
+				for (const track of stream.getTracks()) peer.addTrack(track, stream);
+				peer.ontrack = event => {
+					if (event.track.kind === 'audio') audio.srcObject = new MediaStream([event.track]);
+				};
+				await peer.setRemoteDescription({ type: 'offer', sdp });
+				await peer.setLocalDescription(await peer.createAnswer());
+				if (peer.iceGatheringState !== 'complete') {
+					await new Promise<void>(resolve => {
+						const gathered = (): void => {
+							if (peer.iceGatheringState !== 'complete') return;
+							peer.removeEventListener('icegatheringstatechange', gathered);
+							resolve();
+						};
+						peer.addEventListener('icegatheringstatechange', gathered);
+					});
+				}
+				return peer.localDescription!.sdp;
+			},
+			state(): { connection: string; ice: string; channel: string }[] {
+				return resources.map(({ peer, channel }) => ({
+					connection: peer.connectionState,
+					ice: peer.iceConnectionState,
+					channel: channel.readyState,
+				}));
+			},
+			dispose(): boolean {
+				for (const { peer, channel, stream, audio } of resources) {
+					peer.ontrack = null;
+					channel.close();
+					peer.close();
+					for (const track of stream.getTracks()) track.stop();
+					audio.pause();
+					audio.srcObject = null;
+					audio.remove();
+				}
+				return resources.length > 0 && resources.every(({ stream }) => stream.getTracks().every(track => track.readyState === 'ended'));
+			},
+		};
+	});
+	try {
+		await mockChatGPTRequests(page);
+		let negotiations = 0;
+		await page.route('**/service/realtime/vp**', async route => {
+			const request = route.request();
+			const form = await new Response(request.postData()!, {
+				headers: { 'Content-Type': request.headers()['content-type']! },
+			}).formData();
+			const offer = form.get('sdp');
+			expect(typeof offer).toBe('string');
+			expect(offer).toMatch(/^v=0\r?\n/u);
+			const answer = await remote.evaluate((remote, offer) => remote.answer(offer), String(offer));
+			negotiations++;
+			await route.fulfill({ contentType: 'application/sdp', body: answer });
 		});
-		const peer = await context.newPage();
-		await mockChatGPTRequests(peer);
-		await peer.goto('/chatgptNavigation.html?locale=en');
-		// The remote peer answers the real client's SDP and negotiated data channel;
-		// only the HTTP service boundary is synthetic.
-		const remote = await peer.evaluateHandle(() => {
-			const resources: {
-				peer: RTCPeerConnection;
-				channel: RTCDataChannel;
-				stream: MediaStream;
-				audio: HTMLAudioElement;
-			}[] = [];
-			return {
-				async answer(sdp: string): Promise<string> {
-					const peer = new RTCPeerConnection();
-					const channel = peer.createDataChannel('', { negotiated: true, id: 0 });
-					const audio = document.createElement('audio');
-					audio.autoplay = true;
-					document.body.append(audio);
-					const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-					resources.push({ peer, channel, stream, audio });
-					for (const track of stream.getTracks()) peer.addTrack(track, stream);
-					peer.ontrack = event => {
-						if (event.track.kind === 'audio') audio.srcObject = new MediaStream([event.track]);
-					};
-					await peer.setRemoteDescription({ type: 'offer', sdp });
-					await peer.setLocalDescription(await peer.createAnswer());
-					if (peer.iceGatheringState !== 'complete') {
-						await new Promise<void>(resolve => {
-							const gathered = (): void => {
-								if (peer.iceGatheringState !== 'complete') return;
-								peer.removeEventListener('icegatheringstatechange', gathered);
-								resolve();
-							};
-							peer.addEventListener('icegatheringstatechange', gathered);
-						});
-					}
-					return peer.localDescription!.sdp;
-				},
-				state(): { connection: string; ice: string; channel: string }[] {
-					return resources.map(({ peer, channel }) => ({
-						connection: peer.connectionState,
-						ice: peer.iceConnectionState,
-						channel: channel.readyState,
-					}));
-				},
-				dispose(): boolean {
-					for (const { peer, channel, stream, audio } of resources) {
-						peer.ontrack = null;
-						channel.close();
-						peer.close();
-						for (const track of stream.getTracks()) track.stop();
-						audio.pause();
-						audio.srcObject = null;
-						audio.remove();
-					}
-					return (
-						resources.length > 0 &&
-						resources.every(({ stream }) => stream.getTracks().every(track => track.readyState === 'ended'))
-					);
-				},
-			};
-		});
-		try {
-			await mockChatGPTRequests(page);
-			let negotiations = 0;
-			await page.route('**/service/realtime/vp**', async route => {
-				const request = route.request();
-				const form = await new Response(request.postData()!, {
-					headers: { 'Content-Type': request.headers()['content-type']! },
-				}).formData();
-				const offer = form.get('sdp');
-				expect(typeof offer).toBe('string');
-				expect(offer).toMatch(/^v=0\r?\n/u);
-				const answer = await remote.evaluate((remote, offer) => remote.answer(offer), String(offer));
-				negotiations++;
-				await route.fulfill({ contentType: 'application/sdp', body: answer });
+		await page.goto('/chatgptNavigation.html?locale=en');
+		const voice = page.getByRole('button', { name: 'Voice conversation', exact: true });
+		await voice.click();
+		await expect
+			.poll(async () => ({
+				status: await page.locator('.ash-chatgpt-voice-status').textContent(),
+				peers: await remote.evaluate(remote => remote.state()),
+			}))
+			.toEqual({
+				status: 'Voice conversation is active',
+				peers: [
+					{
+						connection: 'connected',
+						ice: expect.stringMatching(/^(connected|completed)$/u),
+						channel: 'open',
+					},
+				],
 			});
-			await page.goto('/chatgptNavigation.html?locale=en');
-			const voice = page.getByRole('button', { name: 'Voice conversation', exact: true });
-			await voice.click();
-			await expect
-				.poll(async () => ({
-					status: await page.locator('.ash-chatgpt-voice-status').textContent(),
-					peers: await remote.evaluate(remote => remote.state()),
-				}))
-				.toEqual({
-					status: 'Voice conversation is active',
-					peers: [
-						{
-							connection: 'connected',
-							ice: expect.stringMatching(/^(connected|completed)$/u),
-							channel: 'open',
-						},
-					],
-				});
-			await expect(page.locator('audio')).toHaveCount(1);
-			for (const participant of [page, peer]) {
-				await expect
-					.poll(() =>
-						participant.evaluate(() =>
-							[...document.querySelectorAll('audio')].some(
-								audio => audio.readyState >= 2 && !audio.paused,
-							),
-						),
-					)
-					.toBe(true);
-			}
-			const microphoneStates = (): Promise<MediaStreamTrackState[]> =>
-				page.evaluate(() => {
-					const tracks = (window as unknown as { testMediaTracks: MediaStreamTrack[] }).testMediaTracks;
-					return tracks.map(track => track.readyState);
-				});
-			await expect.poll(microphoneStates).toEqual(['live']);
-			await page.getByRole('button', { name: 'Stop voice conversation', exact: true }).click();
-			await expect.poll(microphoneStates).toEqual(['ended']);
-			await expect(page.locator('audio')).toHaveCount(0);
-			await expect(voice).toBeEnabled();
-			await voice.click();
-			await expect(page.locator('.ash-chatgpt-voice-status')).toHaveText('Voice conversation is active');
-			expect(negotiations).toBe(2);
-			await expect.poll(microphoneStates).toEqual(['ended', 'live']);
-			// The host can navigate while the in-chat New button is disabled during voice.
-			await page.evaluate(() => window.ashChatGPTIntegration.newChat());
-			await expect.poll(microphoneStates).toEqual(['ended', 'ended']);
-			await expect(page.locator('audio')).toHaveCount(0);
-			await expect(page.locator('.ash-chatgpt-voice-status')).toBeHidden();
-		} finally {
-			try {
-				expect(await remote.evaluate(remote => remote.dispose())).toBe(true);
-			} finally {
-				await remote.dispose();
-				await peer.close();
-			}
+		await expect(page.locator('audio')).toHaveCount(1);
+		for (const participant of [page, peer]) {
+			await expect.poll(() => participant.evaluate(() => [...document.querySelectorAll('audio')].some(audio => audio.readyState >= 2 && !audio.paused))).toBe(true);
 		}
-	},
-);
+		const microphoneStates = (): Promise<MediaStreamTrackState[]> =>
+			page.evaluate(() => {
+				const tracks = (window as unknown as { testMediaTracks: MediaStreamTrack[] }).testMediaTracks;
+				return tracks.map(track => track.readyState);
+			});
+		await expect.poll(microphoneStates).toEqual(['live']);
+		await page.getByRole('button', { name: 'Stop voice conversation', exact: true }).click();
+		await expect.poll(microphoneStates).toEqual(['ended']);
+		await expect(page.locator('audio')).toHaveCount(0);
+		await expect(voice).toBeEnabled();
+		await voice.click();
+		await expect(page.locator('.ash-chatgpt-voice-status')).toHaveText('Voice conversation is active');
+		expect(negotiations).toBe(2);
+		await expect.poll(microphoneStates).toEqual(['ended', 'live']);
+		// The host can navigate while the in-chat New button is disabled during voice.
+		await page.evaluate(() => window.ashChatGPTIntegration.newChat());
+		await expect.poll(microphoneStates).toEqual(['ended', 'ended']);
+		await expect(page.locator('audio')).toHaveCount(0);
+		await expect(page.locator('.ash-chatgpt-voice-status')).toBeHidden();
+	} finally {
+		try {
+			expect(await remote.evaluate(remote => remote.dispose())).toBe(true);
+		} finally {
+			await remote.dispose();
+			await peer.close();
+		}
+	}
+});
 
-test('ChatGPT rich diagrams retain their nested content without enabling HTML or scripts', async ({
-	page,
-}, testInfo) => {
+test('ChatGPT rich diagrams retain their nested content without enabling HTML or scripts', async ({ page }, testInfo) => {
 	const diagram = `<box border radius="lg" padding={3} gap={2}>
   <box background="surface-secondary" radius="md" padding={3} align="center" gap={1}>
     **Ash editor (TypeScript)**
@@ -633,10 +592,7 @@ test('ChatGPT rich diagrams retain their nested content without enabling HTML or
 
 test('ChatGPT replies omit internal citation tags while preserving literal code and links', async ({ page }) => {
 	const citation = '<Cite refs={[["turn744052search0","turn744052search6"]]}/>';
-	await chatPage(
-		page,
-		`Before ${citation} after.\n\n${citation}\n\n\`inline ${citation}\`\n\n\`\`\`html\n${citation}\n\`\`\`\n\n[Source](https://example.com/source)`,
-	);
+	await chatPage(page, `Before ${citation} after.\n\n${citation}\n\n\`inline ${citation}\`\n\n\`\`\`html\n${citation}\n\`\`\`\n\n[Source](https://example.com/source)`);
 	const body = page.locator('.ash-chatgpt-turn.assistant .ash-chatgpt-message-body');
 	await expect(body).toContainText('Before  after.');
 	await expect(body.locator('code').first()).toHaveText(`inline ${citation}`);
@@ -668,11 +624,7 @@ test('ChatGPT retains text around structured media and names file attachments', 
 							author: { role: 'assistant' },
 							content: {
 								content_type: 'multimodal_text',
-								parts: [
-									'Before image',
-									{ content_type: 'image_asset_pointer', alt: 'Architecture drawing' },
-									'After image',
-								],
+								parts: ['Before image', { content_type: 'image_asset_pointer', alt: 'Architecture drawing' }, 'After image'],
 							},
 							metadata: { attachments: [{ name: 'report.pdf' }] },
 						},
@@ -685,26 +637,16 @@ test('ChatGPT retains text around structured media and names file attachments', 
 	await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
 	const body = page.locator('.ash-chatgpt-turn.assistant .ash-chatgpt-message-body');
 	await expect(page.locator('.ash-chatgpt-turn.user')).toContainText('<box>User literal</box>');
-	await expect(body).toHaveText(
-		/Before image[\s\S]*Architecture drawing[\s\S]*在 ChatGPT 中查看此内容[\s\S]*After image[\s\S]*附件：report\.pdf/u,
-	);
+	await expect(body).toHaveText(/Before image[\s\S]*Architecture drawing[\s\S]*在 ChatGPT 中查看此内容[\s\S]*After image[\s\S]*附件：report\.pdf/u);
 	await expect(body.getByRole('link', { name: '在 ChatGPT 中查看此内容', exact: true })).toHaveCount(2);
 });
 
-test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames locally without Workbench access', async ({
-	page,
-}) => {
+test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames locally without Workbench access', async ({ page }) => {
 	await mockChatGPTRequests(page);
 	const html =
 		'<button onclick="document.querySelector(\'output\').textContent=\'1\'">Increment</button><output>0</output><canvas id="plot" width="16" height="16"></canvas><script>document.querySelector(\'canvas\').getContext(\'2d\').fillRect(0,0,16,16);try{top.document.body.dataset.escaped="true"}catch{document.body.dataset.isolated="true"}</script>';
-	const srcdoc = html
-		.replaceAll('&', '&amp;')
-		.replaceAll('"', '&quot;')
-		.replaceAll('<', '&lt;')
-		.replaceAll('>', '&gt;');
-	await page.route('https://frame.example.invalid/**', route =>
-		route.fulfill({ contentType: 'text/html', body: html }),
-	);
+	const srcdoc = html.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+	await page.route('https://frame.example.invalid/**', route => route.fulfill({ contentType: 'text/html', body: html }));
 	await page.route('**/service/backend-api/conversation/fixture-chat', route =>
 		route.fulfill({
 			json: {
@@ -742,9 +684,7 @@ test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames local
 			},
 		}),
 	);
-	await page.route('**/service/.resource?*', route =>
-		route.fulfill({ contentType: 'text/csv', body: 'name,value\nMay,42\n' }),
-	);
+	await page.route('**/service/.resource?*', route => route.fulfill({ contentType: 'text/csv', body: 'name,value\nMay,42\n' }));
 	await page.goto('/chatgptNavigation.html');
 	await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
 	const citation = page.locator('.ash-chatgpt-citation');
@@ -752,23 +692,13 @@ test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames local
 	await citation.locator('summary').press('Enter');
 	await expect(citation).toContainText('CSV documentation');
 	await expect(citation).toContainText('Read and write tabular data.');
-	await expect(page.getByRole('link', { name: 'Python docs', exact: true })).toHaveAttribute(
-		'href',
-		'https://docs.python.org/3/library/csv.html',
-	);
+	await expect(page.getByRole('link', { name: 'Python docs', exact: true })).toHaveAttribute('href', 'https://docs.python.org/3/library/csv.html');
 	const inline = page.frameLocator('iframe[title="Inline preview"]').frameLocator('iframe');
 	await inline.getByRole('button', { name: 'Increment' }).click();
 	await expect(inline.locator('output')).toHaveText('1');
 	await expect(inline.locator('body')).toHaveAttribute('data-isolated', 'true');
-	expect(
-		await inline
-			.locator('canvas')
-			.evaluate((canvas: HTMLCanvasElement) => canvas.getContext('2d')!.getImageData(1, 1, 1, 1).data[3]),
-	).toBe(255);
-	const external = page
-		.frameLocator('iframe[title="External preview"]')
-		.frameLocator('iframe')
-		.frameLocator('iframe');
+	expect(await inline.locator('canvas').evaluate((canvas: HTMLCanvasElement) => canvas.getContext('2d')!.getImageData(1, 1, 1, 1).data[3])).toBe(255);
+	const external = page.frameLocator('iframe[title="External preview"]').frameLocator('iframe').frameLocator('iframe');
 	await external.getByRole('button', { name: 'Increment' }).click();
 	await expect(external.locator('output')).toHaveText('1');
 	const chart = page.frameLocator('iframe[title="Dataset chart"]').frameLocator('iframe');
@@ -839,9 +769,7 @@ test('ChatGPT Stop cancels pending verification without sending or stopping the 
 	let verify!: () => Promise<void>;
 	await page.route('**/service/.headers/**', route => {
 		verify = async () => {
-			await route
-				.fulfill({ json: { 'OpenAI-Sentinel-Chat-Requirements-Token': 'fixture-verification' } })
-				.catch(() => {});
+			await route.fulfill({ json: { 'OpenAI-Sentinel-Chat-Requirements-Token': 'fixture-verification' } }).catch(() => {});
 		};
 	});
 	await page.route('**/service/backend-api/f/conversation', async route => {
@@ -886,10 +814,7 @@ for (const locale of ['en', 'zh-CN']) {
 	test(`ChatGPT uses the Rust math provider and follows math settings (${locale})`, async ({ page }) => {
 		test.setTimeout(600000);
 		await installMathProvider(page);
-		await mockChatGPTRequests(
-			page,
-			'$\\newcommand{\\chatfoo}{x^2}\\chatfoo$\n\n\\[\\chatfoo+\\RR\\]\n\n$$\\sqrt{x}+\\overbrace{a+b}+\\widehat{ABC}$$\n\n$\\frac{1}{$',
-		);
+		await mockChatGPTRequests(page, '$\\newcommand{\\chatfoo}{x^2}\\chatfoo$\n\n\\[\\chatfoo+\\RR\\]\n\n$$\\sqrt{x}+\\overbrace{a+b}+\\widehat{ABC}$$\n\n$\\frac{1}{$');
 		await page.goto(`/chatgptNavigation.html?locale=${locale}`);
 		await page.evaluate(() => window.ashChatGPTIntegration.setMathMacros({ '\\RR': '\\mathbb{R}' }));
 		await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
@@ -900,16 +825,14 @@ for (const locale of ['en', 'zh-CN']) {
 		const bounds = await body.locator('.katex-display').first().boundingBox();
 		expect(bounds!.height).toBeGreaterThan(10);
 		await page.evaluate(() => document.fonts.ready);
-		const geometry = await body
-			.locator('.katex-html svg')
-			.evaluateAll(elements =>
-				elements.map(element => ({
-					width: element.getAttribute('width'),
-					height: element.getAttribute('height'),
-					actual: element.getBoundingClientRect().height,
-					fontSize: parseFloat(getComputedStyle(element).fontSize),
-				})),
-			);
+		const geometry = await body.locator('.katex-html svg').evaluateAll(elements =>
+			elements.map(element => ({
+				width: element.getAttribute('width'),
+				height: element.getAttribute('height'),
+				actual: element.getBoundingClientRect().height,
+				fontSize: parseFloat(getComputedStyle(element).fontSize),
+			})),
+		);
 		expect(geometry.length).toBeGreaterThanOrEqual(5);
 		for (const svg of geometry) {
 			expect(svg.width).toMatch(/^(400em|100%)$/);
@@ -917,10 +840,7 @@ for (const locale of ['en', 'zh-CN']) {
 			expect(Math.abs(svg.actual - parseFloat(svg.height!) * svg.fontSize)).toBeLessThan(1);
 		}
 		await expect(body.locator('[data-math-diagnostic=invalidFormula]')).toContainText('\\frac{1}{');
-		await expect(body.locator('[data-math-diagnostic=invalidFormula]')).toHaveAttribute(
-			'title',
-			new RegExp(locale === 'en' ? 'This formula could not be rendered' : '无法渲染此公式'),
-		);
+		await expect(body.locator('[data-math-diagnostic=invalidFormula]')).toHaveAttribute('title', new RegExp(locale === 'en' ? 'This formula could not be rendered' : '无法渲染此公式'));
 		await page.evaluate(() => window.ashChatGPTIntegration.setMathEnabled(false));
 		await expect(body.locator('.katex')).toHaveCount(0);
 		await expect(body).toContainText('\\chatfoo+\\RR');
@@ -937,9 +857,7 @@ for (const locale of ['en', 'zh-CN']) {
 			markdown: string;
 			formulas: { source: string; display: string }[];
 		}[];
-		const cases = corpus.filter(
-			entry => entry.formulas.length || ['code and escapes', 'currency and jQuery'].includes(entry.name),
-		);
+		const cases = corpus.filter(entry => entry.formulas.length || ['code and escapes', 'currency and jQuery'].includes(entry.name));
 		const text = cases.map(entry => entry.markdown).join('\n\n');
 		const expected = cases.flatMap(entry => entry.formulas);
 		const extension = await startMarkdownExtension(locale);
@@ -958,10 +876,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
 			await editor.goto(`/markdownEditor.html?locale=${locale}`);
 			await expect(editor.locator('.ash-markdown-content .katex')).toHaveCount(2);
-			await editor.evaluate(
-				text => window.postMessage({ type: 'document', version: 2, text, readOnly: true }, location.origin),
-				text,
-			);
+			await editor.evaluate(text => window.postMessage({ type: 'document', version: 2, text, readOnly: true }, location.origin), text);
 			const chat = page.locator('.ash-chatgpt-turn.assistant .ash-chatgpt-message-body');
 			const markdown = editor.locator('.ash-markdown-content');
 			for (const content of [chat, markdown]) {
@@ -980,9 +895,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await Promise.all([page.evaluate(() => document.fonts.ready), editor.evaluate(() => document.fonts.ready)]);
 			for (const content of [chat, markdown]) {
 				const overflow = await content.evaluate(element => {
-					const formula = [...element.querySelectorAll<HTMLElement>('.ash-markdown-math')].find(node =>
-						node.querySelector('annotation')?.textContent?.startsWith('\\underbrace{'),
-					)!;
+					const formula = [...element.querySelectorAll<HTMLElement>('.ash-markdown-math')].find(node => node.querySelector('annotation')?.textContent?.startsWith('\\underbrace{'))!;
 					return {
 						behavior: getComputedStyle(formula).overflowX,
 						width: formula.clientWidth,
@@ -1012,9 +925,7 @@ for (const locale of ['en', 'zh-CN']) {
 									node instanceof Element
 										? {
 												tag: node.localName,
-												attributes: [...node.attributes]
-													.map(attribute => [attribute.name, attribute.value])
-													.sort(([a], [b]) => a.localeCompare(b)),
+												attributes: [...node.attributes].map(attribute => [attribute.name, attribute.value]).sort(([a], [b]) => a.localeCompare(b)),
 												children: [...node.childNodes].map(semantic),
 											}
 										: node.textContent;
@@ -1028,11 +939,7 @@ for (const locale of ['en', 'zh-CN']) {
 									color: style.color,
 									fontSize: style.fontSize,
 									fontFamily: style.fontFamily,
-									diagnostic:
-										element
-											.querySelector('[data-math-diagnostic]')
-											?.getAttribute('data-math-diagnostic') ??
-										element.getAttribute('data-math-diagnostic'),
+									diagnostic: element.querySelector('[data-math-diagnostic]')?.getAttribute('data-math-diagnostic') ?? element.getAttribute('data-math-diagnostic'),
 									height: katex?.getBoundingClientRect().height,
 								};
 							}),
@@ -1056,9 +963,7 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 }
 
-test('ChatGPT streaming reuses math while prose grows and renders one new ordered batch when formulas change', async ({
-	page,
-}) => {
+test('ChatGPT streaming reuses math while prose grows and renders one new ordered batch when formulas change', async ({ page }) => {
 	await page.addInitScript(() => {
 		const fetcher = globalThis.fetch.bind(globalThis);
 		globalThis.fetch = async (input, init) => {
@@ -1106,9 +1011,7 @@ test('ChatGPT streaming reuses math while prose grows and renders one new ordere
 	expect(counters).toEqual({ lists: 1, renders: 2 });
 });
 
-test('ChatGPT retains semantic content and gives custom cards and charts local interaction', async ({
-	page,
-}, testInfo) => {
+test('ChatGPT retains semantic content and gives custom cards and charts local interaction', async ({ page }, testInfo) => {
 	test.setTimeout(600000);
 	await installMathProvider(page);
 	await chatPage(
@@ -1153,10 +1056,7 @@ Last paragraph.
 	for (const text of ['Architecture image', 'Demo video', 'SVG diagram', 'Node A', 'Last paragraph.']) {
 		await expect(body).toContainText(text);
 	}
-	await expect(body.getByRole('link', { name: 'https://example.com/source', exact: true })).toHaveAttribute(
-		'href',
-		'https://example.com/source',
-	);
+	await expect(body.getByRole('link', { name: 'https://example.com/source', exact: true })).toHaveAttribute('href', 'https://example.com/source');
 	await expect(body.locator('code').last()).toHaveText('<FutureCard>literal code</FutureCard>');
 	await expect(body.locator('.ash-katex-container')).toHaveAttribute('data-latex', 'x^2 + y^2 = z^2');
 	await expect(body.locator('.ash-katex-container math')).toBeAttached();

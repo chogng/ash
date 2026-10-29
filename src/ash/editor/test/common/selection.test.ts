@@ -15,39 +15,36 @@ test('Selection preserves anchor direction and ordered range', () => {
 		{
 			forward: {
 				direction: forward.getDirection(),
-				range: new Range(
-					forward.startLineNumber,
-					forward.startColumn,
-					forward.endLineNumber,
-					forward.endColumn,
-				),
+				range: new Range(forward.startLineNumber, forward.startColumn, forward.endLineNumber, forward.endColumn),
 				collapsed: forward.isEmpty(),
 			},
 			backward: {
 				direction: backward.getDirection(),
-				range: new Range(
-					backward.startLineNumber,
-					backward.startColumn,
-					backward.endLineNumber,
-					backward.endColumn,
-				),
+				range: new Range(backward.startLineNumber, backward.startColumn, backward.endLineNumber, backward.endColumn),
 				collapsed: backward.isEmpty(),
 			},
 			collapsed: {
 				direction: collapsed.getDirection(),
-				range: new Range(
-					collapsed.startLineNumber,
-					collapsed.startColumn,
-					collapsed.endLineNumber,
-					collapsed.endColumn,
-				),
+				range: new Range(collapsed.startLineNumber, collapsed.startColumn, collapsed.endLineNumber, collapsed.endColumn),
 				collapsed: collapsed.isEmpty(),
 			},
 		},
 		{
-			forward: { direction: SelectionDirection.LTR, range: Range.fromPositions(start, end), collapsed: false },
-			backward: { direction: SelectionDirection.RTL, range: Range.fromPositions(start, end), collapsed: false },
-			collapsed: { direction: SelectionDirection.LTR, range: Range.fromPositions(start), collapsed: true },
+			forward: {
+				direction: SelectionDirection.LTR,
+				range: Range.fromPositions(start, end),
+				collapsed: false,
+			},
+			backward: {
+				direction: SelectionDirection.RTL,
+				range: Range.fromPositions(start, end),
+				collapsed: false,
+			},
+			collapsed: {
+				direction: SelectionDirection.LTR,
+				range: Range.fromPositions(start),
+				collapsed: true,
+			},
 		},
 	);
 });
@@ -60,8 +57,18 @@ test('Selection arrays keep the primary cursor first', () => {
 	selections.reverse();
 
 	assert.deepEqual(
-		{ frozen: Object.isFrozen(set), selectionsFrozen: Object.isFrozen(set), selections: set, primary: set[0]! },
-		{ frozen: true, selectionsFrozen: true, selections: [second, first], primary: second },
+		{
+			frozen: Object.isFrozen(set),
+			selectionsFrozen: Object.isFrozen(set),
+			selections: set,
+			primary: set[0]!,
+		},
+		{
+			frozen: true,
+			selectionsFrozen: true,
+			selections: [second, first],
+			primary: second,
+		},
 	);
 	assert.equal([first][0]!, first);
 	assert.throws(() => primaryFirst([], 0), /must not be empty/);
@@ -70,8 +77,7 @@ test('Selection arrays keep the primary cursor first', () => {
 
 function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {
 	if (items.length === 0) throw new RangeError('Selections must not be empty');
-	if (!Number.isSafeInteger(primaryIndex) || primaryIndex < 0 || primaryIndex >= items.length)
-		throw new RangeError('primaryIndex must identify a selection');
+	if (!Number.isSafeInteger(primaryIndex) || primaryIndex < 0 || primaryIndex >= items.length) throw new RangeError('primaryIndex must identify a selection');
 	if (primaryIndex === 0) return Object.freeze([...items]);
 	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
 }

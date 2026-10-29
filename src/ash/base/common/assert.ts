@@ -2,9 +2,7 @@ import { BugIndicatingError, onUnexpectedError } from './errors.js';
 
 export function assert(condition: unknown, messageOrError: string | Error = 'unexpected state'): asserts condition {
 	if (condition) return;
-	throw typeof messageOrError === 'string'
-		? new BugIndicatingError(`Assertion failed: ${messageOrError}`)
-		: messageOrError;
+	throw typeof messageOrError === 'string' ? new BugIndicatingError(`Assertion failed: ${messageOrError}`) : messageOrError;
 }
 
 export function assertNever(_value: never, message = 'Unreachable code'): never {

@@ -12,16 +12,9 @@ import { IPreferencesService } from '../../../../../services/preferences/common/
 import { TestConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';
 import { ISpeechService } from '../../../../speech/common/speechService.js';
 import { SpeechService } from '../../../../speech/browser/speechService.js';
-import {
-	registerTestDictationOnboarding,
-	createTestDictationBackend,
-	installTestDictationAudio,
-} from '../../../../../test/common/testDictationServices.js';
+import { registerTestDictationOnboarding, createTestDictationBackend, installTestDictationAudio } from '../../../../../test/common/testDictationServices.js';
 import { IDictationOnboardingService } from '../../../browser/speechToText/dictationOnboarding.js';
-import {
-	IChatSpeechToTextService,
-	ChatSpeechToTextService,
-} from '../../../browser/speechToText/chatSpeechToTextService.js';
+import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../browser/speechToText/chatSpeechToTextService.js';
 import type { IChatInputNoticeClaimOptions } from '../../../browser/widget/input/chatInputNoticeHost.js';
 
 function fixture() {
@@ -30,28 +23,12 @@ function fixture() {
 		url: 'https://ash.test',
 	});
 	owner.add(toDisposable(() => dom.window.close()));
-	owner.add(
-		installEditorTestDom(dom, [
-			'Node',
-			'Element',
-			'HTMLElement',
-			'HTMLButtonElement',
-			'Event',
-			'KeyboardEvent',
-			'MouseEvent',
-		]),
-	);
+	owner.add(installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'HTMLButtonElement', 'Event', 'KeyboardEvent', 'MouseEvent']));
 	const window = dom.window as unknown as Window & typeof globalThis;
 	const audio = owner.add(installTestDictationAudio(window));
 	const services = owner.add(new InstantiationService());
-	services.registerSingleton(
-		IConfigurationService,
-		() => new TestConfigurationService({ source: '{"dictation.backend":"cloud"}' }),
-	);
-	services.registerInstance(
-		IVoiceCodeTranscriptionBackendService,
-		createTestDictationBackend(owner, { start: async () => ({ stop: async () => {}, cancel: async () => {} }) }),
-	);
+	services.registerSingleton(IConfigurationService, () => new TestConfigurationService({ source: '{"dictation.backend":"cloud"}' }));
+	services.registerInstance(IVoiceCodeTranscriptionBackendService, createTestDictationBackend(owner, { start: async () => ({ stop: async () => {}, cancel: async () => {} }) }));
 	services.registerInstance(IPreferencesService, { openSettings: async () => {} } as unknown as IPreferencesService);
 	services.registerInstance(IAccessibleViewService, {
 		getOpenAriaHint: () => undefined,

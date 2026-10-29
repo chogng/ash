@@ -8,11 +8,7 @@ import { invoke } from '../../ipc/electron-browser/rendererIpc.js';
 import { ILogService } from '../../log/common/log.js';
 import { ManagedRemoteConnection, RemoteConnectionType } from '../../remote/common/remoteAuthorityResolver.js';
 import { IRemoteSocketFactoryService } from '../../remote/common/remoteSocketFactoryService.js';
-import {
-	AppServerConnectionRecovery,
-	AppServerProtocolClient,
-	type AppServerProtocolClientOptions,
-} from '../browser/appServerProtocolClient.js';
+import { AppServerConnectionRecovery, AppServerProtocolClient, type AppServerProtocolClientOptions } from '../browser/appServerProtocolClient.js';
 import { AppServerSocketTransport } from '../browser/appServerSocketTransport.js';
 import { AppServerProtocolIncompatibleError } from '../common/appServerProtocolCompatibility.js';
 import { AppServerMessagePortTransport } from './appServerMessagePortTransport.js';
@@ -121,10 +117,7 @@ export class LocalAgentHostServiceClient extends Disposable {
 		try {
 			await this.client.connect();
 		} catch (error) {
-			if (
-				!(error instanceof AppServerProtocolIncompatibleError) ||
-				(await invoke(`${this.channelPrefix}:recover-runtime`, error.incompatibility)) !== true
-			) {
+			if (!(error instanceof AppServerProtocolIncompatibleError) || (await invoke(`${this.channelPrefix}:recover-runtime`, error.incompatibility)) !== true) {
 				throw error;
 			}
 			this.assertNotDisposed();

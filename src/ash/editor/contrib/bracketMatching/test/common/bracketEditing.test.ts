@@ -18,13 +18,7 @@ test('Remove matching brackets deletes distinct model pairs atomically and resto
 		languageConfigurationService: configurations,
 	});
 	const bracketPairs = model.bracketPairs;
-	using selections = createTestCursorsController(
-		model,
-		primaryFirst(
-			[Selection.fromPositions(new Position(0 + 1, 0 + 1)), Selection.fromPositions(new Position(0 + 1, 1 + 1))],
-			1,
-		),
-	);
+	using selections = createTestCursorsController(model, primaryFirst([Selection.fromPositions(new Position(0 + 1, 0 + 1)), Selection.fromPositions(new Position(0 + 1, 1 + 1))], 1));
 	assert.equal(bracketPairs.getBracketPairsInRange(model.getFullModelRange()).toArray().length, 2);
 	const commands = createRemoveMatchingBracketsCommand(bracketPairs, selections.getSelections());
 	assert.ok(commands);
@@ -62,10 +56,7 @@ for (const reversed of [false, true]) {
 		assert.ok(commands);
 		cursors.executeCommands(commands);
 		assert.equal(model.getText(), 'value keep');
-		assert.deepEqual(cursors.getSelections(), [
-			new Selection(1, 1, 1, 1),
-			reversed ? new Selection(1, 11, 1, 7) : new Selection(1, 7, 1, 11),
-		]);
+		assert.deepEqual(cursors.getSelections(), [new Selection(1, 1, 1, 1), reversed ? new Selection(1, 11, 1, 7) : new Selection(1, 7, 1, 11)]);
 		model.undo();
 		assert.equal(model.getText(), '(value) keep');
 	});

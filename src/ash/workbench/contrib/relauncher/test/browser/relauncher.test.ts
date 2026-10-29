@@ -5,24 +5,11 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
 import { isMacintosh } from '../../../../../base/common/platform.js';
-import {
-	ConfigurationTarget,
-	type IConfigurationChangeEvent,
-	type IConfigurationService,
-} from '../../../../../platform/configuration/common/configuration.js';
+import { ConfigurationTarget, type IConfigurationChangeEvent, type IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import type {
-	IConfirmationDialogOptions,
-	IConfirmationDialogResult,
-	IDialogService,
-} from '../../../../../platform/dialogs/common/dialogs.js';
-import {
-	parseMenuStyle,
-	parseTitleBarStyle,
-	resolveContextMenuStyle,
-	type TitleBarStyleConfiguration,
-} from '../../../../../platform/window/common/window.js';
+import type { IConfirmationDialogOptions, IConfirmationDialogResult, IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { parseMenuStyle, parseTitleBarStyle, resolveContextMenuStyle, type TitleBarStyleConfiguration } from '../../../../../platform/window/common/window.js';
 import type { INativeHostApi } from '../../../../../platform/native/common/nativeHost.js';
 import type { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { IHostService } from '../../../../services/host/browser/host.js';
@@ -75,13 +62,9 @@ function fixture(options: RelauncherFixtureOptions = {}) {
 		getTitleBarStyle: () => Promise.resolve(options.windowTitleBarStyle ?? savedTitleBarStyle),
 	} as INativeHostApi;
 	const contextMenus = {
-		contextMenuStyle:
-			options.selectedMenuStyle ??
-			resolveContextMenuStyle('inherit', savedTitleBarStyle, isMacintosh ? 'macos' : 'desktop'),
+		contextMenuStyle: options.selectedMenuStyle ?? resolveContextMenuStyle('inherit', savedTitleBarStyle, isMacintosh ? 'macos' : 'desktop'),
 	} as IContextMenuService;
-	const relauncher = store.add(
-		new SettingsChangeRelauncher(observedConfiguration, dialogs, host, windowHost, contextMenus),
-	);
+	const relauncher = store.add(new SettingsChangeRelauncher(observedConfiguration, dialogs, host, windowHost, contextMenus));
 	return {
 		configuration,
 		prompts,

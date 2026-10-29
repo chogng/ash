@@ -8,11 +8,7 @@ import type { LanguagePackIndexEntry } from './languagePackContract.js';
 export function normalizeLocale(value: string): string {
 	const parts = value.trim().replaceAll('_', '-').split('-');
 	if (parts.length === 0 || !parts[0] || parts.some(part => !/^[A-Za-z0-9]+$/u.test(part))) return '';
-	return parts
-		.map((part, index) =>
-			index === 0 ? part.toLowerCase() : part.length === 2 || part.length === 3 ? part.toUpperCase() : part,
-		)
-		.join('-');
+	return parts.map((part, index) => (index === 0 ? part.toLowerCase() : part.length === 2 || part.length === 3 ? part.toUpperCase() : part)).join('-');
 }
 
 /** Startup must remain usable when an optional language resource is missing or damaged. */
@@ -68,14 +64,7 @@ export function parseLanguagePackCatalog(value: unknown): LanguagePackCatalog | 
 	)
 		return undefined;
 	const locale = normalizeLocale(candidate.locale);
-	if (
-		!locale ||
-		!candidate.languageName.trim() ||
-		!candidate.localizedLanguageName.trim() ||
-		candidate.languageName.length > 128 ||
-		candidate.localizedLanguageName.length > 128
-	)
-		return undefined;
+	if (!locale || !candidate.languageName.trim() || !candidate.localizedLanguageName.trim() || candidate.languageName.length > 128 || candidate.localizedLanguageName.length > 128) return undefined;
 	const bundles: Record<string, Record<string, string>> = {};
 	const bundleEntries = Object.entries(candidate.bundles);
 	if (bundleEntries.length === 0 || bundleEntries.length > 2048) return undefined;
@@ -85,16 +74,12 @@ export function parseLanguagePackCatalog(value: unknown): LanguagePackCatalog | 
 		const messageEntries = Object.entries(messages);
 		if (messageEntries.length === 0 || messageEntries.length > 10000) return undefined;
 		for (const [key, message] of messageEntries) {
-			if (!key.trim() || key.length > 512 || typeof message !== 'string' || message.length > 64 * 1024)
-				return undefined;
+			if (!key.trim() || key.length > 512 || typeof message !== 'string' || message.length > 64 * 1024) return undefined;
 			normalizedMessages[key] = message;
 		}
 		bundles[bundle] = normalizedMessages;
 	}
-	const extensionTranslations: Record<
-		string,
-		{ package: Readonly<Record<string, string>>; bundle: Readonly<Record<string, string>> }
-	> = {};
+	const extensionTranslations: Record<string, { package: Readonly<Record<string, string>>; bundle: Readonly<Record<string, string>> }> = {};
 	if (candidate.extensionTranslations !== undefined) {
 		if (!isRecord(candidate.extensionTranslations) || Object.keys(candidate.extensionTranslations).length > 2048) {
 			return undefined;

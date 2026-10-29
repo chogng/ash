@@ -2,11 +2,7 @@ import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import * as nls from '../../../../nls.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import {
-	EditorAction,
-	registerEditorAction,
-	type ServicesAccessor,
-} from '../../../browser/editorFeatureRegistration.js';
+import { EditorAction, registerEditorAction, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
 import { ReplaceCommand } from '../../../common/commands/replaceCommand.js';
 import { MoveOperations } from '../../../common/cursor/cursorMoveOperations.js';
 import { Range } from '../../../common/core/range.js';
@@ -18,7 +14,10 @@ class TransposeLettersAction extends EditorAction {
 			id: 'editor.action.transposeLetters',
 			label: nls.localize2('transposeLetters.label', 'Transpose Letters'),
 			precondition: undefined,
-			kbOpts: { weight: KeybindingWeight.EditorContrib, mac: { primary: KeyMod.WinCtrl | KeyCode.KeyT } },
+			kbOpts: {
+				weight: KeybindingWeight.EditorContrib,
+				mac: { primary: KeyMod.WinCtrl | KeyCode.KeyT },
+			},
 			canTriggerInlineEdits: true,
 		});
 	}
@@ -41,10 +40,7 @@ class TransposeLettersAction extends EditorAction {
 				continue;
 			}
 
-			const endPosition =
-				column === lastColumn
-					? selection.getPosition()
-					: MoveOperations.rightPosition(model, selection.positionLineNumber, selection.positionColumn);
+			const endPosition = column === lastColumn ? selection.getPosition() : MoveOperations.rightPosition(model, selection.positionLineNumber, selection.positionColumn);
 			const middlePosition = MoveOperations.leftPosition(model, endPosition);
 			const beginPosition = MoveOperations.leftPosition(model, middlePosition);
 			const leftChar = model.getValueInRange(Range.fromPositions(beginPosition, middlePosition));

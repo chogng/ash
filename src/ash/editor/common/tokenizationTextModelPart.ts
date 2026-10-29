@@ -3,12 +3,7 @@ import type { IDisposable } from '../../base/common/lifecycle.js';
 import type { TextModel } from './model/textModel.js';
 import type { LanguageFeatureRegistry, SyntaxProviderRegistry } from './languageFeatureRegistry.js';
 import type { ILanguageIdCodec, LanguageSemanticTokensProvider, SyntaxServiceOptions } from './languages.js';
-import type {
-	LanguageTokenizationSource,
-	SemanticTokenModelSource,
-	SemanticTokenSource,
-	LanguageToken,
-} from './tokens/languageTokens.js';
+import type { LanguageTokenizationSource, SemanticTokenModelSource, SemanticTokenSource, LanguageToken } from './tokens/languageTokens.js';
 import type { LanguageRequestOptions, LanguageRequestOutcome } from './model/languageRequestCoordinator.js';
 import type {
 	TreeSitterBracket,
@@ -47,11 +42,7 @@ export interface ITokenizationTextModelPart {
 	getTokenTypeIfInsertingCharacter(lineNumber: number, column: number, character: string): StandardTokenType;
 	tokenizeLinesAt(lineNumber: number, lines: string[]): LineTokens[] | null;
 	/** Tokenizes proposed lines using the current document's lexical state without publishing them. */
-	tokenizeLinesAtAsync(
-		lineNumber: number,
-		lines: readonly string[],
-		signal: AbortSignal,
-	): Promise<LineTokens[] | null>;
+	tokenizeLinesAtAsync(lineNumber: number, lines: readonly string[], signal: AbortSignal): Promise<LineTokens[] | null>;
 	getLanguageId(): string;
 	getLanguageIdAtPosition(lineNumber: number, column: number): string;
 	setLanguageId(languageId: string, source?: string): void;
@@ -90,11 +81,7 @@ export interface ISyntaxTreeTextModelPart extends IDisposable {
 	getLanguageTokens(line: number): readonly LanguageToken[];
 	resetStyles(): void;
 	tokenizeLinesAt(line: number, lines: readonly string[]): readonly LanguageToken[][];
-	tokenizeLinesAtAsync(
-		line: number,
-		lines: readonly string[],
-		signal: AbortSignal,
-	): Promise<readonly (readonly LanguageToken[])[]>;
+	tokenizeLinesAtAsync(line: number, lines: readonly string[], signal: AbortSignal): Promise<readonly (readonly LanguageToken[])[]>;
 	getBracketPairs(range: Range): readonly TreeSitterBracket[];
 	getFacts(signal: AbortSignal): Promise<TreeSitterFacts>;
 	getSelectionRanges(ranges: readonly Range[], signal: AbortSignal): Promise<readonly Range[]>;

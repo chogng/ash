@@ -131,11 +131,7 @@ export function isOpenableExtensionCanvasDefinition(canvas: ICanvasDefinition): 
 	return !canvas.requiresInput;
 }
 export function compareCanvasDefinitions(first: ICanvasDefinition, second: ICanvasDefinition): number {
-	return (
-		first.displayName.localeCompare(second.displayName) ||
-		first.extensionId.localeCompare(second.extensionId) ||
-		first.canvasId.localeCompare(second.canvasId)
-	);
+	return first.displayName.localeCompare(second.displayName) || first.extensionId.localeCompare(second.extensionId) || first.canvasId.localeCompare(second.canvasId);
 }
 
 export function getCanvasDefinitionInstanceId(canvas: ICanvasDefinition): string {
@@ -160,19 +156,12 @@ export function getCanvasDefinitionLabels(canvases: readonly ICanvasDefinition[]
 	);
 }
 
-function disambiguate<T>(
-	values: readonly T[],
-	title: (value: T) => string,
-	detail: (value: T, index: number) => string,
-): string[] {
+function disambiguate<T>(values: readonly T[], title: (value: T) => string, detail: (value: T, index: number) => string): string[] {
 	const titles = values.map(title);
 	const used = new Set<string>();
 	return values.map((value, index) => {
 		const name = titles[index]!;
-		let label =
-			titles.filter(title => title === name).length > 1
-				? localize('canvas.instanceTitle', '{0} ({1})', name, detail(value, index))
-				: name;
+		let label = titles.filter(title => title === name).length > 1 ? localize('canvas.instanceTitle', '{0} ({1})', name, detail(value, index)) : name;
 		let suffix = 1;
 		while (used.has(label)) {
 			label = localize('canvas.instanceTitle', '{0} ({1})', name, `${detail(value, index)}, ${++suffix}`);
@@ -211,10 +200,7 @@ export class CanvasInput extends EditorInput {
 		return this.canvas.get().title;
 	}
 	getDescription(): string {
-		return localize(
-			'canvas.description',
-			'Closing this tab hides the Canvas. Use Open Canvas to reopen it beside its conversation.',
-		);
+		return localize('canvas.description', 'Closing this tab hides the Canvas. Use Open Canvas to reopen it beside its conversation.');
 	}
 
 	setCanvas(canvas: ICanvas): void {
@@ -226,8 +212,6 @@ export class CanvasInput extends EditorInput {
 	}
 
 	canMove(_sourceGroup: number, targetGroup: number): true | string {
-		return this.groups.getGroup(targetGroup)
-			? true
-			: localize('canvas.mainWindowOnly', 'Keep the Canvas in its conversation window.');
+		return this.groups.getGroup(targetGroup) ? true : localize('canvas.mainWindowOnly', 'Keep the Canvas in its conversation window.');
 	}
 }

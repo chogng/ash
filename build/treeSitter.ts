@@ -12,15 +12,7 @@ export async function prepareTreeSitterGrammars(): Promise<void> {
 			windowsHide: true,
 		});
 		child.once('error', fail);
-		child.once('close', (code, signal) =>
-			code === 0
-				? done()
-				: fail(
-						new Error(
-							`Grammar preparation ${signal ? `stopped by ${signal}` : `exited with status ${code}`}`,
-						),
-					),
-		);
+		child.once('close', (code, signal) => (code === 0 ? done() : fail(new Error(`Grammar preparation ${signal ? `stopped by ${signal}` : `exited with status ${code}`}`))));
 	});
 }
 

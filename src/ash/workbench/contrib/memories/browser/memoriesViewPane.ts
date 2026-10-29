@@ -1,19 +1,10 @@
-import {
-	IAccessibleViewService,
-	AccessibleViewType,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibleViewType } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
-import {
-	IMemoriesService,
-	type Memory,
-	type MemoryPolicy,
-	type MemoryScopeEntry,
-	type MemorySummary,
-} from '../../../../platform/memories/common/memoriesService.js';
+import { IMemoriesService, type Memory, type MemoryPolicy, type MemoryScopeEntry, type MemorySummary } from '../../../../platform/memories/common/memoriesService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
@@ -172,10 +163,7 @@ export class MemoriesViewPane extends ViewPane {
 				if (this.working) {
 					return;
 				}
-				this.status.textContent = localize(
-					'memories.changed',
-					'Memories changed. Refresh to load the latest version; your draft is kept.',
-				);
+				this.status.textContent = localize('memories.changed', 'Memories changed. Refresh to load the latest version; your draft is kept.');
 			}),
 		);
 		this.refreshContexts();
@@ -191,10 +179,7 @@ export class MemoriesViewPane extends ViewPane {
 	public override focus(): void {
 		this.scope.focus();
 		if (this.configuration.getValue<boolean>('accessibility.verbosity.memories')) {
-			this.status.textContent = localize(
-				'memories.hint',
-				'Memories. Use Tab to navigate, Ctrl or Command+S to save, and Alt+F1 for help.',
-			);
+			this.status.textContent = localize('memories.hint', 'Memories. Use Tab to navigate, Ctrl or Command+S to save, and Alt+F1 for help.');
 		}
 		if (!this.policy) {
 			void this.perform(() => this.refresh());
@@ -261,11 +246,7 @@ export class MemoriesViewPane extends ViewPane {
 	}
 	private async selectScope(): Promise<void> {
 		if (!(await this.discardDraft())) {
-			this.scope.value = String(
-				this.scopes.findIndex(
-					entry => JSON.stringify(entry.policy.scope) === JSON.stringify(this.policy?.scope),
-				),
-			);
+			this.scope.value = String(this.scopes.findIndex(entry => JSON.stringify(entry.policy.scope) === JSON.stringify(this.policy?.scope)));
 			return;
 		}
 		this.policy = this.scopes[Number(this.scope.value)]?.policy;
@@ -319,12 +300,7 @@ export class MemoriesViewPane extends ViewPane {
 		this.body.value = memory.body;
 		this.save.disabled = false;
 		this.remove.disabled = false;
-		this.status.textContent = localize(
-			'memories.source',
-			'Saved by {0}, revision {1}. Editing makes this a user-owned memory.',
-			memory.source,
-			memory.revision,
-		);
+		this.status.textContent = localize('memories.source', 'Saved by {0}, revision {1}. Editing makes this a user-owned memory.', memory.source, memory.revision);
 	}
 	private async newMemory(): Promise<void> {
 		if (!(await this.discardDraft())) {
@@ -347,11 +323,7 @@ export class MemoriesViewPane extends ViewPane {
 		if (!this.policy || this.showingReference) {
 			return;
 		}
-		if (
-			!this.titleInput.value.trim() ||
-			!this.body.value.trim() ||
-			new TextEncoder().encode(this.body.value).length > 16384
-		) {
+		if (!this.titleInput.value.trim() || !this.body.value.trim() || new TextEncoder().encode(this.body.value).length > 16384) {
 			throw new Error('Enter a title and content of at most 16 KiB.');
 		}
 		const result = this.selected
@@ -444,16 +416,10 @@ export class MemoriesViewPane extends ViewPane {
 		this.accessibleView.show(AccessibleViewType.Help);
 	}
 	private applyEnabled(): void {
-		for (const control of this.contentElement.querySelectorAll<
-			HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement | HTMLSelectElement
-		>('input, textarea, button, select')) {
-			if (
-				control instanceof HTMLTextAreaElement ||
-				(control instanceof HTMLInputElement && control.type !== 'checkbox')
-			) {
+		for (const control of this.contentElement.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement | HTMLSelectElement>('input, textarea, button, select')) {
+			if (control instanceof HTMLTextAreaElement || (control instanceof HTMLInputElement && control.type !== 'checkbox')) {
 				control.disabled = false;
-				control.readOnly =
-					this.working || (this.showingReference && (control === this.body || control === this.titleInput));
+				control.readOnly = this.working || (this.showingReference && (control === this.body || control === this.titleInput));
 			} else {
 				control.disabled = this.working;
 			}

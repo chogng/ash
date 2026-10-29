@@ -13,9 +13,7 @@ export function getFullscreenState(targetWindow: Window): FullscreenState | unde
 	if (element) return { mode: 'native', element };
 
 	const screen = targetWindow.screen;
-	const browserFullscreen =
-		Math.abs(targetWindow.innerWidth - screen.width) <= 1 &&
-		Math.abs(targetWindow.innerHeight - screen.height) <= 1;
+	const browserFullscreen = Math.abs(targetWindow.innerWidth - screen.width) <= 1 && Math.abs(targetWindow.innerHeight - screen.height) <= 1;
 	return browserFullscreen ? { mode: 'browser' } : undefined;
 }
 

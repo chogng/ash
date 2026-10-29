@@ -9,12 +9,7 @@ import { JSDOM } from 'jsdom';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import {
-	IQuickInputService,
-	type IQuickInputService as IQuickInputServiceContract,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickInputService as IQuickInputServiceContract, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import type { IEditorPart as IEditorPartContract } from '../../../../browser/parts/editor/editorPart.js';
 import { ExtensionFileTemplateRegistry } from '../../../extensions/common/extensionFileTemplate.js';
 import { IExtensionService } from '../../../extensions/common/extensionService.js';
@@ -39,7 +34,10 @@ for (const [name, value] of Object.entries({
 	Element: browserEnvironment.window.Element,
 	HTMLElement: browserEnvironment.window.HTMLElement,
 })) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
+	Object.defineProperty(globalThis, name, {
+		configurable: true,
+		value,
+	});
 }
 
 const { IEditorPart } = await import('../../../../browser/parts/editor/editorPart.js');
@@ -103,7 +101,11 @@ test('new untitled identities do not reuse drafts restored through resource inpu
 			text: created.initialValue,
 			recovered: workingCopies.get(resource)[0]!.backup(),
 		},
-		{ resource: 'untitled:/Untitled-2', text: '', recovered: 'recovered draft' },
+		{
+			resource: 'untitled:/Untitled-2',
+			text: '',
+			recovered: 'recovered draft',
+		},
 	);
 });
 
@@ -148,7 +150,11 @@ test('restored untitled resources are reused and reserve their document numbers'
 	assert.equal(service.create({ untitledResource: resource, initialValue: 'stale' }), restored);
 	assert.deepEqual(
 		{ restored: restored.initialValue, label: restored.name, next: service.create().resource.toString() },
-		{ restored: 'recovered draft', label: 'Recovered draft', next: 'untitled:/Untitled-8' },
+		{
+			restored: 'recovered draft',
+			label: 'Recovered draft',
+			next: 'untitled:/Untitled-8',
+		},
 	);
 	service.reset();
 	assert.equal(service.get(resource), undefined);
@@ -289,7 +295,11 @@ test('untitled inputs resolve the shared editable text and publish dirty changes
 	await reference.revert(new AbortController().signal);
 	assert.deepEqual(
 		{ text: reference.model.getText(), dirty: draft.isDirty(), dirtyChanges },
-		{ text: '', dirty: false, dirtyChanges: [false] },
+		{
+			text: '',
+			dirty: false,
+			dirtyChanges: [false],
+		},
 	);
 });
 
@@ -354,7 +364,12 @@ test('disposing a draft releases its shared text reference and removes the servi
 			resolved: draft.isResolved(),
 			textDisposed: text.isDisposed(),
 		},
-		{ released: ['untitled:/Untitled-1'], registered: undefined, resolved: false, textDisposed: true },
+		{
+			released: ['untitled:/Untitled-1'],
+			registered: undefined,
+			resolved: false,
+			textDisposed: true,
+		},
 	);
 });
 
@@ -392,7 +407,11 @@ test('reset cancels pending draft resolution without retaining a text model', as
 			resolved: draft.isResolved(),
 			text: models.getModel(draft.resource),
 		},
-		{ registered: undefined, resolved: false, text: null },
+		{
+			registered: undefined,
+			resolved: false,
+			text: null,
+		},
 	);
 });
 

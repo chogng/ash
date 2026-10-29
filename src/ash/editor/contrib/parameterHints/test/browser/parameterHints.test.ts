@@ -49,10 +49,7 @@ test('signature commands switch the returned result without querying or moving t
 		provideParameterHints: () => {
 			calls++;
 			return {
-				signatures: [
-					...hints.signatures,
-					{ label: 'call(other)', parameters: [{ label: 'other' }], activeParameter: 0 },
-				],
+				signatures: [...hints.signatures, { label: 'call(other)', parameters: [{ label: 'other' }], activeParameter: 0 }],
 			};
 		},
 	});
@@ -60,30 +57,18 @@ test('signature commands switch the returned result without querying or moving t
 	const nodes = [...fixture.dialog.children];
 	const before = fixture.editor.getSelections();
 	fixture.editor.trigger('test', 'showNextParameterHint', {});
-	assert.equal(
-		fixture.dialog.querySelector('.stanza-editor-parameter-hints-signature.active')?.textContent,
-		'call(other)',
-	);
+	assert.equal(fixture.dialog.querySelector('.stanza-editor-parameter-hints-signature.active')?.textContent, 'call(other)');
 	assert.deepEqual([...fixture.dialog.children], nodes);
 	fixture.editor.trigger('test', 'showNextParameterHint', {});
-	assert.equal(
-		fixture.dialog.querySelector('.stanza-editor-parameter-hints-signature.active')?.textContent,
-		'call(value)',
-	);
+	assert.equal(fixture.dialog.querySelector('.stanza-editor-parameter-hints-signature.active')?.textContent, 'call(value)');
 	fixture.editor.trigger('test', 'showPrevParameterHint', {});
-	assert.equal(
-		fixture.dialog.querySelector('.stanza-editor-parameter-hints-signature.active')?.textContent,
-		'call(other)',
-	);
+	assert.equal(fixture.dialog.querySelector('.stanza-editor-parameter-hints-signature.active')?.textContent, 'call(other)');
 	assert.deepEqual(fixture.editor.getSelections(), before);
 	assert.equal(calls, 1);
 	fixture.editor.trigger('test', 'closeParameterHints', {});
 	assert.equal(fixture.dialog.hidden, true);
 	const context = fixture.editor.invokeWithinContext(accessor => accessor.get(IContextKeyService));
-	assert.deepEqual(
-		[context.getValue('parameterHintsVisible'), context.getValue('parameterHintsMultipleSignatures')],
-		[false, false],
-	);
+	assert.deepEqual([context.getValue('parameterHintsVisible'), context.getValue('parameterHintsMultipleSignatures')], [false, false]);
 });
 
 test('signature help uses the editor snapshot and stops after the first usable provider', async () => {
@@ -128,13 +113,7 @@ test('signature help uses the editor snapshot and stops after the first usable p
 	assert.deepEqual(fixture.errors, []);
 });
 
-for (const result of [
-	'empty',
-	'throw',
-	'invalid label',
-	'invalid signature index',
-	'invalid parameter index',
-] as const) {
+for (const result of ['empty', 'throw', 'invalid label', 'invalid signature index', 'invalid parameter index'] as const) {
 	test(`a provider returning ${result} does not block another signature provider`, async () => {
 		using fixture = createEditor();
 		using healthy = fixture.features.signatureHelpProvider.register('typescript', {

@@ -6,25 +6,14 @@ import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
 import { TypeOperations } from '../../../common/cursor/cursorTypeOperations.js';
 import { EnterOperation } from '../../../common/cursor/cursorTypeEditOperations.js';
-import {
-	EditorIndentationKind,
-	resolveEditorIndentationOptions,
-	type EditorIndentationOptions,
-} from '../../../common/core/misc/indentation.js';
+import { EditorIndentationKind, resolveEditorIndentationOptions, type EditorIndentationOptions } from '../../../common/core/misc/indentation.js';
 import { IndentAction } from '../../../common/languages/languageConfiguration.js';
-import {
-	TestLanguageConfigurationService,
-	registerTestLanguageConfigurations,
-} from '../modes/testLanguageConfigurationService.js';
+import { TestLanguageConfigurationService, registerTestLanguageConfigurations } from '../modes/testLanguageConfigurationService.js';
 import { type ResolvedLanguageConfiguration } from '../../../common/languages/languageConfigurationRegistry.js';
 import { Selection } from '../../../common/core/selection.js';
 import { Position } from '../../../common/core/position.js';
 import { TextModel } from '../../../common/model/textModel.js';
-import {
-	createTestCursorConfiguration,
-	createTestCursorsController,
-	executeTestEditOperation,
-} from '../testCursorConfiguration.js';
+import { createTestCursorConfiguration, createTestCursorsController, executeTestEditOperation } from '../testCursorConfiguration.js';
 import { Event } from '../../../../base/common/event.js';
 import { EditOperationType } from '../../../common/cursorCommon.js';
 import { ViewModelEventsCollector } from '../../../common/viewModelEventDispatcher.js';
@@ -44,17 +33,12 @@ for (const scenario of [
 		using builtins = registerTestLanguageConfigurations(configurations);
 		executeTestEditOperation(
 			selections,
-			createLanguageEnterCommand(
-				model,
-				selections.getSelections(),
-				configurations.getLanguageConfiguration('typescript'),
-				{ autoIndent: scenario.mode, indentation: { kind: EditorIndentationKind.Spaces, tabSize: 2 } },
-			),
+			createLanguageEnterCommand(model, selections.getSelections(), configurations.getLanguageConfiguration('typescript'), {
+				autoIndent: scenario.mode,
+				indentation: { kind: EditorIndentationKind.Spaces, tabSize: 2 },
+			}),
 		);
-		assert.deepEqual(
-			{ text: model.getText(), position: selections.getSelections()[0]!.getPosition() },
-			{ text: scenario.value, position: scenario.position },
-		);
+		assert.deepEqual({ text: model.getText(), position: selections.getSelections()[0]!.getPosition() }, { text: scenario.value, position: scenario.position });
 	});
 }
 
@@ -64,15 +48,7 @@ for (const mode of ['brackets', 'advanced', 'full'] as const) {
 		using selections = createTestCursorsController(model, [caret(12)]);
 		using configurations = new TestLanguageConfigurationService();
 		using builtins = registerTestLanguageConfigurations(configurations);
-		executeTestEditOperation(
-			selections,
-			createLanguageEnterCommand(
-				model,
-				selections.getSelections(),
-				configurations.getLanguageConfiguration('rust'),
-				{ autoIndent: mode },
-			),
-		);
+		executeTestEditOperation(selections, createLanguageEnterCommand(model, selections.getSelections(), configurations.getLanguageConfiguration('rust'), { autoIndent: mode }));
 		assert.equal(model.getText(), mode === 'brackets' ? '  // explain\n  ' : '  // explain\n  // ');
 	});
 }
@@ -91,10 +67,7 @@ test('Full Enter inherits indentation across a blank line', () => {
 			indentation: { kind: EditorIndentationKind.Spaces, tabSize: 2 },
 		}),
 	);
-	assert.deepEqual(
-		{ text: model.getText(), position: selections.getSelections()[0]!.getPosition() },
-		{ text: 'block:\n\n  ', position: new Position(3, 3) },
-	);
+	assert.deepEqual({ text: model.getText(), position: selections.getSelections()[0]!.getPosition() }, { text: 'block:\n\n  ', position: new Position(3, 3) });
 });
 
 test('Language Enter creates an indented line between configured brackets', () => {
@@ -105,12 +78,9 @@ test('Language Enter creates an indented line between configured brackets', () =
 
 	executeTestEditOperation(
 		selections,
-		createLanguageEnterCommand(
-			model,
-			selections.getSelections(),
-			configurations.getLanguageConfiguration('typescript'),
-			{ indentation: { kind: EditorIndentationKind.Spaces, tabSize: 2 } },
-		),
+		createLanguageEnterCommand(model, selections.getSelections(), configurations.getLanguageConfiguration('typescript'), {
+			indentation: { kind: EditorIndentationKind.Spaces, tabSize: 2 },
+		}),
 	);
 
 	assert.equal(model.getText(), 'if (ok) {\n  \n}');
@@ -124,28 +94,12 @@ test('Rust Enter continues line comments and applies Rust bracket indentation', 
 	using builtins = registerTestLanguageConfigurations(configurations);
 	const indentation = { kind: EditorIndentationKind.Spaces, tabSize: 2 } as const;
 
-	executeTestEditOperation(
-		commentSelections,
-		createLanguageEnterCommand(
-			commentModel,
-			commentSelections.getSelections(),
-			configurations.getLanguageConfiguration('rust'),
-			{ indentation },
-		),
-	);
+	executeTestEditOperation(commentSelections, createLanguageEnterCommand(commentModel, commentSelections.getSelections(), configurations.getLanguageConfiguration('rust'), { indentation }));
 	assert.equal(commentModel.getText(), '  // explain\n  // ');
 
 	using blockModel = new TextModel('fn main() {}');
 	using blockSelections = createTestCursorsController(blockModel, [caret(11)]);
-	executeTestEditOperation(
-		blockSelections,
-		createLanguageEnterCommand(
-			blockModel,
-			blockSelections.getSelections(),
-			configurations.getLanguageConfiguration('rust'),
-			{ indentation },
-		),
-	);
+	executeTestEditOperation(blockSelections, createLanguageEnterCommand(blockModel, blockSelections.getSelections(), configurations.getLanguageConfiguration('rust'), { indentation }));
 	assert.equal(blockModel.getText(), 'fn main() {\n  \n}');
 });
 
@@ -157,12 +111,9 @@ test('Explicit on-enter rules precede bracket fallback and continue documentatio
 
 	executeTestEditOperation(
 		selections,
-		createLanguageEnterCommand(
-			model,
-			selections.getSelections(),
-			configurations.getLanguageConfiguration('typescript'),
-			{ indentation: { kind: EditorIndentationKind.Spaces, tabSize: 2 } },
-		),
+		createLanguageEnterCommand(model, selections.getSelections(), configurations.getLanguageConfiguration('typescript'), {
+			indentation: { kind: EditorIndentationKind.Spaces, tabSize: 2 },
+		}),
 	);
 
 	assert.equal(model.getText(), '/**\n * \n */');
@@ -171,9 +122,7 @@ test('Explicit on-enter rules precede bracket fallback and continue documentatio
 
 test('On-enter rules observe previous, before, and after text in registration order', () => {
 	using model = new TextModel('header\n  beginEND');
-	using selections = createTestCursorsController(model, [
-		Selection.fromPositions(new Position(1 + 1, 7 + 1), new Position(1 + 1, 10 + 1)),
-	]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position(1 + 1, 7 + 1), new Position(1 + 1, 10 + 1))]);
 	using configurations = new TestLanguageConfigurationService();
 	using rules = configurations.register('demo', {
 		onEnterRules: [
@@ -183,7 +132,10 @@ test('On-enter rules observe previous, before, and after text in registration or
 				afterText: /^$/,
 				action: { indentAction: IndentAction.Indent, appendText: 'first' },
 			},
-			{ beforeText: /begin$/, action: { indentAction: IndentAction.None, appendText: 'second' } },
+			{
+				beforeText: /begin$/,
+				action: { indentAction: IndentAction.None, appendText: 'second' },
+			},
 		],
 	});
 
@@ -212,26 +164,17 @@ test('Indentation rules increase, decrease, and ignore matching lines', () => {
 
 	using increaseModel = new TextModel('  block:');
 	using increaseSelections = createTestCursorsController(increaseModel, [caret(8)]);
-	executeTestEditOperation(
-		increaseSelections,
-		createLanguageEnterCommand(increaseModel, increaseSelections.getSelections(), configuration, { indentation }),
-	);
+	executeTestEditOperation(increaseSelections, createLanguageEnterCommand(increaseModel, increaseSelections.getSelections(), configuration, { indentation }));
 	assert.equal(increaseModel.getText(), '  block:\n    ');
 
 	using decreaseModel = new TextModel('    valueend');
 	using decreaseSelections = createTestCursorsController(decreaseModel, [caret(9)]);
-	executeTestEditOperation(
-		decreaseSelections,
-		createLanguageEnterCommand(decreaseModel, decreaseSelections.getSelections(), configuration, { indentation }),
-	);
+	executeTestEditOperation(decreaseSelections, createLanguageEnterCommand(decreaseModel, decreaseSelections.getSelections(), configuration, { indentation }));
 	assert.equal(decreaseModel.getText(), '    value\n  end');
 
 	using ignoredModel = new TextModel('  *:');
 	using ignoredSelections = createTestCursorsController(ignoredModel, [caret(4)]);
-	executeTestEditOperation(
-		ignoredSelections,
-		createLanguageEnterCommand(ignoredModel, ignoredSelections.getSelections(), configuration, { indentation }),
-	);
+	executeTestEditOperation(ignoredSelections, createLanguageEnterCommand(ignoredModel, ignoredSelections.getSelections(), configuration, { indentation }));
 	assert.equal(ignoredModel.getText(), '  *:\n  ');
 });
 
@@ -243,22 +186,16 @@ test('Language Enter maps multiple cursors through one pre-change transaction', 
 
 	executeTestEditOperation(
 		selections,
-		createLanguageEnterCommand(
-			model,
-			selections.getSelections(),
-			configurations.getLanguageConfiguration('typescript'),
-			{ indentation: { kind: EditorIndentationKind.Tabs, tabSize: 4 } },
-		),
+		createLanguageEnterCommand(model, selections.getSelections(), configurations.getLanguageConfiguration('typescript'), {
+			indentation: {
+				kind: EditorIndentationKind.Tabs,
+				tabSize: 4,
+			},
+		}),
 	);
 
 	assert.equal(model.getText(), '{\n\t\n} [\n\t\n]');
-	assert.deepEqual(
-		selections.getSelections(),
-		primaryFirst(
-			[Selection.fromPositions(new Position(1 + 1, 1 + 1)), Selection.fromPositions(new Position(3 + 1, 1 + 1))],
-			1,
-		),
-	);
+	assert.deepEqual(selections.getSelections(), primaryFirst([Selection.fromPositions(new Position(1 + 1, 1 + 1)), Selection.fromPositions(new Position(3 + 1, 1 + 1))], 1));
 });
 
 test('Language Enter starts a new typing history group that following text may join', () => {
@@ -269,12 +206,9 @@ test('Language Enter starts a new typing history group that following text may j
 	typeText(selections, model, ' ');
 	executeTestEditOperation(
 		selections,
-		createLanguageEnterCommand(
-			model,
-			selections.getSelections(),
-			configurations.getLanguageConfiguration('typescript'),
-			{ indentation: { kind: EditorIndentationKind.Spaces, tabSize: 2 } },
-		),
+		createLanguageEnterCommand(model, selections.getSelections(), configurations.getLanguageConfiguration('typescript'), {
+			indentation: { kind: EditorIndentationKind.Spaces, tabSize: 2 },
+		}),
 	);
 	typeText(selections, model, 'x');
 	assert.equal(model.getText(), '{ \n  x');
@@ -291,25 +225,24 @@ test('Language Enter normalizes removeText and validates editor indentation befo
 	using selections = createTestCursorsController(model, [caret(8)]);
 	using configurations = new TestLanguageConfigurationService();
 	using rule = configurations.register('demo', {
-		onEnterRules: [{ beforeText: /stop$/, action: { indentAction: IndentAction.None, removeText: 2 } }],
+		onEnterRules: [
+			{
+				beforeText: /stop$/,
+				action: { indentAction: IndentAction.None, removeText: 2 },
+			},
+		],
 	});
-	const command = createLanguageEnterCommand(
-		model,
-		selections.getSelections(),
-		configurations.getLanguageConfiguration('demo'),
-		{ indentation: { kind: EditorIndentationKind.Spaces, tabSize: 2 } },
-	);
+	const command = createLanguageEnterCommand(model, selections.getSelections(), configurations.getLanguageConfiguration('demo'), {
+		indentation: { kind: EditorIndentationKind.Spaces, tabSize: 2 },
+	});
 	executeTestEditOperation(selections, command);
 	assert.equal(model.getText(), '    stop\n  ');
 
 	assert.throws(
 		() =>
-			createLanguageEnterCommand(
-				model,
-				selections.getSelections(),
-				configurations.getLanguageConfiguration('demo'),
-				{ indentation: { tabSize: 0 } },
-			),
+			createLanguageEnterCommand(model, selections.getSelections(), configurations.getLanguageConfiguration('demo'), {
+				indentation: { tabSize: 0 },
+			}),
 		/tab size/,
 	);
 	assert.equal(model.getText(), '    stop\n  ');
@@ -336,29 +269,20 @@ test('Language Enter ignores bracket-looking text in strings and comments', asyn
 
 test('EnterOperation inserts blank lines before and after every cursor line', () => {
 	using model = new TextModel('zero\none\ntwo');
-	using selections = createTestCursorsController(
-		model,
-		primaryFirst([Selection.fromPositions(new Position(1, 2)), Selection.fromPositions(new Position(3, 2))], 1),
-	);
+	using selections = createTestCursorsController(model, primaryFirst([Selection.fromPositions(new Position(1, 2)), Selection.fromPositions(new Position(3, 2))], 1));
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerTestLanguageConfigurations(configurations);
 	const config = createTestCursorConfiguration(model, configurations);
 
 	selections.executeCommands(EnterOperation.lineInsertBefore(config, model, selections.getSelections()));
 	assert.equal(model.getText(), '\nzero\none\n\ntwo');
-	assert.deepEqual(
-		selections.getSelections(),
-		primaryFirst([Selection.fromPositions(new Position(1, 1)), Selection.fromPositions(new Position(4, 1))], 1),
-	);
+	assert.deepEqual(selections.getSelections(), primaryFirst([Selection.fromPositions(new Position(1, 1)), Selection.fromPositions(new Position(4, 1))], 1));
 
 	selections.executeCommands(EnterOperation.lineInsertAfter(config, model, selections.getSelections()));
 	assert.equal(model.getText(), '\n\nzero\none\n\n\ntwo');
 });
 
-async function enterWithTokens(
-	initialText: string,
-	position: Position,
-): Promise<{ readonly text: string; readonly position: Position }> {
+async function enterWithTokens(initialText: string, position: Position): Promise<{ readonly text: string; readonly position: Position }> {
 	using tokens = registerTestTokens(
 		new Map([
 			[
@@ -380,12 +304,9 @@ async function enterWithTokens(
 	using builtins = registerTestLanguageConfigurations(configurations);
 	executeTestEditOperation(
 		selections,
-		createLanguageEnterCommand(
-			model,
-			selections.getSelections(),
-			configurations.getLanguageConfiguration('typescript'),
-			{ indentation: { kind: EditorIndentationKind.Spaces, tabSize: 2 } },
-		),
+		createLanguageEnterCommand(model, selections.getSelections(), configurations.getLanguageConfiguration('typescript'), {
+			indentation: { kind: EditorIndentationKind.Spaces, tabSize: 2 },
+		}),
 	);
 	return { text: model.getText(), position: selections.getSelections()[0]!.getPosition() };
 }
@@ -422,22 +343,10 @@ function createLanguageEnterCommand(
 	const config = createTestCursorConfiguration(model, languageConfigurationService, {
 		autoIndent: options.autoIndent,
 	});
-	return TypeOperations.typeWithInterceptors(
-		false,
-		EditOperationType.Other,
-		config,
-		model,
-		[...selections],
-		[],
-		'\n',
-	);
+	return TypeOperations.typeWithInterceptors(false, EditOperationType.Other, config, model, [...selections], [], '\n');
 }
 
-function typeText(
-	selections: import('../../../common/cursor/cursor.js').CursorsController,
-	model: TextModel,
-	text: string,
-): void {
+function typeText(selections: import('../../../common/cursor/cursor.js').CursorsController, model: TextModel, text: string): void {
 	void model;
 	selections.type(new ViewModelEventsCollector(), text, 'test');
 }

@@ -33,8 +33,7 @@ export class ChatEditorInputSerializer implements EditorInputSerializer {
 		return { version: 1 };
 	}
 	deserialize(value: unknown): ChatEditorInput {
-		if (!value || typeof value !== 'object' || !('version' in value) || value.version !== 1)
-			throw new TypeError('Invalid Chat editor input');
+		if (!value || typeof value !== 'object' || !('version' in value) || value.version !== 1) throw new TypeError('Invalid Chat editor input');
 		return new ChatEditorInput();
 	}
 }

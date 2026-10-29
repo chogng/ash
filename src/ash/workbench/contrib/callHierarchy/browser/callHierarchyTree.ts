@@ -31,17 +31,12 @@ export class DataSource implements AsyncTreeDataSource<CallHierarchyModel, Call>
 		if (element instanceof CallHierarchyModel) {
 			return element.roots.map(item => new Call(item, element, undefined));
 		}
-		const entries =
-			this.getDirection() === CallHierarchyDirection.CallsFrom
-				? await element.model.resolveOutgoingCalls(element.item)
-				: await element.model.resolveIncomingCalls(element.item);
+		const entries = this.getDirection() === CallHierarchyDirection.CallsFrom ? await element.model.resolveOutgoingCalls(element.item) : await element.model.resolveIncomingCalls(element.item);
 		const items = entries.map(entry => entry.item);
 		return items.map(item => new Call(item, element.model, element));
 	}
 }
 
 function itemIdentity(item: LanguageHierarchyItem): string {
-	return (
-		item.resource.toString() + '\0' + item.selectionRange.startLineNumber + ':' + item.selectionRange.startColumn
-	);
+	return item.resource.toString() + '\0' + item.selectionRange.startLineNumber + ':' + item.selectionRange.startColumn;
 }

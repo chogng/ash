@@ -19,12 +19,7 @@ export interface IColorizerElementOptions extends IColorizerOptions {
 }
 
 export class Colorizer {
-	public static async colorizeElement(
-		themeService: IStandaloneThemeService,
-		languageService: ILanguageService,
-		domNode: HTMLElement,
-		options: IColorizerElementOptions,
-	): Promise<void> {
+	public static async colorizeElement(themeService: IStandaloneThemeService, languageService: ILanguageService, domNode: HTMLElement, options: IColorizerElementOptions): Promise<void> {
 		const language = options.mimeType ?? domNode.getAttribute('lang') ?? domNode.getAttribute('data-lang');
 		if (!language) {
 			throw new TypeError('Colorized elements require a language');
@@ -35,12 +30,7 @@ export class Colorizer {
 		domNode.innerHTML = htmlPolicy?.createHTML?.(html) ?? html;
 	}
 
-	public static async colorize(
-		languageService: ILanguageService,
-		text: string,
-		languageId: string,
-		options: IColorizerOptions | null | undefined,
-	): Promise<string> {
+	public static async colorize(languageService: ILanguageService, text: string, languageId: string, options: IColorizerOptions | null | undefined): Promise<string> {
 		const lines = text.replace(/^\uFEFF/, '').split(/\r\n|\r|\n/);
 		const tabSize = options?.tabSize ?? 4;
 		if (!Number.isSafeInteger(tabSize) || tabSize < 1) {
@@ -84,13 +74,7 @@ export class Colorizer {
 		}
 	}
 
-	public static colorizeLine(
-		line: string,
-		_mightContainNonBasicASCII: boolean,
-		_mightContainRTL: boolean,
-		tokens: IViewLineTokens,
-		tabSize = 4,
-	): string {
+	public static colorizeLine(line: string, _mightContainNonBasicASCII: boolean, _mightContainRTL: boolean, tokens: IViewLineTokens, tabSize = 4): string {
 		const colors = TokenizationRegistry.getColorMap()?.map(color => Color.Format.CSS.formatHexA(color, true)) ?? [];
 		return tokenizeLineToHTML(line, tokens, colors, 0, line.length, tabSize, true);
 	}

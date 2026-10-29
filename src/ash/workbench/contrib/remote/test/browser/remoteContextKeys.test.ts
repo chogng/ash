@@ -6,23 +6,10 @@ import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { isMenuItem, MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 import type { RemoteConnectionState } from '../../../../../platform/remote/common/remote.js';
 import type { RemoteAgentConnection } from '../../../../../platform/remote/common/remoteAgentApi.js';
-import {
-	IRemoteConnectionApi,
-	RemoteConnectionService,
-} from '../../../../../platform/remote/common/remoteConnectionService.js';
+import { IRemoteConnectionApi, RemoteConnectionService } from '../../../../../platform/remote/common/remoteConnectionService.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import {
-	ConnectToRemoteCommandId,
-	ManageRemoteConnectionsCommandId,
-	ReconnectRemoteCommandId,
-	RollbackRemoteRuntimeCommandId,
-} from '../../browser/remoteActions.js';
-import {
-	RemoteConnectionKindContext,
-	RemoteConnectionsAvailableContext,
-	RemoteConnectionStateContext,
-	RemoteContextKeys,
-} from '../../browser/remoteContextKeys.js';
+import { ConnectToRemoteCommandId, ManageRemoteConnectionsCommandId, ReconnectRemoteCommandId, RollbackRemoteRuntimeCommandId } from '../../browser/remoteActions.js';
+import { RemoteConnectionKindContext, RemoteConnectionsAvailableContext, RemoteConnectionStateContext, RemoteContextKeys } from '../../browser/remoteContextKeys.js';
 import type { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
 
 test('Remote context keys track sanitized connection kind and lifecycle', () => {
@@ -43,9 +30,7 @@ test('Remote context keys track sanitized connection kind and lifecycle', () => 
 });
 
 test('Remote reconnect appears only for a disconnected SSH context', () => {
-	const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(
-		candidate => isMenuItem(candidate) && candidate.command.id === ReconnectRemoteCommandId,
-	);
+	const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(candidate => isMenuItem(candidate) && candidate.command.id === ReconnectRemoteCommandId);
 	assert.ok(item && isMenuItem(item));
 	using contextKeyService = new ContextKeyService();
 
@@ -59,9 +44,7 @@ test('Remote reconnect appears only for a disconnected SSH context', () => {
 });
 
 test('Remote connection selection appears only when the renderer has a native connection host', () => {
-	const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(
-		candidate => isMenuItem(candidate) && candidate.command.id === ConnectToRemoteCommandId,
-	);
+	const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(candidate => isMenuItem(candidate) && candidate.command.id === ConnectToRemoteCommandId);
 	assert.ok(item && isMenuItem(item));
 	using contextKeyService = new ContextKeyService();
 
@@ -71,9 +54,7 @@ test('Remote connection selection appears only when the renderer has a native co
 });
 
 test('Remote connection management appears only when the renderer has a native connection host', () => {
-	const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(
-		candidate => isMenuItem(candidate) && candidate.command.id === ManageRemoteConnectionsCommandId,
-	);
+	const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(candidate => isMenuItem(candidate) && candidate.command.id === ManageRemoteConnectionsCommandId);
 	assert.ok(item && isMenuItem(item));
 	using contextKeyService = new ContextKeyService();
 
@@ -83,9 +64,7 @@ test('Remote connection management appears only when the renderer has a native c
 });
 
 test('Remote runtime rollback appears in the Command Palette only for SSH context', () => {
-	const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(
-		candidate => isMenuItem(candidate) && candidate.command.id === RollbackRemoteRuntimeCommandId,
-	);
+	const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(candidate => isMenuItem(candidate) && candidate.command.id === RollbackRemoteRuntimeCommandId);
 	assert.ok(item && isMenuItem(item));
 	using contextKeyService = new ContextKeyService();
 

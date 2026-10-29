@@ -4,12 +4,7 @@ import { CancellationToken, CancellationTokenSource } from '../../../../../base/
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { URI } from '../../../../../base/common/uri.js';
-import {
-	IContentSearchService,
-	type ContentSearchMatch,
-	type IContentSearchOptions,
-	type IContentSearchComplete,
-} from '../../../../../platform/search/common/search.js';
+import { IContentSearchService, type ContentSearchMatch, type IContentSearchOptions, type IContentSearchComplete } from '../../../../../platform/search/common/search.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { BrowserContentSearchService } from '../../../../../platform/search/browser/searchService.js';
 import type { IContentSearchApi } from '../../../../../platform/search/common/searchApi.js';
@@ -115,11 +110,7 @@ test('Workbench model results obey includes, parent excludes, case and multiline
 		new BrowserFileSearchService(fixture.files),
 	);
 	const builder = new QueryBuilder();
-	const textQuery = builder.text(
-		{ pattern: 'first\nsecond', isRegExp: true, isCaseSensitive: true },
-		[folders[0]!.uri],
-		{ includePattern: 'src/**' },
-	);
+	const textQuery = builder.text({ pattern: 'first\nsecond', isRegExp: true, isCaseSensitive: true }, [folders[0]!.uri], { includePattern: 'src/**' });
 	const result = new SearchResultImpl(folders);
 	await service.textSearch(textQuery, CancellationToken.None, progress => {
 		if ('resource' in progress) {
@@ -171,22 +162,14 @@ test('Workbench budget counts occurrences and releases the backend job before st
 			released.push(params.searchId);
 		},
 	};
-	using service = createSearchService(
-		new BrowserContentSearchService(api),
-		workspace,
-		fixture.models,
-		new BrowserFileSearchService(fixture.files),
-	);
+	using service = createSearchService(new BrowserContentSearchService(api), workspace, fixture.models, new BrowserFileSearchService(fixture.files));
 	const result = new SearchResultImpl(folders);
 	const complete = await service.textSearch({ ...query(), maxResults: 2 }, CancellationToken.None, progress => {
 		if ('resource' in progress) {
 			result.addFileMatch(progress);
 		}
 	});
-	assert.deepEqual(
-		{ count: result.count, limitHit: complete.limitHit, started, released },
-		{ count: 2, limitHit: true, started: ['first'], released: ['job'] },
-	);
+	assert.deepEqual({ count: result.count, limitHit: complete.limitHit, started, released }, { count: 2, limitHit: true, started: ['first'], released: ['job'] });
 });
 
 test('an exact Workbench budget remains complete when no additional occurrence exists', async () => {
@@ -222,13 +205,9 @@ test('whole-word model search excludes longer and Unicode-adjacent words', async
 		fixture.models,
 		new BrowserFileSearchService(fixture.files),
 	);
-	const complete = await service.textSearch(
-		new QueryBuilder().text({ ...pattern, isWordMatch: true }, [folders[0]!.uri]),
-	);
+	const complete = await service.textSearch(new QueryBuilder().text({ ...pattern, isWordMatch: true }, [folders[0]!.uri]));
 	assert.deepEqual(
-		complete.results[0]!.results!.flatMap(match =>
-			match.rangeLocations.map(location => location.source.startColumn),
-		),
+		complete.results[0]!.results!.flatMap(match => match.rangeLocations.map(location => location.source.startColumn)),
 		[8, 32],
 	);
 });
@@ -249,11 +228,7 @@ test('overlapping roots count and publish a source occurrence once', async () =>
 		new BrowserFileSearchService(fixture.files),
 	);
 	let delivered = 0;
-	const complete = await service.textSearch(
-		new QueryBuilder().text(pattern, [folders[0]!.uri, nested.uri], { maxResults: 1 }),
-		CancellationToken.None,
-		() => delivered++,
-	);
+	const complete = await service.textSearch(new QueryBuilder().text(pattern, [folders[0]!.uri, nested.uri], { maxResults: 1 }), CancellationToken.None, () => delivered++);
 	assert.deepEqual(
 		{
 			delivered,
@@ -285,12 +260,7 @@ test('Workbench cancellation suppresses a pending backend read and releases its 
 			released.push(params.searchId);
 		},
 	};
-	using service = createSearchService(
-		new BrowserContentSearchService(api),
-		workspace,
-		fixture.models,
-		new BrowserFileSearchService(fixture.files),
-	);
+	using service = createSearchService(new BrowserContentSearchService(api), workspace, fixture.models, new BrowserFileSearchService(fixture.files));
 	const pending = service.textSearch(query(), cancellation.token, () => progressCount++);
 	const rejected = assert.rejects(pending, isCancellationError);
 	await reading.p;
@@ -342,14 +312,8 @@ test('explicit open resources search outside the workspace without disk access a
 	const draft = URI.parse('untitled:/Untitled-1');
 	const outside = URI.file('/outside/main.ts');
 	using fixture = new BulkEditTestServices([]);
-	using draftReference = await fixture.models.acquire(
-		{ resource: draft, initialText: '中文😀 needle needle' },
-		new AbortController().signal,
-	);
-	using outsideReference = await fixture.models.acquire(
-		{ resource: outside, initialText: 'needle' },
-		new AbortController().signal,
-	);
+	using draftReference = await fixture.models.acquire({ resource: draft, initialText: '中文😀 needle needle' }, new AbortController().signal);
+	using outsideReference = await fixture.models.acquire({ resource: outside, initialText: 'needle' }, new AbortController().signal);
 	using workspace = new TestWorkspaceService({ id: 'empty', folders: [] });
 	using service = createSearchService(
 		{
@@ -376,7 +340,13 @@ test('explicit open resources search outside the workspace without disk access a
 			messages: complete.messages,
 			limitHit: complete.limitHit,
 		},
-		{ resources: [draft.toString(), outside.toString()], count: 3, roots: 0, messages: [], limitHit: false },
+		{
+			resources: [draft.toString(), outside.toString()],
+			count: 3,
+			roots: 0,
+			messages: [],
+			limitHit: false,
+		},
 	);
 	result.batchRemove([result.files[0]!.matches[0]!, result.files[1]!]);
 	assert.equal(result.count, 1);
@@ -533,8 +503,7 @@ suite('Workbench text search scope lifetime', () => {
 			let replacement: Promise<unknown> | undefined;
 			using listener = workspace.onDidChangeWorkspace(event => {
 				if (event.workspace.folders[0]?.id !== 'replacement') return;
-				if (nested)
-					workspace.updateWorkspace({ id: 'workspace', folders: [{ ...folders[0]!, id: 'current' }] });
+				if (nested) workspace.updateWorkspace({ id: 'workspace', folders: [{ ...folders[0]!, id: 'current' }] });
 				replacement = service.textSearch(new QueryBuilder().text(pattern, [folders[0]!.uri]));
 				void replacement.catch(() => {});
 			});
@@ -644,12 +613,7 @@ suite('Workbench text search scope lifetime', () => {
 					released.push(params.searchId);
 				},
 			};
-			using service = createSearchService(
-				new BrowserContentSearchService(api),
-				workspace,
-				fixture.models,
-				new BrowserFileSearchService(fixture.files),
-			);
+			using service = createSearchService(new BrowserContentSearchService(api), workspace, fixture.models, new BrowserFileSearchService(fixture.files));
 			let progress = 0;
 			await assert.rejects(
 				service.textSearch(query(), CancellationToken.None, () => {
@@ -721,12 +685,7 @@ suite('Workbench text search scope lifetime', () => {
 	}
 });
 
-function createSearchService(
-	content: IContentSearchService,
-	workspace: IWorkspaceContextService,
-	models: IFileTextModelService,
-	files: IFileSearchService,
-): SearchService {
+function createSearchService(content: IContentSearchService, workspace: IWorkspaceContextService, models: IFileTextModelService, files: IFileSearchService): SearchService {
 	using services = new InstantiationService();
 	services.registerInstance(IContentSearchService, content);
 	services.registerInstance(IWorkspaceContextService, workspace);
@@ -743,11 +702,7 @@ test('Workbench filename constraints reach the backend before glob and fuzzy bud
 	using registration = files.registerProvider('file', storage);
 	await files.createDirectory(URI.joinPath(folders[0]!.uri, 'src'));
 	await files.createDirectory(URI.joinPath(folders[0]!.uri, 'docs'));
-	for (const path of paths)
-		await files.writeFile(
-			{ resource: URI.joinPath(folders[0]!.uri, path), content: 'not searched' },
-			{ create: true, overwrite: false },
-		);
+	for (const path of paths) await files.writeFile({ resource: URI.joinPath(folders[0]!.uri, path), content: 'not searched' }, { create: true, overwrite: false });
 	using workspace = new TestWorkspaceService({ id: 'workspace', folders: [folders[0]!] });
 	using service = createSearchService(
 		{

@@ -54,10 +54,7 @@ test('extension comparisons retain binary versions without filesystem providers'
 
 test('extension editor inputs reject invalid binary data at the bridge boundary', () => {
 	for (const initialBytes of [[-1], [256], [0.5], ['0'], null]) {
-		assert.throws(
-			() => parseExtensionEditorInput({ resource: 'snapshot:/invalid', initialBytes }),
-			/Invalid extension editor bytes/,
-		);
+		assert.throws(() => parseExtensionEditorInput({ resource: 'snapshot:/invalid', initialBytes }), /Invalid extension editor bytes/);
 	}
 	assert.throws(
 		() =>

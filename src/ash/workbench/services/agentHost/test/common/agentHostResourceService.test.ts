@@ -6,10 +6,7 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import {
-	createAppServerAgentThreadService,
-	createAppServerAgentTurnService,
-} from '../../../../../platform/agentHost/browser/appServerAgentService.js';
+import { createAppServerAgentThreadService, createAppServerAgentTurnService } from '../../../../../platform/agentHost/browser/appServerAgentService.js';
 import { registerAgentHostResourceHost } from '../../../../../platform/agentHost/browser/agentHostResourceHost.js';
 import type { AppServerProtocolClient } from '../../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import type { AgentInput } from '../../../../../platform/agentHost/common/agent.js';
@@ -25,10 +22,7 @@ test('Renderer snapshots preserve captured UTF-8 bytes, reject replay and remain
 	assert.ok(lease);
 	assert.equal(lease.object.byteLength, new TextEncoder().encode(content).byteLength);
 	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(content));
-	assert.equal(
-		lease.object.sha256,
-		`sha256:${[...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('')}`,
-	);
+	assert.equal(lease.object.sha256, `sha256:${[...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('')}`);
 	assert.throws(() => other.read(lease.object.handle, 0, 10));
 	assert.throws(() => snapshots.read(lease.object.handle, 1, 10));
 	assert.throws(() => snapshots.read(lease.object.handle, 0, 262145));
@@ -114,10 +108,7 @@ class SnapshotClient extends Disposable {
 	readonly capabilities = { contracts: { hostResources: { version: 1 } } };
 	generation = 1;
 	state = 'ready';
-	readonly handlers = new Map<
-		string,
-		(params: ReadParams | { handle: string }, context: { signal: AbortSignal }) => unknown
-	>();
+	readonly handlers = new Map<string, (params: ReadParams | { handle: string }, context: { signal: AbortSignal }) => unknown>();
 	onRequest: (method: string, params: WireParams) => Promise<unknown> = async () => {
 		throw new Error('unexpected request');
 	};
@@ -125,10 +116,7 @@ class SnapshotClient extends Disposable {
 	request(definition: { method: string }, params: WireParams): Promise<unknown> {
 		return this.onRequest(definition.method, params);
 	}
-	registerRequestHandler(
-		definition: { method: string },
-		handler: (params: ReadParams | { handle: string }, context: { signal: AbortSignal }) => unknown,
-	) {
+	registerRequestHandler(definition: { method: string }, handler: (params: ReadParams | { handle: string }, context: { signal: AbortSignal }) => unknown) {
 		this.handlers.set(definition.method, handler);
 		return toDisposable(() => this.handlers.delete(definition.method));
 	}
@@ -203,11 +191,7 @@ for (const operation of ['start', 'steer', 'enqueue', 'rewrite'] as const) {
 			});
 		}
 		assert.throws(() => snapshots.read(handle, 0, 100));
-		assert.deepEqual(
-			input[0],
-			{ type: 'context', name: 'selected.ts', content },
-			'transport must leave the captured domain input unchanged',
-		);
+		assert.deepEqual(input[0], { type: 'context', name: 'selected.ts', content }, 'transport must leave the captured domain input unchanged');
 	});
 }
 
@@ -242,10 +226,7 @@ test('Renderer resource transfer retains inline compatibility and retires failed
 	assert.ok(lease);
 	const cancellation = new AbortController();
 	cancellation.abort();
-	await assert.rejects(
-		owner.read({ handle: lease.object.handle, offset: 0, maxBytes: 100 }, cancellation.signal),
-		isCancellationError,
-	);
+	await assert.rejects(owner.read({ handle: lease.object.handle, offset: 0, maxBytes: 100 }, cancellation.signal), isCancellationError);
 	owner.state = 'closed';
 	owner.changed.fire('closed');
 	await assert.rejects(owner.read({ handle: lease.object.handle, offset: 0, maxBytes: 100 }));
@@ -292,10 +273,7 @@ for (const operation of ['start', 'steer', 'enqueue', 'rewrite'] as const) {
 					? turns.steer({ ...params, turnId: 'turn' }, controller.signal)
 					: operation === 'enqueue'
 						? turns.enqueue({ ...params, approvalMode: 'manual' }, controller.signal)
-						: createAppServerAgentThreadService(owner.client, undefined, snapshots).rewrite(
-								{ ...params, beforeTurnId: 'before', title: 'Revised' },
-								controller.signal,
-							);
+						: createAppServerAgentThreadService(owner.client, undefined, snapshots).rewrite({ ...params, beforeTurnId: 'before', title: 'Revised' }, controller.signal);
 		const rejected = assert.rejects(pending, isCancellationError);
 		await snapshots.entered.p;
 		controller.abort();

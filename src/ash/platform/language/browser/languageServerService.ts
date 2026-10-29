@@ -9,10 +9,7 @@ import type { ILanguageServerService } from '../common/languageServerService.js'
 export function createAppServerLanguageServerService(connection: AppServerProtocolClient): ILanguageServerService {
 	return {
 		read: async dirId => {
-			const [config, result] = await Promise.all([
-				appServerRequest(connection, 'config/read', {}),
-				appServerRequest(connection, 'language/servers', { dirId }),
-			]);
+			const [config, result] = await Promise.all([appServerRequest(connection, 'config/read', {}), appServerRequest(connection, 'language/servers', { dirId })]);
 			return {
 				revision: config.revision,
 				configurations: Object.fromEntries(
@@ -44,18 +41,8 @@ export function createAppServerLanguageServerService(connection: AppServerProtoc
 					...configuration,
 					languageIds: configuration.languageIds ? [...configuration.languageIds] : undefined,
 					args: configuration.args ? [...configuration.args] : undefined,
-					initializationOptions:
-						configuration.initializationOptions === undefined
-							? undefined
-							: protocolJsonValue(configuration.initializationOptions),
-					settings: configuration.settings
-						? Object.fromEntries(
-								Object.entries(configuration.settings).map(([key, value]) => [
-									key,
-									protocolJsonValue(value),
-								]),
-							)
-						: undefined,
+					initializationOptions: configuration.initializationOptions === undefined ? undefined : protocolJsonValue(configuration.initializationOptions),
+					settings: configuration.settings ? Object.fromEntries(Object.entries(configuration.settings).map(([key, value]) => [key, protocolJsonValue(value)])) : undefined,
 				},
 			});
 		},

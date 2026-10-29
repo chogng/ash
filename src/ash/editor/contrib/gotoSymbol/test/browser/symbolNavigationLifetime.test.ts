@@ -65,16 +65,11 @@ suite('Symbol navigation provider lifetime', () => {
 		firstService.put(references.references.find(reference => reference.uri.toString() === first.uri.toString())!);
 		assert.equal(secondEditor.getAction('editor.gotoNextSymbolFromResult')!.isSupported(), true);
 		await secondEditor.getAction('editor.gotoNextSymbolFromResult')!.run();
-		assert.deepEqual(
-			secondEditor.getSelection(),
-			new (await import('../../../../common/core/selection.js')).Selection(1, 7, 1, 11),
-		);
+		assert.deepEqual(secondEditor.getSelection(), new (await import('../../../../common/core/selection.js')).Selection(1, 7, 1, 11));
 		features.dispose();
 		assert.equal(secondEditor.getContribution('editor.contrib.symbolNavigation'), null);
 		assert.equal(
-			secondEditor.invokeWithinContext(accessor =>
-				accessor.get(IContextKeyService).getContext().getValue('hasSymbols'),
-			),
+			secondEditor.invokeWithinContext(accessor => accessor.get(IContextKeyService).getContext().getValue('hasSymbols')),
 			false,
 		);
 		assert.equal(first.getText(), 'alpha beta');

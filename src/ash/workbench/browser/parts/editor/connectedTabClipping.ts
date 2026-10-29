@@ -9,13 +9,7 @@ export interface IConnectedTabBounds {
 	readonly shoulderExtent: number;
 }
 
-const tabStateClasses = [
-	'connected-tab-left-edge',
-	'connected-tab-right-edge',
-	'connected-tab-left-clipped',
-	'connected-tab-right-clipped',
-	'connected-tab-hidden',
-];
+const tabStateClasses = ['connected-tab-left-edge', 'connected-tab-right-edge', 'connected-tab-left-clipped', 'connected-tab-right-clipped', 'connected-tab-hidden'];
 
 export function clearConnectedTabClipping(tab: HTMLElement | undefined, overflowEdge: HTMLElement | undefined): void {
 	if (tab) tab.classList.remove(...tabStateClasses);

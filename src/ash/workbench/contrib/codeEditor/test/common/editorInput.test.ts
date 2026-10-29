@@ -21,8 +21,7 @@ for (const [name, value] of Object.entries({
 
 const { EditorPaneRegistry } = await import('../../../../browser/editor.js');
 const { binaryEditorDescriptor, BINARY_EDITOR_ID } = await import('../../../../browser/parts/editor/binaryEditor.js');
-const { matchPdfEditor, PDF_EDITOR_ID } =
-	await import('../../../../../../../extensions/pdf-viewer/browser/pdfEditorInput.js');
+const { matchPdfEditor, PDF_EDITOR_ID } = await import('../../../../../../../extensions/pdf-viewer/browser/pdfEditorInput.js');
 const { EditorPaneMatch } = await import('../../../../browser/parts/editor/editorPane.js');
 const { languageForEditorInput, matchCodeEditor, matchDiffEditor } = await import('../../browser/codeEditorInput.js');
 const { CODE_EDITOR_ID } = await import('../../../../browser/parts/editor/textResourceEditor.js');
@@ -37,10 +36,7 @@ test('Stanza opens text files while registered languages own resource detection'
 	assert.equal(languageForEditorInput({ resource: URI.file('C:\\project\\view.tsx') }, languages), 'typescriptreact');
 	assert.equal(languageForEditorInput({ resource: URI.file('C:\\project\\settings.jsonc') }, languages), 'jsonc');
 	assert.equal(matchCodeEditor({ resource: URI.parse('untitled:/Untitled-1') }), EditorPaneMatch.Default);
-	assert.equal(
-		languageForEditorInput({ resource: URI.parse('untitled:/Untitled-1'), languageId: 'typescript' }),
-		'typescript',
-	);
+	assert.equal(languageForEditorInput({ resource: URI.parse('untitled:/Untitled-1'), languageId: 'typescript' }), 'typescript');
 	assert.equal(matchCodeEditor({ resource: URI.file('C:\\project\\script') }), EditorPaneMatch.Builtin);
 	assert.equal(matchCodeEditor({ resource: URI.file('C:\\project\\script.cgi') }), EditorPaneMatch.Builtin);
 	assert.equal(matchCodeEditor({ resource: URI.file('C:\\project\\.env') }), EditorPaneMatch.Builtin);
@@ -93,14 +89,8 @@ test('editor resource access selects comparison sides and filters their resource
 	const comparison = createDiffEditorInput(original, modified);
 	const identity = comparison.resource;
 	assert.equal(EditorResourceAccessor.getOriginalUri(comparison), undefined);
-	assert.strictEqual(
-		EditorResourceAccessor.getOriginalUri(comparison, { supportSideBySide: SideBySideEditor.PRIMARY }),
-		modified.resource,
-	);
-	assert.strictEqual(
-		EditorResourceAccessor.getOriginalUri(comparison, { supportSideBySide: SideBySideEditor.SECONDARY }),
-		original.resource,
-	);
+	assert.strictEqual(EditorResourceAccessor.getOriginalUri(comparison, { supportSideBySide: SideBySideEditor.PRIMARY }), modified.resource);
+	assert.strictEqual(EditorResourceAccessor.getOriginalUri(comparison, { supportSideBySide: SideBySideEditor.SECONDARY }), original.resource);
 	assert.deepEqual(EditorResourceAccessor.getOriginalUri(comparison, { supportSideBySide: SideBySideEditor.BOTH }), {
 		primary: modified.resource,
 		secondary: original.resource,
@@ -155,11 +145,7 @@ test('files select the text editor before language extensions load while special
 		assert.equal(registry.getEditorPane(input, { preferredEditorId: BINARY_EDITOR_ID })?.id, BINARY_EDITOR_ID);
 	}
 	assert.equal(registry.getEditorPane({ resource: URI.file('/project/paper.pdf') })?.id, PDF_EDITOR_ID);
-	assert.equal(
-		registry.getEditorPane({ resource: URI.file('/project/sample.bin'), contentType: 'application/octet-stream' })
-			?.id,
-		BINARY_EDITOR_ID,
-	);
+	assert.equal(registry.getEditorPane({ resource: URI.file('/project/sample.bin'), contentType: 'application/octet-stream' })?.id, BINARY_EDITOR_ID);
 });
 test('static document declarations exclude the text editor only for the owning registry lifetime', () => {
 	const input = { resource: URI.file('/notes/document.ash-testdoc') };

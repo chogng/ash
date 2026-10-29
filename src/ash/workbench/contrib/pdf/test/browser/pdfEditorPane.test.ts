@@ -1,14 +1,7 @@
 import { Disposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { Event } from '../../../../../base/common/event.js';
-import {
-	type IFileSystemProvider,
-	FileSystemProviderCapabilities,
-} from '../../../../../platform/files/common/files.js';
-import {
-	createTestFileService,
-	createTestComponentServices,
-	registerTestComponentServices,
-} from '../../../../test/common/testEditorServices.js';
+import { type IFileSystemProvider, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
+import { createTestFileService, createTestComponentServices, registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -18,29 +11,16 @@ import { URI } from '../../../../../base/common/uri.js';
 import { FileKind } from '../../../../../platform/files/common/files.js';
 import { EditorPaneMatch } from '../../../../../workbench/browser/parts/editor/editorPane.js';
 import { PdfEditorPane } from '../../../../../../../extensions/pdf-viewer/browser/pdfEditorPane.js';
-import type {
-	IPdfAnnotationStore,
-	PdfAnnotationSnapshot,
-} from '../../../../../../../extensions/pdf-viewer/browser/pdfAnnotationStore.js';
+import type { IPdfAnnotationStore, PdfAnnotationSnapshot } from '../../../../../../../extensions/pdf-viewer/browser/pdfAnnotationStore.js';
 import { WorkspacePdfDocumentLoader } from '../../../../../../../extensions/pdf-viewer/browser/pdfDocumentLoader.js';
-import type {
-	IPdfRenderResult,
-	IPdfRenderer,
-	PdfRenderRequest,
-} from '../../../../../../../extensions/pdf-viewer/browser/pdfRenderer.js';
+import type { IPdfRenderResult, IPdfRenderer, PdfRenderRequest } from '../../../../../../../extensions/pdf-viewer/browser/pdfRenderer.js';
 import { matchPdfEditor } from '../../../../../../../extensions/pdf-viewer/browser/pdfEditorInput.js';
-import {
-	emptyPdfAnnotationDocument,
-	type PdfAnnotationDocument,
-} from '../../../../../../../extensions/pdf-viewer/common/pdfAnnotations.js';
+import { emptyPdfAnnotationDocument, type PdfAnnotationDocument } from '../../../../../../../extensions/pdf-viewer/common/pdfAnnotations.js';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 
 test('PDF editor matching selects only application/pdf and .pdf resources', () => {
 	assert.equal(matchPdfEditor(input('paper.PDF')), EditorPaneMatch.Default);
-	assert.equal(
-		matchPdfEditor({ ...input('paper.bin'), contentType: 'Application/PDF; charset=binary' }),
-		EditorPaneMatch.Default,
-	);
+	assert.equal(matchPdfEditor({ ...input('paper.bin'), contentType: 'Application/PDF; charset=binary' }), EditorPaneMatch.Default);
 	assert.equal(matchPdfEditor(input('paper.txt')), EditorPaneMatch.None);
 });
 
@@ -49,12 +29,7 @@ test('PDF editor renders pages, creates annotations, and saves a companion docum
 	const annotations = new TestAnnotationStore();
 	const renderer = new TestRenderer();
 	using services = createTestComponentServices(undefined, undefined, dom.window.document);
-	const pane = registerTestComponentServices(services).createInstance(
-		PdfEditorPane,
-		{ load: async () => new Uint8Array([37, 80, 68, 70]) },
-		annotations,
-		renderer,
-	);
+	const pane = registerTestComponentServices(services).createInstance(PdfEditorPane, { load: async () => new Uint8Array([37, 80, 68, 70]) }, annotations, renderer);
 	pane.create(dom.window.document.body);
 
 	await pane.setInput(input('paper.pdf'), new AbortController().signal);
@@ -123,12 +98,7 @@ test('PDF editor observes cancellation before rendering pages', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const renderer = new TestRenderer();
 	using services = createTestComponentServices(undefined, undefined, dom.window.document);
-	const pane = registerTestComponentServices(services).createInstance(
-		PdfEditorPane,
-		{ load: async () => new Uint8Array([37]) },
-		new TestAnnotationStore(),
-		renderer,
-	);
+	const pane = registerTestComponentServices(services).createInstance(PdfEditorPane, { load: async () => new Uint8Array([37]) }, new TestAnnotationStore(), renderer);
 	pane.create(dom.window.document.body);
 	const controller = new AbortController();
 	controller.abort('closed');
@@ -142,12 +112,7 @@ test('PDF editor observes cancellation before rendering pages', async () => {
 test('PDF reading shortcuts precede document commands only while the pane is focused', async () => {
 	const dom = new JSDOM('<!doctype html><body><button id="outside">Outside</button></body>');
 	using services = createTestComponentServices(undefined, undefined, dom.window.document);
-	using pane = registerTestComponentServices(services).createInstance(
-		PdfEditorPane,
-		{ load: async () => new Uint8Array([37]) },
-		new TestAnnotationStore(),
-		new TestRenderer(),
-	);
+	using pane = registerTestComponentServices(services).createInstance(PdfEditorPane, { load: async () => new Uint8Array([37]) }, new TestAnnotationStore(), new TestRenderer());
 	pane.create(dom.window.document.body);
 	await pane.setInput(input('paper.pdf'), new AbortController().signal);
 	let globalKeys = 0;
@@ -161,8 +126,7 @@ test('PDF reading shortcuts precede document commands only while the pane is foc
 	);
 	const pages = dom.window.document.querySelector<HTMLElement>('.ash-pdf-pages')!;
 	const zoom = dom.window.document.querySelector<HTMLSelectElement>('.ash-pdf-zoom')!;
-	const key = () =>
-		new dom.window.KeyboardEvent('keydown', { key: '0', metaKey: true, bubbles: true, cancelable: true });
+	const key = () => new dom.window.KeyboardEvent('keydown', { key: '0', metaKey: true, bubbles: true, cancelable: true });
 	pages.focus();
 	pages.dispatchEvent(key());
 	await new Promise(resolve => setImmediate(resolve));
@@ -221,10 +185,7 @@ test('workspace PDF loader reads only through the binary file contract', async (
 	} satisfies IFileSystemProvider);
 	const loader = new WorkspacePdfDocumentLoader(fileService);
 
-	assert.deepEqual(
-		await loader.load(input('paper.pdf'), new AbortController().signal),
-		new Uint8Array([37, 80, 68, 70]),
-	);
+	assert.deepEqual(await loader.load(input('paper.pdf'), new AbortController().signal), new Uint8Array([37, 80, 68, 70]));
 });
 
 function input(name: string): IResourceEditorInput {
@@ -254,11 +215,7 @@ class TestAnnotationStore implements IPdfAnnotationStore {
 		return { document: emptyPdfAnnotationDocument(), revision: undefined };
 	}
 
-	async save(
-		_resource: URI,
-		document: PdfAnnotationDocument,
-		_expectedRevision: string | undefined,
-	): Promise<PdfAnnotationSnapshot> {
+	async save(_resource: URI, document: PdfAnnotationDocument, _expectedRevision: string | undefined): Promise<PdfAnnotationSnapshot> {
 		const snapshot = { document, revision: `revision-${this.saved.length + 1}` };
 		this.saved.push(snapshot);
 		return snapshot;

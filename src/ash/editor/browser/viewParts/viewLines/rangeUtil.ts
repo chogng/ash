@@ -25,13 +25,7 @@ export class RangeUtil {
 		range.selectNodeContents(endNode);
 	}
 
-	private static _readClientRects(
-		startElement: Node,
-		startOffset: number,
-		endElement: Node,
-		endOffset: number,
-		endNode: HTMLElement,
-	): DOMRectList | null {
+	private static _readClientRects(startElement: Node, startOffset: number, endElement: Node, endOffset: number, endNode: HTMLElement): DOMRectList | null {
 		const range = this._createRange(endNode.ownerDocument);
 		try {
 			range.setStart(startElement, startOffset);
@@ -73,11 +67,7 @@ export class RangeUtil {
 		return result;
 	}
 
-	private static _createHorizontalRangesFromClientRects(
-		clientRects: DOMRectList | null,
-		clientRectDeltaLeft: number,
-		clientRectScale: number,
-	): FloatHorizontalRange[] | null {
+	private static _createHorizontalRangesFromClientRects(clientRects: DOMRectList | null, clientRectDeltaLeft: number, clientRectScale: number): FloatHorizontalRange[] | null {
 		if (!clientRects || clientRects.length === 0) {
 			return null;
 		}
@@ -88,10 +78,7 @@ export class RangeUtil {
 		const result: FloatHorizontalRange[] = [];
 		for (let i = 0, len = clientRects.length; i < len; i++) {
 			const clientRect = clientRects[i];
-			result[i] = new FloatHorizontalRange(
-				Math.max(0, (clientRect.left - clientRectDeltaLeft) / clientRectScale),
-				clientRect.width / clientRectScale,
-			);
+			result[i] = new FloatHorizontalRange(Math.max(0, (clientRect.left - clientRectDeltaLeft) / clientRectScale), clientRect.width / clientRectScale);
 		}
 
 		return this._mergeAdjacentRanges(result);
@@ -121,29 +108,15 @@ export class RangeUtil {
 			context.markDidDomLayout();
 			const left = (box.left - context.clientRectDeltaLeft) / context.clientRectScale;
 			const right = (box.right - context.clientRectDeltaLeft) / context.clientRectScale;
-			return [
-				new FloatHorizontalRange(
-					startOffset === 0 ? left : right,
-					startOffset === endOffset ? 0 : right - left,
-				),
-			];
+			return [new FloatHorizontalRange(startOffset === 0 ? left : right, startOffset === endOffset ? 0 : right - left)];
 		}
 
-		if (
-			startChildIndex === endChildIndex &&
-			startOffset === endOffset &&
-			startOffset === 0 &&
-			!domNode.children[startChildIndex].firstChild
-		) {
+		if (startChildIndex === endChildIndex && startOffset === endOffset && startOffset === 0 && !domNode.children[startChildIndex].firstChild) {
 			// We must find the position at the beginning of a <span>
 			// To cover cases of empty <span>s, avoid using a range and use the <span>'s bounding box
 			const clientRects = domNode.children[startChildIndex].getClientRects();
 			context.markDidDomLayout();
-			return this._createHorizontalRangesFromClientRects(
-				clientRects,
-				context.clientRectDeltaLeft,
-				context.clientRectScale,
-			);
+			return this._createHorizontalRangesFromClientRects(clientRects, context.clientRectDeltaLeft, context.clientRectScale);
 		}
 
 		// If crossing over to a span only to select offset 0, then use the previous span's maximum offset
@@ -179,12 +152,7 @@ export class RangeUtil {
 
 		const clientRects = this._readClientRects(startElement, startOffset, endElement, endOffset, context.endNode);
 		context.markDidDomLayout();
-		const ranges =
-			this._createHorizontalRangesFromClientRects(
-				clientRects,
-				context.clientRectDeltaLeft,
-				context.clientRectScale,
-			) ?? [];
+		const ranges = this._createHorizontalRangesFromClientRects(clientRects, context.clientRectDeltaLeft, context.clientRectScale) ?? [];
 		for (const [element, include] of [
 			[startObject, startOffset === 0],
 			[endObject, endOffset > 0],
@@ -192,12 +160,7 @@ export class RangeUtil {
 			if (!include || element.dataset.ashInlineObject !== 'true') continue;
 			const box = element.getBoundingClientRect();
 			context.markDidDomLayout();
-			ranges.push(
-				new FloatHorizontalRange(
-					(box.left - context.clientRectDeltaLeft) / context.clientRectScale,
-					box.width / context.clientRectScale,
-				),
-			);
+			ranges.push(new FloatHorizontalRange((box.left - context.clientRectDeltaLeft) / context.clientRectScale, box.width / context.clientRectScale));
 		}
 		return ranges.length > 0 ? this._mergeAdjacentRanges(ranges) : null;
 	}

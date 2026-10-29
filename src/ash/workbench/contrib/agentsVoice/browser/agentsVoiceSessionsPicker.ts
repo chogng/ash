@@ -19,19 +19,13 @@ export class AgentsVoiceSessionsPicker extends Disposable {
 	show(): void {
 		this.pickers.clear();
 		const lifetime = this.pickers.add(new DisposableStore());
-		const picker = lifetime.add(
-			this.quickInput.createQuickPick<
-				IQuickPickItem & { readonly sessionId: string; readonly threadId: string }
-			>(),
-		);
+		const picker = lifetime.add(this.quickInput.createQuickPick<IQuickPickItem & { readonly sessionId: string; readonly threadId: string }>());
 		const active = this.navigation.getActiveConversation();
-		const items = this.navigation
-			.getConversations()
-			.map(conversation => ({
-				...conversation,
-				label: conversation.title || localize('agentsVoice.untitled', 'Untitled conversation'),
-				picked: conversation.sessionId === active?.sessionId && conversation.threadId === active.threadId,
-			}));
+		const items = this.navigation.getConversations().map(conversation => ({
+			...conversation,
+			label: conversation.title || localize('agentsVoice.untitled', 'Untitled conversation'),
+			picked: conversation.sessionId === active?.sessionId && conversation.threadId === active.threadId,
+		}));
 		picker.placeholder = localize('agentsVoice.sessions.hint', 'Open a conversation to start voice there.');
 		picker.ariaLabel = localize('agentsVoice.sessions', 'Conversations');
 		picker.items = items;
@@ -42,10 +36,7 @@ export class AgentsVoiceSessionsPicker extends Disposable {
 				if (!selected) return;
 				picker.hide();
 				void this.navigation.openConversation(selected.sessionId, selected.threadId).catch(error => {
-					if (!this.isDisposed)
-						this.notifications.error(
-							localize('agentsVoice.operationFailed', 'Voice conversation: {0}', String(error)),
-						);
+					if (!this.isDisposed) this.notifications.error(localize('agentsVoice.operationFailed', 'Voice conversation: {0}', String(error)));
 				});
 			}),
 		);

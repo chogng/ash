@@ -1,20 +1,11 @@
-import {
-	defaultDialogStyles,
-	defaultButtonStyles,
-	defaultCheckboxStyles,
-	defaultInputBoxStyles,
-} from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultDialogStyles, defaultButtonStyles, defaultCheckboxStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/accessibleView.css';
 import { h, getActiveDocument, getActiveElement } from '../../../../base/browser/dom.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
 import { Disposable, MutableDisposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js';
 import { localize } from '../../../../nls.js';
-import {
-	AccessibleViewType,
-	type IAccessibleViewContentProvider,
-	type IAccessibleViewService,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewType, type IAccessibleViewContentProvider, type IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -22,12 +13,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { AccessibilityCommandId } from '../common/accessibilityCommands.js';
-import {
-	accessibilityHelpIsShown,
-	accessibleViewIsShown,
-	accessibleViewVerbosityEnabled,
-	accessibleViewCurrentProviderId,
-} from './accessibilityConfiguration.js';
+import { accessibilityHelpIsShown, accessibleViewIsShown, accessibleViewVerbosityEnabled, accessibleViewCurrentProviderId } from './accessibilityConfiguration.js';
 import { resolveContentAndKeybindingItems } from './accessibleViewKeybindingResolver.js';
 
 /** Displays one focused provider in a modal, read-only text surface. */
@@ -60,17 +46,10 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 		const focusedDocument = getActiveDocument();
 		// Auxiliary editors share services with their opener, but their help dialog
 		// and scoped context must stay in the document that owns keyboard focus.
-		const root =
-			target?.closest<HTMLElement>('.ash-workbench') ??
-			getActiveElement(focusedDocument)?.closest<HTMLElement>('.ash-workbench') ??
-			mainRoot;
+		const root = target?.closest<HTMLElement>('.ash-workbench') ?? getActiveElement(focusedDocument)?.closest<HTMLElement>('.ash-workbench') ?? mainRoot;
 		const activeElement = target ?? getActiveElement(root.ownerDocument);
 		const implementations = [...AccessibleViewRegistry.getImplementations()]
-			.filter(
-				implementation =>
-					implementation.type === type &&
-					this.contextKeys.contextMatchesRules(implementation.when, activeElement),
-			)
+			.filter(implementation => implementation.type === type && this.contextKeys.contextMatchesRules(implementation.when, activeElement))
 			.sort((left, right) => right.priority - left.priority);
 		let provider: IAccessibleViewContentProvider | undefined;
 		for (const implementation of implementations) {
@@ -114,18 +93,12 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 			};
 			const updateContent = (): void => {
 				const value = selectedProvider.provideContent();
-				const text =
-					type === AccessibleViewType.Help
-						? (resolveContentAndKeybindingItems(this.keybindings, value)?.content.value ?? '')
-						: value;
+				const text = type === AccessibleViewType.Help ? (resolveContentAndKeybindingItems(this.keybindings, value)?.content.value ?? '') : value;
 				this.updateText(content, text);
 				updateHint();
 			};
 			updateContent();
-			const title =
-				type === AccessibleViewType.Help
-					? localize('accessibility.helpTitle', 'Accessibility Help')
-					: localize('accessibility.viewTitle', 'Accessible View');
+			const title = type === AccessibleViewType.Help ? localize('accessibility.helpTitle', 'Accessibility Help') : localize('accessibility.viewTitle', 'Accessible View');
 			content.setAttribute('aria-label', title);
 			const dialog = lifetime.add(
 				new Dialog(root, title, [localize('accessibility.close', 'Close')], {
@@ -147,9 +120,7 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 			lifetime.add(
 				this.configuration.onDidChangeConfiguration(event => {
 					if (event.affectsConfiguration(selectedProvider.verbositySettingKey)) {
-						verbosityEnabled.set(
-							this.configuration.getValue<boolean>(selectedProvider.verbositySettingKey),
-						);
+						verbosityEnabled.set(this.configuration.getValue<boolean>(selectedProvider.verbositySettingKey));
 						updateHint();
 					}
 				}),
@@ -180,21 +151,11 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 		if (!this.configuration.getValue<boolean>(verbositySettingKey)) {
 			return undefined;
 		}
-		const binding = this.keybindings.lookupKeybinding(
-			AccessibilityCommandId.OpenAccessibilityHelp,
-			this.contextKeys.getContext(this.layoutService.mainContainer.ownerDocument.activeElement),
-		);
+		const binding = this.keybindings.lookupKeybinding(AccessibilityCommandId.OpenAccessibilityHelp, this.contextKeys.getContext(this.layoutService.mainContainer.ownerDocument.activeElement));
 		if (!binding) {
-			return localize(
-				'accessibility.openHelpCommandHint',
-				'Run Open Accessibility Help from the Command Palette.',
-			);
+			return localize('accessibility.openHelpCommandHint', 'Run Open Accessibility Help from the Command Palette.');
 		}
-		return localize(
-			'accessibility.openHelpKeybindingHint',
-			'Press {0} for accessibility help.',
-			getKeybindingLabel(binding),
-		);
+		return localize('accessibility.openHelpKeybindingHint', 'Press {0} for accessibility help.', getKeybindingLabel(binding));
 	}
 
 	public async disableHint(): Promise<void> {
@@ -231,24 +192,12 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 					'accessibility.viewHelpRead',
 					'Accessible View presents the current feature as read-only text. Use arrow keys to read, Home and End to move within a line, and Ctrl+Home or Command+Home to move to the beginning.',
 				),
-				localize(
-					'accessibility.viewHelpCopy',
-					'Use Shift with arrow keys to select text and Ctrl+C or Command+C to copy. Tab and Shift+Tab move between the text and Close.',
-				),
-				localize(
-					'accessibility.viewHelpHint',
-					'<keybinding:editor.action.accessibleViewDisableHint> stops announcing the help hint for the current feature.',
-				),
-				localize(
-					'accessibility.viewHelpClose',
-					'Escape returns to the content. Press Escape again to close Accessible View and return to the feature.',
-				),
+				localize('accessibility.viewHelpCopy', 'Use Shift with arrow keys to select text and Ctrl+C or Command+C to copy. Tab and Shift+Tab move between the text and Close.'),
+				localize('accessibility.viewHelpHint', '<keybinding:editor.action.accessibleViewDisableHint> stops announcing the help hint for the current feature.'),
+				localize('accessibility.viewHelpClose', 'Escape returns to the content. Press Escape again to close Accessible View and return to the feature.'),
 			].join('\n\n');
 			const updateContent = (): void => {
-				this.updateText(
-					content,
-					resolveContentAndKeybindingItems(this.keybindings, helpContent)!.content.value,
-				);
+				this.updateText(content, resolveContentAndKeybindingItems(this.keybindings, helpContent)!.content.value);
 			};
 			updateContent();
 			lifetime.add(this.keybindings.onDidUpdateKeybindings(updateContent));

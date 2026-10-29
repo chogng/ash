@@ -48,9 +48,7 @@ export class PolicyConfiguration extends Disposable {
 					if (type === 'boolean' || type === 'number' || type === 'string')
 						definitions[setting.policy.name] = {
 							type,
-							...(setting.policy.managedSettings === undefined
-								? {}
-								: { managedSettings: setting.policy.managedSettings }),
+							...(setting.policy.managedSettings === undefined ? {} : { managedSettings: setting.policy.managedSettings }),
 							...(setting.policy.value === undefined ? {} : { value: setting.policy.value }),
 						};
 				}
@@ -79,17 +77,8 @@ export class PolicyConfiguration extends Disposable {
 			try {
 				const value = this.policies.getPolicyValue(setting.policy.name);
 				if (value === undefined) continue;
-				if (
-					typeof value !== typeof setting.defaultValue ||
-					(typeof value === 'number' && !Number.isFinite(value))
-				) {
-					throw new TypeError(
-						localize(
-							'configuration.invalidPolicy',
-							'Administrator policy {0} has an invalid value.',
-							setting.policy.name,
-						),
-					);
+				if (typeof value !== typeof setting.defaultValue || (typeof value === 'number' && !Number.isFinite(value))) {
+					throw new TypeError(localize('configuration.invalidPolicy', 'Administrator policy {0} has an invalid value.', setting.policy.name));
 				}
 				values[setting.key] = setting.parse(value);
 				names.set(setting.key, setting.policy.name);

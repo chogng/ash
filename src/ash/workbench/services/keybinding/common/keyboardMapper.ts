@@ -1,12 +1,4 @@
-import {
-	IMMUTABLE_CODE_TO_KEY_CODE,
-	IMMUTABLE_KEY_CODE_TO_CODE,
-	KeyCode,
-	KeyCodeUtils,
-	NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE,
-	ScanCode,
-	ScanCodeUtils,
-} from '../../../../base/common/keyCodes.js';
+import { IMMUTABLE_CODE_TO_KEY_CODE, IMMUTABLE_KEY_CODE_TO_CODE, KeyCode, KeyCodeUtils, NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE, ScanCode, ScanCodeUtils } from '../../../../base/common/keyCodes.js';
 import {
 	Keybinding,
 	KeybindingChordKind,
@@ -19,12 +11,7 @@ import {
 	type ResolvedKeybindingChord,
 } from '../../../../base/common/keybindings.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
-import {
-	KeyboardDispatchMode,
-	type IKeyboardMapper,
-	type IKeyboardMapperConfiguration,
-	type IKeyboardMapping,
-} from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
+import { KeyboardDispatchMode, type IKeyboardMapper, type IKeyboardMapperConfiguration, type IKeyboardMapping } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
 import { findKeyboardMappingCandidates, getKeyboardMappingLabel, isKeyboardMappingDeadKey } from './keyboardMapping.js';
 
 export abstract class KeyboardMapper implements IKeyboardMapper {
@@ -80,26 +67,23 @@ export abstract class KeyboardMapper implements IKeyboardMapper {
 	public resolveKeyboardEvent(event: KeybindingEvent): ResolvedKeybinding {
 		const ctrlKey = event.ctrlKey || (this.configuration.mapAltGrToCtrlAlt && Boolean(event.altGraphKey));
 		const altKey = event.altKey || (this.configuration.mapAltGrToCtrlAlt && Boolean(event.altGraphKey));
-		const modifiers = { ctrlKey, shiftKey: event.shiftKey, altKey, metaKey: event.metaKey };
-		const logicalKeyValue =
-			event.keyCode !== undefined && event.keyCode > KeyCode.Unknown
-				? KeyCodeUtils.toString(event.keyCode)
-				: event.key;
+		const modifiers = {
+			ctrlKey,
+			shiftKey: event.shiftKey,
+			altKey,
+			metaKey: event.metaKey,
+		};
+		const logicalKeyValue = event.keyCode !== undefined && event.keyCode > KeyCode.Unknown ? KeyCodeUtils.toString(event.keyCode) : event.key;
 		const chord = isModifierKeyCode(event.keyCode)
 			? logicalKey(KeyCodeUtils.toString(event.keyCode!), {})
 			: this.configuration.dispatch === KeyboardDispatchMode.Code || event.key === 'Dead'
 				? physicalKey(event.code, modifiers)
 				: logicalKey(logicalKeyValue, modifiers);
-		return (
-			this.resolveKeybinding(Keybinding.single(chord))[0] ??
-			resolveKeybinding(Keybinding.single(chord), this.operatingSystem)
-		);
+		return this.resolveKeybinding(Keybinding.single(chord))[0] ?? resolveKeybinding(Keybinding.single(chord), this.operatingSystem);
 	}
 
 	public resolveKeybinding(keybinding: Keybinding): readonly ResolvedKeybinding[] {
-		const resolved = resolveKeybinding(keybinding, this.operatingSystem, (code, modifiers) =>
-			getKeyboardMappingLabel(code, this.mapping[code], modifiers, this.configuration.mapAltGrToCtrlAlt),
-		);
+		const resolved = resolveKeybinding(keybinding, this.operatingSystem, (code, modifiers) => getKeyboardMappingLabel(code, this.mapping[code], modifiers, this.configuration.mapAltGrToCtrlAlt));
 		const enriched = new ResolvedKeybinding(
 			resolved.chords.map(chord => this.enrichChord(chord)),
 			this.operatingSystem,
@@ -114,21 +98,12 @@ export abstract class KeyboardMapper implements IKeyboardMapper {
 		if (chord.kind === KeybindingChordKind.Physical) {
 			const scanCode = ScanCodeUtils.toEnum(chord.key);
 			const immutableKeyCode = IMMUTABLE_CODE_TO_KEY_CODE[scanCode];
-			const windowsKeyCode =
-				this.operatingSystem === OperatingSystem.Windows
-					? NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE[this.mapping[chord.key]?.vkey ?? '']
-					: undefined;
+			const windowsKeyCode = this.operatingSystem === OperatingSystem.Windows ? NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE[this.mapping[chord.key]?.vkey ?? ''] : undefined;
 			return {
 				...chord,
-				keyCode:
-					windowsKeyCode ??
-					(immutableKeyCode !== KeyCode.DependsOnKeyboardLayout ? immutableKeyCode : undefined),
+				keyCode: windowsKeyCode ?? (immutableKeyCode !== KeyCode.DependsOnKeyboardLayout ? immutableKeyCode : undefined),
 				scanCode,
-				isDeadKey: isKeyboardMappingDeadKey(
-					this.mapping[chord.key],
-					chord,
-					this.configuration.mapAltGrToCtrlAlt,
-				),
+				isDeadKey: isKeyboardMappingDeadKey(this.mapping[chord.key], chord, this.configuration.mapAltGrToCtrlAlt),
 			};
 		}
 		return { ...chord, keyCode: KeyCodeUtils.fromString(chord.key) };
@@ -164,23 +139,12 @@ export abstract class KeyboardMapper implements IKeyboardMapper {
 					...chord,
 					kind: KeybindingChordKind.Physical,
 					key: ScanCodeUtils.toString(immutableScanCode),
-					label: getKeyboardMappingLabel(
-						ScanCodeUtils.toString(immutableScanCode),
-						this.mapping[ScanCodeUtils.toString(immutableScanCode)],
-						chord,
-						this.configuration.mapAltGrToCtrlAlt,
-					),
+					label: getKeyboardMappingLabel(ScanCodeUtils.toString(immutableScanCode), this.mapping[ScanCodeUtils.toString(immutableScanCode)], chord, this.configuration.mapAltGrToCtrlAlt),
 					scanCode: immutableScanCode,
 				},
 			];
 		}
-		const candidates = findKeyboardMappingCandidates(
-			this.mapping,
-			normalizeLogicalKey(chord.key),
-			keyCode,
-			chord,
-			this.operatingSystem,
-		);
+		const candidates = findKeyboardMappingCandidates(this.mapping, normalizeLogicalKey(chord.key), keyCode, chord, this.operatingSystem);
 		if (candidates.length === 0) {
 			return [chord];
 		}

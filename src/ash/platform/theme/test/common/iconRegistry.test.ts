@@ -44,10 +44,7 @@ test('circular icon defaults report the complete alias chain', () => {
 	const secondId = nextIconId('cycle-second');
 	const first = registerIcon(firstId, Icon.fromId(secondId), 'First test icon');
 	registerIcon(secondId, first, 'Second test icon');
-	assert.throws(
-		() => resolveIconDefinition(first),
-		new Error(`Circular icon defaults: ${firstId} -> ${secondId} -> ${firstId}`),
-	);
+	assert.throws(() => resolveIconDefinition(first), new Error(`Circular icon defaults: ${firstId} -> ${secondId} -> ${firstId}`));
 });
 
 test('duplicate and malformed icon IDs are rejected', () => {

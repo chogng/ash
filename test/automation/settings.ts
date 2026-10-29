@@ -30,14 +30,8 @@ export async function readUserSettings(page: Page): Promise<{ resource: string; 
 		const home = await globalThis.ashTestMainProcess.call<string>('localFilesystem', 'userDataHome');
 		const resource = home.replace(/\/$/u, '') + '/settings.json';
 		try {
-			const file = await globalThis.ashTestMainProcess.call<{ bytes: string; revision: string }>(
-				'localFilesystem',
-				'readFile',
-				{ resource },
-			);
-			const content = new TextDecoder().decode(
-				Uint8Array.from(atob(file.bytes), character => character.charCodeAt(0)),
-			);
+			const file = await globalThis.ashTestMainProcess.call<{ bytes: string; revision: string }>('localFilesystem', 'readFile', { resource });
+			const content = new TextDecoder().decode(Uint8Array.from(atob(file.bytes), character => character.charCodeAt(0)));
 			return { resource, content, revision: file.revision };
 		} catch (error) {
 			if (error instanceof Error && error.name === 'FileNotFoundError') return { resource, content: '{}\n' };
@@ -79,8 +73,7 @@ export async function writeUserSettings(page: Page, content: string, expectedRev
 						};
 						transaction.oncomplete = () => resolve();
 						transaction.onerror = () => reject(transaction.error);
-						transaction.onabort = () =>
-							reject(transaction.error ?? new Error('Settings file revision conflict'));
+						transaction.onabort = () => reject(transaction.error ?? new Error('Settings file revision conflict'));
 					});
 				} finally {
 					database.close();
@@ -90,9 +83,7 @@ export async function writeUserSettings(page: Page, content: string, expectedRev
 		);
 		return;
 	}
-	const home = await page.evaluate(() =>
-		globalThis.ashTestMainProcess.call<string>('localFilesystem', 'userDataHome'),
-	);
+	const home = await page.evaluate(() => globalThis.ashTestMainProcess.call<string>('localFilesystem', 'userDataHome'));
 	const resource = home.replace(/\/$/u, '') + '/settings.json';
 	const bytes = Buffer.from(content, 'utf8').toString('base64');
 	await page.evaluate(
@@ -123,9 +114,7 @@ export class SettingsEditor {
 	}
 
 	public async selectCategory(categoryId: string): Promise<void> {
-		const category = this.element
-			.getByRole('treeitem')
-			.filter({ has: this.page.locator(`[data-settings-category-id="${categoryId}"]`) });
+		const category = this.element.getByRole('treeitem').filter({ has: this.page.locator(`[data-settings-category-id="${categoryId}"]`) });
 		await category.click();
 		await expect(category).toHaveAttribute('aria-selected', 'true');
 	}
@@ -136,9 +125,7 @@ export class SettingsEditor {
 	}
 
 	public async selectGroup(groupId: string): Promise<void> {
-		const group = this.element
-			.getByRole('treeitem')
-			.filter({ has: this.page.locator(`[data-settings-group-id="${groupId}"]`) });
+		const group = this.element.getByRole('treeitem').filter({ has: this.page.locator(`[data-settings-group-id="${groupId}"]`) });
 		if ((await group.getAttribute('aria-expanded')) !== 'true') {
 			await group.click();
 		}

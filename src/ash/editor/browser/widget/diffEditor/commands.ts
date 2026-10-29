@@ -20,10 +20,7 @@ export class ToggleCollapseUnchangedRegions extends Action2 {
 
 	public override run(accessor: ServicesAccessor): Promise<void> {
 		const configuration = accessor.get(IConfigurationService);
-		return configuration.updateValue(
-			'diffEditor.hideUnchangedRegions.enabled',
-			!configuration.getValue<boolean>('diffEditor.hideUnchangedRegions.enabled'),
-		);
+		return configuration.updateValue('diffEditor.hideUnchangedRegions.enabled', !configuration.getValue<boolean>('diffEditor.hideUnchangedRegions.enabled'));
 	}
 }
 

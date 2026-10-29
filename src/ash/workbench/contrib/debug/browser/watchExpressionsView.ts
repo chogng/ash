@@ -156,12 +156,7 @@ export class WatchExpressionsView extends ViewPane {
 		);
 	}
 	private isCurrentInspection(session: IDebugSession, generation: number): boolean {
-		return (
-			!this.isDisposed &&
-			generation === this.refreshGeneration &&
-			this.debug.session === session &&
-			session.state === 'stopped'
-		);
+		return !this.isDisposed && generation === this.refreshGeneration && this.debug.session === session && session.state === 'stopped';
 	}
 
 	private addWatch(event: Event): void {
@@ -198,24 +193,13 @@ export class WatchExpressionsView extends ViewPane {
 		};
 		void loading.then(finish, finish);
 		const results = await loading;
-		if (
-			!this.isCurrentInspection(session, generation) ||
-			this.debug.getViewModel().focusedStackFrame?.id !== frameId ||
-			this.debug.watchExpressions !== expressions
-		)
-			return;
+		if (!this.isCurrentInspection(session, generation) || this.debug.getViewModel().focusedStackFrame?.id !== frameId || this.debug.watchExpressions !== expressions) return;
 		this.watchResults = Object.freeze(results);
 		this.announcements.announce(session.id, results);
 		this.render();
 	}
 }
-function watchItem(
-	owner: DisposableStore,
-	document: Document,
-	expression: string,
-	result: DebugWatchResult | undefined,
-	index: number,
-): HTMLLIElement {
+function watchItem(owner: DisposableStore, document: Document, expression: string, result: DebugWatchResult | undefined, index: number): HTMLLIElement {
 	const item = h(document, 'li');
 	const value = h(document, 'span');
 	value.className = 'ash-debug-watch-value';
@@ -237,8 +221,7 @@ function watchItem(
 	return item;
 }
 function indexFromEvent(event: Event, selector: string, dataName: string, document: Document): number | undefined {
-	const target =
-		event.target instanceof document.defaultView!.Element ? event.target.closest<HTMLElement>(selector) : null;
+	const target = event.target instanceof document.defaultView!.Element ? event.target.closest<HTMLElement>(selector) : null;
 	const raw = target?.dataset[dataName];
 	if (raw === undefined) return undefined;
 	const index = Number(raw);

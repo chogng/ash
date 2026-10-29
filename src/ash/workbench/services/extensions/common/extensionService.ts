@@ -17,21 +17,11 @@ export type {
 export type { ExtensionDebugAdapterDefinition, ExtensionDebugAdapterSource } from './extensionDebugAdapter.js';
 export type { ExtensionThemeCatalog, ExtensionThemeDefinition, ExtensionThemeSource } from './extensionTheme.js';
 export { parseExtensionTheme } from './extensionTheme.js';
-export type {
-	ExtensionFileTemplateCatalog,
-	ExtensionFileTemplateDefinition,
-	ExtensionFileTemplateSource,
-} from './extensionFileTemplate.js';
+export type { ExtensionFileTemplateCatalog, ExtensionFileTemplateDefinition, ExtensionFileTemplateSource } from './extensionFileTemplate.js';
 export { parseExtensionManifest } from './extensionManifest.js';
 
 export type ExtensionSourceKind = 'builtIn' | 'plugin' | 'registry' | 'user';
-export type ExtensionDiagnosticCode =
-	| 'sourceUnavailable'
-	| 'invalidManifest'
-	| 'duplicateExtension'
-	| 'pathEscapesRoot'
-	| 'resourceNotFound'
-	| 'resourceTooLarge';
+export type ExtensionDiagnosticCode = 'sourceUnavailable' | 'invalidManifest' | 'duplicateExtension' | 'pathEscapesRoot' | 'resourceNotFound' | 'resourceTooLarge';
 
 /** Workbench-owned public identity for one discovered declarative extension. */
 export interface ExtensionDescriptor {
@@ -99,9 +89,7 @@ export interface IExtensionService extends IDisposable {
 	/** The executable host owns this registration; declaration-only hosts have no handler. */
 	registerActivationHandler(handler: (event: string, signal?: AbortSignal) => Promise<void>): IDisposable;
 	/** The sole snippet owner validates generation-bound resources before commit. A replacement receives the current snapshot on the next reload; in-flight loads drain to the latest owner. */
-	registerSnippetHandler(
-		handler: (files: readonly ExtensionSnippetFile[]) => ExtensionSnippetActivation,
-	): IDisposable;
+	registerSnippetHandler(handler: (files: readonly ExtensionSnippetFile[]) => ExtensionSnippetActivation): IDisposable;
 }
 
 export const IExtensionService = createServiceIdentifier<IExtensionService>('extensionService');

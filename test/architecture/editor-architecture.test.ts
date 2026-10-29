@@ -9,9 +9,7 @@ const editorRoot = resolve(desktopRoot, 'src/ash/editor');
 const workbenchImportPattern = /(?:from\s+|import\s*(?:\(\s*)?)["'][^"']*\/workbench\/[^"']*["']/u;
 
 test('Editor keeps explicit feature files without index barrels', () => {
-	const indexFiles = collectFiles(editorRoot).filter(
-		file => file.endsWith('\\index.ts') || file.endsWith('/index.ts'),
-	);
+	const indexFiles = collectFiles(editorRoot).filter(file => file.endsWith('\\index.ts') || file.endsWith('/index.ts'));
 	assert.deepEqual(indexFiles, []);
 });
 
@@ -20,16 +18,8 @@ test('Editor production code does not depend on Workbench or generated transport
 		if (!file.endsWith('.ts') || isTestFile(file)) continue;
 		const source = readFileSync(file, 'utf8');
 		assert.doesNotMatch(source, workbenchImportPattern, relative(editorRoot, file));
-		assert.doesNotMatch(
-			source,
-			/from\s+["'][^"']*app-server\/common\/generated[^"']*["']/u,
-			relative(editorRoot, file),
-		);
-		assert.doesNotMatch(
-			source,
-			/from\s+["'][^"']*platform\/(?:syntax|diff)\/[^"']*["']/u,
-			relative(editorRoot, file),
-		);
+		assert.doesNotMatch(source, /from\s+["'][^"']*app-server\/common\/generated[^"']*["']/u, relative(editorRoot, file));
+		assert.doesNotMatch(source, /from\s+["'][^"']*platform\/(?:syntax|diff)\/[^"']*["']/u, relative(editorRoot, file));
 	}
 });
 
@@ -47,47 +37,26 @@ test('Common editor contracts do not import contribution-owned modules', () => {
 });
 
 test('Editor dependency checks distinguish layer paths from Platform filenames', () => {
-	assert.doesNotMatch(
-		"import { editorBackground } from '../../platform/theme/common/colors/editorColors.js';",
-		workbenchImportPattern,
-	);
-	assert.match(
-		"import { EditorPart } from '../../workbench/browser/parts/editor/editorPart.js';",
-		workbenchImportPattern,
-	);
+	assert.doesNotMatch("import { editorBackground } from '../../platform/theme/common/colors/editorColors.js';", workbenchImportPattern);
+	assert.match("import { EditorPart } from '../../workbench/browser/parts/editor/editorPart.js';", workbenchImportPattern);
 	assert.match("import '../../workbench/browser/workbench.contribution.js';", workbenchImportPattern);
 	assert.match("await import('../../workbench/browser/workbench.js');", workbenchImportPattern);
 });
 
 test('Editor synchronous layers do not import Electron or generated DTOs', () => {
-	const protectedDirectories = [
-		'common/config',
-		'common/core',
-		'common/diff',
-		'common/model',
-		'common/cursor',
-		'common/commands',
-		'common/viewLayout',
-		'common/viewModel',
-	];
+	const protectedDirectories = ['common/config', 'common/core', 'common/diff', 'common/model', 'common/cursor', 'common/commands', 'common/viewLayout', 'common/viewModel'];
 	for (const directory of protectedDirectories) {
 		for (const file of collectFiles(join(editorRoot, directory))) {
 			if (!file.endsWith('.ts')) continue;
 			const source = readFileSync(file, 'utf8');
-			assert.doesNotMatch(
-				source,
-				/from\s+["'][^"']*(?:electron|generated)[^"']*["']/u,
-				relative(editorRoot, file),
-			);
+			assert.doesNotMatch(source, /from\s+["'][^"']*(?:electron|generated)[^"']*["']/u, relative(editorRoot, file));
 		}
 	}
 });
 
 test('Editor implementation files have an importer or an explicit entrypoint', () => {
 	const sourceRoot = resolve(desktopRoot, 'src');
-	const sourceFiles = [...collectFiles(sourceRoot), ...collectFiles(resolve(desktopRoot, 'extensions'))].filter(
-		file => file.endsWith('.ts'),
-	);
+	const sourceFiles = [...collectFiles(sourceRoot), ...collectFiles(resolve(desktopRoot, 'extensions'))].filter(file => file.endsWith('.ts'));
 	const editorProductionFiles = sourceFiles.filter(file => file.startsWith(editorRoot) && !isTestFile(file));
 	const incoming = new Map(editorProductionFiles.map(file => [architecturePathKey(file), 0]));
 	const importPattern = /(?:from\s+|import\s*(?:\(\s*)?)["']([^"']+)["']/gu;
@@ -103,11 +72,7 @@ test('Editor implementation files have an importer or an explicit entrypoint', (
 	}
 
 	const explicitEntrypoints = new Set(
-		[
-			resolve(editorRoot, 'editor.main.ts'),
-			resolve(editorRoot, 'common/services/editorWebWorkerMain.ts'),
-			resolve(editorRoot, 'common/diff/diffWorkerMain.ts'),
-		].map(architecturePathKey),
+		[resolve(editorRoot, 'editor.main.ts'), resolve(editorRoot, 'common/services/editorWebWorkerMain.ts'), resolve(editorRoot, 'common/diff/diffWorkerMain.ts')].map(architecturePathKey),
 	);
 	const unreferenced = editorProductionFiles
 		.filter(file => {
@@ -133,19 +98,11 @@ test('Stanza owns editor DOM and CSS brand classes', () => {
 test('Editor syntax ownership keeps WASM imports behind the syntax adapter', () => {
 	for (const file of collectFiles(editorRoot)) {
 		if (!file.endsWith('.ts') || isTestFile(file)) continue;
-		assert.doesNotMatch(
-			readFileSync(file, 'utf8'),
-			/^import (?!type\b).*from ['"]@vscode\/tree-sitter-wasm['"]/mu,
-			relative(editorRoot, file),
-		);
+		assert.doesNotMatch(readFileSync(file, 'utf8'), /^import (?!type\b).*from ['"]@vscode\/tree-sitter-wasm['"]/mu, relative(editorRoot, file));
 	}
 });
 test('Editor widget and view composition do not import optional contributions', () => {
-	for (const file of [
-		'browser/widget/codeEditor/codeEditorWidget.ts',
-		'browser/view/viewController.ts',
-		'browser/editorExtensions.ts',
-	]) {
+	for (const file of ['browser/widget/codeEditor/codeEditorWidget.ts', 'browser/view/viewController.ts', 'browser/editorExtensions.ts']) {
 		assert.doesNotMatch(readFileSync(editorSource(file), 'utf8'), /from\s+["'][^"']*\/contrib\//u, file);
 	}
 });

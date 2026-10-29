@@ -49,9 +49,7 @@ export class LinkPresentationService extends Disposable implements ILinkPresenta
 		super();
 		this._register(
 			contextKeyService.onDidChangeContext(event => {
-				const affected = [...this.providers.values()].filter(
-					entry => entry.enablement && event.affectsSome(entry.enablement.keys()),
-				);
+				const affected = [...this.providers.values()].filter(entry => entry.enablement && event.affectsSome(entry.enablement.keys()));
 				if (affected.length === 0) {
 					return;
 				}
@@ -76,10 +74,7 @@ export class LinkPresentationService extends Disposable implements ILinkPresenta
 			}));
 	}
 
-	public registerLinkPresentationProvider(
-		registration: ILinkPresentationProviderRegistration,
-		provider: ILinkPresentationProvider,
-	): IDisposable {
+	public registerLinkPresentationProvider(registration: ILinkPresentationProviderRegistration, provider: ILinkPresentationProvider): IDisposable {
 		this.assertNotDisposed();
 		if (this.providers.has(registration.id)) {
 			throw new Error(`Link presentation provider '${registration.id}' is already registered`);

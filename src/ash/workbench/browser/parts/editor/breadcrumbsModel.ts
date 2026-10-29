@@ -37,9 +37,7 @@ export class BreadcrumbsModel {
 			elements.push(new FileElement(this.workspaceFolder.uri, FileKind.Directory, this.workspaceFolder.name));
 		}
 		if (this.resource.authority && !this.workspaceFolder) {
-			elements.push(
-				new FileElement(this.resource.with({ path: '/' }), FileKind.Directory, this.resource.authority),
-			);
+			elements.push(new FileElement(this.resource.with({ path: '/' }), FileKind.Directory, this.resource.authority));
 		}
 		let currentPath = '';
 		for (const [index, segment] of segments.entries()) {
@@ -58,9 +56,7 @@ export class BreadcrumbsModel {
 			);
 		}
 		if (elements.length === 0) {
-			elements.push(
-				new FileElement(this.resource, FileKind.File, this.fallbackLabel?.trim() || this.resource.toString()),
-			);
+			elements.push(new FileElement(this.resource, FileKind.File, this.fallbackLabel?.trim() || this.resource.toString()));
 		}
 		return elements;
 	}

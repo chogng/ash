@@ -46,11 +46,7 @@ export abstract class EditorTabsControl extends Disposable {
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
-	abstract setEditors(
-		editors: readonly EditorTabDescriptor[],
-		activeInput: IResourceEditorInput | undefined,
-		selectedIds?: ReadonlySet<EditorInstanceId>,
-	): void;
+	abstract setEditors(editors: readonly EditorTabDescriptor[], activeInput: IResourceEditorInput | undefined, selectedIds?: ReadonlySet<EditorInstanceId>): void;
 }
 
 export function editorInputKey(input: IResourceEditorInput): string {

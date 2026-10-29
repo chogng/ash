@@ -79,10 +79,7 @@ test('Advisor focuses its saved model, Disable when disabled and the menu when t
 			button.focus();
 			button.click();
 			const menu = document.querySelector<HTMLElement>('[role="menu"]')!;
-			assert.equal(
-				document.activeElement,
-				state.label ? menu.querySelector(`[aria-label="${state.label}"]`) : menu,
-			);
+			assert.equal(document.activeElement, state.label ? menu.querySelector(`[aria-label="${state.label}"]`) : menu);
 			assert.equal(menu.querySelector('[aria-checked="true"]')?.getAttribute('aria-label') ?? null, state.label);
 			menu.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 			assert.equal(document.activeElement, button);
@@ -155,10 +152,7 @@ test('Advisor hide and reopen discard a late load and keep the newer backend pre
 	await old.complete(null);
 	await Promise.resolve();
 	await Promise.resolve();
-	assert.equal(
-		fixture.content.domNode.querySelector('[aria-label="Advisor model"]')?.textContent,
-		'openai/new-model',
-	);
+	assert.equal(fixture.content.domNode.querySelector('[aria-label="Advisor model"]')?.textContent, 'openai/new-model');
 	assert.equal(fixture.content.domNode.querySelector<HTMLInputElement>('input')?.checked, true);
 });
 
@@ -219,10 +213,7 @@ test('Advisor rechecks a backend update received while its first read is still p
 	);
 	const refreshed = new Promise<void>(resolve => {
 		const listener = fixture.content.onDidChange(() => {
-			if (
-				fixture.content.domNode.querySelector('[aria-label="Advisor model"]')?.textContent ===
-				'openai/new-default'
-			) {
+			if (fixture.content.domNode.querySelector('[aria-label="Advisor model"]')?.textContent === 'openai/new-default') {
 				listener.dispose();
 				resolve();
 			}

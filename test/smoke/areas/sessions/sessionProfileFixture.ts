@@ -48,15 +48,11 @@ export async function connectProfile(
 		};
 		let active = true;
 		// The binding follows the fixture page lifetime; close clears all transport listeners.
-		await source.exposeBinding(
-			'agenthostSessionFixtureFrame',
-			(_, payload: { frame?: string; closed?: boolean }) => {
-				if (!active) return;
-				if (payload.frame !== undefined) emit(WEB_APP_SERVER_FRAME_EVENT, { frame: payload.frame });
-				else if (payload.closed)
-					emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'Session fixture socket closed' });
-			},
-		);
+		await source.exposeBinding('agenthostSessionFixtureFrame', (_, payload: { frame?: string; closed?: boolean }) => {
+			if (!active) return;
+			if (payload.frame !== undefined) emit(WEB_APP_SERVER_FRAME_EVENT, { frame: payload.frame });
+			else if (payload.closed) emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'Session fixture socket closed' });
+		});
 		const client = new AppServerProtocolClient({
 			on(event, listener) {
 				let group = listeners.get(event);
@@ -76,10 +72,7 @@ export async function connectProfile(
 								const socket = new WebSocket(url, `ash-session.${token}`);
 								const fixture = window as Window & {
 									agenthostSessionFixtureSocket?: WebSocket;
-									agenthostSessionFixtureFrame?: (payload: {
-										frame?: string;
-										closed?: boolean;
-									}) => Promise<void>;
+									agenthostSessionFixtureFrame?: (payload: { frame?: string; closed?: boolean }) => Promise<void>;
 								};
 								const receive = fixture.agenthostSessionFixtureFrame;
 								if (!receive) throw new Error('Session fixture binding is missing');
@@ -92,11 +85,7 @@ export async function connectProfile(
 								});
 								await new Promise<void>((resolve, reject) => {
 									socket.addEventListener('open', () => resolve(), { once: true });
-									socket.addEventListener(
-										'error',
-										() => reject(new Error('Session fixture socket failed')),
-										{ once: true },
-									);
+									socket.addEventListener('error', () => reject(new Error('Session fixture socket failed')), { once: true });
 								});
 							},
 							{ endpoint: web.connection.endpoint, token: session.token },
@@ -112,13 +101,7 @@ export async function connectProfile(
 						);
 				} else if (event === WEB_APP_SERVER_FRAME_EVENT) {
 					void source
-						.evaluate(
-							frame =>
-								(
-									window as Window & { agenthostSessionFixtureSocket?: WebSocket }
-								).agenthostSessionFixtureSocket!.send(frame),
-							(payload as { frame: string }).frame,
-						)
+						.evaluate(frame => (window as Window & { agenthostSessionFixtureSocket?: WebSocket }).agenthostSessionFixtureSocket!.send(frame), (payload as { frame: string }).frame)
 						.catch(error => emit(WEB_APP_SERVER_CLOSED_EVENT, { message: String(error) }));
 				} else if (event !== WEB_APP_SERVER_DISCONNECT_EVENT) {
 					throw new Error(`Unexpected session fixture event ${event}`);
@@ -147,9 +130,7 @@ export async function connectProfile(
 	if (!web && !('evaluate' in application)) throw new Error('Expected an Electron profile');
 	// Directory grants belong to a trusted host. Web fixtures seed them through
 	// Node's local stdio connection; the browser connection keeps its usual rights.
-	const webPackage = web
-		? developmentAshPackagePath(resolve(import.meta.dirname, '../../../..'), 'packaged-node')
-		: undefined;
+	const webPackage = web ? developmentAshPackagePath(resolve(import.meta.dirname, '../../../..'), 'packaged-node') : undefined;
 	const host = web
 		? {
 				appPath: webPackage!,
@@ -231,8 +212,7 @@ export async function connectProfile(
 						});
 					else if (event === WEB_APP_SERVER_FRAME_EVENT) {
 						void frames!.send((payload as { frame: string }).frame);
-					} else if (event !== WEB_APP_SERVER_DISCONNECT_EVENT)
-						throw new Error(`Unexpected session fixture event ${event}`);
+					} else if (event !== WEB_APP_SERVER_DISCONNECT_EVENT) throw new Error(`Unexpected session fixture event ${event}`);
 				},
 			},
 			{ capabilities: options.directoryGrantsHost ? { directoryGrantsHost: { version: 1 } } : {} },

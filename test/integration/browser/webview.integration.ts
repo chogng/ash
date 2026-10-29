@@ -8,18 +8,13 @@ import { IWebviewService, type IWebviewElement } from '../../../src/ash/workbenc
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { MemoryFileService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
-import {
-	createTestFileService,
-	registerTestComponentServices,
-} from '../../../src/ash/workbench/test/common/testEditorServices.js';
+import { createTestFileService, registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { asWebviewUri } from '../../../src/ash/workbench/contrib/webview/common/webview.js';
 
 const resources = new DisposableStore();
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 const registration = getSingletonServiceDescriptors().find(([id]) => id === IWebviewService)!;
-const instantiation = resources.add(
-	registerTestComponentServices(new InstantiationService(new ServiceCollection(registration))),
-);
+const instantiation = resources.add(registerTestComponentServices(new InstantiationService(new ServiceCollection(registration))));
 const service = instantiation.get(IWebviewService);
 const received: Array<{ view: string; message: unknown }> = [];
 const first = resources.add(
@@ -29,9 +24,7 @@ const first = resources.add(
 		contentOptions: { allowScripts: true },
 	}),
 );
-const second = resources.add(
-	service.createWebviewElement({ title: 'Second view', options: {}, contentOptions: { allowScripts: true } }),
-);
+const second = resources.add(service.createWebviewElement({ title: 'Second view', options: {}, contentOptions: { allowScripts: true } }));
 for (const [name, view] of [
 	['first', first],
 	['second', second],
@@ -56,8 +49,7 @@ second.mountTo(document.querySelector('#second')!, mainWindow);
 const keyboard: string[] = [];
 resources.add(first.onDidKeyboardEvent(event => keyboard.push(event.key)));
 const changes: Array<string | undefined> = [];
-const nameOf = (view: IWebviewElement | undefined): string | undefined =>
-	view === first ? 'first' : view === second ? 'second' : undefined;
+const nameOf = (view: IWebviewElement | undefined): string | undefined => (view === first ? 'first' : view === second ? 'second' : undefined);
 resources.add(service.onDidChangeActiveWebview(view => changes.push(nameOf(view as IWebviewElement | undefined))));
 
 declare global {
@@ -110,9 +102,7 @@ window.ashWebviewIntegration = {
 	},
 	focusSecond: () => second.focus(),
 	mountFocused: () => {
-		const view = resources.add(
-			service.createWebviewElement({ title: 'Loading view', options: { forwardKeyboardEvents: true } }),
-		);
+		const view = resources.add(service.createWebviewElement({ title: 'Loading view', options: { forwardKeyboardEvents: true } }));
 		resources.add(view.onDidKeyboardEvent(event => keyboard.push(event.key)));
 		view.setHtml('<output>Focused document</output>');
 		view.mountTo(document.body, mainWindow);
@@ -122,30 +112,18 @@ window.ashWebviewIntegration = {
 		return resourceReads;
 	},
 	mountResources: async () => {
-		const fontUrl = new URL(
-			'../../../node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf',
-			import.meta.url,
-		);
+		const fontUrl = new URL('../../../node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf', import.meta.url);
 		const font = new Uint8Array(await (await fetch(fontUrl)).arrayBuffer());
 		const root = URI.parse('file:///workspace');
 		const files = new MemoryFileService([
-			[
-				URI.parse('file:///workspace/assets/pixel.svg'),
-				'<svg xmlns="http://www.w3.org/2000/svg" width="12" height="8"></svg>',
-			],
-			[
-				URI.parse('file:///workspace/assets/style.css'),
-				'@font-face{font-family:ResourceFont;src:url(font.ttf)}body{font-family:ResourceFont;color:rgb(1,2,3);background-image:url(pixel.svg)}',
-			],
+			[URI.parse('file:///workspace/assets/pixel.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="8"></svg>'],
+			[URI.parse('file:///workspace/assets/style.css'), '@font-face{font-family:ResourceFont;src:url(font.ttf)}body{font-family:ResourceFont;color:rgb(1,2,3);background-image:url(pixel.svg)}'],
 			[
 				URI.parse('file:///workspace/assets/main.mjs'),
 				'import { answer } from "./value.mjs";document.body.dataset.answer=String(answer);try{parent.parent.document.body;document.body.dataset.isolated="false"}catch{document.body.dataset.isolated="true"}',
 			],
 			[URI.parse('file:///workspace/assets/value.mjs'), 'export const answer=42;'],
-			[
-				URI.parse('file:///outside/secret.svg'),
-				'<svg xmlns="http://www.w3.org/2000/svg" width="99" height="99"></svg>',
-			],
+			[URI.parse('file:///outside/secret.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="99" height="99"></svg>'],
 		]);
 		const read = files.readFile.bind(files);
 		files.readFile = async resource => {
@@ -153,11 +131,7 @@ window.ashWebviewIntegration = {
 			if (resource.path === '/workspace/assets/font.ttf') return { resource, bytes: font, revision: 'font' };
 			return read(resource);
 		};
-		const resourceScope = resources.add(
-			instantiation.createChild(
-				new ServiceCollection([IFileService, resources.add(createTestFileService(files))], registration),
-			),
-		);
+		const resourceScope = resources.add(instantiation.createChild(new ServiceCollection([IFileService, resources.add(createTestFileService(files))], registration)));
 		const resourceViews = resourceScope.get(IWebviewService);
 		for (const [title, allowScripts] of [
 			['Resource view', true],

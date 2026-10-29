@@ -1,18 +1,10 @@
 import { createDefaultDocumentSchema } from '../../../common/model/documentSchema.js';
 import { createAcademyDocumentSchema } from '../academy/common/schema.js';
 import { localize } from 'ash:editor/nls.js';
-import {
-	findDocumentNode,
-	type DocumentNode,
-	type DocumentAttributes,
-	type DocumentMark,
-} from '../../../common/model/document.js';
+import { findDocumentNode, type DocumentNode, type DocumentAttributes, type DocumentMark } from '../../../common/model/document.js';
 import type { DocumentSchema } from '../../../common/model/documentSchema.js';
 import { serializeDocument, deserializeDocument } from '../../../common/model/documentSerialization.js';
-import {
-	resolveDocumentParagraphAttributes,
-	getDocumentParagraphStyles,
-} from '../../../common/model/documentParagraph.js';
+import { resolveDocumentParagraphAttributes, getDocumentParagraphStyles } from '../../../common/model/documentParagraph.js';
 import { documentPageDimensions } from '../../../common/model/documentPageLayout.js';
 import { zipFiles, unzipFiles } from './zip.js';
 import { buildReferenceIndex } from '../citation/common/references.js';
@@ -22,11 +14,7 @@ const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const P = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
 const decode = (bytes: Uint8Array): string => new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-const escape = (value: unknown): string =>
-	String(value ?? '').replace(
-		/[&<>"']/g,
-		character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[character]!,
-	);
+const escape = (value: unknown): string => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[character]!);
 const xml = (body: string): string => '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' + body;
 const children = (element: Element, name?: string): Element[] => {
 	const elements = [...element.children];
@@ -34,16 +22,9 @@ const children = (element: Element, name?: string): Element[] => {
 	return elements.filter(child => !name || child.localName === name);
 };
 const child = (element: Element, name: string): Element | undefined => children(element, name)[0];
-const val = (element: Element | undefined, name = 'val'): string | undefined =>
-	element?.getAttributeNS(W, name) ?? undefined;
+const val = (element: Element | undefined, name = 'val'): string | undefined => element?.getAttributeNS(W, name) ?? undefined;
 function fail(feature: string): never {
-	throw new Error(
-		localize(
-			'document.docx.unsupported',
-			'Cannot preserve DOCX feature: {0}. The source file has not been changed.',
-			feature,
-		),
-	);
+	throw new Error(localize('document.docx.unsupported', 'Cannot preserve DOCX feature: {0}. The source file has not been changed.', feature));
 }
 function parse(value: Uint8Array | undefined, owner: Document): XMLDocument {
 	if (!value) return fail('missing package part');
@@ -58,22 +39,14 @@ function safeUrl(value: string): string {
 	return value;
 }
 async function digest(bytes: Uint8Array): Promise<string> {
-	return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as Uint8Array<ArrayBuffer>))]
-		.map(byte => byte.toString(16).padStart(2, '0'))
-		.join('');
+	return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as Uint8Array<ArrayBuffer>))].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
 /** OOXML parts and relationships stay package-owned. Ash metadata is used only when all interoperable parts are unchanged. */
-export async function exportDocx(
-	document: DocumentNode,
-	schema: DocumentSchema,
-	signal: AbortSignal,
-): Promise<Uint8Array> {
+export async function exportDocx(document: DocumentNode, schema: DocumentSchema, signal: AbortSignal): Promise<Uint8Array> {
 	schema.validate(document);
 	signal.throwIfAborted();
-	const citationOrdinals = new Map(
-		buildReferenceIndex(document).citations.map(entry => [entry.nodeId, entry.ordinal]),
-	);
+	const citationOrdinals = new Map(buildReferenceIndex(document).citations.map(entry => [entry.nodeId, entry.ordinal]));
 	const files = new Map<string, Uint8Array>();
 	const relationships: string[] = [];
 	const overrides: string[] = [];
@@ -81,9 +54,7 @@ export async function exportDocx(
 		drawing = 1;
 	const relation = (type: string, target: string, external = false): string => {
 		const id = `rId${next++}`;
-		relationships.push(
-			`<Relationship Id="${id}" Type="${R}/${type}" Target="${escape(target)}"${external ? ' TargetMode="External"' : ''}/>`,
-		);
+		relationships.push(`<Relationship Id="${id}" Type="${R}/${type}" Target="${escape(target)}"${external ? ' TargetMode="External"' : ''}/>`);
 		return id;
 	};
 	const part = (name: string, type: string, text: string): void => {
@@ -117,8 +88,7 @@ export async function exportDocx(
 	const collectImages = async (node: DocumentNode): Promise<void> => {
 		if (node.type === 'image') {
 			const source = String(node.attrs.src);
-			if (!/^data:image\/(png|jpeg|gif|webp);base64,/i.test(source))
-				return fail('non-embedded or unsupported image at ' + node.id);
+			if (!/^data:image\/(png|jpeg|gif|webp);base64,/i.test(source)) return fail('non-embedded or unsupported image at ' + node.id);
 			const match = /^data:image\/(png|jpeg|gif|webp);base64,(.*)$/i.exec(source)!;
 			const bytes = Uint8Array.from(atob(match[2]!), character => character.charCodeAt(0));
 			const name = `media/image${images.size + 1}.${match[1] === 'jpeg' ? 'jpg' : match[1]}`;
@@ -148,9 +118,7 @@ export async function exportDocx(
 			.join('<w:br/>');
 		const result = `<w:r>${properties ? `<w:rPr>${properties}</w:rPr>` : ''}${content}</w:r>`;
 		const link = marks.find(mark => mark.type === 'link');
-		return link
-			? `<w:hyperlink r:id="${relation('hyperlink', safeUrl(String(link.attrs.href)), true)}">${result}</w:hyperlink>`
-			: result;
+		return link ? `<w:hyperlink r:id="${relation('hyperlink', safeUrl(String(link.attrs.href)), true)}">${result}</w:hyperlink>` : result;
 	};
 	const inline = (node: DocumentNode, inherited: DocumentAttributes = {}): string => {
 		if (node.text !== undefined) {
@@ -159,30 +127,20 @@ export async function exportDocx(
 				...(inherited.fontSize ? { fontSize: inherited.fontSize } : {}),
 				...node.marks.find(mark => mark.type === 'textStyle')?.attrs,
 			};
-			const marks = [
-				...node.marks.filter(mark => mark.type !== 'textStyle'),
-				...(Object.keys(textStyle).length ? [{ type: 'textStyle', attrs: textStyle }] : []),
-			];
-			const points = [...(edges.get(node.id) ?? [])].sort(
-				(a, b) => a.offset - b.offset || Number(b.start) - Number(a.start),
-			);
+			const marks = [...node.marks.filter(mark => mark.type !== 'textStyle'), ...(Object.keys(textStyle).length ? [{ type: 'textStyle', attrs: textStyle }] : [])];
+			const points = [...(edges.get(node.id) ?? [])].sort((a, b) => a.offset - b.offset || Number(b.start) - Number(a.start));
 			let result = '',
 				at = 0;
 			for (const point of points) {
 				result += run(node.text.slice(at, point.offset), marks);
-				result += point.start
-					? `<w:commentRangeStart w:id="${point.id}"/>`
-					: `<w:commentRangeEnd w:id="${point.id}"/><w:r><w:commentReference w:id="${point.id}"/></w:r>`;
+				result += point.start ? `<w:commentRangeStart w:id="${point.id}"/>` : `<w:commentRangeEnd w:id="${point.id}"/><w:r><w:commentReference w:id="${point.id}"/></w:r>`;
 				at = point.offset;
 			}
 			return result + run(node.text.slice(at), marks);
 		}
 		if (node.type === 'hardBreak') return '<w:r><w:br/></w:r>';
 		if (node.type === 'citation') {
-			const label =
-				typeof node.attrs.label === 'string' && node.attrs.label.length > 0
-					? node.attrs.label
-					: `[${citationOrdinals.get(node.id) ?? node.attrs.key}]`;
+			const label = typeof node.attrs.label === 'string' && node.attrs.label.length > 0 ? node.attrs.label : `[${citationOrdinals.get(node.id) ?? node.attrs.key}]`;
 			return run(label, []);
 		}
 		if (node.type === 'image') {
@@ -195,9 +153,7 @@ export async function exportDocx(
 	const revisionParagraphs = new Map<string, { before?: DocumentNode; record: DocumentNode }>();
 	const deletedParagraphs: { before: DocumentNode; record: DocumentNode }[] = [];
 	for (const record of document.content.filter(node => node.type === 'reviewChange')) {
-		const before: DocumentNode | undefined = record.attrs.before
-			? JSON.parse(String(record.attrs.before))
-			: undefined;
+		const before: DocumentNode | undefined = record.attrs.before ? JSON.parse(String(record.attrs.before)) : undefined;
 		const oldParagraphs = new Map<string, DocumentNode>();
 		const collect = (node: DocumentNode, target: Map<string, DocumentNode>): void => {
 			if (['paragraph', 'heading', 'codeBlock'].includes(node.type)) target.set(node.id, node);
@@ -207,21 +163,14 @@ export async function exportDocx(
 		const currentParagraphs = new Map<string, DocumentNode>();
 		const current = findDocumentNode(document, String(record.attrs.target))?.node;
 		if (current) collect(current, currentParagraphs);
-		for (const [id, paragraph] of currentParagraphs)
-			if (JSON.stringify(paragraph) !== JSON.stringify(oldParagraphs.get(id)))
-				revisionParagraphs.set(id, { before: oldParagraphs.get(id), record });
-		for (const [id, paragraph] of oldParagraphs)
-			if (!currentParagraphs.has(id)) deletedParagraphs.push({ before: paragraph, record });
+		for (const [id, paragraph] of currentParagraphs) if (JSON.stringify(paragraph) !== JSON.stringify(oldParagraphs.get(id))) revisionParagraphs.set(id, { before: oldParagraphs.get(id), record });
+		for (const [id, paragraph] of oldParagraphs) if (!currentParagraphs.has(id)) deletedParagraphs.push({ before: paragraph, record });
 	}
 	let revisionId = 1;
 	const revisionRun = (kind: 'ins' | 'del', record: DocumentNode, content: string): string =>
 		`<w:${kind} w:id="${revisionId++}" w:author="${escape(record.attrs.author)}" w:date="${escape(record.attrs.createdAt)}">${content}</w:${kind}>`;
 	const deletedInline = (node: DocumentNode): string =>
-		node.text !== undefined
-			? run(node.text, node.marks, true)
-			: node.type === 'hardBreak'
-				? '<w:r><w:br/></w:r>'
-				: node.content.map(deletedInline).join('');
+		node.text !== undefined ? run(node.text, node.marks, true) : node.type === 'hardBreak' ? '<w:r><w:br/></w:r>' : node.content.map(deletedInline).join('');
 	const numbering: string[] = [];
 	let listId = 1;
 	const paragraphProperties = (node: DocumentNode, list?: { id: number; level: number }): string => {
@@ -241,14 +190,10 @@ export async function exportDocx(
 					}),
 				)
 				.join('');
-			const content = revision
-				? (revision.before ? revisionRun('del', revision.record, deletedInline(revision.before)) : '') +
-					revisionRun('ins', revision.record, current)
-				: current;
+			const content = revision ? (revision.before ? revisionRun('del', revision.record, deletedInline(revision.before)) : '') + revisionRun('ins', revision.record, current) : current;
 			return `<w:p><w:pPr>${paragraphProperties(node, list)}</w:pPr>${content}</w:p>`;
 		}
-		if (node.type === 'horizontalRule')
-			return '<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="4"/></w:pBdr></w:pPr></w:p>';
+		if (node.type === 'horizontalRule') return '<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="4"/></w:pBdr></w:pPr></w:p>';
 		if (node.type === 'table')
 			return `<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblBorders>${['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(side => `<w:${side} w:val="single" w:sz="4"/>`).join('')}</w:tblBorders></w:tblPr>${node.content.map(row => `<w:tr>${row.content.map(cell => `<w:tc><w:tcPr/>${cell.content.map(child => block(child)).join('')}${cell.content.at(-1)?.type === 'table' || !cell.content.length ? '<w:p/>' : ''}</w:tc>`).join('')}</w:tr>`).join('')}</w:tbl>`;
 		if (node.type === 'orderedList' || node.type === 'bulletList') {
@@ -264,18 +209,9 @@ export async function exportDocx(
 			numbering.push(
 				`<w:abstractNum w:abstractNumId="${id}"><w:lvl w:ilvl="${level}"><w:start w:val="${node.attrs.order ?? 1}"/><w:numFmt w:val="${node.type === 'bulletList' ? 'bullet' : formats[String(node.attrs.numbering ?? 'decimal')]}"/><w:lvlText w:val="${node.type === 'bulletList' ? '•' : `%${level + 1}.`}"/></w:lvl></w:abstractNum><w:num w:numId="${id}"><w:abstractNumId w:val="${id}"/></w:num>`,
 			);
-			return node.content
-				.map(item =>
-					item.content
-						.map((child, index) =>
-							block(child, index === 0 || child.type.endsWith('List') ? { id, level } : undefined),
-						)
-						.join(''),
-				)
-				.join('');
+			return node.content.map(item => item.content.map((child, index) => block(child, index === 0 || child.type.endsWith('List') ? { id, level } : undefined)).join('')).join('');
 		}
-		if (['blockquote', 'title', 'abstract', 'section', 'bibliography', 'reference', 'listItem'].includes(node.type))
-			return node.content.map(child => block(child, list)).join('');
+		if (['blockquote', 'title', 'abstract', 'section', 'bibliography', 'reference', 'listItem'].includes(node.type)) return node.content.map(child => block(child, list)).join('');
 		return fail(node.type);
 	};
 	const sections: { attrs: DocumentAttributes; content: readonly DocumentNode[] }[] = [];
@@ -298,11 +234,7 @@ export async function exportDocx(
 		const index = ++sectionIndex;
 		let refs = '';
 		for (const kind of ['header', 'footer'] as const)
-			for (const variant of [
-				'default',
-				...(even ? ['even'] : []),
-				...(attrs.pageDifferentFirst ? ['first'] : []),
-			]) {
+			for (const variant of ['default', ...(even ? ['even'] : []), ...(attrs.pageDifferentFirst ? ['first'] : [])]) {
 				const value =
 					variant === 'first'
 						? ''
@@ -337,11 +269,7 @@ export async function exportDocx(
 		body += index === sections.length - 1 ? properties : `<w:p><w:pPr>${properties}</w:pPr></w:p>`;
 	}
 	const declarations = `xmlns:w="${W}" xmlns:r="${R}" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"`;
-	part(
-		'word/document.xml',
-		'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
-		`<w:document ${declarations}><w:body>${body}</w:body></w:document>`,
-	);
+	part('word/document.xml', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml', `<w:document ${declarations}><w:body>${body}</w:body></w:document>`);
 	part(
 		'word/styles.xml',
 		'application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml',
@@ -377,18 +305,8 @@ export async function exportDocx(
 		`<w:settings xmlns:w="${W}">${even ? '<w:evenAndOddHeaders/>' : ''}${document.attrs.trackChanges ? '<w:trackRevisions/>' : ''}</w:settings>`,
 	);
 	relation('settings', 'settings.xml');
-	files.set(
-		'word/_rels/document.xml.rels',
-		encode(xml(`<Relationships xmlns="${P}">${relationships.join('')}</Relationships>`)),
-	);
-	files.set(
-		'_rels/.rels',
-		encode(
-			xml(
-				`<Relationships xmlns="${P}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`,
-			),
-		),
-	);
+	files.set('word/_rels/document.xml.rels', encode(xml(`<Relationships xmlns="${P}">${relationships.join('')}</Relationships>`)));
+	files.set('_rels/.rels', encode(xml(`<Relationships xmlns="${P}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`)));
 	files.set(
 		'[Content_Types].xml',
 		encode(
@@ -407,21 +325,12 @@ export async function exportDocx(
 	return zipFiles(files);
 }
 
-export async function importDocx(
-	bytes: Uint8Array,
-	schema: DocumentSchema,
-	owner: Document,
-	signal: AbortSignal,
-): Promise<DocumentNode> {
+export async function importDocx(bytes: Uint8Array, schema: DocumentSchema, owner: Document, signal: AbortSignal): Promise<DocumentNode> {
 	return importDocxParts(await unzipFiles(bytes, signal), schema, owner, signal);
 }
 
 /** A native package retains its owning profile; ordinary Word files become general documents. */
-export async function importDocxDocument(
-	bytes: Uint8Array,
-	owner: Document,
-	signal: AbortSignal,
-): Promise<{ document: DocumentNode; documentType: string }> {
+export async function importDocxDocument(bytes: Uint8Array, owner: Document, signal: AbortSignal): Promise<{ document: DocumentNode; documentType: string }> {
 	const files = await unzipFiles(bytes, signal);
 	const snapshot = files.get('customXml/ash-document.json');
 	const type = snapshot ? JSON.parse(decode(snapshot)).documentType : 'general';
@@ -430,20 +339,13 @@ export async function importDocxDocument(
 	return { document: await importDocxParts(files, schema, owner, signal), documentType: schema.documentType };
 }
 
-async function importDocxParts(
-	files: Map<string, Uint8Array>,
-	schema: DocumentSchema,
-	owner: Document,
-	signal: AbortSignal,
-): Promise<DocumentNode> {
-	if ([...files.keys()].some(name => /vbaProject|\/embeddings\/|\/activeX\//i.test(name)))
-		return fail('macros or embedded executable objects');
+async function importDocxParts(files: Map<string, Uint8Array>, schema: DocumentSchema, owner: Document, signal: AbortSignal): Promise<DocumentNode> {
+	if ([...files.keys()].some(name => /vbaProject|\/embeddings\/|\/activeX\//i.test(name))) return fail('macros or embedded executable objects');
 	const snapshot = files.get('customXml/ash-document.json'),
 		manifestBytes = files.get('customXml/ash-manifest.json');
 	if (snapshot && manifestBytes) {
 		const manifest = JSON.parse(decode(manifestBytes));
-		let matches =
-			manifest.version === 1 && manifest.hashes && Object.keys(manifest.hashes).length === files.size - 2;
+		let matches = manifest.version === 1 && manifest.hashes && Object.keys(manifest.hashes).length === files.size - 2;
 		if (matches)
 			for (const [name, hash] of Object.entries(manifest.hashes)) {
 				signal.throwIfAborted();
@@ -456,8 +358,7 @@ async function importDocxParts(
 			const document = deserializeDocument(decode(snapshot), schema);
 			const visit = (node: DocumentNode): void => {
 				for (const mark of node.marks) if (mark.type === 'link') safeUrl(String(mark.attrs.href));
-				if (node.type === 'image' && !/^data:image\/(png|jpeg|gif|webp);base64,/i.test(String(node.attrs.src)))
-					return fail('non-embedded image');
+				if (node.type === 'image' && !/^data:image\/(png|jpeg|gif|webp);base64,/i.test(String(node.attrs.src))) return fail('non-embedded image');
 				node.content.forEach(visit);
 			};
 			visit(document);
@@ -500,50 +401,33 @@ async function importDocxParts(
 	if (numbering) {
 		const root = parse(numbering, owner).documentElement;
 		for (const number of children(root, 'num')) {
-			const abstract = children(root, 'abstractNum').find(
-				node => val(node, 'abstractNumId') === val(child(number, 'abstractNumId')),
-			);
+			const abstract = children(root, 'abstractNum').find(node => val(node, 'abstractNumId') === val(child(number, 'abstractNumId')));
 			if (!abstract) return fail('numbering definition');
 			for (const level of children(abstract, 'lvl')) {
 				const override = children(number, 'lvlOverride').find(node => val(node, 'ilvl') === val(level, 'ilvl'));
 				const definition = (override && child(override, 'lvl')) || level;
 				numberDefinitions.set(`${val(number, 'numId')}:${val(level, 'ilvl')}`, {
 					format: val(child(definition, 'numFmt')) ?? 'decimal',
-					order: Number(
-						val(override && child(override, 'startOverride')) ?? val(child(definition, 'start')) ?? 1,
-					),
+					order: Number(val(override && child(override, 'startOverride')) ?? val(child(definition, 'start')) ?? 1),
 				});
 			}
 		}
 	}
 	const font = (name: string): string =>
-		/times|cambria|georgia|serif/i.test(name)
-			? 'serif'
-			: /courier|consolas|mono/i.test(name)
-				? 'monospace'
-				: /arial|calibri|aptos|sans/i.test(name)
-					? 'sans'
-					: fail('font ' + name);
+		/times|cambria|georgia|serif/i.test(name) ? 'serif' : /courier|consolas|mono/i.test(name) ? 'monospace' : /arial|calibri|aptos|sans/i.test(name) ? 'sans' : fail('font ' + name);
 	const marks = (properties: Element | undefined): DocumentMark[] => {
 		if (!properties) return [];
 		const result: DocumentMark[] = [],
 			style: Record<string, string | number> = {};
 		for (const property of children(properties)) {
 			if (['b', 'i'].includes(property.localName)) {
-				if (!['0', 'false', 'off'].includes(val(property) ?? '1'))
-					result.push({ type: property.localName === 'b' ? 'strong' : 'em', attrs: {} });
+				if (!['0', 'false', 'off'].includes(val(property) ?? '1')) result.push({ type: property.localName === 'b' ? 'strong' : 'em', attrs: {} });
 			} else if (property.localName === 'rFonts') {
 				const name = val(property, 'ascii') ?? val(property, 'hAnsi');
 				if (name) style.fontFamily = font(name);
-			} else if (property.localName === 'sz' || property.localName === 'szCs')
-				style.fontSize = Math.round(Number(val(property)) / 1.5);
-			else if (
-				property.localName === 'rStyle' &&
-				!['DefaultParagraphFont', 'Hyperlink'].includes(val(property) ?? '')
-			)
-				return fail('character style ' + val(property));
-			else if (!['lang', 'rStyle', 'noProof', 'bCs', 'iCs'].includes(property.localName))
-				return fail('character formatting ' + property.localName);
+			} else if (property.localName === 'sz' || property.localName === 'szCs') style.fontSize = Math.round(Number(val(property)) / 1.5);
+			else if (property.localName === 'rStyle' && !['DefaultParagraphFont', 'Hyperlink'].includes(val(property) ?? '')) return fail('character style ' + val(property));
+			else if (!['lang', 'rStyle', 'noProof', 'bCs', 'iCs'].includes(property.localName)) return fail('character formatting ' + property.localName);
 		}
 		if (Object.keys(style).length) result.push({ type: 'textStyle', attrs: style });
 		return result;
@@ -584,8 +468,7 @@ async function importDocxParts(
 				] as const)
 					if (val(property, source)) attrs[target] = Number(val(property, source)) / 20;
 				if (val(property, 'line')) {
-					if (val(property, 'lineRule') && val(property, 'lineRule') !== 'auto')
-						return fail('absolute line spacing');
+					if (val(property, 'lineRule') && val(property, 'lineRule') !== 'auto') return fail('absolute line spacing');
 					attrs.lineSpacing = Number(val(property, 'line')) / 240;
 				}
 			} else if (name === 'ind') {
@@ -596,10 +479,8 @@ async function importDocxParts(
 				] as const)
 					if (val(property, source)) attrs[target] = Number(val(property, source)) / 20;
 				if (val(property, 'hanging')) attrs.firstLineIndent = -Number(val(property, 'hanging')) / 20;
-			} else if (name === 'rPr')
-				Object.assign(attrs, marks(property).find(mark => mark.type === 'textStyle')?.attrs);
-			else if (!['pStyle', 'numPr', 'sectPr', 'outlineLvl', 'contextualSpacing'].includes(name))
-				return fail('paragraph formatting ' + name);
+			} else if (name === 'rPr') Object.assign(attrs, marks(property).find(mark => mark.type === 'textStyle')?.attrs);
+			else if (!['pStyle', 'numPr', 'sectPr', 'outlineLvl', 'contextualSpacing'].includes(name)) return fail('paragraph formatting ' + name);
 		}
 		return attrs;
 	};
@@ -634,9 +515,7 @@ async function importDocxParts(
 	let defaultStyle: string | undefined;
 	const styleBytes = related('styles');
 	if (styleBytes) {
-		const definitions = children(parse(styleBytes, owner).documentElement, 'style').filter(
-			style => val(style, 'type') === 'paragraph',
-		);
+		const definitions = children(parse(styleBytes, owner).documentElement, 'style').filter(style => val(style, 'type') === 'paragraph');
 		const resolved = new Map<string, DocumentAttributes>();
 		const resolvedMarks = new Map<string, readonly DocumentMark[]>();
 		defaultStyle = val(
@@ -663,13 +542,7 @@ async function importDocxParts(
 		};
 		for (const style of definitions.filter(style => usedStyles.has(val(style, 'styleId')))) {
 			const source = val(style, 'styleId') ?? '',
-				level =
-					Number(
-						val(child(child(style, 'pPr') ?? style, 'outlineLvl')) ??
-							(/^Heading([1-6])$/i.exec(source)?.[1]
-								? Number(/^Heading([1-6])$/i.exec(source)![1]) - 1
-								: -1),
-					) + 1;
+				level = Number(val(child(child(style, 'pPr') ?? style, 'outlineLvl')) ?? (/^Heading([1-6])$/i.exec(source)?.[1] ? Number(/^Heading([1-6])$/i.exec(source)![1]) - 1 : -1)) + 1;
 			styles.push({
 				id: `docx-style-${styles.length}`,
 				source,
@@ -681,20 +554,13 @@ async function importDocxParts(
 		}
 	}
 
-	const commentAnchors = new Map<
-		string,
-		{ anchor?: { nodeId: string; offset: number }; head?: { nodeId: string; offset: number } }
-	>();
+	const commentAnchors = new Map<string, { anchor?: { nodeId: string; offset: number }; head?: { nodeId: string; offset: number } }>();
 	const commentRecords: DocumentNode[] = [],
 		revisions: DocumentNode[] = [];
 	let lastPoint: { nodeId: string; offset: number } | undefined;
 	const pendingStarts: string[] = [],
 		pendingEnds: string[] = [];
-	const inline = (
-		element: Element,
-		mode: 'current' | 'before',
-		inherited: readonly DocumentMark[] = [],
-	): DocumentNode[] => {
+	const inline = (element: Element, mode: 'current' | 'before', inherited: readonly DocumentMark[] = []): DocumentNode[] => {
 		const result: DocumentNode[] = [];
 		for (const node of children(element)) {
 			const name = node.localName;
@@ -704,11 +570,7 @@ async function importDocxParts(
 				if (name === 'hyperlink') {
 					const id = node.getAttributeNS(R, 'id'),
 						relationship = id && rels.get(id);
-					const destination = relationship
-						? relationship.external
-							? safeUrl(relationship.target)
-							: fail('internal hyperlink part')
-						: '#' + val(node, 'anchor');
+					const destination = relationship ? (relationship.external ? safeUrl(relationship.target) : fail('internal hyperlink part')) : '#' + val(node, 'anchor');
 					nextMarks = [...nextMarks, { type: 'link', attrs: { href: destination } }];
 				}
 				result.push(...inline(node, mode, nextMarks));
@@ -717,8 +579,7 @@ async function importDocxParts(
 				const text = schema.createText(node.textContent, { marks: inherited });
 				result.push(text);
 				if (mode === 'current') {
-					for (const id of pendingStarts.splice(0))
-						commentAnchors.set(id, { ...commentAnchors.get(id), anchor: { nodeId: text.id, offset: 0 } });
+					for (const id of pendingStarts.splice(0)) commentAnchors.set(id, { ...commentAnchors.get(id), anchor: { nodeId: text.id, offset: 0 } });
 					for (const id of pendingEnds.splice(0))
 						commentAnchors.set(id, {
 							...commentAnchors.get(id),
@@ -734,38 +595,24 @@ async function importDocxParts(
 				if (
 					node.children.length !== 1 ||
 					node.firstElementChild?.localName !== 'inline' ||
-					node.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'srcRect')
-						.length
+					node.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'srcRect').length
 				)
 					return fail('floating or cropped image');
-				const blip = node.getElementsByTagNameNS(
-						'http://schemas.openxmlformats.org/drawingml/2006/main',
-						'blip',
-					)[0],
+				const blip = node.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'blip')[0],
 					id = blip?.getAttributeNS(R, 'embed'),
 					image = id && rels.get(id);
-				if (!image || image.external || !/\.(png|jpe?g|gif|webp)$/i.test(image.target))
-					return fail('drawing or external image');
+				if (!image || image.external || !/\.(png|jpe?g|gif|webp)$/i.test(image.target)) return fail('drawing or external image');
 				const data = files.get(image.target);
 				if (!data) return fail('missing image');
 				let binary = '';
 				for (const byte of data) binary += String.fromCharCode(byte);
 				const extension = image.target.split('.').at(-1)!.toLowerCase(),
-					extent = node.getElementsByTagNameNS(
-						'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
-						'extent',
-					)[0];
+					extent = node.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing', 'extent')[0];
 				result.push(
 					schema.createNode('image', {
 						attrs: {
 							src: `data:image/${extension === 'jpg' ? 'jpeg' : extension};base64,${btoa(binary)}`,
-							alt:
-								node
-									.getElementsByTagNameNS(
-										'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
-										'docPr',
-									)[0]
-									?.getAttribute('descr') ?? '',
+							alt: node.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing', 'docPr')[0]?.getAttribute('descr') ?? '',
 							...(extent
 								? {
 										width: Number(extent.getAttribute('cx')) / 9525,
@@ -782,18 +629,7 @@ async function importDocxParts(
 				const id = val(node, 'id')!;
 				if (lastPoint) commentAnchors.set(id, { ...commentAnchors.get(id), head: lastPoint });
 				else pendingEnds.push(id);
-			} else if (
-				![
-					'commentReference',
-					'bookmarkStart',
-					'bookmarkEnd',
-					'proofErr',
-					'commentRangeStart',
-					'commentRangeEnd',
-					'lastRenderedPageBreak',
-				].includes(name)
-			)
-				return fail('inline ' + name);
+			} else if (!['commentReference', 'bookmarkStart', 'bookmarkEnd', 'proofErr', 'commentRangeStart', 'commentRangeEnd', 'lastRenderedPageBreak'].includes(name)) return fail('inline ' + name);
 		}
 		return result;
 	};
@@ -805,12 +641,7 @@ async function importDocxParts(
 			height = Number(val(size, 'h') ?? 16838);
 		const wide = Math.max(width, height),
 			narrow = Math.min(width, height);
-		const pageSize =
-			Math.abs(wide - 16838) < 30 && Math.abs(narrow - 11906) < 30
-				? 'a4'
-				: Math.abs(wide - 15840) < 30 && Math.abs(narrow - 12240) < 30
-					? 'letter'
-					: fail('custom paper size');
+		const pageSize = Math.abs(wide - 16838) < 30 && Math.abs(narrow - 11906) < 30 ? 'a4' : Math.abs(wide - 15840) < 30 && Math.abs(narrow - 12240) < 30 ? 'letter' : fail('custom paper size');
 		const margins = ['top', 'right', 'bottom', 'left'].map(side => Number(val(margin, side) ?? 1440));
 		if (!margins.every(value => value === margins[0])) return fail('asymmetric page margins');
 		const attrs: Record<string, string | number | boolean> = {
@@ -819,9 +650,7 @@ async function importDocxParts(
 			pageMargin: margins[0]! / 20,
 			pageDifferentFirst: !!child(element, 'titlePg'),
 		};
-		for (const reference of children(element).filter(
-			node => node.localName === 'headerReference' || node.localName === 'footerReference',
-		)) {
+		for (const reference of children(element).filter(node => node.localName === 'headerReference' || node.localName === 'footerReference')) {
 			const relation = rels.get(reference.getAttributeNS(R, 'id') ?? '');
 			if (!relation || relation.external) return fail('header/footer relationship');
 			const part = parse(files.get(relation.target), owner);
@@ -838,16 +667,9 @@ async function importDocxParts(
 				continue;
 			}
 			const kind = reference.localName === 'headerReference' ? 'Header' : 'Footer';
-			attrs[`page${variant === 'even' ? 'Even' : ''}${kind}`] = [...part.getElementsByTagNameNS(W, 't')]
-				.map(node => node.textContent)
-				.join('');
+			attrs[`page${variant === 'even' ? 'Even' : ''}${kind}`] = [...part.getElementsByTagNameNS(W, 't')].map(node => node.textContent).join('');
 			if (variant === 'even') attrs.pageDifferentEven = true;
-			if (
-				[...part.getElementsByTagNameNS(W, 'fldSimple')].some(node =>
-					/PAGE/.test(node.getAttributeNS(W, 'instr') ?? ''),
-				)
-			)
-				attrs.pageNumbers = true;
+			if ([...part.getElementsByTagNameNS(W, 'fldSimple')].some(node => /PAGE/.test(node.getAttributeNS(W, 'instr') ?? ''))) attrs.pageNumbers = true;
 		}
 		return attrs;
 	};
@@ -861,14 +683,10 @@ async function importDocxParts(
 		children(parent).flatMap(node => {
 			if (node.localName === 'sectPr') return [];
 			if (node.localName === 'tbl') {
-				for (const cell of [...node.getElementsByTagNameNS(W, 'tcPr')])
-					if (child(cell, 'gridSpan') || child(cell, 'vMerge') || child(cell, 'hMerge'))
-						return fail('merged table cells');
+				for (const cell of [...node.getElementsByTagNameNS(W, 'tcPr')]) if (child(cell, 'gridSpan') || child(cell, 'vMerge') || child(cell, 'hMerge')) return fail('merged table cells');
 				const content = children(node, 'tr').map(row =>
 					schema.createNode('tableRow', {
-						content: children(row, 'tc').map(cell =>
-							schema.createNode('tableCell', { content: makeBlocks(entries(cell)) }),
-						),
+						content: children(row, 'tc').map(cell => schema.createNode('tableCell', { content: makeBlocks(entries(cell)) })),
 					}),
 				);
 				return [{ node: schema.createNode('table', { content }), level: 0 }];
@@ -919,8 +737,7 @@ async function importDocxParts(
 			const items: DocumentNode[] = [];
 			while (index < list.length && list[index]!.number === number && list[index]!.level === level) {
 				const content = [list[index++]!.node];
-				while (index < list.length && list[index]!.number && list[index]!.level > level)
-					content.push(readList(list[index]!.number!, list[index]!.level));
+				while (index < list.length && list[index]!.number && list[index]!.level > level) content.push(readList(list[index]!.number!, list[index]!.level));
 				items.push(schema.createNode('listItem', { content }));
 			}
 			const formats: Record<string, string> = {
@@ -964,9 +781,7 @@ async function importDocxParts(
 		}
 	}
 	let attrs: DocumentAttributes = sectionProperties(child(body, 'sectPr'));
-	const content = sections.length
-		? [...sections, schema.createNode('documentSection', { attrs, content: makeBlocks(pending) })]
-		: makeBlocks(pending);
+	const content = sections.length ? [...sections, schema.createNode('documentSection', { attrs, content: makeBlocks(pending) })] : makeBlocks(pending);
 	const commentBytes = related('comments');
 	if (commentBytes)
 		for (const comment of children(parse(commentBytes, owner).documentElement, 'comment')) {
@@ -979,9 +794,7 @@ async function importDocxParts(
 						createdAt: val(comment, 'date') ?? new Date().toISOString(),
 						quote: '',
 						resolved: false,
-						...(anchor?.anchor && anchor.head
-							? { anchor: JSON.stringify({ kind: 'text', anchor: anchor.anchor, head: anchor.head }) }
-							: {}),
+						...(anchor?.anchor && anchor.head ? { anchor: JSON.stringify({ kind: 'text', anchor: anchor.anchor, head: anchor.head }) } : {}),
 					},
 				}),
 			);

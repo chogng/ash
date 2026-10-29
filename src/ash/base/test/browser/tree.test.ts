@@ -4,11 +4,7 @@ import { JSDOM } from 'jsdom';
 import { DragAndDropDataKind } from '../../browser/ui/dnd/dnd.js';
 import { AbstractTree } from '../../browser/ui/tree/abstractTree.js';
 import { AsyncDataTree, CompressibleAsyncDataTree } from '../../browser/ui/tree/asyncDataTree.js';
-import {
-	CompressibleObjectTreeModel,
-	compressTreeElement,
-	decompressTreeElement,
-} from '../../browser/ui/tree/compressedObjectTreeModel.js';
+import { CompressibleObjectTreeModel, compressTreeElement, decompressTreeElement } from '../../browser/ui/tree/compressedObjectTreeModel.js';
 import { DataTree } from '../../browser/ui/tree/dataTree.js';
 import { IndexTree } from '../../browser/ui/tree/indexTree.js';
 import { IndexTreeModel } from '../../browser/ui/tree/indexTreeModel.js';
@@ -94,8 +90,7 @@ test('Compact async reads discard queued work on input replacement and disposal'
 				{
 					identityProvider: { getId: item => item.id },
 					isIncompressible: item => !item.directory,
-					renderCompressedElements: items =>
-						h(dom.window.document, 'span', items.map(item => item.id).join('/')),
+					renderCompressedElements: items => h(dom.window.document, 'span', items.map(item => item.id).join('/')),
 				},
 			);
 			const oldRead = tree.setInput(root);
@@ -152,8 +147,14 @@ test('Async trees preserve modifier-click selection when multiple selection is e
 		const root: TestNode = { id: 'root', label: 'Root', expanded: false };
 		const first: TestNode = { id: 'first', label: 'First', expanded: false };
 		const second: TestNode = { id: 'second', label: 'Second', expanded: false };
-		const source = { hasChildren: (item: TestNode) => item === root, getChildren: () => [first, second] };
-		const options = { multipleSelectionSupport: true, identityProvider: { getId: (item: TestNode) => item.id } };
+		const source = {
+			hasChildren: (item: TestNode) => item === root,
+			getChildren: () => [first, second],
+		};
+		const options = {
+			multipleSelectionSupport: true,
+			identityProvider: { getId: (item: TestNode) => item.id },
+		};
 		using ordinary = new AsyncDataTree(dom.window.document.body, source, {
 			...options,
 			renderElement: item => h(dom.window.document, 'span', item.label),
@@ -168,7 +169,11 @@ test('Async trees preserve modifier-click selection when multiple selection is e
 			const rows = tree.domNode.querySelectorAll<HTMLElement>('.ash-tree-row');
 			rows[0]!.click();
 			rows[1]!.dispatchEvent(
-				new dom.window.MouseEvent('click', { bubbles: true, ctrlKey: !isMacintosh, metaKey: isMacintosh }),
+				new dom.window.MouseEvent('click', {
+					bubbles: true,
+					ctrlKey: !isMacintosh,
+					metaKey: isMacintosh,
+				}),
 			);
 			assert.deepEqual(tree.selection, [first, second]);
 		}
@@ -262,8 +267,7 @@ test('Compact async chains retain selection and loaded expansion across branchin
 				identityProvider: { getId: item => item.id },
 				isIncompressible: item => !item.directory,
 				collapseByDefault: () => true,
-				renderCompressedElements: items =>
-					h(dom.window.document, 'span', items.map(item => item.label).join('/')),
+				renderCompressedElements: items => h(dom.window.document, 'span', items.map(item => item.label).join('/')),
 			},
 		);
 		await tree.setInput(root);
@@ -326,7 +330,10 @@ test('IndexTreeModel owns index locations and atomic splice', () => {
 test('IndexTreeModel reports the changed visible range and keeps unrelated branches intact', () => {
 	const model = new IndexTreeModel<TestNode>(
 		{ id: 'root', label: 'Root', expanded: true },
-		{ identityProvider: { getId: node => node.id }, preserveCollapseStateByIdentity: true },
+		{
+			identityProvider: { getId: node => node.id },
+			preserveCollapseStateByIdentity: true,
+		},
 	);
 	model.setChildren([
 		{
@@ -542,7 +549,10 @@ test('AsyncDataTree collapses loaded descendants even when their parent is alrea
 	try {
 		using tree = new AsyncDataTree<TestNode, TestNode>(
 			dom.window.document.body,
-			{ hasChildren: element => !!element.children?.length, getChildren: element => element.children ?? [] },
+			{
+				hasChildren: element => !!element.children?.length,
+				getChildren: element => element.children ?? [],
+			},
 			{
 				identityProvider: { getId: element => element.id },
 				collapseByDefault: () => true,
@@ -768,10 +778,7 @@ test('AsyncDataTree discards a pending read invalidated while folded', async () 
 		);
 		tree.expand(group);
 		await tree.updateChildren(group);
-		assert.deepEqual(
-			{ reads, visible: tree.getVisibleElements().map(element => element.id) },
-			{ reads: 2, visible: ['group', 'new'] },
-		);
+		assert.deepEqual({ reads, visible: tree.getVisibleElements().map(element => element.id) }, { reads: 2, visible: ['group', 'new'] });
 	} finally {
 		dom.window.close();
 	}
@@ -1026,7 +1033,10 @@ test('AsyncDataTree preserves loaded children after an invalid refresh', async (
 	let children: readonly TestNode[] = [child];
 	const tree = new AsyncDataTree<TestNode, TestNode>(
 		dom.window.document.body,
-		{ hasChildren: element => element === root, getChildren: () => children },
+		{
+			hasChildren: element => element === root,
+			getChildren: () => children,
+		},
 		{
 			identityProvider: { getId: element => element.id },
 			renderElement: element => {
@@ -1115,9 +1125,7 @@ test('CompressibleObjectTreeModel round-trips chains and honors incompressible b
 	const root: TestNode = { id: 'root', label: 'Root', expanded: false };
 	const source = {
 		element: root,
-		children: [
-			{ element: middle, children: [{ element: boundary, incompressible: true, children: [{ element: leaf }] }] },
-		],
+		children: [{ element: middle, children: [{ element: boundary, incompressible: true, children: [{ element: leaf }] }] }],
 	};
 	const compressed = compressTreeElement(source);
 	assert.deepEqual(
@@ -1209,9 +1217,7 @@ test('CompressibleAsyncDataTree lazily expands compressed branches', async () =>
 		},
 	);
 	const pointers: string[] = [];
-	tree.onPointer(({ element, elements }) =>
-		pointers.push(`${element.id}:${elements.map(candidate => candidate.id).join('/')}`),
-	);
+	tree.onPointer(({ element, elements }) => pointers.push(`${element.id}:${elements.map(candidate => candidate.id).join('/')}`));
 	await tree.setInput(root);
 	assert.deepEqual(
 		[...tree.element.querySelectorAll<HTMLElement>(':scope > .ash-tree-row')].map(row => row.textContent),
@@ -1258,20 +1264,14 @@ test('ObjectTreeModel owns hierarchy, local replacement, and collapse state', ()
 		['parent'],
 	);
 	const parentNode = model.getNode('parent');
-	model.setChildren([
-		{ element: { id: 'parent', label: 'Updated parent', expanded: false }, children: [{ element: child }] },
-	]);
+	model.setChildren([{ element: { id: 'parent', label: 'Updated parent', expanded: false }, children: [{ element: child }] }]);
 	assert.equal(model.getNode('parent')?.collapsed, true);
 	assert.equal(model.getNode('parent'), parentNode);
 	model.setNodeChildren('parent', [{ element: { id: 'replacement', label: 'Replacement', expanded: false } }]);
 	assert.equal(model.getNode('child'), undefined);
 	assert.equal(model.getParent('replacement')?.id, 'parent');
 	assert.throws(
-		() =>
-			model.setChildren([
-				{ element: { id: 'duplicate', label: 'First', expanded: false } },
-				{ element: { id: 'duplicate', label: 'Second', expanded: false } },
-			]),
+		() => model.setChildren([{ element: { id: 'duplicate', label: 'First', expanded: false } }, { element: { id: 'duplicate', label: 'Second', expanded: false } }]),
 		/Duplicate tree node ID/,
 	);
 	assert.equal(model.getNode('replacement')?.element.label, 'Replacement');
@@ -1312,11 +1312,7 @@ test('ObjectTreeModel keeps local updates atomic and expands ancestors', () => {
 		['root'],
 	);
 	assert.throws(
-		() =>
-			model.setNodeChildren('parent', [
-				{ element: { id: 'duplicate', label: 'First', expanded: false } },
-				{ element: { id: 'duplicate', label: 'Second', expanded: false } },
-			]),
+		() => model.setNodeChildren('parent', [{ element: { id: 'duplicate', label: 'First', expanded: false } }, { element: { id: 'duplicate', label: 'Second', expanded: false } }]),
 		/Duplicate tree node ID/,
 	);
 	assert.equal(model.getNode('leaf')?.element.label, 'Leaf');
@@ -1396,10 +1392,7 @@ test('ObjectTreeModel filters recursively and sorts every level', () => {
 		},
 		{
 			element: { id: 'a-group', label: 'A group', expanded: false },
-			children: [
-				{ element: { id: 'hidden', label: 'Hidden', expanded: false } },
-				{ element: { id: 'match-a', label: 'Match A', expanded: false } },
-			],
+			children: [{ element: { id: 'hidden', label: 'Hidden', expanded: false } }, { element: { id: 'match-a', label: 'Match A', expanded: false } }],
 		},
 	]);
 
@@ -1446,9 +1439,7 @@ test('ObjectTree projects the model as flat list rows with tree ARIA', () => {
 	const collapsed: string[] = [];
 	tree.onDidActivate(({ element }) => activated.push(element.id));
 	tree.onPointer(({ element, target }) => pointers.push(`${element.id}:${target}`));
-	tree.onDidChangeCollapseState(({ element, collapsed: isCollapsed }) =>
-		collapsed.push(`${element.id}:${isCollapsed}`),
-	);
+	tree.onDidChangeCollapseState(({ element, collapsed: isCollapsed }) => collapsed.push(`${element.id}:${isCollapsed}`));
 	tree.setChildren([
 		{
 			element: { id: 'parent', label: 'Parent', expanded: false },
@@ -1581,10 +1572,7 @@ test('ObjectTree releases hidden rows when its hierarchy is replaced', () => {
 test('ObjectTree delegates focus, selection, and keyboard navigation to List', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const tree = createObjectTree(dom);
-	tree.setChildren([
-		{ element: { id: 'first', label: 'First', expanded: false } },
-		{ element: { id: 'second', label: 'Second', expanded: false } },
-	]);
+	tree.setChildren([{ element: { id: 'first', label: 'First', expanded: false } }, { element: { id: 'second', label: 'Second', expanded: false } }]);
 	const focusChanges: string[] = [];
 	const selectionChanges: string[] = [];
 	const accepted: string[] = [];
@@ -1674,8 +1662,7 @@ test('ObjectTree find preserves subsequence order, contiguous matching and Unico
 				return label;
 			},
 		});
-		const visible = (): (string | undefined)[] =>
-			[...tree.element.querySelectorAll<HTMLElement>(':scope > .ash-tree-row')].map(row => row.dataset.treeId);
+		const visible = (): (string | undefined)[] => [...tree.element.querySelectorAll<HTMLElement>(':scope > .ash-tree-row')].map(row => row.dataset.treeId);
 		try {
 			tree.setChildren(nodes.map(element => ({ element })));
 			tree.setFindPattern('aT');
@@ -1785,10 +1772,7 @@ test('ObjectTree routes HTML drag and drop through hierarchy-aware policy', () =
 			return label;
 		},
 	});
-	tree.setChildren([
-		{ element: { id: 'first', label: 'First', expanded: false } },
-		{ element: { id: 'second', label: 'Second', expanded: false } },
-	]);
+	tree.setChildren([{ element: { id: 'first', label: 'First', expanded: false } }, { element: { id: 'second', label: 'Second', expanded: false } }]);
 	const first = tree.element.querySelector<HTMLElement>("[data-tree-id='first']")!;
 	const second = tree.element.querySelector<HTMLElement>("[data-tree-id='second']")!;
 	assert.equal(first.draggable, true);
@@ -1873,10 +1857,7 @@ test('ObjectTree preserves cross-tree drag origin while projecting domain elemen
 	targetRow.dispatchEvent(new dom.window.Event('dragover', { bubbles: true, cancelable: true }));
 	targetRow.dispatchEvent(new dom.window.Event('drop', { bubbles: true, cancelable: true }));
 	sourceRow.dispatchEvent(new dom.window.Event('dragend', { bubbles: true }));
-	assert.deepEqual(observed, [
-		`over:${DragAndDropDataKind.External}:source:target`,
-		`drop:${DragAndDropDataKind.External}:source:target`,
-	]);
+	assert.deepEqual(observed, [`over:${DragAndDropDataKind.External}:source:target`, `drop:${DragAndDropDataKind.External}:source:target`]);
 	source.dispose();
 	target.dispose();
 	dom.window.close();

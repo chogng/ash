@@ -8,22 +8,10 @@ test('text model large-file policy follows the fixed editor limits', () => {
 		tooLargeForSynchronization: false,
 		tooLargeForHeapOperation: false,
 	});
-	assert.equal(
-		classifyTextModelSize(TEXT_MODEL_LARGE_FILE_LIMITS.tokenizationTextUnits + 1, 1).tooLargeForTokenization,
-		true,
-	);
-	assert.equal(
-		classifyTextModelSize(1, TEXT_MODEL_LARGE_FILE_LIMITS.tokenizationLineCount + 1).tooLargeForTokenization,
-		true,
-	);
-	assert.equal(
-		classifyTextModelSize(TEXT_MODEL_LARGE_FILE_LIMITS.synchronizationTextUnits + 1, 1).tooLargeForSynchronization,
-		true,
-	);
-	assert.equal(
-		classifyTextModelSize(TEXT_MODEL_LARGE_FILE_LIMITS.heapOperationTextUnits + 1, 1).tooLargeForHeapOperation,
-		true,
-	);
+	assert.equal(classifyTextModelSize(TEXT_MODEL_LARGE_FILE_LIMITS.tokenizationTextUnits + 1, 1).tooLargeForTokenization, true);
+	assert.equal(classifyTextModelSize(1, TEXT_MODEL_LARGE_FILE_LIMITS.tokenizationLineCount + 1).tooLargeForTokenization, true);
+	assert.equal(classifyTextModelSize(TEXT_MODEL_LARGE_FILE_LIMITS.synchronizationTextUnits + 1, 1).tooLargeForSynchronization, true);
+	assert.equal(classifyTextModelSize(TEXT_MODEL_LARGE_FILE_LIMITS.heapOperationTextUnits + 1, 1).tooLargeForHeapOperation, true);
 });
 
 test('text model large-file optimizations leave the synchronization limit in force', () => {
@@ -32,10 +20,7 @@ test('text model large-file optimizations leave the synchronization limit in for
 		tooLargeForSynchronization: true,
 		tooLargeForHeapOperation: false,
 	});
-	assert.equal(
-		classifyTextModelSize(1, TEXT_MODEL_LARGE_FILE_LIMITS.tokenizationLineCount + 1, false).tooLargeForTokenization,
-		false,
-	);
+	assert.equal(classifyTextModelSize(1, TEXT_MODEL_LARGE_FILE_LIMITS.tokenizationLineCount + 1, false).tooLargeForTokenization, false);
 });
 
 test('text model large-file policy validates dimensions', () => {

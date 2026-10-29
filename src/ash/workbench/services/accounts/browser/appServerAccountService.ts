@@ -1,20 +1,8 @@
-import type {
-	AccountDto,
-	AccountLoginCompleted,
-	AccountReadResult,
-	AccountUpdated,
-} from '../../../../../../.build/protocol/typescript/index.js';
+import type { AccountDto, AccountLoginCompleted, AccountReadResult, AccountUpdated } from '../../../../../../.build/protocol/typescript/index.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IAccountApi } from '../../../../platform/accounts/common/accountApi.js';
-import type {
-	Account,
-	AccountLoginChallenge,
-	AccountLoginCompletion,
-	AccountLoginMethod,
-	AccountState,
-	IAccountService,
-} from '../../../../platform/accounts/common/accountService.js';
+import type { Account, AccountLoginChallenge, AccountLoginCompletion, AccountLoginMethod, AccountState, IAccountService } from '../../../../platform/accounts/common/accountService.js';
 import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 
 export class AppServerAccountService extends Disposable implements IAccountService {
@@ -88,10 +76,7 @@ function account(value: AccountDto): Account {
 function accountLoginCompletion(value: AccountLoginCompleted): AccountLoginCompletion {
 	return {
 		loginId: value.loginId,
-		status:
-			value.status.type === 'succeeded'
-				? { type: 'succeeded' }
-				: { type: 'failed', failure: { ...value.status.failure } },
+		status: value.status.type === 'succeeded' ? { type: 'succeeded' } : { type: 'failed', failure: { ...value.status.failure } },
 		account: accountState(value.account),
 	};
 }

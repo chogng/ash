@@ -1,8 +1,4 @@
-import {
-	IProgressService,
-	ProgressLocation,
-	type IProgressOptions,
-} from '../../../platform/progress/common/progress.js';
+import { IProgressService, ProgressLocation, type IProgressOptions } from '../../../platform/progress/common/progress.js';
 import { AppServerRemoteError } from '../../../platform/agentHost/common/appServerError.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { IExtensionApi } from '../../../platform/extensions/common/extensionApi.js';
@@ -75,12 +71,7 @@ export class MainThreadExtensionBackend extends Disposable {
 				this.changed.fire(undefined);
 			}, 75),
 		);
-		const editorFolders = () =>
-			new Set(
-				editors.groups.flatMap(group =>
-					group.inputs.map(input => dirname(input.resource).with({ query: '', fragment: '' }).toString()),
-				),
-			);
+		const editorFolders = () => new Set(editors.groups.flatMap(group => group.inputs.map(input => dirname(input.resource).with({ query: '', fragment: '' }).toString())));
 		let previousFolders = editorFolders();
 		this._register(
 			editors.onDidChangeEditors(event => {
@@ -88,10 +79,7 @@ export class MainThreadExtensionBackend extends Disposable {
 				const folders = editorFolders();
 				// Separate editor discovery inputs from workspace/configuration resets.
 				// Providers can skip discovery for files inside repositories they already own.
-				if (
-					folders.size !== previousFolders.size ||
-					[...folders].some(folder => !previousFolders.has(folder))
-				) {
+				if (folders.size !== previousFolders.size || [...folders].some(folder => !previousFolders.has(folder))) {
 					previousFolders = folders;
 					this.editorFoldersChangedAfter = ++this.sequence;
 					this.changed.fire(undefined);
@@ -104,8 +92,7 @@ export class MainThreadExtensionBackend extends Disposable {
 			const listeners = new DisposableStore();
 			this.editorListeners.set(editor, listeners);
 			const changed = () => {
-				if (editor.getModel()?.uri.toString() === this.editors.activeGroup?.activeInput?.resource.toString())
-					editorChanged.schedule();
+				if (editor.getModel()?.uri.toString() === this.editors.activeGroup?.activeInput?.resource.toString()) editorChanged.schedule();
 			};
 			listeners.add(editor.onDidChangeCursorPosition(changed));
 			listeners.add(editor.onDidChangeModelContent(changed));
@@ -148,12 +135,8 @@ export class MainThreadExtensionBackend extends Disposable {
 				generation: this.connection.connectionGeneration,
 				reset: after < this.resetAfter || after < this.discardedThrough,
 				editorFoldersChanged: after < this.editorFoldersChangedAfter,
-				events: this.events
-					.filter(entry => entry.sequence > after && grant.notifications?.includes(entry.method))
-					.map(entry => entry.event),
-				folders: this.workspace
-					.getWorkspace()
-					.folders.map(folder => ({ id: folder.id, name: folder.name, uri: folder.uri.toString() })),
+				events: this.events.filter(entry => entry.sequence > after && grant.notifications?.includes(entry.method)).map(entry => entry.event),
+				folders: this.workspace.getWorkspace().folders.map(folder => ({ id: folder.id, name: folder.name, uri: folder.uri.toString() })),
 			});
 		}
 		const route = grant.methods?.[method];
@@ -168,12 +151,7 @@ export class MainThreadExtensionBackend extends Disposable {
 		}
 		const operationId = (params as Record<string, JsonValue>).operationId;
 		const cancellable = typeof route.cancellationRoute === 'string' && typeof operationId === 'string';
-		if (
-			progressOptions &&
-			(typeof progressOptions.title !== 'string' ||
-				progressOptions.title.length > 2048 ||
-				(progressOptions.cancellable && !cancellable))
-		)
+		if (progressOptions && (typeof progressOptions.title !== 'string' || progressOptions.title.length > 2048 || (progressOptions.cancellable && !cancellable)))
 			throw new TypeError('Invalid backend progress contract');
 		let cancellation: Promise<unknown> | undefined;
 		const cancel = (): void => {
@@ -188,11 +166,7 @@ export class MainThreadExtensionBackend extends Disposable {
 			let result: JsonValue;
 			try {
 				signal.throwIfAborted();
-				result = await this.backend.request(
-					route.route,
-					params,
-					cancellable ? new AbortController().signal : signal,
-				);
+				result = await this.backend.request(route.route, params, cancellable ? new AbortController().signal : signal);
 				signal.throwIfAborted();
 			} catch (error) {
 				signal.throwIfAborted();
@@ -212,12 +186,7 @@ export class MainThreadExtensionBackend extends Disposable {
 			if (!result || typeof result !== 'object' || Array.isArray(result)) {
 				throw new TypeError('Extension backend result must be an object');
 			}
-			return Object.fromEntries(
-				route.resultFields.map((field: string) => [
-					field,
-					(result as Record<string, JsonValue>)[field] ?? null,
-				]),
-			);
+			return Object.fromEntries(route.resultFields.map((field: string) => [field, (result as Record<string, JsonValue>)[field] ?? null]));
 		};
 		return progressOptions
 			? this.progress.withProgress(
@@ -232,11 +201,7 @@ export class MainThreadExtensionBackend extends Disposable {
 			: execute();
 	}
 
-	private async waitForStateChange(
-		after: number,
-		notifications: readonly string[],
-		signal: AbortSignal,
-	): Promise<void> {
+	private async waitForStateChange(after: number, notifications: readonly string[], signal: AbortSignal): Promise<void> {
 		let finish!: () => void;
 		const waiting = new Promise<void>(resolve => {
 			finish = resolve;

@@ -22,7 +22,10 @@ test('built-in SSH and contributed authorities resolve through the same saved ca
 	using services = createServices();
 	using resolver = services.createInstance(RemoteConnectionService);
 	using registration = resolver.registerResolvers([
-		{ authorityPrefix: 'ssh', resolve: async authority => ({ connectionName: authority.slice(4) }) },
+		{
+			authorityPrefix: 'ssh',
+			resolve: async authority => ({ connectionName: authority.slice(4) }),
+		},
 		{
 			authorityPrefix: 'team',
 			resolve: async authority => {
@@ -32,21 +35,13 @@ test('built-in SSH and contributed authorities resolve through the same saved ca
 		},
 	]);
 	const signal = new AbortController().signal;
-	assert.deepEqual(
-		await Promise.all([
-			resolver.resolveConnection('ssh+build', signal),
-			resolver.resolveConnection('team+linux', signal),
-		]),
-		[connection, connection],
-	);
+	assert.deepEqual(await Promise.all([resolver.resolveConnection('ssh+build', signal), resolver.resolveConnection('team+linux', signal)]), [connection, connection]);
 });
 
 test('Remote resolution rejects arbitrary targets and conflicting prefixes atomically', async () => {
 	using services = createServices();
 	using resolver = services.createInstance(RemoteConnectionService);
-	using registration = resolver.registerResolvers([
-		{ authorityPrefix: 'team', resolve: async () => ({ connectionName: 'missing' }) },
-	]);
+	using registration = resolver.registerResolvers([{ authorityPrefix: 'team', resolve: async () => ({ connectionName: 'missing' }) }]);
 	assert.throws(
 		() =>
 			registration.replace([
@@ -55,18 +50,9 @@ test('Remote resolution rejects arbitrary targets and conflicting prefixes atomi
 			]),
 		/already has a resolver/,
 	);
-	assert.throws(
-		() =>
-			resolver.registerResolvers([
-				{ authorityPrefix: 'team', resolve: async () => ({ connectionName: 'build' }) },
-			]),
-		/already has a resolver/,
-	);
+	assert.throws(() => resolver.registerResolvers([{ authorityPrefix: 'team', resolve: async () => ({ connectionName: 'build' }) }]), /already has a resolver/);
 	await assert.rejects(resolver.resolveConnection('team+linux', new AbortController().signal), /no longer exists/);
-	await assert.rejects(
-		resolver.resolveConnection('unknown+target', new AbortController().signal),
-		/No Remote resolver/,
-	);
+	await assert.rejects(resolver.resolveConnection('unknown+target', new AbortController().signal), /No Remote resolver/);
 	await assert.rejects(resolver.resolveConnection('ssh+build', new AbortController().signal), /No Remote resolver/);
 });
 
@@ -127,9 +113,7 @@ test('disposing a selector or its window service cancels a pending catalog read'
 			connect: async () => assert.fail('Resolution must not connect'),
 		});
 		using resolver = services.createInstance(RemoteConnectionService);
-		using registration = resolver.registerResolvers([
-			{ authorityPrefix: 'team', resolve: async () => ({ connectionName: 'build' }) },
-		]);
+		using registration = resolver.registerResolvers([{ authorityPrefix: 'team', resolve: async () => ({ connectionName: 'build' }) }]);
 		const pending = resolver.resolveConnection('team+linux', new AbortController().signal);
 		await reading;
 		if (retireService) {

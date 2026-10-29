@@ -131,18 +131,13 @@ export class MirrorTextModel implements IMirrorTextModel {
 			// Delete text on the affected line
 			this._setLineText(
 				range.startLineNumber - 1,
-				this._lines[range.startLineNumber - 1].substring(0, range.startColumn - 1) +
-					this._lines[range.startLineNumber - 1].substring(range.endColumn - 1),
+				this._lines[range.startLineNumber - 1].substring(0, range.startColumn - 1) + this._lines[range.startLineNumber - 1].substring(range.endColumn - 1),
 			);
 			return;
 		}
 
 		// Take remaining text on last line and append it to remaining text on first line
-		this._setLineText(
-			range.startLineNumber - 1,
-			this._lines[range.startLineNumber - 1].substring(0, range.startColumn - 1) +
-				this._lines[range.endLineNumber - 1].substring(range.endColumn - 1),
-		);
+		this._setLineText(range.startLineNumber - 1, this._lines[range.startLineNumber - 1].substring(0, range.startColumn - 1) + this._lines[range.endLineNumber - 1].substring(range.endColumn - 1));
 
 		// Delete middle lines
 		this._lines.splice(range.startLineNumber, range.endLineNumber - range.startLineNumber);
@@ -162,9 +157,7 @@ export class MirrorTextModel implements IMirrorTextModel {
 			// Inserting text on one line
 			this._setLineText(
 				position.lineNumber - 1,
-				this._lines[position.lineNumber - 1].substring(0, position.column - 1) +
-					insertLines[0] +
-					this._lines[position.lineNumber - 1].substring(position.column - 1),
+				this._lines[position.lineNumber - 1].substring(0, position.column - 1) + insertLines[0] + this._lines[position.lineNumber - 1].substring(position.column - 1),
 			);
 			return;
 		}
@@ -173,10 +166,7 @@ export class MirrorTextModel implements IMirrorTextModel {
 		insertLines[insertLines.length - 1] += this._lines[position.lineNumber - 1].substring(position.column - 1);
 
 		// Delete overflowing text from first line and insert text on first line
-		this._setLineText(
-			position.lineNumber - 1,
-			this._lines[position.lineNumber - 1].substring(0, position.column - 1) + insertLines[0],
-		);
+		this._setLineText(position.lineNumber - 1, this._lines[position.lineNumber - 1].substring(0, position.column - 1) + insertLines[0]);
 
 		// Insert new lines & store lengths
 		const newLengths = new Uint32Array(insertLines.length - 1);

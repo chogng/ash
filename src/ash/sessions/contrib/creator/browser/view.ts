@@ -101,16 +101,9 @@ export class DesignView extends Disposable {
 			const appearance = (shape: DesignShape): DesignShape => ({
 				...shape,
 				opacity: state.opacity?.get(shape.id) ?? shape.opacity,
-				...(shape.kind === 'frame' || shape.kind === 'group'
-					? { children: shape.children.map(appearance) }
-					: {}),
+				...(shape.kind === 'frame' || shape.kind === 'group' ? { children: shape.children.map(appearance) } : {}),
 			});
-			const element = renderDesignShape(
-				state.opacity ? appearance(shape) : shape,
-				previous,
-				state.images,
-				backdrop,
-			);
+			const element = renderDesignShape(state.opacity ? appearance(shape) : shape, previous, state.images, backdrop);
 			backdrop.push(element);
 			element.setAttribute('aria-hidden', 'true');
 			if (previous !== element) {
@@ -164,12 +157,7 @@ export class DesignView extends Disposable {
 						circle.classList.add('ash-sessions-design-path-handle');
 						circle.dataset.pathNode = `${index}`;
 						circle.dataset.pathContour = `${contourIndex}`;
-						circle.classList.toggle(
-							'selected',
-							point === 'anchor' &&
-								state.activeContour === contourIndex &&
-								!!state.selectedNodes?.has(index),
-						);
+						circle.classList.toggle('selected', point === 'anchor' && state.activeContour === contourIndex && !!state.selectedNodes?.has(index));
 						circle.dataset.pathPoint = point;
 						circle.setAttribute('cx', `${path.x + position.x * path.width}`);
 						circle.setAttribute('cy', `${path.y + position.y * path.height}`);
@@ -253,8 +241,7 @@ export class DesignView extends Disposable {
 		if (state.blur && selected.length === 1) {
 			const shape = selected[0];
 			const effect = designEffects(shape).find(effect => effect.id === state.blur!.effectId);
-			const progressive =
-				effect?.visible !== false && effect && 'progressive' in effect ? effect.progressive : undefined;
+			const progressive = effect?.visible !== false && effect && 'progressive' in effect ? effect.progressive : undefined;
 			if (progressive) {
 				const group = this.domNode.ownerDocument.createElementNS(SVG_NAMESPACE, 'g');
 				group.setAttribute('transform', this.shapeTransform(shape));
@@ -306,12 +293,7 @@ export class DesignView extends Disposable {
 					}
 					group.append(line);
 				}
-				const handle = (
-					p: { x: number; y: number },
-					data: Record<string, string>,
-					selected: boolean,
-					color?: string,
-				) => {
+				const handle = (p: { x: number; y: number }, data: Record<string, string>, selected: boolean, color?: string) => {
 					const circle = this.domNode.ownerDocument.createElementNS(SVG_NAMESPACE, 'circle');
 					circle.classList.add('ash-sessions-design-path-handle');
 					circle.classList.toggle('selected', selected);

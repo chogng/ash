@@ -3,6 +3,4 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../../wo
 import { SSHAgentHostContribution } from './sshAgentHost.contribution.js';
 
 // The Desktop entrypoint admits this window-owned scope after the base Sessions services restore.
-registerWorkbenchContribution(SSHAgentHostContribution.ID, WorkbenchPhase.AfterRestored, accessor =>
-	accessor.get(IInstantiationService).createInstance(SSHAgentHostContribution),
-);
+registerWorkbenchContribution(SSHAgentHostContribution.ID, WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(SSHAgentHostContribution));

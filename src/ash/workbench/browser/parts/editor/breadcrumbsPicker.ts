@@ -3,11 +3,7 @@ import { dirname } from '../../../../base/common/resources.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { FileKind, IFileService, type IFileEntry } from '../../../../platform/files/common/files.js';
-import {
-	IQuickInputService,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import type { FileElement } from './breadcrumbsModel.js';
 import type { LanguageDocumentSymbol } from '../../../../editor/common/languages.js';
 import type { Range } from '../../../../editor/common/core/range.js';
@@ -61,21 +57,12 @@ export class BreadcrumbsFilePicker extends Disposable {
 		const entries = await this.fileService.readDirectory(directory);
 		if (sequence !== this.readSequence || !this.picker) return;
 		this.directory = directory;
-		const sorted = [...entries].sort(
-			(left, right) =>
-				Number(right.kind === FileKind.Directory) - Number(left.kind === FileKind.Directory) ||
-				left.name.localeCompare(right.name),
-		);
-		this.picker.placeholder = localize(
-			'workbench.breadcrumbsPickerPlaceholder',
-			'Select a file in {0}',
-			directory.path,
-		);
+		const sorted = [...entries].sort((left, right) => Number(right.kind === FileKind.Directory) - Number(left.kind === FileKind.Directory) || left.name.localeCompare(right.name));
+		this.picker.placeholder = localize('workbench.breadcrumbsPickerPlaceholder', 'Select a file in {0}', directory.path);
 		this.picker.items = sorted.map(entry => ({
 			entry,
 			label: entry.name,
-			description:
-				entry.kind === FileKind.Directory ? localize('workbench.breadcrumbsDirectory', 'Directory') : undefined,
+			description: entry.kind === FileKind.Directory ? localize('workbench.breadcrumbsDirectory', 'Directory') : undefined,
 		}));
 		this.picker.value = '';
 	}
@@ -113,11 +100,7 @@ export class BreadcrumbsSymbolPicker extends Disposable {
 	show(): void {
 		const picker = this._register(this.quickInputService.createQuickPick<SymbolPickItem>());
 		picker.ariaLabel = localize('workbench.breadcrumbsSymbolPickerAriaLabel', 'Symbols in active editor');
-		picker.placeholder = localize(
-			'workbench.breadcrumbsSymbolPickerPlaceholder',
-			'Select a symbol (current: {0})',
-			this.selected.name,
-		);
+		picker.placeholder = localize('workbench.breadcrumbsSymbolPickerPlaceholder', 'Select a symbol (current: {0})', this.selected.name);
 		picker.items = this.symbols.flatMap(symbol => flattenSymbol(symbol));
 		this._register(
 			picker.onDidAccept(() => {

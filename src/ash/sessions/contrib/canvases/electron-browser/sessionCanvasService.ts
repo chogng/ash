@@ -7,13 +7,7 @@ import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPa
 import type { IEditorGroup } from '../../../../workbench/services/editor/common/editorGroupsService.js';
 import type { ICanvasOwner, CanvasInput } from '../../../../workbench/contrib/canvases/common/canvas.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
-import {
-	autorun,
-	derived,
-	observableSignalFromEvent,
-	observableValue,
-	type IReader,
-} from '../../../../base/common/observable.js';
+import { autorun, derived, observableSignalFromEvent, observableValue, type IReader } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
 import { isCanvasOwner } from '../../../../workbench/contrib/canvases/common/canvas.js';
 import { IAgentHostCanvasCollection } from '../../../../workbench/contrib/canvases/common/agentHostCanvas.js';
@@ -22,12 +16,7 @@ import { ISessionsManagementService } from '../../../services/sessions/common/se
 import { Event } from '../../../../base/common/event.js';
 import { canvasOwnerKey } from '../../../../workbench/contrib/canvases/common/canvas.js';
 import { SESSIONS_LAYOUT_SCOPE_SETTING, type ChatLayoutMode } from '../../../common/chatLayout.js';
-import {
-	ICanvasContextService,
-	ICanvasService,
-	getCanvasDefinitionInstanceId,
-	type ICanvasDefinition,
-} from '../../../../workbench/contrib/canvases/common/canvas.js';
+import { ICanvasContextService, ICanvasService, getCanvasDefinitionInstanceId, type ICanvasDefinition } from '../../../../workbench/contrib/canvases/common/canvas.js';
 import { CanvasDefinitionStore } from '../../../../workbench/contrib/canvases/common/canvasDefinitionStore.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { ISessionCanvasRegistryService } from '../common/sessionCanvas.js';
@@ -79,18 +68,11 @@ export class SessionCanvasContextService extends Disposable implements ICanvasCo
 			}
 			if (management.state === 'ready') {
 				for (const [key, owner] of this.owners) {
-					const session = management.sessions.find(
-						session =>
-							session.sessionId === owner.session.path.slice(1) &&
-							(session.providerId ?? 'local-agent-host') === owner.providerId,
-					);
+					const session = management.sessions.find(session => session.sessionId === owner.session.path.slice(1) && (session.providerId ?? 'local-agent-host') === owner.providerId);
 					if (
 						!session ||
 						session.status === 'archived' ||
-						(session.agentTree !== undefined &&
-							!session.chats.some(
-								chat => chat.threadId === owner.chat.path.slice(1) && chat.status !== 'archived',
-							))
+						(session.agentTree !== undefined && !session.chats.some(chat => chat.threadId === owner.chat.path.slice(1) && chat.status !== 'archived'))
 					) {
 						this.owners.delete(key);
 						collection.removeOwner(owner);
@@ -103,20 +85,13 @@ export class SessionCanvasContextService extends Disposable implements ICanvasCo
 		this.contexts = derived(reader => {
 			changes.read(reader);
 			const visible = visibleOwners().filter(owner => this.owners.has(canvasOwnerKey(owner)));
-			return [
-				...visible,
-				...[...this.owners.values()].filter(owner => !visible.some(current => isCanvasOwner(current, owner))),
-			].map(owner => collection.createContext(owner));
+			return [...visible, ...[...this.owners.values()].filter(owner => !visible.some(current => isCanvasOwner(current, owner)))].map(owner => collection.createContext(owner));
 		});
 		this._register(Event.any(sessions.onDidChange, management.onDidChange)(updateOwners));
 		updateOwners();
 		this._register(
 			configuration.onDidChangeConfiguration(event => {
-				if (
-					event.affectsConfiguration(CanvasesEnabledSettingId) ||
-					event.affectsConfiguration(ChatAIDisabledSettingId) ||
-					event.affectsConfiguration(SESSIONS_LAYOUT_SCOPE_SETTING)
-				) {
+				if (event.affectsConfiguration(CanvasesEnabledSettingId) || event.affectsConfiguration(ChatAIDisabledSettingId) || event.affectsConfiguration(SESSIONS_LAYOUT_SCOPE_SETTING)) {
 					this.changed.fire();
 				}
 			}),
@@ -124,9 +99,7 @@ export class SessionCanvasContextService extends Disposable implements ICanvasCo
 	}
 
 	getContext(owner: ICanvasOwner, reader?: IReader) {
-		return (reader ? this.contexts.read(reader) : this.contexts.get()).find(context =>
-			isCanvasOwner(context.owner, owner),
-		);
+		return (reader ? this.contexts.read(reader) : this.contexts.get()).find(context => isCanvasOwner(context.owner, owner));
 	}
 	getFrontendSessionResource(owner: ICanvasOwner, reader?: IReader): URI | undefined {
 		return this.getContext(owner, reader)?.owner.session;
@@ -144,9 +117,7 @@ export class SessionCanvasContextService extends Disposable implements ICanvasCo
 					(selection.active.session.providerId ?? 'local-agent-host') === owner.providerId &&
 					selection.active.session.sessionId === owner.session.path.slice(1) &&
 					(selection.active.threadId === owner.chat.path.slice(1) ||
-						((this.configuration.getValue<ChatLayoutMode>(SESSIONS_LAYOUT_SCOPE_SETTING) ??
-							'session-shared') === 'session-shared' &&
-							this.owners.has(canvasOwnerKey(owner)))),
+						((this.configuration.getValue<ChatLayoutMode>(SESSIONS_LAYOUT_SCOPE_SETTING) ?? 'session-shared') === 'session-shared' && this.owners.has(canvasOwnerKey(owner)))),
 			)
 		);
 	}
@@ -180,8 +151,7 @@ export class SessionCanvasRegistryService extends Disposable implements ISession
 						.read(reader)
 						.find(
 							context =>
-								context.owner.providerId ===
-									(selection.active.session.providerId ?? 'local-agent-host') &&
+								context.owner.providerId === (selection.active.session.providerId ?? 'local-agent-host') &&
 								context.owner.session.path.slice(1) === selection.active.session.sessionId &&
 								context.owner.chat.path.slice(1) === selection.active.threadId &&
 								contexts.isOwnerVisible(context.owner),
@@ -193,9 +163,7 @@ export class SessionCanvasRegistryService extends Disposable implements ISession
 		this._register(
 			autorun(reader => {
 				const context = this.current.read(reader);
-				listener.value = context?.definitionProvider?.onDidChangeDefinitions(() =>
-					changes.set(changes.get() + 1, undefined),
-				);
+				listener.value = context?.definitionProvider?.onDidChangeDefinitions(() => changes.set(changes.get() + 1, undefined));
 			}),
 		);
 		const store = this._register(
@@ -204,9 +172,7 @@ export class SessionCanvasRegistryService extends Disposable implements ISession
 				(reader: IReader) => {
 					changes.read(reader);
 					const context = this.current.read(reader);
-					return context?.definitionProvider
-						? { owner: context.owner, listCanvases: () => context.definitionProvider!.listCanvases() }
-						: undefined;
+					return context?.definitionProvider ? { owner: context.owner, listCanvases: () => context.definitionProvider!.listCanvases() } : undefined;
 				},
 				'Session Canvas registry',
 			),
@@ -216,9 +182,7 @@ export class SessionCanvasRegistryService extends Disposable implements ISession
 
 	async openCanvas(canvas: ICanvasDefinition): Promise<void> {
 		const context = this.current.get();
-		const admitted = this.availableCanvases
-			.get()
-			.find(candidate => candidate.extensionId === canvas.extensionId && candidate.canvasId === canvas.canvasId);
+		const admitted = this.availableCanvases.get().find(candidate => candidate.extensionId === canvas.extensionId && candidate.canvasId === canvas.canvasId);
 		if (!context?.definitionProvider || !admitted) {
 			throw new CancellationError();
 		}

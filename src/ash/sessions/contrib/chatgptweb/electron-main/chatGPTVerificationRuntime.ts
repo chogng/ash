@@ -66,9 +66,7 @@ export class ChatGPTVerificationRuntime extends Disposable implements IChatGPTVe
 			this.ready ??= this.initialize(script);
 			await this.ready;
 			signal.throwIfAborted();
-			const value: unknown = await this.view!.webContents.executeJavaScript(
-				'globalThis.__ashPrepareChatGPTHeaders()',
-			);
+			const value: unknown = await this.view!.webContents.executeJavaScript('globalThis.__ashPrepareChatGPTHeaders()');
 			signal.throwIfAborted();
 			return value;
 		});

@@ -8,12 +8,7 @@ import { RawContextKey, type IContextKey, ContextKeyExpr } from '../../../../pla
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { ICodeEditorService } from '../../../browser/services/codeEditorService.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import {
-	EditorAction,
-	registerEditorAction,
-	registerEditorContribution,
-	type ServicesAccessor,
-} from '../../../browser/editorFeatureRegistration.js';
+import { EditorAction, registerEditorAction, registerEditorContribution, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { type OneReference } from './referencesModel.js';
 import { Position } from '../../../common/core/position.js';
@@ -61,10 +56,7 @@ class SymbolNavigationService extends Disposable implements ISymbolNavigationSer
 			return;
 		}
 		const model = this.session.add(anchor.parent.parent.clone());
-		this.anchor = model.referenceAt(
-			anchor.uri,
-			new Position(anchor.range.startLineNumber, anchor.range.startColumn),
-		);
+		this.anchor = model.referenceAt(anchor.uri, new Position(anchor.range.startLineNumber, anchor.range.startColumn));
 		for (const key of this.contexts) key.set(true);
 		for (const editor of this.editors.listCodeEditors()) {
 			if (editor instanceof EmbeddedCodeEditorWidget) {
@@ -104,10 +96,7 @@ class SymbolNavigationService extends Disposable implements ISymbolNavigationSer
 }
 
 // Navigation spans editors in one window. Its last provider/view lease releases the shared session.
-const navigationScopes = new WeakMap<
-	ICodeEditorService,
-	{ readonly service: SymbolNavigationService; users: number }
->();
+const navigationScopes = new WeakMap<ICodeEditorService, { readonly service: SymbolNavigationService; users: number }>();
 const symbolNavigationId = 'editor.contrib.symbolNavigation';
 class SymbolNavigationContribution extends Disposable {
 	constructor(
@@ -172,10 +161,7 @@ class CancelSymbolNavigation extends EditorAction {
 			precondition: ctxHasSymbols.isEqualTo(true),
 			kbOpts: {
 				primary: KeyCode.Escape,
-				kbExpr: ContextKeyExpr.and(
-					ctxHasSymbols.isEqualTo(true),
-					EditorContextKeys.editorTextFocus.isEqualTo(true),
-				),
+				kbExpr: ContextKeyExpr.and(ctxHasSymbols.isEqualTo(true), EditorContextKeys.editorTextFocus.isEqualTo(true)),
 				weight: KeybindingWeight.EditorContrib + 50,
 			},
 		});

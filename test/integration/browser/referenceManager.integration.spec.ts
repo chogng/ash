@@ -78,8 +78,7 @@ test.beforeEach(async ({ page }) => {
 		const id = params.get('id')!;
 		const path = params.get('path')!;
 		const value = clients.get(id)?.resources[path];
-		if (!runtimes.has(id) || params.get('generation') !== String(generation) || value === undefined)
-			return route.fulfill({ status: 410 });
+		if (!runtimes.has(id) || params.get('generation') !== String(generation) || value === undefined) return route.fulfill({ status: 410 });
 		return route.fulfill({ body: value, contentType: path.endsWith('.css') ? 'text/css' : 'text/javascript' });
 	});
 	await page.route('**/__references_enable?*', async route => {
@@ -89,14 +88,7 @@ test.beforeEach(async ({ page }) => {
 			await runtimes.get(pkg.id)?.dispose();
 			runtimes.delete(pkg.id);
 		} else if (!runtimes.has(pkg.id)) {
-			runtimes.set(
-				pkg.id,
-				await startClientEditorExtension(
-					pkg.binary,
-					pkg.id,
-					new URL(route.request().url()).searchParams.get('locale') ?? 'en',
-				),
-			);
+			runtimes.set(pkg.id, await startClientEditorExtension(pkg.binary, pkg.id, new URL(route.request().url()).searchParams.get('locale') ?? 'en'));
 			incarnations.set(pkg.id, generation + 1);
 		}
 		await route.fulfill({
@@ -133,9 +125,7 @@ test.afterEach(async ({ page }) => {
 });
 
 for (const locale of ['en', 'zh-CN'])
-	test(`Reference Manager imports, manages, inserts, updates and reuses optional PDF in ${locale}`, async ({
-		page,
-	}, testInfo) => {
+	test(`Reference Manager imports, manages, inserts, updates and reuses optional PDF in ${locale}`, async ({ page }, testInfo) => {
 		test.setTimeout(120000);
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
@@ -148,24 +138,16 @@ for (const locale of ['en', 'zh-CN'])
 		const library = page.locator('.stanza-reference-library');
 		await expect(library.getByRole('listbox').getByRole('option')).toHaveCount(2);
 		await expect(library).toHaveAttribute('aria-label', locale === 'zh-CN' ? '文献库' : 'Reference library');
-		const ids = await page.evaluate(() =>
-			window.referenceManagerTest.library().entries.map((entry: any) => entry.id),
-		);
+		const ids = await page.evaluate(() => window.referenceManagerTest.library().entries.map((entry: any) => entry.id));
 		await page.evaluate(() => window.referenceManagerTest.dialogs(['/fixture/library.ash-library']));
 		if (locale === 'en') await page.evaluate(() => window.referenceManagerTest.saveLibrary());
 		else await library.locator('[data-action="saveAs"]').click();
 		await expect.poll(() => page.evaluate(() => window.referenceManagerTest.dirty())).toBe(false);
-		expect(
-			(await page.evaluate(() => window.referenceManagerTest.persisted('/fixture/source.ris'))).startsWith(
-				'TY  - JOUR',
-			),
-		).toBe(true);
+		expect((await page.evaluate(() => window.referenceManagerTest.persisted('/fixture/source.ris'))).startsWith('TY  - JOUR')).toBe(true);
 		await page.evaluate(() => window.referenceManagerTest.dialogs(['/fixture/source.ris']));
 		await library.locator('[data-action="import"]').click();
 		await expect(library.getByRole('status')).toContainText(locale === 'zh-CN' ? '2' : '2 duplicates');
-		expect(
-			await page.evaluate(() => window.referenceManagerTest.library().entries.map((entry: any) => entry.id)),
-		).toEqual(ids);
+		expect(await page.evaluate(() => window.referenceManagerTest.library().entries.map((entry: any) => entry.id))).toEqual(ids);
 		await library.getByRole('searchbox').fill('second');
 		await expect(library.getByRole('listbox').getByRole('option')).toHaveCount(1);
 		await expect(library.locator('article h2')).toHaveText('A second book');
@@ -192,33 +174,14 @@ for (const locale of ['en', 'zh-CN'])
 		await page.evaluate(() => window.referenceManagerTest.redo());
 		await page.evaluate(() => window.referenceManagerTest.captureApi());
 		await page.evaluate(() =>
-			window.referenceManagerTest.dialogs(
-				[],
-				[
-					'Renamed2025',
-					'Corrected paper',
-					'Smith, Jane',
-					'2025',
-					'10.1234/abc',
-					'Journal',
-					'1',
-					'2',
-					'10',
-					'20',
-					'',
-					'Abstract',
-					'tag',
-				],
-			),
+			window.referenceManagerTest.dialogs([], ['Renamed2025', 'Corrected paper', 'Smith, Jane', '2025', '10.1234/abc', 'Journal', '1', '2', '10', '20', '', 'Abstract', 'tag']),
 		);
 		await library.locator('[data-action="edit"]').click();
 		await expect(library.getByRole('listbox').getByRole('option').first()).toContainText('Corrected paper');
 		await expect.poll(() => page.evaluate(() => window.referenceManagerTest.dirty())).toBe(false);
 		await library.locator('[data-action="update"]').click();
 		await expect(library.getByRole('status')).toContainText('1');
-		expect(JSON.stringify(await page.evaluate(() => window.referenceManagerTest.document()))).toContain(
-			'Renamed2025',
-		);
+		expect(JSON.stringify(await page.evaluate(() => window.referenceManagerTest.document()))).toContain('Renamed2025');
 		expect(
 			await page.evaluate(() =>
 				window.referenceManagerTest.invokeSaved({
@@ -233,9 +196,7 @@ for (const locale of ['en', 'zh-CN'])
 		expect(await page.evaluate(() => window.referenceManagerTest.document())).toEqual(inserted);
 		await page.evaluate(() => window.referenceManagerTest.redo());
 		await page.evaluate(() => window.referenceManagerTest.saveDocument());
-		expect(
-			await page.evaluate(() => window.referenceManagerTest.persisted('/fixture/paper.ash-academy')),
-		).toContain('Renamed2025');
+		expect(await page.evaluate(() => window.referenceManagerTest.persisted('/fixture/paper.ash-academy'))).toContain('Renamed2025');
 		await page.evaluate(() => window.referenceManagerTest.dialogs(['/fixture/paper.pdf']));
 		await library.locator('[data-action="attach"]').click();
 		await expect(library.locator('[data-action="pdf"]')).toBeEnabled();
@@ -249,18 +210,14 @@ for (const locale of ['en', 'zh-CN'])
 		expect(await page.evaluate(() => window.referenceManagerTest.accessible())).toContain('Corrected paper');
 		await library.locator('[data-action="delete"]').click();
 		await expect(library.getByRole('listbox').getByRole('option')).toHaveCount(1);
-		expect(JSON.stringify(await page.evaluate(() => window.referenceManagerTest.document()))).toContain(
-			'Renamed2025',
-		);
+		expect(JSON.stringify(await page.evaluate(() => window.referenceManagerTest.document()))).toContain('Renamed2025');
 		await library.locator('[data-action="update"]').click();
 		await expect(library.getByRole('status')).toContainText('1');
 		await page.screenshot({ path: testInfo.outputPath(`reference-manager-${locale}.png`), fullPage: true });
 		expect(errors).toEqual([]);
 	});
 
-test('Reference Manager retains conflicted drafts across provider retirement and rejects read-only edits', async ({
-	page,
-}) => {
+test('Reference Manager retains conflicted drafts across provider retirement and rejects read-only edits', async ({ page }) => {
 	await page.goto('/referenceManager.html');
 	await page.waitForFunction(() => !!window.referenceManagerTest);
 	await page.evaluate(async () => {
@@ -275,10 +232,7 @@ test('Reference Manager retains conflicted drafts across provider retirement and
 		const raw = JSON.parse(await window.referenceManagerTest.persisted());
 		raw.entries[0].title = 'External writer';
 		await window.referenceManagerTest.write('/fixture/library.ash-library', JSON.stringify(raw));
-		window.referenceManagerTest.dialogs(
-			[],
-			['Draft2024', 'Preserved draft', 'Smith', '2024', '', '', '', '', '', '', '', '', ''],
-		);
+		window.referenceManagerTest.dialogs([], ['Draft2024', 'Preserved draft', 'Smith', '2024', '', '', '', '', '', '', '', '', '']);
 	});
 	await library.locator('[data-action="edit"]').click();
 	await expect(library.getByRole('status')).toContainText('retained');
@@ -295,23 +249,14 @@ test('Reference Manager retains conflicted drafts across provider retirement and
 	await page.evaluate(() => window.referenceManagerTest.dialogs(['/fixture/recovered.ash-library']));
 	await library.locator('[data-action="saveAs"]').click();
 	await expect.poll(() => page.evaluate(() => window.referenceManagerTest.dirty())).toBe(false);
-	expect(await page.evaluate(() => window.referenceManagerTest.persisted('/fixture/library.ash-library'))).toContain(
-		'External writer',
-	);
-	expect(
-		await page.evaluate(() => window.referenceManagerTest.persisted('/fixture/recovered.ash-library')),
-	).toContain('Preserved draft');
+	expect(await page.evaluate(() => window.referenceManagerTest.persisted('/fixture/library.ash-library'))).toContain('External writer');
+	expect(await page.evaluate(() => window.referenceManagerTest.persisted('/fixture/recovered.ash-library'))).toContain('Preserved draft');
 	await page.evaluate(() => window.referenceManagerTest.open('/fixture/recovered.ash-library', true));
 	await expect(library.locator('[data-action="edit"]')).toBeDisabled();
 	await expect(library.locator('[data-action="import"]')).toBeDisabled();
 	await page.evaluate(() => window.referenceManagerTest.open('/fixture/recovered.ash-library'));
 	await expect(library.locator('[data-action="edit"]')).toBeEnabled();
-	await page.evaluate(() =>
-		window.referenceManagerTest.dialogs(
-			[],
-			['Manual2026', 'Manual reference', 'Author', '2026', '', '', '', '', '', '', '', '', ''],
-		),
-	);
+	await page.evaluate(() => window.referenceManagerTest.dialogs([], ['Manual2026', 'Manual reference', 'Author', '2026', '', '', '', '', '', '', '', '', '']));
 	await library.locator('[data-action="add"]').click();
 	await expect(library.getByRole('listbox').getByRole('option')).toHaveCount(3);
 	const before = await page.evaluate(() => window.referenceManagerTest.library());

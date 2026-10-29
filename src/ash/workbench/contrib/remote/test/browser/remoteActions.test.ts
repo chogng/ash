@@ -1,9 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
-import {
-	IAppServerApi,
-	type IAppServerConnectionRecovery,
-} from '../../../../../platform/agentHost/common/appServerApi.js';
+import { IAppServerApi, type IAppServerConnectionRecovery } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IBannerService, type IBannerItem } from '../../../../services/banner/browser/bannerService.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -14,19 +11,12 @@ import '../../browser/remote.contribution.js';
 import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { QuickInputType, type IQuickPickDidAcceptEvent } from '../../../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../../../base/common/event.js';
-import {
-	IRemoteConnectionApi,
-	RemoteConnectionService,
-} from '../../../../../platform/remote/common/remoteConnectionService.js';
+import { IRemoteConnectionApi, RemoteConnectionService } from '../../../../../platform/remote/common/remoteConnectionService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import {
-	DialogResult,
-	type IDialogService,
-	type IPromptDialogOptions,
-} from '../../../../../platform/dialogs/common/dialogs.js';
+import { DialogResult, type IDialogService, type IPromptDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import type { IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import type { IMessageDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import type { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -52,9 +42,7 @@ test('Remote connection picker shows saved credential-free targets and connects 
 	using services = new InstantiationService();
 	services.registerInstance(IRemoteConnectionApi, connections);
 	using resolvers = services.createInstance(RemoteConnectionService);
-	using registration = resolvers.registerResolvers([
-		{ authorityPrefix: 'ssh', resolve: async authority => ({ connectionName: authority.slice(4) }) },
-	]);
+	using registration = resolvers.registerResolvers([{ authorityPrefix: 'ssh', resolve: async authority => ({ connectionName: authority.slice(4) }) }]);
 	await showRemoteConnectionPicker(resolvers, quickInput, dialogs);
 	assert.equal(quickInput.picker?.placeholder, 'Select a Remote SSH connection');
 	assert.deepEqual(quickInput.picker?.items, [
@@ -230,11 +218,7 @@ async function waitUntil(predicate: () => boolean): Promise<void> {
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`Agent Host recovery banner and command use the same owner and disappear on recovery (${locale})`, async () => {
-		if (locale === 'zh-CN')
-			setNlsMessages(
-				locale,
-				JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')),
-			);
+		if (locale === 'zh-CN') setNlsMessages(locale, JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
 		try {
 			using services = new InstantiationService();
 			const notices = new Map<string, IBannerItem>();
@@ -282,21 +266,13 @@ for (const locale of ['en', 'zh-CN']) {
 			const notice = [...notices.values()][0]!;
 			assert.equal(notices.size, 1);
 			assert.equal(notice.actions?.[0]?.label, locale === 'zh-CN' ? '重新连接' : 'Reconnect');
-			assert.equal(
-				notice.message,
-				locale === 'zh-CN'
-					? '无法恢复 Agent Host 连接或工作区。请重试。'
-					: 'Could not restore the Agent Host connection or workspace. Try again.',
-			);
+			assert.equal(notice.message, locale === 'zh-CN' ? '无法恢复 Agent Host 连接或工作区。请重试。' : 'Could not restore the Agent Host connection or workspace. Try again.');
 			assert.equal(contexts.contextMatchesRules(AppServerRecoveryAvailableContext.isEqualTo(true)), true);
 			assert.equal(notice.actions?.[0]?.href, `command:${ReconnectAppServerCommandId}`);
 			await CommandsRegistry.getCommand(ReconnectAppServerCommandId)!(services);
 			assert.equal(retries, 1);
 			assert.equal(notices.size, 1);
-			assert.equal(
-				[...notices.values()][0]!.message,
-				locale === 'zh-CN' ? '正在重新连接到 Agent Host…' : 'Reconnecting to the Agent Host…',
-			);
+			assert.equal([...notices.values()][0]!.message, locale === 'zh-CN' ? '正在重新连接到 Agent Host…' : 'Reconnecting to the Agent Host…');
 			recovery.status = 'idle';
 			changed.fire();
 			assert.equal(notices.size, 0);

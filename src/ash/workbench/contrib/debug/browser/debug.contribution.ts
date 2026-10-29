@@ -19,72 +19,39 @@ import { DebugTitleContribution } from './debugTitle.js';
 import { DebugContentProvider } from '../common/debugContentProvider.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
-import {
-	ViewContainerLocation,
-	type WorkbenchViewRegistry,
-	WorkbenchViewContainerId,
-	ViewsRegistry,
-} from '../../../common/views.js';
-import {
-	BREAKPOINT_EDITOR_CONTRIBUTION_ID,
-	LOADED_SCRIPTS_VIEW_ID,
-	CONTEXT_DISASSEMBLY_VIEW_FOCUS,
-	DEBUG_CONSOLE_VIEW_ID,
-	DISASSEMBLY_VIEW_ID,
-} from '../common/debug.js';
+import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from '../../../common/views.js';
+import { BREAKPOINT_EDITOR_CONTRIBUTION_ID, LOADED_SCRIPTS_VIEW_ID, CONTEXT_DISASSEMBLY_VIEW_FOCUS, DEBUG_CONSOLE_VIEW_ID, DISASSEMBLY_VIEW_ID } from '../common/debug.js';
 import { VariablesView } from './variablesView.js';
 import { WatchExpressionsView } from './watchExpressionsView.js';
 import { CallStackView } from './callStackView.js';
 import { BreakpointsView } from './breakpointsView.js';
 import { WelcomeView } from './welcomeView.js';
-import {
-	VARIABLES_VIEW_ID,
-	WATCH_VIEW_ID,
-	CALLSTACK_VIEW_ID,
-	BREAKPOINTS_VIEW_ID,
-	CONTEXT_DEBUG_UX,
-	CONTEXT_BREAKPOINTS_EXIST,
-} from '../common/debug.js';
+import { VARIABLES_VIEW_ID, WATCH_VIEW_ID, CALLSTACK_VIEW_ID, BREAKPOINTS_VIEW_ID, CONTEXT_DEBUG_UX, CONTEXT_BREAKPOINTS_EXIST } from '../common/debug.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { DebugViewPaneContainer } from './debugViewlet.js';
 import { Repl } from './repl.js';
 import { BreakpointEditorContribution } from './breakpointEditorContribution.js';
-import {
-	EditorContributionInstantiation,
-	registerEditorContribution,
-} from '../../../../editor/browser/editorExtensions.js';
+import { EditorContributionInstantiation, registerEditorContribution } from '../../../../editor/browser/editorExtensions.js';
 import { localize } from '../../../../nls.js';
 import { registerEditorPane } from '../../../browser/editor.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { DisassemblyView } from './disassemblyView.js';
 import './debugCommands.js';
 import './debugEditorActions.js';
 import './debug.service.contribution.js';
 import './media/debugViewlet.css';
-import {
-	ConfigurationScope,
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<boolean>({
 	key: 'debug.allowBreakpointsEverywhere',
 	defaultValue: true,
 	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean')
-			throw new TypeError(
-				localize('debug.breakpointPolicyInvalid', 'Breakpoint language policy must be a boolean.'),
-			);
+		if (typeof value !== 'boolean') throw new TypeError(localize('debug.breakpointPolicyInvalid', 'Breakpoint language policy must be a boolean.'));
 		return value;
 	},
 	setting: {
@@ -93,10 +60,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize('debug.allowBreakpointsEverywhere', 'Allow breakpoints in every language');
 		},
 		get description() {
-			return localize(
-				'debug.breakpointPolicyDescription',
-				'When disabled, enable source breakpoints only for languages and context conditions declared by extensions.',
-			);
+			return localize('debug.breakpointPolicyDescription', 'When disabled, enable source breakpoints only for languages and context conditions declared by extensions.');
 		},
 	},
 });
@@ -105,10 +69,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	key: 'debug.confirmOnExit',
 	defaultValue: 'never',
 	parse(value: unknown): string {
-		if (value !== 'always' && value !== 'never')
-			throw new TypeError(
-				localize('debug.confirmOnExitInvalid', 'Debug exit confirmation must be always or never.'),
-			);
+		if (value !== 'always' && value !== 'never') throw new TypeError(localize('debug.confirmOnExitInvalid', 'Debug exit confirmation must be always or never.'));
 		return value;
 	},
 	setting: {
@@ -131,10 +92,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize('debug.confirmOnExitTitle', 'Confirm before closing during debugging');
 		},
 		get description() {
-			return localize(
-				'debug.confirmOnExitDescription',
-				'Ask before window close, reload, or quit stops an active debug session.',
-			);
+			return localize('debug.confirmOnExitDescription', 'Ask before window close, reload, or quit stops an active debug session.');
 		},
 	},
 });
@@ -143,10 +101,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	key: 'accessibility.debugWatchVariableAnnouncements',
 	defaultValue: false,
 	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean')
-			throw new TypeError(
-				localize('debug.watchAnnouncementInvalid', 'Watch value announcements must be a boolean.'),
-			);
+		if (typeof value !== 'boolean') throw new TypeError(localize('debug.watchAnnouncementInvalid', 'Watch value announcements must be a boolean.'));
 		return value;
 	},
 	setting: {
@@ -155,10 +110,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize('debug.watchAnnouncementTitle', 'Announce Debug Watch value changes');
 		},
 		get description() {
-			return localize(
-				'debug.watchAnnouncementDescription',
-				'Announce changed values from the current paused Watch inspection.',
-			);
+			return localize('debug.watchAnnouncementDescription', 'Announce changed values from the current paused Watch inspection.');
 		},
 	},
 });
@@ -167,8 +119,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	key: 'debug.inlineValues',
 	defaultValue: 'auto',
 	parse(value: unknown): string {
-		if (value !== 'on' && value !== 'off' && value !== 'auto')
-			throw new TypeError(localize('debug.inlineValuesInvalid', 'Debug inline values must be on, off, or auto.'));
+		if (value !== 'on' && value !== 'off' && value !== 'auto') throw new TypeError(localize('debug.inlineValuesInvalid', 'Debug inline values must be on, off, or auto.'));
 		return value;
 	},
 	setting: {
@@ -197,10 +148,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize('debug.inlineValuesTitle', 'Debug inline values');
 		},
 		get description() {
-			return localize(
-				'debug.inlineValuesDescription',
-				'Show inspected variable values beside their occurrences while debugging is paused.',
-			);
+			return localize('debug.inlineValuesDescription', 'Show inspected variable values beside their occurrences while debugging is paused.');
 		},
 	},
 });
@@ -218,10 +166,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	schema: {
 		type: 'string',
 		enum: ['allEditorsInActiveGroup', 'nonUntitledEditorsInActiveGroup', 'none'],
-		description: localize(
-			'debug.saveBeforeStart',
-			'Controls which editors are saved before starting a debug session.',
-		),
+		description: localize('debug.saveBeforeStart', 'Controls which editors are saved before starting a debug session.'),
 	},
 	setting: {
 		valueType: 'select',
@@ -249,10 +194,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize('debug.saveBeforeStartTitle', 'Save before debugging');
 		},
 		get description() {
-			return localize(
-				'debug.saveBeforeStart',
-				'Controls which editors are saved before starting a debug session.',
-			);
+			return localize('debug.saveBeforeStart', 'Controls which editors are saved before starting a debug session.');
 		},
 	},
 });
@@ -421,16 +363,14 @@ registerEditorContribution({
 	id: 'editor.contrib.debug',
 	instantiation: EditorContributionInstantiation.Eager,
 	install: context => {
-		if (context.kind === 'text')
-			return context.instantiationService.createInstance(DebugEditorContribution, context.editor, context.model);
+		if (context.kind === 'text') return context.instantiationService.createInstance(DebugEditorContribution, context.editor, context.model);
 	},
 });
 registerEditorContribution({
 	id: 'editor.contrib.callStack',
 	instantiation: EditorContributionInstantiation.Eager,
 	install: context => {
-		if (context.kind === 'text')
-			return context.instantiationService.createInstance(CallStackEditorContribution, context.model);
+		if (context.kind === 'text') return context.instantiationService.createInstance(CallStackEditorContribution, context.model);
 	},
 });
 registerEditorContribution({
@@ -442,42 +382,25 @@ registerEditorContribution({
 	},
 });
 
-registerWorkbenchContribution('workbench.contrib.debugTitle', WorkbenchPhase.AfterRestored, accessor =>
-	accessor.get(IInstantiationService).createInstance(DebugTitleContribution),
-);
+registerWorkbenchContribution('workbench.contrib.debugTitle', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(DebugTitleContribution));
 
-registerWorkbenchContribution('workbench.contrib.debugLifecycle', WorkbenchPhase.AfterRestored, accessor =>
-	accessor.get(IInstantiationService).createInstance(DebugLifecycle),
-);
+registerWorkbenchContribution('workbench.contrib.debugLifecycle', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(DebugLifecycle));
 
-registerWorkbenchContribution('workbench.contrib.debugContentProvider', WorkbenchPhase.BlockRestore, accessor =>
-	accessor.get(IInstantiationService).createInstance(DebugContentProvider),
-);
+registerWorkbenchContribution('workbench.contrib.debugContentProvider', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(DebugContentProvider));
 
-registerWorkbenchContribution('workbench.contrib.debugProgress', WorkbenchPhase.AfterRestored, accessor =>
-	accessor.get(IInstantiationService).createInstance(DebugProgressContribution),
-);
+registerWorkbenchContribution('workbench.contrib.debugProgress', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(DebugProgressContribution));
 
-registerWorkbenchContribution('workbench.contrib.debugMemory', WorkbenchPhase.BlockRestore, accessor =>
-	accessor.get(IInstantiationService).createInstance(DebugMemoryFileSystemProvider),
-);
+registerWorkbenchContribution('workbench.contrib.debugMemory', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(DebugMemoryFileSystemProvider));
 
-registerWorkbenchContribution('workbench.contrib.debugStatusbar', WorkbenchPhase.AfterRestored, accessor =>
-	accessor.get(IInstantiationService).createInstance(StatusBarColorProvider),
-);
+registerWorkbenchContribution('workbench.contrib.debugStatusbar', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(StatusBarColorProvider));
 
-registerWorkbenchContribution('workbench.contrib.debugChatContext', WorkbenchPhase.AfterRestored, accessor =>
-	accessor.get(IInstantiationService).createInstance(DebugChatContextContribution),
-);
+registerWorkbenchContribution('workbench.contrib.debugChatContext', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(DebugChatContextContribution));
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<boolean>({
 	key: AccessibilityVerbositySettingId.DebugException,
 	defaultValue: true,
 	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean')
-			throw new TypeError(
-				localize('debug.exceptionVerbosityInvalid', 'Exception accessibility verbosity must be a boolean.'),
-			);
+		if (typeof value !== 'boolean') throw new TypeError(localize('debug.exceptionVerbosityInvalid', 'Exception accessibility verbosity must be a boolean.'));
 		return value;
 	},
 	setting: {
@@ -486,10 +409,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize('debug.exceptionVerbosityTitle', 'Debug exception accessibility help');
 		},
 		get description() {
-			return localize(
-				'debug.exceptionVerbosityDescription',
-				'Announce how to open help when exception details receive focus.',
-			);
+			return localize('debug.exceptionVerbosityDescription', 'Announce how to open help when exception details receive focus.');
 		},
 	},
 });
@@ -511,10 +431,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View])
 					type === AccessibleViewType.View
 						? [
 								widget.innerText,
-								...[...widget.querySelectorAll('input, textarea')].map(
-									input =>
-										`${input.getAttribute('aria-label')}: ${(input as HTMLInputElement | HTMLTextAreaElement).value}`,
-								),
+								...[...widget.querySelectorAll('input, textarea')].map(input => `${input.getAttribute('aria-label')}: ${(input as HTMLInputElement | HTMLTextAreaElement).value}`),
 							].join('\n')
 						: localize(
 								'debug.breakpointWidgetHelp',

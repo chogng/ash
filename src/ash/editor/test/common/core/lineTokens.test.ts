@@ -3,13 +3,7 @@ import { test } from 'mocha';
 import { OffsetRange } from '../../../common/core/ranges/offsetRange.js';
 import { LanguageId, MetadataConsts } from '../../../common/encodedTokenAttributes.js';
 import { type ILanguageIdCodec } from '../../../common/languages.js';
-import {
-	type IViewLineTokens,
-	LineTokens,
-	TokenArray,
-	TokenArrayBuilder,
-	TokenInfo,
-} from '../../../common/tokens/lineTokens.js';
+import { type IViewLineTokens, LineTokens, TokenArray, TokenArrayBuilder, TokenInfo } from '../../../common/tokens/lineTokens.js';
 
 interface ILineToken {
 	readonly startIndex: number;
@@ -53,9 +47,7 @@ function renderLineTokens(tokens: LineTokens): string {
 	return result;
 }
 
-function viewTokenSummary(
-	tokens: IViewLineTokens,
-): readonly { readonly endIndex: number; readonly foreground: number; readonly text: string }[] {
+function viewTokenSummary(tokens: IViewLineTokens): readonly { readonly endIndex: number; readonly foreground: number; readonly text: string }[] {
 	return Array.from({ length: tokens.getCount() }, (_, index) => ({
 		endIndex: tokens.getEndOffset(index),
 		foreground: tokens.getForeground(index),
@@ -65,10 +57,7 @@ function viewTokenSummary(
 
 test('LineTokens inserts tokens at boundaries and inside existing tokens', () => {
 	const lineTokens = createTestLineTokens();
-	assert.equal(
-		renderLineTokens(lineTokens),
-		'Hello (32768)world, (65536)this (98304)is (131072)a (163840)lovely (196608)day(229376)',
-	);
+	assert.equal(renderLineTokens(lineTokens), 'Hello (32768)world, (65536)this (98304)is (131072)a (163840)lovely (196608)day(229376)');
 
 	assert.equal(
 		renderLineTokens(

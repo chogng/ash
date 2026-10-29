@@ -24,9 +24,7 @@ import type { IDisposable } from '../../../base/common/lifecycle.js';
  */
 export abstract class CompositePart<T extends Composite> extends Part {
 	private readonly composites = this._register(new DisposableMap<string, T>());
-	private readonly progressIndicators = this._register(
-		new DisposableMap<string, IDisposable & { readonly indicator: IProgressIndicator }>(),
-	);
+	private readonly progressIndicators = this._register(new DisposableMap<string, IDisposable & { readonly indicator: IProgressIndicator }>());
 	private activeComposite: T | undefined;
 	private lastLayout: { readonly composite: T; readonly dimension: IDimension } | undefined;
 	private readonly titleAreaListener = this._register(new MutableDisposable());
@@ -44,12 +42,7 @@ export abstract class CompositePart<T extends Composite> extends Part {
 	public readonly onDidCompositeOpen = this.compositeOpened.event;
 	public readonly onDidCompositeClose = this.compositeClosed.event;
 
-	protected constructor(
-		container: HTMLElement,
-		id: string,
-		@IThemeService themeService: IThemeService,
-		@IStorageService storageService: IStorageService,
-	) {
+	protected constructor(container: HTMLElement, id: string, @IThemeService themeService: IThemeService, @IStorageService storageService: IStorageService) {
 		super(container, id, themeService, storageService);
 		this.contentDomNode.classList.add('ash-composite-content');
 	}
@@ -102,11 +95,7 @@ export abstract class CompositePart<T extends Composite> extends Part {
 		return indicator;
 	}
 
-	protected createCompositeToolBar(
-		container: HTMLElement,
-		contextMenus: IContextMenuProvider,
-		ariaLabel: string,
-	): void {
+	protected createCompositeToolBar(container: HTMLElement, contextMenus: IContextMenuProvider, ariaLabel: string): void {
 		this.compositeToolBarContainer = container;
 		this.compositeToolBarAriaLabel = ariaLabel;
 		this.compositeToolBar = this._register(
@@ -142,9 +131,7 @@ export abstract class CompositePart<T extends Composite> extends Part {
 		const toolbar = this.compositeToolBar;
 		if (!toolbar) return;
 		const activeElement = toolbar.element.ownerDocument.activeElement;
-		const focusedAction = toolbar.element.contains(activeElement)
-			? (activeElement as HTMLElement).closest<HTMLElement>('[data-action-id]')?.dataset.actionId
-			: undefined;
+		const focusedAction = toolbar.element.contains(activeElement) ? (activeElement as HTMLElement).closest<HTMLElement>('[data-action-id]')?.dataset.actionId : undefined;
 		// A merged View lends its scoped action host; return the Part-owned renderer before switching hosts.
 		this.compositeToolBarContainer!.append(toolbar.element);
 		// The retained renderer must release the previous View's accessible name before its next host lends one.
@@ -154,9 +141,7 @@ export abstract class CompositePart<T extends Composite> extends Part {
 		toolbar.setActions(primary, secondary);
 		toolbar.element.hidden = primary.length === 0 && secondary.length === 0;
 		if (focusedAction) {
-			const entry = [...toolbar.element.querySelectorAll<HTMLElement>('[data-action-id]')].find(
-				element => element.dataset.actionId === focusedAction,
-			);
+			const entry = [...toolbar.element.querySelectorAll<HTMLElement>('[data-action-id]')].find(element => element.dataset.actionId === focusedAction);
 			entry?.querySelector<HTMLElement>('button:not(:disabled), [tabindex]')?.focus();
 		}
 	}
@@ -269,12 +254,7 @@ export abstract class CompositePart<T extends Composite> extends Part {
 		const { clientWidth, clientHeight } = this.contentDomNode;
 		if (clientWidth > 0 && clientHeight > 0) {
 			const previous = this.lastLayout;
-			if (
-				previous?.composite === this.activeComposite &&
-				previous.dimension.width === clientWidth &&
-				previous.dimension.height === clientHeight
-			)
-				return;
+			if (previous?.composite === this.activeComposite && previous.dimension.width === clientWidth && previous.dimension.height === clientHeight) return;
 			const dimension = new Dimension(clientWidth, clientHeight);
 			this.lastLayout = { composite: this.activeComposite, dimension };
 			this.activeComposite.layout(dimension);

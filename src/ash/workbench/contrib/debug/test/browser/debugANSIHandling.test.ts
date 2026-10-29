@@ -36,13 +36,7 @@ suite('Debug ANSI output', () => {
 
 	test('handles 256-color and truecolor without treating channel values as style codes', () => {
 		using store = new DisposableStore();
-		const result = handleANSIOutput(
-			'\x1b[38;5;196mred\x1b[48;2;1;2;3m background\x1b[39;49m reset',
-			links,
-			undefined,
-			undefined,
-			{ type: DebugLinkHoverBehavior.None, store },
-		);
+		const result = handleANSIOutput('\x1b[38;5;196mred\x1b[48;2;1;2;3m background\x1b[39;49m reset', links, undefined, undefined, { type: DebugLinkHoverBehavior.None, store });
 		const spans = result.querySelectorAll('span');
 		assert.equal(spans[0]!.style.color, 'rgb(255, 0, 0)');
 		assert.equal(spans[1]!.style.backgroundColor, 'rgb(1, 2, 3)');

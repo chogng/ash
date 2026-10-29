@@ -1,9 +1,5 @@
 import { localize } from '../../nls.js';
-import {
-	ConfigurationScope,
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
 import { SESSIONS_LAYOUT_SCOPE_SETTING, type ChatLayoutMode } from './chatLayout.js';
 
@@ -27,10 +23,7 @@ registry.registerConfiguration<ChatLayoutMode>({
 			return localize('sessions.layoutScope.title', 'Layout scope');
 		},
 		get description() {
-			return localize(
-				'sessions.layoutScope.description',
-				'Keep documents per session, per chat with shared visibility, or per chat with its own visibility.',
-			);
+			return localize('sessions.layoutScope.description', 'Keep documents per session, per chat with shared visibility, or per chat with its own visibility.');
 		},
 		get options() {
 			return [

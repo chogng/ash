@@ -8,16 +8,8 @@ import { localize } from '../../../../nls.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { IStatusbarService } from '../../../services/statusbar/browser/statusbar.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
-import {
-	CopyEditorToNewWindowCommandId,
-	MoveEditorToNewWindowCommandId,
-	ToggleEditorGroupLockCommandId,
-} from './editorActions.js';
-import {
-	CLOSE_EDITOR_COMMAND_ID,
-	CLOSE_EDITORS_IN_GROUP_COMMAND_ID,
-	CLOSE_SAVED_EDITORS_COMMAND_ID,
-} from './editorCommands.js';
+import { CopyEditorToNewWindowCommandId, MoveEditorToNewWindowCommandId, ToggleEditorGroupLockCommandId } from './editorActions.js';
+import { CLOSE_EDITOR_COMMAND_ID, CLOSE_EDITORS_IN_GROUP_COMMAND_ID, CLOSE_SAVED_EDITORS_COMMAND_ID } from './editorCommands.js';
 import './diffEditor.workbench.contribution.js';
 import '../../../../editor/browser/widget/diffEditor/diffEditor.contribution.js';
 import { ToggleCollapseUnchangedRegions } from '../../../../editor/browser/widget/diffEditor/commands.js';
@@ -38,16 +30,8 @@ import { ConfigureEditorAction } from '../../actions/layoutActions.js';
 import { DIFF_EDITOR_ID } from '../../../common/editor/diffEditorInput.js';
 import { EditorAutoSave } from './editorAutoSave.js';
 import { IEditorPart } from './editorPart.js';
-import {
-	ActiveGroupEditorsByMostRecentlyUsedQuickAccess,
-	AllEditorsByMostRecentlyUsedQuickAccess,
-} from './editorQuickAccess.js';
-import {
-	ChangeEncodingAction,
-	ChangeEOLAction,
-	ChangeLanguageAction,
-	EditorStatusContribution,
-} from './editorStatus.js';
+import { ActiveGroupEditorsByMostRecentlyUsedQuickAccess, AllEditorsByMostRecentlyUsedQuickAccess } from './editorQuickAccess.js';
+import { ChangeEncodingAction, ChangeEOLAction, ChangeLanguageAction, EditorStatusContribution } from './editorStatus.js';
 import { DynamicEditorConfigurations } from './editorConfiguration.js';
 
 const outsideModalEditor = EditorPartModalVisibleContext.isEqualTo(false);
@@ -97,10 +81,7 @@ MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
 	},
 	group: '8_group_operations',
 	order: 5,
-	when: ContextKeyExpr.and(
-		EditorPartMultipleEditorGroupsContext.isEqualTo(true),
-		EditorPartMaximizedEditorGroupContext.isEqualTo(false),
-	),
+	when: ContextKeyExpr.and(EditorPartMultipleEditorGroupsContext.isEqualTo(true), EditorPartMaximizedEditorGroupContext.isEqualTo(false)),
 });
 MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
 	command: {
@@ -183,11 +164,7 @@ for (const [id, key, title, icon, order] of [
 	});
 }
 
-registerWorkbenchContribution(
-	DynamicEditorConfigurations.ID,
-	WorkbenchPhase.AfterRestored,
-	() => new DynamicEditorConfigurations(),
-);
+registerWorkbenchContribution(DynamicEditorConfigurations.ID, WorkbenchPhase.AfterRestored, () => new DynamicEditorConfigurations());
 
 QuickAccessRegistry.register({
 	prefix: AllEditorsByMostRecentlyUsedQuickAccess.PREFIX,
@@ -212,18 +189,11 @@ QuickAccessRegistry.register({
 });
 
 registerWorkbenchContribution(EditorStatusContribution.ID, WorkbenchPhase.AfterRestored, accessor =>
-	accessor
-		.get(IInstantiationService)
-		.createInstance(EditorStatusContribution, accessor.get(IEditorPart), accessor.get(IStatusbarService)),
+	accessor.get(IInstantiationService).createInstance(EditorStatusContribution, accessor.get(IEditorPart), accessor.get(IStatusbarService)),
 );
 
 registerWorkbenchContribution(
 	EditorAutoSave.ID,
 	WorkbenchPhase.AfterRestored,
-	accessor =>
-		new EditorAutoSave(
-			accessor.get(IEditorPart),
-			accessor.get(IWorkingCopyService),
-			accessor.get(IConfigurationService),
-		),
+	accessor => new EditorAutoSave(accessor.get(IEditorPart), accessor.get(IWorkingCopyService), accessor.get(IConfigurationService)),
 );

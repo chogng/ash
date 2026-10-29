@@ -10,18 +10,11 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { IEditorOptions } from '../../../../platform/editor/common/editor.js';
-import {
-	IAccessibleViewService,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { WorkbenchObjectTree } from '../../../../platform/list/browser/listService.js';
 import { ViewPane, type IViewPaneOptions } from '../../../../workbench/browser/parts/views/viewPane.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import {
-	IChatService,
-	type TurnChangeSetSummary,
-	type TurnCommitSelection,
-} from '../../../../workbench/services/chat/common/chatService.js';
+import { IChatService, type TurnChangeSetSummary, type TurnCommitSelection } from '../../../../workbench/services/chat/common/chatService.js';
 import { createDiffEditorInput } from '../../../../workbench/common/editor/diffEditorInput.js';
 import { createMultiDiffEditorInput } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
@@ -38,14 +31,7 @@ import { CreatePullRequestContextView } from './createPullRequestContextView.js'
 import { IChangesViewService } from '../common/changesViewService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { ChangesViewMode } from '../common/changes.js';
-import {
-	buildTreeChildren,
-	ChangesTreeRenderer,
-	fileState,
-	isChangesFileItem,
-	type ChangesTreeElement,
-	type IChangesFileItem,
-} from './changesViewRenderer.js';
+import { buildTreeChildren, ChangesTreeRenderer, fileState, isChangesFileItem, type ChangesTreeElement, type IChangesFileItem } from './changesViewRenderer.js';
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { findChangesEditorFileChange, getChangesEditorFileResource } from './changesEditorLabels.js';
@@ -194,17 +180,13 @@ export class ChangesViewPane extends ViewPane {
 		);
 		this._register(
 			addDisposableListener(this.modePicker, 'change', () => {
-				this.viewState.setViewMode(
-					this.modePicker.value === ChangesViewMode.Tree ? ChangesViewMode.Tree : ChangesViewMode.List,
-				);
+				this.viewState.setViewMode(this.modePicker.value === ChangesViewMode.Tree ? ChangesViewMode.Tree : ChangesViewMode.List);
 			}),
 		);
 		const treeContainer = h(container.ownerDocument, 'div');
 		treeContainer.className = 'ash-sessions-changes-tree';
 		this.contentElement.append(treeContainer);
-		this.skeleton = this._register(
-			new LoadingSkeleton(this.contentElement, localize('sessions.changes.loading', 'Loading changes…')),
-		);
+		this.skeleton = this._register(new LoadingSkeleton(this.contentElement, localize('sessions.changes.loading', 'Loading changes…')));
 		treeContainer.before(this.skeleton.element);
 		this.trackBodyMinimum(treeContainer, this.minimumBodySize);
 		const renderer = new ChangesTreeRenderer(container.ownerDocument);
@@ -221,8 +203,7 @@ export class ChangesViewPane extends ViewPane {
 				renderElement: row =>
 					renderer.renderElement(
 						row,
-						isChangesFileItem(row) &&
-							this.viewState.reviewedFilesObs.get().has(getChangesEditorFileResource(row).toString()),
+						isChangesFileItem(row) && this.viewState.reviewedFilesObs.get().has(getChangesEditorFileResource(row).toString()),
 						this.viewMode === ChangesViewMode.Tree,
 					),
 			}),
@@ -308,11 +289,7 @@ export class ChangesViewPane extends ViewPane {
 		this._register(
 			chat.onDidUpdateTurnChanges(event => {
 				const active = sessions.activeSelection;
-				if (
-					active?.kind === 'session' &&
-					active.active.session.sessionId === event.sessionId &&
-					active.active.threadId === event.threadId
-				) {
+				if (active?.kind === 'session' && active.active.session.sessionId === event.sessionId && active.active.threadId === event.threadId) {
 					void this.refresh();
 				}
 			}),
@@ -332,10 +309,7 @@ export class ChangesViewPane extends ViewPane {
 		}
 		super.setVisible(visible);
 		if (visible) {
-			this.gitActions.value = this.instantiation.createInstance(
-				SessionSyncChangesActionViewItem,
-				this.contentElement,
-			);
+			this.gitActions.value = this.instantiation.createInstance(SessionSyncChangesActionViewItem, this.contentElement);
 			this.checks.value = this.instantiation.createInstance(ChecksWidget, this.contentElement);
 			void this.refresh();
 		} else {
@@ -376,9 +350,7 @@ export class ChangesViewPane extends ViewPane {
 				`${row.file.path}: +${row.file.additions} −${row.file.deletions}`,
 				localize('sessions.changes.turn', 'Turn {0}', row.turnNumber),
 				fileState(row),
-				this.viewState.reviewedFilesObs.get().has(getChangesEditorFileResource(row).toString())
-					? localize('sessions.changes.reviewed', 'Reviewed')
-					: undefined,
+				this.viewState.reviewedFilesObs.get().has(getChangesEditorFileResource(row).toString()) ? localize('sessions.changes.reviewed', 'Reviewed') : undefined,
 				selected.has(row) ? localize('sessions.changes.fileSelected', 'Selected') : undefined,
 				row.summary.failureMessage,
 				...row.summary.warnings,
@@ -433,10 +405,7 @@ export class ChangesViewPane extends ViewPane {
 		if (!this.isVisible() || this.loading) {
 			return;
 		}
-		this.viewState.setChangesetFilesReviewState(
-			this.tree.selection.filter(isChangesFileItem).map(getChangesEditorFileResource),
-			reviewed,
-		);
+		this.viewState.setChangesetFilesReviewState(this.tree.selection.filter(isChangesFileItem).map(getChangesEditorFileResource), reviewed);
 	}
 
 	private saveTreeState(): void {
@@ -449,34 +418,24 @@ export class ChangesViewPane extends ViewPane {
 				expanded[item.id] = this.tree.isCollapsed(item.id) ? 0 : 1;
 			}
 		}
-		this.viewState.setDetailsViewState(
-			this.stateResource.with({ fragment: this.changesetId ?? '' }),
-			this.viewMode,
-			{
-				focus: this.tree.focus ? [this.tree.focus.id] : [],
-				selection: this.tree.selection.map(row => row.id),
-				expanded,
-				scrollTop: this.tree.scrollTop,
-			},
-		);
+		this.viewState.setDetailsViewState(this.stateResource.with({ fragment: this.changesetId ?? '' }), this.viewMode, {
+			focus: this.tree.focus ? [this.tree.focus.id] : [],
+			selection: this.tree.selection.map(row => row.id),
+			expanded,
+			scrollTop: this.tree.scrollTop,
+		});
 	}
 
 	private renderRows(): void {
 		const rows = this.visibleRows();
-		const children =
-			this.viewMode === ChangesViewMode.Tree ? buildTreeChildren(rows) : rows.map(element => ({ element }));
+		const children = this.viewMode === ChangesViewMode.Tree ? buildTreeChildren(rows) : rows.map(element => ({ element }));
 		this.tree.setChildren(children);
 		for (const child of children) {
 			if (!isChangesFileItem(child.element)) {
 				this.tree.expandRecursive(child.element.id);
 			}
 		}
-		const state =
-			this.stateResource &&
-			this.viewState.getDetailsViewState(
-				this.stateResource.with({ fragment: this.changesetId ?? '' }),
-				this.viewMode,
-			);
+		const state = this.stateResource && this.viewState.getDetailsViewState(this.stateResource.with({ fragment: this.changesetId ?? '' }), this.viewMode);
 		if (state) {
 			for (const [id, expanded] of Object.entries(state.expanded)) {
 				if (!expanded && this.tree.isCollapsed(id) !== undefined) {
@@ -542,10 +501,7 @@ export class ChangesViewPane extends ViewPane {
 			this.loading = false;
 			this.changesetPicker.disabled = false;
 			this.tree.domNode.removeAttribute('aria-busy');
-			this.statusDomNode.textContent = localize(
-				'sessions.changes.draft',
-				'Changes appear after the agent edits files.',
-			);
+			this.statusDomNode.textContent = localize('sessions.changes.draft', 'Changes appear after the agent edits files.');
 			return;
 		}
 		this.statusDomNode.textContent = localize('sessions.changes.loading', 'Loading changes…');
@@ -560,11 +516,7 @@ export class ChangesViewPane extends ViewPane {
 				return;
 			}
 			const details = await Promise.all(
-				summaries
-					.filter(summary => summary.captureState !== 'discarded')
-					.map(summary =>
-						this.chat.readTurnChange(active.session.sessionId, active.threadId, summary.changeSetId),
-					),
+				summaries.filter(summary => summary.captureState !== 'discarded').map(summary => this.chat.readTurnChange(active.session.sessionId, active.threadId, summary.changeSetId)),
 			);
 			if (this.isDisposed || request !== this.request) {
 				return;
@@ -591,9 +543,7 @@ export class ChangesViewPane extends ViewPane {
 				this.changesetPicker.append(option);
 			}
 			// Only an authoritative successful catalogue can clear a missing preference.
-			this.changesetId = details.some(entry => entry.summary.changeSetId === selectedTurn)
-				? selectedTurn
-				: undefined;
+			this.changesetId = details.some(entry => entry.summary.changeSetId === selectedTurn) ? selectedTurn : undefined;
 			this.changesetPicker.value = this.changesetId ?? '';
 			this.renderRows();
 			this.statusDomNode.textContent = this.rows.length
@@ -607,11 +557,7 @@ export class ChangesViewPane extends ViewPane {
 			this.tree.setChildren([]);
 			this.statistics.set(undefined, undefined);
 			this.retry.domNode.hidden = false;
-			this.statusDomNode.textContent = localize(
-				'sessions.changes.error',
-				'Could not load changes: {0}',
-				error instanceof Error ? error.message : String(error),
-			);
+			this.statusDomNode.textContent = localize('sessions.changes.error', 'Could not load changes: {0}', error instanceof Error ? error.message : String(error));
 		} finally {
 			if (!this.isDisposed && request === this.request) {
 				this.loadingProgress.clear();
@@ -657,18 +603,12 @@ export class ChangesViewPane extends ViewPane {
 		}
 		const message = await this.quickInput.input({
 			title: localize('sessions.changes.commitMessage', 'Commit message'),
-			validateInput: async value =>
-				value.trim() ? undefined : localize('sessions.changes.messageRequired', 'Enter a commit message.'),
+			validateInput: async value => (value.trim() ? undefined : localize('sessions.changes.messageRequired', 'Enter a commit message.')),
 		});
 		if (message === undefined || this.isDisposed || ownerEpoch !== this.ownerEpoch) {
 			return;
 		}
-		const preview = await this.chat.prepareTurnCommit(
-			active.session.sessionId,
-			active.threadId,
-			[...grouped.values()],
-			message,
-		);
+		const preview = await this.chat.prepareTurnCommit(active.session.sessionId, active.threadId, [...grouped.values()], message);
 		if (this.isDisposed || ownerEpoch !== this.ownerEpoch) {
 			return;
 		}
@@ -686,40 +626,20 @@ export class ChangesViewPane extends ViewPane {
 		const ownerEpoch = this.ownerEpoch;
 		const summary = row.summary;
 		const resource = getChangesEditorFileResource(row);
-		const contents = await this.chat.readTurnChangeFile(
-			summary.sessionId,
-			summary.threadId,
-			summary.changeSetId,
-			row.file.path,
-		);
+		const contents = await this.chat.readTurnChangeFile(summary.sessionId, summary.threadId, summary.changeSetId, row.file.path);
 		// A refresh can replace a capture without changing the selected conversation.
-		if (
-			this.isDisposed ||
-			ownerEpoch !== this.ownerEpoch ||
-			this.loading ||
-			!findChangesEditorFileChange(resource, this.rows)
-		) {
+		if (this.isDisposed || ownerEpoch !== this.ownerEpoch || this.loading || !findChangesEditorFileChange(resource, this.rows)) {
 			return;
 		}
 		if (contents.truncated && !contents.binary) {
 			throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.'));
 		}
 		const current = await this.chat.readTurnChange(summary.sessionId, summary.threadId, summary.changeSetId);
-		if (
-			this.isDisposed ||
-			ownerEpoch !== this.ownerEpoch ||
-			this.loading ||
-			!findChangesEditorFileChange(resource, this.rows)
-		) {
+		if (this.isDisposed || ownerEpoch !== this.ownerEpoch || this.loading || !findChangesEditorFileChange(resource, this.rows)) {
 			return;
 		}
 		if (current.summary.revision !== summary.revision || current.summary.captureState === 'discarded') {
-			throw new Error(
-				localize(
-					'sessions.changes.captureChanged',
-					'This Turn capture changed while loading. Reopen its changes to review the latest revision.',
-				),
-			);
+			throw new Error(localize('sessions.changes.captureChanged', 'This Turn capture changed while loading. Reopen its changes to review the latest revision.'));
 		}
 		const before = resource.with({ query: `${resource.query}&side=before` });
 		const after = resource.with({ query: `${resource.query}&side=after` });
@@ -743,11 +663,7 @@ export class ChangesViewPane extends ViewPane {
 			return;
 		}
 		await this.editors.openEditor(
-			createDiffEditorInput(
-				{ resource: before, initialText: contents.before ?? '', readOnly: true },
-				{ resource: after, initialText: contents.after ?? '', readOnly: true },
-				row.file.path,
-			),
+			createDiffEditorInput({ resource: before, initialText: contents.before ?? '', readOnly: true }, { resource: after, initialText: contents.after ?? '', readOnly: true }, row.file.path),
 			options,
 			sideBySide ? 'sideGroup' : 'activeGroup',
 		);

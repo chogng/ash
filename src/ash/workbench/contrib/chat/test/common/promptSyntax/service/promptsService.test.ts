@@ -7,13 +7,7 @@ import { Emitter, Event } from '../../../../../../../base/common/event.js';
 import { Disposable } from '../../../../../../../base/common/lifecycle.js';
 import { isCancellationError } from '../../../../../../../base/common/errors.js';
 import { URI } from '../../../../../../../base/common/uri.js';
-import {
-	IAppServerHookApi,
-	IAppServerSkillApi,
-	type HookSource,
-	type SkillCatalog,
-	type SkillReference,
-} from '../../../../../../../platform/agentHost/common/appServerApi.js';
+import { IAppServerHookApi, IAppServerSkillApi, type HookSource, type SkillCatalog, type SkillReference } from '../../../../../../../platform/agentHost/common/appServerApi.js';
 import { AppServerRemoteError } from '../../../../../../../platform/agentHost/common/appServerError.js';
 import { SkillManagementConflictError } from '../../../../common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../../common/promptSyntax/service/promptsServiceImpl.js';
@@ -47,12 +41,7 @@ class Backend extends Disposable implements IAppServerSkillApi {
 	public setEnabled = async (skillId: typeof id, enabled: boolean, revision: number, sessionId?: string) => {
 		this.calls.push(['set', skillId, enabled, revision, sessionId]);
 	};
-	public readTextResource = async (
-		reference: SkillReference,
-		path: string,
-		signal: AbortSignal,
-		sessionId?: string,
-	) => {
+	public readTextResource = async (reference: SkillReference, path: string, signal: AbortSignal, sessionId?: string) => {
 		this.calls.push(['body', reference, sessionId, signal.aborted, path]);
 		return instructions;
 	};
@@ -75,17 +64,8 @@ test('Prompt discovery is metadata-only and reading pins source, digest and Sess
 		['list', 'cached', 'second'],
 	]);
 	const parsed = await prompts.parseNew(first.uri);
-	assert.deepEqual(
-		{ content: parsed.content, body: parsed.body?.getContent(), uri: parsed.uri },
-		{ content: instructions, body: '# Review\r\nKeep the exact file.\r\n', uri: first.uri },
-	);
-	assert.deepEqual(backend.calls.at(-1), [
-		'body',
-		{ id, version: { type: 'pinnedDigest', digest } },
-		'first',
-		false,
-		'SKILL.md',
-	]);
+	assert.deepEqual({ content: parsed.content, body: parsed.body?.getContent(), uri: parsed.uri }, { content: instructions, body: '# Review\r\nKeep the exact file.\r\n', uri: first.uri });
+	assert.deepEqual(backend.calls.at(-1), ['body', { id, version: { type: 'pinnedDigest', digest } }, 'first', false, 'SKILL.md']);
 });
 
 test('Prompt management uses the same discovered URIs and backend revision authority', async () => {
@@ -201,13 +181,7 @@ test('Prompt relative references preserve source, pinned digest and Session and 
 	const parsed = await prompts.parseNew(child);
 	assert.equal(parsed.uri.toString(), child.toString());
 	assert.equal(parsed.content, 'See [next](nested/checks.md).');
-	assert.deepEqual(backend.calls.at(-1), [
-		'resource',
-		{ id, version: { type: 'pinnedDigest', digest } },
-		'references/guide.md',
-		'reference-session',
-		false,
-	]);
+	assert.deepEqual(backend.calls.at(-1), ['resource', { id, version: { type: 'pinnedDigest', digest } }, 'references/guide.md', 'reference-session', false]);
 	const next = parsed.body!.resolveFilePath('nested/checks.md')!;
 	await prompts.parseNew(next);
 	assert.equal((backend.calls.at(-1) as unknown[])[2], 'references/nested/checks.md');
@@ -287,10 +261,7 @@ test('Skill enablement exposes a domain conflict with the displayed revision and
 	};
 	await assert.rejects(
 		prompts.setSkillEnablement(id, false, 7, 'session'),
-		error =>
-			error instanceof SkillManagementConflictError &&
-			error.expectedRevision === 7 &&
-			/Refresh Skills/u.test(error.message),
+		error => error instanceof SkillManagementConflictError && error.expectedRevision === 7 && /Refresh Skills/u.test(error.message),
 	);
 	assert.equal(writes, 1);
 });

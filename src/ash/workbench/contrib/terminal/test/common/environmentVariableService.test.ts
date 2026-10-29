@@ -8,10 +8,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import type { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import type { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { EnvironmentVariableService } from '../../common/environmentVariableService.js';
-import {
-	deserializeEnvironmentVariableCollection,
-	serializeEnvironmentVariableCollection,
-} from '../../../../../platform/terminal/common/environmentVariableShared.js';
+import { deserializeEnvironmentVariableCollection, serializeEnvironmentVariableCollection } from '../../../../../platform/terminal/common/environmentVariableShared.js';
 import type { IEnvironmentVariableCollectionWithPersistence } from '../../common/environmentVariable.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
@@ -62,11 +59,7 @@ suite('Terminal environment collections', () => {
 			applyAtProcessCreation: false,
 			applyAtShellIntegration: true,
 		});
-		assert.throws(() =>
-			deserializeEnvironmentVariableCollection([
-				['STAGE', { variable: 'STAGE', type: 1, value: '', options: { applyAtShellIntegration: 'yes' } }],
-			]),
-		);
+		assert.throws(() => deserializeEnvironmentVariableCollection([['STAGE', { variable: 'STAGE', type: 1, value: '', options: { applyAtShellIntegration: 'yes' } }]]));
 	});
 
 	test('scoped shell replacement cancels prior global appends and phase changes participate in diff', async () => {
@@ -119,11 +112,7 @@ suite('Terminal environment collections', () => {
 			]),
 		});
 		const env = { Path: 'caller', REMOVED: undefined };
-		await new MergedEnvironmentVariableCollection(service.collections, false).applyToProcessEnvironment(
-			env,
-			undefined,
-			async value => value.replace('${prefix}', 'resolved'),
-		);
+		await new MergedEnvironmentVariableCollection(service.collections, false).applyToProcessEnvironment(env, undefined, async value => value.replace('${prefix}', 'resolved'));
 		assert.deepEqual(env, { Path: 'resolved:caller:b', MODE: 'extension', REMOVED: ':new' });
 	});
 
@@ -334,17 +323,11 @@ suite('Terminal environment collections', () => {
 		const serialized = serializeEnvironmentVariableCollection(decoded);
 		assert.deepEqual(serialized, [['PATH', { variable: 'PATH', type: 2, value: ':legacy' }]]);
 		assert.deepEqual(deserializeEnvironmentVariableCollection(serialized), decoded);
-		assert.throws(
-			() =>
-				deserializeEnvironmentVariableCollection([['PATH', { variable: 'OTHER=KEY', type: 2, value: ':bad' }]]),
-			TypeError,
-		);
+		assert.throws(() => deserializeEnvironmentVariableCollection([['PATH', { variable: 'OTHER=KEY', type: 2, value: ':bad' }]]), TypeError);
 		using owner = new DisposableStore();
 		const { service, persisted } = create(owner);
 		service.set('extension', { persistent: true, map: decoded });
-		assert.deepEqual(JSON.parse(persisted.get('terminal.integrated.environmentVariableCollections.v1')!), [
-			['extension', serialized, []],
-		]);
+		assert.deepEqual(JSON.parse(persisted.get('terminal.integrated.environmentVariableCollections.v1')!), [['extension', serialized, []]]);
 	});
 
 	test('platform callback validation preserves the Chinese error message', () => {

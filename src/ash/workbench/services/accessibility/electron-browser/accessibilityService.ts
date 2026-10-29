@@ -19,8 +19,7 @@ export class NativeAccessibilityService extends AccessibilityService {
 		let supportChangedByEvent = false;
 		const subscription = host.onDidChangeAccessibilitySupport(enabled => {
 			supportChangedByEvent = true;
-			if (active)
-				this.setAccessibilitySupport(enabled ? AccessibilitySupport.Enabled : AccessibilitySupport.Disabled);
+			if (active) this.setAccessibilitySupport(enabled ? AccessibilitySupport.Enabled : AccessibilitySupport.Disabled);
 		});
 		this._register(
 			toDisposable(() => {
@@ -31,10 +30,7 @@ export class NativeAccessibilityService extends AccessibilityService {
 		void host
 			.isAccessibilitySupportEnabled()
 			.then(enabled => {
-				if (active && !supportChangedByEvent)
-					this.setAccessibilitySupport(
-						enabled ? AccessibilitySupport.Enabled : AccessibilitySupport.Disabled,
-					);
+				if (active && !supportChangedByEvent) this.setAccessibilitySupport(enabled ? AccessibilitySupport.Enabled : AccessibilitySupport.Disabled);
 			})
 			.catch((error: unknown) => console.error('Failed to read Electron accessibility support', error));
 	}

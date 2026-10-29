@@ -18,9 +18,7 @@ Promise.prototype.then = function <TResult1 = unknown, TResult2 = never>(
 	rejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
 ): Promise<TResult1 | TResult2> {
 	const owner = currentInvocation;
-	const bind = <TResult>(
-		callback: ((value: unknown) => TResult | PromiseLike<TResult>) | null | undefined,
-	): typeof callback =>
+	const bind = <TResult>(callback: ((value: unknown) => TResult | PromiseLike<TResult>) | null | undefined): typeof callback =>
 		callback &&
 		function (value: unknown): TResult | PromiseLike<TResult> {
 			const previous = currentInvocation;
@@ -33,10 +31,7 @@ Promise.prototype.then = function <TResult1 = unknown, TResult2 = never>(
 		};
 	return originalThen.call(this, bind(fulfilled), bind(rejected)) as Promise<TResult1 | TResult2>;
 };
-const commands = new Map<
-	number,
-	{ request: JsonValue; sent: boolean; resolve(value: JsonValue): void; reject(error: Error): void }
->();
+const commands = new Map<number, { request: JsonValue; sent: boolean; resolve(value: JsonValue): void; reject(error: Error): void }>();
 let sentCommands = 0;
 let nextCommand = 1;
 const scope = globalThis as unknown as {
@@ -66,16 +61,13 @@ scope.onmessage = event => {
 	);
 };
 
-async function dispatch(
-	message: Exclude<BrowserExtensionHostRequest, { type: 'cancel' | 'commandResult' }>,
-): Promise<JsonValue> {
+async function dispatch(message: Exclude<BrowserExtensionHostRequest, { type: 'cancel' | 'commandResult' }>): Promise<JsonValue> {
 	if (message.type === 'activate') {
 		const globals = globalThis as unknown as Record<string, unknown>;
 		globals.__ashConfiguration = message.configuration;
 		globals.__ashInitialization = message.initialization;
 		globals.__ashInvocation = (required = true): number | undefined => {
-			if (required && (currentInvocation === undefined || !invocations.has(currentInvocation)))
-				throw new Error('Browser invocation has retired');
+			if (required && (currentInvocation === undefined || !invocations.has(currentInvocation))) throw new Error('Browser invocation has retired');
 			return currentInvocation;
 		};
 		globals.__ashRequest = (id: number, encoded: string): Promise<string> => {
@@ -88,8 +80,7 @@ async function dispatch(
 			return clientRequest(JSON.parse(encoded)).then(value => JSON.stringify(value));
 		};
 		globals.__ashWebviewResource = (url: string): void => scope.postMessage({ type: 'webviewResource', url });
-		globals.__ashRegistrationsChanged = (snapshot: JsonValue): void =>
-			scope.postMessage({ type: 'registrationsChanged', snapshot });
+		globals.__ashRegistrationsChanged = (snapshot: JsonValue): void => scope.postMessage({ type: 'registrationsChanged', snapshot });
 		// Immutable bundled package code executes in a separate Worker realm.
 		runtime = (await import(/* @vite-ignore */ message.entryPoint)) as BrowserRuntime;
 		return runtime.activate();
@@ -117,12 +108,7 @@ async function dispatch(
 	currentInvocation = message.id;
 	let result: Promise<JsonValue>;
 	try {
-		result = runtime.invoke(
-			message.request.registrationId,
-			message.request.payload,
-			message.id,
-			message.request.operation,
-		);
+		result = runtime.invoke(message.request.registrationId, message.request.payload, message.id, message.request.operation);
 	} finally {
 		currentInvocation = previous;
 	}

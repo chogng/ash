@@ -57,39 +57,24 @@ export function hitTestStanzaVisualEditorPoint(
 	if (projection.modelVersion !== model.version) {
 		throw new Error('Stanza visual hit testing requires the current text model projection');
 	}
-	if (
-		point.left < 0 ||
-		point.top < 0 ||
-		point.left >= layout.viewportSize.width ||
-		point.top >= layout.viewportSize.height
-	) {
+	if (point.left < 0 || point.top < 0 || point.left >= layout.viewportSize.width || point.top >= layout.viewportSize.height) {
 		return undefined;
 	}
 	const contentTop = point.top + layout.scrollPosition.top - (metrics.paddingTop ?? 0);
 	if (contentTop < 0) {
 		return target(EditorHitTargetKind.EmptyContent, 0, 0);
 	}
-	const visualLineIndex =
-		metrics.getLineIndexAtVerticalOffset?.(contentTop + (metrics.paddingTop ?? 0)) ??
-		Math.floor(contentTop / layout.lineHeight);
+	const visualLineIndex = metrics.getLineIndexAtVerticalOffset?.(contentTop + (metrics.paddingTop ?? 0)) ?? Math.floor(contentTop / layout.lineHeight);
 	if (visualLineIndex >= projection.visualLineCount) {
 		const logicalLineIndex = model.lineCount - 1;
-		return target(
-			EditorHitTargetKind.AfterLines,
-			logicalLineIndex,
-			model.getLineContent(logicalLineIndex + 1).length,
-		);
+		return target(EditorHitTargetKind.AfterLines, logicalLineIndex, model.getLineContent(logicalLineIndex + 1).length);
 	}
 	const visualLine = projection.lineAt(visualLineIndex)!;
 	if (point.left < metrics.gutterWidth) {
 		return target(EditorHitTargetKind.Gutter, visualLine.logicalLineIndex, 0);
 	}
 	const text = projection.getViewLineData(model, visualLineIndex + 1).content;
-	const textOffset =
-		point.left +
-		layout.scrollPosition.left -
-		metrics.textLeft -
-		(visualLine.projectionData ? 0 : (visualLine.wrappedTextIndentWidth ?? 0));
+	const textOffset = point.left + layout.scrollPosition.left - metrics.textLeft - (visualLine.projectionData ? 0 : (visualLine.wrappedTextIndentWidth ?? 0));
 	if (textOffset < 0 || text.length === 0) {
 		return visualTarget(EditorHitTargetKind.EmptyContent, projection, visualLineIndex, 0);
 	}
@@ -97,20 +82,10 @@ export function hitTestStanzaVisualEditorPoint(
 	if (textOffset >= lineWidth) {
 		return visualTarget(EditorHitTargetKind.EmptyContent, projection, visualLineIndex, text.length);
 	}
-	return visualTarget(
-		EditorHitTargetKind.Text,
-		projection,
-		visualLineIndex,
-		nearestCursorColumn(text, textOffset, measurer),
-	);
+	return visualTarget(EditorHitTargetKind.Text, projection, visualLineIndex, nearestCursorColumn(text, textOffset, measurer));
 }
 
-function visualTarget(
-	kind: EditorHitTargetKind,
-	projection: EditorVisualLineProjection,
-	visualLineIndex: number,
-	columnIndex: number,
-): EditorHitTarget {
+function visualTarget(kind: EditorHitTargetKind, projection: EditorVisualLineProjection, visualLineIndex: number, columnIndex: number): EditorHitTarget {
 	const viewPosition = new Position(visualLineIndex + 1, columnIndex + 1);
 	return Object.freeze({
 		kind,
@@ -140,7 +115,10 @@ function nearestCursorColumn(line: string, horizontalOffset: number, measurer: T
 }
 
 function target(kind: EditorHitTargetKind, lineIndex: number, columnIndex: number): EditorHitTarget {
-	return Object.freeze({ kind, position: new Position(lineIndex + 1, columnIndex + 1) });
+	return Object.freeze({
+		kind,
+		position: new Position(lineIndex + 1, columnIndex + 1),
+	});
 }
 
 function validatePoint(point: ViewportPoint): void {

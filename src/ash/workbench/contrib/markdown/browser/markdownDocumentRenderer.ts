@@ -23,11 +23,7 @@ export class MarkdownDocumentView extends Disposable {
 
 	readonly element: HTMLIFrameElement;
 
-	constructor(
-		container: HTMLElement,
-		options: MarkdownDocumentViewOptions,
-		@IInstantiationService instantiation: IInstantiationService,
-	) {
+	constructor(container: HTMLElement, options: MarkdownDocumentViewOptions, @IInstantiationService instantiation: IInstantiationService) {
 		super();
 		this.openLink = options.openLink;
 		this.preview = this._register(

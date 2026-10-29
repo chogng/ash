@@ -1,17 +1,8 @@
-import {
-	APP_SERVER_METHODS,
-	type MessageHistoryEntry as EntryDto,
-} from '../../../../../.build/protocol/typescript/index.js';
+import { APP_SERVER_METHODS, type MessageHistoryEntry as EntryDto } from '../../../../../.build/protocol/typescript/index.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { localize } from '../../../nls.js';
-import type {
-	IMessageHistoryService,
-	MessageHistoryEntry,
-	MessageHistoryPage,
-	MessageHistoryQuery,
-	MessageHistorySubmission,
-} from '../common/messageHistory.js';
+import type { IMessageHistoryService, MessageHistoryEntry, MessageHistoryPage, MessageHistoryQuery, MessageHistorySubmission } from '../common/messageHistory.js';
 
 export class AppServerMessageHistoryService implements IMessageHistoryService {
 	constructor(private readonly client: AppServerProtocolClient) {}

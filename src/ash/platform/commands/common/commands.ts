@@ -40,10 +40,7 @@ export interface ICommandEvent {
 
 /** Stores realm-wide command definitions independently of their UI bindings. */
 export class CommandRegistry {
-	private readonly commands = new Map<
-		CommandId,
-		{ readonly owner: object; readonly definition: CommandDefinition }
-	>();
+	private readonly commands = new Map<CommandId, { readonly owner: object; readonly definition: CommandDefinition }>();
 	private readonly changed = new Emitter<void>();
 	readonly onDidChangeCommands: Event<void> = this.changed.event;
 
@@ -90,8 +87,7 @@ export class CommandRegistry {
 		const ids = new Set<CommandId>();
 		for (const command of normalized) {
 			const existing = this.commands.get(command.id);
-			if (ids.has(command.id) || (existing && existing.owner !== owner))
-				throw new Error(`Command is already registered: ${command.id}`);
+			if (ids.has(command.id) || (existing && existing.owner !== owner)) throw new Error(`Command is already registered: ${command.id}`);
 			ids.add(command.id);
 		}
 		this.deleteOwner(owner);
@@ -106,12 +102,7 @@ export class CommandRegistry {
 
 function normalizeCommandDefinition(command: CommandDefinition): CommandDefinition {
 	if (!command || typeof command !== 'object') throw new TypeError('Command definition must be an object');
-	if (
-		typeof command.id !== 'string' ||
-		command.id.trim().length === 0 ||
-		command.id.length > 256 ||
-		command.id.includes('\0')
-	)
+	if (typeof command.id !== 'string' || command.id.trim().length === 0 || command.id.length > 256 || command.id.includes('\0'))
 		throw new TypeError('Command ID must contain 1 to 256 characters without NUL');
 	if (typeof command.handler !== 'function') throw new TypeError(`Command '${command.id}' must provide a handler`);
 	const constraints = command.metadata?.args?.map(argument => argument.constraint);

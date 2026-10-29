@@ -45,10 +45,7 @@ export class ReplacePattern {
 		let result = '';
 		for (const piece of this.pieces) {
 			if (isNamedPiece(piece)) {
-				result += applyCaseOperations(
-					groups && Object.hasOwn(groups, piece.name) ? (groups[piece.name] ?? '') : `$<${piece.name}>`,
-					piece.caseOps,
-				);
+				result += applyCaseOperations(groups && Object.hasOwn(groups, piece.name) ? (groups[piece.name] ?? '') : `$<${piece.name}>`, piece.caseOps);
 			} else if (piece.staticValue !== null) {
 				result += piece.staticValue;
 			} else {
@@ -99,9 +96,7 @@ export function parseReplaceString(source: string): ReplacePattern {
 				matchIndex = matchIndex * 10 + Number(source[index + 2]);
 				index++;
 			}
-			pieces.push(
-				caseOps.length ? ReplacePiece.caseOps(matchIndex, caseOps) : ReplacePiece.matchIndex(matchIndex),
-			);
+			pieces.push(caseOps.length ? ReplacePiece.caseOps(matchIndex, caseOps) : ReplacePiece.matchIndex(matchIndex));
 			caseOps = [];
 			index++;
 			continue;
@@ -140,12 +135,7 @@ function applyCaseOperations(value: string, operations: readonly string[]): stri
 	let operationIndex = 0;
 	for (const character of value) {
 		const operation = operations[operationIndex];
-		result +=
-			operation === 'u' || operation === 'U'
-				? character.toUpperCase()
-				: operation === 'l' || operation === 'L'
-					? character.toLowerCase()
-					: character;
+		result += operation === 'u' || operation === 'U' ? character.toUpperCase() : operation === 'l' || operation === 'L' ? character.toLowerCase() : character;
 		if (operation === 'u' || operation === 'l') operationIndex++;
 	}
 	return result;

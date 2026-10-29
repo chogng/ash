@@ -51,10 +51,7 @@ test('text inputs resolve once and retain shared provider text until the last in
 	const opening = first.resolve();
 	assert.equal(first.resolve(), opening);
 	const [firstModel, secondModel] = await Promise.all([opening, second.resolve()]);
-	assert.deepEqual(
-		[calls, first.getName(), second.getName(), firstModel.textEditorModel === secondModel.textEditorModel],
-		[2, 'Review', 'content.txt', true],
-	);
+	assert.deepEqual([calls, first.getName(), second.getName(), firstModel.textEditorModel === secondModel.textEditorModel], [2, 'Review', 'content.txt', true]);
 	first.dispose();
 	assert.deepEqual([firstModel.isResolved(), secondModel.isResolved(), text.isDisposed()], [false, true, false]);
 	second.dispose();
@@ -102,20 +99,12 @@ test('live file inputs match resource requests while custom views keep their sep
 	const original = group.openEditor(input).editor;
 	assert.ok(input instanceof EditorInput);
 	assert.deepEqual(
-		[
-			input.matches(renamed),
-			input.matches({ resource: input.resource }),
-			input.matches(custom),
-			custom.matches({ resource: input.resource, editorId: custom.editorId }),
-		],
+		[input.matches(renamed), input.matches({ resource: input.resource }), input.matches(custom), custom.matches({ resource: input.resource, editorId: custom.editorId })],
 		[true, true, false, true],
 	);
 	group.openEditor(renamed);
 	group.openEditor(custom);
-	assert.deepEqual(
-		[group.entries.length, group.entries[0]!.instanceId, input.getName()],
-		[2, original.instanceId, 'Selected name'],
-	);
+	assert.deepEqual([group.entries.length, group.entries[0]!.instanceId, input.getName()], [2, original.instanceId, 'Selected name']);
 });
 
 for (const [kind, createInput] of [
@@ -167,14 +156,6 @@ for (const [kind, createInput] of [
 		}
 		secondView.clear();
 		input.dispose();
-		assert.deepEqual(
-			[
-				originalChanges.hasListeners(),
-				modifiedChanges.hasListeners(),
-				originalChanges.isDisposed,
-				modifiedChanges.isDisposed,
-			],
-			[false, false, false, false],
-		);
+		assert.deepEqual([originalChanges.hasListeners(), modifiedChanges.hasListeners(), originalChanges.isDisposed, modifiedChanges.isDisposed], [false, false, false, false]);
 	});
 }

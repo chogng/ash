@@ -5,5 +5,8 @@ export const EDITOR_MODEL_DEFAULTS = Object.freeze({
 	detectIndentation: true,
 	trimAutoWhitespace: true,
 	largeFileOptimizations: true,
-	bracketPairColorizationOptions: Object.freeze({ enabled: true, independentColorPoolPerBracketType: false }),
+	bracketPairColorizationOptions: Object.freeze({
+		enabled: true,
+		independentColorPoolPerBracketType: false,
+	}),
 });

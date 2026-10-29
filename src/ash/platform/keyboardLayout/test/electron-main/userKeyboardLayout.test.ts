@@ -5,14 +5,8 @@ import { join } from 'node:path';
 import { test } from 'mocha';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
-import {
-	parseUserKeyboardLayoutResource,
-	USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT,
-} from '../../../../platform/keyboardLayout/common/userKeyboardLayout.js';
-import {
-	UserKeyboardLayoutMainService,
-	userKeyboardLayoutChannel,
-} from '../../../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js';
+import { parseUserKeyboardLayoutResource, USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT } from '../../../../platform/keyboardLayout/common/userKeyboardLayout.js';
+import { UserKeyboardLayoutMainService, userKeyboardLayoutChannel } from '../../../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js';
 
 test('user keyboard layout parser accepts VS Code debug JSON and canonical Ash JSON', () => {
 	const windows = parseUserKeyboardLayoutResource({
@@ -77,15 +71,9 @@ test('profile keyboard-layout.json is created and hot-reloaded, including invali
 		try {
 			const channel = userKeyboardLayoutChannel(service);
 			const snapshots: unknown[] = [];
-			using subscription = channel.listen(
-				'window:1',
-				'onDidChangeKeyboardLayout',
-			)(value => snapshots.push(value));
+			using subscription = channel.listen('window:1', 'onDidChangeKeyboardLayout')(value => snapshots.push(value));
 			assert.equal(await channel.call('window:1', 'readKeyboardLayout'), undefined);
-			await assert.rejects(
-				channel.call('window:1', 'readKeyboardLayout', { windowId: 2 }),
-				/does not accept parameters/,
-			);
+			await assert.rejects(channel.call('window:1', 'readKeyboardLayout', { windowId: 2 }), /does not accept parameters/);
 			assert.equal(await service.ensureResource(), filePath);
 			assert.equal(await readFile(filePath, 'utf8'), USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT);
 			await channel.call('window:1', 'openResource');
@@ -115,9 +103,7 @@ test('profile keyboard-layout.json is created and hot-reloaded, including invali
 			assert.equal(await service.readKeyboardLayout(), undefined);
 			assert.equal(errors.length, 1);
 			assert.deepEqual(
-				snapshots.map(value =>
-					value === undefined ? undefined : (value as { layout: { id: string } }).layout.id,
-				),
+				snapshots.map(value => (value === undefined ? undefined : (value as { layout: { id: string } }).layout.id)),
 				['custom.test', undefined],
 			);
 		} finally {
@@ -130,7 +116,13 @@ test('profile keyboard-layout.json is created and hot-reloaded, including invali
 });
 
 function mappingEntry(value: string, withShift: string, vkey?: string) {
-	return { value, withShift, withAltGr: '', withShiftAltGr: '', ...(vkey ? { vkey } : {}) };
+	return {
+		value,
+		withShift,
+		withAltGr: '',
+		withShiftAltGr: '',
+		...(vkey ? { vkey } : {}),
+	};
 }
 
 function nextChange(service: UserKeyboardLayoutMainService): Promise<void> {

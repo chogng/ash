@@ -5,20 +5,7 @@ import { SSEParser, type ISSEEvent } from '../../common/sseParser.js';
 suite('SSE framing', () => {
 	test('preserves UTF-8, fields and blank lines across arbitrary byte splits', () => {
 		for (const newline of ['\n', '\r', '\r\n']) {
-			const bytes = new TextEncoder().encode(
-				[
-					': keepalive',
-					'event: delta',
-					'data: 你好 🌲',
-					'data: next',
-					'',
-					'event: ignored',
-					'',
-					'data',
-					'',
-					'',
-				].join(newline),
-			);
+			const bytes = new TextEncoder().encode([': keepalive', 'event: delta', 'data: 你好 🌲', 'data: next', '', 'event: ignored', '', 'data', '', ''].join(newline));
 			for (let split = 0; split <= bytes.length; split++) {
 				const events: ISSEEvent[] = [];
 				const parser = new SSEParser(event => events.push(event));

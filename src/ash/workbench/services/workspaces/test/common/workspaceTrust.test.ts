@@ -7,30 +7,15 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
-import {
-	DEVELOPMENT_DIR_PERMISSIONS,
-	IWorkspaceTrustApi,
-	READ_DIR_PERMISSIONS,
-	type WorkspaceTrustPermission,
-} from '../../../../../platform/workspace/common/workspaceTrust.js';
+import { DEVELOPMENT_DIR_PERMISSIONS, IWorkspaceTrustApi, READ_DIR_PERMISSIONS, type WorkspaceTrustPermission } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { createDisconnectedWorkspaceTrustApi } from '../../../../../platform/workspace/browser/workspaceTrustApi.js';
 import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { WorkspaceTrustManagementService } from '../../common/workspaceTrust.js';
-import {
-	IRemoteAuthorityResolverService,
-	WebSocketRemoteConnection,
-} from '../../../../../platform/remote/common/remoteAuthorityResolver.js';
+import { IRemoteAuthorityResolverService, WebSocketRemoteConnection } from '../../../../../platform/remote/common/remoteAuthorityResolver.js';
 import { RemoteAuthorityResolverService } from '../../../../../platform/remote/browser/remoteAuthorityResolverService.js';
 import { RemoteAuthorityResolverService as DesktopRemoteAuthorityResolverService } from '../../../../../platform/remote/electron-browser/remoteAuthorityResolverService.js';
-import {
-	IExtensionHostApi,
-	type ExtensionHostFleetSnapshot,
-	type JsonValue,
-} from '../../../../../platform/agentHost/common/extensionHostApi.js';
-import {
-	IRemoteSocketFactoryService,
-	RemoteSocketFactoryService,
-} from '../../../../../platform/remote/common/remoteSocketFactoryService.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
+import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../../../../platform/remote/common/remoteSocketFactoryService.js';
 import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { WorkspaceTrustRequestService } from '../../common/workspaceTrust.js';
 import { IWorkspaceTrustManagementService } from '../../../../../platform/workspace/common/workspaceTrust.js';
@@ -169,9 +154,7 @@ for (const prefix of ['ssh', 'team']) {
 		using resolver = services.createInstance(DesktopRemoteAuthorityResolverService);
 		services.registerInstance(IRemoteAuthorityResolverService, resolver);
 		services.registerInstance(IWorkspaceContextService, workspace);
-		services.registerSingleton(IRemoteSocketFactoryService, () =>
-			services.createInstance(RemoteSocketFactoryService),
-		);
+		services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
 		let trustHint = true;
 		let canonical = URI.parse(`ash-remote://${prefix}+build/canonical`);
 		let allowed: readonly WorkspaceTrustPermission[] = READ_DIR_PERMISSIONS;
@@ -215,9 +198,7 @@ for (const prefix of ['ssh', 'team']) {
 					failure: undefined,
 					stderr: '',
 					outputEvents: [],
-					registrations: [
-						{ kind: 'remoteAuthorityResolver', registrationId: 'resolve', authorityPrefix: prefix },
-					],
+					registrations: [{ kind: 'remoteAuthorityResolver', registrationId: 'resolve', authorityPrefix: prefix }],
 				},
 			],
 		};
@@ -633,17 +614,8 @@ for (const destination of ['local', 'other-host', 'replaced-provider'] as const)
 		const mutation = f.trust.setUrisTrust([uri], true);
 		await entered.p;
 		if (destination === 'replaced-provider') f.resolver._setResolvedAuthority(address, { isTrusted: false });
-		await canonical.complete(
-			destination === 'local'
-				? URI.file('/first')
-				: destination === 'other-host'
-					? uri.with({ authority: 'team+other' })
-					: uri,
-		);
-		await assert.rejects(
-			mutation,
-			destination === 'replaced-provider' ? isCancellationError : /cannot manage directory permissions/,
-		);
+		await canonical.complete(destination === 'local' ? URI.file('/first') : destination === 'other-host' ? uri.with({ authority: 'team+other' }) : uri);
+		await assert.rejects(mutation, destination === 'replaced-provider' ? isCancellationError : /cannot manage directory permissions/);
 		assert.deepEqual(f.effects, []);
 	});
 }
@@ -687,9 +659,7 @@ function createTrustFixture(recovering = false, multiRoot = false) {
 	const changed = resources.add(new Emitter<void>());
 	const recovered = resources.add(new Emitter<void>());
 	const state = {
-		status: recovering
-			? ('recovering' as 'recovering' | 'idle' | 'failed')
-			: ('idle' as 'recovering' | 'idle' | 'failed'),
+		status: recovering ? ('recovering' as 'recovering' | 'idle' | 'failed') : ('idle' as 'recovering' | 'idle' | 'failed'),
 		readGate: undefined as DeferredPromise<void> | undefined,
 		readStarted: undefined as DeferredPromise<void> | undefined,
 		failPath: undefined as string | undefined,

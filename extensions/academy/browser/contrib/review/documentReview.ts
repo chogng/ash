@@ -7,11 +7,7 @@ import { localize } from 'ash:editor/nls.js';
 import { createCommentCommand, createResolveRevisionCommand } from '../../../common/model/documentReview.js';
 import { DocumentTransaction } from '../../../common/model/documentTransaction.js';
 import { findDocumentNode, type DocumentNode } from '../../../common/model/document.js';
-import type {
-	DocumentEditorContributionContext,
-	DocumentFormattingContribution,
-	DocumentFormattingState,
-} from '../../documentContributions.js';
+import type { DocumentEditorContributionContext, DocumentFormattingContribution, DocumentFormattingState } from '../../documentContributions.js';
 import { DocumentFormattingControls } from '../../widget/documentFormattingControls.js';
 
 export class DocumentReviewContribution extends DocumentFormattingControls implements DocumentFormattingContribution {
@@ -19,9 +15,7 @@ export class DocumentReviewContribution extends DocumentFormattingControls imple
 	private readonly author = this.addInput(localize('document.review.author', 'Review author'));
 	private readonly comment = this.addInput(localize('document.review.comment', 'Comment text'));
 	private readonly add = this.addButton(localize('document.review.add', 'Add comment'), () =>
-		this.context.runDocumentCommand((schema, document, blockId, selection) =>
-			createCommentCommand(schema, document, blockId, selection, this.comment.value, this.author.value),
-		),
+		this.context.runDocumentCommand((schema, document, blockId, selection) => createCommentCommand(schema, document, blockId, selection, this.comment.value, this.author.value)),
 	);
 	private readonly track = this.addSelect(
 		localize('document.review.track', 'Track block revisions'),
@@ -31,9 +25,7 @@ export class DocumentReviewContribution extends DocumentFormattingControls imple
 		],
 		value =>
 			this.context.runDocumentCommand((_schema, document, blockId) => ({
-				transaction: new DocumentTransaction()
-					.withMeta('review.control', true)
-					.setNodeAttributes(document.id, { ...document.attrs, trackChanges: value === 'true' }),
+				transaction: new DocumentTransaction().withMeta('review.control', true).setNodeAttributes(document.id, { ...document.attrs, trackChanges: value === 'true' }),
 				focus: { blockId },
 			})),
 	);
@@ -67,16 +59,8 @@ export class DocumentReviewContribution extends DocumentFormattingControls imple
 				record.type === 'reviewComment'
 					? localize('document.review.commentSummary', '{0}: {1}', record.attrs.author, record.attrs.body)
 					: record.attrs.scope === 'structure'
-						? localize(
-								'document.review.structureSummary',
-								'Document structure revision started by {0}',
-								record.attrs.author,
-							)
-						: localize(
-								'document.review.revisionSummary',
-								'Block revision started by {0}',
-								record.attrs.author,
-							);
+						? localize('document.review.structureSummary', 'Document structure revision started by {0}', record.attrs.author)
+						: localize('document.review.revisionSummary', 'Block revision started by {0}', record.attrs.author);
 			row.append(label);
 			const button = (name: string, run: () => void): void => {
 				const control = this.rows.add(new Button(row, { ...defaultButtonStyles, label: name, size: 'small' }));
@@ -91,37 +75,28 @@ export class DocumentReviewContribution extends DocumentFormattingControls imple
 					button(localize('document.review.go', 'Go to comment'), () => {
 						const selection = JSON.parse(String(record.attrs.anchor));
 						let target = findDocumentNode(state.document!, selection.anchor.nodeId);
-						while (target?.parent && target.node.type !== 'paragraph' && target.node.type !== 'heading')
-							target = findDocumentNode(state.document!, target.parent.id);
+						while (target?.parent && target.node.type !== 'paragraph' && target.node.type !== 'heading') target = findDocumentNode(state.document!, target.parent.id);
 						if (target) this.context.selectText(target.node.id, selection);
 					});
-				button(
-					record.attrs.resolved
-						? localize('document.review.reopen', 'Reopen comment')
-						: localize('document.review.resolve', 'Resolve comment'),
-					() =>
-						this.context.runDocumentCommand((_schema, document, blockId) => {
-							const current = findDocumentNode(document, record.id)?.node;
-							return current
-								? {
-										transaction: new DocumentTransaction()
-											.withMeta('review.control', true)
-											.setNodeAttributes(current.id, {
-												...current.attrs,
-												resolved: !current.attrs.resolved,
-											}),
-										focus: { blockId },
-									}
-								: undefined;
-						}),
+				button(record.attrs.resolved ? localize('document.review.reopen', 'Reopen comment') : localize('document.review.resolve', 'Resolve comment'), () =>
+					this.context.runDocumentCommand((_schema, document, blockId) => {
+						const current = findDocumentNode(document, record.id)?.node;
+						return current
+							? {
+									transaction: new DocumentTransaction().withMeta('review.control', true).setNodeAttributes(current.id, {
+										...current.attrs,
+										resolved: !current.attrs.resolved,
+									}),
+									focus: { blockId },
+								}
+							: undefined;
+					}),
 				);
 				button(localize('document.review.delete', 'Delete comment'), () =>
 					this.context.runDocumentCommand((_schema, document, blockId) =>
 						document.content.some(node => node.id === record.id)
 							? {
-									transaction: new DocumentTransaction()
-										.withMeta('review.control', true)
-										.deleteNode(record.id),
+									transaction: new DocumentTransaction().withMeta('review.control', true).deleteNode(record.id),
 									focus: { blockId },
 								}
 							: undefined,
@@ -145,10 +120,7 @@ export class DocumentReviewContribution extends DocumentFormattingControls imple
 							: accept
 								? localize('document.review.accept', 'Accept block revision')
 								: localize('document.review.reject', 'Reject block revision'),
-						() =>
-							this.context.runDocumentCommand((schema, document, blockId) =>
-								createResolveRevisionCommand(schema, document, record.id, accept, blockId),
-							),
+						() => this.context.runDocumentCommand((schema, document, blockId) => createResolveRevisionCommand(schema, document, record.id, accept, blockId)),
 					);
 			}
 			this.list.append(row);
@@ -169,9 +141,7 @@ export function getDocumentReviewAccessibleText(document: DocumentNode): string 
 						record.attrs.author,
 						record.attrs.body,
 						record.attrs.quote,
-						record.attrs.resolved
-							? localize('document.review.resolved', 'Resolved')
-							: localize('document.review.open', 'Open'),
+						record.attrs.resolved ? localize('document.review.resolved', 'Resolved') : localize('document.review.open', 'Open'),
 					)
 				: localize('document.review.revisionSummary', 'Block revision started by {0}', record.attrs.author) +
 					'\n' +

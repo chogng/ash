@@ -3,13 +3,7 @@ import { WorkbenchViewContainerId } from '../../../common/views.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
@@ -52,8 +46,7 @@ export class BreakpointsView extends ViewPane {
 	private readonly breakpointToolbar: WorkbenchToolBar;
 	private readonly breakpointItems = this._register(new DisposableMap<string, DebugBreakpointItem>());
 	private readonly breakpointEditControls = this._register(new MutableDisposable<DisposableStore>());
-	private breakpointEdit:
-		{ readonly id?: string; readonly form: HTMLFormElement; readonly sessionId?: string } | undefined;
+	private breakpointEdit: { readonly id?: string; readonly form: HTMLFormElement; readonly sessionId?: string } | undefined;
 	private readonly exceptionControls = this._register(new DisposableStore());
 	constructor(
 		container: HTMLElement,
@@ -107,9 +100,7 @@ export class BreakpointsView extends ViewPane {
 				run: () => this.debug.removeAllBreakpoints(),
 			},
 		];
-		this.breakpointToolbar.setActions(
-			breakpointActions.map(action => ({ ...action, tooltip: action.label, enabled: true })),
-		);
+		this.breakpointToolbar.setActions(breakpointActions.map(action => ({ ...action, tooltip: action.label, enabled: true })));
 
 		this._register(
 			addDisposableListener(this.exceptionsElement, 'change', () => {
@@ -126,11 +117,7 @@ export class BreakpointsView extends ViewPane {
 		this.render();
 	}
 	private async changeExceptionBreakpoints(): Promise<void> {
-		const filters = [
-			...this.exceptionsElement.querySelectorAll<HTMLInputElement>('input[data-exception-filter]:checked'),
-		]
-			.map(input => input.dataset.exceptionFilter!)
-			.filter(Boolean);
+		const filters = [...this.exceptionsElement.querySelectorAll<HTMLInputElement>('input[data-exception-filter]:checked')].map(input => input.dataset.exceptionFilter!).filter(Boolean);
 		try {
 			await this.debug.setExceptionBreakpoints(filters);
 		} catch (error) {
@@ -199,30 +186,14 @@ export class BreakpointsView extends ViewPane {
 						: key === 'logMessage'
 							? capabilities?.supportsLogPoints
 							: undefined;
-			if (supported === false)
-				input.inputElement.setAttribute(
-					'aria-description',
-					localize(
-						'debug.breakpointUnsupported',
-						'The active debug adapter does not support this breakpoint option.',
-					),
-				);
+			if (supported === false) input.inputElement.setAttribute('aria-description', localize('debug.breakpointUnsupported', 'The active debug adapter does not support this breakpoint option.'));
 			inputs.set(key, input);
 			return input;
 		};
-		if (state.kind === 'function')
-			field('name', localize('debug.functionName', 'Function name'), state.breakpoint?.name);
+		if (state.kind === 'function') field('name', localize('debug.functionName', 'Function name'), state.breakpoint?.name);
 		if (state.kind === 'instruction') {
-			field(
-				'instructionReference',
-				localize('debug.instructionAddress', 'Instruction address'),
-				state.instructionReference,
-			);
-			field(
-				'offset',
-				localize('debug.instructionOffset', 'Instruction byte offset'),
-				String(state.breakpoint?.offset ?? 0),
-			);
+			field('instructionReference', localize('debug.instructionAddress', 'Instruction address'), state.instructionReference);
+			field('offset', localize('debug.instructionOffset', 'Instruction byte offset'), String(state.breakpoint?.offset ?? 0));
 		}
 		let access: HTMLSelectElement | undefined;
 		if (state.kind === 'data') {
@@ -230,21 +201,14 @@ export class BreakpointsView extends ViewPane {
 			const label = h(this.element.ownerDocument, 'label');
 			label.textContent = localize('debug.dataAccess', 'Break on access');
 			access = select(this.element.ownerDocument, label.textContent);
-			access.append(
-				...data.accessTypes.map(type => option(this.element.ownerDocument, type, dataAccessLabel(type))),
-			);
+			access.append(...data.accessTypes.map(type => option(this.element.ownerDocument, type, dataAccessLabel(type))));
 			access.value = data.accessType;
 			label.append(access);
 			form.append(label);
 		}
 		field('condition', localize('debug.breakpointCondition', 'Expression condition'), breakpoint?.condition);
-		field(
-			'hitCondition',
-			localize('debug.breakpointHitCondition', 'Hit count condition'),
-			breakpoint?.hitCondition,
-		);
-		if (state.kind === 'source')
-			field('logMessage', localize('debug.breakpointLogMessage', 'Log message'), state.breakpoint.logMessage);
+		field('hitCondition', localize('debug.breakpointHitCondition', 'Hit count condition'), breakpoint?.hitCondition);
+		if (state.kind === 'source') field('logMessage', localize('debug.breakpointLogMessage', 'Log message'), state.breakpoint.logMessage);
 		const close = () => {
 			this.renderInputBox(undefined);
 			if (breakpoint) this.breakpointItems.get(breakpoint.id)?.focusEdit();
@@ -282,37 +246,20 @@ export class BreakpointsView extends ViewPane {
 					for (const [key, input] of inputs) {
 						if (key === 'offset') {
 							if (!/^[+-]?\d+$/.test(input.value.trim()) || !Number.isSafeInteger(Number(input.value))) {
-								input.showValidation(
-									localize(
-										'debug.invalidInstructionOffset',
-										'Instruction byte offset must be an integer.',
-									),
-								);
+								input.showValidation(localize('debug.invalidInstructionOffset', 'Instruction byte offset must be an integer.'));
 								return;
 							}
 							update.offset = Number(input.value);
-						} else if (
-							key === 'name' ||
-							key === 'instructionReference' ||
-							key === 'condition' ||
-							key === 'hitCondition' ||
-							key === 'logMessage'
-						)
-							update[key] = input.value;
+						} else if (key === 'name' || key === 'instructionReference' || key === 'condition' || key === 'hitCondition' || key === 'logMessage') update[key] = input.value;
 					}
 					if (state.kind === 'instruction' && !update.instructionReference?.trim()) {
-						inputs
-							.get('instructionReference')!
-							.showValidation(
-								localize('debug.instructionAddressRequired', 'Enter an instruction address.'),
-							);
+						inputs.get('instructionReference')!.showValidation(localize('debug.instructionAddressRequired', 'Enter an instruction address.'));
 						return;
 					}
 					if (access) update.accessType = access.value as IDataBreakpointOptions['accessType'];
 					if (breakpoint) this.debug.updateBreakpoint(breakpoint.id, update);
 					else if (state.kind === 'function') {
-						if (!update.name?.trim())
-							throw new Error(localize('debug.functionNameRequired', 'Enter a function name.'));
+						if (!update.name?.trim()) throw new Error(localize('debug.functionNameRequired', 'Enter a function name.'));
 						this.debug.addFunctionBreakpoint({
 							name: update.name,
 							condition: update.condition,
@@ -338,12 +285,7 @@ export class BreakpointsView extends ViewPane {
 				}
 			}),
 		);
-		const sessionId =
-			state.kind === 'instruction'
-				? this.debug.session!.id
-				: state.kind === 'data' && !state.breakpoint
-					? state.options.sessionId
-					: undefined;
+		const sessionId = state.kind === 'instruction' ? this.debug.session!.id : state.kind === 'data' && !state.breakpoint ? state.options.sessionId : undefined;
 		this.breakpointEdit = { id: breakpoint?.id, form, sessionId };
 		this.setCollapsed(false);
 		this.breakpointsElement.before(form);
@@ -365,39 +307,21 @@ export class BreakpointsView extends ViewPane {
 		this.exceptionControls.clear();
 		this.exceptionsElement.replaceChildren(
 			...(session?.capabilities.exceptionBreakpointFilters ?? []).map(filter =>
-				exceptionItem(
-					this.exceptionControls,
-					this.element.ownerDocument,
-					filter.filter,
-					filter.label,
-					filter.description,
-					selectedExceptions.includes(filter.filter),
-				),
+				exceptionItem(this.exceptionControls, this.element.ownerDocument, filter.filter, filter.label, filter.description, selectedExceptions.includes(filter.filter)),
 			),
 		);
-		const allBreakpoints: readonly DebugBreakpoint[] = [
-			...this.debug.breakpoints,
-			...this.debug.functionBreakpoints,
-			...this.debug.dataBreakpoints,
-			...this.debug.instructionBreakpoints,
-		];
+		const allBreakpoints: readonly DebugBreakpoint[] = [...this.debug.breakpoints, ...this.debug.functionBreakpoints, ...this.debug.dataBreakpoints, ...this.debug.instructionBreakpoints];
 		const breakpointIds = new Set(allBreakpoints.map(breakpoint => breakpoint.id));
 		for (const id of this.breakpointItems.keys()) {
 			if (!breakpointIds.has(id)) this.breakpointItems.deleteAndDispose(id);
 		}
 		const edit = this.breakpointEdit;
-		if (
-			edit &&
-			((edit.id && !breakpointIds.has(edit.id)) ||
-				(edit.sessionId && (edit.sessionId !== session?.id || !stopped)))
-		) {
+		if (edit && ((edit.id && !breakpointIds.has(edit.id)) || (edit.sessionId && (edit.sessionId !== session?.id || !stopped)))) {
 			edit.form.remove();
 			this.breakpointEdit = undefined;
 			this.breakpointEditControls.clear();
 		}
-		const focusedBreakpointControl = this.breakpointsElement.contains(this.element.ownerDocument.activeElement)
-			? (this.element.ownerDocument.activeElement as HTMLElement)
-			: undefined;
+		const focusedBreakpointControl = this.breakpointsElement.contains(this.element.ownerDocument.activeElement) ? (this.element.ownerDocument.activeElement as HTMLElement) : undefined;
 		this.breakpointsElement.replaceChildren(
 			...allBreakpoints.map(breakpoint => {
 				let item = this.breakpointItems.get(breakpoint.id);
@@ -409,15 +333,10 @@ export class BreakpointsView extends ViewPane {
 							this.debug,
 							point => {
 								if ('resource' in point)
-									void this.editor
-										.openEditor(
-											{ resource: point.resource },
-											{ selection: lineSelection(point.lineNumber) },
-										)
-										.catch(error => {
-											this.notifications.error(message(error));
-											this.render();
-										});
+									void this.editor.openEditor({ resource: point.resource }, { selection: lineSelection(point.lineNumber) }).catch(error => {
+										this.notifications.error(message(error));
+										this.render();
+									});
 								else this.editAdditionalBreakpoint(point);
 							},
 							point => {
@@ -437,12 +356,7 @@ export class BreakpointsView extends ViewPane {
 		const breakpoints = this;
 		if (!this.contentElement.isConnected || breakpoints.isCollapsed()) return;
 		// Measure intrinsic children rather than the allocated body, so removing rows can shrink it.
-		const contentHeight = Math.ceil(
-			[...this.contentElement.children].reduce(
-				(height, child) => height + child.getBoundingClientRect().height,
-				0,
-			),
-		);
+		const contentHeight = Math.ceil([...this.contentElement.children].reduce((height, child) => height + child.getBoundingClientRect().height, 0));
 		const rowHeight = 22;
 		const minimum = Math.min(contentHeight, 9 * rowHeight);
 		const container = this.views.getActiveViewPaneContainerWithId(WorkbenchViewContainerId.Debug);
@@ -465,16 +379,15 @@ function option(document: Document, value: string, label: string): HTMLOptionEle
 	element.textContent = label;
 	return element;
 }
-function exceptionItem(
-	owner: DisposableStore,
-	document: Document,
-	filter: string,
-	label: string,
-	description: string | undefined,
-	checked: boolean,
-): HTMLLIElement {
+function exceptionItem(owner: DisposableStore, document: Document, filter: string, label: string, description: string | undefined, checked: boolean): HTMLLIElement {
 	const item = h(document, 'li');
-	const control = owner.add(new Checkbox(item, { ...defaultCheckboxStyles, label, checked }));
+	const control = owner.add(
+		new Checkbox(item, {
+			...defaultCheckboxStyles,
+			label,
+			checked,
+		}),
+	);
 	control.element.classList.add('ash-debug-exception-toggle');
 	control.input.dataset.exceptionFilter = filter;
 	if (description) control.element.title = description;
@@ -487,12 +400,7 @@ class DebugBreakpointItem extends Disposable {
 	private readonly edit: Button;
 	private breakpoint!: DebugBreakpoint;
 
-	constructor(
-		document: Document,
-		debug: IDebugService,
-		open: (breakpoint: DebugBreakpoint) => void,
-		edit: (breakpoint: DebugBreakpoint) => void,
-	) {
+	constructor(document: Document, debug: IDebugService, open: (breakpoint: DebugBreakpoint) => void, edit: (breakpoint: DebugBreakpoint) => void) {
 		super();
 		this.domNode = h(document, 'li');
 		this.checkbox = this._register(
@@ -542,46 +450,18 @@ class DebugBreakpointItem extends Disposable {
 		this.breakpoint = breakpoint;
 		let location: string;
 		if ('resource' in breakpoint) location = `${basename(breakpoint.resource)}:${breakpoint.lineNumber}`;
-		else if (breakpoint.kind === 'function')
-			location = localize('debug.functionBreakpointLabel', 'Function: {0}', breakpoint.name);
-		else if (breakpoint.kind === 'data')
-			location = localize(
-				'debug.dataBreakpointLabel',
-				'Data: {0} ({1})',
-				breakpoint.description,
-				dataAccessLabel(breakpoint.accessType),
-			);
-		else
-			location = localize(
-				'debug.instructionBreakpointLabel',
-				'Instruction: {0} (offset {1})',
-				breakpoint.instructionReference,
-				breakpoint.offset ?? 0,
-			);
+		else if (breakpoint.kind === 'function') location = localize('debug.functionBreakpointLabel', 'Function: {0}', breakpoint.name);
+		else if (breakpoint.kind === 'data') location = localize('debug.dataBreakpointLabel', 'Data: {0} ({1})', breakpoint.description, dataAccessLabel(breakpoint.accessType));
+		else location = localize('debug.instructionBreakpointLabel', 'Instruction: {0} (offset {1})', breakpoint.instructionReference, breakpoint.offset ?? 0);
 		this.domNode.dataset.breakpointId = breakpoint.id;
 		this.domNode.dataset.breakpointKind = 'resource' in breakpoint ? 'source' : breakpoint.kind;
 		this.domNode.classList.toggle('disabled', !breakpoint.enabled);
 		this.domNode.classList.toggle('unverified', !breakpoint.verified);
 		this.checkbox.checked = breakpoint.enabled;
-		this.checkbox.input.setAttribute(
-			'aria-label',
-			localize('debug.enableBreakpoint', 'Enable breakpoint at {0}', location),
-		);
-		const details = [
-			breakpoint.condition,
-			breakpoint.hitCondition,
-			'resource' in breakpoint ? breakpoint.logMessage : undefined,
-		]
-			.filter(Boolean)
-			.join('; ');
+		this.checkbox.input.setAttribute('aria-label', localize('debug.enableBreakpoint', 'Enable breakpoint at {0}', location));
+		const details = [breakpoint.condition, breakpoint.hitCondition, 'resource' in breakpoint ? breakpoint.logMessage : undefined].filter(Boolean).join('; ');
 		this.action.textContent = `${location}${details ? ` — ${details}` : ''}`;
-		this.action.title = [
-			'resource' in breakpoint ? breakpoint.resource.toString() : location,
-			details,
-			breakpoint.message,
-		]
-			.filter(Boolean)
-			.join('\n');
+		this.action.title = ['resource' in breakpoint ? breakpoint.resource.toString() : location, details, breakpoint.message].filter(Boolean).join('\n');
 		if (breakpoint.message) this.action.setAttribute('aria-description', breakpoint.message);
 		else this.action.removeAttribute('aria-description');
 	}

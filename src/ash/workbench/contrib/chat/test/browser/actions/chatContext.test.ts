@@ -1,12 +1,7 @@
 import { CancellationTokenSource } from '../../../../../../base/common/cancellation.js';
 import { observableValue } from '../../../../../../base/common/observable.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
-import {
-	picksWithPromiseFn,
-	type ChatContextPick,
-	type IChatContextPickerItem,
-	type IChatContextPickerPickItem,
-} from '../../../browser/attachments/chatContextPickService.js';
+import { picksWithPromiseFn, type ChatContextPick, type IChatContextPickerItem, type IChatContextPickerPickItem } from '../../../browser/attachments/chatContextPickService.js';
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -30,9 +25,7 @@ function pickerHost(resources: DisposableStore): TestQuickInputService {
 }
 
 function enter(background = false): void {
-	document.activeElement!.dispatchEvent(
-		new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: background, bubbles: true, cancelable: true }),
-	);
+	document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: background, bubbles: true, cancelable: true }));
 }
 
 test('Async context results make the actual source the default background selection', async () => {
@@ -40,12 +33,7 @@ test('Async context results make the actual source the default background select
 	const quickInput = pickerHost(resources);
 	const result = new DeferredPromise<readonly IQuickPickItem[]>();
 	const item = { label: 'Zsh', description: 'Owned terminal' };
-	const selection = pickChatContextItem(
-		quickInput,
-		'Select a terminal',
-		() => result.p,
-		new AbortController().signal,
-	);
+	const selection = pickChatContextItem(quickInput, 'Select a terminal', () => result.p, new AbortController().signal);
 	await result.complete([item]);
 	assert.equal((quickInput.currentQuickInput as IQuickPick<IQuickPickItem>).busy, false);
 	enter(true);
@@ -78,9 +66,7 @@ test('Escape cancels an unresolved context catalog and ignores its late result',
 		},
 		new AbortController().signal,
 	);
-	document.activeElement!.dispatchEvent(
-		new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
-	);
+	document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 	assert.equal(await selection, undefined);
 	assert.equal(token?.isCancellationRequested, true);
 	await result.complete([{ label: 'Late context' }]);

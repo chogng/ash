@@ -1,18 +1,6 @@
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	toDisposable,
-	type IDisposable,
-} from '../../../../../base/common/lifecycle.js';
-import {
-	autorun,
-	observableValue,
-	type IObservable,
-	type IReader,
-	type ISettableObservable,
-} from '../../../../../base/common/observable.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { autorun, observableValue, type IObservable, type IReader, type ISettableObservable } from '../../../../../base/common/observable.js';
 import { LineRange } from '../../../../common/core/ranges/lineRange.js';
 import type { IOffsetRange } from '../../../../common/core/ranges/offsetRange.js';
 import type { CodeEditorWidget } from '../../codeEditor/codeEditorWidget.js';
@@ -64,9 +52,7 @@ export class EditorGutter<T extends IGutterItemInfo> extends Disposable {
 			autorun(reader => {
 				this.geometry.read(reader);
 				const visible = editor.getVisibleRanges();
-				const range = visible.length
-					? LineRange.join(visible.map(range => LineRange.fromRangeInclusive(range)))
-					: new LineRange(1, 1);
+				const range = visible.length ? LineRange.join(visible.map(range => LineRange.fromRangeInclusive(range))) : new LineRange(1, 1);
 				const items = provider.getIntersectingGutterItems(range, reader);
 				const live = new Set(items.map(item => item.id));
 				for (const id of this.views.keys()) {
@@ -82,9 +68,7 @@ export class EditorGutter<T extends IGutterItemInfo> extends Disposable {
 					item,
 					start: editor.getTopForLineNumber(item.range.startLineNumber, true) - scrollTop,
 					endExclusive:
-						(item.range.isEmpty
-							? editor.getTopForLineNumber(item.range.startLineNumber)
-							: editor.getBottomForLineNumber(item.range.endLineNumberExclusive - 1, true)) - scrollTop,
+						(item.range.isEmpty ? editor.getTopForLineNumber(item.range.startLineNumber) : editor.getBottomForLineNumber(item.range.endLineNumberExclusive - 1, true)) - scrollTop,
 				}));
 				let previousNode: HTMLElement | undefined;
 				for (const { item, start, endExclusive } of bounds) {

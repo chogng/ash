@@ -44,13 +44,10 @@ export class SearchResultsRenderer extends Disposable {
 			content.classList.add('ash-search-match');
 			const showLineNumbers = this.configuration.getValue<boolean>(ContentSearchConfiguration.showLineNumbers);
 			const extraLines = element.range.endLineNumber - element.range.startLineNumber;
-			const lineLabel =
-				(showLineNumbers ? `${element.range.startLineNumber}:` : '') + (extraLines > 0 ? `+${extraLines}` : '');
+			const lineLabel = (showLineNumbers ? `${element.range.startLineNumber}:` : '') + (extraLines > 0 ? `+${extraLines}` : '');
 			if (lineLabel) {
 				// A shared budget aligns numbered results; a multiline hint remains visible without line numbers.
-				const digits = showLineNumbers
-					? Math.max(this.lineNumberDigits + 1, lineLabel.length)
-					: lineLabel.length;
+				const digits = showLineNumbers ? Math.max(this.lineNumberDigits + 1, lineLabel.length) : lineLabel.length;
 				content.style.gridTemplateColumns = `calc(${digits}ch + 4px) minmax(0, 1fr)`;
 				const line = h(this.document, 'span');
 				line.className = 'ash-search-line-number';
@@ -63,27 +60,14 @@ export class SearchResultsRenderer extends Disposable {
 			preview.className = 'ash-search-preview';
 			appendPreview(this.document, preview, element);
 			content.append(preview);
-			content.setAttribute(
-				'aria-label',
-				localize(
-					'search.matchLabel',
-					'Line {0}, column {1}: {2}',
-					element.range.startLineNumber,
-					element.range.startColumn,
-					element.preview,
-				),
-			);
+			content.setAttribute('aria-label', localize('search.matchLabel', 'Line {0}, column {1}: {2}', element.range.startLineNumber, element.range.startColumn, element.preview));
 		} else {
 			content.classList.add('ash-search-file-heading');
 			const labelContainer = h(this.document, 'span');
 			labelContainer.className = element.kind === 'file' ? 'ash-search-file-path' : 'ash-search-folder-path';
 			content.append(labelContainer);
-			const parent =
-				element.kind === 'file' ? element.path.slice(0, Math.max(0, element.path.lastIndexOf('/'))) : '';
-			const description =
-				element.kind === 'file' && !options.treeView
-					? [options.showWorkspace ? element.folder?.name : '', parent].filter(Boolean).join(' • ')
-					: undefined;
+			const parent = element.kind === 'file' ? element.path.slice(0, Math.max(0, element.path.lastIndexOf('/'))) : '';
+			const description = element.kind === 'file' && !options.treeView ? [options.showWorkspace ? element.folder?.name : '', parent].filter(Boolean).join(' • ') : undefined;
 			const label = options.folderNames?.join('/') ?? element.name;
 			resources.add(
 				new IconLabel(labelContainer, {
@@ -95,7 +79,14 @@ export class SearchResultsRenderer extends Disposable {
 			);
 			if (element.kind === 'file') {
 				const badge = resources.add(
-					new CountBadge(content, { count: element.matches.length, size: 'small' }, defaultCountBadgeStyles),
+					new CountBadge(
+						content,
+						{
+							count: element.matches.length,
+							size: 'small',
+						},
+						defaultCountBadgeStyles,
+					),
 				);
 				badge.domNode.classList.add('ash-search-file-count');
 			}
@@ -130,11 +121,7 @@ export class SearchResultsRenderer extends Disposable {
 	}
 }
 
-function appendPreview(
-	document: Document,
-	container: HTMLElement,
-	match: Extract<RenderableMatch, { kind: 'match' }>,
-): void {
+function appendPreview(document: Document, container: HTMLElement, match: Extract<RenderableMatch, { kind: 'match' }>): void {
 	const text = match.preview;
 	const hitStart = Math.max(0, Math.min(text.length, match.previewRange.start));
 	const hitEnd = Math.max(hitStart, Math.min(text.length, match.previewRange.end));

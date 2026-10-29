@@ -8,17 +8,10 @@ import { localize } from 'ash:editor/nls.js';
 import type { DocumentTextFormat } from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
 
 /** Academy owns image embedding; resource reads retain the initiating host's access checks. */
-export async function materializeDocumentImages(
-	document: DocumentNode,
-	readResource: (resource: URI) => Promise<Uint8Array>,
-): Promise<DocumentNode> {
+export async function materializeDocumentImages(document: DocumentNode, readResource: (resource: URI) => Promise<Uint8Array>): Promise<DocumentNode> {
 	const images = new Map<string, Promise<string>>();
 	const materialize = async (node: DocumentNode): Promise<DocumentNode> => {
-		if (
-			node.type === 'image' &&
-			typeof node.attrs.src === 'string' &&
-			!/^(?:https?:|data:)/i.test(node.attrs.src)
-		) {
+		if (node.type === 'image' && typeof node.attrs.src === 'string' && !/^(?:https?:|data:)/i.test(node.attrs.src)) {
 			let image = images.get(node.attrs.src);
 			if (!image) {
 				const resource = URI.parse(node.attrs.src);
@@ -50,26 +43,13 @@ export class DocumentConversionError extends Error {
 		readonly feature: string,
 		readonly location: string,
 	) {
-		super(
-			localize(
-				'document.conversion.unsupported',
-				'Cannot preserve {0} at {1}.',
-				conversionFeatureLabel(feature),
-				location,
-			),
-		);
+		super(localize('document.conversion.unsupported', 'Cannot preserve {0} at {1}.', conversionFeatureLabel(feature), location));
 		this.name = 'DocumentConversionError';
 	}
 }
 
 /** Explicit import creates a new document; the source remains owned by its text editor. */
-export function importDocumentText(
-	text: string,
-	format: DocumentTextFormat,
-	schema: DocumentSchema,
-	ownerDocument: Document,
-	source: URI,
-): DocumentNode {
+export function importDocumentText(text: string, format: DocumentTextFormat, schema: DocumentSchema, ownerDocument: Document, source: URI): DocumentNode {
 	if (format === 'text') return documentFromPlainText(schema, text);
 	const normalized = text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
 	const decoder = ownerDocument.createElement('textarea');
@@ -92,17 +72,11 @@ export function importDocumentText(
 			return fail('link destination', offset);
 		}
 		if (['javascript:', 'vbscript:', 'blob:'].includes(url.protocol)) return fail(url.protocol, offset);
-		if (url.protocol === 'data:' && !/^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(href))
-			return fail('data URL', offset);
-		if (source.scheme === 'untitled' && !/^[a-z][a-z0-9+.-]*:/i.test(href))
-			return fail('relative destination in an unsaved source', offset);
+		if (url.protocol === 'data:' && !/^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(href)) return fail('data URL', offset);
+		if (source.scheme === 'untitled' && !/^[a-z][a-z0-9+.-]*:/i.test(href)) return fail('relative destination in an unsaved source', offset);
 		return url.href;
 	};
-	const inline = (
-		tokens: readonly MarkedToken[],
-		offset: number,
-		marks: readonly DocumentMark[] = [],
-	): DocumentNode[] => {
+	const inline = (tokens: readonly MarkedToken[], offset: number, marks: readonly DocumentMark[] = []): DocumentNode[] => {
 		const content: DocumentNode[] = [];
 		let cursor = offset;
 		for (const token of tokens) {
@@ -118,22 +92,14 @@ export function importDocumentText(
 				}
 				case 'strong':
 				case 'em':
-					content.push(
-						...inline(token.tokens as MarkedToken[], at, [...marks, { type: token.type, attrs: {} }]),
-					);
+					content.push(...inline(token.tokens as MarkedToken[], at, [...marks, { type: token.type, attrs: {} }]));
 					break;
 				case 'codespan':
-					if (token.text)
-						content.push(schema.createText(token.text, { marks: [...marks, { type: 'code', attrs: {} }] }));
+					if (token.text) content.push(schema.createText(token.text, { marks: [...marks, { type: 'code', attrs: {} }] }));
 					break;
 				case 'link':
 					if (token.title) fail('link title', at);
-					content.push(
-						...inline(token.tokens as MarkedToken[], at, [
-							...marks,
-							{ type: 'link', attrs: { href: destination(token.href, at) } },
-						]),
-					);
+					content.push(...inline(token.tokens as MarkedToken[], at, [...marks, { type: 'link', attrs: { href: destination(token.href, at) } }]));
 					break;
 				case 'image':
 					if (token.title || marks.length) fail('image title or formatting', at);
@@ -167,11 +133,7 @@ export function importDocumentText(
 				case 'text':
 					content.push(
 						schema.createNode('paragraph', {
-							content: token.tokens
-								? inline(token.tokens as MarkedToken[], at)
-								: token.text
-									? [schema.createText(decode(token.text))]
-									: [],
+							content: token.tokens ? inline(token.tokens as MarkedToken[], at) : token.text ? [schema.createText(decode(token.text))] : [],
 						}),
 					);
 					break;
@@ -196,9 +158,7 @@ export function importDocumentText(
 					content.push(schema.createNode('horizontalRule'));
 					break;
 				case 'blockquote':
-					content.push(
-						schema.createNode('blockquote', { content: blocks(token.tokens as MarkedToken[], at) }),
-					);
+					content.push(schema.createNode('blockquote', { content: blocks(token.tokens as MarkedToken[], at) }));
 					break;
 				case 'list':
 					let itemCursor = at;
@@ -255,9 +215,7 @@ export function exportDocumentText(document: DocumentNode, schema: DocumentSchem
 	const escape = (value: string): string =>
 		value
 			.replace(/[\\`*_{}\[\]<>&#!|~.+():@\-]/g, character => (character === '&' ? '&amp;' : `\\${character}`))
-			.replace(/^[ \t]+|[ \t]+$/gm, whitespace =>
-				[...whitespace].map(character => (character === '\t' ? '&#9;' : '&#32;')).join(''),
-			);
+			.replace(/^[ \t]+|[ \t]+$/gm, whitespace => [...whitespace].map(character => (character === '\t' ? '&#9;' : '&#32;')).join(''));
 	const fail = (node: DocumentNode, feature: string): never => {
 		throw new DocumentConversionError(feature, node.id);
 	};
@@ -266,8 +224,7 @@ export function exportDocumentText(document: DocumentNode, schema: DocumentSchem
 	};
 	// GFM splits table cells before parsing code spans and link/image destinations.
 	// These literals bypass text escaping, so protect their pipes only inside cells.
-	const escapeTablePipes = (value: string, inTable: boolean): string =>
-		inTable ? value.replaceAll('|', '\\|') : value;
+	const escapeTablePipes = (value: string, inTable: boolean): string => (inTable ? value.replaceAll('|', '\\|') : value);
 	const inline = (nodes: readonly DocumentNode[], inTable = false): string =>
 		mergeTextRuns(nodes, schema)
 			.map(node => {
@@ -291,16 +248,13 @@ export function exportDocumentText(document: DocumentNode, schema: DocumentSchem
 						case 'code': {
 							const raw = node.text ?? '';
 							if (node.marks.length > 1 || raw.includes('\n')) return fail(node, 'code formatting');
-							const fence = '`'.repeat(
-								Math.max(0, ...[...raw.matchAll(/`+/g)].map(match => match[0].length)) + 1,
-							);
+							const fence = '`'.repeat(Math.max(0, ...[...raw.matchAll(/`+/g)].map(match => match[0].length)) + 1);
 							const content = escapeTablePipes(raw, inTable);
 							value = raw.trim().length ? `${fence} ${content} ${fence}` : `${fence}${content}${fence}`;
 							break;
 						}
 						case 'link':
-							if (Object.keys(mark.attrs).some(key => key !== 'href'))
-								return fail(node, 'link attributes');
+							if (Object.keys(mark.attrs).some(key => key !== 'href')) return fail(node, 'link attributes');
 							value = `[${value}](<${escapeTablePipes(String(mark.attrs.href).replace(/[<>\s]/g, encodeURIComponent), inTable)}>)`;
 							break;
 						default:
@@ -328,16 +282,9 @@ export function exportDocumentText(document: DocumentNode, schema: DocumentSchem
 						return '---';
 					case 'codeBlock': {
 						attributes(node, ['language']);
-						if (
-							node.content.some(
-								child => child.type !== 'text' || child.marks.length || Object.keys(child.attrs).length,
-							)
-						)
-							return fail(node, 'code content');
+						if (node.content.some(child => child.type !== 'text' || child.marks.length || Object.keys(child.attrs).length)) return fail(node, 'code content');
 						const value = node.content.map(child => child.text ?? '').join('');
-						const fence = '`'.repeat(
-							Math.max(2, ...[...value.matchAll(/`+/g)].map(match => match[0].length)) + 1,
-						);
+						const fence = '`'.repeat(Math.max(2, ...[...value.matchAll(/`+/g)].map(match => match[0].length)) + 1);
 						const language = String(node.attrs.language ?? 'text');
 						if (!language || /[\s`]/.test(language)) return fail(node, 'code language');
 						return `${fence}${language}\n${value}\n${fence}`;
@@ -354,13 +301,10 @@ export function exportDocumentText(document: DocumentNode, schema: DocumentSchem
 						return node.content
 							.map((item, index) => {
 								attributes(item, []);
-								const marker =
-									node.type === 'orderedList' ? `${Number(node.attrs.order ?? 1) + index}. ` : '- ';
+								const marker = node.type === 'orderedList' ? `${Number(node.attrs.order ?? 1) + index}. ` : '- ';
 								return blocks(item.content)
 									.split('\n')
-									.map(
-										(line, lineIndex) => `${lineIndex ? ' '.repeat(marker.length) : marker}${line}`,
-									)
+									.map((line, lineIndex) => `${lineIndex ? ' '.repeat(marker.length) : marker}${line}`)
 									.join('\n');
 							})
 							.join('\n\n');
@@ -371,12 +315,7 @@ export function exportDocumentText(document: DocumentNode, schema: DocumentSchem
 							attributes(row, []);
 							return row.content.map(cell => {
 								attributes(cell, []);
-								if (
-									cell.content.length !== 1 ||
-									cell.content[0]!.type !== 'paragraph' ||
-									Object.keys(cell.content[0]!.attrs).length
-								)
-									return fail(cell, 'table cell structure');
+								if (cell.content.length !== 1 || cell.content[0]!.type !== 'paragraph' || Object.keys(cell.content[0]!.attrs).length) return fail(cell, 'table cell structure');
 								const value = inline(cell.content[0]!.content, true);
 								if (value.includes('\n')) return fail(cell, 'multiline table cell');
 								return value;
@@ -452,12 +391,7 @@ function mergeTextRuns(content: readonly DocumentNode[], schema: DocumentSchema)
 	const merged: DocumentNode[] = [];
 	for (const node of content) {
 		const previous = merged.at(-1);
-		if (
-			node.type === 'text' &&
-			previous?.type === 'text' &&
-			JSON.stringify(previous.marks) === JSON.stringify(node.marks) &&
-			JSON.stringify(previous.attrs) === JSON.stringify(node.attrs)
-		) {
+		if (node.type === 'text' && previous?.type === 'text' && JSON.stringify(previous.marks) === JSON.stringify(node.marks) && JSON.stringify(previous.attrs) === JSON.stringify(node.attrs)) {
 			merged[merged.length - 1] = schema.createText(previous.text! + node.text!, {
 				id: previous.id,
 				marks: previous.marks,

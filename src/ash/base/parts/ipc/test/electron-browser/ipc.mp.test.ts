@@ -74,11 +74,7 @@ suite('IPC, MessagePorts', () => {
 			tracking[Symbol.dispose]();
 		}
 	});
-	const reply = (
-		data: unknown,
-		ports: readonly MessagePort[] = [],
-		source: Window | null = dom.window as unknown as Window,
-	): void => {
+	const reply = (data: unknown, ports: readonly MessagePort[] = [], source: Window | null = dom.window as unknown as Window): void => {
 		dom.window.dispatchEvent(new dom.window.MessageEvent('message', { data, ports: [...ports], source }));
 	};
 
@@ -109,13 +105,7 @@ suite('IPC, MessagePorts', () => {
 	test('structured failures preserve their message and fatal recovery category', async () => {
 		for (const fatal of [false, true]) {
 			const result = ipc.acquirePort(undefined, 'ash:test:ports', `failure-${fatal}`);
-			const failed = assert.rejects(
-				result,
-				error =>
-					error instanceof ipc.MessagePortAcquisitionError &&
-					error.message === 'host unavailable' &&
-					error.fatal === fatal,
-			);
+			const failed = assert.rejects(result, error => error instanceof ipc.MessagePortAcquisitionError && error.message === 'host unavailable' && error.fatal === fatal);
 			reply({ nonce: `failure-${fatal}`, error: 'host unavailable', fatal });
 			await failed;
 		}
@@ -141,19 +131,13 @@ suite('IPC, MessagePorts', () => {
 
 	test('request dispatch failure rejects and releases the registered preload response', async () => {
 		sendFailure = new Error('request channel closed');
-		await assert.rejects(
-			ipc.acquirePort('ash:test:request', 'ash:test:ports', 'dispatch'),
-			error => error === sendFailure,
-		);
+		await assert.rejects(ipc.acquirePort('ash:test:request', 'ash:test:ports', 'dispatch'), error => error === sendFailure);
 		assert.deepEqual(sent, []);
 	});
 
 	test('request channels dispatch the nonce after response registration', async () => {
 		const result = ipc.acquirePort('ash:test:request', 'ash:test:ports', 'dispatch');
-		assert.deepEqual(
-			{ sent, registrations: [...registrations] },
-			{ sent: [['ash:test:request', 'dispatch']], registrations: ['ash:test:ports:dispatch'] },
-		);
+		assert.deepEqual({ sent, registrations: [...registrations] }, { sent: [['ash:test:request', 'dispatch']], registrations: ['ash:test:ports:dispatch'] });
 		const rejected = assert.rejects(result, { name: 'CancellationError' });
 		result.cancel();
 		await rejected;

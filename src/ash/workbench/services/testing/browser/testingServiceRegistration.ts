@@ -10,13 +10,6 @@ import { IDebugService } from '../../../contrib/debug/common/debug.js';
 
 registerWorkbenchServiceContribution({
 	service: ITestingService,
-	dependencies: [
-		ITaskService,
-		ILogService,
-		ITestExecutionService,
-		IWorkspaceContextService,
-		IWorkingCopyService,
-		IDebugService,
-	],
+	dependencies: [ITaskService, ILogService, ITestExecutionService, IWorkspaceContextService, IWorkingCopyService, IDebugService],
 	install: context => context.register(context.container.createInstance(TestingService)),
 });

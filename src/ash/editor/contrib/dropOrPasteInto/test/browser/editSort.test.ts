@@ -15,12 +15,7 @@ function edit(title: string, kind: string, yieldTo?: Edit['yieldTo'], handledMim
 }
 
 test('yield preferences order a chain without changing unrelated candidates', () => {
-	const edits = [
-		edit('third', 'c', [{ kind: new HierarchicalKind('b') }]),
-		edit('unrelated', 'x'),
-		edit('second', 'b', [{ kind: new HierarchicalKind('a') }]),
-		edit('first', 'a'),
-	];
+	const edits = [edit('third', 'c', [{ kind: new HierarchicalKind('b') }]), edit('unrelated', 'x'), edit('second', 'b', [{ kind: new HierarchicalKind('a') }]), edit('first', 'a')];
 	assert.deepEqual(
 		sortEditsByYieldTo(edits).map(item => item.title),
 		['first', 'second', 'third', 'unrelated'],
@@ -45,10 +40,7 @@ test('mime preferences and parent kinds target matching edits', () => {
 
 test('empty and cyclic preferences remain finite', () => {
 	assert.deepEqual(sortEditsByYieldTo([]), []);
-	const edits = [
-		edit('a', 'a', [{ kind: new HierarchicalKind('b') }]),
-		edit('b', 'b', [{ kind: new HierarchicalKind('a') }]),
-	];
+	const edits = [edit('a', 'a', [{ kind: new HierarchicalKind('b') }]), edit('b', 'b', [{ kind: new HierarchicalKind('a') }])];
 	assert.deepEqual(
 		sortEditsByYieldTo(edits).map(item => item.title),
 		['a', 'b'],

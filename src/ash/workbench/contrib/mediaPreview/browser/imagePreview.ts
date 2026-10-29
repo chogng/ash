@@ -9,10 +9,7 @@ import { CancellationError } from '../../../../base/common/errors.js';
 import { MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { basename, extUri } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
-import {
-	IAccessibleViewService,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
@@ -106,21 +103,13 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 		this._register(
 			this.files.onDidChangeFiles(event => {
 				const input = this.input;
-				if (
-					!input ||
-					(event.resources && !event.resources.some(resource => extUri.isEqual(resource, input.resource)))
-				) {
+				if (!input || (event.resources && !event.resources.some(resource => extUri.isEqual(resource, input.resource)))) {
 					return;
 				}
 				const reload = this.load(input, new AbortController().signal, false);
 				const generation = this.generation;
 				void reload.catch(error => {
-					if (
-						error instanceof CancellationError ||
-						this.isDisposed ||
-						generation !== this.generation ||
-						this.input !== input
-					) {
+					if (error instanceof CancellationError || this.isDisposed || generation !== this.generation || this.input !== input) {
 						return;
 					}
 					this.failLoad(input, error, generation);
@@ -177,9 +166,7 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 	public getAccessibleContent(): string {
 		const metadata = this.metadata;
 		if (!metadata || !this.input) {
-			return this.loadFailure === undefined
-				? localize('media.image.empty', 'No image loaded.')
-				: localize('media.image.loadFailed', 'Could not load image: {0}', this.loadFailure);
+			return this.loadFailure === undefined ? localize('media.image.empty', 'No image loaded.') : localize('media.image.loadFailed', 'Could not load image: {0}', this.loadFailure);
 		}
 		return localize(
 			'media.image.content',
@@ -257,9 +244,7 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 		});
 		const actions = [
 			action('imagePreview.fit', localize('media.image.fit', 'Fit to window'), () => this.setScale('fit')),
-			action('imagePreview.actualSize', localize('media.image.actualSize', 'Actual size'), () =>
-				this.setScale(1),
-			),
+			action('imagePreview.actualSize', localize('media.image.actualSize', 'Actual size'), () => this.setScale(1)),
 			action('imagePreview.zoomOut', localize('media.image.zoomOut', 'Zoom out'), () => this.zoom(0.8)),
 			action('imagePreview.zoomIn', localize('media.image.zoomIn', 'Zoom in'), () => this.zoom(1.25)),
 		];
@@ -279,10 +264,7 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 
 	private updateAriaLabel(): void {
 		const hint = this.accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.ImagePreview);
-		this.domNode.setAttribute(
-			'aria-label',
-			[localize('media.image.preview', 'Image preview'), hint].filter(Boolean).join('. '),
-		);
+		this.domNode.setAttribute('aria-label', [localize('media.image.preview', 'Image preview'), hint].filter(Boolean).join('. '));
 	}
 
 	private zoom(factor: number): void {
@@ -298,11 +280,7 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 		if (this.scale !== 'fit' || !this.metadata) {
 			return this.scale === 'fit' ? 1 : this.scale;
 		}
-		return Math.min(
-			1,
-			this.viewportDomNode.clientWidth / this.metadata.width,
-			this.viewportDomNode.clientHeight / this.metadata.height,
-		);
+		return Math.min(1, this.viewportDomNode.clientWidth / this.metadata.width, this.viewportDomNode.clientHeight / this.metadata.height);
 	}
 
 	private zoomLabel(): string {
@@ -323,14 +301,7 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 		const metadata = this.metadata;
 		let summary = '';
 		if (metadata) {
-			summary = localize(
-				'media.image.summary',
-				'{0} × {1} pixels · {2} bytes · {3}',
-				metadata.width,
-				metadata.height,
-				this.byteLength,
-				this.zoomLabel(),
-			);
+			summary = localize('media.image.summary', '{0} × {1} pixels · {2} bytes · {3}', metadata.width, metadata.height, this.byteLength, this.zoomLabel());
 		} else if (this.loadFailure !== undefined) {
 			summary = localize('media.image.loadFailed', 'Could not load image: {0}', this.loadFailure);
 		}

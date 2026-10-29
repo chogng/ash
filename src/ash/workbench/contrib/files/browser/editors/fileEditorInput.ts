@@ -22,8 +22,7 @@ export class FileEditorInput extends AbstractResourceEditorInput {
 	readonly showBreadcrumbs = true;
 
 	constructor(resource: URI, options: FileEditorInputOptions = {}) {
-		if (resource.scheme !== Schemas.file && !isRemoteResource(resource))
-			throw new TypeError('File editor input requires a file resource');
+		if (resource.scheme !== Schemas.file && !isRemoteResource(resource)) throw new TypeError('File editor input requires a file resource');
 		super(resource);
 		this.displayName = options.label;
 		this.contentType = options.contentType;

@@ -19,7 +19,10 @@ export class LanguageBracketsConfiguration {
 		const openingBracketInfos = new CachedFunction((bracket: string) => {
 			const closing = new Set<ClosingBracketKind>();
 
-			return { info: new OpeningBracketKind(this, bracket, closing), closing };
+			return {
+				info: new OpeningBracketKind(this, bracket, closing),
+				closing,
+			};
 		});
 		const closingBracketInfos = new CachedFunction((bracket: string) => {
 			const opening = new Set<OpeningBracketKind>();

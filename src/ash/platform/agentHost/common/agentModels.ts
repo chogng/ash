@@ -50,10 +50,7 @@ export interface AdvisorConfig {
 	readonly maxOutputTokens: number;
 }
 
-export type AdvisorSelection =
-	| { readonly type: 'default' }
-	| { readonly type: 'off' }
-	| { readonly type: 'model'; readonly config: AdvisorConfig };
+export type AdvisorSelection = { readonly type: 'default' } | { readonly type: 'off' } | { readonly type: 'model'; readonly config: AdvisorConfig };
 
 export interface ModelProviderCredentialStatus {
 	readonly connection: string;
@@ -92,8 +89,7 @@ export interface CustomModelProvider {
 	}[];
 }
 
-export type ModelProviderTestResult =
-	{ readonly type: 'passed' } | { readonly type: 'failed'; readonly message: string };
+export type ModelProviderTestResult = { readonly type: 'passed' } | { readonly type: 'failed'; readonly message: string };
 
 export interface ModelPreferencesUpdate {
 	readonly acceleration?: string | null;
@@ -136,10 +132,7 @@ export interface IAgentModelsService {
 	listModels(): Promise<AgentModelCatalog>;
 	listProviders(): Promise<AgentModelProviders>;
 	listProviderModels(connection: string): Promise<readonly ModelCatalogEntry[]>;
-	setProviderApiKey(params: {
-		readonly connection: string;
-		readonly apiKey: string;
-	}): Promise<{ readonly connection: string; readonly apiKeyConfigured: boolean }>;
+	setProviderApiKey(params: { readonly connection: string; readonly apiKey: string }): Promise<{ readonly connection: string; readonly apiKeyConfigured: boolean }>;
 	removeProviderApiKey(connection: string): Promise<void>;
 	readModel(): Promise<ModelRef | null>;
 	setModel(params: { readonly commandId: string; readonly model: ModelRef }): Promise<void>;

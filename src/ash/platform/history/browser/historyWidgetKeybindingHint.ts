@@ -4,8 +4,7 @@ import type { IKeybindingService } from '../../keybinding/common/keybinding.js';
 
 export function showHistoryKeybindingHint(keybindingService: IKeybindingService, context?: Context): boolean {
 	return (
-		hasPlainArrow(keybindingService.lookupKeybindings('history.showPrevious', context), 'arrowup') &&
-		hasPlainArrow(keybindingService.lookupKeybindings('history.showNext', context), 'arrowdown')
+		hasPlainArrow(keybindingService.lookupKeybindings('history.showPrevious', context), 'arrowup') && hasPlainArrow(keybindingService.lookupKeybindings('history.showNext', context), 'arrowdown')
 	);
 }
 

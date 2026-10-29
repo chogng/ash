@@ -71,12 +71,7 @@ export class ReleaseNotesEditor extends EditorPane implements IEditorPane {
 		const suffix = this.locale.locale === 'zh-CN' ? '.zh-CN.md' : '.md';
 		const notes = basePath && releaseNotesByFile[`${basePath}${suffix}`];
 		if (!notes) {
-			this.documentView.setMarkdown(
-				localize(
-					'releaseNotes.unavailable',
-					'# Release notes unavailable\n\nThere are no release notes for this version.',
-				),
-			);
+			this.documentView.setMarkdown(localize('releaseNotes.unavailable', '# Release notes unavailable\n\nThere are no release notes for this version.'));
 			return;
 		}
 		this.documentView.setMarkdown(prepareReleaseNotesMarkdown(notes));
@@ -88,7 +83,6 @@ export class ReleaseNotesEditor extends EditorPane implements IEditorPane {
 			await this.tryouts.run(id);
 			return;
 		}
-		if (/^https?:\/\//.test(href))
-			await this.opener.open(href, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true });
+		if (/^https?:\/\//.test(href)) await this.opener.open(href, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true });
 	}
 }

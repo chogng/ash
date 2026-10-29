@@ -8,11 +8,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { startAcademyExtension } from '../../../../../../test/fixtures/academyExtension.js';
 import { URI } from '../../../../base/common/uri.js';
-import {
-	IExtensionHostApi,
-	type ExtensionHostRuntime,
-	type JsonValue,
-} from '../../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostRuntime, type JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { IExtensionApi, type ExtensionDescriptor } from '../../../../platform/extensions/common/extensionApi.js';
 import { EditorPanes } from '../../../browser/editor.js';
 import { type EditorPane } from '../../../browser/parts/editor/editorPane.js';
@@ -70,8 +66,7 @@ for (const [language, title] of [
 			let createdSignal: AbortSignal | undefined;
 			let loads = 0;
 			const api = {
-				invoke: (request, signal) =>
-					process.invoke(request.registrationId, request.operation, request.payload, signal),
+				invoke: (request, signal) => process.invoke(request.registrationId, request.operation, request.payload, signal),
 			} as IExtensionHostApi;
 			const packages = {
 				list: async () => ({ generation: 1, extensions: enabled ? [owner] : [], diagnostics: [] }),
@@ -318,9 +313,7 @@ test('a publisher name or runtime identity cannot grant installed renderer execu
 		{
 			list: async () => ({
 				generation: 1,
-				extensions: [
-					{ ...owner, sourceKind: 'registry', publisher: 'ash', packageSha256: runtime.packageDigest },
-				],
+				extensions: [{ ...owner, sourceKind: 'registry', publisher: 'ash', packageSha256: runtime.packageDigest }],
 				diagnostics: [],
 			}),
 		} as unknown as IExtensionApi,
@@ -370,9 +363,7 @@ test('disabled installed declarations protect document routing and uninstall rem
 					viewType: 'stanza.editor.document',
 					displayName: 'Academy',
 					priority: 'default',
-					selector: [
-						{ filenamePattern: '*.ash-protected', mimeType: 'application/vnd.ash.academy-document+json' },
-					],
+					selector: [{ filenamePattern: '*.ash-protected', mimeType: 'application/vnd.ash.academy-document+json' }],
 				},
 			],
 		},
@@ -426,9 +417,7 @@ test('package artifact capabilities validate targets and cancel conversion when 
 				],
 				importBinary: async (_bytes, _format, _owner, signal) => {
 					started();
-					await new Promise<void>((_resolve, reject) =>
-						signal.addEventListener('abort', () => reject(signal.reason), { once: true }),
-					);
+					await new Promise<void>((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
 					throw new Error('must cancel');
 				},
 			}),
@@ -436,16 +425,10 @@ test('package artifact capabilities validate targets and cancel conversion when 
 	});
 	using bridge = new MainThreadClientEditors(30_000, load, api, packages, emptyEditorDeclarations);
 	await bridge.update({ generation: 1, extensions: [runtime] });
-	const profile = await EditorPanes.getEditorPane({ resource: URI.file('/paper.ash-paper') })!
-		.resolveDocumentProfile!();
+	const profile = await EditorPanes.getEditorPane({ resource: URI.file('/paper.ash-paper') })!.resolveDocumentProfile!();
 	assert.throws(() => profile.create(), /Invalid document artifact format/);
 	invalid = false;
-	const conversion = profile.create().importBinary!(
-		new Uint8Array(),
-		'test',
-		{} as Document,
-		new AbortController().signal,
-	);
+	const conversion = profile.create().importBinary!(new Uint8Array(), 'test', {} as Document, new AbortController().signal);
 	const outcome = assert.rejects(conversion, /abort/i);
 	await entered;
 	bridge.clear();
@@ -475,9 +458,7 @@ test('resource editors validate manifest scope, reserve binary resources and ret
 	const resourceRuntime = {
 		...runtime,
 		id: installed.id,
-		registrations: [
-			{ kind: 'dataChannel' as const, registrationId: 'editor.resource.v1', channelId: 'editor.resource.v1' },
-		],
+		registrations: [{ kind: 'dataChannel' as const, registrationId: 'editor.resource.v1', channelId: 'editor.resource.v1' }],
 	};
 	const editor = {
 		editorId: 'ash.workbench.pdfViewer',
@@ -514,14 +495,8 @@ test('resource editors validate manifest scope, reserve binary resources and ret
 	const descriptor = EditorPanes.getEditorPane(input)!;
 	assert.equal(descriptor.resourceEditor, true);
 	assert.equal(descriptor.documentType, undefined);
-	assert.equal(
-		EditorPanes.getEditorPane({ resource: URI.file('/scope.bin'), contentType: 'Application/PDF; charset=binary' }),
-		descriptor,
-	);
-	await assert.rejects(
-		async () => descriptor.create({ input, instantiationService: {} as IInstantiationService }),
-		/no static implementation/,
-	);
+	assert.equal(EditorPanes.getEditorPane({ resource: URI.file('/scope.bin'), contentType: 'Application/PDF; charset=binary' }), descriptor);
+	await assert.rejects(async () => descriptor.create({ input, instantiationService: {} as IInstantiationService }), /no static implementation/);
 	await bridge.update({ generation: generation++, extensions: [] });
 	assert.throws(() => EditorPanes.getEditorPane(input), /unavailable/);
 	await assert.rejects(async () => descriptor.create({ input }), /abort/i);
@@ -543,15 +518,15 @@ test('a sibling window resource runtime does not register, invoke or load withou
 				throw new Error('An unsupported window must not invoke the client');
 			},
 		} as unknown as IExtensionHostApi,
-		{ list: async () => ({ generation: 1, extensions: [], diagnostics: [] }) } as unknown as IExtensionApi,
+		{
+			list: async () => ({ generation: 1, extensions: [], diagnostics: [] }),
+		} as unknown as IExtensionApi,
 		emptyEditorDeclarations,
 	);
 	const resourceRuntime = {
 		...runtime,
 		id: 'marketplace:pdf-viewer:editor',
-		registrations: [
-			{ kind: 'dataChannel' as const, registrationId: 'editor.resource.v1', channelId: 'editor.resource.v1' },
-		],
+		registrations: [{ kind: 'dataChannel' as const, registrationId: 'editor.resource.v1', channelId: 'editor.resource.v1' }],
 	};
 	await bridge.update({ generation: 1, extensions: [resourceRuntime] });
 	assert.deepEqual(requests, []);
@@ -588,9 +563,7 @@ test('an installed document editor declares restore and creation routes before s
 						displayName: 'Academy Document',
 						priority: 'default',
 						documentType: 'academy',
-						selector: [
-							{ filenamePattern: '*.ash-paper', mimeType: 'application/vnd.ash.academy-document+json' },
-						],
+						selector: [{ filenamePattern: '*.ash-paper', mimeType: 'application/vnd.ash.academy-document+json' }],
 					},
 				],
 			},
@@ -615,10 +588,7 @@ test('an installed document editor declares restore and creation routes before s
 			starts++;
 			assert.deepEqual(request.event, { type: 'capability', capability: 'dataChannel' });
 			await bridge.update({ generation: 1, extensions: [{ ...dormant, lifecycle: 'starting' }] });
-			assert.equal(
-				EditorPanes.getEditorPane({ resource: URI.file('/restored.ash-paper') })?.id,
-				'stanza.editor.document',
-			);
+			assert.equal(EditorPanes.getEditorPane({ resource: URI.file('/restored.ash-paper') })?.id, 'stanza.editor.document');
 			return { generation: 2, extensions: [ready] };
 		},
 		invoke: async () => {
@@ -636,9 +606,7 @@ test('an installed document editor declares restore and creation routes before s
 						displayName: 'Academy Document',
 						priority: 'default',
 						documentType: 'academy',
-						selector: [
-							{ filenamePattern: '*.ash-paper', mimeType: 'application/vnd.ash.academy-document+json' },
-						],
+						selector: [{ filenamePattern: '*.ash-paper', mimeType: 'application/vnd.ash.academy-document+json' }],
 					},
 				],
 			},

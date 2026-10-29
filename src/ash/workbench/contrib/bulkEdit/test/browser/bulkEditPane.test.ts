@@ -1,10 +1,7 @@
 import '../../../../../editor/test/browser/testEditorDom.js';
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import { ResourceEdit, ResourceTextEdit } from '../../../../../editor/browser/services/bulkEditService.js';
-import {
-	ITextModelResourceService,
-	IFileTextModelService,
-} from '../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { ITextModelResourceService, IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { IContextKeyService, ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -32,10 +29,7 @@ import { IViewsService } from '../../../../services/views/common/viewsService.js
 import { isMultiDiffEditorInput } from '../../../multiDiffEditor/browser/multiDiffEditorInput.js';
 import '../../browser/preview/bulkEdit.contribution.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -95,11 +89,7 @@ test('bulk edit preview applies only the selected valid entries', async () => {
 		await previewReady(pane);
 		const checkboxes = [...pane.element.querySelectorAll<HTMLInputElement>('input[type=checkbox]')];
 		assert.equal(checkboxes.length, 2);
-		assert.equal(
-			checkboxes[1] instanceof browser.window.HTMLInputElement,
-			false,
-			'adopted controls retain the main window constructor',
-		);
+		assert.equal(checkboxes[1] instanceof browser.window.HTMLInputElement, false, 'adopted controls retain the main window constructor');
 		assert.equal(checkboxes[0]!.checked, true);
 		assert.equal(checkboxes[1]!.checked, true);
 
@@ -238,10 +228,7 @@ test('individual replacements preserve focus, expanded text and selection across
 			{ range: new Range(1, 1, 1, 2), text: 'A' },
 			{ range: new Range(1, 2, 1, 3), text: 'B' },
 		];
-		const pending = pane.setInput(
-			ResourceEdit.convert({ entries: [{ kind: 'textDocument', resource, expectedText: 'ab', edits }] }),
-			new AbortController().signal,
-		);
+		const pending = pane.setInput(ResourceEdit.convert({ entries: [{ kind: 'textDocument', resource, expectedText: 'ab', edits }] }), new AbortController().signal);
 		await previewReady(pane);
 		const details = pane.element.querySelector('details')!;
 		details.open = true;
@@ -257,9 +244,7 @@ test('individual replacements preserve focus, expanded text and selection across
 		assert.equal(browser.window.document.activeElement, first);
 		assert.equal(pane.element.querySelector('details'), details);
 		assert.equal(details.open, true);
-		pane.element.dispatchEvent(
-			new browser.window.KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }),
-		);
+		pane.element.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }));
 		assert.deepEqual(
 			(await pending)?.map(edit => (edit instanceof ResourceTextEdit ? edit.textEdit : edit)),
 			[edits[1]],
@@ -327,10 +312,7 @@ test('Escape cancels the preview and restores the previously focused control', a
 		browser.window.document.body.prepend(origin);
 		origin.focus();
 		const resource = URI.file('/workspace/new.ts');
-		const pending = pane.setInput(
-			ResourceEdit.convert({ entries: [{ kind: 'create', resource, existing: 'error' }] }),
-			new AbortController().signal,
-		);
+		const pending = pane.setInput(ResourceEdit.convert({ entries: [{ kind: 'create', resource, existing: 'error' }] }), new AbortController().signal);
 		await previewReady(pane);
 		pane.element.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 		assert.deepEqual(
@@ -349,9 +331,7 @@ test('Chinese preview labels and accessibility verbosity follow the registered l
 	setNlsMessages('zh-CN', catalog.bundles);
 	try {
 		await withPane(async (pane, _browser, configuration) => {
-			const setting = Registry.as<IConfigurationRegistry>(Extensions.Configuration).getConfiguration(
-				'files.refactoring.autoSave',
-			)!.setting!;
+			const setting = Registry.as<IConfigurationRegistry>(Extensions.Configuration).getConfiguration('files.refactoring.autoSave')!.setting!;
 			assert.equal(setting.title, '重构后保存文件');
 			assert.equal(setting.description, '控制是否自动保存重构修改的文件。');
 			assert.deepEqual(
@@ -366,14 +346,7 @@ test('Chinese preview labels and accessibility verbosity follow the registered l
 	}
 });
 
-async function withPane(
-	run: (
-		pane: BulkEditPane,
-		browser: JSDOM,
-		configuration: InMemoryConfigurationService,
-		services: InstantiationService,
-	) => Promise<void>,
-): Promise<void> {
+async function withPane(run: (pane: BulkEditPane, browser: JSDOM, configuration: InMemoryConfigurationService, services: InstantiationService) => Promise<void>): Promise<void> {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	const globals = installDomGlobals(browser);
 	using configuration = new InMemoryConfigurationService();
@@ -478,9 +451,7 @@ test('Open changes sends the selected replacements as read-only snapshots to the
 			})),
 			[{ before: 'ab', after: 'aB', readonly: [true, true], target: resource.toString() }],
 		);
-		using reference = await services
-			.get(ITextModelResourceService)
-			.acquire({ resource }, new AbortController().signal);
+		using reference = await services.get(ITextModelResourceService).acquire({ resource }, new AbortController().signal);
 		assert.equal(reference.model.getText(), 'ab');
 		pane.discard();
 		assert.equal(await pending, undefined);

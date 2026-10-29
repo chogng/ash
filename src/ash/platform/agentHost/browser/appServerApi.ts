@@ -39,10 +39,7 @@ export function createDisconnectedServerEventApi(): IServerEventApi {
 	return { subscribe: inertSubscription };
 }
 
-export function createAppServerAppServerApi(
-	connection: AppServerProtocolClient,
-	recovery?: IAppServerConnectionRecovery,
-): IAppServerApi {
+export function createAppServerAppServerApi(connection: AppServerProtocolClient, recovery?: IAppServerConnectionRecovery): IAppServerApi {
 	return {
 		get connectionGeneration() {
 			return connection.generation;
@@ -76,13 +73,7 @@ export function createAppServerServerEventApi(connection: AppServerProtocolClien
 }
 
 /** Consumes a resource from its opening connection and releases it on every terminal path. */
-export async function readAppServerResource(
-	api: IResourceApi,
-	resource: ResourceMetadataResult,
-	maximum: number,
-	signal?: AbortSignal,
-	generation = api.connectionGeneration,
-): Promise<Uint8Array> {
+export async function readAppServerResource(api: IResourceApi, resource: ResourceMetadataResult, maximum: number, signal?: AbortSignal, generation = api.connectionGeneration): Promise<Uint8Array> {
 	let failed = false;
 	const assertCurrent = () => {
 		if (api.connectionGeneration !== generation) throw new Error('Resource belongs to a retired connection');
@@ -102,8 +93,7 @@ export async function readAppServerResource(
 			/[\r\n]/u.test(resource.mimeType)
 		)
 			throw new TypeError('Resource metadata shape is invalid');
-		if (!Number.isSafeInteger(resource.size) || resource.size < 0 || resource.size > maximum)
-			throw new TypeError('Resource size exceeds the read limit');
+		if (!Number.isSafeInteger(resource.size) || resource.size < 0 || resource.size > maximum) throw new TypeError('Resource size exceeds the read limit');
 		if (!/^sha256:[0-9a-f]{64}$/u.test(resource.sha256)) throw new TypeError('Resource digest is invalid');
 		const chunks: VSBuffer[] = [];
 		let offset = 0;
@@ -115,10 +105,8 @@ export async function readAppServerResource(
 				maxBytes: Math.min(262_144, resource.size - offset),
 			});
 			assertCurrent();
-			if (Object.keys(chunk).sort().join(',') !== 'dataBase64,decodedLength,eof,offset,resourceId')
-				throw new TypeError('Resource chunk shape is invalid');
-			if (typeof chunk.dataBase64 !== 'string' || chunk.dataBase64.length > 512 * 1024)
-				throw new TypeError('Resource chunk data exceeds the read limit');
+			if (Object.keys(chunk).sort().join(',') !== 'dataBase64,decodedLength,eof,offset,resourceId') throw new TypeError('Resource chunk shape is invalid');
+			if (typeof chunk.dataBase64 !== 'string' || chunk.dataBase64.length > 512 * 1024) throw new TypeError('Resource chunk data exceeds the read limit');
 			const bytes = decodeBase64(chunk.dataBase64);
 			if (
 				chunk.resourceId !== resource.resourceId ||
@@ -177,13 +165,9 @@ export function createAppServerSkillOperations(connection: AppServerProtocolClie
 					if (state === 'ready') listener.call(thisArgs);
 				}),
 		),
-		list: async (reload, sessionId) =>
-			normalizeSkillCatalog(await appServerRequest(connection, 'skills/list', { reload, sessionId })),
+		list: async (reload, sessionId) => normalizeSkillCatalog(await appServerRequest(connection, 'skills/list', { reload, sessionId })),
 		read: async sessionId => {
-			const [config, catalog] = await Promise.all([
-				appServerRequest(connection, 'config/read', {}),
-				appServerRequest(connection, 'skills/list', { reload: 'refresh', sessionId }),
-			]);
+			const [config, catalog] = await Promise.all([appServerRequest(connection, 'config/read', {}), appServerRequest(connection, 'skills/list', { reload: 'refresh', sessionId })]);
 			return {
 				revision: config.revision,
 				catalog: normalizeSkillCatalog(catalog),
@@ -246,8 +230,7 @@ export function createAppServerSkillOperations(connection: AppServerProtocolClie
 
 function normalizeSkillCatalog(value: unknown): SkillCatalog {
 	const catalog = record(value, 'Skill catalog');
-	if (!Number.isSafeInteger(catalog.generation) || (catalog.generation as number) < 0)
-		throw new TypeError('Skill catalog generation is invalid');
+	if (!Number.isSafeInteger(catalog.generation) || (catalog.generation as number) < 0) throw new TypeError('Skill catalog generation is invalid');
 	if (!Array.isArray(catalog.skills)) throw new TypeError('Skill catalog entries must be an array');
 	return Object.freeze({
 		generation: catalog.generation as number,
@@ -262,20 +245,14 @@ function normalizeSkill(value: unknown): SkillDescriptor {
 	const name = boundedText(id.name, 'Skill name', 64);
 	const description = boundedText(skill.description, 'Skill description', 1024);
 	const metadata = Object.entries(record(skill.metadata ?? {}, 'Skill metadata'));
-	if (
-		metadata.length > 64 ||
-		metadata.some(
-			([key, value]) => !key || [...key].length > 128 || typeof value !== 'string' || [...value].length > 1024,
-		)
-	)
+	if (metadata.length > 64 || metadata.some(([key, value]) => !key || [...key].length > 128 || typeof value !== 'string' || [...value].length > 1024))
 		throw new TypeError('Skill metadata is invalid');
 	const contentDigest = boundedText(skill.contentDigest, 'Skill digest', 96);
 	const enablement = boundedText(skill.enablement, 'Skill enablement', 16);
 	const compatibility = record(skill.compatibility, 'Skill compatibility');
 	const compatibilityType = boundedText(compatibility.type, 'Skill compatibility type', 16);
 	if (enablement !== 'enabled' && enablement !== 'disabled') throw new TypeError('Skill enablement is invalid');
-	if (compatibilityType !== 'compatible' && compatibilityType !== 'unknown')
-		throw new TypeError('Skill compatibility is invalid');
+	if (compatibilityType !== 'compatible' && compatibilityType !== 'unknown') throw new TypeError('Skill compatibility is invalid');
 	return Object.freeze({
 		id: Object.freeze({ source, name }),
 		description,
@@ -287,14 +264,12 @@ function normalizeSkill(value: unknown): SkillDescriptor {
 }
 
 function record(value: unknown, owner: string): Record<string, unknown> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value))
-		throw new TypeError(`${owner} must be an object`);
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError(`${owner} must be an object`);
 	return value as Record<string, unknown>;
 }
 
 function boundedText(value: unknown, owner: string, maximum: number): string {
-	if (typeof value !== 'string' || value.length === 0 || value.length > maximum)
-		throw new TypeError(`${owner} is invalid`);
+	if (typeof value !== 'string' || value.length === 0 || value.length > maximum) throw new TypeError(`${owner} is invalid`);
 	return value;
 }
 

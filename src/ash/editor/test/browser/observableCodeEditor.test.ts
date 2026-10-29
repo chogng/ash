@@ -83,15 +83,9 @@ test('observable code editor starts with an empty editor and follows attachment'
 	});
 	try {
 		const observableEditor = observableCodeEditor(editor);
-		assert.deepEqual(
-			{ model: observableEditor.model.get(), value: observableEditor.value.get() },
-			{ model: null, value: '' },
-		);
+		assert.deepEqual({ model: observableEditor.model.get(), value: observableEditor.value.get() }, { model: null, value: '' });
 		editor.setModel(model);
-		assert.deepEqual(
-			{ model: observableEditor.model.get(), value: observableEditor.value.get() },
-			{ model, value: 'attached' },
-		);
+		assert.deepEqual({ model: observableEditor.model.get(), value: observableEditor.value.get() }, { model, value: 'attached' });
 		editor.dispose();
 		assert.equal(observableEditor.isDisposed, true);
 	} finally {
@@ -112,9 +106,7 @@ test('observable code editor line APIs use one-based line numbers', () => {
 	assert.equal(observableEditor.observeLineHeightForLine(1).get(), 20);
 	assert.equal(observableEditor.observeLineHeightForLine(2).get(), 20);
 	assert.ok(observableEditor.observeTopForLineNumber(1).get() < observableEditor.observeTopForLineNumber(2).get());
-	assert.ok(
-		observableEditor.observeBottomForLineNumber(1).get() <= observableEditor.observeTopForLineNumber(2).get(),
-	);
+	assert.ok(observableEditor.observeBottomForLineNumber(1).get() <= observableEditor.observeTopForLineNumber(2).get());
 	assert.doesNotThrow(() => observableEditor.getWidthOfLine(1));
 	assert.throws(() => observableEditor.getWidthOfLine(0), /Line number/);
 
@@ -128,9 +120,7 @@ test('observable code editor owns reactive decorations and follows editor dispos
 	using model = new TextModel('alpha');
 	const editor = createTestCodeEditor({ container, model, lineHeight: 20 });
 	const observableEditor = observableCodeEditor(editor);
-	const source = observableValue('decorations', [
-		{ range: new Range(1, 1, 1, 3), options: { description: 'observable' } },
-	]);
+	const source = observableValue('decorations', [{ range: new Range(1, 1, 1, 3), options: { description: 'observable' } }]);
 	using decorationOwner = observableEditor.setDecorations(source);
 
 	assert.deepEqual(
@@ -155,9 +145,7 @@ test('observable code editor follows model attachment changes without retaining 
 	using observableEditor = observableCodeEditor(editor);
 	const values: string[] = [];
 	using reaction = autorun(reader => {
-		values.push(
-			`${observableEditor.model.read(reader)?.uri.toString() ?? 'none'}:${observableEditor.value.read(reader)}`,
-		);
+		values.push(`${observableEditor.model.read(reader)?.uri.toString() ?? 'none'}:${observableEditor.value.read(reader)}`);
 	});
 
 	editor.setModel(second);
@@ -191,9 +179,7 @@ test('observable decorations follow the attached model and release old ranges', 
 	using second = new TextModel('second');
 	using editor = createTestCodeEditor({ container, model: first, lineHeight: 20 });
 	using observableEditor = observableCodeEditor(editor);
-	const source = observableValue('switch-decorations', [
-		{ range: new Range(1, 1, 1, 2), options: { description: 'switch' } },
-	]);
+	const source = observableValue('switch-decorations', [{ range: new Range(1, 1, 1, 2), options: { description: 'switch' } }]);
 	using owner = observableEditor.setDecorations(source);
 	assert.equal(first.getAllDecorations().length, 1);
 

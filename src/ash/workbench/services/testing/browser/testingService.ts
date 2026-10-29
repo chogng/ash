@@ -18,11 +18,7 @@ import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js
 import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
-import {
-	ITestExecutionService,
-	type TestDebugLaunch,
-	type TestUpdate,
-} from '../../../../platform/testing/common/testExecutionService.js';
+import { ITestExecutionService, type TestDebugLaunch, type TestUpdate } from '../../../../platform/testing/common/testExecutionService.js';
 import { IDebugService } from '../../../contrib/debug/common/debug.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IWorkingCopyService } from '../../workingCopy/common/workingCopyService.js';
@@ -59,12 +55,7 @@ export class TestingService extends Disposable implements ITestingService {
 	private runController: AbortController | undefined;
 	private debugConfigurationId: string | undefined;
 	private get debugSession() {
-		return this.debug.sessions.find(
-			session =>
-				session.configuration.id === this.debugConfigurationId &&
-				session.state !== 'terminated' &&
-				session.state !== 'error',
-		);
+		return this.debug.sessions.find(session => session.configuration.id === this.debugConfigurationId && session.state !== 'terminated' && session.state !== 'error');
 	}
 	readonly onDidChangeTests = this.testsEmitter.event;
 	private readonly profilesEmitter = this._register(new Emitter<readonly ITestProfile[]>());
@@ -96,9 +87,7 @@ export class TestingService extends Disposable implements ITestingService {
 		this._register(execution.onDidUpdate(update => this.acceptUpdate(update)));
 		this._register(
 			execution.onDidDisconnect(() => {
-				const error = new Error(
-					localize('testing.disconnected', 'The test connection closed. Refresh tests to reconnect.'),
-				);
+				const error = new Error(localize('testing.disconnected', 'The test connection closed. Refresh tests to reconnect.'));
 				for (const operation of this.operations.values()) {
 					operation.abandoned = true;
 					operation.reject(error);
@@ -135,8 +124,7 @@ export class TestingService extends Disposable implements ITestingService {
 		this._register(
 			taskService.onDidChangeTasks(() => {
 				this.projectProfiles();
-				if (this.loaded && this.refreshingTasks === 0 && !this.activeProviderRefresh)
-					void this.refreshProviderProfiles().catch(error => this.reportError(error));
+				if (this.loaded && this.refreshingTasks === 0 && !this.activeProviderRefresh) void this.refreshProviderProfiles().catch(error => this.reportError(error));
 			}),
 		);
 		this._register(
@@ -226,10 +214,7 @@ export class TestingService extends Disposable implements ITestingService {
 				if (controller.signal.aborted) {
 					return;
 				}
-				if (
-					copy.isDirty &&
-					roots.some(root => extUriBiasedIgnorePathCase.isEqualOrParent(copy.resource, root))
-				) {
+				if (copy.isDirty && roots.some(root => extUriBiasedIgnorePathCase.isEqualOrParent(copy.resource, root))) {
 					await copy.save(controller.signal);
 				}
 			}
@@ -281,11 +266,7 @@ export class TestingService extends Disposable implements ITestingService {
 	}
 
 	rerunFailedTests(): Promise<void> {
-		return this.runTests(
-			this.testResults
-				.filter(result => result.state === 'failed' || result.state === 'errored')
-				.map(result => result.key),
-		);
+		return this.runTests(this.testResults.filter(result => result.state === 'failed' || result.state === 'errored').map(result => result.key));
 	}
 
 	async debugTest(key: string): Promise<void> {
@@ -324,16 +305,12 @@ export class TestingService extends Disposable implements ITestingService {
 			}
 			const operation = this.createOperation(test.dirId, 'debug');
 			try {
-				await this.startOperation(operation, () =>
-					this.execution.prepareDebug(operation.id, test.dirId, catalogId, test.id),
-				);
+				await this.startOperation(operation, () => this.execution.prepareDebug(operation.id, test.dirId, catalogId, test.id));
 				if (controller.signal.aborted) {
 					return;
 				}
 				if (!operation.launch) {
-					throw new Error(
-						localize('testing.missingLaunch', 'The backend did not prepare a test debugger launch.'),
-					);
+					throw new Error(localize('testing.missingLaunch', 'The backend did not prepare a test debugger launch.'));
 				}
 				const launch = operation.launch;
 				// Keep the configuration identity across DAP restarts, which may replace the session.
@@ -562,16 +539,10 @@ export class TestingService extends Disposable implements ITestingService {
 
 	async run(profile: ITestProfile): Promise<ITestRun> {
 		const currentProfile = this.currentProfiles.find(candidate => candidate.id === profile.id);
-		const task = currentProfile
-			? this.taskService.tasks.find(
-					candidate => candidate.id === currentProfile.taskId && candidate.group === 'test',
-				)
-			: undefined;
+		const task = currentProfile ? this.taskService.tasks.find(candidate => candidate.id === currentProfile.taskId && candidate.group === 'test') : undefined;
 		if (!task) throw new Error('Test profile is no longer present in the current workspace');
 		const taskRun = await this.taskService.run(task);
-		const run = this._register(
-			new TestRun(currentProfile!, taskRun, current => this.changeRunEmitter.fire(current)),
-		);
+		const run = this._register(new TestRun(currentProfile!, taskRun, current => this.changeRunEmitter.fire(current)));
 		this.currentRuns = [...this.currentRuns, run].slice(-50);
 		this.startRunEmitter.fire(run);
 		return run;
@@ -593,9 +564,7 @@ export class TestingService extends Disposable implements ITestingService {
 	}
 
 	private projectProfiles(): void {
-		const tasks = new Map(
-			this.taskService.tasks.filter(task => task.group === 'test').map(task => [task.id, task]),
-		);
+		const tasks = new Map(this.taskService.tasks.filter(task => task.group === 'test').map(task => [task.id, task]));
 		const taskProfiles = [...tasks.values()].map(task =>
 			Object.freeze({
 				id: task.id,
@@ -605,10 +574,7 @@ export class TestingService extends Disposable implements ITestingService {
 				detail: task.detail ?? task.command,
 			}),
 		);
-		const profiles = Object.freeze([
-			...taskProfiles,
-			...this.providerProfiles.filter(profile => tasks.has(profile.taskId)),
-		]);
+		const profiles = Object.freeze([...taskProfiles, ...this.providerProfiles.filter(profile => tasks.has(profile.taskId))]);
 		if (JSON.stringify(profiles) === JSON.stringify(this.currentProfiles)) return;
 		this.currentProfiles = profiles;
 		this.profilesEmitter.fire(profiles);
@@ -620,8 +586,7 @@ export class TestingService extends Disposable implements ITestingService {
 		const ids = new Set<string>();
 		for (const provider of normalized) {
 			const existing = this.providers.get(provider.id);
-			if (ids.has(provider.id) || (existing && existing.owner !== owner))
-				throw new Error(`Test Profile provider '${provider.id}' is already registered`);
+			if (ids.has(provider.id) || (existing && existing.owner !== owner)) throw new Error(`Test Profile provider '${provider.id}' is already registered`);
 			ids.add(provider.id);
 		}
 		const changed = new Set(this.deleteProviderOwner(owner));
@@ -644,9 +609,7 @@ export class TestingService extends Disposable implements ITestingService {
 		if (this.isDisposed) return;
 		const changedProviders = new Set(providerIds);
 		const refresh = this.loaded || this.activeProviderRefresh !== undefined;
-		this.providerProfiles = Object.freeze(
-			this.providerProfiles.filter(profile => !changedProviders.has(profile.source)),
-		);
+		this.providerProfiles = Object.freeze(this.providerProfiles.filter(profile => !changedProviders.has(profile.source)));
 		this.projectProfiles();
 		this.activeProviderRefresh?.abort();
 		this.providerRefreshGeneration += 1;
@@ -661,11 +624,8 @@ export class TestingService extends Disposable implements ITestingService {
 		const generation = ++this.providerRefreshGeneration;
 		const providers = [...this.providers.values()].map(entry => entry.provider);
 		try {
-			const providerProfiles = (
-				await Promise.all(providers.map(provider => this.provideProfiles(provider, controller.signal)))
-			).flat();
-			if (controller.signal.aborted || generation !== this.providerRefreshGeneration || this.isDisposed)
-				return this.currentProfiles;
+			const providerProfiles = (await Promise.all(providers.map(provider => this.provideProfiles(provider, controller.signal)))).flat();
+			if (controller.signal.aborted || generation !== this.providerRefreshGeneration || this.isDisposed) return this.currentProfiles;
 			const ids = new Set(this.taskService.tasks.filter(task => task.group === 'test').map(task => task.id));
 			for (const profile of providerProfiles) {
 				if (ids.has(profile.id)) throw new Error(`Test Profile '${profile.id}' is already registered`);
@@ -676,30 +636,22 @@ export class TestingService extends Disposable implements ITestingService {
 			this.projectProfiles();
 			return this.currentProfiles;
 		} catch (error) {
-			if (controller.signal.aborted || generation !== this.providerRefreshGeneration || this.isDisposed)
-				return this.currentProfiles;
+			if (controller.signal.aborted || generation !== this.providerRefreshGeneration || this.isDisposed) return this.currentProfiles;
 			throw error;
 		} finally {
 			if (this.activeProviderRefresh === controller) this.activeProviderRefresh = undefined;
 		}
 	}
 
-	private async provideProfiles(
-		provider: TestProfileProvider,
-		signal: AbortSignal,
-	): Promise<readonly ITestProfile[]> {
+	private async provideProfiles(provider: TestProfileProvider, signal: AbortSignal): Promise<readonly ITestProfile[]> {
 		const contributions = await provider.provideTestProfiles(signal);
 		if (signal.aborted) return Object.freeze([]);
-		if (!Array.isArray(contributions))
-			throw new TypeError(`Test Profile provider '${provider.id}' must return an array`);
+		if (!Array.isArray(contributions)) throw new TypeError(`Test Profile provider '${provider.id}' must return an array`);
 		const ids = new Set<string>();
 		return Object.freeze(
 			contributions.map(contribution => {
 				const profile = projectProviderProfile(provider.id, contribution, this.taskService);
-				if (ids.has(profile.id))
-					throw new Error(
-						`Test Profile provider '${provider.id}' returned duplicate profile '${contribution.id}'`,
-					);
+				if (ids.has(profile.id)) throw new Error(`Test Profile provider '${provider.id}' returned duplicate profile '${contribution.id}'`);
 				ids.add(profile.id);
 				return profile;
 			}),
@@ -747,30 +699,20 @@ function projectTestStatus(status: ITaskRun['status']): TestRunStatus {
 function normalizeTestProfileProvider(provider: TestProfileProvider): TestProfileProvider {
 	if (!provider || typeof provider !== 'object') throw new TypeError('Test Profile provider must be an object');
 	const id = normalizeText(provider.id, 'Test Profile provider ID', 256);
-	if (typeof provider.provideTestProfiles !== 'function')
-		throw new TypeError(`Test Profile provider '${id}' must implement provideTestProfiles`);
+	if (typeof provider.provideTestProfiles !== 'function') throw new TypeError(`Test Profile provider '${id}' must implement provideTestProfiles`);
 	return Object.freeze({
 		id,
 		provideTestProfiles: (signal: AbortSignal) => provider.provideTestProfiles.call(provider, signal),
 	});
 }
 
-function projectProviderProfile(
-	providerId: string,
-	contribution: TestProfileContribution,
-	taskService: ITaskService,
-): ITestProfile {
-	if (!contribution || typeof contribution !== 'object')
-		throw new TypeError(`Test Profile provider '${providerId}' returned an invalid profile`);
+function projectProviderProfile(providerId: string, contribution: TestProfileContribution, taskService: ITaskService): ITestProfile {
+	if (!contribution || typeof contribution !== 'object') throw new TypeError(`Test Profile provider '${providerId}' returned an invalid profile`);
 	const id = normalizeText(contribution.id, `Test Profile provider '${providerId}' profile ID`, 256);
 	const label = normalizeText(contribution.label, `Test Profile provider '${providerId}' profile label`, 256);
 	const taskId = normalizeText(contribution.taskId, `Test Profile provider '${providerId}' task ID`, 1024);
-	if (!taskService.tasks.some(task => task.id === taskId && task.group === 'test'))
-		throw new Error(`Test Profile provider '${providerId}' references unavailable test task '${taskId}'`);
-	const detail =
-		contribution.detail === undefined
-			? undefined
-			: normalizeText(contribution.detail, `Test Profile provider '${providerId}' profile detail`, 4096, false);
+	if (!taskService.tasks.some(task => task.id === taskId && task.group === 'test')) throw new Error(`Test Profile provider '${providerId}' references unavailable test task '${taskId}'`);
+	const detail = contribution.detail === undefined ? undefined : normalizeText(contribution.detail, `Test Profile provider '${providerId}' profile detail`, 4096, false);
 	return Object.freeze({
 		id: `extension-profile:${encodeURIComponent(providerId)}:${encodeURIComponent(id)}`,
 		label,
@@ -781,15 +723,12 @@ function projectProviderProfile(
 }
 
 function normalizeText(value: string, owner: string, maximum: number, trim = true): string {
-	if (typeof value !== 'string' || value.trim().length === 0 || value.length > maximum || value.includes('\0'))
-		throw new TypeError(`${owner} must contain 1 to ${maximum} characters without NUL`);
+	if (typeof value !== 'string' || value.trim().length === 0 || value.length > maximum || value.includes('\0')) throw new TypeError(`${owner} must contain 1 to ${maximum} characters without NUL`);
 	return trim ? value.trim() : value;
 }
 
 function staleSelection(): Error {
-	return new Error(
-		localize('testing.staleSelection', 'The selected tests have changed. Refresh tests and select them again.'),
-	);
+	return new Error(localize('testing.staleSelection', 'The selected tests have changed. Refresh tests and select them again.'));
 }
 
 async function settle(promises: readonly Promise<unknown>[]): Promise<void> {

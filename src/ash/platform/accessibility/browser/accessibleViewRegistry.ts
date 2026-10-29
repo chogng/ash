@@ -15,11 +15,7 @@ class AccessibleViewImplementationRegistry {
 	private readonly implementations: IAccessibleViewImplementation[] = [];
 
 	public register(implementation: IAccessibleViewImplementation): IDisposable {
-		if (
-			this.implementations.some(
-				candidate => candidate.name === implementation.name && candidate.type === implementation.type,
-			)
-		) {
+		if (this.implementations.some(candidate => candidate.name === implementation.name && candidate.type === implementation.type)) {
 			throw new Error('Accessible view provider already registered: ' + implementation.name);
 		}
 		this.implementations.push(implementation);

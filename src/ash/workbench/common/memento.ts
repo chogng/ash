@@ -2,12 +2,7 @@ import type { Event } from '../../base/common/event.js';
 import { validateJsonValue } from '../../base/common/jsonValue.js';
 import type { DisposableStore } from '../../base/common/lifecycle.js';
 import { isRecord } from '../../base/common/types.js';
-import {
-	type IStorageService,
-	type IStorageValueChangeEvent,
-	StorageScope,
-	StorageTarget,
-} from '../../platform/storage/common/storage.js';
+import { type IStorageService, type IStorageValueChangeEvent, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
 
 interface MementoScope<T extends object> {
 	readonly state: Partial<T>;
@@ -59,12 +54,7 @@ export class Memento<T extends object = object> {
 			if (Object.keys(state).length === 0) {
 				this.storageService.remove(this.storageKey, scope);
 			} else {
-				this.storageService.store(
-					this.storageKey,
-					JSON.stringify(validateJsonValue(state, { path: this.storageKey })),
-					scope,
-					target,
-				);
+				this.storageService.store(this.storageKey, JSON.stringify(validateJsonValue(state, { path: this.storageKey })), scope, target);
 			}
 		}
 	}

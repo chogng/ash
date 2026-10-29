@@ -50,12 +50,7 @@ class RenameController extends Disposable {
 		private readonly editorInput: HTMLElement,
 		private readonly editor: ICodeEditor,
 		private readonly viewport: View,
-		private readonly applyWorkspaceEdit:
-			| ((
-					edit: languages.LanguageWorkspaceEdit,
-					options?: IBulkEditOptions,
-			  ) => void | boolean | Promise<void | boolean>)
-			| undefined,
+		private readonly applyWorkspaceEdit: ((edit: languages.LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>) | undefined,
 		private readonly onError: (error: unknown) => void,
 		private readonly executeCommand: EditorCommandExecutor,
 		@ILanguageFeaturesService private readonly languageFeaturesService: ILanguageFeaturesService,
@@ -71,11 +66,7 @@ class RenameController extends Disposable {
 		// Cancel before a provider can settle ahead of the editor's deferred blur event.
 		this._register(
 			addDisposableListener(viewport.domNode.domNode, 'focusout', event => {
-				if (
-					this.request &&
-					!this.previewing &&
-					(!isNode(event.relatedTarget) || !viewport.domNode.domNode.contains(event.relatedTarget))
-				) {
+				if (this.request && !this.previewing && (!isNode(event.relatedTarget) || !viewport.domNode.domNode.contains(event.relatedTarget))) {
 					this.cancel();
 				}
 			}),
@@ -134,12 +125,7 @@ class RenameController extends Disposable {
 					const word = model.getWordAtPosition(position);
 					if (word) {
 						preparation = {
-							range: new Range(
-								position.lineNumber,
-								word.startColumn,
-								position.lineNumber,
-								word.endColumn,
-							),
+							range: new Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn),
 							placeholder: word.word,
 						};
 					}
@@ -164,27 +150,20 @@ class RenameController extends Disposable {
 			}
 		}
 		if (languages.isLanguageFeatureRequestCurrent(context)) {
-			this.viewport.announceAccessibilityStatus(
-				localize('rename.notAvailable', 'Rename is not available at this position.'),
-			);
+			this.viewport.announceAccessibilityStatus(localize('rename.notAvailable', 'Rename is not available at this position.'));
 			this.cancel();
 		}
 	}
 
 	private showInput(currentName: string, context: languages.LanguageRenameRequest): void {
-		this.inputResult = this.widget
-			.getInput(this.inputRange!, currentName, context.signal, this.bulkEditService.hasPreviewHandler())
-			.then(result => {
-				if (result !== undefined && this.context === context)
-					return this.applyName(result.newName, result.wantsPreview);
-			});
+		this.inputResult = this.widget.getInput(this.inputRange!, currentName, context.signal, this.bulkEditService.hasPreviewHandler()).then(result => {
+			if (result !== undefined && this.context === context) return this.applyName(result.newName, result.wantsPreview);
+		});
 	}
 
 	public async accept(wantsPreview = false): Promise<void> {
 		if (wantsPreview && !this.bulkEditService.hasPreviewHandler()) {
-			throw new Error(
-				localize('rename.previewUnavailable', 'Rename preview is not available for this editor host.'),
-			);
+			throw new Error(localize('rename.previewUnavailable', 'Rename preview is not available for this editor host.'));
 		}
 		this.widget.acceptInput(wantsPreview);
 		await this.inputResult;
@@ -228,11 +207,7 @@ class RenameController extends Disposable {
 					return;
 				}
 				if (edit.entries.length === 0) return;
-				const documentEdit = edit.entries.find(
-					candidate =>
-						candidate.kind === 'textDocument' &&
-						candidate.resource.toString() === context.resource.toString(),
-				);
+				const documentEdit = edit.entries.find(candidate => candidate.kind === 'textDocument' && candidate.resource.toString() === context.resource.toString());
 				if (edit.entries.length !== 1 || !documentEdit || documentEdit.kind !== 'textDocument') {
 					throw new Error('This editor host cannot apply a multi-resource rename');
 				}
@@ -251,8 +226,7 @@ class RenameController extends Disposable {
 			if (this.context === context) this.cancel();
 		} catch (error) {
 			if (editDispatched || languages.isLanguageFeatureRequestCurrent(context)) this.onError(error);
-			if (languages.isLanguageFeatureRequestCurrent(context) && this.context === context)
-				this.showInput(newName, context);
+			if (languages.isLanguageFeatureRequestCurrent(context) && this.context === context) this.showInput(newName, context);
 		} finally {
 			if (this.context === context) {
 				this.previewing = false;
@@ -295,10 +269,7 @@ class RenameAction extends EditorAction {
 		super({
 			id: RenameCommandId,
 			label: localize2('rename.label', 'Rename Symbol'),
-			precondition: ContextKeyExpr.and(
-				EditorContextKeys.writable,
-				EditorContextKeys.hasRenameProvider.isEqualTo(true),
-			),
+			precondition: ContextKeyExpr.and(EditorContextKeys.writable, EditorContextKeys.hasRenameProvider.isEqualTo(true)),
 			kbOpts: {
 				kbExpr: EditorContextKeys.editorTextFocus.isEqualTo(true),
 				primary: KeyCode.F2,

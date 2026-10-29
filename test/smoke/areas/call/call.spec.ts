@@ -6,37 +6,31 @@ import { launchElectron } from '../../../automation/playwrightElectron.js';
 
 test.use({ openWorkspace: false });
 
-test(
-	'Calls reject unsupported server connections and keep the microphone off',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ target, workbench }) => {
-		const page = workbench.page;
-		await page.keyboard.press('ControlOrMeta+Shift+P');
-		await page.getByPlaceholder('Type the name of a command to run').fill('Open Calls');
-		await page.keyboard.press('Enter');
-		const view = page.locator('.ash-call');
-		await expect(view).toBeVisible();
-		await expect(view.getByRole('status')).toContainText('microphone stays off');
-		await expect(view.getByRole('button', { name: 'Unmute microphone', exact: true })).toBeDisabled();
-		await view.getByLabel('Call', { exact: true }).focus();
-		await page.keyboard.press('Alt+F1');
-		const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
-		await expect(help.getByRole('textbox')).toHaveValue(/Your microphone starts off/u);
-		await page.keyboard.press('Escape');
-		await expect(view.getByLabel('Call', { exact: true })).toBeFocused();
-		await view.getByLabel('Call', { exact: true }).selectOption('server');
-		await view.getByLabel('Server address', { exact: true }).fill('http://example.com');
-		await view.getByLabel('Administrator key or invitation key', { exact: true }).fill('invalid-test-key');
-		await view.getByRole('button', { name: 'Join call', exact: true }).focus();
-		await page.keyboard.press('Enter');
-		// Web enforces its call permission before the desktop address validation.
-		await expect(view.getByRole('status')).toContainText(
-			target.kind === 'browser' ? 'PermissionRequired' : 'invalid call input',
-		);
-		await expect(view.getByRole('button', { name: 'Join call', exact: true })).toBeEnabled();
-		await expect(view.getByRole('button', { name: 'Unmute microphone', exact: true })).toBeDisabled();
-	},
-);
+test('Calls reject unsupported server connections and keep the microphone off', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+Shift+P');
+	await page.getByPlaceholder('Type the name of a command to run').fill('Open Calls');
+	await page.keyboard.press('Enter');
+	const view = page.locator('.ash-call');
+	await expect(view).toBeVisible();
+	await expect(view.getByRole('status')).toContainText('microphone stays off');
+	await expect(view.getByRole('button', { name: 'Unmute microphone', exact: true })).toBeDisabled();
+	await view.getByLabel('Call', { exact: true }).focus();
+	await page.keyboard.press('Alt+F1');
+	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
+	await expect(help.getByRole('textbox')).toHaveValue(/Your microphone starts off/u);
+	await page.keyboard.press('Escape');
+	await expect(view.getByLabel('Call', { exact: true })).toBeFocused();
+	await view.getByLabel('Call', { exact: true }).selectOption('server');
+	await view.getByLabel('Server address', { exact: true }).fill('http://example.com');
+	await view.getByLabel('Administrator key or invitation key', { exact: true }).fill('invalid-test-key');
+	await view.getByRole('button', { name: 'Join call', exact: true }).focus();
+	await page.keyboard.press('Enter');
+	// Web enforces its call permission before the desktop address validation.
+	await expect(view.getByRole('status')).toContainText(target.kind === 'browser' ? 'PermissionRequired' : 'invalid call input');
+	await expect(view.getByRole('button', { name: 'Join call', exact: true })).toBeEnabled();
+	await expect(view.getByRole('button', { name: 'Unmute microphone', exact: true })).toBeDisabled();
+});
 
 test.extend({ electronWindowMode: 'inactive' })(
 	'Windows calls share a selected window, receive video, and clear it after stopping',
@@ -91,15 +85,7 @@ test.extend({ electronWindowMode: 'inactive' })(
 			await expect(selector).toBeFocused();
 			const option = await selector
 				.locator('option')
-				.evaluateAll(options =>
-					options
-						.find(
-							option =>
-								option.textContent?.startsWith('Window:') &&
-								option.textContent.includes('Ash screen share test'),
-						)
-						?.getAttribute('value'),
-				);
+				.evaluateAll(options => options.find(option => option.textContent?.startsWith('Window:') && option.textContent.includes('Ash screen share test'))?.getAttribute('value'));
 			expect(option).toBeTruthy();
 			await selector.selectOption(option!);
 			await view.getByRole('button', { name: 'Start sharing', exact: true }).click();
@@ -121,15 +107,11 @@ test.extend({ electronWindowMode: 'inactive' })(
 	},
 );
 
-test(
-	'Calls remain unavailable when the host has no call backend',
-	{ tag: ['@browser-ui', '@electron-ui'] },
-	async ({ target, workbench }) => {
-		const page = workbench.page;
-		await page.keyboard.press('ControlOrMeta+Shift+P');
-		await page.getByPlaceholder('Type the name of a command to run').fill('Open Calls');
-		await expect(page.getByRole('option', { name: 'Open Calls', exact: true })).toHaveCount(0);
-		await page.keyboard.press('Escape');
-		await expect(page.locator('.ash-call')).toHaveCount(0);
-	},
-);
+test('Calls remain unavailable when the host has no call backend', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+Shift+P');
+	await page.getByPlaceholder('Type the name of a command to run').fill('Open Calls');
+	await expect(page.getByRole('option', { name: 'Open Calls', exact: true })).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await expect(page.locator('.ash-call')).toHaveCount(0);
+});

@@ -1,9 +1,5 @@
 import type { IWorkbenchContribution } from '../../../common/contributions.js';
-import {
-	StatusbarAlignment,
-	type IStatusbarEntryAccessor,
-	IStatusbarService,
-} from '../../../services/statusbar/browser/statusbar.js';
+import { StatusbarAlignment, type IStatusbarEntryAccessor, IStatusbarService } from '../../../services/statusbar/browser/statusbar.js';
 import { Disposable, DisposableMap, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
@@ -25,9 +21,7 @@ export class SCMActiveRepositoryController extends Disposable {
 	}
 
 	private selectRepository(): void {
-		this.repositoryListener.value = this.scmViewService.activeRepository?.provider.onDidChangeResources(() =>
-			this.update(),
-		);
+		this.repositoryListener.value = this.scmViewService.activeRepository?.provider.onDidChangeResources(() => this.update());
 		this.update();
 	}
 
@@ -36,18 +30,9 @@ export class SCMActiveRepositoryController extends Disposable {
 		const provider = this.scmViewService.activeRepository?.provider;
 		if (!provider) return;
 		// A file can appear in both the staged and working-tree groups; the activity counts it once.
-		const count =
-			provider.count ??
-			new Set(
-				provider.groups.flatMap(group =>
-					group.resources.map(resource => extUriBiasedIgnorePathCase.getComparisonKey(resource.sourceUri)),
-				),
-			).size;
+		const count = provider.count ?? new Set(provider.groups.flatMap(group => group.resources.map(resource => extUriBiasedIgnorePathCase.getComparisonKey(resource.sourceUri)))).size;
 		if (!count) return;
-		const description =
-			count === 1
-				? localize('scm.activity.oneChange', '1 changed file')
-				: localize('scm.activity.changes', '{0} changed files', count);
+		const description = count === 1 ? localize('scm.activity.oneChange', '1 changed file') : localize('scm.activity.changes', '{0} changed files', count);
 		this.activity.value = this.activityService.showViewActivity(VIEW_PANE_ID, {
 			badge: new NumberBadge(count, () => description),
 		});

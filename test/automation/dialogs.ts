@@ -17,32 +17,15 @@ interface DialogCaptureGlobal {
 export class Dialogs {
 	constructor(private readonly page: Page) {}
 
-	async expectMessage(
-		application: PlaywrightApplication,
-		title: string,
-		open: () => Promise<unknown>,
-		timeout?: number,
-	): Promise<DialogMessage> {
+	async expectMessage(application: PlaywrightApplication, title: string, open: () => Promise<unknown>, timeout?: number): Promise<DialogMessage> {
 		return this.respond(application, title, open, undefined, timeout);
 	}
 
-	async confirm(
-		application: PlaywrightApplication,
-		title: string,
-		button: string,
-		open: () => Promise<unknown>,
-		timeout?: number,
-	): Promise<DialogMessage> {
+	async confirm(application: PlaywrightApplication, title: string, button: string, open: () => Promise<unknown>, timeout?: number): Promise<DialogMessage> {
 		return this.respond(application, title, open, button, timeout);
 	}
 
-	private async respond(
-		application: PlaywrightApplication,
-		title: string,
-		open: () => Promise<unknown>,
-		button?: string,
-		timeout?: number,
-	): Promise<DialogMessage> {
+	private async respond(application: PlaywrightApplication, title: string, open: () => Promise<unknown>, button?: string, timeout?: number): Promise<DialogMessage> {
 		if (!('windows' in application)) {
 			await open();
 			const dialog = this.page.getByRole('dialog', { name: title, exact: true });
@@ -85,13 +68,7 @@ export class Dialogs {
 		let response: number | undefined;
 		try {
 			await open();
-			await expect
-				.poll(
-					() =>
-						application.evaluate(() => (globalThis as DialogCaptureGlobal).ashTestMessage?.options?.title),
-					{ timeout },
-				)
-				.toBe(title);
+			await expect.poll(() => application.evaluate(() => (globalThis as DialogCaptureGlobal).ashTestMessage?.options?.title), { timeout }).toBe(title);
 			const message = await application.evaluate(() => {
 				const options = (globalThis as DialogCaptureGlobal).ashTestMessage!.options!;
 				return {

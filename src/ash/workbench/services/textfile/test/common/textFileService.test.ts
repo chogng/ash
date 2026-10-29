@@ -1,12 +1,7 @@
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { Disposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { Event } from '../../../../../base/common/event.js';
-import {
-	type IFileSystemProvider,
-	type IFileWriteOptions,
-	type IFileWriteResult,
-	FileSystemProviderCapabilities,
-} from '../../../../../platform/files/common/files.js';
+import { type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { createTestFileService, createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import { BulkEditTestServices } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { BulkEditService } from '../../../../contrib/bulkEdit/browser/bulkEditService.js';
@@ -17,17 +12,8 @@ import { BrowserTextModelService } from '../../../textmodelResolver/browser/brow
 import { BrowserTextResourceStore } from '../../../../contrib/codeEditor/browser/browserTextResourceStore.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { URI } from '../../../../../base/common/uri.js';
-import {
-	FileKind,
-	FileRevisionConflictError,
-	type IFileWriteRequest,
-} from '../../../../../platform/files/common/files.js';
-import {
-	TextFileBinaryError,
-	TextFileContentSource,
-	TextFileSaveConflictError,
-	TextFileTooLargeError,
-} from '../../../../../workbench/services/textfile/common/textFileService.js';
+import { FileKind, FileRevisionConflictError, type IFileWriteRequest } from '../../../../../platform/files/common/files.js';
+import { TextFileBinaryError, TextFileContentSource, TextFileSaveConflictError, TextFileTooLargeError } from '../../../../../workbench/services/textfile/common/textFileService.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
@@ -79,47 +65,23 @@ test('TextFileService preserves file-system failures', async () => {
 	const failure = new Error('unreadable');
 	using service = createTestTextFileService(new TestFileService(Promise.reject(failure)));
 
-	await assert.rejects(
-		service.resolve({ resource: URI.file('C:\\project\\main.ts') }, new AbortController().signal),
-		error => error === failure,
-	);
+	await assert.rejects(service.resolve({ resource: URI.file('C:\\project\\main.ts') }, new AbortController().signal), error => error === failure);
 });
 
 test('TextFileService decodes a UTF-8 BOM and rejects binary or invalid UTF-8 content', async () => {
 	const resource = URI.file('C:\\project\\content.txt');
 	const withBom = new TestFileService(new Uint8Array([0xef, 0xbb, 0xbf, 0x68, 0x69]));
-	assert.equal(
-		(await createTestTextFileService(withBom).resolve({ resource }, new AbortController().signal)).text,
-		'hi',
-	);
+	assert.equal((await createTestTextFileService(withBom).resolve({ resource }, new AbortController().signal)).text, 'hi');
 
-	await assert.rejects(
-		createTestTextFileService(new TestFileService(new Uint8Array([0x68, 0x00, 0x69]))).resolve(
-			{ resource },
-			new AbortController().signal,
-		),
-		TextFileBinaryError,
-	);
-	await assert.rejects(
-		createTestTextFileService(new TestFileService(new Uint8Array([0xc3, 0x28]))).resolve(
-			{ resource },
-			new AbortController().signal,
-		),
-		TextFileBinaryError,
-	);
+	await assert.rejects(createTestTextFileService(new TestFileService(new Uint8Array([0x68, 0x00, 0x69]))).resolve({ resource }, new AbortController().signal), TextFileBinaryError);
+	await assert.rejects(createTestTextFileService(new TestFileService(new Uint8Array([0xc3, 0x28]))).resolve({ resource }, new AbortController().signal), TextFileBinaryError);
 });
 
 test('TextFileService rejects oversized resources before reading their bytes', async () => {
 	const files = new TestFileService('small');
 	files.reportedSizeBytes = 32 * 1024 * 1024 + 1;
 
-	await assert.rejects(
-		createTestTextFileService(files).resolve(
-			{ resource: URI.file('C:\\project\\large.txt') },
-			new AbortController().signal,
-		),
-		TextFileTooLargeError,
-	);
+	await assert.rejects(createTestTextFileService(files).resolve({ resource: URI.file('C:\\project\\large.txt') }, new AbortController().signal), TextFileTooLargeError);
 	assert.equal(files.readCount, 0);
 });
 
@@ -128,10 +90,7 @@ test('TextFileService writes text and observes cancellation', async () => {
 	using service = createTestTextFileService(files);
 	const resource = URI.file('C:\\project\\main.ts');
 
-	const saved = await service.save(
-		{ resource, text: 'saved', expectedRevision: 'revision-1' },
-		new AbortController().signal,
-	);
+	const saved = await service.save({ resource, text: 'saved', expectedRevision: 'revision-1' }, new AbortController().signal);
 	assert.deepEqual(files.writes, [{ resource, content: 'saved', expectedRevision: 'revision-1' }]);
 	assert.equal(saved.revision, 'revision-2');
 
@@ -147,10 +106,7 @@ test('TextFileService maps conditional file-write conflicts to its editor-facing
 	using service = createTestTextFileService(files);
 	const resource = URI.file('C:\\project\\main.ts');
 
-	await assert.rejects(
-		service.save({ resource, text: 'saved', expectedRevision: 'stale' }, new AbortController().signal),
-		TextFileSaveConflictError,
-	);
+	await assert.rejects(service.save({ resource, text: 'saved', expectedRevision: 'stale' }, new AbortController().signal), TextFileSaveConflictError);
 });
 
 test('cancelled replacement waits for an in-flight provider write before restoring the original file', async () => {
@@ -175,19 +131,13 @@ test('cancelled replacement waits for an in-flight provider write before restori
 	};
 	using files = createTestFileService(provider);
 	using service = createTestTextFileService(files);
-	using models = uriIdentityServices.createInstance(
-		BrowserTextModelService,
-		new BrowserTextResourceStore(service),
-		{},
-	);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(service), {});
 	using fixture = new BulkEditTestServices([]);
 	using bulk = new BulkEditService(models, fixture.workingCopies, files, fixture.configuration, fixture.dialogs);
 	const controller = new AbortController();
 	const replacing = bulk.apply(
 		{
-			entries: [
-				{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 10), text: 'replacement' }] },
-			],
+			entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 10), text: 'replacement' }] }],
 		},
 		{ token: controller.signal },
 	);
@@ -210,15 +160,11 @@ test('cancelled replacement waits for an in-flight provider write before restori
 		release.resolve();
 	}
 	await rejected;
-	assert.deepEqual(
-		{ disk, writes, pending: models.hasPendingSaveRecovery() },
-		{ disk: 'workspace', writes: ['replacement', 'workspace'], pending: false },
-	);
+	assert.deepEqual({ disk, writes, pending: models.hasPendingSaveRecovery() }, { disk: 'workspace', writes: ['replacement', 'workspace'], pending: false });
 });
 
 class TestFileService implements IFileSystemProvider {
-	public readonly capabilities =
-		FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
 	public readonly onDidChangeCapabilities = Event.None;
 	public watch(): IDisposable {
 		return Disposable.None;
@@ -228,7 +174,10 @@ class TestFileService implements IFileSystemProvider {
 	reportedSizeBytes: number | undefined;
 	readonly writes: IFileWriteRequest[] = [];
 	rejectWritesWithRevisionConflict = false;
-	readonly onDidChangeFiles = () => ({ dispose() {}, [Symbol.dispose]() {} });
+	readonly onDidChangeFiles = () => ({
+		dispose() {},
+		[Symbol.dispose]() {},
+	});
 
 	constructor(private readonly content: string | Uint8Array | Promise<string>) {}
 
@@ -236,9 +185,7 @@ class TestFileService implements IFileSystemProvider {
 		return {
 			resource,
 			kind: FileKind.File,
-			sizeBytes:
-				this.reportedSizeBytes ??
-				(typeof this.content === 'string' || this.content instanceof Uint8Array ? this.content.length : 0),
+			sizeBytes: this.reportedSizeBytes ?? (typeof this.content === 'string' || this.content instanceof Uint8Array ? this.content.length : 0),
 			readonly: false,
 			modifiedAtMillis: undefined,
 		};
@@ -310,20 +257,17 @@ test('text-file editing preserves UTF-8 BOM through the model, resource adapter 
 	for (const hasBom of [false, true]) {
 		const files = new TestFileService(new TextEncoder().encode((hasBom ? '\uFEFF' : '') + 'first\r\nsecond'));
 		using service = createTestTextFileService(files);
-		using models = uriIdentityServices.createInstance(
-			BrowserTextModelService,
-			new BrowserTextResourceStore(service),
-			{},
-		);
-		using reference = await models.acquire(
-			{ resource: URI.file('C:\\project\\bom.txt') },
-			new AbortController().signal,
-		);
+		using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(service), {});
+		using reference = await models.acquire({ resource: URI.file('C:\\project\\bom.txt') }, new AbortController().signal);
 		reference.model.applyOperations([{ range: new Range(1, 1, 1, 6), text: 'saved' }]);
 		await reference.save(new AbortController().signal);
 		assert.deepEqual(
 			{ text: reference.model.getText(), dirty: reference.isDirty, written: files.writes[0]?.content },
-			{ text: 'saved\r\nsecond', dirty: false, written: (hasBom ? '\uFEFF' : '') + 'saved\r\nsecond' },
+			{
+				text: 'saved\r\nsecond',
+				dirty: false,
+				written: (hasBom ? '\uFEFF' : '') + 'saved\r\nsecond',
+			},
 		);
 	}
 });
@@ -331,18 +275,13 @@ test('text-file editing preserves UTF-8 BOM through the model, resource adapter 
 test('text-file decoding retains a leading content character after the UTF-8 BOM', async () => {
 	const resource = URI.file('C:\\project\\bom.txt');
 	using service = createTestTextFileService(new TestFileService(new TextEncoder().encode('\uFEFF\uFEFFcontent')));
-	using models = uriIdentityServices.createInstance(
-		BrowserTextModelService,
-		new BrowserTextResourceStore(service),
-		{},
-	);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(service), {});
 	using reference = await models.acquire({ resource }, new AbortController().signal);
 	assert.equal(reference.model.getText(), '\uFEFFcontent');
 });
 
 test('TextFileService forwards configured detection and language overrides, with explicit reopen precedence', async () => {
-	const { TestConfigurationService: WorkbenchConfigurationService } =
-		await import('../../../configuration/test/common/testServices.js');
+	const { TestConfigurationService: WorkbenchConfigurationService } = await import('../../../configuration/test/common/testServices.js');
 	await import('../../../../contrib/files/browser/files.contribution.js');
 	using configuration = new WorkbenchConfigurationService();
 	await configuration.updateValue('files.encoding', 'windows1252');
@@ -358,28 +297,14 @@ test('TextFileService forwards configured detection and language overrides, with
 	});
 	using service = createTestTextFileService(files, configuration);
 	const resource = URI.file('/project/file.ts');
-	assert.equal(
-		(await service.resolve({ resource, languageId: 'typescript' }, new AbortController().signal)).encoding,
-		'cp950',
-	);
+	assert.equal((await service.resolve({ resource, languageId: 'typescript' }, new AbortController().signal)).encoding, 'cp950');
 	await service.resolve({ resource, encoding: 'cp850', autoGuessEncoding: true }, new AbortController().signal);
 	assert.deepEqual(requests, [
 		{ encoding: 'cp1125', options: { autoGuessEncoding: true, candidateGuessEncodings: ['utf8', 'cp950'] } },
 		{ encoding: 'cp850', options: undefined },
 	]);
-	assert.equal(
-		(
-			await service.resolve(
-				{ resource, languageId: 'typescript', bootstrapText: 'untitled' },
-				new AbortController().signal,
-			)
-		).encoding,
-		'cp1125',
-	);
-	await assert.rejects(
-		configuration.updateValue('files.candidateGuessEncodings', ['unsupported']),
-		/unique detectable/,
-	);
+	assert.equal((await service.resolve({ resource, languageId: 'typescript', bootstrapText: 'untitled' }, new AbortController().signal)).encoding, 'cp1125');
+	await assert.rejects(configuration.updateValue('files.candidateGuessEncodings', ['unsupported']), /unique detectable/);
 	await assert.rejects(configuration.updateValue('files.autoGuessEncoding', 'yes'), /true or false/);
 	await assert.rejects(configuration.updateValue('files.encoding', 'unsupported'), /Unsupported/);
 	assert.deepEqual(configuration.getValue('files.candidateGuessEncodings'), ['utf8', 'cp950']);

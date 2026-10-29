@@ -20,8 +20,7 @@ export class TestConfigurationFiles extends FileService {
 		const provider = this._register(new InMemoryFileSystemProvider());
 		this._register(this.registerProvider(Schemas.vscodeUserData, provider));
 		this.ready = this.createDirectory(resource.with({ path: '/user' })).then(async () => {
-			if (!this.isDisposed)
-				await super.writeFile({ resource, content: source }, { create: true, overwrite: false });
+			if (!this.isDisposed) await super.writeFile({ resource, content: source }, { create: true, overwrite: false });
 		});
 	}
 
@@ -73,10 +72,7 @@ async function read(files: IFileService) {
 async function write(files: IFileService, source: string, expectedRevision?: string) {
 	const previous = await read(files);
 	await files.createDirectory(resource.with({ path: '/user' }));
-	await files.writeFile(
-		{ resource, content: source, expectedRevision: expectedRevision ?? previous.revision },
-		{ create: true, overwrite: previous.revision !== undefined },
-	);
+	await files.writeFile({ resource, content: source, expectedRevision: expectedRevision ?? previous.revision }, { create: true, overwrite: previous.revision !== undefined });
 }
 
 /** Test composition only; production resolves required services through DI. */

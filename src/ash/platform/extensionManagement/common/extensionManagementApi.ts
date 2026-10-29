@@ -19,15 +19,11 @@ import type {
 
 /** Transport API mirroring the generic App Server Extensions contract. */
 export interface IExtensionManagementApi {
-	recommendationEnvironment(): Promise<
-		import('../../../../../.build/protocol/typescript/index.js').ExtensionsRecommendationEnvironmentResult
-	>;
+	recommendationEnvironment(): Promise<import('../../../../../.build/protocol/typescript/index.js').ExtensionsRecommendationEnvironmentResult>;
 	searchPage(
 		params: import('../../../../../.build/protocol/typescript/index.js').ExtensionsSearchPageParams,
 	): Promise<import('../../../../../.build/protocol/typescript/index.js').ExtensionsSearchPageResult>;
-	builtInProviders(): Promise<
-		import('../../../../../.build/protocol/typescript/index.js').ExtensionsBuiltInProvidersResult
-	>;
+	builtInProviders(): Promise<import('../../../../../.build/protocol/typescript/index.js').ExtensionsBuiltInProvidersResult>;
 	setBuiltInProviderEnablement(
 		params: import('../../../../../.build/protocol/typescript/index.js').ExtensionsBuiltInProviderEnablementParams,
 	): Promise<import('../../../../../.build/protocol/typescript/index.js').ExtensionsBuiltInProvidersResult>;
@@ -45,9 +41,7 @@ export interface IExtensionManagementApi {
 	update(params: ExtensionsUpdateParams): Promise<ExtensionsInstalledPackageDto>;
 	uninstall(params: ExtensionsUninstallParams): Promise<void>;
 	listInstalled(): Promise<ExtensionsListInstalledResult>;
-	editorExtensions(): Promise<
-		import('../../../../../.build/protocol/typescript/index.js').ExtensionsEditorExtensionsResult
-	>;
+	editorExtensions(): Promise<import('../../../../../.build/protocol/typescript/index.js').ExtensionsEditorExtensionsResult>;
 	setEditorExtensionPolicy(
 		params: import('../../../../../.build/protocol/typescript/index.js').ExtensionsEditorExtensionPolicyParams,
 	): Promise<import('../../../../../.build/protocol/typescript/index.js').ExtensionsEditorExtensionsResult>;

@@ -89,10 +89,7 @@ export interface IMouseTargetMarginData {
 }
 
 export interface IMouseTargetMargin extends IBaseMouseTarget {
-	readonly type:
-		| MouseTargetType.GUTTER_GLYPH_MARGIN
-		| MouseTargetType.GUTTER_LINE_NUMBERS
-		| MouseTargetType.GUTTER_LINE_DECORATIONS;
+	readonly type: MouseTargetType.GUTTER_GLYPH_MARGIN | MouseTargetType.GUTTER_LINE_NUMBERS | MouseTargetType.GUTTER_LINE_DECORATIONS;
 	readonly position: Position;
 	readonly range: Range;
 	readonly detail: IMouseTargetMarginData;
@@ -273,16 +270,8 @@ export interface ICodeEditor extends IEditor {
 	setSelection(selection: ISelection, source?: string): void;
 	setSelections(selections: readonly ISelection[], source?: string): void;
 	executeCommand(source: string | null | undefined, command: ICommand): void;
-	executeEdits(
-		source: string | null | undefined,
-		edits: IIdentifiedSingleEditOperation[],
-		endCursorState?: ICursorStateComputer | Selection[],
-	): boolean;
-	executeEdits(
-		source: TextModelEditSource | undefined,
-		edits: IIdentifiedSingleEditOperation[],
-		endCursorState?: ICursorStateComputer | Selection[],
-	): boolean;
+	executeEdits(source: string | null | undefined, edits: IIdentifiedSingleEditOperation[], endCursorState?: ICursorStateComputer | Selection[]): boolean;
+	executeEdits(source: TextModelEditSource | undefined, edits: IIdentifiedSingleEditOperation[], endCursorState?: ICursorStateComputer | Selection[]): boolean;
 	executeCommands(source: string | null | undefined, commands: (ICommand | null)[]): void;
 	pushUndoStop(): boolean;
 	trigger(source: string | null | undefined, handlerId: string, payload: unknown): void;
@@ -337,12 +326,7 @@ export function getCodeEditor(control: unknown): ICodeEditor | null {
 	if ('getModifiedEditor' in control && typeof control.getModifiedEditor === 'function') {
 		return getCodeEditor(control.getModifiedEditor());
 	}
-	return 'getModel' in control &&
-		typeof control.getModel === 'function' &&
-		'getContribution' in control &&
-		typeof control.getContribution === 'function'
-		? (control as ICodeEditor)
-		: null;
+	return 'getModel' in control && typeof control.getModel === 'function' && 'getContribution' in control && typeof control.getContribution === 'function' ? (control as ICodeEditor) : null;
 }
 
 export interface IViewZone {
@@ -390,10 +374,7 @@ export interface IContentWidget {
 	getDomNode(): HTMLElement;
 	getPosition(): IContentWidgetPosition | null;
 	beforeRender?(): IDimension | null;
-	afterRender?(
-		position: ContentWidgetPositionPreference | null,
-		coordinate: IContentWidgetRenderedCoordinate | null,
-	): void;
+	afterRender?(position: ContentWidgetPositionPreference | null, coordinate: IContentWidgetRenderedCoordinate | null): void;
 }
 
 export interface IContentWidgetRenderedCoordinate {

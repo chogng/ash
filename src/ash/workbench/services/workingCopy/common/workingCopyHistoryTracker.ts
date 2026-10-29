@@ -4,11 +4,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import {
-	ConfigurationScope,
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -25,8 +21,7 @@ registry.registerConfiguration({
 	defaultValue: true,
 	scope: ConfigurationScope.RESOURCE,
 	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean')
-			throw new TypeError(localize('localHistory.invalidEnabled', 'Local history enabled must be a boolean.'));
+		if (typeof value !== 'boolean') throw new TypeError(localize('localHistory.invalidEnabled', 'Local history enabled must be a boolean.'));
 		return value;
 	},
 	setting: {
@@ -41,9 +36,7 @@ registry.registerConfiguration({
 	scope: ConfigurationScope.RESOURCE,
 	parse(value: unknown): number {
 		if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 32768)
-			throw new TypeError(
-				localize('localHistory.invalidSize', 'Local history file size must be between 0 and 32768 KB.'),
-			);
+			throw new TypeError(localize('localHistory.invalidSize', 'Local history file size must be between 0 and 32768 KB.'));
 		return value;
 	},
 	setting: {
@@ -51,10 +44,7 @@ registry.registerConfiguration({
 		minimum: 0,
 		maximum: 32768,
 		title: localize('localHistory.sizeTitle', 'Local history file size limit'),
-		description: localize(
-			'localHistory.sizeDescription',
-			'Maximum saved file size in KB to include in local history.',
-		),
+		description: localize('localHistory.sizeDescription', 'Maximum saved file size in KB to include in local history.'),
 	},
 });
 
@@ -85,8 +75,7 @@ export class WorkingCopyHistoryTracker extends Disposable {
 					(event.resource.scheme !== Schemas.file && !isRemoteResource(event.resource)) ||
 					!configuration.getValue<boolean>('workbench.localHistory.enabled') ||
 					excludes.matches(event.resource) ||
-					new TextEncoder().encode(event.content).byteLength >
-						configuration.getValue<number>('workbench.localHistory.maxFileSize') * 1024
+					new TextEncoder().encode(event.content).byteLength > configuration.getValue<number>('workbench.localHistory.maxFileSize') * 1024
 				)
 					return;
 				const operation = history

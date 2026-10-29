@@ -3,11 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Emitter } from '../../../../base/common/event.js';
-import {
-	OverlayWidgetPositionPreference,
-	type IOverlayWidget,
-	type IOverlayWidgetPosition,
-} from '../../../browser/editorBrowser.js';
+import { OverlayWidgetPositionPreference, type IOverlayWidget, type IOverlayWidgetPosition } from '../../../browser/editorBrowser.js';
 import { ViewOverlayWidgets } from '../../../browser/viewParts/overlayWidgets/overlayWidgets.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
@@ -55,10 +51,7 @@ test('ViewOverlayWidgets reports only position changes and owns widget DOM lifet
 	assert.equal(node.style.position, 'fixed');
 
 	minimumWidth = 64;
-	assert.equal(
-		overlays.setWidgetPosition(widget, { preference: OverlayWidgetPositionPreference.TOP_RIGHT_CORNER }),
-		false,
-	);
+	assert.equal(overlays.setWidgetPosition(widget, { preference: OverlayWidgetPositionPreference.TOP_RIGHT_CORNER }), false);
 	assert.equal(minimumWidths.at(-1), 64);
 	assert.equal(overlays.setWidgetPosition(widget, { preference: { top: 8, left: 13 }, stackOrdinal: 2 }), true);
 	assert.equal(overlays.setWidgetPosition(widget, { preference: { top: 8, left: 13 }, stackOrdinal: 2 }), false);
@@ -73,10 +66,7 @@ test('ViewOverlayWidgets reports only position changes and owns widget DOM lifet
 	dom.window.close();
 });
 
-function testViewContext(
-	configuration: { allowOverflow: boolean; fixedOverflowWidgets: boolean },
-	minimumWidths: number[],
-): ViewContext {
+function testViewContext(configuration: { allowOverflow: boolean; fixedOverflowWidgets: boolean }, minimumWidths: number[]): ViewContext {
 	return {
 		configuration: {
 			options: {

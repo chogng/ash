@@ -29,8 +29,7 @@ const { resources, root, workspaceFiles, workspaceRoot, samples, storage, api, c
 const diffPreview = new URLSearchParams(location.search).get('sample') === 'diff';
 // Code preview owns no conversations or media. Shared Chat contributions can
 // observe that empty scope without borrowing the enclosing product's history.
-const chatUnavailable = () =>
-	new Error(localize('themeEditor.previewChatUnavailable', 'Chat is unavailable in this preview.'));
+const chatUnavailable = () => new Error(localize('themeEditor.previewChatUnavailable', 'Chat is unavailable in this preview.'));
 serviceCollection.set(IChatSessionNavigationService, {
 	revision: 0,
 	getConversations: () => [],
@@ -64,33 +63,12 @@ class TerminalPreviewPane extends ViewPane {
 				tabindex: '0',
 			},
 		});
-		sample.append(
-			h(
-				doc,
-				'p',
-				{},
-				localize('themeEditor.previewTerminalIntro', 'Terminal color preview. Commands are not executed.'),
-			),
-		);
+		sample.append(h(doc, 'p', {}, localize('themeEditor.previewTerminalIntro', 'Terminal color preview. Commands are not executed.')));
 		for (const bright of [false, true]) {
 			const line = h(doc, 'p');
-			for (const [index, name] of [
-				'Black',
-				'Red',
-				'Green',
-				'Yellow',
-				'Blue',
-				'Magenta',
-				'Cyan',
-				'White',
-			].entries()) {
+			for (const [index, name] of ['Black', 'Red', 'Green', 'Yellow', 'Blue', 'Magenta', 'Cyan', 'White'].entries()) {
 				const id = `terminal.ansi${bright ? 'Bright' : ''}${name}`;
-				const swatch = h(
-					doc,
-					'span',
-					{ attributes: { 'data-color': id, 'aria-label': id, title: id } },
-					`${(bright ? 90 : 30) + index} Aa `,
-				);
+				const swatch = h(doc, 'span', { attributes: { 'data-color': id, 'aria-label': id, title: id } }, `${(bright ? 90 : 30) + index} Aa `);
 				swatch.style.color = `var(--ash-${id.replaceAll('.', '-')})`;
 				line.append(swatch);
 			}
@@ -98,19 +76,9 @@ class TerminalPreviewPane extends ViewPane {
 		}
 		const prompt = h(doc, 'p', {}, '$ ');
 		prompt.append(
-			h(
-				doc,
-				'span',
-				{ className: 'ash-theme-preview-terminal-selection' },
-				localize('themeEditor.previewOnly', 'Preview only'),
-			),
+			h(doc, 'span', { className: 'ash-theme-preview-terminal-selection' }, localize('themeEditor.previewOnly', 'Preview only')),
 			' ',
-			h(
-				doc,
-				'span',
-				{ className: 'ash-theme-preview-terminal-cursor', attributes: { 'aria-hidden': 'true' } },
-				'▌',
-			),
+			h(doc, 'span', { className: 'ash-theme-preview-terminal-cursor', attributes: { 'aria-hidden': 'true' } }, '▌'),
 		);
 		sample.append(prompt);
 		this.contentElement.append(sample);
@@ -168,8 +136,7 @@ const workbench = resources.add(
 		createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),
 		createLifecycleService: host.createLifecycleService,
 		createContextMenuService: scope => scope.createInstance(BrowserContextMenuService),
-		createTitleService: (container, productName, groups, scope) =>
-			scope.createInstance(BrowserTitleService, container, productName, createBrowserTitlebarPart, groups),
+		createTitleService: (container, productName, groups, scope) => scope.createInstance(BrowserTitleService, container, productName, createBrowserTitlebarPart, groups),
 		createURLService: scope => {
 			host.restrictOpeners(scope);
 			return scope.createInstance(BrowserURLService, undefined);
@@ -225,45 +192,23 @@ export function withOpacity(color: string): string {
 	] as const) {
 		await workspaceFiles.writeFile(resource, new TextEncoder().encode(text), { create: true, overwrite: false });
 	}
-	await editorService.openEditor(
-		createDiffEditorInput(
-			{ resource: original },
-			{ resource: modified },
-			localize('themeEditor.diffSample', 'Color changes'),
-		),
-		{ pinned: true, preserveFocus: true },
-	);
+	await editorService.openEditor(createDiffEditorInput({ resource: original }, { resource: modified }, localize('themeEditor.diffSample', 'Color changes')), { pinned: true, preserveFocus: true });
 } else {
 	for (const sample of [...samples].reverse()) {
-		await editorService.openEditor(
-			{ resource: URI.joinPath(workspaceRoot, sample.name) },
-			{ pinned: true, preserveFocus: true },
-		);
+		await editorService.openEditor({ resource: URI.joinPath(workspaceRoot, sample.name) }, { pinned: true, preserveFocus: true });
 	}
 }
 
-const publishContent = connectThemePreview(
-	resources,
-	services.get(IWorkbenchThemeService),
-	services.get(IConfigurationService),
-	() => {
-		const editors = services.get(ICodeEditorService).listCodeEditors();
-		const output = root.querySelector('.ash-theme-preview-terminal')?.textContent ?? '';
-		return (
-			editors
-				.map(editor => `${editor.getModel()?.uri.path ?? ''}\n${editor.getModel()?.getValue() ?? ''}`)
-				.join('\n') +
-			'\n' +
-			output
-		);
-	},
-);
+const publishContent = connectThemePreview(resources, services.get(IWorkbenchThemeService), services.get(IConfigurationService), () => {
+	const editors = services.get(ICodeEditorService).listCodeEditors();
+	const output = root.querySelector('.ash-theme-preview-terminal')?.textContent ?? '';
+	return editors.map(editor => `${editor.getModel()?.uri.path ?? ''}\n${editor.getModel()?.getValue() ?? ''}`).join('\n') + '\n' + output;
+});
 resources.add(editorService.onDidActiveEditorChange(publishContent));
 const editorListeners = resources.add(new DisposableStore());
 const bindEditors = (): void => {
 	editorListeners.clear();
-	for (const editor of services.get(ICodeEditorService).listCodeEditors())
-		editorListeners.add(editor.onDidChangeModelContent(publishContent));
+	for (const editor of services.get(ICodeEditorService).listCodeEditors()) editorListeners.add(editor.onDidChangeModelContent(publishContent));
 };
 resources.add(editorService.onDidVisibleEditorsChange(bindEditors));
 bindEditors();

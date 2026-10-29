@@ -176,11 +176,7 @@ test('token exchange rejects upstream redirects without forwarding client creden
 });
 
 test('authorization rejects unsafe or repeated callback parameters', async () => {
-	for (const unsafe of [
-		'https://example.com/steal',
-		'http://localhost:58123/github-oauth/' + 'A'.repeat(43),
-		'http://127.0.0.1:58123/other',
-	]) {
+	for (const unsafe of ['https://example.com/steal', 'http://localhost:58123/github-oauth/' + 'A'.repeat(43), 'http://127.0.0.1:58123/other']) {
 		assert.equal((await worker.fetch(authorizationRequest({ redirect_uri: unsafe }), environment)).status, 400);
 	}
 	const repeated = new URL(authorizationRequest().url);
@@ -251,10 +247,7 @@ test('token exchange keeps the client secret on the server and returns refresh e
 
 test('Enterprise authorization and token exchange stay on the configured host', async () => {
 	const enterprise = { ...environment, GITHUB_HOST: 'git.example.com', GITHUB_CLIENT_ID: 'enterpriseClient' };
-	const authorization = await worker.fetch(
-		authorizationRequest({ client_id: enterprise.GITHUB_CLIENT_ID }),
-		enterprise,
-	);
+	const authorization = await worker.fetch(authorizationRequest({ client_id: enterprise.GITHUB_CLIENT_ID }), enterprise);
 	const github = new URL(authorization.headers.get('Location'));
 	assert.equal(github.origin, 'https://git.example.com');
 	assert.equal(github.searchParams.get('scope'), 'read:user repo notifications');

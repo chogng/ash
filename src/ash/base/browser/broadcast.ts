@@ -24,18 +24,12 @@ export class BroadcastDataChannel<T> extends Disposable {
 		if (this.channel) {
 			const channel = this.channel;
 			this._register(toDisposable(() => channel.close()));
-			this._register(
-				addDisposableListener(channel, 'message', event => this.received.fire((event as MessageEvent<T>).data)),
-			);
+			this._register(addDisposableListener(channel, 'message', event => this.received.fire((event as MessageEvent<T>).data)));
 		} else {
 			this._register(
 				addDisposableListener(ownerWindow, 'storage', event => {
 					const changed = event as StorageEvent;
-					if (
-						changed.key !== this.storageKey ||
-						changed.newValue === null ||
-						changed.storageArea !== ownerWindow.localStorage
-					) {
+					if (changed.key !== this.storageKey || changed.newValue === null || changed.storageArea !== ownerWindow.localStorage) {
 						return;
 					}
 					try {

@@ -1,17 +1,7 @@
-import {
-	ISessionProviderScopeService,
-	type ISessionProviderScope,
-	type SessionProviderServices,
-} from '../../browser/agentHost/sessionProviderScopeService.js';
+import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
-import {
-	IChatSpeechToTextService,
-	ChatSpeechToTextService,
-} from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
-import {
-	IVoiceCodeTranscriptionClient,
-	VoiceCodeTranscriptionClient,
-} from '../../../workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
+import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
+import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../../platform/telemetry/common/telemetryUtils.js';
 import { ISecretStorageStatusService } from '../../../platform/secrets/common/secrets.js';
@@ -65,15 +55,13 @@ import type { IAccessibleViewService } from '../../../platform/accessibility/bro
 import type { IChatService } from '../../../workbench/services/chat/common/chatService.js';
 
 test('Sessions modified filtering excludes window defaults, fixed values and language-only overrides', async () => {
-	const [{ testConfigurationService }, { ConfigurationRegistry, ConfigurationScope }, { SettingsTreeModel }] =
-		await Promise.all([
-			import('../../../workbench/services/configuration/test/common/testServices.js'),
-			import('../../../platform/configuration/common/configurationRegistry.js'),
-			import('../../../workbench/contrib/preferences/browser/settingsTreeModels.js'),
-		]);
+	const [{ testConfigurationService }, { ConfigurationRegistry, ConfigurationScope }, { SettingsTreeModel }] = await Promise.all([
+		import('../../../workbench/services/configuration/test/common/testServices.js'),
+		import('../../../platform/configuration/common/configurationRegistry.js'),
+		import('../../../workbench/contrib/preferences/browser/settingsTreeModels.js'),
+	]);
 
-	const { ConfigurationService: SessionsConfigurationService } =
-		await import('../../services/configuration/browser/configurationService.js');
+	const { ConfigurationService: SessionsConfigurationService } = await import('../../services/configuration/browser/configurationService.js');
 	const ConfigurationService = testConfigurationService(SessionsConfigurationService);
 	const registry = new ConfigurationRegistry();
 	for (const [key, readOnly] of [
@@ -90,9 +78,7 @@ test('Sessions modified filtering excludes window defaults, fixed values and lan
 		});
 	}
 	using configuration = new ConfigurationService({ registry });
-	using tree = new SettingsTreeModel<string>(
-		id => registry.getConfiguration(id) !== undefined && configuration.inspect(id).userLocalValue !== undefined,
-	);
+	using tree = new SettingsTreeModel<string>(id => registry.getConfiguration(id) !== undefined && configuration.inspect(id).userLocalValue !== undefined);
 	tree.setChildren(
 		[...registry.getConfigurations()].map(id => ({
 			element: { kind: 'item', id, title: id, description: '', value: id },
@@ -104,9 +90,7 @@ test('Sessions modified filtering excludes window defaults, fixed values and lan
 		tree.visibleItems.map(item => item.id),
 		[],
 	);
-	await configuration.write(
-		'{ "sessions.editable": false, "sessions.fixed": true, "[typescript]": { "sessions.language": true } }',
-	);
+	await configuration.write('{ "sessions.editable": false, "sessions.fixed": true, "[typescript]": { "sessions.language": true } }');
 	assert.deepEqual(
 		tree.visibleItems.map(item => item.id),
 		['sessions.editable'],
@@ -159,8 +143,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		import('../../../platform/contextkey/browser/contextKeyService.js'),
 	]);
 
-	const { ConfigurationService: SessionsConfigurationService } =
-		await import('../../services/configuration/browser/configurationService.js');
+	const { ConfigurationService: SessionsConfigurationService } = await import('../../services/configuration/browser/configurationService.js');
 	const ConfigurationService = testConfigurationService(SessionsConfigurationService);
 	const model = { provider: 'openai', model: 'gpt-test' };
 	const otherModel = { provider: 'anthropic', model: 'claude-test' };
@@ -232,10 +215,8 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	using contextKeys = new ContextKeyService();
 	const { InstantiationService } = await import('../../../platform/instantiation/common/instantiationService.js');
 	const { IConfigurationService } = await import('../../../platform/configuration/common/configuration.js');
-	const { ILocalTranscriptionService, ILocalTranscriptionModelService } =
-		await import('../../../platform/localTranscription/common/localTranscription.js');
-	const { NullLocalTranscriptionService } =
-		await import('../../../workbench/services/localTranscription/browser/localTranscriptionService.js');
+	const { ILocalTranscriptionService, ILocalTranscriptionModelService } = await import('../../../platform/localTranscription/common/localTranscription.js');
+	const { NullLocalTranscriptionService } = await import('../../../workbench/services/localTranscription/browser/localTranscriptionService.js');
 	using services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	using transcription = new NullLocalTranscriptionService();
@@ -262,30 +243,24 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const { ISpeechService } = await import('../../../workbench/contrib/speech/common/speechService.js');
 	const { SpeechService } = await import('../../../workbench/contrib/speech/browser/speechService.js');
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
-	const { IContextKeyService: ContextKeys } =
-		await import('../../../platform/contextkey/browser/contextKeyService.js');
+	const { IContextKeyService: ContextKeys } = await import('../../../platform/contextkey/browser/contextKeyService.js');
 	services.registerInstance(ContextKeys, contextKeys);
 	services.registerSingleton(IExtensionService, () => new TestExtensionService());
 	using speech = services.createInstance(SpeechService);
 	services.registerInstance(ISpeechService, speech);
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
-	services.registerSingleton(IVoiceCodeTranscriptionClient, () =>
-		services.createInstance(VoiceCodeTranscriptionClient),
-	);
+	services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
 	services.registerInstance(ITelemetryService, NullTelemetryService);
 	const { INotificationService } = await import('../../../platform/notification/common/notification.js');
-	const { TestNotificationService } =
-		await import('../../../workbench/services/notification/test/common/testNotificationService.js');
+	const { TestNotificationService } = await import('../../../workbench/services/notification/test/common/testNotificationService.js');
 	using notifications = new TestNotificationService();
 	services.registerInstance(INotificationService, notifications);
-	const { IClipboardService: ClipboardService } =
-		await import('../../../platform/clipboard/common/clipboardService.js');
+	const { IClipboardService: ClipboardService } = await import('../../../platform/clipboard/common/clipboardService.js');
 	const { IContextMenuService: ContextMenus } = await import('../../../platform/contextview/browser/contextView.js');
 	const { IContextViewService } = await import('../../../platform/contextview/browser/contextView.js');
 	const { BrowserContextViewService } = await import('../../../platform/contextview/browser/contextViewService.js');
 	const { BrowserContextMenuService } = await import('../../../platform/contextview/browser/contextMenuService.js');
-	const { IAccessibleViewService: AccessibleView } =
-		await import('../../../platform/accessibility/browser/accessibleView.js');
+	const { IAccessibleViewService: AccessibleView } = await import('../../../platform/accessibility/browser/accessibleView.js');
 	const copied: string[] = [];
 	services.registerInstance(ClipboardService, {
 		triggerPaste: () => undefined,
@@ -410,11 +385,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const editorOpens: { resource: string; target: unknown }[] = [];
 	services.registerInstance(IEditorService, {
 		openEditor: async (input, _options, target) => {
-			assert.equal(
-				window.document.querySelector('dialog[open]'),
-				null,
-				'the modal is closed before editor ownership changes',
-			);
+			assert.equal(window.document.querySelector('dialog[open]'), null, 'the modal is closed before editor ownership changes');
 			editorOpens.push({ resource: input.resource.toString(), target });
 			return undefined;
 		},
@@ -431,8 +402,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerInstance(IPreferencesService, {
 		openSettings: options => preferences.open(options),
 		openUserSettings: async options => {
-			if (options?.groupId !== undefined || options?.openToSide)
-				assert.equal(editorRevealing, false, 'document layout settles before the group opens');
+			if (options?.groupId !== undefined || options?.openToSide) assert.equal(editorRevealing, false, 'document layout settles before the group opens');
 			preferenceOpens.push({ user: options });
 		},
 		openGlobalKeybindingSettings: async textual => {
@@ -529,14 +499,9 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const opened = preferences.open();
 	await Promise.race([opened, Promise.resolve()]);
 	await preferences.open({ query: 'Preferences: Open User Settings (JSON)' });
-	assert.ok(
-		window.document.querySelector('.ash-sessions-customize'),
-		'global search discovers lazily created Settings actions',
-	);
+	assert.ok(window.document.querySelector('.ash-sessions-customize'), 'global search discovers lazily created Settings actions');
 	await preferences.open({ section: 'general' });
-	const resourceEditorToggle = window.document.querySelector<HTMLInputElement>(
-		'input[data-configuration-key="accessibility.verbosity.resourceEditor"]',
-	);
+	const resourceEditorToggle = window.document.querySelector<HTMLInputElement>('input[data-configuration-key="accessibility.verbosity.resourceEditor"]');
 	assert.ok(resourceEditorToggle, 'Agents Window General exposes the resource reader preference');
 	assert.equal(resourceEditorToggle.checked, true);
 	const resourceEditorChanged = new Promise<void>(resolve => {
@@ -549,9 +514,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	resourceEditorToggle.click();
 	await resourceEditorChanged;
 	assert.equal(configuration.getValue('accessibility.verbosity.resourceEditor'), false);
-	const aiToggle = window.document.querySelector<HTMLInputElement>(
-		'input[data-configuration-key="chat.disableAIFeatures"]',
-	);
+	const aiToggle = window.document.querySelector<HTMLInputElement>('input[data-configuration-key="chat.disableAIFeatures"]');
 	assert.ok(aiToggle, 'General exposes the registered AI preference so disabled Chat can be restored');
 	assert.equal(aiToggle.getAttribute('aria-label'), 'Disable AI features');
 	const aiChanged = new Promise<void>(resolve => {
@@ -566,24 +529,10 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.equal(configuration.getValue('chat.disableAIFeatures'), true);
 	await configuration.updateValue('chat.disableAIFeatures', undefined);
 	await configuration.updateValue('chat.disableAIFeatures', true);
-	const categoryButton = (id: string): HTMLButtonElement =>
-		window.document.querySelector<HTMLButtonElement>(`[data-settings-category-id="${id}"]`)!;
+	const categoryButton = (id: string): HTMLButtonElement => window.document.querySelector<HTMLButtonElement>(`[data-settings-category-id="${id}"]`)!;
 	assert.equal(categoryButton('worktree'), null, 'unsupported worktree management is not offered as an empty page');
 	assert.equal(categoryButton('archived-chats'), null);
-	for (const id of [
-		'execution-trace',
-		'appearance',
-		'browser',
-		'tab',
-		'code-intelligence',
-		'environment',
-		'keyboard-shortcuts',
-		'account',
-		'projects',
-		'design',
-		'customize',
-		'general',
-	]) {
+	for (const id of ['execution-trace', 'appearance', 'browser', 'tab', 'code-intelligence', 'environment', 'keyboard-shortcuts', 'account', 'projects', 'design', 'customize', 'general']) {
 		await preferences.open({ section: id });
 		assert.equal(categoryButton(id).getAttribute('aria-current'), 'page', `reopening navigates to ${id}`);
 		assert.equal(categoryButton(id).getAttribute('aria-controls'), 'ash-sessions-settings-content');
@@ -598,45 +547,29 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	settingsSearch.value = 'compact';
 	settingsSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
 	settingsSearch.focus();
-	settingsSearch.dispatchEvent(
-		new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
-	);
+	settingsSearch.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 	assert.equal(settingsSearch.value, '');
 	assert.equal(window.document.activeElement, settingsSearch);
 	assert.ok(window.document.querySelector('dialog[open]'), 'clearing a search must not dismiss Settings');
 	categoryButton('general').focus();
-	categoryButton('general').dispatchEvent(
-		new window.KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }),
-	);
+	categoryButton('general').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
 	assert.equal(window.document.activeElement, categoryButton('keyboard-shortcuts'));
 	assert.equal(categoryButton('keyboard-shortcuts').getAttribute('aria-current'), 'page');
-	categoryButton('keyboard-shortcuts').dispatchEvent(
-		new window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }),
-	);
+	categoryButton('keyboard-shortcuts').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
 	assert.equal(window.document.activeElement, categoryButton('general'));
 	await preferences.open({ section: 'general' });
 	const openCopyMenu = (category = 'General', copyLabel = 'Copy Setting as JSON') => {
 		const dialog = window.document.querySelector<HTMLDialogElement>('dialog')!;
-		[...dialog.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-navigation-item')]
-			.find(button => button.textContent === category)!
-			.click();
-		const more = dialog.querySelector<HTMLButtonElement>(
-			'[data-settings-item-id="chat.disableAIFeatures"] .ash-setting-item-actions-trigger',
-		)!;
+		[...dialog.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === category)!.click();
+		const more = dialog.querySelector<HTMLButtonElement>('[data-settings-item-id="chat.disableAIFeatures"] .ash-setting-item-actions-trigger')!;
 		more.focus();
 		more.click();
 		const menu = dialog.querySelector<HTMLElement>('[role="menu"]')!;
 		assert.ok(menu);
 		menu.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
 		menu.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
-		assert.equal(
-			window.document.activeElement?.textContent,
-			copyLabel,
-			'Copy Setting as JSON remains keyboard reachable before Edit in settings.json',
-		);
-		const copy = [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-			button => button.textContent === copyLabel,
-		)!;
+		assert.equal(window.document.activeElement?.textContent, copyLabel, 'Copy Setting as JSON remains keyboard reachable before Edit in settings.json');
+		const copy = [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent === copyLabel)!;
 		assert.ok(copy);
 		assert.equal(window.document.activeElement, copy);
 		assert.equal(dialog.querySelectorAll('.ash-context-view').length, 1);
@@ -653,19 +586,13 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.equal(cancelledMenu.menu.isConnected, false);
 	assert.equal(window.document.activeElement, cancelledMenu.more);
 	assert.equal(
-		[...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].some(
-			button => button.textContent === 'Tools',
-		),
+		[...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].some(button => button.textContent === 'Tools'),
 		false,
 	);
-	const designButton = [
-		...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item'),
-	].find(button => button.textContent === 'Design');
+	const designButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Design');
 	assert.ok(designButton);
 	designButton.click();
-	const pointerSwitch = window.document.querySelector<HTMLInputElement>(
-		'input[data-configuration-key="sessions.design.usePointerCursor"][role="switch"]',
-	);
+	const pointerSwitch = window.document.querySelector<HTMLInputElement>('input[data-configuration-key="sessions.design.usePointerCursor"][role="switch"]');
 	assert.ok(pointerSwitch);
 	assert.equal(pointerSwitch.getAttribute('aria-label'), 'Use pointer cursor on the canvas');
 	assert.equal(pointerSwitch.checked, true);
@@ -681,16 +608,12 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await pointerSaved;
 	assert.equal(configuration.getValue('sessions.design.usePointerCursor'), false);
 	assert.ok(window.document.querySelector('[data-configuration-key="accessibility.verbosity.designCanvas"]'));
-	const modelsButton = [
-		...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item'),
-	].find(button => button.textContent?.includes('Models'));
+	const modelsButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent?.includes('Models'));
 	assert.ok(modelsButton);
 	modelsButton.click();
 	assert.equal(window.document.querySelector('.ash-local-transcription-model-controls'), null);
 	await Promise.resolve();
-	const voiceButton = [
-		...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item'),
-	].find(button => button.textContent === 'General');
+	const voiceButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'General');
 	assert.ok(voiceButton);
 	voiceButton.click();
 	assert.equal(window.document.querySelector('[data-configuration-key="dictation.model"]'), null);
@@ -702,9 +625,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.equal(window.document.querySelector('.ash-local-transcription-model-controls'), null);
 	modelsButton.click();
 	await new Promise<void>(resolve => setImmediate(resolve));
-	const apiInput = window.document.querySelector<HTMLInputElement>(
-		'.ash-models-settings-api-row input[type="password"]',
-	);
+	const apiInput = window.document.querySelector<HTMLInputElement>('.ash-models-settings-api-row input[type="password"]');
 	assert.ok(apiInput);
 	assert.equal(window.document.querySelector('.ash-models-settings-api-row button'), null);
 	apiInput.value = 'test-secret';
@@ -719,19 +640,14 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	apiInput.dispatchEvent(new window.Event('blur'));
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.deepEqual(removedKeys, ['openai']);
-	const modelSearch = window.document.querySelector<HTMLInputElement>(
-		'.ash-sessions-settings-search input[type="search"]',
-	);
+	const modelSearch = window.document.querySelector<HTMLInputElement>('.ash-sessions-settings-search input[type="search"]');
 	assert.ok(modelSearch);
 	await import('../../../workbench/contrib/preferences/browser/preferencesActions.js');
 	await commands.executeCommand('workbench.action.openSettings', 'chat.disableAIFeatures');
 	assert.equal(window.document.querySelector('.ash-sessions-settings-search input[type="search"]'), modelSearch);
 	assert.equal(modelSearch.value, 'chat.disableAIFeatures');
 	assert.equal(window.document.activeElement, modelSearch);
-	assert.equal(
-		window.document.querySelectorAll('.ash-sessions-settings-content-tree [data-settings-item-id]').length,
-		1,
-	);
+	assert.equal(window.document.querySelectorAll('.ash-sessions-settings-content-tree [data-settings-item-id]').length, 1);
 	await assert.rejects(commands.executeCommand('workbench.action.openSettings', { query: 'changed', target: 4 }));
 	assert.equal(modelSearch.value, 'chat.disableAIFeatures');
 	await commands.executeCommand('workbench.action.openSettings', { query: '' });
@@ -739,19 +655,13 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.equal(window.document.activeElement, modelSearch);
 	modelSearch.value = '@id:chat.disableAIFeatures';
 	modelSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
-	const filter = window.document.querySelector<HTMLButtonElement>(
-		'.ash-sessions-settings-search .ash-settings-search-filter',
-	);
+	const filter = window.document.querySelector<HTMLButtonElement>('.ash-sessions-settings-search .ash-settings-search-filter');
 	assert.ok(filter);
 	assert.equal(filter.getAttribute('aria-label'), 'Filter Settings');
 	filter.click();
-	const filterMenu = window.document
-		.querySelector<HTMLDialogElement>('dialog')!
-		.querySelector<HTMLElement>('[role="menu"]');
+	const filterMenu = window.document.querySelector<HTMLDialogElement>('dialog')!.querySelector<HTMLElement>('[role="menu"]');
 	assert.ok(filterMenu);
-	const modified = [...filterMenu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-		button => button.textContent === 'Modified',
-	);
+	const modified = [...filterMenu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent === 'Modified');
 	assert.ok(modified);
 	modified.click();
 	assert.equal(filterMenu.isConnected, false);
@@ -794,9 +704,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		rows.map(row => row.isConnected),
 		[true, false],
 	);
-	const switchInput = window.document.querySelector<HTMLInputElement>(
-		'.ash-models-settings-model-row input[role="switch"]',
-	);
+	const switchInput = window.document.querySelector<HTMLInputElement>('.ash-models-settings-model-row input[role="switch"]');
 	assert.ok(switchInput);
 	assert.equal(switchInput.getAttribute('aria-label'), 'Show GPT Test in model picker');
 	assert.equal(switchInput.getAttribute('aria-checked'), 'true');
@@ -807,9 +715,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.equal(switchInput.getAttribute('aria-checked'), 'false');
 	modelSearch.value = '';
 	modelSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
-	const agentsButton = [
-		...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item'),
-	].find(button => button.textContent === 'Agents');
+	const agentsButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Agents');
 	assert.ok(agentsButton);
 	agentsButton.click();
 	await Promise.resolve();
@@ -820,9 +726,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	advisorSwitch.checked = false;
 	advisorSwitch.dispatchEvent(new window.Event('change', { bubbles: true }));
 	await Promise.resolve();
-	assert.deepEqual(advisorWrites, [
-		{ model: advisorModel, enabled: false, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' },
-	]);
+	assert.deepEqual(advisorWrites, [{ model: advisorModel, enabled: false, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' }]);
 	const closingMenu = openCopyMenu();
 	window.document.querySelector<HTMLDialogElement>('dialog')?.close();
 	await opened;
@@ -831,68 +735,38 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await configuration.updateValue('chat.disableAIFeatures', false);
 	assert.equal(window.document.querySelector('dialog'), null);
 	await configuration.updateValue('chat.disableAIFeatures', true);
-	const { productLanguagePackCatalogs } =
-		await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		const reopened = preferences.open({ query: 'chat.disableAIFeatures' });
-		const reopenedSearch = window.document.querySelector<HTMLInputElement>(
-			'.ash-sessions-settings-search input[type="search"]',
-		)!;
+		const reopenedSearch = window.document.querySelector<HTMLInputElement>('.ash-sessions-settings-search input[type="search"]')!;
 		assert.equal(reopenedSearch.value, 'chat.disableAIFeatures');
 		assert.equal(window.document.activeElement, reopenedSearch);
-		await assert.rejects(
-			commands.executeCommand('workbench.action.openSettings', { query: 1 }),
-			/设置查询必须是字符串/u,
-		);
-		await assert.rejects(
-			commands.executeCommand('workbench.action.openSettings', { target: 4 }),
-			/此设置编辑器支持本地用户、工作区和文件夹设置/u,
-		);
+		await assert.rejects(commands.executeCommand('workbench.action.openSettings', { query: 1 }), /设置查询必须是字符串/u);
+		await assert.rejects(commands.executeCommand('workbench.action.openSettings', { target: 4 }), /此设置编辑器支持本地用户、工作区和文件夹设置/u);
 		assert.equal(reopenedSearch.value, 'chat.disableAIFeatures');
-		assert.equal(
-			window.document.querySelector('.ash-settings-search-filter')?.getAttribute('aria-label'),
-			'筛选设置',
-		);
+		assert.equal(window.document.querySelector('.ash-settings-search-filter')?.getAttribute('aria-label'), '筛选设置');
 		const reopenedMenu = openCopyMenu('通用', '复制设置为 JSON');
 		reopenedMenu.copy.click();
 		await Promise.resolve();
 		assert.deepEqual(copied, ['"chat.disableAIFeatures": true', '"chat.disableAIFeatures": true']);
 		assert.equal(reopenedMenu.menu.isConnected, false);
 		assert.equal(window.document.activeElement, reopenedMenu.more);
-		const translatedDesign = [
-			...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item'),
-		].find(button => button.textContent === '设计');
+		const translatedDesign = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === '设计');
 		assert.ok(translatedDesign);
 		translatedDesign.click();
-		const restoredSwitch = window.document.querySelector<HTMLInputElement>(
-			'input[data-configuration-key="sessions.design.usePointerCursor"][role="switch"]',
-		);
+		const restoredSwitch = window.document.querySelector<HTMLInputElement>('input[data-configuration-key="sessions.design.usePointerCursor"][role="switch"]');
 		assert.ok(restoredSwitch);
 		assert.equal(restoredSwitch.getAttribute('aria-label'), '在画布中使用指针光标');
 		assert.equal(restoredSwitch.checked, false);
 		await assert.rejects(configuration.updateValue('sessions.design.usePointerCursor', 'false'), /必须是布尔值/u);
 		await preferences.open({ section: 'keyboard-shortcuts' });
-		assert.ok(
-			[...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].some(
-				button => button.textContent === '快捷键',
-			),
-		);
-		assert.ok(
-			window.document
-				.querySelector('.ash-sessions-settings-page')
-				?.textContent?.includes('搜索命令和快捷键、查看默认绑定、录制按键'),
-		);
+		assert.ok([...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].some(button => button.textContent === '快捷键'));
+		assert.ok(window.document.querySelector('.ash-sessions-settings-page')?.textContent?.includes('搜索命令和快捷键、查看默认绑定、录制按键'));
 		await preferences.open({ section: 'customize' });
-		assert.ok(
-			[...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].some(
-				button => button.textContent === '打开工作台设置',
-			),
-		);
+		assert.ok([...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].some(button => button.textContent === '打开工作台设置'));
 
 		window.document.querySelector<HTMLDialogElement>('dialog')?.close();
 		await reopened;
@@ -911,9 +785,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await replacementOpen;
 	const openCategoryAction = async (section: string, label: string): Promise<void> => {
 		const opening = preferences.open({ section });
-		const button = [
-			...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button'),
-		].find(button => button.textContent === label);
+		const button = [...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].find(button => button.textContent === label);
 		assert.ok(button, `${section} offers ${label}`);
 		button.click();
 		await opening;
@@ -921,11 +793,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	};
 	const revealsBeforeShortcuts = editorReveals;
 	await openCategoryAction('keyboard-shortcuts', 'Keyboard Shortcuts');
-	assert.equal(
-		editorReveals,
-		revealsBeforeShortcuts,
-		'the shortcut modal preserves the underlying entry and document working set',
-	);
+	assert.equal(editorReveals, revealsBeforeShortcuts, 'the shortcut modal preserves the underlying entry and document working set');
 	await openCategoryAction('keyboard-shortcuts', 'Preferences: Open Keyboard Shortcuts (JSON)');
 	await openCategoryAction('customize', 'Preferences: Open User Settings (JSON)');
 	assert.deepEqual(preferenceOpens, [{ keybindings: false }, { keybindings: true }, { user: { jsonEditor: true } }]);
@@ -955,9 +823,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.equal(editorReveals, 2, 'account management preserves the current Sessions entry');
 	const editSettingOpen = preferences.open({ section: 'appearance' });
 	const editSettingMenu = openCopyMenu();
-	const editSetting = [...editSettingMenu.menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-		button => button.textContent === 'Edit in settings.json',
-	);
+	const editSetting = [...editSettingMenu.menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent === 'Edit in settings.json');
 	assert.ok(editSetting, 'ordinary settings expose the shared JSON entry');
 	editSettingMenu.menu.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	const jsonSwitch = window.document.querySelector<HTMLButtonElement>('.ash-settings-open-json')!;
@@ -991,22 +857,13 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.equal(editorReveals, 6);
 	const cancelledOpen = preferences.open({ section: 'keyboard-shortcuts' });
 	const callsBeforeCancel = preferenceOpens.length;
-	window.document
-		.querySelector<HTMLDialogElement>('dialog')!
-		.dispatchEvent(new window.Event('cancel', { cancelable: true }));
+	window.document.querySelector<HTMLDialogElement>('dialog')!.dispatchEvent(new window.Event('cancel', { cancelable: true }));
 	await cancelledOpen;
 	assert.equal(window.document.querySelector('dialog'), null);
-	assert.equal(
-		preferenceOpens.length,
-		callsBeforeCancel,
-		'cancelling Settings cannot open or edit a profile resource',
-	);
+	assert.equal(preferenceOpens.length, callsBeforeCancel, 'cancelling Settings cannot open or edit a profile resource');
 	rejectShortcut = true;
 	await openCategoryAction('keyboard-shortcuts', 'Keyboard Shortcuts');
-	assert.equal(
-		notifications.model.getNotifications().at(-1)?.message,
-		'Could not open preferences: Error: shortcut editor unavailable',
-	);
+	assert.equal(notifications.model.getNotifications().at(-1)?.message, 'Could not open preferences: Error: shortcut editor unavailable');
 	assert.equal(editorReveals, 6, 'a failed open cannot reveal an unrelated editor');
 	const notificationsBeforeShutdown = notifications.model.getNotifications().length;
 	let rejectLateOpen!: (error: Error) => void;
@@ -1018,11 +875,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	rejectLateOpen(new Error('window closed while opening shortcuts'));
 	await pendingShortcut.catch(() => {});
 	await Promise.resolve();
-	assert.equal(
-		notifications.model.getNotifications().length,
-		notificationsBeforeShutdown,
-		'late opens cannot notify a retired window',
-	);
+	assert.equal(notifications.model.getNotifications().length, notificationsBeforeShutdown, 'late opens cannot notify a retired window');
 	assert.equal(editorReveals, 6);
 	changed.dispose();
 	browser.window.close();

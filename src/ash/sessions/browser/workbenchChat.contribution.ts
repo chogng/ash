@@ -2,10 +2,7 @@ import { ISessionGroupsService, SessionGroupsService } from '../services/session
 import { EditorInputSerializers } from '../../workbench/services/editor/common/editorInputSerializer.js';
 import { Schemas } from '../../base/common/network.js';
 import { ChatEditor } from '../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditor.js';
-import {
-	ChatEditorInput,
-	ChatEditorInputSerializer,
-} from '../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditorInput.js';
+import { ChatEditorInput, ChatEditorInputSerializer } from '../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditorInput.js';
 import { EditorPaneMatch } from '../../workbench/browser/parts/editor/editorPane.js';
 import { registerEditorPane } from '../../workbench/browser/editor.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../common/agentHostSessionsProvider.js';
@@ -16,10 +13,7 @@ import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.
 import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { ViewContainerLocation, type WorkbenchViewRegistry, ViewsRegistry } from '../../workbench/common/views.js';
 import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID } from '../../workbench/contrib/chat/common/chat.js';
-import {
-	IChatSessionNavigationService,
-	type IChatSessionNavigationService as IChatSessionNavigationServiceContract,
-} from '../../workbench/services/chat/common/chatSessionNavigationService.js';
+import { IChatSessionNavigationService, type IChatSessionNavigationService as IChatSessionNavigationServiceContract } from '../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IViewsService } from '../../workbench/services/views/common/viewsService.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { ChatViewPane } from './chatViewPane.js';
@@ -41,9 +35,7 @@ class ChatSessionNavigationService implements IChatSessionNavigationServiceContr
 		return this.sessions.navigationRevision;
 	}
 
-	captureActiveDraft(): Promise<
-		{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined
-	> {
+	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined> {
 		const view = this.views.getViewWithId(CHAT_VIEW_ID);
 		if (!view) return Promise.resolve(undefined);
 		if (!(view instanceof ChatViewPane)) throw new Error('Chat view is unavailable for Agents Window handoff');
@@ -85,12 +77,7 @@ class ChatSessionNavigationService implements IChatSessionNavigationServiceContr
 
 	async openConversation(sessionId: string, threadId: string, providerId?: string): Promise<void> {
 		if (providerId !== undefined && providerId !== LOCAL_AGENT_HOST_PROVIDER_ID) {
-			throw new Error(
-				localize(
-					{ bundle: 'ash.workbench', key: 'agentHosts.conversationUnavailable' },
-					'This conversation belongs to another Agent host.',
-				),
-			);
+			throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.conversationUnavailable' }, 'This conversation belongs to another Agent host.'));
 		}
 		await this.sessions.openThread(sessionId, threadId);
 		const active = this.getActiveConversation();
@@ -98,8 +85,7 @@ class ChatSessionNavigationService implements IChatSessionNavigationServiceContr
 	}
 	async startVoiceConversation(): Promise<void> {
 		const view = await this.views.openView(CHAT_VIEW_ID);
-		if (!(view instanceof ChatViewPane))
-			throw new Error(localize('agentsVoice.viewUnavailable', 'Chat view is unavailable for voice'));
+		if (!(view instanceof ChatViewPane)) throw new Error(localize('agentsVoice.viewUnavailable', 'Chat view is unavailable for voice'));
 		await view.startVoiceConversation();
 	}
 }
@@ -138,9 +124,6 @@ EditorInputSerializers.registerStatic(new ChatEditorInputSerializer());
 registerEditorPane({
 	id: ChatEditorInput.EditorID,
 	name: localize({ bundle: 'ash.views', key: 'chat' }, 'Chat'),
-	canOpen: input =>
-		input.resource.scheme === Schemas.vscodeChatEditor && input.resource.path === '/current'
-			? EditorPaneMatch.Default
-			: EditorPaneMatch.None,
+	canOpen: input => (input.resource.scheme === Schemas.vscodeChatEditor && input.resource.path === '/current' ? EditorPaneMatch.Default : EditorPaneMatch.None),
 	create: options => options.instantiationService!.createInstance(ChatEditor),
 });

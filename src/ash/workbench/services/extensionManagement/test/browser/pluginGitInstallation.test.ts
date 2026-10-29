@@ -18,9 +18,7 @@ function fixture() {
 	const files = {
 		createDirectory: async () => undefined,
 		readDirectory: async (resource: URI) => {
-			const names = resource.path.endsWith('/.ash-plugin')
-				? ['plugin.json']
-				: ['.git', '.ash-plugin', 'README.md'];
+			const names = resource.path.endsWith('/.ash-plugin') ? ['plugin.json'] : ['.git', '.ash-plugin', 'README.md'];
 			return names.map(name => ({
 				name,
 				resource: URI.joinPath(resource, name),
@@ -67,13 +65,7 @@ function fixture() {
 		revokeGrant: unused,
 		uninstall: unused,
 	};
-	const service = new AppServerPluginManagementService(
-		api,
-		{ subscribe: () => ({ dispose() {} }) },
-		git,
-		files,
-		new NullLoggerService(),
-	);
+	const service = new AppServerPluginManagementService(api, { subscribe: () => ({ dispose() {} }) }, git, files, new NullLoggerService());
 	return {
 		service,
 		api,
@@ -112,11 +104,7 @@ test('Local plugin lists preserve declared and missing manifest UI targets', asy
 	f.api.list = async () => ({
 		revision: 7,
 		activationGeneration: 1,
-		packages: [
-			legacy,
-			{ ...legacy, id: 'example/agents', uiTargets: ['agents'] },
-			{ ...legacy, id: 'example/shared', uiTargets: ['ide', 'agents'] },
-		],
+		packages: [legacy, { ...legacy, id: 'example/agents', uiTargets: ['agents'] }, { ...legacy, id: 'example/shared', uiTargets: ['ide', 'agents'] }],
 	});
 	const catalog = await service.list();
 	assert.deepEqual(catalog.packages[0], legacy);
@@ -128,16 +116,11 @@ test('Git plugin installation excludes metadata and installs into the captured d
 	const f = fixture();
 	using service = f.service;
 	const folder = { id: 'captured-folder', uri: URI.file('/workspace'), name: 'Workspace', index: 0 };
-	assert.deepEqual(
-		await service.installFromGit(
-			folder,
-			'https://example.test/plugin.git',
-			'release',
-			'.',
-			new AbortController().signal,
-		),
-		{ id: 'example/plugin', version: '1.0.0', digest: 'digest' },
-	);
+	assert.deepEqual(await service.installFromGit(folder, 'https://example.test/plugin.git', 'release', '.', new AbortController().signal), {
+		id: 'example/plugin',
+		version: '1.0.0',
+		digest: 'digest',
+	});
 	assert.equal(f.cloned?.[1], 'https://example.test/plugin.git');
 	assert.equal(f.cloned?.[3], 'release');
 	assert.equal((f.installation as { dirId: string }).dirId, 'captured-folder');
@@ -157,13 +140,7 @@ test('Git plugin cancellation reaches the host and never starts package installa
 			finish = resolve;
 		});
 	};
-	const pending = service.installFromGit(
-		{ id: 'folder', uri: URI.file('/workspace'), name: 'Workspace', index: 0 },
-		'https://example.test/plugin.git',
-		undefined,
-		'.',
-		controller.signal,
-	);
+	const pending = service.installFromGit({ id: 'folder', uri: URI.file('/workspace'), name: 'Workspace', index: 0 }, 'https://example.test/plugin.git', undefined, '.', controller.signal);
 	controller.abort();
 	finish!();
 	await assert.rejects(pending, { name: 'CancellationError' });
@@ -176,15 +153,7 @@ test('Git plugin package paths reject traversal and metadata before cloning', as
 	const f = fixture();
 	using service = f.service;
 	for (const path of ['../outside', '/absolute', '.git', 'package/.git', 'a\\b']) {
-		await assert.rejects(
-			service.installFromGit(
-				{ id: 'folder', uri: URI.file('/workspace'), name: 'Workspace', index: 0 },
-				'url',
-				undefined,
-				path,
-				new AbortController().signal,
-			),
-		);
+		await assert.rejects(service.installFromGit({ id: 'folder', uri: URI.file('/workspace'), name: 'Workspace', index: 0 }, 'url', undefined, path, new AbortController().signal));
 	}
 	assert.equal(f.cloned, undefined);
 });
@@ -197,13 +166,7 @@ test('Closing the App installation service cancels its running Git operation', a
 			finish = resolve;
 		});
 	};
-	const pending = f.service.installFromGit(
-		{ id: 'folder', uri: URI.file('/workspace'), name: 'Workspace', index: 0 },
-		'url',
-		undefined,
-		'.',
-		new AbortController().signal,
-	);
+	const pending = f.service.installFromGit({ id: 'folder', uri: URI.file('/workspace'), name: 'Workspace', index: 0 }, 'url', undefined, '.', new AbortController().signal);
 	f.service.dispose();
 	finish!();
 	await assert.rejects(pending, { name: 'CancellationError' });
@@ -214,18 +177,8 @@ test('Closing the App installation service cancels its running Git operation', a
 test('Git plugin staging rejects symbolic links before package installation', async () => {
 	const f = fixture();
 	using service = f.service;
-	f.files.readDirectory = async resource => [
-		{ name: 'outside', resource: URI.joinPath(resource, 'outside'), kind: FileKind.SymbolicLink },
-	];
-	await assert.rejects(
-		service.installFromGit(
-			{ id: 'folder', uri: URI.file('/workspace'), name: 'Workspace', index: 0 },
-			'url',
-			undefined,
-			'.',
-			new AbortController().signal,
-		),
-	);
+	f.files.readDirectory = async resource => [{ name: 'outside', resource: URI.joinPath(resource, 'outside'), kind: FileKind.SymbolicLink }];
+	await assert.rejects(service.installFromGit({ id: 'folder', uri: URI.file('/workspace'), name: 'Workspace', index: 0 }, 'url', undefined, '.', new AbortController().signal));
 	assert.equal(f.installation, undefined);
 	assert.equal(f.copies.length, 0);
 	assert.equal(f.removed.length, 1);
@@ -239,17 +192,8 @@ test('Git plugin installation resolves a package subdirectory inside the capture
 		inspected.push(resource.path);
 		return { resource, kind: FileKind.Directory, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined };
 	};
-	await service.installFromGit(
-		{ id: 'folder', uri: URI.file('/workspace'), name: 'Workspace', index: 0 },
-		'url',
-		undefined,
-		'packages/example',
-		new AbortController().signal,
-	);
-	assert.deepEqual(inspected, [
-		URI.joinPath(f.checkout, 'packages').path,
-		URI.joinPath(f.checkout, 'packages/example').path,
-	]);
+	await service.installFromGit({ id: 'folder', uri: URI.file('/workspace'), name: 'Workspace', index: 0 }, 'url', undefined, 'packages/example', new AbortController().signal);
+	assert.deepEqual(inspected, [URI.joinPath(f.checkout, 'packages').path, URI.joinPath(f.checkout, 'packages/example').path]);
 	assert.ok(f.copies.every(path => path.startsWith(URI.joinPath(f.checkout, 'packages/example').path + '/')));
 });
 
@@ -263,15 +207,7 @@ test('A symlink package directory cannot redirect Git installation to another wo
 		readonly: false,
 		modifiedAtMillis: undefined,
 	});
-	await assert.rejects(
-		service.installFromGit(
-			{ id: 'folder', uri: URI.file('/workspace'), name: 'Workspace', index: 0 },
-			'url',
-			undefined,
-			'other',
-			new AbortController().signal,
-		),
-	);
+	await assert.rejects(service.installFromGit({ id: 'folder', uri: URI.file('/workspace'), name: 'Workspace', index: 0 }, 'url', undefined, 'other', new AbortController().signal));
 	assert.equal(f.installation, undefined);
 	assert.equal(f.copies.length, 0);
 });

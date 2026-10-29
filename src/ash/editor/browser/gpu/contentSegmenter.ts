@@ -16,14 +16,8 @@ export function createContentSegmenter(lineData: ViewLineRenderingData, options:
 }
 
 /** Creates the same segment view when a renderer already owns the line text. */
-export function segmentContent(
-	content: string,
-	isBasicASCII: boolean,
-	useMonospaceOptimizations: boolean,
-): IContentSegmenter {
-	return isBasicASCII && useMonospaceOptimizations
-		? new AsciiContentSegmenter(content)
-		: new GraphemeContentSegmenter(content);
+export function segmentContent(content: string, isBasicASCII: boolean, useMonospaceOptimizations: boolean): IContentSegmenter {
+	return isBasicASCII && useMonospaceOptimizations ? new AsciiContentSegmenter(content) : new GraphemeContentSegmenter(content);
 }
 
 class AsciiContentSegmenter implements IContentSegmenter {

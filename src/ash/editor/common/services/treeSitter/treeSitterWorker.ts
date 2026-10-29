@@ -1,10 +1,4 @@
-import type {
-	RelativeToken,
-	TreeSitterTokenizationMeasure,
-	TreeSitterFacts,
-	TreeSitterBracket,
-	TreeSitterSyntaxResult,
-} from './treeSitterLibraryService.js';
+import type { RelativeToken, TreeSitterTokenizationMeasure, TreeSitterFacts, TreeSitterBracket, TreeSitterSyntaxResult } from './treeSitterLibraryService.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -55,19 +49,12 @@ class SyntaxMirror extends MirrorTextModel {
 		const start = range.startLineNumber - 1,
 			end = range.endLineNumber - 1;
 		if (start === end) return this._lines[start]!.slice(range.startColumn - 1, range.endColumn - 1);
-		return [
-			this._lines[start]!.slice(range.startColumn - 1),
-			...this._lines.slice(start + 1, end),
-			this._lines[end]!.slice(0, range.endColumn - 1),
-		].join(this._eol);
+		return [this._lines[start]!.slice(range.startColumn - 1), ...this._lines.slice(start + 1, end), this._lines[end]!.slice(0, range.endColumn - 1)].join(this._eol);
 	}
 	accept(change: TextModelChange): void {
 		if (change.version !== this.version + 1) throw new RangeError('Nonconsecutive syntax mirror revision');
 		for (const edit of change.changes) {
-			if (
-				this.getOffsetAt(edit.range.getStartPosition()) !== edit.rangeOffset ||
-				this.getOffsetAt(edit.range.getEndPosition()) - edit.rangeOffset !== edit.rangeLength
-			)
+			if (this.getOffsetAt(edit.range.getStartPosition()) !== edit.rangeOffset || this.getOffsetAt(edit.range.getEndPosition()) - edit.rangeOffset !== edit.rangeLength)
 				throw new RangeError('Syntax edit does not match mirror');
 		}
 		this.onEvents({
@@ -110,22 +97,10 @@ export class TreeSitterWorker extends Disposable implements WebWorkerRequestHand
 			return;
 		}
 		if (message.kind === 'open') {
-			if (
-				this.documents.has(id) ||
-				typeof message.text !== 'string' ||
-				typeof message.language !== 'string' ||
-				(message.eol !== '\n' && message.eol !== '\r\n')
-			)
+			if (this.documents.has(id) || typeof message.text !== 'string' || typeof message.language !== 'string' || (message.eol !== '\n' && message.eol !== '\r\n'))
 				throw new TypeError('Invalid syntax open');
 			const resources = new DisposableStore();
-			const model = resources.add(
-				new SyntaxMirror(
-					URI.parse('inmemory:syntax'),
-					message.text.split(/\r\n|\n/),
-					message.eol,
-					integer(message.revision, 1),
-				),
-			);
+			const model = resources.add(new SyntaxMirror(URI.parse('inmemory:syntax'), message.text.split(/\r\n|\n/), message.eol, integer(message.revision, 1)));
 			const measures: TreeSitterTokenizationMeasure[] = [];
 			const tree = resources.add(
 				new TreeSitterTree(
@@ -149,13 +124,7 @@ export class TreeSitterWorker extends Disposable implements WebWorkerRequestHand
 		}
 		if (message.kind !== 'update') throw new TypeError('Unknown syntax notification');
 		const change = message.change as TextModelChange;
-		if (
-			!change ||
-			!Array.isArray(change.changes) ||
-			typeof change.isEolChange !== 'boolean' ||
-			(change.eol !== '\n' && change.eol !== '\r\n')
-		)
-			throw new TypeError('Invalid syntax edit');
+		if (!change || !Array.isArray(change.changes) || typeof change.isEolChange !== 'boolean' || (change.eol !== '\n' && change.eol !== '\r\n')) throw new TypeError('Invalid syntax edit');
 		integer(change.version, 1);
 		const edits = change.changes.map(edit => {
 			const range = readRange(edit.range, document.model.getLineCount());
@@ -176,8 +145,7 @@ export class TreeSitterWorker extends Disposable implements WebWorkerRequestHand
 		const result = { revision, measures: document.measures.splice(0) };
 		switch (message.operation) {
 			case 'highlight': {
-				if (!Array.isArray(message.ranges) || message.ranges.length > 1000)
-					throw new TypeError('Invalid syntax viewport');
+				if (!Array.isArray(message.ranges) || message.ranges.length > 1000) throw new TypeError('Invalid syntax viewport');
 				const ranges = message.ranges;
 				const rows: { row: number; tokens: readonly RelativeToken[] }[] = [];
 				for (const range of message.ranges) {
@@ -185,15 +153,12 @@ export class TreeSitterWorker extends Disposable implements WebWorkerRequestHand
 						end = integer(range.endLineNumber, start);
 					if (end > document.model.getLineCount()) throw new RangeError('Syntax viewport outside model');
 					document.tree.refreshRange(start, end);
-					for (let row = start - 1; row < end; row++)
-						rows.push({ row, tokens: document.tree.captureRowsCache.get(row) ?? [] });
+					for (let row = start - 1; row < end; row++) rows.push({ row, tokens: document.tree.captureRowsCache.get(row) ?? [] });
 				}
 				return {
 					...result,
 					rows,
-					brackets: [document.tree.rootNode!, ...document.tree.embeddedRootNodes].flatMap(root =>
-						collectBrackets(root, ranges, document.model),
-					),
+					brackets: [document.tree.rootNode!, ...document.tree.embeddedRootNodes].flatMap(root => collectBrackets(root, ranges, document.model)),
 					measures: [...result.measures, ...document.measures.splice(0)],
 				};
 			}
@@ -225,15 +190,13 @@ export class TreeSitterWorker extends Disposable implements WebWorkerRequestHand
 						{ row: range.startLineNumber - 1, column: range.startColumn - 1 },
 						{ row: range.endLineNumber - 1, column: range.endColumn - 1 },
 					);
-					for (let count = 0; node?.parent && count < 64; node = node.parent, count++)
-						if (node.isNamed && !node.isError && !node.isMissing) selections.push(nodeRange(node));
+					for (let count = 0; node?.parent && count < 64; node = node.parent, count++) if (node.isNamed && !node.isError && !node.isMissing) selections.push(nodeRange(node));
 				}
 				return { ...result, selections };
 			}
 			case 'preview': {
 				const line = integer(message.line, 1);
-				if (!Array.isArray(message.lines) || message.lines.some(value => typeof value !== 'string'))
-					throw new TypeError('Invalid hypothetical syntax');
+				if (!Array.isArray(message.lines) || message.lines.some(value => typeof value !== 'string')) throw new TypeError('Invalid hypothetical syntax');
 				return {
 					...result,
 					preview: await document.tree.tokenizeLinesAtAsync(line, message.lines as string[], signal),
@@ -318,8 +281,7 @@ function collectFacts(tree: TreeSitterTree, model: SyntaxMirror): TreeSitterFact
 		const text = model.getValueInRange(new Range(row + 1, 1, row + 1, model.getLineMaxColumn(row + 1)));
 		if (matches(rules?.markers?.end, text)) {
 			const start = regions.pop();
-			if (start !== undefined && row > start)
-				fallbackFold({ startLineIndex: start, endLineIndex: row, kind: 'region' });
+			if (start !== undefined && row > start) fallbackFold({ startLineIndex: start, endLineIndex: row, kind: 'region' });
 		} else if (matches(rules?.markers?.start, text)) regions.push(row);
 		if (!text.trim()) continue;
 		let indent = 0;
@@ -342,11 +304,7 @@ function collectFacts(tree: TreeSitterTree, model: SyntaxMirror): TreeSitterFact
 		if (end > entry.row) fallbackFold({ startLineIndex: entry.row, endLineIndex: end });
 	}
 	folds.sort((a, b) => a.startLineIndex - b.startLineIndex || b.endLineIndex - a.endLineIndex);
-	symbols.sort(
-		(a, b) =>
-			a.selectionRange.startLineNumber - b.selectionRange.startLineNumber ||
-			a.selectionRange.startColumn - b.selectionRange.startColumn,
-	);
+	symbols.sort((a, b) => a.selectionRange.startLineNumber - b.selectionRange.startLineNumber || a.selectionRange.startColumn - b.selectionRange.startColumn);
 	return {
 		folds: folds.filter((range, index) => index === 0 || folds[index - 1]!.startLineIndex !== range.startLineIndex),
 		symbols,
@@ -354,12 +312,7 @@ function collectFacts(tree: TreeSitterTree, model: SyntaxMirror): TreeSitterFact
 	};
 }
 function nodeRange(node: Node): Range {
-	return new Range(
-		node.startPosition.row + 1,
-		node.startPosition.column + 1,
-		node.endPosition.row + 1,
-		node.endPosition.column + 1,
-	);
+	return new Range(node.startPosition.row + 1, node.startPosition.column + 1, node.endPosition.row + 1, node.endPosition.column + 1);
 }
 function integer(value: unknown, minimum: number): number {
 	if (!Number.isSafeInteger(value) || (value as number) < minimum) throw new RangeError('Invalid syntax integer');
@@ -372,28 +325,18 @@ function readRange(value: unknown, lines: number): Range {
 	integer(range.endLineNumber, range.startLineNumber);
 	integer(range.startColumn, 1);
 	integer(range.endColumn, 1);
-	if (
-		range.endLineNumber > lines ||
-		(range.startLineNumber === range.endLineNumber && range.startColumn > range.endColumn)
-	)
-		throw new RangeError('Invalid syntax range');
+	if (range.endLineNumber > lines || (range.startLineNumber === range.endLineNumber && range.startColumn > range.endColumn)) throw new RangeError('Invalid syntax range');
 	return Range.lift(range);
 }
 
 /** Query just the viewport and its ancestors; no second renderer bracket AST. */
-function collectBrackets(
-	root: Node,
-	ranges: readonly { startLineNumber: number; endLineNumber: number }[],
-	model: SyntaxMirror,
-): readonly TreeSitterBracket[] {
+function collectBrackets(root: Node, ranges: readonly { startLineNumber: number; endLineNumber: number }[], model: SyntaxMirror): readonly TreeSitterBracket[] {
 	const parents = new Map<number, Node>();
 	for (const range of ranges) {
 		const start = { row: range.startLineNumber - 1, column: 0 },
 			end = { row: range.endLineNumber, column: 0 };
-		for (const leaf of root.descendantsOfType(['(', ')', '[', ']', '{', '}'], start, end))
-			if (leaf?.parent) parents.set(leaf.parent.id, leaf.parent);
-		for (let node = root.descendantForPosition(start); node?.parent; node = node.parent)
-			parents.set(node.parent.id, node.parent);
+		for (const leaf of root.descendantsOfType(['(', ')', '[', ']', '{', '}'], start, end)) if (leaf?.parent) parents.set(leaf.parent.id, leaf.parent);
+		for (let node = root.descendantForPosition(start); node?.parent; node = node.parent) parents.set(node.parent.id, node.parent);
 	}
 	const result: TreeSitterBracket[] = [];
 	for (const parent of parents.values()) {
@@ -401,9 +344,7 @@ function collectBrackets(
 			opens = children.filter(node => !node.isNamed && ['(', '[', '{'].includes(node.type));
 		for (const open of opens) {
 			const closeText = ({ '(': ')', '[': ']', '{': '}' } as Record<string, string>)[open.type]!;
-			const close = children.find(
-				node => !node.isNamed && node.type === closeText && node.startIndex >= open.endIndex,
-			);
+			const close = children.find(node => !node.isNamed && node.type === closeText && node.startIndex >= open.endIndex);
 			let level = 0,
 				equalLevel = 0;
 			for (let ancestor = parent.parent; ancestor; ancestor = ancestor.parent) {
@@ -427,10 +368,7 @@ function collectBrackets(
 					minIndent = Math.min(minIndent, indent);
 				}
 			result.push({
-				range: Range.fromPositions(
-					nodeRange(open).getStartPosition(),
-					nodeRange(close ?? parent).getEndPosition(),
-				),
+				range: Range.fromPositions(nodeRange(open).getStartPosition(), nodeRange(close ?? parent).getEndPosition()),
 				opening: nodeRange(open),
 				...(close ? { closing: nodeRange(close), closeText } : {}),
 				text: open.type,

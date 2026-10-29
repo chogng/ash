@@ -1,7 +1,6 @@
 import type { Event } from '../../../base/common/event.js';
 
-export type SymphonyStatus =
-	'pending' | 'starting' | 'running' | 'blocked' | 'retrying' | 'stopping' | 'paused' | 'completed';
+export type SymphonyStatus = 'pending' | 'starting' | 'running' | 'blocked' | 'retrying' | 'stopping' | 'paused' | 'completed';
 export type SymphonyControl = 'run' | 'pause' | 'complete';
 export interface SymphonyWorkflow {
 	readonly id: string;
@@ -39,7 +38,5 @@ export interface ISymphonyBackend {
 	submit(workflowId: string, title: string, prompt: string): Promise<SymphonyConversation>;
 	control(id: string, control: SymphonyControl): Promise<void>;
 	enable(workflowId: string, enabled: boolean): Promise<void>;
-	messages(
-		id: string,
-	): Promise<{ readonly conversation: SymphonyConversation; readonly messages: readonly SymphonyMessage[] }>;
+	messages(id: string): Promise<{ readonly conversation: SymphonyConversation; readonly messages: readonly SymphonyMessage[] }>;
 }

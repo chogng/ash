@@ -6,9 +6,7 @@
 	const { ipcRenderer, contextBridge } = require('electron') as typeof import('electron');
 	const channel = 'ash:browserView:preload';
 	// getRandomValues also works on about:blank and other non-secure page contexts.
-	const frameToken = [...crypto.getRandomValues(new Uint8Array(16))]
-		.map(value => value.toString(16).padStart(2, '0'))
-		.join('');
+	const frameToken = [...crypto.getRandomValues(new Uint8Array(16))].map(value => value.toString(16).padStart(2, '0')).join('');
 	let elementSequence = 0;
 	const elements = new Map<string, WeakRef<Element>>();
 	let configuration: Configuration | undefined;
@@ -32,12 +30,8 @@
 	let passwordFormSequence = 0;
 	let passwordGesture: { root: HTMLElement; at: number } | undefined;
 	const visiblePasswordInput = (input: HTMLInputElement): boolean =>
-		input.isConnected &&
-		input.getClientRects().length > 0 &&
-		input.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) &&
-		input.type !== 'hidden';
-	const passwordAction = (root: HTMLElement): string =>
-		root instanceof HTMLFormElement ? root.action : location.href;
+		input.isConnected && input.getClientRects().length > 0 && input.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) && input.type !== 'hidden';
+	const passwordAction = (root: HTMLElement): string => (root instanceof HTMLFormElement ? root.action : location.href);
 	const samePasswordOrigin = (action: string): boolean => {
 		try {
 			return action.length <= 8192 && new URL(action, location.href).origin === location.origin;
@@ -47,57 +41,26 @@
 	};
 	const autocomplete = (input: HTMLInputElement): string | undefined => input.autocomplete.split(/\s+/u).at(-1);
 	const verificationInput = (input: HTMLInputElement): boolean =>
-		autocomplete(input) === 'one-time-code' ||
-		/(?:^|[\s_-])(?:otp|totp|code|pin|verification)(?:$|[\s_-])/iu.test(input.name + ' ' + input.id);
-	function passwordFields(
-		root: HTMLElement,
-	): { username?: HTMLInputElement; password?: HTMLInputElement; hasPasswordControl: boolean } | undefined {
-		if (
-			window !== window.top ||
-			!root.isConnected ||
-			!samePasswordOrigin(passwordAction(root)) ||
-			(root instanceof HTMLFormElement && root.autocomplete === 'off')
-		) {
+		autocomplete(input) === 'one-time-code' || /(?:^|[\s_-])(?:otp|totp|code|pin|verification)(?:$|[\s_-])/iu.test(input.name + ' ' + input.id);
+	function passwordFields(root: HTMLElement): { username?: HTMLInputElement; password?: HTMLInputElement; hasPasswordControl: boolean } | undefined {
+		if (window !== window.top || !root.isConnected || !samePasswordOrigin(passwordAction(root)) || (root instanceof HTMLFormElement && root.autocomplete === 'off')) {
 			return;
 		}
 		const controls = root instanceof HTMLFormElement ? [...root.elements] : [...root.querySelectorAll('input')];
 		// A submit button can override its form's destination, including after a controlled-input update.
-		if (
-			controls.some(
-				element =>
-					element.hasAttribute('formaction') && !samePasswordOrigin(element.getAttribute('formaction')!),
-			)
-		) {
+		if (controls.some(element => element.hasAttribute('formaction') && !samePasswordOrigin(element.getAttribute('formaction')!))) {
 			return;
 		}
-		const inputs = controls.filter(
-			(element): element is HTMLInputElement =>
-				element instanceof HTMLInputElement &&
-				!element.disabled &&
-				!element.readOnly &&
-				visiblePasswordInput(element),
-		);
+		const inputs = controls.filter((element): element is HTMLInputElement => element instanceof HTMLInputElement && !element.disabled && !element.readOnly && visiblePasswordInput(element));
 		const passwords = inputs.filter(input => input.type === 'password');
-		if (
-			passwords.length > 1 ||
-			passwords.some(
-				input => verificationInput(input) || ['new-password', 'off'].includes(autocomplete(input) ?? ''),
-			)
-		) {
+		if (passwords.length > 1 || passwords.some(input => verificationInput(input) || ['new-password', 'off'].includes(autocomplete(input) ?? ''))) {
 			return;
 		}
 		const candidates = inputs.filter(
-			input =>
-				['text', 'email'].includes(input.type) &&
-				autocomplete(input) !== 'off' &&
-				autocomplete(input) !== 'one-time-code' &&
-				!/otp|code|token|search/iu.test(input.name + ' ' + input.id),
+			input => ['text', 'email'].includes(input.type) && autocomplete(input) !== 'off' && autocomplete(input) !== 'one-time-code' && !/otp|code|token|search/iu.test(input.name + ' ' + input.id),
 		);
 		const identity = candidates.find(
-			input =>
-				['username', 'email'].includes(autocomplete(input) ?? '') ||
-				input.type === 'email' ||
-				/user|email|login|account/iu.test(input.name + ' ' + input.id),
+			input => ['username', 'email'].includes(autocomplete(input) ?? '') || input.type === 'email' || /user|email|login|account/iu.test(input.name + ' ' + input.id),
 		);
 		const username = identity ?? (passwords.length === 1 && candidates.length === 1 ? candidates[0] : undefined);
 		if (!passwords.length && (!identity || candidates.length !== 1)) {
@@ -106,9 +69,7 @@
 		return {
 			username,
 			password: passwords[0],
-			hasPasswordControl: controls.some(
-				element => element instanceof HTMLInputElement && element.type === 'password',
-			),
+			hasPasswordControl: controls.some(element => element instanceof HTMLInputElement && element.type === 'password'),
 		};
 	}
 	function passwordRoot(element: Element): HTMLElement | undefined {
@@ -134,9 +95,7 @@
 			return;
 		}
 		// Keep the submission pending while a site advances to a visible verification-code step.
-		const hasPasswordForm = [...document.querySelectorAll<HTMLInputElement>('input')].some(
-			input => visiblePasswordInput(input) && (input.type === 'password' || verificationInput(input)),
-		);
+		const hasPasswordForm = [...document.querySelectorAll<HTMLInputElement>('input')].some(input => visiblePasswordInput(input) && (input.type === 'password' || verificationInput(input)));
 		if (hasPasswordForm === previousPasswordPageState) {
 			return;
 		}
@@ -189,13 +148,7 @@
 						passwordGesture = { root, at: performance.now() };
 						// Native forms report a real submit event after validation. SPA panels
 						// have no such event, so retain their explicit Enter submission path.
-						if (
-							!(root instanceof HTMLFormElement) &&
-							event instanceof KeyboardEvent &&
-							event.key === 'Enter' &&
-							!event.isComposing &&
-							event.target instanceof HTMLInputElement
-						) {
+						if (!(root instanceof HTMLFormElement) && event instanceof KeyboardEvent && event.key === 'Enter' && !event.isComposing && event.target instanceof HTMLInputElement) {
 							passwordSubmit(root);
 						}
 					}
@@ -217,12 +170,7 @@
 			if (fields && !fields.password && fields.hasPasswordControl) {
 				return;
 			}
-			if (
-				!fields ||
-				fields.password?.value ||
-				(!fields.password && fields.username?.value) ||
-				![fields.username, fields.password].includes(target)
-			) {
+			if (!fields || fields.password?.value || (!fields.password && fields.username?.value) || ![fields.username, fields.password].includes(target)) {
 				return;
 			}
 			let formId = passwordFormIds.get(root);
@@ -249,11 +197,7 @@
 					return;
 				}
 				const control = event.target.closest('button,input[type="submit"],[role="button"]');
-				if (
-					!control ||
-					control.getAttribute('type') === 'reset' ||
-					control.getAttribute('aria-disabled') === 'true'
-				) {
+				if (!control || control.getAttribute('type') === 'reset' || control.getAttribute('aria-disabled') === 'true') {
 					return;
 				}
 				const root = passwordRoot(control);
@@ -315,17 +259,10 @@
 	}
 	let clearContentVisibility = (): void => {};
 
-	function configureContentVisibility(
-		rule: import('../common/browserView.js').IBrowserContentVisibilityRule | undefined,
-	): void {
+	function configureContentVisibility(rule: import('../common/browserView.js').IBrowserContentVisibilityRule | undefined): void {
 		clearContentVisibility();
 		clearContentVisibility = () => {};
-		if (
-			!rule ||
-			window !== window.top ||
-			location.origin !== rule.origin ||
-			!CSS.supports('content-visibility', 'auto')
-		) {
+		if (!rule || window !== window.top || location.origin !== rule.origin || !CSS.supports('content-visibility', 'auto')) {
 			return;
 		}
 		// The rule comes from the trusted host; a changed website or invalid selector must fail closed.
@@ -336,10 +273,7 @@
 		}
 		const abort = new AbortController();
 		const properties = ['content-visibility', 'contain-intrinsic-height'] as const;
-		const originals = new Map<
-			HTMLElement,
-			{ values: readonly { value: string; priority: string }[]; applied: boolean }
-		>();
+		const originals = new Map<HTMLElement, { values: readonly { value: string; priority: string }[]; applied: boolean }>();
 		const restore = (element: HTMLElement): void => {
 			const saved = originals.get(element);
 			if (!saved) {
@@ -501,26 +435,13 @@
 		}
 		const commandModifier = mac ? event.metaKey : event.ctrlKey;
 		if (commandModifier && !event.altKey) {
-			const key = /^[a-z]$/i.test(event.key)
-				? event.key.toLowerCase()
-				: /^Key[A-Z]$/.test(event.code)
-					? event.code.slice(3).toLowerCase()
-					: event.key.toLowerCase();
+			const key = /^[a-z]$/i.test(event.key) ? event.key.toLowerCase() : /^Key[A-Z]$/.test(event.code) ? event.code.slice(3).toLowerCase() : event.key.toLowerCase();
 			const editing = event.shiftKey ? ['v', 'z'] : ['a', 'c', 'v', 'x', 'z', ...(mac ? [] : ['y'])];
-			if (
-				editing.includes(key) ||
-				['arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'home', 'end', 'backspace', 'delete'].includes(key)
-			) {
+			if (editing.includes(key) || ['arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'home', 'end', 'backspace', 'delete'].includes(key)) {
 				return false;
 			}
 		}
-		return (
-			event.ctrlKey ||
-			event.altKey ||
-			event.metaKey ||
-			event.key === 'Escape' ||
-			/^(F\d+|Audio|Media|Browser)/.test(event.key)
-		);
+		return event.ctrlKey || event.altKey || event.metaKey || event.key === 'Escape' || /^(F\d+|Audio|Media|Browser)/.test(event.key);
 	}
 	window.addEventListener('keydown', event => {
 		if (event.isTrusted) {
@@ -662,20 +583,7 @@
 	}
 	function pick(element: Element, comment?: string): void {
 		const style = getComputedStyle(element);
-		const properties = [
-			'display',
-			'position',
-			'color',
-			'background-color',
-			'font-family',
-			'font-size',
-			'font-weight',
-			'line-height',
-			'padding',
-			'margin',
-			'border',
-			'border-radius',
-		];
+		const properties = ['display', 'position', 'color', 'background-color', 'font-family', 'font-size', 'font-weight', 'line-height', 'padding', 'margin', 'border', 'border-radius'];
 		const computedStyle = properties
 			.map(property => property + ': ' + style.getPropertyValue(property))
 			.join('; ')
@@ -769,12 +677,7 @@
 			marker.type = 'button';
 			marker.className = 'marker';
 			marker.textContent = String(index + 1);
-			marker.setAttribute(
-				'aria-label',
-				configuration.localizedStrings.elementCommentWithBody
-					.replace('{0}', String(index + 1))
-					.replace('{1}', item.body),
-			);
+			marker.setAttribute('aria-label', configuration.localizedStrings.elementCommentWithBody.replace('{0}', String(index + 1)).replace('{1}', item.body));
 			const bounds = rect(element);
 			Object.assign(marker.style, {
 				left: Math.max(0, Math.min(innerWidth - 32, bounds.x)) + 'px',
@@ -812,13 +715,7 @@
 	window.addEventListener(
 		'pointerdown',
 		event => {
-			if (
-				!mode ||
-				dialog ||
-				!event.isTrusted ||
-				event.button !== 0 ||
-				(mode === 'element' && event.composedPath().includes(host!))
-			) {
+			if (!mode || dialog || !event.isTrusted || event.button !== 0 || (mode === 'element' && event.composedPath().includes(host!))) {
 				return;
 			}
 			event.preventDefault();
@@ -835,13 +732,7 @@
 	window.addEventListener(
 		'pointerup',
 		event => {
-			if (
-				!mode ||
-				dialog ||
-				!event.isTrusted ||
-				event.button !== 0 ||
-				(mode === 'element' && event.composedPath().includes(host!))
-			) {
+			if (!mode || dialog || !event.isTrusted || event.button !== 0 || (mode === 'element' && event.composedPath().includes(host!))) {
 				return;
 			}
 			event.preventDefault();
@@ -964,14 +855,11 @@
 				} else if (event.key === 'ArrowDown' && current?.firstElementChild) {
 					current = current.firstElementChild;
 				} else {
-					const candidates = [
-						...document.querySelectorAll('a,button,input,textarea,select,h1,h2,h3,p,img,[tabindex]'),
-					]
+					const candidates = [...document.querySelectorAll('a,button,input,textarea,select,h1,h2,h3,p,img,[tabindex]')]
 						.filter(element => element !== host && element.getBoundingClientRect().width > 0)
 						.slice(0, 1000);
 					const position = candidates.indexOf(current!);
-					current =
-						candidates[(position + (event.shiftKey ? -1 : 1) + candidates.length) % candidates.length];
+					current = candidates[(position + (event.shiftKey ? -1 : 1) + candidates.length) % candidates.length];
 				}
 				if (current) {
 					current.scrollIntoView({ block: 'nearest', behavior: 'instant' });
@@ -1006,12 +894,7 @@
 				}
 				const form = passwordForms.get(data.formId)?.deref();
 				const fields = form && passwordFields(form);
-				if (
-					!fields ||
-					(fields.password ? 'password' : 'username') !== data.field ||
-					fields.password?.value ||
-					(fields.username?.value && fields.username.value !== data.username)
-				) {
+				if (!fields || (fields.password ? 'password' : 'username') !== data.field || fields.password?.value || (fields.username?.value && fields.username.value !== data.username)) {
 					break;
 				}
 				const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
@@ -1023,10 +906,7 @@
 						continue;
 					}
 					// Controlled inputs can replace or retarget the form in their username handler.
-					if (
-						input === fields.password &&
-						(!form || passwordFields(form)?.password !== input || input.value)
-					) {
+					if (input === fields.password && (!form || passwordFields(form)?.password !== input || input.value)) {
 						break;
 					}
 					setter.call(input, value);
@@ -1088,9 +968,7 @@
 					markerItems = update.comments;
 				}
 				if (update.pendingCommentIdsToDiscard?.length) {
-					markerItems = markerItems.filter(
-						item => !update.pendingCommentIdsToDiscard!.includes(item.elementId),
-					);
+					markerItems = markerItems.filter(item => !update.pendingCommentIdsToDiscard!.includes(item.elementId));
 				}
 				renderMarkers();
 				break;

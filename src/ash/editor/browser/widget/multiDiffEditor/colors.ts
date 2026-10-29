@@ -10,7 +10,10 @@ export const multiDiffEditorHeaderBackground = registerColor(
 		hcDark: 'editor.background',
 		hcLight: 'editor.background',
 	},
-	{ description: 'Background of each file header in a multi-file diff editor.', owner },
+	{
+		description: 'Background of each file header in a multi-file diff editor.',
+		owner,
+	},
 );
 
 export const multiDiffEditorBackground = registerColor(
@@ -21,11 +24,22 @@ export const multiDiffEditorBackground = registerColor(
 		hcDark: 'editor.background',
 		hcLight: 'editor.background',
 	},
-	{ description: 'Background of a multi-file diff editor.', owner },
+	{
+		description: 'Background of a multi-file diff editor.',
+		owner,
+	},
 );
 
 export const multiDiffEditorBorder = registerColor(
 	'multiDiffEditor.border',
-	{ dark: 'widget.border', light: 'widget.border', hcDark: '#ffffff', hcLight: '#000000' },
-	{ description: 'Border around a file comparison in a multi-file diff editor.', owner },
+	{
+		dark: 'widget.border',
+		light: 'widget.border',
+		hcDark: '#ffffff',
+		hcLight: '#000000',
+	},
+	{
+		description: 'Border around a file comparison in a multi-file diff editor.',
+		owner,
+	},
 );

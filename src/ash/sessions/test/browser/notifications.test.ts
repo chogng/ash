@@ -54,18 +54,10 @@ suite('Sessions notification presentation', () => {
 		const { page } = browser;
 		await page.setViewportSize({ width: 360, height: 480 });
 		await page.goto('/sessionsNotifications.html?noStatusbar');
-		await page.evaluate(() =>
-			window.ashNotificationsIntegration.notify(
-				'A long notification with https://example.test/very/long/path/without/spaces and actions.',
-			),
-		);
+		await page.evaluate(() => window.ashNotificationsIntegration.notify('A long notification with https://example.test/very/long/path/without/spaces and actions.'));
 		const toast = page.locator('.ash-notification');
 		await expect(toast).toBeVisible();
-		for (const position of [
-			NotificationsPosition.BOTTOM_LEFT,
-			NotificationsPosition.TOP_RIGHT,
-			NotificationsPosition.BOTTOM_RIGHT,
-		]) {
+		for (const position of [NotificationsPosition.BOTTOM_LEFT, NotificationsPosition.TOP_RIGHT, NotificationsPosition.BOTTOM_RIGHT]) {
 			await page.evaluate(value => window.ashNotificationsIntegration.setPosition(value), position);
 			const geometry = await toast.evaluate(element => {
 				const bounds = element.getBoundingClientRect();

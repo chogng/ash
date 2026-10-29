@@ -66,20 +66,14 @@ export class TerminalProfileQuickpick extends Disposable {
 			this.selection.value = lifetime;
 			const picker = lifetime.add(this.quickInput.createQuickPick<ProfileItem>());
 			picker.ariaLabel = picker.placeholder =
-				type === 'setDefault'
-					? localize('terminal.profile.selectDefault', 'Select the default terminal profile')
-					: localize('terminal.profile.select', 'Select a terminal profile');
+				type === 'setDefault' ? localize('terminal.profile.selectDefault', 'Select the default terminal profile') : localize('terminal.profile.select', 'Select a terminal profile');
 			const update = () => {
 				picker.items = [
-					...this.profiles
-						.getAvailableProfiles(dirId)
-						.map(profile => ({
-							profileId: profile.profileId,
-							label: profile.title,
-							description: profile.isDefault
-								? localize('terminal.profile.default', 'Default')
-								: undefined,
-						})),
+					...this.profiles.getAvailableProfiles(dirId).map(profile => ({
+						profileId: profile.profileId,
+						label: profile.title,
+						description: profile.isDefault ? localize('terminal.profile.default', 'Default') : undefined,
+					})),
 					...this.profiles.contributedProfiles.map(profile => ({
 						profileId: `extension:${profile.extensionIdentifier}/${profile.id}`,
 						label: profile.title,
@@ -96,12 +90,8 @@ export class TerminalProfileQuickpick extends Disposable {
 					if (!item) return;
 
 					if (
-						!this.profiles
-							.getAvailableProfiles(dirId)
-							.some(profile => profile.profileId === item.profileId) &&
-						!this.profiles.contributedProfiles.some(
-							profile => item.profileId === `extension:${profile.extensionIdentifier}/${profile.id}`,
-						)
+						!this.profiles.getAvailableProfiles(dirId).some(profile => profile.profileId === item.profileId) &&
+						!this.profiles.contributedProfiles.some(profile => item.profileId === `extension:${profile.extensionIdentifier}/${profile.id}`)
 					)
 						return;
 					selected = item.profileId;
@@ -121,20 +111,13 @@ export class TerminalProfileQuickpick extends Disposable {
 		const currentPlatform = await this.profiles.getPlatformKey();
 		if (!isCurrent() || platform !== currentPlatform) return undefined;
 		const profile = this.profiles.getAvailableProfiles(dirId).find(profile => profile.profileId === profileId);
-		const contributed = this.profiles.contributedProfiles.find(
-			profile => profileId === `extension:${profile.extensionIdentifier}/${profile.id}`,
-		);
+		const contributed = this.profiles.contributedProfiles.find(profile => profileId === `extension:${profile.extensionIdentifier}/${profile.id}`);
 		if (!profile && !contributed) return undefined;
 		if (type === 'setDefault') {
-			if (contributed)
-				await this.profiles.registerContributedProfile({ ...contributed, options: contributed.options ?? {} });
+			if (contributed) await this.profiles.registerContributedProfile({ ...contributed, options: contributed.options ?? {} });
 			if (!isCurrent()) return undefined;
 			const title = profile?.profileName ?? contributed!.title;
-			await this.configuration.updateValue(
-				`${TerminalSettingPrefix.DefaultProfile}${platform}`,
-				title,
-				ConfigurationTarget.USER,
-			);
+			await this.configuration.updateValue(`${TerminalSettingPrefix.DefaultProfile}${platform}`, title, ConfigurationTarget.USER);
 			return title;
 		}
 		return profileId;

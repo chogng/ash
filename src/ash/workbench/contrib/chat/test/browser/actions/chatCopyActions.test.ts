@@ -13,10 +13,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/
 import { resetNlsResolver, setNlsMessages } from '../../../../../../nls.js';
 import { IAppServerApi } from '../../../../../../platform/agentHost/common/appServerApi.js';
 import { IAccessibilityService } from '../../../../../../platform/accessibility/common/accessibility.js';
-import {
-	buildOpenSessionLinkUri,
-	parseOpenSessionLinkUri,
-} from '../../../../../../platform/agentHost/common/openSessionLink.js';
+import { buildOpenSessionLinkUri, parseOpenSessionLinkUri } from '../../../../../../platform/agentHost/common/openSessionLink.js';
 import { IClipboardService } from '../../../../../../platform/clipboard/common/clipboardService.js';
 import { CommandsRegistry } from '../../../../../../platform/commands/common/commands.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
@@ -90,10 +87,7 @@ suite('Conversation links', () => {
 			copied,
 			opened,
 			announcements,
-			routeWith: (
-				prepare: NonNullable<IChatSessionNavigationService['prepareConversationLink']>,
-				open: NonNullable<IChatSessionNavigationService['openConversationLink']>,
-			) => {
+			routeWith: (prepare: NonNullable<IChatSessionNavigationService['prepareConversationLink']>, open: NonNullable<IChatSessionNavigationService['openConversationLink']>) => {
 				navigation.prepareConversationLink = prepare;
 				navigation.openConversationLink = open;
 			},
@@ -102,17 +96,9 @@ suite('Conversation links', () => {
 				const keys = lifetime.add(new ContextKeyService());
 				services.registerInstance(IMenuService, new MenuService(commands, keys));
 				services.registerInstance(IContextMenuService, { showContextMenu } as IContextMenuService);
-				return lifetime.add(
-					services.createInstance(ChatViewTitleControl, container, 'chat-link', async () => {}),
-				);
+				return lifetime.add(services.createInstance(ChatViewTitleControl, container, 'chat-link', async () => {}));
 			},
-			copy: (context?: unknown) =>
-				Promise.resolve(
-					services.invokeFunction(
-						CommandsRegistry.getCommand('workbench.action.chat.copySessionLink')!,
-						context,
-					),
-				),
+			copy: (context?: unknown) => Promise.resolve(services.invokeFunction(CommandsRegistry.getCommand('workbench.action.chat.copySessionLink')!, context)),
 			open: (uri: URI) => registered!.open(uri),
 			select: (value: typeof active) => {
 				active = value;
@@ -257,15 +243,8 @@ suite('Conversation links', () => {
 			return { thread: { sessionId: 'different', threadId: 'root' } };
 		});
 		await assert.rejects(f.open(buildOpenSessionLinkUri('active', 'root', 'remote')), /connection.*unavailable/);
-		for (const query of [
-			'sessionId=active',
-			'sessionId=active&threadId=root&threadId=peer',
-			'sessionId=active&threadId=%00',
-		]) {
-			await assert.rejects(
-				f.open(URI.from({ scheme: 'agent-host-session', authority: 'local', path: '/open', query })),
-				/invalid/,
-			);
+		for (const query of ['sessionId=active', 'sessionId=active&threadId=root&threadId=peer', 'sessionId=active&threadId=%00']) {
+			await assert.rejects(f.open(URI.from({ scheme: 'agent-host-session', authority: 'local', path: '/open', query })), /invalid/);
 		}
 		assert.equal(reads, 0);
 		await assert.rejects(f.open(buildOpenSessionLinkUri('active', 'root', 'local')), /unavailable/);
@@ -281,8 +260,7 @@ suite('Conversation links', () => {
 				const f = fixture(lifetime);
 				const pending = new DeferredPromise<{ thread: { sessionId: string; threadId: string } }>();
 				f.readWith(() => pending.p);
-				const result =
-					operation === 'copy' ? f.copy() : f.open(buildOpenSessionLinkUri('active', 'root', 'local'));
+				const result = operation === 'copy' ? f.copy() : f.open(buildOpenSessionLinkUri('active', 'root', 'local'));
 				const rejected = assert.rejects(result, /cancelled/);
 				f[retirement]();
 				await pending.complete({ thread: { sessionId: 'active', threadId: 'root' } });
@@ -292,9 +270,7 @@ suite('Conversation links', () => {
 	}
 
 	test('Chinese link errors come from the product translation catalog', async () => {
-		const messages = JSON.parse(
-			readFileSync(resolve('extensions/language-pack-zh-cn/translations/chat.json'), 'utf8'),
-		);
+		const messages = JSON.parse(readFileSync(resolve('extensions/language-pack-zh-cn/translations/chat.json'), 'utf8'));
 		setNlsMessages('zh-CN', messages);
 		try {
 			// Product commands are registered after localization during startup.
@@ -308,13 +284,8 @@ suite('Conversation links', () => {
 				f.title(dom.window.document.body, value => {
 					menu = value;
 				});
-				dom.window.document
-					.querySelector<HTMLButtonElement>('.ash-chat-view-title-button')!
-					.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true }));
-				assert.equal(
-					menu!.getActions().find(action => action.id === 'workbench.action.chat.copySessionLink')!.label,
-					'复制对话链接',
-				);
+				dom.window.document.querySelector<HTMLButtonElement>('.ash-chat-view-title-button')!.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true }));
+				assert.equal(menu!.getActions().find(action => action.id === 'workbench.action.chat.copySessionLink')!.label, '复制对话链接');
 			} finally {
 				ModifierKeyEmitter.disposeInstance(dom.window as unknown as Window);
 				dom.window.close();

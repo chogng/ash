@@ -1,8 +1,4 @@
-import {
-	defaultMenuStyles,
-	defaultButtonStyles,
-	defaultKeybindingLabelStyles,
-} from '../../theme/browser/defaultStyles.js';
+import { defaultMenuStyles, defaultButtonStyles, defaultKeybindingLabelStyles } from '../../theme/browser/defaultStyles.js';
 import { type ContextMenuAnchor, type IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
 import { isNode } from '../../../base/browser/dom.js';
 import { AnchorPosition, ContextViewFocusRestore } from '../../../base/browser/ui/contextview/contextview.js';
@@ -41,12 +37,7 @@ export class ContextMenuHandler extends Disposable {
 			return false;
 		}
 		const actions = delegate.getActions();
-		if (
-			actions.length === 0 ||
-			this.activeMenu ||
-			this.isDisposed ||
-			delegate.cancellationToken?.isCancellationRequested
-		) {
+		if (actions.length === 0 || this.activeMenu || this.isDisposed || delegate.cancellationToken?.isCancellationRequested) {
 			delegate.onHide?.(true);
 			return false;
 		}
@@ -215,5 +206,11 @@ export class ContextMenuHandler extends Disposable {
 
 function toContextViewAnchor(anchor: ContextMenuAnchor): Element | (IRectangle & { readonly targetWindow?: Window }) {
 	if (isNode(anchor)) return anchor;
-	return { left: anchor.x, top: anchor.y, width: 0, height: 0, targetWindow: anchor.targetWindow };
+	return {
+		left: anchor.x,
+		top: anchor.y,
+		width: 0,
+		height: 0,
+		targetWindow: anchor.targetWindow,
+	};
 }

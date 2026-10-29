@@ -1,15 +1,5 @@
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-} from '../../../../base/common/lifecycle.js';
-import {
-	AccessibilitySignal,
-	AccessibilitySignalService,
-	IAccessibilitySignalService,
-} from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { AccessibilitySignal, AccessibilitySignalService, IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { AccessibilityProgressSignalScheduler } from '../../../../platform/accessibilitySignal/browser/progressAccessibilitySignalScheduler.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -52,11 +42,7 @@ class TaskProgressAccessibilityContribution extends Disposable {
 		if (this.taskService.activeRuns.length === 0) {
 			this.progress.clear();
 		} else if (!this.progress.value) {
-			this.progress.value = this.instantiationService.createInstance(
-				AccessibilityProgressSignalScheduler,
-				5000,
-				undefined,
-			);
+			this.progress.value = this.instantiationService.createInstance(AccessibilityProgressSignalScheduler, 5000, undefined);
 		}
 	}
 }
@@ -68,11 +54,7 @@ registerWorkbenchContribution('workbench.contrib.taskProgressAccessibility', Wor
 class TerminalAccessibilityContribution extends Disposable {
 	private readonly terminals = this._register(new DisposableMap<ITerminalInstance, DisposableStore>());
 
-	constructor(
-		@ITerminalService terminals: ITerminalService,
-		@ITaskService tasks: ITaskService,
-		@IAccessibilitySignalService signals: IAccessibilitySignalService,
-	) {
+	constructor(@ITerminalService terminals: ITerminalService, @ITaskService tasks: ITaskService, @IAccessibilitySignalService signals: IAccessibilitySignalService) {
 		super();
 		const taskTerminals = new Set(tasks.activeRuns.map(run => run.terminalId));
 		this._register(toDisposable(() => taskTerminals.clear()));
@@ -151,7 +133,5 @@ for (const [id, contribution] of [
 	['workbench.contrib.debugAccessibilitySignals', AccessibilitySignalDebuggerContribution],
 	['workbench.contrib.editorTextPropertySignals', EditorTextPropertySignalsContribution],
 ] as const) {
-	registerWorkbenchContribution(id, WorkbenchPhase.AfterRestored, accessor =>
-		accessor.get(IInstantiationService).createInstance(contribution),
-	);
+	registerWorkbenchContribution(id, WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(contribution));
 }

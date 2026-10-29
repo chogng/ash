@@ -10,13 +10,7 @@ import { Position } from '../../../../editor/common/core/position.js';
 import { LineDiffKind } from '../../../../editor/common/diff/lineDiff.js';
 import { PeekViewWidget } from '../../../../editor/contrib/peekView/browser/peekView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import {
-	type IQuickDiffEditorController,
-	IQuickDiffEditorControllerService,
-	IQuickDiffModelService,
-	type QuickDiffChange,
-	type QuickDiffModelReference,
-} from '../common/quickDiff.js';
+import { type IQuickDiffEditorController, IQuickDiffEditorControllerService, IQuickDiffModelService, type QuickDiffChange, type QuickDiffModelReference } from '../common/quickDiff.js';
 import { QuickDiffDecorator } from './quickDiffDecorator.js';
 
 /** Per-editor Quick Diff controller created through constructor injection after first render. */
@@ -34,34 +28,13 @@ export class QuickDiffEditorController extends Disposable implements IQuickDiffE
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
-		this.modelReference = this._register(
-			modelService.createModelReference(editorView.textModel.uri, editorView.textModel),
-		);
+		this.modelReference = this._register(modelService.createModelReference(editorView.textModel.uri, editorView.textModel));
 		this._register(new QuickDiffDecorator(editor, this.modelReference, configurationService));
 		this._register(controllerService.register(this));
-		this._register(
-			addDisposableListener<FocusEvent>(editorView.domNode.domNode, 'focusin', () =>
-				controllerService.activate(this),
-			),
-		);
-		if (editorView.domNode.domNode.contains(editorView.domNode.domNode.ownerDocument.activeElement))
-			controllerService.activate(this);
-		this._register(
-			addDisposableListener<PointerEvent>(
-				editorView.domNode.domNode,
-				'pointerdown',
-				event => this.handlePointerDown(event),
-				{ capture: true },
-			),
-		);
-		this._register(
-			addDisposableListener<KeyboardEvent>(
-				editorView.domNode.domNode,
-				'keydown',
-				event => this.handleKeyDown(event),
-				{ capture: true },
-			),
-		);
+		this._register(addDisposableListener<FocusEvent>(editorView.domNode.domNode, 'focusin', () => controllerService.activate(this)));
+		if (editorView.domNode.domNode.contains(editorView.domNode.domNode.ownerDocument.activeElement)) controllerService.activate(this);
+		this._register(addDisposableListener<PointerEvent>(editorView.domNode.domNode, 'pointerdown', event => this.handlePointerDown(event), { capture: true }));
+		this._register(addDisposableListener<KeyboardEvent>(editorView.domNode.domNode, 'keydown', event => this.handleKeyDown(event), { capture: true }));
 		this._register(this.modelReference.object.onDidChange(() => this.handleModelChange()));
 	}
 
@@ -78,9 +51,7 @@ export class QuickDiffEditorController extends Disposable implements IQuickDiffE
 		const model = this.modelReference?.object;
 		if (!model) return;
 		const lineIndex = this.currentChange?.lineIndex ?? this.editor.getPosition()!.lineNumber - 1;
-		const change = this.currentChange
-			? model.findPreviousChange(lineIndex)
-			: model.findPreviousChange(lineIndex, true);
+		const change = this.currentChange ? model.findPreviousChange(lineIndex) : model.findPreviousChange(lineIndex, true);
 		if (change) this.showChange(change);
 		else this.editorView.announceAccessibilityStatus('No Quick Diff changes');
 	}
@@ -91,8 +62,7 @@ export class QuickDiffEditorController extends Disposable implements IQuickDiffE
 	}
 
 	private handlePointerDown(event: PointerEvent): void {
-		if (event.button !== 0 || this.configurationService.getValue('scm.diffDecorationsGutterAction') !== 'diff')
-			return;
+		if (event.button !== 0 || this.configurationService.getValue('scm.diffDecorationsGutterAction') !== 'diff') return;
 		if (!isHTMLElement(event.target) || !event.target.closest('.ash-quick-diff-gutter')) return;
 		const target = this.editorView.getNearestTargetAtClientPoint({
 			clientX: event.clientX,
@@ -106,15 +76,7 @@ export class QuickDiffEditorController extends Disposable implements IQuickDiffE
 	}
 
 	private handleKeyDown(event: KeyboardEvent): void {
-		if (
-			event.defaultPrevented ||
-			event.isComposing ||
-			event.ctrlKey ||
-			event.metaKey ||
-			event.altKey ||
-			event.shiftKey
-		)
-			return;
+		if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
 		if (event.key === 'Escape' && this.view.value) {
 			stopEvent(event);
 			this.close();
@@ -125,9 +87,7 @@ export class QuickDiffEditorController extends Disposable implements IQuickDiffE
 	private handleModelChange(): void {
 		if (!this.currentChange) return;
 		const model = this.modelReference?.object;
-		const next =
-			model?.findChangeAtLine(this.currentChange.lineIndex) ??
-			model?.findNextChange(this.currentChange.lineIndex, true);
+		const next = model?.findChangeAtLine(this.currentChange.lineIndex) ?? model?.findNextChange(this.currentChange.lineIndex, true);
 		if (next) this.showChange(next);
 		else this.close();
 	}
@@ -148,9 +108,7 @@ export class QuickDiffEditorController extends Disposable implements IQuickDiffE
 			() => this.showNextChange(),
 			() => this.close(),
 		);
-		this.editorView.announceAccessibilityStatus(
-			`Quick Diff change ${Math.max(0, index) + 1} of ${model.state.changes.length}`,
-		);
+		this.editorView.announceAccessibilityStatus(`Quick Diff change ${Math.max(0, index) + 1} of ${model.state.changes.length}`);
 	}
 }
 
@@ -175,8 +133,7 @@ export class QuickDiffEditorControllerService extends Disposable implements IQui
 
 	register(controller: IQuickDiffEditorController) {
 		this.assertNotDisposed();
-		if (this.controllers.has(controller))
-			throw new RangeError('Quick Diff editor controller is already registered');
+		if (this.controllers.has(controller)) throw new RangeError('Quick Diff editor controller is already registered');
 		this.controllers.add(controller);
 		return toDisposable(() => {
 			this.controllers.delete(controller);
@@ -186,8 +143,7 @@ export class QuickDiffEditorControllerService extends Disposable implements IQui
 
 	activate(controller: IQuickDiffEditorController): void {
 		this.assertNotDisposed();
-		if (!this.controllers.has(controller))
-			throw new ReferenceError('Quick Diff editor controller is not registered');
+		if (!this.controllers.has(controller)) throw new ReferenceError('Quick Diff editor controller is not registered');
 		this._activeController = controller;
 	}
 }
@@ -207,12 +163,7 @@ class QuickDiffPeekView extends Disposable {
 		const domNode = editor.getDomNode();
 		if (!domNode) throw new Error('Quick Diff requires an attached editor');
 		const document = domNode.ownerDocument;
-		const kind =
-			change.kind === LineDiffKind.Added
-				? 'Added'
-				: change.kind === LineDiffKind.Removed
-					? 'Deleted'
-					: 'Modified';
+		const kind = change.kind === LineDiffKind.Added ? 'Added' : change.kind === LineDiffKind.Removed ? 'Deleted' : 'Modified';
 		const peek = this._register(new PeekViewWidget(editor));
 		peek.setTitle(`${change.comparison.original.label} — ${kind} — ${index} of ${count}`);
 		this._register(peek.onDidClose(close));

@@ -15,12 +15,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { CommandRegistry } from '../../../../platform/commands/common/commands.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { createExtensionHostInitialization } from '../../extensions/common/extensionHostProtocol.js';
-import {
-	IExtensionHostApi,
-	type ExtensionHostFleetSnapshot,
-	type ExtensionHostRuntime,
-	type ExtensionHostActivationEvent,
-} from '../../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostRuntime, type ExtensionHostActivationEvent } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import type { AppServerConnectionState } from '../../../../platform/agentHost/common/appServerApi.js';
 import { IOutputService, type IOutputChannel, type OutputEntrySeverity } from '../../output/common/output.js';
 import { MainThreadExtensionApi, type ExtensionApiIssue } from '../../../api/browser/mainThreadExtensionApi.js';
@@ -73,22 +68,15 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 	) {
 		super();
 		const timeout = normalizeTimeout(invocationTimeoutMillis);
-		this.fleetOutput = this._register(
-			output.createChannel({ id: 'extension-host', label: 'Extension Host', kind: 'log', source: 'core' }),
-		);
-		this.extensionApi = this._register(
-			instantiationService.createInstance(MainThreadExtensionApi, commands, timeout, this.fleetOutput),
-		);
-		this.clientEditors = this._register(
-			instantiationService.createInstance(MainThreadClientEditors, timeout, loadExtensionEditorModule),
-		);
+		this.fleetOutput = this._register(output.createChannel({ id: 'extension-host', label: 'Extension Host', kind: 'log', source: 'core' }));
+		this.extensionApi = this._register(instantiationService.createInstance(MainThreadExtensionApi, commands, timeout, this.fleetOutput));
+		this.clientEditors = this._register(instantiationService.createInstance(MainThreadClientEditors, timeout, loadExtensionEditorModule));
 		this._register(extensions.registerActivationHandler((event, signal) => this.activateByEvent(event, signal)));
 		// Runtime registrations can arrive before their attested catalog identity.
 		// Retry that same fleet when the declarative owner commits its catalog.
 		this._register(
 			extensions.onDidChange(() => {
-				if (this.started && this.connectionReady)
-					void this.requestRefresh('list').catch(reportExtensionHostError);
+				if (this.started && this.connectionReady) void this.requestRefresh('list').catch(reportExtensionHostError);
 			}),
 		);
 		this._register(models.onModelAdded(() => this.activateEditorEvents()));
@@ -128,8 +116,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		const revision = this.connectionRevision;
 		try {
 			const state = await this.api.getConnectionState();
-			if (!this.isDisposed && this.started && revision === this.connectionRevision)
-				await this.acceptConnectionState(state, false);
+			if (!this.isDisposed && this.started && revision === this.connectionRevision) await this.acceptConnectionState(state, false);
 			// Eager editor providers must publish their factories before tabs restore. Other
 			// startup providers keep running concurrently with Workbench restoration.
 			const editorOwners = new Set(
@@ -238,15 +225,8 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 				this.pendingAction = undefined;
 				const revision = this.authorityRevision;
 				try {
-					const snapshot =
-						action === 'reconcile' ? await this.api.reconcile('refresh') : await this.api.list();
-					if (
-						this.isDisposed ||
-						!this.started ||
-						!this.connectionReady ||
-						revision !== this.authorityRevision
-					)
-						continue;
+					const snapshot = action === 'reconcile' ? await this.api.reconcile('refresh') : await this.api.list();
+					if (this.isDisposed || !this.started || !this.connectionReady || revision !== this.authorityRevision) continue;
 					if (snapshot.generation < this.desiredGeneration) {
 						this.pendingAction = mergeAction(this.pendingAction, 'list');
 						continue;
@@ -254,20 +234,13 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 					this.desiredGeneration = 0;
 					await this.acceptSnapshot(snapshot);
 				} catch (error) {
-					if (
-						this.isDisposed ||
-						!this.started ||
-						!this.connectionReady ||
-						revision !== this.authorityRevision
-					)
-						continue;
+					if (this.isDisposed || !this.started || !this.connectionReady || revision !== this.authorityRevision) continue;
 					this.failRefresh(error);
 				}
 			}
 		} finally {
 			this.refreshRunner = undefined;
-			if (!this.isDisposed && this.started && this.connectionReady && this.pendingAction)
-				this.refreshRunner = this.drainRefreshes();
+			if (!this.isDisposed && this.started && this.connectionReady && this.pendingAction) this.refreshRunner = this.drainRefreshes();
 		}
 	}
 
@@ -278,19 +251,11 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		const extensions = await Promise.all(
 			snapshot.extensions.map(async runtime => {
 				const activation = runtime.activation;
-				if (
-					runtime.lifecycle !== 'dormant' ||
-					!activation?.commands.some(command => command.title.includes('%'))
-				)
-					return runtime;
+				if (runtime.lifecycle !== 'dormant' || !activation?.commands.some(command => command.title.includes('%'))) return runtime;
 				const titles: string[] = JSON.parse(
 					await this.instantiationService
 						.createInstance(MainThreadLocalization)
-						.localizeManifest(
-							runtime.id,
-							JSON.stringify(activation.commands.map(command => command.title)),
-							this.extensions.currentCatalog.generation,
-						),
+						.localizeManifest(runtime.id, JSON.stringify(activation.commands.map(command => command.title)), this.extensions.currentCatalog.generation),
 				);
 				return {
 					...runtime,
@@ -301,26 +266,12 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 				};
 			}),
 		);
-		if (
-			this.isDisposed ||
-			!this.started ||
-			!this.connectionReady ||
-			revision !== this.authorityRevision ||
-			snapshot.generation < this.snapshot.fleetGeneration
-		)
-			return;
+		if (this.isDisposed || !this.started || !this.connectionReady || revision !== this.authorityRevision || snapshot.generation < this.snapshot.fleetGeneration) return;
 		snapshot = { ...snapshot, extensions };
 		const projected = projectSnapshot(snapshot);
 		try {
 			await this.clientEditors.update(snapshot);
-			if (
-				this.isDisposed ||
-				!this.started ||
-				!this.connectionReady ||
-				revision !== this.authorityRevision ||
-				snapshot.generation < this.snapshot.fleetGeneration
-			)
-				return;
+			if (this.isDisposed || !this.started || !this.connectionReady || revision !== this.authorityRevision || snapshot.generation < this.snapshot.fleetGeneration) return;
 			runWithBufferedEvents(() => {
 				const issues = this.extensionApi.update(snapshot);
 				this.setSnapshot(projected);
@@ -355,20 +306,10 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 			if (runtime.lifecycle !== 'dormant') {
 				continue;
 			}
-			const language = [...languages].find(
-				id =>
-					runtime.activation!.events.includes('onLanguage') ||
-					runtime.activation!.events.includes(`onLanguage:${id}`),
-			);
+			const language = [...languages].find(id => runtime.activation!.events.includes('onLanguage') || runtime.activation!.events.includes(`onLanguage:${id}`));
 			if (language) {
-				void this.activateRuntime(runtime, { type: 'language', languageId: language }).catch(
-					reportExtensionHostError,
-				);
-			} else if (
-				runtime.activation!.events.includes('*') ||
-				(this.lifecycle.phase >= LifecyclePhase.Restored &&
-					runtime.activation!.events.includes('onStartupFinished'))
-			) {
+				void this.activateRuntime(runtime, { type: 'language', languageId: language }).catch(reportExtensionHostError);
+			} else if (runtime.activation!.events.includes('*') || (this.lifecycle.phase >= LifecyclePhase.Restored && runtime.activation!.events.includes('onStartupFinished'))) {
 				void this.activateRuntime(runtime, { type: 'startupFinished' }).catch(reportExtensionHostError);
 			}
 		}
@@ -382,17 +323,14 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		// from current authority before selecting an activation fence.
 		await this.reload();
 		if (signal) throwIfCancelled(signal);
-		if (!this.started || !this.connectionReady || this.isDisposed || revision !== this.authorityRevision)
-			throw new CancellationError();
+		if (!this.started || !this.connectionReady || this.isDisposed || revision !== this.authorityRevision) throw new CancellationError();
 		const snapshot = await this.api.list();
 		if (signal) throwIfCancelled(signal);
-		if (!this.started || !this.connectionReady || this.isDisposed || revision !== this.authorityRevision)
-			throw new CancellationError();
+		if (!this.started || !this.connectionReady || this.isDisposed || revision !== this.authorityRevision) throw new CancellationError();
 		if (snapshot.generation < this.snapshot.fleetGeneration) throw new CancellationError();
 		await this.acceptSnapshot(snapshot);
 		if (signal) throwIfCancelled(signal);
-		if (!this.started || !this.connectionReady || this.isDisposed || revision !== this.authorityRevision)
-			throw new CancellationError();
+		if (!this.started || !this.connectionReady || this.isDisposed || revision !== this.authorityRevision) throw new CancellationError();
 		const activations = snapshot.extensions.flatMap(runtime => {
 			if (runtime.lifecycle !== 'dormant') return [];
 			const activation = selectActivationEvent(runtime.activation!.events, event);
@@ -401,8 +339,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		const operation = Promise.all(activations);
 		await (signal ? raceCancellationError(operation, signal) : operation);
 		if (signal) throwIfCancelled(signal);
-		if (!this.started || !this.connectionReady || this.isDisposed || revision !== this.authorityRevision)
-			throw new CancellationError();
+		if (!this.started || !this.connectionReady || this.isDisposed || revision !== this.authorityRevision) throw new CancellationError();
 	}
 
 	private activateRuntime(runtime: ExtensionHostRuntime, event: ExtensionHostActivationEvent): Promise<void> {
@@ -416,8 +353,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 			.createInstance(MainThreadLocalization)
 			.getLocalization(runtime.id)
 			.then(localization => {
-				if (this.isDisposed || !this.started || !this.connectionReady || revision !== this.authorityRevision)
-					throw new CancellationError();
+				if (this.isDisposed || !this.started || !this.connectionReady || revision !== this.authorityRevision) throw new CancellationError();
 				return this.api.activateByEvent({
 					extensionId: runtime.id,
 					activationGeneration: runtime.activationGeneration,
@@ -429,27 +365,13 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 				});
 			})
 			.then(async snapshot => {
-				if (
-					!this.isDisposed &&
-					this.started &&
-					this.connectionReady &&
-					revision === this.authorityRevision &&
-					snapshot.generation >= this.snapshot.fleetGeneration
-				) {
+				if (!this.isDisposed && this.started && this.connectionReady && revision === this.authorityRevision && snapshot.generation >= this.snapshot.fleetGeneration) {
 					await this.acceptSnapshot(snapshot);
 				}
-				const activated = snapshot.extensions.find(
-					extension =>
-						extension.id === runtime.id && extension.activationGeneration === runtime.activationGeneration,
-				);
+				const activated = snapshot.extensions.find(extension => extension.id === runtime.id && extension.activationGeneration === runtime.activationGeneration);
 				if (activated?.lifecycle !== 'ready')
 					throw new Error(
-						localize(
-							'extensionHost.activationFailed',
-							"Extension '{0}' failed to activate: {1}",
-							runtime.id,
-							activated?.failure?.message ?? activated?.lifecycle ?? 'unavailable',
-						),
+						localize('extensionHost.activationFailed', "Extension '{0}' failed to activate: {1}", runtime.id, activated?.failure?.message ?? activated?.lifecycle ?? 'unavailable'),
 					);
 			})
 			.catch(error => {
@@ -521,32 +443,21 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 	}
 }
 
-function selectActivationEvent(
-	declarations: readonly string[],
-	event: string,
-): ExtensionHostActivationEvent | undefined {
+function selectActivationEvent(declarations: readonly string[], event: string): ExtensionHostActivationEvent | undefined {
 	for (const capability of ['terminalCompletionProvider', 'terminalQuickFixProvider']) {
-		if (event === `onTerminal:${capability}` && declarations.includes(`onDemand:${capability}`))
-			return { type: 'capability', capability };
+		if (event === `onTerminal:${capability}` && declarations.includes(`onDemand:${capability}`)) return { type: 'capability', capability };
 	}
-	if (event === 'onTerminal' && declarations.includes('onDemand:terminalLinkProvider'))
-		return { type: 'capability', capability: 'terminalLinkProvider' };
-	if (event === 'onCanvas' && declarations.includes('onDemand:dataChannel'))
-		return { type: 'capability', capability: 'dataChannel' };
-	if (event === 'onSpeech' && (declarations.includes('onSpeech') || declarations.includes('onDemand:speechProvider')))
-		return { type: 'speech' };
+	if (event === 'onTerminal' && declarations.includes('onDemand:terminalLinkProvider')) return { type: 'capability', capability: 'terminalLinkProvider' };
+	if (event === 'onCanvas' && declarations.includes('onDemand:dataChannel')) return { type: 'capability', capability: 'dataChannel' };
+	if (event === 'onSpeech' && (declarations.includes('onSpeech') || declarations.includes('onDemand:speechProvider'))) return { type: 'speech' };
 	if (event.startsWith('onTerminalProfile:')) {
 		const profileId = event.slice('onTerminalProfile:'.length);
-		if (declarations.includes(event) || declarations.includes('onDemand:terminalProfileProvider'))
-			return { type: 'terminalProfile', profileId };
+		if (declarations.includes(event) || declarations.includes('onDemand:terminalProfileProvider')) return { type: 'terminalProfile', profileId };
 	}
 	if (event === 'onTaskType' || event.startsWith('onTaskType:')) {
 		const requested = event === 'onTaskType' ? undefined : event.slice('onTaskType:'.length);
 		const declared = declarations.find(value => value.startsWith('onTaskType:'));
-		const matches =
-			declarations.includes('onTaskType') ||
-			declarations.includes('onDemand:taskProvider') ||
-			(requested ? declarations.includes(event) : declared !== undefined);
+		const matches = declarations.includes('onTaskType') || declarations.includes('onDemand:taskProvider') || (requested ? declarations.includes(event) : declared !== undefined);
 		if (matches) {
 			return { type: 'taskType', taskType: requested ?? declared?.slice('onTaskType:'.length) ?? null };
 		}
@@ -560,10 +471,7 @@ function selectActivationEvent(
 	} as const;
 	const [name, debugType] = event.split(':', 2);
 	if (!name || !Object.hasOwn(phases, name)) return undefined;
-	const declaredType =
-		!debugType && name === 'onDebugDynamicConfigurations'
-			? declarations.find(value => value.startsWith(`${name}:`))?.slice(name.length + 1)
-			: undefined;
+	const declaredType = !debugType && name === 'onDebugDynamicConfigurations' ? declarations.find(value => value.startsWith(`${name}:`))?.slice(name.length + 1) : undefined;
 	if (
 		!declarations.includes(event) &&
 		!declarations.includes(name) &&
@@ -594,10 +502,7 @@ function projectSnapshot(snapshot: ExtensionHostFleetSnapshot): ExtensionHostSna
 						runtime.registrations.map((registration): WorkbenchExtensionHostRegistration =>
 							Object.freeze({
 								id: registration.registrationId,
-								kind:
-									registration.kind === 'testProfileProvider'
-										? 'testProfileProvider'
-										: registration.kind,
+								kind: registration.kind === 'testProfileProvider' ? 'testProfileProvider' : registration.kind,
 							}),
 						),
 					),
@@ -615,21 +520,11 @@ function fleetStateSeverity(state: ExtensionHostState): OutputEntrySeverity {
 
 function projectState(snapshot: ExtensionHostFleetSnapshot, bridgeIssues: boolean): ExtensionHostState {
 	if (snapshot.extensions.length === 0) return bridgeIssues ? 'degraded' : 'ready';
-	const ready = snapshot.extensions.filter(
-		extension => extension.lifecycle === 'ready' || extension.lifecycle === 'dormant',
-	).length;
+	const ready = snapshot.extensions.filter(extension => extension.lifecycle === 'ready' || extension.lifecycle === 'dormant').length;
 	if (ready === snapshot.extensions.length) return bridgeIssues ? 'degraded' : 'ready';
 	if (ready > 0) return 'degraded';
 	if (snapshot.extensions.every(extension => extension.lifecycle === 'stopped')) return 'stopped';
-	if (
-		snapshot.extensions.some(
-			extension =>
-				extension.lifecycle === 'starting' ||
-				extension.lifecycle === 'handshaking' ||
-				extension.lifecycle === 'recovering',
-		)
-	)
-		return 'starting';
+	if (snapshot.extensions.some(extension => extension.lifecycle === 'starting' || extension.lifecycle === 'handshaking' || extension.lifecycle === 'recovering')) return 'starting';
 	return 'failed';
 }
 
@@ -638,8 +533,7 @@ function mergeAction(current: RefreshAction | undefined, next: RefreshAction): R
 }
 
 function normalizeTimeout(value: number): number {
-	if (!Number.isSafeInteger(value) || value < 100 || value > 300_000)
-		throw new TypeError('Extension Host invocation timeout is invalid');
+	if (!Number.isSafeInteger(value) || value < 100 || value > 300_000) throw new TypeError('Extension Host invocation timeout is invalid');
 	return value;
 }
 

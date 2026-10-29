@@ -1,13 +1,6 @@
 import { onUnexpectedError } from '../../../base/common/errors.js';
 import { OffsetRange } from '../core/ranges/offsetRange.js';
-import {
-	ColorId,
-	FontStyle,
-	type ITokenPresentation,
-	MetadataConsts,
-	StandardTokenType,
-	TokenMetadata,
-} from '../encodedTokenAttributes.js';
+import { ColorId, FontStyle, type ITokenPresentation, MetadataConsts, StandardTokenType, TokenMetadata } from '../encodedTokenAttributes.js';
 import { type ILanguageIdCodec } from '../languages.js';
 import { type IPosition } from '../core/position.js';
 import { type ITextModel } from '../model.js';
@@ -39,10 +32,7 @@ export class LineTokens implements IViewLineTokens {
 		return new LineTokens(tokens, lineContent, decoder);
 	}
 
-	public static createFromTextAndMetadata(
-		data: { text: string; metadata: number }[],
-		decoder: ILanguageIdCodec,
-	): LineTokens {
+	public static createFromTextAndMetadata(data: { text: string; metadata: number }[], decoder: ILanguageIdCodec): LineTokens {
 		let offset = 0;
 		let fullText = '';
 		const tokens = new Array<number>();
@@ -93,9 +83,7 @@ export class LineTokens implements IViewLineTokens {
 	public readonly languageIdCodec: ILanguageIdCodec;
 
 	public static defaultTokenMetadata =
-		((FontStyle.None << MetadataConsts.FONT_STYLE_OFFSET) |
-			(ColorId.DefaultForeground << MetadataConsts.FOREGROUND_OFFSET) |
-			(ColorId.DefaultBackground << MetadataConsts.BACKGROUND_OFFSET)) >>>
+		((FontStyle.None << MetadataConsts.FONT_STYLE_OFFSET) | (ColorId.DefaultForeground << MetadataConsts.FOREGROUND_OFFSET) | (ColorId.DefaultBackground << MetadataConsts.BACKGROUND_OFFSET)) >>>
 		0;
 
 	public constructor(tokens: Uint32Array, text: string, decoder: ILanguageIdCodec) {
@@ -220,13 +208,9 @@ export class LineTokens implements IViewLineTokens {
 		const newTokens = new Array<number>();
 		let originalEndOffset = 0;
 		while (true) {
-			const nextOriginalTokenEndOffset =
-				nextOriginalTokenIdx < this._tokensCount ? this._tokens[nextOriginalTokenIdx << 1] : -1;
+			const nextOriginalTokenEndOffset = nextOriginalTokenIdx < this._tokensCount ? this._tokens[nextOriginalTokenIdx << 1] : -1;
 			const nextInsertToken = nextInsertTokenIdx < insertTokens.length ? insertTokens[nextInsertTokenIdx] : null;
-			if (
-				nextOriginalTokenEndOffset !== -1 &&
-				(nextInsertToken === null || nextOriginalTokenEndOffset <= nextInsertToken.offset)
-			) {
+			if (nextOriginalTokenEndOffset !== -1 && (nextInsertToken === null || nextOriginalTokenEndOffset <= nextInsertToken.offset)) {
 				text += this._text.substring(originalEndOffset, nextOriginalTokenEndOffset);
 				const metadata = this._tokens[(nextOriginalTokenIdx << 1) + 1];
 				newTokens.push(text.length, metadata);
@@ -368,9 +352,7 @@ class SliceLineTokens implements IViewLineTokens {
 	}
 
 	public findTokenIndexAtOffset(offset: number): number {
-		return (
-			this._source.findTokenIndexAtOffset(offset + this._startOffset - this._deltaOffset) - this._firstTokenIndex
-		);
+		return this._source.findTokenIndexAtOffset(offset + this._startOffset - this._deltaOffset) - this._firstTokenIndex;
 	}
 
 	public getTokenText(tokenIndex: number): string {
@@ -399,9 +381,7 @@ export class TokenArray {
 	public static fromLineTokens(lineTokens: LineTokens): TokenArray {
 		const tokenInfo: TokenInfo[] = [];
 		for (let i = 0; i < lineTokens.getCount(); i++) {
-			tokenInfo.push(
-				new TokenInfo(lineTokens.getEndOffset(i) - lineTokens.getStartOffset(i), lineTokens.getMetadata(i)),
-			);
+			tokenInfo.push(new TokenInfo(lineTokens.getEndOffset(i) - lineTokens.getStartOffset(i), lineTokens.getMetadata(i)));
 		}
 		return TokenArray.create(tokenInfo);
 	}

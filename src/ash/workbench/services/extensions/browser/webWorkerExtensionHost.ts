@@ -27,9 +27,7 @@ const BUILT_IN_SSH_EXTENSION_ID = 'ash.remote-ssh';
 
 /** A package snapshot is executed in a window-owned Worker, never in the Workbench realm. */
 export class WebWorkerExtensionHost extends Disposable implements IExtensionHostApi {
-	public registerClientHandler(
-		handler: ExtensionHostClientHandler,
-	): ReturnType<IExtensionHostApi['registerClientHandler']> {
+	public registerClientHandler(handler: ExtensionHostClientHandler): ReturnType<IExtensionHostApi['registerClientHandler']> {
 		if (this.clientHandler) throw new Error('An extension client handler is already registered');
 		const remote = this.remote.registerClientHandler(handler);
 		this.clientHandler = handler as ExtensionClientHandler;
@@ -62,9 +60,7 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 			this._register(
 				extensions.onDidChange(() => {
 					this.pendingMode ??= 'restartFailed';
-					void this.reconcile('restartFailed').catch(error =>
-						console.error('Browser extension enablement refresh failed', error),
-					);
+					void this.reconcile('restartFailed').catch(error => console.error('Browser extension enablement refresh failed', error));
 				}),
 			);
 		}
@@ -74,8 +70,7 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 		this._register(toDisposable(() => changes.dispose()));
 		const connection = remote.onConnectionState(state => {
 			this.remoteConnectionRevision++;
-			if (state === 'ready')
-				void this.refreshRemote().catch(error => console.error('Extension Host refresh failed', error));
+			if (state === 'ready') void this.refreshRemote().catch(error => console.error('Extension Host refresh failed', error));
 			else {
 				this.remoteRevision++;
 				this.remoteSnapshot = { generation: 1, extensions: [] };
@@ -125,8 +120,7 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 			assertRemoteResolverOwnership(runtime, runtime.id === BUILT_IN_SSH_EXTENSION_ID);
 		}
 		const localIds = new Set(this.snapshot.extensions.map(runtime => runtime.id));
-		if (snapshot.extensions.some(runtime => localIds.has(runtime.id)))
-			throw new Error('An extension cannot be active in two hosts');
+		if (snapshot.extensions.some(runtime => localIds.has(runtime.id))) throw new Error('An extension cannot be active in two hosts');
 		this.remoteSnapshot = snapshot;
 		// The queued catalog read may revoke a local runtime activated by the current pass.
 		if (!this.pendingMode) {
@@ -157,20 +151,13 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 		return this.list();
 	}
 
-	public async activateByEvent(
-		request: Parameters<IExtensionHostApi['activateByEvent']>[0],
-	): Promise<ExtensionHostFleetSnapshot> {
+	public async activateByEvent(request: Parameters<IExtensionHostApi['activateByEvent']>[0]): Promise<ExtensionHostFleetSnapshot> {
 		this.assertNotDisposed();
 		const connectionRevision = this.remoteConnectionRevision;
 		const activated = await this.remote.activateByEvent(request);
 		this.assertNotDisposed();
 		if (connectionRevision !== this.remoteConnectionRevision) {
-			throw new Error(
-				localize(
-					'extensionHost.browser.retired',
-					'Browser extension invocation belongs to a retired activation',
-				),
-			);
+			throw new Error(localize('extensionHost.browser.retired', 'Browser extension invocation belongs to a retired activation'));
 		}
 		// The activation reply is a complete fleet. Retire in-flight older reads so first use
 		// cannot return dormant metadata while a notification refresh is still pending.
@@ -182,22 +169,11 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 	public async invoke(request: Parameters<IExtensionHostApi['invoke']>[0], signal: AbortSignal): Promise<JsonValue> {
 		this.assertNotDisposed();
 		const normalized = normalizeExtensionHostInvocationRequest(request);
-		if (this.remoteSnapshot.extensions.some(extension => extension.id === normalized.extensionId))
-			return this.remote.invoke(normalized, signal);
+		if (this.remoteSnapshot.extensions.some(extension => extension.id === normalized.extensionId)) return this.remote.invoke(normalized, signal);
 		const worker = this.workers.get(normalized.extensionId);
 		const runtime = this.snapshot.extensions.find(extension => extension.id === normalized.extensionId);
-		if (
-			!worker ||
-			runtime?.lifecycle !== 'ready' ||
-			runtime.activationGeneration !== normalized.activationGeneration ||
-			runtime.incarnation !== normalized.incarnation
-		) {
-			throw new Error(
-				localize(
-					'extensionHost.browser.retired',
-					'Browser extension invocation belongs to a retired activation',
-				),
-			);
+		if (!worker || runtime?.lifecycle !== 'ready' || runtime.activationGeneration !== normalized.activationGeneration || runtime.incarnation !== normalized.incarnation) {
+			throw new Error(localize('extensionHost.browser.retired', 'Browser extension invocation belongs to a retired activation'));
 		}
 		return worker.request({ type: 'invoke', request: normalized }, normalized.deadlineUnixMillis, signal);
 	}
@@ -209,15 +185,8 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 		// a cached backend read still observes managed updates and connection changes.
 		const catalog = await this.extensions.list('cached');
 		this.assertNotDisposed();
-		const packages = new Map(
-			catalog.extensions.map(extension => [extension.id, browserPackageIdentity(extension)]),
-		);
-		const retained = this.snapshot.extensions.filter(
-			runtime =>
-				runtime.lifecycle === 'ready' &&
-				this.workers.has(runtime.id) &&
-				this.workerPackages.get(runtime.id) === packages.get(runtime.id),
-		);
+		const packages = new Map(catalog.extensions.map(extension => [extension.id, browserPackageIdentity(extension)]));
+		const retained = this.snapshot.extensions.filter(runtime => runtime.lifecycle === 'ready' && this.workers.has(runtime.id) && this.workerPackages.get(runtime.id) === packages.get(runtime.id));
 		const retainedIds = new Set(retained.map(runtime => runtime.id));
 		const retired: BrowserExtensionWorker[] = [];
 		for (const [id] of this.workers) {
@@ -252,21 +221,14 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 				continue;
 			}
 			const localization = this.instantiation.createInstance(MainThreadLocalization);
-			const manifest = JSON.parse(
-				await localization.localizeManifest(extension.id, extension.manifestJson, catalog.generation),
-			);
+			const manifest = JSON.parse(await localization.localizeManifest(extension.id, extension.manifestJson, catalog.generation));
 			if (typeof manifest.browser !== 'string') {
 				continue;
 			}
 			let worker: BrowserExtensionWorker | undefined;
 			try {
 				if (extension.id === BUILT_IN_SSH_EXTENSION_ID) {
-					throw new TypeError(
-						localize(
-							'extensionHost.browser.productSsh',
-							'The product SSH extension must execute as a Rust provider',
-						),
-					);
+					throw new TypeError(localize('extensionHost.browser.productSsh', 'The product SSH extension must execute as a Rust provider'));
 				}
 				const path = manifest.browser.replace(/^\.\//, '');
 				const source = await this.extensions.resources.readExtensionResourceBytes({
@@ -275,98 +237,73 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 					path,
 				});
 				this.assertNotDisposed();
-				worker = this.instantiation.createInstance(
-					BrowserExtensionWorker,
-					extension.id,
-					source,
-					async (message: unknown, signal: AbortSignal) => {
-						if (this.workers.get(extension.id) !== worker) {
-							throw new Error(
-								localize(
-									'extensionHost.browser.retired',
-									'Browser extension invocation belongs to a retired activation',
-								),
-							);
-						}
-						const operation = message as ExtensionClientOperation;
-						if (!this.clientHandler) throw new Error('No extension client handler is registered');
-						const result = await this.clientHandler(operation, signal, {
-							extensionId: extension.id,
-							activationGeneration: generation,
-							incarnation: generation,
-						});
-						if (this.workers.get(extension.id) !== worker) {
-							throw new Error(
-								localize(
-									'extensionHost.browser.retired',
-									'Browser extension invocation belongs to a retired activation',
-								),
-							);
-						}
-						if (
-							operation.operation === 'setStatusBarEntries' &&
-							result.result === 'done' &&
-							!signal.aborted
-						) {
-							// Reconnect snapshots retain only the current acknowledged value, never activation's old arguments.
-							this.snapshot = {
-								...this.snapshot,
-								extensions: this.snapshot.extensions.map(runtime =>
-									runtime.id !== extension.id || runtime.incarnation !== generation
-										? runtime
-										: {
-												...runtime,
-												registrations: runtime.registrations.map(registration =>
-													registration.kind === 'statusBar' &&
-													registration.registrationId === operation.registrationId &&
-													operation.revision > registration.revision
-														? {
-																...registration,
-																revision: operation.revision,
-																entries: operation.entries,
-															}
-														: registration,
-												),
-											},
-								),
-							};
-							// The client already applied this value. Publishing a fleet change before
-							// the Worker receives its reply would invalidate the originating command.
-							this.snapshotGeneration++;
-						}
-						if (operation.operation === 'scmUpdate' && result.result === 'done' && !signal.aborted) {
-							this.snapshot = {
-								...this.snapshot,
-								extensions: this.snapshot.extensions.map(runtime =>
-									runtime.id !== extension.id || runtime.incarnation !== generation
-										? runtime
-										: {
-												...runtime,
-												registrations: runtime.registrations.map(registration =>
-													registration.kind === 'sourceControl' &&
-													registration.registrationId === operation.registrationId &&
-													operation.revision > registration.revision
-														? {
-																...registration,
-																revision: operation.revision,
-																providers: operation.providers,
-															}
-														: registration,
-												),
-											},
-								),
-							};
-							this.snapshotGeneration++;
-						}
-						return result;
-					},
-				);
+				worker = this.instantiation.createInstance(BrowserExtensionWorker, extension.id, source, async (message: unknown, signal: AbortSignal) => {
+					if (this.workers.get(extension.id) !== worker) {
+						throw new Error(localize('extensionHost.browser.retired', 'Browser extension invocation belongs to a retired activation'));
+					}
+					const operation = message as ExtensionClientOperation;
+					if (!this.clientHandler) throw new Error('No extension client handler is registered');
+					const result = await this.clientHandler(operation, signal, {
+						extensionId: extension.id,
+						activationGeneration: generation,
+						incarnation: generation,
+					});
+					if (this.workers.get(extension.id) !== worker) {
+						throw new Error(localize('extensionHost.browser.retired', 'Browser extension invocation belongs to a retired activation'));
+					}
+					if (operation.operation === 'setStatusBarEntries' && result.result === 'done' && !signal.aborted) {
+						// Reconnect snapshots retain only the current acknowledged value, never activation's old arguments.
+						this.snapshot = {
+							...this.snapshot,
+							extensions: this.snapshot.extensions.map(runtime =>
+								runtime.id !== extension.id || runtime.incarnation !== generation
+									? runtime
+									: {
+											...runtime,
+											registrations: runtime.registrations.map(registration =>
+												registration.kind === 'statusBar' && registration.registrationId === operation.registrationId && operation.revision > registration.revision
+													? {
+															...registration,
+															revision: operation.revision,
+															entries: operation.entries,
+														}
+													: registration,
+											),
+										},
+							),
+						};
+						// The client already applied this value. Publishing a fleet change before
+						// the Worker receives its reply would invalidate the originating command.
+						this.snapshotGeneration++;
+					}
+					if (operation.operation === 'scmUpdate' && result.result === 'done' && !signal.aborted) {
+						this.snapshot = {
+							...this.snapshot,
+							extensions: this.snapshot.extensions.map(runtime =>
+								runtime.id !== extension.id || runtime.incarnation !== generation
+									? runtime
+									: {
+											...runtime,
+											registrations: runtime.registrations.map(registration =>
+												registration.kind === 'sourceControl' && registration.registrationId === operation.registrationId && operation.revision > registration.revision
+													? {
+															...registration,
+															revision: operation.revision,
+															providers: operation.providers,
+														}
+													: registration,
+											),
+										},
+							),
+						};
+						this.snapshotGeneration++;
+					}
+					return result;
+				});
 				this.workers.set(extension.id, worker);
 				worker.onDidChangeRegistrations(() => {
 					if (this.workers.get(extension.id) !== worker) return;
-					const current = this.snapshot.extensions.find(
-						runtime => runtime.id === extension.id && runtime.incarnation === generation,
-					);
+					const current = this.snapshot.extensions.find(runtime => runtime.id === extension.id && runtime.incarnation === generation);
 					// Activation publishes its latest transport snapshot below, including
 					// changes that arrive while a sibling package is still starting.
 					if (!current) return;
@@ -377,9 +314,7 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 						assertRemoteResolverOwnership(updated, false);
 						this.snapshot = {
 							generation: this.snapshot.generation + 1,
-							extensions: this.snapshot.extensions.map(runtime =>
-								runtime === current ? updated : runtime,
-							),
+							extensions: this.snapshot.extensions.map(runtime => (runtime === current ? updated : runtime)),
 						};
 						this.changes.fire(++this.snapshotGeneration);
 					} catch (error) {
@@ -387,11 +322,11 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 					}
 				});
 				if (!this.clientHandler) throw new Error('No extension client handler is registered');
-				const initialized = await this.clientHandler(
-					{ operation: 'readInitialization' },
-					new AbortController().signal,
-					{ extensionId: extension.id, activationGeneration: generation, incarnation: generation },
-				);
+				const initialized = await this.clientHandler({ operation: 'readInitialization' }, new AbortController().signal, {
+					extensionId: extension.id,
+					activationGeneration: generation,
+					incarnation: generation,
+				});
 				if (initialized.result !== 'initialization') throw new Error('Invalid extension initialization');
 				const registrations = await worker.request(
 					{
@@ -414,9 +349,7 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 				this.assertNotDisposed();
 				const runtime = normalizeExtensionHostSnapshot({
 					generation,
-					extensions: [
-						{ ...runtimeIdentity(extension, generation), lifecycle: 'ready', failure: null, registrations },
-					],
+					extensions: [{ ...runtimeIdentity(extension, generation), lifecycle: 'ready', failure: null, registrations }],
 				}).extensions[0];
 				assertRemoteResolverOwnership(runtime, false);
 				worker.onDidFail(error => this.retire(extension.id, generation, error));
@@ -441,12 +374,7 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 			generation: this.snapshot.generation + 1,
 			extensions: Object.freeze(
 				runtimes.map(runtime => {
-					const current =
-						this.snapshot.extensions.find(
-							candidate =>
-								candidate.id === runtime.id &&
-								candidate.activationGeneration === runtime.activationGeneration,
-						) ?? runtime;
+					const current = this.snapshot.extensions.find(candidate => candidate.id === runtime.id && candidate.activationGeneration === runtime.activationGeneration) ?? runtime;
 					const registrations = this.workers.get(runtime.id)?.takeRegistrationSnapshot();
 					const updated = registrations ? Object.freeze({ ...current, registrations }) : current;
 					assertRemoteResolverOwnership(updated, false);
@@ -510,11 +438,7 @@ class BrowserExtensionWorker extends Disposable {
 	private nextId = 1;
 	private readonly pending = new Map<number, { resolve(value: JsonValue): void; reject(error: Error): void }>();
 
-	constructor(
-		extensionId: string,
-		source: Uint8Array,
-		clientHandler: (operation: unknown, signal: AbortSignal) => ReturnType<ExtensionHostClientHandler>,
-	) {
+	constructor(extensionId: string, source: Uint8Array, clientHandler: (operation: unknown, signal: AbortSignal) => ReturnType<ExtensionHostClientHandler>) {
 		super();
 		const clients = new Map<number, AbortController>();
 		const webviewResources = this._register(new DisposableMap<string>());
@@ -536,9 +460,7 @@ class BrowserExtensionWorker extends Disposable {
 			toDisposable(() => {
 				this.worker.terminate();
 				for (const pending of this.pending.values()) {
-					pending.reject(
-						new Error(localize('extensionHost.browser.stopped', 'Browser extension Worker stopped')),
-					);
+					pending.reject(new Error(localize('extensionHost.browser.stopped', 'Browser extension Worker stopped')));
 				}
 				this.pending.clear();
 			}),
@@ -548,8 +470,7 @@ class BrowserExtensionWorker extends Disposable {
 			if (message?.type === 'registrationsChanged') {
 				try {
 					const payload = normalizeExtensionHostPayload(message.snapshot);
-					if (!payload || typeof payload !== 'object' || Array.isArray(payload))
-						throw new TypeError('Invalid browser registration snapshot');
+					if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new TypeError('Invalid browser registration snapshot');
 					const value = payload as Readonly<Record<string, JsonValue>>;
 					if (
 						Object.keys(value).sort().join(',') !== 'registrations,revision' ||
@@ -568,12 +489,7 @@ class BrowserExtensionWorker extends Disposable {
 				return;
 			}
 			if (message?.type === 'webviewResource') {
-				if (
-					typeof message.url !== 'string' ||
-					!URL.canParse(message.url) ||
-					!message.url.startsWith('blob:') ||
-					new URL(message.url).origin !== new URL(this.entryPoint).origin
-				) {
+				if (typeof message.url !== 'string' || !URL.canParse(message.url) || !message.url.startsWith('blob:') || new URL(message.url).origin !== new URL(this.entryPoint).origin) {
 					this.fail(new TypeError('Invalid extension webview resource URL'));
 					return;
 				}
@@ -599,12 +515,7 @@ class BrowserExtensionWorker extends Disposable {
 				return;
 			}
 			if (message?.type === 'clientRequest') {
-				if (
-					!Number.isSafeInteger(message.id) ||
-					message.id <= 0 ||
-					clients.has(message.id) ||
-					clients.size >= 32
-				) {
+				if (!Number.isSafeInteger(message.id) || message.id <= 0 || clients.has(message.id) || clients.size >= 32) {
 					this.fail(new TypeError('Invalid browser extension client request ID'));
 					return;
 				}
@@ -616,10 +527,7 @@ class BrowserExtensionWorker extends Disposable {
 					// These fields validate shape only; the window binding supplies the actual fence.
 					const browserOperation = normalizeBrowserClientOperation(payload);
 					if (browserOperation) {
-						return (await clientHandler(
-							browserOperation,
-							AbortSignal.any([lifetime.signal, client.signal]),
-						)) as unknown as JsonValue;
+						return (await clientHandler(browserOperation, AbortSignal.any([lifetime.signal, client.signal]))) as unknown as JsonValue;
 					}
 					const { operation } = decodeAppServerServerRequestParams('extensionClient/request', {
 						extensionId,
@@ -627,12 +535,8 @@ class BrowserExtensionWorker extends Disposable {
 						incarnation: 1,
 						operation: payload,
 					});
-					if (operation.operation === 'readWorkspaceFile')
-						throw new TypeError('Workspace file requests belong to the backend');
-					return (await clientHandler(
-						operation,
-						AbortSignal.any([lifetime.signal, client.signal]),
-					)) as unknown as JsonValue;
+					if (operation.operation === 'readWorkspaceFile') throw new TypeError('Workspace file requests belong to the backend');
+					return (await clientHandler(operation, AbortSignal.any([lifetime.signal, client.signal]))) as unknown as JsonValue;
 				})()
 					.then(normalizeExtensionHostPayload)
 					.then(
@@ -663,11 +567,7 @@ class BrowserExtensionWorker extends Disposable {
 			}
 
 			if (!message || !Number.isSafeInteger(message.id) || typeof message.success !== 'boolean') {
-				this.fail(
-					new Error(
-						localize('extensionHost.browser.invalidResponse', 'Invalid browser extension Worker response'),
-					),
-				);
+				this.fail(new Error(localize('extensionHost.browser.invalidResponse', 'Invalid browser extension Worker response')));
 				return;
 			}
 			const pending = this.pending.get(message.id);
@@ -712,12 +612,7 @@ class BrowserExtensionWorker extends Disposable {
 	public request(request: WorkerRequest, deadline: number, signal?: AbortSignal): Promise<JsonValue> {
 		this.assertNotDisposed();
 		if (signal?.aborted) {
-			return Promise.reject(
-				new DOMException(
-					localize('extensionHost.browser.cancelled', 'Browser extension invocation cancelled'),
-					'AbortError',
-				),
-			);
+			return Promise.reject(new DOMException(localize('extensionHost.browser.cancelled', 'Browser extension invocation cancelled'), 'AbortError'));
 		}
 		const id = this.nextId++;
 		return new Promise((resolve, reject) => {
@@ -733,20 +628,11 @@ class BrowserExtensionWorker extends Disposable {
 					type: 'cancel',
 					invocationId: id,
 				} satisfies BrowserExtensionHostRequest);
-				reject(
-					new DOMException(
-						localize('extensionHost.browser.cancelled', 'Browser extension invocation cancelled'),
-						'AbortError',
-					),
-				);
+				reject(new DOMException(localize('extensionHost.browser.cancelled', 'Browser extension invocation cancelled'), 'AbortError'));
 			};
 			const timer = setTimeout(
 				() => {
-					this.fail(
-						new Error(
-							localize('extensionHost.browser.deadline', 'Browser extension invocation deadline elapsed'),
-						),
-					);
+					this.fail(new Error(localize('extensionHost.browser.deadline', 'Browser extension invocation deadline elapsed')));
 				},
 				Math.max(0, deadline - Date.now()),
 			);
@@ -779,11 +665,7 @@ function assertRemoteResolverOwnership(runtime: ExtensionHostRuntime, builtInSsh
 	// cannot acquire the reserved prefix, even if their catalog provenance is built-in.
 	if (
 		!builtInSsh &&
-		runtime.registrations.some(
-			registration =>
-				(registration.kind === 'remoteAuthorityResolver' || registration.kind === 'remoteConnectionResolver') &&
-				registration.authorityPrefix === 'ssh',
-		)
+		runtime.registrations.some(registration => (registration.kind === 'remoteAuthorityResolver' || registration.kind === 'remoteConnectionResolver') && registration.authorityPrefix === 'ssh')
 	) {
 		throw new TypeError('Remote ssh prefix belongs to the built-in SSH extension');
 	}
@@ -802,10 +684,7 @@ function browserPackageIdentity(extension: ExtensionDescriptor): string {
 	]);
 }
 
-function runtimeIdentity(
-	extension: ExtensionDescriptor,
-	generation: number,
-): Omit<ExtensionHostRuntime, 'lifecycle' | 'failure' | 'registrations'> {
+function runtimeIdentity(extension: ExtensionDescriptor, generation: number): Omit<ExtensionHostRuntime, 'lifecycle' | 'failure' | 'registrations'> {
 	return {
 		id: extension.id,
 		version: extension.version,
@@ -830,12 +709,7 @@ function normalizeBrowserClientOperation(value: JsonValue): ExtensionClientOpera
 		return entry;
 	};
 	if (input.operation === 'scmUpdate') {
-		if (
-			!Number.isSafeInteger(input.revision) ||
-			Number(input.revision) < 1 ||
-			!Array.isArray(input.providers) ||
-			input.providers.length > 128
-		) {
+		if (!Number.isSafeInteger(input.revision) || Number(input.revision) < 1 || !Array.isArray(input.providers) || input.providers.length > 128) {
 			throw new TypeError('Invalid SCM update');
 		}
 		return {

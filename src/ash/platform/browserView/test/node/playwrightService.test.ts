@@ -27,12 +27,7 @@ suite('Playwright session lifetime', () => {
 				args: ['--remote-debugging-port=0'],
 			});
 			const page = context.pages()[0]!;
-			await page.goto(
-				'data:text/html,' +
-					encodeURIComponent(
-						'<style>:root{--accent:rgb(1,2,3)}input{color:var(--accent);margin:3px 4px}</style><input style="padding:2px" value="Inspect me">',
-					),
-			);
+			await page.goto('data:text/html,' + encodeURIComponent('<style>:root{--accent:rgb(1,2,3)}input{color:var(--accent);margin:3px 4px}</style><input style="padding:2px" value="Inspect me">'));
 			await page.locator('input').focus();
 			const [port, endpoint] = readFileSync(join(profile, 'DevToolsActivePort'), 'utf8').trim().split('\n');
 			const socket = new WebSocket(`ws://127.0.0.1:${port}${endpoint}`);
@@ -46,11 +41,7 @@ suite('Playwright session lifetime', () => {
 			const receive = (event: MessageEvent): void => {
 				const message = JSON.parse(String(event.data));
 				// The Main group normally adds the view's domain identity to Chromium target metadata.
-				for (const target of [
-					message.result?.targetInfo,
-					message.params?.targetInfo,
-					...(message.result?.targetInfos ?? []),
-				]) {
+				for (const target of [message.result?.targetInfo, message.params?.targetInfo, ...(message.result?.targetInfos ?? [])]) {
 					if (target) {
 						target.browserViewId = 'observed-page';
 					}
@@ -69,10 +60,7 @@ suite('Playwright session lifetime', () => {
 				sendCDPMessage: async (_id, message) => {
 					if (message.method === 'Page.createIsolatedWorld') {
 						// Exercise Main's rejection of universal access through the real Playwright connection.
-						assert.notEqual(
-							(message.params as { grantUniveralAccess?: boolean }).grantUniveralAccess,
-							true,
-						);
+						assert.notEqual((message.params as { grantUniveralAccess?: boolean }).grantUniveralAccess, true);
 						isolatedWorlds.push(message.params);
 					}
 					socket.send(JSON.stringify(message));

@@ -1,9 +1,5 @@
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
-import type {
-	EnvironmentEntry as EntryDto,
-	ApprovalEnvironmentReadResult as ProfileDto,
-	ApprovalEnvironmentScanResult as DraftDto,
-} from '../../../../../.build/protocol/typescript/index.js';
+import type { EnvironmentEntry as EntryDto, ApprovalEnvironmentReadResult as ProfileDto, ApprovalEnvironmentScanResult as DraftDto } from '../../../../../.build/protocol/typescript/index.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { localize } from '../../../nls.js';
@@ -22,32 +18,15 @@ import type {
 export class AppServerApprovalEnvironmentService implements IApprovalEnvironmentService {
 	constructor(private readonly client: AppServerProtocolClient) {}
 	async read(scope: ReviewEnvironmentScope): Promise<ReviewEnvironmentProfile> {
-		return profile(
-			await this.client.request(APP_SERVER_METHODS['approval/environment/read'], { scope }).catch(explain),
-		);
+		return profile(await this.client.request(APP_SERVER_METHODS['approval/environment/read'], { scope }).catch(explain));
 	}
-	async scan(
-		scope: ReviewEnvironmentScope,
-		operationId: string,
-		options: ReviewEnvironmentScanOptions,
-		model?: ReviewEnvironmentModel,
-	): Promise<ReviewEnvironmentDraft> {
-		return draft(
-			await this.client
-				.request(APP_SERVER_METHODS['approval/environment/scan'], { scope, operationId, options, model })
-				.catch(explain),
-		);
+	async scan(scope: ReviewEnvironmentScope, operationId: string, options: ReviewEnvironmentScanOptions, model?: ReviewEnvironmentModel): Promise<ReviewEnvironmentDraft> {
+		return draft(await this.client.request(APP_SERVER_METHODS['approval/environment/scan'], { scope, operationId, options, model }).catch(explain));
 	}
 	async cancel(operationId: string): Promise<void> {
 		await this.client.request(APP_SERVER_METHODS['approval/environment/cancel'], { operationId }).catch(explain);
 	}
-	async save(
-		scope: ReviewEnvironmentScope,
-		commandId: string,
-		expectedRevision: number,
-		entries: readonly ReviewEnvironmentInput[],
-		draftId?: string,
-	): Promise<ReviewEnvironmentProfile> {
+	async save(scope: ReviewEnvironmentScope, commandId: string, expectedRevision: number, entries: readonly ReviewEnvironmentInput[], draftId?: string): Promise<ReviewEnvironmentProfile> {
 		return profile(
 			await this.client
 				.request(APP_SERVER_METHODS['approval/environment/save'], {
@@ -90,12 +69,7 @@ function profile(value: ProfileDto): ReviewEnvironmentProfile {
 		revision: value.profile.revision,
 		entries: [
 			...value.profile.entries,
-			...value.profile.observations.filter(
-				observation =>
-					!value.profile.entries.some(
-						accepted => accepted.current && accepted.source.id === observation.source.id,
-					),
-			),
+			...value.profile.observations.filter(observation => !value.profile.entries.some(accepted => accepted.current && accepted.source.id === observation.source.id)),
 		].map(entry),
 	};
 }
@@ -115,33 +89,13 @@ function explain(error: unknown): never {
 	if (error instanceof AppServerRemoteError) {
 		switch (error.errorName) {
 			case 'ApprovalEnvironmentConflict':
-				throw new Error(
-					localize(
-						'approvalEnvironment.conflict',
-						'The profile or its sources changed. Rescan before saving. Your current draft is still open.',
-					),
-				);
+				throw new Error(localize('approvalEnvironment.conflict', 'The profile or its sources changed. Rescan before saving. Your current draft is still open.'));
 			case 'ApprovalEnvironmentUnavailable':
-				throw new Error(
-					localize(
-						'approvalEnvironment.unavailable',
-						'Review environment preparation or the selected model is unavailable.',
-					),
-				);
+				throw new Error(localize('approvalEnvironment.unavailable', 'Review environment preparation or the selected model is unavailable.'));
 			case 'ApprovalEnvironmentOperationFailed':
-				throw new Error(
-					localize(
-						'approvalEnvironment.failed',
-						'Review environment preparation failed. Check source access and model configuration.',
-					),
-				);
+				throw new Error(localize('approvalEnvironment.failed', 'Review environment preparation failed. Check source access and model configuration.'));
 			case 'InvalidParams':
-				throw new Error(
-					localize(
-						'approvalEnvironment.invalid',
-						'Check the selected project, source, title, and description. Descriptions must be short and contain no credentials.',
-					),
-				);
+				throw new Error(localize('approvalEnvironment.invalid', 'Check the selected project, source, title, and description. Descriptions must be short and contain no credentials.'));
 		}
 	}
 	throw error;

@@ -11,13 +11,11 @@ test('HTML token fragments clip across token boundaries without changing UTF-16 
 		[
 			{
 				text: '<tag>',
-				metadata:
-					(3 << MetadataConsts.FOREGROUND_OFFSET) | (FontStyle.Bold << MetadataConsts.FONT_STYLE_OFFSET),
+				metadata: (3 << MetadataConsts.FOREGROUND_OFFSET) | (FontStyle.Bold << MetadataConsts.FONT_STYLE_OFFSET),
 			},
 			{
 				text: '😀\t&"\'',
-				metadata:
-					(4 << MetadataConsts.FOREGROUND_OFFSET) | (FontStyle.Underline << MetadataConsts.FONT_STYLE_OFFSET),
+				metadata: (4 << MetadataConsts.FOREGROUND_OFFSET) | (FontStyle.Underline << MetadataConsts.FONT_STYLE_OFFSET),
 			},
 		],
 		codec,
@@ -35,26 +33,17 @@ test('HTML token fragments keep font styles when the color map has no matching e
 		[
 			{
 				text: 'value',
-				metadata:
-					(5 << MetadataConsts.FOREGROUND_OFFSET) |
-					((FontStyle.Bold | FontStyle.Italic | FontStyle.Underline | FontStyle.Strikethrough) <<
-						MetadataConsts.FONT_STYLE_OFFSET),
+				metadata: (5 << MetadataConsts.FOREGROUND_OFFSET) | ((FontStyle.Bold | FontStyle.Italic | FontStyle.Underline | FontStyle.Strikethrough) << MetadataConsts.FONT_STYLE_OFFSET),
 			},
 		],
 		codec,
 	);
-	assert.equal(
-		tokenizeLineToHTML('value', tokens, [], 0, 5, 4, false),
-		'<span style="font-style: italic;font-weight: bold;text-decoration: underline line-through;">value</span>',
-	);
+	assert.equal(tokenizeLineToHTML('value', tokens, [], 0, 5, 4, false), '<span style="font-style: italic;font-weight: bold;text-decoration: underline line-through;">value</span>');
 });
 
 test('HTML token fragments escape content and style attributes', () => {
 	const text = '<img src=x> & "\'';
-	const tokens = LineTokens.createFromTextAndMetadata(
-		[{ text, metadata: 1 << MetadataConsts.FOREGROUND_OFFSET }],
-		codec,
-	);
+	const tokens = LineTokens.createFromTextAndMetadata([{ text, metadata: 1 << MetadataConsts.FOREGROUND_OFFSET }], codec);
 	assert.equal(
 		tokenizeLineToHTML(text, tokens, ['', '" onmouseover="bad'], 0, text.length, 4, false),
 		'<span style="color: &quot; onmouseover=&quot;bad;">&lt;img src=x&gt; &amp; &quot;&#39;</span>',

@@ -65,22 +65,11 @@ export class PdfAnnotationModel {
 		return this.add({ kind: 'highlight', page, rect, color }, now);
 	}
 
-	addInk(
-		page: number,
-		points: readonly PdfAnnotationPoint[],
-		color: PdfAnnotationColor,
-		now = new Date(),
-	): PdfAnnotation {
+	addInk(page: number, points: readonly PdfAnnotationPoint[], color: PdfAnnotationColor, now = new Date()): PdfAnnotation {
 		return this.add({ kind: 'ink', page, points, color }, now);
 	}
 
-	addNote(
-		page: number,
-		point: PdfAnnotationPoint,
-		text: string,
-		color: PdfAnnotationColor,
-		now = new Date(),
-	): PdfAnnotation {
+	addNote(page: number, point: PdfAnnotationPoint, text: string, color: PdfAnnotationColor, now = new Date()): PdfAnnotation {
 		return this.add({ kind: 'note', page, point, text, color }, now);
 	}
 
@@ -89,9 +78,7 @@ export class PdfAnnotationModel {
 		if (!annotation || annotation.kind !== 'note') return;
 		this.apply({
 			version: this.document.version,
-			annotations: this.document.annotations.map(candidate =>
-				candidate.id === id ? { ...candidate, text, updatedAt: now.toISOString() } : candidate,
-			),
+			annotations: this.document.annotations.map(candidate => (candidate.id === id ? { ...candidate, text, updatedAt: now.toISOString() } : candidate)),
 		});
 	}
 
@@ -157,9 +144,7 @@ export class PdfAnnotationModel {
 }
 
 type NewPdfAnnotation =
-	| Omit<PdfHighlightAnnotation, 'id' | 'createdAt' | 'updatedAt'>
-	| Omit<PdfInkAnnotation, 'id' | 'createdAt' | 'updatedAt'>
-	| Omit<PdfNoteAnnotation, 'id' | 'createdAt' | 'updatedAt'>;
+	Omit<PdfHighlightAnnotation, 'id' | 'createdAt' | 'updatedAt'> | Omit<PdfInkAnnotation, 'id' | 'createdAt' | 'updatedAt'> | Omit<PdfNoteAnnotation, 'id' | 'createdAt' | 'updatedAt'>;
 
 function clone(document: PdfAnnotationDocument): PdfAnnotationDocument {
 	return parsePdfAnnotationDocument(serializePdfAnnotationDocument(document));

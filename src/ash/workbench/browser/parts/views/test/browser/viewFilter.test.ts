@@ -2,10 +2,7 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { browserEnvironment } from '../../../../../../editor/test/browser/testEditorDom.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
-import {
-	ContextKeyService,
-	IContextKeyService,
-} from '../../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { FilterWidget } from '../../viewFilter.js';
 import { FilterViewPane } from '../../viewPane.js';
@@ -194,7 +191,5 @@ class TestFilterPane extends FilterViewPane {
 }
 
 function key(input: HTMLInputElement, key: string, options: KeyboardEventInit = {}): void {
-	input.dispatchEvent(
-		new browserEnvironment.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...options }),
-	);
+	input.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...options }));
 }

@@ -4,12 +4,7 @@ import { isWrappingIndent, WrappingIndent } from '../../common/config/editorOpti
 import { type FontInfo } from '../../common/config/fontInfo.js';
 import { CursorColumns } from '../../common/core/cursorColumns.js';
 import { getTextGraphemeBoundaries } from '../../common/core/textSegmentation.js';
-import {
-	type ILineBreaksComputer,
-	type ILineBreaksComputerContext,
-	type ILineBreaksComputerFactory,
-	ModelLineProjectionData,
-} from '../../common/modelLineProjectionData.js';
+import { type ILineBreaksComputer, type ILineBreaksComputerContext, type ILineBreaksComputerFactory, ModelLineProjectionData } from '../../common/modelLineProjectionData.js';
 import { LineInjectedText } from '../../common/textModelEvents.js';
 import { type TextMeasurer } from '../../common/viewModel.js';
 
@@ -33,32 +28,18 @@ export class DOMLineBreaksComputerFactory implements ILineBreaksComputerFactory 
 		wordBreak: 'normal' | 'keepAll',
 		_wrapOnEscapedLineFeeds: boolean,
 	): ILineBreaksComputer {
-		if (!Number.isSafeInteger(tabSize) || tabSize < 1)
-			throw new RangeError('DOM line-break tab size must be a positive safe integer');
-		if (!Number.isSafeInteger(wrappingColumn) || wrappingColumn < -1)
-			throw new RangeError('DOM line-break wrapping column must be -1 or a non-negative safe integer');
+		if (!Number.isSafeInteger(tabSize) || tabSize < 1) throw new RangeError('DOM line-break tab size must be a positive safe integer');
+		if (!Number.isSafeInteger(wrappingColumn) || wrappingColumn < -1) throw new RangeError('DOM line-break wrapping column must be -1 or a non-negative safe integer');
 		if (!isWrappingIndent(wrappingIndent)) throw new TypeError('Unknown editor wrapping indent mode');
 		const requests: number[] = [];
 		const measure = createTextMeasurement(this.targetWindow, this.textMeasurer, fontInfo, tabSize);
 		return {
 			addRequest(lineNumber): void {
-				if (!Number.isSafeInteger(lineNumber) || lineNumber < 1)
-					throw new RangeError('DOM line-break line number must be a positive safe integer');
+				if (!Number.isSafeInteger(lineNumber) || lineNumber < 1) throw new RangeError('DOM line-break line number must be a positive safe integer');
 				requests.push(lineNumber);
 			},
 			finalize: (): (ModelLineProjectionData | null)[] =>
-				requests.map(lineNumber =>
-					computeLineBreaks(
-						context,
-						lineNumber,
-						fontInfo,
-						tabSize,
-						wrappingColumn,
-						wrappingIndent,
-						wordBreak,
-						measure,
-					),
-				),
+				requests.map(lineNumber => computeLineBreaks(context, lineNumber, fontInfo, tabSize, wrappingColumn, wrappingIndent, wordBreak, measure)),
 		};
 	}
 }
@@ -75,16 +56,13 @@ function computeLineBreaks(
 ): ModelLineProjectionData | null {
 	const injectedTexts = context.getLineInjectedText(lineNumber);
 	const text = LineInjectedText.applyInjectedText(context.getLineContent(lineNumber), injectedTexts);
-	if (wrappingColumn === -1)
-		return injectedTexts ? createProjectionData(text, injectedTexts, [text.length], tabSize, 0) : null;
+	if (wrappingColumn === -1) return injectedTexts ? createProjectionData(text, injectedTexts, [text.length], tabSize, 0) : null;
 	const wrapWidth = wrappingColumn * fontInfo.typicalHalfwidthCharacterWidth;
 	const wrappedTextIndentLength = computeWrappedTextIndentLength(text, wrappingColumn, wrappingIndent, tabSize);
 	const wrappedTextIndentWidth = wrappedTextIndentLength * fontInfo.spaceWidth;
 	const breakOffsets: number[] = [];
 	const fixedWidths = LineInjectedText.getFixedWidthInjectedTextRanges(injectedTexts);
-	const boundaries = getTextGraphemeBoundaries(text).filter(
-		offset => !fixedWidths.some(range => offset > range.startOffset && offset < range.endOffset),
-	);
+	const boundaries = getTextGraphemeBoundaries(text).filter(offset => !fixedWidths.some(range => offset > range.startOffset && offset < range.endOffset));
 	// Canvas glyph widths cannot measure a control's reserved width. Measure ordinary runs between injections.
 	const measureRange = (start: number, end: number): number => {
 		if (fixedWidths.length === 0) return measure(text.slice(start, end));
@@ -101,12 +79,7 @@ function computeLineBreaks(
 			}
 		};
 		for (const range of fixedWidths) {
-			if (
-				range.startOffset < start ||
-				range.startOffset > end ||
-				(range.startOffset === end && end !== text.length)
-			)
-				continue;
+			if (range.startOffset < start || range.startOffset > end || (range.startOffset === end && end !== text.length)) continue;
 			appendText(text.slice(cursor, range.startOffset));
 			width += range.widthInEm * fontInfo.fontSize;
 			cursor = range.endOffset;
@@ -136,11 +109,7 @@ function computeLineBreaks(
 	return createProjectionData(text, injectedTexts, breakOffsets, tabSize, wrappedTextIndentLength);
 }
 
-function getPreferredBreaks(
-	text: string,
-	boundaries: readonly number[],
-	wordBreak: 'normal' | 'keepAll',
-): ReadonlySet<number> {
+function getPreferredBreaks(text: string, boundaries: readonly number[], wordBreak: 'normal' | 'keepAll'): ReadonlySet<number> {
 	const preferred = new Set<number>();
 	let hasContent = false;
 	for (let index = 1; index < boundaries.length - 1; index += 1) {
@@ -157,13 +126,7 @@ function getPreferredBreaks(
 
 const CJK_GRAPHEME = /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
 
-function createProjectionData(
-	text: string,
-	injectedTexts: readonly LineInjectedText[] | null,
-	breakOffsets: number[],
-	tabSize: number,
-	wrappedTextIndentLength: number,
-): ModelLineProjectionData {
+function createProjectionData(text: string, injectedTexts: readonly LineInjectedText[] | null, breakOffsets: number[], tabSize: number, wrappedTextIndentLength: number): ModelLineProjectionData {
 	return new ModelLineProjectionData(
 		injectedTexts ? injectedTexts.map(value => value.column - 1) : null,
 		injectedTexts ? injectedTexts.map(value => value.options) : null,
@@ -173,35 +136,23 @@ function createProjectionData(
 	);
 }
 
-function computeWrappedTextIndentLength(
-	text: string,
-	wrappingColumn: number,
-	wrappingIndent: WrappingIndent,
-	tabSize: number,
-): number {
+function computeWrappedTextIndentLength(text: string, wrappingColumn: number, wrappingIndent: WrappingIndent, tabSize: number): number {
 	if (wrappingIndent === WrappingIndent.None || text.length === 0) return 0;
 	let firstNonWhitespaceIndex = 0;
-	while (firstNonWhitespaceIndex < text.length && /\s/u.test(text[firstNonWhitespaceIndex]!))
-		firstNonWhitespaceIndex += 1;
+	while (firstNonWhitespaceIndex < text.length && /\s/u.test(text[firstNonWhitespaceIndex]!)) firstNonWhitespaceIndex += 1;
 	if (firstNonWhitespaceIndex === text.length) return 0;
 	let visibleColumn = 0;
 	for (let index = 0; index < firstNonWhitespaceIndex; index += 1) {
-		visibleColumn =
-			text.charCodeAt(index) === 9 ? visibleColumn + tabSize - (visibleColumn % tabSize) : visibleColumn + 1;
+		visibleColumn = text.charCodeAt(index) === 9 ? visibleColumn + tabSize - (visibleColumn % tabSize) : visibleColumn + 1;
 	}
-	const additionalIndentLevels =
-		wrappingIndent === WrappingIndent.DeepIndent ? 2 : wrappingIndent === WrappingIndent.Indent ? 1 : 0;
+	const additionalIndentLevels = wrappingIndent === WrappingIndent.DeepIndent ? 2 : wrappingIndent === WrappingIndent.Indent ? 1 : 0;
 	for (let level = 0; level < additionalIndentLevels; level += 1) {
 		visibleColumn += tabSize - (visibleColumn % tabSize);
 	}
 	return visibleColumn + 2 > wrappingColumn ? 0 : visibleColumn;
 }
 
-function createCanvasMeasurement(
-	targetWindow: Window | undefined,
-	fontInfo: FontInfo,
-	tabSize: number,
-): (text: string) => number {
+function createCanvasMeasurement(targetWindow: Window | undefined, fontInfo: FontInfo, tabSize: number): (text: string) => number {
 	if (!targetWindow) throw new ReferenceError('DOM line-break factory target window is no longer available');
 	const canvas = h(targetWindow.document, 'canvas');
 	const context = canvas.getContext('2d');
@@ -222,21 +173,13 @@ function createCanvasMeasurement(
 	};
 }
 
-function createTextMeasurement(
-	targetWindow: WeakRef<Window>,
-	textMeasurer: TextMeasurer | undefined,
-	fontInfo: FontInfo,
-	tabSize: number,
-): (text: string) => number {
+function createTextMeasurement(targetWindow: WeakRef<Window>, textMeasurer: TextMeasurer | undefined, fontInfo: FontInfo, tabSize: number): (text: string) => number {
 	// One wrapping batch measures many prefixes. Reuse its canvas rather than allocating one per grapheme.
 	// Create it on the first measurement so requests with wrapping disabled need no browser context.
 	let canvasMeasurement: ((text: string) => number) | undefined;
 	return text => {
-		const width = textMeasurer
-			? textMeasurer.measureLineWidth(text)
-			: (canvasMeasurement ??= createCanvasMeasurement(targetWindow.deref(), fontInfo, tabSize))(text);
-		if (!isFiniteNumber(width) || width < 0)
-			throw new RangeError('DOM line-break measurement must be finite and non-negative');
+		const width = textMeasurer ? textMeasurer.measureLineWidth(text) : (canvasMeasurement ??= createCanvasMeasurement(targetWindow.deref(), fontInfo, tabSize))(text);
+		if (!isFiniteNumber(width) || width < 0) throw new RangeError('DOM line-break measurement must be finite and non-negative');
 		return width;
 	};
 }

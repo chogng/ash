@@ -2,11 +2,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { materializeExtensionFileTemplate } from '../../../services/extensions/common/extensionSnippetProvider.js';
 import type { ExtensionFileTemplateDefinition } from '../../../services/extensions/common/extensionFileTemplate.js';
-import {
-	IExtensionService,
-	type ExtensionSnippetActivation,
-	type ExtensionSnippetFile,
-} from '../../../services/extensions/common/extensionService.js';
+import { IExtensionService, type ExtensionSnippetActivation, type ExtensionSnippetFile } from '../../../services/extensions/common/extensionService.js';
 import type { ISnippetsService } from './snippets.js';
 import { SnippetFile, type Snippet } from './snippetsFile.js';
 
@@ -31,12 +27,7 @@ export class SnippetsService extends Disposable implements ISnippetsService {
 		for (const resource of resources) {
 			const key = resource.location.toString();
 			const previous = merged.get(key);
-			merged.set(
-				key,
-				previous
-					? { ...resource, languageIds: [...new Set([...previous.languageIds, ...resource.languageIds])] }
-					: resource,
-			);
+			merged.set(key, previous ? { ...resource, languageIds: [...new Set([...previous.languageIds, ...resource.languageIds])] } : resource);
 		}
 		const entries = [...merged.values()];
 		const files = entries.map(resource => new SnippetFile(resource));

@@ -57,12 +57,7 @@ test('syntax theme updates repaint text and minimap through shared line support'
 					const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
 					const channel = color === '#149b37' ? 1 : 2;
 					for (let offset = 0; offset < pixels.length; offset += 4) {
-						if (
-							pixels[offset + 3]! > 0 &&
-							pixels[offset + channel]! > pixels[offset]! &&
-							pixels[offset + channel]! > pixels[offset + 3 - channel]!
-						)
-							return true;
+						if (pixels[offset + 3]! > 0 && pixels[offset + channel]! > pixels[offset]! && pixels[offset + channel]! > pixels[offset + 3 - channel]!) return true;
 					}
 					return false;
 				}, color),
@@ -87,9 +82,7 @@ test.afterEach(async ({ page }) => {
 	expect(pageErrors.get(page) ?? []).toEqual([]);
 });
 
-test('save code actions apply fixes and organize imports before the keyboard save writes the file', async ({
-	page,
-}) => {
+test('save code actions apply fixes and organize imports before the keyboard save writes the file', async ({ page }) => {
 	await openEditor(page);
 	await page.evaluate(async () => {
 		await window.ashTextModelIntegration.enableSaveCodeActions();
@@ -101,9 +94,7 @@ test('save code actions apply fixes and organize imports before the keyboard sav
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSavedText())).toBe(saved);
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe(saved);
 	await page.keyboard.press('ControlOrMeta+z');
-	await expect
-		.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue()))
-		.toBe('use z;\nuse a;\nfn main() { let _unused = 1; }\n');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('use z;\nuse a;\nfn main() { let _unused = 1; }\n');
 });
 
 test('text-model editor public API, pane, undo, save, and browser worker', async ({ page }) => {
@@ -125,18 +116,12 @@ test('text-model editor public API, pane, undo, save, and browser worker', async
 	await page.keyboard.press('Insert');
 	await expect(caret).toHaveClass(/cursor-style-line/u);
 	await page.keyboard.type('integrated');
-	await expect
-		.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue()))
-		.toBe('integratedfn main() {\n  answer();\n}\n');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('integratedfn main() {\n  answer();\n}\n');
 
 	await page.keyboard.press('ControlOrMeta+z');
-	await expect
-		.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue()))
-		.toBe('fn main() {\n  answer();\n}\n');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('fn main() {\n  answer();\n}\n');
 	await page.evaluate(() => window.ashTextModelIntegration.save());
-	await expect
-		.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSavedText()))
-		.toBe('fn main() {\n  answer();\n}\n');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSavedText())).toBe('fn main() {\n  answer();\n}\n');
 	// Editing and saving do not need a Worker. Formatting requests minimal edits
 	// from the browser Worker, so verify that work and its concrete result.
 	await page.evaluate(() => {
@@ -168,14 +153,10 @@ test('switching a Workbench file keeps keyboard input on the new editor and rele
 	await expect(page.locator('.stanza-editor-input')).toBeFocused();
 	await page.keyboard.press('ControlOrMeta+End');
 	await page.keyboard.type('!');
-	await expect
-		.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue()))
-		.toBe('fn other() {\n  answer();\n}\n!');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('fn other() {\n  answer();\n}\n!');
 });
 
-test('Explicit Code assembly installs text contributions without document controls and releases their UI', async ({
-	page,
-}) => {
+test('Explicit Code assembly installs text contributions without document controls and releases their UI', async ({ page }) => {
 	await openEditor(page);
 	const ids = await page.evaluate(() => window.ashTextModelIntegration.getBundleIds());
 	expect(ids).toContain('editor.contrib.clipboard');
@@ -284,9 +265,7 @@ for (const inputBackend of ['EditContext', 'textarea'] as const) {
 		[false, 'Process'],
 		[true, 'Process'],
 	] as const) {
-		test(`Chinese composition cancellation restores selection and history through ${inputBackend} with ${cancelKey}${unchanged ? ' without a text change' : ''}`, async ({
-			page,
-		}) => {
+		test(`Chinese composition cancellation restores selection and history through ${inputBackend} with ${cancelKey}${unchanged ? ' without a text change' : ''}`, async ({ page }) => {
 			if (inputBackend === 'textarea')
 				await page.addInitScript(() => {
 					Reflect.deleteProperty(window, 'EditContext');
@@ -301,14 +280,12 @@ for (const inputBackend of ['EditContext', 'textarea'] as const) {
 			const input = page.locator('.stanza-editor-input');
 			await page.keyboard.insertText('!');
 			await page.evaluate(() =>
-				window.ashTextModelIntegration
-					.getControl()
-					.setSelection({
-						selectionStartLineNumber: 1,
-						selectionStartColumn: 2,
-						positionLineNumber: 1,
-						positionColumn: 1,
-					}),
+				window.ashTextModelIntegration.getControl().setSelection({
+					selectionStartLineNumber: 1,
+					selectionStartColumn: 2,
+					positionLineNumber: 1,
+					positionColumn: 1,
+				}),
 			);
 			await input.evaluate(
 				(element, { unchanged, cancelKey }) => {
@@ -324,14 +301,8 @@ for (const inputBackend of ['EditContext', 'textarea'] as const) {
 					).editContext;
 					const target = native ?? element;
 					const textarea = element as HTMLTextAreaElement;
-					const start = Math.min(
-						native?.selectionStart ?? textarea.selectionStart,
-						native?.selectionEnd ?? textarea.selectionEnd,
-					);
-					let end = Math.max(
-						native?.selectionStart ?? textarea.selectionStart,
-						native?.selectionEnd ?? textarea.selectionEnd,
-					);
+					const start = Math.min(native?.selectionStart ?? textarea.selectionStart, native?.selectionEnd ?? textarea.selectionEnd);
+					let end = Math.max(native?.selectionStart ?? textarea.selectionStart, native?.selectionEnd ?? textarea.selectionEnd);
 					target.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
 					for (const text of unchanged ? ['中'] : ['n', 'ni', '你']) {
 						if (native) {
@@ -350,9 +321,7 @@ for (const inputBackend of ['EditContext', 'textarea'] as const) {
 						} else {
 							textarea.setRangeText(text, start, end, 'end');
 							end = start + text.length;
-							target.dispatchEvent(
-								new CompositionEvent('compositionupdate', { bubbles: true, data: text }),
-							);
+							target.dispatchEvent(new CompositionEvent('compositionupdate', { bubbles: true, data: text }));
 						}
 					}
 					element.dispatchEvent(
@@ -465,9 +434,7 @@ for (const inputBackend of ['EditContext', 'textarea'] as const) {
 							} else {
 								const textarea = element as HTMLTextAreaElement;
 								textarea.setRangeText(text, textarea.selectionStart, textarea.selectionEnd, 'end');
-								target.dispatchEvent(
-									new CompositionEvent('compositionupdate', { bubbles: true, data: text }),
-								);
+								target.dispatchEvent(new CompositionEvent('compositionupdate', { bubbles: true, data: text }));
 							}
 							target.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: text }));
 						}, text);
@@ -486,13 +453,9 @@ for (const inputBackend of ['EditContext', 'textarea'] as const) {
 							selection: { lineNumber: 1, column: 2 + text.length },
 						});
 					await input.press('ControlOrMeta+z');
-					await expect
-						.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue()))
-						.toBe('ab😀e\u0301z\nend');
+					await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('ab😀e\u0301z\nend');
 					await input.press('ControlOrMeta+Shift+z');
-					await expect
-						.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue()))
-						.toBe(`a${text}😀e\u0301z\nend`);
+					await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe(`a${text}😀e\u0301z\nend`);
 					await expect(input).toBeFocused();
 				}
 			}
@@ -535,7 +498,12 @@ test('textarea fallback routes type and composition through the standard input p
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toMatch(/^xyfn main/u);
 	await expect
 		.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSelection()))
-		.toEqual({ startLineIndex: 0, startColumnIndex: 1, endLineIndex: 0, endColumnIndex: 1 });
+		.toEqual({
+			startLineIndex: 0,
+			startColumnIndex: 1,
+			endLineIndex: 0,
+			endColumnIndex: 1,
+		});
 	await expect
 		.poll(() =>
 			input.evaluate(element => {
@@ -615,9 +583,7 @@ test('editor scrollbar configuration updates visibility and track dimensions', a
 	await expect(horizontal).toBeVisible();
 	await expect(vertical).toBeVisible();
 	await expect(vertical).toHaveCSS('pointer-events', 'auto');
-	await page.evaluate(() =>
-		window.ashTextModelIntegration.setScrollbar({ horizontalScrollbarSize: 0, verticalScrollbarSize: 0 }),
-	);
+	await page.evaluate(() => window.ashTextModelIntegration.setScrollbar({ horizontalScrollbarSize: 0, verticalScrollbarSize: 0 }));
 	await expect(horizontal).toHaveCSS('height', '0px');
 	await expect(vertical).toHaveCSS('width', '0px');
 	await expect(horizontal).toBeHidden();
@@ -648,40 +614,26 @@ test('editor scrollbar uses wheel policy, slider dimensions and page clicks from
 	await expect(horizontal.locator('.ash-scrollbar-thumb')).toHaveCSS('height', '4px');
 	await expect(vertical.locator('.ash-scrollbar-thumb')).toHaveCSS('width', '6px');
 	await editor.dispatchEvent('wheel', { deltaY: 20, deltaMode: 0 });
-	await expect
-		.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop))
-		.toBe(40);
+	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(40);
 	await editor.dispatchEvent('wheel', { deltaY: 10, deltaMode: 0, altKey: true });
-	await expect
-		.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop))
-		.toBe(100);
+	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(100);
 	await editor.dispatchEvent('wheel', { deltaY: 10, deltaMode: 0, shiftKey: true });
-	await expect
-		.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollLeft))
-		.toBe(20);
+	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollLeft)).toBe(20);
 	await page.evaluate(() => window.ashTextModelIntegration.setScrollbar({ handleMouseWheel: false }));
 	await editor.dispatchEvent('wheel', { deltaY: 20, deltaMode: 0 });
-	await expect
-		.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop))
-		.toBe(100);
+	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(100);
 	const box = await vertical.boundingBox();
 	assertBox(box, 'vertical scrollbar');
 	await vertical.click({ position: { x: box.width / 2, y: box.height - 3 } });
-	await expect
-		.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop))
-		.toBe(520);
+	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(520);
 	await page.evaluate(() => window.ashTextModelIntegration.setScrollbar({ scrollByPage: false }));
-	await page
-		.locator('.decorationsOverviewRuler')
-		.dispatchEvent('pointerdown', {
-			button: 0,
-			buttons: 1,
-			clientX: box.x + box.width / 2,
-			clientY: box.y + box.height - 3,
-		});
-	await expect
-		.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop))
-		.toBeGreaterThan(520);
+	await page.locator('.decorationsOverviewRuler').dispatchEvent('pointerdown', {
+		button: 0,
+		buttons: 1,
+		clientX: box.x + box.width / 2,
+		clientY: box.y + box.height - 3,
+	});
+	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(520);
 });
 
 test('editor scrollbar arrows support click, hold, keyboard and runtime removal', async ({ page }) => {
@@ -703,14 +655,10 @@ test('editor scrollbar arrows support click, hold, keyboard and runtime removal'
 	await expect(down).toHaveCSS('height', '18px');
 	await expect(up).toBeDisabled();
 	await down.click();
-	await expect
-		.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop))
-		.toBe(40);
+	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(40);
 	await right.focus();
 	await page.keyboard.press('Enter');
-	await expect
-		.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollLeft))
-		.toBe(40);
+	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollLeft)).toBe(40);
 	const thumb = editor.locator('.ash-scrollbar-track-vertical .ash-scrollbar-thumb');
 	const upBox = await up.boundingBox();
 	const thumbBox = await thumb.boundingBox();
@@ -720,25 +668,17 @@ test('editor scrollbar arrows support click, hold, keyboard and runtime removal'
 
 	await down.hover();
 	await page.mouse.down();
-	await expect
-		.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop))
-		.toBeGreaterThan(80);
+	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(80);
 	await page.mouse.up();
 	const released = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
 	await page.waitForTimeout(180);
-	expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(
-		released,
-	);
+	expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(released);
 	await page.mouse.down();
-	await page.evaluate(() =>
-		window.ashTextModelIntegration.setScrollbar({ verticalHasArrows: false, horizontalHasArrows: false }),
-	);
+	await page.evaluate(() => window.ashTextModelIntegration.setScrollbar({ verticalHasArrows: false, horizontalHasArrows: false }));
 	await expect(down).toBeHidden();
 	const disabled = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
 	await page.waitForTimeout(400);
-	expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(
-		disabled,
-	);
+	expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(disabled);
 	await page.mouse.up();
 	await expect(editor.locator('.ash-scrollbar-track-vertical')).toHaveCSS('top', '0px');
 	await page.evaluate(() => {
@@ -774,40 +714,24 @@ test('Workbench editor actions update the open editor and Go to Line retains key
 	await expect(minimap).toBeVisible();
 
 	await page.evaluate(() => window.ashTextModelIntegration.setValue('alpha  beta\nsecond line'));
-	await page.evaluate(() =>
-		window.ashTextModelIntegration.runWorkbenchCommand('editor.action.toggleRenderWhitespace'),
-	);
-	await expect
-		.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings().renderWhitespace))
-		.toBe('none');
-	await page.evaluate(() =>
-		window.ashTextModelIntegration.runWorkbenchCommand('editor.action.toggleRenderWhitespace'),
-	);
+	await page.evaluate(() => window.ashTextModelIntegration.runWorkbenchCommand('editor.action.toggleRenderWhitespace'));
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings().renderWhitespace)).toBe('none');
+	await page.evaluate(() => window.ashTextModelIntegration.runWorkbenchCommand('editor.action.toggleRenderWhitespace'));
 	await expect(page.locator('.stanza-editor-whitespace').first()).toBeVisible();
-	await page.evaluate(() =>
-		window.ashTextModelIntegration.runWorkbenchCommand('editor.action.toggleRenderControlCharacter'),
-	);
-	await expect
-		.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings().renderControlCharacters))
-		.toBe(false);
+	await page.evaluate(() => window.ashTextModelIntegration.runWorkbenchCommand('editor.action.toggleRenderControlCharacter'));
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings().renderControlCharacters)).toBe(false);
 	const text = `${'alpha '.repeat(80)}\nsecond line`;
 	await page.evaluate(value => window.ashTextModelIntegration.setValue(value), text);
 	await input.focus();
 	await page.evaluate(() => window.ashTextModelIntegration.runWorkbenchCommand('editor.action.toggleWordWrap'));
 	await expect(page.locator('.stanza-editor.word-wrapped')).toBeVisible();
 	await expect(page.locator('.stanza-editor-accessibility-status')).toHaveText('Word wrap on');
-	await expect
-		.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings()))
-		.toMatchObject({ wordWrap: 'off', wordWrapOverride: 'on' });
-	await expect
-		.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings().wrappingColumn))
-		.toBeGreaterThan(0);
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings())).toMatchObject({ wordWrap: 'off', wordWrapOverride: 'on' });
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings().wrappingColumn)).toBeGreaterThan(0);
 	await input.press('Alt+Z');
 	await expect(page.locator('.stanza-editor.word-wrapped')).toHaveCount(0);
 	await expect(page.locator('.stanza-editor-accessibility-status')).toHaveText('Word wrap off');
-	await expect
-		.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings()))
-		.toMatchObject({ wordWrap: 'off', wordWrapOverride: 'inherit', wrappingColumn: -1 });
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getViewSettings())).toMatchObject({ wordWrap: 'off', wordWrapOverride: 'inherit', wrappingColumn: -1 });
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe(text);
 
 	await input.focus();
@@ -840,7 +764,12 @@ test('textarea system-caret movement updates the editor only while focused', asy
 	});
 	await expect
 		.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSelection()))
-		.toEqual({ startLineIndex: 0, startColumnIndex: 1, endLineIndex: 0, endColumnIndex: 3 });
+		.toEqual({
+			startLineIndex: 0,
+			startColumnIndex: 1,
+			endLineIndex: 0,
+			endColumnIndex: 3,
+		});
 
 	await input.blur();
 	await input.evaluate(element => {
@@ -850,7 +779,12 @@ test('textarea system-caret movement updates the editor only while focused', asy
 	});
 	await expect
 		.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSelection()))
-		.toEqual({ startLineIndex: 0, startColumnIndex: 1, endLineIndex: 0, endColumnIndex: 3 });
+		.toEqual({
+			startLineIndex: 0,
+			startColumnIndex: 1,
+			endLineIndex: 0,
+			endColumnIndex: 3,
+		});
 });
 
 test('textarea clipboard events pass through TextAreaInput semantic events', async ({ page }) => {
@@ -886,7 +820,11 @@ test('textarea clipboard events pass through TextAreaInput semantic events', asy
 		textArea.setSelectionRange(0, 3, 'forward');
 		textArea.ownerDocument.dispatchEvent(new Event('selectionchange'));
 		textArea.dispatchEvent(
-			new ClipboardEvent('cut', { bubbles: true, cancelable: true, clipboardData: new DataTransfer() }),
+			new ClipboardEvent('cut', {
+				bubbles: true,
+				cancelable: true,
+				clipboardData: new DataTransfer(),
+			}),
 		);
 	});
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toMatch(/^main\(\)/u);
@@ -918,9 +856,7 @@ async function openEditor(page: Page): Promise<void> {
 }
 
 for (const editContext of [true, false]) {
-	test(`editor Tab navigation has one input stop with ${editContext ? 'NativeEditContext' : 'textarea'}`, async ({
-		page,
-	}) => {
+	test(`editor Tab navigation has one input stop with ${editContext ? 'NativeEditContext' : 'textarea'}`, async ({ page }) => {
 		if (!editContext) {
 			await page.addInitScript(() => {
 				Reflect.deleteProperty(window, 'EditContext');
@@ -967,9 +903,7 @@ for (const editContext of [true, false]) {
 		await expect(after).toBeFocused();
 		await after.press('Shift+Tab');
 		await expect(before).toBeFocused();
-		await page.evaluate(() =>
-			window.ashTextModelIntegration.getControl().updateOptions({ tabIndex: 0, readOnly: true }),
-		);
+		await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ tabIndex: 0, readOnly: true }));
 		await before.press('Tab');
 		await expect(input).toBeFocused();
 		await expect(input).toHaveAttribute('aria-readonly', 'true');
@@ -978,9 +912,7 @@ for (const editContext of [true, false]) {
 	});
 }
 
-test('extension snippet completions accept, navigate placeholders and undo in the workbench editor', async ({
-	page,
-}) => {
+test('extension snippet completions accept, navigate placeholders and undo in the workbench editor', async ({ page }) => {
 	await openEditor(page);
 	await page.evaluate(() => {
 		const editor = window.ashTextModelIntegration.getControl();
@@ -997,9 +929,7 @@ test('extension snippet completions accept, navigate placeholders and undo in th
 	await page.keyboard.press('Enter');
 	const expanded = 'class name {\n\tconstructor(parameters) {\n\t\t\n\t}\n}';
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe(expanded);
-	await expect
-		.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getSelection()))
-		.toMatchObject({ startLineNumber: 1, startColumn: 7, endLineNumber: 1, endColumn: 11 });
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getSelection())).toMatchObject({ startLineNumber: 1, startColumn: 7, endLineNumber: 1, endColumn: 11 });
 	await page.keyboard.press('ControlOrMeta+z');
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('cla');
 	await page.keyboard.press('Control+Space');
@@ -1007,20 +937,14 @@ test('extension snippet completions accept, navigate placeholders and undo in th
 	await page.keyboard.press('Enter');
 	await page.keyboard.type('Widget');
 	await page.keyboard.press('Tab');
-	await expect
-		.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getSelection()))
-		.toMatchObject({ startLineNumber: 2, startColumn: 14, endLineNumber: 2, endColumn: 24 });
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getSelection())).toMatchObject({ startLineNumber: 2, startColumn: 14, endLineNumber: 2, endColumn: 24 });
 	await page.keyboard.press('Shift+Tab');
-	await expect
-		.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getSelection()))
-		.toMatchObject({ startLineNumber: 1, startColumn: 7, endLineNumber: 1, endColumn: 13 });
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getSelection())).toMatchObject({ startLineNumber: 1, startColumn: 7, endLineNumber: 1, endColumn: 13 });
 	await page.keyboard.press('Tab');
 	await page.keyboard.type('value');
 	await page.keyboard.press('Tab');
 	await page.keyboard.type('// body');
-	await expect
-		.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue()))
-		.toBe('class Widget {\n\tconstructor(value) {\n\t\t// body\n\t}\n}');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('class Widget {\n\tconstructor(value) {\n\t\t// body\n\t}\n}');
 	await page.keyboard.press('Escape');
 	await page.evaluate(() => window.ashTextModelIntegration.dispose());
 });
@@ -1039,10 +963,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect(input).toHaveAttribute('placeholder', locale === 'en' ? 'Select a Formatter' : '选择格式化程序');
 		await input.fill(locale === 'en' ? 'Configure Default Formatter' : '配置默认格式化程序');
 		await input.press('Enter');
-		await expect(input).toHaveAttribute(
-			'placeholder',
-			locale === 'en' ? 'Select the Default Formatter for rust' : '选择 rust 的默认格式化程序',
-		);
+		await expect(input).toHaveAttribute('placeholder', locale === 'en' ? 'Select the Default Formatter for rust' : '选择 rust 的默认格式化程序');
 		await input.fill('beta.format');
 		await input.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('BETA');
@@ -1090,9 +1011,7 @@ test('formatter choice cancels on cursor changes and readonly formatting does no
 	await expect(page.locator('.ash-quick-pick')).not.toBeVisible();
 });
 
-test('minimap section headers use comment tokens and live MARK, region, pattern and font settings', async ({
-	page,
-}) => {
+test('minimap section headers use comment tokens and live MARK, region, pattern and font settings', async ({ page }) => {
 	await openEditor(page);
 	await page.evaluate(() => {
 		const editor = window.ashTextModelIntegration.getControl();
@@ -1123,37 +1042,21 @@ test('minimap section headers use comment tokens and live MARK, region, pattern 
 	await expect.poll(labels).toEqual(['First', 'Region']);
 	const pixels = () => page.locator('.minimap canvas').evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
 	const original = await pixels();
-	await page.evaluate(() =>
-		window.ashTextModelIntegration
-			.getControl()
-			.updateOptions({ minimap: { sectionHeaderFontSize: 20, sectionHeaderLetterSpacing: 3 } }),
-	);
+	await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ minimap: { sectionHeaderFontSize: 20, sectionHeaderLetterSpacing: 3 } }));
 	await expect.poll(pixels).not.toBe(original);
-	await page.evaluate(() =>
-		window.ashTextModelIntegration
-			.getControl()
-			.updateOptions({ minimap: { showRegionSectionHeaders: false, showMarkSectionHeaders: false } }),
-	);
+	await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ minimap: { showRegionSectionHeaders: false, showMarkSectionHeaders: false } }));
 	await expect.poll(labels).toEqual([]);
 	const withoutHeaders = await pixels();
-	await page.evaluate(() =>
-		window.ashTextModelIntegration
-			.getControl()
-			.updateOptions({ minimap: { showMarkSectionHeaders: true, markSectionHeaderRegex: 'PART (?<label>.*)' } }),
-	);
+	await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ minimap: { showMarkSectionHeaders: true, markSectionHeaderRegex: 'PART (?<label>.*)' } }));
 	await expect.poll(labels).toEqual(['Third']);
 	await expect.poll(pixels).not.toBe(withoutHeaders);
 	await page.evaluate(() => window.ashTextModelIntegration.getControl().setValue('// PART Renamed\nfn next() {}'));
 	await expect.poll(labels).toEqual(['Renamed']);
-	await page.evaluate(() =>
-		window.ashTextModelIntegration.getControl().updateOptions({ minimap: { enabled: false } }),
-	);
+	await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ minimap: { enabled: false } }));
 	await expect.poll(labels).toEqual([]);
 });
 
-test('minimap inline diagnostics and gutter changes keep distinct positions through wrapping, folding and themes', async ({
-	page,
-}) => {
+test('minimap inline diagnostics and gutter changes keep distinct positions through wrapping, folding and themes', async ({ page }) => {
 	await openEditor(page);
 	for (const theme of ['light', 'dark', 'contrast', 'contrastLight'] as const) {
 		await page.evaluate(theme => window.ashTextModelIntegration.setTheme(theme), theme);
@@ -1174,14 +1077,12 @@ test('minimap inline diagnostics and gutter changes keep distinct positions thro
 						editor.setHiddenAreas(
 							folded
 								? [
-										editor
-											.getModel()!
-											.validateRange({
-												startLineNumber: 2,
-												startColumn: 1,
-												endLineNumber: 4,
-												endColumn: 181,
-											}),
+										editor.getModel()!.validateRange({
+											startLineNumber: 2,
+											startColumn: 1,
+											endLineNumber: 4,
+											endColumn: 181,
+										}),
 									]
 								: [],
 						);
@@ -1212,21 +1113,15 @@ test('minimap inline diagnostics and gutter changes keep distinct positions thro
 						() =>
 							page.locator('.minimap canvas').evaluate((canvas: HTMLCanvasElement) => {
 								const editor = window.ashTextModelIntegration.getControl();
-								const data = canvas
-									.getContext('2d')!
-									.getImageData(0, 0, canvas.width, canvas.height).data;
+								const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
 								const inline: number[] = [];
 								const gutter = new Set<number>();
 								for (let offset = 0; offset < data.length; offset += 4) {
 									if (data[offset + 3] !== 255 || data[offset + 2] !== 255) continue;
 									if (data[offset] === 255 && data[offset + 1] === 0) inline.push(offset / 4);
-									if (data[offset] === 0 && data[offset + 1] === 255)
-										gutter.add((offset / 4) % canvas.width);
+									if (data[offset] === 0 && data[offset + 1] === 255) gutter.add((offset / 4) % canvas.width);
 								}
-								const expectedTop = Math.floor(
-									(editor.getTopForLineNumber(8) / 20) *
-										editor.getLayoutInfo().minimap.minimapLineHeight,
-								);
+								const expectedTop = Math.floor((editor.getTopForLineNumber(8) / 20) * editor.getLayoutInfo().minimap.minimapLineHeight);
 								return {
 									inline: inline.some(pixel => pixel % canvas.width > 5),
 									gutter: [...gutter].sort((a, b) => a - b),

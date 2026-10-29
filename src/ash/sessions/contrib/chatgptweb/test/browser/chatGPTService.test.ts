@@ -9,14 +9,8 @@ import type { IStorageService } from '../../../../../platform/storage/common/sto
 import type { ChatGPTRequest, IChatGPTTransport } from '../../common/chatGPTTransport.js';
 import { ChatGPTService } from '../../browser/chatGPTService.js';
 
-function fixture(
-	respond: (path: string, signal: AbortSignal, request: ChatGPTRequest) => Promise<Response>,
-	retained?: string,
-) {
-	const requests = new Map<
-		string,
-		{ controller: AbortController; reader?: ReadableStreamDefaultReader<Uint8Array> }
-	>();
+function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRequest) => Promise<Response>, retained?: string) {
+	const requests = new Map<string, { controller: AbortController; reader?: ReadableStreamDefaultReader<Uint8Array> }>();
 	const transport: IChatGPTTransport = {
 		async request(id, request) {
 			const pending = {
@@ -201,10 +195,7 @@ suite('ChatGPT shared service', () => {
 			await Promise.resolve();
 			assert.equal(chat.state.get().voice, 'idle');
 			assert.equal(chat.state.get().conversationId, navigation === 'history' ? 'two' : undefined);
-			assert.equal(
-				chat.state.get().conversations.find(item => item.id === 'created-voice')?.title,
-				'Saved voice conversation',
-			);
+			assert.equal(chat.state.get().conversations.find(item => item.id === 'created-voice')?.title, 'Saved voice conversation');
 			await chat.select('created-voice');
 			assert.equal(chat.state.get().messages[0]?.text, 'Spoken reply');
 		});
@@ -216,10 +207,7 @@ suite('ChatGPT shared service', () => {
 				return Response.json({ success: true });
 			}
 			if (path.includes('/pins?')) {
-				return Response.json([
-					{ item: { id: 'old-pin', title: 'Old pin' } },
-					{ item: { id: 'one', title: 'One' } },
-				]);
+				return Response.json([{ item: { id: 'old-pin', title: 'Old pin' } }, { item: { id: 'one', title: 'One' } }]);
 			}
 			if (path.includes('/gizmos/snorlax/sidebar?')) {
 				return Response.json({
@@ -262,11 +250,7 @@ suite('ChatGPT shared service', () => {
 	});
 
 	test('project and pin failures leave recent chats usable and report the error', async () => {
-		using chat = fixture(async path =>
-			path.includes('/pins?') || path.includes('/gizmos/snorlax/sidebar?')
-				? new Response(null, { status: 503 })
-				: response(path),
-		);
+		using chat = fixture(async path => (path.includes('/pins?') || path.includes('/gizmos/snorlax/sidebar?') ? new Response(null, { status: 503 }) : response(path)));
 		await chat.reload();
 		assert.equal(chat.state.get().connected, true);
 		assert.equal(chat.state.get().conversations.length, 2);
@@ -292,10 +276,9 @@ suite('ChatGPT shared service', () => {
 				assert.equal(body.conversation_id, 'one');
 				assert.equal(body.parent_message_id, 'reply');
 				sends++;
-				return new Response(
-					'data: {"conversation_id":"one","message":{"id":"next","author":{"role":"assistant"},"content":{"parts":["Still connected"]}}}\n\ndata: [DONE]\n\n',
-					{ headers: { 'Content-Type': 'text/event-stream' } },
-				);
+				return new Response('data: {"conversation_id":"one","message":{"id":"next","author":{"role":"assistant"},"content":{"parts":["Still connected"]}}}\n\ndata: [DONE]\n\n', {
+					headers: { 'Content-Type': 'text/event-stream' },
+				});
 			}
 			return response(path);
 		}, 'one');
@@ -437,10 +420,9 @@ suite('ChatGPT shared service', () => {
 			}
 			if (path.endsWith('/f/conversation')) {
 				sent.push(JSON.parse(String(request.body)));
-				return new Response(
-					'data: {"message":{"id":"reply","author":{"role":"assistant"},"content":{"parts":["Reply"]}}}\n\ndata: [DONE]\n\n',
-					{ headers: { 'Content-Type': 'text/event-stream' } },
-				);
+				return new Response('data: {"message":{"id":"reply","author":{"role":"assistant"},"content":{"parts":["Reply"]}}}\n\ndata: [DONE]\n\n', {
+					headers: { 'Content-Type': 'text/event-stream' },
+				});
 			}
 			return response(path);
 		});
@@ -472,9 +454,7 @@ suite('ChatGPT shared service', () => {
 		await chat.send();
 		assert.ok(sent.slice(-2).every(body => body.model === 'gpt-5-6-thinking' && body.thinking_effort === 'max'));
 		catalog = chatGPTModelCatalog();
-		catalog.versions[1]!.intelligence_presets = catalog.versions[1]!.intelligence_presets.filter(
-			preset => preset.id !== 6,
-		);
+		catalog.versions[1]!.intelligence_presets = catalog.versions[1]!.intelligence_presets.filter(preset => preset.id !== 6);
 		await chat.reload();
 		assert.equal(chat.state.get().modelPreset, '0');
 	});

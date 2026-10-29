@@ -2,10 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Event } from '../../../../../base/common/event.js';
-import type {
-	IDebugAdapterProcessService,
-	IDebugAdapterProcessReadResult,
-} from '../../../../../platform/debug/common/debugAdapterProcessService.js';
+import type { IDebugAdapterProcessService, IDebugAdapterProcessReadResult } from '../../../../../platform/debug/common/debugAdapterProcessService.js';
 import { RawDebugSession } from '../../browser/rawDebugSession.js';
 
 const empty: IDebugAdapterProcessReadResult = {

@@ -21,11 +21,7 @@ import type { IExtensionApi } from '../../../../platform/extensions/common/exten
 import type { IExtensionBackendApi } from '../../../../platform/agentHost/common/extensionBackendApi.js';
 import type { IAppServerApi, IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import type { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import {
-	ConfigurationTarget,
-	type IConfigurationChangeEvent,
-	type IConfigurationService,
-} from '../../../../platform/configuration/common/configuration.js';
+import { ConfigurationTarget, type IConfigurationChangeEvent, type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { MainThreadExtensionBackend } from '../../browser/mainThreadExtensionBackend.js';
 import type { EditorPartChangeEvent } from '../../../services/editor/common/editorState.js';
 
@@ -48,13 +44,7 @@ const manifest = {
 		},
 	},
 };
-function fixture(
-	sourceKind = 'builtIn',
-	request?: IExtensionBackendApi['request'],
-	progress?: IProgressService,
-	editor?: ICodeEditor,
-	editorPart?: IEditorPart,
-) {
+function fixture(sourceKind = 'builtIn', request?: IExtensionBackendApi['request'], progress?: IProgressService, editor?: ICodeEditor, editorPart?: IEditorPart) {
 	const calls: { method: string; params: unknown }[] = [];
 	const extensions = {
 		list: async () => ({ extensions: [{ id: 'ash.git', sourceKind, manifestJson: JSON.stringify(manifest) }] }),
@@ -201,16 +191,7 @@ test('editor folder changes are retained separately from resets and same-folder 
 			},
 		];
 		for (const { change, foldersChanged } of cases) {
-			const waiting = bridge.handle(
-				source,
-				'git.repository',
-				undefined,
-				{},
-				sequence,
-				new AbortController().signal,
-				undefined,
-				true,
-			);
+			const waiting = bridge.handle(source, 'git.repository', undefined, {}, sequence, new AbortController().signal, undefined, true);
 			await Promise.resolve();
 			await Promise.resolve();
 			change();
@@ -257,16 +238,7 @@ test('backend state subscriptions wake on admitted changes and replay notificati
 	assert.equal(result.events.length, 1);
 	assert.equal(JSON.stringify(result.events[0]), JSON.stringify(change));
 	notifications.fire(change);
-	const replay = (await bridge.handle(
-		source,
-		'git.repository',
-		undefined,
-		{},
-		result.sequence,
-		signal,
-		undefined,
-		true,
-	)) as { events: JsonValue[] };
+	const replay = (await bridge.handle(source, 'git.repository', undefined, {}, result.sequence, signal, undefined, true)) as { events: JsonValue[] };
 	assert.deepEqual(replay.events, result.events);
 });
 
@@ -295,20 +267,14 @@ test('product backend grants restrict methods, input fields and returned configu
 		gitConfigured: true,
 	});
 	await assert.rejects(value.bridge.handle(source, 'git.repository', 'unknown', {}, 0, signal), /not authorized/);
-	await assert.rejects(
-		value.bridge.handle(source, 'git.repository', 'write', { providers: { token: 'secret' } }, 0, signal),
-		/exceed/,
-	);
+	await assert.rejects(value.bridge.handle(source, 'git.repository', 'write', { providers: { token: 'secret' } }, 0, signal), /exceed/);
 	assert.deepEqual(value.calls, [{ method: 'config/read', params: {} }]);
 });
 
 test('an installed extension cannot grant itself product backend access', async () => {
 	const value = fixture('user');
 	using cleanup = value.bridge;
-	await assert.rejects(
-		value.bridge.handle(source, 'git.repository', 'read', {}, 0, new AbortController().signal),
-		/not authorized/,
-	);
+	await assert.rejects(value.bridge.handle(source, 'git.repository', 'read', {}, 0, new AbortController().signal), /not authorized/);
 	assert.deepEqual(value.calls, []);
 });
 
@@ -339,14 +305,7 @@ for (const retire of [false, true])
 					return undefined;
 				},
 			});
-			using progress = new ProgressService(
-				statusbar,
-				notifications,
-				commands,
-				{} as never,
-				{} as never,
-				{} as never,
-			);
+			using progress = new ProgressService(statusbar, notifications, commands, {} as never, {} as never, {} as never);
 			const value = fixture(
 				'builtIn',
 				async (method, params) => {
@@ -359,15 +318,7 @@ for (const retire of [false, true])
 				progress,
 			);
 			using cleanup = value.bridge;
-			const result = value.bridge.handle(
-				source,
-				'git.repository',
-				'transport',
-				{ operationId: 'window-owned-operation' },
-				0,
-				controller.signal,
-				{ title: 'Git', cancellable: true },
-			);
+			const result = value.bridge.handle(source, 'git.repository', 'transport', { operationId: 'window-owned-operation' }, 0, controller.signal, { title: 'Git', cancellable: true });
 			void result.then(
 				() => {
 					settled = true;
@@ -403,16 +354,7 @@ test('idle backend waits renew at the service deadline rather than polling edito
 		using notifications = value.notifications;
 		using changes = value.configurationChanges;
 		let completed = false;
-		const waiting = bridge.handle(
-			source,
-			'git.repository',
-			undefined,
-			{},
-			0,
-			new AbortController().signal,
-			undefined,
-			true,
-		);
+		const waiting = bridge.handle(source, 'git.repository', undefined, {}, 0, new AbortController().signal, undefined, true);
 		void waiting.then(() => {
 			completed = true;
 		});
@@ -462,16 +404,7 @@ test('cursor and unsaved text changes wake blame without invalidating repository
 		// A change arriving between requests must also wake the next subscription.
 		cursor.fire();
 		mock.timers.tick(75);
-		const replay = (await bridge.handle(
-			source,
-			'git.repository',
-			undefined,
-			{},
-			sequence,
-			signal,
-			undefined,
-			true,
-		)) as { sequence: number };
+		const replay = (await bridge.handle(source, 'git.repository', undefined, {}, sequence, signal, undefined, true)) as { sequence: number };
 		assert.equal(replay.sequence, sequence + 1);
 	} finally {
 		mock.timers.reset();

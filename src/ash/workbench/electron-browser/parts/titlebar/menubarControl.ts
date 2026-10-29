@@ -4,11 +4,7 @@ import { isMacintosh } from '../../../../base/common/platform.js';
 import { getErrorMessage, isCancellationError } from '../../../../base/common/errors.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { type IMenu, IMenuService, MenuId, MenuItemAction } from '../../../../platform/actions/common/actions.js';
-import type {
-	INativeMenubarData,
-	NativeMenubarItem,
-	INativeTouchBarItem,
-} from '../../../../platform/menubar/common/nativeMenubar.js';
+import type { INativeMenubarData, NativeMenubarItem, INativeTouchBarItem } from '../../../../platform/menubar/common/nativeMenubar.js';
 import { IMenubarService } from '../../../../platform/menubar/electron-browser/menubar.js';
 import type { IMenubarControl } from '../../../browser/parts/titlebar/menubarControl.js';
 
@@ -104,12 +100,7 @@ interface ISerializedMenubar {
 	readonly actions: ReadonlyMap<string, IAction>;
 }
 
-function serializeMenubar(
-	actions: readonly IAction[],
-	revision: number,
-	touchBarActions: readonly IAction[] = [],
-	touchBarIcons: readonly string[] = [],
-): ISerializedMenubar {
+function serializeMenubar(actions: readonly IAction[], revision: number, touchBarActions: readonly IAction[] = [], touchBarIcons: readonly string[] = []): ISerializedMenubar {
 	const actionMap = new Map<string, IAction>();
 	let nextId = 1;
 
@@ -123,7 +114,12 @@ function serializeMenubar(
 			if (action instanceof SubmenuAction) {
 				const children = serializeItems(action.actions);
 				if (children.length > 0) {
-					items.push({ type: 'submenu', label: action.label, enabled: action.enabled, items: children });
+					items.push({
+						type: 'submenu',
+						label: action.label,
+						enabled: action.enabled,
+						items: children,
+					});
 				}
 				continue;
 			}
@@ -158,7 +154,10 @@ function serializeMenubar(
 			...(touchBar.length ? { touchBar } : {}),
 			menus: actions
 				.filter((action): action is SubmenuAction => action instanceof SubmenuAction)
-				.map(action => ({ label: action.label, items: serializeItems(action.actions) }))
+				.map(action => ({
+					label: action.label,
+					items: serializeItems(action.actions),
+				}))
 				.filter(({ items }) => items.length > 0),
 		},
 		actions: actionMap,

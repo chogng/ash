@@ -114,18 +114,13 @@ console.log(describeTheme(palette));
 	];
 	await workspaceFiles.createDirectory(workspaceRoot);
 	for (const sample of samples) {
-		await workspaceFiles.writeFile(
-			URI.joinPath(workspaceRoot, sample.name),
-			new TextEncoder().encode(sample.text),
-			{ create: true, overwrite: false },
-		);
+		await workspaceFiles.writeFile(URI.joinPath(workspaceRoot, sample.name), new TextEncoder().encode(sample.text), { create: true, overwrite: false });
 	}
 	await workspaceFiles.createDirectory(URI.joinPath(workspaceRoot, 'src'));
-	await workspaceFiles.writeFile(
-		URI.joinPath(workspaceRoot, 'src', 'index.ts'),
-		new TextEncoder().encode('import { createTokens } from "../palette";\n\nconsole.log(createTokens);\n'),
-		{ create: true, overwrite: false },
-	);
+	await workspaceFiles.writeFile(URI.joinPath(workspaceRoot, 'src', 'index.ts'), new TextEncoder().encode('import { createTokens } from "../palette";\n\nconsole.log(createTokens);\n'), {
+		create: true,
+		overwrite: false,
+	});
 
 	const state = new Map<string, string>();
 	const storage = resources.add(
@@ -201,9 +196,7 @@ console.log(describeTheme(palette));
 						return {
 							path,
 							parent: path === '/' ? null : URI.joinPath(uri, '..').path,
-							directories: children
-								.filter(entry => entry.kind === FileKind.Directory)
-								.map(entry => ({ name: entry.name, path: entry.resource.path })),
+							directories: children.filter(entry => entry.kind === FileKind.Directory).map(entry => ({ name: entry.name, path: entry.resource.path })),
 						};
 					},
 					authorize: async () => () => {},
@@ -281,8 +274,7 @@ export function connectThemePreview(
 				if (registeredKeys.has(key) && Object.hasOwn(data.configuration, key)) {
 					if (resources.isDisposed) return;
 					const value = data.configuration[key];
-					if (JSON.stringify(configuration.getValue(key)) !== JSON.stringify(value))
-						await configuration.updateValue(key, value);
+					if (JSON.stringify(configuration.getValue(key)) !== JSON.stringify(value)) await configuration.updateValue(key, value);
 				}
 			}
 			publishContent();
@@ -341,9 +333,7 @@ export function connectThemePreview(
 			// Auxiliary editors borrow the main window's realm and clear window.opener.
 			// The one-use channel token and origin bind the port to the creating editor;
 			// event.source is not the iframe's parent in that host.
-			const matchingOrigin = localFile
-				? event.origin === 'null' || event.origin === 'file://'
-				: event.origin === location.origin;
+			const matchingOrigin = localFile ? event.origin === 'null' || event.origin === 'file://' : event.origin === location.origin;
 			if (
 				port ||
 				!channelToken ||
@@ -362,29 +352,15 @@ export function connectThemePreview(
 			resources.add(
 				addDisposableListener(connection, 'message', (message: MessageEvent<unknown>) => {
 					const data = message.data;
-					if (
-						!data ||
-						typeof data !== 'object' ||
-						!('kind' in data) ||
-						data.kind !== 'ash-theme-preview-theme'
-					)
-						return;
+					if (!data || typeof data !== 'object' || !('kind' in data) || data.kind !== 'ash-theme-preview-theme') return;
 					if ('source' in data && (typeof data.source !== 'string' || data.source.length > 1_048_576)) return;
-					if (
-						'configuration' in data &&
-						(!data.configuration ||
-							typeof data.configuration !== 'object' ||
-							Array.isArray(data.configuration))
-					)
-						return;
+					if ('configuration' in data && (!data.configuration || typeof data.configuration !== 'object' || Array.isArray(data.configuration))) return;
 					// Keep the newest pending state while an async configuration write is
 					// running. Replaying every intermediate picker value creates a backlog.
 					pending = {
 						...pending,
 						...('source' in data ? { source: data.source as string } : {}),
-						...('configuration' in data
-							? { configuration: data.configuration as Record<string, unknown> }
-							: {}),
+						...('configuration' in data ? { configuration: data.configuration as Record<string, unknown> } : {}),
 					};
 					scheduleUpdate();
 				}),
@@ -407,9 +383,6 @@ export function connectThemePreview(
 			{ capture: true },
 		),
 	);
-	window.parent.postMessage(
-		{ kind: 'ash-theme-preview-ready', token: channelToken },
-		localFile || location.origin === 'null' ? '*' : location.origin,
-	);
+	window.parent.postMessage({ kind: 'ash-theme-preview-ready', token: channelToken }, localFile || location.origin === 'null' ? '*' : location.origin);
 	return publishContent;
 }

@@ -8,18 +8,9 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { CommandsRegistry } from '../../../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
-import {
-	IQuickInputService,
-	type IQuickPick,
-	type IQuickPickItem,
-	type IQuickPickSeparator,
-} from '../../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPick, type IQuickPickItem, type IQuickPickSeparator } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { IStorageService, StorageScope } from '../../../../../../platform/storage/common/storage.js';
-import {
-	ITerminalService,
-	type ITerminalCommandStatusEvent,
-	type ITerminalInstance,
-} from '../../../../terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalCommandStatusEvent, type ITerminalInstance } from '../../../../terminal/browser/terminal.js';
 import { TerminalExtensionsRegistry } from '../../../../terminal/browser/terminalExtensions.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';
 import { BrowserStorageService } from '../../../../../../workbench/services/storage/browser/storageService.js';
@@ -75,9 +66,7 @@ test('Terminal history contribution keeps commands across PTY reuse and rejects 
 			},
 			onDidChangeCommandStatus: commands.event,
 		} as unknown as ITerminalInstance;
-		const contribution = TerminalExtensionsRegistry.getTerminalContributions().find(
-			value => value.id === 'terminal.history',
-		);
+		const contribution = TerminalExtensionsRegistry.getTerminalContributions().find(value => value.id === 'terminal.history');
 		assert.ok(contribution);
 		const history = services.createInstance(contribution.ctor, { instance });
 		resources.add(history);
@@ -122,13 +111,10 @@ test('Terminal history contribution keeps commands across PTY reuse and rejects 
 			command: 'echo missing nonce',
 		});
 
-		assert.deepEqual(
-			JSON.parse(storage.get('terminal.shellIntegration.commandHistory.v1', StorageScope.APPLICATION)!).entries,
-			[
-				{ shellId: 'bash', command: 'echo before reuse' },
-				{ shellId: 'bash', command: 'echo after reuse' },
-			],
-		);
+		assert.deepEqual(JSON.parse(storage.get('terminal.shellIntegration.commandHistory.v1', StorageScope.APPLICATION)!).entries, [
+			{ shellId: 'bash', command: 'echo before reuse' },
+			{ shellId: 'bash', command: 'echo after reuse' },
+		]);
 	} finally {
 		dom.window.close();
 	}
@@ -147,20 +133,11 @@ test('Run Recent Command executes only an accepted item in the still-active term
 				flushInterval: 0,
 			}),
 		);
-		new TerminalCommandHistory(configuration, storage).record(
-			'bash',
-			'succeeded',
-			'echo explicitly accepted',
-			true,
-			false,
-		);
+		new TerminalCommandHistory(configuration, storage).record('bash', 'succeeded', 'echo explicitly accepted', true, false);
 		const services = resources.add(new InstantiationService());
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IStorageService, storage);
-		services.registerInstance(
-			IWorkspaceContextService,
-			resources.add(new TestWorkspaceService({ id: 'history-action', folders: [] })),
-		);
+		services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'history-action', folders: [] })));
 
 		const sent: Array<{ text: string; shouldExecute: boolean }> = [];
 		const instance = {
@@ -264,12 +241,7 @@ function createHistoryPickerTest(resources: DisposableStore) {
 	const folder = { id: 'folder', uri: URI.file('/workspace'), name: 'root', index: 0 };
 	const workspace = resources.add(new TestWorkspaceService({ id: 'history-lifetime', folders: [folder] }));
 	new TerminalCommandHistory(configuration, storage).record('bash', 'succeeded', 'echo accepted', true, false);
-	new TerminalDirectoryHistory(configuration, storage).record(
-		JSON.stringify(['history-lifetime', '', 'file', '']),
-		'/saved directory',
-		true,
-		false,
-	);
+	new TerminalDirectoryHistory(configuration, storage).record(JSON.stringify(['history-lifetime', '', 'file', '']), '/saved directory', true, false);
 	const services = resources.add(new InstantiationService());
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IStorageService, storage);
@@ -418,9 +390,7 @@ test('Go to Recent Directory preserves execution and does not steal focus after 
 	const fixture = createHistoryPickerTest(resources);
 	const gate = new DeferredPromise<void>();
 	fixture.delaySend(gate.p);
-	const running = fixture.services.invokeFunction(
-		CommandsRegistry.getCommand(TerminalHistoryCommandId.GoToRecentDirectory)!,
-	);
+	const running = fixture.services.invokeFunction(CommandsRegistry.getCommand(TerminalHistoryCommandId.GoToRecentDirectory)!);
 	await fixture.shown;
 	fixture.accept();
 	await fixture.started;
@@ -434,9 +404,7 @@ test('Go to Recent Directory preserves execution and does not steal focus after 
 test('Go to Recent Directory executes the accepted path and restores focus to the unchanged terminal', async () => {
 	using resources = new DisposableStore();
 	const fixture = createHistoryPickerTest(resources);
-	const running = fixture.services.invokeFunction(
-		CommandsRegistry.getCommand(TerminalHistoryCommandId.GoToRecentDirectory)!,
-	);
+	const running = fixture.services.invokeFunction(CommandsRegistry.getCommand(TerminalHistoryCommandId.GoToRecentDirectory)!);
 	await fixture.shown;
 	assert.deepEqual(fixture.sent, []);
 	fixture.accept();

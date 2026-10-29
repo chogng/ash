@@ -8,10 +8,7 @@ import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.j
 import { randomUUID } from 'node:crypto';
 import type { WebContents } from 'electron/main';
 import type { BrowserViewEvent, IBrowserViewOwner } from '../common/browserView.js';
-import type {
-	ISerializedBrowserHistoryEntriesSnapshot,
-	ISerializedBrowserFaviconsSnapshot,
-} from '../common/browserHistory.js';
+import type { ISerializedBrowserHistoryEntriesSnapshot, ISerializedBrowserFaviconsSnapshot } from '../common/browserHistory.js';
 import type { BrowserSessionHistory } from './browserSessionHistory.js';
 import { getMediaOrTextMime } from '../../../base/common/mime.js';
 
@@ -41,11 +38,7 @@ export class BrowserSession {
 			this.electronSession.protocol.handle('file', async request => {
 				// Remote websites cannot probe local files through this protocol handler.
 				const initiator: unknown = Reflect.get(request, 'initiatorOrigin');
-				if (
-					(initiator !== undefined && initiator !== 'file://') ||
-					!['GET', 'HEAD'].includes(request.method) ||
-					request.url.length > 8192
-				) {
+				if ((initiator !== undefined && initiator !== 'file://') || !['GET', 'HEAD'].includes(request.method) || request.url.length > 8192) {
 					return new Response(null, { status: 403 });
 				}
 				const url = new URL(request.url);
@@ -79,18 +72,14 @@ export class BrowserSession {
 	private remote: BrowserSessionRemote | undefined;
 	private remoteReady: Promise<void> | undefined;
 	private networkUsers = 0;
-	private readonly networkPages = new Map<
-		number,
-		{ id: string; token: () => string | null; emit: (event: BrowserViewEvent) => void }
-	>();
+	private readonly networkPages = new Map<number, { id: string; token: () => string | null; emit: (event: BrowserViewEvent) => void }>();
 	private readonly networkRequests = new Map<string, { contentsId: number; settle: (allowed: boolean) => void }>();
 	private hasNetworkFilter = false;
 	private networkTurn: Promise<void> = Promise.resolve();
 	private history: BrowserSessionHistory | undefined;
 	private historyReady: Promise<void> | undefined;
 	private historyLoaded = false;
-	private historySnapshot:
-		{ entries: ISerializedBrowserHistoryEntriesSnapshot; favicons: ISerializedBrowserFaviconsSnapshot } | undefined;
+	private historySnapshot: { entries: ISerializedBrowserHistoryEntriesSnapshot; favicons: ISerializedBrowserFaviconsSnapshot } | undefined;
 	private historyUsers = 0;
 
 	private constructor(
@@ -102,9 +91,7 @@ export class BrowserSession {
 	}
 
 	/** Windows share one session store. A retired store leaves only its immutable data behind. */
-	public async acquireHistory(
-		createHistory: () => BrowserSessionHistory,
-	): Promise<IDisposable & { readonly history: BrowserSessionHistory }> {
+	public async acquireHistory(createHistory: () => BrowserSessionHistory): Promise<IDisposable & { readonly history: BrowserSessionHistory }> {
 		if (!this.history) {
 			const history = (this.history = createHistory());
 			this.historyReady = history.initialize().then(() => {
@@ -145,13 +132,7 @@ export class BrowserSession {
 	}
 
 	/** Requests are authorized by the backend; Chromium never receives its policy or credentials. */
-	public attachNetwork(
-		id: string,
-		contents: WebContents,
-		owner: IBrowserViewOwner,
-		token: () => string | null,
-		emit: (event: BrowserViewEvent) => void,
-	): IDisposable {
+	public attachNetwork(id: string, contents: WebContents, owner: IBrowserViewOwner, token: () => string | null, emit: (event: BrowserViewEvent) => void): IDisposable {
 		if (owner.type !== 'agent') {
 			return toDisposable(() => {});
 		}
@@ -164,11 +145,7 @@ export class BrowserSession {
 				const contentsId = details.webContentsId;
 				const page = contentsId === undefined ? undefined : this.networkPages.get(contentsId);
 				const networkToken = page?.token();
-				if (
-					details.url === 'about:blank' ||
-					details.url.startsWith('data:') ||
-					details.url.startsWith('blob:')
-				) {
+				if (details.url === 'about:blank' || details.url.startsWith('data:') || details.url.startsWith('blob:')) {
 					callback({ cancel: false });
 					return;
 				}

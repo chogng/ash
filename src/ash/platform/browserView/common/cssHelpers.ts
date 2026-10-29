@@ -65,14 +65,7 @@ const inheritedProperties = new Set([
 
 function isInherited(name: string): boolean {
 	name = name.toLowerCase();
-	return (
-		name.startsWith('--') ||
-		name === 'font' ||
-		name.startsWith('font-') ||
-		name === 'list-style' ||
-		name.startsWith('list-style-') ||
-		inheritedProperties.has(name)
-	);
+	return name.startsWith('--') || name === 'font' || name.startsWith('font-') || name === 'list-style' || name.startsWith('list-style-') || inheritedProperties.has(name);
 }
 
 /** Split declarations only at top-level semicolons, preserving strings and functions. */
@@ -152,28 +145,16 @@ export function collapseToShorthands(entries: Map<string, string>): string[] {
 			continue;
 		}
 		const [top, right, bottom, left] = values as [string, string, string, string];
-		if (
-			values.some(value => /^(inherit|initial|unset|revert|revert-layer)$/.test(value!)) &&
-			!values.every(value => value === top)
-		) {
+		if (values.some(value => /^(inherit|initial|unset|revert|revert-layer)$/.test(value!)) && !values.every(value => value === top)) {
 			continue;
 		}
-		const shorthand =
-			top === bottom && right === left
-				? top === right
-					? top
-					: `${top} ${right}`
-				: right === left
-					? `${top} ${right} ${bottom}`
-					: values.join(' ');
+		const shorthand = top === bottom && right === left ? (top === right ? top : `${top} ${right}`) : right === left ? `${top} ${right} ${bottom}` : values.join(' ');
 		for (const name of names) {
 			compact.delete(name);
 		}
 		compact.set(family, shorthand);
 	}
-	return [...compact]
-		.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-		.map(([name, value]) => `${name}: ${value};`);
+	return [...compact].sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)).map(([name, value]) => `${name}: ${value};`);
 }
 
 /** Keeps author rules distinct from computed values; it does not approximate the cascade. */
@@ -186,9 +167,7 @@ export function formatMatchedStyles(matched: IMatchedStyles): IFormattedStyles {
 	};
 	const blocks: string[] = [];
 	const append = (selector: string, style: ICSSStyle, userAgent: boolean, inherited = false): void => {
-		const properties = style.cssProperties.filter(
-			property => !property.disabled && (!inherited || isInherited(property.name)),
-		);
+		const properties = style.cssProperties.filter(property => !property.disabled && (!inherited || isInherited(property.name)));
 		for (const { name, value } of properties) {
 			(userAgent ? result.userAgentPropertyNames : result.authorPropertyNames).add(name);
 		}
@@ -213,19 +192,11 @@ export function formatMatchedStyles(matched: IMatchedStyles): IFormattedStyles {
 		append('element.style', matched.inlineStyle, false);
 	}
 	for (const { rule } of matched.matchedCSSRules ?? []) {
-		append(
-			rule.selectorList.selectors.map(selector => selector.text).join(', '),
-			rule.style,
-			rule.origin === 'user-agent',
-		);
+		append(rule.selectorList.selectors.map(selector => selector.text).join(', '), rule.style, rule.origin === 'user-agent');
 	}
 	for (const pseudo of matched.pseudoElements ?? []) {
 		for (const { rule } of pseudo.matches) {
-			append(
-				rule.selectorList.selectors.map(selector => selector.text).join(', '),
-				rule.style,
-				rule.origin === 'user-agent',
-			);
+			append(rule.selectorList.selectors.map(selector => selector.text).join(', '), rule.style, rule.origin === 'user-agent');
 		}
 	}
 	for (const parent of matched.inherited ?? []) {
@@ -233,12 +204,7 @@ export function formatMatchedStyles(matched: IMatchedStyles): IFormattedStyles {
 			append('inherited element.style', parent.inlineStyle, false, true);
 		}
 		for (const { rule } of parent.matchedCSSRules) {
-			append(
-				rule.selectorList.selectors.map(selector => selector.text).join(', '),
-				rule.style,
-				rule.origin === 'user-agent',
-				true,
-			);
+			append(rule.selectorList.selectors.map(selector => selector.text).join(', '), rule.style, rule.origin === 'user-agent', true);
 		}
 	}
 	result.rulesText = blocks.join('\n');

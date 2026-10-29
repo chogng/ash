@@ -30,10 +30,7 @@ test('language identity, configuration, and feature providers have separate owne
 	using model = new TextModel('', { languageId: 'demo' });
 
 	assert.equal(languageService.resolveLanguageId({ resource: URI.file('C:\\project\\source.ts') }), undefined);
-	assert.equal(
-		languageConfigurationService.getLanguageConfiguration('typescript').comments?.lineCommentToken,
-		undefined,
-	);
+	assert.equal(languageConfigurationService.getLanguageConfiguration('typescript').comments?.lineCommentToken, undefined);
 	assert.deepEqual(languageFeaturesService.hoverProvider.ordered(model), []);
 
 	using language = languageService.registerLanguage({ id: 'demo', extensions: ['.demo'] });
@@ -119,9 +116,7 @@ test('extension provider replacement updates diagnostics and navigation atomical
 	const definitions = { selector: 'markdown', provider: { provideDefinition: () => [] } };
 	using registration = service.registerProviderBatch({ syntax: [diagnostics], definitions: [definitions] });
 	const observations: number[] = [];
-	using listener = service.syntaxProvider.onDidChange(() =>
-		observations.push(service.definitionProvider.all(model).length),
-	);
+	using listener = service.syntaxProvider.onDidChange(() => observations.push(service.definitionProvider.all(model).length));
 	registration.replace({
 		syntax: [{ ...diagnostics }],
 		documentSymbols: [{ selector: 'markdown', provider: { provideDocumentSymbols: () => [] } }],
@@ -132,13 +127,7 @@ test('extension provider replacement updates diagnostics and navigation atomical
 	assert.equal(service.syntaxProvider.getDiagnosticProviders('markdown').length, 1);
 	assert.equal(service.documentSymbolProvider.all(model).length, 1);
 	registration.dispose();
-	assert.deepEqual(
-		[
-			service.syntaxProvider.getDiagnosticProviders('markdown').length,
-			service.documentSymbolProvider.all(model).length,
-		],
-		[0, 0],
-	);
+	assert.deepEqual([service.syntaxProvider.getDiagnosticProviders('markdown').length, service.documentSymbolProvider.all(model).length], [0, 0]);
 });
 
 test('navigation-only batch updates retain syntax providers without invalidating open models', () => {

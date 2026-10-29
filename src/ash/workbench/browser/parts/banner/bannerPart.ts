@@ -13,10 +13,7 @@ import { Action2, registerAction2 } from '../../../../platform/actions/common/ac
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { KeybindingsRegistry, KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import {
-	IAccessibleViewService,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import type { IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
@@ -127,12 +124,7 @@ export class BannerPart extends Part implements IBannerService {
 		if (!this.displayed) return;
 		const actions = [...this.domNode.querySelectorAll<HTMLElement>('a, button')];
 		const index = actions.findIndex(action => action === this.domNode.ownerDocument.activeElement);
-		const next =
-			index < 0
-				? direction === 1
-					? 0
-					: actions.length - 1
-				: (index + direction + actions.length) % actions.length;
+		const next = index < 0 ? (direction === 1 ? 0 : actions.length - 1) : (index + direction + actions.length) % actions.length;
 		actions[next]?.focus();
 	}
 
@@ -185,18 +177,14 @@ export class BannerPart extends Part implements IBannerService {
 		const label = next.ariaLabel ?? text;
 		this.domNode.setAttribute('aria-label', label);
 		// Open into the content area so native titlebar controls cannot cover the tooltip.
-		this.content.add(
-			this.hover.setupDelayedHover(message, { content: text, position: { hoverPosition: HoverPosition.BELOW } }),
-		);
+		this.content.add(this.hover.setupDelayedHover(message, { content: text, position: { hoverPosition: HoverPosition.BELOW } }));
 		const actions = h(document, 'div');
 		actions.className = 'ash-banner-actions';
 		for (const action of next.actions ?? []) {
 			this.content.add(
 				this.instantiation.createInstance(Link, actions, action, {
 					opener: (href: string) => {
-						void this.opener
-							.open(href, { allowCommands: true, fromUserGesture: true })
-							.catch(onUnexpectedError);
+						void this.opener.open(href, { allowCommands: true, fromUserGesture: true }).catch(onUnexpectedError);
 					},
 				}),
 			);
@@ -233,12 +221,8 @@ export class BannerPart extends Part implements IBannerService {
 }
 
 CommandsRegistry.register('workbench.banner.focusBanner', accessor => accessor.get(IBannerService).focus());
-CommandsRegistry.register('workbench.banner.focusNextAction', accessor =>
-	accessor.get(IBannerService).focusNextAction(),
-);
-CommandsRegistry.register('workbench.banner.focusPreviousAction', accessor =>
-	accessor.get(IBannerService).focusPreviousAction(),
-);
+CommandsRegistry.register('workbench.banner.focusNextAction', accessor => accessor.get(IBannerService).focusNextAction());
+CommandsRegistry.register('workbench.banner.focusPreviousAction', accessor => accessor.get(IBannerService).focusPreviousAction());
 
 for (const [key, command] of [
 	['Escape', 'workbench.banner.focusBanner'],

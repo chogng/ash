@@ -31,24 +31,18 @@ export function normalizeIndentation(value: string, indentSize: number, insertSp
 	);
 }
 
-export function resolveEditorIndentationOptions(
-	options: EditorIndentationOptions = {},
-): ResolvedEditorIndentationOptions {
-	if (typeof options !== 'object' || options === null)
-		throw new TypeError('Editor indentation options must be an object');
+export function resolveEditorIndentationOptions(options: EditorIndentationOptions = {}): ResolvedEditorIndentationOptions {
+	if (typeof options !== 'object' || options === null) throw new TypeError('Editor indentation options must be an object');
 	const kind = options.kind ?? DEFAULT_EDITOR_INDENTATION.kind;
-	if (kind !== EditorIndentationKind.Tabs && kind !== EditorIndentationKind.Spaces)
-		throw new TypeError('Unknown editor indentation kind');
+	if (kind !== EditorIndentationKind.Tabs && kind !== EditorIndentationKind.Spaces) throw new TypeError('Unknown editor indentation kind');
 	const tabSize = options.tabSize ?? DEFAULT_EDITOR_INDENTATION.tabSize;
-	if (!Number.isSafeInteger(tabSize) || tabSize < 1 || tabSize > 32)
-		throw new RangeError('Editor tab size must be a safe integer between 1 and 32');
+	if (!Number.isSafeInteger(tabSize) || tabSize < 1 || tabSize > 32) throw new RangeError('Editor tab size must be a safe integer between 1 and 32');
 	return Object.freeze({ kind, tabSize });
 }
 
 export function getLeadingIndentation(text: string, endColumn = text.length): string {
 	if (typeof text !== 'string') throw new TypeError('Indented text must be a string');
-	if (!Number.isSafeInteger(endColumn) || endColumn < 0 || endColumn > text.length)
-		throw new RangeError('Indentation end column must be within the text');
+	if (!Number.isSafeInteger(endColumn) || endColumn < 0 || endColumn > text.length) throw new RangeError('Indentation end column must be within the text');
 	return /^[\t ]*/.exec(text.slice(0, endColumn))![0];
 }
 
@@ -66,21 +60,15 @@ export function normalizeEditorIndentationText(text: string, options: ResolvedEd
 }
 
 export function unshiftEditorIndentation(indentation: string, options: ResolvedEditorIndentationOptions): string {
-	return indentationFromColumns(
-		Math.max(0, indentationColumns(indentation, options.tabSize) - options.tabSize),
-		options,
-	);
+	return indentationFromColumns(Math.max(0, indentationColumns(indentation, options.tabSize) - options.tabSize), options);
 }
 
 function indentationFromColumns(columns: number, options: ResolvedEditorIndentationOptions): string {
-	return options.kind === EditorIndentationKind.Spaces
-		? ' '.repeat(columns)
-		: '\t'.repeat(Math.floor(columns / options.tabSize)) + ' '.repeat(columns % options.tabSize);
+	return options.kind === EditorIndentationKind.Spaces ? ' '.repeat(columns) : '\t'.repeat(Math.floor(columns / options.tabSize)) + ' '.repeat(columns % options.tabSize);
 }
 
 function indentationColumns(indentation: string, tabSize: number): number {
-	if (typeof indentation !== 'string' || /[^\t ]/.test(indentation))
-		throw new TypeError('Editor indentation must contain only tabs and spaces');
+	if (typeof indentation !== 'string' || /[^\t ]/.test(indentation)) throw new TypeError('Editor indentation must contain only tabs and spaces');
 	let columns = 0;
 	for (const character of indentation) {
 		columns = character === '\t' ? CursorColumns.nextIndentTabStop(columns, tabSize) : columns + 1;

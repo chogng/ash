@@ -19,10 +19,7 @@ test('remote indicator owns the leading clickable left status entry', async () =
 	using remoteAgentService = new TestRemoteAgentService('connected');
 	using statusbarService = new StatusbarService();
 	const commands: string[] = [];
-	statusbarService.addEntry(
-		{ text: 'main' },
-		{ id: 'ash.status.git.branch', alignment: StatusbarAlignment.Left, priority: 900 },
-	);
+	statusbarService.addEntry({ text: 'main' }, { id: 'ash.status.git.branch', alignment: StatusbarAlignment.Left, priority: 900 });
 	using indicator = new RemoteStatusIndicator({
 		remoteAgentService,
 		runCommand: commandRunner(commands),
@@ -64,10 +61,7 @@ test('remote indicator projects connection changes and reconnects a disconnected
 		authority: 'ssh+work-server',
 		host: 'work-server',
 	});
-	assert.equal(
-		statusbarService.getEntries(StatusbarAlignment.Left)[0]?.entry.tooltip,
-		'SSH host work-server is disconnected',
-	);
+	assert.equal(statusbarService.getEntries(StatusbarAlignment.Left)[0]?.entry.tooltip, 'SSH host work-server is disconnected');
 	assert.equal(statusbarService.getEntries(StatusbarAlignment.Left)[0]?.entry.kind, undefined);
 	await statusbarService.getEntries(StatusbarAlignment.Left)[0]?.entry.run?.();
 	assert.deepEqual(commands, [ReconnectRemoteCommandId]);
@@ -113,19 +107,14 @@ class TestRemoteAgentService extends Disposable implements IAppServerRemoteAgent
 }
 
 test('a standard remote endpoint has a localized identity and accessible ready state', () => {
-	setNlsMessages(
-		'zh-CN',
-		JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')),
-	);
+	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
 	using restore = toDisposable(resetNlsResolver);
 	using remoteAgentService = new TestRemoteAgentService('connected');
 	remoteAgentService.emitConnection({ kind: 'remote', generation: 1, authority: 'fixture+backend' });
 	using statusbarService = new StatusbarService();
 	using indicator = new RemoteStatusIndicator({ remoteAgentService, statusbarService, runCommand: () => undefined });
 	assert.deepEqual(
-		statusbarService
-			.getEntries(StatusbarAlignment.Left)
-			.map(item => ({ kind: item.entry.kind, aria: item.entry.ariaLabel, tooltip: item.entry.tooltip })),
+		statusbarService.getEntries(StatusbarAlignment.Left).map(item => ({ kind: item.entry.kind, aria: item.entry.ariaLabel, tooltip: item.entry.tooltip })),
 		[
 			{
 				kind: 'remote',

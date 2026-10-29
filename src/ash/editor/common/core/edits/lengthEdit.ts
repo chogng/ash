@@ -5,11 +5,7 @@ import { AnyEdit, BaseEdit, BaseReplacement } from './edit.js';
 export class LengthEdit extends BaseEdit<LengthReplacement, LengthEdit> {
 	static readonly empty = new LengthEdit([]);
 	static fromEdit(edit: AnyEdit): LengthEdit {
-		return new LengthEdit(
-			edit.replacements.map(
-				replacement => new LengthReplacement(replacement.replaceRange, replacement.getNewLength()),
-			),
-		);
+		return new LengthEdit(edit.replacements.map(replacement => new LengthReplacement(replacement.replaceRange, replacement.getNewLength())));
 	}
 	static create(replacements: readonly LengthReplacement[]): LengthEdit {
 		return new LengthEdit(replacements);
@@ -38,12 +34,7 @@ export class LengthEdit extends BaseEdit<LengthReplacement, LengthEdit> {
 		const inverse: LengthReplacement[] = [];
 		let delta = 0;
 		for (const replacement of this.replacements) {
-			inverse.push(
-				new LengthReplacement(
-					OffsetRange.ofStartAndLength(replacement.replaceRange.start + delta, replacement.newLength),
-					replacement.replaceRange.length,
-				),
-			);
+			inverse.push(new LengthReplacement(OffsetRange.ofStartAndLength(replacement.replaceRange.start + delta, replacement.newLength), replacement.replaceRange.length));
 			delta += replacement.getLengthDelta();
 		}
 		return new LengthEdit(inverse);
@@ -73,8 +64,7 @@ export class LengthReplacement extends BaseReplacement<LengthReplacement> {
 		readonly newLength: number,
 	) {
 		super(range);
-		if (!Number.isSafeInteger(newLength) || newLength < 0)
-			throw new RangeError('Replacement length must be non-negative');
+		if (!Number.isSafeInteger(newLength) || newLength < 0) throw new RangeError('Replacement length must be non-negative');
 	}
 
 	getNewLength(): number {
@@ -84,10 +74,7 @@ export class LengthReplacement extends BaseReplacement<LengthReplacement> {
 		return this.replaceRange.equals(other.replaceRange) && this.newLength === other.newLength;
 	}
 	tryJoinTouching(other: LengthReplacement): LengthReplacement | undefined {
-		return new LengthReplacement(
-			this.replaceRange.joinRightTouching(other.replaceRange),
-			this.newLength + other.newLength,
-		);
+		return new LengthReplacement(this.replaceRange.joinRightTouching(other.replaceRange), this.newLength + other.newLength);
 	}
 	slice(range: OffsetRange, rangeInReplacement: OffsetRange): LengthReplacement {
 		return new LengthReplacement(range, rangeInReplacement.length);

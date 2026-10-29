@@ -15,10 +15,7 @@ import { AppServerRemoteError } from '../../../src/ash/platform/agentHost/common
 import { RustGitHostFixture } from '../../fixtures/browser/rustGitHostFixture.js';
 import '../../../src/ash/workbench/browser/parts/editor/editor.contribution.js';
 import { MenuId, MenusRegistry } from '../../../src/ash/platform/actions/common/actions.js';
-import {
-	ContextKeyService,
-	IContextKeyService,
-} from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { setIconResolver } from '../../../src/ash/base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRegistry.js';
 import '../../../src/ash/editor/browser/widget/diffEditor/registrations.contribution.js';
@@ -44,14 +41,8 @@ import { createBuiltinExtensionFixture } from '../../fixtures/browser/builtinExt
 import { WebWorkerExtensionHost as BrowserExtensionHostApi } from '../../../src/ash/workbench/services/extensions/browser/webWorkerExtensionHost.js';
 import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/agentHost/browser/extensionHostApi.js';
 import { createExtensionHostInitialization } from '../../../src/ash/workbench/services/extensions/common/extensionHostProtocol.js';
-import {
-	type ExtensionClientSource,
-	type JsonValue,
-} from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
-import {
-	type ExtensionClientOperation,
-	type ExtensionClientResult,
-} from '../../../src/ash/workbench/api/common/extHost.protocol.js';
+import { type ExtensionClientSource, type JsonValue } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
+import { type ExtensionClientOperation, type ExtensionClientResult } from '../../../src/ash/workbench/api/common/extHost.protocol.js';
 import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { MainThreadSCM } from '../../../src/ash/workbench/api/browser/mainThreadSCM.js';
@@ -62,22 +53,14 @@ import { SCMService } from '../../../src/ash/workbench/contrib/scm/common/scmSer
 import { SCMViewService } from '../../../src/ash/workbench/contrib/scm/browser/scmViewService.js';
 import { ISCMService, ISCMViewService } from '../../../src/ash/workbench/contrib/scm/common/scm.js';
 import { ScmStatusContribution } from '../../../src/ash/workbench/contrib/scm/browser/activity.js';
-import {
-	IStatusbarService,
-	StatusbarAlignment,
-} from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
+import { IStatusbarService, StatusbarAlignment } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
 import { StatusbarEntryItem } from '../../../src/ash/workbench/browser/parts/statusbar/statusbarItem.js';
 import { ScmViewPane } from '../../../src/ash/workbench/contrib/scm/browser/scmViewPane.js';
 import { Pane, PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
 import { bindTestColorTheme } from '../../fixtures/browser/themeFixture.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
-import {
-	darkColorTheme,
-	lightColorTheme,
-	highContrastDarkColorTheme,
-	highContrastLightColorTheme,
-} from '../../../src/ash/platform/theme/common/colorTheme.js';
+import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import '../../../src/ash/base/browser/ui/splitview/splitview.css';
 import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/workbench/browser/media/style.css';
@@ -138,14 +121,7 @@ toastServices.registerInstance(IContextMenuService, {
 	},
 	hideContextMenu() {},
 } satisfies IContextMenuService);
-lifetime.add(
-	toastServices.createInstance(
-		NotificationsToasts,
-		document.body,
-		backendNotifications.model,
-		lifetime.add(new NotificationActionRunner(backendNotifications)),
-	),
-);
+lifetime.add(toastServices.createInstance(NotificationsToasts, document.body, backendNotifications.model, lifetime.add(new NotificationActionRunner(backendNotifications))));
 const workspace = lifetime.add(new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') }));
 const gitConfigurationRegistry = new ConfigurationRegistry();
 gitConfigurationRegistry.updateConfigurations({
@@ -228,22 +204,13 @@ const genericSource = new TextEncoder().encode(`
 `);
 const catalog = withEnabledBuiltInExtensions(
 	{
-		resources: new ExtensionResourceLoaderService(request =>
-			request.extensionId === 'test.snapshots'
-				? Promise.resolve(genericSource)
-				: packages.resources.readExtensionResourceBytes(request),
-		),
+		resources: new ExtensionResourceLoaderService(request => (request.extensionId === 'test.snapshots' ? Promise.resolve(genericSource) : packages.resources.readExtensionResourceBytes(request))),
 		list: async () => {
 			const value = await packages.list('cached');
 			const git = value.extensions.find(extension => extension.id === 'ash.git')!;
 			return {
 				...value,
-				extensions: [
-					...(includeGit ? [git] : []),
-					...(includeGeneric
-						? [{ ...git, id: 'test.snapshots', manifestJson: JSON.stringify({ browser: './main.js' }) }]
-						: []),
-				],
+				extensions: [...(includeGit ? [git] : []), ...(includeGeneric ? [{ ...git, id: 'test.snapshots', manifestJson: JSON.stringify({ browser: './main.js' }) }] : [])],
 			};
 		},
 	},
@@ -335,8 +302,7 @@ const backend = lifetime.add(
 						return { revision: configurationRevision, gitConfigured: true, git: { ...sharedGit } };
 					case 'config/update': {
 						const update = params as { expectedRevision: number; git: typeof sharedGit };
-						if (failSettingsWrite || update.expectedRevision !== configurationRevision)
-							throw new Error('Settings save rejected');
+						if (failSettingsWrite || update.expectedRevision !== configurationRevision) throw new Error('Settings save rejected');
 						sharedGit = { ...update.git };
 						configurationRevision++;
 						configurationEvents.fire({
@@ -381,18 +347,14 @@ const backend = lifetime.add(
 								repositoryId: (params as Record<string, JsonValue>).repositoryId,
 								transport: transport.transport,
 								...(transport.operation.mode ? { mode: transport.operation.mode } : {}),
-								...(transport.operation.expectedHead
-									? { expectedHead: transport.operation.expectedHead }
-									: {}),
+								...(transport.operation.expectedHead ? { expectedHead: transport.operation.expectedHead } : {}),
 							} as JsonValue,
 						});
 						if (kind === 'pull') {
 							await pullGate?.p;
-							if (transportCancelled)
-								throw new AppServerRemoteError(-32800, 'Cancelled', { kind: 'RequestCancelled' });
+							if (transportCancelled) throw new AppServerRemoteError(-32800, 'Cancelled', { kind: 'RequestCancelled' });
 							if (pullFailure) throw new Error('Pull rejected');
-							if (conflictingTags && !(transport.transport as { replaceTags: boolean }).replaceTags)
-								return { status: status(), outcome: { kind: 'tagConflict', tags: ['release'] } };
+							if (conflictingTags && !(transport.transport as { replaceTags: boolean }).replaceTags) return { status: status(), outcome: { kind: 'tagConflict', tags: ['release'] } };
 							if (upstream) upstream = { ...upstream, behind: 0, ahead: pullAhead ?? upstream.ahead };
 						}
 						if (kind === 'push') {
@@ -419,14 +381,12 @@ const backend = lifetime.add(
 						revision++;
 						return { status: status(), objectId: 'c'.repeat(40) };
 					case 'git/command': {
-						const command = (params as { command: { kind: string; name?: string; remote?: string } })
-							.command;
+						const command = (params as { command: { kind: string; name?: string; remote?: string } }).command;
 						if (command.kind === 'addRemote') {
 							configuredRemotes.push(command.name!);
 							return { status: status(), outcome: 'completed', operation: null };
 						}
-						if (command.kind === 'stash')
-							return { status: status(), outcome: 'completed', operation: null };
+						if (command.kind === 'stash') return { status: status(), outcome: 'completed', operation: null };
 						if (command.kind !== 'publishBranch') throw new Error(`Unexpected Git command ${command.kind}`);
 						upstream = { name: `${command.remote}/main`, ahead: 0, behind: 0 };
 						revision++;
@@ -520,16 +480,7 @@ const backend = lifetime.add(
 		{ subscribe: listener => configurationEvents.event(listener) },
 		workspace,
 		configuration,
-		lifetime.add(
-			new ProgressService(
-				lifetime.add(new StatusbarService()),
-				backendNotifications,
-				progressCommands,
-				{} as never,
-				{} as never,
-				{} as never,
-			),
-		),
+		lifetime.add(new ProgressService(lifetime.add(new StatusbarService()), backendNotifications, progressCommands, {} as never, {} as never, {} as never)),
 		{ groups: [], onDidChangeEditors: Event.None } as unknown as IEditorPart,
 		{
 			listCodeEditors: () => [],
@@ -548,12 +499,8 @@ const workerCatalog = {
 		return { ...snapshot, extensions: snapshot.extensions.filter(extension => extension.id !== 'ash.git') };
 	},
 };
-const genericHost = lifetime.add(
-	services.createInstance(BrowserExtensionHostApi, workerCatalog, createDisconnectedExtensionHostApi(unavailable)),
-);
-const host = lifetime.add(
-	new RustGitHostFixture(catalog, genericHost, () => createExtensionHostInitialization(workspace, configuration)),
-);
+const genericHost = lifetime.add(services.createInstance(BrowserExtensionHostApi, workerCatalog, createDisconnectedExtensionHostApi(unavailable)));
+const host = lifetime.add(new RustGitHostFixture(catalog, genericHost, () => createExtensionHostInitialization(workspace, configuration)));
 const scm = lifetime.add(new SCMService());
 const view = lifetime.add(new SCMViewService(scm));
 const quickDiff = lifetime.add(new QuickDiffService());
@@ -622,15 +569,7 @@ const clientHandler = host.registerClientHandler(async (raw, signal, source): Pr
 			});
 			return {
 				result: 'value',
-				value: await backend.handle(
-					source,
-					operation.capability,
-					operation.method,
-					operation.params,
-					0,
-					signal,
-					operation.progress,
-				),
+				value: await backend.handle(source, operation.capability, operation.method, operation.params, 0, signal, operation.progress),
 			};
 		case 'backendState':
 			startupStateReads++;
@@ -638,35 +577,22 @@ const clientHandler = host.registerClientHandler(async (raw, signal, source): Pr
 			signal.throwIfAborted();
 			return {
 				result: 'value',
-				value: await backend.handle(
-					source,
-					operation.capability,
-					undefined,
-					{},
-					operation.after,
-					signal,
-					undefined,
-					operation.waitForChange === true,
-				),
+				value: await backend.handle(source, operation.capability, undefined, {}, operation.after, signal, undefined, operation.waitForChange === true),
 			};
 		case 'editorOperation': {
 			requests.push(operation.payload);
 			const request = operation.payload as { method: string; uri?: string; text?: string };
-			if (request.method === 'hostFacts')
-				return { result: 'value', value: { canClone: true, canOpenWorkspace: true } };
+			if (request.method === 'hostFacts') return { result: 'value', value: { canClone: true, canOpenWorkspace: true } };
 			if (request.method === 'input') return { result: 'value', value: answers.shift() ?? null };
 			if (request.method === 'pickFolder') return { result: 'value', value: 'file:///downloads' };
 			if (request.method === 'openWorkspace') return { result: 'value', value: null };
 			if (request.method === 'openEditorResources') return { result: 'value', value: [] };
-			if (request.method === 'activeEditor')
-				return { result: 'value', value: { input: null, selection: null, version: null, contents: null } };
+			if (request.method === 'activeEditor') return { result: 'value', value: { input: null, selection: null, version: null, contents: null } };
 			if (request.method === 'setLineAnnotation') return { result: 'value', value: null };
 			if (request.method === 'readEditorDocument')
 				return {
 					result: 'value',
-					value: commitDocuments.has(request.uri as string)
-						? { text: commitDocuments.get(request.uri as string)!, dirty: true }
-						: null,
+					value: commitDocuments.has(request.uri as string) ? { text: commitDocuments.get(request.uri as string)!, dirty: true } : null,
 				};
 			if (request.method === 'openEditorDocument') {
 				commitDocuments.set(request.uri as string, request.text!);
@@ -836,12 +762,7 @@ const presentationIntegration = {
 			statusCommands: provider.statusBarCommands.map(command => command.id),
 		};
 	},
-	actions: () =>
-		scm
-			.getRepository('root')
-			?.provider.groups.flatMap(group =>
-				group.resources.flatMap(resource => resource.actions.map(action => action.id)),
-			),
+	actions: () => scm.getRepository('root')?.provider.groups.flatMap(group => group.resources.flatMap(resource => resource.actions.map(action => action.id))),
 	async decoration() {
 		return [...decorationProviders][0]!.provideDecorations(URI.file('/workspace/one.ts'), CancellationToken.None);
 	},
@@ -871,10 +792,7 @@ const startupIntegration = {
 		for (const entry of gitManifest.contributes.viewsWelcome) {
 			lifetime.add(
 				ViewsRegistry.registerViewWelcomeContent(entry.view, {
-					content: entry.contents.replace(
-						/%([^%]+)%/g,
-						(_, key) => (messages as Record<string, string>)[key] ?? key,
-					),
+					content: entry.contents.replace(/%([^%]+)%/g, (_, key) => (messages as Record<string, string>)[key] ?? key),
 					when: ContextKeyExpr.deserialize(entry.when),
 				}),
 			);
@@ -962,9 +880,7 @@ const statusbarIntegration = {
 			holdPrompt?: boolean;
 		},
 	) {
-		upstream = tracking
-			? { name: options?.upstream ?? 'origin/main', ahead: options?.ahead ?? 2, behind: 3 }
-			: null;
+		upstream = tracking ? { name: options?.upstream ?? 'origin/main', ahead: options?.ahead ?? 2, behind: 3 } : null;
 		pullAhead = options?.afterPullAhead;
 		upstreamReadOnly = options?.readOnly === true;
 		configuredRemotes = options?.remotes ?? ['origin'];
@@ -995,9 +911,7 @@ const statusbarIntegration = {
 	commandLabels: async () =>
 		(await host.list()).extensions
 			.find(extension => extension.id === 'ash.git')!
-			.registrations.flatMap(registration =>
-				registration.kind === 'command' ? [{ id: registration.command, title: registration.title }] : [],
-			),
+			.registrations.flatMap(registration => (registration.kind === 'command' ? [{ id: registration.command, title: registration.title }] : [])),
 };
 declare global {
 	interface Window {
@@ -1011,16 +925,11 @@ const gitSettingsIntegration = {
 	mount(language = 'en') {
 		const localized = language === 'zh-CN' ? gitChineseMessages : gitEnglishMessages;
 		const manifest = JSON.stringify(gitManifest, (_key, value) =>
-			typeof value === 'string'
-				? value.replace(/%([^%]+)%/g, (match, key) => (localized as Record<string, string>)[key] ?? match)
-				: value,
+			typeof value === 'string' ? value.replace(/%([^%]+)%/g, (match, key) => (localized as Record<string, string>)[key] ?? match) : value,
 		);
 		const registry = new ConfigurationRegistry();
 		registry.updateConfigurations({
-			add: [
-				...parseExtensionManifest(manifest, { id: 'ash.git', name: 'git', publisher: 'ash', version: '0.1.0' })
-					.contributes.configuration,
-			],
+			add: [...parseExtensionManifest(manifest, { id: 'ash.git', name: 'git', publisher: 'ash', version: '0.1.0' }).contributes.configuration],
 			remove: [],
 		});
 		const descriptor = new DefaultSettings(registry).get('git.rebaseWhenSync');
@@ -1271,9 +1180,7 @@ async function openEditor(): Promise<void> {
 			{},
 		),
 	);
-	reference = lifetime.add(
-		await models.acquire({ resource: URI.file('/snapshots/one.ts') }, new AbortController().signal),
-	);
+	reference = lifetime.add(await models.acquire({ resource: URI.file('/snapshots/one.ts') }, new AbortController().signal));
 	const original = lifetime.add(new TextModel('before\n'));
 	const computation = lifetime.add(editorServices.createInstance(DiffService).createComputationService());
 	comparison = lifetime.add(
@@ -1295,9 +1202,7 @@ async function openEditor(): Promise<void> {
 }
 const isolation = {
 	openSideVisible: (scheme: string) => {
-		const item = MenusRegistry.getMenuItems(MenuId.EditorTitle).find(
-			item => 'command' in item && item.command.id === 'workbench.action.compareEditor.openSide',
-		);
+		const item = MenusRegistry.getMenuItems(MenuId.EditorTitle).find(item => 'command' in item && item.command.id === 'workbench.action.compareEditor.openSide');
 		using context = new ContextKeyService();
 		context.setContext('activeEditor', 'stanza.editor.diff');
 		context.setContext('resourceScheme', scheme);
@@ -1313,15 +1218,11 @@ const isolation = {
 			id: extension.id,
 			incarnation: extension.incarnation,
 			lifecycle: extension.lifecycle,
-			commands: extension.registrations.flatMap(registration =>
-				registration.kind === 'command' ? [registration.command] : [],
-			),
+			commands: extension.registrations.flatMap(registration => (registration.kind === 'command' ? [registration.command] : [])),
 		})),
 	retiredRequest: async () => {
 		const previous = retiredGit!;
-		const registration = previous.registrations.find(
-			value => value.kind === 'command' && value.command === 'git.refresh',
-		)!;
+		const registration = previous.registrations.find(value => value.kind === 'command' && value.command === 'git.refresh')!;
 		const source = {
 			extensionId: previous.id,
 			activationGeneration: previous.activationGeneration,
@@ -1345,14 +1246,7 @@ const isolation = {
 			invocationError = String(error);
 		}
 		try {
-			await backend.handle(
-				source,
-				'git.repository',
-				'status',
-				{ repositoryId: 'root' },
-				0,
-				new AbortController().signal,
-			);
+			await backend.handle(source, 'git.repository', 'status', { repositoryId: 'root' }, 0, new AbortController().signal);
 		} catch (error) {
 			backendError = String(error);
 		}

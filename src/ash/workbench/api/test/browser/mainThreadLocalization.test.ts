@@ -61,16 +61,10 @@ suite('MainThreadLocalization', () => {
 			uri: uri.toString(),
 			...contents,
 		});
-		assert.deepEqual(
-			JSON.parse(
-				await service.localizeManifest(
-					'example.test',
-					'{"title":"%title%","nested":{"other":"%other%","missing":"%missing%"}}',
-					7,
-				),
-			),
-			{ title: '新版标题', nested: { other: 'Other', missing: '%missing%' } },
-		);
+		assert.deepEqual(JSON.parse(await service.localizeManifest('example.test', '{"title":"%title%","nested":{"other":"%other%","missing":"%missing%"}}', 7)), {
+			title: '新版标题',
+			nested: { other: 'Other', missing: '%missing%' },
+		});
 	});
 
 	test('damaged packs fall back to regional and base extension bundles', async () => {
@@ -86,20 +80,14 @@ suite('MainThreadLocalization', () => {
 		const localization = await service.getLocalization('example.test');
 		assert.deepEqual({ ...localization?.bundle }, { Hello: 'Bonjour' });
 		assert.equal(extensionResourceRequest(URI.parse(localization!.uri))?.path, 'l10n/bundle.l10n.fr.json');
-		assert.equal(
-			JSON.parse(await service.localizeManifest('example.test', '{"title":"%title%"}', 7)).title,
-			'Français',
-		);
+		assert.equal(JSON.parse(await service.localizeManifest('example.test', '{"title":"%title%"}', 7)).title, 'Français');
 	});
 
 	test('English uses original declarations and missing translations do not block activation', async () => {
 		setNlsMessages('en', {});
 		const service = create({ 'package.nls.json': '{"title":"English"}' });
 		assert.equal(await service.getLocalization('example.test'), undefined);
-		assert.equal(
-			JSON.parse(await service.localizeManifest('example.test', '{"title":"%title%"}', 7)).title,
-			'English',
-		);
+		assert.equal(JSON.parse(await service.localizeManifest('example.test', '{"title":"%title%"}', 7)).title, 'English');
 		setNlsMessages('de', {});
 		assert.equal(await service.getLocalization('example.test'), undefined);
 	});

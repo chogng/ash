@@ -2,11 +2,7 @@ import type { CancellationToken } from '../../../../base/common/cancellation.js'
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { derived, observableSignalFromEvent, type IReader } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
-import type {
-	IAutomationDescriptor,
-	IAutomationRun,
-	IAutomationSchedule,
-} from '../../../../workbench/contrib/chat/common/automations/automation.js';
+import type { IAutomationDescriptor, IAutomationRun, IAutomationSchedule } from '../../../../workbench/contrib/chat/common/automations/automation.js';
 import type {
 	AutomationCatalogueState,
 	IAutomationService,
@@ -30,9 +26,7 @@ export class ProviderAutomationService extends Disposable implements IAutomation
 		this.providersChanged = observableSignalFromEvent(this, providers.onDidChangeProviders);
 		const stores = (reader: IReader) => {
 			this.providersChanged.read(reader);
-			return providers
-				.getProviders()
-				.flatMap(provider => (provider.automations ? [{ provider, store: provider.automations }] : []));
+			return providers.getProviders().flatMap(provider => (provider.automations ? [{ provider, store: provider.automations }] : []));
 		};
 		this.automations = derived(reader =>
 			stores(reader)
@@ -46,23 +40,11 @@ export class ProviderAutomationService extends Disposable implements IAutomation
 		);
 		this.catalogueState = derived<AutomationCatalogueState>(reader => {
 			const states = stores(reader).map(({ store }) => store.catalogueState.read(reader));
-			return states.includes('error')
-				? 'error'
-				: states.includes('loading')
-					? 'loading'
-					: !states.length || states.includes('unavailable')
-						? 'unavailable'
-						: 'ready';
+			return states.includes('error') ? 'error' : states.includes('loading') ? 'loading' : !states.length || states.includes('unavailable') ? 'unavailable' : 'ready';
 		});
 		this.historyState = derived<AutomationCatalogueState>(reader => {
 			const states = stores(reader).map(({ store }) => store.historyState?.read(reader) ?? 'ready');
-			return states.includes('error')
-				? 'error'
-				: states.includes('loading')
-					? 'loading'
-					: !states.length || states.includes('unavailable')
-						? 'unavailable'
-						: 'ready';
+			return states.includes('error') ? 'error' : states.includes('loading') ? 'loading' : !states.length || states.includes('unavailable') ? 'unavailable' : 'ready';
 		});
 		this.availableProviders = derived(reader =>
 			stores(reader)
@@ -72,11 +54,7 @@ export class ProviderAutomationService extends Disposable implements IAutomation
 	}
 
 	async refresh(): Promise<void> {
-		await Promise.all(
-			this.providers
-				.getProviders()
-				.flatMap(provider => (provider.automations ? [provider.automations.refresh()] : [])),
-		);
+		await Promise.all(this.providers.getProviders().flatMap(provider => (provider.automations ? [provider.automations.refresh()] : [])));
 	}
 
 	canCreateAutomation(providerId: string | undefined): boolean {
@@ -141,19 +119,13 @@ export class ProviderAutomationService extends Disposable implements IAutomation
 
 	private storeFor(id: string): IAutomationStore {
 		const store = this.findStore(id);
-		if (!store)
-			throw new Error(
-				localize('automations.missing', 'This automation or run is unavailable on its owning provider.'),
-			);
+		if (!store) throw new Error(localize('automations.missing', 'This automation or run is unavailable on its owning provider.'));
 		return store;
 	}
 
 	private requireProvider(id: string): IAutomationStore {
 		const store = this.providers.getProvider(id)?.automations;
-		if (!store)
-			throw new Error(
-				localize('automations.hostUnavailable', 'Connect to the owning automation host and try again.'),
-			);
+		if (!store) throw new Error(localize('automations.hostUnavailable', 'Connect to the owning automation host and try again.'));
 		return store;
 	}
 }

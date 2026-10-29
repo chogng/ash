@@ -5,19 +5,9 @@ import iconManifest from '../media/icons.json' with { type: 'json' };
 import type { ImageEditorCompletion as ScreenshotCompletion } from '@ash/sdk';
 import type { ImageRectangle as IRectangle } from '../common/image.js';
 const SCREENSHOT_MAX_PIXELS = 16_777_216;
-const iconGlyphs = new Map(
-	iconManifest.glyphs.map(icon => [icon.id, String.fromCodePoint(parseInt(icon.unicode, 16))]),
-);
-type ScreenshotIcon =
-	ScreenshotTool | 'undo' | 'coordinates' | 'help' | 'retake' | 'cancel' | 'save' | 'copy' | 'attach' | 'entire';
-import {
-	clampScreenshotRectangle,
-	paintScreenshotAnnotation,
-	screenshotRectangle,
-	type ScreenshotAnnotation,
-	type ScreenshotPoint,
-	type ScreenshotTool,
-} from './screenshotEditorModel.js';
+const iconGlyphs = new Map(iconManifest.glyphs.map(icon => [icon.id, String.fromCodePoint(parseInt(icon.unicode, 16))]));
+type ScreenshotIcon = ScreenshotTool | 'undo' | 'coordinates' | 'help' | 'retake' | 'cancel' | 'save' | 'copy' | 'attach' | 'entire';
+import { clampScreenshotRectangle, paintScreenshotAnnotation, screenshotRectangle, type ScreenshotAnnotation, type ScreenshotPoint, type ScreenshotTool } from './screenshotEditorModel.js';
 
 interface ScreenshotEditorOptions {
 	readonly defaultAction: 'copy' | 'attach';
@@ -114,13 +104,7 @@ export class ScreenshotEditor extends Disposable {
 		this.toolbar.setAttribute('role', 'group');
 		this.toolbar.setAttribute('aria-label', localize('screenshot.tools', 'Screenshot tools'));
 		this.toolbar.hidden = true;
-		const button = (
-			parent: HTMLElement,
-			label: string,
-			icon: ScreenshotIcon,
-			run: () => void,
-			primary = false,
-		): HTMLButtonElement => {
+		const button = (parent: HTMLElement, label: string, icon: ScreenshotIcon, run: () => void, primary = false): HTMLButtonElement => {
 			const element = node('button', 'ash-screenshot-icon-button');
 			element.type = 'button';
 			element.setAttribute('aria-label', label);
@@ -178,9 +162,7 @@ export class ScreenshotEditor extends Disposable {
 			this.positionToolbar();
 			if (!this.fields.hidden) this.inputs.get('x')!.focus();
 		});
-		button(actions, localize('screenshot.helpTitle', 'Screenshot Help'), 'help', () =>
-			this.showAccessibleContent(false),
-		);
+		button(actions, localize('screenshot.helpTitle', 'Screenshot Help'), 'help', () => this.showAccessibleContent(false));
 		button(actions, localize('screenshot.retake', 'Retake'), 'retake', () => {
 			void this.complete({ kind: 'retake' });
 		});
@@ -228,8 +210,7 @@ export class ScreenshotEditor extends Disposable {
 			this._register(
 				addDisposableListener(input, 'change', () => {
 					if (!this.region) return;
-					if (Number.isFinite(input.valueAsNumber))
-						this.setRegion({ ...this.region, [key]: input.valueAsNumber });
+					if (Number.isFinite(input.valueAsNumber)) this.setRegion({ ...this.region, [key]: input.valueAsNumber });
 					this.render();
 					this.announce();
 				}),
@@ -239,9 +220,7 @@ export class ScreenshotEditor extends Disposable {
 		const hint = node('div', 'ash-screenshot-instructions');
 		hint.textContent = localize('screenshot.instructions', 'Drag to capture a region · Esc to cancel');
 		button(hint, localize('screenshot.entire', 'Entire screen'), 'entire', () => this.selectEntire());
-		button(hint, localize('screenshot.helpTitle', 'Screenshot Help'), 'help', () =>
-			this.showAccessibleContent(false),
-		);
+		button(hint, localize('screenshot.helpTitle', 'Screenshot Help'), 'help', () => this.showAccessibleContent(false));
 		button(hint, localize('screenshot.cancel', 'Cancel'), 'cancel', () => {
 			void this.complete({ kind: 'cancel' });
 		});
@@ -255,15 +234,7 @@ export class ScreenshotEditor extends Disposable {
 		this.status.setAttribute('role', 'status');
 		this.status.setAttribute('aria-live', 'polite');
 		this.help = node('dialog', 'ash-screenshot-help');
-		this.element.append(
-			this.imageArea,
-			hint,
-			this.dimensions,
-			this.toolbar,
-			this.textInput,
-			this.status,
-			this.help,
-		);
+		this.element.append(this.imageArea, hint, this.dimensions, this.toolbar, this.textInput, this.status, this.help);
 		document.body.append(this.element);
 		this._register(
 			toDisposable(() => {
@@ -315,18 +286,10 @@ export class ScreenshotEditor extends Disposable {
 		this.element.showModal();
 		this.imageArea.focus();
 		this.render();
-		if (options.accessibilityHints)
-			this.status.textContent = localize(
-				'screenshot.hint',
-				'Screen capture. Drag to select a region, or choose Entire screen. Press Alt+F1 for help.',
-			);
+		if (options.accessibilityHints) this.status.textContent = localize('screenshot.hint', 'Screen capture. Drag to select a region, or choose Entire screen. Press Alt+F1 for help.');
 	}
 
-	static async create(
-		document: Document,
-		image: Uint8Array,
-		options: ScreenshotEditorOptions,
-	): Promise<ScreenshotEditor> {
+	static async create(document: Document, image: Uint8Array, options: ScreenshotEditorOptions): Promise<ScreenshotEditor> {
 		const bitmap = await createImageBitmap(new Blob([new Uint8Array(image)], { type: 'image/png' }));
 		if (!bitmap.width || !bitmap.height || bitmap.width * bitmap.height > SCREENSHOT_MAX_PIXELS) {
 			bitmap.close();
@@ -354,20 +317,8 @@ export class ScreenshotEditor extends Disposable {
 	private point(event: PointerEvent): ScreenshotPoint {
 		const bounds = this.canvas.getBoundingClientRect();
 		return {
-			x: Math.max(
-				0,
-				Math.min(
-					this.bitmap.width,
-					Math.round(((event.clientX - bounds.left) * this.bitmap.width) / bounds.width),
-				),
-			),
-			y: Math.max(
-				0,
-				Math.min(
-					this.bitmap.height,
-					Math.round(((event.clientY - bounds.top) * this.bitmap.height) / bounds.height),
-				),
-			),
+			x: Math.max(0, Math.min(this.bitmap.width, Math.round(((event.clientX - bounds.left) * this.bitmap.width) / bounds.width))),
+			y: Math.max(0, Math.min(this.bitmap.height, Math.round(((event.clientY - bounds.top) * this.bitmap.height) / bounds.height))),
 		};
 	}
 
@@ -376,12 +327,7 @@ export class ScreenshotEditor extends Disposable {
 		event.preventDefault();
 		this.commitText();
 		const start = this.point(event);
-		const inside =
-			this.region &&
-			start.x >= this.region.x &&
-			start.y >= this.region.y &&
-			start.x <= this.region.x + this.region.width &&
-			start.y <= this.region.y + this.region.height;
+		const inside = this.region && start.x >= this.region.x && start.y >= this.region.y && start.x <= this.region.x + this.region.width && start.y <= this.region.y + this.region.height;
 		if (this.tool === 'text' && inside) {
 			this.textPoint = start;
 			const bounds = this.canvas.getBoundingClientRect();
@@ -396,8 +342,7 @@ export class ScreenshotEditor extends Disposable {
 			this.textInput.focus();
 			return;
 		}
-		const handle =
-			(event.target as HTMLElement).dataset.handle ?? (inside && this.tool === 'select' ? 'move' : 'new');
+		const handle = (event.target as HTMLElement).dataset.handle ?? (inside && this.tool === 'select' ? 'move' : 'new');
 		this.drag = { id: event.pointerId, start, rect: this.region, handle, points: [start] };
 		if (this.tool === 'select' || !inside) {
 			if (handle === 'new') {
@@ -473,8 +418,7 @@ export class ScreenshotEditor extends Disposable {
 
 	private commitText(): void {
 		if (!this.textPoint) return;
-		if (this.textInput.value.trim())
-			this.annotations.push({ ...this.annotation([this.textPoint], this.textInput.value), tool: 'text' });
+		if (this.textInput.value.trim()) this.annotations.push({ ...this.annotation([this.textPoint], this.textInput.value), tool: 'text' });
 		this.textPoint = undefined;
 		this.textInput.hidden = true;
 		this.paint();
@@ -529,8 +473,7 @@ export class ScreenshotEditor extends Disposable {
 		event.stopImmediatePropagation();
 		const horizontal = event.key === 'ArrowLeft' || event.key === 'ArrowRight';
 		const key = event.shiftKey ? (horizontal ? 'width' : 'height') : horizontal ? 'x' : 'y';
-		const delta =
-			(event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1) * (event.ctrlKey || event.metaKey ? 10 : 1);
+		const delta = (event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1) * (event.ctrlKey || event.metaKey ? 10 : 1);
 		this.setRegion({ ...this.region, [key]: this.region[key] + delta });
 		this.announce();
 	}
@@ -543,8 +486,7 @@ export class ScreenshotEditor extends Disposable {
 	private paint(): void {
 		this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
 		this.context.drawImage(this.bitmap, 0, 0);
-		for (const annotation of [...this.annotations, ...(this.pendingAnnotation ? [this.pendingAnnotation] : [])])
-			paintScreenshotAnnotation(this.context, annotation);
+		for (const annotation of [...this.annotations, ...(this.pendingAnnotation ? [this.pendingAnnotation] : [])]) paintScreenshotAnnotation(this.context, annotation);
 	}
 
 	private render(): void {
@@ -594,15 +536,7 @@ export class ScreenshotEditor extends Disposable {
 		for (const [key, input] of this.inputs) {
 			input.value = String(this.region[key]);
 			input.min = key === 'x' || key === 'y' ? '0' : '1';
-			input.max = String(
-				key === 'x'
-					? this.bitmap.width - 1
-					: key === 'y'
-						? this.bitmap.height - 1
-						: key === 'width'
-							? this.bitmap.width - x
-							: this.bitmap.height - y,
-			);
+			input.max = String(key === 'x' ? this.bitmap.width - 1 : key === 'y' ? this.bitmap.height - 1 : key === 'width' ? this.bitmap.width - x : this.bitmap.height - y);
 		}
 		this.positionToolbar();
 	}
@@ -611,21 +545,9 @@ export class ScreenshotEditor extends Disposable {
 		if (!this.region) return;
 		const bounds = this.selection.getBoundingClientRect();
 		const { innerWidth, innerHeight } = this.document.defaultView!;
-		const left = Math.max(
-			8,
-			Math.min(innerWidth - this.toolbar.offsetWidth - 8, bounds.right - this.toolbar.offsetWidth),
-		);
+		const left = Math.max(8, Math.min(innerWidth - this.toolbar.offsetWidth - 8, bounds.right - this.toolbar.offsetWidth));
 		const below = bounds.bottom + 12;
-		const top =
-			below + this.toolbar.offsetHeight <= innerHeight - 8
-				? below
-				: Math.max(
-						8,
-						Math.min(
-							innerHeight - this.toolbar.offsetHeight - 8,
-							bounds.top - this.toolbar.offsetHeight - 12,
-						),
-					);
+		const top = below + this.toolbar.offsetHeight <= innerHeight - 8 ? below : Math.max(8, Math.min(innerHeight - this.toolbar.offsetHeight - 8, bounds.top - this.toolbar.offsetHeight - 12));
 		Object.assign(this.toolbar.style, { left: `${left}px`, top: `${top}px` });
 	}
 
@@ -640,10 +562,7 @@ export class ScreenshotEditor extends Disposable {
 					this.region.height,
 					this.annotations.length,
 				)
-			: localize(
-					'screenshot.noSelection',
-					'No region selected. Drag to select a region or choose Entire screen.',
-				);
+			: localize('screenshot.noSelection', 'No region selected. Drag to select a region or choose Entire screen.');
 	}
 
 	private announce(): void {
@@ -654,15 +573,11 @@ export class ScreenshotEditor extends Disposable {
 		const focused = this.document.activeElement as HTMLElement;
 		this.help.replaceChildren();
 		const heading = this.document.createElement('h2');
-		heading.textContent = summary
-			? localize('screenshot.summary', 'Screenshot selection')
-			: localize('screenshot.helpTitle', 'Screenshot Help');
+		heading.textContent = summary ? localize('screenshot.summary', 'Screenshot selection') : localize('screenshot.helpTitle', 'Screenshot Help');
 		this.help.setAttribute('aria-label', heading.textContent);
 		const content = this.document.createElement('textarea');
 		content.readOnly = true;
-		content.value =
-			(summary ? this.describe() : this.options.help) +
-			(this.options.description ? '\n' + this.options.description : '');
+		content.value = (summary ? this.describe() : this.options.help) + (this.options.description ? '\n' + this.options.description : '');
 		content.setAttribute('aria-label', heading.textContent);
 		const close = this.document.createElement('button');
 		close.textContent = localize('screenshot.closeHelp', 'Close help');
@@ -704,8 +619,7 @@ export class ScreenshotEditor extends Disposable {
 		try {
 			if (await this.options.complete(result)) this.dispose();
 		} catch (error) {
-			if (!this.isDisposed)
-				this.status.textContent = localize('screenshot.failed', 'Screenshot action failed: {0}', String(error));
+			if (!this.isDisposed) this.status.textContent = localize('screenshot.failed', 'Screenshot action failed: {0}', String(error));
 		} finally {
 			this.busy = false;
 			if (!this.isDisposed) {

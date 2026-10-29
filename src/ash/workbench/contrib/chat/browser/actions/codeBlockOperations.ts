@@ -22,15 +22,8 @@ export class InsertCodeBlockOperation {
 				.listDiffEditors()
 				.find(candidate => candidate === control)
 				?.getModifiedEditor();
-		if (!editor || !input)
-			throw new Error(
-				localize(
-					'chat.code.noEditor',
-					'Open a file editor and place the cursor where the code should be inserted.',
-				),
-			);
-		if (input.readOnly || editor.getOption(EditorOption.readOnly))
-			throw new Error(localize('chat.code.readOnly', 'The active file editor is read-only.'));
+		if (!editor || !input) throw new Error(localize('chat.code.noEditor', 'Open a file editor and place the cursor where the code should be inserted.'));
+		if (input.readOnly || editor.getOption(EditorOption.readOnly)) throw new Error(localize('chat.code.readOnly', 'The active file editor is read-only.'));
 		const selections = editor.getSelections();
 		if (!selections?.length || !context.code) return;
 		editor.pushUndoStop();

@@ -27,17 +27,8 @@ import {
 	type SemanticTokenModelSource,
 	type SemanticTokenSource,
 } from '../../tokens/languageTokens.js';
-import {
-	BackgroundTokenizationState,
-	type ITokenizationTextModelPart,
-	SynchronousTokenizationUnavailableError,
-} from '../../tokenizationTextModelPart.js';
-import {
-	LanguageTokenLineIndex,
-	StyledTokenSource,
-	overlayTokenSources,
-	type LanguageTokenLine,
-} from '../../tokens/languageTokenLineIndex.js';
+import { BackgroundTokenizationState, type ITokenizationTextModelPart, SynchronousTokenizationUnavailableError } from '../../tokenizationTextModelPart.js';
+import { LanguageTokenLineIndex, StyledTokenSource, overlayTokenSources, type LanguageTokenLine } from '../../tokens/languageTokenLineIndex.js';
 import { LineTokens } from '../../tokens/lineTokens.js';
 import { type SparseMultilineTokens } from '../../tokens/sparseMultilineTokens.js';
 import { SparseTokensStore } from '../../tokens/sparseTokensStore.js';
@@ -53,16 +44,11 @@ import { raceCancellationError } from '../../../../base/common/async.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 
 export type { TextModelTokenizationOptions as TokenizationTextModelPartOptions } from '../../tokenizationTextModelPart.js';
-import type {
-	TextModelTokenizationOptions as TokenizationTextModelPartOptions,
-	ISyntaxTreeTextModelPart,
-} from '../../tokenizationTextModelPart.js';
+import type { TextModelTokenizationOptions as TokenizationTextModelPartOptions, ISyntaxTreeTextModelPart } from '../../tokenizationTextModelPart.js';
 
 /** Owns syntax requests and their line-token index for exactly one TextModel. */
 export class TokenizationTextModelPart extends Disposable implements ITokenizationTextModelPart {
-	private readonly changeEmitter = this._register(
-		new Emitter<readonly { fromLineNumber: number; toLineNumber: number }[] | undefined>(),
-	);
+	private readonly changeEmitter = this._register(new Emitter<readonly { fromLineNumber: number; toLineNumber: number }[] | undefined>());
 	private readonly errorEmitter = this._register(new Emitter<unknown>());
 	private readonly languageIdCodec: ILanguageIdCodec;
 	private readonly syntaxProviderRegistry: SyntaxProviderRegistry;
@@ -70,15 +56,12 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	private readonly semanticTokensStore: SparseTokensStore;
 	private readonly hasWorkerProvider: boolean;
 	private readonly lineBackendListeners = this._register(new DisposableStore());
-	private readonly lineBackend = this._register(
-		new MutableDisposable<TokenizerSyntaxTokenBackend | ISyntaxTreeTextModelPart>(),
-	);
+	private readonly lineBackend = this._register(new MutableDisposable<TokenizerSyntaxTokenBackend | ISyntaxTreeTextModelPart>());
 	private visibleLines: readonly { startLineNumber: number; endLineNumber: number }[] = [];
 	private requestGeneration = 0;
 	private pendingAnalysis: Promise<void> = Promise.resolve();
 
-	readonly onDidChange: Event<readonly { fromLineNumber: number; toLineNumber: number }[] | undefined> =
-		this.changeEmitter.event;
+	readonly onDidChange: Event<readonly { fromLineNumber: number; toLineNumber: number }[] | undefined> = this.changeEmitter.event;
 	readonly onDidEncounterError: Event<unknown> = this.errorEmitter.event;
 	private readonly tokenStore: ReturnType<typeof createLanguageTokenStore>;
 	private readonly coordinator: LanguageRequestCoordinator<SyntaxLane, SyntaxRequest, SyntaxResult>;
@@ -102,22 +85,11 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 			(options.createSyntaxSession
 				? model => {
 						const source = options.createSyntaxSession!(model);
-						return source
-							? new TreeSitterSyntaxTokenBackend(
-									model,
-									source.session,
-									source.resolveStyle,
-									source.measure,
-								)
-							: undefined;
+						return source ? new TreeSitterSyntaxTokenBackend(model, source.session, source.resolveStyle, source.measure) : undefined;
 					}
 				: undefined);
 		this.tokenStore = this._register(createLanguageTokenStore(textModel));
-		this.coordinator = this._register(
-			new LanguageRequestCoordinator(textModel, () =>
-				createSyntaxWorker(this.syntaxProviderRegistry, options.syntaxService ?? {}, this.languageIdCodec),
-			),
-		);
+		this.coordinator = this._register(new LanguageRequestCoordinator(textModel, () => createSyntaxWorker(this.syntaxProviderRegistry, options.syntaxService ?? {}, this.languageIdCodec)));
 		this.languageTokenLineIndex = this._register(new LanguageTokenLineIndex(this.tokenStore));
 		const tokenization = this;
 		this.languageTokens = Object.freeze({
@@ -132,15 +104,10 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 			getLineTokens: (lineIndex: number) => tokenization.getLanguageTokens(lineIndex),
 		});
 		this.semanticTokensStore = new SparseTokensStore(this.languageIdCodec);
-		this.semanticTokens = options.documentSemanticTokensProvider
-			? this._register(new SemanticTokensTextModelPart(textModel, options.documentSemanticTokensProvider))
-			: undefined;
-		if (this.semanticTokens)
-			this._register(this.semanticTokens.onDidEncounterError(error => this.errorEmitter.fire(error)));
+		this.semanticTokens = options.documentSemanticTokensProvider ? this._register(new SemanticTokensTextModelPart(textModel, options.documentSemanticTokensProvider)) : undefined;
+		if (this.semanticTokens) this._register(this.semanticTokens.onDidEncounterError(error => this.errorEmitter.fire(error)));
 		const lexicalSource = this._register(new StyledTokenSource(this.languageTokens));
-		this.renderedTokens = this.semanticTokens
-			? overlayTokenSources(lexicalSource, this._register(new StyledTokenSource(this.semanticTokens, 'semantic')))
-			: lexicalSource;
+		this.renderedTokens = this.semanticTokens ? overlayTokenSources(lexicalSource, this._register(new StyledTokenSource(this.semanticTokens, 'semantic'))) : lexicalSource;
 		this._register(
 			this.languageTokenLineIndex.onDidChange(() => {
 				if (!this.lineBackend.value) this.changeEmitter.fire(undefined);
@@ -151,13 +118,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 				if (!change.isEolChange) {
 					for (const contentChange of change.changes) {
 						const [eolCount, firstLineLength, lastLineLength] = countEOL(contentChange.text);
-						this.semanticTokensStore.acceptEdit(
-							contentChange.range,
-							eolCount,
-							firstLineLength,
-							lastLineLength,
-							contentChange.text.length > 0 ? contentChange.text.charCodeAt(0) : 0,
-						);
+						this.semanticTokensStore.acceptEdit(contentChange.range, eolCount, firstLineLength, lastLineLength, contentChange.text.length > 0 ? contentChange.text.charCodeAt(0) : 0);
 					}
 				}
 				this.scheduleAnalysis();
@@ -231,10 +192,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	}
 
 	getLanguageTokens(lineIndex: number): readonly LanguageToken[] {
-		return (
-			this.lineBackend.value?.getLanguageTokens(lineIndex + 1) ??
-			this.languageTokenLineIndex.getLineTokens(lineIndex)
-		);
+		return this.lineBackend.value?.getLanguageTokens(lineIndex + 1) ?? this.languageTokenLineIndex.getLineTokens(lineIndex);
 	}
 
 	get hasTokens(): boolean {
@@ -316,9 +274,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 		this.validateLineNumber(lineNumber);
 		return (
 			this.lineBackend.value?.hasAccurateTokensForLine(lineNumber) ??
-			(!this.hasTokenProvider() ||
-				(this.languageTokenLineIndex.modelVersion === this.textModel.version &&
-					this.languageTokenLineIndex.requestId !== undefined))
+			(!this.hasTokenProvider() || (this.languageTokenLineIndex.modelVersion === this.textModel.version && this.languageTokenLineIndex.requestId !== undefined))
 		);
 	}
 
@@ -329,25 +285,17 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	getLineTokens(lineNumber: number): LineTokens {
 		this.validateLineNumber(lineNumber);
 		const lineContent = this.textModel.getLineContent(lineNumber);
-		const syntacticTokens = createLineTokens(
-			lineContent,
-			this.getLanguageTokens(lineNumber - 1),
-			this.textModel.getLanguageId(),
-			this.languageIdCodec,
-		);
+		const syntacticTokens = createLineTokens(lineContent, this.getLanguageTokens(lineNumber - 1), this.textModel.getLanguageId(), this.languageIdCodec);
 		return this.semanticTokensStore.addSparseTokens(lineNumber, syntacticTokens);
 	}
 
 	getTokenTypeIfInsertingCharacter(lineNumber: number, column: number, character: string): StandardTokenType {
 		const position = this.textModel.validatePosition(new Position(lineNumber, column));
-		if (typeof character !== 'string' || character.length === 0)
-			throw new TypeError('Tokenization insertion character must be non-empty text');
+		if (typeof character !== 'string' || character.length === 0) throw new TypeError('Tokenization insertion character must be non-empty text');
 		if (!this.hasTokenProvider()) return StandardTokenType.Other;
 		if (this.lineBackend.value) {
 			const line = this.textModel.getLineContent(position.lineNumber);
-			const tokens = this.tokenizeLinesAt(position.lineNumber, [
-				line.slice(0, position.column - 1) + character + line.slice(position.column - 1),
-			])![0]!;
+			const tokens = this.tokenizeLinesAt(position.lineNumber, [line.slice(0, position.column - 1) + character + line.slice(position.column - 1)])![0]!;
 			return tokens.getStandardTokenType(tokens.findTokenIndexAtOffset(position.column - 1));
 		}
 		this.forceTokenization(position.lineNumber);
@@ -356,23 +304,12 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 
 	tokenizeLinesAt(lineNumber: number, lines: string[]): LineTokens[] | null {
 		this.validateLineNumber(lineNumber);
-		if (!Array.isArray(lines) || lines.some(line => typeof line !== 'string'))
-			throw new TypeError('Tokenization lines must be strings');
+		if (!Array.isArray(lines) || lines.some(line => typeof line !== 'string')) throw new TypeError('Tokenization lines must be strings');
 		const backend = this.lineBackend.value;
-		return backend
-			? backend
-					.tokenizeLinesAt(lineNumber, lines)
-					.map((tokens, index) =>
-						createLineTokens(lines[index]!, tokens, this.textModel.getLanguageId(), this.languageIdCodec),
-					)
-			: null;
+		return backend ? backend.tokenizeLinesAt(lineNumber, lines).map((tokens, index) => createLineTokens(lines[index]!, tokens, this.textModel.getLanguageId(), this.languageIdCodec)) : null;
 	}
 
-	async tokenizeLinesAtAsync(
-		lineNumber: number,
-		lines: readonly string[],
-		signal: AbortSignal,
-	): Promise<LineTokens[] | null> {
+	async tokenizeLinesAtAsync(lineNumber: number, lines: readonly string[], signal: AbortSignal): Promise<LineTokens[] | null> {
 		this.validateLineNumber(lineNumber);
 		const languageId = this.textModel.getLanguageId();
 		const payload = { languageId, tokenize: { lineNumber, lines: [...lines] } };
@@ -380,9 +317,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 		if (!this.hasTokenProvider() || signal.aborted) return null;
 		if (this.lineBackend.value && 'getFacts' in this.lineBackend.value) {
 			const tokens = await this.lineBackend.value.tokenizeLinesAtAsync(lineNumber, lines, signal);
-			return tokens.map((value, index) =>
-				createLineTokens(lines[index]!, value, languageId, this.languageIdCodec),
-			);
+			return tokens.map((value, index) => createLineTokens(lines[index]!, value, languageId, this.languageIdCodec));
 		}
 		if (this.lineBackend.value) return this.tokenizeLinesAt(lineNumber, [...lines]);
 		const text = lines.join('\n');
@@ -392,8 +327,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 			SYNTAX_TOKENIZE_LANE,
 			payload,
 			response => {
-				if (response.value.lane !== SYNTAX_TOKENIZE_LANE)
-					throw new TypeError('Hypothetical tokenization returned a different lane');
+				if (response.value.lane !== SYNTAX_TOKENIZE_LANE) throw new TypeError('Hypothetical tokenization returned a different lane');
 				if (response.value.value === null || generation !== this.requestGeneration) return;
 				const tokens = createLanguageTokenSnapshotNormalizer({
 					version: response.modelVersion,
@@ -408,9 +342,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 					group.push(token);
 					byLine.set(token.range.startLineNumber, group);
 				}
-				result = payload.tokenize.lines.map((line, index) =>
-					createLineTokens(line, byLine.get(index + 1) ?? [], languageId, this.languageIdCodec),
-				);
+				result = payload.tokenize.lines.map((line, index) => createLineTokens(line, byLine.get(index + 1) ?? [], languageId, this.languageIdCodec));
 			},
 			{ signal },
 		);
@@ -432,11 +364,8 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	}
 
 	get backgroundTokenizationState(): BackgroundTokenizationState {
-		if (this.lineBackend.value && 'getFacts' in this.lineBackend.value)
-			return this.lineBackend.value.backgroundTokenizationState;
-		return this.hasAccurateTokensForLine(this.textModel.getLineCount())
-			? BackgroundTokenizationState.Completed
-			: BackgroundTokenizationState.InProgress;
+		if (this.lineBackend.value && 'getFacts' in this.lineBackend.value) return this.lineBackend.value.backgroundTokenizationState;
+		return this.hasAccurateTokensForLine(this.textModel.getLineCount()) ? BackgroundTokenizationState.Completed : BackgroundTokenizationState.InProgress;
 	}
 
 	setVisibleLines(ranges: readonly { startLineNumber: number; endLineNumber: number }[]): void {
@@ -475,11 +404,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	private scheduleAnalysis(): void {
 		const generation = ++this.requestGeneration;
 		const languageId = this.textModel.getLanguageId();
-		if (
-			!this.lineBackend.value &&
-			this.createSyntaxTokenBackend &&
-			!this.textModel.largeFile.tooLargeForTokenization
-		) {
+		if (!this.lineBackend.value && this.createSyntaxTokenBackend && !this.textModel.largeFile.tooLargeForTokenization) {
 			const backend = this.createSyntaxTokenBackend(this.textModel);
 			if (backend) {
 				this.lineBackend.value = backend;
@@ -499,11 +424,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 		const support = TokenizationRegistry.get(languageId);
 		if (support) {
 			if (!this.lineBackend.value) {
-				const backend = (this.lineBackend.value = new TokenizerSyntaxTokenBackend(
-					this.textModel,
-					support,
-					this.languageIdCodec,
-				));
+				const backend = (this.lineBackend.value = new TokenizerSyntaxTokenBackend(this.textModel, support, this.languageIdCodec));
 				this.lineBackendListeners.clear();
 				this.lineBackendListeners.add(backend.onDidChangeTokens(ranges => this.changeEmitter.fire(ranges)));
 				this.lineBackendListeners.add(backend.onDidEncounterError(error => this.errorEmitter.fire(error)));
@@ -521,8 +442,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	}
 
 	private async requestAnalysis(generation: number, languageId: string): Promise<void> {
-		if (this.isDisposed || generation !== this.requestGeneration || languageId !== this.textModel.getLanguageId())
-			return;
+		if (this.isDisposed || generation !== this.requestGeneration || languageId !== this.textModel.getLanguageId()) return;
 		if (!TokenizationRegistry.isResolved(languageId)) {
 			const support = await TokenizationRegistry.getOrCreate(languageId);
 			if (this.isDisposed || generation !== this.requestGeneration) return;
@@ -547,43 +467,23 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	}
 }
 
-function createLineTokens(
-	lineContent: string,
-	tokens: readonly LanguageToken[],
-	topLevelLanguageId: string,
-	codec: ILanguageIdCodec,
-): LineTokens {
+function createLineTokens(lineContent: string, tokens: readonly LanguageToken[], topLevelLanguageId: string, codec: ILanguageIdCodec): LineTokens {
 	const data: { text: string; metadata: number }[] = [];
 	let offset = 0;
 	for (const token of tokens) {
 		const startOffset = token.range.startColumn - 1;
 		const endOffset = token.range.endColumn - 1;
-		if (startOffset > offset)
-			appendToken(
-				data,
-				lineContent.slice(offset, startOffset),
-				metadata(topLevelLanguageId, StandardTokenType.Other, true, codec),
-			);
+		if (startOffset > offset) appendToken(data, lineContent.slice(offset, startOffset), metadata(topLevelLanguageId, StandardTokenType.Other, true, codec));
 		const standardType = toStandardTokenType(token.tokenType);
 		appendToken(
 			data,
 			lineContent.slice(startOffset, endOffset),
-			metadata(
-				token.languageId ?? topLevelLanguageId,
-				standardType,
-				token.balancedBrackets !== false && standardType === StandardTokenType.Other,
-				codec,
-				token.presentation,
-			),
+			metadata(token.languageId ?? topLevelLanguageId, standardType, token.balancedBrackets !== false && standardType === StandardTokenType.Other, codec, token.presentation),
 		);
 		offset = endOffset;
 	}
 	if (offset < lineContent.length || data.length === 0) {
-		appendToken(
-			data,
-			lineContent.slice(offset),
-			metadata(topLevelLanguageId, StandardTokenType.Other, true, codec),
-		);
+		appendToken(data, lineContent.slice(offset), metadata(topLevelLanguageId, StandardTokenType.Other, true, codec));
 	}
 	return LineTokens.createFromTextAndMetadata(data, codec);
 }
@@ -597,13 +497,7 @@ function appendToken(target: { text: string; metadata: number }[], text: string,
 	target.push({ text, metadata: tokenMetadata });
 }
 
-function metadata(
-	languageId: string,
-	tokenType: StandardTokenType,
-	balancedBrackets: boolean,
-	codec: ILanguageIdCodec,
-	presentation?: LanguageToken['presentation'],
-): number {
+function metadata(languageId: string, tokenType: StandardTokenType, balancedBrackets: boolean, codec: ILanguageIdCodec, presentation?: LanguageToken['presentation']): number {
 	let foreground: number = ColorId.DefaultForeground;
 	let background: number = ColorId.DefaultBackground;
 	let fontStyle = FontStyle.None;
@@ -611,10 +505,8 @@ function metadata(
 		const colors = TokenizationRegistry.getColorMap();
 		const foregroundColor = presentation.foreground ? Color.fromHex(presentation.foreground) : undefined;
 		const backgroundColor = presentation.background ? Color.fromHex(presentation.background) : undefined;
-		const foregroundId =
-			foregroundColor && colors?.findIndex((color, index) => index > 0 && color.equals(foregroundColor));
-		const backgroundId =
-			backgroundColor && colors?.findIndex((color, index) => index > 0 && color.equals(backgroundColor));
+		const foregroundId = foregroundColor && colors?.findIndex((color, index) => index > 0 && color.equals(foregroundColor));
+		const backgroundId = backgroundColor && colors?.findIndex((color, index) => index > 0 && color.equals(backgroundColor));
 		if (foregroundId !== undefined && foregroundId > 0) foreground = foregroundId;
 		if (backgroundId !== undefined && backgroundId > 0) background = backgroundId;
 		for (const style of presentation.fontStyle ?? []) {
@@ -646,10 +538,7 @@ function metadata(
 }
 
 function isCancellation(error: unknown): boolean {
-	return (
-		error instanceof Error &&
-		(error.name === 'AbortError' || error.name === 'Canceled' || error.name === 'CancellationError')
-	);
+	return error instanceof Error && (error.name === 'AbortError' || error.name === 'Canceled' || error.name === 'CancellationError');
 }
 
 class ModelLanguageIdCodec implements ILanguageIdCodec {
@@ -660,8 +549,7 @@ class ModelLanguageIdCodec implements ILanguageIdCodec {
 		const current = this.ids.get(languageId);
 		if (current !== undefined) return current;
 		const next = this.ids.size + 1;
-		if (next > MetadataConsts.LANGUAGEID_MASK)
-			throw new RangeError('TextModel tokenization exhausted encoded language IDs');
+		if (next > MetadataConsts.LANGUAGEID_MASK) throw new RangeError('TextModel tokenization exhausted encoded language IDs');
 		const encoded = next as LanguageId;
 		this.ids.set(languageId, encoded);
 		this.languages.set(encoded, languageId);

@@ -9,11 +9,7 @@ export interface WindowSize {
 	readonly height: number;
 }
 
-const FORBIDDEN_WORKBENCH_CONSOLE_ERRORS = [
-	'[runtime]',
-	'App Server language document synchronization failed',
-	'Declarative extension refresh failed',
-] as const;
+const FORBIDDEN_WORKBENCH_CONSOLE_ERRORS = ['[runtime]', 'App Server language document synchronization failed', 'Declarative extension refresh failed'] as const;
 
 /** Captures startup and subsequent window errors for one application generation. */
 export class WorkbenchDiagnostics extends Disposable {
@@ -43,12 +39,7 @@ export class WorkbenchDiagnostics extends Disposable {
 	}
 
 	public get errors(): readonly string[] {
-		return [
-			...this.pageErrors,
-			...this.consoleErrors.filter(message =>
-				FORBIDDEN_WORKBENCH_CONSOLE_ERRORS.some(prefix => message.startsWith(prefix)),
-			),
-		];
+		return [...this.pageErrors, ...this.consoleErrors.filter(message => FORBIDDEN_WORKBENCH_CONSOLE_ERRORS.some(prefix => message.startsWith(prefix)))];
 	}
 }
 
@@ -66,10 +57,7 @@ export class PlaywrightDriver {
 
 	async setWindowSize(size: WindowSize): Promise<WindowSize> {
 		await this.currentPage.setViewportSize(size);
-		await this.currentPage.waitForFunction(
-			requestedSize => window.innerWidth === requestedSize.width && window.innerHeight === requestedSize.height,
-			size,
-		);
+		await this.currentPage.waitForFunction(requestedSize => window.innerWidth === requestedSize.width && window.innerHeight === requestedSize.height, size);
 		await this.workbench.waitForUiIdle();
 		return size;
 	}

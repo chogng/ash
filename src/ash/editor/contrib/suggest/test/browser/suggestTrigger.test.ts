@@ -66,12 +66,7 @@ test('A registered trigger character requests after the text transaction', async
 	assert.equal(fixture.model.getText(), 'obj.');
 	assert.equal(requests.length, 1);
 	assert.equal(requests[0]!.context.kind, LanguageCompletionTriggerKind.TriggerCharacter);
-	assert.equal(
-		requests[0]!.context.kind === LanguageCompletionTriggerKind.TriggerCharacter
-			? requests[0]!.context.triggerCharacter
-			: undefined,
-		'.',
-	);
+	assert.equal(requests[0]!.context.kind === LanguageCompletionTriggerKind.TriggerCharacter ? requests[0]!.context.triggerCharacter : undefined, '.');
 	assert.equal(Position.compare(requests[0]!.position, new Position(0 + 1, 4 + 1)), 0);
 	assert.equal(requests[0]!.snapshot.getText(), 'obj.');
 });
@@ -171,10 +166,7 @@ test('Completion request wiring rejects a same-model session from another servic
 	using languages = new LanguageService();
 
 	const input = viewport.controller;
-	assert.throws(
-		() => new SuggestController(editor, input, secondService, session, {}, languages),
-		/must share one text model and completion result store/,
-	);
+	assert.throws(() => new SuggestController(editor, input, secondService, session, {}, languages), /must share one text model and completion result store/);
 	dom.window.close();
 });
 
@@ -229,11 +221,7 @@ function createFixture(provider: LanguageCompletionProvider, text = 'con'): Trig
 	};
 }
 
-function completionResult(
-	request: LanguageCompletionProviderRequest,
-	label: string,
-	isIncomplete = false,
-): LanguageCompletionProviderResult {
+function completionResult(request: LanguageCompletionProviderRequest, label: string, isIncomplete = false): LanguageCompletionProviderResult {
 	return {
 		items: [
 			{
@@ -252,11 +240,7 @@ interface KeyOptions {
 	readonly ctrlKey?: boolean;
 }
 
-function keyboardEvent(
-	targetWindow: typeof browserEnvironment.window,
-	key: string,
-	options: KeyOptions = {},
-): KeyboardEvent {
+function keyboardEvent(targetWindow: typeof browserEnvironment.window, key: string, options: KeyOptions = {}): KeyboardEvent {
 	return new targetWindow.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,
@@ -265,11 +249,7 @@ function keyboardEvent(
 	}) as unknown as KeyboardEvent;
 }
 
-function beforeInputEvent(
-	targetWindow: typeof browserEnvironment.window,
-	data: string | null,
-	inputType = 'insertText',
-): InputEvent {
+function beforeInputEvent(targetWindow: typeof browserEnvironment.window, data: string | null, inputType = 'insertText'): InputEvent {
 	return new targetWindow.InputEvent('beforeinput', {
 		bubbles: true,
 		cancelable: true,

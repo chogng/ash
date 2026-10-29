@@ -18,22 +18,12 @@ import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { ResourceTree, type IResourceNode } from '../../../../base/common/resourceTree.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { getActionBarActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import {
-	IQuickInputService,
-	type IQuickPickItem,
-	type IQuickPickSeparator,
-} from '../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPickItem, type IQuickPickSeparator } from '../../../../platform/quickinput/common/quickInput.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IProgressService } from '../../../../platform/progress/common/progress.js';
 import { FileKind } from '../../../../platform/files/common/files.js';
@@ -41,10 +31,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import type { IAction } from '../../../../base/common/actions.js';
 import { Action2, IMenuService, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr, RawContextKey, type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
-import {
-	IContextKeyService,
-	type IScopedContextKeyService,
-} from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextKeyService, type IScopedContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { toOpenEditorOptions, type IOpenEditorOptions } from '../../../../platform/editor/browser/editor.js';
 import { IHoverService, type IManagedHover } from '../../../../platform/hover/browser/hoverService.js';
@@ -80,10 +67,7 @@ import {
 	toISCMHistoryItemViewModelArray,
 } from './scmHistory.js';
 import { SCMHistoryBusyContext, SCMHistoryProviderIdContext } from '../common/scm.js';
-import {
-	createMultiDiffEditorInput,
-	type MultiDiffEditorInputItem,
-} from '../../multiDiffEditor/browser/multiDiffEditorInput.js';
+import { createMultiDiffEditorInput, type MultiDiffEditorInputItem } from '../../multiDiffEditor/browser/multiDiffEditorInput.js';
 
 registerAction2(
 	class extends Action2 {
@@ -105,43 +89,27 @@ registerAction2(
 		): Promise<void> {
 			if (!CancellationToken.isCancellationToken(token) || token.isCancellationRequested) return;
 			const source = URI.isUri(element) ? SCMHistoryItemUri.fromUri(element) : undefined;
-			if (URI.isUri(element) ? !source || source.path !== undefined : element?.type !== 'historyItemViewModel')
-				return;
+			if (URI.isUri(element) ? !source || source.path !== undefined : element?.type !== 'historyItemViewModel') return;
 			const scm = accessor.get(ISCMService);
-			const repository = scm.getRepository(
-				source ? source.repositoryId : (element as SCMHistoryItemViewModelTreeElement).repository?.provider?.id,
-			);
+			const repository = scm.getRepository(source ? source.repositoryId : (element as SCMHistoryItemViewModelTreeElement).repository?.provider?.id);
 			const provider = repository?.provider.historyProvider;
 			if (!repository || !provider) {
 				if (source)
 					throw new SCMHistoryUnavailableError(
-						localize(
-							'scm.history.sourceUnavailable',
-							'The original source control repository is unavailable. The saved attachment content is still available.',
-						),
+						localize('scm.history.sourceUnavailable', 'The original source control repository is unavailable. The saved attachment content is still available.'),
 					);
 				return;
 			}
-			const historyItem = source
-				? undefined
-				: (element as SCMHistoryItemViewModelTreeElement).historyItemViewModel.historyItem;
+			const historyItem = source ? undefined : (element as SCMHistoryItemViewModelTreeElement).historyItemViewModel.historyItem;
 			const selectedComparison = typeof comparison === 'object' ? comparison : undefined;
 			const revision = source?.revision ?? historyItem!.comparison?.revision ?? historyItem!.id;
-			const baseRevision = source
-				? source.baseRevision
-				: (selectedComparison?.baseId ?? historyItem!.comparison?.baseRevision ?? historyItem!.parentIds[0]);
+			const baseRevision = source ? source.baseRevision : (selectedComparison?.baseId ?? historyItem!.comparison?.baseRevision ?? historyItem!.parentIds[0]);
 			const title = source
 				? typeof comparison === 'string'
 					? comparison
 					: revision
-				: (selectedComparison?.label ??
-					(historyItem!.comparison
-						? historyItem!.subject
-						: `${historyItem!.displayId ?? historyItem!.id} · ${historyItem!.subject}`));
-			const isCurrent = () =>
-				!token.isCancellationRequested &&
-				scm.getRepository(repository.id) === repository &&
-				repository.provider.historyProvider === provider;
+				: (selectedComparison?.label ?? (historyItem!.comparison ? historyItem!.subject : `${historyItem!.displayId ?? historyItem!.id} · ${historyItem!.subject}`));
+			const isCurrent = () => !token.isCancellationRequested && scm.getRepository(repository.id) === repository && repository.provider.historyProvider === provider;
 			await accessor
 				.get(IProgressService)
 				.withProgress({ location: 'ash.gitGraph', delay: 100 }, async () => {
@@ -150,11 +118,7 @@ registerAction2(
 					if (!isCurrent()) return;
 					if (!changes?.length) {
 						if (changes) {
-							accessor
-								.get(INotificationService)
-								.info(
-									localize('scm.history.noChanges', 'There are no changes between these versions.'),
-								);
+							accessor.get(INotificationService).info(localize('scm.history.noChanges', 'There are no changes between these versions.'));
 						}
 						return;
 					}
@@ -168,20 +132,14 @@ registerAction2(
 								// Missing sides represent additions and deletions; their revision URIs keep empty models distinct.
 								return {
 									binary: file.original.kind === 'binary' || file.modified.kind === 'binary',
-									label: change.originalPath
-										? `${change.originalPath} → ${change.path}`
-										: change.path,
+									label: change.originalPath ? `${change.originalPath} → ${change.path}` : change.path,
 									original: {
-										resource: source
-											? historyFileResource(source, change, true, file.parentId)
-											: (change.originalUri ?? change.uri),
+										resource: source ? historyFileResource(source, change, true, file.parentId) : (change.originalUri ?? change.uri),
 										readOnly: true,
 										initialText: file.original.kind === 'text' ? file.original.text : '',
 									},
 									modified: {
-										resource: source
-											? historyFileResource(source, change, false)
-											: (change.modifiedUri ?? change.uri),
+										resource: source ? historyFileResource(source, change, false) : (change.modifiedUri ?? change.uri),
 										readOnly: true,
 										initialText: file.modified.kind === 'text' ? file.modified.text : '',
 									},
@@ -195,22 +153,19 @@ registerAction2(
 						scheme: 'ash-multi-diff',
 						path: `/scm-history/${repository.id}/${baseRevision ?? 'parent'}/${revision}`,
 					});
-					await accessor
-						.get(IEditorService)
-						.openEditor(
-							createMultiDiffEditorInput(resource, items, title, {
-								kind: 'snapshot',
-								repositoryId: repository.id,
-								label: historyItem?.displayId ?? revision,
-							}),
-							{ pinned: true },
-						);
+					await accessor.get(IEditorService).openEditor(
+						createMultiDiffEditorInput(resource, items, title, {
+							kind: 'snapshot',
+							repositoryId: repository.id,
+							label: historyItem?.displayId ?? revision,
+						}),
+						{ pinned: true },
+					);
 				})
 				.catch(error => {
 					if (!isCurrent()) return;
 					// The attachment owns source-action errors; menu invocations retain graph notifications.
-					if (!source)
-						accessor.get(INotificationService).error(error instanceof Error ? error : String(error));
+					if (!source) accessor.get(INotificationService).error(error instanceof Error ? error : String(error));
 					throw error;
 				});
 		}
@@ -240,32 +195,20 @@ registerAction2(
 			const source = URI.isUri(element) ? SCMHistoryItemUri.fromUri(element) : undefined;
 			if (URI.isUri(element) ? !source?.path : element?.type !== 'historyItemChangeViewModel') return;
 			const scm = source ? accessor.get(ISCMService) : undefined;
-			const repository = source
-				? scm!.getRepository(source.repositoryId)
-				: (element as SCMHistoryItemChangeViewModelTreeElement).repository;
+			const repository = source ? scm!.getRepository(source.repositoryId) : (element as SCMHistoryItemChangeViewModelTreeElement).repository;
 			const provider = repository?.provider.historyProvider;
 			if (!repository || !provider) {
 				if (source)
 					throw new SCMHistoryUnavailableError(
-						localize(
-							'scm.history.sourceUnavailable',
-							'The original source control repository is unavailable. The saved attachment content is still available.',
-						),
+						localize('scm.history.sourceUnavailable', 'The original source control repository is unavailable. The saved attachment content is still available.'),
 					);
 				return;
 			}
-			const isCurrent = () =>
-				!token.isCancellationRequested &&
-				(!source || scm!.getRepository(repository.id) === repository) &&
-				repository.provider.historyProvider === provider;
-			const historyItem = source
-				? undefined
-				: (element as SCMHistoryItemChangeViewModelTreeElement).historyItemViewModel.historyItem;
+			const isCurrent = () => !token.isCancellationRequested && (!source || scm!.getRepository(repository.id) === repository) && repository.provider.historyProvider === provider;
+			const historyItem = source ? undefined : (element as SCMHistoryItemChangeViewModelTreeElement).historyItemViewModel.historyItem;
 			const revision = source?.revision ?? historyItem!.comparison?.revision ?? historyItem!.id;
 			const historyItemChange = source
-				? (await provider.provideHistoryItemChanges(revision, source.baseRevision))?.find(
-						change => change.path === source.path,
-					)
+				? (await provider.provideHistoryItemChanges(revision, source.baseRevision))?.find(change => change.path === source.path)
 				: (element as SCMHistoryItemChangeViewModelTreeElement).historyItemChange;
 			if (!isCurrent() || !historyItemChange) return;
 			const file = await provider.resolveHistoryItemChangeContents(revision, historyItemChange);
@@ -275,43 +218,25 @@ registerAction2(
 			const contents = original ? file.original : file.modified;
 			if (contents.kind === 'missing') return;
 			if (contents.kind === 'binary' && !contents.bytes) {
-				accessor
-					.get(INotificationService)
-					.info(
-						localize(
-							'scm.history.binaryUnavailable',
-							'The history provider did not supply binary file contents.',
-						),
-					);
+				accessor.get(INotificationService).info(localize('scm.history.binaryUnavailable', 'The history provider did not supply binary file contents.'));
 				return;
 			}
 			const name = historyItemChange.path.split('/').at(-1) ?? historyItemChange.path;
-			await accessor
-				.get(IEditorService)
-				.openEditor(
-					{
-						resource: source
-							? historyFileResource(source, historyItemChange, original, file.parentId)
-							: (historyItemChange.modifiedUri ?? historyItemChange.uri),
-						label: `${name} (${original ? ((source?.baseRevision ?? file.parentId)?.slice(0, 7) ?? 'empty') : (historyItem?.displayId ?? revision.slice(0, 7))})`,
-						readOnly: true,
-						...(contents.kind === 'text'
-							? { initialText: contents.text }
-							: { initialBytes: contents.bytes, contentType: 'application/octet-stream' }),
-					},
-					source ? { pinned: true } : undefined,
-				);
+			await accessor.get(IEditorService).openEditor(
+				{
+					resource: source ? historyFileResource(source, historyItemChange, original, file.parentId) : (historyItemChange.modifiedUri ?? historyItemChange.uri),
+					label: `${name} (${original ? ((source?.baseRevision ?? file.parentId)?.slice(0, 7) ?? 'empty') : (historyItem?.displayId ?? revision.slice(0, 7))})`,
+					readOnly: true,
+					...(contents.kind === 'text' ? { initialText: contents.text } : { initialBytes: contents.bytes, contentType: 'application/octet-stream' }),
+				},
+				source ? { pinned: true } : undefined,
+			);
 		}
 	},
 );
 
 /** Providers may omit revision URIs. Such snapshots must not borrow a working-file model or alias diff sides. */
-function historyFileResource(
-	source: NonNullable<ReturnType<typeof SCMHistoryItemUri.fromUri>>,
-	change: ISCMHistoryItemChange,
-	original: boolean,
-	parentId?: string,
-): URI {
+function historyFileResource(source: NonNullable<ReturnType<typeof SCMHistoryItemUri.fromUri>>, change: ISCMHistoryItemChange, original: boolean, parentId?: string): URI {
 	return (
 		(original ? change.originalUri : change.modifiedUri) ??
 		SCMHistoryItemUri.toUri({
@@ -330,9 +255,7 @@ const HistoryCurrentRefHasCommit = new RawContextKey<boolean>('scmCurrentHistory
 const HistoryRefsAvailable = new RawContextKey<boolean>('scmHistoryRefsAvailable', false);
 
 function getHistoryView(accessor: ServicesAccessor, target: unknown): SCMHistoryViewPane | null {
-	return target instanceof SCMHistoryViewPane
-		? target
-		: accessor.get(IViewsService).getActiveViewWithId<SCMHistoryViewPane>('ash.gitGraph');
+	return target instanceof SCMHistoryViewPane ? target : accessor.get(IViewsService).getActiveViewWithId<SCMHistoryViewPane>('ash.gitGraph');
 }
 
 registerAction2(
@@ -357,10 +280,7 @@ for (const mode of ['list', 'tree'] as const) {
 			constructor() {
 				super({
 					id: `workbench.scm.action.graph.set${mode === 'list' ? 'List' : 'Tree'}ViewMode`,
-					title:
-						mode === 'list'
-							? localize2('scm.history.viewAsList', 'View as List')
-							: localize2('scm.history.viewAsTree', 'View as Tree'),
+					title: mode === 'list' ? localize2('scm.history.viewAsList', 'View as List') : localize2('scm.history.viewAsTree', 'View as Tree'),
 					icon: mode === 'list' ? Lxicon.listUnordered : Lxicon.folders,
 					menu: { id: MenuId.SCMHistoryTitle, group: '9_viewmode', order: mode === 'list' ? 1 : 2 },
 					toggled: HistoryViewMode.isEqualTo(mode),
@@ -403,10 +323,7 @@ registerAction2(
 				id: 'workbench.scm.action.graph.revealCurrentHistoryItem',
 				title: localize2('scm.history.goToCurrent', 'Go to Current History Item'),
 				icon: Lxicon.target,
-				precondition: ContextKeyExpr.and(
-					CurrentHistoryItemAvailable.isEqualTo(true),
-					SCMHistoryBusyContext.isEqualTo(false),
-				),
+				precondition: ContextKeyExpr.and(CurrentHistoryItemAvailable.isEqualTo(true), SCMHistoryBusyContext.isEqualTo(false)),
 				menu: { id: MenuId.SCMHistoryTitle, group: 'navigation', order: 2 },
 			});
 		}
@@ -418,10 +335,7 @@ registerAction2(
 	},
 );
 
-type HistoryItemChanges =
-	| { readonly state: 'loading' }
-	| { readonly state: 'ready'; readonly result: readonly ISCMHistoryItemChange[] }
-	| { readonly state: 'error'; readonly message: string };
+type HistoryItemChanges = { readonly state: 'loading' } | { readonly state: 'ready'; readonly result: readonly ISCMHistoryItemChange[] } | { readonly state: 'error'; readonly message: string };
 
 interface HistoryPage {
 	readonly items: readonly ISCMHistoryItem[];
@@ -485,22 +399,12 @@ export class SCMHistoryViewPane extends ViewPane {
 	private readonly loadingProgress = this._register(new DisposableStore());
 	private readonly refreshScheduler = this._register(
 		new RunOnceScheduler(() => {
-			if (
-				this.pendingHistoryChange === 'background' &&
-				!this.refreshing &&
-				this.tree &&
-				this.tree.scrollTop > 0
-			) {
+			if (this.pendingHistoryChange === 'background' && !this.refreshing && this.tree && this.tree.scrollTop > 0) {
 				this.pendingHistoryChange = undefined;
 				if (!this.repositoryOutdated) {
 					this.repositoryOutdated = true;
 					this.updateTitleDescription(localize('scm.history.outdated', 'Outdated'));
-					status(
-						localize(
-							'scm.history.outdatedHint',
-							'The commit graph has updates. Refresh to show the latest history.',
-						),
-					);
+					status(localize('scm.history.outdatedHint', 'The commit graph has updates. Refresh to show the latest history.'));
 				}
 				return;
 			}
@@ -584,8 +488,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.resourceLabels = this._register(resourceLabelService.createGroup());
 		this.scmViewService = scmViewService;
 		this.graphLabel = options.title;
-		this.viewMode =
-			storageService.get('scm.graphView.viewMode', StorageScope.WORKSPACE) === 'tree' ? 'tree' : 'list';
+		this.viewMode = storageService.get('scm.graphView.viewMode', StorageScope.WORKSPACE) === 'tree' ? 'tree' : 'list';
 		this.viewModeContext = HistoryViewMode.bindTo(contextKeyService);
 		this.viewModeContext.set(this.viewMode);
 		this.refsAvailableContext = HistoryRefsAvailable.bindTo(contextKeyService);
@@ -606,22 +509,14 @@ export class SCMHistoryViewPane extends ViewPane {
 			}),
 		);
 		try {
-			const saved: unknown = JSON.parse(
-				storageService.get('scm.graphView.referencesFilter', StorageScope.WORKSPACE) ?? '[]',
-			);
+			const saved: unknown = JSON.parse(storageService.get('scm.graphView.referencesFilter', StorageScope.WORKSPACE) ?? '[]');
 			if (Array.isArray(saved)) {
 				for (const entry of saved) {
 					if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string') {
 						continue;
 					}
 					const filter: unknown = entry[1];
-					if (
-						filter === 'all' ||
-						filter === 'auto' ||
-						(Array.isArray(filter) &&
-							filter.length <= 1000 &&
-							filter.every(id => typeof id === 'string' && id.length <= 1024))
-					) {
+					if (filter === 'all' || filter === 'auto' || (Array.isArray(filter) && filter.length <= 1000 && filter.every(id => typeof id === 'string' && id.length <= 1024))) {
 						this.filters.set(entry[0], filter as HistoryItemRefsFilter);
 					}
 				}
@@ -647,23 +542,16 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.currentItemContext = CurrentHistoryItemAvailable.bindTo(contextKeyService);
 		this._register(toDisposable(() => this.currentItemContext.reset()));
 		const toolbar = this._register(
-			new MenuWorkbenchToolBar(
-				this.headerActionsElement,
-				menuService,
-				contextMenuService,
-				MenuId.SCMHistoryTitle,
-				{ ariaLabel: localize('scm.history.actions', 'History actions'), menuOptions: { arg: this } },
-			),
+			new MenuWorkbenchToolBar(this.headerActionsElement, menuService, contextMenuService, MenuId.SCMHistoryTitle, {
+				ariaLabel: localize('scm.history.actions', 'History actions'),
+				menuOptions: { arg: this },
+			}),
 		);
 		toolbar.element.classList.add('ash-scm-remote-actions');
 		this._register(this.scmViewService.onDidChangeActiveRepository(() => void this.refresh()));
 		this._register(
 			configurationService.onDidChangeConfiguration(event => {
-				if (
-					event.affectsConfiguration('scm.graph.pageSize') ||
-					event.affectsConfiguration('scm.graph.showIncomingChanges') ||
-					event.affectsConfiguration('scm.graph.showOutgoingChanges')
-				) {
+				if (event.affectsConfiguration('scm.graph.pageSize') || event.affectsConfiguration('scm.graph.showIncomingChanges') || event.affectsConfiguration('scm.graph.showOutgoingChanges')) {
 					void this.refresh();
 				} else if (event.affectsConfiguration('scm.graph.pageOnScroll') && this.page) {
 					this.renderGraph(this.page);
@@ -695,16 +583,9 @@ export class SCMHistoryViewPane extends ViewPane {
 	public async pickRepository(): Promise<void> {
 		const resources = new DisposableStore();
 		this.filterPicker.value = resources;
-		const repositories = [...this.scmService.repositories].filter(
-			repository => repository.provider.historyProvider,
-		);
-		const picker = resources.add(
-			this.quickInputService.createQuickPick<IQuickPickItem & { repository: (typeof repositories)[number] }>(),
-		);
-		picker.placeholder = picker.ariaLabel = localize(
-			'scm.history.pickRepository',
-			'Choose a repository for the Source Control Graph',
-		);
+		const repositories = [...this.scmService.repositories].filter(repository => repository.provider.historyProvider);
+		const picker = resources.add(this.quickInputService.createQuickPick<IQuickPickItem & { repository: (typeof repositories)[number] }>());
+		picker.placeholder = picker.ariaLabel = localize('scm.history.pickRepository', 'Choose a repository for the Source Control Graph');
 		picker.items = repositories.map(repository => ({
 			label: repository.provider.label,
 			description: repository.provider.activeRepositoryName,
@@ -743,10 +624,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		} catch {
 			if (!this.isDisposed) {
 				this.statusElement.hidden = false;
-				this.statusElement.textContent = localize(
-					'scm.history.repositoryFailed',
-					'Unable to select the history repository.',
-				);
+				this.statusElement.textContent = localize('scm.history.repositoryFailed', 'Unable to select the history repository.');
 			}
 		}
 	}
@@ -754,20 +632,10 @@ export class SCMHistoryViewPane extends ViewPane {
 	private getHistoryItemReferences(item: ISCMHistoryItem): readonly ISCMHistoryItemRef[] {
 		const references = historyItemReferences(item, this.head);
 		const filter = this.filters.get(this.filterKey) ?? 'auto';
-		if (
-			this.configurationService.getValue<string>('scm.graph.badges') !== 'filter' ||
-			filter === 'all' ||
-			!this.provider?.provideHistoryItemRefs
-		) {
+		if (this.configurationService.getValue<string>('scm.graph.badges') !== 'filter' || filter === 'all' || !this.provider?.provideHistoryItemRefs) {
 			return references;
 		}
-		const ids = Array.isArray(filter)
-			? filter
-			: [
-					this.head?.id,
-					this.provider.historyItemRemoteRef?.get()?.id,
-					this.provider.historyItemBaseRef?.get()?.id,
-				];
+		const ids = Array.isArray(filter) ? filter : [this.head?.id, this.provider.historyItemRemoteRef?.get()?.id, this.provider.historyItemBaseRef?.get()?.id];
 		return references.filter(reference => ids.includes(reference.id));
 	}
 
@@ -783,10 +651,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		const picker = resources.add(this.quickInputService.createQuickPick<Pick>());
 		picker.canSelectMany = true;
 		picker.sortByLabel = false;
-		picker.placeholder = picker.ariaLabel = localize(
-			'scm.history.selectRefs',
-			'Filter branches and tags in the commit graph; changes apply immediately.',
-		);
+		picker.placeholder = picker.ariaLabel = localize('scm.history.selectRefs', 'Filter branches and tags in the commit graph; changes apply immediately.');
 		picker.busy = true;
 		resources.add(
 			picker.onDidHide(() => {
@@ -798,12 +663,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		picker.show();
 		try {
 			const references = await provider.provideHistoryItemRefs();
-			if (
-				this.isDisposed ||
-				this.provider !== provider ||
-				key !== this.filterKey ||
-				this.filterPicker.value !== resources
-			) {
+			if (this.isDisposed || this.provider !== provider || key !== this.filterKey || this.filterPicker.value !== resources) {
 				return;
 			}
 			const current = this.filters.get(key) ?? 'auto';
@@ -828,9 +688,7 @@ export class SCMHistoryViewPane extends ViewPane {
 					reference,
 				};
 			});
-			const selected = Array.isArray(current)
-				? referencePicks.filter(item => current.includes(item.reference.id))
-				: modes.filter(item => item.reference === current);
+			const selected = Array.isArray(current) ? referencePicks.filter(item => current.includes(item.reference.id)) : modes.filter(item => item.reference === current);
 			const items: (Pick | IQuickPickSeparator)[] = [...modes];
 			// Keep explicit choices together when reopening, then group the remaining refs.
 			if (Array.isArray(current) && selected.length) {
@@ -850,10 +708,7 @@ export class SCMHistoryViewPane extends ViewPane {
 				}
 			}
 			const categories = ['localBranch', 'remoteBranch', 'tag'];
-			const orderedCategories = [
-				...categories,
-				...[...groups.keys()].filter(category => !categories.includes(category)),
-			];
+			const orderedCategories = [...categories, ...[...groups.keys()].filter(category => !categories.includes(category))];
 			for (const category of orderedCategories) {
 				const group = groups.get(category);
 				if (!group) {
@@ -875,44 +730,20 @@ export class SCMHistoryViewPane extends ViewPane {
 			let selection = picker.selectedItems;
 			resources.add(
 				picker.onDidChangeSelection(selected => {
-					if (
-						this.isDisposed ||
-						this.provider !== provider ||
-						key !== this.filterKey ||
-						this.filterPicker.value !== resources
-					) {
+					if (this.isDisposed || this.provider !== provider || key !== this.filterKey || this.filterPicker.value !== resources) {
 						return;
 					}
-					if (
-						selected.length === selection.length &&
-						selected.every((item, index) => item === selection[index])
-					) {
+					if (selected.length === selection.length && selected.every((item, index) => item === selection[index])) {
 						return;
 					}
 					const added = selected.find(item => !selection.includes(item));
-					selection =
-						added && typeof added.reference === 'string'
-							? [added]
-							: selected.filter(item => typeof item.reference !== 'string');
-					if (
-						selection.length !== selected.length ||
-						selection.some((item, index) => item !== selected[index])
-					) {
+					selection = added && typeof added.reference === 'string' ? [added] : selected.filter(item => typeof item.reference !== 'string');
+					if (selection.length !== selected.length || selection.some((item, index) => item !== selected[index])) {
 						picker.selectedItems = selection;
 					}
 					const first = selection[0]?.reference;
-					this.filters.set(
-						key,
-						typeof first === 'string'
-							? first
-							: selection.map(item => (item.reference as ISCMHistoryItemRef).id),
-					);
-					this.storageService.store(
-						'scm.graphView.referencesFilter',
-						JSON.stringify([...this.filters]),
-						StorageScope.WORKSPACE,
-						StorageTarget.USER,
-					);
+					this.filters.set(key, typeof first === 'string' ? first : selection.map(item => (item.reference as ISCMHistoryItemRef).id));
+					this.storageService.store('scm.graphView.referencesFilter', JSON.stringify([...this.filters]), StorageScope.WORKSPACE, StorageTarget.USER);
 					this.page = undefined;
 					this.commitChanges.clear();
 					void this.refresh();
@@ -927,10 +758,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		} catch {
 			if (!this.isDisposed && this.filterPicker.value === resources) {
 				this.statusElement.hidden = false;
-				this.statusElement.textContent = localize(
-					'scm.history.refsFailed',
-					'Unable to load history references. Try opening the picker again.',
-				);
+				this.statusElement.textContent = localize('scm.history.refsFailed', 'Unable to load history references. Try opening the picker again.');
 			}
 		} finally {
 			if (this.filterPicker.value === resources) {
@@ -962,18 +790,9 @@ export class SCMHistoryViewPane extends ViewPane {
 
 	public async revealCurrentHistoryItem(): Promise<void> {
 		const filter = this.filters.get(this.filterKey) ?? 'auto';
-		if (
-			this.head?.revision &&
-			((Array.isArray(filter) && !filter.includes(this.head.id)) ||
-				(this.historyItemRefs && !this.historyItemRefs.includes(this.head.revision)))
-		) {
+		if (this.head?.revision && ((Array.isArray(filter) && !filter.includes(this.head.id)) || (this.historyItemRefs && !this.historyItemRefs.includes(this.head.revision)))) {
 			this.filters.delete(this.filterKey);
-			this.storageService.store(
-				'scm.graphView.referencesFilter',
-				JSON.stringify([...this.filters]),
-				StorageScope.WORKSPACE,
-				StorageTarget.USER,
-			);
+			this.storageService.store('scm.graphView.referencesFilter', JSON.stringify([...this.filters]), StorageScope.WORKSPACE, StorageTarget.USER);
 			this.page = undefined;
 			await this.refresh();
 		}
@@ -986,12 +805,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		while (index < 0 && this.page?.hasMore) {
 			const previousPage = this.page;
 			await this.loadMore();
-			if (
-				this.isDisposed ||
-				generation !== this.generation ||
-				this.head?.revision !== revision ||
-				this.page === previousPage
-			) {
+			if (this.isDisposed || generation !== this.generation || this.head?.revision !== revision || this.page === previousPage) {
 				return;
 			}
 			index = this.rows.findIndex(row => row.historyItem.id === revision);
@@ -1033,9 +847,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		const generation = ++this.generation;
 		const repository = this.scmViewService.activeRepository;
 		this.providerIdContext.set(repository?.provider.providerId ?? '');
-		this.refsAvailableContext.set(
-			typeof repository?.provider.historyProvider?.provideHistoryItemRefs === 'function',
-		);
+		this.refsAvailableContext.set(typeof repository?.provider.historyProvider?.provideHistoryItemRefs === 'function');
 		const provider = repository?.provider.historyProvider;
 		if (repository?.id !== this.graphRepositoryId || provider !== this.provider) {
 			this.titleOperation = undefined;
@@ -1084,10 +896,7 @@ export class SCMHistoryViewPane extends ViewPane {
 				if (provider.onDidChangeHistoryItemRefs) {
 					listeners.add(
 						provider.onDidChangeHistoryItemRefs(items => {
-							if (
-								(this.filters.get(this.filterKey) ?? 'auto') !== 'all' &&
-								provider.provideHistoryItemRefs
-							) {
+							if ((this.filters.get(this.filterKey) ?? 'auto') !== 'all' && provider.provideHistoryItemRefs) {
 								void this.refresh();
 								return;
 							}
@@ -1137,15 +946,10 @@ export class SCMHistoryViewPane extends ViewPane {
 			if (provider.provideHistoryItemRefs) {
 				let filter = this.filters.get(this.filterKey) ?? 'auto';
 				const currentHead = provider.historyItemRef.get();
-				const currentRefs = [
-					currentHead,
-					provider.historyItemRemoteRef?.get(),
-					provider.historyItemBaseRef?.get(),
-				].filter((ref): ref is ISCMHistoryItemRef => !!ref);
+				const currentRefs = [currentHead, provider.historyItemRemoteRef?.get(), provider.historyItemBaseRef?.get()].filter((ref): ref is ISCMHistoryItemRef => !!ref);
 				// Automatic history already has its roots when the provider captures every
 				// endpoint. Custom filters and unresolved refs still need the full catalog.
-				const useCurrentRefs =
-					filter === 'auto' && !!currentHead?.revision && currentRefs.every(ref => !!ref.revision);
+				const useCurrentRefs = filter === 'auto' && !!currentHead?.revision && currentRefs.every(ref => !!ref.revision);
 				const refs = useCurrentRefs ? currentRefs : await provider.provideHistoryItemRefs();
 				if (this.isDisposed || generation !== this.generation) {
 					return;
@@ -1159,12 +963,7 @@ export class SCMHistoryViewPane extends ViewPane {
 				if (Array.isArray(filter) && filter.length > 0 && selected.length === 0) {
 					filter = 'auto';
 					this.filters.delete(this.filterKey);
-					this.storageService.store(
-						'scm.graphView.referencesFilter',
-						JSON.stringify([...this.filters]),
-						StorageScope.WORKSPACE,
-						StorageTarget.USER,
-					);
+					this.storageService.store('scm.graphView.referencesFilter', JSON.stringify([...this.filters]), StorageScope.WORKSPACE, StorageTarget.USER);
 				}
 				if (filter === 'auto') {
 					selected = [this.head, remote, provider.historyItemBaseRef?.get()]
@@ -1173,16 +972,9 @@ export class SCMHistoryViewPane extends ViewPane {
 				}
 				this.historyItemRefs = filter === 'all' ? undefined : selected.map(ref => ref.revision ?? ref.id);
 				this.comparison = undefined;
-				if (
-					this.head?.revision &&
-					remote?.revision &&
-					remote.revision !== this.head.revision &&
-					provider.resolveHistoryItemRefsCommonAncestor
-				) {
+				if (this.head?.revision && remote?.revision && remote.revision !== this.head.revision && provider.resolveHistoryItemRefsCommonAncestor) {
 					// A missing merge base must not hide otherwise readable commit history.
-					const base = await provider
-						.resolveHistoryItemRefsCommonAncestor([this.head.revision, remote.revision])
-						.catch(() => undefined);
+					const base = await provider.resolveHistoryItemRefsCommonAncestor([this.head.revision, remote.revision]).catch(() => undefined);
 					if (this.isDisposed || generation !== this.generation) {
 						return;
 					}
@@ -1190,38 +982,21 @@ export class SCMHistoryViewPane extends ViewPane {
 						this.comparison = {
 							remote,
 							base,
-							incoming:
-								this.configurationService.getValue<boolean>('scm.graph.showIncomingChanges') &&
-								(filter === 'all' || selected.some(ref => ref.id === remote.id)),
-							outgoing:
-								this.configurationService.getValue<boolean>('scm.graph.showOutgoingChanges') &&
-								(filter === 'all' || selected.some(ref => ref.id === this.head?.id)),
+							incoming: this.configurationService.getValue<boolean>('scm.graph.showIncomingChanges') && (filter === 'all' || selected.some(ref => ref.id === remote.id)),
+							outgoing: this.configurationService.getValue<boolean>('scm.graph.showOutgoingChanges') && (filter === 'all' || selected.some(ref => ref.id === this.head?.id)),
 						};
 					}
 				}
 				const head = this.head;
 				if (previousComparison && head?.revision && remote?.revision === head.revision) {
-					synchronizedRefs = [
-						...refs.filter(ref => ref.id !== head.id && ref.id !== remote.id),
-						head,
-						remote,
-					];
+					synchronizedRefs = [...refs.filter(ref => ref.id !== head.id && ref.id !== remote.id), head, remote];
 					if (useCurrentRefs && previousPage) {
 						const capturedIds = new Set(synchronizedRefs.map(ref => ref.id));
-						synchronizedRefs = [
-							...previousPage.items
-								.flatMap(item => item.references ?? [])
-								.filter(ref => !capturedIds.has(ref.id)),
-							...synchronizedRefs,
-						];
+						synchronizedRefs = [...previousPage.items.flatMap(item => item.references ?? []).filter(ref => !capturedIds.has(ref.id)), ...synchronizedRefs];
 					}
 				}
 			}
-			if (
-				previousHead !== this.head?.revision ||
-				previousComparison?.remote.revision !== this.comparison?.remote.revision ||
-				previousComparison?.base !== this.comparison?.base
-			) {
+			if (previousHead !== this.head?.revision || previousComparison?.remote.revision !== this.comparison?.remote.revision || previousComparison?.base !== this.comparison?.base) {
 				this.commitChanges.delete(SCMIncomingHistoryItemId);
 				this.commitChanges.delete(SCMOutgoingHistoryItemId);
 			}
@@ -1259,18 +1034,10 @@ export class SCMHistoryViewPane extends ViewPane {
 			const previousTail = previousPage?.items.at(-1)?.id;
 			let tailIndex = previousTail === undefined ? -1 : items.findIndex(item => item.id === previousTail);
 			let hasMore = items.length > limit;
-			if (
-				previousTail &&
-				tailIndex < 0 &&
-				hasMore &&
-				this.head?.revision &&
-				provider.resolveHistoryItemRefsCommonAncestor
-			) {
+			if (previousTail && tailIndex < 0 && hasMore && this.head?.revision && provider.resolveHistoryItemRefsCommonAncestor) {
 				// Only search beyond the bounded refresh when the old tail is still reachable.
 				// A rewritten branch must not cause refresh to drain the entire repository.
-				const ancestor = await provider
-					.resolveHistoryItemRefsCommonAncestor([previousTail, this.head.revision])
-					.catch(() => undefined);
+				const ancestor = await provider.resolveHistoryItemRefsCommonAncestor([previousTail, this.head.revision]).catch(() => undefined);
 				if (this.isDisposed || generation !== this.generation) return;
 				while (ancestor === previousTail && tailIndex < 0 && hasMore) {
 					const next =
@@ -1320,19 +1087,13 @@ export class SCMHistoryViewPane extends ViewPane {
 	private renderGraph(page: HistoryPage): void {
 		const tree = this.tree;
 		const scrollTop = tree?.scrollTop ?? 0;
-		const anchor = tree?.model.visibleNodes.find(
-			node => (tree.getElementTop(node.id) ?? 0) + SWIMLANE_HEIGHT > scrollTop,
-		);
+		const anchor = tree?.model.visibleNodes.find(node => (tree.getElementTop(node.id) ?? 0) + SWIMLANE_HEIGHT > scrollTop);
 		const anchorOffset = anchor ? scrollTop - (tree!.getElementTop(anchor.id) ?? 0) : 0;
 		const document = this.graphElement.ownerDocument;
 		const focused = document.activeElement as HTMLElement | null;
 		const restoreFocus = focused && this.graphElement.contains(focused) ? focused : undefined;
 		const focusedId = tree?.focus?.id;
-		const retained = new Set([
-			...page.items.map(item => item.id),
-			SCMIncomingHistoryItemId,
-			SCMOutgoingHistoryItemId,
-		]);
+		const retained = new Set([...page.items.map(item => item.id), SCMIncomingHistoryItemId, SCMOutgoingHistoryItemId]);
 		for (const id of this.commitChanges.keys()) {
 			if (!retained.has(id)) this.commitChanges.delete(id);
 		}
@@ -1344,16 +1105,13 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.statusElement.hidden = page.items.length > 0;
 		const filter = this.filters.get(this.filterKey);
 		this.statusElement.textContent =
-			Array.isArray(filter) && filter.length === 0
-				? localize('scm.history.noRefs', 'No branches or tags selected.')
-				: localize('scm.history.empty', 'No commits yet.');
+			Array.isArray(filter) && filter.length === 0 ? localize('scm.history.noRefs', 'No branches or tags selected.') : localize('scm.history.empty', 'No commits yet.');
 		if (!this.tree && page.items.length > 0) this.createHistoryTree();
 		if (this.tree) {
 			const children: ObjectTreeElement<HistoryTreeElement>[] = this.rows.map(model => {
 				const id = `commit:${model.historyItem.id}`;
 				const previous = this.tree!.model.getElement(id);
-				const element: HistoryCommitElement =
-					previous?.kind === 'commit' ? previous : { id, kind: 'commit', model };
+				const element: HistoryCommitElement = previous?.kind === 'commit' ? previous : { id, kind: 'commit', model };
 				element.model = model;
 				const row = this.rowResources.get(model.historyItem.id);
 				if (row) this.updateCommitRow(row, model);
@@ -1369,28 +1127,20 @@ export class SCMHistoryViewPane extends ViewPane {
 			// At the top, follow newly inserted commits. Preserve a row anchor only
 			// when the user has scrolled into older history.
 			if (scrollTop === 0) this.tree.scrollTop = 0;
-			else if (anchor && this.tree.model.has(anchor.id))
-				this.tree.scrollTop = (this.tree.getElementTop(anchor.id) ?? 0) + anchorOffset;
+			else if (anchor && this.tree.model.has(anchor.id)) this.tree.scrollTop = (this.tree.getElementTop(anchor.id) ?? 0) + anchorOffset;
 			if (restoreFocus === this.tree.element && focusedId && !this.tree.model.has(focusedId)) {
 				// A rewritten branch may remove the focused node while the tree keeps
 				// DOM focus. Give its visible replacement logical focus without scrolling.
-				const replacement = this.tree.model.visibleNodes.find(
-					node => (this.tree!.getElementTop(node.id) ?? 0) + SWIMLANE_HEIGHT > this.tree!.scrollTop,
-				);
+				const replacement = this.tree.model.visibleNodes.find(node => (this.tree!.getElementTop(node.id) ?? 0) + SWIMLANE_HEIGHT > this.tree!.scrollTop);
 				if (replacement) this.tree.setFocus(replacement.id);
 			}
 			this.updateSelection();
 			for (const node of this.tree.model.rootNodes) {
-				if (
-					node.element.kind === 'commit' &&
-					!node.collapsed &&
-					!this.commitChanges.has(node.element.model.historyItem.id)
-				) {
+				if (node.element.kind === 'commit' && !node.collapsed && !this.commitChanges.has(node.element.model.historyItem.id)) {
 					const currentTree = this.tree;
 					const item = node.element.model.historyItem;
 					queueMicrotask(() => {
-						if (!this.isDisposed && currentTree === this.tree && currentTree.isCollapsed(node.id) === false)
-							void this.loadCommitChanges(item);
+						if (!this.isDisposed && currentTree === this.tree && currentTree.isCollapsed(node.id) === false) void this.loadCommitChanges(item);
 					});
 				}
 			}
@@ -1421,13 +1171,7 @@ export class SCMHistoryViewPane extends ViewPane {
 				modelOptions: { identityProvider: { getId: element => element.id } },
 				keyboardNavigationLabelProvider: {
 					getKeyboardNavigationLabel: element =>
-						element.kind === 'commit'
-							? element.model.historyItem.subject
-							: element.kind === 'file'
-								? element.change.path
-								: element.kind === 'folder'
-									? element.folder.name
-									: undefined,
+						element.kind === 'commit' ? element.model.historyItem.subject : element.kind === 'file' ? element.change.path : element.kind === 'folder' ? element.folder.name : undefined,
 				},
 				getHeight: element => (element.kind === 'more' ? SWIMLANE_HEIGHT * 2 : SWIMLANE_HEIGHT),
 				reuseRows: true,
@@ -1436,19 +1180,13 @@ export class SCMHistoryViewPane extends ViewPane {
 						this.more.clear();
 						return this.renderMore();
 					}
-					if (element.kind === 'commit')
-						return this.renderCommit(
-							element.model,
-							renderSCMHistoryItemGraph(element.model, SWIMLANE_HEIGHT, this.graphElement.ownerDocument),
-						).element;
+					if (element.kind === 'commit') return this.renderCommit(element.model, renderSCMHistoryItemGraph(element.model, SWIMLANE_HEIGHT, this.graphElement.ownerDocument)).element;
 					return this.renderHistoryChange(element, node);
 				},
 				onDidRemoveRow: row => {
 					const commit = row.querySelector<HTMLElement>('.ash-scm-graph-commit');
 					if (commit?.dataset.historyItemId) this.rowResources.deleteAndDispose(commit.dataset.historyItemId);
-					const change = row.querySelector<HTMLElement>(
-						'.ash-scm-graph-change-row, .ash-scm-graph-folder, .ash-scm-graph-change-state',
-					);
+					const change = row.querySelector<HTMLElement>('.ash-scm-graph-change-row, .ash-scm-graph-folder, .ash-scm-graph-change-state');
 					if (change) this.changeRows.deleteAndDispose(change);
 					if (row.querySelector('.ash-scm-graph-load-more')) this.more.clear();
 				},
@@ -1474,9 +1212,7 @@ export class SCMHistoryViewPane extends ViewPane {
 				if (
 					element?.kind === 'file' &&
 					event.browserEvent instanceof KeyboardEvent &&
-					['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(
-						event.browserEvent.key,
-					)
+					['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.browserEvent.key)
 				) {
 					void this.openCommitChange(element.model.historyItem, element.change, {
 						editorOptions: { pinned: false, preserveFocus: true },
@@ -1491,8 +1227,7 @@ export class SCMHistoryViewPane extends ViewPane {
 				if (event.element.kind === 'commit' && !event.collapsed) {
 					const item = event.element.model.historyItem;
 					queueMicrotask(() => {
-						if (!this.isDisposed && tree === this.tree && tree.isCollapsed(event.element.id) === false)
-							void this.loadCommitChanges(item);
+						if (!this.isDisposed && tree === this.tree && tree.isCollapsed(event.element.id) === false) void this.loadCommitChanges(item);
 					});
 				}
 				if (event.element.kind === 'folder') this.updateFolderTwistie(event.element.id, event.collapsed);
@@ -1500,22 +1235,12 @@ export class SCMHistoryViewPane extends ViewPane {
 		);
 		resources.add(
 			tree.onPointer(({ element, browserEvent }) => {
-				if (element.kind === 'file' && browserEvent.detail !== 2)
-					void this.openCommitChange(
-						element.model.historyItem,
-						element.change,
-						toOpenEditorOptions(browserEvent),
-					);
+				if (element.kind === 'file' && browserEvent.detail !== 2) void this.openCommitChange(element.model.historyItem, element.change, toOpenEditorOptions(browserEvent));
 			}),
 		);
 		resources.add(
 			tree.onDidDoubleClick(({ element, browserEvent }) => {
-				if (element.kind === 'file')
-					void this.openCommitChange(
-						element.model.historyItem,
-						element.change,
-						toOpenEditorOptions(browserEvent, true),
-					);
+				if (element.kind === 'file') void this.openCommitChange(element.model.historyItem, element.change, toOpenEditorOptions(browserEvent, true));
 			}),
 		);
 		resources.add(
@@ -1528,17 +1253,8 @@ export class SCMHistoryViewPane extends ViewPane {
 			}),
 		);
 		// The shared tree prevents native pointer focus, which can retain :focus-visible.
-		resources.add(
-			addDisposableListener(
-				tree.element,
-				'pointerdown',
-				() => tree.element.classList.add('pointer-navigation'),
-				true,
-			),
-		);
-		resources.add(
-			addDisposableListener(tree.element, 'blur', () => tree.element.classList.remove('pointer-navigation')),
-		);
+		resources.add(addDisposableListener(tree.element, 'pointerdown', () => tree.element.classList.add('pointer-navigation'), true));
+		resources.add(addDisposableListener(tree.element, 'blur', () => tree.element.classList.remove('pointer-navigation')));
 		resources.add(
 			addDisposableListener(
 				tree.element,
@@ -1587,9 +1303,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		if (this.viewMode === 'list') return changes.result.map(file);
 		const paths = new ResourceTree<ISCMHistoryItemChange, ISCMHistoryItemViewModel>(model, URI.file('/'));
 		for (const change of changes.result) paths.add(URI.file(`/${change.path}`), change);
-		const folder = (
-			node: IResourceNode<ISCMHistoryItemChange, ISCMHistoryItemViewModel>,
-		): ObjectTreeElement<HistoryTreeElement> =>
+		const folder = (node: IResourceNode<ISCMHistoryItemChange, ISCMHistoryItemViewModel>): ObjectTreeElement<HistoryTreeElement> =>
 			node.element
 				? file(node.element)
 				: {
@@ -1623,10 +1337,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		if (height <= 0 || !tail) return;
 		// A short pane still needs a full page of runway for a provider round trip.
 		// Include expanded file rows so they do not cause premature history reads.
-		const prefetch = Math.max(
-			height,
-			this.configurationService.getValue<number>('scm.graph.pageSize') * SWIMLANE_HEIGHT,
-		);
+		const prefetch = Math.max(height, this.configurationService.getValue<number>('scm.graph.pageSize') * SWIMLANE_HEIGHT);
 		const bottom = (tree.getElementTop(tail.id) ?? 0) + SWIMLANE_HEIGHT;
 		if (bottom - tree.scrollTop - height <= prefetch) void this.loadMore();
 	}
@@ -1669,14 +1380,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			return;
 		}
 		if (!element) return;
-		if (
-			element.kind === 'commit' &&
-			event.altKey &&
-			!event.ctrlKey &&
-			!event.metaKey &&
-			!event.shiftKey &&
-			event.key === 'ArrowDown'
-		) {
+		if (element.kind === 'commit' && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key === 'ArrowDown') {
 			event.preventDefault();
 			event.stopPropagation();
 			const row = this.rowResources.get(element.model.historyItem.id);
@@ -1686,9 +1390,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			event.preventDefault();
 			event.stopPropagation();
 			const domNode =
-				element.kind === 'commit'
-					? this.rowResources.get(element.model.historyItem.id)?.element
-					: [...this.changeRows.keys()].find(node => node.dataset.historyTreeId === element.id);
+				element.kind === 'commit' ? this.rowResources.get(element.model.historyItem.id)?.element : [...this.changeRows.keys()].find(node => node.dataset.historyTreeId === element.id);
 			domNode?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
 		} else if (event.metaKey && event.key === 'ArrowDown') {
 			const options = toOpenEditorOptions(new StandardKeyboardEvent(event));
@@ -1696,8 +1398,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			event.preventDefault();
 			event.stopPropagation();
 			if (element.kind === 'commit' || element.kind === 'folder') tree.toggleCollapsed(element.id);
-			else if (element.kind === 'file')
-				void this.openCommitChange(element.model.historyItem, element.change, options);
+			else if (element.kind === 'file') void this.openCommitChange(element.model.historyItem, element.change, options);
 		}
 	}
 
@@ -1716,15 +1417,8 @@ export class SCMHistoryViewPane extends ViewPane {
 		button.className = 'ash-scm-command';
 		button.type = 'button';
 		button.disabled = this.loading;
-		button.textContent = this.moreError
-			? localize('scm.history.retry', 'Retry')
-			: localize('scm.history.loadMore', 'Load more commits');
-		button.setAttribute(
-			'aria-label',
-			this.moreError
-				? localize('scm.history.retryMore', 'Retry loading commit history')
-				: localize('scm.history.loadMore', 'Load more commits'),
-		);
+		button.textContent = this.moreError ? localize('scm.history.retry', 'Retry') : localize('scm.history.loadMore', 'Load more commits');
+		button.setAttribute('aria-label', this.moreError ? localize('scm.history.retryMore', 'Retry loading commit history') : localize('scm.history.loadMore', 'Load more commits'));
 		// Native button activation must not be consumed by the containing tree.
 		this.more.add(addDisposableListener(button, 'keydown', event => event.stopPropagation()));
 		this.more.add(addDisposableListener(button, 'click', () => void this.loadMore()));
@@ -1767,9 +1461,7 @@ export class SCMHistoryViewPane extends ViewPane {
 
 		const generation = this.generation;
 		const hadLoaderFocus =
-			this.graphElement
-				.querySelector('.ash-scm-graph-load-more')
-				?.contains(this.graphElement.ownerDocument.activeElement) === true ||
+			this.graphElement.querySelector('.ash-scm-graph-load-more')?.contains(this.graphElement.ownerDocument.activeElement) === true ||
 			(this.tree?.focus?.kind === 'more' && this.graphElement.ownerDocument.activeElement === this.tree.element);
 		this.loading = true;
 		this.moreError = undefined;
@@ -1791,9 +1483,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			const active = this.graphElement.ownerDocument.activeElement;
 			if (
 				hadLoaderFocus &&
-				(active === this.graphElement.ownerDocument.body ||
-					active === this.tree?.element ||
-					(active && this.graphElement.querySelector('.ash-scm-graph-load-more')?.contains(active)))
+				(active === this.graphElement.ownerDocument.body || active === this.tree?.element || (active && this.graphElement.querySelector('.ash-scm-graph-load-more')?.contains(active)))
 			) {
 				if (items[0]) this.focusHistoryElement(`commit:${items[0].id}`);
 			}
@@ -1808,18 +1498,12 @@ export class SCMHistoryViewPane extends ViewPane {
 	private renderCommit(historyItemViewModel: ISCMHistoryItemViewModel, graph: SVGSVGElement): HistoryItemRow {
 		const historyItem = historyItemViewModel.historyItem;
 		const document = this.graphElement.ownerDocument;
-		const rendered = this.rowResources.set(
-			historyItem.id,
-			new HistoryItemRow(historyItemViewModel, graph, document),
-		);
+		const rendered = this.rowResources.set(historyItem.id, new HistoryItemRow(historyItemViewModel, graph, document));
 		const item = rendered.element;
 		const resources = rendered.resources;
 		item.className = 'ash-scm-graph-commit';
 		item.dataset.historyItemId = historyItem.id;
-		item.classList.toggle(
-			'selected',
-			this.tree?.selection.some(element => element.id === `commit:${historyItem.id}`) ?? false,
-		);
+		item.classList.toggle('selected', this.tree?.selection.some(element => element.id === `commit:${historyItem.id}`) ?? false);
 		item.classList.toggle('focused', this.tree?.focus?.id === `commit:${historyItem.id}`);
 		const current = this.head?.revision === historyItem.id;
 		const merge = historyItem.parentIds.length > 1;
@@ -1851,20 +1535,9 @@ export class SCMHistoryViewPane extends ViewPane {
 		rendered.target = menuTarget;
 		scope.setContext('scmHistoryProviderId', historyItem.comparison ? '' : (repository?.provider.providerId ?? ''));
 		scope.setContext('scmHistoryItemHasRemote', (historyItem.remoteLinks?.length ?? 0) > 0);
-		scope.setContext(
-			'scmHistoryItemRemoteAuthority',
-			historyItem.remoteLinks?.length === 1 ? historyItem.remoteLinks[0].uri.authority : '',
-		);
-		scope.setContext(
-			'scmHistoryItemHasBranch',
-			historyItem.references?.some(
-				reference => reference.category === 'localBranch' || reference.category === 'remoteBranch',
-			) ?? false,
-		);
-		scope.setContext(
-			'scmHistoryItemHasUpstream',
-			historyItem.references?.some(reference => reference.upstream !== undefined) ?? false,
-		);
+		scope.setContext('scmHistoryItemRemoteAuthority', historyItem.remoteLinks?.length === 1 ? historyItem.remoteLinks[0].uri.authority : '');
+		scope.setContext('scmHistoryItemHasBranch', historyItem.references?.some(reference => reference.category === 'localBranch' || reference.category === 'remoteBranch') ?? false);
+		scope.setContext('scmHistoryItemHasUpstream', historyItem.references?.some(reference => reference.upstream !== undefined) ?? false);
 		const commitDetails = menuTarget
 			? setupHistoryItemHover(
 					{
@@ -1883,12 +1556,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		const overlay = h(document, 'div');
 		overlay.className = 'ash-scm-graph-overlay';
 		if (visibleReferences.length > 0) {
-			rendered.referenceLabels = this.renderReferenceLabels(
-				visibleReferences,
-				menuTarget,
-				scope,
-				rendered.references,
-			);
+			rendered.referenceLabels = this.renderReferenceLabels(visibleReferences, menuTarget, scope, rendered.references);
 			overlay.append(rendered.referenceLabels);
 		}
 		const row = h(document, 'div');
@@ -1897,14 +1565,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		if (repository) {
 			const actions = h(document, 'div');
 			actions.className = 'ash-scm-graph-actions';
-			this.renderInlineActions(
-				actions,
-				MenuId.SCMHistoryItemContext,
-				menuTarget,
-				scope,
-				resources,
-				localize('scm.history.commitActions', 'Commit actions'),
-			);
+			this.renderInlineActions(actions, MenuId.SCMHistoryItemContext, menuTarget, scope, resources, localize('scm.history.commitActions', 'Commit actions'));
 			resources.add(addDisposableListener(actions, 'click', event => event.stopPropagation()));
 			resources.add(addDisposableListener(actions, 'dblclick', event => event.stopPropagation()));
 			overlay.append(actions);
@@ -1949,10 +1610,8 @@ export class SCMHistoryViewPane extends ViewPane {
 
 	private updateCommitRow(row: HistoryItemRow, model: ISCMHistoryItemViewModel): void {
 		const previous = row.historyItemViewModel;
-		const sameLane = (
-			left: ISCMHistoryItemViewModel['inputSwimlanes'][number],
-			right: ISCMHistoryItemViewModel['inputSwimlanes'][number],
-		): boolean => left.id === right.id && left.color === right.color;
+		const sameLane = (left: ISCMHistoryItemViewModel['inputSwimlanes'][number], right: ISCMHistoryItemViewModel['inputSwimlanes'][number]): boolean =>
+			left.id === right.id && left.color === right.color;
 		if (
 			previous.kind !== model.kind ||
 			previous.color !== model.color ||
@@ -1976,20 +1635,9 @@ export class SCMHistoryViewPane extends ViewPane {
 		if (current) row.element.setAttribute('aria-current', 'true');
 		else row.element.removeAttribute('aria-current');
 		row.scope?.setContext('scmHistoryItemHasRemote', (historyItem.remoteLinks?.length ?? 0) > 0);
-		row.scope?.setContext(
-			'scmHistoryItemRemoteAuthority',
-			historyItem.remoteLinks?.length === 1 ? historyItem.remoteLinks[0].uri.authority : '',
-		);
-		row.scope?.setContext(
-			'scmHistoryItemHasBranch',
-			historyItem.references?.some(
-				reference => reference.category === 'localBranch' || reference.category === 'remoteBranch',
-			) ?? false,
-		);
-		row.scope?.setContext(
-			'scmHistoryItemHasUpstream',
-			historyItem.references?.some(reference => reference.upstream !== undefined) ?? false,
-		);
+		row.scope?.setContext('scmHistoryItemRemoteAuthority', historyItem.remoteLinks?.length === 1 ? historyItem.remoteLinks[0].uri.authority : '');
+		row.scope?.setContext('scmHistoryItemHasBranch', historyItem.references?.some(reference => reference.category === 'localBranch' || reference.category === 'remoteBranch') ?? false);
+		row.scope?.setContext('scmHistoryItemHasUpstream', historyItem.references?.some(reference => reference.upstream !== undefined) ?? false);
 		const references = this.getHistoryItemReferences(historyItem);
 		const headReferenceId = references.find(reference => reference.id === this.head?.id)?.id;
 		if (
@@ -2008,8 +1656,7 @@ export class SCMHistoryViewPane extends ViewPane {
 					left.canDelete === right.canDelete,
 			)
 		) {
-			if (row.referenceLabels?.contains(row.element.ownerDocument.activeElement))
-				this.focusHistoryElement(`commit:${model.historyItem.id}`);
+			if (row.referenceLabels?.contains(row.element.ownerDocument.activeElement)) this.focusHistoryElement(`commit:${model.historyItem.id}`);
 			row.references.clear();
 			row.referenceLabels?.remove();
 			row.referenceLabels = undefined;
@@ -2022,18 +1669,12 @@ export class SCMHistoryViewPane extends ViewPane {
 		}
 	}
 
-	private showHistoryMenu(
-		target: SCMHistoryItemViewModelTreeElement,
-		scope: IScopedContextKeyService,
-		focus: HTMLElement,
-		event?: MouseEvent,
-	): void {
+	private showHistoryMenu(target: SCMHistoryItemViewModelTreeElement, scope: IScopedContextKeyService, focus: HTMLElement, event?: MouseEvent): void {
 		this.selectCommit(target.historyItemViewModel.historyItem.id);
 		if (focus.classList.contains('ash-scm-graph-commit')) this.tree?.domFocus();
 		else focus.focus();
 		this.contextMenuService.showContextMenu({
-			getAnchor: () =>
-				event ? { x: event.clientX, y: event.clientY, targetWindow: event.view ?? undefined } : focus,
+			getAnchor: () => (event ? { x: event.clientX, y: event.clientY, targetWindow: event.view ?? undefined } : focus),
 			menuId: target.references ? MenuId.SCMHistoryItemRefContext : MenuId.SCMHistoryItemContext,
 			contextKeyService: scope,
 			menuActionOptions: { arg: target },
@@ -2139,12 +1780,7 @@ export class SCMHistoryViewPane extends ViewPane {
 				);
 				resources.add(
 					addDisposableListener(label, 'keydown', event => {
-						if (
-							event.key === 'Enter' ||
-							event.key === ' ' ||
-							event.key === 'ContextMenu' ||
-							(event.shiftKey && event.key === 'F10')
-						) {
+						if (event.key === 'Enter' || event.key === ' ' || event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
 							event.preventDefault();
 							event.stopPropagation();
 							this.showHistoryMenu(menuTarget, scope, label);
@@ -2173,24 +1809,13 @@ export class SCMHistoryViewPane extends ViewPane {
 		return container;
 	}
 
-	private renderHistoryChange(
-		element: Exclude<HistoryTreeElement, HistoryCommitElement | { kind: 'more' }>,
-		node: ObjectTreeNode<HistoryTreeElement>,
-	): HTMLElement {
+	private renderHistoryChange(element: Exclude<HistoryTreeElement, HistoryCommitElement | { kind: 'more' }>, node: ObjectTreeNode<HistoryTreeElement>): HTMLElement {
 		const document = this.graphElement.ownerDocument;
 		const resources = new DisposableStore();
 		const domNode = h(document, 'div');
-		domNode.className =
-			element.kind === 'folder'
-				? 'ash-scm-graph-folder'
-				: element.kind === 'state'
-					? 'ash-scm-graph-change-state'
-					: 'ash-scm-graph-change-row';
+		domNode.className = element.kind === 'folder' ? 'ash-scm-graph-folder' : element.kind === 'state' ? 'ash-scm-graph-change-state' : 'ash-scm-graph-change-row';
 		domNode.dataset.historyTreeId = element.id;
-		domNode.classList.toggle(
-			'selected',
-			this.tree?.selection.some(selected => selected.id === element.id) ?? false,
-		);
+		domNode.classList.toggle('selected', this.tree?.selection.some(selected => selected.id === element.id) ?? false);
 		domNode.classList.toggle('focused', this.tree?.focus?.id === element.id);
 		domNode.style.setProperty('--scm-graph-change-depth', String(Math.max(0, node.depth - 2)));
 		this.changeRows.set(domNode, resources);
@@ -2211,10 +1836,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			appendIcon(node.collapsed ? Lxicon.chevronRight : Lxicon.chevronDown, arrow);
 			label.append(arrow);
 			const resourceLabel = resources.add(this.resourceLabels.create(label));
-			resourceLabel.setResource(
-				{ resource: element.folder.uri, name: element.folder.name },
-				{ title: element.folder.relativePath, fileKind: FileKind.Directory },
-			);
+			resourceLabel.setResource({ resource: element.folder.uri, name: element.folder.name }, { title: element.folder.relativePath, fileKind: FileKind.Directory });
 			domNode.append(label);
 			return domNode;
 		}
@@ -2228,7 +1850,11 @@ export class SCMHistoryViewPane extends ViewPane {
 		const fileLabel = resources.add(this.resourceLabels.create(content));
 		fileLabel.setResource(
 			{ resource: change.uri, name, description: this.viewMode === 'list' ? parentPath || undefined : undefined },
-			{ reserveIconSpace: true, title: change.path, extraClasses: ['ash-scm-graph-change-label'] },
+			{
+				reserveIconSpace: true,
+				title: change.path,
+				extraClasses: ['ash-scm-graph-change-label'],
+			},
 		);
 		const status = h(document, 'span');
 		status.className = `ash-scm-graph-change-status ${change.status}`;
@@ -2248,14 +1874,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			} satisfies SCMHistoryItemChangeViewModelTreeElement;
 			const actions = h(document, 'div');
 			actions.className = 'ash-scm-graph-actions';
-			this.renderInlineActions(
-				actions,
-				MenuId.SCMHistoryItemChangeContext,
-				menuTarget,
-				scope,
-				resources,
-				localize('scm.history.fileActions', 'History file actions'),
-			);
+			this.renderInlineActions(actions, MenuId.SCMHistoryItemChangeContext, menuTarget, scope, resources, localize('scm.history.fileActions', 'History file actions'));
 			resources.add(addDisposableListener(actions, 'click', event => event.stopPropagation()));
 			resources.add(addDisposableListener(actions, 'dblclick', event => event.stopPropagation()));
 			domNode.append(actions);
@@ -2266,16 +1885,12 @@ export class SCMHistoryViewPane extends ViewPane {
 					this.focusHistoryElement(element.id);
 					this.tree?.setSelection([element.id]);
 					this.contextMenuService.showContextMenu({
-						getAnchor: () =>
-							event.clientX || event.clientY
-								? { x: event.clientX, y: event.clientY, targetWindow: event.view ?? undefined }
-								: domNode,
+						getAnchor: () => (event.clientX || event.clientY ? { x: event.clientX, y: event.clientY, targetWindow: event.view ?? undefined } : domNode),
 						menuId: MenuId.SCMHistoryItemChangeContext,
 						contextKeyService: scope,
 						menuActionOptions: { arg: menuTarget },
 						onHide: cancelled => {
-							if (cancelled)
-								this.restoreHistoryFocus(repository.id, historyItem.id, this.tree?.element ?? domNode);
+							if (cancelled) this.restoreHistoryFocus(repository.id, historyItem.id, this.tree?.element ?? domNode);
 						},
 					});
 				}),
@@ -2298,9 +1913,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		const element = tree?.model.getElement(`commit:${historyItemId}`);
 		if (!tree || element?.kind !== 'commit') return;
 		const scrollTop = tree.scrollTop;
-		const anchor = tree.model.visibleNodes.find(
-			node => (tree.getElementTop(node.id) ?? 0) + SWIMLANE_HEIGHT > scrollTop,
-		);
+		const anchor = tree.model.visibleNodes.find(node => (tree.getElementTop(node.id) ?? 0) + SWIMLANE_HEIGHT > scrollTop);
 		const anchorOffset = anchor ? scrollTop - (tree.getElementTop(anchor.id) ?? 0) : 0;
 		// File reads do not change graph lanes or other commits' children. Updating
 		// only this branch keeps their rows, actions and hover resources intact.
@@ -2325,16 +1938,11 @@ export class SCMHistoryViewPane extends ViewPane {
 			handle.dispose();
 		});
 		try {
-			const result = await provider.provideHistoryItemChanges(
-				historyItem.comparison?.revision ?? historyItem.id,
-				historyItem.comparison?.baseRevision ?? historyItem.parentIds[0],
-			);
-			if (this.isDisposed || provider !== this.provider || this.commitChanges.get(historyItem.id) !== pending)
-				return;
+			const result = await provider.provideHistoryItemChanges(historyItem.comparison?.revision ?? historyItem.id, historyItem.comparison?.baseRevision ?? historyItem.parentIds[0]);
+			if (this.isDisposed || provider !== this.provider || this.commitChanges.get(historyItem.id) !== pending) return;
 			this.commitChanges.set(historyItem.id, { state: 'ready', result: result ?? [] });
 		} catch (error) {
-			if (this.isDisposed || provider !== this.provider || this.commitChanges.get(historyItem.id) !== pending)
-				return;
+			if (this.isDisposed || provider !== this.provider || this.commitChanges.get(historyItem.id) !== pending) return;
 			this.commitChanges.set(historyItem.id, {
 				state: 'error',
 				message: error instanceof Error ? error.message : String(error),
@@ -2343,25 +1951,13 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.updateCommitChildren(historyItem.id);
 	}
 
-	private async openCommitChange(
-		historyItem: ISCMHistoryItem,
-		change: ISCMHistoryItemChange,
-		options: IOpenEditorOptions,
-	): Promise<void> {
+	private async openCommitChange(historyItem: ISCMHistoryItem, change: ISCMHistoryItemChange, options: IOpenEditorOptions): Promise<void> {
 		const provider = this.provider;
 		if (!provider) return;
 		const request = ++this.openGeneration;
-		const file = await provider.resolveHistoryItemChangeContents(
-			historyItem.comparison?.revision ?? historyItem.id,
-			change,
-		);
+		const file = await provider.resolveHistoryItemChangeContents(historyItem.comparison?.revision ?? historyItem.id, change);
 		// Rapid keyboard navigation must not let an older preview replace the latest selected file.
-		if (
-			this.isDisposed ||
-			provider !== this.provider ||
-			(request !== this.openGeneration && !options.editorOptions.pinned && !options.openToSide)
-		)
-			return;
+		if (this.isDisposed || provider !== this.provider || (request !== this.openGeneration && !options.editorOptions.pinned && !options.openToSide)) return;
 		const name = change.path.split('/').at(-1) ?? change.path;
 		const original =
 			file.original.kind === 'text'
@@ -2383,18 +1979,8 @@ export class SCMHistoryViewPane extends ViewPane {
 				: undefined;
 		const group = options.openToSide ? 'sideGroup' : 'activeGroup';
 		if (file.original.kind === 'binary' || file.modified.kind === 'binary') {
-			const before =
-				file.original.kind === 'binary'
-					? file.original.bytes
-					: file.original.kind === 'text'
-						? new TextEncoder().encode(file.original.text)
-						: new Uint8Array();
-			const after =
-				file.modified.kind === 'binary'
-					? file.modified.bytes
-					: file.modified.kind === 'text'
-						? new TextEncoder().encode(file.modified.text)
-						: new Uint8Array();
+			const before = file.original.kind === 'binary' ? file.original.bytes : file.original.kind === 'text' ? new TextEncoder().encode(file.original.text) : new Uint8Array();
+			const after = file.modified.kind === 'binary' ? file.modified.bytes : file.modified.kind === 'text' ? new TextEncoder().encode(file.modified.text) : new Uint8Array();
 			if (!before || !after) {
 				return;
 			}
@@ -2419,11 +2005,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			return;
 		}
 		if (original && modified) {
-			await this.editorService.openEditor(
-				createDiffEditorInput(original, modified, `${original.label} ↔ ${modified.label}`),
-				options.editorOptions,
-				group,
-			);
+			await this.editorService.openEditor(createDiffEditorInput(original, modified, `${original.label} ↔ ${modified.label}`), options.editorOptions, group);
 		} else if (modified) {
 			await this.editorService.openEditor(modified, options.editorOptions, group);
 		} else if (original) {
@@ -2448,18 +2030,12 @@ export class SCMHistoryViewPane extends ViewPane {
 			subject.className = 'ash-scm-graph-hover-subject';
 			subject.textContent = historyItem.subject;
 			const range = h(document, 'div');
-			range.textContent = localize(
-				'scm.history.comparisonRange',
-				'Changes from {0} to {1}',
-				historyItem.comparison.baseRevision.slice(0, 7),
-				historyItem.comparison.revision.slice(0, 7),
-			);
+			range.textContent = localize('scm.history.comparisonRange', 'Changes from {0} to {1}', historyItem.comparison.baseRevision.slice(0, 7), historyItem.comparison.revision.slice(0, 7));
 			const actions = h(document, 'div');
 			const toolbar = resources.add(
 				new WorkbenchToolBar(actions, this.contextMenuService, {
 					ariaLabel: historyItem.subject,
-					actionViewItemProvider: (action, options) =>
-						new LabelActionViewItem(action, { ...options, tooltip: '' }),
+					actionViewItemProvider: (action, options) => new LabelActionViewItem(action, { ...options, tooltip: '' }),
 				}),
 			);
 			const openChanges = this.menuService
@@ -2492,19 +2068,10 @@ export class SCMHistoryViewPane extends ViewPane {
 	}
 }
 
-function historyItemReferences(
-	historyItem: ISCMHistoryItem,
-	head: ISCMHistoryItemRef | undefined,
-): readonly ISCMHistoryItemRef[] {
+function historyItemReferences(historyItem: ISCMHistoryItem, head: ISCMHistoryItemRef | undefined): readonly ISCMHistoryItemRef[] {
 	const references = [...(historyItem.references ?? [])];
-	if (head?.revision === historyItem.id && !references.some(reference => reference.id === head.id))
-		references.unshift(head);
-	return references.sort(
-		(left, right) =>
-			Number(right.id === head?.id) - Number(left.id === head?.id) ||
-			left.category?.localeCompare(right.category ?? '') ||
-			left.name.localeCompare(right.name),
-	);
+	if (head?.revision === historyItem.id && !references.some(reference => reference.id === head.id)) references.unshift(head);
+	return references.sort((left, right) => Number(right.id === head?.id) - Number(left.id === head?.id) || left.category?.localeCompare(right.category ?? '') || left.name.localeCompare(right.name));
 }
 
 function changeStatusLabel(status: string): string {

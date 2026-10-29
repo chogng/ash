@@ -17,10 +17,7 @@ export class SashSettingsController extends Disposable {
 		this.binding = this._register(new SashSettingsBinding(root));
 		this._register(
 			configurationService.onDidChangeConfiguration(event => {
-				if (
-					event.affectsConfiguration(SashConfiguration.size) ||
-					event.affectsConfiguration(SashConfiguration.hoverDelay)
-				) {
+				if (event.affectsConfiguration(SashConfiguration.size) || event.affectsConfiguration(SashConfiguration.hoverDelay)) {
 					this.apply();
 				}
 			}),

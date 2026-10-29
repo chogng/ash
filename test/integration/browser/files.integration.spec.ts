@@ -18,11 +18,7 @@ for (const scenario of ['absent', 'legacy', 'equal', 'conflict', 'invalid', 'int
 			expect(result.target).toBe(scenario === 'conflict' ? '{ "editor.fontSize": 23 }' : undefined);
 		} else {
 			expect(retained).toBe(false);
-			expect(result.target).toBe(
-				scenario === 'equal'
-					? '{ "editor.fontSize": 19 }'
-					: '// retain this comment\n{ "editor.fontSize": 19, }\n',
-			);
+			expect(result.target).toBe(scenario === 'equal' ? '{ "editor.fontSize": 19 }' : '// retain this comment\n{ "editor.fontSize": 19, }\n');
 			if (scenario === 'interrupted') expect(result.retainedOnFailure).toBe(true);
 			else expect(result.error).toBeUndefined();
 		}
@@ -51,13 +47,8 @@ test('closing browser storage aborts pending writes and rejects new transactions
 	});
 });
 
-test('browser files notify another window through storage events when BroadcastChannel is unavailable', async ({
-	page,
-	context,
-}) => {
-	await context.addInitScript(() =>
-		Object.defineProperty(window, 'BroadcastChannel', { configurable: true, value: undefined }),
-	);
+test('browser files notify another window through storage events when BroadcastChannel is unavailable', async ({ page, context }) => {
+	await context.addInitScript(() => Object.defineProperty(window, 'BroadcastChannel', { configurable: true, value: undefined }));
 	await page.goto('/files.html');
 	const other = await context.newPage();
 	try {
@@ -75,9 +66,7 @@ test('browser files notify another window through storage events when BroadcastC
 	}
 });
 
-test('picked-folder foreground fallback revalidates after external create, update and delete and stops with the watch', async ({
-	page,
-}) => {
+test('picked-folder foreground fallback revalidates after external create, update and delete and stops with the watch', async ({ page }) => {
 	await page.goto('/files.html');
 	await page.evaluate(() => window.ashFilesIntegration.prepareBrowserWatch('unavailable'));
 	expect(await page.evaluate(() => window.ashFilesIntegration.foregroundSubscriptions)).toBe(2);
@@ -108,9 +97,7 @@ test('picked-folder foreground fallback revalidates after external create, updat
 	expect(await page.evaluate(() => window.ashFilesIntegration.foregroundSubscriptions)).toBe(0);
 });
 
-test('picked-folder observation failure preserves foreground refresh and an in-flight watch stays cancelled', async ({
-	page,
-}) => {
+test('picked-folder observation failure preserves foreground refresh and an in-flight watch stays cancelled', async ({ page }) => {
 	await page.goto('/files.html');
 	await page.evaluate(() => window.ashFilesIntegration.prepareBrowserWatch('rejected'));
 	await expect.poll(() => page.evaluate(() => window.ashFilesIntegration.observations[0]?.disconnected)).toBe(1);
@@ -128,10 +115,7 @@ test('picked-folder observation failure preserves foreground refresh and an in-f
 	expect(await page.evaluate(() => window.ashFilesIntegration.foregroundSubscriptions)).toBe(0);
 });
 
-test('picked-folder shallow watches ignore descendants and suspend invalidations while the page is hidden', async ({
-	page,
-	context,
-}) => {
+test('picked-folder shallow watches ignore descendants and suspend invalidations while the page is hidden', async ({ page, context }) => {
 	await page.goto('/files.html');
 	const root = await page.evaluate(() => window.ashFilesIntegration.prepareBrowserWatch('available', false));
 	await expect.poll(() => page.evaluate(() => window.ashFilesIntegration.browserWatchEvents)).toEqual([null]);
@@ -166,9 +150,7 @@ test('picked-folder shallow watches ignore descendants and suspend invalidations
 	}
 });
 
-test('picked-folder permission revocation stops observation without prompting and resumes after permission is restored', async ({
-	page,
-}) => {
+test('picked-folder permission revocation stops observation without prompting and resumes after permission is restored', async ({ page }) => {
 	await page.goto('/files.html');
 	await page.evaluate(() => window.ashFilesIntegration.prepareBrowserWatch('available'));
 	await expect.poll(() => page.evaluate(() => window.ashFilesIntegration.browserWatchEvents)).toEqual([null]);
@@ -179,9 +161,7 @@ test('picked-folder permission revocation stops observation without prompting an
 	});
 	await expect.poll(() => page.evaluate(() => window.ashFilesIntegration.permissionQueries)).toBe(1);
 	expect(await page.evaluate(() => window.ashFilesIntegration.permissionRequests)).toBe(0);
-	expect(await page.evaluate(() => window.ashFilesIntegration.observations)).toEqual([
-		{ disconnected: 1, recursive: true },
-	]);
+	expect(await page.evaluate(() => window.ashFilesIntegration.observations)).toEqual([{ disconnected: 1, recursive: true }]);
 	await page.evaluate(() => {
 		window.ashFilesIntegration.setBrowserPermission('granted');
 		window.dispatchEvent(new Event('focus'));
@@ -196,18 +176,12 @@ test('picked-folder watches receive real browser filesystem observation events',
 		const context = await browser.newContext({ baseURL });
 		const page = await context.newPage();
 		await page.goto('/files.html');
-		expect(
-			await page.evaluate(() => typeof (window as Window & { FileSystemObserver?: unknown }).FileSystemObserver),
-		).toBe('function');
+		expect(await page.evaluate(() => typeof (window as Window & { FileSystemObserver?: unknown }).FileSystemObserver)).toBe('function');
 		const root = await page.evaluate(() => window.ashFilesIntegration.prepareBrowserWatch('real'));
 		await expect.poll(() => page.evaluate(() => window.ashFilesIntegration.browserWatchEvents)).toEqual([null]);
 		await page.evaluate(() => window.ashFilesIntegration.changeBrowserFile('observed.txt', 'outside provider'));
-		await expect
-			.poll(() => page.evaluate(() => window.ashFilesIntegration.browserWatchEvents.flat()))
-			.toContain(`${root}/observed.txt`);
-		expect(await page.evaluate(() => window.ashFilesIntegration.readBrowserFile('observed.txt'))).toBe(
-			'outside provider',
-		);
+		await expect.poll(() => page.evaluate(() => window.ashFilesIntegration.browserWatchEvents.flat())).toContain(`${root}/observed.txt`);
+		expect(await page.evaluate(() => window.ashFilesIntegration.readBrowserFile('observed.txt'))).toBe('outside provider');
 		await context.close();
 	} finally {
 		await browser.close();
@@ -234,10 +208,7 @@ test('browser files persist through reload and reject competing saves from two w
 		await page.reload();
 		await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
 		expect((await page.evaluate(() => window.ashFilesIntegration.read())).content).toBe(result.content);
-		expect(await page.evaluate(() => window.ashFilesIntegration.copyAndRename())).toEqual([
-			result.content,
-			result.content,
-		]);
+		expect(await page.evaluate(() => window.ashFilesIntegration.copyAndRename())).toEqual([result.content, result.content]);
 	} finally {
 		await other.close();
 	}
@@ -247,18 +218,12 @@ test('binary imports retain exact bytes after reload and never replace an existi
 	await page.goto('/files.html');
 	await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
 	expect(await page.evaluate(() => window.ashFilesIntegration.importBytes('empty.bin', []))).toBe('saved');
-	expect(await page.evaluate(() => window.ashFilesIntegration.importBytes('empty.bin', [255]))).toBe(
-		'File already exists',
-	);
+	expect(await page.evaluate(() => window.ashFilesIntegration.importBytes('empty.bin', [255]))).toBe('File already exists');
 	expect(await page.evaluate(() => window.ashFilesIntegration.readBytes('empty.bin'))).toEqual([]);
-	expect(
-		await page.evaluate(() => window.ashFilesIntegration.importBytes('binary.bin', [0, 255, 239, 187, 191])),
-	).toBe('saved');
+	expect(await page.evaluate(() => window.ashFilesIntegration.importBytes('binary.bin', [0, 255, 239, 187, 191]))).toBe('saved');
 	await page.reload();
 	await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
-	expect(await page.evaluate(() => window.ashFilesIntegration.readBytes('binary.bin'))).toEqual([
-		0, 255, 239, 187, 191,
-	]);
+	expect(await page.evaluate(() => window.ashFilesIntegration.readBytes('binary.bin'))).toEqual([0, 255, 239, 187, 191]);
 });
 
 test('binary comparison reloads both byte previews and resolves their file paths', async ({ page }) => {
@@ -269,9 +234,7 @@ test('binary comparison reloads both byte previews and resolves their file paths
 			await page.reload();
 			await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
 		}
-		expect(
-			await page.evaluate(restored => window.ashFilesIntegration.showBinaryComparison(restored), restored),
-		).toEqual({ primary: '/binary/after.bin', secondary: '/binary/before.bin' });
+		expect(await page.evaluate(restored => window.ashFilesIntegration.showBinaryComparison(restored), restored)).toEqual({ primary: '/binary/after.bin', secondary: '/binary/before.bin' });
 		const sides = page.locator('#binary-comparison .ash-side-by-side-editor > section');
 		await expect(sides).toHaveCount(2);
 		await expect(sides.first().locator('.ash-binary-editor-content')).toContainText('48 69');

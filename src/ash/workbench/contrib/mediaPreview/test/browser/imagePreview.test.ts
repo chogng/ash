@@ -11,12 +11,7 @@ import { resetNlsResolver, setNlsResolver, formatNlsMessage } from '../../../../
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
-import {
-	IFileService,
-	FileKind,
-	type IFileChangeEvent,
-	FileSystemProviderCapabilities,
-} from '../../../../../platform/files/common/files.js';
+import { IFileService, FileKind, type IFileChangeEvent, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { inspectImage } from '../../../../../base/browser/image.js';
 import { getBuiltinEditorPaneFactory } from '../../../../browser/editor.js';
@@ -76,8 +71,7 @@ class ImageFixture extends Disposable {
 		};
 		this.services.registerSingleton(IFileService, () =>
 			createTestFileService({
-				capabilities:
-					FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
+				capabilities: FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
 				onDidChangeCapabilities: Event.None,
 				watch: (): IDisposable => Disposable.None,
 
@@ -116,12 +110,7 @@ class ImageFixture extends Disposable {
 			dispose: () => {},
 			[Symbol.dispose]: () => {},
 		});
-		this.preview = this._register(
-			getBuiltinEditorPaneFactory('ash.media-preview', IMAGE_PREVIEW_ID)!.create(
-				{ instantiationService: this.services },
-				'Image preview',
-			) as ImagePreview,
-		);
+		this.preview = this._register(getBuiltinEditorPaneFactory('ash.media-preview', IMAGE_PREVIEW_ID)!.create({ instantiationService: this.services }, 'Image preview') as ImagePreview);
 		this.preview.create(this.browser.window.document.body);
 		const viewport = this.browser.window.document.querySelector('.ash-image-preview-viewport')!;
 		Object.defineProperties(viewport, { clientWidth: { value: 400 }, clientHeight: { value: 300 } });
@@ -130,14 +119,7 @@ class ImageFixture extends Disposable {
 
 test('Image preview factory requires production services', () => {
 	using services = new InstantiationService();
-	assert.throws(
-		() =>
-			getBuiltinEditorPaneFactory('ash.media-preview', IMAGE_PREVIEW_ID)!.create(
-				{ instantiationService: services },
-				'Image preview',
-			),
-		/fileService/,
-	);
+	assert.throws(() => getBuiltinEditorPaneFactory('ash.media-preview', IMAGE_PREVIEW_ID)!.create({ instantiationService: services }, 'Image preview'), /fileService/);
 });
 
 test('Image preview opens through the registered pane, zooms and releases its URL on closure', async () => {
@@ -146,10 +128,7 @@ test('Image preview opens through the registered pane, zooms and releases its UR
 	const image = fixture.browser.window.document.querySelector('img')!;
 	const url = image.src;
 	assert.equal(fixture.preview.id, IMAGE_PREVIEW_ID);
-	assert.deepEqual(
-		[image.style.width, image.style.height, image.alt, fixture.closedBitmaps],
-		['400px', '300px', 'Product', 1],
-	);
+	assert.deepEqual([image.style.width, image.style.height, image.alt, fixture.closedBitmaps], ['400px', '300px', 'Product', 1]);
 	fixture.preview.focus();
 	const viewport = fixture.browser.window.document.activeElement!;
 	viewport.dispatchEvent(new fixture.browser.window.KeyboardEvent('keydown', { key: '1', bubbles: true }));
@@ -169,9 +148,7 @@ test('Image preview keeps a first-open read failure in the pane and retries it',
 	await fixture.preview.setInput({ resource, label: 'Product' }, new AbortController().signal);
 
 	assert.match(fixture.preview.getAccessibleContent(), /Could not load image: Read denied/);
-	const retry = Array.from(fixture.browser.window.document.querySelectorAll('button')).find(
-		button => button.textContent?.trim() === 'Retry',
-	);
+	const retry = Array.from(fixture.browser.window.document.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Retry');
 	assert.ok(retry, 'failed image should expose a Retry action');
 	assert.equal(fixture.browser.window.document.querySelector('img')!.hasAttribute('src'), false);
 
@@ -180,10 +157,7 @@ test('Image preview keeps a first-open read failure in the pane and retries it',
 	await setImmediate();
 	const image = fixture.browser.window.document.querySelector('img')!;
 	const url = image.src;
-	assert.deepEqual(
-		[fixture.preview.getAccessibleContent().includes('Image: Product'), image.hasAttribute('src')],
-		[true, true],
-	);
+	assert.deepEqual([fixture.preview.getAccessibleContent().includes('Image: Product'), image.hasAttribute('src')], [true, true]);
 	fixture.preview.clearInput();
 	assert.deepEqual(fixture.revoked, [url]);
 });
@@ -195,10 +169,7 @@ test('Image preview cancellation cannot replace a newer image or retain a previe
 	const opening = fixture.preview.setInput({ resource }, new AbortController().signal);
 	const cancelled = assert.rejects(opening, /cancelled/);
 	fixture.read = async () => png;
-	await fixture.preview.setInput(
-		{ resource: URI.file('/images/new.png'), label: 'New' },
-		new AbortController().signal,
-	);
+	await fixture.preview.setInput({ resource: URI.file('/images/new.png'), label: 'New' }, new AbortController().signal);
 	await first.error(new Error('Old image read failed'));
 	await cancelled;
 	assert.match(fixture.preview.getAccessibleContent(), /Image: New/);
@@ -227,10 +198,7 @@ test('Image preview closes a decoder that finishes after disposal', async () => 
 			},
 		} as ImageBitmap);
 		await cancelled;
-		assert.deepEqual(
-			[fixture.closedBitmaps, fixture.revoked.length, fixture.browser.window.document.querySelector('img')],
-			[1, 0, null],
-		);
+		assert.deepEqual([fixture.closedBitmaps, fixture.revoked.length, fixture.browser.window.document.querySelector('img')], [1, 0, null]);
 	} finally {
 		fixture.dispose();
 	}
@@ -238,16 +206,11 @@ test('Image preview closes a decoder that finishes after disposal', async () => 
 
 test('Image preview initializes its visible and accessible text in Chinese', async () => {
 	const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
 	using fixture = new ImageFixture();
 	await fixture.preview.setInput({ resource }, new AbortController().signal);
 
-	assert.match(
-		fixture.browser.window.document.querySelector('.ash-image-preview-summary')!.textContent!,
-		/像素.*适应窗口/,
-	);
+	assert.match(fixture.browser.window.document.querySelector('.ash-image-preview-summary')!.textContent!, /像素.*适应窗口/);
 	assert.match(fixture.preview.getAccessibleContent(), /图片：product.png[\s\S]*格式：image\/png/);
 	assert.equal(fixture.browser.window.document.querySelector('button')!.textContent, '适应窗口');
 	fixture.preview.clearInput();
@@ -257,9 +220,7 @@ test('Image preview initializes its visible and accessible text in Chinese', asy
 	await fixture.preview.setInput({ resource }, new AbortController().signal);
 	assert.match(fixture.preview.getAccessibleContent(), /无法加载图片：Read denied/);
 	assert.equal(
-		Array.from(fixture.browser.window.document.querySelectorAll('button')).some(
-			button => button.textContent?.trim() === '重试',
-		),
+		Array.from(fixture.browser.window.document.querySelectorAll('button')).some(button => button.textContent?.trim() === '重试'),
 		true,
 	);
 });
@@ -294,13 +255,8 @@ test('Image inspection rejects unsupported signatures and preview decoding failu
 	};
 	await fixture.preview.setInput({ resource }, new AbortController().signal);
 	assert.match(fixture.preview.getAccessibleContent(), /Could not load image: The image data could not be decoded/);
-	assert.deepEqual(
-		[fixture.revoked.length, fixture.browser.window.document.querySelector('img')!.hasAttribute('src')],
-		[0, false],
-	);
-	const retry = Array.from(fixture.browser.window.document.querySelectorAll('button')).find(
-		button => button.textContent?.trim() === 'Retry',
-	);
+	assert.deepEqual([fixture.revoked.length, fixture.browser.window.document.querySelector('img')!.hasAttribute('src')], [0, false]);
+	const retry = Array.from(fixture.browser.window.document.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Retry');
 	assert.ok(retry, 'failed image decode should expose a Retry action');
 	fixture.decode = async () =>
 		({

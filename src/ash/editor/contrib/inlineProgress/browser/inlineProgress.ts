@@ -3,12 +3,7 @@ import { disposableTimeout } from '../../../../base/common/async.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { type IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import {
-	ContentWidgetPositionPreference,
-	type ICodeEditor,
-	type IContentWidget,
-	type IContentWidgetPosition,
-} from '../../../browser/editorBrowser.js';
+import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../browser/editorBrowser.js';
 import type { IPosition } from '../../../common/core/position.js';
 import './inlineProgressWidget.css';
 
@@ -71,25 +66,12 @@ export class InlineProgressManager extends Disposable {
 		super();
 	}
 
-	public async showWhile<R>(
-		position: IPosition,
-		title: string,
-		promise: Promise<R>,
-		delegate: InlineProgressDelegate,
-		delayOverride = 500,
-	): Promise<R> {
+	public async showWhile<R>(position: IPosition, title: string, promise: Promise<R>, delegate: InlineProgressDelegate, delayOverride = 500): Promise<R> {
 		const operation = ++this.operation;
 		this.clear();
 		this.pending.value = disposableTimeout(
 			() => {
-				this.widget.value = this.instantiationService.createInstance(
-					inlineProgressWidget,
-					this.id,
-					this.editor,
-					position,
-					title,
-					delegate,
-				);
+				this.widget.value = this.instantiationService.createInstance(inlineProgressWidget, this.id, this.editor, position, title, delegate);
 			},
 			Math.max(0, delayOverride),
 		);

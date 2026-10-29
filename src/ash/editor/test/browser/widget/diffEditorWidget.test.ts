@@ -8,11 +8,7 @@ import { Event } from '../../../../base/common/event.js';
 import { setIconResolver } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Range } from '../../../common/core/range.js';
 import { TokenizationRegistry, type IState } from '../../../common/languages.js';
-import {
-	type IDocumentDiff,
-	type IDocumentDiffProvider,
-	type IDocumentDiffProviderOptions,
-} from '../../../common/diff/documentDiffProvider.js';
+import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from '../../../common/diff/documentDiffProvider.js';
 import { DefaultLinesDiffComputer } from '../../../common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
 import { type ITextModel } from '../../../common/model.js';
 import { TextModel } from '../../../common/model/textModel.js';
@@ -31,10 +27,7 @@ import { createTestLanguageConfigurationService } from '../../common/modes/testL
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../../common/services/languageFeaturesService.js';
 import { IContextKeyService, ContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import {
-	AccessibilitySupport,
-	IAccessibilityService,
-} from '../../../../platform/accessibility/common/accessibility.js';
+import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import { installEditorTestDom } from '../editorTestGlobals.js';
 
@@ -45,11 +38,7 @@ class TestResizeObserver {
 	unobserve(): void {}
 	disconnect(): void {}
 }
-const installedGlobals = installEditorTestDom(
-	browserEnvironment,
-	['Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent'],
-	{ ResizeObserver: TestResizeObserver },
-);
+const installedGlobals = installEditorTestDom(browserEnvironment, ['Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent'], { ResizeObserver: TestResizeObserver });
 setIconResolver(browserEnvironment.window.document, icon => getIconDefinition(icon));
 
 await import('../../../contrib/diffEditorBreadcrumbs/browser/contribution.js');
@@ -106,14 +95,8 @@ test('DiffEditorWidget colors inline removed lines and refreshes their tokens wi
 	assert.ok(removedLine);
 	assert.equal(removedLine.textContent, 'before');
 	assert.equal(removedLine.getAttribute('aria-label'), 'Removed line 1: before');
-	assert.equal(
-		[...removedLine.querySelectorAll('.token-keyword')].map(token => token.textContent).join(''),
-		'before',
-	);
-	assert.equal(
-		[...removedLine.querySelectorAll('.stanza-diff-inline-removed')].map(token => token.textContent).join(''),
-		'before',
-	);
+	assert.equal([...removedLine.querySelectorAll('.token-keyword')].map(token => token.textContent).join(''), 'before');
+	assert.equal([...removedLine.querySelectorAll('.stanza-diff-inline-removed')].map(token => token.textContent).join(''), 'before');
 
 	const unchangedToken = removedLine.firstElementChild;
 	original.deltaDecorations(
@@ -199,10 +182,7 @@ test('inline token batches refresh only deleted rows in the changed range', asyn
 		assert.deepEqual(queries, [99, 100, 101, 102, 103]);
 		assert.strictEqual(lines[10]!.firstElementChild, retainedSpan);
 		for (let index = 99; index <= 103; index++) {
-			assert.equal(
-				[...lines[index]!.querySelectorAll('.token-keyword')].map(token => token.textContent).join(''),
-				`before ${index}`,
-			);
+			assert.equal([...lines[index]!.querySelectorAll('.token-keyword')].map(token => token.textContent).join(''), `before ${index}`);
 		}
 	} finally {
 		source.getLineTokens = getLineTokens;
@@ -274,10 +254,7 @@ test('inline removed lines follow semantic theme styles and coloring settings wh
 	assert.deepEqual(style(), ['#00ff00', 'bold']);
 	await services.get(IConfigurationService).updateValue('editor.semanticHighlighting.enabled', false);
 	assert.deepEqual(style(), ['', '']);
-	assert.equal(
-		[...removedLine.querySelectorAll('.stanza-diff-inline-removed')].map(token => token.textContent).join(''),
-		'before',
-	);
+	assert.equal([...removedLine.querySelectorAll('.stanza-diff-inline-removed')].map(token => token.textContent).join(''), 'before');
 });
 
 test('DiffEditorWidget owns two editors, keeps source models caller-owned, and refreshes decorations after an edit', async () => {
@@ -312,10 +289,7 @@ test('DiffEditorWidget owns two editors, keeps source models caller-owned, and r
 		true,
 	);
 	assert.equal(editor.nextChange(), 1);
-	assert.match(
-		editor.element.querySelector('.stanza-diff-editor-accessibility-status')?.textContent ?? '',
-		/Change 1 of 1/,
-	);
+	assert.match(editor.element.querySelector('.stanza-diff-editor-accessibility-status')?.textContent ?? '', /Change 1 of 1/);
 
 	modified.applyEdits([{ range: new Range(2, 1, 2, 10), text: 'old value' }]);
 	await waitForReady(model);
@@ -372,11 +346,9 @@ test('DiffEditorWidget retains exact keyboard sash steps across ratio round trip
 	using editor = services.createInstance(DiffEditorWidget, { container, model });
 	editor.layout({ width: 800, height: 80 });
 	const sash = editor.element.querySelector<HTMLElement>('.stanza-diff-sash')!;
-	const originalWidth = () =>
-		Number.parseFloat(editor.element.style.getPropertyValue('--stanza-diff-original-width'));
+	const originalWidth = () => Number.parseFloat(editor.element.style.getPropertyValue('--stanza-diff-original-width'));
 	const initial = originalWidth();
-	const press = (key: string, altKey = false) =>
-		sash.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key, altKey, bubbles: true }));
+	const press = (key: string, altKey = false) => sash.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key, altKey, bubbles: true }));
 	press('ArrowRight');
 	assert.equal(originalWidth(), initial + 10);
 	press('ArrowLeft', true);
@@ -649,18 +621,9 @@ function createServices(): InstantiationService {
 class WidgetTestDiffComputationService implements IDocumentDiffProvider {
 	readonly onDidChange = Event.None;
 
-	async computeDiff(
-		original: ITextModel,
-		modified: ITextModel,
-		options: IDocumentDiffProviderOptions,
-		token: CancellationToken,
-	): Promise<IDocumentDiff> {
+	async computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, token: CancellationToken): Promise<IDocumentDiff> {
 		assert.equal(token.isCancellationRequested, false);
-		const result = new DefaultLinesDiffComputer().computeDiff(
-			original.getLinesContent(),
-			modified.getLinesContent(),
-			options,
-		);
+		const result = new DefaultLinesDiffComputer().computeDiff(original.getLinesContent(), modified.getLinesContent(), options);
 		return {
 			identical: original.getValue() === modified.getValue(),
 			quitEarly: result.hitTimeout,

@@ -11,18 +11,10 @@ import { FileKind, IFileService, type IFileStat } from '../../../../../platform/
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
-import {
-	IFileTextModelService,
-	ITextModelResourceService,
-	type TextModelReference,
-} from '../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { IFileTextModelService, ITextModelResourceService, type TextModelReference } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { createTestEditorServices, getWebviewHtml } from '../../../../test/common/testEditorServices.js';
-import {
-	WebviewEditor,
-	type CustomTextEditorContent,
-	type CustomTextEditorProvider,
-} from '../../browser/webviewEditor.js';
+import { WebviewEditor, type CustomTextEditorContent, type CustomTextEditorProvider } from '../../browser/webviewEditor.js';
 
 function createEditor(
 	store: DisposableStore,

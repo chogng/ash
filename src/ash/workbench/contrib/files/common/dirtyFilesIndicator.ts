@@ -27,10 +27,7 @@ export class DirtyFilesIndicator extends Disposable implements IWorkbenchContrib
 			this.badge.clear();
 			return;
 		}
-		const description =
-			count === 1
-				? localize('files.dirtyOne', '1 unsaved file')
-				: localize('files.dirtyMany', '{0} unsaved files', count);
+		const description = count === 1 ? localize('files.dirtyOne', '1 unsaved file') : localize('files.dirtyMany', '{0} unsaved files', count);
 		this.badge.value = this.activityService.showViewContainerActivity(WorkbenchViewContainerId.Sidebar, {
 			badge: new NumberBadge(count, () => description),
 		});

@@ -25,9 +25,7 @@ export interface IUserHomeProvider {
 
 /** Formats a resource using the target operating system's path conventions. */
 export function getPathLabel(resource: URI, formatting: IPathLabelFormatting): string {
-	const relative = formatting.relative
-		? getRelativePathLabel(resource, formatting.relative, formatting.os)
-		: undefined;
+	const relative = formatting.relative ? getRelativePathLabel(resource, formatting.relative, formatting.os) : undefined;
 	if (relative !== undefined) return relative;
 
 	let path = resourcePath(resource, formatting.os);
@@ -44,11 +42,7 @@ function getRelativePathLabel(resource: URI, provider: IRelativePathProvider, os
 	// Workspace providers may compare resources by scheme. When a caller hands
 	// us a path-only URI, align it with the first workspace scheme just as VS
 	// Code does before asking the provider for ownership.
-	if (
-		resource.scheme !== firstFolder.uri.scheme &&
-		resource.path.startsWith('/') &&
-		!resource.path.startsWith('//')
-	) {
+	if (resource.scheme !== firstFolder.uri.scheme && resource.path.startsWith('/') && !resource.path.startsWith('//')) {
 		resource = firstFolder.uri.with({ path: resource.path });
 	}
 	const folder = provider.getWorkspaceFolder(resource);
@@ -62,13 +56,8 @@ function getRelativePathLabel(resource: URI, provider: IRelativePathProvider, os
 }
 
 function resourcePath(resource: URI, os: OperatingSystem): string {
-	let path =
-		resource.authority && resource.scheme === 'file' ? `//${resource.authority}${resource.path}` : resource.path;
-	if (
-		os === OperatingSystem.Windows &&
-		(resource.scheme !== 'file' || !resource.authority) &&
-		/^\/[a-z]:/i.test(path)
-	) {
+	let path = resource.authority && resource.scheme === 'file' ? `//${resource.authority}${resource.path}` : resource.path;
+	if (os === OperatingSystem.Windows && (resource.scheme !== 'file' || !resource.authority) && /^\/[a-z]:/i.test(path)) {
 		path = `${path[1].toLowerCase()}${path.slice(2)}`;
 	}
 	return os === OperatingSystem.Windows ? path.replaceAll('/', '\\') : path;
@@ -160,8 +149,7 @@ export function shorten(paths: string[], defaultPathSeparator = isWindows ? '\\'
 					const otherPath = paths[otherPathIndex];
 					if (otherPathIndex === pathIndex || !otherPath || !otherPath.includes(subpath)) continue;
 					const isSubpathEnding = start + subpathLength === segments.length;
-					const subpathWithSeparator =
-						start > 0 && otherPath.includes(pathSeparator) ? `${pathSeparator}${subpath}` : subpath;
+					const subpathWithSeparator = start > 0 && otherPath.includes(pathSeparator) ? `${pathSeparator}${subpath}` : subpath;
 					const isOtherPathEnding = otherPath.endsWith(subpathWithSeparator);
 					matchesOtherPath = !isSubpathEnding || isOtherPathEnding;
 				}
@@ -182,10 +170,7 @@ export function shorten(paths: string[], defaultPathSeparator = isWindows ? '\\'
 				if (start > 0) result += `${ellipsis}${pathSeparator}`;
 				if (!result.endsWith(subpath)) result += subpath;
 				if (start + subpathLength < segments.length) {
-					result +=
-						segments[start + subpathLength] === '' && start + subpathLength === segments.length - 1
-							? pathSeparator
-							: `${pathSeparator}${ellipsis}`;
+					result += segments[start + subpathLength] === '' && start + subpathLength === segments.length - 1 ? pathSeparator : `${pathSeparator}${ellipsis}`;
 				}
 				shortenedPaths[pathIndex] = result;
 				found = true;
@@ -201,10 +186,7 @@ export interface ISeparator {
 }
 
 /** Expands `${variable}` placeholders and omits separators beside empty values. */
-export function template(
-	value: string,
-	values: Readonly<Record<string, string | ISeparator | undefined | null>> = {},
-): string {
+export function template(value: string, values: Readonly<Record<string, string | ISeparator | undefined | null>> = {}): string {
 	const segments: { readonly value: string; readonly separator: boolean }[] = [];
 	let current = '';
 	let variable = false;
@@ -249,20 +231,12 @@ export function mnemonicMenuLabel(label: string, forceDisableMnemonics = false):
 }
 
 export function mnemonicButtonLabel(label: string, forceDisableMnemonics: true): string;
-export function mnemonicButtonLabel(
-	label: string,
-	forceDisableMnemonics?: false,
-): { readonly withMnemonic: string; readonly withoutMnemonic: string };
-export function mnemonicButtonLabel(
-	label: string,
-	forceDisableMnemonics = false,
-): { readonly withMnemonic: string; readonly withoutMnemonic: string } | string {
+export function mnemonicButtonLabel(label: string, forceDisableMnemonics?: false): { readonly withMnemonic: string; readonly withoutMnemonic: string };
+export function mnemonicButtonLabel(label: string, forceDisableMnemonics = false): { readonly withMnemonic: string; readonly withoutMnemonic: string } | string {
 	const withoutMnemonic = label.replace(/\(&&\w\)|&&/gu, '');
 	if (forceDisableMnemonics) return withoutMnemonic;
 	if (isMacintosh) return { withMnemonic: withoutMnemonic, withoutMnemonic };
-	const withMnemonic = isWindows
-		? label.replace(/&&|&/gu, match => (match === '&' ? '&&' : '&'))
-		: label.replace(/&&/gu, '_');
+	const withMnemonic = isWindows ? label.replace(/&&|&/gu, match => (match === '&' ? '&&' : '&')) : label.replace(/&&/gu, '_');
 	return { withMnemonic, withoutMnemonic };
 }
 
@@ -297,9 +271,7 @@ function pathSeparator(os: OperatingSystem): '\\' | '/' {
 function normalizePath(path: string, os: OperatingSystem): string {
 	const rules = os === OperatingSystem.Windows ? win32 : posix;
 	const normalized = rules.normalize(path);
-	return rules.dirname(normalized) === normalized
-		? normalized
-		: normalized.replace(os === OperatingSystem.Windows ? /[\\/]+$/ : /\/+$/, '');
+	return rules.dirname(normalized) === normalized ? normalized : normalized.replace(os === OperatingSystem.Windows ? /[\\/]+$/ : /\/+$/, '');
 }
 
 function trimTrailingSeparators(path: string): string {

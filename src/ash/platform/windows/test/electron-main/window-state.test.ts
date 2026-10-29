@@ -12,17 +12,8 @@ import {
 	WorkbenchState,
 	serializeWorkspaceIdentifier,
 } from '../../../../platform/workspace/common/workspace.js';
-import {
-	defaultWindowState,
-	WindowMode,
-	type IWindowBounds,
-} from '../../../../platform/window/electron-main/window.js';
-import {
-	applyWindowState,
-	resolveBrowserWindowOptions,
-	validateWindowState,
-	type IWindowDisplay,
-} from '../../../../platform/windows/electron-main/windows.js';
+import { defaultWindowState, WindowMode, type IWindowBounds } from '../../../../platform/window/electron-main/window.js';
+import { applyWindowState, resolveBrowserWindowOptions, validateWindowState, type IWindowDisplay } from '../../../../platform/windows/electron-main/windows.js';
 import {
 	WindowsStateHandler,
 	WindowSessionStateHandler,
@@ -79,11 +70,8 @@ class TestStateService implements IStateService {
 }
 
 test('window session state owner persists active Workbench and Agents windows and the last closed window', async () => {
-	type Entry =
-		| { readonly kind: 'workbench'; readonly workspace: IAnyWorkspaceIdentifier }
-		| { readonly kind: 'sessions'; readonly workspace: IAnyWorkspaceIdentifier };
-	const isEntry = (entry: IWindowSessionEntry): entry is Entry =>
-		entry.kind === 'workbench' || entry.kind === 'sessions';
+	type Entry = { readonly kind: 'workbench'; readonly workspace: IAnyWorkspaceIdentifier } | { readonly kind: 'sessions'; readonly workspace: IAnyWorkspaceIdentifier };
+	const isEntry = (entry: IWindowSessionEntry): entry is Entry => entry.kind === 'workbench' || entry.kind === 'sessions';
 	const workbench: Entry = { kind: 'workbench', workspace: folderWorkspace };
 	const agents: Entry = { kind: 'sessions', workspace: multiRootWorkspace };
 	const state = new TestStateService();
@@ -130,9 +118,7 @@ test('window session state reads retired mode fields and saves only window kind 
 	state.setItem('windowSession', {
 		version: 1,
 		active: 0,
-		windows: [
-			{ kind: 'sessions', workspace: serializeWorkspaceIdentifier(multiRootWorkspace), modeId: 'retired-mode' },
-		],
+		windows: [{ kind: 'sessions', workspace: serializeWorkspaceIdentifier(multiRootWorkspace), modeId: 'retired-mode' }],
 	});
 	const handler = new WindowSessionStateHandler(
 		state,
@@ -260,11 +246,7 @@ class TestWindow implements IStatefulWindow {
 	}
 }
 
-function createHandler(
-	stateService: IStateService,
-	workspace: IAnyWorkspaceIdentifier,
-	backupPath?: string,
-): WindowsStateHandler {
+function createHandler(stateService: IStateService, workspace: IAnyWorkspaceIdentifier, backupPath?: string): WindowsStateHandler {
 	return new WindowsStateHandler({
 		stateService,
 		workspace,
@@ -280,8 +262,16 @@ function createHandler(
 }
 
 test('default window states share the user-requested 1200 by 800 size', () => {
-	assert.deepEqual(defaultWindowState(WorkbenchState.EMPTY), { mode: WindowMode.Normal, width: 1200, height: 800 });
-	assert.deepEqual(defaultWindowState(WorkbenchState.FOLDER), { mode: WindowMode.Normal, width: 1200, height: 800 });
+	assert.deepEqual(defaultWindowState(WorkbenchState.EMPTY), {
+		mode: WindowMode.Normal,
+		width: 1200,
+		height: 800,
+	});
+	assert.deepEqual(defaultWindowState(WorkbenchState.FOLDER), {
+		mode: WindowMode.Normal,
+		width: 1200,
+		height: 800,
+	});
 	assert.deepEqual(defaultWindowState(WorkbenchState.WORKSPACE), {
 		mode: WindowMode.Normal,
 		width: 1200,
@@ -290,8 +280,7 @@ test('default window states share the user-requested 1200 by 800 size', () => {
 });
 
 test('window dimension settings validate their complete persisted values', () => {
-	for (const value of ['default', 'inherit', 'offset', 'maximized', 'fullscreen'])
-		assert.equal(parseNewWindowDimensions(value), value);
+	for (const value of ['default', 'inherit', 'offset', 'maximized', 'fullscreen']) assert.equal(parseNewWindowDimensions(value), value);
 	for (const value of ['center', true, 1440, null]) assert.throws(() => parseNewWindowDimensions(value), TypeError);
 	assert.equal(parseRestoreFullscreen(true), true);
 	assert.equal(parseRestoreFullscreen(false), false);
@@ -315,7 +304,12 @@ test('new windows apply each dimension policy to normal bounds and retain their 
 				lastActiveWindow: { state: active, bounds: active },
 				existingWindows: [active],
 			}),
-			{ ...bounds, mode, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea },
+			{
+				...bounds,
+				mode,
+				displayId: primaryDisplay.id,
+				workArea: primaryDisplay.workArea,
+			},
 		);
 	}
 	for (const policy of ['inherit', 'offset'] as const) {
@@ -496,7 +490,10 @@ test('window state falls back to defaults when persisted data is invalid', () =>
 		openedWindows: [
 			{
 				folder: folderWorkspace.uri.toString(),
-				uiState: { mode: WindowMode.Normal, bounds: { x: 0, y: 0, width: -1, height: 800 } },
+				uiState: {
+					mode: WindowMode.Normal,
+					bounds: { x: 0, y: 0, width: -1, height: 800 },
+				},
 			},
 		],
 	});
@@ -612,7 +609,14 @@ test('resolution changes keep a fitting saved rectangle and bring partially hidd
 	for (const workArea of [undefined, primaryDisplay.workArea]) {
 		assert.deepEqual(
 			validateWindowState(
-				{ mode: WindowMode.Normal, x: 120, y: 80, width: 1100, height: 760, workArea },
+				{
+					mode: WindowMode.Normal,
+					x: 120,
+					y: 80,
+					width: 1100,
+					height: 760,
+					workArea,
+				},
 				[display],
 				WorkbenchState.FOLDER,
 			),
@@ -628,7 +632,14 @@ test('resolution changes keep a fitting saved rectangle and bring partially hidd
 		);
 		assert.deepEqual(
 			validateWindowState(
-				{ mode: WindowMode.Normal, x: 1200, y: 700, width: 1100, height: 760, workArea },
+				{
+					mode: WindowMode.Normal,
+					x: 1200,
+					y: 700,
+					width: 1100,
+					height: 760,
+					workArea,
+				},
 				[display],
 				WorkbenchState.FOLDER,
 			),
@@ -649,18 +660,29 @@ test('window state restores exact folder and workspace records', () => {
 	const stateService = new TestStateService();
 	stateService.setItem('windowsState', {
 		version: 1,
-		lastActiveWindow: { uiState: { mode: WindowMode.Normal, bounds: { x: 30, y: 40, width: 1200, height: 800 } } },
+		lastActiveWindow: {
+			uiState: {
+				mode: WindowMode.Normal,
+				bounds: { x: 30, y: 40, width: 1200, height: 800 },
+			},
+		},
 		openedWindows: [
 			{
 				folder: folderWorkspace.uri.toString(),
-				uiState: { mode: WindowMode.Normal, bounds: { x: 100, y: 80, width: 1100, height: 760 } },
+				uiState: {
+					mode: WindowMode.Normal,
+					bounds: { x: 100, y: 80, width: 1100, height: 760 },
+				},
 			},
 			{
 				workspaceIdentifier: {
 					id: multiRootWorkspace.id,
 					configURIPath: multiRootWorkspace.configPath.toString(),
 				},
-				uiState: { mode: WindowMode.Maximized, bounds: { x: 140, y: 90, width: 1000, height: 700 } },
+				uiState: {
+					mode: WindowMode.Maximized,
+					bounds: { x: 140, y: 90, width: 1000, height: 700 },
+				},
 			},
 		],
 	});
@@ -673,7 +695,14 @@ test('window state restores exact folder and workspace records', () => {
 				bounds: primaryDisplay.bounds,
 			},
 		}),
-		{ mode: WindowMode.Normal, x: 100, y: 80, width: 1100, height: 760, displayId: undefined },
+		{
+			mode: WindowMode.Normal,
+			x: 100,
+			y: 80,
+			width: 1100,
+			height: 760,
+			displayId: undefined,
+		},
 	);
 	assert.deepEqual(
 		createHandler(stateService, multiRootWorkspace).getNewWindowState({
@@ -683,7 +712,14 @@ test('window state restores exact folder and workspace records', () => {
 				bounds: primaryDisplay.bounds,
 			},
 		}),
-		{ mode: WindowMode.Maximized, x: 140, y: 90, width: 1000, height: 700, displayId: undefined },
+		{
+			mode: WindowMode.Maximized,
+			x: 140,
+			y: 90,
+			width: 1000,
+			height: 700,
+			displayId: undefined,
+		},
 	);
 });
 
@@ -691,21 +727,31 @@ test('empty windows restore by backup path', () => {
 	const stateService = new TestStateService();
 	stateService.setItem('windowsState', {
 		version: 1,
-		lastActiveWindow: { uiState: { mode: WindowMode.Normal, bounds: { x: 30, y: 40, width: 1200, height: 800 } } },
+		lastActiveWindow: {
+			uiState: {
+				mode: WindowMode.Normal,
+				bounds: { x: 30, y: 40, width: 1200, height: 800 },
+			},
+		},
 		openedWindows: [
 			{
 				backupPath: 'C:\\backups\\empty-1',
-				uiState: { mode: WindowMode.Normal, bounds: { x: 180, y: 120, width: 900, height: 640 } },
+				uiState: {
+					mode: WindowMode.Normal,
+					bounds: { x: 180, y: 120, width: 900, height: 640 },
+				},
 			},
 		],
 	});
 
-	assert.deepEqual(
-		createHandler(stateService, UNKNOWN_EMPTY_WINDOW_WORKSPACE, 'C:\\backups\\empty-1').getNewWindowState(
-			defaultOptions,
-		),
-		{ mode: WindowMode.Normal, x: 180, y: 120, width: 900, height: 640, displayId: undefined },
-	);
+	assert.deepEqual(createHandler(stateService, UNKNOWN_EMPTY_WINDOW_WORKSPACE, 'C:\\backups\\empty-1').getNewWindowState(defaultOptions), {
+		mode: WindowMode.Normal,
+		x: 180,
+		y: 120,
+		width: 900,
+		height: 640,
+		displayId: undefined,
+	});
 });
 
 test('first unmatched window inherits the last active window state', () => {
@@ -717,7 +763,10 @@ test('first unmatched window inherits the last active window state', () => {
 				id: 'other-project',
 				configURIPath: URI.file('C:\\projects\\other.ash-workspace').toString(),
 			},
-			uiState: { mode: WindowMode.Normal, bounds: { x: 200, y: 100, width: 1280, height: 820 } },
+			uiState: {
+				mode: WindowMode.Normal,
+				bounds: { x: 200, y: 100, width: 1280, height: 820 },
+			},
 		},
 		openedWindows: [],
 	});
@@ -789,17 +838,35 @@ test('new unmatched windows use the required default size on the active display 
 
 test('window state is adjusted to the current single display', () => {
 	const state = validateWindowState(
-		{ mode: WindowMode.Normal, x: 5000, y: 5000, width: 2400, height: 1600 },
+		{
+			mode: WindowMode.Normal,
+			x: 5000,
+			y: 5000,
+			width: 2400,
+			height: 1600,
+		},
 		[primaryDisplay],
 		WorkbenchState.FOLDER,
 	);
 
-	assert.deepEqual(state, { mode: WindowMode.Normal, x: 0, y: 0, width: 1920, height: 1040 });
+	assert.deepEqual(state, {
+		mode: WindowMode.Normal,
+		x: 0,
+		y: 0,
+		width: 1920,
+		height: 1040,
+	});
 });
 
 test('window options include restored bounds and defer non-normal display', () => {
 	const options = resolveBrowserWindowOptions({
-		state: { mode: WindowMode.Maximized, x: 100, y: 60, width: 1280, height: 800 },
+		state: {
+			mode: WindowMode.Maximized,
+			x: 100,
+			y: 60,
+			width: 1280,
+			height: 800,
+		},
 		webPreferences: {
 			contextIsolation: true,
 			nodeIntegration: false,
@@ -866,7 +933,10 @@ test('workspace windows persist their workspace identifier', async () => {
 	await handler.saveWindowState(window);
 
 	const serializedWindow = {
-		workspaceIdentifier: { id: multiRootWorkspace.id, configURIPath: multiRootWorkspace.configPath.toString() },
+		workspaceIdentifier: {
+			id: multiRootWorkspace.id,
+			configURIPath: multiRootWorkspace.configPath.toString(),
+		},
 		uiState: {
 			mode: WindowMode.Normal,
 			displayId: primaryDisplay.id,
@@ -959,10 +1029,7 @@ test('dedicated windows keep known placement separate and share first-window pla
 	const dedicatedWindow = new TestWindow();
 	dedicatedWindow.bounds = { x: 180, y: 140, width: 1180, height: 780 };
 	await dedicated.saveWindowState(dedicatedWindow);
-	assert.deepEqual(
-		(stateService.getItem('windowsState') as { openedWindows: unknown[] }).openedWindows,
-		mainState.openedWindows,
-	);
+	assert.deepEqual((stateService.getItem('windowsState') as { openedWindows: unknown[] }).openedWindows, mainState.openedWindows);
 	assert.deepEqual(createHandler(stateService, { id: 'new-empty' }).getNewWindowState(defaultOptions), {
 		mode: WindowMode.Normal,
 		x: 180,
@@ -1130,7 +1197,15 @@ test('restoring onto a removed display retains logical size within the new work 
 			[tiny],
 			WorkbenchState.FOLDER,
 		),
-		{ mode: WindowMode.Normal, x: 0, y: 0, width: 480, height: 360, displayId: 2, workArea: tiny.workArea },
+		{
+			mode: WindowMode.Normal,
+			x: 0,
+			y: 0,
+			width: 480,
+			height: 360,
+			displayId: 2,
+			workArea: tiny.workArea,
+		},
 	);
 });
 
@@ -1195,7 +1270,10 @@ test('resolution changes apply once after OS resize events and defer maximized g
 	await Promise.resolve();
 	assert.deepEqual(
 		{ bounds: window.bounds, flushed: stateService.flushCount },
-		{ bounds: { x: 0, y: 0, width: 960, height: 520 }, flushed },
+		{
+			bounds: { x: 0, y: 0, width: 960, height: 520 },
+			flushed,
+		},
 	);
 });
 
@@ -1231,11 +1309,7 @@ test('display changes preserve fullscreen mode and normal bounds for leaving ful
 });
 
 test('invalid persisted work areas are rejected at the storage boundary', () => {
-	for (const workArea of [
-		null,
-		{ x: 0, y: 0, width: 0, height: 1040 },
-		{ x: 0, y: 0, width: '1920', height: 1040 },
-	]) {
+	for (const workArea of [null, { x: 0, y: 0, width: 0, height: 1040 }, { x: 0, y: 0, width: '1920', height: 1040 }]) {
 		const stateService = new TestStateService();
 		stateService.setItem('windowsState', {
 			version: 1,
@@ -1391,7 +1465,10 @@ test('work areas smaller than the default minimum remain reachable through Elect
 	changes.fire();
 	assert.deepEqual(
 		{ bounds: window.bounds, minimum: window.minimumSize },
-		{ bounds: { x: 0, y: 0, width: 300, height: 200 }, minimum: { width: 300, height: 200 } },
+		{
+			bounds: { x: 0, y: 0, width: 300, height: 200 },
+			minimum: { width: 300, height: 200 },
+		},
 	);
 	const options = resolveBrowserWindowOptions({
 		state: { mode: WindowMode.Normal, ...window.bounds, workArea: display.workArea },

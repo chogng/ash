@@ -38,8 +38,7 @@ export function getRegisteredIcon(id: string, document: Document): Icon | undefi
 function renderDefinition(element: HTMLSpanElement, definition: IconDefinition | undefined): void {
 	element.classList.remove('ash-icon-default-font', 'ash-icon-font', 'ash-icon-layered');
 	element.removeAttribute('data-ash-icon-character');
-	for (const property of ['--ash-icon-font-family', '--ash-icon-font-weight', '--ash-icon-font-style'])
-		element.style.removeProperty(property);
+	for (const property of ['--ash-icon-font-family', '--ash-icon-font-weight', '--ash-icon-font-style']) element.style.removeProperty(property);
 	element.replaceChildren();
 	mountedIcons.add(element);
 	if (!definition) {

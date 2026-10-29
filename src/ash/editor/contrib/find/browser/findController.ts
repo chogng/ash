@@ -48,20 +48,12 @@ import { IQuickInputService } from '../../../../platform/quickinput/common/quick
 
 const SEARCH_STRING_MAX_LENGTH = 524_288;
 
-export function getSelectionSearchString(
-	editor: ICodeEditor,
-	seedSearchStringFromSelection: 'single' | 'multiple' = 'single',
-	seedSearchStringFromNonEmptySelection = false,
-): string | null {
+export function getSelectionSearchString(editor: ICodeEditor, seedSearchStringFromSelection: 'single' | 'multiple' = 'single', seedSearchStringFromNonEmptySelection = false): string | null {
 	const model = editor.getModel();
 	const selection = editor.getSelection();
 	if (!model || !selection) return null;
-	if (seedSearchStringFromSelection === 'single' && selection.startLineNumber !== selection.endLineNumber)
-		return null;
-	if (selection.isEmpty())
-		return seedSearchStringFromNonEmptySelection
-			? null
-			: (model.getWordAtPosition(selection.getStartPosition())?.word ?? null);
+	if (seedSearchStringFromSelection === 'single' && selection.startLineNumber !== selection.endLineNumber) return null;
+	if (selection.isEmpty()) return seedSearchStringFromNonEmptySelection ? null : (model.getWordAtPosition(selection.getStartPosition())?.word ?? null);
 	return model.getValueLengthInRange(selection) < SEARCH_STRING_MAX_LENGTH ? model.getValueInRange(selection) : null;
 }
 
@@ -178,10 +170,7 @@ export class CommonFindController extends Disposable {
 	public toggleSearchScope(): void {
 		if (this.state.searchScope === null && !this.selectionScope.value) this.captureSelectionScope();
 		const range = this.selectionScope.value?.range;
-		this.state.change(
-			{ searchScope: this.state.searchScope === null && range && !range.isEmpty() ? [range] : null },
-			true,
-		);
+		this.state.change({ searchScope: this.state.searchScope === null && range && !range.isEmpty() ? [range] : null }, true);
 		this.widget?.updateSearchScopeAvailability();
 	}
 
@@ -207,34 +196,21 @@ export class CommonFindController extends Disposable {
 		const selectedText =
 			wasVisible || options.seedSearchStringFromSelection === 'none'
 				? null
-				: getSelectionSearchString(
-						this._editor,
-						options.seedSearchStringFromSelection,
-						options.seedSearchStringFromNonEmptySelection,
-					);
-		const seededText =
-			selectedText && (newState.isRegex ?? this.state.isRegex)
-				? escapeRegExpCharacters(selectedText)
-				: selectedText;
+				: getSelectionSearchString(this._editor, options.seedSearchStringFromSelection, options.seedSearchStringFromNonEmptySelection);
+		const seededText = selectedText && (newState.isRegex ?? this.state.isRegex) ? escapeRegExpCharacters(selectedText) : selectedText;
 		const searchString = newState.searchString ?? seededText ?? this.state.searchString;
-		const readGlobalTerm =
-			options.seedSearchStringFromGlobalClipboard && newState.searchString === undefined && !seededText;
+		const readGlobalTerm = options.seedSearchStringFromGlobalClipboard && newState.searchString === undefined && !seededText;
 		const selection = this.selection;
 		const autoFindInSelection = this.findOptions.autoFindInSelection;
 		const useScope =
-			options.updateSearchScope &&
-			!wasVisible &&
-			(autoFindInSelection === 'always' ||
-				(autoFindInSelection === 'multiline' && selection.startLineNumber !== selection.endLineNumber));
+			options.updateSearchScope && !wasVisible && (autoFindInSelection === 'always' || (autoFindInSelection === 'multiline' && selection.startLineNumber !== selection.endLineNumber));
 		const range = this.selectionScope.value?.range;
 		this.state.change(
 			{
 				...newState,
 				searchString,
 				isRevealed: true,
-				isReplaceRevealed:
-					!this._editor.getOption(EditorOption.readOnly) &&
-					(options.forceRevealReplace || this.state.isReplaceRevealed),
+				isReplaceRevealed: !this._editor.getOption(EditorOption.readOnly) && (options.forceRevealReplace || this.state.isReplaceRevealed),
 				loop: options.loop,
 				...(useScope && range && !range.isEmpty() ? { searchScope: [range] } : {}),
 			},
@@ -245,13 +221,7 @@ export class CommonFindController extends Disposable {
 			try {
 				const term = await this.getGlobalBufferTerm();
 				// Showing Find is synchronous. A late read must not undo newer input, close, or model changes.
-				if (
-					!this._store.isDisposed &&
-					request === this.findRequest &&
-					editorModel === this._editor.getModel() &&
-					this.findOptions.globalFindClipboard &&
-					term
-				) {
+				if (!this._store.isDisposed && request === this.findRequest && editorModel === this._editor.getModel() && this.findOptions.globalFindClipboard && term) {
 					this.state.change({ searchString: term }, false);
 				}
 			} catch (error) {
@@ -300,12 +270,7 @@ export class CommonFindController extends Disposable {
 	}
 
 	private get canUseGlobalFindClipboard(): boolean {
-		return (
-			!this._store.isDisposed &&
-			this.findOptions.globalFindClipboard === true &&
-			this._editor.hasModel() &&
-			!this._editor.getModel()!.isTooLargeForSyncing()
-		);
+		return !this._store.isDisposed && this.findOptions.globalFindClipboard === true && this._editor.hasModel() && !this._editor.getModel()!.isTooLargeForSyncing();
 	}
 
 	protected get hasSelectionScope(): boolean {
@@ -314,12 +279,7 @@ export class CommonFindController extends Disposable {
 	private captureSelectionScope(): void {
 		const selection = this.selection;
 		// Match navigation changes the editor selection, so keep the opening range tracked by the model.
-		this.selectionScope.value = selection.isEmpty()
-			? undefined
-			: (this._editor.getModel() as TextModel).trackRange(
-					selection,
-					TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-				);
+		this.selectionScope.value = selection.isEmpty() ? undefined : (this._editor.getModel() as TextModel).trackRange(selection, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges);
 		this.widget?.updateSearchScopeAvailability();
 	}
 	private get findOptions() {
@@ -344,11 +304,7 @@ export class FindController extends CommonFindController {
 		super(editor, clipboardService, contextKeyService);
 		this._register(
 			this.state.onFindReplaceStateChange(event => {
-				if (
-					!this.optionsWidget &&
-					!this.state.isRevealed &&
-					(event.matchCase || event.wholeWord || event.isRegex)
-				) {
+				if (!this.optionsWidget && !this.state.isRevealed && (event.matchCase || event.wholeWord || event.isRegex)) {
 					this.createWidgets();
 					this.optionsWidget!.highlightFindOptions();
 				}
@@ -381,9 +337,7 @@ export class FindController extends CommonFindController {
 				this.replaceHistory,
 			),
 		);
-		this.optionsWidget = this._register(
-			new FindOptionsWidget(this._editor, this.state, this.keybindingService, this.hoverService),
-		);
+		this.optionsWidget = this._register(new FindOptionsWidget(this._editor, this.state, this.keybindingService, this.hoverService));
 	}
 
 	protected override _start(options: IFindStartOptions, newState: INewFindReplaceState = {}): Promise<void> {
@@ -433,12 +387,7 @@ function defaultStartOptions(editor: ICodeEditor, replace: boolean, focus: FindS
 	const find = editor.getOption(EditorOption.find);
 	return {
 		forceRevealReplace: replace,
-		seedSearchStringFromSelection:
-			find.seedSearchStringFromSelection === 'never'
-				? 'none'
-				: find.seedSearchStringFromSelection === 'always'
-					? 'multiple'
-					: 'single',
+		seedSearchStringFromSelection: find.seedSearchStringFromSelection === 'never' ? 'none' : find.seedSearchStringFromSelection === 'always' ? 'multiple' : 'single',
 		seedSearchStringFromNonEmptySelection: false,
 		seedSearchStringFromGlobalClipboard: find.globalFindClipboard === true,
 		shouldFocus: focus,
@@ -452,19 +401,13 @@ registerEditorContribution({
 	id: CommonFindController.ID,
 	install: context => {
 		if (context.kind !== 'text') return;
-		const storageService = context.instantiationService.invokeFunction(accessor =>
-			accessor.getOptional(IStorageService),
-		);
+		const storageService = context.instantiationService.invokeFunction(accessor => accessor.getOptional(IStorageService));
 		const options = context.editor.getOption(EditorOption.find);
 		return context.instantiationService.createInstance(
 			FindController,
 			context.editor,
-			storageService && options.history !== 'never'
-				? FindWidgetSearchHistory.getOrCreate(storageService)
-				: undefined,
-			storageService && options.replaceHistory !== 'never'
-				? ReplaceWidgetHistory.getOrCreate(storageService)
-				: undefined,
+			storageService && options.history !== 'never' ? FindWidgetSearchHistory.getOrCreate(storageService) : undefined,
+			storageService && options.replaceHistory !== 'never' ? ReplaceWidgetHistory.getOrCreate(storageService) : undefined,
 		);
 	},
 });
@@ -484,9 +427,7 @@ export const StartFindAction = registerMultiEditorAction(
 onActivate(() =>
 	StartFindAction.addImplementation(0, (_accessor, editor) => {
 		const controller = CommonFindController.get(editor);
-		return controller
-			? controller.start(defaultStartOptions(editor, false, FindStartFocusAction.FocusFindInput))
-			: false;
+		return controller ? controller.start(defaultStartOptions(editor, false, FindStartFocusAction.FocusFindInput)) : false;
 	}),
 );
 
@@ -506,9 +447,7 @@ export const StartFindReplaceAction = registerMultiEditorAction(
 onActivate(() =>
 	StartFindReplaceAction.addImplementation(0, (_accessor, editor) => {
 		const controller = CommonFindController.get(editor);
-		return controller
-			? controller.start(defaultStartOptions(editor, true, FindStartFocusAction.FocusFindInput))
-			: false;
+		return controller ? controller.start(defaultStartOptions(editor, true, FindStartFocusAction.FocusFindInput)) : false;
 	}),
 );
 
@@ -524,11 +463,7 @@ export class StartFindWithArgsAction extends EditorAction {
 		const controller = CommonFindController.get(editor);
 		if (!controller) return;
 		const args = (input ?? {}) as IFindStartArguments;
-		const options = defaultStartOptions(
-			editor,
-			args.replaceString !== undefined,
-			FindStartFocusAction.FocusFindInput,
-		);
+		const options = defaultStartOptions(editor, args.replaceString !== undefined, FindStartFocusAction.FocusFindInput);
 		return controller
 			.start(options, {
 				searchString: args.searchString,
@@ -557,16 +492,10 @@ export class StartFindWithSelectionAction extends EditorAction {
 		const controller = CommonFindController.get(editor);
 		if (!controller) return;
 		const searchString = getSelectionSearchString(editor, 'multiple');
-		const query =
-			searchString && controller.getState().isRegex ? escapeRegExpCharacters(searchString) : searchString;
-		return controller
-			.start(
-				defaultStartOptions(editor, false, FindStartFocusAction.FocusFindInput),
-				query === null ? {} : { searchString: query },
-			)
-			.then(() => {
-				controller.setGlobalBufferTerm(controller.getState().searchString);
-			});
+		const query = searchString && controller.getState().isRegex ? escapeRegExpCharacters(searchString) : searchString;
+		return controller.start(defaultStartOptions(editor, false, FindStartFocusAction.FocusFindInput), query === null ? {} : { searchString: query }).then(() => {
+			controller.setGlobalBufferTerm(controller.getState().searchString);
+		});
 	}
 }
 
@@ -586,15 +515,13 @@ async function navigateFind(editor: ICodeEditor, next: boolean): Promise<void> {
 	const controller = CommonFindController.get(editor);
 	if (!controller) return;
 	const wasVisible = controller.getState().isRevealed;
-	if (!controller.getState().matchesCount)
-		await controller.start(defaultStartOptions(editor, false, FindStartFocusAction.NoFocusChange));
+	if (!controller.getState().matchesCount) await controller.start(defaultStartOptions(editor, false, FindStartFocusAction.NoFocusChange));
 	const before = editor.getSelection();
 	const moved = next ? controller.moveToNextMatch() : controller.moveToPrevMatch();
 	const after = editor.getSelection();
 	if (moved && after && (!before || !before.equalsSelection(after))) {
 		editor.pushUndoStop();
-		if (wasVisible && editor.getOption(EditorOption.find).closeOnResult && controller.isFindInputFocused())
-			controller.closeFindWidget();
+		if (wasVisible && editor.getOption(EditorOption.find).closeOnResult && controller.isFindInputFocused()) controller.closeFindWidget();
 	}
 }
 
@@ -647,10 +574,7 @@ export class MoveToMatchFindAction extends EditorAction {
 		picker.items = [];
 		picker.onDidChangeValue(value => {
 			const number = Number(value);
-			picker.items =
-				Number.isInteger(number) && number >= 1 && number <= controller.getState().matchesCount
-					? [{ label: value }]
-					: [];
+			picker.items = Number.isInteger(number) && number >= 1 && number <= controller.getState().matchesCount ? [{ label: value }] : [];
 		});
 		picker.onDidAccept(() => {
 			const item = picker.selectedItems[0];

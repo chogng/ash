@@ -14,16 +14,8 @@ export class StableEditorScrollState {
 		}
 
 		const visiblePosition = editor.getVisibleRanges()[0]?.getStartPosition() ?? null;
-		const visiblePositionTop = visiblePosition
-			? editor.getTopForPosition(visiblePosition.lineNumber, visiblePosition.column)
-			: 0;
-		return new StableEditorScrollState(
-			scrollTop,
-			contentHeight,
-			visiblePosition,
-			scrollTop - visiblePositionTop,
-			cursorPosition,
-		);
+		const visiblePositionTop = visiblePosition ? editor.getTopForPosition(visiblePosition.lineNumber, visiblePosition.column) : 0;
+		return new StableEditorScrollState(scrollTop, contentHeight, visiblePosition, scrollTop - visiblePositionTop, cursorPosition);
 	}
 
 	public constructor(
@@ -36,18 +28,12 @@ export class StableEditorScrollState {
 
 	/** Restores the captured top-row offset after the viewport layout changes. */
 	public restore(editor: ICodeEditor): void {
-		if (
-			this._initialContentHeight === editor.getContentHeight() &&
-			this._initialScrollTop === editor.getScrollTop()
-		) {
+		if (this._initialContentHeight === editor.getContentHeight() && this._initialScrollTop === editor.getScrollTop()) {
 			return;
 		}
 		if (!this._visiblePosition) return;
 
-		const visiblePositionTop = editor.getTopForPosition(
-			this._visiblePosition.lineNumber,
-			this._visiblePosition.column,
-		);
+		const visiblePositionTop = editor.getTopForPosition(this._visiblePosition.lineNumber, this._visiblePosition.column);
 		editor.setScrollTop(visiblePositionTop + this._visiblePositionScrollDelta);
 	}
 
@@ -56,10 +42,7 @@ export class StableEditorScrollState {
 	 * model or visual-line projection change.
 	 */
 	public restoreRelativeVerticalPositionOfCursor(editor: ICodeEditor): void {
-		if (
-			this._initialContentHeight === editor.getContentHeight() &&
-			this._initialScrollTop === editor.getScrollTop()
-		) {
+		if (this._initialContentHeight === editor.getContentHeight() && this._initialScrollTop === editor.getScrollTop()) {
 			return;
 		}
 
@@ -96,10 +79,7 @@ export class StableEditorBottomScrollState {
 
 	/** Restores the captured bottom-row offset after the viewport layout changes. */
 	public restore(editor: ICodeEditor): void {
-		if (
-			this._initialContentHeight === editor.getContentHeight() &&
-			this._initialScrollTop === editor.getScrollTop()
-		) {
+		if (this._initialContentHeight === editor.getContentHeight() && this._initialScrollTop === editor.getScrollTop()) {
 			return;
 		}
 		if (!this._visiblePosition) return;

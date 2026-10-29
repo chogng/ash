@@ -24,11 +24,7 @@ export class TerminalTabsChatEntry extends Disposable {
 			if (removed === instance) controller.abort();
 		});
 		try {
-			const attachment = await captureTerminalAttachment(
-				instance,
-				this.views.getViewWithId<ITerminalView>(TERMINAL_VIEW_ID),
-				controller.signal,
-			);
+			const attachment = await captureTerminalAttachment(instance, this.views.getViewWithId<ITerminalView>(TERMINAL_VIEW_ID), controller.signal);
 			if (!attachment || controller.signal.aborted) return;
 			const chat = await this.views.openView<IView & IChatContextTarget>(CHAT_VIEW_ID, true);
 			if (!controller.signal.aborted) chat?.addContext(attachment);

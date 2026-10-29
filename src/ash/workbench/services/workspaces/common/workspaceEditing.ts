@@ -6,11 +6,7 @@ export interface IWorkspaceEditingService {
 	validateFolders(folders: readonly URI[]): void;
 	addFolders(folders: readonly { readonly uri: URI; readonly name?: string }[]): Promise<void>;
 	removeFolders(folders: readonly URI[]): Promise<void>;
-	updateFolders(
-		index: number,
-		deleteCount?: number,
-		foldersToAdd?: readonly { readonly uri: URI; readonly name?: string }[],
-	): Promise<void>;
+	updateFolders(index: number, deleteCount?: number, foldersToAdd?: readonly { readonly uri: URI; readonly name?: string }[]): Promise<void>;
 	/** Enters an existing workspace through the current window's host. */
 	enterWorkspace(path: URI): Promise<void>;
 	saveAndEnterWorkspace(path: URI): Promise<void>;

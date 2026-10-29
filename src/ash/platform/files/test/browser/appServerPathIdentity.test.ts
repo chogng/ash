@@ -25,10 +25,7 @@ suite('App Server directory path identity', () => {
 		const host = createDisconnectedRendererApi();
 		const requests: unknown[] = [];
 		using provider = new AgentHostFileSystemProvider({
-			directories: () =>
-				workspace
-					.getWorkspace()
-					.folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			resourceApi: host.resource,
 			api: {
 				...host.fs,
@@ -50,10 +47,7 @@ suite('App Server directory path identity', () => {
 		const first = URI.parse('file:///workspace/Parent/File.txt?view=1#one');
 		await identity.resolveCanonicalUri(first);
 		const alias = URI.parse('file:///workspace/Parent/FILE.txt?view=1#two');
-		assert.equal(
-			(await identity.resolveCanonicalUri(alias)).toString(),
-			first.with({ fragment: 'two' }).toString(),
-		);
+		assert.equal((await identity.resolveCanonicalUri(alias)).toString(), first.with({ fragment: 'two' }).toString());
 		const other = URI.file('/workspace/parent/File.txt');
 		await identity.resolveCanonicalUri(other);
 		assert.deepEqual(
@@ -61,16 +55,10 @@ suite('App Server directory path identity', () => {
 				identity.extUri.isEqualIgnoringFragment(first, alias),
 				identity.extUri.isEqualIgnoringFragment(first, other.with({ query: 'view=1' })),
 				identity.extUri.isEqualIgnoringFragment(first, alias.with({ query: 'view=2' })),
-				identity.extUri.isEqualOrParent(
-					alias.with({ query: null, fragment: null }),
-					URI.file('/workspace/Parent'),
-				),
+				identity.extUri.isEqualOrParent(alias.with({ query: null, fragment: null }), URI.file('/workspace/Parent')),
 				identity.extUri.isEqualOrParent(other, URI.file('/workspace/Parent')),
 				identity.extUri.isEqual(URI.parse('file:///workspace/Parent/a%2Fb'), URI.file('/workspace/Parent/a/b')),
-				identity.extUri.isEqualIgnoringFragment(
-					first,
-					URI.parse('file:///%77orkspace/%50arent/FILE.txt?view=1'),
-				),
+				identity.extUri.isEqualIgnoringFragment(first, URI.parse('file:///%77orkspace/%50arent/FILE.txt?view=1')),
 				identity.extUri.isEqualIgnoringFragment(first, URI.parse('file:///WORKSPACE/Parent/FILE.txt?view=1')),
 				identity.extUri.isEqual(URI.file('/workspace/Parent/İ.txt'), URI.file('/workspace/Parent/i\u0307.txt')),
 			],
@@ -92,10 +80,7 @@ suite('App Server directory path identity', () => {
 		});
 		const host = createDisconnectedRendererApi();
 		using provider = new AgentHostFileSystemProvider({
-			directories: () =>
-				workspace
-					.getWorkspace()
-					.folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			resourceApi: host.resource,
 			api: {
 				...host.fs,
@@ -112,10 +97,7 @@ suite('App Server directory path identity', () => {
 		await identity.resolveCanonicalUri(local.joinPathSegment('File'));
 		await identity.resolveCanonicalUri(remote.joinPathSegment('File'));
 		assert.deepEqual(
-			[
-				identity.extUri.isEqual(local.joinPathSegment('File'), local.joinPathSegment('FILE')),
-				identity.extUri.isEqual(remote.joinPathSegment('File'), remote.joinPathSegment('FILE')),
-			],
+			[identity.extUri.isEqual(local.joinPathSegment('File'), local.joinPathSegment('FILE')), identity.extUri.isEqual(remote.joinPathSegment('File'), remote.joinPathSegment('FILE'))],
 			[true, false],
 		);
 	});
@@ -128,10 +110,7 @@ suite('App Server directory path identity', () => {
 		let response = new DeferredPromise<FsReadPathCaseSensitivityResult>();
 		const host = createDisconnectedRendererApi();
 		using provider = new AgentHostFileSystemProvider({
-			directories: () =>
-				workspace
-					.getWorkspace()
-					.folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			resourceApi: host.resource,
 			api: {
 				...host.fs,
@@ -180,16 +159,12 @@ suite('App Server directory path identity', () => {
 		let count = 0;
 		const host = createDisconnectedRendererApi();
 		using provider = new AgentHostFileSystemProvider({
-			directories: () =>
-				workspace
-					.getWorkspace()
-					.folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			resourceApi: host.resource,
 			onDidChange: changes.event,
 			api: {
 				...host.fs,
-				readPathCaseSensitivity: async () =>
-					++count === 1 ? response.p : { scopes: [{ path: '.', sensitivity: 'sensitive' }] },
+				readPathCaseSensitivity: async () => (++count === 1 ? response.p : { scopes: [{ path: '.', sensitivity: 'sensitive' }] }),
 			},
 		});
 		using files = new FileService();
@@ -219,10 +194,7 @@ suite('App Server directory path identity', () => {
 		const host = createDisconnectedRendererApi();
 		const reads: string[] = [];
 		using provider = new AgentHostFileSystemProvider({
-			directories: () =>
-				workspace
-					.getWorkspace()
-					.folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			api: {
 				...host.fs,
 				readPathCaseSensitivity: async () => ({ scopes: [{ path: '.', sensitivity: 'insensitive' }] }),
@@ -266,17 +238,11 @@ suite('App Server directory path identity', () => {
 		const host = createDisconnectedRendererApi();
 		const reads: string[] = [];
 		using provider = new AgentHostFileSystemProvider({
-			directories: () =>
-				workspace
-					.getWorkspace()
-					.folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			onDidChange: changes.event,
 			api: {
 				...host.fs,
-				readPathCaseSensitivity: async () =>
-					++queries === 2
-						? oldResponse.p
-						: { scopes: [{ path: '.', sensitivity: queries === 1 ? 'insensitive' : 'sensitive' }] },
+				readPathCaseSensitivity: async () => (++queries === 2 ? oldResponse.p : { scopes: [{ path: '.', sensitivity: queries === 1 ? 'insensitive' : 'sensitive' }] }),
 				readFile: async params => {
 					reads.push(params.path);
 					return { content: 'disk', encoding: 'utf8', revision: 'revision' };
@@ -310,10 +276,7 @@ suite('App Server directory path identity', () => {
 		await services.get(IUriIdentityService).resolveCanonicalUri(firstResource);
 		void oldResponse.complete({ scopes: [{ path: '.', sensitivity: 'insensitive' }] });
 		using second = await acquiring;
-		assert.deepEqual(
-			[first.model === second.model, first.model.getText(), second.model.getText(), reads],
-			[false, 'unsaved', 'disk', ['File', 'FILE']],
-		);
+		assert.deepEqual([first.model === second.model, first.model.getText(), second.model.getText(), reads], [false, 'unsaved', 'disk', ['File', 'FILE']]);
 	});
 
 	test('a shorter refresh removes unconfirmed descendants while preserving sibling facts', async () => {
@@ -323,10 +286,7 @@ suite('App Server directory path identity', () => {
 		let missing = false;
 		const host = createDisconnectedRendererApi();
 		using provider = new AgentHostFileSystemProvider({
-			directories: () =>
-				workspace
-					.getWorkspace()
-					.folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			resourceApi: host.resource,
 			onDidChange: changes.event,
 			api: {
@@ -334,9 +294,7 @@ suite('App Server directory path identity', () => {
 				readPathCaseSensitivity: async params => ({
 					scopes: [
 						{ path: '.', sensitivity: 'sensitive' },
-						...(missing && params.path.startsWith('Parent/')
-							? []
-							: [{ path: params.path.split('/')[0], sensitivity: 'insensitive' as const }]),
+						...(missing && params.path.startsWith('Parent/') ? [] : [{ path: params.path.split('/')[0], sensitivity: 'insensitive' as const }]),
 					],
 				}),
 			},
@@ -353,13 +311,7 @@ suite('App Server directory path identity', () => {
 		missing = true;
 		changes.fire({ type: 'pathsChanged', dirId: 'project', paths: ['Parent'] });
 		await identity.resolveCanonicalUri(parentFile);
-		assert.deepEqual(
-			[
-				identity.extUri.isEqual(parentFile, URI.file('/workspace/Parent/FILE')),
-				identity.extUri.isEqual(otherFile, URI.file('/workspace/Other/FILE')),
-			],
-			[false, true],
-		);
+		assert.deepEqual([identity.extUri.isEqual(parentFile, URI.file('/workspace/Parent/FILE')), identity.extUri.isEqual(otherFile, URI.file('/workspace/Other/FILE'))], [false, true]);
 	});
 
 	test('transient rule eviction keeps retained URI facts and releases them with their owner', async () => {
@@ -367,10 +319,7 @@ suite('App Server directory path identity', () => {
 		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		const host = createDisconnectedRendererApi();
 		using provider = new AgentHostFileSystemProvider({
-			directories: () =>
-				workspace
-					.getWorkspace()
-					.folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			resourceApi: host.resource,
 			api: {
 				...host.fs,
@@ -390,8 +339,7 @@ suite('App Server directory path identity', () => {
 		const alias = URI.file('/workspace/Original/FILE');
 		using retained = identity.retainUri(resource);
 		await identity.resolveCanonicalUri(resource);
-		for (let index = 0; index < 4097; index++)
-			await identity.resolveCanonicalUri(URI.file(`/workspace/other${index}/File`));
+		for (let index = 0; index < 4097; index++) await identity.resolveCanonicalUri(URI.file(`/workspace/other${index}/File`));
 		assert.equal(identity.extUri.isEqual(resource, alias), true);
 		retained.dispose();
 		await identity.resolveCanonicalUri(URI.file('/workspace/last/File'));
@@ -404,10 +352,7 @@ suite('App Server directory path identity', () => {
 		const host = createDisconnectedRendererApi();
 		const reads: string[] = [];
 		using provider = new AgentHostFileSystemProvider({
-			directories: () =>
-				workspace
-					.getWorkspace()
-					.folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			api: {
 				...host.fs,
 				readPathCaseSensitivity: async params => ({
@@ -445,15 +390,9 @@ suite('App Server directory path identity', () => {
 		using third = await models.acquire({ resource: URI.file('/workspace/c/File') }, signal);
 		first.model.setValue('unsaved');
 		const identity = services.get(IUriIdentityService);
-		for (let index = 0; index < 4097; index++)
-			await identity.resolveCanonicalUri(URI.file(`/workspace/other${index}/File`));
+		for (let index = 0; index < 4097; index++) await identity.resolveCanonicalUri(URI.file(`/workspace/other${index}/File`));
 		assert.deepEqual(
-			[
-				models.getModels().length,
-				reads,
-				models.getModel(URI.file('/workspace/a/FILE')) === first.model,
-				first.model.getText(),
-			],
+			[models.getModels().length, reads, models.getModel(URI.file('/workspace/a/FILE')) === first.model, first.model.getText()],
 			[3, ['a/File', 'b/File', 'c/File'], true, 'unsaved'],
 		);
 	});
@@ -472,10 +411,7 @@ suite('App Server directory path identity', () => {
 		const host = createDisconnectedRendererApi();
 		let queries = 0;
 		using provider = new AgentHostFileSystemProvider({
-			directories: () =>
-				workspace
-					.getWorkspace()
-					.folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			resourceApi: host.resource,
 			onDidChange: changes.event,
 			api: {
@@ -505,18 +441,12 @@ suite('App Server directory path identity', () => {
 		const response = new DeferredPromise<FsReadPathCaseSensitivityResult>();
 		const host = createDisconnectedRendererApi();
 		using predecessor = new AgentHostFileSystemProvider({
-			directories: () =>
-				workspace
-					.getWorkspace()
-					.folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			resourceApi: host.resource,
 			api: { ...host.fs, readPathCaseSensitivity: () => response.p },
 		});
 		using replacement = new AgentHostFileSystemProvider({
-			directories: () =>
-				workspace
-					.getWorkspace()
-					.folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			resourceApi: host.resource,
 			api: {
 				...host.fs,
@@ -544,10 +474,7 @@ suite('App Server directory path identity', () => {
 		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		const host = createDisconnectedRendererApi();
 		using provider = new AgentHostFileSystemProvider({
-			directories: () =>
-				workspace
-					.getWorkspace()
-					.folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			resourceApi: host.resource,
 			api: {
 				...host.fs,
@@ -564,10 +491,7 @@ suite('App Server directory path identity', () => {
 		using services = new TestUriIdentityServices(files);
 		const identity = services.get(IUriIdentityService);
 		const resource = root.joinPathSegment('File');
-		await assert.rejects(
-			Promise.resolve(identity.resolveCanonicalUri(resource)),
-			/outside the authorized directory/,
-		);
+		await assert.rejects(Promise.resolve(identity.resolveCanonicalUri(resource)), /outside the authorized directory/);
 		assert.equal(identity.extUri.isEqual(resource, root.joinPathSegment('FILE')), false);
 	});
 });

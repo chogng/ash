@@ -30,9 +30,7 @@ export async function launchBrowser(options: BrowserLaunchOptions): Promise<Brow
 	try {
 		const context = await browser.newContext({
 			baseURL: options.baseURL,
-			recordVideo: options.recordVideo
-				? { dir: options.recordVideo.directory, size: options.recordVideo.size }
-				: undefined,
+			recordVideo: options.recordVideo ? { dir: options.recordVideo.directory, size: options.recordVideo.size } : undefined,
 			viewport: options.recordVideo?.size,
 		});
 		diagnostics = new WorkbenchDiagnostics(context);
@@ -53,11 +51,7 @@ export async function launchBrowser(options: BrowserLaunchOptions): Promise<Brow
 		}
 		await page.goto(options.baseURL, { waitUntil: 'domcontentloaded' });
 		if (options.appServerMode === 'required') {
-			await page.waitForFunction(
-				() => (globalThis as { ashWebWorkbenchHost?: unknown }).ashWebWorkbenchHost !== undefined,
-				undefined,
-				{ timeout: 30_000 },
-			);
+			await page.waitForFunction(() => (globalThis as { ashWebWorkbenchHost?: unknown }).ashWebWorkbenchHost !== undefined, undefined, { timeout: 30_000 });
 		}
 
 		const driver = new PlaywrightDriver(browser, page, diagnostics);

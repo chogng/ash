@@ -4,10 +4,7 @@ import { JSDOM } from 'jsdom';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { StorageScope, StorageTarget, WillSaveStateReason } from '../../../../../platform/storage/common/storage.js';
 import { Memento } from '../../../../../workbench/common/memento.js';
-import {
-	BrowserStorageService,
-	migrateBrowserStorage,
-} from '../../../../../workbench/services/storage/browser/storageService.js';
+import { BrowserStorageService, migrateBrowserStorage } from '../../../../../workbench/services/storage/browser/storageService.js';
 
 test('storage startup retires the Code namespace, restores all scopes and archives conflicting values', () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
@@ -16,18 +13,9 @@ test('storage startup retires the Code namespace, restores all scopes and archiv
 		const entry = (value: string) => ({ value, target: StorageTarget.MACHINE });
 		const legacy = JSON.stringify({ version: 1, entries: { editors: entry('paper'), layout: entry('code') } });
 		backend.setItem('ash.code.storage.workspace.research', legacy);
-		backend.setItem(
-			'ash.storage.workspace.research',
-			JSON.stringify({ version: 1, entries: { layout: entry('current') } }),
-		);
-		backend.setItem(
-			'ash.code.storage.application',
-			JSON.stringify({ version: 1, entries: { fonts: entry('font-cache') } }),
-		);
-		backend.setItem(
-			'ash.code.storage.profile.sessions',
-			JSON.stringify({ version: 1, entries: { sidebar: entry('360') } }),
-		);
+		backend.setItem('ash.storage.workspace.research', JSON.stringify({ version: 1, entries: { layout: entry('current') } }));
+		backend.setItem('ash.code.storage.application', JSON.stringify({ version: 1, entries: { fonts: entry('font-cache') } }));
+		backend.setItem('ash.code.storage.profile.sessions', JSON.stringify({ version: 1, entries: { sidebar: entry('360') } }));
 		using storage = new BrowserStorageService({
 			ownerWindow: dom.window as unknown as Window,
 			workspaceId: 'research',
@@ -56,11 +44,7 @@ test('storage startup retires the Code namespace, restores all scopes and archiv
 			profileId: 'sessions',
 			flushInterval: 0,
 		});
-		assert.equal(
-			restored.get('editors', StorageScope.WORKSPACE),
-			undefined,
-			'Archived data must never be replayed',
-		);
+		assert.equal(restored.get('editors', StorageScope.WORKSPACE), undefined, 'Archived data must never be replayed');
 		assert.equal(restored.isNew(StorageScope.PROFILE), false);
 	} finally {
 		dom.window.close();
@@ -89,10 +73,7 @@ test('namespace migration resumes after interrupted cleanup without replacing cu
 		});
 		assert.throws(() => migrateBrowserStorage(interrupted), /Interrupted cleanup/);
 		assert.equal(backend.getItem('ash.storage.v1.code.application'), original);
-		backend.setItem(
-			'ash.storage.application',
-			JSON.stringify({ version: 1, entries: { saved: { value: 'current', target: StorageTarget.USER } } }),
-		);
+		backend.setItem('ash.storage.application', JSON.stringify({ version: 1, entries: { saved: { value: 'current', target: StorageTarget.USER } } }));
 		migrateBrowserStorage(backend);
 		assert.deepEqual(JSON.parse(backend.getItem('ash.storage.application')!).entries, {
 			saved: { value: 'current', target: StorageTarget.USER },
@@ -189,11 +170,7 @@ test('profiles share application and workspace state while keeping their prefere
 		first.store('preference', 'first', StorageScope.PROFILE, StorageTarget.USER);
 		using second = new BrowserStorageService({ ...options, profileId: 'second' });
 		assert.deepEqual(
-			[
-				second.get('shared', StorageScope.APPLICATION),
-				second.get('layout', StorageScope.WORKSPACE),
-				second.get('preference', StorageScope.PROFILE),
-			],
+			[second.get('shared', StorageScope.APPLICATION), second.get('layout', StorageScope.WORKSPACE), second.get('preference', StorageScope.PROFILE)],
 			['application', 'workspace', undefined],
 		);
 		second.store('preference', 'second', StorageScope.PROFILE, StorageTarget.USER);
@@ -212,12 +189,7 @@ test('Browser storage saves and reloads Mementos across workspace changes', asyn
 		backend: dom.window.localStorage,
 		flushInterval: 0,
 	});
-	seed.store(
-		'memento/test.workspace',
-		JSON.stringify({ value: 'workspace-b' }),
-		StorageScope.WORKSPACE,
-		StorageTarget.MACHINE,
-	);
+	seed.store('memento/test.workspace', JSON.stringify({ value: 'workspace-b' }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	seed.dispose();
 
 	const storage = new BrowserStorageService({
@@ -298,9 +270,7 @@ test('Browser storage projects external document changes', () => {
 			if (event.external) externalChanges.push(event.key);
 		}),
 	);
-	const storageKey = [...Array(dom.window.localStorage.length).keys()]
-		.map(index => dom.window.localStorage.key(index))
-		.find(key => key?.includes('.profile.'));
+	const storageKey = [...Array(dom.window.localStorage.length).keys()].map(index => dom.window.localStorage.key(index)).find(key => key?.includes('.profile.'));
 	assert.ok(storageKey);
 	const document = JSON.parse(dom.window.localStorage.getItem(storageKey)!) as {
 		entries: Record<string, { value: string; target: string }>;
@@ -309,7 +279,11 @@ test('Browser storage projects external document changes', () => {
 	const newValue = JSON.stringify(document);
 	dom.window.localStorage.setItem(storageKey, newValue);
 	dom.window.dispatchEvent(
-		new dom.window.StorageEvent('storage', { key: storageKey, newValue, storageArea: dom.window.localStorage }),
+		new dom.window.StorageEvent('storage', {
+			key: storageKey,
+			newValue,
+			storageArea: dom.window.localStorage,
+		}),
 	);
 
 	assert.equal(storage.getNumber('size', StorageScope.PROFILE), 310);

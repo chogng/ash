@@ -28,8 +28,7 @@ test('merge model keeps two conflicts anchored to the base after editing the fir
 	const base = 'before\nbase\nbetween\nbase2\nafter\n';
 	const current = 'before\ncurrent\nbetween\ncurrent2\nafter\n';
 	const incoming = 'before\nincoming\nbetween\nincoming2\nafter\n';
-	const initial =
-		'before\n<<<<<<< HEAD\ncurrent\n=======\nincoming\n>>>>>>> topic\nbetween\n<<<<<<< HEAD\ncurrent2\n=======\nincoming2\n>>>>>>> topic\nafter\n';
+	const initial = 'before\n<<<<<<< HEAD\ncurrent\n=======\nincoming\n>>>>>>> topic\nbetween\n<<<<<<< HEAD\ncurrent2\n=======\nincoming2\n>>>>>>> topic\nafter\n';
 	using result = new TextModel(initial);
 	using model = new MergeEditorModel(base, current, incoming, result, undefined, diffService);
 	await model.initialize(new AbortController().signal);
@@ -59,22 +58,10 @@ test('merge model keeps two conflicts anchored to the base after editing the fir
 
 test('merge model maps every line inside unequal conflict spans and refreshes the result mapping', async () => {
 	using result = new TextModel('head\n<<<<<<< HEAD\ncur1\ncur2\n=======\ninc1\ninc2\ninc3\n>>>>>>> topic\nlast\n');
-	using model = new MergeEditorModel(
-		'head\nold\nlast\n',
-		'head\ncur1\ncur2\nlast\n',
-		'head\ninc1\ninc2\ninc3\nlast\n',
-		result,
-		undefined,
-		diffService,
-	);
+	using model = new MergeEditorModel('head\nold\nlast\n', 'head\ncur1\ncur2\nlast\n', 'head\ninc1\ninc2\ninc3\nlast\n', result, undefined, diffService);
 	await model.initialize(new AbortController().signal);
 	assert.deepEqual(
-		model.hunks.map(hunk => [
-			hunk.base.serialize(),
-			hunk.current.serialize(),
-			hunk.incoming.serialize(),
-			hunk.result.serialize(),
-		]),
+		model.hunks.map(hunk => [hunk.base.serialize(), hunk.current.serialize(), hunk.incoming.serialize(), hunk.result.serialize()]),
 		[
 			[
 				[2, 3],
@@ -93,22 +80,10 @@ test('merge model maps every line inside unequal conflict spans and refreshes th
 
 test('merge model maps inserted and deleted conflict ranges without consuming the next line', async () => {
 	using insertedResult = new TextModel('head\n<<<<<<< HEAD\ncurrent\n=======\nincoming\n>>>>>>> topic\nlast\n');
-	using inserted = new MergeEditorModel(
-		'head\nlast\n',
-		'head\ncurrent\nlast\n',
-		'head\nincoming\nlast\n',
-		insertedResult,
-		undefined,
-		diffService,
-	);
+	using inserted = new MergeEditorModel('head\nlast\n', 'head\ncurrent\nlast\n', 'head\nincoming\nlast\n', insertedResult, undefined, diffService);
 	await inserted.initialize(new AbortController().signal);
 	assert.deepEqual(
-		inserted.hunks.map(hunk => [
-			hunk.base.serialize(),
-			hunk.current.serialize(),
-			hunk.incoming.serialize(),
-			hunk.result.serialize(),
-		]),
+		inserted.hunks.map(hunk => [hunk.base.serialize(), hunk.current.serialize(), hunk.incoming.serialize(), hunk.result.serialize()]),
 		[
 			[
 				[2, 2],
@@ -122,22 +97,10 @@ test('merge model maps inserted and deleted conflict ranges without consuming th
 	assert.equal(insertedResult.getValue(), 'head\nincoming\nlast\n');
 
 	using deletedResult = new TextModel('head\n<<<<<<< HEAD\n=======\nnew1\nnew2\n>>>>>>> topic\nlast\n');
-	using deleted = new MergeEditorModel(
-		'head\nold\nlast\n',
-		'head\nlast\n',
-		'head\nnew1\nnew2\nlast\n',
-		deletedResult,
-		undefined,
-		diffService,
-	);
+	using deleted = new MergeEditorModel('head\nold\nlast\n', 'head\nlast\n', 'head\nnew1\nnew2\nlast\n', deletedResult, undefined, diffService);
 	await deleted.initialize(new AbortController().signal);
 	assert.deepEqual(
-		deleted.hunks.map(hunk => [
-			hunk.base.serialize(),
-			hunk.current.serialize(),
-			hunk.incoming.serialize(),
-			hunk.result.serialize(),
-		]),
+		deleted.hunks.map(hunk => [hunk.base.serialize(), hunk.current.serialize(), hunk.incoming.serialize(), hunk.result.serialize()]),
 		[
 			[
 				[2, 3],
@@ -154,25 +117,11 @@ test('merge model maps inserted and deleted conflict ranges without consuming th
 });
 
 test('merge model keeps unchanged lines aligned across a one-sided insertion before a conflict', async () => {
-	using result = new TextModel(
-		'head\ncurrentIntro\nunchanged\n<<<<<<< HEAD\ncur\n=======\ninc\n>>>>>>> topic\nlast\n',
-	);
-	using model = new MergeEditorModel(
-		'head\nunchanged\nold\nlast\n',
-		'head\ncurrentIntro\nunchanged\ncur\nlast\n',
-		'head\nunchanged\ninc\nlast\n',
-		result,
-		undefined,
-		diffService,
-	);
+	using result = new TextModel('head\ncurrentIntro\nunchanged\n<<<<<<< HEAD\ncur\n=======\ninc\n>>>>>>> topic\nlast\n');
+	using model = new MergeEditorModel('head\nunchanged\nold\nlast\n', 'head\ncurrentIntro\nunchanged\ncur\nlast\n', 'head\nunchanged\ninc\nlast\n', result, undefined, diffService);
 	await model.initialize(new AbortController().signal);
 	assert.deepEqual(
-		model.hunks.map(hunk => [
-			hunk.base.serialize(),
-			hunk.current.serialize(),
-			hunk.incoming.serialize(),
-			hunk.result.serialize(),
-		]),
+		model.hunks.map(hunk => [hunk.base.serialize(), hunk.current.serialize(), hunk.incoming.serialize(), hunk.result.serialize()]),
 		[
 			[
 				[3, 4],
@@ -214,12 +163,7 @@ test('merge model recognizes base and both input orders from the editable result
 	using model = new MergeEditorModel('base\n', 'current\n', 'incoming\n', result, undefined, diffService);
 	await model.initialize(new AbortController().signal);
 	assert.deepEqual(
-		[
-			model.canSmartCombine(0),
-			model.editForHunk(0, 'base').text,
-			model.editForHunk(0, 'both').text,
-			model.editForHunk(0, 'bothReversed').text,
-		],
+		[model.canSmartCombine(0), model.editForHunk(0, 'base').text, model.editForHunk(0, 'both').text, model.editForHunk(0, 'bothReversed').text],
 		[false, 'base\n', 'current\nincoming\n', 'incoming\ncurrent\n'],
 	);
 	await applyChoice(model, 0, 'bothReversed');
@@ -233,29 +177,13 @@ test('merge model keeps explicit handling separate from base text across reopeni
 	using result = new TextModel('base\n');
 	using model = new MergeEditorModel('base\n', 'current\n', 'incoming\n', result, undefined, diffService);
 	await model.initialize(new AbortController().signal);
-	assert.deepEqual(
-		[model.hunks[0].resolution, model.hunks[0].handled, model.hunks[0].unresolved],
-		['base', false, true],
-	);
+	assert.deepEqual([model.hunks[0].resolution, model.hunks[0].handled, model.hunks[0].unresolved], ['base', false, true]);
 	await applyChoice(model, 0, 'base');
-	assert.deepEqual(
-		[model.hunks[0].resolution, model.hunks[0].handled, model.hunks[0].unresolved],
-		['base', true, false],
-	);
+	assert.deepEqual([model.hunks[0].resolution, model.hunks[0].handled, model.hunks[0].unresolved], ['base', true, false]);
 	using reopenedResult = new TextModel(result.getValue());
-	using reopened = new MergeEditorModel(
-		'base\n',
-		'current\n',
-		'incoming\n',
-		reopenedResult,
-		model.getHandledState(),
-		diffService,
-	);
+	using reopened = new MergeEditorModel('base\n', 'current\n', 'incoming\n', reopenedResult, model.getHandledState(), diffService);
 	await reopened.initialize(new AbortController().signal);
-	assert.deepEqual(
-		[reopened.hunks[0].resolution, reopened.hunks[0].handled, reopened.hunks[0].unresolved],
-		['base', true, false],
-	);
+	assert.deepEqual([reopened.hunks[0].resolution, reopened.hunks[0].handled, reopened.hunks[0].unresolved], ['base', true, false]);
 });
 
 test('merge model restores handling after accepting, manually editing, undoing, and redoing', async () => {
@@ -269,29 +197,14 @@ test('merge model restores handling after accepting, manually editing, undoing, 
 	await changeResult(model, () => result.redo());
 	assert.deepEqual([model.hunks[0].handled, model.hunks[0].unresolved], [true, false]);
 	await changeResult(model, () => result.applyOperations([model.editForHunk(0, 'base')]));
-	assert.deepEqual(
-		[model.hunks[0].resolution, model.hunks[0].handled, model.hunks[0].unresolved],
-		['base', true, false],
-	);
+	assert.deepEqual([model.hunks[0].resolution, model.hunks[0].handled, model.hunks[0].unresolved], ['base', true, false]);
 	await changeResult(model, () => result.undo());
-	assert.deepEqual(
-		[model.hunks[0].resolution, model.hunks[0].handled, model.hunks[0].unresolved],
-		['current', true, false],
-	);
+	assert.deepEqual([model.hunks[0].resolution, model.hunks[0].handled, model.hunks[0].unresolved], ['current', true, false]);
 });
 
 test('manual edits and undo affect only the touched conflict', async () => {
-	using result = new TextModel(
-		'start\n<<<<<<< HEAD\ncurrent\n=======\nincoming\n>>>>>>> topic\nmiddle\n<<<<<<< HEAD\ncurrent2\n=======\nincoming2\n>>>>>>> topic\nend\n',
-	);
-	using model = new MergeEditorModel(
-		'start\nbase\nmiddle\nbase2\nend\n',
-		'start\ncurrent\nmiddle\ncurrent2\nend\n',
-		'start\nincoming\nmiddle\nincoming2\nend\n',
-		result,
-		undefined,
-		diffService,
-	);
+	using result = new TextModel('start\n<<<<<<< HEAD\ncurrent\n=======\nincoming\n>>>>>>> topic\nmiddle\n<<<<<<< HEAD\ncurrent2\n=======\nincoming2\n>>>>>>> topic\nend\n');
+	using model = new MergeEditorModel('start\nbase\nmiddle\nbase2\nend\n', 'start\ncurrent\nmiddle\ncurrent2\nend\n', 'start\nincoming\nmiddle\nincoming2\nend\n', result, undefined, diffService);
 	await model.initialize(new AbortController().signal);
 	await applyChoice(model, 0, 'current');
 	const second = model.editForHunk(1, 'incoming');
@@ -313,11 +226,7 @@ test('manual edits and undo affect only the touched conflict', async () => {
 	);
 });
 
-async function applyChoice(
-	model: MergeEditorModel,
-	index: number,
-	choice: 'base' | 'current' | 'incoming' | 'bothReversed',
-): Promise<void> {
+async function applyChoice(model: MergeEditorModel, index: number, choice: 'base' | 'current' | 'incoming' | 'bothReversed'): Promise<void> {
 	await changeResult(model, () => model.acceptHunk(index, choice));
 }
 

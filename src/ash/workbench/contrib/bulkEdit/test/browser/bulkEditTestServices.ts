@@ -1,11 +1,6 @@
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
-import {
-	type IFileSystemProvider,
-	type IFileWriteOptions,
-	type IFileWriteResult,
-	FileSystemProviderCapabilities,
-} from '../../../../../platform/files/common/files.js';
+import { type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
@@ -19,13 +14,7 @@ import type {
 	TextResourceSaveRequest,
 	ITextResourceStore,
 } from '../../../../services/textmodelResolver/common/textResourceStore.js';
-import {
-	FileKind,
-	FileNotFoundError,
-	type FileDeleteMode,
-	type FileExistingTargetBehavior,
-	type FileMissingTargetBehavior,
-} from '../../../../../platform/files/common/files.js';
+import { FileKind, FileNotFoundError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior } from '../../../../../platform/files/common/files.js';
 import { BulkEditService } from '../../browser/bulkEditService.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import type { IDialogService, IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -90,15 +79,7 @@ export class BulkEditTestServices extends Disposable {
 		this.store = this._register(new MemoryResourceStore(resources));
 		this.models = this._register(this.uriIdentityServices.createInstance(BrowserTextModelService, this.store, {}));
 		this.files = new MemoryFileService(resources);
-		this.service = this._register(
-			new BulkEditService(
-				this.models,
-				this.workingCopies,
-				this._register(createTestFileService(this.files)),
-				this.configuration,
-				this.dialogs,
-			),
-		);
+		this.service = this._register(new BulkEditService(this.models, this.workingCopies, this._register(createTestFileService(this.files)), this.configuration, this.dialogs));
 	}
 }
 
@@ -119,8 +100,7 @@ export class MemoryResourceStore implements ITextResourceStore {
 
 	async resolve(request: TextResourceResolveRequest): Promise<TextResourceContent> {
 		const entry = this.resources.get(request.resource.toString());
-		if (!entry && request.bootstrapText !== undefined)
-			return { resource: request.resource, text: request.bootstrapText, revision: undefined };
+		if (!entry && request.bootstrapText !== undefined) return { resource: request.resource, text: request.bootstrapText, revision: undefined };
 		if (!entry) throw new Error(`Unknown resource ${request.resource.toString()}`);
 		return { resource: request.resource, text: entry.text, revision: String(entry.revision) };
 	}
@@ -158,10 +138,7 @@ export class MemoryResourceStore implements ITextResourceStore {
 }
 
 export class MemoryFileService implements IFileSystemProvider {
-	public readonly capabilities =
-		FileSystemProviderCapabilities.FileReadWrite |
-		FileSystemProviderCapabilities.FileFolderCopy |
-		FileSystemProviderCapabilities.PathCaseSensitive;
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy | FileSystemProviderCapabilities.PathCaseSensitive;
 	public readonly onDidChangeCapabilities = Event.None;
 	public watch(): IDisposable {
 		return Disposable.None;
@@ -237,7 +214,6 @@ export class MemoryFileService implements IFileSystemProvider {
 		this.resources.set(target.toString(), sourceText);
 	}
 	async delete(resource: URI, missing: FileMissingTargetBehavior, _mode: FileDeleteMode): Promise<void> {
-		if (!this.resources.delete(resource.toString()) && missing === 'error')
-			throw new Error('FileSystemOperationFailed');
+		if (!this.resources.delete(resource.toString()) && missing === 'error') throw new Error('FileSystemOperationFailed');
 	}
 }

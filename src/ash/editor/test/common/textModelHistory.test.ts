@@ -7,18 +7,11 @@ import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
 
 test('Same-text forced replacements move markers and keep their alternative versions through undo and redo', () => {
 	using model = new TextModel('same.ts');
-	const marker = model.deltaDecorations(
-		[],
-		[{ range: new Range(1, 3, 1, 3), options: { description: 'replacement-marker' } }],
-	)[0]!;
+	const marker = model.deltaDecorations([], [{ range: new Range(1, 3, 1, 3), options: { description: 'replacement-marker' } }])[0]!;
 	const before = model.getAlternativeVersionId();
 	const events: number[] = [];
 	using listener = model.onDidChangeContent(() => events.push(model.getAlternativeVersionId()));
-	model.pushEditOperations(
-		null,
-		[{ range: model.getFullModelRange(), text: 'same.ts', forceMoveMarkers: true }],
-		() => null,
-	);
+	model.pushEditOperations(null, [{ range: model.getFullModelRange(), text: 'same.ts', forceMoveMarkers: true }], () => null);
 	model.pushStackElement();
 	const after = model.getAlternativeVersionId();
 	assert.notEqual(after, before);
@@ -53,8 +46,18 @@ test('TextModel applyEdits bypasses history and returns identified inverse opera
 	assert.equal(model.getText(), 'aXc');
 	assert.equal(model.canUndo(), false);
 	assert.deepEqual(
-		inverse.map(operation => ({ identifier: operation.identifier, range: operation.range, text: operation.text })),
-		[{ identifier, range: new Range(1, 2, 1, 3), text: 'b' }],
+		inverse.map(operation => ({
+			identifier: operation.identifier,
+			range: operation.range,
+			text: operation.text,
+		})),
+		[
+			{
+				identifier,
+				range: new Range(1, 2, 1, 3),
+				text: 'b',
+			},
+		],
 	);
 
 	model.applyEdits(inverse);
@@ -142,7 +145,13 @@ test('TextModel history restores cursor state through undo, redo, and cancellati
 	const identifier = { major: 2, minor: 4 };
 	const resulting = model.pushEditOperations(
 		before,
-		[{ identifier, range: new Range(1, 2, 1, 2), text: 'X' }],
+		[
+			{
+				identifier,
+				range: new Range(1, 2, 1, 2),
+				text: 'X',
+			},
+		],
 		inverseOperations => {
 			assert.deepEqual(
 				inverseOperations.map(operation => operation.identifier),
@@ -168,7 +177,12 @@ test('TextModel history restores cursor state through undo, redo, and cancellati
 	model.beginHistoryRevision(group);
 	model.pushEditOperations(
 		cancellationBefore,
-		[{ range: new Range(1, 1, 1, 1), text: 'Y' }],
+		[
+			{
+				range: new Range(1, 1, 1, 1),
+				text: 'Y',
+			},
+		],
 		() => [new Selection(1, 2, 1, 2)],
 		group,
 	);
@@ -215,10 +229,7 @@ test('Rejected and empty edit batches preserve an open undo step and its selecti
 	const undo = model.undo();
 	assert.deepEqual({ text: model.getText(), selection: undo?.resultingSelection }, { text: '', selection: before });
 	const redo = model.redo();
-	assert.deepEqual(
-		{ text: model.getText(), selection: redo?.resultingSelection },
-		{ text: 'ab', selection: afterSecond },
-	);
+	assert.deepEqual({ text: model.getText(), selection: redo?.resultingSelection }, { text: 'ab', selection: afterSecond });
 });
 
 test('TextModel replays deterministic history across changing line maps', () => {
@@ -230,8 +241,7 @@ test('TextModel replays deterministic history across changing line maps', () => 
 		const length = model.getText().length;
 		const startOffset = Math.floor(random() * (length + 1));
 		const deleteLength = index % 3 === 0 && startOffset < length ? 1 : 0;
-		const insertedText =
-			deleteLength > 0 ? '' : index % 5 === 0 ? `\r\n${index}` : String.fromCharCode(97 + (index % 26));
+		const insertedText = deleteLength > 0 ? '' : index % 5 === 0 ? `\r\n${index}` : String.fromCharCode(97 + (index % 26));
 		model.applyOperations([
 			{
 				range: Range.fromPositions(model.positionAt(startOffset), model.positionAt(startOffset + deleteLength)),
@@ -253,8 +263,18 @@ test('TextModel replays deterministic history across changing line maps', () => 
 
 test('TextModel keeps transaction identity across undo and redo', () => {
 	using model = new TextModel('abc');
-	const first = model.applyOperations([{ range: Range.fromPositions(model.positionAt(0)), text: 'X' }]);
-	const second = model.applyOperations([{ range: Range.fromPositions(model.positionAt(2)), text: 'Y' }]);
+	const first = model.applyOperations([
+		{
+			range: Range.fromPositions(model.positionAt(0)),
+			text: 'X',
+		},
+	]);
+	const second = model.applyOperations([
+		{
+			range: Range.fromPositions(model.positionAt(2)),
+			text: 'Y',
+		},
+	]);
 	const undoSecond = model.undo();
 	const undoFirst = model.undo();
 	const redoFirst = model.redo();
@@ -267,7 +287,13 @@ test('TextModel keeps transaction identity across undo and redo', () => {
 			undoFirst: undoFirst?.transactionId,
 			redoFirst: redoFirst?.transactionId,
 		},
-		{ first: 1, second: 2, undoSecond: 2, undoFirst: 1, redoFirst: 1 },
+		{
+			first: 1,
+			second: 2,
+			undoSecond: 2,
+			undoFirst: 1,
+			redoFirst: 1,
+		},
 	);
 });
 

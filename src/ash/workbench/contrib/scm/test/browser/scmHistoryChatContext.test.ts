@@ -3,19 +3,11 @@ import { IFileService } from '../../../../../platform/files/common/files.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { IFileSearchService } from '../../../../../platform/search/common/fileSearch.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
-import {
-	IChatAttachmentResolveService,
-	ChatAttachmentResolveService,
-} from '../../../chat/browser/attachments/chatAttachmentResolveService.js';
+import { IChatAttachmentResolveService, ChatAttachmentResolveService } from '../../../chat/browser/attachments/chatAttachmentResolveService.js';
 import { ISCMService } from '../../common/scm.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { observableValue } from '../../../../../base/common/observable.js';
-import {
-	isChatContextPickerPickItem,
-	type IChatContextPickerItem,
-	type IChatContextValueItem,
-	type IChatContextPickerPickItem,
-} from '../../../chat/browser/attachments/chatContextPickService.js';
+import { isChatContextPickerPickItem, type IChatContextPickerItem, type IChatContextValueItem, type IChatContextPickerPickItem } from '../../../chat/browser/attachments/chatContextPickService.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 import { IChatContextPickService } from '../../../chat/browser/attachments/chatContextPickService.js';
 import assert from 'node:assert/strict';
@@ -27,12 +19,7 @@ import { JSDOM } from 'jsdom';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Event } from '../../../../../base/common/event.js';
 
-import {
-	SCMHistoryItemUri,
-	type ISCMHistoryProvider,
-	type ISCMHistoryItem,
-	type ISCMHistoryItemChange,
-} from '../../common/history.js';
+import { SCMHistoryItemUri, type ISCMHistoryProvider, type ISCMHistoryItem, type ISCMHistoryItemChange } from '../../common/history.js';
 import { URI } from '../../../../../base/common/uri.js';
 
 import { SCMService } from '../../common/scmService.js';
@@ -48,12 +35,10 @@ for (const [name, value] of Object.entries({
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
-const { ScmHistoryChatContextContribution } =
-	await import('../../../../../workbench/contrib/scm/browser/scmHistoryChatContext.js');
+const { ScmHistoryChatContextContribution } = await import('../../../../../workbench/contrib/scm/browser/scmHistoryChatContext.js');
 suiteTeardown(() => {
 	browserEnvironment.window.close();
-	for (const name of ['window', 'document', 'Node', 'Element', 'HTMLElement'])
-		Reflect.deleteProperty(globalThis, name);
+	for (const name of ['window', 'document', 'Node', 'Element', 'HTMLElement']) Reflect.deleteProperty(globalThis, name);
 });
 
 const commit: ISCMHistoryItem = {
@@ -72,12 +57,7 @@ const change: ISCMHistoryItemChange = {
 for (const locale of ['en', 'zh-CN'])
 	test(`SCM history picker filters commits and resolves provider context lazily in ${locale}`, async () => {
 		using resetLocale = toDisposable(() => resetNlsResolver());
-		setNlsMessages(
-			locale,
-			locale === 'zh-CN'
-				? JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8'))
-				: {},
-		);
+		setNlsMessages(locale, locale === 'zh-CN' ? JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')) : {});
 		using owner = resolverServices();
 		let picker: IChatContextPickerItem | undefined;
 		let graphRequests = 0,
@@ -146,9 +126,7 @@ test('SCM history attachments preserve the captured commit and file when delegat
 		outputSwimlanes: [],
 		kind: 'node' as const,
 	};
-	const first = resolver.resolveSourceControlHistoryItemAttachContext([
-		{ repository, historyItemViewModel, type: 'historyItemViewModel' },
-	])[0]!;
+	const first = resolver.resolveSourceControlHistoryItemAttachContext([{ repository, historyItemViewModel, type: 'historyItemViewModel' }])[0]!;
 	const second = resolver.resolveSourceControlHistoryItemAttachContext([
 		{
 			repository,
@@ -190,9 +168,7 @@ suite('SCM history Chat source identity', () => {
 			outputSwimlanes: [],
 			kind: 'node' as const,
 		};
-		const first = resolver.resolveSourceControlHistoryItemAttachContext([
-			{ repository, historyItemViewModel, type: 'historyItemViewModel' },
-		])[0]!;
+		const first = resolver.resolveSourceControlHistoryItemAttachContext([{ repository, historyItemViewModel, type: 'historyItemViewModel' }])[0]!;
 		const second = resolver.resolveSourceControlHistoryItemAttachContext([
 			{
 				repository,
@@ -254,12 +230,7 @@ function historyFixture(overrides: Partial<ISCMHistoryProvider>): ISCMHistoryPro
 		...overrides,
 	};
 }
-function testProvider(
-	id: string,
-	providerId: string,
-	label: string,
-	historyProvider?: ISCMHistoryProvider,
-): ISCMProvider {
+function testProvider(id: string, providerId: string, label: string, historyProvider?: ISCMHistoryProvider): ISCMProvider {
 	return {
 		id,
 		providerId,
@@ -285,10 +256,7 @@ function testProvider(
 	};
 }
 
-async function readContextPicks(
-	source: IChatContextPickerItem | IChatContextValueItem,
-	query: string,
-): Promise<IChatContextPickerPickItem[]> {
+async function readContextPicks(source: IChatContextPickerItem | IChatContextValueItem, query: string): Promise<IChatContextPickerPickItem[]> {
 	if (source.type !== 'pickerPick') throw new Error('Expected the registered picker contract');
 	const picker = source.asPicker();
 	const cancellation = new CancellationTokenSource();

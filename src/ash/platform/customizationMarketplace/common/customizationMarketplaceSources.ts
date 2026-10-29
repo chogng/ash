@@ -10,7 +10,5 @@ export function getEnabledCustomizationMarketplaceSources(
 	configuration: IConfigurationService,
 	sources: readonly ICustomizationMarketplaceSourceInfo[],
 ): readonly ICustomizationMarketplaceSourceInfo[] {
-	return configuration.getValue<boolean>(CustomizationMarketplaceConfiguration.MarketplaceEnabled)
-		? sources.filter(source => source.enabled !== false)
-		: [];
+	return configuration.getValue<boolean>(CustomizationMarketplaceConfiguration.MarketplaceEnabled) ? sources.filter(source => source.enabled !== false) : [];
 }

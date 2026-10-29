@@ -101,10 +101,7 @@ MenusRegistry.appendMenuItem(Menus.ActivityBar, {
 		id: 'sessions.newSession',
 		title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'),
 		icon: Lxicon.add,
-		toggled: ContextKeyExpr.or(
-			ContextKeyExpr.has('sessions.activity.chatSelected'),
-			ContextKeyExpr.has('sessions.activity.chatgptSelected'),
-		),
+		toggled: ContextKeyExpr.or(ContextKeyExpr.has('sessions.activity.chatSelected'), ContextKeyExpr.has('sessions.activity.chatgptSelected')),
 	},
 	group: 'navigation',
 	order: 10,
@@ -155,7 +152,5 @@ MenusRegistry.appendMenuItems([
 registerTerminalView(SessionsViewRegistry);
 registerOutputView(SessionsViewRegistry);
 
-registerCollabViews(SessionsViewRegistry, accessor =>
-	accessor.get(ICommandService).executeCommand('sessions.open.collaboration'),
-);
+registerCollabViews(SessionsViewRegistry, accessor => accessor.get(ICommandService).executeCommand('sessions.open.collaboration'));
 registerCallView(SessionsViewRegistry);

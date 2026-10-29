@@ -75,41 +75,20 @@ export class LiveBuilder {
 				buffer = buffer.slice(newline + 1);
 				try {
 					const frame: unknown = JSON.parse(line);
-					if (
-						!frame ||
-						typeof frame !== 'object' ||
-						!('protocol_version' in frame) ||
-						frame.protocol_version !== 1 ||
-						!('id' in frame)
-					)
-						throw new Error('invalid live build response');
+					if (!frame || typeof frame !== 'object' || !('protocol_version' in frame) || frame.protocol_version !== 1 || !('id' in frame)) throw new Error('invalid live build response');
 					if (!initialized) {
-						if (
-							frame.id !== null ||
-							!('result' in frame) ||
-							!frame.result ||
-							typeof frame.result !== 'object' ||
-							!('event' in frame.result) ||
-							frame.result.event !== 'ready'
-						)
+						if (frame.id !== null || !('result' in frame) || !frame.result || typeof frame.result !== 'object' || !('event' in frame.result) || frame.result.event !== 'ready')
 							throw new Error('invalid live build ready event');
 						initialized = true;
 						ready.resolve();
 						continue;
 					}
-					if (!this.pending || frame.id !== this.pending.id)
-						throw new Error('mismatched live build response');
+					if (!this.pending || frame.id !== this.pending.id) throw new Error('mismatched live build response');
 					if ('error' in frame) {
 						this.rejectPending(new Error(String(frame.error)));
 						continue;
 					}
-					if (
-						!('result' in frame) ||
-						!frame.result ||
-						typeof frame.result !== 'object' ||
-						!('kind' in frame.result) ||
-						!['function', 'module'].includes(String(frame.result.kind))
-					)
+					if (!('result' in frame) || !frame.result || typeof frame.result !== 'object' || !('kind' in frame.result) || !['function', 'module'].includes(String(frame.result.kind)))
 						throw new Error('invalid live build result');
 					const pending = this.pending;
 					this.pending = undefined;

@@ -59,16 +59,7 @@ export class MultiDiffEditorToolbar extends Disposable {
 				() =>
 					this.run(async () => {
 						const resolved = await this.sourceResolvers.resolve(options.input.resource);
-						if (resolved)
-							await options.editorService?.openEditor(
-								createMultiDiffEditorInput(
-									resolved.resource,
-									resolved.resources,
-									resolved.label,
-									resolved.source,
-								),
-								{ pinned: true },
-							);
+						if (resolved) await options.editorService?.openEditor(createMultiDiffEditorInput(resolved.resource, resolved.resources, resolved.label, resolved.source), { pinned: true });
 					}),
 			);
 			const dropdown = new ToolbarAction(
@@ -82,15 +73,7 @@ export class MultiDiffEditorToolbar extends Disposable {
 			const toolbar = this._register(
 				new WorkbenchToolBar(left, options.contextMenuProvider, {
 					ariaLabel: localize('multiDiff.changeSource', 'Multi-diff change source'),
-					actionViewItemProvider: action =>
-						action.id === primary.id
-							? new DropdownWithPrimaryActionViewItem(
-									primary,
-									dropdown,
-									sourceActions,
-									options.contextMenuProvider,
-								)
-							: undefined,
+					actionViewItemProvider: action => (action.id === primary.id ? new DropdownWithPrimaryActionViewItem(primary, dropdown, sourceActions, options.contextMenuProvider) : undefined),
 				}),
 			);
 			toolbar.setActions([primary]);
@@ -103,8 +86,7 @@ export class MultiDiffEditorToolbar extends Disposable {
 			this._register(hoverService.setupDelayedHover(label, { content: options.input.label }));
 		}
 		const primary = this.sourceResolvers.primaryRepositoryAction(options.input);
-		const repositoryActions =
-			this.sourceResolvers.repositoryActions?.(options.input).map(action => this.wrap(action)) ?? [];
+		const repositoryActions = this.sourceResolvers.repositoryActions?.(options.input).map(action => this.wrap(action)) ?? [];
 		const wrapped = primary ? this.wrap(primary) : undefined;
 		const dropdown = new ToolbarAction(
 			'multiDiff.repository.menu',
@@ -119,31 +101,19 @@ export class MultiDiffEditorToolbar extends Disposable {
 				ariaLabel: localize('multiDiff.repositoryActions', 'Multi-diff repository actions'),
 				actionViewItemProvider: action =>
 					wrapped && action.id === wrapped.id && repositoryActions.length
-						? new DropdownWithPrimaryActionViewItem(
-								wrapped,
-								dropdown,
-								repositoryActions,
-								options.contextMenuProvider,
-							)
+						? new DropdownWithPrimaryActionViewItem(wrapped, dropdown, repositoryActions, options.contextMenuProvider)
 						: undefined,
 			}),
 		);
-		const files = new ToolbarAction(
-			'multiDiff.files',
-			localize('multiDiff.files', 'Files'),
-			localize('multiDiff.openFiles', 'Open Files'),
-			Lxicon.files,
-			options.viewsService !== undefined,
-			() => options.viewsService?.focusView(VIEW_ID),
+		const files = new ToolbarAction('multiDiff.files', localize('multiDiff.files', 'Files'), localize('multiDiff.openFiles', 'Open Files'), Lxicon.files, options.viewsService !== undefined, () =>
+			options.viewsService?.focusView(VIEW_ID),
 		);
 		toolbar.setActions(wrapped ? [wrapped, files] : [files], [
 			{
 				id: 'multiDiff.toggleCollapseAll',
 				label: localize('multiDiff.collapseAll', 'Collapse All'),
 				get tooltip() {
-					return options.editor.allCollapsed
-						? localize('multiDiff.expandAllTooltip', 'Expand all diffs')
-						: localize('multiDiff.collapseAllTooltip', 'Collapse all diffs');
+					return options.editor.allCollapsed ? localize('multiDiff.expandAllTooltip', 'Expand all diffs') : localize('multiDiff.collapseAllTooltip', 'Collapse all diffs');
 				},
 				icon: Lxicon.fold,
 				enabled: true,
@@ -156,9 +126,7 @@ export class MultiDiffEditorToolbar extends Disposable {
 		toolbar.element.classList.add('stanza-multi-diff-editor-repository-toolbar');
 	}
 	private wrap(action: IAction): IAction {
-		return new ToolbarAction(action.id, action.label, action.tooltip, action.icon, action.enabled, () =>
-			this.run(() => Promise.resolve(action.run())),
-		);
+		return new ToolbarAction(action.id, action.label, action.tooltip, action.icon, action.enabled, () => this.run(() => Promise.resolve(action.run())));
 	}
 	private async run(operation: () => Promise<unknown>): Promise<void> {
 		if (this.busy || this.isDisposed) return;
@@ -169,9 +137,7 @@ export class MultiDiffEditorToolbar extends Disposable {
 			const result = await operation();
 			if (!this.isDisposed) this.statusDomNode.textContent = typeof result === 'string' ? result : '';
 		} catch (error) {
-			if (!this.isDisposed)
-				this.statusDomNode.textContent =
-					error instanceof Error ? error.message : localize('multiDiff.failed', 'The operation failed.');
+			if (!this.isDisposed) this.statusDomNode.textContent = error instanceof Error ? error.message : localize('multiDiff.failed', 'The operation failed.');
 		} finally {
 			this.busy = false;
 			this.domNode.classList.remove('busy');

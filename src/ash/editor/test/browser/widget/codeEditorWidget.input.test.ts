@@ -22,10 +22,7 @@ import { TextModel } from '../../../common/model/textModel.js';
 import { ScrollType } from '../../../common/editorCommon.js';
 import { EditorLineWrapping, EditorOption } from '../../../common/config/editorOptions.js';
 import { type ViewConfigurationChangedEvent } from '../../../common/viewEvents.js';
-import {
-	AccessibilitySupport,
-	IAccessibilityService,
-} from '../../../../platform/accessibility/common/accessibility.js';
+import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
 import { ViewContext } from '../../../common/viewModel/viewContext.js';
 import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
@@ -33,8 +30,7 @@ import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js'
 const { CodeEditorWidget } = await import('../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../testCodeEditor.js');
 const { NativeEditContext } = await import('../../../browser/controller/editContext/native/nativeEditContext.js');
-const { NativeEditContextRegistry } =
-	await import('../../../browser/controller/editContext/native/nativeEditContextRegistry.js');
+const { NativeEditContextRegistry } = await import('../../../browser/controller/editContext/native/nativeEditContextRegistry.js');
 const { ScreenReaderSupport } = await import('../../../browser/controller/editContext/native/screenReaderSupport.js');
 const { TextAreaEditContext } = await import('../../../browser/controller/editContext/textArea/textAreaEditContext.js');
 const { TestView } = await import('../viewModel/testViewModel.js');
@@ -56,14 +52,7 @@ const enabledAccessibilityService: IAccessibilityService = {
 	status: () => {},
 };
 
-function pointerEvent(
-	dom: JSDOM,
-	type: string,
-	pointerId: number,
-	buttons: number,
-	clientX: number,
-	clientY: number,
-): Event {
+function pointerEvent(dom: JSDOM, type: string, pointerId: number, buttons: number, clientX: number, clientY: number): Event {
 	const event = new dom.window.MouseEvent(type, {
 		bubbles: true,
 		cancelable: true,
@@ -131,10 +120,18 @@ test('textarea system-caret movement returns through TextAreaInput and stops aft
 	textArea.dispatchEvent(lateInput);
 	assert.deepEqual(
 		{ prevented: lateInput.defaultPrevented, value: model.getValue(), version: model.getVersionId() },
-		{ prevented: true, value: 'alpha', version: 1 },
+		{
+			prevented: true,
+			value: 'alpha',
+			version: 1,
+		},
 	);
 	textArea.dispatchEvent(
-		new dom.window.InputEvent('beforeinput', { bubbles: true, inputType: 'insertText', data: 'Y' }),
+		new dom.window.InputEvent('beforeinput', {
+			bubbles: true,
+			inputType: 'insertText',
+			data: 'Y',
+		}),
 	);
 	assert.deepEqual({ value: model.getValue(), version: model.getVersionId() }, { value: 'alpha', version: 1 });
 	dom.window.close();
@@ -298,9 +295,7 @@ test('setSelection accepts ranges, preserves selection direction, and reports it
 	using editor = createTestCodeEditor({ container, model });
 	const api: ICodeEditor = editor;
 	const events: { selection: string; source: string }[] = [];
-	using listener = api.onDidChangeCursorSelection(event =>
-		events.push({ selection: event.selection.toString(), source: event.source }),
-	);
+	using listener = api.onDidChangeCursorSelection(event => events.push({ selection: event.selection.toString(), source: event.source }));
 	api.setSelections([new Selection(1, 1, 1, 1), new Selection(2, 1, 2, 1)]);
 	events.length = 0;
 	const version = model.getVersionId();
@@ -360,14 +355,7 @@ test('executeEdits applies one editor transaction and its requested cursor state
 	});
 
 	editor.pushUndoStop();
-	assert.equal(
-		editor.executeEdits(
-			'test.executeEdits',
-			[{ range: new Range(1, 1, 1, 6), text: 'beta' }],
-			[Selection.fromPositions(new Position(1, 5))],
-		),
-		true,
-	);
+	assert.equal(editor.executeEdits('test.executeEdits', [{ range: new Range(1, 1, 1, 6), text: 'beta' }], [Selection.fromPositions(new Position(1, 5))]), true);
 	editor.pushUndoStop();
 	assert.equal(model.getText(), 'beta');
 	assert.deepEqual(editor.getSelection(), Selection.fromPositions(new Position(1, 5)));
@@ -391,10 +379,7 @@ test('CodeEditorWidget publishes canonical cursor position and selection events'
 	using positionListener = editor.onDidChangeCursorPosition(event => positions.push(event));
 	using selectionListener = editor.onDidChangeCursorSelection(event => selections.push(event));
 
-	editor.setSelections(
-		[Selection.fromPositions(new Position(1, 3)), Selection.fromPositions(new Position(1, 5))],
-		'test.cursorEvents',
-	);
+	editor.setSelections([Selection.fromPositions(new Position(1, 3)), Selection.fromPositions(new Position(1, 5))], 'test.cursorEvents');
 
 	assert.deepEqual(positions, [
 		{
@@ -446,13 +431,7 @@ test('editor focus updates the view overlay presentation', () => {
 	);
 	assert.deepEqual(
 		[...requiredElement(editor.getDomNode(), '.margin-view-overlays .current-line-margin').classList],
-		[
-			'current-line',
-			'stanza-editor-current-line-margin-highlight',
-			'current-line-margin',
-			'current-line-margin-both',
-			'current-line-exact-margin',
-		],
+		['current-line', 'stanza-editor-current-line-margin-highlight', 'current-line-margin', 'current-line-margin-both', 'current-line-exact-margin'],
 	);
 	assert.ok(editor.getDomNode().querySelectorAll('.view-overlays .current-line').length > 1);
 	assert.equal(editor.getDomNode().querySelectorAll('.view-overlays .current-line-exact').length, 1);
@@ -573,7 +552,11 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	);
 	assert.deepEqual(
 		{ text: model.getText(), version: model.getVersionId(), browserText: nativeComposition.text },
-		{ text: 'alpha', version: versionBeforeLateInput, browserText: 'alpha' },
+		{
+			text: 'alpha',
+			version: versionBeforeLateInput,
+			browserText: 'alpha',
+		},
 	);
 
 	const adoptedDom = new JSDOM('<!doctype html><body></body>');
@@ -622,9 +605,7 @@ test('ScreenReaderSupport projects one model and screen-reader selection returns
 	assert.ok(domSelection);
 	domSelection.setBaseAndExtent(textNode, 1, textNode, 3);
 	dom.window.document.dispatchEvent(new dom.window.Event('selectionchange'));
-	assert.deepEqual(viewport.testViewModel.getSelections(), [
-		Selection.fromPositions(new Position(1, 2), new Position(1, 4)),
-	]);
+	assert.deepEqual(viewport.testViewModel.getSelections(), [Selection.fromPositions(new Position(1, 2), new Position(1, 4))]);
 
 	viewport.testConfiguration.updateOptions({ renderRichScreenReaderContent: true });
 	support.onConfigurationChanged(configurationChange(EditorOption.renderRichScreenReaderContent));
@@ -639,9 +620,7 @@ test('ScreenReaderSupport projects one model and screen-reader selection returns
 	assert.ok(richTextNode);
 	domSelection.setBaseAndExtent(richTextNode, 0, richTextNode, 2);
 	dom.window.document.dispatchEvent(new dom.window.Event('selectionchange'));
-	assert.deepEqual(viewport.testViewModel.getSelections(), [
-		Selection.fromPositions(new Position(1, 1), new Position(1, 3)),
-	]);
+	assert.deepEqual(viewport.testViewModel.getSelections(), [Selection.fromPositions(new Position(1, 1), new Position(1, 3))]);
 
 	viewport.testConfiguration.updateOptions({ renderRichScreenReaderContent: false });
 	support.onConfigurationChanged(configurationChange(EditorOption.renderRichScreenReaderContent));
@@ -659,17 +638,15 @@ test('ScreenReaderSupport projects one model and screen-reader selection returns
 	container.append(outsideText);
 	domSelection.setBaseAndExtent(outsideText, 0, outsideText, 4);
 	dom.window.document.dispatchEvent(new dom.window.Event('selectionchange'));
-	assert.deepEqual(viewport.testViewModel.getSelections(), [
-		Selection.fromPositions(new Position(1, 1), new Position(1, 3)),
-	]);
+	assert.deepEqual(viewport.testViewModel.getSelections(), [Selection.fromPositions(new Position(1, 1), new Position(1, 3))]);
 
 	using unrelatedModel = new TextModel('unrelated');
-	using unrelatedViewport = new TestView({ container, model: unrelatedModel, lineHeight: 20 });
-	const unrelatedContext = new ViewContext(
-		unrelatedViewport.testConfiguration,
-		darkColorTheme,
-		unrelatedViewport.testViewModel,
-	);
+	using unrelatedViewport = new TestView({
+		container,
+		model: unrelatedModel,
+		lineHeight: 20,
+	});
+	const unrelatedContext = new ViewContext(unrelatedViewport.testConfiguration, darkColorTheme, unrelatedViewport.testViewModel);
 	assert.throws(
 		() =>
 			new ScreenReaderSupport({
@@ -686,13 +663,7 @@ test('ScreenReaderSupport projects one model and screen-reader selection returns
 test('ViewUserInputEvents converts view targets once and CodeEditorWidget publishes the shared event', () => {
 	const converter: ICoordinatesConverter = {
 		convertViewPositionToModelPosition: position => new Position(position.lineNumber + 10, position.column + 20),
-		convertViewRangeToModelRange: range =>
-			new Range(
-				range.startLineNumber + 10,
-				range.startColumn + 20,
-				range.endLineNumber + 10,
-				range.endColumn + 20,
-			),
+		convertViewRangeToModelRange: range => new Range(range.startLineNumber + 10, range.startColumn + 20, range.endLineNumber + 10, range.endColumn + 20),
 		validateViewPosition: position => position,
 		validateViewRange: range => range,
 		convertModelPositionToViewPosition: position => position,
@@ -771,11 +742,7 @@ test('ViewUserInputEvents converts view targets once and CodeEditorWidget publis
 	};
 	span.dispatchEvent(browserEvent);
 	editor.controller.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
-	editor
-		.getDomNode()
-		.dispatchEvent(
-			new dom.window.MouseEvent('drop', { bubbles: true, clientX: 80, clientY: 10 }) as unknown as DragEvent,
-		);
+	editor.getDomNode().dispatchEvent(new dom.window.MouseEvent('drop', { bubbles: true, clientX: 80, clientY: 10 }) as unknown as DragEvent);
 
 	assert.ok(received);
 	assert.ok(received.event instanceof StandardMouseEvent);
@@ -810,26 +777,19 @@ test('ViewController owns mouse selection policy for pointer dispatch', () => {
 		height: 60,
 		toJSON: () => ({}),
 	});
-	editor
-		.getDomNode()
-		.dispatchEvent(
-			new dom.window.MouseEvent('pointerdown', {
-				bubbles: true,
-				cancelable: true,
-				button: 0,
-				clientX: 80,
-				clientY: 25,
-			}),
-		);
-	dom.window.dispatchEvent(
-		new dom.window.MouseEvent('pointerup', { bubbles: true, button: 0, clientX: 80, clientY: 25 }),
+	editor.getDomNode().dispatchEvent(
+		new dom.window.MouseEvent('pointerdown', {
+			bubbles: true,
+			cancelable: true,
+			button: 0,
+			clientX: 80,
+			clientY: 25,
+		}),
 	);
+	dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true, button: 0, clientX: 80, clientY: 25 }));
 	assert.equal(editor.getPosition()?.lineNumber, 2);
 
-	const dispatch = (
-		position: Position,
-		options: { count?: number; selecting?: boolean; altKey?: boolean; lineNumbers?: boolean } = {},
-	) =>
+	const dispatch = (position: Position, options: { count?: number; selecting?: boolean; altKey?: boolean; lineNumbers?: boolean } = {}) =>
 		editor.controller.dispatchMouse({
 			position,
 			mouseColumn: position.column,
@@ -858,10 +818,7 @@ test('ViewController owns mouse selection policy for pointer dispatch', () => {
 
 	editor.setSelection(Selection.fromPositions(new Position(1, 1)));
 	dispatch(new Position(3, 2), { altKey: true });
-	assert.deepEqual(editor.getSelections(), [
-		Selection.fromPositions(new Position(3, 2)),
-		Selection.fromPositions(new Position(1, 1)),
-	]);
+	assert.deepEqual(editor.getSelections(), [Selection.fromPositions(new Position(3, 2)), Selection.fromPositions(new Position(1, 1))]);
 	dom.window.close();
 });
 
@@ -891,9 +848,7 @@ test('pointer selection uses outside-editor targets to scroll both axes and stop
 		mouseUpEvents += 1;
 	});
 
-	editor
-		.getDomNode()
-		.dispatchEvent(pointerEvent(dom, 'pointerdown', 17, 1, editor.getLayoutInfo().contentLeft + 8, 10));
+	editor.getDomNode().dispatchEvent(pointerEvent(dom, 'pointerdown', 17, 1, editor.getLayoutInfo().contentLeft + 8, 10));
 	dom.window.dispatchEvent(pointerEvent(dom, 'pointermove', 17, 1, editor.getLayoutInfo().contentLeft + 8, 120));
 	await delay(dom.window, 45);
 	assert.ok(editor.getScrollTop() > 0);
@@ -903,26 +858,20 @@ test('pointer selection uses outside-editor targets to scroll both axes and stop
 	await delay(dom.window, 45);
 	assert.ok(editor.getScrollLeft() > 0);
 	dom.window.dispatchEvent(pointerEvent(dom, 'pointerup', 17, 0, 260, 20));
-	editor
-		.getDomNode()
-		.dispatchEvent(new dom.window.MouseEvent('mouseup', { bubbles: true, button: 0, clientX: 260, clientY: 20 }));
+	editor.getDomNode().dispatchEvent(new dom.window.MouseEvent('mouseup', { bubbles: true, button: 0, clientX: 260, clientY: 20 }));
 	assert.equal(mouseUpEvents, 1);
 	const releasedScroll = { left: editor.getScrollLeft(), top: editor.getScrollTop() };
 	await delay(dom.window, 35);
 	assert.deepEqual({ left: editor.getScrollLeft(), top: editor.getScrollTop() }, releasedScroll);
-	editor
-		.getDomNode()
-		.dispatchEvent(pointerEvent(dom, 'pointerdown', 18, 1, editor.getLayoutInfo().contentLeft + 8, 10));
-	editor
-		.getDomNode()
-		.dispatchEvent(
-			new dom.window.MouseEvent('mouseup', {
-				bubbles: true,
-				button: 0,
-				clientX: editor.getLayoutInfo().contentLeft + 8,
-				clientY: 10,
-			}),
-		);
+	editor.getDomNode().dispatchEvent(pointerEvent(dom, 'pointerdown', 18, 1, editor.getLayoutInfo().contentLeft + 8, 10));
+	editor.getDomNode().dispatchEvent(
+		new dom.window.MouseEvent('mouseup', {
+			bubbles: true,
+			button: 0,
+			clientX: editor.getLayoutInfo().contentLeft + 8,
+			clientY: 10,
+		}),
+	);
 	assert.equal(mouseUpEvents, 2);
 	dom.window.close();
 });
@@ -986,8 +935,16 @@ test('CodeEditorWidget offers keys to input consumers before cursor navigation',
 	input.dispatchEvent(down);
 
 	assert.deepEqual(
-		{ position: editor.getPosition(), prevented: down.defaultPrevented, order },
-		{ position: new Position(1, 3), prevented: true, order: ['consumer', 'public:handled'] },
+		{
+			position: editor.getPosition(),
+			prevented: down.defaultPrevented,
+			order,
+		},
+		{
+			position: new Position(1, 3),
+			prevented: true,
+			order: ['consumer', 'public:handled'],
+		},
 	);
 	dom.window.close();
 });
@@ -1016,11 +973,7 @@ class TestClipboardData {
 	}
 }
 
-function testClipboardEvent(
-	targetWindow: typeof browserEnvironment.window,
-	type: 'copy' | 'cut' | 'paste',
-	clipboardData: TestClipboardData,
-): ClipboardEvent {
+function testClipboardEvent(targetWindow: typeof browserEnvironment.window, type: 'copy' | 'cut' | 'paste', clipboardData: TestClipboardData): ClipboardEvent {
 	const event = new targetWindow.Event(type, { bubbles: true, cancelable: true });
 	Object.defineProperty(event, 'clipboardData', { configurable: true, value: clipboardData });
 	return event as unknown as ClipboardEvent;
@@ -1103,24 +1056,22 @@ test('paste interception precedes the edit and the public paste event follows it
 		using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model });
 		const order: string[] = [];
 		using before = editor.onWillPaste(() => order.push(`will:${model.getValue()}`));
-		using after = editor.onDidPaste(event =>
-			order.push(`did:${model.getValue()}:${event.range.toString()}:${event.languageId}`),
-		);
+		using after = editor.onDidPaste(event => order.push(`did:${model.getValue()}:${event.range.toString()}:${event.languageId}`));
 		editor.focus();
 		const data = new TestClipboardData();
 		data.setData('text/plain', 'X');
 		editor.controller.editContext.domNode.domNode.dispatchEvent(testClipboardEvent(dom.window, 'paste', data));
 		assert.deepEqual(order, ['will:alpha', 'did:Xalpha:[1,1 -> 1,2]:null']);
 		editor.trigger('test-api', 'paste', { text: 'Y' });
-		assert.deepEqual(
-			{ value: model.getValue(), order },
-			{ value: 'XYalpha', order: ['will:alpha', 'did:Xalpha:[1,1 -> 1,2]:null'] },
-		);
+		assert.deepEqual({ value: model.getValue(), order }, { value: 'XYalpha', order: ['will:alpha', 'did:Xalpha:[1,1 -> 1,2]:null'] });
 		using intercept = editor.onWillPaste(event => event.setHandled());
 		editor.controller.editContext.domNode.domNode.dispatchEvent(testClipboardEvent(dom.window, 'paste', data));
 		assert.deepEqual(
 			{ value: model.getValue(), order },
-			{ value: 'XYalpha', order: ['will:alpha', 'did:Xalpha:[1,1 -> 1,2]:null', 'will:XYalpha'] },
+			{
+				value: 'XYalpha',
+				order: ['will:alpha', 'did:Xalpha:[1,1 -> 1,2]:null', 'will:XYalpha'],
+			},
 		);
 	} finally {
 		dom.window.close();
@@ -1189,10 +1140,7 @@ for (const scenario of [
 		try {
 			using model = new TextModel(scenario.original);
 			using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model });
-			const before = Selection.fromPositions(
-				model.getPositionAt(scenario.before[0]),
-				model.getPositionAt(scenario.before[1]),
-			);
+			const before = Selection.fromPositions(model.getPositionAt(scenario.before[0]), model.getPositionAt(scenario.before[1]));
 			editor.setSelection(before);
 			editor.controller.applyTextUpdate({
 				text: scenario.text,
@@ -1204,24 +1152,12 @@ for (const scenario of [
 				selectionEnd: scenario.after[1],
 				inputType: scenario.text ? 'insertReplacementText' : 'deleteContentForward',
 			});
-			const after = Selection.fromPositions(
-				model.getPositionAt(scenario.after[0]),
-				model.getPositionAt(scenario.after[1]),
-			);
-			assert.deepEqual(
-				{ value: model.getValue(), selection: editor.getSelection() },
-				{ value: scenario.expected, selection: after },
-			);
+			const after = Selection.fromPositions(model.getPositionAt(scenario.after[0]), model.getPositionAt(scenario.after[1]));
+			assert.deepEqual({ value: model.getValue(), selection: editor.getSelection() }, { value: scenario.expected, selection: after });
 			editor.controller.undo();
-			assert.deepEqual(
-				{ value: model.getValue(), selection: editor.getSelection() },
-				{ value: scenario.original, selection: before },
-			);
+			assert.deepEqual({ value: model.getValue(), selection: editor.getSelection() }, { value: scenario.original, selection: before });
 			editor.controller.redo();
-			assert.deepEqual(
-				{ value: model.getValue(), selection: editor.getSelection() },
-				{ value: scenario.expected, selection: after },
-			);
+			assert.deepEqual({ value: model.getValue(), selection: editor.getSelection() }, { value: scenario.expected, selection: after });
 		} finally {
 			dom.window.close();
 		}
@@ -1243,9 +1179,7 @@ for (const source of ['keyboard', 'mouse', 'api'] as const) {
 		editor.focus();
 		editor.trigger('keyboard', 'type', { text: 'abc' });
 		if (source === 'keyboard') {
-			editor.controller.element.dispatchEvent(
-				new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Home' }),
-			);
+			editor.controller.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Home' }));
 		} else if (source === 'mouse') {
 			editor.controller.dispatchMouse({
 				position: new Position(1, 1),
@@ -1271,7 +1205,10 @@ for (const source of ['keyboard', 'mouse', 'api'] as const) {
 		editor.controller.undo();
 		assert.deepEqual(
 			{ text: model.getText(), selection: editor.getSelection() },
-			{ text: 'baseabc', selection: new Selection(1, 1, 1, 1) },
+			{
+				text: 'baseabc',
+				selection: new Selection(1, 1, 1, 1),
+			},
 		);
 		editor.controller.undo();
 		assert.equal(model.getText(), 'base');
@@ -1279,7 +1216,10 @@ for (const source of ['keyboard', 'mouse', 'api'] as const) {
 		editor.controller.redo();
 		assert.deepEqual(
 			{ text: model.getText(), selection: editor.getSelection() },
-			{ text: 'Xbaseabc', selection: new Selection(1, 2, 1, 2) },
+			{
+				text: 'Xbaseabc',
+				selection: new Selection(1, 2, 1, 2),
+			},
 		);
 	});
 }

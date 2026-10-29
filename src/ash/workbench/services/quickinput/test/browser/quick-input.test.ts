@@ -1,19 +1,10 @@
-import {
-	installEditorTestDom,
-	installTestElementHeights,
-} from '../../../../../editor/test/browser/editorTestGlobals.js';
+import { installEditorTestDom, installTestElementHeights } from '../../../../../editor/test/browser/editorTestGlobals.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import type { IDisposable } from '../../../../../base/common/lifecycle.js';
 import { getWindowById, getWindowId, mainWindow, registerWindow } from '../../../../../base/browser/window.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import {
-	PickerQuickAccessProvider,
-	TriggerAction,
-	type IPickerQuickAccessItem,
-	type Picks,
-	type FastAndSlowPicks,
-} from '../../../../../platform/quickinput/browser/pickerQuickAccess.js';
+import { PickerQuickAccessProvider, TriggerAction, type IPickerQuickAccessItem, type Picks, type FastAndSlowPicks } from '../../../../../platform/quickinput/browser/pickerQuickAccess.js';
 import type { IKeyMods } from '../../../../../platform/quickinput/common/quickInput.js';
 import { inQuickInputContext } from '../../../../../platform/quickinput/browser/quickInput.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -36,28 +27,14 @@ import { DialogService } from '../../../../services/dialogs/common/dialogService
 import assert from 'node:assert/strict';
 import { suite, suiteSetup, suiteTeardown, test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import {
-	Action2,
-	IMenuService,
-	MenuId,
-	MenusRegistry,
-	registerAction2,
-} from '../../../../../platform/actions/common/actions.js';
+import { Action2, IMenuService, MenuId, MenusRegistry, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import {
-	IKeybindingService,
-	type IKeybindingService as KeybindingService,
-} from '../../../../../platform/keybinding/common/keybinding.js';
+import { IKeybindingService, type IKeybindingService as KeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { filterQuickPickItems, QuickInputList } from '../../../../../platform/quickinput/browser/quickInputList.js';
-import {
-	IQuickInputService,
-	QuickPickFocus,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, QuickPickFocus, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { QuickAccessRegistry } from '../../../../../platform/quickinput/common/quickAccess.js';
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
@@ -71,9 +48,7 @@ import { ThemeIcon } from '../../../../../base/common/themables.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 
 test('Show All Commands is not duplicated in the titlebar action menu', () => {
-	const titlebarCommandIds = MenusRegistry.getMenuItems(MenuId.TitleBar).flatMap(item =>
-		'command' in item ? [item.command.id] : [],
-	);
+	const titlebarCommandIds = MenusRegistry.getMenuItems(MenuId.TitleBar).flatMap(item => ('command' in item ? [item.command.id] : []));
 
 	assert.equal(titlebarCommandIds.includes(ShowAllCommandsCommandId), false);
 });
@@ -176,10 +151,7 @@ test('QuickInputList checkboxes share multi-selection across pointer, keyboard a
 			rows().map(row => row.getAttribute('aria-checked')),
 			['true', 'false'],
 		);
-		assert.equal(
-			controls()[0].closest('.ash-quick-pick-row-content')?.firstElementChild,
-			controls()[0].parentElement,
-		);
+		assert.equal(controls()[0].closest('.ash-quick-pick-row-content')?.firstElementChild, controls()[0].parentElement);
 		const removedControl = controls()[1];
 		removedControl.click();
 		assert.deepEqual(changes, [['main', 'topic']], 'A checkbox click must toggle once without accepting');
@@ -207,11 +179,7 @@ test('QuickInputList checkboxes share multi-selection across pointer, keyboard a
 			rows().map(row => row.getAttribute('aria-checked')),
 			[null, null],
 		);
-		assert.equal(
-			list.element.querySelectorAll('.ash-quick-pick-row-check').length,
-			1,
-			'Single-select picked items keep their existing checkmark',
-		);
+		assert.equal(list.element.querySelectorAll('.ash-quick-pick-row-check').length, 1, 'Single-select picked items keep their existing checkmark');
 	} finally {
 		list.dispose();
 		dom.window.close();
@@ -336,7 +304,11 @@ test('Command Palette filters, executes, closes, and restores focus', async () =
 	let executions = 0;
 	class PaletteTargetAction extends Action2 {
 		constructor() {
-			super({ id: 'test.quickInput.target', title: 'Run Palette Target', f1: true });
+			super({
+				id: 'test.quickInput.target',
+				title: 'Run Palette Target',
+				f1: true,
+			});
 		}
 
 		override run(): void {
@@ -438,7 +410,12 @@ test('Command Palette releases its provider before an accepted command disposes 
 				picker: dom.window.document.querySelector('.ash-quick-pick'),
 				errors: unexpectedErrors,
 			},
-			{ executions: 1, disposed: true, picker: null, errors: [] },
+			{
+				executions: 1,
+				disposed: true,
+				picker: null,
+				errors: [],
+			},
 		);
 	} finally {
 		errorHandler.setUnexpectedErrorHandler(previousErrorHandler);
@@ -515,7 +492,12 @@ test('Quick Access preserves hide delivery and a new session opened before old c
 				disposed: first.disposed,
 				generations: runs.length,
 			},
-			{ hidden: 1, aborted: true, disposed: 1, generations: 2 },
+			{
+				hidden: 1,
+				aborted: true,
+				disposed: 1,
+				generations: 2,
+			},
 		);
 		const second = runs[1]!;
 		await first.complete();
@@ -527,7 +509,12 @@ test('Quick Access preserves hide delivery and a new session opened before old c
 				disposed: second.disposed,
 				visible: contextKeys.getValue(inQuickInputContext.key),
 			},
-			{ items: ['Current 2'], aborted: false, disposed: 0, visible: true },
+			{
+				items: ['Current 2'],
+				aborted: false,
+				disposed: 0,
+				visible: true,
+			},
 		);
 		await second.complete();
 		assert.deepEqual(
@@ -543,7 +530,11 @@ test('Quick Access preserves hide delivery and a new session opened before old c
 				aborted: runs.map(run => run.signal.isCancellationRequested),
 				picker: dom.window.document.querySelector('.ash-quick-pick'),
 			},
-			{ disposed: [1, 1], aborted: [true, true], picker: null },
+			{
+				disposed: [1, 1],
+				aborted: [true, true],
+				picker: null,
+			},
 		);
 	} finally {
 		dom.window.close();
@@ -618,17 +609,18 @@ test('Quick Access cancels old provider results when switching modes in the same
 				disposed: oldDisposed,
 				items: newPicker.items.map(item => item.label),
 			},
-			{ aborted: true, disposed: 1, items: ['Current result'] },
+			{
+				aborted: true,
+				disposed: 1,
+				items: ['Current result'],
+			},
 		);
 		newPicker.hide();
 		newPicker.hide();
 		quickInput.dispose();
 		quickInput.dispose();
 		await Promise.resolve();
-		assert.deepEqual(
-			{ oldDisposed, newDisposed, picker: dom.window.document.querySelector('.ash-quick-pick') },
-			{ oldDisposed: 1, newDisposed: 1, picker: null },
-		);
+		assert.deepEqual({ oldDisposed, newDisposed, picker: dom.window.document.querySelector('.ash-quick-pick') }, { oldDisposed: 1, newDisposed: 1, picker: null });
 	} finally {
 		dom.window.close();
 	}
@@ -669,9 +661,7 @@ test('Quick Access switches search modes in one picker and restores focus on clo
 		input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 		assert.equal(dom.window.document.querySelector('.ash-quick-pick'), picker);
 		assert.equal(input.placeholder, 'Select a search mode');
-		const commandMode = [...picker.querySelectorAll<HTMLElement>('.ash-quick-pick-row-label')].find(
-			label => label.textContent === '> Commands',
-		);
+		const commandMode = [...picker.querySelectorAll<HTMLElement>('.ash-quick-pick-row-label')].find(label => label.textContent === '> Commands');
 		assert.ok(commandMode);
 		commandMode.click();
 		assert.equal(dom.window.document.querySelector('.ash-quick-pick'), picker);
@@ -683,16 +673,12 @@ test('Quick Access switches search modes in one picker and restores focus on clo
 		assert.equal(input.value, '>foo');
 		assert.equal(input.selectionStart, 1);
 		assert.equal(input.selectionEnd, 4);
-		input.dispatchEvent(
-			new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }),
-		);
+		input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
 		assert.equal(dom.window.document.querySelector('.ash-quick-pick'), null);
 		assert.equal(dom.window.document.activeElement, button);
 		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
 		assert.ok(chinese);
-		setNlsResolver((bundle, key, fallback, parameters) =>
-			formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-		);
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		try {
 			quickAccess.show('>');
 			const localizedPicker = dom.window.document.querySelector('.ash-quick-pick');
@@ -702,26 +688,17 @@ test('Quick Access switches search modes in one picker and restores focus on clo
 			assert.equal(localizedInput.placeholder, '输入要运行的命令名称');
 			assert.equal(localizedInput.getAttribute('aria-label'), '输入要运行的命令名称');
 			assert.equal(
-				[...localizedPicker.querySelectorAll<HTMLElement>('.ash-quick-pick-row-label')].some(
-					label => label.textContent === '转到工作区中的符号',
-				),
+				[...localizedPicker.querySelectorAll<HTMLElement>('.ash-quick-pick-row-label')].some(label => label.textContent === '转到工作区中的符号'),
 				true,
 			);
 			quickAccess.show('?');
 			assert.equal(localizedInput.placeholder, '选择搜索模式');
-			const labels = [...localizedPicker.querySelectorAll<HTMLElement>('.ash-quick-pick-row-label')].map(
-				label => label.textContent,
-			);
+			const labels = [...localizedPicker.querySelectorAll<HTMLElement>('.ash-quick-pick-row-label')].map(label => label.textContent);
 			assert.deepEqual(labels, ['> 命令', '@ 工作区中的符号']);
 			quickAccess.show('?missing');
 			assert.equal(localizedPicker.querySelector('.ash-quick-pick-empty')?.textContent, '没有匹配结果');
-			assert.equal(
-				localizedPicker.querySelector('.ash-quick-pick-list-items')?.getAttribute('aria-label'),
-				'快速选择结果',
-			);
-			localizedInput.dispatchEvent(
-				new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }),
-			);
+			assert.equal(localizedPicker.querySelector('.ash-quick-pick-list-items')?.getAttribute('aria-label'), '快速选择结果');
+			localizedInput.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
 			assert.equal(dom.window.document.querySelector('.ash-quick-pick'), null);
 			assert.equal(dom.window.document.activeElement, button);
 		} finally {
@@ -758,9 +735,7 @@ test('Quick Input preserves viewport intent across repeated focus restoration an
 				if (close === 'Escape') {
 					const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
 					assert.ok(input);
-					input.dispatchEvent(
-						new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
-					);
+					input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 				} else {
 					picker.hide();
 				}
@@ -778,19 +753,13 @@ test('Quick Input preserves viewport intent across repeated focus restoration an
 			otherEditor.focus();
 			focusCalls.length = 0;
 			picker.hide();
-			assert.deepEqual(
-				{ focus: dom.window.document.activeElement, calls: [...focusCalls] },
-				{ focus: otherEditor, calls: [] },
-			);
+			assert.deepEqual({ focus: dom.window.document.activeElement, calls: [...focusCalls] }, { focus: otherEditor, calls: [] });
 			editor.focus();
 			focusCalls.length = 0;
 			picker.show();
 			picker.dispose();
 			picker.dispose();
-			assert.deepEqual(
-				{ focus: dom.window.document.activeElement, calls: [...focusCalls] },
-				{ focus: editor, calls: [{ preventScroll: true }] },
-			);
+			assert.deepEqual({ focus: dom.window.document.activeElement, calls: [...focusCalls] }, { focus: editor, calls: [{ preventScroll: true }] });
 			editor.focus();
 			focusCalls.length = 0;
 			service.createQuickPick().show();
@@ -890,9 +859,7 @@ test('Quick Input masks a password, validates it, clears it, and restores focus'
 	const renamed = service.input({ title: 'Rename', value: 'old.ts' });
 	const renameInput = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
 	assert.equal(renameInput?.value, 'old.ts');
-	renameInput?.dispatchEvent(
-		new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }),
-	);
+	renameInput?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
 	assert.equal(await renamed, 'old.ts');
 
 	const cancelled = service.input({ title: 'Another key', password: true });
@@ -930,10 +897,7 @@ test('Quick Pick labels its input and reports focus leaving the picker', async (
 		using listener = picker.onDidBlur(() => blurs++);
 		picker.show();
 		assert.equal(dom.window.document.querySelector('.ash-quick-pick')?.getAttribute('aria-label'), 'Go to Symbol');
-		assert.equal(
-			dom.window.document.querySelector('.ash-quick-pick-input input')?.getAttribute('aria-label'),
-			'Go to Symbol',
-		);
+		assert.equal(dom.window.document.querySelector('.ash-quick-pick-input input')?.getAttribute('aria-label'), 'Go to Symbol');
 		nextButton.focus();
 		await Promise.resolve();
 		assert.equal(blurs, 1);
@@ -969,10 +933,7 @@ test('Quick Input keeps clicks inside the picker and passes outside clicks to th
 		assert.equal(contextKeys.getValue(inQuickInputContext.key), true);
 		action.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
 		action.click();
-		assert.deepEqual(
-			{ clicks, pickerVisible: contextKeys.getValue(inQuickInputContext.key) },
-			{ clicks: 1, pickerVisible: false },
-		);
+		assert.deepEqual({ clicks, pickerVisible: contextKeys.getValue(inQuickInputContext.key) }, { clicks: 1, pickerVisible: false });
 	}
 	dom.window.close();
 });
@@ -980,7 +941,10 @@ test('Quick Input keeps clicks inside the picker and passes outside clicks to th
 function emptyKeybindingService(): KeybindingService {
 	return {
 		inChordMode: false,
-		onDidUpdateKeybindings: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+		onDidUpdateKeybindings: () => ({
+			dispose() {},
+			[Symbol.dispose]() {},
+		}),
 		resolveKeybinding() {
 			throw new Error('Not needed by Command Palette test');
 		},
@@ -1035,7 +999,10 @@ function installDomGlobals(dom: JSDOM): void {
 		KeyboardEvent: dom.window.KeyboardEvent,
 		navigator: dom.window.navigator,
 	})) {
-		Object.defineProperty(globalThis, name, { configurable: true, value });
+		Object.defineProperty(globalThis, name, {
+			configurable: true,
+			value,
+		});
 	}
 }
 
@@ -1060,16 +1027,12 @@ test('Quick Input token cancellation closes only its prompt and releases the tok
 
 	using accepted = new CancellationTokenSource();
 	const value = service.input({ title: 'Accepted', value: 'kept' }, accepted.token);
-	dom.window.document
-		.querySelector('input')!
-		.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+	dom.window.document.querySelector('input')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 	assert.equal(await value, 'kept');
 	const next = service.input({ title: 'Next' });
 	accepted.cancel();
 	assert.equal(dom.window.document.querySelector('input')?.getAttribute('aria-label'), 'Next');
-	dom.window.document
-		.querySelector('input')!
-		.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+	dom.window.document.querySelector('input')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 	assert.equal(await next, undefined);
 });
 
@@ -1079,14 +1042,7 @@ suite('Quick Input shared foundations', () => {
 	let mainHeights: IDisposable;
 	suiteSetup(() => {
 		mainDom = new JSDOM('<!doctype html><body></body>');
-		mainGlobals = installEditorTestDom(mainDom, [
-			'Node',
-			'Element',
-			'HTMLElement',
-			'Event',
-			'MouseEvent',
-			'KeyboardEvent',
-		]);
+		mainGlobals = installEditorTestDom(mainDom, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
 		getWindowId(mainDom.window as unknown as Window);
 		mainHeights = installTestElementHeights(mainWindow.document);
 	});
@@ -1102,14 +1058,7 @@ suite('Quick Input shared foundations', () => {
 		const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 		using browser = toDisposable(() => dom.window.close());
 		using registrationWindow = registerWindow(dom.window as unknown as Window);
-		using globals = installEditorTestDom(dom, [
-			'Node',
-			'Element',
-			'HTMLElement',
-			'Event',
-			'MouseEvent',
-			'KeyboardEvent',
-		]);
+		using globals = installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
 		using services = new InstantiationService();
 		using contexts = new ContextKeyService();
 		using layout = new BrowserLayoutService({ root: dom.window.document.body });
@@ -1124,15 +1073,7 @@ suite('Quick Input shared foundations', () => {
 		});
 		services.registerInstance(IStorageService, storage);
 		const key = 'workbench.quickInput.viewState';
-		for (const value of [
-			'broken json',
-			'null',
-			'[]',
-			'{"top":0.2}',
-			'{"top":-1,"left":0.5}',
-			'{"top":0.2,"left":2}',
-			'{"top":"0.2","left":0.5}',
-		]) {
+		for (const value of ['broken json', 'null', '[]', '{"top":0.2}', '{"top":-1,"left":0.5}', '{"top":0.2,"left":2}', '{"top":"0.2","left":0.5}']) {
 			storage.store(key, value, StorageScope.APPLICATION, StorageTarget.MACHINE);
 			using picker = service.createQuickPick();
 			picker.show();
@@ -1152,14 +1093,7 @@ suite('Quick Input shared foundations', () => {
 		using heights = installTestElementHeights(dom.window.document);
 		using browser = toDisposable(() => dom.window.close());
 		using registrationWindow = registerWindow(dom.window as unknown as Window);
-		using globals = installEditorTestDom(dom, [
-			'Node',
-			'Element',
-			'HTMLElement',
-			'Event',
-			'MouseEvent',
-			'KeyboardEvent',
-		]);
+		using globals = installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
 		using service = new TestQuickInputService({ container: dom.window.document.body });
 		const access = service.quickAccess;
 		assert.equal(service.quickAccess, access);
@@ -1172,14 +1106,7 @@ suite('Quick Input shared foundations', () => {
 		using heights = installTestElementHeights(dom.window.document);
 		using browser = toDisposable(() => dom.window.close());
 		using registrationWindow = registerWindow(dom.window as unknown as Window);
-		using globals = installEditorTestDom(dom, [
-			'Node',
-			'Element',
-			'HTMLElement',
-			'Event',
-			'MouseEvent',
-			'KeyboardEvent',
-		]);
+		using globals = installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
 		using service = new TestQuickInputService({ container: dom.window.document.body });
 		const requests: {
 			filter: string;
@@ -1191,11 +1118,7 @@ suite('Quick Input shared foundations', () => {
 			constructor() {
 				super('test-query:');
 			}
-			protected override _getPicks(
-				filter: string,
-				resources: DisposableStore,
-				token: CancellationToken,
-			): FastAndSlowPicks<IPickerQuickAccessItem> {
+			protected override _getPicks(filter: string, resources: DisposableStore, token: CancellationToken): FastAndSlowPicks<IPickerQuickAccessItem> {
 				const request = {
 					filter,
 					token,
@@ -1254,14 +1177,7 @@ suite('Quick Input shared foundations', () => {
 		using heights = installTestElementHeights(dom.window.document);
 		using browser = toDisposable(() => dom.window.close());
 		using registrationWindow = registerWindow(dom.window as unknown as Window);
-		using globals = installEditorTestDom(dom, [
-			'Node',
-			'Element',
-			'HTMLElement',
-			'Event',
-			'MouseEvent',
-			'KeyboardEvent',
-		]);
+		using globals = installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
 		using service = new TestQuickInputService({ container: dom.window.document.body });
 		const additional = new DeferredPromise<Picks<IPickerQuickAccessItem>>();
 		let accepted = false;
@@ -1270,11 +1186,7 @@ suite('Quick Input shared foundations', () => {
 			constructor() {
 				super('test-fast:');
 			}
-			protected override _getPicks(
-				_filter: string,
-				_resources: DisposableStore,
-				query: CancellationToken,
-			): FastAndSlowPicks<IPickerQuickAccessItem> {
+			protected override _getPicks(_filter: string, _resources: DisposableStore, query: CancellationToken): FastAndSlowPicks<IPickerQuickAccessItem> {
 				token = query;
 				return {
 					picks: [
@@ -1310,14 +1222,7 @@ suite('Quick Input shared foundations', () => {
 		using heights = installTestElementHeights(dom.window.document);
 		using browser = toDisposable(() => dom.window.close());
 		using registrationWindow = registerWindow(dom.window as unknown as Window);
-		using globals = installEditorTestDom(dom, [
-			'Node',
-			'Element',
-			'HTMLElement',
-			'Event',
-			'MouseEvent',
-			'KeyboardEvent',
-		]);
+		using globals = installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
 		using service = new TestQuickInputService({ container: dom.window.document.body });
 		const buttonResult = new DeferredPromise<TriggerAction>();
 		const accepted: IKeyMods[] = [];

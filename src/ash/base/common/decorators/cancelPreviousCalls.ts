@@ -1,9 +1,7 @@
 import { CancellationToken, CancellationTokenSource } from '../cancellation.js';
 import { Disposable, toDisposable } from '../lifecycle.js';
 
-type WithOptionalCancellationToken<TFunction extends (...args: any[]) => unknown> = TFunction extends (
-	...args: infer TArgs
-) => infer TResult
+type WithOptionalCancellationToken<TFunction extends (...args: any[]) => unknown> = TFunction extends (...args: infer TArgs) => infer TResult
 	? (...args: [...TArgs, cancellationToken?: CancellationToken]) => TResult
 	: never;
 

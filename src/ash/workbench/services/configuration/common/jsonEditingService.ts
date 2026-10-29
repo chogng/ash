@@ -3,11 +3,7 @@ import { parseJsonc } from '../../../../base/common/jsonc.js';
 import { setProperty } from '../../../../base/common/jsonEdit.js';
 import { dirname } from '../../../../base/common/resources.js';
 import type { URI } from '../../../../base/common/uri.js';
-import {
-	IFileService,
-	FileSystemProviderErrorCode,
-	toFileSystemProviderErrorCode,
-} from '../../../../platform/files/common/files.js';
+import { IFileService, FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../../../platform/files/common/files.js';
 import { IFileTextModelService } from '../../textmodelResolver/common/textModelResourceService.js';
 import { IWorkingCopyService } from '../../workingCopy/common/workingCopyService.js';
 import { localize } from '../../../../nls.js';
@@ -33,13 +29,7 @@ class JSONEditingService extends Disposable implements IJSONEditingService {
 
 	private async edit(resource: URI, values: IJSONValue[], save: boolean): Promise<void> {
 		if (this.copies.get(resource).some(copy => copy.isDirty)) {
-			throw new Error(
-				localize(
-					'jsonEditing.dirty',
-					'Save or revert unsaved changes in {0} before updating it.',
-					resource.toString(),
-				),
-			);
+			throw new Error(localize('jsonEditing.dirty', 'Save or revert unsaved changes in {0} before updating it.', resource.toString()));
 		}
 		let initialText: string | undefined;
 		try {
@@ -49,31 +39,14 @@ class JSONEditingService extends Disposable implements IJSONEditingService {
 			await this.files.createDirectory(dirname(resource));
 			initialText = '{}\n';
 		}
-		using reference = await this.models.acquire(
-			{ resource, initialText, languageId: 'jsonc' },
-			new AbortController().signal,
-		);
-		if (reference.isDirty)
-			throw new Error(
-				localize(
-					'jsonEditing.dirty',
-					'Save or revert unsaved changes in {0} before updating it.',
-					resource.toString(),
-				),
-			);
+		using reference = await this.models.acquire({ resource, initialText, languageId: 'jsonc' }, new AbortController().signal);
+		if (reference.isDirty) throw new Error(localize('jsonEditing.dirty', 'Save or revert unsaved changes in {0} before updating it.', resource.toString()));
 		const model = reference.model;
 		let text = model.getValue();
 		try {
 			parseJsonc(text, resource.toString());
 		} catch {
-			throw new JSONEditingError(
-				localize(
-					'jsonEditing.invalid',
-					'Cannot update {0} because it contains invalid JSON.',
-					resource.toString(),
-				),
-				JSONEditingErrorCode.ERROR_INVALID_FILE,
-			);
+			throw new JSONEditingError(localize('jsonEditing.invalid', 'Cannot update {0} because it contains invalid JSON.', resource.toString()), JSONEditingErrorCode.ERROR_INVALID_FILE);
 		}
 		for (const value of values) {
 			for (const edit of [

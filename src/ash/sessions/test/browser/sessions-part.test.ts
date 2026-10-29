@@ -1,10 +1,7 @@
 import { BrowserImageEditorService } from '../../../workbench/services/imageEditor/browser/browserImageEditorService.js';
 import { IImageEditorService } from '../../../workbench/services/imageEditor/common/imageEditorService.js';
 import { ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
-import {
-	IChatSpeechToTextService,
-	ChatSpeechToTextService,
-} from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
+import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
 import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
@@ -17,11 +14,7 @@ import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyn
 import { IAppServerHookApi, IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
-import {
-	createTestFileService,
-	registerTestComponentServices,
-	createTestEditorServices,
-} from '../../../workbench/test/common/testEditorServices.js';
+import { createTestFileService, registerTestComponentServices, createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IGitHubService as ISessionsGitHubService } from '../../contrib/github/browser/githubService.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { IFileService, FileSystemProviderCapabilities } from '../../../platform/files/common/files.js';
@@ -60,11 +53,7 @@ import { BrowserStorageService } from '../../../workbench/services/storage/brows
 import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat/browser/chatTipService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/browser/lifecycleService.js';
-import {
-	migrateNewChatDraftState,
-	readNewChatDraftState,
-	writeNewChatDraftState,
-} from '../../contrib/chat/common/newChatDraftState.js';
+import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
 import type { SessionsPartOptions } from '../../browser/parts/sessionsPart.js';
 import { NewChatContextAttachments } from '../../contrib/chat/browser/newChatContextAttachments.js';
 import { NewChatInputPasteTarget } from '../../contrib/chat/browser/newChatInputPasteTarget.js';
@@ -87,24 +76,12 @@ const { SessionsPart } = await import('../../browser/parts/sessionsPart.js');
 await import('../../contrib/creator/browser/creatorEditor.contribution.js');
 const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
 const { CoworkPaneFactory } = await import('../../contrib/cowork/browser/cowork.contribution.js');
-const { ChatTipService: CoworkTipService, IChatTipService: ICoworkTipService } =
-	await import('../../contrib/cowork/browser/chatTipService.js');
+const { ChatTipService: CoworkTipService, IChatTipService: ICoworkTipService } = await import('../../contrib/cowork/browser/chatTipService.js');
 const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');
 
 suiteTeardown(() => {
 	browserEnvironment.window.close();
-	for (const name of [
-		'window',
-		'document',
-		'Node',
-		'Element',
-		'HTMLElement',
-		'Event',
-		'MouseEvent',
-		'FileReader',
-		'navigator',
-	])
-		Reflect.deleteProperty(globalThis, name);
+	for (const name of ['window', 'document', 'Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'FileReader', 'navigator']) Reflect.deleteProperty(globalThis, name);
 });
 
 test('SessionsPart remains owned by the Sessions product layer', async () => {
@@ -162,8 +139,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		},
 		discardUntitledSession(untitledSessionId) {
 			untitledSessions = untitledSessions.filter(session => session.untitledSessionId !== untitledSessionId);
-			if (activeUntitledSessionId === untitledSessionId)
-				activeUntitledSessionId = untitledSessions[0]?.untitledSessionId;
+			if (activeUntitledSessionId === untitledSessionId) activeUntitledSessionId = untitledSessions[0]?.untitledSessionId;
 			onDidChange.fire();
 		},
 		setUntitledSessionModel() {},
@@ -199,9 +175,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		},
 	};
 	const threadUpdates = new Emitter<ThreadUpdateEnvelope>();
-	const transcriptUpdates = new Emitter<
-		import('../../../workbench/services/chat/common/chatService.js').ThreadTranscriptUpdateEnvelope
-	>();
+	const transcriptUpdates = new Emitter<import('../../../workbench/services/chat/common/chatService.js').ThreadTranscriptUpdateEnvelope>();
 	const ready = new Emitter<void>();
 	const chatService: IChatService & ILanguageModelsService = {
 		rewriteRequest: async () => {
@@ -445,10 +419,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		}),
 	);
 	services.registerInstance(IUriIdentityService, resources.add(services.createInstance(UriIdentityService)));
-	services.registerInstance(
-		IWorkspaceContextService,
-		resources.add(new TestWorkspaceService({ id: 'sessions-test', folders: [] })),
-	);
+	services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'sessions-test', folders: [] })));
 
 	services.registerInstance(IAccessibleViewService, {
 		getOpenAriaHint: () => undefined,
@@ -543,10 +514,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		},
 		createScope: () => paneServices.createChild(),
 	});
-	paneServices.registerInstance(
-		IImageEditorService,
-		resources.add(paneServices.createInstance(BrowserImageEditorService)),
-	);
+	paneServices.registerInstance(IImageEditorService, resources.add(paneServices.createInstance(BrowserImageEditorService)));
 	const cowork = resources.add(paneServices.createInstance(CoworkPaneFactory));
 	const part = paneServices.createInstance(SessionsPart, dom.window.document.body, {
 		sessionService,
@@ -597,9 +565,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-tip').length, 0);
 	assert.equal(services.get(IChatTipService).getWelcomeTip(), undefined);
 
-	(
-		part.domNode.querySelector('.ash-sessions-chat-slot input, .ash-sessions-chat-slot textarea') as HTMLElement
-	).focus();
+	(part.domNode.querySelector('.ash-sessions-chat-slot input, .ash-sessions-chat-slot textarea') as HTMLElement).focus();
 	assert.ok(part.domNode.querySelector('.ash-sessions-chat-slot.active'));
 	assert.equal(part.domNode.querySelector('.ash-editor-group, .ash-editor-title-control, [role=tab]'), null);
 	viewService.closeVisibleSelection(viewService.activeSelection!);
@@ -686,11 +652,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	assert.equal(coworkView.querySelectorAll('.ash-cowork-attachment').length, 0);
 	const grid = part.domNode.querySelector('.ash-sessions-chat-grid');
 	part.restoreDraft(draft);
-	await Promise.all([
-		part.setConversationKind('code'),
-		part.setConversationKind('cowork'),
-		part.setConversationKind('code'),
-	]);
+	await Promise.all([part.setConversationKind('code'), part.setConversationKind('cowork'), part.setConversationKind('code')]);
 	assert.equal(part.domNode.querySelector('.ash-sessions-chat-grid'), grid);
 	assert.equal(part.domNode.querySelector('[data-conversation-kind="code"]'), codeView);
 	assert.equal(part.domNode.querySelector('.ash-chat-input-part'), retainedCodeInput);
@@ -756,34 +718,18 @@ test('legacy drafts merge by session identity and conflicting content survives u
 			},
 		],
 	};
-	storage.store(
-		'sessions.draftState:thread-1',
-		JSON.stringify(chatDraft),
-		StorageScope.WORKSPACE,
-		StorageTarget.MACHINE,
-	);
-	storage.store(
-		'sessions.codeDraftState:thread-1',
-		JSON.stringify(codeDraft),
-		StorageScope.WORKSPACE,
-		StorageTarget.MACHINE,
-	);
+	storage.store('sessions.draftState:thread-1', JSON.stringify(chatDraft), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	storage.store('sessions.codeDraftState:thread-1', JSON.stringify(codeDraft), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	storage.store('sessions.activityBar.activePage', 'code', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	const recovered = migrateNewChatDraftState(storage);
-	assert.deepEqual(
-		{ selected: readNewChatDraftState(storage, 'thread-1'), recovered },
-		{ selected: codeDraft, recovered: [{ draft: chatDraft, key: 'sessions.draftState:thread-1' }] },
-	);
+	assert.deepEqual({ selected: readNewChatDraftState(storage, 'thread-1'), recovered }, { selected: codeDraft, recovered: [{ draft: chatDraft, key: 'sessions.draftState:thread-1' }] });
 	assert.equal(storage.get(recovered[0]!.key, StorageScope.WORKSPACE), JSON.stringify(chatDraft));
 	writeNewChatDraftState(storage, recovered[0]!.draft, 'untitled:recovered');
 	storage.remove(recovered[0]!.key, StorageScope.WORKSPACE);
 	assert.deepEqual(migrateNewChatDraftState(storage), []);
 	await storage.flush();
 	using restored = new BrowserStorageService({ ownerWindow, workspaceId: 'sessions', flushInterval: 0 });
-	assert.deepEqual(
-		[readNewChatDraftState(restored, 'thread-1'), readNewChatDraftState(restored, 'untitled:recovered')],
-		[codeDraft, chatDraft],
-	);
+	assert.deepEqual([readNewChatDraftState(restored, 'thread-1'), readNewChatDraftState(restored, 'untitled:recovered')], [codeDraft, chatDraft]);
 });
 
 test('Sessions file picker forwards the original files to the shared composer', () => {

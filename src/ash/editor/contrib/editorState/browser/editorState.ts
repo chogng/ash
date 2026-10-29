@@ -79,10 +79,7 @@ export class EditorState {
 			const selection = editor.getSelection();
 			checks.push(current => {
 				const value = current.getSelection();
-				return (
-					selection === value ||
-					(selection !== null && value !== null && Selection.selectionsEqual(selection, value))
-				);
+				return selection === value || (selection !== null && value !== null && Selection.selectionsEqual(selection, value));
 			});
 		}
 		if (flags & CodeEditorStateFlag.Position) {

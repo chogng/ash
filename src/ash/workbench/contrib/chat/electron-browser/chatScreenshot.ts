@@ -6,11 +6,7 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
-import {
-	GLOBAL_KEYBINDING_UPDATE_CHANNEL,
-	GLOBAL_KEYBINDING_TRIGGER_CHANNEL,
-	validateGlobalKeybindingResult,
-} from '../../../../platform/globalKeybindings/common/globalKeybindings.js';
+import { GLOBAL_KEYBINDING_UPDATE_CHANNEL, GLOBAL_KEYBINDING_TRIGGER_CHANNEL, validateGlobalKeybindingResult } from '../../../../platform/globalKeybindings/common/globalKeybindings.js';
 import { invoke, subscribe } from '../../../../platform/ipc/electron-browser/rendererIpc.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 import { IImageEditorService } from '../../../services/imageEditor/common/imageEditorService.js';
@@ -57,18 +53,10 @@ export class ChatScreenshotContribution extends Disposable {
 			}),
 		);
 		const trigger = subscribe<unknown>(GLOBAL_KEYBINDING_TRIGGER_CHANNEL, value => {
-			if (
-				!value ||
-				typeof value !== 'object' ||
-				Array.isArray(value) ||
-				Object.keys(value).join(',') !== 'id' ||
-				typeof (value as { id?: unknown }).id !== 'string'
-			)
+			if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).join(',') !== 'id' || typeof (value as { id?: unknown }).id !== 'string')
 				throw new TypeError('Invalid global keybinding trigger');
 			if ((value as { id: string }).id === 'chat.screenshot')
-				void commands
-					.executeCommand(ScreenshotCommandId)
-					.catch(error => log.error('Could not start screenshot from global shortcut', error));
+				void commands.executeCommand(ScreenshotCommandId).catch(error => log.error('Could not start screenshot from global shortcut', error));
 		});
 		this._register(
 			toDisposable(() => {
@@ -91,9 +79,7 @@ export class ChatScreenshotContribution extends Disposable {
 			if (this.isDisposed || generation !== this.shortcutGeneration) return;
 			const binding = this.keybindings.lookupKeybinding(ScreenshotCommandId);
 			const accelerator = toElectronAccelerator(binding);
-			const global =
-				this.configuration.getValue<boolean>(ScreenshotGlobalShortcutSetting) === true &&
-				this.editors.available;
+			const global = this.configuration.getValue<boolean>(ScreenshotGlobalShortcutSetting) === true && this.editors.available;
 			try {
 				const result = validateGlobalKeybindingResult(
 					await invoke<unknown>(GLOBAL_KEYBINDING_UPDATE_CHANNEL, {
@@ -107,13 +93,7 @@ export class ChatScreenshotContribution extends Disposable {
 				if (this.isDisposed || generation !== this.shortcutGeneration) return;
 				this.shortcut = {
 					global,
-					availability: !binding
-						? 'unassigned'
-						: !accelerator
-							? 'unsupported'
-							: result.available
-								? 'available'
-								: 'unavailable',
+					availability: !binding ? 'unassigned' : !accelerator ? 'unsupported' : result.available ? 'available' : 'unavailable',
 					activeLabel: result.activeLabel,
 				};
 			} catch (error) {
@@ -132,39 +112,21 @@ export class ChatScreenshotContribution extends Disposable {
 		if (status.global) {
 			switch (status.availability) {
 				case 'unavailable':
-					message = localize(
-						'screenshot.shortcut.conflictNotice',
-						'The global screenshot shortcut could not be registered. Another application or the system may use it.',
-					);
+					message = localize('screenshot.shortcut.conflictNotice', 'The global screenshot shortcut could not be registered. Another application or the system may use it.');
 					break;
 				case 'unsupported':
-					message = localize(
-						'screenshot.shortcut.unsupportedNotice',
-						'This screenshot shortcut cannot be used globally. Choose another key combination.',
-					);
+					message = localize('screenshot.shortcut.unsupportedNotice', 'This screenshot shortcut cannot be used globally. Choose another key combination.');
 					break;
 				case 'unassigned':
-					message = localize(
-						'screenshot.shortcut.unassignedNotice',
-						'Assign a screenshot shortcut to use global screenshots.',
-					);
+					message = localize('screenshot.shortcut.unassignedNotice', 'Assign a screenshot shortcut to use global screenshots.');
 					break;
 				case 'unknown':
-					message = localize(
-						'screenshot.shortcut.failedNotice',
-						'Could not enable the global screenshot shortcut. Try changing the shortcut.',
-					);
+					message = localize('screenshot.shortcut.failedNotice', 'Could not enable the global screenshot shortcut. Try changing the shortcut.');
 					break;
 			}
 		}
 		if (message && status.activeLabel) {
-			message +=
-				' ' +
-				localize(
-					'screenshot.shortcut.previousActive',
-					'The previous shortcut still works: {0}.',
-					status.activeLabel,
-				);
+			message += ' ' + localize('screenshot.shortcut.previousActive', 'The previous shortcut still works: {0}.', status.activeLabel);
 		}
 		// Dismissed failures stay quiet until the state changes; a changed retained
 		// shortcut replaces the notice so it never describes an obsolete binding.

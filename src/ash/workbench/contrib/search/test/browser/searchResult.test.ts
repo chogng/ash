@@ -61,10 +61,7 @@ test('Search results keep same-path files in different roots and every occurrenc
 		],
 	);
 	result.clear();
-	assert.deepEqual(
-		{ count: result.count, children: result.children, files: result.files },
-		{ count: 0, children: [], files: [] },
-	);
+	assert.deepEqual({ count: result.count, children: result.children, files: result.files }, { count: 0, children: [], files: [] });
 });
 
 test('Search results require a root identity even for a single workspace folder', () => {
@@ -74,17 +71,12 @@ test('Search results require a root identity even for a single workspace folder'
 	];
 	for (const workspaceFolders of [folders.slice(0, 1), folders]) {
 		const result = new SearchResultImpl(workspaceFolders);
-		assert.throws(
-			() => result.add([{ path: 'main.ts', lineNumber: 1, preview: 'needle', ranges: [{ start: 0, end: 6 }] }]),
-			/workspace folder/,
-		);
+		assert.throws(() => result.add([{ path: 'main.ts', lineNumber: 1, preview: 'needle', ranges: [{ start: 0, end: 6 }] }]), /workspace folder/);
 	}
 });
 
 test('Search results map UTF-16 offsets in a CRLF preview block to an editor range across lines', () => {
-	const result = new SearchResultImpl([
-		{ id: 'workspace', name: 'workspace', index: 0, uri: URI.file('/workspace') },
-	]);
+	const result = new SearchResultImpl([{ id: 'workspace', name: 'workspace', index: 0, uri: URI.file('/workspace') }]);
 	result.add([
 		{
 			dirId: 'workspace',
@@ -94,10 +86,7 @@ test('Search results map UTF-16 offsets in a CRLF preview block to an editor ran
 			ranges: [{ start: 5, end: 18 }],
 		},
 	]);
-	assert.deepEqual(
-		{ ...result.files[0]!.matches[0]!.range },
-		{ startLineNumber: 4, startColumn: 6, endLineNumber: 5, endColumn: 7 },
-	);
+	assert.deepEqual({ ...result.files[0]!.matches[0]!.range }, { startLineNumber: 4, startColumn: 6, endLineNumber: 5, endColumn: 7 });
 });
 
 test('Dismiss removes mixed levels once, keeps other roots and prunes empty branches', () => {
@@ -147,16 +136,11 @@ test('Dismiss removes mixed levels once, keeps other roots and prunes empty bran
 		['keep.ts'],
 	);
 	result.batchRemove([...result.children]);
-	assert.deepEqual(
-		{ count: result.count, files: result.files, children: result.children },
-		{ count: 0, files: [], children: [] },
-	);
+	assert.deepEqual({ count: result.count, files: result.files, children: result.children }, { count: 0, files: [], children: [] });
 });
 
 test('Later search batches can restore dismissed matches and stale selections cannot remove them', () => {
-	const result = new SearchResultImpl([
-		{ id: 'workspace', name: 'workspace', index: 0, uri: URI.file('/workspace') },
-	]);
+	const result = new SearchResultImpl([{ id: 'workspace', name: 'workspace', index: 0, uri: URI.file('/workspace') }]);
 	const raw = {
 		dirId: 'workspace',
 		path: 'src/main.ts',
@@ -171,16 +155,11 @@ test('Later search batches can restore dismissed matches and stale selections ca
 	result.batchRemove([match]);
 	result.add([raw, { ...raw, lineNumber: 2 }]);
 	result.batchRemove([folder, file, match]);
-	assert.deepEqual(
-		{ count: result.count, lines: result.files[0]!.matches.map(match => match.range.startLineNumber) },
-		{ count: 2, lines: [1, 2] },
-	);
+	assert.deepEqual({ count: result.count, lines: result.files[0]!.matches.map(match => match.range.startLineNumber) }, { count: 2, lines: [1, 2] });
 });
 
 test('Dismissing whole files detaches their contents while later batches own distinct objects', () => {
-	const result = new SearchResultImpl([
-		{ id: 'workspace', name: 'workspace', index: 0, uri: URI.file('/workspace') },
-	]);
+	const result = new SearchResultImpl([{ id: 'workspace', name: 'workspace', index: 0, uri: URI.file('/workspace') }]);
 	const raw = {
 		dirId: 'workspace',
 		path: 'src/main.ts',
@@ -204,7 +183,12 @@ test('Dismissing whole files detaches their contents while later batches own dis
 			folders: [...root.children.values()].map(child => child.name),
 			detachedMatches: file.matches,
 		},
-		{ count: 1, paths: ['keep.ts'], folders: ['keep.ts'], detachedMatches: oldMatches },
+		{
+			count: 1,
+			paths: ['keep.ts'],
+			folders: ['keep.ts'],
+			detachedMatches: oldMatches,
+		},
 	);
 	assert.equal(folder.kind === 'folder' && folder.children.size, 0);
 	result.add([raw]);
@@ -212,10 +196,7 @@ test('Dismissing whole files detaches their contents while later batches own dis
 	assert.notEqual(replacement, file);
 	assert.notEqual(replacement.matches[0], oldMatches[0]);
 	result.batchRemove([folder, file, ...oldMatches]);
-	assert.deepEqual(
-		{ count: result.count, activeMatches: replacement.matches.length, detachedMatches: file.matches },
-		{ count: 3, activeMatches: 2, detachedMatches: oldMatches },
-	);
+	assert.deepEqual({ count: result.count, activeMatches: replacement.matches.length, detachedMatches: file.matches }, { count: 3, activeMatches: 2, detachedMatches: oldMatches });
 	const newFolder = [...root.children.values()].find(child => child.kind === 'folder')!;
 	result.batchRemove([newFolder]);
 	assert.equal(newFolder.kind === 'folder' && newFolder.children.size, 0);
@@ -224,8 +205,5 @@ test('Dismissing whole files detaches their contents while later batches own dis
 	result.clear();
 	result.add([{ ...raw, preview: 'fresh needle', ranges: [{ start: 6, end: 12 }] }]);
 	result.batchRemove([replacement, file, ...oldMatches]);
-	assert.deepEqual(
-		{ count: result.count, preview: result.files[0]!.matches[0]!.preview, oldPreview: file.matches[0]!.preview },
-		{ count: 1, preview: 'fresh needle', oldPreview: 'needle needle' },
-	);
+	assert.deepEqual({ count: result.count, preview: result.files[0]!.matches[0]!.preview, oldPreview: file.matches[0]!.preview }, { count: 1, preview: 'fresh needle', oldPreview: 'needle needle' });
 });

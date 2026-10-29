@@ -20,10 +20,7 @@ suite('Independent loading regions', () => {
 		assert.equal(content.element.hidden, false);
 		assert.equal(content.element.querySelector('[role="status"]')!.textContent, 'Content');
 		assert.equal(content.element.querySelectorAll('.ash-sessions-loading-row').length, 2);
-		assert.equal(
-			content.element.querySelector('.ash-sessions-loading-shapes')!.getAttribute('aria-hidden'),
-			'true',
-		);
+		assert.equal(content.element.querySelector('.ash-sessions-loading-shapes')!.getAttribute('aria-hidden'), 'true');
 		assert.equal(parent.querySelector('button, input, a, [tabindex]'), null);
 	});
 

@@ -8,10 +8,7 @@ import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle
 import { Range } from '../../core/range.js';
 import { Position } from '../../core/position.js';
 import type { TextModelChange } from '../../core/textChange.js';
-import {
-	BackgroundTokenizationState,
-	SynchronousTokenizationUnavailableError,
-} from '../../tokenizationTextModelPart.js';
+import { BackgroundTokenizationState, SynchronousTokenizationUnavailableError } from '../../tokenizationTextModelPart.js';
 import type { LanguageToken } from '../../tokens/languageTokens.js';
 import type { TextModel } from '../../model/textModel.js';
 import type { FoldingRules } from '../../languages/languageConfiguration.js';
@@ -59,9 +56,7 @@ interface Capture {
  * Only queried lines have cached captures, and themes do not participate in parsing.
  */
 export class TreeSitterTree extends Disposable {
-	private readonly changeEmitter = this._register(
-		new Emitter<readonly { fromLineNumber: number; toLineNumber: number }[]>(),
-	);
+	private readonly changeEmitter = this._register(new Emitter<readonly { fromLineNumber: number; toLineNumber: number }[]>());
 	private readonly disposedEmitter = this._register(new Emitter<void>());
 	private readonly errorEmitter = this._register(new Emitter<unknown>());
 	readonly onDidChangeTokens = this.changeEmitter.event;
@@ -139,14 +134,10 @@ export class TreeSitterTree extends Disposable {
 		return this.count;
 	}
 	get backgroundTokenizationState(): BackgroundTokenizationState {
-		return this.parsedVersion === this.model.version && this.rows.size === this.model.getLineCount()
-			? BackgroundTokenizationState.Completed
-			: BackgroundTokenizationState.InProgress;
+		return this.parsedVersion === this.model.version && this.rows.size === this.model.getLineCount() ? BackgroundTokenizationState.Completed : BackgroundTokenizationState.InProgress;
 	}
 	get lines(): readonly { lineIndex: number; tokens: readonly LanguageToken[] }[] {
-		return [...this.rows.keys()]
-			.sort((a, b) => a - b)
-			.map(row => ({ lineIndex: row, tokens: this.getLanguageTokens(row + 1) }));
+		return [...this.rows.keys()].sort((a, b) => a - b).map(row => ({ lineIndex: row, tokens: this.getLanguageTokens(row + 1) }));
 	}
 
 	async whenReady(signal: AbortSignal): Promise<void> {
@@ -235,9 +226,7 @@ export class TreeSitterTree extends Disposable {
 	/** Restyling cached captures leaves both the parse tree and query results intact. */
 	resetStyles(): void {
 		this.styles.clear();
-		this.changeEmitter.fire(
-			this.visible.map(range => ({ fromLineNumber: range.startLineNumber, toLineNumber: range.endLineNumber })),
-		);
+		this.changeEmitter.fire(this.visible.map(range => ({ fromLineNumber: range.startLineNumber, toLineNumber: range.endLineNumber })));
 	}
 
 	/** Hypothetical typing uses an isolated parser and never edits the authoritative tree. */
@@ -260,28 +249,15 @@ export class TreeSitterTree extends Disposable {
 			newEndPosition: { row: lineNumber + lines.length - 2, column: lines.at(-1)?.length ?? 0 },
 		});
 		const tree = parser.parse(offset => {
-			if (offset < start)
-				return this.model.getValueInRange(
-					Range.fromPositions(
-						this.model.getPositionAt(offset),
-						this.model.getPositionAt(Math.min(start, offset + 4096)),
-					),
-				);
+			if (offset < start) return this.model.getValueInRange(Range.fromPositions(this.model.getPositionAt(offset), this.model.getPositionAt(Math.min(start, offset + 4096))));
 			if (offset < start + replacement.length) return replacement.slice(offset - start, offset - start + 4096);
 			const original = offset - delta;
 			if (original >= this.model.length) return '';
-			return this.model.getValueInRange(
-				Range.fromPositions(this.model.getPositionAt(original), this.model.getPositionAt(original + 4096)),
-			);
+			return this.model.getValueInRange(Range.fromPositions(this.model.getPositionAt(original), this.model.getPositionAt(original + 4096)));
 		}, edited);
 		try {
 			if (!tree) return lines.map(() => []);
-			const rows = this.captureRows(
-				tree.rootNode,
-				lineNumber - 1,
-				lineNumber + lines.length - 2,
-				row => lines[row - lineNumber + 1]!.length,
-			);
+			const rows = this.captureRows(tree.rootNode, lineNumber - 1, lineNumber + lines.length - 2, row => lines[row - lineNumber + 1]!.length);
 			return lines.map((_, index) =>
 				(rows.get(lineNumber - 1 + index) ?? []).flatMap(token => {
 					const style = this.resolveStyle(token.name);
@@ -306,11 +282,7 @@ export class TreeSitterTree extends Disposable {
 	}
 
 	/** Preview embedded syntax against a temporary view of the same buffer. */
-	async tokenizeLinesAtAsync(
-		lineNumber: number,
-		lines: readonly string[],
-		signal: AbortSignal,
-	): Promise<readonly (readonly LanguageToken[])[]> {
+	async tokenizeLinesAtAsync(lineNumber: number, lines: readonly string[], signal: AbortSignal): Promise<readonly (readonly LanguageToken[])[]> {
 		if (!this.runtime || !lines.length) return lines.map(() => []);
 		const lastLine = Math.min(this.model.getLineCount(), lineNumber + lines.length - 1);
 		const start = this.model.getOffsetAt({ lineNumber, column: 1 });
@@ -328,12 +300,7 @@ export class TreeSitterTree extends Disposable {
 				return new Position(lineNumber + index, offset - start - offsets[index]! + 1);
 			}
 			const original = this.model.getPositionAt(offset - delta);
-			return new Position(
-				original.lineNumber + lineDelta,
-				original.lineNumber === lastLine
-					? original.column - this.model.getLineLength(lastLine) + lines.at(-1)!.length
-					: original.column,
-			);
+			return new Position(original.lineNumber + lineDelta, original.lineNumber === lastLine ? original.column - this.model.getLineLength(lastLine) + lines.at(-1)!.length : original.column);
 		};
 		const source: TreeSitterTextSource = {
 			version: this.model.version,
@@ -343,39 +310,23 @@ export class TreeSitterTree extends Disposable {
 			onDidChangeAttached: Event.None,
 			isAttachedToEditor: () => false,
 			getLineCount: () => this.model.getLineCount() + lineDelta,
-			getLineLength: row =>
-				row >= lineNumber && row < lineNumber + lines.length
-					? lines[row - lineNumber]!.length
-					: this.model.getLineLength(row < lineNumber ? row : row - lineDelta),
+			getLineLength: row => (row >= lineNumber && row < lineNumber + lines.length ? lines[row - lineNumber]!.length : this.model.getLineLength(row < lineNumber ? row : row - lineDelta)),
 			getLineMaxColumn: row => source.getLineLength(row) + 1,
 			getOffsetAt: point =>
 				point.lineNumber < lineNumber
 					? this.model.getOffsetAt(point)
 					: point.lineNumber < lineNumber + lines.length
 						? start + offsets[point.lineNumber - lineNumber]! + point.column - 1
-						: this.model.getOffsetAt({ lineNumber: point.lineNumber - lineDelta, column: point.column }) +
-							delta,
+						: this.model.getOffsetAt({ lineNumber: point.lineNumber - lineDelta, column: point.column }) + delta,
 			getPositionAt: offset => position(Math.min(source.length, Math.max(0, offset))),
 			getValueInRange: range => {
 				const from = source.getOffsetAt(Range.lift(range).getStartPosition()),
 					to = source.getOffsetAt(Range.lift(range).getEndPosition());
 				let value = '';
-				if (from < start)
-					value += this.model.getValueInRange(
-						Range.fromPositions(
-							this.model.getPositionAt(from),
-							this.model.getPositionAt(Math.min(to, start)),
-						),
-					);
-				if (to > start && from < start + replacement.length)
-					value += replacement.slice(Math.max(0, from - start), to - start);
+				if (from < start) value += this.model.getValueInRange(Range.fromPositions(this.model.getPositionAt(from), this.model.getPositionAt(Math.min(to, start))));
+				if (to > start && from < start + replacement.length) value += replacement.slice(Math.max(0, from - start), to - start);
 				if (to > start + replacement.length)
-					value += this.model.getValueInRange(
-						Range.fromPositions(
-							this.model.getPositionAt(Math.max(from, start + replacement.length) - delta),
-							this.model.getPositionAt(to - delta),
-						),
-					);
+					value += this.model.getValueInRange(Range.fromPositions(this.model.getPositionAt(Math.max(from, start + replacement.length) - delta), this.model.getPositionAt(to - delta)));
 				return value;
 			},
 		};
@@ -384,12 +335,10 @@ export class TreeSitterTree extends Disposable {
 			await preview.whenReady(signal);
 			preview.refreshRange(lineNumber, lineNumber + lines.length - 1);
 			return lines.map((_, index) =>
-				preview
-					.getLanguageTokens(lineNumber + index)
-					.map(token => ({
-						...token,
-						range: new Range(index + 1, token.range.startColumn, index + 1, token.range.endColumn),
-					})),
+				preview.getLanguageTokens(lineNumber + index).map(token => ({
+					...token,
+					range: new Range(index + 1, token.range.startColumn, index + 1, token.range.endColumn),
+				})),
 			);
 		} finally {
 			preview.dispose();
@@ -409,9 +358,7 @@ export class TreeSitterTree extends Disposable {
 				const end = edit.range.endLineNumber - 1;
 				const added = edit.text.split('\n');
 				const delta = added.length - 1 - (end - start);
-				const scope = this.tree
-					? enclosingScope(this.tree.rootNode, start, edit.range.startColumn - 1)
-					: { start, end };
+				const scope = this.tree ? enclosingScope(this.tree.rootNode, start, edit.range.startColumn - 1) : { start, end };
 				this.invalidate(scope.start, Math.max(end, scope.end));
 				// Only multi-line edits shift cached row keys. Relative columns elsewhere are reusable.
 				if (delta !== 0) {
@@ -428,8 +375,7 @@ export class TreeSitterTree extends Disposable {
 					oldEndPosition: { row: end, column: edit.range.endColumn - 1 },
 					newEndPosition: {
 						row: start + added.length - 1,
-						column:
-							added.length === 1 ? edit.range.startColumn - 1 + edit.text.length : added.at(-1)!.length,
+						column: added.length === 1 ? edit.range.startColumn - 1 + edit.text.length : added.at(-1)!.length,
 					},
 				});
 			}
@@ -481,9 +427,7 @@ export class TreeSitterTree extends Disposable {
 			// The mirror supplies buffer-owned length and chunks without joining
 			// the complete source inside parser callbacks.
 			if (offset >= this.model.length) return '';
-			return this.model.getValueInRange(
-				Range.fromPositions(this.model.getPositionAt(offset), this.model.getPositionAt(offset + 4096)),
-			);
+			return this.model.getValueInRange(Range.fromPositions(this.model.getPositionAt(offset), this.model.getPositionAt(offset + 4096)));
 		}, this.tree);
 		this.measure?.({
 			operation: 'parse',
@@ -513,13 +457,7 @@ export class TreeSitterTree extends Disposable {
 			const revision = this.model.version;
 			const snapshot = next.copy();
 			const pending: InjectedTree[] = [];
-			this.injectionPreparation = prepareInjectedTrees(
-				snapshot.rootNode,
-				this.runtime,
-				this.model,
-				() => !this.isDisposed && this.model.version === revision,
-				pending,
-			)
+			this.injectionPreparation = prepareInjectedTrees(snapshot.rootNode, this.runtime, this.model, () => !this.isDisposed && this.model.version === revision, pending)
 				.then(() => {
 					if (this.isDisposed || this.model.version !== revision) {
 						disposeInjectedTrees(pending);
@@ -547,13 +485,7 @@ export class TreeSitterTree extends Disposable {
 
 	/** Fill offscreen rows in idle slices so minimap and later scrolls retain syntax coverage. */
 	private scheduleBackground(): void {
-		if (
-			this.background.value ||
-			this.isDisposed ||
-			!this.model.isAttachedToEditor() ||
-			this.parsedVersion !== this.model.version
-		)
-			return;
+		if (this.background.value || this.isDisposed || !this.model.isAttachedToEditor() || this.parsedVersion !== this.model.version) return;
 		if (this.backgroundRow >= this.model.getLineCount()) return;
 		this.background.value = runWhenGlobalIdle(() => {
 			this.background.clear();
@@ -567,11 +499,7 @@ export class TreeSitterTree extends Disposable {
 					continue;
 				}
 				const start = this.backgroundRow;
-				while (
-					this.backgroundRow < Math.min(start + 32, this.model.getLineCount()) &&
-					!this.rows.has(this.backgroundRow)
-				)
-					this.backgroundRow++;
+				while (this.backgroundRow < Math.min(start + 32, this.model.getLineCount()) && !this.rows.has(this.backgroundRow)) this.backgroundRow++;
 				this.queryRows(start, this.backgroundRow - 1);
 				first ??= start;
 				last = this.backgroundRow;
@@ -599,12 +527,7 @@ export class TreeSitterTree extends Disposable {
 		});
 	}
 
-	private captureRows(
-		root: Node,
-		start: number,
-		end: number,
-		lineLength: (row: number) => number,
-	): Map<number, readonly RelativeToken[]> {
+	private captureRows(root: Node, start: number, end: number, lineLength: (row: number) => number): Map<number, readonly RelativeToken[]> {
 		const options = { startPosition: { row: start, column: 0 }, endPosition: { row: end + 1, column: 0 } };
 		const captures = [
 			...this.runtime!.query.captures(root, options).map(capture => ({
@@ -614,14 +537,12 @@ export class TreeSitterTree extends Disposable {
 				ranges: undefined as readonly SyntaxRange[] | undefined,
 			})),
 			...(root.id === this.tree?.rootNode.id ? this.injected : []).flatMap(injection =>
-				injection.query
-					.captures(injection.tree.rootNode, options)
-					.map(capture => ({
-						...capture,
-						depth: injection.depth,
-						languageId: injection.languageId,
-						ranges: injection.ranges,
-					})),
+				injection.query.captures(injection.tree.rootNode, options).map(capture => ({
+					...capture,
+					depth: injection.depth,
+					languageId: injection.languageId,
+					ranges: injection.ranges,
+				})),
 			),
 		];
 		const rows = new Map<number, Capture[]>();
@@ -640,10 +561,7 @@ export class TreeSitterTree extends Disposable {
 							.filter(range => range.startPosition.row <= row && range.endPosition.row >= row)
 							.map(range => ({
 								from: Math.max(from, range.startPosition.row === row ? range.startPosition.column : 0),
-								to: Math.min(
-									to,
-									range.endPosition.row === row ? range.endPosition.column : lineLength(row),
-								),
+								to: Math.min(to, range.endPosition.row === row ? range.endPosition.column : lineLength(row)),
 							}))
 					: [{ from, to }];
 				for (const segment of segments)
@@ -661,11 +579,7 @@ export class TreeSitterTree extends Disposable {
 		if (root.id === this.tree?.rootNode.id)
 			for (const injection of this.injected)
 				for (const range of injection.ranges) {
-					for (
-						let row = Math.max(start, range.startPosition.row);
-						row <= Math.min(end, range.endPosition.row);
-						row++
-					) {
+					for (let row = Math.max(start, range.startPosition.row); row <= Math.min(end, range.endPosition.row); row++) {
 						const from = row === range.startPosition.row ? range.startPosition.column : 0;
 						const to = row === range.endPosition.row ? range.endPosition.column : lineLength(row);
 						if (from >= to) continue;
@@ -735,20 +649,13 @@ function flattenCaptures(captures: readonly Capture[]): readonly RelativeToken[]
 		let language: (typeof events)[number]['value'] | undefined;
 		for (const capture of active) {
 			if (capture.languageId && (!language || capture.priority > language.priority)) language = capture;
-			if (
-				capture.name &&
-				(!winner ||
-					capture.priority > winner.priority ||
-					(capture.priority === winner.priority && capture.order > winner.order))
-			)
-				winner = capture;
+			if (capture.name && (!winner || capture.priority > winner.priority || (capture.priority === winner.priority && capture.order > winner.order))) winner = capture;
 		}
 		if (!winner && !language) continue;
 		const name = winner?.name ?? 'none',
 			languageId = language?.languageId;
 		const previous = tokens.at(-1);
-		if (previous && previous.end === start && previous.name === name && previous.languageId === languageId)
-			tokens[tokens.length - 1] = { ...previous, end };
+		if (previous && previous.end === start && previous.name === name && previous.languageId === languageId) tokens[tokens.length - 1] = { ...previous, end };
 		else tokens.push({ start, end, name, languageId });
 	}
 	return tokens;

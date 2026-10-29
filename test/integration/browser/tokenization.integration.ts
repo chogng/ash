@@ -1,10 +1,6 @@
 import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
-import {
-	TreeSitterLibraryService,
-	TreeSitterSyntaxProviders,
-	createTreeSitterSyntaxSession,
-} from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
+import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxSession } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
 import { rustSyntaxFixture } from '../../fixtures/browser/rustSyntaxHostFixture.js';
 import { Range } from '../../../src/ash/editor/common/core/range.js';
 import { LanguageDiagnosticSeverity } from '../../../src/ash/editor/common/languages.js';
@@ -24,13 +20,7 @@ const library = store.add(new TreeSitterLibraryService(await rustSyntaxFixture()
 const services: ReturnType<typeof StandaloneServices.initialize> = store.add(
 	StandaloneServices.initialize({
 		tokenization: {
-			createSyntaxSession: model =>
-				createTreeSitterSyntaxSession(
-					model,
-					services.get(IConfigurationService),
-					library,
-					services.get(IThemeService),
-				),
+			createSyntaxSession: model => createTreeSitterSyntaxSession(model, services.get(IConfigurationService), library, services.get(IThemeService)),
 		},
 	}),
 );
@@ -57,16 +47,7 @@ const pending: { revision: number; resolve: () => void }[] = [];
 store.add(
 	services.languageFeaturesService.syntaxProvider.register({
 		id: 'test.delayedDiagnostics',
-		languageIds: [
-			'rust',
-			'javascript',
-			'javascriptreact',
-			'typescript',
-			'typescriptreact',
-			'json',
-			'jsonc',
-			'shellscript',
-		],
+		languageIds: ['rust', 'javascript', 'javascriptreact', 'typescript', 'typescriptreact', 'json', 'jsonc', 'shellscript'],
 		diagnosticPriority: 200,
 		provideDiagnostics: request => {
 			analyzeCalls++;
@@ -90,11 +71,7 @@ store.add(
 		},
 	}),
 );
-let model = services.modelService.createModel(
-	'fn main() {}\n',
-	services.languageService.createById('rust'),
-	stanza.URI.file('/project/main.rs'),
-);
+let model = services.modelService.createModel('fn main() {}\n', services.languageService.createById('rust'), stanza.URI.file('/project/main.rs'));
 const container = document.getElementById('editor')!;
 const editor = store.add(stanza.editor.create(container, { model }));
 editor.layout({ width: container.clientWidth, height: container.clientHeight });
@@ -110,21 +87,14 @@ observeModel();
 const integration = {
 	open(languageId: string, text: string, path?: string): void {
 		const previous = model;
-		model = services.modelService.createModel(
-			text,
-			services.languageService.createById(languageId),
-			path === undefined ? undefined : stanza.URI.file(path),
-		);
+		model = services.modelService.createModel(text, services.languageService.createById(languageId), path === undefined ? undefined : stanza.URI.file(path));
 		editor.setModel(model);
 		observeModel();
 		previous.dispose();
 	},
 	openResource(path: string, text: string): string {
 		const resource = stanza.URI.file(path);
-		const languageId = resolveTextResourceLanguageId(
-			{ resource, firstLine: text.split('\n')[0] },
-			services.languageService,
-		);
+		const languageId = resolveTextResourceLanguageId({ resource, firstLine: text.split('\n')[0] }, services.languageService);
 		integration.open(languageId, text, path);
 		return model.getLanguageId();
 	},
@@ -134,9 +104,7 @@ const integration = {
 			version: model.version,
 			tokenVersion: model.tokenization.modelVersion,
 			accurate: model.tokenization.hasAccurateTokensForLine(model.getLineCount()),
-			tokens: model.tokenization.lines.flatMap(line =>
-				line.tokens.map(token => ({ type: token.tokenType, text: model.getTextInRange(token.range) })),
-			),
+			tokens: model.tokenization.lines.flatMap(line => line.tokens.map(token => ({ type: token.tokenType, text: model.getTextInRange(token.range) }))),
 			analyzeCalls,
 			completedCalls,
 			pendingVersions: pending.map(request => request.revision),
@@ -148,9 +116,7 @@ const integration = {
 		initial: initialLanguages,
 		shell: services.languageService.guessLanguageIdByFilepathOrFirstLine(shellResource),
 		resource: resolveTextResourceLanguageId({ resource: shellResource }, services.languageService),
-		comment:
-			services.languageConfigurationService.getLanguageConfiguration('shellscript').comments?.lineCommentToken ??
-			null,
+		comment: services.languageConfigurationService.getLanguageConfiguration('shellscript').comments?.lineCommentToken ?? null,
 		grammar: !!model.tokenization.syntaxTree,
 		model: model.getLanguageId(),
 	}),
@@ -162,17 +128,9 @@ const integration = {
 	},
 	async preview(): Promise<{ hasString: boolean; unchanged: boolean }> {
 		const version = model.version;
-		const tokens = await model.tokenization.tokenizeLinesAtAsync(
-			1,
-			['fn preview() { "preview"; }'],
-			new AbortController().signal,
-		);
+		const tokens = await model.tokenization.tokenizeLinesAtAsync(1, ['fn preview() { "preview"; }'], new AbortController().signal);
 		const line = tokens?.[0];
-		const hasString =
-			line !== undefined &&
-			Array.from({ length: line.getCount() }, (_, index) => line.getStandardTokenType(index)).includes(
-				StandardTokenType.String,
-			);
+		const hasString = line !== undefined && Array.from({ length: line.getCount() }, (_, index) => line.getStandardTokenType(index)).includes(StandardTokenType.String);
 		return { hasString, unchanged: model.version === version };
 	},
 	async forceRetokenize(): Promise<{ version: number; accurate: boolean }> {

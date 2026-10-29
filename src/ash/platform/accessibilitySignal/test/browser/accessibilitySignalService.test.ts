@@ -14,11 +14,7 @@ import { InstantiationService } from '../../../instantiation/common/instantiatio
 import { ILogService, NullLoggerService } from '../../../log/common/log.js';
 import { resetNlsResolver } from '../../../../nls.js';
 import { initializeTestLocalization } from '../../../../workbench/services/localization/test/common/localizationTestUtils.js';
-import {
-	AccessibilitySignal,
-	AccessibilitySignalService,
-	IAccessibilitySignalService,
-} from '../../browser/accessibilitySignalService.js';
+import { AccessibilitySignal, AccessibilitySignalService, IAccessibilitySignalService } from '../../browser/accessibilitySignalService.js';
 import { AccessibilityProgressSignalScheduler } from '../../browser/progressAccessibilitySignalScheduler.js';
 
 suite('Accessibility signals', () => {
@@ -55,10 +51,7 @@ suite('Accessibility signals', () => {
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IAccessibilityService, accessibility);
 		services.registerInstance(ILogService, new NullLoggerService());
-		services.registerInstance(
-			IAccessibilitySignalService,
-			owner.add(services.createInstance(AccessibilitySignalService)),
-		);
+		services.registerInstance(IAccessibilitySignalService, owner.add(services.createInstance(AccessibilitySignalService)));
 		return { services, configuration, accessibility, announcements };
 	}
 
@@ -143,13 +136,7 @@ suite('Accessibility signals', () => {
 	test('rejects invalid configuration and keeps the last policy', async () => {
 		using owner = new DisposableStore();
 		const { configuration } = createServices(owner);
-		for (const value of [
-			null,
-			{},
-			{ sound: ['auto'], announcement: 'off' },
-			{ sound: 'on', announcement: 'on' },
-			{ sound: 'on', announcement: 'off', extra: true },
-		]) {
+		for (const value of [null, {}, { sound: ['auto'], announcement: 'off' }, { sound: 'on', announcement: 'on' }, { sound: 'on', announcement: 'off', extra: true }]) {
 			await assert.rejects(configuration.updateValue(AccessibilitySignal.progress.settingsKey, value));
 		}
 		for (const value of [-1, 101, NaN, '70']) {
@@ -162,9 +149,7 @@ suite('Accessibility signals', () => {
 		for (const signal of AccessibilitySignal.allAccessibilitySignals) {
 			await assert.rejects(configuration.updateValue(signal.settingsKey, { sound: 'invalid' }));
 			if (!signal.announcementMessage) {
-				await assert.rejects(
-					configuration.updateValue(signal.settingsKey, { sound: 'on', announcement: 'auto' }),
-				);
+				await assert.rejects(configuration.updateValue(signal.settingsKey, { sound: 'on', announcement: 'auto' }));
 				await configuration.updateValue(signal.settingsKey, { sound: 'on' });
 			}
 		}
@@ -224,10 +209,7 @@ suite('Accessibility signals', () => {
 		const { services, configuration, accessibility, announcements } = createServices(owner);
 		accessibility.setAccessibilitySupport(AccessibilitySupport.Enabled);
 		for (const signal of AccessibilitySignal.allAccessibilitySignals) {
-			await configuration.updateValue(
-				signal.settingsKey,
-				signal.announcementMessage ? { sound: 'off', announcement: 'auto' } : { sound: 'off' },
-			);
+			await configuration.updateValue(signal.settingsKey, signal.announcementMessage ? { sound: 'off', announcement: 'auto' } : { sound: 'off' });
 			await services.get(IAccessibilitySignalService).playSignal(signal);
 		}
 		assert.deepEqual(announcements, [
@@ -314,10 +296,7 @@ suite('Accessibility signals', () => {
 		try {
 			await services.get(IAccessibilitySignalService).playSignal(AccessibilitySignal.progress);
 			await services.get(IAccessibilitySignalService).playSignal(AccessibilitySignal.progress);
-			assert.deepEqual(
-				{ attempts: play.mock.callCount(), announcements },
-				{ attempts: 2, announcements: ['进行中', '进行中'] },
-			);
+			assert.deepEqual({ attempts: play.mock.callCount(), announcements }, { attempts: 2, announcements: ['进行中', '进行中'] });
 		} finally {
 			owner.dispose();
 			play.mock.restore();

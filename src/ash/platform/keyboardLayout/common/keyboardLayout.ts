@@ -71,10 +71,7 @@ export interface IKeyboardLayoutService {
 	refreshKeyboardLayout(): Promise<void>;
 }
 
-export function keyboardMappingEntriesEqual(
-	first: IKeyboardMappingEntry | undefined,
-	second: IKeyboardMappingEntry | undefined,
-): boolean {
+export function keyboardMappingEntriesEqual(first: IKeyboardMappingEntry | undefined, second: IKeyboardMappingEntry | undefined): boolean {
 	return (
 		first === second ||
 		Boolean(
@@ -93,10 +90,7 @@ export function keyboardMappingEntriesEqual(
 	);
 }
 
-export function keyboardMappingsEqual(
-	first: IKeyboardMapping | undefined,
-	second: IKeyboardMapping | undefined,
-): boolean {
+export function keyboardMappingsEqual(first: IKeyboardMapping | undefined, second: IKeyboardMapping | undefined): boolean {
 	if (first === second) {
 		return true;
 	}
@@ -105,10 +99,7 @@ export function keyboardMappingsEqual(
 	}
 	const firstCodes = Object.keys(first);
 	const secondCodes = Object.keys(second);
-	return (
-		firstCodes.length === secondCodes.length &&
-		firstCodes.every(code => keyboardMappingEntriesEqual(first[code], second[code]))
-	);
+	return firstCodes.length === secondCodes.length && firstCodes.every(code => keyboardMappingEntriesEqual(first[code], second[code]));
 }
 
 export const IKeyboardLayoutService = createServiceIdentifier<IKeyboardLayoutService>('keyboardLayoutService');

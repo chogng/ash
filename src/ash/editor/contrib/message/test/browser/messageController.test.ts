@@ -32,12 +32,16 @@ const { ReadOnlyMessageController } = await import('../../../readOnlyMessage/bro
 test('read-only edit attempts use MessageController and close after cursor movement', () => {
 	const container = h(environment.window.document, 'main');
 	using model = new TextModel('alpha\nbeta');
-	using editor = createTestCodeEditor({ container, model, readOnly: true, lineHeight: 20 });
+	using editor = createTestCodeEditor({
+		container,
+		model,
+		readOnly: true,
+		lineHeight: 20,
+	});
 	editor.layout({ width: 400, height: 100 });
 	assert.ok(editor.getContribution(ReadOnlyMessageController.ID));
 	editor.executeCommand('test', {
-		getEditOperations: (_textModel, builder) =>
-			builder.addEditOperation({ startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 }, 'x'),
+		getEditOperations: (_textModel, builder) => builder.addEditOperation({ startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 }, 'x'),
 		computeCursorState: () => Selection.fromPositions(new Position(1, 2)),
 	});
 
@@ -78,10 +82,7 @@ test('Markdown resource links open through the code editor service', async () =>
 	editor.layout({ width: 400, height: 100 });
 	const messages = MessageController.get(editor);
 	assert.ok(messages);
-	messages.showMessage(
-		new MarkdownString('[remote](vscode-remote://ssh-remote+host/src/file.ts)'),
-		new Position(1, 1),
-	);
+	messages.showMessage(new MarkdownString('[remote](vscode-remote://ssh-remote+host/src/file.ts)'), new Position(1, 1));
 	editor.layout({ width: 400, height: 100 });
 	const link = environment.window.document.body.querySelector<HTMLAnchorElement>('.stanza-editor-overlay-message a');
 	assert.ok(link);
@@ -89,9 +90,7 @@ test('Markdown resource links open through the code editor service', async () =>
 	await Promise.resolve();
 	messages.showMessage(new MarkdownString('[Ash remote](ash-remote://ssh+host/src/ash.ts)'), new Position(1, 1));
 	editor.layout({ width: 400, height: 100 });
-	const ashLink = environment.window.document.body.querySelector<HTMLAnchorElement>(
-		'.stanza-editor-overlay-message a',
-	);
+	const ashLink = environment.window.document.body.querySelector<HTMLAnchorElement>('.stanza-editor-overlay-message a');
 	assert.ok(ashLink);
 	ashLink.dispatchEvent(new environment.window.MouseEvent('click', { bubbles: true, cancelable: true }));
 	await Promise.resolve();
@@ -128,10 +127,7 @@ test('Markdown message URLs reach contributed openers and dismiss the message', 
 	const messages = MessageController.get(editor)!;
 	messages.showMessage(new MarkdownString('[Documentation](https://example.com/docs)'), new Position(1, 1));
 	environment.window.document.querySelector<HTMLAnchorElement>('.stanza-editor-overlay-message a')!.click();
-	assert.deepEqual(
-		{ href: await opened, visible: messages.isVisible() },
-		{ href: 'https://example.com/docs', visible: false },
-	);
+	assert.deepEqual({ href: await opened, visible: messages.isVisible() }, { href: 'https://example.com/docs', visible: false });
 });
 
 test('Markdown message commands pass through opener validation and retain their arguments', async () => {
@@ -161,9 +157,7 @@ test('Markdown message commands pass through opener validation and retain their 
 	using editor = createTestCodeEditor({ container, model, instantiationService: services });
 	editor.layout({ width: 400, height: 100 });
 	const messages = MessageController.get(editor)!;
-	const source = new MarkdownString(
-		`[Run](command:test.markdown.message?${encodeURIComponent(JSON.stringify(['%20 中文']))})`,
-	);
+	const source = new MarkdownString(`[Run](command:test.markdown.message?${encodeURIComponent(JSON.stringify(['%20 中文']))})`);
 	source.isTrusted = { enabledCommands: ['test.markdown.message'] };
 	const activate = async (): Promise<void> => {
 		messages.showMessage(source, new Position(1, 1));
@@ -172,16 +166,10 @@ test('Markdown message commands pass through opener validation and retain their 
 		await Promise.resolve();
 	};
 	await activate();
-	assert.deepEqual(
-		{ validations, calls, visible: messages.isVisible() },
-		{ validations: 1, calls: [], visible: false },
-	);
+	assert.deepEqual({ validations, calls, visible: messages.isVisible() }, { validations: 1, calls: [], visible: false });
 	allowed = true;
 	await activate();
-	assert.deepEqual(
-		{ validations, calls, visible: messages.isVisible() },
-		{ validations: 2, calls: [['%20 中文']], visible: false },
-	);
+	assert.deepEqual({ validations, calls, visible: messages.isVisible() }, { validations: 2, calls: [['%20 中文']], visible: false });
 });
 
 const codeFeatures = registerTestCodeEditorFeatures();

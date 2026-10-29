@@ -31,21 +31,13 @@ export class IssueReporterModel extends Disposable {
 
 	serialize(): string {
 		const data = this.current;
-		const type = [
-			localize('issue.bug', 'Bug'),
-			localize('issue.performance', 'Performance issue'),
-			localize('issue.feature', 'Feature request'),
-		][data.issueType];
+		const type = [localize('issue.bug', 'Bug'), localize('issue.performance', 'Performance issue'), localize('issue.feature', 'Feature request')][data.issueType];
 		const sections = [localize('issue.reportType', 'Type: {0}', type), data.issueBody.trim()];
 		if (data.includeSystemInfo) {
-			sections.push(
-				`<details>\n<summary>${localize('issue.systemInformation', 'System information')}</summary>\n\n${data.systemInfo}\n</details>`,
-			);
+			sections.push(`<details>\n<summary>${localize('issue.systemInformation', 'System information')}</summary>\n\n${data.systemInfo}\n</details>`);
 		}
 		if (data.includeExtensions) {
-			sections.push(
-				`<details>\n<summary>${localize('issue.extensions', 'Extensions')}</summary>\n\n${data.extensionInfo}\n</details>`,
-			);
+			sections.push(`<details>\n<summary>${localize('issue.extensions', 'Extensions')}</summary>\n\n${data.extensionInfo}\n</details>`);
 		}
 		return sections.join('\n\n');
 	}

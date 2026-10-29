@@ -60,10 +60,7 @@ test('browser image clipboard reads PNG bytes without consuming text or resource
 });
 
 test('browser image clipboard distinguishes a missing image from denied access', async () => {
-	assert.deepEqual(
-		await new BrowserClipboardService({ read: async () => [] } as unknown as Clipboard).readImage(),
-		new Uint8Array(),
-	);
+	assert.deepEqual(await new BrowserClipboardService({ read: async () => [] } as unknown as Clipboard).readImage(), new Uint8Array());
 	const denied = new Error('Clipboard access denied');
 	await assert.rejects(
 		new BrowserClipboardService({
@@ -97,15 +94,7 @@ test('browser typed text stays scoped and does not access or overwrite the syste
 	await first.writeText('selected', 'selection');
 	await first.writeText('custom', 'private-type');
 	await first.writeText('updated system');
-	assert.deepEqual(
-		await Promise.all([
-			first.readText(),
-			first.readText('selection'),
-			first.readText('private-type'),
-			second.readText('selection'),
-		]),
-		['updated system', 'selected', 'custom', ''],
-	);
+	assert.deepEqual(await Promise.all([first.readText(), first.readText('selection'), first.readText('private-type'), second.readText('selection')]), ['updated system', 'selected', 'custom', '']);
 });
 
 test('browser paste targets only registered windows and reports unsupported commands without a synthetic event', async () => {

@@ -20,12 +20,7 @@ export class ProcessMainService implements IProcessService {
 		return {
 			os: `${type()} ${arch()} ${release()}`,
 			cpus,
-			memory: localize(
-				'diagnostics.memory',
-				'{0} GiB ({1} GiB free)',
-				(totalmem() / 2 ** 30).toFixed(2),
-				(freemem() / 2 ** 30).toFixed(2),
-			),
+			memory: localize('diagnostics.memory', '{0} GiB ({1} GiB free)', (totalmem() / 2 ** 30).toFixed(2), (freemem() / 2 ** 30).toFixed(2)),
 			vmHint: localize('issue.diagnosticsUnavailable', 'Unavailable'),
 			// Launch arguments are unnecessary for this report and can contain user data.
 			processArgs: '',
@@ -85,10 +80,7 @@ export class ProcessMainService implements IProcessService {
 		}
 		for (const window of BrowserWindow.getAllWindows()) {
 			if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
-				names.set(
-					window.webContents.getOSProcessId(),
-					localize('diagnostics.renderer', 'Renderer: {0}', window.getTitle()),
-				);
+				names.set(window.webContents.getOSProcessId(), localize('diagnostics.renderer', 'Renderer: {0}', window.getTitle()));
 			}
 		}
 		return {
@@ -118,9 +110,7 @@ export class ProcessMainService implements IProcessService {
 			}
 			const pending = [group.rootProcess];
 			for (const item of pending) {
-				lines.push(
-					`${item.pid}\t${item.load.toFixed(1)}\t${(item.mem / 2 ** 20).toFixed(1)}\t${names.get(item.pid) ?? item.name}`,
-				);
+				lines.push(`${item.pid}\t${item.load.toFixed(1)}\t${(item.mem / 2 ** 20).toFixed(1)}\t${names.get(item.pid) ?? item.name}`);
 				pending.push(...(item.children ?? []));
 			}
 		}

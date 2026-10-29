@@ -78,21 +78,15 @@ export class GettingStarted extends Disposable {
 		const items = [...this.recentSection.querySelectorAll<HTMLElement>('.ash-getting-started-recent-item')];
 		const activeElement = this.domNode.ownerDocument.activeElement;
 		const focusedIndex = items.findIndex(item => item.contains(activeElement));
-		const focusedAction = items[focusedIndex]
-			?.querySelector('.ash-getting-started-recent-actions')
-			?.contains(activeElement);
+		const focusedAction = items[focusedIndex]?.querySelector('.ash-getting-started-recent-actions')?.contains(activeElement);
 		const focusedPath = this.recentProjects[focusedIndex]?.path;
 		this.recentProjects = projects;
 		this.renderRecentProjects(this.recentSection);
 		if (focusedIndex !== -1) {
 			const nextItems = this.recentSection.querySelectorAll<HTMLElement>('.ash-getting-started-recent-item');
 			const retainedIndex = projects.findIndex(project => project.path === focusedPath);
-			const nextItem =
-				nextItems[retainedIndex === -1 ? Math.min(focusedIndex, nextItems.length - 1) : retainedIndex];
-			const target =
-				retainedIndex !== -1 && focusedAction
-					? nextItem?.querySelector<HTMLElement>('.ash-getting-started-recent-actions button')
-					: nextItem?.querySelector<HTMLElement>('button');
+			const nextItem = nextItems[retainedIndex === -1 ? Math.min(focusedIndex, nextItems.length - 1) : retainedIndex];
+			const target = retainedIndex !== -1 && focusedAction ? nextItem?.querySelector<HTMLElement>('.ash-getting-started-recent-actions button') : nextItem?.querySelector<HTMLElement>('button');
 			const fallback = this.domNode.querySelector<HTMLButtonElement>('.ash-getting-started-card:not(:disabled)');
 			(target ?? fallback ?? this.domNode).focus();
 		}
@@ -247,8 +241,7 @@ export class GettingStarted extends Disposable {
 			this.recentDisposables.add(
 				new ActionBar(actions, {
 					ariaLabel: localize('gettingStarted.recentActions', 'Actions for {0}', project.name),
-					actionViewItemProvider: action =>
-						new LabelActionViewItem(action, { label: '', ariaLabel: action.label }),
+					actionViewItemProvider: action => new LabelActionViewItem(action, { label: '', ariaLabel: action.label }),
 					actions: [
 						{
 							id: 'gettingStarted.removeRecent',
@@ -265,11 +258,7 @@ export class GettingStarted extends Disposable {
 		return item;
 	}
 
-	private appendRecentProjectContent(
-		ownerDocument: Document,
-		item: HTMLElement,
-		project: IGettingStartedProject,
-	): void {
+	private appendRecentProjectContent(ownerDocument: Document, item: HTMLElement, project: IGettingStartedProject): void {
 		const name = h(ownerDocument, 'span');
 		name.className = 'ash-getting-started-recent-name';
 		name.textContent = project.name;

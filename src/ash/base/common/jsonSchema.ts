@@ -77,11 +77,7 @@ export interface JsonSchemaIssue {
 }
 
 /** Resolves completion metadata, selecting conditional branches from the current document. */
-export function jsonSchemaAtPath(
-	schema: JsonSchema | undefined,
-	path: readonly (string | number)[],
-	root?: JsonValueNode,
-): JsonSchema | undefined {
+export function jsonSchemaAtPath(schema: JsonSchema | undefined, path: readonly (string | number)[], root?: JsonValueNode): JsonSchema | undefined {
 	if (!schema) return undefined;
 	const rootSchema = schema;
 	let current: JsonSchema | undefined = schema;
@@ -98,17 +94,9 @@ export function jsonSchemaAtPath(
 			}
 			node = node?.type === 'array' ? node.items[segment] : undefined;
 		} else {
-			const pattern = Object.entries(current.patternProperties ?? {}).find(([expression]) =>
-				new RegExp(expression, 'u').test(segment),
-			);
-			current =
-				current.properties?.[segment] ??
-				pattern?.[1] ??
-				(typeof current.additionalProperties === 'object' ? current.additionalProperties : undefined);
-			node =
-				node?.type === 'object'
-					? node.properties.find(property => property.key === segment)?.valueNode
-					: undefined;
+			const pattern = Object.entries(current.patternProperties ?? {}).find(([expression]) => new RegExp(expression, 'u').test(segment));
+			current = current.properties?.[segment] ?? pattern?.[1] ?? (typeof current.additionalProperties === 'object' ? current.additionalProperties : undefined);
+			node = node?.type === 'object' ? node.properties.find(property => property.key === segment)?.valueNode : undefined;
 		}
 	}
 	return current ? completionSchema(current, node, rootSchema) : undefined;
@@ -179,12 +167,7 @@ export function validateJsonSchema(document: JsonDocument, schema: JsonSchema | 
 	return Object.freeze(issues);
 }
 
-function validateNode(
-	node: JsonValueNode,
-	schema: JsonSchema,
-	issues: JsonSchemaIssue[],
-	rootSchema: JsonSchema,
-): void {
+function validateNode(node: JsonValueNode, schema: JsonSchema, issues: JsonSchemaIssue[], rootSchema: JsonSchema): void {
 	if (schema.$ref) {
 		validateNode(node, resolveSchemaReference(schema.$ref, rootSchema), issues, rootSchema);
 		return;
@@ -218,22 +201,17 @@ function validateNode(
 		issues.push(issue('Value is not one of the permitted values', node));
 	}
 	if (node.type === 'number') {
-		if (schema.minimum !== undefined && node.value < schema.minimum)
-			issues.push(issue(`Value must be at least ${schema.minimum}`, node));
-		if (schema.maximum !== undefined && node.value > schema.maximum)
-			issues.push(issue(`Value must be at most ${schema.maximum}`, node));
+		if (schema.minimum !== undefined && node.value < schema.minimum) issues.push(issue(`Value must be at least ${schema.minimum}`, node));
+		if (schema.maximum !== undefined && node.value > schema.maximum) issues.push(issue(`Value must be at most ${schema.maximum}`, node));
 	}
 	if (node.type === 'string') {
 		const minimumLength = schema.minLength ?? schema.minimumLength;
 		const maximumLength = schema.maxLength ?? schema.maximumLength;
-		if (minimumLength !== undefined && node.value.length < minimumLength)
-			issues.push(issue(`String must contain at least ${minimumLength} characters`, node));
-		if (maximumLength !== undefined && node.value.length > maximumLength)
-			issues.push(issue(`String must contain at most ${maximumLength} characters`, node));
+		if (minimumLength !== undefined && node.value.length < minimumLength) issues.push(issue(`String must contain at least ${minimumLength} characters`, node));
+		if (maximumLength !== undefined && node.value.length > maximumLength) issues.push(issue(`String must contain at most ${maximumLength} characters`, node));
 		if (schema.pattern !== undefined) {
 			try {
-				if (!new RegExp(schema.pattern, 'u').test(node.value))
-					issues.push(issue('String does not match the required pattern', node));
+				if (!new RegExp(schema.pattern, 'u').test(node.value)) issues.push(issue('String does not match the required pattern', node));
 			} catch {
 				issues.push(issue('Schema contains an invalid regular expression', node));
 			}
@@ -243,29 +221,20 @@ function validateNode(
 		if (isSchemaTuple(schema.items)) {
 			for (let index = 0; index < node.items.length; index++) {
 				const itemSchema = schema.items[index] ?? schema.additionalItems;
-				if (itemSchema && typeof itemSchema !== 'boolean')
-					validateNode(node.items[index], itemSchema, issues, rootSchema);
+				if (itemSchema && typeof itemSchema !== 'boolean') validateNode(node.items[index], itemSchema, issues, rootSchema);
 			}
 		} else {
 			for (const item of node.items) validateNode(item, schema.items, issues, rootSchema);
 		}
 	}
 	if (node.type === 'array') {
-		if (schema.minItems !== undefined && node.items.length < schema.minItems)
-			issues.push(issue(`Array must contain at least ${schema.minItems} items`, node));
-		if (schema.maxItems !== undefined && node.items.length > schema.maxItems)
-			issues.push(issue(`Array must contain at most ${schema.maxItems} items`, node));
-		if (
-			schema.uniqueItems &&
-			new Set(node.items.map(nodeValue).map(value => JSON.stringify(value))).size !== node.items.length
-		)
-			issues.push(issue('Array items must be unique', node));
+		if (schema.minItems !== undefined && node.items.length < schema.minItems) issues.push(issue(`Array must contain at least ${schema.minItems} items`, node));
+		if (schema.maxItems !== undefined && node.items.length > schema.maxItems) issues.push(issue(`Array must contain at most ${schema.maxItems} items`, node));
+		if (schema.uniqueItems && new Set(node.items.map(nodeValue).map(value => JSON.stringify(value))).size !== node.items.length) issues.push(issue('Array items must be unique', node));
 	}
 	if (node.type !== 'object') return;
-	if (schema.minProperties !== undefined && node.properties.length < schema.minProperties)
-		issues.push(issue(`Object must contain at least ${schema.minProperties} properties`, node));
-	if (schema.maxProperties !== undefined && node.properties.length > schema.maxProperties)
-		issues.push(issue(`Object must contain at most ${schema.maxProperties} properties`, node));
+	if (schema.minProperties !== undefined && node.properties.length < schema.minProperties) issues.push(issue(`Object must contain at least ${schema.minProperties} properties`, node));
+	if (schema.maxProperties !== undefined && node.properties.length > schema.maxProperties) issues.push(issue(`Object must contain at most ${schema.maxProperties} properties`, node));
 	const seen = new Set<string>();
 	for (const property of node.properties) {
 		if (seen.has(property.key)) issues.push(issue(`Duplicate property '${property.key}'`, property.keyNode));
@@ -288,10 +257,8 @@ function validateNode(
 			}
 		}
 		if (matched) continue;
-		if (schema.additionalProperties === false)
-			issues.push(issue(`Property '${property.key}' is not permitted`, property.keyNode));
-		if (typeof schema.additionalProperties === 'object')
-			validateNode(property.valueNode, schema.additionalProperties, issues, rootSchema);
+		if (schema.additionalProperties === false) issues.push(issue(`Property '${property.key}' is not permitted`, property.keyNode));
+		if (typeof schema.additionalProperties === 'object') validateNode(property.valueNode, schema.additionalProperties, issues, rootSchema);
 	}
 	for (const required of schema.required ?? []) {
 		if (!seen.has(required)) issues.push(issue(`Required property '${required}' is missing`, node));

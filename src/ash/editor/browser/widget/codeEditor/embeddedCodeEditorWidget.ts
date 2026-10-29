@@ -8,10 +8,7 @@ import { ICodeEditor } from '../../editorBrowser.js';
 import { ICodeEditorService } from '../../services/codeEditorService.js';
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from './codeEditorWidget.js';
 import { ConfigurationChangedEvent, IEditorOptions } from '../../../common/config/editorOptions.js';
-import {
-	IInstantiationService,
-	type ServicesAccessor,
-} from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 
 export class EmbeddedCodeEditorWidget extends CodeEditorWidget {
 	private readonly overwriteOptions: IEditorOptions;
@@ -31,7 +28,12 @@ export class EmbeddedCodeEditorWidget extends CodeEditorWidget {
 		@IConfigurationService configurationService: IConfigurationService,
 	) {
 		super(
-			{ ...parentEditor.getRawOptions(), ...codeEditorWidgetOptions, ...options, container: domElement },
+			{
+				...parentEditor.getRawOptions(),
+				...codeEditorWidgetOptions,
+				...options,
+				container: domElement,
+			},
 			instantiationService,
 			themeService,
 			languageConfigurationService,
@@ -44,11 +46,7 @@ export class EmbeddedCodeEditorWidget extends CodeEditorWidget {
 
 		this.overwriteOptions = { ...options };
 		super.updateOptions(this.overwriteOptions);
-		this._register(
-			parentEditor.onDidChangeConfiguration((event: ConfigurationChangedEvent) =>
-				this.onParentConfigurationChanged(event),
-			),
-		);
+		this._register(parentEditor.onDidChangeConfiguration((event: ConfigurationChangedEvent) => this.onParentConfigurationChanged(event)));
 		this.registerWithService();
 	}
 

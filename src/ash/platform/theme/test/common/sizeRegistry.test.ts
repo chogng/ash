@@ -22,17 +22,7 @@ test('size contributions remain sealed after startup', () => {
 
 test('size identifiers preserve camelCase segments in Ash CSS variables', () => {
 	assert.deepEqual(
-		[
-			asCssVariableName('strokeThickness'),
-			asCssVariableName('fontSize.body1'),
-			asCssVariableName('fontWeight.semiBold'),
-			asCssVariableName('tabList.itemContentInset'),
-		],
-		[
-			'--ash-strokeThickness',
-			'--ash-fontSize-body1',
-			'--ash-fontWeight-semiBold',
-			'--ash-tabList-itemContentInset',
-		],
+		[asCssVariableName('strokeThickness'), asCssVariableName('fontSize.body1'), asCssVariableName('fontWeight.semiBold'), asCssVariableName('tabList.itemContentInset')],
+		['--ash-strokeThickness', '--ash-fontSize-body1', '--ash-fontWeight-semiBold', '--ash-tabList-itemContentInset'],
 	);
 });

@@ -3,13 +3,7 @@ import { isWindowsRemotePath } from '../common/remote.js';
 import { isAbsolute } from 'node:path';
 import { isRecord } from '../../../base/common/types.js';
 import { isNonNegativeSafeInteger, isPositiveSafeInteger } from '../../../base/common/numbers.js';
-import {
-	isCanonicalAbsoluteRemotePath,
-	normalizeCredentialFreeSshHost,
-	type RunRemoteCommand,
-	runRemoteCommand,
-	validLocalCommand,
-} from './remoteCommand.js';
+import { isCanonicalAbsoluteRemotePath, normalizeCredentialFreeSshHost, type RunRemoteCommand, runRemoteCommand, validLocalCommand } from './remoteCommand.js';
 
 export type { RunRemoteCommand, RemoteCommandResult } from './remoteCommand.js';
 
@@ -64,8 +58,7 @@ export class RemoteRuntimeInstaller {
 		validateTrustedRemoteRuntimeArtifact(options.artifact);
 		if (!validLocalCommand(options.remoteExecutable) || !validLocalCommand(options.sshExecutable))
 			throw new Error('Remote installer executables must be non-empty and contain no control characters');
-		if (options.installRoot !== undefined && !isCanonicalAbsoluteRemotePath(options.installRoot))
-			throw new Error('Remote runtime install root must be a canonical absolute remote path');
+		if (options.installRoot !== undefined && !isCanonicalAbsoluteRemotePath(options.installRoot)) throw new Error('Remote runtime install root must be a canonical absolute remote path');
 		this.runCommand = options.runCommand ?? runRemoteCommand;
 	}
 
@@ -93,18 +86,13 @@ export class RemoteRuntimeInstaller {
 		];
 		if (this.options.installRoot !== undefined) args.push('--install-root', this.options.installRoot);
 		const reportProgress = request.onProgress ?? this.options.onProgress;
-		const progressDecoder =
-			reportProgress === undefined ? undefined : new RemoteRuntimeInstallProgressDecoder(reportProgress);
+		const progressDecoder = reportProgress === undefined ? undefined : new RemoteRuntimeInstallProgressDecoder(reportProgress);
 		if (progressDecoder !== undefined) args.push('--progress', 'json-lines');
-		const observer =
-			progressDecoder === undefined && request.signal === undefined
-				? undefined
-				: { onStderrData: (chunk: string) => progressDecoder?.accept(chunk), signal: request.signal };
+		const observer = progressDecoder === undefined && request.signal === undefined ? undefined : { onStderrData: (chunk: string) => progressDecoder?.accept(chunk), signal: request.signal };
 		const result = await this.runCommand(this.options.remoteExecutable, args, this.options.environment, observer);
 		progressDecoder?.finish();
 		if (result.exitCode !== 0) {
-			const diagnostic =
-				result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode ?? 'unknown'}`;
+			const diagnostic = result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode ?? 'unknown'}`;
 			throw new Error(`Remote runtime installation failed: ${diagnostic}`);
 		}
 		const executable = result.stdout
@@ -156,19 +144,14 @@ function parseRemoteRuntimeInstallProgress(line: string): RemoteRuntimeInstallPr
 	} catch {
 		throw new Error('Remote runtime installer returned malformed progress JSON');
 	}
-	if (!isRecord(value) || value.kind !== 'remoteRuntimeInstallProgress' || typeof value.phase !== 'string')
-		throw new Error('Remote runtime installer returned an invalid progress record');
+	if (!isRecord(value) || value.kind !== 'remoteRuntimeInstallProgress' || typeof value.phase !== 'string') throw new Error('Remote runtime installer returned an invalid progress record');
 	switch (value.phase) {
 		case 'validatingArtifact':
 		case 'probingPlatform':
 		case 'finalizingRemoteInstall':
 			return Object.freeze({ phase: value.phase });
 		case 'uploading':
-			if (
-				!isNonNegativeSafeInteger(value.transferredBytes) ||
-				!isPositiveSafeInteger(value.totalBytes) ||
-				value.transferredBytes > value.totalBytes
-			)
+			if (!isNonNegativeSafeInteger(value.transferredBytes) || !isPositiveSafeInteger(value.totalBytes) || value.transferredBytes > value.totalBytes)
 				throw new Error('Remote runtime installer returned invalid upload progress');
 			return Object.freeze({
 				phase: value.phase,
@@ -176,8 +159,7 @@ function parseRemoteRuntimeInstallProgress(line: string): RemoteRuntimeInstallPr
 				totalBytes: value.totalBytes,
 			});
 		case 'complete':
-			if (value.disposition !== 'installed' && value.disposition !== 'reused')
-				throw new Error('Remote runtime installer returned an invalid completion disposition');
+			if (value.disposition !== 'installed' && value.disposition !== 'reused') throw new Error('Remote runtime installer returned an invalid completion disposition');
 			return Object.freeze({ phase: value.phase, disposition: value.disposition });
 		default:
 			throw new Error(`Remote runtime installer returned an unknown progress phase: ${value.phase}`);
@@ -185,9 +167,7 @@ function parseRemoteRuntimeInstallProgress(line: string): RemoteRuntimeInstallPr
 }
 
 /** Reads the explicit Main-process artifact override; incomplete records fail closed. */
-export function remoteRuntimeArtifactFromEnvironment(
-	environment: NodeJS.ProcessEnv,
-): TrustedRemoteRuntimeArtifact | undefined {
+export function remoteRuntimeArtifactFromEnvironment(environment: NodeJS.ProcessEnv): TrustedRemoteRuntimeArtifact | undefined {
 	const names = [
 		'ASH_REMOTE_RUNTIME_ARCHIVE',
 		'ASH_REMOTE_RUNTIME_VERSION',
@@ -199,8 +179,7 @@ export function remoteRuntimeArtifactFromEnvironment(
 	const values = names.map(name => environment[name]);
 	if (values.every(value => value === undefined)) return undefined;
 	const missing = names.filter((_, index) => values[index] === undefined);
-	if (missing.length > 0)
-		throw new Error(`Incomplete Remote runtime artifact override; missing ${missing.join(', ')}`);
+	if (missing.length > 0) throw new Error(`Incomplete Remote runtime artifact override; missing ${missing.join(', ')}`);
 	const artifact = {
 		archivePath: values[0]!,
 		version: values[1]!,
@@ -214,16 +193,12 @@ export function remoteRuntimeArtifactFromEnvironment(
 }
 
 export function validateTrustedRemoteRuntimeArtifact(artifact: TrustedRemoteRuntimeArtifact): void {
-	if (!isAbsolute(artifact.archivePath) || !validLocalCommand(artifact.archivePath))
-		throw new Error('Remote runtime archive path must be an absolute local path');
+	if (!isAbsolute(artifact.archivePath) || !validLocalCommand(artifact.archivePath)) throw new Error('Remote runtime archive path must be an absolute local path');
 	if (!VERSION_PATTERN.test(artifact.version)) throw new Error('Remote runtime artifact version is invalid');
 	if (!REMOTE_TARGETS.has(artifact.target)) throw new Error(`Unsupported Remote runtime target: ${artifact.target}`);
-	if (!Number.isSafeInteger(artifact.archiveSize) || artifact.archiveSize <= 0)
-		throw new Error('Remote runtime archive size must be a positive safe integer');
-	if (!Number.isSafeInteger(artifact.unpackedSize) || artifact.unpackedSize <= 0)
-		throw new Error('Remote runtime unpacked size must be a positive safe integer');
-	if (!SHA256_PATTERN.test(artifact.sha256))
-		throw new Error('Remote runtime SHA-256 must be 64 lowercase hex characters');
+	if (!Number.isSafeInteger(artifact.archiveSize) || artifact.archiveSize <= 0) throw new Error('Remote runtime archive size must be a positive safe integer');
+	if (!Number.isSafeInteger(artifact.unpackedSize) || artifact.unpackedSize <= 0) throw new Error('Remote runtime unpacked size must be a positive safe integer');
+	if (!SHA256_PATTERN.test(artifact.sha256)) throw new Error('Remote runtime SHA-256 must be 64 lowercase hex characters');
 }
 
 function parsePositiveSafeInteger(value: string, name: string): number {

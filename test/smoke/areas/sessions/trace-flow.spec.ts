@@ -6,11 +6,7 @@ import { expect, test as base } from '../../../automation/test.js';
 import { Menus } from '../../../automation/menus.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
-import {
-	parseAgentTrace,
-	parseAgentTraceDiagnostics,
-	type AgentTraceEvent,
-} from '../../../../src/ash/workbench/contrib/chat/common/chatDebugEvents.js';
+import { parseAgentTrace, parseAgentTraceDiagnostics, type AgentTraceEvent } from '../../../../src/ash/workbench/contrib/chat/common/chatDebugEvents.js';
 import { connectTraceAppServer } from './traceFixture.js';
 
 type FixtureRequest = { input: Array<Record<string, unknown>>; tools?: Array<{ name: string }> };
@@ -91,13 +87,11 @@ const test = base.extend<{ traceModelFixture: TraceModelFixture }>({
 					return;
 				}
 				if (prompt.includes('trace-fixture-failure')) {
-					response
-						.writeHead(400, { 'Content-Type': 'application/json' })
-						.end(
-							JSON.stringify({
-								error: { message: 'trace-fixture-deliberate-failure', type: 'invalid_request_error' },
-							}),
-						);
+					response.writeHead(400, { 'Content-Type': 'application/json' }).end(
+						JSON.stringify({
+							error: { message: 'trace-fixture-deliberate-failure', type: 'invalid_request_error' },
+						}),
+					);
 					return;
 				}
 				if (prompt.includes('trace-fixture-child-task')) {
@@ -198,13 +192,7 @@ const test = base.extend<{ traceModelFixture: TraceModelFixture }>({
 
 /** The caption belongs to the evidence artifact, not the product UI. Screenshots
  * document asserted runtime state and never replace the scenario's assertions. */
-async function captureFixtureEvidence(
-	page: Page,
-	testInfo: TestInfo,
-	name: string,
-	state: string,
-	scope: 'page' | 'trace',
-): Promise<void> {
+async function captureFixtureEvidence(page: Page, testInfo: TestInfo, name: string, state: string, scope: 'page' | 'trace'): Promise<void> {
 	const bounds = scope === 'trace' ? await page.locator('.ash-agent-trace').boundingBox() : null;
 	await page.evaluate(
 		({ state, bounds }) => {
@@ -307,18 +295,8 @@ test(
 			await new QuickAccess(page).runCommand('sessions.trace.open');
 			const viewer = page.locator('.ash-agent-trace');
 			await expect(viewer.getByRole('status')).toContainText('Live');
-			await expect
-				.poll(
-					async () =>
-						(
-							await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })
-						).thread.turns.at(-1)?.status,
-				)
-				.toBe('completed');
-			const durable = parseAgentTrace(
-				(await client.request(APP_SERVER_METHODS['session/trace/read'], { sessionId, after: {}, limit: 500 }))
-					.trace,
-			);
+			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread.turns.at(-1)?.status).toBe('completed');
+			const durable = parseAgentTrace((await client.request(APP_SERVER_METHODS['session/trace/read'], { sessionId, after: {}, limit: 500 })).trace);
 			const diagnostics = parseAgentTraceDiagnostics(
 				(
 					await client.request(APP_SERVER_METHODS['session/trace/diagnostics/read'], {
@@ -338,90 +316,44 @@ test(
 			expect(durable.threads).toHaveLength(3);
 			expect(events.filter(record => record.event.type === 'delegationResultReceived')).toHaveLength(2);
 			expect(events.some(record => record.event.type === 'agentJoinSatisfied')).toBe(true);
-			const attempts = diagnostics.events.filter(
-				record => record.threadId === threadId && record.event.type === 'modelAttemptStarted',
-			);
+			const attempts = diagnostics.events.filter(record => record.threadId === threadId && record.event.type === 'modelAttemptStarted');
 			expect(attempts).toHaveLength(3);
 			expect(diagnostics.events.filter(record => record.event.type === 'modelAttemptCompleted')).toHaveLength(5);
-			const parentRequests = traceModelFixture.requests.filter(request =>
-				JSON.stringify(request.input).includes('trace-fixture-parent-task'),
-			);
+			const parentRequests = traceModelFixture.requests.filter(request => JSON.stringify(request.input).includes('trace-fixture-parent-task'));
 			expect(parentRequests).toHaveLength(3);
-			expect(parentRequests[1].input).toEqual(
-				expect.arrayContaining([
-					expect.objectContaining({ type: 'function_call_output', call_id: 'fixture-shell' }),
-				]),
-			);
-			expect(
-				JSON.stringify(
-					parentRequests[1].input.find(
-						item => item.type === 'function_call_output' && item.call_id === 'fixture-shell',
-					)?.output,
-				),
-			).toContain('trace-fixture-tool-result');
+			expect(parentRequests[1].input).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'function_call_output', call_id: 'fixture-shell' })]));
+			expect(JSON.stringify(parentRequests[1].input.find(item => item.type === 'function_call_output' && item.call_id === 'fixture-shell')?.output)).toContain('trace-fixture-tool-result');
 			await selectRecord(viewer, attempts[1].eventId);
 			await viewer.getByRole('tab', { name: 'Input', exact: true }).click();
 			await expect(viewer.getByRole('button', { name: 'Saved body', exact: true })).toBeVisible();
 			await viewer.getByRole('button', { name: 'Saved body', exact: true }).click();
 			// Saved bodies use a virtual readonly editor; Find reveals evidence beyond its viewport.
 			await viewer.locator('.stanza-editor-input:visible').press('ControlOrMeta+F');
-			const find = viewer
-				.getByRole('dialog', { name: 'Find and replace', exact: true })
-				.getByRole('textbox', { name: 'Find', exact: true });
+			const find = viewer.getByRole('dialog', { name: 'Find and replace', exact: true }).getByRole('textbox', { name: 'Find', exact: true });
 			await find.fill('trace-fixture-tool-result');
-			await expect
-				.poll(async () => (await viewer.locator('.view-lines').innerText()).replace(/\s/gu, ''))
-				.toContain('trace-fixture-tool-result');
-			await viewer
-				.getByRole('dialog', { name: 'Find and replace', exact: true })
-				.getByRole('button', { name: 'Close find', exact: true })
-				.click();
+			await expect.poll(async () => (await viewer.locator('.view-lines').innerText()).replace(/\s/gu, '')).toContain('trace-fixture-tool-result');
+			await viewer.getByRole('dialog', { name: 'Find and replace', exact: true }).getByRole('button', { name: 'Close find', exact: true }).click();
 			await expect(viewer.getByRole('dialog', { name: 'Find and replace', exact: true })).toBeHidden();
 			await viewer.getByRole('tab', { name: 'Relations', exact: true }).click();
 			if (target.kind === 'browser') {
-				await expect(
-					viewer
-						.locator('.ash-agent-trace-relation')
-						.filter({ hasText: 'Result present in model input' })
-						.filter({ hasText: 'fixture-shell' }),
-				).toHaveCount(1);
+				await expect(viewer.locator('.ash-agent-trace-relation').filter({ hasText: 'Result present in model input' }).filter({ hasText: 'fixture-shell' })).toHaveCount(1);
 				await workbench.setAppearance(application, 'dark', page);
 				await expect(page.locator('#app')).toHaveAttribute('data-color-theme', 'ash-dark');
-				await captureFixtureEvidence(
-					page,
-					testInfo,
-					'ash-dark-wide.png',
-					'Next model input contains the saved shell result; outgoing call continues to wait_agent',
-					'page',
-				);
+				await captureFixtureEvidence(page, testInfo, 'ash-dark-wide.png', 'Next model input contains the saved shell result; outgoing call continues to wait_agent', 'page');
 			}
-			await viewer
-				.locator('.ash-agent-trace-relation')
-				.filter({ hasText: 'Result present in model input' })
-				.filter({ hasText: 'fixture-shell' })
-				.click();
-			await expect(
-				viewer.getByRole('treeitem', { selected: true }).locator('.ash-agent-trace-event'),
-			).toHaveAttribute('data-event-id', result.eventId);
+			await viewer.locator('.ash-agent-trace-relation').filter({ hasText: 'Result present in model input' }).filter({ hasText: 'fixture-shell' }).click();
+			await expect(viewer.getByRole('treeitem', { selected: true }).locator('.ash-agent-trace-event')).toHaveAttribute('data-event-id', result.eventId);
 			await selectRecord(viewer, attempts[0].eventId);
 			await viewer.getByRole('tab', { name: 'Relations', exact: true }).click();
-			await viewer
-				.locator('.ash-agent-trace-relation')
-				.filter({ hasText: 'Model requested tool' })
-				.filter({ hasText: 'shell-command' })
-				.click();
-			await expect(
-				viewer.getByRole('treeitem', { selected: true }).locator('.ash-agent-trace-event'),
-			).toHaveAttribute('data-event-id', shell.eventId);
+			await viewer.locator('.ash-agent-trace-relation').filter({ hasText: 'Model requested tool' }).filter({ hasText: 'shell-command' }).click();
+			await expect(viewer.getByRole('treeitem', { selected: true }).locator('.ash-agent-trace-event')).toHaveAttribute('data-event-id', shell.eventId);
 			const returned = events.find(record => record.event.type === 'delegationResultReceived')!;
 			await selectRecord(viewer, returned.eventId);
 			await viewer.getByRole('tab', { name: 'Overview', exact: true }).click();
 			await expect(viewer.getByRole('tabpanel')).toContainText('trace-fixture-child-result');
 			await viewer.getByRole('tab', { name: 'Relations', exact: true }).click();
 			await viewer.locator('.ash-agent-trace-relation').filter({ hasText: 'Child result returned' }).click();
-			await expect(
-				viewer.getByRole('treeitem', { selected: true }).locator('.ash-agent-trace-event'),
-			).toHaveAttribute(
+			await expect(viewer.getByRole('treeitem', { selected: true }).locator('.ash-agent-trace-event')).toHaveAttribute(
 				'data-thread-id',
 				String((returned.event.result as Record<string, unknown>).childThreadId),
 			);
@@ -430,19 +362,11 @@ test(
 			const satisfied = events.find(record => record.event.type === 'agentJoinSatisfied')!;
 			await selectRecord(viewer, satisfied.eventId);
 			await viewer.getByRole('tab', { name: 'Relations', exact: true }).click();
-			await expect(viewer.locator('.ash-agent-trace-relation').filter({ hasText: 'Join satisfied' })).toHaveCount(
-				3,
-			);
+			await expect(viewer.locator('.ash-agent-trace-relation').filter({ hasText: 'Join satisfied' })).toHaveCount(3);
 			if (target.kind === 'browser') {
 				await workbench.setAppearance(application, 'light', page);
 				await expect(page.locator('#app')).toHaveAttribute('data-color-theme', 'ash-light');
-				await captureFixtureEvidence(
-					page,
-					testInfo,
-					'ash-light-narrow.png',
-					'Saved join request and two returned child results satisfy the same parent join',
-					'trace',
-				);
+				await captureFixtureEvidence(page, testInfo, 'ash-light-narrow.png', 'Saved join request and two returned child results satisfy the same parent join', 'trace');
 				await workbench.setAppearance(application, 'dark', page);
 			}
 			await page.getByRole('button', { name: 'Close Execution Trace', exact: true }).click();
@@ -450,21 +374,15 @@ test(
 			await expect(viewer.getByRole('status')).toContainText('Live');
 			await selectRecord(viewer, returned.eventId);
 			await viewer.getByRole('tab', { name: 'Relations', exact: true }).click();
-			await expect(
-				viewer.locator('.ash-agent-trace-relation').filter({ hasText: 'Child result returned' }),
-			).toHaveCount(1);
+			await expect(viewer.locator('.ash-agent-trace-relation').filter({ hasText: 'Child result returned' })).toHaveCount(1);
 			let exportedPath: string;
 			const menu = new Menus(page);
 			if ('windows' in application) {
 				exportedPath = testInfo.outputPath('controlled-model.trace.json');
 				await application.evaluate(({ BrowserWindow }, path) => {
-					BrowserWindow.getAllWindows()[0]!.webContents.session.once('will-download', (_event, item) =>
-						item.setSavePath(path),
-					);
+					BrowserWindow.getAllWindows()[0]!.webContents.session.once('will-download', (_event, item) => item.setSavePath(path));
 				}, exportedPath);
-				await menu.select(application, () => viewer.locator('.ash-toolbar-more-actions button').click(), [
-					'Export trace',
-				]);
+				await menu.select(application, () => viewer.locator('.ash-toolbar-more-actions button').click(), ['Export trace']);
 				await expect
 					.poll(async () => {
 						try {
@@ -476,9 +394,7 @@ test(
 					.toBe(3);
 			} else {
 				const download = page.waitForEvent('download');
-				await menu.select(application, () => viewer.locator('.ash-toolbar-more-actions button').click(), [
-					'Export trace',
-				]);
+				await menu.select(application, () => viewer.locator('.ash-toolbar-more-actions button').click(), ['Export trace']);
 				exportedPath = (await (await download).path())!;
 			}
 			const artifact = await readFile(exportedPath);
@@ -487,15 +403,11 @@ test(
 			expect(exported.threads).toEqual(durable.threads);
 			expect(exported.diagnostics?.events).toEqual(diagnostics.events);
 			expect(exported.diagnostics?.payloads && Object.keys(exported.diagnostics.payloads)).toHaveLength(15);
-			await viewer
-				.locator('input[type=file]')
-				.setInputFiles({ name: 'controlled-model.trace.json', mimeType: 'application/json', buffer: artifact });
+			await viewer.locator('input[type=file]').setInputFiles({ name: 'controlled-model.trace.json', mimeType: 'application/json', buffer: artifact });
 			await expect(viewer.getByRole('status')).toHaveText('Imported · controlled-model.trace.json');
 			await selectRecord(viewer, returned.eventId);
 			await viewer.getByRole('tab', { name: 'Relations', exact: true }).click();
-			await expect(
-				viewer.locator('.ash-agent-trace-relation').filter({ hasText: 'Child result returned' }),
-			).toHaveCount(1);
+			await expect(viewer.locator('.ash-agent-trace-relation').filter({ hasText: 'Child result returned' })).toHaveCount(1);
 			const boundary = JSON.stringify({
 				fixture: 'local HTTP Responses provider; no paid account',
 				threadCount: durable.threads.length,
@@ -519,10 +431,7 @@ test(
 						after: {},
 						limit: 500,
 					});
-					await writeFile(
-						testInfo.outputPath('controlled-model-failure-evidence.json'),
-						JSON.stringify({ history, requests: traceModelFixture.requests }) + '\n',
-					);
+					await writeFile(testInfo.outputPath('controlled-model-failure-evidence.json'), JSON.stringify({ history, requests: traceModelFixture.requests }) + '\n');
 					await testInfo.attach('controlled-model-failure-evidence', {
 						path: testInfo.outputPath('controlled-model-failure-evidence.json'),
 						contentType: 'application/json',
@@ -631,12 +540,8 @@ test(
 					})
 				).diagnostics,
 			);
-			const failed = diagnostics.events.find(
-				record => record.threadId === failureThread && record.event.type === 'modelAttemptFailed',
-			)!;
-			const cancelled = diagnostics.events.find(
-				record => record.threadId === cancelThread && record.event.type === 'modelAttemptCancelled',
-			)!;
+			const failed = diagnostics.events.find(record => record.threadId === failureThread && record.event.type === 'modelAttemptFailed')!;
+			const cancelled = diagnostics.events.find(record => record.threadId === cancelThread && record.event.type === 'modelAttemptCancelled')!;
 			expect(failed.event.error).toBe('model request was invalid');
 			expect(cancelled).toBeDefined();
 			await selectRecord(viewer, failed.eventId);
@@ -667,11 +572,7 @@ for (const outcome of ['continued', 'denied', 'failed', 'cancelled'] as const) {
 		async ({ target, application, workbench, testWorkspace }, testInfo) => {
 			test.setTimeout(180_000);
 			let page = await workbench.openAgentsWindow(target.kind);
-			let connection: Awaited<ReturnType<typeof connectTraceAppServer>> | undefined = await connectTraceAppServer(
-				application,
-				page,
-				testWorkspace.directory,
-			);
+			let connection: Awaited<ReturnType<typeof connectTraceAppServer>> | undefined = await connectTraceAppServer(application, page, testWorkspace.directory);
 			const { client } = connection;
 			try {
 				const marker = join(testWorkspace.directory, 'hook-started');
@@ -695,8 +596,7 @@ for (const outcome of ['continued', 'denied', 'failed', 'cancelled'] as const) {
 						id: 'hook-trace',
 						selector: { type: 'source', source: 'user', sourceId: 'user:hook:trace-test' },
 						effect: { type: 'allowUnsandboxed' },
-						justification:
-							'The controlled Hook writes readiness and an execution count in the isolated test workspace, waits for a local release file, and returns a scripted outcome.',
+						justification: 'The controlled Hook writes readiness and an execution count in the isolated test workspace, waits for a local release file, and returns a scripted outcome.',
 					},
 				});
 				const config = await client.request(APP_SERVER_METHODS['config/read'], {});
@@ -734,10 +634,7 @@ for (const outcome of ['continued', 'denied', 'failed', 'cancelled'] as const) {
 						toolMode: 'direct',
 					},
 				});
-				await page
-					.locator('.ash-window-mode-control')
-					.getByRole('button', { name: 'Code', exact: true })
-					.click();
+				await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 				await page
 					.locator('.ash-sessions-list-item')
 					.filter({ hasText: `Hook ${outcome}` })
@@ -756,11 +653,8 @@ for (const outcome of ['continued', 'denied', 'failed', 'cancelled'] as const) {
 					sessionId,
 					threadId,
 				});
-				const runningEntry = running.transcript.entries.find(
-					entry => entry.type === 'hookRun' && entry.run.hookId === 'user:hook:trace-test',
-				);
-				if (!runningEntry || runningEntry.type !== 'hookRun')
-					throw new Error('Missing real running Hook transcript record');
+				const runningEntry = running.transcript.entries.find(entry => entry.type === 'hookRun' && entry.run.hookId === 'user:hook:trace-test');
+				if (!runningEntry || runningEntry.type !== 'hookRun') throw new Error('Missing real running Hook transcript record');
 				expect(runningEntry.run.status.type).toBe('running');
 				const identity = {
 					runId: runningEntry.run.runId,
@@ -771,8 +665,7 @@ for (const outcome of ['continued', 'denied', 'failed', 'cancelled'] as const) {
 					turnId: running.thread.turns.at(-1)!.turnId,
 					toolCallId: 'fixture-hook-tool',
 				});
-				const transcript = () =>
-					page.getByRole('log', { name: 'Chat transcript', exact: true }).filter({ visible: true });
+				const transcript = () => page.getByRole('log', { name: 'Chat transcript', exact: true }).filter({ visible: true });
 				const feedback = transcript().locator('.ash-chat-hook');
 				await expect(feedback).toHaveAttribute('data-status', 'running');
 				await expect(feedback).toHaveAttribute('data-run-id', identity.runId);
@@ -818,19 +711,14 @@ for (const outcome of ['continued', 'denied', 'failed', 'cancelled'] as const) {
 					sessionId,
 					threadId,
 				});
-				const completedEntry = completed.transcript.entries.find(
-					entry => entry.entryId === runningEntry.entryId,
-				);
-				if (!completedEntry || completedEntry.type !== 'hookRun')
-					throw new Error('Missing completed Hook transcript identity');
+				const completedEntry = completed.transcript.entries.find(entry => entry.entryId === runningEntry.entryId);
+				if (!completedEntry || completedEntry.type !== 'hookRun') throw new Error('Missing completed Hook transcript identity');
 				expect(completedEntry.run).toMatchObject({ ...identity, status: { type: outcome } });
 				await expect(feedback).toHaveAttribute('data-status', outcome);
 				expect(await feedback.evaluate((element, previous) => element === previous, original)).toBe(true);
 				await expect(summary).toBeFocused();
 				expect(await feedback.evaluate(element => (element as HTMLDetailsElement).open)).toBe(true);
-				expect(
-					await feedback.evaluate(element => element.closest('article')!.classList.contains('error')),
-				).toBe(outcome === 'denied' || outcome === 'failed');
+				expect(await feedback.evaluate(element => element.closest('article')!.classList.contains('error'))).toBe(outcome === 'denied' || outcome === 'failed');
 				const reason =
 					completedEntry.run.status.type === 'denied' || completedEntry.run.status.type === 'cancelled'
 						? completedEntry.run.status.reason
@@ -841,9 +729,7 @@ for (const outcome of ['continued', 'denied', 'failed', 'cancelled'] as const) {
 				await expect(feedback.locator('img')).toHaveCount(0);
 				expect(await readFile(counter, 'utf8')).toBe('started\n');
 				const turn = completed.thread.turns.at(-1)!;
-				const result = turn.items.find(
-					item => item.type === 'toolResult' && item.toolCallId === 'fixture-hook-tool',
-				);
+				const result = turn.items.find(item => item.type === 'toolResult' && item.toolCallId === 'fixture-hook-tool');
 				if (outcome === 'continued' || outcome === 'denied') {
 					const text = outcome === 'continued' ? 'hook-trace-tool-executed' : 'hook-trace-denied';
 					expect(result).toMatchObject({
@@ -876,11 +762,8 @@ for (const outcome of ['continued', 'denied', 'failed', 'cancelled'] as const) {
 				);
 				const events = capture.threads.find(thread => thread.threadId === threadId)!.events;
 				completedItem(events, 'toolCall', 'fixture-hook-tool');
-				expect(events.some(record => record.event.type === 'toolExecutionStarted')).toBe(
-					outcome === 'continued',
-				);
-				const type =
-					outcome === 'cancelled' ? 'turnInterrupted' : outcome === 'failed' ? 'turnFailed' : 'turnCompleted';
+				expect(events.some(record => record.event.type === 'toolExecutionStarted')).toBe(outcome === 'continued');
+				const type = outcome === 'cancelled' ? 'turnInterrupted' : outcome === 'failed' ? 'turnFailed' : 'turnCompleted';
 				const event = events.find(record => record.event.type === type)!;
 				expect(event.event.turnId).toBe(turn.turnId);
 				await selectRecord(viewer, event.eventId);
@@ -893,10 +776,7 @@ for (const outcome of ['continued', 'denied', 'failed', 'cancelled'] as const) {
 				await connection.close();
 				connection = undefined;
 				page = await workbench.reopenAgentsWindow(application, page);
-				await page
-					.locator('.ash-window-mode-control')
-					.getByRole('button', { name: 'Code', exact: true })
-					.click();
+				await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 				await page
 					.locator('.ash-sessions-list-item')
 					.filter({ hasText: `Hook ${outcome}` })

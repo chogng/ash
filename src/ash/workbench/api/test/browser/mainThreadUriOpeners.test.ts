@@ -12,22 +12,11 @@ import { Position } from '../../../../editor/common/core/position.js';
 import { TextModel } from '../../../../editor/common/model/textModel.js';
 import { createCodeEditorServices } from '../../../../editor/test/browser/testCodeEditor.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import {
-	ConfigurationSchemaId,
-	createConfigurationSchema,
-} from '../../../../platform/configuration/common/configurationSchema.js';
-import {
-	Extensions as JSONExtensions,
-	type IJSONContributionRegistry,
-} from '../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
+import { ConfigurationSchemaId, createConfigurationSchema } from '../../../../platform/configuration/common/configurationSchema.js';
+import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import type { AppServerConnectionState } from '../../../../platform/agentHost/common/appServerApi.js';
-import {
-	IExtensionHostApi,
-	type ExtensionHostFleetSnapshot,
-	type ExtensionHostInvocationRequest,
-	type JsonValue,
-} from '../../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { normalizeExtensionHostSnapshot } from '../../../../platform/agentHost/browser/extensionHostProtocol.js';
 import { externalUriOpenersConfigurationNode } from '../../../contrib/externalUriOpener/common/configuration.js';
 import { IExternalUriOpenerService } from '../../../contrib/externalUriOpener/common/externalUriOpenerService.js';
@@ -55,9 +44,7 @@ function snapshot(incarnation = 1): ExtensionHostFleetSnapshot {
 				failure: null,
 				stderr: '',
 				outputEvents: [],
-				registrations: [
-					{ kind: 'externalUriOpener', registrationId: 'browser', schemes: ['https'], label: 'Acme browser' },
-				],
+				registrations: [{ kind: 'externalUriOpener', registrationId: 'browser', schemes: ['https'], label: 'Acme browser' }],
 			},
 		],
 	});
@@ -133,12 +120,9 @@ class Fixture extends DisposableStore {
 test('configured extension opener receives resolved and original URLs without a capability probe', async () => {
 	using fixture = new Fixture();
 	await fixture.bridge.start();
-	await fixture.services
-		.get(IConfigurationService)
-		.updateValue('workbench.externalUriOpeners', { 'https://example.com': openerId });
+	await fixture.services.get(IConfigurationService).updateValue('workbench.externalUriOpeners', { 'https://example.com': openerId });
 	using resolver = fixture.opener.registerExternalUriResolver({
-		resolveExternalUri: async () =>
-			Object.assign(new DisposableStore(), { resolved: URI.parse('https://example.com/resolved?q=1#part') }),
+		resolveExternalUri: async () => Object.assign(new DisposableStore(), { resolved: URI.parse('https://example.com/resolved?q=1#part') }),
 	});
 	assert.equal(
 		await fixture.opener.open('https://source.example/docs?q=1#part', {
@@ -199,14 +183,7 @@ test('extension URI opener respects schemes, priority and stable IDs across rest
 	const uri = URI.parse('https://example.com/docs');
 	assert.equal((await service.getOpener(uri, { sourceUri: uri }, CancellationToken.None))?.id, openerId);
 	assert.deepEqual(fixture.api.requests[0]!.payload, { uri: uri.toString() });
-	assert.equal(
-		await service.getOpener(
-			URI.parse('http://example.com'),
-			{ sourceUri: uri, preferredOpenerId: openerId },
-			CancellationToken.None,
-		),
-		undefined,
-	);
+	assert.equal(await service.getOpener(URI.parse('http://example.com'), { sourceUri: uri, preferredOpenerId: openerId }, CancellationToken.None), undefined);
 	fixture.api.replace();
 	const fresh = await service.getOpener(uri, { sourceUri: uri }, CancellationToken.None);
 	assert.equal(fresh?.id, openerId);
@@ -214,10 +191,7 @@ test('extension URI opener respects schemes, priority and stable IDs across rest
 	fixture.api.result = 99;
 	assert.equal(await service.getOpener(uri, { sourceUri: uri }, CancellationToken.None), undefined);
 	fixture.api.disconnect();
-	assert.equal(
-		await service.getOpener(uri, { sourceUri: uri, preferredOpenerId: openerId }, CancellationToken.None),
-		undefined,
-	);
+	assert.equal(await service.getOpener(uri, { sourceUri: uri, preferredOpenerId: openerId }, CancellationToken.None), undefined);
 	assert.doesNotMatch(JSON.stringify(externalUriOpenersConfigurationNode.schema), /acme\.links/);
 });
 
@@ -225,9 +199,7 @@ test('caller cancellation and revoked extension registrations reject late open r
 	using fixture = new Fixture();
 	await fixture.bridge.start();
 	const uri = URI.parse('https://example.com/docs');
-	const handler = (await fixture.services
-		.get(IExternalUriOpenerService)
-		.getOpener(uri, { sourceUri: uri, preferredOpenerId: openerId }, CancellationToken.None))!;
+	const handler = (await fixture.services.get(IExternalUriOpenerService).getOpener(uri, { sourceUri: uri, preferredOpenerId: openerId }, CancellationToken.None))!;
 	for (const cancel of ['caller', 'connection'] as const) {
 		const deferred = new DeferredPromise<JsonValue>();
 		fixture.api.pending = deferred.p;

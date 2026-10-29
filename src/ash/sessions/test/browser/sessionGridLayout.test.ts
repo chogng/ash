@@ -59,10 +59,7 @@ test('Sessions host live views without creating editor groups or title controls'
 		]) {
 			layout.reconcile(entries, entries[0]!.id);
 
-			assert.equal(
-				layout.element.querySelector('.ash-editor-group, .ash-editor-title-control, [role=tab]'),
-				null,
-			);
+			assert.equal(layout.element.querySelector('.ash-editor-group, .ash-editor-title-control, [role=tab]'), null);
 			assert.equal(first.bounds!.height, 800);
 			assert.equal(first.element.querySelector('input'), firstInput);
 		}
@@ -108,10 +105,7 @@ test('Sessions split insertion preserves an unrelated pane and retained input fo
 		);
 
 		layout.layout(1_200, 800);
-		assert.deepEqual(
-			{ bounds: first.bounds, focused: document.activeElement },
-			{ bounds: firstBounds, focused: first.element.querySelector('input') },
-		);
+		assert.deepEqual({ bounds: first.bounds, focused: document.activeElement }, { bounds: firstBounds, focused: first.element.querySelector('input') });
 		const beforeMaterialization = [first.bounds, second.bounds, third.bounds];
 		layout.reconcile(
 			[
@@ -163,10 +157,7 @@ test('Sessions rearrangement keeps live inputs and does not steal focus from ano
 			'first',
 		);
 
-		assert.deepEqual(
-			{ focused: document.activeElement, input: first.element.querySelector('input')!.value },
-			{ focused: sidebar, input: 'Unsent text' },
-		);
+		assert.deepEqual({ focused: document.activeElement, input: first.element.querySelector('input')!.value }, { focused: sidebar, input: 'Unsent text' });
 		layout.reconcile([{ id: 'first', view: first }], 'first');
 
 		assert.equal(second.element.isConnected, false);
@@ -202,12 +193,7 @@ test('Sessions restores and immediately saves widths from both legacy layouts wi
 			StorageScope.WORKSPACE,
 			StorageTarget.MACHINE,
 		);
-		storage.store(
-			'sessions.gridState.code',
-			JSON.stringify({ version: 1, widths: [{ id: 'code', width: 900 }] }),
-			StorageScope.WORKSPACE,
-			StorageTarget.MACHINE,
-		);
+		storage.store('sessions.gridState.code', JSON.stringify({ version: 1, widths: [{ id: 'code', width: 900 }] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		using services = createTestEditorServices(undefined, undefined, browser.window.document, storage);
 		const first = new TestView(browser.window.document);
 		const second = new TestView(browser.window.document);
@@ -228,11 +214,7 @@ test('Sessions restores and immediately saves widths from both legacy layouts wi
 		layout.setVisible(false);
 		layout.layout(1_200, 800);
 		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
-		assert.equal(
-			JSON.parse(storage.get('sessions.gridState.chat', StorageScope.WORKSPACE)!).widths[0].width,
-			300,
-			'Hidden layouts retain their pending saved widths',
-		);
+		assert.equal(JSON.parse(storage.get('sessions.gridState.chat', StorageScope.WORKSPACE)!).widths[0].width, 300, 'Hidden layouts retain their pending saved widths');
 		layout.setVisible(true);
 		layout.layout(1_200, 800);
 		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
@@ -264,10 +246,7 @@ test('Sessions restores and immediately saves widths from both legacy layouts wi
 		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
 		layout.layout(1_200, 800);
 		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
-		assert.deepEqual(
-			{ widths: [first.bounds!.width, second.bounds!.width], input: second.element.querySelector('input') },
-			{ widths: [400, 800], input },
-		);
+		assert.deepEqual({ widths: [first.bounds!.width, second.bounds!.width], input: second.element.querySelector('input') }, { widths: [400, 800], input });
 	} finally {
 		getWindowById(1)?.disposables.dispose();
 		browser.window.close();
@@ -283,12 +262,7 @@ test('Sessions ignores saved widths when every pane has been replaced before its
 			workspaceId: 'test',
 			flushInterval: 0,
 		});
-		storage.store(
-			'sessions.gridState.code',
-			JSON.stringify({ version: 1, widths: [{ id: 'old', width: 900 }] }),
-			StorageScope.WORKSPACE,
-			StorageTarget.MACHINE,
-		);
+		storage.store('sessions.gridState.code', JSON.stringify({ version: 1, widths: [{ id: 'old', width: 900 }] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		using services = createTestEditorServices(undefined, undefined, browser.window.document, storage);
 		const view = new TestView(browser.window.document);
 		using layout = services.createInstance(SessionGridLayout, browser.window.document.body, view);
@@ -432,22 +406,13 @@ test('Sessions scales saved nested proportions before applying live pane minimum
 			workspaceId: 'test',
 			flushInterval: 0,
 		});
-		storage.store(
-			'sessions.gridState',
-			JSON.stringify(savedNestedLayout()),
-			StorageScope.WORKSPACE,
-			StorageTarget.MACHINE,
-		);
+		storage.store('sessions.gridState', JSON.stringify(savedNestedLayout()), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		using services = createTestEditorServices(undefined, undefined, browser.window.document, storage);
 		const views = ['first', 'second', 'third'].map(id => ({
 			id,
 			view: new TestView(browser.window.document, 240),
 		}));
-		using layout = services.createInstance(
-			SessionGridLayout,
-			browser.window.document.body,
-			new TestView(browser.window.document, 240),
-		);
+		using layout = services.createInstance(SessionGridLayout, browser.window.document.body, new TestView(browser.window.document, 240));
 		layout.layout(1800, 900);
 		layout.reconcile(views, 'third');
 		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
@@ -497,10 +462,7 @@ test('invalid stored geometry falls back to a usable conversation without mounti
 		layout.layout(1000, 600);
 		assert.equal(view.bounds!.width, 1000);
 		assert.equal(warnings.length, 1);
-		assert.equal(
-			storedIds(JSON.parse(storage.get('sessions.gridState', StorageScope.WORKSPACE)!).layout)[0],
-			'first',
-		);
+		assert.equal(storedIds(JSON.parse(storage.get('sessions.gridState', StorageScope.WORKSPACE)!).layout)[0], 'first');
 	} finally {
 		console.warn = warn;
 		getWindowById(1)?.disposables.dispose();
@@ -508,10 +470,6 @@ test('invalid stored geometry falls back to a usable conversation without mounti
 	}
 });
 
-function storedIds(node: {
-	type: string;
-	data?: { id: string };
-	children?: readonly Parameters<typeof storedIds>[0][];
-}): string[] {
+function storedIds(node: { type: string; data?: { id: string }; children?: readonly Parameters<typeof storedIds>[0][] }): string[] {
 	return node.type === 'leaf' ? [node.data!.id] : node.children!.flatMap(storedIds);
 }

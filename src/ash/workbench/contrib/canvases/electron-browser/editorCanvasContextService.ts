@@ -10,13 +10,7 @@ import { IChatService } from '../../../services/chat/common/chatService.js';
 import { Direction } from '../../../../base/browser/ui/grid/grid.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { IChatWidgetService } from '../../chat/browser/chat.js';
-import {
-	canvasOwnerKey,
-	isCanvasOwner,
-	type ICanvasContextService,
-	type ICanvasOwner,
-	type CanvasInput,
-} from '../common/canvas.js';
+import { canvasOwnerKey, isCanvasOwner, type ICanvasContextService, type ICanvasOwner, type CanvasInput } from '../common/canvas.js';
 import type { IEditorGroup } from '../../../services/editor/common/editorGroupsService.js';
 
 /** Both products register their visible conversations in the same window-scoped registry. */
@@ -61,10 +55,7 @@ export class EditorCanvasContextService extends Disposable implements ICanvasCon
 		this.collectOwners();
 		this._register(
 			configuration.onDidChangeConfiguration(event => {
-				if (
-					event.affectsConfiguration(CanvasesEnabledSettingId) ||
-					event.affectsConfiguration(ChatAIDisabledSettingId)
-				) {
+				if (event.affectsConfiguration(CanvasesEnabledSettingId) || event.affectsConfiguration(ChatAIDisabledSettingId)) {
 					this.changed.fire();
 				}
 			}),
@@ -97,10 +88,7 @@ export class EditorCanvasContextService extends Disposable implements ICanvasCon
 			for (const [key, owner] of this.owners) {
 				if (
 					owner.session.path.slice(1) !== sessionId ||
-					(session?.status === 'active' &&
-						session.threads.some(
-							thread => thread.threadId === owner.chat.path.slice(1) && thread.status === 'active',
-						))
+					(session?.status === 'active' && session.threads.some(thread => thread.threadId === owner.chat.path.slice(1) && thread.status === 'active'))
 				) {
 					continue;
 				}
@@ -115,9 +103,7 @@ export class EditorCanvasContextService extends Disposable implements ICanvasCon
 	}
 
 	getContext(owner: ICanvasOwner, reader?: IReader) {
-		return (reader ? this.contexts.read(reader) : this.contexts.get()).find(context =>
-			isCanvasOwner(context.owner, owner),
-		);
+		return (reader ? this.contexts.read(reader) : this.contexts.get()).find(context => isCanvasOwner(context.owner, owner));
 	}
 	getFrontendSessionResource(owner: ICanvasOwner, reader?: IReader): URI | undefined {
 		return this.getContext(owner, reader)?.owner.session;
@@ -129,14 +115,7 @@ export class EditorCanvasContextService extends Disposable implements ICanvasCon
 			this.owners.has(canvasOwnerKey(owner)) &&
 			this.configuration.getValue<boolean>(CanvasesEnabledSettingId) !== false &&
 			this.configuration.getValue<boolean>(ChatAIDisabledSettingId) !== true &&
-			this.widgets
-				.getAllWidgets()
-				.some(
-					widget =>
-						widget.visible &&
-						widget.sessionId === owner.session.path.slice(1) &&
-						widget.threadId === owner.chat.path.slice(1),
-				)
+			this.widgets.getAllWidgets().some(widget => widget.visible && widget.sessionId === owner.session.path.slice(1) && widget.threadId === owner.chat.path.slice(1))
 		);
 	}
 
@@ -146,13 +125,7 @@ export class EditorCanvasContextService extends Disposable implements ICanvasCon
 			return existing;
 		}
 		const visibleChats = this.widgets.getAllWidgets().filter(widget => widget.visible);
-		const available = this.editors.groups.filter(
-			group => !group.isLocked && !visibleChats.some(widget => group.domNode.contains(widget.domNode)),
-		);
-		return (
-			available.find(group => group === this.editors.activeGroup) ??
-			available[0] ??
-			this.editors.addGroup(this.editors.activeGroup.id, Direction.Right)
-		);
+		const available = this.editors.groups.filter(group => !group.isLocked && !visibleChats.some(widget => group.domNode.contains(widget.domNode)));
+		return available.find(group => group === this.editors.activeGroup) ?? available[0] ?? this.editors.addGroup(this.editors.activeGroup.id, Direction.Right);
 	}
 }

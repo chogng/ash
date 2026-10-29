@@ -86,8 +86,7 @@ export interface JsonArrayNode extends JsonNodeBase {
 	readonly items: readonly JsonValueNode[];
 }
 
-export type JsonValueNode =
-	JsonStringNode | JsonNumberNode | JsonBooleanNode | JsonNullNode | JsonObjectNode | JsonArrayNode;
+export type JsonValueNode = JsonStringNode | JsonNumberNode | JsonBooleanNode | JsonNullNode | JsonObjectNode | JsonArrayNode;
 export type JsonNode = JsonValueNode | JsonPropertyNode;
 
 export interface JsonDocument {
@@ -141,8 +140,7 @@ export function scanJson(source: string, options: JsonParseOptions = {}): Scanne
 				}
 				tokens.push(token(JsonTokenKind.BlockComment, start, offset));
 			}
-			if (!options.allowComments)
-				errors.push(parseError('Comments are not permitted in JSON', start, offset - start));
+			if (!options.allowComments) errors.push(parseError('Comments are not permitted in JSON', start, offset - start));
 			continue;
 		}
 		if (character === '"') {
@@ -185,13 +183,10 @@ export function parseJsonDocument(source: string, options: JsonParseOptions = {}
 
 /** Formats valid JSON or JSONC from tokens while preserving comment text and trailing commas. */
 export function formatJson(source: string, options: JsonFormattingOptions): string {
-	if (!Number.isSafeInteger(options.tabSize) || options.tabSize < 1)
-		throw new RangeError('JSON formatting tab size must be positive');
+	if (!Number.isSafeInteger(options.tabSize) || options.tabSize < 1) throw new RangeError('JSON formatting tab size must be positive');
 	const document = parseJsonDocument(source, { allowComments: true, allowTrailingComma: true });
 	if (document.errors.length > 0) throw new TypeError(`Cannot format invalid JSONC: ${document.errors[0]!.message}`);
-	const tokens = scanJson(source, { allowComments: true, allowTrailingComma: true }).tokens.filter(
-		candidate => candidate.kind !== JsonTokenKind.Trivia,
-	);
+	const tokens = scanJson(source, { allowComments: true, allowTrailingComma: true }).tokens.filter(candidate => candidate.kind !== JsonTokenKind.Trivia);
 	const eol = options.eol ?? (source.includes('\r\n') ? '\r\n' : '\n');
 	const indentation = options.insertSpaces ? ' '.repeat(options.tabSize) : '\t';
 	let result = '';
@@ -277,10 +272,7 @@ export function findJsonNodeAtOffset(root: JsonValueNode | undefined, offset: nu
 }
 
 /** Returns the property/index path of one value node. */
-export function getJsonNodePath(
-	root: JsonValueNode | undefined,
-	target: JsonValueNode,
-): readonly (string | number)[] | undefined {
+export function getJsonNodePath(root: JsonValueNode | undefined, target: JsonValueNode): readonly (string | number)[] | undefined {
 	if (!root) return undefined;
 	if (root === target) return Object.freeze([]);
 	if (root.type === 'object') {
@@ -355,27 +347,18 @@ function scanString(source: string, start: number, errors: JsonParseError[]): nu
 			errors.push(parseError('Unterminated string', start, offset - start));
 			return offset;
 		}
-		if (character.charCodeAt(0) <= 0x1f)
-			errors.push(parseError('Unescaped control character in string', offset, 1));
+		if (character.charCodeAt(0) <= 0x1f) errors.push(parseError('Unescaped control character in string', offset, 1));
 		if (character === '\\') {
 			offset += 1;
 			if (offset >= source.length) break;
 			const escaped = source[offset]!;
 			if (escaped === 'u') {
 				const digits = source.slice(offset + 1, offset + 5);
-				if (!/^[0-9A-Fa-f]{4}$/u.test(digits))
-					errors.push(
-						parseError(
-							'Invalid Unicode escape sequence',
-							offset - 1,
-							Math.min(6, source.length - offset + 1),
-						),
-					);
+				if (!/^[0-9A-Fa-f]{4}$/u.test(digits)) errors.push(parseError('Invalid Unicode escape sequence', offset - 1, Math.min(6, source.length - offset + 1)));
 				offset += Math.min(5, source.length - offset);
 				continue;
 			}
-			if (!'"\\/bfnrt'.includes(escaped))
-				errors.push(parseError(`Invalid escape sequence '\\${escaped}'`, offset - 1, 2));
+			if (!'"\\/bfnrt'.includes(escaped)) errors.push(parseError(`Invalid escape sequence '\\${escaped}'`, offset - 1, 2));
 		}
 		offset += 1;
 	}
@@ -396,17 +379,13 @@ function decodeStringToken(raw: string): string {
 	}
 }
 
-function keywordKind(
-	source: string,
-	offset: number,
-): { readonly kind: JsonTokenKind; readonly length: number } | undefined {
+function keywordKind(source: string, offset: number): { readonly kind: JsonTokenKind; readonly length: number } | undefined {
 	for (const [word, kind] of [
 		['true', JsonTokenKind.True],
 		['false', JsonTokenKind.False],
 		['null', JsonTokenKind.Null],
 	] as const) {
-		if (source.startsWith(word, offset) && isTokenBoundary(source[offset + word.length] ?? ''))
-			return { kind, length: word.length };
+		if (source.startsWith(word, offset) && isTokenBoundary(source[offset + word.length] ?? '')) return { kind, length: word.length };
 	}
 	return undefined;
 }
@@ -426,12 +405,7 @@ class JsonParser {
 	private readonly errors: JsonParseError[];
 	private index = 0;
 
-	constructor(
-		source: string,
-		tokens: readonly JsonToken[],
-		scanErrors: readonly JsonParseError[],
-		options: JsonParseOptions,
-	) {
+	constructor(source: string, tokens: readonly JsonToken[], scanErrors: readonly JsonParseError[], options: JsonParseOptions) {
 		this.source = source;
 		this.options = options;
 		this.significantTokens = tokens.filter(candidate => !isTrivia(candidate.kind));
@@ -441,10 +415,7 @@ class JsonParser {
 	public parse(): JsonDocument {
 		const root = this.parseValue();
 		if (!root && this.significantTokens.length === 0) this.errors.push(parseError('Expected a JSON value', 0, 1));
-		if (root && this.current())
-			this.errors.push(
-				parseError('Unexpected content after the root value', this.current()!.offset, this.current()!.length),
-			);
+		if (root && this.current()) this.errors.push(parseError('Unexpected content after the root value', this.current()!.offset, this.current()!.length));
 		return Object.freeze({
 			root,
 			value: root ? propertyValue(root) : undefined,
@@ -516,13 +487,7 @@ class JsonParser {
 			});
 			if (!this.consume(JsonTokenKind.Colon)) {
 				const current = this.current();
-				this.errors.push(
-					parseError(
-						"Expected ':' after the property name",
-						current?.offset ?? key.offset + key.length,
-						current?.length ?? 1,
-					),
-				);
+				this.errors.push(parseError("Expected ':' after the property name", current?.offset ?? key.offset + key.length, current?.length ?? 1));
 			}
 			const valueNode = this.parseValue();
 			const end = valueNode ? valueNode.offset + valueNode.length : key.offset + key.length;
@@ -539,21 +504,13 @@ class JsonParser {
 			const comma = this.consume(JsonTokenKind.Comma);
 			if (comma) {
 				if (this.current()?.kind === JsonTokenKind.CloseBrace && !this.options.allowTrailingComma) {
-					this.errors.push(
-						parseError('Trailing commas are not permitted in JSON', comma.offset, comma.length),
-					);
+					this.errors.push(parseError('Trailing commas are not permitted in JSON', comma.offset, comma.length));
 				}
 				continue;
 			}
 			if (this.current()?.kind !== JsonTokenKind.CloseBrace) {
 				const current = this.current();
-				this.errors.push(
-					parseError(
-						"Expected ',' or '}' after the property value",
-						current?.offset ?? end,
-						current?.length ?? 1,
-					),
-				);
+				this.errors.push(parseError("Expected ',' or '}' after the property value", current?.offset ?? end, current?.length ?? 1));
 				this.recover(JsonTokenKind.Comma, JsonTokenKind.CloseBrace);
 				this.consume(JsonTokenKind.Comma);
 			}
@@ -580,21 +537,13 @@ class JsonParser {
 			const comma = this.consume(JsonTokenKind.Comma);
 			if (comma) {
 				if (this.current()?.kind === JsonTokenKind.CloseBracket && !this.options.allowTrailingComma) {
-					this.errors.push(
-						parseError('Trailing commas are not permitted in JSON', comma.offset, comma.length),
-					);
+					this.errors.push(parseError('Trailing commas are not permitted in JSON', comma.offset, comma.length));
 				}
 				continue;
 			}
 			if (this.current()?.kind !== JsonTokenKind.CloseBracket) {
 				const current = this.current();
-				this.errors.push(
-					parseError(
-						"Expected ',' or ']' after the array item",
-						current?.offset ?? this.source.length,
-						current?.length ?? 1,
-					),
-				);
+				this.errors.push(parseError("Expected ',' or ']' after the array item", current?.offset ?? this.source.length, current?.length ?? 1));
 				this.recover(JsonTokenKind.Comma, JsonTokenKind.CloseBracket);
 				this.consume(JsonTokenKind.Comma);
 			}
@@ -641,10 +590,7 @@ function isTrivia(kind: JsonTokenKind): boolean {
 }
 
 function isMatchingClose(open: JsonTokenKind, close: JsonTokenKind): boolean {
-	return (
-		(open === JsonTokenKind.OpenBrace && close === JsonTokenKind.CloseBrace) ||
-		(open === JsonTokenKind.OpenBracket && close === JsonTokenKind.CloseBracket)
-	);
+	return (open === JsonTokenKind.OpenBrace && close === JsonTokenKind.CloseBrace) || (open === JsonTokenKind.OpenBracket && close === JsonTokenKind.CloseBracket);
 }
 
 function propertyValue(node: JsonValueNode): JsonValue {
@@ -686,10 +632,7 @@ function detectFormatting(source: string, root: JsonObjectNode): JsonFormatting 
 	const rootIndent = indentationAt(source, root.offset);
 	const firstProperty = root.properties[0];
 	const propertyIndent = firstProperty ? indentationAt(source, firstProperty.offset) : '';
-	const indent =
-		propertyIndent.startsWith(rootIndent) && propertyIndent.length > rootIndent.length
-			? propertyIndent.slice(rootIndent.length)
-			: '\t';
+	const indent = propertyIndent.startsWith(rootIndent) && propertyIndent.length > rootIndent.length ? propertyIndent.slice(rootIndent.length) : '\t';
 	return { eol, indent, rootIndent };
 }
 
@@ -711,13 +654,7 @@ function indentMultiline(value: string, propertyIndent: string, eol: string): st
 		.join(eol);
 }
 
-function insertObjectProperty(
-	source: string,
-	document: JsonDocument,
-	key: string,
-	serialized: string,
-	formatting: JsonFormatting,
-): string {
+function insertObjectProperty(source: string, document: JsonDocument, key: string, serialized: string, formatting: JsonFormatting): string {
 	const root = document.root as JsonObjectNode;
 	const closeOffset = root.offset + root.length - 1;
 	const propertyIndent = `${formatting.rootIndent}${formatting.indent}`;
@@ -727,41 +664,16 @@ function insertObjectProperty(
 	if (!lastProperty) {
 		const inner = source.slice(root.offset + 1, closeOffset);
 		if (/^\s*$/u.test(inner)) {
-			return replaceSource(
-				source,
-				root.offset + 1,
-				inner.length,
-				`${formatting.eol}${propertyIndent}${propertySource}${formatting.eol}${formatting.rootIndent}`,
-			);
+			return replaceSource(source, root.offset + 1, inner.length, `${formatting.eol}${propertyIndent}${propertySource}${formatting.eol}${formatting.rootIndent}`);
 		}
 		const separator = inner.endsWith('\n') || inner.endsWith('\r') ? '' : formatting.eol;
-		return replaceSource(
-			source,
-			closeOffset,
-			0,
-			`${separator}${propertyIndent}${propertySource}${formatting.eol}${formatting.rootIndent}`,
-		);
+		return replaceSource(source, closeOffset, 0, `${separator}${propertyIndent}${propertySource}${formatting.eol}${formatting.rootIndent}`);
 	}
-	const trailingComma = document.tokens.find(
-		candidate =>
-			candidate.kind === JsonTokenKind.Comma &&
-			candidate.offset >= lastProperty.offset + lastProperty.length &&
-			candidate.offset < closeOffset,
-	);
+	const trailingComma = document.tokens.find(candidate => candidate.kind === JsonTokenKind.Comma && candidate.offset >= lastProperty.offset + lastProperty.length && candidate.offset < closeOffset);
 	if (trailingComma) {
-		return replaceSource(
-			source,
-			trailingComma.offset + trailingComma.length,
-			0,
-			`${formatting.eol}${propertyIndent}${propertySource},`,
-		);
+		return replaceSource(source, trailingComma.offset + trailingComma.length, 0, `${formatting.eol}${propertyIndent}${propertySource},`);
 	}
-	return replaceSource(
-		source,
-		lastProperty.offset + lastProperty.length,
-		0,
-		`,${formatting.eol}${propertyIndent}${propertySource}`,
-	);
+	return replaceSource(source, lastProperty.offset + lastProperty.length, 0, `,${formatting.eol}${propertyIndent}${propertySource}`);
 }
 
 function removeObjectProperty(source: string, document: JsonDocument, property: JsonPropertyNode): string {
@@ -770,12 +682,7 @@ function removeObjectProperty(source: string, document: JsonDocument, property: 
 	const next = root.properties[index + 1];
 	const closeOffset = root.offset + root.length - 1;
 	const followingLimit = next?.offset ?? closeOffset;
-	const followingComma = document.tokens.find(
-		candidate =>
-			candidate.kind === JsonTokenKind.Comma &&
-			candidate.offset >= property.offset + property.length &&
-			candidate.offset < followingLimit,
-	);
+	const followingComma = document.tokens.find(candidate => candidate.kind === JsonTokenKind.Comma && candidate.offset >= property.offset + property.length && candidate.offset < followingLimit);
 	if (followingComma) {
 		const withoutComma = replaceSource(source, followingComma.offset, followingComma.length, '');
 		return replaceSource(withoutComma, property.offset, property.length, '');
@@ -784,12 +691,7 @@ function removeObjectProperty(source: string, document: JsonDocument, property: 
 	if (!previous) return replaceSource(source, property.offset, property.length, '');
 	const separator = [...document.tokens]
 		.reverse()
-		.find(
-			candidate =>
-				candidate.kind === JsonTokenKind.Comma &&
-				candidate.offset >= previous.offset + previous.length &&
-				candidate.offset < property.offset,
-		);
+		.find(candidate => candidate.kind === JsonTokenKind.Comma && candidate.offset >= previous.offset + previous.length && candidate.offset < property.offset);
 	const withoutProperty = replaceSource(source, property.offset, property.length, '');
 	return separator ? replaceSource(withoutProperty, separator.offset, separator.length, '') : withoutProperty;
 }
@@ -902,7 +804,9 @@ export interface ParseOptions {
 	readonly allowEmptyContent?: boolean;
 }
 
-export const ParseOptions = { DEFAULT: Object.freeze<ParseOptions>({ allowTrailingComma: true }) };
+export const ParseOptions = {
+	DEFAULT: Object.freeze<ParseOptions>({ allowTrailingComma: true }),
+};
 
 export interface JSONVisitor {
 	onObjectBegin?: (offset: number, length: number) => void;
@@ -1225,11 +1129,7 @@ export function parse(text: string, errors: ParseError[] = [], options: ParseOpt
 	}
 }
 
-export function parseTree(
-	text: string,
-	errors: ParseError[] = [],
-	options: ParseOptions = ParseOptions.DEFAULT,
-): Node | undefined {
+export function parseTree(text: string, errors: ParseError[] = [], options: ParseOptions = ParseOptions.DEFAULT): Node | undefined {
 	let currentParent: MutableNode = { type: 'array', offset: -1, length: -1, children: [] };
 	const visitor: JSONVisitor = {
 		onObjectBegin: offset => {
@@ -1307,14 +1207,12 @@ export function visit(text: string, visitor: JSONVisitor, options: ParseOptions 
 			const result = scanner.scan();
 			reportScannerError();
 			if (result === SyntaxKind.LineCommentTrivia || result === SyntaxKind.BlockCommentTrivia) {
-				if (disallowComments)
-					report(ParseErrorCode.InvalidCommentToken, scanner.getTokenOffset(), scanner.getTokenLength());
+				if (disallowComments) report(ParseErrorCode.InvalidCommentToken, scanner.getTokenOffset(), scanner.getTokenLength());
 				else visitor.onComment?.(scanner.getTokenOffset(), scanner.getTokenLength());
 				continue;
 			}
 			if (result === SyntaxKind.Trivia || result === SyntaxKind.LineBreakTrivia) continue;
-			if (result === SyntaxKind.Unknown)
-				report(ParseErrorCode.InvalidSymbol, scanner.getTokenOffset(), scanner.getTokenLength());
+			if (result === SyntaxKind.Unknown) report(ParseErrorCode.InvalidSymbol, scanner.getTokenOffset(), scanner.getTokenLength());
 			return result;
 		}
 	}
@@ -1421,8 +1319,7 @@ export function visit(text: string, visitor: JSONVisitor, options: ParseOptions 
 		let needsComma = false;
 		while (current !== SyntaxKind.CloseBraceToken && current !== SyntaxKind.EOF) {
 			if (current === SyntaxKind.CommaToken) {
-				if (!needsComma)
-					report(ParseErrorCode.ValueExpected, scanner.getTokenOffset(), scanner.getTokenLength());
+				if (!needsComma) report(ParseErrorCode.ValueExpected, scanner.getTokenOffset(), scanner.getTokenLength());
 				visitor.onSeparator?.(',', scanner.getTokenOffset(), scanner.getTokenLength());
 				current = scanNext();
 				if (current === SyntaxKind.CloseBraceToken && allowTrailingComma) break;
@@ -1447,8 +1344,7 @@ export function visit(text: string, visitor: JSONVisitor, options: ParseOptions 
 		let needsComma = false;
 		while (current !== SyntaxKind.CloseBracketToken && current !== SyntaxKind.EOF) {
 			if (current === SyntaxKind.CommaToken) {
-				if (!needsComma)
-					report(ParseErrorCode.ValueExpected, scanner.getTokenOffset(), scanner.getTokenLength());
+				if (!needsComma) report(ParseErrorCode.ValueExpected, scanner.getTokenOffset(), scanner.getTokenLength());
 				visitor.onSeparator?.(',', scanner.getTokenOffset(), scanner.getTokenLength());
 				current = scanNext();
 				if (current === SyntaxKind.CloseBracketToken && allowTrailingComma) break;
@@ -1482,9 +1378,7 @@ export function findNodeAtLocation(root: Node | undefined, path: JSONPath): Node
 	for (const segment of path) {
 		if (typeof segment === 'string') {
 			if (node.type !== 'object') return undefined;
-			const property = node.children?.find(
-				candidate => candidate.type === 'property' && candidate.children?.[0]?.value === segment,
-			);
+			const property = node.children?.find(candidate => candidate.type === 'property' && candidate.children?.[0]?.value === segment);
 			if (!property?.children?.[1]) return undefined;
 			node = property.children[1];
 			continue;
@@ -1525,10 +1419,7 @@ export function getNodeValue(node: Node | undefined): unknown {
 }
 
 export function contains(node: Node, offset: number, includeRightBound = false): boolean {
-	return (
-		offset >= node.offset &&
-		(offset < node.offset + node.length || (includeRightBound && offset === node.offset + node.length))
-	);
+	return offset >= node.offset && (offset < node.offset + node.length || (includeRightBound && offset === node.offset + node.length));
 }
 
 export function findNodeAtOffset(node: Node | undefined, offset: number, includeRightBound = false): Node | undefined {
@@ -1546,10 +1437,8 @@ export function getLocation(text: string, position: number): Location {
 	const boundedPosition = Math.max(0, Math.min(text.length, position));
 	const node = root ? findNodeAtOffset(root, boundedPosition, true) : undefined;
 	const path = node ? getNodePath(node) : [];
-	const previousNode =
-		node && ['property', 'string', 'number', 'boolean', 'null'].includes(node.type) ? node : undefined;
-	const isAtPropertyKey =
-		node?.type === 'string' && node.parent?.type === 'property' && node.parent.children?.[0] === node;
+	const previousNode = node && ['property', 'string', 'number', 'boolean', 'null'].includes(node.type) ? node : undefined;
+	const isAtPropertyKey = node?.type === 'string' && node.parent?.type === 'property' && node.parent.children?.[0] === node;
 	return {
 		previousNode,
 		path,
@@ -1562,15 +1451,8 @@ function matchesPath(path: JSONPath, patterns: JSONPath): boolean {
 	const match = (pathIndex: number, patternIndex: number): boolean => {
 		if (patternIndex === patterns.length) return pathIndex === path.length;
 		const pattern = patterns[patternIndex];
-		if (pattern === '**')
-			return (
-				match(pathIndex, patternIndex + 1) || (pathIndex < path.length && match(pathIndex + 1, patternIndex))
-			);
-		return (
-			pathIndex < path.length &&
-			(pattern === '*' || pattern === path[pathIndex]) &&
-			match(pathIndex + 1, patternIndex + 1)
-		);
+		if (pattern === '**') return match(pathIndex, patternIndex + 1) || (pathIndex < path.length && match(pathIndex + 1, patternIndex));
+		return pathIndex < path.length && (pattern === '*' || pattern === path[pathIndex]) && match(pathIndex + 1, patternIndex + 1);
 	};
 	return match(0, 0);
 }

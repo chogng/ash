@@ -48,14 +48,8 @@ suite('Configured file policies', () => {
 
 	test('rejects malformed persisted rules before notifying consumers', async () => {
 		using configuration = new InMemoryConfigurationService();
-		await assert.rejects(
-			configuration.updateValue('files.readonlyInclude', { '**/*': { when: 3 } }),
-			/Invalid rule/,
-		);
-		await assert.rejects(
-			configuration.updateValue('files.readonlyInclude', { '**/*': { when: 'main.ts' } }),
-			/Use true or false/,
-		);
+		await assert.rejects(configuration.updateValue('files.readonlyInclude', { '**/*': { when: 3 } }), /Invalid rule/);
+		await assert.rejects(configuration.updateValue('files.readonlyInclude', { '**/*': { when: 'main.ts' } }), /Use true or false/);
 		assert.deepEqual(configuration.getValue('files.readonlyInclude'), {});
 	});
 

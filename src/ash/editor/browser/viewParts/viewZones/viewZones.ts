@@ -168,11 +168,7 @@ export class ViewZones extends ViewPart {
 					zone.marginDomNode.setHeight(0);
 					zone.marginDomNode.setDisplay('none');
 				}
-				this.safeInvoke(
-					zone.delegate,
-					zone.delegate.onDomNodeTop,
-					context.getScrolledTopFromAbsoluteTop(-1_000_000),
-				);
+				this.safeInvoke(zone.delegate, zone.delegate.onDomNodeTop, context.getScrolledTopFromAbsoluteTop(-1_000_000));
 				continue;
 			}
 			hasVisibleZone = true;
@@ -190,11 +186,7 @@ export class ViewZones extends ViewPart {
 				zone.marginDomNode.setHeight(height);
 			}
 			zone.isVisible = true;
-			this.safeInvoke(
-				zone.delegate,
-				zone.delegate.onDomNodeTop,
-				context.getScrolledTopFromAbsoluteTop(absoluteTop),
-			);
+			this.safeInvoke(zone.delegate, zone.delegate.onDomNodeTop, context.getScrolledTopFromAbsoluteTop(absoluteTop));
 		}
 		if (hasVisibleZone) {
 			this.domNode.setLeft(this.contentLeft);
@@ -206,12 +198,7 @@ export class ViewZones extends ViewPart {
 	private addZoneData(whitespaceAccessor: IWhitespaceChangeAccessor, zone: IViewZone): string {
 		this.validateZone(zone);
 		const properties = this.computeZoneProperties(zone);
-		const id = whitespaceAccessor.insertWhitespace(
-			properties.afterViewLineNumber,
-			this.zoneOrdinal(zone),
-			properties.heightInPixels,
-			properties.minWidthInPixels,
-		);
+		const id = whitespaceAccessor.insertWhitespace(properties.afterViewLineNumber, this.zoneOrdinal(zone), properties.heightInPixels, properties.minWidthInPixels);
 		const domNode = createFastDomNode(zone.domNode);
 		domNode.setPosition('absolute');
 		domNode.domNode.style.width = '100%';
@@ -263,21 +250,14 @@ export class ViewZones extends ViewPart {
 	}
 
 	private recomputeWhitespaceProperties(): boolean {
-		const existing = new Map(
-			this._context.viewLayout.getWhitespaces().map(whitespace => [whitespace.id, whitespace]),
-		);
+		const existing = new Map(this._context.viewLayout.getWhitespaces().map(whitespace => [whitespace.id, whitespace]));
 		let changed = false;
 		this._context.viewModel.changeWhitespace(accessor => {
 			for (const [id, zone] of this.zones) {
 				const properties = this.computeZoneProperties(zone.delegate);
 				zone.isInHiddenArea = properties.isInHiddenArea;
 				const whitespace = existing.get(id);
-				if (
-					!whitespace ||
-					(whitespace.afterLineNumber === properties.afterViewLineNumber &&
-						whitespace.height === properties.heightInPixels)
-				)
-					continue;
+				if (!whitespace || (whitespace.afterLineNumber === properties.afterViewLineNumber && whitespace.height === properties.heightInPixels)) continue;
 				accessor.changeOneWhitespace(id, properties.afterViewLineNumber, properties.heightInPixels);
 				this.safeInvoke(zone.delegate, zone.delegate.onComputedHeight, properties.heightInPixels);
 				changed = true;
@@ -296,11 +276,7 @@ export class ViewZones extends ViewPart {
 		if (zone.heightInPx !== undefined && (!isFiniteNumber(zone.heightInPx) || zone.heightInPx < 0)) {
 			throw new RangeError('Editor view zone height must be finite and non-negative');
 		}
-		if (
-			zone.heightInPx === undefined &&
-			zone.heightInLines !== undefined &&
-			(!isFiniteNumber(zone.heightInLines) || zone.heightInLines < 0)
-		) {
+		if (zone.heightInPx === undefined && zone.heightInLines !== undefined && (!isFiniteNumber(zone.heightInLines) || zone.heightInLines < 0)) {
 			throw new RangeError('Editor view zone line height must be finite and non-negative');
 		}
 		if (zone.ordinal !== undefined && !isFiniteNumber(zone.ordinal)) {
@@ -322,8 +298,7 @@ export class ViewZones extends ViewPart {
 	private computeZoneProperties(zone: IViewZone): ComputedViewZoneProperties {
 		const heightInPixels = this.zoneHeight(zone);
 		const minWidthInPixels = zone.minWidthInPx ?? 0;
-		if (zone.afterLineNumber === 0)
-			return { afterViewLineNumber: 0, heightInPixels, minWidthInPixels, isInHiddenArea: false };
+		if (zone.afterLineNumber === 0) return { afterViewLineNumber: 0, heightInPixels, minWidthInPixels, isInHiddenArea: false };
 		const model = this._context.viewModel.model;
 		const validAfterLineNumber = model.validatePosition(new Position(zone.afterLineNumber, 1)).lineNumber;
 		const afterPosition =
@@ -334,14 +309,8 @@ export class ViewZones extends ViewPart {
 			afterPosition.column === model.getLineMaxColumn(afterPosition.lineNumber)
 				? model.validatePosition(new Position(afterPosition.lineNumber + 1, 1))
 				: model.validatePosition(new Position(afterPosition.lineNumber, afterPosition.column + 1));
-		const viewPosition = this._context.viewModel.coordinatesConverter.convertModelPositionToViewPosition(
-			afterPosition,
-			zone.afterColumnAffinity,
-			true,
-		);
-		const isVisible =
-			zone.showInHiddenAreas ||
-			this._context.viewModel.coordinatesConverter.modelPositionIsVisible(beforePosition);
+		const viewPosition = this._context.viewModel.coordinatesConverter.convertModelPositionToViewPosition(afterPosition, zone.afterColumnAffinity, true);
+		const isVisible = zone.showInHiddenAreas || this._context.viewModel.coordinatesConverter.modelPositionIsVisible(beforePosition);
 		return {
 			afterViewLineNumber: viewPosition.lineNumber,
 			heightInPixels: isVisible ? heightInPixels : 0,

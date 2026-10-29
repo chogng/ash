@@ -1,10 +1,7 @@
 import { URI } from '../../../../../base/common/uri.js';
 import { localize } from '../../../../../nls.js';
 import { EditorInput } from '../../../../common/editor/editorInput.js';
-import {
-	AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID,
-	AI_CUSTOMIZATION_MANAGEMENT_EDITOR_INPUT_ID,
-} from './aiCustomizationManagement.js';
+import { AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID, AI_CUSTOMIZATION_MANAGEMENT_EDITOR_INPUT_ID } from './aiCustomizationManagement.js';
 
 /** One resource identity keeps Hooks management in a retained editor rather than in Settings. */
 export class AICustomizationManagementEditorInput extends EditorInput {

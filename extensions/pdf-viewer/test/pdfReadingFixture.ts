@@ -1,9 +1,7 @@
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 
-const { createCanvas } = createRequire(resolve('extensions/pdf-viewer/package.json'))(
-	'@napi-rs/canvas',
-) as typeof import('@napi-rs/canvas');
+const { createCanvas } = createRequire(resolve('extensions/pdf-viewer/package.json'))('@napi-rs/canvas') as typeof import('@napi-rs/canvas');
 
 /** Text, vector chart and raster-only pages for the same PDF read by unit and Desktop tests. */
 export function pdfReadingFixture(rotation = 0): Buffer {
@@ -17,11 +15,7 @@ export function pdfReadingFixture(rotation = 0): Buffer {
 	context.font = '20px sans-serif';
 	context.fillText('SCANNED VALUE 73', 20, 155);
 	const jpeg = scan.toBuffer('image/jpeg');
-	const objects = [
-		'<< /Type /Catalog /Pages 2 0 R >>',
-		'<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R] /Count 3 >>',
-		'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-	];
+	const objects = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R] /Count 3 >>', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];
 	const streams = [
 		'BT /F1 24 Tf 40 450 Td (Revenue: 42 million) Tj /F1 16 Tf 0 -50 Td (Forecast: 55 million) Tj 0 -50 Td (Use physical PDF page numbers.) Tj ET',
 		'BT /F1 20 Tf 40 450 Td (Regional revenue chart) Tj ET 0.1 0.3 0.8 rg 50 100 80 200 re f 0.9 0.7 0.1 rg 170 100 80 300 re f',

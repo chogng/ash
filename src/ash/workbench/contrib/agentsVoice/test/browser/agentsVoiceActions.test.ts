@@ -70,9 +70,7 @@ test('Voice push to talk shortcut suppresses repeats and releases on keyup and w
 		},
 	});
 	const commands = resources.add(new CommandService(services));
-	const layouts = resources.add(
-		new BrowserKeyboardLayoutService({ navigator: {} as Navigator, operatingSystem: OperatingSystem.Windows }),
-	);
+	const layouts = resources.add(new BrowserKeyboardLayoutService({ navigator: {} as Navigator, operatingSystem: OperatingSystem.Windows }));
 	const keybindings = resources.add(
 		new WorkbenchKeybindingService(
 			{

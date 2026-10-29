@@ -81,9 +81,7 @@ export interface IRemoteAuthorityResolverService {
 	_setCanonicalURIProvider(provider: (uri: URI) => Promise<URI>): void;
 }
 
-export const IRemoteAuthorityResolverService = createServiceIdentifier<IRemoteAuthorityResolverService>(
-	'remoteAuthorityResolverService',
-);
+export const IRemoteAuthorityResolverService = createServiceIdentifier<IRemoteAuthorityResolverService>('remoteAuthorityResolverService');
 
 export function getRemoteAuthorityPrefix(remoteAuthority: string): string {
 	const delimiter = remoteAuthority.indexOf('+');

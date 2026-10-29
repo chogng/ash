@@ -21,9 +21,7 @@ export function toMenuItems(
 			kind: ActionListItemKind.Action,
 			item: entry,
 			group: { title },
-			label: entry.action.disabledReason
-				? localize('codeAction.disabled', '{0} ({1})', entry.action.title, entry.action.disabledReason)
-				: entry.action.title,
+			label: entry.action.disabledReason ? localize('codeAction.disabled', '{0} ({1})', entry.action.title, entry.action.disabledReason) : entry.action.title,
 			disabled: entry.action.disabledReason !== undefined,
 			canPreview: entry.action.edit !== undefined || entry.provider.resolveCodeAction !== undefined,
 			keybinding: keybindingResolver(entry.action),

@@ -14,10 +14,6 @@ export function ensureNoStylesAreLeakedInTestSuite(): void {
 		before = undefined;
 		// Let settled render promises finish after synchronous resource disposal.
 		await new Promise<void>(resolve => setImmediate(resolve));
-		assert.deepEqual(
-			compareDocumentStyles(baseline, captureDocumentStyles(document.documentElement)),
-			[],
-			'Test must restore shared document styles',
-		);
+		assert.deepEqual(compareDocumentStyles(baseline, captureDocumentStyles(document.documentElement)), [], 'Test must restore shared document styles');
 	});
 }

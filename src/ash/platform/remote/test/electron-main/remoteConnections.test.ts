@@ -51,50 +51,26 @@ test('Electron Main creates, atomically updates, and removes targets through the
 		scheduleConnect: () => {},
 	});
 
-	await assert.rejects(
-		service.save({ name: 'build', host: 'build-linux', workspace: ' /srv/project ' }),
-		/must be absolute/,
-	);
+	await assert.rejects(service.save({ name: 'build', host: 'build-linux', workspace: ' /srv/project ' }), /must be absolute/);
 	assert.deepEqual(calls, [], 'Invalid paths never reach the backend');
 	assert.deepEqual(await service.save({ name: ' BUILD ', host: 'BUILD-LINUX', workspace: '/srv/project ' }), {
 		name: 'build',
 		host: 'build-linux',
 		workspace: '/srv/project ',
 	});
-	assert.deepEqual(
-		await service.update('BUILD', { name: 'Production', host: 'PRODUCTION-LINUX', workspace: '/srv/production' }),
-		{ name: 'production', host: 'production-linux', workspace: '/srv/production' },
-	);
+	assert.deepEqual(await service.update('BUILD', { name: 'Production', host: 'PRODUCTION-LINUX', workspace: '/srv/production' }), {
+		name: 'production',
+		host: 'production-linux',
+		workspace: '/srv/production',
+	});
 	assert.deepEqual(await service.remove('PRODUCTION'), {
 		name: 'production',
 		host: 'production-linux',
 		workspace: '/srv/production',
 	});
 	assert.deepEqual(calls, [
-		[
-			'connections',
-			'save',
-			'--name',
-			'build',
-			'--host',
-			'build-linux',
-			'--dir',
-			'/srv/project ',
-			'--mode',
-			'create',
-		],
-		[
-			'connections',
-			'update',
-			'--name',
-			'build',
-			'--new-name',
-			'production',
-			'--host',
-			'production-linux',
-			'--dir',
-			'/srv/production',
-		],
+		['connections', 'save', '--name', 'build', '--host', 'build-linux', '--dir', '/srv/project ', '--mode', 'create'],
+		['connections', 'update', '--name', 'build', '--new-name', 'production', '--host', 'production-linux', '--dir', '/srv/production'],
 		['connections', 'remove', '--name', 'production'],
 	]);
 });
@@ -126,19 +102,12 @@ test('named Remote connection mutations require the CLI to return the exact requ
 		scheduleConnect: () => {},
 	});
 
-	await assert.rejects(
-		() => service.save({ name: 'build', host: 'build', workspace: '/srv/build' }),
-		/different target/,
-	);
+	await assert.rejects(() => service.save({ name: 'build', host: 'build', workspace: '/srv/build' }), /different target/);
 	await assert.rejects(() => service.remove('build'), /different named target/);
 });
 
 test('named Remote connections fail closed on missing, non-canonical, or expanded records', async () => {
-	const outputs = [
-		'null\n',
-		'{"name":"build","host":"Build-Linux","dir":"/srv/project"}\n',
-		'{"name":"build","host":"build-linux","dir":"/srv/project","password":"secret"}\n',
-	];
+	const outputs = ['null\n', '{"name":"build","host":"Build-Linux","dir":"/srv/project"}\n', '{"name":"build","host":"build-linux","dir":"/srv/project","password":"secret"}\n'];
 	const service = new RemoteConnections({
 		remoteExecutable: 'ash-remote',
 		environment: {},
@@ -183,9 +152,7 @@ test('named Remote connection scheduling is reusable after one window open settl
 
 test('concurrent named Remote connection requests cannot both cross the catalog gate', async () => {
 	let finishLookup!: (output: { exitCode: number; stdout: string; stderr: string }) => void;
-	const lookup = new Promise<{ exitCode: number; stdout: string; stderr: string }>(
-		resolve => (finishLookup = resolve),
-	);
+	const lookup = new Promise<{ exitCode: number; stdout: string; stderr: string }>(resolve => (finishLookup = resolve));
 	let schedules = 0;
 	const service = new RemoteConnections({
 		remoteExecutable: 'ash-remote',

@@ -1,16 +1,11 @@
 import { OperatingSystem } from '../../../../base/common/platform.js';
-import type {
-	IKeyboardLayoutDefinition,
-	IKeyboardMapping,
-} from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
+import type { IKeyboardLayoutDefinition, IKeyboardMapping } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
 import { toKeyboardLayoutDefinitions } from '../common/keymapInfo.js';
 import { KeyboardLayoutContribution } from './keyboardLayouts/_.contribution.js';
 
 const layoutPromises = new Map<OperatingSystem, Promise<readonly IKeyboardLayoutDefinition[]>>();
 
-export function loadBuiltinKeyboardLayouts(
-	operatingSystem: OperatingSystem,
-): Promise<readonly IKeyboardLayoutDefinition[]> {
+export function loadBuiltinKeyboardLayouts(operatingSystem: OperatingSystem): Promise<readonly IKeyboardLayoutDefinition[]> {
 	const existing = layoutPromises.get(operatingSystem);
 	if (existing) {
 		return existing;
@@ -25,10 +20,7 @@ export function loadBuiltinKeyboardLayouts(
 	return promise;
 }
 
-export function findMatchingBuiltinLayout(
-	browserMapping: IKeyboardMapping,
-	definitions: readonly IKeyboardLayoutDefinition[],
-): IKeyboardLayoutDefinition | undefined {
+export function findMatchingBuiltinLayout(browserMapping: IKeyboardMapping, definitions: readonly IKeyboardLayoutDefinition[]): IKeyboardLayoutDefinition | undefined {
 	let best: IKeyboardLayoutDefinition | undefined;
 	let bestScore = -1;
 	for (const definition of definitions) {

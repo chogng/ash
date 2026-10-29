@@ -27,18 +27,12 @@ suite('Workbench Desktop logging', () => {
 				using services = new InstantiationService();
 				using startup = new DisposableStore();
 				using workbench = new DisposableStore();
-				services.registerInstance(
-					IWorkbenchEnvironmentService,
-					new ElectronWorkbenchEnvironmentService(
-						await channel.call('window:7', 'getDefaultLogLevels', undefined),
-					),
-				);
+				services.registerInstance(IWorkbenchEnvironmentService, new ElectronWorkbenchEnvironmentService(await channel.call('window:7', 'getDefaultLogLevels', undefined)));
 				assert.throws(() => services.createInstance(NativeLogService, category), /mainProcessService/);
 				services.registerInstance(IMainProcessService, {
 					_serviceBrand: undefined,
 					getChannel: () => ({
-						call: (command, arg) =>
-							channel.call('window:7', command, JSON.parse(JSON.stringify(arg ?? null)) ?? undefined),
+						call: (command, arg) => channel.call('window:7', command, JSON.parse(JSON.stringify(arg ?? null)) ?? undefined),
 						listen: event => channel.listen('window:7', event),
 					}),
 					registerChannel: () => {

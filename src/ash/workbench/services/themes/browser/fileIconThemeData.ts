@@ -1,9 +1,6 @@
 import { ColorScheme, isDarkColorScheme } from '../../../../platform/theme/common/theme.js';
 import type { FileIconDefinition, IWorkbenchFileIconTheme } from '../common/workbenchThemeService.js';
-import {
-	fileIconSelectorEscape,
-	getIconClassesForLanguageId,
-} from '../../../../editor/common/services/getIconClasses.js';
+import { fileIconSelectorEscape, getIconClassesForLanguageId } from '../../../../editor/common/services/getIconClasses.js';
 
 interface Associations {
 	readonly file?: string;
@@ -26,25 +23,13 @@ export class FileIconThemeData implements IWorkbenchFileIconTheme {
 		private readonly highContrast: Associations,
 		public readonly hidesExplorerArrows: boolean,
 	) {
-		this.hasFileIcons = [normal, light, highContrast].some(
-			associations =>
-				associations.file !== undefined ||
-				[...associations.selectors.keys()].some(selector => selector.endsWith('-file-icon')),
-		);
+		this.hasFileIcons = [normal, light, highContrast].some(associations => associations.file !== undefined || [...associations.selectors.keys()].some(selector => selector.endsWith('-file-icon')));
 		this.hasFolderIcons = [normal, light, highContrast].some(
-			associations =>
-				associations.folder !== undefined ||
-				associations.rootFolder !== undefined ||
-				[...associations.selectors.keys()].some(selector => selector.endsWith('-folder-icon')),
+			associations => associations.folder !== undefined || associations.rootFolder !== undefined || [...associations.selectors.keys()].some(selector => selector.endsWith('-folder-icon')),
 		);
 	}
 
-	public static async load(
-		id: string,
-		label: string,
-		value: unknown,
-		readResource: (path: string) => Promise<Uint8Array>,
-	): Promise<FileIconThemeData> {
+	public static async load(id: string, label: string, value: unknown, readResource: (path: string) => Promise<Uint8Array>): Promise<FileIconThemeData> {
 		const document = record(value);
 		if (document.hidesExplorerArrows !== undefined && typeof document.hidesExplorerArrows !== 'boolean') {
 			throw new Error('hidesExplorerArrows must be a boolean');
@@ -87,23 +72,12 @@ export class FileIconThemeData implements IWorkbenchFileIconTheme {
 				throw new Error('Invalid icon font weight or style');
 			}
 			fonts.set(fontId, { family, size, weight, style });
-			styles.push(
-				'@font-face{font-family:"' +
-					family +
-					'";src:' +
-					sources.join(',') +
-					';font-weight:' +
-					weight +
-					';font-style:' +
-					style +
-					';font-display:block;}',
-			);
+			styles.push('@font-face{font-family:"' + family + '";src:' + sources.join(',') + ';font-weight:' + weight + ';font-style:' + style + ';font-display:block;}');
 		}
 		const icons = new Map<string, FileIconDefinition>();
 		for (const [key, candidate] of Object.entries(record(document.iconDefinitions))) {
 			const definition = record(candidate);
-			const font =
-				definition.fontId === undefined ? fonts.values().next().value : fonts.get(text(definition.fontId));
+			const font = definition.fontId === undefined ? fonts.values().next().value : fonts.get(text(definition.fontId));
 			let image = '';
 			if (definition.iconPath !== undefined) {
 				const path = assetPath(definition.iconPath);
@@ -131,8 +105,7 @@ export class FileIconThemeData implements IWorkbenchFileIconTheme {
 					fontStyle: font?.style ?? 'normal',
 					color,
 					fontFamily: font?.family ?? '',
-					fontSize:
-						definition.fontSize === undefined ? (font?.size ?? '100%') : fontSize(definition.fontSize),
+					fontSize: definition.fontSize === undefined ? (font?.size ?? '100%') : fontSize(definition.fontSize),
 					image,
 				}),
 			);
@@ -141,25 +114,12 @@ export class FileIconThemeData implements IWorkbenchFileIconTheme {
 		const light = associations(document.light ?? {}, icons);
 		const highContrast = associations(document.highContrast ?? {}, icons);
 		styles.push(...suggestionStyles(icons, normal, light, highContrast));
-		return new FileIconThemeData(
-			id,
-			label,
-			styles.join('\n'),
-			icons,
-			normal,
-			light,
-			highContrast,
-			document.hidesExplorerArrows === true,
-		);
+		return new FileIconThemeData(id, label, styles.join('\n'), icons, normal, light, highContrast, document.hidesExplorerArrows === true);
 	}
 
 	public resolveFileIcon(classes: readonly string[], colorScheme: ColorScheme): FileIconDefinition | undefined {
 		const fallback = (associations: Associations): string | undefined =>
-			classes.includes('rootfolder-icon')
-				? (associations.rootFolder ?? associations.folder)
-				: classes.includes('folder-icon')
-					? associations.folder
-					: associations.file;
+			classes.includes('rootfolder-icon') ? (associations.rootFolder ?? associations.folder) : classes.includes('folder-icon') ? associations.folder : associations.file;
 		const dark = isDarkColorScheme(colorScheme);
 		const contrast = colorScheme === ColorScheme.HighContrastDark || colorScheme === ColorScheme.HighContrastLight;
 		const variants: Associations[] = [];
@@ -249,12 +209,7 @@ function associations(value: unknown, icons: ReadonlyMap<string, FileIconDefinit
 	};
 }
 
-function suggestionStyles(
-	icons: ReadonlyMap<string, FileIconDefinition>,
-	normal: Associations,
-	light: Associations,
-	highContrast: Associations,
-): string[] {
+function suggestionStyles(icons: ReadonlyMap<string, FileIconDefinition>, normal: Associations, light: Associations, highContrast: Associations): string[] {
 	const styles: string[] = [];
 	const add = (selector: string, iconId: string | undefined): void => {
 		if (!iconId) return;
@@ -268,10 +223,8 @@ function suggestionStyles(
 		);
 	};
 	const base = ':where(.ash-workbench) .ash-themed-file-icon';
-	const lightBase =
-		':where(.ash-workbench[data-color-scheme="light"],.ash-workbench[data-color-scheme="hcLight"]) .ash-themed-file-icon';
-	const contrastBase =
-		':where(.ash-workbench[data-color-scheme="hcDark"],.ash-workbench[data-color-scheme="hcLight"]) .ash-themed-file-icon';
+	const lightBase = ':where(.ash-workbench[data-color-scheme="light"],.ash-workbench[data-color-scheme="hcLight"]) .ash-themed-file-icon';
+	const contrastBase = ':where(.ash-workbench[data-color-scheme="hcDark"],.ash-workbench[data-color-scheme="hcLight"]) .ash-themed-file-icon';
 	const defaults = (prefix: string, associations: Associations): void => {
 		add(`${prefix}.file-icon`, associations.file);
 		add(`${prefix}.folder-icon`, associations.folder);
@@ -282,20 +235,12 @@ function suggestionStyles(
 		...[...normal.selectors].map(([className, iconId]) => ({ prefix: base, className, iconId })),
 		...[...light.selectors].map(([className, iconId]) => ({ prefix: lightBase, className, iconId })),
 		...[...highContrast.selectors].map(([className, iconId]) => ({ prefix: contrastBase, className, iconId })),
-	].sort(
-		(left, right) =>
-			iconSelectorPriority(left.className) - iconSelectorPriority(right.className) ||
-			left.className.length - right.className.length,
-	);
+	].sort((left, right) => iconSelectorPriority(left.className) - iconSelectorPriority(right.className) || left.className.length - right.className.length);
 	defaults(base, normal);
 	defaults(lightBase, light);
 	defaults(contrastBase, highContrast);
 	for (const { prefix, className, iconId } of entries) {
-		const kind = className.endsWith('-folder-icon')
-			? className.endsWith('-root-name-folder-icon')
-				? 'rootfolder-icon'
-				: 'folder-icon'
-			: 'file-icon';
+		const kind = className.endsWith('-folder-icon') ? (className.endsWith('-root-name-folder-icon') ? 'rootfolder-icon' : 'folder-icon') : 'file-icon';
 		add(`${prefix}.${kind}[class~=${cssString(className)}]`, iconId);
 	}
 	return styles;
@@ -308,11 +253,5 @@ function iconSelectorPriority(className: string): number {
 }
 
 function cssString(value: string): string {
-	return (
-		'"' +
-		Array.from(value, character =>
-			/[a-z0-9_-]/i.test(character) ? character : `\\${character.codePointAt(0)!.toString(16)} `,
-		).join('') +
-		'"'
-	);
+	return '"' + Array.from(value, character => (/[a-z0-9_-]/i.test(character) ? character : `\\${character.codePointAt(0)!.toString(16)} `)).join('') + '"';
 }

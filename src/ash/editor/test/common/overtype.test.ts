@@ -64,17 +64,27 @@ for (const input of ['e\u0301', '👩‍💻', '🇨🇳', '😀', '中']) {
 			const after = [caret(0, 1 + input.length)];
 			assert.deepEqual(
 				{ text: model.getText(), selections: controller.getSelections() },
-				{ text: `a${input}😀e\u0301z\nend`, selections: after },
+				{
+					text: `a${input}😀e\u0301z\nend`,
+					selections: after,
+				},
 			);
 			model.undo();
 			assert.deepEqual(
 				{ text: model.getText(), selections: controller.getSelections(), canUndo: model.canUndo() },
-				{ text: original, selections: before, canUndo: false },
+				{
+					text: original,
+					selections: before,
+					canUndo: false,
+				},
 			);
 			model.redo();
 			assert.deepEqual(
 				{ text: model.getText(), selections: controller.getSelections() },
-				{ text: `a${input}😀e\u0301z\nend`, selections: after },
+				{
+					text: `a${input}😀e\u0301z\nend`,
+					selections: after,
+				},
 			);
 		});
 	}

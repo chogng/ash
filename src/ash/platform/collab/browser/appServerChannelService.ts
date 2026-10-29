@@ -106,38 +106,22 @@ export class AppServerChannelService extends Disposable implements IChannelServi
 	public call(channel: ChannelReference): Promise<ChannelResourceAccess> {
 		return this.resource('channels/call', channel);
 	}
-	private async resource(
-		method: 'channels/notes' | 'channels/call',
-		channel: ChannelReference,
-	): Promise<ChannelResourceAccess> {
+	private async resource(method: 'channels/notes' | 'channels/call', channel: ChannelReference): Promise<ChannelResourceAccess> {
 		const space = this.space;
-		if (!space || space.id !== channel.spaceId || space.serverUrl !== channel.serverUrl)
-			throw new CancellationError();
+		if (!space || space.id !== channel.spaceId || space.serverUrl !== channel.serverUrl) throw new CancellationError();
 		try {
 			const result = await appServerRequest(this.client, method, {
 				spaceId: channel.spaceId,
 				channelId: channel.channelId,
 			});
-			if (
-				this.isDisposed ||
-				this.space?.id !== space.id ||
-				this.space.memberId !== space.memberId ||
-				this.space.serverUrl !== space.serverUrl
-			)
-				throw new CancellationError();
+			if (this.isDisposed || this.space?.id !== space.id || this.space.memberId !== space.memberId || this.space.serverUrl !== space.serverUrl) throw new CancellationError();
 			return { serverUrl: result.serverUrl, resourceId: result.resourceId, credential: result.credential };
 		} catch (error) {
 			if (error instanceof CancellationError) throw error;
 			throw new Error(
 				failure(error) === 'denied'
-					? localize(
-							'collaboration.resourceDenied',
-							'Channel access was denied. Read-only members can join an existing call; an editor or administrator must start it.',
-						)
-					: localize(
-							'collaboration.resourceFailed',
-							'Could not open the channel resource. Check the collaboration server and its call hosting configuration.',
-						),
+					? localize('collaboration.resourceDenied', 'Channel access was denied. Read-only members can join an existing call; an editor or administrator must start it.')
+					: localize('collaboration.resourceFailed', 'Could not open the channel resource. Check the collaboration server and its call hosting configuration.'),
 			);
 		}
 	}

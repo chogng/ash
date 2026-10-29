@@ -20,9 +20,7 @@ export interface DocumentCollaborationEnvelope<TTransaction = unknown> {
 	readonly baseVersion: number;
 	readonly transaction: TTransaction;
 }
-export interface DocumentCollaborationRemoteEnvelope<
-	TTransaction = unknown,
-> extends DocumentCollaborationEnvelope<TTransaction> {
+export interface DocumentCollaborationRemoteEnvelope<TTransaction = unknown> extends DocumentCollaborationEnvelope<TTransaction> {
 	readonly version: number;
 }
 export type DocumentCollaborationSubmitOutcome<TTransaction = unknown> =
@@ -41,11 +39,7 @@ export interface DocumentCollaborationConnection<TTransaction = unknown> extends
 	readonly onDidReceiveSnapshot: Event<DocumentCollaborationSnapshot>;
 	readonly onDidReceivePresence: Event<readonly DocumentCollaborationPresence[]>;
 	readonly onDidFail: Event<Error>;
-	submit(
-		envelope: DocumentCollaborationEnvelope<TTransaction>,
-		document: DocumentNode,
-		signal: AbortSignal,
-	): Promise<DocumentCollaborationSubmitOutcome<TTransaction>>;
+	submit(envelope: DocumentCollaborationEnvelope<TTransaction>, document: DocumentNode, signal: AbortSignal): Promise<DocumentCollaborationSubmitOutcome<TTransaction>>;
 	updatePresence(selection: DocumentSelection | undefined, signal: AbortSignal): Promise<void>;
 }
 
@@ -86,11 +80,7 @@ export interface DocumentCollaborationRoom extends DocumentCollaborationConnecti
 	readonly serverUrl?: string;
 	readonly principalId: string | undefined;
 	readonly canManageMembers: boolean;
-	createInvite(
-		displayName: string,
-		role: DocumentCollaborationRoomRole,
-		signal: AbortSignal,
-	): Promise<DocumentCollaborationInvite>;
+	createInvite(displayName: string, role: DocumentCollaborationRoomRole, signal: AbortSignal): Promise<DocumentCollaborationInvite>;
 	listMembers(signal: AbortSignal): Promise<readonly DocumentCollaborationMember[]>;
 	rotateMemberAccessToken(principalId: string, signal: AbortSignal): Promise<DocumentCollaborationInvite>;
 	revokeMember(principalId: string, signal: AbortSignal): Promise<void>;

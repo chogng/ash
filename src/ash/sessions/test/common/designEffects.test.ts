@@ -13,13 +13,7 @@ import {
 	type DesignEffect,
 } from '../../contrib/creator/common/model/designEffects.js';
 import { createDesignPaint } from '../../contrib/creator/common/model/designPaint.js';
-import {
-	documentFromShapes,
-	flattenDesignShapes,
-	parseDesignDocument,
-	serializeDesignDocument,
-	type DesignShape,
-} from '../../contrib/creator/common/model/document.js';
+import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/creator/common/model/document.js';
 
 const rectangle = (): DesignShape => ({
 	id: generateUuid(),
@@ -57,10 +51,7 @@ test('Progressive blur validates both endpoints, preserves reversed ranges and e
 	]) {
 		assert.throws(() => parseDesignEffects([{ ...blur, progressive: invalid }]), /Invalid design effect/u);
 	}
-	assert.throws(
-		() => parseDesignEffects([{ ...createDesignEffect('drop-shadow'), progressive }]),
-		/Invalid design effect/u,
-	);
+	assert.throws(() => parseDesignEffects([{ ...createDesignEffect('drop-shadow'), progressive }]), /Invalid design effect/u);
 	using model = new DesignModel();
 	model.replace(documentFromShapes([{ ...rectangle(), effects: [blur] }]));
 	const saved = designEffects(model.value.shapes[0])[0];
@@ -74,10 +65,7 @@ test('Effect stacks retain order, visibility, immutable history and legacy shado
 	const shape = { ...rectangle(), effects: { x: -4, y: 8, blur: 12, color: '#12345680' } };
 	model.replace(documentFromShapes([shape]));
 	assert.equal(designEffects(shape)[0].type, 'drop-shadow');
-	assert.equal(
-		(designEffects(shape)[0] as Extract<DesignEffect, { type: 'drop-shadow' | 'inner-shadow' }>).showBehind,
-		true,
-	);
+	assert.equal((designEffects(shape)[0] as Extract<DesignEffect, { type: 'drop-shadow' | 'inner-shadow' }>).showBehind, true);
 	commands.updateShape({ ...shape, effects: stack().map((effect, index) => ({ ...effect, visible: index !== 2 })) });
 	assert.ok(Array.isArray(model.value.shapes[0].effects));
 	assert.ok(Object.isFrozen(model.value.shapes[0].effects));
@@ -141,19 +129,10 @@ test('Spread follows geometry and clipped-frame fill coverage without discarding
 	assert.equal(supportsDesignShadowSpread(frame), true);
 	assert.equal(supportsDesignShadowSpread({ ...frame, clip: false }), false);
 	assert.equal(supportsDesignShadowSpread({ ...frame, fills: [] }), false);
-	assert.equal(
-		supportsDesignShadowSpread({ ...frame, fills: [{ ...createDesignPaint('solid'), opacity: 0.009 }] }),
-		false,
-	);
-	assert.equal(
-		supportsDesignShadowSpread({ ...frame, fills: [{ ...createDesignPaint('solid'), visible: false }] }),
-		false,
-	);
+	assert.equal(supportsDesignShadowSpread({ ...frame, fills: [{ ...createDesignPaint('solid'), opacity: 0.009 }] }), false);
+	assert.equal(supportsDesignShadowSpread({ ...frame, fills: [{ ...createDesignPaint('solid'), visible: false }] }), false);
 	assert.equal(supportsDesignShadowSpread({ ...frame, fills: [createDesignPaint('solid', '#ffffff00')] }), false);
-	assert.equal(
-		supportsDesignShadowSpread({ ...frame, fills: [{ ...createDesignPaint('solid'), opacity: 0.01 }] }),
-		true,
-	);
+	assert.equal(supportsDesignShadowSpread({ ...frame, fills: [{ ...createDesignPaint('solid'), opacity: 0.01 }] }), true);
 	assert.equal(supportsDesignShadowSpread({ ...shape, kind: 'text', text: 'Shadow', fontSize: 20 }), false);
 });
 
@@ -165,10 +144,7 @@ test('Effect bounds include shadow offsets, layer blur and scaled nested content
 	const frame: DesignShape = { ...rectangle(), kind: 'frame', children: [child], clip: true };
 	assert.equal(designEffectPadding(frame), 0);
 	assert.equal(designEffectPadding({ ...frame, clip: false }), 56);
-	assert.equal(
-		designEffectPadding({ ...rectangle(), kind: 'group', children: [child], contentWidth: 100, contentHeight: 50 }),
-		112,
-	);
+	assert.equal(designEffectPadding({ ...rectangle(), kind: 'group', children: [child], contentWidth: 100, contentHeight: 50 }), 112);
 });
 
 test('Effect styles publish complete stacks, update library instances and retain local overrides', () => {
@@ -183,8 +159,7 @@ test('Effect styles publish complete stacks, update library instances and retain
 		component: { kind: 'main' },
 	};
 	source.applyEdit([main]);
-	const find = (model: DesignModel, id: string) =>
-		flattenDesignShapes(model.value.shapes).find(shape => shape.id === id)!;
+	const find = (model: DesignModel, id: string) => flattenDesignShapes(model.value.shapes).find(shape => shape.id === id)!;
 	const style = author.resources.createStyle(find(source, shape.id), 'effect', 'Glass');
 	using consumer = new DesignModel();
 	const commands = new DocumentCommands(consumer);

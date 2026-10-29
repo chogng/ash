@@ -68,10 +68,7 @@ import { ILogService, NullLoggerService } from '../../../platform/log/common/log
 test('Animated counters require the host accessibility service before creating DOM', () => {
 	using services = new InstantiationService();
 	const host = document.createElement('div');
-	assert.throws(
-		() => services.createInstance(AnimatedCounterWidget, host, { count: observableValue('count', 1) }),
-		/Unknown service: accessibilityService/,
-	);
+	assert.throws(() => services.createInstance(AnimatedCounterWidget, host, { count: observableValue('count', 1) }), /Unknown service: accessibilityService/);
 	assert.equal(host.childElementCount, 0);
 });
 
@@ -132,9 +129,7 @@ for (const locale of ['en', 'zh-CN'])
 			let truncated = false;
 			let loadFailure = false;
 			let pendingRefresh: DeferredPromise<{ changeSets: TurnChangesReadResult['summary'][] }> | undefined;
-			let pendingRead:
-				| DeferredPromise<{ path: string; binary: boolean; truncated: boolean; before: string; after: string }>
-				| undefined;
+			let pendingRead: DeferredPromise<{ path: string; binary: boolean; truncated: boolean; before: string; after: string }> | undefined;
 			services.registerInstance(IAgentModelsService, host.model);
 			services.registerInstance(IAgentExecutionSettingsService, host.executionSettings);
 			services.registerInstance(IAgentThreadService, host.thread);
@@ -148,11 +143,7 @@ for (const locale of ['en', 'zh-CN'])
 					if (loadFailure) {
 						throw new Error('Repository unavailable');
 					}
-					return params.sessionId === 'old'
-						? old.p
-						: pendingRefresh
-							? pendingRefresh.p
-							: { changeSets: [details.summary] };
+					return params.sessionId === 'old' ? old.p : pendingRefresh ? pendingRefresh.p : { changeSets: [details.summary] };
 				},
 				read: async params => {
 					requests.push(params);
@@ -160,9 +151,7 @@ for (const locale of ['en', 'zh-CN'])
 				},
 				readFile: async params => {
 					requests.push(params);
-					return pendingRead
-						? pendingRead.p
-						: { path: 'main.ts', binary: false, truncated, before: 'before', after: 'after' };
+					return pendingRead ? pendingRead.p : { path: 'main.ts', binary: false, truncated, before: 'before', after: 'after' };
 				},
 			});
 			services.registerInstance(IConfigurationService, config);
@@ -216,13 +205,8 @@ for (const locale of ['en', 'zh-CN'])
 			await old.complete({ changeSets: [] });
 			await settle();
 			assert.match(view.getAccessibleContent(), /main.ts: \+1 −1/u);
-			assert.equal(
-				view.element.querySelector('.ash-sessions-changes-summary')!.textContent,
-				locale === 'zh-CN' ? '1 个文件 +1 −1' : '1 file +1 −1',
-			);
-			const accessibility = AccessibleViewRegistry.getImplementations().filter(provider =>
-				provider.name.startsWith('sessionsChanges.'),
-			);
+			assert.equal(view.element.querySelector('.ash-sessions-changes-summary')!.textContent, locale === 'zh-CN' ? '1 个文件 +1 −1' : '1 file +1 −1');
+			const accessibility = AccessibleViewRegistry.getImplementations().filter(provider => provider.name.startsWith('sessionsChanges.'));
 			for (const implementation of accessibility) {
 				using provider = implementation.getProvider(services)!;
 				if (implementation.type === AccessibleViewType.View) {
@@ -253,10 +237,7 @@ for (const locale of ['en', 'zh-CN'])
 				side: 'before',
 			});
 			assert.equal(new URLSearchParams(diff.modified.resource.query).get('side'), 'after');
-			assert.deepEqual(
-				[diff.original.initialText, diff.modified.initialText, diff.original.readOnly, diff.modified.readOnly],
-				['before', 'after', true, true],
-			);
+			assert.deepEqual([diff.original.initialText, diff.modified.initialText, diff.original.readOnly, diff.modified.readOnly], ['before', 'after', true, true]);
 			assert.deepEqual(
 				requests.find(request => typeof request === 'object' && request !== null && 'path' in request),
 				{ sessionId: 'current', threadId: 'current-thread', changeSetId: 'change-current', path: 'main.ts' },
@@ -278,16 +259,9 @@ for (const locale of ['en', 'zh-CN'])
 			tree.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 			await settle();
 			assert.equal(opened.length, 3);
-			assert.match(
-				notifications.model.getNotifications()[0]!.message,
-				locale === 'zh-CN' ? /过大/u : /too large/u,
-			);
+			assert.match(notifications.model.getNotifications()[0]!.message, locale === 'zh-CN' ? /过大/u : /too large/u);
 			assert.equal(selection.kind, 'session');
-			if (selection.kind === 'session')
-				await assert.rejects(
-					createTurnMultiDiffEditorInput(chat, selection.active, 'currentTurn'),
-					locale === 'zh-CN' ? /过大/u : /too large/u,
-				);
+			if (selection.kind === 'session') await assert.rejects(createTurnMultiDiffEditorInput(chat, selection.active, 'currentTurn'), locale === 'zh-CN' ? /过大/u : /too large/u);
 			view.element.querySelector<HTMLElement>('[role=treeitem]')!.click();
 			assert.equal(preview.disabled, false);
 			pendingRefresh = new DeferredPromise();
@@ -454,13 +428,7 @@ test('Turn comparison cancellation finishes before the in-flight read and preven
 		throw new Error('Expected a durable conversation');
 	}
 	const controller = new AbortController();
-	const comparison = createTurnMultiDiffEditorInput(
-		chat,
-		selection.active,
-		'currentTurn',
-		undefined,
-		controller.signal,
-	);
+	const comparison = createTurnMultiDiffEditorInput(chat, selection.active, 'currentTurn', undefined, controller.signal);
 	const rejected = assert.rejects(comparison, { name: 'CancellationError' });
 	await settle();
 	controller.abort();
@@ -468,10 +436,7 @@ test('Turn comparison cancellation finishes before the in-flight read and preven
 	await pending.complete({ path: 'main.ts', binary: false, truncated: false, before: 'before', after: 'after' });
 	await settle();
 	assert.deepEqual(reads, ['capture', 'main.ts']);
-	await assert.rejects(
-		createTurnMultiDiffEditorInput(chat, selection.active, 'currentTurn', undefined, controller.signal),
-		{ name: 'CancellationError' },
-	);
+	await assert.rejects(createTurnMultiDiffEditorInput(chat, selection.active, 'currentTurn', undefined, controller.signal), { name: 'CancellationError' });
 	assert.deepEqual(reads, ['capture', 'main.ts']);
 });
 
@@ -578,11 +543,7 @@ suite('Changes visibility lifecycle', () => {
 				getOpenAriaHint: () => undefined,
 			} as unknown as IAccessibleViewService);
 			services.registerSingleton(IChangesViewService, () => services.createInstance(ChangesViewService));
-			using view = registerTestComponentServices(services).createInstance(
-				ChangesViewPane,
-				browser.window.document.body,
-				{ id: CHANGES_VIEW_ID, title: 'Changes' },
-			);
+			using view = registerTestComponentServices(services).createInstance(ChangesViewPane, browser.window.document.body, { id: CHANGES_VIEW_ID, title: 'Changes' });
 			view.setVisible(true);
 			await settle();
 			const tree = view.element.querySelector<HTMLElement>('[role="tree"]')!;
@@ -676,11 +637,7 @@ suite('Changes visibility lifecycle', () => {
 			getOpenAriaHint: () => undefined,
 		} as unknown as IAccessibleViewService);
 		services.registerSingleton(IChangesViewService, () => services.createInstance(ChangesViewService));
-		using view = registerTestComponentServices(services).createInstance(
-			ChangesViewPane,
-			browser.window.document.body,
-			{ id: CHANGES_VIEW_ID, title: 'Changes' },
-		);
+		using view = registerTestComponentServices(services).createInstance(ChangesViewPane, browser.window.document.body, { id: CHANGES_VIEW_ID, title: 'Changes' });
 		services.registerInstance(IViewsService, {
 			getViewWithId: (id: string) => (id === CHANGES_VIEW_ID ? view : undefined),
 		} as unknown as IViewsService);
@@ -737,9 +694,7 @@ suite('Changes visibility lifecycle', () => {
 		await settle();
 		assert.equal(prepares, 0);
 
-		const providers = AccessibleViewRegistry.getImplementations().filter(provider =>
-			provider.name.startsWith('sessionsChanges.'),
-		);
+		const providers = AccessibleViewRegistry.getImplementations().filter(provider => provider.name.startsWith('sessionsChanges.'));
 		assert.equal(providers.length, 2);
 		for (const implementation of providers) {
 			using provider = implementation.getProvider(services)!;
@@ -784,11 +739,7 @@ test('Turn review and commit preview retain binary-only files without text place
 			after: undefined,
 		}),
 	} as unknown as IChatService;
-	const review = await createTurnMultiDiffEditorInput(
-		chat,
-		{ session: { sessionId: 'session' }, threadId: 'thread' } as never,
-		'currentTurn',
-	);
+	const review = await createTurnMultiDiffEditorInput(chat, { session: { sessionId: 'session' }, threadId: 'thread' } as never, 'currentTurn');
 	const preview = await createTurnCommitPreviewInput(chat, 'session', 'thread', {
 		commitId: 'commit',
 		targetBranch: 'main',

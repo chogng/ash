@@ -16,14 +16,8 @@ onActivate(() =>
 		const reference = await modelService.createModelReference(resource);
 		try {
 			const model = reference.object.textEditorModel;
-			if (!(model instanceof TextModel))
-				throw new TypeError('Document symbol command requires an Ash text model');
-			const outline = await OutlineModel.create(
-				registry,
-				model,
-				new AbortController().signal,
-				onUnexpectedExternalError,
-			);
+			if (!(model instanceof TextModel)) throw new TypeError('Document symbol command requires an Ash text model');
+			const outline = await OutlineModel.create(registry, model, new AbortController().signal, onUnexpectedExternalError);
 			if (!outline) throw new Error('Document changed during symbol request');
 			return outline.getTopLevelSymbols();
 		} finally {

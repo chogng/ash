@@ -10,11 +10,7 @@ import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storag
 
 test.use({ openWorkspace: false });
 
-test('Workbench saves font metrics through shutdown and replaces a corrupt persisted cache', async ({
-	application,
-	workbench,
-	reloadWorkbench,
-}) => {
+test('Workbench saves font metrics through shutdown and replaces a corrupt persisted cache', async ({ application, workbench, reloadWorkbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
 	const identity = { scope: StorageScope.APPLICATION, id: 'application' };
@@ -25,21 +21,14 @@ test('Workbench saves font metrics through shutdown and replaces a corrupt persi
 	const fonts = JSON.parse(saved!.value) as ISerializedFontInfo[];
 	expect(fonts.length).toBeGreaterThan(0);
 	expect(fonts.every(font => font.typicalHalfwidthCharacterWidth > 2)).toBe(true);
-	const restored = JSON.stringify(
-		fonts.map(font => ({ ...font, typicalHalfwidthCharacterWidth: font.typicalHalfwidthCharacterWidth + 1 })),
-	);
+	const restored = JSON.stringify(fonts.map(font => ({ ...font, typicalHalfwidthCharacterWidth: font.typicalHalfwidthCharacterWidth + 1 })));
 	await seedStorageOnNextLoad(application, page, identity, {
 		editorFontInfo: { value: restored, target: StorageTarget.MACHINE },
 	});
 	await page.reload();
 	await workbench.waitForReady();
 	const reloaded = await reloadWorkbench();
-	await expect
-		.poll(
-			async () =>
-				(await readStorageEntries(reloaded.application, reloaded.workbench.page, identity)).editorFontInfo,
-		)
-		.toEqual({ value: restored, target: 'machine' });
+	await expect.poll(async () => (await readStorageEntries(reloaded.application, reloaded.workbench.page, identity)).editorFontInfo).toEqual({ value: restored, target: 'machine' });
 	const active = reloaded.workbench;
 	await seedStorageOnNextLoad(reloaded.application, active.page, identity, {
 		editorFontInfo: { value: '{', target: StorageTarget.MACHINE },
@@ -56,71 +45,49 @@ test('Workbench saves font metrics through shutdown and replaces a corrupt persi
 	expect(fresh.target).toBe('machine');
 	const measured = JSON.parse(fresh.value) as ISerializedFontInfo[];
 	expect(measured.length).toBeGreaterThan(0);
-	expect(
-		measured.every(
-			font =>
-				font.version === 2 &&
-				Number.isFinite(font.typicalHalfwidthCharacterWidth) &&
-				font.typicalHalfwidthCharacterWidth > 2,
-		),
-	).toBe(true);
+	expect(measured.every(font => font.version === 2 && Number.isFinite(font.typicalHalfwidthCharacterWidth) && font.typicalHalfwidthCharacterWidth > 2)).toBe(true);
 });
 
-test(
-	'Browser migrates retired storage before restoring font metrics',
-	{ tag: ['@browser-ui', '@browser-app-server'] },
-	async ({ application, workbench }) => {
-		const page = workbench.page;
-		await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
-		const identity = { scope: StorageScope.APPLICATION, id: 'application' };
-		await page.reload();
-		await workbench.waitForReady();
-		const fonts = JSON.parse(
-			(await readStorageEntries(application, page, identity)).editorFontInfo!.value,
-		) as ISerializedFontInfo[];
-		const value = JSON.stringify(
-			fonts.map(font => ({ ...font, typicalHalfwidthCharacterWidth: font.typicalHalfwidthCharacterWidth + 1 })),
+test('Browser migrates retired storage before restoring font metrics', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ application, workbench }) => {
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+	const identity = { scope: StorageScope.APPLICATION, id: 'application' };
+	await page.reload();
+	await workbench.waitForReady();
+	const fonts = JSON.parse((await readStorageEntries(application, page, identity)).editorFontInfo!.value) as ISerializedFontInfo[];
+	const value = JSON.stringify(fonts.map(font => ({ ...font, typicalHalfwidthCharacterWidth: font.typicalHalfwidthCharacterWidth + 1 })));
+	await page.addInitScript(value => {
+		if (sessionStorage.getItem('storage-migration-seeded')) {
+			return;
+		}
+		localStorage.setItem('ash.storage.application', JSON.stringify({ version: 1, entries: { editorFontInfo: { value, target: 'machine' } } }));
+		localStorage.setItem(
+			'ash.code.storage.application',
+			JSON.stringify({
+				version: 1,
+				entries: {
+					editorFontInfo: { value: 'conflicting-font-cache', target: 'machine' },
+					savedPreference: { value: 'retained', target: 'user' },
+				},
+			}),
 		);
-		await page.addInitScript(value => {
-			if (sessionStorage.getItem('storage-migration-seeded')) {
-				return;
-			}
-			localStorage.setItem(
-				'ash.storage.application',
-				JSON.stringify({ version: 1, entries: { editorFontInfo: { value, target: 'machine' } } }),
-			);
-			localStorage.setItem(
-				'ash.code.storage.application',
-				JSON.stringify({
-					version: 1,
-					entries: {
-						editorFontInfo: { value: 'conflicting-font-cache', target: 'machine' },
-						savedPreference: { value: 'retained', target: 'user' },
-					},
-				}),
-			);
-			sessionStorage.setItem('storage-migration-seeded', 'true');
-		}, value);
-		await page.reload();
-		await workbench.waitForReady();
-		expect(await readStorageEntries(application, page, identity)).toMatchObject({
-			editorFontInfo: { value, target: 'machine' },
-			savedPreference: { value: 'retained', target: 'user' },
-		});
-		expect(await page.evaluate(() => localStorage.getItem('ash.code.storage.application'))).toBeNull();
-		expect(
-			await page.evaluate(
-				() => JSON.parse(localStorage.getItem('ash.storage.v1.code.application')!).entries.editorFontInfo.value,
-			),
-		).toBe('conflicting-font-cache');
-		await page.reload();
-		await workbench.waitForReady();
-		expect((await readStorageEntries(application, page, identity)).editorFontInfo).toEqual({
-			value,
-			target: 'machine',
-		});
-	},
-);
+		sessionStorage.setItem('storage-migration-seeded', 'true');
+	}, value);
+	await page.reload();
+	await workbench.waitForReady();
+	expect(await readStorageEntries(application, page, identity)).toMatchObject({
+		editorFontInfo: { value, target: 'machine' },
+		savedPreference: { value: 'retained', target: 'user' },
+	});
+	expect(await page.evaluate(() => localStorage.getItem('ash.code.storage.application'))).toBeNull();
+	expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ash.storage.v1.code.application')!).entries.editorFontInfo.value)).toBe('conflicting-font-cache');
+	await page.reload();
+	await workbench.waitForReady();
+	expect((await readStorageEntries(application, page, identity)).editorFontInfo).toEqual({
+		value,
+		target: 'machine',
+	});
+});
 
 for (const restoreAgents of [false, true]) {
 	test(
@@ -135,10 +102,7 @@ for (const restoreAgents of [false, true]) {
 			try {
 				session = await launchElectron(options);
 				const agents = await session.driver.workbench.openAgentsWindow('electron');
-				await agents
-					.locator('.ash-sessions-titlebar-actions')
-					.getByRole('button', { name: 'Hide sidebar', exact: true })
-					.click();
+				await agents.locator('.ash-sessions-titlebar-actions').getByRole('button', { name: 'Hide sidebar', exact: true }).click();
 				await expect(agents.locator('[data-part="sidebar"]')).toBeHidden();
 				if (!restoreAgents) {
 					// Exercise the single-window migration separately from concurrent Sessions startup.
@@ -165,9 +129,7 @@ for (const restoreAgents of [false, true]) {
 					version: number;
 					storages: IStorageSnapshot[];
 				};
-				const application = document.storages.find(
-					storage => storage.identity.scope === StorageScope.APPLICATION,
-				)!;
+				const application = document.storages.find(storage => storage.identity.scope === StorageScope.APPLICATION)!;
 				const fonts = JSON.parse(application.entries.editorFontInfo!.value) as ISerializedFontInfo[];
 				const value = JSON.stringify(
 					fonts.map(font => ({
@@ -208,10 +170,10 @@ for (const restoreAgents of [false, true]) {
 					storages: IStorageSnapshot[];
 				};
 				expect(closedDocument.version).toBe(2);
-				expect(
-					closedDocument.storages.find(snapshot => snapshot.identity.scope === StorageScope.APPLICATION)
-						?.entries.savedPreference,
-				).toEqual({ value: 'retained', target: StorageTarget.USER });
+				expect(closedDocument.storages.find(snapshot => snapshot.identity.scope === StorageScope.APPLICATION)?.entries.savedPreference).toEqual({
+					value: 'retained',
+					target: StorageTarget.USER,
+				});
 				expect(await readFile(`${file}.v1`, 'utf8')).toBe(source);
 				expect(session.diagnostics.errors).toEqual([]);
 				session = await launchElectron(options);
@@ -228,13 +190,7 @@ for (const restoreAgents of [false, true]) {
 					)
 					.toEqual({ value, target: 'machine' });
 				if (restoreAgents) {
-					await expect
-						.poll(() =>
-							restored.application
-								.windows()
-								.some(page => /\/sessions\.html(?:[?#].*)?$/u.test(page.url())),
-						)
-						.toBe(true);
+					await expect.poll(() => restored.application.windows().some(page => /\/sessions\.html(?:[?#].*)?$/u.test(page.url()))).toBe(true);
 				}
 				const restoredAgents = restoreAgents
 					? session.application.windows().find(page => /\/sessions\.html(?:[?#].*)?$/u.test(page.url()))!

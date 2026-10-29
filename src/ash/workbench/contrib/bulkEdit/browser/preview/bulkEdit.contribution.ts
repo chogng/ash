@@ -5,22 +5,12 @@ import { IBulkEditService, type ResourceEdit } from '../../../../../editor/brows
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../common/contributions.js';
-import {
-	ViewContainerLocation,
-	type WorkbenchViewRegistry,
-	WorkbenchViewContainerId,
-	ViewsRegistry,
-} from '../../../../common/views.js';
+import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from '../../../../common/views.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { BulkEditPane } from './bulkEditPane.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
@@ -117,11 +107,7 @@ export class BulkEditPreviewContribution extends Disposable {
 	) {
 		super();
 		this.enabledContext = contextKeys.createKey('refactorPreview.enabled', false);
-		this._register(
-			bulkEdits.setPreviewHandler((edits, options) =>
-				this.preview(edits, options?.token ?? new AbortController().signal),
-			),
-		);
+		this._register(bulkEdits.setPreviewHandler((edits, options) => this.preview(edits, options?.token ?? new AbortController().signal)));
 		this._register(
 			toDisposable(() => {
 				this.activeSession?.controller.abort();
@@ -137,10 +123,7 @@ export class BulkEditPreviewContribution extends Disposable {
 			const confirmed = await this.dialogs.confirm({
 				title: localize('bulkEdit.title', 'Refactor Preview'),
 				message: localize('bulkEdit.anotherPreview', 'Another refactoring is being previewed.'),
-				detail: localize(
-					'bulkEdit.replacePreview',
-					'Continue to discard the previous refactoring and preview this one?',
-				),
+				detail: localize('bulkEdit.replacePreview', 'Continue to discard the previous refactoring and preview this one?'),
 				primaryButton: localize('bulkEdit.continue', 'Continue'),
 				cancelButton: localize('bulkEdit.cancel', 'Cancel'),
 			});
@@ -153,9 +136,7 @@ export class BulkEditPreviewContribution extends Disposable {
 		// Replacement previews inherit the original destination, never the transient panel.
 		const session: PreviewSession = {
 			controller,
-			previousPanelId: previous
-				? previous.previousPanelId
-				: this.views.getVisibleViewContainer(ViewContainerLocation.Panel)?.id,
+			previousPanelId: previous ? previous.previousPanelId : this.views.getVisibleViewContainer(ViewContainerLocation.Panel)?.id,
 			previousFocus: previous ? previous.previousFocus : getActiveElement(),
 		};
 		this.activeSession = session;
@@ -177,8 +158,7 @@ export class BulkEditPreviewContribution extends Disposable {
 				if (!session.previousPanelId) this.views.closeViewContainer(WorkbenchViewContainerId.BulkEdit);
 				this.enabledContext.set(false);
 				if (session.previousPanelId) await this.views.openViewContainer(session.previousPanelId);
-				if (!this.activeSession && isHTMLElement(session.previousFocus) && session.previousFocus.isConnected)
-					session.previousFocus.focus();
+				if (!this.activeSession && isHTMLElement(session.previousFocus) && session.previousFocus.isConnected) session.previousFocus.focus();
 			}
 		}
 	}
@@ -220,6 +200,4 @@ interface PreviewSession {
 	readonly previousFocus: Element | null;
 }
 
-registerWorkbenchContribution('workbench.contrib.bulkEditPreview', WorkbenchPhase.BlockRestore, accessor =>
-	accessor.get(IInstantiationService).createInstance(BulkEditPreviewContribution),
-);
+registerWorkbenchContribution('workbench.contrib.bulkEditPreview', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(BulkEditPreviewContribution));

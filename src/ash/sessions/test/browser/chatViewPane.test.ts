@@ -1,7 +1,4 @@
-import {
-	IAuxiliaryWindowService,
-	type IAuxiliaryWindow,
-} from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { IImageEditorService } from '../../../workbench/services/imageEditor/common/imageEditorService.js';
 import { ImageEditorService } from '../../../workbench/services/imageEditor/browser/imageEditorService.js';
 import type { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
@@ -11,23 +8,14 @@ import { ChatEditorInput } from '../../../workbench/contrib/chat/browser/widgetH
 import { EditorInputSerializers } from '../../../workbench/services/editor/common/editorInputSerializer.js';
 import { emptyEditorGroupsService } from '../../../workbench/test/common/testWorkbenchContextKeys.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
-import {
-	IChatSpeechToTextService,
-	ChatSpeechToTextService,
-} from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
+import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
 import { setARIAContainer } from '../../../base/browser/ui/aria/aria.js';
-import {
-	ChatResponseResourceFileSystemProvider,
-	IChatResponseResourceFileSystemProvider,
-} from '../../../workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
+import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystemProvider } from '../../../workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
 import { installEditorTestGlobals } from '../../../editor/test/browser/editorTestGlobals.js';
 import { StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
-import {
-	createAppServerAgentThreadService,
-	createDisconnectedAgentThreadService,
-} from '../../../platform/agentHost/browser/appServerAgentService.js';
+import { createAppServerAgentThreadService, createDisconnectedAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
 import type { AppServerProtocolClient } from '../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { createAppServerAgentModelsService } from '../../../platform/agentHost/browser/appServerAgentModels.js';
 import type { ModelListResult } from '../../../../../.build/protocol/typescript/index.js';
@@ -41,14 +29,8 @@ import { ChatInputEditors } from '../../../workbench/contrib/chat/browser/widget
 import type { ChatInputDelegate } from '../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { createTestModel } from '../../../platform/agentHost/test/common/testAppServerProtocol.js';
 import { ActionWidgetService, IActionWidgetService } from '../../../platform/actionWidget/browser/actionWidget.js';
-import {
-	ILanguageModelsService,
-	LanguageModelsService,
-} from '../../../workbench/contrib/chat/common/languageModels.js';
-import {
-	ChatModelPreferences,
-	LanguageModelsConfigurationService,
-} from '../../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
+import { ILanguageModelsService, LanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
+import { ChatModelPreferences, LanguageModelsConfigurationService } from '../../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
 import { ILanguageModelsConfigurationService } from '../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
 import { CoworkModelPreferences } from '../../contrib/cowork/common/languageModels.js';
 import { CoworkWidgetModel } from '../../contrib/cowork/browser/coworkWidgetModel.js';
@@ -62,29 +44,18 @@ import { AccessibleViewType } from '../../../platform/accessibility/browser/acce
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IAccountService } from '../../../platform/accounts/common/accountService.js';
 import { AppServerAccountService } from '../../../workbench/services/accounts/browser/appServerAccountService.js';
-import {
-	IAgentSessionService,
-	IAgentThreadService,
-	IAgentTurnService,
-} from '../../../platform/agentHost/common/agentService.js';
+import { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../../platform/agentHost/common/agentModels.js';
 import { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
 import { IAppServerHookApi, IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
-import {
-	IAppServerApi,
-	IServerEventApi,
-	type AppServerConnectionState,
-} from '../../../platform/agentHost/common/appServerApi.js';
+import { IAppServerApi, IServerEventApi, type AppServerConnectionState } from '../../../platform/agentHost/common/appServerApi.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { ChatAIDisabledSettingId } from '../../../platform/chat/common/chatSettings.js';
 import { ChatContextKeys } from '../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../workbench/common/contributions.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../platform/renderer/common/dictation.js';
-import {
-	IVoiceCodeTranscriptionClient,
-	VoiceCodeTranscriptionClient,
-} from '../../../workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
+import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
@@ -102,11 +73,7 @@ import type {
 	Thread,
 	ThreadTranscriptSnapshot,
 } from '../../../../../.build/protocol/typescript/index.js';
-import type {
-	SessionMutationParams,
-	SessionOperationInput,
-	ThreadTranscriptEntry,
-} from '../../../platform/agentHost/common/agent.js';
+import type { SessionMutationParams, SessionOperationInput, ThreadTranscriptEntry } from '../../../platform/agentHost/common/agent.js';
 import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
 import type { IAction } from '../../../base/common/actions.js';
 import { Emitter, Event } from '../../../base/common/event.js';
@@ -124,21 +91,11 @@ import { IContextMenuService } from '../../../platform/contextview/browser/conte
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
-import {
-	IQuickInputService,
-	QuickInputType,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, QuickInputType, type IQuickPick, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import type { IPaneComposite } from '../../../workbench/common/panecomposite.js';
 import { ViewContainerLocation, ViewsRegistry, WorkbenchViewRegistry } from '../../../workbench/common/views.js';
-import {
-	chatTranscriptListItems,
-	chatListItem,
-	chatTurnErrorListItem,
-	type ChatTurnErrorAction,
-} from '../../../workbench/contrib/chat/browser/widget/chatListItems.js';
+import { chatTranscriptListItems, chatListItem, chatTurnErrorListItem, type ChatTurnErrorAction } from '../../../workbench/contrib/chat/browser/widget/chatListItems.js';
 import { ChatWidgetModel } from '../../browser/chatWidgetModel.js';
 import {
 	AGENT_SESSIONS_ORIENTATION_SETTING,
@@ -154,17 +111,10 @@ import {
 	TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID,
 } from '../../../workbench/contrib/chat/common/chat.js';
 import { Menus } from '../../browser/menus.js';
-import {
-	IPreferencesService,
-	type IPreferencesService as PreferencesService,
-} from '../../../workbench/services/preferences/common/preferences.js';
+import { IPreferencesService, type IPreferencesService as PreferencesService } from '../../../workbench/services/preferences/common/preferences.js';
 import { PreferencesService as BrowserPreferencesService } from '../../../workbench/services/preferences/browser/preferencesService.js';
 import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
-import {
-	IWorkbenchLayoutService,
-	type WorkbenchPartId,
-	type WorkbenchPartVisibilityChangeEvent,
-} from '../../../workbench/services/layout/browser/layoutService.js';
+import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from '../../../workbench/services/layout/browser/layoutService.js';
 import { ChatService } from '../../../workbench/services/chat/browser/chatService.js';
 import { IHostService } from '../../../workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
@@ -177,10 +127,7 @@ import {
 	type ThreadChangesSummary,
 	type TurnError,
 } from '../../../workbench/services/chat/common/chatService.js';
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 import { ModelCatalogConfiguration } from '../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
@@ -195,10 +142,7 @@ import { DialogResult, IDialogService, type IMessageDialogOptions } from '../../
 import { TestQuickInputService } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { Dimension, h } from '../../../base/browser/dom.js';
 import { FileKind, IFileService } from '../../../platform/files/common/files.js';
-import {
-	ChatAttachmentResolveService,
-	IChatAttachmentResolveService,
-} from '../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
+import { ChatAttachmentResolveService, IChatAttachmentResolveService } from '../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
 import { URI } from '../../../base/common/uri.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
@@ -211,10 +155,7 @@ import { TestConfigurationFiles } from '../../../workbench/services/configuratio
 import { parseJsonDocument } from '../../../base/common/json.js';
 import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat/browser/chatTipService.js';
-import {
-	ChatTipService as CoworkChatTipService,
-	IChatTipService as ICoworkChatTipService,
-} from '../../contrib/cowork/browser/chatTipService.js';
+import { ChatTipService as CoworkChatTipService, IChatTipService as ICoworkChatTipService } from '../../contrib/cowork/browser/chatTipService.js';
 import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
@@ -228,15 +169,8 @@ const inputResources = new DisposableStore();
 const userDataProfile = new UserDataProfileService();
 const testLifecycle = { onWillShutdown: Event.None } as unknown as ILifecycleService;
 suiteTeardown(() => inputResources.dispose());
-function createInputServices(
-	contextView: IContextViewService,
-	chat: IChatService,
-	menus?: IMenuService,
-	contextMenus?: IContextMenuService,
-): InstantiationService {
-	const services = inputResources.add(
-		createTestEditorServices(configurationServices.get(chat), createCodeEditorServices(inputResources)),
-	);
+function createInputServices(contextView: IContextViewService, chat: IChatService, menus?: IMenuService, contextMenus?: IContextMenuService): InstantiationService {
+	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), createCodeEditorServices(inputResources)));
 	services.registerSingleton(
 		IImageEditorService,
 		() =>
@@ -261,14 +195,8 @@ function createInputServices(
 		},
 	});
 	services.registerInstance(IContextViewService, contextView);
-	services.registerInstance(
-		IMenuService,
-		menus ?? new MenuService(inputResources.add(new CommandService(services)), services.get(IContextKeyService)),
-	);
-	services.registerInstance(
-		IContextMenuService,
-		contextMenus ?? ({ showContextMenu: () => {} } as unknown as IContextMenuService),
-	);
+	services.registerInstance(IMenuService, menus ?? new MenuService(inputResources.add(new CommandService(services)), services.get(IContextKeyService)));
+	services.registerInstance(IContextMenuService, contextMenus ?? ({ showContextMenu: () => {} } as unknown as IContextMenuService));
 	services.registerInstance(IDialogService, recordingDialogService([]));
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(IChatSessionNavigationService, {
@@ -288,19 +216,14 @@ function createInputServices(
 	services.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 	// The editor parent contains product descriptors, but the host boundary belongs to this scope.
-	services.registerSingleton(IVoiceCodeTranscriptionClient, () =>
-		services.createInstance(VoiceCodeTranscriptionClient),
-	);
+	services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
 	services.registerInstance(IAgentVoiceService, undefined);
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	registerTestDictationOnboarding(services);
 	return services;
 }
-function createChatListWidget(
-	container: HTMLElement,
-	options: ConstructorParameters<typeof ChatListWidget>[1] = {},
-): InstanceType<typeof ChatListWidget> {
+function createChatListWidget(container: HTMLElement, options: ConstructorParameters<typeof ChatListWidget>[1] = {}): InstanceType<typeof ChatListWidget> {
 	const services = inputResources.add(createTestEditorServices(undefined, createCodeEditorServices(inputResources)));
 	services.registerInstance(
 		IAgentThreadService,
@@ -308,10 +231,7 @@ function createChatListWidget(
 			throw new Error(operation);
 		}),
 	);
-	services.registerInstance(
-		IChatResponseResourceFileSystemProvider,
-		inputResources.add(services.createInstance(ChatResponseResourceFileSystemProvider)),
-	);
+	services.registerInstance(IChatResponseResourceFileSystemProvider, inputResources.add(services.createInstance(ChatResponseResourceFileSystemProvider)));
 	services.registerInstance(IEditorService, {
 		...emptyEditorServiceState,
 		openEditor: async () => {
@@ -367,7 +287,10 @@ for (const [name, value] of Object.entries({
 	Event: browserEnvironment.window.Event,
 	MouseEvent: browserEnvironment.window.MouseEvent,
 })) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
+	Object.defineProperty(globalThis, name, {
+		configurable: true,
+		value,
+	});
 }
 await import('../../browser/workbenchChat.contribution.js');
 const { BrowserContextViewService } = await import('../../../platform/contextview/browser/contextViewService.js');
@@ -377,13 +300,11 @@ const { BrowserStorageService } = await import('../../../workbench/services/stor
 const testStorageEnvironment = new JSDOM('', { url: 'https://ash.test/' });
 const storageResources = new DisposableStore();
 const testStorages: InstanceType<typeof BrowserStorageService>[] = [];
-const { ChatWidget, openChatMarkdownLink } =
-	await import('../../../workbench/contrib/chat/browser/widget/chatWidget.js');
+const { ChatWidget, openChatMarkdownLink } = await import('../../../workbench/contrib/chat/browser/widget/chatWidget.js');
 const { CoworkWidget } = await import('../../contrib/cowork/browser/widget/coworkWidget.js');
 const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
 const { NewCoworkInputWidget } = await import('../../contrib/cowork/browser/newCoworkInput.js');
-const { readNewChatDraftState, writeNewChatDraftState } =
-	await import('../../contrib/chat/common/newChatDraftState.js');
+const { readNewChatDraftState, writeNewChatDraftState } = await import('../../contrib/chat/common/newChatDraftState.js');
 const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');
 await import('../../../workbench/contrib/preferences/browser/preferences.contribution.js');
 suiteTeardown(() => {
@@ -413,18 +334,10 @@ test('Chat Markdown links route resource, command, and external targets through 
 	await openChatMarkdownLink('vscode-remote://ssh-remote+host/src/file.ts', openerService, editorService);
 	await openChatMarkdownLink('ash-remote://ssh+host/src/ash.ts', openerService, editorService);
 	await openChatMarkdownLink('vscode-file://vscode-app/workspace/readme.md', openerService, editorService);
-	await openChatMarkdownLink(
-		'vscode-remote-resource://ssh-remote+host/workspace/image.png',
-		openerService,
-		editorService,
-	);
+	await openChatMarkdownLink('vscode-remote-resource://ssh-remote+host/workspace/image.png', openerService, editorService);
 	await openChatMarkdownLink('vscode-notebook-cell:///workspace/notebook.ipynb#cell-4', openerService, editorService);
 	await openChatMarkdownLink('vscode-file://other-host/workspace/secret.md', openerService, editorService);
-	await openChatMarkdownLink(
-		'vscode-remote-resource://127.0.0.1:9999/vscode-remote-resource?path=%2Fworkspace%2Fsecret.png',
-		openerService,
-		editorService,
-	);
+	await openChatMarkdownLink('vscode-remote-resource://127.0.0.1:9999/vscode-remote-resource?path=%2Fworkspace%2Fsecret.png', openerService, editorService);
 	await openChatMarkdownLink('command:ash.open?%5B%22readme.md%22%5D', openerService, editorService);
 	await openChatMarkdownLink('mailto:help@example.com', openerService, editorService);
 	await openChatMarkdownLink('https://example.com/docs', openerService, editorService);
@@ -526,17 +439,13 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 	}
 });
 
-function chatTitleContent(pane: {
-	readonly partTitleProjection: { readonly content?: HTMLElement } | undefined;
-}): HTMLElement {
+function chatTitleContent(pane: { readonly partTitleProjection: { readonly content?: HTMLElement } | undefined }): HTMLElement {
 	const content = pane.partTitleProjection?.content;
 	assert.ok(content);
 	return content;
 }
 
-function chatTitleActions(pane: {
-	readonly partTitleProjection: { readonly actions?: HTMLElement } | undefined;
-}): HTMLElement {
+function chatTitleActions(pane: { readonly partTitleProjection: { readonly actions?: HTMLElement } | undefined }): HTMLElement {
 	const actions = pane.partTitleProjection?.actions;
 	assert.ok(actions);
 	return actions;
@@ -647,8 +556,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	});
 	using configuration = new WorkbenchConfigurationService();
 	services.registerInstance(IConfigurationService, configuration);
-	let preferencesEditorTarget:
-		import('../../../workbench/services/editor/common/editorService.js').EditorOpenTarget | undefined;
+	let preferencesEditorTarget: import('../../../workbench/services/editor/common/editorService.js').EditorOpenTarget | undefined;
 	using chat = createChatService(api);
 	using quickInput = new TestQuickInputService({
 		instantiationService: services,
@@ -766,9 +674,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	assert.equal(sessionsSidebar?.hidden, false);
 	assert.equal(contextKeys.getValue('agentSessionsSidebarVisible'), true);
 	assert.deepEqual(
-		[...(sessionsSidebar?.querySelectorAll<HTMLButtonElement>('.ash-agent-session-row') ?? [])].map(
-			button => button.title,
-		),
+		[...(sessionsSidebar?.querySelectorAll<HTMLButtonElement>('.ash-agent-session-row') ?? [])].map(button => button.title),
 		['Session session-1', 'Session session-2'],
 	);
 	assert.equal(sessionsSidebar?.contains(dom.window.document.activeElement), true);
@@ -776,10 +682,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	assert.equal(sessions.active?.session.sessionId, 'session-2');
 	assert.equal(sessionsSidebar?.hidden, true);
 	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-pane-host')?.hidden, false);
-	assert.equal(
-		pane.element.querySelector('.ash-chat:where(:not([hidden]))')?.contains(dom.window.document.activeElement),
-		true,
-	);
+	assert.equal(pane.element.querySelector('.ash-chat:where(:not([hidden]))')?.contains(dom.window.document.activeElement), true);
 	layoutToolbar?.querySelector<HTMLButtonElement>('button')?.focus();
 	await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
 	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-pane-host')?.hidden, false);
@@ -789,9 +692,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	search.value = 'session-1';
 	search.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 	assert.deepEqual(
-		[...(sessionsSidebar?.querySelectorAll<HTMLButtonElement>('.ash-agent-session-row') ?? [])].map(
-			button => button.title,
-		),
+		[...(sessionsSidebar?.querySelectorAll<HTMLButtonElement>('.ash-agent-session-row') ?? [])].map(button => button.title),
 		['Session session-1'],
 	);
 	search.value = '';
@@ -818,9 +719,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	assert.equal(sessionsSidebar?.hidden, true);
 	layoutToolbar?.querySelector<HTMLButtonElement>('button')?.focus();
 	await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
-	pane.element
-		.querySelector('.ash-chat-body')!
-		.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	pane.element.querySelector('.ash-chat-body')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(sessionsSidebar?.hidden, true);
 	assert.equal(contextKeys.getValue('agentSessionsSidebarVisible'), false);
 	assert.equal(dom.window.document.activeElement, layoutToolbar?.querySelector('button'));
@@ -830,9 +729,19 @@ test('Chat title and history switching retain conversations and drafts', async (
 		.filter(([group]) => group === 'chatActions')
 		.flatMap(([, actions]) => actions);
 	assert.deepEqual(
-		chatActions.map(action => ({ id: action.id, label: action.label, enabled: action.enabled, icon: action.icon })),
+		chatActions.map(action => ({
+			id: action.id,
+			label: action.label,
+			enabled: action.enabled,
+			icon: action.icon,
+		})),
 		[
-			{ id: OPEN_CHAT_BROWSER_COMMAND_ID, label: 'Open Browser', enabled: false, icon: Lxicon.browserWeb },
+			{
+				id: OPEN_CHAT_BROWSER_COMMAND_ID,
+				label: 'Open Browser',
+				enabled: false,
+				icon: Lxicon.browserWeb,
+			},
 			{
 				id: MOVE_CHAT_TO_EDITOR_COMMAND_ID,
 				label: 'Move Chat to Editor Area',
@@ -845,7 +754,12 @@ test('Chat title and history switching retain conversations and drafts', async (
 				enabled: false,
 				icon: Lxicon.linkExternal,
 			},
-			{ id: OPEN_CHAT_SETTINGS_COMMAND_ID, label: 'Chat Settings', enabled: true, icon: Lxicon.settings },
+			{
+				id: OPEN_CHAT_SETTINGS_COMMAND_ID,
+				label: 'Chat Settings',
+				enabled: true,
+				icon: Lxicon.settings,
+			},
 		],
 	);
 	assert.deepEqual(
@@ -869,10 +783,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 		layoutChoices().map(action => action.checked),
 		[false, true],
 	);
-	await assert.rejects(
-		configuration.updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, 'diagonal'),
-		/Invalid Sessions layout/,
-	);
+	await assert.rejects(configuration.updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, 'diagonal'), /Invalid Sessions layout/);
 	const body = pane.element.querySelector<HTMLElement>('.ash-chat-body')!;
 	body.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, 600, 600);
 	await configuration.updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation.SideBySide);
@@ -887,9 +798,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	assert.equal(body.classList.contains('sessions-stacked'), true);
 	assert.equal(paneHost.hidden, false);
 	assert.equal(pane.minimumWidth, 300);
-	const activeInput = paneHost.querySelector<HTMLTextAreaElement>(
-		'.ash-chat:not([hidden]) .ash-chat-textarea-input',
-	)!;
+	const activeInput = paneHost.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) .ash-chat-textarea-input')!;
 	activeInput.value = 'Keep this draft while resizing';
 	activeInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 	activeInput.focus();
@@ -925,18 +834,13 @@ test('Chat title and history switching retain conversations and drafts', async (
 	await chatActions[3]?.run();
 	const settingsInput = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
 	assert.ok(settingsInput);
-	settingsInput.dispatchEvent(
-		new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }),
-	);
+	settingsInput.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
 	assert.equal(preferencesEditorTarget, 'modalGroup');
 	assert.equal(chatTitleContent(pane).querySelector('[role=tab]'), null);
 	const panel = pane.element.querySelector('[role=region]');
 	assert.equal(panel?.id, titleButton.getAttribute('aria-controls'));
 	assert.equal(panel?.getAttribute('aria-labelledby'), titleButton.querySelector('span')?.id);
-	assert.equal(
-		pane.element.querySelector('.ash-chat-transcript-scrollable')?.getAttribute('data-scroll-direction'),
-		'vertical',
-	);
+	assert.equal(pane.element.querySelector('.ash-chat-transcript-scrollable')?.getAttribute('data-scroll-direction'), 'vertical');
 	const chatPanes = pane.element.querySelectorAll<HTMLElement>('.ash-chat-pane-host > .ash-chat');
 	assert.equal(chatPanes.length, 2);
 	for (const chatPane of chatPanes) {
@@ -949,63 +853,27 @@ test('Chat title and history switching retain conversations and drafts', async (
 		assert.equal(inputToolbar?.getAttribute('role'), 'toolbar');
 		assert.ok(chatPane.querySelector(".ash-chat-secondary-input-toolbar [data-action-id='ash.chat.input.attach']"));
 		assert.deepEqual(
-			[...(inputToolbar?.querySelectorAll<HTMLElement>('[data-action-id]') ?? [])].map(
-				item => item.dataset.actionId,
-			),
-			[
-				'ash.chat.input.mode',
-				'ash.chat.input.model',
-				'workbench.action.chat.toggleSpeechToText',
-				'ash.chat.input.voice',
-			],
+			[...(inputToolbar?.querySelectorAll<HTMLElement>('[data-action-id]') ?? [])].map(item => item.dataset.actionId),
+			['ash.chat.input.mode', 'ash.chat.input.model', 'workbench.action.chat.toggleSpeechToText', 'ash.chat.input.voice'],
 		);
-		assert.equal(
-			inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")
-				?.textContent,
-			'Agent',
-		);
-		assert.equal(
-			inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action .ash-chat-input-picker-label')
-				?.textContent,
-			'GPT-6.1 Sol',
-		);
-		assert.equal(
-			inputToolbar
-				?.querySelector<HTMLElement>('.ash-chat-input-configuration-action')
-				?.getAttribute('aria-label'),
-			'Model options: Medium',
-		);
+		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Agent');
+		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action .ash-chat-input-picker-label')?.textContent, 'GPT-6.1 Sol');
+		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.getAttribute('aria-label'), 'Model options: Medium');
 		assert.equal(inputToolbar?.querySelector('.ash-chat-input-model-access-badge'), null);
-		assert.equal(
-			inputToolbar?.querySelector<HTMLButtonElement>(
-				"[data-action-id='workbench.action.chat.toggleSpeechToText'] button",
-			)?.disabled,
-			true,
-		);
-		assert.equal(
-			inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.voice'] button")?.disabled,
-			true,
-		);
+		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='workbench.action.chat.toggleSpeechToText'] button")?.disabled, true);
+		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.voice'] button")?.disabled, true);
 	}
 	const firstChatPane = chatPanes[0]!;
 	const modelButton = firstChatPane.querySelector<HTMLElement>('.ash-chat-input-model-action');
-	modelButton?.dispatchEvent(
-		new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
-	);
+	modelButton?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 	const modelPicker = dom.window.document.querySelector<HTMLElement>('.ash-chat-model-picker[role="dialog"]');
 	assert.equal(modelPicker?.getAttribute('aria-label'), 'Choose a chat model');
 	assert.equal(modelPicker?.closest('.ash-context-view')?.parentElement, contextViewService.container);
 	assert.equal(modelButton?.getAttribute('aria-expanded'), 'true');
 	assert.equal(modelPicker?.querySelector<HTMLInputElement>('input')?.placeholder, 'Search models');
 	assert.match(modelPicker?.textContent ?? '', /GPT-6\.1 Sol/);
-	assert.match(
-		modelPicker?.querySelector('[role=menuitemradio]')?.getAttribute('aria-description') ?? '',
-		/128,000 context tokens/,
-	);
-	assert.match(
-		modelPicker?.querySelector('[role=menuitemradio]')?.getAttribute('aria-description') ?? '',
-		/Thinking: Low, Medium, High/,
-	);
+	assert.match(modelPicker?.querySelector('[role=menuitemradio]')?.getAttribute('aria-description') ?? '', /128,000 context tokens/);
+	assert.match(modelPicker?.querySelector('[role=menuitemradio]')?.getAttribute('aria-description') ?? '', /Thinking: Low, Medium, High/);
 	assert.equal(modelPicker?.classList.contains('ash-action-widget'), true);
 	const modelSearch = modelPicker?.querySelector<HTMLInputElement>('input');
 	assert.ok(modelSearch);
@@ -1014,56 +882,25 @@ test('Chat title and history switching retain conversations and drafts', async (
 	assert.equal(modelPicker?.querySelectorAll('[role=menuitemradio]').length, 0);
 	modelSearch.value = 'GPT-6.1 Sol';
 	modelSearch.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
-	modelSearch.dispatchEvent(
-		new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }),
-	);
+	modelSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
 	assert.equal(dom.window.document.activeElement, modelPicker?.querySelector('[role=menuitemradio]'));
 	modelSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-	assert.equal(
-		firstChatPane.querySelector<HTMLElement>('.ash-chat-input-model-action')?.getAttribute('aria-expanded'),
-		'false',
-	);
-	firstChatPane
-		.querySelector<HTMLElement>('.ash-chat-input-configuration-action')
-		?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+	assert.equal(firstChatPane.querySelector<HTMLElement>('.ash-chat-input-model-action')?.getAttribute('aria-expanded'), 'false');
+	firstChatPane.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 	const effortMenu = dom.window.document.querySelector<HTMLElement>('.ash-chat-model-configuration-menu');
 	assert.equal(effortMenu?.querySelector('.ash-chat-model-configuration-heading')?.textContent, 'Thinking Level');
 	assert.deepEqual(
-		[...(effortMenu?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? [])].map(
-			button => button.textContent,
-		),
+		[...(effortMenu?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? [])].map(button => button.textContent),
 		['Low', 'Medium', 'High'],
 	);
 	assert.equal(effortMenu?.querySelector('[role="menuitemradio"][aria-checked="true"]')?.textContent, 'Medium');
-	assert.equal(
-		effortMenu?.querySelector('[role="menuitemradio"][aria-checked="true"]')?.getAttribute('aria-description'),
-		null,
-	);
+	assert.equal(effortMenu?.querySelector('[role="menuitemradio"][aria-checked="true"]')?.getAttribute('aria-description'), null);
 	effortMenu?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort.high'] button")?.click();
-	await waitFor(
-		() =>
-			firstChatPane
-				.querySelector<HTMLElement>('.ash-chat-input-configuration-action')
-				?.getAttribute('aria-label') === 'Model options: High',
-	);
-	firstChatPane
-		.querySelector<HTMLElement>('.ash-chat-input-configuration-action')
-		?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-	assert.equal(
-		dom.window.document.querySelector(
-			'.ash-chat-model-configuration-menu [role="menuitemradio"][aria-checked="true"]',
-		)?.textContent,
-		'High',
-	);
-	dom.window.document
-		.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort.medium'] button")
-		?.click();
-	await waitFor(
-		() =>
-			firstChatPane
-				.querySelector<HTMLElement>('.ash-chat-input-configuration-action')
-				?.getAttribute('aria-label') === 'Model options: Medium',
-	);
+	await waitFor(() => firstChatPane.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.getAttribute('aria-label') === 'Model options: High');
+	firstChatPane.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+	assert.equal(dom.window.document.querySelector('.ash-chat-model-configuration-menu [role="menuitemradio"][aria-checked="true"]')?.textContent, 'High');
+	dom.window.document.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort.medium'] button")?.click();
+	await waitFor(() => firstChatPane.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.getAttribute('aria-label') === 'Model options: Medium');
 	shownContextMenuActions = [];
 	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
 	assert.deepEqual(shownContextMenuActions, []);
@@ -1076,24 +913,16 @@ test('Chat title and history switching retain conversations and drafts', async (
 	);
 	assert.deepEqual(
 		[...(modeMenu?.querySelectorAll<HTMLElement>('[data-action-id]') ?? [])].map(
-			item =>
-				item
-					.querySelector('.ash-menu-leading-slot .ash-icon-label-icon .ash-icon')
-					?.getAttribute('data-ash-icon-id') ?? null,
+			item => item.querySelector('.ash-menu-leading-slot .ash-icon-label-icon .ash-icon')?.getAttribute('data-ash-icon-id') ?? null,
 		),
 		['unlimited', 'plan', 'debug', 'multitask', 'chat-4'],
 	);
 	assert.deepEqual(
-		[...(modeMenu?.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']") ?? [])].map(item =>
-			item.getAttribute('aria-checked'),
-		),
+		[...(modeMenu?.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']") ?? [])].map(item => item.getAttribute('aria-checked')),
 		['true', 'false', 'false', 'false', 'false'],
 	);
 	modeMenu?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-	assert.equal(
-		firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent,
-		'Agent',
-	);
+	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Agent');
 	assert.equal(firstChatPane.querySelector('.ash-chat-input-mode-selector')?.classList.contains('mode-agent'), true);
 	assert.equal(dom.window.document.querySelector('.ash-chat-input-mode-menu'), null);
 	assert.deepEqual(
@@ -1112,10 +941,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 		name: 'first.txt',
 		resolve: async () => ({ name: 'first.txt', content: 'First context' }),
 	});
-	assert.equal(
-		firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.send'] button")?.disabled,
-		false,
-	);
+	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.send'] button")?.disabled, false);
 	assert.equal(firstChatPane.querySelector("[data-action-id='ash.chat.input.voice']"), null);
 
 	await chooseConversation(pane, dom, 1);
@@ -1220,8 +1046,7 @@ test('Chat transcript keeps the first visible message in place when history is p
 		toJSON: () => ({}),
 	});
 	viewport.getBoundingClientRect = () => rect(0, 100);
-	transcript.getBoundingClientRect = () =>
-		rect(-viewport.scrollTop, transcript.childElementCount * 100 - viewport.scrollTop);
+	transcript.getBoundingClientRect = () => rect(-viewport.scrollTop, transcript.childElementCount * 100 - viewport.scrollTop);
 	const item = (id: string) => ({ id, type: 'userMessage' as const, text: id, transient: false });
 	list.render([item('one'), item('two'), item('three')]);
 	for (const element of transcript.children) {
@@ -1271,11 +1096,7 @@ class SessionsInputForTest extends NewChatInputWidget {
 	}
 }
 
-async function sessionsInputFixture(
-	send: ChatInputDelegate['send'] = async () => {},
-	stored?: string,
-	interrupt: ChatInputDelegate['interrupt'] = async () => {},
-) {
+async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () => {}, stored?: string, interrupt: ChatInputDelegate['interrupt'] = async () => {}) {
 	const resources = new DisposableStore();
 	try {
 		const fake = fakeApi({ sessions: [] });
@@ -1308,8 +1129,7 @@ async function sessionsInputFixture(
 			detachPullRequest: async () => {},
 		});
 		const identity = `untitled:${draft.untitledSessionId}`;
-		if (stored !== undefined)
-			storage.store(`sessions.inputDraft:${identity}`, stored, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		if (stored !== undefined) storage.store(`sessions.inputDraft:${identity}`, stored, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		const delegate: ChatInputDelegate = {
 			send,
 			executeCommand: async () => {},
@@ -1354,12 +1174,8 @@ for (const surface of ['chat', 'cowork'] as const)
 			stat: async () => ({ kind: FileKind.File }),
 			readFile: async () => ({ content: sourceText }),
 		} as unknown as IFileService);
-		fixture.services.registerSingleton(IChatAttachmentResolveService, () =>
-			fixture.services.createInstance(ChatAttachmentResolveService),
-		);
-		fixture.services.registerSingleton(ICoworkChatTipService, () =>
-			fixture.services.createInstance(CoworkChatTipService),
-		);
+		fixture.services.registerSingleton(IChatAttachmentResolveService, () => fixture.services.createInstance(ChatAttachmentResolveService));
+		fixture.services.registerSingleton(ICoworkChatTipService, () => fixture.services.createInstance(CoworkChatTipService));
 		using input =
 			surface === 'chat'
 				? fixture.services.createInstance(SessionsInputForTest, document.body, fixture.delegate, fixture.model)
@@ -1405,9 +1221,7 @@ test('Cowork composer submits the exact Skill reference through the shared input
 		submissions.push({ text, skills });
 	});
 	fixture.input.dispose();
-	fixture.services.registerSingleton(ICoworkChatTipService, () =>
-		fixture.services.createInstance(CoworkChatTipService),
-	);
+	fixture.services.registerSingleton(ICoworkChatTipService, () => fixture.services.createInstance(CoworkChatTipService));
 	using input = fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model);
 	const skill = {
 		id: { source: 'user:skill-source:test', name: 'commit' },
@@ -1439,9 +1253,7 @@ for (const locale of ['en', 'zh-CN'])
 			const form = fixture.input.element.querySelector('.ash-chat-input-container')!;
 			const footer = fixture.input.element.querySelector('.ash-sessions-chat-input-footer')!;
 			assert.ok(form.querySelector('[data-action-id="ash.chat.input.attach"]'));
-			const microphone = form.querySelector<HTMLButtonElement>(
-				'[data-action-id="workbench.action.chat.toggleSpeechToText"] button',
-			)!;
+			const microphone = form.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!;
 			assert.ok(microphone);
 			assert.equal(microphone.getAttribute('aria-label'), locale === 'en' ? 'Dictate message' : '听写');
 			assert.equal(form.querySelector('[data-action-id="ash.chat.input.model"]'), null);
@@ -1456,22 +1268,12 @@ for (const locale of ['en', 'zh-CN'])
 			assert.equal(ring.hidden, false);
 			assert.equal(ring.disabled, true);
 			assert.ok(footer.lastElementChild!.contains(ring));
-			assert.equal(
-				ring.getAttribute('aria-label'),
-				locale === 'en' ? 'Context usage is not available yet' : '暂无上下文用量数据',
-			);
+			assert.equal(ring.getAttribute('aria-label'), locale === 'en' ? 'Context usage is not available yet' : '暂无上下文用量数据');
 			fixture.input.focus();
-			const help = new SessionsChatAccessibilityHelp(fixture.input.element, () =>
-				fixture.input.focus(),
-			).getProvider()!;
-			assert.match(
-				help.provideContent(),
-				locale === 'en' ? /Dictation inserts editable text without sending it/u : /不会自动发送/u,
-			);
+			const help = new SessionsChatAccessibilityHelp(fixture.input.element, () => fixture.input.focus()).getProvider()!;
+			assert.match(help.provideContent(), locale === 'en' ? /Dictation inserts editable text without sending it/u : /不会自动发送/u);
 			const editor = form.querySelector('.stanza-editor-input')!;
-			editor.dispatchEvent(
-				new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, isComposing: true }),
-			);
+			editor.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, isComposing: true }));
 			assert.deepEqual(sent, []);
 			editor.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 			await waitFor(() => sent.length === 1);
@@ -1512,9 +1314,7 @@ test('Sessions custom composer context ring opens details without sending and st
 			categories: [{ category: 'conversation', tokens: 800 }],
 		},
 	});
-	const ring = fixture.input.element.querySelector<HTMLButtonElement>(
-		'.ash-sessions-chat-input-footer .ash-chat-context-usage-button',
-	);
+	const ring = fixture.input.element.querySelector<HTMLButtonElement>('.ash-sessions-chat-input-footer .ash-chat-context-usage-button');
 	assert.ok(ring);
 	assert.equal(ring.hidden, false);
 	assert.equal(ring.disabled, false);
@@ -1601,9 +1401,7 @@ test('Chinese Sessions draft recovery and accessibility help use the product lan
 		using fixture = await sessionsInputFixture(undefined, '{unfinished');
 		assert.match(fixture.notices.model.getNotifications()[0]!.message, /^无法恢复聊天草稿：/u);
 		fixture.input.focus();
-		const help = new SessionsChatAccessibilityHelp(fixture.input.element, () =>
-			fixture.input.focus(),
-		).getProvider();
+		const help = new SessionsChatAccessibilityHelp(fixture.input.element, () => fixture.input.focus()).getProvider();
 		assert.ok(help);
 		const content = help.provideContent();
 		assert.match(content, /已完成的附件仍保留在草稿中/u);
@@ -1685,14 +1483,7 @@ test('sending from one session preserves a later draft during first-session crea
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorResources = new DisposableStore();
 	const composerStorage = editorResources.add(createTestStorage());
-	const editorServices = editorResources.add(
-		createTestEditorServices(
-			undefined,
-			createCodeEditorServices(editorResources),
-			dom.window.document,
-			composerStorage,
-		),
-	);
+	const editorServices = editorResources.add(createTestEditorServices(undefined, createCodeEditorServices(editorResources), dom.window.document, composerStorage));
 	editorServices.registerSingleton(
 		IImageEditorService,
 		() =>
@@ -1724,14 +1515,10 @@ test('sending from one session preserves a later draft during first-session crea
 		},
 	});
 	editorServices.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
-	editorServices.registerSingleton(IVoiceCodeTranscriptionClient, () =>
-		editorServices.createInstance(VoiceCodeTranscriptionClient),
-	);
+	editorServices.registerSingleton(IVoiceCodeTranscriptionClient, () => editorServices.createInstance(VoiceCodeTranscriptionClient));
 	editorServices.registerInstance(IAgentVoiceService, undefined);
 	editorServices.registerSingleton(ISpeechService, () => editorServices.createInstance(SpeechService));
-	editorServices.registerSingleton(IChatSpeechToTextService, () =>
-		editorServices.createInstance(ChatSpeechToTextService),
-	);
+	editorServices.registerSingleton(IChatSpeechToTextService, () => editorServices.createInstance(ChatSpeechToTextService));
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	editorServices.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
 	editorServices.registerInstance(INotificationService, notifications);
@@ -1739,10 +1526,7 @@ test('sending from one session preserves a later draft during first-session crea
 		openConversation: async () => {},
 	} as unknown as IChatSessionNavigationService);
 	registerTestDictationOnboarding(editorServices);
-	editorServices.registerInstance(
-		IChatTipService,
-		editorResources.add(editorServices.createInstance(ChatTipService)),
-	);
+	editorServices.registerInstance(IChatTipService, editorResources.add(editorServices.createInstance(ChatTipService)));
 	Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });
 	editorServices.registerInstance(
 		ILifecycleService,
@@ -1809,13 +1593,7 @@ test('sending from one session preserves a later draft during first-session crea
 	assert.equal(input?.classList.contains('chat-composer'), true);
 	const welcomeTip = input?.querySelector('.ash-chat-input-tip');
 	assert.ok(welcomeTip);
-	assert.deepEqual(
-		[
-			input?.getAttribute('aria-busy'),
-			input?.querySelector('.ash-chat-status, .ash-chat-status-summary')?.textContent,
-		],
-		['true', ''],
-	);
+	assert.deepEqual([input?.getAttribute('aria-busy'), input?.querySelector('.ash-chat-status, .ash-chat-status-summary')?.textContent], ['true', '']);
 	await widgetModel.initialize();
 	assert.equal(input?.getAttribute('aria-busy'), 'false');
 	assert.equal(input?.querySelector('.ash-chat-input-tip'), welcomeTip);
@@ -1871,10 +1649,7 @@ test('sending from one session preserves a later draft during first-session crea
 	assert.equal(widget.element.querySelector('.ash-chat-input-part'), input);
 	assert.equal(widget.sessionId, 'session-1');
 	assert.deepEqual((await chatWidget.captureDraft())?.draft, restoredChatDraft);
-	assert.deepEqual(
-		readNewChatDraftState(composerStorage, `untitled:${chatSelection.session.untitledSessionId}`),
-		restoredChatDraft,
-	);
+	assert.deepEqual(readNewChatDraftState(composerStorage, `untitled:${chatSelection.session.untitledSessionId}`), restoredChatDraft);
 	assert.equal(readNewChatDraftState(composerStorage, 'thread-1'), undefined);
 	assert.equal(view.activeSelection?.kind, 'untitled');
 	assert.equal(chatWidget.sessionId, undefined);
@@ -1896,7 +1671,10 @@ test('an empty Session list opens an untitled session and persists it on its fir
 		agents: [{ name: 'reviewer', description: 'Reviews changes', sourceId: 'directory-1' }],
 		agentListFails: () => failAgentList,
 		createSession: createdSession,
-		createThread: { session: attachedSession, threadId: 'thread-1' },
+		createThread: {
+			session: attachedSession,
+			threadId: 'thread-1',
+		},
 	});
 	const api = fake.api;
 	const services = new InstantiationService();
@@ -2067,10 +1845,7 @@ test('the New Chat slash command opens an untitled session', async () => {
 	const input = pane.element.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) .ash-chat-textarea-input');
 	assert.ok(input);
 	typeChatText(dom.window, input, '/new');
-	assert.equal(
-		pane.element.querySelector("[data-action-id='ash.chat.input.command'] button")?.textContent,
-		'Command',
-	);
+	assert.equal(pane.element.querySelector("[data-action-id='ash.chat.input.command'] button")?.textContent, 'Command');
 	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
 	await waitFor(() => sessions.untitledSessions.length === 1);
 	assert.equal(chatTitleContent(pane).querySelector('.ash-chat-view-title-label')?.textContent, 'New Chat');
@@ -2086,7 +1861,10 @@ test('the New Chat slash command opens an untitled session', async () => {
 test('failed first send keeps the untitled session and its input draft', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
-	const fake = fakeApi({ sessions: [], createSessionError: new Error('Cannot create Session') });
+	const fake = fakeApi({
+		sessions: [],
+		createSessionError: new Error('Cannot create Session'),
+	});
 	const services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, {
@@ -2152,19 +1930,10 @@ test('failed first send keeps the untitled session and its input draft', async (
 	assert.equal(sessions.untitledSessions.length, 1);
 	assert.equal(pane.element.querySelector('.ash-chat-input-attachments'), null);
 	assert.equal(input.value, 'failed commit Keep this draft');
-	assert.equal(
-		pane.element.querySelector<HTMLElement>("[role='region']")?.dataset.untitledSessionId,
-		sessions.untitledSessions[0]?.untitledSessionId,
-	);
+	assert.equal(pane.element.querySelector<HTMLElement>("[role='region']")?.dataset.untitledSessionId, sessions.untitledSessions[0]?.untitledSessionId);
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='region']")?.classList.contains('empty'), true);
-	assert.equal(
-		pane.element.querySelector<HTMLElement>("[role='region']")?.classList.contains('has-conversation'),
-		false,
-	);
-	assert.match(
-		pane.element.querySelector<HTMLElement>('.ash-chat-status, .ash-chat-status-summary')?.textContent ?? '',
-		/Cannot create Session/,
-	);
+	assert.equal(pane.element.querySelector<HTMLElement>("[role='region']")?.classList.contains('has-conversation'), false);
+	assert.match(pane.element.querySelector<HTMLElement>('.ash-chat-status, .ash-chat-status-summary')?.textContent ?? '', /Cannot create Session/);
 
 	dom.window.close();
 });
@@ -2295,7 +2064,12 @@ test('Chat history selects an active Thread through Quick Pick', async () => {
 test('ViewsService resolves, opens, and focuses contributed views', async () => {
 	const registry = ViewsRegistry;
 	using contextKeys = new ContextKeyService();
-	using descriptors = new TestViewDescriptorService({ registry }, contextKeys);
+	using descriptors = new TestViewDescriptorService(
+		{
+			registry,
+		},
+		contextKeys,
+	);
 	let focused = 0;
 	let opened = 0;
 	const view = {
@@ -2342,8 +2116,7 @@ test('ViewsService resolves, opens, and focuses contributed views', async () => 
 			return view;
 		},
 	};
-	const { IPaneCompositePartService } =
-		await import('../../../workbench/services/panecomposite/browser/panecomposite.js');
+	const { IPaneCompositePartService } = await import('../../../workbench/services/panecomposite/browser/panecomposite.js');
 	const { IViewDescriptorService } = await import('../../../workbench/common/views.js');
 	using services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
@@ -2394,7 +2167,10 @@ test('SessionsManagementService restores and creates active Threads', async () =
 	const api = fakeApi({
 		sessions: [initialSession],
 		createSession: createdSession,
-		createThread: { session: attachedSession, threadId: 'thread-2' },
+		createThread: {
+			session: attachedSession,
+			threadId: 'thread-2',
+		},
 	}).api;
 	using service = new SessionsManagementService(api);
 
@@ -2492,11 +2268,7 @@ test('ChatWidgetModel applies backend-assembled transcript entries', async () =>
 	let currentThread = thread();
 	const fake = fakeApi({ sessions: [activeSession], thread: () => currentThread });
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		createChatService(fake.api),
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(createChatService(fake.api), { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 
 	await model.initialize();
 	fake.emit({
@@ -2582,11 +2354,7 @@ test('ChatWidgetModel projects and refreshes the canonical durable Turn plan', a
 	};
 	const fake = fakeApi({ sessions: [activeSession], thread: () => currentThread });
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		createChatService(fake.api),
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(createChatService(fake.api), { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 
 	await model.initialize();
 	assert.equal(model.items[0]?.id, 'turn-plan:turn-1');
@@ -2634,23 +2402,25 @@ test('ChatWidgetModel projects and refreshes the canonical durable Turn plan', a
 
 test('ChatWidgetModel mechanically clears and replaces transient transcript entries', async () => {
 	const activeSession = session('session-1', 'thread-1');
-	const fake = fakeApi({ sessions: [activeSession], thread: () => thread() });
+	const fake = fakeApi({
+		sessions: [activeSession],
+		thread: () => thread(),
+	});
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		createChatService(fake.api),
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(createChatService(fake.api), { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 
 	await model.initialize();
 	let transcriptRevision = 1;
-	const emitChanges = (
-		changes: Extract<ServerNotification, { method: 'session/thread/transcript/update' }>['params']['changes'],
-		revision = ++transcriptRevision,
-	): void => {
+	const emitChanges = (changes: Extract<ServerNotification, { method: 'session/thread/transcript/update' }>['params']['changes'], revision = ++transcriptRevision): void => {
 		fake.emit({
 			method: 'session/thread/transcript/update',
-			params: { sessionId: 'session-1', threadId: 'thread-1', durableSequence: 1, revision, changes },
+			params: {
+				sessionId: 'session-1',
+				threadId: 'thread-1',
+				durableSequence: 1,
+				revision,
+				changes,
+			},
 		});
 	};
 	const item = (itemId: string) => ({
@@ -2716,17 +2486,17 @@ test('ChatWidgetModel projects a durable Turn failure into the conversation', as
 				approvalMode: 'manual',
 				usage: emptyUsage(),
 				items: [],
-				error: { code: 'providerAuth', message: 'Model provider authentication failed', retryable: false },
+				error: {
+					code: 'providerAuth',
+					message: 'Model provider authentication failed',
+					retryable: false,
+				},
 			},
 		],
 	};
 	const fake = fakeApi({ sessions: [activeSession], thread: () => failedThread });
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		createChatService(fake.api),
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(createChatService(fake.api), { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 
 	await model.initialize();
 
@@ -2786,11 +2556,7 @@ test('ChatWidgetModel rebuilds error actions from canonical Thread state after r
 	let currentThread = threadWithFailure('providerAuth', false);
 	const fake = fakeApi({ sessions: [activeSession], thread: () => currentThread });
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		createChatService(fake.api),
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(createChatService(fake.api), { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 
 	currentThread = threadWithFailure('toolRepetition', false, 4);
@@ -2825,18 +2591,19 @@ test('ChatWidgetModel retries only the latest retryable failed Turn as a new vis
 	const failedThread = threadWithFailure('modelInvocationFailed', true);
 	const fake = fakeApi({ sessions: [activeSession], thread: () => failedThread });
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		createChatService(fake.api),
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(createChatService(fake.api), { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 
 	await model.retryFailedTurn('turn-1');
 
 	assert.deepEqual(
 		fake.turnStartRequests.map(({ expectedSequence, input }) => ({ expectedSequence, input })),
-		[{ expectedSequence: failedThread.sequence, input: [{ type: 'text', text: 'Try again.' }] }],
+		[
+			{
+				expectedSequence: failedThread.sequence,
+				input: [{ type: 'text', text: 'Try again.' }],
+			},
+		],
 	);
 	await assert.rejects(model.retryFailedTurn('older-turn'), /Only the latest retryable failed Turn/);
 });
@@ -2868,9 +2635,7 @@ interface FakeOptions {
 	}[];
 	readonly configuredProviders?: readonly string[];
 	readonly providers?: readonly ModelProviderCredentialStatus[];
-	readonly providerModels?: Readonly<
-		Record<string, readonly { readonly model: ModelRef; readonly displayName: string }[]>
-	>;
+	readonly providerModels?: Readonly<Record<string, readonly { readonly model: ModelRef; readonly displayName: string }[]>>;
 	readonly advisorDefault?: {
 		readonly model: ModelRef;
 		readonly enabled: boolean;
@@ -2927,17 +2692,10 @@ function createWidgetModel(
 		},
 	);
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
-	services.registerInstance(
-		IConfigurationService,
-		configuration ?? configurationServices.get(chat) ?? inputResources.add(new WorkbenchConfigurationService()),
-	);
+	services.registerInstance(IConfigurationService, configuration ?? configurationServices.get(chat) ?? inputResources.add(new WorkbenchConfigurationService()));
 	return services.createInstance(ChatWidgetModel, chat, selection, sessions);
 }
-function createChatService(
-	api: IRendererHost,
-	configurationService?: WorkbenchConfigurationService,
-	storageService?: InstanceType<typeof BrowserStorageService>,
-): ChatService {
+function createChatService(api: IRendererHost, configurationService?: WorkbenchConfigurationService, storageService?: InstanceType<typeof BrowserStorageService>): ChatService {
 	const storage = storageService ?? createTestStorage();
 	if (!storageService) testStorages.push(storage);
 	const services = inputResources.add(new InstantiationService());
@@ -2949,17 +2707,11 @@ function createChatService(
 		},
 	});
 	registerChatBackend(services, api, IConfigurationService);
-	services.registerInstance(
-		IAccountService,
-		inputResources.add(new AppServerAccountService(api.accounts, api.events)),
-	);
+	services.registerInstance(IAccountService, inputResources.add(new AppServerAccountService(api.accounts, api.events)));
 	const configuration = configurationService ?? inputResources.add(new WorkbenchConfigurationService());
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IStorageService, storage);
-	services.registerInstance(
-		ILanguageModelsConfigurationService,
-		inputResources.add(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)),
-	);
+	services.registerInstance(ILanguageModelsConfigurationService, inputResources.add(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
 	const chat = services.createInstance(ChatService);
 	configurationServices.set(chat, configuration);
 	modelServices.set(chat, inputResources.add(services.createInstance(LanguageModelsService)));
@@ -2967,17 +2719,9 @@ function createChatService(
 	return chat;
 }
 
-function registerChatBackend(
-	services: InstantiationService,
-	api: IRendererHost,
-	omitted?: unknown,
-	configuration?: WorkbenchConfigurationService,
-): void {
+function registerChatBackend(services: InstantiationService, api: IRendererHost, omitted?: unknown, configuration?: WorkbenchConfigurationService): void {
 	if (omitted !== IConfigurationService) {
-		services.registerInstance(
-			IConfigurationService,
-			configuration ?? inputResources.add(new WorkbenchConfigurationService()),
-		);
+		services.registerInstance(IConfigurationService, configuration ?? inputResources.add(new WorkbenchConfigurationService()));
 	}
 	if (omitted !== IAgentModelsService) {
 		services.registerInstance(IAgentModelsService, api.model);
@@ -3017,16 +2761,7 @@ function registerChatBackend(
 	}
 }
 
-for (const dependency of [
-	IAgentModelsService,
-	IAgentThreadService,
-	IAgentTurnService,
-	ITurnChangesApi,
-	IAppServerApi,
-	IServerEventApi,
-	IAgentExecutionSettingsService,
-	IConfigurationService,
-]) {
+for (const dependency of [IAgentModelsService, IAgentThreadService, IAgentTurnService, ITurnChangesApi, IAppServerApi, IServerEventApi, IAgentExecutionSettingsService, IConfigurationService]) {
 	test(`Chat rejects missing ${dependency.description} before allocating listeners`, () => {
 		using services = new InstantiationService();
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
@@ -3075,9 +2810,7 @@ test('a late subscription and release from the old connection cannot replace or 
 	generation++;
 	connection.fire('ready');
 	await chat.subscribeThread('session-1', 'thread-1', 0, owner);
-	await pending.complete(
-		await fake.api.thread.subscribe({ sessionId: 'session-1', threadId: 'thread-1', afterSequence: 0 }),
-	);
+	await pending.complete(await fake.api.thread.subscribe({ sessionId: 'session-1', threadId: 'thread-1', afterSequence: 0 }));
 	await rejected;
 	await closing;
 	assert.deepEqual(released, []);
@@ -3127,9 +2860,7 @@ for (const reconnect of [false, true]) {
 		const rejected = assert.rejects(subscribing, isCancellationError);
 		chat.dispose();
 		if (reconnect) fake.emitReady();
-		await pending.complete(
-			await fake.api.thread.subscribe({ sessionId: 'session-1', threadId: 'thread-1', afterSequence: 0 }),
-		);
+		await pending.complete(await fake.api.thread.subscribe({ sessionId: 'session-1', threadId: 'thread-1', afterSequence: 0 }));
 		await rejected;
 		await Promise.resolve();
 		if (!reconnect) await waitFor(() => released.length === 1);
@@ -3256,9 +2987,7 @@ test('closing during subscription waits for the request before releasing the bac
 	const subscribing = chat.subscribeThread('session-1', 'thread-1', 0, owner);
 	const closing = chat.unsubscribeThread('session-1', 'thread-1', owner);
 	assert.deepEqual(released, []);
-	await pending.complete(
-		await fake.api.thread.subscribe({ sessionId: 'session-1', threadId: 'thread-1', afterSequence: 0 }),
-	);
+	await pending.complete(await fake.api.thread.subscribe({ sessionId: 'session-1', threadId: 'thread-1', afterSequence: 0 }));
 	await subscribing;
 	await closing;
 	assert.deepEqual(released, ['thread-1']);
@@ -3342,9 +3071,7 @@ test('Chat service preserves complete transcript items from reads and updates', 
 		},
 	});
 	assert.deepEqual(
-		updates[0]?.changes.map(change =>
-			change.type === 'upsert' && change.entry.type === 'item' ? change.entry.item : undefined,
-		),
+		updates[0]?.changes.map(change => (change.type === 'upsert' && change.entry.type === 'item' ? change.entry.item : undefined)),
 		items,
 	);
 });
@@ -3494,10 +3221,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
 		services.registerInstance(ICoworkModelPreferences, preferences);
 		const selection = { kind: 'session' as const, active: { session: session('session-1'), threadId: 'thread-1' } };
-		using widget =
-			kind === 'Code'
-				? services.createInstance(ChatWidgetModel, chat, selection, sessions)
-				: services.createInstance(CoworkWidgetModel, chat, selection, sessions);
+		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : services.createInstance(CoworkWidgetModel, chat, selection, sessions);
 		await widget.initialize();
 		assert.deepEqual(scopes, ['session-1']);
 		changed.fire();
@@ -3519,9 +3243,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 test('instruction references reach Turn start, queue and steering without becoming document text', async () => {
 	const fake = fakeApi();
 	using chat = createChatService(fake.api);
-	const contexts = [
-		{ name: 'Review', content: '/workspace/.ash/instructions/review.md', kind: 'instruction' as const },
-	];
+	const contexts = [{ name: 'Review', content: '/workspace/.ash/instructions/review.md', kind: 'instruction' as const }];
 	const options = {
 		sessionId: 'session-1',
 		threadId: 'thread-1',
@@ -3573,10 +3295,7 @@ test('Language models service applies product visibility defaults and persists m
 		(await modelsFor(chat).listModels()).map(({ model, displayName }) => ({ model, displayName })),
 		[...enabled.slice(1), older],
 	);
-	assert.deepEqual(configuration.getValue(ModelCatalogConfiguration.hiddenModels), [
-		{ ...older.model, visible: true },
-		enabled[0]!.model,
-	]);
+	assert.deepEqual(configuration.getValue(ModelCatalogConfiguration.hiddenModels), [{ ...older.model, visible: true }, enabled[0]!.model]);
 	using restored = createChatService(fake.api, configuration);
 	assert.deepEqual(
 		(await modelsFor(restored).listModels()).map(({ model, displayName }) => ({ model, displayName })),
@@ -3594,23 +3313,15 @@ test('Language models service applies product visibility defaults and persists m
 		(await modelsFor(chat).listModels()).map(({ model, displayName }) => ({ model, displayName })),
 		enabled.slice(1),
 	);
-	await configuration.updateValue(ModelCatalogConfiguration.hiddenModels, [
-		{ ...older.model, visible: true },
-		enabled[0]!.model,
-	]);
+	await configuration.updateValue(ModelCatalogConfiguration.hiddenModels, [{ ...older.model, visible: true }, enabled[0]!.model]);
 	assert.deepEqual(
 		(await modelsFor(chat).listModels()).map(({ model, displayName }) => ({ model, displayName })),
 		[...enabled.slice(1), older],
 	);
 	await modelsFor(chat).refreshModels();
 	assert.equal(fake.modelListRequests.length, 3);
-	const definition = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(
-		ModelCatalogConfiguration.hiddenModels,
-	)!;
-	assert.deepEqual(definition.serialize(definition.parse([{ ...older.model, visible: true }, enabled[0]!.model])), [
-		{ ...older.model, visible: true },
-		enabled[0]!.model,
-	]);
+	const definition = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(ModelCatalogConfiguration.hiddenModels)!;
+	assert.deepEqual(definition.serialize(definition.parse([{ ...older.model, visible: true }, enabled[0]!.model])), [{ ...older.model, visible: true }, enabled[0]!.model]);
 	assert.throws(() => definition.parse([{ ...older.model, visible: 'true' }]), /must be a boolean/);
 });
 
@@ -3668,14 +3379,8 @@ test('Cowork and Code keep independent defaults and model choices for the same d
 	assert.deepEqual([code.selectedModel, cowork.selectedModel], [codeModel.model, coworkModel.model]);
 	using restoredCoworkPreferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
 	const catalog = await modelsFor(chat).listModels();
-	assert.deepEqual(
-		[modelsFor(chat).getDefaultNewChatModel(catalog), restoredCoworkPreferences.getDefaultNewChatModel(catalog)],
-		[codeModel.model, coworkModel.model],
-	);
-	assert.deepEqual(
-		sessions.untitledSessions.find(session => session.untitledSessionId === draft.untitledSessionId)?.model,
-		codeModel.model,
-	);
+	assert.deepEqual([modelsFor(chat).getDefaultNewChatModel(catalog), restoredCoworkPreferences.getDefaultNewChatModel(catalog)], [codeModel.model, coworkModel.model]);
+	assert.deepEqual(sessions.untitledSessions.find(session => session.untitledSessionId === draft.untitledSessionId)?.model, codeModel.model);
 	await cowork.send('Use the Cowork model');
 	assert.deepEqual(fake.turnStartRequests.at(-1)?.model, coworkModel.model);
 	assert.ok(fake.skillListRequests.includes(undefined));
@@ -3685,19 +3390,10 @@ test('Cowork and Code keep independent defaults and model choices for the same d
 test('Cowork default model settings use the Chinese catalog and reject invalid values', () => {
 	initializeTestLocalization('zh-CN');
 	try {
-		const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(
-			CoworkModelPreferences.defaultModelSetting,
-		)!;
+		const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(CoworkModelPreferences.defaultModelSetting)!;
 		const schema = setting.setting;
 		assert.ok(schema?.valueType === 'text');
-		assert.deepEqual(
-			[schema.title, schema.description, schema.placeholder],
-			[
-				'默认 Cowork 模型',
-				'新 Cowork 对话使用的模型。填写 auto 或 provider/model 标识。',
-				'auto 或 provider/model',
-			],
-		);
+		assert.deepEqual([schema.title, schema.description, schema.placeholder], ['默认 Cowork 模型', '新 Cowork 对话使用的模型。填写 auto 或 provider/model 标识。', 'auto 或 provider/model']);
 		assert.throws(() => setting.parse(42), /默认 Cowork 模型必须是字符串/);
 		assert.equal(setting.parse(' auto '), 'auto');
 	} finally {
@@ -3737,10 +3433,7 @@ test('New chats use the configured model before the remembered picker choice', a
 	assert.deepEqual(fake.turnStartRequests.at(-1)?.model, first.model);
 	using restoredChatService = createChatService(fake.api, configuration, storage);
 	await modelsFor(restoredChatService).readModelDefaults();
-	assert.deepEqual(
-		modelsFor(restoredChatService).getDefaultNewChatModel(await modelsFor(restoredChatService).listModels()),
-		first.model,
-	);
+	assert.deepEqual(modelsFor(restoredChatService).getDefaultNewChatModel(await modelsFor(restoredChatService).listModels()), first.model);
 	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'missing/model');
 	assert.deepEqual(modelsFor(chat).getDefaultNewChatModel(await modelsFor(chat).listModels()), first.model);
 	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'auto');
@@ -3850,9 +3543,7 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	discovered.settings.service_tiers[0].description = 'Updated processing terms';
 	discovered.acceleration_options[0].description = 'Updated processing terms';
 	const refreshed = await models.refreshModels();
-	assert.deepEqual(refreshed[0].accelerationOptions, [
-		{ id: 'priority', name: 'Priority lane', description: 'Updated processing terms' },
-	]);
+	assert.deepEqual(refreshed[0].accelerationOptions, [{ id: 'priority', name: 'Priority lane', description: 'Updated processing terms' }]);
 	assert.equal(changes, 1);
 	assert.equal(pickerEntry.accelerationOptions[0].description, 'Faster processing');
 	discovered.description = 'Updated overview';
@@ -3866,18 +3557,17 @@ test('Model discovery refreshes the picker after an older catalog request comple
 });
 
 test('Chat picker excludes a hidden selected model', async () => {
-	const entry = { model: { provider: 'openai', model: 'gpt-5.6-sol' }, displayName: 'GPT-5.6 Sol' };
+	const entry = {
+		model: { provider: 'openai', model: 'gpt-5.6-sol' },
+		displayName: 'GPT-5.6 Sol',
+	};
 	const activeSession = { ...session('session-1', 'thread-1'), model: entry.model };
 	const fake = fakeApi({ sessions: [activeSession], models: [entry] });
 	using configuration = new WorkbenchConfigurationService();
 	await configuration.updateValue(ModelCatalogConfiguration.hiddenModels, [entry.model]);
 	using chat = createChatService(fake.api, configuration);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 
 	await model.initialize();
 
@@ -3945,15 +3635,9 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
 		services.registerInstance(ICoworkModelPreferences, preferences);
 		const selection = { kind: 'session' as const, active: sessions.active! };
-		using widget =
-			kind === 'Code'
-				? services.createInstance(ChatWidgetModel, chat, selection, sessions)
-				: services.createInstance(CoworkWidgetModel, chat, selection, sessions);
+		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : services.createInstance(CoworkWidgetModel, chat, selection, sessions);
 		await widget.initialize();
-		assert.deepEqual(
-			{ catalog: sessions.active?.session.model, picker: widget.inputState.selectedModel },
-			{ catalog: rootModel, picker: rootModel },
-		);
+		assert.deepEqual({ catalog: sessions.active?.session.model, picker: widget.inputState.selectedModel }, { catalog: rootModel, picker: rootModel });
 		await widget.send('Continue the root');
 		currentThread = {
 			...root,
@@ -3963,10 +3647,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		};
 		await sessions.openThread('session-1', 'child');
 		await widget.selectThread(sessions.active!);
-		assert.deepEqual(
-			{ catalog: sessions.active?.session.model, picker: widget.inputState.selectedModel },
-			{ catalog: rootModel, picker: childModel },
-		);
+		assert.deepEqual({ catalog: sessions.active?.session.model, picker: widget.inputState.selectedModel }, { catalog: rootModel, picker: childModel });
 		await widget.send('Continue the child');
 		assert.deepEqual(
 			fake.turnStartRequests.map(request => request.model),
@@ -4016,20 +3697,14 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
 		services.registerInstance(ICoworkModelPreferences, preferences);
 		const selection = { kind: 'session' as const, active: sessions.active! };
-		using widget =
-			kind === 'Code'
-				? services.createInstance(ChatWidgetModel, chat, selection, sessions)
-				: services.createInstance(CoworkWidgetModel, chat, selection, sessions);
+		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : services.createInstance(CoworkWidgetModel, chat, selection, sessions);
 		await widget.initialize();
 		await widget.selectModel(manualModel);
 		persisted[0] = { ...persisted[0]!, model: nextModel };
 		fake.emit({ method: 'session/changed', params: { sessionId: 'session-1', agentTreeChanged: false } });
 		await waitFor(() => sessions.active?.session.model?.model === nextModel.model);
 		await widget.selectThread(sessions.active!);
-		assert.deepEqual(
-			{ selected: widget.inputState.selectedModel, automatic: widget.inputState.isAutomaticModel },
-			{ selected: manualModel, automatic: false },
-		);
+		assert.deepEqual({ selected: widget.inputState.selectedModel, automatic: widget.inputState.isAutomaticModel }, { selected: manualModel, automatic: false });
 		await widget.send('Use the unsent manual choice');
 		await widget.selectAutomaticModel();
 		persisted[0] = { ...persisted[0]!, model: initialModel };
@@ -4065,11 +3740,7 @@ test('ChatWidgetModel keeps per-chat choices while saving the default for new ch
 	await modelsFor(chat).setModelVisible(firstModel, true);
 	await modelsFor(chat).setModelVisible(secondModel, true);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 
 	await model.selectModel(firstModel);
@@ -4112,11 +3783,7 @@ test('ChatWidgetModel sends the selected model thinking effort with its Turn', a
 	});
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 
 	assert.equal(model.inputState.selectedReasoningEffort, 'high');
@@ -4154,9 +3821,7 @@ test('New Chat keeps its thinking effort when it creates a Thread', async () => 
 	await model.initialize();
 
 	await model.selectModel(entry.model);
-	model.selectUntitledSession(
-		sessions.untitledSessions.find(session => session.untitledSessionId === untitled.untitledSessionId)!,
-	);
+	model.selectUntitledSession(sessions.untitledSessions.find(session => session.untitledSessionId === untitled.untitledSessionId)!);
 	await model.selectReasoningEffort('high');
 	await model.send('Use high effort');
 
@@ -4175,11 +3840,7 @@ test('ChatWidgetModel Auto retains the configured profile model and leaves Turn 
 	using chat = createChatService(fake.api);
 	await modelsFor(chat).setModelVisible(manualModel, true);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 
 	await model.selectModel(manualModel);
@@ -4203,9 +3864,7 @@ test('ChatWidgetModel sends image-only input using the selected approval mode', 
 	using model = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
 	await model.initialize();
 	model.selectApprovalMode('auto');
-	await model.send('', 'agent', undefined, [
-		{ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' },
-	]);
+	await model.send('', 'agent', undefined, [{ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }]);
 	assert.equal(fake.turnStartRequests[0]?.approvalMode, 'auto');
 	assert.deepEqual(fake.turnStartRequests[0]?.input, [{ type: 'image', url: 'data:image/png;base64,aGVsbG8=' }]);
 	assert.equal(model.inputState.approvalMode, 'auto');
@@ -4225,18 +3884,21 @@ test('ChatWidgetModel steers an active Turn instead of starting another Turn', a
 				toolMode: 'direct',
 				approvalMode: 'manual',
 				usage: emptyUsage(),
-				items: [{ type: 'userMessage', itemId: 'item-user', turnId: 'turn-running', text: 'initial request' }],
+				items: [
+					{
+						type: 'userMessage',
+						itemId: 'item-user',
+						turnId: 'turn-running',
+						text: 'initial request',
+					},
+				],
 			},
 		],
 	};
 	const fake = fakeApi({ sessions: [activeSession], thread: () => activeThread });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 
 	await model.send('focus on the failing test');
@@ -4259,11 +3921,7 @@ test('ChatWidgetModel dispatches compact as a standalone server command', async 
 	const fake = fakeApi({ sessions: [activeSession], thread: () => thread('previous answer') });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 
 	await model.executeServerCommand('compact', 'preserve the deployment decision');
@@ -4288,18 +3946,12 @@ test('ChatWidgetModel queues a new mode while keeping the active Turn unchanged'
 	const fake = fakeApi({ sessions: [activeSession], thread: () => value });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	assert.equal(model.inputState.mode, 'plan');
 	model.selectMode('multitask');
 	model.selectApprovalMode('auto');
-	await model.send('Implement independent steps', 'multitask', undefined, [
-		{ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' },
-	]);
+	await model.send('Implement independent steps', 'multitask', undefined, [{ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }]);
 	assert.equal(fake.turnStartRequests.length, 0);
 	assert.equal(fake.turnSteerRequests.length, 0);
 	assert.deepEqual(fake.queuedRequests, [
@@ -4332,11 +3984,7 @@ for (const kind of ['tool', 'shell', 'contextCompaction', 'advisor'] as const) {
 		const fake = fakeApi({ sessions: [activeSession], thread: () => value });
 		using chat = createChatService(fake.api);
 		using sessions = new SessionsManagementService(fake.api);
-		using model = createWidgetModel(
-			chat,
-			{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-			sessions,
-		);
+		using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 		await model.initialize();
 		await model.send('Follow up', 'agent', undefined, [{ name: 'App context', content: 'latest context' }]);
 		assert.equal(fake.turnStartRequests.length, 0);
@@ -4350,19 +3998,15 @@ for (const kind of ['tool', 'shell', 'contextCompaction', 'advisor'] as const) {
 }
 
 test('Chat mode accessibility help explains switch_mode in Chinese and restores input focus', async () => {
-	const { SessionsChatAccessibilityHelp } =
-		await import('../../contrib/chat/browser/sessionsChatAccessibilityHelp.js');
-	const { productLanguagePackCatalogs } =
-		await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { SessionsChatAccessibilityHelp } = await import('../../contrib/chat/browser/sessionsChatAccessibilityHelp.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	const container = document.createElement('div');
 	const input = document.createElement('textarea');
 	container.append(input);
 	document.body.append(container);
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		input.focus();
 		const help = new SessionsChatAccessibilityHelp(container, () => input.focus());
@@ -4387,11 +4031,7 @@ test('ChatWidgetModel follows switch_mode while preserving a different next-mess
 		const fake = fakeApi({ sessions: [activeSession], thread: () => value });
 		using chat = createChatService(fake.api);
 		using sessions = new SessionsManagementService(fake.api);
-		using model = createWidgetModel(
-			chat,
-			{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-			sessions,
-		);
+		using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 		await model.initialize();
 		if (selectedMode) {
 			model.selectMode(selectedMode);
@@ -4433,11 +4073,7 @@ test('ChatWidgetModel restores the mode once and keeps it when reconnecting to n
 	const fake = fakeApi({ sessions: [activeSession], thread: () => value });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	assert.equal(model.inputState.mode, 'plan');
 	value = { ...value, sequence: value.sequence + 1, turns: [{ ...value.turns[0]!, mode: 'agent' }] };
@@ -4453,11 +4089,7 @@ test('ChatWidgetModel submits server commands using the selected mode', async ()
 	const fake = fakeApi({ sessions: [activeSession], createSession: session('created', 'created-thread') });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	model.selectMode('ask');
 	await model.executeServerCommand('init', '');
@@ -4473,11 +4105,7 @@ test('ChatWidgetModel retries the recorded mode independently of prompt identity
 	const fake = fakeApi({ sessions: [activeSession], thread: () => value });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	model.selectMode('ask');
 	await model.retryFailedTurn('turn-1');
@@ -4536,8 +4164,7 @@ function fakeApi(options: FakeOptions = {}): {
 	let modelDefaults = {
 		revision: 1,
 		model: null as ModelRef | null,
-		reasoningEffort: null as
-			import('../../../platform/agentHost/common/agentModels.js').ModelReasoningEffort | null,
+		reasoningEffort: null as import('../../../platform/agentHost/common/agentModels.js').ModelReasoningEffort | null,
 	};
 	const archiveRequests: SessionMutationParams[] = [];
 	const stopRequests: SessionMutationParams[] = [];
@@ -4608,12 +4235,9 @@ function fakeApi(options: FakeOptions = {}): {
 			create: async (params: SessionCreateParams) => {
 				createSessionRequests.push(params);
 				if (options.createSessionError) throw options.createSessionError;
-				const created =
-					options.createSession ?? options.createThread?.session ?? session('created', 'created-thread');
+				const created = options.createSession ?? options.createThread?.session ?? session('created', 'created-thread');
 				// Legacy fixtures kept root creation in createThread; the real create API is atomic.
-				const chats = created.chats.length
-					? created.chats
-					: (options.createThread?.session ?? session(created.sessionId, 'created-thread')).chats;
+				const chats = created.chats.length ? created.chats : (options.createThread?.session ?? session(created.sessionId, 'created-thread')).chats;
 				return { session: sessionDto({ ...created, chats }) };
 			},
 			createThread: async (params: SessionOperationInput<'createThread'>) => {
@@ -4626,31 +4250,33 @@ function fakeApi(options: FakeOptions = {}): {
 			},
 			archive: async (params: SessionMutationParams) => {
 				archiveRequests.push(params);
-				const archived =
-					options.sessions?.find(({ sessionId }) => sessionId === params.sessionId) ??
-					session(params.sessionId);
-				return { session: { ...sessionDto(archived), status: 'archived' as const } };
+				const archived = options.sessions?.find(({ sessionId }) => sessionId === params.sessionId) ?? session(params.sessionId);
+				return {
+					session: {
+						...sessionDto(archived),
+						status: 'archived' as const,
+					},
+				};
 			},
 			stop: async (params: SessionMutationParams) => {
 				stopRequests.push(params);
-				const stopped =
-					options.sessions?.find(({ sessionId }) => sessionId === params.sessionId) ??
-					session(params.sessionId);
-				return { session: { ...sessionDto(stopped), status: 'archived' as const } };
+				const stopped = options.sessions?.find(({ sessionId }) => sessionId === params.sessionId) ?? session(params.sessionId);
+				return {
+					session: {
+						...sessionDto(stopped),
+						status: 'archived' as const,
+					},
+				};
 			},
 		},
 		model: {
 			readDefaults: async () => modelDefaults,
-			configureDefaults: async (
-				update: import('../../../platform/agentHost/common/agentModels.js').AgentModelDefaultsUpdate,
-				expectedRevision: number,
-			) => {
+			configureDefaults: async (update: import('../../../platform/agentHost/common/agentModels.js').AgentModelDefaultsUpdate, expectedRevision: number) => {
 				assert.equal(expectedRevision, modelDefaults.revision);
 				modelDefaults = {
 					revision: modelDefaults.revision + 1,
 					model: update.model === undefined ? modelDefaults.model : update.model,
-					reasoningEffort:
-						update.reasoningEffort === undefined ? modelDefaults.reasoningEffort : update.reasoningEffort,
+					reasoningEffort: update.reasoningEffort === undefined ? modelDefaults.reasoningEffort : update.reasoningEffort,
 				};
 			},
 			setModelPreferences: async () => {},
@@ -4674,21 +4300,11 @@ function fakeApi(options: FakeOptions = {}): {
 			listProviders: async () => ({ providers: providers.map(provider => ({ ...provider })) }),
 			listProviderModels: async (connection: string) => {
 				providerModelRequests.push(connection);
-				return (
-					await agentModelCatalog(
-						(options.providerModels?.[connection] ?? []).map(entry =>
-							createTestModel({ model: entry.model, display_name: entry.displayName }),
-						),
-					)
-				).models;
+				return (await agentModelCatalog((options.providerModels?.[connection] ?? []).map(entry => createTestModel({ model: entry.model, display_name: entry.displayName })))).models;
 			},
 			setProviderApiKey: async ({ connection, apiKey }: { connection: string; apiKey: string }) => {
 				providerKeyRequests.push({ connection, apiKey });
-				providers = providers.map(entry =>
-					entry.connection === connection
-						? { ...entry, apiKeyConfigured: true, active: true, configured: true, ready: true }
-						: entry,
-				);
+				providers = providers.map(entry => (entry.connection === connection ? { ...entry, apiKeyConfigured: true, active: true, configured: true, ready: true } : entry));
 				return { connection, apiKeyConfigured: true };
 			},
 			readAdvisorDefault: async () => advisorDefault,
@@ -4748,7 +4364,11 @@ function fakeApi(options: FakeOptions = {}): {
 				const value = currentThread();
 				return { thread: value, transcript: transcript(value) };
 			},
-			subscribe: async () => ({ thread: currentThread(), transcript: transcript(currentThread()), updates: [] }),
+			subscribe: async () => ({
+				thread: currentThread(),
+				transcript: transcript(currentThread()),
+				updates: [],
+			}),
 			unsubscribe: async () => undefined,
 		},
 		turn: {
@@ -4840,9 +4460,7 @@ function sessionDto(value: ISession): SessionDto {
 			usage: emptyUsage(),
 			status: chat.status,
 			...(chat.origin.type === 'root' ? {} : { parentThreadId: chat.origin.parentThreadId }),
-			...(chat.origin.type === 'fork' || chat.origin.type === 'rewind'
-				? { forkedFromId: chat.origin.parentThreadId }
-				: {}),
+			...(chat.origin.type === 'fork' || chat.origin.type === 'rewind' ? { forkedFromId: chat.origin.parentThreadId } : {}),
 		})),
 	};
 }
@@ -4870,7 +4488,14 @@ function thread(agentText?: string): Thread {
 						toolMode: 'direct',
 						approvalMode: 'manual',
 						usage: emptyUsage(),
-						items: [{ type: 'agentMessage', itemId: 'item-1', turnId: 'turn-1', text: agentText }],
+						items: [
+							{
+								type: 'agentMessage',
+								itemId: 'item-1',
+								turnId: 'turn-1',
+								text: agentText,
+							},
+						],
 					},
 				]
 			: [],
@@ -4942,9 +4567,7 @@ function pagedChatFixture(initialCount = 65) {
 			};
 		}),
 	});
-	const page = (
-		history?: import('../../../platform/agentHost/common/agent.js').ThreadSnapshotHistory,
-	): import('../../../platform/agentHost/common/agent.js').ThreadRead => {
+	const page = (history?: import('../../../platform/agentHost/common/agent.js').ThreadSnapshotHistory): import('../../../platform/agentHost/common/agent.js').ThreadRead => {
 		const value = full();
 		const end = history?.type === 'before' ? value.turns.findIndex(turn => turn.turnId === history.turnId) : count;
 		assert.ok(end >= 0, 'the requested cursor must exist');
@@ -5002,15 +4625,9 @@ test('bounded Chat pages are requested by cursor and retain every message in chr
 	const fixture = pagedChatFixture();
 	using chat = createChatService(fixture.api);
 	using sessions = new SessionsManagementService(fixture.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
-	assert.deepEqual(fixture.requests, [
-		{ type: 'subscribe', afterSequence: 0, history: { type: 'latest', turnLimit: 20 } },
-	]);
+	assert.deepEqual(fixture.requests, [{ type: 'subscribe', afterSequence: 0, history: { type: 'latest', turnLimit: 20 } }]);
 	assert.equal(model.items.length, 20);
 	while (model.olderHistory) await model.loadOlderHistory();
 	assert.deepEqual(
@@ -5032,11 +4649,7 @@ test('bounded Chat pagination coalesces clicks without replacing live transcript
 	};
 	using chat = createChatService(fixture.api);
 	using sessions = new SessionsManagementService(fixture.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	const pending = model.loadOlderHistory();
 	assert.equal(model.loadOlderHistory(), pending);
@@ -5076,11 +4689,7 @@ test('bounded Chat refresh and reconnect preserve loaded pages and fill multi-pa
 	const fixture = pagedChatFixture();
 	using chat = createChatService(fixture.api);
 	using sessions = new SessionsManagementService(fixture.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	await model.loadOlderHistory();
 	fixture.setCount(66);
@@ -5121,11 +4730,7 @@ test('bounded Chat pagination failures retain content, allow sending and retry t
 	};
 	using chat = createChatService(fixture.api);
 	using sessions = new SessionsManagementService(fixture.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	await model.loadOlderHistory();
 	assert.match(model.olderHistory?.error ?? '', /Synthetic page failure/);
@@ -5152,11 +4757,7 @@ test('bounded Chat discards a retired page after A-B-A navigation and disposal',
 	};
 	using chat = createChatService(fixture.api);
 	using sessions = new SessionsManagementService(fixture.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	const page = model.loadOlderHistory();
 	await nextTask();
@@ -5180,11 +4781,7 @@ test('bounded Chat retains and submits an offered approval outside its visible h
 	};
 	using chat = createChatService(fixture.api);
 	using sessions = new SessionsManagementService(fixture.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	const interaction = {
 		requestId: 'old-approval',
@@ -5262,11 +4859,7 @@ test('bounded Chat applies durable replay after its snapshot and retains the ove
 	};
 	using chat = createChatService(fixture.api);
 	using sessions = new SessionsManagementService(fixture.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	await waitFor(() => model.thread?.sequence === 66);
 	assert.deepEqual(
@@ -5300,21 +4893,13 @@ test('bounded Chat deduplicates speech across pages and retains its older item a
 			...page,
 			transcript: {
 				...page.transcript,
-				entries: [
-					speech('global-speech', null),
-					...page.transcript.entries,
-					speech(`speech-${first.turnId}`, first.items[0]!.itemId),
-				],
+				entries: [speech('global-speech', null), ...page.transcript.entries, speech(`speech-${first.turnId}`, first.items[0]!.itemId)],
 			},
 		};
 	};
 	using chat = createChatService(fixture.api);
 	using sessions = new SessionsManagementService(fixture.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	await model.loadOlderHistory();
 	await model.loadOlderHistory();
@@ -5342,11 +4927,7 @@ test('bounded Chat cannot erase a newer tail when an older read has a newer stre
 	fixture.api.thread.read = async ({ history }) => (++reads === 1 ? pending.p : fixture.page(history));
 	using chat = createChatService(fixture.api);
 	using sessions = new SessionsManagementService(fixture.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	const complete = (sequence: number) =>
 		fixture.fake.emit({
@@ -5376,11 +4957,7 @@ test('bounded Chat cannot erase a newer tail when an older read has a newer stre
 	assert.equal(model.thread?.sequence, 67);
 });
 
-function failedTurn(
-	code: TurnError['code'],
-	retryable: boolean,
-	message = 'Turn failed',
-): Omit<Thread['turns'][number], 'items'> & { items: [] } {
+function failedTurn(code: TurnError['code'], retryable: boolean, message = 'Turn failed'): Omit<Thread['turns'][number], 'items'> & { items: [] } {
 	return {
 		turnId: 'turn-1',
 		status: 'failed',
@@ -5501,11 +5078,7 @@ test('Advisor question consults directly without starting the worker', async () 
 	});
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	await model.executeServerCommand('advisor', 'Check src/app.rs cancellation');
 	assert.equal(fake.turnStartRequests.length, 0);
@@ -5521,10 +5094,7 @@ test('Advisor without a configured model keeps an untitled chat', async () => {
 	const untitled = sessions.createUntitledSession();
 	using model = createWidgetModel(chat, { kind: 'untitled', session: untitled }, sessions);
 	await model.initialize();
-	await assert.rejects(
-		model.executeServerCommand('advisor', 'Check cancellation'),
-		/Configure an advisor model in Chat Settings/,
-	);
+	await assert.rejects(model.executeServerCommand('advisor', 'Check cancellation'), /Configure an advisor model in Chat Settings/);
 	assert.equal(fake.createSessionRequests.length, 0);
 	assert.equal(fake.consultRequests.length, 0);
 });
@@ -5618,7 +5188,11 @@ test('Chat Settings toggles Advisor while keeping its selected model', async () 
 	using editorServices = createTestEditorServices(undefined, keybindingFiles.services);
 	editorServices.registerInstance(IDialogService, recordingDialogService([]));
 	using preferences = new BrowserPreferencesService(
-		{ ...emptyEditorServiceState, openEditor: async () => undefined, focusActiveEditor() {} },
+		{
+			...emptyEditorServiceState,
+			openEditor: async () => undefined,
+			focusActiveEditor() {},
+		},
 		editorServices.get(IFileTextModelService),
 		keybindingFiles.files,
 		keybindingFiles.profiles,
@@ -5636,12 +5210,8 @@ test('Chat Settings toggles Advisor while keeping its selected model', async () 
 		assert.ok(labels.includes('Clear saved Advisor model'));
 		const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
 		assert.ok(input);
-		input.dispatchEvent(
-			new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }),
-		);
-		input.dispatchEvent(
-			new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }),
-		);
+		input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
+		input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
 		input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
 		await waitFor(() => fake.savedAdvisorDefaults.length === (enabled ? 2 : 1));
 		assert.deepEqual(fake.savedAdvisorDefaults.at(-1), { ...selected, enabled });
@@ -5709,7 +5279,11 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	using editorServices = createTestEditorServices(undefined, keybindingFiles.services);
 	editorServices.registerInstance(IDialogService, recordingDialogService([]));
 	using preferences = new BrowserPreferencesService(
-		{ ...emptyEditorServiceState, openEditor: async () => undefined, focusActiveEditor() {} },
+		{
+			...emptyEditorServiceState,
+			openEditor: async () => undefined,
+			focusActiveEditor() {},
+		},
 		editorServices.get(IFileTextModelService),
 		keybindingFiles.files,
 		keybindingFiles.profiles,
@@ -5735,11 +5309,7 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	assert.deepEqual(labels, ['Save key for OpenAI']);
 	assert.equal(currentQuickPickItems(quickInput)[0]?.description, 'API key required');
 	choose('OpenAI');
-	await waitFor(
-		() =>
-			dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input[type="password"]') !==
-			null,
-	);
+	await waitFor(() => dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input[type="password"]') !== null);
 	const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input[type="password"]');
 	assert.ok(input);
 	input.value = '  test-secret  ';
@@ -5835,11 +5405,7 @@ test('reconnection keeps a draft and blocks submission until thread subscription
 		},
 	});
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	using contextView = new BrowserContextViewService(document.body);
 	const services = createInputServices(contextView, chat);
@@ -5857,18 +5423,10 @@ test('reconnection keeps a draft and blocks submission until thread subscription
 		openModelSettings: async () => {},
 		resolveInteraction: async () => {},
 	};
-	using part = services.createInstance(
-		ChatInputPart,
-		document.body,
-		delegate,
-		{} as IContextMenuService,
-		contextView,
-		unavailableAccessibleViewService,
-		notifications,
-		ChatInputEditors,
-		[],
-		{ modePicker: 'visible', modelPickerPosition: 'leading' },
-	);
+	using part = services.createInstance(ChatInputPart, document.body, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], {
+		modePicker: 'visible',
+		modelPickerPosition: 'leading',
+	});
 	using changed = model.onDidChange(() => part.render(model.inputState));
 	part.render(model.inputState);
 	part.appendToDraft('Keep this draft');
@@ -5878,9 +5436,7 @@ test('reconnection keeps a draft and blocks submission until thread subscription
 	await part.acceptInput();
 	assert.equal(fake.turnStartRequests.length, 0);
 	assert.equal((await part.captureDraft())?.draft.text, 'Keep this draft');
-	await pending.complete(
-		await fake.api.thread.subscribe({ sessionId: 'session-1', threadId: 'thread-1', afterSequence: 0 }),
-	);
+	await pending.complete(await fake.api.thread.subscribe({ sessionId: 'session-1', threadId: 'thread-1', afterSequence: 0 }));
 	await waitFor(() => model.inputState.phase === 'ready');
 	assert.equal((await part.captureDraft())?.draft.text, 'Keep this draft');
 	await part.acceptInput();
@@ -5907,11 +5463,7 @@ test('Chat Changes refreshes share a pending summary and reread once when durabl
 	});
 	chat.readThreadChanges = async () => (!block ? summary(sequence) : ++reads === 1 ? pending.p : summary(sequence));
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	await model.refreshChanges();
 	block = true;
@@ -5943,11 +5495,7 @@ test('a disposed Chat model ignores its late Changes summary and starts no new r
 	const fake = fakeApi({ sessions: [activeSession], createSession: session('created', 'created-thread') });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	await model.refreshChanges();
 	const revision = model.inputState.changesRevision;
@@ -5989,11 +5537,7 @@ test('stream updates preserve message order and survive an older refresh snapsho
 		},
 	});
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	const emit = (revision: number, itemId: string, text: string, transient = true): void =>
 		fake.emit({
@@ -6064,11 +5608,7 @@ test('approval capabilities reach the composer only through owner-directed backe
 	});
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	const interaction = {
 		requestId: 'approval-1',
@@ -6167,12 +5707,7 @@ test('ChatWidgetModel inherits profile approval and preserves a conversation ove
 		}),
 		configure: async () => {},
 	};
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'untitled', session: sessions.createUntitledSession() },
-		sessions,
-		execution,
-	);
+	using model = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions, execution);
 	await model.initialize();
 	assert.equal(model.inputState.approvalMode, 'auto');
 	const updated = new Promise<void>(resolve => {
@@ -6210,11 +5745,7 @@ test('Chat context usage refresh ignores an estimate from an older connection', 
 		thread: { ...fake.api.thread, readContext: () => (++reads === 1 ? oldRead : currentRead).p },
 	});
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	const contextUsage = () => model.inputState.contextUsage;
 	await waitFor(() => reads === 1);
@@ -6242,27 +5773,15 @@ for (const kind of ['Code', 'Cowork'] as const)
 		const fake = fakeApi({ sessions: [activeSession] });
 		using chat = createChatService(fake.api);
 		using sessions = new SessionsManagementService(fake.api);
-		using model = createWidgetModel(
-			chat,
-			{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-			sessions,
-		);
+		using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 		await model.initialize();
 		using contextView = new BrowserContextViewService(document.body);
 		const services = createInputServices(contextView, chat);
 		const createInput = (container: HTMLElement, delegate: ChatInputDelegate) =>
-			services.createInstance(
-				ChatInputPart,
-				container,
-				delegate,
-				{} as IContextMenuService,
-				contextView,
-				unavailableAccessibleViewService,
-				notifications,
-				ChatInputEditors,
-				[],
-				{ modePicker: 'visible' as const, modelPickerPosition: 'leading' as const },
-			);
+			services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], {
+				modePicker: 'visible' as const,
+				modelPickerPosition: 'leading' as const,
+			});
 		using widget =
 			kind === 'Code'
 				? new ChatWidget(
@@ -6326,11 +5845,7 @@ test('Chat footer permission changes use the current model and confirm full acce
 	const fake = fakeApi({ sessions: [activeSession], createSession: session('created', 'created-thread') });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	using contextView = new BrowserContextViewService(document.body);
 	const services = createInputServices(contextView, chat);
@@ -6359,18 +5874,10 @@ test('Chat footer permission changes use the current model and confirm full acce
 		undefined,
 		(container, delegate) => {
 			delegates.push(delegate);
-			return services.createInstance(
-				ChatInputPart,
-				container,
-				delegate,
-				{} as IContextMenuService,
-				contextView,
-				unavailableAccessibleViewService,
-				notifications,
-				ChatInputEditors,
-				[],
-				{ modePicker: 'visible', modelPickerPosition: 'leading' },
-			);
+			return services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], {
+				modePicker: 'visible',
+				modelPickerPosition: 'leading',
+			});
 		},
 		services,
 		dialogs,
@@ -6403,8 +5910,7 @@ async function chooseConversation(pane: InstanceType<typeof ChatViewPane>, dom: 
 	await nextTask();
 	const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input')!;
 	assert.ok(input);
-	for (let step = 0; step < index; step++)
-		input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
+	for (let step = 0; step < index; step++) input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
 	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
 	await nextTask();
 }
@@ -6434,11 +5940,7 @@ test('ChatWidgetModel connects agentHost tool transcript updates to a retained c
 	const fake = fakeApi({ sessions: [activeSession], thread: () => currentThread });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	const callId = model.items[0].id;
 	assert.equal(model.items[0].toolInvocation?.call.name, 'shell');
@@ -6484,11 +5986,7 @@ test('Chat model saves cannot overwrite or send the previous input into the newl
 	fake.api.model.configureDefaults = async () => saved.p;
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	const selecting = model.selectModel(entry.model);
 	const sending = model.send('Keep this message in its original Thread');
@@ -6649,11 +6147,7 @@ test('An unavailable model leaves backend defaults and Auto intact with the gene
 		const fake = fakeApi();
 		using chat = createChatService(fake.api);
 		using sessions = new SessionsManagementService(fake.api);
-		using model = createWidgetModel(
-			chat,
-			{ kind: 'untitled', session: sessions.createUntitledSession() },
-			sessions,
-		);
+		using model = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
 		await model.initialize();
 		const before = await fake.api.model.readDefaults();
 		await assert.rejects(model.selectModel({ provider: 'missing', model: 'retired' }), {
@@ -6847,12 +6341,7 @@ test('moving Chat after attachment preparation cannot follow A-B-A navigation', 
 
 test('late Chat initialization failure cannot freeze a new explicit selection', async () => {
 	using storage = createTestStorage();
-	storage.store(
-		'chat.viewState',
-		JSON.stringify({ version: 1, drafts: [] }),
-		StorageScope.WORKSPACE,
-		StorageTarget.MACHINE,
-	);
+	storage.store('chat.viewState', JSON.stringify({ version: 1, drafts: [] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	const pending = new DeferredPromise<void>();
 	const fixture = await createNavigationInputPane('{}', undefined, {}, storage, pending.p);
 	using resources = fixture.resources;
@@ -6944,9 +6433,7 @@ for (const locale of ['en', 'zh-CN']) {
 		initializeTestLocalization(locale);
 		try {
 			let subscriptions = 0;
-			const pending = new DeferredPromise<
-				import('../../../platform/agentHost/common/agent.js').ThreadSubscription
-			>();
+			const pending = new DeferredPromise<import('../../../platform/agentHost/common/agent.js').ThreadSubscription>();
 			const fixture = await createNavigationInputPane('{}', undefined, {
 				subscribe: async () => {
 					subscriptions++;
@@ -6973,9 +6460,7 @@ for (const locale of ['en', 'zh-CN']) {
 			assert.equal(fake.turnStartRequests.length, 0);
 			retry.focus();
 			const help = AccessibleViewRegistry.getImplementations()
-				.filter(
-					provider => provider.type === AccessibleViewType.Help && provider.name.startsWith('chatHistory-'),
-				)
+				.filter(provider => provider.type === AccessibleViewType.Help && provider.name.startsWith('chatHistory-'))
 				.map(provider => provider.getProvider({} as ServicesAccessor))
 				.find(provider => provider !== undefined);
 			assert.ok(help);
@@ -7034,11 +6519,7 @@ test('Chat history recovery actions expire across A-B-A selection and pane dispo
 		},
 	});
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	const retired = model.historyStatus!;
 	await model.selectThread({ session: activeSession, threadId: 'thread-2' });
@@ -7079,11 +6560,7 @@ test('Chat live-update recovery reloads retained content and keeps repeated fail
 		},
 	});
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	const retained = model.thread;
 	fake.emit({
@@ -7330,11 +6807,7 @@ test('composer navigation A-B-A during model initialization cannot dispatch an o
 		},
 	});
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await waitFor(() => subscriptions === 1);
 	const previous = model.send('Old A request').then(
 		() => undefined,
@@ -7404,17 +6877,9 @@ test('composer navigation A-B-A during a pending model save cannot dispatch the 
 		},
 	});
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(
-		chat,
-		{ kind: 'session', active: { session: activeSession, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
-	assert.ok(
-		model.inputState.models.some(
-			entry => entry.model.provider === selected.provider && entry.model.model === selected.model,
-		),
-	);
+	assert.ok(model.inputState.models.some(entry => entry.model.provider === selected.provider && entry.model.model === selected.model));
 	const selection = model.selectModel(selected);
 	await saving.p;
 	const previous = model.send('Old A request').then(
@@ -7573,10 +7038,7 @@ for (const navigate of [false, true]) {
 		assert.equal(target.hidden, false);
 		if (navigate) {
 			assert.equal(fake.turnStartRequests.length, 0);
-			assert.equal(
-				target.querySelector<HTMLTextAreaElement>('.ash-chat-textarea-input')!.value,
-				'Keep my chosen durable draft',
-			);
+			assert.equal(target.querySelector<HTMLTextAreaElement>('.ash-chat-textarea-input')!.value, 'Keep my chosen durable draft');
 		} else {
 			assert.equal(fake.turnStartRequests.length, 1);
 			assert.equal(fake.turnStartRequests[0]!.threadId, 'thread-1');
@@ -7655,12 +7117,7 @@ test('Cowork consumes rich tool evidence from its actual scoped transcript and c
 	using services = createInputServices(contextView, chat);
 	using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
 	services.registerInstance(ICoworkModelPreferences, preferences);
-	using model = services.createInstance(
-		CoworkWidgetModel,
-		chat,
-		{ kind: 'session', active: { session: durable, threadId: 'thread-1' } },
-		sessions,
-	);
+	using model = services.createInstance(CoworkWidgetModel, chat, { kind: 'session', active: { session: durable, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	assert.equal(model.items.length, 2);
 	assert.equal(model.items[0]!.toolInvocation?.result?.itemId, 'result-first');
@@ -7734,10 +7191,7 @@ for (const locale of ['en', 'zh-CN']) {
 			});
 			const originalDraft = input.value;
 			await configuration.updateValue(ChatAIDisabledSettingId, true);
-			assert.match(
-				chatPane.querySelector('.ash-chat-status, .ash-chat-status-summary')!.textContent!,
-				locale === 'en' ? /AI features are disabled/u : /AI 功能已禁用/u,
-			);
+			assert.match(chatPane.querySelector('.ash-chat-status, .ash-chat-status-summary')!.textContent!, locale === 'en' ? /AI features are disabled/u : /AI 功能已禁用/u);
 			await pane.acceptInput();
 			assert.equal(fake.turnStartRequests.length, 0);
 			assert.equal(input.value, originalDraft);
@@ -7794,14 +7248,7 @@ test('AI preference blocks direct dispatch, including a pending permission read,
 		() => chat.generateTurnChangeMessage('session-1', 'thread-1', 'change-1', 1),
 	])
 		await assert.rejects(request(), /AI features are disabled/);
-	assert.equal(
-		fake.turnStartRequests.length +
-			fake.queuedRequests.length +
-			fake.turnSteerRequests.length +
-			fake.consultRequests.length +
-			fake.turnCompactRequests.length,
-		0,
-	);
+	assert.equal(fake.turnStartRequests.length + fake.queuedRequests.length + fake.turnSteerRequests.length + fake.consultRequests.length + fake.turnCompactRequests.length, 0);
 	await chat.readThread('session-1', 'thread-1');
 	await chat.interruptTurn({ ...options, turnId: 'turn-1' });
 	await configuration.updateValue(ChatAIDisabledSettingId, false);
@@ -7863,11 +7310,7 @@ test('Chat configuration contribution hides the registered Code view and command
 		await configuration.updateValue(ChatAIDisabledSettingId, true);
 		assert.equal(view.activeViewDescriptors.length, 0);
 		using commands = new CommandService(services);
-		assert.equal(
-			await commands.executeCommand(NEW_CHAT_COMMAND_ID),
-			false,
-			'Disabled direct calls need no Session service and cannot create a draft',
-		);
+		assert.equal(await commands.executeCommand(NEW_CHAT_COMMAND_ID), false, 'Disabled direct calls need no Session service and cannot create a draft');
 		await configuration.updateValue(ChatAIDisabledSettingId, false);
 		assert.equal(
 			view.activeViewDescriptors.some(view => view.id === CHAT_VIEW_ID),
@@ -7879,11 +7322,7 @@ test('Chat configuration contribution hides the registered Code view and command
 	assert.equal(contexts.getValue(ChatContextKeys.enabled.key), false);
 	await configuration.updateValue(ChatAIDisabledSettingId, true);
 	await configuration.updateValue(ChatAIDisabledSettingId, false);
-	assert.equal(
-		contexts.getValue(ChatContextKeys.enabled.key),
-		false,
-		'Disposed contribution no longer mirrors settings',
-	);
+	assert.equal(contexts.getValue(ChatContextKeys.enabled.key), false, 'Disposed contribution no longer mirrors settings');
 });
 
 for (const kind of ['Chat', 'Cowork']) {
@@ -7894,8 +7333,7 @@ for (const kind of ['Chat', 'Cowork']) {
 		});
 		using configuration = new WorkbenchConfigurationService();
 		using chat = createChatService(fake.api, configuration);
-		const submissions: { sessionId: string; threadId: string; isNewSession: boolean; requestSequence: number }[] =
-			[];
+		const submissions: { sessionId: string; threadId: string; isNewSession: boolean; requestSequence: number }[] = [];
 		using submitted = chat.onDidSubmitRequest(event => submissions.push(event));
 		using sessions = new SessionsManagementService(fake.api);
 		using services = new InstantiationService();
@@ -7917,10 +7355,7 @@ for (const kind of ['Chat', 'Cowork']) {
 		using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
 		services.registerInstance(ICoworkModelPreferences, preferences);
 		const selection = { kind: 'untitled' as const, session: sessions.createUntitledSession() };
-		using model =
-			kind === 'Chat'
-				? services.createInstance(ChatWidgetModel, chat, selection, sessions)
-				: services.createInstance(CoworkWidgetModel, chat, selection, sessions);
+		using model = kind === 'Chat' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : services.createInstance(CoworkWidgetModel, chat, selection, sessions);
 		await model.initialize();
 		await configuration.updateValue(ChatAIDisabledSettingId, true);
 		assert.equal(model.inputState.aiDisabled, true);
@@ -7935,9 +7370,7 @@ for (const kind of ['Chat', 'Cowork']) {
 		await model.send('Synthetic draft');
 		assert.equal(fake.createSessionRequests.length, 1);
 		assert.equal(fake.turnStartRequests.length, 1);
-		assert.deepEqual(submissions, [
-			{ sessionId: 'created', threadId: 'created-thread', isNewSession: true, requestSequence: 1 },
-		]);
+		assert.deepEqual(submissions, [{ sessionId: 'created', threadId: 'created-thread', isNewSession: true, requestSequence: 1 }]);
 	});
 }
 
@@ -8001,9 +7434,7 @@ test('Chat accepted-request notifications follow backend success and exclude rej
 
 test('initial naming is scoped to the accepted Thread and cannot turn a naming failure into a resend', async () => {
 	const fake = fakeApi();
-	const names: Parameters<
-		import('../../../platform/agentHost/common/agentService.js').IAgentThreadService['rename']
-	>[0][] = [];
+	const names: Parameters<import('../../../platform/agentHost/common/agentService.js').IAgentThreadService['rename']>[0][] = [];
 	fake.api.thread.rename = params => {
 		names.push(params);
 		throw new Error('Synthetic naming failure');
@@ -8023,10 +7454,7 @@ test('initial naming is scoped to the accepted Thread and cannot turn a naming f
 		names.map(({ sessionId, threadId, title, source }) => ({ sessionId, threadId, title, source })),
 		[{ sessionId: 'session-1', threadId: 'thread-1', title: '修复 parser now', source: 'automatic' }],
 	);
-	await assert.rejects(
-		service.renameThread('session-1', 'thread-2', 'Manual branch name'),
-		/Synthetic naming failure/,
-	);
+	await assert.rejects(service.renameThread('session-1', 'thread-2', 'Manual branch name'), /Synthetic naming failure/);
 	assert.deepEqual(
 		names.slice(1).map(({ threadId, title, source }) => ({ threadId, title, source })),
 		[{ threadId: 'thread-2', title: 'Manual branch name', source: 'manual' }],

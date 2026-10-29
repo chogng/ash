@@ -1,15 +1,8 @@
 import { TaskQueue } from '../../../../../base/common/async.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
-import {
-	IMessageHistoryService,
-	type MessageHistoryEntry,
-	type MessageHistoryKind,
-	type MessageHistoryPage,
-} from '../../../../../platform/messageHistory/common/messageHistory.js';
+import { IMessageHistoryService, type MessageHistoryEntry, type MessageHistoryKind, type MessageHistoryPage } from '../../../../../platform/messageHistory/common/messageHistory.js';
 
-export type ChatHistoryNavigationResult<TDraft> =
-	| { readonly kind: 'history'; readonly entry: MessageHistoryEntry }
-	| { readonly kind: 'draft'; readonly draft: TDraft };
+export type ChatHistoryNavigationResult<TDraft> = { readonly kind: 'history'; readonly entry: MessageHistoryEntry } | { readonly kind: 'draft'; readonly draft: TDraft };
 
 type Navigation<TDraft> = {
 	readonly draft: TDraft;
@@ -74,13 +67,9 @@ export class ChatHistoryNavigator<TDraft> extends Disposable {
 				before: undefined,
 				loaded: false,
 			});
-			if (
-				navigation.index + 1 >= navigation.entries.length &&
-				(!navigation.loaded || navigation.before !== undefined)
-			) {
+			if (navigation.index + 1 >= navigation.entries.length && (!navigation.loaded || navigation.before !== undefined)) {
 				const page = await this.history!.read({ before: navigation.before, text: '', limit: 40 });
-				if (this.isDisposed || generation !== this.generation || this.navigation !== navigation)
-					return undefined;
+				if (this.isDisposed || generation !== this.generation || this.navigation !== navigation) return undefined;
 				navigation.entries.push(...page.entries);
 				navigation.before = page.nextBefore;
 				navigation.loaded = true;

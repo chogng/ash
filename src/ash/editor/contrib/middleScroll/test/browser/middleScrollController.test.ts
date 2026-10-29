@@ -16,7 +16,12 @@ test('middle click opens a scroll session and keyboard input closes it', () => {
 	const container = h(environment.window.document, 'main');
 	environment.window.document.body.append(container);
 	using model = new TextModel('one\ntwo\nthree');
-	using editor = createTestCodeEditor({ container, model, lineHeight: 20, scrollOnMiddleClick: true });
+	using editor = createTestCodeEditor({
+		container,
+		model,
+		lineHeight: 20,
+		scrollOnMiddleClick: true,
+	});
 	editor.layout({ width: 300, height: 60 });
 	editor.focus();
 	const pointer = new environment.window.Event('pointerdown', { bubbles: true, cancelable: true });
@@ -34,9 +39,7 @@ test('middle click opens a scroll session and keyboard input closes it', () => {
 	const dot = editor.view.domNode.domNode.querySelector('.scroll-editor-on-middle-click-dot');
 	assert.ok(dot);
 	assert.equal(dot.getAttribute('aria-hidden'), 'true');
-	editor.controller.element.dispatchEvent(
-		new environment.window.KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }),
-	);
+	editor.controller.element.dispatchEvent(new environment.window.KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
 	assert.equal(editor.view.domNode.domNode.classList.contains('scroll-editor-on-middle-click-editor'), false);
 	assert.equal(editor.view.domNode.domNode.querySelector('.scroll-editor-on-middle-click-dot'), null);
 	container.remove();
@@ -45,7 +48,12 @@ test('middle click opens a scroll session and keyboard input closes it', () => {
 test('disabled middle-click scrolling does not create a scroll session', () => {
 	const container = h(environment.window.document, 'main');
 	using model = new TextModel('one\ntwo\nthree');
-	using editor = createTestCodeEditor({ container, model, lineHeight: 20, scrollOnMiddleClick: false });
+	using editor = createTestCodeEditor({
+		container,
+		model,
+		lineHeight: 20,
+		scrollOnMiddleClick: false,
+	});
 	editor.layout({ width: 300, height: 60 });
 	const pointer = pointerEvent('pointerdown', 1, 5, 40, 30);
 	editor.view.domNode.domNode.dispatchEvent(pointer);
@@ -57,10 +65,13 @@ test('disabled middle-click scrolling does not create a scroll session', () => {
 
 test('pointer displacement continuously scrolls and release ends an active movement', async () => {
 	const container = h(environment.window.document, 'main');
-	using model = new TextModel(
-		Array.from({ length: 80 }, (_, index) => `${'line content '.repeat(20)}${index}`).join('\n'),
-	);
-	using editor = createTestCodeEditor({ container, model, lineHeight: 20, scrollOnMiddleClick: true });
+	using model = new TextModel(Array.from({ length: 80 }, (_, index) => `${'line content '.repeat(20)}${index}`).join('\n'));
+	using editor = createTestCodeEditor({
+		container,
+		model,
+		lineHeight: 20,
+		scrollOnMiddleClick: true,
+	});
 	editor.layout({ width: 300, height: 60 });
 	editor.view.domNode.domNode.dispatchEvent(pointerEvent('pointerdown', 1, 7, 40, 30));
 	const scrolled = new Promise<void>(resolve => {

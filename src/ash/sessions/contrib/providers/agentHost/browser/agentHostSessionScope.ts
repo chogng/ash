@@ -5,24 +5,12 @@ import type { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { IAccountService } from '../../../../../platform/accounts/common/accountService.js';
 import { IAgentExecutionSettingsService } from '../../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IAgentModelsService } from '../../../../../platform/agentHost/common/agentModels.js';
-import {
-	IAgentSessionService,
-	IAgentThreadService,
-	IAgentTurnService,
-} from '../../../../../platform/agentHost/common/agentService.js';
-import {
-	IAppServerApi,
-	IAppServerHookApi,
-	IAppServerSkillApi,
-	IServerEventApi,
-} from '../../../../../platform/agentHost/common/appServerApi.js';
+import { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../../../../platform/agentHost/common/agentService.js';
+import { IAppServerApi, IAppServerHookApi, IAppServerSkillApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import type { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 import { ITurnChangesApi } from '../../../../../platform/turnChanges/common/turnChangesApi.js';
-import {
-	LanguageModelsService,
-	ILanguageModelsService,
-} from '../../../../../workbench/contrib/chat/common/languageModels.js';
+import { LanguageModelsService, ILanguageModelsService } from '../../../../../workbench/contrib/chat/common/languageModels.js';
 import { IPromptsService } from '../../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { AppServerAccountService } from '../../../../../workbench/services/accounts/browser/appServerAccountService.js';
@@ -30,11 +18,7 @@ import { ChatService } from '../../../../../workbench/services/chat/browser/chat
 import { IChatService } from '../../../../../workbench/services/chat/common/chatService.js';
 
 /** The host scope borrows UI services and owns every service that retains backend subscriptions. */
-export function createAgentHostSessionScope(
-	parent: IInstantiationService,
-	api: IRendererHost,
-	lifetime: DisposableStore,
-): IInstantiationService {
+export function createAgentHostSessionScope(parent: IInstantiationService, api: IRendererHost, lifetime: DisposableStore): IInstantiationService {
 	const scope = lifetime.add(parent.createChild());
 	scope.registerInstance(IRendererHostService, api);
 	scope.registerInstance(IAppServerApi, api.appServer);

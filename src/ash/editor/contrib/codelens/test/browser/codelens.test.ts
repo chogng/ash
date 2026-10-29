@@ -69,9 +69,7 @@ test('CodeLens model preserves provider ownership, provider rank, and independen
 	const errors: unknown[] = [];
 	const previousErrorHandler = errorHandler.getUnexpectedErrorHandler();
 	errorHandler.setUnexpectedErrorHandler(error => errors.push(error));
-	const result = await getCodeLensModel(providers, model, CancellationToken.None).finally(() =>
-		errorHandler.setUnexpectedErrorHandler(previousErrorHandler),
-	);
+	const result = await getCodeLensModel(providers, model, CancellationToken.None).finally(() => errorHandler.setUnexpectedErrorHandler(previousErrorHandler));
 
 	assert.deepEqual(
 		result.lenses.map(item => item.symbol.command?.id ?? item.symbol.id),
@@ -80,9 +78,7 @@ test('CodeLens model preserves provider ownership, provider rank, and independen
 	assert.equal(result.lenses[2]!.provider, primary);
 	assert.equal(errors.length, 1);
 	const deferred = result.lenses[2]!;
-	const resolved = await Promise.resolve(
-		deferred.provider.resolveCodeLens!(model, deferred.symbol, CancellationToken.None),
-	);
+	const resolved = await Promise.resolve(deferred.provider.resolveCodeLens!(model, deferred.symbol, CancellationToken.None));
 	assert.equal(resolved?.command?.id, 'primary.resolved');
 	assert.equal(primaryResolveCount, 1);
 	assert.equal(secondaryResolveCount, 0);
@@ -102,7 +98,9 @@ test('CodeLens contribution groups one stable widget per line and refreshes prov
 		onDidChange: changeEmitter.event,
 		provideCodeLenses: (_model, token) => {
 			providerToken = token;
-			return { lenses: [lens(1, 0, command('immediate', 'Immediate')), lens(1, 5, undefined, 'deferred')] };
+			return {
+				lenses: [lens(1, 0, command('immediate', 'Immediate')), lens(1, 5, undefined, 'deferred')],
+			};
 		},
 		resolveCodeLens: (_model, value) => {
 			resolveCount += 1;
@@ -119,19 +117,8 @@ test('CodeLens contribution groups one stable widget per line and refreshes prov
 	viewport.layout({ width: 300, height: 60 });
 	const executions: string[] = [];
 	const contributionErrors: unknown[] = [];
-	const executeCommand = ((id: string) => executions.push(id)) as unknown as (
-		id: string,
-		args: readonly unknown[] | undefined,
-	) => void;
-	using contribution = new CodeLensContribution(
-		editorFor(viewport),
-		viewport,
-		providers,
-		codeLensCache,
-		undefined,
-		executeCommand,
-		error => contributionErrors.push(error),
-	);
+	const executeCommand = ((id: string) => executions.push(id)) as unknown as (id: string, args: readonly unknown[] | undefined) => void;
+	using contribution = new CodeLensContribution(editorFor(viewport), viewport, providers, codeLensCache, undefined, executeCommand, error => contributionErrors.push(error));
 
 	await contribution.getModel();
 	viewport.render(true, false);
@@ -150,17 +137,15 @@ test('CodeLens contribution groups one stable widget per line and refreshes prov
 	using mouseDownListener = viewport.controller.userInputEvents.onMouseDown(event => {
 		mouseDown = event;
 	});
-	widget
-		.querySelector('button')!
-		.dispatchEvent(
-			new dom.window.MouseEvent('pointerdown', {
-				bubbles: true,
-				cancelable: true,
-				button: 2,
-				buttons: 2,
-				clientX: 80,
-			}),
-		);
+	widget.querySelector('button')!.dispatchEvent(
+		new dom.window.MouseEvent('pointerdown', {
+			bubbles: true,
+			cancelable: true,
+			button: 2,
+			buttons: 2,
+			clientX: 80,
+		}),
+	);
 	assert.equal(mouseDown?.target.type, MouseTargetType.CONTENT_VIEW_ZONE);
 	viewport.layout({ width: 320, height: 60 });
 	viewport.render(true, false);
@@ -206,14 +191,7 @@ test('CodeLens model waits for every visible resolve batch in the current reques
 		textMeasurer: new FixedTextMeasurer(),
 	});
 	viewport.layout({ width: 300, height: 20 });
-	using contribution = new CodeLensContribution(
-		editorFor(viewport),
-		viewport,
-		providers,
-		codeLensCache,
-		undefined,
-		() => undefined,
-	);
+	using contribution = new CodeLensContribution(editorFor(viewport), viewport, providers, codeLensCache, undefined, () => undefined);
 	await waitFor(() => requests.length === 1);
 
 	viewport.scrollTo({ left: 0, top: 210 });
@@ -263,14 +241,7 @@ test('CodeLens contribution shows cached labels as text until fresh commands arr
 			provideCodeLenses: () => ({ lenses: [lens(1, 0, command('old.run', 'Cached'))] }),
 		});
 		using firstViewport = createViewport(firstDom, firstModel);
-		using firstContribution = new CodeLensContribution(
-			editorFor(firstViewport),
-			firstViewport,
-			firstProviders,
-			codeLensCache,
-			resource,
-			() => undefined,
-		);
+		using firstContribution = new CodeLensContribution(editorFor(firstViewport), firstViewport, firstProviders, codeLensCache, resource, () => undefined);
 		await firstContribution.getModel();
 		firstDom.window.close();
 
@@ -286,34 +257,18 @@ test('CodeLens contribution shows cached labels as text until fresh commands arr
 		});
 		using secondViewport = createViewport(secondDom, secondModel);
 		const executions: string[] = [];
-		using secondContribution = new CodeLensContribution(
-			editorFor(secondViewport),
-			secondViewport,
-			secondProviders,
-			codeLensCache,
-			resource,
-			id => {
-				executions.push(id);
-			},
-		);
+		using secondContribution = new CodeLensContribution(editorFor(secondViewport), secondViewport, secondProviders, codeLensCache, resource, id => {
+			executions.push(id);
+		});
 
-		const cachedCommand = requiredElement<HTMLElement>(
-			secondViewport.domNode.domNode,
-			'.stanza-editor-codelens-command',
-		);
-		assert.deepEqual(
-			{ tagName: cachedCommand.tagName, title: cachedCommand.textContent },
-			{ tagName: 'SPAN', title: 'Cached' },
-		);
+		const cachedCommand = requiredElement<HTMLElement>(secondViewport.domNode.domNode, '.stanza-editor-codelens-command');
+		assert.deepEqual({ tagName: cachedCommand.tagName, title: cachedCommand.textContent }, { tagName: 'SPAN', title: 'Cached' });
 		cachedCommand.dispatchEvent(new secondDom.window.MouseEvent('click', { bubbles: true }));
 		assert.deepEqual(executions, []);
 
 		provideFreshLenses!([lens(1, 0, command('fresh.run', 'Fresh'))]);
 		await secondContribution.getModel();
-		const freshCommand = requiredElement<HTMLButtonElement>(
-			secondViewport.domNode.domNode,
-			'button.stanza-editor-codelens-command',
-		);
+		const freshCommand = requiredElement<HTMLButtonElement>(secondViewport.domNode.domNode, 'button.stanza-editor-codelens-command');
 		assert.equal(freshCommand.textContent, 'Fresh');
 		freshCommand.dispatchEvent(new secondDom.window.MouseEvent('click', { bubbles: true }));
 		assert.deepEqual(executions, ['fresh.run']);
@@ -359,12 +314,10 @@ test('CodeLens cache persists workspace line positions without command data', ()
 	let binding: ReturnType<CodeLensCache['bindStorage']> | undefined = codeLensCache.bindStorage(storage);
 	try {
 		assert.deepEqual(
-			codeLensCache
-				.get(restoredResource, 3)
-				?.lenses.map(item => ({
-					lineIndex: item.symbol.range.startLineNumber - 1,
-					command: item.symbol.command,
-				})),
+			codeLensCache.get(restoredResource, 3)?.lenses.map(item => ({
+				lineIndex: item.symbol.range.startLineNumber - 1,
+				command: item.symbol.command,
+			})),
 			[{ lineIndex: 2, command: undefined }],
 		);
 		const restoredDom = new JSDOM('<!doctype html><body><main></main></body>');
@@ -377,19 +330,9 @@ test('CodeLens cache persists workspace line positions without command data', ()
 			textMeasurer: new FixedTextMeasurer(),
 		});
 		restoredViewport.layout({ width: 300, height: 20 });
-		using restoredContribution = new CodeLensContribution(
-			editorFor(restoredViewport),
-			restoredViewport,
-			restoredProviders,
-			codeLensCache,
-			restoredResource,
-			undefined,
-		);
+		using restoredContribution = new CodeLensContribution(editorFor(restoredViewport), restoredViewport, restoredProviders, codeLensCache, restoredResource, undefined);
 		restoredViewport.render(true, false);
-		const restoredWidget = requiredElement<HTMLElement>(
-			restoredViewport.domNode.domNode,
-			'.stanza-editor-codelens',
-		);
+		const restoredWidget = requiredElement<HTMLElement>(restoredViewport.domNode.domNode, '.stanza-editor-codelens');
 		assert.deepEqual(
 			{
 				hidden: restoredWidget.hidden,
@@ -397,7 +340,12 @@ test('CodeLens cache persists workspace line positions without command data', ()
 				thirdLineTop: restoredViewport.getPositionContentCoordinates(new Position(2 + 1, 0 + 1)).top,
 				contentHeight: restoredViewport.viewportLayout.contentSize.height,
 			},
-			{ hidden: true, zoneTop: '0px', thirdLineTop: 54, contentHeight: 74 },
+			{
+				hidden: true,
+				zoneTop: '0px',
+				thirdLineTop: 54,
+				contentHeight: 74,
+			},
 		);
 		restoredDom.window.close();
 
@@ -413,7 +361,9 @@ test('CodeLens cache persists workspace line positions without command data', ()
 		assert.equal(serialized.includes('source.run') || serialized.includes('Run'), false);
 		storage.fireExternalChange(
 			'codelens/cache2',
-			JSON.stringify({ [switchedResource.toString()]: { lineCount: 1, lines: [1] } }),
+			JSON.stringify({
+				[switchedResource.toString()]: { lineCount: 1, lines: [1] },
+			}),
 		);
 		assert.equal(codeLensCache.get(storedResource, 2), undefined);
 		assert.deepEqual(
@@ -424,10 +374,7 @@ test('CodeLens cache persists workspace line positions without command data', ()
 		codeLensCache.put(closingResource, 1, modelFrom(provider, lens(0, 0, command('closing.run', 'Closing'))));
 		binding.dispose();
 		binding = undefined;
-		assert.deepEqual(
-			JSON.parse(storage.get('codelens/cache2', StorageScope.WORKSPACE, '{}'))[closingResource.toString()],
-			{ lineCount: 1, lines: [1] },
-		);
+		assert.deepEqual(JSON.parse(storage.get('codelens/cache2', StorageScope.WORKSPACE, '{}'))[closingResource.toString()], { lineCount: 1, lines: [1] });
 	} finally {
 		binding?.dispose();
 		codeLensCache.delete(restoredResource);
@@ -486,25 +433,12 @@ function editorFor(viewport: InstanceType<typeof View>): ICodeEditor {
 			const projection = viewport.getVisualLineProjection();
 			const first = projection.lineAt(visible.startLineIndex);
 			const last = projection.lineAt(visible.endLineIndexExclusive - 1);
-			return first && last
-				? [
-						new Range(
-							first.logicalLineIndex + 1,
-							first.startColumn + 1,
-							last.logicalLineIndex + 1,
-							last.endColumn + 1,
-						),
-					]
-				: [];
+			return first && last ? [new Range(first.logicalLineIndex + 1, first.startColumn + 1, last.logicalLineIndex + 1, last.endColumn + 1)] : [];
 		},
-		getTopForPosition: (lineNumber: number, column: number) =>
-			viewport.getPositionContentCoordinates(new Position(lineNumber, column)).top,
-		getTopForLineNumber: (lineNumber: number) =>
-			viewport.getPositionContentCoordinates(new Position(lineNumber, 1)).top,
+		getTopForPosition: (lineNumber: number, column: number) => viewport.getPositionContentCoordinates(new Position(lineNumber, column)).top,
+		getTopForLineNumber: (lineNumber: number) => viewport.getPositionContentCoordinates(new Position(lineNumber, 1)).top,
 		getBottomForLineNumber: (lineNumber: number) => {
-			const coordinates = viewport.getPositionContentCoordinates(
-				new Position(lineNumber, viewport.textModel.getLineMaxColumn(lineNumber)),
-			);
+			const coordinates = viewport.getPositionContentCoordinates(new Position(lineNumber, viewport.textModel.getLineMaxColumn(lineNumber)));
 			return coordinates.top + coordinates.height;
 		},
 		setScrollTop: (top: number) => viewport.scrollTo({ left: viewport.currentLayout.scrollPosition.left, top }),

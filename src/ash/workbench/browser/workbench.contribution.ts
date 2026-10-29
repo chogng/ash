@@ -13,10 +13,7 @@ import { registerOutputView } from '../contrib/output/browser/output.contributio
 import { Lxicon } from '../../base/common/lxicons.js';
 import { registerAction2 } from '../../platform/actions/common/actions.js';
 import { localize } from '../../nls.js';
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
 import {
 	OpenWorkspaceAction,

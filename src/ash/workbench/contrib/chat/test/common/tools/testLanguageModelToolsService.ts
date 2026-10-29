@@ -1,7 +1,4 @@
-import type {
-	AgentCapabilitiesReadResult,
-	AgentToolCapabilityDto,
-} from '../../../../../../../../.build/protocol/typescript/index.js';
+import type { AgentCapabilitiesReadResult, AgentToolCapabilityDto } from '../../../../../../../../.build/protocol/typescript/index.js';
 import { createDisconnectedAppServerApi } from '../../../../../../platform/agentHost/browser/appServerApi.js';
 import { unavailableOperation } from '../../../../../../platform/renderer/browser/disconnectedHost.js';
 import { LanguageModelToolsService } from '../../../browser/tools/languageModelToolsService.js';
@@ -17,11 +14,7 @@ export interface ToolCatalogFixture {
 }
 
 /** The caller or a singleton registration owns the returned service. */
-export function createTestLanguageModelToolsService(api: {
-	readonly isAvailable: boolean;
-	readonly onDidChangeTools?: Event<void>;
-	read(): Promise<ToolCatalogFixture>;
-}): LanguageModelToolsService {
+export function createTestLanguageModelToolsService(api: { readonly isAvailable: boolean; readonly onDidChangeTools?: Event<void>; read(): Promise<ToolCatalogFixture> }): LanguageModelToolsService {
 	return new LanguageModelToolsService(
 		{
 			isAvailable: api.isAvailable,

@@ -1,12 +1,6 @@
 import type { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import type {
-	ILocalTranscriptionModelService,
-	ILocalTranscriptionModelSnapshot,
-} from '../../../../../platform/localTranscription/common/localTranscription.js';
-import type {
-	IVoiceCodeTranscriptionBackendService,
-	IDictationInputOptions,
-} from '../../../../../platform/renderer/common/dictation.js';
+import type { ILocalTranscriptionModelService, ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import type { IVoiceCodeTranscriptionBackendService, IDictationInputOptions } from '../../../../../platform/renderer/common/dictation.js';
 import type { ISpeechService } from '../../../speech/common/speechService.js';
 import { dictationBackend } from '../../common/constants.js';
 import { localize } from '../../../../../nls.js';

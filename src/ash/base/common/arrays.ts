@@ -23,11 +23,7 @@ export namespace CompareResult {
 export const numberComparator: Comparator<number> = (left, right) => left - right;
 export const booleanComparator: Comparator<boolean> = (left, right) => numberComparator(left ? 1 : 0, right ? 1 : 0);
 
-export function equals<T>(
-	left: readonly T[] | undefined,
-	right: readonly T[] | undefined,
-	itemEquals: (left: T, right: T) => boolean = strictEquals,
-): boolean {
+export function equals<T>(left: readonly T[] | undefined, right: readonly T[] | undefined, itemEquals: (left: T, right: T) => boolean = strictEquals): boolean {
 	if (left === right) return true;
 	if (!left || !right) return false;
 	return arraysEqual(left, right, itemEquals);
@@ -35,8 +31,7 @@ export function equals<T>(
 
 /** Binary-searches an indexed collection. A missing item is encoded as `-(insertionIndex + 1)`. */
 export function binarySearch2(length: number, compareToKey: (index: number) => number): number {
-	if (!Number.isSafeInteger(length) || length < 0)
-		throw new RangeError('Binary-search length must be a non-negative safe integer');
+	if (!Number.isSafeInteger(length) || length < 0) throw new RangeError('Binary-search length must be a non-negative safe integer');
 	let low = 0;
 	let high = length - 1;
 	while (low <= high) {
@@ -63,10 +58,7 @@ export function sumBy<T>(items: readonly T[], selector: (item: T) => number): nu
 	return result;
 }
 
-export function* groupAdjacentBy<T>(
-	items: Iterable<T>,
-	shouldGroup: (left: T, right: T) => boolean,
-): IterableIterator<T[]> {
+export function* groupAdjacentBy<T>(items: Iterable<T>, shouldGroup: (left: T, right: T) => boolean): IterableIterator<T[]> {
 	let group: T[] = [];
 	for (const item of items) {
 		if (group.length > 0 && !shouldGroup(group[group.length - 1]!, item)) {
@@ -128,8 +120,7 @@ export class ArrayQueue<T> {
 		return result;
 	}
 	takeCount(count: number): T[] {
-		if (!Number.isSafeInteger(count) || count < 0 || count > this.length)
-			throw new RangeError('Queue count is outside the remaining items');
+		if (!Number.isSafeInteger(count) || count < 0 || count > this.length) throw new RangeError('Queue count is outside the remaining items');
 		const result = this.items.slice(this.firstIndex, this.firstIndex + count);
 		this.firstIndex += count;
 		return result;
@@ -137,11 +128,7 @@ export class ArrayQueue<T> {
 }
 
 /** Compares two array-like sequences item by item. */
-export function arraysEqual<T>(
-	left: readonly T[],
-	right: readonly T[],
-	equals: (left: T, right: T) => boolean = strictEquals,
-): boolean {
+export function arraysEqual<T>(left: readonly T[], right: readonly T[], equals: (left: T, right: T) => boolean = strictEquals): boolean {
 	if (left === right) return true;
 	if (left.length !== right.length) return false;
 	return left.every((value, index) => equals(value, right[index]!));
@@ -166,11 +153,7 @@ export function distinct<T>(array: ReadonlyArray<T>, keyFn: (value: T) => unknow
 }
 
 /** Returns the number of equal items at the beginning of two sequences. */
-export function commonPrefixLength<T>(
-	left: readonly T[],
-	right: readonly T[],
-	equals: (left: T, right: T) => boolean = strictEquals,
-): number {
+export function commonPrefixLength<T>(left: readonly T[], right: readonly T[], equals: (left: T, right: T) => boolean = strictEquals): number {
 	const limit = Math.min(left.length, right.length);
 	let index = 0;
 	while (index < limit && equals(left[index]!, right[index]!)) index += 1;
@@ -178,12 +161,7 @@ export function commonPrefixLength<T>(
 }
 
 /** Returns the number of equal trailing items without overlapping an already matched prefix. */
-export function commonArraySuffixLength<T>(
-	left: readonly T[],
-	right: readonly T[],
-	prefixLength = 0,
-	equals: (left: T, right: T) => boolean = strictEquals,
-): number {
+export function commonArraySuffixLength<T>(left: readonly T[], right: readonly T[], prefixLength = 0, equals: (left: T, right: T) => boolean = strictEquals): number {
 	const limit = Math.min(left.length, right.length);
 	if (!Number.isInteger(prefixLength) || prefixLength < 0 || prefixLength > limit) {
 		throw new RangeError('Prefix length must be an integer within both sequences');

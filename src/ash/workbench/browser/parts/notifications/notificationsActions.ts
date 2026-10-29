@@ -9,12 +9,7 @@ export class ConfigureNotificationAction extends SubmenuAction {
 	static readonly ID = 'workbench.action.configureNotification';
 
 	constructor(actions: readonly IAction[]) {
-		super(
-			ConfigureNotificationAction.ID,
-			localize('notifications.moreActions', 'More Actions'),
-			actions,
-			Lxicon.gear,
-		);
+		super(ConfigureNotificationAction.ID, localize('notifications.moreActions', 'More Actions'), actions, Lxicon.gear);
 	}
 }
 

@@ -17,10 +17,7 @@ test('merge line alignment pairs lines after an insertion within a conflict', ()
 		resolution: 'unresolved',
 	};
 	const changes = {
-		current: [
-			new LineRangeMapping(new LineRange(2, 3), new LineRange(2, 4)),
-			new LineRangeMapping(new LineRange(4, 5), new LineRange(5, 6)),
-		],
+		current: [new LineRangeMapping(new LineRange(2, 3), new LineRange(2, 4)), new LineRangeMapping(new LineRange(4, 5), new LineRange(5, 6))],
 		incoming: [new LineRangeMapping(new LineRange(3, 4), new LineRange(3, 4))],
 		result: [new LineRangeMapping(new LineRange(2, 5), new LineRange(2, 9))],
 	};

@@ -63,11 +63,7 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 		this.changed.fire();
 	}
 
-	moveInstance(
-		instances: ITerminalInstance | readonly ITerminalInstance[],
-		index: number,
-		position: 'before' | 'after',
-	): void {
+	moveInstance(instances: ITerminalInstance | readonly ITerminalInstance[], index: number, position: 'before' | 'after'): void {
 		const target = this.instances[index];
 		const moving = new Set(Array.isArray(instances) ? instances : [instances]);
 		if (!target || moving.has(target)) return;
@@ -129,8 +125,7 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 		const total = this.relativeSizes.reduce((sum, size) => sum + size, 0);
 		this.applyingPaneSizes = true;
 		try {
-			for (let index = 0; index < this.relativeSizes.length - 1; index++)
-				this.splitView.resizeView(index, (this.primarySize * this.relativeSizes[index]!) / total);
+			for (let index = 0; index < this.relativeSizes.length - 1; index++) this.splitView.resizeView(index, (this.primarySize * this.relativeSizes[index]!) / total);
 		} finally {
 			this.applyingPaneSizes = false;
 		}
@@ -168,9 +163,7 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 		if (!this.container) return;
 		const activeElement = this.container.ownerDocument.activeElement;
 		const focusedInstance = this.instances.find(instance => instance.xterm?.element.contains(activeElement));
-		const focusedSash = this.instances.findIndex(
-			(_, index) => this.splitView?.getSash(index)?.element === activeElement,
-		);
+		const focusedSash = this.instances.findIndex((_, index) => this.splitView?.getSash(index)?.element === activeElement);
 		// Detach before disposing the old layout so xterm's DOM and buffer survive.
 		for (const instance of this.instances) instance.detachFromElement();
 		this.layoutLifetime.clear();
@@ -204,17 +197,14 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 			);
 		}
 		for (let index = 0; index < this.instances.length - 1; index++) {
-			split
-				.getSash(index)
-				?.element.setAttribute('aria-label', localize('terminal.group.resize', 'Resize terminal panes'));
+			split.getSash(index)?.element.setAttribute('aria-label', localize('terminal.group.resize', 'Resize terminal panes'));
 		}
 		// Desired proportions change through pane operations and user sash input.
 		// Intermediate Grid sizes may clamp the rendered panes; those temporary
 		// sizes must never replace the proportions restored on the final layout.
 		lifetime.add(
 			split.onDidChangeViewSizes(() => {
-				if (!this.applyingPaneSizes)
-					this.relativeSizes = this.instances.map((_, index) => split.getViewSize(index));
+				if (!this.applyingPaneSizes) this.relativeSizes = this.instances.map((_, index) => split.getViewSize(index));
 			}),
 		);
 		this.setVisible(this.visible);

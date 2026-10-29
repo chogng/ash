@@ -1,7 +1,4 @@
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { localize } from '../../../../nls.js';
 
@@ -13,10 +10,7 @@ export const ContentSearchConfiguration = Object.freeze({
 		key: 'search.showLineNumbers',
 		defaultValue: false,
 		parse: value => parseBoolean(value, 'search.showLineNumbers'),
-		setting: booleanSetting(
-			localize('search.showLineNumbers.title', 'Show line numbers'),
-			localize('search.showLineNumbers', 'Controls whether to show line numbers for search results.'),
-		),
+		setting: booleanSetting(localize('search.showLineNumbers.title', 'Show line numbers'), localize('search.showLineNumbers', 'Controls whether to show line numbers for search results.')),
 	}),
 	matchCase: configurationRegistry.registerConfiguration<boolean>({
 		key: 'search.matchCase',
@@ -28,49 +22,32 @@ export const ContentSearchConfiguration = Object.freeze({
 		key: 'search.smartCase',
 		defaultValue: true,
 		parse: value => parseBoolean(value, 'search.smartCase'),
-		setting: booleanSetting(
-			'Smart case',
-			'Use case-sensitive matching automatically when the query contains uppercase characters.',
-		),
+		setting: booleanSetting('Smart case', 'Use case-sensitive matching automatically when the query contains uppercase characters.'),
 	}),
 	regularExpression: configurationRegistry.registerConfiguration<boolean>({
 		key: 'search.useRegularExpression',
 		defaultValue: false,
 		parse: value => parseBoolean(value, 'search.useRegularExpression'),
-		setting: booleanSetting(
-			'Use regular expressions',
-			'Interpret workspace search queries as regular expressions by default.',
-		),
+		setting: booleanSetting('Use regular expressions', 'Interpret workspace search queries as regular expressions by default.'),
 	}),
 	includePatterns: configurationRegistry.registerConfiguration<string>({
 		key: 'search.includePatterns',
 		defaultValue: '',
 		parse: value => parsePatternList(value, 'search.includePatterns'),
-		setting: textSetting(
-			'Files to include',
-			'Comma-separated glob patterns included in new workspace searches.',
-			'src/**, packages/**',
-		),
+		setting: textSetting('Files to include', 'Comma-separated glob patterns included in new workspace searches.', 'src/**, packages/**'),
 	}),
 	excludePatterns: configurationRegistry.registerConfiguration<string>({
 		key: 'search.excludePatterns',
 		defaultValue: '',
 		parse: value => parsePatternList(value, 'search.excludePatterns'),
-		setting: textSetting(
-			'Files to exclude',
-			'Comma-separated glob patterns excluded from new workspace searches.',
-			'**/node_modules/**, **/dist/**',
-		),
+		setting: textSetting('Files to exclude', 'Comma-separated glob patterns excluded from new workspace searches.', '**/node_modules/**, **/dist/**'),
 	}),
 	maxResults: configurationRegistry.registerConfiguration<number>({
 		key: 'search.maxResults',
 		defaultValue: 2_000,
 		parse(value: unknown): number {
-			if (Number.isSafeInteger(value) && (value as number) >= 100 && (value as number) <= 5_000)
-				return value as number;
-			throw new RangeError(
-				`search.maxResults must be an integer between 100 and 5000; received ${String(value)}`,
-			);
+			if (Number.isSafeInteger(value) && (value as number) >= 100 && (value as number) <= 5_000) return value as number;
+			throw new RangeError(`search.maxResults must be an integer between 100 and 5000; received ${String(value)}`);
 		},
 		setting: {
 			valueType: 'number',

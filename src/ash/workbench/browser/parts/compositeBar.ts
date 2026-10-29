@@ -3,11 +3,7 @@ import './compositebar/compositebar.css';
 import { IActivityService, NumberBadge } from '../../services/activity/common/activity.js';
 import type { IContextMenuDelegate, IContextMenuProvider } from '../../../base/browser/contextmenu.js';
 import type { ActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
-import {
-	ActionBar,
-	type ActionBarDropPosition,
-	type ActionBarOrientation,
-} from '../../../base/browser/ui/actionbar/actionbar.js';
+import { ActionBar, type ActionBarDropPosition, type ActionBarOrientation } from '../../../base/browser/ui/actionbar/actionbar.js';
 import { Separator, type IAction } from '../../../base/common/actions.js';
 import { onUnexpectedError } from '../../../base/common/errors.js';
 import type { IComposite } from '../../common/composite.js';
@@ -17,13 +13,7 @@ import { localize, type ILocalizationService } from '../../services/localization
 import { localize as resolveNls } from '../../../nls.js';
 import { ViewContainerLocation, type IViewContainerDescriptor } from '../../common/views.js';
 import type { IViewDescriptorService } from '../../common/views.js';
-import {
-	CompositeBarAction,
-	CompositeActionViewItem,
-	CompositeOverflowActivityAction,
-	CompositeOverflowActivityActionViewItem,
-	type IActivityHoverOptions,
-} from './compositeBarActions.js';
+import { CompositeBarAction, CompositeActionViewItem, CompositeOverflowActivityAction, CompositeOverflowActivityActionViewItem, type IActivityHoverOptions } from './compositeBarActions.js';
 import { getWindow, h } from '../../../base/browser/dom.js';
 import { observeResize } from '../../../base/browser/observer.js';
 import { AnimationFrameScheduler } from '../../../base/browser/scheduler.js';
@@ -103,9 +93,7 @@ export class CompositeBar extends Disposable {
 		this.activityHoverOptions = options.activityHoverOptions;
 		this.viewDescriptorService = options.viewDescriptorService;
 		this.localizationService = options.localizationService;
-		this.overflowAction = new CompositeOverflowActivityAction(
-			localize(this.localizationService, { bundle: 'ash.regions', key: 'additionalViews' }, 'Additional views'),
-		);
+		this.overflowAction = new CompositeOverflowActivityAction(localize(this.localizationService, { bundle: 'ash.regions', key: 'additionalViews' }, 'Additional views'));
 		this.location = options.location;
 		this.orientation = options.orientation ?? 'horizontal';
 		this.contextMenuProvider = options.contextMenuProvider;
@@ -113,8 +101,7 @@ export class CompositeBar extends Disposable {
 		this.hiddenContainerIds = this.readHiddenContainerIds();
 		this.disabledBadgeIds = this.readDisabledBadgeIds();
 		this.restoreContainerOrder();
-		this.overflowEnabled =
-			(presentation === 'label' || this.orientation === 'vertical') && this.contextMenuProvider !== undefined;
+		this.overflowEnabled = (presentation === 'label' || this.orientation === 'vertical') && this.contextMenuProvider !== undefined;
 		this.containerFilter = options.containerFilter ?? (() => true);
 		this.domNode = h(container.ownerDocument, 'section');
 		this.domNode.className = `ash-composite-bar ash-composite-bar-${presentation}`;
@@ -135,12 +122,7 @@ export class CompositeBar extends Disposable {
 						return new CompositeActionViewItem(action, { hoverOptions: this.activityHoverOptions });
 					}
 					if (action instanceof CompositeOverflowActivityAction) {
-						return new CompositeOverflowActivityActionViewItem(
-							action,
-							() => this.createOverflowActions(),
-							this.contextMenuProvider!,
-							this.activityHoverOptions,
-						);
+						return new CompositeOverflowActivityActionViewItem(action, () => this.createOverflowActions(), this.contextMenuProvider!, this.activityHoverOptions);
 					}
 					throw new TypeError(`Unsupported CompositeBar action: ${action.id}`);
 				},
@@ -149,8 +131,7 @@ export class CompositeBar extends Disposable {
 					onDragStart: (action, event) => {
 						if (action instanceof CompositeBarAction) this.onDragStart(action.id, event);
 					},
-					onDrop: (action, position) =>
-						this.onDrop(action instanceof CompositeBarAction ? action.id : undefined, position),
+					onDrop: (action, position) => this.onDrop(action instanceof CompositeBarAction ? action.id : undefined, position),
 					onDragEnd: () => {
 						this.draggedCompositeId = undefined;
 					},
@@ -168,9 +149,7 @@ export class CompositeBar extends Disposable {
 				if (!this.restoringOrder) {
 					this.storageService?.store(
 						this.containerOrderKey,
-						JSON.stringify(
-							this.viewDescriptorService.getViewContainers(this.location).map(container => container.id),
-						),
+						JSON.stringify(this.viewDescriptorService.getViewContainers(this.location).map(container => container.id)),
 						StorageScope.PROFILE,
 						StorageTarget.USER,
 					);
@@ -186,20 +165,11 @@ export class CompositeBar extends Disposable {
 						this.render();
 						return;
 					}
-					if (
-						event.key === this.containerOrderKey &&
-						event.scope === StorageScope.PROFILE &&
-						event.external
-					) {
+					if (event.key === this.containerOrderKey && event.scope === StorageScope.PROFILE && event.external) {
 						this.restoreContainerOrder();
 						return;
 					}
-					if (
-						event.key !== HIDDEN_VIEW_CONTAINERS_KEY ||
-						event.scope !== StorageScope.PROFILE ||
-						!event.external
-					)
-						return;
+					if (event.key !== HIDDEN_VIEW_CONTAINERS_KEY || event.scope !== StorageScope.PROFILE || !event.external) return;
 					this.hiddenContainerIds = this.readHiddenContainerIds();
 					this.render();
 				}),
@@ -229,10 +199,7 @@ export class CompositeBar extends Disposable {
 
 	private getBadge(containerId: string): { readonly count: number; readonly description: string } | undefined {
 		const activities = this.activityService.getViewContainerActivities(containerId);
-		const count = activities.reduce(
-			(total, activity) => total + (activity.badge instanceof NumberBadge ? activity.badge.number : 0),
-			0,
-		);
+		const count = activities.reduce((total, activity) => total + (activity.badge instanceof NumberBadge ? activity.badge.number : 0), 0);
 		return count > 0
 			? {
 					count,
@@ -258,19 +225,12 @@ export class CompositeBar extends Disposable {
 		} else {
 			this.disabledBadgeIds.delete(compositeId);
 		}
-		this.storageService?.store(
-			DISABLED_BADGES_KEY,
-			JSON.stringify([...this.disabledBadgeIds]),
-			StorageScope.PROFILE,
-			StorageTarget.USER,
-		);
+		this.storageService?.store(DISABLED_BADGES_KEY, JSON.stringify([...this.disabledBadgeIds]), StorageScope.PROFILE, StorageTarget.USER);
 		this.render();
 	}
 
 	setActiveComposite(compositeId: string | undefined): void {
-		const available = this.viewDescriptorService
-			.getViewContainers(this.location)
-			.some(container => container.id === compositeId);
+		const available = this.viewDescriptorService.getViewContainers(this.location).some(container => container.id === compositeId);
 		if (compositeId !== undefined && !available) {
 			throw new Error(`Composite Bar item is not available: ${compositeId}`);
 		}
@@ -281,10 +241,7 @@ export class CompositeBar extends Disposable {
 		if (compositeId) this.compositeActions.get(compositeId)?.setChecked(true);
 		// Unpinned active views change the item set. Ordinary selection only changes
 		// two retained actions; measuring the whole bar here would force style/layout.
-		if (
-			(previousId && this.hiddenContainerIds.has(previousId)) ||
-			(compositeId && this.hiddenContainerIds.has(compositeId))
-		) {
+		if ((previousId && this.hiddenContainerIds.has(previousId)) || (compositeId && this.hiddenContainerIds.has(compositeId))) {
 			this.render();
 		} else {
 			if (this.overflowingContainerIds.size > 0) this.layout();
@@ -315,20 +272,14 @@ export class CompositeBar extends Disposable {
 		event: MouseEvent | KeyboardEvent,
 		additionalActions: readonly IAction[] = [],
 		itemOptions?: {
-			readonly transformContextMenuActionsForComposite: (
-				actions: readonly IAction[],
-				compositeId: string,
-			) => readonly IAction[];
+			readonly transformContextMenuActionsForComposite: (actions: readonly IAction[], compositeId: string) => readonly IAction[];
 			readonly getKeyBinding?: IContextMenuDelegate['getKeyBinding'];
 		},
 	): void {
 		if (!this.contextMenuProvider) return;
 		event.preventDefault();
 		event.stopPropagation();
-		const target =
-			event.target && 'closest' in event.target
-				? (event.target as Element).closest<HTMLElement>('.ash-composite-bar-destination')
-				: null;
+		const target = event.target && 'closest' in event.target ? (event.target as Element).closest<HTMLElement>('.ash-composite-bar-destination') : null;
 		const containerId = target && this.domNode.contains(target) ? target.dataset.actionId : undefined;
 		const anchor =
 			event.type === 'contextmenu'
@@ -340,16 +291,7 @@ export class CompositeBar extends Disposable {
 				: (target ?? (event.target as HTMLElement | null) ?? this.domNode);
 		this.contextMenuProvider.showContextMenu({
 			getAnchor: () => anchor,
-			getActions: () =>
-				Separator.join(
-					[
-						...this.createContextMenuActions(
-							containerId,
-							itemOptions?.transformContextMenuActionsForComposite,
-						),
-					],
-					[...additionalActions],
-				),
+			getActions: () => Separator.join([...this.createContextMenuActions(containerId, itemOptions?.transformContextMenuActionsForComposite)], [...additionalActions]),
 			getKeyBinding: itemOptions?.getKeyBinding,
 			getCheckedActionsRepresentation: () => 'checkbox',
 			onHide: didCancel => {
@@ -369,16 +311,9 @@ export class CompositeBar extends Disposable {
 		const availableWidth = this.domNode.clientWidth;
 		if (availableWidth <= 0) return;
 
-		const visibleContainers = this.visibleContainersForWidth(
-			availableWidth,
-			this.overflowActionSize + this.actionBarItemGap,
-		);
+		const visibleContainers = this.visibleContainersForWidth(availableWidth, this.overflowActionSize + this.actionBarItemGap);
 		const visibleContainerIds = visibleContainers.map(container => container.id);
-		const overflowingContainerIds = new Set(
-			this.displayedContainers
-				.filter(container => !visibleContainerIds.includes(container.id))
-				.map(container => container.id),
-		);
+		const overflowingContainerIds = new Set(this.displayedContainers.filter(container => !visibleContainerIds.includes(container.id)).map(container => container.id));
 		const overflowChanged = !sameIds([...this.overflowingContainerIds], [...overflowingContainerIds]);
 		this.setOverflowingContainerIds(overflowingContainerIds);
 		if (!sameIds(this.renderedContainerIds, visibleContainerIds) || overflowChanged) {
@@ -395,15 +330,12 @@ export class CompositeBar extends Disposable {
 		if (itemHeight <= 0) return;
 		const gap = Number.parseFloat(getComputedStyle(this.actionBar.element).rowGap) || 0;
 		const fit = Math.floor((availableHeight + gap) / (itemHeight + gap));
-		const visibleCount =
-			fit >= this.displayedContainers.length ? this.displayedContainers.length : Math.max(0, fit - 1);
+		const visibleCount = fit >= this.displayedContainers.length ? this.displayedContainers.length : Math.max(0, fit - 1);
 		const visible = this.displayedContainers.slice(0, visibleCount);
 		const active = this.displayedContainers.find(container => container.id === this._activeCompositeId);
 		if (active && visibleCount > 0 && !visible.includes(active)) visible[visible.length - 1] = active;
 		const visibleIds = new Set(visible.map(container => container.id));
-		const overflowingIds = new Set(
-			this.displayedContainers.filter(container => !visibleIds.has(container.id)).map(container => container.id),
-		);
+		const overflowingIds = new Set(this.displayedContainers.filter(container => !visibleIds.has(container.id)).map(container => container.id));
 		if (
 			sameIds(
 				this.renderedContainerIds,
@@ -424,8 +356,7 @@ export class CompositeBar extends Disposable {
 		}
 		const conditionalContainers = availableContainers.filter(container => container.hideIfEmpty);
 		for (const id of this.containerListeners.keys()) {
-			if (!conditionalContainers.some(container => container.id === id))
-				this.containerListeners.deleteAndDispose(id);
+			if (!conditionalContainers.some(container => container.id === id)) this.containerListeners.deleteAndDispose(id);
 		}
 		for (const container of conditionalContainers) {
 			if (!this.containerListeners.has(container.id)) {
@@ -437,18 +368,10 @@ export class CompositeBar extends Disposable {
 			}
 		}
 		this.containers = availableContainers.filter(
-			container =>
-				this.containerFilter(container) &&
-				(!container.hideIfEmpty ||
-					this.viewDescriptorService.getViewContainerModel(container.id).activeViewDescriptors.length > 0),
+			container => this.containerFilter(container) && (!container.hideIfEmpty || this.viewDescriptorService.getViewContainerModel(container.id).activeViewDescriptors.length > 0),
 		);
-		this.displayedContainers = this.containers.filter(
-			container => !this.hiddenContainerIds.has(container.id) || container.id === this._activeCompositeId,
-		);
-		if (
-			this._activeCompositeId !== undefined &&
-			!availableContainers.some(container => container.id === this._activeCompositeId)
-		) {
+		this.displayedContainers = this.containers.filter(container => !this.hiddenContainerIds.has(container.id) || container.id === this._activeCompositeId);
+		if (this._activeCompositeId !== undefined && !availableContainers.some(container => container.id === this._activeCompositeId)) {
 			this._activeCompositeId = undefined;
 		}
 		this.tabWidths.clear();
@@ -548,10 +471,7 @@ export class CompositeBar extends Disposable {
 		return true;
 	}
 
-	private visibleContainersForWidth(
-		availableWidth: number,
-		overflowWidth: number,
-	): readonly IViewContainerDescriptor[] {
+	private visibleContainersForWidth(availableWidth: number, overflowWidth: number): readonly IViewContainerDescriptor[] {
 		const totalWidth = this.containersWidth(this.displayedContainers);
 		if (totalWidth <= availableWidth) return this.displayedContainers;
 
@@ -566,8 +486,7 @@ export class CompositeBar extends Disposable {
 		if (activeCompositeId && !visible.some(container => container.id === activeCompositeId)) {
 			const activeContainer = this.displayedContainers.find(container => container.id === activeCompositeId);
 			if (activeContainer) {
-				while (visible.length > 0 && this.containersWidth([...visible, activeContainer]) > widthLimit)
-					visible.pop();
+				while (visible.length > 0 && this.containersWidth([...visible, activeContainer]) > widthLimit) visible.pop();
 				if (this.containersWidth([...visible, activeContainer]) <= widthLimit) visible.push(activeContainer);
 			}
 		}
@@ -575,14 +494,7 @@ export class CompositeBar extends Disposable {
 	}
 
 	private containersWidth(containers: readonly IViewContainerDescriptor[]): number {
-		return (
-			this.actionBarInsetWidth +
-			containers.reduce(
-				(total, container, index) =>
-					total + this.tabWidths.get(container.id)! + (index > 0 ? this.actionBarItemGap : 0),
-				0,
-			)
-		);
+		return this.actionBarInsetWidth + containers.reduce((total, container, index) => total + this.tabWidths.get(container.id)! + (index > 0 ? this.actionBarItemGap : 0), 0);
 	}
 
 	private createOverflowActions(): readonly IAction[] {
@@ -601,10 +513,7 @@ export class CompositeBar extends Disposable {
 			});
 	}
 
-	private createContextMenuActions(
-		containerId: string | undefined,
-		transform?: (actions: readonly IAction[], compositeId: string) => readonly IAction[],
-	): readonly IAction[] {
+	private createContextMenuActions(containerId: string | undefined, transform?: (actions: readonly IAction[], compositeId: string) => readonly IAction[]): readonly IAction[] {
 		const pinnedCount = this.containers.filter(container => !this.hiddenContainerIds.has(container.id)).length;
 		const selected = this.containers.find(container => container.id === containerId);
 		const toggleActions = this.containers.map(container => {
@@ -631,11 +540,7 @@ export class CompositeBar extends Disposable {
 				}) ?? resolveNls('workbench.keepActivityBarView', "Keep '{0}'", name));
 		const badgeLabel = this.areBadgesEnabled(selected.id)
 			? localize(this.localizationService, { bundle: 'ash', key: 'workbench.hideActivityBarBadge' }, 'Hide Badge')
-			: localize(
-					this.localizationService,
-					{ bundle: 'ash', key: 'workbench.showActivityBarBadge' },
-					'Show Badge',
-				);
+			: localize(this.localizationService, { bundle: 'ash', key: 'workbench.showActivityBarBadge' }, 'Show Badge');
 		const selectedActions: IAction[] = [
 			{
 				id: `ash.activityBar.toggleSelected.${encodeURIComponent(selected.id)}`,
@@ -662,13 +567,7 @@ export class CompositeBar extends Disposable {
 		}
 		const ids: unknown = JSON.parse(stored);
 		if (!Array.isArray(ids) || !ids.every(id => typeof id === 'string') || new Set(ids).size !== ids.length) {
-			throw new TypeError(
-				localize(
-					this.localizationService,
-					{ bundle: 'ash', key: 'workbench.activityBar.invalidBadgeVisibility' },
-					'Saved badge visibility is invalid.',
-				),
-			);
+			throw new TypeError(localize(this.localizationService, { bundle: 'ash', key: 'workbench.activityBar.invalidBadgeVisibility' }, 'Saved badge visibility is invalid.'));
 		}
 		return new Set(ids);
 	}
@@ -676,12 +575,7 @@ export class CompositeBar extends Disposable {
 	private async setPinned(containerId: string, pinned: boolean): Promise<void> {
 		if (pinned) this.hiddenContainerIds.delete(containerId);
 		else this.hiddenContainerIds.add(containerId);
-		this.storageService?.store(
-			HIDDEN_VIEW_CONTAINERS_KEY,
-			JSON.stringify([...this.hiddenContainerIds]),
-			StorageScope.PROFILE,
-			StorageTarget.USER,
-		);
+		this.storageService?.store(HIDDEN_VIEW_CONTAINERS_KEY, JSON.stringify([...this.hiddenContainerIds]), StorageScope.PROFILE, StorageTarget.USER);
 		this.render();
 		if (pinned || containerId !== this._activeCompositeId) {
 			return;
@@ -715,13 +609,7 @@ export class CompositeBar extends Disposable {
 		if (raw === undefined) return;
 		const ids: unknown = JSON.parse(raw);
 		if (!Array.isArray(ids) || !ids.every(id => typeof id === 'string') || new Set(ids).size !== ids.length) {
-			throw new TypeError(
-				localize(
-					this.localizationService,
-					{ bundle: 'ash', key: 'workbench.activityBar.invalidOrder' },
-					'Saved view container order is invalid.',
-				),
-			);
+			throw new TypeError(localize(this.localizationService, { bundle: 'ash', key: 'workbench.activityBar.invalidOrder' }, 'Saved view container order is invalid.'));
 		}
 		this.restoringOrder = true;
 		try {

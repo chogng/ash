@@ -24,10 +24,7 @@ export class MenuService implements IMenuService {
 	private readonly commandService: ICommandService;
 	private readonly contextKeyService: IContextKeyService;
 
-	constructor(
-		@ICommandService commandService: ICommandService,
-		@IContextKeyService contextKeyService: IContextKeyService,
-	) {
+	constructor(@ICommandService commandService: ICommandService, @IContextKeyService contextKeyService: IContextKeyService) {
 		this.commandService = commandService;
 		this.contextKeyService = contextKeyService;
 	}
@@ -36,11 +33,7 @@ export class MenuService implements IMenuService {
 		return new Menu(id, this.commandService, contextKeyService);
 	}
 
-	getMenuActions(
-		id: MenuId,
-		options?: IMenuActionOptions,
-		contextKeyService: IContextKeyService = this.contextKeyService,
-	): readonly MenuActionGroup[] {
+	getMenuActions(id: MenuId, options?: IMenuActionOptions, contextKeyService: IContextKeyService = this.contextKeyService): readonly MenuActionGroup[] {
 		return resolveMenu(id, this.commandService, contextKeyService, options, new Set());
 	}
 }
@@ -70,7 +63,11 @@ class Menu extends Disposable implements IMenu {
 				}
 				if (!affected) return;
 				this.snapshot.refresh();
-				this._onDidChange.fire({ isStructuralChange: true, isEnablementChange: true, isToggleChange: true });
+				this._onDidChange.fire({
+					isStructuralChange: true,
+					isEnablementChange: true,
+					isToggleChange: true,
+				});
 			}),
 		);
 		this._register(
@@ -81,7 +78,11 @@ class Menu extends Disposable implements IMenu {
 				if (!isStructuralChange && !isEnablementChange && !isToggleChange) {
 					return;
 				}
-				this._onDidChange.fire({ isStructuralChange, isEnablementChange, isToggleChange });
+				this._onDidChange.fire({
+					isStructuralChange,
+					isEnablementChange,
+					isToggleChange,
+				});
 			}),
 		);
 	}
@@ -122,10 +123,7 @@ class MenuInfoSnapshot {
 				if (!command) continue;
 				addExpressionKeys(command.precondition, this.enablementContextKeys);
 				const toggled = command.toggled;
-				addExpressionKeys(
-					toggled && isCommandActionToggleInfo(toggled) ? toggled.condition : toggled,
-					this.toggleContextKeys,
-				);
+				addExpressionKeys(toggled && isCommandActionToggleInfo(toggled) ? toggled.condition : toggled, this.toggleContextKeys);
 			}
 		}
 	}
@@ -136,13 +134,7 @@ function addExpressionKeys(expression: ContextKeyExpression | undefined, keys: S
 	for (const key of expression.keys()) keys.add(key);
 }
 
-function resolveMenu(
-	id: MenuId,
-	commandService: ICommandService,
-	contextKeyService: IContextKeyService,
-	options: IMenuActionOptions | undefined,
-	ancestors: Set<MenuId>,
-): readonly MenuActionGroup[] {
+function resolveMenu(id: MenuId, commandService: ICommandService, contextKeyService: IContextKeyService, options: IMenuActionOptions | undefined, ancestors: Set<MenuId>): readonly MenuActionGroup[] {
 	if (ancestors.has(id)) {
 		throw new Error(`Menu contribution cycle detected at '${id.id}'`);
 	}
@@ -174,9 +166,7 @@ function resolveItem(
 	ancestors: Set<MenuId>,
 ): IAction | undefined {
 	if (isMenuItem(item)) {
-		const alt = item.alt
-			? new MenuItemAction(item.alt, undefined, options, contextKeyService, commandService)
-			: undefined;
+		const alt = item.alt ? new MenuItemAction(item.alt, undefined, options, contextKeyService, commandService) : undefined;
 		return new MenuItemAction(item.command, alt, options, contextKeyService, commandService);
 	}
 

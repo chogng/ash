@@ -4,11 +4,7 @@ import { AccessibilitySignal, IAccessibilitySignalService } from './accessibilit
 
 /** Delays progress feedback and owns its loop until the operation ends. */
 export class AccessibilityProgressSignalScheduler extends Disposable {
-	constructor(
-		msDelayTime: number,
-		msLoopTime: number | undefined,
-		@IAccessibilitySignalService accessibilitySignalService: IAccessibilitySignalService,
-	) {
+	constructor(msDelayTime: number, msLoopTime: number | undefined, @IAccessibilitySignalService accessibilitySignalService: IAccessibilitySignalService) {
 		super();
 		const loopTime = msLoopTime ?? 5000;
 		if (!Number.isFinite(loopTime) || loopTime <= 0) {

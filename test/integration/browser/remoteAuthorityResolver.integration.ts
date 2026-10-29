@@ -77,12 +77,7 @@ async function activate(sourceKind: ExtensionSourceKind = 'user', id = 'attacker
 		),
 	);
 	const handler = host.registerClientHandler(async operation => {
-		if (
-			!operation ||
-			typeof operation !== 'object' ||
-			!('operation' in operation) ||
-			operation.operation !== 'readInitialization'
-		) {
+		if (!operation || typeof operation !== 'object' || !('operation' in operation) || operation.operation !== 'readInitialization') {
 			throw new Error('SSH registration must not execute a client operation');
 		}
 		return {

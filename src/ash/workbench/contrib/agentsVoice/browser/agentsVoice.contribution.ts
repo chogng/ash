@@ -9,19 +9,11 @@ import { AccessibilityVerbositySettingId } from '../../../../platform/accessibil
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
-import {
-	AGENTS_VOICE_CONNECTED,
-	AGENTS_VOICE_CONNECTING,
-	AGENTS_VOICE_PUSH_TO_TALK,
-	IAgentsVoiceWindowService,
-} from '../common/agentsVoice.js';
+import { AGENTS_VOICE_CONNECTED, AGENTS_VOICE_CONNECTING, AGENTS_VOICE_PUSH_TO_TALK, IAgentsVoiceWindowService } from '../common/agentsVoice.js';
 import { AgentsVoiceWindowService } from './agentsVoiceWindowService.js';
 
 registerSingleton(IAgentsVoiceWindowService, AgentsVoiceWindowService, InstantiationType.Delayed);
@@ -30,10 +22,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	key: AccessibilityVerbositySettingId.AgentsVoice,
 	defaultValue: true,
 	parse: value => {
-		if (typeof value !== 'boolean')
-			throw new TypeError(
-				localize('agentsVoice.verbosity.invalid', 'Voice accessibility verbosity must be boolean.'),
-			);
+		if (typeof value !== 'boolean') throw new TypeError(localize('agentsVoice.verbosity.invalid', 'Voice accessibility verbosity must be boolean.'));
 		return value;
 	},
 	setting: {
@@ -42,10 +31,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize('agentsVoice.verbosity.title', 'Voice conversation accessibility help');
 		},
 		get description() {
-			return localize(
-				'agentsVoice.verbosity.description',
-				'Announce how to access help when the voice controls receive focus.',
-			);
+			return localize('agentsVoice.verbosity.description', 'Announce how to access help when the voice controls receive focus.');
 		},
 	},
 });
@@ -90,10 +76,7 @@ registerAction2(
 			super({
 				id: 'agentsVoice.pushToTalk',
 				title: localize2('agentsVoice.command.ptt', 'Voice: Push to Talk'),
-				precondition: ContextKeyExpr.and(
-					AGENTS_VOICE_CONNECTED.isEqualTo(true),
-					AGENTS_VOICE_PUSH_TO_TALK.isEqualTo(true),
-				),
+				precondition: ContextKeyExpr.and(AGENTS_VOICE_CONNECTED.isEqualTo(true), AGENTS_VOICE_PUSH_TO_TALK.isEqualTo(true)),
 				keybinding: { primary: Keybinding.single(logicalKey(' ', { primaryKey: true, shiftKey: true })) },
 			});
 		}
@@ -134,10 +117,7 @@ registerAction2(
 				id: 'agentsVoice.disconnect',
 				title: localize2('agentsVoice.command.disconnect', 'Voice: Disconnect'),
 				f1: true,
-				precondition: ContextKeyExpr.or(
-					AGENTS_VOICE_CONNECTED.isEqualTo(true),
-					AGENTS_VOICE_CONNECTING.isEqualTo(true),
-				),
+				precondition: ContextKeyExpr.or(AGENTS_VOICE_CONNECTED.isEqualTo(true), AGENTS_VOICE_CONNECTING.isEqualTo(true)),
 			});
 		}
 		async run(accessor: ServicesAccessor): Promise<void> {

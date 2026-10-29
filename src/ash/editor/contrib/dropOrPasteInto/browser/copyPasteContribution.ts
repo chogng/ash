@@ -14,12 +14,7 @@ import {
 } from '../../../browser/editorFeatureRegistration.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { DefaultTextPasteOrDropEditProvider } from './defaultProviders.js';
-import {
-	CopyPasteController,
-	type PastePreference,
-	changePasteTypeCommandId,
-	pasteWidgetVisibleCtx,
-} from './copyPasteController.js';
+import { CopyPasteController, type PastePreference, changePasteTypeCommandId, pasteWidgetVisibleCtx } from './copyPasteController.js';
 
 export const pasteAsCommandId = 'editor.action.pasteAs';
 
@@ -79,12 +74,7 @@ registerEditorAction(
 				}
 				if ('kind' in args && typeof args.kind === 'string' && !('preferences' in args)) {
 					preferred = { only: new HierarchicalKind(args.kind) };
-				} else if (
-					'preferences' in args &&
-					Array.isArray(args.preferences) &&
-					args.preferences.every(value => typeof value === 'string') &&
-					!('kind' in args)
-				) {
+				} else if ('preferences' in args && Array.isArray(args.preferences) && args.preferences.every(value => typeof value === 'string') && !('kind' in args)) {
 					preferred = { preferences: args.preferences.map(value => new HierarchicalKind(value)) };
 				} else {
 					throw new TypeError('Paste As requires kind or preferences');

@@ -12,11 +12,7 @@ import { IAccountService, type AccountState } from '../../../../../platform/acco
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import {
-	IQuickInputService,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { IGitHubConnectionService } from '../../../../services/accounts/common/gitHubConnectionService.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
@@ -66,11 +62,7 @@ test('Manage Accounts command opens account actions and signs out only after a s
 test('Manage Accounts command offers product login methods when no account is connected', async () => {
 	const operations: string[] = [];
 	const quickInput = new TestQuickInputService();
-	using environment = new AccountActionEnvironment(
-		accountFixture({ revision: 1n, accounts: [] }, operations),
-		quickInput,
-		operations,
-	);
+	using environment = new AccountActionEnvironment(accountFixture({ revision: 1n, accounts: [] }, operations), quickInput, operations);
 	using registration = registerAction2(ManageAccountsAction);
 
 	await environment.commands.executeCommand(ManageAccountsAction.ID);
@@ -165,11 +157,7 @@ test('Manage Accounts command offers sign in when an account needs reauthenticat
 test('Manage Accounts command offers cancellation for a pending GitHub connection', async () => {
 	const operations: string[] = [];
 	const quickInput = new TestQuickInputService();
-	using environment = new AccountActionEnvironment(
-		accountFixture({ revision: 1n, accounts: [] }, operations),
-		quickInput,
-		operations,
-	);
+	using environment = new AccountActionEnvironment(accountFixture({ revision: 1n, accounts: [] }, operations), quickInput, operations);
 	using registration = registerAction2(ManageAccountsAction);
 	environment.github.isConnecting = true;
 
@@ -177,12 +165,7 @@ test('Manage Accounts command offers cancellation for a pending GitHub connectio
 	quickInput.pickers[0]!.chooseItem(quickInput.pickers[0]!.items[0]!);
 	assert.deepEqual(
 		quickInput.pickers[1]!.items.map(item => item.label),
-		[
-			'Sign in with ChatGPT',
-			'Cancel GitHub connection',
-			'Sign in with BigModel Start Plan',
-			'Sign in with Z.AI Start Plan',
-		],
+		['Sign in with ChatGPT', 'Cancel GitHub connection', 'Sign in with BigModel Start Plan', 'Sign in with Z.AI Start Plan'],
 	);
 	quickInput.pickers[1]!.chooseItem(quickInput.pickers[1]!.items[1]!);
 	assert.deepEqual(operations, ['read', 'github:cancel']);
@@ -232,23 +215,20 @@ test('Manage Accounts command reports a failed account read without opening a pi
 	await environment.commands.executeCommand(ManageAccountsAction.ID);
 	assert.deepEqual(
 		{ pickers: quickInput.pickers.length, errors: environment.errors },
-		{ pickers: 0, errors: ['Could not load accounts.'] },
+		{
+			pickers: 0,
+			errors: ['Could not load accounts.'],
+		},
 	);
 });
 
 test('Manage Accounts command and picker use the selected language', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		const operations: string[] = [];
 		const quickInput = new TestQuickInputService();
-		using environment = new AccountActionEnvironment(
-			accountFixture({ revision: 1n, accounts: [] }, operations),
-			quickInput,
-			operations,
-		);
+		using environment = new AccountActionEnvironment(accountFixture({ revision: 1n, accounts: [] }, operations), quickInput, operations);
 		using registration = registerAction2(ManageAccountsAction);
 		await environment.commands.executeCommand(ManageAccountsAction.ID);
 		assert.deepEqual(
@@ -257,7 +237,11 @@ test('Manage Accounts command and picker use the selected language', async () =>
 				picker: quickInput.pickers[0]!.ariaLabel,
 				addAccount: quickInput.pickers[0]!.items[0]!.label,
 			},
-			{ title: '管理账户', picker: '选择要管理的账户', addAccount: '添加账户' },
+			{
+				title: '管理账户',
+				picker: '选择要管理的账户',
+				addAccount: '添加账户',
+			},
 		);
 		quickInput.pickers[0]!.chooseItem(quickInput.pickers[0]!.items[0]!);
 		assert.deepEqual(
@@ -272,11 +256,7 @@ test('Manage Accounts command and picker use the selected language', async () =>
 test('Start Plan choices send separate region login methods', async () => {
 	const operations: string[] = [];
 	const quickInput = new TestQuickInputService();
-	using environment = new AccountActionEnvironment(
-		accountFixture({ revision: 1n, accounts: [] }, operations),
-		quickInput,
-		operations,
-	);
+	using environment = new AccountActionEnvironment(accountFixture({ revision: 1n, accounts: [] }, operations), quickInput, operations);
 	using registration = registerAction2(ManageAccountsAction);
 	for (const index of [2, 3]) {
 		await environment.commands.executeCommand(ManageAccountsAction.ID);

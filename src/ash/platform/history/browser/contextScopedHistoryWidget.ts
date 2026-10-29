@@ -25,10 +25,7 @@ export interface IHistoryNavigationContext extends IDisposable {
 const registeredWidgets = new Set<IHistoryNavigationWidget>();
 let focusedWidget: IHistoryNavigationWidget | undefined;
 
-export function registerAndCreateHistoryNavigationContext(
-	scopedContextKeyService: IContextKeyService,
-	widget: IHistoryNavigationWidget,
-): IHistoryNavigationContext {
+export function registerAndCreateHistoryNavigationContext(scopedContextKeyService: IContextKeyService, widget: IHistoryNavigationWidget): IHistoryNavigationContext {
 	if (registeredWidgets.has(widget)) {
 		throw new Error('Cannot register the same widget multiple times');
 	}
@@ -61,16 +58,15 @@ export function registerAndCreateHistoryNavigationContext(
 
 	return Object.assign(
 		toDisposable(() => resources.dispose()),
-		{ historyNavigationForwardsEnablement, historyNavigationBackwardsEnablement },
+		{
+			historyNavigationForwardsEnablement,
+			historyNavigationBackwardsEnablement,
+		},
 	);
 }
 
 export class ContextScopedHistoryInputBox<Flexible extends boolean = false> extends HistoryInputBox<Flexible> {
-	constructor(
-		container: HTMLElement,
-		options: IHistoryInputOptions<Flexible>,
-		@IContextKeyService contextKeyService: IContextKeyService,
-	) {
+	constructor(container: HTMLElement, options: IHistoryInputOptions<Flexible>, @IContextKeyService contextKeyService: IContextKeyService) {
 		super(container, options);
 		const scope = this._register(contextKeyService.createScoped(this.element));
 		const navigation = this._register(registerAndCreateHistoryNavigationContext(scope, this));
@@ -84,13 +80,7 @@ export class ContextScopedHistoryInputBox<Flexible extends boolean = false> exte
 		updateNavigation();
 		this._register(
 			addDisposableListener(this.inputElement, 'keydown', event => {
-				if (
-					event.isComposing ||
-					event.ctrlKey ||
-					event.metaKey ||
-					event.shiftKey ||
-					(event.key !== 'ArrowUp' && event.key !== 'ArrowDown')
-				) {
+				if (event.isComposing || event.ctrlKey || event.metaKey || event.shiftKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) {
 					return;
 				}
 				if (!event.altKey && this.value.includes('\n')) {
@@ -115,11 +105,7 @@ export class ContextScopedHistoryInputBox<Flexible extends boolean = false> exte
 }
 
 export class ContextScopedFindInput<Flexible extends boolean = false> extends FindInput<Flexible> {
-	constructor(
-		container: HTMLElement,
-		options: IFindInputOptions<Flexible>,
-		@IInstantiationService instantiationService: IInstantiationService,
-	) {
+	constructor(container: HTMLElement, options: IFindInputOptions<Flexible>, @IInstantiationService instantiationService: IInstantiationService) {
 		super(
 			instantiationService.createInstance(ContextScopedHistoryInputBox<Flexible>, container, {
 				...options,
@@ -133,11 +119,7 @@ export class ContextScopedFindInput<Flexible extends boolean = false> extends Fi
 }
 
 export class ContextScopedReplaceInput<Flexible extends boolean = false> extends ReplaceInput<Flexible> {
-	constructor(
-		container: HTMLElement,
-		options: IReplaceInputOptions<Flexible>,
-		@IInstantiationService instantiationService: IInstantiationService,
-	) {
+	constructor(container: HTMLElement, options: IReplaceInputOptions<Flexible>, @IInstantiationService instantiationService: IInstantiationService) {
 		super(
 			instantiationService.createInstance(ContextScopedHistoryInputBox<Flexible>, container, {
 				...options,
@@ -150,10 +132,7 @@ export class ContextScopedReplaceInput<Flexible extends boolean = false> extends
 	}
 }
 
-const historyEnabled = ContextKeyExpr.and(
-	focusContext.isEqualTo(true),
-	ContextKeyExpr.not(historyNavigationVisible.key),
-);
+const historyEnabled = ContextKeyExpr.and(focusContext.isEqualTo(true), ContextKeyExpr.not(historyNavigationVisible.key));
 
 CommandsRegistry.register('history.showPrevious', () => {
 	if (focusedWidget && focusedWidget.element.contains(focusedWidget.element.ownerDocument.activeElement)) {

@@ -62,7 +62,10 @@ test('DOM guards validate nodes from their owning window', () => {
 			htmlElement: isHTMLElement(element),
 			svgElement: isElement(svgElement),
 			svgHtmlElement: isHTMLElement(svgElement),
-			structuralLookalike: isNode({ nodeType: 1, namespaceURI: 'http://www.w3.org/1999/xhtml' }),
+			structuralLookalike: isNode({
+				nodeType: 1,
+				namespaceURI: 'http://www.w3.org/1999/xhtml',
+			}),
 		},
 		{
 			firstDocument: true,
@@ -77,8 +80,7 @@ test('DOM guards validate nodes from their owning window', () => {
 });
 
 test('DOM exposes shared geometry and editable-element guards', () => {
-	const ownerWindow = new JSDOM("<!doctype html><body><input><div contenteditable='true'></div><span></span></body>")
-		.window;
+	const ownerWindow = new JSDOM("<!doctype html><body><input><div contenteditable='true'></div><span></span></body>").window;
 	const input = ownerWindow.document.querySelector('input')!;
 	const editable = ownerWindow.document.querySelector('div')!;
 	const span = ownerWindow.document.querySelector('span')!;
@@ -101,7 +103,11 @@ test('DOM context queries resolve the owning window and document', () => {
 			windowFromDocument: getWindow(ownerWindow.document),
 			documentFromNode: getDocument(button),
 		},
-		{ windowFromNode: ownerWindow, windowFromDocument: ownerWindow, documentFromNode: ownerWindow.document },
+		{
+			windowFromNode: ownerWindow,
+			windowFromDocument: ownerWindow,
+			documentFromNode: ownerWindow.document,
+		},
 	);
 	ownerWindow.close();
 });
@@ -115,7 +121,10 @@ test('screen-aware CSS sizes occupy stable whole physical pixels', () => {
 			thin: computeScreenAwareSize(ownerWindow as unknown as Window, 1),
 			wide: computeScreenAwareSize(ownerWindow as unknown as Window, 2),
 		},
-		{ thin: 0.8, wide: 1.6 },
+		{
+			thin: 0.8,
+			wide: 1.6,
+		},
 	);
 	ownerWindow.close();
 });
@@ -128,8 +137,14 @@ test('active DOM context follows a registered focused window', () => {
 
 	try {
 		assert.deepEqual(
-			{ document: getActiveDocument(), element: getActiveElement() },
-			{ document: ownerWindow.document, element: button },
+			{
+				document: getActiveDocument(),
+				element: getActiveElement(),
+			},
+			{
+				document: ownerWindow.document,
+				element: button,
+			},
 		);
 	} finally {
 		registration.dispose();
@@ -150,7 +165,10 @@ test('getShadowRoot resolves an element inside an open shadow tree', () => {
 });
 
 test('stopEvent prevents native behavior and propagation', () => {
-	const event = new Event('submit', { bubbles: true, cancelable: true });
+	const event = new Event('submit', {
+		bubbles: true,
+		cancelable: true,
+	});
 	let propagated = false;
 	const target = new EventTarget();
 	target.addEventListener('submit', next => stopEvent(next, { immediate: true }));

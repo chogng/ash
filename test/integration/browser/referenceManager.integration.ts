@@ -1,10 +1,6 @@
 import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
-import {
-	createTestEditorServices,
-	createTestFileService,
-	createTestTextFileService,
-} from '../../../src/ash/workbench/test/common/testEditorServices.js';
+import { createTestEditorServices, createTestFileService, createTestTextFileService } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { InMemoryFileSystemProvider } from '../../../src/ash/platform/files/common/inMemoryFilesystemProvider.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
@@ -72,11 +68,7 @@ const panes = new Map<string, EditorPane>();
 async function open(
 	input: IResourceEditorInput,
 	preferredEditorId?: string,
-	slot = /\.pdf$/i.test(input.resource.path)
-		? 'pdf'
-		: /\.(?:ash-academy|ash-paper)$/i.test(input.resource.path)
-			? 'document'
-			: 'library',
+	slot = /\.pdf$/i.test(input.resource.path) ? 'pdf' : /\.(?:ash-academy|ash-paper)$/i.test(input.resource.path) ? 'document' : 'library',
 ) {
 	const descriptor = EditorPanes.getEditorPane(input, { preferredEditorId });
 	if (!descriptor) throw new Error('No admitted editor');
@@ -106,9 +98,7 @@ services.registerInstance(IEditorService, {
 	},
 } as unknown as IEditorService);
 const resources = new ExtensionResourceLoaderService(async request => {
-	const response = await fetch(
-		`/__references_resource?id=${request.extensionId}&generation=${request.generation}&path=${encodeURIComponent(request.path)}`,
-	);
+	const response = await fetch(`/__references_resource?id=${request.extensionId}&generation=${request.generation}&path=${encodeURIComponent(request.path)}`);
 	if (!response.ok) throw new Error('Package resource unavailable');
 	return new Uint8Array(await response.arrayBuffer());
 });
@@ -134,15 +124,10 @@ const bridge = services.createInstance(MainThreadClientEditors, 30000, loadExten
 await memory.createDirectory(URI.file('/fixture'));
 await files.writeFile({
 	resource: URI.file('/fixture/source.ris'),
-	content:
-		'TY  - JOUR\nTI  - A paper\nAU  - Smith, Jane\nPY  - 2024\nDO  - 10.1234/abc\nER  -\nTY  - BOOK\nTI  - A second book\nAU  - Wang, Ming\nPY  - 2023\nER  -\n',
+	content: 'TY  - JOUR\nTI  - A paper\nAU  - Smith, Jane\nPY  - 2024\nDO  - 10.1234/abc\nER  -\nTY  - BOOK\nTI  - A second book\nAU  - Wang, Ming\nPY  - 2023\nER  -\n',
 });
 await files.writeFile({ resource: URI.file('/fixture/paper.ash-academy'), content: '' });
-await memory.writeFile(
-	URI.file('/fixture/paper.pdf'),
-	new Uint8Array(await (await fetch('/__references_pdf')).arrayBuffer()),
-	{ create: true, overwrite: false },
-);
+await memory.writeFile(URI.file('/fixture/paper.pdf'), new Uint8Array(await (await fetch('/__references_pdf')).arrayBuffer()), { create: true, overwrite: false });
 const library = () => panes.get('library') as ReferenceLibraryEditor;
 const model = () => (panes.get('document')!.workingCopy as TextModelWorkingCopyReference).model as AcademyTextModel;
 let savedApi: IEditorExtensionApi | undefined;

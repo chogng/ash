@@ -22,13 +22,7 @@ import { TerminalContextKeys, TerminalHasActiveInstanceContext } from '../common
 import { ITerminalProfileService } from '../common/terminal.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { TerminalProfileQuickpick } from './terminalProfileQuickpick.js';
-import {
-	ITerminalService,
-	ITerminalGroupService,
-	ITerminalEditorService,
-	ITerminalEditingService,
-	type ITerminalInstance,
-} from './terminal.js';
+import { ITerminalService, ITerminalGroupService, ITerminalEditorService, ITerminalEditingService, type ITerminalInstance } from './terminal.js';
 import type { TerminalViewPane } from './terminalView.js';
 import { MarshalledId } from '../../../../base/common/marshallingIds.js';
 import { InstanceContext } from './terminalContextMenu.js';
@@ -37,10 +31,7 @@ import { EndOfLinePreference } from '../../../../editor/common/model.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { Schemas } from '../../../../base/common/network.js';
 import type { Terminal } from '@xterm/xterm';
-import {
-	IWorkspaceTrustManagementService,
-	IWorkspaceTrustRequestService,
-} from '../../../../platform/workspace/common/workspaceTrust.js';
+import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 
 /** Command definitions use the invoking window's services, never a retained View callback. */
@@ -55,10 +46,7 @@ export function registerTerminalActions(): void {
 					precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
 					keybinding: {
 						primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KeyK, KeyMod.CtrlCmd | KeyCode.KeyI),
-						when: ContextKeyExpr.or(
-							TerminalContextKeys.focus.isEqualTo(true),
-							TerminalContextKeys.tabsFocus.isEqualTo(true),
-						),
+						when: ContextKeyExpr.or(TerminalContextKeys.focus.isEqualTo(true), TerminalContextKeys.tabsFocus.isEqualTo(true)),
 						weight: KeybindingWeight.WorkbenchContrib,
 					},
 				});
@@ -68,10 +56,7 @@ export function registerTerminalActions(): void {
 			}
 		},
 	);
-	const normalBufferFocused = ContextKeyExpr.and(
-		TerminalContextKeys.focus.isEqualTo(true),
-		TerminalContextKeys.altBufferActive.isEqualTo(false),
-	);
+	const normalBufferFocused = ContextKeyExpr.and(TerminalContextKeys.focus.isEqualTo(true), TerminalContextKeys.altBufferActive.isEqualTo(false));
 	// These operations use the retained screen, including exited and read-only terminals.
 	for (const action of [
 		{
@@ -134,8 +119,7 @@ export function registerTerminalActions(): void {
 				}
 				override run(accessor: ServicesAccessor): void {
 					const screen = accessor.get(ITerminalService).activeInstance?.xterm;
-					if (screen && !screen.isDisposed && screen.raw.buffer.active.type === 'normal')
-						action.operation(screen.raw);
+					if (screen && !screen.isDisposed && screen.raw.buffer.active.type === 'normal') action.operation(screen.raw);
 				}
 			},
 		);
@@ -201,28 +185,14 @@ export function registerTerminalActions(): void {
 				const resource = accessor.get(ICodeEditorService).getActiveCodeEditor()?.getModel()?.uri;
 				if (!resource) return;
 				if (resource.scheme !== Schemas.file && resource.scheme !== Schemas.ashRemote)
-					throw new Error(
-						localize(
-							'terminal.runActiveFile.diskRequired',
-							'Open a file on disk before running it in the terminal.',
-						),
-					);
+					throw new Error(localize('terminal.runActiveFile.diskRequired', 'Open a file on disk before running it in the terminal.'));
 				const terminals = accessor.get(ITerminalService);
 				let instance = terminals.activeInstance;
-				if (!instance || instance.isReadOnly || instance.state === 'exited')
-					instance = await terminals.createTerminal();
-				if (
-					!instance ||
-					!terminals.instances.includes(instance) ||
-					terminals.activeInstance !== instance ||
-					instance.isReadOnly ||
-					instance.state !== 'running'
-				)
-					return;
+				if (!instance || instance.isReadOnly || instance.state === 'exited') instance = await terminals.createTerminal();
+				if (!instance || !terminals.instances.includes(instance) || terminals.activeInstance !== instance || instance.isReadOnly || instance.state !== 'running') return;
 				await instance.sendPath(resource, true);
 				if (!terminals.instances.includes(instance) || terminals.activeInstance !== instance) return;
-				if (instance.target === TerminalLocation.Editor)
-					await accessor.get(ITerminalEditorService).openEditor(instance, { preserveFocus: true });
+				if (instance.target === TerminalLocation.Editor) await accessor.get(ITerminalEditorService).openEditor(instance, { preserveFocus: true });
 				else await accessor.get(ITerminalGroupService).showPanel(false);
 			}
 		},
@@ -244,25 +214,15 @@ export function registerTerminalActions(): void {
 				const selection = editor?.getSelection();
 				if (!model || !selection) return;
 				// Capture the request before folder/profile selection can yield to another edit.
-				const text = selection.isEmpty()
-					? model.getLineContent(selection.selectionStartLineNumber).trim()
-					: model.getValueInRange(selection, EndOfLinePreference.LF);
+				const text = selection.isEmpty() ? model.getLineContent(selection.selectionStartLineNumber).trim() : model.getValueInRange(selection, EndOfLinePreference.LF);
 				if (!text) return;
 
 				const terminals = accessor.get(ITerminalService);
 				const groups = accessor.get(ITerminalGroupService);
 				const terminalEditors = accessor.get(ITerminalEditorService);
 				let instance = terminals.activeInstance;
-				if (!instance || instance.isReadOnly || instance.state === 'exited')
-					instance = await terminals.createTerminal();
-				if (
-					!instance ||
-					!terminals.instances.includes(instance) ||
-					terminals.activeInstance !== instance ||
-					instance.isReadOnly ||
-					instance.state !== 'running'
-				)
-					return;
+				if (!instance || instance.isReadOnly || instance.state === 'exited') instance = await terminals.createTerminal();
+				if (!instance || !terminals.instances.includes(instance) || terminals.activeInstance !== instance || instance.isReadOnly || instance.state !== 'running') return;
 				await instance.sendText(text, true, true);
 				if (!terminals.instances.includes(instance) || terminals.activeInstance !== instance) return;
 				if (instance.target === TerminalLocation.Editor) {
@@ -419,16 +379,11 @@ export function registerTerminalActions(): void {
 				const trust = accessor.get(IWorkspaceTrustManagementService);
 				const requests = accessor.get(IWorkspaceTrustRequestService);
 				await trust.workspaceTrustInitialized;
-				const permissions = await Promise.all(
-					workspace.folders.map(async folder => (await trust.getUriTrustInfo(folder.uri)).permissions),
-				);
+				const permissions = await Promise.all(workspace.folders.map(async folder => (await trust.getUriTrustInfo(folder.uri)).permissions));
 				if (workspaceContext.getWorkspace() !== workspace) return;
 				if (permissions.some(allowed => !allowed?.includes('executeCommands'))) {
 					const accepted = await requests.requestWorkspaceTrust({
-						message: localize(
-							'workspaceTrust.terminalRequest',
-							'Creating a terminal can run code from this workspace. Do you trust its authors?',
-						),
+						message: localize('workspaceTrust.terminalRequest', 'Creating a terminal can run code from this workspace. Do you trust its authors?'),
 					});
 					if (accepted !== true) return;
 				}
@@ -450,8 +405,7 @@ export function registerTerminalActions(): void {
 				// Reveal without deferring focus inside openView: a newer picker may
 				// open while process creation or view restoration is still pending.
 				await groups.showPanel(false);
-				if (focus && !quickInput.currentQuickInput && terminals.activeInstance === instance)
-					instance.xterm?.focus();
+				if (focus && !quickInput.currentQuickInput && terminals.activeInstance === instance) instance.xterm?.focus();
 			}
 		},
 	);
@@ -501,9 +455,7 @@ export function registerTerminalActions(): void {
 				});
 			}
 			override run(accessor: ServicesAccessor): Promise<void> {
-				return accessor
-					.get(IPreferencesService)
-					.openSettings({ jsonEditor: false, query: '@id:terminal.integrated.*' });
+				return accessor.get(IPreferencesService).openSettings({ jsonEditor: false, query: '@id:terminal.integrated.*' });
 			}
 		},
 	);
@@ -525,41 +477,20 @@ export function registerTerminalActions(): void {
 			}
 			override async run(accessor: ServicesAccessor, context?: unknown, profileId?: unknown): Promise<void> {
 				const parent = resolveInstance(accessor, context);
-				if (
-					!parent ||
-					parent.state !== 'running' ||
-					parent.isReadOnly ||
-					parent.shellLaunchConfig?.customPtyImplementation
-				)
-					return;
+				if (!parent || parent.state !== 'running' || parent.isReadOnly || parent.shellLaunchConfig?.customPtyImplementation) return;
 				const terminals = accessor.get(ITerminalService);
 				const profiles = accessor.get(ITerminalProfileService);
-				const config =
-					profileId === undefined
-						? parent.shellLaunchConfig
-						: resolveProfile(profiles, profileId, parent.dirId);
+				const config = profileId === undefined ? parent.shellLaunchConfig : resolveProfile(profiles, profileId, parent.dirId);
 				const terminalEditors = accessor.get(ITerminalEditorService);
 				const created =
-					parent.target === TerminalLocation.Editor
-						? await terminalEditors.splitInstance(parent, config)
-						: await terminals.createTerminal({ config, location: { parentTerminal: parent } });
+					parent.target === TerminalLocation.Editor ? await terminalEditors.splitInstance(parent, config) : await terminals.createTerminal({ config, location: { parentTerminal: parent } });
 				created?.xterm?.focus();
 			}
 		},
 	);
 	for (const [id, title, direction, key] of [
-		[
-			TerminalCommandId.FocusNextPane,
-			localize2('terminal.group.next', 'Terminal: Focus Next Pane'),
-			'next',
-			KeyCode.RightArrow,
-		],
-		[
-			TerminalCommandId.FocusPreviousPane,
-			localize2('terminal.group.previous', 'Terminal: Focus Previous Pane'),
-			'previous',
-			KeyCode.LeftArrow,
-		],
+		[TerminalCommandId.FocusNextPane, localize2('terminal.group.next', 'Terminal: Focus Next Pane'), 'next', KeyCode.RightArrow],
+		[TerminalCommandId.FocusPreviousPane, localize2('terminal.group.previous', 'Terminal: Focus Previous Pane'), 'previous', KeyCode.LeftArrow],
 	] as const) {
 		registerAction2(
 			class FocusTerminalPaneAction extends Action2 {
@@ -625,10 +556,7 @@ export function registerTerminalActions(): void {
 					.filter(instance => instance !== source)
 					.flatMap(target =>
 						(['before', 'after'] as const).map(side => ({
-							label:
-								side === 'before'
-									? localize('terminal.group.moveBefore', 'Before {0}', target.title)
-									: localize('terminal.group.moveAfter', 'After {0}', target.title),
+							label: side === 'before' ? localize('terminal.group.moveBefore', 'Before {0}', target.title) : localize('terminal.group.moveAfter', 'After {0}', target.title),
 							target,
 							side,
 						})),
@@ -660,13 +588,7 @@ export function registerTerminalActions(): void {
 					lifetime.add(toDisposable(() => resolve(undefined)));
 					picker.show();
 				});
-				if (
-					!item ||
-					retired ||
-					!terminals.instances.includes(source) ||
-					!terminals.instances.includes(item.target)
-				)
-					return;
+				if (!item || retired || !terminals.instances.includes(source) || !terminals.instances.includes(item.target)) return;
 				groups.moveInstance(source, item.target, item.side);
 				source.xterm?.focus();
 			}
@@ -723,10 +645,7 @@ export function registerTerminalActions(): void {
 					precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
 					keybinding: {
 						primary: KeyMod.CtrlCmd | KeyCode.UpArrow,
-						when: ContextKeyExpr.and(
-							TerminalContextKeys.focus.isEqualTo(true),
-							CONTEXT_ACCESSIBILITY_MODE_ENABLED.isEqualTo(false),
-						),
+						when: ContextKeyExpr.and(TerminalContextKeys.focus.isEqualTo(true), CONTEXT_ACCESSIBILITY_MODE_ENABLED.isEqualTo(false)),
 						weight: KeybindingWeight.WorkbenchContrib,
 					},
 				});
@@ -745,10 +664,7 @@ export function registerTerminalActions(): void {
 					precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
 					keybinding: {
 						primary: KeyMod.CtrlCmd | KeyCode.DownArrow,
-						when: ContextKeyExpr.and(
-							TerminalContextKeys.focus.isEqualTo(true),
-							CONTEXT_ACCESSIBILITY_MODE_ENABLED.isEqualTo(false),
-						),
+						when: ContextKeyExpr.and(TerminalContextKeys.focus.isEqualTo(true), CONTEXT_ACCESSIBILITY_MODE_ENABLED.isEqualTo(false)),
 						weight: KeybindingWeight.WorkbenchContrib,
 					},
 				});
@@ -759,24 +675,19 @@ export function registerTerminalActions(): void {
 		},
 	);
 	CommandsRegistry.register(TerminalCommandId.Relaunch, async (accessor, context) => {
-		if (context === undefined && accessor.get(ITerminalService).activeInstance?.target !== TerminalLocation.Editor)
-			return terminalView(accessor).relaunchActive();
+		if (context === undefined && accessor.get(ITerminalService).activeInstance?.target !== TerminalLocation.Editor) return terminalView(accessor).relaunchActive();
 		const instance = resolveInstance(accessor, context);
 		if (!instance || instance.state === 'reconnecting') return;
-		await accessor
-			.get(ITerminalService)
-			.relaunchTerminal(instance, instance.xterm?.dimensions() ?? { cols: 80, rows: 24 });
+		await accessor.get(ITerminalService).relaunchTerminal(instance, instance.xterm?.dimensions() ?? { cols: 80, rows: 24 });
 	});
 	CommandsRegistry.register(TerminalCommandId.Kill, (accessor, context) => {
 		const instance = resolveInstance(accessor, context);
 		if (!instance) return;
-		if (context === undefined && instance.target !== TerminalLocation.Editor)
-			return terminalView(accessor).killActive();
+		if (context === undefined && instance.target !== TerminalLocation.Editor) return terminalView(accessor).killActive();
 		return accessor.get(ITerminalService).safeDisposeTerminal(instance);
 	});
 	CommandsRegistry.register(TerminalCommandId.Clear, (accessor, context) => {
-		if (context === undefined && accessor.get(ITerminalService).activeInstance?.target !== TerminalLocation.Editor)
-			return terminalView(accessor).clearActive();
+		if (context === undefined && accessor.get(ITerminalService).activeInstance?.target !== TerminalLocation.Editor) return terminalView(accessor).clearActive();
 		resolveInstance(accessor, context)?.clearBuffer();
 	});
 }
@@ -801,11 +712,7 @@ function resolveInstance(accessor: ServicesAccessor, context: unknown): ITermina
 		const id =
 			context instanceof InstanceContext
 				? context.instanceId
-				: context &&
-					  typeof context === 'object' &&
-					  '$mid' in context &&
-					  context.$mid === MarshalledId.TerminalContext &&
-					  'instanceId' in context
+				: context && typeof context === 'object' && '$mid' in context && context.$mid === MarshalledId.TerminalContext && 'instanceId' in context
 					? context.instanceId
 					: undefined;
 		if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) {
@@ -828,10 +735,7 @@ function terminalView(accessor: ServicesAccessor): TerminalViewPane {
 function resolveProfile(profiles: ITerminalProfileService, profileId: unknown, dirId?: string) {
 	const profile =
 		profiles.getAvailableProfiles(dirId).find(profile => profile.profileId === profileId) ??
-		profiles.contributedProfiles.find(
-			profile => `extension:${profile.extensionIdentifier}/${profile.id}` === profileId,
-		);
-	if (!profile)
-		throw new TypeError(localize('terminal.profile.unknown', 'Unknown terminal profile: {0}', String(profileId)));
+		profiles.contributedProfiles.find(profile => `extension:${profile.extensionIdentifier}/${profile.id}` === profileId);
+	if (!profile) throw new TypeError(localize('terminal.profile.unknown', 'Unknown terminal profile: {0}', String(profileId)));
 	return profile;
 }

@@ -2,16 +2,9 @@ import { TestViewDescriptorService } from './workbenchTestServices.js';
 import { MutableDisposable } from '../../../base/common/lifecycle.js';
 import { ActivityService } from '../../services/activity/browser/activityService.js';
 import { IActivityService, NumberBadge } from '../../services/activity/common/activity.js';
-import {
-	BrowserAuxiliaryWindowService,
-	IAuxiliaryWindowService,
-} from '../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from '../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { LayoutActionsContext } from '../../browser/actions/layoutActions.js';
-import {
-	createTestComponentServices,
-	registerTestComponentServices,
-	createTestEditorServices,
-} from '../common/testEditorServices.js';
+import { createTestComponentServices, registerTestComponentServices, createTestEditorServices } from '../common/testEditorServices.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
 import { HoverPosition } from '../../../base/browser/ui/hover/hoverWidget.js';
@@ -40,23 +33,23 @@ for (const [name, value] of Object.entries({
 	MouseEvent: browserEnvironment.window.MouseEvent,
 	navigator: browserEnvironment.window.navigator,
 })) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
+	Object.defineProperty(globalThis, name, {
+		configurable: true,
+		value,
+	});
 }
 
 const { Dimension } = await import('../../../base/browser/dom.js');
 const { Lxicon } = await import('../../../base/common/lxicons.js');
-const { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } =
-	await import('../../../platform/storage/common/storage.js');
+const { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } = await import('../../../platform/storage/common/storage.js');
 const { WorkbenchState } = await import('../../../platform/workspace/common/workspace.js');
 const { ActivityBarPosition, WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
 const { MenuId, IMenuService } = await import('../../../platform/actions/common/actions.js');
 const { MenuService } = await import('../../../platform/actions/common/menuService.js');
 const { WorkbenchLayout } = await import('../../../workbench/browser/layout.js');
-const { createTestWorkbenchContextKeysHandler } =
-	await import('../../../workbench/test/common/testWorkbenchContextKeys.js');
+const { createTestWorkbenchContextKeysHandler } = await import('../../../workbench/test/common/testWorkbenchContextKeys.js');
 const { ILayoutService } = await import('../../../platform/layout/browser/layoutService.js');
-const { IWorkbenchLayoutService, workbenchPartIds, Position } =
-	await import('../../../workbench/services/layout/browser/layoutService.js');
+const { IWorkbenchLayoutService, workbenchPartIds, Position } = await import('../../../workbench/services/layout/browser/layoutService.js');
 const { BrowserStorageService } = await import('../../../workbench/services/storage/browser/storageService.js');
 const paneStorageEnvironment = new JSDOM('<!doctype html><body></body>', { url: 'https://ash-pane.test' });
 const paneStorage = new BrowserStorageService({
@@ -69,8 +62,7 @@ suiteTeardown(() => {
 	paneStorage.dispose();
 	paneStorageEnvironment.window.close();
 });
-const { InMemoryConfigurationService } =
-	await import('../../../platform/configuration/common/inMemoryConfigurationService.js');
+const { InMemoryConfigurationService } = await import('../../../platform/configuration/common/inMemoryConfigurationService.js');
 const { IConfigurationService } = await import('../../../platform/configuration/common/configuration.js');
 const { TestQuickInputService } = await import('../../../platform/quickinput/test/browser/testQuickInputService.js');
 const componentServices = createTestComponentServices(paneStorage);
@@ -86,8 +78,7 @@ const { IContextMenuService } = await import('../../../platform/contextview/brow
 const { IContextKeyService } = await import('../../../platform/contextkey/browser/contextKeyService.js');
 const { IKeybindingService } = await import('../../../platform/keybinding/common/keybinding.js');
 const { IViewDescriptorService } = await import('../../../workbench/common/views.js');
-const { ILocalizationService: PanelLocalizationService } =
-	await import('../../../workbench/services/localization/common/localizationService.js');
+const { ILocalizationService: PanelLocalizationService } = await import('../../../workbench/services/localization/common/localizationService.js');
 const { CompositeBar } = await import('../../../workbench/browser/parts/compositeBar.js');
 const { AuxiliaryBarPart } = await import('../../../workbench/browser/parts/auxiliarybar/auxiliaryBarPart.js');
 const { PaneComposite } = await import('../../browser/panecomposite.js');
@@ -96,8 +87,7 @@ const { EditorPart } = await import('../../../workbench/browser/parts/editor/edi
 const { ViewDescriptorService } = await import('../../../workbench/services/views/browser/viewDescriptorService.js');
 const { ViewContainerLocation, WorkbenchViewRegistry } = await import('../../../workbench/common/views.js');
 const { ToggleSideBarCommandId } = await import('../../../workbench/browser/parts/titlebar/titlebarActions.js');
-const { ToggleAuxiliaryBarAction } =
-	await import('../../../workbench/browser/parts/auxiliarybar/auxiliaryBarActions.js');
+const { ToggleAuxiliaryBarAction } = await import('../../../workbench/browser/parts/auxiliarybar/auxiliaryBarActions.js');
 const { TogglePanelAction } = await import('../../../workbench/browser/parts/panel/panelActions.js');
 const { CommandService } = await import('../../../workbench/services/commands/common/commandService.js');
 const { InstantiationService } = await import('../../../platform/instantiation/common/instantiationService.js');
@@ -127,11 +117,7 @@ class TestPart extends Part {
 
 	override get minimumWidth(): number {
 		if (this.id === 'activitybar') return 48;
-		return this.id === 'sidebar' || this.id === 'auxiliarybar' || this.id === 'agentSidebar'
-			? 170
-			: this.id === 'editor'
-				? 120
-				: 0;
+		return this.id === 'sidebar' || this.id === 'auxiliarybar' || this.id === 'agentSidebar' ? 170 : this.id === 'editor' ? 120 : 0;
 	}
 
 	override get maximumWidth(): number {
@@ -174,15 +160,7 @@ function createLayoutHarness(
 	ownerDocument.body.append(container);
 	disposables.add(toDisposable(() => container.remove()));
 
-	const {
-		storageService,
-		layoutStyle,
-		activityBarLocation,
-		sideBarLocation,
-		panelDefaultLocation,
-		configurationValues,
-		...layoutOptions
-	} = options;
+	const { storageService, layoutStyle, activityBarLocation, sideBarLocation, panelDefaultLocation, configurationValues, ...layoutOptions } = options;
 	const configuration = disposables.add(new InMemoryConfigurationService());
 	for (const [key, value] of Object.entries(configurationValues ?? {})) void configuration.updateValue(key, value);
 	if (layoutStyle !== undefined) {
@@ -194,8 +172,7 @@ function createLayoutHarness(
 	if (sideBarLocation !== undefined) {
 		void configuration.updateValue(WorkbenchConfiguration.sideBarLocation, sideBarLocation);
 	}
-	if (panelDefaultLocation !== undefined)
-		void configuration.updateValue(WorkbenchConfiguration.panelDefaultLocation, panelDefaultLocation);
+	if (panelDefaultLocation !== undefined) void configuration.updateValue(WorkbenchConfiguration.panelDefaultLocation, panelDefaultLocation);
 	let storage = storageService;
 	if (!storage) {
 		const storageDom = new JSDOM('', { url: 'https://ash.test' });
@@ -223,11 +200,7 @@ function createLayoutHarness(
 	let editor: EditorPartInstance | undefined;
 	for (const partId of workbenchPartIds) {
 		const part =
-			partId === 'editor'
-				? registerContainerServices(services).createInstance(EditorPart, container, {})
-				: partId === 'sidebar' && sidebarPart
-					? sidebarPart
-					: new TestPart(partId, container);
+			partId === 'editor' ? registerContainerServices(services).createInstance(EditorPart, container, {}) : partId === 'sidebar' && sidebarPart ? sidebarPart : new TestPart(partId, container);
 		disposables.add(part);
 		parts.set(partId, part);
 		if (part instanceof EditorPart) editor = part;
@@ -249,9 +222,7 @@ test('Workbench layout keeps the footer inside fractional container bounds on fi
 	});
 	const harness = createLayoutHarness(dom.window.document, {}, container);
 	try {
-		const footer = container
-			.querySelector('[data-part="statusbar"]')!
-			.closest<HTMLElement>('.ash-split-view-pane')!;
+		const footer = container.querySelector('[data-part="statusbar"]')!.closest<HTMLElement>('.ash-split-view-pane')!;
 		for (const nextHeight of [700.8, 700.2, 701.6]) {
 			height = nextHeight;
 			harness.layout.layout();
@@ -288,10 +259,8 @@ test('Workbench layout hides and restores Parts with context keys', () => {
 	const panelElement = harness.container.querySelector<HTMLElement>("[data-part='panel']");
 	const editorFrame = editorElement?.parentElement as HTMLElement | undefined;
 	const panelFrame = panelElement?.parentElement as HTMLElement | undefined;
-	const sidebarFrame = harness.container.querySelector<HTMLElement>("[data-part='sidebar']")?.parentElement as
-		HTMLElement | undefined;
-	const auxiliarybarFrame = harness.container.querySelector<HTMLElement>("[data-part='auxiliarybar']")
-		?.parentElement as HTMLElement | undefined;
+	const sidebarFrame = harness.container.querySelector<HTMLElement>("[data-part='sidebar']")?.parentElement as HTMLElement | undefined;
+	const auxiliarybarFrame = harness.container.querySelector<HTMLElement>("[data-part='auxiliarybar']")?.parentElement as HTMLElement | undefined;
 	assert.equal(editorFrame?.className, 'ash-workbench-part-frame');
 	assert.equal(editorFrame?.style.paddingLeft, '2px');
 	assert.equal(editorFrame?.style.paddingRight, '2px');
@@ -351,8 +320,7 @@ test('Workbench layout switches between modern and flat geometry without replaci
 	const state = harness.layout.state;
 	const editor = harness.container.querySelector<HTMLElement>("[data-part='editor']");
 	const editorFrame = editor?.parentElement as HTMLElement | undefined;
-	const sidebarFrame = harness.container.querySelector<HTMLElement>("[data-part='sidebar']")?.parentElement as
-		HTMLElement | undefined;
+	const sidebarFrame = harness.container.querySelector<HTMLElement>("[data-part='sidebar']")?.parentElement as HTMLElement | undefined;
 	assert.equal(editorFrame?.style.paddingLeft, '2px');
 	assert.equal(sidebarFrame?.style.paddingLeft, '0px');
 	assert.equal(harness.container.querySelectorAll('.ash-sash-inset').length, 4);
@@ -384,8 +352,7 @@ test('Activity Bar badge setting applies on startup and preserves per-icon choic
 	try {
 		const harness = createLayoutHarness(dom.window.document);
 		using disposables = harness.disposables;
-		const { ILocalizationService } =
-			await import('../../../workbench/services/localization/common/localizationService.js');
+		const { ILocalizationService } = await import('../../../workbench/services/localization/common/localizationService.js');
 		harness.services.registerInstance(ILocalizationService, {
 			whenReady: Promise.resolve(),
 			translate: (_bundle, _key, fallback) => fallback,
@@ -425,10 +392,7 @@ test('Activity Bar badge setting applies on startup and preserves per-icon choic
 		activityServices.registerInstance(IKeybindingService, {
 			lookupKeybinding: () => undefined,
 		} as unknown as import('../../../platform/keybinding/common/keybinding.js').IKeybindingService);
-		activityServices.registerInstance(
-			IMenuService,
-			new MenuService(disposables.add(new CommandService(activityServices)), contextKeys),
-		);
+		activityServices.registerInstance(IMenuService, new MenuService(disposables.add(new CommandService(activityServices)), contextKeys));
 		disposables.add(activityServices.createInstance(ActivitybarPart, harness.container, bar, globalBar));
 		const first = (): HTMLElement => bar.domNode.querySelector('[data-action-id="first"]')!;
 		assert.equal(bar.domNode.querySelector('.ash-count-badge'), null);
@@ -524,9 +488,7 @@ test('Workbench pane sashes snap closed while Auxiliary Bar stops at its minimum
 	assert.equal(harness.layout.isPartVisible('auxiliarybar'), true);
 	assert.equal(contextKeys.getValue('auxiliaryBarVisible'), true);
 	const auxiliaryFrame = harness.container.querySelector<HTMLElement>("[data-part='auxiliarybar']")!.parentElement!;
-	const frameInsets =
-		(Number.parseFloat(auxiliaryFrame.style.paddingLeft) || 0) +
-		(Number.parseFloat(auxiliaryFrame.style.paddingRight) || 0);
+	const frameInsets = (Number.parseFloat(auxiliaryFrame.style.paddingLeft) || 0) + (Number.parseFloat(auxiliaryFrame.style.paddingRight) || 0);
 	assert.equal(harness.layout.getPartSize('auxiliarybar').width, 170 + frameInsets);
 	dragWorkbenchSash(dom.window, harness.container, 'auxiliarybar', 1, -110);
 	assert.equal(harness.layout.isPartVisible('auxiliarybar'), true);
@@ -754,8 +716,7 @@ test('maximized Panel survives configuration changes and restores its saved heig
 });
 
 test('Auxiliary Bar commands restore dimensions, hidden Parts and Panel maximization across layout changes', async () => {
-	const { IPaneCompositePartService } =
-		await import('../../../workbench/services/panecomposite/browser/panecomposite.js');
+	const { IPaneCompositePartService } = await import('../../../workbench/services/panecomposite/browser/panecomposite.js');
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
 		const harness = createLayoutHarness(dom.window.document, {
@@ -789,10 +750,7 @@ test('Auxiliary Bar commands restore dimensions, hidden Parts and Panel maximiza
 				assert.equal(harness.layout.isPartVisible(partId), false, partId);
 			}
 			assert.deepEqual(harness.layout.state, ordinary);
-			await harness.configuration.updateValue(
-				WorkbenchConfiguration.sideBarLocation,
-				panelMaximized ? 'left' : 'right',
-			);
+			await harness.configuration.updateValue(WorkbenchConfiguration.sideBarLocation, panelMaximized ? 'left' : 'right');
 			assert.equal(harness.layout.isAuxiliaryBarMaximized(), true);
 			assert.equal(harness.layout.isPartVisible('sidebar'), false);
 			await commands.executeCommand('workbench.action.toggleMaximizedAuxiliaryBar');
@@ -981,12 +939,7 @@ test('Git sidebar uses its preferred reset width and merges a lone view into the
 	});
 	sidebar.addComposite(composite);
 	sidebar.showComposite(descriptor.id);
-	const harness = createLayoutHarness(
-		dom.window.document,
-		{ initialDimension: new Dimension(1_200, 800) },
-		host,
-		sidebar,
-	);
+	const harness = createLayoutHarness(dom.window.document, { initialDimension: new Dimension(1_200, 800) }, host, sidebar);
 	harness.layout.layout(new Dimension(1_200, 800));
 	harness.layout.resizePart('sidebar', harness.layout.getPartSize('sidebar').with(250));
 	assert.equal(sidebar.preferredWidth, 400);
@@ -1135,12 +1088,7 @@ test('Panel reveal honors always, never, and preserve instead of overriding the 
 				backend: dom.window.localStorage,
 				flushInterval: 0,
 			});
-			storage.store(
-				'workbench.layout.panel.wasLastMaximized',
-				saved,
-				StorageScope.WORKSPACE,
-				StorageTarget.MACHINE,
-			);
+			storage.store('workbench.layout.panel.wasLastMaximized', saved, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 			const harness = createLayoutHarness(dom.window.document, {
 				storageService: storage,
 				configurationValues: { 'workbench.panel.opensMaximized': mode },
@@ -1203,7 +1151,14 @@ test('Workbench layout applies host defaults without exposing persisted state', 
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const harness = createLayoutHarness(dom.window.document, {
 		initialDimension: new Dimension(1_200, 800),
-		defaultLayout: { parts: { sidebar: false, auxiliarybar: false, agentSidebar: false, panel: false } },
+		defaultLayout: {
+			parts: {
+				sidebar: false,
+				auxiliarybar: false,
+				agentSidebar: false,
+				panel: false,
+			},
+		},
 	});
 	harness.layout.layout(new Dimension(1_200, 800));
 
@@ -1232,14 +1187,7 @@ test('new profiles show the auxiliary bar in empty windows and restore saved vis
 		workbenchState: WorkbenchState.EMPTY,
 		storageService: firstStorage,
 	});
-	assert.deepEqual(
-		[
-			first.layout.isPartVisible('sidebar'),
-			first.layout.isPartVisible('auxiliarybar'),
-			first.layout.isPartVisible('panel'),
-		],
-		[false, true, false],
-	);
+	assert.deepEqual([first.layout.isPartVisible('sidebar'), first.layout.isPartVisible('auxiliarybar'), first.layout.isPartVisible('panel')], [false, true, false]);
 	await firstStorage.flush(WillSaveStateReason.SHUTDOWN);
 	first.disposables.dispose();
 	firstStorage.dispose();
@@ -1250,10 +1198,7 @@ test('new profiles show the auxiliary bar in empty windows and restore saved vis
 		workbenchState: WorkbenchState.EMPTY,
 		storageService: storage,
 	});
-	assert.deepEqual(
-		[restored.layout.isPartVisible('sidebar'), restored.layout.isPartVisible('auxiliarybar')],
-		[false, true],
-	);
+	assert.deepEqual([restored.layout.isPartVisible('sidebar'), restored.layout.isPartVisible('auxiliarybar')], [false, true]);
 	restored.layout.showPart('sidebar');
 	restored.layout.showPart('auxiliarybar');
 	await storage.flush(WillSaveStateReason.SHUTDOWN);
@@ -1265,26 +1210,13 @@ test('new profiles show the auxiliary bar in empty windows and restore saved vis
 		workbenchState: WorkbenchState.EMPTY,
 		storageService: savedEmptyStorage,
 	});
-	assert.deepEqual(
-		[savedEmpty.layout.isPartVisible('sidebar'), savedEmpty.layout.isPartVisible('auxiliarybar')],
-		[true, true],
-	);
+	assert.deepEqual([savedEmpty.layout.isPartVisible('sidebar'), savedEmpty.layout.isPartVisible('auxiliarybar')], [true, true]);
 	savedEmptyStorage.switchWorkspace('empty-c');
 	savedEmpty.layout.restoreWorkspaceState(WorkbenchState.EMPTY);
-	assert.deepEqual(
-		[savedEmpty.layout.isPartVisible('sidebar'), savedEmpty.layout.isPartVisible('auxiliarybar')],
-		[false, true],
-	);
+	assert.deepEqual([savedEmpty.layout.isPartVisible('sidebar'), savedEmpty.layout.isPartVisible('auxiliarybar')], [false, true]);
 	savedEmptyStorage.switchWorkspace('folder-a');
 	savedEmpty.layout.restoreWorkspaceState(WorkbenchState.FOLDER);
-	assert.deepEqual(
-		[
-			savedEmpty.layout.isPartVisible('sidebar'),
-			savedEmpty.layout.isPartVisible('auxiliarybar'),
-			savedEmpty.layout.isPartVisible('panel'),
-		],
-		[true, true, false],
-	);
+	assert.deepEqual([savedEmpty.layout.isPartVisible('sidebar'), savedEmpty.layout.isPartVisible('auxiliarybar'), savedEmpty.layout.isPartVisible('panel')], [true, true, false]);
 	savedEmpty.layout.hidePart('auxiliarybar');
 	await savedEmptyStorage.flush(WillSaveStateReason.SHUTDOWN);
 	savedEmpty.disposables.dispose();
@@ -1313,7 +1245,10 @@ test('Workbench default layout applies to new workspaces unless forced', async (
 		});
 	const initialDimension = new Dimension(1_000, 700);
 	const seedStorage = createStorage('workspace-a');
-	const seed = createLayoutHarness(dom.window.document, { initialDimension, storageService: seedStorage });
+	const seed = createLayoutHarness(dom.window.document, {
+		initialDimension,
+		storageService: seedStorage,
+	});
 	assert.equal(seed.layout.isPartVisible('sidebar'), true);
 	await seedStorage.flush(WillSaveStateReason.SHUTDOWN);
 	seed.disposables.dispose();
@@ -1473,8 +1408,7 @@ test('Workbench layout retains resized Part dimensions across visibility', () =>
 	harness.layout.hidePart('sidebar');
 	harness.layout.showPart('sidebar');
 	assert.equal(harness.layout.getPartSize('sidebar').width, 250);
-	const restoredSidebarPane =
-		harness.container.querySelector<HTMLElement>("[data-part='sidebar']")?.parentElement?.parentElement;
+	const restoredSidebarPane = harness.container.querySelector<HTMLElement>("[data-part='sidebar']")?.parentElement?.parentElement;
 	assert.equal(restoredSidebarPane?.style.width, '250px');
 
 	harness.disposables.dispose();
@@ -1530,9 +1464,7 @@ test('Activity Bar hosts the primary sidebar selector independently of sidebar v
 	const localization = {
 		translate: (_bundle: string, _key: string, fallback: string) => fallback,
 	} as ILocalizationService;
-	const activitybar = disposables.add(
-		createTestActivitybar(dom.window.document.body, compositeBar, globalBar, configuration, localization),
-	);
+	const activitybar = disposables.add(createTestActivitybar(dom.window.document.body, compositeBar, globalBar, configuration, localization));
 	assert.equal(activitybar.minimumWidth, 44);
 	activitybar.setLayoutStyle('flat');
 	assert.equal(activitybar.minimumWidth, 48);
@@ -1550,9 +1482,7 @@ test('Activity Bar hosts the primary sidebar selector independently of sidebar v
 
 	assert.equal(compositeBar.domNode.querySelectorAll('.ash-action-view-item').length, 3);
 	assert.deepEqual(
-		[...compositeBar.domNode.querySelectorAll<HTMLElement>('.ash-action-view-item')].map(
-			item => item.dataset.actionId,
-		),
+		[...compositeBar.domNode.querySelectorAll<HTMLElement>('.ash-action-view-item')].map(item => item.dataset.actionId),
 		['ash.explorer', 'ash.search', 'ash.git'],
 	);
 	const title = sidebar.domNode.querySelector(':scope > .ash-workbench-part-title.ash-pane-composite-title');
@@ -1562,15 +1492,9 @@ test('Activity Bar hosts the primary sidebar selector independently of sidebar v
 	assert.equal(title?.parentElement, sidebar.domNode);
 	sidebar.setActivityBarLocation(ActivityBarPosition.TOP);
 	assert.equal(compositeBar.domNode.parentElement, sidebar.domNode.querySelector('.ash-sidebar-composite-bar-top'));
-	assert.equal(
-		compositeBar.domNode.querySelector('[role="tablist"]')?.getAttribute('aria-orientation'),
-		'horizontal',
-	);
+	assert.equal(compositeBar.domNode.querySelector('[role="tablist"]')?.getAttribute('aria-orientation'), 'horizontal');
 	sidebar.setActivityBarLocation(ActivityBarPosition.BOTTOM);
-	assert.equal(
-		compositeBar.domNode.parentElement,
-		sidebar.domNode.querySelector('.ash-sidebar-composite-bar-bottom'),
-	);
+	assert.equal(compositeBar.domNode.parentElement, sidebar.domNode.querySelector('.ash-sidebar-composite-bar-bottom'));
 	sidebar.setActivityBarLocation(ActivityBarPosition.DEFAULT);
 	activitybar.hostCompositeBar();
 	assert.equal(compositeBar.domNode.parentElement, activitybar.domNode.querySelector('.ash-workbench-part-content'));
@@ -1615,7 +1539,11 @@ test('Activity Bar hosts the primary sidebar selector independently of sidebar v
 	assert.equal(explorerTab.getAttribute('aria-selected'), 'true');
 	explorerTab.focus();
 	explorerTab.dispatchEvent(
-		new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }),
+		new dom.window.KeyboardEvent('keydown', {
+			bubbles: true,
+			cancelable: true,
+			key: 'ArrowDown',
+		}),
 	);
 	assert.equal(dom.window.document.activeElement, searchTab);
 	assert.deepEqual(selections, []);
@@ -1627,16 +1555,14 @@ test('Activity Bar hosts the primary sidebar selector independently of sidebar v
 
 	const explorerContainer = viewDescriptors.getViewContainers(ViewContainerLocation.Sidebar)[0];
 	const searchContainer = viewDescriptors.getViewContainers(ViewContainerLocation.Sidebar)[1];
-	const explorerComposite = registerContainerServices(componentServices).createInstance(
-		PaneComposite,
-		dom.window.document.body,
-		{ viewContainer: explorerContainer, model: viewDescriptors.getViewContainerModel(explorerContainer.id) },
-	);
-	const searchComposite = registerContainerServices(componentServices).createInstance(
-		PaneComposite,
-		dom.window.document.body,
-		{ viewContainer: searchContainer, model: viewDescriptors.getViewContainerModel(searchContainer.id) },
-	);
+	const explorerComposite = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
+		viewContainer: explorerContainer,
+		model: viewDescriptors.getViewContainerModel(explorerContainer.id),
+	});
+	const searchComposite = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
+		viewContainer: searchContainer,
+		model: viewDescriptors.getViewContainerModel(searchContainer.id),
+	});
 	sidebar.addComposite(explorerComposite);
 	sidebar.addComposite(searchComposite);
 	sidebar.showComposite(explorerComposite.id);
@@ -1694,9 +1620,7 @@ test('CompositeBar retains selectors and keyboard focus through selection and un
 		const tabs = [...bar.domNode.querySelectorAll<HTMLElement>('[role="tab"]')];
 		bar.setActiveComposite('first');
 		tabs[1]!.focus();
-		tabs[1]!.dispatchEvent(
-			new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
-		);
+		tabs[1]!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 		assert.deepEqual(opened, ['second']);
 		assert.deepEqual([...bar.domNode.querySelectorAll('[role="tab"]')], tabs);
 		assert.deepEqual(
@@ -1715,9 +1639,7 @@ test('CompositeBar retains selectors and keyboard focus through selection and un
 		bar.setActiveComposite(undefined);
 		bar.setActiveComposite('first');
 		assert.equal(bar.domNode.querySelector('[data-action-id="first"]'), tabs[0]);
-		tabs[1]!.dispatchEvent(
-			new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }),
-		);
+		tabs[1]!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
 		assert.equal(dom.window.document.activeElement?.getAttribute('data-action-id'), 'third');
 	} finally {
 		dom.window.close();
@@ -1808,7 +1730,11 @@ test('Pane Composite Parts restore workspace selections with Registry fallback',
 		}),
 	);
 	disposables.add(
-		registry.registerViewContainer({ id: 'ash.search', title: 'Search', location: ViewContainerLocation.Sidebar }),
+		registry.registerViewContainer({
+			id: 'ash.search',
+			title: 'Search',
+			location: ViewContainerLocation.Sidebar,
+		}),
 	);
 	const contextKeys = disposables.add(new ContextKeyService());
 	const viewDescriptors = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
@@ -1820,9 +1746,7 @@ test('Pane Composite Parts restore workspace selections with Registry fallback',
 			flushInterval: 0,
 		});
 	const createComposite = (containerId: string) => {
-		const descriptor = viewDescriptors
-			.getViewContainers(ViewContainerLocation.Sidebar)
-			.find(candidate => candidate.id === containerId);
+		const descriptor = viewDescriptors.getViewContainers(ViewContainerLocation.Sidebar).find(candidate => candidate.id === containerId);
 		assert.ok(descriptor);
 		return registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
 			viewContainer: descriptor,
@@ -1918,11 +1842,10 @@ test('Sidebar can host Agent Sidebar composites', () => {
 	assert.equal(agentSidebar.compositeBar.domNode.querySelector("[data-action-id='ash.chat']"), null);
 	const descriptor = viewDescriptors.getDefaultViewContainer(ViewContainerLocation.AgentSidebar);
 	assert.ok(descriptor);
-	const composite = registerContainerServices(componentServices).createInstance(
-		PaneComposite,
-		dom.window.document.body,
-		{ viewContainer: descriptor, model: viewDescriptors.getViewContainerModel(descriptor.id) },
-	);
+	const composite = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
+		viewContainer: descriptor,
+		model: viewDescriptors.getViewContainerModel(descriptor.id),
+	});
 	agentSidebar.addComposite(composite);
 	agentSidebar.showComposite(composite.id);
 	assert.equal(contextKeys.getValue('activeAgentSidebar'), composite.id);
@@ -1954,7 +1877,11 @@ test('Panel presents its destinations as tabs and active commands as a toolbar',
 	}
 	disposables.add(
 		registry.registerViews('ash.panel.terminal', [
-			{ id: 'ash.terminal', title: 'Terminal', ctorDescriptor: new SyncDescriptor(TestPanelView) },
+			{
+				id: 'ash.terminal',
+				title: 'Terminal',
+				ctorDescriptor: new SyncDescriptor(TestPanelView),
+			},
 		]),
 	);
 	const contextKeys = disposables.add(new ContextKeyService());
@@ -1980,17 +1907,12 @@ test('Panel presents its destinations as tabs and active commands as a toolbar',
 		onDidHideContextMenu: BaseEvent.None,
 		hideContextMenu() {},
 	});
-	const panel = disposables.add(
-		registerContainerServices(panelServices).createInstance(PanelPart, dom.window.document.body),
-	);
+	const panel = disposables.add(registerContainerServices(panelServices).createInstance(PanelPart, dom.window.document.body));
 	assert.deepEqual([panel.minimumWidth, panel.minimumHeight], [300, 77]);
 	dom.window.document.body.append(panel.domNode);
 
 	const tablist = panel.domNode.querySelector(".ash-panel-title-control [role='tablist']");
-	assert.equal(
-		panel.compositeBar.domNode.className,
-		'ash-composite-bar ash-composite-bar-label ash-composite-bar-horizontal',
-	);
+	assert.equal(panel.compositeBar.domNode.className, 'ash-composite-bar ash-composite-bar-label ash-composite-bar-horizontal');
 	assert.equal(tablist?.getAttribute('aria-label'), 'Panel views');
 	assert.deepEqual(
 		[...(tablist?.querySelectorAll("[role='tab']") ?? [])].map(tab => tab.textContent),
@@ -1998,42 +1920,27 @@ test('Panel presents its destinations as tabs and active commands as a toolbar',
 	);
 	const panelToolbar = panel.domNode.querySelector(".ash-pane-composite-title-part-actions [role='toolbar']");
 	assert.ok(panelToolbar);
-	const maximizePanel = [...panelToolbar.querySelectorAll('button')].find(
-		button => button.textContent === 'Maximize Panel',
-	);
-	const closePanel = [...panelToolbar.querySelectorAll('button')].find(
-		button => button.textContent === 'Close Panel',
-	);
+	const maximizePanel = [...panelToolbar.querySelectorAll('button')].find(button => button.textContent === 'Maximize Panel');
+	const closePanel = [...panelToolbar.querySelectorAll('button')].find(button => button.textContent === 'Close Panel');
 	assert.ok(maximizePanel);
 	assert.ok(closePanel);
 	assert.ok(maximizePanel.querySelector('.ash-icon'));
 	assert.ok(closePanel.querySelector('.ash-icon'));
-	assert.equal(
-		maximizePanel.compareDocumentPosition(closePanel) & browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING,
-		browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING,
-	);
+	assert.equal(maximizePanel.compareDocumentPosition(closePanel) & browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING, browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING);
 
-	const terminalDescriptor = viewDescriptors
-		.getViewContainers(ViewContainerLocation.Panel)
-		.find(container => container.id === 'ash.panel.terminal');
+	const terminalDescriptor = viewDescriptors.getViewContainers(ViewContainerLocation.Panel).find(container => container.id === 'ash.panel.terminal');
 	assert.ok(terminalDescriptor);
-	const terminal = registerContainerServices(componentServices).createInstance(
-		PaneComposite,
-		dom.window.document.body,
-		{
-			viewContainer: terminalDescriptor,
-			model: viewDescriptors.getViewContainerModel(terminalDescriptor.id),
-			paneHeaders: 'hidden',
-			paneLayout: 'fill',
-		},
-	);
+	const terminal = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
+		viewContainer: terminalDescriptor,
+		model: viewDescriptors.getViewContainerModel(terminalDescriptor.id),
+		paneHeaders: 'hidden',
+		paneLayout: 'fill',
+	});
 	panel.addComposite(terminal);
 	panel.showComposite(terminal.id);
 	assert.equal(contextKeys.getValue('activePanel'), terminal.id);
 
-	const toolbar = panel.domNode.querySelector(
-		".ash-pane-composite-title-view-actions [role='toolbar'][aria-label='Test panel actions']",
-	);
+	const toolbar = panel.domNode.querySelector(".ash-pane-composite-title-view-actions [role='toolbar'][aria-label='Test panel actions']");
 	const terminalTab = panel.domNode.querySelector("[role='tab'][aria-selected='true']");
 	assert.equal(toolbar?.getAttribute('aria-label'), 'Test panel actions');
 	assert.equal(toolbar?.querySelector('button')?.textContent, 'Run');
@@ -2045,26 +1952,17 @@ test('Panel presents its destinations as tabs and active commands as a toolbar',
 	assert.equal(terminal.element.getAttribute('aria-labelledby'), terminalTab?.id);
 
 	for (const panelId of ['ash.panel.problems', 'ash.panel.output', 'ash.panel.ports']) {
-		const descriptor = viewDescriptors
-			.getViewContainers(ViewContainerLocation.Panel)
-			.find(container => container.id === panelId);
+		const descriptor = viewDescriptors.getViewContainers(ViewContainerLocation.Panel).find(container => container.id === panelId);
 		assert.ok(descriptor);
-		const composite = registerContainerServices(componentServices).createInstance(
-			PaneComposite,
-			dom.window.document.body,
-			{
-				viewContainer: descriptor,
-				model: viewDescriptors.getViewContainerModel(descriptor.id),
-				paneHeaders: 'hidden',
-				paneLayout: 'fill',
-			},
-		);
+		const composite = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
+			viewContainer: descriptor,
+			model: viewDescriptors.getViewContainerModel(descriptor.id),
+			paneHeaders: 'hidden',
+			paneLayout: 'fill',
+		});
 		panel.addComposite(composite);
 		panel.showComposite(composite.id);
-		assert.equal(
-			panel.domNode.querySelector(".ash-pane-composite-title-view-actions [aria-label='Test panel actions']"),
-			null,
-		);
+		assert.equal(panel.domNode.querySelector(".ash-pane-composite-title-view-actions [aria-label='Test panel actions']"), null);
 		assert.equal(panelToolbar.isConnected, true);
 		assert.ok([...panelToolbar.querySelectorAll('button')].some(button => button.textContent === 'Maximize Panel'));
 		assert.ok([...panelToolbar.querySelectorAll('button')].some(button => button.textContent === 'Close Panel'));
@@ -2119,16 +2017,13 @@ test('Transient view navigation follows its active session and ignores stale res
 		onDidHideContextMenu: BaseEvent.None,
 	});
 	const panel = resources.add(services.createInstance(PanelPart, browserEnvironment.window.document.body));
-	const tabs = () =>
-		[...panel.compositeBar.domNode.querySelectorAll<HTMLElement>('[role="tab"]')].map(tab => tab.dataset.actionId);
+	const tabs = () => [...panel.compositeBar.domNode.querySelectorAll<HTMLElement>('[role="tab"]')].map(tab => tab.dataset.actionId);
 	const model = descriptors.getViewContainerModel(previewId);
 	const baseTabs = tabs();
 	const fallback = panel.getCompositeIdToRestore();
 	const activeTabs = descriptors.getViewContainers(ViewContainerLocation.Panel).map(container => container.id);
 	assert.equal(baseTabs.includes(previewId), false);
-	services
-		.get(IStorageService)
-		.store('workbench.panel.activeViewContainer', previewId, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	services.get(IStorageService).store('workbench.panel.activeViewContainer', previewId, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	assert.deepEqual({ tabs: tabs(), restore: panel.getCompositeIdToRestore() }, { tabs: baseTabs, restore: fallback });
 	for (let session = 0; session < 2; session++) {
 		enabled.set(true);
@@ -2138,14 +2033,15 @@ test('Transient view navigation follows its active session and ignores stale res
 				visible: model.visibleViewDescriptors.map(view => view.id),
 				restore: panel.getCompositeIdToRestore(),
 			},
-			{ tabs: activeTabs, visible: ['test.preview.view'], restore: previewId },
+			{
+				tabs: activeTabs,
+				visible: ['test.preview.view'],
+				restore: previewId,
+			},
 		);
 		panel.compositeBar.setActiveComposite(previewId);
 		enabled.set(false);
-		assert.deepEqual(
-			{ tabs: tabs(), restore: panel.getCompositeIdToRestore() },
-			{ tabs: baseTabs, restore: fallback },
-		);
+		assert.deepEqual({ tabs: tabs(), restore: panel.getCompositeIdToRestore() }, { tabs: baseTabs, restore: fallback });
 	}
 });
 
@@ -2163,7 +2059,13 @@ for (const [overflowActionSize, availableWidth] of [
 			['ash.panel.terminal', 'Terminal'],
 		] as const;
 		for (const [id, title] of panels) {
-			disposables.add(registry.registerViewContainer({ id, title, location: ViewContainerLocation.Panel }));
+			disposables.add(
+				registry.registerViewContainer({
+					id,
+					title,
+					location: ViewContainerLocation.Panel,
+				}),
+			);
 		}
 		const contextKeys = disposables.add(new ContextKeyService());
 		const viewDescriptors = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
@@ -2189,15 +2091,12 @@ for (const [overflowActionSize, availableWidth] of [
 			overflowActionSize,
 			contextMenuProvider,
 		};
-		const compositeBar = disposables.add(
-			new CompositeBar(
-				dom.window.document.body,
-				barOptions,
-				disposables.add(new ActivityService(viewDescriptors)),
-			),
-		);
+		const compositeBar = disposables.add(new CompositeBar(dom.window.document.body, barOptions, disposables.add(new ActivityService(viewDescriptors))));
 		dom.window.document.body.append(compositeBar.domNode);
-		Object.defineProperty(compositeBar.domNode, 'clientWidth', { configurable: true, value: availableWidth });
+		Object.defineProperty(compositeBar.domNode, 'clientWidth', {
+			configurable: true,
+			value: availableWidth,
+		});
 		compositeBar.setActiveComposite('ash.panel.terminal');
 		const tabs = [...compositeBar.domNode.querySelectorAll<HTMLElement>('.ash-composite-bar-destination')];
 		for (const tab of tabs) {
@@ -2237,10 +2136,7 @@ for (const [overflowActionSize, availableWidth] of [
 		assert.equal(compositeBar.domNode.querySelector('.ash-composite-bar-overflow'), overflowItem);
 		assert.equal(retainedTerminal.getAttribute('aria-selected'), 'true');
 		compositeBar.setActiveComposite('ash.panel.problems');
-		assert.equal(
-			compositeBar.domNode.querySelector('[data-action-id="ash.panel.problems"]')?.getAttribute('aria-selected'),
-			'true',
-		);
+		assert.equal(compositeBar.domNode.querySelector('[data-action-id="ash.panel.problems"]')?.getAttribute('aria-selected'), 'true');
 		compositeBar.domNode.querySelector<HTMLElement>('.ash-composite-bar-overflow')!.click();
 		assert.deepEqual(
 			overflowActions.map(action => action.label),
@@ -2306,10 +2202,7 @@ for (const activeId of ['search', 'explorer']) {
 			assert.deepEqual(opened, [{ id: nextId, preserveFocus: nextId === 'explorer' }]);
 			assert.equal(bar.activeCompositeId, nextId);
 			assert.equal(bar.domNode.querySelector(`[data-action-id="${activeId}"]`), null);
-			assert.equal(
-				bar.domNode.querySelector(`[data-action-id="${nextId}"]`)?.getAttribute('aria-selected'),
-				'true',
-			);
+			assert.equal(bar.domNode.querySelector(`[data-action-id="${nextId}"]`)?.getAttribute('aria-selected'), 'true');
 			bar.showContextMenu(new dom.window.MouseEvent('contextmenu'));
 			assert.deepEqual(
 				actions.map(action => [action.label, action.checked, action.enabled]),
@@ -2379,9 +2272,7 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 	const localization = {
 		translate: (_bundle: string, _key: string, fallback: string) => fallback,
 	} as ILocalizationService;
-	const activitybar = firstBar.add(
-		createTestActivitybar(dom.window.document.body, compositeBar, globalBar, configuration, localization),
-	);
+	const activitybar = firstBar.add(createTestActivitybar(dom.window.document.body, compositeBar, globalBar, configuration, localization));
 	activitybar.domNode.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true }));
 	assert.deepEqual(
 		actions.slice(0, 2).map(action => [action.label, action.checked]),
@@ -2398,9 +2289,7 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 	assert.equal(actions[1]?.label, "Hide 'Search'");
 	await actions[1]?.run();
 	assert.equal(activitybar.domNode.querySelector('[data-action-id="ash.search"]'), null);
-	activitybar.domNode
-		.querySelector<HTMLElement>('[data-action-id="ash.explorer"]')
-		?.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true }));
+	activitybar.domNode.querySelector<HTMLElement>('[data-action-id="ash.explorer"]')?.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true }));
 	assert.equal(actions.find(action => action.id === 'ash.activityBar.togglePinned.ash.explorer')?.enabled, false);
 	assert.equal(actions.find(action => action.id === 'ash.activityBar.togglePinned.ash.search')?.checked, false);
 	await storage.flush(WillSaveStateReason.SHUTDOWN);
@@ -2451,8 +2340,7 @@ test('CompositeBar retains the startup language of View Container labels', () =>
 	const localeChanges = new Emitter<string>();
 	let locale = 'en';
 	const localization = {
-		translate: (_bundle: string, key: string, fallback: string) =>
-			key === 'terminal' && locale === 'zh-CN' ? '终端' : fallback,
+		translate: (_bundle: string, key: string, fallback: string) => (key === 'terminal' && locale === 'zh-CN' ? '终端' : fallback),
 	} as unknown as ILocalizationService;
 	const compositeBar = disposables.add(
 		new CompositeBar(
@@ -2492,25 +2380,17 @@ test('Auxiliary Bar retains its View and exposes container selection as a standa
 			isDefault: true,
 		}),
 	);
-	disposables.add(
-		registry.registerViews('ash.chat', [
-			{ id: 'ash.chat.test', title: 'Chat', ctorDescriptor: new SyncDescriptor(TestPanelView) },
-		]),
-	);
+	disposables.add(registry.registerViews('ash.chat', [{ id: 'ash.chat.test', title: 'Chat', ctorDescriptor: new SyncDescriptor(TestPanelView) }]));
 	const contextKeys = disposables.add(new ContextKeyService());
 	const viewDescriptors = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
 	const descriptor = viewDescriptors.getDefaultViewContainer(ViewContainerLocation.AuxiliaryBar);
 	assert.ok(descriptor);
-	const composite = registerContainerServices(componentServices).createInstance(
-		PaneComposite,
-		dom.window.document.body,
-		{
-			viewContainer: descriptor,
-			model: viewDescriptors.getViewContainerModel(descriptor.id),
-			paneHeaders: 'hidden',
-			paneLayout: 'fill',
-		},
-	);
+	const composite = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
+		viewContainer: descriptor,
+		model: viewDescriptors.getViewContainerModel(descriptor.id),
+		paneHeaders: 'hidden',
+		paneLayout: 'fill',
+	});
 	const auxiliaryServices = disposables.add(registerContainerServices(componentServices).createChild());
 	auxiliaryServices.registerInstance(IViewDescriptorService, viewDescriptors);
 	auxiliaryServices.registerInstance(IContextKeyService, contextKeys);
@@ -2528,16 +2408,7 @@ test('Auxiliary Bar retains its View and exposes container selection as a standa
 		onDidHideContextMenu: BaseEvent.None,
 	});
 	const contextViews = disposables.add(new BrowserContextViewService(dom.window.document.body));
-	auxiliaryServices.registerInstance(
-		IHoverService,
-		disposables.add(
-			new HoverService(
-				auxiliaryServices.get(IConfigurationService),
-				contextViews,
-				auxiliaryServices.get(IContextMenuService),
-			),
-		),
-	);
+	auxiliaryServices.registerInstance(IHoverService, disposables.add(new HoverService(auxiliaryServices.get(IConfigurationService), contextViews, auxiliaryServices.get(IContextMenuService))));
 	const auxiliarybar = disposables.add(auxiliaryServices.createInstance(AuxiliaryBarPart, dom.window.document.body));
 	auxiliarybar.addComposite(composite);
 	auxiliarybar.showComposite(descriptor.id);
@@ -2550,9 +2421,7 @@ test('Auxiliary Bar retains its View and exposes container selection as a standa
 	const compositeBar = auxiliarybar.domNode.querySelector<HTMLElement>('.ash-composite-bar');
 	assert.ok(compositeBar);
 	assert.equal(compositeBar.hidden, false);
-	const action = auxiliarybar.domNode.querySelector<HTMLButtonElement>(
-		'.ash-pane-composite-title-view-actions button',
-	);
+	const action = auxiliarybar.domNode.querySelector<HTMLButtonElement>('.ash-pane-composite-title-view-actions button');
 	assert.ok(action);
 	action.focus();
 	auxiliarybar.showComposite(descriptor.id);
@@ -2630,11 +2499,10 @@ test('PaneComposite rejects ambiguous title projections from multiple Views', ()
 	const viewDescriptors = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
 	const descriptor = viewDescriptors.getDefaultViewContainer(ViewContainerLocation.Panel);
 	assert.ok(descriptor);
-	const composite = registerContainerServices(componentServices).createInstance(
-		PaneComposite,
-		dom.window.document.body,
-		{ viewContainer: descriptor, model: viewDescriptors.getViewContainerModel(descriptor.id) },
-	);
+	const composite = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
+		viewContainer: descriptor,
+		model: viewDescriptors.getViewContainerModel(descriptor.id),
+	});
 
 	assert.throws(() => composite.partTitleProjection, /only one visible View/);
 
@@ -2692,8 +2560,7 @@ test('CompositeBar reorders view container tabs through drag and drop', () => {
 });
 
 test('titlebar layout commands toggle shell regions', async () => {
-	const { IPaneCompositePartService } =
-		await import('../../../workbench/services/panecomposite/browser/panecomposite.js');
+	const { IPaneCompositePartService } = await import('../../../workbench/services/panecomposite/browser/panecomposite.js');
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const harness = createLayoutHarness(dom.window.document, { defaultLayout: { parts: { panel: true } } });
 	const services = new InstantiationService();
@@ -2789,13 +2656,7 @@ test('panel layout actions use state icons', () => {
 	assert.equal(maximizePanelAction()?.checked, true);
 });
 
-function dragWorkbenchSash(
-	targetWindow: typeof browserEnvironment.window,
-	container: HTMLElement,
-	partId: WorkbenchPartId,
-	boundaryIndex: number,
-	delta: number,
-): void {
+function dragWorkbenchSash(targetWindow: typeof browserEnvironment.window, container: HTMLElement, partId: WorkbenchPartId, boundaryIndex: number, delta: number): void {
 	const part = container.querySelector<HTMLElement>(`[data-part='${partId}']`);
 	assert.ok(part);
 	const splitView = part.parentElement?.parentElement?.parentElement;
@@ -2818,12 +2679,7 @@ function dragWorkbenchSash(
 	targetWindow.dispatchEvent(event('pointerup', delta));
 }
 
-function resetWorkbenchSash(
-	targetWindow: typeof browserEnvironment.window,
-	container: HTMLElement,
-	partId: WorkbenchPartId,
-	boundaryIndex: number,
-): void {
+function resetWorkbenchSash(targetWindow: typeof browserEnvironment.window, container: HTMLElement, partId: WorkbenchPartId, boundaryIndex: number): void {
 	const part = container.querySelector<HTMLElement>(`[data-part='${partId}']`);
 	assert.ok(part);
 	const splitView = part.parentElement?.parentElement?.parentElement;
@@ -2891,9 +2747,7 @@ test('Activity Bar restores user container order in a new window and keeps the a
 		),
 	);
 	assert.deepEqual(
-		[...restored.domNode.querySelectorAll<HTMLElement>('.ash-composite-bar-destination')].map(
-			item => item.dataset.actionId,
-		),
+		[...restored.domNode.querySelectorAll<HTMLElement>('.ash-composite-bar-destination')].map(item => item.dataset.actionId),
 		['third', 'first', 'second'],
 	);
 	disposables.dispose();
@@ -2909,12 +2763,10 @@ class TestRuntimeView extends ViewPane {
 
 test('Pane composite service reveals retained Parts and publishes visibility changes once', async () => {
 	const { PaneCompositePartService } = await import('../../../workbench/browser/parts/paneCompositePartService.js');
-	const { IPaneCompositePartService } =
-		await import('../../../workbench/services/panecomposite/browser/panecomposite.js');
+	const { IPaneCompositePartService } = await import('../../../workbench/services/panecomposite/browser/panecomposite.js');
 	const { IViewDescriptorService } = await import('../../../workbench/common/views.js');
 	const { IContextKeyService } = await import('../../../platform/contextkey/browser/contextKeyService.js');
-	const { ILocalizationService } =
-		await import('../../../workbench/services/localization/common/localizationService.js');
+	const { ILocalizationService } = await import('../../../workbench/services/localization/common/localizationService.js');
 	const { IViewsService } = await import('../../../workbench/services/views/common/viewsService.js');
 	const { ViewsService } = await import('../../../workbench/services/views/browser/viewsService.js');
 	using resources = new DisposableStore();
@@ -2985,9 +2837,7 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 		onDidShowContextMenu: BaseEvent.None,
 		onDidHideContextMenu: BaseEvent.None,
 	});
-	const panel = resources.add(
-		registerContainerServices(services).createInstance(PanelPart, browserEnvironment.window.document.body),
-	);
+	const panel = resources.add(registerContainerServices(services).createInstance(PanelPart, browserEnvironment.window.document.body));
 	panel.setVisible(false);
 	services.registerInstance(IWorkbenchLayoutService, {
 		isPartVisible: () => !panel.domNode.hidden,
@@ -3022,22 +2872,14 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 			visible: !panel.domNode.hidden,
 		},
 		{
-			events: [
-				'open:test.panel.first',
-				'close:test.panel.first',
-				'open:test.panel.second',
-				'close:test.panel.second',
-				'open:test.panel.first',
-			],
+			events: ['open:test.panel.first', 'close:test.panel.first', 'open:test.panel.second', 'close:test.panel.second', 'open:test.panel.first'],
 			active: 'test.panel.first',
 			visible: true,
 		},
 	);
 	const views = services.get(IViewsService);
 	const runtimeEvents: string[] = [];
-	resources.add(
-		views.onDidChangeViewContainerVisibility(event => runtimeEvents.push(`container:${event.id}:${event.visible}`)),
-	);
+	resources.add(views.onDidChangeViewContainerVisibility(event => runtimeEvents.push(`container:${event.id}:${event.visible}`)));
 	resources.add(views.onDidChangeViewVisibility(event => runtimeEvents.push(`view:${event.id}:${event.visible}`)));
 	resources.add(views.onDidChangeFocusedView(() => runtimeEvents.push(`focus:${views.getFocusedView()?.id ?? ''}`)));
 	assert.equal(await views.openView('test.panel.view'), first!.getView('test.panel.view'));
@@ -3045,9 +2887,7 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 	assert.equal(views.getFocusedViewName(), 'View');
 	assert.equal(context.getValue('focusedView'), 'test.panel.view');
 	// Focus tracking waits for focus to leave the pane before accepting the next command's focus.
-	const commandFocus = new Promise<void>(resolve =>
-		resources.add(first!.getView('test.panel.view')!.onDidBlur(resolve)),
-	);
+	const commandFocus = new Promise<void>(resolve => resources.add(first!.getView('test.panel.view')!.onDidBlur(resolve)));
 	const commandInput = h(browserEnvironment.window.document, 'input');
 	browserEnvironment.window.document.body.append(commandInput);
 	resources.add(toDisposable(() => commandInput.remove()));
@@ -3072,10 +2912,7 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 	});
 	assert.equal(await views.openView('test.panel.hidden', true), first!.getView('test.panel.hidden'));
 	await oldViewBlurred;
-	assert.deepEqual(
-		{ focused: views.getFocusedView()?.id, context: context.getValue('focusedView') },
-		{ focused: 'test.panel.hidden', context: 'test.panel.hidden' },
-	);
+	assert.deepEqual({ focused: views.getFocusedView()?.id, context: context.getValue('focusedView') }, { focused: 'test.panel.hidden', context: 'test.panel.hidden' });
 	assert.equal(views.isViewVisible('test.panel.hidden'), true);
 	views.closeView('test.panel.hidden');
 	assert.deepEqual(
@@ -3116,11 +2953,7 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 			location: ViewContainerLocation.Panel,
 		}),
 	);
-	resources.add(
-		registry.registerViews('test.panel.dynamic', [
-			{ id: 'test.dynamic.view', title: 'Dynamic view', ctorDescriptor: new SyncDescriptor(TestRuntimeView) },
-		]),
-	);
+	resources.add(registry.registerViews('test.panel.dynamic', [{ id: 'test.dynamic.view', title: 'Dynamic view', ctorDescriptor: new SyncDescriptor(TestRuntimeView) }]));
 	await views.openView('test.dynamic.view', true);
 	const dynamic = panel.getComposite('test.panel.dynamic')!;
 	views.closeView('test.dynamic.view');
@@ -3148,10 +2981,7 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 	const beforeDisposal = [...runtimeEvents];
 	runtimeViews.dispose();
 	await panes.openPaneComposite('test.panel.second', ViewContainerLocation.Panel);
-	assert.deepEqual(
-		{ events: runtimeEvents, context: context.getValue('focusedView'), retained: first!.isDisposed },
-		{ events: beforeDisposal, context: '', retained: false },
-	);
+	assert.deepEqual({ events: runtimeEvents, context: context.getValue('focusedView'), retained: first!.isDisposed }, { events: beforeDisposal, context: '', retained: false });
 });
 
 function createTestActivitybar(
@@ -3186,18 +3016,10 @@ function createTestActivitybar(
 const titleMenuResources = new DisposableStore();
 suiteTeardown(() => titleMenuResources.dispose());
 
-function registerContainerServices(
-	services: InstanceType<typeof InstantiationService>,
-): InstanceType<typeof InstantiationService> {
-	if (!services.has(IConfigurationService))
-		services.registerInstance(IConfigurationService, titleMenuResources.add(new InMemoryConfigurationService()));
-	if (!services.has(IContextKeyService))
-		services.registerInstance(IContextKeyService, titleMenuResources.add(new ContextKeyService()));
-	if (!services.has(IViewDescriptorService))
-		services.registerInstance(
-			IViewDescriptorService,
-			titleMenuResources.add(services.createInstance(ViewDescriptorService, {})),
-		);
+function registerContainerServices(services: InstanceType<typeof InstantiationService>): InstanceType<typeof InstantiationService> {
+	if (!services.has(IConfigurationService)) services.registerInstance(IConfigurationService, titleMenuResources.add(new InMemoryConfigurationService()));
+	if (!services.has(IContextKeyService)) services.registerInstance(IContextKeyService, titleMenuResources.add(new ContextKeyService()));
+	if (!services.has(IViewDescriptorService)) services.registerInstance(IViewDescriptorService, titleMenuResources.add(services.createInstance(ViewDescriptorService, {})));
 	registerTestComponentServices(services);
 	if (!services.has(IMenuService)) {
 		const context = titleMenuResources.add(new ContextKeyService());
@@ -3246,8 +3068,7 @@ test('auxiliary containers route Quick Input and context views through focus, re
 		picker.hide();
 		assert.equal(popup.window.document.activeElement, target);
 
-		const { BrowserContextViewService } =
-			await import('../../../platform/contextview/browser/contextViewService.js');
+		const { BrowserContextViewService } = await import('../../../platform/contextview/browser/contextViewService.js');
 		using contextViews = new BrowserContextViewService(harness.container, harness.layout);
 		const content = h(popup.window.document, 'div');
 		assert.equal(contextViews.show({ anchor: target, content }), true);
@@ -3326,16 +3147,9 @@ test('Panel position commands rotate the actual Grid, retain focus and restore b
 			const horizontal = direction === 'left' || direction === 'right';
 			const axis = horizontal ? 'left' : 'top';
 			const extent = horizontal ? 'width' : 'height';
-			assert.equal(
-				panelPane.parentElement!.classList.contains(`ash-split-view-${horizontal ? 'horizontal' : 'vertical'}`),
-				true,
-			);
-			const [leading, trailing] =
-				direction === 'right' || direction === 'down' ? [panelPane, editorPane] : [editorPane, panelPane];
-			assert.equal(
-				Number.parseFloat(leading!.style[axis]) + Number.parseFloat(leading!.style[extent]),
-				Number.parseFloat(trailing!.style[axis]),
-			);
+			assert.equal(panelPane.parentElement!.classList.contains(`ash-split-view-${horizontal ? 'horizontal' : 'vertical'}`), true);
+			const [leading, trailing] = direction === 'right' || direction === 'down' ? [panelPane, editorPane] : [editorPane, panelPane];
+			assert.equal(Number.parseFloat(leading!.style[axis]) + Number.parseFloat(leading!.style[extent]), Number.parseFloat(trailing!.style[axis]));
 			assert.equal(dom.window.document.activeElement, input);
 			const size = harness.layout.getPartSize('panel');
 			if (position === Position.LEFT || position === Position.RIGHT) assert.equal(size.width, 256);
@@ -3356,14 +3170,8 @@ test('Panel position commands rotate the actual Grid, retain focus and restore b
 		assert.equal(harness.layout.getPartSize('panel').width, 420);
 		const state = harness.layout.state;
 		assert.equal(state.panel.height, 230);
-		assert.throws(
-			() => harness.layout.restoreState({ ...state, panel: { ...state.panel, position: 99 } }),
-			/invalid or unsupported/,
-		);
-		assert.throws(
-			() => harness.layout.restoreState({ ...state, panel: { ...state.panel, width: Number.NaN } }),
-			/invalid or unsupported/,
-		);
+		assert.throws(() => harness.layout.restoreState({ ...state, panel: { ...state.panel, position: 99 } }), /invalid or unsupported/);
+		assert.throws(() => harness.layout.restoreState({ ...state, panel: { ...state.panel, width: Number.NaN } }), /invalid or unsupported/);
 		harness.layout.restoreState(state);
 		const restored = createLayoutHarness(dom.window.document, {
 			storageService: harness.services.get(IStorageService),
@@ -3391,10 +3199,7 @@ test('Panel default setting applies to new workspaces while saved workspace posi
 	});
 	try {
 		assert.equal(first.layout.getPanelPosition(), Position.LEFT);
-		await assert.rejects(
-			first.configuration.updateValue(WorkbenchConfiguration.panelDefaultLocation, 'center'),
-			/Panel location/,
-		);
+		await assert.rejects(first.configuration.updateValue(WorkbenchConfiguration.panelDefaultLocation, 'center'), /Panel location/);
 		first.layout.setPanelPosition(Position.RIGHT);
 		const storage = first.services.get(IStorageService) as InstanceType<typeof BrowserStorageService>;
 		const restored = createLayoutHarness(dom.window.document, {

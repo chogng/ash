@@ -28,22 +28,13 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { TerminalNativeContribution } from './terminalNativeContribution.js';
 
-registerWorkbenchContribution(TerminalNativeContribution.ID, WorkbenchPhase.BlockRestore, accessor =>
-	accessor.get(IInstantiationService).createInstance(TerminalNativeContribution),
-);
+registerWorkbenchContribution(TerminalNativeContribution.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(TerminalNativeContribution));
 
 registerRemoteContributions();
 
 registerWorkbenchServiceContribution({
 	service: ITerminalProfileResolverService,
-	dependencies: [
-		ITerminalProfileService,
-		ITerminalProcessService,
-		IConfigurationService,
-		IConfigurationResolverService,
-		IWorkspaceContextService,
-		IEnvironmentVariableService,
-	],
+	dependencies: [ITerminalProfileService, ITerminalProcessService, IConfigurationService, IConfigurationResolverService, IWorkspaceContextService, IEnvironmentVariableService],
 	install: context => context.register(context.container.createInstance(ElectronTerminalProfileResolverService)),
 });
 
@@ -63,11 +54,7 @@ registerAction2(
 		}
 
 		override async run(accessor: ServicesAccessor, targetWindowId?: unknown): Promise<void> {
-			if (
-				targetWindowId !== undefined &&
-				(!Number.isSafeInteger(targetWindowId) || (targetWindowId as number) <= 0)
-			)
-				throw new TypeError('Invalid terminal transfer target');
+			if (targetWindowId !== undefined && (!Number.isSafeInteger(targetWindowId) || (targetWindowId as number) <= 0)) throw new TypeError('Invalid terminal transfer target');
 			const terminals = accessor.get(ITerminalService);
 			const instance = terminals.activeInstance;
 			if (!instance || movingTerminals.has(instance)) return;
@@ -75,28 +62,12 @@ registerAction2(
 			const nativeHost = accessor.get(INativeHostService);
 			const workspace = accessor.get(IWorkspaceContextService);
 			const log = accessor.get(ILogService);
-			if (
-				!processes.detach ||
-				!processes.attach ||
-				!processes.getReconnectLease ||
-				instance.isReadOnly ||
-				instance.state !== 'running' ||
-				instance.shellLaunchConfig?.customPtyImplementation
-			) {
-				throw new Error(
-					localize(
-						'terminal.windowTransfer.unsupported',
-						'This terminal cannot move its process to another window.',
-					),
-				);
+			if (!processes.detach || !processes.attach || !processes.getReconnectLease || instance.isReadOnly || instance.state !== 'running' || instance.shellLaunchConfig?.customPtyImplementation) {
+				throw new Error(localize('terminal.windowTransfer.unsupported', 'This terminal cannot move its process to another window.'));
 			}
 			const scope = terminalExecutionScope(workspace.getWorkspace());
 			const assertCurrent = (): void => {
-				if (
-					!terminals.instances.includes(instance) ||
-					!terminalExecutionScopesEqual(scope, terminalExecutionScope(workspace.getWorkspace()))
-				)
-					throw new CancellationError();
+				if (!terminals.instances.includes(instance) || !terminalExecutionScopesEqual(scope, terminalExecutionScope(workspace.getWorkspace()))) throw new CancellationError();
 			};
 			movingTerminals.add(instance);
 			let snapshot: ITerminalSerializedState | undefined;
@@ -116,13 +87,7 @@ registerAction2(
 				parseTerminalReloadState(state);
 				const id = generateUuid();
 				const currentLease = await processes.getReconnectLease(snapshot.process.terminalId);
-				if (!currentLease)
-					throw new Error(
-						localize(
-							'terminal.windowTransfer.unsupported',
-							'This terminal cannot move its process to another window.',
-						),
-					);
+				if (!currentLease) throw new Error(localize('terminal.windowTransfer.unsupported', 'This terminal cannot move its process to another window.'));
 				// Check native payload bounds before detaching the execution owner.
 				validateTerminalWindowTransferMove({
 					transfer: { id, state, lease: currentLease },
@@ -131,17 +96,8 @@ registerAction2(
 				assertCurrent();
 				lease = await processes.detach(snapshot.process.terminalId);
 				assertCurrent();
-				const result = await nativeHost.moveTerminalToWindow(
-					{ id, state, lease },
-					targetWindowId as number | undefined,
-				);
-				if (result.id !== id)
-					throw new Error(
-						localize(
-							'terminal.windowTransfer.invalidReply',
-							'The terminal window returned an invalid transfer acknowledgement.',
-						),
-					);
+				const result = await nativeHost.moveTerminalToWindow({ id, state, lease }, targetWindowId as number | undefined);
+				if (result.id !== id) throw new Error(localize('terminal.windowTransfer.invalidReply', 'The terminal window returned an invalid transfer acknowledgement.'));
 				if (result.error) {
 					lease = result.lease ?? lease;
 					throw new Error(result.error);
@@ -152,18 +108,9 @@ registerAction2(
 				if (!delivered) {
 					try {
 						if (lease && snapshot) {
-							const restored = await processes.attach(
-								lease,
-								{ rows: snapshot.rows, cols: snapshot.cols },
-								snapshot.process.profile,
-							);
+							const restored = await processes.attach(lease, { rows: snapshot.rows, cols: snapshot.cols }, snapshot.process.profile);
 							if (restored.ready.pid !== snapshot.process.ready.pid)
-								throw new Error(
-									localize(
-										'terminal.windowTransfer.processChanged',
-										'The terminal process changed during window transfer.',
-									),
-								);
+								throw new Error(localize('terminal.windowTransfer.processChanged', 'The terminal process changed during window transfer.'));
 							if (!terminals.instances.includes(instance)) {
 								await processes.close({ terminalId: restored.terminalId, dirId: lease.dirId });
 								throw new CancellationError();
@@ -171,14 +118,7 @@ registerAction2(
 						}
 						instance.start();
 					} catch (rollbackError) {
-						log.error(
-							'terminal',
-							localize(
-								'terminal.windowTransfer.rollbackFailed',
-								'Could not restore the terminal after its window transfer failed.',
-							),
-							rollbackError,
-						);
+						log.error('terminal', localize('terminal.windowTransfer.rollbackFailed', 'Could not restore the terminal after its window transfer failed.'), rollbackError);
 						await instance.close().catch(closeError => log.error('terminal', closeError));
 					}
 				}

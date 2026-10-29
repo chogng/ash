@@ -2,11 +2,7 @@ import { type EditorAutoIndentStrategy } from '../../../common/config/editorOpti
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { Selection } from '../../../common/core/selection.js';
-import {
-	type ICommand,
-	type ICursorStateComputerData,
-	type IEditOperationBuilder,
-} from '../../../common/editorCommon.js';
+import { type ICommand, type ICursorStateComputerData, type IEditOperationBuilder } from '../../../common/editorCommon.js';
 import { type ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
 import { type ITextModel } from '../../../common/model.js';
 
@@ -29,20 +25,14 @@ export class MoveLinesCommand implements ICommand {
 		if (this.isMovingDown) {
 			if (endLineNumber === model.getLineCount()) return;
 			const next = model.getLineContent(endLineNumber + 1);
-			const range = Range.fromPositions(
-				new Position(startLineNumber, 1),
-				new Position(endLineNumber + 1, model.getLineMaxColumn(endLineNumber + 1)),
-			);
+			const range = Range.fromPositions(new Position(startLineNumber, 1), new Position(endLineNumber + 1, model.getLineMaxColumn(endLineNumber + 1)));
 			builder.addEditOperation(range, `${next}${eol}${selected}`);
 			this.lineDelta = 1;
 			return;
 		}
 		if (startLineNumber === 1) return;
 		const previous = model.getLineContent(startLineNumber - 1);
-		const range = Range.fromPositions(
-			new Position(startLineNumber - 1, 1),
-			new Position(endLineNumber, model.getLineMaxColumn(endLineNumber)),
-		);
+		const range = Range.fromPositions(new Position(startLineNumber - 1, 1), new Position(endLineNumber, model.getLineMaxColumn(endLineNumber)));
 		builder.addEditOperation(range, `${selected}${eol}${previous}`);
 		this.lineDelta = -1;
 	}
@@ -58,10 +48,7 @@ export class MoveLinesCommand implements ICommand {
 }
 
 function selectedLines(selection: Selection): { readonly startLineNumber: number; readonly endLineNumber: number } {
-	const endLineNumber =
-		!selection.isEmpty() && selection.endColumn === 1
-			? Math.max(selection.startLineNumber, selection.endLineNumber - 1)
-			: selection.endLineNumber;
+	const endLineNumber = !selection.isEmpty() && selection.endColumn === 1 ? Math.max(selection.startLineNumber, selection.endLineNumber - 1) : selection.endLineNumber;
 	return { startLineNumber: selection.startLineNumber, endLineNumber };
 }
 

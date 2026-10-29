@@ -11,5 +11,4 @@ export interface IOnboardingScenarioService {
 	resetAll(): void;
 }
 
-export const IOnboardingScenarioService =
-	createServiceIdentifier<IOnboardingScenarioService>('onboardingScenarioService');
+export const IOnboardingScenarioService = createServiceIdentifier<IOnboardingScenarioService>('onboardingScenarioService');

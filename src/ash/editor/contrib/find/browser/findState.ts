@@ -180,12 +180,7 @@ export class FindReplaceState<T extends { update(value: T): void } = { update():
 			preserveCase: this.preserveCase,
 		};
 		const event = createEvent(moveCursor, updateHistory);
-		const updateScalar = <
-			K extends 'searchString' | 'replaceString' | 'isRevealed' | 'isReplaceRevealed' | 'loop' | 'isSearching',
-		>(
-			key: K,
-			value: FindValues<T>[K] | undefined,
-		): void => {
+		const updateScalar = <K extends 'searchString' | 'replaceString' | 'isRevealed' | 'isReplaceRevealed' | 'loop' | 'isSearching'>(key: K, value: FindValues<T>[K] | undefined): void => {
 			if (value !== undefined && value !== this.values[key]) {
 				this.values[key] = value;
 				event[key] = true;
@@ -228,13 +223,7 @@ function effective(value: boolean, override: FindOptionOverride): boolean {
 }
 
 function sameScopes(left: readonly Range[] | null, right: readonly Range[] | null): boolean {
-	return (
-		left === right ||
-		(left !== null &&
-			right !== null &&
-			left.length === right.length &&
-			left.every((range, index) => Range.equalsRange(range, right[index])))
-	);
+	return left === right || (left !== null && right !== null && left.length === right.length && left.every((range, index) => Range.equalsRange(range, right[index])));
 }
 
 function createEvent(moveCursor: boolean, updateHistory: boolean): FindReplaceStateChangedEvent {

@@ -58,12 +58,7 @@ export class AgentSessionsControl extends Disposable {
 
 	private update(): void {
 		const query = this.searchInput.value.trim().toLocaleLowerCase();
-		const items = this.model.items.filter(
-			item =>
-				!query ||
-				item.title.toLocaleLowerCase().includes(query) ||
-				item.description.toLocaleLowerCase().includes(query),
-		);
+		const items = this.model.items.filter(item => !query || item.title.toLocaleLowerCase().includes(query) || item.description.toLocaleLowerCase().includes(query));
 		this.emptyDomNode.hidden = this.viewer.update(items) > 0;
 		this.emptyDomNode.textContent = query
 			? localize('sessions.list.noResults', 'No matching sessions')

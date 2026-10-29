@@ -22,10 +22,7 @@ test('command cancellation terminates the active local process and preserves its
 	});
 	cancellation.abort('user cancelled bootstrap');
 
-	await assert.rejects(
-		command,
-		(error: unknown) => isCancellationError(error) && error.reason === 'user cancelled bootstrap',
-	);
+	await assert.rejects(command, (error: unknown) => isCancellationError(error) && error.reason === 'user cancelled bootstrap');
 });
 
 test('an already-cancelled command never starts', () => {

@@ -12,14 +12,7 @@ export async function collectElectronMemory(window: BrowserWindow): Promise<Memo
 	const observations: MemoryObservation[] = processes.map(metric => ({
 		instanceId: `${metric.pid}:${metric.creationTime}`,
 		processId: metric.pid,
-		role:
-			metric.type === 'Browser'
-				? 'electronMain'
-				: metric.type === 'Tab'
-					? 'renderer'
-					: metric.type === 'GPU'
-						? 'gpu'
-						: 'utility',
+		role: metric.type === 'Browser' ? 'electronMain' : metric.type === 'Tab' ? 'renderer' : metric.type === 'GPU' ? 'gpu' : 'utility',
 		phase: 'unknown',
 		metrics: [{ kind: 'residentBytes', value: metric.memory.workingSetSize * 1024, unavailable: null }],
 	}));
@@ -53,10 +46,7 @@ export async function collectElectronMemory(window: BrowserWindow): Promise<Memo
 		attached = true;
 		contents.debugger.once('detach', detached);
 		const values = await Promise.race([
-			Promise.all([
-				contents.debugger.sendCommand('Runtime.getHeapUsage'),
-				contents.debugger.sendCommand('Memory.getDOMCounters'),
-			]),
+			Promise.all([contents.debugger.sendCommand('Runtime.getHeapUsage'), contents.debugger.sendCommand('Memory.getDOMCounters')]),
 			new Promise<never>((_, reject) => {
 				timer = setTimeout(() => reject(new Error('Memory collection timed out')), 2000);
 			}),
@@ -67,11 +57,7 @@ export async function collectElectronMemory(window: BrowserWindow): Promise<Memo
 			['domNodes', dom.nodes],
 			['eventListeners', dom.jsEventListeners],
 		] as const) {
-			renderer.metrics.push(
-				Number.isSafeInteger(value) && value >= 0
-					? { kind, value, unavailable: null }
-					: { kind, value: null, unavailable: 'readFailed' },
-			);
+			renderer.metrics.push(Number.isSafeInteger(value) && value >= 0 ? { kind, value, unavailable: null } : { kind, value: null, unavailable: 'readFailed' });
 		}
 	} catch {
 		renderer.metrics.push(...unavailable(contents.isDestroyed() ? 'exited' : 'readFailed'));

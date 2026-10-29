@@ -8,12 +8,7 @@ export function applyTextEditorOptions(options: ITextEditorOptions, editor: IEdi
 	if (!selection) {
 		return false;
 	}
-	const range = new Range(
-		selection.startLineNumber,
-		selection.startColumn,
-		selection.endLineNumber ?? selection.startLineNumber,
-		selection.endColumn ?? selection.startColumn,
-	);
+	const range = new Range(selection.startLineNumber, selection.startColumn, selection.endLineNumber ?? selection.startLineNumber, selection.endColumn ?? selection.startColumn);
 	editor.setSelection(range, options.selectionSource ?? TextEditorSelectionSource.NAVIGATION);
 	editor.revealRange(range, scrollType);
 	return true;

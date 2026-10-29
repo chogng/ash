@@ -1,9 +1,6 @@
 import type { Event } from '../../../base/common/event.js';
 import { RawContextKey } from '../../contextkey/common/contextkey.js';
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../configuration/common/configurationRegistry.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import { Registry } from '../../registry/common/platform.js';
 
@@ -40,8 +37,7 @@ export const AccessibilityConfiguration = Object.freeze({
 		setting: {
 			valueType: 'select',
 			title: 'Screen reader optimization',
-			description:
-				'Let the operating system decide, or explicitly enable or disable optimized editor accessibility behavior.',
+			description: 'Let the operating system decide, or explicitly enable or disable optimized editor accessibility behavior.',
 			options: triStateSettingOptions,
 		},
 	}),

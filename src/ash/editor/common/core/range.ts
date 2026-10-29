@@ -264,14 +264,7 @@ export class Range {
 		if (!a && !b) {
 			return true;
 		}
-		return (
-			!!a &&
-			!!b &&
-			a.startLineNumber === b.startLineNumber &&
-			a.startColumn === b.startColumn &&
-			a.endLineNumber === b.endLineNumber &&
-			a.endColumn === b.endColumn
-		);
+		return !!a && !!b && a.startLineNumber === b.startLineNumber && a.startColumn === b.startColumn && a.endLineNumber === b.endLineNumber && a.endColumn === b.endColumn;
 	}
 
 	/**
@@ -306,17 +299,7 @@ export class Range {
 	 * Transform to a user presentable string representation.
 	 */
 	public toString(): string {
-		return (
-			'[' +
-			this.startLineNumber +
-			',' +
-			this.startColumn +
-			' -> ' +
-			this.endLineNumber +
-			',' +
-			this.endColumn +
-			']'
-		);
+		return '[' + this.startLineNumber + ',' + this.startColumn + ' -> ' + this.endLineNumber + ',' + this.endColumn + ']';
 	}
 
 	/**
@@ -365,12 +348,7 @@ export class Range {
 	 * Moves the range by the given amount of lines.
 	 */
 	public delta(lineCount: number): Range {
-		return new Range(
-			this.startLineNumber + lineCount,
-			this.startColumn,
-			this.endLineNumber + lineCount,
-			this.endColumn,
-		);
+		return new Range(this.startLineNumber + lineCount, this.startColumn, this.endLineNumber + lineCount, this.endColumn);
 	}
 
 	/**
@@ -417,18 +395,12 @@ export class Range {
 	 */
 	public static areIntersectingOrTouching(a: IRange, b: IRange): boolean {
 		// Check if `a` is before `b`
-		if (
-			a.endLineNumber < b.startLineNumber ||
-			(a.endLineNumber === b.startLineNumber && a.endColumn < b.startColumn)
-		) {
+		if (a.endLineNumber < b.startLineNumber || (a.endLineNumber === b.startLineNumber && a.endColumn < b.startColumn)) {
 			return false;
 		}
 
 		// Check if `b` is before `a`
-		if (
-			b.endLineNumber < a.startLineNumber ||
-			(b.endLineNumber === a.startLineNumber && b.endColumn < a.startColumn)
-		) {
+		if (b.endLineNumber < a.startLineNumber || (b.endLineNumber === a.startLineNumber && b.endColumn < a.startColumn)) {
 			return false;
 		}
 
@@ -441,18 +413,12 @@ export class Range {
 	 */
 	public static areIntersecting(a: IRange, b: IRange): boolean {
 		// Check if `a` is before `b`
-		if (
-			a.endLineNumber < b.startLineNumber ||
-			(a.endLineNumber === b.startLineNumber && a.endColumn <= b.startColumn)
-		) {
+		if (a.endLineNumber < b.startLineNumber || (a.endLineNumber === b.startLineNumber && a.endColumn <= b.startColumn)) {
 			return false;
 		}
 
 		// Check if `b` is before `a`
-		if (
-			b.endLineNumber < a.startLineNumber ||
-			(b.endLineNumber === a.startLineNumber && b.endColumn <= a.startColumn)
-		) {
+		if (b.endLineNumber < a.startLineNumber || (b.endLineNumber === a.startLineNumber && b.endColumn <= a.startColumn)) {
 			return false;
 		}
 
@@ -465,18 +431,12 @@ export class Range {
 	 */
 	public static areOnlyIntersecting(a: IRange, b: IRange): boolean {
 		// Check if `a` is before `b`
-		if (
-			a.endLineNumber < b.startLineNumber - 1 ||
-			(a.endLineNumber === b.startLineNumber && a.endColumn < b.startColumn - 1)
-		) {
+		if (a.endLineNumber < b.startLineNumber - 1 || (a.endLineNumber === b.startLineNumber && a.endColumn < b.startColumn - 1)) {
 			return false;
 		}
 
 		// Check if `b` is before `a`
-		if (
-			b.endLineNumber < a.startLineNumber - 1 ||
-			(b.endLineNumber === a.startLineNumber && b.endColumn < a.startColumn - 1)
-		) {
+		if (b.endLineNumber < a.startLineNumber - 1 || (b.endLineNumber === a.startLineNumber && b.endColumn < a.startColumn - 1)) {
 			return false;
 		}
 

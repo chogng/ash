@@ -60,10 +60,7 @@ test('rename keeps the provider that prepared the symbol and reports one undoabl
 	input.value = 'result';
 	fixture.press(input, 'Enter');
 	await flushPromises();
-	assert.deepEqual(
-		{ text: model.getValue(), commands, errors },
-		{ text: 'result', commands: ['editor.action.rename'], errors: [] },
-	);
+	assert.deepEqual({ text: model.getValue(), commands, errors }, { text: 'result', commands: ['editor.action.rename'], errors: [] });
 	model.undo();
 	assert.equal(model.getValue(), 'value');
 });
@@ -121,9 +118,7 @@ for (const mismatch of ['version', 'expectedText'] as const) {
 					{
 						kind: 'textDocument',
 						resource: request.resource,
-						...(mismatch === 'version'
-							? { version: request.snapshot.version + 1 }
-							: { expectedText: 'outdated' }),
+						...(mismatch === 'version' ? { version: request.snapshot.version + 1 } : { expectedText: 'outdated' }),
 						edits: [{ range: fixture.model.getFullModelRange(), text: 'wrong' }],
 					},
 				],
@@ -216,9 +211,7 @@ test('rename forwards refactoring autosave and its edit reason through the host 
 	);
 });
 
-function createEditor(
-	onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => Promise<void>,
-) {
+function createEditor(onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => Promise<void>) {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const model = new TextModel('value', { languageId: 'typescript' });

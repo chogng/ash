@@ -14,8 +14,7 @@ class LineSelectionController extends Disposable {
 		private readonly viewModel: IViewModel,
 	) {
 		super();
-		if (viewport.textModel !== viewModel.model)
-			throw new TypeError('Line selection dependencies must share one text model');
+		if (viewport.textModel !== viewModel.model) throw new TypeError('Line selection dependencies must share one text model');
 		this._register(
 			addDisposableListener(input, 'keydown', event => {
 				if (

@@ -3,8 +3,7 @@ import type { IWorkspaceFolder } from '../../../../platform/workspace/common/wor
 import type { ConfigurationResolverExpression } from './configurationResolverExpression.js';
 import type { ConfigurationTarget } from '../../../../platform/configuration/common/configuration.js';
 
-export const IConfigurationResolverService =
-	createServiceIdentifier<IConfigurationResolverService>('configurationResolverService');
+export const IConfigurationResolverService = createServiceIdentifier<IConfigurationResolverService>('configurationResolverService');
 
 /** Names shared by execution resolution and task configuration validation. */
 export const executionVariableNames: ReadonlySet<string> = new Set([
@@ -41,35 +40,18 @@ export function isExecutionVariable(reference: string): boolean {
 	const separator = reference.indexOf(':');
 	const name = separator === -1 ? reference : reference.slice(0, separator);
 	if (!executionVariableNames.has(name)) return false;
-	if (['env', 'command', 'input', 'config', 'extensionInstallFolder'].includes(name))
-		return separator !== -1 && reference.length > separator + 1;
+	if (['env', 'command', 'input', 'config', 'extensionInstallFolder'].includes(name)) return separator !== -1 && reference.length > separator + 1;
 	return (
 		separator === -1 ||
-		([
-			'workspaceFolder',
-			'workspaceFolderBasename',
-			'workspaceRoot',
-			'workspaceRootFolderName',
-			'cwd',
-			'relativeFile',
-			'relativeFileDirname',
-		].includes(name) &&
-			reference.length > separator + 1)
+		(['workspaceFolder', 'workspaceFolderBasename', 'workspaceRoot', 'workspaceRootFolderName', 'cwd', 'relativeFile', 'relativeFileDirname'].includes(name) && reference.length > separator + 1)
 	);
 }
 
 /** Resolves execution data without changing the source configuration. */
 export interface IConfigurationResolverService {
 	readonly resolvableVariables: ReadonlySet<string>;
-	resolveWithEnvironment(
-		environment: Readonly<Record<string, string | undefined>>,
-		folder: Pick<IWorkspaceFolder, 'uri' | 'name'> | undefined,
-		value: string,
-	): Promise<string>;
-	resolveAsync<T>(
-		folder: Pick<IWorkspaceFolder, 'uri' | 'name'> | undefined,
-		config: T,
-	): Promise<T extends ConfigurationResolverExpression<infer R> ? R : T>;
+	resolveWithEnvironment(environment: Readonly<Record<string, string | undefined>>, folder: Pick<IWorkspaceFolder, 'uri' | 'name'> | undefined, value: string): Promise<string>;
+	resolveAsync<T>(folder: Pick<IWorkspaceFolder, 'uri' | 'name'> | undefined, config: T): Promise<T extends ConfigurationResolverExpression<infer R> ? R : T>;
 	/** Resolves command and configured input variables once per invocation; undefined means cancellation. */
 	resolveWithInteractionReplace<T>(
 		folder: Pick<IWorkspaceFolder, 'uri' | 'name'> | undefined,

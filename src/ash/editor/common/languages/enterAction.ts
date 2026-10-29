@@ -5,12 +5,7 @@ import { EditorAutoIndentStrategy } from '../config/editorOptions.js';
 import { getIndentationAtPosition, ILanguageConfigurationService } from './languageConfigurationRegistry.js';
 import { IndentationContextProcessor } from './supports/indentationLineProcessor.js';
 
-export function getEnterAction(
-	autoIndent: EditorAutoIndentStrategy,
-	model: ITextModel,
-	range: Range,
-	languageConfigurationService: ILanguageConfigurationService,
-): CompleteEnterAction | null {
+export function getEnterAction(autoIndent: EditorAutoIndentStrategy, model: ITextModel, range: Range, languageConfigurationService: ILanguageConfigurationService): CompleteEnterAction | null {
 	model.tokenization.forceTokenization(range.startLineNumber);
 	const languageId = model.getLanguageIdAtPosition(range.startLineNumber, range.startColumn);
 	const richEditSupport = languageConfigurationService.getLanguageConfiguration(languageId);
@@ -48,5 +43,10 @@ export function getEnterAction(
 		indentation = indentation.substring(0, indentation.length - removeText);
 	}
 
-	return { indentAction: indentAction, appendText: appendText, removeText: removeText, indentation: indentation };
+	return {
+		indentAction: indentAction,
+		appendText: appendText,
+		removeText: removeText,
+		indentation: indentation,
+	};
 }

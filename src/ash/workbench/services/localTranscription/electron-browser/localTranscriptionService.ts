@@ -39,10 +39,7 @@ interface ActiveTranscription {
 	readonly cancelled: DeferredPromise<string>;
 }
 
-export class LocalTranscriptionService
-	extends Disposable
-	implements ILocalTranscriptionService, ILocalTranscriptionModelService
-{
+export class LocalTranscriptionService extends Disposable implements ILocalTranscriptionService, ILocalTranscriptionModelService {
 	public readonly _serviceBrand = undefined;
 	public readonly isSupported = true;
 	private readonly transcribed = this._register(new Emitter<ILocalTranscriptionResult>());
@@ -66,13 +63,7 @@ export class LocalTranscriptionService
 		this._register(
 			backend.onDidTranscribe(result => {
 				const active = this.active;
-				if (
-					!active ||
-					result.resourceId !== active.resourceId ||
-					active.discard ||
-					active.finalReceived ||
-					active.hasEnded
-				) {
+				if (!active || result.resourceId !== active.resourceId || active.discard || active.finalReceived || active.hasEnded) {
 					return;
 				}
 				active.text = result.text;
@@ -130,29 +121,15 @@ export class LocalTranscriptionService
 		return this.backend.getModelStatus(model);
 	}
 
-	public prepareModel(
-		model: string,
-		onProgress: (status: IDictationModelStatus) => void,
-	): ILocalTranscriptionModelOperation {
+	public prepareModel(model: string, onProgress: (status: IDictationModelStatus) => void): ILocalTranscriptionModelOperation {
 		return this.startModelOperation(model, { type: 'prepare' }, onProgress);
 	}
 
-	public importPackage(
-		options: { readonly model: string; readonly sourcePath: string },
-		onProgress: (status: IDictationModelStatus) => void,
-	): ILocalTranscriptionModelOperation {
-		return this.startModelOperation(
-			options.model,
-			{ type: 'import', sourceDirectory: options.sourcePath },
-			onProgress,
-		);
+	public importPackage(options: { readonly model: string; readonly sourcePath: string }, onProgress: (status: IDictationModelStatus) => void): ILocalTranscriptionModelOperation {
+		return this.startModelOperation(options.model, { type: 'import', sourceDirectory: options.sourcePath }, onProgress);
 	}
 
-	private startModelOperation(
-		model: string,
-		operation: LocalTranscriptionModelOperation,
-		onProgress: (status: IDictationModelStatus) => void,
-	): ILocalTranscriptionModelOperation {
+	private startModelOperation(model: string, operation: LocalTranscriptionModelOperation, onProgress: (status: IDictationModelStatus) => void): ILocalTranscriptionModelOperation {
 		this.assertNotDisposed();
 		if (!this.backend.isConnected) {
 			throw new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable'));
@@ -184,21 +161,10 @@ export class LocalTranscriptionService
 	public async importModel(options: Parameters<ILocalTranscriptionService['importModel']>[0]) {
 		this.assertNotDisposed();
 		const cache = await this.backend.getModelCacheInfo();
-		if (options.cacheDir !== cache.directory)
-			throw new Error(
-				localize(
-					'dictation.managedCache',
-					'Local transcription uses the managed cache directory: {0}',
-					cache.directory,
-				),
-			);
-		const operation = this.importPackage(
-			{ model: DEFAULT_LOCAL_TRANSCRIPTION_MODEL, sourcePath: options.sourcePath },
-			() => {},
-		);
+		if (options.cacheDir !== cache.directory) throw new Error(localize('dictation.managedCache', 'Local transcription uses the managed cache directory: {0}', cache.directory));
+		const operation = this.importPackage({ model: DEFAULT_LOCAL_TRANSCRIPTION_MODEL, sourcePath: options.sourcePath }, () => {});
 		try {
-			if ((await operation.completed) !== DictationModelState.Ready)
-				throw new Error(localize('dictation.importCancelled', 'Model import was cancelled'));
+			if ((await operation.completed) !== DictationModelState.Ready) throw new Error(localize('dictation.importCancelled', 'Model import was cancelled'));
 			return { model: DEFAULT_LOCAL_TRANSCRIPTION_MODEL, version: cache.version };
 		} finally {
 			operation.dispose();
@@ -215,34 +181,12 @@ export class LocalTranscriptionService
 		}
 		const resourceId = generateUuid();
 		const started = Promise.resolve().then(async () => {
-			const unsupported = (
-				[
-					'language',
-					'proxyUrl',
-					'noProxy',
-					'proxyStrictSSL',
-					'proxyAuthorization',
-					'runtimeUrlTemplate',
-					'runtimeVersion',
-				] as const
-			).filter(key => options[key] !== undefined);
-			if (unsupported.length)
-				throw new Error(
-					localize(
-						'dictation.unsupportedLocalOptions',
-						'This local transcription backend does not support: {0}',
-						unsupported.join(', '),
-					),
-				);
+			const unsupported = (['language', 'proxyUrl', 'noProxy', 'proxyStrictSSL', 'proxyAuthorization', 'runtimeUrlTemplate', 'runtimeVersion'] as const).filter(
+				key => options[key] !== undefined,
+			);
+			if (unsupported.length) throw new Error(localize('dictation.unsupportedLocalOptions', 'This local transcription backend does not support: {0}', unsupported.join(', ')));
 			const cacheDirectory = await this.getCacheDirectory();
-			if (options.cacheDir !== cacheDirectory)
-				throw new Error(
-					localize(
-						'dictation.managedCache',
-						'Local transcription uses the managed cache directory: {0}',
-						cacheDirectory,
-					),
-				);
+			if (options.cacheDir !== cacheDirectory) throw new Error(localize('dictation.managedCache', 'Local transcription uses the managed cache directory: {0}', cacheDirectory));
 			if (active.discard) throw canceled();
 			await this.backend.start(resourceId, options.model ?? DEFAULT_LOCAL_TRANSCRIPTION_MODEL);
 		});
@@ -265,11 +209,7 @@ export class LocalTranscriptionService
 		} catch (error) {
 			if (this.active === active) {
 				this.active = undefined;
-				this.setStatus(
-					active.discard
-						? { state: LocalTranscriptionModelState.Idle }
-						: { state: LocalTranscriptionModelState.Error, error: String(error) },
-				);
+				this.setStatus(active.discard ? { state: LocalTranscriptionModelState.Idle } : { state: LocalTranscriptionModelState.Error, error: String(error) });
 			}
 			throw error;
 		}
@@ -283,10 +223,7 @@ export class LocalTranscriptionService
 		this.assertNotDisposed();
 		const active = this.active;
 		if (!active || active.discard || active.hasEnded || active.stopping) return Promise.resolve();
-		if (active.queuedBytes + chunk.byteLength > 4 * 1024 * 1024)
-			return Promise.reject(
-				new Error(localize('dictation.audioBackpressure', 'Transcription audio is empty or backpressured')),
-			);
+		if (active.queuedBytes + chunk.byteLength > 4 * 1024 * 1024) return Promise.reject(new Error(localize('dictation.audioBackpressure', 'Transcription audio is empty or backpressured')));
 		active.queuedBytes += chunk.byteLength;
 		active.audio = active.audio
 			.then(async () => {
@@ -322,8 +259,7 @@ export class LocalTranscriptionService
 				},
 				error => {
 					active.cancelling = undefined;
-					if (this.active === active)
-						this.setStatus({ state: LocalTranscriptionModelState.Error, error: String(error) });
+					if (this.active === active) this.setStatus({ state: LocalTranscriptionModelState.Error, error: String(error) });
 					throw error;
 				},
 			);
@@ -373,11 +309,7 @@ export class LocalTranscriptionService
 		} finally {
 			if (this.active === active && !active.cancelling) {
 				this.active = undefined;
-				this.setStatus(
-					active.endedError && !active.discard
-						? { state: LocalTranscriptionModelState.Error, error: active.endedError }
-						: { state: LocalTranscriptionModelState.Idle },
-				);
+				this.setStatus(active.endedError && !active.discard ? { state: LocalTranscriptionModelState.Error, error: active.endedError } : { state: LocalTranscriptionModelState.Idle });
 			}
 		}
 	}
@@ -407,11 +339,7 @@ class ModelOperation extends Disposable implements ILocalTranscriptionModelOpera
 					return;
 				}
 				const status = event.status;
-				if (
-					status.state === DictationModelState.Ready ||
-					status.state === DictationModelState.Cancelled ||
-					status.state === DictationModelState.Error
-				) {
+				if (status.state === DictationModelState.Ready || status.state === DictationModelState.Cancelled || status.state === DictationModelState.Error) {
 					this.terminal = status;
 					void this.release();
 				}
@@ -422,18 +350,14 @@ class ModelOperation extends Disposable implements ILocalTranscriptionModelOpera
 		);
 		this._register(
 			backend.onDidDisconnect(() => {
-				void this.completion.error(
-					new Error(localize('dictation.connectionLost', 'Dictation connection lost')),
-				);
+				void this.completion.error(new Error(localize('dictation.connectionLost', 'Dictation connection lost')));
 			}),
 		);
 	}
 
 	public start(model: string, operation: LocalTranscriptionModelOperation): void {
 		// Register delivery before issuing start: a cached model may finish before acceptance arrives.
-		this.started = Promise.resolve().then(() =>
-			this.backend.startModelOperation(this.resourceId, model, operation),
-		);
+		this.started = Promise.resolve().then(() => this.backend.startModelOperation(this.resourceId, model, operation));
 		void this.started.catch(error => {
 			void this.completion.error(error);
 		});
@@ -458,11 +382,7 @@ class ModelOperation extends Disposable implements ILocalTranscriptionModelOpera
 			if (terminal?.state === DictationModelState.Error) {
 				throw new Error(terminal.error);
 			}
-			await this.completion.complete(
-				terminal?.state === DictationModelState.Ready
-					? DictationModelState.Ready
-					: DictationModelState.Cancelled,
-			);
+			await this.completion.complete(terminal?.state === DictationModelState.Ready ? DictationModelState.Ready : DictationModelState.Cancelled);
 		} catch (error) {
 			await this.completion.error(error);
 		}
@@ -477,19 +397,10 @@ class ModelOperation extends Disposable implements ILocalTranscriptionModelOpera
 }
 
 /** The renderer entry owns this service scope and releases it with the window. */
-export function registerLocalTranscriptionService(
-	services: InstantiationService,
-	client: AppServerProtocolClient,
-): RendererHostCapabilities {
-	services.registerInstance(
-		ILocalTranscriptionBackendService,
-		createAppServerLocalTranscriptionBackendService(client),
-	);
+export function registerLocalTranscriptionService(services: InstantiationService, client: AppServerProtocolClient): RendererHostCapabilities {
+	services.registerInstance(ILocalTranscriptionBackendService, createAppServerLocalTranscriptionBackendService(client));
 	services.registerSingleton(ILocalTranscriptionService, () => services.createInstance(LocalTranscriptionService));
-	services.registerSingleton(
-		ILocalTranscriptionModelService,
-		() => services.get(ILocalTranscriptionService) as LocalTranscriptionService,
-	);
+	services.registerSingleton(ILocalTranscriptionModelService, () => services.get(ILocalTranscriptionService) as LocalTranscriptionService);
 	return {
 		localTranscription: services.get(ILocalTranscriptionService),
 		localTranscriptionModels: services.get(ILocalTranscriptionModelService),

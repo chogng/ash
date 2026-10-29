@@ -1,11 +1,7 @@
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { Selection } from '../../../common/core/selection.js';
-import {
-	type ICommand,
-	type ICursorStateComputerData,
-	type IEditOperationBuilder,
-} from '../../../common/editorCommon.js';
+import { type ICommand, type ICursorStateComputerData, type IEditOperationBuilder } from '../../../common/editorCommon.js';
 import { type ITextModel } from '../../../common/model.js';
 
 /** Duplicates the physical lines covered by one selection. */
@@ -34,10 +30,7 @@ export class CopyLinesCommand implements ICommand {
 }
 
 function selectedLines(selection: Selection): { readonly startLineNumber: number; readonly endLineNumber: number } {
-	const endLineNumber =
-		!selection.isEmpty() && selection.endColumn === 1
-			? Math.max(selection.startLineNumber, selection.endLineNumber - 1)
-			: selection.endLineNumber;
+	const endLineNumber = !selection.isEmpty() && selection.endColumn === 1 ? Math.max(selection.startLineNumber, selection.endLineNumber - 1) : selection.endLineNumber;
 	return { startLineNumber: selection.startLineNumber, endLineNumber };
 }
 
@@ -50,10 +43,5 @@ function lineText(model: ITextModel, startLineNumber: number, endLineNumber: num
 }
 
 function shiftSelection(selection: Selection, lineDelta: number): Selection {
-	return new Selection(
-		selection.selectionStartLineNumber + lineDelta,
-		selection.selectionStartColumn,
-		selection.positionLineNumber + lineDelta,
-		selection.positionColumn,
-	);
+	return new Selection(selection.selectionStartLineNumber + lineDelta, selection.selectionStartColumn, selection.positionLineNumber + lineDelta, selection.positionColumn);
 }

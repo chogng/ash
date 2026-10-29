@@ -1,12 +1,6 @@
 import type { AgentSessionActivity as SessionManagementInfo } from '../../../../platform/agentHost/common/agent.js';
 export type { AgentSessionActivity as SessionManagementInfo } from '../../../../platform/agentHost/common/agent.js';
-import type {
-	ApprovalMode,
-	ChatAgent,
-	ModelRef,
-	SessionId,
-	ThreadId,
-} from '../../../../workbench/services/chat/common/chatService.js';
+import type { ApprovalMode, ChatAgent, ModelRef, SessionId, ThreadId } from '../../../../workbench/services/chat/common/chatService.js';
 import type { TurnChangeFile, TurnChangeSetSummary } from '../../../../workbench/services/chat/common/chatService.js';
 import type { IObservable } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -61,11 +55,7 @@ export interface ISessionChangeset {
 	readonly originalCheckpointRef: IObservable<string | undefined>;
 	readonly modifiedCheckpointRef: IObservable<string | undefined>;
 	readonly capabilities?: { readonly review?: boolean };
-	invokeOperation(
-		operationId: string,
-		target?: ISessionChangesetOperationTarget,
-		meta?: Record<string, unknown>,
-	): Promise<void>;
+	invokeOperation(operationId: string, target?: ISessionChangesetOperationTarget, meta?: Record<string, unknown>): Promise<void>;
 }
 
 export function createSessionFileChange(summary: TurnChangeSetSummary, file: TurnChangeFile): ISessionFileChange {
@@ -86,12 +76,7 @@ export function createSessionFileChange(summary: TurnChangeSetSummary, file: Tur
 }
 
 // Shared Chat identities live below Sessions so both window modes use one contract.
-export type {
-	ApprovalMode,
-	ModelRef,
-	SessionId,
-	ThreadId,
-} from '../../../../workbench/services/chat/common/chatService.js';
+export type { ApprovalMode, ModelRef, SessionId, ThreadId } from '../../../../workbench/services/chat/common/chatService.js';
 
 export type ThreadOrigin =
 	| { readonly type: 'root' }
@@ -109,8 +94,7 @@ export type ThreadOrigin =
 			readonly delegationId: string;
 	  };
 export type ChatStatus = 'active' | 'archived';
-export type AgentThreadExecutionStatus =
-	'idle' | 'queued' | 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
+export type AgentThreadExecutionStatus = 'idle' | 'queued' | 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
 export type AgentWaitingReason = 'approval' | 'userInput' | 'capability';
 
 export interface AgentTreeNode {
@@ -158,10 +142,7 @@ export type SessionWorkspaceSelection =
 			readonly folders: readonly { readonly label: string; readonly target: SessionExecutionTarget }[];
 	  };
 
-export type SessionExecutionTarget = Extract<
-	SessionWorkspaceSelection,
-	{ readonly type: 'local' | 'ssh' | 'provider' }
->;
+export type SessionExecutionTarget = Extract<SessionWorkspaceSelection, { readonly type: 'local' | 'ssh' | 'provider' }>;
 
 /** Execution directory supplied by the Session or hydrated Thread domain snapshot. */
 export interface ISessionWorkspace {

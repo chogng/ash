@@ -19,14 +19,8 @@ for (const alignment of ['top', 'center'] as const) {
 		class extends Action2 {
 			constructor() {
 				super({
-					id:
-						alignment === 'top'
-							? 'workbench.action.alignQuickInputTop'
-							: 'workbench.action.alignQuickInputCenter',
-					title:
-						alignment === 'top'
-							? localize2('alignQuickInputTop', 'Align Quick Input Top')
-							: localize2('alignQuickInputCenter', 'Align Quick Input Center'),
+					id: alignment === 'top' ? 'workbench.action.alignQuickInputTop' : 'workbench.action.alignQuickInputCenter',
+					title: alignment === 'top' ? localize2('alignQuickInputTop', 'Align Quick Input Top') : localize2('alignQuickInputCenter', 'Align Quick Input Center'),
 					f1: true,
 				});
 			}
@@ -37,11 +31,7 @@ for (const alignment of ['top', 'center'] as const) {
 	);
 }
 
-async function selectItem<T extends IQuickPickItem>(
-	quickInput: IQuickInputService,
-	items: readonly T[],
-	placeholder: string,
-): Promise<T | undefined> {
+async function selectItem<T extends IQuickPickItem>(quickInput: IQuickInputService, items: readonly T[], placeholder: string): Promise<T | undefined> {
 	using lifetime = new DisposableStore();
 	const picker = lifetime.add(quickInput.createQuickPick<T>());
 	picker.items = items;
@@ -70,9 +60,7 @@ async function moveView(accessor: ServicesAccessor, id?: unknown): Promise<void>
 				label: view.localizationKey ? localize(view.localizationKey, view.title) : view.title,
 				view,
 			}));
-		view =
-			(await selectItem(quickInput, candidates, localize('views.selectView', 'Select a view to move')))?.view ??
-			null;
+		view = (await selectItem(quickInput, candidates, localize('views.selectView', 'Select a view to move')))?.view ?? null;
 	}
 	if (!view?.canMoveView) return;
 	type Destination = { readonly containerId: string } | { readonly location: ViewContainerLocation };
@@ -90,25 +78,16 @@ async function moveView(accessor: ServicesAccessor, id?: unknown): Promise<void>
 			destination: { location: ViewContainerLocation.Panel },
 		},
 		...descriptors.viewContainers
-			.filter(
-				container => !container.rejectAddedViews && container.location !== ViewContainerLocation.AgentSidebar,
-			)
+			.filter(container => !container.rejectAddedViews && container.location !== ViewContainerLocation.AgentSidebar)
 			.map(container => ({
-				label: container.localizationKey
-					? localize(container.localizationKey, container.title)
-					: container.title,
+				label: container.localizationKey ? localize(container.localizationKey, container.title) : container.title,
 				destination: { containerId: container.id },
 			})),
 	];
 	const title = view.localizationKey ? localize(view.localizationKey, view.title) : view.title;
-	const selected = await selectItem(
-		quickInput,
-		destinations,
-		localize('views.selectDestination', "Move '{0}' to", title),
-	);
+	const selected = await selectItem(quickInput, destinations, localize('views.selectDestination', "Move '{0}' to", title));
 	if (!selected) return;
-	if ('containerId' in selected.destination)
-		descriptors.moveViewsToContainer([view], descriptors.getViewContainerById(selected.destination.containerId)!);
+	if ('containerId' in selected.destination) descriptors.moveViewsToContainer([view], descriptors.getViewContainerById(selected.destination.containerId)!);
 	else descriptors.moveViewToLocation(view, selected.destination.location);
 	await views.openView(view.id, true);
 }
@@ -156,11 +135,7 @@ registerAction2(
 			const descriptors = accessor.get(IViewDescriptorService);
 			descriptors.reset();
 			const views = accessor.get(IViewsService);
-			for (const location of [
-				ViewContainerLocation.Sidebar,
-				ViewContainerLocation.Panel,
-				ViewContainerLocation.AuxiliaryBar,
-			]) {
+			for (const location of [ViewContainerLocation.Sidebar, ViewContainerLocation.Panel, ViewContainerLocation.AuxiliaryBar]) {
 				const container = descriptors.getDefaultViewContainer(location);
 				if (container) await views.openViewContainer(container.id);
 			}
@@ -195,7 +170,10 @@ export class ConfigureEditorAction extends Action2 {
 	static readonly ID = 'workbench.action.configureEditor';
 
 	constructor() {
-		super({ id: ConfigureEditorAction.ID, title: localize2('workbench.configureEditors', 'Configure Editors') });
+		super({
+			id: ConfigureEditorAction.ID,
+			title: localize2('workbench.configureEditors', 'Configure Editors'),
+		});
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
@@ -280,15 +258,10 @@ const sideKey = `config.${WorkbenchConfiguration.sideBarLocation}`;
 export class LayoutActionsContext extends Disposable {
 	constructor(configuration: IConfigurationService, context: IContextKeyService) {
 		super();
-		const settings = [
-			WorkbenchConfiguration.activityBarLocation,
-			WorkbenchConfiguration.activityBarCompact,
-			WorkbenchConfiguration.sideBarLocation,
-		];
+		const settings = [WorkbenchConfiguration.activityBarLocation, WorkbenchConfiguration.activityBarCompact, WorkbenchConfiguration.sideBarLocation];
 		const update = () =>
 			context.bufferChangeEvents(() => {
-				for (const setting of settings)
-					context.setContext(`config.${setting}`, configuration.getValue<string | boolean>(setting));
+				for (const setting of settings) context.setContext(`config.${setting}`, configuration.getValue<string | boolean>(setting));
 			});
 		update();
 		this._register(
@@ -314,30 +287,10 @@ registerWorkbenchContribution(
 
 let positionOrder = 0;
 for (const [position, suffix, shortTitle, title] of [
-	[
-		ActivityBarPosition.DEFAULT,
-		'default',
-		localize2('workbench.activityBarPositionDefault', 'Default'),
-		localize2('workbench.activityBarCommand.default', 'Move Activity Bar to Side'),
-	],
-	[
-		ActivityBarPosition.TOP,
-		'top',
-		localize2('workbench.activityBarPositionTop', 'Top'),
-		localize2('workbench.activityBarCommand.top', 'Move Activity Bar to Top'),
-	],
-	[
-		ActivityBarPosition.BOTTOM,
-		'bottom',
-		localize2('workbench.activityBarPositionBottom', 'Bottom'),
-		localize2('workbench.activityBarCommand.bottom', 'Move Activity Bar to Bottom'),
-	],
-	[
-		ActivityBarPosition.HIDDEN,
-		'hide',
-		localize2('workbench.activityBarPositionHidden', 'Hidden'),
-		localize2('workbench.activityBarCommand.hide', 'Hide Activity Bar'),
-	],
+	[ActivityBarPosition.DEFAULT, 'default', localize2('workbench.activityBarPositionDefault', 'Default'), localize2('workbench.activityBarCommand.default', 'Move Activity Bar to Side')],
+	[ActivityBarPosition.TOP, 'top', localize2('workbench.activityBarPositionTop', 'Top'), localize2('workbench.activityBarCommand.top', 'Move Activity Bar to Top')],
+	[ActivityBarPosition.BOTTOM, 'bottom', localize2('workbench.activityBarPositionBottom', 'Bottom'), localize2('workbench.activityBarCommand.bottom', 'Move Activity Bar to Bottom')],
+	[ActivityBarPosition.HIDDEN, 'hide', localize2('workbench.activityBarPositionHidden', 'Hidden'), localize2('workbench.activityBarCommand.hide', 'Hide Activity Bar')],
 ] as const) {
 	const desc = {
 		id: `workbench.action.activityBarLocation.${suffix}`,
@@ -353,9 +306,7 @@ for (const [position, suffix, shortTitle, title] of [
 				super(desc);
 			}
 			override run(accessor: ServicesAccessor): Promise<void> {
-				return accessor
-					.get(IConfigurationService)
-					.updateValue(WorkbenchConfiguration.activityBarLocation, position);
+				return accessor.get(IConfigurationService).updateValue(WorkbenchConfiguration.activityBarLocation, position);
 			}
 		},
 	);
@@ -370,12 +321,8 @@ for (const compact of [false, true]) {
 	const suffix = compact ? 'compact' : 'default';
 	const desc = {
 		id: `workbench.action.activityBar.size.${suffix}`,
-		title: compact
-			? localize2('workbench.activityBarSizeCommand.compact', 'Use Compact Activity Bar')
-			: localize2('workbench.activityBarSizeCommand.default', 'Use Default Activity Bar Size'),
-		shortTitle: compact
-			? localize2('workbench.activityBarSizeCompact', 'Compact')
-			: localize2('workbench.activityBarSizeDefault', 'Default'),
+		title: compact ? localize2('workbench.activityBarSizeCommand.compact', 'Use Compact Activity Bar') : localize2('workbench.activityBarSizeCommand.default', 'Use Default Activity Bar Size'),
+		shortTitle: compact ? localize2('workbench.activityBarSizeCompact', 'Compact') : localize2('workbench.activityBarSizeDefault', 'Default'),
 		toggled: ContextKeyExpr.equals(compactKey, compact),
 		f1: true,
 		precondition: IsSessionsWindowContext.isEqualTo(false),
@@ -386,9 +333,7 @@ for (const compact of [false, true]) {
 				super(desc);
 			}
 			override run(accessor: ServicesAccessor): Promise<void> {
-				return accessor
-					.get(IConfigurationService)
-					.updateValue(WorkbenchConfiguration.activityBarCompact, compact);
+				return accessor.get(IConfigurationService).updateValue(WorkbenchConfiguration.activityBarCompact, compact);
 			}
 		},
 	);
@@ -406,9 +351,7 @@ for (const side of ['left', 'right'] as const) {
 				super({
 					id: side === 'left' ? 'workbench.action.moveSideBarLeft' : 'workbench.action.moveSideBarRight',
 					title:
-						side === 'left'
-							? localize2('workbench.movePrimarySideBarLeft', 'Move Primary Side Bar Left')
-							: localize2('workbench.movePrimarySideBarRight', 'Move Primary Side Bar Right'),
+						side === 'left' ? localize2('workbench.movePrimarySideBarLeft', 'Move Primary Side Bar Left') : localize2('workbench.movePrimarySideBarRight', 'Move Primary Side Bar Right'),
 					f1: true,
 					precondition: IsSessionsWindowContext.isEqualTo(false),
 					menu: [MenuId.ViewContainerTitleContext, ActivityBarContextMenu].map(id => ({
@@ -417,9 +360,7 @@ for (const side of ['left', 'right'] as const) {
 						order: 4,
 						when: ContextKeyExpr.and(
 							ContextKeyExpr.notEquals(sideKey, side),
-							id === MenuId.ViewContainerTitleContext
-								? ContextKeyExpr.equals('viewContainerLocation', 'sidebar')
-								: undefined,
+							id === MenuId.ViewContainerTitleContext ? ContextKeyExpr.equals('viewContainerLocation', 'sidebar') : undefined,
 						),
 					})),
 				});
@@ -443,19 +384,13 @@ export class ToggleSidebarPositionAction extends Action2 {
 	}
 	override run(accessor: ServicesAccessor): Promise<void> {
 		const configuration = accessor.get(IConfigurationService);
-		return configuration.updateValue(
-			WorkbenchConfiguration.sideBarLocation,
-			configuration.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation) === 'left'
-				? 'right'
-				: 'left',
-		);
+		return configuration.updateValue(WorkbenchConfiguration.sideBarLocation, configuration.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation) === 'left' ? 'right' : 'left');
 	}
 }
 registerAction2(ToggleSidebarPositionAction);
 
 for (const id of [MenuId.ViewContainerTitleContext, ActivityBarContextMenu]) {
-	const sidebar =
-		id === MenuId.ViewContainerTitleContext ? ContextKeyExpr.equals('viewContainerLocation', 'sidebar') : undefined;
+	const sidebar = id === MenuId.ViewContainerTitleContext ? ContextKeyExpr.equals('viewContainerLocation', 'sidebar') : undefined;
 	MenusRegistry.appendMenuItem(id, {
 		submenu: MenuId.ActivityBarPositionMenu,
 		title: localize2('workbench.activityBarPosition', 'Activity Bar Position'),

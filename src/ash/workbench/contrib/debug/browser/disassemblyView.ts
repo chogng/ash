@@ -21,24 +21,14 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
-import {
-	AccessibilityVerbositySettingId,
-	IAccessibleViewService,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
-import {
-	IDebugService,
-	type IDebugSession,
-	type IDisassembledInstruction,
-	type IInstructionBreakpoint,
-	CONTEXT_DISASSEMBLY_VIEW_FOCUS,
-	DISASSEMBLY_VIEW_ID,
-} from '../common/debug.js';
+import { IDebugService, type IDebugSession, type IDisassembledInstruction, type IInstructionBreakpoint, CONTEXT_DISASSEMBLY_VIEW_FOCUS, DISASSEMBLY_VIEW_ID } from '../common/debug.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 
 const PAGE_SIZE = 50;
@@ -145,9 +135,7 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 			addDisposableListener(form, 'submit', event => {
 				event.preventDefault();
 				if (!this.address.value.trim()) {
-					this.address.showValidation(
-						localize('debug.instructionAddressRequired', 'Enter an instruction address.'),
-					);
+					this.address.showValidation(localize('debug.instructionAddressRequired', 'Enter an instruction address.'));
 					return;
 				}
 				void this.load(this.address.value, 0);
@@ -183,23 +171,12 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 			renderElement: (instruction, _index, template) => {
 				template.instruction = instruction;
 				const breakpoint = this.breakpointFor(instruction);
-				template.button.enabled =
-					this.canInspect() &&
-					!this.loading &&
-					this.debug.session!.capabilities.supportsInstructionBreakpoints &&
-					instruction.presentationHint !== 'invalid';
-				template.button.label = localize(
-					'debug.instructionBreakpointAt',
-					'Toggle instruction breakpoint at {0}',
-					instruction.address,
-				);
+				template.button.enabled = this.canInspect() && !this.loading && this.debug.session!.capabilities.supportsInstructionBreakpoints && instruction.presentationHint !== 'invalid';
+				template.button.label = localize('debug.instructionBreakpointAt', 'Toggle instruction breakpoint at {0}', instruction.address);
 				template.button.domNode.setAttribute('aria-pressed', String(Boolean(breakpoint)));
 				template.button.domNode.classList.toggle('checked', Boolean(breakpoint));
 				template.button.domNode.classList.toggle('disabled-breakpoint', breakpoint?.enabled === false);
-				template.button.domNode.classList.toggle(
-					'unverified',
-					breakpoint !== undefined && !breakpoint.verified,
-				);
+				template.button.domNode.classList.toggle('unverified', breakpoint !== undefined && !breakpoint.verified);
 			},
 			disposeTemplate: template => template.button.dispose(),
 		};
@@ -219,16 +196,11 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 					value = instruction.instructionBytes ?? '';
 				}
 				if (cell.column === 'instruction') {
-					value = instruction.symbol
-						? `${instruction.instruction} — ${instruction.symbol}`
-						: instruction.instruction;
+					value = instruction.symbol ? `${instruction.instruction} — ${instruction.symbol}` : instruction.instruction;
 				}
 				text.textContent = value;
 				template.hover.update(value);
-				const current = sameAddress(
-					instruction.address,
-					this.debug.getViewModel().focusedStackFrame?.instructionPointerReference,
-				);
+				const current = sameAddress(instruction.address, this.debug.getViewModel().focusedStackFrame?.instructionPointerReference);
 				text.classList.toggle('current', current);
 				if (cell.column === 'address') {
 					text.dataset.instructionAddress = instruction.address;
@@ -265,18 +237,11 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 			});
 		}
 		this.table = this._register(
-			new Table(
-				'DisassemblyView',
-				container,
-				{ headerRowHeight: 28, getHeight: () => 28 },
-				columns,
-				[breakpointRenderer, textRenderer],
-				{
-					ariaLabel: localize('debug.disassembly', 'Disassembly'),
-					scrolling: 'internal',
-					accessibilityProvider: { getAriaLabel: instruction => this.instructionText(instruction) },
-				},
-			),
+			new Table('DisassemblyView', container, { headerRowHeight: 28, getHeight: () => 28 }, columns, [breakpointRenderer, textRenderer], {
+				ariaLabel: localize('debug.disassembly', 'Disassembly'),
+				scrolling: 'internal',
+				accessibilityProvider: { getAriaLabel: instruction => this.instructionText(instruction) },
+			}),
 		);
 		this._register(observeElementSize(container, size => this.table.layout(size.height, size.width)));
 		this._register(this.table.onDidChangeFocus(() => this.renderControls()));
@@ -366,9 +331,7 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 		return this;
 	}
 	public getAccessibleContent(): string {
-		return this.instructions.length
-			? this.instructions.map(instruction => this.instructionText(instruction)).join('\n')
-			: this.statusDomNode.textContent!;
+		return this.instructions.length ? this.instructions.map(instruction => this.instructionText(instruction)).join('\n') : this.statusDomNode.textContent!;
 	}
 	public toggleBreakpoint(): void {
 		const instruction = this.selectedInstruction();
@@ -388,12 +351,7 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 	}
 
 	private canInspect(): boolean {
-		return Boolean(
-			this.inputSignal &&
-			!this.inputSignal.aborted &&
-			this.debug.session?.state === 'stopped' &&
-			this.debug.session.capabilities.supportsDisassembleRequest,
-		);
+		return Boolean(this.inputSignal && !this.inputSignal.aborted && this.debug.session?.state === 'stopped' && this.debug.session.capabilities.supportsDisassembleRequest);
 	}
 	private async refreshSession(): Promise<void> {
 		const session = this.debug.session;
@@ -417,9 +375,7 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 		this.memoryReference = undefined;
 		this.renderControls();
 		try {
-			const frames = this.debug.getViewModel().focusedStackFrame
-				? [this.debug.getViewModel().focusedStackFrame]
-				: await session!.stackTrace();
+			const frames = this.debug.getViewModel().focusedStackFrame ? [this.debug.getViewModel().focusedStackFrame] : await session!.stackTrace();
 			if (!this.isCurrent(session!, generation)) {
 				return;
 			}
@@ -442,10 +398,7 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 				this.instructions = [];
 				this.memoryReference = undefined;
 				this.table.splice(0, this.table.length);
-				this.statusDomNode.textContent = localize(
-					'debug.disassemblyNoAddress',
-					'This stack frame has no instruction address. Enter an address to inspect.',
-				);
+				this.statusDomNode.textContent = localize('debug.disassemblyNoAddress', 'This stack frame has no instruction address. Enter an address to inspect.');
 			}
 		} catch (error) {
 			if (this.isCurrent(session!, generation)) {
@@ -503,37 +456,23 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 		}
 	}
 	private isCurrent(session: IDebugSession, generation: number): boolean {
-		return (
-			!this.isDisposed && this.canInspect() && this.debug.session === session && generation === this.generation
-		);
+		return !this.isDisposed && this.canInspect() && this.debug.session === session && generation === this.generation;
 	}
 	private selectedInstruction(): IDisassembledInstruction | undefined {
 		const index = this.table.getFocus()[0];
 		return index === undefined ? undefined : this.instructions[index];
 	}
 	private instructionText(instruction: IDisassembledInstruction): string {
-		const current = sameAddress(
-			instruction.address,
-			this.debug.getViewModel().focusedStackFrame?.instructionPointerReference,
-		)
+		const current = sameAddress(instruction.address, this.debug.getViewModel().focusedStackFrame?.instructionPointerReference)
 			? localize('debug.disassemblyCurrent', 'Current instruction') + ': '
 			: '';
 		return `${current}${instruction.address} ${instruction.instructionBytes ?? ''} ${instruction.instruction}${instruction.symbol ? ` — ${instruction.symbol}` : ''}`;
 	}
 	private breakpointFor(instruction: IDisassembledInstruction): IInstructionBreakpoint | undefined {
-		return this.debug.instructionBreakpoints.find(
-			point =>
-				point.sessionId === this.debug.session?.id &&
-				sameAddress(instruction.address, point.instructionReference, point.offset),
-		);
+		return this.debug.instructionBreakpoints.find(point => point.sessionId === this.debug.session?.id && sameAddress(instruction.address, point.instructionReference, point.offset));
 	}
 	private toggleInstructionBreakpoint(instruction: IDisassembledInstruction): void {
-		if (
-			!this.canInspect() ||
-			this.loading ||
-			!this.debug.session!.capabilities.supportsInstructionBreakpoints ||
-			instruction.presentationHint === 'invalid'
-		) {
+		if (!this.canInspect() || this.loading || !this.debug.session!.capabilities.supportsInstructionBreakpoints || instruction.presentationHint === 'invalid') {
 			return;
 		}
 		const breakpoint = this.breakpointFor(instruction);
@@ -556,31 +495,14 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 			const session = this.debug.session!;
 			const generation = this.generation;
 			const location = instruction.location;
-			const selection = new Range(
-				instruction.line,
-				instruction.column || 1,
-				instruction.endLine || instruction.line,
-				instruction.endColumn || instruction.column || 1,
-			);
+			const selection = new Range(instruction.line, instruction.column || 1, instruction.endLine || instruction.line, instruction.endColumn || instruction.column || 1);
 			if (location.sourceReference && location.sourceReference > 0) {
-				const resource = getUriFromSource(
-					location,
-					location.path,
-					session.id,
-					this.uriIdentity,
-					this.logService,
-				);
+				const resource = getUriFromSource(location, location.path, session.id, this.uriIdentity, this.logService);
 				using reference = await this.textModels.createModelReference(resource);
 				if (!this.isCurrent(session, generation)) return;
-				await this.editors.openEditor(
-					{ resource, label: location.name, readOnly: true },
-					{ selection, pinned: true },
-				);
+				await this.editors.openEditor({ resource, label: location.name, readOnly: true }, { selection, pinned: true });
 			} else if (location.resource) {
-				await this.editors.openEditor(
-					{ resource: location.resource, label: location.name },
-					{ selection, pinned: true },
-				);
+				await this.editors.openEditor({ resource: location.resource, label: location.name }, { selection, pinned: true });
 			}
 		} catch (error) {
 			this.showError(error);
@@ -589,43 +511,20 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 	private renderControls(): void {
 		const enabled = this.canInspect() && !this.loading;
 		const instruction = this.selectedInstruction();
-		const action = (
-			id: string,
-			label: string,
-			icon: typeof Lxicon.add,
-			canRun: boolean,
-			run: () => void | Promise<void>,
-		): IAction => ({ id, label, tooltip: label, icon, enabled: canRun, run });
+		const action = (id: string, label: string, icon: typeof Lxicon.add, canRun: boolean, run: () => void | Promise<void>): IAction => ({ id, label, tooltip: label, icon, enabled: canRun, run });
 		this.toolbar.setActions([
-			action(
-				'debug.disassemblyPrevious',
-				localize('debug.disassemblyPrevious', 'Previous instructions'),
-				Lxicon.arrowUp,
-				enabled && Boolean(this.memoryReference),
-				() => this.load(this.memoryReference!, this.instructionOffset - PAGE_SIZE),
+			action('debug.disassemblyPrevious', localize('debug.disassemblyPrevious', 'Previous instructions'), Lxicon.arrowUp, enabled && Boolean(this.memoryReference), () =>
+				this.load(this.memoryReference!, this.instructionOffset - PAGE_SIZE),
 			),
-			action(
-				'debug.disassemblyNext',
-				localize('debug.disassemblyNext', 'Next instructions'),
-				Lxicon.arrowDown,
-				enabled && Boolean(this.memoryReference),
-				() => this.load(this.memoryReference!, this.instructionOffset + PAGE_SIZE),
+			action('debug.disassemblyNext', localize('debug.disassemblyNext', 'Next instructions'), Lxicon.arrowDown, enabled && Boolean(this.memoryReference), () =>
+				this.load(this.memoryReference!, this.instructionOffset + PAGE_SIZE),
 			),
-			action(
-				'debug.disassemblyCurrent',
-				localize('debug.disassemblyCurrent', 'Current instruction'),
-				Lxicon.target,
-				enabled,
-				() => this.refreshSession(),
-			),
+			action('debug.disassemblyCurrent', localize('debug.disassemblyCurrent', 'Current instruction'), Lxicon.target, enabled, () => this.refreshSession()),
 			action(
 				'debug.disassemblySource',
 				localize('debug.disassemblySource', 'Open instruction source'),
 				Lxicon.fileCode,
-				enabled &&
-					Boolean(
-						(instruction?.location?.resource || instruction?.location?.sourceReference) && instruction.line,
-					),
+				enabled && Boolean((instruction?.location?.resource || instruction?.location?.sourceReference) && instruction.line),
 				() => this.openSource(),
 			),
 			action(

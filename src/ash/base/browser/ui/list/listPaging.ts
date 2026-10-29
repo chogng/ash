@@ -1,13 +1,7 @@
 import { h } from '../../dom.js';
 import { cancelOnDispose } from '../../../common/cancellation.js';
 import { isCancellationError, onUnexpectedError } from '../../../common/errors.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-} from '../../../common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../common/lifecycle.js';
 import type { IPagedModel } from '../../../common/paging.js';
 import type { IListRenderer, IListVirtualDelegate } from './list.js';
 import { List, type ListOptions } from './listWidget.js';
@@ -16,10 +10,7 @@ export interface IPagedRenderer<TElement, TTemplateData> extends IListRenderer<T
 	renderPlaceholder(index: number, templateData: TTemplateData): void;
 }
 
-export interface IPagedListOptions<T> extends Pick<
-	ListOptions<T>,
-	'ariaLabel' | 'role' | 'accessibilityProvider' | 'multipleSelectionSupport' | 'mouseSupport' | 'styles'
-> {
+export interface IPagedListOptions<T> extends Pick<ListOptions<T>, 'ariaLabel' | 'role' | 'accessibilityProvider' | 'multipleSelectionSupport' | 'mouseSupport' | 'styles'> {
 	readonly keyboardSupport?: boolean;
 }
 
@@ -65,30 +56,12 @@ export class PagedList<T> extends Disposable {
 				reuseRows: true,
 				domFocusable: options.keyboardSupport !== false,
 				accessibilityProvider: {
-					getRole: index =>
-						this.model.isResolved(index)
-							? (accessibilityProvider?.getRole?.(this.model.get(index)) ?? resolvedRole)
-							: 'presentation',
-					getAriaLabel: index =>
-						this.model.isResolved(index)
-							? accessibilityProvider?.getAriaLabel?.(this.model.get(index))
-							: undefined,
-					getAriaLevel: index =>
-						this.model.isResolved(index)
-							? accessibilityProvider?.getAriaLevel?.(this.model.get(index))
-							: undefined,
-					getAriaSetSize: index =>
-						this.model.isResolved(index)
-							? accessibilityProvider?.getAriaSetSize?.(this.model.get(index))
-							: undefined,
-					getAriaPosInSet: index =>
-						this.model.isResolved(index)
-							? accessibilityProvider?.getAriaPosInSet?.(this.model.get(index))
-							: undefined,
-					isExpanded: index =>
-						this.model.isResolved(index)
-							? accessibilityProvider?.isExpanded?.(this.model.get(index))
-							: undefined,
+					getRole: index => (this.model.isResolved(index) ? (accessibilityProvider?.getRole?.(this.model.get(index)) ?? resolvedRole) : 'presentation'),
+					getAriaLabel: index => (this.model.isResolved(index) ? accessibilityProvider?.getAriaLabel?.(this.model.get(index)) : undefined),
+					getAriaLevel: index => (this.model.isResolved(index) ? accessibilityProvider?.getAriaLevel?.(this.model.get(index)) : undefined),
+					getAriaSetSize: index => (this.model.isResolved(index) ? accessibilityProvider?.getAriaSetSize?.(this.model.get(index)) : undefined),
+					getAriaPosInSet: index => (this.model.isResolved(index) ? accessibilityProvider?.getAriaPosInSet?.(this.model.get(index)) : undefined),
+					isExpanded: index => (this.model.isResolved(index) ? accessibilityProvider?.isExpanded?.(this.model.get(index)) : undefined),
 				},
 				renderItem: (index, _position, row) => {
 					const templateId = virtualDelegate.getTemplateId(index);
@@ -178,11 +151,7 @@ export class PagedList<T> extends Disposable {
 		void this.resolveRow(state, model, request).catch(onUnexpectedError);
 	}
 
-	private async resolveRow(
-		state: RenderedPageRow<T>,
-		model: IPagedModel<T>,
-		request: DisposableStore,
-	): Promise<void> {
+	private async resolveRow(state: RenderedPageRow<T>, model: IPagedModel<T>, request: DisposableStore): Promise<void> {
 		const token = cancelOnDispose(request);
 		try {
 			try {

@@ -3,11 +3,7 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
-import {
-	ChatInputEditorRegistry,
-	type ChatInputEditorOptions,
-	type IChatInputEditor,
-} from '../../browser/widget/input/chatInputEditorRegistry.js';
+import { ChatInputEditorRegistry, type ChatInputEditorOptions, type IChatInputEditor } from '../../browser/widget/input/chatInputEditorRegistry.js';
 import { SlashCommandCatalog } from '../../../../../workbench/contrib/chat/common/slashCommands.js';
 import { SkillSelectorCatalog } from '../../../../../workbench/contrib/chat/common/skillSelectors.js';
 import { h } from '../../../../../base/browser/dom.js';
@@ -40,10 +36,19 @@ test('Chat input editor fallback owns multiline change and submit gestures', () 
 	editor.value = 'First draft';
 	assert.deepEqual(changes, ['First draft']);
 	textarea.dispatchEvent(
-		new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', shiftKey: true }),
+		new dom.window.KeyboardEvent('keydown', {
+			bubbles: true,
+			cancelable: true,
+			key: 'Enter',
+			shiftKey: true,
+		}),
 	);
 	assert.equal(submissions, 0);
-	const submitEvent = new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' });
+	const submitEvent = new dom.window.KeyboardEvent('keydown', {
+		bubbles: true,
+		cancelable: true,
+		key: 'Enter',
+	});
 	textarea.dispatchEvent(submitEvent);
 	assert.equal(submitEvent.defaultPrevented, true);
 	assert.equal(submissions, 1);

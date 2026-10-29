@@ -8,10 +8,7 @@ import type { IDimension } from '../../base/browser/dom.js';
 import type { ActionViewItem, ActionViewItemOptions } from '../../base/browser/ui/actionbar/actionViewItems.js';
 
 /** Owns focus for the complete hosted content, across all of its child controls. */
-export abstract class Composite<MementoType extends object = object>
-	extends Component<MementoType>
-	implements IComposite
-{
+export abstract class Composite<MementoType extends object = object> extends Component<MementoType> implements IComposite {
 	private readonly constraintsChanged = this._register(new Emitter<void>());
 	readonly onDidChangeConstraints = this.constraintsChanged.event;
 

@@ -50,32 +50,22 @@ function borrowPort(port: WebWorkerClientPort): WebWorkerClientPort {
 	};
 }
 
-function createProxy<T>(
-	channel: string,
-	invoke: (channel: string, method: string, args: unknown[]) => Promise<unknown>,
-): Proxied<T> {
+function createProxy<T>(channel: string, invoke: (channel: string, method: string, args: unknown[]) => Promise<unknown>): Proxied<T> {
 	return new Proxy(Object.create(null) as Proxied<T>, {
 		get: (_target, method) => {
 			if (method === 'then') return undefined;
-			if (typeof method !== 'string' || ['constructor', '__proto__', 'prototype'].includes(method))
-				throw new TypeError('Invalid Worker method');
+			if (typeof method !== 'string' || ['constructor', '__proto__', 'prototype'].includes(method)) throw new TypeError('Invalid Worker method');
 			return (...args: unknown[]) => invoke(channel, method, args);
 		},
 	});
 }
 
 function invokeChannel(channels: Map<string, object>, message: Record<string, unknown>): unknown {
-	if (
-		typeof message.channel !== 'string' ||
-		typeof message.method !== 'string' ||
-		!Array.isArray(message.args) ||
-		['constructor', '__proto__', 'prototype'].includes(message.method)
-	)
+	if (typeof message.channel !== 'string' || typeof message.method !== 'string' || !Array.isArray(message.args) || ['constructor', '__proto__', 'prototype'].includes(message.method))
 		throw new TypeError('Invalid Worker channel request');
 	const target = channels.get(message.channel);
 	const method = target && (target as Record<string, unknown>)[message.method];
-	if (typeof method !== 'function')
-		throw new ReferenceError(`Unknown Worker method '${message.channel}.${message.method}'`);
+	if (typeof method !== 'function') throw new ReferenceError(`Unknown Worker method '${message.channel}.${message.method}'`);
 	return method.apply(target, message.args);
 }
 
@@ -147,9 +137,7 @@ export class WebWorkerClient<T extends object = object> extends Disposable imple
 			// Legacy domain protocols keep their IDs and cancellation namespace.
 			// RPC calls use the same request machinery on a distinct channel.
 			const transport =
-				this.channel.protocol === rpcChannel.protocol || this.channel.protocol === hostChannel.protocol
-					? this
-					: (this.rpc ??= this._register(new WebWorkerClient(borrowPort(this.port))));
+				this.channel.protocol === rpcChannel.protocol || this.channel.protocol === hostChannel.protocol ? this : (this.rpc ??= this._register(new WebWorkerClient(borrowPort(this.port))));
 			if (transport !== this && !this.rpcFailure) {
 				this.rpcFailure = this._register(transport.onDidFail(error => this.invalidate(error)));
 			}
@@ -168,12 +156,7 @@ export class WebWorkerClient<T extends object = object> extends Disposable imple
 		return this.proxies.get(channel) as Proxied<C>;
 	}
 
-	public request(
-		requestId: number,
-		data: object,
-		signal: AbortSignal,
-		transfer?: readonly ArrayBuffer[],
-	): Promise<unknown> {
+	public request(requestId: number, data: object, signal: AbortSignal, transfer?: readonly ArrayBuffer[]): Promise<unknown> {
 		this.ensureAvailable();
 		assertRequestId(requestId);
 		signal.throwIfAborted();
@@ -193,10 +176,7 @@ export class WebWorkerClient<T extends object = object> extends Disposable imple
 				} catch {
 					// Cancellation still settles locally when the transport is already closed.
 				}
-				const error =
-					signal.reason instanceof Error
-						? signal.reason
-						: new Error(String(signal.reason ?? 'Worker request cancelled'));
+				const error = signal.reason instanceof Error ? signal.reason : new Error(String(signal.reason ?? 'Worker request cancelled'));
 				if (!(signal.reason instanceof Error)) {
 					error.name = 'AbortError';
 				}
@@ -404,10 +384,7 @@ export class WebWorkerServer extends Disposable implements IWebWorkerServer {
 		try {
 			const result = await this.handler.handleRequest(message, controller.signal);
 			if (!this.isDisposed && !controller.signal.aborted) {
-				this.port.send(
-					{ ...this.channel, kind: 'result', requestId, result },
-					result instanceof ArrayBuffer ? [result] : [],
-				);
+				this.port.send({ ...this.channel, kind: 'result', requestId, result }, result instanceof ArrayBuffer ? [result] : []);
 			}
 		} catch (error) {
 			if (!this.isDisposed && !controller.signal.aborted) {
@@ -435,9 +412,7 @@ export class WebWorkerServer extends Disposable implements IWebWorkerServer {
 }
 
 function isChannelMessage(value: unknown, channel: WebWorkerChannel): value is Record<string, unknown> {
-	return (
-		typeof value === 'object' && value !== null && (value as Record<string, unknown>).protocol === channel.protocol
-	);
+	return typeof value === 'object' && value !== null && (value as Record<string, unknown>).protocol === channel.protocol;
 }
 
 function assertVersion(value: Record<string, unknown>, channel: WebWorkerChannel): void {
@@ -453,14 +428,7 @@ function assertRequestId(value: unknown): asserts value is number {
 }
 
 function decodeError(value: unknown): WebWorkerRemoteError {
-	if (
-		!value ||
-		typeof value !== 'object' ||
-		!('name' in value) ||
-		!('message' in value) ||
-		typeof value.name !== 'string' ||
-		typeof value.message !== 'string'
-	) {
+	if (!value || typeof value !== 'object' || !('name' in value) || !('message' in value) || typeof value.name !== 'string' || typeof value.message !== 'string') {
 		throw new TypeError('Invalid worker error');
 	}
 	return new WebWorkerRemoteError(value.name, value.message);

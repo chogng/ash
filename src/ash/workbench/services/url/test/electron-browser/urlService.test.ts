@@ -75,16 +75,9 @@ suite('Desktop URL service', () => {
 			],
 		);
 		assert.equal(await opener.open(uri), true);
-		assert.deepEqual(calls, [
-			['main', uri.toString(), { trusted: true, originalUrl: undefined }],
-			['handler', uri.toString(), { trusted: true, originalUrl: undefined }],
-			['focus'],
-		]);
+		assert.deepEqual(calls, [['main', uri.toString(), { trusted: true, originalUrl: undefined }], ['handler', uri.toString(), { trusted: true, originalUrl: undefined }], ['focus']]);
 		calls.length = 0;
-		assert.equal(
-			await rendererChannel.call('main', 'handleURL', [uri.toString(), { originalUrl: uri.toString() }]),
-			true,
-		);
+		assert.equal(await rendererChannel.call('main', 'handleURL', [uri.toString(), { originalUrl: uri.toString() }]), true);
 		assert.deepEqual(calls, [['handler', uri.toString(), { originalUrl: uri.toString() }], ['focus']]);
 		handler.dispose();
 		calls.length = 0;

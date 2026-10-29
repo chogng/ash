@@ -15,13 +15,6 @@ registerTerminalBackend('remote', RemoteTerminalBackend);
 
 registerWorkbenchServiceContribution({
 	service: ITerminalProfileResolverService,
-	dependencies: [
-		ITerminalProfileService,
-		ITerminalProcessService,
-		IConfigurationService,
-		IConfigurationResolverService,
-		IWorkspaceContextService,
-		IEnvironmentVariableService,
-	],
+	dependencies: [ITerminalProfileService, ITerminalProcessService, IConfigurationService, IConfigurationResolverService, IWorkspaceContextService, IEnvironmentVariableService],
 	install: context => context.register(context.container.createInstance(BrowserTerminalProfileResolverService)),
 });

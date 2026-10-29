@@ -3,30 +3,17 @@ import { mkdtemp, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { test } from 'mocha';
-import {
-	DisposableStore,
-	DisposableTracker,
-	installDisposableTracker,
-	toDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { DisposableStore, DisposableTracker, installDisposableTracker, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { AppServerConnectionState } from '../../../agentHost/common/appServerApi.js';
 import { AppServerDaemonLauncher } from '../../electron-main/appServerDaemonLauncher.js';
-import {
-	DevelopmentAppServerReloader,
-	readDevelopmentAppServerGeneration,
-} from '../../electron-main/developmentAppServerReloader.js';
+import { DevelopmentAppServerReloader, readDevelopmentAppServerGeneration } from '../../electron-main/developmentAppServerReloader.js';
 import type { IDevelopmentAppServerRuntime } from '../../electron-main/developmentAppServerRuntime.js';
 import { DeferredPromise, disposableTimeout } from '../../../../base/common/async.js';
 
 const oldRuntime = resolve('/test/old');
 const newRuntime = resolve('/test/new');
 
-function connection(
-	resources: DisposableStore,
-	name: string,
-	events: string[],
-	initial: AppServerConnectionState = 'ready',
-) {
+function connection(resources: DisposableStore, name: string, events: string[], initial: AppServerConnectionState = 'ready') {
 	const launcher = resources.add(
 		new AppServerDaemonLauncher({
 			executable: resolve('/test/daemon'),
@@ -71,11 +58,7 @@ function connection(
 	};
 }
 
-function coordinator(
-	resources: DisposableStore,
-	restartDaemon: (launcher: AppServerDaemonLauncher) => Promise<void>,
-	readGeneration: () => Promise<string | undefined> = async () => newRuntime,
-) {
+function coordinator(resources: DisposableStore, restartDaemon: (launcher: AppServerDaemonLauncher) => Promise<void>, readGeneration: () => Promise<string | undefined> = async () => newRuntime) {
 	return resources.add(
 		new DevelopmentAppServerReloader({
 			generationFile: resolve('/test/current.json'),
@@ -98,11 +81,7 @@ test('development change notifications validate pointers without opening collect
 		const runtimePath = `generations/${'a'.repeat(64)}`;
 		const runtime = join(directory, runtimePath);
 		for (const name of ['bin', 'ash-path', 'ash-resources']) await mkdir(join(runtime, name), { recursive: true });
-		for (const name of [
-			'ash-development.json',
-			`bin/ash-app-server${process.platform === 'win32' ? '.exe' : ''}`,
-			`bin/ash-app-server-daemon${process.platform === 'win32' ? '.exe' : ''}`,
-		])
+		for (const name of ['ash-development.json', `bin/ash-app-server${process.platform === 'win32' ? '.exe' : ''}`, `bin/ash-app-server-daemon${process.platform === 'win32' ? '.exe' : ''}`])
 			await writeFile(join(runtime, name), 'file');
 		const file = join(directory, 'current.json');
 		await writeFile(file, JSON.stringify({ version: 3, runtime: runtimePath }));
@@ -140,7 +119,10 @@ test('atomic runtime pointer replacement reaches the profile reloader without na
 				acquireGeneration: async () =>
 					Object.assign(
 						toDisposable(() => {}),
-						{ runtime: (await readDevelopmentAppServerGeneration(generationFile))!, assertActive() {} },
+						{
+							runtime: (await readDevelopmentAppServerGeneration(generationFile))!,
+							assertActive() {},
+						},
 					),
 				restartDaemon: async launcher => {
 					assert.equal(launcher.environment.ASH_DEV_RUNTIME_ROOT, join(directory, second));

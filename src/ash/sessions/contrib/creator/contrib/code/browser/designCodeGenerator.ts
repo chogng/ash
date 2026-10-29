@@ -3,46 +3,22 @@ import { designPaintBackground } from '../../../browser/designPaintRendering.js'
 import { renderDesignTextFrame } from '../../../browser/designTextRendering.js';
 import { mainWindow } from '../../../../../../base/browser/window.js';
 import { localize } from '../../../../../../nls.js';
-import {
-	flattenDesignShapes,
-	serializeDesignDocument,
-	type DesignDocument,
-	type DesignGridTrack,
-	type DesignShape,
-} from '../../../common/model/document.js';
+import { flattenDesignShapes, serializeDesignDocument, type DesignDocument, type DesignGridTrack, type DesignShape } from '../../../common/model/document.js';
 import { getDesignGridCells } from '../../../common/model/layout.js';
 import type { DesignImageSource } from '../../../browser/designMedia.js';
 import { getDesignRenderBounds, renderDesignShape } from '../../../browser/svgRenderer.js';
 
 /** Generates runnable source from committed data, retaining IDs and JSON for agent edits. */
-export function generateDesignCode(
-	document: DesignDocument,
-	images: ReadonlyMap<string, DesignImageSource> = new Map(),
-): string {
+export function generateDesignCode(document: DesignDocument, images: ReadonlyMap<string, DesignImageSource> = new Map()): string {
 	const ownerDocument = mainWindow.document;
 	const scene = ownerDocument.createElement('div');
 	scene.className = 'ash-design-scene';
-	const rules = [
-		'body { margin: 0; }',
-		'.ash-design-scene { position: relative; overflow: visible; }',
-		'.ash-design-object { position: absolute; transform-origin: center; }',
-	];
-	const frames = document.shapes.flatMap(shape => [
-		shape,
-		...(shape.motion?.keyframes.map(frame => ({ ...shape, ...frame })) ?? []),
-	]);
+	const rules = ['body { margin: 0; }', '.ash-design-scene { position: relative; overflow: visible; }', '.ash-design-object { position: absolute; transform-origin: center; }'];
+	const frames = document.shapes.flatMap(shape => [shape, ...(shape.motion?.keyframes.map(frame => ({ ...shape, ...frame })) ?? [])]);
 	const bounds = getDesignRenderBounds(frames);
 	const padding = strokePadding(document.shapes) + Math.max(0, ...document.shapes.map(designEffectPadding));
-	rules.push(
-		`.ash-design-scene { width: ${bounds.width + padding * 2}px; height: ${bounds.height + padding * 2}px; }`,
-	);
-	function render(
-		shape: DesignShape,
-		originX: number,
-		originY: number,
-		parent?: Extract<DesignShape, { kind: 'frame' }>,
-		backdrop: readonly SVGGraphicsElement[] = [],
-	): HTMLElement {
+	rules.push(`.ash-design-scene { width: ${bounds.width + padding * 2}px; height: ${bounds.height + padding * 2}px; }`);
+	function render(shape: DesignShape, originX: number, originY: number, parent?: Extract<DesignShape, { kind: 'frame' }>, backdrop: readonly SVGGraphicsElement[] = []): HTMLElement {
 		const node = ownerDocument.createElement('div');
 		const className = `ash-design-object-${shape.id}`;
 		node.className = `ash-design-object ${className}`;
@@ -53,9 +29,7 @@ export function generateDesignCode(
 		}
 		const geometry = `left: ${shape.x - originX}px; top: ${shape.y - originY}px; width: ${shape.width}px; height: ${shape.height}px; transform: rotate(${shape.rotation}deg);`;
 		let appearance = '';
-		const stackedEffects = flattenDesignShapes([shape]).some(
-			layer => Array.isArray(layer.effects) && layer.effects.length > 0,
-		);
+		const stackedEffects = flattenDesignShapes([shape]).some(layer => Array.isArray(layer.effects) && layer.effects.length > 0);
 		if (stackedEffects) {
 			const svg = ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
 			svg.setAttribute('width', '100%');
@@ -65,9 +39,7 @@ export function generateDesignCode(
 			const behind = ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'g');
 			behind.setAttribute('transform', `translate(${-shape.x} ${-shape.y})`);
 			behind.append(...backdrop.map(element => element.cloneNode(true)));
-			svg.append(
-				renderDesignShape({ ...shape, x: 0, y: 0, rotation: 0, opacity: 1 }, undefined, images, [behind]),
-			);
+			svg.append(renderDesignShape({ ...shape, x: 0, y: 0, rotation: 0, opacity: 1 }, undefined, images, [behind]));
 			node.append(svg);
 		} else if (shape.blendMode === 'plus-darker') {
 			const svg = ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -75,13 +47,7 @@ export function generateDesignCode(
 			svg.setAttribute('height', '100%');
 			svg.setAttribute('viewBox', `0 0 ${shape.width} ${shape.height}`);
 			svg.setAttribute('overflow', 'visible');
-			svg.append(
-				renderDesignShape(
-					{ ...shape, x: 0, y: 0, rotation: 0, opacity: 1, effects: undefined },
-					undefined,
-					images,
-				),
-			);
+			svg.append(renderDesignShape({ ...shape, x: 0, y: 0, rotation: 0, opacity: 1, effects: undefined }, undefined, images));
 			node.append(svg);
 		} else if (shape.kind === 'rectangle' || shape.kind === 'ellipse') {
 			appearance = ` background: ${shape.fills !== undefined ? 'transparent' : shape.fill};${shape.kind === 'ellipse' ? ' border-radius: 50%;' : ''}`;
@@ -99,33 +65,18 @@ export function generateDesignCode(
 				if (layout.direction === 'grid' && layout.grid) {
 					const grid = layout.grid;
 					const cells = getDesignGridCells(
-						shape.children.filter(
-							child => child.visible !== false && child.layoutPositioning !== 'absolute',
-						),
+						shape.children.filter(child => child.visible !== false && child.layoutPositioning !== 'absolute'),
 						grid,
 					);
-					const rowCount = Math.max(
-						grid.autoRows ? 0 : grid.rows.length,
-						...cells.map(cell => cell.row + cell.rowSpan),
-					);
-					const rows = Array.from(
-						{ length: rowCount },
-						(_, index) => grid.rows[index] ?? ({ sizing: 'fill', value: 1 } as const),
-					);
+					const rowCount = Math.max(grid.autoRows ? 0 : grid.rows.length, ...cells.map(cell => cell.row + cell.rowSpan));
+					const rows = Array.from({ length: rowCount }, (_, index) => grid.rows[index] ?? ({ sizing: 'fill', value: 1 } as const));
 					appearance += ` display: grid; grid-template-columns: ${grid.columns.map(trackCss).join(' ')}; grid-template-rows: ${rows.map(trackCss).join(' ') || 'none'}; grid-auto-rows: minmax(0, 1fr); column-gap: ${layout.gap}px; row-gap: ${layout.crossGap ?? layout.gap}px; justify-items: start; align-items: start;`;
 				} else {
 					const horizontal = layout.direction === 'horizontal';
 					appearance += ` display: flex; flex-direction: ${horizontal ? 'row' : 'column'}; flex-wrap: ${layout.wrap ? 'wrap' : 'nowrap'}; column-gap: ${horizontal ? layout.gap : (layout.crossGap ?? layout.gap)}px; row-gap: ${horizontal ? (layout.crossGap ?? layout.gap) : layout.gap}px; align-items: ${align[layout.align]}; align-content: ${align[layout.align]}; justify-content: ${align[layout.justify]};`;
 				}
 				for (const axis of ['width', 'height'] as const) {
-					if (
-						layout[axis] === 'hug' &&
-						!(
-							parent?.autoLayout &&
-							shape.layoutPositioning !== 'absolute' &&
-							shape.sizing?.[axis] === 'fill'
-						)
-					) {
+					if (layout[axis] === 'hug' && !(parent?.autoLayout && shape.layoutPositioning !== 'absolute' && shape.sizing?.[axis] === 'fill')) {
 						appearance += ` ${axis}: max-content; min-${axis}: 0.001px;`;
 					}
 				}
@@ -154,13 +105,7 @@ export function generateDesignCode(
 			svg.setAttribute('height', `${shape.height}`);
 			svg.setAttribute('viewBox', `0 0 ${shape.width} ${shape.height}`);
 			svg.setAttribute('overflow', 'visible');
-			svg.append(
-				renderDesignShape(
-					{ ...shape, x: 0, y: 0, rotation: 0, opacity: 1, effects: undefined, blendMode: undefined },
-					undefined,
-					images,
-				),
-			);
+			svg.append(renderDesignShape({ ...shape, x: 0, y: 0, rotation: 0, opacity: 1, effects: undefined, blendMode: undefined }, undefined, images));
 			svg.querySelector('[data-shape-id]')!.removeAttribute('data-shape-id');
 			if (shape.sizing?.width === 'fill') {
 				svg.setAttribute('width', '100%');
@@ -170,12 +115,7 @@ export function generateDesignCode(
 			}
 			node.append(svg);
 		}
-		if (
-			!stackedEffects &&
-			shape.blendMode !== 'plus-darker' &&
-			shape.fills !== undefined &&
-			(shape.kind === 'rectangle' || shape.kind === 'ellipse' || shape.kind === 'frame')
-		) {
+		if (!stackedEffects && shape.blendMode !== 'plus-darker' && shape.fills !== undefined && (shape.kind === 'rectangle' || shape.kind === 'ellipse' || shape.kind === 'frame')) {
 			const backdrop = ownerDocument.createElement('div');
 			backdrop.style.position = 'absolute';
 			backdrop.style.inset = '0';
@@ -235,11 +175,7 @@ export function generateDesignCode(
 				const cell = getDesignGridCells(
 					parent.children.filter(child => child.visible !== false && child.layoutPositioning !== 'absolute'),
 					grid,
-				)[
-					parent.children
-						.filter(child => child.visible !== false && child.layoutPositioning !== 'absolute')
-						.findIndex(child => child.id === shape.id)
-				];
+				)[parent.children.filter(child => child.visible !== false && child.layoutPositioning !== 'absolute').findIndex(child => child.id === shape.id)];
 				appearance += ` grid-column: ${grid.positioning === 'manual' ? cell.column + 1 + ' / ' : ''}span ${cell.columnSpan}; grid-row: ${grid.positioning === 'manual' ? cell.row + 1 + ' / ' : ''}span ${cell.rowSpan}; justify-self: ${shape.gridCell?.horizontal ?? 'start'}; align-self: ${shape.gridCell?.vertical ?? 'start'};`;
 				for (const axis of ['width', 'height'] as const) {
 					if (shape.kind !== 'group' && shape.sizing?.[axis] === 'fill') {
@@ -249,18 +185,10 @@ export function generateDesignCode(
 			} else {
 				const main = layout.direction === 'horizontal' ? 'width' : 'height';
 				const cross = main === 'width' ? 'height' : 'width';
-				if (
-					shape.kind !== 'group' &&
-					shape.sizing?.[main] === 'fill' &&
-					(layout[main] === 'fixed' || parent.sizing?.[main] === 'fill')
-				) {
+				if (shape.kind !== 'group' && shape.sizing?.[main] === 'fill' && (layout[main] === 'fixed' || parent.sizing?.[main] === 'fill')) {
 					appearance += ` ${main}: 0; min-${main}: 0.001px; flex-grow: 1; flex-basis: 0;`;
 				}
-				if (
-					shape.kind !== 'group' &&
-					shape.sizing?.[cross] === 'fill' &&
-					(layout[cross] === 'fixed' || parent.sizing?.[cross] === 'fill')
-				) {
+				if (shape.kind !== 'group' && shape.sizing?.[cross] === 'fill' && (layout[cross] === 'fixed' || parent.sizing?.[cross] === 'fill')) {
 					appearance += ` ${cross}: auto; align-self: stretch;`;
 				}
 			}
@@ -302,8 +230,7 @@ export function generateDesignCode(
 			const motion = shape.motion;
 			appearance += ` animation: ${className}-motion ${motion.duration}ms linear ${motion.loop ? 'infinite' : '1'} both;`;
 			const keyframes = motion.keyframes.map(
-				frame =>
-					`  ${frame.offset * 100}% { transform: translate(${frame.x - shape.x}px, ${frame.y - shape.y}px) rotate(${frame.rotation}deg); opacity: ${frame.opacity}; }`,
+				frame => `  ${frame.offset * 100}% { transform: translate(${frame.x - shape.x}px, ${frame.y - shape.y}px) rotate(${frame.rotation}deg); opacity: ${frame.opacity}; }`,
 			);
 			rules.push(`@keyframes ${className}-motion {\n${keyframes.join('\n')}\n}`);
 		}
@@ -318,10 +245,7 @@ export function generateDesignCode(
 	const title = ownerDocument.createElement('title');
 	title.textContent = localize('sessions.design.codeTitle', 'Ash design');
 	// A raw-text script cannot contain a literal closing tag, even for inert JSON.
-	const data = serializeDesignDocument(document)
-		.replaceAll('<', '\\u003c')
-		.replaceAll('>', '\\u003e')
-		.replaceAll('&', '\\u0026');
+	const data = serializeDesignDocument(document).replaceAll('<', '\\u003c').replaceAll('>', '\\u003e').replaceAll('&', '\\u0026');
 	return `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n${title.outerHTML}\n<style>\n${rules.join('\n')}\n@media (prefers-reduced-motion: reduce) { .ash-design-object { animation: none; } }\n</style>\n</head>\n<body>\n${scene.outerHTML}\n<script type="application/json" id="ash-design-document">\n${data}</script>\n</body>\n</html>\n`;
 }
 
@@ -344,9 +268,5 @@ function strokePadding(shapes: readonly DesignShape[]): number {
 }
 
 function trackCss(track: DesignGridTrack): string {
-	return track.sizing === 'hug'
-		? 'max-content'
-		: track.sizing === 'fixed'
-			? `${track.value}px`
-			: `minmax(0, ${track.value}fr)`;
+	return track.sizing === 'hug' ? 'max-content' : track.sizing === 'fixed' ? `${track.value}px` : `minmax(0, ${track.value}fr)`;
 }

@@ -31,11 +31,7 @@ import {
 } from '../../../../platform/terminal/common/terminal.js';
 import type { IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
-import {
-	ConfigurationResolverExpression,
-	type Replacement,
-	type IResolvedValue,
-} from '../../../services/configurationResolver/common/configurationResolverExpression.js';
+import { ConfigurationResolverExpression, type Replacement, type IResolvedValue } from '../../../services/configurationResolver/common/configurationResolverExpression.js';
 import { type IOutputChannel, type OutputEntrySeverity } from '../../../services/output/common/output.js';
 import {
 	readTaskOutput,
@@ -127,27 +123,14 @@ export class TerminalTaskSystem extends Disposable {
 		return [...this.runs].map(([, run]) => run).filter(run => run.status === 'running');
 	}
 
-	private problemSearchDirectories(
-		paths: ProblemMatcher['searchPaths'],
-		taskFolder: IWorkspaceFolder,
-	): readonly ProblemSearchDirectory[] {
+	private problemSearchDirectories(paths: ProblemMatcher['searchPaths'], taskFolder: IWorkspaceFolder): readonly ProblemSearchDirectory[] {
 		if (!paths) return [];
-		const resource = (path: string): URI =>
-			taskFolder.uri.scheme === 'file'
-				? URI.file(path)
-				: taskFolder.uri.with({ path: path.replaceAll('\\', '/') });
+		const resource = (path: string): URI => (taskFolder.uri.scheme === 'file' ? URI.file(path) : taskFolder.uri.with({ path: path.replaceAll('\\', '/') }));
 		const exclude = paths.exclude.map(resource);
 		return paths.include.map(path => {
 			const include = resource(path);
 			const folder = this.workspace.getWorkspaceFolder(include);
-			if (!path || path.includes('\0') || !folder)
-				throw new RangeError(
-					localize(
-						'tasks.problemSearchScope',
-						"Problem matcher search directory '{0}' is outside the current workspace.",
-						path,
-					),
-				);
+			if (!path || path.includes('\0') || !folder) throw new RangeError(localize('tasks.problemSearchScope', "Problem matcher search directory '{0}' is outside the current workspace.", path));
 			return {
 				folder,
 				include,
@@ -156,11 +139,7 @@ export class TerminalTaskSystem extends Disposable {
 		});
 	}
 
-	private async searchProblemFile(
-		file: string,
-		directories: readonly ProblemSearchDirectory[],
-		signal: AbortSignal,
-	): Promise<URI | undefined> {
+	private async searchProblemFile(file: string, directories: readonly ProblemSearchDirectory[], signal: AbortSignal): Promise<URI | undefined> {
 		const filename = file.replaceAll('\\', '/');
 		// Character classes quote literal glob metacharacters in both the browser
 		// grammar and the Workspace engine, without turning backslashes into paths.
@@ -168,9 +147,7 @@ export class TerminalTaskSystem extends Disposable {
 		for (const directory of directories) {
 			if (directory.exclude.some(value => extUriBiasedIgnorePathCase.isEqual(value, directory.include))) continue;
 			const relative = directory.include.path.slice(directory.folder.uri.path.length).replace(/^\/+|\/+$/g, '');
-			const suffix = filename.startsWith(directory.folder.uri.path + '/')
-				? filename.slice(directory.folder.uri.path.length + 1)
-				: filename.replace(/^\/+/, '');
+			const suffix = filename.startsWith(directory.folder.uri.path + '/') ? filename.slice(directory.folder.uri.path.length + 1) : filename.replace(/^\/+/, '');
 			if (!suffix || suffix.split('/').some(part => part === '..')) continue;
 			const prefix = relative ? `${escape(relative)}/` : '';
 			const pattern = `${prefix}**/*${escape(suffix)}`;
@@ -186,15 +163,8 @@ export class TerminalTaskSystem extends Disposable {
 				},
 				signal,
 			);
-			const candidates = found.matches.filter(
-				value =>
-					extUriBiasedIgnorePathCase.isEqualOrParent(value.resource, directory.include) &&
-					value.resource.path.endsWith(filename),
-			);
-			candidates.sort(
-				(left, right) =>
-					left.path.split('/').length - right.path.split('/').length || left.path.localeCompare(right.path),
-			);
+			const candidates = found.matches.filter(value => extUriBiasedIgnorePathCase.isEqualOrParent(value.resource, directory.include) && value.resource.path.endsWith(filename));
+			candidates.sort((left, right) => left.path.split('/').length - right.path.split('/').length || left.path.localeCompare(right.path));
 			if (candidates[0]) return candidates[0].resource;
 		}
 		return undefined;
@@ -286,49 +256,34 @@ export class TerminalTaskSystem extends Disposable {
 		}
 		const resolved = expression.toObject();
 		if (!resolved.command.trim() || resolved.command.includes('\0')) {
-			throw new Error(
-				localize(
-					'tasks.invalidResolvedCommand',
-					'The resolved task command is empty or contains an invalid character.',
-				),
-			);
+			throw new Error(localize('tasks.invalidResolvedCommand', 'The resolved task command is empty or contains an invalid character.'));
 		}
 		const runtimeMatchers: ProblemMatcher[] = matchers.map((matcher, index) => ({
 			...matcher,
 			filePrefix: resolved.matcherPrefixes[index],
 			searchPaths: resolved.matcherSearchPaths[index],
 		}));
-		const searchDirectories = new Map(
-			runtimeMatchers.map(matcher => [matcher, this.problemSearchDirectories(matcher.searchPaths, folder)]),
-		);
+		const searchDirectories = new Map(runtimeMatchers.map(matcher => [matcher, this.problemSearchDirectories(matcher.searchPaths, folder)]));
 		let execution: TerminalProcessExecution | undefined;
 		let profile: ITerminalProfileSelection = { type: 'default' };
 		let launch: IShellLaunchConfig | undefined;
 		let os: OperatingSystem | undefined;
-		const configuredEnvironments =
-			this.configuration.getValue<Readonly<Record<string, Readonly<Record<string, string | null>>>>>(
-				'terminal.integrated.env',
-			) ?? {};
+		const configuredEnvironments = this.configuration.getValue<Readonly<Record<string, Readonly<Record<string, string | null>>>>>('terminal.integrated.env') ?? {};
 		const needsShell = resolved.execution === undefined || resolved.execution.type === 'shell';
-		const needsEnvironment =
-			Object.values(configuredEnvironments).some(env => Object.keys(env).length > 0) ||
-			Object.keys(resolved.env ?? {}).length > 0;
+		const needsEnvironment = Object.values(configuredEnvironments).some(env => Object.keys(env).length > 0) || Object.keys(resolved.env ?? {}).length > 0;
 		if (resolved.execution?.type !== 'custom' && (needsShell || needsEnvironment)) {
 			const platform = this.paths.getOperatingSystem(folder.uri);
 			os = await (signal ? raceCancellationError(platform, signal) : platform);
 			assertCurrent();
 			this.assertNotDisposed();
-			if (os === undefined)
-				throw new Error(localize('tasks.shellUnavailable', 'No shell is available to execute this task.'));
+			if (os === undefined) throw new Error(localize('tasks.shellUnavailable', 'No shell is available to execute this task.'));
 		}
 		if (resolved.execution?.type === 'process') {
 			execution = resolved.execution;
 		} else if (resolved.execution?.type === 'shell' || resolved.execution === undefined) {
 			// Variable results may contain spaces or shell metacharacters. Preserve
 			// their argument boundaries until the actual shell has been selected.
-			const shell = resolved.execution
-				? parseShellExecution(resolved.execution)
-				: { type: 'shell' as const, command: resolved.command, args: [] };
+			const shell = resolved.execution ? parseShellExecution(resolved.execution) : { type: 'shell' as const, command: resolved.command, args: [] };
 			const executable = shell.options?.executable;
 			let shellName: string;
 			let shellPath: string;
@@ -352,9 +307,7 @@ export class TerminalTaskSystem extends Disposable {
 				this.assertNotDisposed();
 				const path = typeof selected.path === 'string' ? selected.path : selected.path[0]!;
 				shellPath = path;
-				profile = selected.isAutoDetected
-					? { type: 'profile', profileId: selected.profileId }
-					: { type: 'custom', name: selected.profileName, path: [path], args: selected.args ?? [] };
+				profile = selected.isAutoDetected ? { type: 'profile', profileId: selected.profileId } : { type: 'custom', name: selected.profileName, path: [path], args: selected.args ?? [] };
 				launch = { executable: path, args: shell.options?.shellArgs ?? selected.args, env: selected.env ?? {} };
 				shellName = path
 					.split(/[\\/]/)
@@ -364,29 +317,18 @@ export class TerminalTaskSystem extends Disposable {
 			}
 			const commandLine = resolved.execution ? shellCommandLine(shell, shellName) : resolved.command;
 			execution =
-				executable ||
-				profile.type === 'custom' ||
-				launch.args?.length ||
-				shell.options?.shellArgs !== undefined ||
-				usesWindowsCommandLine(shellName, os!)
+				executable || profile.type === 'custom' || launch.args?.length || shell.options?.shellArgs !== undefined || usesWindowsCommandLine(shellName, os!)
 					? {
 							type: 'process',
 							program: shellPath,
-							args: taskShellArguments(
-								shellName,
-								launch.args ?? [],
-								commandLine,
-								os!,
-								executable !== undefined,
-							),
+							args: taskShellArguments(shellName, launch.args ?? [], commandLine, os!, executable !== undefined),
 						}
 					: { type: 'shell', commandLine };
 		}
 		let environment = resolved.env;
 		if (os !== undefined) {
 			const resolution = (async () => {
-				const platform =
-					os === OperatingSystem.Windows ? 'windows' : os === OperatingSystem.Macintosh ? 'osx' : 'linux';
+				const platform = os === OperatingSystem.Windows ? 'windows' : os === OperatingSystem.Macintosh ? 'osx' : 'linux';
 				const caseSensitive = os !== OperatingSystem.Windows;
 				const env: Record<string, string | null> = {};
 				mergeEnvironments(env, configuredEnvironments[platform], caseSensitive);
@@ -394,18 +336,13 @@ export class TerminalTaskSystem extends Disposable {
 				if (Object.keys(env).length) {
 					const inherited = await this.profiles.getEnvironment(getRemoteAuthority(folder.uri), folder);
 					for (const [key, value] of Object.entries(env)) {
-						env[key] =
-							value === null
-								? null
-								: await this.resolver.resolveWithEnvironment(inherited, folder, value);
+						env[key] = value === null ? null : await this.resolver.resolveWithEnvironment(inherited, folder, value);
 					}
 				}
 				// Task variables have already been resolved, including command results
 				// that may contain variable syntax intended as literal text.
 				mergeEnvironments(env, resolved.env, caseSensitive);
-				return Object.keys(env).length || resolved.env !== undefined || launch?.env !== undefined
-					? Object.freeze(env)
-					: undefined;
+				return Object.keys(env).length || resolved.env !== undefined || launch?.env !== undefined ? Object.freeze(env) : undefined;
 			})();
 			environment = await (signal ? raceCancellationError(resolution, signal) : resolution);
 			assertCurrent();
@@ -421,24 +358,14 @@ export class TerminalTaskSystem extends Disposable {
 		const initialText =
 			task.presentation?.echo !== false && commandText !== undefined
 				? {
-						text: formatMessageForTerminal(
-							localize('tasks.executingCommand', 'Executing task: {0}', commandText),
-						),
+						text: formatMessageForTerminal(localize('tasks.executingCommand', 'Executing task: {0}', commandText)),
 						trailingNewLine: false,
 					}
 				: undefined;
 		let waitOnExit: IShellLaunchConfig['waitOnExit'] = !task.presentation?.close;
-		if (
-			waitOnExit &&
-			(task.presentation?.reveal !== 'never' || !task.isBackground || task.presentation?.close === false)
-		) {
-			if (task.presentation?.panel === 'new')
-				waitOnExit = localize('tasks.terminalCloseMessage', 'Press any key to close the terminal.');
-			else if (task.presentation?.showReuseMessage !== false)
-				waitOnExit = localize(
-					'tasks.terminalReuseMessage',
-					'Terminal will be reused by tasks, press any key to close it.',
-				);
+		if (waitOnExit && (task.presentation?.reveal !== 'never' || !task.isBackground || task.presentation?.close === false)) {
+			if (task.presentation?.panel === 'new') waitOnExit = localize('tasks.terminalCloseMessage', 'Press any key to close the terminal.');
+			else if (task.presentation?.showReuseMessage !== false) waitOnExit = localize('tasks.terminalReuseMessage', 'Terminal will be reused by tasks, press any key to close it.');
 		}
 		let pty: TaskPseudoterminal | undefined;
 		let ptyClosed = false;
@@ -572,16 +499,8 @@ export class TerminalTaskSystem extends Disposable {
 				);
 				if (sibling) this.groups.joinInstances([sibling.terminal, terminal]);
 			}
-			if (
-				terminal.state !== 'running' &&
-				!((resolved.execution || resolved.cwd) && terminal.state === 'exited')
-			) {
-				throw new Error(
-					localize(
-						'tasks.terminalUnavailable',
-						'The terminal is unavailable. The task was not started. Run the task again.',
-					),
-				);
+			if (terminal.state !== 'running' && !((resolved.execution || resolved.cwd) && terminal.state === 'exited')) {
+				throw new Error(localize('tasks.terminalUnavailable', 'The terminal is unavailable. The task was not started. Run the task again.'));
 			}
 		} catch (error) {
 			await this.closeTerminal(terminal);
@@ -615,21 +534,14 @@ export class TerminalTaskSystem extends Disposable {
 			collector,
 			current => {
 				const exit = current.exitCode === undefined ? '' : ` (exit code ${current.exitCode})`;
-				this.log(
-					current.status === 'failed' ? 'error' : current.status === 'canceled' ? 'warning' : 'information',
-					`Task '${current.task.label}' ${current.status}${exit}.`,
-				);
+				this.log(current.status === 'failed' ? 'error' : current.status === 'canceled' ? 'warning' : 'information', `Task '${current.task.label}' ${current.status}${exit}.`);
 				this.stateEmitter.fire(current);
 				// Retained runs keep their output artifact; completed runs no longer own listeners.
 				if (current.status !== 'running') this.runs.deleteAndDispose(current.terminalId);
 			},
 			pty?.releaseCompletion,
 			() => {
-				if (
-					(task.presentation?.revealProblems ?? 'never') === 'never' &&
-					task.presentation?.reveal === 'silent'
-				)
-					revealing = this.revealTerminal(terminal, task.presentation?.focus === true);
+				if ((task.presentation?.revealProblems ?? 'never') === 'never' && task.presentation?.reveal === 'silent') revealing = this.revealTerminal(terminal, task.presentation?.focus === true);
 			},
 			() => {
 				if (task.presentation?.revealProblems === 'onProblem') revealing = this.revealProblems(true);
@@ -655,11 +567,7 @@ export class TerminalTaskSystem extends Disposable {
 				if (this.isDisposed) return;
 				if (task.presentation?.revealProblems === 'onProblem' && !run.hasBackgroundMatcher && run.hasProblems) {
 					revealing = this.revealProblems(false);
-				} else if (
-					!revealing &&
-					task.presentation?.reveal === 'silent' &&
-					(run.status === 'failed' || run.hasErrors)
-				) {
+				} else if (!revealing && task.presentation?.reveal === 'silent' && (run.status === 'failed' || run.hasErrors)) {
 					revealing = this.revealTerminal(terminal, task.presentation?.focus === true);
 				}
 				if (revealing) await revealing;
@@ -697,24 +605,14 @@ export class TerminalTaskSystem extends Disposable {
 			}
 		} catch (error) {
 			run.fail(isCancellationError(error));
-			this.log(
-				'error',
-				localize('tasks.terminalSendFailed', "Could not send task '{0}': {1}", task.label, errorMessage(error)),
-			);
+			this.log('error', localize('tasks.terminalSendFailed', "Could not send task '{0}': {1}", task.label, errorMessage(error)));
 			try {
 				await this.terminals.closeTerminal(terminal);
 				run.completeExecution(undefined);
 				await run.completion;
 			} catch (closeError) {
 				run.rejectCompletion(closeError);
-				this.log(
-					'error',
-					localize(
-						'tasks.terminalCloseFailed',
-						'Could not close the task terminal: {0}',
-						errorMessage(closeError),
-					),
-				);
+				this.log('error', localize('tasks.terminalCloseFailed', 'Could not close the task terminal: {0}', errorMessage(closeError)));
 			}
 			throw error;
 		}
@@ -762,10 +660,7 @@ export class TerminalTaskSystem extends Disposable {
 		try {
 			await this.terminals.closeTerminal(terminal);
 		} catch (error) {
-			this.log(
-				'error',
-				localize('tasks.terminalCloseFailed', 'Could not close the task terminal: {0}', errorMessage(error)),
-			);
+			this.log('error', localize('tasks.terminalCloseFailed', 'Could not close the task terminal: {0}', errorMessage(error)));
 		}
 	}
 
@@ -917,18 +812,13 @@ class TaskRun extends Disposable implements ITaskRun {
 		if (pending) {
 			// A fresh barrier survives clearing queued work and waits for the active
 			// search's cancellation acknowledgment before releasing this run.
-			this.collectionCompletion = Promise.allSettled([this.collectionCompletion, this.collector.flush()]).then(
-				results => {
-					const failure = results.find(result => result.status === 'rejected');
-					if (failure?.status === 'rejected') throw failure.reason;
-				},
-			);
+			this.collectionCompletion = Promise.allSettled([this.collectionCompletion, this.collector.flush()]).then(results => {
+				const failure = results.find(result => result.status === 'rejected');
+				if (failure?.status === 'rejected') throw failure.reason;
+			});
 		}
 	}
-	public finish(
-		exitCode: number | undefined,
-		status: TaskRunStatus = exitCode === undefined ? 'completed' : exitCode === 0 ? 'succeeded' : 'failed',
-	): void {
+	public finish(exitCode: number | undefined, status: TaskRunStatus = exitCode === undefined ? 'completed' : exitCode === 0 ? 'succeeded' : 'failed'): void {
 		if (this._status !== 'running' || this.collectionCompletion) return;
 		this.collector.done();
 		if (this.collector.hasPendingResolutions) {
@@ -944,8 +834,7 @@ class TaskRun extends Disposable implements ITaskRun {
 			if (collectionCompletion !== this.collectionCompletion) return;
 			const failure = results.find(result => result.status === 'rejected');
 			if (failure?.status === 'rejected') this.rejectCompletion(failure.reason);
-			else if (!this.completionResult.isSettled)
-				void this.completionResult.complete(this._status === 'canceled' ? undefined : exitCode);
+			else if (!this.completionResult.isSettled) void this.completionResult.complete(this._status === 'canceled' ? undefined : exitCode);
 		});
 	}
 	public rejectCompletion(error: unknown): void {
@@ -976,34 +865,16 @@ class TaskRun extends Disposable implements ITaskRun {
 
 function shellInvocationArguments(shellName: string): readonly string[] {
 	if (shellName === 'cmd' || shellName === 'command-prompt') return ['/d', '/s', '/c'];
-	if (['powershell', 'windows-powershell', 'pwsh'].includes(shellName))
-		return ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command'];
+	if (['powershell', 'windows-powershell', 'pwsh'].includes(shellName)) return ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command'];
 	return ['-c'];
 }
 
-function taskShellArguments(
-	shellName: string,
-	args: TerminalArguments,
-	commandLine: string,
-	os: OperatingSystem,
-	explicitShell: boolean,
-): TerminalArguments {
+function taskShellArguments(shellName: string, args: TerminalArguments, commandLine: string, os: OperatingSystem, explicitShell: boolean): TerminalArguments {
 	// Profiles may already include a command flag; adding a second one would
 	// turn the intended command into a shell option instead of executing it.
-	const commandFlag =
-		shellName === 'cmd'
-			? /^\/c$/i
-			: ['powershell', 'pwsh'].includes(shellName)
-				? /^-command$/i
-				: shellName === 'wsl'
-					? /^(?:-e|--exec)$/i
-					: /^-[il]*c[il]*$/;
+	const commandFlag = shellName === 'cmd' ? /^\/c$/i : ['powershell', 'pwsh'].includes(shellName) ? /^-command$/i : shellName === 'wsl' ? /^(?:-e|--exec)$/i : /^-[il]*c[il]*$/;
 	const raw = typeof args === 'string';
-	const hasFlag = raw
-		? (args.match(/(?:[^\s"\\]|\\.|"(?:[^"\\]|\\.)*")+/g) ?? []).some(arg =>
-				commandFlag.test(arg.replace(/^"(.*)"$/, '$1')),
-			)
-		: args.some(arg => commandFlag.test(arg));
+	const hasFlag = raw ? (args.match(/(?:[^\s"\\]|\\.|"(?:[^"\\]|\\.)*")+/g) ?? []).some(arg => commandFlag.test(arg.replace(/^"(.*)"$/, '$1'))) : args.some(arg => commandFlag.test(arg));
 	const defaults =
 		explicitShell || hasFlag
 			? []
@@ -1017,16 +888,10 @@ function taskShellArguments(
 							: ['/d', '/c']
 				: shellInvocationArguments(shellName);
 	if (raw || usesWindowsCommandLine(shellName, os)) {
-		const prefix = raw
-			? args
-			: args.map(arg => (/[\s"]/.test(arg) || arg.length === 0 ? quoteWindowsArgument(arg) : arg)).join(' ');
-		const command =
-			raw && ['bash', 'zsh', 'fish'].includes(shellName) ? quoteWindowsArgument(commandLine) : commandLine;
+		const prefix = raw ? args : args.map(arg => (/[\s"]/.test(arg) || arg.length === 0 ? quoteWindowsArgument(arg) : arg)).join(' ');
+		const command = raw && ['bash', 'zsh', 'fish'].includes(shellName) ? quoteWindowsArgument(commandLine) : commandLine;
 		const result = [prefix, ...defaults, command].filter(value => value.length > 0).join(' ');
-		if (result.length > 32768 || result.includes('\0'))
-			throw new TypeError(
-				localize('terminal.profile.invalidArguments', 'The terminal arguments are too large or contain NUL.'),
-			);
+		if (result.length > 32768 || result.includes('\0')) throw new TypeError(localize('terminal.profile.invalidArguments', 'The terminal arguments are too large or contain NUL.'));
 		return result;
 	}
 	return [...args, ...defaults, commandLine];
@@ -1042,29 +907,8 @@ function quoteWindowsArgument(value: string): string {
 
 function shellCommandLine(execution: TaskShellExecution, shellName: string): string {
 	if (execution.commandLine !== undefined) return execution.commandLine;
-	if (
-		![
-			'sh',
-			'bash',
-			'zsh',
-			'fish',
-			'dash',
-			'ksh',
-			'ash',
-			'powershell',
-			'windows-powershell',
-			'pwsh',
-			'cmd',
-			'command-prompt',
-		].includes(shellName)
-	) {
-		throw new Error(
-			localize(
-				'tasks.unsupportedShellQuoting',
-				"Ash cannot quote structured task arguments for shell '{0}'. Use a process task or an explicit shell command line.",
-				shellName,
-			),
-		);
+	if (!['sh', 'bash', 'zsh', 'fish', 'dash', 'ksh', 'ash', 'powershell', 'windows-powershell', 'pwsh', 'cmd', 'command-prompt'].includes(shellName)) {
+		throw new Error(localize('tasks.unsupportedShellQuoting', "Ash cannot quote structured task arguments for shell '{0}'. Use a process task or an explicit shell command line.", shellName));
 	}
 	const powershell = ['powershell', 'windows-powershell', 'pwsh'].includes(shellName);
 	const commandPrompt = shellName === 'cmd' || shellName === 'command-prompt';
@@ -1093,10 +937,7 @@ function shellCommandLine(execution: TaskShellExecution, shellName: string): str
 		const delimiter = kind === ShellQuoting.Strong ? strong : weak;
 		let content: string;
 		if (delimiter === "'") {
-			return escapeNonWindowsPath(
-				value,
-				powershell ? GeneralShellType.PowerShell : shellName === 'fish' ? PosixShellType.Fish : undefined,
-			);
+			return escapeNonWindowsPath(value, powershell ? GeneralShellType.PowerShell : shellName === 'fish' ? PosixShellType.Fish : undefined);
 		} else {
 			const character = powershell ? '`' : commandPrompt ? '^' : '\\';
 			content = value.replaceAll(character, character + character).replaceAll(delimiter, character + delimiter);
@@ -1106,12 +947,9 @@ function shellCommandLine(execution: TaskShellExecution, shellName: string): str
 	const command = quote(execution.command);
 	const argumentsList = execution.args.map(quote);
 	let commandLine = [command, ...argumentsList].join(' ');
-	if (powershell && command !== (typeof execution.command === 'string' ? execution.command : execution.command.value))
-		commandLine = '& ' + commandLine;
-	if (commandPrompt && command.startsWith('"') && argumentsList.some(argument => argument.startsWith('"')))
-		commandLine = '"' + commandLine + '"';
-	if (commandLine.length > 32768 || commandLine.includes('\0'))
-		throw new TypeError('Resolved shell command is too large or contains NUL');
+	if (powershell && command !== (typeof execution.command === 'string' ? execution.command : execution.command.value)) commandLine = '& ' + commandLine;
+	if (commandPrompt && command.startsWith('"') && argumentsList.some(argument => argument.startsWith('"'))) commandLine = '"' + commandLine + '"';
+	if (commandLine.length > 32768 || commandLine.includes('\0')) throw new TypeError('Resolved shell command is too large or contains NUL');
 	return commandLine;
 }
 
@@ -1136,11 +974,7 @@ class TaskTerminalProcess extends Disposable implements ITerminalChildProcess {
 		private rows: number,
 	) {
 		super();
-		if (
-			typeof pty?.onDidWrite !== 'function' ||
-			typeof pty.open !== 'function' ||
-			typeof pty.close !== 'function'
-		) {
+		if (typeof pty?.onDidWrite !== 'function' || typeof pty.open !== 'function' || typeof pty.close !== 'function') {
 			throw new TypeError('CustomExecution must return a Pseudoterminal');
 		}
 		this.input = pty.handleInput

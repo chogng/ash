@@ -5,11 +5,7 @@ import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { Action2, registerAction2 } from '../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
-import {
-	NEW_CHAT_COMMAND_ID,
-	SHOW_CHAT_HISTORY_COMMAND_ID,
-	OPEN_CHAT_PERMISSIONS_COMMAND_ID,
-} from '../../../workbench/contrib/chat/common/chat.js';
+import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
 import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import type { IUntitledChatSession, SessionId, ThreadId } from '../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
@@ -44,9 +40,7 @@ registerAction2(
 			const value = argument.trim();
 			const definition = value ? approvalModeDefinitions.find(mode => mode.id === value) : undefined;
 			if (value && !definition) {
-				throw new Error(
-					localize('sessions.chat.permission.commandUsage', 'Use /permission manual|auto|bypassPermissions.'),
-				);
+				throw new Error(localize('sessions.chat.permission.commandUsage', 'Use /permission manual|auto|bypassPermissions.'));
 			}
 			const selected =
 				definition?.id ??
@@ -81,19 +75,14 @@ for (const definition of approvalModeDefinitions) {
 
 			override async run(accessor: ServicesAccessor, model: IChatWidgetModel): Promise<void> {
 				if (definition.requiresConfirmation) {
-					const result = await accessor
-						.get(IDialogService)
-						.confirm({
-							message: localize(
-								'sessions.chat.permission.fullWarning',
-								'Skip most permission approvals?',
-							),
-							detail: localize(
-								'sessions.chat.permission.fullDetail',
-								'Commands may change or delete files and perform external actions without asking. File and network access limits still apply. Plan and Ask remain analysis modes.',
-							),
-							primaryButton: localize(definition.label.key, definition.label.text),
-						});
+					const result = await accessor.get(IDialogService).confirm({
+						message: localize('sessions.chat.permission.fullWarning', 'Skip most permission approvals?'),
+						detail: localize(
+							'sessions.chat.permission.fullDetail',
+							'Commands may change or delete files and perform external actions without asking. File and network access limits still apply. Plan and Ask remain analysis modes.',
+						),
+						primaryButton: localize(definition.label.key, definition.label.text),
+					});
 					if (!result.confirmed) {
 						return;
 					}
@@ -117,10 +106,7 @@ registerAction2(
 		override async run(accessor: ServicesAccessor): Promise<void> {
 			const models = accessor.get(ILanguageModelsService);
 			const input = accessor.get(IQuickInputService);
-			const [selection, providers] = await Promise.all([
-				models.readApprovalReviewModel(),
-				models.listModelProviders(),
-			]);
+			const [selection, providers] = await Promise.all([models.readApprovalReviewModel(), models.listModelProviders()]);
 			const connection = await selectReviewItem(
 				input,
 				localize('sessions.chat.permission.reviewConnection', 'Choose the review connection'),
@@ -128,10 +114,7 @@ registerAction2(
 					{
 						label: localize('sessions.chat.permission.reviewDefault', 'Automatic (connection default)'),
 						id: 'automatic',
-						description: localize(
-							'sessions.chat.permission.reviewDefaults',
-							'ChatGPT subscription: codex-auto-review; OpenAI API: GPT-6 Luna, low',
-						),
+						description: localize('sessions.chat.permission.reviewDefaults', 'ChatGPT subscription: codex-auto-review; OpenAI API: GPT-6 Luna, low'),
 					},
 					...providers
 						.filter(provider => provider.configured)
@@ -151,9 +134,7 @@ registerAction2(
 				return;
 			}
 			const provider = providers.find(provider => provider.connection === connection.id)!;
-			const catalog = (await models.listModelCatalog()).filter(
-				entry => entry.model.provider === provider.provider,
-			);
+			const catalog = (await models.listModelCatalog()).filter(entry => entry.model.provider === provider.provider);
 			const choice = await selectReviewItem(
 				input,
 				localize('sessions.chat.permission.reviewModel', 'Review model…'),
@@ -177,10 +158,7 @@ registerAction2(
 				choice.id === 'custom-model-id'
 					? (
 							await input.input({
-								title: localize(
-									'sessions.chat.permission.reviewCustomPrompt',
-									'Model ID supported by this connection',
-								),
+								title: localize('sessions.chat.permission.reviewCustomPrompt', 'Model ID supported by this connection'),
 								value: selection.type === 'explicit' ? selection.model.model : '',
 							})
 						)?.trim()
@@ -223,12 +201,7 @@ interface ReviewPickItem extends IQuickPickItem {
 	readonly id: string;
 }
 
-function selectReviewItem(
-	input: IQuickInputService,
-	title: string,
-	items: readonly ReviewPickItem[],
-	selectedId?: string,
-): Promise<ReviewPickItem | undefined> {
+function selectReviewItem(input: IQuickInputService, title: string, items: readonly ReviewPickItem[], selectedId?: string): Promise<ReviewPickItem | undefined> {
 	return new Promise(resolve => {
 		const disposables = new DisposableStore();
 		const picker = disposables.add(input.createQuickPick<ReviewPickItem>());
@@ -339,10 +312,7 @@ registerAction2(
 			super({
 				id: SHOW_CHAT_HISTORY_COMMAND_ID,
 				f1: true,
-				title: localize2(
-					{ bundle: 'ash.sessions', key: 'command.ShowSessionsChatHistoryAction' },
-					'Show Session History',
-				),
+				title: localize2({ bundle: 'ash.sessions', key: 'command.ShowSessionsChatHistoryAction' }, 'Show Session History'),
 			});
 		}
 
@@ -363,12 +333,8 @@ registerAction2(
 					description:
 						[
 							session.application?.label,
-							threads.length > 1
-								? localize('sessions.history.thread', 'Thread {0}', index + 1)
-								: undefined,
-							thread.origin.type !== 'root' && thread.title?.trim() !== session.title.trim()
-								? thread.title?.trim()
-								: undefined,
+							threads.length > 1 ? localize('sessions.history.thread', 'Thread {0}', index + 1) : undefined,
+							thread.origin.type !== 'root' && thread.title?.trim() !== session.title.trim() ? thread.title?.trim() : undefined,
 							sessionManagementLabel(thread.management),
 						]
 							.filter(Boolean)

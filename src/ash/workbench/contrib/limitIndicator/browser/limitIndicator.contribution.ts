@@ -2,10 +2,7 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
 import Severity from '../../../../base/common/severity.js';
 import { getCodeEditor, type ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
-import {
-	EditorContributionInstantiation,
-	registerEditorContribution,
-} from '../../../../editor/browser/editorExtensions.js';
+import { EditorContributionInstantiation, registerEditorContribution } from '../../../../editor/browser/editorExtensions.js';
 import { EditorOption, filterValidationDecorations } from '../../../../editor/common/config/editorOptions.js';
 import { IMarkerDecorationsService } from '../../../../editor/common/services/markerDecorations.js';
 import { ColorDetector } from '../../../../editor/contrib/colorPicker/browser/colorDetector.js';
@@ -14,10 +11,7 @@ import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import {
-	ILanguageStatusService,
-	type ILanguageStatus,
-} from '../../../services/languageStatus/common/languageStatusService.js';
+import { ILanguageStatusService, type ILanguageStatus } from '../../../services/languageStatus/common/languageStatusService.js';
 
 export interface LimitInfo {
 	readonly onDidChange: Event<void>;
@@ -81,14 +75,7 @@ export class LimitIndicatorContribution extends Disposable {
 		);
 	}
 
-	private watch(
-		id: string,
-		reporter: LimitInfo | undefined,
-		label: string,
-		name: string,
-		source: string,
-		setting?: string,
-	): void {
+	private watch(id: string, reporter: LimitInfo | undefined, label: string, name: string, source: string, setting?: string): void {
 		if (!reporter) return;
 		const update = () => {
 			const detail =
@@ -96,11 +83,7 @@ export class LimitIndicatorContribution extends Disposable {
 					? reporter.limited
 					: reporter.limited === false
 						? undefined
-						: localize(
-								'limitIndicator.limited',
-								'only {0} shown for performance reasons',
-								reporter.limited,
-							);
+						: localize('limitIndicator.limited', 'only {0} shown for performance reasons', reporter.limited);
 			const previous = this.statuses.get(id);
 			if (detail === previous?.detail) return;
 			previous?.registration.dispose();
@@ -159,10 +142,7 @@ export class DiagnosticDecorationLimitReporter extends Disposable implements Lim
 		super();
 		const update = () => {
 			const model = editor.getModel();
-			const limit =
-				model && !filterValidationDecorations(editor.getOptions())
-					? decorations.getMarkerLimits(model.uri)
-					: undefined;
+			const limit = model && !filterValidationDecorations(editor.getOptions()) ? decorations.getMarkerLimits(model.uri) : undefined;
 			let message: string | false = false;
 			if (limit?.isMarkersSourceTruncated && limit.isMarkersTruncated !== undefined) {
 				message = localize(
@@ -171,16 +151,9 @@ export class DiagnosticDecorationLimitReporter extends Disposable implements Lim
 					limit.isMarkersTruncated,
 				);
 			} else if (limit?.isMarkersSourceTruncated) {
-				message = localize(
-					'limitIndicator.diagnosticsSource',
-					'Some problems are not shown in the problems view for performance reasons.',
-				);
+				message = localize('limitIndicator.diagnosticsSource', 'Some problems are not shown in the problems view for performance reasons.');
 			} else if (limit?.isMarkersTruncated !== undefined) {
-				message = localize(
-					'limitIndicator.diagnosticsEditor',
-					'Only {0} problems are rendered in the editor for performance reasons.',
-					limit.isMarkersTruncated,
-				);
+				message = localize('limitIndicator.diagnosticsEditor', 'Only {0} problems are rendered in the editor for performance reasons.', limit.isMarkersTruncated);
 			}
 			if (message === this.message) return;
 			this.message = message;
@@ -189,11 +162,7 @@ export class DiagnosticDecorationLimitReporter extends Disposable implements Lim
 		this._register(editor.onDidChangeModel(update));
 		this._register(
 			editor.onDidChangeConfiguration(event => {
-				if (
-					event.hasChanged(EditorOption.renderValidationDecorations) ||
-					event.hasChanged(EditorOption.readOnly)
-				)
-					update();
+				if (event.hasChanged(EditorOption.renderValidationDecorations) || event.hasChanged(EditorOption.readOnly)) update();
 			}),
 		);
 		this._register(
@@ -205,11 +174,5 @@ export class DiagnosticDecorationLimitReporter extends Disposable implements Lim
 	}
 }
 
-registerEditorContribution(
-	DiagnosticDecorationLimitReporter.ID,
-	DiagnosticDecorationLimitReporter,
-	EditorContributionInstantiation.Lazy,
-);
-registerWorkbenchContribution('workbench.contrib.limitIndicator', WorkbenchPhase.AfterRestored, accessor =>
-	accessor.get(IInstantiationService).createInstance(LimitIndicatorContribution),
-);
+registerEditorContribution(DiagnosticDecorationLimitReporter.ID, DiagnosticDecorationLimitReporter, EditorContributionInstantiation.Lazy);
+registerWorkbenchContribution('workbench.contrib.limitIndicator', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(LimitIndicatorContribution));

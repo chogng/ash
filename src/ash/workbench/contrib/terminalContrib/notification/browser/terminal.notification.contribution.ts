@@ -4,17 +4,8 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { ITerminalLogService, TerminalLocation } from '../../../../../platform/terminal/common/terminal.js';
 import { IHostService } from '../../../../services/host/browser/host.js';
-import {
-	ITerminalEditorService,
-	ITerminalGroupService,
-	ITerminalService,
-	type ITerminalContribution,
-	type IXtermTerminal,
-} from '../../../terminal/browser/terminal.js';
-import {
-	registerTerminalContribution,
-	type ITerminalContributionContext,
-} from '../../../terminal/browser/terminalExtensions.js';
+import { ITerminalEditorService, ITerminalGroupService, ITerminalService, type ITerminalContribution, type IXtermTerminal } from '../../../terminal/browser/terminal.js';
+import { registerTerminalContribution, type ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
 import { TerminalOscNotificationsSettingId } from '../common/terminalNotificationConfiguration.js';
 import { TerminalNotificationHandler } from './terminalNotificationHandler.js';
 
@@ -39,30 +30,18 @@ class TerminalOscNotificationsContribution extends Disposable implements ITermin
 		this.handler = this._register(
 			new TerminalNotificationHandler({
 				isEnabled: () =>
-					!this.isDisposed &&
-					!instance.isReadOnly &&
-					instance.state === 'running' &&
-					configuration.getValue<boolean>(TerminalOscNotificationsSettingId.EnableNotifications) !== false,
+					!this.isDisposed && !instance.isReadOnly && instance.state === 'running' && configuration.getValue<boolean>(TerminalOscNotificationsSettingId.EnableNotifications) !== false,
 				isWindowFocused: () => host.hasFocus,
-				isTerminalVisible: () =>
-					!!this.screen?.element.isConnected && this.screen.element.getClientRects().length > 0,
+				isTerminalVisible: () => !!this.screen?.element.isConnected && this.screen.element.getClientRects().length > 0,
 				focusTerminal: () => {
 					void this.focus().catch(onUnexpectedError);
 				},
 				notify: notification => notifications.notify(notification),
-				updateEnableNotifications: value =>
-					configuration.updateValue(TerminalOscNotificationsSettingId.EnableNotifications, value),
+				updateEnableNotifications: value => configuration.updateValue(TerminalOscNotificationsSettingId.EnableNotifications, value),
 				logWarn: message => log.warn(message),
 				writeToProcess: data => {
-					if (
-						!this.isDisposed &&
-						terminals.instances.includes(instance) &&
-						instance.state === 'running' &&
-						!instance.isReadOnly
-					) {
-						void instance
-							.sendText(data, false)
-							.catch(error => log.warn('Could not deliver an OSC 99 terminal reply', error));
+					if (!this.isDisposed && terminals.instances.includes(instance) && instance.state === 'running' && !instance.isReadOnly) {
+						void instance.sendText(data, false).catch(error => log.warn('Could not deliver an OSC 99 terminal reply', error));
 					}
 				},
 			}),
@@ -71,8 +50,7 @@ class TerminalOscNotificationsContribution extends Disposable implements ITermin
 		this._register(instance.onDidExit(() => this.handler.clear()));
 		this._register(
 			configuration.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(TerminalOscNotificationsSettingId.EnableNotifications))
-					this.handler.clear();
+				if (event.affectsConfiguration(TerminalOscNotificationsSettingId.EnableNotifications)) this.handler.clear();
 			}),
 		);
 	}

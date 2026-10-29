@@ -35,9 +35,7 @@ function parseLegacyTheme(source: string): IColorTheme {
 	});
 }
 
-function normalizeLegacyEditorTokenOverrides(
-	colors: Readonly<Record<string, ColorValue>>,
-): Readonly<Record<string, ColorValue>> {
+function normalizeLegacyEditorTokenOverrides(colors: Readonly<Record<string, ColorValue>>): Readonly<Record<string, ColorValue>> {
 	const normalized: Record<string, ColorValue> = { ...colors };
 	for (const [id, value] of Object.entries(colors)) {
 		if (!id.startsWith(LEGACY_EDITOR_TOKEN_PREFIX)) continue;
@@ -50,16 +48,9 @@ function normalizeLegacyEditorTokenOverrides(
 function validateUserColorThemeDocument(value: unknown): IUserColorThemeDocument {
 	const document = exactRecord(value, ['$schema', 'colorScheme', 'colors', 'id', 'label', 'version']);
 	if (document.version !== 1) throw new Error('User theme version must be 1');
-	if (document.$schema !== undefined && document.$schema !== USER_COLOR_THEME_SCHEMA_URL)
-		throw new Error(`User theme $schema must be '${USER_COLOR_THEME_SCHEMA_URL}'`);
-	if (typeof document.id !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(document.id))
-		throw new Error('User theme id must be lowercase kebab-case');
-	if (
-		typeof document.label !== 'string' ||
-		document.label.trim() !== document.label ||
-		document.label.length < 1 ||
-		document.label.length > 80
-	)
+	if (document.$schema !== undefined && document.$schema !== USER_COLOR_THEME_SCHEMA_URL) throw new Error(`User theme $schema must be '${USER_COLOR_THEME_SCHEMA_URL}'`);
+	if (typeof document.id !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(document.id)) throw new Error('User theme id must be lowercase kebab-case');
+	if (typeof document.label !== 'string' || document.label.trim() !== document.label || document.label.length < 1 || document.label.length > 80)
 		throw new Error('User theme label must contain 1 to 80 trimmed characters');
 	let colorScheme: ColorScheme;
 	switch (document.colorScheme) {
@@ -83,8 +74,7 @@ function validateUserColorThemeDocument(value: unknown): IUserColorThemeDocument
 	if (entries.length > 512) throw new Error('User theme contains more than 512 color overrides');
 	const overrides: Record<string, ColorValue> = {};
 	for (const [id, color] of entries) {
-		if (!/^[a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)*$/.test(id))
-			throw new Error(`Invalid user theme color token ID: ${id}`);
+		if (!/^[a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)*$/.test(id)) throw new Error(`Invalid user theme color token ID: ${id}`);
 		overrides[id] = validateJsonColorValue(color, `colors.${id}`, 0);
 	}
 	return Object.freeze({
@@ -144,8 +134,7 @@ function validateJsonColorValue(value: unknown, path: string, depth: number): Co
 }
 
 function factor(value: unknown, path: string): number {
-	if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1)
-		throw new Error(`${path} must be a finite number between 0 and 1`);
+	if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) throw new Error(`${path} must be a finite number between 0 and 1`);
 	return value;
 }
 
@@ -162,13 +151,11 @@ function requireExactKeys(value: Record<string, unknown>, keys: readonly string[
 		.filter(key => value[key] !== undefined)
 		.sort();
 	const expected = [...keys].sort();
-	if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index]))
-		throw new Error(`${path} has invalid fields for '${String(value.op)}'`);
+	if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) throw new Error(`${path} has invalid fields for '${String(value.op)}'`);
 }
 
 function record(value: unknown, path: string): Record<string, unknown> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value))
-		throw new Error(`${path} must be an object`);
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${path} must be an object`);
 	return value as Record<string, unknown>;
 }
 

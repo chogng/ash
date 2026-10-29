@@ -1,9 +1,4 @@
-import {
-	type ILocalWorkspaceOpenTarget,
-	type IWorkspaceOpenTarget,
-	type IParsedLaunchArguments,
-	WorkspaceOpenTargetKind,
-} from '../common/argv.js';
+import { type ILocalWorkspaceOpenTarget, type IWorkspaceOpenTarget, type IParsedLaunchArguments, WorkspaceOpenTargetKind } from '../common/argv.js';
 import { fileURLToPath } from 'node:url';
 
 /** Keeps file requests separate from the single project target. */
@@ -117,11 +112,7 @@ export function parseLaunchArguments(args: readonly string[]): IParsedLaunchArgu
 	if (waitMarkerFilePath && !wait) {
 		throw new Error('--waitMarkerFilePath requires --wait');
 	}
-	if (
-		workspaceArgs.includes('--remote-ssh') &&
-		!workspaceArgs.includes('--folder') &&
-		!workspaceArgs.includes('--workspace')
-	) {
+	if (workspaceArgs.includes('--remote-ssh') && !workspaceArgs.includes('--folder') && !workspaceArgs.includes('--workspace')) {
 		if (paths.length !== 1) {
 			throw new Error('--remote-ssh requires one folder path');
 		}
@@ -265,7 +256,5 @@ export function parseMainProcessArgv(options: MainProcessArgumentsOptions): stri
 
 /** Quotes Windows process arguments, including quotes and trailing backslashes in paths. */
 export function windowsCommandLine(arguments_: readonly string[]): string {
-	return arguments_
-		.map(argument => `"${argument.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1')}"`)
-		.join(' ');
+	return arguments_.map(argument => `"${argument.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1')}"`).join(' ');
 }

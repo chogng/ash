@@ -1,19 +1,7 @@
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export type CodebaseSymbolsState = 'empty' | 'indexing' | 'ready' | 'stale' | 'failed';
-export type CodebaseSymbolsSymbolKind =
-	| 'constant'
-	| 'enum'
-	| 'field'
-	| 'function'
-	| 'macro'
-	| 'method'
-	| 'module'
-	| 'static'
-	| 'struct'
-	| 'trait'
-	| 'type'
-	| 'variable';
+export type CodebaseSymbolsSymbolKind = 'constant' | 'enum' | 'field' | 'function' | 'macro' | 'method' | 'module' | 'static' | 'struct' | 'trait' | 'type' | 'variable';
 
 export interface CodebaseSymbolsPosition {
 	readonly lineIndex: number;

@@ -1,11 +1,6 @@
 import { isHTMLElement } from '../../../../../base/browser/dom.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -33,10 +28,7 @@ EditorInputSerializers.registerStatic({
 registerEditorPane({
 	id: ModelsManagementEditor.ID,
 	name: localize('modelsManagementEditorInputName', 'Language Models'),
-	canOpen: input =>
-		input.resource.scheme === 'ash-models' && input.resource.path === '/management'
-			? EditorPaneMatch.Default
-			: EditorPaneMatch.None,
+	canOpen: input => (input.resource.scheme === 'ash-models' && input.resource.path === '/management' ? EditorPaneMatch.Default : EditorPaneMatch.None),
 	create: options => {
 		if (!options.instantiationService) {
 			throw new Error('Models management requires Workbench services');
@@ -55,18 +47,13 @@ registerAction2(
 			});
 		}
 
-		public override async run(
-			accessor: ServicesAccessor,
-			searchQuery?: unknown,
-		): Promise<ModelsManagementEditor | undefined> {
+		public override async run(accessor: ServicesAccessor, searchQuery?: unknown): Promise<ModelsManagementEditor | undefined> {
 			if (searchQuery !== undefined && typeof searchQuery !== 'string') {
 				throw new TypeError('Model search must be a string');
 			}
 			const editors = accessor.get(IEditorService);
 			await editors.openEditor(new ModelsManagementEditorInput(), { pinned: true });
-			const pane = editors.visibleEditorPanes.find(
-				(candidate): candidate is ModelsManagementEditor => candidate instanceof ModelsManagementEditor,
-			);
+			const pane = editors.visibleEditorPanes.find((candidate): candidate is ModelsManagementEditor => candidate instanceof ModelsManagementEditor);
 			if (pane && searchQuery !== undefined) {
 				pane.search(searchQuery);
 			}

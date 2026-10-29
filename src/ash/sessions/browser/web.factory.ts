@@ -37,11 +37,7 @@ export function create(domElement: HTMLElement, options: SessionsProfile): IDisp
 		if (lifetime.isDisposed) {
 			return;
 		}
-		lifetime.add(
-			showStartupError(error, text =>
-				new BrowserClipboardService(ownerWindow.navigator.clipboard).writeText(text),
-			),
-		);
+		lifetime.add(showStartupError(error, text => new BrowserClipboardService(ownerWindow.navigator.clipboard).writeText(text)));
 	});
 	return lifetime;
 }

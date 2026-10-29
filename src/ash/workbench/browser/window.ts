@@ -4,10 +4,7 @@ import { onUnexpectedError } from '../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
 import { environment } from '../../base/common/platform.js';
 import { type WorkbenchState, workbenchStateToString } from '../../platform/workspace/common/workspace.js';
-import {
-	type IWorkbenchHostService,
-	type WorkbenchTextDownload,
-} from '../services/host/common/workbenchHostService.js';
+import { type IWorkbenchHostService, type WorkbenchTextDownload } from '../services/host/common/workbenchHostService.js';
 import { h } from '../../base/browser/dom.js';
 
 export interface WorkbenchWindowOptions {
@@ -67,13 +64,11 @@ export class WorkbenchWindow extends Disposable implements IWorkbenchHostService
 				event.preventDefault();
 			};
 			this.targetWindow.addEventListener('error', onError);
-			if (this.targetWindow !== mainWindow)
-				this.targetWindow.addEventListener('unhandledrejection', onUnhandledRejection);
+			if (this.targetWindow !== mainWindow) this.targetWindow.addEventListener('unhandledrejection', onUnhandledRejection);
 			this._register(
 				toDisposable(() => {
 					this.targetWindow?.removeEventListener('error', onError);
-					if (this.targetWindow !== mainWindow)
-						this.targetWindow?.removeEventListener('unhandledrejection', onUnhandledRejection);
+					if (this.targetWindow !== mainWindow) this.targetWindow?.removeEventListener('unhandledrejection', onUnhandledRejection);
 				}),
 			);
 		}
@@ -82,9 +77,7 @@ export class WorkbenchWindow extends Disposable implements IWorkbenchHostService
 	downloadText(download: WorkbenchTextDownload): void {
 		if (!this.targetWindow) throw new Error('Text download requires a browser window');
 		const targetWindow = this.targetWindow as Window & typeof globalThis;
-		const url = targetWindow.URL.createObjectURL(
-			new targetWindow.Blob([download.content], { type: download.mediaType }),
-		);
+		const url = targetWindow.URL.createObjectURL(new targetWindow.Blob([download.content], { type: download.mediaType }));
 		const anchor = h(this.ownerDocument, 'a');
 		anchor.href = url;
 		anchor.download = download.fileName;

@@ -28,21 +28,15 @@ test('code action shortcut resolves the most specific kind and respects preferre
 		keybinding: KeyMod.CtrlCmd | KeyCode.KeyP,
 		args: [{ kind: 'refactor.extract', preferred: true }],
 	});
-	const resolve = fixture.editor.invokeWithinContext(accessor =>
-		accessor.get(IInstantiationService).createInstance(CodeActionKeybindingResolver).getResolver(),
-	);
+	const resolve = fixture.editor.invokeWithinContext(accessor => accessor.get(IInstantiationService).createInstance(CodeActionKeybindingResolver).getResolver());
 	const keybindings = fixture.editor.invokeWithinContext(accessor => accessor.get(IKeybindingService));
 	assert.equal(
 		getKeybindingLabel(resolve({ title: 'Extract', kind: 'refactor.extract.function' })!),
-		getKeybindingLabel(
-			keybindings.resolveKeybinding(decodeKeybinding(KeyMod.CtrlCmd | KeyCode.KeyE, operatingSystem)!),
-		),
+		getKeybindingLabel(keybindings.resolveKeybinding(decodeKeybinding(KeyMod.CtrlCmd | KeyCode.KeyE, operatingSystem)!)),
 	);
 	assert.equal(
 		getKeybindingLabel(resolve({ title: 'Preferred extract', kind: 'refactor.extract', isPreferred: true })!),
-		getKeybindingLabel(
-			keybindings.resolveKeybinding(decodeKeybinding(KeyMod.CtrlCmd | KeyCode.KeyP, operatingSystem)!),
-		),
+		getKeybindingLabel(keybindings.resolveKeybinding(decodeKeybinding(KeyMod.CtrlCmd | KeyCode.KeyP, operatingSystem)!)),
 	);
 	assert.equal(resolve({ title: 'Unrelated', kind: 'quickfix' }), undefined);
 });

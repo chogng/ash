@@ -1,13 +1,7 @@
 import type { ITextEditingPolicy } from '../cursor/textEditingPolicy.js';
 import { CallbackIterable } from '../../../base/common/arrays.js';
 import { Emitter, Event } from '../../../base/common/event.js';
-import {
-	Disposable,
-	DisposableStore,
-	markAsSingleton,
-	toDisposable,
-	type IDisposable,
-} from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, markAsSingleton, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { StandardTokenType } from '../encodedTokenAttributes.js';
 import { BackgroundTokenizationState } from '../tokenizationTextModelPart.js';
 import { LineTokens } from '../tokens/lineTokens.js';
@@ -22,12 +16,7 @@ import type { IModelTokenization } from '../tokenizationTextModelPart.js';
 import type { IBracketPairsTextModelPart } from '../textModelBracketPairs.js';
 import type { IGuidesTextModelPart } from '../textModelGuides.js';
 import type { LanguageConfigurationServiceChangeEvent } from '../languages/languageConfigurationRegistry.js';
-import type {
-	IModelOptionsChangedEvent,
-	IModelLanguageChangedEvent,
-	IModelContentChangedEvent,
-	IModelTokensChangedEvent,
-} from '../textModelEvents.js';
+import type { IModelOptionsChangedEvent, IModelLanguageChangedEvent, IModelContentChangedEvent, IModelTokensChangedEvent } from '../textModelEvents.js';
 
 interface ModelBracketPairs extends IBracketPairsTextModelPart, IDisposable {
 	handleLanguageConfigurationServiceChange(event: LanguageConfigurationServiceChangeEvent): void;
@@ -48,10 +37,7 @@ export interface TextModelFeatureParts extends IDisposable {
 	};
 	readonly decorations: DecorationProvider & { readonly onDidChange: Event<void> };
 }
-export type TextModelFeatureFactory = (
-	model: TextModel,
-	options: TextModelOptions,
-) => TextModelFeatureParts | undefined;
+export type TextModelFeatureFactory = (model: TextModel, options: TextModelOptions) => TextModelFeatureParts | undefined;
 const changes = markAsSingleton(new Emitter<void>());
 let factory: TextModelFeatureFactory | undefined;
 
@@ -72,9 +58,7 @@ export function registerTextModelFeatures(value: TextModelFeatureFactory): IDisp
 export class TextModelFeatureHost extends Disposable {
 	private readonly active = this._register(new DisposableStore());
 	private parts: TextModelFeatureParts;
-	private readonly tokensChanged = this._register(
-		new Emitter<readonly { fromLineNumber: number; toLineNumber: number }[] | undefined>(),
-	);
+	private readonly tokensChanged = this._register(new Emitter<readonly { fromLineNumber: number; toLineNumber: number }[] | undefined>());
 	private readonly stylesChanged = this._register(new Emitter<void>());
 	private readonly bracketsChanged = this._register(new Emitter<void>());
 	private readonly decorationsChanged = this._register(new Emitter<void>());
@@ -153,11 +137,7 @@ export class TextModelFeatureHost extends Disposable {
 			this.active.add(this.model.onDidChangeLanguage(event => parts.brackets.handleDidChangeLanguage(event)));
 			this.active.add(this.model.onDidChangeOptions(event => parts.brackets.handleDidChangeOptions(event)));
 			if (this.options.languageConfigurationService)
-				this.active.add(
-					this.options.languageConfigurationService.onDidChange(event =>
-						parts.brackets.handleLanguageConfigurationServiceChange(event),
-					),
-				);
+				this.active.add(this.options.languageConfigurationService.onDidChange(event => parts.brackets.handleLanguageConfigurationServiceChange(event)));
 		}
 		this.tokensChanged.fire(undefined);
 		this.stylesChanged.fire();

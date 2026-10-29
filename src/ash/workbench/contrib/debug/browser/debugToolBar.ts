@@ -52,7 +52,13 @@ export class DebugToolBar extends Disposable {
 					const label = localize('debug.stopActions', 'More Stop Actions');
 					return new DropdownWithPrimaryActionViewItem(
 						action,
-						{ id: 'ash.debug.stopActions', label, tooltip: label, enabled: true, run: () => {} },
+						{
+							id: 'ash.debug.stopActions',
+							label,
+							tooltip: label,
+							enabled: true,
+							run: () => {},
+						},
 						[this.debugAction('stopAll', localize('debug.stopAll', 'Stop All'), Lxicon.square)],
 						contextMenus,
 						options,
@@ -141,11 +147,7 @@ export class DebugToolBar extends Disposable {
 		const controls = this.sessions.parentElement!;
 		controls.hidden = !inspection;
 		controls.classList.toggle('empty', !inspection);
-		this.status.textContent =
-			this.error ??
-			(session
-				? `${session.name}: ${sessionStateLabel(session.state)}${session.reason ? ` (${session.reason})` : ''}`
-				: '');
+		this.status.textContent = this.error ?? (session ? `${session.name}: ${sessionStateLabel(session.state)}${session.reason ? ` (${session.reason})` : ''}` : '');
 		this.status.hidden = !this.status.textContent;
 		this.status.classList.toggle('empty', !this.status.textContent);
 		this.status.classList.toggle('error', this.error !== undefined);
@@ -159,31 +161,11 @@ export class DebugToolBar extends Disposable {
 				? [
 						stopped
 							? this.debugAction('continue', localize('debug.continue', 'Continue'), Lxicon.play)
-							: this.debugAction(
-									'pause',
-									localize('debug.pause', 'Pause'),
-									Lxicon.pause,
-									session.state === 'running',
-								),
-						this.debugAction(
-							'stepOver',
-							localize('debug.stepOver', 'Step Over'),
-							Lxicon.arrowRight,
-							stopped,
-						),
-						this.debugAction(
-							'stepInto',
-							localize('debug.stepInto', 'Step Into'),
-							Lxicon.arrowDown,
-							stopped,
-						),
+							: this.debugAction('pause', localize('debug.pause', 'Pause'), Lxicon.pause, session.state === 'running'),
+						this.debugAction('stepOver', localize('debug.stepOver', 'Step Over'), Lxicon.arrowRight, stopped),
+						this.debugAction('stepInto', localize('debug.stepInto', 'Step Into'), Lxicon.arrowDown, stopped),
 						this.debugAction('stepOut', localize('debug.stepOut', 'Step Out'), Lxicon.arrowUp, stopped),
-						this.debugAction(
-							'restart',
-							localize('debug.restart', 'Restart'),
-							Lxicon.refresh,
-							session.state !== 'starting',
-						),
+						this.debugAction('restart', localize('debug.restart', 'Restart'), Lxicon.refresh, session.state !== 'starting'),
 						this.debugAction('stop', localize('debug.stop', 'Stop'), Lxicon.square),
 					]
 				: [],

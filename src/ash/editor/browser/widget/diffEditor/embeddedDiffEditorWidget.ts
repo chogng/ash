@@ -52,9 +52,7 @@ export class EmbeddedDiffEditorWidget extends DiffEditorWidget {
 	}
 }
 
-function parentPresentation(
-	editor: ICodeEditor,
-): Pick<DiffEditorWidgetOptions, 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures'> & {
+function parentPresentation(editor: ICodeEditor): Pick<DiffEditorWidgetOptions, 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures'> & {
 	lineNumbers: 'on' | 'off';
 } {
 	const font = editor.getOption(EditorOption.fontInfo);

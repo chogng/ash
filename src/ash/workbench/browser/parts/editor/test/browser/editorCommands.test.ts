@@ -5,10 +5,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { URI } from '../../../../../../base/common/uri.js';
-import {
-	ContextKeyService,
-	IContextKeyService,
-} from '../../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../../services/commands/common/commandService.js';
@@ -37,10 +34,7 @@ import { IHistoryService } from '../../../../../services/history/common/history.
 import { SubmenuAction } from '../../../../../../base/common/actions.js';
 import { IEditorPartsService } from '../../editorParts.js';
 import type { EditorIdentifier } from '../../../../../services/editor/common/editorState.js';
-import {
-	IPreferencesService,
-	type IOpenSettingsOptions,
-} from '../../../../../services/preferences/common/preferences.js';
+import { IPreferencesService, type IOpenSettingsOptions } from '../../../../../services/preferences/common/preferences.js';
 import { ConfigureEditorAction } from '../../../../actions/layoutActions.js';
 import { localize2, resetNlsResolver, setNlsMessages } from '../../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../../services/localization/common/localizationCatalogs.js';
@@ -105,14 +99,8 @@ test('Configure Editors menu opens filtered settings and is hidden in the modal 
 		});
 		assert.equal(localize2('command.NewEmptyEditorWindow', 'New Empty Editor Window').value, '新建空编辑器窗口');
 		assert.equal(localize2('workbench.zoomPerWindowTitle', 'Zoom per window').value, '每个窗口独立缩放');
-		assert.equal(
-			localize2({ bundle: 'ash.workbench', key: 'editor.moveIntoNewWindow' }, 'Move into New Window').value,
-			'移至新窗口',
-		);
-		assert.equal(
-			localize2({ bundle: 'ash.workbench', key: 'editor.copyIntoNewWindow' }, 'Copy into New Window').value,
-			'复制到新窗口',
-		);
+		assert.equal(localize2({ bundle: 'ash.workbench', key: 'editor.moveIntoNewWindow' }, 'Move into New Window').value, '移至新窗口');
+		assert.equal(localize2({ bundle: 'ash.workbench', key: 'editor.copyIntoNewWindow' }, 'Copy into New Window').value, '复制到新窗口');
 	} finally {
 		resetNlsResolver();
 	}
@@ -153,12 +141,7 @@ test('new window tab menus resolve the clicked tab, multiselection and invalid t
 	context.setContext(EditorsVisibleContext.key, true);
 	const menus = new MenuService(commands, context);
 	const argument = { groupId: group.id, editorIndex: 1 };
-	const windowCommands = [
-		MoveEditorToNewWindowCommandId,
-		CopyEditorToNewWindowCommandId,
-		'workbench.action.moveEditorGroupToNewWindow',
-		'workbench.action.copyEditorGroupToNewWindow',
-	];
+	const windowCommands = [MoveEditorToNewWindowCommandId, CopyEditorToNewWindowCommandId, 'workbench.action.moveEditorGroupToNewWindow', 'workbench.action.copyEditorGroupToNewWindow'];
 	for (const visible of [true, false]) {
 		context.setContext(EditorsVisibleContext.key, visible);
 		const titleActions = menus
@@ -172,12 +155,7 @@ test('new window tab menus resolve the clicked tab, multiselection and invalid t
 		.getMenuActions(MenuId.CommandPalette)
 		.flatMap(([, actions]) => actions)
 		.filter(action => windowCommands.includes(action.id));
-	assert.deepEqual(paletteActions.map(action => action.label).sort(), [
-		'Copy Editor Group into New Window',
-		'Copy to New Window',
-		'Move Editor Group into New Window',
-		'Move to New Window',
-	]);
+	assert.deepEqual(paletteActions.map(action => action.label).sort(), ['Copy Editor Group into New Window', 'Copy to New Window', 'Move Editor Group into New Window', 'Move to New Window']);
 	const groups = menus.getMenuActions(MenuId.EditorTitleContext, { arg: argument });
 	assert.ok(groups.findIndex(([name]) => name === '7_new_window') > groups.findIndex(([name]) => name === '5_split'));
 	const actions = groups.find(([name]) => name === '7_new_window')![1];
@@ -206,12 +184,8 @@ test('new window tab menus resolve the clicked tab, multiselection and invalid t
 
 test('tab close and split menus operate on the clicked group and selected editors', async () => {
 	await import('../../editor.contribution.js');
-	const {
-		CLOSE_EDITORS_TO_THE_RIGHT_COMMAND_ID,
-		CLOSE_SAVED_EDITORS_COMMAND_ID,
-		CLOSE_EDITORS_IN_GROUP_COMMAND_ID,
-		CLOSE_OTHER_EDITORS_IN_GROUP_COMMAND_ID,
-	} = await import('../../editorCommands.js');
+	const { CLOSE_EDITORS_TO_THE_RIGHT_COMMAND_ID, CLOSE_SAVED_EDITORS_COMMAND_ID, CLOSE_EDITORS_IN_GROUP_COMMAND_ID, CLOSE_OTHER_EDITORS_IN_GROUP_COMMAND_ID } =
+		await import('../../editorCommands.js');
 	const { CloseAllEditorsCommandId, ReopenClosedEditorCommandId } = await import('../../editorActions.js');
 	const inputs = ['sticky', 'clicked', 'dirty', 'saved'].map(name => ({ resource: URI.file(`/project/${name}.ts`) }));
 	const closed: unknown[] = [];
@@ -279,8 +253,7 @@ test('tab close and split menus operate on the clicked group and selected editor
 		]);
 	}
 	const argument = { groupId: group.id, editorIndex: 1 };
-	const close = () =>
-		menus.getMenuActions(MenuId.EditorTitleContext, { arg: argument }).find(([name]) => name === '1_close')![1];
+	const close = () => menus.getMenuActions(MenuId.EditorTitleContext, { arg: argument }).find(([name]) => name === '1_close')![1];
 	assert.deepEqual(
 		close().map(action => [action.id, action.label]),
 		[
@@ -345,9 +318,7 @@ test('tab close and split menus operate on the clicked group and selected editor
 	closed.length = 0;
 	await commands.executeCommand('workbench.action.closeEditorsToTheLeft', argument);
 	assert.deepEqual(closed, []);
-	const splitGroup = menus
-		.getMenuActions(MenuId.EditorTitleContext, { arg: argument })
-		.find(([name]) => name === '5_split')![1];
+	const splitGroup = menus.getMenuActions(MenuId.EditorTitleContext, { arg: argument }).find(([name]) => name === '5_split')![1];
 	assert.equal(splitGroup.length, 1);
 	const submenu = splitGroup[0];
 	assert.ok(submenu instanceof SubmenuAction);
@@ -360,11 +331,7 @@ test('tab close and split menus operate on the clicked group and selected editor
 	for (const action of split) await action.run();
 	assert.deepEqual(
 		splits,
-		[Direction.Up, Direction.Down, Direction.Left, Direction.Right].map(direction => [
-			group.id,
-			[inputs[1], inputs[3]],
-			direction,
-		]),
+		[Direction.Up, Direction.Down, Direction.Left, Direction.Right].map(direction => [group.id, [inputs[1], inputs[3]], direction]),
 	);
 });
 
@@ -526,17 +493,25 @@ test('editor commands close the active tab and reopen it with a chosen editor', 
 		assert.ok(picker);
 		assert.equal(picker.querySelector<HTMLInputElement>('input')?.placeholder, 'Select an editor');
 		assert.match(picker.textContent ?? '', /Binary Editor/u);
-		picker
-			.querySelector<HTMLInputElement>('input')
-			?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
+		picker.querySelector<HTMLInputElement>('input')?.dispatchEvent(
+			new dom.window.KeyboardEvent('keydown', {
+				bubbles: true,
+				cancelable: true,
+				key: 'Enter',
+			}),
+		);
 		await reopening;
 		assert.equal(chosen, 'ash.editor.binary');
 		assert.equal(dom.window.document.querySelector('.ash-quick-pick'), null);
 
 		const otherReopening = commands.executeCommand(REOPEN_WITH_COMMAND_ID, { groupId: 0, editorIndex: 0 });
-		dom.window.document
-			.querySelector<HTMLInputElement>('.ash-quick-pick input')!
-			.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
+		dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick input')!.dispatchEvent(
+			new dom.window.KeyboardEvent('keydown', {
+				bubbles: true,
+				cancelable: true,
+				key: 'Enter',
+			}),
+		);
 		await otherReopening;
 		assert.equal(reopenedOtherGroup, true, 'zero is a valid group identity');
 		editorTypes.pop();
@@ -594,12 +569,5 @@ test('empty editor windows and whole-group commands use the shared coordinator a
 	await commands.executeCommand('workbench.action.newEmptyEditorWindow');
 	await commands.executeCommand('workbench.action.moveEditorGroupToNewWindow', { groupId: source.id });
 	await commands.executeCommand('workbench.action.copyEditorGroupToNewWindow', { groupId: source.id });
-	assert.deepEqual(calls, [
-		'empty',
-		'focus',
-		['move', editors.map(editor => editor.instanceId)],
-		['locked', true],
-		['copy', editors.map(editor => editor.instanceId)],
-		['locked', true],
-	]);
+	assert.deepEqual(calls, ['empty', 'focus', ['move', editors.map(editor => editor.instanceId)], ['locked', true], ['copy', editors.map(editor => editor.instanceId)], ['locked', true]]);
 });

@@ -6,11 +6,7 @@ import { Disposable, toDisposable } from 'ash:editor/base/common/lifecycle.js';
 import { SelectBox, type SelectOption } from 'ash:editor/base/browser/ui/selectbox/selectbox.js';
 import { Button } from 'ash:editor/base/browser/ui/button/button.js';
 import { InputBox } from 'ash:editor/base/browser/ui/inputbox/inputbox.js';
-import {
-	defaultButtonStyles,
-	defaultInputBoxStyles,
-	defaultSelectBoxStyles,
-} from 'ash:editor/platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultInputBoxStyles, defaultSelectBoxStyles } from 'ash:editor/platform/theme/browser/defaultStyles.js';
 
 /** Shared control mechanics only; each contribution owns its choices, commands and derived state. */
 export class DocumentFormattingControls extends Disposable {

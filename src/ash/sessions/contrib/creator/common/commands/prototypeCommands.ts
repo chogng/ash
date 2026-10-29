@@ -4,13 +4,7 @@ import { localize } from '../../../../../nls.js';
 import { flattenDesignShapes, type DesignShape } from '../model/document.js';
 import { getDesignLibraryShapes } from '../model/designResources.js';
 import type { DesignModel } from '../model/designModel.js';
-import {
-	defaultPrototypeTransition,
-	prototypeVariants,
-	prototypeFrames,
-	prototypeOwner,
-	type PrototypeInteraction,
-} from '../model/prototype.js';
+import { defaultPrototypeTransition, prototypeVariants, prototypeFrames, prototypeOwner, type PrototypeInteraction } from '../model/prototype.js';
 
 /** Wires, hotspot settings and flow names are ordinary immutable document edits. */
 export class PrototypeCommands {
@@ -57,10 +51,7 @@ export class PrototypeCommands {
 		}
 		this.commit(updates);
 	}
-	public setScroll(
-		id: string,
-		settings: Pick<Partial<DesignShape>, 'overflowDirection' | 'scrollPosition' | 'layoutPositioning'>,
-	): void {
+	public setScroll(id: string, settings: Pick<Partial<DesignShape>, 'overflowDirection' | 'scrollPosition' | 'layoutPositioning'>): void {
 		const path = prototypePath(this.model.value.shapes, id),
 			shape = path.at(-1),
 			parent = path.at(-2);
@@ -68,12 +59,7 @@ export class PrototypeCommands {
 			return;
 		}
 		const next = { ...shape, ...settings };
-		if (
-			parent?.kind === 'frame' &&
-			parent.autoLayout &&
-			next.scrollPosition === 'fixed' &&
-			next.layoutPositioning !== 'absolute'
-		) {
+		if (parent?.kind === 'frame' && parent.autoLayout && next.scrollPosition === 'fixed' && next.layoutPositioning !== 'absolute') {
 			next.scrollPosition = 'scroll';
 		}
 		this.commit(new Map([[id, next]]));
@@ -95,9 +81,7 @@ export class PrototypeCommands {
 	private commit(updates: ReadonlyMap<string, DesignShape>): void {
 		const update = (shape: DesignShape): DesignShape => {
 			const result = updates.get(shape.id) ?? shape;
-			return result.kind === 'frame' || result.kind === 'group'
-				? { ...result, children: result.children.map(update) }
-				: result;
+			return result.kind === 'frame' || result.kind === 'group' ? { ...result, children: result.children.map(update) } : result;
 		};
 		this.model.applyEdit(this.model.value.shapes.map(update));
 	}

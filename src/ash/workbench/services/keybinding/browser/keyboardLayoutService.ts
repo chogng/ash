@@ -19,12 +19,7 @@ import {
 } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
 import { FallbackKeyboardMapper } from '../common/fallbackKeyboardMapper.js';
 import { CachedKeyboardMapper } from '../common/keyboardMapper.js';
-import {
-	copyKeyboardMapping,
-	createKeyboardMappingFromLabels,
-	getKeyboardMappingValue,
-	observeKeyboardMapping,
-} from '../common/keyboardMapping.js';
+import { copyKeyboardMapping, createKeyboardMappingFromLabels, getKeyboardMappingValue, observeKeyboardMapping } from '../common/keyboardMapping.js';
 import { MacLinuxKeyboardMapper } from '../common/macLinuxKeyboardMapper.js';
 import { WindowsKeyboardMapper } from '../common/windowsKeyboardMapper.js';
 import { findMatchingBuiltinLayout, loadBuiltinKeyboardLayouts } from './builtinKeyboardLayouts.js';
@@ -89,14 +84,8 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 		this.dispatchOverride = options.dispatch;
 		this.mapAltGrOverride = options.mapAltGrToCtrlAlt;
 		this.configuration = Object.freeze({
-			dispatch:
-				options.dispatch ??
-				options.configurationService?.getValue<KeyboardDispatchMode>(KeyboardConfiguration.dispatch) ??
-				KeyboardDispatchMode.Code,
-			mapAltGrToCtrlAlt:
-				options.mapAltGrToCtrlAlt ??
-				options.configurationService?.getValue<boolean>(KeyboardConfiguration.mapAltGrToCtrlAlt) ??
-				false,
+			dispatch: options.dispatch ?? options.configurationService?.getValue<KeyboardDispatchMode>(KeyboardConfiguration.dispatch) ?? KeyboardDispatchMode.Code,
+			mapAltGrToCtrlAlt: options.mapAltGrToCtrlAlt ?? options.configurationService?.getValue<boolean>(KeyboardConfiguration.mapAltGrToCtrlAlt) ?? false,
 		});
 		this.configuredLayout = options.layout;
 		this.additionalLayouts = options.additionalLayouts ?? [];
@@ -149,15 +138,7 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 	}
 
 	public validateCurrentKeyboardMapping(event: KeybindingEvent): void {
-		if (
-			this.hasExplicitLayoutSelection() ||
-			this.layout.source === 'native' ||
-			this.layout.source === 'user' ||
-			!this.navigator.keyboard ||
-			!this.mapping ||
-			!event.code ||
-			event.isComposing
-		) {
+		if (this.hasExplicitLayoutSelection() || this.layout.source === 'native' || this.layout.source === 'user' || !this.navigator.keyboard || !this.mapping || !event.code || event.isComposing) {
 			return;
 		}
 		// Shortcut keys do not produce text. Learning their key value can map an
@@ -169,11 +150,7 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 			return;
 		}
 		const entry = this.mapping[event.code];
-		const expected = getKeyboardMappingValue(
-			entry,
-			{ ...event, altGraphKey: event.altGraphKey },
-			this.configuration.mapAltGrToCtrlAlt,
-		);
+		const expected = getKeyboardMappingValue(entry, { ...event, altGraphKey: event.altGraphKey }, this.configuration.mapAltGrToCtrlAlt);
 		const isDeadKey = event.key === 'Dead';
 		if (isDeadKey || (!expected && (event.shiftKey || event.altGraphKey))) {
 			this.acceptObservedMapping(event);
@@ -226,19 +203,14 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 	}
 
 	private async readProvidedLayout(): Promise<void> {
-		const [nativeLayout, userLayout] = await Promise.all([
-			this.readLayoutProvider(this.layoutProvider),
-			this.readLayoutProvider(this.userLayoutProvider),
-		]);
+		const [nativeLayout, userLayout] = await Promise.all([this.readLayoutProvider(this.layoutProvider), this.readLayoutProvider(this.userLayoutProvider)]);
 		if (!this.isDisposed) {
 			this.nativeLayout = nativeLayout;
 			this.userLayout = userLayout;
 		}
 	}
 
-	private async readLayoutProvider(
-		provider: IKeyboardLayoutProvider | undefined,
-	): Promise<IKeyboardLayoutDefinition | undefined> {
+	private async readLayoutProvider(provider: IKeyboardLayoutProvider | undefined): Promise<IKeyboardLayoutDefinition | undefined> {
 		if (!provider) {
 			return undefined;
 		}
@@ -289,17 +261,11 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 		}
 		this._register(
 			this.configurationService.onDidChangeConfiguration(event => {
-				const mapperChanged =
-					event.affectsConfiguration(KeyboardConfiguration.dispatch) ||
-					event.affectsConfiguration(KeyboardConfiguration.mapAltGrToCtrlAlt);
+				const mapperChanged = event.affectsConfiguration(KeyboardConfiguration.dispatch) || event.affectsConfiguration(KeyboardConfiguration.mapAltGrToCtrlAlt);
 				if (mapperChanged) {
 					this.configuration = Object.freeze({
-						dispatch:
-							this.dispatchOverride ??
-							this.configurationService!.getValue<KeyboardDispatchMode>(KeyboardConfiguration.dispatch),
-						mapAltGrToCtrlAlt:
-							this.mapAltGrOverride ??
-							this.configurationService!.getValue<boolean>(KeyboardConfiguration.mapAltGrToCtrlAlt),
+						dispatch: this.dispatchOverride ?? this.configurationService!.getValue<KeyboardDispatchMode>(KeyboardConfiguration.dispatch),
+						mapAltGrToCtrlAlt: this.mapAltGrOverride ?? this.configurationService!.getValue<boolean>(KeyboardConfiguration.mapAltGrToCtrlAlt),
 					});
 					this.mapper = this.createMapper();
 					this._onDidChangeKeyboardLayout.fire();
@@ -434,10 +400,7 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 	}
 }
 
-function preserveObservedStates(
-	nextMapping: IKeyboardMapping,
-	previousMapping: IKeyboardMapping | undefined,
-): IKeyboardMapping {
+function preserveObservedStates(nextMapping: IKeyboardMapping, previousMapping: IKeyboardMapping | undefined): IKeyboardMapping {
 	if (!previousMapping) {
 		return nextMapping;
 	}

@@ -219,18 +219,12 @@ test('Activity Bar badge menu uses Chinese labels and restores independent visib
 		using updated = restoredActivity.showViewContainerActivity('badge-first', {
 			badge: new NumberBadge(8, () => 'Latest activity'),
 		});
-		assert.deepEqual(
-			[restored.areBadgesEnabled('badge-first'), restored.areBadgesEnabled('badge-second')],
-			[false, true],
-		);
+		assert.deepEqual([restored.areBadgesEnabled('badge-first'), restored.areBadgesEnabled('badge-second')], [false, true]);
 		const restoredTab = restored.domNode.querySelector<HTMLElement>('[data-action-id="badge-first"]')!;
 		restoredTab.addEventListener('contextmenu', event => restored.showContextMenu(event), { once: true });
 		restoredTab.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
 		await actions.find(action => action.label === '显示徽章')!.run();
-		assert.equal(
-			restored.domNode.querySelector('[data-action-id="badge-first"] .ash-count-badge')?.textContent,
-			'8',
-		);
+		assert.equal(restored.domNode.querySelector('[data-action-id="badge-first"] .ash-count-badge')?.textContent, '8');
 		await restoredStorage.flush();
 		const profileKey = 'ash.storage.profile.default';
 		dom.window.dispatchEvent(
@@ -269,25 +263,19 @@ test('view activity follows late registration and container changes without depe
 	using views = new TestViewDescriptorService({ registry }, contexts);
 	using activity = new ActivityService(views);
 	const changed: string[] = [];
-	using listener = activity.onDidChangeActivity(container =>
-		changed.push(typeof container === 'string' ? container : container.id),
-	);
+	using listener = activity.onDidChangeActivity(container => changed.push(typeof container === 'string' ? container : container.id));
 	const entry = { badge: new NumberBadge(4, count => `${count} changes`) };
 	using handle = activity.showViewActivity('changes', entry);
 	assert.deepEqual(activity.getViewContainerActivities('first'), []);
 	assert.deepEqual(changed, []);
 	using registration = new MutableDisposable();
-	registration.value = registry.registerViews('first', [
-		{ id: 'changes', title: 'Changes', ctorDescriptor: new SyncDescriptor(ActivityView) },
-	]);
+	registration.value = registry.registerViews('first', [{ id: 'changes', title: 'Changes', ctorDescriptor: new SyncDescriptor(ActivityView) }]);
 	assert.deepEqual(activity.getViewContainerActivities('first'), [entry]);
 	assert.equal(changed.at(-1), 'first');
 	registration.clear();
 	assert.deepEqual(activity.getViewContainerActivities('first'), []);
 	assert.equal(changed.at(-1), 'first');
-	registration.value = registry.registerViews('second', [
-		{ id: 'changes', title: 'Changes', ctorDescriptor: new SyncDescriptor(ActivityView) },
-	]);
+	registration.value = registry.registerViews('second', [{ id: 'changes', title: 'Changes', ctorDescriptor: new SyncDescriptor(ActivityView) }]);
 	assert.deepEqual(activity.getViewContainerActivities('second'), [entry]);
 	assert.equal(changed.at(-1), 'second');
 	handle.dispose();

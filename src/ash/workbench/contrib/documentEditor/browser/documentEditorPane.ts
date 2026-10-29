@@ -1,8 +1,5 @@
 import type { IEditorExtensionApi } from '../../../common/editor.js';
-import type {
-	DocumentEditorConfiguration,
-	DocumentEditorWidget,
-} from '../../../services/documentEditor/browser/documentEditorProfile.js';
+import type { DocumentEditorConfiguration, DocumentEditorWidget } from '../../../services/documentEditor/browser/documentEditorProfile.js';
 import type { DocumentCodec, DocumentTextFormat } from '../../../services/documentEditor/common/documentCodec.js';
 import { IChannelService, type ChannelReference } from '../../../../platform/collab/common/channelService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
@@ -34,10 +31,7 @@ import type { CallDocument } from '../../../../platform/call/common/callService.
 import { localize } from '../../../../nls.js';
 
 /** Workbench-only services that complement one document editor. */
-export interface EditorPaneOptions extends Pick<
-	DocumentEditorConfiguration,
-	'codec' | 'widget' | 'exportText' | 'createEmptyDocument' | 'importBinary' | 'artifactFormats' | 'accessibilityHelp'
-> {
+export interface EditorPaneOptions extends Pick<DocumentEditorConfiguration, 'codec' | 'widget' | 'exportText' | 'createEmptyDocument' | 'importBinary' | 'artifactFormats' | 'accessibilityHelp'> {
 	readonly codec: DocumentCodec;
 	readonly modelCompatibility?: string;
 	readonly editorId?: string;
@@ -111,17 +105,8 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 	public exportArtifact(format: string, signal: AbortSignal): Promise<Uint8Array> {
 		this.options.providerSignal?.throwIfAborted();
 		if (!this.editor?.exportArtifact || !this.getArtifactFormats().some(candidate => candidate.id === format))
-			throw new Error(
-				localize('document.output.unavailable', 'This document provider does not support the selected output.'),
-			);
-		return this.editor.exportArtifact(
-			format,
-			AbortSignal.any([
-				signal,
-				this.artifactLifetime.signal,
-				...(this.options.providerSignal ? [this.options.providerSignal] : []),
-			]),
-		);
+			throw new Error(localize('document.output.unavailable', 'This document provider does not support the selected output.'));
+		return this.editor.exportArtifact(format, AbortSignal.any([signal, this.artifactLifetime.signal, ...(this.options.providerSignal ? [this.options.providerSignal] : [])]));
 	}
 
 	public exportText(format: DocumentTextFormat): string {
@@ -139,8 +124,7 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 	/** A conversion populates the already-open untitled working copy without acquiring a second model. */
 	public restoreDraft(document: DocumentNode): void {
 		const reference = this.requireWorkingCopy();
-		if (reference.resource.scheme !== 'untitled')
-			throw new Error('Only an untitled document accepts a converted draft');
+		if (reference.resource.scheme !== 'untitled') throw new Error('Only an untitled document accepts a converted draft');
 		reference.restoreBackup(this.options.codec.serialize(document));
 	}
 
@@ -152,9 +136,7 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		super.create(container);
 		this.container = container;
 		const { createDocumentCollaborationService } = this.options;
-		this.collaborationService = createDocumentCollaborationService
-			? this._register(createDocumentCollaborationService())
-			: undefined;
+		this.collaborationService = createDocumentCollaborationService ? this._register(createDocumentCollaborationService()) : undefined;
 		const collaboration = this._register(
 			new CollaborationContribution(
 				container,
@@ -162,13 +144,10 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 					fixedRoom: () => (this.channel ? `channel-notes-${this.channel.channelId}` : undefined),
 					onStart: roomId => this.startCollaboration(roomId, this.channel?.serverUrl, this.channel),
 					onStop: () => this.stopCollaboration(),
-					onInvite: (displayName, role) =>
-						this.requireRoom().createInvite(displayName, role, this.roomRequest!.signal),
+					onInvite: (displayName, role) => this.requireRoom().createInvite(displayName, role, this.roomRequest!.signal),
 					onListMembers: () => this.requireRoom().listMembers(this.roomRequest!.signal),
-					onRotateMemberAccessToken: principalId =>
-						this.requireRoom().rotateMemberAccessToken(principalId, this.roomRequest!.signal),
-					onRevokeMember: principalId =>
-						this.requireRoom().revokeMember(principalId, this.roomRequest!.signal),
+					onRotateMemberAccessToken: principalId => this.requireRoom().rotateMemberAccessToken(principalId, this.roomRequest!.signal),
+					onRevokeMember: principalId => this.requireRoom().revokeMember(principalId, this.roomRequest!.signal),
 				},
 				this.dialogs,
 			),
@@ -200,12 +179,7 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 			},
 			signal,
 		);
-		if (
-			signal.aborted ||
-			this.options.providerSignal?.aborted ||
-			this.isDisposed ||
-			generation !== this.inputGeneration
-		) {
+		if (signal.aborted || this.options.providerSignal?.aborted || this.isDisposed || generation !== this.inputGeneration) {
 			reference.dispose();
 			throwIfCancelled(signal, 'Document editor input loading was cancelled');
 			this.options.providerSignal?.throwIfAborted();
@@ -250,11 +224,7 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 			version: api.version,
 			readOnly: api.readOnly,
 			invoke: async (payload, signal) => {
-				const request = AbortSignal.any([
-					signal,
-					lifetime,
-					...(this.options.providerSignal ? [this.options.providerSignal] : []),
-				]);
+				const request = AbortSignal.any([signal, lifetime, ...(this.options.providerSignal ? [this.options.providerSignal] : [])]);
 				request.throwIfAborted();
 				return api.invoke(payload, request);
 			},
@@ -307,45 +277,24 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	async joinCollaborationDocument(document: CallDocument, channel?: ChannelReference): Promise<void> {
-		if (
-			document.schemaId !== (this.options.collaborationSchemaId ?? 'stanza-document-v1') ||
-			document.contentType !== this.options.contentType
-		) {
-			throw new Error(
-				localize('call.document.incompatible', 'This editor cannot open the shared document format.'),
-			);
+		if (document.schemaId !== (this.options.collaborationSchemaId ?? 'stanza-document-v1') || document.contentType !== this.options.contentType) {
+			throw new Error(localize('call.document.incompatible', 'This editor cannot open the shared document format.'));
 		}
-		if (
-			this.room?.roomId === document.roomId &&
-			this.room.serverUrl === document.serverUrl &&
-			!this.roomRequest?.signal.aborted
-		)
-			return;
+		if (this.room?.roomId === document.roomId && this.room.serverUrl === document.serverUrl && !this.roomRequest?.signal.aborted) return;
 		const reference = this.requireWorkingCopy();
 		if (reference.resource.scheme !== 'untitled' || reference.isDirty) {
-			throw new Error(
-				localize(
-					'call.document.newCopyRequired',
-					'Open shared documents in a new untitled editor to preserve local changes.',
-				),
-			);
+			throw new Error(localize('call.document.newCopyRequired', 'Open shared documents in a new untitled editor to preserve local changes.'));
 		}
 		this.channel = channel;
 		const opened = await this.startCollaboration(document.roomId, document.serverUrl, channel);
 		this.collaboration?.setState('connected', opened);
 	}
 
-	private async startCollaboration(
-		roomId: string | undefined,
-		serverUrl?: string,
-		channel?: ChannelReference,
-	): Promise<CollaborationStartResult> {
+	private async startCollaboration(roomId: string | undefined, serverUrl?: string, channel?: ChannelReference): Promise<CollaborationStartResult> {
 		const service = this.collaborationService;
 		if (!service) throw new Error('Document collaboration is unavailable in this renderer');
 		const reference = this.requireWorkingCopy();
-		const channels = channel
-			? this.instantiation.invokeFunction(accessor => accessor.getOptional(IChannelService))
-			: undefined;
+		const channels = channel ? this.instantiation.invokeFunction(accessor => accessor.getOptional(IChannelService)) : undefined;
 		const memberId = channels?.space?.memberId;
 		const role = channels?.space?.members.find(member => member.id === memberId)?.role;
 		const authorized = () =>
@@ -382,12 +331,7 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		if (serverUrl !== undefined && reference.isDirty) {
 			request.abort();
 			room.dispose();
-			throw new Error(
-				localize(
-					'call.document.newCopyRequired',
-					'Open shared documents in a new untitled editor to preserve local changes.',
-				),
-			);
+			throw new Error(localize('call.document.newCopyRequired', 'Open shared documents in a new untitled editor to preserve local changes.'));
 		}
 		try {
 			const controller = this.requireEditor().setCollaborationConnection(room);
@@ -415,20 +359,13 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 						if (!request.signal.aborted && !authorized()) {
 							request.abort();
 							controller.invalidate(
-								localize(
-									'collaboration.permissionChanged',
-									'Channel access changed. Reopen the notes to apply current permissions; unsynced edits are preserved in this editor.',
-								),
+								localize('collaboration.permissionChanged', 'Channel access changed. Reopen the notes to apply current permissions; unsynced edits are preserved in this editor.'),
 							);
 						}
 					}),
 				);
 				this.modelService.acceptCollaborationSnapshot(reference.resource, room.initialSnapshot.document);
-				listeners.add(
-					controller.onDidConfirmDocument(document =>
-						this.modelService.acceptCollaborationSnapshot(reference.resource, document),
-					),
-				);
+				listeners.add(controller.onDidConfirmDocument(document => this.modelService.acceptCollaborationSnapshot(reference.resource, document)));
 			}
 			return { roomId: room.roomId, principalId: room.principalId, canManageMembers: room.canManageMembers };
 		} catch (error) {
@@ -447,8 +384,7 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	private requireRoom(): DocumentCollaborationRoom {
-		if (!this.room || !this.roomRequest || this.roomRequest.signal.aborted)
-			throw new Error('Document collaboration is not connected');
+		if (!this.room || !this.roomRequest || this.roomRequest.signal.aborted) throw new Error('Document collaboration is not connected');
 		if (!this.room.canManageMembers) throw new Error('This collaboration member cannot manage room credentials');
 		return this.room;
 	}

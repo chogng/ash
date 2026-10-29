@@ -45,17 +45,12 @@ test('provisioner probes the Remote target and installs only its packaged artifa
 				invocations.push([...args]);
 				observedSignals.push(observer?.signal);
 				if (args[0] === 'probe') return { exitCode: 0, stdout: 'x86_64-unknown-linux-gnu\n', stderr: '' };
-				observer?.onStderrData(
-					'{"kind":"remoteRuntimeInstallProgress","phase":"complete","disposition":"reused"}\n',
-				);
+				observer?.onStderrData('{"kind":"remoteRuntimeInstallProgress","phase":"complete","disposition":"reused"}\n');
 				return { exitCode: 0, stdout: '/srv/ash/remote/runtime/bin/ash-remote-server\n', stderr: '' };
 			},
 		});
 
-		assert.equal(
-			await provisioner.install('Build-Linux', { signal: cancellation.signal }),
-			'/srv/ash/remote/runtime/bin/ash-remote-server',
-		);
+		assert.equal(await provisioner.install('Build-Linux', { signal: cancellation.signal }), '/srv/ash/remote/runtime/bin/ash-remote-server');
 		assert.deepEqual(invocations[0], ['probe', '--host', 'build-linux', '--ssh', '/usr/bin/ssh']);
 		assert.deepEqual(invocations[1], [
 			'install',
@@ -111,17 +106,11 @@ test('network provisioner fetches the authenticated target before invoking the s
 			invocations.push([...args]);
 			if (args[0] === 'probe') return { exitCode: 0, stdout: `${artifact.target}\n`, stderr: '' };
 			if (args[0] === 'fetch-runtime') {
-				observer?.onStderrData(
-					'{"kind":"remoteRuntimeDownloadProgress","phase":"downloadingArtifact","transferredBytes":1024,"totalBytes":2048}\n',
-				);
-				observer?.onStderrData(
-					'{"kind":"remoteRuntimeDownloadProgress","phase":"complete","disposition":"downloaded"}\n',
-				);
+				observer?.onStderrData('{"kind":"remoteRuntimeDownloadProgress","phase":"downloadingArtifact","transferredBytes":1024,"totalBytes":2048}\n');
+				observer?.onStderrData('{"kind":"remoteRuntimeDownloadProgress","phase":"complete","disposition":"downloaded"}\n');
 				return { exitCode: 0, stdout: `${JSON.stringify(artifact)}\n`, stderr: '' };
 			}
-			observer?.onStderrData(
-				'{"kind":"remoteRuntimeInstallProgress","phase":"complete","disposition":"installed"}\n',
-			);
+			observer?.onStderrData('{"kind":"remoteRuntimeInstallProgress","phase":"complete","disposition":"installed"}\n');
 			return { exitCode: 0, stdout: '/srv/ash/runtime/bin/ash-remote-server\n', stderr: '' };
 		},
 	});
@@ -140,13 +129,7 @@ test('network provisioner fetches the authenticated target before invoking the s
 		'--progress',
 		'json-lines',
 	]);
-	assert.deepEqual(invocations[2].slice(0, 5), [
-		'install',
-		'--host',
-		'build-linux',
-		'--archive',
-		artifact.archivePath,
-	]);
+	assert.deepEqual(invocations[2].slice(0, 5), ['install', '--host', 'build-linux', '--archive', artifact.archivePath]);
 	assert.deepEqual(progress, [
 		{ phase: 'downloadingArtifact', transferredBytes: 1024, totalBytes: 2048 },
 		{ phase: 'downloadComplete', disposition: 'downloaded' },

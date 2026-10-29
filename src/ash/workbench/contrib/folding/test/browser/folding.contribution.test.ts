@@ -13,17 +13,11 @@ import { FoldingController } from '../../../../../editor/contrib/folding/browser
 import { createTestCodeEditor } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { createConfigurationSchema } from '../../../../../platform/configuration/common/configurationSchema.js';
-import {
-	Extensions as JSONExtensions,
-	type IJSONContributionRegistry,
-} from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
+import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { IExtensionService, type ExtensionCatalog } from '../../../../services/extensions/common/extensionService.js';
@@ -56,8 +50,7 @@ function createServices(resources: DisposableStore): {
 		{
 			getExtensionPointContributions: () => [],
 			currentCatalog: catalog,
-			getExtension: async (id: string) =>
-				catalog.extensions.find(extension => extension.id.toLowerCase() === id.toLowerCase()),
+			getExtension: async (id: string) => catalog.extensions.find(extension => extension.id.toLowerCase() === id.toLowerCase()),
 			themes: { currentCatalog: { revision: 0, themes: [] }, onDidChange: Event.None },
 			fileTemplates: { currentCatalog: { revision: 0, templates: [] }, onDidChange: Event.None },
 			debugAdapters: { definitions: [], onDidChange: Event.None, get: () => undefined },
@@ -94,13 +87,9 @@ test('Code folding applies persisted language overrides independently of the hos
 			}),
 		);
 	using model = new TextModel('one\ntwo', { languageId: 'plaintext' });
-	await configuration.write(
-		'{\n// Keep this comment\n"editor.defaultFoldingRangeProvider": "test.first",\n"[plaintext]": { "editor.defaultFoldingRangeProvider": "test.second" }\n}',
-	);
+	await configuration.write('{\n// Keep this comment\n"editor.defaultFoldingRangeProvider": "test.first",\n"[plaintext]": { "editor.defaultFoldingRangeProvider": "test.second" }\n}');
 	const errors: unknown[] = [];
-	const host = resources.add(
-		WorkbenchContributionsRegistry.createHost(services, error => errors.push(error), ['workbench.contrib.folding']),
-	);
+	const host = resources.add(WorkbenchContributionsRegistry.createHost(services, error => errors.push(error), ['workbench.contrib.folding']));
 	host.advance(WorkbenchPhase.AfterRestored);
 	const container = document.createElement('div');
 	document.body.appendChild(container);
@@ -213,11 +202,7 @@ test('changing the default folding provider cancels pending results and refreshe
 	);
 	const requestCounts = [pending.length, readyRequests];
 	host.dispose();
-	assert.deepEqual(
-		[pending.length, readyRequests],
-		requestCounts,
-		'Releasing the Workbench policy must not request providers during transport teardown',
-	);
+	assert.deepEqual([pending.length, readyRequests], requestCounts, 'Releasing the Workbench policy must not request providers during transport teardown');
 });
 
 test('folding candidates follow providers and extension labels and use Chinese configuration text', async () => {
@@ -231,9 +216,7 @@ test('folding candidates follow providers and extension labels and use Chinese c
 		['workbench.contrib.folding'],
 	);
 	host.advance(WorkbenchPhase.AfterRestored);
-	const registration = resources.add(
-		features.foldingRangeProvider.register('*', { id: 'test.extension', provideFoldingRanges: () => [] }),
-	);
+	const registration = resources.add(features.foldingRangeProvider.register('*', { id: 'test.extension', provideFoldingRanges: () => [] }));
 	catalogChanged.fire({
 		generation: 1,
 		diagnostics: [],
@@ -252,10 +235,7 @@ test('folding candidates follow providers and extension labels and use Chinese c
 	});
 	const definition = Registry.as<IConfigurationRegistry>(Extensions.Configuration).getConfiguration(configName)!;
 	const choices = definition.schema!.anyOf![0]!;
-	assert.deepEqual(
-		{ ids: choices.enum, label: choices.enumDescriptions?.[1] },
-		{ ids: [null, 'test.extension'], label: 'Test extension' },
-	);
+	assert.deepEqual({ ids: choices.enum, label: choices.enumDescriptions?.[1] }, { ids: [null, 'test.extension'], label: 'Test extension' });
 	using schemaStore = new DisposableStore();
 	const schemas = jsonRegistry;
 	schemas.registerSchema('test.settings', createConfigurationSchema(), schemaStore);

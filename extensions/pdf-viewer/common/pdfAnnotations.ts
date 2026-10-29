@@ -68,13 +68,11 @@ export function parsePdfAnnotationDocument(source: string): PdfAnnotationDocumen
 	if (document.version !== PDF_ANNOTATION_DOCUMENT_VERSION) {
 		throw new RangeError(`Unsupported PDF annotation document version: ${String(document.version)}`);
 	}
-	if (!Array.isArray(document.annotations))
-		throw new TypeError('PDF annotation document annotations must be an array');
+	if (!Array.isArray(document.annotations)) throw new TypeError('PDF annotation document annotations must be an array');
 	const ids = new Set<string>();
 	const annotations = document.annotations.map((annotation, index) => {
 		const decoded = parseAnnotation(annotation, `PDF annotation document annotations[${index}]`);
-		if (ids.has(decoded.id))
-			throw new RangeError(`PDF annotation document contains duplicate annotation ID: ${decoded.id}`);
+		if (ids.has(decoded.id)) throw new RangeError(`PDF annotation document contains duplicate annotation ID: ${decoded.id}`);
 		ids.add(decoded.id);
 		return decoded;
 	});
@@ -109,17 +107,11 @@ function parseAnnotation(value: unknown, path: string): PdfAnnotation {
 			return Object.freeze({
 				...base,
 				kind,
-				points: Object.freeze(
-					annotation.points.map((point, index) => pointValue(point, `${path}.points[${index}]`)),
-				),
+				points: Object.freeze(annotation.points.map((point, index) => pointValue(point, `${path}.points[${index}]`))),
 			});
 		}
 		case 'note':
-			requireExactKeys(
-				annotation,
-				['id', 'kind', 'page', 'color', 'createdAt', 'updatedAt', 'point', 'text'],
-				path,
-			);
+			requireExactKeys(annotation, ['id', 'kind', 'page', 'color', 'createdAt', 'updatedAt', 'point', 'text'], path);
 			return Object.freeze({
 				...base,
 				kind,
@@ -162,8 +154,7 @@ function requireExactKeys(value: Record<string, unknown>, keys: readonly string[
 }
 
 function identifier(value: unknown, path: string): string {
-	if (typeof value !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(value))
-		throw new TypeError(`${path} must be a stable annotation ID`);
+	if (typeof value !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(value)) throw new TypeError(`${path} must be a stable annotation ID`);
 	return value;
 }
 
@@ -173,37 +164,31 @@ function string(value: unknown, path: string): string {
 }
 
 function color(value: unknown, path: string): string {
-	if (typeof value !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(value))
-		throw new TypeError(`${path} must be a six-digit hexadecimal color`);
+	if (typeof value !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(value)) throw new TypeError(`${path} must be a six-digit hexadecimal color`);
 	return value.toLowerCase();
 }
 
 function timestamp(value: unknown, path: string): string {
-	if (typeof value !== 'string' || !Number.isFinite(Date.parse(value)))
-		throw new TypeError(`${path} must be an ISO timestamp`);
+	if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) throw new TypeError(`${path} must be an ISO timestamp`);
 	return value;
 }
 
 function text(value: unknown, path: string): string {
-	if (typeof value !== 'string' || value.length > 10_000)
-		throw new RangeError(`${path} must be text no longer than 10000 characters`);
+	if (typeof value !== 'string' || value.length > 10_000) throw new RangeError(`${path} must be text no longer than 10000 characters`);
 	return value;
 }
 
 function positiveInteger(value: unknown, path: string): number {
-	if (!Number.isSafeInteger(value) || (value as number) < 1)
-		throw new RangeError(`${path} must be a positive integer`);
+	if (!Number.isSafeInteger(value) || (value as number) < 1) throw new RangeError(`${path} must be a positive integer`);
 	return value as number;
 }
 
 function relative(value: unknown, path: string): number {
-	if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1)
-		throw new RangeError(`${path} must be between 0 and 1`);
+	if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) throw new RangeError(`${path} must be between 0 and 1`);
 	return value;
 }
 
 function positiveRelative(value: unknown, path: string): number {
-	if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0 || value > 1)
-		throw new RangeError(`${path} must be greater than 0 and no more than 1`);
+	if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0 || value > 1) throw new RangeError(`${path} must be greater than 0 and no more than 1`);
 	return value;
 }

@@ -45,12 +45,7 @@ export interface Layout2DResult extends IRectangle {
  * The calculation is independent of DOM coordinate systems. Callers must
  * provide every rectangle in the same coordinate space.
  */
-export function layout2d(
-	viewport: IRectangle,
-	view: ISize,
-	anchor: IRectangle,
-	options: Layout2DOptions = {},
-): Layout2DResult {
+export function layout2d(viewport: IRectangle, view: ISize, anchor: IRectangle, options: Layout2DOptions = {}): Layout2DResult {
 	const axis = options.anchorAxisAlignment ?? AnchorAxisAlignment.Vertical;
 	const gap = Math.max(0, options.gap ?? 0);
 	const requestedPosition = options.anchorPosition ?? AnchorPosition.Below;
@@ -63,14 +58,7 @@ export function layout2d(
 	const cross =
 		axis === AnchorAxisAlignment.Vertical
 			? alignWithAnchor(viewport.left, viewport.width, view.width, anchor.left, anchor.width, requestedAlignment)
-			: alignWithAnchor(
-					viewport.top,
-					viewport.height,
-					view.height,
-					anchor.top,
-					anchor.height,
-					requestedAlignment,
-				);
+			: alignWithAnchor(viewport.top, viewport.height, view.height, anchor.top, anchor.height, requestedAlignment);
 
 	const left = axis === AnchorAxisAlignment.Vertical ? cross.offset : primary.offset;
 	const top = axis === AnchorAxisAlignment.Vertical ? primary.offset : cross.offset;
@@ -92,15 +80,7 @@ interface PrimaryPlacement {
 	readonly position: AnchorPosition;
 }
 
-function placeBeside(
-	viewportStart: number,
-	viewportSize: number,
-	viewSize: number,
-	anchorStart: number,
-	anchorSize: number,
-	requested: AnchorPosition,
-	gap: number,
-): PrimaryPlacement {
+function placeBeside(viewportStart: number, viewportSize: number, viewSize: number, anchorStart: number, anchorSize: number, requested: AnchorPosition, gap: number): PrimaryPlacement {
 	const viewportEnd = viewportStart + viewportSize;
 	const anchorEnd = anchorStart + anchorSize;
 	const after = anchorEnd + gap;
@@ -128,7 +108,10 @@ function placeBeside(
 	const spaceBefore = Math.max(0, anchorStart - gap - viewportStart);
 	const position = spaceAfter >= spaceBefore ? AnchorPosition.Below : AnchorPosition.Above;
 	const desired = position === AnchorPosition.Below ? after : before;
-	return { offset: clampToViewport(desired, viewSize, viewportStart, viewportEnd), position };
+	return {
+		offset: clampToViewport(desired, viewSize, viewportStart, viewportEnd),
+		position,
+	};
 }
 
 interface CrossPlacement {
@@ -136,14 +119,7 @@ interface CrossPlacement {
 	readonly alignment: AnchorAlignment;
 }
 
-function alignWithAnchor(
-	viewportStart: number,
-	viewportSize: number,
-	viewSize: number,
-	anchorStart: number,
-	anchorSize: number,
-	requested: AnchorAlignment,
-): CrossPlacement {
+function alignWithAnchor(viewportStart: number, viewportSize: number, viewSize: number, anchorStart: number, anchorSize: number, requested: AnchorAlignment): CrossPlacement {
 	const viewportEnd = viewportStart + viewportSize;
 	if (requested === AnchorAlignment.Center) {
 		return {
@@ -158,22 +134,37 @@ function alignWithAnchor(
 
 	if (requested === AnchorAlignment.Left) {
 		if (leftFits) {
-			return { offset: leftAligned, alignment: AnchorAlignment.Left };
+			return {
+				offset: leftAligned,
+				alignment: AnchorAlignment.Left,
+			};
 		}
 		if (rightFits) {
-			return { offset: rightAligned, alignment: AnchorAlignment.Right };
+			return {
+				offset: rightAligned,
+				alignment: AnchorAlignment.Right,
+			};
 		}
 	} else {
 		if (rightFits) {
-			return { offset: rightAligned, alignment: AnchorAlignment.Right };
+			return {
+				offset: rightAligned,
+				alignment: AnchorAlignment.Right,
+			};
 		}
 		if (leftFits) {
-			return { offset: leftAligned, alignment: AnchorAlignment.Left };
+			return {
+				offset: leftAligned,
+				alignment: AnchorAlignment.Left,
+			};
 		}
 	}
 
 	const desired = requested === AnchorAlignment.Left ? leftAligned : rightAligned;
-	return { offset: clampToViewport(desired, viewSize, viewportStart, viewportEnd), alignment: requested };
+	return {
+		offset: clampToViewport(desired, viewSize, viewportStart, viewportEnd),
+		alignment: requested,
+	};
 }
 
 function clampToViewport(offset: number, size: number, viewportStart: number, viewportEnd: number): number {

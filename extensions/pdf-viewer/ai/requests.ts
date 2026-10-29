@@ -22,8 +22,7 @@ export type PdfReadRequest =
 
 const path = {
 	type: 'string',
-	description:
-		'Absolute path of the local PDF explicitly requested by the user. The MCP invocation remains subject to Ash approval.',
+	description: 'Absolute path of the local PDF explicitly requested by the user. The MCP invocation remains subject to Ash approval.',
 };
 const version = {
 	type: 'string',
@@ -33,12 +32,9 @@ const version = {
 const region = {
 	type: 'object',
 	additionalProperties: false,
-	properties: Object.fromEntries(
-		['x', 'y', 'width', 'height'].map(key => [key, { type: 'number', minimum: 0, maximum: 1 }]),
-	),
+	properties: Object.fromEntries(['x', 'y', 'width', 'height'].map(key => [key, { type: 'number', minimum: 0, maximum: 1 }])),
 	required: ['x', 'y', 'width', 'height'],
-	description:
-		'Optional rectangle on the rotated page, normalized 0–1 from its top-left. Text region requires one page.',
+	description: 'Optional rectangle on the rotated page, normalized 0–1 from its top-left. Text region requires one page.',
 };
 const annotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 
@@ -60,15 +56,13 @@ export const pdfTools = [
 					type: 'integer',
 					minimum: 0,
 					default: 0,
-					description:
-						'Continue within start_page at the exact continuation.offset returned by pdf_read. Use the same region and SHA-256.',
+					description: 'Continue within start_page at the exact continuation.offset returned by pdf_read. Use the same region and SHA-256.',
 				},
 				region,
 				include_saved_annotations: {
 					type: 'boolean',
 					default: false,
-					description:
-						'Only when the user asks to include annotations. Reads the saved companion file, never viewer drafts.',
+					description: 'Only when the user asks to include annotations. Reads the saved companion file, never viewer drafts.',
 				},
 			},
 			required: ['path'],
@@ -103,35 +97,18 @@ export function parseRequest(name: string, input: unknown): PdfReadRequest {
 	if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Expected PDF tool arguments');
 	const value = input as Record<string, unknown>;
 	const schema = pdfTools[name === 'pdf_read' ? 0 : 1].inputSchema;
-	for (const key of Object.keys(value))
-		if (!Object.hasOwn(schema.properties, key)) throw new Error(`Unknown argument: ${key}`);
-	if (
-		typeof value.path !== 'string' ||
-		!isAbsolute(value.path) ||
-		value.path.includes('\0') ||
-		value.path.length > 4096
-	)
-		throw new Error('path must be an absolute local file path');
-	if (
-		value.expected_sha256 !== undefined &&
-		(typeof value.expected_sha256 !== 'string' || !/^[a-f0-9]{64}$/u.test(value.expected_sha256))
-	)
+	for (const key of Object.keys(value)) if (!Object.hasOwn(schema.properties, key)) throw new Error(`Unknown argument: ${key}`);
+	if (typeof value.path !== 'string' || !isAbsolute(value.path) || value.path.includes('\0') || value.path.length > 4096) throw new Error('path must be an absolute local file path');
+	if (value.expected_sha256 !== undefined && (typeof value.expected_sha256 !== 'string' || !/^[a-f0-9]{64}$/u.test(value.expected_sha256)))
 		throw new Error('expected_sha256 must be a SHA-256 hex digest');
 	let clip: Region | undefined;
 	if (value.region !== undefined) {
-		if (!value.region || typeof value.region !== 'object' || Array.isArray(value.region))
-			throw new Error('Invalid page region');
+		if (!value.region || typeof value.region !== 'object' || Array.isArray(value.region)) throw new Error('Invalid page region');
 		const r = value.region as Record<string, unknown>;
-		if (
-			Object.keys(r).length !== 4 ||
-			!['x', 'y', 'width', 'height'].every(
-				key => typeof r[key] === 'number' && Number.isFinite(r[key]) && r[key] >= 0 && r[key] <= 1,
-			)
-		)
+		if (Object.keys(r).length !== 4 || !['x', 'y', 'width', 'height'].every(key => typeof r[key] === 'number' && Number.isFinite(r[key]) && r[key] >= 0 && r[key] <= 1))
 			throw new Error('Invalid page region');
 		clip = r as unknown as Region;
-		if (!clip.width || !clip.height || clip.x + clip.width > 1 || clip.y + clip.height > 1)
-			throw new Error('Region must fit within the page');
+		if (!clip.width || !clip.height || clip.x + clip.width > 1 || clip.y + clip.height > 1) throw new Error('Region must fit within the page');
 	}
 	const base = { path: value.path, expected_sha256: value.expected_sha256 as string | undefined, region: clip };
 	if (name === 'pdf_render_page')
@@ -144,8 +121,7 @@ export function parseRequest(name: string, input: unknown): PdfReadRequest {
 	const start = integer(value.start_page ?? 1, 'start_page', 1, 100000);
 	const end = value.end_page === undefined ? undefined : integer(value.end_page, 'end_page', start, start + 19);
 	if (clip && end !== undefined && end !== start) throw new Error('A text region requires exactly one page');
-	if (value.include_saved_annotations !== undefined && typeof value.include_saved_annotations !== 'boolean')
-		throw new Error('include_saved_annotations must be boolean');
+	if (value.include_saved_annotations !== undefined && typeof value.include_saved_annotations !== 'boolean') throw new Error('include_saved_annotations must be boolean');
 	return {
 		...base,
 		kind: 'text',
@@ -158,7 +134,6 @@ export function parseRequest(name: string, input: unknown): PdfReadRequest {
 }
 
 function integer(value: unknown, name: string, minimum: number, maximum: number): number {
-	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum || value > maximum)
-		throw new Error(`${name} must be an integer from ${minimum} to ${maximum}`);
+	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum || value > maximum) throw new Error(`${name} must be an integer from ${minimum} to ${maximum}`);
 	return value;
 }

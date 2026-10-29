@@ -1,11 +1,6 @@
 import { Emitter, type Event } from '../../base/common/event.js';
 import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
-import {
-	type DialogRequest,
-	DialogResult,
-	type IDialogHandler,
-	type IDialogOutcome,
-} from '../../platform/dialogs/common/dialogs.js';
+import { type DialogRequest, DialogResult, type IDialogHandler, type IDialogOutcome } from '../../platform/dialogs/common/dialogs.js';
 import { createServiceIdentifier } from '../../platform/instantiation/common/instantiation.js';
 
 /** One dialog exposed to a workbench dialog renderer. */
@@ -25,8 +20,7 @@ export interface IDialogHandle {
 
 /** Change emitted after one dialog leaves the model. */
 export type IDialogCloseEvent =
-	| { readonly kind: 'result'; readonly item: IDialogViewItem; readonly result: IDialogOutcome }
-	| { readonly kind: 'error'; readonly item: IDialogViewItem; readonly error: unknown };
+	{ readonly kind: 'result'; readonly item: IDialogViewItem; readonly result: IDialogOutcome } | { readonly kind: 'error'; readonly item: IDialogViewItem; readonly error: unknown };
 
 /**
  * Window-scoped dialog queue shared between dialog services and renderers.
@@ -89,7 +83,11 @@ export class DialogsModel extends Disposable implements IDialogsModel {
 				settled = true;
 				this.remove(item);
 				resolveResult(dialogResult);
-				this._onDidCloseDialog.fire({ kind: 'result', item, result: dialogResult });
+				this._onDidCloseDialog.fire({
+					kind: 'result',
+					item,
+					result: dialogResult,
+				});
 			},
 			cancel: () => item.close({ button: DialogResult.Cancel }),
 			fail: error => {

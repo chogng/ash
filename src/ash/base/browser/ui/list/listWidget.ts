@@ -7,12 +7,7 @@ import { disposableWindowTimeout } from '../../scheduler.js';
 import { rot } from '../../../common/numbers.js';
 import { isMacintosh } from '../../../common/platform.js';
 import { setAriaAttribute } from '../aria/aria.js';
-import type {
-	IKeyboardNavigationLabelProvider,
-	ListAccessibilityProvider,
-	ListDragAndDrop,
-	ListScrolling,
-} from './list.js';
+import type { IKeyboardNavigationLabelProvider, ListAccessibilityProvider, ListDragAndDrop, ListScrolling } from './list.js';
 import { ListView } from './listView.js';
 
 /** Host-provided CSS colors, resolved through the containing theme root. */
@@ -168,22 +163,14 @@ export class List<T> extends Disposable {
 			this._register(
 				addDisposableListener(this.element, 'mousedown', (event: MouseEvent) => {
 					const index = this.view.getRowIndex(event);
-					if (index !== undefined)
-						stopEvent(event, { preventDefault: this.view.row(index)?.draggable !== true });
+					if (index !== undefined) stopEvent(event, { preventDefault: this.view.row(index)?.draggable !== true });
 				}),
 			);
 			this._register(addDisposableListener(this.element, 'click', (event: MouseEvent) => this.onClick(event)));
-			this._register(
-				addDisposableListener(this.element, 'auxclick', (event: MouseEvent) => this.onAuxClick(event)),
-			);
-			this._register(
-				addDisposableListener(this.element, 'dblclick', (event: MouseEvent) => this.onDoubleClick(event)),
-			);
+			this._register(addDisposableListener(this.element, 'auxclick', (event: MouseEvent) => this.onAuxClick(event)));
+			this._register(addDisposableListener(this.element, 'dblclick', (event: MouseEvent) => this.onDoubleClick(event)));
 		}
-		if (options.keyboardNavigation === true)
-			this._register(
-				addDisposableListener(this.element, 'keydown', (event: KeyboardEvent) => this.onKeyDown(event)),
-			);
+		if (options.keyboardNavigation === true) this._register(addDisposableListener(this.element, 'keydown', (event: KeyboardEvent) => this.onKeyDown(event)));
 		this._register(addDisposableListener(this.element, 'focusout', () => this.resetNavigationPrefix()));
 	}
 
@@ -208,29 +195,21 @@ export class List<T> extends Disposable {
 	splice(start: number, deleteCount: number, elements: readonly T[] = []): void {
 		const focusedId = this.activeItem === undefined ? undefined : this.itemId(this.activeItem, this._activeIndex);
 		const selectedIds = this._selectionIndexes.map(index => this.itemId(this.items[index], index));
-		const anchorId =
-			this.selectionAnchor === undefined
-				? undefined
-				: this.itemId(this.items[this.selectionAnchor], this.selectionAnchor);
+		const anchorId = this.selectionAnchor === undefined ? undefined : this.itemId(this.items[this.selectionAnchor], this.selectionAnchor);
 
 		this.view.splice(start, deleteCount, elements);
 		const nextActive = focusedId === undefined ? -1 : this.indexOfId(focusedId);
 		if (nextActive >= 0) {
 			this._activeIndex = nextActive;
 		} else {
-			this._activeIndex =
-				this.items.length > 0 &&
-				(this.options.mouseSupport !== false || this.options.keyboardNavigation === true)
-					? 0
-					: -1;
+			this._activeIndex = this.items.length > 0 && (this.options.mouseSupport !== false || this.options.keyboardNavigation === true) ? 0 : -1;
 		}
 		this._selectionIndexes = selectedIds.map(id => this.indexOfId(id)).filter(index => index >= 0);
 		const nextAnchor = anchorId === undefined ? -1 : this.indexOfId(anchorId);
 		this.selectionAnchor = nextAnchor >= 0 ? nextAnchor : undefined;
 		this.syncRows();
 
-		const nextFocusedId =
-			this.activeItem === undefined ? undefined : this.itemId(this.activeItem, this._activeIndex);
+		const nextFocusedId = this.activeItem === undefined ? undefined : this.itemId(this.activeItem, this._activeIndex);
 		const nextSelectedIds = this._selectionIndexes.map(index => this.itemId(this.items[index], index));
 		if (focusedId !== nextFocusedId) {
 			this.emitFocus(undefined);
@@ -260,9 +239,7 @@ export class List<T> extends Disposable {
 	}
 
 	setSelection(indexes: readonly number[], browserEvent?: UIEvent): void {
-		const normalized = [...new Set(indexes)].filter(
-			index => Number.isInteger(index) && index >= 0 && index < this.items.length,
-		);
+		const normalized = [...new Set(indexes)].filter(index => Number.isInteger(index) && index >= 0 && index < this.items.length);
 		if (equals(this._selectionIndexes, normalized)) {
 			return;
 		}
@@ -356,8 +333,7 @@ export class List<T> extends Disposable {
 
 	private onKeyDown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing) return;
-		if (isHTMLElement(event.target) && event.target.closest('input, textarea, select, [contenteditable="true"]'))
-			return;
+		if (isHTMLElement(event.target) && event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
 		let index: number | undefined;
 		switch (event.key) {
 			case 'ArrowDown':
@@ -401,8 +377,7 @@ export class List<T> extends Disposable {
 		const pageEdge = (): number => {
 			const position = this.view.scrollTop + (direction === 1 ? pageHeight : 0);
 			let index = this.view.indexAt(position);
-			if (direction === 1 && this.view.getElementTop(index) + this.view.getElementHeight(index) > position)
-				index--;
+			if (direction === 1 && this.view.getElementTop(index) + this.view.getElementHeight(index) > position) index--;
 			if (direction === -1 && this.view.getElementTop(index) < position) index++;
 			return Math.max(0, Math.min(index, this.items.length - 1));
 		};
@@ -415,28 +390,17 @@ export class List<T> extends Disposable {
 
 	private navigateByLabel(event: KeyboardEvent): void {
 		const provider = this.options.keyboardNavigationLabelProvider;
-		if (!provider || event.altKey || event.ctrlKey || event.metaKey || event.key.length !== 1 || event.key === ' ')
-			return;
+		if (!provider || event.altKey || event.ctrlKey || event.metaKey || event.key.length !== 1 || event.key === ' ') return;
 		const character = event.key.toLocaleLowerCase();
 		const cycling = this.navigationPrefix === character;
 		const start = !this.navigationPrefix || cycling ? this._activeIndex + 1 : this._activeIndex;
 		this.navigationPrefix = cycling ? character : this.navigationPrefix + character;
-		this.navigationTimer.value = disposableWindowTimeout(
-			getWindow(this.element),
-			() => this.resetNavigationPrefix(),
-			800,
-		);
+		this.navigationTimer.value = disposableWindowTimeout(getWindow(this.element), () => this.resetNavigationPrefix(), 800);
 		for (let offset = 0; offset < this.items.length; offset++) {
 			const index = rot(start + offset, this.items.length);
 			const label = provider.getKeyboardNavigationLabel(this.items[index]!);
 			const labels = Array.isArray(label) ? label : [label];
-			if (
-				!labels.some(
-					value =>
-						value === undefined || value.toString()?.toLocaleLowerCase().startsWith(this.navigationPrefix),
-				)
-			)
-				continue;
+			if (!labels.some(value => value === undefined || value.toString()?.toLocaleLowerCase().startsWith(this.navigationPrefix))) continue;
 			stopEvent(event);
 			this.setActiveIndex(index, event);
 			return;
@@ -463,9 +427,7 @@ export class List<T> extends Disposable {
 		const toggleSelection = isMacintosh ? event.metaKey : event.ctrlKey;
 		if (this.options.multipleSelectionSupport && toggleSelection) {
 			if (event.type === 'click') {
-				const indexes = this._selectionIndexes.includes(index)
-					? this._selectionIndexes.filter(selected => selected !== index)
-					: [...this._selectionIndexes, index];
+				const indexes = this._selectionIndexes.includes(index) ? this._selectionIndexes.filter(selected => selected !== index) : [...this._selectionIndexes, index];
 				this.setSelection(indexes, event);
 			}
 			return;

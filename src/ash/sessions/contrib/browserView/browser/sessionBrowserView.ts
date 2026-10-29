@@ -4,10 +4,7 @@ import { autorun, observableSignalFromEvent } from '../../../../base/common/obse
 import { IBrowserViewService } from '../../../../platform/browserView/common/browserView.js';
 import type { IWorkbenchContribution } from '../../../../workbench/common/contributions.js';
 import type { BrowserEditorInput } from '../../../../workbench/contrib/browserView/common/browserEditorInput.js';
-import {
-	IBrowserViewWorkbenchService,
-	type IBrowserViewFilterContext,
-} from '../../../../workbench/contrib/browserView/common/browserView.js';
+import { IBrowserViewWorkbenchService, type IBrowserViewFilterContext } from '../../../../workbench/contrib/browserView/common/browserView.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
 import type { AgentTreeNode } from '../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
@@ -72,17 +69,12 @@ export class SessionBrowserViewController extends Disposable implements IWorkben
 		if (!selection) {
 			return undefined;
 		}
-		return selection.kind === 'session'
-			? { kind: 'session', id: selection.active.session.sessionId }
-			: { kind: 'untitled', id: selection.session.untitledSessionId };
+		return selection.kind === 'session' ? { kind: 'session', id: selection.active.session.sessionId } : { kind: 'untitled', id: selection.session.untitledSessionId };
 	}
 
 	private findSession(ownerId: string): SessionReference | undefined {
 		const session = this.management.sessions.find(
-			candidate =>
-				candidate.sessionId === ownerId ||
-				candidate.chats.some(chat => chat.threadId === ownerId) ||
-				this.hasThread(candidate.agentTree ?? [], ownerId),
+			candidate => candidate.sessionId === ownerId || candidate.chats.some(chat => chat.threadId === ownerId) || this.hasThread(candidate.agentTree ?? [], ownerId),
 		);
 		return session ? { kind: 'session', id: session.sessionId } : undefined;
 	}
@@ -118,10 +110,7 @@ export class SessionBrowserViewController extends Disposable implements IWorkben
 		if (!owner) {
 			return true;
 		}
-		const active =
-			context.activeSessionId === undefined
-				? this.reference(this.sessions.activeSelection)
-				: this.findSession(context.activeSessionId);
+		const active = context.activeSessionId === undefined ? this.reference(this.sessions.activeSelection) : this.findSession(context.activeSessionId);
 		return owner.kind === active?.kind && owner.id === active.id;
 	}
 
@@ -143,9 +132,7 @@ export class SessionBrowserViewController extends Disposable implements IWorkben
 			}
 			const live =
 				owner.kind === 'session'
-					? this.management.sessions.some(
-							session => session.sessionId === owner.id && session.status === 'active',
-						)
+					? this.management.sessions.some(session => session.sessionId === owner.id && session.status === 'active')
 					: this.management.untitledSessions.some(session => session.untitledSessionId === owner.id);
 			if (live) {
 				continue;

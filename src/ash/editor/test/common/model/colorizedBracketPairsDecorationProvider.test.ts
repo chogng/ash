@@ -35,25 +35,19 @@ test('Bracket colorization follows model nesting and excludes brackets in string
 	model.tokenization.forceTokenization(model.getLineCount());
 	const colors = {
 		getLineBrackets: (lineIndex: number) =>
-			model
-				.getLineDecorations(lineIndex + 1)
-				.map(decoration => ({
-					startColumn: decoration.range.startColumn - 1,
-					endColumn: decoration.range.endColumn - 1,
-					className: decoration.options.inlineClassName,
-				})),
+			model.getLineDecorations(lineIndex + 1).map(decoration => ({
+				startColumn: decoration.range.startColumn - 1,
+				endColumn: decoration.range.endColumn - 1,
+				className: decoration.options.inlineClassName,
+			})),
 	};
 
-	assert.deepEqual(colors.getLineBrackets(0), [
-		{ startColumn: 0, endColumn: 1, className: 'stanza-editor-bracket-level-1' },
-	]);
+	assert.deepEqual(colors.getLineBrackets(0), [{ startColumn: 0, endColumn: 1, className: 'stanza-editor-bracket-level-1' }]);
 	assert.deepEqual(colors.getLineBrackets(1), [
 		{ startColumn: 2, endColumn: 3, className: 'stanza-editor-bracket-level-2' },
 		{ startColumn: 6, endColumn: 7, className: 'stanza-editor-bracket-level-2' },
 	]);
-	assert.deepEqual(colors.getLineBrackets(2), [
-		{ startColumn: 0, endColumn: 1, className: 'stanza-editor-bracket-level-1' },
-	]);
+	assert.deepEqual(colors.getLineBrackets(2), [{ startColumn: 0, endColumn: 1, className: 'stanza-editor-bracket-level-1' }]);
 });
 
 test('Bracket colorization invalidates its cached nesting after model edits', () => {
@@ -62,21 +56,15 @@ test('Bracket colorization invalidates its cached nesting after model edits', ()
 	using registration = configurations.register('typescript', { brackets: [['{', '}']] });
 	const colors = {
 		getLineBrackets: (lineIndex: number) =>
-			model
-				.getLineDecorations(lineIndex + 1)
-				.map(decoration => ({
-					startColumn: decoration.range.startColumn - 1,
-					endColumn: decoration.range.endColumn - 1,
-					className: decoration.options.inlineClassName,
-				})),
+			model.getLineDecorations(lineIndex + 1).map(decoration => ({
+				startColumn: decoration.range.startColumn - 1,
+				endColumn: decoration.range.endColumn - 1,
+				className: decoration.options.inlineClassName,
+			})),
 	};
-	assert.deepEqual(colors.getLineBrackets(1), [
-		{ startColumn: 0, endColumn: 1, className: 'stanza-editor-bracket-level-1' },
-	]);
+	assert.deepEqual(colors.getLineBrackets(1), [{ startColumn: 0, endColumn: 1, className: 'stanza-editor-bracket-level-1' }]);
 	model.applyEdits([{ range: Range.fromPositions(model.positionAt(0)), text: '{\n' }]);
-	assert.deepEqual(colors.getLineBrackets(2), [
-		{ startColumn: 0, endColumn: 1, className: 'stanza-editor-bracket-level-2' },
-	]);
+	assert.deepEqual(colors.getLineBrackets(2), [{ startColumn: 0, endColumn: 1, className: 'stanza-editor-bracket-level-2' }]);
 });
 
 test('Model bracket decorations honor color pools, query filters and option changes', () => {

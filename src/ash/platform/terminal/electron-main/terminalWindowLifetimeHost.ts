@@ -42,8 +42,7 @@ export class TerminalWindowLifetimeHost extends Disposable {
 	}
 
 	private getToken(): Promise<string> {
-		if (this.isDisposed)
-			return Promise.reject(new Error(localize('terminal.windowLifetime.closed', 'Terminal window is closed')));
+		if (this.isDisposed) return Promise.reject(new Error(localize('terminal.windowLifetime.closed', 'Terminal window is closed')));
 		if (!this.pending) {
 			const pending = this.start();
 			this.pending = pending;
@@ -82,40 +81,13 @@ export class TerminalWindowLifetimeHost extends Disposable {
 					else resolve();
 				};
 				const onError = (error: Error): void => finish(error);
-				const onExit = (): void =>
-					finish(
-						new Error(
-							localize(
-								'terminal.windowLifetime.registrationExited',
-								'Terminal lifetime process exited before registration',
-							),
-						),
-					);
+				const onExit = (): void => finish(new Error(localize('terminal.windowLifetime.registrationExited', 'Terminal lifetime process exited before registration')));
 				const onData = (data: Buffer): void => {
 					response += data.toString('utf8');
 					if (response === 'ready\n') finish();
-					else if (response.length > 16 || response.includes('\n'))
-						finish(
-							new Error(
-								localize(
-									'terminal.windowLifetime.registrationInvalid',
-									'Invalid terminal lifetime registration',
-								),
-							),
-						);
+					else if (response.length > 16 || response.includes('\n')) finish(new Error(localize('terminal.windowLifetime.registrationInvalid', 'Invalid terminal lifetime registration')));
 				};
-				const timer = setTimeout(
-					() =>
-						finish(
-							new Error(
-								localize(
-									'terminal.windowLifetime.registrationTimedOut',
-									'Terminal lifetime registration timed out',
-								),
-							),
-						),
-					10_000,
-				);
+				const timer = setTimeout(() => finish(new Error(localize('terminal.windowLifetime.registrationTimedOut', 'Terminal lifetime registration timed out'))), 10_000);
 				child.stdout!.on('data', onData);
 				child.once('error', onError);
 				child.once('exit', onExit);
@@ -125,8 +97,7 @@ export class TerminalWindowLifetimeHost extends Disposable {
 				// Never put a lifetime credential in argv, environment, or logs.
 				child.stdin!.write(`${token}\n`);
 			});
-			if (this.isDisposed || this.child !== child)
-				throw new Error(localize('terminal.windowLifetime.closed', 'Terminal window is closed'));
+			if (this.isDisposed || this.child !== child) throw new Error(localize('terminal.windowLifetime.closed', 'Terminal window is closed'));
 			return token;
 		} catch (error) {
 			child.stdin?.destroy();

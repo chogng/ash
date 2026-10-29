@@ -68,11 +68,7 @@ export class ChatContextUsageDetails extends Disposable {
 						capacity.toLocaleString(),
 						Math.round((usage.estimatedTokens / capacity) * 100),
 					)
-				: localize(
-						'chat.input.contextSummaryUnknown',
-						'{0} tokens · Capacity unavailable',
-						usage.estimatedTokens.toLocaleString(),
-					);
+				: localize('chat.input.contextSummaryUnknown', '{0} tokens · Capacity unavailable', usage.estimatedTokens.toLocaleString());
 		const bar = h(document, 'div');
 		bar.className = 'ash-chat-context-details-bar';
 		bar.setAttribute('aria-hidden', 'true');
@@ -89,10 +85,7 @@ export class ChatContextUsageDetails extends Disposable {
 		table.className = 'ash-chat-context-details-table';
 		table.setAttribute('aria-label', localize('chat.input.contextBreakdown', 'Context breakdown'));
 		const tableHead = table.createTHead().insertRow();
-		const headings = [
-			localize('chat.input.contextCategoryHeading', 'Category'),
-			localize('chat.input.contextTokensHeading', 'Tokens'),
-		];
+		const headings = [localize('chat.input.contextCategoryHeading', 'Category'), localize('chat.input.contextTokensHeading', 'Tokens')];
 		if (capacity !== undefined) headings.push(localize('chat.input.contextShareHeading', 'Input budget share'));
 		for (const label of headings) {
 			const heading = h(document, 'th');
@@ -112,15 +105,10 @@ export class ChatContextUsageDetails extends Disposable {
 			heading.append(marker, document.createTextNode(label));
 			row.append(heading);
 			row.insertCell().textContent = tokens.toLocaleString();
-			if (capacity !== undefined)
-				row.insertCell().textContent = `${((tokens / capacity) * 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
+			if (capacity !== undefined) row.insertCell().textContent = `${((tokens / capacity) * 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
 		};
 		for (const { category, tokens } of usage.categories) appendRow(categoryLabels[category], tokens, category);
-		if (capacity !== undefined)
-			appendRow(
-				localize('chat.input.contextRemaining', 'Remaining input budget'),
-				Math.max(0, capacity - usage.estimatedTokens),
-			);
+		if (capacity !== undefined) appendRow(localize('chat.input.contextRemaining', 'Remaining input budget'), Math.max(0, capacity - usage.estimatedTokens));
 		const notes = h(document, 'div');
 		notes.className = 'ash-chat-context-details-notes';
 		const addNote = (text: string): void => {
@@ -128,32 +116,10 @@ export class ChatContextUsageDetails extends Disposable {
 			note.textContent = text;
 			notes.append(note);
 		};
-		if (usage.model)
-			addNote(localize('chat.input.contextModel', 'Model: {0}/{1}', usage.model.provider, usage.model.model));
-		if (usage.contextWindow !== undefined)
-			addNote(
-				localize(
-					'chat.input.contextCapacity',
-					'Model context capacity: {0} tokens',
-					usage.contextWindow.toLocaleString(),
-				),
-			);
-		if (usage.autoCompactAt !== undefined)
-			addNote(
-				localize(
-					'chat.input.contextCompaction',
-					'Automatic compaction at: {0} tokens',
-					usage.autoCompactAt.toLocaleString(),
-				),
-			);
-		if (usage.latestRequestTokens !== undefined)
-			addNote(
-				localize(
-					'chat.input.contextLatest',
-					'Latest request measurement: {0} tokens',
-					usage.latestRequestTokens.toLocaleString(),
-				),
-			);
+		if (usage.model) addNote(localize('chat.input.contextModel', 'Model: {0}/{1}', usage.model.provider, usage.model.model));
+		if (usage.contextWindow !== undefined) addNote(localize('chat.input.contextCapacity', 'Model context capacity: {0} tokens', usage.contextWindow.toLocaleString()));
+		if (usage.autoCompactAt !== undefined) addNote(localize('chat.input.contextCompaction', 'Automatic compaction at: {0} tokens', usage.autoCompactAt.toLocaleString()));
+		if (usage.latestRequestTokens !== undefined) addNote(localize('chat.input.contextLatest', 'Latest request measurement: {0} tokens', usage.latestRequestTokens.toLocaleString()));
 		addNote(localize('chat.input.contextDraft', 'The unsent draft is not included in this estimate.'));
 		body.append(summary, bar, table, notes);
 	}

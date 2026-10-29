@@ -3,9 +3,7 @@ import { formatGeneratedTypeScript } from '../../lib/generatedTypeScript.ts';
 
 export function generateToTs(icons: readonly GeneratedIcon[]): string {
 	const registrations = icons.map(({ id, propertyName, fontCharacter, layers }) => {
-		const definition = layers
-			? JSON.stringify({ fontCharacter, layers })
-			: `0x${fontCharacter!.codePointAt(0)!.toString(16)}`;
+		const definition = layers ? JSON.stringify({ fontCharacter, layers }) : `0x${fontCharacter!.codePointAt(0)!.toString(16)}`;
 		return `\t${propertyName}: registerLxicon(${JSON.stringify(id)}, ${definition}),`;
 	});
 	return formatGeneratedTypeScript(

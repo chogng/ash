@@ -56,7 +56,10 @@ test('URI-list paste inserts paths before duplicate plain text', async () => {
 
 	assert.deepEqual(
 		{ value: model.getText(), handled: paste.defaultPrevented },
-		{ value: `${URI.parse('file:///workspace/one.rs').fsPath} https://example.test/two`, handled: true },
+		{
+			value: `${URI.parse('file:///workspace/one.rs').fsPath} https://example.test/two`,
+			handled: true,
+		},
 	);
 });
 
@@ -150,10 +153,7 @@ test('A language paste provider can replace text and the selector switches to pl
 			return { ...edit, insertText: 'CUSTOM' };
 		},
 	};
-	using registration = features.documentPasteEditProvider.register(
-		{ language: 'plaintext', hasAccessToAllModels: true },
-		provider,
-	);
+	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
 	using editor = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model,
@@ -175,9 +175,7 @@ test('A language paste provider can replace text and the selector switches to pl
 	selector.querySelector<HTMLButtonElement>('button')!.click();
 	assert.equal(dom.window.document.querySelectorAll('[role=menuitem]').length, 2);
 	assert.equal(selector.querySelector('button')!.getAttribute('aria-label'), 'Paste options');
-	const plainOption = [...dom.window.document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(
-		option => option.textContent === 'Insert Plain Text',
-	);
+	const plainOption = [...dom.window.document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(option => option.textContent === 'Insert Plain Text');
 	assert.ok(plainOption);
 	plainOption.click();
 	await waitFor(() => model.getText() === 'raw');
@@ -213,10 +211,7 @@ test('A provider paste switches its insertion and additional text edit together'
 			};
 		},
 	};
-	using registration = features.documentPasteEditProvider.register(
-		{ language: 'plaintext', hasAccessToAllModels: true },
-		provider,
-	);
+	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
 	using editor = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model,
@@ -232,9 +227,7 @@ test('A provider paste switches its insertion and additional text edit together'
 	const selector = dom.window.document.querySelector<HTMLElement>('.stanza-editor-post-edit-selector');
 	assert.ok(selector);
 	selector.querySelector<HTMLButtonElement>('button')!.click();
-	const plainOption = [...dom.window.document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(
-		option => option.textContent === 'Insert Plain Text',
-	);
+	const plainOption = [...dom.window.document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(option => option.textContent === 'Insert Plain Text');
 	assert.ok(plainOption);
 	plainOption.click();
 	await waitFor(() => model.getText() === 'raw\ntrail');
@@ -260,9 +253,7 @@ test('A pasted snippet keeps its tabstops after the workspace edit applies', asy
 						kind,
 						insertText: { snippet: '${TM_FILENAME_BASE}: function ${1:name}(${2:value}) {$0}' },
 						additionalEdit: {
-							edits: [
-								{ resource: model.uri, textEdit: { range: new Range(1, 1, 1, 7), text: 'LONGPREFIX' } },
-							],
+							edits: [{ resource: model.uri, textEdit: { range: new Range(1, 1, 1, 7), text: 'LONGPREFIX' } }],
 						},
 					},
 				],
@@ -270,10 +261,7 @@ test('A pasted snippet keeps its tabstops after the workspace edit applies', asy
 			};
 		},
 	};
-	using registration = features.documentPasteEditProvider.register(
-		{ language: 'plaintext', hasAccessToAllModels: true },
-		provider,
-	);
+	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
 	using editor = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model,
@@ -290,10 +278,7 @@ test('A pasted snippet keeps its tabstops after the workspace edit applies', asy
 
 	const tab = new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
 	input.dispatchEvent(tab);
-	assert.deepEqual(
-		{ handled: tab.defaultPrevented, selected: model.getValueInRange(editor.getSelection()!) },
-		{ handled: true, selected: 'value' },
-	);
+	assert.deepEqual({ handled: tab.defaultPrevented, selected: model.getValueInRange(editor.getSelection()!) }, { handled: true, selected: 'value' });
 	const back = new dom.window.KeyboardEvent('keydown', {
 		key: 'Tab',
 		shiftKey: true,
@@ -301,10 +286,7 @@ test('A pasted snippet keeps its tabstops after the workspace edit applies', asy
 		cancelable: true,
 	});
 	input.dispatchEvent(back);
-	assert.deepEqual(
-		{ handled: back.defaultPrevented, selected: model.getValueInRange(editor.getSelection()!) },
-		{ handled: true, selected: 'name' },
-	);
+	assert.deepEqual({ handled: back.defaultPrevented, selected: model.getValueInRange(editor.getSelection()!) }, { handled: true, selected: 'name' });
 	const snippets = SnippetController2.get(editor)!;
 	snippets.next();
 	snippets.next();
@@ -334,9 +316,7 @@ test('Switching a paste choice reverts additional edits in another open resource
 						kind,
 						insertText: 'MAIN',
 						additionalEdit: {
-							edits: [
-								{ resource: otherModel.uri, textEdit: { range: new Range(1, 1, 1, 6), text: 'EXTRA' } },
-							],
+							edits: [{ resource: otherModel.uri, textEdit: { range: new Range(1, 1, 1, 6), text: 'EXTRA' } }],
 						},
 					},
 				],
@@ -344,10 +324,7 @@ test('Switching a paste choice reverts additional edits in another open resource
 			};
 		},
 	};
-	using registration = features.documentPasteEditProvider.register(
-		{ language: 'plaintext', hasAccessToAllModels: true },
-		provider,
-	);
+	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
 	using otherEditor = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('aside')!,
 		model: otherModel,
@@ -370,9 +347,7 @@ test('Switching a paste choice reverts additional edits in another open resource
 	const selector = dom.window.document.querySelector<HTMLElement>('.stanza-editor-post-edit-selector');
 	assert.ok(selector);
 	selector.querySelector<HTMLButtonElement>('button')!.click();
-	const plainOption = [...dom.window.document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(
-		option => option.textContent === 'Insert Plain Text',
-	);
+	const plainOption = [...dom.window.document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(option => option.textContent === 'Insert Plain Text');
 	assert.ok(plainOption);
 	plainOption.click();
 	await waitFor(() => model.getText() === 'raw' && otherModel.getText() === 'trail');
@@ -394,10 +369,7 @@ test('A snippet paste tracks placeholders at every cursor', async () => {
 			return { edits: [{ title: 'Insert Snippet', kind, insertText: { snippet: '${1:x}$0' } }], dispose() {} };
 		},
 	};
-	using registration = features.documentPasteEditProvider.register(
-		{ language: 'plaintext', hasAccessToAllModels: true },
-		provider,
-	);
+	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
 	using editor = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model,
@@ -442,10 +414,7 @@ test('A delayed paste provider cannot apply after the document changes', async (
 			return { edits: [{ title: 'Delayed', kind, insertText: 'late' }], dispose() {} };
 		},
 	};
-	using registration = features.documentPasteEditProvider.register(
-		{ language: 'plaintext', hasAccessToAllModels: true },
-		provider,
-	);
+	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
 	using editor = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model,
@@ -555,10 +524,7 @@ test('Copy preparation data reaches the matching paste provider', async () => {
 			return { edits: [{ title: 'Insert Prepared', kind, insertText: value }], dispose() {} };
 		},
 	};
-	using registration = features.documentPasteEditProvider.register(
-		{ language: 'plaintext', hasAccessToAllModels: true },
-		provider,
-	);
+	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
 	using editor = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		instantiationService: services,
@@ -680,10 +646,7 @@ async function waitFor(condition: () => boolean): Promise<void> {
 	}
 }
 
-function clipboardEvent(
-	targetWindow: typeof browserEnvironment.window,
-	clipboardData: TestClipboardData,
-): ClipboardEvent {
+function clipboardEvent(targetWindow: typeof browserEnvironment.window, clipboardData: TestClipboardData): ClipboardEvent {
 	const event = new targetWindow.Event('paste', { bubbles: true, cancelable: true });
 	Object.defineProperty(event, 'clipboardData', { configurable: true, value: clipboardData });
 	return event as unknown as ClipboardEvent;
@@ -775,9 +738,7 @@ test('Paste command resolves after delayed provider edits', async () => {
 	editor.focus();
 	clipboard.data.setData('text/plain', 'raw');
 	let complete = false;
-	const commands = services.get(
-		(await import('../../../../../platform/commands/common/commands.js')).ICommandService,
-	);
+	const commands = services.get((await import('../../../../../platform/commands/common/commands.js')).ICommandService);
 	const paste = commands.executeCommand('editor.action.clipboardPasteAction').then(() => {
 		complete = true;
 	});
@@ -831,9 +792,7 @@ test('Cancelling a paste ends the command before an uncooperative provider retur
 	});
 	editor.focus();
 	clipboard.data.setData('text/plain', 'raw');
-	const commands = services.get(
-		(await import('../../../../../platform/commands/common/commands.js')).ICommandService,
-	);
+	const commands = services.get((await import('../../../../../platform/commands/common/commands.js')).ICommandService);
 	const paste = commands.executeCommand('editor.action.clipboardPasteAction');
 	await started.p;
 	model.setValue('changed');
@@ -873,9 +832,7 @@ for (const preference of ['html', 'text', 'picker']) {
 			model,
 		});
 		editor.setSelection(new Selection(1, 1, 1, 4));
-		const paste = editor
-			.getAction(preference === 'text' ? 'editor.action.pasteAsText' : 'editor.action.pasteAs')!
-			.run(preference === 'html' ? { kind: 'html' } : undefined);
+		const paste = editor.getAction(preference === 'text' ? 'editor.action.pasteAsText' : 'editor.action.pasteAs')!.run(preference === 'html' ? { kind: 'html' } : undefined);
 		if (preference === 'picker') {
 			await waitFor(() => dom.window.document.querySelector('.ash-quick-pick') !== null);
 			assert.equal(model.getText(), 'old');
@@ -921,9 +878,7 @@ for (const change of ['selection', 'content', 'focus', 'readOnly', 'dispose']) {
 		if (change === 'readOnly') editor.updateOptions({ readOnly: true });
 		if (change === 'dispose') editor.dispose();
 		await paste;
-		await release.complete([
-			{ types: ['text/html'], getType: async () => new Blob(['<b>late</b>']) } as unknown as ClipboardItem,
-		]);
+		await release.complete([{ types: ['text/html'], getType: async () => new Blob(['<b>late</b>']) } as unknown as ClipboardItem]);
 		await Promise.resolve();
 		assert.equal(model.getText(), change === 'content' ? 'changed' : 'old');
 	});
@@ -988,25 +943,14 @@ test('command Paste As matches copied preparation metadata read from a byte snap
 	assert.equal(model.getText(), 'source');
 });
 
-for (const mime of [
-	'image/png',
-	'application/pdf',
-	'application/x-test-binary',
-	'application/x-test-paste',
-	'application/json',
-	'application/vnd.test+xml',
-]) {
+for (const mime of ['image/png', 'application/pdf', 'application/x-test-binary', 'application/x-test-paste', 'application/json', 'application/vnd.test+xml']) {
 	test(`command Paste As supplies ${mime} to its registered provider`, async () => {
 		const dom = new JSDOM('<!doctype html><body><main></main></body>');
 		using closeWindow = toDisposable(() => dom.window.close());
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 		using services = new InstantiationService();
-		const isCustomText = ['application/x-test-paste', 'application/json', 'application/vnd.test+xml'].includes(
-			mime,
-		);
-		const bytes = isCustomText
-			? new TextEncoder().encode('custom metadata')
-			: Uint8Array.of(255, 128, 0, 80, 68, 70);
+		const isCustomText = ['application/x-test-paste', 'application/json', 'application/vnd.test+xml'].includes(mime);
+		const bytes = isCustomText ? new TextEncoder().encode('custom metadata') : Uint8Array.of(255, 128, 0, 80, 68, 70);
 		using clipboard = new BrowserClipboardService({
 			read: async () => [{ types: [mime], getType: async () => new Blob([bytes]) }],
 		} as unknown as Clipboard);
@@ -1050,9 +994,7 @@ for (const mime of [
 		assert.deepEqual(
 			{ received, text: model.getText() },
 			{
-				received: isCustomText
-					? 'custom metadata'
-					: { bytes, name: `clipboard${expectedExtension}`, value: undefined, text: '' },
+				received: isCustomText ? 'custom metadata' : { bytes, name: `clipboard${expectedExtension}`, value: undefined, text: '' },
 				text: 'provided',
 			},
 		);
@@ -1090,10 +1032,5 @@ test('command Paste As ends quietly when its clipboard read returns empty', asyn
 	assert.equal(model.getText(), 'old');
 });
 
-const codeFeatures = registerTestCodeEditorFeatures([
-	'editor.contrib.codeServices',
-	'editor.contrib.clipboard',
-	'editor.contrib.copyPasteActionController',
-	'snippetController2',
-]);
+const codeFeatures = registerTestCodeEditorFeatures(['editor.contrib.codeServices', 'editor.contrib.clipboard', 'editor.contrib.copyPasteActionController', 'snippetController2']);
 afterCodeFeatures(() => codeFeatures.dispose());

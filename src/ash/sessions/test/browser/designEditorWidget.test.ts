@@ -44,12 +44,7 @@ import { IWorkingCopyService } from '../../../workbench/services/workingCopy/com
 
 import { AbstractLifecycleService } from '../../../workbench/services/lifecycle/common/lifecycleService.js';
 import { NullLoggerService } from '../../../platform/log/common/log.js';
-import {
-	ILifecycleService,
-	LifecyclePhase,
-	StartupKind,
-	type IBeforeShutdownEvent,
-} from '../../../workbench/services/lifecycle/common/lifecycle.js';
+import { ILifecycleService, LifecyclePhase, StartupKind, type IBeforeShutdownEvent } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
@@ -79,13 +74,11 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { documentFromShapes, parseDesignDocument, serializeDesignDocument } =
-	await import('../../contrib/creator/common/model/document.js');
+const { documentFromShapes, parseDesignDocument, serializeDesignDocument } = await import('../../contrib/creator/common/model/document.js');
 const { DesignEditorWidget } = await import('../../contrib/creator/browser/widget/designEditorWidget.js');
 const { DesignDocumentController } = await import('../../contrib/creator/browser/designDocumentController.js');
 const { DesignEditorPage } = await import('../../contrib/creator/browser/designEditorPage.js');
-const { DesignEditorService, IDesignEditorService } =
-	await import('../../contrib/creator/browser/designEditorService.js');
+const { DesignEditorService, IDesignEditorService } = await import('../../contrib/creator/browser/designEditorService.js');
 const { DesignLayersView, DesignPropertiesView } = await import('../../contrib/creator/browser/designViews.js');
 const { CreatorMode } = await import('../../contrib/creator/common/creator.js');
 const { CreatorPage } = await import('../../contrib/creator/browser/creatorPage.js');
@@ -108,10 +101,7 @@ setup(() => notifications.model.clear());
 suiteTeardown(() => notifications.dispose());
 services.registerSingleton(IUriIdentityService, () => services.createInstance(UriIdentityService));
 const colorContextView = new ContextView(browser.window.document.body);
-services.registerInstance(
-	IContextViewService,
-	Object.assign(colorContextView, { container: browser.window.document.body }),
-);
+services.registerInstance(IContextViewService, Object.assign(colorContextView, { container: browser.window.document.body }));
 const contextKeys = new ContextKeyService();
 const configuration = new WorkbenchConfigurationService();
 const theme = new TestThemeService(lightColorTheme);
@@ -371,9 +361,7 @@ class DesignEditorFixture extends Disposable {
 				title: 'Shape properties',
 			}),
 		);
-		const layers = this._register(
-			child.createInstance(DesignLayersView, this.layersDomNode, { id: 'design.layers', title: 'Layers' }),
-		);
+		const layers = this._register(child.createInstance(DesignLayersView, this.layersDomNode, { id: 'design.layers', title: 'Layers' }));
 		properties.setVisible(true);
 		layers.setVisible(true);
 		this.pane.setVisible(true);
@@ -415,13 +403,8 @@ function projectedTransform(view: { readonly domNode: HTMLElement }): ProjectedT
 	return { panX: Number(match[1]), panY: Number(match[2]), scale: Number(match[3]) };
 }
 
-function dispatchWheel(
-	view: { readonly domNode: HTMLElement },
-	init: WheelEventInit & { clientX?: number; clientY?: number },
-): void {
-	view.domNode
-		.querySelector<HTMLElement>('.ash-canvas-viewport')!
-		.dispatchEvent(new browser.window.WheelEvent('wheel', { cancelable: true, ...init }));
+function dispatchWheel(view: { readonly domNode: HTMLElement }, init: WheelEventInit & { clientX?: number; clientY?: number }): void {
+	view.domNode.querySelector<HTMLElement>('.ash-canvas-viewport')!.dispatchEvent(new browser.window.WheelEvent('wheel', { cancelable: true, ...init }));
 }
 
 test('Design cursor follows configuration and theme changes and releases its subscriptions', async () => {
@@ -435,8 +418,7 @@ test('Design cursor follows configuration and theme changes and releases its sub
 		value: Object.assign(new browser.window.EventTarget(), { load: async () => [{}] }),
 	});
 	canvasPrototype.getContext = (() => context) as unknown as typeof originalContext;
-	canvasPrototype.toDataURL = () =>
-		'data:image/png;base64,' + Buffer.from(context.font + context.fillStyle).toString('base64');
+	canvasPrototype.toDataURL = () => 'data:image/png;base64,' + Buffer.from(context.font + context.fillStyle).toString('base64');
 	const settle = () => new Promise<void>(resolve => setImmediate(resolve));
 	const view = createView();
 	const viewport = view.domNode.querySelector<HTMLElement>('.ash-canvas-viewport')!;
@@ -454,18 +436,9 @@ test('Design cursor follows configuration and theme changes and releases its sub
 		assert.equal(viewport.classList.contains('pointer-cursor'), false);
 		assert.equal(configuration.inspect(DesignConfiguration.usePointerCursor).userValue, false);
 		using nextView = createView();
-		assert.equal(
-			nextView.domNode.querySelector('.ash-canvas-viewport')!.classList.contains('pointer-cursor'),
-			false,
-		);
-		await assert.rejects(
-			configuration.updateValue(DesignConfiguration.usePointerCursor, 'false'),
-			/must be boolean/u,
-		);
-		await assert.rejects(
-			configuration.updateValue(DesignConfiguration.usePointerCursor, false, ConfigurationTarget.WORKSPACE),
-			/Unable to write/u,
-		);
+		assert.equal(nextView.domNode.querySelector('.ash-canvas-viewport')!.classList.contains('pointer-cursor'), false);
+		await assert.rejects(configuration.updateValue(DesignConfiguration.usePointerCursor, 'false'), /must be boolean/u);
+		await assert.rejects(configuration.updateValue(DesignConfiguration.usePointerCursor, false, ConfigurationTarget.WORKSPACE), /Unable to write/u);
 		view.dispose();
 		const disposedCursor = cursor();
 		await configuration.updateValue(DesignConfiguration.usePointerCursor, true);
@@ -538,23 +511,14 @@ test('Design canvas pans and zooms from the keyboard and resets with 0', () => {
 	view.layout({ width: 200, height: 100 });
 	const canvas = view.domNode;
 	try {
-		canvas.dispatchEvent(
-			new browser.window.KeyboardEvent('keydown', { key: 'ArrowLeft', cancelable: true, bubbles: true }),
-		);
+		canvas.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowLeft', cancelable: true, bubbles: true }));
 		assert.equal(projectedTransform(view).panX, 60);
-		canvas.dispatchEvent(
-			new browser.window.KeyboardEvent('keydown', { key: '=', cancelable: true, bubbles: true }),
-		);
+		canvas.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: '=', cancelable: true, bubbles: true }));
 		const { panX, panY, scale } = projectedTransform(view);
 		assert.ok(Math.abs(scale - 1.2) < 1e-9, `unexpected scale ${scale}`);
-		assert.ok(
-			Math.abs(panX - (100 - (100 - 60) * 1.2)) < 1e-9,
-			'zoom is not anchored at the canvas center horizontally',
-		);
+		assert.ok(Math.abs(panX - (100 - (100 - 60) * 1.2)) < 1e-9, 'zoom is not anchored at the canvas center horizontally');
 		assert.ok(Math.abs(panY - (50 - 50 * 1.2)) < 1e-9, 'zoom is not anchored at the canvas center vertically');
-		canvas.dispatchEvent(
-			new browser.window.KeyboardEvent('keydown', { key: '0', cancelable: true, bubbles: true }),
-		);
+		canvas.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: '0', cancelable: true, bubbles: true }));
 		assert.deepEqual(projectedTransform(view), { panX: 0, panY: 0, scale: 1 });
 	} finally {
 		view.dispose();
@@ -589,13 +553,10 @@ test('Design canvas pans by dragging with the pointer', () => {
 });
 
 test('Design canvas resolves its accessible name from the Chinese language pack', async () => {
-	const { productLanguagePackCatalogs } =
-		await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	const view = createView();
 	try {
 		assert.equal(view.domNode.getAttribute('aria-label'), '设计画布');
@@ -692,13 +653,10 @@ test('Design color preview cancels without editing and one committed range gestu
 });
 
 test('Design color picker uses Chinese labels and releases its overlay when the editor is hidden', async () => {
-	const { productLanguagePackCatalogs } =
-		await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using view = createView();
 		view.domNode.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'r', bubbles: true }));
@@ -730,23 +688,15 @@ function createText(view: DesignEditorFixture): void {
 			}),
 		);
 	}
-	view.domNode
-		.querySelector('[contenteditable]')
-		?.dispatchEvent(
-			new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
-		);
+	view.domNode.querySelector('[contenteditable]')?.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 }
 
 function pressCanvas(view: { readonly domNode: HTMLElement }, key: string, options: KeyboardEventInit = {}): void {
-	view.domNode.dispatchEvent(
-		new browser.window.KeyboardEvent('keydown', { key, cancelable: true, bubbles: true, ...options }),
-	);
+	view.domNode.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key, cancelable: true, bubbles: true, ...options }));
 }
 
 async function clickAction(view: { readonly domNode: HTMLElement }, name: string): Promise<void> {
-	const button = Array.from(view.domNode.querySelectorAll('button')).find(
-		button => button.getAttribute('aria-label') === name || button.textContent === name,
-	)!;
+	const button = Array.from(view.domNode.querySelectorAll('button')).find(button => button.getAttribute('aria-label') === name || button.textContent === name)!;
 	button.click();
 	// File-service promises are immediate in this fixture, but the action crosses several async boundaries.
 	for (let index = 0; index < 20; index++) {
@@ -908,13 +858,10 @@ test('Design saves before opening another file and rejects stale writes and inva
 });
 
 test('Design keyboard selection and Chinese properties expose the document content', async () => {
-	const { productLanguagePackCatalogs } =
-		await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using view = createView();
 		pressCanvas(view, 'r');
@@ -940,19 +887,14 @@ test('Design edits text and path nodes, groups a selection, and exports safe SVG
 	assert.match(DesignEditorWidget.getFocused(view.domNode)!.getAccessibleContent(), /中文 <script>/u);
 	assert.equal(view.domNode.querySelector('script'), null);
 	assert.equal(view.domNode.querySelectorAll('[data-text-paragraph]').length, 2);
-	view.pane.editor.selectShape(
-		new DocumentCommands(view.designEditors.document.model).addShape('path', { x: 200, y: 50 }),
-	);
+	view.pane.editor.selectShape(new DocumentCommands(view.designEditors.document.model).addShape('path', { x: 200, y: 50 }));
 	pressCanvas(view, 'Enter');
 	const outgoing = view.propertiesDomNode.querySelector<HTMLInputElement>('input[aria-label="Outgoing handle X"]')!;
 	outgoing.value = '48';
 	outgoing.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 	assert.match(view.domNode.querySelector('path[data-shape-id]')!.getAttribute('d')!, /C 188 10/u);
 	await clickCanvasMenu(view, 'Add node');
-	assert.equal(
-		view.propertiesDomNode.querySelector<HTMLSelectElement>('select[aria-label="Path node"]')!.options.length,
-		3,
-	);
+	assert.equal(view.propertiesDomNode.querySelector<HTMLSelectElement>('select[aria-label="Path node"]')!.options.length, 3);
 	await clickCanvasMenu(view, 'Remove node');
 	const closed = view.propertiesDomNode.querySelector<HTMLInputElement>('input[aria-label="Closed path"]')!;
 	closed.click();
@@ -995,57 +937,20 @@ test('Design property sections follow the selected object and path stroke edits 
 			.filter(section => !section.hidden)
 			.map(section => section.querySelector('summary')!.textContent!);
 	pressCanvas(view, 'r');
-	assert.deepEqual(sections(), [
-		'Components',
-		'Design resources',
-		'Layer',
-		'Arrange',
-		'Position',
-		'Layout',
-		'Appearance',
-		'Effects',
-		'Vector tools',
-		'Prototype',
-	]);
-	const position = [
-		...view.propertiesDomNode.querySelectorAll<HTMLDetailsElement>('details.ash-design-property-section'),
-	].find(section => section.querySelector('summary')?.textContent === 'Position')!;
+	assert.deepEqual(sections(), ['Components', 'Design resources', 'Layer', 'Arrange', 'Position', 'Layout', 'Appearance', 'Effects', 'Vector tools', 'Prototype']);
+	const position = [...view.propertiesDomNode.querySelectorAll<HTMLDetailsElement>('details.ash-design-property-section')].find(
+		section => section.querySelector('summary')?.textContent === 'Position',
+	)!;
 	position.open = false;
 	createText(view);
-	assert.deepEqual(sections(), [
-		'Components',
-		'Design resources',
-		'Layer',
-		'Arrange',
-		'Position',
-		'Layout',
-		'Appearance',
-		'Effects',
-		'Typography',
-		'Vector tools',
-		'Prototype',
-	]);
+	assert.deepEqual(sections(), ['Components', 'Design resources', 'Layer', 'Arrange', 'Position', 'Layout', 'Appearance', 'Effects', 'Typography', 'Vector tools', 'Prototype']);
 	assert.equal(position.open, false);
 	DesignEditorWidget.getFocused(view.domNode)!.focusProperties();
 	assert.equal(position.open, true);
 	assert.equal(browser.window.document.activeElement?.getAttribute('aria-label'), 'X');
-	view.pane.editor.selectShape(
-		new DocumentCommands(view.designEditors.document.model).addShape('path', { x: 200, y: 50 }),
-	);
+	view.pane.editor.selectShape(new DocumentCommands(view.designEditors.document.model).addShape('path', { x: 200, y: 50 }));
 	pressCanvas(view, 'Enter');
-	assert.deepEqual(sections(), [
-		'Components',
-		'Design resources',
-		'Layer',
-		'Arrange',
-		'Position',
-		'Layout',
-		'Appearance',
-		'Effects',
-		'Bézier path',
-		'Vector tools',
-		'Prototype',
-	]);
+	assert.deepEqual(sections(), ['Components', 'Design resources', 'Layer', 'Arrange', 'Position', 'Layout', 'Appearance', 'Effects', 'Bézier path', 'Vector tools', 'Prototype']);
 	const path = view.domNode.querySelector<SVGPathElement>('path[data-shape-id]')!;
 	const original = path.getAttribute('stroke-width');
 	const stroke = view.propertiesDomNode.querySelector<HTMLInputElement>('input[aria-label="Stroke width"]')!;
@@ -1058,18 +963,7 @@ test('Design property sections follow the selected object and path stroke edits 
 	stroke.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 	assert.equal(path.getAttribute('stroke-width'), original);
 	pressCanvas(view, 'f');
-	assert.deepEqual(sections(), [
-		'Components',
-		'Design resources',
-		'Layer',
-		'Arrange',
-		'Position',
-		'Layout',
-		'Appearance',
-		'Effects',
-		'Auto layout',
-		'Prototype',
-	]);
+	assert.deepEqual(sections(), ['Components', 'Design resources', 'Layer', 'Arrange', 'Position', 'Layout', 'Appearance', 'Effects', 'Auto layout', 'Prototype']);
 	assert.equal(view.propertiesDomNode.querySelector<HTMLElement>('.ash-design-frame-properties')!.hidden, false);
 });
 
@@ -1079,12 +973,8 @@ test('Design properties switch between Page, object and multiple selection while
 	const editor = DesignEditorWidget.getFocused(view.domNode)!;
 	const heading = (): string => root.querySelector('h2')!.textContent!;
 	const visibleSections = (): string[] =>
-		[...root.querySelectorAll<HTMLDetailsElement>('details.ash-design-property-section')]
-			.filter(section => !section.hidden)
-			.map(section => section.querySelector('summary')!.textContent!);
-	const exportButton = [...root.querySelectorAll<HTMLButtonElement>('button')].find(
-		button => button.textContent === 'Export design',
-	)!;
+		[...root.querySelectorAll<HTMLDetailsElement>('details.ash-design-property-section')].filter(section => !section.hidden).map(section => section.querySelector('summary')!.textContent!);
+	const exportButton = [...root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Export design')!;
 	assert.deepEqual(
 		{
 			heading: heading(),
@@ -1134,31 +1024,21 @@ test('Design properties switch between Page, object and multiple selection while
 });
 
 test('Chinese Design actions and new property labels are localized', async () => {
-	const { productLanguagePackCatalogs } =
-		await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using view = createView();
 		createText(view);
-		assert.equal(
-			view.propertiesDomNode
-				.querySelector('.ash-sessions-design-properties textarea')!
-				.getAttribute('aria-label'),
-			'文字内容',
-		);
+		assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties textarea')!.getAttribute('aria-label'), '文字内容');
 		assert.deepEqual(
 			[...view.propertiesDomNode.querySelectorAll<HTMLDetailsElement>('details.ash-design-property-section')]
 				.filter(section => !section.hidden)
 				.map(section => section.querySelector('summary')!.textContent),
 			['组件', '设计资源', '图层', '排列', '位置', '布局', '外观', '效果', '文字排版', '矢量工具', '原型'],
 		);
-		view.pane.editor.selectShape(
-			new DocumentCommands(view.designEditors.document.model).addShape('path', { x: 200, y: 50 }),
-		);
+		view.pane.editor.selectShape(new DocumentCommands(view.designEditors.document.model).addShape('path', { x: 200, y: 50 }));
 		pressCanvas(view, 'Enter');
 		assert.ok(view.propertiesDomNode.querySelector('input[aria-label="出控制点 X"]'));
 		assert.ok(view.propertiesDomNode.querySelector('input[aria-label="描边宽度"]'));
@@ -1167,10 +1047,7 @@ test('Chinese Design actions and new property labels are localized', async () =>
 		assert.equal(chinese.bundles.ash['sessions.design.contextMenuHelp'].includes('Shift+F10'), true);
 		pressCanvas(view, 'n');
 		pressCanvas(view, 'g');
-		assert.match(
-			DesignEditorWidget.getFocused(view.domNode)!.getAccessibleContent(),
-			/组合[\s\S]*文字[\s\S]*贝塞尔路径/u,
-		);
+		assert.match(DesignEditorWidget.getFocused(view.domNode)!.getAccessibleContent(), /组合[\s\S]*文字[\s\S]*贝塞尔路径/u);
 	} finally {
 		resetNlsResolver();
 	}
@@ -1178,18 +1055,8 @@ test('Chinese Design actions and new property labels are localized', async () =>
 
 test('Design editors share document edits and history while keeping selection, camera and lifetime separate', () => {
 	using document = services.createInstance(DesignDocumentController, CreatorMode.Design);
-	using first = services.createInstance(
-		DesignEditorWidget,
-		browser.window.document,
-		document,
-		(context: DesignEditorContributionContext) => createDesignEditorContributions(context, services),
-	);
-	using second = services.createInstance(
-		DesignEditorWidget,
-		browser.window.document,
-		document,
-		(context: DesignEditorContributionContext) => createDesignEditorContributions(context, services),
-	);
+	using first = services.createInstance(DesignEditorWidget, browser.window.document, document, (context: DesignEditorContributionContext) => createDesignEditorContributions(context, services));
+	using second = services.createInstance(DesignEditorWidget, browser.window.document, document, (context: DesignEditorContributionContext) => createDesignEditorContributions(context, services));
 	for (const editor of [first, second]) {
 		editor.initialize();
 		editor.layout({ width: 400, height: 300 });
@@ -1304,10 +1171,7 @@ test('Registered Design tools and modes act on the originating editor and preser
 	await clickAction(first, 'Ellipse');
 	assert.equal(first.domNode.querySelector('button[aria-label="Ellipse"]')!.getAttribute('aria-pressed'), 'true');
 	await commandService.executeCommand('sessions.design.mode.code', editor);
-	assert.deepEqual(
-		[first.domNode.classList.contains('code-mode'), second.domNode.classList.contains('code-mode')],
-		[true, false],
-	);
+	assert.deepEqual([first.domNode.classList.contains('code-mode'), second.domNode.classList.contains('code-mode')], [true, false]);
 	assert.ok(first.domNode.querySelector('button[aria-label="Shape tools"]')!.hasAttribute('disabled'));
 	await clickAction(first, 'Design');
 	const trigger = first.domNode.querySelector<HTMLButtonElement>('button[aria-label="Shape tools"]')!;
@@ -1371,13 +1235,10 @@ test('Motion keyframes round trip, scrub without editing, undo and export runnab
 });
 
 test('Code contribution escapes user text and Chinese tool, mode and timeline names are translated', async () => {
-	const { productLanguagePackCatalogs } =
-		await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using view = createView();
 		assert.ok(view.domNode.querySelector('button[aria-label="选择工具"]'));
@@ -1394,9 +1255,7 @@ test('Code contribution escapes user text and Chinese tool, mode and timeline na
 		const html = new browser.window.DOMParser().parseFromString(source, 'text/html');
 		assert.equal(html.querySelectorAll('script').length, 1);
 		assert.deepEqual(
-			parseDesignDocument(html.querySelector('script')!.textContent!).shapes.map(shape =>
-				shape.kind === 'text' ? shape.text : undefined,
-			),
+			parseDesignDocument(html.querySelector('script')!.textContent!).shapes.map(shape => (shape.kind === 'text' ? shape.text : undefined)),
 			[text.value],
 		);
 		assert.match(DesignEditorWidget.getFocused(view.domNode)!.getAccessibleContent(), /doctype html/u);
@@ -1411,42 +1270,23 @@ test('Design panels share the editor selection and detach when the pane hides', 
 	pressCanvas(view, 'e');
 	assert.equal(view.domNode.querySelector('.ash-sessions-design-properties'), null);
 	assert.equal(view.layersDomNode.querySelectorAll('[role="treeitem"]').length, 2);
-	const rectangle = [...view.layersDomNode.querySelectorAll<HTMLElement>('[role="treeitem"]')].find(element =>
-		element.textContent?.includes('Rectangle'),
-	)!;
+	const rectangle = [...view.layersDomNode.querySelectorAll<HTMLElement>('[role="treeitem"]')].find(element => element.textContent?.includes('Rectangle'))!;
 	rectangle.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true }));
-	assert.deepEqual(
-		[...view.designEditors.activeEditor.get()!.selection.ids],
-		[view.pane.workingCopy.model.value.shapes[0]!.id],
-	);
-	const ellipse = [...view.layersDomNode.querySelectorAll<HTMLElement>('[role="treeitem"]')].find(element =>
-		element.textContent?.includes('Ellipse'),
-	)!;
+	assert.deepEqual([...view.designEditors.activeEditor.get()!.selection.ids], [view.pane.workingCopy.model.value.shapes[0]!.id]);
+	const ellipse = [...view.layersDomNode.querySelectorAll<HTMLElement>('[role="treeitem"]')].find(element => element.textContent?.includes('Ellipse'))!;
 	ellipse.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true, shiftKey: true }));
 	assert.equal(view.designEditors.activeEditor.get()!.selection.ids.size, 2);
-	assert.equal(
-		view.propertiesDomNode.querySelector('.ash-sessions-design-properties')!.classList.contains('visible'),
-		true,
-	);
-	assert.equal(
-		view.propertiesDomNode.querySelector('.ash-design-properties-heading')!.textContent,
-		'2 objects selected.',
-	);
+	assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties')!.classList.contains('visible'), true);
+	assert.equal(view.propertiesDomNode.querySelector('.ash-design-properties-heading')!.textContent, '2 objects selected.');
 	rectangle.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true }));
-	assert.equal(
-		view.propertiesDomNode.querySelector('.ash-sessions-design-properties')!.classList.contains('visible'),
-		true,
-	);
+	assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties')!.classList.contains('visible'), true);
 	view.pane.setVisible(false);
 	assert.equal(view.designEditors.activeEditor.get(), undefined);
 	assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties'), null);
 	assert.equal(view.layersDomNode.querySelectorAll('[role="treeitem"]').length, 0);
 	view.pane.setVisible(true);
 	assert.equal(view.layersDomNode.querySelectorAll('[role="treeitem"]').length, 2);
-	assert.equal(
-		view.propertiesDomNode.querySelector('.ash-sessions-design-properties')!.classList.contains('visible'),
-		true,
-	);
+	assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties')!.classList.contains('visible'), true);
 });
 
 test('Design shutdown automatically saves hidden documents without asking to save', async () => {
@@ -1494,13 +1334,10 @@ test('Design shutdown automatically saves hidden documents without asking to sav
 });
 
 test('Design panel labels and empty states follow Chinese localization', async () => {
-	const { productLanguagePackCatalogs } =
-		await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using view = createView();
 		assert.equal(view.layersDomNode.querySelector('[role="tree"]')!.getAttribute('aria-label'), '图层');
@@ -1552,12 +1389,7 @@ test('Design page instances share the window document and retain independent edi
 test('Frame image properties, package media, backup recovery and SVG export keep one editable document', async () => {
 	using view = createView();
 	const controller = view.pane.workingCopy;
-	const bytes = new Uint8Array(
-		Buffer.from(
-			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=',
-			'base64',
-		),
-	);
+	const bytes = new Uint8Array(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=', 'base64'));
 	const sha256 = createHash('sha256').update(bytes).digest('hex');
 	const asset = {
 		id: generateUuid(),
@@ -1610,27 +1442,12 @@ test('Frame image properties, package media, backup recovery and SVG export keep
 		[...view.propertiesDomNode.querySelectorAll<HTMLDetailsElement>('details.ash-design-property-section')]
 			.filter(section => !section.hidden)
 			.map(section => section.querySelector('summary')!.textContent),
-		[
-			'Components',
-			'Design resources',
-			'Layer',
-			'Arrange',
-			'Position',
-			'Layout',
-			'Appearance',
-			'Effects',
-			'Image crop',
-			'Constraints',
-			'Prototype',
-		],
+		['Components', 'Design resources', 'Layer', 'Arrange', 'Position', 'Layout', 'Appearance', 'Effects', 'Image crop', 'Constraints', 'Prototype'],
 	);
 	const crop = view.propertiesDomNode.querySelector<HTMLInputElement>('input[aria-label="Crop width (%)"]')!;
 	crop.value = '50';
 	crop.dispatchEvent(new browser.window.Event('change'));
-	assert.equal(
-		view.domNode.querySelector('svg[data-shape-id] svg[data-shape-id]')!.getAttribute('viewBox'),
-		'0 0 0.5 1',
-	);
+	assert.equal(view.domNode.querySelector('svg[data-shape-id] svg[data-shape-id]')!.getAttribute('viewBox'), '0 0 0.5 1');
 	pressCanvas(view, 'ArrowRight');
 	assert.equal((controller.model.value.shapes[0] as typeof frame).children[0].x, 21);
 	editor.selectShape(frame.id);
@@ -1662,10 +1479,7 @@ test('Frame image properties, package media, backup recovery and SVG export keep
 	blend.value = 'plus-darker';
 	blend.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 	const filterSource = view.domNode.querySelector('feImage')!.getAttribute('href')!;
-	assert.match(
-		decodeURIComponent(filterSource.slice(filterSource.indexOf(',') + 1)),
-		/href="data:image\/png;base64,/u,
-	);
+	assert.match(decodeURIComponent(filterSource.slice(filterSource.indexOf(',') + 1)), /href="data:image\/png;base64,/u);
 	controller.model.undo();
 	fileContent = serializeDesignDocument(beforeSave);
 	await controller.openDocument();
@@ -1677,10 +1491,7 @@ test('Frame image properties, package media, backup recovery and SVG export keep
 	assert.equal(controller.model.value, active);
 	assert.equal(errors.length, 1);
 	assert.equal(errors[0], 'Could not open the design.');
-	assert.throws(
-		() => recovered.restoreBackup(JSON.stringify({ manifest: serializeDesignDocument(beforeSave), media: {} })),
-		/Missing design backup media/u,
-	);
+	assert.throws(() => recovered.restoreBackup(JSON.stringify({ manifest: serializeDesignDocument(beforeSave), media: {} })), /Missing design backup media/u);
 	assert.equal(recovered.model.value.documentId, beforeSave.documentId);
 });
 
@@ -1732,9 +1543,7 @@ test('Frame rotation keeps keyboard movement in canvas directions and unclipped 
 			{ offset: 1, x: 40, y: -20, rotation: 0, opacity: 1 },
 		],
 	};
-	const code = generateDesignCode(
-		documentFromShapes([{ ...overflowing, children: [{ ...overflowing.children[0], motion }] }]),
-	);
+	const code = generateDesignCode(documentFromShapes([{ ...overflowing, children: [{ ...overflowing.children[0], motion }] }]));
 	assert.match(code, new RegExp(`@keyframes ash-design-object-${child.id}-motion`, 'u'));
 	assert.match(code, /overflow: visible/u);
 });
@@ -1755,11 +1564,7 @@ test('Saving captures a baseline while later edits and Save As retain dirty stat
 	childServices.registerSingleton(IFileService, () =>
 		createTestFileService({
 			...fileProvider,
-			writeFile: async (
-				resource: URI,
-				bytes: Uint8Array,
-				options: IFileWriteOptions,
-			): Promise<IFileWriteResult> => {
+			writeFile: async (resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> => {
 				const request = {
 					resource,
 					content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes),
@@ -1804,13 +1609,10 @@ test('Saving captures a baseline while later edits and Save As retain dirty stat
 });
 
 test('Chinese frame and image controls use translated labels and accessible descriptions', async () => {
-	const { productLanguagePackCatalogs } =
-		await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using view = createView();
 		pressCanvas(view, 'f');
@@ -1919,9 +1721,7 @@ test('Design reuses the exact Library version without importing again or duplica
 	assert.equal(controller.model.value.assets.length, 1);
 	assert.equal(controller.model.value.assets[0].versions.length, 1);
 	assert.deepEqual(
-		controller.model.value.shapes.map(shape =>
-			shape.kind === 'image' ? [shape.assetId, shape.assetVersionId] : undefined,
-		),
+		controller.model.value.shapes.map(shape => (shape.kind === 'image' ? [shape.assetId, shape.assetVersionId] : undefined)),
 		[
 			[version.assetId, version.versionId],
 			[version.assetId, version.versionId],
@@ -1972,9 +1772,7 @@ class CreatorFixture extends Disposable {
 		this.page.setVisible(true);
 	}
 	click(label: string): void {
-		const button = [...this.page.domNode.querySelectorAll<HTMLElement>('button, [role="button"]')].find(
-			element => element.getAttribute('aria-label') === label && !element.closest('[hidden]'),
-		);
+		const button = [...this.page.domNode.querySelectorAll<HTMLElement>('button, [role="button"]')].find(element => element.getAttribute('aria-label') === label && !element.closest('[hidden]'));
 		assert.ok(button, label);
 		button.click();
 	}
@@ -2000,13 +1798,7 @@ test('Creator routes all seven contributions and retains separate documents, sel
 	whiteboard.model.undo();
 	assert.equal(whiteboard.model.value.shapes.length, 0);
 	assert.equal(design.documentController.model.value.shapes.length, 1);
-	for (const mode of [
-		CreatorMode.Slides,
-		CreatorMode.Brand,
-		CreatorMode.Sites,
-		CreatorMode.Make,
-		CreatorMode.Prototype,
-	]) {
+	for (const mode of [CreatorMode.Slides, CreatorMode.Brand, CreatorMode.Sites, CreatorMode.Make, CreatorMode.Prototype]) {
 		fixture.page.openMode(mode);
 		assert.equal(fixture.editors.activeEditor.get()!.documentController.model.value.mode, mode);
 		assert.equal(fixture.editors.getDocument(mode).model.value.shapes.length, 0);
@@ -2067,9 +1859,7 @@ test('Creator Slides order and Brand variants use their own complete undo histor
 
 test('Creator saves workspace identity and refuses to replace another mode with its file or backup', async () => {
 	using controller = services.createInstance(DesignDocumentController, CreatorMode.Slides);
-	new (await import('../../contrib/creator/common/commands/documentCommands.js')).DocumentCommands(
-		controller.model,
-	).addFrame({ x: 0, y: 0 });
+	new (await import('../../contrib/creator/common/commands/documentCommands.js')).DocumentCommands(controller.model).addFrame({ x: 0, y: 0 });
 	assert.equal(await controller.saveDocument(), true);
 	assert.equal(parseDesignDocument(fileContent).mode, CreatorMode.Slides);
 	using other = services.createInstance(DesignDocumentController, CreatorMode.Design);
@@ -2116,8 +1906,7 @@ test('Design layout properties edit nested geometry, rename layers and save the 
 	pressCanvas(view, 'a', { ctrlKey: true });
 	pressCanvas(view, 'A', { shiftKey: true });
 	const editor = DesignEditorWidget.getFocused(view.domNode)!;
-	const input = (label: string): HTMLInputElement =>
-		view.propertiesDomNode.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
+	const input = (label: string): HTMLInputElement => view.propertiesDomNode.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
 	const select = (label: string, value: string): void => {
 		const control = view.propertiesDomNode.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`)!;
 		control.value = value;
@@ -2191,9 +1980,7 @@ test('Design layer shortcuts duplicate containers and reorder children through t
 	);
 	editor.selectShape(frame.children[0].id);
 	const tree = view.layersDomNode.querySelector<HTMLElement>('[role="tree"]')!;
-	tree.dispatchEvent(
-		new browser.window.KeyboardEvent('keydown', { key: ']', ctrlKey: true, bubbles: true, cancelable: true }),
-	);
+	tree.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: ']', ctrlKey: true, bubbles: true, cancelable: true }));
 	assert.deepEqual(
 		(model.value.shapes[1] as typeof frame).children.map(shape => shape.id),
 		[frame.children[1].id, frame.children[0].id],
@@ -2206,13 +1993,10 @@ test('Design layer shortcuts duplicate containers and reorder children through t
 });
 
 test('Chinese Design layout controls and accessibility help describe the editing behavior', async () => {
-	const { productLanguagePackCatalogs } =
-		await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using view = createView();
 		pressCanvas(view, 'r');
@@ -2241,10 +2025,8 @@ test('Design grid, wrapping and size limits edit one undoable document and rejec
 	pressCanvas(view, 'A', { shiftKey: true });
 	const editor = DesignEditorWidget.getFocused(view.domNode)!;
 	const model = view.designEditors.document.model;
-	const frame = (): Extract<DesignShape, { kind: 'frame' }> =>
-		model.value.shapes[0] as Extract<DesignShape, { kind: 'frame' }>;
-	const input = (name: string): HTMLInputElement =>
-		view.propertiesDomNode.querySelector<HTMLInputElement>(`input[aria-label="${name}"]`)!;
+	const frame = (): Extract<DesignShape, { kind: 'frame' }> => model.value.shapes[0] as Extract<DesignShape, { kind: 'frame' }>;
+	const input = (name: string): HTMLInputElement => view.propertiesDomNode.querySelector<HTMLInputElement>(`input[aria-label="${name}"]`)!;
 	const number = (name: string, value: string): void => {
 		const field = input(name);
 		field.value = value;
@@ -2311,11 +2093,7 @@ test('Design grid, wrapping and size limits edit one undoable document and rejec
 	assert.match(generateDesignCode(model.value), /grid-column: 1 \/ span 2; grid-row: 2 \/ span 1/u);
 	assert.match(generateDesignCode(model.value), /max-width: 80px/u);
 	editor.selectShape(frame().id);
-	assert.equal(
-		input('Column pixels / fraction').value,
-		'1',
-		'returning to the frame resets the track picker and its value together',
-	);
+	assert.equal(input('Column pixels / fraction').value, '1', 'returning to the frame resets the track picker and its value together');
 	number('Columns', '1');
 	number('Rows', '1');
 	assert.equal(frame().children.length, 3);
@@ -2330,9 +2108,7 @@ test('Design component controls create variants, preserve text overrides, reset,
 	const editor = DesignEditorWidget.getFocused(view.domNode)!;
 	const model = view.designEditors.document.model;
 	const button = (label: string): void => {
-		const button = [...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')].find(
-			button => button.textContent === label,
-		)!;
+		const button = [...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === label)!;
 		assert.ok(button, label);
 		button.click();
 	};
@@ -2382,30 +2158,19 @@ test('Design component controls create variants, preserve text overrides, reset,
 });
 
 test('Chinese component labels, variants and accessibility instructions use the product language pack', async () => {
-	const { productLanguagePackCatalogs } =
-		await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using view = createView();
 		pressCanvas(view, 'r');
 		pressCanvas(view, 'k', { ctrlKey: true, altKey: true });
-		[...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')]
-			.find(button => button.textContent === '添加变体')!
-			.click();
+		[...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === '添加变体')!.click();
 		assert.ok(view.propertiesDomNode.querySelector('input[aria-label="属性名称：状态"]'));
-		[...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')]
-			.find(button => button.textContent === '创建实例')!
-			.click();
+		[...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === '创建实例')!.click();
 		assert.ok(view.propertiesDomNode.querySelector('select[aria-label="变体：状态"]'));
-		assert.ok(
-			[...view.propertiesDomNode.querySelectorAll('button')].find(
-				button => button.textContent === '重置全部覆盖',
-			),
-		);
+		assert.ok([...view.propertiesDomNode.querySelectorAll('button')].find(button => button.textContent === '重置全部覆盖'));
 		assert.match(DesignEditorWidget.getFocused(view.domNode)!.getAccessibleContent(), /主组件[\s\S]*的实例/u);
 		assert.match(chinese.bundles.ash['sessions.design.componentsHelp'], /嵌套实例[\s\S]*撤销/u);
 	} finally {
@@ -2419,12 +2184,8 @@ test('Design resource controls bind modes, reject invalid values, create styles 
 	const model = editor.documentController.model;
 	pressCanvas(view, 'r');
 	const id = model.value.shapes[0].id;
-	const button = (name: string): HTMLButtonElement =>
-		[...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')].find(
-			button => button.textContent === name,
-		)!;
-	const input = (key: string): HTMLInputElement =>
-		view.propertiesDomNode.querySelector<HTMLInputElement>(`[data-resource-control="${key}"]`)!;
+	const button = (name: string): HTMLButtonElement => [...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === name)!;
+	const input = (key: string): HTMLInputElement => view.propertiesDomNode.querySelector<HTMLInputElement>(`[data-resource-control="${key}"]`)!;
 	const change = (key: string, value: string): void => {
 		const field = input(key);
 		field.focus();
@@ -2566,9 +2327,7 @@ test('Design library files publish media and review updates before changing cons
 	assert.equal(current().children[0].fill, '#123456');
 	assert.ok(consumer.getLibraryUpdate(publisher.model.value.documentId));
 	assert.match(view.propertiesDomNode.textContent!, /Review the published changes/u);
-	const accept = [...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')].find(button =>
-		button.textContent?.startsWith('Accept update:'),
-	)!;
+	const accept = [...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.startsWith('Accept update:'))!;
 	accept.click();
 	assert.equal(current().children[0].fill, '#ff0000');
 	assert.equal((current().children[0] as Extract<DesignShape, { kind: 'text' }>).text, 'My label');
@@ -2603,9 +2362,7 @@ test('Design library imports reject corrupt media without changing the active do
 		{
 			id: assetId,
 			name: 'Corrupt',
-			versions: [
-				{ id: versionId, sha256: hash, path: `assets/${hash}`, mediaType: 'image/png', width: 10, height: 10 },
-			],
+			versions: [{ id: versionId, sha256: hash, path: `assets/${hash}`, mediaType: 'image/png', width: 10, height: 10 }],
 		},
 	]);
 	fileContent = JSON.stringify({
@@ -2671,21 +2428,16 @@ test('Design text, effect and layout guide styles render safely and artwork expo
 });
 
 test('Chinese Design resource controls and accessibility help use translated names', async () => {
-	const { productLanguagePackCatalogs } =
-		await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using view = createView();
 		pressCanvas(view, 'r');
 		assert.match(view.propertiesDomNode.textContent!, /设计资源/u);
 		assert.match(view.propertiesDomNode.textContent!, /发布组件库/u);
-		const button = [...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')].find(
-			button => button.textContent === '创建集合',
-		)!;
+		const button = [...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === '创建集合')!;
 		button.click();
 		assert.ok(view.propertiesDomNode.querySelector('input[aria-label="集合名称"]'));
 		assert.ok(view.propertiesDomNode.querySelector('select[aria-label="变量类型"]'));
@@ -2726,9 +2478,7 @@ test('Prototype properties author interactions and transitions, save them, and r
 	const root = view.propertiesDomNode.querySelector<HTMLDetailsElement>('.ash-prototype-properties')!;
 	root.open = true;
 	const click = (name: string): void => {
-		const button = [...root.querySelectorAll<HTMLButtonElement>('button')].find(
-			button => button.textContent === name,
-		);
+		const button = [...root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === name);
 		assert.ok(button, name);
 		button.click();
 	};
@@ -2800,9 +2550,7 @@ test('Prototype preview follows hotspot branches, overlay dismissal and Back, le
 	preview.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(scene.dataset.screenId, detail.id);
 	assert.equal(preview.hidden, false);
-	const back = [...preview.querySelectorAll<HTMLButtonElement>('button')].find(
-		button => button.textContent === 'Back',
-	)!;
+	const back = [...preview.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Back')!;
 	back.click();
 	assert.equal(scene.dataset.screenId, home.id);
 	preview.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -2826,9 +2574,7 @@ test('Prototype hover and press restore temporary navigation while mouse enter i
 						{
 							id: generateUuid(),
 							trigger,
-							actions: [
-								{ action: 'navigate', destination: detail.id, transition: defaultPrototypeTransition },
-							],
+							actions: [{ action: 'navigate', destination: detail.id, transition: defaultPrototypeTransition }],
 						},
 					],
 				},
@@ -2839,14 +2585,12 @@ test('Prototype hover and press restore temporary navigation while mouse enter i
 		editor.previewPrototype();
 		const preview = view.domNode.querySelector<HTMLElement>('.ash-prototype-preview')!;
 		const scene = preview.querySelector<SVGSVGElement>('.ash-prototype-preview-scene')!;
-		scene
-			.querySelector(`[data-shape-id="${home.id}"]`)!
-			.dispatchEvent(
-				new browser.window.MouseEvent(trigger === 'press' ? 'pointerdown' : 'pointerover', {
-					bubbles: true,
-					button: 0,
-				}),
-			);
+		scene.querySelector(`[data-shape-id="${home.id}"]`)!.dispatchEvent(
+			new browser.window.MouseEvent(trigger === 'press' ? 'pointerdown' : 'pointerover', {
+				bubbles: true,
+				button: 0,
+			}),
+		);
 		assert.equal(scene.dataset.screenId, detail.id);
 		if (trigger === 'press') {
 			browser.window.document.dispatchEvent(new browser.window.MouseEvent('pointerup', { bubbles: true }));
@@ -2904,9 +2648,7 @@ test('Prototype cancels delayed transitions when hidden and renders animation fr
 		const version = editor.documentController.model.version;
 		editor.previewPrototype();
 		const preview = view.domNode.querySelector<HTMLElement>('.ash-prototype-preview')!;
-		preview
-			.querySelector(`[data-shape-id="${home.id}"]`)!
-			.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true }));
+		preview.querySelector(`[data-shape-id="${home.id}"]`)!.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true }));
 		assert.equal(callbacks.size, 1);
 		const [id, tick] = [...callbacks][0];
 		callbacks.delete(id);
@@ -2943,9 +2685,7 @@ test('Prototype cancels delayed transitions when hidden and renders animation fr
 							id: generateUuid(),
 							trigger: 'delay',
 							delay: 800,
-							actions: [
-								{ action: 'navigate', destination: detail.id, transition: defaultPrototypeTransition },
-							],
+							actions: [{ action: 'navigate', destination: detail.id, transition: defaultPrototypeTransition }],
 						},
 					],
 				},
@@ -2958,10 +2698,7 @@ test('Prototype cancels delayed transitions when hidden and renders animation fr
 		assert.equal(timers.size, 1);
 		const fire = [...timers.values()][0];
 		fire();
-		assert.equal(
-			view.domNode.querySelector<SVGSVGElement>('.ash-prototype-preview-scene')!.dataset.screenId,
-			detail.id,
-		);
+		assert.equal(view.domNode.querySelector<SVGSVGElement>('.ash-prototype-preview-scene')!.dataset.screenId, detail.id);
 		editor.setVisible(false);
 		assert.equal(timers.size, 0);
 		editor.previewPrototype();
@@ -2975,22 +2712,17 @@ test('Prototype cancels delayed transitions when hidden and renders animation fr
 });
 
 test('Chinese Prototype properties, triggers and accessible descriptions use translated names', async () => {
-	const { productLanguagePackCatalogs } =
-		await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using view = createView();
 		const { home, detail } = prototypeScreens();
 		view.designEditors.document.model.replace(documentFromShapes([home, detail]));
 		view.pane.editor.selectShape(home.id);
 		const root = view.propertiesDomNode.querySelector('.ash-prototype-properties')!;
-		[...root.querySelectorAll<HTMLButtonElement>('button')]
-			.find(button => button.textContent === '添加交互')!
-			.click();
+		[...root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === '添加交互')!.click();
 		assert.ok(root.querySelector('select[aria-label="触发器"]'));
 		assert.ok(root.querySelector('select[aria-label="过渡"]'));
 		assert.match(view.pane.editor.getAccessibleContent(), /点击／轻触时.*跳转至/u);
@@ -3015,9 +2747,7 @@ test('Prototype key, pointer and link triggers use the preview and repeated prev
 							id: generateUuid(),
 							trigger,
 							key: 'k',
-							actions: [
-								{ action: 'navigate', destination: detail.id, transition: defaultPrototypeTransition },
-							],
+							actions: [{ action: 'navigate', destination: detail.id, transition: defaultPrototypeTransition }],
 						},
 					],
 				},
@@ -3033,19 +2763,10 @@ test('Prototype key, pointer and link triggers use the preview and repeated prev
 		if (trigger === 'key') {
 			preview.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'k', bubbles: true }));
 		} else if (trigger === 'drag') {
-			hotspot.dispatchEvent(
-				new browser.window.MouseEvent('pointerdown', { button: 0, clientX: 1, clientY: 1, bubbles: true }),
-			);
-			preview.dispatchEvent(
-				new browser.window.MouseEvent('pointermove', { clientX: 30, clientY: 1, bubbles: true }),
-			);
+			hotspot.dispatchEvent(new browser.window.MouseEvent('pointerdown', { button: 0, clientX: 1, clientY: 1, bubbles: true }));
+			preview.dispatchEvent(new browser.window.MouseEvent('pointermove', { clientX: 30, clientY: 1, bubbles: true }));
 		} else {
-			hotspot.dispatchEvent(
-				new browser.window.MouseEvent(
-					trigger === 'down' ? 'pointerdown' : trigger === 'up' ? 'pointerup' : 'pointerout',
-					{ button: 0, bubbles: true },
-				),
-			);
+			hotspot.dispatchEvent(new browser.window.MouseEvent(trigger === 'down' ? 'pointerdown' : trigger === 'up' ? 'pointerup' : 'pointerout', { button: 0, bubbles: true }));
 		}
 		assert.equal(scene.dataset.screenId, detail.id, trigger);
 		preview.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -3075,9 +2796,7 @@ test('Prototype key, pointer and link triggers use the preview and repeated prev
 	);
 	view.pane.editor.previewPrototype();
 	const count = openedPrototypeLinks.length;
-	view.domNode
-		.querySelector(`.ash-prototype-preview [data-shape-id="${home.id}"]`)!
-		.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true }));
+	view.domNode.querySelector(`.ash-prototype-preview [data-shape-id="${home.id}"]`)!.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true }));
 	assert.deepEqual(openedPrototypeLinks.slice(count), ['https://example.com/prototype']);
 });
 
@@ -3098,16 +2817,12 @@ test('Prototype Change to authoring and preview preserve editable component inst
 	model.replace(documentFromShapes([main]));
 	const variant = commands.components.addVariant(main.id)!;
 	commands.updateShape({
-		...model.value.shapes
-			.flatMap(shape => (shape.kind === 'frame' ? shape.children : []))
-			.find(shape => shape.id === variant)!,
+		...model.value.shapes.flatMap(shape => (shape.kind === 'frame' ? shape.children : [])).find(shape => shape.id === variant)!,
 		fill: '#ff0000',
 	});
 	editor.selectShape(main.id);
 	const properties = view.propertiesDomNode.querySelector('.ash-prototype-properties')!;
-	[...properties.querySelectorAll<HTMLButtonElement>('button')]
-		.find(button => button.textContent === 'Add interaction')!
-		.click();
+	[...properties.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Add interaction')!.click();
 	assert.equal(properties.querySelector<HTMLSelectElement>('[aria-label="Action"]')!.value, 'changeTo');
 	const instanceId = commands.components.createInstance(main.id)!;
 	const instance = model.value.shapes.find(shape => shape.id === instanceId)!;
@@ -3117,9 +2832,7 @@ test('Prototype Change to authoring and preview preserve editable component inst
 	const saved = serializeDesignDocument(model.value);
 	editor.previewPrototype();
 	const scene = view.domNode.querySelector('.ash-prototype-preview-scene')!;
-	scene
-		.querySelector(`[data-shape-id="${instanceId}"]`)!
-		.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+	scene.querySelector(`[data-shape-id="${instanceId}"]`)!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 	assert.equal(scene.querySelector(`[data-shape-id="${instanceId}"]`)!.getAttribute('fill'), '#ff0000');
 	assert.equal(serializeDesignDocument(model.value), saved);
 });
@@ -3247,10 +2960,7 @@ test('Prototype animated chains defer later effects and cancel the entire contin
 		editor.selectShape(home.id);
 		editor.previewPrototype();
 		const preview = view.domNode.querySelector<HTMLElement>('.ash-prototype-preview')!;
-		const click = () =>
-			preview
-				.querySelector(`[data-shape-id="${home.id}"]`)!
-				.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true }));
+		const click = () => preview.querySelector(`[data-shape-id="${home.id}"]`)!.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true }));
 		const tick = () => {
 			assert.equal(callbacks.size, 1);
 			const [id, run] = [...callbacks][0];
@@ -3265,9 +2975,7 @@ test('Prototype animated chains defer later effects and cancel the entire contin
 		assert.equal(callbacks.size, 1);
 		tick();
 		assert.equal(preview.querySelector<SVGSVGElement>('.ash-prototype-preview-scene')!.dataset.screenId, dialog.id);
-		const restart = [...preview.querySelectorAll<HTMLButtonElement>('button')].find(
-			button => button.textContent === 'Restart flow',
-		)!;
+		const restart = [...preview.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Restart flow')!;
 		restart.click();
 		click();
 		assert.equal(callbacks.size, 1);
@@ -3286,23 +2994,17 @@ test('Prototype animated chains defer later effects and cancel the entire contin
 });
 
 test('Chinese Prototype action chains, condition errors and spring parameters use localized controls and help', async () => {
-	const { productLanguagePackCatalogs } =
-		await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using view = createView();
 		const { home, detail } = prototypeScreens();
 		view.designEditors.document.model.replace(documentFromShapes([home, detail]));
 		view.pane.editor.selectShape(home.id);
 		const root = view.propertiesDomNode.querySelector('.ash-prototype-properties')!;
-		const click = (text: string) =>
-			[...root.querySelectorAll<HTMLButtonElement>('button')]
-				.find(button => button.textContent === text)!
-				.click();
+		const click = (text: string) => [...root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === text)!.click();
 		const change = (label: string, value: string) => {
 			const input = root.querySelector<HTMLInputElement>(`[aria-label="${label}"]`)!;
 			input.value = value;
@@ -3343,8 +3045,7 @@ test('Prototype scroll controls save undoable settings and preview handles wheel
 	model.replace(documentFromShapes([{ ...home, height: 200, children: [fixed, target] }]));
 	editor.selectShape(home.id);
 	const root = view.propertiesDomNode.querySelector('.ash-prototype-properties')!;
-	const control = (key: string) =>
-		root.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-prototype-control="${key}"]`)!;
+	const control = (key: string) => root.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-prototype-control="${key}"]`)!;
 	const change = (key: string, value: string) => {
 		control(key).focus();
 		control(key).value = value;
@@ -3381,22 +3082,16 @@ test('Prototype scroll controls save undoable settings and preview handles wheel
 	assert.equal(browser.window.document.activeElement, frame());
 	frame().dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
 	assert.equal(frame().dataset.scrollY, '0');
-	frame().dispatchEvent(
-		new browser.window.MouseEvent('pointerdown', { button: 0, clientX: 100, clientY: 180, bubbles: true }),
-	);
+	frame().dispatchEvent(new browser.window.MouseEvent('pointerdown', { button: 0, clientX: 100, clientY: 180, bubbles: true }));
 	scene.dispatchEvent(new browser.window.MouseEvent('pointermove', { clientX: 100, clientY: 80, bubbles: true }));
 	browser.window.document.dispatchEvent(new browser.window.MouseEvent('pointerup', { bubbles: true }));
 	assert.equal(frame().dataset.scrollY, '100');
 	// Consume the synthetic click that follows a drag before activating a hotspot.
 	scene.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true }));
-	scene
-		.querySelector(`[data-shape-id="${fixed.id}"]`)!
-		.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+	scene.querySelector(`[data-shape-id="${fixed.id}"]`)!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 	assert.equal(frame().dataset.scrollY, '660');
 	assert.match(editor.getAccessibleContent(), /Home: scroll position 0, 660/u);
-	[...preview.querySelectorAll<HTMLButtonElement>('button')]
-		.find(button => button.textContent === 'Restart flow')!
-		.click();
+	[...preview.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Restart flow')!.click();
 	assert.equal(frame().dataset.scrollY, '0');
 	assert.equal(model.version, version);
 	assert.equal(serializeDesignDocument(model.value), saved);
@@ -3469,10 +3164,7 @@ test('Prototype scroll animation recomputes fixed and sticky positions per frame
 		editor.previewPrototype();
 		const preview = view.domNode.querySelector<HTMLElement>('.ash-prototype-preview')!,
 			scene = preview.querySelector('.ash-prototype-preview-scene')!;
-		const click = () =>
-			scene
-				.querySelector(`[data-shape-id="${home.id}"]`)!
-				.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true }));
+		const click = () => scene.querySelector(`[data-shape-id="${home.id}"]`)!.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true }));
 		const tick = (offset: number) => {
 			const [id, callback] = [...callbacks][0];
 			callbacks.delete(id);
@@ -3487,9 +3179,7 @@ test('Prototype scroll animation recomputes fixed and sticky positions per frame
 		tick(1500);
 		assert.equal(openedPrototypeLinks.length, opened + 1);
 		assert.equal(scene.querySelector<SVGElement>(`[data-shape-id="${home.id}"]`)!.dataset.scrollY, '660');
-		[...preview.querySelectorAll<HTMLButtonElement>('button')]
-			.find(button => button.textContent === 'Restart flow')!
-			.click();
+		[...preview.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Restart flow')!.click();
 		click();
 		assert.equal(callbacks.size, 1);
 		editor.setVisible(false);
@@ -3501,13 +3191,10 @@ test('Prototype scroll animation recomputes fixed and sticky positions per frame
 });
 
 test('Chinese Prototype overflow, fixed positioning, Scroll to and keyboard help use translated controls', async () => {
-	const { productLanguagePackCatalogs } =
-		await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using view = createView();
 		const editor = view.pane.editor,
@@ -3523,9 +3210,7 @@ test('Chinese Prototype overflow, fixed positioning, Scroll to and keyboard help
 			rotation: 0,
 			fill: '#ff0000',
 		};
-		view.designEditors.document.model.replace(
-			documentFromShapes([{ ...home, overflowDirection: 'vertical', children: [target] }]),
-		);
+		view.designEditors.document.model.replace(documentFromShapes([{ ...home, overflowDirection: 'vertical', children: [target] }]));
 		editor.selectShape(home.id);
 		const root = view.propertiesDomNode.querySelector('.ash-prototype-properties')!;
 		assert.ok(root.querySelector('[aria-label="溢出滚动"]'));
@@ -3537,10 +3222,7 @@ test('Chinese Prototype overflow, fixed positioning, Scroll to and keyboard help
 		);
 		assert.match(chinese.bundles.ash['sessions.design.prototype.scrollHelp'], /粘性.*直接父层边界/u);
 		editor.previewPrototype();
-		assert.match(
-			view.domNode.querySelector('.ash-prototype-preview [data-scroll-y]')!.getAttribute('aria-label')!,
-			/垂直滚动位置/u,
-		);
+		assert.match(view.domNode.querySelector('.ash-prototype-preview [data-scroll-y]')!.getAttribute('aria-label')!, /垂直滚动位置/u);
 	} finally {
 		resetNlsResolver();
 	}
@@ -3656,15 +3338,9 @@ test('Design inline text commits composition, formats selections and groups typi
 	editor().dispatchEvent(new browser.window.CompositionEvent('compositionstart', { bubbles: true }));
 	editor().textContent = '你好 world';
 	editor().dispatchEvent(new browser.window.InputEvent('input', { bubbles: true, isComposing: true }));
-	assert.equal(
-		(view.designEditors.document.model.value.shapes[0] as Extract<DesignShape, { kind: 'text' }>).text,
-		'Hello world',
-	);
+	assert.equal((view.designEditors.document.model.value.shapes[0] as Extract<DesignShape, { kind: 'text' }>).text, 'Hello world');
 	editor().dispatchEvent(new browser.window.CompositionEvent('compositionend', { bubbles: true, data: '你好' }));
-	assert.equal(
-		(view.designEditors.document.model.value.shapes[0] as Extract<DesignShape, { kind: 'text' }>).text,
-		'你好 world',
-	);
+	assert.equal((view.designEditors.document.model.value.shapes[0] as Extract<DesignShape, { kind: 'text' }>).text, '你好 world');
 	const range = browser.window.document.createRange();
 	const node = editor().querySelector('span')!.firstChild!;
 	range.setStart(node, 0);
@@ -3672,14 +3348,10 @@ test('Design inline text commits composition, formats selections and groups typi
 	const selection = browser.window.getSelection()!;
 	selection.removeAllRanges();
 	selection.addRange(range);
-	editor().dispatchEvent(
-		new browser.window.KeyboardEvent('keydown', { key: 'b', ctrlKey: true, bubbles: true, cancelable: true }),
-	);
+	editor().dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'b', ctrlKey: true, bubbles: true, cancelable: true }));
 	const shape = view.designEditors.document.model.value.shapes[0] as Extract<DesignShape, { kind: 'text' }>;
 	assert.deepEqual(shape.textRuns, [{ start: 0, end: 2, style: { fontWeight: 700 } }]);
-	editor().dispatchEvent(
-		new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
-	);
+	editor().dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 	assert.equal(editor(), null);
 	assert.equal(view.domNode.querySelector('[data-shape-id]')?.getAttribute('visibility'), null);
 });
@@ -3732,16 +3404,9 @@ test('Design character controls keep canvas selection, report mixed values and p
 	assert.equal(data.get('text/plain'), 'Hello world');
 	assert.ok(data.get('text/html')?.includes('36px'));
 	clipboard('paste');
-	assert.equal(
-		(view.designEditors.document.model.value.shapes[0] as Extract<DesignShape, { kind: 'text' }>).textRuns?.[0]
-			.style.fontSize,
-		36,
-	);
+	assert.equal((view.designEditors.document.model.value.shapes[0] as Extract<DesignShape, { kind: 'text' }>).textRuns?.[0].style.fontSize, 36);
 	data.clear();
-	data.set(
-		'text/html',
-		'<p><b>Safe</b> <i>text</i><img src="https://invalid.test/image" onerror="alert(1)"><script>bad()</script></p>',
-	);
+	data.set('text/html', '<p><b>Safe</b> <i>text</i><img src="https://invalid.test/image" onerror="alert(1)"><script>bad()</script></p>');
 	view.pane.editor.selectAll();
 	clipboard('paste');
 	const pasted = view.designEditors.document.model.value.shapes[0] as Extract<DesignShape, { kind: 'text' }>;
@@ -3749,10 +3414,7 @@ test('Design character controls keep canvas selection, report mixed values and p
 	assert.equal(pasted.textRuns?.[0].style.fontWeight, 700);
 	assert.equal(pasted.textRuns?.at(-1)?.style.fontStyle, 'italic');
 	assert.equal(editor().querySelector('script, img'), null);
-	assert.deepEqual(
-		parseDesignDocument(serializeDesignDocument(view.designEditors.document.model.value)),
-		view.designEditors.document.model.value,
-	);
+	assert.deepEqual(parseDesignDocument(serializeDesignDocument(view.designEditors.document.model.value)), view.designEditors.document.model.value);
 	const { readDesignTextHtml } = await import('../../contrib/creator/contrib/text/browser/textClipboard.js');
 	assert.equal(readDesignTextHtml(browser.window.document, '<div><div>A</div>\n<div>B</div></div>').text, 'A\nB');
 });
@@ -3774,36 +3436,22 @@ test('Replacing a document cancels an unfinished text composition without writin
 });
 
 test('Chinese text typography controls and inline editing use the Design accessibility help', async () => {
-	const { productLanguagePackCatalogs } =
-		await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using view = createView();
 		view.layout({ width: 400, height: 300 });
 		createText(view);
 		pressCanvas(view, 'Enter');
 		assert.ok(view.domNode.querySelector('[aria-label="编辑文本"]'));
-		for (const label of [
-			'文本尺寸',
-			'字距单位',
-			'垂直对齐',
-			'OpenType 特性',
-			'可变字体轴',
-			'最大行数',
-			'换行样式',
-		]) {
+		for (const label of ['文本尺寸', '字距单位', '垂直对齐', 'OpenType 特性', '可变字体轴', '最大行数', '换行样式']) {
 			assert.ok(view.propertiesDomNode.querySelector(`[aria-label="${label}"]`), label);
 		}
 		view.propertiesDomNode.querySelector<HTMLElement>('[aria-label="可变字体轴"]')!.focus();
 		assert.match(chinese.bundles.ash['sessions.design.textEditingHelp'], /输入法.*自动宽度/u);
-		assert.match(
-			view.domNode.querySelector('[contenteditable]')!.getAttribute('aria-description')!,
-			/文本编辑帮助/u,
-		);
+		assert.match(view.domNode.querySelector('[contenteditable]')!.getAttribute('aria-description')!, /文本编辑帮助/u);
 	} finally {
 		resetNlsResolver();
 	}
@@ -3868,9 +3516,7 @@ test('Design edits text inside scaled rotated groups and keeps the character edi
 	assert.equal(updated.fontSize, 20);
 	assert.equal(updated.x, 10);
 	assert.equal(updated.y, 5);
-	view.domNode
-		.querySelector('[contenteditable]')!
-		.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	view.domNode.querySelector('[contenteditable]')!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	view.pane.editor.selectShape(group.id);
 	pressCanvas(view, 'u');
 	const ungrouped = model.value.shapes[0] as typeof label;
@@ -3897,9 +3543,7 @@ test('Design font picker queries installed families only on request and accepts 
 	});
 	try {
 		assert.equal(calls, 0);
-		const button = [...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')].find(
-			button => button.textContent === 'Load installed fonts',
-		)!;
+		const button = [...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Load installed fonts')!;
 		button.click();
 		await new Promise(resolve => setTimeout(resolve, 0));
 		assert.equal(calls, 1);
@@ -3911,10 +3555,7 @@ test('Design font picker queries installed families only on request and accepts 
 		);
 		input.value = 'Test Serif';
 		input.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
-		assert.equal(
-			(view.designEditors.document.model.value.shapes[0] as Extract<DesignShape, { kind: 'text' }>).fontFamily,
-			'Test Serif',
-		);
+		assert.equal((view.designEditors.document.model.value.shapes[0] as Extract<DesignShape, { kind: 'text' }>).fontFamily, 'Test Serif');
 	} finally {
 		if (previous) {
 			Object.defineProperty(globalThis, 'queryLocalFonts', previous);
@@ -3931,11 +3572,7 @@ test('Linked text styles stay within the character selection and preserve subseq
 	const model = view.designEditors.document.model;
 	const commands = new DocumentCommands(model);
 	const original = model.value.shapes[0] as Extract<DesignShape, { kind: 'text' }>;
-	const styleId = commands.resources.createStyle(
-		{ ...original, id: generateUuid(), fontSize: 32, fontWeight: 400, paragraphSpacing: 8 },
-		'text',
-		'Body',
-	);
+	const styleId = commands.resources.createStyle({ ...original, id: generateUuid(), fontSize: 32, fontWeight: 400, paragraphSpacing: 8 }, 'text', 'Body');
 	pressCanvas(view, 'Enter');
 	const editor = () => view.domNode.querySelector<HTMLElement>('[contenteditable]')!;
 	const input = (text: string) =>
@@ -3980,9 +3617,7 @@ test('Linked text styles stay within the character selection and preserve subseq
 	assert.match(view.pane.editor.getAccessibleContent(), /Text selection 5–5/u, 'style preserves caret');
 	// JSDOM collapses DOM selection after focusin; place the browser caret explicitly.
 	select(5, 5);
-	editor().dispatchEvent(
-		new browser.window.KeyboardEvent('keydown', { key: 'b', ctrlKey: true, bubbles: true, cancelable: true }),
-	);
+	editor().dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'b', ctrlKey: true, bubbles: true, cancelable: true }));
 	input('!');
 	shape = model.value.shapes[0] as typeof original;
 	assert.equal(shape.text, 'Hello! world');
@@ -4018,13 +3653,10 @@ test('IME emoji replacement preserves Unicode boundaries and the surrounding ric
 
 test('Vector compound paths save, open and recover with editable handles and localized controls', async () => {
 	const { designShapeContours } = await import('../../contrib/creator/common/model/designVector.js');
-	const { productLanguagePackCatalogs } =
-		await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using view = createView();
 		const controller = view.designEditors.document;
@@ -4061,17 +3693,12 @@ test('Vector compound paths save, open and recover with editable handles and loc
 		const input = view.propertiesDomNode.querySelector<HTMLSelectElement>('[aria-label="轮廓"]')!;
 		input.value = '1';
 		input.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
-		assert.equal(
-			view.propertiesDomNode.querySelector<HTMLInputElement>('[aria-label="入控制点 X"]')!.value,
-			'-200',
-		);
+		assert.equal(view.propertiesDomNode.querySelector<HTMLInputElement>('[aria-label="入控制点 X"]')!.value, '-200');
 		assert.match(chinese.bundles.ash['sessions.design.vectorHelp'], /原始图层仍可编辑/u);
 		view.pane.editor.selectShape(new DocumentCommands(controller.model).addShape('rectangle', { x: 300, y: 300 }));
 		view.pane.editor.selectShapes(controller.model.value.shapes.map(shape => shape.id));
 		assert.ok([...view.propertiesDomNode.querySelectorAll('button')].some(button => button.textContent === '联集'));
-		assert.ok(
-			[...view.propertiesDomNode.querySelectorAll('button')].some(button => button.textContent === '减去顶层'),
-		);
+		assert.ok([...view.propertiesDomNode.querySelectorAll('button')].some(button => button.textContent === '减去顶层'));
 		await controller.saveDocument();
 		const saved = parseDesignDocument(fileContent);
 		assert.deepEqual(saved, controller.model.value);
@@ -4100,13 +3727,9 @@ test('Vector compound paths save, open and recover with editable handles and loc
 		assert.ok(view.propertiesDomNode.querySelector('[aria-label="端点样式"]'));
 		assert.match(chinese.bundles.ash['sessions.design.vectorAppearanceHelp'], /开放端点/u);
 		assert.match(chinese.bundles.ash['sessions.design.vectorAppearanceHelp'], /可变宽度工具/u);
-		assert.ok(
-			[...view.propertiesDomNode.querySelectorAll('button')].some(button => button.textContent === '偏移矢量'),
-		);
+		assert.ok([...view.propertiesDomNode.querySelectorAll('button')].some(button => button.textContent === '偏移矢量'));
 		assert.ok(view.propertiesDomNode.querySelector('[aria-label="简化程度"]'));
-		assert.ok(
-			[...view.propertiesDomNode.querySelectorAll('button')].some(button => button.textContent === '简化矢量'),
-		);
+		assert.ok([...view.propertiesDomNode.querySelectorAll('button')].some(button => button.textContent === '简化矢量'));
 	} finally {
 		resetNlsResolver();
 	}
@@ -4149,10 +3772,7 @@ test('Gradient properties commit stacks and keyboard edits atomically and persis
 	assert.match(fileContent, /linearGradient/u);
 	assert.match(fileContent, /mix-blend-mode: multiply/u);
 	select('Layer blend mode', 'normal');
-	assert.equal(
-		view.domNode.querySelector<SVGElement>('.ash-sessions-design-shapes > [data-shape-id]')!.style.isolation,
-		'isolate',
-	);
+	assert.equal(view.domNode.querySelector<SVGElement>('.ash-sessions-design-shapes > [data-shape-id]')!.style.isolation, 'isolate');
 	await clickAction({ domNode: view.propertiesDomNode }, 'Remove fill');
 	await clickAction({ domNode: view.propertiesDomNode }, 'Remove fill');
 	assert.deepEqual(controller.model.value.shapes[0].fills, []);
@@ -4226,10 +3846,7 @@ test('Effect properties save complete stacks, reject invalid input and retain on
 	select('Effect type', 'inner-shadow');
 	await clickAction({ domNode: view.propertiesDomNode }, 'Add effect');
 	select('Effect type', 'layer-blur');
-	assert.equal(
-		view.propertiesDomNode.querySelector<HTMLButtonElement>('[aria-label="Duplicate effect"]')!.disabled,
-		true,
-	);
+	assert.equal(view.propertiesDomNode.querySelector<HTMLButtonElement>('[aria-label="Duplicate effect"]')!.disabled, true);
 	await clickAction({ domNode: view.propertiesDomNode }, 'Add effect');
 	select('Effect type', 'background-blur');
 	const { designEffects } = await import('../../contrib/creator/common/model/designEffects.js');
@@ -4408,18 +4025,16 @@ test('Progressive blur edits normalized positions with keyboard and cancels a dr
 	assert.deepEqual(read(), effect);
 	const viewport = view.domNode.querySelector<HTMLElement>('.ash-canvas-viewport')!;
 	const begin = (handle = 'end') =>
-		view.domNode
-			.querySelector(`[data-blur-handle="${handle}"]`)!
-			.dispatchEvent(
-				new browser.window.PointerEvent('pointerdown', {
-					pointerId: 1,
-					button: 0,
-					isPrimary: true,
-					clientX: 170,
-					clientY: 150,
-					bubbles: true,
-				}),
-			);
+		view.domNode.querySelector(`[data-blur-handle="${handle}"]`)!.dispatchEvent(
+			new browser.window.PointerEvent('pointerdown', {
+				pointerId: 1,
+				button: 0,
+				isPrimary: true,
+				clientX: 170,
+				clientY: 150,
+				bubbles: true,
+			}),
+		);
 	const move = () =>
 		viewport.dispatchEvent(
 			new browser.window.PointerEvent('pointermove', {
@@ -4491,14 +4106,11 @@ test('Progressive blur edits normalized positions with keyboard and cancels a dr
 });
 
 test('Chinese progressive blur fields, descriptions and keyboard help are localized', async () => {
-	const { productLanguagePackCatalogs } =
-		await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const { describeDesignEffect } = await import('../../contrib/creator/browser/designEffectLabels.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using view = createView();
 		view.layout({ width: 400, height: 300 });
@@ -4521,14 +4133,7 @@ test('Chinese progressive blur fields, descriptions and keyboard help are locali
 		};
 		view.designEditors.document.model.replace(documentFromShapes([shape]));
 		view.pane.editor.selectShape(shape.id);
-		for (const label of [
-			'模糊模式',
-			'起点模糊',
-			'终点模糊',
-			'模糊起点 X（%）',
-			'模糊终点 Y（%）',
-			'在画布上编辑模糊',
-		]) {
+		for (const label of ['模糊模式', '起点模糊', '终点模糊', '模糊起点 X（%）', '模糊终点 Y（%）', '在画布上编辑模糊']) {
 			assert.ok(view.propertiesDomNode.querySelector(`[aria-label="${label}"]`), label);
 		}
 		assert.match(describeDesignEffect(effect), /渐进式模糊：0 至 20/u);
@@ -4557,11 +4162,7 @@ class AutoSaveFixture extends Disposable {
 		const fixture = this;
 		const provider = this._register(
 			new (class extends InMemoryFileSystemProvider {
-				override async writeFile(
-					resource: URI,
-					bytes: Uint8Array,
-					options: IFileWriteOptions,
-				): Promise<IFileWriteResult> {
+				override async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
 					await fixture.beforeWrite?.(resource);
 					return super.writeFile(resource, bytes, options);
 				}
@@ -4597,9 +4198,7 @@ class AutoSaveFixture extends Disposable {
 		return URI.parse(this.storage.get('creator.design.activeDocument', StorageScope.WORKSPACE)!);
 	}
 	async readActive(): Promise<ReturnType<typeof parseDesignDocument>> {
-		return parseDesignDocument(
-			(await this.files.readFile(URI.joinPath(this.activeResource, 'manifest.json'))).content,
-		);
+		return parseDesignDocument((await this.files.readFile(URI.joinPath(this.activeResource, 'manifest.json'))).content);
 	}
 }
 
@@ -4703,11 +4302,8 @@ test('Design drains edits made during saving without interrupting editing or ask
 test('Design retains failed edits, refuses to close on failure and retries without a save dialog', async () => {
 	using fixture = new AutoSaveFixture();
 	const document = fixture.createDocument();
-	using editor = fixture.child.createInstance(
-		DesignEditorWidget,
-		browser.window.document,
-		document,
-		(context: DesignEditorContributionContext) => createDesignEditorContributions(context, fixture.child),
+	using editor = fixture.child.createInstance(DesignEditorWidget, browser.window.document, document, (context: DesignEditorContributionContext) =>
+		createDesignEditorContributions(context, fixture.child),
 	);
 	new DocumentCommands(document.model).addShape('rectangle', { x: 0, y: 0 });
 	fixture.beforeWrite = async () => {
@@ -4716,9 +4312,7 @@ test('Design retains failed edits, refuses to close on failure and retries witho
 	assert.equal(await document.flushAutoSave(), false);
 	assert.equal(await document.confirmDiscard(), true);
 	assert.equal(document.needsSaveRetry, true);
-	assert.ok(
-		notifications.model.getNotifications().some(notification => notification.message === document.saveStatus),
-	);
+	assert.ok(notifications.model.getNotifications().some(notification => notification.message === document.saveStatus));
 	assert.equal(document.isDirty, true);
 	assert.equal(document.model.value.shapes.length, 1);
 	fixture.beforeWrite = undefined;
@@ -4754,9 +4348,7 @@ test('Design save a copy and export stay manual and keep the automatically saved
 	const original = document.model.value;
 	assert.equal(fixture.saveDialogs, 0);
 	await document.saveCopy();
-	const copy = parseDesignDocument(
-		(await fixture.files.readFile(URI.joinPath(fixture.copyResource, 'manifest.json'))).content,
-	);
+	const copy = parseDesignDocument((await fixture.files.readFile(URI.joinPath(fixture.copyResource, 'manifest.json'))).content);
 	assert.notEqual(copy.documentId, original.documentId);
 	assert.deepEqual(copy.shapes, original.shapes);
 	assert.deepEqual(document.model.value, original);
@@ -4795,13 +4387,10 @@ test('Design failed restoration keeps the original pointer and blocks replacemen
 });
 
 test('Design autosave status and copy actions use Chinese localization', async () => {
-	const { productLanguagePackCatalogs } =
-		await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using fixture = new AutoSaveFixture();
 		const document = fixture.createDocument();
@@ -4818,11 +4407,7 @@ test('Design autosave status and copy actions use Chinese localization', async (
 
 test('Design close drains edits from final lifecycle joins without confirming save', async () => {
 	using fixture = new AutoSaveFixture();
-	using lifecycle = new (class extends AbstractLifecycleService {})(
-		StartupKind.NewWindow,
-		new NullLoggerService(),
-		fixture.storage,
-	);
+	using lifecycle = new (class extends AbstractLifecycleService {})(StartupKind.NewWindow, new NullLoggerService(), fixture.storage);
 	fixture.child.registerInstance(ILifecycleService, lifecycle);
 	using editors = fixture.child.createInstance(DesignEditorService);
 	const document = editors.document;
@@ -4873,16 +4458,12 @@ test('Design save a copy rejects the active package as its destination', async (
 test('Page and fill color widgets preserve alpha, validate edits and restore their shared document history', async () => {
 	using fixture = new AutoSaveFixture();
 	const document = fixture.createDocument();
-	using editor = fixture.child.createInstance(
-		DesignEditorWidget,
-		browser.window.document,
-		document,
-		(context: DesignEditorContributionContext) => createDesignEditorContributions(context, fixture.child),
+	using editor = fixture.child.createInstance(DesignEditorWidget, browser.window.document, document, (context: DesignEditorContributionContext) =>
+		createDesignEditorContributions(context, fixture.child),
 	);
 	editor.initialize();
 	const properties = editor.propertiesDomNode;
-	const field = (label: string): HTMLInputElement =>
-		properties.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
+	const field = (label: string): HTMLInputElement => properties.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
 	const change = (label: string, value: string): void => {
 		const input = field(label);
 		input.value = value;
@@ -4930,17 +4511,14 @@ test('Stroke and both shadow types share color controls, keep alpha and close pi
 	const commands = new DocumentCommands(model);
 	const pathId = commands.addShape('path', { x: 0, y: 0 });
 	editor.selectShape(pathId);
-	const field = (label: string): HTMLInputElement =>
-		view.propertiesDomNode.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
+	const field = (label: string): HTMLInputElement => view.propertiesDomNode.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
 	const change = (label: string, value: string): void => {
 		const input = field(label);
 		input.value = value;
 		input.dispatchEvent(new browser.window.Event('change'));
 	};
 	const button = (label: string): HTMLButtonElement =>
-		[...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')].find(
-			button => button.getAttribute('aria-label') === label || button.textContent === label,
-		)!;
+		[...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')].find(button => button.getAttribute('aria-label') === label || button.textContent === label)!;
 	change('Stroke color', '336699');
 	change('Stroke opacity (%)', '40');
 	assert.equal((model.value.shapes[0] as Extract<DesignShape, { kind: 'path' }>).stroke, '#33669966');

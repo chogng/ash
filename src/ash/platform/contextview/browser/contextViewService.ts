@@ -1,8 +1,4 @@
-import {
-	ContextView,
-	type ContextViewHideReason,
-	type ContextViewOptions,
-} from '../../../base/browser/ui/contextview/contextview.js';
+import { ContextView, type ContextViewHideReason, type ContextViewOptions } from '../../../base/browser/ui/contextview/contextview.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import type { ILayoutService } from '../../layout/browser/layoutService.js';
 import type { IContextViewService } from './contextView.js';

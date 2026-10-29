@@ -25,13 +25,10 @@ export function markdownEscapeEscapedIcons(text: string): string {
 /** Removes rendered icon syntax while preserving escaped literal icons. */
 export function stripIcons(text: string): string {
 	if (!text.includes(iconStartMarker)) return text;
-	return text.replace(
-		stripIconsRegex,
-		(match, preWhitespace: string | undefined, escaped: string | undefined, postWhitespace: string | undefined) => {
-			if (escaped) return match;
-			return preWhitespace || postWhitespace || '';
-		},
-	);
+	return text.replace(stripIconsRegex, (match, preWhitespace: string | undefined, escaped: string | undefined, postWhitespace: string | undefined) => {
+		if (escaped) return match;
+		return preWhitespace || postWhitespace || '';
+	});
 }
 
 /** Converts icon syntax to words that screen readers can pronounce. */
@@ -71,11 +68,7 @@ export function parseLabelWithIcons(input: string): IParsedLabelWithIcons {
 }
 
 /** Fuzzy matches a label while ignoring source positions occupied by icons. */
-export function matchesFuzzyIconAware(
-	query: string,
-	target: IParsedLabelWithIcons,
-	_enableSeparateSubstringMatching = false,
-): IMatch[] | null {
+export function matchesFuzzyIconAware(query: string, target: IParsedLabelWithIcons, _enableSeparateSubstringMatching = false): IMatch[] | null {
 	const { text, iconOffsets } = target;
 	if (!iconOffsets || iconOffsets.length === 0) return matchesSubString(query, text);
 

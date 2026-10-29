@@ -10,12 +10,8 @@ suite('Ash Code terminal dictation', () => {
 			const { page } = browserTests;
 			await page.goto(`/terminal.html?input&groups&clipboard&browser&voice&locale=${locale}`);
 			await page.waitForFunction(() => Boolean(window.ashTerminalGroupsIntegration));
-			const start = page.locator(
-				'.ash-terminal-title-toolbar > [data-action-id="workbench.action.terminal.startVoice"] button',
-			);
-			const stop = page.locator(
-				'.ash-terminal-title-toolbar > [data-action-id="workbench.action.terminal.stopVoice"] button',
-			);
+			const start = page.locator('.ash-terminal-title-toolbar > [data-action-id="workbench.action.terminal.startVoice"] button');
+			const stop = page.locator('.ash-terminal-title-toolbar > [data-action-id="workbench.action.terminal.stopVoice"] button');
 			await expect(start).toHaveCount(0);
 			await expect(stop).toHaveCount(0);
 			await page.evaluate(() => window.ashTerminalGroupsIntegration.feed('ash code\r\n\x1b]0;Ash Code\x07'));
@@ -28,38 +24,19 @@ suite('Ash Code terminal dictation', () => {
 				window.ashTerminalGroupsIntegration.feed('\\');
 			});
 			await expect(start).toBeVisible();
-			await expect(start).toHaveAttribute(
-				'aria-label',
-				locale === 'zh-CN' ? '终端：开始听写' : 'Terminal: Start dictation',
-			);
+			await expect(start).toHaveAttribute('aria-label', locale === 'zh-CN' ? '终端：开始听写' : 'Terminal: Start dictation');
 			await page.evaluate(() => window.ashTerminalGroupsIntegration.clearWrites());
 			await start.focus();
 			await start.press('Enter');
-			await expect
-				.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().map(write => write.data)))
-				.toEqual(['\x1b[23;8~']);
-			await page.evaluate(() =>
-				window.ashTerminalGroupsIntegration.feed(
-					'\x1b]7501;state=idle:app=ash:dictation=active:protocol=1\x1b\\',
-				),
-			);
+			await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().map(write => write.data))).toEqual(['\x1b[23;8~']);
+			await page.evaluate(() => window.ashTerminalGroupsIntegration.feed('\x1b]7501;state=idle:app=ash:dictation=active:protocol=1\x1b\\'));
 			await expect(start).toHaveCount(0);
 			await expect(stop).toBeVisible();
 			await stop.click();
-			await expect
-				.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().map(write => write.data)))
-				.toEqual(['\x1b[23;8~', '\x1b[24;8~']);
-			await page.evaluate(() =>
-				window.ashTerminalGroupsIntegration.feed(
-					'\x1b]7501;state=idle:app=ash:dictation=busy:protocol=1\x1b\\',
-				),
-			);
+			await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().map(write => write.data))).toEqual(['\x1b[23;8~', '\x1b[24;8~']);
+			await page.evaluate(() => window.ashTerminalGroupsIntegration.feed('\x1b]7501;state=idle:app=ash:dictation=busy:protocol=1\x1b\\'));
 			await expect(start).toBeDisabled();
-			await page.evaluate(() =>
-				window.ashTerminalGroupsIntegration.feed(
-					'\x1b]7501;state=idle:app=ash:dictation=idle:protocol=1\x1b\\',
-				),
-			);
+			await page.evaluate(() => window.ashTerminalGroupsIntegration.feed('\x1b]7501;state=idle:app=ash:dictation=idle:protocol=1\x1b\\'));
 			await expect(start).toBeEnabled();
 			await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.new'));
 			await expect
@@ -89,11 +66,7 @@ suite('Ash Code terminal dictation', () => {
 			await expect(start).toBeVisible();
 			await page.evaluate(() => window.ashTerminalGroupsIntegration.feed('\x1b]7501;state=clear\x1b\\'));
 			await expect(start).toHaveCount(0);
-			await page.evaluate(() =>
-				window.ashTerminalGroupsIntegration.feed(
-					'\x1b]7501;state=idle:app=ash:dictation=idle:protocol=1\x1b\\',
-				),
-			);
+			await page.evaluate(() => window.ashTerminalGroupsIntegration.feed('\x1b]7501;state=idle:app=ash:dictation=idle:protocol=1\x1b\\'));
 			await expect(start).toBeVisible();
 			await page.evaluate(() => window.ashTerminalClipboardIntegration.disconnect());
 			await expect(start).toHaveCount(0);
@@ -114,14 +87,8 @@ suite('Ash Code terminal dictation', () => {
 		await entry.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.metadata().created)).toBe(2);
 		await expect
-			.poll(() =>
-				page.evaluate(() =>
-					window.ashTerminalGroupsIntegration.writes().filter(write => write.data === 'ash code\r'),
-				),
-			)
+			.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().filter(write => write.data === 'ash code\r')))
 			.toEqual([{ terminalId: 'input-shell-2', data: 'ash code\r' }]);
-		await expect(
-			page.locator('.ash-terminal-title-toolbar > [data-action-id="workbench.action.terminal.startVoice"]'),
-		).toHaveCount(0);
+		await expect(page.locator('.ash-terminal-title-toolbar > [data-action-id="workbench.action.terminal.startVoice"]')).toHaveCount(0);
 	});
 });

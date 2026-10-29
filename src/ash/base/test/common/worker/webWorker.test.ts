@@ -48,9 +48,7 @@ suite('Worker transport and RPC', () => {
 				if (message.wait) {
 					remoteSignal = signal;
 					started();
-					await new Promise<void>(resolve =>
-						signal.addEventListener('abort', () => resolve(), { once: true }),
-					);
+					await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
 				}
 				return Number(message.value) * 2;
 			},
@@ -69,8 +67,7 @@ suite('Worker transport and RPC', () => {
 	test('notification failure rejects pending requests and prevents further use', async () => {
 		const [clientPort, serverPort] = ports();
 		using server = new WebWorkerServer(serverPort, channel, {
-			handleRequest: async (_message, signal) =>
-				new Promise(resolve => signal.addEventListener('abort', () => resolve(null), { once: true })),
+			handleRequest: async (_message, signal) => new Promise(resolve => signal.addEventListener('abort', () => resolve(null), { once: true })),
 			handleNotification: () => {
 				throw new RangeError('Invalid settings');
 			},
@@ -78,13 +75,7 @@ suite('Worker transport and RPC', () => {
 		using client = new WebWorkerClient(clientPort, channel);
 		const pending = client.request(1, {}, new AbortController().signal);
 		client.send('settings', {});
-		await assert.rejects(
-			pending,
-			error =>
-				error instanceof WebWorkerRemoteError &&
-				error.remoteName === 'RangeError' &&
-				error.message === 'Invalid settings',
-		);
+		await assert.rejects(pending, error => error instanceof WebWorkerRemoteError && error.remoteName === 'RangeError' && error.message === 'Invalid settings');
 		assert.equal(clientPort.isDisposed, true);
 		assert.throws(() => client.request(2, {}, new AbortController().signal), /Invalid settings/);
 	});
@@ -140,10 +131,7 @@ suite('Worker transport and RPC', () => {
 		});
 		server.setChannel('foreign', { $wait: () => new Promise(() => {}) });
 		using client = new WebWorkerClient(clientPort, channel);
-		const rejected = assert.rejects(
-			client.getChannel<{ $wait(): void }>('foreign').$wait(),
-			/Domain channel failed/,
-		);
+		const rejected = assert.rejects(client.getChannel<{ $wait(): void }>('foreign').$wait(), /Domain channel failed/);
 		client.send('invalid', {});
 		await rejected;
 	});

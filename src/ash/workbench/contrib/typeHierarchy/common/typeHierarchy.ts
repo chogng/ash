@@ -78,19 +78,13 @@ export class TypeHierarchyModel extends Disposable {
 	public async provideSubtypes(item: LanguageHierarchyItem): Promise<readonly LanguageHierarchyItem[]> {
 		return this.query(item, 'subtypes');
 	}
-	private async query(
-		item: LanguageHierarchyItem,
-		direction: 'supertypes' | 'subtypes',
-	): Promise<readonly LanguageHierarchyItem[]> {
+	private async query(item: LanguageHierarchyItem, direction: 'supertypes' | 'subtypes'): Promise<readonly LanguageHierarchyItem[]> {
 		if (this.isDisposed || !isLanguageFeatureRequestCurrent(this.request)) {
 			return [];
 		}
 		const provider = this.providerFor(item);
 		const request = { ...this.request, item };
-		const items =
-			direction === 'supertypes'
-				? await provider.provideSupertypes(request, request.signal)
-				: await provider.provideSubtypes(request, request.signal);
+		const items = direction === 'supertypes' ? await provider.provideSupertypes(request, request.signal) : await provider.provideSubtypes(request, request.signal);
 		if (this.isDisposed || !isLanguageFeatureRequestCurrent(request)) {
 			return [];
 		}
@@ -114,10 +108,7 @@ export class TypeHierarchyModel extends Disposable {
 
 function normalizeItem(item: LanguageHierarchyItem): LanguageHierarchyItem {
 	const range = Range.fromPositions(item.range.getStartPosition(), item.range.getEndPosition());
-	const selectionRange = Range.fromPositions(
-		item.selectionRange.getStartPosition(),
-		item.selectionRange.getEndPosition(),
-	);
+	const selectionRange = Range.fromPositions(item.selectionRange.getStartPosition(), item.selectionRange.getEndPosition());
 	if (!range.containsRange(selectionRange)) {
 		throw new RangeError('Hierarchy selection range must be contained by its symbol range');
 	}

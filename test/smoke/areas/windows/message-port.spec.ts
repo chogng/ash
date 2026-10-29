@@ -40,12 +40,7 @@ const test = baseTest.extend<{ portHarness: PortHarness }>({
 					await page.evaluate(values => {
 						const sandbox = (globalThis as unknown as { ash: ISandboxGlobals }).ash;
 						const ports: MessagePort[] = [];
-						const subscriptions = new Map(
-							values.map(nonce => [
-								nonce,
-								sandbox.ipcMessagePort.acquire('ash:test:message-port', nonce),
-							]),
-						);
+						const subscriptions = new Map(values.map(nonce => [nonce, sandbox.ipcMessagePort.acquire('ash:test:message-port', nonce)]));
 						const observer: PortBridgeObserver = {
 							responses: [],
 							frames: [],
@@ -84,18 +79,14 @@ const test = baseTest.extend<{ portHarness: PortHarness }>({
 							}
 						};
 						window.addEventListener('message', receive);
-						(globalThis as unknown as { portBridgeObserver: PortBridgeObserver }).portBridgeObserver =
-							observer;
+						(globalThis as unknown as { portBridgeObserver: PortBridgeObserver }).portBridgeObserver = observer;
 					}, nonces);
 				},
 			});
 		} finally {
-			await page.evaluate(() =>
-				(globalThis as unknown as { portBridgeObserver?: PortBridgeObserver }).portBridgeObserver?.dispose(),
-			);
+			await page.evaluate(() => (globalThis as unknown as { portBridgeObserver?: PortBridgeObserver }).portBridgeObserver?.dispose());
 			await electron.evaluate(() => {
-				for (const port of (globalThis as unknown as { portBridgePeers: PortBridgePeers }).portBridgePeers
-					.ports) {
+				for (const port of (globalThis as unknown as { portBridgePeers: PortBridgePeers }).portBridgePeers.ports) {
 					port.close();
 				}
 			});
@@ -103,10 +94,7 @@ const test = baseTest.extend<{ portHarness: PortHarness }>({
 	},
 });
 
-async function postResponses(
-	application: ElectronApplication,
-	responses: { nonce: string; port?: boolean; error?: string; fatal?: boolean; stringResponse?: boolean }[],
-): Promise<void> {
+async function postResponses(application: ElectronApplication, responses: { nonce: string; port?: boolean; error?: string; fatal?: boolean; stringResponse?: boolean }[]): Promise<void> {
 	await application.evaluate(({ BrowserWindow, MessageChannelMain }, values) => {
 		const renderer = BrowserWindow.getAllWindows()[0].webContents;
 		const peers = (globalThis as unknown as { portBridgePeers: PortBridgePeers }).portBridgePeers;
@@ -131,21 +119,13 @@ async function postResponses(
 	}, responses);
 }
 
-test('sandbox MessagePort bridge matches concurrent nonces and transfers working ports', async ({
-	portHarness: { application, page, register },
-}) => {
+test('sandbox MessagePort bridge matches concurrent nonces and transfers working ports', async ({ portHarness: { application, page, register } }) => {
 	await register(['a', 'b']);
-	await postResponses(application, [
-		{ nonce: 'unrelated' },
-		{ nonce: 'b', port: true, stringResponse: true },
-		{ nonce: 'a', port: true },
-		{ nonce: 'a', error: 'duplicate response' },
-	]);
+	await postResponses(application, [{ nonce: 'unrelated' }, { nonce: 'b', port: true, stringResponse: true }, { nonce: 'a', port: true }, { nonce: 'a', error: 'duplicate response' }]);
 	await expect
 		.poll(() =>
 			page.evaluate(() => {
-				const observer = (globalThis as unknown as { portBridgeObserver: PortBridgeObserver })
-					.portBridgeObserver;
+				const observer = (globalThis as unknown as { portBridgeObserver: PortBridgeObserver }).portBridgeObserver;
 				return {
 					responses: observer.responses,
 					frames: [...observer.frames].sort((a, b) => a.nonce.localeCompare(b.nonce)),
@@ -175,13 +155,9 @@ test('sandbox MessagePort bridge matches concurrent nonces and transfers working
 		]);
 });
 
-test('sandbox MessagePort cancellation stops late responses while the next request still completes', async ({
-	portHarness: { application, page, register },
-}) => {
+test('sandbox MessagePort cancellation stops late responses while the next request still completes', async ({ portHarness: { application, page, register } }) => {
 	await register(['cancelled', 'current']);
-	await page.evaluate(() =>
-		(globalThis as unknown as { portBridgeObserver: PortBridgeObserver }).portBridgeObserver.cancel('cancelled'),
-	);
+	await page.evaluate(() => (globalThis as unknown as { portBridgeObserver: PortBridgeObserver }).portBridgeObserver.cancel('cancelled'));
 	await postResponses(application, [
 		{ nonce: 'cancelled', error: 'late failure', fatal: true },
 		{ nonce: 'current', port: true },
@@ -189,8 +165,7 @@ test('sandbox MessagePort cancellation stops late responses while the next reque
 	await expect
 		.poll(() =>
 			page.evaluate(() => {
-				const observer = (globalThis as unknown as { portBridgeObserver: PortBridgeObserver })
-					.portBridgeObserver;
+				const observer = (globalThis as unknown as { portBridgeObserver: PortBridgeObserver }).portBridgeObserver;
 				return { responses: observer.responses, frames: observer.frames };
 			}),
 		)
@@ -200,21 +175,14 @@ test('sandbox MessagePort cancellation stops late responses while the next reque
 		});
 });
 
-test('sandbox MessagePort failures retain diagnostics without a transferred port', async ({
-	portHarness: { application, page, register },
-}) => {
+test('sandbox MessagePort failures retain diagnostics without a transferred port', async ({ portHarness: { application, page, register } }) => {
 	await register(['failure', 'fatal']);
 	await postResponses(application, [
 		{ nonce: 'failure', error: 'connection closed', fatal: false },
 		{ nonce: 'fatal', error: 'host exited', fatal: true },
 	]);
 	await expect
-		.poll(() =>
-			page.evaluate(
-				() =>
-					(globalThis as unknown as { portBridgeObserver: PortBridgeObserver }).portBridgeObserver.responses,
-			),
-		)
+		.poll(() => page.evaluate(() => (globalThis as unknown as { portBridgeObserver: PortBridgeObserver }).portBridgeObserver.responses))
 		.toEqual([
 			{ nonce: 'failure', ports: 0, error: 'connection closed', fatal: false },
 			{ nonce: 'fatal', ports: 0, error: 'host exited', fatal: true },

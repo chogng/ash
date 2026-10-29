@@ -8,18 +8,10 @@ import { getErrorMessage, isCancellationError } from '../../../../base/common/er
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import {
-	IAccessibleViewService,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { GitHubError, GitHubErrorCode } from '../../../../platform/github/common/githubService.js';
-import type {
-	ISessionPullRequestCreation,
-	ISessionPullRequestDetails,
-	ISessionPullRequestOptions,
-	SessionPullRequestMergeMethod,
-} from '../common/pullRequestCreation.js';
+import type { ISessionPullRequestCreation, ISessionPullRequestDetails, ISessionPullRequestOptions, SessionPullRequestMergeMethod } from '../common/pullRequestCreation.js';
 import { CreatePullRequestFocusedContext } from '../common/changes.js';
 import { CreatePullRequestPreferences } from '../common/createPullRequestPreferences.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -141,10 +133,7 @@ export class CreatePullRequestWidget extends Disposable {
 		this.draft.type = 'checkbox';
 		this.draft.checked = preferences.draft ?? false;
 		this.draft.setAttribute('aria-label', localize('sessions.changes.prDraft', 'Create as draft'));
-		draftLabel.append(
-			this.draft,
-			ownerDocument.createTextNode(localize('sessions.changes.prDraft', 'Create as draft')),
-		);
+		draftLabel.append(this.draft, ownerDocument.createTextNode(localize('sessions.changes.prDraft', 'Create as draft')));
 		this.domNode.append(draftLabel);
 		this.merge = h(ownerDocument, 'select');
 		this.merge.setAttribute('aria-label', localize('sessions.changes.prMerge', 'Merge mode'));
@@ -158,8 +147,7 @@ export class CreatePullRequestWidget extends Disposable {
 			}),
 		);
 		this.domNode.append(this.merge);
-		this.primaryAction =
-			options.onSendToChat && preferences.primaryAction === 'sendToChat' ? 'sendToChat' : 'create';
+		this.primaryAction = options.onSendToChat && preferences.primaryAction === 'sendToChat' ? 'sendToChat' : 'create';
 		this.message = h(ownerDocument, 'p');
 		this.message.setAttribute('role', 'status');
 		this.message.textContent = localize('sessions.changes.prLoading', 'Preparing pull request…');
@@ -175,10 +163,7 @@ export class CreatePullRequestWidget extends Disposable {
 		);
 		const submitOptions = {
 			...defaultButtonStyles,
-			label:
-				this.primaryAction === 'sendToChat'
-					? localize('sessions.changes.prSend', 'Send to agent')
-					: localize('sessions.changes.createPR', 'Create pull request'),
+			label: this.primaryAction === 'sendToChat' ? localize('sessions.changes.prSend', 'Send to agent') : localize('sessions.changes.createPR', 'Create pull request'),
 			type: 'submit' as const,
 			enabled: false,
 			presentation: 'primary' as const,
@@ -193,29 +178,20 @@ export class CreatePullRequestWidget extends Disposable {
 						getActions: () =>
 							(['create', 'sendToChat'] as const).map(action => ({
 								id: `sessions.createPullRequest.${action}`,
-								label:
-									action === 'create'
-										? localize('sessions.changes.prDirect', 'Create directly')
-										: localize('sessions.changes.prAgent', 'Ask agent to create'),
+								label: action === 'create' ? localize('sessions.changes.prDirect', 'Create directly') : localize('sessions.changes.prAgent', 'Ask agent to create'),
 								tooltip: '',
 								checked: this.primaryAction === action,
 								enabled: this.submit.enabled,
 								run: () => {
 									this.primaryAction = action;
-									this.submit.label =
-										action === 'sendToChat'
-											? localize('sessions.changes.prSend', 'Send to agent')
-											: localize('sessions.changes.createPR', 'Create pull request');
+									this.submit.label = action === 'sendToChat' ? localize('sessions.changes.prSend', 'Send to agent') : localize('sessions.changes.createPR', 'Create pull request');
 									return this.create();
 								},
 							})),
 					},
 				}),
 			);
-			this.submit.dropdownButton.domNode.setAttribute(
-				'aria-label',
-				localize('sessions.changes.prAction', 'Pull request action'),
-			);
+			this.submit.dropdownButton.domNode.setAttribute('aria-label', localize('sessions.changes.prAction', 'Pull request action'));
 			this.submit.dropdownButton.setTitle(localize('sessions.changes.prAction', 'Pull request action'));
 		} else {
 			this.submit = this._register(new Button(actions, submitOptions));
@@ -234,11 +210,9 @@ export class CreatePullRequestWidget extends Disposable {
 					options.onCancel();
 				}
 				if (event.key === 'Tab') {
-					const targets = [
-						...this.domNode.querySelectorAll<HTMLElement>(
-							'input:not(:disabled), textarea:not(:disabled), select:not(:disabled), button:not(:disabled)',
-						),
-					].filter(element => !element.hidden);
+					const targets = [...this.domNode.querySelectorAll<HTMLElement>('input:not(:disabled), textarea:not(:disabled), select:not(:disabled), button:not(:disabled)')].filter(
+						element => !element.hidden,
+					);
 					const first = targets[0];
 					const last = targets.at(-1);
 					if (event.shiftKey && ownerDocument.activeElement === first) {
@@ -275,13 +249,7 @@ export class CreatePullRequestWidget extends Disposable {
 			if (!this.descriptionEdited) {
 				this.descriptionInput.value = details.description;
 			}
-			this.message.textContent = localize(
-				'sessions.changes.prContext',
-				'{0}: {1} → {2}',
-				details.repository,
-				details.branchName,
-				details.baseBranchName,
-			);
+			this.message.textContent = localize('sessions.changes.prContext', '{0}: {1} → {2}', details.repository, details.branchName, details.baseBranchName);
 			if (details.autoMergeAllowed && details.mergeMethods.length) {
 				this.merge.hidden = false;
 				const manual = h(this.domNode.ownerDocument, 'option');
@@ -300,12 +268,7 @@ export class CreatePullRequestWidget extends Disposable {
 					this.merge.append(option);
 				}
 				const preferences = this.preferences.read();
-				if (
-					preferences.mergeMode === 'auto' &&
-					preferences.mergeMethod &&
-					details.mergeMethods.includes(preferences.mergeMethod) &&
-					!this.draft.checked
-				) {
+				if (preferences.mergeMode === 'auto' && preferences.mergeMethod && details.mergeMethods.includes(preferences.mergeMethod) && !this.draft.checked) {
 					this.merge.value = preferences.mergeMethod;
 				}
 			}
@@ -325,10 +288,7 @@ export class CreatePullRequestWidget extends Disposable {
 		const title = this.titleInput.value.trim();
 		const base = this.baseInput.value.trim();
 		if (!title || !base || base === this.details.branchName) {
-			this.message.textContent = localize(
-				'sessions.changes.prRequired',
-				'Enter a title and a target branch different from the source branch.',
-			);
+			this.message.textContent = localize('sessions.changes.prRequired', 'Enter a title and a target branch different from the source branch.');
 			(!title ? this.titleInput : this.baseInput).focus();
 			return;
 		}
@@ -351,9 +311,7 @@ export class CreatePullRequestWidget extends Disposable {
 		this.submit.enabled = false;
 		this.domNode.setAttribute('aria-busy', 'true');
 		this.message.textContent =
-			formAction === 'sendToChat'
-				? localize('sessions.changes.prSending', 'Sending request to agent…')
-				: localize('sessions.changes.prCreating', 'Creating pull request…');
+			formAction === 'sendToChat' ? localize('sessions.changes.prSending', 'Sending request to agent…') : localize('sessions.changes.prCreating', 'Creating pull request…');
 		let uncertain = false;
 		try {
 			if (formAction === 'sendToChat') {
@@ -370,14 +328,10 @@ export class CreatePullRequestWidget extends Disposable {
 			});
 		} catch (error) {
 			const chatUncertain = CreatePullRequestChatRequest.isSubmissionUncertain(error);
-			uncertain =
-				chatUncertain || (error instanceof GitHubError && error.code === GitHubErrorCode.SubmissionUncertain);
+			uncertain = chatUncertain || (error instanceof GitHubError && error.code === GitHubErrorCode.SubmissionUncertain);
 			const message =
 				uncertain && !chatUncertain
-					? localize(
-							'sessions.changes.prUncertain',
-							'GitHub may have created the pull request. Check the repository before trying again.',
-						)
+					? localize('sessions.changes.prUncertain', 'GitHub may have created the pull request. Check the repository before trying again.')
 					: this.errorMessage(error);
 			if (this.isDisposed) {
 				this.options.onDetachedError(new Error(message));
@@ -398,10 +352,7 @@ export class CreatePullRequestWidget extends Disposable {
 
 	private errorMessage(error: unknown): string {
 		return error instanceof GitHubError
-			? localize(
-					'sessions.changes.prGitHubError',
-					'GitHub could not prepare or create the pull request. Check your account and repository, then reopen the form.',
-				)
+			? localize('sessions.changes.prGitHubError', 'GitHub could not prepare or create the pull request. Check your account and repository, then reopen the form.')
 			: getErrorMessage(error);
 	}
 }

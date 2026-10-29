@@ -22,7 +22,11 @@ const MAX_WORKSPACE_INPUT_BYTES = 1024 * 1024;
 /** Trusted IPC routes for managing and selecting named targets without accepting SSH options. */
 export function remoteConnectionIpcRoutes(service: IRemoteConnectionApi): readonly IpcRoute<unknown, unknown>[] {
 	return [
-		{ channel: REMOTE_CONNECTION_LIST_CHANNEL, validate: emptyParams, invoke: () => service.list() },
+		{
+			channel: REMOTE_CONNECTION_LIST_CHANNEL,
+			validate: emptyParams,
+			invoke: () => service.list(),
+		},
 		{
 			channel: REMOTE_CONNECTION_CONNECT_CHANNEL,
 			validate: connectParams,
@@ -108,8 +112,7 @@ function connectionDefinition(value: unknown): RemoteConnectionDefinition {
 
 function boundedString(value: unknown, field: string, maximumBytes: number): string {
 	const string = nonEmptyString(value, field);
-	if (VSBuffer.fromString(string).byteLength > maximumBytes)
-		throw new Error(`${field} exceeds its maximum encoded length`);
+	if (VSBuffer.fromString(string).byteLength > maximumBytes) throw new Error(`${field} exceeds its maximum encoded length`);
 	return string;
 }
 
@@ -149,17 +152,10 @@ export class RemoteAgentHostConnectionPool extends Disposable {
 	private async open(id: string, expected: RemoteConnectionDefinition): Promise<void> {
 		this.assertNotDisposed();
 		if (this.leases.has(id)) {
-			throw new Error(
-				localize(
-					{ bundle: 'ash.workbench', key: 'agentHosts.duplicateLease' },
-					'Agent host connection lease already exists',
-				),
-			);
+			throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.duplicateLease' }, 'Agent host connection lease already exists'));
 		}
 		if (this.leases.size >= 16) {
-			throw new Error(
-				localize({ bundle: 'ash.workbench', key: 'agentHosts.limit' }, 'Too many Agent host connections'),
-			);
+			throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.limit' }, 'Too many Agent host connections'));
 		}
 		const resources = new DisposableStore();
 		const cancellation = new AbortController();
@@ -168,19 +164,12 @@ export class RemoteAgentHostConnectionPool extends Disposable {
 		this.leases.set(id, resources);
 		try {
 			// Retiring a lease must settle its OPEN route even if the old catalog connection never replies.
-			const actual = (await raceCancellationError(this.catalog.list(), cancellation.signal)).find(
-				connection => connection.name === expected.name,
-			);
+			const actual = (await raceCancellationError(this.catalog.list(), cancellation.signal)).find(connection => connection.name === expected.name);
 			if (this.isDisposed || this.leases.get(id) !== resources) {
 				throw canceled();
 			}
 			if (!actual || actual.host !== expected.host || actual.workspace !== expected.workspace) {
-				throw new Error(
-					localize(
-						{ bundle: 'ash.workbench', key: 'agentHosts.targetChanged' },
-						'Saved Remote connection changed; select the target again',
-					),
-				);
+				throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.targetChanged' }, 'Saved Remote connection changed; select the target again'));
 			}
 			resources.add(this.createConnection(actual, id));
 		} catch (error) {

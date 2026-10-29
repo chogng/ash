@@ -69,12 +69,7 @@ export class Rect {
 			marginBottom = bottom;
 			marginLeft = left ?? right;
 		}
-		return new Rect(
-			this.left - marginLeft,
-			this.top - marginTop,
-			this.right + marginRight,
-			this.bottom + marginBottom,
-		);
+		return new Rect(this.left - marginLeft, this.top - marginTop, this.right + marginRight, this.bottom + marginBottom);
 	}
 
 	intersect(parent: Rect): Rect | undefined {
@@ -86,33 +81,16 @@ export class Rect {
 	}
 
 	intersectHorizontal(range: OffsetRange): Rect {
-		return new Rect(
-			Math.max(this.left, range.start),
-			this.top,
-			Math.max(Math.max(this.left, range.start), Math.min(this.right, range.endExclusive)),
-			this.bottom,
-		);
+		return new Rect(Math.max(this.left, range.start), this.top, Math.max(Math.max(this.left, range.start), Math.min(this.right, range.endExclusive)), this.bottom);
 	}
 	intersectVertical(range: OffsetRange): Rect {
-		return new Rect(
-			this.left,
-			Math.max(this.top, range.start),
-			this.right,
-			Math.max(Math.max(this.top, range.start), Math.min(this.bottom, range.endExclusive)),
-		);
+		return new Rect(this.left, Math.max(this.top, range.start), this.right, Math.max(Math.max(this.top, range.start), Math.min(this.bottom, range.endExclusive)));
 	}
 	union(other: Rect): Rect {
-		return new Rect(
-			Math.min(this.left, other.left),
-			Math.min(this.top, other.top),
-			Math.max(this.right, other.right),
-			Math.max(this.bottom, other.bottom),
-		);
+		return new Rect(Math.min(this.left, other.left), Math.min(this.top, other.top), Math.max(this.right, other.right), Math.max(this.bottom, other.bottom));
 	}
 	containsRect(other: Rect): boolean {
-		return (
-			this.left <= other.left && this.top <= other.top && this.right >= other.right && this.bottom >= other.bottom
-		);
+		return this.left <= other.left && this.top <= other.top && this.right >= other.right && this.bottom >= other.bottom;
 	}
 	containsPoint(point: Point): boolean {
 		return this.left <= point.x && point.x <= this.right && this.top <= point.y && point.y <= this.bottom;

@@ -2,9 +2,7 @@ import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export type CallDeployment =
-	| { readonly type: 'local' }
-	| { readonly type: 'server'; readonly url: string; readonly administrator: string }
-	| { readonly type: 'invitation'; readonly url: string; readonly credential: string };
+	{ readonly type: 'local' } | { readonly type: 'server'; readonly url: string; readonly administrator: string } | { readonly type: 'invitation'; readonly url: string; readonly credential: string };
 /** A reference to an independently authorized document, without contents or credentials. */
 export interface CallDocument {
 	readonly serverUrl: string;

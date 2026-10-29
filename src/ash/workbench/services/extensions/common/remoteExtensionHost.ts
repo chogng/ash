@@ -1,10 +1,7 @@
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import {
-	IExtensionHostApi,
-	type ExtensionHostFleetSnapshot,
-} from '../../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { IRemoteAuthorityResolverService } from '../../../../platform/remote/common/remoteAuthorityResolver.js';
 
 /** Owns remote extension startup readiness; Rust owns the connection's executable processes. */

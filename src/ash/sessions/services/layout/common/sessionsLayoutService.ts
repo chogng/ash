@@ -39,11 +39,7 @@ export interface ISessionsLayoutService extends IDisposable {
 	readonly onDidChangeConversationVisibility: Event<void>;
 	setConversationVisible(visible: boolean): Promise<void>;
 	/** Initialize retained content after its editor is created. Restoration preserves any covering Custom View and its focus. */
-	openEntry(
-		entry: ISessionsEntry,
-		initialize?: () => ISessionsEntry,
-		options?: { readonly source: 'restore' },
-	): Promise<void>;
+	openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry, options?: { readonly source: 'restore' }): Promise<void>;
 	restore(): Promise<void>;
 }
 

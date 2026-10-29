@@ -25,9 +25,7 @@ export abstract class AbstractScrollbar extends Disposable {
 	private readonly getMetrics: () => ScrollbarAxisMetrics;
 	private readonly setPosition: (position: number) => void;
 	private readonly dragListeners: DisposableStore;
-	private readonly visibility = this._register(
-		new ScrollbarVisibilityController(ScrollbarVisibility.Auto, 'ash-scrollbar-visible', 'ash-scrollbar-invisible'),
-	);
+	private readonly visibility = this._register(new ScrollbarVisibilityController(ScrollbarVisibility.Auto, 'ash-scrollbar-visible', 'ash-scrollbar-invisible'));
 
 	protected constructor(container: HTMLElement, axis: ScrollbarAxis, options: AbstractScrollbarOptions) {
 		super();
@@ -84,10 +82,7 @@ export abstract class AbstractScrollbar extends Disposable {
 
 	protected abstract pointerCoordinate(event: Pick<PointerEvent, 'clientX' | 'clientY'>): number;
 
-	protected abstract trackPointerCoordinate(
-		event: Pick<PointerEvent, 'clientX' | 'clientY'>,
-		bounds: DOMRect,
-	): number;
+	protected abstract trackPointerCoordinate(event: Pick<PointerEvent, 'clientX' | 'clientY'>, bounds: DOMRect): number;
 
 	protected abstract keyboardDelta(key: string, step: number): number | undefined;
 
@@ -178,10 +173,7 @@ export abstract class AbstractScrollbar extends Disposable {
 		const metrics = this.getMetrics();
 		let next: number;
 		if (this.options.trackClickBehavior === 'page') {
-			next =
-				coordinate < metrics.thumbPosition
-					? metrics.position - metrics.viewportSize
-					: metrics.position + metrics.viewportSize;
+			next = coordinate < metrics.thumbPosition ? metrics.position - metrics.viewportSize : metrics.position + metrics.viewportSize;
 		} else {
 			const targetThumbPosition = coordinate - metrics.thumbSize / 2;
 			const thumbTravel = metrics.trackSize - metrics.thumbSize;

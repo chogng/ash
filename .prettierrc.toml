@@ -15,11 +15,10 @@ tabWidth = 4
 [[overrides]]
 files = ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"]
 [overrides.options]
-printWidth = 120
+printWidth = 200
 useTabs = true
 tabWidth = 4
 singleQuote = true
 trailingComma = "all"
 arrowParens = "avoid"
-# Avoid Bun 1.4.4's second-pass call-chain changes when preserving object layout.
-objectWrap = "collapse"
+objectWrap = "preserve"

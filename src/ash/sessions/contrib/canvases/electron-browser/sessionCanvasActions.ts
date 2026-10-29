@@ -1,9 +1,4 @@
-import {
-	DisposableMap,
-	DisposableStore,
-	MutableDisposable,
-	type IDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { MenusRegistry } from '../../../../platform/actions/common/actions.js';
@@ -25,11 +20,7 @@ import { StringSHA1 } from '../../../../base/common/hash.js';
 export const OPEN_SESSION_CANVAS_COMMAND_ID = 'workbench.action.agentSessions.openCanvas';
 export const REOPEN_SESSION_CANVAS_COMMAND_ID = 'workbench.action.agentSessions.reopenCanvas';
 
-export function registerSessionCanvasActions(
-	canvases: ICanvasService,
-	registry: ISessionCanvasRegistryService,
-	contexts: ICanvasContextService,
-): IDisposable {
+export function registerSessionCanvasActions(canvases: ICanvasService, registry: ISessionCanvasRegistryService, contexts: ICanvasContextService): IDisposable {
 	const lifetime = new DisposableStore();
 	const menu = lifetime.add(new DisposableStore());
 	const activity = lifetime.add(new MutableDisposable());
@@ -45,28 +36,18 @@ export function registerSessionCanvasActions(
 						context.canvases
 							.get()
 							?.filter(canvas => canvas.source)
-							.map(canvas => ({ reference: { ...context.owner, canvas: canvas.resource }, canvas })) ??
-						[],
+							.map(canvas => ({ reference: { ...context.owner, canvas: canvas.resource }, canvas })) ?? [],
 				);
 			return live.length === 1 ? canvases.revealCanvas(live[0]!.reference) : showCanvasContextPicker(accessor);
 		}),
 	);
-	lifetime.add(
-		CommandsRegistry.register(REOPEN_SESSION_CANVAS_COMMAND_ID, accessor => showCanvasContextPicker(accessor)),
-	);
+	lifetime.add(CommandsRegistry.register(REOPEN_SESSION_CANVAS_COMMAND_ID, accessor => showCanvasContextPicker(accessor)));
 	lifetime.add(
 		autorun(reader => {
 			const enabled = canvases.enabled.read(reader);
 			const definitions = enabled ? registry.availableCanvases.read(reader) : [];
 			const live = enabled ? canvases.reopenableCanvases.read(reader) : [];
-			const identity = JSON.stringify([
-				definitions,
-				live.map(target => [
-					getCanvasReferenceKey(target.reference),
-					target.canvas.title,
-					target.canvas.instanceId,
-				]),
-			]);
+			const identity = JSON.stringify([definitions, live.map(target => [getCanvasReferenceKey(target.reference), target.canvas.title, target.canvas.instanceId])]);
 			if (identity === menuIdentity) {
 				return;
 			}
@@ -101,9 +82,7 @@ export function registerSessionCanvasActions(
 				if (!commands.has(id)) {
 					commands.set(
 						id,
-						CommandsRegistry.register(id, () =>
-							canvases.isOwnerPresentable(reference) ? canvases.revealCanvas(reference) : undefined,
-						),
+						CommandsRegistry.register(id, () => (canvases.isOwnerPresentable(reference) ? canvases.revealCanvas(reference) : undefined)),
 					);
 				}
 				menu.add(

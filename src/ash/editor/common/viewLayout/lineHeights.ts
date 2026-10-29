@@ -48,12 +48,7 @@ export class LineHeightsManager {
 		this.ranges.delete(decorationId);
 	}
 
-	insertOrChangeCustomLineHeight(
-		decorationId: string,
-		startLineNumber: number,
-		endLineNumber: number,
-		lineHeight: number,
-	): void {
+	insertOrChangeCustomLineHeight(decorationId: string, startLineNumber: number, endLineNumber: number, lineHeight: number): void {
 		const start = Math.max(1, Math.min(startLineNumber, endLineNumber));
 		const end = Math.max(start, Math.max(startLineNumber, endLineNumber));
 		this.ranges.set(decorationId, new CustomLineHeightData(decorationId, start, end, lineHeight));
@@ -119,10 +114,7 @@ export class LineHeightsManager {
 			if (from <= range.startLineNumber) {
 				this.ranges.set(id, moveRange(range, count));
 			} else if (from <= range.endLineNumber) {
-				this.ranges.set(
-					id,
-					new CustomLineHeightData(id, range.startLineNumber, range.endLineNumber + count, range.lineHeight),
-				);
+				this.ranges.set(id, new CustomLineHeightData(id, range.startLineNumber, range.endLineNumber + count, range.lineHeight));
 			}
 		}
 	}
@@ -136,29 +128,15 @@ export class CustomLineHeightData {
 		readonly lineHeight: number,
 	) {}
 
-	static fromDecorations(
-		decorations: IModelDecoration[],
-		coordinatesConverter: ICoordinatesConverter,
-		configuration: IEditorConfiguration,
-	): CustomLineHeightData[] {
+	static fromDecorations(decorations: IModelDecoration[], coordinatesConverter: ICoordinatesConverter, configuration: IEditorConfiguration): CustomLineHeightData[] {
 		const baseHeight = configuration.options.get(EditorOption.lineHeight);
 		return decorations.map(decoration => {
 			const range = coordinatesConverter.convertModelRangeToViewRange(decoration.range);
-			return new CustomLineHeightData(
-				decoration.id,
-				range.startLineNumber,
-				range.endLineNumber,
-				(decoration.options.lineHeight ?? 0) * baseHeight,
-			);
+			return new CustomLineHeightData(decoration.id, range.startLineNumber, range.endLineNumber, (decoration.options.lineHeight ?? 0) * baseHeight);
 		});
 	}
 }
 
 function moveRange(range: CustomLineHeightData, delta: number): CustomLineHeightData {
-	return new CustomLineHeightData(
-		range.decorationId,
-		range.startLineNumber + delta,
-		range.endLineNumber + delta,
-		range.lineHeight,
-	);
+	return new CustomLineHeightData(range.decorationId, range.startLineNumber + delta, range.endLineNumber + delta, range.lineHeight);
 }

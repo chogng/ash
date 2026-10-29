@@ -18,10 +18,7 @@ export async function loadLocalResource(
 	const resource = requestUri.with({ query: '', fragment: '' });
 	const allowed = options.roots.some(root => {
 		const directory = root.with({ query: '', fragment: '' });
-		return (
-			extUriBiasedIgnorePathCase.isEqualOrParent(resource, directory) &&
-			!extUriBiasedIgnorePathCase.isEqual(resource, directory)
-		);
+		return extUriBiasedIgnorePathCase.isEqualOrParent(resource, directory) && !extUriBiasedIgnorePathCase.isEqual(resource, directory);
 	});
 	const mimeType = getWebviewContentMimeType(resource);
 	if (!allowed) {

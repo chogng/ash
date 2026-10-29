@@ -1,6 +1,5 @@
 /** JSON-compatible data accepted across trusted host boundaries. */
-export type JsonValue =
-	null | boolean | number | string | readonly JsonValue[] | Readonly<{ [key: string]: JsonValue }>;
+export type JsonValue = null | boolean | number | string | readonly JsonValue[] | Readonly<{ [key: string]: JsonValue }>;
 
 export interface JsonValueValidationOptions {
 	readonly path?: string;

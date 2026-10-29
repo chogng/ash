@@ -39,11 +39,7 @@ export function isModelDecorationInString(model: ITextModel, decoration: IModelD
  * If the callback returns `false`, iteration stops and `false` is returned.
  * Otherwise, `true` is returned.
  */
-function testTokensInRange(
-	model: ITextModel,
-	range: Range,
-	callback: (tokenType: StandardTokenType) => boolean,
-): boolean {
+function testTokensInRange(model: ITextModel, range: Range, callback: (tokenType: StandardTokenType) => boolean): boolean {
 	for (let lineNumber = range.startLineNumber; lineNumber <= range.endLineNumber; lineNumber++) {
 		const lineTokens = model.tokenization.getLineTokens(lineNumber);
 		const isFirstLine = lineNumber === range.startLineNumber;

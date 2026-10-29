@@ -1,16 +1,8 @@
 import { Disposable, DisposableMap, toDisposable } from '../../../base/common/lifecycle.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { normalizeExtensionStatusBarEntries } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
-import {
-	type ExtensionClientSource,
-	type ExtensionHostFleetSnapshot,
-	type ExtensionStatusBarEntry,
-} from '../../../platform/agentHost/common/extensionHostApi.js';
-import {
-	IStatusbarService,
-	StatusbarAlignment,
-	type IStatusbarEntryAccessor,
-} from '../../services/statusbar/browser/statusbar.js';
+import { type ExtensionClientSource, type ExtensionHostFleetSnapshot, type ExtensionStatusBarEntry } from '../../../platform/agentHost/common/extensionHostApi.js';
+import { IStatusbarService, StatusbarAlignment, type IStatusbarEntryAccessor } from '../../services/statusbar/browser/statusbar.js';
 
 class StatusBarRegistration extends Disposable {
 	public revision = 0;
@@ -56,12 +48,7 @@ export class MainThreadStatusBar extends Disposable {
 		}
 	}
 
-	public set(
-		source: ExtensionClientSource,
-		registrationId: string,
-		revision: number,
-		values: readonly ExtensionStatusBarEntry[],
-	): void {
+	public set(source: ExtensionClientSource, registrationId: string, revision: number, values: readonly ExtensionStatusBarEntry[]): void {
 		this.assertNotDisposed();
 		const key = registrationKey(source, registrationId);
 		const registration = this.registrations.get(key);
@@ -87,11 +74,9 @@ export class MainThreadStatusBar extends Disposable {
 						: () => {
 								// A pending click owns this snapshot; replacing the UI releases all other old arguments.
 								if (this.registrations.get(key) !== registration) return;
-								return this.commands
-									.executeCommand(value.command!.command, ...value.command!.arguments)
-									.catch(error => {
-										if (!this.isDisposed) this.reportError(error);
-									});
+								return this.commands.executeCommand(value.command!.command, ...value.command!.arguments).catch(error => {
+									if (!this.isDisposed) this.reportError(error);
+								});
 							},
 			};
 			const placement = JSON.stringify([value.alignment, value.priority]);

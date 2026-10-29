@@ -38,12 +38,8 @@ test(
 			expect(authorization.origin).toBe('https://github-broker.example');
 			expect(authorization.pathname).toBe('/v1/oauth/github/authorize');
 			expect(authorization.searchParams.get('client_id')).toBe('AshSmokeGitHub');
-			await expect(
-				second.client.request(APP_SERVER_METHODS['account/login/start'], { method: { type: 'gitHubBrowser' } }),
-			).rejects.toMatchObject({ errorName: 'AccountLoginConflict' });
-			expect(
-				await second.client.request(APP_SERVER_METHODS['account/login/cancel'], { loginId: started.loginId }),
-			).toEqual({ status: 'notFound' });
+			await expect(second.client.request(APP_SERVER_METHODS['account/login/start'], { method: { type: 'gitHubBrowser' } })).rejects.toMatchObject({ errorName: 'AccountLoginConflict' });
+			expect(await second.client.request(APP_SERVER_METHODS['account/login/cancel'], { loginId: started.loginId })).toEqual({ status: 'notFound' });
 			await first.close();
 			first = undefined;
 			// Observe actual disconnect cleanup, without assuming transport-close timing.
@@ -63,17 +59,13 @@ test(
 					}
 				})
 				.toBe('browser');
-			expect(
-				await second.client.request(APP_SERVER_METHODS['account/login/cancel'], { loginId: pending! }),
-			).toEqual({ status: 'cancelled' });
+			expect(await second.client.request(APP_SERVER_METHODS['account/login/cancel'], { loginId: pending! })).toEqual({ status: 'cancelled' });
 			pending = undefined;
 			const account = await second.client.request(APP_SERVER_METHODS['account/read'], {});
 			expect(account.accounts.filter(entry => entry.provider === 'github')).toEqual([]);
 		} finally {
 			if (pending && second) {
-				await second.client
-					.request(APP_SERVER_METHODS['account/login/cancel'], { loginId: pending })
-					.catch(() => undefined);
+				await second.client.request(APP_SERVER_METHODS['account/login/cancel'], { loginId: pending }).catch(() => undefined);
 			}
 			await first?.close();
 			await second?.close();

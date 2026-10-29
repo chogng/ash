@@ -1,11 +1,4 @@
-import {
-	EditorAction,
-	EditorCommand,
-	registerEditorAction,
-	registerEditorCommand,
-	registerEditorContribution,
-	type ServicesAccessor,
-} from '../../../browser/editorFeatureRegistration.js';
+import { EditorAction, EditorCommand, registerEditorAction, registerEditorCommand, registerEditorContribution, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
 import { stopEvent } from '../../../../base/browser/dom.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
@@ -46,9 +39,7 @@ class ParameterHintsController extends Disposable {
 		if (viewport.textModel !== editor.getModel()) {
 			throw new TypeError('Parameter hints dependencies must share one text model');
 		}
-		this.model = this._register(
-			new ParameterHintsModel(input, editor, viewport.textModel, onError, languageFeaturesService),
-		);
+		this.model = this._register(new ParameterHintsModel(input, editor, viewport.textModel, onError, languageFeaturesService));
 		this.widget = this._register(new ParameterHintsWidget(viewport, editor, this.model, contextKeyService));
 		this._register(
 			editor.onKeyDown(keyboardEvent => {
@@ -66,13 +57,10 @@ class ParameterHintsController extends Disposable {
 					return;
 				}
 				const hints = this.model.hints;
-				if (!this.widget.isVisible || !hints || hints.signatures.length < 2 || event.shiftKey || event.metaKey)
-					return;
+				if (!this.widget.isVisible || !hints || hints.signatures.length < 2 || event.shiftKey || event.metaKey) return;
 				const macControl = isMacintosh && event.ctrlKey && !event.altKey;
-				const previous =
-					(!event.ctrlKey && event.key === 'ArrowUp') || (macControl && event.key.toLowerCase() === 'p');
-				const next =
-					(!event.ctrlKey && event.key === 'ArrowDown') || (macControl && event.key.toLowerCase() === 'n');
+				const previous = (!event.ctrlKey && event.key === 'ArrowUp') || (macControl && event.key.toLowerCase() === 'p');
+				const next = (!event.ctrlKey && event.key === 'ArrowDown') || (macControl && event.key.toLowerCase() === 'n');
 				if (previous || next) {
 					stopEvent(event);
 					editor.trigger('keyboard', previous ? 'showPrevParameterHint' : 'showNextParameterHint', {});
@@ -178,12 +166,6 @@ registerEditorContribution({
 		if (context.kind !== 'text') {
 			return;
 		}
-		return context.instantiationService.createInstance(
-			ParameterHintsController,
-			context.controller.element,
-			context.editor,
-			context.view,
-			context.onLanguageError,
-		);
+		return context.instantiationService.createInstance(ParameterHintsController, context.controller.element, context.editor, context.view, context.onLanguageError);
 	},
 });

@@ -18,14 +18,7 @@ const range = Range.fromPositions(new Position(2 + 1, 4 + 1), new Position(2 + 1
 test('workspace symbol acceptance refreshes instead of opening a stale local result', async () => {
 	const events = acceptanceEvents('current');
 
-	await acceptWorkspaceSymbol(
-		symbol('sha256:stale'),
-		events.files,
-		events.workingCopies,
-		events.editor,
-		events.quickPick,
-		events.refresh,
-	);
+	await acceptWorkspaceSymbol(symbol('sha256:stale'), events.files, events.workingCopies, events.editor, events.quickPick, events.refresh);
 
 	assert.equal(events.refreshed(), 1);
 	assert.equal(events.hidden(), 0);
@@ -35,14 +28,7 @@ test('workspace symbol acceptance refreshes instead of opening a stale local res
 test('workspace symbol acceptance opens a revision-verified local result', async () => {
 	const events = acceptanceEvents('current');
 
-	await acceptWorkspaceSymbol(
-		symbol('sha256:current'),
-		events.files,
-		events.workingCopies,
-		events.editor,
-		events.quickPick,
-		events.refresh,
-	);
+	await acceptWorkspaceSymbol(symbol('sha256:current'), events.files, events.workingCopies, events.editor, events.quickPick, events.refresh);
 
 	assert.equal(events.refreshed(), 0);
 	assert.equal(events.hidden(), 1);
@@ -53,14 +39,7 @@ test('workspace symbol acceptance verifies an unsaved local result against curre
 	const content = 'fn ephemeral_workspace_symbol() {}\n';
 	const events = acceptanceEvents('persisted', content);
 
-	await acceptWorkspaceSymbol(
-		symbol(sha256Revision(content)),
-		events.files,
-		events.workingCopies,
-		events.editor,
-		events.quickPick,
-		events.refresh,
-	);
+	await acceptWorkspaceSymbol(symbol(sha256Revision(content)), events.files, events.workingCopies, events.editor, events.quickPick, events.refresh);
 
 	assert.equal(events.refreshed(), 0);
 	assert.equal(events.hidden(), 1);

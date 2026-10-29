@@ -10,11 +10,7 @@ import type { IContextViewService } from '../../../../../platform/contextview/br
 import type { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import type { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { createDisconnectedRendererApi } from '../../../../../workbench/browser/rendererApi.js';
-import type {
-	ISessionProviderScope,
-	ISessionProviderScopeService,
-	SessionProviderServices,
-} from '../../../../browser/agentHost/sessionProviderScopeService.js';
+import type { ISessionProviderScope, ISessionProviderScopeService, SessionProviderServices } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import type { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import type { ISession } from '../../../../services/sessions/common/session.js';
 import { CreatePullRequestContextView } from '../../browser/createPullRequestContextView.js';
@@ -50,9 +46,7 @@ function fixture() {
 		},
 		github: {
 			...base.github,
-			listAccounts: async () => [
-				{ id: 'account', host: 'github.com', login: 'user', status: 'ready' as const, credentialRevision: 1n },
-			],
+			listAccounts: async () => [{ id: 'account', host: 'github.com', login: 'user', status: 'ready' as const, credentialRevision: 1n }],
 			readRepository: async () => ({
 				defaultBranch: 'main',
 				fullName: 'team/repo',
@@ -137,12 +131,7 @@ test('PR creation captures the remote historical Session repository and attaches
 		draft: false,
 		expectedContext: details.context,
 	});
-	assert.deepEqual(context.calls, [
-		'repos:same-session:/historical',
-		'repos:same-session:/historical',
-		'create',
-		'attach:same-session',
-	]);
+	assert.deepEqual(context.calls, ['repos:same-session:/historical', 'repos:same-session:/historical', 'create', 'attach:same-session']);
 });
 
 test('a retired PR scope cannot dispatch a write through a replacement host', async () => {

@@ -5,10 +5,7 @@ import { RichTextEditorWidget, type RichTextEditorOptions } from './widget/richT
 import { importDocumentText, exportDocumentText, materializeDocumentImages } from './documentImportExport.js';
 import { getDocumentAccessibilityHelp } from './documentAccessibility.js';
 import { documentContributions } from './documentContributions.js';
-import type {
-	EditorProfile,
-	DocumentEditorConfiguration,
-} from 'ash:editor/workbench/services/documentEditor/browser/documentEditorProfile.js';
+import type { EditorProfile, DocumentEditorConfiguration } from 'ash:editor/workbench/services/documentEditor/browser/documentEditorProfile.js';
 import { IDialogService } from 'ash:editor/platform/dialogs/common/dialogs.js';
 import { IOpenerService } from 'ash:editor/platform/opener/common/opener.js';
 import { createDefaultDocumentSchema, type DocumentSchema } from '../common/model/documentSchema.js';
@@ -53,10 +50,7 @@ export function createEditorProfileConfiguration(
 		widget: ProfileWidget,
 		createEmptyDocument,
 		importText: async (text, format, ownerDocument, source, readResource) => {
-			const document = await materializeDocumentImages(
-				importDocumentText(text, format, schema, ownerDocument, source),
-				readResource,
-			);
+			const document = await materializeDocumentImages(importDocumentText(text, format, schema, ownerDocument, source), readResource);
 			schema.validate(document);
 			return document;
 		},
@@ -70,18 +64,12 @@ export const generalProfile: EditorProfile = Object.freeze({
 	contentType: 'application/vnd.ash.document+json',
 	create: () => {
 		const schema = createDefaultDocumentSchema();
-		return createEditorProfileConfiguration(
-			schema,
-			{ outlineNavigator: true, contributions: documentContributions },
-			undefined,
-			() => schema.createDocument([schema.createNode('paragraph')]),
-		);
+		return createEditorProfileConfiguration(schema, { outlineNavigator: true, contributions: documentContributions }, undefined, () => schema.createDocument([schema.createNode('paragraph')]));
 	},
 });
 
 export const channelNotesProfile: EditorProfile = Object.freeze({
 	id: 'ash.collaboration.notes',
 	contentType: 'application/vnd.ash.channel-notes+json',
-	create: () =>
-		createEditorProfileConfiguration(createDefaultDocumentSchema(), { contributions: documentContributions }),
+	create: () => createEditorProfileConfiguration(createDefaultDocumentSchema(), { contributions: documentContributions }),
 });

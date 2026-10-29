@@ -89,13 +89,7 @@ export function isFunction(value: unknown): value is (...args: never[]) => unkno
 }
 
 export function isObject(value: unknown): value is object {
-	return (
-		typeof value === 'object' &&
-		value !== null &&
-		!Array.isArray(value) &&
-		!(value instanceof RegExp) &&
-		!(value instanceof Date)
-	);
+	return typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof RegExp) && !(value instanceof Date);
 }
 
 /**

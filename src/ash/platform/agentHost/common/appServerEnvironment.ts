@@ -34,12 +34,7 @@ export type AppServerLaunchMode = 'desktop' | 'web';
 /** Whether a variable may cross the Electron Main to App Server process boundary. */
 export function isAllowedAppServerEnvironmentKey(key: string): boolean {
 	const normalized = key.toUpperCase();
-	return (
-		isValidEnvironmentName(key) &&
-		!PRIVATE_HOST_ENVIRONMENT_KEYS.has(normalized) &&
-		normalized !== agentEnvironment.marker &&
-		!normalized.startsWith('ELECTRON_')
-	);
+	return isValidEnvironmentName(key) && !PRIVATE_HOST_ENVIRONMENT_KEYS.has(normalized) && normalized !== agentEnvironment.marker && !normalized.startsWith('ELECTRON_');
 }
 
 /** Builds the developer environment supplied to the local App Server process. */

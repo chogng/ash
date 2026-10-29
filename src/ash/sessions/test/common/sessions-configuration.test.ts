@@ -1,10 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { resetNlsResolver, setNlsResolver } from '../../../nls.js';
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 import { SessionsConfiguration } from '../../common/configuration.js';
 import { ActivityBarPosition, WorkbenchConfiguration } from '../../../workbench/common/configuration.js';

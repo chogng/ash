@@ -1,11 +1,7 @@
 import { localize2 } from '../../../../../nls.js';
 import { MenuId } from '../../../../../platform/actions/common/actions.js';
 import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
-import {
-	EditorAction,
-	registerEditorAction,
-	type ServicesAccessor,
-} from '../../../../browser/editorFeatureRegistration.js';
+import { EditorAction, registerEditorAction, type ServicesAccessor } from '../../../../browser/editorFeatureRegistration.js';
 import { EditorContextKeys } from '../../../../common/editorContextKeys.js';
 import { ColorPickerController } from '../colorPickerController.js';
 import { KeyCode } from '../../../../../base/common/keyCodes.js';

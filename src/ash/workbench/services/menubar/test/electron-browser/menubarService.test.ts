@@ -8,16 +8,9 @@ import { IMenuService, MenuId } from '../../../../../platform/actions/common/act
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
-import {
-	NATIVE_MENUBAR_SELECT_CHANNEL,
-	type INativeMenubarSelection,
-} from '../../../../../platform/menubar/common/nativeMenubar.js';
+import { NATIVE_MENUBAR_SELECT_CHANNEL, type INativeMenubarSelection } from '../../../../../platform/menubar/common/nativeMenubar.js';
 import { IMenubarService } from '../../../../../platform/menubar/electron-browser/menubar.js';
-import {
-	NativeMenubarMainService,
-	nativeMenubarIpcRoutes,
-	type INativeMenubarMainMenuItem,
-} from '../../../../../platform/menubar/electron-main/menubarMainService.js';
+import { NativeMenubarMainService, nativeMenubarIpcRoutes, type INativeMenubarMainMenuItem } from '../../../../../platform/menubar/electron-main/menubarMainService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { NativeMenubarControl } from '../../../../electron-browser/parts/titlebar/menubarControl.js';
 import { TestNotificationService } from '../../../notification/test/common/testNotificationService.js';
@@ -74,10 +67,7 @@ test('registered menubar service publishes the controller menu through Main and 
 		assert.equal(descriptors[0]![1].supportsDelayedInstantiation, true);
 		using services = new InstantiationService(new ServiceCollection(...descriptors));
 		using missingServices = new InstantiationService();
-		assert.throws(
-			() => missingServices.createInstance(NativeMenubarControl, MenuId.MenubarMainMenu),
-			/menubarService/,
-		);
+		assert.throws(() => missingServices.createInstance(NativeMenubarControl, MenuId.MenubarMainMenu), /menubarService/);
 		let runs = 0;
 		const action: IAction = {
 			id: 'save',
@@ -91,10 +81,7 @@ test('registered menubar service publishes the controller menu through Main and 
 		services.registerInstance(IMenuService, {
 			createMenu: id => ({
 				onDidChange: Event.None,
-				getActions: () =>
-					id === MenuId.MenubarMainMenu
-						? [['navigation', [new SubmenuAction('file', 'File', [action])]]]
-						: [],
+				getActions: () => (id === MenuId.MenubarMainMenu ? [['navigation', [new SubmenuAction('file', 'File', [action])]]] : []),
 				dispose() {},
 				[Symbol.dispose]() {},
 			}),
@@ -113,13 +100,7 @@ test('registered menubar service publishes the controller menu through Main and 
 		assert.equal(services.get(IMenubarService), service);
 		const selections: INativeMenubarSelection[] = [];
 		using selection = service.onDidSelect(value => selections.push(value));
-		for (const value of [
-			null,
-			{ revision: -1, id: 'save' },
-			{ revision: 1.5, id: 'save' },
-			{ revision: 1, id: '' },
-			{ revision: 1, id: 7 },
-		]) {
+		for (const value of [null, { revision: -1, id: 'save' }, { revision: 1.5, id: 'save' }, { revision: 1, id: '' }, { revision: 1, id: 7 }]) {
 			window.webContents.send(NATIVE_MENUBAR_SELECT_CHANNEL, value);
 		}
 		assert.deepEqual(selections, [], 'Malformed IPC selections do not enter the domain');

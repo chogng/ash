@@ -17,14 +17,8 @@ export namespace EditorContextKeys {
 	export const hasTypeHierarchyProvider = new RawContextKey<boolean>('editorHasTypeHierarchyProvider', false);
 	export const hasCodeActionsProvider = new RawContextKey<boolean>('editorHasCodeActionsProvider', false);
 	export const hasSignatureHelpProvider = new RawContextKey<boolean>('editorHasSignatureHelpProvider', false);
-	export const hasDocumentFormattingProvider = new RawContextKey<boolean>(
-		'editorHasDocumentFormattingProvider',
-		false,
-	);
-	export const hasDocumentSelectionFormattingProvider = new RawContextKey<boolean>(
-		'editorHasDocumentSelectionFormattingProvider',
-		false,
-	);
+	export const hasDocumentFormattingProvider = new RawContextKey<boolean>('editorHasDocumentFormattingProvider', false);
+	export const hasDocumentSelectionFormattingProvider = new RawContextKey<boolean>('editorHasDocumentSelectionFormattingProvider', false);
 	export const editorSimpleInput = new RawContextKey<boolean>('editorSimpleInput', false);
 	export const editorTextFocus = new RawContextKey<boolean>('editorTextFocus', false);
 	export const focus = new RawContextKey<boolean>('editorFocus', false);

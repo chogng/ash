@@ -10,12 +10,7 @@ import type { AppServerProtocolClient } from '../../agentHost/browser/appServerP
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
 import { McpOAuthClientRequiredError } from '../common/mcpServerManagementService.js';
-import type {
-	IMcpServerManagementService,
-	McpServerConfiguration,
-	McpServerConfigurationSnapshot,
-	McpOAuthLoginOptions,
-} from '../common/mcpServerManagementService.js';
+import type { IMcpServerManagementService, McpServerConfiguration, McpServerConfigurationSnapshot, McpOAuthLoginOptions } from '../common/mcpServerManagementService.js';
 
 /** Converts the existing stable protocol without retaining a second configuration or runtime catalog. */
 export class AppServerMcpServerManagementService extends Disposable implements IMcpServerManagementService {
@@ -53,31 +48,16 @@ export class AppServerMcpServerManagementService extends Disposable implements I
 	async login(serverId: string, options: McpOAuthLoginOptions = {}, signal?: AbortSignal): Promise<void> {
 		const callbacks = this.host?.callbackHost;
 		if (!this.isOAuthAvailable || !callbacks || !this.host) {
-			throw new Error(
-				localize(
-					{ bundle: 'ash.extensions', key: 'mcpOAuthUnavailable' },
-					'MCP sign-in is unavailable in this window.',
-				),
-			);
+			throw new Error(localize({ bundle: 'ash.extensions', key: 'mcpOAuthUnavailable' }, 'MCP sign-in is unavailable in this window.'));
 		}
 		if (signal?.aborted) {
-			throw new Error(
-				localize({ bundle: 'ash.extensions', key: 'mcpOAuthCancelled' }, 'MCP sign-in was cancelled.'),
-			);
+			throw new Error(localize({ bundle: 'ash.extensions', key: 'mcpOAuthCancelled' }, 'MCP sign-in was cancelled.'));
 		}
 		const server = (await this.readConfiguration()).servers.find(server => server.id === serverId);
 		if (server?.transport.type !== 'streamableHttp') {
-			throw new Error(
-				localize(
-					{ bundle: 'ash.extensions', key: 'mcpOAuthHttpOnly' },
-					'MCP sign-in requires an HTTPS server.',
-				),
-			);
+			throw new Error(localize({ bundle: 'ash.extensions', key: 'mcpOAuthHttpOnly' }, 'MCP sign-in requires an HTTPS server.'));
 		}
-		const digest = await crypto.subtle.digest(
-			'SHA-256',
-			new TextEncoder().encode(new URL(server.transport.url).href),
-		);
+		const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(new URL(server.transport.url).href));
 		const callbackId = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 		const callback = await callbacks.listen({ path: `/mcp-oauth/${callbackId}/callback` });
 		let flowId: string | undefined;
@@ -85,9 +65,7 @@ export class AppServerMcpServerManagementService extends Disposable implements I
 		let cancellationRequest: Promise<unknown> | undefined;
 		const cancel = () => {
 			if (flowId && !completed) {
-				cancellationRequest ??= appServerRequest(this.connection, 'mcp/oauth/cancel', { flowId }).catch(
-					() => undefined,
-				);
+				cancellationRequest ??= appServerRequest(this.connection, 'mcp/oauth/cancel', { flowId }).catch(() => undefined);
 			}
 		};
 		const close = () => {
@@ -103,9 +81,7 @@ export class AppServerMcpServerManagementService extends Disposable implements I
 		this.activeCallbacks.add(close);
 		try {
 			if (signal?.aborted || this.isDisposed) {
-				throw new Error(
-					localize({ bundle: 'ash.extensions', key: 'mcpOAuthCancelled' }, 'MCP sign-in was cancelled.'),
-				);
+				throw new Error(localize({ bundle: 'ash.extensions', key: 'mcpOAuthCancelled' }, 'MCP sign-in was cancelled.'));
 			}
 			const started = await appServerRequest(this.connection, 'mcp/oauth/start', {
 				serverId,
@@ -116,28 +92,15 @@ export class AppServerMcpServerManagementService extends Disposable implements I
 			});
 			flowId = started.flowId;
 			if (signal?.aborted || this.isDisposed) {
-				throw new Error(
-					localize({ bundle: 'ash.extensions', key: 'mcpOAuthCancelled' }, 'MCP sign-in was cancelled.'),
-				);
+				throw new Error(localize({ bundle: 'ash.extensions', key: 'mcpOAuthCancelled' }, 'MCP sign-in was cancelled.'));
 			}
-			const opened = await this.host.externalOpener.openExternal(
-				started.authorizationUrl,
-				{ sourceUri: URI.parse(started.authorizationUrl) },
-				CancellationToken.None,
-			);
+			const opened = await this.host.externalOpener.openExternal(started.authorizationUrl, { sourceUri: URI.parse(started.authorizationUrl) }, CancellationToken.None);
 			if (!opened) {
-				throw new Error(
-					localize(
-						{ bundle: 'ash.extensions', key: 'mcpOAuthBrowserFailed' },
-						'Could not open the sign-in page.',
-					),
-				);
+				throw new Error(localize({ bundle: 'ash.extensions', key: 'mcpOAuthBrowserFailed' }, 'Could not open the sign-in page.'));
 			}
 			const values = await callbacks.wait(callback.id);
 			if (signal?.aborted || this.isDisposed) {
-				throw new Error(
-					localize({ bundle: 'ash.extensions', key: 'mcpOAuthCancelled' }, 'MCP sign-in was cancelled.'),
-				);
+				throw new Error(localize({ bundle: 'ash.extensions', key: 'mcpOAuthCancelled' }, 'MCP sign-in was cancelled.'));
 			}
 			await appServerRequest(this.connection, 'mcp/oauth/complete', {
 				flowId,
@@ -148,9 +111,7 @@ export class AppServerMcpServerManagementService extends Disposable implements I
 			completed = true;
 		} catch (error) {
 			if (signal?.aborted || this.isDisposed) {
-				throw new Error(
-					localize({ bundle: 'ash.extensions', key: 'mcpOAuthCancelled' }, 'MCP sign-in was cancelled.'),
-				);
+				throw new Error(localize({ bundle: 'ash.extensions', key: 'mcpOAuthCancelled' }, 'MCP sign-in was cancelled.'));
 			}
 			throw explain(error);
 		} finally {
@@ -185,10 +146,7 @@ export class AppServerMcpServerManagementService extends Disposable implements I
 						server.transport.type === 'stdio'
 							? { type: 'stdio', command: server.transport.command, args: [...server.transport.args] }
 							: { type: 'streamableHttp', url: server.transport.url },
-					credential:
-						server.credential.type === 'reference'
-							? { type: 'reference', credentialRef: server.credential.credentialRef }
-							: { type: 'unauthenticated' },
+					credential: server.credential.type === 'reference' ? { type: 'reference', credentialRef: server.credential.credentialRef } : { type: 'unauthenticated' },
 					enablement: server.enablement,
 				})),
 			};
@@ -247,12 +205,7 @@ export class AppServerMcpServerManagementService extends Disposable implements I
 
 	private requireAvailable(): void {
 		if (!this.isAvailable) {
-			throw new Error(
-				localize(
-					{ bundle: 'ash.extensions', key: 'mcpManagementUnavailable' },
-					'MCP server management is unavailable.',
-				),
-			);
+			throw new Error(localize({ bundle: 'ash.extensions', key: 'mcpManagementUnavailable' }, 'MCP server management is unavailable.'));
 		}
 	}
 
@@ -273,77 +226,36 @@ function explain(error: unknown): unknown {
 		switch (error.errorName) {
 			case 'McpOAuthRegistrationRequired':
 				return new McpOAuthClientRequiredError(
-					localize(
-						{ bundle: 'ash.extensions', key: 'mcpOAuthClientRequired' },
-						'This MCP server needs a registered OAuth client ID or a client metadata URL.',
-					),
+					localize({ bundle: 'ash.extensions', key: 'mcpOAuthClientRequired' }, 'This MCP server needs a registered OAuth client ID or a client metadata URL.'),
 				);
 			case 'McpOAuthUnavailable':
-				return new Error(
-					localize(
-						{ bundle: 'ash.extensions', key: 'mcpOAuthUnavailable' },
-						'MCP sign-in is unavailable in this window.',
-					),
-				);
+				return new Error(localize({ bundle: 'ash.extensions', key: 'mcpOAuthUnavailable' }, 'MCP sign-in is unavailable in this window.'));
 			case 'McpOAuthReauthenticationRequired':
-				return new Error(
-					localize(
-						{ bundle: 'ash.extensions', key: 'mcpOAuthSignInRequired' },
-						'This MCP server needs sign-in again.',
-					),
-				);
+				return new Error(localize({ bundle: 'ash.extensions', key: 'mcpOAuthSignInRequired' }, 'This MCP server needs sign-in again.'));
 			case 'McpOAuthExpired':
-				return new Error(
-					localize(
-						{ bundle: 'ash.extensions', key: 'mcpOAuthExpired' },
-						'MCP sign-in expired. Start sign-in again.',
-					),
-				);
+				return new Error(localize({ bundle: 'ash.extensions', key: 'mcpOAuthExpired' }, 'MCP sign-in expired. Start sign-in again.'));
 			case 'McpOAuthInvalidCallback':
 			case 'McpOAuthOperationFailed':
-				return new Error(
-					localize(
-						{ bundle: 'ash.extensions', key: 'mcpOAuthFailed' },
-						'MCP authentication failed. Sign in again or check the server OAuth configuration.',
-					),
-				);
+				return new Error(localize({ bundle: 'ash.extensions', key: 'mcpOAuthFailed' }, 'MCP authentication failed. Sign in again or check the server OAuth configuration.'));
 			case 'ConfigRevisionConflict':
 				return new Error(
-					localize(
-						{ bundle: 'ash.extensions', key: 'mcpConfigurationConflict' },
-						'MCP configuration changed. Refresh and review the current configuration before trying again.',
-					),
+					localize({ bundle: 'ash.extensions', key: 'mcpConfigurationConflict' }, 'MCP configuration changed. Refresh and review the current configuration before trying again.'),
 				);
 			case 'McpServerNotFound':
-				return new Error(
-					localize(
-						{ bundle: 'ash.extensions', key: 'mcpConfigurationMissing' },
-						'This MCP server is no longer configured.',
-					),
-				);
+				return new Error(localize({ bundle: 'ash.extensions', key: 'mcpConfigurationMissing' }, 'This MCP server is no longer configured.'));
 			case 'InvalidParams':
 				return new Error(
-					localize(
-						{ bundle: 'ash.extensions', key: 'mcpConfigurationInvalid' },
-						'The backend rejected this MCP server configuration. Check its ID, transport and credential reference.',
-					),
+					localize({ bundle: 'ash.extensions', key: 'mcpConfigurationInvalid' }, 'The backend rejected this MCP server configuration. Check its ID, transport and credential reference.'),
 				);
 			case 'ConfigUnavailable':
 			case 'McpRuntimeUnavailable':
-				return new Error(
-					localize(
-						{ bundle: 'ash.extensions', key: 'mcpManagementUnavailable' },
-						'MCP server management is unavailable.',
-					),
-				);
+				return new Error(localize({ bundle: 'ash.extensions', key: 'mcpManagementUnavailable' }, 'MCP server management is unavailable.'));
 		}
 	}
 	return error;
 }
 
-export function createDisconnectedMcpServerManagementService(
-	unavailable: UnavailableOperation,
-): IMcpServerManagementService {
+export function createDisconnectedMcpServerManagementService(unavailable: UnavailableOperation): IMcpServerManagementService {
 	return {
 		isAvailable: false,
 		isOAuthAvailable: false,

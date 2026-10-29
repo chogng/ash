@@ -1,10 +1,7 @@
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import * as stanzaApi from '../../../src/ash/editor/editor.main.js';
 import { GlyphRasterizer } from '../../../src/ash/editor/browser/gpu/raster/glyphRasterizer.js';
-import {
-	DecorationStyleCache,
-	type IDecorationStyleSet,
-} from '../../../src/ash/editor/browser/gpu/css/decorationStyleCache.js';
+import { DecorationStyleCache, type IDecorationStyleSet } from '../../../src/ash/editor/browser/gpu/css/decorationStyleCache.js';
 import { FontStyle, MetadataConsts } from '../../../src/ash/editor/common/encodedTokenAttributes.js';
 import { ViewGpuContext } from '../../../src/ash/editor/browser/gpu/viewGpuContext.js';
 import { createColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
@@ -103,9 +100,7 @@ const editor = disposables.add(
 		experimentalGpuAcceleration: 'on',
 	}),
 );
-const resizeObserver = new ResizeObserver(() =>
-	editor.layout({ width: container.clientWidth, height: container.clientHeight }),
-);
+const resizeObserver = new ResizeObserver(() => editor.layout({ width: container.clientWidth, height: container.clientHeight }));
 resizeObserver.observe(container);
 disposables.add(toDisposable(() => resizeObserver.disconnect()));
 editor.layout({ width: container.clientWidth, height: container.clientHeight });
@@ -129,17 +124,8 @@ window.ashGpuTextIntegration = {
 		];
 		return Object.fromEntries(
 			variants.map(([name, fontStyle, style]) => {
-				const id = cache.getOrCreateEntry(
-					style.color,
-					style.bold,
-					style.opacity,
-					style.strikethrough,
-					style.strikethroughThickness,
-					style.strikethroughColor,
-				);
-				const glyph = rasterizer.rasterizeGlyph('m', fontStyle << MetadataConsts.FONT_STYLE_OFFSET, id, [
-					'#ffffff',
-				]);
+				const id = cache.getOrCreateEntry(style.color, style.bold, style.opacity, style.strikethrough, style.strikethroughThickness, style.strikethroughColor);
+				const glyph = rasterizer.rasterizeGlyph('m', fontStyle << MetadataConsts.FONT_STYLE_OFFSET, id, ['#ffffff']);
 				const source = glyph.source;
 				const pixels = source.getContext('2d')!.getImageData(0, 0, source.width, source.height).data;
 				return [name, Array.from(pixels)];
@@ -181,9 +167,7 @@ window.ashGpuTextIntegration = {
 		});
 		document.body.append(replacementContainer);
 		disposables.add(toDisposable(() => replacementContainer.remove()));
-		const replacement = disposables.add(
-			stanzaApi.editor.create(replacementContainer, { model, experimentalGpuAcceleration: 'on' }),
-		);
+		const replacement = disposables.add(stanzaApi.editor.create(replacementContainer, { model, experimentalGpuAcceleration: 'on' }));
 		replacement.layout({ width: 800, height: 300 });
 		await ViewGpuContext.device;
 		return {
@@ -239,9 +223,7 @@ window.ashGpuTextIntegration = {
 		Object.assign(domContainer.style, { position: 'absolute', inset: '0', width: '800px', height: '300px' });
 		document.body.append(domContainer);
 		disposables.add(toDisposable(() => domContainer.remove()));
-		const domEditor = disposables.add(
-			stanzaApi.editor.create(domContainer, { model, experimentalGpuAcceleration: 'off' }),
-		);
+		const domEditor = disposables.add(stanzaApi.editor.create(domContainer, { model, experimentalGpuAcceleration: 'off' }));
 		domEditor.layout({ width: 800, height: 300 });
 	},
 	clearSemanticFontStyles: () =>
@@ -278,9 +260,7 @@ window.ashGpuTextIntegration = {
 		stanzaApi.editor.defineNamedTheme('gpu-brackets', {
 			label: 'GPU brackets',
 			colorScheme: stanzaApi.ColorScheme.Dark,
-			colors: Object.fromEntries(
-				[1, 2, 3, 4, 5, 6].map(level => [`editorBracketHighlight.foreground${level}`, color]),
-			),
+			colors: Object.fromEntries([1, 2, 3, 4, 5, 6].map(level => [`editorBracketHighlight.foreground${level}`, color])),
 		});
 		stanzaApi.editor.setTheme('gpu-brackets');
 	},
@@ -293,12 +273,7 @@ window.ashGpuTextIntegration = {
 			}
 			const pixels = context.getImageData(0, 0, page.source.width, page.source.height).data;
 			for (let index = 0; index < pixels.length; index += 4) {
-				if (
-					pixels[index] === red &&
-					pixels[index + 1] === green &&
-					pixels[index + 2] === blue &&
-					pixels[index + 3]! > 0
-				) {
+				if (pixels[index] === red && pixels[index + 1] === green && pixels[index + 2] === blue && pixels[index + 3]! > 0) {
 					count++;
 				}
 			}
@@ -312,17 +287,9 @@ function measureGpuAdvance(text: string): number {
 	const editorElement = container.querySelector<HTMLElement>('.stanza-editor');
 	if (!editorElement) throw new Error('GPU integration editor is missing');
 	const style = getComputedStyle(editorElement);
-	using rasterizer = new GlyphRasterizer(
-		Number.parseFloat(style.fontSize),
-		style.fontFamily,
-		devicePixelRatio,
-		new DecorationStyleCache(),
-	);
+	using rasterizer = new GlyphRasterizer(Number.parseFloat(style.fontSize), style.fontFamily, devicePixelRatio, new DecorationStyleCache());
 	const letterSpacing = style.letterSpacing === 'normal' ? 0 : Number.parseFloat(style.letterSpacing) || 0;
-	return [...text].reduce(
-		(width, character) => width + rasterizer.getTextMetrics(character).width / devicePixelRatio + letterSpacing,
-		0,
-	);
+	return [...text].reduce((width, character) => width + rasterizer.getTextMetrics(character).width / devicePixelRatio + letterSpacing, 0);
 }
 
 function installGpuFrameTrace(): GpuFrameTraceController {

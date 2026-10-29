@@ -10,26 +10,13 @@ import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
 import type { IAction } from '../../../../base/common/actions.js';
-import {
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-	type IDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import {
-	IChannelService,
-	type Channel,
-	type ChannelRole,
-	type ChannelFailure,
-} from '../../../../platform/collab/common/channelService.js';
+import { IChannelService, type Channel, type ChannelRole, type ChannelFailure } from '../../../../platform/collab/common/channelService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { localize } from '../../../../nls.js';
-import {
-	AccessibilityVerbositySettingId,
-	IAccessibleViewService,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
@@ -62,12 +49,7 @@ export class CollabViewPane extends ViewPane {
 		return space?.members.find(member => member.id === space.memberId)?.role;
 	}
 	private get writable(): boolean {
-		return (
-			!!this.channelService &&
-			!this.channelService.busy &&
-			!this.channelService.error &&
-			(this.role === 'owner' || this.role === 'editor')
-		);
+		return !!this.channelService && !this.channelService.busy && !this.channelService.error && (this.role === 'owner' || this.role === 'editor');
 	}
 	private selectedId: string | undefined;
 	private readonly collapsedChannels = new Set<string>();
@@ -154,9 +136,7 @@ export class CollabViewPane extends ViewPane {
 			}),
 		);
 		this.contentElement.append(selection);
-		this._register(
-			hover.setupDelayedHover(this.selectionLabel, () => ({ content: this.selectionLabel.textContent ?? '' })),
-		);
+		this._register(hover.setupDelayedHover(this.selectionLabel, () => ({ content: this.selectionLabel.textContent ?? '' })));
 		this.toolbar = this._register(
 			new WorkbenchToolBar(this.headerActionsElement, menus, {
 				ariaLabel: localize('collaboration.actions', 'Channels Actions'),
@@ -227,10 +207,7 @@ export class CollabViewPane extends ViewPane {
 		);
 		const updateHint = () => {
 			const hint = accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.Collaboration);
-			this.tree.element.setAttribute(
-				'aria-label',
-				[localize('collaboration.channels', 'Channels'), hint].filter(Boolean).join('. '),
-			);
+			this.tree.element.setAttribute('aria-label', [localize('collaboration.channels', 'Channels'), hint].filter(Boolean).join('. '));
 		};
 		this._register(
 			configuration.onDidChangeConfiguration(event => {
@@ -251,8 +228,7 @@ export class CollabViewPane extends ViewPane {
 						this.search.value = '';
 						this.resourceError = undefined;
 					}
-					if (revision !== undefined && space && space.id === spaceId && space.revision !== revision)
-						status(localize('collaboration.updated', 'Channels and members updated.'));
+					if (revision !== undefined && space && space.id === spaceId && space.revision !== revision) status(localize('collaboration.updated', 'Channels and members updated.'));
 					spaceId = space?.id;
 					revision = space?.revision;
 					this.render();
@@ -280,8 +256,7 @@ export class CollabViewPane extends ViewPane {
 			this.message.hidden ? '' : this.message.textContent,
 			...this.tree.getVisibleElements().map(channel => this.path(channel)),
 			this.selectionLabel.textContent,
-			...(this.channelService?.space?.members.map(member => `${member.name}: ${this.roleLabel(member.role)}`) ??
-				[]),
+			...(this.channelService?.space?.members.map(member => `${member.name}: ${this.roleLabel(member.role)}`) ?? []),
 		]
 			.filter(Boolean)
 			.join('\n');
@@ -304,9 +279,7 @@ export class CollabViewPane extends ViewPane {
 				.flatMap(channel => {
 					const children = build(channel.id);
 					if (query && !channel.name.toLocaleLowerCase().includes(query) && !children.length) return [];
-					return [
-						{ element: channel, children, collapsed: !query && this.collapsedChannels.has(channel.id) },
-					];
+					return [{ element: channel, children, collapsed: !query && this.collapsedChannels.has(channel.id) }];
 				});
 		const focus = this.tree.focus?.id;
 		this.tree.setChildren(build());
@@ -327,13 +300,7 @@ export class CollabViewPane extends ViewPane {
 			(this.channelService?.error
 				? this.errorText(this.channelService.error)
 				: space
-					? localize(
-							'collaboration.connection',
-							'{0} · {1} · {2} members',
-							space.name,
-							this.roleLabel(this.role!),
-							space.members.length,
-						)
+					? localize('collaboration.connection', '{0} · {1} · {2} members', space.name, this.roleLabel(this.role!), space.members.length)
 					: '');
 		this.connectButton.enabled = !!this.channelService && !this.channelService.busy;
 		this.connectButton.domNode.hidden = !!this.channels;
@@ -341,10 +308,7 @@ export class CollabViewPane extends ViewPane {
 		this.message.hidden = !this.tree.element.hidden;
 		this.message.textContent = !this.channels
 			? this.channelService
-				? localize(
-						'collaboration.connectHelp',
-						'Connect to a collaboration server to create a space or join with an invitation.',
-					)
+				? localize('collaboration.connectHelp', 'Connect to a collaboration server to create a space or join with an invitation.')
 				: localize('collaboration.unavailable', 'Channels require a connected Ash backend.')
 			: query
 				? localize('collaboration.noResults', 'No matching channels. Try another search.')
@@ -359,67 +323,44 @@ export class CollabViewPane extends ViewPane {
 	private channelActions(id: string): IAction[] {
 		return [
 			...this.resourceActions(id),
-			this.action('collaboration.newChild', localize('collaboration.newChild', 'New Subchannel'), () =>
-				this.editChannel(undefined, id),
-			),
-			this.action('collaboration.rename', localize('collaboration.rename', 'Rename Channel'), () =>
-				this.editChannel(id),
-			),
-			this.action(
-				'collaboration.remove',
-				localize('collaboration.remove', 'Remove Channel and Subchannels'),
-				async () => {
-					const channel = this.channels?.find(entry => entry.id === id);
-					if (!channel || !this.writable) return;
-					const generation = this.connectionGeneration;
-					const choice = await this.pick(
-						[
-							{
-								label: localize(
-									'collaboration.confirmRemove',
-									'Remove {0} and all subchannels',
-									channel.name,
-								),
-							},
-						],
+			this.action('collaboration.newChild', localize('collaboration.newChild', 'New Subchannel'), () => this.editChannel(undefined, id)),
+			this.action('collaboration.rename', localize('collaboration.rename', 'Rename Channel'), () => this.editChannel(id)),
+			this.action('collaboration.remove', localize('collaboration.remove', 'Remove Channel and Subchannels'), async () => {
+				const channel = this.channels?.find(entry => entry.id === id);
+				if (!channel || !this.writable) return;
+				const generation = this.connectionGeneration;
+				const choice = await this.pick(
+					[
 						{
-							title: localize('collaboration.remove', 'Remove Channel and Subchannels'),
-							placeHolder: localize(
-								'collaboration.removeHelp',
-								'This removes these channels for every member of this space.',
-							),
+							label: localize('collaboration.confirmRemove', 'Remove {0} and all subchannels', channel.name),
 						},
-					);
-					if (!choice || this.isDisposed || generation !== this.connectionGeneration) return;
-					await this.channelService?.edit({ type: 'remove', channelId: id });
-					if (this.isDisposed || generation !== this.connectionGeneration) return;
-					this.selectedId = channel.parentId;
-					this.render();
-					this.focusTree();
-				},
-			),
+					],
+					{
+						title: localize('collaboration.remove', 'Remove Channel and Subchannels'),
+						placeHolder: localize('collaboration.removeHelp', 'This removes these channels for every member of this space.'),
+					},
+				);
+				if (!choice || this.isDisposed || generation !== this.connectionGeneration) return;
+				await this.channelService?.edit({ type: 'remove', channelId: id });
+				if (this.isDisposed || generation !== this.connectionGeneration) return;
+				this.selectedId = channel.parentId;
+				this.render();
+				this.focusTree();
+			}),
 		];
 	}
 
 	private resourceActions(id: string): IAction[] {
-		const enabled =
-			!!this.channelService?.space &&
-			!this.channelService.error &&
-			!this.channelService.busy &&
-			!this.resourceBusy;
+		const enabled = !!this.channelService?.space && !this.channelService.error && !this.channelService.busy && !this.resourceBusy;
 		const calls = this.instantiation.invokeFunction(accessor => accessor.getOptional(ICallService));
 		return [
 			{
-				...this.action('collaboration.notes', localize('collaboration.notes', 'Open channel notes'), () =>
-					this.openResource(id, 'notes'),
-				),
+				...this.action('collaboration.notes', localize('collaboration.notes', 'Open channel notes'), () => this.openResource(id, 'notes')),
 				enabled,
 				icon: Lxicon.fileText,
 			},
 			{
-				...this.action('collaboration.call', localize('collaboration.call', 'Join or start channel call'), () =>
-					this.openResource(id, 'call'),
-				),
+				...this.action('collaboration.call', localize('collaboration.call', 'Join or start channel call'), () => this.openResource(id, 'call')),
 				enabled: enabled && !!calls && calls.canStart !== false,
 				tooltip:
 					calls?.canStart === false
@@ -445,12 +386,7 @@ export class CollabViewPane extends ViewPane {
 				const calls = this.instantiation.invokeFunction(accessor => accessor.getOptional(ICallService));
 				if (!calls || calls.canStart === false) return;
 				if (calls.state && calls.state.connection !== 'ended' && calls.state.connection !== 'failed') {
-					throw new Error(
-						localize(
-							'collaboration.leaveCallFirst',
-							'Leave the current call before joining a channel call.',
-						),
-					);
+					throw new Error(localize('collaboration.leaveCallFirst', 'Leave the current call before joining a channel call.'));
 				}
 				const access = await service.call(reference);
 				if (this.isDisposed || generation !== this.connectionGeneration) return;
@@ -458,32 +394,18 @@ export class CollabViewPane extends ViewPane {
 				status(localize('collaboration.callJoined', 'Joined the call in {0}.', channel.name));
 			} else {
 				const editors = this.instantiation.invokeFunction(accessor => accessor.getOptional(IEditorService));
-				if (!editors)
-					throw new Error(
-						localize('collaboration.notesUnavailable', 'Enable the document editor to open channel notes.'),
-					);
+				if (!editors) throw new Error(localize('collaboration.notesUnavailable', 'Enable the document editor to open channel notes.'));
 				const resource = URI.from({
 					scheme: 'untitled',
 					path: `/channel-notes/${encodeURIComponent(space.serverUrl)}/${space.id}/${space.memberId}/${id}`,
 				});
 				const contentType = CHANNEL_NOTES_CONTENT_TYPE;
-				if (!DocumentTypes.find({ resource, contentType }))
-					throw new Error(
-						localize('collaboration.notesUnavailable', 'Enable the document editor to open channel notes.'),
-					);
+				if (!DocumentTypes.find({ resource, contentType })) throw new Error(localize('collaboration.notesUnavailable', 'Enable the document editor to open channel notes.'));
 				const title = localize('collaboration.notesTitle', '{0} — Notes', channel.name);
-				await editors.openEditor(
-					{ resource, contentType, label: title, showBreadcrumbs: false },
-					{ pinned: true, revealIfOpened: true },
-				);
+				await editors.openEditor({ resource, contentType, label: title, showBreadcrumbs: false }, { pinned: true, revealIfOpened: true });
 				if (this.isDisposed || generation !== this.connectionGeneration) return;
-				const pane = editors.visibleEditorPanes.find(
-					pane => pane.workingCopy?.resource.toString() === resource.toString(),
-				);
-				if (!isDocumentCollaborationEditor(pane))
-					throw new Error(
-						localize('collaboration.notesUnavailable', 'Enable the document editor to open channel notes.'),
-					);
+				const pane = editors.visibleEditorPanes.find(pane => pane.workingCopy?.resource.toString() === resource.toString());
+				if (!isDocumentCollaborationEditor(pane)) throw new Error(localize('collaboration.notesUnavailable', 'Enable the document editor to open channel notes.'));
 				await pane.joinCollaborationDocument(
 					{
 						serverUrl: space.serverUrl,
@@ -500,10 +422,7 @@ export class CollabViewPane extends ViewPane {
 				this.resourceError =
 					error instanceof Error
 						? error.message
-						: localize(
-								'collaboration.resourceFailed',
-								'Could not open the channel resource. Check the collaboration server and its call hosting configuration.',
-							);
+						: localize('collaboration.resourceFailed', 'Could not open the channel resource. Check the collaboration server and its call hosting configuration.');
 			}
 		} finally {
 			this.resourceBusy = false;
@@ -517,67 +436,41 @@ export class CollabViewPane extends ViewPane {
 		const secondary: IAction[] = service
 			? [
 					{
-						...this.action(
-							'collaboration.refresh',
-							localize('collaboration.refresh', 'Refresh Channels'),
-							() => service.refresh(),
-						),
+						...this.action('collaboration.refresh', localize('collaboration.refresh', 'Refresh Channels'), () => service.refresh()),
 						enabled,
 					},
 					{
-						...this.action(
-							'collaboration.connect',
-							localize('collaboration.connect', 'Connect Channels'),
-							() => this.connect(),
-						),
+						...this.action('collaboration.connect', localize('collaboration.connect', 'Connect Channels'), () => this.connect()),
 						enabled,
 					},
 					{
-						...this.action(
-							'collaboration.copyKey',
-							localize('collaboration.copyKey', 'Copy My Sign-in Key'),
-							() => this.copyKey(),
-						),
+						...this.action('collaboration.copyKey', localize('collaboration.copyKey', 'Copy My Sign-in Key'), () => this.copyKey()),
 						enabled: enabled && !!service.space,
 					},
 					{
-						...this.action(
-							'collaboration.disconnect',
-							localize('collaboration.disconnect', 'Disconnect This Account'),
-							() => this.disconnect(),
-						),
+						...this.action('collaboration.disconnect', localize('collaboration.disconnect', 'Disconnect This Account'), () => this.disconnect()),
 						enabled,
 					},
 				]
 			: [];
 		if (this.channels)
 			secondary.unshift({
-				...this.action(
-					'collaboration.collapse',
-					localize('collaboration.collapse', 'Collapse All Channels'),
-					() => {
-						this.search.value = '';
-						for (const channel of this.channels ?? []) this.collapsedChannels.add(channel.id);
-						this.render();
-					},
-				),
+				...this.action('collaboration.collapse', localize('collaboration.collapse', 'Collapse All Channels'), () => {
+					this.search.value = '';
+					for (const channel of this.channels ?? []) this.collapsedChannels.add(channel.id);
+					this.render();
+				}),
 				enabled: true,
 			});
 		this.toolbar.setActions(
 			this.channels
 				? [
 						{
-							...this.action('collaboration.new', localize('collaboration.new', 'New Channel'), () =>
-								this.editChannel(),
-							),
+							...this.action('collaboration.new', localize('collaboration.new', 'New Channel'), () => this.editChannel()),
 							icon: Lxicon.add,
 						},
 						{
-							...this.action(
-								'collaboration.members',
-								localize('collaboration.members', 'Members and Permissions'),
-								() => this.members(),
-							),
+							...this.action('collaboration.members', localize('collaboration.members', 'Members and Permissions'), () => this.members()),
 							enabled,
 							icon: Lxicon.collab,
 						},
@@ -588,10 +481,7 @@ export class CollabViewPane extends ViewPane {
 		const channel = this.channels?.find(channel => channel.id === this.selectedId);
 		this.selectionLabel.parentElement!.hidden = !channel;
 		this.selectionLabel.textContent = channel ? this.path(channel) : '';
-		this.selectionToolbar.setActions(
-			channel ? this.resourceActions(channel.id) : [],
-			channel ? this.channelActions(channel.id).slice(2) : [],
-		);
+		this.selectionToolbar.setActions(channel ? this.resourceActions(channel.id) : [], channel ? this.channelActions(channel.id).slice(2) : []);
 	}
 
 	private focusTree(): void {
@@ -629,28 +519,13 @@ export class CollabViewPane extends ViewPane {
 		const existing = this.channels?.find(channel => channel.id === id);
 		parentId = existing?.parentId ?? parentId;
 		const name = await this.quickInput.input({
-			title: existing
-				? localize('collaboration.rename', 'Rename Channel')
-				: parentId
-					? localize('collaboration.newChild', 'New Subchannel')
-					: localize('collaboration.new', 'New Channel'),
+			title: existing ? localize('collaboration.rename', 'Rename Channel') : parentId ? localize('collaboration.newChild', 'New Subchannel') : localize('collaboration.new', 'New Channel'),
 			placeHolder: localize('collaboration.namePrompt', 'Channel name'),
 			value: existing?.name ?? '',
 			validateInput: async value => {
 				const name = value.trim();
-				if (!name || name.length > 80 || /[\r\n\x00-\x1f/]/.test(name))
-					return localize(
-						'collaboration.invalidName',
-						'Use 1–80 characters without slashes or control characters.',
-					);
-				if (
-					this.channels?.some(
-						channel =>
-							channel.id !== id &&
-							channel.parentId === parentId &&
-							channel.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
-					)
-				)
+				if (!name || name.length > 80 || /[\r\n\x00-\x1f/]/.test(name)) return localize('collaboration.invalidName', 'Use 1–80 characters without slashes or control characters.');
+				if (this.channels?.some(channel => channel.id !== id && channel.parentId === parentId && channel.name.toLocaleLowerCase() === name.toLocaleLowerCase()))
 					return localize('collaboration.duplicateName', 'A channel with this name already exists here.');
 				return undefined;
 			},
@@ -658,11 +533,7 @@ export class CollabViewPane extends ViewPane {
 		if (this.isDisposed || generation !== this.connectionGeneration || !this.channels) return;
 		if (name !== undefined) {
 			const before = new Set(this.channels.map(channel => channel.id));
-			await this.channelService?.edit(
-				existing
-					? { type: 'rename', channelId: existing.id, name: name.trim() }
-					: { type: 'create', parentId, name: name.trim() },
-			);
+			await this.channelService?.edit(existing ? { type: 'rename', channelId: existing.id, name: name.trim() } : { type: 'create', parentId, name: name.trim() });
 			if (this.isDisposed || generation !== this.connectionGeneration) return;
 			this.selectedId = existing?.id ?? this.channels?.find(channel => !before.has(channel.id))?.id;
 			let parent = parentId;
@@ -676,10 +547,7 @@ export class CollabViewPane extends ViewPane {
 
 		this.focusTree();
 	}
-	private pick<T extends IQuickPickItem>(
-		items: readonly T[],
-		options: { title: string; placeHolder?: string },
-	): Promise<T | undefined> {
+	private pick<T extends IQuickPickItem>(items: readonly T[], options: { title: string; placeHolder?: string }): Promise<T | undefined> {
 		return new Promise(resolve => {
 			const resources = this.quickPicks.add(new DisposableStore());
 			const picker = resources.add(this.quickInput.createQuickPick<T>());
@@ -705,15 +573,8 @@ export class CollabViewPane extends ViewPane {
 	private async copyKey(): Promise<void> {
 		const key = await this.channelService?.signInKey();
 		if (key && !this.isDisposed) {
-			await this.instantiation.invokeFunction(accessor =>
-				accessor.get(IClipboardService).writeText(JSON.stringify(key)),
-			);
-			status(
-				localize(
-					'collaboration.keyCopied',
-					'Sign-in key copied. Keep it privately to reconnect as this member. Use Invite Member for another person.',
-				),
-			);
+			await this.instantiation.invokeFunction(accessor => accessor.get(IClipboardService).writeText(JSON.stringify(key)));
+			status(localize('collaboration.keyCopied', 'Sign-in key copied. Keep it privately to reconnect as this member. Use Invite Member for another person.'));
 		}
 	}
 	private async confirmAccountChange(): Promise<boolean> {
@@ -725,10 +586,7 @@ export class CollabViewPane extends ViewPane {
 			],
 			{
 				title: localize('collaboration.accountChange', 'Change Collab Account'),
-				placeHolder: localize(
-					'collaboration.keepKey',
-					'Keep your sign-in key before leaving. Without it, you will need another administrator to invite you.',
-				),
+				placeHolder: localize('collaboration.keepKey', 'Keep your sign-in key before leaving. Without it, you will need another administrator to invite you.'),
 			},
 		);
 		if (action?.id === 'copy') await this.copyKey();
@@ -753,14 +611,8 @@ export class CollabViewPane extends ViewPane {
 			const invitation = await this.quickInput.input({
 				title: localize('collaboration.join', 'Join with Invitation'),
 				password: true,
-				placeHolder: localize(
-					'collaboration.invitationPrompt',
-					'Paste the invitation copied by a space administrator',
-				),
-				validateInput: async value =>
-					this.parseInvitation(value)
-						? undefined
-						: localize('collaboration.invalidInvitation', 'Paste a complete channel invitation.'),
+				placeHolder: localize('collaboration.invitationPrompt', 'Paste the invitation copied by a space administrator'),
+				validateInput: async value => (this.parseInvitation(value) ? undefined : localize('collaboration.invalidInvitation', 'Paste a complete channel invitation.')),
 			});
 			const parsed = invitation && this.parseInvitation(invitation);
 			if (parsed && !this.isDisposed) await service.connect({ type: 'join', ...parsed });
@@ -769,10 +621,7 @@ export class CollabViewPane extends ViewPane {
 				title: localize('collaboration.server', 'Collab Server'),
 				placeHolder: 'https://collaboration.example.com',
 				value: service.space?.serverUrl,
-				validateInput: async value =>
-					this.validServer(value)
-						? undefined
-						: localize('collaboration.invalidServer', 'Use an HTTPS server origin, or HTTP on localhost.'),
+				validateInput: async value => (this.validServer(value) ? undefined : localize('collaboration.invalidServer', 'Use an HTTPS server origin, or HTTP on localhost.')),
 			});
 			if (!serverUrl || this.isDisposed) return;
 			const administrator = await this.quickInput.input({
@@ -812,14 +661,10 @@ export class CollabViewPane extends ViewPane {
 			description: this.roleLabel(member.role),
 			id: member.id,
 		}));
-		if (owner)
-			items.unshift({ label: localize('collaboration.invite', 'Invite Member'), description: '', id: 'invite' });
+		if (owner) items.unshift({ label: localize('collaboration.invite', 'Invite Member'), description: '', id: 'invite' });
 		const member = await this.pick(items, {
 			title: localize('collaboration.members', 'Members and Permissions'),
-			placeHolder: localize(
-				'collaboration.inheritance',
-				'Members can access every channel in this space. Subchannels inherit the same permissions.',
-			),
+			placeHolder: localize('collaboration.inheritance', 'Members can access every channel in this space. Subchannels inherit the same permissions.'),
 		});
 		if (!member || !owner || this.isDisposed || generation !== this.connectionGeneration) return;
 		if (member.id === 'invite') {
@@ -834,37 +679,26 @@ export class CollabViewPane extends ViewPane {
 			if (!invitation || this.isDisposed) return;
 			const copy = await this.pick([{ label: localize('collaboration.copyInvitation', 'Copy Invitation') }], {
 				title: localize('collaboration.invitationReady', 'Invitation for {0}', name.trim()),
-				placeHolder: localize(
-					'collaboration.invitationSecret',
-					'This invitation grants access. Share it privately with this member.',
-				),
+				placeHolder: localize('collaboration.invitationSecret', 'This invitation grants access. Share it privately with this member.'),
 			});
-			if (copy)
-				await this.instantiation.invokeFunction(accessor =>
-					accessor.get(IClipboardService).writeText(JSON.stringify(invitation)),
-				);
+			if (copy) await this.instantiation.invokeFunction(accessor => accessor.get(IClipboardService).writeText(JSON.stringify(invitation)));
 		} else {
 			const action = await this.pick(
 				[
 					{ label: localize('collaboration.changeRole', 'Change Role'), id: 'role' },
-					...(member.id === space.memberId
-						? []
-						: [{ label: localize('collaboration.removeMember', 'Remove Member'), id: 'remove' }]),
+					...(member.id === space.memberId ? [] : [{ label: localize('collaboration.removeMember', 'Remove Member'), id: 'remove' }]),
 				],
 				{ title: member.label },
 			);
 			if (!action || this.isDisposed || generation !== this.connectionGeneration) return;
 			if (action.id === 'role') {
 				const role = await this.pickRole();
-				if (role && !this.isDisposed && generation === this.connectionGeneration)
-					await service.edit({ type: 'setRole', memberId: member.id, role });
+				if (role && !this.isDisposed && generation === this.connectionGeneration) await service.edit({ type: 'setRole', memberId: member.id, role });
 			} else {
-				const confirm = await this.pick(
-					[{ label: localize('collaboration.confirmMember', 'Revoke access for {0}', member.label) }],
-					{ title: localize('collaboration.removeMember', 'Remove Member') },
-				);
-				if (confirm && !this.isDisposed && generation === this.connectionGeneration)
-					await service.edit({ type: 'removeMember', memberId: member.id });
+				const confirm = await this.pick([{ label: localize('collaboration.confirmMember', 'Revoke access for {0}', member.label) }], {
+					title: localize('collaboration.removeMember', 'Remove Member'),
+				});
+				if (confirm && !this.isDisposed && generation === this.connectionGeneration) await service.edit({ type: 'removeMember', memberId: member.id });
 			}
 		}
 	}
@@ -874,20 +708,13 @@ export class CollabViewPane extends ViewPane {
 				(['viewer', 'editor', 'owner'] as const).map(role => ({ label: this.roleLabel(role), role })),
 				{
 					title: localize('collaboration.role', 'Member Role'),
-					placeHolder: localize(
-						'collaboration.roleHelp',
-						'Viewers read channels; editors change channels; administrators also manage members.',
-					),
+					placeHolder: localize('collaboration.roleHelp', 'Viewers read channels; editors change channels; administrators also manage members.'),
 				},
 			)
 		)?.role;
 	}
 	private roleLabel(role: ChannelRole): string {
-		return role === 'owner'
-			? localize('collaboration.owner', 'Administrator')
-			: role === 'editor'
-				? localize('collaboration.editor', 'Editor')
-				: localize('collaboration.viewer', 'Viewer');
+		return role === 'owner' ? localize('collaboration.owner', 'Administrator') : role === 'editor' ? localize('collaboration.editor', 'Editor') : localize('collaboration.viewer', 'Viewer');
 	}
 	private validateName(value: string): string | undefined {
 		return !value.trim() || value.trim().length > 80 || /[\x00-\x1f\x7f/]/.test(value)
@@ -898,8 +725,7 @@ export class CollabViewPane extends ViewPane {
 		try {
 			const url = new URL(value.trim());
 			return (
-				(url.protocol === 'https:' ||
-					(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) &&
+				(url.protocol === 'https:' || (url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) &&
 				!url.username &&
 				!url.password &&
 				!url.search &&
@@ -934,25 +760,13 @@ export class CollabViewPane extends ViewPane {
 			case 'denied':
 				return localize('collaboration.denied', 'Access denied. Your invitation may have been revoked.');
 			case 'conflict':
-				return localize(
-					'collaboration.conflict',
-					'Channels or permissions changed. Refresh before trying again.',
-				);
+				return localize('collaboration.conflict', 'Channels or permissions changed. Refresh before trying again.');
 			case 'invalid':
-				return localize(
-					'collaboration.invalid',
-					'The change is not allowed. Check names, hierarchy, and that at least one administrator remains.',
-				);
+				return localize('collaboration.invalid', 'The change is not allowed. Check names, hierarchy, and that at least one administrator remains.');
 			case 'storage':
-				return localize(
-					'collaboration.storageError',
-					'Could not load or save collaboration data. Check the server and secret storage, then retry.',
-				);
+				return localize('collaboration.storageError', 'Could not load or save collaboration data. Check the server and secret storage, then retry.');
 			case 'transport':
-				return localize(
-					'collaboration.transportError',
-					'Could not reach the collaboration server. Refresh to check whether your change was saved.',
-				);
+				return localize('collaboration.transportError', 'Could not reach the collaboration server. Refresh to check whether your change was saved.');
 		}
 	}
 }

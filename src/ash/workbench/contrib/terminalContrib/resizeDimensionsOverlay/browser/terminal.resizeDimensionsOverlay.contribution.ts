@@ -2,10 +2,7 @@ import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { Disposable, MutableDisposable } from '../../../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { ITerminalContribution, IXtermTerminal } from '../../../terminal/browser/terminal.js';
-import {
-	registerTerminalContribution,
-	type ITerminalContributionContext,
-} from '../../../terminal/browser/terminalExtensions.js';
+import { registerTerminalContribution, type ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
 import { TerminalResizeDimensionsOverlaySettingId } from '../common/terminalResizeDimensionsOverlayConfiguration.js';
 import { TerminalResizeDimensionsOverlay } from './terminalResizeDimensionsOverlay.js';
 
@@ -52,12 +49,7 @@ class TerminalResizeDimensionsOverlayContribution extends Disposable implements 
 
 	private update(): void {
 		const screen = this.screen;
-		if (
-			!this.ready ||
-			!screen ||
-			screen.isDisposed ||
-			!this.configuration.getValue<boolean>(TerminalResizeDimensionsOverlaySettingId.Enabled)
-		) {
+		if (!this.ready || !screen || screen.isDisposed || !this.configuration.getValue<boolean>(TerminalResizeDimensionsOverlaySettingId.Enabled)) {
 			this.overlay.clear();
 		} else if (!this.overlay.value) {
 			this.overlay.value = new TerminalResizeDimensionsOverlay(screen.element, screen);

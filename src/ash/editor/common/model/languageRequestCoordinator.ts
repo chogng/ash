@@ -153,12 +153,7 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 		this.workerSlot.clear();
 	}
 
-	async runLatest(
-		lane: TLane,
-		payload: TPayload,
-		apply: LanguageResultApplier<TResult>,
-		options: LanguageRequestOptions = {},
-	): Promise<LanguageRequestOutcome> {
+	async runLatest(lane: TLane, payload: TPayload, apply: LanguageResultApplier<TResult>, options: LanguageRequestOptions = {}): Promise<LanguageRequestOutcome> {
 		this.assertNotDisposed();
 		assertLane(lane);
 		if (typeof apply !== 'function') {
@@ -205,7 +200,12 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 		};
 		options.signal?.addEventListener('abort', cancelFromCaller, { once: true });
 		if (options.signal?.aborted) cancelFromCaller();
-		const request = Object.freeze<LanguageWorkerRequest<TLane, TPayload>>({ requestId, lane, snapshot, payload });
+		const request = Object.freeze<LanguageWorkerRequest<TLane, TPayload>>({
+			requestId,
+			lane,
+			snapshot,
+			payload,
+		});
 
 		try {
 			let value: TResult;
@@ -225,10 +225,7 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 				}
 				const disposalError = this.invalidateWorker(worker, active);
 				if (disposalError !== undefined) {
-					throw new AggregateError(
-						[error, disposalError],
-						'Language worker request and disposal both failed',
-					);
+					throw new AggregateError([error, disposalError], 'Language worker request and disposal both failed');
 				}
 				throw error;
 			}
@@ -256,13 +253,24 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 
 			this.activeRequests.delete(lane);
 			try {
-				apply(Object.freeze({ requestId, textModel: this.model, modelVersion: snapshot.version, value }));
+				apply(
+					Object.freeze({
+						requestId,
+						textModel: this.model,
+						modelVersion: snapshot.version,
+						value,
+					}),
+				);
 			} catch (error) {
 				settleWorkerResult(worker, requestId, LanguageWorkerResultDisposition.Discarded);
 				throw error;
 			}
 			settleWorkerResult(worker, requestId, LanguageWorkerResultDisposition.Applied);
-			return Object.freeze({ status: LanguageRequestStatus.Applied, requestId, modelVersion: snapshot.version });
+			return Object.freeze({
+				status: LanguageRequestStatus.Applied,
+				requestId,
+				modelVersion: snapshot.version,
+			});
 		} finally {
 			options.signal?.removeEventListener('abort', cancelFromCaller);
 			if (this.activeRequests.get(lane) === active) {
@@ -278,12 +286,7 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 		const current = this.workerSlot.value;
 		if (current) return current;
 		const worker = this.createWorker();
-		if (
-			!worker ||
-			typeof worker.run !== 'function' ||
-			typeof worker.dispose !== 'function' ||
-			typeof worker[Symbol.dispose] !== 'function'
-		) {
+		if (!worker || typeof worker.run !== 'function' || typeof worker.dispose !== 'function' || typeof worker[Symbol.dispose] !== 'function') {
 			throw new TypeError('Language worker factory returned an invalid worker');
 		}
 		this.workerSlot.value = worker;
@@ -293,10 +296,7 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 		return worker;
 	}
 
-	private invalidateWorker(
-		worker: LanguageWorker<TLane, TPayload, TResult>,
-		failedRequest: ActiveLanguageRequest<TLane>,
-	): unknown | undefined {
+	private invalidateWorker(worker: LanguageWorker<TLane, TPayload, TResult>, failedRequest: ActiveLanguageRequest<TLane>): unknown | undefined {
 		if (this.workerSlot.value !== worker) return undefined;
 		for (const active of this.activeRequests.values()) {
 			if (active !== failedRequest) {
@@ -322,11 +322,7 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 		}
 	}
 
-	private cancelRequest(
-		active: ActiveLanguageRequest<TLane>,
-		reason: LanguageRequestCancellationReason,
-		cause?: unknown,
-	): void {
+	private cancelRequest(active: ActiveLanguageRequest<TLane>, reason: LanguageRequestCancellationReason, cause?: unknown): void {
 		if (active.cancellation) return;
 		active.cancellation = cause === undefined ? { reason } : { reason, cause };
 		active.controller.abort(cause ?? reason);
@@ -361,14 +357,15 @@ function settleWorkerResult(value: IDisposable, requestId: number, disposition: 
 	if (typeof settler.settleResult === 'function') settler.settleResult(requestId, disposition);
 }
 
-function cancelledOutcome(
-	requestId: number,
-	modelVersion: number,
-	cancellation: RequestCancellation,
-): LanguageRequestCancelled {
+function cancelledOutcome(requestId: number, modelVersion: number, cancellation: RequestCancellation): LanguageRequestCancelled {
 	return Object.freeze(
 		cancellation.cause === undefined
-			? { status: LanguageRequestStatus.Cancelled, requestId, modelVersion, reason: cancellation.reason }
+			? {
+					status: LanguageRequestStatus.Cancelled,
+					requestId,
+					modelVersion,
+					reason: cancellation.reason,
+				}
 			: {
 					status: LanguageRequestStatus.Cancelled,
 					requestId,

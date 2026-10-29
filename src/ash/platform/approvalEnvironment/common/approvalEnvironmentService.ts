@@ -1,15 +1,13 @@
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
-export type ReviewEnvironmentScope =
-	{ readonly type: 'directory'; readonly root: string } | { readonly type: 'thread'; readonly threadId: string };
+export type ReviewEnvironmentScope = { readonly type: 'directory'; readonly root: string } | { readonly type: 'thread'; readonly threadId: string };
 export interface ReviewEnvironmentModel {
 	readonly provider: string;
 	readonly model: string;
 	readonly connection?: string;
 }
 export type ReviewEnvironmentEntryKind = 'fact' | 'target';
-export type ReviewEnvironmentSourceKind =
-	'projectFile' | 'recentCommand' | 'shellHistory' | 'otherRepository' | 'manual';
+export type ReviewEnvironmentSourceKind = 'projectFile' | 'recentCommand' | 'shellHistory' | 'otherRepository' | 'manual';
 export interface ReviewEnvironmentCommandSource {
 	readonly sessionId: string;
 	readonly threadId: string;
@@ -82,20 +80,8 @@ export interface ReviewEnvironmentScanOptions {
 /** Project facts and confirmed target descriptions are background; policy rules own authorization. */
 export interface IApprovalEnvironmentService {
 	read(scope: ReviewEnvironmentScope): Promise<ReviewEnvironmentProfile>;
-	scan(
-		scope: ReviewEnvironmentScope,
-		operationId: string,
-		options: ReviewEnvironmentScanOptions,
-		model?: ReviewEnvironmentModel,
-	): Promise<ReviewEnvironmentDraft>;
+	scan(scope: ReviewEnvironmentScope, operationId: string, options: ReviewEnvironmentScanOptions, model?: ReviewEnvironmentModel): Promise<ReviewEnvironmentDraft>;
 	cancel(operationId: string): Promise<void>;
-	save(
-		scope: ReviewEnvironmentScope,
-		commandId: string,
-		expectedRevision: number,
-		entries: readonly ReviewEnvironmentInput[],
-		draftId?: string,
-	): Promise<ReviewEnvironmentProfile>;
+	save(scope: ReviewEnvironmentScope, commandId: string, expectedRevision: number, entries: readonly ReviewEnvironmentInput[], draftId?: string): Promise<ReviewEnvironmentProfile>;
 }
-export const IApprovalEnvironmentService =
-	createServiceIdentifier<IApprovalEnvironmentService>('approvalEnvironmentService');
+export const IApprovalEnvironmentService = createServiceIdentifier<IApprovalEnvironmentService>('approvalEnvironmentService');

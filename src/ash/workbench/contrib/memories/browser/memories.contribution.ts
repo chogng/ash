@@ -1,9 +1,4 @@
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { FocusedViewContext } from '../../../common/contextkeys.js';
 import { localize, localize2 } from '../../../../nls.js';
@@ -15,10 +10,7 @@ import { IMemoriesService } from '../../../../platform/memories/common/memoriesS
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ViewContainerLocation, ViewsRegistry } from '../../../common/views.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
@@ -138,10 +130,7 @@ registerWorkbenchContribution('workbench.contrib.memories', WorkbenchPhase.Block
 				constructor() {
 					super({
 						id: 'ash.memories.openReference',
-						title: localize2(
-							{ bundle: 'ash.workbench', key: 'command.OpenMemoryReference' },
-							'Open memory reference',
-						),
+						title: localize2({ bundle: 'ash.workbench', key: 'command.OpenMemoryReference' }, 'Open memory reference'),
 					});
 				}
 				public override async run(services: ServicesAccessor, reference: string): Promise<void> {

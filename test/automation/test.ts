@@ -64,10 +64,7 @@ export interface BackendFixture {
 export const test = base.extend<PlaywrightFixtures>({
 	testTargetSupport: [
 		async ({ target }, use, testInfo) => {
-			testInfo.skip(
-				!supportsTestTarget(testInfo.tags, target, process.platform),
-				'Scenario does not apply to this host, backend or platform.',
-			);
+			testInfo.skip(!supportsTestTarget(testInfo.tags, target, process.platform), 'Scenario does not apply to this host, backend or platform.');
 			await use();
 		},
 		{ auto: true },
@@ -91,11 +88,7 @@ export const test = base.extend<PlaywrightFixtures>({
 		await use(playwrightTargetForProject(testInfo.project.name));
 	},
 	webAppServer: [
-		async (
-			{ testWorkspace, reportIssueUrl, backendConfiguration, githubAccount, useInMemorySecretStorage },
-			use,
-			testInfo,
-		) => {
+		async ({ testWorkspace, reportIssueUrl, backendConfiguration, githubAccount, useInMemorySecretStorage }, use, testInfo) => {
 			if (testInfo.project.name !== 'browser-app-server') {
 				await use(undefined);
 				return;
@@ -195,9 +188,7 @@ export const test = base.extend<PlaywrightFixtures>({
 				if (failed && !page.isClosed()) {
 					const screenshotPath = testInfo.outputPath('workbench.png');
 					await page.screenshot({ path: screenshotPath }).catch(() => undefined);
-					await testInfo
-						.attach('workbench', { path: screenshotPath, contentType: 'image/png' })
-						.catch(() => undefined);
+					await testInfo.attach('workbench', { path: screenshotPath, contentType: 'image/png' }).catch(() => undefined);
 				}
 				if (failed) {
 					const tracePath = testInfo.outputPath('trace.zip');
@@ -205,9 +196,7 @@ export const test = base.extend<PlaywrightFixtures>({
 						.context()
 						.tracing.stop({ path: tracePath })
 						.catch(() => undefined);
-					await testInfo
-						.attach('trace', { path: tracePath, contentType: 'application/zip' })
-						.catch(() => undefined);
+					await testInfo.attach('trace', { path: tracePath, contentType: 'application/zip' }).catch(() => undefined);
 				} else {
 					await page
 						.context()
@@ -236,9 +225,7 @@ export const test = base.extend<PlaywrightFixtures>({
 						await driver.workbench.page.context().tracing.stop();
 						await driver.workbench.reloadWindow();
 						await driver.workbench.waitForReady();
-						await driver.workbench.page
-							.context()
-							.tracing.start({ screenshots: true, snapshots: true, sources: true });
+						await driver.workbench.page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
 						return { application, workbench: driver.workbench };
 					},
 					deferRestart: async () => {
@@ -255,9 +242,7 @@ export const test = base.extend<PlaywrightFixtures>({
 						await driver.workbench.page.getByRole('button', { name: /^(Restart now|立即重启)$/u }).click();
 						await loaded;
 						await driver.workbench.waitForReady();
-						await driver.workbench.page
-							.context()
-							.tracing.start({ screenshots: true, snapshots: true, sources: true });
+						await driver.workbench.page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
 						return { application, workbench: driver.workbench };
 					},
 				};
@@ -273,9 +258,7 @@ export const test = base.extend<PlaywrightFixtures>({
 				appServerMode: target.appServerMode,
 				userDataDirectory,
 				recordVideo,
-				productServicesPath:
-					backendFixture?.productServicesPath ??
-					(githubAccount ? join(userDataDirectory, 'product-services.json') : undefined),
+				productServicesPath: backendFixture?.productServicesPath ?? (githubAccount ? join(userDataDirectory, 'product-services.json') : undefined),
 				windowMode: electronWindowMode,
 				useInMemorySecretStorage,
 				extraArgs: electronArgs,
@@ -289,16 +272,10 @@ export const test = base.extend<PlaywrightFixtures>({
 				if (electronUserSettings) {
 					const profileDirectory = join(userDataDirectory, 'profile');
 					await mkdir(profileDirectory, { recursive: true });
-					await writeFile(
-						join(profileDirectory, 'settings.json'),
-						JSON.stringify(electronUserSettings) + '\n',
-					);
+					await writeFile(join(profileDirectory, 'settings.json'), JSON.stringify(electronUserSettings) + '\n');
 				}
 				if (githubAccount && options.productServicesPath) {
-					await writeFile(
-						options.productServicesPath,
-						JSON.stringify({ schemaVersion: 3, githubAccount }) + '\n',
-					);
+					await writeFile(options.productServicesPath, JSON.stringify({ schemaVersion: 3, githubAccount }) + '\n');
 				}
 				// Startup-only backend options must be present before the daemon is composed.
 				if (backendConfiguration) {
@@ -339,27 +316,14 @@ export const test = base.extend<PlaywrightFixtures>({
 							generations.push(current.driver.diagnostics);
 							await captureRestartDialogs(current.application);
 							running.driver = current.driver;
-							await current.driver.workbench.page
-								.context()
-								.tracing.start({ screenshots: true, snapshots: true, sources: true });
+							await current.driver.workbench.page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
 							return { application: current.application, workbench: current.driver.workbench };
 						},
 						deferRestart: async () => {
-							await expect
-								.poll(async () =>
-									current.application.evaluate(() =>
-										Boolean((globalThis as RestartDialogGlobal).ashTestRestartDialog),
-									),
-								)
-								.toBe(true);
-							await current.application.evaluate(() =>
-								(globalThis as RestartDialogGlobal).ashTestRestartDialog!.respond('later'),
-							);
+							await expect.poll(async () => current.application.evaluate(() => Boolean((globalThis as RestartDialogGlobal).ashTestRestartDialog))).toBe(true);
+							await current.application.evaluate(() => (globalThis as RestartDialogGlobal).ashTestRestartDialog!.respond('later'));
 						},
-						restartMessage: async () =>
-							current.application.evaluate(
-								() => (globalThis as RestartDialogGlobal).ashTestRestartDialog?.message ?? '',
-							),
+						restartMessage: async () => current.application.evaluate(() => (globalThis as RestartDialogGlobal).ashTestRestartDialog?.message ?? ''),
 						restart: async () => {
 							const marker = join(userDataDirectory, `restart-${++generation}`);
 							// Playwright owns process launch so it can attach to the replacement. Verify the
@@ -377,16 +341,8 @@ export const test = base.extend<PlaywrightFixtures>({
 							childProcess.stderr?.on('data', data => {
 								processOutput += data.toString();
 							});
-							await expect
-								.poll(async () =>
-									current.application.evaluate(() =>
-										Boolean((globalThis as RestartDialogGlobal).ashTestRestartDialog),
-									),
-								)
-								.toBe(true);
-							await current.application.evaluate(() =>
-								(globalThis as RestartDialogGlobal).ashTestRestartDialog!.respond('restart'),
-							);
+							await expect.poll(async () => current.application.evaluate(() => Boolean((globalThis as RestartDialogGlobal).ashTestRestartDialog))).toBe(true);
+							await current.application.evaluate(() => (globalThis as RestartDialogGlobal).ashTestRestartDialog!.respond('restart'));
 							// A Windows launcher can retain inherited pipes after Main exits.
 							// Observe the real process before releasing the old fixture; waiting
 							// for its wrapper or Playwright channel first can deadlock cleanup.
@@ -398,17 +354,12 @@ export const test = base.extend<PlaywrightFixtures>({
 								.toBe(false);
 							await current.close();
 							const relaunched = await readFile(marker, 'utf8').catch(() => 'missing');
-							if (relaunched !== 'relaunch')
-								throw new Error(
-									`Desktop shutdown did not request relaunch. Exit ${childProcess.exitCode}; ${processOutput}`,
-								);
+							if (relaunched !== 'relaunch') throw new Error(`Desktop shutdown did not request relaunch. Exit ${childProcess.exitCode}; ${processOutput}`);
 							current = await launchElectron(options);
 							generations.push(current.driver.diagnostics);
 							await captureRestartDialogs(current.application);
 							running.driver = current.driver;
-							await current.driver.workbench.page
-								.context()
-								.tracing.start({ screenshots: true, snapshots: true, sources: true });
+							await current.driver.workbench.page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
 							return { application: current.application, workbench: current.driver.workbench };
 						},
 					};
@@ -467,15 +418,9 @@ interface RestartDialogGlobal {
 async function captureRestartDialogs(application: import('@playwright/test').ElectronApplication): Promise<void> {
 	await application.evaluate(({ dialog }) => {
 		const original = dialog.showMessageBox.bind(dialog);
-		dialog.showMessageBox = ((
-			windowOrOptions: Electron.BrowserWindow | Electron.MessageBoxOptions,
-			suppliedOptions?: Electron.MessageBoxOptions,
-		) => {
+		dialog.showMessageBox = ((windowOrOptions: Electron.BrowserWindow | Electron.MessageBoxOptions, suppliedOptions?: Electron.MessageBoxOptions) => {
 			const options = suppliedOptions ?? (windowOrOptions as Electron.MessageBoxOptions);
-			if (!/^(Restart Ash|重启 Ash)/u.test(options.message))
-				return suppliedOptions
-					? original(windowOrOptions as Electron.BrowserWindow, suppliedOptions)
-					: original(options);
+			if (!/^(Restart Ash|重启 Ash)/u.test(options.message)) return suppliedOptions ? original(windowOrOptions as Electron.BrowserWindow, suppliedOptions) : original(options);
 			return new Promise<Electron.MessageBoxReturnValue>(resolve => {
 				(globalThis as RestartDialogGlobal).ashTestRestartDialog = {
 					message: options.message,
@@ -494,23 +439,14 @@ async function captureRestartDialogs(application: import('@playwright/test').Ele
 export { expect } from '@playwright/test';
 
 /** Writes an Ash SDK package alongside its Plugin authority envelope. */
-export async function writeEditorExtensionFixture(
-	root: string,
-	source: string,
-	debuggerDefaults?: readonly unknown[],
-): Promise<void> {
+export async function writeEditorExtensionFixture(root: string, source: string, debuggerDefaults?: readonly unknown[]): Promise<void> {
 	const plugin = JSON.parse(await readFile(join(root, '.ash-plugin', 'plugin.json'), 'utf8'));
 	const commands = [...source.matchAll(/commands\.register\('([^']+)'/g)].flatMap(match => {
-		if (match[1] === 'acme.debugCancellation.descriptor.')
-			return ['undefined', 'null'].map(value => match[1] + value);
-		if (match[1] === 'acme.debugCancellation.')
-			return ['before.undefined', 'before.null', 'after.undefined', 'after.null'].map(value => match[1] + value);
+		if (match[1] === 'acme.debugCancellation.descriptor.') return ['undefined', 'null'].map(value => match[1] + value);
+		if (match[1] === 'acme.debugCancellation.') return ['before.undefined', 'before.null', 'after.undefined', 'after.null'].map(value => match[1] + value);
 		return [match[1]];
 	});
-	const types = (method: string): string[] =>
-		[...source.matchAll(new RegExp(method + '\\([\'"]([^\'"]+)[\'"]', 'g'))]
-			.map(match => match[1])
-			.filter(value => value !== '*');
+	const types = (method: string): string[] => [...source.matchAll(new RegExp(method + '\\([\'"]([^\'"]+)[\'"]', 'g'))].map(match => match[1]).filter(value => value !== '*');
 	const contribution = plugin.contributions.editorExtensions[0];
 	await writeFile(
 		join(root, 'package.json'),
@@ -520,29 +456,21 @@ export async function writeEditorExtensionFixture(
 			version: plugin.version,
 			main: 'extension.js',
 			engines: { ash: '*' },
-			activationEvents: contribution.activationEvents.map(
-				(event: { type: string; id?: string; taskType?: string; debugType?: string }) =>
-					event.type === 'startup'
-						? '*'
-						: event.type === 'onCommand'
-							? 'onCommand:' + event.id
-							: event.type === 'onTaskType'
-								? 'onTaskType:' + event.taskType
-								: event.type === 'onDebugType'
-									? 'onDebugResolve:' + event.debugType
-									: 'onDebug',
+			activationEvents: contribution.activationEvents.map((event: { type: string; id?: string; taskType?: string; debugType?: string }) =>
+				event.type === 'startup'
+					? '*'
+					: event.type === 'onCommand'
+						? 'onCommand:' + event.id
+						: event.type === 'onTaskType'
+							? 'onTaskType:' + event.taskType
+							: event.type === 'onDebugType'
+								? 'onDebugResolve:' + event.debugType
+								: 'onDebug',
 			),
 			contributes: {
 				// Visible titles differ from stable IDs so commands participate in the Command Palette.
 				commands: [...new Set(commands)].map(command => ({ command, title: 'Run ' + command })),
-				debuggers:
-					debuggerDefaults ??
-					[
-						...new Set([
-							...types('registerDebugConfigurationProvider'),
-							...types('registerDebugAdapterDescriptorFactory'),
-						]),
-					].map(type => ({ type, label: type })),
+				debuggers: debuggerDefaults ?? [...new Set([...types('registerDebugConfigurationProvider'), ...types('registerDebugAdapterDescriptorFactory')])].map(type => ({ type, label: type })),
 				taskDefinitions: types('registerTaskProvider').map(type => ({ type, required: [], properties: {} })),
 			},
 		}),

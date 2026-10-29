@@ -24,11 +24,7 @@ for (const locale of ['en', 'zh-CN'])
 			const commands = resources.add(services.createInstance(CommandService));
 			services.registerInstance(ICommandService, commands);
 			const invoked: string[] = [];
-			for (const id of [
-				'workbench.action.manageAccounts',
-				OPEN_ASH_WINDOW_COMMAND_ID,
-				'workbench.action.openKeyboardShortcuts',
-			]) {
+			for (const id of ['workbench.action.manageAccounts', OPEN_ASH_WINDOW_COMMAND_ID, 'workbench.action.openKeyboardShortcuts']) {
 				resources.add(
 					CommandsRegistry.register(id, () => {
 						invoked.push(id);
@@ -59,27 +55,15 @@ for (const locale of ['en', 'zh-CN'])
 			menu.show(anchor);
 			assert.deepEqual(
 				actions.map(action => action.label),
-				locale === 'zh-CN'
-					? ['设置', '账号', '打开 IDE', '快捷键']
-					: ['Settings', 'Account', 'Open IDE', 'Keyboard Shortcuts'],
+				locale === 'zh-CN' ? ['设置', '账号', '打开 IDE', '快捷键'] : ['Settings', 'Account', 'Open IDE', 'Keyboard Shortcuts'],
 			);
 			assert.ok(actions.every(action => action.enabled));
-			assert.match(
-				localize('sessions.activity.help', ''),
-				locale === 'zh-CN'
-					? /保留 Agent 窗口及其中未发送的草稿/u
-					: /keeping the Agents window and its unsent drafts open/u,
-			);
+			assert.match(localize('sessions.activity.help', ''), locale === 'zh-CN' ? /保留 Agent 窗口及其中未发送的草稿/u : /keeping the Agents window and its unsent drafts open/u);
 			assert.equal(anchor.getAttribute('aria-expanded'), 'true');
 			for (const action of actions) {
 				await action.run();
 			}
-			assert.deepEqual(invoked, [
-				'settings',
-				'workbench.action.manageAccounts',
-				OPEN_ASH_WINDOW_COMMAND_ID,
-				'workbench.action.openKeyboardShortcuts',
-			]);
+			assert.deepEqual(invoked, ['settings', 'workbench.action.manageAccounts', OPEN_ASH_WINDOW_COMMAND_ID, 'workbench.action.openKeyboardShortcuts']);
 			hide?.();
 			assert.equal(anchor.getAttribute('aria-expanded'), 'false');
 		} finally {

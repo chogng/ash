@@ -49,7 +49,10 @@ export interface ILayoutService {
 
 export const ILayoutService = createServiceIdentifier<ILayoutService>('layoutService');
 
-const NoLayoutOffset: ILayoutOffsetInfo = Object.freeze({ top: 0, quickInputTop: 0 });
+const NoLayoutOffset: ILayoutOffsetInfo = Object.freeze({
+	top: 0,
+	quickInputTop: 0,
+});
 
 export interface BrowserLayoutServiceOptions {
 	readonly root: HTMLElement;
@@ -136,7 +139,10 @@ export class BrowserLayoutService extends Disposable implements ILayoutService {
 	layout(dimension: IDimension = getClientArea(this.root)): void {
 		assertDimension(dimension);
 		this.dimension = new Dimension(dimension.width, dimension.height);
-		this._onDidLayoutContainer.fire({ container: this.root, dimension: this.dimension });
+		this._onDidLayoutContainer.fire({
+			container: this.root,
+			dimension: this.dimension,
+		});
 		this._onDidLayoutMainContainer.fire(this.dimension);
 		if (this.activeContainer === this.root) this._onDidLayoutActiveContainer.fire(this.dimension);
 	}
@@ -147,12 +153,7 @@ export class BrowserLayoutService extends Disposable implements ILayoutService {
 }
 
 function assertDimension(dimension: IDimension): void {
-	if (
-		!Number.isFinite(dimension.width) ||
-		dimension.width < 0 ||
-		!Number.isFinite(dimension.height) ||
-		dimension.height < 0
-	) {
+	if (!Number.isFinite(dimension.width) || dimension.width < 0 || !Number.isFinite(dimension.height) || dimension.height < 0) {
 		throw new RangeError('Layout container dimensions must be non-negative and finite');
 	}
 }

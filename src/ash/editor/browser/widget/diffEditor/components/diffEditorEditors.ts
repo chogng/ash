@@ -10,12 +10,7 @@ export class DiffEditorEditors extends Disposable {
 	public readonly modified: CodeEditorWidget;
 	private codeLens: boolean;
 
-	constructor(
-		originalContainer: HTMLElement,
-		modifiedContainer: HTMLElement,
-		options: DiffEditorWidgetOptions,
-		@IInstantiationService instantiationService: IInstantiationService,
-	) {
+	constructor(originalContainer: HTMLElement, modifiedContainer: HTMLElement, options: DiffEditorWidgetOptions, @IInstantiationService instantiationService: IInstantiationService) {
 		super();
 		this.codeLens = options.diffCodeLens ?? false;
 		const shared: CodeEditorWidgetOptions = {

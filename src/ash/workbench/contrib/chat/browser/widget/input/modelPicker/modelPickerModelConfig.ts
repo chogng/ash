@@ -2,10 +2,7 @@ import { localize } from '../../../../../../../nls.js';
 import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
 
 /** The toolbar shows thinking level when available and otherwise signals model options. */
-export function getModelConfigSummary(
-	entry: ModelCatalogEntry,
-	selectedEffort: ModelReasoningEffort | undefined,
-): string {
+export function getModelConfigSummary(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): string {
 	if (entry.supportedReasoningEfforts?.length) {
 		return modelPickerEffortLabel(selectedEffort ?? entry.defaultReasoningEffort);
 	}
@@ -43,9 +40,7 @@ export function modelPickerEffortOptions(
 		value: effort === defaultEffort ? undefined : effort,
 		label: modelPickerEffortLabel(effort),
 		description: modelPickerEffortDescription(description),
-		checked:
-			effort ===
-			(selectedEffort ?? (efforts.some(option => option.effort === defaultEffort) ? defaultEffort : undefined)),
+		checked: effort === (selectedEffort ?? (efforts.some(option => option.effort === defaultEffort) ? defaultEffort : undefined)),
 	}));
 }
 
@@ -59,10 +54,7 @@ export function modelPickerEffortDescription(description: string | null | undefi
 		case 'Fast responses with lighter reasoning':
 			return localize('chat.modelPicker.reasoningLow', 'Fast responses with lighter reasoning');
 		case 'Balances speed and reasoning depth for everyday tasks':
-			return localize(
-				'chat.modelPicker.reasoningMedium',
-				'Balances speed and reasoning depth for everyday tasks',
-			);
+			return localize('chat.modelPicker.reasoningMedium', 'Balances speed and reasoning depth for everyday tasks');
 		case 'Greater reasoning depth for complex problems':
 			return localize('chat.modelPicker.reasoningHigh', 'Greater reasoning depth for complex problems');
 		case 'Extra high reasoning depth for complex problems':

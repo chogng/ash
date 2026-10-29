@@ -9,10 +9,7 @@ import { decodeAppServerResponse } from '../../../../../../.build/protocol/types
 function fixture(started: AccountLoginStartResult, rejectOpen = false): { api: IAccountApi; calls: unknown[] } {
 	const calls: unknown[] = [];
 	const connection = {
-		async request(
-			definition: { method: string },
-			params: unknown,
-		): Promise<AccountLoginStartResult | { status: string }> {
+		async request(definition: { method: string }, params: unknown): Promise<AccountLoginStartResult | { status: string }> {
 			calls.push([definition.method, params]);
 			return definition.method === 'account/login/start' ? started : { status: 'cancelled' };
 		},

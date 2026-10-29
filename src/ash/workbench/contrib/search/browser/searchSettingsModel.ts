@@ -2,16 +2,9 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import {
-	IContentSearchConfigurationService,
-	type ContentSearchConfiguration,
-	type ContentSearchEngine,
-} from '../../../../platform/search/common/search.js';
+import { IContentSearchConfigurationService, type ContentSearchConfiguration, type ContentSearchEngine } from '../../../../platform/search/common/search.js';
 import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 import type { SettingsSectionField, SettingsSectionModel } from '../../preferences/browser/settingsTreeModels.js';
 
@@ -30,10 +23,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize({ bundle: 'ash.settings', key: 'search.verbosity' }, 'Content search accessibility help');
 		},
 		get description() {
-			return localize(
-				{ bundle: 'ash.settings', key: 'search.verbosityDescription' },
-				'Announce how to open accessibility help in content search settings.',
-			);
+			return localize({ bundle: 'ash.settings', key: 'search.verbosityDescription' }, 'Announce how to open accessibility help in content search settings.');
 		},
 	},
 });
@@ -115,7 +105,11 @@ export class SearchSettingsModel extends Disposable implements SettingsSectionMo
 					void this.configure(value as ContentSearchEngine);
 				},
 			},
-			{ id: 'status', kind: 'status', text: this.status },
+			{
+				id: 'status',
+				kind: 'status',
+				text: this.status,
+			},
 			{
 				id: 'refresh',
 				kind: 'action',
@@ -220,15 +214,9 @@ export class SearchSettingsModel extends Disposable implements SettingsSectionMo
 			case 'saved':
 				return localize({ bundle: 'ash.settings', key: 'search.saved' }, 'Search engine saved.');
 			case 'readFailed':
-				return localize(
-					{ bundle: 'ash.settings', key: 'search.readFailed' },
-					'Could not read search configuration. Connect to App Server and refresh.',
-				);
+				return localize({ bundle: 'ash.settings', key: 'search.readFailed' }, 'Could not read search configuration. Connect to App Server and refresh.');
 			case 'saveFailed':
-				return localize(
-					{ bundle: 'ash.settings', key: 'search.saveFailed' },
-					'Could not save search engine. Refresh the configuration before trying again.',
-				);
+				return localize({ bundle: 'ash.settings', key: 'search.saveFailed' }, 'Could not save search engine. Refresh the configuration before trying again.');
 			case 'disconnected':
 				return localize({ bundle: 'ash.settings', key: 'search.disconnected' }, 'App Server is disconnected.');
 		}

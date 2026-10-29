@@ -8,10 +8,7 @@ import type { AppServerConnectionRelay } from '../../../agentHost/electron-main/
 import { AppServerDaemonLauncher } from '../../../app-server-daemon/electron-main/appServerDaemonLauncher.js';
 import { RemoteAppServerProcessLauncher } from '../../../remote/electron-main/remoteAppServerProcessLauncher.js';
 import { createSshRemoteWorkspaceUri } from '../../../remote/common/remote.js';
-import {
-	createAppServerWorkspaceTransitionAdapter,
-	reconnectAppServerWorkspace,
-} from '../../electron-main/appServerWorkspaceTransition.js';
+import { createAppServerWorkspaceTransitionAdapter, reconnectAppServerWorkspace } from '../../electron-main/appServerWorkspaceTransition.js';
 import { RendererWorkspaceHost } from '../../electron-main/rendererWorkspaceHost.js';
 
 suite('App Server workspace connection replacement', () => {
@@ -53,12 +50,7 @@ suite('App Server workspace connection replacement', () => {
 					},
 					start: async () => {
 						starts++;
-						events.push([
-							'start',
-							kind === 'local'
-								? carrier.environment.ASH_WORKSPACE_ROOT
-								: (launcher as RemoteAppServerProcessLauncher).workspaceRoot,
-						]);
+						events.push(['start', kind === 'local' ? carrier.environment.ASH_WORKSPACE_ROOT : (launcher as RemoteAppServerProcessLauncher).workspaceRoot]);
 						if (starts === 1 && (failedStage === 'start' || failedStage === 'rollback')) {
 							throw failure;
 						}
@@ -71,14 +63,10 @@ suite('App Server workspace connection replacement', () => {
 					send: (_channel: string, request: { nonce: string; operation: string; params: unknown }) => {
 						events.push([request.operation, request.params]);
 						queueMicrotask(() =>
-							workspaceHost
-								.routes()[0]!
-								.invoke({
-									nonce: request.nonce,
-									...(request.operation === 'setFolders' && starts === 1 && failedStage === 'folders'
-										? { error: failure.message }
-										: {}),
-								}),
+							workspaceHost.routes()[0]!.invoke({
+								nonce: request.nonce,
+								...(request.operation === 'setFolders' && starts === 1 && failedStage === 'folders' ? { error: failure.message } : {}),
+							}),
 						);
 					},
 				} as unknown as WebContents);
@@ -101,27 +89,17 @@ suite('App Server workspace connection replacement', () => {
 				} else {
 					await assert.rejects(operation, error =>
 						failedStage === 'rollback'
-							? error instanceof AggregateError &&
-								error.errors[0] === failure &&
-								error.errors[1] === rollbackFailure
+							? error instanceof AggregateError && error.errors[0] === failure && error.errors[1] === rollbackFailure
 							: error instanceof Error && error.message === failure.message,
 					);
-					assert.equal(
-						kind === 'local'
-							? carrier.environment.ASH_WORKSPACE_ROOT
-							: (launcher as RemoteAppServerProcessLauncher).workspaceRoot,
-						'/previous',
-					);
+					assert.equal(kind === 'local' ? carrier.environment.ASH_WORKSPACE_ROOT : (launcher as RemoteAppServerProcessLauncher).workspaceRoot, '/previous');
 					if (kind === 'local') {
 						assert.deepEqual(carrier.environment, previousEnvironment);
 					}
 					if (failedStage !== 'rollback') {
 						assert.deepEqual(events.slice(-2), [
 							['start', '/previous'],
-							[
-								'setFolders',
-								{ folders: [{ id: 'previous', path: '/previous', grant: { type: 'config' } }] },
-							],
+							['setFolders', { folders: [{ id: 'previous', path: '/previous', grant: { type: 'config' } }] }],
 						]);
 					}
 				}
@@ -148,9 +126,6 @@ suite('App Server workspace connection replacement', () => {
 			start: async () => {},
 		} as unknown as AppServerConnectionRelay;
 		await reconnectAppServerWorkspace(relay, host, undefined, { type: 'config' }, 'empty', 'previous');
-		assert.deepEqual(
-			{ environment: launcher.environment, folders },
-			{ environment: { ASH_HOME: '/profile' }, folders: { folders: [] } },
-		);
+		assert.deepEqual({ environment: launcher.environment, folders }, { environment: { ASH_HOME: '/profile' }, folders: { folders: [] } });
 	});
 });

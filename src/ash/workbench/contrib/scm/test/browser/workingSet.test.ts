@@ -24,9 +24,7 @@ test('SCM working sets save and restore editor state across branch changes', asy
 	const saved: string[] = [];
 	const applied: EditorWorkingSetTarget[] = [];
 	const editorPart = {
-		domNode:
-			globalThis.document?.body ??
-			({ ownerDocument: { activeElement: undefined }, contains: () => false } as unknown as HTMLElement),
+		domNode: globalThis.document?.body ?? ({ ownerDocument: { activeElement: undefined }, contains: () => false } as unknown as HTMLElement),
 		saveWorkingSet(id: string): EditorWorkingSet {
 			saved.push(id);
 			return workingSet(id);
@@ -62,7 +60,11 @@ test('SCM working sets save and restore editor state across branch changes', asy
 });
 
 function workingSet(id: string): EditorWorkingSet {
-	return { id, activeGroupIndex: 0, groups: [{ activeEditorIndex: -1, editors: [], size: 1 }] };
+	return {
+		id,
+		activeGroupIndex: 0,
+		groups: [{ activeEditorIndex: -1, editors: [], size: 1 }],
+	};
 }
 
 class TestSCMProvider implements ISCMProvider {

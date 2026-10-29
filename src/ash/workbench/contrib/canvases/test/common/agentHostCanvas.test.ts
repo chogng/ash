@@ -4,12 +4,7 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import type {
-	IBrowserViewService,
-	IBrowserViewInfo,
-	IBrowserViewCreateOptions,
-	BrowserViewEvent,
-} from '../../../../../platform/browserView/common/browserView.js';
+import type { IBrowserViewService, IBrowserViewInfo, IBrowserViewCreateOptions, BrowserViewEvent } from '../../../../../platform/browserView/common/browserView.js';
 import type { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
 import { AgentHostCanvasCollection, type ICanvasProvider } from '../../common/agentHostCanvas.js';
 import { promiseWithResolvers } from '../../../../../base/common/async.js';
@@ -50,9 +45,7 @@ suite('Agent Canvas provider ownership', () => {
 				close: async () => {},
 				open: async (_owner, _instance, signal) => {
 					started.resolve(signal);
-					return new Promise((_resolve, reject) =>
-						signal.addEventListener('abort', () => reject(new Error('Owner removed')), { once: true }),
-					);
+					return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('Owner removed')), { once: true }));
 				},
 			}),
 		);
@@ -101,9 +94,7 @@ suite('Agent Canvas provider ownership', () => {
 				events.fire({ type: 'stateChanged', state });
 			},
 		} as unknown as IBrowserViewService;
-		const collection = resources.add(
-			new AgentHostCanvasCollection(browser, { activateByEvent: async () => {} } as unknown as IExtensionService),
-		);
+		const collection = resources.add(new AgentHostCanvasCollection(browser, { activateByEvent: async () => {} } as unknown as IExtensionService));
 		await Promise.resolve();
 		const owner = {
 			providerId: 'local-agent-host',
@@ -127,12 +118,7 @@ suite('Agent Canvas provider ownership', () => {
 				calls.push({ context, instanceId });
 				return { url: 'http://localhost:9000/board' };
 			},
-			resolve: async () =>
-				state === 'ready'
-					? { url: 'http://localhost:9000/updated', title: 'Updated' }
-					: state === 'pending'
-						? undefined
-						: null,
+			resolve: async () => (state === 'ready' ? { url: 'http://localhost:9000/updated', title: 'Updated' } : state === 'pending' ? undefined : null),
 			close: async () => {
 				closes++;
 			},
@@ -143,10 +129,7 @@ suite('Agent Canvas provider ownership', () => {
 		assert.equal(calls.length, 1);
 		assert.deepEqual((calls[0] as { context: unknown }).context, owner);
 		const canvas = context.canvases.get()![0]!;
-		assert.equal(
-			collection.createContext({ ...owner, chat: URI.parse('ash-thread:/other') }).canvases.get()!.length,
-			0,
-		);
+		assert.equal(collection.createContext({ ...owner, chat: URI.parse('ash-thread:/other') }).canvases.get()!.length, 0);
 		const request = context.openRequests!.get().get('preview');
 		assert.equal(request?.succeeded, true);
 		state = 'pending';
@@ -156,18 +139,10 @@ suite('Agent Canvas provider ownership', () => {
 		state = 'ready';
 		await collection.refreshProvider(provider);
 		assert.equal(context.canvases.get()![0]!.title, 'Updated');
-		assert.equal(
-			context.openRequests!.get().get('preview'),
-			request,
-			'source updates do not invent an explicit open',
-		);
+		assert.equal(context.openRequests!.get().get('preview'), request, 'source updates do not invent an explicit open');
 		await browser.loadURL(canvas.resource.path.slice(1), 'http://localhost:9000/updated/nested-route');
 		await collection.refreshProvider(provider);
-		assert.equal(
-			pages.get(canvas.resource.path.slice(1))!.state.url,
-			'http://localhost:9000/updated/nested-route',
-			'metadata refresh must retain navigation inside the live page',
-		);
+		assert.equal(pages.get(canvas.resource.path.slice(1))!.state.url, 'http://localhost:9000/updated/nested-route', 'metadata refresh must retain navigation inside the live page');
 		await context.closeCanvas!(context.canvases.get()![0]!);
 		assert.equal(closes, 1);
 		assert.equal(pages.size, 0);

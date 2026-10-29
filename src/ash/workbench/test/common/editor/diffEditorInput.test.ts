@@ -4,12 +4,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { createSshRemoteWorkspaceUri } from '../../../../platform/remote/common/remote.js';
 import { EditorResourceAccessor, SideBySideEditor, isResourceDiffEditorInput } from '../../../common/editor.js';
-import {
-	createBinaryDiffEditorInput,
-	createDiffEditorInput,
-	isBinaryDiffEditorInput,
-	isDiffEditorInput,
-} from '../../../common/editor/diffEditorInput.js';
+import { createBinaryDiffEditorInput, createDiffEditorInput, isBinaryDiffEditorInput, isDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 import { EditorInputSerializers } from '../../../services/editor/common/editorInputSerializer.js';
 
 suite('Comparison editor inputs', () => {
@@ -59,10 +54,10 @@ suite('Comparison editor inputs', () => {
 			const restored = EditorInputSerializers.deserialize(JSON.parse(JSON.stringify(serialized)));
 			assert.ok(matches(restored));
 			assert.deepEqual(EditorInputSerializers.serialize(restored), serialized);
-			assert.deepEqual(
-				EditorResourceAccessor.getOriginalUri(restored, { supportSideBySide: SideBySideEditor.BOTH }),
-				{ primary: input.modified.resource, secondary: input.original.resource },
-			);
+			assert.deepEqual(EditorResourceAccessor.getOriginalUri(restored, { supportSideBySide: SideBySideEditor.BOTH }), {
+				primary: input.modified.resource,
+				secondary: input.original.resource,
+			});
 		});
 	}
 
@@ -73,9 +68,7 @@ suite('Comparison editor inputs', () => {
 			{ resource: URI.parse('git-change:/unstaged/TODO.md?side=original'), preferredResource },
 			{ resource: snapshot, preferredResource, initialText: '# Heading', readOnly: true },
 		);
-		const restored = EditorInputSerializers.deserialize(
-			JSON.parse(JSON.stringify(EditorInputSerializers.serialize(comparison))),
-		);
+		const restored = EditorInputSerializers.deserialize(JSON.parse(JSON.stringify(EditorInputSerializers.serialize(comparison))));
 		assert.equal(
 			EditorResourceAccessor.getOriginalUri(restored, {
 				supportSideBySide: SideBySideEditor.PRIMARY,

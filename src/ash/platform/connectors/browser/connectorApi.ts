@@ -12,9 +12,7 @@ export interface BrowserConnectorHostServices {
 	readonly externalOpener: IExternalOpener;
 	readonly clipboardService: IClipboardService;
 	readonly callbackHost?: {
-		listen(options?: {
-			readonly path: `/mcp-oauth/${string}/callback`;
-		}): Promise<{ readonly id: string; readonly redirectUri: string }>;
+		listen(options?: { readonly path: `/mcp-oauth/${string}/callback` }): Promise<{ readonly id: string; readonly redirectUri: string }>;
 		wait(id: string): Promise<{ readonly state: string; readonly code: string; readonly issuer?: string }>;
 		close(id: string): Promise<void>;
 	};
@@ -31,10 +29,7 @@ export function createDisconnectedConnectorApi(unavailable: UnavailableOperation
 	};
 }
 
-export function createAppServerConnectorApi(
-	connection: AppServerProtocolClient,
-	hostServices: BrowserConnectorHostServices,
-): IConnectorApi {
+export function createAppServerConnectorApi(connection: AppServerProtocolClient, hostServices: BrowserConnectorHostServices): IConnectorApi {
 	return {
 		list: () => appServerRequest(connection, 'connector/list', {}),
 		connectApiToken: params => appServerRequest(connection, 'connector/connect/apiToken', params),
@@ -57,23 +52,14 @@ export function createAppServerConnectorApi(
 	};
 }
 
-async function connectDeviceOAuth(
-	connection: AppServerProtocolClient,
-	params: Parameters<IConnectorApi['connectOAuth']>[0],
-	hostServices: BrowserConnectorHostServices,
-) {
+async function connectDeviceOAuth(connection: AppServerProtocolClient, params: Parameters<IConnectorApi['connectOAuth']>[0], hostServices: BrowserConnectorHostServices) {
 	const catalog = await appServerRequest(connection, 'connector/list', {});
 	const connector = catalog.connectors.find(candidate => candidate.id === params.connectorId);
-	if (!connector?.oauthMethods.includes('device'))
-		throw new Error('Connector device OAuth is unavailable in this browser host');
+	if (!connector?.oauthMethods.includes('device')) throw new Error('Connector device OAuth is unavailable in this browser host');
 	const started = await appServerRequest(connection, 'connector/connect/oauth/device/start', params);
 	let completed = false;
 	try {
-		await hostServices.externalOpener.openExternal(
-			started.verificationUri,
-			{ sourceUri: URI.parse(started.verificationUri) },
-			CancellationToken.None,
-		);
+		await hostServices.externalOpener.openExternal(started.verificationUri, { sourceUri: URI.parse(started.verificationUri) }, CancellationToken.None);
 		await hostServices.clipboardService.writeText(started.userCode);
 		let waitSeconds = started.pollIntervalSeconds;
 		for (;;) {
@@ -110,11 +96,7 @@ async function connectBrowserOAuth(
 			redirectUri: callback.redirectUri,
 		});
 		flowId = started.flowId;
-		await host.externalOpener.openExternal(
-			started.authorizationUrl,
-			{ sourceUri: URI.parse(started.authorizationUrl) },
-			CancellationToken.None,
-		);
+		await host.externalOpener.openExternal(started.authorizationUrl, { sourceUri: URI.parse(started.authorizationUrl) }, CancellationToken.None);
 		const values = await callbacks.wait(callback.id);
 		const result = await appServerRequest(connection, 'connector/connect/oauth/complete', {
 			flowId,

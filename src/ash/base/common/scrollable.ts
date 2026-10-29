@@ -305,36 +305,22 @@ export class Scrollable extends Disposable {
 		if (this._smoothScrolling) {
 			// Combine our pending scrollLeft/scrollTop with incoming scrollLeft/scrollTop
 			update = {
-				scrollLeft:
-					typeof update.scrollLeft === 'undefined' ? this._smoothScrolling.to.scrollLeft : update.scrollLeft,
-				scrollTop:
-					typeof update.scrollTop === 'undefined' ? this._smoothScrolling.to.scrollTop : update.scrollTop,
+				scrollLeft: typeof update.scrollLeft === 'undefined' ? this._smoothScrolling.to.scrollLeft : update.scrollLeft,
+				scrollTop: typeof update.scrollTop === 'undefined' ? this._smoothScrolling.to.scrollTop : update.scrollTop,
 			};
 
 			// Validate `update`
 			const validTarget = this._state.withScrollPosition(update);
 
-			if (
-				this._smoothScrolling.to.scrollLeft === validTarget.scrollLeft &&
-				this._smoothScrolling.to.scrollTop === validTarget.scrollTop
-			) {
+			if (this._smoothScrolling.to.scrollLeft === validTarget.scrollLeft && this._smoothScrolling.to.scrollTop === validTarget.scrollTop) {
 				// No need to interrupt or extend the current animation since we're going to the same place
 				return;
 			}
 			let newSmoothScrolling: SmoothScrollingOperation;
 			if (reuseAnimation) {
-				newSmoothScrolling = new SmoothScrollingOperation(
-					this._smoothScrolling.from,
-					validTarget,
-					this._smoothScrolling.startTime,
-					this._smoothScrolling.duration,
-				);
+				newSmoothScrolling = new SmoothScrollingOperation(this._smoothScrolling.from, validTarget, this._smoothScrolling.startTime, this._smoothScrolling.duration);
 			} else {
-				newSmoothScrolling = this._smoothScrolling.combine(
-					this._state,
-					validTarget,
-					this._smoothScrollDuration,
-				);
+				newSmoothScrolling = this._smoothScrolling.combine(this._state, validTarget, this._smoothScrollDuration);
 			}
 			this._smoothScrolling.dispose();
 			this._smoothScrolling = newSmoothScrolling;
@@ -342,11 +328,7 @@ export class Scrollable extends Disposable {
 			// Validate `update`
 			const validTarget = this._state.withScrollPosition(update);
 
-			this._smoothScrolling = SmoothScrollingOperation.start(
-				this._state,
-				validTarget,
-				this._smoothScrollDuration,
-			);
+			this._smoothScrolling = SmoothScrollingOperation.start(this._state, validTarget, this._smoothScrollDuration);
 		}
 
 		// Begin smooth scrolling animation
@@ -512,11 +494,7 @@ export class SmoothScrollingOperation {
 		return SmoothScrollingOperation.start(from, to, duration);
 	}
 
-	public static start(
-		from: ISmoothScrollPosition,
-		to: ISmoothScrollPosition,
-		duration: number,
-	): SmoothScrollingOperation {
+	public static start(from: ISmoothScrollPosition, to: ISmoothScrollPosition, duration: number): SmoothScrollingOperation {
 		// +10 / -10 : pretend the animation already started for a quicker response to a scroll request
 		duration = duration + 10;
 		const startTime = Date.now() - 10;

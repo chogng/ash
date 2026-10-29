@@ -5,10 +5,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { Position } from '../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { LanguageFeatureRegistry } from '../../../../../editor/common/languageFeatureRegistry.js';
-import {
-	type LanguageWorkspaceSymbol,
-	type LanguageWorkspaceSymbolProvider,
-} from '../../../../../editor/common/languages.js';
+import { type LanguageWorkspaceSymbol, type LanguageWorkspaceSymbolProvider } from '../../../../../editor/common/languages.js';
 import { getWorkspaceSymbols } from '../../common/search.js';
 
 const RANGE = Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 4 + 1));
@@ -32,9 +29,7 @@ test('workspace symbols publish fast providers before deterministic final fusion
 	);
 	const updates: (readonly LanguageWorkspaceSymbol[])[] = [];
 
-	const final = getWorkspaceSymbols(providers.allNoModel(), 'f', new AbortController().signal, symbols =>
-		updates.push(symbols),
-	);
+	const final = getWorkspaceSymbols(providers.allNoModel(), 'f', new AbortController().signal, symbols => updates.push(symbols));
 	await new Promise(resolve => setTimeout(resolve, 0));
 	assert.deepEqual(
 		updates.at(-1)?.map(symbol => symbol.name),
@@ -99,10 +94,7 @@ test('cancelled workspace symbol searches never publish late provider results', 
 	assert.deepEqual({ result: await pending, updates }, { result: [], updates: [] });
 });
 
-function provider(
-	providerId: string,
-	provide: LanguageWorkspaceSymbolProvider['provideWorkspaceSymbols'],
-): LanguageWorkspaceSymbolProvider {
+function provider(providerId: string, provide: LanguageWorkspaceSymbolProvider['provideWorkspaceSymbols']): LanguageWorkspaceSymbolProvider {
 	void providerId;
 	return { provideWorkspaceSymbols: provide };
 }

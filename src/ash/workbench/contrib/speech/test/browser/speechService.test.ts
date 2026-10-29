@@ -198,11 +198,7 @@ suite('Workbench speech ownership', () => {
 		events.fire({ status: SpeechToTextStatus.Recognized, text: 'hello' });
 		await cancelRecognition(owner, session, source);
 		assert.deepEqual(activations, ['onSpeech']);
-		assert.deepEqual(received, [
-			{ status: SpeechToTextStatus.Started },
-			{ status: SpeechToTextStatus.Recognized, text: 'hello' },
-			{ status: SpeechToTextStatus.Stopped },
-		]);
+		assert.deepEqual(received, [{ status: SpeechToTextStatus.Started }, { status: SpeechToTextStatus.Recognized, text: 'hello' }, { status: SpeechToTextStatus.Stopped }]);
 	});
 
 	test('cancel during provider activation releases only the speech waiter and cannot start late capture', async () => {
@@ -266,10 +262,7 @@ suite('Workbench speech ownership', () => {
 		await speech.createTextToSpeechSession(token.token);
 		token.cancel();
 		assert.deepEqual(languages, ['zh-TW', 'tr-TR']);
-		await assert.rejects(
-			configuration.updateValue(SPEECH_LANGUAGE_CONFIG, 'not-a-supported-language'),
-			/supported speech language/,
-		);
+		await assert.rejects(configuration.updateValue(SPEECH_LANGUAGE_CONFIG, 'not-a-supported-language'), /supported speech language/);
 		assert.equal(configuration.getValue(SPEECH_LANGUAGE_CONFIG), 'tr-TR');
 		assert.deepEqual(
 			[
@@ -310,13 +303,8 @@ suite('Workbench speech ownership', () => {
 		using owner = new DisposableStore();
 		const contexts = owner.add(new ContextKeyService());
 		const speech = owner.add(new SpeechService(undefined, undefined, contexts));
-		const flags = () =>
-			['hasSpeechProvider', 'speechToTextInProgress', 'textToSpeechInProgress'].map(key =>
-				contexts.getContext().getValue(key),
-			);
-		const cancel = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(
-			item => 'command' in item && item.command.id === 'workbench.action.chat.cancelSpeechToText',
-		);
+		const flags = () => ['hasSpeechProvider', 'speechToTextInProgress', 'textToSpeechInProgress'].map(key => contexts.getContext().getValue(key));
+		const cancel = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(item => 'command' in item && item.command.id === 'workbench.action.chat.cancelSpeechToText');
 		assert.ok(cancel && 'command' in cancel);
 		const canCancel = () => cancel.command.precondition!.evaluate(contexts.getContext());
 		assert.deepEqual(flags(), [false, false, false]);
@@ -376,20 +364,14 @@ async function declaredExtensions(owner: DisposableStore): Promise<TestExtension
 					},
 				],
 			}),
-			resources: new ExtensionResourceLoaderService(async () =>
-				assert.fail('Speech declaration must not read package resources'),
-			),
+			resources: new ExtensionResourceLoaderService(async () => assert.fail('Speech declaration must not read package resources')),
 		}),
 	);
 	await extensions.start();
 	return extensions;
 }
 
-async function cancelRecognition(
-	owner: DisposableStore,
-	session: ISpeechToTextSession,
-	source: CancellationTokenSource,
-): Promise<void> {
+async function cancelRecognition(owner: DisposableStore, session: ISpeechToTextSession, source: CancellationTokenSource): Promise<void> {
 	const stopped = new Promise<void>(resolve => {
 		owner.add(
 			session.onDidChange(event => {

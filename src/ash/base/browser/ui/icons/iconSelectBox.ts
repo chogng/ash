@@ -107,8 +107,7 @@ export class IconSelectBox extends Disposable {
 	}
 
 	public setSelection(index: number): void {
-		if (!Number.isInteger(index) || index < 0 || index >= this.renderedIcons.length)
-			throw new RangeError(`Invalid icon index ${index}`);
+		if (!Number.isInteger(index) || index < 0 || index >= this.renderedIcons.length) throw new RangeError(`Invalid icon index ${index}`);
 		this.focusIcon(index);
 		const icon = this.renderedIcons[index]!.icon;
 		this.selectedIconId = icon.id;

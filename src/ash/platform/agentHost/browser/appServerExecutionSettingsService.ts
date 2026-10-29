@@ -5,9 +5,7 @@ import { appServerRequest } from './appServerRequest.js';
 import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
 import type { IAgentExecutionSettingsService } from '../common/agentExecutionSettingsService.js';
 
-export function createAppServerExecutionSettingsService(
-	connection: AppServerProtocolClient,
-): IAgentExecutionSettingsService {
+export function createAppServerExecutionSettingsService(connection: AppServerProtocolClient): IAgentExecutionSettingsService {
 	return {
 		onDidChange: (listener, thisArgs, disposables) => {
 			const subscription = connection.onNotification(event => {
@@ -36,9 +34,7 @@ export function createAppServerExecutionSettingsService(
 	};
 }
 
-export function createDisconnectedExecutionSettingsService(
-	unavailable: UnavailableOperation,
-): IAgentExecutionSettingsService {
+export function createDisconnectedExecutionSettingsService(unavailable: UnavailableOperation): IAgentExecutionSettingsService {
 	return {
 		onDidChange: Event.None,
 		read: () => unavailable('executionSettings.read'),

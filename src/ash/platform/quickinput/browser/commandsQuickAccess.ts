@@ -49,10 +49,7 @@ export class CommandsHistory extends Disposable {
 	}
 
 	public static getConfiguredCommandHistoryLength(configurationService: IConfigurationService): number {
-		return (
-			configurationService.getValue<number>('workbench.commandPalette.history') ??
-			CommandsHistory.DEFAULT_COMMANDS_HISTORY_LENGTH
-		);
+		return configurationService.getValue<number>('workbench.commandPalette.history') ?? CommandsHistory.DEFAULT_COMMANDS_HISTORY_LENGTH;
 	}
 
 	public static clearHistory(_configurationService: IConfigurationService, storageService: IStorageService): void {
@@ -65,12 +62,7 @@ export class CommandsHistory extends Disposable {
 
 	private saveEntries(): void {
 		this.entries = this.limit === 0 ? [] : this.entries.slice(-this.limit);
-		this.storageService.store(
-			CommandsHistory.storageKey,
-			JSON.stringify({ version: 1, entries: this.entries }),
-			StorageScope.PROFILE,
-			StorageTarget.USER,
-		);
+		this.storageService.store(CommandsHistory.storageKey, JSON.stringify({ version: 1, entries: this.entries }), StorageScope.PROFILE, StorageTarget.USER);
 	}
 
 	private readEntries(): string[] {
@@ -78,13 +70,7 @@ export class CommandsHistory extends Disposable {
 		if (!stored) return [];
 		try {
 			const value: unknown = JSON.parse(stored);
-			if (
-				!isRecord(value) ||
-				value.version !== 1 ||
-				!Array.isArray(value.entries) ||
-				value.entries.some(id => typeof id !== 'string' || !id)
-			)
-				return [];
+			if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.entries) || value.entries.some(id => typeof id !== 'string' || !id)) return [];
 			if (new Set(value.entries).size !== value.entries.length) return [];
 			return this.limit === 0 ? [] : value.entries.slice(-this.limit);
 		} catch {

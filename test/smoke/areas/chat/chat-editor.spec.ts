@@ -23,12 +23,8 @@ for (const locale of ['en', 'zh-CN'] as const)
 				await page.keyboard.insertText('Keep this unsent canvas draft');
 				await chat.locator('.ash-chat-input-container').evaluate(form => {
 					const transfer = new DataTransfer();
-					transfer.items.add(
-						new File(['Captured unsaved source'], 'canvas-draft.txt', { type: 'text/plain' }),
-					);
-					form.dispatchEvent(
-						new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer }),
-					);
+					transfer.items.add(new File(['Captured unsaved source'], 'canvas-draft.txt', { type: 'text/plain' }));
+					form.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer }));
 				});
 				await expect(chat.locator('.ash-chat-code-reference')).toContainText('canvas-draft.txt');
 				const original = await chat.getAttribute('id');
@@ -65,9 +61,7 @@ for (const locale of ['en', 'zh-CN'] as const)
 				});
 				await page.locator('.ash-editor-group').last().locator('.stanza-editor-input').focus();
 				await workbench.quickaccess.runCommand('workbench.action.files.save');
-				await expect
-					.poll(() => readFile(join(testWorkspace.directory, 'main.ts'), 'utf8'))
-					.toContain('Retained unsaved document');
+				await expect.poll(() => readFile(join(testWorkspace.directory, 'main.ts'), 'utf8')).toContain('Retained unsaved document');
 				({ workbench } = await reloadWorkbench());
 				page = workbench.page;
 				chat = page.locator('.ash-chat-editor .ash-chat:visible');
@@ -77,11 +71,7 @@ for (const locale of ['en', 'zh-CN'] as const)
 				await chat.locator('.stanza-editor-input').focus();
 				await chat.locator('.stanza-editor-input').press('Alt+F1');
 				const help = page.locator('.ash-accessible-view-content');
-				await expect(help).toHaveValue(
-					locale === 'en'
-						? /Move Chat to Editor Area[\s\S]*never sends a message/u
-						: /将聊天移到编辑器区域[\s\S]*不会发送消息/u,
-				);
+				await expect(help).toHaveValue(locale === 'en' ? /Move Chat to Editor Area[\s\S]*never sends a message/u : /将聊天移到编辑器区域[\s\S]*不会发送消息/u);
 				await help.press('Escape');
 				await workbench.quickaccess.runCommand('workbench.action.chat.moveToSideBar');
 				chat = page.locator('.ash-chat-view-pane .ash-chat:visible');

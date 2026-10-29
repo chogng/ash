@@ -30,12 +30,7 @@ const precedence: Record<Operator, number> = {
 	'/': 6,
 };
 function invalid(): never {
-	throw new TypeError(
-		localize(
-			'sessions.design.prototype.invalidExpression',
-			'Enter a valid expression with compatible values and operators.',
-		),
-	);
+	throw new TypeError(localize('sessions.design.prototype.invalidExpression', 'Enter a valid expression with compatible values and operators.'));
 }
 
 /** Persist identities, not variable names. Neither imported expressions nor typed input execute JavaScript. */
@@ -49,28 +44,17 @@ export function readPrototypeExpression(value: unknown): PrototypeExpression {
 		if (
 			raw.kind === 'literal' &&
 			only(['kind', 'value']) &&
-			(typeof raw.value === 'boolean' ||
-				(typeof raw.value === 'number' && Number.isFinite(raw.value)) ||
-				(typeof raw.value === 'string' && raw.value.length <= 4096))
+			(typeof raw.value === 'boolean' || (typeof raw.value === 'number' && Number.isFinite(raw.value)) || (typeof raw.value === 'string' && raw.value.length <= 4096))
 		) {
 			return { kind: 'literal', value: raw.value as PrototypeValue };
 		}
 		if (raw.kind === 'variable' && only(['kind', 'id']) && isUuid(raw.id)) {
 			return { kind: 'variable', id: raw.id };
 		}
-		if (
-			raw.kind === 'unary' &&
-			only(['kind', 'operator', 'operand']) &&
-			(raw.operator === '-' || raw.operator === 'not')
-		) {
+		if (raw.kind === 'unary' && only(['kind', 'operator', 'operand']) && (raw.operator === '-' || raw.operator === 'not')) {
 			return { kind: 'unary', operator: raw.operator, operand: visit(raw.operand, depth + 1) };
 		}
-		if (
-			raw.kind === 'binary' &&
-			only(['kind', 'operator', 'left', 'right']) &&
-			typeof raw.operator === 'string' &&
-			Object.hasOwn(precedence, raw.operator)
-		) {
+		if (raw.kind === 'binary' && only(['kind', 'operator', 'left', 'right']) && typeof raw.operator === 'string' && Object.hasOwn(precedence, raw.operator)) {
 			return {
 				kind: 'binary',
 				operator: raw.operator as Operator,
@@ -84,10 +68,7 @@ export function readPrototypeExpression(value: unknown): PrototypeExpression {
 }
 
 /** Missing library variables are unresolved; known type errors are rejected at the input boundary. */
-export function prototypeExpressionType(
-	expression: PrototypeExpression,
-	variables: readonly DesignVariable[],
-): DesignVariableType | undefined {
+export function prototypeExpressionType(expression: PrototypeExpression, variables: readonly DesignVariable[]): DesignVariableType | undefined {
 	if (expression.kind === 'literal') {
 		return typeof expression.value as 'string' | 'number' | 'boolean';
 	}
@@ -132,10 +113,7 @@ export function prototypeExpressionType(
 }
 
 /** Undefined propagates rather than coercing missing variables, division by zero, or invalid operands. */
-export function evaluatePrototypeExpression(
-	expression: PrototypeExpression,
-	resolve: (id: string) => PrototypeValue | undefined,
-): PrototypeValue | undefined {
+export function evaluatePrototypeExpression(expression: PrototypeExpression, resolve: (id: string) => PrototypeValue | undefined): PrototypeValue | undefined {
 	if (expression.kind === 'literal') {
 		return expression.value;
 	}
@@ -144,13 +122,7 @@ export function evaluatePrototypeExpression(
 	}
 	if (expression.kind === 'unary') {
 		const value = evaluatePrototypeExpression(expression.operand, resolve);
-		return expression.operator === 'not'
-			? typeof value === 'boolean'
-				? !value
-				: undefined
-			: typeof value === 'number'
-				? -value
-				: undefined;
+		return expression.operator === 'not' ? (typeof value === 'boolean' ? !value : undefined) : typeof value === 'number' ? -value : undefined;
 	}
 	const a = evaluatePrototypeExpression(expression.left, resolve);
 	if (a === undefined) {
@@ -167,21 +139,12 @@ export function evaluatePrototypeExpression(
 		return undefined;
 	}
 	if (expression.operator === 'and' || expression.operator === 'or') {
-		return typeof a === 'boolean' && typeof b === 'boolean'
-			? expression.operator === 'and'
-				? a && b
-				: a || b
-			: undefined;
+		return typeof a === 'boolean' && typeof b === 'boolean' ? (expression.operator === 'and' ? a && b : a || b) : undefined;
 	}
 	if (expression.operator === '==' || expression.operator === '!=') {
 		return typeof a === typeof b ? (expression.operator === '==' ? a === b : a !== b) : undefined;
 	}
-	if (
-		expression.operator === '+' &&
-		(typeof a === 'string' || typeof b === 'string') &&
-		typeof a !== 'boolean' &&
-		typeof b !== 'boolean'
-	) {
+	if (expression.operator === '+' && (typeof a === 'string' || typeof b === 'string') && typeof a !== 'boolean' && typeof b !== 'boolean') {
 		const value = `${a}${b}`;
 		return value.length <= 4096 ? value : undefined;
 	}
@@ -198,24 +161,14 @@ export function evaluatePrototypeExpression(
 		case '>=':
 			return a >= b;
 		default: {
-			const value =
-				expression.operator === '+'
-					? a + b
-					: expression.operator === '-'
-						? a - b
-						: expression.operator === '*'
-							? a * b
-							: a / b;
+			const value = expression.operator === '+' ? a + b : expression.operator === '-' ? a - b : expression.operator === '*' ? a * b : a / b;
 			return Number.isFinite(value) ? value : undefined;
 		}
 	}
 }
 
 /** Names with spaces or punctuation use backticks; duplicate names require a variable ID token. */
-export function formatPrototypeExpression(
-	expression: PrototypeExpression,
-	variables: readonly DesignVariable[],
-): string {
+export function formatPrototypeExpression(expression: PrototypeExpression, variables: readonly DesignVariable[]): string {
 	if (expression.kind === 'literal') {
 		return JSON.stringify(expression.value);
 	}
@@ -224,10 +177,7 @@ export function formatPrototypeExpression(
 		if (!variable || variables.filter(item => item.name === variable.name).length !== 1) {
 			return `@{${expression.id}}`;
 		}
-		return /^[\p{L}_][\p{L}\p{N}_]*$/u.test(variable.name) &&
-			!['true', 'false', 'and', 'or', 'not'].includes(variable.name)
-			? variable.name
-			: '`' + variable.name.replace(/[`\\]/gu, '\\$&') + '`';
+		return /^[\p{L}_][\p{L}\p{N}_]*$/u.test(variable.name) && !['true', 'false', 'and', 'or', 'not'].includes(variable.name) ? variable.name : '`' + variable.name.replace(/[`\\]/gu, '\\$&') + '`';
 	}
 	if (expression.kind === 'unary') {
 		return `${expression.operator} (${formatPrototypeExpression(expression.operand, variables)})`;
@@ -241,8 +191,7 @@ export function parsePrototypeExpression(text: string, variables: readonly Desig
 	}
 	const tokens: string[] = [];
 	let position = 0;
-	const token =
-		/\s*("(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`|@\{[\da-f-]+\}|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|[\p{L}_][\p{L}\p{N}_]*|==|!=|<=|>=|[()+\-*/<>!])/uy;
+	const token = /\s*("(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`|@\{[\da-f-]+\}|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|[\p{L}_][\p{L}\p{N}_]*|==|!=|<=|>=|[()+\-*/<>!])/uy;
 	while (position < text.trimEnd().length) {
 		token.lastIndex = position;
 		const match = token.exec(text);
@@ -283,9 +232,7 @@ export function parsePrototypeExpression(text: string, variables: readonly Desig
 			left = { kind: 'literal', value };
 		} else {
 			const name = current?.startsWith('`') ? current.slice(1, -1).replace(/\\([`\\])/gu, '$1') : current;
-			const matches = current?.startsWith('@{')
-				? variables.filter(variable => variable.id === current.slice(2, -1))
-				: variables.filter(variable => variable.name === name);
+			const matches = current?.startsWith('@{') ? variables.filter(variable => variable.id === current.slice(2, -1)) : variables.filter(variable => variable.name === name);
 			if (matches.length !== 1) {
 				return invalid();
 			}

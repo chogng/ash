@@ -9,13 +9,7 @@ test('configuration model combines structured values and replaces arrays without
 	};
 	const log = new NullLoggerService();
 	const defaults = new ConfigurationModel(contents, ['editor.options'], [], undefined, log);
-	const user = new ConfigurationModel(
-		{ editor: { options: { colors: { foreground: 'white' }, rulers: [100] } } },
-		['editor.options'],
-		[],
-		undefined,
-		log,
-	);
+	const user = new ConfigurationModel({ editor: { options: { colors: { foreground: 'white' }, rulers: [100] } } }, ['editor.options'], [], undefined, log);
 	const combined = defaults.merge(user);
 
 	contents.editor.options.rulers.push(120);

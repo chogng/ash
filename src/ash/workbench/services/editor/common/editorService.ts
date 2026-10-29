@@ -42,10 +42,7 @@ export interface IEditorService {
 	readonly visibleEditorPanes: readonly IEditorPane[];
 	/** Resolves after display, an error page, or expected cancellation; ignoreError leaves failures with the caller. */
 	openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<void>;
-	save(
-		editors: IEditorIdentifier | readonly IEditorIdentifier[],
-		options?: ISaveEditorsOptions,
-	): Promise<ISaveEditorsResult>;
+	save(editors: IEditorIdentifier | readonly IEditorIdentifier[], options?: ISaveEditorsOptions): Promise<ISaveEditorsResult>;
 	saveAll(options?: ISaveAllEditorsOptions): Promise<ISaveEditorsResult>;
 	focusActiveEditor(): void;
 }

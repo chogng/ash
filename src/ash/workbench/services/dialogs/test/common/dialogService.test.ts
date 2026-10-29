@@ -33,7 +33,10 @@ test('dialog service emits lifecycle events for completion and failure', async (
 
 test('dialog service maps cancellation to a false confirmation', async () => {
 	using service = new DialogService();
-	const confirmation = service.confirm({ message: 'Delete item?', primaryButton: 'Delete' });
+	const confirmation = service.confirm({
+		message: 'Delete item?',
+		primaryButton: 'Delete',
+	});
 
 	service.model.dialogs[0]?.cancel();
 
@@ -126,13 +129,20 @@ test('input dialog returns values and checkbox state from the selected action', 
 	const item = service.model.dialogs[0];
 	assert.equal(item?.request.kind, 'input');
 	item?.close({ button: DialogResult.Primary, values: ['https://example.test'], checkboxChecked: true });
-	assert.deepEqual(await input, { confirmed: true, values: ['https://example.test'], checkboxChecked: true });
+	assert.deepEqual(await input, {
+		confirmed: true,
+		values: ['https://example.test'],
+		checkboxChecked: true,
+	});
 });
 
 test('disposing dialog service cancels every queued model request', async () => {
 	const service = new DialogService();
 	const confirmation = service.confirm({ message: 'Active' });
-	const message = service.showMessage({ severity: DialogSeverity.Warning, message: 'Queued' });
+	const message = service.showMessage({
+		severity: DialogSeverity.Warning,
+		message: 'Queued',
+	});
 
 	assert.equal(service.model.dialogs.length, 2);
 	service.dispose();
@@ -144,7 +154,10 @@ test('disposing dialog service cancels every queued model request', async () => 
 
 test('dialog service propagates model presentation failures', async () => {
 	using service = new DialogService();
-	const result = service.showMessage({ severity: DialogSeverity.Error, message: 'Failure' });
+	const result = service.showMessage({
+		severity: DialogSeverity.Error,
+		message: 'Failure',
+	});
 
 	service.model.dialogs[0]?.fail(new Error('render failed'));
 
@@ -154,11 +167,7 @@ test('dialog service propagates model presentation failures', async () => {
 
 test('info, warn, and error use the dialog queue with their severity', async () => {
 	using service = new DialogService();
-	const results = [
-		service.info('Information', 'First detail'),
-		service.warn('Warning', 'Second detail'),
-		service.error('Failure', 'Third detail'),
-	];
+	const results = [service.info('Information', 'First detail'), service.warn('Warning', 'Second detail'), service.error('Failure', 'Third detail')];
 	assert.deepEqual(
 		service.model.dialogs.map(item => item.request),
 		[

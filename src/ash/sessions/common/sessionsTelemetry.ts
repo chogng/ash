@@ -12,16 +12,9 @@ type Classification = {
 };
 
 /** Use the host's existing telemetry policy; this hook does not enable collection. */
-export function logSessionsInteraction(
-	telemetry: ITelemetryService,
-	button: SessionsInteractionButton,
-	source?: SessionsInteractionSource,
-): void {
+export function logSessionsInteraction(telemetry: ITelemetryService, button: SessionsInteractionButton, source?: SessionsInteractionSource): void {
 	if (telemetry.telemetryLevel !== TelemetryLevel.USAGE) {
 		return;
 	}
-	telemetry.publicLog2<Interaction, Classification>(
-		'ashSessions.interaction',
-		source === undefined ? { button } : { button, source },
-	);
+	telemetry.publicLog2<Interaction, Classification>('ashSessions.interaction', source === undefined ? { button } : { button, source });
 }

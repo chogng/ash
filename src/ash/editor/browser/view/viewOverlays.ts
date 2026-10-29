@@ -92,10 +92,7 @@ export class ViewOverlays extends ViewPart {
 	}
 
 	public prepareRender(context: RenderingContext): void {
-		const viewportChanged = !this._visibleLines.hasViewport(
-			context.viewportData.startLineNumber,
-			context.viewportData.endLineNumber,
-		);
+		const viewportChanged = !this._visibleLines.hasViewport(context.viewportData.startLineNumber, context.viewportData.endLineNumber);
 		for (const overlay of this._dynamicOverlays) {
 			if (!viewportChanged && !overlay.shouldRender()) continue;
 			overlay.prepareRender(context);

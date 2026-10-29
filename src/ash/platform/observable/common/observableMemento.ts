@@ -9,9 +9,7 @@ interface IObservableMementoOpts<T> {
 	readonly fromStorage: (value: string) => T;
 }
 
-export function observableMemento<T>(
-	opts: IObservableMementoOpts<T>,
-): (scope: StorageScope, target: StorageTarget, storageService: IStorageService) => ObservableMemento<T> {
+export function observableMemento<T>(opts: IObservableMementoOpts<T>): (scope: StorageScope, target: StorageTarget, storageService: IStorageService) => ObservableMemento<T> {
 	return (scope, target, storageService) => new ObservableMemento(opts, scope, target, storageService);
 }
 

@@ -15,10 +15,7 @@ class ToggleRenderControlCharacterAction extends Action2 {
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		const configuration = accessor.get(IConfigurationService);
-		await configuration.updateValue(
-			CodeEditorConfiguration.renderControlCharacters,
-			!configuration.getValue(CodeEditorConfiguration.renderControlCharacters),
-		);
+		await configuration.updateValue(CodeEditorConfiguration.renderControlCharacters, !configuration.getValue(CodeEditorConfiguration.renderControlCharacters));
 	}
 }
 

@@ -1,12 +1,7 @@
 import * as strings from '../../../base/common/strings.js';
 import { ReplaceCommand } from '../commands/replaceCommand.js';
 import { type EditorAutoClosingEditStrategy, type EditorAutoClosingStrategy } from '../config/editorOptions.js';
-import {
-	CursorConfiguration,
-	EditOperationResult,
-	EditOperationType,
-	type ICursorSimpleModel,
-} from '../cursorCommon.js';
+import { CursorConfiguration, EditOperationResult, EditOperationType, type ICursorSimpleModel } from '../cursorCommon.js';
 import { CursorColumns } from '../core/cursorColumns.js';
 import { Selection } from '../core/selection.js';
 import { Position } from '../core/position.js';
@@ -16,12 +11,7 @@ import { type StandardAutoClosingPairConditional } from '../languages/languageCo
 import { MoveOperations } from './cursorMoveOperations.js';
 
 export class DeleteOperations {
-	public static deleteRight(
-		prevEditOperationType: EditOperationType,
-		config: CursorConfiguration,
-		model: ICursorSimpleModel,
-		selections: Selection[],
-	): [boolean, Array<ICommand | null>] {
+	public static deleteRight(prevEditOperationType: EditOperationType, config: CursorConfiguration, model: ICursorSimpleModel, selections: Selection[]): [boolean, Array<ICommand | null>] {
 		const commands: Array<ICommand | null> = [];
 		let shouldPushStackElementBefore = prevEditOperationType !== EditOperationType.DeletingRight;
 		for (let index = 0; index < selections.length; index += 1) {
@@ -45,17 +35,7 @@ export class DeleteOperations {
 		selections: Selection[],
 		autoClosedCharacters: Range[],
 	): boolean {
-		return (
-			model.editingPolicy?.isAutoClosingPairDelete(
-				autoClosingDelete,
-				autoClosingBrackets,
-				autoClosingQuotes,
-				autoClosingPairsOpen,
-				model,
-				selections,
-				autoClosedCharacters,
-			) ?? false
-		);
+		return model.editingPolicy?.isAutoClosingPairDelete(autoClosingDelete, autoClosingBrackets, autoClosingQuotes, autoClosingPairsOpen, model, selections, autoClosedCharacters) ?? false;
 	}
 
 	public static deleteLeft(
@@ -82,18 +62,10 @@ export class DeleteOperations {
 		return [shouldPushStackElementBefore, commands];
 	}
 
-	public static cut(
-		config: CursorConfiguration,
-		model: ICursorSimpleModel,
-		selections: Selection[],
-	): EditOperationResult {
+	public static cut(config: CursorConfiguration, model: ICursorSimpleModel, selections: Selection[]): EditOperationResult {
 		const commands: Array<ICommand | null> = [];
 		let previousRange: Range | undefined;
-		const ordered = selections
-			.map((selection, index) => ({ selection, index }))
-			.sort((left, right) =>
-				Position.compare(left.selection.getStartPosition(), right.selection.getStartPosition()),
-			);
+		const ordered = selections.map((selection, index) => ({ selection, index })).sort((left, right) => Position.compare(left.selection.getStartPosition(), right.selection.getStartPosition()));
 		for (const { selection, index } of ordered) {
 			let range: Range | undefined;
 			if (!selection.isEmpty()) {
@@ -103,19 +75,9 @@ export class DeleteOperations {
 				if (position.lineNumber < model.getLineCount()) {
 					range = new Range(position.lineNumber, 1, position.lineNumber + 1, 1);
 				} else if (position.lineNumber > 1 && previousRange?.endLineNumber !== position.lineNumber) {
-					range = new Range(
-						position.lineNumber - 1,
-						model.getLineMaxColumn(position.lineNumber - 1),
-						position.lineNumber,
-						model.getLineMaxColumn(position.lineNumber),
-					);
+					range = new Range(position.lineNumber - 1, model.getLineMaxColumn(position.lineNumber - 1), position.lineNumber, model.getLineMaxColumn(position.lineNumber));
 				} else {
-					range = new Range(
-						position.lineNumber,
-						1,
-						position.lineNumber,
-						model.getLineMaxColumn(position.lineNumber),
-					);
+					range = new Range(position.lineNumber, 1, position.lineNumber, model.getLineMaxColumn(position.lineNumber));
 				}
 				previousRange = range;
 			}

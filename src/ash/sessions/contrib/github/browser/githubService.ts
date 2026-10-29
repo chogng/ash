@@ -2,13 +2,7 @@ import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
-import {
-	DisposableStore,
-	Disposable,
-	DisposableMap,
-	MutableDisposable,
-	toDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { DisposableStore, Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { observableValue, type IReader } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -30,17 +24,11 @@ import { CommandsRegistry } from '../../../../platform/commands/common/commands.
 import { ISCMService } from '../../../../workbench/contrib/scm/common/scm.js';
 import type { GitRepositoryContext } from '../../../../platform/git/common/localGitService.js';
 type RepositoryIdentity = NonNullable<GitRepositoryContext['remotes'][number]['identity']>;
-import {
-	getPullRequestChecksStatus,
-	getPullRequestResourceStatus,
-} from '../../../../workbench/contrib/github/browser/githubResourceHover.js';
+import { getPullRequestChecksStatus, getPullRequestResourceStatus } from '../../../../workbench/contrib/github/browser/githubResourceHover.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import type { ISession, SessionId } from '../../../services/sessions/common/session.js';
-import {
-	ISessionProviderScopeService,
-	type ISessionProviderScope,
-} from '../../../browser/agentHost/sessionProviderScopeService.js';
+import { ISessionProviderScopeService, type ISessionProviderScope } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { linkKey } from '../../../common/sessionLinks.js';
 import { agentHostSessionWorkspaceKey } from '../../../common/agentHostSessionWorkspace.js';
 import type { IResolvedSessionPullRequest, IResolvedSessionIssue } from '../common/types.js';
@@ -62,19 +50,11 @@ export const IGitHubService = createServiceIdentifier<IGitHubService>('sessionsG
 export class GitHubService extends Disposable implements IGitHubService {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
-	private readonly requests = new Map<
-		SessionId,
-		{ readonly directory: string; readonly values: readonly IResolvedSessionPullRequest[] }
-	>();
-	private readonly issues = observableValue<ReadonlyMap<SessionId, readonly IResolvedSessionIssue[]>>(
-		this,
-		new Map(),
-	);
+	private readonly requests = new Map<SessionId, { readonly directory: string; readonly values: readonly IResolvedSessionPullRequest[] }>();
+	private readonly issues = observableValue<ReadonlyMap<SessionId, readonly IResolvedSessionIssue[]>>(this, new Map());
 	private readonly accountGenerations = new WeakMap<ISessionProviderScope, number>();
 	private readonly attachmentProviders = new WeakMap<CancellationTokenSource, ISessionProviderScope>();
-	private readonly attachments = this._register(
-		new DisposableMap<CancellationTokenSource, CancellationTokenSource>(),
-	);
+	private readonly attachments = this._register(new DisposableMap<CancellationTokenSource, CancellationTokenSource>());
 	private readonly branches = new Map<SessionId, ReadonlyMap<string, string>>();
 	private readonly operation = new MutableDisposable<CancellationTokenSource>();
 	private readonly refresh = this._register(
@@ -123,8 +103,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 		const observeHosts = (): void => {
 			hostListeners.clear();
 			const current = scopes.getScopes();
-			for (const previous of this.observedScopes)
-				if (!current.includes(previous)) this.invalidateAccounts(previous);
+			for (const previous of this.observedScopes) if (!current.includes(previous)) this.invalidateAccounts(previous);
 			this.observedScopes = new Set(current);
 			for (const scope of current) {
 				const api = scope.services.host;
@@ -133,20 +112,15 @@ export class GitHubService extends Disposable implements IGitHubService {
 						api.github.onDidChangeSessionPullRequests,
 						api.github.onDidChangeSessionIssues,
 					)(sessionId => {
-						if (
-							this.sessions.activeSelection?.kind === 'session' &&
-							this.sessions.activeSelection.active.session.sessionId === scope.identity(sessionId)
-						) {
+						if (this.sessions.activeSelection?.kind === 'session' && this.sessions.activeSelection.active.session.sessionId === scope.identity(sessionId)) {
 							this.operation.value?.cancel();
 							this.refresh.schedule(0);
 						}
 					}),
 				);
 				const events = api.events.subscribe(event => {
-					if (event.method === 'account/updated' || event.method === 'account/login/completed')
-						this.invalidateAccounts(scope);
-					if (event.method === 'git/statusChanged' || event.method === 'git/repositoriesChanged')
-						this.invalidateSelection();
+					if (event.method === 'account/updated' || event.method === 'account/login/completed') this.invalidateAccounts(scope);
+					if (event.method === 'git/statusChanged' || event.method === 'git/repositoriesChanged') this.invalidateSelection();
 				});
 				hostListeners.add(toDisposable(() => events.dispose()));
 				const connection = api.appServer.onConnectionState(() => this.invalidateAccounts(scope));
@@ -195,12 +169,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 			backendSessionId: scope.backendIdentity(sessionId),
 			assertCurrent: () => {
 				scope.assertCurrent();
-				if (
-					this.isDisposed ||
-					generation !== scope.services.host.appServer.connectionGeneration ||
-					accounts !== (this.accountGenerations.get(scope) ?? 0)
-				)
-					throw new CancellationError();
+				if (this.isDisposed || generation !== scope.services.host.appServer.connectionGeneration || accounts !== (this.accountGenerations.get(scope) ?? 0)) throw new CancellationError();
 			},
 		};
 	}
@@ -218,22 +187,9 @@ export class GitHubService extends Disposable implements IGitHubService {
 		try {
 			const accounts = await binding.github.listAccounts(source.token);
 			binding.assertCurrent();
-			const account = accounts.find(
-				account => account.status === 'ready' && account.host.toLowerCase() === reference.repository.host,
-			);
-			if (!account)
-				throw new Error(
-					localize(
-						'sessions.github.connectHost',
-						'Connect a GitHub account for {0} before attaching this pull request.',
-						reference.repository.host,
-					),
-				);
-			await binding.github.readPullRequest(
-				{ ...reference.repository, accountId: account.id },
-				reference.number,
-				source.token,
-			);
+			const account = accounts.find(account => account.status === 'ready' && account.host.toLowerCase() === reference.repository.host);
+			if (!account) throw new Error(localize('sessions.github.connectHost', 'Connect a GitHub account for {0} before attaching this pull request.', reference.repository.host));
+			await binding.github.readPullRequest({ ...reference.repository, accountId: account.id }, reference.number, source.token);
 			binding.assertCurrent();
 			if (source.token.isCancellationRequested) throw new CancellationError();
 			await binding.github.attachSessionPullRequest(binding.backendSessionId, reference);
@@ -274,23 +230,11 @@ export class GitHubService extends Disposable implements IGitHubService {
 		try {
 			const accounts = await binding.github.listAccounts(source.token);
 			binding.assertCurrent();
-			const account = accounts.find(
-				account => account.status === 'ready' && account.host.toLowerCase() === reference.repository.host,
-			);
+			const account = accounts.find(account => account.status === 'ready' && account.host.toLowerCase() === reference.repository.host);
 			if (!account) {
-				throw new Error(
-					localize(
-						'sessions.github.connectIssueHost',
-						'Connect a GitHub account for {0} before attaching this issue.',
-						reference.repository.host,
-					),
-				);
+				throw new Error(localize('sessions.github.connectIssueHost', 'Connect a GitHub account for {0} before attaching this issue.', reference.repository.host));
 			}
-			await binding.github.readIssue(
-				{ ...reference.repository, accountId: account.id },
-				reference.number,
-				source.token,
-			);
+			await binding.github.readIssue({ ...reference.repository, accountId: account.id }, reference.number, source.token);
 			binding.assertCurrent();
 			if (this.isDisposed || source.token.isCancellationRequested) {
 				throw new CancellationError();
@@ -336,10 +280,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 			this.changed.fire();
 		}
 		const selected = this.sessions.activeSelection;
-		const key =
-			selected?.kind === 'session'
-				? `${selected.active.session.sessionId}:${directoryKey(selected.active.session)}`
-				: undefined;
+		const key = selected?.kind === 'session' ? `${selected.active.session.sessionId}:${directoryKey(selected.active.session)}` : undefined;
 		if (key === this.selectionKey) {
 			return;
 		}
@@ -383,22 +324,15 @@ export class GitHubService extends Disposable implements IGitHubService {
 			const accountsPromise = binding.github.listAccounts(token);
 			issueResolution = this.resolveSessionIssues(binding, session.sessionId, accountsPromise, token);
 			const branches = new Map<string, string>();
-			const [accounts, references] = await Promise.all([
-				accountsPromise,
-				binding.github.listSessionPullRequests(binding.backendSessionId),
-			]);
-			const hosts = new Set(
-				accounts.filter(account => account.status === 'ready').map(account => account.host.toLowerCase()),
-			);
+			const [accounts, references] = await Promise.all([accountsPromise, binding.github.listSessionPullRequests(binding.backendSessionId)]);
+			const hosts = new Set(accounts.filter(account => account.status === 'ready').map(account => account.host.toLowerCase()));
 			const contexts = root
-				? await binding.provider.services.host.localGit
-						.readRepositoryContexts({ sessionId: binding.backendSessionId, path: workspace!.root }, token)
-						.catch(error => {
-							// Attached references remain useful without permission to inspect a working directory.
-							if (isCancellationError(error) || token.isCancellationRequested) throw error;
-							this.log.error('sessions.github', 'Unable to inspect session repositories', error);
-							return [];
-						})
+				? await binding.provider.services.host.localGit.readRepositoryContexts({ sessionId: binding.backendSessionId, path: workspace!.root }, token).catch(error => {
+						// Attached references remain useful without permission to inspect a working directory.
+						if (isCancellationError(error) || token.isCancellationRequested) throw error;
+						this.log.error('sessions.github', 'Unable to inspect session repositories', error);
+						return [];
+					})
 				: [];
 			const repositories = root
 				? contexts
@@ -406,11 +340,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 							...repository,
 							root: root.with({ path: URI.file(repository.rootPath).path }),
 						}))
-						.filter(
-							repository =>
-								extUriBiasedIgnorePathCase.isEqualOrParent(repository.root, root) ||
-								extUriBiasedIgnorePathCase.isEqualOrParent(root, repository.root),
-						)
+						.filter(repository => extUriBiasedIgnorePathCase.isEqualOrParent(repository.root, root) || extUriBiasedIgnorePathCase.isEqualOrParent(root, repository.root))
 				: [];
 			binding.assertCurrent();
 			if (token.isCancellationRequested || this.isDisposed) {
@@ -422,11 +352,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 				}
 			}
 			const previousBranches = this.branches.get(session.sessionId);
-			if (
-				previousBranches &&
-				(previousBranches.size !== branches.size ||
-					[...previousBranches].some(([id, branch]) => branches.get(id) !== branch))
-			) {
+			if (previousBranches && (previousBranches.size !== branches.size || [...previousBranches].some(([id, branch]) => branches.get(id) !== branch))) {
 				// Clear old branch associations before remote lookups, while preserving focus on ordinary status refreshes.
 				const entry = this.requests.get(session.sessionId);
 				if (entry) {
@@ -437,45 +363,20 @@ export class GitHubService extends Disposable implements IGitHubService {
 					this.changed.fire();
 				}
 			}
-			const recorded = await Promise.all(
-				references.map(reference => this.resolveReference(binding, reference, accounts, token)),
-			);
+			const recorded = await Promise.all(references.map(reference => this.resolveReference(binding, reference, accounts, token)));
 			const results = await Promise.all(
 				repositories.map(async repository => {
 					if (token.isCancellationRequested || repository.head.type !== 'branch') {
 						return [];
 					}
 					// Enterprise remotes can be classified as "other" by Git; a GitHub grant identifies their host.
-					const identities = repository.remotes.flatMap(remote =>
-						remote.identity && hosts.has(remote.identity.host.toLowerCase()) ? [remote.identity] : [],
-					);
+					const identities = repository.remotes.flatMap(remote => (remote.identity && hosts.has(remote.identity.host.toLowerCase()) ? [remote.identity] : []));
 					const branch = repository.head.name;
-					const unique = new Map(
-						identities.map(identity => [
-							`${identity.host}/${identity.owner}/${identity.repository}`.toLowerCase(),
-							identity,
-						]),
-					);
+					const unique = new Map(identities.map(identity => [`${identity.host}/${identity.owner}/${identity.repository}`.toLowerCase(), identity]));
 					return Promise.all(
 						[...unique.values()].flatMap(identity => {
-							const account = accounts.find(
-								account =>
-									account.host.toLowerCase() === identity.host.toLowerCase() &&
-									account.status === 'ready',
-							);
-							return account
-								? [
-										this.resolveRepository(
-											binding,
-											identity,
-											branch,
-											identities,
-											account.id,
-											token,
-											references,
-										),
-									]
-								: [];
+							const account = accounts.find(account => account.host.toLowerCase() === identity.host.toLowerCase() && account.status === 'ready');
+							return account ? [this.resolveRepository(binding, identity, branch, identities, account.id, token, references)] : [];
 						}),
 					);
 				}),
@@ -510,11 +411,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 				if (!this.isDisposed && this.refreshQueued) {
 					this.refreshQueued = false;
 					this.refresh.schedule(0);
-				} else if (
-					this.operation.value === cancellation &&
-					!this.isDisposed &&
-					!token.isCancellationRequested
-				) {
+				} else if (this.operation.value === cancellation && !this.isDisposed && !token.isCancellationRequested) {
 					this.refresh.schedule();
 				}
 			}
@@ -547,12 +444,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 					const result = await binding.github.listPullRequests(repository, state, page, token, {
 						head: `${owner}:${branch}`,
 					});
-					match = result.items.find(
-						request =>
-							request.headBranch === branch &&
-							request.headRepository !== null &&
-							headRepositories.has(request.headRepository.toLowerCase()),
-					);
+					match = result.items.find(request => request.headBranch === branch && request.headRepository !== null && headRepositories.has(request.headRepository.toLowerCase()));
 					if (match) {
 						break;
 					}
@@ -584,22 +476,12 @@ export class GitHubService extends Disposable implements IGitHubService {
 		return this.readPullRequest(binding, repository, match.number, token);
 	}
 
-	private async resolveSessionIssues(
-		binding: SessionGitHubScope,
-		sessionId: SessionId,
-		accountsPromise: Promise<readonly GitHubAccount[]>,
-		token: CancellationToken,
-	): Promise<void> {
+	private async resolveSessionIssues(binding: SessionGitHubScope, sessionId: SessionId, accountsPromise: Promise<readonly GitHubAccount[]>, token: CancellationToken): Promise<void> {
 		let values: readonly IResolvedSessionIssue[];
 		try {
-			const [accounts, references] = await Promise.all([
-				accountsPromise,
-				binding.github.listSessionIssues(binding.backendSessionId),
-			]);
+			const [accounts, references] = await Promise.all([accountsPromise, binding.github.listSessionIssues(binding.backendSessionId)]);
 			binding.assertCurrent();
-			values = await Promise.all(
-				references.map(reference => this.resolveIssue(binding, reference, accounts, token)),
-			);
+			values = await Promise.all(references.map(reference => this.resolveIssue(binding, reference, accounts, token)));
 			binding.assertCurrent();
 		} catch (error) {
 			if (token.isCancellationRequested || isCancellationError(error)) {
@@ -617,31 +499,19 @@ export class GitHubService extends Disposable implements IGitHubService {
 		this.issues.set(state, undefined);
 	}
 
-	private async resolveIssue(
-		binding: SessionGitHubScope,
-		reference: GitHubIssueReference,
-		accounts: readonly GitHubAccount[],
-		token: CancellationToken,
-	): Promise<IResolvedSessionIssue> {
+	private async resolveIssue(binding: SessionGitHubScope, reference: GitHubIssueReference, accounts: readonly GitHubAccount[], token: CancellationToken): Promise<IResolvedSessionIssue> {
 		const uri = URI.from({
 			scheme: 'https',
 			authority: reference.repository.host,
 			path: `/${reference.repository.owner}/${reference.repository.name}/issues/${reference.number}`,
 		});
 		const unresolved: IResolvedSessionIssue = { reference, uri, issue: undefined };
-		const account = accounts.find(
-			account =>
-				account.status === 'ready' && account.host.toLowerCase() === reference.repository.host.toLowerCase(),
-		);
+		const account = accounts.find(account => account.status === 'ready' && account.host.toLowerCase() === reference.repository.host.toLowerCase());
 		if (!account || token.isCancellationRequested) {
 			return unresolved;
 		}
 		try {
-			const issue = await binding.github.readIssue(
-				{ ...reference.repository, accountId: account.id },
-				reference.number,
-				token,
-			);
+			const issue = await binding.github.readIssue({ ...reference.repository, accountId: account.id }, reference.number, token);
 			if (token.isCancellationRequested) {
 				return unresolved;
 			}
@@ -664,20 +534,12 @@ export class GitHubService extends Disposable implements IGitHubService {
 		accounts: readonly GitHubAccount[],
 		token: CancellationToken,
 	): Promise<IResolvedSessionPullRequest | undefined> {
-		const account = accounts.find(
-			account =>
-				account.host.toLowerCase() === reference.repository.host.toLowerCase() && account.status === 'ready',
-		);
+		const account = accounts.find(account => account.host.toLowerCase() === reference.repository.host.toLowerCase() && account.status === 'ready');
 		if (!account || token.isCancellationRequested) {
 			return undefined;
 		}
 		try {
-			const request = await this.readPullRequest(
-				binding,
-				{ ...reference.repository, accountId: account.id },
-				reference.number,
-				token,
-			);
+			const request = await this.readPullRequest(binding, { ...reference.repository, accountId: account.id }, reference.number, token);
 			return request ? { ...request, recordedReference: reference } : undefined;
 		} catch (error) {
 			if (token.isCancellationRequested || isCancellationError(error)) {
@@ -702,12 +564,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 		}
 	}
 
-	private async readPullRequest(
-		binding: SessionGitHubScope,
-		repository: GitHubRepository,
-		number: number,
-		token: CancellationToken,
-	): Promise<IResolvedSessionPullRequest | undefined> {
+	private async readPullRequest(binding: SessionGitHubScope, repository: GitHubRepository, number: number, token: CancellationToken): Promise<IResolvedSessionPullRequest | undefined> {
 		binding.assertCurrent();
 		const pullRequest = await binding.github.readPullRequest(repository, number, token);
 		binding.assertCurrent();
@@ -735,12 +592,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 		};
 	}
 
-	private async readFailingChecks(
-		binding: SessionGitHubScope,
-		repository: GitHubRepository,
-		commit: string,
-		token: CancellationToken,
-	): Promise<boolean> {
+	private async readFailingChecks(binding: SessionGitHubScope, repository: GitHubRepository, commit: string, token: CancellationToken): Promise<boolean> {
 		let page: number | null = 1;
 		while (page !== null && !token.isCancellationRequested) {
 			const result = await binding.github.readChecks(repository, commit, page, token);
@@ -752,12 +604,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 		return false;
 	}
 
-	private async readUnresolvedComments(
-		binding: SessionGitHubScope,
-		repository: GitHubRepository,
-		number: number,
-		token: CancellationToken,
-	): Promise<boolean> {
+	private async readUnresolvedComments(binding: SessionGitHubScope, repository: GitHubRepository, number: number, token: CancellationToken): Promise<boolean> {
 		let cursor: string | null = null;
 		do {
 			const result = await binding.github.listReviewThreads(repository, number, cursor, token);
@@ -786,28 +633,11 @@ function parsePullRequestReference(value: string): GitHubPullRequestReference {
 	try {
 		url = new URL(value.trim());
 	} catch {
-		throw new Error(
-			localize(
-				'sessions.github.invalidUrl',
-				'Enter an HTTPS pull request URL, such as https://github.com/owner/repo/pull/123.',
-			),
-		);
+		throw new Error(localize('sessions.github.invalidUrl', 'Enter an HTTPS pull request URL, such as https://github.com/owner/repo/pull/123.'));
 	}
 	const match = /^\/([\w.-]+)\/([\w.-]+)\/pull\/([1-9]\d*)\/?$/.exec(url.pathname);
-	if (
-		url.protocol !== 'https:' ||
-		url.username ||
-		url.password ||
-		url.port ||
-		!match ||
-		!Number.isSafeInteger(Number(match[3]))
-	) {
-		throw new Error(
-			localize(
-				'sessions.github.invalidUrl',
-				'Enter an HTTPS pull request URL, such as https://github.com/owner/repo/pull/123.',
-			),
-		);
+	if (url.protocol !== 'https:' || url.username || url.password || url.port || !match || !Number.isSafeInteger(Number(match[3]))) {
+		throw new Error(localize('sessions.github.invalidUrl', 'Enter an HTTPS pull request URL, such as https://github.com/owner/repo/pull/123.'));
 	}
 	return {
 		repository: { host: url.hostname.toLowerCase(), owner: match[1].toLowerCase(), name: match[2].toLowerCase() },
@@ -816,13 +646,7 @@ function parsePullRequestReference(value: string): GitHubPullRequestReference {
 }
 
 function parseIssueReference(value: string): GitHubIssueReference {
-	const invalid = () =>
-		new Error(
-			localize(
-				'sessions.github.invalidIssueUrl',
-				'Enter an HTTPS issue URL, such as https://github.com/owner/repo/issues/123.',
-			),
-		);
+	const invalid = () => new Error(localize('sessions.github.invalidIssueUrl', 'Enter an HTTPS issue URL, such as https://github.com/owner/repo/issues/123.'));
 	let url: URL;
 	try {
 		url = new URL(value.trim());
@@ -830,14 +654,7 @@ function parseIssueReference(value: string): GitHubIssueReference {
 		throw invalid();
 	}
 	const match = /^\/([\w.-]+)\/([\w.-]+)\/issues\/([1-9]\d*)\/?$/.exec(url.pathname);
-	if (
-		url.protocol !== 'https:' ||
-		url.username ||
-		url.password ||
-		url.port ||
-		!match ||
-		!Number.isSafeInteger(Number(match[3]))
-	) {
+	if (url.protocol !== 'https:' || url.username || url.password || url.port || !match || !Number.isSafeInteger(Number(match[3]))) {
 		throw invalid();
 	}
 	return {

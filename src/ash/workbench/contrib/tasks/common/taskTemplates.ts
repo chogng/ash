@@ -9,11 +9,7 @@ export interface ITaskEntry extends IQuickPickItem {
 /** Templates are editable launch configuration, never automatically executed commands. */
 export function getTemplates(): ITaskEntry[] {
 	const content = (label: string, command: string, args: readonly string[] = []): string =>
-		JSON.stringify(
-			{ version: '2.0.0', tasks: [{ label, type: 'shell', command, args, problemMatcher: [] }] },
-			null,
-			'\t',
-		) + '\n';
+		JSON.stringify({ version: '2.0.0', tasks: [{ label, type: 'shell', command, args, problemMatcher: [] }] }, null, '\t') + '\n';
 	return [
 		{
 			label: 'npm',

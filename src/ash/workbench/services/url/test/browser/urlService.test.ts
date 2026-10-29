@@ -47,10 +47,7 @@ suite('Browser URL service', () => {
 			[uri.toString(), { trusted: true }],
 			[uri.toString(), undefined],
 		]);
-		assert.equal(
-			service.create({ authority: 'callback', query: 'state=abc' }).toString(),
-			'https://host.test/callback',
-		);
+		assert.equal(service.create({ authority: 'callback', query: 'state=abc' }).toString(), 'https://host.test/callback');
 		assert.deepEqual(callbackOptions, { authority: 'callback', query: 'state=abc' });
 		service.dispose();
 		callbacks.fire(uri);

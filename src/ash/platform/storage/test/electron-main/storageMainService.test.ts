@@ -98,9 +98,7 @@ suite('Desktop storage owner', () => {
 				file,
 				JSON.stringify({
 					version: 2,
-					storages: [
-						{ identity: application, revision: 3, isNew: false, entries: { saved: entry('retained') } },
-					],
+					storages: [{ identity: application, revision: 3, isNew: false, entries: { saved: entry('retained') } }],
 				}),
 			);
 			using storage = new StorageMainService(file);
@@ -117,10 +115,7 @@ suite('Desktop storage owner', () => {
 			await storage.close();
 			using restored = new StorageMainService(file);
 			await restored.initialize();
-			assert.deepEqual(
-				{ ...(await restored.getItems(application)).entries },
-				{ saved: entry('retained'), added: entry('new') },
-			);
+			assert.deepEqual({ ...(await restored.getItems(application)).entries }, { saved: entry('retained'), added: entry('new') });
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
@@ -146,11 +141,7 @@ suite('Desktop storage owner', () => {
 			const initializing = storage.initialize();
 			try {
 				await storage.flush();
-				assert.equal(
-					JSON.parse(await readFile(file, 'utf8')).version,
-					2,
-					'Flush includes startup disk work already accepted by the owner',
-				);
+				assert.equal(JSON.parse(await readFile(file, 'utf8')).version, 2, 'Flush includes startup disk work already accepted by the owner');
 				assert.equal(await readFile(`${file}.v1`, 'utf8'), source);
 				assert.deepEqual({ ...(await storage.getItems(application)).entries }, { saved: entry('retained') });
 			} finally {
@@ -169,9 +160,7 @@ suite('Desktop storage owner', () => {
 				file,
 				JSON.stringify({
 					version: 2,
-					storages: [
-						{ identity: application, revision: 0, isNew: false, entries: { saved: entry('before') } },
-					],
+					storages: [{ identity: application, revision: 0, isNew: false, entries: { saved: entry('before') } }],
 				}),
 			);
 			using storage = new StorageMainService(file);
@@ -237,16 +226,10 @@ suite('Desktop storage owner', () => {
 				file,
 				JSON.stringify({
 					version: 2,
-					storages: [
-						{ identity: application, revision: 0, isNew: false, entries: { saved: entry('repaired') } },
-					],
+					storages: [{ identity: application, revision: 0, isNew: false, entries: { saved: entry('repaired') } }],
 				}),
 			);
-			await assert.rejects(
-				storage.initialize(),
-				/Invalid Desktop storage file/,
-				'Failed startup remains cached even after repairing the file',
-			);
+			await assert.rejects(storage.initialize(), /Invalid Desktop storage file/, 'Failed startup remains cached even after repairing the file');
 			using restored = new StorageMainService(file);
 			await restored.initialize();
 			assert.deepEqual({ ...(await restored.getItems(application)).entries }, { saved: entry('repaired') });
@@ -340,26 +323,16 @@ suite('Desktop storage owner', () => {
 				await writeFile(file, source);
 				using storage = new StorageMainService(file);
 				await storage.initialize();
-				assert.deepEqual(
-					{ ...(await storage.getItems(identity)).entries },
-					{ editors: entry('paper'), layout: entry('code') },
-				);
+				assert.deepEqual({ ...(await storage.getItems(identity)).entries }, { editors: entry('paper'), layout: entry('code') });
 				assert.equal((await storage.getItems(identity)).revision, 2);
-				assert.deepEqual(
-					{ ...(await storage.getItems({ scope: StorageScope.PROFILE, id: 'sessions' })).entries },
-					{ sidebar: entry('360') },
-				);
+				assert.deepEqual({ ...(await storage.getItems({ scope: StorageScope.PROFILE, id: 'sessions' })).entries }, { sidebar: entry('360') });
 				assert.deepEqual({ ...(await storage.getItems(application)).entries }, { fonts: entry('cache') });
 				assert.equal(await readFile(`${file}.v1`, 'utf8'), source);
 				await storage.updateItems(identity, 'editors', null);
 				await storage.close();
 				using restored = new StorageMainService(file);
 				await restored.initialize();
-				assert.deepEqual(
-					{ ...(await restored.getItems(identity)).entries },
-					{ layout: entry('code') },
-					'Archived data must never be replayed',
-				);
+				assert.deepEqual({ ...(await restored.getItems(identity)).entries }, { layout: entry('code') }, 'Archived data must never be replayed');
 				const data = JSON.parse(await readFile(file, 'utf8'));
 				assert.equal(data.version, 2);
 				assert.equal(data.storages.length, 3);
@@ -416,10 +389,7 @@ suite('Desktop storage owner', () => {
 			await storage.close();
 			using restored = new StorageMainService(file);
 			await restored.initialize();
-			assert.deepEqual(
-				{ ...(await restored.getItems(application)).entries },
-				{ first: entry('one'), second: entry('two') },
-			);
+			assert.deepEqual({ ...(await restored.getItems(application)).entries }, { first: entry('one'), second: entry('two') });
 			assert.equal(JSON.parse(await readFile(file, 'utf8')).version, 2);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
@@ -445,10 +415,7 @@ suite('Desktop storage owner', () => {
 				}),
 				/Invalid storage entry/,
 			);
-			assert.throws(
-				() => validateStorageSnapshot({ identity: application, revision: -1, isNew: true, entries: {} }),
-				/Invalid storage snapshot/,
-			);
+			assert.throws(() => validateStorageSnapshot({ identity: application, revision: -1, isNew: true, entries: {} }), /Invalid storage snapshot/);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}

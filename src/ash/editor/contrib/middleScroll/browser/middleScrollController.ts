@@ -35,24 +35,15 @@ export class MiddleScrollController extends Disposable implements IEditorContrib
 		if (!this.domNode) return;
 		const targetWindow = getWindow(this.domNode);
 		this._register(editor.onMouseDown(event => this.handleMouseDown(event)));
-		this._register(
-			addDisposableListener<PointerEvent>(targetWindow, 'pointermove', event => this.handlePointerMove(event)),
-		);
-		this._register(
-			addDisposableListener<PointerEvent>(targetWindow, 'pointerup', event => this.handlePointerUp(event)),
-		);
-		this._register(
-			addDisposableListener<PointerEvent>(targetWindow, 'pointercancel', event =>
-				this.handlePointerCancel(event),
-			),
-		);
+		this._register(addDisposableListener<PointerEvent>(targetWindow, 'pointermove', event => this.handlePointerMove(event)));
+		this._register(addDisposableListener<PointerEvent>(targetWindow, 'pointerup', event => this.handlePointerUp(event)));
+		this._register(addDisposableListener<PointerEvent>(targetWindow, 'pointercancel', event => this.handlePointerCancel(event)));
 		this._register(editor.onKeyDown(() => this.stop()));
 		this._register(toDisposable(() => this.stop()));
 	}
 
 	private handleMouseDown(event: IEditorMouseEvent): void {
-		if (!event.event.middleButton || !this.editor.getOption(EditorOption.scrollOnMiddleClick) || !this.domNode)
-			return;
+		if (!event.event.middleButton || !this.editor.getOption(EditorOption.scrollOnMiddleClick) || !this.domNode) return;
 		event.event.preventDefault();
 		event.event.stopPropagation();
 		if (this.session) {
@@ -85,11 +76,7 @@ export class MiddleScrollController extends Disposable implements IEditorContrib
 		if (!this.session || event.pointerId !== this.session.pointerId) return;
 		this.session.x = event.clientX;
 		this.session.y = event.clientY;
-		if (this.domNode)
-			this.domNode.dataset.scrollDirection = direction(
-				this.session.x - this.session.startX,
-				this.session.y - this.session.startY,
-			);
+		if (this.domNode) this.domNode.dataset.scrollDirection = direction(this.session.x - this.session.startX, this.session.y - this.session.startY);
 	}
 
 	private handlePointerUp(event: PointerEvent): void {
@@ -122,8 +109,7 @@ export class MiddleScrollController extends Disposable implements IEditorContrib
 					scrollLeft: before.left + x * factor,
 					scrollTop: before.top + y * factor,
 				});
-				session.didScroll ||=
-					before.left !== this.editor.getScrollLeft() || before.top !== this.editor.getScrollTop();
+				session.didScroll ||= before.left !== this.editor.getScrollLeft() || before.top !== this.editor.getScrollTop();
 			}
 			this.scheduleFrame();
 		});

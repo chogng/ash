@@ -21,13 +21,7 @@ export function toDesignLocal(frame: DesignFrame, point: DesignPoint): DesignPoi
 	};
 }
 
-export function cubicBezierPoint(
-	start: DesignPoint,
-	outgoing: DesignPoint,
-	incoming: DesignPoint,
-	end: DesignPoint,
-	t: number,
-): DesignPoint {
+export function cubicBezierPoint(start: DesignPoint, outgoing: DesignPoint, incoming: DesignPoint, end: DesignPoint, t: number): DesignPoint {
 	const u = 1 - t;
 	return {
 		x: u ** 3 * start.x + 3 * u ** 2 * t * outgoing.x + 3 * u * t ** 2 * incoming.x + t ** 3 * end.x,
@@ -44,16 +38,8 @@ export function designBounds(shapes: readonly DesignFrame[]): { x: number; y: nu
 		const radians = (shape.rotation * Math.PI) / 180;
 		return [-1, 1].flatMap(x =>
 			[-1, 1].map(y => ({
-				x:
-					shape.x +
-					shape.width / 2 +
-					((x * shape.width) / 2) * Math.cos(radians) -
-					((y * shape.height) / 2) * Math.sin(radians),
-				y:
-					shape.y +
-					shape.height / 2 +
-					((x * shape.width) / 2) * Math.sin(radians) +
-					((y * shape.height) / 2) * Math.cos(radians),
+				x: shape.x + shape.width / 2 + ((x * shape.width) / 2) * Math.cos(radians) - ((y * shape.height) / 2) * Math.sin(radians),
+				y: shape.y + shape.height / 2 + ((x * shape.width) / 2) * Math.sin(radians) + ((y * shape.height) / 2) * Math.cos(radians),
 			})),
 		);
 	});

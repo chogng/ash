@@ -1,9 +1,6 @@
 import { CanvasInput, ICanvasService } from '../../../../workbench/contrib/canvases/common/canvas.js';
 import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
-import {
-	UnknownEditorInputSerializerError,
-	type EditorInputSerializer,
-} from '../../../../workbench/services/editor/common/editorInputSerializer.js';
+import { UnknownEditorInputSerializerError, type EditorInputSerializer } from '../../../../workbench/services/editor/common/editorInputSerializer.js';
 
 /** Persistence contains only a versioned nonce admitted by this live renderer. It never grants URL reconstruction. */
 export class SessionCanvasSerializer implements EditorInputSerializer {
@@ -13,9 +10,7 @@ export class SessionCanvasSerializer implements EditorInputSerializer {
 		return input instanceof CanvasInput;
 	}
 	serialize(input: IResourceEditorInput): { version: 1; id: string } | null {
-		return input instanceof CanvasInput && this.canvases.restoreCanvasInput(input.serializationId) === input
-			? { version: 1, id: input.serializationId }
-			: null;
+		return input instanceof CanvasInput && this.canvases.restoreCanvasInput(input.serializationId) === input ? { version: 1, id: input.serializationId } : null;
 	}
 	deserialize(value: unknown): CanvasInput {
 		if (typeof value !== 'object' || value === null || Array.isArray(value)) {

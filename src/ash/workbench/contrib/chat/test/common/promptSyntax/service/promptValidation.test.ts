@@ -6,9 +6,7 @@ import { PromptValidator } from '../../../../common/promptSyntax/languageProvide
 import { LanguageDiagnosticSeverity } from '../../../../../../../editor/common/languages.js';
 
 function diagnostics(fields: string, directory = 'review') {
-	return new PromptValidator().validate(
-		new PromptFileParser().parse(URI.file(`/skills/${directory}/SKILL.md`), `---\n${fields}\n---`),
-	);
+	return new PromptValidator().validate(new PromptFileParser().parse(URI.file(`/skills/${directory}/SKILL.md`), `---\n${fields}\n---`));
 }
 
 test('Skill draft names and descriptions match the catalog shape and Unicode character limits', () => {

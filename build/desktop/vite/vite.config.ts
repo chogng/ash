@@ -74,19 +74,13 @@ export default defineConfig(({ mode, command }) => {
 		[browserEntry]: resolve(sourceRoot, `${browserEntry}.html`),
 		[sessionsWebEntry]: resolve(sourceRoot, `${sessionsWebEntry}.html`),
 		'browser/theme-preview/themePreview': resolve(sourceRoot, 'browser/theme-preview/themePreview.html'),
-		'browser/theme-preview/sessionsThemePreview': resolve(
-			sourceRoot,
-			'browser/theme-preview/sessionsThemePreview.html',
-		),
+		'browser/theme-preview/sessionsThemePreview': resolve(sourceRoot, 'browser/theme-preview/sessionsThemePreview.html'),
 	};
 	const sessionsInputs = {
 		'sessions/electron-browser/sessions': resolve(sourceRoot, 'sessions/electron-browser/sessions.html'),
 	};
 	const remoteRuntimeInstallInput = {
-		'electron-browser/remote-runtime-install/remoteRuntimeInstall': resolve(
-			sourceRoot,
-			'electron-browser/remote-runtime-install/remoteRuntimeInstall.html',
-		),
+		'electron-browser/remote-runtime-install/remoteRuntimeInstall': resolve(sourceRoot, 'electron-browser/remote-runtime-install/remoteRuntimeInstall.html'),
 	};
 	const verificationScript = `(${installChatGPTVerification.toString()})();`;
 	const inputs = webOnly
@@ -96,10 +90,7 @@ export default defineConfig(({ mode, command }) => {
 				[electronEntry]: resolve(sourceRoot, `${electronEntry}.html`),
 				...sessionsInputs,
 				...remoteRuntimeInstallInput,
-				'electron-browser/imageView/imageView': resolve(
-					sourceRoot,
-					'electron-browser/imageView/imageView.html',
-				),
+				'electron-browser/imageView/imageView': resolve(sourceRoot, 'electron-browser/imageView/imageView.html'),
 			};
 
 	return {
@@ -125,18 +116,15 @@ export default defineConfig(({ mode, command }) => {
 								});
 							},
 							configureServer(server) {
-								server.middlewares.use(
-									'/browser/chatgpt/verification.js',
-									(request, response, next) => {
-										if (request.method !== 'GET') {
-											next();
-											return;
-										}
-										response.setHeader('Content-Type', 'text/javascript');
-										response.setHeader('Cache-Control', 'no-store');
-										response.end(verificationScript);
-									},
-								);
+								server.middlewares.use('/browser/chatgpt/verification.js', (request, response, next) => {
+									if (request.method !== 'GET') {
+										next();
+										return;
+									}
+									response.setHeader('Content-Type', 'text/javascript');
+									response.setHeader('Cache-Control', 'no-store');
+									response.end(verificationScript);
+								});
 							},
 						} satisfies Plugin,
 					]),
@@ -153,18 +141,12 @@ export default defineConfig(({ mode, command }) => {
 					{
 						url: '/browser/theme-preview/themePreview.html',
 						inputFile: browserInputs['browser/theme-preview/themePreview'],
-						sourceFile: resolve(
-							repositoryRoot,
-							'src/ash/workbench/contrib/themeEditor/browser/themePreview.html',
-						),
+						sourceFile: resolve(repositoryRoot, 'src/ash/workbench/contrib/themeEditor/browser/themePreview.html'),
 					},
 					{
 						url: '/browser/theme-preview/sessionsThemePreview.html',
 						inputFile: browserInputs['browser/theme-preview/sessionsThemePreview'],
-						sourceFile: resolve(
-							repositoryRoot,
-							'src/ash/sessions/contrib/themeEditor/browser/sessionsThemePreview.html',
-						),
+						sourceFile: resolve(repositoryRoot, 'src/ash/sessions/contrib/themeEditor/browser/sessionsThemePreview.html'),
 					},
 					...(webOnly
 						? []
@@ -222,20 +204,10 @@ export default defineConfig(({ mode, command }) => {
 					.filter(([entry]) => !entry.startsWith('electron-browser/remote-runtime-install/'))
 					.map(([entry, path]) => {
 						// HTML warmup reads disk directly, bypassing the virtual product-page loader.
-						if (entry === sessionsWebEntry)
-							return resolve(repositoryRoot, 'src/ash/sessions/sessions.web.main.internal.ts');
-						if (entry === 'browser/theme-preview/sessionsThemePreview')
-							return resolve(
-								repositoryRoot,
-								'src/ash/sessions/contrib/themeEditor/browser/themePreviewPage.ts',
-							);
-						if (entry === 'browser/theme-preview/themePreview')
-							return resolve(
-								repositoryRoot,
-								'src/ash/workbench/contrib/themeEditor/browser/themePreviewPage.ts',
-							);
-						if (entry === 'sessions/electron-browser/sessions')
-							return resolve(repositoryRoot, 'src/ash/sessions/electron-browser/sessions.ts');
+						if (entry === sessionsWebEntry) return resolve(repositoryRoot, 'src/ash/sessions/sessions.web.main.internal.ts');
+						if (entry === 'browser/theme-preview/sessionsThemePreview') return resolve(repositoryRoot, 'src/ash/sessions/contrib/themeEditor/browser/themePreviewPage.ts');
+						if (entry === 'browser/theme-preview/themePreview') return resolve(repositoryRoot, 'src/ash/workbench/contrib/themeEditor/browser/themePreviewPage.ts');
+						if (entry === 'sessions/electron-browser/sessions') return resolve(repositoryRoot, 'src/ash/sessions/electron-browser/sessions.ts');
 						return path;
 					}),
 			},
@@ -243,7 +215,10 @@ export default defineConfig(({ mode, command }) => {
 		build: {
 			outDir: desktopBuildPath(repositoryRoot, webOnly ? 'web' : 'renderer', AshRendererDirectory),
 			emptyOutDir: true,
-			rolldownOptions: { output: rendererOutput, input: inputs },
+			rolldownOptions: {
+				output: rendererOutput,
+				input: inputs,
+			},
 		},
 	};
 });

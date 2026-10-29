@@ -34,9 +34,7 @@ export async function rebuild(options) {
 	for (const name of ['native-keymap', 'native-is-elevated']) {
 		files[`node_modules/${name}/package.json`] = JSON.stringify({ name, version: '1.0.0' });
 		files[`node_modules/${name}/src/source.cc`] = 'original source';
-		files[
-			`node_modules/${name}/build/Release/${name === 'native-keymap' ? 'keymapping.node' : 'iselevated.node'}`
-		] = 'loadable';
+		files[`node_modules/${name}/build/Release/${name === 'native-keymap' ? 'keymapping.node' : 'iselevated.node'}`] = 'loadable';
 	}
 	for (const [file, content] of Object.entries(files)) {
 		await mkdir(dirname(join(root, file)), { recursive: true });
@@ -51,28 +49,19 @@ export async function rebuild(options) {
 	const probes: string[][] = [];
 	// This fixture models the loader result, not a fake production addon. The
 	// actual Electron binary is exercised separately against the installed modules.
-	t.mock.method(
-		childProcess,
-		'execFile',
-		(
-			_executable: string,
-			args: string[],
-			options: childProcess.ExecFileOptions,
-			callback: (error: Error | null, stdout: string, stderr: string) => void,
-		) => {
-			probes.push(args);
-			assert.equal(options.env?.ELECTRON_RUN_AS_NODE, '1');
-			assert.equal(options.windowsHide, true);
-			let error: Error | null = null;
-			try {
-				assert.equal(readFileSync(args[2]!, 'utf8'), 'loadable');
-			} catch {
-				error = new Error('Binding cannot load');
-			}
-			queueMicrotask(() => callback(error, '', ''));
-			return new childProcess.ChildProcess();
-		},
-	);
+	t.mock.method(childProcess, 'execFile', (_executable: string, args: string[], options: childProcess.ExecFileOptions, callback: (error: Error | null, stdout: string, stderr: string) => void) => {
+		probes.push(args);
+		assert.equal(options.env?.ELECTRON_RUN_AS_NODE, '1');
+		assert.equal(options.windowsHide, true);
+		let error: Error | null = null;
+		try {
+			assert.equal(readFileSync(args[2]!, 'utf8'), 'loadable');
+		} catch {
+			error = new Error('Binding cannot load');
+		}
+		queueMicrotask(() => callback(error, '', ''));
+		return new childProcess.ChildProcess();
+	});
 	const { prepareElectronAddons } = await import(pathToFileURL(join(root, 'build/desktop/addons.ts')).href);
 	const { pythonCommand: fixturePythonCommand } = await import(pathToFileURL(join(root, 'build/python.ts')).href);
 	const binary = join(root, 'node_modules/native-keymap/build/Release/keymapping.node');
@@ -85,13 +74,7 @@ export async function rebuild(options) {
 
 	await prepareElectronAddons(root);
 	await assert.rejects(readFile(join(root, 'rebuilds.jsonl')), { code: 'ENOENT' });
-	assert.deepEqual(probes[0]?.slice(3), [
-		'44.4.5',
-		process.arch,
-		'getKeyMap',
-		'getCurrentKeyboardLayout',
-		'onDidChangeKeyboardLayout',
-	]);
+	assert.deepEqual(probes[0]?.slice(3), ['44.4.5', process.arch, 'getKeyMap', 'getCurrentKeyboardLayout', 'onDidChangeKeyboardLayout']);
 	assert.equal((await readdir(cacheDirectory)).length, process.platform === 'win32' ? 2 : 1);
 
 	// A missing installed binding is repaired from the exact source/runtime cache.

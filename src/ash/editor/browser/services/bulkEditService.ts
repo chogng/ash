@@ -68,9 +68,7 @@ export class ResourceTextEdit extends ResourceEdit {
 	}
 
 	static lift(edit: ResourceTextEdit | ResourceTextEditLike): ResourceTextEdit {
-		return edit instanceof ResourceTextEdit
-			? edit
-			: new ResourceTextEdit(edit.resource, edit.textEdit, edit.versionId, edit.metadata);
+		return edit instanceof ResourceTextEdit ? edit : new ResourceTextEdit(edit.resource, edit.textEdit, edit.versionId, edit.metadata);
 	}
 
 	constructor(
@@ -92,9 +90,7 @@ export class ResourceFileEdit extends ResourceEdit {
 	}
 
 	static lift(edit: ResourceFileEdit | ResourceFileEditLike): ResourceFileEdit {
-		return edit instanceof ResourceFileEdit
-			? edit
-			: new ResourceFileEdit(edit.oldResource, edit.newResource, edit.options ?? {}, edit.metadata);
+		return edit instanceof ResourceFileEdit ? edit : new ResourceFileEdit(edit.oldResource, edit.newResource, edit.options ?? {}, edit.metadata);
 	}
 
 	constructor(
@@ -140,10 +136,7 @@ export interface IBulkEditService {
 	readonly _serviceBrand: undefined;
 	hasPreviewHandler(): boolean;
 	setPreviewHandler(handler: IBulkEditPreviewHandler): IDisposable;
-	apply(
-		edit: ResourceEdit[] | WorkspaceEdit | LanguageWorkspaceEdit,
-		options?: IBulkEditOptions,
-	): Promise<IBulkEditResult>;
+	apply(edit: ResourceEdit[] | WorkspaceEdit | LanguageWorkspaceEdit, options?: IBulkEditOptions): Promise<IBulkEditResult>;
 }
 
 function resourceEdits(entry: LanguageWorkspaceEditEntry): ResourceEdit[] {
@@ -153,9 +146,7 @@ function resourceEdits(entry: LanguageWorkspaceEditEntry): ResourceEdit[] {
 		case 'create':
 			return [
 				new ResourceFileEdit(undefined, entry.resource, {
-					...(entry.contents !== undefined
-						? { contents: Promise.resolve(VSBuffer.fromString(entry.contents)) }
-						: {}),
+					...(entry.contents !== undefined ? { contents: Promise.resolve(VSBuffer.fromString(entry.contents)) } : {}),
 					overwrite: entry.existing === 'overwrite',
 					ignoreIfExists: entry.existing === 'ignore',
 				}),

@@ -1,19 +1,8 @@
 import { KeyCode } from '../../../../base/common/keyCodes.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../nls.js';
-import {
-	ContentWidgetPositionPreference,
-	type ICodeEditor,
-	type IContentWidget,
-	type IContentWidgetPosition,
-} from '../../../browser/editorBrowser.js';
-import {
-	EditorAction,
-	EditorContributionInstantiation,
-	registerEditorAction,
-	registerEditorContribution,
-	type ServicesAccessor,
-} from '../../../browser/editorExtensions.js';
+import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../browser/editorBrowser.js';
+import { EditorAction, EditorContributionInstantiation, registerEditorAction, registerEditorContribution, type ServicesAccessor } from '../../../browser/editorExtensions.js';
 import { StandardTokenType } from '../../../common/encodedTokenAttributes.js';
 import type { IEditorContribution } from '../../../common/editorCommon.js';
 import type { ITextModel } from '../../../common/model.js';
@@ -104,9 +93,7 @@ class InspectTokensWidget extends Disposable implements IContentWidget {
 
 	public getPosition(): IContentWidgetPosition | null {
 		const position = this.editor.getPosition();
-		return position
-			? { position, preference: [ContentWidgetPositionPreference.ABOVE, ContentWidgetPositionPreference.BELOW] }
-			: null;
+		return position ? { position, preference: [ContentWidgetPositionPreference.ABOVE, ContentWidgetPositionPreference.BELOW] } : null;
 	}
 
 	private addDetail(parent: HTMLDListElement, label: string): HTMLElement {
@@ -124,9 +111,7 @@ class InspectTokensWidget extends Disposable implements IContentWidget {
 		const column = Math.min(position.column, Math.max(1, line.length));
 		const tokens = this.model.tokenization.getLineTokens(position.lineNumber);
 		const index = tokens.findTokenIndexAtOffset(column - 1);
-		const token = this.model.tokenization
-			.getLanguageTokens(position.lineNumber - 1)
-			.find(candidate => candidate.range.startColumn <= column && column < candidate.range.endColumn);
+		const token = this.model.tokenization.getLanguageTokens(position.lineNumber - 1).find(candidate => candidate.range.startColumn <= column && column < candidate.range.endColumn);
 		this.sample.textContent = token ? this.model.getValueInRange(token.range) : tokens.getTokenText(index);
 		this.language.textContent = token?.languageId ?? tokens.getLanguageId(index);
 		this.scope.textContent = this.model.tokenization.hasAccurateTokensForLine(position.lineNumber)

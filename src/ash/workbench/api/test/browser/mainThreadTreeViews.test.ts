@@ -27,17 +27,7 @@ suite('treeView browser component', () => {
 				await checkbox.focus();
 				await page.keyboard.press('Space');
 				await expect
-					.poll(() =>
-						page.evaluate(() =>
-							window.treeIntegration
-								.requests()
-								.some(
-									request =>
-										(request.payload as any).method === 'checkbox' &&
-										(request.payload as any).isChecked,
-								),
-						),
-					)
+					.poll(() => page.evaluate(() => window.treeIntegration.requests().some(request => (request.payload as any).method === 'checkbox' && (request.payload as any).isChecked)))
 					.toBe(true);
 				await expect(checkbox).toBeChecked();
 				expect(await page.evaluate(() => window.treeIntegration.commands())).toEqual([]);
@@ -47,9 +37,7 @@ suite('treeView browser component', () => {
 					name: variant.includes('zh-CN') ? '重命名 Child' : 'Rename Child',
 				});
 				await expect(rename).toBeFocused();
-				expect(
-					await rename.evaluate((input: HTMLInputElement) => [input.selectionStart, input.selectionEnd]),
-				).toEqual([0, 5]);
+				expect(await rename.evaluate((input: HTMLInputElement) => [input.selectionStart, input.selectionEnd])).toEqual([0, 5]);
 				await rename.fill('Renamed');
 				await rename.press('Enter');
 				await expect(page.locator('.ash-custom-tree-label').filter({ hasText: /^Renamed$/ })).toBeVisible();
@@ -68,9 +56,7 @@ suite('treeView browser component', () => {
 				).toEqual(['Renamed']);
 				const tree = page.getByRole('tree');
 				await tree.focus();
-				expect(await page.evaluate(() => window.treeIntegration.accessible(false))).toContain(
-					'Renamed: Provider owned',
-				);
+				expect(await page.evaluate(() => window.treeIntegration.accessible(false))).toContain('Renamed: Provider owned');
 				expect(await page.evaluate(() => window.treeIntegration.accessible(true))).toContain('F2');
 				await expect(tree).toBeFocused();
 				await expect(tree).toHaveAttribute('aria-description', /F2/);
@@ -98,25 +84,14 @@ suite('treeView browser component', () => {
 				await expect(page.getByRole('textbox')).toHaveValue('Unsubmitted');
 				await page.getByRole('textbox').press('Escape');
 				await expect(page.getByRole('textbox')).toHaveCount(0);
-				expect(
-					await page.evaluate(
-						() =>
-							window.treeIntegration
-								.requests()
-								.filter(request => (request.payload as any).method === 'rename').length,
-					),
-				).toBe(1);
-				await expect(
-					page.locator('.ash-custom-tree-label').filter({ hasText: /^From provider$/ }),
-				).toBeVisible();
+				expect(await page.evaluate(() => window.treeIntegration.requests().filter(request => (request.payload as any).method === 'rename').length)).toBe(1);
+				await expect(page.locator('.ash-custom-tree-label').filter({ hasText: /^From provider$/ })).toBeVisible();
 				await page.evaluate(() => window.treeIntegration.move());
 				await expect(page.locator('#first .ash-custom-tree-view')).toHaveCount(0);
 				await expect(page.locator('#second .ash-custom-tree-view')).toBeVisible();
 				await page.getByRole('treeitem').filter({ hasText: 'Root' }).click();
 				await page.keyboard.press('ArrowRight');
-				await expect(
-					page.locator('#second .ash-custom-tree-label').filter({ hasText: /^From provider$/ }),
-				).toBeVisible();
+				await expect(page.locator('#second .ash-custom-tree-label').filter({ hasText: /^From provider$/ })).toBeVisible();
 				expect(errors).toEqual([]);
 			} finally {
 				await page.evaluate(() => window.treeIntegration?.dispose());

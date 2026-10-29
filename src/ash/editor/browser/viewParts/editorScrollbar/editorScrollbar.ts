@@ -1,9 +1,6 @@
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { type IMouseWheelEvent } from '../../../../base/browser/mouseEvent.js';
-import {
-	SmoothScrollableElement,
-	type IOverviewRulerLayoutInfo,
-} from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
+import { SmoothScrollableElement, type IOverviewRulerLayoutInfo } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { type ScrollableElementChangeOptions } from '../../../../base/browser/ui/scrollbar/scrollableElementOptions.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import * as viewEvents from '../../../common/viewEvents.js';
@@ -16,27 +13,23 @@ export class EditorScrollbar extends ViewPart {
 	private readonly scrollbar: SmoothScrollableElement;
 	private readonly domNode: FastDomNode<HTMLElement>;
 
-	constructor(
-		context: ViewContext,
-		linesContent: FastDomNode<HTMLElement>,
-		viewDomNode: FastDomNode<HTMLElement>,
-		overflowGuardDomNode: FastDomNode<HTMLElement>,
-	) {
+	constructor(context: ViewContext, linesContent: FastDomNode<HTMLElement>, viewDomNode: FastDomNode<HTMLElement>, overflowGuardDomNode: FastDomNode<HTMLElement>) {
 		super(context);
 		this.scrollbar = this._register(
 			new SmoothScrollableElement(
 				linesContent.domNode,
-				{ ...this.readOptions(), lazyRender: true, listenOnDomNode: overflowGuardDomNode.domNode },
+				{
+					...this.readOptions(),
+					lazyRender: true,
+					listenOnDomNode: overflowGuardDomNode.domNode,
+				},
 				context.viewLayout.getScrollable(),
 			),
 		);
 		this.domNode = new FastDomNode(this.scrollbar.getDomNode());
 		PartFingerprints.write(this.domNode, PartFingerprint.ScrollableElement);
 		this.domNode.domNode.dataset.colorScheme = context.theme.type;
-		this.domNode.domNode.setAttribute(
-			'aria-label',
-			viewDomNode.domNode.getAttribute('aria-label') ?? 'Editor content',
-		);
+		this.domNode.domNode.setAttribute('aria-label', viewDomNode.domNode.getAttribute('aria-label') ?? 'Editor content');
 	}
 
 	public getDomNode(): FastDomNode<HTMLElement> {

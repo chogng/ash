@@ -1,20 +1,11 @@
-import {
-	IBrowserPasswordService,
-	UnavailableBrowserPasswordService,
-} from '../../../../../platform/browserView/common/browserPasswordService.js';
+import { IBrowserPasswordService, UnavailableBrowserPasswordService } from '../../../../../platform/browserView/common/browserPasswordService.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { ScreenshotGlobalShortcutSetting } from '../../../chat/common/constants.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { resolveKeybinding } from '../../../../../base/common/keybindings.js';
 import { IHostService } from '../../../../services/host/browser/host.js';
-import {
-	IChatSpeechToTextService,
-	ChatSpeechToTextService,
-} from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
-import {
-	IVoiceCodeTranscriptionClient,
-	VoiceCodeTranscriptionClient,
-} from '../../../chat/browser/speechToText/voiceCodeTranscriptionClient.js';
+import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
+import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../../../../platform/telemetry/common/telemetryUtils.js';
 import { TestConfigurationFiles } from '../../../../services/configuration/test/common/testServices.js';
@@ -43,10 +34,7 @@ import { IAccountService } from '../../../../../platform/accounts/common/account
 import { IGitHubService } from '../../../../../platform/github/common/githubService.js';
 import { IAccountPolicyService } from '../../../../services/policies/common/accountPolicyService.js';
 import { IGitHubConnectionService } from '../../../../../workbench/services/accounts/common/gitHubConnectionService.js';
-import {
-	GitHubReviewModel,
-	IGitHubReviewModel,
-} from '../../../../../workbench/contrib/github/browser/githubReviewModel.js';
+import { GitHubReviewModel, IGitHubReviewModel } from '../../../../../workbench/contrib/github/browser/githubReviewModel.js';
 import { KeybindingTestServices } from '../../../../services/keybinding/test/browser/keybindingTestServices.js';
 import { createTestLocaleService } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import '../../../chat/common/languageModelsConfiguration.js';
@@ -69,11 +57,7 @@ import { IAppServerHookApi, IAppServerSkillApi } from '../../../../../platform/a
 import { IExtensionManagementService } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { ILanguageServerService } from '../../../../../platform/language/common/languageServerService.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
-import {
-	createTestFileService,
-	createTestEditorServices,
-	createTestTextFileService,
-} from '../../../../test/common/testEditorServices.js';
+import { createTestFileService, createTestEditorServices, createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
 import { suiteTeardown, test } from 'mocha';
 import { installEditorTestDom } from '../../../../../editor/test/browser/editorTestGlobals.js';
@@ -102,12 +86,7 @@ import { IChatSessionNavigationService } from '../../../../services/chat/common/
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { DiskFileSystemProvider } from '../../../../../platform/files/node/diskFileSystemProvider.js';
-import {
-	IAccessibleViewService,
-	AccessibleViewType,
-	AccessibleViewProviderId,
-	AccessibilityVerbositySettingId,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibleViewType, AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -120,17 +99,20 @@ import { join } from 'node:path';
 const keybindingProfile = new KeybindingTestServices();
 suiteTeardown(() => keybindingProfile.dispose());
 
-const browserEnvironment = new JSDOM('<!doctype html><body></body>', { pretendToBeVisual: true });
-Object.defineProperty(browserEnvironment.window.Element.prototype, 'scrollTo', { configurable: true, value() {} });
+const browserEnvironment = new JSDOM('<!doctype html><body></body>', {
+	pretendToBeVisual: true,
+});
+Object.defineProperty(browserEnvironment.window.Element.prototype, 'scrollTo', {
+	configurable: true,
+	value() {},
+});
 Object.defineProperty(browserEnvironment.window.Element.prototype, 'scrollIntoView', {
 	configurable: true,
 	value() {},
 });
-const installedGlobals = installEditorTestDom(
-	browserEnvironment,
-	['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent'],
-	{ navigator: browserEnvironment.window.navigator },
-);
+const installedGlobals = installEditorTestDom(browserEnvironment, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent'], {
+	navigator: browserEnvironment.window.navigator,
+});
 suiteTeardown(() => {
 	installedGlobals.dispose();
 	browserEnvironment.window.close();
@@ -139,23 +121,16 @@ suiteTeardown(() => {
 const { h } = await import('../../../../../base/browser/dom.js');
 const { Emitter, Event } = await import('../../../../../base/common/event.js');
 const { DisposableStore, toDisposable } = await import('../../../../../base/common/lifecycle.js');
-const {
-	ConfigurationRegistry,
-	ConfigurationScope,
-	Extensions: ConfigurationExtensions,
-} = await import('../../../../../platform/configuration/common/configurationRegistry.js');
-const { IClipboardService: ClipboardServiceId } =
-	await import('../../../../../platform/clipboard/common/clipboardService.js');
-const { IConfigurationService: ConfigurationServiceId } =
-	await import('../../../../../platform/configuration/common/configuration.js');
+const { ConfigurationRegistry, ConfigurationScope, Extensions: ConfigurationExtensions } = await import('../../../../../platform/configuration/common/configurationRegistry.js');
+const { IClipboardService: ClipboardServiceId } = await import('../../../../../platform/clipboard/common/clipboardService.js');
+const { IConfigurationService: ConfigurationServiceId } = await import('../../../../../platform/configuration/common/configuration.js');
 const { IContextMenuService } = await import('../../../../../platform/contextview/browser/contextView.js');
 const { IContextViewService } = await import('../../../../../platform/contextview/browser/contextView.js');
 const { BrowserContextViewService } = await import('../../../../../platform/contextview/browser/contextViewService.js');
 const { InstantiationService } = await import('../../../../../platform/instantiation/common/instantiationService.js');
 const { IExtensionService } = await import('../../../../services/extensions/common/extensionService.js');
 const { TestExtensionService } = await import('../../../../test/common/testExtensionServices.js');
-const { ContextKeyService, IContextKeyService } =
-	await import('../../../../../platform/contextkey/browser/contextKeyService.js');
+const { ContextKeyService, IContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
 const { Registry } = await import('../../../../../platform/registry/common/platform.js');
 const { darkColorTheme } = await import('../../../../../platform/theme/common/colorTheme.js');
 const { AccessibilityConfiguration } = await import('../../../../../platform/accessibility/common/accessibility.js');
@@ -179,27 +154,18 @@ await import('../../../scm/browser/scm.contribution.js');
 const { IChatService: ChatServiceId } = await import('../../../../services/chat/common/chatService.js');
 await import('../../../../services/chat/common/modelCatalog.js');
 const { IContentSearchConfigurationService } = await import('../../../../../platform/search/common/search.js');
-const { INetworkDiagnosticsService } =
-	await import('../../../../../platform/networkDiagnostics/common/networkDiagnosticsService.js');
-const { IAgentCapabilitiesService } =
-	await import('../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js');
+const { INetworkDiagnosticsService } = await import('../../../../../platform/networkDiagnostics/common/networkDiagnosticsService.js');
+const { IAgentCapabilitiesService } = await import('../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js');
 const { ILanguageModelToolsService } = await import('../../../chat/common/tools/languageModelToolsService.js');
 const { ITraceSettingsService } = await import('../../../../../platform/trace/common/traceSettingsService.js');
 const { IFileDialogService } = await import('../../../../../platform/dialogs/common/dialogs.js');
-const { IAppServerRemoteAgentService: RemoteAgentServiceId } =
-	await import('../../../../services/remote/common/appServerRemoteAgentService.js');
-const { IWorkspaceTrustApi: WorkspaceTrustApiId } =
-	await import('../../../../../platform/workspace/common/workspaceTrust.js');
-const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(
-	ConfigurationExtensions.Configuration,
-);
+const { IAppServerRemoteAgentService: RemoteAgentServiceId } = await import('../../../../services/remote/common/appServerRemoteAgentService.js');
+const { IWorkspaceTrustApi: WorkspaceTrustApiId } = await import('../../../../../platform/workspace/common/workspaceTrust.js');
+const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
 configurationRegistry.updateConfigurations({
 	add: [
 		...parseExtensionManifest(
-			JSON.stringify(manifest).replace(
-				/%([^%]+)%/g,
-				(match, key) => (gitMessages as Record<string, string>)[key] ?? match,
-			),
+			JSON.stringify(manifest).replace(/%([^%]+)%/g, (match, key) => (gitMessages as Record<string, string>)[key] ?? match),
 			{ id: 'ash.git', name: 'git', publisher: 'ash', version: '0.1.0' },
 		).contributes.configuration,
 	],
@@ -222,8 +188,7 @@ const { SettingsSearchQuery } = await import('../../browser/settingsSearch.js');
 await import('../../browser/preferencesActions.js');
 await import('../../../../browser/actions/layoutActions.js');
 await import('../../../extensions/browser/extensions.contribution.js');
-const { createSettingsLayout, settingsRootNodes, SettingsCategories, SettingsLayout } =
-	await import('../../browser/settingsLayout.js');
+const { createSettingsLayout, settingsRootNodes, SettingsCategories, SettingsLayout } = await import('../../browser/settingsLayout.js');
 
 // The canonical module above captures English. Chinese metadata tests need the
 // same NLS-before-import order used by a fresh production window.
@@ -233,34 +198,24 @@ async function loadChineseSettingsLayout(): Promise<typeof import('../../browser
 const { TOCTreeModel } = await import('../../browser/tocTree.js');
 const { SettingsEditorId } = await import('../../browser/settingsEditor.js');
 await import('../../../chat/browser/aiCustomization/aiCustomizationManagement.contribution.js');
-const { AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID } =
-	await import('../../../chat/browser/aiCustomization/aiCustomizationManagement.js');
-const { ILocalTranscriptionService, ILocalTranscriptionModelService, DictationModelState } =
-	await import('../../../../../platform/localTranscription/common/localTranscription.js');
-const { NullLocalTranscriptionService } =
-	await import('../../../../services/localTranscription/browser/localTranscriptionService.js');
+const { AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID } = await import('../../../chat/browser/aiCustomization/aiCustomizationManagement.js');
+const { ILocalTranscriptionService, ILocalTranscriptionModelService, DictationModelState } = await import('../../../../../platform/localTranscription/common/localTranscription.js');
+const { NullLocalTranscriptionService } = await import('../../../../services/localTranscription/browser/localTranscriptionService.js');
 const { ModelSettingsRenderer } = await import('../../browser/modelSettingsRenderer.js');
 const { LocalTranscriptionModelControls } = await import('../../browser/localTranscriptionModelControls.js');
 const { SettingsTree } = await import('../../browser/settingsTree.js');
 const { SettingsTreeModel } = await import('../../browser/settingsTreeModels.js');
 const { PreferencesService } = await import('../../../../services/preferences/browser/preferencesService.js');
 const { BrowserEditorService } = await import('../../../../services/editor/browser/browserEditorService.js');
-const { ILocalizationService: LocalizationServiceId } =
-	await import('../../../../services/localization/common/localizationService.js');
+const { ILocalizationService: LocalizationServiceId } = await import('../../../../services/localization/common/localizationService.js');
 const { createSettingWidget: instantiateSettingWidget } = await import('../../browser/settingsWidgets.js');
-const { DefaultSettings, SettingsEditorModel } =
-	await import('../../../../services/preferences/common/settingsModels.js');
-const { TestConfigurationService: WorkspaceService } =
-	await import('../../../../services/configuration/test/common/testServices.js');
-const { productLanguagePackCatalogs } =
-	await import('../../../../services/localization/common/localizationCatalogs.js');
-const { ILanguagePackService: LanguagePackServiceId } =
-	await import('../../../../../platform/languagePacks/common/languagePacks.js');
-const { ILocaleService, LocalizationConfiguration } =
-	await import('../../../../services/localization/common/locale.js');
+const { DefaultSettings, SettingsEditorModel } = await import('../../../../services/preferences/common/settingsModels.js');
+const { TestConfigurationService: WorkspaceService } = await import('../../../../services/configuration/test/common/testServices.js');
+const { productLanguagePackCatalogs } = await import('../../../../services/localization/common/localizationCatalogs.js');
+const { ILanguagePackService: LanguagePackServiceId } = await import('../../../../../platform/languagePacks/common/languagePacks.js');
+const { ILocaleService, LocalizationConfiguration } = await import('../../../../services/localization/common/locale.js');
 const { WorkbenchLocaleService } = await import('../../../../services/localization/browser/localeService.js');
-const { WorkbenchLocalizationService } =
-	await import('../../../../services/localization/browser/workbenchLocalizationService.js');
+const { WorkbenchLocalizationService } = await import('../../../../services/localization/browser/workbenchLocalizationService.js');
 const { StartupEditorConfigurationKey } = await import('../../../welcomeGettingStarted/browser/startupPage.js');
 await import('../../../welcomeGettingStarted/browser/gettingStarted.contribution.js');
 await import('../../../../browser/workbench.contribution.js');
@@ -307,8 +262,7 @@ test('Sandbox diagnostics render Chinese readiness and preserve backend reasons 
 		{ onDidChangeTrust: Event.None } as IWorkspaceTrustApi,
 		{
 			whenReady: Promise.resolve(),
-			translate: (bundle, key, fallback, parameters) =>
-				formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
+			translate: (bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
 		},
 	);
 	panel.setView('sandbox');
@@ -380,9 +334,7 @@ test('Sandbox diagnostics refresh after runtime installation and stop reading wh
 
 test('developer command opens a grouped read-only tool snapshot outside ordinary settings', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	using reset = toDisposable(resetNlsResolver);
 	using tools = createTestLanguageModelToolsService({
 		isAvailable: true,
@@ -436,12 +388,9 @@ test('Chinese indexed search settings explain engine scope in the control and ac
 	using resources = new DisposableStore();
 	const { SearchSettingsModel } = await import('../../../search/browser/searchSettingsModel.js');
 	const { SettingsSectionRenderer } = await import('../../browser/settingsSectionRenderer.js');
-	const { ContextKeyService, IContextKeyService } =
-		await import('../../../../../platform/contextkey/browser/contextKeyService.js');
+	const { ContextKeyService, IContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	resources.add(toDisposable(resetNlsResolver));
 	const root = h(browserEnvironment.window.document, 'div');
 	browserEnvironment.window.document.body.append(root);
@@ -611,7 +560,11 @@ test('DefaultSettings projects only Configuration Registry metadata', () => {
 			if (typeof value !== 'boolean') throw new TypeError('Expected a boolean');
 			return value;
 		},
-		setting: { valueType: 'boolean', title: 'Test setting', description: 'A registered test setting.' },
+		setting: {
+			valueType: 'boolean',
+			title: 'Test setting',
+			description: 'A registered test setting.',
+		},
 	});
 	registry.registerConfiguration({
 		key: 'internal.test.state',
@@ -670,9 +623,7 @@ test('Sessions resolves its registered appearance metadata in the active languag
 	const { SESSIONS_LAYOUT_SCOPE_SETTING } = await import('../../../../../sessions/common/chatLayout.js');
 	await import('../../../../../sessions/common/sessionConfig.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	using reset = toDisposable(resetNlsResolver);
 	const defaults = new DefaultSettings();
 	assert.equal(defaults.get(SessionsConfiguration.layoutStyle).title, '布局样式');
@@ -752,11 +703,7 @@ test('Extension settings use catalog identities and standard schemas without a p
 		['editor.sample.enabled'],
 	);
 	assert.equal(extension.descriptor.label, '示例扩展');
-	assert.equal(
-		findSettingCategory(layout, 'editor.sample.enabled'),
-		extension.id,
-		'extension ownership wins over product key patterns',
-	);
+	assert.equal(findSettingCategory(layout, 'editor.sample.enabled'), extension.id, 'extension ownership wins over product key patterns');
 	assert.equal(defaults.get('sample.text').description, 'Sample text');
 	assert.deepEqual(defaults.get('editor.sample.enabled').tags, ['preview']);
 	assert.equal(registry.getConfiguration('sample.nested')?.source?.id, 'test.sample');
@@ -771,13 +718,8 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	const registry = new ConfigurationRegistry();
 	for (const name of ['git', 'markdown-language-features', 'media-preview']) {
 		const manifest = JSON.parse(await readFile(`extensions/${name}/package.json`, 'utf8'));
-		const messages = JSON.parse(await readFile(`extensions/${name}/package.nls.zh-CN.json`, 'utf8')) as Record<
-			string,
-			string
-		>;
-		const localized = JSON.stringify(manifest, (_key, value) =>
-			typeof value === 'string' ? value.replace(/%([^%]+)%/g, (match, key) => messages[key] ?? match) : value,
-		);
+		const messages = JSON.parse(await readFile(`extensions/${name}/package.nls.zh-CN.json`, 'utf8')) as Record<string, string>;
+		const localized = JSON.stringify(manifest, (_key, value) => (typeof value === 'string' ? value.replace(/%([^%]+)%/g, (match, key) => messages[key] ?? match) : value));
 		registry.updateConfigurations({
 			add: [
 				...parseExtensionManifest(localized, {
@@ -793,9 +735,7 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	const defaults = new DefaultSettings(registry);
 	const layout = createSettingsLayout(defaults.all);
 	assert.deepEqual(
-		layout
-			.filter(category => category.id.startsWith('extension.'))
-			.map(category => [category.id, category.groups.flatMap(group => group.settings).length]),
+		layout.filter(category => category.id.startsWith('extension.')).map(category => [category.id, category.groups.flatMap(group => group.settings).length]),
 		[
 			['extension.ash.git', 103],
 			['extension.ash.markdown-language-features', 13],
@@ -806,12 +746,7 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	assert.equal(defaults.get('markdown.validate.enabled').title, '检查链接');
 	const severity = defaults.get('markdown.validate.fragmentLinks.enabled');
 	assert.equal(severity.valueType, 'select');
-	assert.deepEqual(
-		severity.configuration.setting?.valueType === 'select'
-			? severity.configuration.setting.options.map(option => option.label)
-			: [],
-		['忽略', '警告', '错误'],
-	);
+	assert.deepEqual(severity.configuration.setting?.valueType === 'select' ? severity.configuration.setting.options.map(option => option.label) : [], ['忽略', '警告', '错误']);
 	using configuration = new WorkspaceService({ registry });
 	await configuration.updateValue('mediaPreview.video.loop', true);
 	await configuration.updateValue('markdown.validate.enabled', false);
@@ -834,18 +769,11 @@ for (const locale of ['en', 'zh-CN']) {
 	test(`Rust numeric settings save numbers, automatic values and named modes directly (${locale})`, async () => {
 		using resources = new DisposableStore();
 		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-		if (locale === 'zh-CN')
-			setNlsResolver((bundle, key, fallback, parameters) =>
-				formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-			);
+		if (locale === 'zh-CN') setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		resources.add(toDisposable(resetNlsResolver));
 		const manifest = JSON.parse(await readFile('extensions/rust/package.json', 'utf8'));
-		const messages = JSON.parse(
-			await readFile(`extensions/rust/package.nls${locale === 'en' ? '' : '.zh-CN'}.json`, 'utf8'),
-		);
-		const localized = JSON.stringify(manifest, (_key, value) =>
-			typeof value === 'string' ? value.replace(/%([^%]+)%/g, (match, key) => messages[key] ?? match) : value,
-		);
+		const messages = JSON.parse(await readFile(`extensions/rust/package.nls${locale === 'en' ? '' : '.zh-CN'}.json`, 'utf8'));
+		const localized = JSON.stringify(manifest, (_key, value) => (typeof value === 'string' ? value.replace(/%([^%]+)%/g, (match, key) => messages[key] ?? match) : value));
 		const registry = new ConfigurationRegistry();
 		registry.updateConfigurations({
 			add: [
@@ -859,13 +787,7 @@ for (const locale of ['en', 'zh-CN']) {
 			remove: [],
 		});
 		const defaults = new DefaultSettings(registry);
-		for (const key of [
-			'lru.capacity',
-			'numThreads',
-			'cachePriming.numThreads',
-			'procMacro.processes',
-			'completion.limit',
-		]) {
+		for (const key of ['lru.capacity', 'numThreads', 'cachePriming.numThreads', 'procMacro.processes', 'completion.limit']) {
 			assert.equal(defaults.get(`rust-analyzer.${key}`).valueType, 'numberWithOptions', key);
 		}
 		const configuration = resources.add(new WorkspaceService({ registry }));
@@ -929,11 +851,7 @@ for (const locale of ['en', 'zh-CN']) {
 		assert.ok(errors[0].includes(locale === 'zh-CN' ? '整数' : 'whole number'));
 		await change(cache, '');
 		assert.equal(configuration.getValue('rust-analyzer.lru.capacity'), null);
-		assert.equal(
-			JSON.parse((await configuration.read()).source)['rust-analyzer.lru.capacity'],
-			undefined,
-			'automatic removes a redundant user override',
-		);
+		assert.equal(JSON.parse((await configuration.read()).source)['rust-analyzer.lru.capacity'], undefined, 'automatic removes a redundant user override');
 		await change(cache, '32');
 		widgets[0].domNode.querySelector<HTMLButtonElement>('.ash-setting-item-actions-trigger')!.click();
 		await actions.find(action => action.id === 'settings.resetSetting')!.run();
@@ -975,9 +893,7 @@ test('File exclusion Settings show defaults, persist disabled rules and reset th
 			contextViewProvider: resources.add(new BrowserContextViewService(root)),
 			contextMenuProvider: {
 				showContextMenu: delegate => {
-					menuActions = delegate
-						.getActions()
-						.filter((action): action is IAction => !(action instanceof Separator));
+					menuActions = delegate.getActions().filter((action): action is IAction => !(action instanceof Separator));
 				},
 			},
 			clipboardService: {
@@ -998,13 +914,9 @@ test('File exclusion Settings show defaults, persist disabled rules and reset th
 		}),
 	);
 	root.append(widget.domNode);
-	const displayedRules = () =>
-		[...widget.domNode.querySelectorAll<HTMLElement>('.ash-pattern-row')].map(row => row.dataset.pattern);
+	const displayedRules = () => [...widget.domNode.querySelectorAll<HTMLElement>('.ash-pattern-row')].map(row => row.dataset.pattern);
 	const defaults = ['**/.git', '**/.svn', '**/.hg', '**/.jj', '**/.DS_Store', '**/Thumbs.db'];
-	const ruleRow = (pattern: string) =>
-		[...widget.domNode.querySelectorAll<HTMLElement>('.ash-pattern-row')].find(
-			row => row.dataset.pattern === pattern,
-		)!;
+	const ruleRow = (pattern: string) => [...widget.domNode.querySelectorAll<HTMLElement>('.ash-pattern-row')].find(row => row.dataset.pattern === pattern)!;
 	const save = async (action: () => void): Promise<void> => {
 		let resolveSaved!: () => void;
 		const saved = new Promise<void>(resolve => {
@@ -1025,11 +937,7 @@ test('File exclusion Settings show defaults, persist disabled rules and reset th
 		displayedRules(),
 		defaults.filter(pattern => pattern !== '**/.DS_Store'),
 	);
-	assert.deepEqual(
-		JSON.parse((await configuration.read()).source)['files.exclude'],
-		{ '**/.DS_Store': false },
-		'only the explicit override is persisted',
-	);
+	assert.deepEqual(JSON.parse((await configuration.read()).source)['files.exclude'], { '**/.DS_Store': false }, 'only the explicit override is persisted');
 	assert.equal(widget.domNode.classList.contains('is-configured'), true);
 	using reopened = new WorkspaceService({ source: (await configuration.read()).source });
 	assert.equal(reopened.getValue<Record<string, boolean>>('files.exclude')['**/.DS_Store'], false);
@@ -1038,17 +946,9 @@ test('File exclusion Settings show defaults, persist disabled rules and reset th
 	add.click();
 	let inputs = widget.domNode.querySelectorAll<HTMLInputElement>('.ash-pattern-editor input');
 	inputs[0]!.value = '**/.DS_Store';
-	await save(() =>
-		inputs[0]!.dispatchEvent(
-			new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
-		),
-	);
+	await save(() => inputs[0]!.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
 	assert.deepEqual(displayedRules(), defaults);
-	assert.equal(
-		configuration.inspect('files.exclude').userLocalValue,
-		undefined,
-		'adding a default restores it without duplicating its value',
-	);
+	assert.equal(configuration.inspect('files.exclude').userLocalValue, undefined, 'adding a default restores it without duplicating its value');
 	add.click();
 	inputs = widget.domNode.querySelectorAll<HTMLInputElement>('.ash-pattern-editor input');
 	inputs[0]!.value = '**/*.js';
@@ -1059,23 +959,11 @@ test('File exclusion Settings show defaults, persist disabled rules and reset th
 	ruleRow('**/*.js').querySelector<HTMLButtonElement>('button')!.click();
 	inputs = widget.domNode.querySelectorAll<HTMLInputElement>('.ash-pattern-editor input');
 	inputs[0]!.value = '**/*.cjs';
-	await save(() =>
-		inputs[1]!.dispatchEvent(
-			new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
-		),
-	);
+	await save(() => inputs[1]!.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
 	assert.deepEqual(configuration.inspect('files.exclude').userLocalValue, { '**/*.cjs': { when: '$(basename).ts' } });
 	assert.equal(browserEnvironment.window.document.activeElement, ruleRow('**/*.cjs'));
-	await save(() =>
-		ruleRow('**/*.cjs').dispatchEvent(
-			new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Delete', bubbles: true }),
-		),
-	);
-	assert.equal(
-		configuration.inspect('files.exclude').userLocalValue,
-		undefined,
-		'deleting a custom rule removes its key',
-	);
+	await save(() => ruleRow('**/*.cjs').dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Delete', bubbles: true })));
+	assert.equal(configuration.inspect('files.exclude').userLocalValue, undefined, 'deleting a custom rule removes its key');
 	add.click();
 	inputs = widget.domNode.querySelectorAll<HTMLInputElement>('.ash-pattern-editor input');
 	inputs[0]!.value = '**/.git';
@@ -1085,11 +973,7 @@ test('File exclusion Settings show defaults, persist disabled rules and reset th
 	inputs[0]!.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(widget.domNode.querySelector('.ash-pattern-editor'), null);
 	assert.equal(browserEnvironment.window.document.activeElement, add);
-	assert.equal(
-		configuration.inspect('files.exclude').userLocalValue,
-		undefined,
-		'cancelling a draft does not save it',
-	);
+	assert.equal(configuration.inspect('files.exclude').userLocalValue, undefined, 'cancelling a draft does not save it');
 	const updateValue = configuration.updateValue.bind(configuration);
 	configuration.updateValue = async () => {
 		throw new Error('Settings disk unavailable');
@@ -1110,11 +994,7 @@ test('File exclusion Settings show defaults, persist disabled rules and reset th
 		resolveReset = resolve;
 	});
 	using resetListener = configuration.onDidChangeConfiguration(event => {
-		if (
-			event.affectsConfiguration('files.exclude') &&
-			configuration.inspect('files.exclude').userLocalValue === undefined
-		)
-			resolveReset();
+		if (event.affectsConfiguration('files.exclude') && configuration.inspect('files.exclude').userLocalValue === undefined) resolveReset();
 	});
 	widget.domNode.querySelector<HTMLButtonElement>('.ash-setting-item-actions-trigger')!.click();
 	await menuActions.find(action => action.id === 'settings.resetSetting')!.run();
@@ -1167,9 +1047,7 @@ test('URL rule suggestions follow extension registration without changing saved 
 	updateContributedOpeners(['extension:test:viewer'], ['Test website viewer']);
 	opener.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	assert.equal(root.querySelector('[role="option"]')?.textContent, 'extension:test:viewerTest website viewer');
-	opener.dispatchEvent(
-		new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }),
-	);
+	opener.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
 	assert.equal(root.querySelector('[role="option"]')?.getAttribute('aria-selected'), 'true');
 	updateContributedOpeners([], []);
 	opener.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
@@ -1246,20 +1124,13 @@ test('Configured markers follow explicit local user overrides and expose one acc
 			assert.equal(widget.domNode.getAttribute('aria-describedby'), configured ? indicator.id : null);
 			assert.equal(indicator.textContent, 'Configured in local user settings.');
 			assert.equal(indicator.hidden, !configured);
-			assert.equal(
-				widget.domNode.querySelector('input')?.hasAttribute('aria-describedby') ?? false,
-				false,
-				'controls do not repeat the row status',
-			);
+			assert.equal(widget.domNode.querySelector('input')?.hasAttribute('aria-describedby') ?? false, false, 'controls do not repeat the row status');
 		}
 	};
 	assertStatus(false);
 	await configuration.write('{ "status.flag": true, "status.object": {} }');
 	assertStatus(true);
-	assert.notEqual(
-		widgets[0]!.domNode.getAttribute('aria-describedby'),
-		widgets[1]!.domNode.getAttribute('aria-describedby'),
-	);
+	assert.notEqual(widgets[0]!.domNode.getAttribute('aria-describedby'), widgets[1]!.domNode.getAttribute('aria-describedby'));
 	await configuration.write('{ "[typescript]": { "status.flag": false } }');
 	assertStatus(false);
 	const first = new DefaultSettings(registry).get('status.flag');
@@ -1362,9 +1233,7 @@ test('Copy Setting as JSON reads the latest local user values and preserves fals
 	};
 	await copy('copy.boolean');
 	// A menu can stay open while another window saves a new value.
-	await configuration.write(
-		'{ "copy.boolean": false, "copy.number": 0, "copy.text": "", "[typescript]": { "copy.boolean": true } }',
-	);
+	await configuration.write('{ "copy.boolean": false, "copy.number": 0, "copy.text": "", "[typescript]": { "copy.boolean": true } }');
 	await actions.find(action => action.id === 'settings.copySettingAsJSON')!.run();
 	await copy('copy.number');
 	await copy('copy.text');
@@ -1393,8 +1262,7 @@ test('Copy Setting as JSON reads the latest local user values and preserves fals
 test('Copy Setting as JSON uses the current window default and reports clipboard failures in Chinese', async () => {
 	using resources = new DisposableStore();
 	const { testConfigurationService } = await import('../../../../services/configuration/test/common/testServices.js');
-	const { ConfigurationService: SessionsConfigurationService } =
-		await import('../../../../../sessions/services/configuration/browser/configurationService.js');
+	const { ConfigurationService: SessionsConfigurationService } = await import('../../../../../sessions/services/configuration/browser/configurationService.js');
 	const ConfigurationService = testConfigurationService(SessionsConfigurationService);
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({
@@ -1409,9 +1277,7 @@ test('Copy Setting as JSON uses the current window default and reports clipboard
 	browserEnvironment.window.document.body.replaceChildren(root);
 	resources.add(toDisposable(() => root.remove()));
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	resources.add(toDisposable(resetNlsResolver));
 	const contextView = resources.add(new BrowserContextViewService(root));
 	let actions: readonly IAction[] = [];
@@ -1468,16 +1334,9 @@ test('Copy Setting as JSON uses the current window default and reports clipboard
 	await action.run();
 	assert.deepEqual(await reported.p, { message: '无法执行设置操作。', isError: true });
 	assert.equal((await configuration.read()).source, '{}\n');
-	assert.equal(
-		widget.domNode.querySelector<HTMLElement>('.ash-settings-configured-marker')!.hidden,
-		true,
-		'the Sessions default does not count as a user override',
-	);
+	assert.equal(widget.domNode.querySelector<HTMLElement>('.ash-settings-configured-marker')!.hidden, true, 'the Sessions default does not count as a user override');
 	await configuration.updateValue('copy.window', false);
-	assert.equal(
-		widget.domNode.querySelector('.ash-settings-configured-description')!.textContent,
-		'已在本地用户设置中配置。',
-	);
+	assert.equal(widget.domNode.querySelector('.ash-settings-configured-description')!.textContent, '已在本地用户设置中配置。');
 	await configuration.updateValue('copy.window', undefined);
 	assert.equal(widget.domNode.querySelector<HTMLElement>('.ash-settings-configured-marker')!.hidden, true);
 });
@@ -1486,9 +1345,7 @@ test('Chinese setting actions, search filters and pending saves expose translate
 	using resources = new DisposableStore();
 	const { SettingsSearchWidget } = await import('../../browser/settingsWidgets.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	resources.add(toDisposable(resetNlsResolver));
 	const root = h(browserEnvironment.window.document, 'div');
 	browserEnvironment.window.document.body.replaceChildren(root);
@@ -1505,8 +1362,7 @@ test('Chinese setting actions, search filters and pending saves expose translate
 	const pending = new DeferredPromise<void>();
 	let current = 1;
 	let status = '';
-	const registered = configurationRegistry.getConfiguration('editor.fontSize') as
-		IRegisteredConfiguration<number> | undefined;
+	const registered = configurationRegistry.getConfiguration('editor.fontSize') as IRegisteredConfiguration<number> | undefined;
 	assert.ok(registered);
 	const widget = resources.add(
 		createSettingWidget(
@@ -1559,11 +1415,7 @@ test('Chinese setting actions, search filters and pending saves expose translate
 		),
 	);
 	root.append(widget.domNode);
-	assert.equal(
-		widget.domNode.querySelector<HTMLElement>('.ash-settings-configured-marker')!.hidden,
-		true,
-		'domain bindings do not expose local user configuration markers',
-	);
+	assert.equal(widget.domNode.querySelector<HTMLElement>('.ash-settings-configured-marker')!.hidden, true, 'domain bindings do not expose local user configuration markers');
 	const more = widget.domNode.querySelector<HTMLButtonElement>('.ash-setting-item-actions-trigger')!;
 	assert.equal(more.getAttribute('aria-label'), '字号 的更多操作');
 	more.click();
@@ -1578,16 +1430,10 @@ test('Chinese setting actions, search filters and pending saves expose translate
 	input.value = '2';
 	input.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
 	const indicator = widget.domNode.querySelector<HTMLElement>('.ash-settings-indicators')!;
-	assert.deepEqual(
-		[indicator.hidden, indicator.textContent, indicator.getAttribute('aria-label'), input.disabled],
-		[false, '正在保存…', '正在保存设置', true],
-	);
+	assert.deepEqual([indicator.hidden, indicator.textContent, indicator.getAttribute('aria-label'), input.disabled], [false, '正在保存…', '正在保存设置', true]);
 	await pending.complete();
 	await nextTurn();
-	assert.deepEqual(
-		[indicator.hidden, indicator.textContent, indicator.getAttribute('aria-label'), input.disabled],
-		[true, '', '', false],
-	);
+	assert.deepEqual([indicator.hidden, indicator.textContent, indicator.getAttribute('aria-label'), input.disabled], [true, '', '', false]);
 	assert.equal(widget.domNode.classList.contains('is-configured'), false);
 	more.click();
 	await actions.find(action => action.id === 'settings.resetSetting')!.run();
@@ -1596,9 +1442,7 @@ test('Chinese setting actions, search filters and pending saves expose translate
 	input.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
 	assert.equal(status, '字号 必须介于 1 和 10 之间。');
 
-	const search = resources.add(
-		new SettingsSearchWidget(root, { ariaControls: 'settings-results', contextMenuProvider, localizationService }),
-	);
+	const search = resources.add(new SettingsSearchWidget(root, { ariaControls: 'settings-results', contextMenuProvider, localizationService }));
 	const filter = search.domNode.querySelector<HTMLButtonElement>('.ash-settings-search-filter')!;
 	assert.equal(filter.getAttribute('aria-label'), '筛选设置');
 	search.value = '@id:editor.fontSize';
@@ -1644,9 +1488,7 @@ test('Workspace permission banner registration participates in the complete Sett
 test('Activity Bar badges expose a translated profile setting with strict boolean validation', () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
-		setNlsResolver((bundle, key, fallback, parameters) =>
-			formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-		);
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		const defaults = new DefaultSettings();
 		const setting = defaults.get(WorkbenchConfiguration.activityBarBadges);
 		assert.equal(setting.title, '活动栏徽章');
@@ -1675,9 +1517,7 @@ test('view header action visibility exposes a window setting with translated met
 	assert.throws(() => definition.parse('true'), /true or false/);
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
-		setNlsResolver((bundle, key, fallback, parameters) =>
-			formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-		);
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		const setting = new DefaultSettings().get(key);
 		assert.equal(setting.valueType, 'boolean');
 		assert.equal(setting.title, '视图：始终显示标题操作');
@@ -1692,9 +1532,7 @@ test('view header action visibility exposes a window setting with translated met
 test('empty-editor tips expose translated settings metadata', () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
-		setNlsResolver((bundle, key, fallback, parameters) =>
-			formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-		);
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		const defaults = new DefaultSettings();
 		const tips = defaults.get('workbench.tips.enabled');
 		assert.equal(tips.title, '空编辑器提示');
@@ -1708,9 +1546,7 @@ test('Settings Editor belongs to Workbench and localizes the shared default edit
 	const { SettingsNavigation } = await import('../../browser/settingsLayout.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
-		setNlsResolver((bundle, key, fallback, parameters) =>
-			formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-		);
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		const defaults = new DefaultSettings();
 		const setting = defaults.get(WorkbenchConfiguration.settingsEditor);
 		assert.equal(setting.title, '默认设置编辑器');
@@ -1729,21 +1565,12 @@ test('Settings Editor belongs to Workbench and localizes the shared default edit
 		const category = layout.find(category => category.id === 'settings-editor')!;
 		assert.equal(category.descriptor.label, 'Settings Editor');
 		assert.equal(chinese.bundles['ash.settings']?.['categories.settings-editor.label'], '设置编辑器');
-		assert.ok(
-			SettingsNavigation.find(group => group.id === 'workbench')?.categories.some(
-				item => item.id === category.id,
-			),
-		);
+		assert.ok(SettingsNavigation.find(group => group.id === 'workbench')?.categories.some(item => item.id === category.id));
 		assert.deepEqual(
 			category.groups.flatMap(group => group.settings.map(item => item.id)),
 			[setting.id],
 		);
-		assert.equal(
-			layout
-				.flatMap(category => category.groups.flatMap(group => group.settings))
-				.filter(item => item.id === setting.id).length,
-			1,
-		);
+		assert.equal(layout.flatMap(category => category.groups.flatMap(group => group.settings)).filter(item => item.id === setting.id).length, 1);
 	} finally {
 		resetNlsResolver();
 	}
@@ -1755,36 +1582,17 @@ test('Files belongs to Editor and owns file behavior exactly once', async () => 
 	const layout = createSettingsLayout(defaults.all);
 	const files = layout.find(category => category.id === 'editor-files')!;
 	assert.equal(files.descriptor.label, 'Files');
-	assert.ok(
-		SettingsNavigation.find(group => group.id === 'editor')?.categories.some(category => category.id === files.id),
-	);
-	const opening = [
-		'workbench.editor.openErrorDialog',
-		'workbench.editor.defaultBinaryEditor',
-		'workbench.editorLargeFileConfirmation',
-		EditorSelectionConfiguration.defaultNewDocumentEditor,
-	];
+	assert.ok(SettingsNavigation.find(group => group.id === 'editor')?.categories.some(category => category.id === files.id));
+	const opening = ['workbench.editor.openErrorDialog', 'workbench.editor.defaultBinaryEditor', 'workbench.editorLargeFileConfirmation', EditorSelectionConfiguration.defaultNewDocumentEditor];
 	const expected = defaults.all.filter(
 		setting =>
 			!setting.configuration.source &&
-			(setting.id.startsWith('files.') ||
-				setting.id.startsWith('workbench.localHistory.') ||
-				setting.id === 'debug.saveBeforeStart' ||
-				opening.includes(setting.id)),
+			(setting.id.startsWith('files.') || setting.id.startsWith('workbench.localHistory.') || setting.id === 'debug.saveBeforeStart' || opening.includes(setting.id)),
 	);
-	assert.deepEqual(
-		new Set(files.groups.flatMap(group => group.settings.map(setting => setting.id))),
-		new Set(expected.map(setting => setting.id)),
-	);
+	assert.deepEqual(new Set(files.groups.flatMap(group => group.settings.map(setting => setting.id))), new Set(expected.map(setting => setting.id)));
 	for (const setting of expected) {
 		assert.equal(findSettingCategory(layout, setting.id), 'editor-files', setting.id);
-		assert.equal(
-			layout
-				.flatMap(category => category.groups.flatMap(group => group.settings))
-				.filter(item => item.id === setting.id).length,
-			1,
-			setting.id,
-		);
+		assert.equal(layout.flatMap(category => category.groups.flatMap(group => group.settings)).filter(item => item.id === setting.id).length, 1, setting.id);
 	}
 	assert.equal(findSettingCategory(layout, 'workbench.editor.showTabs'), 'editor-opening');
 	assert.equal(findSettingCategory(layout, 'explorer.autoRevealExclude'), 'explorer');
@@ -1794,9 +1602,7 @@ test('Files belongs to Editor and owns file behavior exactly once', async () => 
 test('file opening preferences have a translated group and correctly typed controls', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
-		setNlsResolver((bundle, key, fallback, parameters) =>
-			formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-		);
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		const defaults = new DefaultSettings();
 		const layout = await loadChineseSettingsLayout();
 		const category = layout.createSettingsLayout(defaults.all).find(category => category.id === 'editor-files');
@@ -1804,11 +1610,7 @@ test('file opening preferences have a translated group and correctly typed contr
 		const group = category?.groups.find(group => group.id === 'file-opening');
 		assert.equal(group?.title, '文件打开');
 		assert.equal(group?.settings.length, 4);
-		assert.equal(
-			group?.settings.find(setting => setting.id === EditorSelectionConfiguration.defaultNewDocumentEditor)
-				?.valueType,
-			'select',
-		);
+		assert.equal(group?.settings.find(setting => setting.id === EditorSelectionConfiguration.defaultNewDocumentEditor)?.valueType, 'select');
 		assert.deepEqual(
 			group?.settings
 				.filter(setting => setting.id !== EditorSelectionConfiguration.defaultNewDocumentEditor)
@@ -1822,10 +1624,7 @@ test('file opening preferences have a translated group and correctly typed contr
 		const binary = defaults.get('workbench.editor.defaultBinaryEditor');
 		assert.equal(binary.valueType === 'select' && binary.options[0]?.label, '默认');
 		assert.match(defaults.get('workbench.editor.openErrorDialog').description, /自动恢复文件时不显示错误弹窗/);
-		assert.throws(
-			() => configurationRegistry.getConfiguration('workbench.editor.openErrorDialog')?.parse('false'),
-			/文件打开错误弹窗必须为 true 或 false/,
-		);
+		assert.throws(() => configurationRegistry.getConfiguration('workbench.editor.openErrorDialog')?.parse('false'), /文件打开错误弹窗必须为 true 或 false/);
 	} finally {
 		resetNlsResolver();
 	}
@@ -1834,17 +1633,13 @@ test('file opening preferences have a translated group and correctly typed contr
 test('font preferences show translated labels and the actual platform defaults', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
-		setNlsResolver((bundle, key, fallback, parameters) =>
-			formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-		);
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		const defaults = new DefaultSettings();
 		const layout = await loadChineseSettingsLayout();
 		const fonts = layout.createSettingsLayout(defaults.all).find(category => category.id === 'editor-fonts')!;
 		assert.equal(fonts.groups[0]?.title, '字体');
 		assert.deepEqual(
-			fonts.groups.flatMap(group =>
-				group.settings.map(setting => ({ id: setting.id, title: setting.title, type: setting.valueType })),
-			),
+			fonts.groups.flatMap(group => group.settings.map(setting => ({ id: setting.id, title: setting.title, type: setting.valueType }))),
 			[
 				{ id: 'editor.fontFamily', title: '字体', type: 'text' },
 				{ id: 'editor.fontSize', title: '字号', type: 'number' },
@@ -1859,9 +1654,7 @@ test('font preferences show translated labels and the actual platform defaults',
 		const input = layout.createSettingsLayout(defaults.all).find(category => category.id === 'chat-input')!;
 		assert.equal(input.groups[0]?.title, '消息输入');
 		assert.deepEqual(
-			input.groups.flatMap(group =>
-				group.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
-			),
+			input.groups.flatMap(group => group.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue])),
 			[
 				['chat.input.fontFamily', '字体', ''],
 				['chat.input.fontSize', '字号', 13],
@@ -1873,9 +1666,7 @@ test('font preferences show translated labels and the actual platform defaults',
 		const blocks = layout.createSettingsLayout(defaults.all).find(category => category.id === 'chat-code-blocks')!;
 		assert.equal(blocks.groups[0]?.title, '代码块');
 		assert.deepEqual(
-			blocks.groups.flatMap(group =>
-				group.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
-			),
+			blocks.groups.flatMap(group => group.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue])),
 			[
 				['chat.editor.fontFamily', '字体', ''],
 				['chat.editor.fontSize', '字号', 0],
@@ -1943,25 +1734,13 @@ test('settingsLayout is the single projection from registered settings to catego
 	for (const id of ['editor.accessibilitySupport', 'workbench.reduceMotion', 'workbench.reduceTransparency']) {
 		assert.equal(findSettingCategory(layout, id), 'accessibility');
 	}
-	const accessibilitySettings = defaults.all.filter(
-		setting => !setting.configuration.source && setting.id.startsWith('accessibility.'),
-	);
+	const accessibilitySettings = defaults.all.filter(setting => !setting.configuration.source && setting.id.startsWith('accessibility.'));
 	assert.ok(accessibilitySettings.some(setting => setting.id.startsWith('accessibility.signals.')));
 	assert.ok(accessibilitySettings.some(setting => setting.id.startsWith('accessibility.verbosity.')));
 	assert.ok(accessibilitySettings.some(setting => setting.id === 'accessibility.signalOptions.volume'));
 	for (const setting of accessibilitySettings) {
-		assert.equal(
-			findSettingCategory(layout, setting.id),
-			setting.id.startsWith('accessibility.signal') ? 'accessibilitySignals' : 'accessibility',
-			setting.id,
-		);
-		assert.equal(
-			layout
-				.flatMap(category => category.groups.flatMap(group => group.settings))
-				.filter(item => item.id === setting.id).length,
-			1,
-			setting.id,
-		);
+		assert.equal(findSettingCategory(layout, setting.id), setting.id.startsWith('accessibility.signal') ? 'accessibilitySignals' : 'accessibility', setting.id);
+		assert.equal(layout.flatMap(category => category.groups.flatMap(group => group.settings)).filter(item => item.id === setting.id).length, 1, setting.id);
 	}
 	using tree = new SettingsTreeModel<ISetting | SettingsSectionReference>();
 	tree.setChildren(settingsRootNodes(layout));
@@ -2087,11 +1866,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.rebaseWhenSync)?.defaultValue, false);
 	assert.equal(defaults.get(GitConfiguration.rebaseWhenSync).valueType, 'boolean');
 	assert.equal(
-		defaults.all.every(setting =>
-			['boolean', 'number', 'numberWithOptions', 'select', 'text', 'stringMap', 'complex'].includes(
-				setting.valueType,
-			),
-		),
+		defaults.all.every(setting => ['boolean', 'number', 'numberWithOptions', 'select', 'text', 'stringMap', 'complex'].includes(setting.valueType)),
 		true,
 	);
 	assert.equal(defaults.get('git.ignoredRepositories').valueType, 'complex');
@@ -2116,10 +1891,7 @@ test('settingsLayout is the single projection from registered settings to catego
 			{ value: 'flat', label: 'Flat' },
 		]);
 	}
-	assert.throws(
-		() => configurationRegistry.getConfiguration(SessionsConfiguration.layoutStyle)?.parse('other'),
-		/Unknown Sessions layout style/,
-	);
+	assert.throws(() => configurationRegistry.getConfiguration(SessionsConfiguration.layoutStyle)?.parse('other'), /Unknown Sessions layout style/);
 
 	model.dispose();
 });
@@ -2127,26 +1899,20 @@ test('settingsLayout is the single projection from registered settings to catego
 test('feature settings navigation and groups capture the language initialized before module loading', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
-		setNlsResolver((bundle, key, fallback, parameters) =>
-			formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-		);
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		const layout = await loadChineseSettingsLayout();
 		const category = layout.SettingsCategories.find(category => category.id === 'terminal');
 		assert.ok(category);
 		assert.equal(category.label, '终端');
 		assert.equal(category.description, '设置终端字体、光标外观、对比度和回滚行数。');
-		const group = layout
-			.createSettingsLayout(new DefaultSettings().all)
-			.find(category => category.id === 'terminal')?.groups[0];
+		const group = layout.createSettingsLayout(new DefaultSettings().all).find(category => category.id === 'terminal')?.groups[0];
 		assert.equal(group?.title, '终端');
 		assert.equal(group?.description, category.description);
 		for (const [id, title, description] of [
 			['accessibilitySignals', '辅助功能信号', '设置工作台事件的声音提示和播报。'],
 			['accessibility', '辅助功能', '设置屏幕阅读器支持、辅助功能帮助、动态效果、透明度和链接可见性。'],
 		]) {
-			const feature = layout
-				.createSettingsLayout(new DefaultSettings().all)
-				.find(category => category.id === id)!;
+			const feature = layout.createSettingsLayout(new DefaultSettings().all).find(category => category.id === id)!;
 			assert.equal(feature.descriptor.label, title);
 			assert.equal(feature.descriptor.description, description);
 			assert.equal(feature.groups[0]?.title, title);
@@ -2162,7 +1928,12 @@ test('feature settings navigation and groups capture the language initialized be
 test('SettingsLayout validates stable configuration identities', () => {
 	const fontFamily = new DefaultSettings().get(CodeEditorConfiguration.fontFamily);
 	const layout = new SettingsLayout('editor', [
-		{ id: 'typography', title: 'Typography', description: 'Editor typography.', settings: [fontFamily] },
+		{
+			id: 'typography',
+			title: 'Typography',
+			description: 'Editor typography.',
+			settings: [fontFamily],
+		},
 	]);
 
 	assert.equal(layout.nodes[0]?.element.id, 'editor.group.typography');
@@ -2171,7 +1942,12 @@ test('SettingsLayout validates stable configuration identities', () => {
 	assert.throws(
 		() =>
 			new SettingsLayout('editor', [
-				{ id: 'typography', title: 'Typography', description: '', settings: [fontFamily, fontFamily] },
+				{
+					id: 'typography',
+					title: 'Typography',
+					description: '',
+					settings: [fontFamily, fontFamily],
+				},
 			]),
 		/Duplicate Settings setting ID/,
 	);
@@ -2202,35 +1978,30 @@ test('Settings search normalizes pasted setting syntax and matches complete meta
 		}),
 		true,
 	);
-	assert.equal(query.matches({ title: 'Font size', description: 'Configure the editor font size.' }), false);
+	assert.equal(
+		query.matches({
+			title: 'Font size',
+			description: 'Configure the editor font size.',
+		}),
+		false,
+	);
 });
 
 test('Settings ordinary search matches IDs and combines them with metadata words', () => {
 	const metadata = { id: 'editor.fontFamily', title: 'Font family', description: 'Editor typography.' };
 	assert.deepEqual(
-		['editor.fontFamily', 'EDITOR.FONT', 'editor.font typography', 'font missing'].map(query =>
-			new SettingsSearchQuery(query).matches(metadata),
-		),
+		['editor.fontFamily', 'EDITOR.FONT', 'editor.font typography', 'font missing'].map(query => new SettingsSearchQuery(query).matches(metadata)),
 		[true, true, true, false],
 	);
-	assert.equal(
-		new SettingsSearchQuery('typography').matches({ title: 'Font family', description: 'Editor typography.' }),
-		true,
-	);
+	assert.equal(new SettingsSearchQuery('typography').matches({ title: 'Font family', description: 'Editor typography.' }), true);
 });
 
 test('Settings search composes setting ID and text filters', () => {
 	const query = new SettingsSearchQuery('@id:editor.font* editor');
 
-	assert.equal(
-		query.matches({ id: 'editor.fontFamily', title: 'Font family', description: 'Editor typography.' }),
-		true,
-	);
+	assert.equal(query.matches({ id: 'editor.fontFamily', title: 'Font family', description: 'Editor typography.' }), true);
 	assert.equal(query.matches({ id: 'editor.fontSize', title: 'Font size', description: 'Editor typography.' }), true);
-	assert.equal(
-		query.matches({ id: 'workbench.fontFamily', title: 'Font family', description: 'Workbench typography.' }),
-		false,
-	);
+	assert.equal(query.matches({ id: 'workbench.fontFamily', title: 'Font family', description: 'Workbench typography.' }), false);
 });
 
 test('Settings search recognizes modified filters without treating them as text', () => {
@@ -2276,19 +2047,13 @@ test('Modified Settings derives membership from accepted local overrides through
 	const pending = new DeferredPromise<void>();
 	let blockWrites = false;
 	using api = new (class extends TestConfigurationFiles {
-		override async writeFile(
-			...args: Parameters<TestConfigurationFiles['writeFile']>
-		): ReturnType<TestConfigurationFiles['writeFile']> {
+		override async writeFile(...args: Parameters<TestConfigurationFiles['writeFile']>): ReturnType<TestConfigurationFiles['writeFile']> {
 			if (blockWrites) await pending.p;
 			return super.writeFile(...args);
 		}
 	})();
 	const configuration = resources.add(new WorkspaceService({ registry, files: api }));
-	const tree = resources.add(
-		new SettingsTreeModel<string>(
-			id => registry.getConfiguration(id) !== undefined && configuration.inspect(id).userLocalValue !== undefined,
-		),
-	);
+	const tree = resources.add(new SettingsTreeModel<string>(id => registry.getConfiguration(id) !== undefined && configuration.inspect(id).userLocalValue !== undefined));
 	tree.setChildren(
 		[...registry.getConfigurations(), 'service.status'].map(id => ({
 			element: { kind: 'item', id, title: 'Preference', description: '', value: id },
@@ -2298,15 +2063,9 @@ test('Modified Settings derives membership from accepted local overrides through
 	resources.add(configuration.onDidChangeConfiguration(() => tree.refilter()));
 	const visible = () => tree.visibleItems.map(item => item.id);
 	assert.deepEqual(visible(), []);
-	await configuration.write(
-		'{ "modified.boolean": false, "modified.number": 0, "modified.text": "", "modified.default": true, "[typescript]": { "modified.language": false } }',
-	);
+	await configuration.write('{ "modified.boolean": false, "modified.number": 0, "modified.text": "", "modified.default": true, "[typescript]": { "modified.language": false } }');
 	const configured = ['modified.boolean', 'modified.number', 'modified.text', 'modified.default'];
-	assert.deepEqual(
-		visible(),
-		configured,
-		'presence includes explicit defaults and falsy values, without language-only or service state',
-	);
+	assert.deepEqual(visible(), configured, 'presence includes explicit defaults and falsy values, without language-only or service state');
 	tree.setQuery('preference @modified @id:modified.text');
 	assert.deepEqual(visible(), ['modified.text']);
 	tree.setQuery('@modified');
@@ -2331,11 +2090,7 @@ test('Modified Settings derives membership from accepted local overrides through
 
 test('Settings table of contents follows modified result counts through reset', async () => {
 	using configuration = new WorkspaceService();
-	using tree = new SettingsTreeModel<ISetting | SettingsSectionReference>(
-		id =>
-			configurationRegistry.getConfiguration(id) !== undefined &&
-			configuration.inspect(id).userLocalValue !== undefined,
-	);
+	using tree = new SettingsTreeModel<ISetting | SettingsSectionReference>(id => configurationRegistry.getConfiguration(id) !== undefined && configuration.inspect(id).userLocalValue !== undefined);
 	tree.setChildren(settingsRootNodes(createSettingsLayout(new DefaultSettings().all)));
 	using listener = configuration.onDidChangeConfiguration(() => tree.refilter());
 	const toc = new TOCTreeModel(tree);
@@ -2379,10 +2134,7 @@ test('Settings search categories follow matched settings for text and ID filters
 test('Models Settings requires a separately registered secret storage status service', () => {
 	using services = new InstantiationService();
 	services.registerInstance(ILanguageModelsService, {} as ILanguageModelsService);
-	assert.throws(
-		() => services.createInstance(ModelSettingsRenderer, h(browserEnvironment.window.document, 'div')),
-		/Unknown service: secretStorageStatusService/,
-	);
+	assert.throws(() => services.createInstance(ModelSettingsRenderer, h(browserEnvironment.window.document, 'div')), /Unknown service: secretStorageStatusService/);
 });
 
 test('Models Settings keeps loading API connections when the model catalog changes', async () => {
@@ -2531,17 +2283,9 @@ test('Models Settings orders enabled models by catalog position and restores dis
 		removeModelProviderApiKey: async () => {},
 		listAdvisorModels: async () => [],
 		refreshModels: async () => catalog,
-		isModelVisible: model =>
-			catalog.some(
-				entry =>
-					entry.model.provider === model.provider &&
-					entry.model.model === model.model &&
-					enabled.has(entry.displayName),
-			),
+		isModelVisible: model => catalog.some(entry => entry.model.provider === model.provider && entry.model.model === model.model && enabled.has(entry.displayName)),
 		setModelVisible: async (model, visible) => {
-			const entry = catalog.find(
-				entry => entry.model.provider === model.provider && entry.model.model === model.model,
-			)!;
+			const entry = catalog.find(entry => entry.model.provider === model.provider && entry.model.model === model.model)!;
 			if (visible) {
 				enabled.add(entry.displayName);
 			} else {
@@ -2759,8 +2503,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		getBuiltInExtensionTranslationsUri: async () => undefined,
 		whenReady: Promise.resolve(),
 		catalogs,
-		getInstalledLanguages: async () =>
-			catalogs.map(catalog => ({ id: catalog.locale, label: catalog.localizedLanguageName })),
+		getInstalledLanguages: async () => catalogs.map(catalog => ({ id: catalog.locale, label: catalog.localizedLanguageName })),
 		refresh: async () => {},
 	};
 	const locale = disposables.add(createTestLocaleService(configuration, languagePacks));
@@ -2840,8 +2583,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 				apiKeyConfigured: savedKeys.length > 0,
 			},
 		],
-		isModelVisible: (entry: typeof model) =>
-			entry.model === model.model ? modelVisible : !hiddenAdvisors.has(entry.model),
+		isModelVisible: (entry: typeof model) => (entry.model === model.model ? modelVisible : !hiddenAdvisors.has(entry.model)),
 		setModelVisible: async (_model: typeof model, visible: boolean) => {
 			modelWrites.push(visible);
 			modelVisible = visible;
@@ -2897,9 +2639,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IExtensionService, disposables.add(new TestExtensionService()));
 	services.registerInstance(ISpeechService, disposables.add(services.createInstance(SpeechService)));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
-	services.registerSingleton(IVoiceCodeTranscriptionClient, () =>
-		services.createInstance(VoiceCodeTranscriptionClient),
-	);
+	services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
 	services.registerInstance(ITelemetryService, NullTelemetryService);
 	const skillsChanged = disposables.add(new Emitter<void>());
 	let skillEnabled = true;
@@ -2953,34 +2693,14 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(ClipboardServiceId, clipboardService);
 	services.registerInstance(IContextMenuService, contextMenuProvider);
 	services.registerInstance(IContextViewService, contextView);
-	services.registerInstance(
-		IHoverService,
-		disposables.add(new HoverService(configuration, contextView, contextMenuProvider)),
-	);
+	services.registerInstance(IHoverService, disposables.add(new HoverService(configuration, contextView, contextMenuProvider)));
 	services.registerInstance(LocalizationServiceId, workbenchLocalization);
-	disposables.add(
-		CommandsRegistry.register('git.readSettings', () => ({ autoFetch, autoFetchPeriod, rebaseWhenSync })),
-	);
-	disposables.add(
-		CommandsRegistry.register('git.updateAutoFetch', async (_accessor, value) =>
-			gitService.setAutoFetch(value as false | true | 'all'),
-		),
-	);
-	disposables.add(
-		CommandsRegistry.register('git.updateAutoFetchPeriod', async (_accessor, value) =>
-			gitService.setAutoFetchPeriod(value as number),
-		),
-	);
-	disposables.add(
-		CommandsRegistry.register('git.updateRebaseWhenSync', async (_accessor, value) =>
-			gitService.setRebaseWhenSync(value as boolean),
-		),
-	);
+	disposables.add(CommandsRegistry.register('git.readSettings', () => ({ autoFetch, autoFetchPeriod, rebaseWhenSync })));
+	disposables.add(CommandsRegistry.register('git.updateAutoFetch', async (_accessor, value) => gitService.setAutoFetch(value as false | true | 'all')));
+	disposables.add(CommandsRegistry.register('git.updateAutoFetchPeriod', async (_accessor, value) => gitService.setAutoFetchPeriod(value as number)));
+	disposables.add(CommandsRegistry.register('git.updateRebaseWhenSync', async (_accessor, value) => gitService.setRebaseWhenSync(value as boolean)));
 	services.registerInstance(IServerEventApi, {
-		subscribe: listener =>
-			autoFetchChanged.event(() =>
-				listener({ method: 'config/changed', params: { revision: 1, generation: 1 } }),
-			),
+		subscribe: listener => autoFetchChanged.event(() => listener({ method: 'config/changed', params: { revision: 1, generation: 1 } })),
 	});
 	services.registerInstance(ChatServiceId, chatService);
 	services.registerInstance(ILanguageModelsService, chatService as unknown as ILanguageModelsService);
@@ -3007,10 +2727,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(ILocaleService, locale);
 	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: languagePackService/);
 	services.registerInstance(LanguagePackServiceId, languagePacks);
-	assert.throws(
-		() => descriptor.create({ instantiationService: services }),
-		/Unknown service: agentCapabilitiesService/,
-	);
+	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: agentCapabilitiesService/);
 	let capabilityReads = 0;
 	services.registerInstance(IAgentCapabilitiesService, {
 		isAvailable: true,
@@ -3053,10 +2770,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 			},
 		}),
 	);
-	assert.throws(
-		() => descriptor.create({ instantiationService: services }),
-		/Unknown service: appServerRemoteAgentService/,
-	);
+	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: appServerRemoteAgentService/);
 	const connectionChanged = disposables.add(new Emitter<RemoteConnectionState>());
 	const connectionIdentityChanged = disposables.add(new Emitter<RemoteAgentConnection>());
 	let connectionIdentity: RemoteAgentConnection = { kind: 'local', generation: 1 };
@@ -3148,17 +2862,11 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 			await rm(hooksFolder, { recursive: true, force: true });
 		},
 	};
-	services.registerSingleton(IFileService, () =>
-		createTestFileService(disposables.add(new DiskFileSystemProvider([URI.file(hooksFolder)]))),
-	);
-	services.registerSingleton(ITextFileService, () =>
-		disposables.add(createTestTextFileService(services.get(IFileService), configuration)),
-	);
+	services.registerSingleton(IFileService, () => createTestFileService(disposables.add(new DiskFileSystemProvider([URI.file(hooksFolder)]))));
+	services.registerSingleton(ITextFileService, () => disposables.add(createTestTextFileService(services.get(IFileService), configuration)));
 	const editorPanes = new EditorPaneRegistry();
 	disposables.add(editorPanes.registerEditorPane(descriptor));
-	const managementDescriptor = EditorPanes.getEditorPanes().find(
-		candidate => candidate.id === AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID,
-	)!;
+	const managementDescriptor = EditorPanes.getEditorPanes().find(candidate => candidate.id === AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID)!;
 	disposables.add(editorPanes.registerEditorPane(managementDescriptor));
 	const editorServices = disposables.add(createTestEditorServices(undefined, services));
 	const editor = disposables.add(editorServices.createInstance(EditorPart, root, { registry: editorPanes }));
@@ -3236,9 +2944,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(host.hidden, false);
 	assert.equal(root.querySelector('.ash-modal-editor')?.getAttribute('role'), 'dialog');
 	assert.deepEqual(
-		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(
-			element => element.dataset.settingsCategoryId,
-		),
+		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
 		['general', 'github', 'network'],
 	);
 	const workbenchGroup = root.querySelector<HTMLElement>('[data-settings-group-id="workbench"]');
@@ -3246,39 +2952,13 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(workbenchGroup.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'false');
 	workbenchGroup.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.deepEqual(
-		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(
-			element => element.dataset.settingsCategoryId,
-		),
+		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
 		['general', 'github', 'network', 'appearance', 'layout', 'debugging', 'settings-editor', 'startup', 'browser'],
 	);
-	assert.equal(
-		root
-			.querySelector('[data-settings-category-id="general"]')
-			?.closest('.ash-tree-row')
-			?.hasAttribute('aria-expanded'),
-		false,
-	);
-	assert.equal(
-		root
-			.querySelector('[data-settings-category-id="appearance"]')
-			?.closest('.ash-tree-row')
-			?.hasAttribute('aria-expanded'),
-		false,
-	);
-	assert.equal(
-		root
-			.querySelector('[data-settings-category-id="layout"]')
-			?.closest('.ash-tree-row')
-			?.hasAttribute('aria-expanded'),
-		false,
-	);
-	assert.equal(
-		root
-			.querySelector('[data-settings-category-id="startup"]')
-			?.closest('.ash-tree-row')
-			?.hasAttribute('aria-expanded'),
-		false,
-	);
+	assert.equal(root.querySelector('[data-settings-category-id="general"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
+	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
+	assert.equal(root.querySelector('[data-settings-category-id="layout"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
+	assert.equal(root.querySelector('[data-settings-category-id="startup"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-target-id="appearance.group.theme"]'), null);
 	assert.equal(root.querySelector('[data-settings-target-id="layout.group.layout"]'), null);
 	assert.equal(root.querySelector('[data-settings-target-id="startup.group.startup-windows"]'), null);
@@ -3295,47 +2975,28 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('[data-settings-item-id="screenshot.section"]'), null);
 	assert.equal(root.querySelector('[data-settings-category-id="screenshot"]'), null);
 	assert.equal(root.querySelector('[data-settings-category-id="extension.ash.snapshot"]')?.textContent, 'Snapshot');
-	const screenSettings = root.querySelector<HTMLElement>(
-		'[data-settings-tree-group-id="extension.ash.snapshot.group.screen"]',
-	)!;
-	const codeSettings = root.querySelector<HTMLElement>(
-		'[data-settings-tree-group-id="extension.ash.snapshot.group.code"]',
-	)!;
+	const screenSettings = root.querySelector<HTMLElement>('[data-settings-tree-group-id="extension.ash.snapshot.group.screen"]')!;
+	const codeSettings = root.querySelector<HTMLElement>('[data-settings-tree-group-id="extension.ash.snapshot.group.code"]')!;
 	assert.ok(screenSettings);
 	assert.ok(codeSettings);
-	assert.ok(
-		screenSettings
-			.querySelector('[data-settings-item-id="snapshot.screen.shortcut"]')
-			?.textContent?.includes('Not set'),
-	);
-	assert.ok(
-		codeSettings
-			.querySelector('[data-settings-item-id="snapshot.code.shortcut"]')
-			?.textContent?.includes('Not set'),
-	);
+	assert.ok(screenSettings.querySelector('[data-settings-item-id="snapshot.screen.shortcut"]')?.textContent?.includes('Not set'));
+	assert.ok(codeSettings.querySelector('[data-settings-item-id="snapshot.code.shortcut"]')?.textContent?.includes('Not set'));
 	assert.ok(codeSettings.textContent?.includes('Resolution scale'));
 	assert.equal(screenSettings.querySelector('[data-configuration-key="snapshot.code.padding"]'), null);
-	const globalScreenshot = root.querySelector<HTMLElement>(
-		`[data-configuration-key="${ScreenshotGlobalShortcutSetting}"]`,
-	)!;
+	const globalScreenshot = root.querySelector<HTMLElement>(`[data-configuration-key="${ScreenshotGlobalShortcutSetting}"]`)!;
 	assert.ok(globalScreenshot);
 	assert.equal(globalScreenshot.getAttribute('aria-checked'), 'false');
 	globalScreenshot.click();
 	await nextTurn();
 	assert.equal(configuration.getValue(ScreenshotGlobalShortcutSetting), true);
-	const screenshotHints = root.querySelector<HTMLElement>(
-		`[data-configuration-key="${AccessibilityVerbositySettingId.ChatScreenshot}"]`,
-	)!;
+	const screenshotHints = root.querySelector<HTMLElement>(`[data-configuration-key="${AccessibilityVerbositySettingId.ChatScreenshot}"]`)!;
 	assert.ok(screenshotHints);
 	assert.equal(screenshotHints.getAttribute('aria-checked'), 'false');
 	screenshotHints.click();
 	await nextTurn();
 	assert.equal(configuration.getValue(AccessibilityVerbositySettingId.ChatScreenshot), true);
 	await preferences.openSettings({ section: 'accessibilitySignals' });
-	assert.equal(
-		root.querySelector('[data-settings-category-id="accessibilitySignals"]')?.textContent,
-		'Accessibility Signals',
-	);
+	assert.equal(root.querySelector('[data-settings-category-id="accessibilitySignals"]')?.textContent, 'Accessibility Signals');
 	assert.ok(root.querySelector('[data-settings-item-id="accessibility.signalOptions.volume"]'));
 	assert.ok(root.querySelector('[data-settings-item-id^="accessibility.signals."]'));
 	assert.equal(root.querySelector('[data-settings-item-id^="accessibility.verbosity."]'), null);
@@ -3345,10 +3006,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.ok(root.querySelector('[data-settings-item-id="workbench.reduceMotion"]'));
 	assert.ok(root.querySelector(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"]`));
 	assert.ok(root.querySelector('[data-settings-item-id^="accessibility.verbosity."]'));
-	assert.equal(
-		root.querySelector(`[data-settings-item-id="${AccessibilityVerbositySettingId.ChatScreenshot}"]`),
-		null,
-	);
+	assert.equal(root.querySelector(`[data-settings-item-id="${AccessibilityVerbositySettingId.ChatScreenshot}"]`), null);
 	assert.equal(root.querySelector('[data-settings-item-id^="accessibility.signal"]'), null);
 	await preferences.openSettings({ section: 'terminal' });
 	assert.equal(root.querySelector('[data-settings-category-id="terminal"]')?.textContent, 'Terminal');
@@ -3371,10 +3029,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	searchList.querySelectorAll<HTMLElement>('[role="option"]')[0].click();
 	await nextTurn();
 	assert.equal((searchEngine as HTMLButtonElement).disabled, true);
-	assert.equal(
-		searchRow.querySelector('[role="status"]')?.textContent,
-		'Could not save search engine. Refresh the configuration before trying again.',
-	);
+	assert.equal(searchRow.querySelector('[role="status"]')?.textContent, 'Could not save search engine. Refresh the configuration before trying again.');
 	rejectSearchSave = false;
 	searchRow.querySelector<HTMLButtonElement>('button:not([role="combobox"])')!.click();
 	await nextTurn();
@@ -3395,9 +3050,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await preferences.openSettings({ section: 'general' });
 	assert.equal(root.querySelector(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"]`), null);
 	assert.ok(root.querySelector(`[data-settings-item-id="${HoverConfiguration.delay}"]`));
-	const languageControl = root.querySelector<HTMLElement>(
-		'[data-configuration-key="workbench.locale"] [role="combobox"]',
-	);
+	const languageControl = root.querySelector<HTMLElement>('[data-configuration-key="workbench.locale"] [role="combobox"]');
 	assert.ok(languageControl);
 	assert.equal(languageControl.textContent, 'English');
 	catalogs.push({
@@ -3409,9 +3062,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	languagePacksChanged.fire();
 	languageControl.click();
 	const languageListId = languageControl.getAttribute('aria-controls')!;
-	const languageOptions = [
-		...ownerDocument.getElementById(languageListId)!.querySelectorAll<HTMLElement>('[role="option"]'),
-	];
+	const languageOptions = [...ownerDocument.getElementById(languageListId)!.querySelectorAll<HTMLElement>('[role="option"]')];
 	assert.deepEqual(
 		languageOptions.map(option => option.textContent),
 		['English', 'Français', '简体中文'],
@@ -3427,9 +3078,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await configuration.updateValue(LocalizationConfiguration.locale, 'zh-CN');
 	assert.equal(languageControl.textContent, '简体中文');
 	assert.equal(languageControl.getAttribute('aria-label'), 'Interface language');
-	root.querySelector<HTMLButtonElement>(
-		'[data-settings-item-id="workbench.locale"] .ash-setting-item-actions-trigger',
-	)!.click();
+	root.querySelector<HTMLButtonElement>('[data-settings-item-id="workbench.locale"] .ash-setting-item-actions-trigger')!.click();
 	let resolveSaved!: () => void;
 	const resetSaved = new Promise<void>(resolve => {
 		resolveSaved = resolve;
@@ -3443,9 +3092,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(languageControl.textContent, 'English');
 	assert.equal(configuration.inspect(LocalizationConfiguration.locale).userValue, undefined);
 	await preferences.openSettings({ section: 'extension.ash.git' });
-	const autofetchControl = root.querySelector<HTMLElement>(
-		`[data-configuration-key="${GitConfiguration.autofetch}"]`,
-	);
+	const autofetchControl = root.querySelector<HTMLElement>(`[data-configuration-key="${GitConfiguration.autofetch}"]`);
 	assert.ok(autofetchControl);
 	const autofetchButton = autofetchControl.querySelector<HTMLButtonElement>('[role="combobox"]');
 	assert.equal(autofetchButton?.getAttribute('aria-label'), 'Auto Fetch');
@@ -3460,9 +3107,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await nextTurn();
 	assert.equal(autoFetch, 'all');
 
-	const rebaseControl = root.querySelector<HTMLElement>(
-		`[data-configuration-key="${GitConfiguration.rebaseWhenSync}"]`,
-	);
+	const rebaseControl = root.querySelector<HTMLElement>(`[data-configuration-key="${GitConfiguration.rebaseWhenSync}"]`);
 	assert.ok(rebaseControl);
 	assert.equal(rebaseControl.getAttribute('role'), 'switch');
 	assert.equal(rebaseControl.getAttribute('aria-label'), 'Rebase When Sync');
@@ -3472,9 +3117,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(rebaseWhenSync, true);
 	assert.equal(rebaseControl.getAttribute('aria-checked'), 'true');
 	assert.equal(configuration.inspect(GitConfiguration.rebaseWhenSync).userLocalValue, undefined);
-	root.querySelector<HTMLButtonElement>(
-		`[data-settings-item-id="${GitConfiguration.rebaseWhenSync}"] .ash-setting-item-actions-trigger`,
-	)!.click();
+	root.querySelector<HTMLButtonElement>(`[data-settings-item-id="${GitConfiguration.rebaseWhenSync}"] .ash-setting-item-actions-trigger`)!.click();
 	await menuActions.find(action => action.id === 'settings.resetSetting')!.run();
 	hideMenu?.(false);
 	assert.equal(rebaseWhenSync, false);
@@ -3509,29 +3152,20 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		await nextTurn();
 		assert.equal(configuration.getValue('live.enabled'), true);
 		await preferences.openSettings({ query: '@modified @id:live.enabled' });
-		assert.equal(
-			root.querySelector('[data-settings-category-id="extension.test.live"]')?.textContent,
-			'Live extension',
-		);
+		assert.equal(root.querySelector('[data-settings-category-id="extension.test.live"]')?.textContent, 'Live extension');
 		assert.ok(root.querySelector('[data-settings-item-id="live.enabled"]'));
 		await preferences.openSettings({ section: 'extension.test.live' });
 		configurationRegistry.updateConfigurations({ add: [], remove: extensionNodes });
 		assert.equal(root.querySelector('[data-settings-category-id="extension.test.live"]'), null);
 		assert.equal(root.querySelector('[data-settings-item-id="live.enabled"]'), null);
 		assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Application');
-		assert.equal(
-			JSON.parse((await configuration.read()).source)['live.enabled'],
-			true,
-			'withdrawal preserves saved extension values',
-		);
+		assert.equal(JSON.parse((await configuration.read()).source)['live.enabled'], true, 'withdrawal preserves saved extension values');
 	} finally {
 		configurationRegistry.updateConfigurations({ add: [], remove: extensionNodes });
 	}
 
 	await preferences.openSettings({ section: 'accessibility' });
-	const underline = root.querySelector<HTMLInputElement>(
-		`[data-configuration-key="${AccessibilityConfiguration.underlineLinks}"]`,
-	);
+	const underline = root.querySelector<HTMLInputElement>(`[data-configuration-key="${AccessibilityConfiguration.underlineLinks}"]`);
 	assert.ok(underline);
 	assert.equal(underline.getAttribute('role'), 'switch');
 	assert.equal(underline.getAttribute('aria-checked'), 'false');
@@ -3539,9 +3173,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await nextTurn();
 	assert.equal(configuration.getValue(AccessibilityConfiguration.underlineLinks), true);
 	assert.equal(underline.getAttribute('aria-checked'), 'true');
-	const underlineIndicator = root.querySelector<HTMLElement>(
-		`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"] .ash-settings-indicators`,
-	);
+	const underlineIndicator = root.querySelector<HTMLElement>(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"] .ash-settings-indicators`);
 	assert.equal(underlineIndicator?.hidden, true);
 	assert.equal(underlineIndicator?.textContent, '');
 
@@ -3555,9 +3187,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	for (let attempt = 0; hoverDelay.disabled && attempt < 100; attempt++) await nextTurn();
 	assert.equal(hoverDelay.disabled, false);
 
-	root.querySelector<HTMLButtonElement>(
-		`[data-settings-item-id="${HoverConfiguration.delay}"] .ash-setting-item-actions-trigger`,
-	)?.click();
+	root.querySelector<HTMLButtonElement>(`[data-settings-item-id="${HoverConfiguration.delay}"] .ash-setting-item-actions-trigger`)?.click();
 	const copyAction = menuActions.find(action => action.id === 'settings.copySettingId');
 	const resetAction = menuActions.find(action => action.id === 'settings.resetSetting');
 	assert.ok(copyAction);
@@ -3573,14 +3203,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	});
 	await resetAction.run();
 	await hoverReset;
-	assert.equal(
-		configuration.getValue(HoverConfiguration.delay),
-		configurationRegistry.getConfiguration(HoverConfiguration.delay)?.defaultValue,
-	);
+	assert.equal(configuration.getValue(HoverConfiguration.delay), configurationRegistry.getConfiguration(HoverConfiguration.delay)?.defaultValue);
 
-	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')
-		?.closest<HTMLElement>('.ash-tree-row')
-		?.click();
+	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.equal(root.querySelector('[data-tree-id="group.agents"]')?.getAttribute('aria-expanded'), 'true');
 	assert.deepEqual(
 		['agents', 'teams', 'agent-defaults', 'models', 'rules', 'sandbox', 'execution-trace', 'hooks'].map(
@@ -3601,13 +3226,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	advisorSwitch.checked = false;
 	advisorSwitch.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
 	await nextTurn();
-	assert.deepEqual(advisorWrites, [
-		{ model: advisorModel, enabled: false, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' },
-	]);
+	assert.deepEqual(advisorWrites, [{ model: advisorModel, enabled: false, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' }]);
 	root.querySelector<HTMLElement>('.ash-advisor-settings [aria-haspopup="menu"]')?.click();
-	const otherAdvisorOption = [...root.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(
-		option => option.textContent === 'Muse Spark 1.3',
-	);
+	const otherAdvisorOption = [...root.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(option => option.textContent === 'Muse Spark 1.3');
 	assert.ok(otherAdvisorOption);
 	otherAdvisorOption.click();
 	await nextTurn();
@@ -3623,18 +3244,13 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	advisorSwitch.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
 	await nextTurn();
 	assert.equal(advisorSwitch.checked, true);
-	assert.match(
-		root.querySelector('.ash-advisor-settings [role="status"]')?.textContent ?? '',
-		/Preference write failed/u,
-	);
+	assert.match(root.querySelector('.ash-advisor-settings [role="status"]')?.textContent ?? '', /Preference write failed/u);
 	rejectAdvisorSave = false;
 	advisorSwitch.checked = true;
 	advisorSwitch.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
 	await nextTurn();
 	root.querySelector<HTMLElement>('.ash-advisor-settings [aria-haspopup="menu"]')?.click();
-	const clearAdvisorOption = [...root.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(
-		option => option.textContent === 'Disable',
-	);
+	const clearAdvisorOption = [...root.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(option => option.textContent === 'Disable');
 	assert.ok(clearAdvisorOption);
 	clearAdvisorOption.click();
 	await nextTurn();
@@ -3685,15 +3301,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	using managementListener = editorServices.get(IEditorService).onDidActiveEditorChange(() => {
 		if (editor.activePane?.id === AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID) void managementOpened.complete();
 	});
-	const manageHooks = [...root.querySelectorAll<HTMLButtonElement>('.ash-settings-section button')].find(
-		button => button.textContent === 'Manage Hooks',
-	);
-	assert.ok(
-		manageHooks,
-		[...root.querySelectorAll<HTMLButtonElement>('.ash-settings-section button')]
-			.map(button => button.textContent)
-			.join(', '),
-	);
+	const manageHooks = [...root.querySelectorAll<HTMLButtonElement>('.ash-settings-section button')].find(button => button.textContent === 'Manage Hooks');
+	assert.ok(manageHooks, [...root.querySelectorAll<HTMLButtonElement>('.ash-settings-section button')].map(button => button.textContent).join(', '));
 	manageHooks.click();
 	await managementOpened.p;
 	await firstHookRead.p;
@@ -3706,34 +3315,23 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	}
 	assert.equal(hooksRoot.getAttribute('aria-busy'), 'false');
 	assert.equal(hooksRoot.querySelectorAll('[data-hook-event]').length, 33, hooksRoot.outerHTML);
-	assert.equal(
-		hooksRoot.querySelector('[data-hook-event="preToolUse"] > summary')?.textContent,
-		'PreToolUse · 1 configured',
-	);
+	assert.equal(hooksRoot.querySelector('[data-hook-event="preToolUse"] > summary')?.textContent, 'PreToolUse · 1 configured');
 	assert.equal(root.querySelectorAll('input[type="search"]').length, 1);
 	await configuration.updateValue(LocalizationConfiguration.locale, 'zh-CN');
 	assert.equal(hooksRoot.querySelector('[data-hook-action="edit-scope"]')?.textContent, 'Edit TOML');
 	await configuration.updateValue(LocalizationConfiguration.locale, 'en');
-	assert.match(
-		hooksRoot.querySelector('[data-hook-id="user:hook:check"]')?.textContent ?? '',
-		/Disabled.*Source file.*\/profile\/config.toml.*two words/s,
-	);
+	assert.match(hooksRoot.querySelector('[data-hook-id="user:hook:check"]')?.textContent ?? '', /Disabled.*Source file.*\/profile\/config.toml.*two words/s);
 	const hookSearch = hooksRoot.querySelector<HTMLInputElement>('input[type="search"]');
 	assert.ok(hookSearch);
 	hookSearch.value = 'two words';
 	hookSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	assert.deepEqual(
-		[...hooksRoot.querySelectorAll<HTMLElement>('.ash-hooks-event')]
-			.filter(row => !row.hidden)
-			.map(row => row.dataset.hookEvent),
+		[...hooksRoot.querySelectorAll<HTMLElement>('.ash-hooks-event')].filter(row => !row.hidden).map(row => row.dataset.hookEvent),
 		['preToolUse'],
 	);
 	hooksRoot.querySelector<HTMLElement>('summary')?.focus();
 	const contentProvider = AccessibleViewRegistry.getImplementations()
-		.find(
-			provider =>
-				provider.name.startsWith('aiCustomizationManagement-') && provider.type === AccessibleViewType.View,
-		)
+		.find(provider => provider.name.startsWith('aiCustomizationManagement-') && provider.type === AccessibleViewType.View)
 		?.getProvider(editorServices);
 	assert.ok(contentProvider);
 	assert.match(contentProvider.provideContent(), /user:hook:check/);
@@ -3754,10 +3352,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	managementPane.setVisible(false);
 	await pendingHooks.complete([{ namespace: 'user', configPath: '/stale/config.toml', hooks: [] }]);
 	await nextTurn();
-	assert.equal(
-		hooksRoot.querySelector<HTMLButtonElement>('[data-hook-action="edit-scope"]')?.title,
-		'/profile/config.toml',
-	);
+	assert.equal(hooksRoot.querySelector<HTMLButtonElement>('[data-hook-action="edit-scope"]')?.title, '/profile/config.toml');
 	managementPane.setVisible(true);
 	await nextTurn();
 	assert.equal(hookReads, 4);
@@ -3817,22 +3412,13 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	trigger.focus();
 	await preferences.openSettings();
 	await preferences.openSettings({ section: 'dictation' });
-	assert.equal(
-		root.querySelector('[data-settings-container]')?.getAttribute('data-active-settings-category'),
-		'voice-input',
-	);
+	assert.equal(root.querySelector('[data-settings-container]')?.getAttribute('data-active-settings-category'), 'voice-input');
 	assert.equal(root.querySelector('[data-tree-id="voice-input"]')?.getAttribute('aria-selected'), 'true');
 	assert.equal(root.querySelector('[data-settings-category-id="dictation"]'), null);
 	assert.equal(root.querySelector('[data-settings-target-id]'), null);
-	assert.equal(
-		root.querySelector('[data-settings-tree-group-id="dictation"] .ash-settings-tree-group-title')?.textContent,
-		'Voice input',
-	);
+	assert.equal(root.querySelector('[data-settings-tree-group-id="dictation"] .ash-settings-tree-group-title')?.textContent, 'Voice input');
 	await configuration.updateValue(LocalizationConfiguration.locale, 'zh-CN');
-	assert.equal(
-		root.querySelector('[data-settings-tree-group-id="dictation"] .ash-settings-tree-group-title')?.textContent,
-		'Voice input',
-	);
+	assert.equal(root.querySelector('[data-settings-tree-group-id="dictation"] .ash-settings-tree-group-title')?.textContent, 'Voice input');
 	const dictationSearch = root.querySelector<HTMLInputElement>('.ash-settings-search input')!;
 	dictationSearch.value = 'dictation';
 	dictationSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
@@ -3851,33 +3437,18 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(subscription?.querySelector('button')?.textContent, 'Manage Codex account');
 	assert.equal(root.querySelector('[data-settings-item-id="dictation.cloudModel"]'), null);
 	assert.equal(subscription?.getAttribute('role'), 'group');
-	assert.equal(
-		ownerDocument.getElementById(subscription?.getAttribute('aria-labelledby') ?? '')?.textContent,
-		'Codex subscription dictation',
-	);
-	assert.match(
-		ownerDocument.getElementById(subscription?.getAttribute('aria-describedby') ?? '')?.textContent ?? '',
-		/Codex login from Models/,
-	);
+	assert.equal(ownerDocument.getElementById(subscription?.getAttribute('aria-labelledby') ?? '')?.textContent, 'Codex subscription dictation');
+	assert.match(ownerDocument.getElementById(subscription?.getAttribute('aria-describedby') ?? '')?.textContent ?? '', /Codex login from Models/);
 	await configuration.updateValue('dictation.backend', 'cloud');
-	assert.match(
-		root.querySelector('[data-settings-item-id="dictation.cloudModel"]')?.textContent ?? '',
-		/gpt-live-transcribe/,
-	);
+	assert.match(root.querySelector('[data-settings-item-id="dictation.cloudModel"]')?.textContent ?? '', /gpt-live-transcribe/);
 	await configuration.updateValue('dictation.cloudProvider', 'xai');
-	assert.match(
-		root.querySelector('[data-settings-item-id="dictation.cloudModel"]')?.textContent ?? '',
-		/grok-voice-transcribe-2\.0/,
-	);
+	assert.match(root.querySelector('[data-settings-item-id="dictation.cloudModel"]')?.textContent ?? '', /grok-voice-transcribe-2\.0/);
 	assert.equal(root.querySelector('[data-configuration-key="dictation.subscription"]'), null);
 	await configuration.updateValue('dictation.backend', 'local');
 	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.click();
 	root.querySelector<HTMLElement>('[data-settings-category-id="models"]')?.click();
 	await nextTurn();
-	assert.equal(
-		root.querySelector('[data-settings-container]')?.getAttribute('data-active-settings-category'),
-		'models',
-	);
+	assert.equal(root.querySelector('[data-settings-container]')?.getAttribute('data-active-settings-category'), 'models');
 	assert.equal(root.querySelector('[data-configuration-key="dictation.model"]'), null);
 	const modelSwitch = root.querySelector<HTMLInputElement>('.ash-models-settings-model-row input[role="switch"]');
 	assert.ok(modelSwitch);
@@ -3906,13 +3477,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsCategory, 'teams');
 	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Teams');
 	assert.equal(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length, 0);
-	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')
-		?.closest<HTMLElement>('.ash-tree-row')
-		?.click();
+	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.equal(root.querySelector('[data-tree-id="group.agents"]')?.getAttribute('aria-selected'), 'true');
-	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')
-		?.closest<HTMLElement>('.ash-tree-row')
-		?.click();
+	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.equal(root.querySelector('[data-tree-id="teams"]')?.getAttribute('aria-selected'), 'true');
 
 	const search = root.querySelector<HTMLInputElement>('.ash-settings-search input');
@@ -3939,32 +3506,20 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	assert.equal(root.querySelector('[data-settings-category-id="agents"]')?.textContent, 'Agents');
 	assert.equal(root.querySelector('[data-settings-category-id="teams"]'), null);
-	search.dispatchEvent(
-		new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }),
-	);
+	search.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
 	assert.equal(search.value, '');
 	search.value = 'workbench.colorTheme';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.textContent, 'Appearance');
-	search.dispatchEvent(
-		new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }),
-	);
+	search.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
 
 	root.querySelector<HTMLElement>('[data-settings-group-id="editor"]')?.click();
 	root.querySelector<HTMLElement>('[data-settings-category-id="editor-fonts"]')?.click();
-	assert.equal(
-		root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsCategory,
-		'editor-fonts',
-	);
+	assert.equal(root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsCategory, 'editor-fonts');
 	assert.ok(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily}"]`));
-	assert.equal(
-		root.querySelector(`[data-configuration-key="${EditorSelectionConfiguration.defaultNewDocumentEditor}"]`),
-		null,
-	);
+	assert.equal(root.querySelector(`[data-configuration-key="${EditorSelectionConfiguration.defaultNewDocumentEditor}"]`), null);
 	assert.equal(root.querySelector('[data-settings-item-id^="models.item."]'), null);
-	const fontFamily = root.querySelector<HTMLInputElement>(
-		`[data-configuration-key="${CodeEditorConfiguration.fontFamily}"]`,
-	);
+	const fontFamily = root.querySelector<HTMLInputElement>(`[data-configuration-key="${CodeEditorConfiguration.fontFamily}"]`);
 	assert.ok(fontFamily);
 	fontFamily.value = 'Fira Code';
 	fontFamily.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
@@ -4008,10 +3563,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'missing-theme');
 	search.value = '@stable @id:workbench.colorTheme';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
-	assert.match(
-		root.querySelector('[data-configuration-key="workbench.colorTheme"]')?.textContent ?? '',
-		/Unavailable \(missing-theme\)/,
-	);
+	assert.match(root.querySelector('[data-configuration-key="workbench.colorTheme"]')?.textContent ?? '', /Unavailable \(missing-theme\)/);
 	assert.equal(configuration.getValue(WorkbenchConfiguration.colorTheme), 'missing-theme');
 	await configuration.updateValue(WorkbenchConfiguration.colorTheme, undefined);
 
@@ -4023,34 +3575,26 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.ok(root.querySelector('[data-settings-item-id="chat.editor.fontFamily"]'));
 	assert.ok(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily}"]`));
 	assert.equal(root.querySelector(`[data-configuration-key="${CodeEditorConfiguration.fontFamily}"]`), fontFamily);
-	search.dispatchEvent(
-		new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }),
-	);
+	search.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
 	assert.equal(root.querySelector('.ash-settings-navigation-tree')?.contains(ownerDocument.activeElement), true);
-	search.dispatchEvent(
-		new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }),
-	);
+	search.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
 	assert.equal(search.value, '');
 	assert.ok(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length > 1);
 	const commands = editorServices.get(ICommandService);
 	await commands.executeCommand('workbench.action.configureEditor');
 	assert.equal(search.value, 'workbench.editor');
 	assert.equal(ownerDocument.activeElement, search);
-	const editorSettings = [
-		...root.querySelectorAll<HTMLElement>('.ash-settings-content-tree [data-settings-item-id]'),
-	];
+	const editorSettings = [...root.querySelectorAll<HTMLElement>('.ash-settings-content-tree [data-settings-item-id]')];
 	assert.ok(editorSettings.length > 0);
 	assert.ok(editorSettings.every(row => row.dataset.settingsItemId?.startsWith('workbench.editor')));
 	await commands.executeCommand('workbench.action.openSettings', 'editor.fontFamily');
 	assert.equal(root.querySelector('.ash-settings-search input'), search, 'query opening reuses the search owner');
 	assert.equal(search.value, 'editor.fontFamily');
 	assert.equal(ownerDocument.activeElement, search);
-	assert.deepEqual(
-		[...root.querySelectorAll<HTMLElement>('.ash-settings-content-tree [data-settings-item-id]')]
-			.map(row => row.dataset.settingsItemId)
-			.sort(),
-		['chat.editor.fontFamily', 'editor.fontFamily'],
-	);
+	assert.deepEqual([...root.querySelectorAll<HTMLElement>('.ash-settings-content-tree [data-settings-item-id]')].map(row => row.dataset.settingsItemId).sort(), [
+		'chat.editor.fontFamily',
+		'editor.fontFamily',
+	]);
 	assert.equal(root.querySelector(`[data-configuration-key="${CodeEditorConfiguration.fontFamily}"]`), fontFamily);
 	await commands.executeCommand('workbench.action.openSettings', { query: '@id:editor.fontSize' });
 	assert.equal(search.value, '@id:editor.fontSize');
@@ -4073,10 +3617,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(ownerDocument.activeElement, search);
 	assert.ok(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length > 1);
 	await preferences.openSettings({ section: 'models' });
-	assert.equal(
-		root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsCategory,
-		'models',
-	);
+	assert.equal(root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsCategory, 'models');
 
 	using language = editorServices.get(ILanguageService).registerLanguage({ id: 'settings-test-language' });
 	await commands.executeCommand('workbench.action.openSettings', {
@@ -4087,32 +3628,16 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	languageSize.value = '29';
 	languageSize.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
 	await nextTurn();
-	assert.equal(
-		configuration.inspect<number>('editor.fontSize', { overrideIdentifier: 'settings-test-language' }).userLocal
-			?.override,
-		29,
-	);
-	assert.equal(
-		configuration.inspect('editor.fontSize').userLocalValue,
-		undefined,
-		'language editing leaves the base user setting absent',
-	);
+	assert.equal(configuration.inspect<number>('editor.fontSize', { overrideIdentifier: 'settings-test-language' }).userLocal?.override, 29);
+	assert.equal(configuration.inspect('editor.fontSize').userLocalValue, undefined, 'language editing leaves the base user setting absent');
 	await preferences.openSettings({ query: '@lang:settings-test-language @modified @id:editor.fontSize' });
 	assert.ok(root.querySelector('[data-settings-item-id="editor.fontSize"]'));
 	await preferences.openSettings({ query: '@lang:settings-test-language @id:window.title' });
-	assert.equal(
-		root.querySelector('[data-settings-item-id="window.title"]'),
-		null,
-		'non-overridable settings are excluded',
-	);
+	assert.equal(root.querySelector('[data-settings-item-id="window.title"]'), null, 'non-overridable settings are excluded');
 	await preferences.openSettings({ query: '@lang:unregistered @id:editor.fontSize' });
 	assert.equal(root.querySelector('[data-settings-item-id="editor.fontSize"]'), null);
 	await preferences.openSettings({ query: '@modified @id:editor.fontSize' });
-	assert.equal(
-		root.querySelector('[data-settings-item-id="editor.fontSize"]'),
-		null,
-		'base modified filter excludes a language-only override',
-	);
+	assert.equal(root.querySelector('[data-settings-item-id="editor.fontSize"]'), null, 'base modified filter excludes a language-only override');
 	await preferences.openSettings({ query: '@id:editor.fontSize' });
 	assert.notEqual(root.querySelector<HTMLInputElement>('[data-configuration-key="editor.fontSize"]')?.value, '29');
 
@@ -4168,16 +3693,11 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	});
 	assert.notEqual(editor.activeGroup, firstGroup);
 	assert.equal(firstSearch.value, '@id:editor.fontSize');
-	assert.equal(
-		editor.activeGroup.domNode.querySelector<HTMLInputElement>('.ash-settings-search input')?.value,
-		'@id:editor.fontFamily',
-	);
+	assert.equal(editor.activeGroup.domNode.querySelector<HTMLInputElement>('.ash-settings-search input')?.value, '@id:editor.fontFamily');
 });
 
 function findSettingCategory(layout: ReturnType<typeof createSettingsLayout>, settingId: string): string | undefined {
-	return layout.find(category =>
-		category.groups.some(group => group.settings.some(setting => setting.id === settingId)),
-	)?.id;
+	return layout.find(category => category.groups.some(group => group.settings.some(setting => setting.id === settingId)))?.id;
 }
 
 async function nextTurn(): Promise<void> {
@@ -4187,9 +3707,7 @@ async function nextTurn(): Promise<void> {
 test('Local model controls share translated snapshots and keep preparation running when hidden', async () => {
 	using resources = new DisposableStore();
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	resources.add(toDisposable(resetNlsResolver));
 	const configuration = resources.add(new WorkspaceService());
 	await configuration.updateValue(DictationConfiguration.model, 'imported-model');
@@ -4312,8 +3830,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 			removed++;
 		},
 		refreshModels: async () => [],
-		testProviderModel: async () =>
-			failed ? { type: 'failed', message: 'Endpoint rejected this model' } : { type: 'passed' },
+		testProviderModel: async () => (failed ? { type: 'failed', message: 'Endpoint rejected this model' } : { type: 'passed' }),
 	} as unknown as IChatService;
 	const configuration = disposables.add(new WorkspaceService());
 	const services = disposables.add(new InstantiationService());
@@ -4454,8 +3971,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	edit(card.querySelector<HTMLInputElement>('input[aria-label="Provider name"]')!, 'Gateway');
 	edit(card.querySelector<HTMLInputElement>('input[aria-label="Base URL"]')!, 'https://example.test/v1');
 	await nextTurn();
-	const button = (label: string): HTMLButtonElement =>
-		[...card.querySelectorAll<HTMLButtonElement>('button')].find(candidate => candidate.textContent === label)!;
+	const button = (label: string): HTMLButtonElement => [...card.querySelectorAll<HTMLButtonElement>('button')].find(candidate => candidate.textContent === label)!;
 	button('Add model').click();
 	const first = card.querySelector<HTMLInputElement>('input[aria-label="Model ID"]')!;
 	edit(first, 'first-private-model');
@@ -4494,20 +4010,12 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 test('Custom provider fields and test states use the Chinese catalog', () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
-		setNlsResolver((bundle, key, fallback, parameters) =>
-			formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-		);
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		assert.equal(localize('models.catalog.search', 'Search models'), '搜索模型');
 		assert.equal(localize('models.provider.name', 'Provider name'), '供应商名称');
 		assert.equal(localize('models.provider.context', '1M context'), '1M 上下文');
 		assert.equal(localize('models.provider.passed', 'Model test passed'), '模型测试通过');
-		assert.equal(
-			localize(
-				'models.discovery.unsupported',
-				'This endpoint does not provide a model list. Add model IDs manually.',
-			),
-			'此端点不提供模型列表，请手动添加模型 ID。',
-		);
+		assert.equal(localize('models.discovery.unsupported', 'This endpoint does not provide a model list. Add model IDs manually.'), '此端点不提供模型列表，请手动添加模型 ID。');
 		assert.equal(localize('models.provider.contextWindow', 'Context window (tokens)'), '上下文长度（tokens）');
 	} finally {
 		resetNlsResolver();
@@ -4536,22 +4044,8 @@ function createSettingWidget(
 		onDidHideContextMenu: Event.None,
 		hideContextMenu() {},
 	});
-	services.registerInstance(
-		IHoverService,
-		resources.add(
-			new HoverService(
-				options.configurationService,
-				options.contextViewProvider,
-				services.get(IContextMenuService),
-			),
-		),
-	);
-	return instantiateSettingWidget(
-		container,
-		setting,
-		{ onStatus: options.onStatus, onOpenSettings: options.onOpenSettings },
-		services,
-	);
+	services.registerInstance(IHoverService, resources.add(new HoverService(options.configurationService, options.contextViewProvider, services.get(IContextMenuService))));
+	return instantiateSettingWidget(container, setting, { onStatus: options.onStatus, onOpenSettings: options.onOpenSettings }, services);
 }
 
 test('Settings widgets require their scoped clipboard registration and clean up when creation fails', async () => {
@@ -4570,16 +4064,7 @@ test('Settings widgets require their scoped clipboard registration and clean up 
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 	});
-	assert.throws(
-		() =>
-			instantiateSettingWidget(
-				root,
-				new DefaultSettings().get('editor.lineNumbers'),
-				{ onStatus() {} },
-				services,
-			),
-		/clipboardService/,
-	);
+	assert.throws(() => instantiateSettingWidget(root, new DefaultSettings().get('editor.lineNumbers'), { onStatus() {} }, services), /clipboardService/);
 	assert.equal(root.querySelector('.ash-configuration-setting'), null);
 });
 
@@ -4641,8 +4126,7 @@ test('Models Settings keeps checks silent and requires explicit authorization an
 	assert.equal(node.element.kind, 'item');
 	if (node.element.kind !== 'item') throw new Error('Expected credential storage item');
 	root.append(content.renderItem(node.element.value));
-	const button = (label: string): HTMLButtonElement =>
-		[...root.querySelectorAll('button')].find(button => button.textContent === label)!;
+	const button = (label: string): HTMLButtonElement => [...root.querySelectorAll('button')].find(button => button.textContent === label)!;
 	assert.deepEqual(mutations, []);
 	button('Retry credential storage').click();
 	await nextTurn();

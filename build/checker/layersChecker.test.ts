@@ -19,10 +19,7 @@ function fixture(t: test.TestContext) {
 		mkdirSync(dirname(path), { recursive: true });
 		writeFileSync(path, content);
 	};
-	write(
-		'platform/ipc/common/mainProcessService.ts',
-		'export interface IMainProcessService { getChannel(name: string): unknown; }\nexport const IMainProcessService = {};\n',
-	);
+	write('platform/ipc/common/mainProcessService.ts', 'export interface IMainProcessService { getChannel(name: string): unknown; }\nexport const IMainProcessService = {};\n');
 	const config = join(directory, 'tsconfig.json');
 	writeFileSync(
 		config,
@@ -53,60 +50,33 @@ test('runtime imports reject Node/Electron through every literal import form', t
 	] as const;
 	for (const [name, content] of cases) project.write(`base/${name}`, content);
 	const violations = project.check();
-	assert.deepEqual(
-		violations.map(item => relative(project.sourceRoot, item.fileName).replaceAll('\\', '/')).sort(),
-		cases.map(([name]) => `base/${name}`).sort(),
-	);
+	assert.deepEqual(violations.map(item => relative(project.sourceRoot, item.fileName).replaceAll('\\', '/')).sort(), cases.map(([name]) => `base/${name}`).sort());
 	assert.ok(violations.every(item => item.line === 1 && item.character > 0 && item.message.includes('unavailable')));
 });
 
 test('native IPC type checks follow import aliases, namespaces and re-exports', t => {
 	const project = fixture(t);
-	project.write(
-		'platform/ipc/electron-browser/public.ts',
-		"export { IMainProcessService as DesktopIPC } from '../common/mainProcessService.js';",
-	);
-	project.write(
-		'workbench/browser/alias.ts',
-		"import type { DesktopIPC as Host } from '../../platform/ipc/electron-browser/public.js'; export type Leak = Host;",
-	);
-	project.write(
-		'workbench/common/namespace.ts',
-		"import type * as IPC from '../../platform/ipc/common/mainProcessService.js'; export type Leak = IPC.IMainProcessService;",
-	);
+	project.write('platform/ipc/electron-browser/public.ts', "export { IMainProcessService as DesktopIPC } from '../common/mainProcessService.js';");
+	project.write('workbench/browser/alias.ts', "import type { DesktopIPC as Host } from '../../platform/ipc/electron-browser/public.js'; export type Leak = Host;");
+	project.write('workbench/common/namespace.ts', "import type * as IPC from '../../platform/ipc/common/mainProcessService.js'; export type Leak = IPC.IMainProcessService;");
 	const violations = project.check();
-	assert.deepEqual(
-		[...new Set(violations.map(item => relative(project.sourceRoot, item.fileName).replaceAll('\\', '/')))].sort(),
-		['workbench/browser/alias.ts', 'workbench/common/namespace.ts'],
-	);
+	assert.deepEqual([...new Set(violations.map(item => relative(project.sourceRoot, item.fileName).replaceAll('\\', '/')))].sort(), ['workbench/browser/alias.ts', 'workbench/common/namespace.ts']);
 	assert.ok(violations.every(item => item.message.includes('IMainProcessService')));
 });
 
 test('native IPC checks identify inferred receivers without a native type name in the consumer', t => {
 	const project = fixture(t);
-	project.write(
-		'platform/ipc/electron-browser/factory.ts',
-		"import type { IMainProcessService } from '../common/mainProcessService.js'; export declare function getHost(): IMainProcessService;",
-	);
-	project.write(
-		'workbench/browser/inferred.ts',
-		"import { getHost } from '../../platform/ipc/electron-browser/factory.js'; getHost().getChannel('logger');",
-	);
+	project.write('platform/ipc/electron-browser/factory.ts', "import type { IMainProcessService } from '../common/mainProcessService.js'; export declare function getHost(): IMainProcessService;");
+	project.write('workbench/browser/inferred.ts', "import { getHost } from '../../platform/ipc/electron-browser/factory.js'; getHost().getChannel('logger');");
 	const violations = project.check();
 	assert.equal(violations.length, 1);
-	assert.equal(
-		relative(project.sourceRoot, violations[0]!.fileName).replaceAll('\\', '/'),
-		'workbench/browser/inferred.ts',
-	);
+	assert.equal(relative(project.sourceRoot, violations[0]!.fileName).replaceAll('\\', '/'), 'workbench/browser/inferred.ts');
 	assert.match(violations[0]!.message, /Inferred IMainProcessService/);
 });
 
 test('unrelated same-name types, host adapters and excluded test fixtures remain valid', t => {
 	const project = fixture(t);
-	project.write(
-		'workbench/browser/local.ts',
-		'interface IMainProcessService { getChannel(): void; } declare const local: IMainProcessService; local.getChannel(); export {};',
-	);
+	project.write('workbench/browser/local.ts', 'interface IMainProcessService { getChannel(): void; } declare const local: IMainProcessService; local.getChannel(); export {};');
 	project.write(
 		'platform/ipc/electron-browser/client.ts',
 		"import type { IMainProcessService } from '../common/mainProcessService.js'; export const use = (host: IMainProcessService) => host.getChannel('logger');",
@@ -151,8 +121,7 @@ test('environment projects cover each runtime and keep privileged preloads out o
 			{},
 			{
 				...ts.sys,
-				onUnRecoverableConfigFileDiagnostic: diagnostic =>
-					assert.fail(ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')),
+				onUnRecoverableConfigFileDiagnostic: diagnostic => assert.fail(ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')),
 			},
 		);
 		assert.ok(parsed && parsed.fileNames.length > 0, project.name);
@@ -163,9 +132,7 @@ test('environment projects cover each runtime and keep privileged preloads out o
 			project.name,
 		);
 		if (project.name === 'electron-browser') {
-			assert.ok(
-				!parsed.fileNames.some(path => path.endsWith('preload-browserView.ts') || path.endsWith('preload.cts')),
-			);
+			assert.ok(!parsed.fileNames.some(path => path.endsWith('preload-browserView.ts') || path.endsWith('preload.cts')));
 			assert.deepEqual(parsed.options.types, ['vite/client', '@webgpu/types']);
 		}
 	}
@@ -240,10 +207,7 @@ test('ambient Node declarations cannot grant host globals to Web code or ban sam
 	project.write('workbench/browser/process.ts', 'export const unavailable = globalThis.process;');
 	project.write('workbench/worker/type.ts', 'export type Unavailable = NodeJS.Timeout;');
 	project.write('workbench/electron-browser/buffer.ts', 'export const unavailable = Buffer.alloc(1);');
-	project.write(
-		'workbench/browser/local.ts',
-		'const process = { pid: 1 }; const Buffer = { value: 1 }; export const valid = process.pid + Buffer.value;',
-	);
+	project.write('workbench/browser/local.ts', 'const process = { pid: 1 }; const Buffer = { value: 1 }; export const valid = process.pid + Buffer.value;');
 	const violations = project.check();
 	assert.deepEqual(violations.map(item => relative(project.sourceRoot, item.fileName).replaceAll('\\', '/')).sort(), [
 		'workbench/browser/process.ts',

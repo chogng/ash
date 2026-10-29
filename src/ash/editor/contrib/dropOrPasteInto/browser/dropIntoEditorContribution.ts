@@ -1,20 +1,10 @@
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import {
-	EditorCommand,
-	EditorContributionInstantiation,
-	registerEditorCommand,
-	registerEditorContribution,
-	type ServicesAccessor,
-} from '../../../browser/editorFeatureRegistration.js';
+import { EditorCommand, EditorContributionInstantiation, registerEditorCommand, registerEditorContribution, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
 import { DropIntoEditorController, changeDropTypeCommandId, dropWidgetVisibleCtx } from './dropIntoEditorController.js';
 
-registerEditorContribution(
-	DropIntoEditorController.ID,
-	DropIntoEditorController,
-	EditorContributionInstantiation.BeforeFirstInteraction,
-);
+registerEditorContribution(DropIntoEditorController.ID, DropIntoEditorController, EditorContributionInstantiation.BeforeFirstInteraction);
 
 registerEditorCommand(
 	new (class extends EditorCommand {

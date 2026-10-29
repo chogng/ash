@@ -4,31 +4,15 @@ import { asCssVariableName, sizeValueToCss } from '../../../platform/theme/commo
 import { Emitter, Event } from '../../../base/common/event.js';
 import { setIconResolver } from '../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
-import {
-	createColorTheme,
-	darkColorTheme,
-	highContrastDarkColorTheme,
-	highContrastLightColorTheme,
-	lightColorTheme,
-} from '../../../platform/theme/common/colorTheme.js';
-import {
-	noFileIconTheme,
-	defaultProductIconTheme,
-	type IColorTheme,
-} from '../../../platform/theme/common/themeService.js';
+import { createColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import { noFileIconTheme, defaultProductIconTheme, type IColorTheme } from '../../../platform/theme/common/themeService.js';
 import { ColorScheme, isDarkColorScheme } from '../../../platform/theme/common/theme.js';
 import { Colors } from '../../../platform/theme/common/colorRegistry.js';
 import { getIconDefinition } from '../../../platform/theme/common/iconRegistry.js';
 import type { Color } from '../../../base/common/color.js';
 import { TokenizationRegistry } from '../../common/languages.js';
 import { TokenTheme } from '../../common/languages/supports/tokenization.js';
-import type {
-	BuiltinTheme,
-	IStandaloneTheme,
-	IStandaloneThemeData,
-	IStandaloneThemeService,
-	NamedEditorThemeData,
-} from '../common/standaloneTheme.js';
+import type { BuiltinTheme, IStandaloneTheme, IStandaloneThemeData, IStandaloneThemeService, NamedEditorThemeData } from '../common/standaloneTheme.js';
 import { hc_black, hc_light, vs, vs_dark } from '../common/themes.js';
 
 const ForcedColorsQuery = '(forced-colors: active)';
@@ -52,10 +36,7 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 	private readonly forcedColors: MediaQueryList;
 	private selectedThemeId = lightColorTheme.id;
 	private autoDetectHighContrast = true;
-	private readonly documentStyles = new Map<
-		Document,
-		{ readonly styles: ManagedStyleSheet; readonly metadata: IDisposable; references: number }
-	>();
+	private readonly documentStyles = new Map<Document, { readonly styles: ManagedStyleSheet; readonly metadata: IDisposable; references: number }>();
 
 	constructor(ownerWindow: Window) {
 		super();
@@ -71,18 +52,8 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 		// Host-level menus outlive individual editors; other documents follow their container lifetimes.
 		this._register(this.registerEditorContainer(ownerWindow.document.documentElement));
 		setIconResolver(ownerWindow.document, icon => getIconDefinition(icon));
-		for (const theme of [
-			lightColorTheme,
-			darkColorTheme,
-			highContrastLightColorTheme,
-			highContrastDarkColorTheme,
-		]) {
-			this.themes.set(
-				theme.id,
-				theme === lightColorTheme
-					? this.colorTheme
-					: withTokenTheme(theme, definitionForScheme(theme.colorScheme)),
-			);
+		for (const theme of [lightColorTheme, darkColorTheme, highContrastLightColorTheme, highContrastDarkColorTheme]) {
+			this.themes.set(theme.id, theme === lightColorTheme ? this.colorTheme : withTokenTheme(theme, definitionForScheme(theme.colorScheme)));
 		}
 		for (const [name, data] of builtinDefinitions) {
 			this.definitions.set(name, data);
@@ -128,12 +99,8 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 	}
 
 	private registerThemeClasses(domNode: HTMLElement): IDisposable {
-		const attributes = ['data-color-theme', 'data-color-scheme'].map(
-			name => [name, domNode.getAttribute(name)] as const,
-		);
-		const classes = ['hc-black', 'hc-light', 'ash-high-contrast'].map(
-			name => [name, domNode.classList.contains(name)] as const,
-		);
+		const attributes = ['data-color-theme', 'data-color-scheme'].map(name => [name, domNode.getAttribute(name)] as const);
+		const classes = ['hc-black', 'hc-light', 'ash-high-contrast'].map(name => [name, domNode.classList.contains(name)] as const);
 		const update = (): void => {
 			const theme = this.colorTheme;
 			domNode.setAttribute('data-color-theme', theme.id);
@@ -156,9 +123,7 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 
 	private updateThemeStyles(): void {
 		const theme = this.colorTheme;
-		const declarations = theme.colorEntries.map(
-			({ id, value }) => `${colorCssVariable(id)}: ${value?.toString() ?? 'initial'};`,
-		);
+		const declarations = theme.colorEntries.map(({ id, value }) => `${colorCssVariable(id)}: ${value?.toString() ?? 'initial'};`);
 		for (const { id, value } of theme.sizeEntries) {
 			declarations.push(`${asCssVariableName(id)}: ${sizeValueToCss(value)};`);
 		}
@@ -278,13 +243,7 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 			return;
 		}
 		const dark = isDarkColorScheme(selectedTheme.colorScheme);
-		const highContrastId = this.definitions.has(selectedTheme.id)
-			? dark
-				? 'hc-black'
-				: 'hc-light'
-			: dark
-				? highContrastDarkColorTheme.id
-				: highContrastLightColorTheme.id;
+		const highContrastId = this.definitions.has(selectedTheme.id) ? (dark ? 'hc-black' : 'hc-light') : dark ? highContrastDarkColorTheme.id : highContrastLightColorTheme.id;
 		const registeredHighContrastTheme = this.themes.get(highContrastId);
 		if (!registeredHighContrastTheme) {
 			throw new Error(`Unknown standalone color theme: ${highContrastId}`);
@@ -320,11 +279,7 @@ function definitionForScheme(scheme: ColorScheme): IStandaloneThemeData {
 	}
 }
 
-function compileTheme(
-	name: string,
-	data: IStandaloneThemeData,
-	definitions: ReadonlyMap<string, IStandaloneThemeData>,
-): IStandaloneTheme {
+function compileTheme(name: string, data: IStandaloneThemeData, definitions: ReadonlyMap<string, IStandaloneThemeData>): IStandaloneTheme {
 	const builtin = builtinDefinitions.get(data.base)!;
 	const base = name === data.base ? builtin : definitions.get(data.base)!;
 	const inheritedRules = base.inherit ? [...builtin.rules, ...base.rules] : base.rules;
@@ -340,14 +295,7 @@ function compileTheme(
 			}
 		}
 	}
-	const colorScheme =
-		data.base === 'vs'
-			? ColorScheme.Light
-			: data.base === 'vs-dark'
-				? ColorScheme.Dark
-				: data.base === 'hc-black'
-					? ColorScheme.HighContrastDark
-					: ColorScheme.HighContrastLight;
+	const colorScheme = data.base === 'vs' ? ColorScheme.Light : data.base === 'vs-dark' ? ColorScheme.Dark : data.base === 'hc-black' ? ColorScheme.HighContrastDark : ColorScheme.HighContrastLight;
 	const theme = createColorTheme({
 		id: name,
 		label: name,

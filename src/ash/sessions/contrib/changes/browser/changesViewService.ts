@@ -4,12 +4,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { ChangesViewMode } from '../common/changes.js';
-import type {
-	IChangesDetailsViewState,
-	IChangesViewService,
-	IChangesViewSectionCollapseState,
-	ChangesViewSection,
-} from '../common/changesViewService.js';
+import type { IChangesDetailsViewState, IChangesViewService, IChangesViewSectionCollapseState, ChangesViewSection } from '../common/changesViewService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -61,14 +56,7 @@ export class ChangesViewService extends Disposable implements IChangesViewServic
 		this._register(sessions.onDidChange(() => this.updateSections()));
 		this.updateSections();
 		const reviewedResources = context.createKey<readonly string[]>('sessions.changesReviewedFiles', []);
-		const updateReviewed = (): void =>
-			reviewedResources.set(
-				[...this.reviewed.get()].flatMap(resource => [
-					resource,
-					`${resource}&side=before`,
-					`${resource}&side=after`,
-				]),
-			);
+		const updateReviewed = (): void => reviewedResources.set([...this.reviewed.get()].flatMap(resource => [resource, `${resource}&side=before`, `${resource}&side=after`]));
 		this._register(this.reviewed.onDidChange(updateReviewed));
 		this._register(toDisposable(() => reviewedResources.reset()));
 		updateReviewed();
@@ -102,9 +90,7 @@ export class ChangesViewService extends Disposable implements IChangesViewServic
 
 	public getChangesetId(resource: URI | undefined, reader?: IReader): string | undefined {
 		const selections = reader ? this.changesetSelections.read(reader) : this.changesetSelections.get();
-		return resource
-			? selections.get(resource.with({ scheme: 'ash-session-changes', fragment: '' }).toString())
-			: undefined;
+		return resource ? selections.get(resource.with({ scheme: 'ash-session-changes', fragment: '' }).toString()) : undefined;
 	}
 
 	public setChangesetId(id: string | undefined, resource?: URI): void {
@@ -188,10 +174,7 @@ export class ChangesViewService extends Disposable implements IChangesViewServic
 
 	private restoreState(): void {
 		const stored = this.storage.get(stateKey, StorageScope.WORKSPACE);
-		const state =
-			stored === undefined
-				? { version: 1 as const, changesets: [], details: [], sections: [], reviewed: [] }
-				: readChangesState(stored);
+		const state = stored === undefined ? { version: 1 as const, changesets: [], details: [], sections: [], reviewed: [] } : readChangesState(stored);
 		// Invalid cache data must not partially replace a valid live snapshot.
 		if (!state) {
 			return;
@@ -216,32 +199,20 @@ function readChangesState(stored: string): StoredChangesState | undefined {
 		if (!isRecord(value) || value.version !== 1) {
 			return undefined;
 		}
-		const entries = (
-			candidate: unknown,
-			validKey: (key: string) => boolean,
-			validValue: (entry: unknown) => boolean,
-		): boolean => {
+		const entries = (candidate: unknown, validKey: (key: string) => boolean, validValue: (entry: unknown) => boolean): boolean => {
 			if (!Array.isArray(candidate) || candidate.length > 64) {
 				return false;
 			}
 			const keys = new Set<string>();
 			return candidate.every(entry => {
-				if (
-					!Array.isArray(entry) ||
-					entry.length !== 2 ||
-					typeof entry[0] !== 'string' ||
-					keys.has(entry[0]) ||
-					!validKey(entry[0]) ||
-					!validValue(entry[1])
-				) {
+				if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string' || keys.has(entry[0]) || !validKey(entry[0]) || !validValue(entry[1])) {
 					return false;
 				}
 				keys.add(entry[0]);
 				return true;
 			});
 		};
-		const strings = (candidate: unknown): candidate is string[] =>
-			Array.isArray(candidate) && candidate.every(item => typeof item === 'string');
+		const strings = (candidate: unknown): candidate is string[] => Array.isArray(candidate) && candidate.every(item => typeof item === 'string');
 		const validResource = (key: string): boolean => {
 			const resource = URI.parse(key);
 			return (
@@ -262,13 +233,7 @@ function readChangesState(stored: string): StoredChangesState | undefined {
 				value.details,
 				key => {
 					const delimiter = key.lastIndexOf('\n');
-					return (
-						delimiter > 0 &&
-						validResource(key.slice(0, delimiter)) &&
-						[ChangesViewMode.List, ChangesViewMode.Tree].includes(
-							key.slice(delimiter + 1) as ChangesViewMode,
-						)
-					);
+					return delimiter > 0 && validResource(key.slice(0, delimiter)) && [ChangesViewMode.List, ChangesViewMode.Tree].includes(key.slice(delimiter + 1) as ChangesViewMode);
 				},
 				entry =>
 					isRecord(entry) &&

@@ -8,10 +8,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import type { IEditorGroupView } from '../../../../../workbench/browser/parts/editor/editor.js';
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
-import {
-	IEditorService,
-	type EditorOpenTarget,
-} from '../../../../../workbench/services/editor/common/editorService.js';
+import { IEditorService, type EditorOpenTarget } from '../../../../../workbench/services/editor/common/editorService.js';
 import { EditorInputCapabilities, type IResourceEditorInput } from '../../../../../workbench/common/editor.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
@@ -33,13 +30,7 @@ suite('DesktopDockedTabsCoordinator', () => {
 			['ash-trace'],
 		);
 		assert.ok(fixture.opened.every(open => open.target === fixture.documents.id));
-		assert.ok(
-			fixture.documents.inputs.every(
-				input =>
-					input.capabilities ===
-					(EditorInputCapabilities.CannotClose | EditorInputCapabilities.ExcludeFromEditorLimit),
-			),
-		);
+		assert.ok(fixture.documents.inputs.every(input => input.capabilities === (EditorInputCapabilities.CannotClose | EditorInputCapabilities.ExcludeFromEditorLimit)));
 	});
 
 	test('disposing during the first managed open prevents subsequent opens', async () => {
@@ -67,14 +58,8 @@ suite('DesktopDockedTabsCoordinator', () => {
 		await gate.complete();
 		await outgoing;
 		await fixture.coordinator.reconcile(fixture.selection, true);
-		assert.equal(
-			fixture.documents.inputs.filter(input => input.resource.scheme === 'ash-session-changes').length,
-			1,
-		);
-		assert.equal(
-			fixture.documents.inputs.find(input => input.resource.scheme === 'ash-session-changes')?.resource.path,
-			'/incoming',
-		);
+		assert.equal(fixture.documents.inputs.filter(input => input.resource.scheme === 'ash-session-changes').length, 1);
+		assert.equal(fixture.documents.inputs.find(input => input.resource.scheme === 'ash-session-changes')?.resource.path, '/incoming');
 	});
 
 	test('closing a target group while an open waits does not recreate its tabs elsewhere', async () => {

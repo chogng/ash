@@ -1,9 +1,6 @@
 import { localize, localize2 } from '../../../../nls.js';
 import { ExternalUriOpenerPriority } from '../../../../editor/common/languages.js';
-import {
-	IExternalUriOpenerService,
-	type IExternalUriOpener,
-} from '../../externalUriOpener/common/externalUriOpenerService.js';
+import { IExternalUriOpenerService, type IExternalUriOpener } from '../../externalUriOpener/common/externalUriOpenerService.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { extUri } from '../../../../base/common/resources.js';
 
@@ -14,16 +11,10 @@ import { EditorPanes } from '../../../browser/editor.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
-import {
-	IInstantiationService,
-	type ServicesAccessor,
-} from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { BrowserEditor } from './browserEditor.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 
 import { BrowserEditorSerializer } from '../common/browserEditorInput.js';
 import { BrowserViewUri } from '../../../../platform/browserView/common/browserViewUri.js';
@@ -67,8 +58,7 @@ registerWorkbenchContribution('workbench.contrib.browserView', WorkbenchPhase.Bl
 					label: localize('browser.urlOpener', 'Open in Ash browser'),
 					// Offer the browser for explicit URL rules without changing ordinary link opening.
 					canOpen: async uri =>
-						configuration.getValue<boolean>('workbench.browser.openLocalhostLinks') &&
-						['localhost', '127.0.0.1', '[::1]'].includes(new URL(uri.toString()).hostname)
+						configuration.getValue<boolean>('workbench.browser.openLocalhostLinks') && ['localhost', '127.0.0.1', '[::1]'].includes(new URL(uri.toString()).hostname)
 							? ExternalUriOpenerPriority.Preferred
 							: ExternalUriOpenerPriority.Option,
 					openExternalUri: async uri => {
@@ -102,11 +92,7 @@ registerWorkbenchContribution('workbench.contrib.browserView.restore', Workbench
 		.initialize()
 		.then(async () => {
 			for (const input of views.getContextualBrowserViews().values()) {
-				if (
-					!editorPart.groups.some(group =>
-						group.inputs.some(candidate => extUri.isEqual(candidate.resource, input.resource)),
-					)
-				) {
+				if (!editorPart.groups.some(group => group.inputs.some(candidate => extUri.isEqual(candidate.resource, input.resource)))) {
 					await editors.openEditor(input, { pinned: true, preserveFocus: true });
 				}
 			}
@@ -121,11 +107,7 @@ import './features/browserDataStorageFeatures.js';
 
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 
-import {
-	BrowserNavigationFeatures,
-	CONTEXT_BROWSER_CAN_GO_BACK,
-	CONTEXT_BROWSER_CAN_GO_FORWARD,
-} from './features/browserNavigationFeatures.js';
+import { BrowserNavigationFeatures, CONTEXT_BROWSER_CAN_GO_BACK, CONTEXT_BROWSER_CAN_GO_FORWARD } from './features/browserNavigationFeatures.js';
 import { BrowserEditorErrorFeatures } from './features/browserEditorErrorFeatures.js';
 import { WebContentsViewRendererFeature } from './features/webContentsViewRendererFeature.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';

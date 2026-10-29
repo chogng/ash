@@ -12,17 +12,14 @@ const snapshot = (document: ash.TextDocument): JsonDocumentSnapshot => ({
 	version: document.version,
 	text: document.getText(),
 });
-const range = (value: {
-	start: { line: number; character: number };
-	end: { line: number; character: number };
-}): ash.Range => new ash.Range(value.start.line, value.start.character, value.end.line, value.end.character);
+const range = (value: { start: { line: number; character: number }; end: { line: number; character: number } }): ash.Range =>
+	new ash.Range(value.start.line, value.start.character, value.end.line, value.end.character);
 
 export async function activate(context: ash.ExtensionContext): Promise<void> {
 	configureLocalization({
 		contents: {
 			...ash.l10n.bundle,
-			[dependenciesDescription]:
-				ash.l10n.bundle?.['json.schema.dependenciesDescription'] ?? dependenciesDescription,
+			[dependenciesDescription]: ash.l10n.bundle?.['json.schema.dependenciesDescription'] ?? dependenciesDescription,
 		},
 	});
 	const features = new JsonLanguageFeatures(() => ash.languages.getJsonSchemaContributions());
@@ -35,21 +32,11 @@ export async function activate(context: ash.ExtensionContext): Promise<void> {
 		const generation = (pending.get(source.uri) ?? 0) + 1;
 		pending.set(source.uri, generation);
 		const values = await features.validate(source);
-		if (
-			disposed ||
-			document.isClosed ||
-			document.version !== source.version ||
-			pending.get(source.uri) !== generation
-		)
-			return;
+		if (disposed || document.isClosed || document.version !== source.version || pending.get(source.uri) !== generation) return;
 		diagnostics.set(
 			document.uri,
 			values.map(value => {
-				const diagnostic = new ash.Diagnostic(
-					range(value.range),
-					typeof value.message === 'string' ? value.message : value.message.value,
-					(value.severity ?? 1) - 1,
-				);
+				const diagnostic = new ash.Diagnostic(range(value.range), typeof value.message === 'string' ? value.message : value.message.value, (value.severity ?? 1) - 1);
 				diagnostic.source = 'json';
 				diagnostic.code = value.code;
 				return diagnostic;
@@ -80,10 +67,7 @@ export async function activate(context: ash.ExtensionContext): Promise<void> {
 					if (token.isCancellationRequested) return undefined;
 					return new ash.CompletionList(
 						(result?.items ?? []).map(value => {
-							const item = new ash.CompletionItem(
-								value.label,
-								value.kind === undefined ? undefined : value.kind - 1,
-							);
+							const item = new ash.CompletionItem(value.label, value.kind === undefined ? undefined : value.kind - 1);
 							const edit = value.textEdit && 'range' in value.textEdit ? value.textEdit : undefined;
 							const text = edit?.newText ?? value.insertText ?? value.label;
 							item.insertText = value.insertTextFormat === 2 ? new ash.SnippetString(text) : text;
@@ -91,10 +75,7 @@ export async function activate(context: ash.ExtensionContext): Promise<void> {
 							item.filterText = value.filterText || undefined;
 							item.sortText = value.sortText || undefined;
 							item.detail = value.detail || undefined;
-							item.documentation =
-								(typeof value.documentation === 'string'
-									? value.documentation
-									: value.documentation?.value) || undefined;
+							item.documentation = (typeof value.documentation === 'string' ? value.documentation : value.documentation?.value) || undefined;
 							return item;
 						}),
 						result?.isIncomplete ?? false,
@@ -108,14 +89,10 @@ export async function activate(context: ash.ExtensionContext): Promise<void> {
 			async provideHover(document, position, token) {
 				const value = await features.hover(snapshot(document), position);
 				if (!value || token.isCancellationRequested) return undefined;
-				const contents = (Array.isArray(value.contents) ? value.contents : [value.contents]).filter(
-					content => (typeof content === 'string' ? content : content.value).length > 0,
-				);
+				const contents = (Array.isArray(value.contents) ? value.contents : [value.contents]).filter(content => (typeof content === 'string' ? content : content.value).length > 0);
 				return contents.length
 					? new ash.Hover(
-							contents.map(content =>
-								typeof content === 'string' ? content : new ash.MarkdownString(content.value),
-							),
+							contents.map(content => (typeof content === 'string' ? content : new ash.MarkdownString(content.value))),
 							value.range ? range(value.range) : undefined,
 						)
 					: undefined;
@@ -123,11 +100,7 @@ export async function activate(context: ash.ExtensionContext): Promise<void> {
 		}),
 		ash.languages.registerDocumentFormattingEditProvider(selector, {
 			provideDocumentFormattingEdits: (document, options, token) =>
-				token.isCancellationRequested
-					? []
-					: features
-							.format(snapshot(document), options)
-							.map(edit => new ash.TextEdit(range(edit.range), edit.newText)),
+				token.isCancellationRequested ? [] : features.format(snapshot(document), options).map(edit => new ash.TextEdit(range(edit.range), edit.newText)),
 		}),
 	);
 	await Promise.all(ash.workspace.textDocuments.map(validate));

@@ -195,10 +195,7 @@ export class SelectBox extends Disposable {
 		validateOptions(options);
 		const previousValue = this.value;
 		this.optionList.items = options;
-		const preservedIndex =
-			previousValue === undefined
-				? -1
-				: this.options.findIndex(option => option.value === previousValue && !option.disabled);
+		const preservedIndex = previousValue === undefined ? -1 : this.options.findIndex(option => option.value === previousValue && !option.disabled);
 		this.applySelection(preservedIndex >= 0 ? preservedIndex : this.firstEnabledIndex());
 		this.syncEnabledState();
 	}
@@ -270,7 +267,11 @@ export class SelectBox extends Disposable {
 		this.applySelection(index);
 		this.dropdown.hide();
 		if (!changed) return;
-		this._onDidSelect.fire({ value: option.value, index, option });
+		this._onDidSelect.fire({
+			value: option.value,
+			index,
+			option,
+		});
 	}
 
 	private onListKeyDown(event: KeyboardEvent): void {
@@ -334,12 +335,7 @@ export class SelectBox extends Disposable {
 			step = -1;
 		} else {
 			step = direction === 'next' ? 1 : -1;
-			index =
-				this.optionList.activeIndex < 0
-					? step > 0
-						? 0
-						: this.options.length - 1
-					: this.optionList.activeIndex + step;
+			index = this.optionList.activeIndex < 0 ? (step > 0 ? 0 : this.options.length - 1) : this.optionList.activeIndex + step;
 		}
 		while (index >= 0 && index < this.options.length) {
 			if (!this.options[index]?.disabled) {
@@ -367,7 +363,9 @@ export class SelectBox extends Disposable {
 	private focusActiveOption(): void {
 		const option = this.optionList.row(this.optionList.activeIndex);
 		if (option) focusPreservingScroll(option);
-		option?.scrollIntoView({ block: 'nearest' });
+		option?.scrollIntoView({
+			block: 'nearest',
+		});
 	}
 
 	private optionElements(): HTMLElement[] {

@@ -15,11 +15,7 @@ import { createDiffEditorInput } from '../../../common/editor/diffEditorInput.js
 import { IWorkingCopyService } from '../../workingCopy/common/workingCopyService.js';
 import { IEditorGroupsService } from '../common/editorGroupsService.js';
 import { IEditorService } from '../common/editorService.js';
-import {
-	APP_SERVER_METHODS,
-	APP_SERVER_SERVER_REQUESTS,
-	type IdeContext,
-} from '../../../../../../.build/protocol/typescript/index.js';
+import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, type IdeContext } from '../../../../../../.build/protocol/typescript/index.js';
 
 /** Publishes this live window; editor models, selections, tabs and undo retain their existing owners. */
 export class AppServerIdeHost extends Disposable {
@@ -45,8 +41,7 @@ export class AppServerIdeHost extends Disposable {
 				// Retire discovery after an in-flight registration, even if the connection stays open.
 				void this.registration
 					.schedule(async () => {
-						if (client.state === 'ready')
-							await client.request(APP_SERVER_METHODS['ide/request'], { type: 'unregister' });
+						if (client.state === 'ready') await client.request(APP_SERVER_METHODS['ide/request'], { type: 'unregister' });
 					})
 					.catch(error => {
 						if (client.state === 'ready') onUnexpectedError(error);
@@ -81,10 +76,7 @@ export class AppServerIdeHost extends Disposable {
 					case 'openReview': {
 						const original = this.displayResource(params.original);
 						const modified = this.displayResource(params.modified);
-						await this.editors.openEditor(
-							createDiffEditorInput({ resource: original }, { resource: modified }),
-							{ ignoreError: true },
-						);
+						await this.editors.openEditor(createDiffEditorInput({ resource: original }, { resource: modified }), { ignoreError: true });
 						break;
 					}
 				}
@@ -113,17 +105,10 @@ export class AppServerIdeHost extends Disposable {
 		const generation = this.client.generation;
 		void this.registration
 			.schedule(async () => {
-				if (
-					this.lifetime.signal.aborted ||
-					this.client.state !== 'ready' ||
-					this.client.generation !== generation
-				)
-					return;
+				if (this.lifetime.signal.aborted || this.client.state !== 'ready' || this.client.generation !== generation) return;
 				this.registered = false;
 				const workspace = this.workspace.getWorkspace();
-				const roots = workspace.folders
-					.filter(folder => folder.uri.scheme === 'file')
-					.map(folder => folder.uri.fsPath);
+				const roots = workspace.folders.filter(folder => folder.uri.scheme === 'file').map(folder => folder.uri.fsPath);
 				// Remote windows require an execution-environment contract before they can attach.
 				if (workspace.remoteAuthority || roots.length === 0) {
 					this.registered = false;
@@ -149,17 +134,13 @@ export class AppServerIdeHost extends Disposable {
 
 	private displayResource(path: string): URI {
 		const resource = URI.file(path);
-		if (!this.workspace.getWorkspaceFolder(resource))
-			throw new Error('IDE display target is outside this workspace');
+		if (!this.workspace.getWorkspaceFolder(resource)) throw new Error('IDE display target is outside this workspace');
 		return resource;
 	}
 
 	private capture(paths: readonly string[]): IdeContext {
 		const roots = paths.map(path => URI.file(path));
-		const allowed = (resource: URI): boolean =>
-			resource.scheme === 'file' &&
-			!!this.workspace.getWorkspaceFolder(resource) &&
-			roots.some(root => extUri.isEqualOrParent(resource, root));
+		const allowed = (resource: URI): boolean => resource.scheme === 'file' && !!this.workspace.getWorkspaceFolder(resource) && roots.some(root => extUri.isEqualOrParent(resource, root));
 		const active = this.codeEditors.getActiveCodeEditor();
 		const model = active?.getModel();
 		let activeFile: IdeContext['activeFile'] = null;

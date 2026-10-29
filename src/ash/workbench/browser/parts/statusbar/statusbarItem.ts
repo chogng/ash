@@ -129,10 +129,7 @@ export class StatusbarEntryItem extends Disposable {
 	}
 
 	private updateContent(previousEntry: IStatusbarEntry | undefined, entry: IStatusbarEntry): void {
-		this.domNode.classList.toggle(
-			'icon-only',
-			entry.icon !== undefined && !entry.text && entry.segments === undefined,
-		);
+		this.domNode.classList.toggle('icon-only', entry.icon !== undefined && !entry.text && entry.segments === undefined);
 		this.labelDomNode.classList.toggle('has-segments', entry.segments !== undefined);
 		if (entry.segments) {
 			this.iconDomNode?.remove();
@@ -148,10 +145,7 @@ export class StatusbarEntryItem extends Disposable {
 		this.updateText(previousEntry?.segments ? undefined : previousEntry?.text, entry.text);
 	}
 
-	private updateSegments(
-		previousSegments: readonly IStatusbarEntrySegment[] | undefined,
-		segments: readonly IStatusbarEntrySegment[],
-	): void {
+	private updateSegments(previousSegments: readonly IStatusbarEntrySegment[] | undefined, segments: readonly IStatusbarEntrySegment[]): void {
 		if (segmentsEqual(previousSegments, segments)) return;
 		this.clearSegments();
 		for (const segment of segments) {
@@ -196,16 +190,8 @@ export class StatusbarEntryItem extends Disposable {
 	}
 }
 
-function segmentsEqual(
-	first: readonly IStatusbarEntrySegment[] | undefined,
-	second: readonly IStatusbarEntrySegment[],
-): boolean {
-	return (
-		first?.length === second.length &&
-		first.every(
-			(segment, index) => segment.icon?.id === second[index]?.icon?.id && segment.text === second[index]?.text,
-		)
-	);
+function segmentsEqual(first: readonly IStatusbarEntrySegment[] | undefined, second: readonly IStatusbarEntrySegment[]): boolean {
+	return first?.length === second.length && first.every((segment, index) => segment.icon?.id === second[index]?.icon?.id && segment.text === second[index]?.text);
 }
 
 function setOptionalAttribute(element: HTMLElement, name: string, value: string): void {

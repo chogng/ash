@@ -3,11 +3,7 @@ import { test } from 'mocha';
 import { URI } from '../../../../../base/common/uri.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { SearchResultImpl } from '../../../search/browser/searchTreeModel/searchResult.js';
-import {
-	parseSearchEditor,
-	searchEditorLocation,
-	serializeSearchResultForEditor,
-} from '../../browser/searchEditorSerialization.js';
+import { parseSearchEditor, searchEditorLocation, serializeSearchResultForEditor } from '../../browser/searchEditorSerialization.js';
 
 test('saved search documents restore multiline queries, filters and exact source ranges across roots', () => {
 	const query = {

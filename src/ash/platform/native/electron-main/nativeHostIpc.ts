@@ -1,20 +1,10 @@
 import type { EventEmitter } from 'node:events';
 import { toDisposable } from '../../../base/common/lifecycle.js';
-import type {
-	OpenDialogOptions,
-	OpenDialogReturnValue,
-	SaveDialogOptions,
-	SaveDialogReturnValue,
-} from '../../../base/parts/sandbox/common/electronTypes.js';
+import type { OpenDialogOptions, OpenDialogReturnValue, SaveDialogOptions, SaveDialogReturnValue } from '../../../base/parts/sandbox/common/electronTypes.js';
 import type { Event } from '../../../base/common/event.js';
 import type { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
 import type { IThemeMainService } from '../../theme/electron-main/themeMainService.js';
-import {
-	WINDOW_SPLASH_READ_CHANNEL,
-	WINDOW_SPLASH_SAVE_CHANNEL,
-	validatePartsSplash,
-	type IPartsSplash,
-} from '../../theme/common/themeService.js';
+import { WINDOW_SPLASH_READ_CHANNEL, WINDOW_SPLASH_SAVE_CHANNEL, validatePartsSplash, type IPartsSplash } from '../../theme/common/themeService.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import {
 	NATIVE_HOST_IS_ADMIN_CHANNEL,
@@ -59,17 +49,8 @@ import {
 	validateRevealFilePath,
 } from '../common/nativeHost.js';
 
-import {
-	validateOpenEmptyWindowOptions,
-	type IOpenEmptyWindowOptions,
-	type TitleBarStyleConfiguration,
-	type IWindowClientSize,
-} from '../../window/common/window.js';
-import type {
-	AgentHostEditorUpdate,
-	IAgentHostEditorState,
-	IAgentsWindowInvitation,
-} from '../../chat/common/agentsWindowInvitation.js';
+import { validateOpenEmptyWindowOptions, type IOpenEmptyWindowOptions, type TitleBarStyleConfiguration, type IWindowClientSize } from '../../window/common/window.js';
+import type { AgentHostEditorUpdate, IAgentHostEditorState, IAgentsWindowInvitation } from '../../chat/common/agentsWindowInvitation.js';
 import { URI, type UriComponents } from '../../../base/common/uri.js';
 import {
 	AGENT_HOST_EDITOR_STATE_CHANNEL,
@@ -93,10 +74,7 @@ export interface INativeHostMainService {
 	openWorkspace(root: string, forceNewWindow?: boolean): Promise<void>;
 	openWindow(options: IOpenEmptyWindowOptions): Promise<void>;
 	openAgentsWindow(options?: IOpenAgentsWindowOptions): Promise<void>;
-	moveTerminalToWindow(
-		transfer: ITerminalWindowTransfer,
-		targetWindowId?: number,
-	): Promise<ITerminalWindowTransferResult>;
+	moveTerminalToWindow(transfer: ITerminalWindowTransfer, targetWindowId?: number): Promise<ITerminalWindowTransferResult>;
 	takeTerminalTransfer(): ITerminalWindowTransfer | undefined;
 	completeTerminalTransfer(result: ITerminalWindowTransferResult): void;
 	getAgentHostEditorState(): IAgentHostEditorState;
@@ -204,7 +182,11 @@ export function nativeHostIpcRoutes(service: INativeHostMainService): readonly I
 			validate: validateAccessibilitySupportRead,
 			invoke: () => service.isAccessibilitySupportEnabled(),
 		},
-		{ channel: NATIVE_HOST_PICK_FOLDER_CHANNEL, validate: validatePickFolder, invoke: () => service.pickFolder() },
+		{
+			channel: NATIVE_HOST_PICK_FOLDER_CHANNEL,
+			validate: validatePickFolder,
+			invoke: () => service.pickFolder(),
+		},
 		...fileDialogIpcRoutes(service),
 		{
 			channel: NATIVE_HOST_OPEN_WORKSPACE_CHANNEL,
@@ -244,9 +226,7 @@ export function nativeHostIpcRoutes(service: INativeHostMainService): readonly I
 }
 
 /** File pickers belong to their requesting window; picking a path grants no file access. */
-export function fileDialogIpcRoutes(
-	service: Pick<INativeHostMainService, 'showOpenDialog' | 'showSaveDialog'>,
-): readonly IpcRoute<unknown, unknown>[] {
+export function fileDialogIpcRoutes(service: Pick<INativeHostMainService, 'showOpenDialog' | 'showSaveDialog'>): readonly IpcRoute<unknown, unknown>[] {
 	return [
 		{
 			channel: NATIVE_HOST_PICK_FILE_CHANNEL,
@@ -262,9 +242,7 @@ export function fileDialogIpcRoutes(
 }
 
 /** Window appearance is available to every Electron renderer, including Sessions. */
-export function windowAppearanceIpcRoutes(
-	service: Pick<INativeHostMainService, 'setWindowTheme' | 'setWindowDimmed'>,
-): readonly IpcRoute<unknown, unknown>[] {
+export function windowAppearanceIpcRoutes(service: Pick<INativeHostMainService, 'setWindowTheme' | 'setWindowDimmed'>): readonly IpcRoute<unknown, unknown>[] {
 	return [
 		{
 			channel: NATIVE_HOST_SET_WINDOW_THEME_CHANNEL,
@@ -297,11 +275,7 @@ export function colorSchemeChannel(service: IThemeMainService): IServerChannel {
 }
 
 /** The trusted window host supplies the cache scope; renderers cannot write another window's state. */
-export function windowSplashIpcRoutes(
-	service: IThemeMainService,
-	scope: () => string,
-	setBackground: (color: string) => void,
-): readonly IpcRoute<unknown, unknown>[] {
+export function windowSplashIpcRoutes(service: IThemeMainService, scope: () => string, setBackground: (color: string) => void): readonly IpcRoute<unknown, unknown>[] {
 	return [
 		{
 			channel: WINDOW_SPLASH_READ_CHANNEL,

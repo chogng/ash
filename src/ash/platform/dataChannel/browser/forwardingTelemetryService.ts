@@ -1,9 +1,4 @@
-import type {
-	ClassifiedEvent,
-	IGDPRProperty,
-	OmitMetadata,
-	StrictPropertyCheck,
-} from '../../telemetry/common/gdprTypings.js';
+import type { ClassifiedEvent, IGDPRProperty, OmitMetadata, StrictPropertyCheck } from '../../telemetry/common/gdprTypings.js';
 import { ITelemetryService, type ITelemetryData, type TelemetryLevel } from '../../telemetry/common/telemetry.js';
 import { IDataChannelService } from '../common/dataChannel.js';
 
@@ -45,10 +40,7 @@ export class InterceptingTelemetryService implements ITelemetryService {
 		this.baseService.publicLog(eventName, data);
 	}
 
-	public publicLog2<E extends ClassifiedEvent<OmitMetadata<T>> = never, T extends IGDPRProperty = never>(
-		eventName: string,
-		data?: StrictPropertyCheck<T, E>,
-	): void {
+	public publicLog2<E extends ClassifiedEvent<OmitMetadata<T>> = never, T extends IGDPRProperty = never>(eventName: string, data?: StrictPropertyCheck<T, E>): void {
 		this.intercept(eventName, data);
 		this.baseService.publicLog2<E, T>(eventName, data);
 	}
@@ -58,10 +50,7 @@ export class InterceptingTelemetryService implements ITelemetryService {
 		this.baseService.publicLogError(eventName, data);
 	}
 
-	public publicLogError2<E extends ClassifiedEvent<OmitMetadata<T>> = never, T extends IGDPRProperty = never>(
-		eventName: string,
-		data?: StrictPropertyCheck<T, E>,
-	): void {
+	public publicLogError2<E extends ClassifiedEvent<OmitMetadata<T>> = never, T extends IGDPRProperty = never>(eventName: string, data?: StrictPropertyCheck<T, E>): void {
 		this.intercept(eventName, data);
 		this.baseService.publicLogError2<E, T>(eventName, data);
 	}
@@ -92,10 +81,7 @@ export function isCopilotLikeExtension(extensionId: string | undefined): boolean
 }
 
 export class DataChannelForwardingTelemetryService extends InterceptingTelemetryService {
-	constructor(
-		@ITelemetryService telemetryService: ITelemetryService,
-		@IDataChannelService dataChannelService: IDataChannelService,
-	) {
+	constructor(@ITelemetryService telemetryService: ITelemetryService, @IDataChannelService dataChannelService: IDataChannelService) {
 		const channel = dataChannelService.getDataChannel<IEditTelemetryData>('editTelemetry');
 		super(telemetryService, (eventName, data) => {
 			if (data && (data as Record<symbol, unknown>)[channelForwarding] === false) {

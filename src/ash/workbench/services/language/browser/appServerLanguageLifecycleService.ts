@@ -5,16 +5,10 @@ import { ICodeEditorService } from '../../../../editor/browser/services/codeEdit
 import type { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
-import {
-	ILanguageServerService,
-	type LanguageServerState,
-} from '../../../../platform/language/common/languageServerService.js';
+import { ILanguageServerService, type LanguageServerState } from '../../../../platform/language/common/languageServerService.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import {
-	ILanguageServerLifecycleService,
-	LanguageServerLifecycleConfiguration,
-} from '../common/languageServerLifecycleService.js';
+import { ILanguageServerLifecycleService, LanguageServerLifecycleConfiguration } from '../common/languageServerLifecycleService.js';
 
 interface Server {
 	readonly dirId: string;
@@ -48,12 +42,7 @@ export class AppServerLanguageLifecycleService extends Disposable implements ILa
 	) {
 		super();
 		const subscription = events.subscribe(event => {
-			if (
-				event.method !== 'language/serverCapabilities' &&
-				event.method !== 'language/serverState' &&
-				event.method !== 'language/serverProgress'
-			)
-				return;
+			if (event.method !== 'language/serverCapabilities' && event.method !== 'language/serverState' && event.method !== 'language/serverProgress') return;
 			const dirId = event.params.dirId ?? this.workspace.getWorkspace().folders[0]?.id;
 			if (!dirId) return;
 			const key = `${dirId}:${event.params.server}`;
@@ -81,8 +70,7 @@ export class AppServerLanguageLifecycleService extends Disposable implements ILa
 			if (event.method === 'language/serverState') {
 				entry.state = event.params.state.type;
 				if (entry.state === 'starting' || entry.state === 'stopped') entry.capabilitiesCurrent = false;
-				if (entry.state === 'failed' || entry.state === 'crashLoop')
-					entry.ready?.error(new Error('Language server could not resume'));
+				if (entry.state === 'failed' || entry.state === 'crashLoop') entry.ready?.error(new Error('Language server could not resume'));
 				if (entry.state === 'idle' || entry.state === 'stopped') entry.progress.clear();
 			}
 			// Ready precedes the new incarnation's capability notification on the wire.
@@ -133,15 +121,9 @@ export class AppServerLanguageLifecycleService extends Disposable implements ILa
 		this.refreshAll();
 	}
 
-	async withActivity<T>(
-		document: { readonly dirId?: string; readonly languageId: string },
-		signal: AbortSignal | undefined,
-		operation: () => Promise<T>,
-	): Promise<T> {
+	async withActivity<T>(document: { readonly dirId?: string; readonly languageId: string }, signal: AbortSignal | undefined, operation: () => Promise<T>): Promise<T> {
 		const dirId = document.dirId ?? this.workspace.getWorkspace().folders[0]?.id;
-		const entry = [...this.entries.values()].find(
-			value => value.dirId === dirId && value.languages.includes(document.languageId),
-		);
+		const entry = [...this.entries.values()].find(value => value.dirId === dirId && value.languages.includes(document.languageId));
 		if (!entry) return operation();
 		entry.requests++;
 		this.cancelTimer(entry);
@@ -166,11 +148,7 @@ export class AppServerLanguageLifecycleService extends Disposable implements ILa
 		// A closed resource can retain a cached TextModel for undo or working-copy reuse.
 		return this.editors.listCodeEditors().some(editor => {
 			const model = editor.getModel();
-			return (
-				model &&
-				entry.languages.includes(model.getLanguageId()) &&
-				this.workspace.getWorkspaceFolder(model.uri)?.id === entry.dirId
-			);
+			return model && entry.languages.includes(model.getLanguageId()) && this.workspace.getWorkspaceFolder(model.uri)?.id === entry.dirId;
 		});
 	}
 
@@ -179,8 +157,7 @@ export class AppServerLanguageLifecycleService extends Disposable implements ILa
 		const enabled = this.configuration.getValue<boolean>(LanguageServerLifecycleConfiguration.autoSuspend);
 		if (this.hasOpenModel(entry) || !enabled) {
 			this.cancelTimer(entry);
-			if (entry.state === 'idle' || entry.stopping)
-				void this.activate(entry).catch(error => this.log.warn('Language server resume failed', error));
+			if (entry.state === 'idle' || entry.stopping) void this.activate(entry).catch(error => this.log.warn('Language server resume failed', error));
 			return;
 		}
 		if (entry.state !== 'ready' || entry.requests || entry.progress.size || entry.stopping || entry.waking) {
@@ -191,13 +168,7 @@ export class AppServerLanguageLifecycleService extends Disposable implements ILa
 		entry.timer = setTimeout(
 			() => {
 				entry.timer = undefined;
-				if (
-					this.hasOpenModel(entry) ||
-					entry.requests ||
-					entry.progress.size ||
-					!this.configuration.getValue<boolean>(LanguageServerLifecycleConfiguration.autoSuspend)
-				)
-					return;
+				if (this.hasOpenModel(entry) || entry.requests || entry.progress.size || !this.configuration.getValue<boolean>(LanguageServerLifecycleConfiguration.autoSuspend)) return;
 				entry.stopping = this.servers.control({
 					action: 'suspend',
 					dirId: this.wireId(entry),
@@ -220,19 +191,11 @@ export class AppServerLanguageLifecycleService extends Disposable implements ILa
 		entry.waking = Promise.resolve()
 			.then(async () => {
 				await entry.stopping;
-				if (
-					!this.alive ||
-					this.entries.get(`${entry.dirId}:${entry.serverId}`) !== entry ||
-					entry.state !== 'idle'
-				)
-					return;
+				if (!this.alive || this.entries.get(`${entry.dirId}:${entry.serverId}`) !== entry || entry.state !== 'idle') return;
 				const ready = (entry.ready = new DeferredPromise<void>());
 				const timeout = setTimeout(() => ready.error(new Error('Language server resume timed out')), 30_000);
 				try {
-					await Promise.all([
-						this.servers.control({ action: 'resume', dirId: this.wireId(entry), serverId: entry.serverId }),
-						ready.p,
-					]);
+					await Promise.all([this.servers.control({ action: 'resume', dirId: this.wireId(entry), serverId: entry.serverId }), ready.p]);
 				} finally {
 					clearTimeout(timeout);
 					entry.ready = undefined;

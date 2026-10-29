@@ -40,15 +40,11 @@ export class TerminalRecorder {
 
 	handleData(data: string, shellIntegration?: TerminalShellIntegrationEvent): void {
 		if (!data && !shellIntegration) return;
-		if (
-			shellIntegration?.type === 'commandStorageDisabled' ||
-			(shellIntegration?.type === 'commandExecuted' && shellIntegration.commandStorageDisabled)
-		) {
+		if (shellIntegration?.type === 'commandStorageDisabled' || (shellIntegration?.type === 'commandExecuted' && shellIntegration.commandStorageDisabled)) {
 			for (const segment of this.segments)
 				for (const chunk of segment.chunks) {
 					const previous = chunk.shellIntegration;
-					if (previous?.type === 'commandLine')
-						chunk.shellIntegration = { ...previous, value: '', isTrusted: false };
+					if (previous?.type === 'commandLine') chunk.shellIntegration = { ...previous, value: '', isTrusted: false };
 					else if (previous?.type === 'commandExecuted')
 						chunk.shellIntegration = {
 							...previous,
@@ -57,10 +53,7 @@ export class TerminalRecorder {
 							commandStorageDisabled: true,
 						};
 				}
-			this.bytes = this.segments.reduce(
-				(sum, segment) => sum + segment.chunks.reduce((count, chunk) => count + chunkBytes(chunk), 0),
-				0,
-			);
+			this.bytes = this.segments.reduce((sum, segment) => sum + segment.chunks.reduce((count, chunk) => count + chunkBytes(chunk), 0), 0);
 		}
 		let encoded = VSBuffer.fromString(data);
 		if (encoded.byteLength > this.limits.maxBytes) {
@@ -99,9 +92,7 @@ export class TerminalRecorder {
 							cols: segment.cols,
 							rows: segment.rows,
 							data: chunk.data,
-							...(chunk.shellIntegration
-								? { shellIntegration: snapshotBoundary(chunk.shellIntegration) }
-								: {}),
+							...(chunk.shellIntegration ? { shellIntegration: snapshotBoundary(chunk.shellIntegration) } : {}),
 						});
 				}
 				return events.length ? events : [{ cols: segment.cols, rows: segment.rows, data: '' }];
@@ -115,10 +106,7 @@ export class TerminalRecorder {
 }
 
 function chunkBytes(chunk: { data: string; shellIntegration?: TerminalShellIntegrationEvent }): number {
-	return (
-		VSBuffer.fromString(chunk.data).byteLength +
-		(chunk.shellIntegration ? VSBuffer.fromString(JSON.stringify(chunk.shellIntegration)).byteLength : 0)
-	);
+	return VSBuffer.fromString(chunk.data).byteLength + (chunk.shellIntegration ? VSBuffer.fromString(JSON.stringify(chunk.shellIntegration)).byteLength : 0);
 }
 
 function snapshotBoundary(event: TerminalShellIntegrationEvent): TerminalShellIntegrationEvent {

@@ -19,19 +19,9 @@ import { createDisconnectedFileApi } from '../../platform/files/browser/fileApi.
 import { createDisconnectedExtensionApi } from '../../platform/extensions/browser/extensionApi.js';
 import { createDisconnectedSyntaxApi } from '../../platform/syntax/browser/syntaxApi.js';
 import type { IRendererHost } from '../../platform/renderer/common/rendererHost.js';
-import {
-	unavailableOperation,
-	WebAppServerUnavailableError,
-} from '../../platform/renderer/browser/disconnectedHost.js';
-import {
-	createDisconnectedContentSearchApi,
-	createDisconnectedContentSearchConfigurationApi,
-} from '../../platform/search/browser/searchApi.js';
-import {
-	createDisconnectedAgentSessionService,
-	createDisconnectedAgentThreadService,
-	createDisconnectedAgentTurnService,
-} from '../../platform/agentHost/browser/appServerAgentService.js';
+import { unavailableOperation, WebAppServerUnavailableError } from '../../platform/renderer/browser/disconnectedHost.js';
+import { createDisconnectedContentSearchApi, createDisconnectedContentSearchConfigurationApi } from '../../platform/search/browser/searchApi.js';
+import { createDisconnectedAgentSessionService, createDisconnectedAgentThreadService, createDisconnectedAgentTurnService } from '../../platform/agentHost/browser/appServerAgentService.js';
 import { createDisconnectedAgentModelsService } from '../../platform/agentHost/browser/appServerAgentModels.js';
 import { DisconnectedTerminalProcessService } from '../../platform/terminal/browser/disconnectedTerminalProcessService.js';
 import { createDisconnectedDocumentCollaborationApi } from '../../platform/collab/browser/documentCollaborationApi.js';

@@ -20,23 +20,15 @@ suite('Webview service', () => {
 		const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IWebviewService)!;
 		using instantiation = new InstantiationService(new ServiceCollection(descriptor));
 		const service = instantiation.get(IWebviewService);
-		assert.throws(
-			() => service.createWebviewElement({ title: 'Missing files', options: {} }),
-			/Unknown service: fileService/,
-		);
+		assert.throws(() => service.createWebviewElement({ title: 'Missing files', options: {} }), /Unknown service: fileService/);
 		instantiation.registerSingleton(IFileService, () => createTestFileService(new MemoryFileService([])));
-		assert.throws(
-			() => service.createWebviewElement({ title: 'Missing environment', options: {} }),
-			/Unknown service: workbenchEnvironmentService/,
-		);
+		assert.throws(() => service.createWebviewElement({ title: 'Missing environment', options: {} }), /Unknown service: workbenchEnvironmentService/);
 		assert.deepEqual([...service.webviews], []);
 	});
 
 	test('production registration creates tracked containers and clears only the current focus', () => {
 		const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IWebviewService)!;
-		using instantiation = registerTestComponentServices(
-			new InstantiationService(new ServiceCollection(descriptor)),
-		);
+		using instantiation = registerTestComponentServices(new InstantiationService(new ServiceCollection(descriptor)));
 		const service = instantiation.get(IWebviewService);
 		using first = service.createWebviewElement({ title: 'First', options: {} });
 		using second = service.createWebviewElement({ title: 'Second', options: {} });
@@ -53,22 +45,14 @@ suite('Webview service', () => {
 		assert.deepEqual([...service.webviews], [second]);
 		assert.equal(service.activeWebview, second);
 		second.dispose();
-		assert.deepEqual(
-			{ views: [...service.webviews], active: service.activeWebview, changes },
-			{ views: [], active: undefined, changes: [first, second, undefined] },
-		);
+		assert.deepEqual({ views: [...service.webviews], active: service.activeWebview, changes }, { views: [], active: undefined, changes: [first, second, undefined] });
 	});
 
 	test('the preview requires the registered service and owns its container lifetime', () => {
 		using missing = new InstantiationService();
-		assert.throws(
-			() => missing.createInstance(MarkdownPreview, document.body, {}),
-			/Unknown service: webviewService/,
-		);
+		assert.throws(() => missing.createInstance(MarkdownPreview, document.body, {}), /Unknown service: webviewService/);
 		const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IWebviewService)!;
-		using instantiation = registerTestComponentServices(
-			new InstantiationService(new ServiceCollection(descriptor)),
-		);
+		using instantiation = registerTestComponentServices(new InstantiationService(new ServiceCollection(descriptor)));
 		const service = instantiation.get(IWebviewService);
 		using preview = instantiation.createInstance(MarkdownPreview, document.body, {
 			title: 'Preview',

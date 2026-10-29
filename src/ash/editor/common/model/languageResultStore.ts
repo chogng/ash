@@ -6,14 +6,8 @@ import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { isPositiveSafeInteger } from '../../../base/common/numbers.js';
 
-export function createLanguageDiagnosticStore(
-	model: TextModel,
-): VersionedLanguageResultStore<LanguageDiagnosticResult> {
-	return new VersionedLanguageResultStore(model, (value, currentModel) =>
-		normalizeLanguageDiagnosticResult(value, range =>
-			assertDiagnosticModelRange(currentModel, range, 'Language diagnostic'),
-		),
-	);
+export function createLanguageDiagnosticStore(model: TextModel): VersionedLanguageResultStore<LanguageDiagnosticResult> {
+	return new VersionedLanguageResultStore(model, (value, currentModel) => normalizeLanguageDiagnosticResult(value, range => assertDiagnosticModelRange(currentModel, range, 'Language diagnostic')));
 }
 
 function assertDiagnosticModelRange(model: TextModel, range: Range, owner: string): void {
@@ -166,7 +160,11 @@ export class VersionedLanguageResultStore<TResult> extends Disposable {
 		const modelVersion = this.readModelVersion() ?? this.currentResult.modelVersion;
 		this.currentResult = undefined;
 		this.changeEmitter.fire(
-			Object.freeze({ reason: LanguageResultStoreChangeReason.Cleared, modelVersion, result: undefined }),
+			Object.freeze({
+				reason: LanguageResultStoreChangeReason.Cleared,
+				modelVersion,
+				result: undefined,
+			}),
 		);
 	}
 
@@ -185,7 +183,11 @@ export class VersionedLanguageResultStore<TResult> extends Disposable {
 		this.currentResult = undefined;
 		const modelVersion = this.model.version;
 		this.changeEmitter.fire(
-			Object.freeze({ reason: LanguageResultStoreChangeReason.ModelChanged, modelVersion, result: undefined }),
+			Object.freeze({
+				reason: LanguageResultStoreChangeReason.ModelChanged,
+				modelVersion,
+				result: undefined,
+			}),
 		);
 	}
 

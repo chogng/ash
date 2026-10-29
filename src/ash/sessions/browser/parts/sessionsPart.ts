@@ -29,16 +29,10 @@ import { ChatWidgetModel } from '../chatWidgetModel.js';
 import { ChatWidget } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { INotificationService } from '../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../platform/native/common/nativeHost.js';
-import {
-	IAuxiliaryWindowService,
-	type IAuxiliaryWindow,
-} from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { Button } from '../../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../../platform/theme/browser/defaultStyles.js';
-import type {
-	ISessionsConversationService,
-	SessionsConversationKind,
-} from '../../services/sessions/common/sessionsConversation.js';
+import type { ISessionsConversationService, SessionsConversationKind } from '../../services/sessions/common/sessionsConversation.js';
 
 export interface SessionsPartOptions {
 	readonly sessionService: ISessionsManagementService;
@@ -48,17 +42,8 @@ export interface SessionsPartOptions {
 	readonly accessibleViewService: IAccessibleViewService;
 	readonly notifications: INotificationService;
 	readonly commandService: ICommandService;
-	readonly createInputPart: (
-		container: HTMLElement,
-		delegate: ChatInputDelegate,
-		model: ChatWidgetModel,
-		scope: IInstantiationService,
-	) => IChatInputPart;
-	readonly createCoworkPane: (
-		container: HTMLElement,
-		panelId: string,
-		selection: SessionsViewSelection,
-	) => ISessionsConversationPane;
+	readonly createInputPart: (container: HTMLElement, delegate: ChatInputDelegate, model: ChatWidgetModel, scope: IInstantiationService) => IChatInputPart;
+	readonly createCoworkPane: (container: HTMLElement, panelId: string, selection: SessionsViewSelection) => ISessionsConversationPane;
 	readonly activateSelection: (selection: SessionsViewSelection) => void;
 	readonly createNewSession: () => void;
 }
@@ -74,10 +59,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	private kind: SessionsConversationKind = 'code';
 	private visible = true;
 	private switching = Promise.resolve();
-	private readonly popouts = new Map<
-		SessionView,
-		{ window: IAuxiliaryWindow; resources: DisposableStore; placeholder: IView; shell: SessionAuxiliaryWindow }
-	>();
+	private readonly popouts = new Map<SessionView, { window: IAuxiliaryWindow; resources: DisposableStore; placeholder: IView; shell: SessionAuxiliaryWindow }>();
 	private readonly openingPopouts = new Map<SessionView, Promise<void>>();
 
 	override get minimumWidth(): number {
@@ -97,16 +79,11 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		this.content = h(container.ownerDocument, 'section');
 		this.content.className = 'ash-sessions-chat-view';
 		this.contentDomNode.append(this.content);
-		this.empty = this._register(
-			new SessionsChatEmptyView(this.content, () =>
-				storageService.getBoolean(WELCOME_COMPLETE_KEY, StorageScope.PROFILE, false),
-			),
-		);
+		this.empty = this._register(new SessionsChatEmptyView(this.content, () => storageService.getBoolean(WELCOME_COMPLETE_KEY, StorageScope.PROFILE, false)));
 		this.grid = this._register(services.createInstance(SessionGridLayout, this.content, this.empty));
 		this._register(
 			storageService.onDidChangeValue(event => {
-				if (event.scope === StorageScope.PROFILE && event.key === WELCOME_COMPLETE_KEY)
-					this.empty.update(options.sessionService.state, options.sessionService.error);
+				if (event.scope === StorageScope.PROFILE && event.key === WELCOME_COMPLETE_KEY) this.empty.update(options.sessionService.state, options.sessionService.error);
 			}),
 		);
 		this._register(
@@ -124,11 +101,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		const switchKind = async () => {
 			if (this.isDisposed) return;
 			this.kind = kind;
-			await Promise.all(
-				[...this.entries.values()]
-					.filter(view => !this.popouts.has(view))
-					.map(view => view.setConversationKind(kind)),
-			);
+			await Promise.all([...this.entries.values()].filter(view => !this.popouts.has(view)).map(view => view.setConversationKind(kind)));
 		};
 		// Entry commands may overlap while a composer flushes its pending edits.
 		this.switching = this.switching.then(switchKind, switchKind);
@@ -203,9 +176,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 						this.options.activateSelection(view.currentSelection);
 						this.reconcileGrid();
 						view.setVisible(this.visible);
-						void view
-							.setConversationKind(this.kind)
-							.catch(error => this.options.notifications.error(String(error)));
+						void view.setConversationKind(this.kind).catch(error => this.options.notifications.error(String(error)));
 						if (this.visible && this.activeView === view) view.focus();
 					}
 					window.dispose();
@@ -246,56 +217,37 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	}
 
 	addContext(attachment: ChatContextAttachment): void {
-		if (!this.activeView)
-			throw new Error(
-				localize('sessions.handoff.noActiveChat', 'Agents Window has no active chat for the draft.'),
-			);
+		if (!this.activeView) throw new Error(localize('sessions.handoff.noActiveChat', 'Agents Window has no active chat for the draft.'));
 		this.activeView.activeChat.addContext(attachment);
 	}
 
 	appendToDraft(text: string): void {
-		if (!this.activeView)
-			throw new Error(
-				localize('sessions.handoff.noActiveChat', 'Agents Window has no active chat for the draft.'),
-			);
+		if (!this.activeView) throw new Error(localize('sessions.handoff.noActiveChat', 'Agents Window has no active chat for the draft.'));
 		this.activeView.activeChat.appendToDraft(text);
 	}
 
 	startVoiceConversation(): Promise<void> {
-		if (!this.activeView)
-			return Promise.reject(new Error(localize('agentsVoice.noChat', 'Open a Chat before starting voice.')));
+		if (!this.activeView) return Promise.reject(new Error(localize('agentsVoice.noChat', 'Open a Chat before starting voice.')));
 		return this.activeView.activeChat.startVoiceConversation();
 	}
 
-	async captureActiveDraft(): Promise<
-		{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined
-	> {
+	async captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined> {
 		await this.switching;
 		return this.activeView?.activeChat.captureDraft();
 	}
 
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void {
-		if (!this.activeView)
-			throw new Error(
-				localize('sessions.handoff.noActiveChat', 'Agents Window has no active chat for the draft.'),
-			);
+		if (!this.activeView) throw new Error(localize('sessions.handoff.noActiveChat', 'Agents Window has no active chat for the draft.'));
 		this.activeView.activeChat.restoreDraft(draft);
 		if (this.visible) this.activeView.focus();
 	}
 
-	updateVisibleSelections(
-		selections: readonly SessionsViewSelection[],
-		active: SessionsViewSelection | undefined,
-	): void {
+	updateVisibleSelections(selections: readonly SessionsViewSelection[], active: SessionsViewSelection | undefined): void {
 		// Materializing a draft changes its identity, not its view or live input.
 		for (const [key, view] of [...this.entries]) {
 			const selection = view.currentSelection;
 			const id =
-				view.activeChat.sessionId ??
-				(selection.kind === 'untitled'
-					? this.options.sessionService.materializedSessions.get().get(selection.session.untitledSessionId)
-							?.sessionId
-					: undefined);
+				view.activeChat.sessionId ?? (selection.kind === 'untitled' ? this.options.sessionService.materializedSessions.get().get(selection.session.untitledSessionId)?.sessionId : undefined);
 			if (!id || key === sessionKey(id) || this.entries.has(sessionKey(id))) continue;
 			this.entries.delete(key);
 			this.entries.set(sessionKey(id), view);
@@ -310,25 +262,11 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			if (this.popouts.has(view)) {
 				const current = view.currentSelection;
 				const id =
-					view.activeChat.sessionId ??
-					(current.kind === 'untitled'
-						? this.options.sessionService.materializedSessions.get().get(current.session.untitledSessionId)
-								?.sessionId
-						: undefined);
-				const session = id
-					? this.options.sessionService.sessions.find(
-							session => session.sessionId === id && session.status === 'active',
-						)
-					: undefined;
+					view.activeChat.sessionId ?? (current.kind === 'untitled' ? this.options.sessionService.materializedSessions.get().get(current.session.untitledSessionId)?.sessionId : undefined);
+				const session = id ? this.options.sessionService.sessions.find(session => session.sessionId === id && session.status === 'active') : undefined;
 				if (session) {
 					const selection = view.currentSelection;
-					const thread = session.chats.find(
-						chat =>
-							chat.status === 'active' &&
-							(selection.kind === 'session'
-								? chat.threadId === selection.active.threadId
-								: chat.origin.type === 'root'),
-					);
+					const thread = session.chats.find(chat => chat.status === 'active' && (selection.kind === 'session' ? chat.threadId === selection.active.threadId : chat.origin.type === 'root'));
 					if (thread) {
 						view.openSession({ kind: 'session', active: { session, threadId: thread.threadId } });
 						const popup = this.popouts.get(view)!;
@@ -338,14 +276,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 					}
 				}
 				const selection = view.currentSelection;
-				if (
-					!id &&
-					selection.kind === 'untitled' &&
-					this.options.sessionService.untitledSessions.some(
-						session => session.untitledSessionId === selection.session.untitledSessionId,
-					)
-				)
-					continue;
+				if (!id && selection.kind === 'untitled' && this.options.sessionService.untitledSessions.some(session => session.untitledSessionId === selection.session.untitledSessionId)) continue;
 			}
 			this.entries.delete(key);
 			removed.push(view);
@@ -357,8 +288,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 				view = new SessionView(this.content, {
 					selection,
 					kind: this.kind,
-					createPane: (kind, container, panelId, selected) =>
-						this.createPane(kind, container, panelId, selected),
+					createPane: (kind, container, panelId, selected) => this.createPane(kind, container, panelId, selected),
 					activateSelection: this.options.activateSelection,
 				});
 				setDisposableOwner(view, this);
@@ -394,12 +324,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		this.grid.layout(bounds.width || dimension.width, bounds.height || dimension.height);
 	}
 
-	private createPane(
-		kind: SessionsConversationKind,
-		container: HTMLElement,
-		panelId: string,
-		selection: SessionsViewSelection,
-	): ISessionsConversationPane {
+	private createPane(kind: SessionsConversationKind, container: HTMLElement, panelId: string, selection: SessionsViewSelection): ISessionsConversationPane {
 		const options = this.options;
 		if (kind === 'cowork') return options.createCoworkPane(container, panelId, selection);
 		const scope = this.providerScopes.createScope(
@@ -410,9 +335,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			const model = scope.createInstance(
 				ChatWidgetModel,
 				options.chatService,
-				selection.kind === 'session'
-					? { kind: 'session', active: selection.active }
-					: { kind: 'untitled', session: selection.session },
+				selection.kind === 'session' ? { kind: 'session', active: selection.active } : { kind: 'untitled', session: selection.session },
 				options.sessionService,
 			);
 			const pane = scope.createInstance<ChatWidget<ChatWidgetModel>>(
@@ -429,8 +352,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 				undefined,
 				undefined,
 				undefined,
-				(inputContainer: HTMLElement, delegate: ChatInputDelegate) =>
-					options.createInputPart(inputContainer, delegate, model, scope),
+				(inputContainer: HTMLElement, delegate: ChatInputDelegate) => options.createInputPart(inputContainer, delegate, model, scope),
 			);
 			return new ScopedSessionConversationPane(pane, scope, model);
 		} catch (error) {
@@ -461,14 +383,7 @@ class SessionsChatEmptyView extends Disposable implements IView {
 		this.heading = h(ownerDocument, 'h2');
 		this.description = h(ownerDocument, 'p');
 		this.element.append(this.heading, this.description);
-		this.loading = this._register(
-			new LoadingSkeleton(
-				this.element,
-				localize('sessions.empty.restoring', 'Restoring your agent workspace…'),
-				'transcript',
-				3,
-			),
-		);
+		this.loading = this._register(new LoadingSkeleton(this.element, localize('sessions.empty.restoring', 'Restoring your agent workspace…'), 'transcript', 3));
 		container.append(this.element);
 		this.update('ready', undefined);
 	}
@@ -487,23 +402,16 @@ class SessionsChatEmptyView extends Disposable implements IView {
 			this.heading.textContent = localize('sessions.empty.unavailable', 'Sessions unavailable');
 			this.description.textContent = error;
 		} else {
-			this.heading.textContent = this.welcomeComplete()
-				? localize('sessions.empty.returning', 'Open a session')
-				: localize('sessions.empty.welcome', 'Start a code session');
+			this.heading.textContent = this.welcomeComplete() ? localize('sessions.empty.returning', 'Open a session') : localize('sessions.empty.welcome', 'Start a code session');
 			this.description.textContent = this.welcomeComplete()
 				? localize('sessions.empty.select', 'Select a session from the sidebar, or create a new one.')
-				: localize(
-						'sessions.empty.begin',
-						'Create a session to plan, implement, or review work with the coding agent.',
-					);
+				: localize('sessions.empty.begin', 'Create a session to plan, implement, or review work with the coding agent.');
 		}
 	}
 }
 
 function selectionKey(selection: SessionsViewSelection): string {
-	return selection.kind === 'session'
-		? sessionKey(selection.active.session.sessionId)
-		: `untitled:${selection.session.untitledSessionId}`;
+	return selection.kind === 'session' ? sessionKey(selection.active.session.sessionId) : `untitled:${selection.session.untitledSessionId}`;
 }
 
 function sessionKey(sessionId: SessionId): string {

@@ -5,10 +5,7 @@ import { createBracketOrRegExp } from '../../languages/supports/richEditBrackets
 import { type IViewLineTokens } from '../../tokens/lineTokens.js';
 
 /** Repairs bracket pairs in proposed text, respecting lexical and embedded-language boundaries. */
-export function fixBracketsInLine(
-	tokens: IViewLineTokens,
-	languageConfigurationService: ILanguageConfigurationService,
-): string {
+export function fixBracketsInLine(tokens: IViewLineTokens, languageConfigurationService: ILanguageConfigurationService): string {
 	const text = tokens.getLineContent();
 	const stack: OpeningBracketKind[] = [];
 	const parts: string[] = [];
@@ -21,11 +18,7 @@ export function fixBracketsInLine(
 			continue;
 		}
 		let end = tokens.getEndOffset(index++);
-		while (
-			index < tokens.getCount() &&
-			tokens.getLanguageId(index) === languageId &&
-			includesBrackets(tokens, index)
-		) {
+		while (index < tokens.getCount() && tokens.getLanguageId(index) === languageId && includesBrackets(tokens, index)) {
 			end = tokens.getEndOffset(index++);
 		}
 		const brackets = languageConfigurationService.getLanguageConfiguration(languageId).bracketsNew;
@@ -60,10 +53,7 @@ export function fixBracketsInLine(
 }
 
 function includesBrackets(tokens: IViewLineTokens, index: number): boolean {
-	return (
-		tokens.getStandardTokenType(index) === StandardTokenType.Other &&
-		(tokens.getMetadata(index) & MetadataConsts.BALANCED_BRACKETS_MASK) !== 0
-	);
+	return tokens.getStandardTokenType(index) === StandardTokenType.Other && (tokens.getMetadata(index) & MetadataConsts.BALANCED_BRACKETS_MASK) !== 0;
 }
 
 function closingText(opening: OpeningBracketKind): string {

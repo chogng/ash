@@ -17,22 +17,14 @@ async function accountActions(page: Page, application: PlaywrightApplication): P
 	await page.getByRole('option', { name: 'Notifications', exact: true }).click();
 	await expect(page.getByRole('textbox', { name: 'Owner', exact: true })).toBeHidden();
 	await expect(page.getByRole('combobox', { name: 'Notification filter', exact: true })).toBeVisible();
-	const trigger = () =>
-		page
-			.getByRole('toolbar', { name: 'Repository actions', exact: true })
-			.getByRole('button', { name: 'More Actions', exact: true })
-			.click();
+	const trigger = () => page.getByRole('toolbar', { name: 'Repository actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click();
 	await new Menus(page).select(application, trigger, ['Sign in to GitHub Enterprise']);
 	await expect(page.getByRole('dialog').getByPlaceholder('GitHub host')).toBeVisible();
 	await page.keyboard.press('Escape');
 	await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 
-test('Workbench and Sessions open the shared GitHub editor and restore focus after help', async ({
-	workbench,
-	target,
-	application,
-}) => {
+test('Workbench and Sessions open the shared GitHub editor and restore focus after help', async ({ workbench, target, application }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.github.open');
 	const editor = page.locator('.ash-github-editor');
@@ -48,11 +40,7 @@ test('Workbench and Sessions open the shared GitHub editor and restore focus aft
 	await accountActions(sessions, application);
 });
 
-test('GitHub settings share the Preferences renderer in Workbench and Sessions and restore help focus', async ({
-	workbench,
-	target,
-	application,
-}) => {
+test('GitHub settings share the Preferences renderer in Workbench and Sessions and restore help focus', async ({ workbench, target, application }) => {
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	await workbench.settingsEditor.selectCategory('github');
@@ -63,19 +51,13 @@ test('GitHub settings share the Preferences renderer in Workbench and Sessions a
 	await expect(section.getByRole('button', { name: 'Browse pull requests', exact: true })).toBeDisabled();
 	await refresh.focus();
 	await page.keyboard.press('Alt+F1');
-	await expect(
-		page.getByRole('dialog', { name: 'Accessibility Help', exact: true }).getByRole('textbox'),
-	).toHaveValue(/official Connector authorization are separate/);
+	await expect(page.getByRole('dialog', { name: 'Accessibility Help', exact: true }).getByRole('textbox')).toHaveValue(/official Connector authorization are separate/);
 	await page.keyboard.press('Escape');
 	await expect(refresh).toBeFocused();
 	await page.keyboard.press('Escape');
 	await expect(workbench.settingsEditor.element).toBeHidden();
 	const sessionsPage = await workbench.openAgentsWindow(target.kind);
-	await new Menus(sessionsPage).select(
-		application,
-		() => sessionsPage.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last().click(),
-		['Settings'],
-	);
+	await new Menus(sessionsPage).select(application, () => sessionsPage.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last().click(), ['Settings']);
 	const settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings', exact: true });
 	await settings.getByRole('button', { name: 'Git & PRs', exact: true }).click();
 	const sessionsSection = settings.locator('.ash-settings-section');
@@ -84,9 +66,7 @@ test('GitHub settings share the Preferences renderer in Workbench and Sessions a
 	await expect(sessionsRefresh).toBeEnabled();
 	await sessionsRefresh.focus();
 	await sessionsPage.keyboard.press('Alt+F1');
-	await expect(
-		sessionsPage.getByRole('dialog', { name: 'Accessibility Help', exact: true }).getByRole('textbox'),
-	).toHaveValue(/Request Codex review posts @codex review/);
+	await expect(sessionsPage.getByRole('dialog', { name: 'Accessibility Help', exact: true }).getByRole('textbox')).toHaveValue(/Request Codex review posts @codex review/);
 	await sessionsPage.keyboard.press('Escape');
 	await expect(sessionsRefresh).toBeFocused();
 });
@@ -122,15 +102,11 @@ test(
 			await expect(summary).toHaveAccessibleName('2 issues · 0 open · 0 closed · 2 unavailable');
 			await summary.focus();
 			await page.keyboard.press('Alt+F1');
-			await expect(page.getByRole('dialog', { name: 'Accessibility Help' }).getByRole('textbox')).toHaveValue(
-				/Use Attach issue/,
-			);
+			await expect(page.getByRole('dialog', { name: 'Accessibility Help' }).getByRole('textbox')).toHaveValue(/Use Attach issue/);
 			await page.keyboard.press('Escape');
 			await expect(summary).toBeFocused();
 			await page.keyboard.press('Alt+F2');
-			await expect(page.getByRole('dialog', { name: 'Accessible View' }).getByRole('textbox')).toHaveValue(
-				/ash-fixture\/issues #11 · Status unavailable/,
-			);
+			await expect(page.getByRole('dialog', { name: 'Accessible View' }).getByRole('textbox')).toHaveValue(/ash-fixture\/issues #11 · Status unavailable/);
 			await page.keyboard.press('Escape');
 			await expect(summary).toBeFocused();
 			page = await workbench.reopenAgentsWindow(application, page);

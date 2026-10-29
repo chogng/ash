@@ -2,18 +2,9 @@ import { SyncDescriptor } from '../../../../platform/instantiation/common/descri
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize, localize2 } from '../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import {
-	ConfigurationScope,
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from '../../../common/views.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
@@ -53,10 +44,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	defaultValue: true,
 	scope: ConfigurationScope.APPLICATION,
 	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean')
-			throw new TypeError(
-				localize('outline.verbosityInvalid', 'Outline accessibility verbosity must be a boolean.'),
-			);
+		if (typeof value !== 'boolean') throw new TypeError(localize('outline.verbosityInvalid', 'Outline accessibility verbosity must be a boolean.'));
 		return value;
 	},
 	setting: {
@@ -65,10 +53,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize('outline.verbosityTitle', 'Outline accessibility help');
 		},
 		get description() {
-			return localize(
-				'outline.verbosityDescription',
-				'Announce how to open accessibility help when outline receives focus.',
-			);
+			return localize('outline.verbosityDescription', 'Announce how to open accessibility help when outline receives focus.');
 		},
 	},
 });

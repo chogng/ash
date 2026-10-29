@@ -108,9 +108,7 @@ suite('Terminal editing focus', () => {
 					using next = quickInput.createQuickPick();
 					next.items = [{ label: 'Next command' }];
 					if (newerPicker) next.show();
-					const field = newerPicker
-						? container.querySelector<HTMLInputElement>('.ash-quick-pick input')!
-						: terminal;
+					const field = newerPicker ? container.querySelector<HTMLInputElement>('.ash-quick-pick input')! : terminal;
 					await created.complete();
 					await revealed.complete();
 					await operation;

@@ -18,17 +18,7 @@ test('DOM construction creates typed nested HTML in the supplied document', () =
 			dataset: { state: 'ready' },
 			style: { width: '10px', backgroundColor: 'red', opacity: '1' },
 		},
-		[
-			h(secondDocument, 'h2', 'Title'),
-			false,
-			null,
-			h(
-				secondDocument,
-				'button',
-				{ properties: { type: 'button' }, ref: value => (referenced = value) },
-				'Close',
-			),
-		],
+		[h(secondDocument, 'h2', 'Title'), false, null, h(secondDocument, 'button', { properties: { type: 'button' }, ref: value => (referenced = value) }, 'Close')],
 	);
 
 	assert.equal(root.ownerDocument, secondDocument);
@@ -45,7 +35,10 @@ test('DOM construction creates SVG and fragments in the supplied document', () =
 	const icon = svg(
 		ownerDocument,
 		'svg',
-		{ attributes: { viewBox: '0 0 16 16' }, dataset: { state: 'ready' } },
+		{
+			attributes: { viewBox: '0 0 16 16' },
+			dataset: { state: 'ready' },
+		},
 		svg(ownerDocument, 'path', { attributes: { d: 'M0 0h16v16z' } }),
 	);
 	const result = fragment(ownerDocument, 'before', icon, 3);

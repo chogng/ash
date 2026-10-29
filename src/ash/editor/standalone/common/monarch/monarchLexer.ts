@@ -2,14 +2,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { MetadataConsts } from '../../../common/encodedTokenAttributes.js';
-import {
-	TokenizationRegistry,
-	type EncodedTokenizationResult,
-	type IState,
-	type ITokenizationSupport,
-	type Token,
-	type TokenizationResult,
-} from '../../../common/languages.js';
+import { TokenizationRegistry, type EncodedTokenizationResult, type IState, type ITokenizationSupport, type Token, type TokenizationResult } from '../../../common/languages.js';
 import { ILanguageService } from '../../../common/languages/language.js';
 import { IStandaloneThemeService } from '../standaloneTheme.js';
 import { createError, findRules, substituteMatches, type ILexer, type IRule } from './monarchCommon.js';
@@ -27,27 +20,17 @@ class LineState implements IState {
 	) {}
 
 	public clone(): IState {
-		return new LineState(
-			this.stack.slice(),
-			this.embedded && { ...this.embedded, state: this.embedded.state?.clone() ?? null },
-		);
+		return new LineState(this.stack.slice(), this.embedded && { ...this.embedded, state: this.embedded.state?.clone() ?? null });
 	}
 
 	public equals(other: IState): boolean {
-		if (
-			!(other instanceof LineState) ||
-			this.stack.length !== other.stack.length ||
-			this.stack.some((state, index) => state !== other.stack[index])
-		) {
+		if (!(other instanceof LineState) || this.stack.length !== other.stack.length || this.stack.some((state, index) => state !== other.stack[index])) {
 			return false;
 		}
 		if (!this.embedded || !other.embedded) {
 			return this.embedded === other.embedded;
 		}
-		return (
-			this.embedded.languageId === other.embedded.languageId &&
-			(this.embedded.state === other.embedded.state || !!this.embedded.state?.equals(other.embedded.state!))
-		);
+		return this.embedded.languageId === other.embedded.languageId && (this.embedded.state === other.embedded.state || !!this.embedded.state?.equals(other.embedded.state!));
 	}
 }
 
@@ -68,11 +51,7 @@ export class MonarchTokenizer extends Disposable implements ITokenizationSupport
 		super();
 		this._register(
 			TokenizationRegistry.onDidChange(event => {
-				if (
-					this.notifying ||
-					event.changedLanguages.includes(languageId) ||
-					!event.changedLanguages.some(language => this.embeddedLanguages.has(language))
-				) {
+				if (this.notifying || event.changedLanguages.includes(languageId) || !event.changedLanguages.some(language => this.embeddedLanguages.has(language))) {
 					return;
 				}
 				this.notifying = true;
@@ -85,9 +64,7 @@ export class MonarchTokenizer extends Disposable implements ITokenizationSupport
 		);
 		this._register(
 			configuration.onDidChangeConfiguration(event => {
-				if (
-					event.affectsConfiguration('editor.maxTokenizationLineLength', { overrideIdentifier: languageId })
-				) {
+				if (event.affectsConfiguration('editor.maxTokenizationLineLength', { overrideIdentifier: languageId })) {
 					TokenizationRegistry.handleChange([languageId]);
 				}
 			}),
@@ -116,12 +93,7 @@ export class MonarchTokenizer extends Disposable implements ITokenizationSupport
 		return { tokens: new Uint32Array(result.encoded), rawTokens: result.tokens, endState: result.endState };
 	}
 
-	private scan(
-		line: string,
-		hasEOL: boolean,
-		initial: IState,
-		encoded: boolean,
-	): { tokens: Token[]; encoded: number[]; endState: LineState } {
+	private scan(line: string, hasEOL: boolean, initial: IState, encoded: boolean): { tokens: Token[]; encoded: number[]; endState: LineState } {
 		this.assertNotDisposed();
 		if (!(initial instanceof LineState)) {
 			throw createError(this.lexer, 'Tokenization state belongs to another tokenizer');
@@ -147,11 +119,7 @@ export class MonarchTokenizer extends Disposable implements ITokenizationSupport
 		const emit = (offset: number, type: string, language = this.languageId): void => {
 			emitRaw(offset, type, language);
 			if (encoded) {
-				emitMetadata(
-					offset,
-					theme.match(this.languageService.languageIdCodec.encodeLanguageId(language), type) |
-						MetadataConsts.BALANCED_BRACKETS_MASK,
-				);
+				emitMetadata(offset, theme.match(this.languageService.languageIdCodec.encodeLanguageId(language), type) | MetadataConsts.BALANCED_BRACKETS_MASK);
 			}
 		};
 		const limit = this.configuration.getValue<number>('editor.maxTokenizationLineLength', {
@@ -264,13 +232,7 @@ export class MonarchTokenizer extends Disposable implements ITokenizationSupport
 					console.log(`${this.languageId}: ${substituteMatches(this.lexer, action.log, id, matched, state)}`);
 				}
 				if (action.switchTo !== undefined) {
-					stack[stack.length - 1] = substituteMatches(
-						this.lexer,
-						action.switchTo,
-						id,
-						matched,
-						state,
-					).replace(/^@/, '');
+					stack[stack.length - 1] = substituteMatches(this.lexer, action.switchTo, id, matched, state).replace(/^@/, '');
 				} else if (action.next !== undefined) {
 					const next = substituteMatches(this.lexer, action.next, id, matched, state);
 					switch (next) {
@@ -313,11 +275,7 @@ export class MonarchTokenizer extends Disposable implements ITokenizationSupport
 				return nextOffset;
 			};
 			const nextOffset = apply(rule.action, offset, offset + match[0].length);
-			if (
-				nextOffset === text.length &&
-				match[0].length === 0 &&
-				JSON.stringify([nextOffset, stack, embedded?.languageId]) === key
-			) {
+			if (nextOffset === text.length && match[0].length === 0 && JSON.stringify([nextOffset, stack, embedded?.languageId]) === key) {
 				break;
 			}
 			offset = nextOffset;
@@ -328,9 +286,7 @@ export class MonarchTokenizer extends Disposable implements ITokenizationSupport
 	private tokenType(token: string, text: string): string {
 		if (token.startsWith('@brackets')) {
 			const value = this.lexer.ignoreCase ? text.toLowerCase() : text;
-			const bracket = this.lexer.brackets.find(item =>
-				[item.open, item.close].some(side => (this.lexer.ignoreCase ? side.toLowerCase() : side) === value),
-			);
+			const bracket = this.lexer.brackets.find(item => [item.open, item.close].some(side => (this.lexer.ignoreCase ? side.toLowerCase() : side) === value));
 			if (!bracket) {
 				throw createError(this.lexer, `No bracket definition for ${text}`);
 			}
@@ -339,13 +295,7 @@ export class MonarchTokenizer extends Disposable implements ITokenizationSupport
 		return token ? `${token}${this.lexer.tokenPostfix}` : '';
 	}
 
-	private action(
-		input: IMonarchLanguageAction,
-		id: string,
-		matches: string[],
-		state: string,
-		eos: boolean,
-	): IExpandedMonarchLanguageAction {
+	private action(input: IMonarchLanguageAction, id: string, matches: string[], state: string, eos: boolean): IExpandedMonarchLanguageAction {
 		if (typeof input === 'string') {
 			return { token: input };
 		}
@@ -385,14 +335,10 @@ export class MonarchTokenizer extends Disposable implements ITokenizationSupport
 			if (!Array.isArray(values)) {
 				throw createError(this.lexer, `Case ${pattern} requires an array`);
 			}
-			result = values.some(value =>
-				this.lexer.ignoreCase ? String(value).toLowerCase() === candidate.toLowerCase() : value === candidate,
-			);
+			result = values.some(value => (this.lexer.ignoreCase ? String(value).toLowerCase() === candidate.toLowerCase() : value === candidate));
 		} else if (operator === '==' || operator === '!=') {
 			const expected = substituteMatches(this.lexer, pattern, id, matches, state);
-			result = this.lexer.ignoreCase
-				? expected.toLowerCase() === candidate.toLowerCase()
-				: expected === candidate;
+			result = this.lexer.ignoreCase ? expected.toLowerCase() === candidate.toLowerCase() : expected === candidate;
 		} else {
 			result = new RegExp(`^(?:${pattern})$`, this.lexer.ignoreCase ? 'i' : '').test(candidate);
 		}
@@ -423,19 +369,8 @@ export class MonarchTokenizer extends Disposable implements ITokenizationSupport
 				if (first !== undefined && match.index >= first) {
 					break;
 				}
-				const action = this.action(
-					rule.action,
-					match[0],
-					match,
-					state,
-					match.index + match[0].length === text.length,
-				);
-				if (
-					action.nextEmbedded === '@pop' ||
-					action.group?.some(
-						item => this.action(item, match![0], match!, state, false).nextEmbedded === '@pop',
-					)
-				) {
+				const action = this.action(rule.action, match[0], match, state, match.index + match[0].length === text.length);
+				if (action.nextEmbedded === '@pop' || action.group?.some(item => this.action(item, match![0], match!, state, false).nextEmbedded === '@pop')) {
 					first = match.index;
 					break;
 				}

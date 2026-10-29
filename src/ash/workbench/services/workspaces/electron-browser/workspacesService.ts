@@ -4,14 +4,7 @@ import type { URI } from '../../../../base/common/uri.js';
 import { IMainProcessService } from '../../../../platform/ipc/common/mainProcessService.js';
 import type { IChannel } from '../../../../base/parts/ipc/common/ipc.js';
 import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
-import {
-	IWorkspacesService,
-	LEGACY_RECENT_WORKSPACES_STORAGE_KEY,
-	restoreRecentlyOpened,
-	toStoreData,
-	type IRecent,
-	type IRecentlyOpened,
-} from '../../../../platform/workspaces/common/workspaces.js';
+import { IWorkspacesService, LEGACY_RECENT_WORKSPACES_STORAGE_KEY, restoreRecentlyOpened, toStoreData, type IRecent, type IRecentlyOpened } from '../../../../platform/workspaces/common/workspaces.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 
 /** Desktop windows consume the shared history and import their old Welcome records once. */

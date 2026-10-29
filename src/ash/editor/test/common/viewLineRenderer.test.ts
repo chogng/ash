@@ -35,7 +35,13 @@ const lineTokens: IViewLineTokens = {
 test('line decoration filtering uses one-based Range lines and columns', () => {
 	assert.deepEqual(
 		LineDecoration.filter(
-			[{ range: new Range(2, 2, 3, 4), inlineClassName: 'detected-link', type: InlineDecorationType.Regular }],
+			[
+				{
+					range: new Range(2, 2, 3, 4),
+					inlineClassName: 'detected-link',
+					type: InlineDecorationType.Regular,
+				},
+			],
 			3,
 			1,
 			10,
@@ -71,17 +77,9 @@ test('line renderer maps source columns through decorated spans and tabs', () =>
 		),
 	);
 
-	assert.equal(
-		output.html,
-		'<span class="stanza-editor-line-text"><span class="token-keyword">a</span><span>&nbsp;&nbsp;&nbsp;b</span></span>',
-	);
+	assert.equal(output.html, '<span class="stanza-editor-line-text"><span class="token-keyword">a</span><span>&nbsp;&nbsp;&nbsp;b</span></span>');
 	assert.deepEqual(
-		[
-			output.characterMapping.getDomPosition(1),
-			output.characterMapping.getDomPosition(2),
-			output.characterMapping.getDomPosition(3),
-			output.characterMapping.getDomPosition(4),
-		],
+		[output.characterMapping.getDomPosition(1), output.characterMapping.getDomPosition(2), output.characterMapping.getDomPosition(3), output.characterMapping.getDomPosition(4)],
 		[new DomPosition(0, 0), new DomPosition(1, 0), new DomPosition(1, 3), new DomPosition(1, 4)],
 	);
 	assert.deepEqual(

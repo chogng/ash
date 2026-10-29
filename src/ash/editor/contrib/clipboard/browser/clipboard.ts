@@ -1,14 +1,6 @@
 import { onActivate } from '../../../browser/editorFeatureRegistration.js';
 import { isFirefox } from '../../../../base/browser/browser.js';
-import {
-	addDisposableListener,
-	getActiveDocument,
-	getActiveElement,
-	getActiveWindow,
-	getWindow,
-	getWindowId,
-	isEditableElement,
-} from '../../../../base/browser/dom.js';
+import { addDisposableListener, getActiveDocument, getActiveElement, getActiveWindow, getWindow, getWindowId, isEditableElement } from '../../../../base/browser/dom.js';
 import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { raceCancellation } from '../../../../base/common/async.js';
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
@@ -20,11 +12,7 @@ import * as nls from '../../../../nls.js';
 import { MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
-import {
-	CopyOptions,
-	generateDataToCopyAndStoreInMemory,
-	InMemoryClipboardMetadataManager,
-} from '../../../browser/controller/editContext/clipboardUtils.js';
+import { CopyOptions, generateDataToCopyAndStoreInMemory, InMemoryClipboardMetadataManager } from '../../../browser/controller/editContext/clipboardUtils.js';
 import { NativeEditContextRegistry } from '../../../browser/controller/editContext/native/nativeEditContextRegistry.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import {
@@ -169,10 +157,7 @@ class ExecCommandCopyWithSyntaxHighlightingAction extends EditorAction {
 				menuId,
 				group: '1_copy',
 				order: 1,
-				title: nls.localize(
-					'actions.clipboard.copyWithSyntaxHighlightingLabel',
-					'Copy with Syntax Highlighting',
-				),
+				title: nls.localize('actions.clipboard.copyWithSyntaxHighlightingLabel', 'Copy with Syntax Highlighting'),
 			})),
 			precondition: undefined,
 			kbOpts: {
@@ -203,10 +188,32 @@ registerEditorAction(ExecCommandCopyWithSyntaxHighlightingAction);
 function clipboardMenuOptions(title: string, order: number, writable: boolean) {
 	const when = writable ? EditorContextKeys.writable : undefined;
 	return [
-		{ menuId: MenuId.MenubarEditMenu, group: '2_ccp', title, order },
-		{ menuId: MenuId.EditorContext, group: CLIPBOARD_CONTEXT_MENU_GROUP, title, when, order },
-		{ menuId: MenuId.CommandPalette, group: '', title, order: 1 },
-		{ menuId: MenuId.SimpleEditorContext, group: CLIPBOARD_CONTEXT_MENU_GROUP, title, when, order },
+		{
+			menuId: MenuId.MenubarEditMenu,
+			group: '2_ccp',
+			title,
+			order,
+		},
+		{
+			menuId: MenuId.EditorContext,
+			group: CLIPBOARD_CONTEXT_MENU_GROUP,
+			title,
+			when,
+			order,
+		},
+		{
+			menuId: MenuId.CommandPalette,
+			group: '',
+			title,
+			order: 1,
+		},
+		{
+			menuId: MenuId.SimpleEditorContext,
+			group: CLIPBOARD_CONTEXT_MENU_GROUP,
+			title,
+			when,
+			order,
+		},
 	];
 }
 
@@ -216,8 +223,7 @@ function registerExecCommandImpl(target: MultiCommand | undefined, browserComman
 		target.addImplementation(10_000, 'code-editor', accessor => {
 			const editor = getClipboardEditor(accessor);
 			if (!editor) return false;
-			if (!editor.getOption(EditorOption.emptySelectionClipboard) && editor.getSelection()?.isEmpty())
-				return true;
+			if (!editor.getOption(EditorOption.emptySelectionClipboard) && editor.getSelection()?.isEmpty()) return true;
 			return executeEditorClipboardCommand(editor, accessor.get(IClipboardService), browserCommand);
 		}),
 	);
@@ -233,16 +239,8 @@ function getClipboardEditor(accessor: ServicesAccessor): ICodeEditor | null {
 	return editor;
 }
 
-async function executeEditorClipboardCommand(
-	editor: ICodeEditor,
-	clipboardService: IClipboardService,
-	browserCommand: 'cut' | 'copy',
-): Promise<void> {
-	if (
-		browserCommand === 'cut' &&
-		(editor.inComposition || editor.getOption(EditorOption.readOnly) || !editor.hasModel())
-	)
-		return;
+async function executeEditorClipboardCommand(editor: ICodeEditor, clipboardService: IClipboardService, browserCommand: 'cut' | 'copy'): Promise<void> {
+	if (browserCommand === 'cut' && (editor.inComposition || editor.getOption(EditorOption.readOnly) || !editor.hasModel())) return;
 	editor.focus();
 	NativeEditContextRegistry.get(editor.getId())?.handleWillCopy();
 	if (browserCommand === 'copy') {
@@ -262,10 +260,7 @@ async function executeEditorClipboardCommand(
 }
 
 function createClipboardCancellation(editor: ICodeEditor, resources: DisposableStore): CancellationToken {
-	const request = new EditorStateCancellationTokenSource(
-		editor,
-		CodeEditorStateFlag.Value | CodeEditorStateFlag.Selection,
-	);
+	const request = new EditorStateCancellationTokenSource(editor, CodeEditorStateFlag.Value | CodeEditorStateFlag.Selection);
 	resources.add(toDisposable(() => request.dispose(true)));
 	resources.add(editor.onDidBlurEditorText(() => request.cancel()));
 	resources.add(editor.onDidCompositionStart(() => request.cancel()));
@@ -285,8 +280,7 @@ async function executeEditorCopy(editor: ICodeEditor, clipboardService: IClipboa
 	if (typeof document.execCommand === 'function') {
 		// EditContext may send the command's copy event to the document body.
 		using copy = addDisposableListener<ClipboardEvent>(document, 'copy', event => {
-			if (CopyOptions.electronBugWorkaroundCopyEventHasFired || event.defaultPrevented || !editor.hasTextFocus())
-				return;
+			if (CopyOptions.electronBugWorkaroundCopyEventHasFired || event.defaultPrevented || !editor.hasTextFocus()) return;
 			const viewModel = editor._getViewModel();
 			if (!viewModel || !event.clipboardData) return;
 			const { dataToCopy, metadata } = generateDataToCopyAndStoreInMemory(viewModel, undefined, isFirefox);
@@ -331,14 +325,9 @@ class ClipboardKeybindings extends Disposable implements IEditorContribution {
 		// Preventing its default action would replace that event with a text-only read.
 		if (key !== 'c' && key !== 'x') return;
 		if ((key === 'c' && !CopyAction) || (key === 'x' && !CutAction)) return;
-		if (!this.editor.getOption(EditorOption.emptySelectionClipboard) && this.editor.getSelection()?.isEmpty())
-			return;
+		if (!this.editor.getOption(EditorOption.emptySelectionClipboard) && this.editor.getSelection()?.isEmpty()) return;
 		event.stop();
-		const operation = executeEditorClipboardCommand(
-			this.editor,
-			this.clipboardService,
-			key === 'c' ? 'copy' : 'cut',
-		);
+		const operation = executeEditorClipboardCommand(this.editor, this.clipboardService, key === 'c' ? 'copy' : 'cut');
 		void operation.catch(onUnexpectedError);
 	}
 }

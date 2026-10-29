@@ -2,17 +2,9 @@ import { IAgentExecutionSettingsService } from '../../../../platform/agentHost/c
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import type { ChatContextUsage, IChatRequestSubmittedEvent, RewriteChatRequestOptions } from '../common/chatService.js';
-import type {
-	AgentInteractionOffer,
-	AgentInput,
-	ThreadRead,
-	ThreadSnapshotHistory,
-} from '../../../../platform/agentHost/common/agent.js';
+import type { AgentInteractionOffer, AgentInput, ThreadRead, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agent.js';
 import { localize } from '../../../../nls.js';
-import type {
-	TurnChangeSetSummary as TurnChangeSetSummaryDto,
-	TurnChangesReadResult as TurnChangesReadResultDto,
-} from '../../../../../../.build/protocol/typescript/index.js';
+import type { TurnChangeSetSummary as TurnChangeSetSummaryDto, TurnChangesReadResult as TurnChangesReadResultDto } from '../../../../../../.build/protocol/typescript/index.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { canceled, onUnexpectedError } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -69,9 +61,7 @@ export class ChatService extends Disposable implements IChatService {
 	readonly onDidSubmitRequest = this.submitted.event;
 	private readonly _onDidChangeInteractionOffer = this._register(new Emitter<ChatInteractionOfferChange>());
 	readonly onDidChangeInteractionOffer = this._onDidChangeInteractionOffer.event;
-	private readonly _onDidChangeSession = this._register(
-		new Emitter<{ readonly sessionId: SessionId; readonly agentTreeChanged: boolean }>(),
-	);
+	private readonly _onDidChangeSession = this._register(new Emitter<{ readonly sessionId: SessionId; readonly agentTreeChanged: boolean }>());
 	private readonly _onDidUpdateThread = this._register(new Emitter<ThreadUpdateEnvelope>());
 	private readonly _onDidUpdateThreadTranscript = this._register(new Emitter<ThreadTranscriptUpdateEnvelope>());
 	private readonly _onDidUpdateGoal = this._register(new Emitter<ThreadGoalUpdate>());
@@ -112,8 +102,7 @@ export class ChatService extends Disposable implements IChatService {
 		const events = eventApi.subscribe(event => {
 			if (event.method === 'session/changed') this._onDidChangeSession.fire({ ...event.params });
 			if (event.method === 'queue/changed') this._onDidChangeQueue.fire();
-			if (event.method === 'thread/goal/updated')
-				this._onDidUpdateGoal.fire({ threadId: event.params.threadId, goal: { ...event.params.goal } });
+			if (event.method === 'thread/goal/updated') this._onDidUpdateGoal.fire({ threadId: event.params.threadId, goal: { ...event.params.goal } });
 			if (event.method === 'thread/goal/cleared') this._onDidUpdateGoal.fire({ threadId: event.params.threadId });
 			if (event.method === 'turnChanges/changed')
 				this._onDidUpdateTurnChanges.fire({
@@ -154,17 +143,8 @@ export class ChatService extends Disposable implements IChatService {
 
 	getInteractionOffer(sessionId: SessionId, threadId: ThreadId): AgentInteractionOffer | undefined {
 		const subscription = this.threadSubscriptions.get(JSON.stringify([sessionId, threadId]));
-		if (
-			!subscription ||
-			subscription.owners.size === 0 ||
-			subscription.generation !== this.appServerApi.connectionGeneration
-		)
-			return undefined;
-		if (
-			subscription.offer?.interaction.deadline &&
-			subscription.offer.interaction.deadline.expiresAtUnixMs <= Date.now()
-		)
-			this.retireInteractionOffer(subscription);
+		if (!subscription || subscription.owners.size === 0 || subscription.generation !== this.appServerApi.connectionGeneration) return undefined;
+		if (subscription.offer?.interaction.deadline && subscription.offer.interaction.deadline.expiresAtUnixMs <= Date.now()) this.retireInteractionOffer(subscription);
 		return subscription.offer;
 	}
 
@@ -219,8 +199,7 @@ export class ChatService extends Disposable implements IChatService {
 		switch (event.type) {
 			case 'interactionResolved':
 			case 'interactionCancelled':
-				if (event.turnId === offer.turnId && event.requestId === offer.interaction.requestId)
-					this.retireInteractionOffer(subscription);
+				if (event.turnId === offer.turnId && event.requestId === offer.interaction.requestId) this.retireInteractionOffer(subscription);
 				break;
 			case 'turnCompleted':
 			case 'turnFailed':
@@ -247,21 +226,14 @@ export class ChatService extends Disposable implements IChatService {
 		return this.threadApi.readHistoryState({ sessionId, threadId });
 	}
 
-	async rewriteRequest(
-		options: RewriteChatRequestOptions,
-	): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId }> {
+	async rewriteRequest(options: RewriteChatRequestOptions): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId }> {
 		this.assertAIEnabled();
 		this.requireSubmissionOwner(options);
 		const epoch = this.connectionEpoch;
 		const { thread } = await this.readThread(options.sessionId, options.threadId);
 		const turn = thread.turns.find(turn => turn.turnId === options.turnId);
 		const firstMessage = turn?.items.find(item => item.type === 'userMessage');
-		if (
-			!turn ||
-			firstMessage?.type !== 'userMessage' ||
-			firstMessage.itemId !== options.itemId ||
-			!firstMessage.clientId
-		) {
+		if (!turn || firstMessage?.type !== 'userMessage' || firstMessage.itemId !== options.itemId || !firstMessage.clientId) {
 			throw new Error(localize('chat.edit.unavailable', 'This request is no longer available for editing.'));
 		}
 		const input: AgentInput[] = [];
@@ -307,18 +279,11 @@ export class ChatService extends Disposable implements IChatService {
 		return result;
 	}
 
-	async moveHistory(options: {
-		readonly sessionId: SessionId;
-		readonly threadId: ThreadId;
-		readonly expectedSequence: number;
-		readonly direction: 'undo' | 'redo';
-	}): Promise<void> {
+	async moveHistory(options: { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly direction: 'undo' | 'redo' }): Promise<void> {
 		await this.threadApi.moveHistory({ ...options, commandId: createUuid() });
 	}
 
-	async restoreCheckpoint(
-		options: RestoreChatCheckpointOptions,
-	): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId }> {
+	async restoreCheckpoint(options: RestoreChatCheckpointOptions): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId }> {
 		return this.threadApi.restoreMessage({ ...options, commandId: createUuid() });
 	}
 
@@ -338,13 +303,7 @@ export class ChatService extends Disposable implements IChatService {
 		return this.threadApi.read({ sessionId, threadId, ...(history ? { history } : {}) });
 	}
 
-	async subscribeThread(
-		sessionId: SessionId,
-		threadId: ThreadId,
-		afterSequence: number,
-		owner: object,
-		history?: ThreadSnapshotHistory,
-	): Promise<ThreadSubscription> {
+	async subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number, owner: object, history?: ThreadSnapshotHistory): Promise<ThreadSubscription> {
 		this.assertNotDisposed();
 		const key = JSON.stringify([sessionId, threadId]);
 		let subscription = this.threadSubscriptions.get(key);
@@ -369,11 +328,7 @@ export class ChatService extends Disposable implements IChatService {
 		subscription.pending.add(pending);
 		try {
 			const result = await pending;
-			if (
-				this.isDisposed ||
-				subscription.generation !== this.appServerApi.connectionGeneration ||
-				this.threadSubscriptions.get(key) !== subscription
-			) {
+			if (this.isDisposed || subscription.generation !== this.appServerApi.connectionGeneration || this.threadSubscriptions.get(key) !== subscription) {
 				throw canceled();
 			}
 			// A notification arriving during this RPC can describe newer state than its snapshot.
@@ -381,12 +336,7 @@ export class ChatService extends Disposable implements IChatService {
 			if (subscription.offer && subscription.offer === offeredBeforeSubscribe) {
 				const turn = result.thread.turns.find(turn => turn.turnId === subscription.offer?.turnId);
 				// An omitted Turn in a bounded window says nothing about its pending interaction.
-				if (
-					turn
-						? !['waitingForApproval', 'waitingForUserInput', 'waitingForCapability'].includes(turn.status)
-						: !result.history
-				)
-					this.retireInteractionOffer(subscription);
+				if (turn ? !['waitingForApproval', 'waitingForUserInput', 'waitingForCapability'].includes(turn.status) : !result.history) this.retireInteractionOffer(subscription);
 			}
 			return result;
 		} finally {
@@ -417,23 +367,12 @@ export class ChatService extends Disposable implements IChatService {
 		} catch (error) {
 			// Window teardown can close the owning connection after the readiness check.
 			// Disconnection already releases its subscriptions; active-connection failures still surface.
-			if (
-				subscription.generation === this.appServerApi.connectionGeneration &&
-				(await this.appServerApi.getConnectionState()) === 'ready'
-			)
-				throw error;
+			if (subscription.generation === this.appServerApi.connectionGeneration && (await this.appServerApi.getConnectionState()) === 'ready') throw error;
 		}
 	}
 
-	private requireSubmissionOwner(
-		options: ChatSubmissionOptions & { readonly sessionId: SessionId; readonly threadId: ThreadId },
-	): void {
-		if (
-			options.signal?.aborted ||
-			(options.source &&
-				(options.source.sessionId !== options.sessionId || options.source.threadId !== options.threadId))
-		)
-			throw canceled();
+	private requireSubmissionOwner(options: ChatSubmissionOptions & { readonly sessionId: SessionId; readonly threadId: ThreadId }): void {
+		if (options.signal?.aborted || (options.source && (options.source.sessionId !== options.sessionId || options.source.threadId !== options.threadId))) throw canceled();
 	}
 
 	async startTurn(options: StartTurnOptions): Promise<void> {
@@ -489,8 +428,7 @@ export class ChatService extends Disposable implements IChatService {
 		const epoch = this.connectionEpoch;
 		const generation = this.appServerApi.connectionGeneration;
 		const approvalMode = options.approvalMode ?? (await this.execution.read()).settings.approvalMode;
-		if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServerApi.connectionGeneration)
-			throw canceled();
+		if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServerApi.connectionGeneration) throw canceled();
 		this.assertAIEnabled();
 		this.requireSubmissionOwner(options);
 		await this.turnApi.enqueue(
@@ -517,9 +455,7 @@ export class ChatService extends Disposable implements IChatService {
 
 	async queuedMessageCount(sessionId: SessionId, threadId: ThreadId): Promise<number> {
 		const result = await this.turnApi.listQueued({ sessionId, threadId });
-		return result.messages.filter(
-			message => message.status === 'pending' || message.status === 'paused' || message.status === 'delivering',
-		).length;
+		return result.messages.filter(message => message.status === 'pending' || message.status === 'paused' || message.status === 'delivering').length;
 	}
 
 	async configureAdvisor(options: ConfigureAdvisorOptions): Promise<void> {
@@ -589,12 +525,7 @@ export class ChatService extends Disposable implements IChatService {
 
 	private assertAIEnabled(): void {
 		if (this.configuration.getValue<boolean>(ChatAIDisabledSettingId)) {
-			throw new Error(
-				localize(
-					'chat.ai.disabled.message',
-					'AI features are disabled. Turn off Disable AI features in Settings to send messages.',
-				),
-			);
+			throw new Error(localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.'));
 		}
 	}
 
@@ -625,13 +556,7 @@ export class ChatService extends Disposable implements IChatService {
 		};
 	}
 
-	async readThreadChangeFile(
-		sessionId: SessionId,
-		threadId: ThreadId,
-		revision: string,
-		repositoryId: string,
-		path: string,
-	): Promise<TurnChangeFileContents> {
+	async readThreadChangeFile(sessionId: SessionId, threadId: ThreadId, revision: string, repositoryId: string, path: string): Promise<TurnChangeFileContents> {
 		return { ...(await this.turnChangesApi.summaryFile({ sessionId, threadId, revision, repositoryId, path })) };
 	}
 
@@ -643,12 +568,7 @@ export class ChatService extends Disposable implements IChatService {
 		return { ...(await this.turnChangesApi.readFile({ sessionId, threadId, changeSetId, path })) };
 	}
 
-	async generateTurnChangeMessage(
-		sessionId: SessionId,
-		threadId: ThreadId,
-		changeSetId: string,
-		expectedRevision: number,
-	): Promise<readonly TurnChangeSetSummary[]> {
+	async generateTurnChangeMessage(sessionId: SessionId, threadId: ThreadId, changeSetId: string, expectedRevision: number): Promise<readonly TurnChangeSetSummary[]> {
 		this.assertAIEnabled();
 		const result = await this.turnChangesApi.generateMessage({
 			commandId: commandId('turn-changes-message'),
@@ -660,13 +580,7 @@ export class ChatService extends Disposable implements IChatService {
 		return result.changeSets.map(toTurnChangeSummary);
 	}
 
-	async updateTurnChangeDraft(
-		sessionId: SessionId,
-		threadId: ThreadId,
-		changeSetId: string,
-		expectedRevision: number,
-		message: string,
-	): Promise<readonly TurnChangeSetSummary[]> {
+	async updateTurnChangeDraft(sessionId: SessionId, threadId: ThreadId, changeSetId: string, expectedRevision: number, message: string): Promise<readonly TurnChangeSetSummary[]> {
 		const result = await this.turnChangesApi.updateDraft({
 			commandId: commandId('turn-changes-draft'),
 			sessionId,
@@ -678,12 +592,7 @@ export class ChatService extends Disposable implements IChatService {
 		return result.changeSets.map(toTurnChangeSummary);
 	}
 
-	async prepareTurnCommit(
-		sessionId: SessionId,
-		threadId: ThreadId,
-		selections: readonly TurnCommitSelection[],
-		message: string,
-	): Promise<TurnCommitPreview> {
+	async prepareTurnCommit(sessionId: SessionId, threadId: ThreadId, selections: readonly TurnCommitSelection[], message: string): Promise<TurnCommitPreview> {
 		const result = await this.turnChangesApi.prepareCommit({
 			commandId: commandId('turn-changes-prepare'),
 			sessionId,
@@ -703,11 +612,7 @@ export class ChatService extends Disposable implements IChatService {
 		return { ...(await this.turnChangesApi.readCommitFile({ sessionId, threadId, commitId, path })) };
 	}
 
-	async commitTurnChange(
-		sessionId: SessionId,
-		threadId: ThreadId,
-		commitId: string,
-	): Promise<readonly TurnChangeSetSummary[]> {
+	async commitTurnChange(sessionId: SessionId, threadId: ThreadId, commitId: string): Promise<readonly TurnChangeSetSummary[]> {
 		const result = await this.turnChangesApi.commit({
 			commandId: commandId('turn-changes-commit'),
 			sessionId,
@@ -717,11 +622,7 @@ export class ChatService extends Disposable implements IChatService {
 		return result.changeSets.map(toTurnChangeSummary);
 	}
 
-	async discardThreadChanges(
-		sessionId: SessionId,
-		threadId: ThreadId,
-		expectedRevision: number,
-	): Promise<readonly TurnChangeSetSummary[]> {
+	async discardThreadChanges(sessionId: SessionId, threadId: ThreadId, expectedRevision: number): Promise<readonly TurnChangeSetSummary[]> {
 		const result = await this.turnChangesApi.discardThread({
 			commandId: commandId('turn-changes-discard'),
 			sessionId,
@@ -742,15 +643,8 @@ function toContextInput(context: ResolvedChatContext): AgentInput {
 	}
 	if (context.kind === 'toolSelection') {
 		const disabled: unknown = JSON.parse(context.content);
-		if (
-			!Array.isArray(disabled) ||
-			disabled.length > 4096 ||
-			disabled.some(name => typeof name !== 'string' || !name.trim()) ||
-			new Set(disabled).size !== disabled.length
-		) {
-			throw new Error(
-				localize('chat.tools.invalidSelection', 'The tool selection is invalid. Configure tools again.'),
-			);
+		if (!Array.isArray(disabled) || disabled.length > 4096 || disabled.some(name => typeof name !== 'string' || !name.trim()) || new Set(disabled).size !== disabled.length) {
+			throw new Error(localize('chat.tools.invalidSelection', 'The tool selection is invalid. Configure tools again.'));
 		}
 		return { type: 'toolSelection', disabled };
 	}
@@ -758,34 +652,18 @@ function toContextInput(context: ResolvedChatContext): AgentInput {
 }
 
 function turnInput(options: StartTurnOptions): AgentInput[] {
-	return [
-		...(options.skills ?? []).map(skill => ({ type: 'skill' as const, skill })),
-		...messageInput(options.text, options.contexts),
-	];
+	return [...(options.skills ?? []).map(skill => ({ type: 'skill' as const, skill })), ...messageInput(options.text, options.contexts)];
 }
 
 function messageInput(text: string, contexts: readonly ResolvedChatContext[] = []): AgentInput[] {
 	// Contexts without a composer position, including older drafts, retain their prefix placement.
 	const input = contexts.filter(context => !context.reference).map(toContextInput);
-	const inline = contexts
-		.filter(context => context.reference)
-		.sort((a, b) => a.reference!.start - b.reference!.start);
+	const inline = contexts.filter(context => context.reference).sort((a, b) => a.reference!.start - b.reference!.start);
 	let offset = 0;
 	for (const context of inline) {
 		const { start, end } = context.reference!;
-		if (
-			!Number.isSafeInteger(start) ||
-			!Number.isSafeInteger(end) ||
-			start < offset ||
-			end <= start ||
-			end > text.length
-		) {
-			throw new Error(
-				localize(
-					'chat.context.invalidReference',
-					'An attachment position no longer matches this message. Remove the attachment and add it again.',
-				),
-			);
+		if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < offset || end <= start || end > text.length) {
+			throw new Error(localize('chat.context.invalidReference', 'An attachment position no longer matches this message. Remove the attachment and add it again.'));
 		}
 		const before = text.slice(offset, start);
 		// Core rejects empty text items. Preserve meaningful spans verbatim, but omit whitespace-only gaps.

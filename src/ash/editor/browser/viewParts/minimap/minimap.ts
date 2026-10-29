@@ -84,10 +84,7 @@ export class Minimap extends ViewPart {
 			addDisposableListener(this.domNode, 'pointerdown', event => {
 				if (event.button !== 0) return;
 				const localY = event.clientY - this.domNode.getBoundingClientRect().top;
-				this.dragOffset =
-					localY >= this.sliderTop && localY <= this.sliderTop + this.sliderHeight
-						? localY - this.sliderTop
-						: this.sliderHeight / 2;
+				this.dragOffset = localY >= this.sliderTop && localY <= this.sliderTop + this.sliderHeight ? localY - this.sliderTop : this.sliderHeight / 2;
 				this.dragging = true;
 				this.domNode.classList.add('stanza-editor-minimap-dragging');
 				this.domNode.setPointerCapture(event.pointerId);
@@ -104,8 +101,7 @@ export class Minimap extends ViewPart {
 			addDisposableListener(this.domNode, 'pointerup', event => {
 				this.dragging = false;
 				this.domNode.classList.remove('stanza-editor-minimap-dragging');
-				if (this.domNode.hasPointerCapture(event.pointerId))
-					this.domNode.releasePointerCapture(event.pointerId);
+				if (this.domNode.hasPointerCapture(event.pointerId)) this.domNode.releasePointerCapture(event.pointerId);
 			}),
 		);
 		this._register(
@@ -121,12 +117,7 @@ export class Minimap extends ViewPart {
 	}
 
 	public override onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): boolean {
-		if (
-			event.hasChanged(EditorOption.minimap) ||
-			event.hasChanged(EditorOption.fontInfo) ||
-			event.hasChanged(EditorOption.lineHeight) ||
-			event.hasChanged(EditorOption.padding)
-		) {
+		if (event.hasChanged(EditorOption.minimap) || event.hasChanged(EditorOption.fontInfo) || event.hasChanged(EditorOption.lineHeight) || event.hasChanged(EditorOption.padding)) {
 			this.invalidateRaster();
 		}
 		return true;
@@ -136,16 +127,11 @@ export class Minimap extends ViewPart {
 		return this.invalidateRaster();
 	}
 	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
-		if (
-			event.scrollTopChanged &&
-			this._context.configuration.options.get(EditorOption.minimap).autohide === 'scroll'
-		) {
+		if (event.scrollTopChanged && this._context.configuration.options.get(EditorOption.minimap).autohide === 'scroll') {
 			this.domNode.classList.add('stanza-editor-minimap-scrolling');
 			this.scrolling.schedule();
 		}
-		return (
-			event.scrollTopChanged || event.scrollLeftChanged || event.scrollHeightChanged || event.scrollWidthChanged
-		);
+		return event.scrollTopChanged || event.scrollLeftChanged || event.scrollHeightChanged || event.scrollWidthChanged;
 	}
 	public override onLineMappingChanged(): boolean {
 		return this.invalidateRaster();
@@ -170,11 +156,7 @@ export class Minimap extends ViewPart {
 		this.domNode.classList.toggle('stanza-editor-minimap-show-on-hover', minimap.autohide === 'mouseover');
 		const padding = this._context.configuration.options.get(EditorOption.padding);
 		const scrollbar = this._context.configuration.options.get(EditorOption.scrollbar);
-		const visible =
-			minimap.enabled &&
-			geometry.renderMinimap !== RenderMinimap.None &&
-			geometry.minimapWidth > 0 &&
-			context.viewportHeight > 0;
+		const visible = minimap.enabled && geometry.renderMinimap !== RenderMinimap.None && geometry.minimapWidth > 0 && context.viewportHeight > 0;
 		this.domNode.style.display = visible ? '' : 'none';
 		this.slider.hidden = !visible;
 		if (!visible) return;
@@ -186,18 +168,12 @@ export class Minimap extends ViewPart {
 		// The horizontal scrollbar occupies the bottom of the vertical track even
 		// when its auto thumb is faded out. Use that same extent for the document map.
 		const horizontalScrollbarHeight =
-			scrollbar.horizontal === ScrollbarVisibility.Visible ||
-			(scrollbar.horizontal === ScrollbarVisibility.Auto && context.scrollWidth > context.viewportWidth)
+			scrollbar.horizontal === ScrollbarVisibility.Visible || (scrollbar.horizontal === ScrollbarVisibility.Auto && context.scrollWidth > context.viewportWidth)
 				? scrollbar.horizontalScrollbarSize
 				: 0;
 		const trackHeight = Math.max(0, context.viewportHeight - horizontalScrollbarHeight);
-		this.contentHeight = Math.min(
-			trackHeight,
-			Math.max(0, (rows * geometry.minimapLineHeight) / Math.max(1, pixelRatio)),
-		);
-		const scaleY = geometry.minimapIsSampling
-			? (this.contentHeight * pixelRatio) / rows
-			: geometry.minimapLineHeight;
+		this.contentHeight = Math.min(trackHeight, Math.max(0, (rows * geometry.minimapLineHeight) / Math.max(1, pixelRatio)));
+		const scaleY = geometry.minimapIsSampling ? (this.contentHeight * pixelRatio) / rows : geometry.minimapLineHeight;
 		const viewportRows = context.viewportHeight / lineHeight;
 		this.sliderHeight = Math.min(this.contentHeight, Math.max(8, (viewportRows * scaleY) / pixelRatio));
 		const scrollRange = Math.max(0, context.scrollHeight - context.viewportHeight);
@@ -206,10 +182,7 @@ export class Minimap extends ViewPart {
 		const rasterHeight = this.contentHeight * pixelRatio;
 		const rasterOffset = scrollRatio * Math.max(0, rows * scaleY - rasterHeight);
 		this.domNode.classList.toggle('stanza-editor-minimap-hover-slider', minimap.showSlider === 'mouseover');
-		this.domNode.classList.toggle(
-			'has-right-overflow',
-			context.scrollWidth > context.scrollLeft + context.viewportWidth,
-		);
+		this.domNode.classList.toggle('has-right-overflow', context.scrollWidth > context.scrollLeft + context.viewportWidth);
 		this.domNode.style.left = `${geometry.minimapLeft}px`;
 		this.domNode.style.top = '0px';
 		this.domNode.style.width = `${geometry.minimapWidth}px`;
@@ -273,18 +246,8 @@ export class Minimap extends ViewPart {
 		const hasTokenColors = (TokenizationRegistry.getColorMap()?.length ?? 0) > 2;
 		const backgroundColor = this._context.theme.getColor(editorBackground)!.rgba;
 		const foregroundColor = this._context.theme.getColor(editorForeground)!.rgba;
-		const background = new RGBA8(
-			backgroundColor.r,
-			backgroundColor.g,
-			backgroundColor.b,
-			Math.round(backgroundColor.a * 255),
-		);
-		const foreground = new RGBA8(
-			foregroundColor.r,
-			foregroundColor.g,
-			foregroundColor.b,
-			Math.round(foregroundColor.a * 255),
-		);
+		const background = new RGBA8(backgroundColor.r, backgroundColor.g, backgroundColor.b, Math.round(backgroundColor.a * 255));
+		const foreground = new RGBA8(foregroundColor.r, foregroundColor.g, foregroundColor.b, Math.round(foregroundColor.a * 255));
 		const image = painter.createImageData(width, height);
 		// A raster row can represent many source rows. Sample before reading text
 		// and tokens, so large files neither overpaint rows nor block text rendering.
@@ -294,9 +257,7 @@ export class Minimap extends ViewPart {
 		const sampleCount = Math.min(lineCount, Math.ceil(lineCount * scaleY));
 		for (let sample = 0; sample < sampleCount; sample++) {
 			const line = projection.lineAt(startLine + Math.floor((sample * lineCount) / sampleCount))!;
-			const text = this.source.model
-				.getLineContent(line.logicalLineIndex + 1)
-				.slice(line.startColumn, line.endColumn);
+			const text = this.source.model.getLineContent(line.logicalLineIndex + 1).slice(line.startColumn, line.endColumn);
 			const y = Math.floor((line.visualLineIndex + paddingRows) * scaleY - rasterOffset) + innerLinePadding;
 			if (y < 0 || y + glyphHeight > height) {
 				continue;
@@ -304,13 +265,8 @@ export class Minimap extends ViewPart {
 			const tokens = this.source.model.tokenization.getLineTokens(line.logicalLineIndex + 1);
 			const renderedTokens = this.source.semanticTokenSource?.getLineTokens(line.logicalLineIndex) ?? [];
 			const tokenColors = renderedTokens.map(token => {
-				const presentation = resolveSemanticTokenPresentation(
-					token,
-					this._context.theme.value,
-					this.source.semanticHighlightingEnabled(this._context.theme.value),
-				);
-				const color =
-					presentation.foreground === undefined ? undefined : Color.fromHex(presentation.foreground).rgba;
+				const presentation = resolveSemanticTokenPresentation(token, this._context.theme.value, this.source.semanticHighlightingEnabled(this._context.theme.value));
+				const color = presentation.foreground === undefined ? undefined : Color.fromHex(presentation.foreground).rgba;
 				return color ? new RGBA8(color.r, color.g, color.b, Math.round(color.a * 255)) : undefined;
 			});
 			let renderedTokenIndex = 0;
@@ -327,19 +283,12 @@ export class Minimap extends ViewPart {
 				}
 				const tokenIndex = tokens.findTokenIndexAtOffset(line.startColumn + offset);
 				const sourceOffset = line.startColumn + offset;
-				while (
-					renderedTokenIndex < renderedTokens.length &&
-					renderedTokens[renderedTokenIndex].endColumn <= sourceOffset
-				) {
+				while (renderedTokenIndex < renderedTokens.length && renderedTokens[renderedTokenIndex].endColumn <= sourceOffset) {
 					renderedTokenIndex++;
 				}
 				const renderedToken = renderedTokens[renderedTokenIndex];
-				const renderedColor =
-					renderedToken && renderedToken.startColumn <= sourceOffset
-						? tokenColors[renderedTokenIndex]
-						: undefined;
-				const color =
-					renderedColor ?? (hasTokenColors ? colors.getColor(tokens.getForeground(tokenIndex)) : foreground);
+				const renderedColor = renderedToken && renderedToken.startColumn <= sourceOffset ? tokenColors[renderedTokenIndex] : undefined;
+				const color = renderedColor ?? (hasTokenColors ? colors.getColor(tokens.getForeground(tokenIndex)) : foreground);
 				const characterColumns = isFullWidthCharacter(charCode) ? 2 : 1;
 				// Wide characters still occupy two cells when the compact font uses
 				// a replacement glyph rather than a dedicated character bitmap.
@@ -347,19 +296,7 @@ export class Minimap extends ViewPart {
 					const x = column * charWidth;
 					const alpha = color.a;
 					if (geometry.renderMinimap === RenderMinimap.Text) {
-						renderer.renderChar(
-							image,
-							x,
-							y,
-							charCode,
-							color,
-							alpha,
-							background,
-							0,
-							renderer.scale,
-							colors.backgroundIsLight(),
-							force1pxHeight,
-						);
+						renderer.renderChar(image, x, y, charCode, color, alpha, background, 0, renderer.scale, colors.backgroundIsLight(), force1pxHeight);
 					} else {
 						renderer.blockRenderChar(image, x, y, color, alpha, background, 0, force1pxHeight);
 					}
@@ -368,12 +305,7 @@ export class Minimap extends ViewPart {
 		}
 		painter.putImageData(image, 0, 0);
 
-		const fullRange = new Range(
-			1,
-			1,
-			this._context.viewModel.getLineCount(),
-			this._context.viewModel.getLineMaxColumn(this._context.viewModel.getLineCount()),
-		);
+		const fullRange = new Range(1, 1, this._context.viewModel.getLineCount(), this._context.viewModel.getLineMaxColumn(this._context.viewModel.getLineCount()));
 		const decorations = this._context.viewModel.getMinimapDecorationsInRange(fullRange);
 		// Ranges are already in visual coordinates, including wrapping and folding.
 		// Paint gutter markers last so an inline diagnostic cannot cover a Git marker.
@@ -381,10 +313,7 @@ export class Minimap extends ViewPart {
 			for (const decoration of decorations) {
 				const minimap = decoration.options.minimap;
 				if (!minimap || minimap.sectionHeaderStyle || minimap.position !== position || !minimap.color) continue;
-				const color =
-					typeof minimap.color === 'string'
-						? minimap.color
-						: this._context.theme.getColor(minimap.color.id)?.toString();
+				const color = typeof minimap.color === 'string' ? minimap.color : this._context.theme.getColor(minimap.color.id)?.toString();
 				if (!color) continue;
 				painter.fillStyle = color;
 				const first = Math.max(decoration.range.startLineNumber, startLine + 1);
@@ -398,8 +327,7 @@ export class Minimap extends ViewPart {
 					}
 					const text = this._context.viewModel.getLineContent(line);
 					const startColumn = line === decoration.range.startLineNumber ? decoration.range.startColumn : 1;
-					const endColumn =
-						line === decoration.range.endLineNumber ? decoration.range.endColumn : text.length + 1;
+					const endColumn = line === decoration.range.endLineNumber ? decoration.range.endColumn : text.length + 1;
 					if (endColumn === 1 && line !== decoration.range.startLineNumber) continue;
 					const left = CursorColumns.visibleColumnFromColumn(text, startColumn, tabSize) * charWidth;
 					const right = CursorColumns.visibleColumnFromColumn(text, endColumn, tabSize) * charWidth;

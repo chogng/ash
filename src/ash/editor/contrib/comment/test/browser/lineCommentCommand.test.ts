@@ -28,9 +28,7 @@ test('Toggle Line Comment runs through the canonical editor action', () => {
 		lineHeight: 20,
 	});
 	editor.setSelection(Selection.fromPositions(new Position(1, 1), new Position(2, 5)));
-	const action = [...EditorExtensionsRegistry.getEditorActions()].find(
-		candidate => candidate.id === 'editor.action.commentLine',
-	);
+	const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.commentLine');
 	assert.ok(action);
 
 	editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
@@ -52,9 +50,7 @@ test('Toggle Line Comment leaves languages without a line comment token unchange
 		languageConfigurationService: configurations,
 		lineHeight: 20,
 	});
-	const action = [...EditorExtensionsRegistry.getEditorActions()].find(
-		candidate => candidate.id === 'editor.action.commentLine',
-	);
+	const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.commentLine');
 	assert.ok(action);
 
 	editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
@@ -76,20 +72,18 @@ test('Toggle Line Comment retains a primary selection below a secondary caret', 
 		});
 		const initial = [new Selection(3, 4, 3, 2), new Selection(1, 2, 1, 2)];
 		editor.setSelections(initial);
-		const action = [...EditorExtensionsRegistry.getEditorActions()].find(
-			candidate => candidate.id === 'editor.action.commentLine',
-		);
+		const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.commentLine');
 		assert.ok(action);
 		editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
 		assert.deepEqual(
 			{ value: model.getValue(), selections: editor.getSelections() },
-			{ value: '// alpha\nbeta\n// gamma', selections: [new Selection(3, 7, 3, 5), new Selection(1, 5, 1, 5)] },
+			{
+				value: '// alpha\nbeta\n// gamma',
+				selections: [new Selection(3, 7, 3, 5), new Selection(1, 5, 1, 5)],
+			},
 		);
 		editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
-		assert.deepEqual(
-			{ value: model.getValue(), selections: editor.getSelections() },
-			{ value: 'alpha\nbeta\ngamma', selections: initial },
-		);
+		assert.deepEqual({ value: model.getValue(), selections: editor.getSelections() }, { value: 'alpha\nbeta\ngamma', selections: initial });
 		model.undo();
 		assert.deepEqual(editor.getSelections(), [new Selection(3, 7, 3, 5), new Selection(1, 5, 1, 5)]);
 	} finally {

@@ -12,11 +12,7 @@ import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
 import type { IEditorPane } from '../../../../common/editor.js';
-import {
-	IEditorService,
-	type EditorOpenOptions,
-	type EditorOpenTarget,
-} from '../../../../services/editor/common/editorService.js';
+import { IEditorService, type EditorOpenOptions, type EditorOpenTarget } from '../../../../services/editor/common/editorService.js';
 import { IOutlineService, OutlineTarget } from '../../../../services/outline/browser/outline.js';
 import { OutlineService } from '../../../../services/outline/browser/outlineService.js';
 import { createTestCodeEditor } from '../../../../../editor/test/browser/testCodeEditor.js';
@@ -89,9 +85,7 @@ suite('DocumentSymbolsOutline', () => {
 			}),
 		);
 		lifetime.add(services.createInstance(DocumentSymbolsOutlineCreator));
-		const outline = lifetime.add(
-			(await outlines.createOutline(pane, OutlineTarget.OutlinePane, CancellationToken.None))!,
-		);
+		const outline = lifetime.add((await outlines.createOutline(pane, OutlineTarget.OutlinePane, CancellationToken.None))!);
 		assert.equal(outline.isEmpty, false);
 		const roots = [...outline.config.treeDataSource.getChildren(outline)];
 		assert.deepEqual(

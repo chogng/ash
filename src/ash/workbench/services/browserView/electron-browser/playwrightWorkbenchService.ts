@@ -1,10 +1,6 @@
 import { AbstractDisposable } from '../../../../base/common/lifecycle.js';
 import type { IChannel } from '../../../../base/parts/ipc/common/ipc.js';
-import type {
-	BrowserViewAction,
-	IBrowserViewObservation,
-	IBrowserViewObservationOptions,
-} from '../../../../platform/browserView/common/browserView.js';
+import type { BrowserViewAction, IBrowserViewObservation, IBrowserViewObservationOptions } from '../../../../platform/browserView/common/browserView.js';
 import { IPlaywrightService } from '../../../../platform/browserView/common/playwrightService.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { IMainProcessService } from '../../../../platform/ipc/common/mainProcessService.js';
@@ -22,13 +18,7 @@ class PlaywrightChannelClient extends AbstractDisposable implements IPlaywrightS
 		this.channel = mainProcessService.getChannel('browserHost');
 	}
 
-	public async getObservation(
-		operationId: string,
-		sessionId: string,
-		pageId: string,
-		options: IBrowserViewObservationOptions,
-		networkToken?: string | null,
-	): Promise<IBrowserViewObservation> {
+	public async getObservation(operationId: string, sessionId: string, pageId: string, options: IBrowserViewObservationOptions, networkToken?: string | null): Promise<IBrowserViewObservation> {
 		const result = await this.run(operationId, sessionId, 'observe', {
 			threadId: sessionId,
 			targetId: pageId,
@@ -47,13 +37,7 @@ class PlaywrightChannelClient extends AbstractDisposable implements IPlaywrightS
 		return { ...observation, screenshot: { ...screenshot, mimeType: 'image/png' } };
 	}
 
-	public async performAction(
-		operationId: string,
-		sessionId: string,
-		pageId: string,
-		action: BrowserViewAction,
-		networkToken?: string | null,
-	): Promise<string | undefined> {
+	public async performAction(operationId: string, sessionId: string, pageId: string, action: BrowserViewAction, networkToken?: string | null): Promise<string | undefined> {
 		const result = await this.run(operationId, sessionId, 'perform', {
 			threadId: sessionId,
 			action: { ...action, targetId: pageId },
@@ -70,9 +54,7 @@ class PlaywrightChannelClient extends AbstractDisposable implements IPlaywrightS
 		let pending = this.retiringSessions.get(sessionId);
 		if (!pending) {
 			pending = (async () => {
-				const cancellations = [...this.operations]
-					.filter(([, owner]) => owner === sessionId)
-					.map(([id]) => this.cancelOperation(id));
+				const cancellations = [...this.operations].filter(([, owner]) => owner === sessionId).map(([id]) => this.cancelOperation(id));
 				// The channel preserves send order. Dispatch cleanup before synchronous scope disposal closes it.
 				const release = this.channel.call('disposeSession', { threadId: sessionId });
 				await Promise.all([...cancellations, release]);

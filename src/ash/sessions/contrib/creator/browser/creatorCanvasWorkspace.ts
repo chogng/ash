@@ -82,9 +82,7 @@ export abstract class CreatorCanvasWorkspace extends Disposable implements ICrea
 		this.toolbar.setActions(this.getModeActions(), [
 			this.action('open', localize('sessions.creator.open', 'Open document'), () => this.document.openDocument()),
 			this.action('save', localize('sessions.creator.save', 'Save document'), () => this.editor.saveDocument()),
-			this.action('exportSvg', localize('sessions.design.export', 'Export SVG'), () =>
-				this.document.exportDocument(),
-			),
+			this.action('exportSvg', localize('sessions.design.export', 'Export SVG'), () => this.document.exportDocument()),
 		]);
 	}
 

@@ -11,32 +11,24 @@ import { raceCancellationError } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { Range } from '../../../core/range.js';
-import {
-	BackgroundTokenizationState,
-	SynchronousTokenizationUnavailableError,
-} from '../../../tokenizationTextModelPart.js';
+import { BackgroundTokenizationState, SynchronousTokenizationUnavailableError } from '../../../tokenizationTextModelPart.js';
 import type { LanguageToken } from '../../../tokens/languageTokens.js';
 import type { TextModel } from '../../textModel.js';
 
 /** Renderer cache only. Parsing, queries and structural facts run in the shared background session. */
 export class TreeSitterSyntaxTokenBackend extends Disposable {
-	private readonly changeEmitter = this._register(
-		new Emitter<readonly { fromLineNumber: number; toLineNumber: number }[]>(),
-	);
+	private readonly changeEmitter = this._register(new Emitter<readonly { fromLineNumber: number; toLineNumber: number }[]>());
 	private readonly errorEmitter = this._register(new Emitter<unknown>());
 	readonly onDidChangeTokens = this.changeEmitter.event;
 	readonly onDidEncounterError = this.errorEmitter.event;
 	private readonly rows = new Map<number, readonly RelativeToken[]>();
 	private readonly accurate = new Set<number>();
 	private readonly styles = new Map<string, TreeSitterTokenStyle | undefined>();
-	private visible: readonly { startLineNumber: number; endLineNumber: number }[] = [
-		{ startLineNumber: 1, endLineNumber: 1 },
-	];
+	private visible: readonly { startLineNumber: number; endLineNumber: number }[] = [{ startLineNumber: 1, endLineNumber: 1 }];
 	private pending: Promise<void> = Promise.resolve();
 	private controller: AbortController | undefined;
 	private factsQuery: AbortController | undefined;
-	private factsRequest:
-		{ version: number; controller: AbortController; promise: Promise<TreeSitterFacts> } | undefined;
+	private factsRequest: { version: number; controller: AbortController; promise: Promise<TreeSitterFacts> } | undefined;
 	private parsedVersion = -1;
 	private brackets: readonly TreeSitterBracket[] = [];
 	private count = 0;
@@ -102,17 +94,14 @@ export class TreeSitterSyntaxTokenBackend extends Disposable {
 	get backgroundTokenizationState(): BackgroundTokenizationState {
 		return this.parsedVersion === this.model.version &&
 			this.visible.every(range => {
-				for (let line = range.startLineNumber; line <= range.endLineNumber; line++)
-					if (!this.accurate.has(line - 1)) return false;
+				for (let line = range.startLineNumber; line <= range.endLineNumber; line++) if (!this.accurate.has(line - 1)) return false;
 				return true;
 			})
 			? BackgroundTokenizationState.Completed
 			: BackgroundTokenizationState.InProgress;
 	}
 	get lines(): readonly { lineIndex: number; tokens: readonly LanguageToken[] }[] {
-		return [...this.rows.keys()]
-			.sort((a, b) => a - b)
-			.map(row => ({ lineIndex: row, tokens: this.getLanguageTokens(row + 1) }));
+		return [...this.rows.keys()].sort((a, b) => a - b).map(row => ({ lineIndex: row, tokens: this.getLanguageTokens(row + 1) }));
 	}
 	async whenReady(signal: AbortSignal): Promise<void> {
 		do {
@@ -139,8 +128,7 @@ export class TreeSitterSyntaxTokenBackend extends Disposable {
 		this.visible = ranges.length ? ranges : [{ startLineNumber: 1, endLineNumber: 1 }];
 		if (
 			this.visible.some(range => {
-				for (let line = range.startLineNumber; line <= range.endLineNumber; line++)
-					if (!this.hasAccurateTokensForLine(line)) return true;
+				for (let line = range.startLineNumber; line <= range.endLineNumber; line++) if (!this.hasAccurateTokensForLine(line)) return true;
 				return false;
 			})
 		)
@@ -148,12 +136,7 @@ export class TreeSitterSyntaxTokenBackend extends Disposable {
 	}
 	refreshRange(startLineNumber: number, endLineNumber: number): void {
 		if (!this.hasAccurateTokensForLine(startLineNumber) || !this.hasAccurateTokensForLine(endLineNumber)) {
-			if (
-				!this.visible.some(
-					range => range.startLineNumber <= startLineNumber && range.endLineNumber >= endLineNumber,
-				)
-			)
-				this.visible = [...this.visible, { startLineNumber, endLineNumber }];
+			if (!this.visible.some(range => range.startLineNumber <= startLineNumber && range.endLineNumber >= endLineNumber)) this.visible = [...this.visible, { startLineNumber, endLineNumber }];
 			this.queueRefresh();
 		}
 	}
@@ -183,26 +166,18 @@ export class TreeSitterSyntaxTokenBackend extends Disposable {
 	}
 	resetStyles(): void {
 		this.styles.clear();
-		this.changeEmitter.fire(
-			this.visible.map(range => ({ fromLineNumber: range.startLineNumber, toLineNumber: range.endLineNumber })),
-		);
+		this.changeEmitter.fire(this.visible.map(range => ({ fromLineNumber: range.startLineNumber, toLineNumber: range.endLineNumber })));
 	}
 	tokenizeLinesAt(line: number, _lines: readonly string[]): readonly LanguageToken[][] {
 		throw new SynchronousTokenizationUnavailableError(line);
 	}
-	async tokenizeLinesAtAsync(
-		line: number,
-		lines: readonly string[],
-		signal: AbortSignal,
-	): Promise<readonly (readonly LanguageToken[])[]> {
+	async tokenizeLinesAtAsync(line: number, lines: readonly string[], signal: AbortSignal): Promise<readonly (readonly LanguageToken[])[]> {
 		const result = await this.session.request('preview', { line, lines }, signal);
 		if (result.revision !== this.model.version) throw new Error('Obsolete hypothetical syntax');
 		return (result.preview ?? []).map(tokens =>
 			tokens.flatMap(token => {
 				const style = this.resolveStyle(token.tokenType, token.languageId ?? this.model.getLanguageId());
-				return style
-					? [{ ...token, range: Range.lift(token.range), tokenType: style.tokenType, presentation: style }]
-					: [];
+				return style ? [{ ...token, range: Range.lift(token.range), tokenType: style.tokenType, presentation: style }] : [];
 			}),
 		);
 	}
@@ -260,13 +235,7 @@ export class TreeSitterSyntaxTokenBackend extends Disposable {
 			!!this.controller &&
 			!this.controller.signal.aborted &&
 			this.requestedVersion === this.model.version &&
-			this.visible.every(range =>
-				this.requestedRanges.some(
-					requested =>
-						requested.startLineNumber <= range.startLineNumber &&
-						requested.endLineNumber >= range.endLineNumber,
-				),
-			)
+			this.visible.every(range => this.requestedRanges.some(requested => requested.startLineNumber <= range.startLineNumber && requested.endLineNumber >= range.endLineNumber))
 		);
 	}
 	private queueRefresh(immediate = false): void {
@@ -305,9 +274,7 @@ export class TreeSitterSyntaxTokenBackend extends Disposable {
 				this.parsedVersion = result.revision;
 				this.brackets = result.brackets ?? [];
 				for (const sample of result.measures) this.measure?.(sample);
-				this.changeEmitter.fire(
-					ranges.map(range => ({ fromLineNumber: range.startLineNumber, toLineNumber: range.endLineNumber })),
-				);
+				this.changeEmitter.fire(ranges.map(range => ({ fromLineNumber: range.startLineNumber, toLineNumber: range.endLineNumber })));
 			},
 			error => {
 				if (!controller.signal.aborted && !this.isDisposed) {

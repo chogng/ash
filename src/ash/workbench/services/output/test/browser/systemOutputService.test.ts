@@ -50,10 +50,7 @@ test('system Output preserves producer time, severity, category and error contex
 	});
 	const entry = output.getChannel(windowLogId)!.entries[0]!;
 	assert.deepEqual([entry.timestamp, entry.severity, entry.category], [42, 'warning', 'workspace/read']);
-	assert.match(
-		entry.text,
-		/^1970-01-01T00:00:00.042Z \[warning\] \[workspace\/read\] unavailable\nError: permission denied/,
-	);
+	assert.match(entry.text, /^1970-01-01T00:00:00.042Z \[warning\] \[workspace\/read\] unavailable\nError: permission denied/);
 });
 
 test('file-backed Output keeps a clear during an in-flight read and releases its reader with the channel', async function () {
@@ -141,7 +138,10 @@ test('clearing an empty channel prevents its pending initial file snapshot from 
 	const channel = resources.add(
 		openLogOutput(
 			output,
-			{ list: async () => [], read: async () => pending.promise },
+			{
+				list: async () => [],
+				read: async () => pending.promise,
+			},
 			{ id: 'saved/test', source: 'main', live: false, currentWindow: false, format: 'text' },
 		),
 	);

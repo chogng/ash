@@ -5,11 +5,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { extUriIgnorePathCase } from '../../../../../base/common/resources.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
-import {
-	FileSystemProviderCapabilities,
-	type IFileWriteOptions,
-	type IFileWriteResult,
-} from '../../../../../platform/files/common/files.js';
+import { FileSystemProviderCapabilities, type IFileWriteOptions, type IFileWriteResult } from '../../../../../platform/files/common/files.js';
 import { IUriIdentityService } from '../../../../../platform/uriIdentity/common/uriIdentity.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { MemoryFileService } from '../../../bulkEdit/test/browser/bulkEditTestServices.js';
@@ -32,23 +28,14 @@ suite('File model provider identity', () => {
 		using textFiles = createTestTextFileService(files);
 		using models = services.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 		const signal = new AbortController().signal;
-		const [first, second] = await Promise.all([
-			models.acquire({ resource }, signal),
-			models.acquire({ resource: alias }, signal),
-		]);
+		const [first, second] = await Promise.all([models.acquire({ resource }, signal), models.acquire({ resource: alias }, signal)]);
 		using firstReference = first;
 		using secondReference = second;
 		assert.equal(first.model, second.model);
 		first.model.applyEdits([{ range: first.model.getFullModelRange(), text: 'edited' }]);
-		assert.deepEqual(
-			[models.getModels().length, models.getModel(alias), second.model.getText(), second.isDirty],
-			[1, first.model, 'edited', true],
-		);
+		assert.deepEqual([models.getModels().length, models.getModel(alias), second.model.getText(), second.isDirty], [1, first.model, 'edited', true]);
 		await Promise.all([first.save(signal), second.saveAs(alias, signal)]);
-		assert.deepEqual(
-			[provider.text(resource), first.isDirty, second.isDirty, models.hasPendingSaveRecovery(alias)],
-			['edited', false, false, false],
-		);
+		assert.deepEqual([provider.text(resource), first.isDirty, second.isDirty, models.hasPendingSaveRecovery(alias)], ['edited', false, false, false]);
 		first.dispose();
 		assert.equal(second.model.isDisposed(), false);
 		second.dispose();
@@ -144,8 +131,7 @@ suite('File model provider identity', () => {
 		using models = services.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 		const signal = new AbortController().signal;
 		using first = await models.acquire({ resource }, signal);
-		for (let index = 0; index < 4096; index++)
-			services.get(IUriIdentityService).asCanonicalUri(URI.file(`/transient/${index}`));
+		for (let index = 0; index < 4096; index++) services.get(IUriIdentityService).asCanonicalUri(URI.file(`/transient/${index}`));
 		using alias = await models.acquire({ resource: URI.file('/workspace/MAIN.txt') }, signal);
 		assert.equal(alias.model, first.model);
 	});
@@ -183,10 +169,7 @@ suite('File model provider identity', () => {
 		using reopened = await models.acquire({ resource: alias }, signal);
 		reopened.model.setValue('new edit');
 		assert.throws(() => reopened.save(signal), /multiple pending recovery records/);
-		assert.deepEqual(
-			[models.hasPendingSaveRecovery(lower), provider.text(alias), reopened.isDirty],
-			[true, 'alias', true],
-		);
+		assert.deepEqual([models.hasPendingSaveRecovery(lower), provider.text(alias), reopened.isDirty], [true, 'alias', true]);
 	});
 
 	test('reopening an evicted case alias retains the saved undo history', async () => {
@@ -201,8 +184,7 @@ suite('File model provider identity', () => {
 		first.model.pushEditOperations(null, [{ range: first.model.getFullModelRange(), text: 'saved' }], () => null);
 		await first.save(signal);
 		first.dispose();
-		for (let index = 0; index < 4096; index++)
-			services.get(IUriIdentityService).asCanonicalUri(URI.file(`/transient/${index}`));
+		for (let index = 0; index < 4096; index++) services.get(IUriIdentityService).asCanonicalUri(URI.file(`/transient/${index}`));
 		using reopened = await models.acquire({ resource: URI.file('/workspace/MAIN.txt') }, signal);
 		reopened.model.undo();
 		assert.deepEqual([reopened.model.getText(), reopened.isDirty], ['disk', true]);
@@ -210,8 +192,7 @@ suite('File model provider identity', () => {
 });
 
 class InsensitiveFileProvider extends MemoryFileService {
-	public override readonly capabilities =
-		FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public override readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
 	private readonly fileResources: readonly URI[];
 
 	constructor(resources: readonly (readonly [URI, string])[]) {
@@ -235,8 +216,7 @@ class InsensitiveFileProvider extends MemoryFileService {
 }
 
 class MutableFileProvider extends MemoryFileService {
-	public override capabilities =
-		FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.PathCaseSensitive;
+	public override capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.PathCaseSensitive;
 	public override readonly onDidChangeCapabilities;
 
 	constructor(resources: readonly (readonly [URI, string])[], changes: Emitter<void>) {

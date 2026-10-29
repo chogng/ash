@@ -6,8 +6,7 @@ export function findDesktopRoot(start: string): string {
 	let candidate = resolve(start);
 	while (true) {
 		// Compiled tests also contain package.json and src/ash, but not TypeScript source.
-		if (existsSync(resolve(candidate, 'package.json')) && existsSync(resolve(candidate, 'src/ash/nls.ts')))
-			return candidate;
+		if (existsSync(resolve(candidate, 'package.json')) && existsSync(resolve(candidate, 'src/ash/nls.ts'))) return candidate;
 
 		const parent = dirname(candidate);
 		if (parent === candidate) throw new Error(`Could not locate the desktop package from ${start}`);

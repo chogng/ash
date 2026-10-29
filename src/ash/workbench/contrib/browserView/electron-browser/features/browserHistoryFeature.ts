@@ -29,11 +29,7 @@ export class BrowserHistoryFeature extends Disposable {
 			order: 10,
 			getSuggestions: async ({ text, input }, token) => {
 				const model = input.model;
-				if (
-					!model ||
-					token.isCancellationRequested ||
-					!['global', 'workspace'].includes(model.info.session.scope)
-				) {
+				if (!model || token.isCancellationRequested || !['global', 'workspace'].includes(model.info.session.scope)) {
 					return [];
 				}
 				const snapshot = await this.pageService.getBrowserHistory(model.id);
@@ -67,14 +63,9 @@ export class BrowserHistoryFeature extends Disposable {
 		const picker = resources.add(this.quickInput.createQuickPick<IQuickPickItem & { url?: string }>());
 		resources.add(toDisposable(() => picker.hide()));
 		picker.ariaLabel = localize({ bundle: 'ash.workbench', key: 'browser.history' }, 'History');
-		picker.placeholder = localize(
-			{ bundle: 'ash.workbench', key: 'browser.historySearch' },
-			'Search browsing history',
-		);
+		picker.placeholder = localize({ bundle: 'ash.workbench', key: 'browser.historySearch' }, 'Search browsing history');
 		picker.sortByLabel = false;
-		const items = [...snapshot.items]
-			.reverse()
-			.map(entry => ({ label: entry.title || entry.url, description: entry.url, url: entry.url }));
+		const items = [...snapshot.items].reverse().map(entry => ({ label: entry.title || entry.url, description: entry.url, url: entry.url }));
 		const render = (): void => {
 			picker.items = [
 				...filterQuickPickItems(items, picker.value),
@@ -99,9 +90,7 @@ export class BrowserHistoryFeature extends Disposable {
 					return;
 				}
 				picker.hide();
-				void (
-					selected.url ? model.loadURL(selected.url) : this.pageService.deleteBrowserHistory(model.id)
-				).catch(error => this.report(error));
+				void (selected.url ? model.loadURL(selected.url) : this.pageService.deleteBrowserHistory(model.id)).catch(error => this.report(error));
 			}),
 		);
 		render();
@@ -130,9 +119,7 @@ registerAction2(
 				precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId),
 			});
 		}
-		override async run(
-			accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor,
-		): Promise<void> {
+		override async run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): Promise<void> {
 			const pane = accessor.get(IEditorPart).activePane;
 			if (pane?.id === BrowserViewEditorId) {
 				await (pane as BrowserEditor).getContribution(BrowserNavigationFeatures)?.history.show();

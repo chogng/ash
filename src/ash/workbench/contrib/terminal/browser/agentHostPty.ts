@@ -2,11 +2,7 @@ import type { ITerminalAutoReply } from '../../../../platform/terminal/common/te
 import type { ITerminalProcessOwnership } from '../../../services/terminal/common/terminal.js';
 import { CancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import {
-	ITerminalProcessService,
-	type IProcessDataEvent,
-	type ITerminalProcessCreation,
-} from '../../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, type IProcessDataEvent, type ITerminalProcessCreation } from '../../../../platform/terminal/common/terminal.js';
 import { BasePty } from '../common/basePty.js';
 import { TerminalProcessManager } from './terminalProcessManager.js';
 import { localize } from '../../../../nls.js';
@@ -75,10 +71,7 @@ export class AgentHostPty extends BasePty<IProcessDataEvent> {
 		}
 		// A result from the retired host cannot supply cwd for a new Split request.
 		this.assertCanWrite();
-		if (info.cwd === undefined)
-			throw new Error(
-				localize('terminal.process.cwdUnavailable', 'The terminal working directory is unavailable.'),
-			);
+		if (info.cwd === undefined) throw new Error(localize('terminal.process.cwdUnavailable', 'The terminal working directory is unavailable.'));
 		return info.cwd;
 	}
 	get shellIntegration() {

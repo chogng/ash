@@ -5,13 +5,7 @@ import { JSDOM } from 'jsdom';
 import { ensureNoStylesAreLeakedInTestSuite } from '../../../../../../../test/unit/documentStyles.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { MarkdownString } from '../../../../../base/common/htmlContent.js';
-import {
-	renderMarkdown,
-	renderAsPlaintext,
-	renderWorkbenchMarkdown,
-	resolveMarkdownLinkTarget,
-	sanitizeMarkdownHtmlToString,
-} from '../../../../../base/browser/markdownRenderer.js';
+import { renderMarkdown, renderAsPlaintext, renderWorkbenchMarkdown, resolveMarkdownLinkTarget, sanitizeMarkdownHtmlToString } from '../../../../../base/browser/markdownRenderer.js';
 import { MarkdownPreview } from '../../browser/markdownPreview.js';
 import { createTestComponentServices, getWebviewHtml } from '../../../../test/common/testEditorServices.js';
 import { MarkdownDocumentView } from '../../../../../workbench/contrib/markdown/browser/markdownDocumentRenderer.js';
@@ -19,14 +13,14 @@ import { MarkdownDocumentView } from '../../../../../workbench/contrib/markdown/
 ensureNoStylesAreLeakedInTestSuite();
 
 function createDom(): JSDOM {
-	return new JSDOM('<!DOCTYPE html><body></body>', { url: 'https://ash.invalid/' });
+	return new JSDOM('<!DOCTYPE html><body></body>', {
+		url: 'https://ash.invalid/',
+	});
 }
 
 test('workbench Markdown renders GFM structure through DOMPurify', () => {
 	const dom = createDom();
-	const html = renderWorkbenchMarkdown(
-		['# Heading', '', '**bold** and `code`', '', '| A | B |', '| - | - |', '| 1 | 2 |'].join('\n'),
-	);
+	const html = renderWorkbenchMarkdown(['# Heading', '', '**bold** and `code`', '', '| A | B |', '| - | - |', '| 1 | 2 |'].join('\n'));
 	const safeHtml = sanitizeMarkdownHtmlToString({ ownerDocument: dom.window.document }, html);
 
 	assert.match(safeHtml, /<h1>Heading<\/h1>/);
@@ -37,8 +31,12 @@ test('workbench Markdown renders GFM structure through DOMPurify', () => {
 });
 
 test('workbench Markdown exposes Marked options and renderer extensions', () => {
-	const withoutGfm = renderWorkbenchMarkdown('~~strikethrough~~', false, { markedOptions: { gfm: false } });
-	const hardBreak = renderWorkbenchMarkdown('first\nsecond', false, { markedOptions: { breaks: true } });
+	const withoutGfm = renderWorkbenchMarkdown('~~strikethrough~~', false, {
+		markedOptions: { gfm: false },
+	});
+	const hardBreak = renderWorkbenchMarkdown('first\nsecond', false, {
+		markedOptions: { breaks: true },
+	});
 	const extended = renderWorkbenchMarkdown('**Ash**', false, {
 		markedExtensions: [
 			{
@@ -63,7 +61,13 @@ test('Markdown sanitizes HTML returned by custom Marked renderers', () => {
 		{ value: '**unsafe output**' },
 		{
 			ownerDocument: dom.window.document,
-			markedExtensions: [{ renderer: { strong: () => '<img src="javascript:alert(1)" onerror="alert(1)">' } }],
+			markedExtensions: [
+				{
+					renderer: {
+						strong: () => '<img src="javascript:alert(1)" onerror="alert(1)">',
+					},
+				},
+			],
 		},
 	);
 
@@ -76,11 +80,15 @@ test('Markdown sanitizes HTML returned by custom Marked renderers', () => {
 });
 
 test('Markdown completes an incomplete streaming tail without changing closed content', () => {
-	const html = renderWorkbenchMarkdown('**done** and [open label', false, { fillInIncompleteTokens: true });
+	const html = renderWorkbenchMarkdown('**done** and [open label', false, {
+		fillInIncompleteTokens: true,
+	});
 	assert.match(html, /<strong>done<\/strong>/);
 	assert.match(html, /<a href=\"#\">open label<\/a>/);
 
-	const table = renderWorkbenchMarkdown('| Name | State |', false, { fillInIncompleteTokens: true });
+	const table = renderWorkbenchMarkdown('| Name | State |', false, {
+		fillInIncompleteTokens: true,
+	});
 	assert.match(table, /<table>/);
 	assert.match(table, /<th>Name<\/th>/);
 });
@@ -88,7 +96,11 @@ test('Markdown completes an incomplete streaming tail without changing closed co
 test('Markdown alerts and theme icons become accessible Ash presentation', () => {
 	const dom = createDom();
 	const markdown = renderMarkdown(
-		{ value: '> [!WARNING]\n> Read $(info) and `$(info)`', supportAlertSyntax: true, supportThemeIcons: true },
+		{
+			value: '> [!WARNING]\n> Read $(info) and `$(info)`',
+			supportAlertSyntax: true,
+			supportThemeIcons: true,
+		},
 		{ ownerDocument: dom.window.document },
 	);
 
@@ -105,17 +117,13 @@ test('Markdown alerts and theme icons become accessible Ash presentation', () =>
 
 test('Markdown supports all five GitHub alert severities', () => {
 	const dom = createDom();
-	const value = ['NOTE', 'TIP', 'IMPORTANT', 'WARNING', 'CAUTION']
-		.map(severity => `> [!${severity}]\n> Alert body`)
-		.join('\n\n');
+	const value = ['NOTE', 'TIP', 'IMPORTANT', 'WARNING', 'CAUTION'].map(severity => `> [!${severity}]\n> Alert body`).join('\n\n');
 	const markdown = renderMarkdown({ value, supportAlertSyntax: true }, { ownerDocument: dom.window.document });
 	const alerts = [...markdown.element.querySelectorAll('blockquote.ash-markdown-alert')];
 
 	assert.deepEqual(
 		alerts.map(alert => ({
-			severity: [...alert.classList].find(
-				name => name.startsWith('ash-markdown-alert-') && name !== 'ash-markdown-alert',
-			),
+			severity: [...alert.classList].find(name => name.startsWith('ash-markdown-alert-') && name !== 'ash-markdown-alert'),
 			label: alert.querySelector('.ash-markdown-alert-label')?.textContent,
 			icon: alert.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'),
 		})),
@@ -134,9 +142,7 @@ test('Markdown supports all five GitHub alert severities', () => {
 
 test('MarkdownString.appendText keeps literal theme icon syntax', () => {
 	const dom = createDom();
-	const value = new MarkdownString('', { supportThemeIcons: true })
-		.appendText('literal $(info)')
-		.appendMarkdown(' and $(info)');
+	const value = new MarkdownString('', { supportThemeIcons: true }).appendText('literal $(info)').appendMarkdown(' and $(info)');
 	const markdown = renderMarkdown(value, { ownerDocument: dom.window.document });
 
 	assert.equal(markdown.element.querySelectorAll('.ash-icon').length, 1);
@@ -149,10 +155,7 @@ test('MarkdownString.appendText keeps literal theme icon syntax', () => {
 test('Markdown plaintext keeps readable structure and optional code fences', () => {
 	const value = '# Heading\n\nA **bold** [link](https://example.com)\n\n```ts\nconst x = 1;\n```';
 	assert.equal(renderAsPlaintext(value), 'Heading\nA bold link\nconst x = 1;');
-	assert.equal(
-		renderAsPlaintext(value, { includeCodeBlocksFences: true }),
-		'Heading\nA bold link\n```ts\nconst x = 1;\n```',
-	);
+	assert.equal(renderAsPlaintext(value, { includeCodeBlocksFences: true }), 'Heading\nA bold link\n```ts\nconst x = 1;\n```');
 	assert.equal(renderAsPlaintext('[](https://example.com)', { useLinkFormatter: true }), 'https://example.com');
 });
 
@@ -217,15 +220,14 @@ test('Markdown image dimensions survive sanitization only as numeric image attri
 			height: image?.getAttribute('height'),
 			title: image?.getAttribute('title'),
 		},
-		{ src: 'https://example.com/pixel.gif', width: '48', height: '24', title: 'title' },
+		{
+			src: 'https://example.com/pixel.gif',
+			width: '48',
+			height: '24',
+			title: 'title',
+		},
 	);
-	assert.doesNotMatch(
-		sanitizeMarkdownHtmlToString(
-			{ ownerDocument: dom.window.document },
-			'<img src="https://example.com/a.png" width="5px" height="10" onerror="alert(1)">',
-		),
-		/width=|onerror=/i,
-	);
+	assert.doesNotMatch(sanitizeMarkdownHtmlToString({ ownerDocument: dom.window.document }, '<img src="https://example.com/a.png" width="5px" height="10" onerror="alert(1)">'), /width=|onerror=/i);
 	dom.window.close();
 });
 
@@ -243,10 +245,7 @@ test('Markdown preserves supported resource schemes and filters remote media by 
 		assert.equal(resolveMarkdownLinkTarget(target), target);
 	}
 	const remoteMarkdown = { value: '', baseUri: URI.parse('vscode-remote://ssh-remote+host/docs/readme.md') };
-	assert.equal(
-		resolveMarkdownLinkTarget('../src/file.ts', remoteMarkdown),
-		'vscode-remote://ssh-remote+host/src/file.ts',
-	);
+	assert.equal(resolveMarkdownLinkTarget('../src/file.ts', remoteMarkdown), 'vscode-remote://ssh-remote+host/src/file.ts');
 	const ashMarkdown = { value: '', baseUri: URI.parse('ash-remote://ssh+host/docs/readme.md') };
 	assert.equal(resolveMarkdownLinkTarget('../src/file.ts', ashMarkdown), 'ash-remote://ssh+host/src/file.ts');
 	assert.equal(resolveMarkdownLinkTarget('vscode-file://user:secret@vscode-app/image.png'), undefined);
@@ -261,19 +260,10 @@ test('Markdown preserves supported resource schemes and filters remote media by 
 		['vscode-file://vscode-app/images/pixel.gif', 'https://example.com/pixel.gif', null],
 	);
 	assert.match(
-		sanitizeMarkdownHtmlToString(
-			{ ownerDocument: dom.window.document, markdown: remoteMarkdown },
-			'<img src="../images/pixel.gif">',
-		),
+		sanitizeMarkdownHtmlToString({ ownerDocument: dom.window.document, markdown: remoteMarkdown }, '<img src="../images/pixel.gif">'),
 		/src="vscode-remote:\/\/ssh-remote\+host\/images\/pixel\.gif"/,
 	);
-	assert.match(
-		sanitizeMarkdownHtmlToString(
-			{ ownerDocument: dom.window.document, markdown: ashMarkdown },
-			'<img src="../images/pixel.gif">',
-		),
-		/src="ash-remote:\/\/ssh\+host\/images\/pixel\.gif"/,
-	);
+	assert.match(sanitizeMarkdownHtmlToString({ ownerDocument: dom.window.document, markdown: ashMarkdown }, '<img src="../images/pixel.gif">'), /src="ash-remote:\/\/ssh\+host\/images\/pixel\.gif"/);
 	assert.equal(
 		sanitizeMarkdownHtmlToString(
 			{
@@ -371,13 +361,19 @@ test('Markdown render owns its DOM and delegates link activation', () => {
 	const activated: string[] = [];
 	const markdown = renderMarkdown(
 		{ value: '[Ash](https://example.com/ash)' },
-		{ ownerDocument: dom.window.document, actionHandler: href => activated.push(href) },
+		{
+			ownerDocument: dom.window.document,
+			actionHandler: href => activated.push(href),
+		},
 	);
 	dom.window.document.body.append(markdown.element);
 
 	const anchor = markdown.element.querySelector('a');
 	assert.ok(anchor);
-	const click = new dom.window.MouseEvent('click', { bubbles: true, cancelable: true });
+	const click = new dom.window.MouseEvent('click', {
+		bubbles: true,
+		cancelable: true,
+	});
 	anchor.dispatchEvent(click);
 	assert.equal(click.defaultPrevented, true);
 	assert.deepEqual(activated, ['https://example.com/ash']);
@@ -468,7 +464,10 @@ test('Markdown render mounts an asynchronous code block and signals completion',
 	await completion;
 	assert.deepEqual(
 		{ html: markdown.element.querySelector('pre')?.innerHTML, callbackCount },
-		{ html: '<span class="highlighted-code">rendered</span>', callbackCount: 1 },
+		{
+			html: '<span class="highlighted-code">rendered</span>',
+			callbackCount: 1,
+		},
 	);
 	markdown.dispose();
 	dom.window.close();
@@ -489,15 +488,9 @@ test('Markdown task lists use the shared Checkbox presentation', () => {
 	assert.equal(controls[1]?.querySelector<HTMLInputElement>('input')?.disabled, true);
 	assert.equal(controls[1]?.querySelector<HTMLInputElement>('input')?.getAttribute('aria-label'), 'Todo');
 
-	using html = renderMarkdown(
-		{ value: '<input type="checkbox" checked>', supportHtml: true },
-		{ ownerDocument: dom.window.document },
-	);
+	using html = renderMarkdown({ value: '<input type="checkbox" checked>', supportHtml: true }, { ownerDocument: dom.window.document });
 	assert.equal(html.element.querySelector<HTMLInputElement>('.ash-markdown-checkbox input')?.disabled, true);
-	assert.equal(
-		html.element.querySelector<HTMLInputElement>('.ash-markdown-checkbox input')?.getAttribute('aria-label'),
-		'Task',
-	);
+	assert.equal(html.element.querySelector<HTMLInputElement>('.ash-markdown-checkbox input')?.getAttribute('aria-label'), 'Task');
 
 	markdown.dispose();
 	dom.window.close();
@@ -546,10 +539,7 @@ test('MarkdownPreview resolves and validates relative resources against the sour
 		baseUri,
 	});
 	assert.match(getWebviewHtml(preview.element), /href="file:\/\/\/workspace\/src\/file\.ts"/);
-	assert.match(
-		getWebviewHtml(preview.element),
-		/src="https:\/\/resources\.ash-webview\.invalid\/file\/a\/workspace\/assets\/pixel\.png"/,
-	);
+	assert.match(getWebviewHtml(preview.element), /src="https:\/\/resources\.ash-webview\.invalid\/file\/a\/workspace\/assets\/pixel\.png"/);
 	const links: string[] = [];
 	const registration = preview.onDidOpenLink(href => links.push(href));
 	const channel = preview.element.getAttribute('data-ash-webview-channel');
@@ -558,7 +548,10 @@ test('MarkdownPreview resolves and validates relative resources against the sour
 		new dom.window.MessageEvent('message', {
 			source: preview.element.contentWindow,
 			origin: new URL(preview.element.src).origin,
-			data: { channel, message: { type: 'openLink', href: 'file:///workspace/src/file.ts' } },
+			data: {
+				channel,
+				message: { type: 'openLink', href: 'file:///workspace/src/file.ts' },
+			},
 		}),
 	);
 	assert.deepEqual(links, ['file:///workspace/src/file.ts']);
@@ -583,21 +576,40 @@ test('MarkdownPreview validates iframe link messages before emitting', () => {
 		new dom.window.MessageEvent('message', {
 			source: preview.element.contentWindow,
 			origin: new URL(preview.element.src).origin,
-			data: { channel, message: { type: 'openLink', href: 'https://example.com/docs' } },
+			data: {
+				channel,
+				message: {
+					type: 'openLink',
+					href: 'https://example.com/docs',
+				},
+			},
 		}),
 	);
 	dom.window.dispatchEvent(
 		new dom.window.MessageEvent('message', {
 			source: preview.element.contentWindow,
 			origin: new URL(preview.element.src).origin,
-			data: { channel, message: { type: 'openLink', href: 'https://example.com/docs', unexpected: true } },
+			data: {
+				channel,
+				message: {
+					type: 'openLink',
+					href: 'https://example.com/docs',
+					unexpected: true,
+				},
+			},
 		}),
 	);
 	dom.window.dispatchEvent(
 		new dom.window.MessageEvent('message', {
 			source: preview.element.contentWindow,
 			origin: new URL(preview.element.src).origin,
-			data: { channel, message: { type: 'openLink', href: 'javascript:alert(1)' } },
+			data: {
+				channel,
+				message: {
+					type: 'openLink',
+					href: 'javascript:alert(1)',
+				},
+			},
 		}),
 	);
 
@@ -626,7 +638,13 @@ test('workbench Markdown document view owns link policy and updates', () => {
 		new dom.window.MessageEvent('message', {
 			source: view.element.contentWindow,
 			origin: new URL(view.element.src).origin,
-			data: { channel, message: { type: 'openLink', href: 'https://example.com/workbench' } },
+			data: {
+				channel,
+				message: {
+					type: 'openLink',
+					href: 'https://example.com/workbench',
+				},
+			},
 		}),
 	);
 	assert.deepEqual(links, ['https://example.com/workbench']);

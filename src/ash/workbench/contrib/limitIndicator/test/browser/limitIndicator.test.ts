@@ -19,11 +19,7 @@ import { IEditorService } from '../../../../services/editor/common/editorService
 import { IStatusbarService, StatusbarAlignment } from '../../../../services/statusbar/browser/statusbar.js';
 import { LimitIndicatorContribution } from '../../browser/limitIndicator.contribution.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import {
-	IContextMenuService,
-	IContextViewService,
-	type IContextMenuMenuDelegate,
-} from '../../../../../platform/contextview/browser/contextView.js';
+import { IContextMenuService, IContextViewService, type IContextMenuMenuDelegate } from '../../../../../platform/contextview/browser/contextView.js';
 import { ILanguageStatusService } from '../../../../services/languageStatus/common/languageStatusService.js';
 import { LanguageStatusContribution } from '../../../languageStatus/browser/languageStatus.js';
 import { DiagnosticDecorationLimitReporter } from '../../browser/limitIndicator.contribution.js';
@@ -75,12 +71,7 @@ test('real color and folding limits retain separate Configure actions in one lan
 			provideColorPresentations: () => [],
 		}),
 	);
-	const model = resources.add(
-		new TextModel(
-			'first\n  child\nsecond\n  child\n#f00 #f00 #f00\n' +
-				Array.from({ length: 10 }, (_, index) => `section${index}\n  child`).join('\n'),
-		),
-	);
+	const model = resources.add(new TextModel('first\n  child\nsecond\n  child\n#f00 #f00 #f00\n' + Array.from({ length: 10 }, (_, index) => `section${index}\n  child`).join('\n')));
 	const editor = resources.add(
 		createTestCodeEditor({
 			container: dom.window.document.querySelector<HTMLElement>('main')!,
@@ -96,11 +87,7 @@ test('real color and folding limits retain separate Configure actions in one lan
 	const contribution = resources.add(services.createInstance(LimitIndicatorContribution));
 	resources.add(services.createInstance(LanguageStatusContribution));
 	const statuses = services.get(ILanguageStatusService);
-	await waitFor(
-		() =>
-			ColorDetector.get(editor)?.limitReporter.computed === 3 &&
-			statusbar.getEntries(StatusbarAlignment.Right).length === 1,
-	);
+	await waitFor(() => ColorDetector.get(editor)?.limitReporter.computed === 3 && statusbar.getEntries(StatusbarAlignment.Right).length === 1);
 	const entry = () => statusbar.getEntries(StatusbarAlignment.Right)[0]?.entry;
 	assert.equal(ColorDetector.get(editor)?.limitReporter.computed, 3);
 	assert.equal(FoldingController.get(editor)?.limitReporter.computed, 12);
@@ -214,9 +201,7 @@ test('diagnostic source truncation and the 5000 decoration budget remain distinc
 	fixture.setMarkers(model, 1001, true);
 	assert.deepEqual(fixture.details(), ['Some problems are not shown in the problems view for performance reasons.']);
 	fixture.setMarkers(model, 5001, true);
-	assert.deepEqual(fixture.details(), [
-		'Some problems are not shown in the problems view, and only 5000 problems are rendered in the editor for performance reasons.',
-	]);
+	assert.deepEqual(fixture.details(), ['Some problems are not shown in the problems view, and only 5000 problems are rendered in the editor for performance reasons.']);
 	fixture.setMarkers(model, 5000);
 	assert.deepEqual(fixture.details(), []);
 });
@@ -322,10 +307,7 @@ test('folding budget configuration rejects invalid values and preserves the last
 	assert.equal(configuration.getValue('editor.foldingMaximumRegions'), 5000);
 	await configuration.updateValue('editor.foldingMaximumRegions', 10);
 	for (const value of [0, -1, 1, 9, 10.5, 65001, Number.MAX_SAFE_INTEGER + 1]) {
-		await assert.rejects(
-			configuration.updateValue('editor.foldingMaximumRegions', value),
-			/integer between 10 and 65000/,
-		);
+		await assert.rejects(configuration.updateValue('editor.foldingMaximumRegions', value), /integer between 10 and 65000/);
 		assert.equal(configuration.getValue('editor.foldingMaximumRegions'), 10);
 	}
 	await configuration.updateValue('editor.foldingMaximumRegions', 65000);
@@ -340,10 +322,5 @@ async function waitFor(condition: () => boolean): Promise<void> {
 	}
 }
 
-const features = registerTestCodeEditorFeatures([
-	'editor.contrib.colorPicker',
-	'editor.contrib.folding',
-	'editor.contrib.markerDecorations',
-	DiagnosticDecorationLimitReporter.ID,
-]);
+const features = registerTestCodeEditorFeatures(['editor.contrib.colorPicker', 'editor.contrib.folding', 'editor.contrib.markerDecorations', DiagnosticDecorationLimitReporter.ID]);
 after(() => features.dispose());

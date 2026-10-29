@@ -42,12 +42,7 @@ suite('Configured path globs', () => {
 	test('disables false rules and evaluates sibling conditions only when supplied', () => {
 		const expression = parse({ '**/*.map': false, '**/*.js': { when: '$(basename).ts' } });
 		assert.deepEqual(
-			[
-				expression('main.map'),
-				expression('src/main.js'),
-				expression('src/main.js', undefined, name => name === 'main.ts'),
-				expression('src/main.js', undefined, name => name === 'other.ts'),
-			],
+			[expression('main.map'), expression('src/main.js'), expression('src/main.js', undefined, name => name === 'main.ts'), expression('src/main.js', undefined, name => name === 'other.ts')],
 			[null, null, '**/*.js', null],
 		);
 	});

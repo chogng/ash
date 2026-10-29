@@ -108,10 +108,7 @@ suite('PathService', () => {
 			assert.equal(await paths.getHostPath(resource), undefined);
 		}
 		await assert.rejects(paths.fileURI('\\\\?\\GLOBALROOT\\Device'), /namespace/);
-		assert.deepEqual(
-			await paths.fileURI('\\\\?\\UNC\\build\\share\\notes.rs'),
-			URI.parse('file://build/share/notes.rs'),
-		);
+		assert.deepEqual(await paths.fileURI('\\\\?\\UNC\\build\\share\\notes.rs'), URI.parse('file://build/share/notes.rs'));
 	});
 
 	test('uses server facts for disk resources and keeps browser and SSH rules distinct', async () => {
@@ -159,10 +156,7 @@ suite('PathService', () => {
 		using services = createServices(() => os);
 		const paths = services.get(IPathService);
 		assert.deepEqual(await paths.fileURI('C:\\work\\notes #1.txt'), URI.parse('file:///C:/work/notes%20%231.txt'));
-		assert.deepEqual(
-			await paths.fileURI('\\\\server\\share\\notes.txt'),
-			URI.parse('file://server/share/notes.txt'),
-		);
+		assert.deepEqual(await paths.fileURI('\\\\server\\share\\notes.txt'), URI.parse('file://server/share/notes.txt'));
 		assert.deepEqual(await paths.fileURI('\\\\server'), URI.parse('file://server/'));
 		os = OperatingSystem.Linux;
 		assert.deepEqual(await paths.fileURI('/work/part\\name.txt '), URI.parse('file:///work/part%5Cname.txt%20'));
@@ -190,11 +184,7 @@ suite('PathService', () => {
 	});
 });
 
-function createServices(
-	getOS: () => OperatingSystem | undefined,
-	getHome: () => string | undefined = () => undefined,
-	localUserHome?: URI,
-): InstantiationService {
+function createServices(getOS: () => OperatingSystem | undefined, getHome: () => string | undefined = () => undefined, localUserHome?: URI): InstantiationService {
 	const host = createDisconnectedRendererApi();
 	const services = new InstantiationService(
 		new ServiceCollection(...getSingletonServiceDescriptors(), [
@@ -215,10 +205,7 @@ function createServices(
 			},
 		]),
 	);
-	services.registerSingleton(
-		IWorkspaceContextService,
-		() => new TestWorkspaceService({ id: 'path-test', folders: [] }),
-	);
+	services.registerSingleton(IWorkspaceContextService, () => new TestWorkspaceService({ id: 'path-test', folders: [] }));
 	return services;
 }
 
@@ -232,10 +219,7 @@ test('PathService separates local and target homes and follows replacement conne
 		local,
 	);
 	const paths = services.get(IPathService);
-	assert.deepEqual(
-		[paths.userHome({ preferLocal: true }), await paths.userHome(), (await paths.path).sep],
-		[local, URI.parse('file:///C:/Users/remote'), '\\'],
-	);
+	assert.deepEqual([paths.userHome({ preferLocal: true }), await paths.userHome(), (await paths.path).sep], [local, URI.parse('file:///C:/Users/remote'), '\\']);
 	os = OperatingSystem.Linux;
 	home = '/home/remote';
 	assert.deepEqual([await paths.userHome(), (await paths.path).sep], [URI.parse('file:///home/remote'), '/']);

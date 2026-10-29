@@ -3,20 +3,9 @@ import { test } from 'mocha';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { DocumentCommands } from '../../contrib/creator/common/commands/documentCommands.js';
 import { DesignModel } from '../../contrib/creator/common/model/designModel.js';
-import {
-	documentFromShapes,
-	parseDesignDocument,
-	serializeDesignDocument,
-	type DesignShape,
-} from '../../contrib/creator/common/model/document.js';
+import { documentFromShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/creator/common/model/document.js';
 import { cubicBezierPoint } from '../../contrib/creator/common/core/geometry.js';
-import {
-	designPathContours,
-	designShapeContours,
-	moveDesignPathNode,
-	splitDesignPathSegment,
-	type DesignPath,
-} from '../../contrib/creator/common/model/designVector.js';
+import { designPathContours, designShapeContours, moveDesignPathNode, splitDesignPathSegment, type DesignPath } from '../../contrib/creator/common/model/designVector.js';
 import { hitTestDesignShapes } from '../../contrib/creator/common/model/hitTest.js';
 
 const rectangle = (): DesignShape => ({
@@ -85,10 +74,7 @@ test('Vector split preserves every sample of a cubic including a closed contour 
 			const first = split.nodes[index],
 				middle = split.nodes[index + 1],
 				last = split.nodes[(index + 2) % 3];
-			const actual =
-				t <= 0.35
-					? cubicBezierPoint(first, first.outgoing, middle.incoming, middle, t / 0.35)
-					: cubicBezierPoint(middle, middle.outgoing, last.incoming, last, (t - 0.35) / 0.65);
+			const actual = t <= 0.35 ? cubicBezierPoint(first, first.outgoing, middle.incoming, middle, t / 0.35) : cubicBezierPoint(middle, middle.outgoing, last.incoming, last, (t - 0.35) / 0.65);
 			assert.ok(Math.hypot(actual.x - expected.x, actual.y - expected.y) < 1e-10);
 		}
 	}

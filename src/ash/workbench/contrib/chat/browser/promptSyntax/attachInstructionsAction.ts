@@ -30,10 +30,7 @@ export class ChatInstructionsPickerPick implements IChatContextValueItem {
 		return this.instructions.isAvailable;
 	}
 
-	public async asAttachment(
-		_widget: IChatWidget | undefined,
-		signal: AbortSignal = new AbortController().signal,
-	): Promise<ChatContextAttachment | undefined> {
+	public async asAttachment(_widget: IChatWidget | undefined, signal: AbortSignal = new AbortController().signal): Promise<ChatContextAttachment | undefined> {
 		const sessionId = this.sessionId;
 		if (!this.isEnabled() || signal.aborted) {
 			return undefined;
@@ -48,13 +45,8 @@ export class ChatInstructionsPickerPick implements IChatContextValueItem {
 				return filterQuickPickItems(
 					(await catalog).map(instruction => ({
 						label: instruction.name,
-						description:
-							instruction.scope === 'user'
-								? localize('chat.context.userInstruction', 'User')
-								: localize('chat.context.directoryInstruction', 'Directory'),
-						detail: instruction.description
-							? `${instruction.description} · ${instruction.path}`
-							: instruction.path,
+						description: instruction.scope === 'user' ? localize('chat.context.userInstruction', 'User') : localize('chat.context.directoryInstruction', 'Directory'),
+						detail: instruction.description ? `${instruction.description} · ${instruction.path}` : instruction.path,
 						instruction,
 					})),
 					query,

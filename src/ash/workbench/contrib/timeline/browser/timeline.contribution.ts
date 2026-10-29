@@ -3,18 +3,9 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize, localize2 } from '../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import {
-	ConfigurationScope,
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from '../../../common/views.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
@@ -57,10 +48,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	defaultValue: true,
 	scope: ConfigurationScope.APPLICATION,
 	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean')
-			throw new TypeError(
-				localize('timeline.verbosityInvalid', 'Timeline accessibility verbosity must be a boolean.'),
-			);
+		if (typeof value !== 'boolean') throw new TypeError(localize('timeline.verbosityInvalid', 'Timeline accessibility verbosity must be a boolean.'));
 		return value;
 	},
 	setting: {
@@ -69,10 +57,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize('timeline.verbosityTitle', 'Timeline accessibility help');
 		},
 		get description() {
-			return localize(
-				'timeline.verbosityDescription',
-				'Announce how to open accessibility help when timeline receives focus.',
-			);
+			return localize('timeline.verbosityDescription', 'Announce how to open accessibility help when timeline receives focus.');
 		},
 	},
 });
@@ -113,17 +98,12 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	scope: ConfigurationScope.WINDOW,
 	parse(value: unknown): number | null {
 		if (value !== null && (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1))
-			throw new TypeError(
-				localize('timeline.pageSizeInvalid', 'Timeline page size must be a positive integer or null.'),
-			);
+			throw new TypeError(localize('timeline.pageSizeInvalid', 'Timeline page size must be a positive integer or null.'));
 		return value as number | null;
 	},
 	schema: {
 		type: ['integer', 'null'],
 		minimum: 1,
-		description: localize(
-			'timeline.pageSizeDescription',
-			'Number of entries per timeline page. Set to null to fit the view height.',
-		),
+		description: localize('timeline.pageSizeDescription', 'Number of entries per timeline page. Set to null to fit the view height.'),
 	},
 });

@@ -18,11 +18,7 @@ import type { Icon } from '../../../../../base/common/icon.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
-import {
-	GitHubIssueState,
-	IGitHubService,
-	type GitHubRepository,
-} from '../../../../../platform/github/common/githubService.js';
+import { GitHubIssueState, IGitHubService, type GitHubRepository } from '../../../../../platform/github/common/githubService.js';
 import { filterQuickPickItems } from '../../../../../platform/quickinput/browser/quickInputList.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { createToolSelectionAttachment, showToolsPicker, toolSetLabel } from './chatToolPicker.js';
@@ -55,10 +51,7 @@ export class ToolsContextPickerPick implements IChatContextValueItem {
 		return this.toolsService.isAvailable;
 	}
 
-	public async asAttachment(
-		_widget: IChatWidget | undefined,
-		signal: AbortSignal = new AbortController().signal,
-	): Promise<ChatContextAttachment | undefined> {
+	public async asAttachment(_widget: IChatWidget | undefined, signal: AbortSignal = new AbortController().signal): Promise<ChatContextAttachment | undefined> {
 		if (!this.isEnabled() || signal.aborted) {
 			return undefined;
 		}
@@ -70,12 +63,8 @@ export class ToolsContextPickerPick implements IChatContextValueItem {
 			this.quickInput,
 			localize('chat.context.selectTool', 'Search available tools by name, description or source'),
 			async query => {
-				const tools = [...this.toolsService.getAllToolsIncludingDisabled()].filter(
-					tool => tool.canBeReferencedInPrompt && !this.disabled.includes(tool.id),
-				);
-				const sets = [...this.toolsService.toolSets.get()].filter(set =>
-					[...set.getTools()].some(tool => tool.canBeReferencedInPrompt && !this.disabled.includes(tool.id)),
-				);
+				const tools = [...this.toolsService.getAllToolsIncludingDisabled()].filter(tool => tool.canBeReferencedInPrompt && !this.disabled.includes(tool.id));
+				const sets = [...this.toolsService.toolSets.get()].filter(set => [...set.getTools()].some(tool => tool.canBeReferencedInPrompt && !this.disabled.includes(tool.id)));
 				const references: ToolReferencePick[] = [
 					...tools.map(tool => {
 						const reference = this.toolsService.getFullReferenceName(tool);
@@ -88,9 +77,7 @@ export class ToolsContextPickerPick implements IChatContextValueItem {
 					}),
 					...sets.map(set => {
 						const reference = this.toolsService.getFullReferenceName(set);
-						const members = [...set.getTools()]
-							.filter(tool => tool.canBeReferencedInPrompt && !this.disabled.includes(tool.id))
-							.map(tool => tool.id);
+						const members = [...set.getTools()].filter(tool => tool.canBeReferencedInPrompt && !this.disabled.includes(tool.id)).map(tool => tool.id);
 						return {
 							label: toolSetLabel(set),
 							description: localize('chat.tools.set', 'Tool set'),
@@ -99,10 +86,7 @@ export class ToolsContextPickerPick implements IChatContextValueItem {
 						};
 					}),
 				];
-				return [
-					...filterQuickPickItems(references, query),
-					{ label: localize('chat.tools.configure', 'Configure tools…'), configure: true, alwaysShow: true },
-				];
+				return [...filterQuickPickItems(references, query), { label: localize('chat.tools.configure', 'Configure tools…'), configure: true, alwaysShow: true }];
 			},
 			signal,
 			undefined,
@@ -115,17 +99,13 @@ export class ToolsContextPickerPick implements IChatContextValueItem {
 			const disabled = await showToolsPicker(this.quickInput, this.toolsService, this.disabled, signal);
 			return disabled && !signal.aborted ? createToolSelectionAttachment(disabled) : undefined;
 		}
-		const reference = selected.item.reference
-			? this.toolsService.getToolByFullReferenceName(selected.item.reference)
-			: undefined;
+		const reference = selected.item.reference ? this.toolsService.getToolByFullReferenceName(selected.item.reference) : undefined;
 		const set = isToolSet(reference) ? reference : undefined;
 		const tool = reference && !isToolSet(reference) ? reference : undefined;
 		if (!tool && !set) {
 			return undefined;
 		}
-		const name = tool
-			? localize('chat.context.toolName', 'Tool: {0}', tool.displayName)
-			: localize('chat.tools.setName', 'Tool set: {0}', toolSetLabel(set!));
+		const name = tool ? localize('chat.context.toolName', 'Tool: {0}', tool.displayName) : localize('chat.tools.setName', 'Tool set: {0}', toolSetLabel(set!));
 		// References describe enabled tools; only the separate typed selection narrows execution.
 		const content = JSON.stringify(
 			tool
@@ -141,9 +121,7 @@ export class ToolsContextPickerPick implements IChatContextValueItem {
 						id: set!.id,
 						source: set!.source,
 						sourceId: set!.sourceId,
-						tools: [...set!.getTools()]
-							.filter(tool => tool.canBeReferencedInPrompt && !this.disabled.includes(tool.id))
-							.map(tool => tool.id),
+						tools: [...set!.getTools()].filter(tool => tool.canBeReferencedInPrompt && !this.disabled.includes(tool.id)).map(tool => tool.id),
 					},
 			null,
 			2,
@@ -176,10 +154,7 @@ export class TerminalContext implements IChatContextValueItem {
 	public isEnabled(): boolean {
 		return this.terminals.instances.length > 0 && this.views.getViewWithId(TERMINAL_VIEW_ID) !== null;
 	}
-	public async asAttachment(
-		_widget: IChatWidget | undefined,
-		signal: AbortSignal = new AbortController().signal,
-	): Promise<ChatContextAttachment | undefined> {
+	public async asAttachment(_widget: IChatWidget | undefined, signal: AbortSignal = new AbortController().signal): Promise<ChatContextAttachment | undefined> {
 		const selected = await pickChatContextItem(
 			this.quickInput,
 			localize('chat.context.selectTerminal', 'Select a terminal to attach its selection or recent output'),
@@ -215,18 +190,11 @@ export class ClipboardImageContextValuePick implements IChatContextValueItem {
 		@IClipboardService private readonly clipboard: IClipboardService,
 		@IChatAttachmentResolveService private readonly attachments: IChatAttachmentResolveService,
 	) {}
-	public async asAttachment(
-		_widget: IChatWidget | undefined,
-		signal: AbortSignal = new AbortController().signal,
-	): Promise<ChatContextAttachment | undefined> {
+	public async asAttachment(_widget: IChatWidget | undefined, signal: AbortSignal = new AbortController().signal): Promise<ChatContextAttachment | undefined> {
 		const image = await this.clipboard.readImage();
 		if (signal.aborted) return undefined;
-		if (!image.length)
-			throw new Error(localize('chat.context.noClipboardImage', 'The clipboard does not contain an image'));
-		const [attachment] = await this.attachments.resolveImageAttachContext(
-			[{ name: localize('chat.context.pastedImage', 'Pasted Image'), data: image, mimeType: 'image/png' }],
-			signal,
-		);
+		if (!image.length) throw new Error(localize('chat.context.noClipboardImage', 'The clipboard does not contain an image'));
+		const [attachment] = await this.attachments.resolveImageAttachContext([{ name: localize('chat.context.pastedImage', 'Pasted Image'), data: image, mimeType: 'image/png' }], signal);
 		return signal.aborted || !attachment ? undefined : attachment;
 	}
 }
@@ -241,11 +209,7 @@ export class ScreenshotContextValuePick implements IChatContextValueItem {
 	get accessibilityHelp(): string {
 		return this.imageEditors.accessibilityHelp;
 	}
-	public async asAttachment(
-		_widget: IChatWidget | undefined,
-		signal: AbortSignal = new AbortController().signal,
-		capture?: ChatImageCapture,
-	): Promise<ChatContextAttachment | undefined> {
+	public async asAttachment(_widget: IChatWidget | undefined, signal: AbortSignal = new AbortController().signal, capture?: ChatImageCapture): Promise<ChatContextAttachment | undefined> {
 		const image = await (capture ? capture(signal) : this.imageEditors.capture(signal));
 		if (!image || signal.aborted) return undefined;
 		const attachment = await convertBufferToScreenshotVariable(image);
@@ -265,18 +229,8 @@ export class SessionReferenceContextPickerPick implements IChatContextValueItem 
 		@IChatService private readonly chat: IChatService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 	) {}
-	public async asAttachment(
-		_widget: IChatWidget | undefined,
-		signal: AbortSignal = new AbortController().signal,
-	): Promise<ChatContextAttachment | undefined> {
-		const conversations = this.navigation
-			.getConversations()
-			.filter(
-				item =>
-					!this.current ||
-					item.sessionId !== this.current.sessionId ||
-					item.threadId !== this.current.threadId,
-			);
+	public async asAttachment(_widget: IChatWidget | undefined, signal: AbortSignal = new AbortController().signal): Promise<ChatContextAttachment | undefined> {
+		const conversations = this.navigation.getConversations().filter(item => !this.current || item.sessionId !== this.current.sessionId || item.threadId !== this.current.threadId);
 		const selected = await pickChatContextItem(
 			this.quickInput,
 			localize('chat.context.selectSession', 'Select a session'),
@@ -331,9 +285,7 @@ export class GitHubContextValuePick implements IChatContextValueItem {
 		return this.kind === 'issue' ? Lxicon.circleLarge : Lxicon.gitPullRequest;
 	}
 	public get label(): string {
-		return this.kind === 'issue'
-			? localize('chat.context.issue', 'Issue…')
-			: localize('chat.context.pullRequest', 'Pull Request…');
+		return this.kind === 'issue' ? localize('chat.context.issue', 'Issue…') : localize('chat.context.pullRequest', 'Pull Request…');
 	}
 	constructor(
 		private readonly kind: 'issue' | 'pullRequest',
@@ -342,26 +294,15 @@ export class GitHubContextValuePick implements IChatContextValueItem {
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 	) {}
 
-	public async asAttachment(
-		_widget: IChatWidget | undefined,
-		signal: AbortSignal = new AbortController().signal,
-	): Promise<ChatContextAttachment | undefined> {
+	public async asAttachment(_widget: IChatWidget | undefined, signal: AbortSignal = new AbortController().signal): Promise<ChatContextAttachment | undefined> {
 		using resources = new DisposableStore();
 		const cancellation = new CancellationTokenSource();
 		resources.add(toDisposable(() => cancellation.dispose(true)));
 		resources.add(addDisposableListener(signal, 'abort', () => cancellation.cancel()));
 		if (signal.aborted) return undefined;
-		const accounts = (await this.github.listAccounts(cancellation.token)).filter(
-			account => account.status === 'ready',
-		);
+		const accounts = (await this.github.listAccounts(cancellation.token)).filter(account => account.status === 'ready');
 		if (signal.aborted) return undefined;
-		if (!accounts.length)
-			throw new Error(
-				localize(
-					'chat.context.githubSignIn',
-					'Connect a GitHub account in Settings to attach an issue or pull request',
-				),
-			);
+		if (!accounts.length) throw new Error(localize('chat.context.githubSignIn', 'Connect a GitHub account in Settings to attach an issue or pull request'));
 		let repository: GitHubRepository | undefined;
 		let number: number | undefined;
 		while (!repository) {
@@ -382,8 +323,7 @@ export class GitHubContextValuePick implements IChatContextValueItem {
 								),
 							signal,
 						);
-			if (signal.aborted || (accounts.length > 1 && (!selectedAccount || selectedAccount.kind === 'back')))
-				return undefined;
+			if (signal.aborted || (accounts.length > 1 && (!selectedAccount || selectedAccount.kind === 'back'))) return undefined;
 			const account = selectedAccount?.kind === 'item' ? selectedAccount.item.account : accounts[0];
 			const repositories: RepositoryPick[] = [];
 			const seen = new Set<string>();
@@ -392,12 +332,7 @@ export class GitHubContextValuePick implements IChatContextValueItem {
 				const graph = checkout;
 				for (const remote of graph.remotes) {
 					const identity = remote.identity;
-					if (
-						!identity ||
-						identity.provider !== 'github' ||
-						identity.host.toLowerCase() !== account.host.toLowerCase()
-					)
-						continue;
+					if (!identity || identity.provider !== 'github' || identity.host.toLowerCase() !== account.host.toLowerCase()) continue;
 					const key = `${identity.owner}/${identity.repository}`;
 					if (seen.has(key.toLowerCase())) continue;
 					seen.add(key.toLowerCase());
@@ -416,15 +351,11 @@ export class GitHubContextValuePick implements IChatContextValueItem {
 			while (true) {
 				const selected = await pickChatContextItem(
 					this.quickInput,
-					localize(
-						'chat.context.githubRepository',
-						'Select a repository, enter owner/repository, or paste a GitHub link',
-					),
+					localize('chat.context.githubRepository', 'Select a repository, enter owner/repository, or paste a GitHub link'),
 					async query => {
 						const picks = [...filterQuickPickItems(repositories, query)];
 						const typed = this.repositoryPick(query, account.host, account.id);
-						if (typed && !picks.some(pick => pick.label === typed.label && pick.number === typed.number))
-							picks.unshift(typed);
+						if (typed && !picks.some(pick => pick.label === typed.label && pick.number === typed.number)) picks.unshift(typed);
 						return picks;
 					},
 					signal,
@@ -452,10 +383,7 @@ export class GitHubContextValuePick implements IChatContextValueItem {
 							if (/^#?[1-9]\d*$/.test(query.trim())) {
 								const number = Number(query.trim().replace(/^#/, ''));
 								if (!Number.isSafeInteger(number)) return [];
-								const item =
-									this.kind === 'issue'
-										? await this.github.readIssue(candidate, number, token)
-										: await this.github.readPullRequest(candidate, number, token);
+								const item = this.kind === 'issue' ? await this.github.readIssue(candidate, number, token) : await this.github.readPullRequest(candidate, number, token);
 								return [
 									{
 										label: `#${item.number} ${item.title}`,
@@ -541,14 +469,7 @@ export class GitHubContextValuePick implements IChatContextValueItem {
 		if (path.startsWith('https://')) {
 			try {
 				const url = new URL(path);
-				if (
-					url.host.toLowerCase() !== host.toLowerCase() ||
-					url.username ||
-					url.password ||
-					url.search ||
-					url.hash
-				)
-					return undefined;
+				if (url.host.toLowerCase() !== host.toLowerCase() || url.username || url.password || url.search || url.hash) return undefined;
 				path = url.pathname.replace(/^\//, '').replace(/\/$/, '');
 			} catch {
 				return undefined;
@@ -566,8 +487,7 @@ export class GitHubContextValuePick implements IChatContextValueItem {
 	}
 }
 
-type ContextPickSelection<T> =
-	{ readonly kind: 'item'; readonly item: T; readonly background: boolean } | { readonly kind: 'back' };
+type ContextPickSelection<T> = { readonly kind: 'item'; readonly item: T; readonly background: boolean } | { readonly kind: 'back' };
 interface BackPick extends IQuickPickItem {
 	readonly back: true;
 }
@@ -616,13 +536,7 @@ export function pickChatContextItem<T extends IQuickPickItem>(
 				const items = await provide(query, token);
 				if (!settled && !token.isCancellationRequested) {
 					picker.items = [...items, back];
-					const retained =
-						active &&
-						(active === back
-							? back
-							: items.find(
-									item => item.label === active.label && item.description === active.description,
-								));
+					const retained = active && (active === back ? back : items.find(item => item.label === active.label && item.description === active.description));
 					if (retained) picker.activeItems = [retained];
 				}
 			} catch (error) {

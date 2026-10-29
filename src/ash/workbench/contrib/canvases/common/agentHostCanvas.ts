@@ -5,38 +5,17 @@ import { CancellationError } from '../../../../base/common/errors.js';
 import { StringSHA1 } from '../../../../base/common/hash.js';
 import { URI } from '../../../../base/common/uri.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import {
-	BrowserViewStorageScope,
-	IBrowserViewService,
-	normalizeBrowserViewUrl,
-	type BrowserViewEvent,
-	type IBrowserViewInfo,
-} from '../../../../platform/browserView/common/browserView.js';
+import { BrowserViewStorageScope, IBrowserViewService, normalizeBrowserViewUrl, type BrowserViewEvent, type IBrowserViewInfo } from '../../../../platform/browserView/common/browserView.js';
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
-import {
-	canvasOwnerKey,
-	type ICanvas,
-	type ICanvasContext,
-	type ICanvasDefinition,
-	type ICanvasOpenRequest,
-	type ICanvasOwner,
-} from './canvas.js';
+import { canvasOwnerKey, type ICanvas, type ICanvasContext, type ICanvasDefinition, type ICanvasOpenRequest, type ICanvasOwner } from './canvas.js';
 import type { IAgentCanvasHost, IAgentCanvasOpenRequest } from '../../../../platform/agentHost/common/agentService.js';
 
 export interface ICanvasProvider {
 	readonly definition: ICanvasDefinition;
 	readonly signal: AbortSignal;
-	open(
-		owner: ICanvasOwner,
-		instanceId: string,
-		signal: AbortSignal,
-	): Promise<{ readonly url: string; readonly title?: string; readonly status?: string }>;
+	open(owner: ICanvasOwner, instanceId: string, signal: AbortSignal): Promise<{ readonly url: string; readonly title?: string; readonly status?: string }>;
 	close(owner: ICanvasOwner, instanceId: string, signal: AbortSignal): Promise<void>;
-	resolve?(
-		owner: ICanvasOwner,
-		instanceId: string,
-		signal: AbortSignal,
-	): Promise<CanvasSource | null | undefined | 'unchanged'>;
+	resolve?(owner: ICanvasOwner, instanceId: string, signal: AbortSignal): Promise<CanvasSource | null | undefined | 'unchanged'>;
 }
 
 interface CanvasSource {
@@ -45,8 +24,7 @@ interface CanvasSource {
 	readonly status?: string;
 }
 
-export const IAgentHostCanvasCollection =
-	createServiceIdentifier<IAgentHostCanvasCollection>('agentHostCanvasCollection');
+export const IAgentHostCanvasCollection = createServiceIdentifier<IAgentHostCanvasCollection>('agentHostCanvasCollection');
 export interface IAgentHostCanvasCollection extends IAgentCanvasHost {
 	beginDefinitionRefresh(): IDisposable;
 	register(provider: ICanvasProvider): IDisposable;
@@ -65,10 +43,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 	private readonly providers = new Map<string, ICanvasProvider>();
 	private readonly suspended = new Map<string, ICanvasProvider['definition']>();
 	private readonly pages = observableValue<readonly IBrowserViewInfo[] | undefined>(this, undefined);
-	private readonly requests = observableValue<ReadonlyMap<string, ReadonlyMap<string, ICanvasOpenRequest>>>(
-		this,
-		new Map(),
-	);
+	private readonly requests = observableValue<ReadonlyMap<string, ReadonlyMap<string, ICanvasOpenRequest>>>(this, new Map());
 	private readonly contexts = new Map<string, ICanvasContext>();
 	private readonly ownerControllers = new Map<string, AbortController>();
 	private readonly buffered: BrowserViewEvent[] = [];
@@ -149,10 +124,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 			this.providerRevisions.delete(provider);
 			this.changed.fire();
 			for (const page of this.pages.get() ?? []) {
-				if (
-					page.canvas?.extensionId === provider.definition.extensionId &&
-					page.canvas.canvasId === provider.definition.canvasId
-				) {
+				if (page.canvas?.extensionId === provider.definition.extensionId && page.canvas.canvasId === provider.definition.canvasId) {
 					void this.browser.destroyBrowserView(page.id).catch(() => {});
 				}
 			}
@@ -170,10 +142,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 		this.suspended.set(key, provider.definition);
 		const presentations = new Map(this.presentations.get());
 		for (const page of this.pages.get() ?? []) {
-			if (
-				page.canvas?.extensionId === provider.definition.extensionId &&
-				page.canvas.canvasId === provider.definition.canvasId
-			) {
+			if (page.canvas?.extensionId === provider.definition.extensionId && page.canvas.canvasId === provider.definition.canvasId) {
 				presentations.set(page.id, undefined);
 				this.disconnectedPages.add(page.id);
 			}
@@ -214,20 +183,14 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 			this.changed.fire();
 		}
 		for (const page of this.pages.get() ?? []) {
-			if (
-				page.canvas?.extensionId === extensionId &&
-				this.disconnectedPages.has(page.id) &&
-				!this.providers.has(JSON.stringify([extensionId, page.canvas.canvasId]))
-			) {
+			if (page.canvas?.extensionId === extensionId && this.disconnectedPages.has(page.id) && !this.providers.has(JSON.stringify([extensionId, page.canvas.canvasId]))) {
 				void this.browser.destroyBrowserView(page.id).catch(() => {});
 			}
 		}
 	}
 
 	reconcileExtensions(present: ReadonlySet<string>): void {
-		for (const extensionId of new Set(
-			(this.pages.get() ?? []).flatMap(page => (page.canvas?.extensionId ? [page.canvas.extensionId] : [])),
-		)) {
+		for (const extensionId of new Set((this.pages.get() ?? []).flatMap(page => (page.canvas?.extensionId ? [page.canvas.extensionId] : [])))) {
 			if (!present.has(extensionId)) {
 				this.retireExtension(extensionId);
 			}
@@ -246,13 +209,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 					return this.pages
 						.read(reader)
 						?.filter(page => this.owns(page, owner))
-						.map(
-							page =>
-								new AgentHostCanvas(
-									page,
-									presentations.has(page.id) ? (presentations.get(page.id) ?? null) : undefined,
-								),
-						);
+						.map(page => new AgentHostCanvas(page, presentations.has(page.id) ? (presentations.get(page.id) ?? null) : undefined));
 				}),
 				openRequests: derived(reader => this.requests.read(reader).get(key) ?? new Map()),
 				definitionProvider:
@@ -268,9 +225,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 									if (this.definitionLoads || this.suspended.size) {
 										return undefined;
 									}
-									return [...this.providers.values()]
-										.filter(provider => !provider.signal.aborted)
-										.map(provider => provider.definition);
+									return [...this.providers.values()].filter(provider => !provider.signal.aborted).map(provider => provider.definition);
 								},
 								openCanvas: (definition, instanceId) => this.open(owner, definition, instanceId),
 							},
@@ -282,9 +237,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 	}
 
 	async listCanvases(sessionId: string, threadId: string, signal: AbortSignal) {
-		const definitions = await this.createContext(
-			this.owner(sessionId, threadId),
-		).definitionProvider!.listCanvases();
+		const definitions = await this.createContext(this.owner(sessionId, threadId)).definitionProvider!.listCanvases();
 		signal.throwIfAborted();
 		return definitions?.map(definition => ({
 			id: { extensionId: definition.extensionId, canvasId: definition.canvasId },
@@ -297,9 +250,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 	async openCanvasSource(request: IAgentCanvasOpenRequest, signal: AbortSignal): Promise<CanvasSource> {
 		await this.extensions.activateByEvent('onCanvas');
 		signal.throwIfAborted();
-		const provider = this.providers.get(
-			JSON.stringify([request.definition.extensionId, request.definition.canvasId]),
-		);
+		const provider = this.providers.get(JSON.stringify([request.definition.extensionId, request.definition.canvasId]));
 		if (!provider || provider.signal.aborted || provider.definition.requiresInput) {
 			throw new Error('CanvasProviderUnavailable');
 		}
@@ -313,33 +264,21 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 	}
 
 	async closeCanvasSource(threadId: string, targetId: string, signal: AbortSignal): Promise<void> {
-		const page = this.pages
-			.get()
-			?.find(page => page.id === targetId && page.owner.type === 'agent' && page.owner.sessionId === threadId);
+		const page = this.pages.get()?.find(page => page.id === targetId && page.owner.type === 'agent' && page.owner.sessionId === threadId);
 		if (!page?.canvas?.extensionId || !page.canvas.canvasId) {
 			return;
 		}
 		const provider = this.providers.get(JSON.stringify([page.canvas.extensionId, page.canvas.canvasId]));
 		if (provider) {
-			await provider.close(
-				this.owner(page.canvas.sessionId, threadId),
-				page.canvas.instanceId,
-				AbortSignal.any([signal, provider.signal]),
-			);
+			await provider.close(this.owner(page.canvas.sessionId, threadId), page.canvas.instanceId, AbortSignal.any([signal, provider.signal]));
 		}
 	}
 
-	acceptCanvasOpen(
-		request: { sessionId: string; threadId: string; instanceId: string },
-		state: ICanvasOpenRequest,
-		source?: CanvasSource,
-	): void {
+	acceptCanvasOpen(request: { sessionId: string; threadId: string; instanceId: string }, state: ICanvasOpenRequest, source?: CanvasSource): void {
 		const owner = this.owner(request.sessionId, request.threadId);
 		this.createContext(owner);
 		if (state.succeeded && source) {
-			const page = this.pages
-				.get()
-				?.find(page => this.owns(page, owner) && page.canvas?.instanceId === request.instanceId);
+			const page = this.pages.get()?.find(page => this.owns(page, owner) && page.canvas?.instanceId === request.instanceId);
 			if (page) {
 				this.setPresentation(page.id, source);
 			}
@@ -379,11 +318,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 		}
 		await Promise.all(
 			(this.pages.get() ?? [])
-				.filter(
-					page =>
-						page.canvas?.extensionId === provider.definition.extensionId &&
-						page.canvas.canvasId === provider.definition.canvasId,
-				)
+				.filter(page => page.canvas?.extensionId === provider.definition.extensionId && page.canvas.canvasId === provider.definition.canvasId)
 				.map(async page => {
 					const thread = page.owner.type === 'agent' ? page.owner.sessionId : page.canvas!.threadId!;
 					const owner = this.owner(page.canvas!.sessionId, thread);
@@ -394,12 +329,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 						// A new provider incarnation must confirm a source before an old page can be presented again.
 						source = await provider.open(owner, page.canvas!.instanceId, signal);
 					}
-					if (
-						this.isDisposed ||
-						signal.aborted ||
-						this.providerRevisions.get(provider) !== revision ||
-						!this.pages.get()?.some(current => current.id === page.id)
-					) {
+					if (this.isDisposed || signal.aborted || this.providerRevisions.get(provider) !== revision || !this.pages.get()?.some(current => current.id === page.id)) {
 						return;
 					}
 					if (source === 'unchanged') {
@@ -412,11 +342,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 					if (source && !this.hasSource(page, source.url)) {
 						await this.browser.loadURL(page.id, normalizeBrowserViewUrl(source.url));
 					}
-					if (
-						signal.aborted ||
-						this.providerRevisions.get(provider) !== revision ||
-						!this.pages.get()?.some(current => current.id === page.id)
-					) {
+					if (signal.aborted || this.providerRevisions.get(provider) !== revision || !this.pages.get()?.some(current => current.id === page.id)) {
 						return;
 					}
 					if (source) {
@@ -444,13 +370,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 			.catch(() => {})
 			.then(async () => {
 				const provider = this.providers.get(JSON.stringify([definition.extensionId, definition.canvasId]));
-				if (
-					!provider ||
-					provider.signal.aborted ||
-					definition.requiresInput ||
-					!context ||
-					this.contexts.get(canvasOwnerKey(owner)) !== context
-				) {
+				if (!provider || provider.signal.aborted || definition.requiresInput || !context || this.contexts.get(canvasOwnerKey(owner)) !== context) {
 					throw new CancellationError();
 				}
 				this.providerRevisions.set(provider, (this.providerRevisions.get(provider) ?? 0) + 1);
@@ -460,11 +380,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 				const source = await provider.open(owner, instanceId, signal);
 				this.providerRevisions.set(provider, (this.providerRevisions.get(provider) ?? 0) + 1);
 				signal.throwIfAborted();
-				if (
-					this.isDisposed ||
-					this.contexts.get(canvasOwnerKey(owner)) !== context ||
-					this.providers.get(JSON.stringify([definition.extensionId, definition.canvasId])) !== provider
-				) {
+				if (this.isDisposed || this.contexts.get(canvasOwnerKey(owner)) !== context || this.providers.get(JSON.stringify([definition.extensionId, definition.canvasId])) !== provider) {
 					throw new CancellationError();
 				}
 				const url = normalizeBrowserViewUrl(source.url);
@@ -474,11 +390,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 				const existing = this.pages
 					.get()
 					?.find(
-						page =>
-							this.owns(page, owner) &&
-							page.canvas?.instanceId === instanceId &&
-							page.canvas.extensionId === definition.extensionId &&
-							page.canvas.canvasId === definition.canvasId,
+						page => this.owns(page, owner) && page.canvas?.instanceId === instanceId && page.canvas.extensionId === definition.extensionId && page.canvas.canvasId === definition.canvasId,
 					);
 				if (existing && (existing.owner.type === 'user' || this.hasSource(existing, url))) {
 					if (!this.hasSource(existing, url)) {
@@ -500,11 +412,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 							canvasId: definition.canvasId,
 						},
 					});
-					if (
-						provider.signal.aborted ||
-						this.isDisposed ||
-						this.contexts.get(canvasOwnerKey(owner)) !== context
-					) {
+					if (provider.signal.aborted || this.isDisposed || this.contexts.get(canvasOwnerKey(owner)) !== context) {
 						await this.browser.destroyBrowserView(info.id);
 						throw new CancellationError();
 					}
@@ -528,9 +436,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 	}
 
 	private async close(owner: ICanvasOwner, canvas: ICanvas): Promise<void> {
-		const page = this.pages
-			.get()
-			?.find(page => page.id === canvas.resource.path.slice(1) && this.owns(page, owner));
+		const page = this.pages.get()?.find(page => page.id === canvas.resource.path.slice(1) && this.owns(page, owner));
 		if (!page?.canvas) {
 			throw new CancellationError();
 		}
@@ -553,10 +459,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 		return hash.digest();
 	}
 	private hasSource(page: IBrowserViewInfo, url: string): boolean {
-		return (
-			this.sourceHashes.get(page.id) === this.sourceHash(url) ||
-			(!this.sourceHashes.has(page.id) && page.state.url === normalizeBrowserViewUrl(url))
-		);
+		return this.sourceHashes.get(page.id) === this.sourceHash(url) || (!this.sourceHashes.has(page.id) && page.state.url === normalizeBrowserViewUrl(url));
 	}
 	private setPresentation(id: string, source: CanvasSource | undefined): void {
 		if (source) {
@@ -566,10 +469,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 	}
 
 	private hideUnknownSource(page: IBrowserViewInfo): void {
-		if (
-			page.canvas?.extensionId &&
-			!this.providers.has(JSON.stringify([page.canvas.extensionId, page.canvas.canvasId]))
-		) {
+		if (page.canvas?.extensionId && !this.providers.has(JSON.stringify([page.canvas.extensionId, page.canvas.canvasId]))) {
 			this.disconnectedPages.add(page.id);
 			this.presentations.set(new Map(this.presentations.get()).set(page.id, undefined), undefined);
 		}
@@ -579,18 +479,13 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 		const pages = this.pages.get() ?? [];
 		if ((event.type === 'created' || event.type === 'canvasOpened') && event.info.canvas) {
 			this.hideUnknownSource(event.info);
-			if (
-				event.type === 'canvasOpened' &&
-				event.info.canvas.extensionId &&
-				this.providers.has(JSON.stringify([event.info.canvas.extensionId, event.info.canvas.canvasId]))
-			) {
+			if (event.type === 'canvasOpened' && event.info.canvas.extensionId && this.providers.has(JSON.stringify([event.info.canvas.extensionId, event.info.canvas.canvasId]))) {
 				this.disconnectedPages.delete(event.info.id);
 				this.setPresentation(event.info.id, { url: event.info.state.url, title: event.info.canvas.title });
 			}
 			this.pages.set([...pages.filter(page => page.id !== event.info.id), event.info], undefined);
 			if (event.type === 'canvasOpened') {
-				const thread =
-					event.info.owner.type === 'agent' ? event.info.owner.sessionId : event.info.canvas.threadId;
+				const thread = event.info.owner.type === 'agent' ? event.info.owner.sessionId : event.info.canvas.threadId;
 				if (thread) {
 					const owner = this.owner(event.info.canvas.sessionId, thread);
 					// The typed renderer host publishes pending before navigation. Native-only callers have no pending request.

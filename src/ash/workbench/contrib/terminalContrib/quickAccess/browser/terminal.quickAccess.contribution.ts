@@ -3,12 +3,7 @@ import { Action2, registerAction2 } from '../../../../../platform/actions/common
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { QuickAccessRegistry } from '../../../../../platform/quickinput/common/quickAccess.js';
-import {
-	IQuickInputService,
-	QuickInputType,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, QuickInputType, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TerminalQuickAccessProvider } from './terminalQuickAccess.js';
 
 QuickAccessRegistry.register({
@@ -44,10 +39,6 @@ for (const [id, next] of [
 	CommandsRegistry.register(id, accessor => {
 		const quickInput = accessor.get(IQuickInputService);
 		const picker = quickInput.currentQuickInput;
-		if (
-			picker?.type === QuickInputType.QuickPick &&
-			(picker as IQuickPick<IQuickPickItem>).value.startsWith(TerminalQuickAccessProvider.PREFIX)
-		)
-			quickInput.navigate(next);
+		if (picker?.type === QuickInputType.QuickPick && (picker as IQuickPick<IQuickPickItem>).value.startsWith(TerminalQuickAccessProvider.PREFIX)) quickInput.navigate(next);
 	});
 }

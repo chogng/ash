@@ -21,23 +21,10 @@ import {
 import { LifecycleMainService, ILifecycleMainService } from '../../../lifecycle/electron-main/lifecycleMainService.js';
 import { WindowMode, type IWindowBounds } from '../../../window/electron-main/window.js';
 import type { IAnyWorkspaceIdentifier } from '../../../workspace/common/workspace.js';
-import {
-	createEmptyWorkspaceIdentifier,
-	getSingleFolderWorkspaceIdentifier,
-} from '../../../workspaces/node/workspaces.js';
-import {
-	WindowsMainService,
-	windowOperationIpcRoute,
-	workspaceRecoveryIpcRoute,
-	type IWorkbenchWindow,
-} from '../../electron-main/windowsMainService.js';
+import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier } from '../../../workspaces/node/workspaces.js';
+import { WindowsMainService, windowOperationIpcRoute, workspaceRecoveryIpcRoute, type IWorkbenchWindow } from '../../electron-main/windowsMainService.js';
 import type { IOpenConfiguration } from '../../electron-main/windows.js';
-import {
-	WINDOW_OPEN_FILES_CHANNEL,
-	validateWindowFilesRequest,
-	validateWindowFilesResponse,
-	validateAgentsWindowHandoffComplete,
-} from '../../../window/common/window.js';
+import { WINDOW_OPEN_FILES_CHANNEL, validateWindowFilesRequest, validateWindowFilesResponse, validateAgentsWindowHandoffComplete } from '../../../window/common/window.js';
 import { WindowsStateHandler } from '../../electron-main/windowsStateHandler.js';
 import { Event } from '../../../../base/common/event.js';
 import { DialogMainService, IDialogMainService } from '../../../dialogs/electron-main/dialogMainService.js';
@@ -94,13 +81,7 @@ setup(() => {
 				'test',
 			),
 	);
-	windowServices.registerSingleton(
-		IAuxiliaryWindowsMainService,
-		() =>
-			new AuxiliaryWindowsMainService(contents =>
-				(contents as unknown as TestWindow['webContents']).getOwnerBrowserWindow(),
-			),
-	);
+	windowServices.registerSingleton(IAuxiliaryWindowsMainService, () => new AuxiliaryWindowsMainService(contents => (contents as unknown as TestWindow['webContents']).getOwnerBrowserWindow()));
 });
 teardown(() => windowServices.dispose());
 
@@ -111,21 +92,14 @@ test('backup window IPC validates ordinary workspace identities before opening w
 	const route = workspaceRecoveryIpcRoute(async workspaces => {
 		restored = workspaces;
 	});
-	const identities = [
-		{ id: 'empty' },
-		{ id: 'folder', uri: 'file:///project' },
-		{ id: 'multi', configPath: 'file:///project/test.ash-workspace' },
-	];
+	const identities = [{ id: 'empty' }, { id: 'folder', uri: 'file:///project' }, { id: 'multi', configPath: 'file:///project/test.ash-workspace' }];
 	await route.invoke(route.validate(identities));
 	assert.deepEqual(
 		restored.map(workspace => workspace.id),
 		['empty', 'folder', 'multi'],
 	);
 	assert.throws(() => route.validate({ workspaces: identities }), TypeError);
-	assert.throws(
-		() => route.validate([{ id: 'empty', content: 'must not enter Main' }]),
-		/workspace identifier must contain exactly: id/,
-	);
+	assert.throws(() => route.validate([{ id: 'empty', content: 'must not enter Main' }]), /workspace identifier must contain exactly: id/);
 	assert.throws(() => route.validate([{ id: 'folder', uri: 'https://example.com/project' }]), /workspace folder uri/);
 });
 
@@ -196,14 +170,7 @@ test('window restoration selection respects the setting, explicit target, and up
 	});
 });
 
-type RendererEvent =
-	| 'zoom-changed'
-	| 'did-start-loading'
-	| 'render-process-gone'
-	| 'did-start-navigation'
-	| 'did-navigate'
-	| 'will-prevent-unload'
-	| 'did-fail-load';
+type RendererEvent = 'zoom-changed' | 'did-start-loading' | 'render-process-gone' | 'did-start-navigation' | 'did-navigate' | 'will-prevent-unload' | 'did-fail-load';
 type RendererListener =
 	| (() => void)
 	| ((event: unknown, details: Electron.RenderProcessGoneDetails) => void)
@@ -231,18 +198,13 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 			this.zoomLevel = level;
 		},
 		on: (event: RendererEvent, listener: RendererListener): void => {
-			const listeners =
-				event === 'zoom-changed'
-					? this.zoomListeners
-					: (this.rendererListeners.get(event) ?? new Set<() => void>());
+			const listeners = event === 'zoom-changed' ? this.zoomListeners : (this.rendererListeners.get(event) ?? new Set<() => void>());
 			listeners.add(listener as () => void);
 			if (event !== 'zoom-changed') this.rendererListeners.set(event, listeners);
 		},
 		off: (event: RendererEvent, listener: RendererListener): void => {
 			if (this.destroyed) throw new Error('Object has been destroyed');
-			(event === 'zoom-changed' ? this.zoomListeners : this.rendererListeners.get(event))?.delete(
-				listener as () => void,
-			);
+			(event === 'zoom-changed' ? this.zoomListeners : this.rendererListeners.get(event))?.delete(listener as () => void);
 		},
 		send: (channel: string, level: unknown): void => {
 			this.messages.push({ channel, level });
@@ -281,10 +243,7 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 		for (const listener of this.fullscreenListeners.get(event) ?? []) listener();
 	}
 	public on(event: 'close', listener: (event: { preventDefault(): void }) => void): void;
-	public on(
-		event: 'closed' | 'focus' | 'enter-full-screen' | 'leave-full-screen' | 'unresponsive' | 'responsive',
-		listener: () => void,
-	): void;
+	public on(event: 'closed' | 'focus' | 'enter-full-screen' | 'leave-full-screen' | 'unresponsive' | 'responsive', listener: () => void): void;
 	public on(
 		event: 'close' | 'closed' | 'focus' | 'enter-full-screen' | 'leave-full-screen' | 'unresponsive' | 'responsive',
 		listener: ((event: { preventDefault(): void }) => void) | (() => void),
@@ -297,10 +256,7 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 		}
 	}
 	public off(event: 'close', listener: (event: { preventDefault(): void }) => void): void;
-	public off(
-		event: 'closed' | 'focus' | 'enter-full-screen' | 'leave-full-screen' | 'unresponsive' | 'responsive',
-		listener: () => void,
-	): void;
+	public off(event: 'closed' | 'focus' | 'enter-full-screen' | 'leave-full-screen' | 'unresponsive' | 'responsive', listener: () => void): void;
 	public off(
 		event: 'close' | 'closed' | 'focus' | 'enter-full-screen' | 'leave-full-screen' | 'unresponsive' | 'responsive',
 		listener: ((event: { preventDefault(): void }) => void) | (() => void),
@@ -412,9 +368,7 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 	}
 	public emitFullscreenChanged(fullscreen: boolean): void {
 		this.fullscreen = fullscreen;
-		for (const listener of this.fullscreenListeners.get(fullscreen ? 'enter-full-screen' : 'leave-full-screen') ??
-			[])
-			listener();
+		for (const listener of this.fullscreenListeners.get(fullscreen ? 'enter-full-screen' : 'leave-full-screen') ?? []) listener();
 	}
 	public emitRendererEvent(event: 'did-start-loading' | 'render-process-gone'): void {
 		if (event === 'did-start-loading') this.emitNavigation(false, true);
@@ -427,12 +381,7 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 	}
 	public emitNavigation(inPlace: boolean, mainFrame: boolean): void {
 		for (const listener of this.rendererListeners.get('did-start-navigation') ?? []) {
-			(listener as (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void)(
-				undefined,
-				'http://localhost/sessions',
-				inPlace,
-				mainFrame,
-			);
+			(listener as (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void)(undefined, 'http://localhost/sessions', inPlace, mainFrame);
 		}
 	}
 }
@@ -455,9 +404,7 @@ test('file launches wait for renderer readiness, reject replies from another win
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.deepEqual(window.messages, []);
 	service.respondToFileOpen(window, { kind: 'ready' });
-	assert.deepEqual(window.messages, [
-		{ channel: WINDOW_OPEN_FILES_CHANNEL, level: { id: 1, files: configuration.files, wait: true } },
-	]);
+	assert.deepEqual(window.messages, [{ channel: WINDOW_OPEN_FILES_CHANNEL, level: { id: 1, files: configuration.files, wait: true } }]);
 	assert.throws(() => service.respondToFileOpen(other, { kind: 'opened', id: 1 }), /does not belong/);
 	service.respondToFileOpen(window, { kind: 'opened', id: 1 });
 	const result = await opening;
@@ -588,21 +535,12 @@ test('renderer readiness follows the latest load and rejects a window that close
 test('file launch IPC rejects extra fields, invalid positions, invalid resource schemes and malformed responses', () => {
 	const request = { id: 1, wait: true, files: [{ uri: 'file:///C:/project/file.ts', line: 2, column: 3 }] };
 	assert.deepEqual(validateWindowFilesRequest(request), request);
-	assert.throws(
-		() => validateWindowFilesRequest({ ...request, files: [{ uri: 'https://example.com/file' }] }),
-		/absolute file URIs/,
-	);
-	assert.throws(
-		() => validateWindowFilesRequest({ ...request, files: [{ uri: request.files[0]!.uri, line: 0 }] }),
-		/positive integers/,
-	);
+	assert.throws(() => validateWindowFilesRequest({ ...request, files: [{ uri: 'https://example.com/file' }] }), /absolute file URIs/);
+	assert.throws(() => validateWindowFilesRequest({ ...request, files: [{ uri: request.files[0]!.uri, line: 0 }] }), /positive integers/);
 	assert.throws(() => validateWindowFilesRequest({ ...request, extra: true }), /Invalid file open request/);
 	assert.throws(() => validateWindowFilesResponse({ kind: 'ready', id: 1 }), /Invalid file open response/);
 	assert.throws(() => validateWindowFilesResponse({ kind: 'opened', id: -1 }), /Invalid file open response/);
-	assert.throws(
-		() => validateWindowFilesResponse({ kind: 'failed', id: 1, message: '' }),
-		/Invalid file open response/,
-	);
+	assert.throws(() => validateWindowFilesResponse({ kind: 'failed', id: 1, message: '' }), /Invalid file open response/);
 });
 
 test('WindowsMainService lists, focuses, and closes only live Workbench windows', () => {
@@ -628,11 +566,12 @@ test('WindowsMainService lists, focuses, and closes only live Workbench windows'
 	service.perform(first, { kind: 'closeOthers' });
 	assert.deepEqual(
 		{ first: first.calls, second: second.calls },
-		{ first: ['restore', 'focus'], second: ['restore', 'focus', 'close'] },
+		{
+			first: ['restore', 'focus'],
+			second: ['restore', 'focus', 'close'],
+		},
 	);
-	assert.deepEqual(service.perform(first, { kind: 'list' }), [
-		{ id: 1, title: 'First', focused: true, current: true },
-	]);
+	assert.deepEqual(service.perform(first, { kind: 'list' }), [{ id: 1, title: 'First', focused: true, current: true }]);
 	assert.throws(() => service.perform(second, { kind: 'getZoom' }), /Workbench window is closed/);
 	service.perform(first, { kind: 'close' });
 	assert.deepEqual(first.calls, ['restore', 'focus', 'close']);
@@ -701,9 +640,7 @@ test('WindowsMainService tracks auxiliary windows and releases them with their p
 		() => [parent],
 		async () => undefined,
 	);
-	const registration = windowServices
-		.get(IAuxiliaryWindowsMainService)
-		.registerWindow(child.webContents as unknown as WebContents, parent.id);
+	const registration = windowServices.get(IAuxiliaryWindowsMainService).registerWindow(child.webContents as unknown as WebContents, parent.id);
 	assert.deepEqual(service.perform(parent, { kind: 'list' }), [
 		{ id: 1, title: 'Workbench', focused: false, current: true },
 		{ id: 2, title: 'Editor', focused: false, current: false },
@@ -712,14 +649,10 @@ test('WindowsMainService tracks auxiliary windows and releases them with their p
 	assert.deepEqual(child.calls, ['focus']);
 	registration.dispose();
 	assert.equal(child.isDestroyed(), true);
-	assert.deepEqual(service.perform(parent, { kind: 'list' }), [
-		{ id: 1, title: 'Workbench', focused: false, current: true },
-	]);
+	assert.deepEqual(service.perform(parent, { kind: 'list' }), [{ id: 1, title: 'Workbench', focused: false, current: true }]);
 
 	const next = new TestWindow(3, 'Editor');
-	using nextRegistration = windowServices
-		.get(IAuxiliaryWindowsMainService)
-		.registerWindow(next.webContents as unknown as WebContents, parent.id);
+	using nextRegistration = windowServices.get(IAuxiliaryWindowsMainService).registerWindow(next.webContents as unknown as WebContents, parent.id);
 	service.perform(parent, { kind: 'closeOthers' });
 	assert.deepEqual(next.calls, []);
 	assert.equal(next.isDestroyed(), false);
@@ -761,25 +694,13 @@ test('auxiliary creation validates popup bounds independently of whether a posit
 	assert.deepEqual({ width: custom.width, height: custom.height }, { width: 700, height: 530 });
 	assert.equal(custom.titleBarStyle, process.platform === 'darwin' ? 'hiddenInset' : 'hidden');
 	assert.ok(custom.titleBarOverlay);
-	const restored = service.createWindow(
-		request('width=800,height=600,window-maximized=yes,window-always-on-top=yes,window-zoom-level=2'),
-		'custom',
-	);
-	assert.deepEqual(
-		{ show: restored.show, pinned: restored.alwaysOnTop, zoom: restored.webPreferences?.zoomFactor },
-		{ show: false, pinned: true, zoom: 1.44 },
-	);
-	assert.throws(
-		() => service.createWindow(request('window-zoom-level=Infinity'), 'custom'),
-		/Invalid auxiliary zoom/,
-	);
+	const restored = service.createWindow(request('width=800,height=600,window-maximized=yes,window-always-on-top=yes,window-zoom-level=2'), 'custom');
+	assert.deepEqual({ show: restored.show, pinned: restored.alwaysOnTop, zoom: restored.webPreferences?.zoomFactor }, { show: false, pinned: true, zoom: 1.44 });
+	assert.throws(() => service.createWindow(request('window-zoom-level=Infinity'), 'custom'), /Invalid auxiliary zoom/);
 	for (const features of ['width=0', 'height=-1', 'x=NaN', 'width=', 'height=1.5']) {
 		assert.throws(() => service.createWindow(request(features), 'custom'), /Invalid auxiliary window/);
 	}
-	assert.throws(
-		() => service.createWindow({ ...request(''), url: 'https://example.com' }, 'custom'),
-		/same-origin document/,
-	);
+	assert.throws(() => service.createWindow({ ...request(''), url: 'https://example.com' }, 'custom'), /same-origin document/);
 });
 
 test('focused detached editors retain their parent workspace and focus when that workspace is reused', async () => {
@@ -807,12 +728,7 @@ test('focused detached editors retain their parent workspace and focus when that
 	child.focused = true;
 	child.emitFocus();
 	assert.equal(auxiliary.getWindowByWebContents(child.webContents as unknown as WebContents)?.parentId, first.id);
-	assert.equal(
-		await service.openWorkspace({ id: 'first', uri: folder }, async () =>
-			assert.fail('must reuse parent workspace'),
-		),
-		first,
-	);
+	assert.equal(await service.openWorkspace({ id: 'first', uri: folder }, async () => assert.fail('must reuse parent workspace')), first);
 	assert.deepEqual({ parent: first.calls, child: child.calls }, { parent: [], child: ['focus'] });
 	child.destroy();
 	assert.deepEqual(auxiliary.getWindows(), []);
@@ -836,10 +752,7 @@ test('auxiliary registration resolves descendant ownership and detaches listener
 	registration.dispose();
 	assert.equal(child.isDestroyed(), true);
 	assert.equal(auxiliary.getWindowByWebContents(child.webContents as unknown as WebContents), undefined);
-	assert.throws(
-		() => auxiliary.registerWindow(child.webContents as unknown as WebContents, 1),
-		/closed before registration/,
-	);
+	assert.throws(() => auxiliary.registerWindow(child.webContents as unknown as WebContents, 1), /closed before registration/);
 	windowServices.dispose();
 	assert.equal(descendant.isDestroyed(), true);
 });
@@ -863,9 +776,7 @@ test('auxiliary registration restores Windows outer bounds before capturing its 
 	const saved = { x: 120, y: 90, width: 718, height: 539 };
 	// Reproduce the constructor/frame mismatch measured on the Windows desktop.
 	child.bounds = { ...saved, width: 724, height: 544 };
-	using registration = windowServices
-		.get(IAuxiliaryWindowsMainService)
-		.registerWindow(child.webContents as unknown as WebContents, 1, saved);
+	using registration = windowServices.get(IAuxiliaryWindowsMainService).registerWindow(child.webContents as unknown as WebContents, 1, saved);
 	assert.deepEqual(child.getBounds(), saved);
 	assert.deepEqual(
 		windowServices
@@ -886,16 +797,7 @@ test('auxiliary registration restores Windows outer bounds before capturing its 
 
 test('window service assembly rejects a missing auxiliary window owner', () => {
 	using services = new InstantiationService();
-	assert.throws(
-		() =>
-			services.createInstance(
-				WindowsMainService<TestWindow>,
-				async () => undefined,
-				process.platform,
-				nodeWorkspacePathService,
-			),
-		/Unknown service: auxiliaryWindowsMainService/,
-	);
+	assert.throws(() => services.createInstance(WindowsMainService<TestWindow>, async () => undefined, process.platform, nodeWorkspacePathService), /Unknown service: auxiliaryWindowsMainService/);
 });
 
 test('an auxiliary renderer crash closes its window and removes it from window operations', () => {
@@ -914,7 +816,11 @@ test('an auxiliary renderer crash closes its window and removes it from window o
 			auxiliary: auxiliary.getWindows(),
 			windows: service.perform(parent, { kind: 'list' }),
 		},
-		{ destroyed: true, auxiliary: [], windows: [{ id: 1, title: 'Workbench', focused: false, current: true }] },
+		{
+			destroyed: true,
+			auxiliary: [],
+			windows: [{ id: 1, title: 'Workbench', focused: false, current: true }],
+		},
 	);
 });
 
@@ -959,24 +865,16 @@ test('WindowsMainService owns an independent Sessions window after the Workbench
 	await service.openManagedWindow('workspace', create, options, () => {
 		closed++;
 	});
-	assert.deepEqual(
-		{ created, shown: sessions.shown, focused: sessions.focused },
-		{ created: 1, shown: 1, focused: true },
-	);
+	assert.deepEqual({ created, shown: sessions.shown, focused: sessions.focused }, { created: 1, shown: 1, focused: true });
 	assert.deepEqual(service.perform(workbench, { kind: 'list' }), [
 		{ id: 1, title: 'Workbench', focused: false, current: true },
 		{ id: 2, title: 'Agents', focused: true, current: false },
 	]);
 	service.perform(workbench, { kind: 'close' });
-	assert.deepEqual(service.perform(sessions, { kind: 'list' }), [
-		{ id: 2, title: 'Agents', focused: true, current: true },
-	]);
+	assert.deepEqual(service.perform(sessions, { kind: 'list' }), [{ id: 2, title: 'Agents', focused: true, current: true }]);
 	service.perform(sessions, { kind: 'focusSelf' });
 	await service.closeManagedWindow('workspace');
-	assert.deepEqual(
-		{ current: service.managedWindow('workspace'), released, closed },
-		{ current: undefined, released: 1, closed: 1 },
-	);
+	assert.deepEqual({ current: service.managedWindow('workspace'), released, closed }, { current: undefined, released: 1, closed: 1 });
 });
 
 test('managed Agents windows receive startup theme colors before initialization', async () => {
@@ -1113,10 +1011,7 @@ test('WindowsMainService waits for a managed window to close before reopening it
 	first.deferClose = true;
 	const closing = service.closeManagedWindow('workspace');
 	const reopening = service.openManagedWindow('workspace', create, options, () => {});
-	assert.deepEqual(
-		{ windows: windows.length, closeRequests: first.calls.filter(call => call === 'close').length },
-		{ windows: 1, closeRequests: 1 },
-	);
+	assert.deepEqual({ windows: windows.length, closeRequests: first.calls.filter(call => call === 'close').length }, { windows: 1, closeRequests: 1 });
 	first.destroy();
 	await closing;
 	await reopening;
@@ -1152,13 +1047,11 @@ for (const failReplacement of [false, true]) {
 				},
 				initialize: async window => {
 					if (failReplacement && windows.length === 2) throw new Error('Replacement failed');
-					await service
-						.getWindowById(window.id)!
-						.load({
-							file: '/synthetic/sessions.html',
-							url: 'file:///synthetic/sessions.html',
-							useDevelopmentUrl: false,
-						});
+					await service.getWindowById(window.id)!.load({
+						file: '/synthetic/sessions.html',
+						url: 'file:///synthetic/sessions.html',
+						useDevelopmentUrl: false,
+					});
 				},
 			},
 			() => {
@@ -1220,14 +1113,12 @@ test('WindowsMainService keeps a managed window open after a failed close and pe
 	using tracking = lifecycle.registerWindow(sessions);
 	lifecycle.respondToClose(sessions, { kind: 'ready' });
 	const closing = service.closeManagedWindow('workspace');
-	const firstToken = sessions.messages.find(message => message.channel === WINDOW_PREPARE_CLOSE_CHANNEL)
-		?.level as number;
+	const firstToken = sessions.messages.find(message => message.channel === WINDOW_PREPARE_CLOSE_CHANNEL)?.level as number;
 	lifecycle.respondToClose(sessions, { kind: 'failed', token: firstToken, message: 'Save failed' });
 	await assert.rejects(closing, /Save failed/);
 	assert.equal(service.managedWindow('workspace'), sessions);
 	const retry = service.closeManagedWindow('workspace');
-	const secondToken = sessions.messages.filter(message => message.channel === WINDOW_PREPARE_CLOSE_CHANNEL).at(-1)
-		?.level as number;
+	const secondToken = sessions.messages.filter(message => message.channel === WINDOW_PREPARE_CLOSE_CHANNEL).at(-1)?.level as number;
 	lifecycle.respondToClose(sessions, { kind: 'complete', token: secondToken });
 	await retry;
 	assert.equal(service.managedWindow('workspace'), undefined);
@@ -1271,10 +1162,7 @@ test('WindowsMainService releases a failed or crashed managed window', async () 
 		}),
 		/load failed/,
 	);
-	assert.deepEqual(
-		{ destroyed: windows[0]?.isDestroyed(), released, closed },
-		{ destroyed: true, released: 1, closed: 1 },
-	);
+	assert.deepEqual({ destroyed: windows[0]?.isDestroyed(), released, closed }, { destroyed: true, released: 1, closed: 1 });
 	await service.openManagedWindow('workspace', create, options, () => {
 		closed++;
 	});
@@ -1282,10 +1170,7 @@ test('WindowsMainService releases a failed or crashed managed window', async () 
 	assert.equal(windows[1]!.maximized, 1);
 	windows[1]!.emitRendererEvent('render-process-gone');
 	await new Promise(resolve => setImmediate(resolve));
-	assert.deepEqual(
-		{ current: service.managedWindow('workspace'), released, closed },
-		{ current: undefined, released: 2, closed: 2 },
-	);
+	assert.deepEqual({ current: service.managedWindow('workspace'), released, closed }, { current: undefined, released: 2, closed: 2 });
 });
 
 test('WindowsMainService applies zoom, always-on-top, and platform tab operations', () => {
@@ -1294,14 +1179,7 @@ test('WindowsMainService applies zoom, always-on-top, and platform tab operation
 	using service = createWindowsService(windows, async () => undefined, 'win32');
 	service.perform(window, { kind: 'setZoom', level: 2 });
 	service.perform(window, { kind: 'setAlwaysOnTop', enabled: true });
-	assert.deepEqual(
-		[
-			service.perform(window, { kind: 'getZoom' }),
-			service.perform(window, { kind: 'getZoomFactor' }),
-			service.perform(window, { kind: 'getAlwaysOnTop' }),
-		],
-		[2, 1.44, true],
-	);
+	assert.deepEqual([service.perform(window, { kind: 'getZoom' }), service.perform(window, { kind: 'getZoomFactor' }), service.perform(window, { kind: 'getAlwaysOnTop' })], [2, 1.44, true]);
 	assert.throws(() => service.perform(window, { kind: 'nativeTab', action: 'next' }), /require macOS/);
 
 	using macService = createWindowsService(windows, async () => undefined, 'darwin');
@@ -1321,9 +1199,7 @@ test('window pinning targets only registered auxiliary windows owned by its IPC 
 		() => [parent, other],
 		async () => undefined,
 	);
-	using registration = windowServices
-		.get(IAuxiliaryWindowsMainService)
-		.registerWindow(child.webContents as unknown as WebContents, parent.id);
+	using registration = windowServices.get(IAuxiliaryWindowsMainService).registerWindow(child.webContents as unknown as WebContents, parent.id);
 	const route = windowOperationIpcRoute(service, parent);
 	const pin = route.validate({ kind: 'setAlwaysOnTop', enabled: true, windowName: name });
 	route.invoke(pin);
@@ -1352,12 +1228,7 @@ test('window pinning targets only registered auxiliary windows owned by its IPC 
 		windowName: name,
 		alwaysOnTop: true,
 	});
-	for (const event of [
-		null,
-		{ alwaysOnTop: 'true' },
-		{ alwaysOnTop: true, windowName: 'foreign' },
-		{ alwaysOnTop: true, execute: true },
-	]) {
+	for (const event of [null, { alwaysOnTop: 'true' }, { alwaysOnTop: true, windowName: 'foreign' }, { alwaysOnTop: true, execute: true }]) {
 		assert.throws(() => validateWindowAlwaysOnTopChangedEvent(event), /Invalid window always-on-top change/);
 	}
 	registration.dispose();
@@ -1472,11 +1343,7 @@ test('window operation IPC validates commands before dispatching to the window h
 	assert.deepEqual(window.calls, ['focus']);
 });
 
-function registerWindow(
-	service: WindowsMainService<TestWindow>,
-	window: TestWindow,
-	workspace: IAnyWorkspaceIdentifier = createEmptyWorkspaceIdentifier(),
-): TestWindow {
+function registerWindow(service: WindowsMainService<TestWindow>, window: TestWindow, workspace: IAnyWorkspaceIdentifier = createEmptyWorkspaceIdentifier()): TestWindow {
 	return service.createWindow(
 		() => window,
 		{
@@ -1501,12 +1368,7 @@ function createWindowsService(
 	create: ConstructorParameters<typeof WindowsMainService<TestWindow>>[0],
 	platform: NodeJS.Platform = process.platform,
 ): WindowsMainService<TestWindow> {
-	const service = windowServices.createInstance(
-		WindowsMainService<TestWindow>,
-		create,
-		platform,
-		nodeWorkspacePathService,
-	);
+	const service = windowServices.createInstance(WindowsMainService<TestWindow>, create, platform, nodeWorkspacePathService);
 	for (const window of windows()) {
 		if (window) registerWindow(service, window);
 	}
@@ -1514,12 +1376,7 @@ function createWindowsService(
 }
 
 test('platform window owner tracks activation, workspace changes and close without a product registry', () => {
-	using service = windowServices.createInstance(
-		WindowsMainService<TestWindow>,
-		async () => undefined,
-		process.platform,
-		nodeWorkspacePathService,
-	);
+	using service = windowServices.createInstance(WindowsMainService<TestWindow>, async () => undefined, process.platform, nodeWorkspacePathService);
 	const first = registerWindow(service, new TestWindow(1, 'First'), { id: 'first' });
 	const second = registerWindow(service, new TestWindow(2, 'Second'), { id: 'second' });
 	assert.equal(service.getLastActiveWindow(), second);
@@ -1605,10 +1462,7 @@ test('managed windows share activation, sizing and last-closed placement without
 		displayId: display.id,
 		workArea: display.workArea,
 	});
-	assert.throws(
-		() => service.getNewWindowState(handler, { 'window.newWindowDimensions': 'unknown' }, false),
-		TypeError,
-	);
+	assert.throws(() => service.getNewWindowState(handler, { 'window.newWindowDimensions': 'unknown' }, false), TypeError);
 	await service.open({
 		workspace: { kind: WorkspaceOpenTargetKind.Folder, path: '/project' },
 		files: [],
@@ -1624,12 +1478,7 @@ test('managed windows share activation, sizing and last-closed placement without
 });
 
 test('platform window owner reuses the most recently active folder or workspace file', () => {
-	using service = windowServices.createInstance(
-		WindowsMainService<TestWindow>,
-		async () => undefined,
-		process.platform,
-		nodeWorkspacePathService,
-	);
+	using service = windowServices.createInstance(WindowsMainService<TestWindow>, async () => undefined, process.platform, nodeWorkspacePathService);
 	const folder = URI.file('/repo/project');
 	const first = registerWindow(service, new TestWindow(1, 'First'), { id: 'first', uri: folder });
 	const second = registerWindow(service, new TestWindow(2, 'Second'), { id: 'second', uri: folder });
@@ -1642,12 +1491,7 @@ test('platform window owner reuses the most recently active folder or workspace 
 });
 
 test('platform window owner coalesces opens through renderer startup and focuses the existing window', async () => {
-	using service = windowServices.createInstance(
-		WindowsMainService<TestWindow>,
-		async () => undefined,
-		process.platform,
-		nodeWorkspacePathService,
-	);
+	using service = windowServices.createInstance(WindowsMainService<TestWindow>, async () => undefined, process.platform, nodeWorkspacePathService);
 	const workspace = { id: 'pending' };
 	let finishStartup!: () => void;
 	const startup = new Promise<void>(resolve => {
@@ -1667,20 +1511,12 @@ test('platform window owner coalesces opens through renderer startup and focuses
 	finishStartup();
 	assert.equal(await first, window);
 	assert.equal(await second, window);
-	assert.equal(
-		await service.openWorkspace(workspace, async () => assert.fail('live workspace must not be recreated')),
-		window,
-	);
+	assert.equal(await service.openWorkspace(workspace, async () => assert.fail('live workspace must not be recreated')), window);
 	assert.deepEqual(window.calls, ['focus']);
 });
 
 test('platform window owner releases a failed opening for an explicit retry', async () => {
-	using service = windowServices.createInstance(
-		WindowsMainService<TestWindow>,
-		async () => undefined,
-		process.platform,
-		nodeWorkspacePathService,
-	);
+	using service = windowServices.createInstance(WindowsMainService<TestWindow>, async () => undefined, process.platform, nodeWorkspacePathService);
 	const workspace = { id: 'failed' };
 	await assert.rejects(
 		service.openWorkspace(workspace, async () => {
@@ -1689,10 +1525,7 @@ test('platform window owner releases a failed opening for an explicit retry', as
 		/startup failed/,
 	);
 	const window = new TestWindow(1, 'Retry');
-	assert.equal(
-		await service.openWorkspace(workspace, async () => registerWindow(service, window, workspace)),
-		window,
-	);
+	assert.equal(await service.openWorkspace(workspace, async () => registerWindow(service, window, workspace)), window);
 });
 
 test('auxiliary close, focus and zoom operations stay in their owner and shared zoom reaches every window', () => {
@@ -1705,9 +1538,7 @@ test('auxiliary close, focus and zoom operations stay in their owner and shared 
 		() => [parent, other],
 		async () => undefined,
 	);
-	using registration = windowServices
-		.get(IAuxiliaryWindowsMainService)
-		.registerWindow(child.webContents as unknown as WebContents, parent.id);
+	using registration = windowServices.get(IAuxiliaryWindowsMainService).registerWindow(child.webContents as unknown as WebContents, parent.id);
 	const route = windowOperationIpcRoute(service, parent);
 	route.invoke(route.validate({ kind: 'focusSelf', windowName: name }));
 	assert.deepEqual(child.calls, ['focus']);
@@ -1748,14 +1579,10 @@ test('auxiliary state events report host bounds fullscreen and pin state only to
 		() => [parent, other],
 		async () => undefined,
 	);
-	using registration = windowServices
-		.get(IAuxiliaryWindowsMainService)
-		.registerWindow(child.webContents as unknown as WebContents, parent.id);
+	using registration = windowServices.get(IAuxiliaryWindowsMainService).registerWindow(child.webContents as unknown as WebContents, parent.id);
 	child.emitFullscreenChanged(true);
 	child.setAlwaysOnTop(true);
-	const states = parent.messages
-		.filter(message => message.channel === AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL)
-		.map(message => validateAuxiliaryWindowStateEvent(message.level));
+	const states = parent.messages.filter(message => message.channel === AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL).map(message => validateAuxiliaryWindowStateEvent(message.level));
 	assert.equal(states.length, 2);
 	assert.deepEqual(states[1], {
 		windowName: name,
@@ -1764,14 +1591,8 @@ test('auxiliary state events report host bounds fullscreen and pin state only to
 	assert.deepEqual(other.messages, []);
 	assert.deepEqual(service.perform(parent, { kind: 'getAuxiliaryState', windowName: name }), states[1]!.state);
 	assert.throws(() => service.perform(other, { kind: 'getAuxiliaryState', windowName: name }), /belongs to another/);
-	assert.throws(
-		() => validateAuxiliaryWindowStateEvent({ windowName: name, state: { ...states[1]!.state, width: NaN } }),
-		/Invalid auxiliary window state/,
-	);
-	assert.throws(
-		() => validateAuxiliaryWindowStateEvent({ ...states[1], windowName: 'foreign' }),
-		/Invalid auxiliary window state event/,
-	);
+	assert.throws(() => validateAuxiliaryWindowStateEvent({ windowName: name, state: { ...states[1]!.state, width: NaN } }), /Invalid auxiliary window state/);
+	assert.throws(() => validateAuxiliaryWindowStateEvent({ ...states[1], windowName: 'foreign' }), /Invalid auxiliary window state event/);
 });
 
 test('waiting launches finish for the replaced document while a new wait follows the live document', async () => {
@@ -1842,9 +1663,7 @@ test('window lists retain caller identity when another window owns OS focus and 
 		() => [parent, other],
 		async () => undefined,
 	);
-	using registration = windowServices
-		.get(IAuxiliaryWindowsMainService)
-		.registerWindow(child.webContents as unknown as WebContents, parent.id);
+	using registration = windowServices.get(IAuxiliaryWindowsMainService).registerWindow(child.webContents as unknown as WebContents, parent.id);
 	assert.deepEqual(service.perform(parent, { kind: 'list' }), [
 		{ id: 1, title: 'Workbench', focused: false, current: true },
 		{ id: 2, title: 'Other', focused: true, current: false },

@@ -6,15 +6,8 @@ import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IChatService, type TurnChangeDetails } from '../../../../../workbench/services/chat/common/chatService.js';
-import {
-	IDecorationsService,
-	type IDecorationsProvider,
-} from '../../../../../workbench/services/decorations/common/decorations.js';
-import {
-	IEditorService,
-	type EditorOpenOptions,
-	type EditorOpenTarget,
-} from '../../../../../workbench/services/editor/common/editorService.js';
+import { IDecorationsService, type IDecorationsProvider } from '../../../../../workbench/services/decorations/common/decorations.js';
+import { IEditorService, type EditorOpenOptions, type EditorOpenTarget } from '../../../../../workbench/services/editor/common/editorService.js';
 import { EditorInputSerializers } from '../../../../../workbench/services/editor/common/editorInputSerializer.js';
 import type { IResourceEditorInput } from '../../../../../workbench/common/editor.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
@@ -22,14 +15,8 @@ import { SessionChangesService } from '../../browser/sessionChangesService.js';
 import { SessionChangesEditorInput } from '../../browser/sessionChangesEditorInput.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
-import {
-	SessionChangesetOperationScope,
-	SessionChangesetOperationStatus,
-} from '../../../../services/sessions/common/session.js';
-import {
-	IEditorGroupsService,
-	type IEditorGroup,
-} from '../../../../../workbench/services/editor/common/editorGroupsService.js';
+import { SessionChangesetOperationScope, SessionChangesetOperationStatus } from '../../../../services/sessions/common/session.js';
+import { IEditorGroupsService, type IEditorGroup } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
 
 suite('Session Changes opening and capture contract', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -101,43 +88,26 @@ suite('Session Changes opening and capture contract', () => {
 		const editor = service.getChangesEditorResource(session);
 		assert.equal(service.getSessionResource(editor)?.toString(), session.toString());
 		assert.equal(service.getSessionResource(editor.with({ fragment: 'capture' }))?.toString(), session.toString());
-		assert.equal(
-			service.getChangesEditorResource(session.with({ fragment: 'capture' })).toString(),
-			editor.toString(),
-		);
+		assert.equal(service.getChangesEditorResource(session.with({ fragment: 'capture' })).toString(), editor.toString());
 		assert.equal(service.getSessionResource(URI.parse('file:/session')), undefined);
 		const changeset = await service.resolveChangeset(session, 'capture');
 		const change = changeset.changes.get()[0]!;
-		assert.equal(
-			change.uri.toString(),
-			'ash-turn-diff:/capture/deleted.ts?session=session&thread=thread&revision=3',
-		);
+		assert.equal(change.uri.toString(), 'ash-turn-diff:/capture/deleted.ts?session=session&thread=thread&revision=3');
 		assert.equal(change.deletions, 2);
 		const viewState = { revealData: { resource: { original: change.originalUri, modified: change.modifiedUri } } };
-		assert.equal(
-			await service.openChangesEditor(
-				session,
-				{ changesetSelection: { kind: 'id', id: 'capture' }, preserveFocus: true, viewState },
-				'sideGroup',
-			),
-			editorGroup,
-		);
+		assert.equal(await service.openChangesEditor(session, { changesetSelection: { kind: 'id', id: 'capture' }, preserveFocus: true, viewState }, 'sideGroup'), editorGroup);
 		const request = opened[0]!;
 		assert.equal(request.group, 'sideGroup');
 		assert.equal(request.options?.preserveFocus, true);
 		assert.equal(request.options?.forceReload, true);
 		assert.equal(request.options?.viewState, viewState);
-		const restored = EditorInputSerializers.deserialize(
-			JSON.parse(JSON.stringify(EditorInputSerializers.serialize(request.input))),
-		) as SessionChangesEditorInput;
+		const restored = EditorInputSerializers.deserialize(JSON.parse(JSON.stringify(EditorInputSerializers.serialize(request.input)))) as SessionChangesEditorInput;
 		assert.equal(restored.resource.toString(), editor.toString());
 		assert.deepEqual(restored.changesetSelection, { kind: 'id', id: 'capture' });
 		await assert.rejects(service.openChangesEditor(URI.parse('ash-session:/session?thread=missing')));
 		assert.equal(opened.length, 1);
 		assert.deepEqual(
-			changeset.operations
-				.get()
-				.map(operation => ({ id: operation.id, scopes: operation.scopes, status: operation.status })),
+			changeset.operations.get().map(operation => ({ id: operation.id, scopes: operation.scopes, status: operation.status })),
 			[
 				{
 					id: 'preview',
@@ -160,9 +130,7 @@ suite('Session Changes opening and capture contract', () => {
 		await assert.rejects(unsealed.invokeOperation('preview'), /sealed file changes/u);
 		assert.equal(prepared.length, 1);
 		const changed: string[][] = [];
-		using listener = provider!.onDidChange(resources =>
-			changed.push(resources.map(resource => resource.toString())),
-		);
+		using listener = provider!.onDidChange(resources => changed.push(resources.map(resource => resource.toString())));
 		service.setChangesCount(editor, 1);
 		assert.deepEqual(await provider!.provideDecorations(editor, CancellationToken.None), {
 			letter: '1',

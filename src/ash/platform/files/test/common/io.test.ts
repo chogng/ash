@@ -22,14 +22,7 @@ suite('File stream IO', () => {
 			const resource = URI.file(join(directory, 'bytes.bin'));
 			await writeFile(resource.fsPath, new Uint8Array([0, 1, 2, 3, 4, 5]));
 			const stream = newWriteableStream<Uint8Array>(null);
-			const producer = readFileIntoStream(
-				provider,
-				resource,
-				stream,
-				buffer => buffer.buffer,
-				{ bufferSize: 2, position: 1, length: 4 },
-				CancellationToken.None,
-			);
+			const producer = readFileIntoStream(provider, resource, stream, buffer => buffer.buffer, { bufferSize: 2, position: 1, length: 4 }, CancellationToken.None);
 			const chunks = await consumeStream(stream, values => values.map(value => [...value]));
 			await producer;
 			assert.deepEqual(chunks, [
@@ -60,14 +53,7 @@ suite('File stream IO', () => {
 				}
 				return result;
 			};
-			const producer = readFileIntoStream(
-				provider,
-				resource,
-				stream,
-				buffer => buffer.buffer,
-				{ bufferSize: 1 },
-				cancellation.token,
-			);
+			const producer = readFileIntoStream(provider, resource, stream, buffer => buffer.buffer, { bufferSize: 1 }, cancellation.token);
 			await blocked.p;
 			cancellation.cancel();
 			await producer;

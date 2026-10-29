@@ -26,10 +26,7 @@ export class URLHandlerChannel implements IServerChannel {
 		) {
 			throw new TypeError('Invalid URL options');
 		}
-		return (await this.handler.handleURL(
-			URI.parse(arg[0], true),
-			(options ?? undefined) as IOpenURLOptions | undefined,
-		)) as T;
+		return (await this.handler.handleURL(URI.parse(arg[0], true), (options ?? undefined) as IOpenURLOptions | undefined)) as T;
 	}
 
 	public listen<T>(_context: string, event: string): Event<T> {

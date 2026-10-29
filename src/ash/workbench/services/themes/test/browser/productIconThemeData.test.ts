@@ -27,7 +27,9 @@ test('product themes reject SVG paths before reading any artwork', async () => {
 			ProductIconThemeData.load(
 				'invalid-icons',
 				'Invalid',
-				{ iconDefinitions: { add: { iconPath } } },
+				{
+					iconDefinitions: { add: { iconPath } },
+				},
 				async () => {
 					throw new Error('SVG resources must not be read');
 				},

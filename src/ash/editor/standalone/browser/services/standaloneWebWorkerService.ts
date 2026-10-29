@@ -13,9 +13,7 @@ export class StandaloneWebWorkerService extends WebWorkerService {
 		const supplied = environment?.getWorker?.('workerMain.js', descriptor.label);
 		if (supplied !== undefined) return Promise.resolve(supplied);
 		if (environment?.getWorkerUrl) {
-			return Promise.resolve(
-				new Worker(this.getWorkerUrl(descriptor), { type: 'module', name: descriptor.label }),
-			);
+			return Promise.resolve(new Worker(this.getWorkerUrl(descriptor), { type: 'module', name: descriptor.label }));
 		}
 		return super._createWorker(descriptor);
 	}

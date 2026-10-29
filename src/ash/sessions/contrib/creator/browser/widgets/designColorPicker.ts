@@ -1,8 +1,5 @@
 import { ColorPicker } from '../../../../../base/browser/ui/colorPicker/colorPicker.js';
-import {
-	ContextViewFocusRestore,
-	ContextViewHideReason,
-} from '../../../../../base/browser/ui/contextview/contextview.js';
+import { ContextViewFocusRestore, ContextViewHideReason } from '../../../../../base/browser/ui/contextview/contextview.js';
 import type { Color } from '../../../../../base/common/color.js';
 import { AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';

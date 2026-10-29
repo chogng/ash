@@ -1,8 +1,5 @@
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import type { EditorGroupId } from '../../../services/editor/common/editorState.js';
@@ -39,8 +36,7 @@ export const BreadcrumbsShowEditorTypeConfiguration = configurationRegistry.regi
 	key: 'breadcrumbs.showEditorType',
 	defaultValue: true,
 	parse: value => {
-		if (typeof value !== 'boolean')
-			throw new TypeError(localize('breadcrumbs.showEditorType.invalid', 'Show Editor Type must be a boolean.'));
+		if (typeof value !== 'boolean') throw new TypeError(localize('breadcrumbs.showEditorType.invalid', 'Show Editor Type must be a boolean.'));
 		return value;
 	},
 	setting: {
@@ -48,10 +44,7 @@ export const BreadcrumbsShowEditorTypeConfiguration = configurationRegistry.regi
 			return localize('breadcrumbs.showEditorType.title', 'Breadcrumbs: Show Editor Type');
 		},
 		get description() {
-			return localize(
-				'breadcrumbs.showEditorType.description',
-				'Shows an editor selector for resources that support multiple editors.',
-			);
+			return localize('breadcrumbs.showEditorType.description', 'Shows an editor selector for resources that support multiple editors.');
 		},
 		valueType: 'boolean',
 	},

@@ -56,20 +56,12 @@ test('LabelService normalizes absolute Windows drive labels while retaining work
 	};
 	using labels = createTestLabelService(workspace, OperatingSystem.Windows);
 	assert.deepEqual(
-		[
-			labels.getUriLabel(resource),
-			labels.getUriLabel(resource, { separator: '/' }),
-			labels.getUriLabel(resource, { relative: true }),
-			resource.path,
-		],
+		[labels.getUriLabel(resource), labels.getUriLabel(resource, { separator: '/' }), labels.getUriLabel(resource, { relative: true }), resource.path],
 		['E:\\workspace\\src\\main.ts', 'E:/workspace/src/main.ts', 'src\\main.ts', '/e:/workspace/src/main.ts'],
 	);
 });
 
-function createTestLabelService(
-	workspace: ConstructorParameters<typeof LabelService>[0],
-	os: OperatingSystem = operatingSystem,
-): LabelService {
+function createTestLabelService(workspace: ConstructorParameters<typeof LabelService>[0], os: OperatingSystem = operatingSystem): LabelService {
 	const api = createDisconnectedRendererApi();
 	const host = { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: os } };
 	return new LabelService(workspace, new BrowserPathService(host, workspace), host);
@@ -145,14 +137,8 @@ test('LabelService formats remote drive and UNC paths independently of the App S
 	using labels = createTestLabelService(workspace, OperatingSystem.Macintosh);
 	assert.equal(labels.getUriLabel(root, { noPrefix: true }), 'C:\\work');
 	assert.equal(labels.getSeparator(root.scheme, root.authority), '\\');
-	assert.equal(
-		labels.getUriLabel(URI.parse('ash-remote://ssh+build//server/share/file.ts')),
-		'\\\\server\\share\\file.ts',
-	);
-	assert.equal(
-		labels.getUriLabel(URI.parse('ash-remote://ssh+posix/work/part%5Cname.ts%20')),
-		'/work/part\\name.ts ',
-	);
+	assert.equal(labels.getUriLabel(URI.parse('ash-remote://ssh+build//server/share/file.ts')), '\\\\server\\share\\file.ts');
+	assert.equal(labels.getUriLabel(URI.parse('ash-remote://ssh+posix/work/part%5Cname.ts%20')), '/work/part\\name.ts ');
 	using formatter = labels.registerFormatter({
 		scheme: 'virtual',
 		formatting: { label: '${path}/END', separator: '\\', normalizeDriveLetter: true },

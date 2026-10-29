@@ -47,11 +47,7 @@ export interface ISplitViewView {
 }
 
 /** Controls the initial placement of a newly added SplitView view. */
-export type SplitViewSizing =
-	| number
-	| { readonly type: 'distribute' }
-	| { readonly type: 'split'; readonly index: number }
-	| { readonly type: 'invisible'; readonly cachedVisibleSize: number };
+export type SplitViewSizing = number | { readonly type: 'distribute' } | { readonly type: 'split'; readonly index: number } | { readonly type: 'invisible'; readonly cachedVisibleSize: number };
 
 interface ViewItem {
 	readonly view: ISplitViewView;
@@ -377,10 +373,7 @@ export class SplitView extends Disposable {
 		}
 		const visible = this.visibleItems();
 		return {
-			size:
-				visible.length === 0
-					? this.size
-					: visible.reduce((total, item) => total + item.size, 0) / visible.length,
+			size: visible.length === 0 ? this.size : visible.reduce((total, item) => total + item.size, 0) / visible.length,
 			visible: true,
 		};
 	}
@@ -405,21 +398,11 @@ export class SplitView extends Disposable {
 	}
 
 	private render(): void {
-		const animated =
-			this.element.classList.contains('animated') &&
-			!isReducedMotion(this.element) &&
-			typeof this.element.animate === 'function';
+		const animated = this.element.classList.contains('animated') && !isReducedMotion(this.element) && typeof this.element.animate === 'function';
 		const axis = this.orientation === 'horizontal' ? 'left' : 'top';
 		const extent = this.orientation === 'horizontal' ? 'width' : 'height';
-		const nodes = [
-			...this.items.filter(item => item.visible).map(item => item.container),
-			...this.sashItems.map(item => item.sash.element),
-		];
-		const interrupted =
-			animated &&
-			this.geometryAnimations.some(
-				animation => animation.playState === 'running' || animation.playState === 'paused',
-			);
+		const nodes = [...this.items.filter(item => item.visible).map(item => item.container), ...this.sashItems.map(item => item.sash.element)];
+		const interrupted = animated && this.geometryAnimations.some(animation => animation.playState === 'running' || animation.playState === 'paused');
 		// Settled boundaries already have exact inline allocations. Only an interruption
 		// needs the painted position before cancelling its animation; avoid flushing layout otherwise.
 		const origin = interrupted ? this.element.getBoundingClientRect()[axis] : 0;
@@ -428,8 +411,7 @@ export class SplitView extends Disposable {
 					if (interrupted) {
 						const bounds = node.getBoundingClientRect();
 						return {
-							position:
-								bounds[axis] - origin + (node.classList.contains('ash-sash') ? bounds[extent] / 2 : 0),
+							position: bounds[axis] - origin + (node.classList.contains('ash-sash') ? bounds[extent] / 2 : 0),
 							size: bounds[extent],
 						};
 					}
@@ -467,10 +449,7 @@ export class SplitView extends Disposable {
 			const isSash = node.classList.contains('ash-sash');
 			// A newly mounted boundary has no previous allocation to animate from.
 			if (!Number.isFinite(previous.position) || (!isSash && !Number.isFinite(previous.size))) continue;
-			if (
-				previous.position === Number.parseFloat(node.style[axis]) &&
-				(isSash || previous.size === Number.parseFloat(node.style[extent]))
-			) {
+			if (previous.position === Number.parseFloat(node.style[axis]) && (isSash || previous.size === Number.parseFloat(node.style[extent]))) {
 				continue;
 			}
 			const from = { [axis]: `${previous.position}px` };
@@ -482,7 +461,11 @@ export class SplitView extends Disposable {
 			// Native pending animations share their first frame. Backdating to the document clock
 			// lets synchronous content work consume the opening frames before anything is painted.
 			// A short ease-out also avoids concentrating a large pane displacement in its middle frames.
-			const animation = animateElement(node, [from, to], { duration: 150, easing: 'ease-out', fill: 'none' });
+			const animation = animateElement(node, [from, to], {
+				duration: 150,
+				easing: 'ease-out',
+				fill: 'none',
+			});
 			if (animation) {
 				this.geometryAnimations.push(animation);
 			}
@@ -511,13 +494,7 @@ export class SplitView extends Disposable {
 	}
 
 	private addSash(boundaryIndex: number): void {
-		const sash = this.sashes.add(
-			new Sash(
-				this.element,
-				this.orientation === 'horizontal' ? 'vertical' : 'horizontal',
-				this._sashPresentation,
-			),
-		);
+		const sash = this.sashes.add(new Sash(this.element, this.orientation === 'horizontal' ? 'vertical' : 'horizontal', this._sashPresentation));
 		sash.orthogonalStartSash = this._orthogonalStartSash;
 		sash.orthogonalEndSash = this._orthogonalEndSash;
 		this.sashItems.push({ sash, boundaryIndex });
@@ -554,11 +531,7 @@ export class SplitView extends Disposable {
 		this.element.insertBefore(sash.element, this.sashItems[index + 1]?.sash.element ?? null);
 	}
 
-	private resizeAtBoundary(
-		boundaryIndex: number,
-		snapshot: readonly SplitViewResizeItem[],
-		event: SashDragEvent,
-	): void {
+	private resizeAtBoundary(boundaryIndex: number, snapshot: readonly SplitViewResizeItem[], event: SashDragEvent): void {
 		const resizedItems = solveSashResize(snapshot, {
 			boundaryIndex,
 			delta: event.delta,
@@ -604,11 +577,7 @@ export class SplitView extends Disposable {
 	private setItemVisible(item: ViewItem, visible: boolean, visibleSize?: number, fit = true): void {
 		if (visible) {
 			item.visible = true;
-			item.size = clamp(
-				visibleSize ?? item.cachedVisibleSize ?? item.view.minimumSize,
-				item.view.minimumSize,
-				item.view.maximumSize,
-			);
+			item.size = clamp(visibleSize ?? item.cachedVisibleSize ?? item.view.minimumSize, item.view.minimumSize, item.view.maximumSize);
 			item.cachedVisibleSize = undefined;
 			item.container.hidden = false;
 			item.view.setVisible?.(true);
@@ -635,12 +604,8 @@ export class SplitView extends Disposable {
 	}
 
 	private canHaveSashAtBoundary(boundaryIndex: number): boolean {
-		const canResize = (item: ViewItem) =>
-			isResizable(item) || item.view.snap === true || item.view.onDidChange !== undefined;
-		return (
-			this.items.slice(0, boundaryIndex + 1).some(canResize) &&
-			this.items.slice(boundaryIndex + 1).some(canResize)
-		);
+		const canResize = (item: ViewItem) => isResizable(item) || item.view.snap === true || item.view.onDidChange !== undefined;
+		return this.items.slice(0, boundaryIndex + 1).some(canResize) && this.items.slice(boundaryIndex + 1).some(canResize);
 	}
 
 	private positionSashes(): void {
@@ -665,10 +630,7 @@ export class SplitView extends Disposable {
 			const next = this.items[previousIndex + 1];
 			if (previous && next && previous.visible && next.visible) {
 				sash.element.setAttribute('aria-valuemin', String(previous.view.minimumSize));
-				sash.element.setAttribute(
-					'aria-valuemax',
-					String(Math.min(previous.view.maximumSize, previous.size + next.size - next.view.minimumSize)),
-				);
+				sash.element.setAttribute('aria-valuemax', String(Math.min(previous.view.maximumSize, previous.size + next.size - next.view.minimumSize)));
 				sash.element.setAttribute('aria-valuenow', String(previous.size));
 			} else {
 				sash.element.removeAttribute('aria-valuemin');
@@ -704,9 +666,7 @@ export class SplitView extends Disposable {
 }
 
 function distributeDelta(items: readonly ViewItem[], delta: number): number {
-	let candidates = items.filter(item =>
-		delta > 0 ? item.size < item.view.maximumSize : item.size > item.view.minimumSize,
-	);
+	let candidates = items.filter(item => (delta > 0 ? item.size < item.view.maximumSize : item.size > item.view.minimumSize));
 	while (candidates.length > 0 && Math.abs(delta) > 0.001) {
 		const share = delta / candidates.length;
 		let applied = 0;
@@ -717,9 +677,7 @@ function distributeDelta(items: readonly ViewItem[], delta: number): number {
 		}
 		if (Math.abs(applied) < 0.001) break;
 		delta -= applied;
-		candidates = candidates.filter(item =>
-			delta > 0 ? item.size < item.view.maximumSize : item.size > item.view.minimumSize,
-		);
+		candidates = candidates.filter(item => (delta > 0 ? item.size < item.view.maximumSize : item.size > item.view.minimumSize));
 	}
 	return delta;
 }
@@ -758,10 +716,7 @@ function assertNonNegativeFinite(value: number, name: string): void {
 	}
 }
 
-function solveSashResize(
-	items: readonly SplitViewResizeItem[],
-	options: SplitViewResizeOptions,
-): readonly SplitViewResizeItem[] {
+function solveSashResize(items: readonly SplitViewResizeItem[], options: SplitViewResizeOptions): readonly SplitViewResizeItem[] {
 	if (options.altKey && options.input === 'pointer') {
 		return solveSymmetricResize(items, options.boundaryIndex, options.delta);
 	}
@@ -776,26 +731,14 @@ function solveSashResize(
 		const snapBeforeIndex = findFirstSnapIndex(result, beforeIndexes);
 		const snapAfterIndex = findFirstSnapIndex(result, afterIndexes);
 		const snapBeforeBlocked =
-			snapBeforeIndex !== undefined &&
-			(toggledSnapIndexes.has(snapBeforeIndex) ||
-				(!result[snapBeforeIndex]!.visible && snapBeforeIndex === 0 && !options.startSnappingEnabled));
+			snapBeforeIndex !== undefined && (toggledSnapIndexes.has(snapBeforeIndex) || (!result[snapBeforeIndex]!.visible && snapBeforeIndex === 0 && !options.startSnappingEnabled));
 		const snapAfterBlocked =
-			snapAfterIndex !== undefined &&
-			(toggledSnapIndexes.has(snapAfterIndex) ||
-				(!result[snapAfterIndex]!.visible &&
-					snapAfterIndex === result.length - 1 &&
-					!options.endSnappingEnabled));
+			snapAfterIndex !== undefined && (toggledSnapIndexes.has(snapAfterIndex) || (!result[snapAfterIndex]!.visible && snapAfterIndex === result.length - 1 && !options.endSnappingEnabled));
 		const snapBefore = snapBeforeBlocked ? undefined : snapBeforeIndex;
 		const snapAfter = snapAfterBlocked ? undefined : snapAfterIndex;
 		const snappedIndex = findSnapCandidate(result, options, minimumDelta, maximumDelta, snapBefore, snapAfter);
 		if (snappedIndex === undefined) {
-			applyResize(
-				result,
-				originalSizes,
-				beforeIndexes,
-				afterIndexes,
-				clamp(options.delta, minimumDelta, maximumDelta),
-			);
+			applyResize(result, originalSizes, beforeIndexes, afterIndexes, clamp(options.delta, minimumDelta, maximumDelta));
 			return result;
 		}
 		const item = result[snappedIndex]!;
@@ -810,11 +753,7 @@ function solveSashResize(
 	}
 }
 
-function solveSymmetricResize(
-	items: readonly SplitViewResizeItem[],
-	boundaryIndex: number,
-	requestedDelta: number,
-): readonly SplitViewResizeItem[] {
+function solveSymmetricResize(items: readonly SplitViewResizeItem[], boundaryIndex: number, requestedDelta: number): readonly SplitViewResizeItem[] {
 	const oppositeBoundaryIndex = boundaryIndex === items.length - 2 ? boundaryIndex - 1 : boundaryIndex + 1;
 	if (oppositeBoundaryIndex < 0 || oppositeBoundaryIndex >= items.length - 1) {
 		return solveWithoutSnapping(items, boundaryIndex, requestedDelta);
@@ -825,12 +764,8 @@ function solveSymmetricResize(
 	const firstRange = sashRange(items, boundaryIndex);
 	const oppositeRange = sashRange(items, oppositeBoundaryIndex);
 	const growsWithDelta = targetIndex === boundaryIndex;
-	const targetMinimumDelta = growsWithDelta
-		? (target.minimumSize - target.size) / 2
-		: (target.size - target.maximumSize) / 2;
-	const targetMaximumDelta = growsWithDelta
-		? (target.maximumSize - target.size) / 2
-		: (target.size - target.minimumSize) / 2;
+	const targetMinimumDelta = growsWithDelta ? (target.minimumSize - target.size) / 2 : (target.size - target.maximumSize) / 2;
+	const targetMaximumDelta = growsWithDelta ? (target.maximumSize - target.size) / 2 : (target.size - target.minimumSize) / 2;
 	const minimumDelta = Math.max(firstRange.minimumDelta, -oppositeRange.maximumDelta, targetMinimumDelta);
 	const maximumDelta = Math.min(firstRange.maximumDelta, -oppositeRange.minimumDelta, targetMaximumDelta);
 	if (minimumDelta > maximumDelta) return items.map(item => ({ ...item }));
@@ -841,21 +776,14 @@ function solveSymmetricResize(
 	return result;
 }
 
-function solveWithoutSnapping(
-	items: readonly SplitViewResizeItem[],
-	boundaryIndex: number,
-	requestedDelta: number,
-): readonly SplitViewResizeItem[] {
+function solveWithoutSnapping(items: readonly SplitViewResizeItem[], boundaryIndex: number, requestedDelta: number): readonly SplitViewResizeItem[] {
 	const result = items.map(item => ({ ...item }));
 	const range = sashRange(result, boundaryIndex);
 	applyResizeAtBoundary(result, boundaryIndex, clamp(requestedDelta, range.minimumDelta, range.maximumDelta));
 	return result;
 }
 
-function sashRange(
-	items: readonly SplitViewResizeItem[],
-	boundaryIndex: number,
-): { readonly minimumDelta: number; readonly maximumDelta: number } {
+function sashRange(items: readonly SplitViewResizeItem[], boundaryIndex: number): { readonly minimumDelta: number; readonly maximumDelta: number } {
 	const sizes = items.map(item => item.size);
 	return resizeLimits(items, sizes, indexesBefore(boundaryIndex), indexesAfter(boundaryIndex, items.length));
 }
@@ -865,12 +793,7 @@ function applyResizeAtBoundary(items: SplitViewResizeItem[], boundaryIndex: numb
 	applyResize(items, sizes, indexesBefore(boundaryIndex), indexesAfter(boundaryIndex, items.length), delta);
 }
 
-function getSashState(
-	items: readonly SplitViewResizeItem[],
-	boundaryIndex: number,
-	startSnappingEnabled: boolean,
-	endSnappingEnabled: boolean,
-): SashState {
+function getSashState(items: readonly SplitViewResizeItem[], boundaryIndex: number, startSnappingEnabled: boolean, endSnappingEnabled: boolean): SashState {
 	const adjacentBefore = items[boundaryIndex];
 	const adjacentAfter = items[boundaryIndex + 1];
 	if (!adjacentBefore || !adjacentAfter || (!adjacentBefore.visible && !adjacentAfter.visible)) {
@@ -892,20 +815,10 @@ function getSashState(
 	const snapAfter = findFirstSnapIndex(items, afterIndexes);
 	const position = items.slice(0, boundaryIndex + 1).reduce((total, item) => total + item.size, 0);
 	const contentSize = items.reduce((total, item) => total + item.size, 0);
-	if (
-		snapBefore !== undefined &&
-		!items[snapBefore]!.visible &&
-		collapsesAfter &&
-		(position > 0 || startSnappingEnabled)
-	) {
+	if (snapBefore !== undefined && !items[snapBefore]!.visible && collapsesAfter && (position > 0 || startSnappingEnabled)) {
 		return SashState.AtMinimum;
 	}
-	if (
-		snapAfter !== undefined &&
-		!items[snapAfter]!.visible &&
-		collapsesBefore &&
-		(position < contentSize || endSnappingEnabled)
-	) {
+	if (snapAfter !== undefined && !items[snapAfter]!.visible && collapsesBefore && (position < contentSize || endSnappingEnabled)) {
 		return SashState.AtMaximum;
 	}
 	return SashState.Disabled;
@@ -935,23 +848,15 @@ function findSnapCandidate(
 	if (beforeIndex !== undefined) {
 		const item = items[beforeIndex]!;
 		const threshold = Math.floor(item.minimumSize / 2);
-		const crossesThreshold = item.visible
-			? options.delta < minimumDelta - threshold
-			: options.delta >= minimumDelta + threshold;
-		const keyboardCrossesEdge =
-			options.input === 'keyboard' &&
-			(item.visible ? options.delta < 0 && item.size <= item.minimumSize : options.delta > 0);
+		const crossesThreshold = item.visible ? options.delta < minimumDelta - threshold : options.delta >= minimumDelta + threshold;
+		const keyboardCrossesEdge = options.input === 'keyboard' && (item.visible ? options.delta < 0 && item.size <= item.minimumSize : options.delta > 0);
 		if (crossesThreshold || keyboardCrossesEdge) return beforeIndex;
 	}
 	if (afterIndex !== undefined) {
 		const item = items[afterIndex]!;
 		const threshold = Math.floor(item.minimumSize / 2);
-		const crossesThreshold = item.visible
-			? options.delta >= maximumDelta + threshold
-			: options.delta < maximumDelta - threshold;
-		const keyboardCrossesEdge =
-			options.input === 'keyboard' &&
-			(item.visible ? options.delta > 0 && item.size <= item.minimumSize : options.delta < 0);
+		const crossesThreshold = item.visible ? options.delta >= maximumDelta + threshold : options.delta < maximumDelta - threshold;
+		const keyboardCrossesEdge = options.input === 'keyboard' && (item.visible ? options.delta > 0 && item.size <= item.minimumSize : options.delta < 0);
 		if (crossesThreshold || keyboardCrossesEdge) return afterIndex;
 	}
 	return undefined;
@@ -963,32 +868,17 @@ function resizeLimits(
 	beforeIndexes: readonly number[],
 	afterIndexes: readonly number[],
 ): { readonly minimumDelta: number; readonly maximumDelta: number } {
-	const minimumBefore = beforeIndexes.reduce(
-		(total, index) => total + effectiveMinimum(items[index]!) - originalSizes[index]!,
-		0,
-	);
-	const maximumBefore = beforeIndexes.reduce(
-		(total, index) => total + items[index]!.maximumSize - originalSizes[index]!,
-		0,
-	);
-	const maximumAfter = afterIndexes.reduce(
-		(total, index) => total + originalSizes[index]! - effectiveMinimum(items[index]!),
-		0,
-	);
-	const minimumAfter = afterIndexes.reduce(
-		(total, index) => total + originalSizes[index]! - items[index]!.maximumSize,
-		0,
-	);
-	return { minimumDelta: Math.max(minimumBefore, minimumAfter), maximumDelta: Math.min(maximumBefore, maximumAfter) };
+	const minimumBefore = beforeIndexes.reduce((total, index) => total + effectiveMinimum(items[index]!) - originalSizes[index]!, 0);
+	const maximumBefore = beforeIndexes.reduce((total, index) => total + items[index]!.maximumSize - originalSizes[index]!, 0);
+	const maximumAfter = afterIndexes.reduce((total, index) => total + originalSizes[index]! - effectiveMinimum(items[index]!), 0);
+	const minimumAfter = afterIndexes.reduce((total, index) => total + originalSizes[index]! - items[index]!.maximumSize, 0);
+	return {
+		minimumDelta: Math.max(minimumBefore, minimumAfter),
+		maximumDelta: Math.min(maximumBefore, maximumAfter),
+	};
 }
 
-function applyResize(
-	items: SplitViewResizeItem[],
-	originalSizes: readonly number[],
-	beforeIndexes: readonly number[],
-	afterIndexes: readonly number[],
-	delta: number,
-): void {
+function applyResize(items: SplitViewResizeItem[], originalSizes: readonly number[], beforeIndexes: readonly number[], afterIndexes: readonly number[], delta: number): void {
 	let remaining = delta;
 	for (const index of beforeIndexes) {
 		const item = items[index]!;
@@ -1005,17 +895,8 @@ function applyResize(
 	}
 }
 
-function hasCapacity(
-	items: readonly SplitViewResizeItem[],
-	start: number,
-	end: number,
-	direction: 'collapse' | 'expand',
-): boolean {
-	return items
-		.slice(start, end)
-		.some(item =>
-			direction === 'collapse' ? item.size > effectiveMinimum(item) : effectiveMaximum(item) > item.size,
-		);
+function hasCapacity(items: readonly SplitViewResizeItem[], start: number, end: number, direction: 'collapse' | 'expand'): boolean {
+	return items.slice(start, end).some(item => (direction === 'collapse' ? item.size > effectiveMinimum(item) : effectiveMaximum(item) > item.size));
 }
 
 function effectiveMinimum(item: SplitViewResizeItem): number {

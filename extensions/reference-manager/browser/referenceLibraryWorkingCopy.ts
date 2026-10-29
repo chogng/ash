@@ -1,27 +1,12 @@
-import {
-	Disposable,
-	MutableDisposable,
-	toDisposable,
-	type IDisposable,
-} from '../../../src/ash/base/common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { Emitter } from '../../../src/ash/base/common/event.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
-import {
-	IWorkingCopyService,
-	type IWorkingCopy,
-} from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
+import { IWorkingCopyService, type IWorkingCopy } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
 import type { IResourceEditorInput } from '../../../src/ash/workbench/common/editor.js';
 import { localize } from '../../../src/ash/nls.js';
-import {
-	emptyLibrary,
-	importRecords,
-	LIBRARY_CONTENT_TYPE,
-	parseLibrary,
-	serializeLibrary,
-	type ReferenceLibrary,
-} from '../common/library.js';
+import { emptyLibrary, importRecords, LIBRARY_CONTENT_TYPE, parseLibrary, serializeLibrary, type ReferenceLibrary } from '../common/library.js';
 import { parseRis } from '../common/ris.js';
 
 /** One window-local authoritative working copy per resource; disk revisions coordinate other windows. */
@@ -95,10 +80,7 @@ export class ReferenceLibraryWorkingCopy extends Disposable implements IWorkingC
 			this.changed.fire();
 			return;
 		}
-		const content =
-			input.initialText === undefined
-				? await this.files.readFile(input.resource)
-				: { content: input.initialText, revision: undefined };
+		const content = input.initialText === undefined ? await this.files.readFile(input.resource) : { content: input.initialText, revision: undefined };
 		this.lifetime.signal.throwIfAborted();
 		this.providerSignal.throwIfAborted();
 		signal?.throwIfAborted();
@@ -106,9 +88,7 @@ export class ReferenceLibraryWorkingCopy extends Disposable implements IWorkingC
 			this.library = importRecords(emptyLibrary(), parseRis(content.content)).library;
 			this.baseline = '';
 		} else {
-			this.library = content.content.trim()
-				? parseLibrary(content.content.replace(/^\uFEFF/u, ''))
-				: emptyLibrary();
+			this.library = content.content.trim() ? parseLibrary(content.content.replace(/^\uFEFF/u, '')) : emptyLibrary();
 			this.target = input.resource;
 			this.revision = content.revision;
 			this.baseline = this.backup();
@@ -156,9 +136,7 @@ export class ReferenceLibraryWorkingCopy extends Disposable implements IWorkingC
 		if (!this.target) {
 			const destination = await this.dialogs.showSaveDialog({
 				title: localize('references.saveLibrary', 'Save reference library'),
-				filters: [
-					{ name: localize('references.libraryFiles', 'Reference libraries'), extensions: ['ash-library'] },
-				],
+				filters: [{ name: localize('references.libraryFiles', 'Reference libraries'), extensions: ['ash-library'] }],
 			});
 			if (destination) await this.saveAs(destination, signal);
 			return;
@@ -196,8 +174,7 @@ export class ReferenceLibraryWorkingCopy extends Disposable implements IWorkingC
 	async saveAs(resource: URI, signal: AbortSignal): Promise<void> {
 		await this.ready;
 		this.assertWritable();
-		if (!/\.ash-library$/iu.test(resource.path))
-			throw new Error(localize('references.extension', 'Choose a file ending in .ash-library.'));
+		if (!/\.ash-library$/iu.test(resource.path)) throw new Error(localize('references.extension', 'Choose a file ending in .ash-library.'));
 		while (this.saving) await this.saving;
 		this.assertWritable();
 		const content = this.backup();
@@ -205,11 +182,7 @@ export class ReferenceLibraryWorkingCopy extends Disposable implements IWorkingC
 		lifetime.throwIfAborted();
 		this.saving = (async () => {
 			try {
-				const result = await this.files.writeFile(
-					{ resource, content },
-					{ create: true, overwrite: false },
-					lifetime,
-				);
+				const result = await this.files.writeFile({ resource, content }, { create: true, overwrite: false }, lifetime);
 				lifetime.throwIfAborted();
 				this.baseline = content;
 				this.changed.fire();
@@ -245,10 +218,7 @@ export class ReferenceLibraryWorkingCopy extends Disposable implements IWorkingC
 		await this.saving;
 	}
 	private assertWritable(): void {
-		if (this.isDisposed || this.readOnly)
-			throw new Error(
-				localize('references.readOnly', 'This library is read-only or its extension is unavailable.'),
-			);
+		if (this.isDisposed || this.readOnly) throw new Error(localize('references.readOnly', 'This library is read-only or its extension is unavailable.'));
 	}
 	override dispose(): void {
 		this.lifetime.abort();

@@ -19,12 +19,7 @@ import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type IViewModel } from '../../../common/viewModel.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { isFirefox } from '../../../../base/browser/browser.js';
-import {
-	createClipboardCopyEvent,
-	createClipboardPasteEvent,
-	type IClipboardCopyEvent,
-	type IClipboardPasteEvent,
-} from './clipboardUtils.js';
+import { createClipboardCopyEvent, createClipboardPasteEvent, type IClipboardCopyEvent, type IClipboardPasteEvent } from './clipboardUtils.js';
 
 /** The state that the browser editing surface mirrors from the common editor. */
 export interface EditContextState {
@@ -204,28 +199,16 @@ export abstract class AbstractEditContext extends ViewPart {
 		if (this.compositionControllerValue) throw new ReferenceError('Edit context controller is already initialized');
 		this.viewport = options.viewport;
 		this.viewControllerValue = options.viewController;
-		const compositionController = this._register(
-			new CompositionController(
-				this,
-				options.viewport,
-				this._context.viewModel,
-				options.viewController,
-				this.typeEmitter.event,
-			),
-		);
+		const compositionController = this._register(new CompositionController(this, options.viewport, this._context.viewModel, options.viewController, this.typeEmitter.event));
 		this.compositionControllerValue = compositionController;
 		const viewController = options.viewController;
-		this._register(
-			this.onDidBeforeInput(event => this.routeBeforeInput(event, viewController, compositionController)),
-		);
+		this._register(this.onDidBeforeInput(event => this.routeBeforeInput(event, viewController, compositionController)));
 		this._register(
 			this.onDidInput(event => {
 				if (!event.isComposing || !compositionController.composing) this.clear();
 			}),
 		);
-		this._register(
-			this.onDidTextUpdate(update => this.routeTextUpdate(update, viewController, compositionController)),
-		);
+		this._register(this.onDidTextUpdate(update => this.routeTextUpdate(update, viewController, compositionController)));
 		this._register(this.onKeyDown(event => this.routeKeydown(event, viewController)));
 		this._register(this.onKeyUp(event => viewController.emitKeyUp(event)));
 		return compositionController;
@@ -260,11 +243,7 @@ export abstract class AbstractEditContext extends ViewPart {
 		return event;
 	}
 
-	private routeBeforeInput(
-		event: InputEvent,
-		viewController: EditContextViewController,
-		compositionController: CompositionController,
-	): void {
+	private routeBeforeInput(event: InputEvent, viewController: EditContextViewController, compositionController: CompositionController): void {
 		if (event.defaultPrevented || (event.isComposing && compositionController.composing)) return;
 		if (!this.isFocused()) {
 			event.preventDefault();
@@ -328,11 +307,7 @@ export abstract class AbstractEditContext extends ViewPart {
 		}
 	}
 
-	private routeTextUpdate(
-		update: EditContextTextUpdate,
-		viewController: EditContextViewController,
-		compositionController: CompositionController,
-	): void {
+	private routeTextUpdate(update: EditContextTextUpdate, viewController: EditContextViewController, compositionController: CompositionController): void {
 		if (compositionController.composing) return;
 		if (update.updateRangeStart === update.updateRangeEnd && update.text.length === 0) return;
 		const event = makeTextUpdateEvent(update);
@@ -361,27 +336,12 @@ export abstract class AbstractEditContext extends ViewPart {
 				return;
 			}
 		}
-		if (
-			!event.isComposing &&
-			event.key === 'Insert' &&
-			!event.shiftKey &&
-			!event.ctrlKey &&
-			!event.altKey &&
-			!event.metaKey
-		) {
+		if (!event.isComposing && event.key === 'Insert' && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
 			event.stop();
 			viewController.toggleOvertype();
 			return;
 		}
-		if (
-			event.isComposing ||
-			event.key !== 'Tab' ||
-			event.shiftKey ||
-			event.ctrlKey ||
-			event.altKey ||
-			event.metaKey
-		)
-			return;
+		if (event.isComposing || event.key !== 'Tab' || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return;
 		if (this._context.configuration.options.get(EditorOption.tabFocusMode)) {
 			return;
 		}
@@ -509,13 +469,7 @@ export class CompositionController extends Disposable {
 
 	private handleCompositionStart(): void {
 		if (this.activeComposition) return;
-		if (
-			!this.input.isFocused() ||
-			!IME.enabled ||
-			this.viewport.cursorConfig.readOnly ||
-			this.viewModel.getSelections().length !== 1
-		)
-			return;
+		if (!this.input.isFocused() || !IME.enabled || this.viewport.cursorConfig.readOnly || this.viewModel.getSelections().length !== 1) return;
 		this.input.prepareComposition();
 		const startPosition = this.viewModel.getSelections()[0]!.getStartPosition();
 		this.viewController.compositionStart();
@@ -548,34 +502,16 @@ export class CompositionController extends Disposable {
 		const active = this.activeComposition;
 		if (!active) {
 			if (event.replacePrevCharCnt || event.replaceNextCharCnt || event.positionDelta) {
-				this.viewController.compositionType(
-					event.text,
-					event.replacePrevCharCnt,
-					event.replaceNextCharCnt,
-					event.positionDelta,
-				);
+				this.viewController.compositionType(event.text, event.replacePrevCharCnt, event.replaceNextCharCnt, event.positionDelta);
 			} else {
 				this.viewController.type(event.text);
 			}
 			return;
 		}
-		this.viewController.compositionType(
-			event.text,
-			event.replacePrevCharCnt,
-			event.replaceNextCharCnt,
-			event.positionDelta,
-		);
+		this.viewController.compositionType(event.text, event.replacePrevCharCnt, event.replaceNextCharCnt, event.positionDelta);
 		if (this.activeComposition !== active) return;
-		active.length = Math.max(
-			0,
-			active.length - event.replacePrevCharCnt - event.replaceNextCharCnt + event.text.length,
-		);
-		this.setCompositionRange(
-			Range.fromPositions(
-				this.viewport.textModel.positionAt(active.startOffset),
-				this.viewport.textModel.positionAt(active.startOffset + active.length),
-			),
-		);
+		active.length = Math.max(0, active.length - event.replacePrevCharCnt - event.replaceNextCharCnt + event.text.length);
+		this.setCompositionRange(Range.fromPositions(this.viewport.textModel.positionAt(active.startOffset), this.viewport.textModel.positionAt(active.startOffset + active.length)));
 		this.viewport.revealPosition(this.viewModel.getSelections()[0]!.getPosition());
 		this.positionInputAtPrimary();
 	}
@@ -606,9 +542,7 @@ export class CompositionController extends Disposable {
 	}
 
 	private clearPresentation(): boolean {
-		const changed =
-			this.viewport.domNode.domNode.classList.contains('composing') ||
-			this.input.domNode.domNode.classList.contains('ime-input');
+		const changed = this.viewport.domNode.domNode.classList.contains('composing') || this.input.domNode.domNode.classList.contains('ime-input');
 		this.viewport.domNode.domNode.classList.remove('composing');
 		this.input.clearComposition();
 		this.setCompositionRange(undefined);

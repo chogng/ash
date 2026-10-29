@@ -57,11 +57,7 @@ export interface IGuessedIndentation {
 }
 
 /** Infers indentation from at most the first 10,000 physical lines. */
-export function guessIndentation(
-	source: ITextBuffer,
-	defaultTabSize: number,
-	defaultInsertSpaces: boolean,
-): IGuessedIndentation {
+export function guessIndentation(source: ITextBuffer, defaultTabSize: number, defaultInsertSpaces: boolean): IGuessedIndentation {
 	const linesCount = Math.min(source.getLineCount(), 10_000);
 	let linesIndentedWithTabsCount = 0;
 	let linesIndentedWithSpacesCount = 0;
@@ -96,11 +92,7 @@ export function guessIndentation(
 		else if (currentLineSpacesCount > 1) linesIndentedWithSpacesCount++;
 
 		spacesDiff(previousLineText, previousLineIndentation, currentLineText, currentLineIndentation, temporaryResult);
-		if (
-			temporaryResult.looksLikeAlignment &&
-			!(defaultInsertSpaces && defaultTabSize === temporaryResult.spacesDiff)
-		)
-			continue;
+		if (temporaryResult.looksLikeAlignment && !(defaultInsertSpaces && defaultTabSize === temporaryResult.spacesDiff)) continue;
 
 		if (temporaryResult.spacesDiff <= maximumTabSizeGuess) {
 			spacesDiffCount[temporaryResult.spacesDiff]++;
@@ -124,13 +116,7 @@ export function guessIndentation(
 				tabSize = possibleTabSize;
 			}
 		}
-		if (
-			tabSize === 4 &&
-			spacesDiffCount[4] > 0 &&
-			spacesDiffCount[2] > 0 &&
-			spacesDiffCount[2] >= (spacesDiffCount[4] * 2) / 3
-		)
-			tabSize = 2;
+		if (tabSize === 4 && spacesDiffCount[4] > 0 && spacesDiffCount[2] > 0 && spacesDiffCount[2] >= (spacesDiffCount[4] * 2) / 3) tabSize = 2;
 	}
 
 	return { insertSpaces, tabSize };

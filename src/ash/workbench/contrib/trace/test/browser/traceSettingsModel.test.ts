@@ -5,11 +5,7 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import {
-	ITraceSettingsService,
-	type TraceSettings,
-	type TraceSettingsSnapshot,
-} from '../../../../../platform/trace/common/traceSettingsService.js';
+import { ITraceSettingsService, type TraceSettings, type TraceSettingsSnapshot } from '../../../../../platform/trace/common/traceSettingsService.js';
 import { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
 import { TraceSettingsModel } from '../../browser/traceSettingsModel.js';
 
@@ -84,9 +80,7 @@ suite('Execution trace settings model', () => {
 		assert.deepEqual(updates, [], 'A missing directory must not be persisted');
 		await run(model, 'choose');
 		await run(model, 'save');
-		assert.deepEqual(updates, [
-			{ settings: { enabled: true, directory: URI.file('/recordings').fsPath }, revision: 7 },
-		]);
+		assert.deepEqual(updates, [{ settings: { enabled: true, directory: URI.file('/recordings').fsPath }, revision: 7 }]);
 		assert.match(JSON.stringify(field(model, 'current')), /recording is off/);
 		assert.match(JSON.stringify(field(model, 'application')), /require restarting/);
 		snapshot = { ...snapshot, recording: { type: 'enabled', directory: URI.file('/recordings').fsPath } };

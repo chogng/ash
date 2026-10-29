@@ -27,17 +27,11 @@ export class ResourceCommands {
 	public get value(): DesignResources {
 		return this.model.value.resources ?? emptyDesignResources;
 	}
-	private commit(
-		resources: DesignResources,
-		edit: (shape: DesignShape) => DesignShape = shape => shape,
-		assets = this.model.value.assets,
-	): void {
+	private commit(resources: DesignResources, edit: (shape: DesignShape) => DesignShape = shape => shape, assets = this.model.value.assets): void {
 		validateDesignResources(resources);
 		const visit = (shape: DesignShape): DesignShape => {
 			const next = edit(shape);
-			return next.kind === 'frame' || next.kind === 'group'
-				? { ...next, children: next.children.map(visit) }
-				: next;
+			return next.kind === 'frame' || next.kind === 'group' ? { ...next, children: next.children.map(visit) } : next;
 		};
 		this.model.applyEdit(this.model.value.shapes.map(visit), assets, resources);
 	}
@@ -61,15 +55,11 @@ export class ResourceCommands {
 	public renameCollection(id: string, name: string): void {
 		this.commit({
 			...this.value,
-			collections: this.value.collections.map(collection =>
-				collection.id === id ? { ...collection, name } : collection,
-			),
+			collections: this.value.collections.map(collection => (collection.id === id ? { ...collection, name } : collection)),
 		});
 	}
 	public deleteCollection(id: string): void {
-		const removed = new Set(
-			this.value.variables.filter(variable => variable.collectionId === id).map(variable => variable.id),
-		);
+		const removed = new Set(this.value.variables.filter(variable => variable.collectionId === id).map(variable => variable.id));
 		this.removeVariables(
 			removed,
 			{
@@ -88,13 +78,9 @@ export class ResourceCommands {
 		const id = generateUuid();
 		this.commit({
 			...this.value,
-			collections: this.value.collections.map(current =>
-				current.id === collectionId ? { ...current, modes: [...current.modes, { id, name }] } : current,
-			),
+			collections: this.value.collections.map(current => (current.id === collectionId ? { ...current, modes: [...current.modes, { id, name }] } : current)),
 			variables: this.value.variables.map(variable =>
-				variable.collectionId === collectionId
-					? { ...variable, values: { ...variable.values, [id]: variable.values[collection.defaultMode] } }
-					: variable,
+				variable.collectionId === collectionId ? { ...variable, values: { ...variable.values, [id]: variable.values[collection.defaultMode] } } : variable,
 			),
 		});
 		return id;
@@ -115,11 +101,7 @@ export class ResourceCommands {
 	public setDefaultMode(collectionId: string, id: string): void {
 		this.commit({
 			...this.value,
-			collections: this.value.collections.map(collection =>
-				collection.id === collectionId && collection.modes.some(mode => mode.id === id)
-					? { ...collection, defaultMode: id }
-					: collection,
-			),
+			collections: this.value.collections.map(collection => (collection.id === collectionId && collection.modes.some(mode => mode.id === id) ? { ...collection, defaultMode: id } : collection)),
 		});
 	}
 	public deleteMode(collectionId: string, id: string): void {
@@ -131,8 +113,7 @@ export class ResourceCommands {
 		this.commit(
 			{
 				...this.value,
-				modes:
-					this.value.modes?.[collectionId] === id ? omit(this.value.modes, collectionId) : this.value.modes,
+				modes: this.value.modes?.[collectionId] === id ? omit(this.value.modes, collectionId) : this.value.modes,
 				collections: this.value.collections.map(current =>
 					current.id === collectionId
 						? {
@@ -142,33 +123,21 @@ export class ResourceCommands {
 							}
 						: current,
 				),
-				variables: this.value.variables.map(variable =>
-					variable.collectionId === collectionId
-						? { ...variable, values: omit(variable.values, id) }
-						: variable,
-				),
+				variables: this.value.variables.map(variable => (variable.collectionId === collectionId ? { ...variable, values: omit(variable.values, id) } : variable)),
 			},
-			shape =>
-				shape.variableModes?.[collectionId] === id
-					? { ...shape, variableModes: omit(shape.variableModes, collectionId) }
-					: shape,
+			shape => (shape.variableModes?.[collectionId] === id ? { ...shape, variableModes: omit(shape.variableModes, collectionId) } : shape),
 		);
 	}
 	public setMode(ids: ReadonlySet<string>, collectionId: string, modeId: string): void {
-		const collection = getDesignResourceCatalog(this.value).collections.find(
-			collection => collection.id === collectionId,
-		);
+		const collection = getDesignResourceCatalog(this.value).collections.find(collection => collection.id === collectionId);
 		if (!collection || (modeId && !collection.modes.some(mode => mode.id === modeId))) {
 			return;
 		}
-		const update = (modes: Readonly<Record<string, string>> | undefined): Record<string, string> =>
-			modeId ? { ...modes, [collectionId]: modeId } : omit(modes, collectionId);
+		const update = (modes: Readonly<Record<string, string>> | undefined): Record<string, string> => (modeId ? { ...modes, [collectionId]: modeId } : omit(modes, collectionId));
 		if (!ids.size) {
 			this.commit({ ...this.value, modes: update(this.value.modes) });
 		} else {
-			this.commit(this.value, shape =>
-				ids.has(shape.id) ? { ...shape, variableModes: update(shape.variableModes) } : shape,
-			);
+			this.commit(this.value, shape => (ids.has(shape.id) ? { ...shape, variableModes: update(shape.variableModes) } : shape));
 		}
 	}
 	public addVariable(collectionId: string, name: string, type: DesignVariableType): string {
@@ -202,21 +171,13 @@ export class ResourceCommands {
 	public setVariableValue(id: string, mode: string, value: DesignVariableValue): void {
 		this.commit({
 			...this.value,
-			variables: this.value.variables.map(variable =>
-				variable.id === id && Object.hasOwn(variable.values, mode)
-					? { ...variable, values: { ...variable.values, [mode]: value } }
-					: variable,
-			),
+			variables: this.value.variables.map(variable => (variable.id === id && Object.hasOwn(variable.values, mode) ? { ...variable, values: { ...variable.values, [mode]: value } } : variable)),
 		});
 	}
 	public deleteVariable(id: string): void {
 		this.removeVariables(new Set([id]), this.value);
 	}
-	private removeVariables(
-		ids: ReadonlySet<string>,
-		resources: DesignResources,
-		edit: (shape: DesignShape) => DesignShape = shape => shape,
-	): void {
+	private removeVariables(ids: ReadonlySet<string>, resources: DesignResources, edit: (shape: DesignShape) => DesignShape = shape => shape): void {
 		// Deleting a dependency also breaks aliases at applied properties. Preserve
 		// each layer's materialized value, including layers using different modes.
 		const affected = new Set(ids);
@@ -224,17 +185,13 @@ export class ResourceCommands {
 		while (changed) {
 			changed = false;
 			for (const variable of this.value.variables) {
-				if (
-					!affected.has(variable.id) &&
-					Object.values(variable.values).some(value => typeof value === 'object' && affected.has(value.alias))
-				) {
+				if (!affected.has(variable.id) && Object.values(variable.values).some(value => typeof value === 'object' && affected.has(value.alias))) {
 					affected.add(variable.id);
 					changed = true;
 				}
 			}
 		}
-		const bindings = (values: DesignShape['bindings']): DesignShape['bindings'] =>
-			Object.fromEntries(Object.entries(values ?? {}).filter(([, id]) => !affected.has(id)));
+		const bindings = (values: DesignShape['bindings']): DesignShape['bindings'] => Object.fromEntries(Object.entries(values ?? {}).filter(([, id]) => !affected.has(id)));
 		const variables: DesignVariable[] = resources.variables
 			.filter(variable => !ids.has(variable.id))
 			.map(variable => ({
@@ -246,34 +203,19 @@ export class ResourceCommands {
 							? (resolveDesignVariable(this.value, variable.id, {
 									...this.value.modes,
 									[variable.collectionId]: mode,
-								}) ??
-								(variable.type === 'number'
-									? 0
-									: variable.type === 'boolean'
-										? false
-										: variable.type === 'color'
-											? '#000000'
-											: ''))
+								}) ?? (variable.type === 'number' ? 0 : variable.type === 'boolean' ? false : variable.type === 'color' ? '#000000' : ''))
 							: value,
 					]),
 				),
 			}));
-		const affectedStyles = new Set(
-			resources.styles
-				.filter(style => Object.values(style.bindings ?? {}).some(id => affected.has(id)))
-				.map(style => style.id),
-		);
+		const affectedStyles = new Set(resources.styles.filter(style => Object.values(style.bindings ?? {}).some(id => affected.has(id))).map(style => style.id));
 		const styles = resources.styles.map(style => {
 			const values = { ...style.values };
 			for (const [property, id] of Object.entries(style.bindings ?? {})) {
 				if (affected.has(id)) {
 					const value = resolveDesignVariable(this.value, id, this.value.modes);
 					if (value !== undefined) {
-						Reflect.set(
-							values,
-							property,
-							normalizeDesignProperty(property as DesignBindableProperty, value),
-						);
+						Reflect.set(values, property, normalizeDesignProperty(property as DesignBindableProperty, value));
 					}
 				}
 			}
@@ -283,22 +225,13 @@ export class ResourceCommands {
 			edit({
 				...shape,
 				bindings: bindings(shape.bindings),
-				styleBindings: Object.fromEntries(
-					Object.entries(shape.styleBindings ?? {}).filter(([, id]) => !affectedStyles.has(id)),
-				),
+				styleBindings: Object.fromEntries(Object.entries(shape.styleBindings ?? {}).filter(([, id]) => !affectedStyles.has(id))),
 			}),
 		);
 	}
 
-	public bind(
-		ids: ReadonlySet<string>,
-		property: DesignBindableProperty,
-		variableId: string,
-		inheritStyle = false,
-	): void {
-		const variable = getDesignResourceCatalog(this.value, true).variables.find(
-			variable => variable.id === variableId,
-		);
+	public bind(ids: ReadonlySet<string>, property: DesignBindableProperty, variableId: string, inheritStyle = false): void {
+		const variable = getDesignResourceCatalog(this.value, true).variables.find(variable => variable.id === variableId);
 		if (variableId && (!variable || variable.type !== designPropertyTypes[property])) {
 			return;
 		}
@@ -329,11 +262,7 @@ export class ResourceCommands {
 				? {
 						...current,
 						styleBindings: { ...current.styleBindings, [kind]: id },
-						bindings: Object.fromEntries(
-							Object.entries(current.bindings ?? {}).filter(
-								([key]) => !(designStyleFields[kind] as readonly string[]).includes(key),
-							),
-						),
+						bindings: Object.fromEntries(Object.entries(current.bindings ?? {}).filter(([key]) => !(designStyleFields[kind] as readonly string[]).includes(key))),
 					}
 				: current,
 		);
@@ -354,9 +283,7 @@ export class ResourceCommands {
 			...style,
 			values: {
 				...defaults,
-				...Object.fromEntries(
-					fields.filter(key => Reflect.has(shape, key)).map(key => [key, Reflect.get(shape, key)]),
-				),
+				...Object.fromEntries(fields.filter(key => Reflect.has(shape, key)).map(key => [key, Reflect.get(shape, key)])),
 			},
 			bindings: Object.fromEntries(Object.entries(shape.bindings ?? {}).filter(([key]) => fields.includes(key))),
 		};
@@ -376,33 +303,22 @@ export class ResourceCommands {
 	public deleteStyle(id: string): void {
 		this.commit({ ...this.value, styles: this.value.styles.filter(style => style.id !== id) }, shape => ({
 			...shape,
-			styleBindings: Object.fromEntries(
-				Object.entries(shape.styleBindings ?? {}).filter(([, style]) => style !== id),
-			),
+			styleBindings: Object.fromEntries(Object.entries(shape.styleBindings ?? {}).filter(([, style]) => style !== id)),
 		}));
 	}
 	public applyStyle(ids: ReadonlySet<string>, kind: DesignStyleKind, id: string): void {
-		const style = getDesignResourceCatalog(this.value, true).styles.find(
-			style => style.id === id && style.kind === kind,
-		);
+		const style = getDesignResourceCatalog(this.value, true).styles.find(style => style.id === id && style.kind === kind);
 		if (id && !style) {
 			return;
 		}
 		this.commit(this.value, shape =>
-			ids.has(shape.id) &&
-			(kind !== 'text' || shape.kind === 'text') &&
-			(kind !== 'grid' || shape.kind === 'frame')
+			ids.has(shape.id) && (kind !== 'text' || shape.kind === 'text') && (kind !== 'grid' || shape.kind === 'frame')
 				? {
 						...shape,
 						styleBindings: id ? { ...shape.styleBindings, [kind]: id } : omit(shape.styleBindings, kind),
 						...(id
 							? {
-									bindings: Object.fromEntries(
-										Object.entries(shape.bindings ?? {}).filter(
-											([property]) =>
-												!(designStyleFields[kind] as readonly string[]).includes(property),
-										),
-									),
+									bindings: Object.fromEntries(Object.entries(shape.bindings ?? {}).filter(([property]) => !(designStyleFields[kind] as readonly string[]).includes(property))),
 								}
 							: {}),
 					}
@@ -417,18 +333,12 @@ export class ResourceCommands {
 	}
 	public acceptLibrary(library: DesignLibrary): void {
 		if (library.id === this.model.value.documentId || library.document.resources?.libraries.length) {
-			throw new TypeError(
-				localize('sessions.design.libraryConflict', 'This library contains conflicting resource identities.'),
-			);
+			throw new TypeError(localize('sessions.design.libraryConflict', 'This library contains conflicting resource identities.'));
 		}
 		const libraries = [...this.value.libraries.filter(current => current.id !== library.id), library];
-		const ids = [...this.model.value.shapes, ...libraries.flatMap(current => current.document.shapes)].flatMap(
-			shape => flattenDesignShapes([shape]).map(shape => shape.id),
-		);
+		const ids = [...this.model.value.shapes, ...libraries.flatMap(current => current.document.shapes)].flatMap(shape => flattenDesignShapes([shape]).map(shape => shape.id));
 		if (new Set(ids).size !== ids.length) {
-			throw new TypeError(
-				localize('sessions.design.libraryConflict', 'This library contains conflicting resource identities.'),
-			);
+			throw new TypeError(localize('sessions.design.libraryConflict', 'This library contains conflicting resource identities.'));
 		}
 		const assets = new Map(this.model.value.assets.map(asset => [asset.id, asset]));
 		for (const asset of library.document.assets) {
@@ -437,12 +347,7 @@ export class ResourceCommands {
 			for (const version of asset.versions) {
 				const previous = versions.get(version.id);
 				if (previous && JSON.stringify(previous) !== JSON.stringify(version)) {
-					throw new TypeError(
-						localize(
-							'sessions.design.libraryConflict',
-							'This library contains conflicting resource identities.',
-						),
-					);
+					throw new TypeError(localize('sessions.design.libraryConflict', 'This library contains conflicting resource identities.'));
 				}
 				versions.set(version.id, version);
 			}

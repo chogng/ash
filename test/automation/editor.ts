@@ -21,9 +21,7 @@ export class Editor {
 
 	async waitForTypeInEditor(text: string): Promise<void> {
 		if (text.includes('\n') || text.includes('\r')) {
-			throw new Error(
-				'waitForTypeInEditor accepts one line; press Enter between lines so editor indentation is applied explicitly',
-			);
+			throw new Error('waitForTypeInEditor accepts one line; press Enter between lines so editor indentation is applied explicitly');
 		}
 		await expect(this.input).toBeFocused();
 		await this.input.page().keyboard.insertText(text);
@@ -58,8 +56,8 @@ export class Editor {
 
 	private gutterAtLine(line: number): Locator {
 		// Model line numbers remain stable when folding changes the visible row order.
-		return this.element
-			.locator('.margin-view-overlays > .view-overlay-line')
-			.filter({ has: this.element.page().locator('.line-numbers', { hasText: new RegExp(`^${line}$`) }) });
+		return this.element.locator('.margin-view-overlays > .view-overlay-line').filter({
+			has: this.element.page().locator('.line-numbers', { hasText: new RegExp(`^${line}$`) }),
+		});
 	}
 }

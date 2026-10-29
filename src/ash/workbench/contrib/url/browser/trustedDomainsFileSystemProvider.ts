@@ -26,8 +26,7 @@ import { TRUSTED_DOMAINS_URI } from './trustedDomains.js';
 
 /** Exposes the service's sole JSONC source through the ordinary editor save path. */
 export class TrustedDomainsFileSystemProvider extends Disposable implements IFileSystemProvider {
-	readonly capabilities =
-		FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.PathCaseSensitive;
+	readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.PathCaseSensitive;
 	readonly onDidChangeCapabilities = Event.None;
 	private readonly changed = this._register(new Emitter<IFileChangeEvent>());
 	readonly onDidChangeFiles = this.changed.event;
@@ -38,9 +37,7 @@ export class TrustedDomainsFileSystemProvider extends Disposable implements IFil
 	) {
 		super();
 		this._register(files.registerProvider(TRUSTED_DOMAINS_URI.scheme, this));
-		this._register(
-			domains.onDidChangeTrustedDomains(() => this.changed.fire({ resources: [TRUSTED_DOMAINS_URI] })),
-		);
+		this._register(domains.onDidChangeTrustedDomains(() => this.changed.fire({ resources: [TRUSTED_DOMAINS_URI] })));
 	}
 
 	async readFile(resource: URI): Promise<IFileBytes> {
@@ -61,11 +58,9 @@ export class TrustedDomainsFileSystemProvider extends Disposable implements IFil
 
 	async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
 		this.checkResource(resource);
-		if (!options.overwrite || options.unlock || options.writeElevated)
-			throw new FileOperationNotSupportedError(resource, 'writeFile');
+		if (!options.overwrite || options.unlock || options.writeElevated) throw new FileOperationNotSupportedError(resource, 'writeFile');
 		const current = this.domains.content;
-		if (options.expectedRevision !== undefined && options.expectedRevision !== current)
-			throw new FileRevisionConflictError(resource);
+		if (options.expectedRevision !== undefined && options.expectedRevision !== current) throw new FileRevisionConflictError(resource);
 		const content = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
 		await this.domains.setTrustedDomains(content, current);
 		return { stat: this.fileStat(VSBuffer.fromString(content).byteLength), revision: content };

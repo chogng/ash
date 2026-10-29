@@ -5,17 +5,8 @@ import { LinkedList } from '../../../base/common/linkedList.js';
 import { type URI } from '../../../base/common/uri.js';
 import { type ITextResourceEditorInput } from '../../../platform/editor/common/editor.js';
 import { type ICodeEditor, type IDiffEditor } from '../editorBrowser.js';
-import {
-	isThemeColor,
-	type IDecorationRenderOptions,
-	type IThemeDecorationRenderOptions,
-} from '../../common/editorCommon.js';
-import {
-	OverviewRulerLane,
-	type IModelDecorationOptions,
-	type InjectedTextOptions,
-	type ITextModel,
-} from '../../common/model.js';
+import { isThemeColor, type IDecorationRenderOptions, type IThemeDecorationRenderOptions } from '../../common/editorCommon.js';
+import { OverviewRulerLane, type IModelDecorationOptions, type InjectedTextOptions, type ITextModel } from '../../common/model.js';
 import { colorCssVariable } from '../../../platform/theme/common/colorUtils.js';
 import { type ICodeEditorOpenHandler, type ICodeEditorService } from './codeEditorService.js';
 
@@ -101,13 +92,7 @@ export abstract class AbstractCodeEditorService extends Disposable implements IC
 
 	abstract getActiveCodeEditor(): ICodeEditor | null;
 
-	registerDecorationType(
-		description: string,
-		key: string,
-		options: IDecorationRenderOptions,
-		parentKey?: string,
-		editor?: ICodeEditor,
-	) {
+	registerDecorationType(description: string, key: string, options: IDecorationRenderOptions, parentKey?: string, editor?: ICodeEditor) {
 		const current = this.getDecoration(key);
 		if (current) {
 			current.refs++;
@@ -115,12 +100,7 @@ export abstract class AbstractCodeEditorService extends Disposable implements IC
 		}
 
 		const parent = parentKey ? this.resolveDecorationOptions(parentKey, true) : undefined;
-		this.decorations.set(
-			key,
-			new DecorationRegistration(description, key, options, parent, editor, parentKey, candidate =>
-				this.resolveDecorationOptions(candidate, false),
-			),
-		);
+		this.decorations.set(key, new DecorationRegistration(description, key, options, parent, editor, parentKey, candidate => this.resolveDecorationOptions(candidate, false)));
 		this.decorationRegisteredEmitter.fire(key);
 		return toDisposable(() => this.removeDecorationType(key));
 	}
@@ -181,11 +161,7 @@ export abstract class AbstractCodeEditorService extends Disposable implements IC
 		return this.getTransientWatcher(model.uri.toString())?.entries();
 	}
 
-	async openCodeEditor(
-		input: ITextResourceEditorInput,
-		source: ICodeEditor | null,
-		sideBySide?: boolean,
-	): Promise<ICodeEditor | null> {
+	async openCodeEditor(input: ITextResourceEditorInput, source: ICodeEditor | null, sideBySide?: boolean): Promise<ICodeEditor | null> {
 		for (const handler of this.openHandlers) {
 			const editor = await handler(input, source, sideBySide);
 			if (editor !== null) {
@@ -255,12 +231,8 @@ class DecorationRegistration extends AbstractDisposable {
 			const parent = this.resolveParent(this.parentKey);
 			options = {
 				...parent,
-				...(this.modelOptions.beforeContentClassName
-					? { beforeContentClassName: this.modelOptions.beforeContentClassName }
-					: {}),
-				...(this.modelOptions.afterContentClassName
-					? { afterContentClassName: this.modelOptions.afterContentClassName }
-					: {}),
+				...(this.modelOptions.beforeContentClassName ? { beforeContentClassName: this.modelOptions.beforeContentClassName } : {}),
+				...(this.modelOptions.afterContentClassName ? { afterContentClassName: this.modelOptions.afterContentClassName } : {}),
 			};
 		}
 		return writable ? { ...options } : options;
@@ -323,18 +295,20 @@ function createStyle(editor?: ICodeEditor): HTMLStyleElement | undefined {
 	return style;
 }
 
-function renderDecoration(
-	description: string,
-	key: string,
-	options: IDecorationRenderOptions,
-	parent: IModelDecorationOptions | undefined,
-): { options: IModelDecorationOptions; rules: string[] } {
+function renderDecoration(description: string, key: string, options: IDecorationRenderOptions, parent: IModelDecorationOptions | undefined): { options: IModelDecorationOptions; rules: string[] } {
 	const name = `ash-decoration-${safeName(key)}`;
 	const rules: string[] = [];
 	if (parent) {
 		const beforeContentClassName = renderClass(rules, `${name}-before`, options, 'content', '::before');
 		const afterContentClassName = renderClass(rules, `${name}-after`, options, 'contentAfter', '::after');
-		return { options: { description: parent.description, beforeContentClassName, afterContentClassName }, rules };
+		return {
+			options: {
+				description: parent.description,
+				beforeContentClassName,
+				afterContentClassName,
+			},
+			rules,
+		};
 	}
 
 	const modelOptions: IModelDecorationOptions = {
@@ -352,23 +326,14 @@ function renderDecoration(
 		fontStyle: options.fontStyle,
 		stickiness: options.rangeBehavior,
 		overviewRuler: options.overviewRulerColor
-			? { color: options.overviewRulerColor, position: options.overviewRulerLane ?? OverviewRulerLane.Center }
+			? {
+					color: options.overviewRulerColor,
+					position: options.overviewRulerLane ?? OverviewRulerLane.Center,
+				}
 			: undefined,
 	};
-	const before = renderInjectedText(
-		rules,
-		`${name}-before-injected`,
-		options.beforeInjectedText,
-		options.light?.beforeInjectedText,
-		options.dark?.beforeInjectedText,
-	);
-	const after = renderInjectedText(
-		rules,
-		`${name}-after-injected`,
-		options.afterInjectedText,
-		options.light?.afterInjectedText,
-		options.dark?.afterInjectedText,
-	);
+	const before = renderInjectedText(rules, `${name}-before-injected`, options.beforeInjectedText, options.light?.beforeInjectedText, options.dark?.beforeInjectedText);
+	const after = renderInjectedText(rules, `${name}-after-injected`, options.afterInjectedText, options.light?.afterInjectedText, options.dark?.afterInjectedText);
 	if (before) {
 		modelOptions.before = before;
 	}
@@ -380,25 +345,10 @@ function renderDecoration(
 
 type DecorationRuleKind = 'line' | 'inline' | 'glyph' | 'content' | 'contentAfter';
 
-function renderClass(
-	rules: string[],
-	className: string,
-	options: IDecorationRenderOptions,
-	kind: DecorationRuleKind,
-	pseudo = '',
-): string | undefined {
-	const base = decorationCss(
-		kind,
-		kind === 'contentAfter' ? options.after : kind === 'content' ? options.before : options,
-	);
-	const light = decorationCss(
-		kind,
-		kind === 'contentAfter' ? options.light?.after : kind === 'content' ? options.light?.before : options.light,
-	);
-	const dark = decorationCss(
-		kind,
-		kind === 'contentAfter' ? options.dark?.after : kind === 'content' ? options.dark?.before : options.dark,
-	);
+function renderClass(rules: string[], className: string, options: IDecorationRenderOptions, kind: DecorationRuleKind, pseudo = ''): string | undefined {
+	const base = decorationCss(kind, kind === 'contentAfter' ? options.after : kind === 'content' ? options.before : options);
+	const light = decorationCss(kind, kind === 'contentAfter' ? options.light?.after : kind === 'content' ? options.light?.before : options.light);
+	const dark = decorationCss(kind, kind === 'contentAfter' ? options.dark?.after : kind === 'content' ? options.dark?.before : options.dark);
 	if (!base && !light && !dark) {
 		return undefined;
 	}
@@ -425,7 +375,11 @@ function renderInjectedText(
 	if (!options?.contentText) {
 		return undefined;
 	}
-	const renderOptions: IDecorationRenderOptions = { ...options, light, dark };
+	const renderOptions: IDecorationRenderOptions = {
+		...options,
+		light,
+		dark,
+	};
 	const inlineClassName = renderClass(rules, className, renderOptions, 'inline');
 	return {
 		content: firstLine(options.contentText),
@@ -434,9 +388,7 @@ function renderInjectedText(
 	};
 }
 
-type DecorationCssOptions = Partial<
-	IThemeDecorationRenderOptions & import('../../common/editorCommon.js').IContentDecorationRenderOptions
->;
+type DecorationCssOptions = Partial<IThemeDecorationRenderOptions & import('../../common/editorCommon.js').IContentDecorationRenderOptions>;
 
 function decorationCss(kind: DecorationRuleKind, options: DecorationCssOptions | undefined): string {
 	if (!options) {

@@ -49,9 +49,7 @@ suite('Remote tunnel commands', () => {
 				errors.push(message);
 			},
 		} as unknown as IDialogService);
-		await services.invokeFunction(accessor =>
-			CommandsRegistry.getCommand(RemoteTunnelCommandIds.turnOn)!(accessor),
-		);
+		await services.invokeFunction(accessor => CommandsRegistry.getCommand(RemoteTunnelCommandIds.turnOn)!(accessor));
 		assert.deepEqual(calls, [
 			{
 				active: true,
@@ -71,14 +69,10 @@ suite('Remote tunnel commands', () => {
 				copied = text;
 			},
 		} as IClipboardService);
-		await services.invokeFunction(accessor =>
-			CommandsRegistry.getCommand(RemoteTunnelCommandIds.copyToClipboard)!(accessor),
-		);
+		await services.invokeFunction(accessor => CommandsRegistry.getCommand(RemoteTunnelCommandIds.copyToClipboard)!(accessor));
 		assert.match(copied, /ssh -N -T -o ExitOnForwardFailure=yes -L 127\.0\.0\.1:5174:127\.0\.0\.1:43123 ash-relay/);
 		assert.match(copied, /http:\/\/127\.0\.0\.1:5174\/browser\/workbench\/workbench\.html#ash-ticket=/);
-		await services.invokeFunction(accessor =>
-			CommandsRegistry.getCommand(RemoteTunnelCommandIds.turnOff)!(accessor),
-		);
+		await services.invokeFunction(accessor => CommandsRegistry.getCommand(RemoteTunnelCommandIds.turnOff)!(accessor));
 		assert.equal(service.stopped, true);
 	});
 });

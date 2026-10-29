@@ -1,15 +1,8 @@
 import { URI } from '../../../base/common/uri.js';
-import type {
-	LanguagePackCatalog,
-	LanguagePackIndexEntry,
-	PreinstalledLanguagePack,
-} from '../common/languagePackContract.js';
+import type { LanguagePackCatalog, LanguagePackIndexEntry, PreinstalledLanguagePack } from '../common/languagePackContract.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
-import {
-	IExtensionManagementService,
-	type ExtensionsInstalledPackage,
-} from '../../extensionManagement/common/extensionManagementService.js';
+import { IExtensionManagementService, type ExtensionsInstalledPackage } from '../../extensionManagement/common/extensionManagementService.js';
 import { decodeBase64, normalizeLocale, parseLanguagePackCatalog } from '../common/languagePackCatalog.js';
 import { ILanguagePackStore } from '../common/languagePackStore.js';
 import type { ILanguagePackService, ILanguagePackItem } from '../common/languagePacks.js';
@@ -68,9 +61,7 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 		if (this.automaticRefreshNeeded) await this.refresh().catch(() => undefined);
 		return this.catalogs
 			.map(catalog => {
-				const extensionId =
-					this.installedProviders.get(catalog.locale) ??
-					this.preinstalled.find(pack => pack.catalog.locale === catalog.locale)?.id;
+				const extensionId = this.installedProviders.get(catalog.locale) ?? this.preinstalled.find(pack => pack.catalog.locale === catalog.locale)?.id;
 				return {
 					id: catalog.locale,
 					label: catalog.localizedLanguageName,
@@ -185,10 +176,7 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 	}
 }
 
-async function loadInstalledCatalogs(
-	extensionManagement: IExtensionManagementService,
-	installed: readonly ExtensionsInstalledPackage[],
-): Promise<readonly LanguagePackIndexEntry[]> {
+async function loadInstalledCatalogs(extensionManagement: IExtensionManagementService, installed: readonly ExtensionsInstalledPackage[]): Promise<readonly LanguagePackIndexEntry[]> {
 	const catalogs: LanguagePackIndexEntry[] = [];
 	for (const packageValue of installed) {
 		if (packageValue.state !== 'installed') continue;

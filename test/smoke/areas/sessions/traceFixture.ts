@@ -13,20 +13,14 @@ import {
 } from '../../../../src/ash/platform/agentHost/common/appServerTransport.js';
 
 /** Acquires another initialized connection to the product's owning daemon. */
-export async function connectTraceAppServer(
-	application: PlaywrightApplication,
-	page: Page,
-	workspaceDirectory: string,
-): Promise<{ client: AppServerProtocolClient; close(): Promise<void> }> {
+export async function connectTraceAppServer(application: PlaywrightApplication, page: Page, workspaceDirectory: string): Promise<{ client: AppServerProtocolClient; close(): Promise<void> }> {
 	const listeners = new Map<string, Set<(value: unknown) => void>>();
 	const pendingMethods = new Map<number, string>();
 	const emit = (event: string, value: unknown): void => {
 		if (event === WEB_APP_SERVER_FRAME_EVENT) {
 			const frame = JSON.parse((value as { frame: string }).frame);
 			if (frame.error) {
-				console.error(
-					`Trace fixture RPC ${pendingMethods.get(frame.id)} failed: ${JSON.stringify(frame.error)}`,
-				);
+				console.error(`Trace fixture RPC ${pendingMethods.get(frame.id)} failed: ${JSON.stringify(frame.error)}`);
 			}
 			if (frame.id !== undefined) {
 				pendingMethods.delete(frame.id);
@@ -70,9 +64,7 @@ export async function connectTraceAppServer(
 		frameSubscription = frames.onFrame(frame => emit(WEB_APP_SERVER_FRAME_EVENT, { frame }));
 		closeSubscription = frames.onClose(error => emit(WEB_APP_SERVER_CLOSED_EVENT, { message: error.message }));
 	} else {
-		await page.exposeFunction('ashTraceFixtureFrame', (frame: string) =>
-			emit(WEB_APP_SERVER_FRAME_EVENT, { frame }),
-		);
+		await page.exposeFunction('ashTraceFixtureFrame', (frame: string) => emit(WEB_APP_SERVER_FRAME_EVENT, { frame }));
 		await page.evaluate(async () => {
 			const endpoint = new URL('/ash/app-server', sessionStorage.getItem('ash.appServer.endpoint')!);
 			const token = sessionStorage.getItem(`ash.appServer.session:${endpoint.origin}`)!;
@@ -117,15 +109,7 @@ export async function connectTraceAppServer(
 				if (typeof request.id === 'number' && typeof request.method === 'string') {
 					pendingMethods.set(request.id, request.method);
 				}
-				const sent = frames
-					? frames.send(frame)
-					: page.evaluate(
-							frame =>
-								(
-									globalThis as typeof globalThis & { ashTraceFixtureSocket: WebSocket }
-								).ashTraceFixtureSocket.send(frame),
-							frame,
-						);
+				const sent = frames ? frames.send(frame) : page.evaluate(frame => (globalThis as typeof globalThis & { ashTraceFixtureSocket: WebSocket }).ashTraceFixtureSocket.send(frame), frame);
 				void sent.catch(error => emit(WEB_APP_SERVER_CLOSED_EVENT, { message: String(error) }));
 			} else if (event !== WEB_APP_SERVER_DISCONNECT_EVENT) {
 				throw new Error(`Unexpected trace fixture event ${event}`);
@@ -141,11 +125,7 @@ export async function connectTraceAppServer(
 		await frames?.close();
 		launcher?.dispose();
 		if (!frames && !page.isClosed()) {
-			await page.evaluate(() =>
-				(
-					globalThis as typeof globalThis & { ashTraceFixtureSocket?: WebSocket }
-				).ashTraceFixtureSocket?.close(),
-			);
+			await page.evaluate(() => (globalThis as typeof globalThis & { ashTraceFixtureSocket?: WebSocket }).ashTraceFixtureSocket?.close());
 		}
 	};
 	try {

@@ -16,10 +16,7 @@ suite('Inbound tunnel machine status', () => {
 			throw new Error('Missing connection');
 		}
 		const url = new URL(value.link);
-		assert.deepEqual(
-			{ host: url.host, query: url.search, relay: value.domain, port: value.tunnelId },
-			{ host: '127.0.0.1:5174', query: '', relay: 'ash-relay', port: '43123' },
-		);
+		assert.deepEqual({ host: url.host, query: url.search, relay: value.domain, port: value.tunnelId }, { host: '127.0.0.1:5174', query: '', relay: 'ash-relay', port: '43123' });
 		assert.equal(new URLSearchParams(url.hash.slice(1)).get('ash-ticket'), record.web.ticket);
 	});
 	test('rejects invalid or authority-injecting helper records', () => {

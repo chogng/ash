@@ -29,28 +29,14 @@ test('layout2d flips cross-axis alignment before clamping', () => {
 });
 
 test('layout2d centers a view on its anchor and clamps it at the viewport edge', () => {
-	const centered = layout2d(
-		viewport,
-		{ width: 120, height: 40 },
-		{ left: 100, top: 50, width: 24, height: 24 },
-		{ anchorAlignment: AnchorAlignment.Center },
-	);
-	const clamped = layout2d(
-		viewport,
-		{ width: 120, height: 40 },
-		{ left: 780, top: 50, width: 24, height: 24 },
-		{ anchorAlignment: AnchorAlignment.Center },
-	);
+	const centered = layout2d(viewport, { width: 120, height: 40 }, { left: 100, top: 50, width: 24, height: 24 }, { anchorAlignment: AnchorAlignment.Center });
+	const clamped = layout2d(viewport, { width: 120, height: 40 }, { left: 780, top: 50, width: 24, height: 24 }, { anchorAlignment: AnchorAlignment.Center });
 
 	assert.deepEqual([centered.left, clamped.left, clamped.anchorAlignment], [52, 680, AnchorAlignment.Center]);
 });
 
 test('layout2d respects a non-zero visual viewport origin', () => {
-	const result = layout2d(
-		{ left: 30, top: 20, width: 300, height: 200 },
-		{ width: 400, height: 260 },
-		{ left: 100, top: 80, width: 40, height: 20 },
-	);
+	const result = layout2d({ left: 30, top: 20, width: 300, height: 200 }, { width: 400, height: 260 }, { left: 100, top: 80, width: 40, height: 20 });
 
 	assert.equal(result.left, 30);
 	assert.equal(result.top, 20);

@@ -5,10 +5,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { CodeActionKind } from '../../../../editor/contrib/codeAction/common/types.js';
 import { localize } from '../../../../nls.js';
-import {
-	ConfigurationScope,
-	type IConfigurationKeyDefinition,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, type IConfigurationKeyDefinition } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import type { IWorkbenchContribution } from '../../../common/contributions.js';
 
@@ -20,10 +17,7 @@ const sourceKinds = new Set<string>();
 function saveModeSchema(notebook: boolean): JsonSchema {
 	const modes: readonly SaveMode[] = notebook ? ['explicit', 'never'] : ['always', 'explicit', 'never'];
 	const descriptions = {
-		always: localize(
-			'codeActions.save.always',
-			'Run on explicit saves and on auto saves caused by focus or window changes.',
-		),
+		always: localize('codeActions.save.always', 'Run on explicit saves and on auto saves caused by focus or window changes.'),
 		explicit: localize('codeActions.save.explicit', 'Run only when you explicitly save.'),
 		never: localize('codeActions.save.never', 'Do not run on save.'),
 	};
@@ -45,10 +39,7 @@ function saveActionsDefinition(key: string, notebook: boolean): IConfigurationKe
 		defaultValue: {},
 		scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
 		parse: value => {
-			const invalid = (): TypeError =>
-				new TypeError(
-					localize('codeActions.save.invalid', '{0} must map action kinds to supported save modes.', key),
-				);
+			const invalid = (): TypeError => new TypeError(localize('codeActions.save.invalid', '{0} must map action kinds to supported save modes.', key));
 			if (!value || typeof value !== 'object') {
 				throw invalid();
 			}
@@ -110,16 +101,9 @@ export class CodeActionsContribution extends Disposable implements IWorkbenchCon
 	public static readonly ID = 'workbench.contrib.codeActions';
 	private readonly schemaChanged = this._register(new Emitter<void>());
 
-	constructor(
-		@ILanguageFeaturesService features: ILanguageFeaturesService,
-		@IKeybindingService keybindings: IKeybindingService,
-	) {
+	constructor(@ILanguageFeaturesService features: ILanguageFeaturesService, @IKeybindingService keybindings: IKeybindingService) {
 		super();
-		const kinds = (): string[] => [
-			...new Set(
-				features.codeActionProvider.allNoModel().flatMap(provider => provider.providedCodeActionKinds ?? []),
-			),
-		];
+		const kinds = (): string[] => [...new Set(features.codeActionProvider.allNoModel().flatMap(provider => provider.providedCodeActionKinds ?? []))];
 		const update = (): void => {
 			sourceKinds.clear();
 			for (const kind of kinds()) {
@@ -154,9 +138,7 @@ export class CodeActionsContribution extends Disposable implements IWorkbenchCon
 											type: 'string',
 											anyOf: [
 												{
-													enum: declared.filter(kind =>
-														parent.contains(new HierarchicalKind(kind)),
-													),
+													enum: declared.filter(kind => parent.contains(new HierarchicalKind(kind))),
 												},
 												{ type: 'string' },
 											],

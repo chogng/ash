@@ -33,10 +33,7 @@ import groovy from '../../../extensions/groovy/package.json' with { type: 'json'
 import coffeescript from '../../../extensions/coffeescript/package.json' with { type: 'json' };
 import perl from '../../../extensions/perl/package.json' with { type: 'json' };
 import type { ExtensionDescriptor } from '../../../src/ash/platform/extensions/common/extensionApi.js';
-import {
-	AppServerExtensionService,
-	type AppServerExtensionServiceOptions,
-} from '../../../src/ash/workbench/services/extensions/browser/appServerExtensionService.js';
+import { AppServerExtensionService, type AppServerExtensionServiceOptions } from '../../../src/ash/workbench/services/extensions/browser/appServerExtensionService.js';
 
 const resourceUrls = import.meta.glob<string>(
 	[
@@ -55,10 +52,7 @@ const resourceUrls = import.meta.glob<string>(
 	{ eager: true, query: '?url', import: 'default' },
 );
 
-export async function createLanguageExtensions(
-	options: Omit<AppServerExtensionServiceOptions, 'api' | 'eventApi'>,
-	adapters: IAdapterManager,
-): Promise<AppServerExtensionService> {
+export async function createLanguageExtensions(options: Omit<AppServerExtensionServiceOptions, 'api' | 'eventApi'>, adapters: IAdapterManager): Promise<AppServerExtensionService> {
 	const directories = new Map<string, string>();
 	const descriptors: ExtensionDescriptor[] = [];
 	const manifests = [
@@ -97,8 +91,7 @@ export async function createLanguageExtensions(
 	for (const [directory, manifest] of manifests) {
 		const manifestJson = JSON.stringify(manifest);
 		const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(manifestJson));
-		const hash =
-			'sha256:' + Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+		const hash = 'sha256:' + Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 		const id = `${manifest.publisher}.${manifest.name}`;
 		directories.set(id, directory);
 		descriptors.push({

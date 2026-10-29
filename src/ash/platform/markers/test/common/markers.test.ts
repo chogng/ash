@@ -2,12 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { URI } from '../../../../base/common/uri.js';
 import { MarkerService } from '../../../../platform/markers/common/markerService.js';
-import {
-	MarkerSeverity,
-	MarkerTag,
-	type IMarkerData,
-	type IResourceMarker,
-} from '../../../../platform/markers/common/markers.js';
+import { MarkerSeverity, MarkerTag, type IMarkerData, type IResourceMarker } from '../../../../platform/markers/common/markers.js';
 
 test('marker service replaces an owner atomically and reports affected resources', () => {
 	using service = new MarkerService();
@@ -51,10 +46,7 @@ test('marker service replaces one owner resource without changing its other reso
 	const second = URI.file('/project/second.ts');
 	const changes: string[][] = [];
 	service.onMarkerChanged(resources => changes.push(resources.map(resource => resource.toString())));
-	service.changeAll('host', [
-		createMarker(first, MarkerSeverity.Error, 'old'),
-		createMarker(second, MarkerSeverity.Warning, 'keep'),
-	]);
+	service.changeAll('host', [createMarker(first, MarkerSeverity.Error, 'old'), createMarker(second, MarkerSeverity.Warning, 'keep')]);
 	service.changeAll('other', [createMarker(first, MarkerSeverity.Hint, 'other')]);
 	changes.length = 0;
 
@@ -86,22 +78,14 @@ test('marker queries combine resource, owner, severity masks and limits', () => 
 	using service = new MarkerService();
 	const first = URI.file('/project/first.ts');
 	const second = URI.file('/project/second.ts');
-	service.changeAll('language', [
-		createMarker(first, MarkerSeverity.Error, 'error'),
-		createMarker(first, MarkerSeverity.Warning, 'warning'),
-		createMarker(second, MarkerSeverity.Info, 'info'),
-	]);
+	service.changeAll('language', [createMarker(first, MarkerSeverity.Error, 'error'), createMarker(first, MarkerSeverity.Warning, 'warning'), createMarker(second, MarkerSeverity.Info, 'info')]);
 	service.changeAll('tasks', [createMarker(first, MarkerSeverity.Hint, 'hint')]);
 	assert.deepEqual(
-		service
-			.read({ owner: 'language', resource: first, severities: MarkerSeverity.Error | MarkerSeverity.Warning })
-			.map(marker => marker.message),
+		service.read({ owner: 'language', resource: first, severities: MarkerSeverity.Error | MarkerSeverity.Warning }).map(marker => marker.message),
 		['error', 'warning'],
 	);
 	assert.deepEqual(
-		service
-			.read({ severities: MarkerSeverity.Warning | MarkerSeverity.Info, take: 1 })
-			.map(marker => marker.message),
+		service.read({ severities: MarkerSeverity.Warning | MarkerSeverity.Info, take: 1 }).map(marker => marker.message),
 		['warning'],
 	);
 	assert.deepEqual(service.read({ owner: 'missing' }), []);
@@ -130,9 +114,7 @@ test('marker metadata and coordinates survive storage without aliasing producer 
 		modelVersionId: 42,
 		tags: [MarkerTag.Unnecessary],
 		origin: 'language',
-		relatedInformation: [
-			{ resource, message: 'declared here', startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 2 },
-		],
+		relatedInformation: [{ resource, message: 'declared here', startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 2 }],
 	};
 	service.changeOne('test', resource, [diagnostic]);
 	assert.deepEqual(service.read(), [{ ...diagnostic, owner: 'test', resource }]);
@@ -150,11 +132,7 @@ test('bulk removal reports each affected resource once and ignores absent resour
 	using service = new MarkerService();
 	const first = URI.file('/project/first.ts');
 	const second = URI.file('/project/second.ts');
-	service.changeAll('test', [
-		createMarker(first, MarkerSeverity.Error, 'first'),
-		createMarker(first, MarkerSeverity.Warning, 'second'),
-		createMarker(second, MarkerSeverity.Info, 'third'),
-	]);
+	service.changeAll('test', [createMarker(first, MarkerSeverity.Error, 'first'), createMarker(first, MarkerSeverity.Warning, 'second'), createMarker(second, MarkerSeverity.Info, 'third')]);
 	const changes: string[][] = [];
 	service.onMarkerChanged(resources => changes.push(resources.map(resource => resource.toString())));
 	service.remove('test', [first, first, URI.file('/missing')]);
@@ -171,9 +149,7 @@ test('disposing the marker owner releases listeners and rejects further access',
 	const service = new MarkerService();
 	let events = 0;
 	using listener = service.onMarkerChanged(() => events++);
-	service.changeOne('test', URI.file('/project/main.ts'), [
-		createMarker(URI.file('/project/main.ts'), MarkerSeverity.Error, 'error').marker,
-	]);
+	service.changeOne('test', URI.file('/project/main.ts'), [createMarker(URI.file('/project/main.ts'), MarkerSeverity.Error, 'error').marker]);
 	service.dispose();
 	assert.equal(events, 1);
 	assert.throws(() => service.read(), /disposed/i);

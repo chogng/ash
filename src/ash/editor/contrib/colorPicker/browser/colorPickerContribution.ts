@@ -3,17 +3,9 @@ import './standaloneColorPicker/standaloneColorPickerActions.js';
 import './color.js';
 import { isHTMLElement } from '../../../../base/browser/dom.js';
 import { localize } from '../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { registerEditorContribution } from '../../../browser/editorFeatureRegistration.js';
 import { ICodeEditorService } from '../../../browser/services/codeEditorService.js';
@@ -32,28 +24,13 @@ registerEditorContribution({
 		if (context.kind !== 'text') {
 			return;
 		}
-		const service = new ColorService(
-			context.model,
-			context.languageFeaturesService.colorProvider,
-			context.model.uri,
-			context.onLanguageError,
-		);
+		const service = new ColorService(context.model, context.languageFeaturesService.colorProvider, context.model.uri, context.onLanguageError);
 		const targetWindow = context.controller.element.ownerDocument.defaultView;
 		if (!targetWindow) {
 			throw new Error('Color picker requires an attached browser window');
 		}
-		const detector = context.register(
-			new ColorDetector(context.editor, context.model, service, targetWindow, context.onLanguageError),
-		);
-		return context.instantiationService.createInstance(
-			ColorPickerController,
-			context.controller.element,
-			context.editor,
-			context.view,
-			service,
-			detector,
-			context.onLanguageError,
-		);
+		const detector = context.register(new ColorDetector(context.editor, context.model, service, targetWindow, context.onLanguageError));
+		return context.instantiationService.createInstance(ColorPickerController, context.controller.element, context.editor, context.view, service, detector, context.onLanguageError);
 	},
 });
 
@@ -69,10 +46,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	setting: {
 		valueType: 'boolean',
 		title: localize('colorPicker.verbosityTitle', 'Color picker accessibility help'),
-		description: localize(
-			'colorPicker.verbosityDescription',
-			'Announce how to open accessibility help when the color picker receives focus.',
-		),
+		description: localize('colorPicker.verbosityDescription', 'Announce how to open accessibility help when the color picker receives focus.'),
 	},
 });
 

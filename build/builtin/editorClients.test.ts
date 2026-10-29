@@ -29,17 +29,11 @@ test('Academy publishes closed client resources and platform-specific executable
 		assert.deepEqual(catalog.uiTargets, ['ide', 'agents']);
 		const adapter = JSON.parse(await readFile(join(output, 'package/editor/ash/editor-extensions.json'), 'utf8'));
 		assert.ok(
-			adapter.editorExtensions.every(
-				(entry: { activationEvents: unknown }) =>
-					JSON.stringify(entry.activationEvents) ===
-					JSON.stringify([{ type: 'onDemand', capability: 'dataChannel' }]),
-			),
+			adapter.editorExtensions.every((entry: { activationEvents: unknown }) => JSON.stringify(entry.activationEvents) === JSON.stringify([{ type: 'onDemand', capability: 'dataChannel' }])),
 		);
 
 		assert.deepEqual(
-			catalog.capabilities
-				.filter((capability: { kind: string }) => capability.kind === 'executable')
-				.map((capability: { path: string }) => capability.path),
+			catalog.capabilities.filter((capability: { kind: string }) => capability.kind === 'executable').map((capability: { path: string }) => capability.path),
 			['bin/darwin-arm64/ash-academy', 'bin/win32-x64/ash-academy.exe'],
 		);
 		const manifest = JSON.parse(await readFile(join(output, 'package/editor/package.json'), 'utf8'));
@@ -59,22 +53,9 @@ test('Academy publishes closed client resources and platform-specific executable
 		assert.doesNotMatch(script, /src\/ash|import\(/u);
 		const style = await readFile(join(output, 'package/editor/dist/editor.css'), 'utf8');
 		assert.ok(style.includes(`data-ash-editor-client="${manifest.ashRuntime.client.sourceDigest}"`));
-		const relativeClient = await compileEditorClient(
-			relative(process.cwd(), join(repository, 'extensions/academy')),
-		);
-		assert.deepEqual(
-			relativeClient.client,
-			manifest.ashRuntime.client,
-			'A checkout-relative package root resolves to the same closed artifact',
-		);
-		await assert.rejects(
-			buildEditorPackage(
-				join(repository, 'extensions/academy'),
-				[{ targetPlatform: 'darwin-arm64', path: binary }],
-				output,
-			),
-			/existing editor package/u,
-		);
+		const relativeClient = await compileEditorClient(relative(process.cwd(), join(repository, 'extensions/academy')));
+		assert.deepEqual(relativeClient.client, manifest.ashRuntime.client, 'A checkout-relative package root resolves to the same closed artifact');
+		await assert.rejects(buildEditorPackage(join(repository, 'extensions/academy'), [{ targetPlatform: 'darwin-arm64', path: binary }], output), /existing editor package/u);
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
@@ -87,15 +68,9 @@ test('client bundling rejects direct imports of a service container outside its 
 		await mkdir(join(directory, 'common'));
 		const privileged = join(repository, 'src/ash/platform/instantiation/common/instantiationService.ts');
 		const entry = join(directory, 'browser/editor.ts');
-		await writeFile(
-			entry,
-			`import { InstantiationService } from ${JSON.stringify(relative(dirname(entry), privileged))}; export const instance = InstantiationService;`,
-		);
+		await writeFile(entry, `import { InstantiationService } from ${JSON.stringify(relative(dirname(entry), privileged))}; export const instance = InstantiationService;`);
 		await assert.rejects(compileEditorClient(directory), /outside its host contract|escapes its package/u);
-		await writeFile(
-			entry,
-			`import { InstantiationService } from ${JSON.stringify(privileged)}; export const instance = InstantiationService;`,
-		);
+		await writeFile(entry, `import { InstantiationService } from ${JSON.stringify(privileged)}; export const instance = InstantiationService;`);
 		await assert.rejects(compileEditorClient(directory), /outside its host contract|escapes its package/u);
 	} finally {
 		await rm(directory, { recursive: true, force: true });
@@ -166,10 +141,7 @@ test('portable public editor API allows declared values and rejects private bind
 			"import type { Private } from 'ash:editor/private.js'; export const value: Private = {};",
 		]) {
 			await writeFile(entry, source);
-			await assert.rejects(
-				compileEditorClient(directory, api),
-				/Unsupported editor host binding|named bindings|outside its host contract/u,
-			);
+			await assert.rejects(compileEditorClient(directory, api), /Unsupported editor host binding|named bindings|outside its host contract/u);
 		}
 	} finally {
 		await rm(directory, { recursive: true, force: true });
@@ -195,21 +167,10 @@ test('exported SDK typechecks Academy outside the checkout with no workspace inh
 		const require = createRequire(import.meta.url);
 		execFileSync(
 			process.execPath,
-			[
-				resolve(
-					dirname(require.resolve('typescript/package.json')),
-					Object.values(require('typescript/package.json').bin)[0] as string,
-				),
-				'-p',
-				join(project, 'tsconfig.json'),
-				'--noEmit',
-			],
+			[resolve(dirname(require.resolve('typescript/package.json')), Object.values(require('typescript/package.json').bin)[0] as string), '-p', join(project, 'tsconfig.json'), '--noEmit'],
 			{ cwd: directory, stdio: 'pipe', encoding: 'utf8' },
 		);
-		for (const manifest of [
-			join(project, 'Cargo.toml'),
-			...['rust', 'protocol', 'editor-client-build'].map(name => join(sdk, name, 'Cargo.toml')),
-		]) {
+		for (const manifest of [join(project, 'Cargo.toml'), ...['rust', 'protocol', 'editor-client-build'].map(name => join(sdk, name, 'Cargo.toml'))]) {
 			const content = await readFile(manifest, 'utf8');
 			assert.doesNotMatch(content, /workspace\s*=\s*true|\/Volumes\/|crates\/external-ext/u);
 		}

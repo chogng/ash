@@ -1,12 +1,7 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import type { URI } from '../../../../base/common/uri.js';
-import {
-	IBackupService,
-	type IBackupContent,
-	type IBackupRecord,
-	type IBackupWorkspace,
-} from '../../../../platform/backup/common/backup.js';
+import { IBackupService, type IBackupContent, type IBackupRecord, type IBackupWorkspace } from '../../../../platform/backup/common/backup.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import type { IWorkingCopyBackupService, WorkingCopyBackup } from '../common/workingCopyBackupService.js';
@@ -47,11 +42,7 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 				result.push(deserialize(record));
 				this.revisions.set(record.content.resource.toString(), record.revision);
 			} catch (error) {
-				this.logService.error(
-					'workingCopy',
-					`Unable to interpret backup '${record.content.resource.toString()}'`,
-					error,
-				);
+				this.logService.error('workingCopy', `Unable to interpret backup '${record.content.resource.toString()}'`, error);
 			}
 		}
 		return result;
@@ -95,11 +86,7 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 		const sourceId = this.workspaceId;
 		await this.prepare(generation);
 		const source = await this.backups.list(sourceId);
-		const observed = new Set(
-			source
-				.filter(record => this.revisions.get(record.content.resource.toString()) === record.revision)
-				.map(record => record.content.resource.toString()),
-		);
+		const observed = new Set(source.filter(record => this.revisions.get(record.content.resource.toString()) === record.revision).map(record => record.content.resource.toString()));
 		const moved = await this.backups.move(
 			sourceId,
 			target,
@@ -111,11 +98,7 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 		// source records still require explicit restoration in the destination.
 		this.movedRevisions = {
 			workspaceId: target.id,
-			revisions: new Map(
-				moved
-					.filter(record => observed.has(record.resource.toString()))
-					.map(record => [record.resource.toString(), record.revision]),
-			),
+			revisions: new Map(moved.filter(record => observed.has(record.resource.toString())).map(record => [record.resource.toString(), record.revision])),
 		};
 	}
 
@@ -125,8 +108,7 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 		this.workspaceId = workspaceId;
 		this.workspaceGeneration++;
 		this.revisions.clear();
-		if (this.movedRevisions?.workspaceId === workspaceId)
-			for (const [key, revision] of this.movedRevisions.revisions) this.revisions.set(key, revision);
+		if (this.movedRevisions?.workspaceId === workspaceId) for (const [key, revision] of this.movedRevisions.revisions) this.revisions.set(key, revision);
 		this.movedRevisions = undefined;
 		this.legacyConflicts.clear();
 		this.preparation = undefined;
@@ -200,11 +182,9 @@ function serialize(backup: WorkingCopyBackup): IBackupContent {
 }
 
 function deserialize(record: IBackupRecord): WorkingCopyBackup {
-	if (record.content.format !== CONTENT_FORMAT)
-		throw new Error(`Unsupported working-copy backup format: ${record.content.format}`);
+	if (record.content.format !== CONTENT_FORMAT) throw new Error(`Unsupported working-copy backup format: ${record.content.format}`);
 	const payload: unknown = JSON.parse(record.content.content);
-	if (!payload || typeof payload !== 'object' || Array.isArray(payload))
-		throw new Error('Invalid working-copy backup');
+	if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('Invalid working-copy backup');
 	const value = payload as Record<string, unknown>;
 	if (
 		(value.kind !== 'text' && value.kind !== 'structuredDocument') ||

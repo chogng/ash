@@ -14,18 +14,7 @@ class TestResizeObserver implements ResizeObserver {
 
 const installedGlobals = installEditorTestDom(
 	browserEnvironment,
-	[
-		'Node',
-		'Element',
-		'HTMLElement',
-		'HTMLButtonElement',
-		'HTMLCanvasElement',
-		'Event',
-		'InputEvent',
-		'KeyboardEvent',
-		'MouseEvent',
-		'NodeFilter',
-	],
+	['Node', 'Element', 'HTMLElement', 'HTMLButtonElement', 'HTMLCanvasElement', 'Event', 'InputEvent', 'KeyboardEvent', 'MouseEvent', 'NodeFilter'],
 	{
 		PointerEvent: browserEnvironment.window.PointerEvent ?? browserEnvironment.window.MouseEvent,
 		ResizeObserver: TestResizeObserver,

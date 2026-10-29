@@ -22,8 +22,7 @@ export class ModePickerActionItem extends ChatSessionPickerActionItem {
 		super(
 			modeAction,
 			{
-				getOptions: () =>
-					typeof modeAction.actions === 'function' ? modeAction.actions() : modeAction.actions,
+				getOptions: () => (typeof modeAction.actions === 'function' ? modeAction.actions() : modeAction.actions),
 				captureContext,
 				onDidSelect,
 			},
@@ -34,12 +33,7 @@ export class ModePickerActionItem extends ChatSessionPickerActionItem {
 
 	public override render(container: HTMLElement): void {
 		super.render(container);
-		container.classList.add(
-			'ash-chat-input-selector',
-			'ash-chat-input-mode-selector',
-			'ash-dropdown-menu-action-view-item',
-			`mode-${this.mode}`,
-		);
+		container.classList.add('ash-chat-input-selector', 'ash-chat-input-mode-selector', 'ash-dropdown-menu-action-view-item', `mode-${this.mode}`);
 		container.classList.toggle('disabled', !this.action.enabled);
 	}
 

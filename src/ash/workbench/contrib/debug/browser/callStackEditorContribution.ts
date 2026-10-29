@@ -1,10 +1,7 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { GlyphMarginLane, TrackedRangeStickiness } from '../../../../editor/common/model.js';
-import {
-	TextDecorationCollection,
-	type TextDecorationId,
-} from '../../../../editor/common/model/decorationCollection.js';
+import { TextDecorationCollection, type TextDecorationId } from '../../../../editor/common/model/decorationCollection.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
 import { IDebugService } from '../common/debug.js';
 import './media/callStackEditorContribution.css';
@@ -42,12 +39,7 @@ export class CallStackEditorContribution extends Disposable {
 			current
 				? [
 						{
-							range: new Range(
-								frame.lineNumber,
-								1,
-								frame.lineNumber,
-								this.model.getLineMaxColumn(frame.lineNumber),
-							),
+							range: new Range(frame.lineNumber, 1, frame.lineNumber, this.model.getLineMaxColumn(frame.lineNumber)),
 							stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 							options: {
 								description: 'debug-stack-frame',

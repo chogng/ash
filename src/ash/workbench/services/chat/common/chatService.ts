@@ -55,18 +55,8 @@ export type {
 	ThreadSnapshotHistory,
 	ThreadHistoryBoundary,
 } from '../../../../platform/agentHost/common/agent.js';
-import type {
-	ModelRef,
-	AdvisorConfig,
-	AdvisorSelection,
-	ModelProviderCredentialStatus,
-} from '../../../../platform/agentHost/common/agentModels.js';
-export type {
-	ModelRef,
-	AdvisorConfig,
-	AdvisorSelection,
-	ModelProviderCredentialStatus,
-} from '../../../../platform/agentHost/common/agentModels.js';
+import type { ModelRef, AdvisorConfig, AdvisorSelection, ModelProviderCredentialStatus } from '../../../../platform/agentHost/common/agentModels.js';
+export type { ModelRef, AdvisorConfig, AdvisorSelection, ModelProviderCredentialStatus } from '../../../../platform/agentHost/common/agentModels.js';
 import type { Event } from '../../../../base/common/event.js';
 import { PRODUCT_SLASH_COMMANDS } from '../../../../../../.build/protocol/typescript/index.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
@@ -78,17 +68,8 @@ import type { ApprovalMode } from '../../../../platform/agentHost/common/approva
 
 export type { ModelCatalogEntry } from './modelCatalog.js';
 
-import type {
-	SessionId,
-	ThreadId,
-	IMessageCheckpoint as ChatCheckpoint,
-	AgentThreadHistoryState,
-} from '../../../../platform/agentHost/common/agent.js';
-export type {
-	SessionId,
-	ThreadId,
-	IMessageCheckpoint as ChatCheckpoint,
-} from '../../../../platform/agentHost/common/agent.js';
+import type { SessionId, ThreadId, IMessageCheckpoint as ChatCheckpoint, AgentThreadHistoryState } from '../../../../platform/agentHost/common/agent.js';
+export type { SessionId, ThreadId, IMessageCheckpoint as ChatCheckpoint } from '../../../../platform/agentHost/common/agent.js';
 export { AgentThreadHistoryConflictError as ChatHistoryConflictError } from '../../../../platform/agentHost/common/agentService.js';
 
 /** Identifies the reply that produced a document edit, independently of the visible Chat. */
@@ -124,8 +105,7 @@ export interface SlashCommandDefinition {
 }
 
 /** Shared product metadata; execution bindings remain with each client. */
-export const ProductSlashCommands: Readonly<Record<keyof typeof PRODUCT_SLASH_COMMANDS, SlashCommandDefinition>> =
-	PRODUCT_SLASH_COMMANDS;
+export const ProductSlashCommands: Readonly<Record<keyof typeof PRODUCT_SLASH_COMMANDS, SlashCommandDefinition>> = PRODUCT_SLASH_COMMANDS;
 
 export interface SkillSelectorDefinition {
 	readonly name: string;
@@ -224,8 +204,7 @@ export interface ResolveInteractionOptions extends InterruptTurnOptions {
 
 export type TurnChangeCaptureState = 'open' | 'sealed' | 'incomplete' | 'discarded';
 export type TurnChangeMessageState = 'unconfigured' | 'queued' | 'generating' | 'ready' | 'failed';
-export type TurnChangeCommitState =
-	'idle' | 'queued' | 'committing' | 'committed' | 'partiallyCommitted' | 'conflict' | 'failed';
+export type TurnChangeCommitState = 'idle' | 'queued' | 'committing' | 'committed' | 'partiallyCommitted' | 'conflict' | 'failed';
 
 export interface TurnChangeSetSummary {
 	readonly changeSetId: string;
@@ -331,9 +310,7 @@ export interface RewriteChatRequestOptions {
 
 export interface IChatService {
 	/** Rewrites an initial user message while retaining its accepted context and attachments. */
-	rewriteRequest(
-		options: RewriteChatRequestOptions,
-	): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId }>;
+	rewriteRequest(options: RewriteChatRequestOptions): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId }>;
 	renameThread(sessionId: SessionId, threadId: ThreadId, title: string): Promise<void>;
 	/** Only accepted local submissions establish window activity; broadcasts never establish ownership. */
 	readonly onDidSubmitRequest: Event<IChatRequestSubmittedEvent>;
@@ -341,17 +318,10 @@ export interface IChatService {
 	getInteractionOffer(sessionId: SessionId, threadId: ThreadId): AgentInteractionOffer | undefined;
 	readonly onDidChangeInteractionOffer: Event<ChatInteractionOfferChange>;
 	readHistoryState(sessionId: SessionId, threadId: ThreadId): Promise<AgentThreadHistoryState>;
-	moveHistory(options: {
-		readonly sessionId: SessionId;
-		readonly threadId: ThreadId;
-		readonly expectedSequence: number;
-		readonly direction: 'undo' | 'redo';
-	}): Promise<void>;
+	moveHistory(options: { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly direction: 'undo' | 'redo' }): Promise<void>;
 	readCheckpoints(sessionId: SessionId, threadId: ThreadId): Promise<readonly ChatCheckpoint[]>;
 	/** Creates an independent Thread and directory from the backend's immutable checkpoint. */
-	restoreCheckpoint(
-		options: RestoreChatCheckpointOptions,
-	): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId }>;
+	restoreCheckpoint(options: RestoreChatCheckpointOptions): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId }>;
 	/** Session invalidation also discovers Threads that have not yet been subscribed. */
 	readonly onDidChangeSession: Event<{ readonly sessionId: SessionId; readonly agentTreeChanged: boolean }>;
 	readonly onDidUpdateThread: Event<ThreadUpdateEnvelope>;
@@ -364,13 +334,7 @@ export interface IChatService {
 	readThread(sessionId: SessionId, threadId: ThreadId, history?: ThreadSnapshotHistory): Promise<ThreadRead>;
 	readContextUsage(sessionId: SessionId, threadId: ThreadId): Promise<ChatContextUsage>;
 	/** The owner retains the subscription across refreshes/reconnects until explicitly released. */
-	subscribeThread(
-		sessionId: SessionId,
-		threadId: ThreadId,
-		afterSequence: number,
-		owner: object,
-		history?: ThreadSnapshotHistory,
-	): Promise<ThreadSubscription>;
+	subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number, owner: object, history?: ThreadSnapshotHistory): Promise<ThreadSubscription>;
 	unsubscribeThread(sessionId: SessionId, threadId: ThreadId, owner: object): Promise<void>;
 	startTurn(options: StartTurnOptions): Promise<void>;
 	queueTurn(options: StartTurnOptions): Promise<void>;
@@ -385,56 +349,16 @@ export interface IChatService {
 	resolveInteraction(options: ResolveInteractionOptions): Promise<void>;
 	listTurnChanges(sessionId: SessionId, threadId: ThreadId): Promise<readonly TurnChangeSetSummary[]>;
 	readThreadChanges(sessionId: SessionId, threadId: ThreadId): Promise<ThreadChangesSummary>;
-	readThreadChangeFile(
-		sessionId: SessionId,
-		threadId: ThreadId,
-		revision: string,
-		repositoryId: string,
-		path: string,
-	): Promise<TurnChangeFileContents>;
+	readThreadChangeFile(sessionId: SessionId, threadId: ThreadId, revision: string, repositoryId: string, path: string): Promise<TurnChangeFileContents>;
 	readTurnChange(sessionId: SessionId, threadId: ThreadId, changeSetId: string): Promise<TurnChangeDetails>;
-	readTurnChangeFile(
-		sessionId: SessionId,
-		threadId: ThreadId,
-		changeSetId: string,
-		path: string,
-	): Promise<TurnChangeFileContents>;
-	generateTurnChangeMessage(
-		sessionId: SessionId,
-		threadId: ThreadId,
-		changeSetId: string,
-		expectedRevision: number,
-	): Promise<readonly TurnChangeSetSummary[]>;
-	updateTurnChangeDraft(
-		sessionId: SessionId,
-		threadId: ThreadId,
-		changeSetId: string,
-		expectedRevision: number,
-		message: string,
-	): Promise<readonly TurnChangeSetSummary[]>;
-	prepareTurnCommit(
-		sessionId: SessionId,
-		threadId: ThreadId,
-		selections: readonly TurnCommitSelection[],
-		message: string,
-	): Promise<TurnCommitPreview>;
+	readTurnChangeFile(sessionId: SessionId, threadId: ThreadId, changeSetId: string, path: string): Promise<TurnChangeFileContents>;
+	generateTurnChangeMessage(sessionId: SessionId, threadId: ThreadId, changeSetId: string, expectedRevision: number): Promise<readonly TurnChangeSetSummary[]>;
+	updateTurnChangeDraft(sessionId: SessionId, threadId: ThreadId, changeSetId: string, expectedRevision: number, message: string): Promise<readonly TurnChangeSetSummary[]>;
+	prepareTurnCommit(sessionId: SessionId, threadId: ThreadId, selections: readonly TurnCommitSelection[], message: string): Promise<TurnCommitPreview>;
 	readTurnCommit(sessionId: SessionId, threadId: ThreadId, commitId: string): Promise<TurnCommitPreview>;
-	readTurnCommitFile(
-		sessionId: SessionId,
-		threadId: ThreadId,
-		commitId: string,
-		path: string,
-	): Promise<TurnChangeFileContents>;
-	commitTurnChange(
-		sessionId: SessionId,
-		threadId: ThreadId,
-		commitId: string,
-	): Promise<readonly TurnChangeSetSummary[]>;
-	discardThreadChanges(
-		sessionId: SessionId,
-		threadId: ThreadId,
-		expectedRevision: number,
-	): Promise<readonly TurnChangeSetSummary[]>;
+	readTurnCommitFile(sessionId: SessionId, threadId: ThreadId, commitId: string, path: string): Promise<TurnChangeFileContents>;
+	commitTurnChange(sessionId: SessionId, threadId: ThreadId, commitId: string): Promise<readonly TurnChangeSetSummary[]>;
+	discardThreadChanges(sessionId: SessionId, threadId: ThreadId, expectedRevision: number): Promise<readonly TurnChangeSetSummary[]>;
 }
 
 export const IChatService = createServiceIdentifier<IChatService>('chatService');

@@ -25,27 +25,17 @@ import { BrowserWorkingCopyService } from '../../../workingCopy/browser/browserW
 import { IFileTextModelService } from '../../../textmodelResolver/common/textModelResourceService.js';
 import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { IOutputService } from '../../../output/common/output.js';
-import {
-	DefaultLogLevelsService,
-	IDefaultLogLevelsService,
-	parseDefaultLogLevels,
-	readDefaultLogLevels,
-} from '../../common/defaultLogLevels.js';
+import { DefaultLogLevelsService, IDefaultLogLevelsService, parseDefaultLogLevels, readDefaultLogLevels } from '../../common/defaultLogLevels.js';
 import '../../../../contrib/output/browser/output.contribution.js';
 
 class TestLifecycleService extends AbstractLifecycleService {}
 
-async function fixture(
-	resources: DisposableStore,
-	text?: string,
-	environment = new ElectronWorkbenchEnvironmentService(),
-) {
+async function fixture(resources: DisposableStore, text?: string, environment = new ElectronWorkbenchEnvironmentService()) {
 	const files = resources.add(new FileService());
 	const provider = resources.add(new InMemoryFileSystemProvider());
 	resources.add(files.registerProvider(environment.argvResource.scheme, provider));
 	await files.createDirectory(environment.argvResource.with({ path: '/user' }));
-	if (text !== undefined)
-		await files.writeFile({ resource: environment.argvResource, content: text }, { create: true, overwrite: true });
+	if (text !== undefined) await files.writeFile({ resource: environment.argvResource, content: text }, { create: true, overwrite: true });
 	const failures = resources.add(new Emitter<void>());
 	const logger = resources.add(
 		new LogService({
@@ -62,8 +52,7 @@ async function fixture(
 		fileResources: {
 			onDidChange: files.onDidChangeFiles,
 			resolve: async request => {
-				if (request.bootstrapText !== undefined)
-					return { resource: request.resource, text: request.bootstrapText, revision: undefined };
+				if (request.bootstrapText !== undefined) return { resource: request.resource, text: request.bootstrapText, revision: undefined };
 				const file = await files.readFile(request.resource);
 				return { resource: request.resource, text: file.content, revision: file.revision };
 			},
@@ -84,9 +73,7 @@ async function fixture(
 	const services = resources.add(parent.createChild());
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	services.registerInstance(IFileService, files);
-	services.registerCollection(
-		new ServiceCollection(...getSingletonServiceDescriptors().filter(([id]) => id === IJSONEditingService)),
-	);
+	services.registerCollection(new ServiceCollection(...getSingletonServiceDescriptors().filter(([id]) => id === IJSONEditingService)));
 	services.registerInstance(IWorkbenchEnvironmentService, environment);
 	services.registerInstance(ILogService, logger);
 	services.registerInstance(ILoggerService, logger);
@@ -127,20 +114,16 @@ suite('Default log levels shutdown', () => {
 });
 
 test('startup levels parse canonical spellings, extension identities and invalid boundaries', () => {
-	assert.deepEqual(
-		parseDefaultLogLevels(['debug', 'error', 'Publisher.Extension=warn', 'publisher.extension=trace']),
-		{ default: LogLevel.Error, extensions: [['publisher.extension', LogLevel.Trace]] },
-	);
-	for (const invalid of [null, 4, {}, ['info', 1], ['invalid'], ['bad=debug'], ['publisher.extension=invalid']])
-		assert.throws(() => parseDefaultLogLevels(invalid));
+	assert.deepEqual(parseDefaultLogLevels(['debug', 'error', 'Publisher.Extension=warn', 'publisher.extension=trace']), {
+		default: LogLevel.Error,
+		extensions: [['publisher.extension', LogLevel.Trace]],
+	});
+	for (const invalid of [null, 4, {}, ['info', 1], ['invalid'], ['bad=debug'], ['publisher.extension=invalid']]) assert.throws(() => parseDefaultLogLevels(invalid));
 });
 
 test('Output Set As Default persists JSONC and restores global and extension levels on restart', async () => {
 	using resources = new DisposableStore();
-	const f = await fixture(
-		resources,
-		'{\n  // keep startup options\n  "other": true,\n  "log-level": ["info", "publisher.one=debug"],\n}\n',
-	);
+	const f = await fixture(resources, '{\n  // keep startup options\n  "other": true,\n  "log-level": ["info", "publisher.one=debug"],\n}\n');
 	f.logger.setLevel(LogLevel.Trace);
 	await f.services.get(ICommandService).executeCommand('workbench.action.output.activeOutputLogLevelDefault');
 	assert.equal(f.defaults.getDefaultLogLevel(), LogLevel.Trace);
@@ -180,10 +163,7 @@ test('default changes update inherited loggers, preserve explicit levels and ini
 		logger: { label: 'Explicit', control: explicit },
 	});
 	await f.defaults.setDefaultLogLevel(LogLevel.Warning);
-	assert.deepEqual(
-		[f.logger.getLevel(), inherited.getLevel(), manual.getLevel(), explicit.getLevel()],
-		[LogLevel.Warning, LogLevel.Warning, LogLevel.Off, LogLevel.Info],
-	);
+	assert.deepEqual([f.logger.getLevel(), inherited.getLevel(), manual.getLevel(), explicit.getLevel()], [LogLevel.Warning, LogLevel.Warning, LogLevel.Off, LogLevel.Info]);
 	using later = f.logger.createLogger('later');
 	assert.equal(later.getLevel(), LogLevel.Warning);
 	await f.defaults.setDefaultLogLevel(LogLevel.Debug, 'publisher.one');
@@ -195,17 +175,11 @@ test('external changes reload defaults, invalid input preserves the last snapsho
 	using resources = new DisposableStore();
 	const f = await fixture(resources);
 	const changed = nextEvent(f.defaults.onDidChangeDefaultLogLevels);
-	await f.files.writeFile(
-		{ resource: f.environment.argvResource, content: '{"log-level":"debug"}' },
-		{ create: true, overwrite: true },
-	);
+	await f.files.writeFile({ resource: f.environment.argvResource, content: '{"log-level":"debug"}' }, { create: true, overwrite: true });
 	await changed;
 	assert.equal(f.logger.getLevel(), LogLevel.Debug);
 	const failed = nextEvent(f.failures.event);
-	await f.files.writeFile(
-		{ resource: f.environment.argvResource, content: '{"log-level": [' },
-		{ create: true, overwrite: true },
-	);
+	await f.files.writeFile({ resource: f.environment.argvResource, content: '{"log-level": [' }, { create: true, overwrite: true });
 	await failed;
 	assert.equal(f.defaults.getDefaultLogLevel(), LogLevel.Debug);
 	await assert.rejects(f.defaults.setDefaultLogLevel(LogLevel.Error));
@@ -230,10 +204,7 @@ test('startup CLI values take precedence over the saved file and malformed files
 			['publisher.two', LogLevel.Off],
 		],
 	});
-	await f.files.writeFile(
-		{ resource: environment.argvResource, content: 'broken' },
-		{ create: true, overwrite: true },
-	);
+	await f.files.writeFile({ resource: environment.argvResource, content: 'broken' }, { create: true, overwrite: true });
 	assert.equal((await readDefaultLogLevels(f.files, environment, f.logger)).default, LogLevel.Trace);
 	assert.equal(await f.read(), 'broken');
 });
@@ -241,9 +212,7 @@ test('startup CLI values take precedence over the saved file and malformed files
 test('JSON editing shares the open model, retains unsaved edits and refuses dirty or invalid documents', async () => {
 	using resources = new DisposableStore();
 	const f = await fixture(resources, '{"other": 1}\n');
-	using reference = await f.services
-		.get(IFileTextModelService)
-		.acquire({ resource: f.environment.argvResource }, new AbortController().signal);
+	using reference = await f.services.get(IFileTextModelService).acquire({ resource: f.environment.argvResource }, new AbortController().signal);
 	const editing = f.services.get(IJSONEditingService);
 	await editing.write(f.environment.argvResource, [{ path: ['value'], value: 2 }], false);
 	assert.equal(reference.isDirty, true);
@@ -253,27 +222,17 @@ test('JSON editing shares the open model, retains unsaved edits and refuses dirt
 	await editing.write(f.environment.argvResource, [{ path: ['value'], value: 3 }], true);
 	assert.equal(reference.isDirty, false);
 	assert.equal((parseJsonc(await f.read()) as { value: number }).value, 3);
-	await f.files.writeFile(
-		{ resource: f.environment.argvResource, content: '{ invalid' },
-		{ create: true, overwrite: true },
-	);
+	await f.files.writeFile({ resource: f.environment.argvResource, content: '{ invalid' }, { create: true, overwrite: true });
 	await f.services.get(IFileTextModelService).refresh(f.environment.argvResource);
-	await assert.rejects(
-		editing.write(f.environment.argvResource, [{ path: ['value'], value: 4 }], true),
-		JSONEditingError,
-	);
+	await assert.rejects(editing.write(f.environment.argvResource, [{ path: ['value'], value: 4 }], true), JSONEditingError);
 	assert.equal(await f.read(), '{ invalid');
 });
 
 test('JSON editing saves removal of the only trailing-comma property without losing comments', async () => {
 	using resources = new DisposableStore();
 	const f = await fixture(resources, '{\n  // keep before\n  "other": 1, // keep after\n}\n');
-	using reference = await f.services
-		.get(IFileTextModelService)
-		.acquire({ resource: f.environment.argvResource }, new AbortController().signal);
-	await f.services
-		.get(IJSONEditingService)
-		.write(f.environment.argvResource, [{ path: ['other'], value: undefined }], true);
+	using reference = await f.services.get(IFileTextModelService).acquire({ resource: f.environment.argvResource }, new AbortController().signal);
+	await f.services.get(IJSONEditingService).write(f.environment.argvResource, [{ path: ['other'], value: undefined }], true);
 	const saved = await f.read();
 	assert.deepEqual(parseJsonc(saved), {});
 	assert.match(saved, /keep before/u);
@@ -291,10 +250,7 @@ test('disposal ignores an in-flight external reload and retires the file listene
 		started.resolve();
 		return pending.promise;
 	};
-	await f.files.writeFile(
-		{ resource: f.environment.argvResource, content: '{"log-level":"error"}' },
-		{ create: true, overwrite: true },
-	);
+	await f.files.writeFile({ resource: f.environment.argvResource, content: '{"log-level":"error"}' }, { create: true, overwrite: true });
 	await started.promise;
 	f.defaults.dispose();
 	pending.resolve({ resource: f.environment.argvResource, content: '{"log-level":"error"}', revision: 'late' });

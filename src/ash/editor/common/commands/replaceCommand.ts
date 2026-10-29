@@ -42,10 +42,7 @@ export class ReplaceCommandWithOffsetSelection extends ReplaceCommand {
 		// The inverse range includes shifts caused by the other cursors in this
 		// transaction; offsets describe the selection in this insertion alone.
 		const start = helper.getInverseEditOperations()[0]!.range.getStartPosition();
-		return Selection.fromPositions(
-			model.modifyPosition(start, this.anchorOffset),
-			model.modifyPosition(start, this.activeOffset),
-		);
+		return Selection.fromPositions(model.modifyPosition(start, this.anchorOffset), model.modifyPosition(start, this.activeOffset));
 	}
 }
 
@@ -129,13 +126,7 @@ export class ReplaceCommandWithOffsetCursorState implements ICommand {
 	private readonly _lineNumberDeltaOffset: number;
 	public readonly insertsAutoWhitespace: boolean;
 
-	constructor(
-		range: Range,
-		text: string,
-		lineNumberDeltaOffset: number,
-		columnDeltaOffset: number,
-		insertsAutoWhitespace: boolean = false,
-	) {
+	constructor(range: Range, text: string, lineNumberDeltaOffset: number, columnDeltaOffset: number, insertsAutoWhitespace: boolean = false) {
 		this._range = range;
 		this._text = text;
 		this._columnDeltaOffset = columnDeltaOffset;
@@ -150,9 +141,7 @@ export class ReplaceCommandWithOffsetCursorState implements ICommand {
 	public computeCursorState(model: ITextModel, helper: ICursorStateComputerData): Selection {
 		const inverseEditOperations = helper.getInverseEditOperations();
 		const srcRange = inverseEditOperations[0].range;
-		return Selection.fromPositions(
-			srcRange.getEndPosition().delta(this._lineNumberDeltaOffset, this._columnDeltaOffset),
-		);
+		return Selection.fromPositions(srcRange.getEndPosition().delta(this._lineNumberDeltaOffset, this._columnDeltaOffset));
 	}
 }
 

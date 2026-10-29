@@ -5,12 +5,7 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import type { JsonValue } from '../../../../base/common/jsonValue.js';
 import type { PolicyValue } from '../../../../base/common/policy.js';
 import { IAccountService, type AccountState } from '../../../../platform/accounts/common/accountService.js';
-import {
-	IGitHubService,
-	GitHubError,
-	GitHubErrorCode,
-	type GitHubAccount,
-} from '../../../../platform/github/common/githubService.js';
+import { IGitHubService, GitHubError, GitHubErrorCode, type GitHubAccount } from '../../../../platform/github/common/githubService.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { AbstractPolicyService, validatePolicyValues } from '../../../../platform/policy/common/policy.js';
@@ -79,12 +74,7 @@ export class AccountPolicyService extends AbstractPolicyService implements IAcco
 		this.cancellation?.cancel();
 		// Logout revokes policy immediately; no old-account values survive an identity change.
 		if (this.currentAccount) {
-			const current = state.accounts.find(
-				account =>
-					account.provider === 'github' &&
-					account.accountId === this.currentAccount!.id &&
-					account.status === 'ready',
-			);
+			const current = state.accounts.find(account => account.provider === 'github' && account.accountId === this.currentAccount!.id && account.status === 'ready');
 			if (!current) {
 				this.currentAccount = undefined;
 				this.accept({});
@@ -159,10 +149,7 @@ export class AccountPolicyService extends AbstractPolicyService implements IAcco
 				return;
 			}
 			if (selected.id !== this.currentAccount?.id || selected.host !== this.currentAccount?.host) this.accept({});
-			const sameScope =
-				selected.id === this.state.scope?.accountId &&
-				selected.host === this.state.scope.host &&
-				selected.credentialRevision === this.state.scope.credentialRevision;
+			const sameScope = selected.id === this.state.scope?.accountId && selected.host === this.state.scope.host && selected.credentialRevision === this.state.scope.credentialRevision;
 			this.currentAccount = selected;
 			this.setState({
 				phase: 'refreshing',
@@ -178,8 +165,7 @@ export class AccountPolicyService extends AbstractPolicyService implements IAcco
 				for (const [path, schema] of Object.entries(definition.managedSettings ?? {})) {
 					const value = raw ? settingAtPath(raw, path) : undefined;
 					if (value === undefined) continue;
-					if (typeof value !== schema.type || (typeof value === 'number' && !Number.isFinite(value)))
-						throw new TypeError(`Invalid managed setting: ${path}`);
+					if (typeof value !== schema.type || (typeof value === 'number' && !Number.isFinite(value))) throw new TypeError(`Invalid managed setting: ${path}`);
 					Object.defineProperty(managedSettings, path, { value, enumerable: true, configurable: true });
 				}
 			}
@@ -187,11 +173,7 @@ export class AccountPolicyService extends AbstractPolicyService implements IAcco
 			for (const [name, definition] of Object.entries(this.policyDefinitions)) {
 				const paths = Object.keys(definition.managedSettings ?? {});
 				if (!paths.some(path => Object.hasOwn(managedSettings, path))) continue;
-				const value = definition.value
-					? definition.value({ managedSettings })
-					: paths.length === 1
-						? managedSettings[paths[0]!]
-						: undefined;
+				const value = definition.value ? definition.value({ managedSettings }) : paths.length === 1 ? managedSettings[paths[0]!] : undefined;
 				if (value !== undefined) Object.defineProperty(values, name, { value, enumerable: true });
 			}
 			this.accept(validatePolicyValues(values, this.policyDefinitions));
@@ -200,12 +182,7 @@ export class AccountPolicyService extends AbstractPolicyService implements IAcco
 			this.setState({ phase: 'ready', scope: this.scope(selected), lastAttemptAt, lastSuccessAt: Date.now() });
 		} catch (error) {
 			if (this.stopped || generation !== this.generation || cancellation.token.isCancellationRequested) return;
-			const failure =
-				error instanceof GitHubError
-					? error.code
-					: error instanceof TypeError
-						? 'invalidResponse'
-						: GitHubErrorCode.Unavailable;
+			const failure = error instanceof GitHubError ? error.code : error instanceof TypeError ? 'invalidResponse' : GitHubErrorCode.Unavailable;
 			this.setState({
 				phase: 'failed',
 				scope: this.state.scope,
@@ -230,8 +207,7 @@ function settingAtPath(raw: Readonly<Record<string, JsonValue>>, path: string): 
 	if (Object.hasOwn(raw, path)) return raw[path];
 	let current: JsonValue | undefined = raw as Record<string, JsonValue>;
 	for (const key of path.split('.')) {
-		if (!current || typeof current !== 'object' || Array.isArray(current) || !Object.hasOwn(current, key))
-			return undefined;
+		if (!current || typeof current !== 'object' || Array.isArray(current) || !Object.hasOwn(current, key)) return undefined;
 		current = (current as Readonly<Record<string, JsonValue>>)[key];
 	}
 	return current;

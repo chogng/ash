@@ -1,12 +1,4 @@
-import type {
-	IChatHookPart,
-	ChatContentPart,
-	PlanUpdate,
-	ThreadItem,
-	ThreadTranscriptEntry,
-	Turn,
-	TurnError,
-} from '../../../../services/chat/common/chatService.js';
+import type { IChatHookPart, ChatContentPart, PlanUpdate, ThreadItem, ThreadTranscriptEntry, Turn, TurnError } from '../../../../services/chat/common/chatService.js';
 import { localize } from '../../../../../nls.js';
 
 export type ChatTurnErrorAction =
@@ -88,26 +80,12 @@ export function chatTranscriptListItems(
 	source?: { readonly sessionId: string; readonly threadId: string },
 ): readonly IChatListItem[] {
 	const editableRequests = new Map(
-		turns
-			.filter(turn => !turn.kind || turn.kind === 'coding' || turn.kind === 'review')
-			.map(turn => [turn.turnId, turn.items.find(item => item.type === 'userMessage')?.itemId]),
+		turns.filter(turn => !turn.kind || turn.kind === 'coding' || turn.kind === 'review').map(turn => [turn.turnId, turn.items.find(item => item.type === 'userMessage')?.itemId]),
 	);
 	// Call IDs are provider-owned and can be reused in another Turn. Keep presentation identity scoped.
 	const key = (turnId: string, toolCallId: string) => JSON.stringify([turnId, toolCallId]);
-	const toolCalls = new Map(
-		entries.flatMap(entry =>
-			entry.type === 'item' && entry.item.type === 'toolCall'
-				? [[key(entry.turnId, entry.item.toolCallId), entry] as const]
-				: [],
-		),
-	);
-	const toolResults = new Map(
-		entries.flatMap(entry =>
-			entry.type === 'item' && entry.item.type === 'toolResult'
-				? [[key(entry.turnId, entry.item.toolCallId), entry.item] as const]
-				: [],
-		),
-	);
+	const toolCalls = new Map(entries.flatMap(entry => (entry.type === 'item' && entry.item.type === 'toolCall' ? [[key(entry.turnId, entry.item.toolCallId), entry] as const] : [])));
+	const toolResults = new Map(entries.flatMap(entry => (entry.type === 'item' && entry.item.type === 'toolResult' ? [[key(entry.turnId, entry.item.toolCallId), entry.item] as const] : [])));
 	const outputs = new Map<string, Extract<ThreadTranscriptEntry, { readonly type: 'toolOutput' }>[]>();
 	for (const entry of entries) {
 		if (entry.type !== 'toolOutput') continue;
@@ -116,24 +94,12 @@ export function chatTranscriptListItems(
 		output.push(entry);
 		outputs.set(identity, output);
 	}
-	const stoppedTurns = new Set(
-		turns
-			.filter(turn => turn.status === 'failed' || turn.status === 'interrupted' || turn.status === 'completed')
-			.map(turn => turn.turnId),
-	);
+	const stoppedTurns = new Set(turns.filter(turn => turn.status === 'failed' || turn.status === 'interrupted' || turn.status === 'completed').map(turn => turn.turnId));
 	for (const entry of entries) if (entry.type === 'turnError') stoppedTurns.add(entry.turnId);
 	const calls = new Map(
-		entries.flatMap(entry =>
-			entry.type === 'item' && entry.item.type === 'toolCall' && entry.item.name === 'advisor'
-				? [[key(entry.turnId, entry.item.toolCallId), entry] as const]
-				: [],
-		),
+		entries.flatMap(entry => (entry.type === 'item' && entry.item.type === 'toolCall' && entry.item.name === 'advisor' ? [[key(entry.turnId, entry.item.toolCallId), entry] as const] : [])),
 	);
-	const results = new Set(
-		entries.flatMap(entry =>
-			entry.type === 'item' && entry.item.type === 'toolResult' ? [key(entry.turnId, entry.item.toolCallId)] : [],
-		),
-	);
+	const results = new Set(entries.flatMap(entry => (entry.type === 'item' && entry.item.type === 'toolResult' ? [key(entry.turnId, entry.item.toolCallId)] : [])));
 	return entries.flatMap<IChatListItem>(entry => {
 		if (entry.type === 'toolOutput') {
 			const call = toolCalls.get(key(entry.turnId, entry.toolCallId));
@@ -148,20 +114,11 @@ export function chatTranscriptListItems(
 				{
 					id: entry.entryId,
 					type: 'toolCall' as const,
-					text: [
-						call.name,
-						call.argumentsJson,
-						...output.map(value => `${value.stream}: ${value.text}`),
-						result?.text,
-					]
-						.filter(Boolean)
-						.join('\n\n'),
+					text: [call.name, call.argumentsJson, ...output.map(value => `${value.stream}: ${value.text}`), result?.text].filter(Boolean).join('\n\n'),
 					transient: !result && !stoppedTurns.has(entry.turnId),
 					isError: result?.isError,
 					toolInvocation: { call, result, output, stopped: stoppedTurns.has(entry.turnId) },
-					...(source && result?.content?.some(part => part.type !== 'text')
-						? { attachmentSource: { ...source, itemId: result.itemId, kind: 'toolResult' as const } }
-						: {}),
+					...(source && result?.content?.some(part => part.type !== 'text') ? { attachmentSource: { ...source, itemId: result.itemId, kind: 'toolResult' as const } } : {}),
 				},
 			];
 		}
@@ -169,11 +126,7 @@ export function chatTranscriptListItems(
 			const call = toolCalls.get(key(entry.turnId, entry.item.toolCallId));
 			if (call?.item.type === 'toolCall' && call.item.name !== 'advisor') return [];
 		}
-		if (
-			entry.type === 'item' &&
-			entry.item.type === 'toolCall' &&
-			calls.has(key(entry.turnId, entry.item.toolCallId))
-		) {
+		if (entry.type === 'item' && entry.item.type === 'toolCall' && calls.has(key(entry.turnId, entry.item.toolCallId))) {
 			if (results.has(key(entry.turnId, entry.item.toolCallId))) return [];
 			return [
 				{
@@ -185,11 +138,7 @@ export function chatTranscriptListItems(
 				},
 			];
 		}
-		if (
-			entry.type === 'item' &&
-			entry.item.type === 'toolResult' &&
-			calls.has(key(entry.turnId, entry.item.toolCallId))
-		) {
+		if (entry.type === 'item' && entry.item.type === 'toolResult' && calls.has(key(entry.turnId, entry.item.toolCallId))) {
 			const item = entry.item;
 			let value: unknown;
 			try {
@@ -208,27 +157,19 @@ export function chatTranscriptListItems(
 				];
 			const result = value as Record<string, unknown>;
 			const model = result.model as { provider?: unknown; model?: unknown } | undefined;
-			const modelLabel =
-				typeof model?.provider === 'string' && typeof model.model === 'string'
-					? `${model.provider}/${model.model}`
-					: localize('advisor.settings.title', 'Advisor');
+			const modelLabel = typeof model?.provider === 'string' && typeof model.model === 'string' ? `${model.provider}/${model.model}` : localize('advisor.settings.title', 'Advisor');
 			const advice =
 				typeof result.advice === 'string'
 					? result.advice
 					: typeof result.message === 'string'
 						? result.message
 						: result.status === 'limitReached'
-							? localize(
-									'chat.advisor.limitReached',
-									'The advisor call limit for this Turn has been reached.',
-								)
+							? localize('chat.advisor.limitReached', 'The advisor call limit for this Turn has been reached.')
 							: localize('chat.advisor.noAdvice', 'No advice returned');
 			const usage = result.usage as { inputTokens?: number; outputTokens?: number } | undefined;
 			const details = [
 				typeof result.question === 'string' ? result.question : undefined,
-				typeof result.sourceSequence === 'number'
-					? localize('chat.advisor.sequence', 'Conversation sequence {0}', result.sourceSequence)
-					: undefined,
+				typeof result.sourceSequence === 'number' ? localize('chat.advisor.sequence', 'Conversation sequence {0}', result.sourceSequence) : undefined,
 				usage
 					? localize(
 							'chat.advisor.tokens',
@@ -274,10 +215,7 @@ export function chatTranscriptListItems(
 }
 
 /** Maps one backend-assembled transcript entry to Chat presentation. */
-export function chatTranscriptListItem(
-	entry: ThreadTranscriptEntry,
-	options: TranscriptListItemOptions = {},
-): IChatListItem {
+export function chatTranscriptListItem(entry: ThreadTranscriptEntry, options: TranscriptListItemOptions = {}): IChatListItem {
 	switch (entry.type) {
 		case 'voiceTranscript':
 			return {
@@ -285,10 +223,7 @@ export function chatTranscriptListItem(
 				type: 'voiceTranscript',
 				text: entry.transcript.text,
 				transient: false,
-				label:
-					entry.transcript.speaker === 'user'
-						? localize('chat.voice.transcript.user', 'Your voice transcript')
-						: localize('chat.voice.transcript.assistant', 'Voice reply transcript'),
+				label: entry.transcript.speaker === 'user' ? localize('chat.voice.transcript.user', 'Your voice transcript') : localize('chat.voice.transcript.assistant', 'Voice reply transcript'),
 			};
 		case 'hookRun':
 			return chatHookListItem(entry);
@@ -317,10 +252,7 @@ export function chatTranscriptListItem(
 				text: entry.text,
 				transient: true,
 				isError: entry.stream === 'stderr',
-				label:
-					entry.stream === 'stderr'
-						? localize('chat.transcript.toolStderr', 'Tool stderr')
-						: localize('chat.transcript.toolStdout', 'Tool stdout'),
+				label: entry.stream === 'stderr' ? localize('chat.transcript.toolStderr', 'Tool stderr') : localize('chat.transcript.toolStdout', 'Tool stdout'),
 			};
 	}
 }
@@ -330,10 +262,7 @@ interface TranscriptListItemOptions {
 }
 
 /** Projects one durable Turn failure as a conversation item. */
-export function chatTurnErrorListItem(
-	turn: Turn,
-	options: ChatTurnErrorListItemOptions = {},
-): IChatListItem | undefined {
+export function chatTurnErrorListItem(turn: Turn, options: ChatTurnErrorListItemOptions = {}): IChatListItem | undefined {
 	if (turn.status !== 'failed') return undefined;
 	const error = turn.error ?? undefined;
 	const presentation = error ? turnErrorPresentation(turn.turnId, error) : undefined;
@@ -346,43 +275,26 @@ export function chatTurnErrorListItem(
 		label: presentation?.label,
 		detail: presentation?.detail,
 		errorCode: error?.code,
-		action:
-			options.actionsEnabled === false ||
-			(turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review')
-				? undefined
-				: presentation?.action,
+		action: options.actionsEnabled === false || (turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review') ? undefined : presentation?.action,
 	};
 }
 
-function turnErrorPresentation(
-	turnId: string,
-	error: TurnError,
-): { readonly label: string; readonly detail: string; readonly action?: ChatTurnErrorAction } {
+function turnErrorPresentation(turnId: string, error: TurnError): { readonly label: string; readonly detail: string; readonly action?: ChatTurnErrorAction } {
 	switch (error.code) {
 		case 'policyCircuitBreaker':
 			return {
 				label: localize('chat.policyCircuitBreaker.label', 'Automatic review stopped this turn'),
-				detail: localize(
-					'chat.policyCircuitBreaker.detail',
-					'Repeated actions were rejected. Review the reason before requesting a safer approach.',
-				),
+				detail: localize('chat.policyCircuitBreaker.detail', 'Repeated actions were rejected. Review the reason before requesting a safer approach.'),
 			};
 		case 'connectionFailed':
 		case 'providerUnavailable':
 		case 'providerHttp':
 		case 'modelInvocationFailed':
-			return retryPresentation(
-				turnId,
-				localize('chat.turnError.model.label', 'Model error'),
-				localize('chat.turnError.model.detail', 'The model request may have failed temporarily.'),
-			);
+			return retryPresentation(turnId, localize('chat.turnError.model.label', 'Model error'), localize('chat.turnError.model.detail', 'The model request may have failed temporarily.'));
 		case 'contextOverflow':
 			return {
 				label: localize('chat.turnError.context.label', 'Context limit'),
-				detail: localize(
-					'chat.turnError.context.detail',
-					'Automatic context recovery was exhausted. Start a new chat or send a smaller request.',
-				),
+				detail: localize('chat.turnError.context.detail', 'Automatic context recovery was exhausted. Start a new chat or send a smaller request.'),
 				action: { type: 'startNewChat', label: localize('chat.turnError.startNewChat', 'Start new chat') },
 			};
 		case 'modelConfiguration':
@@ -390,17 +302,11 @@ function turnErrorPresentation(
 		case 'providerAuth':
 			return {
 				label: localize('chat.turnError.auth.label', 'Authentication'),
-				detail: localize(
-					'chat.turnError.auth.detail',
-					'Choose a model with working credentials before sending another message.',
-				),
+				detail: localize('chat.turnError.auth.detail', 'Choose a model with working credentials before sending another message.'),
 				action: { type: 'chooseModel', label: localize('chat.turnError.chooseModel', 'Choose another model') },
 			};
 		case 'invalidRequest':
-			return revisePresentation(
-				localize('chat.turnError.request.label', 'Invalid request'),
-				localize('chat.turnError.request.detail', 'Revise the request or choose a different model.'),
-			);
+			return revisePresentation(localize('chat.turnError.request.label', 'Invalid request'), localize('chat.turnError.request.detail', 'Revise the request or choose a different model.'));
 		case 'invalidResponse':
 			return retryPresentation(
 				turnId,
@@ -411,62 +317,40 @@ function turnErrorPresentation(
 			return retryPresentation(
 				turnId,
 				localize('chat.turnError.save.label', 'Save failed'),
-				localize(
-					'chat.turnError.save.detail',
-					'The Turn completion could not be saved. Review the conversation before retrying.',
-				),
+				localize('chat.turnError.save.detail', 'The Turn completion could not be saved. Review the conversation before retrying.'),
 			);
 		case 'interactionDeadlineElapsed':
 			return retryPresentation(
 				turnId,
 				localize('chat.turnError.expired.label', 'Interaction expired'),
-				localize(
-					'chat.turnError.expired.detail',
-					'The requested interaction expired before it received a response.',
-				),
+				localize('chat.turnError.expired.detail', 'The requested interaction expired before it received a response.'),
 			);
 		case 'toolRepetition':
 			return revisePresentation(
 				localize('chat.turnError.repetition.label', 'Repeated tool failure'),
-				localize(
-					'chat.turnError.repetition.detail',
-					'The same tool and arguments failed five times. Ask Ash to use a different approach or explain the blocker.',
-				),
+				localize('chat.turnError.repetition.detail', 'The same tool and arguments failed five times. Ask Ash to use a different approach or explain the blocker.'),
 			);
 		case 'rateLimited':
 		case 'usageLimited':
 			return {
 				label: localize('chat.turnError.usage.label', 'Usage limit'),
-				detail: localize(
-					'chat.turnError.usage.detail',
-					"The model provider's usage limit was reached. Choose another model or try again later.",
-				),
+				detail: localize('chat.turnError.usage.detail', "The model provider's usage limit was reached. Choose another model or try again later."),
 				action: { type: 'chooseModel', label: localize('chat.turnError.chooseModel', 'Choose another model') },
 			};
 		case 'worktreeCaptureFailed':
 			return retryPresentation(
 				turnId,
 				localize('chat.turnError.capture.label', 'Worktree capture failed'),
-				localize(
-					'chat.turnError.capture.detail',
-					'The Turn could not create its immutable worktree baseline, so write tools were not allowed.',
-				),
+				localize('chat.turnError.capture.detail', 'The Turn could not create its immutable worktree baseline, so write tools were not allowed.'),
 			);
 	}
 }
 
-function retryPresentation(
-	turnId: string,
-	label: string,
-	detail: string,
-): { readonly label: string; readonly detail: string; readonly action: ChatTurnErrorAction } {
+function retryPresentation(turnId: string, label: string, detail: string): { readonly label: string; readonly detail: string; readonly action: ChatTurnErrorAction } {
 	return { label, detail, action: { type: 'retry', label: localize('chat.turnError.retry', 'Try again'), turnId } };
 }
 
-function revisePresentation(
-	label: string,
-	detail: string,
-): { readonly label: string; readonly detail: string; readonly action: ChatTurnErrorAction } {
+function revisePresentation(label: string, detail: string): { readonly label: string; readonly detail: string; readonly action: ChatTurnErrorAction } {
 	return { label, detail, action: { type: 'revise', label: localize('chat.turnError.revise', 'Change approach') } };
 }
 
@@ -477,9 +361,20 @@ export function chatListItem(item: ThreadItem, transient = false): IChatListItem
 		case 'agentMessage':
 		case 'reasoning':
 		case 'plan':
-			return { id: item.itemId, type: item.type, text: item.text, transient };
+			return {
+				id: item.itemId,
+				type: item.type,
+				text: item.text,
+				transient,
+			};
 		case 'userContext':
-			return { id: item.itemId, type: item.type, text: item.name, contextText: item.content, transient };
+			return {
+				id: item.itemId,
+				type: item.type,
+				text: item.name,
+				contextText: item.content,
+				transient,
+			};
 		case 'userImage':
 			return {
 				id: item.itemId,
@@ -500,16 +395,17 @@ export function chatListItem(item: ThreadItem, transient = false): IChatListItem
 			return {
 				id: item.itemId,
 				type: item.type,
-				text: localize(
-					'chat.media.audioDuration',
-					'Audio ({0} seconds)',
-					Math.ceil(item.attachment.durationMs / 1000),
-				),
+				text: localize('chat.media.audioDuration', 'Audio ({0} seconds)', Math.ceil(item.attachment.durationMs / 1000)),
 				content: [{ type: 'audioAttachment', attachment: item.attachment }],
 				transient,
 			};
 		case 'toolCall':
-			return { id: item.itemId, type: item.type, text: `${item.name}\n${item.argumentsJson}`, transient };
+			return {
+				id: item.itemId,
+				type: item.type,
+				text: `${item.name}\n${item.argumentsJson}`,
+				transient,
+			};
 		case 'toolResult':
 			return {
 				id: item.itemId,
@@ -525,12 +421,7 @@ export function chatListItem(item: ThreadItem, transient = false): IChatListItem
 /** Converts one Hook outcome for both Chat presentations. */
 export function chatHookListItem(entry: Extract<ThreadTranscriptEntry, { readonly type: 'hookRun' }>): IChatListItem {
 	const run = entry.run;
-	const reason =
-		run.status.type === 'denied' || run.status.type === 'cancelled'
-			? run.status.reason
-			: run.status.type === 'failed'
-				? run.status.message
-				: '';
+	const reason = run.status.type === 'denied' || run.status.type === 'cancelled' ? run.status.reason : run.status.type === 'failed' ? run.status.message : '';
 	return {
 		id: entry.entryId,
 		type: 'hook',

@@ -113,48 +113,48 @@ export class DiffModel extends Disposable {
 		const source = new CancellationTokenSource();
 		this.activeRequest = source;
 		const generation = ++this.requestGeneration;
-		this.setState(Object.freeze({ kind: 'loading', originalVersion, modifiedVersion }));
+		this.setState(
+			Object.freeze({
+				kind: 'loading',
+				originalVersion,
+				modifiedVersion,
+			}),
+		);
 		void this.compute(generation, source, originalVersion, modifiedVersion);
 	}
 
-	private async compute(
-		generation: number,
-		source: CancellationTokenSource,
-		originalVersion: number,
-		modifiedVersion: number,
-	): Promise<void> {
+	private async compute(generation: number, source: CancellationTokenSource, originalVersion: number, modifiedVersion: number): Promise<void> {
 		try {
-			const result = await this.options.diffProvider.computeDiff(
-				this.original,
-				this.modified,
-				this.diffOptions,
-				source.token,
-			);
+			const result = await this.options.diffProvider.computeDiff(this.original, this.modified, this.diffOptions, source.token);
 			if (!this.isCurrentRequest(generation, source, originalVersion, modifiedVersion)) return;
 			const diff = toLineDiff(result, this.original.lineCount, this.modified.lineCount);
 			source.dispose();
 			this.activeRequest = undefined;
 			this.setState(
-				Object.freeze({ kind: 'ready', originalVersion, modifiedVersion, quitEarly: result.quitEarly, diff }),
+				Object.freeze({
+					kind: 'ready',
+					originalVersion,
+					modifiedVersion,
+					quitEarly: result.quitEarly,
+					diff,
+				}),
 			);
 		} catch (error) {
-			if (
-				source.token.isCancellationRequested ||
-				!this.isCurrentRequest(generation, source, originalVersion, modifiedVersion)
-			)
-				return;
+			if (source.token.isCancellationRequested || !this.isCurrentRequest(generation, source, originalVersion, modifiedVersion)) return;
 			source.dispose();
 			this.activeRequest = undefined;
-			this.setState(Object.freeze({ kind: 'error', originalVersion, modifiedVersion, error: toError(error) }));
+			this.setState(
+				Object.freeze({
+					kind: 'error',
+					originalVersion,
+					modifiedVersion,
+					error: toError(error),
+				}),
+			);
 		}
 	}
 
-	private isCurrentRequest(
-		generation: number,
-		source: CancellationTokenSource,
-		originalVersion: number,
-		modifiedVersion: number,
-	): boolean {
+	private isCurrentRequest(generation: number, source: CancellationTokenSource, originalVersion: number, modifiedVersion: number): boolean {
 		return (
 			!this.isDisposed &&
 			this.requestGeneration === generation &&

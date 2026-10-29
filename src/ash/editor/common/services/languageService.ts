@@ -2,22 +2,10 @@ import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { type URI } from '../../../base/common/uri.js';
 import type { TextResourceLanguageInput } from '../../../platform/language/common/textResourceLanguage.js';
-import {
-	LanguagesRegistry,
-	type LanguageDescription,
-	type LanguageDescriptionContribution,
-	type LanguageDescriptionRegistration,
-	type LanguageRegistrationOptions,
-} from './languagesRegistry.js';
+import { LanguagesRegistry, type LanguageDescription, type LanguageDescriptionContribution, type LanguageDescriptionRegistration, type LanguageRegistrationOptions } from './languagesRegistry.js';
 import { type ILanguageIdCodec } from '../languages.js';
 import { LanguageId } from '../encodedTokenAttributes.js';
-import {
-	type ILanguageExtensionPoint,
-	type ILanguageIcon,
-	type ILanguageNameIdPair,
-	type ILanguageSelection,
-	type IAshLanguageService,
-} from '../languages/language.js';
+import { type ILanguageExtensionPoint, type ILanguageIcon, type ILanguageNameIdPair, type ILanguageSelection, type IAshLanguageService } from '../languages/language.js';
 import { PLAINTEXT_EXTENSION, PLAINTEXT_LANGUAGE_ID } from '../languages/modesRegistry.js';
 
 /** Owns language identities and file associations independently of feature providers. */
@@ -57,13 +45,10 @@ export class LanguageService extends Disposable implements IAshLanguageService {
 		return this.languages.register(description, options);
 	}
 
-	public registerLanguages(
-		contributions: readonly LanguageDescriptionContribution[],
-	): LanguageDescriptionRegistration {
+	public registerLanguages(contributions: readonly LanguageDescriptionContribution[]): LanguageDescriptionRegistration {
 		if (this.warnOnOverwrite) {
 			for (const contribution of contributions) {
-				if (this.languages.get(contribution.description.id))
-					console.warn(`Overwriting language contribution '${contribution.description.id}'`);
+				if (this.languages.get(contribution.description.id)) console.warn(`Overwriting language contribution '${contribution.description.id}'`);
 			}
 		}
 		for (const contribution of contributions) this.languageIdCodec.encodeLanguageId(contribution.description.id);
@@ -112,21 +97,13 @@ export class LanguageService extends Disposable implements IAshLanguageService {
 		return resource ? (this.resolveLanguageId({ resource, firstLine }) ?? null) : null;
 	}
 	createById(languageId: string | null | undefined): ILanguageSelection {
-		return new LanguageSelection(this.onDidChange, () =>
-			languageId && this.isRegisteredLanguageId(languageId) ? languageId : PLAINTEXT_LANGUAGE_ID,
-		);
+		return new LanguageSelection(this.onDidChange, () => (languageId && this.isRegisteredLanguageId(languageId) ? languageId : PLAINTEXT_LANGUAGE_ID));
 	}
 	createByMimeType(mimeType: string | null | undefined): ILanguageSelection {
-		return new LanguageSelection(
-			this.onDidChange,
-			() => this.getLanguageIdByMimeType(mimeType) ?? PLAINTEXT_LANGUAGE_ID,
-		);
+		return new LanguageSelection(this.onDidChange, () => this.getLanguageIdByMimeType(mimeType) ?? PLAINTEXT_LANGUAGE_ID);
 	}
 	createByFilepathOrFirstLine(resource: URI | null, firstLine?: string): ILanguageSelection {
-		return new LanguageSelection(
-			this.onDidChange,
-			() => this.guessLanguageIdByFilepathOrFirstLine(resource, firstLine) ?? PLAINTEXT_LANGUAGE_ID,
-		);
+		return new LanguageSelection(this.onDidChange, () => this.guessLanguageIdByFilepathOrFirstLine(resource, firstLine) ?? PLAINTEXT_LANGUAGE_ID);
 	}
 
 	requestBasicLanguageFeatures(languageId: string): void {

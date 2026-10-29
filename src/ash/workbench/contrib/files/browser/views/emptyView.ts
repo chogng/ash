@@ -52,12 +52,7 @@ export class EmptyView extends ViewPane {
 	}
 
 	private get canOpenFolder(): boolean {
-		return this.contexts.contextMatchesRules(
-			ContextKeyExpr.or(
-				OpenFolderWorkspaceSupportContext.isEqualTo(true),
-				BrowserLocalFolderSupportContext.isEqualTo(true),
-			),
-		);
+		return this.contexts.contextMatchesRules(ContextKeyExpr.or(OpenFolderWorkspaceSupportContext.isEqualTo(true), BrowserLocalFolderSupportContext.isEqualTo(true)));
 	}
 
 	private async openFolder(): Promise<void> {

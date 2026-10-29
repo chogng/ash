@@ -7,9 +7,7 @@ export interface GotoLocation {
 	readonly kind: 'lineColumn' | 'offset';
 }
 
-export type GotoLocationParseResult =
-	| { readonly kind: 'empty' | 'invalid'; readonly message: string }
-	| { readonly kind: 'location'; readonly location: GotoLocation; readonly message: string };
+export type GotoLocationParseResult = { readonly kind: 'empty' | 'invalid'; readonly message: string } | { readonly kind: 'location'; readonly location: GotoLocation; readonly message: string };
 
 /**
  * Parses Stanza's Go to Line input into a clamped model position.
@@ -56,8 +54,7 @@ function parseLineColumn(model: ITextModel, value: string): GotoLocationParseRes
 		});
 	}
 	const lineLength = model.getLineContent(lineIndex + 1).length;
-	const oneBasedColumn =
-		requestedColumn === undefined ? 1 : requestedColumn < 0 ? lineLength + 2 + requestedColumn : requestedColumn;
+	const oneBasedColumn = requestedColumn === undefined ? 1 : requestedColumn < 0 ? lineLength + 2 + requestedColumn : requestedColumn;
 	return locationResult(new Position(lineIndex + 1, clamp(oneBasedColumn - 1, 0, lineLength) + 1), 'lineColumn');
 }
 

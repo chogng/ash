@@ -4,31 +4,17 @@ import { Emitter, Event } from '../../../../base/common/event.js';
 import { type IWebWorkerClient } from '../../../../base/common/worker/webWorker.js';
 import { IWebWorkerService } from '../../../../platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerDescriptor } from '../../../../platform/webWorker/browser/webWorkerDescriptor.js';
-import {
-	syntaxLanguageForEditorLanguage,
-	syntaxEditorLanguageIds,
-} from '../../../../platform/syntax/common/syntaxApi.js';
+import { syntaxLanguageForEditorLanguage, syntaxEditorLanguageIds } from '../../../../platform/syntax/common/syntaxApi.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { ISyntaxApi } from '../../../../platform/syntax/common/syntaxApi.js';
 import { createAppServerTreeSitterSession } from './appServerTreeSitterSession.js';
 import { Range } from '../../../../editor/common/core/range.js';
-import {
-	LanguageDiagnosticSeverity,
-	nestDocumentSymbols,
-	type LanguageDocumentSymbol,
-} from '../../../../editor/common/languages.js';
+import { LanguageDiagnosticSeverity, nestDocumentSymbols, type LanguageDocumentSymbol } from '../../../../editor/common/languages.js';
 import { localize } from '../../../../nls.js';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import {
-	ITreeSitterLibraryService,
-	treeSitterChannel,
-	type TreeSitterSyntaxSession,
-} from '../../../../editor/common/services/treeSitter/treeSitterLibraryService.js';
-import type {
-	TreeSitterFacts,
-	TreeSitterSyntaxResult,
-} from '../../../../editor/common/services/treeSitter/treeSitterLibraryService.js';
+import { ITreeSitterLibraryService, treeSitterChannel, type TreeSitterSyntaxSession } from '../../../../editor/common/services/treeSitter/treeSitterLibraryService.js';
+import type { TreeSitterFacts, TreeSitterSyntaxResult } from '../../../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
@@ -57,8 +43,7 @@ export class TreeSitterLibraryService extends Disposable implements ITreeSitterL
 	}
 	createSession(model: TextModel): TreeSitterSyntaxSession {
 		this.assertNotDisposed();
-		if (!isWeb || this.syntax.isAvailable)
-			return createAppServerTreeSitterSession(this.syntax, model, `shared-tree-${++this.documentId}`);
+		if (!isWeb || this.syntax.isAvailable) return createAppServerTreeSitterSession(this.syntax, model, `shared-tree-${++this.documentId}`);
 		const worker = this.worker.value ?? this.createWorker(),
 			document = ++this.documentId;
 		worker.send('open', {
@@ -84,11 +69,7 @@ export class TreeSitterLibraryService extends Disposable implements ITreeSitterL
 			},
 			request: async (operation, data, signal) => {
 				if (disposed) throw new Error('Syntax session is disposed');
-				const result = await worker.request(
-					++this.requestId,
-					{ ...data, document, revision: model.version, operation },
-					signal,
-				);
+				const result = await worker.request(++this.requestId, { ...data, document, revision: model.version, operation }, signal);
 				this.canRecover = true;
 				return decodeResult(result, model);
 			},
@@ -125,22 +106,14 @@ export class TreeSitterLibraryService extends Disposable implements ITreeSitterL
 function decodeResult(value: unknown, model: TextModel): TreeSitterSyntaxResult {
 	if (!value || typeof value !== 'object') throw new TypeError('Invalid syntax Worker result');
 	const result = value as TreeSitterSyntaxResult;
-	if (!Number.isSafeInteger(result.revision) || !Array.isArray(result.measures))
-		throw new TypeError('Invalid syntax Worker revision');
+	if (!Number.isSafeInteger(result.revision) || !Array.isArray(result.measures)) throw new TypeError('Invalid syntax Worker revision');
 	for (const measure of result.measures)
-		if (
-			!['parse', 'query', 'facts'].includes(measure.operation) ||
-			!Number.isFinite(measure.duration) ||
-			measure.duration < 0 ||
-			typeof measure.incremental !== 'boolean'
-		)
+		if (!['parse', 'query', 'facts'].includes(measure.operation) || !Number.isFinite(measure.duration) || measure.duration < 0 || typeof measure.incremental !== 'boolean')
 			throw new TypeError('Invalid syntax measurement');
 	const range = (value: import('../../../../editor/common/core/range.js').IRange): void => {
 		if (
 			!value ||
-			![value.startLineNumber, value.endLineNumber, value.startColumn, value.endColumn].every(
-				n => Number.isSafeInteger(n) && n > 0,
-			) ||
+			![value.startLineNumber, value.endLineNumber, value.startColumn, value.endColumn].every(n => Number.isSafeInteger(n) && n > 0) ||
 			value.startLineNumber > value.endLineNumber ||
 			(value.startLineNumber === value.endLineNumber && value.startColumn > value.endColumn)
 		)
@@ -152,20 +125,13 @@ function decodeResult(value: unknown, model: TextModel): TreeSitterSyntaxResult 
 			range(pair.range);
 			range(pair.opening);
 			if (pair.closing) range(pair.closing);
-			if (
-				typeof pair.text !== 'string' ||
-				!Number.isSafeInteger(pair.level) ||
-				pair.level < 0 ||
-				!Number.isSafeInteger(pair.equalLevel)
-			)
-				throw new TypeError('Invalid syntax bracket');
+			if (typeof pair.text !== 'string' || !Number.isSafeInteger(pair.level) || pair.level < 0 || !Number.isSafeInteger(pair.equalLevel)) throw new TypeError('Invalid syntax bracket');
 		}
 	}
 	if (result.rows !== undefined) {
 		if (!Array.isArray(result.rows)) throw new TypeError('Invalid syntax rows');
 		for (const row of result.rows) {
-			if (!Number.isSafeInteger(row.row) || row.row < 0 || !Array.isArray(row.tokens))
-				throw new TypeError('Invalid syntax row');
+			if (!Number.isSafeInteger(row.row) || row.row < 0 || !Array.isArray(row.tokens)) throw new TypeError('Invalid syntax row');
 			for (const token of row.tokens)
 				if (
 					!Number.isSafeInteger(token.start) ||
@@ -179,23 +145,12 @@ function decodeResult(value: unknown, model: TextModel): TreeSitterSyntaxResult 
 		}
 	}
 	if (result.facts) {
-		if (
-			!Array.isArray(result.facts.folds) ||
-			!Array.isArray(result.facts.symbols) ||
-			!Array.isArray(result.facts.diagnostics)
-		)
-			throw new TypeError('Invalid syntax facts');
+		if (!Array.isArray(result.facts.folds) || !Array.isArray(result.facts.symbols) || !Array.isArray(result.facts.diagnostics)) throw new TypeError('Invalid syntax facts');
 		for (const fold of result.facts.folds)
-			if (
-				!Number.isSafeInteger(fold.startLineIndex) ||
-				!Number.isSafeInteger(fold.endLineIndex) ||
-				fold.startLineIndex < 0 ||
-				fold.endLineIndex <= fold.startLineIndex
-			)
+			if (!Number.isSafeInteger(fold.startLineIndex) || !Number.isSafeInteger(fold.endLineIndex) || fold.startLineIndex < 0 || fold.endLineIndex <= fold.startLineIndex)
 				throw new TypeError('Invalid syntax fold');
 		for (const symbol of result.facts.symbols) {
-			if (typeof symbol.name !== 'string' || typeof symbol.kind !== 'string')
-				throw new TypeError('Invalid syntax symbol');
+			if (typeof symbol.name !== 'string' || typeof symbol.kind !== 'string') throw new TypeError('Invalid syntax symbol');
 			range(symbol.range);
 			range(symbol.selectionRange);
 		}
@@ -213,12 +168,7 @@ function decodeResult(value: unknown, model: TextModel): TreeSitterSyntaxResult 
 	return result;
 }
 
-export function createTreeSitterSyntaxSession(
-	model: TextModel,
-	configuration: IConfigurationService,
-	library: ITreeSitterLibraryService,
-	themes: IThemeService,
-): TextModelSyntaxSession | undefined {
+export function createTreeSitterSyntaxSession(model: TextModel, configuration: IConfigurationService, library: ITreeSitterLibraryService, themes: IThemeService): TextModelSyntaxSession | undefined {
 	if (!library.supportsLanguage(model.getLanguageId())) return undefined;
 	const session = library.createSession(model);
 	return {
@@ -227,9 +177,7 @@ export function createTreeSitterSyntaxSession(
 			const [tokenType, ...modifiers] = capture.split('.');
 			const theme = themes.getColorTheme();
 			const metadata = theme.getTokenStyleMetadata(tokenType!, modifiers, language);
-			const fontStyle = metadata
-				? (['italic', 'bold', 'underline', 'strikethrough'] as const).filter(style => metadata[style])
-				: undefined;
+			const fontStyle = metadata ? (['italic', 'bold', 'underline', 'strikethrough'] as const).filter(style => metadata[style]) : undefined;
 			return {
 				tokenType: tokenType!,
 				modifiers,
@@ -280,14 +228,12 @@ export class TreeSitterSyntaxProviders extends Disposable {
 		this._register(
 			features.foldingRangeProvider.register(languages, {
 				id: 'ash.treeSitter.syntax',
-				provideFoldingRanges: async (request, signal) =>
-					(await request.model.tokenization.syntaxTree?.getFacts(signal))?.folds ?? [],
+				provideFoldingRanges: async (request, signal) => (await request.model.tokenization.syntaxTree?.getFacts(signal))?.folds ?? [],
 			}),
 		);
 		this._register(
 			features.selectionRangeProvider.register(languages, {
-				provideSelectionRanges: async (request, signal) =>
-					(await request.model.tokenization.syntaxTree?.getSelectionRanges(request.ranges, signal)) ?? [],
+				provideSelectionRanges: async (request, signal) => (await request.model.tokenization.syntaxTree?.getSelectionRanges(request.ranges, signal)) ?? [],
 			}),
 		);
 		// JSON's grammar also backs JSONC, but rejects its legal trailing commas.
@@ -305,9 +251,7 @@ export class TreeSitterSyntaxProviders extends Disposable {
 						diagnostics: facts.diagnostics.map(diagnostic => ({
 							range: Range.lift(diagnostic.range),
 							severity: LanguageDiagnosticSeverity.Error,
-							message: diagnostic.missing
-								? localize('treeSitter.missingSyntax', 'Missing required syntax')
-								: localize('treeSitter.syntaxError', 'Syntax error'),
+							message: diagnostic.missing ? localize('treeSitter.missingSyntax', 'Missing required syntax') : localize('treeSitter.syntaxError', 'Syntax error'),
 							code: diagnostic.missing ? 'syntax-missing' : 'syntax-error',
 							source: 'ash-syntax',
 						})),
@@ -316,11 +260,7 @@ export class TreeSitterSyntaxProviders extends Disposable {
 			}),
 		);
 	}
-	private async documentSymbols(
-		facts: TreeSitterFacts,
-		model: TextModel,
-		version: number,
-	): Promise<readonly LanguageDocumentSymbol[]> {
+	private async documentSymbols(facts: TreeSitterFacts, model: TextModel, version: number): Promise<readonly LanguageDocumentSymbol[]> {
 		const symbols: LanguageDocumentSymbol[] = [];
 		for (let start = 0; start < facts.symbols.length; start += 4096) {
 			if (this.isDisposed || model.isDisposed() || model.version !== version) throw new CancellationError();
@@ -329,10 +269,7 @@ export class TreeSitterSyntaxProviders extends Disposable {
 				if (!symbol) {
 					symbol = {
 						...source,
-						kind:
-							model.getLanguageId() === 'markdown' && source.kind === 'module'
-								? 'string'
-								: symbolKind(source.kind),
+						kind: model.getLanguageId() === 'markdown' && source.kind === 'module' ? 'string' : symbolKind(source.kind),
 						range: Range.lift(source.range),
 						selectionRange: Range.lift(source.selectionRange),
 					};

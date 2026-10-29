@@ -10,12 +10,7 @@ import { TerminalEditorService } from './terminalEditorService.js';
 import { registerTerminalActions } from './terminalActions.js';
 import { setupTerminalMenus } from './terminalMenus.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
-import {
-	ViewContainerLocation,
-	WorkbenchViewContainerId,
-	type WorkbenchViewRegistry,
-	ViewsRegistry,
-} from '../../../common/views.js';
+import { ViewContainerLocation, WorkbenchViewContainerId, type WorkbenchViewRegistry, ViewsRegistry } from '../../../common/views.js';
 import { TERMINAL_VIEW_ID } from '../common/terminal.js';
 import { TerminalViewPane } from './terminalView.js';
 import { ITerminalLogService, ITerminalProcessService } from '../../../../platform/terminal/common/terminal.js';
@@ -23,12 +18,7 @@ import { TerminalLogService } from '../../../../platform/terminal/common/termina
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
 import { ITerminalConfigurationService } from './terminal.js';
-import {
-	ITerminalService,
-	ITerminalGroupService,
-	ITerminalEditorService,
-	ITerminalEditingService,
-} from './terminal.js';
+import { ITerminalService, ITerminalGroupService, ITerminalEditorService, ITerminalEditingService } from './terminal.js';
 import { TerminalGroupService } from './terminalGroupService.js';
 import { setupTerminalCommands } from './terminalCommands.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
@@ -44,12 +34,8 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 
 // Ash creates its view services with the Parts; host terminal requests need both owners ready.
-registerWorkbenchContribution(TerminalMainContribution.ID, WorkbenchPhase.BlockRestore, accessor =>
-	accessor.get(IInstantiationService).createInstance(TerminalMainContribution),
-);
-registerWorkbenchContribution(AgentHostOutputChannel.ID, WorkbenchPhase.BlockRestore, accessor =>
-	accessor.get(IInstantiationService).createInstance(AgentHostOutputChannel),
-);
+registerWorkbenchContribution(TerminalMainContribution.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(TerminalMainContribution));
+registerWorkbenchContribution(AgentHostOutputChannel.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(AgentHostOutputChannel));
 
 // Register the owner before resolving its delayed group/editor services, which
 // depend on it in turn. Their constructors run only after the owner is available.
@@ -66,13 +52,7 @@ registerSingleton(ITerminalLogService, TerminalLogService, InstantiationType.Del
 
 registerWorkbenchServiceContribution({
 	service: ITerminalProfileService,
-	dependencies: [
-		ITerminalProcessService,
-		IConfigurationService,
-		IWorkspaceContextService,
-		IExtensionService,
-		ITerminalContributionService,
-	],
+	dependencies: [ITerminalProcessService, IConfigurationService, IWorkspaceContextService, IExtensionService, ITerminalContributionService],
 	install: context => context.register(context.container.createInstance(TerminalProfileService)),
 });
 

@@ -22,13 +22,7 @@ class PackagePdfEditor extends PdfEditorPane {
 		@IStorageService storage: IStorageService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
-		super(
-			new WorkspacePdfDocumentLoader(files),
-			new WorkspacePdfAnnotationStore(files),
-			new PdfJsRenderer(),
-			theme,
-			storage,
-		);
+		super(new WorkspacePdfDocumentLoader(files), new WorkspacePdfAnnotationStore(files), new PdfJsRenderer(), theme, storage);
 		this.bindProvider(signal);
 	}
 

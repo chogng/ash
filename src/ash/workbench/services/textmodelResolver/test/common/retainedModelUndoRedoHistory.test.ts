@@ -29,12 +29,7 @@ test('RetainedModelUndoRedoHistory does not capture an unfinished history revisi
 	using model = new TextModel('revision');
 	const group = new UndoRedoGroup();
 	model.beginHistoryRevision(group);
-	model.pushEditOperations(
-		null,
-		[{ range: Range.fromPositions(model.positionAt(model.length)), text: '!' }],
-		() => null,
-		group,
-	);
+	model.pushEditOperations(null, [{ range: Range.fromPositions(model.positionAt(model.length)), text: '!' }], () => null, group);
 	participant.remember(resource, model);
 	assert.equal(model.finishHistoryRevision(group), true);
 
@@ -45,11 +40,7 @@ test('RetainedModelUndoRedoHistory does not capture an unfinished history revisi
 
 function editedModel(text: string): TextModel {
 	const model = new TextModel(text);
-	model.pushEditOperations(
-		null,
-		[{ range: Range.fromPositions(model.positionAt(model.length)), text: '!' }],
-		() => null,
-	);
+	model.pushEditOperations(null, [{ range: Range.fromPositions(model.positionAt(model.length)), text: '!' }], () => null);
 	return model;
 }
 

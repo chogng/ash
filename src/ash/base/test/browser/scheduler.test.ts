@@ -1,14 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { WindowIdleValue, WindowIntervalTimer } from '../../browser/dom.js';
-import {
-	disposableWindowInterval,
-	disposableWindowTimeout,
-	measure,
-	modify,
-	runAtThisOrScheduleAtNextAnimationFrame,
-	scheduleAtNextAnimationFrame,
-} from '../../browser/scheduler.js';
+import { disposableWindowInterval, disposableWindowTimeout, measure, modify, runAtThisOrScheduleAtNextAnimationFrame, scheduleAtNextAnimationFrame } from '../../browser/scheduler.js';
 
 test('animation-frame scheduling orders reads, ordinary work, and writes', () => {
 	const targetWindow = new TestAnimationWindow();

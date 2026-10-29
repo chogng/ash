@@ -305,12 +305,7 @@ export class Color {
 	}
 
 	equals(other: Color | null): boolean {
-		return (
-			!!other &&
-			RGBA.equals(this.rgba, other.rgba) &&
-			HSLA.equals(this.hsla, other.hsla) &&
-			HSVA.equals(this.hsva, other.hsva)
-		);
+		return !!other && RGBA.equals(this.rgba, other.rgba) && HSLA.equals(this.hsla, other.hsla) && HSVA.equals(this.hsva, other.hsva);
 	}
 
 	/**
@@ -567,12 +562,7 @@ export class Color {
 	private _toNumber32Bit?: number;
 	toNumber32Bit(): number {
 		if (!this._toNumber32Bit) {
-			this._toNumber32Bit =
-				((this.rgba.r /*  */ << 24) |
-					(this.rgba.g /*  */ << 16) |
-					(this.rgba.b /*  */ << 8) |
-					((this.rgba.a * 0xff) << 0)) >>>
-				0;
+			this._toNumber32Bit = ((this.rgba.r /*  */ << 24) | (this.rgba.g /*  */ << 16) | (this.rgba.b /*  */ << 8) | ((this.rgba.a * 0xff) << 0)) >>> 0;
 		}
 		return this._toNumber32Bit;
 	}
@@ -684,9 +674,7 @@ export namespace Color {
 					return parseHex(css);
 				}
 				if (css.startsWith('rgba(')) {
-					const color = css.match(
-						/rgba\((?<r>(?:\+|-)?\d+), *(?<g>(?:\+|-)?\d+), *(?<b>(?:\+|-)?\d+), *(?<a>(?:\+|-)?\d+(\.\d+)?)\)/,
-					);
+					const color = css.match(/rgba\((?<r>(?:\+|-)?\d+), *(?<g>(?:\+|-)?\d+), *(?<b>(?:\+|-)?\d+), *(?<a>(?:\+|-)?\d+(\.\d+)?)\)/);
 					if (!color) {
 						throw new Error('Invalid color format ' + css);
 					}

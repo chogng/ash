@@ -3,10 +3,7 @@ import { test } from 'mocha';
 import { Event } from '../../../../../base/common/event.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import type { IStorageService } from '../../../../../platform/storage/common/storage.js';
-import {
-	ChatModelPreferences,
-	LanguageModelsConfigurationService,
-} from '../../browser/languageModelsConfigurationService.js';
+import { ChatModelPreferences, LanguageModelsConfigurationService } from '../../browser/languageModelsConfigurationService.js';
 import { ModelCatalogConfiguration } from '../../common/languageModelsConfiguration.js';
 
 const first = { provider: 'openai', model: 'gpt-6.1-sol' };

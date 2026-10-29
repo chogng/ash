@@ -8,11 +8,7 @@ export const LOCAL_APP_SERVER_INITIALIZE_TIMEOUT_MS = 90_000;
 export type AppServerConnectionTarget = 'workspace' | 'local' | { readonly id: string };
 
 export function appServerConnectionChannel(target: AppServerConnectionTarget): string {
-	return typeof target === 'object'
-		? `ash:app-server:host:${target.id}`
-		: target === 'local'
-			? 'ash:app-server:local'
-			: 'ash:app-server';
+	return typeof target === 'object' ? `ash:app-server:host:${target.id}` : target === 'local' ? 'ash:app-server:local' : 'ash:app-server';
 }
 
 export const WEB_APP_SERVER_PROTOCOL_VERSION = 1;

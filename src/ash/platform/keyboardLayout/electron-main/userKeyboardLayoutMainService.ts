@@ -5,12 +5,7 @@ import type { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
 import { parseJsonc } from '../../../base/common/jsonc.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { keyboardMappingsEqual, type IKeyboardLayoutDefinition } from '../common/keyboardLayout.js';
-import {
-	parseUserKeyboardLayoutResource,
-	USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT,
-	validateUserKeyboardLayoutOpenResource,
-	validateUserKeyboardLayoutRead,
-} from '../common/userKeyboardLayout.js';
+import { parseUserKeyboardLayoutResource, USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT, validateUserKeyboardLayoutOpenResource, validateUserKeyboardLayoutRead } from '../common/userKeyboardLayout.js';
 
 export interface UserKeyboardLayoutMainServiceOptions {
 	readonly filePath: string;
@@ -155,20 +150,12 @@ export function userKeyboardLayoutChannel(service: UserKeyboardLayoutMainService
 			if (event !== 'onDidChangeKeyboardLayout' || arg !== undefined) {
 				throw new TypeError('Invalid user keyboard layout subscription');
 			}
-			return (listener, thisArgs, disposables) =>
-				service.onDidChangeKeyboardLayout(
-					() => listener.call(thisArgs, service.currentKeyboardLayout as T),
-					undefined,
-					disposables,
-				);
+			return (listener, thisArgs, disposables) => service.onDidChangeKeyboardLayout(() => listener.call(thisArgs, service.currentKeyboardLayout as T), undefined, disposables);
 		},
 	};
 }
 
-function keyboardLayoutDefinitionsEqual(
-	first: IKeyboardLayoutDefinition | undefined,
-	second: IKeyboardLayoutDefinition | undefined,
-): boolean {
+function keyboardLayoutDefinitionsEqual(first: IKeyboardLayoutDefinition | undefined, second: IKeyboardLayoutDefinition | undefined): boolean {
 	return (
 		first === second ||
 		Boolean(

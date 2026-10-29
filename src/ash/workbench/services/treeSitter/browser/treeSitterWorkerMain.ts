@@ -1,7 +1,4 @@
-import {
-	editorLanguageForSyntaxLanguage,
-	syntaxLanguageForEditorLanguage,
-} from '../../../../platform/syntax/common/syntaxApi.js';
+import { editorLanguageForSyntaxLanguage, syntaxLanguageForEditorLanguage } from '../../../../platform/syntax/common/syntaxApi.js';
 import { treeSitterChannel } from '../../../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import { start } from '../../../../editor/editor.worker.start.js';
 import { WebWorkerServer } from '../../../../base/common/worker/webWorker.js';
@@ -11,17 +8,9 @@ import { getLanguageFoldingRules } from '../../../../platform/language/common/la
 
 start(({ port, resources }) => {
 	const library = resources.add(new TreeSitterWasmLibrary());
-	const load = async (
-		languageId: string,
-	): Promise<
-		| import('../../../../editor/common/services/treeSitter/treeSitterTree.js').TreeSitterTokenizationRuntime
-		| undefined
-	> => {
+	const load = async (languageId: string): Promise<import('../../../../editor/common/services/treeSitter/treeSitterTree.js').TreeSitterTokenizationRuntime | undefined> => {
 		if (!library.supportsLanguage(languageId)) return undefined;
-		const [Parser, language] = await Promise.all([
-			library.getParserClass(),
-			library.getLanguagePromise(languageId),
-		]);
+		const [Parser, language] = await Promise.all([library.getParserClass(), library.getLanguagePromise(languageId)]);
 		const query = library.getHighlightingQueries(languageId);
 		if (!language || !query) throw new Error(`Missing Tree-sitter grammar for ${languageId}`);
 		const editorLanguage = editorLanguageForSyntaxLanguage(syntaxLanguageForEditorLanguage(languageId)!);

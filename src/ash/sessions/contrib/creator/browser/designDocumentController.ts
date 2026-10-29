@@ -16,26 +16,13 @@ import { localize } from '../../../../nls.js';
 import { ConfirmResult, IDialogService, IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { FileKind, FileNotFoundError, IFileService } from '../../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import {
-	documentFromShapes,
-	flattenDesignShapes,
-	parseDesignDocument,
-	serializeDesignDocument,
-	type DesignAssetVersion,
-	type DesignDocument,
-	type DesignShape,
-} from '../common/model/document.js';
+import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignAssetVersion, type DesignDocument, type DesignShape } from '../common/model/document.js';
 import { DocumentCommands } from '../common/commands/documentCommands.js';
 import type { DesignPoint } from '../common/core/geometry.js';
 import { encodeDesignMedia, hashDesignMedia, type DesignImageSource } from './designMedia.js';
 import { IAssetService, type AssetVersion } from '../../../../platform/assets/common/assetService.js';
 import { DesignModel } from '../common/model/designModel.js';
-import {
-	emptyDesignResources,
-	getDesignResourceCatalog,
-	getDesignLibraryShapes,
-	type DesignLibrary,
-} from '../common/model/designResources.js';
+import { emptyDesignResources, getDesignResourceCatalog, getDesignLibraryShapes, type DesignLibrary } from '../common/model/designResources.js';
 import { exportDesignSvg } from './svgRenderer.js';
 import type { IWorkingCopy } from '../../../../workbench/services/workingCopy/common/workingCopyService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
@@ -99,23 +86,15 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	}
 	public get saveStatus(): string {
 		if (this.restoreFailed) {
-			return localize(
-				'sessions.design.restoreFailed',
-				'Could not restore the design. Retry to reopen your saved work.',
-			);
+			return localize('sessions.design.restoreFailed', 'Could not restore the design. Retry to reopen your saved work.');
 		}
 		if (this.restoring) {
 			return localize('sessions.design.restoring', 'Restoring design…');
 		}
 		if (this.autoSaveError) {
-			return localize(
-				'sessions.design.autoSaveFailed',
-				'Could not save changes. Your changes are still in the canvas.',
-			);
+			return localize('sessions.design.autoSaveFailed', 'Could not save changes. Your changes are still in the canvas.');
 		}
-		return this.isDirty || this.autoSaveRunning
-			? localize('sessions.design.saving', 'Saving…')
-			: localize('sessions.design.allSaved', 'All changes saved');
+		return this.isDirty || this.autoSaveRunning ? localize('sessions.design.saving', 'Saving…') : localize('sessions.design.allSaved', 'All changes saved');
 	}
 	private publication: { readonly documentId: string; readonly resource: URI } | undefined;
 	private readonly libraryUpdates = new Map<
@@ -128,10 +107,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	>();
 	public getLibraryUpdate(id: string): DesignLibrary | undefined {
 		const pending = this.libraryUpdates.get(id);
-		return pending?.baseVersion ===
-			this.model.value.resources?.libraries.find(library => library.id === id)?.version
-			? pending?.library
-			: undefined;
+		return pending?.baseVersion === this.model.value.resources?.libraries.find(library => library.id === id)?.version ? pending?.library : undefined;
 	}
 
 	constructor(
@@ -156,22 +132,13 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 			);
 		}
 		this.savedContent = serializeDesignDocument(this.model.value);
-		this.draftHome = URI.joinPath(
-			profiles.currentProfile.location,
-			'creator',
-			encodeURIComponent(workspace.getWorkspace().id),
-		);
+		this.draftHome = URI.joinPath(profiles.currentProfile.location, 'creator', encodeURIComponent(workspace.getWorkspace().id));
 		this._register(
 			this.model.onDidChange(kind => {
 				if (kind === 'replace') {
 					this.libraryUpdates.clear();
 				}
-				if (
-					!isDesignVectorGeometryReady() &&
-					flattenDesignShapes(this.model.value.shapes).some(
-						shape => shape.kind === 'group' && shape.booleanOperation,
-					)
-				) {
+				if (!isDesignVectorGeometryReady() && flattenDesignShapes(this.model.value.shapes).some(shape => shape.kind === 'group' && shape.booleanOperation)) {
 					void loadDesignVectorGeometry().then(
 						() => {
 							if (!this.isDisposed) {
@@ -202,9 +169,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 			}),
 		);
 		this._register(this.model.onDidChange(() => this.scheduleAutoSave()));
-		const active = this.automaticallySaves
-			? storage.get(this.activeDocumentKey, StorageScope.WORKSPACE)
-			: undefined;
+		const active = this.automaticallySaves ? storage.get(this.activeDocumentKey, StorageScope.WORKSPACE) : undefined;
 		this.ready = active ? this.restoreAutoSavedDocument(active) : Promise.resolve();
 	}
 
@@ -212,9 +177,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		if (this.file && !extUri.isEqualOrParent(this.file.resource, this.draftHome)) {
 			return basename(this.file.resource);
 		}
-		return this.mode === CreatorMode.Design
-			? localize('sessions.design.untitled', 'Untitled design')
-			: localize('sessions.creator.untitled', 'Untitled {0}', getCreatorModeTitle(this.mode));
+		return this.mode === CreatorMode.Design ? localize('sessions.design.untitled', 'Untitled design') : localize('sessions.creator.untitled', 'Untitled {0}', getCreatorModeTitle(this.mode));
 	}
 	public get isBusy(): boolean {
 		return this.restoring || this.restoreFailed || (this.isFileOperationRunning && !this.autoSaveRunning);
@@ -226,42 +189,23 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		const document = this.model.value;
 		return JSON.stringify({
 			manifest: serializeDesignDocument(document),
-			media: Object.fromEntries(
-				document.assets.flatMap(asset =>
-					asset.versions.map(version => [version.sha256, encodeDesignMedia(this.readMedia(version))]),
-				),
-			),
+			media: Object.fromEntries(document.assets.flatMap(asset => asset.versions.map(version => [version.sha256, encodeDesignMedia(this.readMedia(version))]))),
 		});
 	}
 	public restoreBackup(content: string): void {
 		const value: unknown = JSON.parse(content);
-		if (
-			!isRecord(value) ||
-			typeof value.manifest !== 'string' ||
-			!isRecord(value.media) ||
-			Object.keys(value).some(key => key !== 'manifest' && key !== 'media')
-		) {
+		if (!isRecord(value) || typeof value.manifest !== 'string' || !isRecord(value.media) || Object.keys(value).some(key => key !== 'manifest' && key !== 'media')) {
 			throw new TypeError(localize('sessions.design.invalidBackup', 'Invalid design backup'));
 		}
 		const document = parseDesignDocument(value.manifest);
 		if (document.mode !== this.mode) {
-			throw new TypeError(
-				localize(
-					'sessions.creator.wrongMode',
-					'This document belongs to {0}. Open it in that Creator mode.',
-					getCreatorModeTitle(document.mode),
-				),
-			);
+			throw new TypeError(localize('sessions.creator.wrongMode', 'This document belongs to {0}. Open it in that Creator mode.', getCreatorModeTitle(document.mode)));
 		}
 		const media = new Map<string, Uint8Array>();
 		for (const asset of document.assets) {
 			for (const version of asset.versions) {
 				const encoded = value.media[version.sha256];
-				if (
-					typeof encoded !== 'string' ||
-					!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(encoded) ||
-					encoded.length === 0
-				) {
+				if (typeof encoded !== 'string' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(encoded) || encoded.length === 0) {
 					throw new TypeError(localize('sessions.design.backupMediaMissing', 'Missing design backup media'));
 				}
 				media.set(version.sha256, decodeBase64(encoded).buffer);
@@ -282,18 +226,13 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		return bytes;
 	}
 
-	public getEmbeddedImageSources(
-		document: DesignDocument = this.model.value,
-		media: ReadonlyMap<string, Uint8Array> = this.media,
-	): ReadonlyMap<string, DesignImageSource> {
+	public getEmbeddedImageSources(document: DesignDocument = this.model.value, media: ReadonlyMap<string, Uint8Array> = this.media): ReadonlyMap<string, DesignImageSource> {
 		const sources = new Map<string, DesignImageSource>();
 		for (const shape of flattenDesignShapes(document.shapes)) {
 			if (shape.kind !== 'image') {
 				continue;
 			}
-			const version = document.assets
-				.find(asset => asset.id === shape.assetId)!
-				.versions.find(version => version.id === shape.assetVersionId)!;
+			const version = document.assets.find(asset => asset.id === shape.assetId)!.versions.find(version => version.id === shape.assetVersionId)!;
 			sources.set(version.id, {
 				url: `data:${version.mediaType};base64,${encodeDesignMedia(media.get(version.sha256) ?? this.readMedia(version))}`,
 				width: version.width,
@@ -305,10 +244,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 
 	public getLibraryImageSources(library: DesignLibrary): ReadonlyMap<string, DesignImageSource> {
 		const pending = this.libraryUpdates.get(library.id);
-		return this.getEmbeddedImageSources(
-			library.document,
-			pending?.library.version === library.version ? pending.media : this.media,
-		);
+		return this.getEmbeddedImageSources(library.document, pending?.library.version === library.version ? pending.media : this.media);
 	}
 
 	public async importImage(center: DesignPoint): Promise<string | undefined> {
@@ -325,9 +261,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 				title: localize('sessions.design.importImage', 'Import image'),
 				canSelectFiles: true,
 				canSelectFolders: false,
-				filters: [
-					{ name: localize('sessions.design.images', 'Images'), extensions: ['png', 'jpg', 'jpeg', 'webp'] },
-				],
+				filters: [{ name: localize('sessions.design.images', 'Images'), extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
 			});
 			if (!resources || this.isDisposed) {
 				return undefined;
@@ -342,10 +276,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 			});
 			return await this.placeImage(metadata, center, versionToken);
 		} catch (error) {
-			await this.dialogs.error(
-				localize('sessions.design.importFailed', 'Could not import the image.'),
-				String(error),
-			);
+			await this.dialogs.error(localize('sessions.design.importFailed', 'Could not import the image.'), String(error));
 			return undefined;
 		} finally {
 			this.isFileOperationRunning = false;
@@ -365,10 +296,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		try {
 			return await this.placeImage(metadata, center, this.model.version);
 		} catch (error) {
-			await this.dialogs.error(
-				localize('sessions.design.importFailed', 'Could not import the image.'),
-				String(error),
-			);
+			await this.dialogs.error(localize('sessions.design.importFailed', 'Could not import the image.'), String(error));
 			return undefined;
 		} finally {
 			this.isFileOperationRunning = false;
@@ -378,23 +306,14 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		}
 	}
 
-	private async placeImage(
-		metadata: AssetVersion,
-		center: DesignPoint,
-		versionToken: string,
-	): Promise<string | undefined> {
+	private async placeImage(metadata: AssetVersion, center: DesignPoint, versionToken: string): Promise<string | undefined> {
 		const bytes = await this.assets.readVersion(metadata);
 		const sha256 = metadata.sha256;
 		if (this.isDisposed) {
 			return undefined;
 		}
 		if (this.model.version !== versionToken) {
-			throw new Error(
-				localize(
-					'sessions.design.importChanged',
-					'The design changed while the image was importing. Import it again at the current location.',
-				),
-			);
+			throw new Error(localize('sessions.design.importChanged', 'The design changed while the image was importing. Import it again at the current location.'));
 		}
 		const version: DesignAssetVersion = {
 			mediaType: metadata.mediaType,
@@ -452,12 +371,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		this.model.replace(parseDesignDocument(this.savedContent));
 	}
 
-	public async exportDocument(output?: {
-		title: string;
-		filename: string;
-		extension: string;
-		content: string;
-	}): Promise<void> {
+	public async exportDocument(output?: { title: string; filename: string; extension: string; content: string }): Promise<void> {
 		await this.ready;
 		await this.autoSavePromise;
 		if (this.isFileOperationRunning) {
@@ -467,11 +381,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		this.changeEmitter.fire({});
 		try {
 			if (!output) {
-				if (
-					flattenDesignShapes(this.model.value.shapes).some(
-						shape => shape.kind === 'group' && shape.booleanOperation,
-					)
-				) {
+				if (flattenDesignShapes(this.model.value.shapes).some(shape => shape.kind === 'group' && shape.booleanOperation)) {
 					await loadDesignVectorGeometry();
 				}
 				output = {
@@ -496,10 +406,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 				});
 			}
 		} catch (error) {
-			await this.dialogs.error(
-				localize('sessions.design.exportFailed', 'Could not export the design.'),
-				String(error),
-			);
+			await this.dialogs.error(localize('sessions.design.exportFailed', 'Could not export the design.'), String(error));
 		} finally {
 			this.isFileOperationRunning = false;
 			if (!this.isDisposed) {
@@ -547,19 +454,11 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		this.changeEmitter.fire({});
 		try {
 			const resources = await this.fileDialogs.showOpenDialog({
-				title:
-					this.mode === CreatorMode.Design
-						? localize('sessions.design.open', 'Open design')
-						: localize('sessions.creator.open', 'Open document'),
-				defaultUri:
-					this.file && !extUri.isEqualOrParent(this.file.resource, this.draftHome)
-						? dirname(this.file.resource)
-						: undefined,
+				title: this.mode === CreatorMode.Design ? localize('sessions.design.open', 'Open design') : localize('sessions.creator.open', 'Open document'),
+				defaultUri: this.file && !extUri.isEqualOrParent(this.file.resource, this.draftHome) ? dirname(this.file.resource) : undefined,
 				canSelectFiles: true,
 				canSelectFolders: true,
-				filters: [
-					{ name: localize('sessions.design.fileType', 'Ash design'), extensions: ['ash-design', 'json'] },
-				],
+				filters: [{ name: localize('sessions.design.fileType', 'Ash design'), extensions: ['ash-design', 'json'] }],
 			});
 			if (!resources || this.isDisposed) {
 				return;
@@ -567,10 +466,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 			await this.readDocument(resources[0]);
 			await this.rememberDocument();
 		} catch (error) {
-			await this.dialogs.error(
-				localize('sessions.design.openFailed', 'Could not open the design.'),
-				String(error),
-			);
+			await this.dialogs.error(localize('sessions.design.openFailed', 'Could not open the design.'), String(error));
 		} finally {
 			this.isFileOperationRunning = false;
 			if (!this.isDisposed) {
@@ -585,13 +481,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		const read = await this.files.readFile(isPackage ? selected.joinPathSegment('manifest.json') : selected);
 		const document = parseDesignDocument(read.content);
 		if (document.mode !== this.mode) {
-			throw new TypeError(
-				localize(
-					'sessions.creator.wrongMode',
-					'This document belongs to {0}. Open it in that Creator mode.',
-					getCreatorModeTitle(document.mode),
-				),
-			);
+			throw new TypeError(localize('sessions.creator.wrongMode', 'This document belongs to {0}. Open it in that Creator mode.', getCreatorModeTitle(document.mode)));
 		}
 		const root = isPackage ? selected : dirname(selected);
 		const media = new Map<string, Uint8Array>();
@@ -599,13 +489,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 			for (const version of asset.versions) {
 				const data = await this.files.readFileBytes(URI.joinPath(root, version.path));
 				if ((await hashDesignMedia(data.bytes)) !== version.sha256) {
-					throw new Error(
-						localize(
-							'sessions.design.mediaCorrupt',
-							'Image content does not match its saved version: {0}',
-							asset.name,
-						),
-					);
+					throw new Error(localize('sessions.design.mediaCorrupt', 'Image content does not match its saved version: {0}', asset.name));
 				}
 				media.set(version.sha256, data.bytes);
 			}
@@ -613,10 +497,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		if (this.isDisposed) {
 			return;
 		}
-		this.file =
-			isPackage || basename(selected) === 'manifest.json'
-				? { resource: root, revision: read.revision }
-				: undefined;
+		this.file = isPackage || basename(selected) === 'manifest.json' ? { resource: root, revision: read.revision } : undefined;
 		this.media = media;
 		this.setExternalChange(false);
 		this.labelChange.fire();
@@ -664,31 +545,18 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 				target ??
 				this.file?.resource ??
 				(await this.fileDialogs.showSaveDialog({
-					title:
-						this.mode === CreatorMode.Design
-							? localize('sessions.design.save', 'Save design')
-							: localize('sessions.creator.save', 'Save document'),
-					defaultUri: this.workspace
-						.getWorkspace()
-						.folders[0]?.uri.joinPathSegment(`${this.mode}.ash-design`),
+					title: this.mode === CreatorMode.Design ? localize('sessions.design.save', 'Save design') : localize('sessions.creator.save', 'Save document'),
+					defaultUri: this.workspace.getWorkspace().folders[0]?.uri.joinPathSegment(`${this.mode}.ash-design`),
 					filters: [{ name: localize('sessions.design.fileType', 'Ash design'), extensions: ['ash-design'] }],
 				}));
 			if (!resource || this.isDisposed) {
 				return false;
 			}
 			if (copyOnly && this.file && extUri.isEqual(this.file.resource, resource)) {
-				throw new Error(
-					localize('sessions.design.copySameLocation', 'Choose a different location for the copy.'),
-				);
+				throw new Error(localize('sessions.design.copySameLocation', 'Choose a different location for the copy.'));
 			}
 			const isCopy = copyOnly || (!!this.file && !extUri.isEqual(this.file.resource, resource));
-			const snapshot = isCopy
-				? documentFromShapes(
-						this.model.value.shapes,
-						{ ...this.model.value, documentId: generateUuid() },
-						this.model.value.assets,
-					)
-				: this.model.value;
+			const snapshot = isCopy ? documentFromShapes(this.model.value.shapes, { ...this.model.value, documentId: generateUuid() }, this.model.value.assets) : this.model.value;
 			const content = serializeDesignDocument(snapshot);
 			await this.files.createDirectory(resource);
 			await this.files.createDirectory(resource.joinPathSegment('assets'));
@@ -696,13 +564,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 				for (const version of asset.versions) {
 					const bytes = this.readMedia(version);
 					if ((await hashDesignMedia(bytes)) !== version.sha256) {
-						throw new Error(
-							localize(
-								'sessions.design.mediaCorrupt',
-								'Image content does not match its saved version: {0}',
-								asset.name,
-							),
-						);
+						throw new Error(localize('sessions.design.mediaCorrupt', 'Image content does not match its saved version: {0}', asset.name));
 					}
 					const target = URI.joinPath(resource, version.path);
 					let exists = false;
@@ -715,16 +577,8 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 						}
 					}
 					if (exists) {
-						if (
-							(await hashDesignMedia((await this.files.readFileBytes(target)).bytes)) !== version.sha256
-						) {
-							throw new Error(
-								localize(
-									'sessions.design.mediaCorrupt',
-									'Image content does not match its saved version: {0}',
-									asset.name,
-								),
-							);
+						if ((await hashDesignMedia((await this.files.readFileBytes(target)).bytes)) !== version.sha256) {
+							throw new Error(localize('sessions.design.mediaCorrupt', 'Image content does not match its saved version: {0}', asset.name));
 						}
 					} else {
 						await this.files.writeFileBytes(target, bytes);
@@ -732,8 +586,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 				}
 			}
 			const manifest = resource.joinPathSegment('manifest.json');
-			let expectedRevision =
-				this.file && extUri.isEqual(this.file.resource, resource) ? this.file.revision : undefined;
+			let expectedRevision = this.file && extUri.isEqual(this.file.resource, resource) ? this.file.revision : undefined;
 			if (expectedRevision === undefined) {
 				try {
 					expectedRevision = (await this.files.readFile(manifest)).revision;
@@ -762,22 +615,14 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 			await this.rememberDocument();
 			this.savedContent = content;
 			this.autoSaveError = false;
-			this.changeEmitter.fire(
-				automatic ? {} : { message: localize('sessions.design.saved', 'Saved {0}', basename(resource)) },
-			);
+			this.changeEmitter.fire(automatic ? {} : { message: localize('sessions.design.saved', 'Saved {0}', basename(resource)) });
 			return !this.isDirty;
 		} catch (error) {
 			if (automatic) {
 				this.autoSaveError = true;
 				this.changeEmitter.fire({ message: this.saveStatus });
 			} else {
-				await this.dialogs.error(
-					localize(
-						'sessions.design.saveFailed',
-						'Could not save the design. Your changes are still in the canvas.',
-					),
-					String(error),
-				);
+				await this.dialogs.error(localize('sessions.design.saveFailed', 'Could not save the design. Your changes are still in the canvas.'), String(error));
 			}
 			return false;
 		} finally {
@@ -830,8 +675,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 			}
 			while (!this.isDisposed && (this.isDirty || this.autoSaveError)) {
 				this.autoSaveRunning = true;
-				const resource =
-					this.file?.resource ?? URI.joinPath(this.draftHome, `${this.model.value.documentId}.ash-design`);
+				const resource = this.file?.resource ?? URI.joinPath(this.draftHome, `${this.model.value.documentId}.ash-design`);
 				await this.persistDocument(resource, true);
 				this.autoSaveRunning = false;
 				if (this.autoSaveError) {
@@ -854,12 +698,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		if (!this.automaticallySaves || !this.file) {
 			return;
 		}
-		this.storage.store(
-			this.activeDocumentKey,
-			this.file.resource.toString(),
-			StorageScope.WORKSPACE,
-			StorageTarget.MACHINE,
-		);
+		this.storage.store(this.activeDocumentKey, this.file.resource.toString(), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		await this.storage.flush();
 	}
 
@@ -890,9 +729,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 					? this.publication.resource
 					: await this.fileDialogs.showSaveDialog({
 							title: localize('sessions.design.publishLibrary', 'Publish library'),
-							defaultUri: this.workspace
-								.getWorkspace()
-								.folders[0]?.uri.joinPathSegment('library.ash-design-library'),
+							defaultUri: this.workspace.getWorkspace().folders[0]?.uri.joinPathSegment('library.ash-design-library'),
 							filters: [
 								{
 									name: localize('sessions.design.designLibrary', 'Design library'),
@@ -905,19 +742,11 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 			}
 			const resources = source.resources ?? emptyDesignResources;
 			const reusable = (shapes: readonly DesignShape[]): readonly DesignShape[] =>
-				shapes.flatMap(shape =>
-					shape.kind === 'frame' && shape.component
-						? [shape]
-						: shape.kind === 'frame' || shape.kind === 'group'
-							? reusable(shape.children)
-							: [],
-				);
+				shapes.flatMap(shape => (shape.kind === 'frame' && shape.component ? [shape] : shape.kind === 'frame' || shape.kind === 'group' ? reusable(shape.children) : []));
 			const shapes = reusable([...source.shapes, ...getDesignLibraryShapes(resources)]);
 			const images = flattenDesignShapes(shapes).filter(shape => shape.kind === 'image');
 			const assets = source.assets.flatMap(asset => {
-				const versions = asset.versions.filter(version =>
-					images.some(shape => shape.assetId === asset.id && shape.assetVersionId === version.id),
-				);
+				const versions = asset.versions.filter(version => images.some(shape => shape.assetId === asset.id && shape.assetVersionId === version.id));
 				return versions.length ? [{ ...asset, versions }] : [];
 			});
 			const document = documentFromShapes(
@@ -933,13 +762,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 				for (const version of asset.versions) {
 					const bytes = this.readMedia(version);
 					if ((await hashDesignMedia(bytes)) !== version.sha256) {
-						throw new Error(
-							localize(
-								'sessions.design.mediaCorrupt',
-								'Image content does not match its saved version: {0}',
-								asset.name,
-							),
-						);
+						throw new Error(localize('sessions.design.mediaCorrupt', 'Image content does not match its saved version: {0}', asset.name));
 					}
 					media[version.sha256] = encodeDesignMedia(bytes);
 				}
@@ -948,18 +771,8 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 			try {
 				const current = await this.files.readFile(resource);
 				const old: unknown = JSON.parse(current.content);
-				if (
-					!isRecord(old) ||
-					old.kind !== 'ash-design-library' ||
-					!isRecord(old.document) ||
-					old.document.documentId !== source.documentId
-				) {
-					throw new Error(
-						localize(
-							'sessions.design.libraryConflict',
-							'This library contains conflicting resource identities.',
-						),
-					);
+				if (!isRecord(old) || old.kind !== 'ash-design-library' || !isRecord(old.document) || old.document.documentId !== source.documentId) {
+					throw new Error(localize('sessions.design.libraryConflict', 'This library contains conflicting resource identities.'));
 				}
 				expectedRevision = current.revision;
 			} catch (error) {
@@ -981,11 +794,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 			if (!this.isDisposed) {
 				this.publication = { documentId: source.documentId, resource };
 				this.changeEmitter.fire({
-					message: localize(
-						'sessions.design.libraryPublished',
-						'Published {0}. Other files can review and accept this version.',
-						name,
-					),
+					message: localize('sessions.design.libraryPublished', 'Published {0}. Other files can review and accept this version.', name),
 				});
 			}
 		});
@@ -1035,12 +844,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 				return;
 			}
 			if (loaded.library.id !== id) {
-				throw new TypeError(
-					localize(
-						'sessions.design.libraryConflict',
-						'This library contains conflicting resource identities.',
-					),
-				);
+				throw new TypeError(localize('sessions.design.libraryConflict', 'This library contains conflicting resource identities.'));
 			}
 			if (loaded.library.version !== current.version) {
 				this.libraryUpdates.set(id, { ...loaded, baseVersion: current.version });
@@ -1063,17 +867,10 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 			this.applyLibrary({ ...library, enabled: current.enabled }, update.media);
 			this.libraryUpdates.delete(id);
 			this.changeEmitter.fire({
-				message: localize(
-					'sessions.design.libraryUpdated',
-					'Updated {0}. Instance overrides were retained.',
-					library.name,
-				),
+				message: localize('sessions.design.libraryUpdated', 'Updated {0}. Instance overrides were retained.', library.name),
 			});
 		} catch (error) {
-			void this.dialogs.error(
-				localize('sessions.design.libraryFailed', 'Could not update the design library.'),
-				String(error),
-			);
+			void this.dialogs.error(localize('sessions.design.libraryFailed', 'Could not update the design library.'), String(error));
 		}
 	}
 	private applyLibrary(library: DesignLibrary, media: ReadonlyMap<string, Uint8Array>): void {
@@ -1107,10 +904,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		try {
 			await run();
 		} catch (error) {
-			await this.dialogs.error(
-				localize('sessions.design.libraryFailed', 'Could not update the design library.'),
-				String(error),
-			);
+			await this.dialogs.error(localize('sessions.design.libraryFailed', 'Could not update the design library.'), String(error));
 		} finally {
 			this.isFileOperationRunning = false;
 			if (!this.isDisposed) {
@@ -1118,9 +912,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 			}
 		}
 	}
-	private async readLibrary(
-		resource: URI,
-	): Promise<{ readonly library: DesignLibrary; readonly media: ReadonlyMap<string, Uint8Array> }> {
+	private async readLibrary(resource: URI): Promise<{ readonly library: DesignLibrary; readonly media: ReadonlyMap<string, Uint8Array> }> {
 		const read = await this.files.readFile(resource);
 		const value: unknown = JSON.parse(read.content);
 		if (
@@ -1132,39 +924,22 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 			!isRecord(value.media) ||
 			Object.keys(value).some(key => !['kind', 'name', 'document', 'media'].includes(key))
 		) {
-			throw new TypeError(
-				localize(
-					'sessions.design.invalidResources',
-					'Invalid design resource, binding, or circular variable alias.',
-				),
-			);
+			throw new TypeError(localize('sessions.design.invalidResources', 'Invalid design resource, binding, or circular variable alias.'));
 		}
 		const document = parseDesignDocument(JSON.stringify(value.document));
 		if (document.resources?.libraries.length) {
-			throw new TypeError(
-				localize('sessions.design.libraryConflict', 'This library contains conflicting resource identities.'),
-			);
+			throw new TypeError(localize('sessions.design.libraryConflict', 'This library contains conflicting resource identities.'));
 		}
 		const media = new Map<string, Uint8Array>();
 		for (const asset of document.assets) {
 			for (const version of asset.versions) {
 				const encoded = value.media[version.sha256];
-				if (
-					typeof encoded !== 'string' ||
-					!encoded ||
-					!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(encoded)
-				) {
+				if (typeof encoded !== 'string' || !encoded || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(encoded)) {
 					throw new TypeError(localize('sessions.design.backupMediaMissing', 'Missing design backup media'));
 				}
 				const bytes = decodeBase64(encoded).buffer;
 				if ((await hashDesignMedia(bytes)) !== version.sha256) {
-					throw new Error(
-						localize(
-							'sessions.design.mediaCorrupt',
-							'Image content does not match its saved version: {0}',
-							asset.name,
-						),
-					);
+					throw new Error(localize('sessions.design.mediaCorrupt', 'Image content does not match its saved version: {0}', asset.name));
 				}
 				media.set(version.sha256, bytes);
 			}
@@ -1203,13 +978,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 			if (error instanceof FileNotFoundError && this.file === file && !this.isDisposed) {
 				this.setExternalChange(true);
 			} else if (!this.isDisposed) {
-				await this.dialogs.error(
-					localize(
-						'sessions.design.checkFileFailed',
-						'Could not check the saved design for external changes.',
-					),
-					String(error),
-				);
+				await this.dialogs.error(localize('sessions.design.checkFileFailed', 'Could not check the saved design for external changes.'), String(error));
 			}
 		}
 	}

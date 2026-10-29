@@ -3,14 +3,7 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
-import {
-	AgentTraceViewModel,
-	eventLabel,
-	evidenceLabel,
-	hookStatusLabel,
-	recordingLabel,
-	relationLabel,
-} from '../../browser/chatDebug/agentTraceModel.js';
+import { AgentTraceViewModel, eventLabel, evidenceLabel, hookStatusLabel, recordingLabel, relationLabel } from '../../browser/chatDebug/agentTraceModel.js';
 import type { AgentTrace, AgentTraceEvent, InvocationPerformance } from '../../common/chatDebugEvents.js';
 
 suite('Execution Trace saved execution flow', () => {
@@ -40,14 +33,8 @@ suite('Execution Trace saved execution flow', () => {
 			generation: { type: 'measured', microseconds: '2000000' },
 			textTps: { type: 'estimated', tokensPerSecond: '50.0' },
 		};
-		assert.match(
-			eventLabel(record, performance),
-			/first text 500.0 ms \/ generation 2000.0 ms \/ total 2500.0 ms.*50.0 tok\/s/,
-		);
-		assert.match(
-			eventLabel(record, { ...performance, textTps: { type: 'unknown', reason: 'missingReasoningTokens' } }),
-			/unknown \(reasoning tokens not reported\)/,
-		);
+		assert.match(eventLabel(record, performance), /first text 500.0 ms \/ generation 2000.0 ms \/ total 2500.0 ms.*50.0 tok\/s/);
+		assert.match(eventLabel(record, { ...performance, textTps: { type: 'unknown', reason: 'missingReasoningTokens' } }), /unknown \(reasoning tokens not reported\)/);
 		assert.match(eventLabel(record), /unknown \(performance not included in capture\)/);
 		const model = new AgentTraceViewModel();
 		const trace: AgentTrace = {
@@ -63,14 +50,8 @@ suite('Execution Trace saved execution flow', () => {
 		const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsMessages(catalog.locale, catalog.bundles);
 		try {
-			assert.match(
-				eventLabel(record, performance),
-				/客户端计时：首正文 500.0 毫秒 \/ 生成 2000.0 毫秒 \/ 总计 2500.0 毫秒.*正文 TPS（估算）：50.0 token\/秒/,
-			);
-			assert.match(
-				eventLabel(record, { ...performance, textTps: { type: 'unknown', reason: 'missingReasoningTokens' } }),
-				/未知（未上报思考 token）/,
-			);
+			assert.match(eventLabel(record, performance), /客户端计时：首正文 500.0 毫秒 \/ 生成 2000.0 毫秒 \/ 总计 2500.0 毫秒.*正文 TPS（估算）：50.0 token\/秒/);
+			assert.match(eventLabel(record, { ...performance, textTps: { type: 'unknown', reason: 'missingReasoningTokens' } }), /未知（未上报思考 token）/);
 		} finally {
 			resetNlsResolver();
 		}
@@ -169,11 +150,7 @@ suite('Execution Trace saved execution flow', () => {
 				sourceThreadSequence: 9,
 			},
 		};
-		for (const event of [
-			receipt.event,
-			{ ...receipt.event, attemptId: 'other' },
-			{ ...receipt.event, invocationId: 'other' },
-		]) {
+		for (const event of [receipt.event, { ...receipt.event, attemptId: 'other' }, { ...receipt.event, invocationId: 'other' }]) {
 			model.update({
 				formatVersion: 3,
 				sessionId: 's',
@@ -216,13 +193,7 @@ suite('Execution Trace saved execution flow', () => {
 			);
 			assert.equal(relationLabel('accountsFor'), '已提交的模型账目');
 			assert.equal(evidenceLabel('hookExecution'), 'Hook 命令及有界的进程输入输出');
-			assert.deepEqual(['running', 'continued', 'denied', 'failed', 'cancelled'].map(hookStatusLabel), [
-				'执行中',
-				'已继续',
-				'已阻断',
-				'失败',
-				'已取消',
-			]);
+			assert.deepEqual(['running', 'continued', 'denied', 'failed', 'cancelled'].map(hookStatusLabel), ['执行中', '已继续', '已阻断', '失败', '已取消']);
 		} finally {
 			resetNlsResolver();
 		}
@@ -416,10 +387,7 @@ suite('Execution Trace saved execution flow', () => {
 			historyPrefixes: [],
 			threads: ['root', 'other'].map(threadId => ({
 				threadId,
-				events: [
-					event(threadId, 1, { type: 'toolCall', toolCallId: 'same' }),
-					event(threadId, 2, { type: 'toolResult', toolCallId: 'same' }),
-				],
+				events: [event(threadId, 1, { type: 'toolCall', toolCallId: 'same' }), event(threadId, 2, { type: 'toolResult', toolCallId: 'same' })],
 			})),
 			diagnostics: {
 				formatVersion: 1,
@@ -521,9 +489,7 @@ suite('Execution Trace saved execution flow', () => {
 		};
 		model.update(trace);
 		assert.deepEqual(
-			model
-				.relations(model.findEvent('root', undefined, 'root-1')!)
-				.map(relation => [relation.kind, relation.target.record?.eventId]),
+			model.relations(model.findEvent('root', undefined, 'root-1')!).map(relation => [relation.kind, relation.target.record?.eventId]),
 			[
 				['returnsResult', 'child-2'],
 				['satisfiesJoin', 'root-3'],
@@ -533,11 +499,7 @@ suite('Execution Trace saved execution flow', () => {
 		model.update({
 			...trace,
 			threads: trace.threads
-				.map(thread =>
-					thread.threadId === 'other'
-						? { ...thread, events: [record('other', 1, { type: 'delegationResultReceived', result })] }
-						: thread,
-				)
+				.map(thread => (thread.threadId === 'other' ? { ...thread, events: [record('other', 1, { type: 'delegationResultReceived', result })] } : thread))
 				.filter(thread => thread.threadId !== 'root'),
 		});
 		assert.deepEqual(model.relations(model.findEvent('other', undefined, 'other-1')!), []);
@@ -558,12 +520,7 @@ suite('Execution Trace saved execution flow', () => {
 			threads: [
 				{
 					threadId: 'root',
-					events: [
-						item('call-1', 1, 't', 'toolCall'),
-						item('call-2', 2, 't', 'toolCall'),
-						item('result', 4, 't', 'toolResult'),
-						item('other-turn', 5, 'other', 'toolResult'),
-					],
+					events: [item('call-1', 1, 't', 'toolCall'), item('call-2', 2, 't', 'toolCall'), item('result', 4, 't', 'toolResult'), item('other-turn', 5, 'other', 'toolResult')],
 				},
 			],
 			diagnostics: {

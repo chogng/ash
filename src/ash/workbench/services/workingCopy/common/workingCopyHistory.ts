@@ -19,10 +19,7 @@ export interface IWorkingCopyHistoryEntryDescriptor {
 
 export interface IWorkingCopyHistoryService {
 	readonly onDidAddEntry: Event<{ readonly entry: IWorkingCopyHistoryEntry }>;
-	addEntry(
-		descriptor: IWorkingCopyHistoryEntryDescriptor,
-		token: CancellationToken,
-	): Promise<IWorkingCopyHistoryEntry>;
+	addEntry(descriptor: IWorkingCopyHistoryEntryDescriptor, token: CancellationToken): Promise<IWorkingCopyHistoryEntry>;
 	getEntries(resource: URI, token: CancellationToken): Promise<readonly IWorkingCopyHistoryEntry[]>;
 }
 

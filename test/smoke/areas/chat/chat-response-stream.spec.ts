@@ -20,9 +20,7 @@ test(
 		let stream: ServerResponse | undefined;
 		const server = createServer(async (request, response) => {
 			if (request.method === 'GET') {
-				response
-					.writeHead(200, { 'content-type': 'application/json' })
-					.end(JSON.stringify({ data: [{ id: model.model }] }));
+				response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: [{ id: model.model }] }));
 				return;
 			}
 			try {
@@ -97,8 +95,7 @@ test(
 			});
 			const sessionId = created.session.sessionId;
 			const threadId = created.session.threads[0]!.threadId;
-			const read = async () =>
-				(await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread;
+			const read = async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread;
 			readThread = read;
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 			await page.locator('.ash-sessions-list-item').filter({ hasText: 'Controlled Chat response' }).click();
@@ -120,8 +117,7 @@ test(
 			});
 			await expect.poll(() => requests.length).toBe(1);
 			const code = '```typescript\nconst value = 1;\n```';
-			for (const index of [0, 1])
-				send({ type: 'response.output_item.added', output_index: index, item: message(index, '') });
+			for (const index of [0, 1]) send({ type: 'response.output_item.added', output_index: index, item: message(index, '') });
 			delta(0, 'Synthetic media is being prepared.');
 			delta(1, code);
 			mark('initial-code');
@@ -141,9 +137,7 @@ test(
 						}
 					).editContext;
 					const input = element as HTMLTextAreaElement;
-					return context
-						? { start: context.selectionStart, end: context.selectionEnd }
-						: { start: input.selectionStart, end: input.selectionEnd };
+					return context ? { start: context.selectionStart, end: context.selectionEnd } : { start: input.selectionStart, end: input.selectionEnd };
 				});
 			const selected = await selection();
 			expect(selected.start).toBe(0);
@@ -155,15 +149,8 @@ test(
 			await viewport.evaluate(element => {
 				element.scrollTop = element.scrollHeight;
 			});
-			const formulaTail =
-				String.raw`Incomplete \( candidate **bold** and price $5. `.repeat(64) + ' Complete $x+1$.';
-			const paragraphs =
-				Array.from(
-					{ length: 32 },
-					(_, index) => `Response section ${index}. ${'Synthetic reading content. '.repeat(8)}`,
-				).join('\n\n') +
-				'\n\n' +
-				formulaTail;
+			const formulaTail = String.raw`Incomplete \( candidate **bold** and price $5. `.repeat(64) + ' Complete $x+1$.';
+			const paragraphs = Array.from({ length: 32 }, (_, index) => `Response section ${index}. ${'Synthetic reading content. '.repeat(8)}`).join('\n\n') + '\n\n' + formulaTail;
 			delta(1, '\n\n' + paragraphs);
 			mark('streamed-following');
 			await expect(chat).toContainText('Response section 31.');
@@ -208,20 +195,15 @@ test(
 				body: await page.screenshot(),
 				contentType: 'image/png',
 			});
-			const half =
-				'Large **stable** [Open](https://example.com) response content. '.repeat(192) + ' Halfway marker. ';
-			const large =
-				half +
-				'More **stable** [Open](https://example.com) response content. '.repeat(192) +
-				'\n\nLarge final marker.';
+			const half = 'Large **stable** [Open](https://example.com) response content. '.repeat(192) + ' Halfway marker. ';
+			const large = half + 'More **stable** [Open](https://example.com) response content. '.repeat(192) + '\n\nLarge final marker.';
 			send({ type: 'response.output_item.added', output_index: 2, item: message(2, '') });
 			delta(2, half);
 			const largeBody = chat.locator('.ash-chat-markdown-part').filter({ hasText: 'Halfway marker.' });
 			await expect(largeBody).toBeAttached();
 			const retained = await largeBody.locator('strong').first().elementHandle();
 			const rest = large.slice(half.length);
-			for (let index = 0; index < 8; index++)
-				delta(2, rest.slice(Math.ceil((rest.length * index) / 8), Math.ceil((rest.length * (index + 1)) / 8)));
+			for (let index = 0; index < 8; index++) delta(2, rest.slice(Math.ceil((rest.length * index) / 8), Math.ceil((rest.length * (index + 1)) / 8)));
 			await expect(largeBody).toContainText('Large final marker.');
 			expect(
 				await largeBody
@@ -230,13 +212,11 @@ test(
 					.evaluate((element, old) => element === old, retained),
 			).toBe(true);
 			await expect(copy).toBeFocused();
-			const png =
-				'iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwHwQBEPgD/U6VwW8AAAAASUVORK5CYII=';
+			const png = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwHwQBEPgD/U6VwW8AAAAASUVORK5CYII=';
 			const media = `Synthetic media is ready.\n\n![Synthetic response media](data:image/png;base64,${png}|width=320,height=320)`;
 			const corrected = code.replace('= 1', '= 2') + '\n\n' + paragraphs;
 			const output = [message(0, media), message(1, corrected), message(2, large)];
-			for (const [index, item] of output.entries())
-				send({ type: 'response.output_item.done', output_index: index, item });
+			for (const [index, item] of output.entries()) send({ type: 'response.output_item.done', output_index: index, item });
 			send({
 				type: 'response.completed',
 				response: {
@@ -249,17 +229,9 @@ test(
 			stream!.end();
 			mark('completed-media-and-correction');
 			await expect.poll(async () => (await read()).turns.at(-1)?.status).toBe('completed');
-			await expect
-				.poll(() =>
-					chat
-						.getByRole('img', { name: 'Synthetic response media', exact: true })
-						.evaluate(element => (element as HTMLImageElement).naturalWidth),
-				)
-				.toBe(2);
+			await expect.poll(() => chat.getByRole('img', { name: 'Synthetic response media', exact: true }).evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(2);
 			await expect(block.locator('.view-lines')).toContainText('const value = 2;');
-			await expect
-				.poll(async () => Math.abs((await geometry(paragraph)).top - reading.top))
-				.toBeLessThanOrEqual(1);
+			await expect.poll(async () => Math.abs((await geometry(paragraph)).top - reading.top)).toBeLessThanOrEqual(1);
 			expect((await geometry(paragraph)).scroll.distance).toBeGreaterThan(100);
 			expect(await editor.evaluate((element, previous) => element === previous, originalEditor)).toBe(true);
 			expect(await selection()).toEqual(selected);
@@ -305,9 +277,7 @@ test(
 			} finally {
 				await connection?.close();
 				server.closeAllConnections();
-				await new Promise<void>((resolve, reject) =>
-					server.close(error => (error ? reject(error) : resolve())),
-				);
+				await new Promise<void>((resolve, reject) => server.close(error => (error ? reject(error) : resolve())));
 			}
 		}
 	},

@@ -1,10 +1,5 @@
 import { OperatingSystem } from '../../../../base/common/platform.js';
-import type {
-	IKeyboardLayoutDefinition,
-	IKeyboardLayoutInfo,
-	IKeyboardMapping,
-	IKeyboardMappingEntry,
-} from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
+import type { IKeyboardLayoutDefinition, IKeyboardLayoutInfo, IKeyboardMapping, IKeyboardMappingEntry } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
 
 interface IWindowsLayoutInfo {
 	readonly name: string;
@@ -62,7 +57,10 @@ export function deserializeKeyboardMapping(serialized: ISerializedKeyboardMappin
 export function toKeyboardLayoutDefinitions(info: IKeymapInfo): readonly IKeyboardLayoutDefinition[] {
 	const mapping = deserializeKeyboardMapping(info.mapping);
 	return [info.layout, ...info.secondaryLayouts].map(layout =>
-		Object.freeze({ layout: toKeyboardLayoutInfo(layout), mapping }),
+		Object.freeze({
+			layout: toKeyboardLayoutInfo(layout),
+			mapping,
+		}),
 	);
 }
 

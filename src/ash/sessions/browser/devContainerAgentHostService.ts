@@ -14,9 +14,7 @@ export class DevContainerAgentHostService implements IDevContainerAgentHostServi
 			throw canceled();
 		}
 		if (!this.sessions.invokeRuntime) {
-			throw new Error(
-				localize('sessions.devContainer.unavailable', 'The Dev Container Provider is unavailable.'),
-			);
+			throw new Error(localize('sessions.devContainer.unavailable', 'The Dev Container Provider is unavailable.'));
 		}
 		const controller = new AbortController();
 		using cancellation = token.onCancellationRequested(() => controller.abort());
@@ -35,9 +33,7 @@ export class DevContainerAgentHostService implements IDevContainerAgentHostServi
 	}
 	async getTargets(token: CancellationToken): Promise<readonly SessionExecutionTarget[]> {
 		const result = await this.invoke({ operation: 'list' }, token);
-		return result.type === 'targets'
-			? result.targets.filter(target => target.type === 'provider' && target.providerId === 'ash.dev-containers')
-			: [];
+		return result.type === 'targets' ? result.targets.filter(target => target.type === 'provider' && target.providerId === 'ash.dev-containers') : [];
 	}
 	async isAvailable(workspace: string, token: CancellationToken): Promise<boolean> {
 		const result = await this.invoke({ workspace, operation: 'probe' }, token);
@@ -45,17 +41,8 @@ export class DevContainerAgentHostService implements IDevContainerAgentHostServi
 	}
 	async connect(workspace: string, token: CancellationToken): Promise<SessionExecutionTarget> {
 		const result = await this.invoke({ workspace, operation: 'prepare' }, token);
-		if (
-			result.type !== 'target' ||
-			result.target.type !== 'provider' ||
-			result.target.providerId !== 'ash.dev-containers'
-		) {
-			throw new Error(
-				localize(
-					'sessions.devContainer.invalidTarget',
-					'The Dev Container Provider returned an invalid execution target.',
-				),
-			);
+		if (result.type !== 'target' || result.target.type !== 'provider' || result.target.providerId !== 'ash.dev-containers') {
+			throw new Error(localize('sessions.devContainer.invalidTarget', 'The Dev Container Provider returned an invalid execution target.'));
 		}
 		return result.target;
 	}

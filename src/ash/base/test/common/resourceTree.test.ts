@@ -32,7 +32,13 @@ suite('ResourceTree', () => {
 				context: node.context,
 				values: ResourceTree.collect(tree.root),
 			},
-			{ count: 1, name: 'first.txt', path: '/one/first.txt', context, values: ['updated', 'second'] },
+			{
+				count: 1,
+				name: 'first.txt',
+				path: '/one/first.txt',
+				context,
+				values: ['updated', 'second'],
+			},
 		);
 		assert.equal(tree.root.get('one')!.get('first.txt'), node);
 		assert.equal(ResourceTree.getRoot(node), tree.root);

@@ -12,9 +12,7 @@ let installedGlobals: IDisposable;
 let canvas: HTMLCanvasElement;
 
 setup(() => {
-	browserEnvironment = new JSDOM(
-		'<!doctype html><head><style>.owned { color: red; } .stanza-decoration-style-probe { --gpu-test: #123456; }</style></head><body><canvas></canvas></body>',
-	);
+	browserEnvironment = new JSDOM('<!doctype html><head><style>.owned { color: red; } .stanza-decoration-style-probe { --gpu-test: #123456; }</style></head><body><canvas></canvas></body>');
 	installedGlobals = installEditorTestDom(browserEnvironment, [], {
 		CSSStyleRule: browserEnvironment.window.CSSStyleRule,
 		CSSImportRule: browserEnvironment.window.CSSImportRule,

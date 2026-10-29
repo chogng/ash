@@ -5,11 +5,7 @@ import { DeferredPromise } from '../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { ExtensionHostInvocationError } from '../../common/extensionHostApi.js';
-import {
-	invokeExtensionHost,
-	normalizeExtensionHostPayload,
-	normalizeExtensionHostSnapshot,
-} from '../../browser/extensionHostProtocol.js';
+import { invokeExtensionHost, normalizeExtensionHostPayload, normalizeExtensionHostSnapshot } from '../../browser/extensionHostProtocol.js';
 import { type ExtensionHostInvocationRequest, type JsonValue } from '../../common/extensionHostApi.js';
 
 const DIGEST = `sha256:${'a'.repeat(64)}`;
@@ -236,12 +232,7 @@ test('completion during a pending read wakes a fenced invocation without polling
 		{ now: () => 100 },
 	);
 
-	assert.equal(
-		typeof result === 'object' && result !== null && !Array.isArray(result)
-			? (result as { readonly ok?: JsonValue }).ok
-			: undefined,
-		true,
-	);
+	assert.equal(typeof result === 'object' && result !== null && !Array.isArray(result) ? (result as { readonly ok?: JsonValue }).ok : undefined, true);
 	assert.equal(requests[0]?.activationGeneration, 4);
 	assert.equal(requests[0]?.incarnation, 5);
 	assert.equal(reads, 2);
@@ -354,9 +345,7 @@ test('notification waits preserve terminal failure and cancellation states', asy
 							completed.fire(state);
 							return { state: 'pending' };
 						}
-						return state === 'failed'
-							? { state, code: 'hostRestarted', message: 'restarted' }
-							: { state, reason: 'authorityRevoked' };
+						return state === 'failed' ? { state, code: 'hostRestarted', message: 'restarted' } : { state, reason: 'authorityRevoked' };
 					},
 					cancel: async () => assert.fail('A terminal result has already released the session'),
 				},
@@ -364,10 +353,7 @@ test('notification waits preserve terminal failure and cancellation states', asy
 				new AbortController().signal,
 				{ now: () => 100 },
 			),
-			error =>
-				state === 'failed'
-					? error instanceof ExtensionHostInvocationError && error.code === 'hostRestarted'
-					: error instanceof CancellationError && error.reason === 'authorityRevoked',
+			error => (state === 'failed' ? error instanceof ExtensionHostInvocationError && error.code === 'hostRestarted' : error instanceof CancellationError && error.reason === 'authorityRevoked'),
 		);
 		assert.equal(reads, 2);
 		assert.equal(completed.hasListeners(), false);
@@ -438,11 +424,7 @@ test('abort, deadline and disconnect interrupt notification waits and release su
 		if (mode === 'abort') controller.abort();
 		if (mode === 'disconnect') disconnected.fire(closed);
 		await assert.rejects(pending, error =>
-			mode === 'disconnect'
-				? error === closed
-				: mode === 'abort'
-					? error instanceof CancellationError
-					: error instanceof ExtensionHostInvocationError && error.code === 'deadlineExceeded',
+			mode === 'disconnect' ? error === closed : mode === 'abort' ? error instanceof CancellationError : error instanceof ExtensionHostInvocationError && error.code === 'deadlineExceeded',
 		);
 		assert.equal(cancellations, 1);
 		assert.equal(completed.hasListeners(), false);
@@ -555,13 +537,7 @@ test('abort returns before a delayed start and discards its late session exactly
 	);
 	controller.abort();
 	try {
-		await assert.rejects(
-			Promise.race([
-				pending,
-				new Promise((_, reject) => setTimeout(() => reject(new Error('abort waited for start')), 500)),
-			]),
-			CancellationError,
-		);
+		await assert.rejects(Promise.race([pending, new Promise((_, reject) => setTimeout(() => reject(new Error('abort waited for start')), 500))]), CancellationError);
 	} finally {
 		await started.complete({ invocationId: 'late-session' });
 		await pending.catch(() => undefined);
@@ -602,17 +578,8 @@ test('abort and deadline interrupt a stalled read and discard its backend sessio
 		await reading.p;
 		if (mode === 'abort') controller.abort();
 		try {
-			await assert.rejects(
-				Promise.race([
-					pending,
-					new Promise((_, reject) =>
-						setTimeout(() => reject(new Error('caller waited for stalled read')), 500),
-					),
-				]),
-				error =>
-					mode === 'abort'
-						? error instanceof CancellationError
-						: error instanceof ExtensionHostInvocationError && error.code === 'deadlineExceeded',
+			await assert.rejects(Promise.race([pending, new Promise((_, reject) => setTimeout(() => reject(new Error('caller waited for stalled read')), 500))]), error =>
+				mode === 'abort' ? error instanceof CancellationError : error instanceof ExtensionHostInvocationError && error.code === 'deadlineExceeded',
 			);
 		} finally {
 			await response.complete({ state: 'pending' });
@@ -650,8 +617,7 @@ test('dormant manifests contain declarations without process registrations or au
 		registrations: [],
 		activation: { events: ['onCommand:acme.run'], commands: [{ command: 'acme.run', title: 'Run' }] },
 	};
-	const normalize = (override: object) =>
-		normalizeExtensionHostSnapshot({ generation: 1, extensions: [{ ...extension, ...override }] });
+	const normalize = (override: object) => normalizeExtensionHostSnapshot({ generation: 1, extensions: [{ ...extension, ...override }] });
 	const runtime = normalize({}).extensions[0]!;
 	assert.equal(runtime.incarnation, undefined);
 	assert.deepEqual(runtime.registrations, []);
@@ -760,16 +726,10 @@ test('only boundary-normalized immutable payloads are reused; caller data and Wo
 	const normalized = normalizeExtensionHostPayload(source);
 	assert.equal(normalizeExtensionHostPayload(normalized), normalized);
 	source.tree[0]!.text = 'changed';
-	assert.deepEqual(
-		normalized,
-		Object.assign(Object.create(null), { tree: [Object.assign(Object.create(null), { text: '中文😀' })] }),
-	);
+	assert.deepEqual(normalized, Object.assign(Object.create(null), { tree: [Object.assign(Object.create(null), { text: '中文😀' })] }));
 	assert.notEqual(normalizeExtensionHostPayload(source), normalized);
 	const clone = structuredClone(normalized) as { tree: unknown[] };
 	clone.tree.push(NaN);
-	assert.throws(
-		() => normalizeExtensionHostPayload(clone),
-		/Extension Host payload\.tree\[1\] contains a non-finite number/,
-	);
+	assert.throws(() => normalizeExtensionHostPayload(clone), /Extension Host payload\.tree\[1\] contains a non-finite number/);
 	assert.throws(() => normalizeExtensionHostPayload(Object.freeze({ invalid: undefined })), /JSON values/);
 });

@@ -17,7 +17,10 @@ test('EditorDom owns stable roots, layout writes, and attachment lifecycle', () 
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const parent = dom.window.document.querySelector<HTMLElement>('main');
 	assert.ok(parent);
-	const editorDom = new EditorDom({ rootClassName: 'editor-root', contentClassName: 'editor-content' });
+	const editorDom = new EditorDom({
+		rootClassName: 'editor-root',
+		contentClassName: 'editor-content',
+	});
 	editorDom.attach(parent);
 	editorDom.layout({ width: -10, height: 240 });
 
@@ -79,10 +82,7 @@ test('editor coordinate contracts preserve page/client identity and undo element
 	assert.deepEqual(page.toClientCoordinates(dom.window as unknown as Window), new ClientCoordinates(20, 35));
 	const editorPosition = createEditorPagePosition(editor);
 	assert.deepEqual({ ...editorPosition }, { x: 40, y: 60, width: 400, height: 200 });
-	assert.deepEqual(
-		{ ...createCoordinatesRelativeToEditor(editor, editorPosition, new PageCoordinates(240, 160)) },
-		{ x: 100, y: 50 },
-	);
+	assert.deepEqual({ ...createCoordinatesRelativeToEditor(editor, editorPosition, new PageCoordinates(240, 160)) }, { x: 100, y: 50 });
 
 	dom.window.close();
 });
@@ -103,10 +103,7 @@ test('editor relative coordinates remain finite before layout dimensions are ava
 		toJSON: () => ({}),
 	});
 	const editorPosition = createEditorPagePosition(editor);
-	assert.deepEqual(
-		{ ...createCoordinatesRelativeToEditor(editor, editorPosition, new PageCoordinates(15, 27)) },
-		{ x: 10, y: 20 },
-	);
+	assert.deepEqual({ ...createCoordinatesRelativeToEditor(editor, editorPosition, new PageCoordinates(15, 27)) }, { x: 10, y: 20 });
 	dom.window.close();
 });
 
@@ -117,9 +114,7 @@ test('EditorMouseEventFactory listeners stop publishing after disposal', () => {
 	assert.ok(editor && button);
 	const events = new EditorMouseEventFactory(editor);
 	const positions: Array<{ readonly x: number; readonly y: number }> = [];
-	const listener = events.onMouseDown(editor, event =>
-		positions.push({ x: event.relativePos.x, y: event.relativePos.y }),
-	);
+	const listener = events.onMouseDown(editor, event => positions.push({ x: event.relativePos.x, y: event.relativePos.y }));
 	button.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true, clientX: 12, clientY: 18 }));
 	listener.dispose();
 	button.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true, clientX: 30, clientY: 40 }));

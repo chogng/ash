@@ -99,16 +99,7 @@ export class BareFontInfo {
 
 	/** Returns a stable identity for the font environment. */
 	public getId(): string {
-		return [
-			this.pixelRatio,
-			this.fontFamily,
-			this.fontWeight,
-			this.fontSize,
-			this.fontFeatureSettings,
-			this.fontVariationSettings,
-			this.lineHeight,
-			this.letterSpacing,
-		].join('-');
+		return [this.pixelRatio, this.fontFamily, this.fontWeight, this.fontSize, this.fontFeatureSettings, this.fontVariationSettings, this.lineHeight, this.letterSpacing].join('-');
 	}
 
 	/** Adds the platform fallback and quotes family names where CSS requires it. */
@@ -210,11 +201,7 @@ export const DEFAULT_LINUX_FONT_FAMILY = "'Droid Sans Mono', monospace";
 
 /** Platform-aware defaults used when a host does not provide font settings. */
 export const EDITOR_FONT_DEFAULTS = Object.freeze({
-	fontFamily: isMacintosh
-		? DEFAULT_MAC_FONT_FAMILY
-		: isWindows
-			? DEFAULT_WINDOWS_FONT_FAMILY
-			: DEFAULT_LINUX_FONT_FAMILY,
+	fontFamily: isMacintosh ? DEFAULT_MAC_FONT_FAMILY : isWindows ? DEFAULT_WINDOWS_FONT_FAMILY : DEFAULT_LINUX_FONT_FAMILY,
 	fontWeight: 'normal',
 	fontSize: isMacintosh ? 12 : 14,
 	lineHeight: 0,

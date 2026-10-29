@@ -1,11 +1,7 @@
 import { ThemeConfigurationSettings } from '../services/themes/common/themeConfiguration.js';
 import { NotificationsPosition, NotificationsSettings } from './notifications.js';
 import { localize } from '../../nls.js';
-import {
-	ConfigurationScope,
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
 import { AccessibilityConfiguration } from '../../platform/accessibility/common/accessibility.js';
 import { Registry } from '../../platform/registry/common/platform.js';
 import { isMacintosh, isWeb } from '../../base/common/platform.js';
@@ -31,18 +27,14 @@ export const enum ActivityBarPosition {
 export type SideBarLocation = 'left' | 'right';
 export type PanelLocation = 'left' | 'right' | 'top' | 'bottom';
 export type PanelOpensMaximized = 'always' | 'never' | 'preserve';
-export type SecondarySideBarDefaultVisibility =
-	'hidden' | 'visibleInWorkspace' | 'visible' | 'maximizedInWorkspace' | 'maximized';
+export type SecondarySideBarDefaultVisibility = 'hidden' | 'visibleInWorkspace' | 'visible' | 'maximizedInWorkspace' | 'maximized';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
 export const Extensions = { ConfigurationMigration: 'base.contributions.configuration.migration' };
 type ConfigurationValue = { value: unknown | undefined };
 export type ConfigurationKeyValuePairs = [string, ConfigurationValue][];
-export type ConfigurationMigrationFn = (
-	value: any,
-	valueAccessor: (key: string) => any,
-) => ConfigurationValue | ConfigurationKeyValuePairs | Promise<ConfigurationValue | ConfigurationKeyValuePairs>;
+export type ConfigurationMigrationFn = (value: any, valueAccessor: (key: string) => any) => ConfigurationValue | ConfigurationKeyValuePairs | Promise<ConfigurationValue | ConfigurationKeyValuePairs>;
 export type ConfigurationMigration = { key: string; migrateFn: ConfigurationMigrationFn; includeApplication?: boolean };
 export interface IConfigurationMigrationRegistry {
 	registerConfigurationMigrations(configurationMigrations: ConfigurationMigration[]): void;
@@ -68,26 +60,13 @@ export const WorkbenchConfiguration = Object.freeze({
 		scope: ConfigurationScope.WINDOW,
 		schema: {
 			type: 'string',
-			enum: [
-				NotificationsPosition.BOTTOM_RIGHT,
-				NotificationsPosition.BOTTOM_LEFT,
-				NotificationsPosition.TOP_RIGHT,
-			],
+			enum: [NotificationsPosition.BOTTOM_RIGHT, NotificationsPosition.BOTTOM_LEFT, NotificationsPosition.TOP_RIGHT],
 		},
 		parse(value: unknown): NotificationsPosition {
-			if (
-				value === NotificationsPosition.BOTTOM_RIGHT ||
-				value === NotificationsPosition.BOTTOM_LEFT ||
-				value === NotificationsPosition.TOP_RIGHT
-			) {
+			if (value === NotificationsPosition.BOTTOM_RIGHT || value === NotificationsPosition.BOTTOM_LEFT || value === NotificationsPosition.TOP_RIGHT) {
 				return value;
 			}
-			throw new TypeError(
-				localize(
-					'notifications.position.invalid',
-					'Notification position must be bottom-right, bottom-left, or top-right.',
-				),
-			);
+			throw new TypeError(localize('notifications.position.invalid', 'Notification position must be bottom-right, bottom-left, or top-right.'));
 		},
 		setting: {
 			valueType: 'select',
@@ -95,10 +74,7 @@ export const WorkbenchConfiguration = Object.freeze({
 				return localize('notifications.position.title', 'Notifications: Position');
 			},
 			get description() {
-				return localize(
-					'notifications.position.description',
-					'Controls the position of notification toasts and the notification center.',
-				);
+				return localize('notifications.position.description', 'Controls the position of notification toasts and the notification center.');
 			},
 			get options() {
 				return [
@@ -127,12 +103,7 @@ export const WorkbenchConfiguration = Object.freeze({
 			if (typeof value === 'boolean') {
 				return value;
 			}
-			throw new TypeError(
-				localize(
-					'notifications.showInTitleBar.invalid',
-					'Notification button visibility must be true or false.',
-				),
-			);
+			throw new TypeError(localize('notifications.showInTitleBar.invalid', 'Notification button visibility must be true or false.'));
 		},
 		setting: {
 			valueType: 'boolean',
@@ -140,10 +111,7 @@ export const WorkbenchConfiguration = Object.freeze({
 				return localize('notifications.showInTitleBar.title', 'Notifications: Show in Title Bar');
 			},
 			get description() {
-				return localize(
-					'notifications.showInTitleBar.description',
-					'Show the Notifications button in the title bar when notifications are positioned at the top right.',
-				);
+				return localize('notifications.showInTitleBar.description', 'Show the Notifications button in the title bar when notifications are positioned at the top right.');
 			},
 		},
 	}),
@@ -154,12 +122,7 @@ export const WorkbenchConfiguration = Object.freeze({
 		schema: { type: 'boolean' },
 		parse(value: unknown): boolean {
 			if (typeof value !== 'boolean') {
-				throw new TypeError(
-					localize(
-						'workbench.view.alwaysShowHeaderActions.invalid',
-						'View header action visibility must be true or false.',
-					),
-				);
+				throw new TypeError(localize('workbench.view.alwaysShowHeaderActions.invalid', 'View header action visibility must be true or false.'));
 			}
 			return value;
 		},
@@ -182,10 +145,7 @@ export const WorkbenchConfiguration = Object.freeze({
 		scope: ConfigurationScope.WINDOW,
 		schema: { type: 'string', enum: ['ui', 'json'] },
 		parse(value: unknown): 'ui' | 'json' {
-			if (value !== 'ui' && value !== 'json')
-				throw new TypeError(
-					localize({ bundle: 'ash.settings', key: 'editor.invalid' }, 'Settings editor must be ui or json.'),
-				);
+			if (value !== 'ui' && value !== 'json') throw new TypeError(localize({ bundle: 'ash.settings', key: 'editor.invalid' }, 'Settings editor must be ui or json.'));
 			return value;
 		},
 		setting: {
@@ -266,10 +226,7 @@ export const WorkbenchConfiguration = Object.freeze({
 				return localize('window.titleSeparator.title', 'Window Title Separator');
 			},
 			get description() {
-				return localize(
-					'window.titleSeparator.description',
-					'Text inserted by ${separator} between non-empty title values.',
-				);
+				return localize('window.titleSeparator.description', 'Text inserted by ${separator} between non-empty title values.');
 			},
 			get placeholder() {
 				return localize('window.titleSeparator.placeholder', 'Title separator');
@@ -352,12 +309,7 @@ export const WorkbenchConfiguration = Object.freeze({
 		schema: { type: 'string', enum: ['standard', 'connected', 'pill'] },
 		parse(value: unknown): ModernUIEditorTabStyle {
 			if (value === 'standard' || value === 'connected' || value === 'pill') return value;
-			throw new TypeError(
-				localize(
-					'workbench.editor.tabStyle.invalid',
-					'Invalid editor tab style. Use standard, connected, or pill.',
-				),
-			);
+			throw new TypeError(localize('workbench.editor.tabStyle.invalid', 'Invalid editor tab style. Use standard, connected, or pill.'));
 		},
 		setting: {
 			valueType: 'select',
@@ -425,9 +377,7 @@ export const WorkbenchConfiguration = Object.freeze({
 		schema: { type: 'boolean' },
 		parse(value: unknown): boolean {
 			if (typeof value === 'boolean') return value;
-			throw new TypeError(
-				localize('workbench.activityBar.autoHide.invalid', 'Activity Bar auto hide must be true or false.'),
-			);
+			throw new TypeError(localize('workbench.activityBar.autoHide.invalid', 'Activity Bar auto hide must be true or false.'));
 		},
 		setting: {
 			valueType: 'boolean',
@@ -449,9 +399,7 @@ export const WorkbenchConfiguration = Object.freeze({
 		schema: { type: 'boolean' },
 		parse(value: unknown): boolean {
 			if (typeof value === 'boolean') return value;
-			throw new TypeError(
-				localize('workbench.activityBar.badges.invalid', 'Activity Bar badges must be true or false.'),
-			);
+			throw new TypeError(localize('workbench.activityBar.badges.invalid', 'Activity Bar badges must be true or false.'));
 		},
 		setting: {
 			valueType: 'boolean',
@@ -459,10 +407,7 @@ export const WorkbenchConfiguration = Object.freeze({
 				return localize('workbench.activityBar.badges.title', 'Activity Bar Badges');
 			},
 			get description() {
-				return localize(
-					'workbench.activityBar.badges.description',
-					'Show badges on Activity Bar icons. Turning this off preserves each icon’s Show Badge or Hide Badge choice.',
-				);
+				return localize('workbench.activityBar.badges.description', 'Show badges on Activity Bar icons. Turning this off preserves each icon’s Show Badge or Hide Badge choice.');
 			},
 		},
 	}),
@@ -480,10 +425,7 @@ export const WorkbenchConfiguration = Object.freeze({
 				return localize('workbench.activityBar.compact.title', 'Compact Activity Bar');
 			},
 			get description() {
-				return localize(
-					'workbench.activityBar.compact.description',
-					'Use smaller Activity Bar items when the bar is on the side.',
-				);
+				return localize('workbench.activityBar.compact.description', 'Use smaller Activity Bar items when the bar is on the side.');
 			},
 		},
 	}),
@@ -497,28 +439,13 @@ export const WorkbenchConfiguration = Object.freeze({
 			enum: ['hidden', 'visibleInWorkspace', 'visible', 'maximizedInWorkspace', 'maximized'],
 		},
 		parse(value: unknown): SecondarySideBarDefaultVisibility {
-			if (
-				value === 'hidden' ||
-				value === 'visibleInWorkspace' ||
-				value === 'visible' ||
-				value === 'maximizedInWorkspace' ||
-				value === 'maximized'
-			)
-				return value;
-			throw new TypeError(
-				localize(
-					'workbench.secondarySideBar.defaultVisibility.invalid',
-					'Invalid default secondary side bar visibility.',
-				),
-			);
+			if (value === 'hidden' || value === 'visibleInWorkspace' || value === 'visible' || value === 'maximizedInWorkspace' || value === 'maximized') return value;
+			throw new TypeError(localize('workbench.secondarySideBar.defaultVisibility.invalid', 'Invalid default secondary side bar visibility.'));
 		},
 		setting: {
 			valueType: 'select',
 			get title() {
-				return localize(
-					'workbench.secondarySideBar.defaultVisibility.title',
-					'Default Secondary Side Bar Visibility',
-				);
+				return localize('workbench.secondarySideBar.defaultVisibility.title', 'Default Secondary Side Bar Visibility');
 			},
 			get description() {
 				return localize(
@@ -534,10 +461,7 @@ export const WorkbenchConfiguration = Object.freeze({
 					},
 					{
 						value: 'visibleInWorkspace',
-						label: localize(
-							'workbench.secondarySideBar.defaultVisibility.visibleInWorkspace',
-							'Visible in Workspace',
-						),
+						label: localize('workbench.secondarySideBar.defaultVisibility.visibleInWorkspace', 'Visible in Workspace'),
 					},
 					{
 						value: 'visible',
@@ -545,10 +469,7 @@ export const WorkbenchConfiguration = Object.freeze({
 					},
 					{
 						value: 'maximizedInWorkspace',
-						label: localize(
-							'workbench.secondarySideBar.defaultVisibility.maximizedInWorkspace',
-							'Maximized in Workspace',
-						),
+						label: localize('workbench.secondarySideBar.defaultVisibility.maximizedInWorkspace', 'Maximized in Workspace'),
 					},
 					{
 						value: 'maximized',
@@ -566,26 +487,15 @@ export const WorkbenchConfiguration = Object.freeze({
 		schema: { type: 'boolean' },
 		parse(value: unknown): boolean {
 			if (typeof value === 'boolean') return value;
-			throw new TypeError(
-				localize(
-					'workbench.secondarySideBar.forceMaximized.invalid',
-					'Secondary side bar maximization must be true or false.',
-				),
-			);
+			throw new TypeError(localize('workbench.secondarySideBar.forceMaximized.invalid', 'Secondary side bar maximization must be true or false.'));
 		},
 		setting: {
 			valueType: 'boolean',
 			get title() {
-				return localize(
-					'workbench.secondarySideBar.forceMaximized.title',
-					'Maximize Secondary Side Bar on Startup',
-				);
+				return localize('workbench.secondarySideBar.forceMaximized.title', 'Maximize Secondary Side Bar on Startup');
 			},
 			get description() {
-				return localize(
-					'workbench.secondarySideBar.forceMaximized.description',
-					'Maximize the secondary side bar when opening the window, overriding saved layout state.',
-				);
+				return localize('workbench.secondarySideBar.forceMaximized.description', 'Maximize the secondary side bar when opening the window, overriding saved layout state.');
 			},
 		},
 	}),
@@ -597,12 +507,7 @@ export const WorkbenchConfiguration = Object.freeze({
 		schema: { type: 'string', enum: ['always', 'never', 'preserve'] },
 		parse(value: unknown): PanelOpensMaximized {
 			if (value === 'always' || value === 'never' || value === 'preserve') return value;
-			throw new TypeError(
-				localize(
-					'workbench.panel.opensMaximized.invalid',
-					'Panel maximization must be always, never, or preserve.',
-				),
-			);
+			throw new TypeError(localize('workbench.panel.opensMaximized.invalid', 'Panel maximization must be always, never, or preserve.'));
 		},
 		setting: {
 			valueType: 'select',
@@ -610,10 +515,7 @@ export const WorkbenchConfiguration = Object.freeze({
 				return localize('workbench.panel.opensMaximized.title', 'Panel Opens Maximized');
 			},
 			get description() {
-				return localize(
-					'workbench.panel.opensMaximized.description',
-					'Choose whether the panel opens maximized or restores its last maximized state.',
-				);
+				return localize('workbench.panel.opensMaximized.description', 'Choose whether the panel opens maximized or restores its last maximized state.');
 			},
 			get options() {
 				return [
@@ -632,12 +534,7 @@ export const WorkbenchConfiguration = Object.freeze({
 		schema: { type: 'string', enum: ['left', 'right', 'top', 'bottom'] },
 		parse(value: unknown): PanelLocation {
 			if (value === 'left' || value === 'right' || value === 'top' || value === 'bottom') return value;
-			throw new TypeError(
-				localize(
-					'workbench.panel.defaultLocation.invalid',
-					'Panel location must be left, right, top, or bottom.',
-				),
-			);
+			throw new TypeError(localize('workbench.panel.defaultLocation.invalid', 'Panel location must be left, right, top, or bottom.'));
 		},
 		setting: {
 			valueType: 'select',
@@ -645,10 +542,7 @@ export const WorkbenchConfiguration = Object.freeze({
 				return localize('workbench.panel.defaultLocation.title', 'Default Panel Position');
 			},
 			get description() {
-				return localize(
-					'workbench.panel.defaultLocation.description',
-					'Choose where the panel opens in a new workspace. Existing workspaces retain their saved panel position.',
-				);
+				return localize('workbench.panel.defaultLocation.description', 'Choose where the panel opens in a new workspace. Existing workspaces retain their saved panel position.');
 			},
 			get options() {
 				return [
@@ -674,10 +568,7 @@ export const WorkbenchConfiguration = Object.freeze({
 				return localize('workbench.sideBar.location.title', 'Primary Side Bar Position');
 			},
 			get description() {
-				return localize(
-					'workbench.sideBar.location.description',
-					'Choose which side contains the primary side bar.',
-				);
+				return localize('workbench.sideBar.location.description', 'Choose which side contains the primary side bar.');
 			},
 			get options() {
 				return [

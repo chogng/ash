@@ -7,19 +7,11 @@ import { URI } from '../../../../base/common/uri.js';
 import type { AppServerConnectionState } from '../../../../platform/agentHost/common/appServerApi.js';
 import { ContextKeyService, IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IDataChannelService, ILinkPresentationService } from '../../../../platform/dataChannel/common/dataChannel.js';
-import {
-	IExtensionHostApi,
-	type ExtensionHostFleetSnapshot,
-	type ExtensionHostInvocationRequest,
-	type JsonValue,
-} from '../../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { normalizeExtensionHostSnapshot } from '../../../../platform/agentHost/browser/extensionHostProtocol.js';
 import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../platform/log/common/log.js';
-import {
-	DataChannelService,
-	LinkPresentationService,
-} from '../../../services/dataChannel/browser/dataChannelService.js';
+import { DataChannelService, LinkPresentationService } from '../../../services/dataChannel/browser/dataChannelService.js';
 import { MainThreadDataChannels } from '../../browser/mainThreadDataChannels.js';
 
 class ExtensionHost extends Disposable implements IExtensionHostApi {
@@ -33,9 +25,7 @@ class ExtensionHost extends Disposable implements IExtensionHostApi {
 	public readonly requests: ExtensionHostInvocationRequest[] = [];
 	public readonly signals: AbortSignal[] = [];
 	public invokeResult: (request: ExtensionHostInvocationRequest) => Promise<JsonValue> = async request =>
-		request.operation === 'provideLinkPresentation'
-			? { kind: 'issue', title: 'Issue one', status: { kind: 'open', label: 'Open' } }
-			: null;
+		request.operation === 'provideLinkPresentation' ? { kind: 'issue', title: 'Issue one', status: { kind: 'open', label: 'Open' } } : null;
 	public start(): Promise<ExtensionHostFleetSnapshot> {
 		throw new Error('Startup is outside this fixture');
 	}
@@ -196,10 +186,7 @@ test('link results from a retired extension cannot update the next watcher', asy
 	await until(() => second.presentation.get()?.title === 'Fresh');
 	assert.equal(api.requests.at(-1)!.incarnation, 2);
 	api.connect('restarting');
-	assert.deepEqual(
-		{ rules: links.linkPresentationRules, value: second.presentation.get(), aborted: api.signals.at(-1)!.aborted },
-		{ rules: [], value: undefined, aborted: true },
-	);
+	assert.deepEqual({ rules: links.linkPresentationRules, value: second.presentation.get(), aborted: api.signals.at(-1)!.aborted }, { rules: [], value: undefined, aborted: true });
 	api.connect('ready');
 	await until(() => links.linkPresentationRules.length === 1);
 	bridge.dispose();

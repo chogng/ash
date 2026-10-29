@@ -1,10 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 for (const surface of ['chat', 'cowork']) {
-	test(`Split picker handles touch and pen taps and rejects drags and cancelled touches in ${surface}`, async ({
-		browser,
-		baseURL,
-	}) => {
+	test(`Split picker handles touch and pen taps and rejects drags and cancelled touches in ${surface}`, async ({ browser, baseURL }) => {
 		const context = await browser.newContext({ baseURL, hasTouch: true });
 		try {
 			const page = await context.newPage();
@@ -82,9 +79,7 @@ for (const locale of ['en', 'zh-CN']) {
 		const prevented = await input.evaluate(element => {
 			const transfer = new DataTransfer();
 			transfer.items.add(new File(['Pasted file contents'], 'pasted.txt', { type: 'text/plain' }));
-			const prevented = !element.dispatchEvent(
-				new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }),
-			);
+			const prevented = !element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 			element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 			(element as HTMLTextAreaElement).value = 'Next draft';
 			element.dispatchEvent(new Event('input', { bubbles: true }));
@@ -98,12 +93,8 @@ for (const locale of ['en', 'zh-CN']) {
 			submissions: [],
 		});
 		await input.press('Enter');
-		await expect(page.getByLabel('Submission', { exact: true })).toHaveText(
-			JSON.stringify([{ name: 'pasted.txt', content: 'Pasted file contents' }]),
-		);
-		await expect
-			.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState()))
-			.toMatchObject({ submissions: [{ text: 'Next draft pasted.txt ' }] });
+		await expect(page.getByLabel('Submission', { exact: true })).toHaveText(JSON.stringify([{ name: 'pasted.txt', content: 'Pasted file contents' }]));
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [{ text: 'Next draft pasted.txt ' }] });
 	});
 
 	test(`Pending file-only mouse Send waits for the real reader in ${locale}`, async ({ page }) => {
@@ -120,9 +111,7 @@ for (const locale of ['en', 'zh-CN']) {
 					reads.push(() => super.readAsArrayBuffer(blob));
 				}
 			};
-			(
-				window as Window & { ashInputReadTest?: { release(): void; restore(): void; count(): number } }
-			).ashInputReadTest = {
+			(window as Window & { ashInputReadTest?: { release(): void; restore(): void; count(): number } }).ashInputReadTest = {
 				release: () => {
 					for (const read of reads.splice(0)) read();
 				},
@@ -139,13 +128,7 @@ for (const locale of ['en', 'zh-CN']) {
 		});
 		try {
 			expect(prevented).toBe(true);
-			await expect
-				.poll(() =>
-					page.evaluate(() =>
-						(window as Window & { ashInputReadTest?: { count(): number } }).ashInputReadTest!.count(),
-					),
-				)
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => (window as Window & { ashInputReadTest?: { count(): number } }).ashInputReadTest!.count())).toBe(1);
 			await expect(send).toBeVisible();
 			await expect(send).toBeEnabled();
 			await expect(page.locator('.ash-chat-input-attachment-item')).toHaveCount(0);
@@ -155,15 +138,9 @@ for (const locale of ['en', 'zh-CN']) {
 			expect(await page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({
 				submissions: [],
 			});
-			await page.evaluate(() =>
-				(window as Window & { ashInputReadTest?: { release(): void } }).ashInputReadTest!.release(),
-			);
-			await expect(page.getByLabel('Submission', { exact: true })).toHaveText(
-				JSON.stringify([{ name: 'held-mouse.txt', content: 'Actual held reader contents' }]),
-			);
-			await expect
-				.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState()))
-				.toMatchObject({ submissions: [{ text: 'held-mouse.txt ' }] });
+			await page.evaluate(() => (window as Window & { ashInputReadTest?: { release(): void } }).ashInputReadTest!.release());
+			await expect(page.getByLabel('Submission', { exact: true })).toHaveText(JSON.stringify([{ name: 'held-mouse.txt', content: 'Actual held reader contents' }]));
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [{ text: 'held-mouse.txt ' }] });
 			await expect(input).toHaveValue('');
 		} finally {
 			await page.evaluate(() => {
@@ -182,9 +159,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await input.evaluate(element => {
 			const transfer = new DataTransfer();
 			transfer.items.add(new File([new Uint8Array([0xff])], 'invalid.bin'));
-			element.dispatchEvent(
-				new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }),
-			);
+			element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 			element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 		});
 		await expect(page.getByLabel('Context error', { exact: true })).toContainText('invalid.bin');
@@ -206,9 +181,7 @@ for (const theme of ['light', 'dark', 'hcLight', 'hcDark']) {
 		await composer.evaluate(element => {
 			const transfer = new DataTransfer();
 			transfer.items.add(new File(['Dropped contents'], 'dropped.txt', { type: 'text/plain' }));
-			element.dispatchEvent(
-				new DragEvent('dragover', { dataTransfer: transfer, bubbles: true, cancelable: true }),
-			);
+			element.dispatchEvent(new DragEvent('dragover', { dataTransfer: transfer, bubbles: true, cancelable: true }));
 		});
 		const overlay = composer.locator('.ash-chat-drop-overlay');
 		await expect(overlay).toBeVisible();
@@ -229,8 +202,6 @@ for (const theme of ['light', 'dark', 'hcLight', 'hcDark']) {
 		await expect(page.locator('.ash-chat-textarea-input')).toHaveValue('dropped.txt ');
 		await expect(composer.getByRole('listitem')).toHaveCount(0);
 		await page.locator('.ash-chat-textarea-input').press('Enter');
-		await expect(page.getByLabel('Submission', { exact: true })).toHaveText(
-			JSON.stringify([{ name: 'dropped.txt', content: 'Dropped contents' }]),
-		);
+		await expect(page.getByLabel('Submission', { exact: true })).toHaveText(JSON.stringify([{ name: 'dropped.txt', content: 'Dropped contents' }]));
 	});
 }

@@ -15,19 +15,12 @@ import { CursorState } from '../../common/cursorCommon.js';
 import { ScrollType, type ICommand } from '../../common/editorCommon.js';
 import { createTestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { CursorStateChangedEvent, ViewModelEventsCollector } from '../../common/viewModelEventDispatcher.js';
-import {
-	VerticalRevealType,
-	ViewCursorStateChangedEvent,
-	ViewRevealRangeRequestEvent,
-} from '../../common/viewEvents.js';
+import { VerticalRevealType, ViewCursorStateChangedEvent, ViewRevealRangeRequestEvent } from '../../common/viewEvents.js';
 import { createTestCursorConfiguration, createTestCursorsController } from './testCursorConfiguration.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
-const range = (startColumn: number, endColumn: number): Range =>
-	Range.fromPositions(position(0, startColumn), position(0, endColumn));
-const single = (anchorColumn: number, activeColumn: number): readonly Selection[] => [
-	Selection.fromPositions(position(0, anchorColumn), position(0, activeColumn)),
-];
+const range = (startColumn: number, endColumn: number): Range => Range.fromPositions(position(0, startColumn), position(0, endColumn));
+const single = (anchorColumn: number, activeColumn: number): readonly Selection[] => [Selection.fromPositions(position(0, anchorColumn), position(0, activeColumn))];
 
 test('CursorsController restores command selections', () => {
 	using model = new TextModel('hello');
@@ -68,12 +61,18 @@ test('CursorsController executes canonical ICommand edits with undoable selectio
 	controller.executeCommand(new ReplaceCommand(range(1, 4), 'i'));
 	assert.deepEqual(
 		{ text: model.getText(), selections: controller.getSelections() },
-		{ text: 'hio', selections: single(2, 2) },
+		{
+			text: 'hio',
+			selections: single(2, 2),
+		},
 	);
 	controller.context.model.undo();
 	assert.deepEqual(
 		{ text: model.getText(), selections: controller.getSelections() },
-		{ text: 'hello', selections: single(1, 4) },
+		{
+			text: 'hello',
+			selections: single(1, 4),
+		},
 	);
 });
 
@@ -86,7 +85,12 @@ test('CursorsController types at two cursors in one model transaction', () => {
 
 	controller.type(new ViewModelEventsCollector(), 'X', 'keyboard');
 	assert.deepEqual(
-		{ text: model.getText(), version: model.getVersionId(), selections: controller.getSelections(), versions },
+		{
+			text: model.getText(),
+			version: model.getVersionId(),
+			selections: controller.getSelections(),
+			versions,
+		},
 		{
 			text: 'abXcd\nefXgh',
 			version: 2,
@@ -95,10 +99,7 @@ test('CursorsController types at two cursors in one model transaction', () => {
 		},
 	);
 	model.undo();
-	assert.deepEqual(
-		{ text: model.getText(), selections: controller.getSelections() },
-		{ text: 'abcd\nefgh', selections: before },
-	);
+	assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, { text: 'abcd\nefgh', selections: before });
 });
 
 for (const count of [1, 2])
@@ -117,20 +118,11 @@ for (const count of [1, 2])
 		);
 		const formatted = Array.from({ length: count }, () => '  value;').join('\n');
 		const after = Array.from({ length: count }, (_, row) => new Selection(row + 1, 9, row + 1, 9));
-		assert.deepEqual(
-			{ text: model.getText(), selections: controller.getSelections() },
-			{ text: formatted, selections: after },
-		);
+		assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, { text: formatted, selections: after });
 		model.undo();
-		assert.deepEqual(
-			{ text: model.getText(), selections: controller.getSelections() },
-			{ text: original, selections: before },
-		);
+		assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, { text: original, selections: before });
 		model.redo();
-		assert.deepEqual(
-			{ text: model.getText(), selections: controller.getSelections() },
-			{ text: formatted, selections: after },
-		);
+		assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, { text: formatted, selections: after });
 	});
 
 test('CursorsController inserts long ordinary text without a transaction per character', () => {
@@ -178,7 +170,10 @@ test('CursorsController bulk typing preserves language interceptors, cursors and
 		characterModel.undo();
 		assert.deepEqual(
 			{ text: bulkModel.getText(), selections: bulk.getSelections() },
-			{ text: characterModel.getText(), selections: characters.getSelections() },
+			{
+				text: characterModel.getText(),
+				selections: characters.getSelections(),
+			},
 		);
 	}
 	assert.equal(bulkModel.canUndo(), false);
@@ -191,12 +186,7 @@ test('CursorsController setStates enforces the configured cursor limit and emits
 	let selectionChanges = 0;
 	using listener = controller.onDidChange(() => (selectionChanges += 1));
 
-	const changed = controller.setStates(
-		collector,
-		'test',
-		CursorChangeReason.Explicit,
-		CursorState.fromModelSelections([...single(1, 1), ...single(3, 3), ...single(5, 5)]),
-	);
+	const changed = controller.setStates(collector, 'test', CursorChangeReason.Explicit, CursorState.fromModelSelections([...single(1, 1), ...single(3, 3), ...single(5, 5)]));
 
 	assert.equal(changed, true);
 	assert.deepEqual(controller.getSelections(), [...single(1, 1), ...single(3, 3)]);
@@ -219,12 +209,7 @@ test('CursorsController owns column selection data and clears it on a state chan
 	controller.setCursorColumnSelectData(stored);
 	assert.deepEqual(controller.getCursorColumnSelectData(), stored);
 
-	controller.setStates(
-		new ViewModelEventsCollector(),
-		'test',
-		CursorChangeReason.Explicit,
-		CursorState.fromModelSelections(single(0, 0)),
-	);
+	controller.setStates(new ViewModelEventsCollector(), 'test', CursorChangeReason.Explicit, CursorState.fromModelSelections(single(0, 0)));
 	assert.deepEqual(controller.getCursorColumnSelectData(), {
 		isReal: false,
 		fromViewLineNumber: 1,
@@ -238,12 +223,7 @@ test('CursorsController saves directional selections and restores them with an i
 	using model = new TextModel('abcdef');
 	using controller = createTestCursorsController(model, single(5, 2));
 	const saved = controller.saveState();
-	controller.setStates(
-		new ViewModelEventsCollector(),
-		'test',
-		CursorChangeReason.Explicit,
-		CursorState.fromModelSelections(single(0, 0)),
-	);
+	controller.setStates(new ViewModelEventsCollector(), 'test', CursorChangeReason.Explicit, CursorState.fromModelSelections(single(0, 0)));
 	const collector = new ViewModelEventsCollector();
 
 	controller.restoreState(collector, saved);
@@ -303,16 +283,16 @@ test('CommandExecutor keeps the first edit and merges converged cursors when com
 
 test('CursorsController executes one command against the primary cursor only', () => {
 	using model = new TextModel('abcd');
-	using controller = createTestCursorsController(model, [
-		Selection.fromPositions(position(0, 1)),
-		Selection.fromPositions(position(0, 3)),
-	]);
+	using controller = createTestCursorsController(model, [Selection.fromPositions(position(0, 1)), Selection.fromPositions(position(0, 3))]);
 
 	controller.executeCommand(new ReplaceCommand(range(1, 2), 'X'));
 
 	assert.deepEqual(
 		{ text: model.getText(), selections: controller.getSelections() },
-		{ text: 'aXcd', selections: single(2, 2) },
+		{
+			text: 'aXcd',
+			selections: single(2, 2),
+		},
 	);
 });
 
@@ -357,14 +337,7 @@ test('Cursor-only selection history restores multi-cursor operations without cha
 	const reasons: CursorChangeReason[] = [];
 	using listener = controller.onDidChange(event => reasons.push(event.reason));
 	const first = primaryFirst([Selection.fromPositions(position(0, 0)), Selection.fromPositions(position(0, 1))], 1);
-	const second = primaryFirst(
-		[
-			Selection.fromPositions(position(0, 0)),
-			Selection.fromPositions(position(0, 1)),
-			Selection.fromPositions(position(0, 2)),
-		],
-		2,
-	);
+	const second = primaryFirst([Selection.fromPositions(position(0, 0)), Selection.fromPositions(position(0, 1)), Selection.fromPositions(position(0, 2))], 2);
 
 	controller.setCursorSelections(first);
 	controller.setCursorSelections(second);
@@ -398,20 +371,28 @@ test('CursorsController maps external model edits', () => {
 	model.applyEdits([{ range: range(0, 0), text: 'X' }]);
 
 	assert.deepEqual(
-		{ text: model.getText(), selections: controller.getSelections(), events },
+		{
+			text: model.getText(),
+			selections: controller.getSelections(),
+			events,
+		},
 		{
 			text: 'Xabc',
 			selections: single(3, 2),
-			events: [{ selections: single(3, 2), reason: CursorChangeReason.RecoverFromMarkers, modelVersion: 2 }],
+			events: [
+				{
+					selections: single(3, 2),
+					reason: CursorChangeReason.RecoverFromMarkers,
+					modelVersion: 2,
+				},
+			],
 		},
 	);
 });
 
 test('CursorsController projects tracked selections before downstream command listeners', () => {
 	using model = new TextModel('const value = 1;\n');
-	using controller = createTestCursorsController(model, [
-		Selection.fromPositions(new Position(0 + 1, 0 + 1), model.positionAt(model.length)),
-	]);
+	using controller = createTestCursorsController(model, [Selection.fromPositions(new Position(0 + 1, 0 + 1), model.positionAt(model.length))]);
 	const observed: Selection[] = [];
 	using listener = model.onDidChangeContent(() => {
 		const selection = controller.getSelections()[0]!;
@@ -422,9 +403,7 @@ test('CursorsController projects tracked selections before downstream command li
 		observed.push(selection);
 	});
 
-	controller.executeCommand(
-		new ReplaceCommand(Range.fromPositions(new Position(0 + 1, 0 + 1), model.positionAt(model.length)), 'x'),
-	);
+	controller.executeCommand(new ReplaceCommand(Range.fromPositions(new Position(0 + 1, 0 + 1), model.positionAt(model.length)), 'x'));
 
 	assert.deepEqual(observed, [Selection.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 1 + 1))]);
 	assert.deepEqual(controller.getSelections(), [Selection.fromPositions(new Position(0 + 1, 1 + 1))]);
@@ -450,20 +429,42 @@ test('Shared editors retain independent selection ownership', () => {
 
 	first.executeCommand(new ReplaceCommand(range(1, 1), 'X'));
 	assert.deepEqual(
-		{ first: first.getSelections(), second: second.getSelections() },
-		{ first: single(2, 2), second: single(4, 4) },
+		{
+			first: first.getSelections(),
+			second: second.getSelections(),
+		},
+		{
+			first: single(2, 2),
+			second: single(4, 4),
+		},
 	);
 
 	second.context.model.undo();
 	assert.deepEqual(
-		{ text: model.getText(), first: first.getSelections(), second: second.getSelections() },
-		{ text: 'abc', first: single(1, 1), second: single(3, 3) },
+		{
+			text: model.getText(),
+			first: first.getSelections(),
+			second: second.getSelections(),
+		},
+		{
+			text: 'abc',
+			first: single(1, 1),
+			second: single(3, 3),
+		},
 	);
 
 	first.context.model.redo();
 	assert.deepEqual(
-		{ text: model.getText(), first: first.getSelections(), second: second.getSelections() },
-		{ text: 'aXbc', first: single(2, 2), second: single(4, 4) },
+		{
+			text: model.getText(),
+			first: first.getSelections(),
+			second: second.getSelections(),
+		},
+		{
+			text: 'aXbc',
+			first: single(2, 2),
+			second: single(4, 4),
+		},
 	);
 });
 
@@ -482,8 +483,16 @@ test('CursorsController leaves the model unchanged when command collection fails
 	};
 	assert.throws(() => controller.executeCommand(command), /Invalid test command/);
 	assert.deepEqual(
-		{ text: model.getText(), version: model.version, selections: controller.getSelections() },
-		{ text: 'abc', version: 1, selections: single(0, 0) },
+		{
+			text: model.getText(),
+			version: model.version,
+			selections: controller.getSelections(),
+		},
+		{
+			text: 'abc',
+			version: 1,
+			selections: single(0, 0),
+		},
 	);
 });
 
@@ -504,15 +513,30 @@ test('CursorsController resolves command selections after reentrant model edits'
 	using controllerListener = controller.onDidChange(event => reasons.push(event.reason));
 	using reentrantListener = model.onDidChangeContent(event => {
 		if (event.version === 2) {
-			model.applyEdits([{ range: Range.fromPositions(model.positionAt(model.getText().length)), text: 'Y' }]);
+			model.applyEdits([
+				{
+					range: Range.fromPositions(model.positionAt(model.getText().length)),
+					text: 'Y',
+				},
+			]);
 		}
 	});
 
 	controller.executeCommand(new ReplaceCommand(range(0, 0), 'X'));
 
 	assert.deepEqual(
-		{ text: model.getText(), version: model.version, selections: controller.getSelections(), reasons },
-		{ text: 'XabcY', version: 3, selections: single(1, 1), reasons: [] },
+		{
+			text: model.getText(),
+			version: model.version,
+			selections: controller.getSelections(),
+			reasons,
+		},
+		{
+			text: 'XabcY',
+			version: 3,
+			selections: single(1, 1),
+			reasons: [],
+		},
 	);
 });
 

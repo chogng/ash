@@ -17,9 +17,7 @@ for (const locale of ['en', 'zh-CN']) {
 				test.setTimeout(180_000);
 				if (locale === 'zh-CN') {
 					await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-					const language = workbench.page
-						.getByRole('dialog', { name: 'Select Display Language' })
-						.getByRole('combobox');
+					const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 					await language.fill('简体中文');
 					await language.press('Enter');
 					({ application, workbench } = await restartWorkbench());
@@ -69,12 +67,7 @@ for (const locale of ['en', 'zh-CN']) {
 						control = await page.context().newPage();
 						await control.goto(page.url(), { waitUntil: 'domcontentloaded' });
 					}
-					connection = await connectProfile(
-						application,
-						webAppServer,
-						testWorkspace.directory,
-						control ?? page,
-					);
+					connection = await connectProfile(application, webAppServer, testWorkspace.directory, control ?? page);
 					const { client } = connection;
 					const address = server.address();
 					if (!address || typeof address === 'string') throw new Error('Missing fixture port');
@@ -109,15 +102,11 @@ for (const locale of ['en', 'zh-CN']) {
 					let composer: Locator;
 					if (surface === 'sessions') {
 						page = await workbench.openAgentsWindow(target.kind);
-						await page
-							.locator('.ash-sessions-activity-content')
-							.getByRole('button', { name: copy.code, exact: true })
-							.click();
+						await page.locator('.ash-sessions-activity-content').getByRole('button', { name: copy.code, exact: true }).click();
 						await page.locator('[data-action-id="sessions.newSession"] button').click();
 						composer = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 					} else {
-						if (!(await page.locator('.ash-chat-view-pane').isVisible()))
-							await page.getByRole('button', { name: copy.sideBar, exact: true }).click();
+						if (!(await page.locator('.ash-chat-view-pane').isVisible())) await page.getByRole('button', { name: copy.sideBar, exact: true }).click();
 						composer = page.locator('.ash-chat-view-pane .ash-chat:visible');
 					}
 					await composer.locator('.ash-chat-input-model-action').press('ArrowDown');
@@ -161,15 +150,7 @@ for (const locale of ['en', 'zh-CN']) {
 					}, marker);
 					holding = true;
 					expect(prevented).toBe(true);
-					await expect
-						.poll(() =>
-							page.evaluate(() =>
-								(
-									window as Window & { ashHeldInputRead?: { count(): number } }
-								).ashHeldInputRead!.count(),
-							),
-						)
-						.toBe(1);
+					await expect.poll(() => page.evaluate(() => (window as Window & { ashHeldInputRead?: { count(): number } }).ashHeldInputRead!.count())).toBe(1);
 					const send = composer.locator('[data-action-id="ash.chat.input.send"] button');
 					await expect(send).toBeVisible();
 					await expect(send).toBeEnabled();
@@ -178,16 +159,12 @@ for (const locale of ['en', 'zh-CN']) {
 					await send.click();
 					await expect(send).toBeDisabled();
 					expect(requests).toEqual([]);
-					await page.evaluate(() =>
-						(window as Window & { ashHeldInputRead?: { release(): void } }).ashHeldInputRead!.release(),
-					);
+					await page.evaluate(() => (window as Window & { ashHeldInputRead?: { release(): void } }).ashHeldInputRead!.release());
 					await expect(composer).toHaveAttribute('data-thread-id', /.+/u);
 					const sessionId = await composer.getAttribute('data-session-id');
 					const threadId = await composer.getAttribute('data-thread-id');
 					if (!sessionId || !threadId) throw new Error('Missing accepted conversation identity');
-					const read = async () =>
-						(await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId }))
-							.thread;
+					const read = async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread;
 					await expect.poll(async () => (await read()).turns.at(-1)?.status).toBe('completed');
 					const accepted = await read();
 					expect(
@@ -214,9 +191,7 @@ for (const locale of ['en', 'zh-CN']) {
 					await connection?.close();
 					await control?.close();
 					server.closeAllConnections();
-					await new Promise<void>((resolve, reject) =>
-						server.close(error => (error ? reject(error) : resolve())),
-					);
+					await new Promise<void>((resolve, reject) => server.close(error => (error ? reject(error) : resolve())));
 				}
 			},
 		);
@@ -257,12 +232,7 @@ for (const text of ['', 'Private instruction intended for A']) {
 						control = await page.context().newPage();
 						await control.goto(page.url(), { waitUntil: 'domcontentloaded' });
 					}
-					connection = await connectProfile(
-						application,
-						webAppServer,
-						testWorkspace.directory,
-						control ?? page,
-					);
+					connection = await connectProfile(application, webAppServer, testWorkspace.directory, control ?? page);
 					const { client } = connection;
 					const address = server.address();
 					if (!address || typeof address === 'string') throw new Error('Missing fixture port');
@@ -294,8 +264,7 @@ for (const text of ['', 'Private instruction intended for A']) {
 					if (!(await enabled.isChecked())) await enabled.press('Space');
 					await expect(enabled).toBeChecked();
 					await page.locator('.ash-modal-editor-close').click();
-					if (!(await page.locator('.ash-chat-view-pane').isVisible()))
-						await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+					if (!(await page.locator('.ash-chat-view-pane').isVisible())) await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 					const composer = page.locator('.ash-chat-view-pane .ash-chat:visible');
 					await composer.locator('.ash-chat-input-model-action').press('ArrowDown');
 					const picker = page.getByRole('dialog', { name: 'Choose a chat model', exact: true });
@@ -312,9 +281,7 @@ for (const text of ['', 'Private instruction intended for A']) {
 					const sessionId = await composer.getAttribute('data-session-id');
 					const threadA = await composer.getAttribute('data-thread-id');
 					if (!sessionId || !threadA) throw new Error('Missing initial conversation identity');
-					const read = async (threadId: string) =>
-						(await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId }))
-							.thread;
+					const read = async (threadId: string) => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread;
 					await expect.poll(async () => (await read(threadA)).turns.at(-1)?.status).toBe('completed');
 					// Only seed the second Thread via the public API. All navigation and sends use the UI.
 					const created = await client.request(APP_SERVER_METHODS['session/request'], {
@@ -325,9 +292,7 @@ for (const text of ['', 'Private instruction intended for A']) {
 					if (created.type !== 'thread') throw new Error('Expected a created Thread');
 					const threadB = created.value.threadId;
 					const selectThread = async (threadId: string): Promise<void> => {
-						const catalog = (
-							await client.request(APP_SERVER_METHODS['session/catalog/read'], { sessionId })
-						).session;
+						const catalog = (await client.request(APP_SERVER_METHODS['session/catalog/read'], { sessionId })).session;
 						if (!catalog) throw new Error('Missing current Session catalog');
 						const active = catalog.threads.filter(thread => thread.status === 'active');
 						const index = active.findIndex(thread => thread.threadId === threadId);
@@ -337,14 +302,10 @@ for (const text of ['', 'Private instruction intended for A']) {
 						const option = history
 							.getByRole('option')
 							.filter({
-								has: page
-									.locator('.ash-quick-pick-row-label')
-									.getByText(catalog.title.trim() || 'Session', { exact: true }),
+								has: page.locator('.ash-quick-pick-row-label').getByText(catalog.title.trim() || 'Session', { exact: true }),
 							})
 							.filter({
-								has: page
-									.locator('.ash-quick-pick-row-description')
-									.getByText(new RegExp(`^Thread ${index + 1}(?: ·|$)`, 'u')),
+								has: page.locator('.ash-quick-pick-row-description').getByText(new RegExp(`^Thread ${index + 1}(?: ·|$)`, 'u')),
 							});
 						await expect(option).toHaveCount(1);
 						await option.click();
@@ -396,15 +357,7 @@ for (const text of ['', 'Private instruction intended for A']) {
 					}, privateFile);
 					holding = true;
 					expect(prevented).toBe(true);
-					await expect
-						.poll(() =>
-							page.evaluate(() =>
-								(
-									window as Window & { ashNavigationRead?: { count(): number } }
-								).ashNavigationRead!.count(),
-							),
-						)
-						.toBe(1);
+					await expect.poll(() => page.evaluate(() => (window as Window & { ashNavigationRead?: { count(): number } }).ashNavigationRead!.count())).toBe(1);
 					const send = composer.locator('[data-action-id="ash.chat.input.send"] button');
 					await expect(send).toBeEnabled();
 					await send.click();
@@ -419,28 +372,16 @@ for (const text of ['', 'Private instruction intended for A']) {
 					await editor.input.press('ControlOrMeta+A');
 					await page.keyboard.insertText(nextDraft);
 					await editor.waitForEditorContents(contents => contents === nextDraft);
-					await page.evaluate(() =>
-						(
-							window as Window & { ashNavigationRead?: { release(): Promise<void> } }
-						).ashNavigationRead!.release(),
-					);
+					await page.evaluate(() => (window as Window & { ashNavigationRead?: { release(): Promise<void> } }).ashNavigationRead!.release());
 					await expect(composer.locator('.ash-chat-input-attachment-item')).toHaveCount(0);
 					await editor.waitForEditorContents(contents => contents === nextDraft);
 					for (const threadId of [threadA, threadB]) {
 						const snapshot = await read(threadId);
 						expect(JSON.stringify(snapshot)).not.toContain(privateFile);
 						if (text) expect(JSON.stringify(snapshot)).not.toContain(text);
-						expect(
-							(await client.request(APP_SERVER_METHODS['queue/list'], { sessionId, threadId })).messages,
-						).toHaveLength(0);
+						expect((await client.request(APP_SERVER_METHODS['queue/list'], { sessionId, threadId })).messages).toHaveLength(0);
 					}
-					expect(
-						requests.filter(
-							request =>
-								JSON.stringify(request).includes(privateFile) ||
-								(text && JSON.stringify(request).includes(text)),
-						),
-					).toHaveLength(0);
+					expect(requests.filter(request => JSON.stringify(request).includes(privateFile) || (text && JSON.stringify(request).includes(text)))).toHaveLength(0);
 					await page.screenshot({ path: testInfo.outputPath('retained-current-draft.png') });
 					await editor.input.press('Enter');
 					await expect.poll(async () => (await read(selected)).turns.at(-1)?.status).toBe('completed');
@@ -449,10 +390,7 @@ for (const text of ['', 'Private instruction intended for A']) {
 					const final = { A: await read(threadA), B: await read(threadB) };
 					expect(JSON.stringify(final)).not.toContain(privateFile);
 					if (text) expect(JSON.stringify(final)).not.toContain(text);
-					await writeFile(
-						testInfo.outputPath('thread-navigation.json'),
-						JSON.stringify({ sessionId, threadA, threadB, selected, final, requests }, null, 2),
-					);
+					await writeFile(testInfo.outputPath('thread-navigation.json'), JSON.stringify({ sessionId, threadA, threadB, selected, final, requests }, null, 2));
 				} finally {
 					if (holding && !page.isClosed())
 						await page.evaluate(() => {
@@ -463,9 +401,7 @@ for (const text of ['', 'Private instruction intended for A']) {
 					await connection?.close();
 					await control?.close();
 					server.closeAllConnections();
-					await new Promise<void>((resolve, reject) =>
-						server.close(error => (error ? reject(error) : resolve())),
-					);
+					await new Promise<void>((resolve, reject) => server.close(error => (error ? reject(error) : resolve())));
 				}
 			},
 		);

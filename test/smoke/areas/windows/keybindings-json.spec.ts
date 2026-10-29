@@ -73,9 +73,7 @@ async function readBrowserProfile(input: Locator): Promise<string> {
 /** Retains the removed pane solely to observe late DOM changes and focus requests. */
 async function observeRecorderSave(root: Locator): Promise<void> {
 	await root.evaluate(root => {
-		const controls = [
-			...root.querySelectorAll<HTMLElement>('input, button, [role="status"], .ash-keybindings-recorder'),
-		];
+		const controls = [...root.querySelectorAll<HTMLElement>('input, button, [role="status"], .ash-keybindings-recorder')];
 		const focusMethods = new Map<HTMLElement, HTMLElement['focus']>();
 		let observer: MutationObserver | undefined;
 		const gate: RecorderSaveGate = {
@@ -138,13 +136,7 @@ async function holdRecorderProfileWrite(root: Locator, binding: string): Promise
 			IDBObjectStore.prototype.put = function (value: unknown, key?: IDBValidKey): IDBRequest<IDBValidKey> {
 				const request = originalPut.call(this, value, key);
 				const entry = value as { bytes?: Uint8Array };
-				if (
-					!transaction &&
-					this.transaction.db.name === 'ash-user-data-files' &&
-					String(key) === resource &&
-					entry.bytes &&
-					new TextDecoder().decode(entry.bytes).includes(binding)
-				) {
+				if (!transaction && this.transaction.db.name === 'ash-user-data-files' && String(key) === resource && entry.bytes && new TextDecoder().decode(entry.bytes).includes(binding)) {
 					transaction = this.transaction;
 					gate.held = true;
 					transaction.addEventListener('complete', () => {
@@ -209,8 +201,7 @@ async function holdRecorderDiskWrite(application: ElectronApplication, binding: 
 			gate.held = true;
 			try {
 				await new Promise<void>((resolve, reject) => {
-					release = fail =>
-						fail ? reject(new Error('Test profile save rejected before publication.')) : resolve();
+					release = fail => (fail ? reject(new Error('Test profile save rejected before publication.')) : resolve());
 				});
 				await rename(source, destination);
 			} finally {
@@ -268,9 +259,7 @@ async function recordBackupTraffic(page: Page) {
 		events.push({ at: Date.now(), direction, frame });
 	};
 	session.on('Network.webSocketFrameSent', event => record('sent', event.requestId, event.response.payloadData));
-	session.on('Network.webSocketFrameReceived', event =>
-		record('received', event.requestId, event.response.payloadData),
-	);
+	session.on('Network.webSocketFrameReceived', event => record('received', event.requestId, event.response.payloadData));
 	return { events, dispose: () => session.detach() };
 }
 
@@ -281,8 +270,7 @@ for (const outcome of ['resolve', 'abort'] as const) {
 		async ({ target, workbench }) => {
 			await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 			const group = workbench.editors.groupAt(0);
-			const source =
-				'// keep pending recorder comment\n[{"key":"ctrl+alt+y","command":"workbench.action.openSettings"}]';
+			const source = '// keep pending recorder comment\n[{"key":"ctrl+alt+y","command":"workbench.action.openSettings"}]';
 			await replaceJson(group.editor.input, source);
 			await workbench.quickaccess.runCommand('workbench.action.files.save');
 			const jsonTab = group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' });
@@ -300,9 +288,7 @@ for (const outcome of ['resolve', 'abort'] as const) {
 			await holdRecorderProfileWrite(root, binding);
 			try {
 				await input.press('Enter');
-				await expect
-					.poll(() => workbench.page.evaluate(() => globalThis.ashTestRecorderSaveGate?.held))
-					.toBe(true);
+				await expect.poll(() => workbench.page.evaluate(() => globalThis.ashTestRecorderSaveGate?.held)).toBe(true);
 				await expect(root.locator('.ash-keybindings-recorder')).toHaveAttribute('aria-busy', 'true');
 				await expect(input).toBeDisabled();
 				const dialog = workbench.page.getByRole('dialog', { name: 'Keyboard Shortcuts', exact: true });
@@ -311,16 +297,9 @@ for (const outcome of ['resolve', 'abort'] as const) {
 				await group.editor.input.focus();
 				await expect(group.editor.input).toBeFocused();
 				await workbench.page.evaluate(() => globalThis.ashTestRecorderSaveGate!.observeRetiredPane());
-				await workbench.page.evaluate(
-					abort => globalThis.ashTestRecorderSaveGate!.release(abort),
-					outcome === 'abort',
-				);
-				await expect
-					.poll(() => workbench.page.evaluate(() => globalThis.ashTestRecorderSaveGate?.settled))
-					.toBe(true);
-				await group.editor.waitForEditorContents(
-					content => content.includes(binding) && content.startsWith('// keep pending recorder comment'),
-				);
+				await workbench.page.evaluate(abort => globalThis.ashTestRecorderSaveGate!.release(abort), outcome === 'abort');
+				await expect.poll(() => workbench.page.evaluate(() => globalThis.ashTestRecorderSaveGate?.settled)).toBe(true);
+				await group.editor.waitForEditorContents(content => content.includes(binding) && content.startsWith('// keep pending recorder comment'));
 				await expect(group.editor.input).toBeFocused();
 				if (outcome === 'abort') await expect(jsonTab.locator('..')).toHaveAttribute('data-state', /dirty/u);
 				else await expect(jsonTab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
@@ -355,8 +334,7 @@ for (const outcome of ['resolve', 'reject'] as const) {
 			if (!profile) throw new Error('Test profile unavailable');
 			await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 			const group = workbench.editors.groupAt(0);
-			const source =
-				'// keep pending recorder comment\n[{"key":"ctrl+alt+y","command":"workbench.action.openSettings"}]';
+			const source = '// keep pending recorder comment\n[{"key":"ctrl+alt+y","command":"workbench.action.openSettings"}]';
 			await replaceJson(group.editor.input, source);
 			await workbench.quickaccess.runCommand('workbench.action.files.save');
 			const jsonTab = group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' });
@@ -376,9 +354,7 @@ for (const outcome of ['resolve', 'reject'] as const) {
 			await holdRecorderDiskWrite(application, binding);
 			try {
 				await input.press('Enter');
-				await expect
-					.poll(() => application.evaluate(() => globalThis.ashTestRecorderDiskSaveGate?.held))
-					.toBe(true);
+				await expect.poll(() => application.evaluate(() => globalThis.ashTestRecorderDiskSaveGate?.held)).toBe(true);
 				await expect(root.locator('.ash-keybindings-recorder')).toHaveAttribute('aria-busy', 'true');
 				await expect(input).toBeDisabled();
 				expect(await readFile(join(profile, 'keybindings.json'), 'utf8')).toBe(source);
@@ -388,16 +364,9 @@ for (const outcome of ['resolve', 'reject'] as const) {
 				await group.editor.input.focus();
 				await expect(group.editor.input).toBeFocused();
 				await workbench.page.evaluate(() => globalThis.ashTestRecorderSaveGate!.observeRetiredPane());
-				await application.evaluate(
-					(_electron, reject) => globalThis.ashTestRecorderDiskSaveGate!.release(reject),
-					outcome === 'reject',
-				);
-				await expect
-					.poll(() => application.evaluate(() => globalThis.ashTestRecorderDiskSaveGate?.settled))
-					.toBe(true);
-				await group.editor.waitForEditorContents(
-					content => content.includes(binding) && content.startsWith('// keep pending recorder comment'),
-				);
+				await application.evaluate((_electron, reject) => globalThis.ashTestRecorderDiskSaveGate!.release(reject), outcome === 'reject');
+				await expect.poll(() => application.evaluate(() => globalThis.ashTestRecorderDiskSaveGate?.settled)).toBe(true);
+				await group.editor.waitForEditorContents(content => content.includes(binding) && content.startsWith('// keep pending recorder comment'));
 				await expect(group.editor.input).toBeFocused();
 				if (outcome === 'reject') {
 					await expect(jsonTab.locator('..')).toHaveAttribute('data-state', /dirty/u);
@@ -452,10 +421,7 @@ for (const waitForRemoval of [false, true]) {
 					at: Date.now(),
 					rendered: (await group.editor.lines.allTextContents()).join('\n').replace(/\u00a0/g, ' '),
 					file: await readBrowserProfile(group.editor.input),
-					state: await group.tabs
-						.filter({ hasText: 'Keyboard Shortcuts (JSON)' })
-						.locator('..')
-						.getAttribute('data-state'),
+					state: await group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..').getAttribute('data-state'),
 					backups: await readBrowserBackups(group.editor.input),
 				});
 			};
@@ -467,28 +433,17 @@ for (const waitForRemoval of [false, true]) {
 				await workbench.quickaccess.runCommand('workbench.action.files.save');
 				await snapshot('initial save');
 				await replaceJson(group.editor.input, dirty);
-				await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).toHaveAttribute(
-					'data-state',
-					/dirty/u,
-				);
-				await expect
-					.poll(async () =>
-						(await readBrowserBackups(group.editor.input)).some(record => record.content === dirty),
-					)
-					.toBe(true);
+				await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).toHaveAttribute('data-state', /dirty/u);
+				await expect.poll(async () => (await readBrowserBackups(group.editor.input)).some(record => record.content === dirty)).toBe(true);
 				await snapshot('dirty backup acknowledged');
 				await workbench.quickaccess.runCommand('workbench.action.files.save');
-				await expect(
-					group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..'),
-				).not.toHaveAttribute('data-state', /dirty|conflict/u);
+				await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 				await snapshot('first clean save');
 				const latest =
 					'// unsaved recorder comment\n[\n  {\n    "key": "ctrl+alt+[KeyK] ctrl+alt+[KeyP]",\n    "command": "workbench.action.files.newUntitledFile",\n    "when": "true"\n  }\n]';
 				await replaceJson(group.editor.input, latest);
 				await workbench.quickaccess.runCommand('workbench.action.files.save');
-				await expect(
-					group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..'),
-				).not.toHaveAttribute('data-state', /dirty|conflict/u);
+				await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 				await expect.poll(() => readBrowserProfile(group.editor.input)).toBe(latest);
 				await snapshot('second clean save');
 				if (waitForRemoval) {
@@ -518,13 +473,10 @@ test(
 	async ({ target, workbench, reloadWorkbench }) => {
 		await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 		const firstGroup = workbench.editors.groupAt(0);
-		const source =
-			'// keep shared input comment\n[{"key":"ctrl+alt+y","command":"workbench.action.openSettings"},{"key":"ctrl+alt+z","command":"workbench.action.openKeyboardShortcuts"},]\n';
+		const source = '// keep shared input comment\n[{"key":"ctrl+alt+y","command":"workbench.action.openSettings"},{"key":"ctrl+alt+z","command":"workbench.action.openKeyboardShortcuts"},]\n';
 		await replaceJson(firstGroup.editor.input, source);
 		await workbench.quickaccess.runCommand('workbench.action.files.save');
-		await expect(
-			firstGroup.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..'),
-		).not.toHaveAttribute('data-state', /dirty|conflict/u);
+		await expect(firstGroup.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 		await workbench.quickaccess.runCommand('workbench.action.openKeyboardShortcuts');
 		await workbench.quickaccess.runCommand('workbench.action.openKeyboardShortcuts');
 		await expect(firstGroup.tabs.filter({ hasText: 'Keyboard Shortcuts', hasNotText: '(JSON)' })).toHaveCount(1);
@@ -536,12 +488,8 @@ test(
 		await expect(secondPane.getByRole('searchbox')).toHaveValue('');
 		await secondPane.getByRole('searchbox').fill('workbench.action.openKeyboardShortcuts');
 		await expect(firstPane.getByRole('searchbox')).toHaveValue('workbench.action.openSettings');
-		await expect(userShortcutRows(firstPane).locator('.ash-keybindings-command-id')).toHaveText(
-			'workbench.action.openSettings',
-		);
-		await expect(userShortcutRows(secondPane).locator('.ash-keybindings-command-id')).toHaveText(
-			'workbench.action.openKeyboardShortcuts',
-		);
+		await expect(userShortcutRows(firstPane).locator('.ash-keybindings-command-id')).toHaveText('workbench.action.openSettings');
+		await expect(userShortcutRows(secondPane).locator('.ash-keybindings-command-id')).toHaveText('workbench.action.openKeyboardShortcuts');
 
 		await userShortcutRows(secondPane)
 			.getByRole('button', { name: /^Edit keybinding for /u })
@@ -550,14 +498,8 @@ test(
 		await recording.press('Control+Alt+P');
 		await recording.press('Enter');
 		await expect(secondPane.getByRole('status')).toHaveText('Keybinding saved.');
-		await expect(userShortcutRows(firstPane).locator('.ash-keybindings-command-id')).toHaveText(
-			'workbench.action.openSettings',
-		);
-		await firstGroup.tabs
-			.filter({ hasText: 'Keyboard Shortcuts', hasNotText: '(JSON)' })
-			.locator('..')
-			.getByRole('button', { name: 'Close Keyboard Shortcuts', exact: true })
-			.click();
+		await expect(userShortcutRows(firstPane).locator('.ash-keybindings-command-id')).toHaveText('workbench.action.openSettings');
+		await firstGroup.tabs.filter({ hasText: 'Keyboard Shortcuts', hasNotText: '(JSON)' }).locator('..').getByRole('button', { name: 'Close Keyboard Shortcuts', exact: true }).click();
 		let remainingPane = workbench.page.locator('.ash-keybindings-editor');
 		await expect(remainingPane).toHaveCount(1);
 		await expect(remainingPane.getByRole('searchbox')).toHaveValue('workbench.action.openKeyboardShortcuts');
@@ -565,14 +507,9 @@ test(
 
 		await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 		const json = workbench.editors.groups.filter({ has: remainingPane });
-		await replaceJson(
-			json.locator('.stanza-editor-input'),
-			source.replace('ctrl+alt+y', 'ctrl+alt+x').replace('ctrl+alt+z', 'ctrl+alt+[KeyP]'),
-		);
+		await replaceJson(json.locator('.stanza-editor-input'), source.replace('ctrl+alt+y', 'ctrl+alt+x').replace('ctrl+alt+z', 'ctrl+alt+[KeyP]'));
 		await workbench.quickaccess.runCommand('workbench.action.files.save');
-		await expect(
-			json.getByRole('tab', { name: 'Keyboard Shortcuts (JSON)', exact: true }).locator('..'),
-		).not.toHaveAttribute('data-state', /dirty|conflict/u);
+		await expect(json.getByRole('tab', { name: 'Keyboard Shortcuts (JSON)', exact: true }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 		await workbench.quickaccess.runCommand('workbench.action.openKeyboardShortcuts');
 		await remainingPane.getByRole('searchbox').fill('workbench.action.openSettings');
 		await expect(userShortcutRows(remainingPane).locator('.ash-keybindings-key')).toContainText('X');
@@ -593,22 +530,14 @@ test(
 	},
 );
 
-test('Keyboard Shortcuts recorder persists and executes an ordered four-chord binding after reload', async ({
-	target,
-	application,
-	workbench,
-	reloadWorkbench,
-}) => {
+test('Keyboard Shortcuts recorder persists and executes an ordered four-chord binding after reload', async ({ target, application, workbench, reloadWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 	let group = workbench.editors.groupAt(0);
 	const source =
 		'// keep recorder comment\n[{"key":"ctrl+alt+y","command":"runCommands","args":{"commands":["workbench.action.files.newUntitledFile",{"command":"workbench.action.openSettings","args":"general"}]},"when":"true"},{"key":"ctrl+alt+z","command":"workbench.action.openKeyboardShortcuts"},]\n';
 	await replaceJson(group.editor.input, source);
 	await workbench.quickaccess.runCommand('workbench.action.files.save');
-	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute(
-		'data-state',
-		/dirty|conflict/u,
-	);
+	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 	await workbench.quickaccess.runCommand('workbench.action.openKeyboardShortcuts');
 	const root = workbench.page.locator('.ash-keybindings-editor');
 	await root.getByRole('searchbox').fill('runCommands');
@@ -627,9 +556,7 @@ test('Keyboard Shortcuts recorder persists and executes an ordered four-chord bi
 	await group.editor.waitForEditorContents(content => content.includes(binding));
 	const persisted = (await group.editor.lines.allTextContents()).join('\n').replace(/\u00a0/g, ' ');
 	expect(persisted).toContain('// keep recorder comment');
-	expect(persisted).toContain(
-		'"commands":["workbench.action.files.newUntitledFile",{"command":"workbench.action.openSettings","args":"general"}]',
-	);
+	expect(persisted).toContain('"commands":["workbench.action.files.newUntitledFile",{"command":"workbench.action.openSettings","args":"general"}]');
 	expect(persisted).toMatch(/"args"\s*:\s*"general"/u);
 	expect(persisted).toMatch(/"when"\s*:\s*"true"/u);
 	expect(persisted).toContain('"key":"ctrl+alt+z","command":"workbench.action.openKeyboardShortcuts"');
@@ -652,16 +579,8 @@ test('Keyboard Shortcuts recorder persists and executes an ordered four-chord bi
 	await expect(group.element.getByRole('tab', { name: /^Untitled-/u })).toHaveCount(1);
 });
 
-test('Keyboard Shortcuts recorder retains a failed draft and retries after saving the dirty JSON model', async ({
-	target,
-	application,
-	workbench,
-	reloadWorkbench,
-}, testInfo) => {
-	const backupTraffic =
-		target.kind === 'browser' && target.appServerMode === 'required'
-			? await recordBackupTraffic(workbench.page)
-			: undefined;
+test('Keyboard Shortcuts recorder retains a failed draft and retries after saving the dirty JSON model', async ({ target, application, workbench, reloadWorkbench }, testInfo) => {
+	const backupTraffic = target.kind === 'browser' && target.appServerMode === 'required' ? await recordBackupTraffic(workbench.page) : undefined;
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 	let group = workbench.editors.groupAt(0);
 	const source = '[{"key":"ctrl+alt+y","command":"workbench.action.files.newUntitledFile"}]';
@@ -687,9 +606,7 @@ test('Keyboard Shortcuts recorder retains a failed draft and retries after savin
 		await input.press('Control+Alt+K');
 		await input.press('Control+Alt+P');
 		await input.press('Enter');
-		await expect(root.getByRole('status')).toHaveText(
-			'Save keybindings.json before changing a shortcut in the Keyboard Shortcuts editor.',
-		);
+		await expect(root.getByRole('status')).toHaveText('Save keybindings.json before changing a shortcut in the Keyboard Shortcuts editor.');
 		await expect(input).toHaveValue(binding.replace(/\[Key([A-Z])\]/gu, (_, key: string) => key.toLowerCase()));
 		await expect(input).toBeEnabled();
 		await expect(input).toBeFocused();
@@ -702,9 +619,7 @@ test('Keyboard Shortcuts recorder retains a failed draft and retries after savin
 		await expect(root.getByRole('status')).toHaveText('Keybinding saved.');
 		await expect(root.locator('.ash-keybindings-recorder')).toBeHidden();
 		await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
-		await group.editor.waitForEditorContents(
-			content => content.includes(binding) && content.startsWith('// unsaved recorder comment'),
-		);
+		await group.editor.waitForEditorContents(content => content.includes(binding) && content.startsWith('// unsaved recorder comment'));
 		await expect(jsonTab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 		const persisted = (await group.editor.lines.allTextContents()).join('\n').replace(/\u00a0/g, ' ');
 		if (target.kind === 'electron' && 'windows' in application) {
@@ -718,10 +633,7 @@ test('Keyboard Shortcuts recorder retains a failed draft and retries after savin
 		group = workbench.editors.groupAt(0);
 		const reloadedProfile =
 			target.kind === 'electron' && 'windows' in application
-				? await readFile(
-						join((await application.evaluate(() => process.env.ASH_HOME))!, 'keybindings.json'),
-						'utf8',
-					)
+				? await readFile(join((await application.evaluate(() => process.env.ASH_HOME))!, 'keybindings.json'), 'utf8')
 				: await readBrowserProfile(group.editor.input);
 		await testInfo.attach('recorder-retry-profile-after-reload', {
 			body: JSON.stringify({ persisted, reloadedProfile }),
@@ -732,10 +644,7 @@ test('Keyboard Shortcuts recorder retains a failed draft and retries after savin
 				body: JSON.stringify({
 					backupBeforeReload,
 					rendered: (await group.editor.lines.allTextContents()).join('\n').replace(/\u00a0/g, ' '),
-					state: await group.tabs
-						.filter({ hasText: 'Keyboard Shortcuts (JSON)' })
-						.locator('..')
-						.getAttribute('data-state'),
+					state: await group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..').getAttribute('data-state'),
 					backups: await readBrowserBackups(group.editor.input),
 					events: backupTraffic.events,
 				}),
@@ -749,10 +658,7 @@ test('Keyboard Shortcuts recorder retains a failed draft and retries after savin
 		await expect(group.element.getByRole('tab', { name: /^Untitled-/u })).toHaveCount(0);
 		await group.editor.input.press('Control+Alt+P');
 		await expect(group.element.getByRole('tab', { name: /^Untitled-/u })).toHaveCount(1);
-		await expect(group.element.getByRole('tab', { name: 'Untitled-1', exact: true })).toHaveAttribute(
-			'aria-selected',
-			'true',
-		);
+		await expect(group.element.getByRole('tab', { name: 'Untitled-1', exact: true })).toHaveAttribute('aria-selected', 'true');
 		await testInfo.attach('recorder-two-chord-execution-after-reload', {
 			body: JSON.stringify({
 				prefixTabs: 0,
@@ -769,10 +675,7 @@ test('Keyboard Shortcuts recorder retains a failed draft and retries after savin
 	}
 });
 
-test('Keyboard Shortcuts recorder explains controls in Chinese and announces a fifth-chord restart', async ({
-	workbench,
-	restartWorkbench,
-}) => {
+test('Keyboard Shortcuts recorder explains controls in Chinese and announces a fifth-chord restart', async ({ workbench, restartWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
 	await picker.getByRole('combobox').fill('简体中文');
@@ -785,9 +688,7 @@ test('Keyboard Shortcuts recorder explains controls in Chinese and announces a f
 	await add.click();
 	const input = root.getByRole('textbox', { name: '录制快捷键', exact: true });
 	const helpId = await input.getAttribute('aria-describedby');
-	await expect(root.locator(`[id="${helpId}"]`)).toContainText(
-		'单独的 Enter、Escape、Tab 或 Shift+Tab 请在键盘快捷方式（JSON）中编辑',
-	);
+	await expect(root.locator(`[id="${helpId}"]`)).toContainText('单独的 Enter、Escape、Tab 或 Shift+Tab 请在键盘快捷方式（JSON）中编辑');
 	const dialog = root.getByRole('dialog');
 	await expect(dialog).toHaveAttribute('aria-modal', 'true');
 	await expect(dialog.getByRole('button')).toHaveCount(0);
@@ -832,10 +733,7 @@ test('Keyboard Shortcuts recorder explains controls in Chinese and announces a f
 	await expect(root.locator('.ash-keybindings-recorder')).toBeHidden();
 });
 
-test('runCommands executes a saved shortcut in order and stops on a failed command', async ({
-	workbench,
-	reloadWorkbench,
-}) => {
+test('runCommands executes a saved shortcut in order and stops on a failed command', async ({ workbench, reloadWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 	let group = workbench.editors.groupAt(0);
 	await replaceJson(
@@ -846,54 +744,33 @@ test('runCommands executes a saved shortcut in order and stops on a failed comma
 				command: 'runCommands',
 				when: String.raw`true && !false && resourceFilename =~ /keybindings[.]json$/`,
 				args: {
-					commands: [
-						'workbench.action.files.newUntitledFile',
-						{ command: 'workbench.action.files.newUntitledFile', args: [] },
-					],
+					commands: ['workbench.action.files.newUntitledFile', { command: 'workbench.action.files.newUntitledFile', args: [] }],
 				},
 			},
 			{
 				key: 'ctrl+alt+z',
 				command: 'runCommands',
 				args: {
-					commands: [
-						'workbench.action.files.newUntitledFile',
-						'ash.test.missingCommand',
-						'workbench.action.files.newUntitledFile',
-					],
+					commands: ['workbench.action.files.newUntitledFile', 'ash.test.missingCommand', 'workbench.action.files.newUntitledFile'],
 				},
 			},
 		]),
 	);
 	await workbench.quickaccess.runCommand('workbench.action.files.save');
-	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute(
-		'data-state',
-		/dirty|conflict/u,
-	);
+	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 	({ workbench } = await reloadWorkbench());
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 	group = workbench.editors.groupAt(0);
 	await group.editor.input.press('Control+Alt+Y');
 	await expect(group.element.getByRole('tab', { name: /^Untitled-/u })).toHaveCount(2);
-	await expect(group.element.getByRole('tab', { name: 'Untitled-2', exact: true })).toHaveAttribute(
-		'aria-selected',
-		'true',
-	);
+	await expect(group.element.getByRole('tab', { name: 'Untitled-2', exact: true })).toHaveAttribute('aria-selected', 'true');
 	await group.editor.input.press('Control+Alt+Z');
-	await expect(
-		workbench.page.locator('.ash-notification', { hasText: 'Unknown command: ash.test.missingCommand' }),
-	).toBeVisible();
+	await expect(workbench.page.locator('.ash-notification', { hasText: 'Unknown command: ash.test.missingCommand' })).toBeVisible();
 	await expect(group.element.getByRole('tab', { name: /^Untitled-/u })).toHaveCount(3);
-	await expect(group.element.getByRole('tab', { name: 'Untitled-3', exact: true })).toHaveAttribute(
-		'aria-selected',
-		'true',
-	);
+	await expect(group.element.getByRole('tab', { name: 'Untitled-3', exact: true })).toHaveAttribute('aria-selected', 'true');
 });
 
-test('runCommands loads in Sessions and executes the saved shortcut through its editor services', async ({
-	target,
-	workbench,
-}) => {
+test('runCommands loads in Sessions and executes the saved shortcut through its editor services', async ({ target, workbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 	const group = workbench.editors.groupAt(0);
 	await replaceJson(
@@ -903,46 +780,29 @@ test('runCommands loads in Sessions and executes the saved shortcut through its 
 				key: 'ctrl+alt+y',
 				command: 'runCommands',
 				args: {
-					commands: [
-						'sessions.open.code',
-						'workbench.action.files.newUntitledFile',
-						{ command: 'workbench.action.files.newUntitledFile', args: [] },
-					],
+					commands: ['sessions.open.code', 'workbench.action.files.newUntitledFile', { command: 'workbench.action.files.newUntitledFile', args: [] }],
 				},
 			},
 		]),
 	);
 	await workbench.quickaccess.runCommand('workbench.action.files.save');
-	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute(
-		'data-state',
-		/dirty|conflict/u,
-	);
+	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.keyboard.press('Control+Alt+Y');
 	const editors = page.locator('[data-part="editor"]');
 	await expect(editors.getByRole('tab', { name: /^Untitled-/u })).toHaveCount(2);
-	await expect(editors.getByRole('tab', { name: 'Untitled-2', exact: true })).toHaveAttribute(
-		'aria-selected',
-		'true',
-	);
+	await expect(editors.getByRole('tab', { name: 'Untitled-2', exact: true })).toHaveAttribute('aria-selected', 'true');
 	await expect(editors.getByRole('textbox', { name: 'Untitled-2', exact: true })).toBeVisible();
 });
 
-test('Keybindings JSON saves the profile file, applies shortcuts after reload and uses Chinese labels', async ({
-	target,
-	application,
-	workbench,
-	reloadWorkbench,
-	restartWorkbench,
-}) => {
+test('Keybindings JSON saves the profile file, applies shortcuts after reload and uses Chinese labels', async ({ target, application, workbench, reloadWorkbench, restartWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 	let group = workbench.editors.groupAt(0);
 	let tab = group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' });
 	await expect(tab).toHaveCount(1);
 	await expect(tab.locator('..')).not.toHaveClass(/preview/u);
 	await expect(group.editor.input).toBeFocused();
-	const source =
-		'// keep this comment\n[{"key":"ctrl+alt+y","command":"workbench.action.openKeyboardShortcuts","args":{"source":"json"}},]\n';
+	const source = '// keep this comment\n[{"key":"ctrl+alt+y","command":"workbench.action.openKeyboardShortcuts","args":{"source":"json"}},]\n';
 	await replaceJson(group.editor.input, source);
 	await workbench.quickaccess.runCommand('workbench.action.files.save');
 	await expect(tab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
@@ -970,93 +830,63 @@ test('Keybindings JSON saves the profile file, applies shortcuts after reload an
 	await group.editor.waitForEditorContents(content => content === source);
 });
 
-test(
-	'runCommands offers command names and nested batch arguments in Keybindings JSON',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ target, workbench }) => {
-		await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
-		const group = workbench.editors.groupAt(0);
-		const commandNames = '[{"key":"ctrl+alt+y","command":"runCommands","args":{"commands":["run"]}}]';
-		const nestedArguments =
-			'[{"key":"ctrl+alt+y","command":"runCommands","args":{"commands":[{"command":"runCommands","args":{}}]}}]';
-		for (const [source, offset, suggestion] of [
-			[commandNames, commandNames.indexOf('["run"]') + '["run'.length, 'runCommands'],
-			[nestedArguments, nestedArguments.lastIndexOf('{}') + 1, 'commands'],
-		] as const) {
-			await replaceJson(group.editor.input, source);
-			await group.editor.input.press('ControlOrMeta+End');
-			for (let count = offset; count < source.length; count++) await group.editor.input.press('ArrowLeft');
-			await group.editor.input.press('Control+Space');
-			await expect(
-				group.content.locator('.stanza-editor-completion-option').filter({ hasText: suggestion }),
-			).toBeVisible();
-			await group.editor.input.press('Escape');
-		}
-	},
-);
+test('runCommands offers command names and nested batch arguments in Keybindings JSON', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
+	const group = workbench.editors.groupAt(0);
+	const commandNames = '[{"key":"ctrl+alt+y","command":"runCommands","args":{"commands":["run"]}}]';
+	const nestedArguments = '[{"key":"ctrl+alt+y","command":"runCommands","args":{"commands":[{"command":"runCommands","args":{}}]}}]';
+	for (const [source, offset, suggestion] of [
+		[commandNames, commandNames.indexOf('["run"]') + '["run'.length, 'runCommands'],
+		[nestedArguments, nestedArguments.lastIndexOf('{}') + 1, 'commands'],
+	] as const) {
+		await replaceJson(group.editor.input, source);
+		await group.editor.input.press('ControlOrMeta+End');
+		for (let count = offset; count < source.length; count++) await group.editor.input.press('ArrowLeft');
+		await group.editor.input.press('Control+Space');
+		await expect(group.content.locator('.stanza-editor-completion-option').filter({ hasText: suggestion })).toBeVisible();
+		await group.editor.input.press('Escape');
+	}
+});
 
-test(
-	'Keybindings JSON completes paste command arguments and ordered provider preferences',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ target, workbench }) => {
-		await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
-		const group = workbench.editors.groupAt(0);
-		const options = group.content.locator('.stanza-editor-completion-option');
-		for (const argument of ['kind', 'preferences']) {
-			await replaceJson(
-				group.editor.input,
-				`[{"key":"ctrl+alt+y","command":"editor.action.pasteAs","args":{${argument === 'kind' ? '"kind":""' : '"preferences":[""]'}}}]`,
-			);
-			await group.editor.input.press('ControlOrMeta+End');
-			for (let count = 0; count < (argument === 'kind' ? 4 : 5); count++)
-				await group.editor.input.press('ArrowLeft');
-			await group.editor.input.press('Control+Space');
-			await expect(options.filter({ hasText: 'uri.path.relative' })).toBeVisible();
-			const relative = options.filter({ hasText: 'uri.path.relative' });
-			const index = Number(await relative.getAttribute('data-completion-index'));
-			for (let count = 0; count < index; count++) await group.editor.input.press('ArrowDown');
-			await expect(relative).toHaveAttribute('aria-selected', 'true');
-			await group.editor.input.press('Enter');
-			await group.editor.waitForEditorContents(content => content.includes('uri.path.relative'));
-			await workbench.quickaccess.runCommand('workbench.action.files.save');
-			await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute(
-				'data-state',
-				/dirty|conflict/u,
-			);
-		}
-	},
-);
+test('Keybindings JSON completes paste command arguments and ordered provider preferences', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
+	const group = workbench.editors.groupAt(0);
+	const options = group.content.locator('.stanza-editor-completion-option');
+	for (const argument of ['kind', 'preferences']) {
+		await replaceJson(group.editor.input, `[{"key":"ctrl+alt+y","command":"editor.action.pasteAs","args":{${argument === 'kind' ? '"kind":""' : '"preferences":[""]'}}}]`);
+		await group.editor.input.press('ControlOrMeta+End');
+		for (let count = 0; count < (argument === 'kind' ? 4 : 5); count++) await group.editor.input.press('ArrowLeft');
+		await group.editor.input.press('Control+Space');
+		await expect(options.filter({ hasText: 'uri.path.relative' })).toBeVisible();
+		const relative = options.filter({ hasText: 'uri.path.relative' });
+		const index = Number(await relative.getAttribute('data-completion-index'));
+		for (let count = 0; count < index; count++) await group.editor.input.press('ArrowDown');
+		await expect(relative).toHaveAttribute('aria-selected', 'true');
+		await group.editor.input.press('Enter');
+		await group.editor.waitForEditorContents(content => content.includes('uri.path.relative'));
+		await workbench.quickaccess.runCommand('workbench.action.files.save');
+		await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+	}
+});
 
-test(
-	'Keybindings external changes reload clean models and preserve dirty text on save conflict',
-	{ tag: ['@electron-ui', '@electron-app-server'] },
-	async ({ target, application, workbench }) => {
-		if (!('windows' in application)) throw new Error('Requires Electron');
-		const profile = await application.evaluate(() => process.env.ASH_HOME);
-		if (!profile) throw new Error('Test profile unavailable');
-		await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
-		const group = workbench.editors.groupAt(0);
-		const source = '[{"key":"ctrl+alt+y","command":"workbench.action.openKeyboardShortcuts"}]';
-		await writeFile(join(profile, 'keybindings.json'), source);
-		await group.editor.waitForEditorContents(content => content === source);
-		await replaceJson(group.editor.input, '// unsaved\n' + source);
-		await group.editor.waitForEditorContents(content => content === '// unsaved\n' + source);
-		await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).toHaveAttribute(
-			'data-state',
-			'dirty',
-		);
-		await writeFile(join(profile, 'keybindings.json'), '[]');
-		await workbench.dialogs.expectMessage(application, 'File changed on disk', () =>
-			workbench.quickaccess.runCommand('workbench.action.files.save'),
-		);
-		await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).toHaveAttribute(
-			'data-state',
-			/conflict/u,
-		);
-		await group.editor.waitForEditorContents(content => content === '// unsaved\n' + source);
-		expect(await readFile(join(profile, 'keybindings.json'), 'utf8')).toBe('[]');
-	},
-);
+test('Keybindings external changes reload clean models and preserve dirty text on save conflict', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }) => {
+	if (!('windows' in application)) throw new Error('Requires Electron');
+	const profile = await application.evaluate(() => process.env.ASH_HOME);
+	if (!profile) throw new Error('Test profile unavailable');
+	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
+	const group = workbench.editors.groupAt(0);
+	const source = '[{"key":"ctrl+alt+y","command":"workbench.action.openKeyboardShortcuts"}]';
+	await writeFile(join(profile, 'keybindings.json'), source);
+	await group.editor.waitForEditorContents(content => content === source);
+	await replaceJson(group.editor.input, '// unsaved\n' + source);
+	await group.editor.waitForEditorContents(content => content === '// unsaved\n' + source);
+	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).toHaveAttribute('data-state', 'dirty');
+	await writeFile(join(profile, 'keybindings.json'), '[]');
+	await workbench.dialogs.expectMessage(application, 'File changed on disk', () => workbench.quickaccess.runCommand('workbench.action.files.save'));
+	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).toHaveAttribute('data-state', /conflict/u);
+	await group.editor.waitForEditorContents(content => content === '// unsaved\n' + source);
+	expect(await readFile(join(profile, 'keybindings.json'), 'utf8')).toBe('[]');
+});
 
 /** Source labels identify user rules without depending on a renderer-only state class. */
 function userShortcutRows(root: Locator): Locator {

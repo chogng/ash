@@ -1,17 +1,15 @@
 import type { CancellationToken } from '../../../base/common/cancellation.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import {
-	type IAnyWorkspaceIdentifier,
-	type IWorkspace,
-	type IWorkspaceIdentifier,
-	type ISingleFolderWorkspaceIdentifier,
-	workspaceFromIdentifier,
-} from '../../workspace/common/workspace.js';
+import { type IAnyWorkspaceIdentifier, type IWorkspace, type IWorkspaceIdentifier, type ISingleFolderWorkspaceIdentifier, workspaceFromIdentifier } from '../../workspace/common/workspace.js';
 import { DEFAULT_EMPTY_WINDOW_SIZE, DEFAULT_WORKSPACE_WINDOW_SIZE, type IWindowClientSize } from '../common/window.js';
 import { WorkbenchState } from '../../workspace/common/workspace.js';
 
-export const WindowMode = { Normal: 'normal', Maximized: 'maximized', Fullscreen: 'fullscreen' } as const;
+export const WindowMode = {
+	Normal: 'normal',
+	Maximized: 'maximized',
+	Fullscreen: 'fullscreen',
+} as const;
 
 /** Stable string values used by runtime and persisted window state. */
 export type WindowMode = (typeof WindowMode)[keyof typeof WindowMode];
@@ -59,19 +57,10 @@ export interface ICodeWindow<TWindow = Electron.BrowserWindow> extends IDisposab
 	sendWhenReady(channel: string, token: CancellationToken, ...args: unknown[]): void;
 	ready(): Promise<ICodeWindow<TWindow>>;
 	setReady(): void;
-	load(configuration: {
-		readonly file: string;
-		readonly url: string;
-		readonly useDevelopmentUrl: boolean;
-	}): Promise<void>;
+	load(configuration: { readonly file: string; readonly url: string; readonly useDevelopmentUrl: boolean }): Promise<void>;
 	reload(): Promise<void>;
 	reportWindowError(gone: boolean, shutdownSignal?: AbortSignal): Promise<void>;
-	updateWindowControls(options: {
-		backgroundColor?: string;
-		foregroundColor?: string;
-		backdropColor?: string;
-		dimmed?: boolean;
-	}): void;
+	updateWindowControls(options: { backgroundColor?: string; foregroundColor?: string; backdropColor?: string; dimmed?: boolean }): void;
 }
 
 /**
@@ -95,7 +84,11 @@ export interface IWindowState {
 export function defaultWindowState(workbenchState: WorkbenchState, mode: WindowMode = WindowMode.Normal): IWindowState {
 	const size = workbenchState === WorkbenchState.EMPTY ? DEFAULT_EMPTY_WINDOW_SIZE : DEFAULT_WORKSPACE_WINDOW_SIZE;
 
-	return { mode, width: size.width, height: size.height };
+	return {
+		mode,
+		width: size.width,
+		height: size.height,
+	};
 }
 
 export interface IFocusableWindow {
@@ -126,10 +119,7 @@ export class WorkspaceContextMainService extends Disposable {
 
 	public readonly onDidChangeWorkspace: Event<IWorkspaceContextMainChangeEvent> = this._onDidChangeWorkspace.event;
 
-	constructor(
-		workspace: IAnyWorkspaceIdentifier,
-		resolvedWorkspace: IWorkspace = workspaceFromIdentifier(workspace),
-	) {
+	constructor(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace = workspaceFromIdentifier(workspace)) {
 		super();
 		this.workspace = workspace;
 		this.resolvedWorkspace = resolvedWorkspace;
@@ -143,14 +133,8 @@ export class WorkspaceContextMainService extends Disposable {
 		return this.resolvedWorkspace;
 	}
 
-	public updateWorkspace(
-		workspace: IAnyWorkspaceIdentifier,
-		resolvedWorkspace: IWorkspace = workspaceFromIdentifier(workspace),
-	): void {
-		if (
-			workspace.id === this.workspace.id &&
-			JSON.stringify(resolvedWorkspace) === JSON.stringify(this.resolvedWorkspace)
-		) {
+	public updateWorkspace(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace = workspaceFromIdentifier(workspace)): void {
+		if (workspace.id === this.workspace.id && JSON.stringify(resolvedWorkspace) === JSON.stringify(this.resolvedWorkspace)) {
 			return;
 		}
 		const previous = this.workspace;

@@ -5,13 +5,7 @@ import { CommandRegistry, ICommandService } from '../../../platform/commands/com
 import { IMultiDiffSourceResolverService } from '../../contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import { isMultiDiffEditorInput, requireActions } from '../../contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { parseExtensionEditorInput } from './mainThreadEditorInput.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	noneDisposable,
-	toDisposable,
-} from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, noneDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { structuralEquals } from '../../../base/common/equals.js';
 import { observableValue } from '../../../base/common/observable.js';
@@ -20,12 +14,7 @@ import { extUriBiasedIgnorePathCase } from '../../../base/common/resources.js';
 import { Icon } from '../../../base/common/icon.js';
 import { LRUCache } from '../../../base/common/map.js';
 import type { IAction } from '../../../base/common/actions.js';
-import {
-	IExtensionHostApi,
-	type ExtensionClientSource,
-	type ExtensionHostFleetSnapshot,
-	type JsonValue,
-} from '../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionClientSource, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
 import {
 	ISCMService,
@@ -99,11 +88,7 @@ export class MainThreadSCM extends Disposable {
 		this._register(
 			commandRegistry.register('workbench.scm.action.retryInitialization', async () => {
 				const registered = new Set([...this.registrations].map(([, owner]) => owner.source.extensionId));
-				if (
-					[...this.initializationContexts].some(
-						([id, context]) => context.get() === 'failed' && !registered.has(id),
-					)
-				) {
+				if ([...this.initializationContexts].some(([id, context]) => context.get() === 'failed' && !registered.has(id))) {
 					// A process can fail before registering SCM. The fleet owner publishes its
 					// replacement and activates it through the usual startup path.
 					await this.api.reconcile('restartFailed');
@@ -223,10 +208,7 @@ export class MainThreadSCM extends Disposable {
 		if (snapshot) {
 			for (const runtime of snapshot.extensions) {
 				if (states.has(runtime.id) || runtime.lifecycle === 'ready') continue;
-				const failed =
-					runtime.lifecycle === 'failed' ||
-					runtime.lifecycle === 'crashLoop' ||
-					runtime.lifecycle === 'stopped';
+				const failed = runtime.lifecycle === 'failed' || runtime.lifecycle === 'crashLoop' || runtime.lifecycle === 'stopped';
 				states.set(runtime.id, [failed ? 'failed' : 'initializing']);
 			}
 		}
@@ -245,18 +227,11 @@ export class MainThreadSCM extends Disposable {
 					context = this.contextKeys.createKey<string>(`scm.providerState.${id}`, 'initializing');
 					this.initializationContexts.set(id, context);
 				}
-				context.set(
-					values.includes('failed') ? 'failed' : values.includes('initializing') ? 'initializing' : 'ready',
-				);
+				context.set(values.includes('failed') ? 'failed' : values.includes('initializing') ? 'initializing' : 'ready');
 			}
 		});
 	}
-	public set(
-		source: ExtensionClientSource,
-		registrationId: string,
-		revision: number,
-		values: readonly JsonValue[],
-	): void {
+	public set(source: ExtensionClientSource, registrationId: string, revision: number, values: readonly JsonValue[]): void {
 		this.assertNotDisposed();
 		const owner = this.registrations.get(registrationKey(source, registrationId));
 		if (!owner) {
@@ -283,19 +258,13 @@ export class MainThreadSCM extends Disposable {
 					Boolean(existing.mergeProvider) !== value.hasMerge ||
 					existing.hasTimeline !== Boolean(value.timeline) ||
 					Boolean(existing.historyProvider?.provideHistoryItemRefs) !== value.hasHistoryItemRefs ||
-					Boolean(existing.historyProvider?.resolveHistoryItemRefsCommonAncestor) !==
-						value.hasHistoryMergeBase)
+					Boolean(existing.historyProvider?.resolveHistoryItemRefsCommonAncestor) !== value.hasHistoryMergeBase)
 			) {
 				throw new TypeError('SCM provider identity cannot change within a registration');
 			}
 			if (value.multiDiff) {
 				const prefix = URI.parse(string(value.multiDiff.resourcePrefix));
-				if (
-					prefix.scheme !== 'ash-scm' ||
-					prefix.authority !== source.extensionId ||
-					prefix.query ||
-					prefix.fragment
-				) {
+				if (prefix.scheme !== 'ash-scm' || prefix.authority !== source.extensionId || prefix.query || prefix.fragment) {
 					throw new TypeError('Multi-diff source must belong to its extension');
 				}
 				requireActions(value.multiDiff.sourceActions);
@@ -318,12 +287,7 @@ export class MainThreadSCM extends Disposable {
 				}
 				provider = owner.providers.set(
 					value.id,
-					new ExtensionSCMProvider(
-						value,
-						(method, payload, signal) =>
-							this.invoke(owner, method, { providerId: value.id, ...payload }, signal),
-						this.reportError,
-					),
+					new ExtensionSCMProvider(value, (method, payload, signal) => this.invoke(owner, method, { providerId: value.id, ...payload }, signal), this.reportError),
 				);
 				provider.add(this.scm.registerSCMProvider(provider));
 				if (value.timeline) {
@@ -332,8 +296,7 @@ export class MainThreadSCM extends Disposable {
 					const openCommand = `workbench.scm.timeline.open.${++this.timelineSequence}`;
 					provider.add(
 						this.commandRegistry.register(openCommand, async (_accessor, resource, handle) => {
-							if (typeof resource !== 'string' || typeof handle !== 'string')
-								throw new TypeError('Invalid SCM timeline entry');
+							if (typeof resource !== 'string' || typeof handle !== 'string') throw new TypeError('Invalid SCM timeline entry');
 							await currentProvider.call('timeline', {
 								methodName: 'open',
 								resource: string(resource),
@@ -346,24 +309,13 @@ export class MainThreadSCM extends Disposable {
 							id,
 							label: value.timeline.label,
 							scheme: provider.rootUri?.scheme ?? '*',
-							onDidChange: listener =>
-								currentProvider.onDidChangeTimeline(() =>
-									listener({ id, uri: undefined, reset: true }),
-								),
+							onDidChange: listener => currentProvider.onDidChangeTimeline(() => listener({ id, uri: undefined, reset: true })),
 							provideTimeline: async (resource, options, token) => {
-								if (
-									currentProvider.rootUri &&
-									!extUriBiasedIgnorePathCase.isEqualOrParent(resource, currentProvider.rootUri)
-								)
-									return undefined;
+								if (currentProvider.rootUri && !extUriBiasedIgnorePathCase.isEqualOrParent(resource, currentProvider.rootUri)) return undefined;
 								const controller = new AbortController();
 								using cancellation = token.onCancellationRequested(() => controller.abort());
 								if (token.isCancellationRequested) controller.abort();
-								const response = await currentProvider.call(
-									'timeline',
-									{ methodName: 'provide', resource: resource.toString(), options },
-									controller.signal,
-								);
+								const response = await currentProvider.call('timeline', { methodName: 'provide', resource: resource.toString(), options }, controller.signal);
 								if (response === null) return undefined;
 								const result = object(response);
 								return {
@@ -374,11 +326,7 @@ export class MainThreadSCM extends Disposable {
 											const handle = string(item.handle);
 											const historyItemId = optionalString(item.id);
 											const historyItem =
-												item.historyItem == null || !currentProvider.historyProvider
-													? undefined
-													: await currentProvider.prepareHistoryItem(
-															parseHistoryItem(item.historyItem),
-														);
+												item.historyItem == null || !currentProvider.historyProvider ? undefined : await currentProvider.prepareHistoryItem(parseHistoryItem(item.historyItem));
 											controller.signal.throwIfAborted();
 											return {
 												source: id,
@@ -388,9 +336,7 @@ export class MainThreadSCM extends Disposable {
 												timestamp: number(item.timestamp),
 												description: optionalString(item.description),
 												tooltip: optionalString(item.tooltip),
-												sourceControl: historyItem
-													? { repositoryId: currentProvider.id, historyItem }
-													: undefined,
+												sourceControl: historyItem ? { repositoryId: currentProvider.id, historyItem } : undefined,
 												icon: item.icon == null ? undefined : Icon.fromId(string(item.icon)),
 												command: {
 													id: openCommand,
@@ -425,9 +371,7 @@ export class MainThreadSCM extends Disposable {
 						this.multiDiff.registerResolver({
 							canHandleUri: resource => resource.with({ query: '', fragment: '' }).toString() === prefix,
 							resolveDiffSource: async resource => {
-								const input = parseExtensionEditorInput(
-									await provider!.call('multiDiff', { resource: resource.toString() }),
-								);
+								const input = parseExtensionEditorInput(await provider!.call('multiDiff', { resource: resource.toString() }));
 								if (!isMultiDiffEditorInput(input)) {
 									throw new TypeError('Source resolver must return a multi-diff input');
 								}
@@ -440,15 +384,11 @@ export class MainThreadSCM extends Disposable {
 							},
 							sourceActions: () => actions(metadata.sourceActions),
 							primaryRepositoryAction: input =>
-								input.source?.kind === 'external' &&
-								input.source.providerId === source.extensionId &&
-								input.source.repositoryId === value.id
+								input.source?.kind === 'external' && input.source.providerId === source.extensionId && input.source.repositoryId === value.id
 									? actions(metadata.repositoryActions)[0]
 									: undefined,
 							repositoryActions: input =>
-								input.source?.kind === 'external' &&
-								input.source.providerId === source.extensionId &&
-								input.source.repositoryId === value.id
+								input.source?.kind === 'external' && input.source.providerId === source.extensionId && input.source.repositoryId === value.id
 									? actions(metadata.repositoryActions)
 									: [],
 						}),
@@ -472,12 +412,7 @@ export class MainThreadSCM extends Disposable {
 								providerLabel: provider!.label,
 								label: original.label == null ? provider!.label : string(original.label),
 								originalResource: URI.parse(string(original.originalResource ?? original.resource)),
-								revision:
-									original.revision == null
-										? owner.revision
-										: typeof original.revision === 'number'
-											? original.revision
-											: string(original.revision),
+								revision: original.revision == null ? owner.revision : typeof original.revision === 'number' ? original.revision : string(original.revision),
 								text: string(original.text, 16 * 1024 * 1024),
 							};
 						},
@@ -493,11 +428,7 @@ export class MainThreadSCM extends Disposable {
 							if (token.isCancellationRequested) {
 								controller.abort();
 							}
-							let result = await provider!.call(
-								'decoration',
-								{ resource: resource.toString() },
-								controller.signal,
-							);
+							let result = await provider!.call('decoration', { resource: resource.toString() }, controller.signal);
 							let inherited = false;
 							if (result === null) {
 								// Collapsed folders have no rendered children to populate the decoration cache.
@@ -505,17 +436,9 @@ export class MainThreadSCM extends Disposable {
 								// decorations are enabled and may bubble, while direct folder data wins.
 								const descendant = provider!.groups
 									.flatMap(group => group.resources)
-									.find(
-										change =>
-											!extUriBiasedIgnorePathCase.isEqual(change.sourceUri, resource) &&
-											extUriBiasedIgnorePathCase.isEqualOrParent(change.sourceUri, resource),
-									);
+									.find(change => !extUriBiasedIgnorePathCase.isEqual(change.sourceUri, resource) && extUriBiasedIgnorePathCase.isEqualOrParent(change.sourceUri, resource));
 								if (descendant) {
-									result = await provider!.call(
-										'decoration',
-										{ resource: descendant.sourceUri.toString() },
-										controller.signal,
-									);
+									result = await provider!.call('decoration', { resource: descendant.sourceUri.toString() }, controller.signal);
 									inherited = true;
 								}
 							}
@@ -546,16 +469,9 @@ export class MainThreadSCM extends Disposable {
 		}
 		owner.revision = revision;
 	}
-	private async invoke(
-		owner: SCMRegistration,
-		method: string,
-		payload: Record<string, unknown>,
-		requestSignal?: AbortSignal,
-	): Promise<JsonValue> {
+	private async invoke(owner: SCMRegistration, method: string, payload: Record<string, unknown>, requestSignal?: AbortSignal): Promise<JsonValue> {
 		owner.controller.signal.throwIfAborted();
-		const signal = requestSignal
-			? AbortSignal.any([owner.controller.signal, requestSignal])
-			: owner.controller.signal;
+		const signal = requestSignal ? AbortSignal.any([owner.controller.signal, requestSignal]) : owner.controller.signal;
 		const run = async (): Promise<JsonValue> => {
 			signal.throwIfAborted();
 			// A published repository may start a graph or decoration read while discovery is still in flight.
@@ -567,38 +483,29 @@ export class MainThreadSCM extends Disposable {
 			// Queueing does not consume the invocation's backend deadline or an admission slot.
 			const openComparisons =
 				method === 'open' && !payload.sideBySide
-					? this.editorPart.activeGroup.inputs
-							.slice(0, 256)
-							.flatMap(input =>
-								isResourceDiffEditorInput(input)
-									? [
-											{
-												original: input.original.resource.toString(),
-												modified: input.modified.resource.toString(),
-											},
-										]
-									: [],
-							)
+					? this.editorPart.activeGroup.inputs.slice(0, 256).flatMap(input =>
+							isResourceDiffEditorInput(input)
+								? [
+										{
+											original: input.original.resource.toString(),
+											modified: input.modified.resource.toString(),
+										},
+									]
+								: [],
+						)
 					: undefined;
 			return this.api.invoke(
 				{
 					...owner.source,
 					registrationId: owner.registrationId,
 					operation: 'scm',
-					payload: normalizeExtensionHostPayload(
-						JSON.parse(
-							JSON.stringify({ method, ...payload, ...(openComparisons ? { openComparisons } : {}) }),
-						),
-					),
+					payload: normalizeExtensionHostPayload(JSON.parse(JSON.stringify({ method, ...payload, ...(openComparisons ? { openComparisons } : {}) }))),
 					deadlineUnixMillis: Date.now() + this.timeout,
 				},
 				signal,
 			);
 		};
-		const result =
-			method === 'decoration'
-				? await this.decorationQueues[this.nextDecorationQueue++ % this.decorationQueues.length]!.schedule(run)
-				: await run();
+		const result = method === 'decoration' ? await this.decorationQueues[this.nextDecorationQueue++ % this.decorationQueues.length]!.schedule(run) : await run();
 		signal.throwIfAborted();
 		return result;
 	}
@@ -617,8 +524,7 @@ export class MainThreadSCM extends Disposable {
 					owner.source.incarnation === source.incarnation &&
 					owner.providers.get(providerId) === repository?.provider,
 			);
-			if (!repository || !owned)
-				throw new TypeError('SCM history command belongs to a retired or foreign repository');
+			if (!repository || !owned) throw new TypeError('SCM history command belongs to a retired or foreign repository');
 			return {
 				type: entry.type,
 				repository,
@@ -640,13 +546,7 @@ export class MainThreadSCM extends Disposable {
 			if (value instanceof URI) {
 				return value.toString();
 			}
-			if (
-				value &&
-				typeof value === 'object' &&
-				'repositoryId' in value &&
-				typeof value.repositoryId === 'string' &&
-				'runTitleOperation' in value
-			) {
+			if (value && typeof value === 'object' && 'repositoryId' in value && typeof value.repositoryId === 'string' && 'runTitleOperation' in value) {
 				return { repositoryId: value.repositoryId };
 			}
 			if (value && typeof value === 'object' && 'repository' in value) {
@@ -760,20 +660,14 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	private resourceGroups: readonly ISCMResourceGroup[] | undefined;
 	private openController: AbortController | undefined;
 	// Both presentations read the same repository owner. Bound retained commit messages and requests.
-	private readonly historyDetails = new LRUCache<string, ISCMHistoryItemDetails | Promise<ISCMHistoryItemDetails>>(
-		128,
-	);
+	private readonly historyDetails = new LRUCache<string, ISCMHistoryItemDetails | Promise<ISCMHistoryItemDetails>>(128);
 	private readonly detailQueues = Array.from({ length: 4 }, () => new TaskQueue());
 	private nextDetailQueue = 0;
 	public readonly historyProvider: ISCMHistoryProvider | undefined;
 	public readonly mergeProvider;
 	constructor(
 		private snapshot: ProviderSnapshot,
-		public readonly call: (
-			method: string,
-			payload: Record<string, unknown>,
-			signal?: AbortSignal,
-		) => Promise<JsonValue>,
+		public readonly call: (method: string, payload: Record<string, unknown>, signal?: AbortSignal) => Promise<JsonValue>,
 		private readonly reportError: (error: unknown) => void,
 	) {
 		super();
@@ -835,11 +729,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 							arguments: [id, encodeChange(change)],
 						}),
 					),
-				resolveHistoryItemChatContext: async id =>
-					optionalString(
-						await this.call('history', { methodName: 'resolveHistoryItemChatContext', arguments: [id] }),
-						512 * 1024,
-					),
+				resolveHistoryItemChatContext: async id => optionalString(await this.call('history', { methodName: 'resolveHistoryItemChatContext', arguments: [id] }), 512 * 1024),
 				resolveHistoryItemChangeRangeChatContext: async (id, parent, path) =>
 					optionalString(
 						await this.call('history', {
@@ -852,14 +742,8 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		}
 		this.mergeProvider = snapshot.hasMerge
 			? {
-					resolve: async (path: string): Promise<ISCMConflictFile> =>
-						parseConflict(await this.call('merge', { methodName: 'resolve', arguments: [path] })),
-					complete: async (
-						path: string,
-						stageIds: readonly (string | null)[],
-						objectId: string | null,
-						resolution: ISCMConflictResolution,
-					): Promise<void> => {
+					resolve: async (path: string): Promise<ISCMConflictFile> => parseConflict(await this.call('merge', { methodName: 'resolve', arguments: [path] })),
+					complete: async (path: string, stageIds: readonly (string | null)[], objectId: string | null, resolution: ISCMConflictResolution): Promise<void> => {
 						await this.call('merge', {
 							methodName: 'complete',
 							arguments: [path, stageIds, objectId, resolution],
@@ -871,9 +755,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	}
 
 	private async provideHistoryItems(options: ISCMHistoryOptions): Promise<readonly ISCMHistoryItem[]> {
-		const items = array(
-			await this.call('history', { methodName: 'provideHistoryItems', arguments: [options] }),
-		).map(parseHistoryItem);
+		const items = array(await this.call('history', { methodName: 'provideHistoryItems', arguments: [options] })).map(parseHistoryItem);
 		return Promise.all(items.map(item => this.prepareHistoryItem(item)));
 	}
 
@@ -987,24 +869,13 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		// Keep resource identities while only input or status presentation changes.
 		return (this.resourceGroups ??= this.createResourceGroups(this.snapshot.groups));
 	}
-	private createResourceGroups(
-		groups: ProviderSnapshot['groups'],
-		previous: ProviderSnapshot['groups'] = [],
-		resources: readonly ISCMResourceGroup[] = [],
-	): readonly ISCMResourceGroup[] {
-		const retained = new Map(
-			previous.map((group, index) => [string(group.id), { snapshot: group, group: resources[index] }]),
-		);
+	private createResourceGroups(groups: ProviderSnapshot['groups'], previous: ProviderSnapshot['groups'] = [], resources: readonly ISCMResourceGroup[] = []): readonly ISCMResourceGroup[] {
+		const retained = new Map(previous.map((group, index) => [string(group.id), { snapshot: group, group: resources[index] }]));
 		return groups.map(group => {
 			const old = retained.get(string(group.id));
 			if (old?.group && structuralEquals(old.snapshot, group)) return old.group;
 			const previousResources = new Map(
-				old?.group
-					? array(old.snapshot.resources).map((value, index) => [
-							string(object(value).id),
-							{ snapshot: value, resource: old.group!.resources[index] },
-						])
-					: [],
+				old?.group ? array(old.snapshot.resources).map((value, index) => [string(object(value).id), { snapshot: value, resource: old.group!.resources[index] }]) : [],
 			);
 			return {
 				id: string(group.id),
@@ -1040,11 +911,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 							}
 							const controller = (this.openController = new AbortController());
 							try {
-								await this.call(
-									'open',
-									{ resourceId: string(resource.id), options, sideBySide },
-									controller.signal,
-								);
+								await this.call('open', { resourceId: string(resource.id), options, sideBySide }, controller.signal);
 							} catch (error) {
 								if (!controller.signal.aborted) throw error;
 							} finally {
@@ -1067,10 +934,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 			alignment: entry.alignment === 'right' ? 'right' : 'left',
 			icon: entry.icon ? Icon.fromId(string(entry.icon)) : undefined,
 			showProgress: entry.showProgress === true,
-			run:
-				entry.enabled === false
-					? undefined
-					: () => this.call('statusBar', { commandId: entry.id }).catch(this.reportError),
+			run: entry.enabled === false ? undefined : () => this.call('statusBar', { commandId: entry.id }).catch(this.reportError),
 		}));
 	}
 	private action(value: JsonValue): IAction {
@@ -1120,11 +984,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		const historyRefsChanged = value.historyRefsRevision !== this.snapshot.historyRefsRevision;
 		const resourcesChanged = !structuralEquals(value.groups, this.snapshot.groups);
 		// An index write can change original content while path/status entries stay equal.
-		const diffChanged =
-			resourcesChanged ||
-			value.label !== this.snapshot.label ||
-			value.historyRef?.revision !== this.snapshot.historyRef?.revision ||
-			(this.snapshot.isBusy && !value.isBusy);
+		const diffChanged = resourcesChanged || value.label !== this.snapshot.label || value.historyRef?.revision !== this.snapshot.historyRef?.revision || (this.snapshot.isBusy && !value.isBusy);
 		// History revisions and reference decorations do not change the working-tree
 		// presentation. Keep input, operation and status controls responsive independently.
 		const presentationChanged =
@@ -1138,8 +998,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 			!structuralEquals(value.actionButton, this.snapshot.actionButton) ||
 			!structuralEquals(value.statusBarCommands, this.snapshot.statusBarCommands) ||
 			!structuralEquals(value.multiDiff, this.snapshot.multiDiff);
-		const timelineChanged =
-			historyChanged || resourcesChanged || !structuralEquals(value.timeline, this.snapshot.timeline);
+		const timelineChanged = historyChanged || resourcesChanged || !structuralEquals(value.timeline, this.snapshot.timeline);
 		if (resourcesChanged && this.resourceGroups) {
 			// Reconcile by provider/group/resource identity. Unchanged rows keep their
 			// actions and labels; removed rows leave this owner's reachable snapshot.
@@ -1237,10 +1096,7 @@ function parseActionButton(value: JsonValue): ISCMActionButtonDescriptor {
 	return {
 		command: command(entry.command),
 		enabled: entry.enabled,
-		secondaryCommands:
-			entry.secondaryCommands == null
-				? undefined
-				: array(entry.secondaryCommands).map(group => array(group).map(command)),
+		secondaryCommands: entry.secondaryCommands == null ? undefined : array(entry.secondaryCommands).map(group => array(group).map(command)),
 	};
 }
 function parseProvider(value: JsonValue): ProviderSnapshot {
@@ -1250,11 +1106,7 @@ function parseProvider(value: JsonValue): ProviderSnapshot {
 			throw new TypeError('Invalid SCM history capability');
 		}
 	}
-	if (
-		entry.count != null &&
-		(typeof entry.count !== 'number' || !Number.isSafeInteger(entry.count) || entry.count < 0)
-	)
-		throw new TypeError('Invalid SCM count');
+	if (entry.count != null && (typeof entry.count !== 'number' || !Number.isSafeInteger(entry.count) || entry.count < 0)) throw new TypeError('Invalid SCM count');
 	const input = object(entry.input);
 	for (const key of ['visible', 'buttonVisible']) {
 		if (input[key] != null && typeof input[key] !== 'boolean') throw new TypeError('Invalid SCM input visibility');
@@ -1312,8 +1164,7 @@ function parseProvider(value: JsonValue): ProviderSnapshot {
 	if (entry.historyChangeSilent !== undefined && typeof entry.historyChangeSilent !== 'boolean') {
 		throw new TypeError('Invalid SCM history change origin');
 	}
-	const historyOperationRevision =
-		entry.historyOperationRevision == null ? 0 : number(entry.historyOperationRevision);
+	const historyOperationRevision = entry.historyOperationRevision == null ? 0 : number(entry.historyOperationRevision);
 	if (!Number.isSafeInteger(historyOperationRevision) || historyOperationRevision < 0) {
 		throw new TypeError('Invalid SCM history operation revision');
 	}
@@ -1415,11 +1266,7 @@ function parseContent(value: JsonValue): ISCMHistoryItemChangeContents['original
 		if (entry.bytes == null) {
 			return { kind: 'binary' };
 		}
-		if (
-			!Array.isArray(entry.bytes) ||
-			entry.bytes.length > 2 * 1024 * 1024 ||
-			entry.bytes.some(byte => typeof byte !== 'number' || !Number.isInteger(byte) || byte < 0 || byte > 255)
-		) {
+		if (!Array.isArray(entry.bytes) || entry.bytes.length > 2 * 1024 * 1024 || entry.bytes.some(byte => typeof byte !== 'number' || !Number.isInteger(byte) || byte < 0 || byte > 255)) {
 			throw new TypeError('Invalid SCM binary bytes');
 		}
 		return { kind: 'binary', bytes: Uint8Array.from(entry.bytes as number[]) };

@@ -35,18 +35,11 @@ export class LoggerChannel implements IServerChannel {
 			const cursor = arg.cursor;
 			if (
 				cursor !== undefined &&
-				(!isRecord(cursor) ||
-					typeof cursor.generation !== 'string' ||
-					cursor.generation.length > 128 ||
-					!Number.isSafeInteger(cursor.offset) ||
-					(cursor.offset as number) < 0)
+				(!isRecord(cursor) || typeof cursor.generation !== 'string' || cursor.generation.length > 128 || !Number.isSafeInteger(cursor.offset) || (cursor.offset as number) < 0)
 			) {
 				throw new TypeError('Invalid log cursor');
 			}
-			return (await this.loggerService.readLogFile(
-				arg.id,
-				cursor as { generation: string; offset: number } | undefined,
-			)) as T;
+			return (await this.loggerService.readLogFile(arg.id, cursor as { generation: string; offset: number } | undefined)) as T;
 		}
 		throw new Error(`Unknown logger command: ${command}`);
 	}

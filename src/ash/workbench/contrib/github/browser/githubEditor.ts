@@ -1,8 +1,4 @@
-import {
-	defaultButtonStyles,
-	defaultInputBoxStyles,
-	defaultSelectBoxStyles,
-} from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultInputBoxStyles, defaultSelectBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
@@ -20,11 +16,7 @@ import { WorkerBasedDiffProviderFactoryService } from '../../../../editor/browse
 import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 import { DiffModel } from '../../../../editor/common/diff/diffModel.js';
 import { localize } from '../../../../nls.js';
-import {
-	AccessibilityVerbositySettingId,
-	AccessibleViewType,
-	IAccessibleViewService,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibilityVerbositySettingId, AccessibleViewType, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
@@ -173,21 +165,17 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			{ value: GitHubIssueState.Open, label: localize('github.editor.open', 'Open') },
 			{ value: GitHubIssueState.Closed, label: localize('github.editor.closed', 'Closed') },
 		]);
-		this.notificationFilter = this.select(
-			header,
-			localize('github.editor.notificationFilter', 'Notification filter'),
-			[
-				{ value: GitHubNotificationFilter.Unread, label: localize('github.editor.unread', 'Unread') },
-				{
-					value: GitHubNotificationFilter.All,
-					label: localize('github.editor.allNotifications', 'All notifications'),
-				},
-				{
-					value: GitHubNotificationFilter.Participating,
-					label: localize('github.editor.participating', 'Participating'),
-				},
-			],
-		);
+		this.notificationFilter = this.select(header, localize('github.editor.notificationFilter', 'Notification filter'), [
+			{ value: GitHubNotificationFilter.Unread, label: localize('github.editor.unread', 'Unread') },
+			{
+				value: GitHubNotificationFilter.All,
+				label: localize('github.editor.allNotifications', 'All notifications'),
+			},
+			{
+				value: GitHubNotificationFilter.Participating,
+				label: localize('github.editor.participating', 'Participating'),
+			},
+		]);
 		this._register(
 			this.mode.onDidSelect(() => {
 				this.updateFilters();
@@ -206,32 +194,17 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		this.listActions = this.toolbar(sidebar, localize('github.editor.listActions', 'List actions'));
 		this.detail = this.element(content, 'github-detail');
 		this.metadata = this.element(this.detail, 'github-metadata');
-		this.detailActions = this.toolbar(
-			this.detail,
-			localize('github.editor.detailActions', 'Pull request and issue actions'),
-		);
+		this.detailActions = this.toolbar(this.detail, localize('github.editor.detailActions', 'Pull request and issue actions'));
 		this.form = this.element(this.detail, 'github-form');
 		this.form.hidden = true;
 		this.formTarget = h(parent.ownerDocument, 'p');
 		this.form.append(this.formTarget);
 		this.formTitle = this.input(this.form, localize('github.editor.formTitle', 'Title'), 'formTitle');
 		this.formBody = this.textarea(this.form, localize('github.editor.description', 'Description'), 'formBody');
-		this.formHead = this.input(
-			this.form,
-			localize('github.editor.head', 'Source branch (owner:branch for a fork)'),
-			'formHead',
-		);
+		this.formHead = this.input(this.form, localize('github.editor.head', 'Source branch (owner:branch for a fork)'), 'formHead');
 		this.formBase = this.input(this.form, localize('github.editor.base', 'Target branch'), 'formBase');
-		this.formLabels = this.input(
-			this.form,
-			localize('github.editor.labels', 'Labels, separated by commas'),
-			'formLabels',
-		);
-		this.formAssignees = this.input(
-			this.form,
-			localize('github.editor.assignees', 'Assignees, separated by commas'),
-			'formAssignees',
-		);
+		this.formLabels = this.input(this.form, localize('github.editor.labels', 'Labels, separated by commas'), 'formLabels');
+		this.formAssignees = this.input(this.form, localize('github.editor.assignees', 'Assignees, separated by commas'), 'formAssignees');
 		const draftLabel = this.element(this.form, 'github-checkbox', 'label');
 		draftLabel.append(h(parent.ownerDocument, 'span', localize('github.editor.draft', 'Draft pull request')));
 		this.formDraft = h(parent.ownerDocument, 'input');
@@ -268,24 +241,15 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		);
 		this.formActions = this.toolbar(this.form, localize('github.editor.formActions', 'Form actions'));
 		this.reviewSection = this.element(this.detail, 'github-review');
-		this.codexActions = this.toolbar(
-			this.reviewSection,
-			localize('github.editor.codexActions', 'Codex review actions'),
-		);
+		this.codexActions = this.toolbar(this.reviewSection, localize('github.editor.codexActions', 'Codex review actions'));
 		this.codexNotice = h(parent.ownerDocument, 'p');
 		this.codexNotice.setAttribute('role', 'status');
 		this.codexNotice.setAttribute('aria-live', 'polite');
 		this.reviewSection.append(this.codexNotice);
 		this.reviewers = h(parent.ownerDocument, 'p');
 		this.reviewSection.append(this.reviewers);
-		this.reviewerActions = this.toolbar(
-			this.reviewSection,
-			localize('github.editor.reviewerActions', 'Reviewer actions'),
-		);
-		this.localActions = this.toolbar(
-			this.reviewSection,
-			localize('github.editor.localActions', 'Local repository actions'),
-		);
+		this.reviewerActions = this.toolbar(this.reviewSection, localize('github.editor.reviewerActions', 'Reviewer actions'));
+		this.localActions = this.toolbar(this.reviewSection, localize('github.editor.localActions', 'Local repository actions'));
 		this.checks = this.element(this.reviewSection, 'github-checks');
 		this.checksActions = this.toolbar(this.reviewSection, localize('github.editor.checkActions', 'Checks actions'));
 		this.files = this.select(this.reviewSection, localize('github.editor.files', 'Changed files'), []);
@@ -301,42 +265,19 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		this.diffContainer = this.element(this.reviewSection, 'github-diff');
 		this.lineLabel = h(parent.ownerDocument, 'p');
 		this.reviewSection.append(this.lineLabel);
-		this.inlineBody = this.textarea(
-			this.reviewSection,
-			localize('github.editor.inlineComment', 'Comment on selected line'),
-			'inlineComment',
-		);
-		this.inlineActions = this.toolbar(
-			this.reviewSection,
-			localize('github.editor.inlineActions', 'Line comment actions'),
-		);
+		this.inlineBody = this.textarea(this.reviewSection, localize('github.editor.inlineComment', 'Comment on selected line'), 'inlineComment');
+		this.inlineActions = this.toolbar(this.reviewSection, localize('github.editor.inlineActions', 'Line comment actions'));
 		this.drafts = this.element(this.reviewSection, 'github-draft-comments');
-		this.reviewBody = this.textarea(
-			this.reviewSection,
-			localize('github.editor.reviewSummary', 'Review summary'),
-			'reviewSummary',
-		);
-		this._register(
-			addDisposableListener(this.reviewBody, 'input', () => this.model.setReviewBody(this.reviewBody.value)),
-		);
-		this.reviewActions = this.toolbar(
-			this.reviewSection,
-			localize('github.editor.reviewActions', 'Review actions'),
-		);
+		this.reviewBody = this.textarea(this.reviewSection, localize('github.editor.reviewSummary', 'Review summary'), 'reviewSummary');
+		this._register(addDisposableListener(this.reviewBody, 'input', () => this.model.setReviewBody(this.reviewBody.value)));
+		this.reviewActions = this.toolbar(this.reviewSection, localize('github.editor.reviewActions', 'Review actions'));
 		this.mergeMethod = this.select(this.reviewSection, localize('github.editor.mergeMethod', 'Merge method'), []);
 		this.mergeActions = this.toolbar(this.reviewSection, localize('github.editor.mergeActions', 'Merge actions'));
 		this.discussions = this.element(this.reviewSection, 'github-discussions');
-		this.discussionActions = this.toolbar(
-			this.reviewSection,
-			localize('github.editor.discussionActions', 'Discussion actions'),
-		);
+		this.discussionActions = this.toolbar(this.reviewSection, localize('github.editor.discussionActions', 'Discussion actions'));
 		this.issueSection = this.element(this.detail, 'github-issue');
 		this.issueComments = this.element(this.issueSection, 'github-issue-comments');
-		this.issueReply = this.textarea(
-			this.issueSection,
-			localize('github.editor.issueComment', 'Issue comment'),
-			'issueComment',
-		);
+		this.issueReply = this.textarea(this.issueSection, localize('github.editor.issueComment', 'Issue comment'), 'issueComment');
 		this.issueActions = this.toolbar(this.issueSection, localize('github.editor.issueActions', 'Issue actions'));
 		this._register(this.model.onDidChange(() => this.render()));
 		this._register(
@@ -349,10 +290,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		);
 		this._register(
 			addDisposableListener(this.root, 'click', event => {
-				const link =
-					event.target instanceof Element
-						? event.target.closest<HTMLAnchorElement>('a[data-github-link]')
-						: null;
+				const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>('a[data-github-link]') : null;
 				if (link && this.root.contains(link)) {
 					event.preventDefault();
 					void this.opener.open(link.href, { openExternal: true, fromUserGesture: true });
@@ -385,17 +323,8 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 				const id = new URLSearchParams(input.resource.query).get('account');
 				const account =
 					this.model.accounts.find(
-						account =>
-							account.host === input.resource.authority &&
-							account.status === 'ready' &&
-							(id ? account.id === id : account.id === this.model.selectedAccount?.id),
-					) ??
-					this.model.accounts.find(
-						account =>
-							account.host === input.resource.authority &&
-							account.status === 'ready' &&
-							(!id || account.id === id),
-					);
+						account => account.host === input.resource.authority && account.status === 'ready' && (id ? account.id === id : account.id === this.model.selectedAccount?.id),
+					) ?? this.model.accounts.find(account => account.host === input.resource.authority && account.status === 'ready' && (!id || account.id === id));
 				if (!account) {
 					throw new GitHubError(GitHubErrorCode.AuthenticationRequired);
 				}
@@ -406,13 +335,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			this.repositoryName.value = repo?.name ?? '';
 			const parts = input.resource.path.split('/').filter(Boolean);
 			const mode = parts[2] === 'issues' ? 'issues' : 'pullRequests';
-			if (
-				parts.length >= 2 &&
-				(repo?.owner !== parts[0] ||
-					repo?.name !== parts[1] ||
-					repo?.accountId !== this.model.selectedAccount?.id ||
-					this.model.mode !== mode)
-			) {
+			if (parts.length >= 2 && (repo?.owner !== parts[0] || repo?.name !== parts[1] || repo?.accountId !== this.model.selectedAccount?.id || this.model.mode !== mode)) {
 				this.owner.value = parts[0]!;
 				this.repositoryName.value = parts[1]!;
 				await this.model.loadRepository(parts[0]!, parts[1]!, mode);
@@ -455,28 +378,15 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		return [
 			this.model.selectedAccount && `${this.model.selectedAccount.login}@${this.model.selectedAccount.host}`,
 			this.model.notifications
-				.map(
-					row =>
-						`${row.unread ? localize('github.editor.unread', 'Unread') : ''} ${row.repository.owner}/${row.repository.name}: ${row.title} (${row.reason})`,
-				)
+				.map(row => `${row.unread ? localize('github.editor.unread', 'Unread') : ''} ${row.repository.owner}/${row.repository.name}: ${row.title} (${row.reason})`)
 				.join('\n'),
-			this.model.fork &&
-				localize(
-					'github.editor.forkAccepted',
-					'Fork creation accepted: {0}. GitHub may still be copying the repository.',
-					this.model.fork.fullName,
-				),
+			this.model.fork && localize('github.editor.forkAccepted', 'Fork creation accepted: {0}. GitHub may still be copying the repository.', this.model.fork.fullName),
 			this.reviewers.textContent,
 			this.status.textContent,
 			selected && `#${selected.number} ${selected.title}\n${selected.body}`,
 			this.model.checks?.checks.map(check => `${check.name}: ${check.conclusion ?? check.status}`).join('\n'),
 			this.model.files.map(file => `${file.filename} +${file.additions} −${file.deletions}`).join('\n'),
-			this.model.threads
-				.map(
-					thread =>
-						`${thread.path}:${thread.line ?? ''}\n${thread.comments.comments.map(comment => `${comment.author ?? ''}: ${comment.body}`).join('\n')}`,
-				)
-				.join('\n\n'),
+			this.model.threads.map(thread => `${thread.path}:${thread.line ?? ''}\n${thread.comments.comments.map(comment => `${comment.author ?? ''}: ${comment.body}`).join('\n')}`).join('\n\n'),
 			this.model.reviews.map(review => `${review.state}: ${review.body}`).join('\n'),
 			this.codexNotice.textContent,
 			this.model.pullRequestComments.map(comment => comment.body).join('\n'),
@@ -491,10 +401,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 	private render(): void {
 		const model = this.model;
 		const active = this.root.ownerDocument.activeElement;
-		const focusKey =
-			active instanceof HTMLElement && this.root.contains(active)
-				? (active.dataset.githubFocus ?? active.getAttribute('aria-label'))
-				: null;
+		const focusKey = active instanceof HTMLElement && this.root.contains(active) ? (active.dataset.githubFocus ?? active.getAttribute('aria-label')) : null;
 		if (model.accountEpoch !== this.accountEpoch) {
 			this.accountEpoch = model.accountEpoch;
 			this.replies.clear();
@@ -508,9 +415,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		}
 		if (this.shownAccounts !== model.accounts) {
 			this.shownAccounts = model.accounts;
-			this.account.setOptions(
-				model.accounts.map(account => ({ value: account.id, label: `${account.login}@${account.host}` })),
-			);
+			this.account.setOptions(model.accounts.map(account => ({ value: account.id, label: `${account.login}@${account.host}` })));
 		}
 		this.account.value = model.selectedAccount?.id;
 		this.account.enabled = !model.busy;
@@ -523,73 +428,34 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			[
 				this.action(
 					'load',
-					model.mode === 'notifications'
-						? localize('github.editor.loadNotifications', 'Refresh notifications')
-						: localize('github.editor.load', 'Load repository'),
+					model.mode === 'notifications' ? localize('github.editor.loadNotifications', 'Refresh notifications') : localize('github.editor.load', 'Load repository'),
 					!model.busy,
 					() => this.load(),
 				),
-				this.action(
-					'signIn',
-					localize('github.editor.signIn', 'Sign in to GitHub'),
-					!this.connection.isConnecting,
-					() => this.connection.connect(),
-				),
+				this.action('signIn', localize('github.editor.signIn', 'Sign in to GitHub'), !this.connection.isConnecting, () => this.connection.connect()),
 			],
 			[
-				this.action(
-					'enterpriseSignIn',
-					localize('github.editor.enterpriseSignIn', 'Sign in to GitHub Enterprise'),
-					!model.busy && !this.connection.isConnecting,
-					() => this.connectEnterprise(),
+				this.action('enterpriseSignIn', localize('github.editor.enterpriseSignIn', 'Sign in to GitHub Enterprise'), !model.busy && !this.connection.isConnecting, () =>
+					this.connectEnterprise(),
 				),
-				this.action(
-					'fork',
-					localize('github.editor.fork', 'Create fork'),
-					!model.busy &&
-						!model.submissionUncertain &&
-						!!model.repositoryInfo &&
-						model.mode !== 'notifications',
-					() => this.createFork(),
+				this.action('fork', localize('github.editor.fork', 'Create fork'), !model.busy && !model.submissionUncertain && !!model.repositoryInfo && model.mode !== 'notifications', () =>
+					this.createFork(),
 				),
-				this.action(
-					'connectToken',
-					localize('github.editor.connectToken', 'Connect with token'),
-					!model.busy,
-					() => this.connectToken(),
-				),
-				this.action(
-					'logout',
-					localize('github.editor.logout', 'Sign out selected account'),
-					!model.busy && !!model.selectedAccount,
-					() => model.logoutSelectedAccount(),
-				),
-				this.action('help', localize('github.editor.helpAction', 'Accessibility help'), true, () =>
-					this.accessibleView.show(AccessibleViewType.Help),
-				),
-				this.action(
-					'acknowledge',
-					localize('github.editor.acknowledge', 'Result verified; start another operation'),
-					model.submissionUncertain && !model.busy,
-					async () => {
-						if (
-							(
-								await this.dialogs.confirm({
-									message: localize(
-										'github.editor.acknowledgeConfirm',
-										'Have you verified the previous operation on GitHub?',
-									),
-									detail: localize(
-										'github.editor.acknowledgeDetail',
-										'Confirmation unlocks new operations and discards any review draft with an uncertain outcome.',
-									),
-								})
-							).confirmed
-						) {
-							model.acknowledgeSubmission();
-						}
-					},
-				),
+				this.action('connectToken', localize('github.editor.connectToken', 'Connect with token'), !model.busy, () => this.connectToken()),
+				this.action('logout', localize('github.editor.logout', 'Sign out selected account'), !model.busy && !!model.selectedAccount, () => model.logoutSelectedAccount()),
+				this.action('help', localize('github.editor.helpAction', 'Accessibility help'), true, () => this.accessibleView.show(AccessibleViewType.Help)),
+				this.action('acknowledge', localize('github.editor.acknowledge', 'Result verified; start another operation'), model.submissionUncertain && !model.busy, async () => {
+					if (
+						(
+							await this.dialogs.confirm({
+								message: localize('github.editor.acknowledgeConfirm', 'Have you verified the previous operation on GitHub?'),
+								detail: localize('github.editor.acknowledgeDetail', 'Confirmation unlocks new operations and discards any review draft with an uncertain outcome.'),
+							})
+						).confirmed
+					) {
+						model.acknowledgeSubmission();
+					}
+				}),
 			],
 		);
 		this.status.textContent = model.busy
@@ -597,15 +463,9 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			: model.error
 				? githubErrorMessage(model.error)
 				: model.staleDraft
-					? localize(
-							'github.editor.staleDraft',
-							'The PR changed. Your draft belongs to an earlier commit. Discard it before starting a new review.',
-						)
+					? localize('github.editor.staleDraft', 'The PR changed. Your draft belongs to an earlier commit. Discard it before starting a new review.')
 					: model.submissionUncertain
-						? localize(
-								'github.editor.uncertain',
-								'GitHub may have accepted the operation. Verify the result on GitHub before starting another operation.',
-							)
+						? localize('github.editor.uncertain', 'GitHub may have accepted the operation. Verify the result on GitHub before starting another operation.')
 						: model.mode === 'notifications'
 							? localize(
 									'github.editor.notificationAccess',
@@ -613,26 +473,15 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 								)
 							: model.repositoryInfo
 								? localize('github.editor.loaded', 'Loaded {0}', model.repositoryInfo.fullName)
-								: localize(
-										'github.editor.start',
-										'Enter a GitHub repository owner and name, then load the repository.',
-									);
+								: localize('github.editor.start', 'Enter a GitHub repository owner and name, then load the repository.');
 		this.status.classList.toggle('error', !!model.error || model.staleDraft || !!model.draft?.uncertain);
 		this.root.setAttribute('aria-busy', String(model.busy));
 		if (this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.GitHubEditor)) {
-			this.root.setAttribute(
-				'aria-description',
-				localize('github.editor.helpHint', 'Press Alt+F1 for GitHub keyboard help.'),
-			);
+			this.root.setAttribute('aria-description', localize('github.editor.helpHint', 'Press Alt+F1 for GitHub keyboard help.'));
 		} else {
 			this.root.removeAttribute('aria-description');
 		}
-		const items =
-			model.mode === 'notifications'
-				? model.notifications
-				: model.mode === 'pullRequests'
-					? model.pullRequests
-					: model.issues;
+		const items = model.mode === 'notifications' ? model.notifications : model.mode === 'pullRequests' ? model.pullRequests : model.issues;
 		if (this.shownItems !== items) {
 			this.shownItems = items;
 			this.listResources.clear();
@@ -657,16 +506,12 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 							if ('number' in item) {
 								this.inlineBody.value = '';
 								this.issueReply.value = '';
-								void (model.mode === 'pullRequests'
-									? model.openPullRequest(item.number)
-									: model.openIssue(item.number));
+								void (model.mode === 'pullRequests' ? model.openPullRequest(item.number) : model.openIssue(item.number));
 							}
 						},
 					}),
 				);
-				button.domNode.dataset.githubFocus = notification
-					? `notification-${notification.id}`
-					: `item-${'number' in item ? item.number : ''}`;
+				button.domNode.dataset.githubFocus = notification ? `notification-${notification.id}` : `item-${'number' in item ? item.number : ''}`;
 			}
 			this.listResources.add(
 				addDisposableListener(this.list, 'keydown', event => {
@@ -675,15 +520,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 					}
 					const buttons = [...this.list.querySelectorAll<HTMLButtonElement>('button')];
 					const index = buttons.indexOf(this.root.ownerDocument.activeElement as HTMLButtonElement);
-					const next =
-						event.key === 'Home'
-							? 0
-							: event.key === 'End'
-								? buttons.length - 1
-								: Math.max(
-										0,
-										Math.min(buttons.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)),
-									);
+					const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : Math.max(0, Math.min(buttons.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
 					event.preventDefault();
 					buttons[next]?.focus();
 				}),
@@ -694,30 +531,16 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		}
 		this.listActions.setActions(
 			[
-				this.action(
-					'more',
-					localize('github.editor.more', 'Load more'),
-					!model.busy && model.nextPage !== null,
-					() => model.moreItems(),
-				),
-				this.action(
-					'new',
-					localize('github.editor.new', 'Create'),
-					!model.busy &&
-						!model.submissionUncertain &&
-						!!model.repositoryInfo &&
-						model.mode !== 'notifications',
-					() => this.showForm('new'),
+				this.action('more', localize('github.editor.more', 'Load more'), !model.busy && model.nextPage !== null, () => model.moreItems()),
+				this.action('new', localize('github.editor.new', 'Create'), !model.busy && !model.submissionUncertain && !!model.repositoryInfo && model.mode !== 'notifications', () =>
+					this.showForm('new'),
 				),
 			],
 			[
 				this.action(
 					'readAllNotifications',
 					localize('github.editor.readAllNotifications', 'Mark all notifications read'),
-					model.mode === 'notifications' &&
-						!model.busy &&
-						!model.submissionUncertain &&
-						!!model.selectedAccount,
+					model.mode === 'notifications' && !model.busy && !model.submissionUncertain && !!model.selectedAccount,
 					() => model.markNotificationsRead(),
 				),
 			],
@@ -727,53 +550,25 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		if (selected) {
 			this.metadata.append(h(this.root.ownerDocument, 'h2', `#${selected.number} ${selected.title}`));
 			this.link(this.metadata, localize('github.editor.viewOnGitHub', 'View on GitHub'), selected.url);
-			this.metadata.append(
-				h(this.root.ownerDocument, 'p', selected.state),
-				h(this.root.ownerDocument, 'pre', selected.body),
-			);
+			this.metadata.append(h(this.root.ownerDocument, 'p', selected.state), h(this.root.ownerDocument, 'pre', selected.body));
 			if (model.pullRequest) {
-				this.metadata.append(
-					h(
-						this.root.ownerDocument,
-						'p',
-						`${model.pullRequest.baseBranch} ← ${model.pullRequest.headBranch} · ${model.pullRequest.headCommit.slice(0, 7)}`,
-					),
-				);
+				this.metadata.append(h(this.root.ownerDocument, 'p', `${model.pullRequest.baseBranch} ← ${model.pullRequest.headBranch} · ${model.pullRequest.headCommit.slice(0, 7)}`));
 			}
 		} else {
-			this.metadata.append(
-				h(
-					this.root.ownerDocument,
-					'p',
-					localize('github.editor.select', 'Select a pull request or issue from the list.'),
-				),
-			);
+			this.metadata.append(h(this.root.ownerDocument, 'p', localize('github.editor.select', 'Select a pull request or issue from the list.')));
 		}
 		this.detailActions.setActions(
 			[
 				this.action('refresh', localize('github.editor.refresh', 'Refresh'), !model.busy && !!selected, () =>
-					model.pullRequest
-						? model.openPullRequest(model.pullRequest.number)
-						: model.openIssue(model.issue!.number),
+					model.pullRequest ? model.openPullRequest(model.pullRequest.number) : model.openIssue(model.issue!.number),
 				),
-				this.action(
-					'edit',
-					localize('github.editor.edit', 'Edit'),
-					model.ready && !model.busy && !model.submissionUncertain && !!selected,
-					() => this.showForm('edit'),
-				),
+				this.action('edit', localize('github.editor.edit', 'Edit'), model.ready && !model.busy && !model.submissionUncertain && !!selected, () => this.showForm('edit')),
 			],
 			[
 				this.action(
 					'changeState',
-					selected?.state === 'open'
-						? localize('github.editor.close', 'Close')
-						: localize('github.editor.reopen', 'Reopen'),
-					model.ready &&
-						!model.busy &&
-						!model.submissionUncertain &&
-						!!selected &&
-						!model.pullRequest?.mergedAt,
+					selected?.state === 'open' ? localize('github.editor.close', 'Close') : localize('github.editor.reopen', 'Reopen'),
+					model.ready && !model.busy && !model.submissionUncertain && !!selected && !model.pullRequest?.mergedAt,
 					() =>
 						model.updateItem(selected!.number, model.pullRequest ? 'pullRequests' : 'issues', {
 							state: selected!.state === 'open' ? GitHubIssueState.Closed : GitHubIssueState.Open,
@@ -787,46 +582,24 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			if (notification) {
 				this.metadata.append(
 					h(this.root.ownerDocument, 'h2', notification.title),
-					h(
-						this.root.ownerDocument,
-						'p',
-						`${notification.repository.owner}/${notification.repository.name} · ${notification.subjectType} · ${notification.reason}`,
-					),
+					h(this.root.ownerDocument, 'p', `${notification.repository.owner}/${notification.repository.name} · ${notification.subjectType} · ${notification.reason}`),
 				);
 				this.link(this.metadata, localize('github.editor.viewOnGitHub', 'View on GitHub'), notification.url);
 			}
 			if (model.notificationsReadAccepted) {
 				this.metadata.append(
-					h(
-						this.root.ownerDocument,
-						'p',
-						localize(
-							'github.editor.readAccepted',
-							'GitHub accepted the request to mark all notifications read. Refresh to check the latest state.',
-						),
-					),
+					h(this.root.ownerDocument, 'p', localize('github.editor.readAccepted', 'GitHub accepted the request to mark all notifications read. Refresh to check the latest state.')),
 				);
 			}
 			this.detailActions.setActions([
-				this.action(
-					'readNotification',
-					localize('github.editor.readNotification', 'Mark notification read'),
-					!!notification?.unread && !model.busy && !model.submissionUncertain,
-					() => model.markNotificationRead(),
+				this.action('readNotification', localize('github.editor.readNotification', 'Mark notification read'), !!notification?.unread && !model.busy && !model.submissionUncertain, () =>
+					model.markNotificationRead(),
 				),
 			]);
 		}
 		if (model.fork && model.mode !== 'notifications') {
 			this.metadata.append(
-				h(
-					this.root.ownerDocument,
-					'p',
-					localize(
-						'github.editor.forkAccepted',
-						'Fork creation accepted: {0}. GitHub may still be copying the repository.',
-						model.fork.fullName,
-					),
-				),
+				h(this.root.ownerDocument, 'p', localize('github.editor.forkAccepted', 'Fork creation accepted: {0}. GitHub may still be copying the repository.', model.fork.fullName)),
 			);
 			this.link(this.metadata, localize('github.editor.openFork', 'Open fork on GitHub'), model.fork.url);
 		}
@@ -852,19 +625,11 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 				model.canWrite && !model.codexReviewRequested && model.repository?.host === 'github.com',
 				() => model.requestCodexReview(),
 			),
-			this.action('codexSettings', localize('github.editor.codexSettings', 'Codex review settings'), true, () =>
-				this.preferences.openSettings({ section: 'github' }),
-			),
+			this.action('codexSettings', localize('github.editor.codexSettings', 'Codex review settings'), true, () => this.preferences.openSettings({ section: 'github' })),
 		]);
 		this.codexNotice.textContent = model.codexReviewRequested
-			? localize(
-					'github.editor.codexRequested',
-					'Posted @codex review. Refresh to read PR comments and review discussions. The official Connector must be authorized for this repository.',
-				)
-			: localize(
-					'github.editor.codexHint',
-					'Request Codex review posts @codex review using your GitHub account. Configure the official Connector in Codex review settings.',
-				);
+			? localize('github.editor.codexRequested', 'Posted @codex review. Refresh to read PR comments and review discussions. The official Connector must be authorized for this repository.')
+			: localize('github.editor.codexHint', 'Request Codex review posts @codex review using your GitHub account. Configure the official Connector in Codex review settings.');
 		this.checks.replaceChildren(h(this.root.ownerDocument, 'h3', localize('github.editor.checks', 'Checks')));
 		if (model.checks) {
 			this.checks.append(h(this.root.ownerDocument, 'p', model.checks.state));
@@ -885,14 +650,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 				}
 			}
 		}
-		this.checksActions.setActions([
-			this.action(
-				'moreChecks',
-				localize('github.editor.moreChecks', 'Load more checks'),
-				!model.busy && !!model.checks?.nextPage,
-				() => model.moreChecks(),
-			),
-		]);
+		this.checksActions.setActions([this.action('moreChecks', localize('github.editor.moreChecks', 'Load more checks'), !model.busy && !!model.checks?.nextPage, () => model.moreChecks())]);
 		if (this.shownFiles !== model.files) {
 			this.shownFiles = model.files;
 			this.files.setOptions(
@@ -904,19 +662,9 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			void this.openFile();
 		}
 		this.files.enabled = !model.busy;
-		this.fileActions.setActions([
-			this.action(
-				'moreFiles',
-				localize('github.editor.moreFiles', 'Load more files'),
-				!model.busy && model.nextFilesPage !== null,
-				() => model.moreFiles(),
-			),
-		]);
+		this.fileActions.setActions([this.action('moreFiles', localize('github.editor.moreFiles', 'Load more files'), !model.busy && model.nextFilesPage !== null, () => model.moreFiles())]);
 		if (model.filesLimitReached) {
-			this.diffNotice.textContent = localize(
-				'github.editor.fileLimit',
-				'GitHub limits the file list to 3,000 files. Open the PR on GitHub to inspect the complete change.',
-			);
+			this.diffNotice.textContent = localize('github.editor.fileLimit', 'GitHub limits the file list to 3,000 files. Open the PR on GitHub to inspect the complete change.');
 		}
 		this.reviewers.textContent = localize(
 			'github.editor.reviewers',
@@ -924,12 +672,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			[...model.requestedReviewers.users, ...model.requestedReviewers.teams.map(team => `@${team}`)].join(', '),
 		);
 		this.reviewerActions.setActions([
-			this.action(
-				'requestReviewers',
-				localize('github.editor.requestReviewers', 'Request reviewers'),
-				model.canWrite,
-				() => this.changeReviewers(GitHubReviewerChange.Request),
-			),
+			this.action('requestReviewers', localize('github.editor.requestReviewers', 'Request reviewers'), model.canWrite, () => this.changeReviewers(GitHubReviewerChange.Request)),
 			this.action(
 				'removeReviewers',
 				localize('github.editor.removeReviewers', 'Remove reviewers'),
@@ -938,17 +681,9 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			),
 		]);
 		this.localActions.setActions([
-			this.action(
-				'checkout',
-				localize('github.editor.checkout', 'Check out pull request'),
-				!model.busy && !!model.pullRequest,
-				() => this.localOperation('checkout'),
-			),
-			this.action(
-				'push',
-				localize('github.editor.push', 'Push local commits to pull request'),
-				!model.busy && !!model.pullRequest?.headRepository && model.pullRequest.state === 'open',
-				() => this.localOperation('push'),
+			this.action('checkout', localize('github.editor.checkout', 'Check out pull request'), !model.busy && !!model.pullRequest, () => this.localOperation('checkout')),
+			this.action('push', localize('github.editor.push', 'Push local commits to pull request'), !model.busy && !!model.pullRequest?.headRepository && model.pullRequest.state === 'open', () =>
+				this.localOperation('push'),
 			),
 		]);
 
@@ -968,71 +703,40 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			this.drafts.replaceChildren();
 			for (const [index, comment] of (model.draft?.comments ?? []).entries()) {
 				const row = this.element(this.drafts, 'github-thread');
-				row.append(
-					h(this.root.ownerDocument, 'strong', `${comment.path}:${comment.line} (${comment.side})`),
-					h(this.root.ownerDocument, 'pre', comment.body),
-				);
-				const toolbar = this.toolbar(
-					row,
-					localize('github.editor.draftActions', 'Draft comment actions'),
-					this.draftResources,
-				);
+				row.append(h(this.root.ownerDocument, 'strong', `${comment.path}:${comment.line} (${comment.side})`), h(this.root.ownerDocument, 'pre', comment.body));
+				const toolbar = this.toolbar(row, localize('github.editor.draftActions', 'Draft comment actions'), this.draftResources);
 				toolbar.setActions([
-					this.action(
-						`remove-${index}`,
-						localize('github.editor.removeComment', 'Remove comment'),
-						!model.busy && !model.draft?.uncertain,
-						() => model.removeComment(index),
-					),
+					this.action(`remove-${index}`, localize('github.editor.removeComment', 'Remove comment'), !model.busy && !model.draft?.uncertain, () => model.removeComment(index)),
 				]);
 			}
 		}
 		const canReview = editable && !model.pullRequest?.draft;
 		this.reviewActions.setActions(
 			[
-				this.action('comment', localize('github.editor.submitReview', 'Submit review'), editable, () =>
-					model.submitReview(GitHubReviewEvent.Comment),
-				),
-				this.action('approve', localize('github.editor.approve', 'Approve'), canReview, () =>
-					model.submitReview(GitHubReviewEvent.Approve),
-				),
-				this.action(
-					'requestChanges',
-					localize('github.editor.requestChanges', 'Request changes'),
-					canReview,
-					() => model.submitReview(GitHubReviewEvent.RequestChanges),
-				),
+				this.action('comment', localize('github.editor.submitReview', 'Submit review'), editable, () => model.submitReview(GitHubReviewEvent.Comment)),
+				this.action('approve', localize('github.editor.approve', 'Approve'), canReview, () => model.submitReview(GitHubReviewEvent.Approve)),
+				this.action('requestChanges', localize('github.editor.requestChanges', 'Request changes'), canReview, () => model.submitReview(GitHubReviewEvent.RequestChanges)),
 			],
 			[
-				this.action(
-					'discardDraft',
-					localize('github.editor.discard', 'Discard review draft'),
-					!model.busy && !!model.draft,
-					async () => {
-						if (
-							(
-								await this.dialogs.confirm({
-									message: localize('github.editor.discardConfirm', 'Discard this review draft?'),
-									detail: model.draft?.uncertain
-										? localize(
-												'github.editor.verifyFirst',
-												'The previous submission may have succeeded. Verify it on GitHub before discarding the draft and creating another review.',
-											)
-										: undefined,
-								})
-							).confirmed
-						) {
-							model.discardDraft();
-						}
-					},
-				),
+				this.action('discardDraft', localize('github.editor.discard', 'Discard review draft'), !model.busy && !!model.draft, async () => {
+					if (
+						(
+							await this.dialogs.confirm({
+								message: localize('github.editor.discardConfirm', 'Discard this review draft?'),
+								detail: model.draft?.uncertain
+									? localize('github.editor.verifyFirst', 'The previous submission may have succeeded. Verify it on GitHub before discarding the draft and creating another review.')
+									: undefined,
+							})
+						).confirmed
+					) {
+						model.discardDraft();
+					}
+				}),
 			],
 		);
 		const info = model.repositoryInfo;
 		const methods = [
-			...(info?.allowSquashMerge
-				? [{ value: GitHubMergeMethod.Squash, label: localize('github.editor.squash', 'Squash and merge') }]
-				: []),
+			...(info?.allowSquashMerge ? [{ value: GitHubMergeMethod.Squash, label: localize('github.editor.squash', 'Squash and merge') }] : []),
 			...(info?.allowMergeCommit
 				? [
 						{
@@ -1041,45 +745,26 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 						},
 					]
 				: []),
-			...(info?.allowRebaseMerge
-				? [{ value: GitHubMergeMethod.Rebase, label: localize('github.editor.rebase', 'Rebase and merge') }]
-				: []),
+			...(info?.allowRebaseMerge ? [{ value: GitHubMergeMethod.Rebase, label: localize('github.editor.rebase', 'Rebase and merge') }] : []),
 		];
 		this.mergeMethod.setOptions(methods);
 		this.mergeMethod.enabled = canReview;
 		this.mergeActions.setActions(
+			[this.action('merge', localize('github.editor.merge', 'Merge pull request'), canReview && methods.length > 0, () => this.merge(false))],
 			[
-				this.action(
-					'merge',
-					localize('github.editor.merge', 'Merge pull request'),
-					canReview && methods.length > 0,
-					() => this.merge(false),
-				),
-			],
-			[
-				this.action(
-					'autoMerge',
-					localize('github.editor.autoMerge', 'Enable auto-merge'),
-					canReview && !!info?.allowAutoMerge && methods.length > 0 && !model.pullRequest?.autoMerge,
-					() => this.merge(true),
+				this.action('autoMerge', localize('github.editor.autoMerge', 'Enable auto-merge'), canReview && !!info?.allowAutoMerge && methods.length > 0 && !model.pullRequest?.autoMerge, () =>
+					this.merge(true),
 				),
 			],
 		);
 		const interactionState = `${model.busy}/${model.submissionUncertain}`;
-		if (
-			this.shownThreads !== model.threads ||
-			this.shownReviews !== model.reviews ||
-			this.shownComments !== model.pullRequestComments ||
-			this.threadInteractionState !== interactionState
-		) {
+		if (this.shownThreads !== model.threads || this.shownReviews !== model.reviews || this.shownComments !== model.pullRequestComments || this.threadInteractionState !== interactionState) {
 			this.threadInteractionState = interactionState;
 			this.shownThreads = model.threads;
 			this.shownReviews = model.reviews;
 			this.shownComments = model.pullRequestComments;
 			this.threadResources.clear();
-			this.discussions.replaceChildren(
-				h(this.root.ownerDocument, 'h3', localize('github.editor.discussions', 'Review discussions')),
-			);
+			this.discussions.replaceChildren(h(this.root.ownerDocument, 'h3', localize('github.editor.discussions', 'Review discussions')));
 			for (const comment of model.pullRequestComments) {
 				const row = this.element(this.discussions, 'github-pr-comment');
 				this.link(row, localize('github.editor.prComment', 'PR comment #{0}', comment.id), comment.url);
@@ -1088,14 +773,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			for (const review of model.reviews) {
 				const row = this.element(this.discussions, 'github-thread');
 				this.link(row, review.state, review.url);
-				row.append(
-					h(
-						this.root.ownerDocument,
-						'p',
-						localize('github.editor.reviewCommit', 'Reviewed commit: {0}', review.commit),
-					),
-					h(this.root.ownerDocument, 'pre', review.body),
-				);
+				row.append(h(this.root.ownerDocument, 'p', localize('github.editor.reviewCommit', 'Reviewed commit: {0}', review.commit)), h(this.root.ownerDocument, 'pre', review.body));
 			}
 			for (const thread of model.threads) {
 				this.renderThread(thread);
@@ -1105,24 +783,9 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			input.disabled = model.busy || model.submissionUncertain;
 		}
 		this.discussionActions.setActions([
-			this.action(
-				'morePRComments',
-				localize('github.editor.morePRComments', 'Load more PR comments'),
-				!model.busy && model.nextCommentsPage !== null,
-				() => model.morePullRequestComments(),
-			),
-			this.action(
-				'moreThreads',
-				localize('github.editor.moreThreads', 'Load more discussions'),
-				!model.busy && !!model.nextThreadsCursor,
-				() => model.moreThreads(),
-			),
-			this.action(
-				'moreReviews',
-				localize('github.editor.moreReviews', 'Load more reviews'),
-				!model.busy && model.nextReviewsPage !== null,
-				() => model.moreReviews(),
-			),
+			this.action('morePRComments', localize('github.editor.morePRComments', 'Load more PR comments'), !model.busy && model.nextCommentsPage !== null, () => model.morePullRequestComments()),
+			this.action('moreThreads', localize('github.editor.moreThreads', 'Load more discussions'), !model.busy && !!model.nextThreadsCursor, () => model.moreThreads()),
+			this.action('moreReviews', localize('github.editor.moreReviews', 'Load more reviews'), !model.busy && model.nextReviewsPage !== null, () => model.moreReviews()),
 		]);
 	}
 
@@ -1145,11 +808,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			const item = this.element(row, 'github-review-comment');
 			this.link(item, comment.author ?? localize('github.editor.deletedAuthor', 'Deleted account'), comment.url);
 			item.append(h(this.root.ownerDocument, 'pre', comment.body));
-			const actions = this.toolbar(
-				item,
-				localize('github.editor.commentActions', 'Comment actions'),
-				this.threadResources,
-			);
+			const actions = this.toolbar(item, localize('github.editor.commentActions', 'Comment actions'), this.threadResources);
 			actions.setActions([
 				this.action(
 					`editComment-${comment.id}`,
@@ -1177,10 +836,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 						if (
 							(
 								await this.dialogs.confirm({
-									message: localize(
-										'github.editor.deleteCommentConfirm',
-										'Delete this review comment?',
-									),
+									message: localize('github.editor.deleteCommentConfirm', 'Delete this review comment?'),
 									detail: comment.body,
 								})
 							).confirmed
@@ -1202,53 +858,32 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		reply.inputElement.dataset.githubFocus = `reply-${thread.id}`;
 		reply.value = this.replies.get(thread.id) ?? '';
 		this.threadResources.add(reply.onDidChange(value => this.replies.set(thread.id, value)));
-		const actions = this.toolbar(
-			row,
-			localize('github.editor.threadActions', 'Discussion actions'),
-			this.threadResources,
-		);
+		const actions = this.toolbar(row, localize('github.editor.threadActions', 'Discussion actions'), this.threadResources);
 		actions.setActions([
-			this.action(
-				`reply-${thread.id}`,
-				localize('github.editor.sendReply', 'Send reply'),
-				!this.model.busy && !this.model.submissionUncertain,
-				async () => {
-					if (this.model.busy || this.model.submissionUncertain || !reply.value.trim()) {
-						return;
+			this.action(`reply-${thread.id}`, localize('github.editor.sendReply', 'Send reply'), !this.model.busy && !this.model.submissionUncertain, async () => {
+				if (this.model.busy || this.model.submissionUncertain || !reply.value.trim()) {
+					return;
+				}
+				await this.model.reply(thread, reply.value);
+				if (!this.model.error) {
+					this.replies.delete(thread.id);
+					const current = [...this.discussions.querySelectorAll<HTMLInputElement>('input')].find(input => input.dataset.githubFocus === `reply-${thread.id}`);
+					if (current) {
+						current.value = '';
 					}
-					await this.model.reply(thread, reply.value);
-					if (!this.model.error) {
-						this.replies.delete(thread.id);
-						const current = [...this.discussions.querySelectorAll<HTMLInputElement>('input')].find(
-							input => input.dataset.githubFocus === `reply-${thread.id}`,
-						);
-						if (current) {
-							current.value = '';
-						}
-					}
-				},
-			),
+				}
+			}),
 			this.action(
 				`resolve-${thread.id}`,
-				thread.resolved
-					? localize('github.editor.unresolve', 'Reopen discussion')
-					: localize('github.editor.resolve', 'Resolve discussion'),
+				thread.resolved ? localize('github.editor.unresolve', 'Reopen discussion') : localize('github.editor.resolve', 'Resolve discussion'),
 				thread.canResolve && !this.model.busy && !this.model.submissionUncertain,
 				() => {
 					if (!this.model.busy && !this.model.submissionUncertain) {
-						return this.model.resolve(
-							thread,
-							thread.resolved ? GitHubReviewThreadState.Unresolved : GitHubReviewThreadState.Resolved,
-						);
+						return this.model.resolve(thread, thread.resolved ? GitHubReviewThreadState.Unresolved : GitHubReviewThreadState.Resolved);
 					}
 				},
 			),
-			this.action(
-				`more-${thread.id}`,
-				localize('github.editor.moreReplies', 'Load more replies'),
-				!this.model.busy && !!thread.comments.nextCursor,
-				() => this.model.moreThreadComments(thread),
-			),
+			this.action(`more-${thread.id}`, localize('github.editor.moreReplies', 'Load more replies'), !this.model.busy && !!thread.comments.nextCursor, () => this.model.moreThreadComments(thread)),
 		]);
 	}
 
@@ -1261,26 +896,16 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		}
 		this.issueReply.disabled = !this.model.ready || this.model.busy || this.model.submissionUncertain;
 		this.issueActions.setActions([
-			this.action(
-				'issueReply',
-				localize('github.editor.sendComment', 'Send comment'),
-				this.model.ready && !this.model.busy && !this.model.submissionUncertain,
-				async () => {
-					if (!this.issueReply.value.trim()) {
-						return;
-					}
-					await this.model.commentOnIssue(this.issueReply.value);
-					if (!this.model.error) {
-						this.issueReply.value = '';
-					}
-				},
-			),
-			this.action(
-				'moreComments',
-				localize('github.editor.moreComments', 'Load more comments'),
-				!this.model.busy && this.model.nextCommentsPage !== null,
-				() => this.model.moreIssueComments(),
-			),
+			this.action('issueReply', localize('github.editor.sendComment', 'Send comment'), this.model.ready && !this.model.busy && !this.model.submissionUncertain, async () => {
+				if (!this.issueReply.value.trim()) {
+					return;
+				}
+				await this.model.commentOnIssue(this.issueReply.value);
+				if (!this.model.error) {
+					this.issueReply.value = '';
+				}
+			}),
+			this.action('moreComments', localize('github.editor.moreComments', 'Load more comments'), !this.model.busy && this.model.nextCommentsPage !== null, () => this.model.moreIssueComments()),
 		]);
 	}
 
@@ -1289,10 +914,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		const repo = this.model.repository;
 		const pr = this.model.pullRequest;
 		const base = this.model.baseCommit;
-		const identity =
-			file && repo && pr && base
-				? `${this.accountEpoch}/${repo.owner}/${repo.name}/${pr.headCommit}/${base}/${file.filename}`
-				: undefined;
+		const identity = file && repo && pr && base ? `${this.accountEpoch}/${repo.owner}/${repo.name}/${pr.headCommit}/${base}/${file.filename}` : undefined;
 		if (identity === this.diffIdentity) {
 			return;
 		}
@@ -1318,12 +940,8 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		try {
 			const empty: GitHubFileContent = { kind: 'text', text: '' };
 			const [before, after] = await Promise.all([
-				file.status === 'added'
-					? Promise.resolve(empty)
-					: this.github.readFile(repo, base, file.previousFilename ?? file.filename, token),
-				file.status === 'removed'
-					? Promise.resolve(empty)
-					: this.github.readFile(repo, pr.headCommit, file.filename, token),
+				file.status === 'added' ? Promise.resolve(empty) : this.github.readFile(repo, base, file.previousFilename ?? file.filename, token),
+				file.status === 'removed' ? Promise.resolve(empty) : this.github.readFile(repo, pr.headCommit, file.filename, token),
 			]);
 			if (token.isCancellationRequested) {
 				resources.dispose();
@@ -1332,10 +950,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			if (before.kind !== 'text' || after.kind !== 'text') {
 				this.diffNotice.textContent =
 					before.kind === 'tooLarge' || after.kind === 'tooLarge'
-						? localize(
-								'github.editor.largeFile',
-								'This file exceeds the 1 MB review limit. View it on GitHub.',
-							)
+						? localize('github.editor.largeFile', 'This file exceeds the 1 MB review limit. View it on GitHub.')
 						: localize('github.editor.binaryFile', 'Binary file. View it on GitHub.');
 				resources.dispose();
 				return;
@@ -1347,18 +962,8 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 					path: `/${repo.owner}/${repo.name}/${commit}/${path}`,
 					query: `account=${this.accountEpoch}`,
 				});
-			const original = resources.add(
-				await this.models.acquire(
-					{ resource: uri(base, file.previousFilename ?? file.filename), initialText: before.text },
-					controller.signal,
-				),
-			);
-			const modified = resources.add(
-				await this.models.acquire(
-					{ resource: uri(pr.headCommit, file.filename), initialText: after.text },
-					controller.signal,
-				),
-			);
+			const original = resources.add(await this.models.acquire({ resource: uri(base, file.previousFilename ?? file.filename), initialText: before.text }, controller.signal));
+			const modified = resources.add(await this.models.acquire({ resource: uri(pr.headCommit, file.filename), initialText: after.text }, controller.signal));
 			if (token.isCancellationRequested) {
 				resources.dispose();
 				return;
@@ -1395,12 +1000,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 				resources.add(editor.onDidChangeCursorPosition(select));
 			}
 			this.diffSession.value = resources;
-			this.diffNotice.textContent = file.patch
-				? ''
-				: localize(
-						'github.editor.noPatch',
-						'GitHub did not provide a patch for this file. Line comments are unavailable.',
-					);
+			this.diffNotice.textContent = file.patch ? '' : localize('github.editor.noPatch', 'GitHub did not provide a patch for this file. Line comments are unavailable.');
 		} catch (error) {
 			resources.dispose();
 			if (!token.isCancellationRequested) {
@@ -1415,9 +1015,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 					'github.editor.selectedLine',
 					'{0}, {1}, line {2}',
 					this.selectedFile.filename,
-					this.selectedSide === GitHubDiffSide.Left
-						? localize('github.editor.originalSide', 'original')
-						: localize('github.editor.modifiedSide', 'modified'),
+					this.selectedSide === GitHubDiffSide.Left ? localize('github.editor.originalSide', 'original') : localize('github.editor.modifiedSide', 'modified'),
 					this.selectedLine,
 				)
 			: '';
@@ -1453,13 +1051,9 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		if (
 			(
 				await this.dialogs.confirm({
-					message: auto
-						? localize('github.editor.autoMergeConfirm', 'Enable auto-merge for this pull request?')
-						: localize('github.editor.mergeConfirm', 'Merge this pull request?'),
+					message: auto ? localize('github.editor.autoMergeConfirm', 'Enable auto-merge for this pull request?') : localize('github.editor.mergeConfirm', 'Merge this pull request?'),
 					detail: `${pr.title}\n${pr.headCommit}`,
-					primaryButton: auto
-						? localize('github.editor.autoMerge', 'Enable auto-merge')
-						: localize('github.editor.merge', 'Merge pull request'),
+					primaryButton: auto ? localize('github.editor.autoMerge', 'Enable auto-merge') : localize('github.editor.merge', 'Merge pull request'),
 				})
 			).confirmed
 		) {
@@ -1527,8 +1121,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			input.enabled = !this.model.busy && !this.model.submissionUncertain;
 		}
 		this.formBody.disabled = this.formDraft.disabled = this.model.busy || this.model.submissionUncertain;
-		this.form.hidden =
-			!compose || compose.repositoryKey !== this.model.repositoryKey || compose.mode !== this.model.mode;
+		this.form.hidden = !compose || compose.repositoryKey !== this.model.repositoryKey || compose.mode !== this.model.mode;
 		if (compose && this.shownCompose !== compose) {
 			this.shownCompose = compose;
 			this.formTitle.value = compose.title;
@@ -1547,65 +1140,51 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			this.formTarget.textContent =
 				compose.number === null
 					? localize('github.editor.newTarget', 'New item in {0}', compose.repositoryKey)
-					: localize(
-							'github.editor.editTarget',
-							'Editing #{0} in {1}',
-							compose.number,
-							compose.repositoryKey,
-						);
+					: localize('github.editor.editTarget', 'Editing #{0} in {1}', compose.number, compose.repositoryKey);
 		}
 		this.formActions.setActions([
-			this.action(
-				'save',
-				localize('github.editor.save', 'Save'),
-				!this.model.busy && !this.model.submissionUncertain && !!compose && !this.form.hidden,
-				async () => {
-					if (!compose) {
-						return;
-					}
-					const title = compose.title.trim();
-					const body = compose.body;
-					if (!title) {
-						this.formTitle.focus();
-						return;
-					}
-					const values = (value: string) =>
-						value
-							.split(',')
-							.map(item => item.trim())
-							.filter(Boolean);
-					if (compose.number !== null) {
-						await this.model.updateItem(compose.number, compose.mode, {
-							title,
-							body,
-							...(compose.mode === 'issues'
-								? { labels: values(compose.labels), assignees: values(compose.assignees) }
-								: {}),
-						});
-					} else if (compose.mode === 'pullRequests') {
-						await this.model.createPullRequest({
-							title,
-							body,
-							head: compose.head.trim(),
-							base: compose.base.trim(),
-							draft: compose.draft,
-						});
-					} else {
-						await this.model.createIssue({
-							title,
-							body,
-							labels: values(compose.labels),
-							assignees: values(compose.assignees),
-						});
-					}
-					if (!this.model.error) {
-						this.model.setCompose(undefined);
-					}
-				},
-			),
-			this.action('cancelForm', localize('github.editor.cancel', 'Cancel'), !this.model.busy, () =>
-				this.model.setCompose(undefined),
-			),
+			this.action('save', localize('github.editor.save', 'Save'), !this.model.busy && !this.model.submissionUncertain && !!compose && !this.form.hidden, async () => {
+				if (!compose) {
+					return;
+				}
+				const title = compose.title.trim();
+				const body = compose.body;
+				if (!title) {
+					this.formTitle.focus();
+					return;
+				}
+				const values = (value: string) =>
+					value
+						.split(',')
+						.map(item => item.trim())
+						.filter(Boolean);
+				if (compose.number !== null) {
+					await this.model.updateItem(compose.number, compose.mode, {
+						title,
+						body,
+						...(compose.mode === 'issues' ? { labels: values(compose.labels), assignees: values(compose.assignees) } : {}),
+					});
+				} else if (compose.mode === 'pullRequests') {
+					await this.model.createPullRequest({
+						title,
+						body,
+						head: compose.head.trim(),
+						base: compose.base.trim(),
+						draft: compose.draft,
+					});
+				} else {
+					await this.model.createIssue({
+						title,
+						body,
+						labels: values(compose.labels),
+						assignees: values(compose.assignees),
+					});
+				}
+				if (!this.model.error) {
+					this.model.setCompose(undefined);
+				}
+			}),
+			this.action('cancelForm', localize('github.editor.cancel', 'Cancel'), !this.model.busy, () => this.model.setCompose(undefined)),
 		]);
 	}
 
@@ -1637,17 +1216,11 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 	private async connectEnterprise(): Promise<void> {
 		const result = await this.dialogs.input({
 			message: localize('github.editor.enterpriseSignIn', 'Sign in to GitHub Enterprise'),
-			detail: localize(
-				'github.editor.enterpriseHelp',
-				'Enter the Enterprise host configured by your administrator for Ash browser authorization.',
-			),
+			detail: localize('github.editor.enterpriseHelp', 'Enter the Enterprise host configured by your administrator for Ash browser authorization.'),
 			inputs: [
 				{
 					placeholder: localize('github.editor.host', 'GitHub host'),
-					value:
-						this.model.selectedAccount?.host === 'github.com'
-							? ''
-							: (this.model.selectedAccount?.host ?? ''),
+					value: this.model.selectedAccount?.host === 'github.com' ? '' : (this.model.selectedAccount?.host ?? ''),
 				},
 			],
 			primaryButton: localize('github.editor.signIn', 'Sign in to GitHub'),
@@ -1661,10 +1234,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		const repository = this.model.repository!;
 		const result = await this.dialogs.input({
 			message: localize('github.editor.fork', 'Create fork'),
-			detail: localize(
-				'github.editor.forkHelp',
-				'Leave the organization empty to create the fork in your selected account. This creates a remote repository.',
-			),
+			detail: localize('github.editor.forkHelp', 'Leave the organization empty to create the fork in your selected account. This creates a remote repository.'),
 			inputs: [
 				{ placeholder: localize('github.editor.forkOrganization', 'Organization (optional)'), value: '' },
 				{ placeholder: localize('github.editor.forkName', 'Fork repository name'), value: repository.name },
@@ -1688,10 +1258,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 	private async connectToken(): Promise<void> {
 		const result = await this.dialogs.input({
 			message: localize('github.editor.connectToken', 'Connect with token'),
-			detail: localize(
-				'github.editor.tokenHelp',
-				'Enter the GitHub host and a personal access token with access to the repositories you want to review.',
-			),
+			detail: localize('github.editor.tokenHelp', 'Enter the GitHub host and a personal access token with access to the repositories you want to review.'),
 			inputs: [
 				{ placeholder: localize('github.editor.host', 'GitHub host'), value: 'github.com' },
 				{ type: 'password', placeholder: localize('github.editor.token', 'Personal access token') },
@@ -1706,10 +1273,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		const selection = this.selection();
 		const requested = this.model.requestedReviewers;
 		const result = await this.dialogs.input({
-			message:
-				change === GitHubReviewerChange.Request
-					? localize('github.editor.requestReviewers', 'Request reviewers')
-					: localize('github.editor.removeReviewers', 'Remove reviewers'),
+			message: change === GitHubReviewerChange.Request ? localize('github.editor.requestReviewers', 'Request reviewers') : localize('github.editor.removeReviewers', 'Remove reviewers'),
 			inputs: [
 				{
 					placeholder: localize('github.editor.reviewerUsers', 'User logins, separated by commas'),
@@ -1740,9 +1304,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		const repositories = await readLocalRepositories(this.commands);
 		selection();
 		if (!repositories.length) {
-			await this.dialogs.info(
-				localize('github.editor.noCheckout', 'Open a folder containing a Git repository first.'),
-			);
+			await this.dialogs.info(localize('github.editor.noCheckout', 'Open a folder containing a Git repository first.'));
 			return;
 		}
 		const choice = await this.dialogs.prompt({
@@ -1761,20 +1323,9 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		const identity = `${repository.host}/${target}`;
 		const graph = local;
 		selection();
-		const remotes = graph.remotes.filter(
-			remote =>
-				remote.identity &&
-				`${remote.identity.host}/${remote.identity.owner}/${remote.identity.repository}`.toLowerCase() ===
-					identity.toLowerCase(),
-		);
+		const remotes = graph.remotes.filter(remote => remote.identity && `${remote.identity.host}/${remote.identity.owner}/${remote.identity.repository}`.toLowerCase() === identity.toLowerCase());
 		if (!remotes.length) {
-			await this.dialogs.info(
-				localize(
-					'github.editor.remoteRequired',
-					'Add a Git remote for {0} in Source Control before continuing.',
-					identity,
-				),
-			);
+			await this.dialogs.info(localize('github.editor.remoteRequired', 'Add a Git remote for {0} in Source Control before continuing.', identity));
 			return;
 		}
 		const remoteChoice = await this.dialogs.prompt({
@@ -1789,11 +1340,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		if (kind === 'checkout') {
 			const result = await this.dialogs.input({
 				message: localize('github.editor.checkout', 'Check out pull request'),
-				detail: localize(
-					'github.editor.checkoutDetail',
-					'Create a local branch at the reviewed commit {0}. Commit or stash local changes first.',
-					pr.headCommit,
-				),
+				detail: localize('github.editor.checkoutDetail', 'Create a local branch at the reviewed commit {0}. Commit or stash local changes first.', pr.headCommit),
 				inputs: [
 					{
 						placeholder: localize('github.editor.localBranch', 'Local branch name'),
@@ -1806,17 +1353,8 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 				return;
 			}
 			selection();
-			if (
-				this.workingCopies
-					.getAll()
-					.some(copy => copy.isDirty && extUriBiasedIgnorePathCase.isEqualOrParent(copy.resource, local.root))
-			) {
-				await this.dialogs.info(
-					localize(
-						'github.editor.saveFiles',
-						'Save or close unsaved files in this repository before checking out the pull request.',
-					),
-				);
+			if (this.workingCopies.getAll().some(copy => copy.isDirty && extUriBiasedIgnorePathCase.isEqualOrParent(copy.resource, local.root))) {
+				await this.dialogs.info(localize('github.editor.saveFiles', 'Save or close unsaved files in this repository before checking out the pull request.'));
 				return;
 			}
 			await this.model.runLocalOperation(async () => {
@@ -1833,22 +1371,14 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			const status = (await readLocalRepositories(this.commands)).find(repository => repository.id === local.id)!;
 			selection();
 			if (status.head.type !== 'branch') {
-				await this.dialogs.info(
-					localize('github.editor.branchRequired', 'Check out a local branch with commits before pushing.'),
-				);
+				await this.dialogs.info(localize('github.editor.branchRequired', 'Check out a local branch with commits before pushing.'));
 				return;
 			}
 			const head = status.head;
 			if (
 				!(
 					await this.dialogs.confirm({
-						message: localize(
-							'github.editor.pushConfirm',
-							'Push local commit {0} to {1}:{2}?',
-							head.objectId,
-							identity,
-							pr.headBranch,
-						),
+						message: localize('github.editor.pushConfirm', 'Push local commit {0} to {1}:{2}?', head.objectId, identity, pr.headBranch),
 						detail: local.path,
 						primaryButton: localize('github.editor.push', 'Push local commits to pull request'),
 					})
@@ -1897,7 +1427,11 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		const label = this.element(parent, 'github-field', 'label');
 		label.append(h(parent.ownerDocument, 'span', text));
 		const input = this._register(
-			new InputBox(label, { inputBoxStyles: defaultInputBoxStyles, presentation: 'field', ariaLabel: text }),
+			new InputBox(label, {
+				inputBoxStyles: defaultInputBoxStyles,
+				presentation: 'field',
+				ariaLabel: text,
+			}),
 		);
 		input.inputElement.dataset.githubFocus = focusKey;
 		return input;
@@ -1913,15 +1447,16 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		label.append(area);
 		return area;
 	}
-	private select(
-		parent: HTMLElement,
-		label: string,
-		options: readonly { value: string; label: string }[],
-	): SelectBox {
+	private select(parent: HTMLElement, label: string, options: readonly { value: string; label: string }[]): SelectBox {
 		return this._register(
 			new SelectBox(
 				parent,
-				{ ariaLabel: label, options, presentation: 'field', contextViewProvider: this.contextView },
+				{
+					ariaLabel: label,
+					options,
+					presentation: 'field',
+					contextViewProvider: this.contextView,
+				},
 				defaultSelectBoxStyles,
 			),
 		);
@@ -1954,34 +1489,19 @@ export function githubErrorMessage(error: unknown): string {
 		case GitHubErrorCode.AuthenticationRequired:
 			return localize('github.editor.authentication', 'Sign in to GitHub, then reload the repository.');
 		case GitHubErrorCode.PermissionDenied:
-			return localize(
-				'github.editor.permission',
-				'Your GitHub account does not have permission for this operation.',
-			);
+			return localize('github.editor.permission', 'Your GitHub account does not have permission for this operation.');
 		case GitHubErrorCode.NotFound:
 			return localize('github.editor.notFound', 'The repository, pull request, issue or file was not found.');
 		case GitHubErrorCode.Conflict:
-			return localize(
-				'github.editor.conflict',
-				'The PR changed or GitHub rejected the operation. Refresh the PR before continuing.',
-			);
+			return localize('github.editor.conflict', 'The PR changed or GitHub rejected the operation. Refresh the PR before continuing.');
 		case GitHubErrorCode.RateLimited:
 			return localize('github.editor.rateLimited', 'GitHub rate limit reached. Wait before reloading.');
 		case GitHubErrorCode.InvalidInput:
-			return localize(
-				'github.editor.invalidInput',
-				'Check the repository, branches, comment and selected diff line.',
-			);
+			return localize('github.editor.invalidInput', 'Check the repository, branches, comment and selected diff line.');
 		case GitHubErrorCode.SubmissionUncertain:
-			return localize(
-				'github.editor.uncertain',
-				'GitHub may have accepted the operation. Verify the result on GitHub before starting another operation.',
-			);
+			return localize('github.editor.uncertain', 'GitHub may have accepted the operation. Verify the result on GitHub before starting another operation.');
 		case GitHubErrorCode.Unavailable:
-			return localize(
-				'github.editor.unavailable',
-				'GitHub is unavailable. Connect to App Server and reload the repository.',
-			);
+			return localize('github.editor.unavailable', 'GitHub is unavailable. Connect to App Server and reload the repository.');
 		case GitHubErrorCode.TimedOut:
 			return localize('github.editor.timedOut', 'GitHub timed out. Reload to check the current state.');
 		default:

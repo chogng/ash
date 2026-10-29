@@ -1,9 +1,5 @@
 import { IOutputService } from '../../../../workbench/services/output/common/output.js';
-import {
-	IViewDescriptorService,
-	ViewContainerLocation,
-	WorkbenchViewContainerId,
-} from '../../../../workbench/common/views.js';
+import { IViewDescriptorService, ViewContainerLocation, WorkbenchViewContainerId } from '../../../../workbench/common/views.js';
 import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
@@ -71,10 +67,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 	private readonly controller: DesktopLayoutController;
 	private readonly activeEntry = observableValue<ISessionsEntry | undefined>(this, undefined);
 	private readonly workspaceMode = derived(reader => this.activeEntry.read(reader)?.workspaceMode ?? 'chat');
-	public readonly documentContent = derived(
-		reader =>
-			!this.customViews.activeCustomView.read(reader) && this.activeEntry.read(reader)?.content === 'documents',
-	);
+	public readonly documentContent = derived(reader => !this.customViews.activeCustomView.read(reader) && this.activeEntry.read(reader)?.content === 'documents');
 	private readonly visibility = new Map<string, EntryVisibility>();
 	private readonly editorEntries = new Map<string, ISessionsEntry>();
 	private readonly activityKeys = new Map<string, IContextKey<boolean>>();
@@ -109,24 +102,15 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 	) {
 		super();
 		this.pageGroupId = (editor as SessionsEditorPart).pageGroupId;
-		const raw =
-			storage.get(visibilityKey, StorageScope.PROFILE) ??
-			storage.get('sessions.layout.modeState', StorageScope.PROFILE);
+		const raw = storage.get(visibilityKey, StorageScope.PROFILE) ?? storage.get('sessions.layout.modeState', StorageScope.PROFILE);
 		if (raw !== undefined) {
 			const value: unknown = JSON.parse(raw);
 			if (!isRecord(value)) {
-				throw new TypeError(
-					localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'),
-				);
+				throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 			}
 			for (const [id, state] of Object.entries(value)) {
-				if (
-					!isRecord(state) ||
-					['details', 'panel', 'documents'].some(field => typeof state[field] !== 'boolean')
-				) {
-					throw new TypeError(
-						localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'),
-					);
+				if (!isRecord(state) || ['details', 'panel', 'documents'].some(field => typeof state[field] !== 'boolean')) {
+					throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 				}
 				this.visibility.set(id, {
 					details: state.details,
@@ -134,21 +118,14 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 					documents: state.documents,
 				} as EntryVisibility);
 			}
-			storage.store(
-				visibilityKey,
-				JSON.stringify(Object.fromEntries(this.visibility)),
-				StorageScope.PROFILE,
-				StorageTarget.MACHINE,
-			);
+			storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);
 			storage.remove('sessions.layout.modeState', StorageScope.PROFILE);
 		}
 		const legacyVisibility = storage.get('sessions.singlePane.sidePaneVisibility', StorageScope.WORKSPACE);
 		if (legacyVisibility !== undefined) {
 			const value: unknown = JSON.parse(legacyVisibility);
 			if (!isRecord(value) || typeof value.editor !== 'boolean' || typeof value.details !== 'boolean') {
-				throw new TypeError(
-					localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'),
-				);
+				throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 			}
 			if (!this.visibility.has(documentEntry.id)) {
 				this.visibility.set(documentEntry.id, {
@@ -157,12 +134,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 					documents: value.editor,
 				});
 			}
-			storage.store(
-				visibilityKey,
-				JSON.stringify(Object.fromEntries(this.visibility)),
-				StorageScope.PROFILE,
-				StorageTarget.MACHINE,
-			);
+			storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);
 			storage.remove('sessions.singlePane.sidePaneVisibility', StorageScope.WORKSPACE);
 		}
 		this.controller = this._register(instantiation.createInstance(DesktopLayoutController, this.pageGroupId, this));
@@ -177,12 +149,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		);
 		this._register(
 			views.onDidChangeViewContainerVisibility(event => {
-				if (
-					!event.visible ||
-					event.location !== ViewContainerLocation.Panel ||
-					event.id !== WorkbenchViewContainerId.Output
-				)
-					return;
+				if (!event.visible || event.location !== ViewContainerLocation.Panel || event.id !== WorkbenchViewContainerId.Output) return;
 				// Output is a diagnostic surface for the current conversation as well as documents.
 				// Revealing it must not navigate away or clear the selected session.
 				this.layout.updateParts(() => {
@@ -206,24 +173,17 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 			if (this.customViews.activeCustomView.get()) {
 				return;
 			}
-			if (
-				editor.isModalEditorVisible ||
-				this.isChangingContent ||
-				this.controller.isRestoringEditors ||
-				!editors.activeEditor
-			) {
+			if (editor.isModalEditorVisible || this.isChangingContent || this.controller.isRestoringEditors || !editors.activeEditor) {
 				return;
 			}
 			if (editor.activeGroup.id === this.pageGroupId && !editor.isGroupVisible(this.pageGroupId)) {
 				return;
 			}
-			const entry =
-				this.editorEntries.get(extUri.getComparisonKey(editors.activeEditor.resource)) ?? documentEntry;
+			const entry = this.editorEntries.get(extUri.getComparisonKey(editors.activeEditor.resource)) ?? documentEntry;
 			if (entry.id !== this.activeEntry.get()?.id) {
 				void this.openEntry(entry)
 					.then(() => {
-						if (explicit && !this.isDisposed && this.isDocumentContent)
-							return this.runOperation(() => this.controller.showEditor());
+						if (explicit && !this.isDisposed && this.isDocumentContent) return this.runOperation(() => this.controller.showEditor());
 					})
 					.catch(error => {
 						if (!this.isDisposed) {
@@ -231,9 +191,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 						}
 					});
 			} else if (entry.content === 'documents') {
-				void this.runOperation(() =>
-					explicit ? this.controller.showEditor() : this.controller.updateDetails(true),
-				).catch(error => {
+				void this.runOperation(() => (explicit ? this.controller.showEditor() : this.controller.updateDetails(true))).catch(error => {
 					if (!this.isDisposed) {
 						notifications.error(String(error));
 					}
@@ -244,12 +202,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		this._register(
 			editor.onDidChangeEditors(event => {
 				// A modal borrows the current entry. Opening or closing it does not navigate its underlying document groups.
-				if (
-					event.kind === 'activeGroupChanged' ||
-					(event.kind === 'groupChanged' &&
-						event.groupId === editor.activeGroup.id &&
-						event.event.kind === 'activeEditorChanged')
-				)
+				if (event.kind === 'activeGroupChanged' || (event.kind === 'groupChanged' && event.groupId === editor.activeGroup.id && event.event.kind === 'activeEditorChanged'))
 					revealActiveEditor();
 			}),
 		);
@@ -310,11 +263,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		return pending;
 	}
 
-	public openEntry(
-		entry: ISessionsEntry,
-		initialize?: () => ISessionsEntry,
-		options?: { readonly source: 'restore' },
-	): Promise<void> {
+	public openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry, options?: { readonly source: 'restore' }): Promise<void> {
 		if (options?.source !== 'restore' && this.customViews.activeCustomView.get()) this.customViews.hideCustomView();
 		return this.runOperation(async () => {
 			await this.controller.prepareContentChange();
@@ -336,13 +285,10 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				}
 				entry = initialize ? initialize() : entry;
 				const previousEntry = this.activeEntry.get();
-				const sameWorkspace =
-					previousEntry && (previousEntry.workspaceMode ?? 'chat') === (entry.workspaceMode ?? 'chat');
+				const sameWorkspace = previousEntry && (previousEntry.workspaceMode ?? 'chat') === (entry.workspaceMode ?? 'chat');
 				const sidebarContainerId =
 					entry.sidebarContainerId ??
-					(sameWorkspace
-						? this.views.getVisibleViewContainer(ViewContainerLocation.Sidebar)?.id
-						: undefined) ??
+					(sameWorkspace ? this.views.getVisibleViewContainer(ViewContainerLocation.Sidebar)?.id : undefined) ??
 					this.viewDescriptors.getDefaultViewContainer(ViewContainerLocation.Sidebar)?.id ??
 					SESSIONS_NAVIGATION_CONTAINER_ID;
 				this.activeEntry.set(entry, undefined);
@@ -361,9 +307,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				for (const group of this.editor.groups) {
 					this.editor.setGroupVisible(group.id, (group.id === this.pageGroupId) === productEditor);
 				}
-				this.editor.groups
-					.find(group => group.id === this.pageGroupId)!
-					.setTitleVisible(entry.showEditorTabs !== false);
+				this.editor.groups.find(group => group.id === this.pageGroupId)!.setTitleVisible(entry.showEditorTabs !== false);
 				if (!productEditor) {
 					this.editor.activateGroup(this.editor.groups.find(group => group.id !== this.pageGroupId)!.id);
 				}
@@ -382,13 +326,9 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 					this.setVisible('auxiliarybar', state.details);
 					this.setVisible('panel', documents && state.panel);
 				});
-				const focusSidebar =
-					entry.focus === 'sidebar' && sidebarVisible && !this.customViews.activeCustomView.get();
+				const focusSidebar = entry.focus === 'sidebar' && sidebarVisible && !this.customViews.activeCustomView.get();
 				// Keep the workspace sidebar attached while only the central page changes.
-				if (
-					this.views.getVisibleViewContainer(ViewContainerLocation.Sidebar)?.id !== sidebarContainerId ||
-					focusSidebar
-				) {
+				if (this.views.getVisibleViewContainer(ViewContainerLocation.Sidebar)?.id !== sidebarContainerId || focusSidebar) {
 					await this.views.openViewContainer(sidebarContainerId, focusSidebar);
 				}
 				if (this.isDisposed) {
@@ -462,12 +402,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 			panel: this.layout.isPartVisible('panel'),
 			documents: this.isDocumentContent && this.layout.isPartVisible('editor'),
 		});
-		this.storage.store(
-			visibilityKey,
-			JSON.stringify(Object.fromEntries(this.visibility)),
-			StorageScope.PROFILE,
-			StorageTarget.MACHINE,
-		);
+		this.storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);
 	}
 
 	public async restore(): Promise<void> {
@@ -475,9 +410,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		if (this.isDisposed) {
 			return;
 		}
-		const saved =
-			this.customViews.activeCustomView.get()?.entryCommand ??
-			this.storage.get(activeEntryKey, StorageScope.WORKSPACE);
+		const saved = this.customViews.activeCustomView.get()?.entryCommand ?? this.storage.get(activeEntryKey, StorageScope.WORKSPACE);
 		// These names describe the discarded storage format, not runtime product selection.
 		const oldEditor = this.storage.get('sessions.layout.primaryEditor', StorageScope.WORKSPACE);
 		const oldEntry =
@@ -496,9 +429,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		if (!saved && oldEntry !== undefined && !Object.hasOwn(oldCommands, oldEntry)) {
 			throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 		}
-		const defaultEntry = CommandsRegistry.hasCommand('sessions.open.new')
-			? 'sessions.open.new'
-			: 'sessions.open.chat';
+		const defaultEntry = CommandsRegistry.hasCommand('sessions.open.new') ? 'sessions.open.new' : 'sessions.open.chat';
 		const requested = saved ?? (oldEntry ? oldCommands[oldEntry]! : defaultEntry);
 		const available = CommandsRegistry.hasCommand(requested);
 		// Entry commands can disappear during development or when a contribution is
@@ -510,12 +441,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		if (this.isDisposed) {
 			return;
 		}
-		for (const key of [
-			'sessions.layout.activeMode',
-			'sessions.layout.primaryPage',
-			'sessions.activityBar.activePage',
-			'sessions.layout.primaryEditor',
-		]) {
+		for (const key of ['sessions.layout.activeMode', 'sessions.layout.primaryPage', 'sessions.activityBar.activePage', 'sessions.layout.primaryEditor']) {
 			this.storage.remove(key, StorageScope.WORKSPACE);
 		}
 	}

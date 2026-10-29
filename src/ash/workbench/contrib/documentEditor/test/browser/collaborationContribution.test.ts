@@ -55,24 +55,21 @@ test('Stanza collaboration contribution keeps a newly issued invitation availabl
 		testDialogs,
 	);
 	environment.window.document.body.append(contribution.element);
-	contribution.setState('connected', { roomId: 'stanza-room', canManageMembers: true });
+	contribution.setState('connected', {
+		roomId: 'stanza-room',
+		canManageMembers: true,
+	});
 
-	const invite = contribution.element.querySelector<HTMLButtonElement>(
-		"[data-action-id='inviteCollaborator'] button",
-	);
+	const invite = contribution.element.querySelector<HTMLButtonElement>("[data-action-id='inviteCollaborator'] button");
 	assert.ok(invite);
 	invite.click();
 	await flushMicrotasks();
 
 	assert.deepEqual(invitations, [{ displayName: 'Writer', role: 'viewer' }]);
-	const credentials = contribution.element.querySelector<HTMLPreElement>(
-		'.stanza-document-collaboration-invitation-token',
-	);
+	const credentials = contribution.element.querySelector<HTMLPreElement>('.stanza-document-collaboration-invitation-token');
 	assert.equal(credentials?.textContent, 'Room ID: stanza-room\nAccess token: member-token');
 	assert.equal(credentials?.parentElement?.hidden, false);
-	const dismiss = contribution.element.querySelector<HTMLButtonElement>(
-		'.stanza-document-collaboration-invitation-dismiss',
-	);
+	const dismiss = contribution.element.querySelector<HTMLButtonElement>('.stanza-document-collaboration-invitation-dismiss');
 	assert.ok(dismiss);
 	dismiss.click();
 	assert.equal(credentials?.textContent, '');
@@ -117,11 +114,13 @@ test('Stanza collaboration contribution lets a room owner inspect, rotate, and r
 		testDialogs,
 	);
 	environment.window.document.body.append(contribution.element);
-	contribution.setState('connected', { roomId: 'stanza-room', principalId: 'owner-1', canManageMembers: true });
+	contribution.setState('connected', {
+		roomId: 'stanza-room',
+		principalId: 'owner-1',
+		canManageMembers: true,
+	});
 
-	const manage = contribution.element.querySelector<HTMLButtonElement>(
-		"[data-action-id='manageCollaborators'] button",
-	);
+	const manage = contribution.element.querySelector<HTMLButtonElement>("[data-action-id='manageCollaborators'] button");
 	assert.ok(manage);
 	manage.click();
 	await flushMicrotasks();
@@ -133,11 +132,7 @@ test('Stanza collaboration contribution lets a room owner inspect, rotate, and r
 	writer?.querySelector<HTMLButtonElement>('button')?.click();
 	await flushMicrotasks();
 	assert.deepEqual(rotations, ['member-1']);
-	assert.equal(
-		contribution.element.querySelector<HTMLPreElement>('.stanza-document-collaboration-invitation-token')
-			?.textContent,
-		'Room ID: stanza-room\nAccess token: rotated-token',
-	);
+	assert.equal(contribution.element.querySelector<HTMLPreElement>('.stanza-document-collaboration-invitation-token')?.textContent, 'Room ID: stanza-room\nAccess token: rotated-token');
 
 	const currentWriter = contribution.element.querySelector<HTMLElement>("[data-principal-id='member-1']");
 	currentWriter?.querySelector<HTMLButtonElement>('button:last-child')?.click();
@@ -175,18 +170,14 @@ test('Stanza collaboration contribution releases replaced and disposed member ac
 	);
 	try {
 		contribution.setState('connected', { roomId: 'room', principalId: 'owner', canManageMembers: true });
-		const manage = contribution.element.querySelector<HTMLButtonElement>(
-			"[data-action-id='manageCollaborators'] button",
-		)!;
+		const manage = contribution.element.querySelector<HTMLButtonElement>("[data-action-id='manageCollaborators'] button")!;
 		manage.click();
 		await flushMicrotasks();
 		const oldRotate = contribution.element.querySelector<HTMLButtonElement>("[data-principal-id='member'] button")!;
 		manage.click();
 		await flushMicrotasks();
 		const rotate = contribution.element.querySelector<HTMLButtonElement>("[data-principal-id='member'] button")!;
-		const revoke = contribution.element.querySelector<HTMLButtonElement>(
-			"[data-principal-id='member'] button:last-child",
-		)!;
+		const revoke = contribution.element.querySelector<HTMLButtonElement>("[data-principal-id='member'] button:last-child")!;
 		assert.notStrictEqual(oldRotate, rotate);
 		oldRotate.click();
 		await flushMicrotasks();
@@ -205,9 +196,7 @@ test('Stanza collaboration contribution releases replaced and disposed member ac
 
 test('Stanza collaboration contribution ignores member results after disposal', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
-	let resolveMembers!: (
-		members: readonly { readonly principalId: string; readonly displayName: string; readonly role: 'editor' }[],
-	) => void;
+	let resolveMembers!: (members: readonly { readonly principalId: string; readonly displayName: string; readonly role: 'editor' }[]) => void;
 	const contribution = new CollaborationContribution(
 		environment.window.document.body,
 		{

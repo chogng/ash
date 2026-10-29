@@ -6,10 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { parseExtensionManifest } from '../../../extensions/common/extensionManifest.js';
 import { AppServerLanguageSupport } from '../../browser/appServerLanguageSupport.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
@@ -17,29 +14,19 @@ import { CancellationToken, CancellationTokenSource } from '../../../../../base/
 import { URI } from '../../../../../base/common/uri.js';
 import { Position } from '../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../editor/common/core/range.js';
-import {
-	LanguageDiagnosticSeverity,
-	createLanguageCompletionInvokeContext,
-	createLanguageFeatureRequest,
-} from '../../../../../editor/common/languages.js';
+import { LanguageDiagnosticSeverity, createLanguageCompletionInvokeContext, createLanguageFeatureRequest } from '../../../../../editor/common/languages.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { LanguageCompletionService } from '../../../../../editor/contrib/suggest/browser/suggest.js';
 import { getWorkspaceSymbols } from '../../../../contrib/search/common/search.js';
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
 import { type ILanguageApi } from '../../../../../platform/language/common/languageApi.js';
 import { IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
-import {
-	IWorkspaceTrustManagementService,
-	type WorkspaceTrustPermission,
-} from '../../../../../platform/workspace/common/workspaceTrust.js';
+import { IWorkspaceTrustManagementService, type WorkspaceTrustPermission } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
-import {
-	type LanguageServerFeatureDto,
-	type ServerNotification,
-} from '../../../../../../../.build/protocol/typescript/index.js';
+import { type LanguageServerFeatureDto, type ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
 import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { AppServerLanguageProviders } from '../../browser/appServerLanguageProviders.js';
 import { ILanguageServerLifecycleService } from '../../common/languageServerLifecycleService.js';
@@ -86,11 +73,7 @@ suite('Rust configuration catalog forwarding', () => {
 		});
 		await workspace.write('{}');
 		await AppServerLanguageSupport.read(api, workspace, workspace);
-		assert.deepEqual(
-			requests.at(-1)?.settings,
-			{ 'rust-analyzer': { cachePriming: { enable: false } } },
-			'removal retires explicit overrides without forwarding 193 upstream defaults',
-		);
+		assert.deepEqual(requests.at(-1)?.settings, { 'rust-analyzer': { cachePriming: { enable: false } } }, 'removal retires explicit overrides without forwarding 193 upstream defaults');
 		const first = URI.file('/first');
 		const second = URI.file('/second');
 		const workspaceFile = URI.file('/folders.code-workspace');
@@ -103,10 +86,7 @@ suite('Rust configuration catalog forwarding', () => {
 		using fileRegistration = folders.fileService.registerProvider('file', fileProvider);
 		await folders.fileService.createDirectory(URI.joinPath(first, '.vscode'));
 		await folders.fileService.createDirectory(URI.joinPath(second, '.vscode'));
-		await folders.fileService.writeFile(
-			{ resource: workspaceFile, content: '{ "settings": {} }' },
-			{ create: true, overwrite: false },
-		);
+		await folders.fileService.writeFile({ resource: workspaceFile, content: '{ "settings": {} }' }, { create: true, overwrite: false });
 		await folders.fileService.writeFile(
 			{
 				resource: URI.joinPath(first, '.vscode', 'settings.json'),
@@ -261,14 +241,8 @@ test('retained adapters filter every request after capability revocation and acr
 			range: model.getFullModelRange(),
 		};
 		await hover.provideHover(request, signal);
-		await completion.provideCompletions(
-			{ ...request, requestId: 1, context: createLanguageCompletionInvokeContext() },
-			signal,
-		);
-		await completion.executeCompletionCommand!(
-			{ ...request, command: { id: 'test.command', title: 'Test', arguments: [] } },
-			signal,
-		);
+		await completion.provideCompletions({ ...request, requestId: 1, context: createLanguageCompletionInvokeContext() }, signal);
+		await completion.executeCompletionCommand!({ ...request, command: { id: 'test.command', title: 'Test', arguments: [] } }, signal);
 		await declaration.provideDeclaration(request, signal);
 		await definition.provideDefinition(request, signal);
 		await implementation.provideImplementation(request, signal);
@@ -278,17 +252,8 @@ test('retained adapters filter every request after capability revocation and acr
 		await typeHierarchy.prepareTypeHierarchy(request, signal);
 		await rename.prepareRename!(request, signal);
 		await rename.provideRenameEdits({ ...request, newName: 'newValue' }, signal);
-		await formatting.provideDocumentFormattingEdits(
-			model,
-			{ tabSize: 4, insertSpaces: true },
-			CancellationToken.None,
-		);
-		await rangeFormatting.provideDocumentRangeFormattingEdits(
-			model,
-			model.getFullModelRange(),
-			{ tabSize: 4, insertSpaces: true },
-			CancellationToken.None,
-		);
+		await formatting.provideDocumentFormattingEdits(model, { tabSize: 4, insertSpaces: true }, CancellationToken.None);
+		await rangeFormatting.provideDocumentRangeFormattingEdits(model, model.getFullModelRange(), { tabSize: 4, insertSpaces: true }, CancellationToken.None);
 		await signature.provideParameterHints({ ...request, context: { kind: 'invoke' } }, signal);
 		await inlay.provideInlayHints(request, signal);
 		await linked.provideLinkedEditingRanges(model, request.position, CancellationToken.None);
@@ -354,12 +319,7 @@ function createProviders(
 		const dirId = params.dirId ?? workspace.getWorkspace().folders[0]?.id;
 		for (const server of api.availableServers) {
 			const languageIds = server.languageIds.filter(
-				language =>
-					!events.capabilityNotifications.some(
-						value =>
-							(value.dirId ?? workspace.getWorkspace().folders[0]?.id) === dirId &&
-							value.languageIds.includes(language),
-					),
+				language => !events.capabilityNotifications.some(value => (value.dirId ?? workspace.getWorkspace().folders[0]?.id) === dirId && value.languageIds.includes(language)),
 			);
 			if (languageIds.length)
 				events.fire({
@@ -421,25 +381,12 @@ test('optional prepare and resolve capabilities preserve direct rename, lens and
 		range: new Range(1, 1, 1, 6),
 		placeholder: 'value',
 	});
-	assert.equal(
-		await languages.codeLensProvider.ordered(model)[0]!.resolveCodeLens!(model, lens, CancellationToken.None),
-		lens,
-	);
+	assert.equal(await languages.codeLensProvider.ordered(model)[0]!.resolveCodeLens!(model, lens, CancellationToken.None), lens);
 	assert.deepEqual(await languages.linkProvider.ordered(model)[0]!.provideLinks(request, signal), []);
 	assert.deepEqual([prepared, resolvedLenses, resolvedLinks], [0, 0, 0]);
-	notifyFeatures(events, [
-		'rename',
-		'renamePrepare',
-		'codeLens',
-		'codeLensResolve',
-		'documentLinks',
-		'documentLinkResolve',
-	]);
+	notifyFeatures(events, ['rename', 'renamePrepare', 'codeLens', 'codeLensResolve', 'documentLinks', 'documentLinkResolve']);
 	await tick();
-	assert.equal(
-		(await languages.renameProvider.ordered(model)[0]!.prepareRename!(request, signal))?.placeholder,
-		'prepared',
-	);
+	assert.equal((await languages.renameProvider.ordered(model)[0]!.prepareRename!(request, signal))?.placeholder, 'prepared');
 	await languages.codeLensProvider.ordered(model)[0]!.resolveCodeLens!(model, lens, CancellationToken.None);
 	const links = await languages.linkProvider.ordered(model)[0]!.provideLinks(request, signal);
 	assert.equal(links?.[0]?.target, 'https://example.com');
@@ -502,10 +449,7 @@ test('language providers require the scoped trust registration even when the bac
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(ILanguageFeaturesService, languages);
 	services.registerInstance(IServerEventApi, new FakeServerEvents());
-	assert.throws(
-		() => services.createInstance(AppServerLanguageProviders, {} as ILanguageApi, { checkWorkspaceTrust: false }),
-		/Unknown service: workspaceTrustManagementService/,
-	);
+	assert.throws(() => services.createInstance(AppServerLanguageProviders, {} as ILanguageApi, { checkWorkspaceTrust: false }), /Unknown service: workspaceTrustManagementService/);
 });
 
 const baselineFeatures: readonly LanguageServerFeatureDto[] = [
@@ -576,10 +520,7 @@ test('App Server Shell registration uses the editor grammar language identity', 
 	using model = new TextModel('value', { languageId: 'shellscript', resource: URI.file('/project/main.sh') });
 	await definition(languages, model, URI.file('/project/main.sh'), new Position(1, 2));
 	assert.equal(api.locationRequests[0]!.document.languageId, 'shellscript');
-	assert.equal(
-		languages.completionProvider.getProvider('ash.appServer.completions')!.languageIds.includes('shellscript'),
-		true,
-	);
+	assert.equal(languages.completionProvider.getProvider('ash.appServer.completions')!.languageIds.includes('shellscript'), true);
 });
 
 test('App Server language providers route resources through their owning Workspace folder', async () => {
@@ -644,16 +585,14 @@ test('App Server hover and completion providers keep revision, resource, and ins
 	using completions = new LanguageCompletionService(model, languages.completionProvider, { resource });
 
 	const hoverSignal = new AbortController().signal;
-	const hoverResult = await languages.hoverProvider
-		.ordered(model)[0]!
-		.provideHover(
-			{
-				...createLanguageFeatureRequest(model, model.getLanguageId(), hoverSignal),
-				resource,
-				position: new Position(1, 2),
-			},
-			hoverSignal,
-		);
+	const hoverResult = await languages.hoverProvider.ordered(model)[0]!.provideHover(
+		{
+			...createLanguageFeatureRequest(model, model.getLanguageId(), hoverSignal),
+			resource,
+			position: new Position(1, 2),
+		},
+		hoverSignal,
+	);
 	await completions.request('rust', new Position(0 + 1, 3 + 1), createLanguageCompletionInvokeContext());
 	const completionResult = completions.results.result!;
 	const completionItem = completionResult.value.items[0]!;
@@ -668,33 +607,25 @@ test('App Server hover and completion providers keep revision, resource, and ins
 	);
 	await completions.executeCompletionCommand('rust', completionItem, new AbortController().signal);
 	const signal = new AbortController().signal;
-	const hints = await languages.signatureHelpProvider
-		.ordered(model)[0]!
-		.provideParameterHints(
-			{
-				...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
-				resource,
-				position: new Position(1, 4),
-				context: { kind: 'triggerCharacter', triggerCharacter: '(' },
-			},
-			signal,
-		);
-	const inlays = await languages.inlayHintsProvider
-		.ordered(model)[0]!
-		.provideInlayHints(
-			{
-				...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
-				resource,
-				range: model.getFullModelRange(),
-			},
-			signal,
-		);
-	const linkedEditing = languages.linkedEditingRangeProvider.ordered(model)[0]!;
-	const linked = await linkedEditing.provideLinkedEditingRanges(
-		model,
-		new Position(0 + 1, 1 + 1),
-		CancellationToken.None,
+	const hints = await languages.signatureHelpProvider.ordered(model)[0]!.provideParameterHints(
+		{
+			...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
+			resource,
+			position: new Position(1, 4),
+			context: { kind: 'triggerCharacter', triggerCharacter: '(' },
+		},
+		signal,
 	);
+	const inlays = await languages.inlayHintsProvider.ordered(model)[0]!.provideInlayHints(
+		{
+			...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
+			resource,
+			range: model.getFullModelRange(),
+		},
+		signal,
+	);
+	const linkedEditing = languages.linkedEditingRangeProvider.ordered(model)[0]!;
+	const linked = await linkedEditing.provideLinkedEditingRanges(model, new Position(0 + 1, 1 + 1), CancellationToken.None);
 
 	assert.equal(hoverResult?.contents[0], 'hover docs');
 	assert.equal(api.hoverRequests[0]!.document.path, 'main.rs');
@@ -731,24 +662,22 @@ test('App Server rename and code actions preserve ordered workspace file operati
 	const rename = languages.renameProvider.ordered(model)[0]!;
 	const preparation = await rename.prepareRename!(request, signal);
 	const edit = await rename.provideRenameEdits({ ...request, newName: 'renamed' }, signal);
-	const available = await languages.codeActionProvider
-		.ordered(model)[0]!
-		.provideCodeActions(
-			{
-				...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
-				resource,
-				range: model.getFullModelRange(),
-				diagnostics: [
-					{
-						range: model.getFullModelRange(),
-						severity: LanguageDiagnosticSeverity.Warning,
-						message: 'demo',
-						source: 'test',
-					},
-				],
-			},
-			signal,
-		);
+	const available = await languages.codeActionProvider.ordered(model)[0]!.provideCodeActions(
+		{
+			...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
+			resource,
+			range: model.getFullModelRange(),
+			diagnostics: [
+				{
+					range: model.getFullModelRange(),
+					severity: LanguageDiagnosticSeverity.Warning,
+					message: 'demo',
+					source: 'test',
+				},
+			],
+		},
+		signal,
+	);
 
 	assert.equal(preparation?.placeholder, 'value');
 	assert.equal(edit.entries[0]!.kind, 'create');
@@ -758,24 +687,14 @@ test('App Server rename and code actions preserve ordered workspace file operati
 	assert.equal(api.codeActionRequests[0]!.diagnostics[0]!.severity, 'warning');
 });
 
-function notifyCodeActions(
-	events: FakeServerEvents,
-	language: string,
-	codeActions: boolean,
-	codeActionResolve: boolean,
-	dirId?: string,
-): void {
+function notifyCodeActions(events: FakeServerEvents, language: string, codeActions: boolean, codeActionResolve: boolean, dirId?: string): void {
 	events.fire({
 		method: 'language/serverCapabilities',
 		params: {
 			...(dirId ? { dirId } : {}),
 			server: 'fixture',
 			languageIds: [language],
-			features: [
-				...baselineFeatures,
-				...(codeActions ? ['codeActions' as const] : []),
-				...(codeActionResolve ? ['codeActionResolve' as const] : []),
-			],
+			features: [...baselineFeatures, ...(codeActions ? ['codeActions' as const] : []), ...(codeActionResolve ? ['codeActionResolve' as const] : [])],
 			completionTriggerCharacters: [],
 			onTypeFormattingTriggerCharacters: [],
 			signatureHelpTriggerCharacters: [],
@@ -891,12 +810,8 @@ test('App Server formatting providers preserve snapshot, options, range, and edi
 	const options = { tabSize: 4, insertSpaces: false, trimTrailingWhitespace: true };
 	assert.deepEqual(languages.onTypeFormattingEditProvider.ordered(model), []);
 
-	const documentEdits = await languages.documentFormattingEditProvider
-		.ordered(model)[0]!
-		.provideDocumentFormattingEdits(model, { tabSize: 2, insertSpaces: true }, CancellationToken.None);
-	const rangeEdits = await languages.documentRangeFormattingEditProvider
-		.ordered(model)[0]!
-		.provideDocumentRangeFormattingEdits(model, new Range(1, 1, 1, 6), options, CancellationToken.None);
+	const documentEdits = await languages.documentFormattingEditProvider.ordered(model)[0]!.provideDocumentFormattingEdits(model, { tabSize: 2, insertSpaces: true }, CancellationToken.None);
+	const rangeEdits = await languages.documentRangeFormattingEditProvider.ordered(model)[0]!.provideDocumentRangeFormattingEdits(model, new Range(1, 1, 1, 6), options, CancellationToken.None);
 
 	assert.equal(api.documentFormattingRequests[0]!.document.path, 'main.ts');
 	assert.deepEqual(api.documentFormattingRequests[0]!.options, {
@@ -940,13 +855,7 @@ test('App Server on-type formatting forwards only negotiated characters, snapsho
 	const provider = languages.onTypeFormattingEditProvider.ordered(model)[0]!;
 	assert.deepEqual(provider.autoFormatTriggerCharacters, [';', '\n']);
 	const options = { tabSize: 2, insertSpaces: true, trimTrailingWhitespace: false };
-	const result = await provider.provideOnTypeFormattingEdits(
-		model,
-		new Position(1, 9),
-		';',
-		options,
-		CancellationToken.None,
-	);
+	const result = await provider.provideOnTypeFormattingEdits(model, new Position(1, 9), ';', options, CancellationToken.None);
 	assert.equal(result?.[0]?.text, 'formatted on type');
 	assert.deepEqual(api.onTypeFormattingRequests[0], {
 		document: { path: 'main.ts', languageId: 'typescript', revision: model.getVersionId(), text: '🦀value;' },
@@ -954,10 +863,7 @@ test('App Server on-type formatting forwards only negotiated characters, snapsho
 		character: ';',
 		options,
 	});
-	assert.deepEqual(
-		await provider.provideOnTypeFormattingEdits(model, new Position(1, 9), '}', options, CancellationToken.None),
-		[],
-	);
+	assert.deepEqual(await provider.provideOnTypeFormattingEdits(model, new Position(1, 9), '}', options, CancellationToken.None), []);
 	assert.equal(api.onTypeFormattingRequests.length, 1);
 	await provider.provideOnTypeFormattingEdits(model, new Position(1, 9), '\n', options, CancellationToken.None);
 	assert.equal(api.onTypeFormattingRequests[1]!.character, '\n');
@@ -988,13 +894,7 @@ for (const invalidation of ['version', 'response revision', 'cancel', 'triggers'
 				edits: [{ range: DTO_RANGE, newText: 'late' }],
 			};
 		};
-		const pending = provider.provideOnTypeFormattingEdits(
-			model,
-			new Position(1, 6),
-			';',
-			{ tabSize: 4, insertSpaces: true },
-			cancellation.token,
-		);
+		const pending = provider.provideOnTypeFormattingEdits(model, new Position(1, 6), ';', { tabSize: 4, insertSpaces: true }, cancellation.token);
 		assert.ok(signal);
 		switch (invalidation) {
 			case 'version':
@@ -1021,16 +921,7 @@ for (const invalidation of ['version', 'response revision', 'cancel', 'triggers'
 		if (invalidation === 'revoke') {
 			await tick();
 			assert.equal(languages.onTypeFormattingEditProvider.has(model), false);
-			assert.deepEqual(
-				await provider.provideOnTypeFormattingEdits(
-					model,
-					new Position(1, 6),
-					';',
-					{ tabSize: 4, insertSpaces: true },
-					CancellationToken.None,
-				),
-				[],
-			);
+			assert.deepEqual(await provider.provideOnTypeFormattingEdits(model, new Position(1, 6), ';', { tabSize: 4, insertSpaces: true }, CancellationToken.None), []);
 		}
 	});
 }
@@ -1055,16 +946,7 @@ test('App Server on-type formatting keeps trigger characters local to each direc
 	const provider = languages.onTypeFormattingEditProvider.ordered(first)[0]!;
 	assert.deepEqual(provider.autoFormatTriggerCharacters, [';']);
 	assert.deepEqual(languages.onTypeFormattingEditProvider.ordered(second)[0]!.autoFormatTriggerCharacters, ['\n']);
-	assert.deepEqual(
-		await provider.provideOnTypeFormattingEdits(
-			second,
-			new Position(1, 6),
-			';',
-			{ tabSize: 4, insertSpaces: true },
-			CancellationToken.None,
-		),
-		[],
-	);
+	assert.deepEqual(await provider.provideOnTypeFormattingEdits(second, new Position(1, 6), ';', { tabSize: 4, insertSpaces: true }, CancellationToken.None), []);
 	assert.equal(api.onTypeFormattingRequests.length, 0);
 });
 
@@ -1085,12 +967,7 @@ test('App Server range formatting discards a response after the model changes', 
 	using model = new TextModel('value', { languageId: 'typescript', resource: URI.file('/project/main.ts') });
 	const result = languages.documentRangeFormattingEditProvider
 		.ordered(model)[0]!
-		.provideDocumentRangeFormattingEdits(
-			model,
-			new Range(1, 1, 1, 6),
-			{ tabSize: 4, insertSpaces: true },
-			CancellationToken.None,
-		);
+		.provideDocumentRangeFormattingEdits(model, new Range(1, 1, 1, 6), { tabSize: 4, insertSpaces: true }, CancellationToken.None);
 	model.setValue('changed');
 	release();
 	assert.deepEqual(await result, []);
@@ -1141,10 +1018,7 @@ test('App Server language providers register only while directory permissions al
 });
 
 class FakeServerEvents implements IServerEventApi {
-	readonly capabilityNotifications: Extract<
-		ServerNotification,
-		{ method: 'language/serverCapabilities' }
-	>['params'][] = [];
+	readonly capabilityNotifications: Extract<ServerNotification, { method: 'language/serverCapabilities' }>['params'][] = [];
 	private listener: ((event: ServerNotification) => void) | undefined;
 	subscribe(listener: (event: ServerNotification) => void) {
 		this.listener = listener;
@@ -1212,10 +1086,7 @@ test('unrelated profile changes preserve language provider registrations', async
 	assert.equal(invalidations, 0, 'unchanged routes and capabilities retain editor registrations');
 	assert.equal(languages.hoverProvider.ordered(model)[0], provider);
 	const signal = new AbortController().signal;
-	const hover = await provider.provideHover(
-		{ ...createLanguageFeatureRequest(model, 'rust', signal), resource: model.uri, position: new Position(1, 4) },
-		signal,
-	);
+	const hover = await provider.provideHover({ ...createLanguageFeatureRequest(model, 'rust', signal), resource: model.uri, position: new Position(1, 4) }, signal);
 	assert.ok(hover);
 	assert.equal(api.hoverRequests.length, 1, 'the retained provider still executes semantic requests');
 });
@@ -1239,11 +1110,7 @@ test('a restarted server replaces its providers even when its capabilities are u
 	events.fire({ method: 'language/serverCapabilities', params: structuredClone(capabilities) });
 	await tick();
 	assert.ok(languages.hoverProvider.has(model));
-	assert.notEqual(
-		languages.hoverProvider.ordered(model)[0],
-		provider,
-		'equal capabilities cannot revive the retired registration',
-	);
+	assert.notEqual(languages.hoverProvider.ordered(model)[0], provider, 'equal capabilities cannot revive the retired registration');
 });
 
 test('idle release keeps demand providers available while explicit stop withdraws them', async () => {
@@ -1340,10 +1207,7 @@ class FakeLanguageApi implements ILanguageApi {
 	async synchronize(): Promise<void> {}
 	async close(): Promise<void> {}
 
-	async hover(
-		params: Parameters<ILanguageApi['hover']>[0],
-		_options?: Parameters<ILanguageApi['hover']>[1],
-	): ReturnType<ILanguageApi['hover']> {
+	async hover(params: Parameters<ILanguageApi['hover']>[0], _options?: Parameters<ILanguageApi['hover']>[1]): ReturnType<ILanguageApi['hover']> {
 		this.hoverRequests.push(params);
 		return { revision: params.document.revision, contents: 'hover docs', range: DTO_RANGE };
 	}
@@ -1375,9 +1239,7 @@ class FakeLanguageApi implements ILanguageApi {
 		};
 	}
 
-	async resolveCompletion(
-		params: Parameters<ILanguageApi['resolveCompletion']>[0],
-	): ReturnType<ILanguageApi['resolveCompletion']> {
+	async resolveCompletion(params: Parameters<ILanguageApi['resolveCompletion']>[0]): ReturnType<ILanguageApi['resolveCompletion']> {
 		return {
 			revision: params.document.revision,
 			detail: 'resolved macro',
@@ -1387,26 +1249,19 @@ class FakeLanguageApi implements ILanguageApi {
 	async executeCommand(params: Parameters<ILanguageApi['executeCommand']>[0]): Promise<void> {
 		this.executeCommandRequests.push(params);
 	}
-	async documentDiagnostics(
-		params: Parameters<ILanguageApi['documentDiagnostics']>[0],
-	): ReturnType<ILanguageApi['documentDiagnostics']> {
+	async documentDiagnostics(params: Parameters<ILanguageApi['documentDiagnostics']>[0]): ReturnType<ILanguageApi['documentDiagnostics']> {
 		return { revision: params.document.revision, kind: 'unchanged', diagnostics: [] };
 	}
 	async directoryDiagnostics(): ReturnType<ILanguageApi['directoryDiagnostics']> {
 		return { supported: false, snapshots: [] };
 	}
 
-	async formatDocument(
-		params: Parameters<ILanguageApi['formatDocument']>[0],
-	): ReturnType<ILanguageApi['formatDocument']> {
+	async formatDocument(params: Parameters<ILanguageApi['formatDocument']>[0]): ReturnType<ILanguageApi['formatDocument']> {
 		this.documentFormattingRequests.push(params);
 		return { revision: params.document.revision, edits: [{ range: DTO_RANGE, newText: 'formatted' }] };
 	}
 
-	async formatOnType(
-		params: Parameters<ILanguageApi['formatOnType']>[0],
-		_options?: Parameters<ILanguageApi['formatOnType']>[1],
-	): ReturnType<ILanguageApi['formatOnType']> {
+	async formatOnType(params: Parameters<ILanguageApi['formatOnType']>[0], _options?: Parameters<ILanguageApi['formatOnType']>[1]): ReturnType<ILanguageApi['formatOnType']> {
 		this.onTypeFormattingRequests.push(params);
 		return { revision: params.document.revision, edits: [{ range: DTO_RANGE, newText: 'formatted on type' }] };
 	}
@@ -1416,9 +1271,7 @@ class FakeLanguageApi implements ILanguageApi {
 		return { revision: params.document.revision, edits: [{ range: DTO_RANGE, newText: 'formatted range' }] };
 	}
 
-	async signatureHelp(
-		params: Parameters<ILanguageApi['signatureHelp']>[0],
-	): ReturnType<ILanguageApi['signatureHelp']> {
+	async signatureHelp(params: Parameters<ILanguageApi['signatureHelp']>[0]): ReturnType<ILanguageApi['signatureHelp']> {
 		this.signatureHelpRequests.push(params);
 		return {
 			revision: params.document.revision,
@@ -1452,46 +1305,32 @@ class FakeLanguageApi implements ILanguageApi {
 			],
 		};
 	}
-	async linkedEditingRanges(
-		params: Parameters<ILanguageApi['linkedEditingRanges']>[0],
-	): ReturnType<ILanguageApi['linkedEditingRanges']> {
+	async linkedEditingRanges(params: Parameters<ILanguageApi['linkedEditingRanges']>[0]): ReturnType<ILanguageApi['linkedEditingRanges']> {
 		return {
 			revision: params.document.revision,
 			ranges: [DTO_RANGE, { start: { lineIndex: 0, columnIndex: 8 }, end: { lineIndex: 0, columnIndex: 13 } }],
 			wordPattern: '[A-Za-z]+',
 		};
 	}
-	async semanticTokens(
-		params: Parameters<ILanguageApi['semanticTokens']>[0],
-	): ReturnType<ILanguageApi['semanticTokens']> {
+	async semanticTokens(params: Parameters<ILanguageApi['semanticTokens']>[0]): ReturnType<ILanguageApi['semanticTokens']> {
 		return { revision: params.document.revision, resultId: '1', tokens: [] };
 	}
-	async documentSymbols(
-		params: Parameters<ILanguageApi['documentSymbols']>[0],
-	): ReturnType<ILanguageApi['documentSymbols']> {
+	async documentSymbols(params: Parameters<ILanguageApi['documentSymbols']>[0]): ReturnType<ILanguageApi['documentSymbols']> {
 		return { revision: params.document.revision, symbols: [] };
 	}
 	async codeLenses(params: Parameters<ILanguageApi['codeLenses']>[0]): ReturnType<ILanguageApi['codeLenses']> {
 		return { revision: params.document.revision, lenses: [] };
 	}
-	async resolveCodeLens(
-		params: Parameters<ILanguageApi['resolveCodeLens']>[0],
-	): ReturnType<ILanguageApi['resolveCodeLens']> {
+	async resolveCodeLens(params: Parameters<ILanguageApi['resolveCodeLens']>[0]): ReturnType<ILanguageApi['resolveCodeLens']> {
 		return { revision: params.document.revision, lenses: [params.lens] };
 	}
-	async documentLinks(
-		params: Parameters<ILanguageApi['documentLinks']>[0],
-	): ReturnType<ILanguageApi['documentLinks']> {
+	async documentLinks(params: Parameters<ILanguageApi['documentLinks']>[0]): ReturnType<ILanguageApi['documentLinks']> {
 		return { revision: params.document.revision, links: [] };
 	}
-	async resolveDocumentLink(
-		params: Parameters<ILanguageApi['resolveDocumentLink']>[0],
-	): ReturnType<ILanguageApi['resolveDocumentLink']> {
+	async resolveDocumentLink(params: Parameters<ILanguageApi['resolveDocumentLink']>[0]): ReturnType<ILanguageApi['resolveDocumentLink']> {
 		return { revision: params.document.revision, links: [params.link] };
 	}
-	async documentColors(
-		params: Parameters<ILanguageApi['documentColors']>[0],
-	): ReturnType<ILanguageApi['documentColors']> {
+	async documentColors(params: Parameters<ILanguageApi['documentColors']>[0]): ReturnType<ILanguageApi['documentColors']> {
 		this.documentColorRequests.push(params);
 		if (this.documentColorsError) throw this.documentColorsError;
 		return {
@@ -1499,15 +1338,11 @@ class FakeLanguageApi implements ILanguageApi {
 			colors: [{ range: DTO_RANGE, color: { red: 255, green: 128, blue: 0, alpha: 255 } }],
 		};
 	}
-	async colorPresentations(
-		params: Parameters<ILanguageApi['colorPresentations']>[0],
-	): ReturnType<ILanguageApi['colorPresentations']> {
+	async colorPresentations(params: Parameters<ILanguageApi['colorPresentations']>[0]): ReturnType<ILanguageApi['colorPresentations']> {
 		this.colorPresentationRequests.push(params);
 		return { revision: params.document.revision, presentations: [] };
 	}
-	async foldingRanges(
-		params: Parameters<ILanguageApi['foldingRanges']>[0],
-	): ReturnType<ILanguageApi['foldingRanges']> {
+	async foldingRanges(params: Parameters<ILanguageApi['foldingRanges']>[0]): ReturnType<ILanguageApi['foldingRanges']> {
 		return { revision: params.document.revision, ranges: [] };
 	}
 
@@ -1523,14 +1358,10 @@ class FakeLanguageApi implements ILanguageApi {
 		return { revision: params.document.revision, entries: [] };
 	}
 
-	async directorySymbols(
-		params: Parameters<ILanguageApi['directorySymbols']>[0],
-	): ReturnType<ILanguageApi['directorySymbols']> {
+	async directorySymbols(params: Parameters<ILanguageApi['directorySymbols']>[0]): ReturnType<ILanguageApi['directorySymbols']> {
 		this.workspaceSymbolLanguages.push(params.languageId);
 		return {
-			symbols: [
-				{ name: 'answer', symbolKind: 12, containerName: 'demo', path: 'src/with space.ts', range: DTO_RANGE },
-			],
+			symbols: [{ name: 'answer', symbolKind: 12, containerName: 'demo', path: 'src/with space.ts', range: DTO_RANGE }],
 		};
 	}
 
@@ -1642,11 +1473,7 @@ test('negotiated triggers replace registrations and dynamic removal drops obsole
 	const events = new FakeServerEvents();
 	using providers = createProviders(languages, new FakeLanguageApi(), workspace, { events });
 	await tick();
-	const notify = (
-		completionTriggerCharacters: string[],
-		signatureHelpTriggerCharacters: string[],
-		signatureHelpRetriggerCharacters: string[],
-	) =>
+	const notify = (completionTriggerCharacters: string[], signatureHelpTriggerCharacters: string[], signatureHelpRetriggerCharacters: string[]) =>
 		events.fire({
 			method: 'language/serverCapabilities',
 			params: {
@@ -1661,20 +1488,14 @@ test('negotiated triggers replace registrations and dynamic removal drops obsole
 		});
 	notify(['\\', '='], ['['], [']']);
 	await tick();
-	assert.deepEqual(languages.completionProvider.getProvider('ash.appServer.completions')!.triggerCharacters, [
-		'\\',
-		'=',
-	]);
+	assert.deepEqual(languages.completionProvider.getProvider('ash.appServer.completions')!.triggerCharacters, ['\\', '=']);
 	using model = new TextModel('value', { languageId: 'rust', resource: URI.file('/project/main.rs') });
 	const signature = languages.signatureHelpProvider.ordered(model)[0]!;
 	assert.deepEqual(signature.signatureHelpTriggerCharacters, ['[']);
 	assert.deepEqual(signature.signatureHelpRetriggerCharacters, [']']);
 	events.fire({ method: 'config/changed', params: { revision: 2, generation: 2 } });
 	await tick();
-	assert.deepEqual(languages.completionProvider.getProvider('ash.appServer.completions')!.triggerCharacters, [
-		'\\',
-		'=',
-	]);
+	assert.deepEqual(languages.completionProvider.getProvider('ash.appServer.completions')!.triggerCharacters, ['\\', '=']);
 	notify(['='], [], []);
 	await tick();
 	assert.deepEqual(languages.completionProvider.getProvider('ash.appServer.completions')!.triggerCharacters, ['=']);
@@ -1731,30 +1552,15 @@ test('document colors require negotiated support in the exact directory and reti
 	assert.equal(languages.colorProvider.has(history), false);
 	const provider = languages.colorProvider.ordered(first)[0]!;
 	const colors = await provider.provideDocumentColors(request(first), signal);
-	assert.deepEqual(colors, [
-		{ range: new Range(1, 1, 1, 6), color: { red: 1, green: 128 / 255, blue: 0, alpha: 1 } },
-	]);
-	await provider.provideColorPresentations(
-		{ ...request(first), range: new Range(1, 1, 1, 2), color: colors![0]!.color },
-		signal,
-	);
+	assert.deepEqual(colors, [{ range: new Range(1, 1, 1, 6), color: { red: 1, green: 128 / 255, blue: 0, alpha: 1 } }]);
+	await provider.provideColorPresentations({ ...request(first), range: new Range(1, 1, 1, 2), color: colors![0]!.color }, signal);
 	assert.equal(api.documentColorRequests[0]!.document.dirId, 'first');
 	assert.equal(api.colorPresentationRequests.length, 1);
 	assert.deepEqual(await provider.provideDocumentColors(request(second), signal), []);
 	assert.equal(api.documentColorRequests.length, 1, 'another directory must not reach the RPC');
 	notify('first', false);
-	assert.deepEqual(
-		await provider.provideDocumentColors(request(first), signal),
-		[],
-		'revocation also applies to retained adapters before refresh',
-	);
-	assert.deepEqual(
-		await provider.provideColorPresentations(
-			{ ...request(first), range: new Range(1, 1, 1, 2), color: colors![0]!.color },
-			signal,
-		),
-		[],
-	);
+	assert.deepEqual(await provider.provideDocumentColors(request(first), signal), [], 'revocation also applies to retained adapters before refresh');
+	assert.deepEqual(await provider.provideColorPresentations({ ...request(first), range: new Range(1, 1, 1, 2), color: colors![0]!.color }, signal), []);
 	await tick();
 	assert.equal(languages.colorProvider.has(first), false);
 	notify('first', true);
@@ -1804,13 +1610,7 @@ test('a negotiated color provider preserves real language request errors', async
 	const signal = new AbortController().signal;
 	api.documentColorsError = new Error('LanguageRequestFailed');
 	await assert.rejects(
-		async () =>
-			languages.colorProvider
-				.ordered(model)[0]!
-				.provideDocumentColors(
-					{ ...createLanguageFeatureRequest(model, model.getLanguageId(), signal), resource: model.uri },
-					signal,
-				),
+		async () => languages.colorProvider.ordered(model)[0]!.provideDocumentColors({ ...createLanguageFeatureRequest(model, model.getLanguageId(), signal), resource: model.uri }, signal),
 		api.documentColorsError,
 	);
 });

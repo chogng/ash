@@ -1,11 +1,6 @@
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import {
-	IProgressService,
-	ProgressLocation,
-	type IProgress,
-	type IProgressStep,
-} from '../../../../platform/progress/common/progress.js';
+import { IProgressService, ProgressLocation, type IProgress, type IProgressStep } from '../../../../platform/progress/common/progress.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IDebugService, type IDebugSession } from '../common/debug.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';

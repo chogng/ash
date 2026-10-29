@@ -11,11 +11,7 @@ import { registerEditorPane } from '../../../browser/editor.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import {
-	Severity,
-	INotificationService,
-	type INotificationHandle,
-} from '../../../../platform/notification/common/notification.js';
+import { Severity, INotificationService, type INotificationHandle } from '../../../../platform/notification/common/notification.js';
 import { IUpdateService, type UpdateCheckResult } from '../../../../platform/update/common/updateService.js';
 import { IBrowserWorkbenchEnvironmentService } from '../../../services/environment/browser/environmentService.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
@@ -26,8 +22,7 @@ registerEditorPane({
 	get name() {
 		return localize('releaseNotes.title', 'Release Notes');
 	},
-	canOpen: input =>
-		input.resource.toString() === releaseNotesResource ? EditorPaneMatch.Default : EditorPaneMatch.None,
+	canOpen: input => (input.resource.toString() === releaseNotesResource ? EditorPaneMatch.Default : EditorPaneMatch.None),
 	create: options => {
 		if (!options.instantiationService) throw new Error('Release notes require Workbench services');
 		return options.instantiationService.createInstance(new SyncDescriptor(ReleaseNotesEditor));
@@ -47,14 +42,12 @@ registerAction2(
 			});
 		}
 		override async run(services: ServicesAccessor): Promise<void> {
-			await services
-				.get(IEditorService)
-				.openEditor({
-					resource: URI.parse(releaseNotesResource),
-					label: localize('releaseNotes.title', 'Release Notes'),
-					readOnly: true,
-					showBreadcrumbs: false,
-				});
+			await services.get(IEditorService).openEditor({
+				resource: URI.parse(releaseNotesResource),
+				label: localize('releaseNotes.title', 'Release Notes'),
+				readOnly: true,
+				showBreadcrumbs: false,
+			});
 		}
 	},
 );
@@ -68,11 +61,7 @@ function clearWebUpdateNotifications(notifications: INotificationService): void 
 	handle?.close();
 }
 
-function showWebUpdate(
-	notifications: INotificationService,
-	update: IUpdateService,
-	result: UpdateCheckResult,
-): boolean {
+function showWebUpdate(notifications: INotificationService, update: IUpdateService, result: UpdateCheckResult): boolean {
 	clearWebUpdateNotifications(notifications);
 	if (result.status !== 'available') return false;
 	const handle = notifications.notify({
@@ -91,9 +80,7 @@ function showWebUpdate(
 						} catch (error) {
 							if (isCancellationError(error)) return;
 							console.error('Web update reload failed', error);
-							notifications.error(
-								localize('update.webReloadFailed', 'Could not reload Ash to apply the update.'),
-							);
+							notifications.error(localize('update.webReloadFailed', 'Could not reload Ash to apply the update.'));
 						}
 					},
 				},
@@ -129,8 +116,7 @@ if (isWeb) {
 				});
 				try {
 					const result = await update.checkForUpdates();
-					if (!showWebUpdate(notifications, update, result))
-						notifications.info(localize('update.webCurrent', 'Ash is up to date.'));
+					if (!showWebUpdate(notifications, update, result)) notifications.info(localize('update.webCurrent', 'Ash is up to date.'));
 				} catch (error) {
 					if (isCancellationError(error)) return;
 					console.error('Web update check failed', error);

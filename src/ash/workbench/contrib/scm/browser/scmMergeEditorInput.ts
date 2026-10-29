@@ -1,10 +1,6 @@
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import { URI } from '../../../../base/common/uri.js';
-import {
-	EditorInputSerializers,
-	requireRecord,
-	requireString,
-} from '../../../services/editor/common/editorInputSerializer.js';
+import { EditorInputSerializers, requireRecord, requireString } from '../../../services/editor/common/editorInputSerializer.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 
 export const SCM_MERGE_EDITOR_ID = 'ash.editor.scmMerge';
@@ -17,12 +13,7 @@ export interface ScmMergeEditorInput extends IResourceEditorInput {
 	readonly resultResource: URI;
 }
 
-export function createScmMergeEditorInput(
-	repositoryId: string,
-	path: string,
-	resource: URI,
-	resultResource: URI,
-): ScmMergeEditorInput {
+export function createScmMergeEditorInput(repositoryId: string, path: string, resource: URI, resultResource: URI): ScmMergeEditorInput {
 	return {
 		resource,
 		contentType,

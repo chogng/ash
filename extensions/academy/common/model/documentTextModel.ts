@@ -6,13 +6,7 @@ import type { DocumentHistoryEntries } from './documentHistory.js';
 import type { DocumentPluginKey } from './documentPlugin.js';
 import type { DocumentSchema } from './documentSchema.js';
 import type { DocumentTransaction } from './documentTransaction.js';
-import {
-	TextModelBlockState,
-	TextModelRemoteHistoryPolicy,
-	type TextModelBlockChange,
-	type TextModelBlockOptions,
-	type TextModelPluginDecorationSource,
-} from './textModelBlockState.js';
+import { TextModelBlockState, TextModelRemoteHistoryPolicy, type TextModelBlockChange, type TextModelBlockOptions, type TextModelPluginDecorationSource } from './textModelBlockState.js';
 import { projectDocumentToLines } from './lineDocumentProjection.js';
 
 /** Academy's semantic transaction owner over the shared text buffer and version. */
@@ -35,11 +29,7 @@ export class DocumentTextModel extends TextModel {
 		}
 	}
 
-	static create(
-		schema: DocumentSchema,
-		document = schema.createDocument(),
-		options: TextModelBlockOptions = {},
-	): DocumentTextModel {
+	static create(schema: DocumentSchema, document = schema.createDocument(), options: TextModelBlockOptions = {}): DocumentTextModel {
 		return new DocumentTextModel(schema, document, options);
 	}
 
@@ -87,10 +77,7 @@ export class DocumentTextModel extends TextModel {
 		return this.blockState.dispatch(transaction);
 	}
 
-	dispatchRemote(
-		transaction: DocumentTransaction,
-		historyPolicy: TextModelRemoteHistoryPolicy = TextModelRemoteHistoryPolicy.Clear,
-	): TextModelBlockChange | undefined {
+	dispatchRemote(transaction: DocumentTransaction, historyPolicy: TextModelRemoteHistoryPolicy = TextModelRemoteHistoryPolicy.Clear): TextModelBlockChange | undefined {
 		return this.blockState.dispatchRemote(transaction, historyPolicy);
 	}
 

@@ -4,11 +4,7 @@ import { type IBracketPairsTextModelPart } from '../../../common/textModelBracke
 import { Range } from '../../../common/core/range.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import {
-	EditorAction,
-	registerEditorAction,
-	type ServicesAccessor,
-} from '../../../browser/editorFeatureRegistration.js';
+import { EditorAction, registerEditorAction, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
@@ -53,9 +49,7 @@ export class BracketMatchingController extends Disposable {
 		const ranges = new Map<string, Range>();
 		for (const selection of this.editor.getSelections()!) {
 			if (!selection.isEmpty()) continue;
-			const match =
-				this.bracketPairs.matchBracket(selection.getPosition()) ??
-				(this.mode === 'always' ? this.bracketPairs.findEnclosingBrackets(selection.getPosition()) : undefined);
+			const match = this.bracketPairs.matchBracket(selection.getPosition()) ?? (this.mode === 'always' ? this.bracketPairs.findEnclosingBrackets(selection.getPosition()) : undefined);
 			if (!match) continue;
 			ranges.set(rangeKey(match[0]), match[0]);
 			ranges.set(rangeKey(match[1]), match[1]);

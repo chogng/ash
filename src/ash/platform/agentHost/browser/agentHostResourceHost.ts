@@ -6,10 +6,7 @@ import type { AppServerProtocolClient } from './appServerProtocolClient.js';
 import { APP_SERVER_SERVER_REQUESTS } from '../../../../../.build/protocol/typescript/index.js';
 
 /** Wire access is scoped by the client which owns these handlers, never by a caller-supplied host name. */
-export function registerAgentHostResourceHost(
-	client: AppServerProtocolClient,
-	snapshots: IAgentHostResourceService,
-): IDisposable {
+export function registerAgentHostResourceHost(client: AppServerProtocolClient, snapshots: IAgentHostResourceService): IDisposable {
 	const lifetime = new DisposableStore();
 	try {
 		lifetime.add(

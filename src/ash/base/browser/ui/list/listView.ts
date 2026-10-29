@@ -8,12 +8,7 @@ import { isFiniteNumber } from '../../../common/numbers.js';
 import { disposableWindowTimeout, scheduleAtNextAnimationFrame } from '../../scheduler.js';
 import { observeResize } from '../../observer.js';
 import { setAriaAttribute, setRole } from '../aria/aria.js';
-import {
-	DndCssClasses,
-	DragAndDropDataKind,
-	type DragAndDropData,
-	type DragAndDropDataKind as DragDataKind,
-} from '../dnd/dnd.js';
+import { DndCssClasses, DragAndDropDataKind, type DragAndDropData, type DragAndDropDataKind as DragDataKind } from '../dnd/dnd.js';
 import { ScrollableElement } from '../scrollbar/scrollableElement.js';
 import { RangeMap } from './rangeMap.js';
 import { RowCache, type IRow } from './rowCache.js';
@@ -90,17 +85,9 @@ export class ListView<T> extends Disposable {
 		this.spliceable = new CombinedSpliceable([
 			{
 				splice: (start, deleteCount, inserted) => {
-					this._items = [
-						...this._items.slice(0, start),
-						...inserted.map(entry => entry.item),
-						...this._items.slice(start + deleteCount),
-					];
+					this._items = [...this._items.slice(0, start), ...inserted.map(entry => entry.item), ...this._items.slice(start + deleteCount)];
 					this.itemIds = options.getId
-						? [
-								...this.itemIds.slice(0, start),
-								...inserted.map(entry => entry.id),
-								...this.itemIds.slice(start + deleteCount),
-							]
+						? [...this.itemIds.slice(0, start), ...inserted.map(entry => entry.id), ...this.itemIds.slice(start + deleteCount)]
 						: this._items.map((_item, index) => String(index));
 				},
 			},
@@ -135,14 +122,11 @@ export class ListView<T> extends Disposable {
 			},
 			disposeTemplate: row => row.replaceChildren(),
 		};
-		this.rowCache = this._register(
-			new RowCache(new Map([[this.renderer.templateId, this.renderer]]), ownerDocument),
-		);
+		this.rowCache = this._register(new RowCache(new Map([[this.renderer.templateId, this.renderer]]), ownerDocument));
 		setRole(this.element, options.role ?? 'listbox');
 		if (options.ariaLabel) setAriaAttribute(this.element, 'label', options.ariaLabel);
 		if (options.domFocusable === true) this.element.tabIndex = 0;
-		this.element.style.overflow =
-			options.scrolling === 'external' || options.scrolling === 'managed' ? 'visible' : 'auto';
+		this.element.style.overflow = options.scrolling === 'external' || options.scrolling === 'managed' ? 'visible' : 'auto';
 		if (options.scrolling === 'managed') {
 			if (options.getHeight) this.element.style.position = 'relative';
 			this.scrollable = this._register(
@@ -174,10 +158,7 @@ export class ListView<T> extends Disposable {
 					this._onDidScroll.fire(event.current.top);
 				}),
 			);
-		else
-			this._register(
-				addDisposableListener(this.element, 'scroll', () => this._onDidScroll.fire(this.element.scrollTop)),
-			);
+		else this._register(addDisposableListener(this.element, 'scroll', () => this._onDidScroll.fire(this.element.scrollTop)));
 		if (this.scrollable)
 			this._register(
 				observeResize([this.domNode], () => {
@@ -185,13 +166,11 @@ export class ListView<T> extends Disposable {
 					this.renderRows('viewport');
 				}),
 			);
-		if (options.dnd)
-			this._register(new ListViewDragAndDrop(this, options.dnd, options.getDragElements ?? (item => [item])));
+		if (options.dnd) this._register(new ListViewDragAndDrop(this, options.dnd, options.getDragElements ?? (item => [item])));
 	}
 
 	updateOptions(options: Pick<ListViewOptions<T>, 'smoothScrolling'>): void {
-		if (options.smoothScrolling !== undefined)
-			this.scrollable?.updateOptions({ mouseWheelSmoothScroll: options.smoothScrolling });
+		if (options.smoothScrolling !== undefined) this.scrollable?.updateOptions({ mouseWheelSmoothScroll: options.smoothScrolling });
 	}
 
 	get items(): readonly T[] {
@@ -225,9 +204,7 @@ export class ListView<T> extends Disposable {
 		const deleted = this._items.slice(start, start + boundedDeleteCount);
 		const getId = this.options.getId;
 		const insertedIds = getId ? elements.map(getId) : [];
-		const nextIds = getId
-			? [...this.itemIds.slice(0, start), ...insertedIds, ...this.itemIds.slice(deleteEnd)]
-			: [];
+		const nextIds = getId ? [...this.itemIds.slice(0, start), ...insertedIds, ...this.itemIds.slice(deleteEnd)] : [];
 
 		if (getId) {
 			if (insertedIds.length > 0) {
@@ -329,8 +306,7 @@ export class ListView<T> extends Disposable {
 					this.updateRowHeight(row, item, itemId);
 				} else if (this.options.getHeight) {
 					// Reuse the splice's measured geometry; retained items can change height too.
-					const bottom =
-						index + 1 === this.rangeMap.count ? this.rangeMap.size : this.rangeMap.positionAt(index + 1);
+					const bottom = index + 1 === this.rangeMap.count ? this.rangeMap.size : this.rangeMap.positionAt(index + 1);
 					const height = `${bottom - this.rangeMap.positionAt(index)}px`;
 					if (row.style.height !== height) row.style.height = height;
 				}
@@ -499,14 +475,9 @@ export class ListView<T> extends Disposable {
 		const top = this.getElementTop(index);
 		const bottom = top + this.getElementHeight(index);
 		const viewport = this.scrollable.state;
-		if (relativeTop !== undefined)
-			this.scrollable.scrollTo(
-				viewport.left,
-				top - relativeTop * (viewport.height - this.getElementHeight(index)),
-			);
+		if (relativeTop !== undefined) this.scrollable.scrollTo(viewport.left, top - relativeTop * (viewport.height - this.getElementHeight(index)));
 		else if (top < viewport.top) this.scrollable.scrollTo(viewport.left, top);
-		else if (bottom > viewport.top + viewport.height)
-			this.scrollable.scrollTo(viewport.left, bottom - viewport.height);
+		else if (bottom > viewport.top + viewport.height) this.scrollable.scrollTo(viewport.left, bottom - viewport.height);
 	}
 
 	get scrollElement(): HTMLElement {
@@ -548,8 +519,7 @@ export class ListView<T> extends Disposable {
 		if (this._items.length === 0) return 0;
 		if (!this.isVirtualized) {
 			let top = 0;
-			for (let current = 0; current < index && current < this._items.length; current += 1)
-				top += this.getElementHeight(current);
+			for (let current = 0; current < index && current < this._items.length; current += 1) top += this.getElementHeight(current);
 			return top;
 		}
 		if (index >= this._items.length) return this.rangeMap.size;
@@ -559,8 +529,7 @@ export class ListView<T> extends Disposable {
 	getElementHeight(index: number): number {
 		const item = this._items[index];
 		if (item === undefined) return 0;
-		const configured =
-			this.heightOverrides.get(this.itemIds[index]!) ?? normalizeHeight(this.options.getHeight?.(item));
+		const configured = this.heightOverrides.get(this.itemIds[index]!) ?? normalizeHeight(this.options.getHeight?.(item));
 		if (configured !== undefined) return configured;
 		const measured = this.row(index)?.getBoundingClientRect().height;
 		return measured !== undefined && measured > 0 ? measured : DefaultRowHeight;
@@ -580,11 +549,7 @@ export class ListView<T> extends Disposable {
 	}
 
 	private itemHeight(item: T, index: number): number {
-		return (
-			this.heightOverrides.get(this.itemIds[index]!) ??
-			normalizeHeight(this.options.getHeight?.(item)) ??
-			DefaultRowHeight
-		);
+		return this.heightOverrides.get(this.itemIds[index]!) ?? normalizeHeight(this.options.getHeight?.(item)) ?? DefaultRowHeight;
 	}
 	private get isVirtualized(): boolean {
 		return this.scrollable !== undefined && this.options.getHeight !== undefined;
@@ -679,10 +644,7 @@ class ListViewDragAndDrop<T> extends Disposable {
 		}
 		event.preventDefault();
 		if (event.dataTransfer) event.dataTransfer.dropEffect = reaction.effect ?? 'move';
-		this.applyFeedback(
-			reaction.feedback ?? (index === undefined ? [-1] : [index]),
-			reaction.position ?? ListDragOverPosition.Over,
-		);
+		this.applyFeedback(reaction.feedback ?? (index === undefined ? [-1] : [index]), reaction.position ?? ListDragOverPosition.Over);
 		this.updateAutoScroll(event);
 	}
 
@@ -725,13 +687,7 @@ class ListViewDragAndDrop<T> extends Disposable {
 		event.preventDefault();
 		data.update(event.dataTransfer);
 		const index = this.view.getRowIndex(event);
-		this.dnd.drop(
-			data,
-			index === undefined ? undefined : this.view.items[index],
-			index,
-			this.targetSector(event, index),
-			event,
-		);
+		this.dnd.drop(data, index === undefined ? undefined : this.view.items[index], index, this.targetSector(event, index), event);
 		this.resetDropTarget();
 		activeListDragSession = undefined;
 	}
@@ -750,12 +706,7 @@ class ListViewDragAndDrop<T> extends Disposable {
 		if (!this.currentData) {
 			const active = activeListDragSession;
 			this.currentData = active
-				? new MutableElementDragAndDropData(
-						DragAndDropDataKind.External,
-						active.data.elements as readonly T[],
-						active.data.types,
-						active.data.files,
-					)
+				? new MutableElementDragAndDropData(DragAndDropDataKind.External, active.data.elements as readonly T[], active.data.types, active.data.files)
 				: new MutableNativeDragAndDropData<T>();
 		}
 		this.currentData.update(dataTransfer);
@@ -777,18 +728,10 @@ class ListViewDragAndDrop<T> extends Disposable {
 
 	private applyFeedback(indexes: readonly number[], position: DragOverPosition): void {
 		const length = this.view.items.length;
-		let normalized = [...new Set(indexes)]
-			.filter(index => index >= -1 && index < length)
-			.sort((left, right) => left - right);
+		let normalized = [...new Set(indexes)].filter(index => index >= -1 && index < length).sort((left, right) => left - right);
 		if (normalized.includes(-1)) normalized = [-1];
-		if (normalized.length > 1 && position !== ListDragOverPosition.Over)
-			throw new TypeError('Multiple List drag feedback rows require the over position');
-		if (
-			position === ListDragOverPosition.After &&
-			normalized.length === 1 &&
-			normalized[0] !== -1 &&
-			normalized[0]! < length - 1
-		) {
+		if (normalized.length > 1 && position !== ListDragOverPosition.Over) throw new TypeError('Multiple List drag feedback rows require the over position');
+		if (position === ListDragOverPosition.After && normalized.length === 1 && normalized[0] !== -1 && normalized[0]! < length - 1) {
 			normalized = [normalized[0]! + 1];
 			position = ListDragOverPosition.Before;
 		}

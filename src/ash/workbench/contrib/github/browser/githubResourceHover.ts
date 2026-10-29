@@ -4,17 +4,8 @@ import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { renderAsPlaintext } from '../../../../base/browser/markdownRenderer.js';
 import { DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import type {
-	ILinkPresentation,
-	ILinkPresentationStatus,
-} from '../../../../platform/dataChannel/common/dataChannel.js';
-import type {
-	GitHubChecks,
-	GitHubCommit,
-	GitHubIssueDetails,
-	GitHubPullRequest,
-	GitHubRepositoryInfo,
-} from '../../../../platform/github/common/githubService.js';
+import type { ILinkPresentation, ILinkPresentationStatus } from '../../../../platform/dataChannel/common/dataChannel.js';
+import type { GitHubChecks, GitHubCommit, GitHubIssueDetails, GitHubPullRequest, GitHubRepositoryInfo } from '../../../../platform/github/common/githubService.js';
 import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 import { computeIssueIcon } from '../../../common/chatIssue.js';
 import { computePullRequestIcon, type ChatPullRequestState } from '../../../common/chatPullRequest.js';
@@ -84,9 +75,7 @@ export class GitHubResourcePresentation implements ILinkPresentation {
 	}
 }
 
-export function createRepositoryResourceHover(
-	data: ResourceHoverData & { readonly repository: GitHubRepositoryInfo },
-): IGitHubResourceHover {
+export function createRepositoryResourceHover(data: ResourceHoverData & { readonly repository: GitHubRepositoryInfo }): IGitHubResourceHover {
 	return resourceHover(
 		data,
 		data.repository.fullName,
@@ -97,13 +86,7 @@ export function createRepositoryResourceHover(
 }
 
 export function createIssueResourceHover(data: IIssueResourceHoverData): IGitHubResourceHover {
-	const card = resourceHover(
-		data,
-		data.issue.title,
-		`#${data.number}`,
-		getIssueResourceStatus(data.issue).label,
-		data.issue.body,
-	);
+	const card = resourceHover(data, data.issue.title, `#${data.number}`, getIssueResourceStatus(data.issue).label, data.issue.body);
 	const icon = computeIssueIcon(data.issue.state, data.issue.stateReason);
 	const status = card.element.querySelector<HTMLElement>('.ash-github-hover-metadata')!;
 	const glyph = appendIcon(icon, status);
@@ -123,31 +106,17 @@ export function createPullRequestResourceHover(data: IPullRequestResourceHoverDa
 	glyph.style.color = `var(${colorCssVariable(icon.color!.id)})`;
 	const branches = $('.ash-github-hover-branches');
 	card.element.append(branches);
-	const base = hoverLink(
-		branches,
-		data.pullRequest.baseBranch,
-		`${data.repositoryHref}/tree/${encodeURIComponent(data.pullRequest.baseBranch)}`,
-		data.onDidClickBaseBranch,
-		card,
-	);
+	const base = hoverLink(branches, data.pullRequest.baseBranch, `${data.repositoryHref}/tree/${encodeURIComponent(data.pullRequest.baseBranch)}`, data.onDidClickBaseBranch, card);
 	branches.append($('span', undefined, '←'));
 	card.tabbableElements.push(base);
 	if (data.headBranchLink) {
-		const head = hoverLink(
-			branches,
-			data.pullRequest.headBranch,
-			data.headBranchLink.href,
-			data.headBranchLink.onClick,
-			card,
-		);
+		const head = hoverLink(branches, data.pullRequest.headBranch, data.headBranchLink.href, data.headBranchLink.onClick, card);
 		card.tabbableElements.push(head);
 	} else {
 		branches.append($('span', undefined, data.pullRequest.headBranch));
 	}
 	if (data.checksStatus) {
-		card.element.append(
-			$('span.ash-github-hover-metadata', undefined, getPullRequestChecksStatusLabel(data.checksStatus)),
-		);
+		card.element.append($('span.ash-github-hover-metadata', undefined, getPullRequestChecksStatusLabel(data.checksStatus)));
 	}
 	card.element.dataset.githubContent += `\n\n${data.pullRequest.baseBranch} ← ${data.pullRequest.headBranch}${data.checksStatus ? `\n${getPullRequestChecksStatusLabel(data.checksStatus)}` : ''}`;
 	return card;
@@ -156,13 +125,7 @@ export function createPullRequestResourceHover(data: IPullRequestResourceHoverDa
 export function createCommitResourceHover(data: ICommitResourceHoverData): IGitHubResourceHover {
 	const [title, ...body] = data.commit.message.split('\n');
 	const card = resourceHover(data, title, data.commit.sha.slice(0, 7), data.commit.author, body.join('\n'));
-	card.element.append(
-		$(
-			'span.ash-github-hover-metadata',
-			undefined,
-			`${data.commit.committedAt} · +${data.commit.additions} −${data.commit.deletions}`,
-		),
-	);
+	card.element.append($('span.ash-github-hover-metadata', undefined, `${data.commit.committedAt} · +${data.commit.additions} −${data.commit.deletions}`));
 	card.element.dataset.githubContent += `\n\n${data.commit.committedAt} · +${data.commit.additions} −${data.commit.deletions}`;
 	return card;
 }
@@ -180,9 +143,7 @@ export function getIssueResourceStatus(issue: GitHubIssueDetails): ILinkPresenta
 	return { kind: 'closed', label: localize('github.status.closed', 'Closed') };
 }
 
-export function getPullRequestResourceStatus(
-	pullRequest: GitHubPullRequest,
-): ILinkPresentationStatus & { readonly kind: ChatPullRequestState } {
+export function getPullRequestResourceStatus(pullRequest: GitHubPullRequest): ILinkPresentationStatus & { readonly kind: ChatPullRequestState } {
 	if (pullRequest.mergedAt) {
 		return { kind: 'merged', label: localize('github.status.merged', 'Merged') };
 	}
@@ -195,10 +156,7 @@ export function getPullRequestResourceStatus(
 	const label = localize('github.status.open', 'Open');
 	return {
 		kind: 'open',
-		label:
-			pullRequest.mergeable === false
-				? `${label} · ${localize('github.mergeConflicts', 'Merge conflicts')}`
-				: label,
+		label: pullRequest.mergeable === false ? `${label} · ${localize('github.mergeConflicts', 'Merge conflicts')}` : label,
 	};
 }
 
@@ -207,25 +165,15 @@ export function getPullRequestChecksStatus(checks: GitHubChecks | undefined): Gi
 		return undefined;
 	}
 	if (
-		checks.checks.some(check =>
-			['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure', 'stale'].includes(
-				check.conclusion!,
-			),
-		) ||
+		checks.checks.some(check => ['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure', 'stale'].includes(check.conclusion!)) ||
 		checks.statuses.some(status => status.state === 'failure' || status.state === 'error')
 	) {
 		return 'failure';
 	}
-	if (
-		checks.checks.some(check => check.status !== 'completed') ||
-		checks.statuses.some(status => status.state === 'pending' || status.state === 'expected')
-	) {
+	if (checks.checks.some(check => check.status !== 'completed') || checks.statuses.some(status => status.state === 'pending' || status.state === 'expected')) {
 		return 'pending';
 	}
-	return checks.checks.some(check => check.conclusion === 'success') ||
-		checks.statuses.some(status => status.state === 'success')
-		? 'success'
-		: 'neutral';
+	return checks.checks.some(check => check.conclusion === 'success') || checks.statuses.some(status => status.state === 'success') ? 'success' : 'neutral';
 }
 
 export function getPullRequestChecksStatusLabel(status: GitHubChecksStatus): string {
@@ -251,23 +199,11 @@ function resourceHover(
 	const store = new DisposableStore();
 	const element = $('.ash-github-resource-hover');
 	element.classList.toggle('compact', data.density === 'compact');
-	const repository = hoverLink(
-		element,
-		`${data.owner}/${data.repo}`,
-		data.repositoryHref,
-		data.onDidClickRepository,
-		store,
-	);
+	const repository = hoverLink(element, `${data.owner}/${data.repo}`, data.repositoryHref, data.onDidClickRepository, store);
 	repository.classList.add('ash-github-hover-repository');
 	const titleElement = $('.ash-github-hover-title');
 	element.append(titleElement);
-	const link = hoverLink(
-		titleElement,
-		`${title} · ${reference}`,
-		data.referenceHref,
-		data.onDidClickReference,
-		store,
-	);
+	const link = hoverLink(titleElement, `${title} · ${reference}`, data.referenceHref, data.onDidClickReference, store);
 	link.title = title;
 	element.append($('span.ash-github-hover-metadata', undefined, status));
 	const text = renderAsPlaintext(body);
@@ -276,19 +212,11 @@ function resourceHover(
 		description.textContent = [...text].length > 200 ? `${[...text].slice(0, 200).join('').trimEnd()}…` : text;
 		element.append(description);
 	}
-	element.dataset.githubContent = [`${data.owner}/${data.repo}`, `${title} · ${reference}`, status, text].join(
-		'\n\n',
-	);
+	element.dataset.githubContent = [`${data.owner}/${data.repo}`, `${title} · ${reference}`, status, text].join('\n\n');
 	return Object.assign(store, { element, tabbableElements: [repository, link] });
 }
 
-function hoverLink(
-	container: HTMLElement,
-	label: string,
-	href: string,
-	onClick: () => void,
-	store: DisposableStore,
-): HTMLAnchorElement {
+function hoverLink(container: HTMLElement, label: string, href: string, onClick: () => void, store: DisposableStore): HTMLAnchorElement {
 	const link = $('a.ash-github-hover-link') as HTMLAnchorElement;
 	link.href = href;
 	link.textContent = label;

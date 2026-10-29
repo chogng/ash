@@ -4,12 +4,7 @@ import { mock } from 'node:test';
 import { JSDOM } from 'jsdom';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { AccessibilityService } from '../../../../../platform/accessibility/browser/accessibilityService.js';
-import {
-	INotificationService,
-	NotificationPriority,
-	NotificationsFilter,
-	Severity,
-} from '../../../../../platform/notification/common/notification.js';
+import { INotificationService, NotificationPriority, NotificationsFilter, Severity } from '../../../../../platform/notification/common/notification.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import type { IAction, IRunEvent } from '../../../../../base/common/actions.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
@@ -24,10 +19,7 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../../pla
 import { BrowserStorageService } from '../../../storage/browser/storageService.js';
 import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import { StatusbarPart, StatusbarService } from '../../../../browser/parts/statusbar/statusbarPart.js';
-import {
-	INotificationsCenter,
-	NotificationsCenter,
-} from '../../../../browser/parts/notifications/notificationsCenter.js';
+import { INotificationsCenter, NotificationsCenter } from '../../../../browser/parts/notifications/notificationsCenter.js';
 import { NotificationActionRunner } from '../../../../browser/parts/notifications/notificationsCommands.js';
 import { CommandService } from '../../../commands/common/commandService.js';
 import { IStatusbarService, StatusbarAlignment } from '../../../statusbar/browser/statusbar.js';
@@ -48,11 +40,7 @@ import { MenuService } from '../../../../../platform/actions/common/menuService.
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { CopyNotificationMessageAction } from '../../../../browser/parts/notifications/notificationsActions.js';
-import type {
-	INativeContextMenuApi,
-	INativeContextMenuRequest,
-	INativeContextMenuResult,
-} from '../../../../../base/parts/contextmenu/common/contextmenu.js';
+import type { INativeContextMenuApi, INativeContextMenuRequest, INativeContextMenuResult } from '../../../../../base/parts/contextmenu/common/contextmenu.js';
 import { ElectronContextMenuService } from '../../../contextmenu/electron-browser/contextMenuService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -109,10 +97,7 @@ test('windows without a status bar keep toast actions and notification history w
 		assert.deepEqual(removed, [handleItem.id]);
 		center.show();
 		assert.equal(root.querySelectorAll('.ash-notifications-row').length, 1);
-		assert.equal(
-			root.querySelector('.ash-notifications-row .ash-notification-message')?.textContent,
-			'Keep this notification',
-		);
+		assert.equal(root.querySelector('.ash-notifications-row .ash-notification-message')?.textContent, 'Keep this notification');
 		root.querySelector<HTMLButtonElement>('.ash-notifications-clear')!.click();
 		assert.deepEqual(removed, [handleItem.id, retainedItem.id]);
 		assert.equal(service.model.getNotifications().length, 0);
@@ -145,8 +130,7 @@ test('clearing focused toasts moves to adjacent actions and returns to the previ
 			service.notify({ severity: Severity.Info, message: 'Third' }),
 		];
 		const handleItems = service.model.getNotifications();
-		const close = (index: number) =>
-			document.querySelector<HTMLButtonElement>(`[data-notification-close="${handleItems[index].id}"]`)!;
+		const close = (index: number) => document.querySelector<HTMLButtonElement>(`[data-notification-close="${handleItems[index].id}"]`)!;
 		const origin = document.querySelector<HTMLButtonElement>('#origin')!;
 		origin.focus();
 		close(1).focus();
@@ -167,12 +151,7 @@ test('toasts cap at three while history retains every notification', () => {
 	try {
 		using service = new TestNotificationService();
 		using runner = createNotificationActionRunner(service);
-		using presentation = new NotificationsPresentation(
-			browser.window.document.body,
-			browser.window.document.body,
-			service,
-			runner,
-		);
+		using presentation = new NotificationsPresentation(browser.window.document.body, browser.window.document.body, service, runner);
 		const center = presentation.center;
 		for (let index = 0; index < 4; index++) service.info(`Message ${index}`);
 		assert.equal(browser.window.document.querySelectorAll('.ash-notification').length, 3);
@@ -229,15 +208,10 @@ for (const control of ['action', 'remove'] as const) {
 			toastControl(document, focusedItem.id, control)!.focus();
 			const last = service.notify({ severity: Severity.Info, message: 'Fourth' });
 			const lastItem = service.model.getNotifications().at(-1)!;
-			assert.equal(
-				document.activeElement,
-				retained ? toastControl(document, focusedItem.id, control) : document.body,
-			);
+			assert.equal(document.activeElement, retained ? toastControl(document, focusedItem.id, control) : document.body);
 			assert.equal(toastControl(document, handleItems[0].id, 'remove'), undefined);
 			assert.deepEqual(
-				[...document.querySelectorAll<HTMLElement>('[data-notification-close]')].map(element =>
-					Number(element.dataset.notificationClose),
-				),
+				[...document.querySelectorAll<HTMLElement>('[data-notification-close]')].map(element => Number(element.dataset.notificationClose)),
 				[lastItem.id, handleItems[2].id, handleItems[1].id],
 			);
 			assert.deepEqual(
@@ -311,10 +285,7 @@ for (const dispose of [false, true]) {
 			} else center.show();
 		});
 		toastControl(document, firstItem.id, 'remove')!.click();
-		assert.equal(
-			document.activeElement,
-			dispose ? outside : (panel.querySelector('.ash-notifications-row') ?? panel),
-		);
+		assert.equal(document.activeElement, dispose ? outside : (panel.querySelector('.ash-notifications-row') ?? panel));
 		assert.equal(document.querySelectorAll('.ash-notification-host .ash-notification').length, 0);
 	});
 }
@@ -401,16 +372,12 @@ for (const control of ['action', 'remove'] as const) {
 		const next = service.notify({ severity: Severity.Info, message: 'Next' });
 		const nextItem = service.model.getNotifications().at(-1)!;
 		assert.deepEqual(
-			[...document.querySelectorAll<HTMLElement>('.ash-notification-host [data-notification-id]')].map(item =>
-				Number(item.dataset.notificationId),
-			),
+			[...document.querySelectorAll<HTMLElement>('.ash-notification-host [data-notification-id]')].map(item => Number(item.dataset.notificationId)),
 			[nextItem.id],
 		);
 		center.show();
 		assert.deepEqual(
-			[...panel.querySelectorAll<HTMLElement>('[data-notification-id]')].map(item =>
-				Number(item.dataset.notificationId),
-			),
+			[...panel.querySelectorAll<HTMLElement>('[data-notification-id]')].map(item => Number(item.dataset.notificationId)),
 			[nextItem.id, secondItem.id, firstItem.id],
 		);
 		center.hide();
@@ -441,15 +408,7 @@ for (const control of ['action', 'remove'] as const) {
 		origin.focus();
 		const target = toastControl(document, handleItem.id, control)!;
 		target.focus();
-		for (const options of [
-			{ key: 'Enter' },
-			{ altKey: true },
-			{ ctrlKey: true },
-			{ metaKey: true },
-			{ shiftKey: true },
-			{ isComposing: true },
-			{ consumed: true },
-		]) {
+		for (const options of [{ key: 'Enter' }, { altKey: true }, { ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { isComposing: true }, { consumed: true }]) {
 			const escape = new document.defaultView!.KeyboardEvent('keydown', {
 				key: 'Escape',
 				bubbles: true,
@@ -466,15 +425,7 @@ for (const control of ['action', 'remove'] as const) {
 	});
 }
 
-for (const unavailable of [
-	'removed',
-	'hidden',
-	'hidden ancestor',
-	'inert',
-	'disabled',
-	'aria hidden',
-	'no visible layout',
-] as const) {
+for (const unavailable of ['removed', 'hidden', 'hidden ancestor', 'inert', 'disabled', 'aria hidden', 'no visible layout'] as const) {
 	test(`toast Escape keeps history without restoring a source that is ${unavailable}`, () => {
 		using fixture = new NotificationsFixture();
 		const { document, service, origin } = fixture;
@@ -495,9 +446,7 @@ for (const unavailable of [
 			parent.append(origin);
 			parent.hidden = true;
 		}
-		target.dispatchEvent(
-			new document.defaultView!.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
-		);
+		target.dispatchEvent(new document.defaultView!.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 		assert.equal(document.querySelectorAll('.ash-notification-host .ash-notification').length, 0);
 		assert.equal(document.activeElement, document.body);
 		assert.deepEqual(service.model.getNotifications(), [handleItem]);
@@ -527,10 +476,7 @@ for (const transition of ['outside', 'center', 'dispose'] as const) {
 			cancelable: true,
 		});
 		target.dispatchEvent(escape);
-		assert.equal(
-			document.activeElement,
-			transition === 'center' ? (panel.querySelector('.ash-notifications-row') ?? panel) : outside,
-		);
+		assert.equal(document.activeElement, transition === 'center' ? (panel.querySelector('.ash-notifications-row') ?? panel) : outside);
 		assert.equal(escape.defaultPrevented, false);
 		assert.deepEqual(service.model.getNotifications(), [handleItem]);
 	});
@@ -556,14 +502,9 @@ for (const transition of ['outside', 'center', 'dispose'] as const) {
 				outside.focus();
 			}
 		};
-		target.dispatchEvent(
-			new document.defaultView!.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
-		);
+		target.dispatchEvent(new document.defaultView!.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 		assert.equal(transitions, 1);
-		assert.equal(
-			document.activeElement,
-			transition === 'center' ? (panel.querySelector('.ash-notifications-row') ?? panel) : outside,
-		);
+		assert.equal(document.activeElement, transition === 'center' ? (panel.querySelector('.ash-notifications-row') ?? panel) : outside);
 		assert.equal(document.querySelectorAll('.ash-notification-host .ash-notification').length, 0);
 		assert.deepEqual(service.model.getNotifications(), [handleItem]);
 	});
@@ -597,7 +538,11 @@ test('toast Escape applies only to a currently focused toast control', () => {
 			toasts: document.querySelectorAll('.ash-notification-host .ash-notification').length,
 			history: service.model.getNotifications(),
 		},
-		{ consumed: [false, true], toasts: 0, history: [handleItem] },
+		{
+			consumed: [false, true],
+			toasts: 0,
+			history: [handleItem],
+		},
 	);
 });
 
@@ -607,10 +552,7 @@ test('notification accessibility help explains toast Escape and retained history
 	services.registerInstance(INotificationsCenter, fixture.center);
 	const implementation = AccessibleViewRegistry.getImplementations().find(item => item.name === 'notificationsHelp')!;
 	using provider = implementation.getProvider(services)!;
-	assert.match(
-		provider.provideContent(),
-		/When a notification toast or one of its actions has focus, press Escape to hide the toasts without removing them from history\./,
-	);
+	assert.match(provider.provideContent(), /When a notification toast or one of its actions has focus, press Escape to hide the toasts without removing them from history\./);
 	assert.match(provider.provideContent(), /Context Menu key or Shift\+F10, and choose Copy Text to copy its message/);
 	assert.match(provider.provideContent(), /Press Escape to close the menu and return to the notification/);
 });
@@ -634,18 +576,12 @@ test('notification arrivals are announced once even while the center hides toast
 	fixture.service.warn('Warning while the center is open');
 	fixture.service.error('Error while the center is open');
 	assert.deepEqual(fixture.presentation.statuses, ['Initial information']);
-	assert.deepEqual(fixture.presentation.alerts, [
-		'Warning while the center is open',
-		'Error while the center is open',
-	]);
+	assert.deepEqual(fixture.presentation.alerts, ['Warning while the center is open', 'Error while the center is open']);
 	assert.equal(fixture.document.querySelectorAll('.ash-notification').length, 0);
 	assert.equal(fixture.panel.querySelectorAll('[role="alert"], [role="status"]').length, 0);
 	fixture.center.dispose();
 	fixture.service.error('After disposal');
-	assert.deepEqual(fixture.presentation.alerts, [
-		'Warning while the center is open',
-		'Error while the center is open',
-	]);
+	assert.deepEqual(fixture.presentation.alerts, ['Warning while the center is open', 'Error while the center is open']);
 });
 
 test('status bell is present at startup and marks notifications read when the center opens', () => {
@@ -654,17 +590,9 @@ test('status bell is present at startup and marks notifications read when the ce
 		using service = new TestNotificationService();
 		using runner = createNotificationActionRunner(service);
 		using statusbar = new StatusbarService();
-		using presentation = new NotificationsPresentation(
-			browser.window.document.body,
-			browser.window.document.body,
-			service,
-			runner,
-			statusbar,
-		);
+		using presentation = new NotificationsPresentation(browser.window.document.body, browser.window.document.body, service, runner, statusbar);
 		const center = presentation.center;
-		const bell = () =>
-			statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === 'ash.status.notifications')?.entry
-				.icon;
+		const bell = () => statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === 'ash.status.notifications')?.entry.icon;
 		assert.equal(bell(), Lxicon.bell);
 		const handle = service.notify({ severity: Severity.Info, message: 'Saved' });
 		const handleItem = service.model.getNotifications().at(-1)!;
@@ -696,18 +624,14 @@ test('removing center rows keeps remaining records open and restores focus after
 	center.show();
 	const row = (id: number) => panel.querySelector<HTMLElement>(`[data-notification-id="${id}"]`)!;
 	row(secondItem.id).focus();
-	row(secondItem.id).dispatchEvent(
-		new document.defaultView!.KeyboardEvent('keydown', { key: 'Delete', bubbles: true }),
-	);
+	row(secondItem.id).dispatchEvent(new document.defaultView!.KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
 	assert.equal(panel.hidden, false);
 	assert.deepEqual(
 		service.model.getNotifications().map(item => item.id),
 		[firstItem.id],
 	);
 	assert.equal(document.activeElement, row(firstItem.id));
-	row(firstItem.id).dispatchEvent(
-		new document.defaultView!.KeyboardEvent('keydown', { key: 'Delete', bubbles: true }),
-	);
+	row(firstItem.id).dispatchEvent(new document.defaultView!.KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
 	assert.equal(panel.hidden, true);
 	assert.equal(document.activeElement, origin);
 	assert.deepEqual(service.model.getNotifications(), []);
@@ -744,10 +668,7 @@ for (const useCommand of [false, true]) {
 		using services = new InstantiationService();
 		services.registerInstance(INotificationsCenter, center);
 		using commands = new CommandService(services);
-		const handles = [
-			service.notify({ severity: Severity.Info, message: 'First' }),
-			service.notify({ severity: Severity.Info, message: 'Second' }),
-		];
+		const handles = [service.notify({ severity: Severity.Info, message: 'First' }), service.notify({ severity: Severity.Info, message: 'Second' })];
 		const handleItems = service.model.getNotifications();
 		const removed: number[] = [];
 		using listener = service.model.onDidRemove(item => removed.push(item.id));
@@ -786,10 +707,7 @@ test('an explicitly opened empty center stays open when a new notification arriv
 	const handle = service.notify({ severity: Severity.Info, message: 'Arrived while open' });
 	const handleItem = service.model.getNotifications().at(-1)!;
 	assert.equal(panel.hidden, false);
-	assert.equal(
-		panel.querySelector('[data-notification-id]')?.getAttribute('data-notification-id'),
-		String(handleItem.id),
-	);
+	assert.equal(panel.querySelector('[data-notification-id]')?.getAttribute('data-notification-id'), String(handleItem.id));
 	assert.equal(document.querySelectorAll('.ash-notification').length, 0);
 	assert.equal(document.activeElement, panel);
 	center.hide();
@@ -804,10 +722,7 @@ for (const addOnFocus of [false, true]) {
 	test(`Clear All keeps notifications added during ${addOnFocus ? 'focus restoration' : 'removal callbacks'} and a reopened center`, () => {
 		using fixture = new NotificationsFixture();
 		const { document, service, center, panel, origin } = fixture;
-		const handles = [
-			service.notify({ severity: Severity.Info, message: 'First' }),
-			service.notify({ severity: Severity.Info, message: 'Second' }),
-		];
+		const handles = [service.notify({ severity: Severity.Info, message: 'First' }), service.notify({ severity: Severity.Info, message: 'Second' })];
 		origin.focus();
 		center.show();
 		let added = false;
@@ -817,9 +732,7 @@ for (const addOnFocus of [false, true]) {
 			service.info('Arrived during clear');
 			center.show();
 		};
-		using listener = addOnFocus
-			? addDisposableListener(origin, 'focus', addNotification)
-			: service.model.onDidRemove(addNotification);
+		using listener = addOnFocus ? addDisposableListener(origin, 'focus', addNotification) : service.model.onDidRemove(addNotification);
 		center.clearAll();
 		assert.deepEqual(
 			service.model.getNotifications().map(item => item.message),
@@ -897,9 +810,7 @@ for (const clearAll of [false, true]) {
 		services.registerInstance(IStatusbarService, statusbar);
 		using part = services.createInstance(StatusbarPart, document.body);
 		document.body.append(part.domNode);
-		const origin = part.domNode.querySelector<HTMLElement>(
-			'[data-statusbar-item-id="ash.status.notifications"] .ash-statusbar-item-label',
-		)!;
+		const origin = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="ash.status.notifications"] .ash-statusbar-item-label')!;
 		const handle = service.notify({ severity: Severity.Info, message: 'Finished' });
 		const handleItem = service.model.getNotifications().at(-1)!;
 		if (clearAll) service.info('Also finished');
@@ -909,10 +820,7 @@ for (const clearAll of [false, true]) {
 		else handle.close();
 		assert.equal(panel.hidden, true);
 		assert.deepEqual(service.model.getNotifications(), []);
-		assert.equal(
-			part.domNode.querySelector('[data-statusbar-item-id="ash.status.notifications"] .ash-statusbar-item-label'),
-			origin,
-		);
+		assert.equal(part.domNode.querySelector('[data-statusbar-item-id="ash.status.notifications"] .ash-statusbar-item-label'), origin);
 		assert.equal(document.activeElement, origin);
 	});
 }
@@ -943,11 +851,7 @@ test('disposing the center leaves records owned by the service and ignores late 
 	const lateItem = service.model.getNotifications().at(-1)!;
 	handle.close();
 	assert.equal(panel.isConnected, false);
-	assert.equal(
-		document.querySelectorAll('.ash-notifications-center, .ash-notification-host, .ash-notifications-toggle')
-			.length,
-		0,
-	);
+	assert.equal(document.querySelectorAll('.ash-notifications-center, .ash-notification-host, .ash-notifications-toggle').length, 0);
 	assert.equal(document.activeElement, outside);
 	assert.deepEqual(
 		service.model.getNotifications().map(item => item.id),
@@ -967,26 +871,14 @@ class NotificationsFixture extends Disposable {
 
 	constructor(statusbar?: StatusbarService, systemMenu?: INativeContextMenuApi) {
 		super();
-		const browser = new JSDOM(
-			"<!doctype html><body><button id='origin'>Origin</button><button id='outside'>Outside</button></body>",
-			{ url: 'https://ash.test' },
-		);
+		const browser = new JSDOM("<!doctype html><body><button id='origin'>Origin</button><button id='outside'>Outside</button></body>", { url: 'https://ash.test' });
 		this._register(toDisposable(() => browser.window.close()));
 		this.document = browser.window.document;
 		this.origin = this.document.querySelector<HTMLButtonElement>('#origin')!;
 		this.outside = this.document.querySelector<HTMLButtonElement>('#outside')!;
 		this.service = this._register(new TestNotificationService());
 		this.runner = this._register(createNotificationActionRunner(this.service));
-		this.presentation = this._register(
-			new NotificationsPresentation(
-				this.document.body,
-				this.document.body,
-				this.service,
-				this.runner,
-				statusbar,
-				systemMenu,
-			),
-		);
+		this.presentation = this._register(new NotificationsPresentation(this.document.body, this.document.body, this.service, this.runner, statusbar, systemMenu));
 		this.center = this.presentation.center;
 		this.panel = this.document.querySelector<HTMLElement>('.ash-notifications-center')!;
 	}
@@ -1011,14 +903,7 @@ class NotificationsPresentation extends Disposable {
 		this.writes.push(text);
 	};
 
-	constructor(
-		root: HTMLElement,
-		toastContainer: HTMLElement,
-		service: TestNotificationService,
-		runner: NotificationActionRunner,
-		statusbar?: StatusbarService,
-		systemMenu?: INativeContextMenuApi,
-	) {
+	constructor(root: HTMLElement, toastContainer: HTMLElement, service: TestNotificationService, runner: NotificationActionRunner, statusbar?: StatusbarService, systemMenu?: INativeContextMenuApi) {
 		super();
 		const window = root.ownerDocument.defaultView!;
 		// Focus tests use immediate frames; the pending-toast suite drives cancellation explicitly.
@@ -1063,10 +948,7 @@ class NotificationsPresentation extends Disposable {
 		accessibility.alert = message => this.alerts.push(message);
 		accessibility.status = message => this.statuses.push(message);
 		this.services.registerInstance(IAccessibilityService, accessibility);
-		this.services.registerInstance(
-			IClipboardService,
-			this._register(new BrowserClipboardService({ writeText: text => this.writeText(text) } as Clipboard)),
-		);
+		this.services.registerInstance(IClipboardService, this._register(new BrowserClipboardService({ writeText: text => this.writeText(text) } as Clipboard)));
 		this.services.registerInstance(ICommandService, this._register(new CommandService(this.services)));
 		this.services.registerInstance(IMenuService, this.services.createInstance(MenuService));
 		this.views = this._register(new BrowserContextViewService(root));
@@ -1104,28 +986,11 @@ class NotificationsPresentation extends Disposable {
 				parse: value => value,
 			});
 		}
-		this.services.registerInstance(
-			IConfigurationService,
-			this._register(new InMemoryConfigurationService(registry)),
-		);
+		this.services.registerInstance(IConfigurationService, this._register(new InMemoryConfigurationService(registry)));
 		this.services.registerInstance(ILayoutService, this._register(new BrowserLayoutService({ root })));
-		this.menus = this._register(
-			systemMenu
-				? this.services.createInstance(ElectronContextMenuService, systemMenu)
-				: this.services.createInstance(BrowserContextMenuService),
-		);
+		this.menus = this._register(systemMenu ? this.services.createInstance(ElectronContextMenuService, systemMenu) : this.services.createInstance(BrowserContextMenuService));
 		this.services.registerInstance(IContextMenuService, this.menus);
-		this.center = this._register(
-			this.services.createInstance(
-				NotificationsCenter,
-				root,
-				service.model,
-				toastContainer,
-				runner,
-				statusbar,
-				undefined,
-			),
-		);
+		this.center = this._register(this.services.createInstance(NotificationsCenter, root, service.model, toastContainer, runner, statusbar, undefined));
 		this.services.registerInstance(INotificationsCenter, this.center);
 	}
 }
@@ -1136,11 +1001,7 @@ function createNotificationActionRunner(service: TestNotificationService): Notif
 	return services.createInstance(NotificationActionRunner);
 }
 
-function openCopyMenu(
-	fixture: NotificationsFixture,
-	id: number,
-	input: 'mouse' | 'ContextMenu' | 'Shift+F10' = 'ContextMenu',
-): HTMLElement {
+function openCopyMenu(fixture: NotificationsFixture, id: number, input: 'mouse' | 'ContextMenu' | 'Shift+F10' = 'ContextMenu'): HTMLElement {
 	const { document, center, panel } = fixture;
 	center.show();
 	const row = panel.querySelector<HTMLElement>(`[data-notification-id="${id}"]`)!;
@@ -1166,43 +1027,17 @@ function openCopyMenu(
 
 test('notification copying requires the clipboard registration and the center requires its window services', () => {
 	using services = new InstantiationService();
-	assert.throws(
-		() =>
-			services.createInstance(
-				CopyNotificationMessageAction,
-				CopyNotificationMessageAction.ID,
-				CopyNotificationMessageAction.LABEL,
-			),
-		/Unknown service: clipboardService/,
-	);
+	assert.throws(() => services.createInstance(CopyNotificationMessageAction, CopyNotificationMessageAction.ID, CopyNotificationMessageAction.LABEL), /Unknown service: clipboardService/);
 	using fixture = new NotificationsFixture();
 	assert.throws(
-		() =>
-			services.createInstance(
-				NotificationsCenter,
-				fixture.document.body,
-				fixture.service.model,
-				fixture.document.body,
-				fixture.runner,
-				undefined,
-				undefined,
-			),
+		() => services.createInstance(NotificationsCenter, fixture.document.body, fixture.service.model, fixture.document.body, fixture.runner, undefined, undefined),
 		/Unknown service: contextKeyService/,
 	);
 	using incomplete = new InstantiationService();
 	incomplete.registerInstance(INotificationService, fixture.service);
 	incomplete.registerInstance(IContextKeyService, fixture.presentation.services.get(IContextKeyService));
 	assert.throws(
-		() =>
-			incomplete.createInstance(
-				NotificationsCenter,
-				fixture.document.body,
-				fixture.service.model,
-				fixture.document.body,
-				fixture.runner,
-				undefined,
-				undefined,
-			),
+		() => incomplete.createInstance(NotificationsCenter, fixture.document.body, fixture.service.model, fixture.document.body, fixture.runner, undefined, undefined),
 		/Unknown service: contextMenuService/,
 	);
 });
@@ -1235,7 +1070,12 @@ for (const input of ['mouse', 'ContextMenu', 'Shift+F10'] as const) {
 				centerHidden: fixture.panel.hidden,
 				focused: fixture.document.activeElement,
 			},
-			{ writes: [message], history: [handleItem], centerHidden: false, focused: row },
+			{
+				writes: [message],
+				history: [handleItem],
+				centerHidden: false,
+				focused: row,
+			},
 		);
 	});
 }
@@ -1246,9 +1086,7 @@ test('Escape dismisses only the copy menu, returns to its row, and then closes t
 	const handleItem = fixture.service.model.getNotifications().at(-1)!;
 	fixture.origin.focus();
 	const row = openCopyMenu(fixture, handleItem.id);
-	fixture.document.activeElement!.dispatchEvent(
-		new fixture.document.defaultView!.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
-	);
+	fixture.document.activeElement!.dispatchEvent(new fixture.document.defaultView!.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 	assert.deepEqual(
 		{
 			menu: fixture.document.querySelector('[role="menu"]'),
@@ -1257,11 +1095,15 @@ test('Escape dismisses only the copy menu, returns to its row, and then closes t
 			writes: fixture.presentation.writes,
 			history: fixture.service.model.getNotifications(),
 		},
-		{ menu: null, centerHidden: false, focused: row, writes: [], history: [handleItem] },
+		{
+			menu: null,
+			centerHidden: false,
+			focused: row,
+			writes: [],
+			history: [handleItem],
+		},
 	);
-	row.dispatchEvent(
-		new fixture.document.defaultView!.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
-	);
+	row.dispatchEvent(new fixture.document.defaultView!.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 	assert.equal(fixture.panel.hidden, true);
 	assert.equal(fixture.document.activeElement, fixture.origin);
 });
@@ -1280,10 +1122,7 @@ for (const change of ['add', 'remove', 'hide', 'clear', 'dispose'] as const) {
 		else fixture.center.dispose();
 		menuItem.click();
 		await new Promise<void>(resolve => setImmediate(resolve));
-		assert.deepEqual(
-			{ menu: fixture.document.querySelector('[role="menu"]'), writes: fixture.presentation.writes },
-			{ menu: null, writes: [] },
-		);
+		assert.deepEqual({ menu: fixture.document.querySelector('[role="menu"]'), writes: fixture.presentation.writes }, { menu: null, writes: [] });
 	});
 }
 
@@ -1392,10 +1231,7 @@ test('window menu disposal suppresses late clipboard failure feedback without ca
 	fixture.presentation.dispose();
 	write.reject(new Error('Late clipboard failure'));
 	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.deepEqual(
-		{ writes: fixture.presentation.writes, history: fixture.service.model.getNotifications() },
-		{ writes: ['Original'], history: [handleItem] },
-	);
+	assert.deepEqual({ writes: fixture.presentation.writes, history: fixture.service.model.getNotifications() }, { writes: ['Original'], history: [handleItem] });
 });
 
 for (const change of ['add', 'remove', 'hide', 'clear', 'dispose'] as const) {
@@ -1425,10 +1261,7 @@ for (const change of ['add', 'remove', 'hide', 'clear', 'dispose'] as const) {
 		assert.ok(action.type === 'action');
 		popup.resolve({ selectedId: action.id });
 		await new Promise<void>(resolve => setImmediate(resolve));
-		assert.deepEqual(
-			{ closed, label: action.label, writes: fixture.presentation.writes },
-			{ closed: 1, label: 'Copy Text', writes: [] },
-		);
+		assert.deepEqual({ closed, label: action.label, writes: fixture.presentation.writes }, { closed: 1, label: 'Copy Text', writes: [] });
 	});
 }
 
@@ -1495,10 +1328,7 @@ test('system Copy Text releases its presentation before starting the selected wr
 	popup.resolve({ selectedId: selected.id });
 	try {
 		await new Promise<void>(resolve => setImmediate(resolve));
-		assert.deepEqual(
-			{ order, writes: fixture.presentation.writes, closeRequests },
-			{ order: ['hide', 'write'], writes: ['Selected system message\n第二行'], closeRequests: 0 },
-		);
+		assert.deepEqual({ order, writes: fixture.presentation.writes, closeRequests }, { order: ['hide', 'write'], writes: ['Selected system message\n第二行'], closeRequests: 0 });
 		fixture.center.hide();
 		assert.deepEqual(
 			{
@@ -1523,12 +1353,7 @@ test('notification center creation retains startup history and the three-toast l
 		using service = new TestNotificationService();
 		for (const message of ['First', 'Second', 'Third', 'Fourth']) service.info(message);
 		using runner = createNotificationActionRunner(service);
-		using presentation = new NotificationsPresentation(
-			browser.window.document.body,
-			browser.window.document.body,
-			service,
-			runner,
-		);
+		using presentation = new NotificationsPresentation(browser.window.document.body, browser.window.document.body, service, runner);
 		assert.equal(browser.window.document.querySelectorAll('.ash-notification').length, 3);
 		presentation.center.show();
 		assert.equal(browser.window.document.querySelectorAll('.ash-notifications-row').length, 4);
@@ -1577,9 +1402,7 @@ for (const asynchronous of [false, true]) {
 				{
 					order,
 					events,
-					notifications: service.model
-						.getNotifications()
-						.map(item => ({ severity: item.severity, message: item.message })),
+					notifications: service.model.getNotifications().map(item => ({ severity: item.severity, message: item.message })),
 				},
 				{
 					order: ['will', 'run', 'error', 'did'],
@@ -1622,10 +1445,7 @@ for (const asynchronous of [false, true]) {
 				},
 			};
 			await runner.run(action);
-			assert.deepEqual(
-				{ completed, messages: service.model.getNotifications().map(item => item.message) },
-				{ completed: 1, messages: handled ? ['Producer recovered'] : [] },
-			);
+			assert.deepEqual({ completed, messages: service.model.getNotifications().map(item => item.message) }, { completed: 1, messages: handled ? ['Producer recovered'] : [] });
 		});
 	}
 }
@@ -1648,10 +1468,7 @@ test('a disposed notification runner skips new actions', async () => {
 			throw new Error('Late failure');
 		},
 	});
-	assert.deepEqual(
-		{ calls, events, notifications: service.model.getNotifications() },
-		{ calls: 0, events: 0, notifications: [] },
-	);
+	assert.deepEqual({ calls, events, notifications: service.model.getNotifications() }, { calls: 0, events: 0, notifications: [] });
 });
 
 test('window disposal suppresses late notification feedback while the producer owns its pending task', async () => {
@@ -1681,10 +1498,7 @@ test('window disposal suppresses late notification feedback while the producer o
 	runner.dispose();
 	reject(new Error('Finished after disposal'));
 	await pending;
-	assert.deepEqual(
-		{ completed, notifications: service.model.getNotifications() },
-		{ completed: 0, notifications: [] },
-	);
+	assert.deepEqual({ completed, notifications: service.model.getNotifications() }, { completed: 0, notifications: [] });
 });
 
 for (const useCenter of [false, true]) {
@@ -1716,19 +1530,13 @@ for (const useCenter of [false, true]) {
 			const originalItem = service.model.getNotifications().at(-1)!;
 			if (useCenter) center.show();
 			const completed = new Promise<void>(resolve => runner.onDidRun(() => resolve()));
-			document
-				.querySelector<HTMLButtonElement>(
-					`${useCenter ? '.ash-notifications-center' : '.ash-notification-host'} .ash-notification-action`,
-				)!
-				.click();
+			document.querySelector<HTMLButtonElement>(`${useCenter ? '.ash-notifications-center' : '.ash-notification-host'} .ash-notification-action`)!.click();
 			assert.equal(calls, 0);
 			await completed;
 			assert.deepEqual(
 				{
 					calls,
-					items: service.model
-						.getNotifications()
-						.map(item => ({ severity: item.severity, message: item.message })),
+					items: service.model.getNotifications().map(item => ({ severity: item.severity, message: item.message })),
 				},
 				{
 					calls: 1,
@@ -1739,16 +1547,8 @@ for (const useCenter of [false, true]) {
 				},
 			);
 			assert.equal(service.model.getNotifications()[0], originalItem);
-			assert.equal(
-				statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === 'ash.status.notifications')
-					?.entry.icon,
-				useCenter ? Lxicon.bell : Lxicon.bellDot,
-			);
-			if (!useCenter)
-				assert.equal(
-					document.querySelector('.ash-notification-error .ash-notification-message')?.textContent,
-					'Visible action failure',
-				);
+			assert.equal(statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === 'ash.status.notifications')?.entry.icon, useCenter ? Lxicon.bell : Lxicon.bellDot);
+			if (!useCenter) assert.equal(document.querySelector('.ash-notification-error .ash-notification-message')?.textContent, 'Visible action failure');
 			center.show();
 			assert.deepEqual(
 				[...fixture.panel.querySelectorAll('.ash-notification-message')].map(element => element.textContent),
@@ -1787,11 +1587,7 @@ for (const useCenter of [false, true]) {
 		const originalItem = fixture.service.model.getNotifications().at(-1)!;
 		if (useCenter) fixture.center.show();
 		const completed = new Promise<void>(resolve => fixture.runner.onDidRun(() => resolve()));
-		fixture.document
-			.querySelector<HTMLButtonElement>(
-				`${useCenter ? '.ash-notifications-center' : '.ash-notification-host'} .ash-notification-action`,
-			)!
-			.click();
+		fixture.document.querySelector<HTMLButtonElement>(`${useCenter ? '.ash-notifications-center' : '.ash-notification-host'} .ash-notification-action`)!.click();
 		await started;
 		original.close();
 		reject(new Error('Failure after original removal'));
@@ -1800,10 +1596,7 @@ for (const useCenter of [false, true]) {
 			fixture.service.model.getNotifications().map(item => ({ severity: item.severity, message: item.message })),
 			[{ severity: Severity.Error, message: 'Failure after original removal' }],
 		);
-		assert.equal(
-			fixture.document.querySelector('.ash-notification-error .ash-notification-message')?.textContent,
-			'Failure after original removal',
-		);
+		assert.equal(fixture.document.querySelector('.ash-notification-error .ash-notification-message')?.textContent, 'Failure after original removal');
 	});
 	test(`${useCenter ? 'center' : 'toast'} successful actions let the producer close its notification without error feedback`, async () => {
 		using fixture = new NotificationsFixture();
@@ -1829,16 +1622,9 @@ for (const useCenter of [false, true]) {
 		const handleItem = fixture.service.model.getNotifications().at(-1)!;
 		if (useCenter) fixture.center.show();
 		const completed = new Promise<void>(resolve => fixture.runner.onDidRun(() => resolve()));
-		fixture.document
-			.querySelector<HTMLButtonElement>(
-				`${useCenter ? '.ash-notifications-center' : '.ash-notification-host'} .ash-notification-action`,
-			)!
-			.click();
+		fixture.document.querySelector<HTMLButtonElement>(`${useCenter ? '.ash-notifications-center' : '.ash-notification-host'} .ash-notification-action`)!.click();
 		await completed;
-		assert.deepEqual(
-			{ calls, notifications: fixture.service.model.getNotifications() },
-			{ calls: 1, notifications: [] },
-		);
+		assert.deepEqual({ calls, notifications: fixture.service.model.getNotifications() }, { calls: 1, notifications: [] });
 	});
 }
 
@@ -2019,8 +1805,7 @@ test('do not disturb commands, header controls, unread icons and silent delivery
 	using statusbar = new StatusbarService();
 	using fixture = new NotificationsFixture(statusbar);
 	const { service, presentation, center, document } = fixture;
-	const entry = () =>
-		statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === 'ash.status.notifications')!.entry;
+	const entry = () => statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === 'ash.status.notifications')!.entry;
 	assert.equal(entry().icon, Lxicon.bell);
 	let changes = 0;
 	using listener = service.onDidChangeFilter(() => changes++);
@@ -2043,9 +1828,7 @@ test('do not disturb commands, header controls, unread icons and silent delivery
 	assert.equal(toggle.getAttribute('aria-pressed'), 'true');
 	assert.equal(toggle.getAttribute('aria-label'), 'Configure Do Not Disturb...');
 	toggle.click();
-	[...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-		.find(item => item.textContent === 'Disable Do Not Disturb Mode')!
-		.click();
+	[...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent === 'Disable Do Not Disturb Mode')!.click();
 	assert.equal(toggle.getAttribute('aria-pressed'), 'false');
 	assert.equal(service.getFilter(), NotificationsFilter.OFF);
 	assert.equal(entry().icon, Lxicon.bell);
@@ -2090,9 +1873,7 @@ test('notification filter restores through the production service assembly and f
 		using first = services.createInstance(NotificationService);
 		first.setFilter(NotificationsFilter.ERROR);
 		assert.equal(storage.getBoolean('notifications.doNotDisturbMode', StorageScope.APPLICATION), true);
-		assert.ok(
-			storage.keys(StorageScope.APPLICATION, StorageTarget.MACHINE).includes('notifications.doNotDisturbMode'),
-		);
+		assert.ok(storage.keys(StorageScope.APPLICATION, StorageTarget.MACHINE).includes('notifications.doNotDisturbMode'));
 		using restored = services.createInstance(NotificationService);
 		assert.equal(restored.getFilter(), NotificationsFilter.ERROR);
 		restored.setFilter(NotificationsFilter.OFF);
@@ -2173,12 +1954,7 @@ test('source filters persist, synchronize, and recover from malformed storage wi
 		first.removeFilter(source.id);
 		assert.deepEqual(restored.getFilters(), []);
 		for (const invalid of ['{', '{}', '[{"id":"fixture","label":"Fixture","filter":42}]']) {
-			storage.store(
-				'notifications.perSourceDoNotDisturbMode',
-				invalid,
-				StorageScope.APPLICATION,
-				StorageTarget.MACHINE,
-			);
+			storage.store('notifications.perSourceDoNotDisturbMode', invalid, StorageScope.APPLICATION, StorageTarget.MACHINE);
 			using recovered = new NotificationService(storage);
 			assert.deepEqual(recovered.getFilters(), []);
 		}
@@ -2203,9 +1979,7 @@ test('queued source toasts are cancelled selectively and row menus can re-enable
 	fixture.center.show();
 	const row = fixture.panel.querySelector<HTMLElement>('[data-notification-id="1"]')!;
 	row.querySelector<HTMLButtonElement>('[aria-label="More Actions"]')!.click();
-	const enable = [...fixture.document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item =>
-		item.textContent?.includes('Turn On All Notifications'),
-	)!;
+	const enable = [...fixture.document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent?.includes('Turn On All Notifications'))!;
 	assert.ok(enable);
 	enable.click();
 	assert.equal(fixture.service.getFilter(source), NotificationsFilter.OFF);
@@ -2223,9 +1997,7 @@ test('running notifications survive Delete and Clear All until progress complete
 	const row = fixture.panel.querySelector<HTMLElement>('[data-notification-id="1"]')!;
 	assert.equal(row.querySelector('[data-notification-remove]'), null);
 	row.focus();
-	row.dispatchEvent(
-		new fixture.document.defaultView!.KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }),
-	);
+	row.dispatchEvent(new fixture.document.defaultView!.KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
 	assert.equal(fixture.service.model.getNotifications().length, 2);
 	fixture.center.clearAll();
 	assert.equal(fixture.service.model.getNotifications().length, 1);
@@ -2248,8 +2020,7 @@ test('read but hidden progress keeps the bell marked and clears when the task co
 	});
 	fixture.center.show();
 	fixture.center.hide();
-	const entry = () =>
-		statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === 'ash.status.notifications')!.entry;
+	const entry = () => statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === 'ash.status.notifications')!.entry;
 	assert.equal(entry().icon, Lxicon.bellDot);
 	assert.equal(entry().tooltip, 'No New Notifications (1 in progress)');
 	handle.progress.done();
@@ -2261,10 +2032,7 @@ test('position settings move the sole bell and expose the title-bar action', asy
 	using fixture = new NotificationsFixture(statusbar);
 	const commands = fixture.presentation.services.get(ICommandService);
 	await commands.executeCommand('workbench.action.setNotificationsPosition.bottomLeft');
-	assert.equal(
-		statusbar.getEntries(StatusbarAlignment.Left).filter(item => item.id === 'ash.status.notifications').length,
-		1,
-	);
+	assert.equal(statusbar.getEntries(StatusbarAlignment.Left).filter(item => item.id === 'ash.status.notifications').length, 1);
 	assert.equal(statusbar.getEntries(StatusbarAlignment.Right).length, 0);
 	assert.equal(fixture.panel.dataset.position, 'bottom-left');
 	await commands.executeCommand('workbench.action.setNotificationsPosition.topRight');
@@ -2283,8 +2051,7 @@ test('status messages honor delay, replacement and handle disposal without enter
 	try {
 		using statusbar = new StatusbarService();
 		using fixture = new NotificationsFixture(statusbar);
-		const messages = () =>
-			statusbar.getEntries(StatusbarAlignment.Left).filter(item => item.id === 'status.message');
+		const messages = () => statusbar.getEntries(StatusbarAlignment.Left).filter(item => item.id === 'status.message');
 		const first = fixture.service.status('Waiting', { showAfter: 10, hideAfter: 30 });
 		mock.timers.tick(9);
 		assert.equal(messages().length, 0);
@@ -2422,13 +2189,7 @@ suite('notification review regressions', () => {
 	test('center leaves modified, composing and previously consumed Escape to its owner', () => {
 		using fixture = new NotificationsFixture();
 		fixture.center.show();
-		for (const options of [
-			{ altKey: true },
-			{ ctrlKey: true },
-			{ shiftKey: true },
-			{ metaKey: true },
-			{ isComposing: true },
-		]) {
+		for (const options of [{ altKey: true }, { ctrlKey: true }, { shiftKey: true }, { metaKey: true }, { isComposing: true }]) {
 			const event = new fixture.document.defaultView!.KeyboardEvent('keydown', {
 				key: 'Escape',
 				bubbles: true,

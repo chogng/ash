@@ -61,16 +61,16 @@ export class GlobalStyleSheet extends Disposable {
 	}
 }
 
-export function createStyleSheet(
-	ownerDocument: Document,
-	cssText = '',
-): { readonly element: HTMLStyleElement; readonly registration: IDisposable } {
+export function createStyleSheet(ownerDocument: Document, cssText = ''): { readonly element: HTMLStyleElement; readonly registration: IDisposable } {
 	const element = h(ownerDocument, 'style');
 	element.type = 'text/css';
 	element.media = 'screen';
 	element.textContent = cssText;
 	ownerDocument.head.append(element);
-	return { element, registration: toDisposable(() => element.remove()) };
+	return {
+		element,
+		registration: toDisposable(() => element.remove()),
+	};
 }
 
 export interface IClonedDocumentStyles extends IDisposable {
@@ -116,11 +116,7 @@ export function cloneDocumentStyles(sourceDocument: Document, targetDocument: Do
 		}),
 	);
 	const synchronize = (): void => {
-		const styles = [
-			...sourceDocument.head.querySelectorAll<HTMLStyleElement | HTMLLinkElement>(
-				'style, link[rel="stylesheet"]',
-			),
-		];
+		const styles = [...sourceDocument.head.querySelectorAll<HTMLStyleElement | HTMLLinkElement>('style, link[rel="stylesheet"]')];
 		const live = new Set(styles);
 		for (const source of clones.keys()) if (!live.has(source)) removeClone(source);
 		for (const source of styles) {
@@ -138,18 +134,13 @@ export function cloneDocumentStyles(sourceDocument: Document, targetDocument: Do
 					if (!source.hasAttribute(attribute.name)) clone.removeAttribute(attribute.name);
 				}
 				for (const attribute of [...source.attributes]) {
-					const value =
-						attribute.name === 'href' && source.tagName === 'LINK'
-							? (source as HTMLLinkElement).href
-							: attribute.value;
+					const value = attribute.name === 'href' && source.tagName === 'LINK' ? (source as HTMLLinkElement).href : attribute.value;
 					if (clone.getAttribute(attribute.name) !== value) {
-						if (attribute.name === 'href' && source.tagName === 'LINK')
-							trackLinkLoad(clone as HTMLLinkElement);
+						if (attribute.name === 'href' && source.tagName === 'LINK') trackLinkLoad(clone as HTMLLinkElement);
 						clone.setAttribute(attribute.name, value);
 					}
 				}
-				if (source.tagName === 'STYLE' && clone.textContent !== source.textContent)
-					clone.textContent = source.textContent;
+				if (source.tagName === 'STYLE' && clone.textContent !== source.textContent) clone.textContent = source.textContent;
 			}
 		}
 		let next: Node = anchor;

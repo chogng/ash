@@ -8,9 +8,6 @@ test('window finder selects the first matching folder or workspace file', () => 
 	const workspace = { openedWorkspace: { id: 'workspace', configPath: URI.file('/repo/project.code-workspace') } };
 	const other = { openedWorkspace: { id: 'other', uri: URI.file('/repo/other') } };
 	assert.equal(findWindowOnWorkspaceOrFolder([other, folder, workspace], URI.file('/repo/project')), folder);
-	assert.equal(
-		findWindowOnWorkspaceOrFolder([other, folder, workspace], URI.file('/repo/project.code-workspace')),
-		workspace,
-	);
+	assert.equal(findWindowOnWorkspaceOrFolder([other, folder, workspace], URI.file('/repo/project.code-workspace')), workspace);
 	assert.equal(findWindowOnWorkspaceOrFolder([other, folder, workspace], URI.file('/repo/missing')), undefined);
 });

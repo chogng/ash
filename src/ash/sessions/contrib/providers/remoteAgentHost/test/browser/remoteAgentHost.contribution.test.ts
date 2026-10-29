@@ -9,10 +9,7 @@ import { DisposableStore, toDisposable } from '../../../../../../base/common/lif
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../../nls.js';
 import { AgentHostConnectionsService } from '../../../../../../platform/agentHost/browser/agentHostConnectionsService.js';
-import {
-	IAgentHostConnectionsService,
-	agentHostConnectionAddress,
-} from '../../../../../../platform/agentHost/common/agentHostConnectionsService.js';
+import { IAgentHostConnectionsService, agentHostConnectionAddress } from '../../../../../../platform/agentHost/common/agentHostConnectionsService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ILanguageModelsConfigurationService } from '../../../../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
@@ -22,41 +19,21 @@ import type { Automation, IAutomationBackendService } from '../../../../../../pl
 import { ContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
-import {
-	IQuickInputService,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
-import {
-	IRemoteConnectionApi,
-	IRemoteConnectionService,
-	RemoteConnectionService,
-	type RemoteConnectionDefinition,
-} from '../../../../../../platform/remote/common/remoteConnectionService.js';
+import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService, type RemoteConnectionDefinition } from '../../../../../../platform/remote/common/remoteConnectionService.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { AgentHostFileSystemProvider } from '../../../../../../platform/agentHost/common/agentHostFileSystemProvider.js';
 import { FileService } from '../../../../../../platform/files/common/fileService.js';
 import { IFileService, type IFileChangeEvent } from '../../../../../../platform/files/common/files.js';
 import { createSshRemoteWorkspaceUri } from '../../../../../../platform/remote/common/remote.js';
-import {
-	AgentHostFileSystemService,
-	IAgentHostFileSystemService,
-} from '../../../../../../workbench/services/agentHost/common/agentHostFileSystemService.js';
-import {
-	IRendererHostService,
-	type IRendererAgentHost,
-	type IRendererAgentHostConnection,
-	type IRendererHost,
-} from '../../../../../../platform/renderer/common/rendererHost.js';
+import { AgentHostFileSystemService, IAgentHostFileSystemService } from '../../../../../../workbench/services/agentHost/common/agentHostFileSystemService.js';
+import { IRendererHostService, type IRendererAgentHost, type IRendererAgentHostConnection, type IRendererHost } from '../../../../../../platform/renderer/common/rendererHost.js';
 import { createDisconnectedRendererApi } from '../../../../../../workbench/browser/rendererApi.js';
 import { CommandService } from '../../../../../../workbench/services/commands/common/commandService.js';
 import { productLanguagePackCatalogs } from '../../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { TestNotificationService } from '../../../../../../workbench/services/notification/test/common/testNotificationService.js';
-import {
-	ISessionsProvidersService,
-	SessionsProvidersService,
-} from '../../../../../services/sessions/browser/sessionsProvidersService.js';
+import { ISessionsProvidersService, SessionsProvidersService } from '../../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ProviderAutomationService } from '../../../../automations/browser/providerAutomationService.js';
 import { SSHAgentHostContribution } from '../../browser/sshAgentHost.contribution.js';
 
@@ -75,9 +52,7 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	browserEnvironment.window.document.body.append(container);
 	lifetime.add(toDisposable(() => container.remove()));
 	const contexts = lifetime.add(new ContextKeyService());
-	const quickInput = lifetime.add(
-		new TestQuickInputService({ container, instantiationService: services, contextKeyService: contexts }),
-	);
+	const quickInput = lifetime.add(new TestQuickInputService({ container, instantiationService: services, contextKeyService: contexts }));
 	services.registerInstance(IQuickInputService, quickInput);
 	const notifications = lifetime.add(new TestNotificationService());
 	services.registerInstance(INotificationService, notifications);
@@ -100,8 +75,7 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	const closed: string[] = [];
 	const renamed: string[] = [];
 	const deleted: string[] = [];
-	let openResult:
-		((target: RemoteConnectionDefinition, host: IRendererAgentHost) => Promise<IRendererAgentHost>) | undefined;
+	let openResult: ((target: RemoteConnectionDefinition, host: IRendererAgentHost) => Promise<IRendererAgentHost>) | undefined;
 	const renderer = createDisconnectedRendererApi();
 	services.registerInstance(IConfigurationService, lifetime.add(new InMemoryConfigurationService()));
 	services.registerInstance(ILanguageModelsConfigurationService, {
@@ -133,10 +107,7 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 			directories: () => [{ uri: URI.file('/primary'), target: { type: 'environment', dirId: 'primary' } }],
 		}),
 	);
-	services.registerInstance(
-		IAgentHostFileSystemService,
-		lifetime.add(services.createInstance(AgentHostFileSystemService, primary, undefined)),
-	);
+	services.registerInstance(IAgentHostFileSystemService, lifetime.add(services.createInstance(AgentHostFileSystemService, primary, undefined)));
 	type HostEvent = Parameters<Parameters<IRendererHost['events']['subscribe']>[0]>[0];
 	const hostEvents = new Map<string, Emitter<HostEvent>>();
 	const fileRequests: { host: string; operation: string; path: string }[] = [];
@@ -255,11 +226,7 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 							};
 						},
 						release: async ({ resourceId }) => {
-							assert.equal(
-								resources.delete(resourceId),
-								true,
-								'release the allocating host connection resource',
-							);
+							assert.equal(resources.delete(resourceId), true, 'release the allocating host connection resource');
 							resourceRequests.push(`${target.name}:release:${resourceId}`);
 							openResources.delete(`${target.name}:${resourceId}`);
 						},
@@ -337,10 +304,7 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 			},
 		},
 	});
-	services.registerInstance(
-		IAgentHostConnectionsService,
-		lifetime.add(services.createInstance(AgentHostConnectionsService)),
-	);
+	services.registerInstance(IAgentHostConnectionsService, lifetime.add(services.createInstance(AgentHostConnectionsService)));
 	const contribution = lifetime.add(services.createInstance(SSHAgentHostContribution));
 	const commands = lifetime.add(new CommandService(services));
 	const automations = lifetime.add(services.createInstance(ProviderAutomationService));
@@ -389,12 +353,10 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 		resourceRequests,
 		openResources,
 		changeFiles: (name: string, path: string) =>
-			hostEvents
-				.get(name)!
-				.fire({
-					method: 'fs/changed',
-					params: { type: 'pathsChanged', dirId: `agent-host:${name}`, paths: [path] },
-				}),
+			hostEvents.get(name)!.fire({
+				method: 'fs/changed',
+				params: { type: 'pathsChanged', dirId: `agent-host:${name}`, paths: [path] },
+			}),
 		deferOpen: (next: typeof openResult) => {
 			openResult = next;
 		},

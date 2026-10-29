@@ -15,7 +15,10 @@ for (const [name, value] of Object.entries({
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
 	PointerEvent: browserEnvironment.window.MouseEvent,
 })) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
+	Object.defineProperty(globalThis, name, {
+		configurable: true,
+		value,
+	});
 }
 
 const { Grid, SerializableGrid } = await import('../../browser/ui/grid/grid.js');
@@ -92,9 +95,24 @@ test('Grid lays out a nested SplitView tree in two dimensions', () => {
 
 	grid.layout(800, 600);
 
-	assert.deepEqual(left.layouts.at(-1), { width: 200, height: 600, top: 0, left: 0 });
-	assert.deepEqual(session.layouts.at(-1), { width: 400, height: 36, top: 0, left: 200 });
-	assert.deepEqual(editor.layouts.at(-1), { width: 400, height: 564, top: 36, left: 200 });
+	assert.deepEqual(left.layouts.at(-1), {
+		width: 200,
+		height: 600,
+		top: 0,
+		left: 0,
+	});
+	assert.deepEqual(session.layouts.at(-1), {
+		width: 400,
+		height: 36,
+		top: 0,
+		left: 200,
+	});
+	assert.deepEqual(editor.layouts.at(-1), {
+		width: 400,
+		height: 564,
+		top: 36,
+		left: 200,
+	});
 	assert.equal(grid.element.querySelectorAll('.ash-sash').length, 2);
 
 	grid.dispose();
@@ -258,9 +276,7 @@ test('Grid links aligned sashes in a 2 by 2 layout', () => {
 	const handle = grid.element.querySelector<HTMLElement>('.ash-sash-vertical .ash-sash-orthogonal-handle-end');
 	assert.ok(handle);
 
-	handle.dispatchEvent(
-		new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 0, clientY: 0 }),
-	);
+	handle.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 0, clientY: 0 }));
 	dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { bubbles: true, clientX: 50, clientY: 30 }));
 	dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true, clientX: 50, clientY: 30 }));
 
@@ -401,12 +417,7 @@ test('SerializableGrid restores view identity and runtime geometry', () => {
 			if (typeof data !== 'string') {
 				throw new TypeError('Serialized test view ID must be a string');
 			}
-			const view = new SerializableTestGridView(
-				dom.window.document,
-				data,
-				data === 'editor' ? 120 : 100,
-				data === 'editor' ? Infinity : 600,
-			);
+			const view = new SerializableTestGridView(dom.window.document, data, data === 'editor' ? 120 : 100, data === 'editor' ? Infinity : 600);
 			restoredViews.set(data, view);
 			return view;
 		},

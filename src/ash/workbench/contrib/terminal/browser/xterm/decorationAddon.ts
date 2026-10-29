@@ -1,16 +1,6 @@
 import type { Terminal, ITerminalAddon, IMarker, IDecoration } from '@xterm/xterm';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-} from '../../../../../base/common/lifecycle.js';
-import {
-	TerminalCapability,
-	type IBufferMarkCapability,
-	type ITerminalCommand,
-} from '../../../../../platform/terminal/common/capabilities/capabilities.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { TerminalCapability, type IBufferMarkCapability, type ITerminalCommand } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { TerminalCapabilityStore } from '../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
 import type { ITerminalCommandStatusEvent } from '../terminal.js';
 import { getTerminalCommandDecorationTooltip, updateLayout } from './decorationStyles.js';
@@ -60,15 +50,8 @@ export class DecorationAddon extends Disposable implements ITerminalAddon {
 		super();
 		this._register(
 			configuration.onDidChangeConfiguration(event => {
-				const decorationChanged = event.affectsConfiguration(
-					'terminal.integrated.shellIntegration.decorationsEnabled',
-				);
-				if (
-					!decorationChanged &&
-					!event.affectsConfiguration('terminal.integrated.fontSize') &&
-					!event.affectsConfiguration('terminal.integrated.lineHeight')
-				)
-					return;
+				const decorationChanged = event.affectsConfiguration('terminal.integrated.shellIntegration.decorationsEnabled');
+				if (!decorationChanged && !event.affectsConfiguration('terminal.integrated.fontSize') && !event.affectsConfiguration('terminal.integrated.lineHeight')) return;
 				for (const command of this.commands.values()) {
 					if (decorationChanged) this.updateOverviewRuler(command);
 					if (command.decoration?.element) this.render(command.decoration.element, command);
@@ -89,11 +72,7 @@ export class DecorationAddon extends Disposable implements ITerminalAddon {
 		this.terminal = terminal;
 	}
 
-	registerCommandDecoration(
-		event: ITerminalCommandStatusEvent | undefined,
-		processId: number,
-		suppliedMarker: IMarker,
-	): void {
+	registerCommandDecoration(event: ITerminalCommandStatusEvent | undefined, processId: number, suppliedMarker: IMarker): void {
 		const terminal = this.terminal;
 		if (!terminal || !this.marks || this.isDisposed) return;
 		// Shell integration may assign its execution ID after the prompt appears.
@@ -148,13 +127,7 @@ export class DecorationAddon extends Disposable implements ITerminalAddon {
 						events.add(addDisposableListener(element, 'contextmenu', show));
 						events.add(
 							addDisposableListener(element, 'keydown', event => {
-								if (
-									event.key === 'Enter' ||
-									event.key === ' ' ||
-									event.key === 'ContextMenu' ||
-									(event.key === 'F10' && event.shiftKey)
-								)
-									show(event);
+								if (event.key === 'Enter' || event.key === ' ' || event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) show(event);
 							}),
 						);
 					}
@@ -172,9 +145,7 @@ export class DecorationAddon extends Disposable implements ITerminalAddon {
 	private commandFor(item: ScreenCommand): ITerminalCommand | undefined {
 		if (this.isDisposed || item.marker.isDisposed) return undefined;
 		const capability = this.capabilities.get(TerminalCapability.CommandDetection);
-		return [...(capability?.commands ?? []), capability?.executingCommandObject].find(
-			command => command && command.marker === item.marker && command.id === item.event?.commandId,
-		);
+		return [...(capability?.commands ?? []), capability?.executingCommandObject].find(command => command && command.marker === item.marker && command.id === item.event?.commandId);
 	}
 
 	private showCommandMenu(element: HTMLElement, item: ScreenCommand): void {
@@ -190,65 +161,30 @@ export class DecorationAddon extends Disposable implements ITerminalAddon {
 			run,
 		});
 		const output = command.getOutput();
-		const hasCommandRange =
-			!!command.marker &&
-			!command.marker.isDisposed &&
-			!!command.executedMarker &&
-			!command.executedMarker.isDisposed;
+		const hasCommandRange = !!command.marker && !command.marker.isDisposed && !!command.executedMarker && !command.executedMarker.isDisposed;
 		const actions = [
-			action(
-				'terminal.copyCommand',
-				localize('terminal.command.copy', 'Copy Command'),
-				!!command.command,
-				async () => {
-					if (current()) await this.clipboard.writeText(command.command);
-				},
-			),
-			action(
-				'terminal.copyOutput',
-				localize('terminal.command.copyOutput', 'Copy Output'),
-				output !== undefined,
-				async () => {
-					const text = current() ? command.getOutput() : undefined;
-					if (text !== undefined) await this.clipboard.writeText(text);
-				},
-			),
-			action(
-				'terminal.copyCommandAndOutput',
-				localize('terminal.command.copyBoth', 'Copy Command and Output'),
-				output !== undefined,
-				async () => {
-					const text = current() ? command.getOutput() : undefined;
-					if (text !== undefined) await this.clipboard.writeText(`${command.command}\n${text}`);
-				},
-			),
-			action(
-				'terminal.selectCommand',
-				localize('terminal.command.select', 'Select Command'),
-				hasCommandRange,
-				async () => {
-					if (
-						!current() ||
-						command.marker?.isDisposed ||
-						command.executedMarker?.isDisposed ||
-						terminal.buffer.active.type !== 'normal'
-					)
-						return;
-					const start = command.marker!;
-					const end = command.executedMarker!;
-					const startX = command.startX ?? 0;
-					const length = (end.line - start.line) * terminal.cols + (command.executedX ?? 0) - startX;
-					if (length > 0) terminal.select(startX, start.line, length);
-				},
-			),
-			action(
-				'terminal.rerunCommand',
-				localize('terminal.command.rerun', 'Rerun Command'),
-				!!command.command && command.endMarker !== undefined,
-				async () => {
-					if (current()) this.runCommand.fire({ command });
-				},
-			),
+			action('terminal.copyCommand', localize('terminal.command.copy', 'Copy Command'), !!command.command, async () => {
+				if (current()) await this.clipboard.writeText(command.command);
+			}),
+			action('terminal.copyOutput', localize('terminal.command.copyOutput', 'Copy Output'), output !== undefined, async () => {
+				const text = current() ? command.getOutput() : undefined;
+				if (text !== undefined) await this.clipboard.writeText(text);
+			}),
+			action('terminal.copyCommandAndOutput', localize('terminal.command.copyBoth', 'Copy Command and Output'), output !== undefined, async () => {
+				const text = current() ? command.getOutput() : undefined;
+				if (text !== undefined) await this.clipboard.writeText(`${command.command}\n${text}`);
+			}),
+			action('terminal.selectCommand', localize('terminal.command.select', 'Select Command'), hasCommandRange, async () => {
+				if (!current() || command.marker?.isDisposed || command.executedMarker?.isDisposed || terminal.buffer.active.type !== 'normal') return;
+				const start = command.marker!;
+				const end = command.executedMarker!;
+				const startX = command.startX ?? 0;
+				const length = (end.line - start.line) * terminal.cols + (command.executedX ?? 0) - startX;
+				if (length > 0) terminal.select(startX, start.line, length);
+			}),
+			action('terminal.rerunCommand', localize('terminal.command.rerun', 'Rerun Command'), !!command.command && command.endMarker !== undefined, async () => {
+				if (current()) this.runCommand.fire({ command });
+			}),
 		];
 		let hidden = false;
 		this.menus.showContextMenu({
@@ -265,9 +201,7 @@ export class DecorationAddon extends Disposable implements ITerminalAddon {
 		if (!hidden) this.menuCommand = item;
 	}
 
-	private overviewRulerOptions(
-		event: ITerminalCommandStatusEvent | undefined,
-	): IDecoration['options']['overviewRulerOptions'] {
+	private overviewRulerOptions(event: ITerminalCommandStatusEvent | undefined): IDecoration['options']['overviewRulerOptions'] {
 		const mode = this.configuration.getValue<string>('terminal.integrated.shellIntegration.decorationsEnabled');
 		if (mode === 'gutter' || mode === 'never') return undefined;
 		const failed = event?.status === 'failed' || event?.status === 'canceled';
@@ -297,19 +231,10 @@ export class DecorationAddon extends Disposable implements ITerminalAddon {
 			const icon = element.ownerDocument.createElement('span');
 			icon.className = 'ash-terminal-command-icon';
 			icon.setAttribute('aria-hidden', 'true');
-			appendIcon(
-				status === 'failed' || status === 'canceled'
-					? terminalDecorationError
-					: status === 'succeeded'
-						? terminalDecorationSuccess
-						: terminalDecorationIncomplete,
-				icon,
-			);
+			appendIcon(status === 'failed' || status === 'canceled' ? terminalDecorationError : status === 'succeeded' ? terminalDecorationSuccess : terminalDecorationIncomplete, icon);
 			element.replaceChildren(icon);
 		}
-		const label = event
-			? getTerminalCommandDecorationTooltip(event)
-			: localize('terminal.command.pending', 'Waiting for a command');
+		const label = event ? getTerminalCommandDecorationTooltip(event) : localize('terminal.command.pending', 'Waiting for a command');
 		const mode = this.configuration.getValue<string>('terminal.integrated.shellIntegration.decorationsEnabled');
 		const gutter = mode !== 'overviewRuler' && mode !== 'never';
 		// Keep the screen marker for navigation when only its presentation is disabled.

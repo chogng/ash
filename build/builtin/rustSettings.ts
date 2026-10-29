@@ -14,22 +14,14 @@ export function rustSettings(schema: unknown): {
 	properties: Record<string, unknown>;
 	messages: Record<string, string>;
 } {
-	if (!Array.isArray(schema) || schema.length === 0)
-		throw new TypeError('Expected the rust-analyzer configuration schema');
+	if (!Array.isArray(schema) || schema.length === 0) throw new TypeError('Expected the rust-analyzer configuration schema');
 	const properties: Record<string, unknown> = {};
 	const messages: Record<string, string> = {};
 	for (const group of schema) {
-		if (!group || typeof group !== 'object' || !group.properties || typeof group.properties !== 'object')
-			throw new TypeError('Invalid rust-analyzer configuration group');
+		if (!group || typeof group !== 'object' || !group.properties || typeof group.properties !== 'object') throw new TypeError('Invalid rust-analyzer configuration group');
 		for (const [key, value] of Object.entries(group.properties)) {
 			const setting = value as Schema;
-			if (
-				!/^rust-analyzer\.[a-zA-Z][\w.]*$/u.test(key) ||
-				Object.hasOwn(properties, key) ||
-				!setting ||
-				typeof setting.markdownDescription !== 'string' ||
-				!Object.hasOwn(setting, 'default')
-			)
+			if (!/^rust-analyzer\.[a-zA-Z][\w.]*$/u.test(key) || Object.hasOwn(properties, key) || !setting || typeof setting.markdownDescription !== 'string' || !Object.hasOwn(setting, 'default'))
 				throw new TypeError(`Invalid or duplicate Rust setting: ${key}`);
 			const id = key.slice('rust-analyzer.'.length);
 			const title = id
@@ -70,8 +62,7 @@ export function rustSettings(schema: unknown): {
 				});
 			}
 			const localizeNested = (value: unknown, path: readonly string[]): unknown => {
-				if (Array.isArray(value))
-					return value.map((item, index) => localizeNested(item, [...path, String(index)]));
+				if (Array.isArray(value)) return value.map((item, index) => localizeNested(item, [...path, String(index)]));
 				if (!value || typeof value !== 'object') return value;
 				return Object.fromEntries(
 					Object.entries(value).map(([field, item]) => {
@@ -80,8 +71,7 @@ export function rustSettings(schema: unknown): {
 							return [
 								field,
 								item.map((description, index) => {
-									if (typeof description !== 'string')
-										throw new TypeError(`Invalid Rust enum description: ${key}`);
+									if (typeof description !== 'string') throw new TypeError(`Invalid Rust enum description: ${key}`);
 									const message = `${id}.${path.join('.')}.enum.${index}`;
 									messages[message] = description;
 									return `%${message}%`;
@@ -102,8 +92,7 @@ export function rustSettings(schema: unknown): {
 
 async function main(): Promise<void> {
 	const [binary, flag, ...extra] = process.argv.slice(2);
-	if (!binary || extra.length || (flag !== undefined && flag !== '--check'))
-		throw new Error('Usage: node build/builtin/rustSettings.ts <pinned-rust-analyzer> [--check]');
+	if (!binary || extra.length || (flag !== undefined && flag !== '--check')) throw new Error('Usage: node build/builtin/rustSettings.ts <pinned-rust-analyzer> [--check]');
 	const root = resolve(import.meta.dirname, '../..');
 	const packagePath = resolve(root, 'extensions/rust/package.json');
 	const manifest = JSON.parse(await readFile(packagePath, 'utf8'));
@@ -111,14 +100,10 @@ async function main(): Promise<void> {
 	// The weekly release tag is one day after this binary's source commit date.
 	const expected = 'rust-analyzer 0.3.3081-standalone (2ad81e72b7 2026-10-11)';
 	if (actual.trim() !== expected) throw new Error(`Expected ${expected}, got ${actual.trim()}`);
-	const output = rustSettings(
-		JSON.parse(execFileSync(binary, ['--print-config-schema'], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 })),
-	);
+	const output = rustSettings(JSON.parse(execFileSync(binary, ['--print-config-schema'], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 })));
 	const englishPath = resolve(root, 'extensions/rust/package.nls.json');
 	const chinese = JSON.parse(await readFile(resolve(root, 'extensions/rust/package.nls.zh-CN.json'), 'utf8'));
-	const missing = Object.keys(output.messages).filter(
-		key => typeof chinese[key] !== 'string' || !chinese[key].trim(),
-	);
+	const missing = Object.keys(output.messages).filter(key => typeof chinese[key] !== 'string' || !chinese[key].trim());
 	if (missing.length) throw new Error(`Missing Chinese Rust messages: ${missing.join(', ')}`);
 	const english = {
 		displayName: 'Rust',
@@ -135,9 +120,7 @@ async function main(): Promise<void> {
 			if ((await readFile(path, 'utf8')) !== source) throw new Error(`Rust configuration is stale: ${path}`);
 		} else await writeFile(path, source);
 	}
-	console.log(
-		`${Object.keys(output.properties).length} Rust server settings ${flag === '--check' ? 'verified' : 'updated'}.`,
-	);
+	console.log(`${Object.keys(output.properties).length} Rust server settings ${flag === '--check' ? 'verified' : 'updated'}.`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) await main();

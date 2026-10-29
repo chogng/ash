@@ -1,7 +1,4 @@
-import {
-	IChatResponseResourceFileSystemProvider,
-	type IChatResourceAssociation,
-} from '../../../common/widget/chatResponseResourceFileSystemProvider.js';
+import { IChatResponseResourceFileSystemProvider, type IChatResourceAssociation } from '../../../common/widget/chatResponseResourceFileSystemProvider.js';
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
 import './media/chatMarkdownPart.css';
 import { addDisposableListener, getWindow, h } from '../../../../../../base/browser/dom.js';
@@ -9,13 +6,7 @@ import { createObjectUrl, triggerDownload } from '../../../../../../base/browser
 import type { URI } from '../../../../../../base/common/uri.js';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { decodeBase64 } from '../../../../../../base/common/buffer.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-} from '../../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../nls.js';
 import { IAgentThreadService } from '../../../../../../platform/agentHost/common/agentService.js';
 import { type ChatContentPart } from '../../../../../../platform/agentHost/common/agent.js';
@@ -67,10 +58,7 @@ class MediaRow extends Disposable {
 	public loading = false;
 
 	public setStatus(message: string): void {
-		this.status.textContent =
-			this.part.type === 'resource'
-				? localize('chat.resource.loadStatus', '{0}: {1}', this.part.name, message)
-				: message;
+		this.status.textContent = this.part.type === 'resource' ? localize('chat.resource.loadStatus', '{0}: {1}', this.part.name, message) : message;
 	}
 
 	constructor(
@@ -85,33 +73,18 @@ class MediaRow extends Disposable {
 		this.element.className = 'ash-chat-media';
 		this.element.tabIndex = -1;
 		this.status = h(document, 'figcaption');
-		const image =
-			part.type === 'imageAttachment' ||
-			part.type === 'imageUrl' ||
-			(part.type === 'resource' && part.presentation === 'image');
+		const image = part.type === 'imageAttachment' || part.type === 'imageUrl' || (part.type === 'resource' && part.presentation === 'image');
 		const presentation = part.type === 'resource' ? part.presentation : image ? 'image' : 'audio';
 		const label = image ? localize('chat.media.image', 'Image') : localize('chat.media.audio', 'Audio');
 		this.status.textContent =
 			part.type === 'resource'
 				? part.name
 				: part.type === 'imageAttachment'
-					? localize(
-							'chat.media.imageDimensions',
-							'Image ({0} × {1})',
-							part.attachment.width,
-							part.attachment.height,
-						)
+					? localize('chat.media.imageDimensions', 'Image ({0} × {1})', part.attachment.width, part.attachment.height)
 					: part.type === 'audioAttachment'
-						? localize(
-								'chat.media.audioDuration',
-								'Audio ({0} seconds)',
-								Math.ceil(part.attachment.durationMs / 1000),
-							)
+						? localize('chat.media.audioDuration', 'Audio ({0} seconds)', Math.ceil(part.attachment.durationMs / 1000))
 						: label;
-		this.media = h(
-			document,
-			image ? 'img' : presentation === 'audio' || presentation === 'video' ? presentation : 'div',
-		);
+		this.media = h(document, image ? 'img' : presentation === 'audio' || presentation === 'video' ? presentation : 'div');
 		this.media.setAttribute('aria-label', this.status.textContent);
 		if (image) {
 			const preview = this.media as HTMLImageElement;
@@ -131,31 +104,17 @@ class MediaRow extends Disposable {
 		this.loadButton = h(document, 'button');
 		this.loadButton.type = 'button';
 		this.loadButton.textContent =
-			part.type === 'resource'
-				? localize('chat.resource.preview', 'Preview')
-				: image
-					? localize('chat.media.loadImage', 'Load image')
-					: localize('chat.media.loadAudio', 'Load audio');
+			part.type === 'resource' ? localize('chat.resource.preview', 'Preview') : image ? localize('chat.media.loadImage', 'Load image') : localize('chat.media.loadAudio', 'Load audio');
 		this.openButton = h(document, 'button');
 		this.openButton.type = 'button';
 		this.openButton.textContent =
-			part.type === 'resource'
-				? localize('chat.resource.open', 'Open resource')
-				: image
-					? localize('chat.media.openImage', 'Open image')
-					: localize('chat.media.openAudio', 'Open audio');
+			part.type === 'resource' ? localize('chat.resource.open', 'Open resource') : image ? localize('chat.media.openImage', 'Open image') : localize('chat.media.openAudio', 'Open audio');
 		this.openButton.hidden = true;
 		this.downloadButton = h(document, 'button');
 		this.downloadButton.type = 'button';
 		this.downloadButton.textContent = localize('chat.resource.download', 'Download');
 		this.downloadButton.hidden = true;
-		this.element.append(
-			this.status,
-			this.loadButton,
-			this.imageContainer ?? this.media,
-			this.openButton,
-			this.downloadButton,
-		);
+		this.element.append(this.status, this.loadButton, this.imageContainer ?? this.media, this.openButton, this.downloadButton);
 		this._register(
 			toDisposable(() => {
 				this.controller.abort();
@@ -192,13 +151,8 @@ export class ChatAttachmentsContentPart extends Disposable {
 		this.updateVariables(options.variables, options.source);
 	}
 
-	public updateVariables(
-		variables: IChatAttachmentsContentPartOptions['variables'],
-		source?: IChatListItem['attachmentSource'],
-	): void {
-		const indices = new Set(
-			variables.flatMap((part, index) => (part.type === 'text' || part.type === 'artifact' ? [] : [index])),
-		);
+	public updateVariables(variables: IChatAttachmentsContentPartOptions['variables'], source?: IChatListItem['attachmentSource']): void {
+		const indices = new Set(variables.flatMap((part, index) => (part.type === 'text' || part.type === 'artifact' ? [] : [index])));
 		let changed = false;
 		for (const [index] of this.rows)
 			if (!indices.has(index)) {
@@ -212,30 +166,11 @@ export class ChatAttachmentsContentPart extends Disposable {
 			if (!row || !sameMedia(row.part, part) || !sameSource(row.source, source)) {
 				changed = true;
 				if (row?.element === next) next = row.element.nextSibling;
-				row = this.rows.set(
-					index,
-					new MediaRow(
-						this.options.ownerDocument,
-						part,
-						source,
-						index,
-						this.options.imagePresentation === 'inline',
-					),
-				);
+				row = this.rows.set(index, new MediaRow(this.options.ownerDocument, part, source, index, this.options.imagePresentation === 'inline'));
 				const current = row;
 				const origin = this.options.imageReveal;
-				if (
-					current.imageContainer &&
-					origin &&
-					!origin.container.hidden &&
-					![...this.rows].some(([, candidate]) => candidate !== current && !!candidate.imageReveal.value)
-				) {
-					current.imageReveal.value = this.instantiation.createInstance(
-						ChatImageReveal,
-						current.imageContainer,
-						current.media as HTMLImageElement,
-						origin,
-					);
+				if (current.imageContainer && origin && !origin.container.hidden && ![...this.rows].some(([, candidate]) => candidate !== current && !!candidate.imageReveal.value)) {
+					current.imageReveal.value = this.instantiation.createInstance(ChatImageReveal, current.imageContainer, current.media as HTMLImageElement, origin);
 				}
 				// The row owns listeners even when a later update replaces it at the same content index.
 				row.resources.add(
@@ -250,8 +185,7 @@ export class ChatAttachmentsContentPart extends Disposable {
 				);
 				row.resources.add(
 					addDisposableListener(row.downloadButton, 'click', () => {
-						if (current.blob)
-							triggerDownload(current.blob, mediaName(current.part), this.options.ownerDocument);
+						if (current.blob) triggerDownload(current.blob, mediaName(current.part), this.options.ownerDocument);
 					}),
 				);
 				row.resources.add(
@@ -264,9 +198,7 @@ export class ChatAttachmentsContentPart extends Disposable {
 						this._onDidChangeHeight.fire();
 					}),
 				);
-				row.resources.add(
-					addDisposableListener(row.media, 'loadedmetadata', () => this._onDidChangeHeight.fire()),
-				);
+				row.resources.add(addDisposableListener(row.media, 'loadedmetadata', () => this._onDidChangeHeight.fire()));
 				row.resources.add(
 					addDisposableListener(row.media, 'error', () => {
 						current.imageReveal.clear();
@@ -329,14 +261,10 @@ export class ChatAttachmentsContentPart extends Disposable {
 		try {
 			// Presentation sources may be structurally typed Thread snapshots. Only send resource coordinates.
 			const { sessionId, threadId, itemId, kind } = row.source;
-			const data = await this.threads.readAttachment(
-				{ sessionId, threadId, itemId, contentIndex: kind === 'toolResult' ? row.index : undefined },
-				row.controller.signal,
-			);
+			const data = await this.threads.readAttachment({ sessionId, threadId, itemId, contentIndex: kind === 'toolResult' ? row.index : undefined }, row.controller.signal);
 			if (row.isDisposed || this.isDisposed) return;
 			const expected = row.part.type === 'imageAttachment' ? 'image/' : 'audio/';
-			if (!data.mimeType.startsWith(expected))
-				throw new Error(localize('chat.media.wrongType', 'The attachment has an unexpected media type.'));
+			if (!data.mimeType.startsWith(expected)) throw new Error(localize('chat.media.wrongType', 'The attachment has an unexpected media type.'));
 			const ownerWindow = this.options.ownerDocument.defaultView;
 			if (!ownerWindow) return;
 			row.blob = new Blob([new Uint8Array(data.bytes)], { type: data.mimeType });
@@ -355,8 +283,7 @@ export class ChatAttachmentsContentPart extends Disposable {
 			if (focused) row.element.focus();
 		} catch (error) {
 			row.imageReveal.clear();
-			if (!row.isDisposed && !this.isDisposed)
-				row.setStatus(localize('chat.media.loadFailed', 'Could not load this media: {0}', String(error)));
+			if (!row.isDisposed && !this.isDisposed) row.setStatus(localize('chat.media.loadFailed', 'Could not load this media: {0}', String(error)));
 		} finally {
 			if (!row.isDisposed) {
 				row.loading = false;
@@ -373,8 +300,7 @@ export class ChatAttachmentsContentPart extends Disposable {
 		row.element.setAttribute('aria-busy', 'true');
 		try {
 			let blob = await this.options.readResource(row.part.resource, row.controller.signal);
-			if ((!blob.type || blob.type === 'application/octet-stream') && row.part.mimeType)
-				blob = new Blob([blob], { type: row.part.mimeType });
+			if ((!blob.type || blob.type === 'application/octet-stream') && row.part.mimeType) blob = new Blob([blob], { type: row.part.mimeType });
 			if (row.isDisposed || this.isDisposed) return;
 			row.blob = blob;
 			row.downloadButton.hidden = false;
@@ -383,10 +309,7 @@ export class ChatAttachmentsContentPart extends Disposable {
 			row.association.value = this.files.associate(bytes, { name: row.part.name });
 			row.openButton.hidden = false;
 			const mime = blob.type.split(';')[0]!.toLowerCase();
-			if (
-				['image', 'audio', 'video'].includes(row.part.presentation) &&
-				!mime.startsWith(row.part.presentation + '/')
-			) {
+			if (['image', 'audio', 'video'].includes(row.part.presentation) && !mime.startsWith(row.part.presentation + '/')) {
 				throw new Error(localize('chat.media.wrongType', 'The attachment has an unexpected media type.'));
 			}
 			if (row.part.presentation === 'html' || mime === 'text/html') {
@@ -440,11 +363,7 @@ export class ChatAttachmentsContentPart extends Disposable {
 							return;
 						}
 					} else {
-						row.media.textContent = localize(
-							'chat.resource.binary',
-							'Binary resource ({0} bytes)',
-							bytes.length,
-						);
+						row.media.textContent = localize('chat.resource.binary', 'Binary resource ({0} bytes)', bytes.length);
 					}
 				}
 			} else {
@@ -472,8 +391,7 @@ export class ChatAttachmentsContentPart extends Disposable {
 				row.status.textContent = row.part.name;
 				return;
 			}
-			if (!row.isDisposed && !this.isDisposed)
-				row.setStatus(localize('chat.media.loadFailed', 'Could not load this media: {0}', String(error)));
+			if (!row.isDisposed && !this.isDisposed) row.setStatus(localize('chat.media.loadFailed', 'Could not load this media: {0}', String(error)));
 		} finally {
 			if (!row.isDisposed) {
 				row.loading = false;
@@ -490,23 +408,14 @@ export class ChatAttachmentsContentPart extends Disposable {
 			if (row.media.matches('audio,video')) (row.media as HTMLMediaElement).pause();
 			await this.editors.openEditor({ resource: row.association.value.resource, readOnly: true });
 		} catch (error) {
-			if (!row.isDisposed && !this.isDisposed)
-				row.status.textContent = localize(
-					'chat.media.openFailed',
-					'Could not open this media: {0}',
-					String(error),
-				);
+			if (!row.isDisposed && !this.isDisposed) row.status.textContent = localize('chat.media.openFailed', 'Could not open this media: {0}', String(error));
 		} finally {
 			if (!row.isDisposed) row.openButton.disabled = false;
 		}
 	}
 
 	private reveal(row: MediaRow, url: string): void {
-		if (
-			this.options.imagePresentation === 'inline' &&
-			row.part.type === 'imageUrl' &&
-			url.startsWith('data:image/')
-		) {
+		if (this.options.imagePresentation === 'inline' && row.part.type === 'imageUrl' && url.startsWith('data:image/')) {
 			try {
 				const separator = url.indexOf(',');
 				const mimeType = url.slice(5, url.indexOf(';'));
@@ -538,12 +447,7 @@ function mediaName(part: MediaPart): string {
 }
 
 function sameSource(left: IChatListItem['attachmentSource'], right: IChatListItem['attachmentSource']): boolean {
-	return (
-		left?.sessionId === right?.sessionId &&
-		left?.threadId === right?.threadId &&
-		left?.itemId === right?.itemId &&
-		left?.kind === right?.kind
-	);
+	return left?.sessionId === right?.sessionId && left?.threadId === right?.threadId && left?.itemId === right?.itemId && left?.kind === right?.kind;
 }
 
 function sameMedia(left: MediaPart, right: MediaPart): boolean {
@@ -566,9 +470,7 @@ function sameMedia(left: MediaPart, right: MediaPart): boolean {
 	)
 		return false;
 	return left.type === 'imageAttachment'
-		? right.type === 'imageAttachment' &&
-				left.attachment.width === right.attachment.width &&
-				left.attachment.height === right.attachment.height
+		? right.type === 'imageAttachment' && left.attachment.width === right.attachment.width && left.attachment.height === right.attachment.height
 		: right.type === 'audioAttachment' && left.attachment.durationMs === right.attachment.durationMs;
 }
 
@@ -577,10 +479,7 @@ function safeMediaUrl(part: Extract<MediaPart, { readonly type: 'imageUrl' | 'au
 		const url = new URL(part.url);
 		if (url.username || url.password) return undefined;
 		if (url.protocol === 'https:' || url.protocol === 'http:') return url.toString();
-		const allowed =
-			part.type === 'imageUrl'
-				? /^data:image\/(png|jpeg|gif|webp);base64,/iu
-				: /^data:audio\/(wav|mpeg|mp4|webm|ogg);base64,/iu;
+		const allowed = part.type === 'imageUrl' ? /^data:image\/(png|jpeg|gif|webp);base64,/iu : /^data:audio\/(wav|mpeg|mp4|webm|ogg);base64,/iu;
 		return allowed.test(part.url) ? part.url : undefined;
 	} catch {
 		return undefined;

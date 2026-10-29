@@ -28,12 +28,7 @@ export class TerminalResizeDimensionsOverlay extends Disposable implements ITerm
 		if (attachment) this._register(attachment);
 		const resized = screen.raw.onResize(({ cols, rows }) => {
 			if (screen.isDisposed || screen.element.hidden || !screen.element.isConnected) return;
-			this.label.textContent = localize(
-				'terminal.resizeDimensionsOverlay.dimensions',
-				'{0} columns × {1} rows',
-				cols,
-				rows,
-			);
+			this.label.textContent = localize('terminal.resizeDimensionsOverlay.dimensions', '{0} columns × {1} rows', cols, rows);
 			this.label.hidden = false;
 			this.hide.schedule();
 		});

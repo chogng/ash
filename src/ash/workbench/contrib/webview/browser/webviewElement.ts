@@ -10,12 +10,7 @@ import { IWorkbenchEnvironmentService } from '../../../services/environment/comm
 import { webviewGenericCspSource } from '../common/webview.js';
 import { loadLocalResource } from './resourceLoading.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import type {
-	IWebviewElement,
-	WebviewContentOptions,
-	WebviewInitInfo,
-	WebviewMessageReceivedEvent,
-} from './webview.js';
+import type { IWebviewElement, WebviewContentOptions, WebviewInitInfo, WebviewMessageReceivedEvent } from './webview.js';
 
 interface WebviewMessageEnvelope {
 	readonly channel: string;
@@ -90,10 +85,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 		const bootstrapAsset = new URL('./pre/index.html', import.meta.url);
 		const workerAsset = new URL('./pre/service-worker.js?no-inline', import.meta.url);
 		// File-hosted bundles use filesystem URLs; the isolated host exposes their asset names.
-		const assetPath = (asset: URL): string =>
-			asset.protocol === `${Schemas.file}:`
-				? `assets/${asset.pathname.slice(asset.pathname.lastIndexOf('/') + 1)}`
-				: asset.pathname.replace(/^\//, '');
+		const assetPath = (asset: URL): string => (asset.protocol === `${Schemas.file}:` ? `assets/${asset.pathname.slice(asset.pathname.lastIndexOf('/') + 1)}` : asset.pathname.replace(/^\//, ''));
 		this.bootstrapUrl = new URL(assetPath(bootstrapAsset), `${endpoint}/`);
 		const workerUrl = new URL(assetPath(workerAsset), `${endpoint}/`);
 		this.frameOrigin = `${this.bootstrapUrl.protocol}//${this.bootstrapUrl.host}`;
@@ -110,11 +102,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 		element.className = 'ash-webview';
 		element.tabIndex = 0;
 		element.setAttribute('sandbox', 'allow-scripts allow-same-origin');
-		if (this.messageProtocol === 'mcp')
-			element.setAttribute(
-				'allow',
-				"camera 'none'; microphone 'none'; geolocation 'none'; clipboard-write 'none'",
-			);
+		if (this.messageProtocol === 'mcp') element.setAttribute('allow', "camera 'none'; microphone 'none'; geolocation 'none'; clipboard-write 'none'");
 		element.setAttribute('referrerpolicy', 'no-referrer');
 		element.setAttribute('title', validateTitle(initInfo.title ?? 'Webview'));
 		element.style.border = '0';
@@ -203,22 +191,8 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 				}
 				if (this.forwardKeyboardEvents && event.data?.channel === `${this.channel}:keyboard`) {
 					const keyboard = event.data;
-					if (
-						(keyboard.type !== 'keydown' && keyboard.type !== 'keyup') ||
-						typeof keyboard.key !== 'string' ||
-						typeof keyboard.code !== 'string'
-					)
-						return;
-					if (
-						![
-							keyboard.altKey,
-							keyboard.ctrlKey,
-							keyboard.shiftKey,
-							keyboard.metaKey,
-							keyboard.repeat,
-						].every(value => typeof value === 'boolean')
-					)
-						return;
+					if ((keyboard.type !== 'keydown' && keyboard.type !== 'keyup') || typeof keyboard.key !== 'string' || typeof keyboard.code !== 'string') return;
+					if (![keyboard.altKey, keyboard.ctrlKey, keyboard.shiftKey, keyboard.metaKey, keyboard.repeat].every(value => typeof value === 'boolean')) return;
 					this.keyboardEvents.fire(
 						new targetWindow.KeyboardEvent(keyboard.type, {
 							key: keyboard.key,
@@ -278,9 +252,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 			return false;
 		}
 		if (!this.isReady) {
-			return new Promise<boolean>((resolve, reject) =>
-				this.pendingMessages.push({ message, transfer, resolve, reject }),
-			);
+			return new Promise<boolean>((resolve, reject) => this.pendingMessages.push({ message, transfer, resolve, reject }));
 		}
 		this.sendContentMessage(message, transfer);
 		return true;
@@ -293,9 +265,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 	}
 
 	private sendControl(message: object, transfer: readonly ArrayBuffer[] = []): void {
-		this.element.contentWindow?.postMessage({ ...message, channel: this.instanceChannel }, this.frameOrigin, [
-			...transfer,
-		]);
+		this.element.contentWindow?.postMessage({ ...message, channel: this.instanceChannel }, this.frameOrigin, [...transfer]);
 	}
 
 	private sendContentMessage(message: unknown, transfer: readonly ArrayBuffer[]): void {
@@ -308,28 +278,14 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 				type: 'document',
 				documentChannel: this.channel,
 				title: this.element.title,
-				html: createWebviewDocument(
-					this.channel,
-					this.html,
-					this.forwardKeyboardEvents,
-					this.allowScripts,
-					this.contentSecurityPolicy,
-				),
+				html: createWebviewDocument(this.channel, this.html, this.forwardKeyboardEvents, this.allowScripts, this.contentSecurityPolicy),
 				messageProtocol: this.messageProtocol,
 			});
 		}
 	}
 
-	private async loadResource(request: {
-		readonly id?: unknown;
-		readonly documentChannel?: unknown;
-		readonly url?: unknown;
-	}): Promise<void> {
-		if (
-			!Number.isSafeInteger(request.id) ||
-			typeof request.url !== 'string' ||
-			request.documentChannel !== this.channel
-		) {
+	private async loadResource(request: { readonly id?: unknown; readonly documentChannel?: unknown; readonly url?: unknown }): Promise<void> {
+		if (!Number.isSafeInteger(request.id) || typeof request.url !== 'string' || request.documentChannel !== this.channel) {
 			return;
 		}
 		const channel = this.channel;
@@ -391,13 +347,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 	}
 }
 
-function createWebviewDocument(
-	channel: string,
-	html: string,
-	forwardKeyboardEvents: boolean,
-	allowScripts: boolean,
-	appCsp?: WebviewContentOptions['contentSecurityPolicy'],
-): string {
+function createWebviewDocument(channel: string, html: string, forwardKeyboardEvents: boolean, allowScripts: boolean, appCsp?: WebviewContentOptions['contentSecurityPolicy']): string {
 	const nonce = crypto.randomUUID();
 	const policy = appCsp
 		? [
@@ -477,7 +427,10 @@ function validateEnvelope(value: unknown, channel: string): WebviewMessageEnvelo
 	if (keys.length !== 2 || keys[0] !== 'channel' || keys[1] !== 'message' || candidate.channel !== channel) {
 		return undefined;
 	}
-	return { channel, message: candidate.message };
+	return {
+		channel,
+		message: candidate.message,
+	};
 }
 
 function validateHtml(value: string): string {

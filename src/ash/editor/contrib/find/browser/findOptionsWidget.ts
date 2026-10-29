@@ -6,12 +6,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { type IHoverService } from '../../../../platform/hover/browser/hoverService.js';
-import {
-	type ICodeEditor,
-	type IOverlayWidget,
-	type IOverlayWidgetPosition,
-	OverlayWidgetPositionPreference,
-} from '../../../browser/editorBrowser.js';
+import { type ICodeEditor, type IOverlayWidget, type IOverlayWidgetPosition, OverlayWidgetPositionPreference } from '../../../browser/editorBrowser.js';
 import { FIND_IDS } from './findModel.js';
 import { FindReplaceState } from './findState.js';
 
@@ -36,15 +31,9 @@ export class FindOptionsWidget extends Disposable implements IOverlayWidget {
 		this.root.hidden = true;
 		this.root.setAttribute('role', 'group');
 		this.root.setAttribute('aria-label', localize('findOptions.label', 'Find options'));
-		this.caseButton = this.button(ownerDocument, localize('label.matchCase', 'Match case'), 'Aa', () =>
-			state.change({ matchCase: !state.matchCase }, false),
-		);
-		this.wordButton = this.button(ownerDocument, localize('label.wholeWord', 'Match whole word'), 'W', () =>
-			state.change({ wholeWord: !state.wholeWord }, false),
-		);
-		this.regexButton = this.button(ownerDocument, localize('label.regex', 'Use regular expression'), '.*', () =>
-			state.change({ isRegex: !state.isRegex }, false),
-		);
+		this.caseButton = this.button(ownerDocument, localize('label.matchCase', 'Match case'), 'Aa', () => state.change({ matchCase: !state.matchCase }, false));
+		this.wordButton = this.button(ownerDocument, localize('label.wholeWord', 'Match whole word'), 'W', () => state.change({ wholeWord: !state.wholeWord }, false));
+		this.regexButton = this.button(ownerDocument, localize('label.regex', 'Use regular expression'), '.*', () => state.change({ isRegex: !state.isRegex }, false));
 		const buttonHovers = [
 			{ button: this.caseButton, command: FIND_IDS.ToggleCaseSensitiveCommand },
 			{ button: this.wordButton, command: FIND_IDS.ToggleWholeWordCommand },
@@ -63,9 +52,7 @@ export class FindOptionsWidget extends Disposable implements IOverlayWidget {
 		const updateHoverLabels = (): void => {
 			for (const { button, command, hover } of buttonHovers) {
 				const binding = keybindingService.lookupKeybinding(command);
-				hover.update(
-					`${button.getAttribute('aria-label')}${binding ? ` (${getKeybindingLabel(binding)})` : ''}`,
-				);
+				hover.update(`${button.getAttribute('aria-label')}${binding ? ` (${getKeybindingLabel(binding)})` : ''}`);
 			}
 		};
 		updateHoverLabels();
@@ -80,8 +67,7 @@ export class FindOptionsWidget extends Disposable implements IOverlayWidget {
 				this.checked(this.wordButton, state.wholeWord);
 				this.checked(this.regexButton, state.isRegex);
 				if (event.isRevealed && state.isRevealed) this.hide();
-				else if (!state.isRevealed && (event.matchCase || event.wholeWord || event.isRegex))
-					this.highlightFindOptions();
+				else if (!state.isRevealed && (event.matchCase || event.wholeWord || event.isRegex)) this.highlightFindOptions();
 			}),
 		);
 		this._register(addDisposableListener(this.root, 'mouseenter', () => this.hideSoon.cancel()));

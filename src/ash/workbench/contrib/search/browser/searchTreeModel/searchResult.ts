@@ -53,12 +53,8 @@ export class SearchResultImpl {
 	}
 
 	public addFileMatch(file: IFileMatch): void {
-		const folder = [...this.workspaceFolders]
-			.sort((a, b) => b.uri.path.length - a.uri.path.length)
-			.find(folder => extUri.isEqualOrParent(file.resource, folder.uri));
-		const path = folder
-			? file.resource.path.slice(folder.uri.path.replace(/\/$/, '').length + 1)
-			: file.resource.path;
+		const folder = [...this.workspaceFolders].sort((a, b) => b.uri.path.length - a.uri.path.length).find(folder => extUri.isEqualOrParent(file.resource, folder.uri));
+		const path = folder ? file.resource.path.slice(folder.uri.path.replace(/\/$/, '').length + 1) : file.resource.path;
 		for (const result of file.results ?? []) {
 			for (const location of result.rangeLocations) {
 				const starts = [0];
@@ -82,13 +78,7 @@ export class SearchResultImpl {
 						this.fileMatches.set(key, retained);
 					}
 					const source = location.source;
-					const id = JSON.stringify([
-						retained.id,
-						source.startLineNumber,
-						source.startColumn,
-						source.endLineNumber,
-						source.endColumn,
-					]);
+					const id = JSON.stringify([retained.id, source.startLineNumber, source.startColumn, source.endLineNumber, source.endColumn]);
 					if (!this.matchIds.has(id)) {
 						this.matchIds.add(id);
 						retained.matches.push({
@@ -100,12 +90,7 @@ export class SearchResultImpl {
 								start: offset(location.preview.startLineNumber, location.preview.startColumn),
 								end: offset(location.preview.endLineNumber, location.preview.endColumn),
 							},
-							range: new Range(
-								source.startLineNumber + 1,
-								source.startColumn + 1,
-								source.endLineNumber + 1,
-								source.endColumn + 1,
-							),
+							range: new Range(source.startLineNumber + 1, source.startColumn + 1, source.endLineNumber + 1, source.endColumn + 1),
 						});
 					}
 					continue;
@@ -188,12 +173,7 @@ export class SearchResultImpl {
 					file,
 					preview: match.preview,
 					previewRange: range,
-					range: new Range(
-						match.lineNumber + start.length - 1,
-						start.at(-1)!.length + 1,
-						match.lineNumber + end.length - 1,
-						end.at(-1)!.length + 1,
-					),
+					range: new Range(match.lineNumber + start.length - 1, start.at(-1)!.length + 1, match.lineNumber + end.length - 1, end.at(-1)!.length + 1),
 				});
 			}
 		}

@@ -26,17 +26,7 @@ export class DesignCodeWidget extends Disposable {
 			attributes: { 'aria-label': localize('sessions.design.generatedCode', 'Generated code') },
 		});
 		const header = h(ownerDocument, 'div', { className: 'ash-design-code-header' });
-		header.append(
-			h(
-				ownerDocument,
-				'span',
-				{},
-				localize(
-					'sessions.design.codeHint',
-					'Runnable HTML/CSS/SVG with object IDs, keyframes and editable design JSON for agents.',
-				),
-			),
-		);
+		header.append(h(ownerDocument, 'span', {}, localize('sessions.design.codeHint', 'Runnable HTML/CSS/SVG with object IDs, keyframes and editable design JSON for agents.')));
 		this.exportButton = this._register(
 			new Button(header, {
 				...defaultButtonStyles,

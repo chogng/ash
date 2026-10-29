@@ -40,9 +40,7 @@ test('repository count decoding rejects malformed extension data at the command 
 		await assert.rejects(readLocalRepositories(commands), /Invalid repository context count/u);
 	}
 	const commands = {
-		executeCommand: async () => [
-			{ ...repository, head: { ...repository.head, upstream: { name: 'origin/main', ahead: 0, behind: -1 } } },
-		],
+		executeCommand: async () => [{ ...repository, head: { ...repository.head, upstream: { name: 'origin/main', ahead: 0, behind: -1 } } }],
 	} as unknown as ICommandService;
 	await assert.rejects(readLocalRepositories(commands), /Invalid repository context count/u);
 });

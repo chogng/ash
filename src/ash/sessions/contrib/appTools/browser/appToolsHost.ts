@@ -3,12 +3,7 @@ import './media/appToolsHost.css';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { CancellationTokenSource, throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { ITaskService } from '../../../../workbench/contrib/tasks/common/taskService.js';
-import {
-	type ITaskRun,
-	type IWorkspaceTask,
-	type ITaskDescription,
-	type ITaskOutput,
-} from '../../../../workbench/contrib/tasks/common/tasks.js';
+import { type ITaskRun, type IWorkspaceTask, type ITaskDescription, type ITaskOutput } from '../../../../workbench/contrib/tasks/common/tasks.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { URI } from '../../../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
@@ -67,37 +62,21 @@ export class AppToolsHost extends Disposable implements IAppToolsHost {
 		);
 	}
 	private taskFolder(directory: string): string {
-		const folder = this.workspace
-			.getWorkspace()
-			.folders.find(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, URI.file(directory)));
-		if (!folder)
-			throw new Error(
-				localize('tasks.agentDirectoryUnavailable', 'The task directory is not a folder in this window.'),
-			);
+		const folder = this.workspace.getWorkspace().folders.find(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, URI.file(directory)));
+		if (!folder) throw new Error(localize('tasks.agentDirectoryUnavailable', 'The task directory is not a folder in this window.'));
 		return folder.id;
 	}
 	private findTask(directory: string, taskId: string): IWorkspaceTask {
 		const dirId = this.taskFolder(directory);
 		const task = this.tasks.tasks.find(task => task.id === taskId && task.dirId === dirId);
-		if (!task)
-			throw new Error(
-				localize(
-					'tasks.agentTaskNotFound',
-					'The selected task is no longer available. Discover workspace tasks again.',
-				),
-			);
+		if (!task) throw new Error(localize('tasks.agentTaskNotFound', 'The selected task is no longer available. Discover workspace tasks again.'));
 		return task;
 	}
 	private findRun(directory: string, runId: string): ITaskRun {
 		const dirId = this.taskFolder(directory);
 		const run = this.tasks.getRun(runId);
 		if (!run || run.task.dirId !== dirId)
-			throw new Error(
-				localize(
-					'tasks.agentRunNotFound',
-					'The task run was not found in this folder. It may have expired or belonged to a previous workspace.',
-				),
-			);
+			throw new Error(localize('tasks.agentRunNotFound', 'The task run was not found in this folder. It may have expired or belonged to a previous workspace.'));
 		return run;
 	}
 	public async listTasks(directory: string, signal: AbortSignal): Promise<TaskCatalog> {
@@ -129,30 +108,14 @@ export class AppToolsHost extends Disposable implements IAppToolsHost {
 		throwIfCancelled(signal);
 		return { tasks, runs: this.tasks.runs.filter(run => run.task.dirId === dirId).map(taskSummary) };
 	}
-	public async describeTask(
-		directory: string,
-		taskId: string,
-		revision: string,
-		signal: AbortSignal,
-	): Promise<ITaskDescription> {
+	public async describeTask(directory: string, taskId: string, revision: string, signal: AbortSignal): Promise<ITaskDescription> {
 		this.taskFolder(directory);
 		await raceCancellationError(this.tasks.refresh(), signal);
 		const description = await raceCancellationError(this.tasks.describe(this.findTask(directory, taskId)), signal);
-		if (description.revision !== revision)
-			throw new Error(
-				localize(
-					'tasks.agentRevisionChanged',
-					'The task configuration changed after review. Discover the task again before running it.',
-				),
-			);
+		if (description.revision !== revision) throw new Error(localize('tasks.agentRevisionChanged', 'The task configuration changed after review. Discover the task again before running it.'));
 		return description;
 	}
-	public async runTask(
-		directory: string,
-		taskId: string,
-		revision: string,
-		signal: AbortSignal,
-	): Promise<TaskRunSummary> {
+	public async runTask(directory: string, taskId: string, revision: string, signal: AbortSignal): Promise<TaskRunSummary> {
 		await this.describeTask(directory, taskId, revision, signal);
 		throwIfCancelled(signal);
 		const priorRuns = new Set(this.tasks.runs.map(run => run.runId));
@@ -173,10 +136,7 @@ export class AppToolsHost extends Disposable implements IAppToolsHost {
 		return taskSummary(run);
 	}
 	public async openFile(resource: URI, line?: number): Promise<void> {
-		await this.editors.openEditor(
-			{ resource },
-			{ pinned: true, ignoreError: true, ...(line ? { selection: new Range(line, 1, line, 1) } : {}) },
-		);
+		await this.editors.openEditor({ resource }, { pinned: true, ignoreError: true, ...(line ? { selection: new Range(line, 1, line, 1) } : {}) });
 	}
 	public async openReview(original: URI, modified: URI): Promise<void> {
 		await this.editors.openEditor(createDiffEditorInput({ resource: original }, { resource: modified }), {
@@ -199,10 +159,7 @@ export class AppToolsHost extends Disposable implements IAppToolsHost {
 		};
 		assertCurrent();
 		const os = this.terminalProcesses.operatingSystem;
-		if (os === undefined)
-			throw new Error(
-				localize('terminal.profile.platformUnavailable', 'The terminal execution host is not ready.'),
-			);
+		if (os === undefined) throw new Error(localize('terminal.profile.platformUnavailable', 'The terminal execution host is not ready.'));
 		using selection = new CancellationTokenSource();
 		using selectionListener = addDisposableListener(signal, 'abort', () => selection.cancel());
 		const folders = this.workspace.getWorkspace().folders;
@@ -213,10 +170,7 @@ export class AppToolsHost extends Disposable implements IAppToolsHost {
 				? folders[0]
 				: await this.commands.executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [
 						{
-							placeHolder: localize(
-								'terminal.selectFolder',
-								'Select a workspace folder for the terminal.',
-							),
+							placeHolder: localize('terminal.selectFolder', 'Select a workspace folder for the terminal.'),
 						},
 						selection.token,
 					]));

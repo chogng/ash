@@ -10,10 +10,7 @@ registerAction2(
 		constructor() {
 			super({
 				id: 'workbench.action.browser.toggleDevTools',
-				title: localize2(
-					{ bundle: 'ash.workbench', key: 'browser.devTools' },
-					'Browser: Toggle Developer Tools',
-				),
+				title: localize2({ bundle: 'ash.workbench', key: 'browser.devTools' }, 'Browser: Toggle Developer Tools'),
 				f1: true,
 			});
 		}

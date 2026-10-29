@@ -3,12 +3,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { type IMarkerService } from '../../../../platform/markers/common/markers.js';
 import type { IWorkbenchContribution } from '../../../common/contributions.js';
-import {
-	StatusbarAlignment,
-	type IStatusbarEntry,
-	type IStatusbarEntryAccessor,
-	type IStatusbarService,
-} from '../../../services/statusbar/browser/statusbar.js';
+import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from '../../../services/statusbar/browser/statusbar.js';
 import type { IViewsService } from '../../../services/views/common/viewsService.js';
 
 const ProblemsPriority = 700;
@@ -45,11 +40,7 @@ export class ProblemsStatusContribution extends Disposable implements IWorkbench
 		if (errors > 0) summaries.push(localize('problems.errorCount', 'Errors: {0}', errors));
 		if (warnings > 0) summaries.push(localize('problems.warningCount', 'Warnings: {0}', warnings));
 		const tooltip =
-			summaries.length === 0
-				? localize('problems.noProblems', 'No Problems')
-				: summaries.length === 1
-					? summaries[0]!
-					: localize('problems.summary', '{0}, {1}', summaries[0]!, summaries[1]!);
+			summaries.length === 0 ? localize('problems.noProblems', 'No Problems') : summaries.length === 1 ? summaries[0]! : localize('problems.summary', '{0}, {1}', summaries[0]!, summaries[1]!);
 		return {
 			text: '',
 			segments: [

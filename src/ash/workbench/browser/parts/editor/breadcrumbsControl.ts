@@ -15,10 +15,7 @@ import { localize } from '../../../../nls.js';
 import { BreadcrumbsModel, FileElement, SymbolElement } from './breadcrumbsModel.js';
 import type { BreadcrumbsPathMode } from './breadcrumbs.js';
 import { ScrollbarVisibility } from '../../../../base/common/scrollable.js';
-import type {
-	EditorTitleScrollbarSizing,
-	EditorTitleScrollbarVisibility,
-} from '../../../services/editor/common/editorConfiguration.js';
+import type { EditorTitleScrollbarSizing, EditorTitleScrollbarVisibility } from '../../../services/editor/common/editorConfiguration.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { defaultBreadcrumbsWidgetStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 
@@ -59,18 +56,14 @@ export class EditorBreadcrumbsControl extends Disposable {
 		this.domNode.setAttribute('aria-label', localize('breadcrumbs.editorLabel', 'Editor breadcrumbs'));
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
-		this.widget = this._register(
-			new BreadcrumbsWidget(this.domNode, 3, undefined, Lxicon.chevronRight, defaultBreadcrumbsWidgetStyles),
-		);
+		this.widget = this._register(new BreadcrumbsWidget(this.domNode, 3, undefined, Lxicon.chevronRight, defaultBreadcrumbsWidgetStyles));
 		this.editorTypeButton = h(container.ownerDocument, 'button');
 		this.editorTypeButton.type = 'button';
 		this.editorTypeButton.className = 'ash-breadcrumbs-editor-type';
 		this.editorTypeButton.hidden = true;
 		this.editorTypeButton.setAttribute('aria-haspopup', 'menu');
 		this.domNode.append(this.editorTypeButton);
-		this._register(
-			addDisposableListener(this.editorTypeButton, 'click', () => this.selectEditorType?.(this.editorTypeButton)),
-		);
+		this._register(addDisposableListener(this.editorTypeButton, 'click', () => this.selectEditorType?.(this.editorTypeButton)));
 		this._register(
 			this.widget.onDidSelectItem(event => {
 				if (!(event.item instanceof EditorBreadcrumbItem)) {
@@ -120,10 +113,7 @@ export class EditorBreadcrumbsControl extends Disposable {
 		this.selectEditorType = select;
 		this.editorTypeButton.hidden = label === undefined;
 		this.editorTypeButton.textContent = label ?? '';
-		this.editorTypeButton.setAttribute(
-			'aria-label',
-			localize('breadcrumbs.editorTypeLabel', 'Select editor: {0}', label ?? ''),
-		);
+		this.editorTypeButton.setAttribute('aria-label', localize('breadcrumbs.editorTypeLabel', 'Select editor: {0}', label ?? ''));
 		const chevron = h(this.domNode.ownerDocument, 'span');
 		chevron.className = 'lxicon lxicon-chevron-down';
 		chevron.setAttribute('aria-hidden', 'true');
@@ -148,25 +138,11 @@ export class EditorBreadcrumbsControl extends Disposable {
 			return;
 		}
 		const workspaceFolder = this.workspaceContextService.getWorkspaceFolder(resource);
-		const files =
-			this.filePath === 'off'
-				? []
-				: new BreadcrumbsModel(
-						resource,
-						workspaceFolder,
-						this.input.label,
-						this.workspaceContextService.getWorkspace().folders.length > 1,
-					).getElements();
+		const files = this.filePath === 'off' ? [] : new BreadcrumbsModel(resource, workspaceFolder, this.input.label, this.workspaceContextService.getWorkspace().folders.length > 1).getElements();
 		const visibleFiles = this.filePath === 'last' ? files.slice(-1) : files;
-		const visibleSymbols =
-			this.symbolPath === 'off' ? [] : this.symbolPath === 'last' ? this.symbols.slice(-1) : this.symbols;
+		const visibleSymbols = this.symbolPath === 'off' ? [] : this.symbolPath === 'last' ? this.symbols.slice(-1) : this.symbols;
 		const elements = [...visibleFiles, ...visibleSymbols];
-		this.widget.setItems(
-			elements.map(
-				(element, index) =>
-					new EditorBreadcrumbItem(element, index === elements.length - 1, this.labels, this.showIcons),
-			),
-		);
+		this.widget.setItems(elements.map((element, index) => new EditorBreadcrumbItem(element, index === elements.length - 1, this.labels, this.showIcons)));
 		this.domNode.title = resource.toString();
 		// Content emptiness is independent of configuration hiding a nonempty path.
 		this.domNode.classList.toggle('empty', elements.length === 0);
@@ -193,22 +169,13 @@ class EditorBreadcrumbItem extends BreadcrumbsItem {
 	}
 
 	public override equals(other: BreadcrumbsItem): boolean {
-		if (
-			!(other instanceof EditorBreadcrumbItem) ||
-			this.current !== other.current ||
-			this.showIcons !== other.showIcons ||
-			this.element.label !== other.element.label
-		) {
+		if (!(other instanceof EditorBreadcrumbItem) || this.current !== other.current || this.showIcons !== other.showIcons || this.element.label !== other.element.label) {
 			return false;
 		}
 		if (this.element instanceof FileElement && other.element instanceof FileElement) {
 			return extUri.isEqual(this.element.uri, other.element.uri);
 		}
-		return (
-			this.element instanceof SymbolElement &&
-			other.element instanceof SymbolElement &&
-			this.element.symbol === other.element.symbol
-		);
+		return this.element instanceof SymbolElement && other.element instanceof SymbolElement && this.element.symbol === other.element.symbol;
 	}
 
 	public override render(container: HTMLElement): void {

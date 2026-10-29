@@ -26,11 +26,7 @@ import { TerminalGroup } from '../../browser/terminalGroup.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
-import {
-	IWorkbenchLayoutService,
-	Position,
-	positionToString,
-} from '../../../../services/layout/browser/layoutService.js';
+import { IWorkbenchLayoutService, Position, positionToString } from '../../../../services/layout/browser/layoutService.js';
 
 import assert from 'node:assert/strict';
 import { test, suite, suiteTeardown } from 'mocha';
@@ -50,23 +46,17 @@ for (const [name, value] of Object.entries({
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
 	MouseEvent: browserEnvironment.window.MouseEvent,
 })) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
+	Object.defineProperty(globalThis, name, {
+		configurable: true,
+		value,
+	});
 }
 
 const { TerminalTabbedView } = await import('../../../../../workbench/contrib/terminal/browser/terminalTabbedView.js');
 
 suiteTeardown(() => {
 	browserEnvironment.window.close();
-	for (const name of [
-		'window',
-		'document',
-		'Node',
-		'Element',
-		'HTMLElement',
-		'Event',
-		'KeyboardEvent',
-		'MouseEvent',
-	]) {
+	for (const name of ['window', 'document', 'Node', 'Element', 'HTMLElement', 'Event', 'KeyboardEvent', 'MouseEvent']) {
 		Reflect.deleteProperty(globalThis, name);
 	}
 });
@@ -123,10 +113,7 @@ suite('Terminal Panel orientation', () => {
 		group.resizePanes([2, 3, 5]);
 		const screens = instances.map(instance => instance.xterm!.element);
 		const assertState = (orientation: string): void => {
-			assert.equal(
-				host.querySelector('.ash-terminal-group')?.classList.contains(`ash-split-view-${orientation}`),
-				true,
-			);
+			assert.equal(host.querySelector('.ash-terminal-group')?.classList.contains(`ash-split-view-${orientation}`), true);
 			assert.deepEqual(group.terminalInstances, instances);
 			assert.equal(group.activeInstance, instances[1]);
 			assert.deepEqual(
@@ -182,10 +169,7 @@ suite('Terminal Panel orientation', () => {
 			assertState('vertical');
 			group.setVisible(true);
 			group.attachToElement(reopened);
-			assert.equal(
-				reopened.querySelector('.ash-terminal-group')?.classList.contains('ash-split-view-vertical'),
-				true,
-			);
+			assert.equal(reopened.querySelector('.ash-terminal-group')?.classList.contains('ash-split-view-vertical'), true);
 			assert.deepEqual(
 				group.getLayoutInfo(true).terminals.map(pane => pane.relativeSize),
 				[0.2, 0.3, 0.5],
@@ -281,10 +265,7 @@ test('Terminal instance list sash resizes the right column within its bounds', (
 	using context = new ContextKeyService();
 	using commands = new CommandService(services);
 	services.registerInstance(ITerminalService, terminals);
-	services.registerSingleton(
-		IWorkspaceContextService,
-		() => new TestWorkspaceService({ id: 'terminal-tabs-test', folders: [] }),
-	);
+	services.registerSingleton(IWorkspaceContextService, () => new TestWorkspaceService({ id: 'terminal-tabs-test', folders: [] }));
 	services.registerSingleton(IEnvironmentVariableService, () => services.createInstance(EnvironmentVariableService));
 	services.registerInstance(IContextKeyService, context);
 	services.registerInstance(ICommandService, commands);
@@ -339,10 +320,7 @@ test('Terminal instance list sash resizes the right column within its bounds', (
 		layout.layout(1_000, 200);
 		assert.equal(panes[1]?.style.width, '120px');
 		assert.equal(tabs.classList.contains('ash-terminal-tabs-narrow'), false);
-		assert.equal(
-			services.get(IStorageService).getNumber('tabs-list-width-horizontal', StorageScope.WORKSPACE),
-			120,
-		);
+		assert.equal(services.get(IStorageService).getNumber('tabs-list-width-horizontal', StorageScope.WORKSPACE), 120);
 	}
 
 	sash.dispatchEvent(new dom.window.MouseEvent('pointerdown', { button: 0, clientX: 880, bubbles: true }));
@@ -378,9 +356,7 @@ test('Terminal instance list sash resizes the right column within its bounds', (
 	group.resizePanes([2, 1, 1]);
 	const paneSizes = () =>
 		[...layout.element.querySelectorAll<HTMLElement>('.ash-terminal-group > .ash-split-view-pane')].map(pane =>
-			panelPosition === Position.BOTTOM || panelPosition === Position.TOP
-				? Number.parseFloat(pane.style.width)
-				: Number.parseFloat(pane.style.height),
+			panelPosition === Position.BOTTOM || panelPosition === Position.TOP ? Number.parseFloat(pane.style.width) : Number.parseFloat(pane.style.height),
 		);
 	const relativeSizes = group.getLayoutInfo(true).terminals.map(terminal => terminal.relativeSize);
 	for (const position of [Position.LEFT, Position.RIGHT, Position.TOP, Position.BOTTOM]) {
@@ -388,25 +364,14 @@ test('Terminal instance list sash resizes the right column within its bounds', (
 		positionChanged.fire(positionToString(position));
 		// Enough height permits unequal vertical panes and demonstrates the axis follows position.
 		group.layout(500, 800);
-		assert.equal(
-			layout.element.querySelector('.ash-terminal-group')?.classList.contains('ash-split-view-horizontal'),
-			position === Position.TOP || position === Position.BOTTOM,
-		);
+		assert.equal(layout.element.querySelector('.ash-terminal-group')?.classList.contains('ash-split-view-horizontal'), position === Position.TOP || position === Position.BOTTOM);
 		const actualSizes = group.getLayoutInfo(true).terminals.map(terminal => terminal.relativeSize);
 		assert.ok(actualSizes.every((size, index) => Math.abs(size - relativeSizes[index]!) < 0.01));
 		assert.ok(paneSizes().every(size => size > 0));
 		group.layout(600, 900);
-		assert.ok(
-			group
-				.getLayoutInfo(true)
-				.terminals.every((terminal, index) => Math.abs(terminal.relativeSize - relativeSizes[index]!) < 0.01),
-		);
+		assert.ok(group.getLayoutInfo(true).terminals.every((terminal, index) => Math.abs(terminal.relativeSize - relativeSizes[index]!) < 0.01));
 		group.layout(0, 0);
-		assert.ok(
-			group
-				.getLayoutInfo(true)
-				.terminals.every((terminal, index) => Math.abs(terminal.relativeSize - relativeSizes[index]!) < 0.01),
-		);
+		assert.ok(group.getLayoutInfo(true).terminals.every((terminal, index) => Math.abs(terminal.relativeSize - relativeSizes[index]!) < 0.01));
 		group.layout(100, 100);
 		group.layout(500, 800);
 		const rendered = paneSizes();
@@ -418,10 +383,7 @@ test('Terminal instance list sash resizes the right column within its bounds', (
 		[...tabs.querySelectorAll('.ash-terminal-group-branch')].map(branch => branch.textContent),
 		['┌', '├', '└'],
 	);
-	assert.equal(
-		tabs.querySelector('[id="three-tab"]')?.getAttribute('aria-description'),
-		'Split 2 of 3 in terminal group 1',
-	);
+	assert.equal(tabs.querySelector('[id="three-tab"]')?.getAttribute('aria-description'), 'Split 2 of 3 in terminal group 1');
 	groups.unsplitInstance(third);
 	instances.pop();
 	disposed.fire(third);
@@ -447,27 +409,16 @@ test('Terminal instance list sash resizes the right column within its bounds', (
 	assert.equal(panes[1]?.hidden, false);
 	assert.equal(panes[1]?.style.width, '500px');
 	assert.equal(layout.element.querySelector(':scope > .ash-sash'), hiddenSash);
-	assert.equal(
-		layout.element.querySelector(':scope > .ash-sash')?.getAttribute('aria-label'),
-		'Resize terminal instance list',
-	);
+	assert.equal(layout.element.querySelector(':scope > .ash-sash')?.getAttribute('aria-label'), 'Resize terminal instance list');
 	assert.equal(services.get(IStorageService).getNumber('tabs-list-width-horizontal', StorageScope.WORKSPACE), 500);
 	using recreated = services.createInstance(TerminalTabbedView, parent);
 	recreated.layout(1_000, 200);
-	assert.equal(
-		recreated.element.querySelectorAll<HTMLElement>(':scope > .ash-split-view-pane')[1]?.style.width,
-		'500px',
-	);
+	assert.equal(recreated.element.querySelectorAll<HTMLElement>(':scope > .ash-split-view-pane')[1]?.style.width, '500px');
 	for (const invalidWidth of [-1, 501, Number.NaN]) {
-		services
-			.get(IStorageService)
-			.store('tabs-list-width-horizontal', invalidWidth, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		services.get(IStorageService).store('tabs-list-width-horizontal', invalidWidth, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		using invalid = services.createInstance(TerminalTabbedView, parent);
 		invalid.layout(1_000, 200);
-		assert.equal(
-			invalid.element.querySelectorAll<HTMLElement>(':scope > .ash-split-view-pane')[1]?.style.width,
-			'120px',
-		);
+		assert.equal(invalid.element.querySelectorAll<HTMLElement>(':scope > .ash-split-view-pane')[1]?.style.width, '120px');
 	}
 
 	dom.window.close();

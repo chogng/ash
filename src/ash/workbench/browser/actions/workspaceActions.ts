@@ -5,22 +5,10 @@ import { Action2, MenuId, MenusRegistry } from '../../../platform/actions/common
 import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
 import { IsNativeContext } from '../../../platform/contextkey/common/contextkeys.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
-import {
-	BrowserLocalFolderSupportContext,
-	OpenFolderWorkspaceSupportContext,
-	WorkbenchStateContext,
-} from '../../common/contextkeys.js';
+import { BrowserLocalFolderSupportContext, OpenFolderWorkspaceSupportContext, WorkbenchStateContext } from '../../common/contextkeys.js';
 import { IHostService } from '../../services/host/browser/host.js';
-import {
-	getWorkspaceRemoteAuthority,
-	IWorkspaceContextService,
-	type IWorkspaceFolder,
-} from '../../../platform/workspace/common/workspace.js';
-import {
-	ADD_ROOT_FOLDER_COMMAND_ID,
-	PICK_WORKSPACE_FOLDER_COMMAND_ID,
-	SET_ROOT_FOLDER_COMMAND_ID,
-} from './workspaceCommands.js';
+import { getWorkspaceRemoteAuthority, IWorkspaceContextService, type IWorkspaceFolder } from '../../../platform/workspace/common/workspace.js';
+import { ADD_ROOT_FOLDER_COMMAND_ID, PICK_WORKSPACE_FOLDER_COMMAND_ID, SET_ROOT_FOLDER_COMMAND_ID } from './workspaceCommands.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { IWorkspaceEditingService } from '../../services/workspaces/common/workspaceEditing.js';
 import { EnterMultiRootWorkspaceSupportContext, WorkspaceFolderCountContext } from '../../common/contextkeys.js';
@@ -57,10 +45,7 @@ export class OpenWorkspaceConfigFileAction extends Action2 {
 			id: 'workbench.action.openWorkspaceConfigFile',
 			title: localize2('workspace.openConfiguration', 'Open Workspace Configuration File'),
 			f1: true,
-			precondition: ContextKeyExpr.and(
-				EnterMultiRootWorkspaceSupportContext.isEqualTo(true),
-				WorkbenchStateContext.isEqualTo('workspace'),
-			),
+			precondition: ContextKeyExpr.and(EnterMultiRootWorkspaceSupportContext.isEqualTo(true), WorkbenchStateContext.isEqualTo('workspace')),
 		});
 	}
 	override async run(accessor: ServicesAccessor): Promise<void> {
@@ -95,16 +80,10 @@ export class RemoveRootFolderAction extends Action2 {
 			id: 'workbench.action.removeRootFolder',
 			title: localize2('workspace.removeFolder', 'Remove Folder from Workspace...'),
 			f1: true,
-			precondition: ContextKeyExpr.and(
-				EnterMultiRootWorkspaceSupportContext.isEqualTo(true),
-				ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0),
-			),
+			precondition: ContextKeyExpr.and(EnterMultiRootWorkspaceSupportContext.isEqualTo(true), ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0)),
 			menu: {
 				id: MenuId.MenubarFileMenu,
-				when: ContextKeyExpr.and(
-					EnterMultiRootWorkspaceSupportContext.isEqualTo(true),
-					ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0),
-				),
+				when: ContextKeyExpr.and(EnterMultiRootWorkspaceSupportContext.isEqualTo(true), ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0)),
 				group: '2_open',
 				order: 5,
 			},
@@ -113,9 +92,7 @@ export class RemoveRootFolderAction extends Action2 {
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		const folder = await accessor
 			.get(ICommandService)
-			.executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [
-				{ placeHolder: localize('workspace.removeFolder', 'Remove Folder from Workspace...') },
-			]);
+			.executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [{ placeHolder: localize('workspace.removeFolder', 'Remove Folder from Workspace...') }]);
 		if (!folder) return;
 		await accessor.get(IWorkspaceEditingService).removeFolders([folder.uri]);
 		status(localize('workspace.foldersUpdated', 'Workspace folders updated.'));
@@ -145,18 +122,9 @@ export class SaveWorkspaceAsAction extends Action2 {
 		status(localize('workspace.saved', 'Workspace saved.'));
 	}
 }
-const OpenFolderViaWorkspaceWhen = ContextKeyExpr.and(
-	OpenFolderWorkspaceSupportContext.isEqualTo(false),
-	BrowserLocalFolderSupportContext.isEqualTo(true),
-);
-const EmptyWorkspaceSupport = ContextKeyExpr.or(
-	IsNativeContext.isEqualTo(true),
-	BrowserLocalFolderSupportContext.isEqualTo(true),
-);
-const CloseWorkspacePrecondition = ContextKeyExpr.and(
-	EmptyWorkspaceSupport,
-	ContextKeyExpr.notEquals(WorkbenchStateContext.key, 'empty'),
-);
+const OpenFolderViaWorkspaceWhen = ContextKeyExpr.and(OpenFolderWorkspaceSupportContext.isEqualTo(false), BrowserLocalFolderSupportContext.isEqualTo(true));
+const EmptyWorkspaceSupport = ContextKeyExpr.or(IsNativeContext.isEqualTo(true), BrowserLocalFolderSupportContext.isEqualTo(true));
+const CloseWorkspacePrecondition = ContextKeyExpr.and(EmptyWorkspaceSupport, ContextKeyExpr.notEquals(WorkbenchStateContext.key, 'empty'));
 
 export class CloseWorkspaceAction extends Action2 {
 	static readonly ID = 'workbench.action.closeFolder';
@@ -173,9 +141,7 @@ export class CloseWorkspaceAction extends Action2 {
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		const remoteAuthority = getWorkspaceRemoteAuthority(accessor.get(IWorkspaceContextService).getWorkspace());
-		return accessor
-			.get(IHostService)
-			.openWindow({ forceReuseWindow: true, ...(remoteAuthority ? { remoteAuthority } : {}) });
+		return accessor.get(IHostService).openWindow({ forceReuseWindow: true, ...(remoteAuthority ? { remoteAuthority } : {}) });
 	}
 }
 

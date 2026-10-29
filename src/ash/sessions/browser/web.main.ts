@@ -83,9 +83,7 @@ export class SessionsBrowserMain extends Disposable {
 			const host = globalThis.ashWebWorkbenchHost;
 			const ownerWindow = container.ownerDocument.defaultView;
 			if (!ownerWindow) throw new Error('Sessions renderer requires an owner window');
-			const browserFiles = host?.webWorkspaceClient
-				? undefined
-				: this._register(new HTMLFileSystemProvider(ownerWindow.indexedDB, ownerWindow));
+			const browserFiles = host?.webWorkspaceClient ? undefined : this._register(new HTMLFileSystemProvider(ownerWindow.indexedDB, ownerWindow));
 			const workbench = await createSessionsWorkbench({
 				serviceCollection: new ServiceCollection([
 					IWorkbenchEnvironmentService,
@@ -95,13 +93,7 @@ export class SessionsBrowserMain extends Disposable {
 						{ updateProvider: host?.updateProvider ?? createWebUpdateProvider(container.ownerDocument) },
 					]),
 				]),
-				createAppToolsHost: documentClient
-					? services =>
-							new AppServerAppToolsHost(
-								documentClient!,
-								services.createInstance(AppToolsHost, container.ownerDocument, undefined),
-							)
-					: undefined,
+				createAppToolsHost: documentClient ? services => new AppServerAppToolsHost(documentClient!, services.createInstance(AppToolsHost, container.ownerDocument, undefined)) : undefined,
 				createTextDocumentHost: documentClient
 					? services => {
 							const editing = services.get(IChatEditingService);
@@ -146,28 +138,18 @@ export class SessionsBrowserMain extends Disposable {
 				createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),
 				profile,
 				api: host?.api ?? createDisconnectedRendererApi(),
-				workspaceSelection: () =>
-					host?.workspace
-						? selectionFromWorkspace(workspaceFromIdentifier(host.workspace))
-						: { type: 'current' },
-				workspace: () =>
-					host?.workspace ? workspaceFromIdentifier(host.workspace) : { id: 'sessions', folders: [] },
+				workspaceSelection: () => (host?.workspace ? selectionFromWorkspace(workspaceFromIdentifier(host.workspace)) : { type: 'current' }),
+				workspace: () => (host?.workspace ? workspaceFromIdentifier(host.workspace) : { id: 'sessions', folders: [] }),
 				createUserDataFileSystemProvider: () =>
-					IndexedDBFileSystemProvider.create(ownerWindow.indexedDB, Schemas.vscodeUserData).then(
-						async provider => {
-							try {
-								await migrateLegacyBrowserSettings(
-									ownerWindow.indexedDB,
-									provider,
-									SettingsURI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }),
-								);
-								return provider;
-							} catch (error) {
-								provider.dispose();
-								throw error;
-							}
-						},
-					),
+					IndexedDBFileSystemProvider.create(ownerWindow.indexedDB, Schemas.vscodeUserData).then(async provider => {
+						try {
+							await migrateLegacyBrowserSettings(ownerWindow.indexedDB, provider, SettingsURI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }));
+							return provider;
+						} catch (error) {
+							provider.dispose();
+							throw error;
+						}
+					}),
 				browserFileSystemProvider: browserFiles,
 				createFileDialogService: services => {
 					const common = {
@@ -177,11 +159,7 @@ export class SessionsBrowserMain extends Disposable {
 					};
 					const dialogs = () => services.get(IDialogService);
 					if (host?.webWorkspaceClient) {
-						return services.createInstance(
-							FileDialogService,
-							{ ...common, kind: 'server', client: host.webWorkspaceClient },
-							dialogs,
-						);
+						return services.createInstance(FileDialogService, { ...common, kind: 'server', client: host.webWorkspaceClient }, dialogs);
 					}
 					return services.createInstance(
 						FileDialogService,
@@ -192,25 +170,21 @@ export class SessionsBrowserMain extends Disposable {
 							pickDirectory: (startIn?: FileSystemDirectoryHandle) =>
 								(
 									ownerWindow as unknown as Window & {
-										showDirectoryPicker: (options?: {
-											startIn?: FileSystemDirectoryHandle;
-										}) => Promise<FileSystemDirectoryHandle>;
+										showDirectoryPicker: (options?: { startIn?: FileSystemDirectoryHandle }) => Promise<FileSystemDirectoryHandle>;
 									}
 								).showDirectoryPicker(startIn ? { startIn } : undefined),
 						},
 						dialogs,
 					);
 				},
-				createLifecycleService: services =>
-					services.createInstance(BrowserLifecycleService, { ownerWindow, onError: onUnexpectedError }),
+				createLifecycleService: services => services.createInstance(BrowserLifecycleService, { ownerWindow, onError: onUnexpectedError }),
 				returnToWorkbench: () => {
 					const location = container.ownerDocument.location;
 					location.assign(new URL(profile.workbenchRelativePath, location.href).href);
 				},
 				createContextMenuService: services => services.createInstance(BrowserContextMenuService),
 				createHostColorSchemeService: () => new BrowserHostColorSchemeService(ownerWindow),
-				createTitlebarPart: (titlebarContainer, services) =>
-					services.createInstance(TitlebarPart, titlebarContainer, 'application-menu'),
+				createTitlebarPart: (titlebarContainer, services) => services.createInstance(TitlebarPart, titlebarContainer, 'application-menu'),
 				container,
 			});
 			if (this.isDisposed) {

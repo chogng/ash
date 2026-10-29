@@ -1,9 +1,5 @@
 import { EditorPane } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
-import type {
-	IResourceEditorInput,
-	IEditorPane,
-	IEditorExtensionApi,
-} from '../../../src/ash/workbench/common/editor.js';
+import type { IResourceEditorInput, IEditorPane, IEditorExtensionApi } from '../../../src/ash/workbench/common/editor.js';
 import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
@@ -18,16 +14,7 @@ import { URI } from '../../../src/ash/base/common/uri.js';
 import { localize } from '../../../src/ash/nls.js';
 import type { EditorClientInstantiation } from '../../../src/ash/workbench/services/extensions/browser/extensionEditor.js';
 import { registerResourceEditorAccessibility } from '../../../src/ash/workbench/services/extensions/browser/resourceEditorAccessibility.js';
-import {
-	createLibraryEntry,
-	emptyLibrary,
-	formatReference,
-	importRecords,
-	LIBRARY_EDITOR_ID,
-	replaceEntry,
-	serializeLibrary,
-	type LibraryEntry,
-} from '../common/library.js';
+import { createLibraryEntry, emptyLibrary, formatReference, importRecords, LIBRARY_EDITOR_ID, replaceEntry, serializeLibrary, type LibraryEntry } from '../common/library.js';
 import { parseRis, RisParseError } from '../common/ris.js';
 import { isReferenceLibraryCopy, ReferenceLibraryWorkingCopy } from './referenceLibraryWorkingCopy.js';
 import './media/referenceLibrary.css';
@@ -73,12 +60,7 @@ export class ReferenceLibraryEditor extends EditorPane {
 				() => {
 					this.controller.abort();
 					this.render();
-					this.message(
-						localize(
-							'references.retired',
-							'Reference Manager is unavailable. This library and unsaved changes are preserved; re-enable the extension and reopen it.',
-						),
-					);
+					this.message(localize('references.retired', 'Reference Manager is unavailable. This library and unsaved changes are preserved; re-enable the extension and reopen it.'));
 				},
 				{ once: true },
 			),
@@ -122,15 +104,9 @@ export class ReferenceLibraryEditor extends EditorPane {
 		this.targets.setAttribute('aria-label', localize('references.target', 'Academy document'));
 		targetLabel.append(this.targets);
 		citationBar.append(targetLabel);
-		this.button(citationBar, 'openDocument', localize('references.openDocument', 'Open Academy document'), () =>
-			this.openDocument(),
-		);
-		this.button(citationBar, 'insert', localize('references.insert', 'Insert citation'), () =>
-			this.citations('insert'),
-		);
-		this.button(citationBar, 'update', localize('references.update', 'Update citations'), () =>
-			this.citations('update'),
-		);
+		this.button(citationBar, 'openDocument', localize('references.openDocument', 'Open Academy document'), () => this.openDocument());
+		this.button(citationBar, 'insert', localize('references.insert', 'Insert citation'), () => this.citations('insert'));
+		this.button(citationBar, 'update', localize('references.update', 'Update citations'), () => this.citations('update'));
 		this._register(addDisposableListener(this.targets, 'change', () => this.updateButtons()));
 		this.search = h(parent.ownerDocument, 'input');
 		this.search.type = 'search';
@@ -162,12 +138,7 @@ export class ReferenceLibraryEditor extends EditorPane {
 			registerResourceEditorAccessibility(
 				root,
 				this.configuration,
-				() =>
-					this.copy
-						? this.copy.library.entries
-								.map(entry => `${entry.key}\n${formatReference(entry)}\n${entry.abstract}`)
-								.join('\n\n')
-						: '',
+				() => (this.copy ? this.copy.library.entries.map(entry => `${entry.key}\n${formatReference(entry)}\n${entry.abstract}`).join('\n\n') : ''),
 				() =>
 					localize(
 						'references.help',
@@ -259,17 +230,8 @@ export class ReferenceLibraryEditor extends EditorPane {
 			if (!lifetime.aborted)
 				this.message(
 					error instanceof RisParseError
-						? localize(
-								'references.risError',
-								'RIS import failed at line {0}: {1}',
-								error.line,
-								risErrorText(error.code),
-							)
-						: localize(
-								'references.failed',
-								'The action failed. Your library changes are retained: {0}',
-								error instanceof Error ? error.message : String(error),
-							),
+						? localize('references.risError', 'RIS import failed at line {0}: {1}', error.line, risErrorText(error.code))
+						: localize('references.failed', 'The action failed. Your library changes are retained: {0}', error instanceof Error ? error.message : String(error)),
 				);
 		} finally {
 			if (!lifetime.aborted) {
@@ -285,11 +247,7 @@ export class ReferenceLibraryEditor extends EditorPane {
 		this.renderEntries();
 		this.updateButtons();
 		if (this.copy)
-			this.message(
-				this.copy.isDirty
-					? localize('references.unsaved', 'Unsaved library changes')
-					: localize('references.count', '{0} references saved', this.copy.library.entries.length),
-			);
+			this.message(this.copy.isDirty ? localize('references.unsaved', 'Unsaved library changes') : localize('references.count', '{0} references saved', this.copy.library.entries.length));
 	}
 	private renderEntries(): void {
 		if (!this.list || !this.detail) return;
@@ -302,19 +260,7 @@ export class ReferenceLibraryEditor extends EditorPane {
 			this.copy?.library.entries.filter(
 				entry =>
 					!query ||
-					[
-						entry.key,
-						entry.title,
-						entry.authors.join(' '),
-						entry.year,
-						entry.doi,
-						entry.journal,
-						entry.keywords.join(' '),
-					]
-						.join(' ')
-						.normalize('NFKC')
-						.toLowerCase()
-						.includes(query),
+					[entry.key, entry.title, entry.authors.join(' '), entry.year, entry.doi, entry.journal, entry.keywords.join(' ')].join(' ').normalize('NFKC').toLowerCase().includes(query),
 			) ?? [];
 		if (!entries.some(entry => entry.id === this.selected)) this.selected = entries[0]?.id;
 		for (const [index, entry] of entries.entries()) {
@@ -324,10 +270,7 @@ export class ReferenceLibraryEditor extends EditorPane {
 			item.dataset.entryId = entry.id;
 			item.setAttribute('role', 'option');
 			item.setAttribute('aria-selected', String(entry.id === this.selected));
-			item.tabIndex =
-				entry.id === this.selected || (!entries.some(entry => entry.id === this.selected) && index === 0)
-					? 0
-					: -1;
+			item.tabIndex = entry.id === this.selected || (!entries.some(entry => entry.id === this.selected) && index === 0) ? 0 : -1;
 			item.textContent = `${entry.key} — ${entry.title || localize('references.untitled', 'Untitled reference')}`;
 			const select = () => {
 				this.selected = entry.id;
@@ -388,11 +331,7 @@ export class ReferenceLibraryEditor extends EditorPane {
 		this.updateButtons();
 	}
 	private target(): IEditorPane | undefined {
-		return this.editors.visibleEditorPanes.find(
-			pane =>
-				pane.workingCopy?.resource.toString() === this.targets?.value &&
-				!!pane.getExtensionApi?.('academy.citations.v1'),
-		);
+		return this.editors.visibleEditorPanes.find(pane => pane.workingCopy?.resource.toString() === this.targets?.value && !!pane.getExtensionApi?.('academy.citations.v1'));
 	}
 	private updateButtons(): void {
 		const writable = this.writable();
@@ -403,11 +342,7 @@ export class ReferenceLibraryEditor extends EditorPane {
 			if (id === 'pdf') button.disabled = this.provider.aborted || this.busy || !this.entry()?.attachments.length;
 			if (id === 'insert' || id === 'update')
 				button.disabled ||=
-					!this.copy?.persisted ||
-					this.copy.isDirty ||
-					!this.target() ||
-					this.target()?.getExtensionApi?.('academy.citations.v1')?.readOnly === true ||
-					(id === 'insert' && !selected);
+					!this.copy?.persisted || this.copy.isDirty || !this.target() || this.target()?.getExtensionApi?.('academy.citations.v1')?.readOnly === true || (id === 'insert' && !selected);
 		}
 	}
 	private async persist(): Promise<void> {
@@ -416,35 +351,24 @@ export class ReferenceLibraryEditor extends EditorPane {
 	async save(): Promise<void> {
 		const copy = this.editableCopy();
 		await copy.save(this.signal());
-		if (copy.persisted && copy.resource.toString() !== this.input?.resource.toString())
-			await this.editors.openEditor({ resource: copy.resource }, { preferredEditorId: LIBRARY_EDITOR_ID });
+		if (copy.persisted && copy.resource.toString() !== this.input?.resource.toString()) await this.editors.openEditor({ resource: copy.resource }, { preferredEditorId: LIBRARY_EDITOR_ID });
 	}
 	async saveAs(resource: URI): Promise<void> {
 		await this.editableCopy().saveAs(resource, this.signal());
 	}
 	private editableCopy(): ReferenceLibraryWorkingCopy {
-		if (!this.copy || this.input?.readOnly)
-			throw new Error(
-				localize('references.readOnly', 'This library is read-only or its extension is unavailable.'),
-			);
+		if (!this.copy || this.input?.readOnly) throw new Error(localize('references.readOnly', 'This library is read-only or its extension is unavailable.'));
 		return this.copy;
 	}
 	private async newLibrary(): Promise<void> {
 		const target = await this.fileDialogs.showSaveDialog({
 			title: localize('references.new', 'New library'),
-			filters: [
-				{ name: localize('references.libraryFiles', 'Reference libraries'), extensions: ['ash-library'] },
-			],
+			filters: [{ name: localize('references.libraryFiles', 'Reference libraries'), extensions: ['ash-library'] }],
 		});
 		if (!target) return;
 		this.signal().throwIfAborted();
-		if (!/\.ash-library$/iu.test(target.path))
-			throw new Error(localize('references.extension', 'Choose a file ending in .ash-library.'));
-		await this.files.writeFile(
-			{ resource: target, content: serializeLibrary(emptyLibrary()) },
-			{ create: true, overwrite: false },
-			this.signal(),
-		);
+		if (!/\.ash-library$/iu.test(target.path)) throw new Error(localize('references.extension', 'Choose a file ending in .ash-library.'));
+		await this.files.writeFile({ resource: target, content: serializeLibrary(emptyLibrary()) }, { create: true, overwrite: false }, this.signal());
 		await this.editors.openEditor({ resource: target }, { preferredEditorId: LIBRARY_EDITOR_ID }, 'sideGroup');
 	}
 	private async importRis(): Promise<void> {
@@ -463,14 +387,7 @@ export class ReferenceLibraryEditor extends EditorPane {
 		await this.persist();
 		this.selected ??= imported.library.entries[0]?.id;
 		this.render();
-		this.message(
-			localize(
-				'references.imported',
-				'Imported {0} references; skipped {1} duplicates.',
-				imported.added,
-				imported.duplicates,
-			),
-		);
+		this.message(localize('references.imported', 'Imported {0} references; skipped {1} duplicates.', imported.added, imported.duplicates));
 	}
 	private async edit(add: boolean): Promise<void> {
 		const copy = this.copy!;
@@ -509,16 +426,12 @@ export class ReferenceLibraryEditor extends EditorPane {
 		];
 		const result = await this.dialogs.input({
 			title: add ? localize('references.add', 'Add reference') : localize('references.edit', 'Edit reference'),
-			message: localize(
-				'references.metadataHelp',
-				'Edit the fields below. Separate multiple authors or keywords with semicolons.',
-			),
+			message: localize('references.metadataHelp', 'Edit the fields below. Separate multiple authors or keywords with semicolons.'),
 			inputs: labels.map((placeholder, index) => ({ placeholder, value: values[index] })),
 		});
 		if (!result.confirmed || !result.values) return;
 		signal.throwIfAborted();
-		const [key, title, authors, year, doi, journal, volume, issue, startPage, endPage, url, abstract, keywords] =
-			result.values.map(value => value.trim());
+		const [key, title, authors, year, doi, journal, volume, issue, startPage, endPage, url, abstract, keywords] = result.values.map(value => value.trim());
 		const entry: LibraryEntry = {
 			...current,
 			id: current.id,
@@ -554,11 +467,7 @@ export class ReferenceLibraryEditor extends EditorPane {
 		const signal = this.signal();
 		const result = await this.dialogs.confirm({
 			title: localize('references.delete', 'Delete reference'),
-			message: localize(
-				'references.deleteConfirm',
-				'Delete {0} from this library? Citations and bibliography entries already in documents will be retained.',
-				entry.key,
-			),
+			message: localize('references.deleteConfirm', 'Delete {0} from this library? Citations and bibliography entries already in documents will be retained.', entry.key),
 		});
 		if (!result.confirmed) return;
 		signal.throwIfAborted();
@@ -570,9 +479,7 @@ export class ReferenceLibraryEditor extends EditorPane {
 	private async chooseSaveAs(): Promise<void> {
 		const destination = await this.fileDialogs.showSaveDialog({
 			title: localize('references.saveLibrary', 'Save reference library'),
-			filters: [
-				{ name: localize('references.libraryFiles', 'Reference libraries'), extensions: ['ash-library'] },
-			],
+			filters: [{ name: localize('references.libraryFiles', 'Reference libraries'), extensions: ['ash-library'] }],
 		});
 		if (!destination) return;
 		await this.saveAs(destination);
@@ -584,10 +491,7 @@ export class ReferenceLibraryEditor extends EditorPane {
 			!(
 				await this.dialogs.confirm({
 					title: localize('references.reload', 'Reload library'),
-					message: localize(
-						'references.discard',
-						'Discard unsaved library changes and reload the saved file?',
-					),
+					message: localize('references.discard', 'Discard unsaved library changes and reload the saved file?'),
 				})
 			).confirmed
 		)
@@ -619,17 +523,8 @@ export class ReferenceLibraryEditor extends EditorPane {
 		const attachment = this.entry()?.attachments[0];
 		if (!attachment) return;
 		if (!EditorPanes.getEditorPanes().some(pane => pane.id === 'ash.workbench.pdfViewer'))
-			throw new Error(
-				localize(
-					'references.pdfUnavailable',
-					'Install, enable and authorize PDF Viewer to open this attachment.',
-				),
-			);
-		await this.editors.openEditor(
-			{ resource: URI.parse(attachment), contentType: 'application/pdf' },
-			{ preferredEditorId: 'ash.workbench.pdfViewer' },
-			'sideGroup',
-		);
+			throw new Error(localize('references.pdfUnavailable', 'Install, enable and authorize PDF Viewer to open this attachment.'));
+		await this.editors.openEditor({ resource: URI.parse(attachment), contentType: 'application/pdf' }, { preferredEditorId: 'ash.workbench.pdfViewer' }, 'sideGroup');
 	}
 	private async openDocument(): Promise<void> {
 		if (!EditorPanes.getEditorPanes().some(pane => pane.id === 'stanza.editor.document'))
@@ -640,20 +535,13 @@ export class ReferenceLibraryEditor extends EditorPane {
 		});
 		if (!resource?.[0]) return;
 		this.signal().throwIfAborted();
-		await this.editors.openEditor(
-			{ resource: resource[0] },
-			{ preferredEditorId: 'stanza.editor.document' },
-			'sideGroup',
-		);
+		await this.editors.openEditor({ resource: resource[0] }, { preferredEditorId: 'stanza.editor.document' }, 'sideGroup');
 		this.refreshTargets();
 	}
 	private async citations(operation: 'insert' | 'update'): Promise<void> {
 		const target = this.target();
 		const api: IEditorExtensionApi | undefined = target?.getExtensionApi?.('academy.citations.v1');
-		if (!api || api.readOnly || !this.copy?.persisted || this.copy.isDirty)
-			throw new Error(
-				localize('references.chooseTarget', 'Save the library and choose an editable Academy document.'),
-			);
+		if (!api || api.readOnly || !this.copy?.persisted || this.copy.isDirty) throw new Error(localize('references.chooseTarget', 'Save the library and choose an editable Academy document.'));
 		const entries = operation === 'insert' ? [this.entry()!] : this.copy.library.entries;
 		const result = await api.invoke(
 			{
@@ -675,17 +563,8 @@ export class ReferenceLibraryEditor extends EditorPane {
 			!Array.isArray(result.missing) ||
 			result.missing.some(value => typeof value !== 'string')
 		)
-			throw new Error(
-				localize('references.invalidResponse', 'Academy returned an incompatible citation response.'),
-			);
-		this.message(
-			localize(
-				'references.citationsUpdated',
-				'Updated {0} bibliography entries. Missing library entries: {1}.',
-				result.changed as number,
-				result.missing.length,
-			),
-		);
+			throw new Error(localize('references.invalidResponse', 'Academy returned an incompatible citation response.'));
+		this.message(localize('references.citationsUpdated', 'Updated {0} bibliography entries. Missing library entries: {1}.', result.changed as number, result.missing.length));
 	}
 }
 

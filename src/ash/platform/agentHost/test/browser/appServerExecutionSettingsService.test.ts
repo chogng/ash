@@ -30,7 +30,10 @@ test('execution defaults retain backend revision and publish only config changes
 	assert.ok(write.commandId);
 	assert.deepEqual(
 		{ ...requests[1], params: { ...write, commandId: 'command' } },
-		{ method: 'config/update', params: { commandId: 'command', expectedRevision: 7, execution: next } },
+		{
+			method: 'config/update',
+			params: { commandId: 'command', expectedRevision: 7, execution: next },
+		},
 	);
 	let changes = 0;
 	const subscription = service.onDidChange(() => changes++);

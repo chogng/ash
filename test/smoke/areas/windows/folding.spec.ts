@@ -1,9 +1,6 @@
 import { expect, test } from '../../../automation/test.js';
 
-test('Default folding provider preferences retain language overrides after reopening', async ({
-	workbench,
-	reloadWorkbench,
-}) => {
+test('Default folding provider preferences retain language overrides after reopening', async ({ workbench, reloadWorkbench }) => {
 	const settings = {
 		'editor.defaultFoldingRangeProvider': 'unavailable.folding.provider',
 		'[typescript]': { 'editor.defaultFoldingRangeProvider': null },
@@ -24,7 +21,5 @@ test('Default folding provider preferences retain language overrides after reope
 	await expect(tab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 	const { workbench: reopened } = await reloadWorkbench();
 	await reopened.quickaccess.runCommand('workbench.action.openSettingsJson');
-	await reopened.editors
-		.groupAt(0)
-		.editor.waitForEditorContents(source => JSON.stringify(JSON.parse(source)) === JSON.stringify(settings));
+	await reopened.editors.groupAt(0).editor.waitForEditorContents(source => JSON.stringify(JSON.parse(source)) === JSON.stringify(settings));
 });

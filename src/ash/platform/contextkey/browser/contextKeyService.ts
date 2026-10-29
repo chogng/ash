@@ -2,13 +2,7 @@ import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { refineServiceDecorator } from '../../instantiation/common/instantiation.js';
 import { IContextKeyService as IContextKeyValueService } from '../common/contextkey.js';
-import type {
-	Context,
-	ContextKeyValue,
-	ContextKeyExpression,
-	ContextKeyChangeEvent,
-	IContextKey,
-} from '../common/contextkey.js';
+import type { Context, ContextKeyValue, ContextKeyExpression, ContextKeyChangeEvent, IContextKey } from '../common/contextkey.js';
 
 /** Evaluates and publishes context values for one window or DOM scope. */
 export interface IContextKeyService extends IContextKeyValueService {
@@ -20,9 +14,7 @@ export interface IContextKeyService extends IContextKeyValueService {
 /** A disposable context layer inherited by descendants of one DOM element. */
 export interface IScopedContextKeyService extends IContextKeyService, IDisposable {}
 
-export const IContextKeyService = refineServiceDecorator<IContextKeyValueService, IContextKeyService>(
-	IContextKeyValueService,
-);
+export const IContextKeyService = refineServiceDecorator<IContextKeyValueService, IContextKeyService>(IContextKeyValueService);
 
 interface ContextKeyState {
 	readonly scopes: WeakMap<Node, AbstractContextKeyService>;

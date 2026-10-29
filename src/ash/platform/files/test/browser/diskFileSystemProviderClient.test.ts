@@ -5,10 +5,7 @@ import { join } from 'node:path';
 import { suite, test } from 'mocha';
 import { URI } from '../../../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
-import {
-	DiskFileSystemProviderClient,
-	LOCAL_FILE_SYSTEM_CHANNEL_NAME,
-} from '../../common/diskFileSystemProviderClient.js';
+import { DiskFileSystemProviderClient, LOCAL_FILE_SYSTEM_CHANNEL_NAME } from '../../common/diskFileSystemProviderClient.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { IPCClient } from '../../../../base/parts/ipc/common/ipc.js';
@@ -46,14 +43,8 @@ suite('Desktop watch subscription ownership', () => {
 			using provider = new TrackingProvider([URI.file(tmpdir())]);
 			using incoming = new Emitter<VSBuffer>();
 			using outgoing = new Emitter<VSBuffer>();
-			using server = new IPCClient(
-				{ onMessage: incoming.event, send: value => outgoing.fire(value) },
-				'window:watch',
-			);
-			using peer = new IPCClient(
-				{ onMessage: outgoing.event, send: value => incoming.fire(value) },
-				'window:watch',
-			);
+			using server = new IPCClient({ onMessage: incoming.event, send: value => outgoing.fire(value) }, 'window:watch');
+			using peer = new IPCClient({ onMessage: outgoing.event, send: value => incoming.fire(value) }, 'window:watch');
 			using channel = new DiskFileSystemProviderChannel(provider, URI.file(tmpdir()), URI.file(tmpdir()));
 			server.registerChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME, channel);
 			using client = new DiskFileSystemProviderClient(peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME));
@@ -76,12 +67,7 @@ suite('Desktop watch subscription ownership', () => {
 		using provider = new DiskFileSystemProvider([URI.file(tmpdir())]);
 		using channel = new DiskFileSystemProviderChannel(provider, URI.file(tmpdir()), URI.file(tmpdir()));
 		const resource = URI.file(join(tmpdir(), 'settings.json')).toString();
-		for (const options of [
-			undefined,
-			{},
-			{ recursive: 'true', excludes: [] },
-			{ recursive: false, excludes: [42] },
-		]) {
+		for (const options of [undefined, {}, { recursive: 'true', excludes: [] }, { recursive: false, excludes: [42] }]) {
 			assert.throws(() => channel.listen('window:watch', 'watch', { resource, options }), /Invalid file watch/);
 		}
 		assert.throws(
@@ -115,16 +101,11 @@ test('desktop file transport preserves resources, revisions, and root boundaries
 			expectedRevision: empty.revision,
 		});
 		const loaded = await client.readFile(resource);
-		const streamed = await consumeStream(
-			client.readFileStream(resource, { position: 1, length: 6 }, CancellationToken.None),
-			chunks => Buffer.concat(chunks),
-		);
+		const streamed = await consumeStream(client.readFileStream(resource, { position: 1, length: 6 }, CancellationToken.None), chunks => Buffer.concat(chunks));
 		assert.equal(streamed.toString(), '"test"');
 		await assert.rejects(
 			consumeStream(client.readFileStream(resource, { limits: { size: 0 } }, CancellationToken.None)),
-			error =>
-				error instanceof Error &&
-				toFileSystemProviderErrorCode(error) === FileSystemProviderErrorCode.FileTooLarge,
+			error => error instanceof Error && toFileSystemProviderErrorCode(error) === FileSystemProviderErrorCode.FileTooLarge,
 		);
 		assert.throws(
 			() =>
@@ -136,9 +117,7 @@ test('desktop file transport preserves resources, revisions, and root boundaries
 		);
 		await assert.rejects(
 			client.writeFile(resource, new Uint8Array(), { create: true, overwrite: false }),
-			error =>
-				error instanceof Error &&
-				toFileSystemProviderErrorCode(error) === FileSystemProviderErrorCode.FileExists,
+			error => error instanceof Error && toFileSystemProviderErrorCode(error) === FileSystemProviderErrorCode.FileExists,
 		);
 		assert.equal(loaded.resource.toString(), resource.toString());
 		assert.equal(new TextDecoder().decode(loaded.bytes), '{"test":true}');
@@ -150,18 +129,9 @@ test('desktop file transport preserves resources, revisions, and root boundaries
 			}),
 			FileRevisionConflictError,
 		);
-		await assert.rejects(
-			client.readFile(URI.file(join(directory, '..', 'outside.json'))),
-			/outside the granted roots/,
-		);
+		await assert.rejects(client.readFile(URI.file(join(directory, '..', 'outside.json'))), /outside the granted roots/);
 		await assert.rejects(client.readFile(URI.file(join(directory, 'missing.json'))), FileNotFoundError);
-		assert.equal(
-			extUriBiasedIgnorePathCase.isEqual(
-				(await client.readDirectory(URI.file(directory)))[0]?.resource,
-				resource,
-			),
-			true,
-		);
+		assert.equal(extUriBiasedIgnorePathCase.isEqual((await client.readDirectory(URI.file(directory)))[0]?.resource, resource), true);
 		const folder = URI.file(join(directory, 'new-folder'));
 		assert.equal((await client.createDirectory(folder)).kind, FileKind.Directory);
 		const binary = URI.file(join(folder.fsPath, 'bytes.bin'));
@@ -182,42 +152,26 @@ test('desktop file transport preserves resources, revisions, and root boundaries
 		assert.deepEqual((await client.readFile(target)).bytes, loaded.bytes);
 		await client.delete(target, 'error', 'fileOrEmptyDirectory');
 		assert.deepEqual(await client.readDirectory(URI.file(directory)), []);
+		await assert.rejects(peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call('execute', { resource: resource.toString() }), /Invalid file operation/);
 		await assert.rejects(
-			peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call('execute', { resource: resource.toString() }),
-			/Invalid file operation/,
-		);
-		await assert.rejects(
-			peer
-				.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME)
-				.call('writeFile', {
-					resource: resource.toString(),
-					bytes: 'broken',
-					options: { create: true, overwrite: true },
-				}),
+			peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call('writeFile', {
+				resource: resource.toString(),
+				bytes: 'broken',
+				options: { create: true, overwrite: true },
+			}),
 			/Invalid file write/,
 		);
 		await assert.rejects(
-			peer
-				.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME)
-				.call('rename', {
-					resource: resource.toString(),
-					target: URI.parse('https://example.test/file').toString(),
-					existing: 'error',
-				}),
+			peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call('rename', {
+				resource: resource.toString(),
+				target: URI.parse('https://example.test/file').toString(),
+				existing: 'error',
+			}),
 			/local file resource/,
 		);
-		assert.equal(
-			await peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call('userDataHome'),
-			URI.file(directory).toString(),
-		);
-		assert.equal(
-			await peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call('userHome'),
-			URI.file(tmpdir()).toString(),
-		);
-		await assert.rejects(
-			peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call('userHome', {}),
-			/No arguments expected/,
-		);
+		assert.equal(await peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call('userDataHome'), URI.file(directory).toString());
+		assert.equal(await peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call('userHome'), URI.file(tmpdir()).toString());
+		await assert.rejects(peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call('userHome', {}), /No arguments expected/);
 		await assert.rejects(client.readDirectory(URI.file(tmpdir())), /outside the granted roots/);
 	} finally {
 		await rm(directory, { recursive: true, force: true });
@@ -242,13 +196,7 @@ test('desktop stream cancellation and owner disposal close the server descriptor
 		let reads = 0;
 		let closes = 0;
 		class TrackingProvider extends DiskFileSystemProvider {
-			public override async read(
-				fd: number,
-				position: number,
-				data: Uint8Array,
-				offset: number,
-				length: number,
-			): Promise<number> {
+			public override async read(fd: number, position: number, data: Uint8Array, offset: number, length: number): Promise<number> {
 				reads++;
 				return super.read(fd, position, data, offset, length);
 			}
@@ -348,9 +296,7 @@ test('desktop file events retain exact resources and reject malformed transport 
 		listen: <T>() => changes as Event<T>,
 	});
 	const observed: Array<readonly string[] | undefined> = [];
-	using subscription = client.onDidChangeFiles(event =>
-		observed.push(event.resources?.map(resource => resource.toString())),
-	);
+	using subscription = client.onDidChangeFiles(event => observed.push(event.resources?.map(resource => resource.toString())));
 	const resource = URI.file('/profile/keybindings.json');
 	notify([resource.toString()]);
 	notify(undefined);

@@ -4,18 +4,10 @@ import { Emitter } from '../../../../base/common/event.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { IAgentVoiceService } from '../../../../platform/agentHost/common/agentService.js';
-import {
-	type AgentVoiceSource,
-	type ThreadTranscriptEntry,
-	type ThreadTranscriptSnapshot,
-	type ThreadTranscriptUpdateEnvelope,
-} from '../../../../platform/agentHost/common/agent.js';
+import { type AgentVoiceSource, type ThreadTranscriptEntry, type ThreadTranscriptSnapshot, type ThreadTranscriptUpdateEnvelope } from '../../../../platform/agentHost/common/agent.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import {
-	IAuxiliaryWindowService,
-	type IAuxiliaryWindow,
-} from '../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { IChatService } from '../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 import type { IAgentsVoiceWindowService } from '../common/agentsVoice.js';
@@ -106,12 +98,7 @@ export class AgentsVoiceWindowService extends Disposable implements IAgentsVoice
 							}),
 						connect: () => this.run(() => this.navigation.startVoiceConversation()),
 						toggleMute: () => this.run(() => this.voice?.setMuted(!this.voice.state?.muted)),
-						toggleInputMode: () =>
-							this.run(() =>
-								this.voice?.setInputMode(
-									this.voice.state?.inputMode === 'pushToTalk' ? 'openMic' : 'pushToTalk',
-								),
-							),
+						toggleInputMode: () => this.run(() => this.voice?.setInputMode(this.voice.state?.inputMode === 'pushToTalk' ? 'openMic' : 'pushToTalk')),
 						pttDown: () => {
 							hold = generateUuid();
 							const id = hold;
@@ -168,8 +155,7 @@ export class AgentsVoiceWindowService extends Disposable implements IAgentsVoice
 		const window = this.window;
 		this.window = undefined;
 		window?.dispose();
-		if (source && owner)
-			void this.chat.unsubscribeThread(source.sessionId, source.threadId, owner).catch(() => undefined);
+		if (source && owner) void this.chat.unsubscribeThread(source.sessionId, source.threadId, owner).catch(() => undefined);
 		if (wasOpen && this.previousFocus?.isConnected) {
 			this.opener?.focus();
 			this.previousFocus.focus();
@@ -193,9 +179,7 @@ export class AgentsVoiceWindowService extends Disposable implements IAgentsVoice
 		widget.setMuted(state?.muted ?? false);
 		widget.setInputMode(state?.inputMode ?? 'openMic');
 		widget.setVoiceState(state?.listening ? 'listening' : 'idle');
-		const title =
-			state &&
-			this.navigation.getConversations().find(conversation => this.sameSource(conversation, state))?.title;
+		const title = state && this.navigation.getConversations().find(conversation => this.sameSource(conversation, state))?.title;
 		const text =
 			state?.state === 'connected'
 				? state.muted
@@ -222,10 +206,7 @@ export class AgentsVoiceWindowService extends Disposable implements IAgentsVoice
 		this.latestRevision = -1;
 		widget.setTranscriptTurns([]);
 		++this.generation;
-		if (previous && previousOwner)
-			void this.chat
-				.unsubscribeThread(previous.sessionId, previous.threadId, previousOwner)
-				.catch(() => undefined);
+		if (previous && previousOwner) void this.chat.unsubscribeThread(previous.sessionId, previous.threadId, previousOwner).catch(() => undefined);
 		if (source && owner) this.run(() => this.load(source, true, owner));
 	}
 
@@ -235,9 +216,7 @@ export class AgentsVoiceWindowService extends Disposable implements IAgentsVoice
 		try {
 			let acquiring = subscribe;
 			do {
-				const result = acquiring
-					? await this.chat.subscribeThread(source.sessionId, source.threadId, 0, owner)
-					: await this.chat.readThread(source.sessionId, source.threadId);
+				const result = acquiring ? await this.chat.subscribeThread(source.sessionId, source.threadId, 0, owner) : await this.chat.readThread(source.sessionId, source.threadId);
 				if (generation !== this.generation || this.isDisposed || !this.widget) {
 					// A late acquisition must release its owner too; it cannot revive a closed view.
 					if (acquiring) await this.chat.unsubscribeThread(source.sessionId, source.threadId, owner);
@@ -268,8 +247,7 @@ export class AgentsVoiceWindowService extends Disposable implements IAgentsVoice
 		}
 		this.revision = update.revision;
 		for (const change of update.changes) {
-			if (change.type === 'remove')
-				this.entries = this.entries.filter(entry => !change.entryIds.includes(entry.entryId));
+			if (change.type === 'remove') this.entries = this.entries.filter(entry => !change.entryIds.includes(entry.entryId));
 			else if (change.type === 'upsert') {
 				const index = this.entries.findIndex(entry => entry.entryId === change.entry.entryId);
 				if (change.entry.type === 'voiceTranscript') {
@@ -277,17 +255,14 @@ export class AgentsVoiceWindowService extends Disposable implements IAgentsVoice
 					if (index < 0) entries.push(change.entry);
 					else entries[index] = change.entry;
 					this.entries = entries;
-				} else if (index >= 0)
-					this.entries = this.entries.filter(entry => entry.entryId !== change.entry.entryId);
+				} else if (index >= 0) this.entries = this.entries.filter(entry => entry.entryId !== change.entry.entryId);
 			}
 		}
 		this.renderTranscript();
 	}
 
 	private renderTranscript(): void {
-		this.widget?.setTranscriptTurns(
-			this.entries.flatMap(entry => (entry.type === 'voiceTranscript' ? [entry.transcript] : [])),
-		);
+		this.widget?.setTranscriptTurns(this.entries.flatMap(entry => (entry.type === 'voiceTranscript' ? [entry.transcript] : [])));
 	}
 
 	private sameSource(left: AgentVoiceSource | undefined, right: AgentVoiceSource | undefined): boolean {
@@ -298,16 +273,10 @@ export class AgentsVoiceWindowService extends Disposable implements IAgentsVoice
 		const generation = this.generation;
 		try {
 			void operation()?.catch(error => {
-				if (!this.isDisposed && this.isOpen && generation === this.generation)
-					this.notifications.error(
-						localize('agentsVoice.operationFailed', 'Voice conversation: {0}', String(error)),
-					);
+				if (!this.isDisposed && this.isOpen && generation === this.generation) this.notifications.error(localize('agentsVoice.operationFailed', 'Voice conversation: {0}', String(error)));
 			});
 		} catch (error) {
-			if (!this.isDisposed)
-				this.notifications.error(
-					localize('agentsVoice.operationFailed', 'Voice conversation: {0}', String(error)),
-				);
+			if (!this.isDisposed) this.notifications.error(localize('agentsVoice.operationFailed', 'Voice conversation: {0}', String(error)));
 		}
 	}
 

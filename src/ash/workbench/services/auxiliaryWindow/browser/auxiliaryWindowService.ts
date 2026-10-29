@@ -13,22 +13,8 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import type { IAuxiliaryWindowState } from '../../../../platform/window/common/window.js';
 import { localize } from '../../../../nls.js';
 
-const WORKBENCH_ROOT_CLASSES = [
-	'ash-reduce-motion',
-	'ash-enable-motion',
-	'ash-reduce-transparency',
-	'ash-underline-links',
-	'hc-black',
-	'hc-light',
-	'ash-high-contrast',
-] as const;
-const WORKBENCH_ROOT_ATTRIBUTES = [
-	'data-os',
-	'data-runtime',
-	'data-workbench-state',
-	'data-color-theme',
-	'data-color-scheme',
-] as const;
+const WORKBENCH_ROOT_CLASSES = ['ash-reduce-motion', 'ash-enable-motion', 'ash-reduce-transparency', 'ash-underline-links', 'hc-black', 'hc-light', 'ash-high-contrast'] as const;
+const WORKBENCH_ROOT_ATTRIBUTES = ['data-os', 'data-runtime', 'data-workbench-state', 'data-color-theme', 'data-color-scheme'] as const;
 const AUXILIARY_WINDOW_STATE_KEY = 'auxiliaryEditorWindowState';
 
 export interface AuxiliaryWindowBounds {
@@ -103,23 +89,12 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 
 	async open(options: AuxiliaryWindowOpenOptions = {}): Promise<IAuxiliaryWindow> {
 		this.assertNotDisposed();
-		const restored = parseAuxiliaryWindowState(
-			this.storageService.get(AUXILIARY_WINDOW_STATE_KEY, StorageScope.APPLICATION),
-		);
-		const width = finiteDimension(
-			options.width ?? (restored ? restored.width + restored.featureWidthOffset : undefined),
-			960,
-		);
-		const height = finiteDimension(
-			options.height ?? (restored ? restored.height + restored.featureHeightOffset : undefined),
-			720,
-		);
+		const restored = parseAuxiliaryWindowState(this.storageService.get(AUXILIARY_WINDOW_STATE_KEY, StorageScope.APPLICATION));
+		const width = finiteDimension(options.width ?? (restored ? restored.width + restored.featureWidthOffset : undefined), 960);
+		const height = finiteDimension(options.height ?? (restored ? restored.height + restored.featureHeightOffset : undefined), 720);
 		const left = options.left ?? restored?.left;
 		const top = options.top ?? restored?.top;
-		const positionKeys =
-			this.workbenchRoot.getAttribute('data-runtime') === 'electron' && left !== undefined && top !== undefined
-				? (['x', 'y'] as const)
-				: (['left', 'top'] as const);
+		const positionKeys = this.workbenchRoot.getAttribute('data-runtime') === 'electron' && left !== undefined && top !== undefined ? (['x', 'y'] as const) : (['left', 'top'] as const);
 		const features = [
 			'popup=yes',
 			options.zoomLevel === undefined ? undefined : `window-zoom-level=${options.zoomLevel}`,
@@ -140,20 +115,12 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 		} catch {
 			// Some browser WindowProxy implementations expose a read-only opener.
 		}
-		const auxiliary = this.createAuxiliaryWindow(
-			target,
-			options.title ?? localize({ bundle: 'ash', key: 'auxiliaryWindow.editor' }, 'Editor'),
-		);
+		const auxiliary = this.createAuxiliaryWindow(target, options.title ?? localize({ bundle: 'ash', key: 'auxiliaryWindow.editor' }, 'Editor'));
 		this.windows.set(auxiliary.id, auxiliary);
 		this.windowListeners.set(
 			auxiliary.id,
 			auxiliary.onDidClose(() => {
-				this.storageService.store(
-					AUXILIARY_WINDOW_STATE_KEY,
-					JSON.stringify(auxiliary.createState()),
-					StorageScope.APPLICATION,
-					StorageTarget.MACHINE,
-				);
+				this.storageService.store(AUXILIARY_WINDOW_STATE_KEY, JSON.stringify(auxiliary.createState()), StorageScope.APPLICATION, StorageTarget.MACHINE);
 				this.windowListeners.deleteAndDispose(auxiliary.id);
 				const closedWindow = this.windows.deleteAndLeak(auxiliary.id);
 				// Release the window after every close listener has received the event.
@@ -161,8 +128,7 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 			}),
 		);
 		await auxiliary.whenStylesHaveLoaded;
-		if (this.windows.get(auxiliary.id) !== auxiliary)
-			throw new Error('The auxiliary editor window closed before its styles loaded');
+		if (this.windows.get(auxiliary.id) !== auxiliary) throw new Error('The auxiliary editor window closed before its styles loaded');
 		auxiliary.recordFrameOffsets();
 		this.openEmitter.fire(auxiliary);
 		auxiliary.layout();
@@ -209,9 +175,7 @@ export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 		const id = getWindowId(window);
 		if (id === undefined) throw new Error('Auxiliary window registration did not produce an identity');
 		this.id = id;
-		this.whenStylesHaveLoaded = this._register(
-			cloneDocumentStyles(sourceWindow.document, window.document),
-		).whenStylesHaveLoaded;
+		this.whenStylesHaveLoaded = this._register(cloneDocumentStyles(sourceWindow.document, window.document)).whenStylesHaveLoaded;
 		window.document.documentElement.lang = sourceWindow.document.documentElement.lang;
 		window.document.documentElement.dir = sourceWindow.document.documentElement.dir;
 		window.document.body.replaceChildren();
@@ -229,15 +193,12 @@ export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 		);
 		this.syncWorkbenchRoot(workbenchRoot);
 		const targetDocument = window.document;
-		const updateIcons = (): void =>
-			setIconResolver(targetDocument, icon => getIconDefinition(icon, themeService.getProductIconTheme().icons));
+		const updateIcons = (): void => setIconResolver(targetDocument, icon => getIconDefinition(icon, themeService.getProductIconTheme().icons));
 		updateIcons();
 		this._register(themeService.onDidProductIconThemeChange(updateIcons));
 		this._register(toDisposable(() => setIconResolver(targetDocument, icon => getIconDefinition(icon))));
 		this._register(addDisposableListener(window, 'resize', () => this.layout()));
-		this._register(
-			addDisposableListener(window, 'beforeunload', event => this.handleBeforeUnload(event as BeforeUnloadEvent)),
-		);
+		this._register(addDisposableListener(window, 'beforeunload', event => this.handleBeforeUnload(event as BeforeUnloadEvent)));
 		this._register(addDisposableListener(window, 'unload', () => this.publishClosed()));
 		this._register(
 			toDisposable(() => {
@@ -334,19 +295,11 @@ export function parseAuxiliaryWindowState(raw: string | undefined): AuxiliaryWin
 	}
 	if (typeof value !== 'object' || value === null) return undefined;
 	const state = value as Partial<AuxiliaryWindowState>;
-	if (
-		![state.width, state.height, state.left, state.top, state.featureWidthOffset, state.featureHeightOffset].every(
-			candidate => typeof candidate === 'number' && Number.isFinite(candidate),
-		)
-	)
+	if (![state.width, state.height, state.left, state.top, state.featureWidthOffset, state.featureHeightOffset].every(candidate => typeof candidate === 'number' && Number.isFinite(candidate)))
 		return undefined;
 	if (state.width! <= 0 || state.height! <= 0) return undefined;
 	if (
-		(state.zoomLevel !== undefined &&
-			(typeof state.zoomLevel !== 'number' ||
-				!Number.isFinite(state.zoomLevel) ||
-				state.zoomLevel < -8 ||
-				state.zoomLevel > 8)) ||
+		(state.zoomLevel !== undefined && (typeof state.zoomLevel !== 'number' || !Number.isFinite(state.zoomLevel) || state.zoomLevel < -8 || state.zoomLevel > 8)) ||
 		(state.alwaysOnTop !== undefined && typeof state.alwaysOnTop !== 'boolean') ||
 		(state.mode !== undefined && !['normal', 'maximized', 'fullscreen'].includes(state.mode))
 	)

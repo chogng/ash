@@ -101,12 +101,7 @@ test('editors finish text rendering before measuring widgets and writing widget 
 				}),
 				beforeRender: () => {
 					phases.push(`measure ${name}`);
-					measuredText.push(
-						[first, second].map(
-							editor =>
-								requiredElement(editor.domNode.domNode, '.stanza-editor-line-text').textContent ?? '',
-						),
-					);
+					measuredText.push([first, second].map(editor => requiredElement(editor.domNode.domNode, '.stanza-editor-line-text').textContent ?? ''));
 					return { width: 10, height: 10 };
 				},
 				afterRender: () => {
@@ -125,11 +120,7 @@ test('editors finish text rendering before measuring widgets and writing widget 
 			const text = requiredElement(view.domNode.domNode, '.stanza-editor-line-text');
 			text.getBoundingClientRect = () => {
 				phases.push(`text ${name}`);
-				lineWidthSnapshots.push(
-					[first, second].map(
-						editor => requiredElement(editor.domNode.domNode, '.stanza-editor-line-text').textContent ?? '',
-					),
-				);
+				lineWidthSnapshots.push([first, second].map(editor => requiredElement(editor.domNode.domNode, '.stanza-editor-line-text').textContent ?? ''));
 				return new dom.window.DOMRect(0, 0, 100, 20);
 			};
 		}
@@ -232,9 +223,7 @@ test('model token ranges retain unaffected rows and ignore duplicate composite n
 	let changed = false;
 	source.getLineTokens = lineIndex => {
 		tokenReads++;
-		return changed && lineIndex === 0
-			? [{ startColumn: 0, endColumn: 10, syntaxPresentation: { foreground: '#123456' } }]
-			: getLineTokens(lineIndex);
+		return changed && lineIndex === 0 ? [{ startColumn: 0, endColumn: 10, syntaxPresentation: { foreground: '#123456' } }] : getLineTokens(lineIndex);
 	};
 	using view = new View({
 		container: requiredElement(dom.window.document, 'main'),
@@ -280,9 +269,7 @@ test('model token ranges retain unaffected rows and ignore duplicate composite n
 		tokenReads = 0;
 		view.scrollTo({ left: 0, top: 40 });
 		view.render(true, false);
-		const enteringRows = [...view.domNode.domNode.querySelectorAll<HTMLElement>('.view-lines > .view-line')].filter(
-			row => !rows.includes(row),
-		);
+		const enteringRows = [...view.domNode.domNode.querySelectorAll<HTMLElement>('.view-lines > .view-line')].filter(row => !rows.includes(row));
 		assert.ok(enteringRows.length > 0);
 		assert.equal(tokenReads, enteringRows.length, 'New viewport rows synchronously prepare their tokens');
 	} finally {
@@ -332,12 +319,7 @@ test('a model token range updates every visible wrapped fragment without queryin
 			wrappedRows.map(() => 1),
 		);
 		for (const row of wrappedRows) {
-			assert.equal(
-				requiredElement<HTMLElement>(row, '.stanza-editor-token').style.getPropertyValue(
-					'--ash-editor-token-foreground',
-				),
-				foreground,
-			);
+			assert.equal(requiredElement<HTMLElement>(row, '.stanza-editor-token').style.getPropertyValue('--ash-editor-token-foreground'), foreground);
 		}
 		assert.deepEqual([...view.domNode.domNode.querySelectorAll('.view-lines > .view-line')], rows);
 	} finally {
@@ -381,11 +363,7 @@ test('custom token sources still refresh retained rows through their own notific
 test('scrolling leaves fixed overlay measurements clean while resize and zone geometry still update them', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	using model = new TextModel(
-		Array.from({ length: 200 }, (_, index) => `line ${String(index).padStart(3, '0')} ${'x'.repeat(100)}`).join(
-			'\n',
-		),
-	);
+	using model = new TextModel(Array.from({ length: 200 }, (_, index) => `line ${String(index).padStart(3, '0')} ${'x'.repeat(100)}`).join('\n'));
 	using view = new View({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
@@ -616,10 +594,7 @@ test('Stanza viewport automatic layout uses the observed content box', () => {
 		clientHeight: { configurable: true, value: 62 },
 	});
 
-	resizeListener?.(
-		[{ contentRect: { width: 383.3875, height: 46.7875 } } as ResizeObserverEntry],
-		{} as ResizeObserver,
-	);
+	resizeListener?.([{ contentRect: { width: 383.3875, height: 46.7875 } } as ResizeObserverEntry], {} as ResizeObserver);
 	viewport.render(true, false);
 
 	assert.deepEqual(viewport.viewportLayout.viewportSize, { width: 383, height: 46 });
@@ -627,16 +602,8 @@ test('Stanza viewport automatic layout uses the observed content box', () => {
 	assert.equal(viewport.domNode.domNode.style.height, '46px');
 	assert.equal(viewport.domNode.domNode.classList.contains('horizontally-scrollable'), false);
 	assert.equal(viewport.domNode.domNode.classList.contains('vertically-scrollable'), false);
-	assert.equal(
-		requiredElement<HTMLElement>(viewport.domNode.domNode, '[role="scrollbar"][aria-orientation="horizontal"]')
-			.hidden,
-		true,
-	);
-	assert.equal(
-		requiredElement<HTMLElement>(viewport.domNode.domNode, '[role="scrollbar"][aria-orientation="vertical"]')
-			.hidden,
-		true,
-	);
+	assert.equal(requiredElement<HTMLElement>(viewport.domNode.domNode, '[role="scrollbar"][aria-orientation="horizontal"]').hidden, true);
+	assert.equal(requiredElement<HTMLElement>(viewport.domNode.domNode, '[role="scrollbar"][aria-orientation="vertical"]').hidden, true);
 	assert.equal(requiredElement<HTMLElement>(viewport.domNode.domNode, '.stanza-editor-content').style.width, '383px');
 	assert.equal(requiredElement<HTMLElement>(viewport.domNode.domNode, '.stanza-editor-content').style.height, '46px');
 	dom.window.close();
@@ -656,21 +623,12 @@ test('Stanza viewport enables scrollbars only for model-backed overflow', () => 
 	assert.equal(viewport.domNode.domNode.style.height, '20px');
 	assert.equal(viewport.domNode.domNode.classList.contains('horizontally-scrollable'), true);
 	assert.equal(viewport.domNode.domNode.classList.contains('vertically-scrollable'), true);
-	const horizontalScrollbar = requiredElement<HTMLElement>(
-		viewport.domNode.domNode,
-		'[role="scrollbar"][aria-orientation="horizontal"]',
-	);
-	const verticalScrollbar = requiredElement<HTMLElement>(
-		viewport.domNode.domNode,
-		'[role="scrollbar"][aria-orientation="vertical"]',
-	);
+	const horizontalScrollbar = requiredElement<HTMLElement>(viewport.domNode.domNode, '[role="scrollbar"][aria-orientation="horizontal"]');
+	const verticalScrollbar = requiredElement<HTMLElement>(viewport.domNode.domNode, '[role="scrollbar"][aria-orientation="vertical"]');
 	assert.equal(horizontalScrollbar.hidden, false);
 	assert.equal(verticalScrollbar.hidden, false);
 	assert.equal(horizontalScrollbar.getAttribute('role'), 'scrollbar');
-	assert.equal(
-		verticalScrollbar.getAttribute('aria-controls'),
-		requiredElement<HTMLElement>(viewport.domNode.domNode, '.stanza-editor-content').id,
-	);
+	assert.equal(verticalScrollbar.getAttribute('aria-controls'), requiredElement<HTMLElement>(viewport.domNode.domNode, '.stanza-editor-content').id);
 	assert.equal(horizontalScrollbar.style.height, '12px');
 	assert.equal(verticalScrollbar.style.width, '14px');
 	assert.equal(horizontalScrollbar.style.right, '14px');
@@ -720,8 +678,7 @@ test('rendered widths update scroll layout before widget measurements and shrink
 		view.layout({ width: 300, height: 80 });
 		view.render(true, false);
 		const text = requiredElement<HTMLElement>(view.domNode.domNode, '.stanza-editor-line-text');
-		text.getBoundingClientRect = () =>
-			new dom.window.DOMRect(0, 0, model.getAllDecorations().length > 0 ? 900 : 24, 20);
+		text.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, model.getAllDecorations().length > 0 ? 900 : 24, 20);
 		let measuredScrollRange = 0;
 		view.addContentWidget({
 			getId: () => 'width-observer',
@@ -751,18 +708,12 @@ test('rendered widths update scroll layout before widget measurements and shrink
 			callback({ didTimeout: false, timeRemaining: () => 50 });
 		}
 		view.render(true, false);
-		assert.ok(
-			view.viewportLayout.maximumScrollPosition.left >= 600,
-			'Idle estimates must retain rendered hint widths',
-		);
+		assert.ok(view.viewportLayout.maximumScrollPosition.left >= 600, 'Idle estimates must retain rendered hint widths');
 		view.scrollTo({ left: 500, top: 0 });
 		assert.equal(view.viewportLayout.scrollPosition.left, 500);
 		model.deltaDecorations(decorations, []);
 		view.render(true, false);
-		assert.deepEqual(
-			{ width: view.viewportLayout.contentSize.width, scrollLeft: view.viewportLayout.scrollPosition.left },
-			{ width: 300, scrollLeft: 0 },
-		);
+		assert.deepEqual({ width: view.viewportLayout.contentSize.width, scrollLeft: view.viewportLayout.scrollPosition.left }, { width: 300, scrollLeft: 0 });
 		view.resetLineWidthCaches();
 		assert.ok(idleTasks.size > 0);
 		view.dispose();
@@ -795,10 +746,7 @@ test('glyph lanes reuse scans for cursor movement and resize and track margin ch
 			view.layout({ width: 300 + index, height: 80 });
 			view.render(true, false);
 		}
-		model.deltaDecorations(
-			[],
-			[{ range: new Range(1, 1, 1, 2), options: { description: 'inline only', className: 'inline-only' } }],
-		);
+		model.deltaDecorations([], [{ range: new Range(1, 1, 1, 2), options: { description: 'inline only', className: 'inline-only' } }]);
 		view.render(true, false);
 		assert.equal(scans, 0);
 		const margin = model.deltaDecorations(

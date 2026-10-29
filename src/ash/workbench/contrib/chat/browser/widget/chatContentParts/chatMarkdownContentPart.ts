@@ -1,20 +1,9 @@
 import './media/chatMarkdownPart.css';
 import { Emitter } from '../../../../../../base/common/event.js';
-import {
-	addDisposableListener,
-	getWindow,
-	h,
-	scheduleAtNextAnimationFrame,
-} from '../../../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h, scheduleAtNextAnimationFrame } from '../../../../../../base/browser/dom.js';
 import type { MarkdownRenderOptions } from '../../../../../../base/browser/markdownRenderer.js';
 import type { IMarkdownString } from '../../../../../../base/common/htmlContent.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-} from '../../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { Marked } from '../../../../../../base/common/marked/marked.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { MarkedKatexExtension } from '../../../../markdown/common/markedKatexExtension.js';
@@ -120,8 +109,7 @@ export class ChatMarkdownContentPart extends Disposable {
 				this.domNode.remove();
 			}),
 		);
-		const markdown =
-			typeof options.markdown === 'string' ? { value: options.markdown } : (options.markdown ?? { value: '' });
+		const markdown = typeof options.markdown === 'string' ? { value: options.markdown } : (options.markdown ?? { value: '' });
 		this.enqueue(markdown, options.fillInIncompleteTokens ?? false);
 	}
 
@@ -142,8 +130,7 @@ export class ChatMarkdownContentPart extends Disposable {
 			// still share the ordinary frame-coalesced rendering path.
 			this.enqueue(pending.markdown, pending.incomplete);
 		}
-		for (const [, block] of this.codeBlocks)
-			if (!this.deferredCodeBlocks.has(block)) block.setVisible(visible && this.viewportVisible);
+		for (const [, block] of this.codeBlocks) if (!this.deferredCodeBlocks.has(block)) block.setVisible(visible && this.viewportVisible);
 	}
 
 	/** Retains readable Markdown while offscreen code blocks release their derived documents. */
@@ -202,12 +189,7 @@ export class ChatMarkdownContentPart extends Disposable {
 			previous.supportThemeIcons === markdown.supportThemeIcons &&
 			previous.supportAlertSyntax === markdown.supportAlertSyntax &&
 			previous.baseUri?.toString() === markdown.baseUri?.toString();
-		if (
-			sameOptions &&
-			previous.value === markdown.value &&
-			this.fragments.at(-1)?.incomplete === fillInIncompleteTokens
-		)
-			return;
+		if (sameOptions && previous.value === markdown.value && this.fragments.at(-1)?.incomplete === fillInIncompleteTokens) return;
 		const append = sameOptions && markdown.value.startsWith(previous.value);
 		if (append && this.extendFence(markdown, fillInIncompleteTokens)) {
 			this.markdown = markdown;
@@ -273,11 +255,7 @@ export class ChatMarkdownContentPart extends Disposable {
 				lexer.walkTokens(tokens, token => {
 					if (token.type.startsWith('ashMath')) hasMath = true;
 				});
-			if (
-				!hasMath &&
-				Object.keys(tokens.links).length === 0 &&
-				tokens.map(token => token.raw).join('') === tail
-			) {
+			if (!hasMath && Object.keys(tokens.links).length === 0 && tokens.map(token => token.raw).join('') === tail) {
 				sources = [];
 				let leading = '';
 				for (const token of tokens) {
@@ -301,10 +279,7 @@ export class ChatMarkdownContentPart extends Disposable {
 		const focused = active && this.domNode.contains(active) ? active : undefined;
 		const selection = document.getSelection();
 		const selected =
-			selection?.anchorNode &&
-			selection.focusNode &&
-			this.domNode.contains(selection.anchorNode) &&
-			this.domNode.contains(selection.focusNode)
+			selection?.anchorNode && selection.focusNode && this.domNode.contains(selection.anchorNode) && this.domNode.contains(selection.focusNode)
 				? {
 						anchor: selection.anchorNode,
 						anchorOffset: selection.anchorOffset,
@@ -321,22 +296,11 @@ export class ChatMarkdownContentPart extends Disposable {
 		try {
 			for (const [index, source] of sources.entries()) {
 				const incomplete = fillInIncompleteTokens && index === sources.length - 1;
-				const match = available.findIndex(
-					fragment =>
-						fragment.source === source &&
-						fragment.incomplete === incomplete &&
-						(!fragment.codeCount || fragment.codeStart === codeStart),
-				);
+				const match = available.findIndex(fragment => fragment.source === source && fragment.incomplete === incomplete && (!fragment.codeCount || fragment.codeStart === codeStart));
 				let fragment: MarkdownFragment;
 				if (match >= 0) fragment = available.splice(match, 1)[0];
 				else {
-					const target =
-						source.length >= 4096
-							? available.find(
-									fragment =>
-										!fragment.codeCount && !fragment.images.size && !targets.has(fragment.element),
-								)?.element
-							: undefined;
+					const target = source.length >= 4096 ? available.find(fragment => !fragment.codeCount && !fragment.images.size && !targets.has(fragment.element))?.element : undefined;
 					if (target) targets.add(target);
 					fragment = this.renderFragment({ ...markdown, value: source }, incomplete, codeStart, target);
 					created.push(fragment);
@@ -383,18 +347,12 @@ export class ChatMarkdownContentPart extends Disposable {
 		this.markdown = markdown;
 		const imageKeys = new Set(next.flatMap(fragment => [...fragment.images]));
 		for (const key of this.images.keys()) if (!imageKeys.has(key)) this.images.delete(key);
-		if (selected?.anchor.isConnected && selected.focus.isConnected)
-			selection?.setBaseAndExtent(selected.anchor, selected.anchorOffset, selected.focus, selected.focusOffset);
+		if (selected?.anchor.isConnected && selected.focus.isConnected) selection?.setBaseAndExtent(selected.anchor, selected.anchorOffset, selected.focus, selected.focusOffset);
 		// Restoring a DOM range can focus the browser's editing host. Preserve toolbar focus.
 		if (focused?.isConnected && document.activeElement !== focused) focused.focus({ preventScroll: true });
 	}
 
-	private renderFragment(
-		markdown: IMarkdownString,
-		incomplete: boolean,
-		codeStart: number,
-		target?: HTMLElement,
-	): MarkdownFragment {
+	private renderFragment(markdown: IMarkdownString, incomplete: boolean, codeStart: number, target?: HTMLElement): MarkdownFragment {
 		const document = this.options.ownerDocument;
 		const lifetime = new DisposableStore();
 		const code: { readonly languageId: string; readonly text: string; readonly placeholder: HTMLElement }[] = [];
@@ -406,9 +364,7 @@ export class ChatMarkdownContentPart extends Disposable {
 					{
 						...this.options,
 						fillInIncompleteTokens: incomplete,
-						actionHandler: this.options.actionHandler
-							? href => this.options.actionHandler!(href, this.codeElement)
-							: undefined,
+						actionHandler: this.options.actionHandler ? href => this.options.actionHandler!(href, this.codeElement) : undefined,
 						asyncRenderCallback: () => {
 							this.options.asyncRenderCallback?.();
 							this.changedHeight.fire();
@@ -446,9 +402,7 @@ export class ChatMarkdownContentPart extends Disposable {
 					!target &&
 					(node.nodeType !== 1 ||
 						(!(node as Element).matches('img,input,button,pre,.ash-katex-container') &&
-							!(node as Element).querySelector(
-								'img,input,button,.ash-chat-code-placeholder,.ash-katex-container',
-							))),
+							!(node as Element).querySelector('img,input,button,.ash-chat-code-placeholder,.ash-katex-container'))),
 			}));
 			for (const [localIndex, data] of code.entries()) {
 				const index = codeStart + localIndex;
@@ -480,9 +434,7 @@ export class ChatMarkdownContentPart extends Disposable {
 			rendered.element.classList.add('ash-chat-markdown-fragment');
 			const blocks = [...rendered.element.childNodes].map((node, index) => ({ node, ...fingerprints[index] }));
 			const header = /^(`{3,}|~{3,})([^\n]*)\n/u.exec(markdown.value);
-			const closing = header
-				? new RegExp(`^ {0,3}${header[1][0]}{${header[1].length},}[\\t ]*(?:\\n|$)`, 'm')
-				: undefined;
+			const closing = header ? new RegExp(`^ {0,3}${header[1][0]}{${header[1].length},}[\\t ]*(?:\\n|$)`, 'm') : undefined;
 			const fence =
 				!markdown.supportHtml &&
 				!this.options.markedExtensions?.length &&
@@ -492,11 +444,7 @@ export class ChatMarkdownContentPart extends Disposable {
 				closing &&
 				!closing.test(markdown.value.slice(header[0].length)) &&
 				code[0].languageId !== 'math' &&
-				blocks.every(
-					block =>
-						block.node === this.codeBlocks.get(codeStart)?.element ||
-						(block.node.nodeType === 3 && !block.node.textContent?.trim()),
-				)
+				blocks.every(block => block.node === this.codeBlocks.get(codeStart)?.element || (block.node.nodeType === 3 && !block.node.textContent?.trim()))
 					? { headerLength: header[0].length, closing, languageId: code[0].languageId }
 					: undefined;
 			return {
@@ -527,19 +475,17 @@ export class ChatMarkdownContentPart extends Disposable {
 		if (fragment.fence.closing.test(fragment.source.slice(lineStart) + appended)) return false;
 		fragment.source += appended;
 		fragment.incomplete = incomplete;
-		this.codeBlocks
-			.get(fragment.codeStart)!
-			.render(
-				{
-					text: fragment.source.slice(fragment.fence.headerLength).replace(/\n$/u, ''),
-					languageId: fragment.fence.languageId,
-					codeBlockIndex: fragment.codeStart,
-					element: this.codeElement,
-					chatSessionResource: undefined,
-					renderOptions: { maxHeightInLines: 20 },
-				},
-				this.domNode.clientWidth,
-			);
+		this.codeBlocks.get(fragment.codeStart)!.render(
+			{
+				text: fragment.source.slice(fragment.fence.headerLength).replace(/\n$/u, ''),
+				languageId: fragment.fence.languageId,
+				codeBlockIndex: fragment.codeStart,
+				element: this.codeElement,
+				chatSessionResource: undefined,
+				renderOptions: { maxHeightInLines: 20 },
+			},
+			this.domNode.clientWidth,
+		);
 		return true;
 	}
 }

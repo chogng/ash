@@ -4,34 +4,13 @@ import { ThemeIcon, themeColorFromId } from '../../../../base/common/themables.j
 import { foldBackground } from '../../../../platform/theme/common/colors/editorColors.js';
 import { registerIcon } from '../../../../platform/theme/common/iconRegistry.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
-import {
-	MinimapPosition,
-	TrackedRangeStickiness,
-	type IModelDecorationOptions,
-	type IModelDecorationsChangeAccessor,
-} from '../../../common/model.js';
+import { MinimapPosition, TrackedRangeStickiness, type IModelDecorationOptions, type IModelDecorationsChangeAccessor } from '../../../common/model.js';
 import type { IDecorationProvider } from './foldingModel.js';
 
-export const foldingExpandedIcon = registerIcon(
-	'folding-expanded',
-	Lxicon.chevronDown,
-	'Icon for an expanded folding range',
-);
-export const foldingCollapsedIcon = registerIcon(
-	'folding-collapsed',
-	Lxicon.chevronRight,
-	'Icon for a collapsed folding range',
-);
-export const foldingManualCollapsedIcon = registerIcon(
-	'folding-manual-collapsed',
-	foldingCollapsedIcon,
-	'Icon for a manually collapsed folding range',
-);
-export const foldingManualExpandedIcon = registerIcon(
-	'folding-manual-expanded',
-	foldingExpandedIcon,
-	'Icon for a manually expanded folding range',
-);
+export const foldingExpandedIcon = registerIcon('folding-expanded', Lxicon.chevronDown, 'Icon for an expanded folding range');
+export const foldingCollapsedIcon = registerIcon('folding-collapsed', Lxicon.chevronRight, 'Icon for a collapsed folding range');
+export const foldingManualCollapsedIcon = registerIcon('folding-manual-collapsed', foldingCollapsedIcon, 'Icon for a manually collapsed folding range');
+export const foldingManualExpandedIcon = registerIcon('folding-manual-expanded', foldingExpandedIcon, 'Icon for a manually expanded folding range');
 
 const collapsedTooltip = 'Expand folded range';
 const expandedTooltip = 'Collapse range';
@@ -50,12 +29,7 @@ export class FoldingDecorationProvider implements IDecorationProvider {
 	getDecorationOption(isCollapsed: boolean, isHidden: boolean, isManual: boolean): IModelDecorationOptions {
 		if (isHidden) return hiddenRange;
 		if (isCollapsed) {
-			const icon =
-				this.showFoldingControls === 'never'
-					? undefined
-					: isManual
-						? foldingManualCollapsedIcon
-						: foldingCollapsedIcon;
+			const icon = this.showFoldingControls === 'never' ? undefined : isManual ? foldingManualCollapsedIcon : foldingCollapsedIcon;
 			return foldingOption(
 				isManual ? 'folding-manually-collapsed' : 'folding-collapsed',
 				TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
@@ -69,9 +43,7 @@ export class FoldingDecorationProvider implements IDecorationProvider {
 		const alwaysVisible = this.showFoldingControls === 'always' || isManual;
 		return foldingOption(
 			isManual ? 'folding-manually-expanded' : 'folding-expanded',
-			isManual
-				? TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges
-				: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+			isManual ? TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges : TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 			expandedTooltip,
 			icon,
 			false,
@@ -99,14 +71,7 @@ const expandedWithoutControls = Object.freeze<IModelDecorationOptions>({
 	isWholeLine: true,
 });
 
-function foldingOption(
-	description: string,
-	stickiness: TrackedRangeStickiness,
-	tooltip: string,
-	icon: Icon | undefined,
-	highlight: boolean,
-	alwaysVisible = false,
-): IModelDecorationOptions {
+function foldingOption(description: string, stickiness: TrackedRangeStickiness, tooltip: string, icon: Icon | undefined, highlight: boolean, alwaysVisible = false): IModelDecorationOptions {
 	return Object.freeze({
 		description,
 		stickiness,

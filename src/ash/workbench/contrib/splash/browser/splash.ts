@@ -26,13 +26,7 @@ export function readBrowserPartsSplash(ownerWindow: Window): IPartsSplash {
 	}
 	const dark = ownerWindow.matchMedia('(prefers-color-scheme: dark)').matches;
 	const contrast = ownerWindow.matchMedia('(forced-colors: active)').matches;
-	const scheme = contrast
-		? dark
-			? ColorScheme.HighContrastDark
-			: ColorScheme.HighContrastLight
-		: dark
-			? ColorScheme.Dark
-			: ColorScheme.Light;
+	const scheme = contrast ? (dark ? ColorScheme.HighContrastDark : ColorScheme.HighContrastLight) : dark ? ColorScheme.Dark : ColorScheme.Light;
 	const colors = Colors.resolve(scheme);
 	return {
 		baseTheme: scheme,
@@ -58,21 +52,13 @@ export function showPartsSplash(ownerDocument: Document, splash: IPartsSplash): 
 		inset: '0',
 		pointerEvents: 'none',
 		zIndex: '10000',
-		forcedColorAdjust:
-			splash.baseTheme === ColorScheme.HighContrastDark || splash.baseTheme === ColorScheme.HighContrastLight
-				? 'none'
-				: 'auto',
+		forcedColorAdjust: splash.baseTheme === ColorScheme.HighContrastDark || splash.baseTheme === ColorScheme.HighContrastLight ? 'none' : 'auto',
 		backgroundColor: splash.colorInfo.background,
 	});
 	const layout = splash.layoutInfo;
 	const ownerWindow = ownerDocument.defaultView;
 	// A viewport or zoom change invalidates geometry while leaving the cached colors useful.
-	if (
-		layout &&
-		ownerWindow &&
-		Math.abs(layout.width - ownerWindow.innerWidth) < 1 &&
-		Math.abs(layout.height - ownerWindow.innerHeight) < 1
-	) {
+	if (layout && ownerWindow && Math.abs(layout.width - ownerWindow.innerWidth) < 1 && Math.abs(layout.height - ownerWindow.innerHeight) < 1) {
 		for (const part of layout.partBounds) {
 			const region = ownerDocument.createElement('div');
 			Object.assign(region.style, {

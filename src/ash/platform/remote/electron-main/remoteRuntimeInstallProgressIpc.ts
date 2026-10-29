@@ -4,9 +4,7 @@ import { REMOTE_RUNTIME_INSTALL_PROGRESS_READ_CHANNEL } from '../common/remoteRu
 import type { RemoteRuntimeInstallProgressMainService } from './remoteRuntimeInstallProgressMainService.js';
 
 /** Trusted routes exposed only to the dedicated Remote installation bootstrap window. */
-export function remoteRuntimeInstallProgressIpcRoutes(
-	service: RemoteRuntimeInstallProgressMainService,
-): readonly IpcRoute<unknown, unknown>[] {
+export function remoteRuntimeInstallProgressIpcRoutes(service: RemoteRuntimeInstallProgressMainService): readonly IpcRoute<unknown, unknown>[] {
 	return [
 		{
 			channel: REMOTE_RUNTIME_INSTALL_PROGRESS_READ_CHANNEL,

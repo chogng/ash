@@ -1,9 +1,5 @@
 import { addDisposableListener, getActiveElement, getWindow, isHTMLElement } from '../../../base/browser/dom.js';
-import {
-	ContextViewFocusRestore,
-	ContextViewHideReason,
-	type ContextViewAnchor,
-} from '../../../base/browser/ui/contextview/contextview.js';
+import { ContextViewFocusRestore, ContextViewHideReason, type ContextViewAnchor } from '../../../base/browser/ui/contextview/contextview.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../accessibility/browser/accessibleView.js';
@@ -13,13 +9,7 @@ import { IContextViewService } from '../../contextview/browser/contextView.js';
 import { InstantiationType, registerSingleton } from '../../instantiation/common/extensions.js';
 import { IInstantiationService, createDecorator } from '../../instantiation/common/instantiation.js';
 import { Registry } from '../../registry/common/platform.js';
-import {
-	ActionList,
-	type IActionListDelegate,
-	type IActionListItem,
-	type IActionListOptions,
-	type IActionListUpdateOptions,
-} from './actionList.js';
+import { ActionList, type IActionListDelegate, type IActionListItem, type IActionListOptions, type IActionListUpdateOptions } from './actionList.js';
 import { TabbedActionListWidget, type ITabbedActionListShowOptions } from './tabbedActionListWidget.js';
 
 export const IActionWidgetService = createDecorator<IActionWidgetService>('actionWidgetService');
@@ -90,16 +80,7 @@ export class ActionWidgetService extends Disposable implements IActionWidgetServ
 						listOptions,
 						tabs,
 					)
-				: this.instantiationService.createInstance(
-						ActionList<T>,
-						user,
-						items,
-						delegate,
-						this.contextViewService.container,
-						ariaHint,
-						supportsPreview,
-						listOptions,
-					),
+				: this.instantiationService.createInstance(ActionList<T>, user, items, delegate, this.contextViewService.container, ariaHint, supportsPreview, listOptions),
 		);
 		this.list = list as ActionList<unknown>;
 		lifetime.add(
@@ -135,10 +116,7 @@ export class ActionWidgetService extends Disposable implements IActionWidgetServ
 				const didCancel = this.cancelOnHide;
 				// ContextView detaches content before this callback, so remember the last focused node.
 				const restore =
-					list.domNode.contains(focused) &&
-					isHTMLElement(source) &&
-					source.isConnected &&
-					(reason === ContextViewHideReason.Escape || reason === ContextViewHideReason.Programmatic);
+					list.domNode.contains(focused) && isHTMLElement(source) && source.isConnected && (reason === ContextViewHideReason.Escape || reason === ContextViewHideReason.Programmatic);
 				if (this.current.value === lifetime) {
 					this.current.clear();
 				}
@@ -192,9 +170,6 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	setting: {
 		valueType: 'boolean',
 		title: localize('actionWidget.verbosityTitle', 'Action menu accessibility help'),
-		description: localize(
-			'actionWidget.verbosityDescription',
-			'Announce how to open accessibility help when an action menu opens.',
-		),
+		description: localize('actionWidget.verbosityDescription', 'Announce how to open accessibility help when an action menu opens.'),
 	},
 });

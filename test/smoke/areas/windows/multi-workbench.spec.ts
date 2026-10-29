@@ -33,10 +33,7 @@ focusTest(
 			await emitSecondInstance(application, secondWorkspace.directory);
 			secondPage = await secondPagePromise;
 			if (target.appServerMode === 'required') {
-				await secondPage
-					.getByRole('dialog', { name: 'Ash' })
-					.getByRole('button', { name: 'Trust Folder' })
-					.click();
+				await secondPage.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: 'Trust Folder' }).click();
 			}
 			const secondWorkbench = new Workbench(secondPage);
 			await secondWorkbench.waitForReady();
@@ -146,10 +143,7 @@ focusTest(
 			await expect.poll(() => focusedWindowTitle(application)).toBe('multi-workbench:first');
 
 			const closed = secondPage.waitForEvent('close');
-			const closingWindowId = await application.evaluate(
-				({ BrowserWindow }) =>
-					BrowserWindow.getAllWindows().find(window => window.getTitle() === 'multi-workbench:second')!.id,
-			);
+			const closingWindowId = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.getTitle() === 'multi-workbench:second')!.id);
 			await expect
 				.poll(() => readWindowLogs(application, closingWindowId))
 				.toContainEqual(
@@ -168,11 +162,9 @@ focusTest(
 			const durableState = JSON.parse(await readFile(join(userData, 'workbench-state.json'), 'utf8')) as {
 				storages: { identity: { id: string; scope: string }; entries: Record<string, { value: string }> }[];
 			};
-			expect(
-				durableState.storages.find(
-					scope => scope.identity.scope === 'workspace' && scope.identity.id === workspaceId,
-				)?.entries['workbench.layout.sidebar.visible']?.value,
-			).toBe(String(!sidebarWasVisible));
+			expect(durableState.storages.find(scope => scope.identity.scope === 'workspace' && scope.identity.id === workspaceId)?.entries['workbench.layout.sidebar.visible']?.value).toBe(
+				String(!sidebarWasVisible),
+			);
 			const reopening = application.waitForEvent('window');
 			await emitSecondInstance(application, secondWorkspace.directory);
 			secondPage = await reopening;
@@ -198,34 +190,62 @@ focusTest(
 	},
 );
 
-focusTest(
-	'Open in Agents reuses one window across Workbench workspaces',
-	{ tag: ['@electron-ui', '@electron-app-server'] },
-	async ({ application, target, workbench, testWorkspace }) => {
-		if (target.kind !== 'electron' || !('windows' in application)) return;
+focusTest('Open in Agents reuses one window across Workbench workspaces', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }) => {
+	if (target.kind !== 'electron' || !('windows' in application)) return;
 
-		const secondWorkspace = await createTestWorkspace();
-		workspacesToDispose.push(secondWorkspace);
-		let secondPage: Page | undefined;
-		try {
-			const secondPagePromise = application.waitForEvent('window');
-			await emitSecondInstance(application, secondWorkspace.directory);
-			secondPage = await secondPagePromise;
-			if (target.appServerMode === 'required') {
-				await secondPage
-					.getByRole('dialog', { name: 'Ash' })
-					.getByRole('button', { name: 'Trust Folder' })
-					.click();
-			}
-			await new Workbench(secondPage).waitForReady();
+	const secondWorkspace = await createTestWorkspace();
+	workspacesToDispose.push(secondWorkspace);
+	let secondPage: Page | undefined;
+	try {
+		const secondPagePromise = application.waitForEvent('window');
+		await emitSecondInstance(application, secondWorkspace.directory);
+		secondPage = await secondPagePromise;
+		if (target.appServerMode === 'required') {
+			await secondPage.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: 'Trust Folder' }).click();
+		}
+		await new Workbench(secondPage).waitForReady();
 
-			const agentsPagePromise = application.waitForEvent('window');
-			await workbench.page
-				.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button")
-				.click();
-			const agentsPage = await agentsPagePromise;
-			await expect(agentsPage.locator('.ash-code-sessions-window')).toBeVisible();
-			const initialConnection = await agentsPage.evaluate(async () => {
+		const agentsPagePromise = application.waitForEvent('window');
+		await workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+		const agentsPage = await agentsPagePromise;
+		await expect(agentsPage.locator('.ash-code-sessions-window')).toBeVisible();
+		const initialConnection = await agentsPage.evaluate(async () => {
+			const ipc = (
+				globalThis as unknown as {
+					ash: { ipcRenderer: { invoke(channel: string): Promise<{ generation: number }> } };
+				}
+			).ash.ipcRenderer;
+			return ipc.invoke('ash:remote:connection');
+		});
+		const agentsWindow = await application.browserWindow(agentsPage);
+		const agentsWindowId = await agentsWindow.evaluate(window => window.id);
+		// Renderer restoration and the OS focus transition complete independently.
+		await waitForElectronWindowState(application, agentsPage, { focused: true });
+		await expect
+			.poll(() => readWindowLogs(application, agentsWindowId!))
+			.toContainEqual(
+				expect.objectContaining({
+					source: `window-${agentsWindowId}`,
+					category: 'lifecycle',
+					message: 'Agents restored',
+				}),
+			);
+		await secondPage.evaluate(async () => {
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<void> } } }).ash.ipcRenderer;
+			await ipc.invoke('ash:native-host:open-agents-window');
+		});
+
+		await waitForElectronWindowState(application, agentsPage, { focused: true });
+		await expect
+			.poll(() =>
+				application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().filter(window => window.webContents.getURL().includes('sessions/electron-browser/sessions.html')).length),
+			)
+			.toBe(1);
+		await expect.poll(() => application.windows().length).toBe(3);
+		await expect.poll(() => canonicalWorkspacePath(agentsPage)).toBe(await realpath(secondWorkspace.directory));
+		await expect(agentsPage.locator('.ash-code-sessions-window')).toBeVisible();
+		if (target.appServerMode === 'required') {
+			const reusedConnection = await agentsPage.evaluate(async () => {
 				const ipc = (
 					globalThis as unknown as {
 						ash: { ipcRenderer: { invoke(channel: string): Promise<{ generation: number }> } };
@@ -233,132 +253,74 @@ focusTest(
 				).ash.ipcRenderer;
 				return ipc.invoke('ash:remote:connection');
 			});
-			const agentsWindow = await application.browserWindow(agentsPage);
-			const agentsWindowId = await agentsWindow.evaluate(window => window.id);
-			// Renderer restoration and the OS focus transition complete independently.
-			await waitForElectronWindowState(application, agentsPage, { focused: true });
-			await expect
-				.poll(() => readWindowLogs(application, agentsWindowId!))
-				.toContainEqual(
-					expect.objectContaining({
-						source: `window-${agentsWindowId}`,
-						category: 'lifecycle',
-						message: 'Agents restored',
-					}),
-				);
-			await secondPage.evaluate(async () => {
-				const ipc = (
-					globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<void> } } }
-				).ash.ipcRenderer;
-				await ipc.invoke('ash:native-host:open-agents-window');
-			});
-
-			await waitForElectronWindowState(application, agentsPage, { focused: true });
-			await expect
-				.poll(() =>
-					application.evaluate(
-						({ BrowserWindow }) =>
-							BrowserWindow.getAllWindows().filter(window =>
-								window.webContents.getURL().includes('sessions/electron-browser/sessions.html'),
-							).length,
-					),
-				)
-				.toBe(1);
-			await expect.poll(() => application.windows().length).toBe(3);
-			await expect.poll(() => canonicalWorkspacePath(agentsPage)).toBe(await realpath(secondWorkspace.directory));
-			await expect(agentsPage.locator('.ash-code-sessions-window')).toBeVisible();
-			if (target.appServerMode === 'required') {
-				const reusedConnection = await agentsPage.evaluate(async () => {
-					const ipc = (
-						globalThis as unknown as {
-							ash: { ipcRenderer: { invoke(channel: string): Promise<{ generation: number }> } };
-						}
-					).ash.ipcRenderer;
-					return ipc.invoke('ash:remote:connection');
-				});
-				expect(reusedConnection.generation).toBe(initialConnection.generation);
-			}
-		} finally {
-			if (secondPage && !secondPage.isClosed()) await secondPage.close().catch(() => undefined);
+			expect(reusedConnection.generation).toBe(initialConnection.generation);
 		}
-	},
-);
+	} finally {
+		if (secondPage && !secondPage.isClosed()) await secondPage.close().catch(() => undefined);
+	}
+});
 
-test(
-	'dirty editor content survives an immediate Electron window close',
-	{ tag: ['@electron-app-server'] },
-	async ({ application, target }) => {
-		if (target.kind !== 'electron' || !('windows' in application)) return;
-		const workspace = await createTestWorkspace();
-		workspacesToDispose.push(workspace);
-		let secondPage: Page | undefined;
-		try {
-			const opened = application.waitForEvent('window');
-			await emitSecondInstance(application, workspace.directory);
-			secondPage = await opened;
-			await secondPage.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: 'Trust Folder' }).click();
-			const secondWorkbench = new Workbench(secondPage);
-			await secondWorkbench.waitForReady();
-			await secondPage.bringToFront();
-			const windowId = await secondPage.evaluate(async () => {
-				const ipc = (
-					globalThis as unknown as {
-						ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } };
-					}
-				).ash.ipcRenderer;
-				const windows = (await ipc.invoke('ash:window:operation', { kind: 'list' })) as readonly {
-					id: number;
-					focused: boolean;
-				}[];
-				const focused = windows.find(window => window.focused);
-				if (!focused) throw new Error('Second Workbench is not focused');
-				return focused.id;
-			});
-			const fileRow = secondPage.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
-			await expect(fileRow).toHaveCount(1);
-			const showSidebar = secondPage.getByRole('button', { name: 'Show Primary Side Bar' });
-			if (await showSidebar.isVisible()) await showSidebar.click();
-			await fileRow.click();
-			const input = secondWorkbench.editors.groupAt(0).content.locator('.stanza-editor-input');
-			await input.focus();
-			await input.press('ControlOrMeta+A');
-			await input.type('preserved by close handshake');
-			const closed = secondPage.waitForEvent('close');
-			await application.evaluate(({ BrowserWindow }, id) => {
-				BrowserWindow.fromId(id)?.close();
-			}, windowId);
-			await closed;
-			secondPage = undefined;
-			const reopened = application.waitForEvent('window');
-			await emitSecondInstance(application, workspace.directory);
-			secondPage = await reopened;
-			await new Workbench(secondPage).waitForReady();
-			await expect(secondPage.locator('.stanza-editor-line-text').first()).toContainText(
-				'preserved by close handshake',
-			);
-		} finally {
-			if (secondPage && !secondPage.isClosed()) await secondPage.close().catch(() => undefined);
-		}
-	},
-);
+test('dirty editor content survives an immediate Electron window close', { tag: ['@electron-app-server'] }, async ({ application, target }) => {
+	if (target.kind !== 'electron' || !('windows' in application)) return;
+	const workspace = await createTestWorkspace();
+	workspacesToDispose.push(workspace);
+	let secondPage: Page | undefined;
+	try {
+		const opened = application.waitForEvent('window');
+		await emitSecondInstance(application, workspace.directory);
+		secondPage = await opened;
+		await secondPage.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: 'Trust Folder' }).click();
+		const secondWorkbench = new Workbench(secondPage);
+		await secondWorkbench.waitForReady();
+		await secondPage.bringToFront();
+		const windowId = await secondPage.evaluate(async () => {
+			const ipc = (
+				globalThis as unknown as {
+					ash: { ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> } };
+				}
+			).ash.ipcRenderer;
+			const windows = (await ipc.invoke('ash:window:operation', { kind: 'list' })) as readonly {
+				id: number;
+				focused: boolean;
+			}[];
+			const focused = windows.find(window => window.focused);
+			if (!focused) throw new Error('Second Workbench is not focused');
+			return focused.id;
+		});
+		const fileRow = secondPage.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
+		await expect(fileRow).toHaveCount(1);
+		const showSidebar = secondPage.getByRole('button', { name: 'Show Primary Side Bar' });
+		if (await showSidebar.isVisible()) await showSidebar.click();
+		await fileRow.click();
+		const input = secondWorkbench.editors.groupAt(0).content.locator('.stanza-editor-input');
+		await input.focus();
+		await input.press('ControlOrMeta+A');
+		await input.type('preserved by close handshake');
+		const closed = secondPage.waitForEvent('close');
+		await application.evaluate(({ BrowserWindow }, id) => {
+			BrowserWindow.fromId(id)?.close();
+		}, windowId);
+		await closed;
+		secondPage = undefined;
+		const reopened = application.waitForEvent('window');
+		await emitSecondInstance(application, workspace.directory);
+		secondPage = await reopened;
+		await new Workbench(secondPage).waitForReady();
+		await expect(secondPage.locator('.stanza-editor-line-text').first()).toContainText('preserved by close handshake');
+	} finally {
+		if (secondPage && !secondPage.isClosed()) await secondPage.close().catch(() => undefined);
+	}
+});
 
 async function emitSecondInstance(application: ElectronApplication, workspaceDirectory: string): Promise<void> {
 	await application.evaluate(({ app }, directory) => {
-		app.emit(
-			'second-instance',
-			{} as never,
-			[process.execPath, app.getAppPath(), '--folder', directory],
-			process.cwd(),
-			{},
-		);
+		app.emit('second-instance', {} as never, [process.execPath, app.getAppPath(), '--folder', directory], process.cwd(), {});
 	}, workspaceDirectory);
 }
 
 async function canonicalWorkspacePath(page: Page): Promise<string> {
 	const value = await page.evaluate(async () => {
-		const bridge = (
-			globalThis as unknown as { ash?: { ipcRenderer?: { invoke(channel: string): Promise<unknown> } } }
-		).ash?.ipcRenderer;
+		const bridge = (globalThis as unknown as { ash?: { ipcRenderer?: { invoke(channel: string): Promise<unknown> } } }).ash?.ipcRenderer;
 		if (!bridge) throw new Error('Ash renderer IPC bridge is unavailable');
 		return bridge.invoke('ash:workspace:context:read');
 	});

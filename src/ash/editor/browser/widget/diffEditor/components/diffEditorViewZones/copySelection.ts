@@ -27,9 +27,7 @@ export function enableCopySelection(options: IEnableViewZoneCopySelectionOptions
 			}
 			const positionAt = (node: Node, offset: number): Position | undefined => {
 				const element = isHTMLElement(node) ? node : node.parentElement;
-				return element && options.domNode.contains(element)
-					? options.getModelPositionAt(element, offset)
-					: undefined;
+				return element && options.domNode.contains(element) ? options.getModelPositionAt(element, offset) : undefined;
 			};
 			const anchor = positionAt(selection.anchorNode, selection.anchorOffset);
 			const focus = positionAt(selection.focusNode, selection.focusOffset);

@@ -29,13 +29,7 @@ test('Transpose swaps the preceding grapheme with the following line break at a 
 
 test('Transpose ignores ranges and resolves overlapping cursor edits in favor of the primary cursor', () => {
 	using model = new TextModel('abc');
-	using selections = createTestCursorsController(
-		model,
-		primaryFirst(
-			[caret(0, 1), caret(0, 2), Selection.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 1 + 1))],
-			1,
-		),
-	);
+	using selections = createTestCursorsController(model, primaryFirst([caret(0, 1), caret(0, 2), Selection.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 1 + 1))], 1));
 	runTranspose(model, selections);
 	assert.equal(model.getText(), 'acb');
 	assert.deepEqual(selections.getSelections()[0]!, caret(0, 3));
@@ -53,10 +47,7 @@ function runTranspose(model: TextModel, selections: ReturnType<typeof createTest
 			selections.pushUndoStop();
 			return true;
 		},
-		executeCommands: (
-			_source: string | null | undefined,
-			commands: Parameters<typeof selections.executeCommands>[0],
-		) => selections.executeCommands(commands),
+		executeCommands: (_source: string | null | undefined, commands: Parameters<typeof selections.executeCommands>[0]) => selections.executeCommands(commands),
 	} as unknown as ICodeEditor;
 	new TransposeAction().run({} as never, editor);
 }

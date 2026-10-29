@@ -134,13 +134,7 @@ export class DesignEditorWidget extends Disposable {
 		this.motion = contributions.motion;
 		this.code = contributions.code;
 		this.prototype = contributions.prototype;
-		stage.append(
-			this.canvas.domNode,
-			this.code.domNode,
-			this.motion.domNode,
-			this.toolsWidget.domNode,
-			this.prototype.previewDomNode,
-		);
+		stage.append(this.canvas.domNode, this.code.domNode, this.motion.domNode, this.toolsWidget.domNode, this.prototype.previewDomNode);
 
 		this.contentDomNode = h(ownerDocument, 'div', {
 			className: 'ash-sessions-design-content',
@@ -155,11 +149,7 @@ export class DesignEditorWidget extends Disposable {
 		scopedContext.createKey('sessionsDesignCanvasFocused', true);
 		const active = scopedContext.createKey<boolean>('sessionsDesignCanvasActive', false);
 		const textEditing = scopedContext.createKey<boolean>('sessionsDesignTextEditing', false);
-		this._register(
-			addDisposableListener(this.domNode, 'focusin', event =>
-				textEditing.set(!!(event.target as Element).closest('[contenteditable][data-design-text]')),
-			),
-		);
+		this._register(addDisposableListener(this.domNode, 'focusin', event => textEditing.set(!!(event.target as Element).closest('[contenteditable][data-design-text]'))));
 		this._register(addDisposableListener(this.domNode, 'focusout', () => textEditing.set(false)));
 		this._register(
 			addDisposableListener(this.domNode, 'focus', () => {
@@ -179,11 +169,7 @@ export class DesignEditorWidget extends Disposable {
 				if (kind === 'replace') {
 					this.text.finish(false);
 					this.select([]);
-				} else if (
-					this.selection.retain(
-						getDesignShapeEntries(this.documentController.model.value.shapes).map(entry => entry.shape),
-					)
-				) {
+				} else if (this.selection.retain(getDesignShapeEntries(this.documentController.model.value.shapes).map(entry => entry.shape))) {
 					this.announceSelection();
 				}
 				this.render();
@@ -213,10 +199,7 @@ export class DesignEditorWidget extends Disposable {
 					domNode: this.domNode,
 					getTool: () => this.tool,
 					getMode: () => this.mode,
-					getShapesForHitTesting: () =>
-						this.mode === DesignMode.Motion
-							? this.motion.getScene().shapes
-							: this.documentController.model.value.shapes,
+					getShapesForHitTesting: () => (this.mode === DesignMode.Motion ? this.motion.getScene().shapes : this.documentController.model.value.shapes),
 					render: () => this.render(),
 					applyTransform: () => this.applyTransform(),
 					selectionChanged: () => this.announceSelection(),
@@ -231,9 +214,7 @@ export class DesignEditorWidget extends Disposable {
 			),
 		);
 		this._register(addDisposableListener(this.domNode, 'keydown', event => this.handleKeyDown(event)));
-		this._register(
-			addDisposableListener(this.canvas.domNode, 'contextmenu', event => this.handleContextMenu(event)),
-		);
+		this._register(addDisposableListener(this.canvas.domNode, 'contextmenu', event => this.handleContextMenu(event)));
 	}
 
 	public initialize(): void {
@@ -273,18 +254,13 @@ export class DesignEditorWidget extends Disposable {
 		this.render();
 	}
 	public revealShape(id: string): void {
-		const entry = getDesignShapeEntries(this.documentController.model.value.shapes).find(
-			entry => entry.shape.id === id,
-		);
+		const entry = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === id);
 		if (!entry) {
 			return;
 		}
 		this.selectShapes([id]);
 		const height = this.canvas.domNode.clientHeight;
-		this.camera.scale = Math.max(
-			0.2,
-			Math.min(1, (this.dimension.width - 48) / entry.world.width, (height - 100) / entry.world.height),
-		);
+		this.camera.scale = Math.max(0.2, Math.min(1, (this.dimension.width - 48) / entry.world.width, (height - 100) / entry.world.height));
 		this.camera.panX = this.dimension.width / 2 - (entry.world.x + entry.world.width / 2) * this.camera.scale;
 		this.camera.panY = height / 2 - (entry.world.y + entry.world.height / 2) * this.camera.scale;
 		this.applyTransform();
@@ -312,11 +288,7 @@ export class DesignEditorWidget extends Disposable {
 			(this.documentController.automaticallySaves ? this.documentController.saveStatus + '\n' : '') +
 			(this.mode === DesignMode.Code
 				? this.code.getAccessibleContent()
-				: this.contentDomNode.textContent! +
-					'\n' +
-					this.text.getAccessibleContent() +
-					'\n' +
-					this.prototype.getAccessibleContent())
+				: this.contentDomNode.textContent! + '\n' + this.text.getAccessibleContent() + '\n' + this.prototype.getAccessibleContent())
 		);
 	}
 	public undo(): void {
@@ -343,9 +315,7 @@ export class DesignEditorWidget extends Disposable {
 		}
 		if (this.selection.editingVector && this.selectedShape?.kind === 'path') {
 			this.selection.nodeIndices.clear();
-			designPathEditingContours(this.selectedShape)[this.selection.contourIndex].nodes.forEach((_, index) =>
-				this.selection.nodeIndices.add(index),
-			);
+			designPathEditingContours(this.selectedShape)[this.selection.contourIndex].nodes.forEach((_, index) => this.selection.nodeIndices.add(index));
 			this.render();
 			return;
 		}
@@ -363,10 +333,7 @@ export class DesignEditorWidget extends Disposable {
 	}
 	private get selectedShapes(): readonly DesignShape[] {
 		return getDesignShapeEntries(this.documentController.model.value.shapes)
-			.filter(
-				entry =>
-					this.selection.ids.has(entry.shape.id) && !entry.ancestors.some(id => this.selection.ids.has(id)),
-			)
+			.filter(entry => this.selection.ids.has(entry.shape.id) && !entry.ancestors.some(id => this.selection.ids.has(id)))
 			.map(entry => entry.shape);
 	}
 
@@ -376,11 +343,7 @@ export class DesignEditorWidget extends Disposable {
 	}
 
 	private announceSelection(): void {
-		this.messageDomNode.textContent = localize(
-			'sessions.design.selectionCount',
-			'{0} objects selected.',
-			this.selection.ids.size,
-		);
+		this.messageDomNode.textContent = localize('sessions.design.selectionCount', '{0} objects selected.', this.selection.ids.size);
 	}
 
 	private action(id: string, label: string, run: () => unknown, enabled = true): IAction {
@@ -393,13 +356,7 @@ export class DesignEditorWidget extends Disposable {
 		}
 		// A direct insertion selects its result, including when the text tool was active.
 		this.setTool(DesignTool.Select);
-		this.select([
-			this.commands.addShape(
-				kind,
-				this.camera.toWorld({ x: this.dimension.width / 2, y: this.canvas.domNode.clientHeight / 2 }),
-				localize('sessions.design.text', 'Text'),
-			),
-		]);
+		this.select([this.commands.addShape(kind, this.camera.toWorld({ x: this.dimension.width / 2, y: this.canvas.domNode.clientHeight / 2 }), localize('sessions.design.text', 'Text'))]);
 		this.render();
 		this.focus();
 	}
@@ -452,13 +409,8 @@ export class DesignEditorWidget extends Disposable {
 			return;
 		}
 		this.cancelGesture();
-		const selected = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry =>
-			this.selection.ids.has(entry.shape.id),
-		);
-		const center =
-			selected?.world.kind === 'frame'
-				? { x: selected.world.x + selected.world.width / 2, y: selected.world.y + selected.world.height / 2 }
-				: this.viewportCenter();
+		const selected = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => this.selection.ids.has(entry.shape.id));
+		const center = selected?.world.kind === 'frame' ? { x: selected.world.x + selected.world.width / 2, y: selected.world.y + selected.world.height / 2 } : this.viewportCenter();
 		const id = await this.documentController.importImage(center);
 		if (this.isDisposed) {
 			return;
@@ -524,12 +476,7 @@ export class DesignEditorWidget extends Disposable {
 	}
 
 	public detachInstance(): void {
-		if (
-			this.documentController.isBusy ||
-			this.mode === DesignMode.Code ||
-			this.mode === DesignMode.Motion ||
-			!this.selectedShape
-		) {
+		if (this.documentController.isBusy || this.mode === DesignMode.Code || this.mode === DesignMode.Motion || !this.selectedShape) {
 			return;
 		}
 		this.cancelGesture();
@@ -547,13 +494,7 @@ export class DesignEditorWidget extends Disposable {
 
 	/** Layers and canvas share editing shortcuts while retaining their own navigation keys. */
 	public handleLayerKeyDown(event: KeyboardEvent): boolean {
-		if (
-			event.defaultPrevented ||
-			this.documentController.isBusy ||
-			this.mode === DesignMode.Code ||
-			this.mode === DesignMode.Motion ||
-			this.input.isGesturing
-		) {
+		if (event.defaultPrevented || this.documentController.isBusy || this.mode === DesignMode.Code || this.mode === DesignMode.Motion || this.input.isGesturing) {
 			return false;
 		}
 		const vectorKey = event.code.startsWith('Key') ? event.code.slice(3).toLowerCase() : event.key.toLowerCase();
@@ -584,33 +525,14 @@ export class DesignEditorWidget extends Disposable {
 			event.stopPropagation();
 			return true;
 		}
-		if (
-			(event.ctrlKey || event.metaKey) &&
-			event.altKey &&
-			(event.code === 'KeyK' || event.key.toLowerCase() === 'k')
-		) {
+		if ((event.ctrlKey || event.metaKey) && event.altKey && (event.code === 'KeyK' || event.key.toLowerCase() === 'k')) {
 			this.createComponent();
-		} else if (
-			(event.ctrlKey || event.metaKey) &&
-			event.altKey &&
-			(event.code === 'KeyB' || event.key.toLowerCase() === 'b')
-		) {
+		} else if ((event.ctrlKey || event.metaKey) && event.altKey && (event.code === 'KeyB' || event.key.toLowerCase() === 'b')) {
 			this.detachInstance();
 		} else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd') {
 			this.duplicateSelected();
-		} else if (
-			(event.ctrlKey || event.metaKey) &&
-			(event.code === 'BracketLeft' || event.code === 'BracketRight' || event.key === '[' || event.key === ']')
-		) {
-			this.reorderSelected(
-				event.code === 'BracketRight' || event.key === ']'
-					? event.shiftKey
-						? 'front'
-						: 'forward'
-					: event.shiftKey
-						? 'back'
-						: 'backward',
-			);
+		} else if ((event.ctrlKey || event.metaKey) && (event.code === 'BracketLeft' || event.code === 'BracketRight' || event.key === '[' || event.key === ']')) {
+			this.reorderSelected(event.code === 'BracketRight' || event.key === ']' ? (event.shiftKey ? 'front' : 'forward') : event.shiftKey ? 'back' : 'backward');
 		} else if (event.shiftKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'a') {
 			this.addAutoLayout();
 		} else {
@@ -626,46 +548,29 @@ export class DesignEditorWidget extends Disposable {
 		const scene = this.mode === DesignMode.Motion ? this.motion.getScene() : undefined;
 		const preview = (shape: DesignShape): DesignShape => {
 			const fillPreview = this.properties.preview;
-			const updated =
-				fillPreview?.id === shape.id
-					? fillPreview
-					: (this.input.preview.find(preview => preview.id === shape.id) ?? shape);
+			const updated = fillPreview?.id === shape.id ? fillPreview : (this.input.preview.find(preview => preview.id === shape.id) ?? shape);
 			if (updated.kind !== 'frame' && updated.kind !== 'group') {
 				return updated;
 			}
 			const children = updated.children.map(preview);
-			return children.every((child, index) => child === updated.children[index])
-				? updated
-				: { ...updated, children };
+			return children.every((child, index) => child === updated.children[index]) ? updated : { ...updated, children };
 		};
 		const shapes = (scene?.shapes ?? this.documentController.model.value.shapes).map(preview);
 		const selected = getDesignShapeEntries(shapes).filter(entry => this.selection.ids.has(entry.shape.id));
 		this.canvas.render({
 			shapes,
 			selectedShapes: selected.map(entry => entry.world),
-			images: this.mediaPreview.getSources(this.documentController.model.value, version =>
-				this.documentController.readMedia(version),
-			),
+			images: this.mediaPreview.getSources(this.documentController.model.value, version => this.documentController.readMedia(version)),
 			draft: this.drawing.preview,
 			selectionRect: this.input.selectionRect,
 			activeContour: this.selection.contourIndex,
 			selectedNodes: this.selection.nodeIndices,
-			gradient: this.selection.editingGradient
-				? { paintId: this.selection.paintId, stopId: this.selection.gradientStopId }
-				: undefined,
-			blur: this.selection.editingBlur
-				? { effectId: this.selection.effectId, handle: this.selection.blurHandle }
-				: undefined,
-			showWidthHandles:
-				this.selection.editingVector &&
-				this.selection.editingWidth &&
-				!selected.some(entry => this.commands.components.isInstanceChild(entry.shape.id)),
+			gradient: this.selection.editingGradient ? { paintId: this.selection.paintId, stopId: this.selection.gradientStopId } : undefined,
+			blur: this.selection.editingBlur ? { effectId: this.selection.effectId, handle: this.selection.blurHandle } : undefined,
+			showWidthHandles: this.selection.editingVector && this.selection.editingWidth && !selected.some(entry => this.commands.components.isInstanceChild(entry.shape.id)),
 			selectedWidthPoints: this.selection.widthPointIds,
 			showPathHandles:
-				!this.selection.editingWidth &&
-				this.selection.editingVector &&
-				this.mode !== DesignMode.Motion &&
-				!selected.some(entry => this.commands.components.isInstanceChild(entry.shape.id)),
+				!this.selection.editingWidth && this.selection.editingVector && this.mode !== DesignMode.Motion && !selected.some(entry => this.commands.components.isInstanceChild(entry.shape.id)),
 			scale: this.camera.scale,
 			opacity: scene?.opacity,
 		});
@@ -681,33 +586,17 @@ export class DesignEditorWidget extends Disposable {
 						this.selection.widthPointIds.size,
 					)
 				: this.selection.paintingVector
-					? localize(
-							'sessions.design.networkPaintStatus',
-							'Paint regions enabled. Click a closed region to toggle its fill; Shift+B returns to node selection.',
-						)
-					: localize(
-							'sessions.design.vectorSelection',
-							'{0} nodes selected. Escape exits vector editing.',
-							this.selection.nodeIndices.size,
-						);
+					? localize('sessions.design.networkPaintStatus', 'Paint regions enabled. Click a closed region to toggle its fill; Shift+B returns to node selection.')
+					: localize('sessions.design.vectorSelection', '{0} nodes selected. Escape exits vector editing.', this.selection.nodeIndices.size);
 		}
 		this.vectorSelectionStatus = vectorStatus;
 		this.text.update();
 		if (this.text.editingId) {
-			this.canvas.domNode
-				.querySelector<SVGElement>(`[data-shape-id="${this.text.editingId}"]`)
-				?.setAttribute('visibility', 'hidden');
+			this.canvas.domNode.querySelector<SVGElement>(`[data-shape-id="${this.text.editingId}"]`)?.setAttribute('visibility', 'hidden');
 		}
 		const showProperties = this.mode === DesignMode.Design || this.mode === DesignMode.Draw;
 		// A properties preview changes the canvas, not the committed anchors addressed by the other editing controls.
-		this.properties.update(
-			showProperties && selected.length === 1
-				? this.properties.preview
-					? this.selectedShape
-					: selected[0].shape
-				: undefined,
-			showProperties,
-		);
+		this.properties.update(showProperties && selected.length === 1 ? (this.properties.preview ? this.selectedShape : selected[0].shape) : undefined, showProperties);
 		this.prototype.update(this.camera.scale, this.mode === DesignMode.Design);
 		this.viewChange.fire();
 	}
@@ -718,10 +607,7 @@ export class DesignEditorWidget extends Disposable {
 		this.cancelGesture();
 		const bounds = this.canvas.domNode.getBoundingClientRect();
 		const point = this.camera.toWorld({ x: event.clientX - bounds.left, y: event.clientY - bounds.top });
-		const shapes =
-			this.mode === DesignMode.Motion
-				? this.motion.getScene().shapes
-				: this.documentController.model.value.shapes;
+		const shapes = this.mode === DesignMode.Motion ? this.motion.getScene().shapes : this.documentController.model.value.shapes;
 		const shape = hitTestDesignShapes(shapes, point);
 		// Keep a multi-selection when opening its menu, including on empty canvas space.
 		if (!this.documentController.isBusy && shape && !this.selection.ids.has(shape.id)) {
@@ -754,61 +640,26 @@ export class DesignEditorWidget extends Disposable {
 		const shapes = this.documentController.model.value.shapes;
 		const selected = this.selectedShape;
 		return [
-			this.action(
-				'undo',
-				localize('sessions.design.undo', 'Undo'),
-				() => this.undo(),
-				!this.documentController.isBusy && this.documentController.model.canUndo,
-			),
-			this.action(
-				'redo',
-				localize('sessions.design.redo', 'Redo'),
-				() => this.redo(),
-				!this.documentController.isBusy && this.documentController.model.canRedo,
-			),
+			this.action('undo', localize('sessions.design.undo', 'Undo'), () => this.undo(), !this.documentController.isBusy && this.documentController.model.canUndo),
+			this.action('redo', localize('sessions.design.redo', 'Redo'), () => this.redo(), !this.documentController.isBusy && this.documentController.model.canRedo),
 			new Separator(),
-			this.action(
-				'delete',
-				localize('sessions.design.delete', 'Delete'),
-				() => this.deleteSelected(),
-				!this.documentController.isBusy && this.selection.ids.size > 0,
-			),
-			this.action(
-				'selectAll',
-				localize('sessions.design.selectAll', 'Select all'),
-				() => this.selectAll(),
-				!this.documentController.isBusy && shapes.length > 0,
-			),
-			this.action(
-				'duplicate',
-				localize('sessions.design.duplicate', 'Duplicate'),
-				() => this.duplicateSelected(),
-				!this.documentController.isBusy && this.selection.ids.size > 0,
-			),
+			this.action('delete', localize('sessions.design.delete', 'Delete'), () => this.deleteSelected(), !this.documentController.isBusy && this.selection.ids.size > 0),
+			this.action('selectAll', localize('sessions.design.selectAll', 'Select all'), () => this.selectAll(), !this.documentController.isBusy && shapes.length > 0),
+			this.action('duplicate', localize('sessions.design.duplicate', 'Duplicate'), () => this.duplicateSelected(), !this.documentController.isBusy && this.selection.ids.size > 0),
 			this.action(
 				'bringToFront',
 				localize('sessions.design.bringToFront', 'Bring to front'),
 				() => this.reorderSelected('front'),
 				!this.documentController.isBusy && this.selection.ids.size > 0,
 			),
-			this.action(
-				'sendToBack',
-				localize('sessions.design.sendToBack', 'Send to back'),
-				() => this.reorderSelected('back'),
-				!this.documentController.isBusy && this.selection.ids.size > 0,
-			),
+			this.action('sendToBack', localize('sessions.design.sendToBack', 'Send to back'), () => this.reorderSelected('back'), !this.documentController.isBusy && this.selection.ids.size > 0),
 			this.action(
 				'addAutoLayout',
 				localize('sessions.design.addAutoLayout', 'Add auto layout'),
 				() => this.addAutoLayout(),
 				!this.documentController.isBusy && this.commands.canAddAutoLayout(this.selection.ids),
 			),
-			this.action(
-				'group',
-				localize('sessions.design.group', 'Group'),
-				() => this.groupSelected(),
-				!this.documentController.isBusy && this.commands.canGroup(this.selection.ids),
-			),
+			this.action('group', localize('sessions.design.group', 'Group'), () => this.groupSelected(), !this.documentController.isBusy && this.commands.canGroup(this.selection.ids)),
 			this.action(
 				'createComponent',
 				localize('sessions.design.createComponent', 'Create component'),
@@ -819,17 +670,9 @@ export class DesignEditorWidget extends Disposable {
 				'detachInstance',
 				localize('sessions.design.detachInstance', 'Detach instance'),
 				() => this.detachInstance(),
-				!this.documentController.isBusy &&
-					selected?.kind === 'frame' &&
-					!!selected.instance &&
-					!this.commands.components.isInstanceChild(selected.id),
+				!this.documentController.isBusy && selected?.kind === 'frame' && !!selected.instance && !this.commands.components.isInstanceChild(selected.id),
 			),
-			this.action(
-				'ungroup',
-				localize('sessions.design.ungroup', 'Ungroup'),
-				() => this.ungroupSelected(),
-				!this.documentController.isBusy && selected?.kind === 'group' && !selected.motion,
-			),
+			this.action('ungroup', localize('sessions.design.ungroup', 'Ungroup'), () => this.ungroupSelected(), !this.documentController.isBusy && selected?.kind === 'group' && !selected.motion),
 			...this.properties.getActions(),
 			new Separator(),
 			this.action(
@@ -850,31 +693,12 @@ export class DesignEditorWidget extends Disposable {
 				() => this.runFileOperation(() => this.documentController.exportDocument()),
 				!this.documentController.isBusy && shapes.length > 0,
 			),
-			this.action(
-				'open',
-				localize('sessions.design.open', 'Open design'),
-				() => this.runFileOperation(() => this.documentController.openDocument()),
-				!this.documentController.isBusy,
-			),
+			this.action('open', localize('sessions.design.open', 'Open design'), () => this.runFileOperation(() => this.documentController.openDocument()), !this.documentController.isBusy),
 			...(this.documentController.needsSaveRetry
-				? [
-						this.action(
-							'retrySave',
-							localize('sessions.design.retrySave', 'Retry saving'),
-							() => this.documentController.flushAutoSave(),
-							!this.documentController.isRestoring,
-						),
-					]
+				? [this.action('retrySave', localize('sessions.design.retrySave', 'Retry saving'), () => this.documentController.flushAutoSave(), !this.documentController.isRestoring)]
 				: []),
 			...(this.documentController.automaticallySaves
-				? [
-						this.action(
-							'saveCopy',
-							localize('sessions.design.saveCopy', 'Save a copy'),
-							() => this.runFileOperation(() => this.documentController.saveCopy()),
-							!this.documentController.isBusy,
-						),
-					]
+				? [this.action('saveCopy', localize('sessions.design.saveCopy', 'Save a copy'), () => this.runFileOperation(() => this.documentController.saveCopy()), !this.documentController.isBusy)]
 				: []),
 		];
 	}
@@ -885,11 +709,7 @@ export class DesignEditorWidget extends Disposable {
 		const selected = this.selectedShape;
 		this.toolsWidget.update(this.tool, this.mode, this.documentController.isBusy);
 		this.motion.update(selected, this.documentController.isBusy);
-		this.code.update(
-			this.documentController.model.value,
-			this.mode === DesignMode.Code,
-			this.documentController.isBusy,
-		);
+		this.code.update(this.documentController.model.value, this.mode === DesignMode.Code, this.documentController.isBusy);
 
 		const describe = (shape: DesignShape, index: number): string => {
 			const labels = {
@@ -917,11 +737,7 @@ export class DesignEditorWidget extends Disposable {
 				content += ' · ' + localize('sessions.design.selected', 'Selected');
 			}
 			if (shape.kind === 'frame' && shape.component) {
-				content +=
-					'\n' +
-					(shape.component.kind === 'set'
-						? localize('sessions.design.componentSet', 'Component set')
-						: localize('sessions.design.mainComponent', 'Main component'));
+				content += '\n' + (shape.component.kind === 'set' ? localize('sessions.design.componentSet', 'Component set') : localize('sessions.design.mainComponent', 'Main component'));
 				if (shape.component.kind === 'main' && shape.component.variant) {
 					content +=
 						': ' +
@@ -935,11 +751,7 @@ export class DesignEditorWidget extends Disposable {
 				content +=
 					'\n' +
 					(main
-						? localize(
-								'sessions.design.instanceOf',
-								'Instance of {0}',
-								main.name || localize('sessions.design.component', 'Component'),
-							)
+						? localize('sessions.design.instanceOf', 'Instance of {0}', main.name || localize('sessions.design.component', 'Component'))
 						: localize('sessions.design.missingMain', 'Main component is missing'));
 			}
 			if (shape.visible === false) {
@@ -956,8 +768,7 @@ export class DesignEditorWidget extends Disposable {
 					);
 			}
 			if (shape.overrides?.length) {
-				content +=
-					'\n' + localize('sessions.design.overrideCount', '{0} property overrides.', shape.overrides.length);
+				content += '\n' + localize('sessions.design.overrideCount', '{0} property overrides.', shape.overrides.length);
 			}
 			if (shape.kind === 'frame' && shape.autoLayout) {
 				content +=
@@ -978,13 +789,7 @@ export class DesignEditorWidget extends Disposable {
 					);
 			}
 			if (shape.kind === 'frame' && shape.autoLayout?.wrap) {
-				content +=
-					'\n' +
-					localize(
-						'sessions.design.wrapDescription',
-						'Wrap enabled; line gap {0}.',
-						shape.autoLayout.crossGap ?? shape.autoLayout.gap,
-					);
+				content += '\n' + localize('sessions.design.wrapDescription', 'Wrap enabled; line gap {0}.', shape.autoLayout.crossGap ?? shape.autoLayout.gap);
 			}
 			if (shape.kind === 'frame' && shape.autoLayout?.direction === 'grid' && shape.autoLayout.grid) {
 				const grid = shape.autoLayout.grid;
@@ -996,20 +801,11 @@ export class DesignEditorWidget extends Disposable {
 						grid.columns.length,
 						grid.autoRows ? localize('sessions.design.automatic', 'Auto') : grid.rows.length,
 						shape.autoLayout.crossGap ?? shape.autoLayout.gap,
-						grid.positioning === 'auto'
-							? localize('sessions.design.automatic', 'Auto')
-							: localize('sessions.design.manual', 'Manual'),
+						grid.positioning === 'auto' ? localize('sessions.design.automatic', 'Auto') : localize('sessions.design.manual', 'Manual'),
 					);
 			}
 			if (shape.gridCell) {
-				content +=
-					'\n' +
-					localize(
-						'sessions.design.cellDescription',
-						'Column span {0}; row span {1}.',
-						shape.gridCell.columnSpan ?? 1,
-						shape.gridCell.rowSpan ?? 1,
-					);
+				content += '\n' + localize('sessions.design.cellDescription', 'Column span {0}; row span {1}.', shape.gridCell.columnSpan ?? 1, shape.gridCell.rowSpan ?? 1);
 			}
 			if (shape.sizeLimits) {
 				content +=
@@ -1047,20 +843,13 @@ export class DesignEditorWidget extends Disposable {
 					);
 			}
 			if (shape.kind === 'image') {
-				content +=
-					'\n' + this.documentController.model.value.assets.find(asset => asset.id === shape.assetId)!.name;
+				content += '\n' + this.documentController.model.value.assets.find(asset => asset.id === shape.assetId)!.name;
 			}
 			if (shape.kind === 'group' || shape.kind === 'frame') {
 				content += '\n' + shape.children.map(describe).join('\n');
 			}
 			if (designEffects(shape).length) {
-				content +=
-					'\n' +
-					localize(
-						'sessions.design.effectsReview',
-						'Effects: {0}',
-						designEffects(shape).map(describeDesignEffect).join('; '),
-					);
+				content += '\n' + localize('sessions.design.effectsReview', 'Effects: {0}', designEffects(shape).map(describeDesignEffect).join('; '));
 			}
 			if (shape.motion) {
 				content +=
@@ -1070,17 +859,12 @@ export class DesignEditorWidget extends Disposable {
 						'{0} keyframes, duration {1} ms, loop: {2}',
 						shape.motion.keyframes.length,
 						shape.motion.duration,
-						shape.motion.loop
-							? localize('sessions.design.yes', 'Yes')
-							: localize('sessions.design.no', 'No'),
+						shape.motion.loop ? localize('sessions.design.yes', 'Yes') : localize('sessions.design.no', 'No'),
 					);
 			}
 			return content;
 		};
-		this.contentDomNode.textContent =
-			shapes.length === 0
-				? localize('sessions.design.empty', 'The design document is empty.')
-				: shapes.map(describe).join('\n');
+		this.contentDomNode.textContent = shapes.length === 0 ? localize('sessions.design.empty', 'The design document is empty.') : shapes.map(describe).join('\n');
 		const resources = this.commands.resources.value;
 		if (resources.collections.length || resources.styles.length || resources.libraries.length) {
 			this.contentDomNode.textContent +=
@@ -1155,27 +939,21 @@ export class DesignEditorWidget extends Disposable {
 		if (event.key === 'Enter') {
 			this.selection.blurHandle = this.selection.blurHandle === 'start' ? 'end' : 'start';
 			this.render();
-		} else if (
-			['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) &&
-			!event.ctrlKey &&
-			!event.metaKey &&
-			!event.altKey
-		) {
+		} else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey) {
 			if (!this.input.isGesturing) {
 				const handle = this.selection.blurHandle,
 					point = effect.progressive[handle];
 				const amount = event.shiftKey ? 10 : 1;
-				const x =
-					point.x +
-					(event.key === 'ArrowLeft' ? -amount : event.key === 'ArrowRight' ? amount : 0) / shape.width;
-				const y =
-					point.y +
-					(event.key === 'ArrowUp' ? -amount : event.key === 'ArrowDown' ? amount : 0) / shape.height;
+				const x = point.x + (event.key === 'ArrowLeft' ? -amount : event.key === 'ArrowRight' ? amount : 0) / shape.width;
+				const y = point.y + (event.key === 'ArrowUp' ? -amount : event.key === 'ArrowDown' ? amount : 0) / shape.height;
 				this.commands.updateShape({
 					...shape,
 					effects: effects.map(value =>
 						value.id === effect.id
-							? { ...effect, progressive: { ...effect.progressive!, [handle]: { x, y } } }
+							? {
+									...effect,
+									progressive: { ...effect.progressive!, [handle]: { x, y } },
+								}
 							: value,
 					),
 				});
@@ -1185,14 +963,8 @@ export class DesignEditorWidget extends Disposable {
 		}
 		this.messageDomNode.textContent =
 			this.selection.blurHandle === 'start'
-				? localize(
-						'sessions.design.blurStartSelected',
-						'Blur start selected. Arrow keys move it; Shift moves ten pixels. Enter selects the end. Escape exits blur editing.',
-					)
-				: localize(
-						'sessions.design.blurEndSelected',
-						'Blur end selected. Arrow keys move it; Shift moves ten pixels. Enter selects the start. Escape exits blur editing.',
-					);
+				? localize('sessions.design.blurStartSelected', 'Blur start selected. Arrow keys move it; Shift moves ten pixels. Enter selects the end. Escape exits blur editing.')
+				: localize('sessions.design.blurEndSelected', 'Blur end selected. Arrow keys move it; Shift moves ten pixels. Enter selects the start. Escape exits blur editing.');
 		event.preventDefault();
 		return true;
 	}
@@ -1222,21 +994,14 @@ export class DesignEditorWidget extends Disposable {
 			return;
 		}
 		if (event.key === 'Enter' && this.properties.preview) {
-			const apply = this.properties
-				.getActions()
-				.find(action => action.id === 'sessions.design.offsetApply' && action.enabled);
+			const apply = this.properties.getActions().find(action => action.id === 'sessions.design.offsetApply' && action.enabled);
 			if (apply) {
 				void apply.run();
 				event.preventDefault();
 				return;
 			}
 		}
-		if (
-			this.selection.editingWidth &&
-			this.selectedShape?.kind === 'path' &&
-			['Delete', 'Backspace'].includes(event.key) &&
-			!this.commands.components.isInstanceChild(this.selectedShape.id)
-		) {
+		if (this.selection.editingWidth && this.selectedShape?.kind === 'path' && ['Delete', 'Backspace'].includes(event.key) && !this.commands.components.isInstanceChild(this.selectedShape.id)) {
 			const path = this.selectedShape;
 			this.commands.vector.update({
 				...path,
@@ -1247,41 +1012,25 @@ export class DesignEditorWidget extends Disposable {
 			event.preventDefault();
 			return;
 		}
-		if (
-			(event.key === 'Enter' || event.key === 'F2') &&
-			this.selectedShapes.length === 1 &&
-			this.selectedShapes[0].kind === 'text'
-		) {
+		if ((event.key === 'Enter' || event.key === 'F2') && this.selectedShapes.length === 1 && this.selectedShapes[0].kind === 'text') {
 			event.preventDefault();
 			this.text.edit(this.selectedShapes[0].id);
 			return;
 		}
-		if (
-			event.shiftKey &&
-			event.code === 'KeyB' &&
-			this.selection.editingVector &&
-			this.selectedShape?.kind === 'path' &&
-			this.selectedShape.network
-		) {
+		if (event.shiftKey && event.code === 'KeyB' && this.selection.editingVector && this.selectedShape?.kind === 'path' && this.selectedShape.network) {
 			this.selection.paintingVector = !this.selection.paintingVector;
 			this.render();
 			event.preventDefault();
 			return;
 		}
-		if (
-			this.selection.editingGradient &&
-			this.selectedShape &&
-			!this.commands.components.isInstanceChild(this.selectedShape.id)
-		) {
+		if (this.selection.editingGradient && this.selectedShape && !this.commands.components.isInstanceChild(this.selectedShape.id)) {
 			const shape = this.selectedShape,
 				paints = designPaints(shape),
 				paint = paints.find(paint => paint.id === this.selection.paintId) ?? paints[0];
 			if (paint && paint.type !== 'solid') {
 				const stop = paint.stops.find(stop => stop.id === this.selection.gradientStopId) ?? paint.stops[0];
 				if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
-					const delta =
-						(event.key === 'ArrowLeft' || event.key === 'ArrowDown' ? -1 : 1) *
-						(event.shiftKey ? 0.1 : 0.01);
+					const delta = (event.key === 'ArrowLeft' || event.key === 'ArrowDown' ? -1 : 1) * (event.shiftKey ? 0.1 : 0.01);
 					this.commands.updateShape({
 						...shape,
 						fills: paints.map(value =>
@@ -1309,11 +1058,7 @@ export class DesignEditorWidget extends Disposable {
 					if (paint.stops.length > 2) {
 						this.commands.updateShape({
 							...shape,
-							fills: paints.map(value =>
-								value.id === paint.id
-									? { ...paint, stops: paint.stops.filter(value => value.id !== stop.id) }
-									: value,
-							),
+							fills: paints.map(value => (value.id === paint.id ? { ...paint, stops: paint.stops.filter(value => value.id !== stop.id) } : value)),
 						});
 						this.selection.gradientStopId = undefined;
 					}
@@ -1337,11 +1082,7 @@ export class DesignEditorWidget extends Disposable {
 			event.preventDefault();
 			return;
 		}
-		if (
-			event.key === 'Enter' &&
-			this.selectedShape?.kind === 'path' &&
-			!this.commands.components.isInstanceChild(this.selectedShape.id)
-		) {
+		if (event.key === 'Enter' && this.selectedShape?.kind === 'path' && !this.commands.components.isInstanceChild(this.selectedShape.id)) {
 			this.selection.editingVector = !this.selection.editingVector;
 			this.announceSelection();
 			this.render();
@@ -1386,9 +1127,7 @@ export class DesignEditorWidget extends Disposable {
 		) {
 			const path = this.selectedShape;
 			if (direction) {
-				const placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(
-					entry => entry.shape.id === path.id,
-				)!.world;
+				const placed = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === path.id)!.world;
 				const angle = (-placed.rotation * Math.PI) / 180;
 				this.commands.vector.editContour(path, this.selection.contourIndex, contour => ({
 					...contour,
@@ -1398,16 +1137,8 @@ export class DesignEditorWidget extends Disposable {
 									node,
 									'anchor',
 									{
-										x:
-											node.x +
-											((direction.x * Math.cos(angle) - direction.y * Math.sin(angle)) *
-												distance) /
-												placed.width,
-										y:
-											node.y +
-											((direction.x * Math.sin(angle) + direction.y * Math.cos(angle)) *
-												distance) /
-												placed.height,
+										x: node.x + ((direction.x * Math.cos(angle) - direction.y * Math.sin(angle)) * distance) / placed.width,
+										y: node.y + ((direction.x * Math.sin(angle) + direction.y * Math.cos(angle)) * distance) / placed.height,
 									},
 									path.width,
 									path.height,
@@ -1477,9 +1208,7 @@ export class DesignEditorWidget extends Disposable {
 					this.ungroupSelected();
 					break;
 				case 'n': {
-					const shapes = getDesignShapeEntries(this.documentController.model.value.shapes).map(
-						entry => entry.shape,
-					);
+					const shapes = getDesignShapeEntries(this.documentController.model.value.shapes).map(entry => entry.shape);
 					const next = shapes.find(shape => !this.selection.ids.has(shape.id));
 					if (next) {
 						this.selection.add(next.id);
@@ -1493,9 +1222,7 @@ export class DesignEditorWidget extends Disposable {
 					this.deleteSelected();
 					break;
 				case 'tab': {
-					const shapes = getDesignShapeEntries(this.documentController.model.value.shapes).map(
-						entry => entry.shape,
-					);
+					const shapes = getDesignShapeEntries(this.documentController.model.value.shapes).map(entry => entry.shape);
 					const index = shapes.findIndex(item => item.id === this.selectedShapes.at(-1)?.id);
 					const next = index + (event.shiftKey ? -1 : 1);
 					if (next < 0 || next >= shapes.length) {

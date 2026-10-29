@@ -104,20 +104,8 @@ test('decoration registrations share one owner until the last reference is relea
 	using listener = service.onDecorationTypeRegistered(key => registered.push(key));
 	const editor = codeEditor('decorations', { text: false, widget: false }, removed);
 	service.addCodeEditor(editor);
-	const first = service.registerDecorationType(
-		'selection',
-		'selection',
-		{ isWholeLine: true, color: 'red' },
-		undefined,
-		editor,
-	);
-	const second = service.registerDecorationType(
-		'selection',
-		'selection',
-		{ isWholeLine: true, color: 'red' },
-		undefined,
-		editor,
-	);
+	const first = service.registerDecorationType('selection', 'selection', { isWholeLine: true, color: 'red' }, undefined, editor);
+	const second = service.registerDecorationType('selection', 'selection', { isWholeLine: true, color: 'red' }, undefined, editor);
 
 	assert.deepEqual(service.listDecorationTypes(), ['selection']);
 	assert.deepEqual(registered, ['selection']);
@@ -155,7 +143,10 @@ test('decoration types expose distinct line, inline, content, and injected-text 
 	using child = service.registerDecorationType(
 		'child',
 		'child',
-		{ before: { contentText: 'child' }, after: { contentText: 'tail' } },
+		{
+			before: { contentText: 'child' },
+			after: { contentText: 'tail' },
+		},
 		'parent',
 	);
 
@@ -187,11 +178,7 @@ test('decoration types expose distinct line, inline, content, and injected-text 
 	);
 });
 
-function codeEditor(
-	id: string,
-	focus: { text: boolean; widget: boolean },
-	removedDecorations: string[] = [],
-): ICodeEditor {
+function codeEditor(id: string, focus: { text: boolean; widget: boolean }, removedDecorations: string[] = []): ICodeEditor {
 	return {
 		getId: () => id,
 		hasTextFocus: () => focus.text,

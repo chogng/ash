@@ -98,14 +98,19 @@ class FakeElement extends FakeNode {
 	scrollTo(): void {}
 }
 
-Object.defineProperty(globalThis, 'Node', { configurable: true, value: FakeNode });
+Object.defineProperty(globalThis, 'Node', {
+	configurable: true,
+	value: FakeNode,
+});
 const fakeDocument = new FakeDocument();
 const fakeWindow = new FakeWindow(fakeDocument);
 fakeDocument.defaultView = fakeWindow;
-Object.defineProperty(globalThis, 'window', { configurable: true, value: fakeWindow });
+Object.defineProperty(globalThis, 'window', {
+	configurable: true,
+	value: fakeWindow,
+});
 
-const { FocusNavigationBoundary, FocusNavigationDirection, getTabbableElements, moveFocus } =
-	await import('../../browser/focus.js');
+const { FocusNavigationBoundary, FocusNavigationDirection, getTabbableElements, moveFocus } = await import('../../browser/focus.js');
 
 test('tabbable elements follow positive tabindex then DOM order', () => {
 	const normal = new FakeElement(fakeDocument, 'BUTTON', 0);
@@ -127,11 +132,7 @@ test('moveFocus wraps explicitly at the container boundary', () => {
 	container.setChildren([normal, second, first]);
 	normal.focus();
 
-	const focused = moveFocus(
-		container as unknown as ParentNode,
-		FocusNavigationDirection.Forward,
-		FocusNavigationBoundary.Wrap,
-	);
+	const focused = moveFocus(container as unknown as ParentNode, FocusNavigationDirection.Forward, FocusNavigationBoundary.Wrap);
 
 	assert.equal(focused, first);
 	assert.equal(fakeDocument.activeElement, first);

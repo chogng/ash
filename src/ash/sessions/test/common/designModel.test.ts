@@ -26,10 +26,7 @@ test('Design transparent fills survive serialization and the committed undo hist
 	model.redo();
 	assert.equal(model.value.shapes[0].fill, '#ff800040');
 	for (const fill of ['#fff', '#ff80004', '#ff8000400', 'rgba(255, 0, 0, 0.5)']) {
-		assert.throws(
-			() => parseDesignDocument(JSON.stringify({ version: 1, shapes: [{ ...model.value.shapes[0], fill }] })),
-			TypeError,
-		);
+		assert.throws(() => parseDesignDocument(JSON.stringify({ version: 1, shapes: [{ ...model.value.shapes[0], fill }] })), TypeError);
 	}
 });
 
@@ -79,10 +76,7 @@ test('Design motion validates ordered keyframes and keeps animation positions th
 		{ ...motion, keyframes: [{ ...motion.keyframes[0], opacity: 2 }, motion.keyframes[1]] },
 		{ ...motion, keyframes: [motion.keyframes[0], motion.keyframes[0], motion.keyframes[1]] },
 	]) {
-		assert.throws(
-			() => parseDesignDocument(JSON.stringify({ version: 1, shapes: [{ ...shape, motion: invalid }] })),
-			TypeError,
-		);
+		assert.throws(() => parseDesignDocument(JSON.stringify({ version: 1, shapes: [{ ...shape, motion: invalid }] })), TypeError);
 	}
 	commands.updateGeometry(model.value.shapes[0], 'x', 20);
 	assert.equal(sampleDesignMotion(model.value.shapes[0], 500).x, 70);
@@ -174,18 +168,9 @@ test('Ungroup preserves child centers, rotation and size after a group transform
 	commands.ungroup(id);
 	const text = model.value.shapes[0] as Extract<DesignShape, { kind: 'text' }>;
 	const child = group.children[0];
-	assert.ok(
-		Math.abs(text.x + text.width / 2 - (100 + group.width - ((child.y + child.height / 2) * 2 - group.height))) <
-			1e-8,
-	);
-	assert.ok(
-		Math.abs(text.y + text.height / 2 - (200 + group.height + ((child.x + child.width / 2) * 2 - group.width))) <
-			1e-8,
-	);
-	assert.deepEqual(
-		[text.width, text.height, text.rotation, text.fontSize],
-		[child.width * 2, child.height * 2, 90, 48],
-	);
+	assert.ok(Math.abs(text.x + text.width / 2 - (100 + group.width - ((child.y + child.height / 2) * 2 - group.height))) < 1e-8);
+	assert.ok(Math.abs(text.y + text.height / 2 - (200 + group.height + ((child.x + child.width / 2) * 2 - group.width))) < 1e-8);
+	assert.deepEqual([text.width, text.height, text.rotation, text.fontSize], [child.width * 2, child.height * 2, 90, 48]);
 	assert.deepEqual(parseDesignDocument(serializeDesignDocument(model.value)), model.value);
 });
 
@@ -354,22 +339,13 @@ test('Version 2 rejects cycles, duplicate placement, unowned objects and missing
 			},
 		],
 	};
-	assert.throws(
-		() => parseDesignDocument(serializeDesignDocument(documentFromShapes([image], undefined, [asset]))),
-		TypeError,
-	);
+	assert.throws(() => parseDesignDocument(serializeDesignDocument(documentFromShapes([image], undefined, [asset]))), TypeError);
 	const validAsset = {
 		...asset,
 		versions: asset.versions.map(version => ({ ...version, path: `assets/${version.sha256}` })),
 	};
 	const duplicate = { ...validAsset, id: generateUuid() };
-	assert.throws(
-		() =>
-			parseDesignDocument(
-				serializeDesignDocument(documentFromShapes([image], undefined, [validAsset, duplicate])),
-			),
-		/Invalid design asset version/u,
-	);
+	assert.throws(() => parseDesignDocument(serializeDesignDocument(documentFromShapes([image], undefined, [validAsset, duplicate]))), /Invalid design asset version/u);
 });
 
 test('Edit tokens change on undo, redo, replacement and Save As while no-op edits retain the token', () => {
@@ -453,10 +429,7 @@ function layoutRectangle(x = 0, y = 0, width = 40, height = 20): DesignShape {
 	return { id: generateUuid(), kind: 'rectangle', x, y, width, height, rotation: 0, fill: '#808080' };
 }
 
-function layoutFrame(
-	children: readonly DesignShape[],
-	autoLayout?: DesignAutoLayout,
-): Extract<DesignShape, { kind: 'frame' }> {
+function layoutFrame(children: readonly DesignShape[], autoLayout?: DesignAutoLayout): Extract<DesignShape, { kind: 'frame' }> {
 	return {
 		id: generateUuid(),
 		kind: 'frame',
@@ -623,10 +596,7 @@ test('Design frame constraints resize nested contents in local coordinates and u
 		],
 	);
 	const resizedInner = resized.children[5] as typeof inner;
-	assert.deepEqual(
-		[resizedInner.width, resizedInner.height, resizedInner.children[0].x, resizedInner.children[0].y],
-		[400, 300, 310, 210],
-	);
+	assert.deepEqual([resizedInner.width, resizedInner.height, resizedInner.children[0].x, resizedInner.children[0].y], [400, 300, 310, 210]);
 	model.undo();
 	assert.deepEqual(model.value.shapes, [frame]);
 	model.redo();
@@ -715,9 +685,7 @@ test('Design files reject malformed layout, sizing and constraints at the persis
 test('Design wrap breaks horizontal rows and vertical columns in layer order and hugs the result', () => {
 	for (const horizontal of [true, false]) {
 		using model = new DesignModel();
-		const children = [20, 30, 40].map(size =>
-			layoutRectangle(0, 0, horizontal ? 100 : size, horizontal ? size : 100),
-		);
+		const children = [20, 30, 40].map(size => layoutRectangle(0, 0, horizontal ? 100 : size, horizontal ? size : 100));
 		const layout: DesignAutoLayout = {
 			...rowLayout,
 			direction: horizontal ? 'horizontal' : 'vertical',

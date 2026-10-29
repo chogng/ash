@@ -5,20 +5,13 @@ import { test } from 'mocha';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import type { IWorkspaceTrustApi } from '../../../platform/workspace/common/workspaceTrust.js';
-import type {
-	IAgentExecutionSettingsService,
-	ExecutionSettings,
-} from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
+import type { IAgentExecutionSettingsService, ExecutionSettings } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import type { IAgentCapabilitiesService } from '../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import type { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import type { IAppServerRemoteAgentService } from '../../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { ExecutionSettingsModel } from '../../contrib/preferences/browser/executionSettingsModel.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
-import type {
-	ISessionProviderScope,
-	ISessionProviderScopeService,
-	SessionProviderServices,
-} from '../../browser/agentHost/sessionProviderScopeService.js';
+import type { ISessionProviderScope, ISessionProviderScopeService, SessionProviderServices } from '../../browser/agentHost/sessionProviderScopeService.js';
 
 function createModel(
 	execution: IAgentExecutionSettingsService,
@@ -127,14 +120,7 @@ test('execution settings preserve an unsaved default while saving an aliased dir
 		onDidChangeConnection: Event.None,
 		onDidChangeConnectionState: Event.None,
 	} as IAppServerRemoteAgentService;
-	using model = createModel(
-		execution,
-		directories,
-		capabilities,
-		remote,
-		{} as IDialogService,
-		{ translate: (_bundle, _key, fallback) => fallback } as ILocalizationService,
-	);
+	using model = createModel(execution, directories, capabilities, remote, {} as IDialogService, { translate: (_bundle, _key, fallback) => fallback } as ILocalizationService);
 	const initialized = ready(model);
 	model.setVisible(true);
 	await initialized;
@@ -263,18 +249,7 @@ test('a directory revision conflict preserves the draft and never silently retri
 		{
 			path: '/alias',
 			revision: 7,
-			permissions: [
-				'readFiles',
-				'watchFiles',
-				'browseFiles',
-				'searchFiles',
-				'inspectRepository',
-				'writeFiles',
-				'mutateRepository',
-				'executeCommands',
-				'discoverSkills',
-				'useLanguageServices',
-			],
+			permissions: ['readFiles', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository', 'writeFiles', 'mutateRepository', 'executeCommands', 'discoverSkills', 'useLanguageServices'],
 		},
 	]);
 	const retained = field(model, 'directory');
@@ -318,10 +293,7 @@ test('Execution settings ignore a late read from the previously hidden page', as
 	let reads = 0;
 	using model = executionFixture({
 		onDidChange: Event.None,
-		read: () =>
-			++reads === 1
-				? old.p
-				: Promise.resolve({ revision: 2, settings: { ...manualDefaults, approvalMode: 'auto' } }),
+		read: () => (++reads === 1 ? old.p : Promise.resolve({ revision: 2, settings: { ...manualDefaults, approvalMode: 'auto' } })),
 		configure: async () => {},
 	});
 	model.setVisible(true);
@@ -343,10 +315,7 @@ test('A backend change received during execution-default loading is reread befor
 	let reads = 0;
 	using model = executionFixture({
 		onDidChange: updates.event,
-		read: () =>
-			++reads === 1
-				? old.p
-				: Promise.resolve({ revision: 2, settings: { ...manualDefaults, approvalMode: 'auto' } }),
+		read: () => (++reads === 1 ? old.p : Promise.resolve({ revision: 2, settings: { ...manualDefaults, approvalMode: 'auto' } })),
 		configure: async () => {},
 	});
 	model.setVisible(true);
@@ -391,8 +360,7 @@ test('switching hosts retires an in-flight directory edit before a same-id grant
 				revision: 7,
 				entries: [{ dir: 'same-id', path: '/same', permissions: ['readFiles'] as const }],
 			}),
-			readDirectory: async () =>
-				pending ? oldDirectory.p : { dir: 'same-id', permissions: ['readFiles'] as const },
+			readDirectory: async () => (pending ? oldDirectory.p : { dir: 'same-id', permissions: ['readFiles'] as const }),
 			setDirectoryPermissions: async () => {
 				writes.push(`${name}:grant`);
 				return { revision: 8, generation: 1, disposition: 'updated' as const };
@@ -499,8 +467,7 @@ test('a host switch during confirmation cannot apply the old defaults to either 
 });
 
 test('execution accessibility help explains host changes in Chinese', async () => {
-	const { productLanguagePackCatalogs } =
-		await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { resetNlsResolver, setNlsMessages } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsMessages(chinese.locale, chinese.bundles);

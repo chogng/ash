@@ -60,8 +60,7 @@ export class RemoteConnectionRecoveryCoordinator {
 	}
 
 	private async performRollback(): Promise<void> {
-		if (!this.launcher.runtimeRollbackAvailable)
-			throw new Error('Remote runtime rollback is not available for this connection');
+		if (!this.launcher.runtimeRollbackAvailable) throw new Error('Remote runtime rollback is not available for this connection');
 		await this.launcher.rollbackRuntime();
 		this.prepareForConnectionReplacement();
 		await this.host.stop();

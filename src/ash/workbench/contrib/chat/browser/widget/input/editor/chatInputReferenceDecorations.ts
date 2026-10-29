@@ -6,10 +6,7 @@ import { chatSlashCommandBackground, chatSlashCommandForeground } from '../../..
 import { dynamicVariableDecorationType } from '../../../attachments/chatDynamicVariables.js';
 
 /** Shares reference styling through the editor registry; each input owns one registration lease. */
-export function registerChatInputReferenceDecorationType(
-	codeEditorService: ICodeEditorService,
-	decorationType = dynamicVariableDecorationType,
-): IDisposable {
+export function registerChatInputReferenceDecorationType(codeEditorService: ICodeEditorService, decorationType = dynamicVariableDecorationType): IDisposable {
 	return codeEditorService.registerDecorationType('chat-context-reference', decorationType, {
 		backgroundColor: themeColorFromId(chatSlashCommandBackground),
 		color: themeColorFromId(chatSlashCommandForeground),

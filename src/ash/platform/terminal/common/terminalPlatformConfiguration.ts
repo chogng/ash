@@ -1,11 +1,5 @@
 import { localize } from '../../../nls.js';
-import {
-	ConfigurationScope,
-	Extensions,
-	type IConfigurationNode,
-	type IConfigurationPropertySchema,
-	type IConfigurationRegistry,
-} from '../../configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationNode, type IConfigurationPropertySchema, type IConfigurationRegistry } from '../../configuration/common/configurationRegistry.js';
 import { Registry } from '../../registry/common/platform.js';
 import { TerminalSettingId, TerminalSettingPrefix } from './terminal.js';
 import type { ITerminalProfile, IExtensionTerminalProfile } from './terminal.js';
@@ -20,11 +14,7 @@ for (const platform of ['linux', 'osx', 'windows']) {
 		default: null,
 		maxLength: 4096,
 		get description() {
-			return localize(
-				'terminal.config.defaultProfileDescription',
-				'Default interactive terminal profile name on {0}. An unavailable name uses the execution host default.',
-				platform,
-			);
+			return localize('terminal.config.defaultProfileDescription', 'Default interactive terminal profile name on {0}. An unavailable name uses the execution host default.', platform);
 		},
 	};
 }
@@ -98,28 +88,16 @@ for (const platform of ['linux', 'osx', 'windows']) {
 		...environmentSchema,
 		default: {},
 		get description() {
-			return localize(
-				'terminal.profile.environmentDescription',
-				'Environment overrides for new terminals on {0}. Null removes an inherited variable.',
-				platform,
-			);
+			return localize('terminal.profile.environmentDescription', 'Environment overrides for new terminals on {0}. Null removes an inherited variable.', platform);
 		},
 	};
 	for (const kind of ['automationProfile', 'agentHostProfile']) {
-		const key =
-			kind === 'automationProfile'
-				? `${TerminalSettingPrefix.AutomationProfile}${platform}`
-				: `${TERMINAL_CONFIG_SECTION}.${kind}.${platform}`;
+		const key = kind === 'automationProfile' ? `${TerminalSettingPrefix.AutomationProfile}${platform}` : `${TERMINAL_CONFIG_SECTION}.${kind}.${platform}`;
 		properties[key] = {
 			anyOf: [{ type: 'null' }, { ...platformProfileSchema, required: ['path'] }],
 			default: null,
 			get description() {
-				return localize(
-					'terminal.profile.executionDescription',
-					'Shell profile for {0} on {1}. An empty value uses the interactive default.',
-					kind,
-					platform,
-				);
+				return localize('terminal.profile.executionDescription', 'Shell profile for {0} on {1}. An empty value uses the interactive default.', kind, platform);
 			},
 		};
 	}
@@ -130,10 +108,7 @@ properties[TerminalSettingId.Cwd] = {
 	scope: ConfigurationScope.RESOURCE,
 	maxLength: 32768,
 	get description() {
-		return localize(
-			'terminal.profile.cwdDescription',
-			'Starting directory of a new terminal. Execution authorization still applies.',
-		);
+		return localize('terminal.profile.cwdDescription', 'Starting directory of a new terminal. Execution authorization still applies.');
 	},
 };
 
@@ -162,10 +137,7 @@ export function registerTerminalDefaultProfileConfiguration(
 	const key = `${TerminalSettingPrefix.DefaultProfile}${platform}`;
 	const candidates = createProfileSchemaEnums(detectedProfiles.profiles, extensionContributedProfiles);
 	const current = terminalPlatformConfiguration.properties![key]!;
-	const anyOf: IConfigurationPropertySchema['anyOf'] = [
-		{ enum: candidates.values, markdownEnumDescriptions: candidates.markdownDescriptions },
-		{ type: ['string', 'null'] },
-	];
+	const anyOf: IConfigurationPropertySchema['anyOf'] = [{ enum: candidates.values, markdownEnumDescriptions: candidates.markdownDescriptions }, { type: ['string', 'null'] }];
 	if (JSON.stringify(current.anyOf) === JSON.stringify(anyOf)) return;
 	const previous = terminalPlatformConfiguration;
 	terminalPlatformConfiguration = {

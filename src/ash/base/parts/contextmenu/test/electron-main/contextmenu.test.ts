@@ -113,10 +113,7 @@ suite('Electron context menu owner', () => {
 			assert.ok(click);
 			Reflect.apply(click, undefined, []);
 			await new Promise<void>(resolve => setImmediate(resolve));
-			assert.deepEqual(
-				{ settled, closeAttempts: fixture.closeAttempts, callbackCalled: fixture.callbackCalled },
-				{ settled: false, closeAttempts: 1, callbackCalled: false },
-			);
+			assert.deepEqual({ settled, closeAttempts: fixture.closeAttempts, callbackCalled: fixture.callbackCalled }, { settled: false, closeAttempts: 1, callbackCalled: false });
 		} finally {
 			fixture.finish();
 			assert.deepEqual(await popup, {});
@@ -194,10 +191,7 @@ suite('Electron context menu owner', () => {
 		});
 		oldCallback();
 		await new Promise<void>(resolve => setImmediate(resolve));
-		assert.deepEqual(
-			{ settled, popups: fixture.popups.length, listeners: fixture.window.listenerCount('closed') },
-			{ settled: false, popups: 2, listeners: 1 },
-		);
+		assert.deepEqual({ settled, popups: fixture.popups.length, listeners: fixture.window.listenerCount('closed') }, { settled: false, popups: 2, listeners: 1 });
 		fixture.finish();
 		await next;
 	});
@@ -276,9 +270,6 @@ suite('Electron context menu owner', () => {
 			{ settled: false, closes: 1, listeners: 1, retry: {} },
 		);
 		fixture.destroyWindow();
-		assert.deepEqual(
-			{ result: await popup, listeners: fixture.window.listenerCount('closed') },
-			{ result: {}, listeners: 0 },
-		);
+		assert.deepEqual({ result: await popup, listeners: fixture.window.listenerCount('closed') }, { result: {}, listeners: 0 });
 	});
 });

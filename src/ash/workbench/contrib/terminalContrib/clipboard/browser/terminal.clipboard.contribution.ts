@@ -9,21 +9,10 @@ import { IClipboardService } from '../../../../../platform/clipboard/common/clip
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import {
-	IInstantiationService,
-	type ServicesAccessor,
-} from '../../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
-import {
-	ITerminalService,
-	type ITerminalContribution,
-	type ITerminalInstance,
-	type IXtermTerminal,
-} from '../../../terminal/browser/terminal.js';
-import {
-	registerTerminalContribution,
-	type ITerminalContributionContext,
-} from '../../../terminal/browser/terminalExtensions.js';
+import { ITerminalService, type ITerminalContribution, type ITerminalInstance, type IXtermTerminal } from '../../../terminal/browser/terminal.js';
+import { registerTerminalContribution, type ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
 
 import { TerminalCommandId } from '../../../terminal/common/terminal.js';
 import { TerminalContextKeys, TerminalHasActiveInstanceContext } from '../../../terminal/common/terminalContextKey.js';
@@ -64,8 +53,7 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 	public xtermReady(screen: IXtermTerminal): void {
 		this.screen = screen;
 		const updateMouseOptions = (): void => {
-			screen.raw.options.rightClickSelectsWord =
-				this.configuration.getValue<string>(TerminalSettingId.RightClickBehavior) === 'selectWord';
+			screen.raw.options.rightClickSelectsWord = this.configuration.getValue<string>(TerminalSettingId.RightClickBehavior) === 'selectWord';
 		};
 		updateMouseOptions();
 		this._register(
@@ -84,8 +72,7 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 					instance.state === 'running' &&
 					!instance.isReadOnly &&
 					this.terminals.activeInstance === instance &&
-					instance.capabilities?.get(TerminalCapability.CommandDetection)?.commands.includes(command) ===
-						true;
+					instance.capabilities?.get(TerminalCapability.CommandDetection)?.commands.includes(command) === true;
 				if (!command.command || !current()) return;
 				try {
 					if (!command.isTrusted) {
@@ -106,8 +93,7 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 		const textarea = screen.raw.textarea!;
 		const scope = this._register(this.contextKeys.createScoped(textarea));
 		const selected = TerminalContextKeys.textSelectedInFocused.bindTo(scope);
-		const updateSelection = (): void =>
-			selected.set(screen.raw.hasSelection() && textarea === textarea.ownerDocument.activeElement);
+		const updateSelection = (): void => selected.set(screen.raw.hasSelection() && textarea === textarea.ownerDocument.activeElement);
 		updateSelection();
 		const listener = screen.raw.onSelectionChange(() => {
 			updateSelection();
@@ -131,8 +117,7 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 		);
 		// Capture before xterm can change the selection on right click. Shift and
 		// keyboard context menus retain their normal menu path.
-		const isScreenTarget = (event: MouseEvent): boolean =>
-			!(event.target as Element | null)?.closest?.('.ash-terminal-widget-overlay, [role="button"], button, a');
+		const isScreenTarget = (event: MouseEvent): boolean => !(event.target as Element | null)?.closest?.('.ash-terminal-widget-overlay, [role="button"], button, a');
 		this._register(
 			addDisposableListener(
 				screen.element,
@@ -172,9 +157,7 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 				(event: ClipboardEvent) => {
 					event.preventDefault();
 					event.stopImmediatePropagation();
-					void this.readAndPaste(undefined, event.clipboardData?.getData('text/plain') ?? '').catch(
-						onUnexpectedError,
-					);
+					void this.readAndPaste(undefined, event.clipboardData?.getData('text/plain') ?? '').catch(onUnexpectedError);
 				},
 				true,
 			),
@@ -207,10 +190,7 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 		const instance = this.context.instance;
 		if (this.terminals.activeInstance !== instance) this.terminals.setActiveInstance(instance);
 		screen.focus();
-		if (
-			this.configuration.getValue<string>(TerminalSettingId.RightClickBehavior) === 'copyPaste' &&
-			screen.raw.hasSelection()
-		) {
+		if (this.configuration.getValue<string>(TerminalSettingId.RightClickBehavior) === 'copyPaste' && screen.raw.hasSelection()) {
 			const selection = screen.raw.getSelection();
 			const position = screen.raw.getSelectionPosition();
 			const generation = this.inputGeneration;
@@ -255,11 +235,7 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 		if (!canPaste()) return;
 		const text = suppliedText ?? (await this.clipboard.readText(type));
 		if (!text || !canPaste() || (requireFocus && focusGeneration !== this.focusGeneration)) return;
-		const decision = await this.instantiation.invokeFunction(
-			shouldPasteTerminalText,
-			text,
-			screen!.raw.modes.bracketedPasteMode,
-		);
+		const decision = await this.instantiation.invokeFunction(shouldPasteTerminalText, text, screen!.raw.modes.bracketedPasteMode);
 		if (!canPaste()) return;
 		screen!.focus();
 		if (decision === false) return;
@@ -286,11 +262,7 @@ function clipboardInstance(accessor: ServicesAccessor, context: unknown): ITermi
 	const id =
 		context instanceof InstanceContext
 			? context.instanceId
-			: context &&
-				  typeof context === 'object' &&
-				  '$mid' in context &&
-				  context.$mid === MarshalledId.TerminalContext &&
-				  'instanceId' in context
+			: context && typeof context === 'object' && '$mid' in context && context.$mid === MarshalledId.TerminalContext && 'instanceId' in context
 				? context.instanceId
 				: undefined;
 	if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) {
@@ -400,10 +372,7 @@ if (isLinux) {
 			constructor() {
 				super({
 					id: TerminalCommandId.PasteSelection,
-					title: localize2(
-						'terminal.clipboard.pasteSelection',
-						'Terminal: Paste Selection into Active Terminal',
-					),
+					title: localize2('terminal.clipboard.pasteSelection', 'Terminal: Paste Selection into Active Terminal'),
 					f1: true,
 					precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
 					keybinding: {

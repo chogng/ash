@@ -2,10 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { InMemoryConfigurationService } from '../../../configuration/common/inMemoryConfigurationService.js';
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../../configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../configuration/common/configurationRegistry.js';
 import { Registry } from '../../../registry/common/platform.js';
 import { ListConfiguration, WorkbenchObjectTree, type ResourceOpenEvent } from '../../browser/listService.js';
 import { h } from '../../../../base/browser/dom.js';
@@ -39,8 +36,7 @@ test('Platform List owns and validates its shared interaction configuration', ()
 	assert.equal(smoothScrolling.defaultValue, false);
 	assert.equal(smoothScrolling.parse(true), true);
 	assert.equal(smoothScrolling.parse(false), false);
-	for (const invalid of [0, 1, 'true', null])
-		assert.throws(() => smoothScrolling.parse(invalid), /must be a boolean/);
+	for (const invalid of [0, 1, 'true', null]) assert.throws(() => smoothScrolling.parse(invalid), /must be a boolean/);
 });
 
 test('Workbench tree settings update retained rows and highlight only the selected branch', async () => {
@@ -63,9 +59,7 @@ test('Workbench tree settings update retained rows and highlight only the select
 	const child = tree.domNode.querySelector<HTMLElement>('[data-tree-id="child"].ash-tree-row')!;
 	tree.setSelection(['child']);
 	assert.deepEqual(
-		[...tree.domNode.querySelectorAll<HTMLElement>('.ash-tree-indent-guide.active')].map(
-			guide => guide.dataset.treeParentId,
-		),
+		[...tree.domNode.querySelectorAll<HTMLElement>('.ash-tree-indent-guide.active')].map(guide => guide.dataset.treeParentId),
 		['first'],
 	);
 	await configuration.updateValue(ListConfiguration.treeIndent, 20);
@@ -78,9 +72,7 @@ test('Workbench tree settings update retained rows and highlight only the select
 	assert.equal(tree.domNode.querySelectorAll('.ash-tree-indent-guide.active').length, 2);
 	tree.collapse('second');
 	assert.deepEqual(
-		[...tree.domNode.querySelectorAll<HTMLElement>('.ash-tree-indent-guide.active')].map(
-			guide => guide.dataset.treeParentId,
-		),
+		[...tree.domNode.querySelectorAll<HTMLElement>('.ash-tree-indent-guide.active')].map(guide => guide.dataset.treeParentId),
 		['first'],
 	);
 	dom.window.close();
@@ -186,13 +178,7 @@ test('WorkbenchObjectTree derives preview, pinned, and side-by-side open intent'
 	dom.window.close();
 });
 
-function assertOpen(
-	event: ResourceOpenEvent<TestItem> | undefined,
-	element: TestItem,
-	pinned: boolean,
-	preserveFocus: boolean,
-	sideBySide: boolean,
-): void {
+function assertOpen(event: ResourceOpenEvent<TestItem> | undefined, element: TestItem, pinned: boolean, preserveFocus: boolean, sideBySide: boolean): void {
 	assert.equal(event?.element, element);
 	assert.deepEqual(event?.editorOptions, { pinned, preserveFocus });
 	assert.equal(event?.sideBySide, sideBySide);

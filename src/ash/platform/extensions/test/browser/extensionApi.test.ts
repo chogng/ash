@@ -4,11 +4,7 @@ import { DeferredPromise } from '../../../../base/common/async.js';
 import type { IResourceApi } from '../../../agentHost/common/appServerApi.js';
 import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import { createAppServerExtensionApi } from '../../browser/extensionApi.js';
-import {
-	MAX_EXTENSION_RESOURCE_BYTES,
-	type ExtensionResourceRequest,
-	type IExtensionApi,
-} from '../../common/extensionApi.js';
+import { MAX_EXTENSION_RESOURCE_BYTES, type ExtensionResourceRequest, type IExtensionApi } from '../../common/extensionApi.js';
 import { createHash } from 'node:crypto';
 
 test('App Server extension resources require a published catalog before opening a handle', async () => {
@@ -20,10 +16,7 @@ test('App Server extension resources require a published catalog before opening 
 		},
 	} as unknown as AppServerProtocolClient;
 	const api = createAppServerExtensionApi(connection, resourceApi({}));
-	await assert.rejects(
-		api.resources.readExtensionResourceBytes({ generation: 1, extensionId: 'ash.demo', path: 'demo.json' }),
-		/generation/,
-	);
+	await assert.rejects(api.resources.readExtensionResourceBytes({ generation: 1, extensionId: 'ash.demo', path: 'demo.json' }), /generation/);
 	assert.equal(requests, 0);
 });
 
@@ -103,7 +96,9 @@ test('Vite extension resources reject oversized open metadata before reading', a
 	let reads = 0;
 	let releases = 0;
 	const { api, request } = await initializedExtensionApi(
-		{ resource: metadata(MAX_EXTENSION_RESOURCE_BYTES + 1) },
+		{
+			resource: metadata(MAX_EXTENSION_RESOURCE_BYTES + 1),
+		},
 		resourceApi({
 			read: async () => {
 				reads += 1;
@@ -173,13 +168,7 @@ test('Vite extension resources reject extra metadata fields and release the hand
 	assert.equal(releases, 1);
 });
 
-for (const invalid of [
-	{ offset: 1 },
-	{ resourceId: 'other-resource' },
-	{ decodedLength: 2 },
-	{ eof: false },
-	{ dataBase64: 'invalid!' },
-]) {
+for (const invalid of [{ offset: 1 }, { resourceId: 'other-resource' }, { decodedLength: 2 }, { eof: false }, { dataBase64: 'invalid!' }]) {
 	test(`Vite extension resources reject inconsistent ${Object.keys(invalid)[0]} and release the handle`, async () => {
 		let releases = 0;
 		const { api, request } = await initializedExtensionApi(
@@ -249,10 +238,7 @@ test('Vite extension resources verify assembled bytes and release a corrupted ha
 	assert.equal(releases, 1);
 });
 
-async function initializedExtensionApi(
-	opened: unknown,
-	resources: IResourceApi,
-): Promise<{ api: IExtensionApi; request: ExtensionResourceRequest }> {
+async function initializedExtensionApi(opened: unknown, resources: IResourceApi): Promise<{ api: IExtensionApi; request: ExtensionResourceRequest }> {
 	const connection = {
 		request: async ({ method }: { method: string }, params: unknown) => {
 			if (method === 'extensions/list') {
@@ -336,10 +322,7 @@ test('Rust catalog reconnection retires old resource references even when the ba
 	const second = await api.list('cached');
 	assert.equal(second.generation, first.generation + 1);
 	await assert.rejects(api.resources.readExtensionResourceBytes(request), /generation/);
-	assert.deepEqual(
-		await api.resources.readExtensionResourceBytes({ ...request, generation: second.generation }),
-		Uint8Array.from(bytes),
-	);
+	assert.deepEqual(await api.resources.readExtensionResourceBytes({ ...request, generation: second.generation }), Uint8Array.from(bytes));
 });
 
 test('an in-flight resource read cannot publish bytes after the Rust catalog has changed', async () => {
@@ -358,8 +341,7 @@ test('an in-flight resource read cannot publish bytes after the Rust catalog has
 		},
 	});
 	const connection = {
-		request: async ({ method }: { method: string }) =>
-			method === 'extensions/list' ? { generation, diagnostics: [], extensions: [] } : { resource },
+		request: async ({ method }: { method: string }) => (method === 'extensions/list' ? { generation, diagnostics: [], extensions: [] } : { resource }),
 	} as unknown as AppServerProtocolClient;
 	const api = createAppServerExtensionApi(connection, resources);
 	const catalog = await api.list('cached');

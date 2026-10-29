@@ -5,8 +5,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { syntaxLanguageForEditorLanguage } from '../../../../platform/syntax/common/syntaxApi.js';
 import { bundledTreeSitterGrammars } from './treeSitterGrammars.generated.js';
 
-const runtime =
-	(treeSitterNamespace as unknown as { default?: typeof treeSitterNamespace }).default ?? treeSitterNamespace;
+const runtime = (treeSitterNamespace as unknown as { default?: typeof treeSitterNamespace }).default ?? treeSitterNamespace;
 
 /** Loads bundled WASM grammars once per window; documents own and release their trees. */
 export class TreeSitterWasmLibrary extends Disposable {

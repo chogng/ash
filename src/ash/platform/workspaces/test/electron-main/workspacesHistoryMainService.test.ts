@@ -7,16 +7,8 @@ import { URI } from '../../../../base/common/uri.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 import { IStateService } from '../../../state/node/state.js';
 import { StateService } from '../../../state/node/stateService.js';
-import {
-	MAX_RECENT_WORKSPACES,
-	recentWorkspaceUri,
-	restoreRecentlyOpened,
-	toStoreData,
-} from '../../common/workspaces.js';
-import {
-	WorkspacesHistoryMainService,
-	workspacesHistoryChannel,
-} from '../../electron-main/workspacesHistoryMainService.js';
+import { MAX_RECENT_WORKSPACES, recentWorkspaceUri, restoreRecentlyOpened, toStoreData } from '../../common/workspaces.js';
+import { WorkspacesHistoryMainService, workspacesHistoryChannel } from '../../electron-main/workspacesHistoryMainService.js';
 
 test('Main history retains concurrent window additions, persists workspace kinds, and removes shared entries', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-history-'));
@@ -55,10 +47,7 @@ test('Main history retains concurrent window additions, persists workspace kinds
 		using restored = restoredServices.createInstance(WorkspacesHistoryMainService);
 		assert.deepEqual(toStoreData(await restored.getRecentlyOpened()), toStoreData(expected));
 		await restored.removeRecentlyOpened([alpha]);
-		assert.deepEqual((await restored.getRecentlyOpened()).workspaces.map(recentWorkspaceUri), [
-			team.workspace.configPath,
-			beta,
-		]);
+		assert.deepEqual((await restored.getRecentlyOpened()).workspaces.map(recentWorkspaceUri), [team.workspace.configPath, beta]);
 		await restored.clearRecentlyOpened();
 		await reopenedState.close();
 		const clearedState = await StateService.create(path);

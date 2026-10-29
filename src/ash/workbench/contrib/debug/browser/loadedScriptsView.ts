@@ -83,8 +83,7 @@ export class LoadedScriptsView extends ViewPane {
 					try {
 						return { session, sources: await session.loadedSources() };
 					} catch (error) {
-						if (!this.isDisposed && generation === this.generation)
-							this.notifications.error(error instanceof Error ? error : String(error));
+						if (!this.isDisposed && generation === this.generation) this.notifications.error(error instanceof Error ? error : String(error));
 						return { session, sources: [] };
 					}
 				}),
@@ -99,9 +98,7 @@ export class LoadedScriptsView extends ViewPane {
 		void loading.then(
 			catalogs => {
 				if (this.isDisposed || generation !== this.generation) return;
-				this.entries = catalogs.flatMap(({ session, sources }) =>
-					this.debug.getSession(session.id) === session ? sources.map(source => ({ session, source })) : [],
-				);
+				this.entries = catalogs.flatMap(({ session, sources }) => (this.debug.getSession(session.id) === session ? sources.map(source => ({ session, source })) : []));
 				this.render();
 			},
 			error => {
@@ -115,18 +112,14 @@ export class LoadedScriptsView extends ViewPane {
 		const filter = this.search.value.toLocaleLowerCase();
 		this.list.replaceChildren(
 			...this.entries
-				.filter(({ source }) =>
-					`${source.name ?? ''} ${source.path ?? ''}`.toLocaleLowerCase().includes(filter),
-				)
+				.filter(({ source }) => `${source.name ?? ''} ${source.path ?? ''}`.toLocaleLowerCase().includes(filter))
 				.map(({ session, source }) => {
 					const item = h(this.element.ownerDocument, 'li');
 					const button = h(this.element.ownerDocument, 'button');
 					button.type = 'button';
 					button.className = 'ash-debug-frame';
 					button.textContent = `${source.name ?? source.path ?? localize('debug.repl.source', 'Source')} — ${session.name}`;
-					this.rows.add(
-						getHoverDelegate().setupHover({ target: button, content: source.path ?? button.textContent }),
-					);
+					this.rows.add(getHoverDelegate().setupHover({ target: button, content: source.path ?? button.textContent }));
 					this.rows.add(
 						addDisposableListener(button, 'click', () => {
 							if (this.debug.getSession(session.id) !== session) return;

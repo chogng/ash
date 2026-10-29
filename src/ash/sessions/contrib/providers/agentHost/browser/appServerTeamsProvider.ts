@@ -1,9 +1,4 @@
-import type {
-	TeamCommandDto,
-	TeamDto,
-	TeamMessageDto,
-	TeamRunDto,
-} from '../../../../../../../.build/protocol/typescript/index.js';
+import type { TeamCommandDto, TeamDto, TeamMessageDto, TeamRunDto } from '../../../../../../../.build/protocol/typescript/index.js';
 import type { ITeamApi } from '../../../../../platform/teams/common/teamApi.js';
 import type { Team, TeamCommand, TeamMessage, TeamRun } from '../../../../services/teams/common/team.js';
 import type { ITeamsProvider } from '../../../../services/teams/common/teamsProvider.js';
@@ -26,17 +21,8 @@ export class AppServerTeamsProvider implements ITeamsProvider {
 		return team(result.team);
 	}
 
-	async startRun(
-		commandId: string,
-		runId: string,
-		teamId: string,
-		expectedRevision: number,
-		objective: string,
-	): Promise<TeamRun> {
-		return run(
-			(await this.api.startRun({ commandId, runId, teamId, expectedTeamRevision: expectedRevision, objective }))
-				.run,
-		);
+	async startRun(commandId: string, runId: string, teamId: string, expectedRevision: number, objective: string): Promise<TeamRun> {
+		return run((await this.api.startRun({ commandId, runId, teamId, expectedTeamRevision: expectedRevision, objective })).run);
 	}
 
 	async listRuns(teamId: string): Promise<readonly TeamRun[]> {
@@ -47,14 +33,7 @@ export class AppServerTeamsProvider implements ITeamsProvider {
 		return (await this.api.listMessages({ teamId, readerId })).messages.map(message);
 	}
 
-	async postMessage(
-		messageId: string,
-		teamId: string,
-		runId: string | null,
-		senderId: string,
-		receiverId: string | null,
-		text: string,
-	): Promise<TeamMessage> {
+	async postMessage(messageId: string, teamId: string, runId: string | null, senderId: string, receiverId: string | null, text: string): Promise<TeamMessage> {
 		return message((await this.api.postMessage({ messageId, teamId, runId, senderId, receiverId, text })).message);
 	}
 }

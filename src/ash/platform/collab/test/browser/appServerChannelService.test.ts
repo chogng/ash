@@ -4,12 +4,7 @@ import { test } from 'mocha';
 import { AppServerChannelService } from '../../browser/appServerChannelService.js';
 import { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import { createTestInitializeResult } from '../../../agentHost/test/common/testAppServerProtocol.js';
-import {
-	WEB_APP_SERVER_CONNECT_EVENT,
-	WEB_APP_SERVER_CONNECTED_EVENT,
-	WEB_APP_SERVER_FRAME_EVENT,
-	type AppServerTransport,
-} from '../../../agentHost/common/appServerTransport.js';
+import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../agentHost/common/appServerTransport.js';
 import type { ChannelConnection, AppServerErrorName } from '../../../../../../.build/protocol/typescript/index.js';
 
 class Transport implements AppServerTransport {
@@ -71,8 +66,7 @@ class Transport implements AppServerTransport {
 			return;
 		}
 		if (request.method === 'channels/disconnect') this.reply(request.id, null);
-		else if (request.method === 'channels/invite' || request.method === 'channels/signInKey')
-			this.reply(request.id, { serverUrl: this.state.serverUrl, credential: 'a'.repeat(64) });
+		else if (request.method === 'channels/invite' || request.method === 'channels/signInKey') this.reply(request.id, { serverUrl: this.state.serverUrl, credential: 'a'.repeat(64) });
 		else if (request.method === 'channels/notes' || request.method === 'channels/call')
 			this.reply(request.id, {
 				serverUrl: this.state.serverUrl,

@@ -25,11 +25,7 @@ function selectionFromResource(resource: URI): SessionExecutionTarget {
 	if (!isRemoteResource(resource)) return { type: 'local', root: resource.fsPath };
 	if (resource.authority.startsWith('provider+')) {
 		const source: unknown = JSON.parse(decodeURIComponent(resource.authority.slice('provider+'.length)));
-		if (
-			!Array.isArray(source) ||
-			source.length !== 2 ||
-			source.some(value => typeof value !== 'string' || !value.length)
-		) {
+		if (!Array.isArray(source) || source.length !== 2 || source.some(value => typeof value !== 'string' || !value.length)) {
 			throw new TypeError('Invalid Session runtime authority');
 		}
 		return {
@@ -120,10 +116,7 @@ export class WorkspaceSelection extends Disposable {
 						...this.snapshot.get(),
 						folderUri: item.folderUri,
 						target: item.target,
-						origin:
-							item.origin === WorkspaceSelectionOrigin.AgentsRecent
-								? item.origin
-								: WorkspaceSelectionOrigin.User,
+						origin: item.origin === WorkspaceSelectionOrigin.AgentsRecent ? item.origin : WorkspaceSelectionOrigin.User,
 						state: 'selected',
 					});
 					finish(this.snapshot.get().target);
@@ -136,15 +129,9 @@ export class WorkspaceSelection extends Disposable {
 					if (settled) {
 						return;
 					}
-					const known = new Set(
-						picker.items.flatMap(item => ('folderUri' in item ? [item.folderUri.toString()] : [])),
-					);
+					const known = new Set(picker.items.flatMap(item => ('folderUri' in item ? [item.folderUri.toString()] : [])));
 					const recents = history.workspaces.flatMap(recent => {
-						if (
-							!('folderUri' in recent) ||
-							known.has(recent.folderUri.toString()) ||
-							(recent.folderUri.scheme !== 'file' && !isRemoteResource(recent.folderUri))
-						) {
+						if (!('folderUri' in recent) || known.has(recent.folderUri.toString()) || (recent.folderUri.scheme !== 'file' && !isRemoteResource(recent.folderUri))) {
 							return [];
 						}
 						if (isRemoteResource(recent.folderUri)) {

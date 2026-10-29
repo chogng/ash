@@ -2,12 +2,7 @@ import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtur
 import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import {
-	DeleteLinesAction,
-	InsertLineAfterAction,
-	InsertLineBeforeAction,
-	JoinLinesAction,
-} from '../../browser/linesOperations.js';
+import { DeleteLinesAction, InsertLineAfterAction, InsertLineBeforeAction, JoinLinesAction } from '../../browser/linesOperations.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { Position } from '../../../../common/core/position.js';
 import { TextModel } from '../../../../common/model/textModel.js';
@@ -16,10 +11,7 @@ import { MoveLinesCommand } from '../../browser/moveLinesCommand.js';
 import { SortLinesCommand } from '../../browser/sortLinesCommand.js';
 import { EditorAutoIndentStrategy } from '../../../../common/config/editorOptions.js';
 import { createTestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
-import {
-	createTestCursorConfiguration,
-	createTestCursorsController,
-} from '../../../../test/common/testCursorConfiguration.js';
+import { createTestCursorConfiguration, createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { type EditorAction } from '../../../../browser/editorExtensions.js';
 
@@ -31,15 +23,18 @@ test('Canonical line commands execute through ICommand without the legacy contro
 	executeIsolated(selections, new CopyLinesCommand(selections.getSelections()[0]!, true));
 	assert.deepEqual(
 		{ text: model.getText(), selection: selections.getSelections()[0] },
-		{ text: 'zero\none\none\ntwo', selection: caret(2, 1) },
+		{
+			text: 'zero\none\none\ntwo',
+			selection: caret(2, 1),
+		},
 	);
-	executeIsolated(
-		selections,
-		new MoveLinesCommand(selections.getSelections()[0]!, true, EditorAutoIndentStrategy.None, configurations),
-	);
+	executeIsolated(selections, new MoveLinesCommand(selections.getSelections()[0]!, true, EditorAutoIndentStrategy.None, configurations));
 	assert.deepEqual(
 		{ text: model.getText(), selection: selections.getSelections()[0] },
-		{ text: 'zero\none\ntwo\none', selection: caret(3, 1) },
+		{
+			text: 'zero\none\ntwo\none',
+			selection: caret(3, 1),
+		},
 	);
 	selections.setSelections([Selection.fromPositions(new Position(1, 1), new Position(4, 4))]);
 	executeIsolated(selections, new SortLinesCommand(selections.getSelections()[0]!, false));
@@ -51,22 +46,13 @@ test('Canonical line commands execute through ICommand without the legacy contro
 test('SortLinesCommand rejects single-line and already-sorted work', () => {
 	using model = new TextModel('a\nb');
 	assert.equal(SortLinesCommand.canRun(model, caret(0, 0), false), false);
-	assert.equal(
-		SortLinesCommand.canRun(model, Selection.fromPositions(new Position(1, 1), new Position(2, 2)), false),
-		false,
-	);
-	assert.equal(
-		SortLinesCommand.canRun(model, Selection.fromPositions(new Position(1, 1), new Position(2, 2)), true),
-		true,
-	);
+	assert.equal(SortLinesCommand.canRun(model, Selection.fromPositions(new Position(1, 1), new Position(2, 2)), false), false);
+	assert.equal(SortLinesCommand.canRun(model, Selection.fromPositions(new Position(1, 1), new Position(2, 2)), true), true);
 });
 
 test('Delete lines removes selected physical line groups and keeps a valid final line', () => {
 	using model = new TextModel('zero\none\ntwo\nthree\nfour');
-	using selections = createTestCursorsController(
-		model,
-		primaryFirst([caret(1, 1), Selection.fromPositions(new Position(3 + 1, 0 + 1), new Position(4 + 1, 0 + 1))], 1),
-	);
+	using selections = createTestCursorsController(model, primaryFirst([caret(1, 1), Selection.fromPositions(new Position(3 + 1, 0 + 1), new Position(4 + 1, 0 + 1))], 1));
 
 	runAction(new DeleteLinesAction(), model, selections);
 	assert.equal(model.getText(), 'zero\ntwo\nfour');
@@ -94,25 +80,32 @@ test('Line actions retain CRLF, Unicode and primary selection across disjoint ed
 	runAction(new JoinLinesAction(), model, cursors);
 	assert.deepEqual(
 		{ text: model.getValue(), selections: cursors.getSelections() },
-		{ text: '😀 one two\r\nkeep\r\n三 four', selections: [new Selection(3, 2, 3, 2), new Selection(1, 7, 1, 7)] },
+		{
+			text: '😀 one two\r\nkeep\r\n三 four',
+			selections: [new Selection(3, 2, 3, 2), new Selection(1, 7, 1, 7)],
+		},
 	);
 	model.undo();
 	assert.deepEqual(
 		{ text: model.getValue(), selections: cursors.getSelections() },
-		{ text: '😀 one\r\n  two\r\nkeep\r\n三\r\n  four', selections: original },
+		{
+			text: '😀 one\r\n  two\r\nkeep\r\n三\r\n  four',
+			selections: original,
+		},
 	);
 	runAction(new DeleteLinesAction(), model, cursors);
 	assert.deepEqual(
 		{ text: model.getValue(), selections: cursors.getSelections() },
-		{ text: '  two\r\nkeep\r\n  four', selections: [new Selection(3, 1, 3, 1), new Selection(1, 1, 1, 1)] },
+		{
+			text: '  two\r\nkeep\r\n  four',
+			selections: [new Selection(3, 1, 3, 1), new Selection(1, 1, 1, 1)],
+		},
 	);
 });
 
 test('Duplicate lines supports multi-line groups, document edges, and isolated undo', () => {
 	using model = new TextModel('zero\none\ntwo\nthree');
-	using selections = createTestCursorsController(model, [
-		Selection.fromPositions(new Position(1 + 1, 0 + 1), new Position(3 + 1, 0 + 1)),
-	]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position(1 + 1, 0 + 1), new Position(3 + 1, 0 + 1))]);
 
 	selections.executeCommands(selections.getSelections().map(selection => new CopyLinesCommand(selection, true)));
 	assert.equal(model.getText(), 'zero\none\ntwo\none\ntwo\nthree');
@@ -149,10 +142,7 @@ for (const down of [false, true]) {
 			},
 		);
 		model.undo();
-		assert.deepEqual(
-			{ text: model.getValue(), selections: cursors.getSelections() },
-			{ text: 'head\ntail\n', selections: original },
-		);
+		assert.deepEqual({ text: model.getValue(), selections: cursors.getSelections() }, { text: 'head\ntail\n', selections: original });
 	});
 
 	test(`Copy lines ${down ? 'down' : 'up'} keeps every cursor on its own copy`, () => {
@@ -169,47 +159,24 @@ for (const down of [false, true]) {
 			},
 		);
 		model.undo();
-		assert.deepEqual(
-			{ text: model.getValue(), selections: cursors.getSelections() },
-			{ text: 'alpha\nbeta\ngamma', selections: original },
-		);
+		assert.deepEqual({ text: model.getValue(), selections: cursors.getSelections() }, { text: 'alpha\nbeta\ngamma', selections: original });
 	});
 }
 
 test('Move lines swaps selected groups with their neighboring rows and keeps directional selections', () => {
 	using model = new TextModel('zero\none\ntwo\nthree\nfour');
-	using selections = createTestCursorsController(model, [
-		Selection.fromPositions(new Position(2 + 1, 3 + 1), new Position(1 + 1, 1 + 1)),
-	]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position(2 + 1, 3 + 1), new Position(1 + 1, 1 + 1))]);
 	using configurations = createTestLanguageConfigurationService();
 
-	selections.executeCommands(
-		selections
-			.getSelections()
-			.map(selection => new MoveLinesCommand(selection, true, EditorAutoIndentStrategy.None, configurations)),
-	);
+	selections.executeCommands(selections.getSelections().map(selection => new MoveLinesCommand(selection, true, EditorAutoIndentStrategy.None, configurations)));
 	assert.equal(model.getText(), 'zero\nthree\none\ntwo\nfour');
-	assert.deepEqual(
-		selections.getSelections()[0]!,
-		Selection.fromPositions(new Position(3 + 1, 3 + 1), new Position(2 + 1, 1 + 1)),
-	);
-	selections.executeCommands(
-		selections
-			.getSelections()
-			.map(selection => new MoveLinesCommand(selection, false, EditorAutoIndentStrategy.None, configurations)),
-	);
+	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(new Position(3 + 1, 3 + 1), new Position(2 + 1, 1 + 1)));
+	selections.executeCommands(selections.getSelections().map(selection => new MoveLinesCommand(selection, false, EditorAutoIndentStrategy.None, configurations)));
 	assert.equal(model.getText(), 'zero\none\ntwo\nthree\nfour');
-	assert.deepEqual(
-		selections.getSelections()[0]!,
-		Selection.fromPositions(new Position(2 + 1, 3 + 1), new Position(1 + 1, 1 + 1)),
-	);
+	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(new Position(2 + 1, 3 + 1), new Position(1 + 1, 1 + 1)));
 
 	selections.setSelections([caret(0, 0)]);
-	selections.executeCommands(
-		selections
-			.getSelections()
-			.map(selection => new MoveLinesCommand(selection, false, EditorAutoIndentStrategy.None, configurations)),
-	);
+	selections.executeCommands(selections.getSelections().map(selection => new MoveLinesCommand(selection, false, EditorAutoIndentStrategy.None, configurations)));
 	assert.equal(model.getText(), 'zero\none\ntwo\nthree\nfour');
 });
 
@@ -218,11 +185,7 @@ test('MoveLinesCommand preserves disjoint selected groups', () => {
 	using selections = createTestCursorsController(model, primaryFirst([caret(1, 1), caret(3, 2)], 1));
 	using configurations = createTestLanguageConfigurationService();
 
-	selections.executeCommands(
-		selections
-			.getSelections()
-			.map(selection => new MoveLinesCommand(selection, true, EditorAutoIndentStrategy.None, configurations)),
-	);
+	selections.executeCommands(selections.getSelections().map(selection => new MoveLinesCommand(selection, true, EditorAutoIndentStrategy.None, configurations)));
 	assert.equal(model.getText(), 'zero\ntwo\none\nfour\nthree');
 	assert.deepEqual(selections.getSelections(), primaryFirst([caret(2, 1), caret(4, 2)], 1));
 	selections.context.model.undo();
@@ -231,10 +194,7 @@ test('MoveLinesCommand preserves disjoint selected groups', () => {
 
 test('Insert line actions follow active cursor lines and undo atomically', () => {
 	using model = new TextModel('zero\none\ntwo\nthree');
-	using selections = createTestCursorsController(
-		model,
-		primaryFirst([caret(0, 1), Selection.fromPositions(new Position(2 + 1, 0 + 1), new Position(3 + 1, 0 + 1))], 1),
-	);
+	using selections = createTestCursorsController(model, primaryFirst([caret(0, 1), Selection.fromPositions(new Position(2 + 1, 0 + 1), new Position(3 + 1, 0 + 1))], 1));
 
 	runAction(new InsertLineAfterAction(), model, selections);
 	assert.equal(model.getText(), 'zero\n\none\ntwo\nthree\n');
@@ -248,11 +208,7 @@ test('Insert line actions follow active cursor lines and undo atomically', () =>
 	assert.deepEqual(selections.getSelections()[0]!, caret(0, 0));
 });
 
-function runAction(
-	action: EditorAction,
-	model: TextModel,
-	selections: ReturnType<typeof createTestCursorsController>,
-): void {
+function runAction(action: EditorAction, model: TextModel, selections: ReturnType<typeof createTestCursorsController>): void {
 	using configurations = createTestLanguageConfigurationService();
 	const cursorConfig = createTestCursorConfiguration(model, configurations);
 	const editor = {
@@ -263,18 +219,9 @@ function runAction(
 			selections.pushUndoStop();
 			return true;
 		},
-		executeCommands: (
-			_source: string | null | undefined,
-			commands: Parameters<typeof selections.executeCommands>[0],
-		) => selections.executeCommands(commands),
-		executeEdits: (
-			_source: unknown,
-			edits: Parameters<TextModel['pushEditOperations']>[1],
-			endCursorState?: unknown,
-		) => {
-			const result = model.pushEditOperations(selections.getSelections(), edits, () =>
-				Array.isArray(endCursorState) ? endCursorState : null,
-			);
+		executeCommands: (_source: string | null | undefined, commands: Parameters<typeof selections.executeCommands>[0]) => selections.executeCommands(commands),
+		executeEdits: (_source: unknown, edits: Parameters<TextModel['pushEditOperations']>[1], endCursorState?: unknown) => {
+			const result = model.pushEditOperations(selections.getSelections(), edits, () => (Array.isArray(endCursorState) ? endCursorState : null));
 			if (result) selections.setSelections(result);
 			return true;
 		},
@@ -282,10 +229,7 @@ function runAction(
 	action.run({} as never, editor, {});
 }
 
-function executeIsolated(
-	selections: ReturnType<typeof createTestCursorsController>,
-	command: Parameters<typeof selections.executeCommand>[0],
-): void {
+function executeIsolated(selections: ReturnType<typeof createTestCursorsController>, command: Parameters<typeof selections.executeCommand>[0]): void {
 	selections.pushUndoStop();
 	selections.executeCommand(command);
 	selections.pushUndoStop();

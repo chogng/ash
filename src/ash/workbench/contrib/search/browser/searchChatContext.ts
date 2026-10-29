@@ -28,10 +28,7 @@ export class SymbolsContextPickerPick implements IChatContextValueItem {
 	public isEnabled(): boolean {
 		return this.languageFeatures.workspaceSymbolProvider.allNoModel().length > 0;
 	}
-	public async asAttachment(
-		_widget: IChatWidget | undefined,
-		signal: AbortSignal = new AbortController().signal,
-	): Promise<ChatContextAttachment | undefined> {
+	public async asAttachment(_widget: IChatWidget | undefined, signal: AbortSignal = new AbortController().signal): Promise<ChatContextAttachment | undefined> {
 		const selected = await pickChatContextItem(
 			this.quickInput,
 			localize('chat.context.selectSymbol', 'Search workspace symbols to attach their source'),
@@ -42,11 +39,7 @@ export class SymbolsContextPickerPick implements IChatContextValueItem {
 					if (token.isCancellationRequested) {
 						controller.abort();
 					}
-					const symbols = await getWorkspaceSymbols(
-						this.languageFeatures.workspaceSymbolProvider.allNoModel(),
-						query,
-						controller.signal,
-					);
+					const symbols = await getWorkspaceSymbols(this.languageFeatures.workspaceSymbolProvider.allNoModel(), query, controller.signal);
 					return symbols.map(symbol => ({
 						label: symbol.name,
 						description: symbol.containerName,
@@ -79,10 +72,7 @@ export class SearchViewResultChatContextPick implements IChatContextValueItem {
 	public isEnabled(): boolean {
 		return Boolean(this.views.getViewWithId<ISearchView>(SEARCH_VIEW_ID)?.getSearchResultSnapshot());
 	}
-	public async asAttachment(
-		_widget: IChatWidget | undefined,
-		signal: AbortSignal = new AbortController().signal,
-	): Promise<ChatContextAttachment | undefined> {
+	public async asAttachment(_widget: IChatWidget | undefined, signal: AbortSignal = new AbortController().signal): Promise<ChatContextAttachment | undefined> {
 		const snapshot = this.views.getViewWithId<ISearchView>(SEARCH_VIEW_ID)?.getSearchResultSnapshot();
 		if (!snapshot || signal.aborted) {
 			return undefined;

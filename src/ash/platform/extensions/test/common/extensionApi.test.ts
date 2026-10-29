@@ -1,16 +1,9 @@
-import type {
-	IExtensionManagementService,
-	ExtensionsBuiltInProviders,
-} from '../../../extensionManagement/common/extensionManagementService.js';
+import type { IExtensionManagementService, ExtensionsBuiltInProviders } from '../../../extensionManagement/common/extensionManagementService.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import type { IResourceApi } from '../../../agentHost/common/appServerApi.js';
 import type { ExtensionCatalog, ExtensionResourceRequest, IExtensionApi } from '../../common/extensionApi.js';
-import {
-	createAppServerExtensionApi,
-	createDisconnectedExtensionApi,
-	withEnabledBuiltInExtensions,
-} from '../../browser/extensionApi.js';
+import { createAppServerExtensionApi, createDisconnectedExtensionApi, withEnabledBuiltInExtensions } from '../../browser/extensionApi.js';
 import { Event } from '../../../../base/common/event.js';
 import { ExtensionResourceLoaderService } from '../../../extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { unavailableOperation, WebAppServerUnavailableError } from '../../../renderer/browser/disconnectedHost.js';
@@ -34,7 +27,14 @@ test('normalizes an extension catalog and preserves explicit diagnostics', () =>
 				packageSha256: `sha256:${'b'.repeat(64)}`,
 			},
 		],
-		diagnostics: [{ source: 'user', subject: null, code: 'invalidManifest', message: 'manifest is invalid' }],
+		diagnostics: [
+			{
+				source: 'user',
+				subject: null,
+				code: 'invalidManifest',
+				message: 'manifest is invalid',
+			},
+		],
 	});
 
 	assert.equal(catalog.generation, 3);
@@ -98,10 +98,7 @@ function packageSnapshot(generation: number, id: string, sourceKind: 'builtIn' |
 	});
 }
 
-function packageApi(
-	catalog: () => ExtensionCatalog,
-	read: (request: ExtensionResourceRequest) => Promise<Uint8Array>,
-): IExtensionApi {
+function packageApi(catalog: () => ExtensionCatalog, read: (request: ExtensionResourceRequest) => Promise<Uint8Array>): IExtensionApi {
 	return { list: async () => catalog(), resources: new ExtensionResourceLoaderService(read) };
 }
 
@@ -146,32 +143,20 @@ test('an idle catalog request starts immediately, concurrent reads share failure
 	const connection = {
 		request: (_method: unknown, params: unknown) => {
 			requests.push(params);
-			return requests.length === 1
-				? first.p
-				: requests.length === 2
-					? second.p
-					: Promise.resolve({ generation: 3, extensions: [], diagnostics: [] });
+			return requests.length === 1 ? first.p : requests.length === 2 ? second.p : Promise.resolve({ generation: 3, extensions: [], diagnostics: [] });
 		},
 	} as unknown as AppServerProtocolClient;
 	const api = createAppServerExtensionApi(connection, { connectionGeneration: 1 } as IResourceApi);
 	const refresh = api.list('refresh');
 	const failed = assert.rejects(refresh, /source scan failed/);
-	assert.deepEqual(
-		requests,
-		[{ reload: 'refresh', knownGeneration: null }],
-		'Backend work starts before the caller yields to Workbench construction',
-	);
+	assert.deepEqual(requests, [{ reload: 'refresh', knownGeneration: null }], 'Backend work starts before the caller yields to Workbench construction');
 	const concurrent = api.list('cached');
 	assert.strictEqual(concurrent, refresh, 'Concurrent consumers share the same catalog operation');
 	const concurrentFailed = assert.rejects(concurrent, /source scan failed/);
 	assert.equal(requests.length, 1, 'Catalog publication remains serialized');
 	await first.error(new Error('source scan failed'));
 	await Promise.all([failed, concurrentFailed]);
-	assert.deepEqual(
-		requests,
-		[{ reload: 'refresh', knownGeneration: null }],
-		'A shared failure does not silently retry discovery',
-	);
+	assert.deepEqual(requests, [{ reload: 'refresh', knownGeneration: null }], 'A shared failure does not silently retry discovery');
 	const retry = api.list('cached');
 	assert.deepEqual(requests, [
 		{ reload: 'refresh', knownGeneration: null },
@@ -237,8 +222,7 @@ test('small frozen resources share reads without sharing mutable bytes or retire
 	};
 	const api = createAppServerExtensionApi(connection, resources);
 	let catalog = await api.list('refresh');
-	const read = (path = 'theme.json') =>
-		api.resources.readExtensionResourceBytes({ generation: catalog.generation, extensionId: 'ash.theme', path });
+	const read = (path = 'theme.json') => api.resources.readExtensionResourceBytes({ generation: catalog.generation, extensionId: 'ash.theme', path });
 	const first = read();
 	const second = read();
 	assert.equal(opens, 1);
@@ -396,11 +380,7 @@ test('warm language catalog reads overlap provider IO and share only its pending
 	);
 	catalogRead = undefined;
 	providerRead = undefined;
-	assert.equal(
-		(await api.list('cached')).extensions.length,
-		1,
-		'the next read observes re-enablement instead of retaining the previous result',
-	);
+	assert.equal((await api.list('cached')).extensions.length, 1, 'the next read observes re-enablement instead of retaining the previous result');
 	assert.equal(reads, 3);
 	await api.list('cached', { includeDisabled: true });
 	assert.equal(reads, 3, 'management inspection does not issue enablement reads');
@@ -417,8 +397,7 @@ test('renderer admission preserves exact backend identity and rejects unsafe res
 		styleDigest: `sha256:${'d'.repeat(64)}`,
 		sourceDigest: `sha256:${'e'.repeat(64)}`,
 	};
-	const normalize = (rendererClient: unknown) =>
-		normalizeExtensionCatalog({ generation: 1, diagnostics: [], extensions: [{ ...owner, rendererClient }] });
+	const normalize = (rendererClient: unknown) => normalizeExtensionCatalog({ generation: 1, diagnostics: [], extensions: [{ ...owner, rendererClient }] });
 	const actual = normalize(admission).extensions[0].rendererClient;
 	assert.deepEqual(actual, admission);
 	assert.ok(Object.isFrozen(actual));

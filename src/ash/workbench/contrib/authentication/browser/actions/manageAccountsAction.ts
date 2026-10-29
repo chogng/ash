@@ -2,26 +2,15 @@ import { localize2, localize } from '../../../../../nls.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 
 import { Action2 } from '../../../../../platform/actions/common/actions.js';
-import {
-	IAccountService,
-	type Account,
-	type AccountState,
-	type AccountLoginMethod,
-} from '../../../../../platform/accounts/common/accountService.js';
+import { IAccountService, type Account, type AccountState, type AccountLoginMethod } from '../../../../../platform/accounts/common/accountService.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IGitHubConnectionService } from '../../../../services/accounts/common/gitHubConnectionService.js';
 
-type AccountPickItem =
-	| (IQuickPickItem & { readonly kind: 'account'; readonly account: Account })
-	| (IQuickPickItem & { readonly kind: 'add' });
+type AccountPickItem = (IQuickPickItem & { readonly kind: 'account'; readonly account: Account }) | (IQuickPickItem & { readonly kind: 'add' });
 
-type LoginPickItem = IQuickPickItem &
-	(
-		| { readonly kind: 'github' }
-		| { readonly kind: 'subscription'; readonly method: AccountLoginMethod; readonly providerName: string }
-	);
+type LoginPickItem = IQuickPickItem & ({ readonly kind: 'github' } | { readonly kind: 'subscription'; readonly method: AccountLoginMethod; readonly providerName: string });
 
 export class ManageAccountsAction extends Action2 {
 	public static readonly ID = 'workbench.action.manageAccounts';
@@ -41,9 +30,7 @@ export class ManageAccountsAction extends Action2 {
 		try {
 			state = await accounts.read();
 		} catch {
-			notifications.error(
-				localize({ bundle: 'ash', key: 'workbench.loadAccountsFailed' }, 'Could not load accounts.'),
-			);
+			notifications.error(localize({ bundle: 'ash', key: 'workbench.loadAccountsFailed' }, 'Could not load accounts.'));
 			return;
 		}
 
@@ -55,18 +42,13 @@ export class ManageAccountsAction extends Action2 {
 		picker.placeholder = localize({ bundle: 'ash', key: 'workbench.selectAccount' }, 'Select an account to manage');
 		picker.ariaLabel = picker.placeholder;
 		const loginItems: LoginPickItem[] = [
-			...(!state.accounts.some(
-				account => account.provider === 'chatgpt-subscription' && account.status === 'ready',
-			)
+			...(!state.accounts.some(account => account.provider === 'chatgpt-subscription' && account.status === 'ready')
 				? [
 						{
 							kind: 'subscription' as const,
 							method: { type: 'openAiChatGptBrowser' as const },
 							providerName: 'ChatGPT',
-							label: localize(
-								{ bundle: 'ash', key: 'workbench.signInWithChatGPT' },
-								'Sign in with ChatGPT',
-							),
+							label: localize({ bundle: 'ash', key: 'workbench.signInWithChatGPT' }, 'Sign in with ChatGPT'),
 						},
 					]
 				: []),
@@ -76,18 +58,13 @@ export class ManageAccountsAction extends Action2 {
 					? localize({ bundle: 'ash', key: 'workbench.cancelGitHubConnection' }, 'Cancel GitHub connection')
 					: localize({ bundle: 'ash', key: 'workbench.connectGitHub' }, 'Connect GitHub'),
 			},
-			...(!state.accounts.some(
-				account => account.provider === 'bigmodel-start-plan' && account.status === 'ready',
-			)
+			...(!state.accounts.some(account => account.provider === 'bigmodel-start-plan' && account.status === 'ready')
 				? [
 						{
 							kind: 'subscription' as const,
 							method: { type: 'bigModelStartPlanBrowser' as const },
 							providerName: 'BigModel Start Plan',
-							label: localize(
-								{ bundle: 'ash', key: 'workbench.signInWithBigModelStartPlan' },
-								'Sign in with BigModel Start Plan',
-							),
+							label: localize({ bundle: 'ash', key: 'workbench.signInWithBigModelStartPlan' }, 'Sign in with BigModel Start Plan'),
 						},
 					]
 				: []),
@@ -97,10 +74,7 @@ export class ManageAccountsAction extends Action2 {
 							kind: 'subscription' as const,
 							method: { type: 'zaiStartPlanBrowser' as const },
 							providerName: 'Z.AI Start Plan',
-							label: localize(
-								{ bundle: 'ash', key: 'workbench.signInWithZaiStartPlan' },
-								'Sign in with Z.AI Start Plan',
-							),
+							label: localize({ bundle: 'ash', key: 'workbench.signInWithZaiStartPlan' }, 'Sign in with Z.AI Start Plan'),
 						},
 					]
 				: []),
@@ -163,13 +137,7 @@ function showAddAccountActions(
 				return;
 			}
 			void accounts.startLogin(item.method).catch(() => {
-				notifications.error(
-					localize(
-						{ bundle: 'ash', key: 'workbench.startAccountSignInFailed' },
-						'Could not start {0} sign in.',
-						item.providerName,
-					),
-				);
+				notifications.error(localize({ bundle: 'ash', key: 'workbench.startAccountSignInFailed' }, 'Could not start {0} sign in.', item.providerName));
 			});
 		}),
 	);
@@ -177,12 +145,7 @@ function showAddAccountActions(
 	picker.show();
 }
 
-function showAccountActions(
-	quickInput: IQuickInputService,
-	accounts: IAccountService,
-	notifications: INotificationService,
-	account: Account,
-): void {
+function showAccountActions(quickInput: IQuickInputService, accounts: IAccountService, notifications: INotificationService, account: Account): void {
 	const picker = quickInput.createQuickPick<IQuickPickItem>();
 	const resources = new DisposableStore();
 	resources.add(picker);
@@ -194,9 +157,7 @@ function showAccountActions(
 		picker.onDidAccept(() => {
 			picker.hide();
 			void accounts.logout(account.provider, account.accountId).catch(() => {
-				notifications.error(
-					localize({ bundle: 'ash', key: 'workbench.signOutFailed' }, 'Could not sign out of {0}.', name),
-				);
+				notifications.error(localize({ bundle: 'ash', key: 'workbench.signOutFailed' }, 'Could not sign out of {0}.', name));
 			});
 		}),
 	);

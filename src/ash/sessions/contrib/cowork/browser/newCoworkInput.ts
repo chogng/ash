@@ -13,10 +13,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IChatSpeechToTextService } from '../../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { IDictationOnboardingService } from '../../../../workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
 import type { ICoworkWidgetModel } from './widget/coworkWidget.js';
-import type {
-	ChatInputDelegate,
-	ChatInputState,
-} from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
+import type { ChatInputDelegate, ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { IChatAttachmentResolveService } from '../../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
@@ -125,13 +122,9 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-cowork-input', 'floating-card');
 		this.element.classList.add('cowork-composer');
-		this.contextAttachments = this._register(
-			new NewChatContextAttachments(this.inputContainer, files => this.attachFiles(files)),
-		);
+		this.contextAttachments = this._register(new NewChatContextAttachments(this.inputContainer, files => this.attachFiles(files)));
 		this._register(new NewChatInputPasteTarget(this.inputContainer, this.contextAttachments));
-		const dragAndDrop = this._register(
-			instantiationService.createInstance(ChatDragAndDrop, this, () => this.supportsImages()),
-		);
+		const dragAndDrop = this._register(instantiationService.createInstance(ChatDragAndDrop, this, () => this.supportsImages()));
 		dragAndDrop.addOverlay(this.inputContainer, this.inputContainer);
 		const tipContainer = h(container.ownerDocument, 'div');
 		tipContainer.className = 'ash-sessions-cowork-tip-slot';
@@ -142,15 +135,12 @@ export class NewCoworkInputWidget extends ChatInputPart {
 				isEligible: () =>
 					!this.submittedMessage &&
 					this.model.items.length === 0 &&
-					(this.model.inputState.phase === 'ready' ||
-						(this.model.untitledSessionId !== undefined && this.model.inputState.phase === 'loading')) &&
+					(this.model.inputState.phase === 'ready' || (this.model.untitledSessionId !== undefined && this.model.inputState.phase === 'loading')) &&
 					!this.model.inputState.interaction,
 				focusInput: () => this.focus(),
 			}),
 		);
-		this._register(
-			AccessibleViewRegistry.register(new SessionsChatAccessibilityHelp(this.element, () => this.focus())),
-		);
+		this._register(AccessibleViewRegistry.register(new SessionsChatAccessibilityHelp(this.element, () => this.focus())));
 		this._register(
 			addDisposableListener(this.inputContainer, 'focusin', event => {
 				if (this.inputContainer.contains(event.relatedTarget as Node | null)) return;
@@ -199,18 +189,12 @@ export class NewCoworkInputWidget extends ChatInputPart {
 						this.restoringDraft = true;
 						this.input.value = '';
 						this.attachmentModel.clear();
-						const draft = readNewChatDraftState(
-							storage,
-							model.threadId ?? `untitled:${model.untitledSessionId!}`,
-						);
+						const draft = readNewChatDraftState(storage, model.threadId ?? `untitled:${model.untitledSessionId!}`);
 						if (draft) this.restoreDraft(draft);
 						this.restoringDraft = false;
 					} else {
 						// A successful materialization consumes the new-session identity and its persisted draft.
-						this.draftWriteRevisions.set(
-							this.displayedDraftId,
-							(this.draftWriteRevisions.get(this.displayedDraftId) ?? 0) + 1,
-						);
+						this.draftWriteRevisions.set(this.displayedDraftId, (this.draftWriteRevisions.get(this.displayedDraftId) ?? 0) + 1);
 						writeNewChatDraftState(storage, undefined, this.displayedDraftId);
 					}
 					this.displayedThreadId = model.threadId;
@@ -233,12 +217,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 
 	protected override statusText(state: ChatInputState): string {
 		// Catalog loading keeps the local draft's welcome content in place; aria-busy exposes readiness.
-		if (
-			!state.aiDisabled &&
-			this.model.untitledSessionId !== undefined &&
-			state.phase === 'loading' &&
-			!state.error
-		) {
+		if (!state.aiDisabled && this.model.untitledSessionId !== undefined && state.phase === 'loading' && !state.error) {
 			return '';
 		}
 		return super.statusText(state);
@@ -251,9 +230,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 			() => this.draftWrites.delete(operation),
 			error => {
 				this.draftWrites.delete(operation);
-				this.draftNotifications.error(
-					localize('sessions.chat.draftFailed', 'Could not save the Chat draft: {0}', String(error)),
-				);
+				this.draftNotifications.error(localize('sessions.chat.draftFailed', 'Could not save the Chat draft: {0}', String(error)));
 			},
 		);
 	}

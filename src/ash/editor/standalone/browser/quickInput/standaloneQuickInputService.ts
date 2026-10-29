@@ -11,9 +11,7 @@ import { ILayoutService } from '../../../../platform/layout/browser/layoutServic
 
 /** Each embedded editor owns the lifetime and geometry of its Quick Input host. */
 export class StandaloneQuickInputService extends QuickInputService {
-	private readonly controllers = this._register(
-		new DisposableMap<ICodeEditor, IDisposable & { readonly controller: QuickInputController }>(),
-	);
+	private readonly controllers = this._register(new DisposableMap<ICodeEditor, IDisposable & { readonly controller: QuickInputController }>());
 
 	constructor(
 		@ICodeEditorService private readonly codeEditors: ICodeEditorService,
@@ -30,8 +28,7 @@ export class StandaloneQuickInputService extends QuickInputService {
 		this._register(
 			layout.onDidChangeActiveContainer(() => {
 				for (const [editor, entry] of this.controllers) {
-					if (editor.getContainerDomNode() !== layout.activeContainer)
-						entry.controller.currentQuickInput?.hide();
+					if (editor.getContainerDomNode() !== layout.activeContainer) entry.controller.currentQuickInput?.hide();
 				}
 			}),
 		);

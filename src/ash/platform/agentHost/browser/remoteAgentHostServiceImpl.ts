@@ -7,11 +7,7 @@ import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
 import { ILogService } from '../../log/common/log.js';
 import type { IAddress } from '../../remote/common/remoteAgentConnection.js';
-import {
-	AppServerConnectionRecovery,
-	AppServerProtocolClient,
-	type AppServerProtocolClientOptions,
-} from './appServerProtocolClient.js';
+import { AppServerConnectionRecovery, AppServerProtocolClient, type AppServerProtocolClientOptions } from './appServerProtocolClient.js';
 import { AppServerSocketTransport } from './appServerSocketTransport.js';
 
 interface RemoteAgentHostConnectionOptions {

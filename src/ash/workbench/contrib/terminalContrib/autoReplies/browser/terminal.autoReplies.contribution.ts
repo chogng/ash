@@ -3,11 +3,7 @@ import { Disposable, DisposableMap, type IDisposable } from '../../../../../base
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { getTerminalAutoReplyRules } from '../../../terminal/common/terminalConfiguration.js';
-import {
-	registerWorkbenchContribution,
-	WorkbenchPhase,
-	type IWorkbenchContribution,
-} from '../../../../common/contributions.js';
+import { registerWorkbenchContribution, WorkbenchPhase, type IWorkbenchContribution } from '../../../../common/contributions.js';
 import { ITerminalService, type ITerminalInstance } from '../../../terminal/browser/terminal.js';
 import { TerminalAutoRepliesSettingId } from '../common/terminalAutoRepliesConfiguration.js';
 
@@ -67,6 +63,4 @@ export class TerminalAutoRepliesContribution extends Disposable implements IWork
 	}
 }
 
-registerWorkbenchContribution(TerminalAutoRepliesContribution.ID, WorkbenchPhase.AfterRestored, accessor =>
-	accessor.get(IInstantiationService).createInstance(TerminalAutoRepliesContribution),
-);
+registerWorkbenchContribution(TerminalAutoRepliesContribution.ID, WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(TerminalAutoRepliesContribution));

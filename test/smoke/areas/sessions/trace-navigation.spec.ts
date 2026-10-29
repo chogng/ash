@@ -25,8 +25,7 @@ async function capture(page: Page, testInfo: TestInfo, name: string): Promise<vo
 	await page.evaluate(() => {
 		const caption = document.createElement('aside');
 		caption.id = 'trace-navigation-evidence-caption';
-		caption.textContent =
-			'REAL APP SERVER SHELL TURN FIXTURE · no paid model · Execution Trace from conversation commands';
+		caption.textContent = 'REAL APP SERVER SHELL TURN FIXTURE · no paid model · Execution Trace from conversation commands';
 		Object.assign(caption.style, {
 			position: 'fixed',
 			bottom: '8px',
@@ -90,13 +89,11 @@ test('Workbench commands open Trace without adding an Activity Bar destination',
 		await expect(viewer).toBeVisible();
 		await expect.poll(() => [...scripts].some(name => /\/chatDebugEditor-/.test(name))).toBe(true);
 		await expect(entry).toHaveCount(0);
-		await viewer
-			.locator('input[type=file]')
-			.setInputFiles({
-				name: 'navigation.trace.json',
-				mimeType: 'application/json',
-				buffer: Buffer.from(JSON.stringify(offline)),
-			});
+		await viewer.locator('input[type=file]').setInputFiles({
+			name: 'navigation.trace.json',
+			mimeType: 'application/json',
+			buffer: Buffer.from(JSON.stringify(offline)),
+		});
 		await expect(viewer.getByRole('status')).toContainText('Imported');
 		await viewer.getByRole('textbox', { name: 'Filter execution events' }).fill('offline-event');
 		await bar.getByRole('tab', { name: 'Explorer', exact: true }).click();
@@ -106,9 +103,7 @@ test('Workbench commands open Trace without adding an Activity Bar destination',
 		const filter = viewer.getByRole('textbox', { name: 'Filter execution events' });
 		await filter.focus();
 		await page.keyboard.press('Alt+F1');
-		await expect(page.getByRole('dialog', { name: 'Accessibility Help' }).getByRole('textbox')).toHaveValue(
-			/Execution Trace/,
-		);
+		await expect(page.getByRole('dialog', { name: 'Accessibility Help' }).getByRole('textbox')).toHaveValue(/Execution Trace/);
 		await page.keyboard.press('Escape');
 		await expect(filter).toBeFocused();
 	} finally {
@@ -116,25 +111,17 @@ test('Workbench commands open Trace without adding an Activity Bar destination',
 	}
 });
 
-test('Sessions commands retain offline Trace inspection without a navigation destination', async ({
-	application,
-	target,
-	workbench,
-}) => {
+test('Sessions commands retain offline Trace inspection without a navigation destination', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	await new QuickAccess(page).runCommand('sessions.trace.import');
 	let viewer = page.locator('.ash-agent-trace:visible');
 	await expect(viewer).toBeVisible();
-	await expect(
-		page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Trace', exact: true }),
-	).toHaveCount(0);
-	await viewer
-		.locator('input[type=file]')
-		.setInputFiles({
-			name: 'navigation.trace.json',
-			mimeType: 'application/json',
-			buffer: Buffer.from(JSON.stringify(offline)),
-		});
+	await expect(page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Trace', exact: true })).toHaveCount(0);
+	await viewer.locator('input[type=file]').setInputFiles({
+		name: 'navigation.trace.json',
+		mimeType: 'application/json',
+		buffer: Buffer.from(JSON.stringify(offline)),
+	});
 	await viewer.getByRole('textbox', { name: 'Filter execution events' }).fill('offline-event');
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Chat', exact: true }).click();
 	await expect(viewer).toBeHidden();
@@ -144,9 +131,7 @@ test('Sessions commands retain offline Trace inspection without a navigation des
 	page = await workbench.reopenAgentsWindow(application, page);
 	viewer = page.locator('.ash-agent-trace:visible');
 	await expect(viewer).toBeVisible();
-	await expect(
-		page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Trace', exact: true }),
-	).toHaveCount(0);
+	await expect(page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Trace', exact: true })).toHaveCount(0);
 	await expect(viewer.locator('.ash-agent-trace-empty')).toContainText('Open a saved conversation');
 });
 
@@ -160,10 +145,7 @@ test(
 		const connection = await connectTraceAppServer(application, page, testWorkspace.directory);
 		const client = connection.client;
 		try {
-			const create = async (
-				title: string,
-				suffix: string,
-			): Promise<{ sessionId: string; threadId: string; turnId: string }> => {
+			const create = async (title: string, suffix: string): Promise<{ sessionId: string; threadId: string; turnId: string }> => {
 				const created = await client.request(APP_SERVER_METHODS['session/create'], {
 					commandId: 'trace-navigation-session-' + suffix,
 					title,
@@ -193,20 +175,11 @@ test(
 						approvalMode: 'bypassPermissions',
 					},
 				});
-				await expect
-					.poll(
-						async () =>
-							(
-								await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })
-							).thread.turns.at(-1)?.status,
-					)
-					.toBe('completed');
+				await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread.turns.at(-1)?.status).toBe('completed');
 				return {
 					sessionId,
 					threadId,
-					turnId: (
-						await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })
-					).thread.turns.at(-1)!.turnId,
+					turnId: (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread.turns.at(-1)!.turnId,
 				};
 			};
 			const first = await create('Trace navigation A', 'a');
@@ -215,41 +188,23 @@ test(
 			const output = page.locator('[data-part="panel"] [data-view-id="ash.output"]');
 			await expect(output).toBeVisible();
 			await expect(output).toContainText('Turn completed');
-			await expect(page.locator('[data-action-id="ash.output.selectChannel"] button')).toContainText(
-				'Trace navigation A',
-			);
+			await expect(page.locator('[data-action-id="ash.output.selectChannel"] button')).toContainText('Trace navigation A');
 			await new QuickAccess(page).runCommand('sessions.trace.open');
 			let viewer = page.locator('.ash-agent-trace:visible');
-			await expect(viewer.locator('.ash-agent-trace-location')).toHaveText(
-				`Located ${first.threadId} / ${first.turnId}.`,
-			);
+			await expect(viewer.locator('.ash-agent-trace-location')).toHaveText(`Located ${first.threadId} / ${first.turnId}.`);
 			await expect(page.locator('[data-part="sessions"]')).toBeHidden();
-			await page
-				.locator('.ash-sessions-activity-content')
-				.getByRole('button', { name: 'Chat', exact: true })
-				.click();
+			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Chat', exact: true }).click();
 			const second = await create('Trace navigation B', 'b');
 			await page.locator('.ash-sessions-list-item').filter({ hasText: 'Trace navigation B' }).click();
 			await new QuickAccess(page).runCommand('sessions.open.trace');
-			await expect(viewer.locator('.ash-agent-trace-location')).toHaveText(
-				`Located ${first.threadId} / ${first.turnId}.`,
-			);
+			await expect(viewer.locator('.ash-agent-trace-location')).toHaveText(`Located ${first.threadId} / ${first.turnId}.`);
 			await new QuickAccess(page).runCommand('sessions.trace.open');
-			await expect(viewer.locator('.ash-agent-trace-location')).toHaveText(
-				`Located ${second.threadId} / ${second.turnId}.`,
-			);
+			await expect(viewer.locator('.ash-agent-trace-location')).toHaveText(`Located ${second.threadId} / ${second.turnId}.`);
 			page = await workbench.reopenAgentsWindow(application, page);
 			viewer = page.locator('.ash-agent-trace:visible');
-			await expect(
-				page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Trace', exact: true }),
-			).toHaveCount(0);
-			await expect(viewer.locator('.ash-agent-trace-location')).toHaveText(
-				`Located ${second.threadId} / ${second.turnId}.`,
-			);
-			await expect(viewer.locator('[role=treeitem][aria-selected=true] .ash-agent-trace-event')).toHaveAttribute(
-				'data-turn-id',
-				second.turnId,
-			);
+			await expect(page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Trace', exact: true })).toHaveCount(0);
+			await expect(viewer.locator('.ash-agent-trace-location')).toHaveText(`Located ${second.threadId} / ${second.turnId}.`);
+			await expect(viewer.locator('[role=treeitem][aria-selected=true] .ash-agent-trace-event')).toHaveAttribute('data-turn-id', second.turnId);
 			await expect(page.locator('[data-part="sessions"]')).toBeHidden();
 			await resize(page, application, 1280);
 			// Theme selection is contributed by Workbench; its profile preference updates both windows.
@@ -273,9 +228,7 @@ test(
 				await expect(themeWorkbench.page.locator('.ash-quick-pick')).toHaveCount(0);
 				await expect(page.locator('#app')).toHaveAttribute('data-color-theme', id);
 				await resize(page, application, width);
-				const entry = page
-					.locator('.ash-sessions-activity-content')
-					.getByRole('button', { name: 'Trace', exact: true });
+				const entry = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Trace', exact: true });
 				await expect(entry).toHaveCount(0);
 				await viewer.getByRole('textbox', { name: 'Filter execution events' }).focus();
 				await expect(viewer.getByRole('tree')).toBeVisible();

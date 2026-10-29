@@ -1,8 +1,5 @@
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import {
-	IConfigurationRegistry,
-	Extensions as ConfigurationExtensions,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { IConfigurationRegistry, Extensions as ConfigurationExtensions } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -21,10 +18,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 	setting: {
 		valueType: 'boolean',
 		title: localize('onboarding.enabled.title', 'Onboarding guides'),
-		description: localize(
-			'onboarding.enabled.description',
-			'Show eligible feature guides automatically. Manually started guides remain available.',
-		),
+		description: localize('onboarding.enabled.description', 'Show eligible feature guides automatically. Manually started guides remain available.'),
 	},
 });
 

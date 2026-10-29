@@ -6,31 +6,16 @@ import { h } from '../../../../base/browser/dom.js';
 import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { type ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
-import {
-	DisposableMap,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-	type IDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { localize } from '../../../../nls.js';
-import {
-	IAccessibleViewService,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { WorkbenchObjectTree } from '../../../../platform/list/browser/listService.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IPathService } from '../../../../platform/path/common/pathService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import {
-	type ITestCase,
-	type ITestCaseResult,
-	type ITestProfile,
-	type ITestRun,
-	ITestingService,
-} from '../../../services/testing/common/testingService.js';
+import { type ITestCase, type ITestCaseResult, type ITestProfile, type ITestRun, ITestingService } from '../../../services/testing/common/testingService.js';
 import { ITerminalService } from '../../terminal/browser/terminal.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
@@ -85,24 +70,12 @@ export class TestingViewPane extends ViewPane {
 		this.contentElement.classList.add('ash-testing');
 		const controls = h(document, 'div');
 		controls.className = 'ash-testing-controls';
-		this.runAllButton = this.makeButton(controls, localize('testing.runAll', 'Run All Tests'), () =>
-			testing.runTests(testing.tests.map(test => test.key)),
-		);
-		this.runSelectedButton = this.makeButton(controls, localize('testing.runSelected', 'Run Selected'), () =>
-			testing.runTests([...new Set(this.selected.flatMap(item => item.keys))]),
-		);
-		this.debugButton = this.makeButton(controls, localize('testing.debugSelected', 'Debug Selected Test'), () =>
-			testing.debugTest(this.selected[0]!.test!.key),
-		);
-		this.failedButton = this.makeButton(controls, localize('testing.rerunFailed', 'Rerun Failed'), () =>
-			testing.rerunFailedTests(),
-		);
-		this.refreshButton = this.makeButton(controls, localize('testing.refresh', 'Refresh Tests'), () =>
-			testing.refresh(),
-		);
-		this.cancelButton = this.makeButton(controls, localize('testing.cancel', 'Cancel Tests'), () =>
-			testing.cancelTests(),
-		);
+		this.runAllButton = this.makeButton(controls, localize('testing.runAll', 'Run All Tests'), () => testing.runTests(testing.tests.map(test => test.key)));
+		this.runSelectedButton = this.makeButton(controls, localize('testing.runSelected', 'Run Selected'), () => testing.runTests([...new Set(this.selected.flatMap(item => item.keys))]));
+		this.debugButton = this.makeButton(controls, localize('testing.debugSelected', 'Debug Selected Test'), () => testing.debugTest(this.selected[0]!.test!.key));
+		this.failedButton = this.makeButton(controls, localize('testing.rerunFailed', 'Rerun Failed'), () => testing.rerunFailedTests());
+		this.refreshButton = this.makeButton(controls, localize('testing.refresh', 'Refresh Tests'), () => testing.refresh());
+		this.cancelButton = this.makeButton(controls, localize('testing.cancel', 'Cancel Tests'), () => testing.cancelTests());
 		this.statusDomNode = h(document, 'div');
 		this.statusDomNode.className = 'ash-testing-status';
 		this.statusDomNode.setAttribute('role', 'status');
@@ -130,17 +103,11 @@ export class TestingViewPane extends ViewPane {
 		);
 		this.tree.element.setAttribute(
 			'aria-description',
-			localize(
-				'testing.treeHelp',
-				'Use arrow keys to navigate tests. Press Enter to open a test. Select a package, file, or test, then choose Run Selected.',
-			),
+			localize('testing.treeHelp', 'Use arrow keys to navigate tests. Press Enter to open a test. Select a package, file, or test, then choose Run Selected.'),
 		);
 		const hint = accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.Testing);
 		if (hint) {
-			this.tree.element.setAttribute(
-				'aria-description',
-				this.tree.element.getAttribute('aria-description') + ' ' + hint,
-			);
+			this.tree.element.setAttribute('aria-description', this.tree.element.getAttribute('aria-description') + ' ' + hint);
 		}
 		this._register(
 			this.tree.onDidChangeSelection(event => {
@@ -162,10 +129,7 @@ export class TestingViewPane extends ViewPane {
 							event.sideBySide ? 'sideGroup' : 'activeGroup',
 						),
 					);
-				} else if (
-					event.browserEvent instanceof KeyboardEvent &&
-					(event.browserEvent.key === 'Enter' || event.browserEvent.key === ' ')
-				) {
+				} else if (event.browserEvent instanceof KeyboardEvent && (event.browserEvent.key === 'Enter' || event.browserEvent.key === ' ')) {
 					this.tree.toggleCollapsed(event.element.id);
 				}
 			}),
@@ -175,9 +139,7 @@ export class TestingViewPane extends ViewPane {
 		result.setAttribute('aria-label', localize('testing.result', 'Test result'));
 		this.resultLabelDomNode = h(document, 'div');
 		this.resultLabelDomNode.className = 'ash-testing-result-label';
-		this.failureButton = this.makeButton(result, localize('testing.openFailure', 'Open Failure Location'), () =>
-			this.openSelectedFailure(),
-		);
+		this.failureButton = this.makeButton(result, localize('testing.openFailure', 'Open Failure Location'), () => this.openSelectedFailure());
 		this.outputDomNode = h(document, 'pre');
 		this.outputDomNode.tabIndex = 0;
 		this.outputDomNode.setAttribute('aria-label', localize('testing.output', 'Test output'));
@@ -203,7 +165,12 @@ export class TestingViewPane extends ViewPane {
 
 	private makeButton(container: HTMLElement, label: string, action: () => Promise<unknown>): Button {
 		return this._register(
-			new Button(container, { ...defaultButtonStyles, label, size: 'small', onClick: () => this.invoke(action) }),
+			new Button(container, {
+				...defaultButtonStyles,
+				label,
+				size: 'small',
+				onClick: () => this.invoke(action),
+			}),
 		);
 	}
 
@@ -211,10 +178,7 @@ export class TestingViewPane extends ViewPane {
 		this.error = undefined;
 		void action()
 			.catch(error => {
-				this.error =
-					error instanceof Error
-						? error.message
-						: localize('testing.operationFailed', 'Test operation failed.');
+				this.error = error instanceof Error ? error.message : localize('testing.operationFailed', 'Test operation failed.');
 			})
 			.finally(() => {
 				if (!this.isDisposed) {
@@ -234,8 +198,7 @@ export class TestingViewPane extends ViewPane {
 		this.runAllButton.enabled = !busy && this.testing.tests.length > 0;
 		this.runSelectedButton.enabled = !busy && this.selected.length > 0;
 		this.debugButton.enabled = !busy && this.selected.length === 1 && this.selected[0]?.test?.debuggable === true;
-		this.failedButton.enabled =
-			!busy && results.some(result => result.state === 'failed' || result.state === 'errored');
+		this.failedButton.enabled = !busy && results.some(result => result.state === 'failed' || result.state === 'errored');
 		this.refreshButton.enabled = !busy;
 		this.cancelButton.enabled = busy;
 		this.statusDomNode.textContent =
@@ -253,8 +216,7 @@ export class TestingViewPane extends ViewPane {
 									'{0} tests · {1} passed · {2} failed · {3} skipped',
 									this.testing.tests.length,
 									results.filter(result => result.state === 'passed').length,
-									results.filter(result => result.state === 'failed' || result.state === 'errored')
-										.length,
+									results.filter(result => result.state === 'failed' || result.state === 'errored').length,
 									results.filter(result => result.state === 'skipped').length,
 								));
 		if (this.renderedTests !== this.testing.tests) {
@@ -275,12 +237,7 @@ export class TestingViewPane extends ViewPane {
 		this.resultLabelDomNode.textContent = test
 			? `${test.name} — ${testStateLabel(result?.state)}${result ? ` · ${result.durationMs} ms` : ''}`
 			: localize('testing.selectResult', 'Select a test to read its result.');
-		this.outputDomNode.textContent = result
-			? result.output +
-				(result.outputTruncated
-					? '\n' + localize('testing.outputTruncated', 'Output exceeded the capture limit.')
-					: '')
-			: '';
+		this.outputDomNode.textContent = result ? result.output + (result.outputTruncated ? '\n' + localize('testing.outputTruncated', 'Output exceeded the capture limit.') : '') : '';
 		this.failureButton.hidden = !result?.failurePath || !result.failureLine;
 	}
 
@@ -302,10 +259,7 @@ export class TestingViewPane extends ViewPane {
 			const tests = [...files.values()].flat();
 			const first = tests[0]!;
 			const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === first.dirId)!;
-			const target =
-				first.targetKind === 'documentation'
-					? localize('testing.documentationTarget', '{0} · Documentation Tests', first.target)
-					: first.target;
+			const target = first.targetKind === 'documentation' ? localize('testing.documentationTarget', '{0} · Documentation Tests', first.target) : first.target;
 			return {
 				element: {
 					id,
@@ -376,9 +330,7 @@ export class TestingViewPane extends ViewPane {
 					label: `${run.profile.label} — ${run.status === 'completed' ? localize('testing.scriptCompleted', 'Completed') : testStateLabel(run.status === 'canceled' ? 'cancelled' : run.status)}`,
 					size: 'small',
 					onClick: () => {
-						const instance = this.terminal.instances.find(
-							instance => instance.id === run.taskRun.terminalId,
-						);
+						const instance = this.terminal.instances.find(instance => instance.id === run.taskRun.terminalId);
 						if (!instance) {
 							return;
 						}
@@ -401,9 +353,7 @@ export class TestingViewPane extends ViewPane {
 			return;
 		}
 		const rules = await this.paths.getPath(folder.uri);
-		const base =
-			(await this.paths.getHostPath(folder.uri)) ??
-			(folder.uri.path.startsWith('/@browser/') ? folder.uri.path : undefined);
+		const base = (await this.paths.getHostPath(folder.uri)) ?? (folder.uri.path.startsWith('/@browser/') ? folder.uri.path : undefined);
 		if (!rules || base === undefined) {
 			return;
 		}
@@ -418,26 +368,16 @@ export class TestingViewPane extends ViewPane {
 					? folder.uri.with({ path: resolved })
 					: await this.paths.fileURI(resolved);
 		// A workspace may be replaced while the owning host's path rules are being resolved.
-		if (
-			this.isDisposed ||
-			!this.workspace
-				.getWorkspace()
-				.folders.some(current => current.id === folder.id && current.uri.toString() === folder.uri.toString())
-		) {
+		if (this.isDisposed || !this.workspace.getWorkspace().folders.some(current => current.id === folder.id && current.uri.toString() === folder.uri.toString())) {
 			return;
 		}
-		return this.editors.openEditor(
-			{ resource },
-			{ selection: new Range(result.failureLine, 1, result.failureLine, 1) },
-		);
+		return this.editors.openEditor({ resource }, { selection: new Range(result.failureLine, 1, result.failureLine, 1) });
 	}
 
 	getAccessibleContent(): string {
 		return [
 			this.statusDomNode.textContent,
-			...this.testing.tests.map(
-				test => `${test.name}: ${testStateLabel(this.resultsByKey.get(test.key)?.state)}`,
-			),
+			...this.testing.tests.map(test => `${test.name}: ${testStateLabel(this.resultsByKey.get(test.key)?.state)}`),
 			this.resultLabelDomNode.textContent,
 			this.outputDomNode.textContent,
 		].join('\n');

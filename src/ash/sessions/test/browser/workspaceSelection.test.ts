@@ -6,12 +6,7 @@ import type { IWorkspace } from '../../../platform/workspace/common/workspace.js
 import { WorkspaceSelection, selectionFromWorkspace } from '../../browser/workspaceSelection.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { Emitter } from '../../../base/common/event.js';
-import {
-	IQuickInputService,
-	type IQuickPick,
-	type IQuickPickDidAcceptEvent,
-	type IQuickPickItem,
-} from '../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPick, type IQuickPickDidAcceptEvent, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
 import { IWorkspacesService, type IRecentlyOpened } from '../../../platform/workspaces/common/workspaces.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { createProviderRemoteWorkspaceUri } from '../../../platform/remote/common/remote.js';
@@ -76,11 +71,7 @@ test('workspace history merges choices, rejects unrelated authorities and cannot
 	const current = URI.file('/current');
 	const result = selection.pick([{ label: 'Current', target: { type: 'local', root: current.fsPath } }]);
 	await history.complete({
-		workspaces: [
-			{ folderUri: current },
-			{ folderUri: URI.file('/recent') },
-			{ folderUri: URI.parse('ash-remote://unknown/work') },
-		],
+		workspaces: [{ folderUri: current }, { folderUri: URI.file('/recent') }, { folderUri: URI.parse('ash-remote://unknown/work') }],
 	});
 	assert.equal(picker.busy, false);
 	assert.equal(picker.items.length, 2);
@@ -119,10 +110,7 @@ test('container source selection filters both window folders and recent remote t
 	services.registerInstance(IQuickInputService, { createQuickPick: () => picker } as unknown as IQuickInputService);
 	services.registerInstance(IWorkspacesService, { getRecentlyOpened: () => history.p } as IWorkspacesService);
 	using selection = services.createInstance(WorkspaceSelection);
-	const pending = selection.pick(
-		[{ label: 'SSH', target: { type: 'ssh', host: 'build', root: '/work' } }],
-		target => target.type === 'local',
-	);
+	const pending = selection.pick([{ label: 'SSH', target: { type: 'ssh', host: 'build', root: '/work' } }], target => target.type === 'local');
 	await history.complete({
 		workspaces: [
 			{ folderUri: URI.file('/source') },

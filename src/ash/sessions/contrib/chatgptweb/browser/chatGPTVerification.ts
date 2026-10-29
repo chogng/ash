@@ -32,11 +32,7 @@ export function installChatGPTVerification(): void {
 			// Its loaded entry still declares the current module URL; read that declaration
 			// without depending on composer visibility, a user gesture, or a fixed build hash.
 			if (!moduleUrl) {
-				const entry = resources.find(
-					name =>
-						new URL(name).origin === location.origin &&
-						/\/native-initial-sentinel-prewarm-[\w-]+\.js$/u.test(new URL(name).pathname),
-				);
+				const entry = resources.find(name => new URL(name).origin === location.origin && /\/native-initial-sentinel-prewarm-[\w-]+\.js$/u.test(new URL(name).pathname));
 				if (entry) {
 					const response = await originalFetch(entry, { credentials: 'omit', signal });
 					if (!response.ok || !response.body) {
@@ -81,15 +77,8 @@ export function installChatGPTVerification(): void {
 		if (!module || typeof module !== 'object') {
 			throw new Error('Invalid verification module');
 		}
-		const api: unknown = Object.values(module).find(
-			value => value && typeof value === 'object' && typeof value.finalizeChatRequirements === 'function',
-		);
-		if (
-			!api ||
-			typeof api !== 'object' ||
-			!('finalizeChatRequirements' in api) ||
-			typeof api.finalizeChatRequirements !== 'function'
-		) {
+		const api: unknown = Object.values(module).find(value => value && typeof value === 'object' && typeof value.finalizeChatRequirements === 'function');
+		if (!api || typeof api !== 'object' || !('finalizeChatRequirements' in api) || typeof api.finalizeChatRequirements !== 'function') {
 			throw new Error('Verification API is unavailable');
 		}
 		const value: unknown = await api.finalizeChatRequirements({ requestSignal: signal });

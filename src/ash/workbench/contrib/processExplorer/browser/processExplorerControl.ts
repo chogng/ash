@@ -3,20 +3,11 @@ import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
 import { Emitter } from '../../../../base/common/event.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	toDisposable,
-	type IDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { ProcessItem } from '../../../../base/common/processes.js';
 import { localize } from '../../../../nls.js';
-import {
-	AccessibilityVerbositySettingId,
-	IAccessibleViewService,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -197,10 +188,7 @@ export class ProcessExplorerControl extends Disposable {
 				return;
 			}
 			// Keep the last successful snapshot readable without presenting it as current.
-			this.statusDomNode.textContent = localize(
-				'processExplorer.failed',
-				'Could not refresh processes. Any displayed metrics are from the previous refresh. Try Refresh again.',
-			);
+			this.statusDomNode.textContent = localize('processExplorer.failed', 'Could not refresh processes. Any displayed metrics are from the previous refresh. Try Refresh again.');
 			status(this.statusDomNode.textContent);
 		} finally {
 			if (this.isCurrent(generation)) {
@@ -227,22 +215,13 @@ export class ProcessExplorerControl extends Disposable {
 	}
 
 	private isCurrent(generation: number): boolean {
-		return (
-			!this.isDisposed && generation === this.generation && Boolean(this.inputSignal && !this.inputSignal.aborted)
-		);
+		return !this.isDisposed && generation === this.generation && Boolean(this.inputSignal && !this.inputSignal.aborted);
 	}
 	private columnLabels(): readonly string[] {
-		return [
-			localize('processExplorer.process', 'Process'),
-			localize('processExplorer.cpu', 'CPU %'),
-			localize('processExplorer.memory', 'RSS MiB'),
-			localize('processExplorer.pid', 'PID'),
-		];
+		return [localize('processExplorer.process', 'Process'), localize('processExplorer.cpu', 'CPU %'), localize('processExplorer.memory', 'RSS MiB'), localize('processExplorer.pid', 'PID')];
 	}
 	private rowValues(row: ProcessRow): readonly string[] {
-		return row.process
-			? [row.name, row.process.load.toFixed(1), (row.process.mem / 2 ** 20).toFixed(1), String(row.process.pid)]
-			: [row.name, '', '', ''];
+		return row.process ? [row.name, row.process.load.toFixed(1), (row.process.mem / 2 ** 20).toFixed(1), String(row.process.pid)] : [row.name, '', '', ''];
 	}
 	private renderRow(row: ProcessRow): HTMLElement {
 		const domNode = h(this.domNode.ownerDocument, 'div');
@@ -265,18 +244,12 @@ export class ProcessExplorerControl extends Disposable {
 			cell.textContent = value;
 			domNode.append(cell);
 		}
-		this.rowResources.set(
-			domNode,
-			this.hover.setupDelayedHover(domNode.firstElementChild as HTMLElement, { content: row.name }),
-		);
+		this.rowResources.set(domNode, this.hover.setupDelayedHover(domNode.firstElementChild as HTMLElement, { content: row.name }));
 		return domNode;
 	}
 	private updateAriaLabel(): void {
 		const hint = this.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.ProcessExplorer);
-		this.tree.domNode.setAttribute(
-			'aria-label',
-			[localize('processExplorer.title', 'Process Explorer'), hint].filter(Boolean).join('. '),
-		);
+		this.tree.domNode.setAttribute('aria-label', [localize('processExplorer.title', 'Process Explorer'), hint].filter(Boolean).join('. '));
 	}
 	private updateActions(): void {
 		this.tree.domNode.setAttribute('aria-busy', String(this.loading));
@@ -304,10 +277,7 @@ export class ProcessExplorerControl extends Disposable {
 						await this.clipboard.writeText(this.getAccessibleContent());
 					} catch {
 						if (this.isCurrent(generation)) {
-							this.statusDomNode.textContent = localize(
-								'processExplorer.copyFailed',
-								'Could not copy process information.',
-							);
+							this.statusDomNode.textContent = localize('processExplorer.copyFailed', 'Could not copy process information.');
 							status(this.statusDomNode.textContent);
 							this.changed.fire();
 						}

@@ -9,11 +9,21 @@ test('Lazy evaluates once and exposes initialized values', () => {
 		return { calls };
 	});
 
-	assert.deepEqual({ hasValue: value.hasValue, rawValue: value.rawValue }, { hasValue: false, rawValue: undefined });
+	assert.deepEqual(
+		{ hasValue: value.hasValue, rawValue: value.rawValue },
+		{
+			hasValue: false,
+			rawValue: undefined,
+		},
+	);
 	assert.equal(value.value, value.value);
 	assert.deepEqual(
 		{ calls, hasValue: value.hasValue, rawValue: value.rawValue },
-		{ calls: 1, hasValue: true, rawValue: { calls: 1 } },
+		{
+			calls: 1,
+			hasValue: true,
+			rawValue: { calls: 1 },
+		},
 	);
 });
 

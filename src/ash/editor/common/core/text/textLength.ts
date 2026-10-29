@@ -16,16 +16,12 @@ export class TextLength {
 
 	static lengthDiffNonNegative(start: TextLength, end: TextLength): TextLength {
 		if (end.isLessThan(start)) return TextLength.zero;
-		return start.lineCount === end.lineCount
-			? new TextLength(0, end.columnCount - start.columnCount)
-			: new TextLength(end.lineCount - start.lineCount, end.columnCount);
+		return start.lineCount === end.lineCount ? new TextLength(0, end.columnCount - start.columnCount) : new TextLength(end.lineCount - start.lineCount, end.columnCount);
 	}
 
 	static betweenPositions(start: Position, end: Position): TextLength {
 		if (end.isBefore(start)) throw new RangeError('TextLength end must not precede its start');
-		return start.lineNumber === end.lineNumber
-			? new TextLength(0, end.column - start.column)
-			: new TextLength(end.lineNumber - start.lineNumber, end.column - 1);
+		return start.lineNumber === end.lineNumber ? new TextLength(0, end.column - start.column) : new TextLength(end.lineNumber - start.lineNumber, end.column - 1);
 	}
 
 	static fromPosition(position: Position): TextLength {
@@ -59,12 +55,7 @@ export class TextLength {
 		readonly lineCount: number,
 		readonly columnCount: number,
 	) {
-		if (
-			!Number.isSafeInteger(lineCount) ||
-			!Number.isSafeInteger(columnCount) ||
-			lineCount < 0 ||
-			columnCount < 0
-		) {
+		if (!Number.isSafeInteger(lineCount) || !Number.isSafeInteger(columnCount) || lineCount < 0 || columnCount < 0) {
 			throw new RangeError('TextLength values must be non-negative safe integers');
 		}
 	}
@@ -89,22 +80,15 @@ export class TextLength {
 	}
 
 	add(other: TextLength): TextLength {
-		return other.lineCount === 0
-			? new TextLength(this.lineCount, this.columnCount + other.columnCount)
-			: new TextLength(this.lineCount + other.lineCount, other.columnCount);
+		return other.lineCount === 0 ? new TextLength(this.lineCount, this.columnCount + other.columnCount) : new TextLength(this.lineCount + other.lineCount, other.columnCount);
 	}
 
 	addToPosition(position: Position): Position {
-		return this.lineCount === 0
-			? new Position(position.lineNumber, position.column + this.columnCount)
-			: new Position(position.lineNumber + this.lineCount, this.columnCount + 1);
+		return this.lineCount === 0 ? new Position(position.lineNumber, position.column + this.columnCount) : new Position(position.lineNumber + this.lineCount, this.columnCount + 1);
 	}
 
 	addToRange(range: Range): Range {
-		return Range.fromPositions(
-			this.addToPosition(range.getStartPosition()),
-			this.addToPosition(range.getEndPosition()),
-		);
+		return Range.fromPositions(this.addToPosition(range.getStartPosition()), this.addToPosition(range.getEndPosition()));
 	}
 	createRange(start: Position): Range {
 		return Range.fromPositions(start, this.addToPosition(start));

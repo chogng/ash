@@ -1,12 +1,7 @@
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
-import {
-	IAdapterManager,
-	type DebugAdapterFactory,
-	type DebugAdapterFactoryRegistration,
-	normalizeDebugAdapterFactory,
-} from '../common/debug.js';
+import { IAdapterManager, type DebugAdapterFactory, type DebugAdapterFactoryRegistration, normalizeDebugAdapterFactory } from '../common/debug.js';
 
 interface OwnedDebugAdapterFactory {
 	readonly owner: object;
@@ -64,42 +59,24 @@ export class AdapterManager extends Disposable implements IAdapterManager {
 	private replace(owner: object, factories: readonly DebugAdapterFactory[]): void {
 		if (!Array.isArray(factories)) throw new TypeError('Debug Adapter factories must be an array');
 		const normalized = factories.map(factory => {
-			const existing = this.entries
-				.get(factory.type)
-				?.find(entry => entry.owner === owner && entry.source === factory);
-			return existing?.owner === owner && existing.source === factory
-				? existing.factory
-				: normalizeDebugAdapterFactory(factory);
+			const existing = this.entries.get(factory.type)?.find(entry => entry.owner === owner && entry.source === factory);
+			return existing?.owner === owner && existing.source === factory ? existing.factory : normalizeDebugAdapterFactory(factory);
 		});
 		const roles = new Set<string>();
 		for (const factory of normalized) {
 			const dynamic = factory.createDebugAdapterDescriptor !== undefined;
 			const role = JSON.stringify([factory.type, dynamic]);
-			const conflicting = this.entries
-				.get(factory.type)
-				?.find(
-					entry =>
-						entry.owner !== owner && (entry.factory.createDebugAdapterDescriptor !== undefined) === dynamic,
-				);
+			const conflicting = this.entries.get(factory.type)?.find(entry => entry.owner !== owner && (entry.factory.createDebugAdapterDescriptor !== undefined) === dynamic);
 			if (roles.has(role) || conflicting) {
-				throw new Error(
-					`Debug Adapter type '${factory.type}' is already registered by '${conflicting?.factory.sourceId ?? factory.sourceId}'`,
-				);
+				throw new Error(`Debug Adapter type '${factory.type}' is already registered by '${conflicting?.factory.sourceId ?? factory.sourceId}'`);
 			}
 			roles.add(role);
 		}
 		const previous = [...this.entries.values()].flat().filter(entry => entry.owner === owner);
-		if (
-			previous.length === normalized.length &&
-			normalized.every(factory => previous.some(entry => entry.factory === factory))
-		)
-			return;
+		if (previous.length === normalized.length && normalized.every(factory => previous.some(entry => entry.factory === factory))) return;
 		this.deleteOwner(owner);
 		for (const [index, factory] of normalized.entries()) {
-			this.entries.set(factory.type, [
-				...(this.entries.get(factory.type) ?? []),
-				{ owner, source: factories[index]!, factory },
-			]);
+			this.entries.set(factory.type, [...(this.entries.get(factory.type) ?? []), { owner, source: factories[index]!, factory }]);
 		}
 		this.updateFactories();
 	}
@@ -127,10 +104,7 @@ export class AdapterManager extends Disposable implements IAdapterManager {
 					// The registry is the sole owner of defaults and callbacks. A derived
 					// descriptor lookup cannot make a default registration shadow its factory.
 					const retained = previous.find(
-						factory =>
-							factory.type === type &&
-							factory.createDebugAdapter === fallback.createDebugAdapter &&
-							factory.createDebugAdapterDescriptor === dynamic.createDebugAdapterDescriptor,
+						factory => factory.type === type && factory.createDebugAdapter === fallback.createDebugAdapter && factory.createDebugAdapterDescriptor === dynamic.createDebugAdapterDescriptor,
 					);
 					return (
 						retained ??
@@ -148,8 +122,7 @@ export class AdapterManager extends Disposable implements IAdapterManager {
 }
 
 function normalizeIdentifier(value: string, owner: string): string {
-	if (typeof value !== 'string' || !value.trim() || value.length > 256 || value.includes('\0'))
-		throw new TypeError(`${owner} must contain 1 to 256 characters without NUL`);
+	if (typeof value !== 'string' || !value.trim() || value.length > 256 || value.includes('\0')) throw new TypeError(`${owner} must contain 1 to 256 characters without NUL`);
 	return value.trim();
 }
 

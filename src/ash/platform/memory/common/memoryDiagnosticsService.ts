@@ -2,17 +2,7 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 import type { Event } from '../../../base/common/event.js';
 
 export type MemoryMetricKind =
-	| 'residentBytes'
-	| 'javaScriptHeapBytes'
-	| 'domNodes'
-	| 'eventListeners'
-	| 'uiObjects'
-	| 'windows'
-	| 'cacheBytes'
-	| 'gpuEstimatedBytes'
-	| 'gpuResources'
-	| 'renderCacheEntries'
-	| 'tasks';
+	'residentBytes' | 'javaScriptHeapBytes' | 'domNodes' | 'eventListeners' | 'uiObjects' | 'windows' | 'cacheBytes' | 'gpuEstimatedBytes' | 'gpuResources' | 'renderCacheEntries' | 'tasks';
 export interface MemoryMetric {
 	kind: MemoryMetricKind;
 	value: number | null;

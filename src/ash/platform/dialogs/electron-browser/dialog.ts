@@ -14,16 +14,12 @@ export async function showMessageBox(options: MessageBoxOptions): Promise<Messag
 	if (signal?.aborted) return cancelled();
 	const id = ++nextDialogId;
 	const abort = (): void => {
-		void invoke<void>(NATIVE_HOST_DIALOG_CHANNEL, { kind: 'cancel', id }).catch(error =>
-			console.error('Failed to cancel system dialog', error),
-		);
+		void invoke<void>(NATIVE_HOST_DIALOG_CHANNEL, { kind: 'cancel', id }).catch(error => console.error('Failed to cancel system dialog', error));
 	};
 	signal?.addEventListener('abort', abort, { once: true });
 	try {
 		// AbortSignal belongs to this process; Main owns an independent controller for the request ID.
-		const result = validateMessageBoxResult(
-			await invoke<unknown>(NATIVE_HOST_DIALOG_CHANNEL, { kind: 'show', id, options: parameters }),
-		);
+		const result = validateMessageBoxResult(await invoke<unknown>(NATIVE_HOST_DIALOG_CHANNEL, { kind: 'show', id, options: parameters }));
 		return signal?.aborted ? cancelled() : result;
 	} finally {
 		signal?.removeEventListener('abort', abort);

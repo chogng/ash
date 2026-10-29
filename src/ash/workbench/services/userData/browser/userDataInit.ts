@@ -3,18 +3,10 @@ import { validateJsonValue } from '../../../../base/common/jsonValue.js';
 import { equals } from '../../../../base/common/objects.js';
 import { dirname } from '../../../../base/common/resources.js';
 import type { URI } from '../../../../base/common/uri.js';
-import {
-	FileSystemProviderErrorCode,
-	toFileSystemProviderErrorCode,
-	type IFileSystemProvider,
-} from '../../../../platform/files/common/files.js';
+import { FileSystemProviderErrorCode, toFileSystemProviderErrorCode, type IFileSystemProvider } from '../../../../platform/files/common/files.js';
 
 /** One-way migration from the former settings-only database into the profile file provider. */
-export async function migrateLegacyBrowserSettings(
-	factory: IDBFactory,
-	files: IFileSystemProvider,
-	resource: URI,
-): Promise<void> {
+export async function migrateLegacyBrowserSettings(factory: IDBFactory, files: IFileSystemProvider, resource: URI): Promise<void> {
 	const database = await new Promise<IDBDatabase | undefined>((resolve, reject) => {
 		const request = factory.open('ash-configuration', 1);
 		let absent = false;
@@ -39,8 +31,7 @@ export async function migrateLegacyBrowserSettings(
 			transaction.onabort = () => reject(transaction.error);
 		});
 		if (legacy === undefined) return;
-		if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy))
-			throw new TypeError('Invalid legacy settings record');
+		if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) throw new TypeError('Invalid legacy settings record');
 		const record = legacy as Record<string, unknown>;
 		const document = record.document as Record<string, unknown> | undefined;
 		if (
@@ -68,13 +59,11 @@ export async function migrateLegacyBrowserSettings(
 			try {
 				await files.writeFile(resource, new TextEncoder().encode(source), { create: true, overwrite: false });
 			} catch (error) {
-				if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileExists)
-					throw error;
+				if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileExists) throw error;
 			}
 			current = new TextDecoder('utf-8', { fatal: true }).decode((await files.readFile(resource)).bytes);
 		}
-		if (!equals(previous, settingsValue(current)))
-			throw new Error('Legacy settings conflict with the profile settings.json; both sources were preserved');
+		if (!equals(previous, settingsValue(current))) throw new Error('Legacy settings conflict with the profile settings.json; both sources were preserved');
 		await new Promise<void>((resolve, reject) => {
 			const transaction = database.transaction('resources', 'readwrite');
 			const store = transaction.objectStore('resources');
@@ -89,8 +78,7 @@ export async function migrateLegacyBrowserSettings(
 			};
 			transaction.oncomplete = () => resolve();
 			transaction.onerror = () => reject(transaction.error);
-			transaction.onabort = () =>
-				reject(transaction.error ?? new Error('Legacy settings changed during migration'));
+			transaction.onabort = () => reject(transaction.error ?? new Error('Legacy settings changed during migration'));
 		});
 	} finally {
 		database.close();

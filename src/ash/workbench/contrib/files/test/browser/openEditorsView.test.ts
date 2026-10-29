@@ -80,14 +80,11 @@ test('Open Editors follows editor groups, dirty state, activation, and close', a
 	services.registerInstance(IAccessibleViewService, accessibility);
 	using decorationChanges = new Emitter<readonly URI[]>();
 	let decoration: IDecorationData | undefined;
-	using decorationProvider = services
-		.get(IDecorationsService)
-		.registerDecorationsProvider({
-			label: 'Test',
-			onDidChange: decorationChanges.event,
-			provideDecorations: resource =>
-				resource.toString() === first.input.resource.toString() ? decoration : undefined,
-		});
+	using decorationProvider = services.get(IDecorationsService).registerDecorationsProvider({
+		label: 'Test',
+		onDidChange: decorationChanges.event,
+		provideDecorations: resource => (resource.toString() === first.input.resource.toString() ? decoration : undefined),
+	});
 
 	try {
 		using view = services.createInstance(OpenEditorsView, browser.window.document.body, {
@@ -115,9 +112,7 @@ test('Open Editors follows editor groups, dirty state, activation, and close', a
 			['Group 1', 'first.tsUnsaved changes', 'Group 2', 'second.ts'],
 		);
 		assert.match(view.getAccessibleContent(), /first\.ts, Unsaved changes/);
-		const firstRow = [...view.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row =>
-			row.textContent?.includes('first.ts'),
-		);
+		const firstRow = [...view.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => row.textContent?.includes('first.ts'));
 		assert.ok(firstRow);
 		firstRow.click();
 		assert.equal(activated, 'first');
@@ -186,9 +181,7 @@ test('Dirty file activity follows working copy registration and dirty state', ()
 	assert.equal(activeBadge?.number, 2);
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
-		setNlsResolver((bundle, key, fallback, parameters) =>
-			formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-		);
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		assert.equal(activeBadge?.getDescription(), '2 unsaved files');
 		using translated = new DirtyFilesIndicator(activity, workingCopies);
 		assert.equal(activeBadge?.getDescription(), '2 个未保存的文件');
@@ -237,7 +230,6 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
 		KeyboardEvent: browser.window.KeyboardEvent,
 		navigator: browser.window.navigator,
 	};
-	for (const [name, value] of Object.entries(globals))
-		Object.defineProperty(globalThis, name, { configurable: true, value });
+	for (const [name, value] of Object.entries(globals)) Object.defineProperty(globalThis, name, { configurable: true, value });
 	return Object.keys(globals);
 }

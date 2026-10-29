@@ -1,17 +1,5 @@
-import type {
-	DocumentNodeId,
-	DocumentAttributeValue,
-	DocumentAttributes,
-	DocumentMark,
-	DocumentNode,
-} from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
-export type {
-	DocumentNodeId,
-	DocumentAttributeValue,
-	DocumentAttributes,
-	DocumentMark,
-	DocumentNode,
-} from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
+import type { DocumentNodeId, DocumentAttributeValue, DocumentAttributes, DocumentMark, DocumentNode } from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
+export type { DocumentNodeId, DocumentAttributeValue, DocumentAttributes, DocumentMark, DocumentNode } from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
 
 export interface DocumentNodeOptions {
 	readonly id: DocumentNodeId;
@@ -37,7 +25,10 @@ export function createDocumentNode(options: DocumentNodeOptions): DocumentNode {
 	const content = Object.freeze([...(options.content ?? [])]);
 	const marks = Object.freeze(
 		(options.marks ?? []).map(mark =>
-			Object.freeze({ type: mark.type, attrs: Object.freeze({ ...(mark.attrs ?? {}) }) }),
+			Object.freeze({
+				type: mark.type,
+				attrs: Object.freeze({ ...(mark.attrs ?? {}) }),
+			}),
 		),
 	);
 	const node: DocumentNode = {
@@ -69,11 +60,7 @@ export function createTextNode(id: DocumentNodeId, text: string, marks: readonly
 }
 
 /** Creates the root node for one structured document. */
-export function createDocumentRoot(
-	id: DocumentNodeId,
-	content: readonly DocumentNode[] = [],
-	type = 'doc',
-): DocumentNode {
+export function createDocumentRoot(id: DocumentNodeId, content: readonly DocumentNode[] = [], type = 'doc'): DocumentNode {
 	return createDocumentNode({ id, type, content });
 }
 
@@ -125,12 +112,7 @@ export function removeDocumentNode(root: DocumentNode, id: DocumentNodeId): Remo
 }
 
 /** Inserts one node at an index in an existing parent. */
-export function insertDocumentNode(
-	root: DocumentNode,
-	parentId: DocumentNodeId,
-	index: number,
-	child: DocumentNode,
-): DocumentNode {
+export function insertDocumentNode(root: DocumentNode, parentId: DocumentNodeId, index: number, child: DocumentNode): DocumentNode {
 	const parent = findDocumentNode(root, parentId)?.node;
 	if (!parent) throw new RangeError(`Document parent '${parentId}' does not exist`);
 	if (!Number.isSafeInteger(index) || index < 0 || index > parent.content.length) {
@@ -153,11 +135,7 @@ function collectIds(node: DocumentNode, ids: Set<DocumentNodeId>): void {
 	for (const child of node.content) collectIds(child, ids);
 }
 
-function replaceDocumentNodeIfPresent(
-	root: DocumentNode,
-	id: DocumentNodeId,
-	replacement: DocumentNode,
-): DocumentNode | undefined {
+function replaceDocumentNodeIfPresent(root: DocumentNode, id: DocumentNodeId, replacement: DocumentNode): DocumentNode | undefined {
 	if (root.id === id) return replacement;
 	for (let index = 0; index < root.content.length; index += 1) {
 		const child = root.content[index];
@@ -176,7 +154,12 @@ function removeFromChildren(parent: DocumentNode, id: DocumentNodeId): RemovedDo
 		if (child.id === id) {
 			const content = parent.content.slice();
 			content.splice(index, 1);
-			return { document: recreateNode(parent, content), removed: child, parentId: parent.id, index };
+			return {
+				document: recreateNode(parent, content),
+				removed: child,
+				parentId: parent.id,
+				index,
+			};
 		}
 		const nested = removeFromChildren(child, id);
 		if (!nested) continue;
@@ -192,11 +175,7 @@ function removeFromChildren(parent: DocumentNode, id: DocumentNodeId): RemovedDo
 	return undefined;
 }
 
-function recreateNode(
-	node: DocumentNode,
-	content: readonly DocumentNode[],
-	attrs: DocumentAttributes = node.attrs,
-): DocumentNode {
+function recreateNode(node: DocumentNode, content: readonly DocumentNode[], attrs: DocumentAttributes = node.attrs): DocumentNode {
 	return createDocumentNode({
 		id: node.id,
 		type: node.type,
@@ -215,11 +194,5 @@ function assertNodeIdentity(id: string): void {
 
 /** A section boundary changes page intent, not the linear order used by text selections. */
 export function getDocumentBodyContent(document: DocumentNode): readonly DocumentNode[] {
-	return document.content.flatMap(node =>
-		node.type === 'documentSection'
-			? node.content
-			: node.type === 'reviewComment' || node.type === 'reviewChange'
-				? []
-				: [node],
-	);
+	return document.content.flatMap(node => (node.type === 'documentSection' ? node.content : node.type === 'reviewComment' || node.type === 'reviewChange' ? [] : [node]));
 }

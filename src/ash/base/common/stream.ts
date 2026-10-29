@@ -45,10 +45,7 @@ export interface WriteableStreamOptions {
 }
 
 /** A paused stream owns its queued chunks until a consumer starts or destroys it. */
-export function newWriteableStream<T>(
-	reducer: IReducer<T> | null,
-	options?: WriteableStreamOptions,
-): WriteableStream<T> {
+export function newWriteableStream<T>(reducer: IReducer<T> | null, options?: WriteableStreamOptions): WriteableStream<T> {
 	const listeners = new Map<string, Set<Function>>();
 	const buffered: T[] = [];
 	const errors: Error[] = [];
@@ -86,14 +83,7 @@ export function newWriteableStream<T>(
 			while (!paused && !destroyed && errors.length && listeners.get('error')?.size) {
 				emit('error', errors.shift());
 			}
-			if (
-				!paused &&
-				!destroyed &&
-				ending &&
-				buffered.length === 0 &&
-				errors.length === 0 &&
-				listeners.get('end')?.size
-			) {
+			if (!paused && !destroyed && ending && buffered.length === 0 && errors.length === 0 && listeners.get('end')?.size) {
 				emit('end');
 				stream.destroy();
 			}
@@ -165,11 +155,7 @@ export function newWriteableStream<T>(
 }
 
 /** Registers terminal listeners before data can switch the stream into flowing mode. */
-export function listenStream<T>(
-	stream: ReadableStreamEvents<T>,
-	listener: IStreamListener<T>,
-	token: CancellationToken = CancellationToken.None,
-): void {
+export function listenStream<T>(stream: ReadableStreamEvents<T>, listener: IStreamListener<T>, token: CancellationToken = CancellationToken.None): void {
 	const lifetime = new DisposableStore();
 	const stop = (): void => lifetime.dispose();
 	const onError = (error: Error): void => {
@@ -227,11 +213,7 @@ export function consumeStream<T, R>(stream: ReadableStreamEvents<T>, reducer?: I
 }
 
 /** Keeps transformation buffering bounded and propagates consumer destruction to the source. */
-export function transform<T, R>(
-	source: ReadableStreamEvents<T>,
-	transformer: ITransformer<T, R>,
-	reducer: IReducer<R>,
-): ReadableStream<R> {
+export function transform<T, R>(source: ReadableStreamEvents<T>, transformer: ITransformer<T, R>, reducer: IReducer<R>): ReadableStream<R> {
 	const target = newWriteableStream(reducer, { highWaterMark: 1 });
 	const cancellation = new CancellationTokenSource();
 	const originalDestroy = target.destroy;

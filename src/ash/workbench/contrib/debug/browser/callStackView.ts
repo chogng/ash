@@ -88,8 +88,7 @@ export class CallStackView extends ViewPane {
 			void loading.then(finish, finish);
 			const inspection = await loading;
 			if (!this.isCurrentInspection(session, generation)) return;
-			if (inspection.threadId === undefined)
-				throw new Error(localize('debug.noThreads', 'The Debug Adapter did not report any stopped threads'));
+			if (inspection.threadId === undefined) throw new Error(localize('debug.noThreads', 'The Debug Adapter did not report any stopped threads'));
 			session.selectThread(inspection.threadId);
 			this.threads = inspection.threads;
 			this.frames = inspection.frames;
@@ -99,12 +98,7 @@ export class CallStackView extends ViewPane {
 		if (this.isCurrentInspection(session, generation)) this.render();
 	}
 	private isCurrentInspection(session: IDebugSession, generation: number): boolean {
-		return (
-			!this.isDisposed &&
-			generation === this.refreshGeneration &&
-			this.debug.session === session &&
-			session.state === 'stopped'
-		);
+		return !this.isDisposed && generation === this.refreshGeneration && this.debug.session === session && session.state === 'stopped';
 	}
 
 	private activateFrame(event: Event): void {
@@ -127,9 +121,7 @@ export class CallStackView extends ViewPane {
 	private render(): void {
 		const session = this.debug.session;
 		const stopped = session?.state === 'stopped';
-		this.threadsElement.replaceChildren(
-			...this.threads.map(thread => option(this.element.ownerDocument, String(thread.id), thread.name)),
-		);
+		this.threadsElement.replaceChildren(...this.threads.map(thread => option(this.element.ownerDocument, String(thread.id), thread.name)));
 		const focusedThread = this.debug.getViewModel().focusedThread;
 		if (focusedThread) this.threadsElement.value = String(focusedThread.id);
 		this.threadsElement.hidden = this.threads.length < 2;
@@ -155,11 +147,7 @@ export class CallStackView extends ViewPane {
 				tooltip: instructionLabel,
 				icon: Lxicon.add,
 				enabled: Boolean(stopped && session.capabilities.supportsInstructionBreakpoints),
-				run: () =>
-					this.commands.executeCommand(
-						ADD_INSTRUCTION_BREAKPOINT_ID,
-						this.debug.getViewModel().focusedStackFrame?.instructionPointerReference ?? '',
-					),
+				run: () => this.commands.executeCommand(ADD_INSTRUCTION_BREAKPOINT_ID, this.debug.getViewModel().focusedStackFrame?.instructionPointerReference ?? ''),
 			},
 			{
 				id: 'debug.action.openDisassemblyView',
@@ -183,15 +171,7 @@ function option(document: Document, value: string, label: string): HTMLOptionEle
 	element.textContent = label;
 	return element;
 }
-function itemButton(
-	owner: DisposableStore,
-	document: Document,
-	label: string,
-	className: string,
-	dataName: string,
-	index: number,
-	selected = false,
-): HTMLLIElement {
+function itemButton(owner: DisposableStore, document: Document, label: string, className: string, dataName: string, index: number, selected = false): HTMLLIElement {
 	const item = h(document, 'li');
 	const action = h(document, 'button');
 	action.type = 'button';
@@ -204,8 +184,7 @@ function itemButton(
 	return item;
 }
 function indexFromEvent(event: Event, selector: string, dataName: string, document: Document): number | undefined {
-	const target =
-		event.target instanceof document.defaultView!.Element ? event.target.closest<HTMLElement>(selector) : null;
+	const target = event.target instanceof document.defaultView!.Element ? event.target.closest<HTMLElement>(selector) : null;
 	const raw = target?.dataset[dataName];
 	if (raw === undefined) return undefined;
 	const index = Number(raw);

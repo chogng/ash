@@ -7,11 +7,7 @@ import { Position } from '../../../../common/core/position.js';
 import { type View } from '../../../view.js';
 import { RichScreenReaderContent } from './screenReaderContentRich.js';
 import { SimpleScreenReaderContent } from './screenReaderContentSimple.js';
-import {
-	type IScreenReaderContent,
-	type ScreenReaderContentLayout,
-	type ScreenReaderContentState,
-} from './screenReaderUtils.js';
+import { type IScreenReaderContent, type ScreenReaderContentLayout, type ScreenReaderContentState } from './screenReaderUtils.js';
 import { type SemanticTokenSource } from '../../../viewParts/viewLines/viewLine.js';
 import { type IEditorAriaOptions } from '../../../editorBrowser.js';
 import { type RenderingContext, type RestrictedRenderingContext } from '../../../view/renderingContext.js';
@@ -73,10 +69,7 @@ export class ScreenReaderSupport extends Disposable {
 	}
 
 	private isEnabled(): boolean {
-		return (
-			this.options.context.configuration.options.get(EditorOption.accessibilitySupport) ===
-			AccessibilitySupport.Enabled
-		);
+		return this.options.context.configuration.options.get(EditorOption.accessibilitySupport) === AccessibilitySupport.Enabled;
 	}
 
 	onWillCut(): void {
@@ -146,12 +139,7 @@ export class ScreenReaderSupport extends Disposable {
 	private synchronize(): void {
 		const content = this.content.value;
 		if (!content) return;
-		if (
-			this.isDisposed ||
-			!this.isEnabled() ||
-			!this.focused ||
-			this.options.viewController.compositionController.composing
-		) {
+		if (this.isDisposed || !this.isEnabled() || !this.focused || this.options.viewController.compositionController.composing) {
 			content.clear();
 			this.resetNativeScreenReaderLayout();
 			return;
@@ -163,13 +151,7 @@ export class ScreenReaderSupport extends Disposable {
 		const content = this.content.value;
 		if (!content) return;
 		const state = content.getState();
-		if (
-			!state ||
-			this.isDisposed ||
-			!this.isEnabled() ||
-			!this.focused ||
-			this.options.viewController.compositionController.composing
-		) {
+		if (!state || this.isDisposed || !this.isEnabled() || !this.focused || this.options.viewController.compositionController.composing) {
 			this.resetNativeScreenReaderLayout();
 			return;
 		}

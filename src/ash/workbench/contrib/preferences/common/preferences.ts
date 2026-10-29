@@ -8,8 +8,7 @@ export const OpenKeyboardShortcutsCommandId = 'workbench.action.openKeyboardShor
 export const ChangeKeyboardLayoutCommandId = 'workbench.action.changeKeyboardLayout';
 export const InspectKeyMappingsCommandId = 'workbench.action.inspectKeyMappings';
 export const InspectKeyMappingsJsonCommandId = 'workbench.action.inspectKeyMappingsJSON';
-export const ToggleKeyboardShortcutsTroubleshootingCommandId =
-	'workbench.action.toggleKeyboardShortcutsTroubleshooting';
+export const ToggleKeyboardShortcutsTroubleshootingCommandId = 'workbench.action.toggleKeyboardShortcutsTroubleshooting';
 
 export const KEYBINDINGS_EDITOR_COMMAND_RECORD_SEARCH_KEYS = 'keybindings.editor.recordSearchKeys';
 export const KEYBINDINGS_EDITOR_COMMAND_SORTBY_PRECEDENCE = 'keybindings.editor.toggleSortByPrecedence';

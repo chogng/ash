@@ -16,11 +16,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import './media/terminal.css';
 
 /** Reads execution identity from the instance; the hover never queries or changes a Shell. */
-function getShellProcessTooltip(
-	instance: ITerminalInstance,
-	showDetailed: boolean,
-	environmentVariableInfo?: IEnvironmentVariableInfo,
-): string {
+function getShellProcessTooltip(instance: ITerminalInstance, showDetailed: boolean, environmentVariableInfo?: IEnvironmentVariableInfo): string {
 	const lines = [localize('terminal.tooltip.profile', 'Profile: {0}', instance.profile.title)];
 	if (instance.processId > 0) {
 		lines.push(localize('terminal.tooltip.pid', 'Process ID (PID): {0}', instance.processId));
@@ -35,12 +31,7 @@ function getShellProcessTooltip(
 	}
 	if (executable) {
 		const processArgs = instance.injectedArgs ?? shell?.args;
-		const args =
-			typeof processArgs === 'string'
-				? processArgs
-				: processArgs
-						?.map(argument => (/\s|^$/.test(argument) ? JSON.stringify(argument) : argument))
-						.join(' ');
+		const args = typeof processArgs === 'string' ? processArgs : processArgs?.map(argument => (/\s|^$/.test(argument) ? JSON.stringify(argument) : argument)).join(' ');
 		if (!showDetailed && executable.length > 32) {
 			// Execution hosts can use Windows paths even when this window runs on macOS.
 			const separator = Math.max(executable.lastIndexOf('/'), executable.lastIndexOf('\\'));
@@ -48,16 +39,12 @@ function getShellProcessTooltip(
 				executable = `…${executable.slice(separator)}`;
 			}
 		}
-		lines.push(
-			localize('terminal.tooltip.commandLine', 'Command line: {0}', args ? `${executable} ${args}` : executable),
-		);
+		lines.push(localize('terminal.tooltip.commandLine', 'Command line: {0}', args ? `${executable} ${args}` : executable));
 	}
 	if (showDetailed) {
 		const cwd = instance.cwd ?? instance.initialCwd;
-		if (cwd && shell?.customPtyImplementation)
-			lines.push(localize('terminal.tooltip.cwd', 'Working directory: {0}', cwd));
-		if (instance.exitCode !== undefined)
-			lines.push(localize('terminal.tooltip.exitCode', 'Exit code: {0}', instance.exitCode));
+		if (cwd && shell?.customPtyImplementation) lines.push(localize('terminal.tooltip.cwd', 'Working directory: {0}', cwd));
+		if (instance.exitCode !== undefined) lines.push(localize('terminal.tooltip.exitCode', 'Exit code: {0}', instance.exitCode));
 		if (!instance.shellLaunchConfig?.customPtyImplementation) {
 			const environment = environmentVariableInfo?.getStatus();
 			if (environment) lines.push(environment.tooltip);
@@ -98,8 +85,7 @@ export class TerminalInstanceHover extends Disposable {
 		);
 		this._register(
 			storage.onDidChangeValue(event => {
-				if (event.scope !== StorageScope.APPLICATION || event.key !== TerminalStorageKeys.TabsShowDetailed)
-					return;
+				if (event.scope !== StorageScope.APPLICATION || event.key !== TerminalStorageKeys.TabsShowDetailed) return;
 				this.refresh();
 			}),
 		);
@@ -133,12 +119,9 @@ export class TerminalInstanceHover extends Disposable {
 
 	private refresh(): void {
 		const activeElement = this.target.ownerDocument.activeElement;
-		const focusedAction = this.content?.contains(activeElement)
-			? (activeElement as HTMLElement).dataset.terminalHoverAction
-			: undefined;
+		const focusedAction = this.content?.contains(activeElement) ? (activeElement as HTMLElement).dataset.terminalHoverAction : undefined;
 		this.hover.update(() => this.createContent());
-		if (focusedAction)
-			this.content?.querySelector<HTMLElement>(`[data-terminal-hover-action="${focusedAction}"]`)?.focus();
+		if (focusedAction) this.content?.querySelector<HTMLElement>(`[data-terminal-hover-action="${focusedAction}"]`)?.focus();
 	}
 
 	private createContent(): HTMLElement {
@@ -152,11 +135,7 @@ export class TerminalInstanceHover extends Disposable {
 		const details = this.storage.getBoolean(TerminalStorageKeys.TabsShowDetailed, StorageScope.APPLICATION, false);
 		const process = h(document, 'div');
 		process.className = 'ash-terminal-instance-hover-section';
-		process.textContent = getShellProcessTooltip(
-			this.instance,
-			details,
-			new EnvironmentVariableInfoChangesActive(this.environment.collections),
-		).trim();
+		process.textContent = getShellProcessTooltip(this.instance, details, new EnvironmentVariableInfoChangesActive(this.environment.collections)).trim();
 		card.append(title, process);
 		const statuses = this.instance.statusList?.statuses ?? [];
 		for (const status of statuses) {
@@ -188,9 +167,7 @@ export class TerminalInstanceHover extends Disposable {
 		if (!this.instance.shellLaunchConfig?.customPtyImplementation && this.instance.resource) {
 			addAction('environment', localize('terminal.tooltip.environment', 'Show Environment Contributions'), () => {
 				this.hover.hide();
-				void this.commands
-					.executeCommand(TerminalCommandId.ShowEnvironmentContributions, this.instance.resource)
-					.catch(onUnexpectedError);
+				void this.commands.executeCommand(TerminalCommandId.ShowEnvironmentContributions, this.instance.resource).catch(onUnexpectedError);
 			});
 		}
 		for (const status of statuses) {
@@ -201,20 +178,9 @@ export class TerminalInstanceHover extends Disposable {
 				});
 			}
 		}
-		const toggle = addAction(
-			'details',
-			details
-				? localize('terminal.tooltip.hideDetails', 'Hide Details')
-				: localize('terminal.tooltip.showDetails', 'Show Details'),
-			() => {
-				this.storage.store(
-					TerminalStorageKeys.TabsShowDetailed,
-					!details,
-					StorageScope.APPLICATION,
-					StorageTarget.USER,
-				);
-			},
-		);
+		const toggle = addAction('details', details ? localize('terminal.tooltip.hideDetails', 'Hide Details') : localize('terminal.tooltip.showDetails', 'Show Details'), () => {
+			this.storage.store(TerminalStorageKeys.TabsShowDetailed, !details, StorageScope.APPLICATION, StorageTarget.USER);
+		});
 		toggle.setAttribute('aria-expanded', String(details));
 		card.append(actions);
 		return card;

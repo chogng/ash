@@ -23,20 +23,12 @@ import { ServiceCollection } from '../../../../../platform/instantiation/common/
 import { ILogService, type LogEntry } from '../../../../../platform/log/common/log.js';
 import { LogService } from '../../../../../platform/log/common/logServiceImpl.js';
 import { defaultExternalUriOpenerId, IOpenerService } from '../../../../../platform/opener/common/opener.js';
-import {
-	IQuickInputService,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { IPreferencesService, type IOpenSettingsOptions } from '../../../../services/preferences/common/preferences.js';
 import { externalUriOpenersConfigurationNode, externalUriOpenersSettingId } from '../../common/configuration.js';
-import {
-	ExternalUriOpenerService,
-	IExternalUriOpenerService,
-	type IExternalUriOpener,
-} from '../../common/externalUriOpenerService.js';
+import { ExternalUriOpenerService, IExternalUriOpenerService, type IExternalUriOpener } from '../../common/externalUriOpenerService.js';
 import '../../common/externalUriOpener.contribution.js';
 
 class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<T> {
@@ -130,10 +122,7 @@ class Fixture extends Disposable {
 				this.settings.push(options!);
 			},
 		});
-		this.services.registerInstance(
-			ILogService,
-			this._register(new LogService({ sinks: [{ log: entry => this.logs.push(entry) }] })),
-		);
+		this.services.registerInstance(ILogService, this._register(new LogService({ sinks: [{ log: entry => this.logs.push(entry) }] })));
 		const host = this._register(
 			WorkbenchContributionsRegistry.createHost(
 				this.services,
@@ -204,10 +193,7 @@ suite('External URI opener production routing', () => {
 		await fixture.opener.open(destination);
 		await fixture.opener.open(destination, { allowContributedOpeners: defaultExternalUriOpenerId });
 		await fixture.opener.open(destination, { allowContributedOpeners: true });
-		assert.deepEqual(
-			[fixture.hostOpened, fixture.contributedOpened],
-			[[destination.toString(), destination.toString()], [`viewer:${destination.toString()}`]],
-		);
+		assert.deepEqual([fixture.hostOpened, fixture.contributedOpened], [[destination.toString(), destination.toString()], [`viewer:${destination.toString()}`]]);
 	});
 
 	test('explicit IDs override configuration and bypass capability probes', async () => {
@@ -232,10 +218,7 @@ suite('External URI opener production routing', () => {
 			'example.test/docs': 'viewer',
 		});
 		await fixture.opener.open(destination, { allowContributedOpeners: true });
-		assert.deepEqual(
-			[fixture.probed, fixture.contributedOpened, fixture.hostOpened],
-			[[], [`viewer:${destination.toString()}`], [destination.toString()]],
-		);
+		assert.deepEqual([fixture.probed, fixture.contributedOpened, fixture.hostOpened], [[], [`viewer:${destination.toString()}`], [destination.toString()]]);
 	});
 
 	test('optional handlers stay discoverable without intercepting ordinary opening', async () => {
@@ -243,10 +226,7 @@ suite('External URI opener production routing', () => {
 		const option = fixture.handler('option', ExternalUriOpenerPriority.Option);
 		fixture.register(fixture.handler('disabled', ExternalUriOpenerPriority.None), option);
 		await fixture.opener.open(destination, { allowContributedOpeners: true });
-		assert.equal(
-			await fixture.external.getOpener(destination, { sourceUri: destination }, CancellationToken.None),
-			option,
-		);
+		assert.equal(await fixture.external.getOpener(destination, { sourceUri: destination }, CancellationToken.None), option);
 		assert.deepEqual([fixture.contributedOpened, fixture.hostOpened], [[], [destination.toString()]]);
 	});
 
@@ -275,11 +255,7 @@ suite('External URI opener production routing', () => {
 			}),
 		});
 		await fixture.opener.open(destination, { allowContributedOpeners: true });
-		assert.deepEqual(calls, [
-			`probe:${destination.toString()}`,
-			`open:https://proxy.test/docs:${destination.toString()}`,
-			'released',
-		]);
+		assert.deepEqual(calls, [`probe:${destination.toString()}`, `open:https://proxy.test/docs:${destination.toString()}`, 'released']);
 		assert.equal(fixture.picker, undefined);
 	});
 
@@ -300,10 +276,7 @@ suite('External URI opener production routing', () => {
 			fixture.handler('viewer'),
 		);
 		await fixture.opener.open(destination, { allowContributedOpeners: true });
-		assert.deepEqual(
-			[fixture.logs.map(entry => (entry.error as Error).message), fixture.contributedOpened],
-			[['enumeration failed', 'probe failed'], [`viewer:${destination.toString()}`]],
-		);
+		assert.deepEqual([fixture.logs.map(entry => (entry.error as Error).message), fixture.contributedOpened], [['enumeration failed', 'probe failed'], [`viewer:${destination.toString()}`]]);
 	});
 
 	for (const [choice, expected] of [
@@ -328,9 +301,7 @@ suite('External URI opener production routing', () => {
 				[
 					choice === 0 ? [`first:${destination.toString()}`] : [],
 					choice === 2 ? [destination.toString()] : [],
-					choice === 3
-						? [{ jsonEditor: true, revealSetting: { key: externalUriOpenersSettingId, edit: true } }]
-						: [],
+					choice === 3 ? [{ jsonEditor: true, revealSetting: { key: externalUriOpenersSettingId, edit: true } }] : [],
 				],
 			);
 			assert.equal(picker.isDisposed, true);
@@ -346,11 +317,7 @@ suite('External URI opener production routing', () => {
 		token.cancel();
 		assert.equal(await opening, true);
 		fixture.picker = undefined;
-		const secondOpening = fixture.external.openExternal(
-			destination.toString(),
-			{ sourceUri: destination },
-			CancellationToken.None,
-		);
+		const secondOpening = fixture.external.openExternal(destination.toString(), { sourceUri: destination }, CancellationToken.None);
 		await fixture.waitForPicker();
 		fixture.external.dispose();
 		assert.equal(await secondOpening, true);
@@ -368,31 +335,13 @@ suite('External URI opener production routing', () => {
 			label: 'Unused',
 			openExternalUri: async () => true,
 		});
-		assert.equal(
-			await fixture.external.getOpener(destination, { sourceUri: destination }, CancellationToken.Cancelled),
-			undefined,
-		);
-		assert.equal(
-			await fixture.external.openExternal(
-				'mailto:user@example.test',
-				{ sourceUri: URI.parse('mailto:user@example.test') },
-				CancellationToken.None,
-			),
-			false,
-		);
+		assert.equal(await fixture.external.getOpener(destination, { sourceUri: destination }, CancellationToken.Cancelled), undefined);
+		assert.equal(await fixture.external.openExternal('mailto:user@example.test', { sourceUri: URI.parse('mailto:user@example.test') }, CancellationToken.None), false);
 	});
 
 	test('invalid settings are rejected and the description is translated', async () => {
 		using fixture = new Fixture();
-		for (const value of [
-			null,
-			[],
-			{ '*': 1 },
-			{ '': 'viewer' },
-			{ '*': '' },
-			{ 'https://': 'viewer' },
-			{ 'example.test:bad': 'viewer' },
-		]) {
+		for (const value of [null, [], { '*': 1 }, { '': 'viewer' }, { '*': '' }, { 'https://': 'viewer' }, { 'example.test:bad': 'viewer' }]) {
 			await assert.rejects(fixture.configuration.updateValue(externalUriOpenersSettingId, value), TypeError);
 		}
 		const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;

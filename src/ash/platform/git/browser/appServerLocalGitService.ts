@@ -14,20 +14,14 @@ export class AppServerLocalGitService implements ILocalGitService {
 
 	constructor(private readonly connection: AppServerProtocolClient) {}
 
-	async readRepositoryContexts(
-		directory: { readonly sessionId: string; readonly path: string },
-		token?: CancellationToken,
-	): Promise<readonly GitRepositoryContext[]> {
+	async readRepositoryContexts(directory: { readonly sessionId: string; readonly path: string }, token?: CancellationToken): Promise<readonly GitRepositoryContext[]> {
 		const generation = this.connection.generation;
 		using cancellation = new CancellationTokenSource(token);
 		using subscription = this.connection.onStateChange(state => {
 			if (state !== 'ready') cancellation.cancel();
 		});
 		if (cancellation.token.isCancellationRequested || this.connection.state !== 'ready') throw canceled();
-		const result = await raceCancellationError(
-			appServerRequest(this.connection, 'git/repositoryContexts', { sessionDirectory: directory }),
-			cancellation.token,
-		);
+		const result = await raceCancellationError(appServerRequest(this.connection, 'git/repositoryContexts', { sessionDirectory: directory }), cancellation.token);
 		if (cancellation.token.isCancellationRequested || generation !== this.connection.generation) throw canceled();
 		return result.repositories.map(repository => ({
 			id: repository.id,
@@ -38,9 +32,7 @@ export class AppServerLocalGitService implements ILocalGitService {
 				type: repository.head.type,
 				name: 'name' in repository.head ? repository.head.name : '',
 				...('objectId' in repository.head ? { objectId: repository.head.objectId } : {}),
-				...('upstream' in repository.head && repository.head.upstream
-					? { upstream: { ...repository.head.upstream } }
-					: {}),
+				...('upstream' in repository.head && repository.head.upstream ? { upstream: { ...repository.head.upstream } } : {}),
 			},
 			remotes: repository.remotes.map(remote => ({
 				name: remote.name,
@@ -54,7 +46,12 @@ export class AppServerLocalGitService implements ILocalGitService {
 		try {
 			await this.connection.request(
 				APP_SERVER_METHODS['git/cloneTo'],
-				{ operationId, url: cloneUrl, targetPath, reference: ref ?? null },
+				{
+					operationId,
+					url: cloneUrl,
+					targetPath,
+					reference: ref ?? null,
+				},
 				{ timeoutMs: 20 * 60_000 },
 			);
 		} catch (error) {

@@ -1,7 +1,4 @@
-import {
-	createReplaceDocumentMatchesCommand,
-	findDocumentText,
-} from '../../../../../extensions/academy/common/commands/documentFindCommands.js';
+import { createReplaceDocumentMatchesCommand, findDocumentText } from '../../../../../extensions/academy/common/commands/documentFindCommands.js';
 import { createDefineParagraphStyleCommand } from '../../../../../extensions/academy/common/commands/documentParagraphCommands.js';
 import { getDocumentParagraphStyles } from '../../../../../extensions/academy/common/model/documentParagraph.js';
 import { DocumentTextModel } from '../../../../../extensions/academy/common/model/documentTextModel.js';
@@ -11,15 +8,9 @@ import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { TextModel } from '../../common/model/textModel.js';
 import type { DocumentNode } from '../../../../../extensions/academy/common/model/document.js';
-import {
-	createDefaultDocumentSchema,
-	type DocumentSchema,
-} from '../../../../../extensions/academy/common/model/documentSchema.js';
+import { createDefaultDocumentSchema, type DocumentSchema } from '../../../../../extensions/academy/common/model/documentSchema.js';
 import { DocumentTransaction } from '../../../../../extensions/academy/common/model/documentTransaction.js';
-import {
-	textSelection,
-	type DocumentSelection,
-} from '../../../../../extensions/academy/common/core/documentSelection.js';
+import { textSelection, type DocumentSelection } from '../../../../../extensions/academy/common/core/documentSelection.js';
 import type { DocumentCollaborationConnection } from '../../../../../extensions/academy/common/services/documentCollaborationService.js';
 import type { DocumentCollaborationSnapshot } from '../../../../../extensions/academy/common/services/documentCollaborationService.js';
 import type { DocumentCollaborationPresence } from '../../../../../extensions/academy/common/services/documentCollaborationService.js';
@@ -36,11 +27,7 @@ test('Academy structural replay conflict retains local content and stops resubmi
 	using controller = new DocumentCollaborationController(model, connection);
 	const states: string[] = [];
 	using listener = controller.onDidChangeState(event => states.push(event.message ?? ''));
-	model.dispatch(
-		new DocumentTransaction()
-			.deleteNode('text-1')
-			.insertNode('paragraph-1', 0, schema.createText('Hxllo', { id: 'text-1' })),
-	);
+	model.dispatch(new DocumentTransaction().deleteNode('text-1').insertNode('paragraph-1', 0, schema.createText('Hxllo', { id: 'text-1' })));
 	connection.conflictWithRemote(0, new DocumentTransaction().replaceText('text-1', 0, 0, 'Peer '), 1);
 	await flushMicrotasks();
 	assert.equal(firstText(model.document), 'Hxllo');
@@ -257,11 +244,7 @@ class FakeDocumentCollaborationConnection extends Disposable implements Document
 		this.initialSnapshot = Object.freeze({ roomId: this.roomId, version: 0, document });
 	}
 
-	submit(
-		envelope: DocumentCollaborationEnvelope,
-		document: DocumentNode,
-		_signal: AbortSignal,
-	): Promise<DocumentCollaborationSubmitOutcome> {
+	submit(envelope: DocumentCollaborationEnvelope, document: DocumentNode, _signal: AbortSignal): Promise<DocumentCollaborationSubmitOutcome> {
 		const submission = new Submission(envelope, document);
 		this.submissions.push(submission);
 		return submission.promise;
@@ -373,10 +356,7 @@ test('Academy replace-all collaboration rebases atomic marked-run edits and reta
 	const document = schema.createDocument([
 		schema.createNode('paragraph', {
 			id: 'paragraph-1',
-			content: [
-				schema.createText('Hel', { id: 'text-1', marks: [{ type: 'strong', attrs: {} }] }),
-				schema.createText('lo Hello', { id: 'text-2' }),
-			],
+			content: [schema.createText('Hel', { id: 'text-1', marks: [{ type: 'strong', attrs: {} }] }), schema.createText('lo Hello', { id: 'text-2' })],
 		}),
 	]);
 	using model = DocumentTextModel.create(schema, document);

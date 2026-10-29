@@ -44,10 +44,7 @@ export interface ThemeColorReferences {
 }
 
 /** Describe registry defaults without resolving colors or inferring links from equal values. */
-export function getThemeColorReferences(
-	theme: IColorTheme,
-	entry: ColorContribution,
-): ThemeColorReferences | undefined {
+export function getThemeColorReferences(theme: IColorTheme, entry: ColorContribution): ThemeColorReferences | undefined {
 	// Included themes also define overrides; their values must not be presented as default links.
 	if (theme.defines(entry.id)) return undefined;
 	const value = entry.defaults[theme.colorScheme];
@@ -74,9 +71,7 @@ export class ThemePreview extends Disposable {
 	private sentSource: string | undefined;
 	private sentConfiguration: string | undefined;
 	private port: MessagePort | undefined;
-	private readonly pendingUpdate = this._register(
-		new MutableDisposable<ReturnType<typeof scheduleAtNextAnimationFrame>>(),
-	);
+	private readonly pendingUpdate = this._register(new MutableDisposable<ReturnType<typeof scheduleAtNextAnimationFrame>>());
 	private readonly connection = this._register(new MutableDisposable<DisposableStore>());
 	private content = '';
 	private readonly colorsChanged = this._register(new Emitter<void>());
@@ -93,9 +88,7 @@ export class ThemePreview extends Disposable {
 	) {
 		super();
 		// Renderer chunks can live in nested assets directories; the page is rooted at the bundle.
-		const root = import.meta.env.DEV
-			? new URL(import.meta.url).origin + '/'
-			: import.meta.url.slice(0, import.meta.url.lastIndexOf('/assets/') + 1);
+		const root = import.meta.env.DEV ? new URL(import.meta.url).origin + '/' : import.meta.url.slice(0, import.meta.url.lastIndexOf('/assets/') + 1);
 		let token: string;
 		const tabsHost = h(container.ownerDocument, 'div', { className: 'ash-theme-editor-preview-tabs' });
 		container.append(tabsHost);
@@ -180,11 +173,7 @@ export class ThemePreview extends Disposable {
 			addDisposableListener(getWindow(container), 'message', (event: MessageEvent<unknown>) => {
 				// Electron serializes file document senders as an opaque origin even
 				// when URL.origin reports file://. The source and token still bind this frame.
-				if (
-					event.source !== this.element.contentWindow ||
-					(localFile ? event.origin !== 'null' && event.origin !== 'file://' : event.origin !== origin)
-				)
-					return;
+				if (event.source !== this.element.contentWindow || (localFile ? event.origin !== 'null' && event.origin !== 'file://' : event.origin !== origin)) return;
 				const data = event.data;
 				if (!data || typeof data !== 'object' || !('kind' in data)) return;
 				if (data.kind !== 'ash-theme-preview-ready' || !('token' in data) || data.token !== token) return;
@@ -205,19 +194,9 @@ export class ThemePreview extends Disposable {
 					addDisposableListener(channel.port1, 'message', (message: MessageEvent<unknown>) => {
 						const value = message.data;
 						if (!value || typeof value !== 'object' || !('kind' in value)) return;
-						if (
-							value.kind === 'ash-theme-preview-content' &&
-							'text' in value &&
-							typeof value.text === 'string' &&
-							value.text.length <= 1_048_576
-						) {
+						if (value.kind === 'ash-theme-preview-content' && 'text' in value && typeof value.text === 'string' && value.text.length <= 1_048_576) {
 							this.content = value.text;
-						} else if (
-							value.kind === 'ash-theme-preview-colors' &&
-							'colors' in value &&
-							Array.isArray(value.colors) &&
-							value.colors.length <= 5000
-						) {
+						} else if (value.kind === 'ash-theme-preview-colors' && 'colors' in value && Array.isArray(value.colors) && value.colors.length <= 5000) {
 							if (!('replace' in value) || typeof value.replace !== 'boolean') return;
 							const colors: PreviewColor[] = [];
 							for (const entry of value.colors) {
@@ -230,12 +209,7 @@ export class ThemePreview extends Disposable {
 									entry.description.length > 4096
 								)
 									return;
-								if (
-									entry.value !== null &&
-									(typeof entry.value !== 'string' ||
-										!/^#[\da-f]{6}(?:[\da-f]{2})?$/iu.test(entry.value))
-								)
-									return;
+								if (entry.value !== null && (typeof entry.value !== 'string' || !/^#[\da-f]{6}(?:[\da-f]{2})?$/iu.test(entry.value))) return;
 								const references = entry.references;
 								if (
 									references !== undefined &&
@@ -245,10 +219,7 @@ export class ThemePreview extends Disposable {
 										!Array.isArray(references.tokens) ||
 										references.tokens.length < 1 ||
 										references.tokens.length > 100 ||
-										references.tokens.some(
-											(id: unknown) =>
-												typeof id !== 'string' || !/^[a-zA-Z][a-zA-Z0-9.]*$/u.test(id),
-										))
+										references.tokens.some((id: unknown) => typeof id !== 'string' || !/^[a-zA-Z][a-zA-Z0-9.]*$/u.test(id)))
 								)
 									return;
 								colors.push({
@@ -258,28 +229,18 @@ export class ThemePreview extends Disposable {
 									references,
 								});
 							}
-							const merged = new Map(
-								value.replace ? [] : this.previewColors.map(entry => [entry.id, entry]),
-							);
+							const merged = new Map(value.replace ? [] : this.previewColors.map(entry => [entry.id, entry]));
 							for (const entry of colors) merged.set(entry.id, entry);
 							this.previewColors = [...merged.values()];
 							this.colorsChanged.fire();
-						} else if (
-							value.kind === 'ash-theme-preview-accessibility' &&
-							'help' in value &&
-							typeof value.help === 'boolean'
-						) {
+						} else if (value.kind === 'ash-theme-preview-accessibility' && 'help' in value && typeof value.help === 'boolean') {
 							onAccessibleView(value.help);
 						}
 					}),
 				);
 				channel.port1.start();
 				// A capability port handles the auxiliary host's different JavaScript realm.
-				this.element.contentWindow?.postMessage(
-					{ kind: 'ash-theme-preview-connect', token },
-					localFile || origin === 'null' ? '*' : origin,
-					[channel.port2],
-				);
+				this.element.contentWindow?.postMessage({ kind: 'ash-theme-preview-connect', token }, localFile || origin === 'null' ? '*' : origin, [channel.port2]);
 				this.sendTheme();
 			}),
 		);
@@ -323,11 +284,7 @@ export class ThemePreview extends Disposable {
 
 	private sendTheme(): void {
 		if (!this.source || !this.port) return;
-		const configuration = Object.fromEntries(
-			themePreviewConfigurationKeys
-				.map(key => [key, this.configuration.getValue(key)])
-				.filter(([, value]) => value !== undefined),
-		);
+		const configuration = Object.fromEntries(themePreviewConfigurationKeys.map(key => [key, this.configuration.getValue(key)]).filter(([, value]) => value !== undefined));
 		const serialized = JSON.stringify(configuration);
 		const themeChanged = this.source !== this.sentSource;
 		const configurationChanged = serialized !== this.sentConfiguration;

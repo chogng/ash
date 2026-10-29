@@ -16,12 +16,7 @@ import { RemoteRuntimeBootstrapMainService } from '../../src/ash/platform/remote
 import { RemoteRuntimeProvisioner } from '../../src/ash/platform/remote/electron-main/remoteRuntimeProvisioner.js';
 
 const { values } = parseArgs({
-	options: Object.fromEntries(
-		['package', 'binding', 'catalog-dir', 'ssh', 'host', 'root', 'report'].map(name => [
-			name,
-			{ type: 'string' as const },
-		]),
-	),
+	options: Object.fromEntries(['package', 'binding', 'catalog-dir', 'ssh', 'host', 'root', 'report'].map(name => [name, { type: 'string' as const }])),
 });
 for (const name of ['package', 'ssh', 'host', 'root', 'report']) assert(values[name], `--${name} is required`);
 assert(Boolean(values.binding) !== Boolean(values['catalog-dir']), 'select --binding or --catalog-dir');
@@ -34,8 +29,7 @@ const workspace = join(root, 'workspace');
 await mkdir(workspace);
 const metadata = JSON.parse(await readFile(join(packageRoot, 'ash-package.json'), 'utf8'));
 const catalogRoot = values['catalog-dir'] === undefined ? undefined : resolve(values['catalog-dir']);
-const release =
-	values.binding === undefined ? { protocol: metadata.protocol } : JSON.parse(await readFile(values.binding, 'utf8'));
+const release = values.binding === undefined ? { protocol: metadata.protocol } : JSON.parse(await readFile(values.binding, 'utf8'));
 assert.deepEqual(release.protocol, metadata.protocol);
 const environment = buildAppServerEnvironment(
 	process.env,
@@ -96,12 +90,7 @@ try {
 			if (reconnect) assert.equal(progress.length, count, 'reconnect must not provision or download');
 			else {
 				assert(progress.some(event => event.phase === 'complete' && event.disposition === 'installed'));
-				if (catalogRoot === undefined)
-					assert(
-						progress.some(
-							event => event.phase === 'downloadComplete' && event.disposition === 'downloaded',
-						),
-					);
+				if (catalogRoot === undefined) assert(progress.some(event => event.phase === 'downloadComplete' && event.disposition === 'downloaded'));
 			}
 			const child = bootstrap.processLauncher.launch();
 			const closed = new Promise<void>((resolve, reject) => {
@@ -159,10 +148,7 @@ try {
 					installed = selected.activeRuntime;
 					await rpc('fs/writeFile', { path: 'release-edit.txt', content: 'published-remote-edit-ok' });
 				}
-				assert.equal(
-					(await rpc('fs/readFile', { path: 'release-edit.txt' })).content,
-					'published-remote-edit-ok',
-				);
+				assert.equal((await rpc('fs/readFile', { path: 'release-edit.txt' })).content, 'published-remote-edit-ok');
 			} finally {
 				child.stdin.end();
 				const timer = setTimeout(() => child.kill('SIGTERM'), 10_000);

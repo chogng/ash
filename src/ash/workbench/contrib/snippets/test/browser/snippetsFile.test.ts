@@ -62,13 +62,7 @@ test('snippet files parse JSONC, multiline bodies and descriptions, scopes and a
 	assert.equal(Object.isFrozen(file.data[0].scopes), true);
 });
 
-for (const contents of [
-	'[]',
-	'{"Bad":{"body":4}}',
-	'{"Bad":{"body":"x","prefix":4}}',
-	'{"Bad":{"body":"x","scope":4}}',
-	'{"Bad":{"body":"x","isFileTemplate":"true"}}',
-]) {
+for (const contents of ['[]', '{"Bad":{"body":4}}', '{"Bad":{"body":"x","prefix":4}}', '{"Bad":{"body":"x","scope":4}}', '{"Bad":{"body":"x","isFileTemplate":"true"}}']) {
 	test(`snippet files reject invalid resource content: ${contents}`, () => {
 		assert.throws(() => new SnippetFile(resource(contents)), /Extension 'ash.demo' snippet file/);
 	});

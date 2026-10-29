@@ -1,26 +1,9 @@
-import {
-	moveDesignNetworkVertices,
-	removeDesignNetworkVertices,
-	splitDesignNetworkEdge,
-	toDesignVectorNetwork,
-	withDesignVectorNetwork,
-} from '../model/designVectorNetwork.js';
+import { moveDesignNetworkVertices, removeDesignNetworkVertices, splitDesignNetworkEdge, toDesignVectorNetwork, withDesignVectorNetwork } from '../model/designVectorNetwork.js';
 import { mergeDesignNetworkVertices, simplifyDesignNetwork } from '../model/designVectorTopology.js';
 import type { DesignModel } from '../model/designModel.js';
 import { flattenDesignShapes, type DesignEndpoint, type DesignPathNode, type DesignShape } from '../model/document.js';
-import {
-	designWidthLocation,
-	nearestDesignWidthLocation,
-	supportsDesignVariableWidth,
-} from '../model/designVariableWidth.js';
-import {
-	designPathContours,
-	designShapeContours,
-	splitDesignPathSegment,
-	withDesignPathContours,
-	type DesignPath,
-	type DesignPathContour,
-} from '../model/designVector.js';
+import { designWidthLocation, nearestDesignWidthLocation, supportsDesignVariableWidth } from '../model/designVariableWidth.js';
+import { designPathContours, designShapeContours, splitDesignPathSegment, withDesignPathContours, type DesignPath, type DesignPathContour } from '../model/designVector.js';
 
 /** Path topology edits commit once, preserving the layer identity and its component override boundary. */
 export class VectorCommands {
@@ -56,42 +39,26 @@ export class VectorCommands {
 		if (path.widthPoints?.length) {
 			// Figma's dynamic strokes are centered and remove arrow tips when a width profile is applied.
 			const clean = <T extends { readonly endpoint?: DesignEndpoint }>(node: T): T =>
-				node.endpoint?.includes('arrow') || node.endpoint === 'reverse-triangle'
-					? { ...node, endpoint: undefined }
-					: node;
+				node.endpoint?.includes('arrow') || node.endpoint === 'reverse-triangle' ? { ...node, endpoint: undefined } : node;
 			path = {
 				...path,
 				strokeAlignment: 'center',
 				nodes: path.nodes.map(clean),
-				...(path.subpaths
-					? { subpaths: path.subpaths.map(contour => ({ ...contour, nodes: contour.nodes.map(clean) })) }
-					: {}),
+				...(path.subpaths ? { subpaths: path.subpaths.map(contour => ({ ...contour, nodes: contour.nodes.map(clean) })) } : {}),
 				...(path.network ? { network: { ...path.network, vertices: path.network.vertices.map(clean) } } : {}),
 			};
 		}
-		const visit = (shape: DesignShape): DesignShape =>
-			shape.id === path.id
-				? path
-				: shape.kind === 'group' || shape.kind === 'frame'
-					? { ...shape, children: shape.children.map(visit) }
-					: shape;
+		const visit = (shape: DesignShape): DesignShape => (shape.id === path.id ? path : shape.kind === 'group' || shape.kind === 'frame' ? { ...shape, children: shape.children.map(visit) } : shape);
 		this.model.applyEdit(this.model.value.shapes.map(visit));
 	}
-	public setEndpoints(
-		path: DesignPath,
-		endpoints: readonly { contour: number; index: number }[],
-		style: DesignEndpoint | undefined,
-	): void {
-		const selected = (ci: number, index: number) =>
-			endpoints.some(endpoint => endpoint.contour === ci && endpoint.index === index);
+	public setEndpoints(path: DesignPath, endpoints: readonly { contour: number; index: number }[], style: DesignEndpoint | undefined): void {
+		const selected = (ci: number, index: number) => endpoints.some(endpoint => endpoint.contour === ci && endpoint.index === index);
 		const edit = style === undefined ? path : { ...path, widthPoints: undefined };
 		if (edit.network) {
 			this.update(
 				withDesignVectorNetwork(edit, {
 					...edit.network,
-					vertices: edit.network.vertices.map((node, index) =>
-						selected(0, index) ? { ...node, endpoint: style } : node,
-					),
+					vertices: edit.network.vertices.map((node, index) => (selected(0, index) ? { ...node, endpoint: style } : node)),
 				}),
 			);
 		} else {
@@ -100,9 +67,7 @@ export class VectorCommands {
 					edit,
 					designPathContours(edit).map((contour, ci) => ({
 						...contour,
-						nodes: contour.nodes.map((node, index) =>
-							selected(ci, index) ? { ...node, endpoint: style } : node,
-						),
+						nodes: contour.nodes.map((node, index) => (selected(ci, index) ? { ...node, endpoint: style } : node)),
 					})),
 				),
 			);
@@ -120,11 +85,7 @@ export class VectorCommands {
 		if (result.network.edges.length) {
 			this.update(withDesignVectorNetwork(path, result.network));
 		} else {
-			this.removeNodes(
-				path,
-				contour,
-				new Set((path.network?.vertices ?? designPathContours(path)[contour]?.nodes ?? []).map((_, i) => i)),
-			);
+			this.removeNodes(path, contour, new Set((path.network?.vertices ?? designPathContours(path)[contour]?.nodes ?? []).map((_, i) => i)));
 		}
 		return result.vertices.get([...selected][0]) ?? 0;
 	}
@@ -135,13 +96,7 @@ export class VectorCommands {
 					.slice(0, contour)
 					.reduce((sum, value) => sum + value.nodes.length, 0);
 		const network = toDesignVectorNetwork(path),
-			result = simplifyDesignNetwork(
-				network,
-				path.width,
-				path.height,
-				1,
-				new Set([...indices].map(index => index + offset)),
-			);
+			result = simplifyDesignNetwork(network, path.width, path.height, 1, new Set([...indices].map(index => index + offset)));
 		if (result.network !== network) {
 			this.update(withDesignVectorNetwork(path, result.network));
 		}
@@ -156,12 +111,7 @@ export class VectorCommands {
 			let network = path.network;
 			for (let i = 0; i < before.length; i++) {
 				if (after[i] && (after[i].x !== before[i].x || after[i].y !== before[i].y)) {
-					network = moveDesignNetworkVertices(
-						network,
-						new Set([i]),
-						after[i].x - before[i].x,
-						after[i].y - before[i].y,
-					);
+					network = moveDesignNetworkVertices(network, new Set([i]), after[i].x - before[i].x, after[i].y - before[i].y);
 				}
 			}
 			this.update(withDesignVectorNetwork(path, network));
@@ -277,9 +227,7 @@ export class VectorCommands {
 			if (value.closed) {
 				return [{ closed: false, nodes: [...value.nodes.slice(index), ...value.nodes.slice(0, index + 1)] }];
 			}
-			return [value.nodes.slice(0, index + 1), value.nodes.slice(index)]
-				.filter(nodes => nodes.length >= 2)
-				.map(nodes => ({ closed: false, nodes }));
+			return [value.nodes.slice(0, index + 1), value.nodes.slice(index)].filter(nodes => nodes.length >= 2).map(nodes => ({ closed: false, nodes }));
 		});
 		this.update(withDesignPathContours(path, contours));
 	}
@@ -304,10 +252,7 @@ export class VectorCommands {
 				[0, b.nodes.length - 1].map(bi => ({
 					ai,
 					bi,
-					distance: Math.hypot(
-						(a.nodes[ai].x - b.nodes[bi].x) * path.width,
-						(a.nodes[ai].y - b.nodes[bi].y) * path.height,
-					),
+					distance: Math.hypot((a.nodes[ai].x - b.nodes[bi].x) * path.width, (a.nodes[ai].y - b.nodes[bi].y) * path.height),
 				})),
 			)
 			.sort((a, b) => a.distance - b.distance);
@@ -327,19 +272,12 @@ export class VectorCommands {
 			),
 		);
 	}
-	public setMirroring(
-		path: DesignPath,
-		contour: number,
-		indices: ReadonlySet<number>,
-		mode: NonNullable<DesignPathNode['mirroring']>,
-	): void {
+	public setMirroring(path: DesignPath, contour: number, indices: ReadonlySet<number>, mode: NonNullable<DesignPathNode['mirroring']>): void {
 		if (path.network) {
 			const network = path.network;
 			let edges = [...network.edges];
 			for (const index of indices) {
-				const incident = edges
-					.map((edge, i) => ({ edge, i }))
-					.filter(({ edge }) => edge.start === index || edge.end === index);
+				const incident = edges.map((edge, i) => ({ edge, i })).filter(({ edge }) => edge.start === index || edge.end === index);
 				if (incident.length !== 2 || mode === 'none') {
 					continue;
 				}
@@ -364,9 +302,7 @@ export class VectorCommands {
 			this.update(
 				withDesignVectorNetwork(path, {
 					...network,
-					vertices: network.vertices.map((point, i) =>
-						indices.has(i) ? { ...point, mirroring: mode } : point,
-					),
+					vertices: network.vertices.map((point, i) => (indices.has(i) ? { ...point, mirroring: mode } : point)),
 					edges,
 				}),
 			);
@@ -392,13 +328,7 @@ export class VectorCommands {
 					dy = ((next.y - previous.y) * path.height) / divisor;
 					length = Math.hypot(dx, dy);
 				}
-				const incoming =
-					mode === 'angle-length'
-						? length
-						: Math.hypot(
-								(node.incoming.x - node.x) * path.width,
-								(node.incoming.y - node.y) * path.height,
-							) || length;
+				const incoming = mode === 'angle-length' ? length : Math.hypot((node.incoming.x - node.x) * path.width, (node.incoming.y - node.y) * path.height) || length;
 				const ratio = length ? incoming / length : 0;
 				return {
 					...node,
@@ -415,17 +345,11 @@ export class VectorCommands {
 			this.update(
 				withDesignVectorNetwork(path, {
 					...network,
-					vertices: network.vertices.map((point, i) =>
-						indices.has(i) ? { ...point, mirroring: 'none' } : point,
-					),
+					vertices: network.vertices.map((point, i) => (indices.has(i) ? { ...point, mirroring: 'none' } : point)),
 					edges: network.edges.map(edge => ({
 						...edge,
-						outgoing: indices.has(edge.start)
-							? { x: network.vertices[edge.start].x, y: network.vertices[edge.start].y }
-							: edge.outgoing,
-						incoming: indices.has(edge.end)
-							? { x: network.vertices[edge.end].x, y: network.vertices[edge.end].y }
-							: edge.incoming,
+						outgoing: indices.has(edge.start) ? { x: network.vertices[edge.start].x, y: network.vertices[edge.start].y } : edge.outgoing,
+						incoming: indices.has(edge.end) ? { x: network.vertices[edge.end].x, y: network.vertices[edge.end].y } : edge.incoming,
 					})),
 				}),
 			);
@@ -448,11 +372,7 @@ export class VectorCommands {
 }
 
 /** Strip container-only fields while keeping shared layer metadata when geometry becomes a path. */
-export function flattenDesignVector(
-	shape: DesignShape,
-	contours: readonly DesignPathContour[],
-	outline = false,
-): DesignPath {
+export function flattenDesignVector(shape: DesignShape, contours: readonly DesignPathContour[], outline = false): DesignPath {
 	const { kind: _kind, ...geometry } = shape;
 	// Copy shared properties explicitly: container fields must not leak into the persisted path contract.
 	const path: DesignPath = {
@@ -480,13 +400,7 @@ export function flattenDesignVector(
 		flowStart: geometry.flowStart,
 		scrollPosition: geometry.scrollPosition,
 		bindings: geometry.bindings
-			? Object.fromEntries(
-					Object.entries(geometry.bindings).filter(
-						([key]) =>
-							key !== 'strokeWidth' &&
-							!(outline && shape.kind === 'path' && shape.stroke && key === 'fill'),
-					),
-				)
+			? Object.fromEntries(Object.entries(geometry.bindings).filter(([key]) => key !== 'strokeWidth' && !(outline && shape.kind === 'path' && shape.stroke && key === 'fill')))
 			: undefined,
 		styleBindings:
 			outline && shape.kind === 'path' && shape.stroke && geometry.styleBindings
@@ -513,13 +427,8 @@ function remapWidthPoints(before: DesignPath, after: DesignPath): DesignPath {
 			const location = designWidthLocation(before, point.contour, point.position);
 			const next = location && nearestDesignWidthLocation(after, location.point);
 			const target = next && designWidthLocation(after, next.contour, next.position);
-			const direction =
-				location && target && location.normal.x * target.normal.x + location.normal.y * target.normal.y < 0
-					? -1
-					: 1;
-			return next
-				? [{ ...point, ...next, ...(point.slope !== undefined ? { slope: point.slope * direction } : {}) }]
-				: [];
+			const direction = location && target && location.normal.x * target.normal.x + location.normal.y * target.normal.y < 0 ? -1 : 1;
+			return next ? [{ ...point, ...next, ...(point.slope !== undefined ? { slope: point.slope * direction } : {}) }] : [];
 		}),
 	};
 }

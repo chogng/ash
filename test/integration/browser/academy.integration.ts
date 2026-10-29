@@ -1,9 +1,6 @@
 import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
 import { InMemoryFileSystemProvider } from '../../../src/ash/platform/files/common/inMemoryFilesystemProvider.js';
-import {
-	exportDocumentArtifact,
-	importDocumentArtifact,
-} from '../../../src/ash/workbench/contrib/documentEditor/browser/documentActions.js';
+import { exportDocumentArtifact, importDocumentArtifact } from '../../../src/ash/workbench/contrib/documentEditor/browser/documentActions.js';
 import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import { IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
@@ -11,26 +8,16 @@ import type { TextModelWorkingCopyReference } from '../../../src/ash/workbench/s
 import { bindTestColorTheme } from '../../fixtures/browser/themeFixture.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
-import {
-	highContrastDarkColorTheme,
-	highContrastLightColorTheme,
-	lightColorTheme,
-} from '../../../src/ash/platform/theme/common/colorTheme.js';
+import { highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import type { IDocumentCollaborationApi } from '../../../src/ash/platform/collab/common/documentCollaborationApi.js';
-import {
-	generalProfile,
-	createEditorProfileConfiguration,
-} from '../../../extensions/academy/browser/generalProfile.js';
+import { generalProfile, createEditorProfileConfiguration } from '../../../extensions/academy/browser/generalProfile.js';
 import { documentContributions } from '../../../extensions/academy/browser/documentContributions.js';
 import { DocumentTextModel } from '../../../extensions/academy/common/model/documentTextModel.js';
 import { MainThreadClientEditors } from '../../../src/ash/workbench/api/browser/mainThreadClientEditors.js';
 import { loadExtensionEditorModule } from '../../../src/ash/workbench/services/extensions/browser/extensionEditorModules.js';
 import { IExtensionApi, normalizeExtensionCatalog } from '../../../src/ash/platform/extensions/common/extensionApi.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
-import {
-	IExtensionHostApi,
-	type ExtensionHostFleetSnapshot,
-} from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
@@ -39,10 +26,7 @@ import { IDocumentEditorTextModelService } from '../../../src/ash/workbench/serv
 import { DocumentEditorTextModelService } from '../../../src/ash/workbench/services/documentEditor/browser/documentEditorTextModelService.js';
 import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import type { ITextFileService } from '../../../src/ash/workbench/services/textfile/common/textfiles.js';
-import type {
-	TextFileResolveRequest,
-	TextFileSaveRequest,
-} from '../../../src/ash/workbench/services/textfile/common/textFileService.js';
+import type { TextFileResolveRequest, TextFileSaveRequest } from '../../../src/ash/workbench/services/textfile/common/textFileService.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { Disposable, DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
@@ -54,10 +38,7 @@ import { createTextNode } from '../../../extensions/academy/common/model/documen
 
 import { DocumentEditorPane } from '../../../src/ash/workbench/contrib/documentEditor/browser/documentEditorPane.js';
 import type { DocumentNode } from '../../../extensions/academy/common/model/document.js';
-import {
-	documentFromPlainText,
-	serializeDocument,
-} from '../../../extensions/academy/common/model/documentSerialization.js';
+import { documentFromPlainText, serializeDocument } from '../../../extensions/academy/common/model/documentSerialization.js';
 import type { DocumentSchema } from '../../../extensions/academy/common/model/documentSchema.js';
 import type { DocumentCollaborationRoom } from '../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js';
 import type { DocumentCollaborationInvite } from '../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js';
@@ -189,11 +170,7 @@ class BrowserDocumentCollaborationConnection extends Disposable implements Docum
 		this.initialSnapshot = Object.freeze({ roomId, version: this.version, document });
 	}
 
-	async submit(
-		envelope: DocumentCollaborationEnvelope,
-		_document: DocumentNode,
-		_signal: AbortSignal,
-	): Promise<DocumentCollaborationSubmitOutcome> {
+	async submit(envelope: DocumentCollaborationEnvelope, _document: DocumentNode, _signal: AbortSignal): Promise<DocumentCollaborationSubmitOutcome> {
 		this.version += 1;
 		collaborationDocuments.set(this.roomId, _document);
 		return {
@@ -210,11 +187,7 @@ class BrowserDocumentCollaborationConnection extends Disposable implements Docum
 
 	async updatePresence(_selection: DocumentSelection | undefined, _signal: AbortSignal): Promise<void> {}
 
-	async createInvite(
-		displayName: string,
-		role: DocumentCollaborationRoomRole,
-		_signal: AbortSignal,
-	): Promise<DocumentCollaborationInvite> {
+	async createInvite(displayName: string, role: DocumentCollaborationRoomRole, _signal: AbortSignal): Promise<DocumentCollaborationInvite> {
 		if (!this.canManageMembers) throw new Error('This collaboration member cannot create room invitations');
 		return Object.freeze({
 			roomId: this.roomId,
@@ -254,16 +227,11 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 }
 const schema = createDefaultDocumentSchema();
 const generalDocument = new URLSearchParams(location.search).has('generalDocument');
-if (generalDocument)
-	await import('../../../src/ash/workbench/contrib/documentEditor/browser/documentEditor.contribution.js');
-const apiDocument = schema.createDocument([
-	schema.createNode('paragraph', { content: [schema.createText('editor-api')] }),
-]);
+if (generalDocument) await import('../../../src/ash/workbench/contrib/documentEditor/browser/documentEditor.contribution.js');
+const apiDocument = schema.createDocument([schema.createNode('paragraph', { content: [schema.createText('editor-api')] })]);
 const apiModel = DocumentTextModel.create(schema, apiDocument);
 const codeBlockResource = URI.parse('inmemory://editor/code-block.ash-academy');
-const structuredResource = URI.parse(
-	generalDocument ? 'inmemory://editor/document.ash-doc' : 'inmemory://editor/document.ash-academy',
-);
+const structuredResource = URI.parse(generalDocument ? 'inmemory://editor/document.ash-doc' : 'inmemory://editor/document.ash-academy');
 const codeBlockDocument = schema.createDocument(
 	[
 		schema.createNode('codeBlock', {
@@ -311,11 +279,7 @@ const complexPagesDocument = schema.createDocument([
 				content: [0, 1].map(column =>
 					schema.createNode('tableCell', {
 						content: [
-							m6Paragraph(
-								`complex-cell-${row}-${column}`,
-								`Row ${row}, column ${column}. ` +
-									'单元格 words '.repeat(row === 8 ? (column === 0 ? 220 : 150) : 3),
-							),
+							m6Paragraph(`complex-cell-${row}-${column}`, `Row ${row}, column ${column}. ` + '单元格 words '.repeat(row === 8 ? (column === 0 ? 220 : 150) : 3)),
 							...(row === 8 && column === 0
 								? [
 										schema.createNode('table', {
@@ -324,12 +288,7 @@ const complexPagesDocument = schema.createDocument([
 													id: 'complex-nested-row',
 													content: [0, 1].map(index =>
 														schema.createNode('tableCell', {
-															content: [
-																m6Paragraph(
-																	`complex-nested-${index}`,
-																	'Nested column '.repeat(40),
-																),
-															],
+															content: [m6Paragraph(`complex-nested-${index}`, 'Nested column '.repeat(40))],
 														}),
 													),
 												}),
@@ -353,9 +312,7 @@ const complexPagesDocument = schema.createDocument([
 	}),
 	schema.createNode('orderedList', {
 		attrs: { order: 3 },
-		content: Array.from({ length: 4 }, (_, index) =>
-			schema.createNode('listItem', { content: [m6Paragraph(`complex-item-${index}`, 'List item '.repeat(45))] }),
-		),
+		content: Array.from({ length: 4 }, (_, index) => schema.createNode('listItem', { content: [m6Paragraph(`complex-item-${index}`, 'List item '.repeat(45))] })),
 	}),
 	schema.createNode('codeBlock', {
 		id: 'complex-code',
@@ -370,11 +327,7 @@ const complexPagesDocument = schema.createDocument([
 		content: [
 			schema.createNode('image', {
 				attrs: {
-					src:
-						'data:image/svg+xml,' +
-						encodeURIComponent(
-							'<svg xmlns="http://www.w3.org/2000/svg" width="200" height="1600"><rect width="200" height="1600" fill="teal"/></svg>',
-						),
+					src: 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="1600"><rect width="200" height="1600" fill="teal"/></svg>'),
 					alt: 'Tall diagram',
 				},
 			}),
@@ -385,27 +338,11 @@ const complexPagesDocument = schema.createDocument([
 const pageRule = new URLSearchParams(location.search).get('pageRule');
 const lineText = (count: number) => Array.from({ length: count }, (_, index) => `Line ${index}`).join('\n');
 const pageRuleDocument = schema.createDocument([
-	m6Paragraph(
-		'rule-lead',
-		lineText(pageRule === 'orphan' || pageRule === 'short' ? 32 : pageRule === 'widow' ? 29 : 30),
-	),
+	m6Paragraph('rule-lead', lineText(pageRule === 'orphan' || pageRule === 'short' ? 32 : pageRule === 'widow' ? 29 : 30)),
 	schema.createNode('paragraph', {
 		id: 'rule-target',
 		attrs: { widowControl: false },
-		content: [
-			schema.createText(
-				lineText(
-					pageRule === 'short'
-						? 2
-						: pageRule === 'widow'
-							? 5
-							: pageRule === 'next' || pageRule === 'chain'
-								? 1
-								: 6,
-				),
-				{ id: 'rule-target-text' },
-			),
-		],
+		content: [schema.createText(lineText(pageRule === 'short' ? 2 : pageRule === 'widow' ? 5 : pageRule === 'next' || pageRule === 'chain' ? 1 : 6), { id: 'rule-target-text' })],
 	}),
 	...(pageRule === 'chain'
 		? [
@@ -423,10 +360,7 @@ const structuredDocument = pageRule
 	: new URLSearchParams(location.search).has('m6ComplexPages')
 		? complexPagesDocument
 		: new URLSearchParams(location.search).has('m6Pages')
-			? schema.createDocument([
-					m6Paragraph('pages-long', '分页中文 writing across pages. '.repeat(260)),
-					m6Paragraph('pages-last', 'End'),
-				])
+			? schema.createDocument([m6Paragraph('pages-long', '分页中文 writing across pages. '.repeat(260)), m6Paragraph('pages-last', 'End')])
 			: new URLSearchParams(location.search).has('m6Document')
 				? schema.createDocument([
 						schema.createNode('paragraph', {
@@ -438,9 +372,7 @@ const structuredDocument = pageRule
 						}),
 						schema.createNode('orderedList', {
 							id: 'm6-list',
-							content: [
-								schema.createNode('listItem', { content: [m6Paragraph('m6-item', 'Hello item')] }),
-							],
+							content: [schema.createNode('listItem', { content: [m6Paragraph('m6-item', 'Hello item')] })],
 						}),
 						schema.createNode('table', {
 							content: [
@@ -522,46 +454,21 @@ const copies = disposables.add(uriIdentityServices.createInstance(BrowserWorking
 const files: ITextFileService = {
 	onDidChangeFiles: codeBlockFiles.onDidChangeFiles,
 	onDidSave: Event.any(codeBlockFiles.onDidSave, structuredFiles.onDidSave),
-	resolve: (request: TextFileResolveRequest, signal: AbortSignal) =>
-		(request.resource.toString() === codeBlockResource.toString() ? codeBlockFiles : structuredFiles).resolve(
-			request,
-			signal,
-		),
-	save: (request: TextFileSaveRequest, signal: AbortSignal) =>
-		(request.resource.toString() === codeBlockResource.toString() ? codeBlockFiles : structuredFiles).save(
-			request,
-			signal,
-		),
+	resolve: (request: TextFileResolveRequest, signal: AbortSignal) => (request.resource.toString() === codeBlockResource.toString() ? codeBlockFiles : structuredFiles).resolve(request, signal),
+	save: (request: TextFileSaveRequest, signal: AbortSignal) => (request.resource.toString() === codeBlockResource.toString() ? codeBlockFiles : structuredFiles).save(request, signal),
 };
-services.registerInstance(
-	IDocumentEditorTextModelService,
-	disposables.add(new DocumentEditorTextModelService(files, copies)),
-);
-if (
-	new URLSearchParams(location.search).has('m6Document') ||
-	new URLSearchParams(location.search).has('m6Pages') ||
-	new URLSearchParams(location.search).has('m6ComplexPages') ||
-	!!pageRule
-)
+services.registerInstance(IDocumentEditorTextModelService, disposables.add(new DocumentEditorTextModelService(files, copies)));
+if (new URLSearchParams(location.search).has('m6Document') || new URLSearchParams(location.search).has('m6Pages') || new URLSearchParams(location.search).has('m6ComplexPages') || !!pageRule)
 	services.registerInstance(
 		IThemeService,
 		disposables.add(
 			new TestThemeService(
-				new URLSearchParams(location.search).has('hc')
-					? highContrastDarkColorTheme
-					: new URLSearchParams(location.search).has('hcLight')
-						? highContrastLightColorTheme
-						: lightColorTheme,
+				new URLSearchParams(location.search).has('hc') ? highContrastDarkColorTheme : new URLSearchParams(location.search).has('hcLight') ? highContrastLightColorTheme : lightColorTheme,
 			),
 		),
 	);
 registerTestComponentServices(services);
-if (
-	new URLSearchParams(location.search).has('m6Document') ||
-	new URLSearchParams(location.search).has('m6Pages') ||
-	new URLSearchParams(location.search).has('m6ComplexPages') ||
-	!!pageRule
-)
+if (new URLSearchParams(location.search).has('m6Document') || new URLSearchParams(location.search).has('m6Pages') || new URLSearchParams(location.search).has('m6ComplexPages') || !!pageRule)
 	disposables.add(bindTestColorTheme(services.get(IThemeService), document.documentElement));
 const codeBlockPane = disposables.add(
 	services.createInstance(DocumentEditorPane, {
@@ -580,9 +487,7 @@ if (new URLSearchParams(location.search).has('academyExtension') || generalDocum
 			return normalizeExtensionCatalog(await response.json());
 		},
 		resources: new ExtensionResourceLoaderService(async request => {
-			const response = await fetch(
-				`/__academy_resource?generation=${request.generation}&extensionId=${encodeURIComponent(request.extensionId)}&path=${encodeURIComponent(request.path)}`,
-			);
+			const response = await fetch(`/__academy_resource?generation=${request.generation}&extensionId=${encodeURIComponent(request.extensionId)}&path=${encodeURIComponent(request.path)}`);
 			if (!response.ok) throw new Error('Academy package resource unavailable');
 			return new Uint8Array(await response.arrayBuffer());
 		}),
@@ -615,9 +520,7 @@ if (new URLSearchParams(location.search).has('academyExtension') || generalDocum
 			return response.json();
 		},
 	} as IExtensionHostApi);
-	academyExtensionService = disposables.add(
-		services.createInstance(MainThreadClientEditors, 30_000, loadExtensionEditorModule),
-	);
+	academyExtensionService = disposables.add(services.createInstance(MainThreadClientEditors, 30_000, loadExtensionEditorModule));
 	const response = await fetch(`/__academy_extension?locale=${locale}`);
 	if (!response.ok) throw new Error('Academy provider unavailable');
 	academySnapshot = await response.json();
@@ -632,10 +535,7 @@ let structuredPane = disposables.add(
 				serverEvents,
 			})) as DocumentEditorPane)
 		: generalDocument
-			? (EditorPanes.getEditorPane(
-					{ resource: structuredResource },
-					{ preferredEditorId: DOCUMENT_EDITOR_ID },
-				)!.create({
+			? (EditorPanes.getEditorPane({ resource: structuredResource }, { preferredEditorId: DOCUMENT_EDITOR_ID })!.create({
 					input: { resource: structuredResource },
 					instantiationService: services,
 					documentCollaborationApi,
@@ -656,10 +556,7 @@ structuredPane.create(requiredElement('#document-editor'));
 codeBlockPane.layout({ width: 900, height: 300 });
 structuredPane.layout({ width: 900, height: 300 });
 await codeBlockPane.setInput({ resource: codeBlockResource, label: 'snippet.ts' }, new AbortController().signal);
-await structuredPane.setInput(
-	{ resource: structuredResource, label: 'paper', readOnly: new URLSearchParams(location.search).has('readOnly') },
-	new AbortController().signal,
-);
+await structuredPane.setInput({ resource: structuredResource, label: 'paper', readOnly: new URLSearchParams(location.search).has('readOnly') }, new AbortController().signal);
 
 const artifactFiles = disposables.add(new InMemoryFileSystemProvider());
 await artifactFiles.createDirectory(URI.parse('artifact:/'));
@@ -782,15 +679,7 @@ if (new URLSearchParams(location.search).has('callDocuments')) {
 	const container = document.createElement('section');
 	container.id = 'call-view';
 	document.body.append(container);
-	const callPane = disposables.add(
-		new CallViewPane(
-			container,
-			{ id: 'call-fixture', title: 'Calls' },
-			calls,
-			services.get(IConfigurationService),
-			editors,
-		),
-	);
+	const callPane = disposables.add(new CallViewPane(container, { id: 'call-fixture', title: 'Calls' }, calls, services.get(IConfigurationService), editors));
 	callPane.setVisible(true);
 	callPane.layout(400, 0, 900);
 }
@@ -800,16 +689,12 @@ window.ashAcademyIntegration = {
 		documents: callDocuments,
 		originalDirty: structuredPane.isDirty,
 		joinedResource: joinedDocumentPane?.workingCopy?.resource.scheme,
-		joinedTexts:
-			joinedDocumentPane
-				?.getDocument()
-				.content.map(block => block.content.find(child => child.text !== undefined)?.text ?? '') ?? [],
+		joinedTexts: joinedDocumentPane?.getDocument().content.map(block => block.content.find(child => child.text !== undefined)?.text ?? '') ?? [],
 	}),
 	apiDocumentType: apiModel.document.type,
 	getBundleIds: () => EditorExtensionsRegistry.getEditorContributions().map(contribution => contribution.id),
 	getCodeBlockText: () => codeBlockPane.getDocument().content[0]?.content[0]?.text,
-	getStructuredBlockTexts: () =>
-		structuredPane.getDocument().content.map(block => block.content.map(child => child.text ?? '').join('')),
+	getStructuredBlockTexts: () => structuredPane.getDocument().content.map(block => block.content.map(child => child.text ?? '').join('')),
 	getStructuredFirstTextMarks: () => structuredPane.getDocument().content[0]?.content[0]?.marks ?? [],
 	getStructuredSelection: () => structuredPane.getDocumentSelection(),
 	getStructuredVersion: () => (structuredPane.workingCopy as TextModelWorkingCopyReference).model.getVersionId(),
@@ -844,9 +729,7 @@ window.ashAcademyIntegration = {
 		await academyExtensionService.update(academySnapshot!);
 	},
 	getAcademyRegistration: () => ({
-		name: EditorPanes.getEditorPanes().find(
-			pane => pane.id === (generalDocument ? DOCUMENT_EDITOR_ID : 'stanza.editor.document'),
-		)?.name,
+		name: EditorPanes.getEditorPanes().find(pane => pane.id === (generalDocument ? DOCUMENT_EDITOR_ID : 'stanza.editor.document'))?.name,
 		routed: DocumentTypes.find({ resource: structuredResource }) !== undefined,
 	}),
 	saveStructured: () => structuredPane.save(),
@@ -876,10 +759,7 @@ window.ashAcademyIntegration = {
 			}
 		} else {
 			structuredPane.clearInput();
-			await structuredPane.setInput(
-				{ resource: structuredResource, label: 'paper' },
-				new AbortController().signal,
-			);
+			await structuredPane.setInput({ resource: structuredResource, label: 'paper' }, new AbortController().signal);
 		}
 	},
 	getStructuredDirty: () => structuredPane.isDirty,
@@ -897,9 +777,7 @@ window.ashAcademyIntegration = {
 	},
 	importArtifact: async bytes => {
 		artifactTarget = URI.parse('artifact:/import.docx');
-		await services
-			.get(IFileService)
-			.writeFileBytes(artifactTarget, new Uint8Array(bytes), { create: true, overwrite: true });
+		await services.get(IFileService).writeFileBytes(artifactTarget, new Uint8Array(bytes), { create: true, overwrite: true });
 		await services.invokeFunction(accessor => importDocumentArtifact(accessor));
 		return {
 			backup: importedPane!.workingCopy!.backup(),

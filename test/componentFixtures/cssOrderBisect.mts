@@ -13,15 +13,8 @@ async function main(): Promise<void> {
 	}
 	const args = process.argv.slice(2);
 	const request = parseFixtureArguments(args);
-	if (!args.includes('--fixture-id-regex'))
-		throw new Error('Bisection requires --fixture-id-regex matching exactly one fixture');
-	if (
-		request.explore ||
-		request.screenshots ||
-		request.compare ||
-		request.baselineRef ||
-		request.playwrightArgs.length
-	)
+	if (!args.includes('--fixture-id-regex')) throw new Error('Bisection requires --fixture-id-regex matching exactly one fixture');
+	if (request.explore || request.screenshots || request.compare || request.baselineRef || request.playwrightArgs.length)
 		throw new Error(`Unexpected bisection arguments: ${request.playwrightArgs.join(' ')}`);
 	const directory = await createResultsDirectory('css-order-bisect', request.out);
 	await withProcessRun(resolve(import.meta.dirname, '../..'), async (run, environment) => {
@@ -29,8 +22,7 @@ async function main(): Promise<void> {
 		try {
 			await renderer.start(run, environment);
 			const fixtures = await renderer.fixtures(request.options.pattern);
-			if (fixtures.length !== 1)
-				throw new Error(`Bisection requires exactly one fixture; matched ${fixtures.length}`);
+			if (fixtures.length !== 1) throw new Error(`Bisection requires exactly one fixture; matched ${fixtures.length}`);
 			const report = await renderer.scan(fixtures, request.options);
 			await writeScanReport(directory, report);
 			if (report.results.some(result => result.status === 'error')) process.exitCode = 1;

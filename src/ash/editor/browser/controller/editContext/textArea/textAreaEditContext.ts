@@ -4,13 +4,7 @@ import { h } from '../../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../../base/browser/fastDomNode.js';
 import { type IKeyboardEvent } from '../../../../../base/browser/keyboardEvent.js';
 import { type Event } from '../../../../../base/common/event.js';
-import {
-	AbstractEditContext,
-	type CompositionController,
-	type EditContextOptions,
-	type EditContextPosition,
-	type EditContextState,
-} from '../editContext.js';
+import { AbstractEditContext, type CompositionController, type EditContextOptions, type EditContextPosition, type EditContextState } from '../editContext.js';
 import { type IEditorAriaOptions } from '../../../editorBrowser.js';
 import { SelectionDirection } from '../../../../common/core/selection.js';
 import { Position } from '../../../../common/core/position.js';
@@ -22,12 +16,7 @@ import { type IViewModel } from '../../../../common/viewModel.js';
 import * as viewEvents from '../../../../common/viewEvents.js';
 import { EditorOption } from '../../../../common/config/editorOptions.js';
 import { SimplePagedScreenReaderStrategy } from '../screenReaderUtils.js';
-import {
-	TextAreaInput,
-	type ICompositionData,
-	type ICompositionStartEvent,
-	type ITextAreaInputHost,
-} from './textAreaEditContextInput.js';
+import { TextAreaInput, type ICompositionData, type ICompositionStartEvent, type ITextAreaInputHost } from './textAreaEditContextInput.js';
 import { TextAreaEditContextRegistry } from './textAreaEditContextRegistry.js';
 import { TextAreaState, type ITextAreaWrapper } from './textAreaEditContextState.js';
 
@@ -94,24 +83,15 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 		const inputHost: ITextAreaInputHost = {
 			context: this._context,
 			getScreenReaderContent: () => this.accessibilityController.getScreenReaderContent(),
-			deduceModelPosition: (viewAnchorPosition, deltaOffset, lineFeedCount) =>
-				this._context.viewModel.deduceModelPositionRelativeToViewPosition(
-					viewAnchorPosition,
-					deltaOffset,
-					lineFeedCount,
-				),
+			deduceModelPosition: (viewAnchorPosition, deltaOffset, lineFeedCount) => this._context.viewModel.deduceModelPositionRelativeToViewPosition(viewAnchorPosition, deltaOffset, lineFeedCount),
 		};
 		this.textAreaInput = this._register(new TextAreaInput(inputHost, this.textArea.domNode));
 		this._register(this.textAreaInput.onFocus(() => this._context.viewModel.setHasFocus(true)));
 		this._register(this.textAreaInput.onBlur(() => this._context.viewModel.setHasFocus(false)));
 		this._register(TextAreaEditContextRegistry.register(options.ownerId, this));
 		const compositionController = this.initializeController(options);
-		this.accessibilityController = this._register(
-			new TextAreaAccessibilityController(this, options.viewport, this._context.viewModel, compositionController),
-		);
-		this._register(
-			this.textAreaInput.onSelectionChangeRequest(selection => this.viewController.setSelection(selection)),
-		);
+		this.accessibilityController = this._register(new TextAreaAccessibilityController(this, options.viewport, this._context.viewModel, compositionController));
+		this._register(this.textAreaInput.onSelectionChangeRequest(selection => this.viewController.setSelection(selection)));
 		this.synchronizeState();
 		this.registerInputListeners();
 	}
@@ -135,8 +115,7 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 				const metadata = event.metadata;
 				this.viewController.paste(
 					event.text,
-					this._context.configuration.options.get(EditorOption.emptySelectionClipboard) &&
-						!!metadata?.isFromEmptySelection,
+					this._context.configuration.options.get(EditorOption.emptySelectionClipboard) && !!metadata?.isFromEmptySelection,
 					metadata?.multicursorText ?? null,
 					metadata?.mode ?? null,
 				);
@@ -247,11 +226,7 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 		if (event.hasChanged(EditorOption.tabIndex)) {
 			this.textArea.domNode.tabIndex = this._context.configuration.options.get(EditorOption.tabIndex);
 		}
-		return (
-			event.hasChanged(EditorOption.readOnly) ||
-			event.hasChanged(EditorOption.ariaLabel) ||
-			event.hasChanged(EditorOption.tabIndex)
-		);
+		return event.hasChanged(EditorOption.readOnly) || event.hasChanged(EditorOption.ariaLabel) || event.hasChanged(EditorOption.tabIndex);
 	}
 
 	public override onCursorStateChanged(_event: viewEvents.ViewCursorStateChangedEvent): boolean {
@@ -339,15 +314,8 @@ class TextAreaAccessibilityController extends Disposable {
 		if (model.length > MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS) {
 			const selectionStartOffset = model.offsetAt(selection.getStartPosition());
 			const selectionEndOffset = model.offsetAt(selection.getEndPosition());
-			const window = accessibleInputWindow(
-				model.length,
-				selectionStartOffset,
-				selectionEndOffset,
-				model.offsetAt(selection.getPosition()),
-			);
-			const text = model.getTextInRange(
-				Range.fromPositions(model.positionAt(window.startOffset), model.positionAt(window.endOffset)),
-			);
+			const window = accessibleInputWindow(model.length, selectionStartOffset, selectionEndOffset, model.offsetAt(selection.getPosition()));
+			const text = model.getTextInRange(Range.fromPositions(model.positionAt(window.startOffset), model.positionAt(window.endOffset)));
 			return new TextAreaState(
 				text,
 				selection.getDirection() === SelectionDirection.RTL
@@ -360,12 +328,7 @@ class TextAreaAccessibilityController extends Disposable {
 				undefined,
 			);
 		}
-		const contentState = this.screenReaderStrategy.fromEditorSelection(
-			model,
-			selection,
-			ACCESSIBILITY_LINES_PER_PAGE,
-			true,
-		);
+		const contentState = this.screenReaderStrategy.fromEditorSelection(model, selection, ACCESSIBILITY_LINES_PER_PAGE, true);
 		return TextAreaState.fromScreenReaderContentState(contentState);
 	}
 
@@ -376,10 +339,7 @@ class TextAreaAccessibilityController extends Disposable {
 			return;
 		}
 		const primary = selections[0]!.getPosition();
-		this.input.domNode.setAttribute(
-			'aria-description',
-			`${selections.length} selections. Primary at line ${primary.lineNumber}, column ${primary.column}.`,
-		);
+		this.input.domNode.setAttribute('aria-description', `${selections.length} selections. Primary at line ${primary.lineNumber}, column ${primary.column}.`);
 	}
 
 	private scheduleScreenReaderContent(): void {
@@ -392,26 +352,17 @@ class TextAreaAccessibilityController extends Disposable {
 	}
 }
 
-function accessibleInputWindow(
-	modelLength: number,
-	selectionStartOffset: number,
-	selectionEndOffset: number,
-	activeOffset: number,
-): { readonly startOffset: number; readonly endOffset: number } {
+function accessibleInputWindow(modelLength: number, selectionStartOffset: number, selectionEndOffset: number, activeOffset: number): { readonly startOffset: number; readonly endOffset: number } {
 	if (modelLength <= MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS) return { startOffset: 0, endOffset: modelLength };
 	const selectionLength = selectionEndOffset - selectionStartOffset;
 	if (selectionLength <= MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS) {
 		const margin = Math.floor((MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS - selectionLength) / 2);
 		let startOffset = Math.max(0, selectionStartOffset - margin);
 		startOffset = Math.min(startOffset, modelLength - MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS);
-		if (selectionEndOffset > startOffset + MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS)
-			startOffset = selectionEndOffset - MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS;
+		if (selectionEndOffset > startOffset + MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS) startOffset = selectionEndOffset - MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS;
 		return { startOffset, endOffset: startOffset + MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS };
 	}
-	const startOffset = Math.min(
-		Math.max(0, activeOffset - Math.floor(MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS / 2)),
-		modelLength - MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS,
-	);
+	const startOffset = Math.min(Math.max(0, activeOffset - Math.floor(MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS / 2)), modelLength - MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS);
 	return { startOffset, endOffset: startOffset + MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS };
 }
 

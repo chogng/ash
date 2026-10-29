@@ -1,18 +1,8 @@
 import { Disposable, MutableDisposable } from '../../../base/common/lifecycle.js';
-import {
-	WebWorkerClient,
-	type WebWorkerClientPort,
-	type IWebWorkerClient,
-} from '../../../base/common/worker/webWorker.js';
+import { WebWorkerClient, type WebWorkerClientPort, type IWebWorkerClient } from '../../../base/common/worker/webWorker.js';
 import type { IWebWorkerService } from '../../webWorker/browser/webWorkerService.js';
 import { WebWorkerDescriptor } from '../../webWorker/browser/webWorkerDescriptor.js';
-import {
-	appServerDecodeChannel,
-	decodeAppServerFrame,
-	readDecodedAppServerFrame,
-	type AppServerDecodeContext,
-	type DecodedAppServerFrame,
-} from './appServerProtocolDecoding.js';
+import { appServerDecodeChannel, decodeAppServerFrame, readDecodedAppServerFrame, type AppServerDecodeContext, type DecodedAppServerFrame } from './appServerProtocolDecoding.js';
 
 /** Owns one lazy decoder Worker for a Renderer connection. Small frames stay synchronous. */
 export class AppServerFrameDecoder extends Disposable {
@@ -23,17 +13,11 @@ export class AppServerFrameDecoder extends Disposable {
 		super();
 	}
 
-	public decode(
-		frame: string,
-		byteLength: number,
-		context: AppServerDecodeContext,
-	): DecodedAppServerFrame | Promise<DecodedAppServerFrame> {
+	public decode(frame: string, byteLength: number, context: AppServerDecodeContext): DecodedAppServerFrame | Promise<DecodedAppServerFrame> {
 		this.assertNotDisposed();
 		if (byteLength < 256 * 1024 || !this.createPort) return decodeAppServerFrame(frame, context);
 		const worker = this.worker.value ?? (this.worker.value = this.createClient());
-		return worker
-			.request(++this.requestId, { frame, context }, new AbortController().signal)
-			.then(value => readDecodedAppServerFrame(value, context));
+		return worker.request(++this.requestId, { frame, context }, new AbortController().signal).then(value => readDecodedAppServerFrame(value, context));
 	}
 
 	private createClient(): IWebWorkerClient<object> {

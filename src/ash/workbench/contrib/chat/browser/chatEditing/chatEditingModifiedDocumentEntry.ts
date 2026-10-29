@@ -8,11 +8,7 @@ import { Range } from '../../../../../editor/common/core/range.js';
 import { DefaultLinesDiffComputer } from '../../../../../editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
 import type { TextModelReference } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { localize } from '../../../../../nls.js';
-import type {
-	IModifiedFileEntry,
-	IModifiedFileEntryChangeHunk,
-	ISnapshotEntry,
-} from '../../common/editing/chatEditingService.js';
+import type { IModifiedFileEntry, IModifiedFileEntryChangeHunk, ISnapshotEntry } from '../../common/editing/chatEditingService.js';
 
 interface ReviewHunk extends IModifiedFileEntryChangeHunk {
 	readonly originalStart: number;
@@ -60,15 +56,9 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 			// Recover the unsaved decision only while the file still matches its
 			// recorded source. Existing dirty models and later file edits belong to
 			// their owner; they must not be replaced by review recovery.
-			if (
-				snapshot.pendingSaveSource !== undefined &&
-				!reference.isDirty &&
-				reference.model.getText() === snapshot.pendingSaveSource
-			) {
+			if (snapshot.pendingSaveSource !== undefined && !reference.isDirty && reference.model.getText() === snapshot.pendingSaveSource) {
 				reference.model.pushStackElement();
-				reference.model.applyOperations([
-					{ range: reference.model.getFullModelRange(), text: snapshot.current },
-				]);
+				reference.model.applyOperations([{ range: reference.model.getFullModelRange(), text: snapshot.current }]);
 				reference.model.pushStackElement();
 			}
 			this.originalText = snapshot.original;
@@ -124,13 +114,7 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 	public beginAgentEdit(edits: readonly LanguageTextEdit[]): void {
 		const eol = this.reference.model.getEOL();
 		this.expectedAgentText = TextEdit.fromParallelReplacementsUnsorted(
-			edits.map(
-				edit =>
-					new TextReplacement(
-						Range.lift(edit.range),
-						normalizeTextLineEndings(edit.text).replaceAll('\n', eol),
-					),
-			),
+			edits.map(edit => new TextReplacement(Range.lift(edit.range), normalizeTextLineEndings(edit.text).replaceAll('\n', eol))),
 		).applyToString(this.reference.model.getText());
 		this.agentEditing = this.agentEditInProgress = true;
 		this.agentEditRevision++;
@@ -165,21 +149,12 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 		if (this.hasPendingSave || this.reference.isDirty) {
 			await this.saveReviewedChanges();
 		}
-		if (
-			this.isDisposed ||
-			this.isBusy ||
-			this.reference.isDirty ||
-			this.reference.model.version !== version ||
-			this.agentEditRevision !== agentEditRevision
-		) {
+		if (this.isDisposed || this.isBusy || this.reference.isDirty || this.reference.model.version !== version || this.agentEditRevision !== agentEditRevision) {
 			return;
 		}
 		if (hunk) {
 			const current = this.requireHunk(hunk);
-			this.originalText =
-				this.originalText.slice(0, current.originalStart) +
-				current.modifiedText +
-				this.originalText.slice(current.originalEnd);
+			this.originalText = this.originalText.slice(0, current.originalStart) + current.modifiedText + this.originalText.slice(current.originalEnd);
 			this.updateDiff();
 		}
 		if (!hunk || this.changes.length === 0) {
@@ -200,9 +175,7 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 		try {
 			try {
 				this.reference.model.pushStackElement();
-				this.reference.model.applyOperations(
-					changes.map(change => ({ range: change.range, text: change.originalText })),
-				);
+				this.reference.model.applyOperations(changes.map(change => ({ range: change.range, text: change.originalText })));
 				this.reference.model.pushStackElement();
 			} finally {
 				this.agentEditing = false;
@@ -249,22 +222,10 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 	public getAccessibleContent(): string {
 		const changes = this.changes
 			.map((hunk, index) =>
-				localize(
-					'chatEditing.accessibleHunk',
-					'Change {0}, line {1}\nBefore:\n{2}\nAfter:\n{3}',
-					index + 1,
-					hunk.range.startLineNumber,
-					hunk.originalText,
-					hunk.modifiedText,
-				),
+				localize('chatEditing.accessibleHunk', 'Change {0}, line {1}\nBefore:\n{2}\nAfter:\n{3}', index + 1, hunk.range.startLineNumber, hunk.originalText, hunk.modifiedText),
 			)
 			.join('\n\n');
-		return this.hasPendingSave
-			? localize(
-					'chatEditing.savePending',
-					'Rejected changes have not been saved. Retry saving to finish this review.',
-				) + (changes ? '\n\n' + changes : '')
-			: changes;
+		return this.hasPendingSave ? localize('chatEditing.savePending', 'Rejected changes have not been saved. Retry saving to finish this review.') + (changes ? '\n\n' + changes : '') : changes;
 	}
 
 	private requireHunk(hunk: IModifiedFileEntryChangeHunk): ReviewHunk {
@@ -276,9 +237,7 @@ export class ChatEditingModifiedDocumentEntry extends Disposable implements IMod
 	}
 
 	private handleModelChange(event: TextModelChange): void {
-		const isAgentEdit =
-			this.agentEditing &&
-			(this.expectedAgentText === undefined || this.reference.model.getText() === this.expectedAgentText);
+		const isAgentEdit = this.agentEditing && (this.expectedAgentText === undefined || this.reference.model.getText() === this.expectedAgentText);
 		if (isAgentEdit) {
 			this.agentEditing = false;
 		}

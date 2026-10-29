@@ -31,10 +31,7 @@ if (process.env.ASH_WEB_LAUNCH_WORKER !== '1') {
 	} else {
 		const serve = sirv(root, { etag: true });
 		const server = createServer((request, response) => {
-			if (
-				(request.method === 'GET' || request.method === 'HEAD') &&
-				(request.url === '/' || request.url?.startsWith('/?'))
-			) {
+			if ((request.method === 'GET' || request.method === 'HEAD') && (request.url === '/' || request.url?.startsWith('/?'))) {
 				const query = request.url.indexOf('?');
 				response.writeHead(302, {
 					Location: `/browser/workbench/workbench.html${query >= 0 ? request.url.slice(query) : ''}`,

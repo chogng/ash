@@ -6,10 +6,7 @@ import type { ITerminalContribution, IXtermTerminal } from '../../../terminal/br
 import type { ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
 
 export type TerminalDictationState = 'unavailable' | 'idle' | 'active' | 'busy';
-export const TerminalDictationStateContext = new RawContextKey<TerminalDictationState>(
-	'terminalAshCodeDictationState',
-	'unavailable',
-);
+export const TerminalDictationStateContext = new RawContextKey<TerminalDictationState>('terminalAshCodeDictationState', 'unavailable');
 
 /** The CLI owns recording and the input draft; the terminal only projects its advertised capability. */
 export class TerminalVoiceContribution extends Disposable implements ITerminalContribution {
@@ -37,9 +34,7 @@ export class TerminalVoiceContribution extends Disposable implements ITerminalCo
 	}
 
 	get state(): TerminalDictationState {
-		return this.context.instance.state === 'running' && !this.context.instance.isReadOnly
-			? this.reportedState
-			: 'unavailable';
+		return this.context.instance.state === 'running' && !this.context.instance.isReadOnly ? this.reportedState : 'unavailable';
 	}
 
 	xtermReady(screen: IXtermTerminal): void {
@@ -49,10 +44,7 @@ export class TerminalVoiceContribution extends Disposable implements ITerminalCo
 				return true;
 			}
 			// Only this versioned capability enables controls; titles and echoed commands do not.
-			const match =
-				/^state=(?:idle|working|blocked):app=ash:dictation=(idle|active|busy|unavailable):protocol=1$/.exec(
-					payload,
-				);
+			const match = /^state=(?:idle|working|blocked):app=ash:dictation=(idle|active|busy|unavailable):protocol=1$/.exec(payload);
 			if (!match) return false;
 			this.setState(match[1] as TerminalDictationState);
 			return true;

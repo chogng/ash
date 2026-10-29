@@ -68,11 +68,7 @@ export function observableSignalFromEvent(_nameOrOwner: string | object, event: 
 }
 
 /** Projects the latest value of an event-backed state source. */
-export function observableFromEvent<T>(
-	_nameOrOwner: string | object,
-	event: Event<unknown>,
-	getValue: () => T,
-): IObservable<T> {
+export function observableFromEvent<T>(_nameOrOwner: string | object, event: Event<unknown>, getValue: () => T): IObservable<T> {
 	return new EventValueObservable(event, getValue);
 }
 
@@ -325,4 +321,6 @@ class ObservableTransaction implements ITransaction {
 	}
 }
 
-const nonTrackingReader: IReader = { readObservable: observable => observable.get() };
+const nonTrackingReader: IReader = {
+	readObservable: observable => observable.get(),
+};

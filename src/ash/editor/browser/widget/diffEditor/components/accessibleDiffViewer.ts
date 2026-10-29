@@ -91,8 +91,7 @@ export class AccessibleDiffViewer extends Disposable {
 	public getAccessibleContent(): string {
 		const state = this.model.state;
 		if (state.kind === 'loading') return localize('diffEditor.computing', 'Computing differences');
-		if (state.kind === 'error')
-			return localize('diffEditor.error', 'Could not compute differences: {0}', state.error.message);
+		if (state.kind === 'error') return localize('diffEditor.error', 'Could not compute differences: {0}', state.error.message);
 		const diff = this.getDiff()!;
 		const content = diff.hunks.map((hunk, index) => this.hunkContent(hunk, index, diff.hunks.length));
 		if (content.length === 0) {
@@ -130,14 +129,8 @@ export class AccessibleDiffViewer extends Disposable {
 	}
 
 	private render(): void {
-		this.domNode.setAttribute(
-			'aria-label',
-			localize('diffEditor.accessibleViewer.title', 'Accessible Diff Viewer'),
-		);
-		this.contentDomNode.setAttribute(
-			'aria-label',
-			localize('diffEditor.accessibleViewer.content', 'Difference content'),
-		);
+		this.domNode.setAttribute('aria-label', localize('diffEditor.accessibleViewer.title', 'Accessible Diff Viewer'));
+		this.contentDomNode.setAttribute('aria-label', localize('diffEditor.accessibleViewer.content', 'Difference content'));
 		this.previousDomNode.textContent = localize('diffEditor.accessibleViewer.previous', 'Previous difference');
 		this.nextDomNode.textContent = localize('diffEditor.accessibleViewer.next', 'Next difference');
 		this.closeDomNode.textContent = localize('diffEditor.accessibleViewer.close', 'Close');
@@ -152,12 +145,7 @@ export class AccessibleDiffViewer extends Disposable {
 			return;
 		}
 		const position = Math.max(0, changedRows.indexOf(this.currentRow));
-		this.summaryDomNode.textContent = localize(
-			'diffEditor.accessibleViewer.position',
-			'Difference {0} of {1}',
-			position + 1,
-			changedRows.length,
-		);
+		this.summaryDomNode.textContent = localize('diffEditor.accessibleViewer.position', 'Difference {0} of {1}', position + 1, changedRows.length);
 		this.contentDomNode.value = this.rowContent(diff.rows.get(changedRows[position]!)!).join('\n');
 		this.previousDomNode.disabled = false;
 		this.nextDomNode.disabled = false;
@@ -166,33 +154,16 @@ export class AccessibleDiffViewer extends Disposable {
 	private hunkContent(hunk: LineDiffHunk, index: number, count: number): string {
 		const rows = this.getDiff()!.rows.slice(hunk.rowStart, hunk.rowEnd);
 		const lines = rows.flatMap(row => this.rowContent(row));
-		return [
-			localize('diffEditor.accessibleViewer.position', 'Difference {0} of {1}', index + 1, count),
-			...lines,
-		].join('\n');
+		return [localize('diffEditor.accessibleViewer.position', 'Difference {0} of {1}', index + 1, count), ...lines].join('\n');
 	}
 
 	private rowContent(row: LineDiffRow): string[] {
 		const lines: string[] = [];
 		if (row.originalLineIndex !== undefined) {
-			lines.push(
-				localize(
-					'diffEditor.accessibleViewer.removedLine',
-					'Original line {0}: {1}',
-					row.originalLineIndex + 1,
-					this.model.original.getLineContent(row.originalLineIndex + 1),
-				),
-			);
+			lines.push(localize('diffEditor.accessibleViewer.removedLine', 'Original line {0}: {1}', row.originalLineIndex + 1, this.model.original.getLineContent(row.originalLineIndex + 1)));
 		}
 		if (row.modifiedLineIndex !== undefined) {
-			lines.push(
-				localize(
-					'diffEditor.accessibleViewer.addedLine',
-					'Modified line {0}: {1}',
-					row.modifiedLineIndex + 1,
-					this.model.modified.getLineContent(row.modifiedLineIndex + 1),
-				),
-			);
+			lines.push(localize('diffEditor.accessibleViewer.addedLine', 'Modified line {0}: {1}', row.modifiedLineIndex + 1, this.model.modified.getLineContent(row.modifiedLineIndex + 1)));
 		}
 		return lines;
 	}

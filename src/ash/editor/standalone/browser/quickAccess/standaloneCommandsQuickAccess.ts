@@ -6,12 +6,7 @@ import { KeybindingWeight } from '../../../../platform/keybinding/common/keybind
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
-import {
-	EditorAction,
-	EditorExtensionsRegistry,
-	registerEditorAction,
-	type ServicesAccessor,
-} from '../../../browser/editorExtensions.js';
+import { EditorAction, EditorExtensionsRegistry, registerEditorAction, type ServicesAccessor } from '../../../browser/editorExtensions.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import type { IEditorAction } from '../../../common/editorCommon.js';
 import { getStandaloneHelpPicks } from './standaloneHelpQuickAccess.js';
@@ -53,9 +48,7 @@ export class GotoLineAction extends EditorAction {
 				}
 			}
 			const isHelp = picker.value.startsWith('?');
-			picker.ariaLabel = isHelp
-				? localize('quickHelp.dialog', 'Quick Access Help')
-				: localize('quickCommand.label', 'Command Palette');
+			picker.ariaLabel = isHelp ? localize('quickHelp.dialog', 'Quick Access Help') : localize('quickCommand.label', 'Command Palette');
 			picker.placeholder = isHelp
 				? localize('quickHelp.placeholder', 'Choose a command or type to filter')
 				: localize('quickCommand.placeholder', 'Type > for commands, ? for help, or @ for symbols');
@@ -67,7 +60,14 @@ export class GotoLineAction extends EditorAction {
 							return [];
 						}
 						const keybinding = keybindings.lookupKeybinding(action.id);
-						return [{ action, label: action.label, description: action.id, keybinding }];
+						return [
+							{
+								action,
+								label: action.label,
+								description: action.id,
+								keybinding,
+							},
+						];
 					});
 		};
 		resources.add(keybindings.onDidUpdateKeybindings(updateMode));

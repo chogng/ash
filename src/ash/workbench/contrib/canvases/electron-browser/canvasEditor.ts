@@ -69,9 +69,7 @@ export class CanvasEditor extends EditorPane {
 		parent.append(root);
 		super.create(root);
 		SessionCanvasFocusedContext.bindTo(this._register(this.contextKeys.createScoped(root))).set(true);
-		this.host = this._register(
-			this.instantiation.createInstance(WebContentsViewHost, parent.ownerDocument.defaultView!),
-		);
+		this.host = this._register(this.instantiation.createInstance(WebContentsViewHost, parent.ownerDocument.defaultView!));
 		this.host.onContainerCreated(this.viewport);
 	}
 
@@ -100,14 +98,7 @@ export class CanvasEditor extends EditorPane {
 		const input = this.input;
 		const source = input?.canvas.get().source;
 		const signal = this.inputSignal;
-		if (
-			!input ||
-			!source ||
-			!signal ||
-			signal.aborted ||
-			this.model ||
-			!this.canvases.isOwnerPresentable(input.reference)
-		) {
+		if (!input || !source || !signal || signal.aborted || this.model || !this.canvases.isOwnerPresentable(input.reference)) {
 			return Promise.resolve();
 		}
 		const revision = this.revision;
@@ -122,9 +113,7 @@ export class CanvasEditor extends EditorPane {
 			this.inputLifetime.add(
 				model.onDidEvent(event => {
 					if (event.type === 'keyDown' && this.host.isActive) {
-						this.viewport.dispatchEvent(
-							new KeyboardEvent('keydown', { ...event.event, bubbles: true, cancelable: true }),
-						);
+						this.viewport.dispatchEvent(new KeyboardEvent('keydown', { ...event.event, bubbles: true, cancelable: true }));
 					}
 				}),
 			);
@@ -179,10 +168,7 @@ export class CanvasEditor extends EditorPane {
 				: pending
 					? localize('canvas.waitingSource', 'This Canvas is reconnecting…')
 					: '';
-		this.viewport.setAttribute(
-			'aria-label',
-			localize('canvas.pageLabel', 'Canvas: {0}', this.input?.getName() ?? ''),
-		);
+		this.viewport.setAttribute('aria-label', localize('canvas.pageLabel', 'Canvas: {0}', this.input?.getName() ?? ''));
 	}
 
 	layout(_dimension: IDimension): void {
@@ -227,21 +213,10 @@ export class CanvasEditor extends EditorPane {
 			AccessibilityVerbositySettingId.SessionCanvas,
 		);
 		provider.onDidChangeContent = changed.event;
-		if (
-			type === AccessibleViewType.View &&
-			input &&
-			source &&
-			model &&
-			this.canvases.isOwnerPresentable(input.reference)
-		) {
+		if (type === AccessibleViewType.View && input && source && model && this.canvases.isOwnerPresentable(input.reference)) {
 			void this.pages.getAccessibilityTree(model.id).then(
 				result => {
-					if (
-						closed ||
-						input !== this.input ||
-						input.canvas.get().source?.toString() !== source.toString() ||
-						!this.canvases.isOwnerPresentable(input.reference)
-					) {
+					if (closed || input !== this.input || input.canvas.get().source?.toString() !== source.toString() || !this.canvases.isOwnerPresentable(input.reference)) {
 						return;
 					}
 					text = result || localize('canvas.noAccessibleContent', 'This page has no accessible content.');
@@ -249,10 +224,7 @@ export class CanvasEditor extends EditorPane {
 				},
 				() => {
 					if (!closed) {
-						text = localize(
-							'canvas.readFailed',
-							'Could not read this Canvas. Return to its conversation and try again.',
-						);
+						text = localize('canvas.readFailed', 'Could not read this Canvas. Return to its conversation and try again.');
 						changed.fire();
 					}
 				},

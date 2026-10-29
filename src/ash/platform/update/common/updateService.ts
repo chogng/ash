@@ -4,9 +4,7 @@ import type { Event } from '../../../base/common/event.js';
 export type DesktopUpdatePolicy = 'latest' | 'stable' | 'never';
 export const DESKTOP_UPDATE_POLICY_SETTING = 'update.policy';
 
-export type UpdateCheckResult =
-	| { readonly status: 'current'; readonly version?: string }
-	| { readonly status: 'available'; readonly currentVersion?: string; readonly version: string };
+export type UpdateCheckResult = { readonly status: 'current'; readonly version?: string } | { readonly status: 'available'; readonly currentVersion?: string; readonly version: string };
 
 export interface UpdateReadyResult {
 	readonly version: string;

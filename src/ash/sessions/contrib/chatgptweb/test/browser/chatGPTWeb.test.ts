@@ -6,10 +6,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
-import {
-	ISessionsLayoutService,
-	type ISessionsEntry,
-} from '../../../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsLayoutService, type ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
 import { ChatGPTWebContribution, chatGPTScrollOptimization } from '../../browser/chatGPTWeb.js';
 import { IChatGPTService, chatGPTNavigationContainerId } from '../../browser/chatGPTService.js';
 import { ISessionsSearchService } from '../../../search/browser/searchService.js';
@@ -27,24 +24,16 @@ suite('ChatGPT entry', () => {
 	test('the Workbench Browser settings expose the translated ChatGPT scrolling control', async () => {
 		setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 		try {
-			assert.equal(
-				localize('sessions.chatgpt.toggleOptimization', 'ChatGPT: Toggle Scrolling Optimization'),
-				'ChatGPT：切换滚动优化',
-			);
+			assert.equal(localize('sessions.chatgpt.toggleOptimization', 'ChatGPT: Toggle Scrolling Optimization'), 'ChatGPT：切换滚动优化');
 			assert.equal(localize('sessions.chatgpt.reloadShort', 'Reload'), '刷新');
-			const { createSettingsLayout, SettingsNavigation } =
-				await import('../../../../../workbench/contrib/preferences/browser/settingsLayout.js');
+			const { createSettingsLayout, SettingsNavigation } = await import('../../../../../workbench/contrib/preferences/browser/settingsLayout.js');
 			const defaults = new DefaultSettings();
-			const browser = createSettingsLayout([defaults.get(chatGPTScrollOptimization)]).find(
-				category => category.id === 'browser',
-			)!;
+			const browser = createSettingsLayout([defaults.get(chatGPTScrollOptimization)]).find(category => category.id === 'browser')!;
 			assert.equal(browser.descriptor.label, '浏览器');
 			assert.equal(browser.groups[0]!.description, '配置此窗口中的 ChatGPT。');
 			assert.equal(browser.groups[0]!.settings[0]!.title, 'ChatGPT 滚动优化');
 			assert.deepEqual(
-				SettingsNavigation.filter(
-					entry => 'categories' in entry && entry.categories.some(category => category.id === browser.id),
-				).map(entry => entry.id),
+				SettingsNavigation.filter(entry => 'categories' in entry && entry.categories.some(category => category.id === browser.id)).map(entry => entry.id),
 				['workbench'],
 			);
 		} finally {
@@ -53,10 +42,7 @@ suite('ChatGPT entry', () => {
 	});
 
 	test('open and restore use a normal editor resource and independent sidebar without a BrowserView', async () => {
-		assert.equal(
-			SessionsViewRegistry.getDefaultViewContainer(ViewContainerLocation.Sidebar)?.id,
-			chatGPTNavigationContainerId,
-		);
+		assert.equal(SessionsViewRegistry.getDefaultViewContainer(ViewContainerLocation.Sidebar)?.id, chatGPTNavigationContainerId);
 		using resources = new DisposableStore();
 		const entries: { entry: ISessionsEntry; source?: string }[] = [];
 		let initialized = 0;
@@ -64,10 +50,7 @@ suite('ChatGPT entry', () => {
 			new InstantiationService(
 				new ServiceCollection(
 					[IChatGPTService, { initialize: () => initialized++ } as unknown as IChatGPTService],
-					[
-						ISessionsSearchService,
-						{ registerSource: () => Disposable.None } as unknown as ISessionsSearchService,
-					],
+					[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
 					[IEditorService, {} as IEditorService],
 					[
 						ISessionsLayoutService,
@@ -114,10 +97,7 @@ suite('ChatGPT entry', () => {
 							},
 						} as unknown as IChatGPTService,
 					],
-					[
-						ISessionsSearchService,
-						{ registerSource: () => Disposable.None } as unknown as ISessionsSearchService,
-					],
+					[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
 					[
 						IEditorService,
 						{
@@ -160,10 +140,7 @@ suite('ChatGPT entry', () => {
 							},
 						} as unknown as IChatGPTService,
 					],
-					[
-						ISessionsSearchService,
-						{ registerSource: () => Disposable.None } as unknown as ISessionsSearchService,
-					],
+					[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
 					[IEditorService, {} as IEditorService],
 					[
 						ISessionsLayoutService,

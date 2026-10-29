@@ -22,10 +22,7 @@ export class OutlineViewState extends Disposable implements IOutlineViewState {
 		this.state = {
 			followCursor: typeof saved.followCursor === 'boolean' ? saved.followCursor : false,
 			filterOnType: typeof saved.filterOnType === 'boolean' ? saved.filterOnType : true,
-			sortBy:
-				saved.sortBy === OutlineSortOrder.ByName || saved.sortBy === OutlineSortOrder.ByKind
-					? saved.sortBy
-					: OutlineSortOrder.ByPosition,
+			sortBy: saved.sortBy === OutlineSortOrder.ByName || saved.sortBy === OutlineSortOrder.ByKind ? saved.sortBy : OutlineSortOrder.ByPosition,
 		};
 	}
 

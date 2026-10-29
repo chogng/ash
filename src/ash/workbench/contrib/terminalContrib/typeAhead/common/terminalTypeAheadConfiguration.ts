@@ -15,10 +15,7 @@ export const terminalTypeAheadConfiguration: Readonly<Record<string, IConfigurat
 		enum: ['on', 'off', 'auto'],
 		default: 'off',
 		get description() {
-			return localize(
-				'terminal.typeAhead.enabled',
-				'Predict terminal input locally. Auto enables predictions for remote terminals when echo latency exceeds the configured threshold.',
-			);
+			return localize('terminal.typeAhead.enabled', 'Predict terminal input locally. Auto enables predictions for remote terminals when echo latency exceeds the configured threshold.');
 		},
 	},
 	[TerminalTypeAheadSettingId.LocalEchoLatencyThreshold]: {
@@ -26,10 +23,7 @@ export const terminalTypeAheadConfiguration: Readonly<Record<string, IConfigurat
 		minimum: -1,
 		default: 30,
 		get description() {
-			return localize(
-				'terminal.typeAhead.threshold',
-				'Echo latency in milliseconds before automatic input prediction is shown. Zero always predicts; -1 disables automatic prediction.',
-			);
+			return localize('terminal.typeAhead.threshold', 'Echo latency in milliseconds before automatic input prediction is shown. Zero always predicts; -1 disables automatic prediction.');
 		},
 	},
 	[TerminalTypeAheadSettingId.LocalEchoExcludePrograms]: {
@@ -37,10 +31,7 @@ export const terminalTypeAheadConfiguration: Readonly<Record<string, IConfigurat
 		items: { type: 'string' },
 		default: DEFAULT_LOCAL_ECHO_EXCLUDE,
 		get description() {
-			return localize(
-				'terminal.typeAhead.exclude',
-				'Disable input prediction when the terminal title contains one of these program names.',
-			);
+			return localize('terminal.typeAhead.exclude', 'Disable input prediction when the terminal title contains one of these program names.');
 		},
 	},
 	[TerminalTypeAheadSettingId.LocalEchoStyle]: {
@@ -48,10 +39,7 @@ export const terminalTypeAheadConfiguration: Readonly<Record<string, IConfigurat
 		default: 'dim',
 		pattern: '^(bold|dim|italic|underlined|inverted|#[0-9a-fA-F]{6})$',
 		get description() {
-			return localize(
-				'terminal.typeAhead.style',
-				'Style of predicted input: bold, dim, italic, underlined, inverted, or an RGB hex color.',
-			);
+			return localize('terminal.typeAhead.style', 'Style of predicted input: bold, dim, italic, underlined, inverted, or an RGB hex color.');
 		},
 	},
 };

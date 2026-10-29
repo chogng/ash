@@ -1,18 +1,10 @@
-import {
-	defaultButtonStyles,
-	defaultDialogStyles,
-	defaultCheckboxStyles,
-	defaultInputBoxStyles,
-} from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultDialogStyles, defaultCheckboxStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
 import { addDisposableListener, getActiveElement, h, type IDimension } from '../../../../base/browser/dom.js';
 import { Button, type IButtonOptions } from '../../../../base/browser/ui/button/button.js';
-import {
-	ButtonActionViewItem,
-	type ActionViewItemOptions,
-} from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { ButtonActionViewItem, type ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { DropdownMenuActionViewItem } from '../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Dialog, DialogContentsAlignment } from '../../../../base/browser/ui/dialog/dialog.js';
@@ -87,10 +79,7 @@ class ProjectsSearchActionViewItem extends ButtonActionViewItem {
 					event.preventDefault();
 					event.stopPropagation();
 					this.closeSearch();
-				} else if (
-					event.target === this.input &&
-					['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)
-				) {
+				} else if (event.target === this.input && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
 					// The toolbar must not consume caret movement inside the search input.
 					event.stopPropagation();
 				}
@@ -195,12 +184,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				},
 			}),
 		);
-		this.breadcrumbSeparator = h(
-			document,
-			'span',
-			{ className: 'ash-projects-breadcrumb-separator', attributes: { 'aria-hidden': 'true' } },
-			'/',
-		);
+		this.breadcrumbSeparator = h(document, 'span', { className: 'ash-projects-breadcrumb-separator', attributes: { 'aria-hidden': 'true' } }, '/');
 		this.breadcrumbName = h(document, 'span', {
 			className: 'ash-projects-breadcrumb-name',
 			attributes: { 'aria-current': 'page' },
@@ -223,16 +207,11 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				ariaLabel: localize('projects.toolbar', 'Project actions'),
 				actionViewItemProvider: (action, options) => {
 					if (action.id === 'projects.search') {
-						this.searchActionViewItem = new ProjectsSearchActionViewItem(
-							action,
-							options,
-							this.search,
-							() => {
-								this.projects.setQuery('');
-								this.setSearchVisible(false);
-								this.searchActionViewItem.focus();
-							},
-						);
+						this.searchActionViewItem = new ProjectsSearchActionViewItem(action, options, this.search, () => {
+							this.projects.setQuery('');
+							this.setSearchVisible(false);
+							this.searchActionViewItem.focus();
+						});
 						return this.searchActionViewItem;
 					}
 					if (action.id === 'projects.sort') {
@@ -406,13 +385,10 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const createAction = this.toolbarActions.find(action => action.id === 'projects.create')!;
 		if (createAction.enabled === state.busy) {
 			// Keep the search and dropdown items mounted while the primary action changes availability.
-			this.toolbarActions = this.toolbarActions.map(action =>
-				action === createAction ? { ...action, enabled: !state.busy } : action,
-			);
+			this.toolbarActions = this.toolbarActions.map(action => (action === createAction ? { ...action, enabled: !state.busy } : action));
 			this.toolbar.setActions(this.toolbarActions);
 		}
-		this.message.textContent =
-			state.message ?? (state.loading ? localize('projects.loading', 'Loading projects…') : '');
+		this.message.textContent = state.message ?? (state.loading ? localize('projects.loading', 'Loading projects…') : '');
 		this.message.parentElement!.hidden = !state.message && !state.loading;
 		// Keep loading announcements available without adding a row that shifts the page.
 		this.message.parentElement!.classList.toggle('loading', state.loading && !state.message);
@@ -431,11 +407,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			this.renderEmpty(!!state.query);
 		}
 		if (focusKey) {
-			(
-				Array.from(this.body.querySelectorAll<HTMLElement>('[data-project-control]')).find(
-					node => node.dataset.projectControl === focusKey,
-				) ?? this.title
-			).focus();
+			(Array.from(this.body.querySelectorAll<HTMLElement>('[data-project-control]')).find(node => node.dataset.projectControl === focusKey) ?? this.title).focus();
 		}
 	}
 
@@ -482,37 +454,19 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	private renderEmpty(searching: boolean): void {
 		const document = this.domNode.ownerDocument;
 		const empty = h(document, 'div', { className: 'ash-projects-empty' });
-		const illustration = h(
-			document,
-			'div',
-			{ className: 'ash-projects-illustration', attributes: { 'aria-hidden': 'true' } },
-			h(document, 'span'),
-			h(document, 'span'),
-			h(document, 'span'),
-		);
+		const illustration = h(document, 'div', { className: 'ash-projects-illustration', attributes: { 'aria-hidden': 'true' } }, h(document, 'span'), h(document, 'span'), h(document, 'span'));
 		empty.append(
 			illustration,
-			h(
-				document,
-				'h2',
-				{},
-				searching
-					? localize('projects.noResults', 'No matching projects')
-					: localize('projects.emptyTitle', 'Looking to start a project?'),
-			),
+			h(document, 'h2', {}, searching ? localize('projects.noResults', 'No matching projects') : localize('projects.emptyTitle', 'Looking to start a project?')),
 			h(
 				document,
 				'p',
 				{},
-				searching
-					? localize('projects.searchHint', 'Try another name or clear your search.')
-					: localize('projects.emptyDescription', 'Bring your materials and goals together in one space.'),
+				searching ? localize('projects.searchHint', 'Try another name or clear your search.') : localize('projects.emptyDescription', 'Bring your materials and goals together in one space.'),
 			),
 		);
 		this.button(empty, {
-			label: searching
-				? localize('projects.clearSearch', 'Clear search')
-				: localize('projects.new', 'New project'),
+			label: searching ? localize('projects.clearSearch', 'Clear search') : localize('projects.new', 'New project'),
 			presentation: 'secondary',
 			onClick: () => (searching ? this.projects.setQuery('') : this.showProjectDialog()),
 		});
@@ -538,12 +492,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				attributes: { 'aria-hidden': 'true' },
 			});
 			appendIcon(Lxicon.projects, mark);
-			const content = h(
-				document,
-				'span',
-				{ className: 'ash-projects-card-content' },
-				h(document, 'span', { className: 'ash-projects-card-name' }, project.name),
-			);
+			const content = h(document, 'span', { className: 'ash-projects-card-content' }, h(document, 'span', { className: 'ash-projects-card-name' }, project.name));
 			const timestamp = project.updatedAtMs ?? project.createdAtMs;
 			if (timestamp !== undefined) {
 				const date = new Date(timestamp);
@@ -560,9 +509,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			card.append(mark, content);
 			const actionsHost = h(document, 'div', { className: 'ash-projects-card-actions' });
 			const pinned = this.projects.isPinned(project.id);
-			const pinLabel = pinned
-				? localize('projects.unpin', 'Unpin {0}', project.name)
-				: localize('projects.pin', 'Pin {0}', project.name);
+			const pinLabel = pinned ? localize('projects.unpin', 'Unpin {0}', project.name) : localize('projects.pin', 'Pin {0}', project.name);
 			const pin: IAction = {
 				id: 'projects.pin',
 				label: pinLabel,
@@ -587,9 +534,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 								},
 							});
 							// The menu mounts synchronously in this window; Projects owns its destructive styling.
-							const destructiveAction = this.domNode.ownerDocument.querySelector(
-								'.ash-projects-menu [data-action-id="projects.delete"]',
-							);
+							const destructiveAction = this.domNode.ownerDocument.querySelector('.ash-projects-menu [data-action-id="projects.delete"]');
 							destructiveAction?.classList.add('ash-projects-destructive-action');
 						},
 					},
@@ -634,9 +579,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		for (const caption of this.body.querySelectorAll<HTMLTimeElement>('time.ash-projects-card-caption')) {
 			const elapsed = Math.max(0, now - Date.parse(caption.dateTime));
 			const unit = units.find(candidate => elapsed >= candidate.milliseconds);
-			caption.textContent = unit
-				? this.relativeTime.format(-Math.floor(elapsed / unit.milliseconds), unit.unit)
-				: localize('projects.justNow', 'Just now');
+			caption.textContent = unit ? this.relativeTime.format(-Math.floor(elapsed / unit.milliseconds), unit.unit) : localize('projects.justNow', 'Just now');
 		}
 	}
 
@@ -665,10 +608,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			action('projects.delete', localize('projects.delete', 'Delete'), Lxicon.trash, async () => {
 				const result = await this.dialogs.confirm({
 					message: localize('projects.deleteConfirm', 'Delete project "{0}"?', project.name),
-					detail: localize(
-						'projects.deleteDetail',
-						'The project and its material references will be removed. Conversations and source files will be kept.',
-					),
+					detail: localize('projects.deleteDetail', 'The project and its material references will be removed. Conversations and source files will be kept.'),
 					primaryButton: localize('projects.delete', 'Delete'),
 				});
 				if (result.confirmed) {
@@ -685,12 +625,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const document = this.domNode.ownerDocument;
 		const layout = h(document, 'div', { className: 'ash-projects-detail' });
 		const overview = h(document, 'section', { className: 'ash-projects-overview' });
-		const heading = h(
-			document,
-			'div',
-			{ className: 'ash-projects-section-heading' },
-			h(document, 'h2', {}, localize('projects.goals', 'Project goals')),
-		);
+		const heading = h(document, 'div', { className: 'ash-projects-section-heading' }, h(document, 'h2', {}, localize('projects.goals', 'Project goals')));
 		this.button(
 			heading,
 			{
@@ -700,25 +635,12 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			},
 			'edit',
 		);
-		overview.append(
-			heading,
-			h(
-				document,
-				'p',
-				{ className: 'ash-projects-description' },
-				project.description || localize('projects.noGoals', 'Add a description of what you want to achieve.'),
-			),
-		);
+		overview.append(heading, h(document, 'p', { className: 'ash-projects-description' }, project.description || localize('projects.noGoals', 'Add a description of what you want to achieve.')));
 		const materials = h(document, 'section', {
 			className: 'ash-projects-materials',
 			attributes: { 'aria-label': localize('projects.materials', 'Materials') },
 		});
-		const materialsHeading = h(
-			document,
-			'div',
-			{ className: 'ash-projects-section-heading' },
-			h(document, 'h2', {}, localize('projects.materials', 'Materials')),
-		);
+		const materialsHeading = h(document, 'div', { className: 'ash-projects-section-heading' }, h(document, 'h2', {}, localize('projects.materials', 'Materials')));
 		this.button(
 			materialsHeading,
 			{
@@ -733,25 +655,10 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		);
 		materials.append(
 			materialsHeading,
-			h(
-				document,
-				'p',
-				{ className: 'ash-projects-muted' },
-				localize(
-					'projects.materialsDescription',
-					'Keep images, PDFs, documents and other files close at hand.',
-				),
-			),
+			h(document, 'p', { className: 'ash-projects-muted' }, localize('projects.materialsDescription', 'Keep images, PDFs, documents and other files close at hand.')),
 		);
 		if (!project.materials.length) {
-			materials.append(
-				h(
-					document,
-					'p',
-					{ className: 'ash-projects-materials-empty' },
-					localize('projects.noMaterials', 'Add your first material to this project.'),
-				),
-			);
+			materials.append(h(document, 'p', { className: 'ash-projects-materials-empty' }, localize('projects.noMaterials', 'Add your first material to this project.')));
 		}
 		const list = h(document, 'ul', { className: 'ash-projects-material-list' });
 		for (const material of project.materials) {
@@ -801,22 +708,14 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			},
 			'add-folder',
 		);
-		materials.append(
-			h(
-				document,
-				'p',
-				{ className: 'ash-projects-source-note' },
-				localize('projects.referenceHint', 'Files stay in their original location.'),
-			),
-		);
+		materials.append(h(document, 'p', { className: 'ash-projects-source-note' }, localize('projects.referenceHint', 'Files stay in their original location.')));
 		layout.append(overview, materials);
 		this.body.append(layout);
 	}
 
 	private renderLoading(detail: boolean): void {
 		const document = this.domNode.ownerDocument;
-		const placeholder = (className = '') =>
-			h(document, 'span', { className: `ash-projects-placeholder ${className}` });
+		const placeholder = (className = '') => h(document, 'span', { className: `ash-projects-placeholder ${className}` });
 		const skeleton = h(document, 'div', {
 			className: `ash-projects-skeleton ${detail ? 'ash-projects-detail' : 'ash-projects-grid'}`,
 			attributes: { 'aria-hidden': 'true' },
@@ -827,27 +726,14 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				'div',
 				{ className: 'ash-projects-overview' },
 				placeholder('ash-projects-skeleton-section-title'),
-				h(
-					document,
-					'div',
-					{ className: 'ash-projects-description ash-projects-skeleton-lines' },
-					placeholder(),
-					placeholder(),
-					placeholder('ash-projects-skeleton-short'),
-				),
+				h(document, 'div', { className: 'ash-projects-description ash-projects-skeleton-lines' }, placeholder(), placeholder(), placeholder('ash-projects-skeleton-short')),
 			);
 			const materials = h(
 				document,
 				'div',
 				{ className: 'ash-projects-materials' },
 				placeholder('ash-projects-skeleton-section-title'),
-				h(
-					document,
-					'div',
-					{ className: 'ash-projects-skeleton-lines' },
-					placeholder(),
-					placeholder('ash-projects-skeleton-short'),
-				),
+				h(document, 'div', { className: 'ash-projects-skeleton-lines' }, placeholder(), placeholder('ash-projects-skeleton-short')),
 			);
 			skeleton.append(overview, materials);
 		} else {
@@ -857,13 +743,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 					'div',
 					{ className: 'ash-projects-card ash-projects-skeleton-card' },
 					placeholder('ash-projects-card-mark'),
-					h(
-						document,
-						'div',
-						{ className: 'ash-projects-card-content' },
-						placeholder('ash-projects-skeleton-name'),
-						placeholder('ash-projects-skeleton-short'),
-					),
+					h(document, 'div', { className: 'ash-projects-card-content' }, placeholder('ash-projects-skeleton-name'), placeholder('ash-projects-skeleton-short')),
 				);
 				skeleton.append(h(document, 'div', { className: 'ash-projects-row' }, card));
 			}
@@ -910,12 +790,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				await this.editors.openEditor({ resource });
 			}
 		} catch {
-			this.showError(
-				localize(
-					'projects.openFailed',
-					'Could not open this material. Check that the source file is still available.',
-				),
-			);
+			this.showError(localize('projects.openFailed', 'Could not open this material. Check that the source file is still available.'));
 		}
 	}
 
@@ -948,12 +823,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			},
 		});
 		nameLabel.append(name);
-		const descriptionLabel = h(
-			document,
-			'label',
-			{},
-			localize('projects.descriptionLabel', 'What are you trying to achieve?'),
-		);
+		const descriptionLabel = h(document, 'label', {}, localize('projects.descriptionLabel', 'What are you trying to achieve?'));
 		const description = h(document, 'textarea', {
 			properties: {
 				value: project?.description ?? '',
@@ -975,10 +845,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				...defaultButtonStyles,
 				label: localize('projects.useFolder', 'Use a folder'),
 				icon: Lxicon.newFolder,
-				title: localize(
-					'projects.useFolderTooltip',
-					'Ash can work in this folder when you use the project from this computer.',
-				),
+				title: localize('projects.useFolderTooltip', 'Ash can work in this folder when you use the project from this computer.'),
 				onClick: () => {
 					void this.files
 						.showOpenDialog({ canSelectFiles: false, canSelectFolders: true })
@@ -999,10 +866,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 						})
 						.catch(() => {
 							if (!store.isDisposed) {
-								feedback.textContent = localize(
-									'projects.pickFailed',
-									'Could not add these materials. Try again.',
-								);
+								feedback.textContent = localize('projects.pickFailed', 'Could not add these materials. Try again.');
 							}
 						});
 				},
@@ -1013,24 +877,17 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		form.append(nameLabel, descriptionLabel, folderRow, feedback, conflicts, actions);
 		let didSave = false;
 		const dialog = store.add(
-			new Dialog(
-				this.domNode,
-				project
-					? localize('projects.edit', 'Edit details')
-					: localize('projects.createTitle', 'Create a project'),
-				[],
-				{
-					buttonStyles: defaultButtonStyles,
-					checkboxStyles: defaultCheckboxStyles,
-					inputBoxStyles: defaultInputBoxStyles,
-					dialogStyles: defaultDialogStyles,
-					type: 'none',
-					alignment: DialogContentsAlignment.Vertical,
-					extraClasses: ['ash-projects-dialog'],
-					disableDefaultAction: true,
-					renderBody: body => body.append(form),
-				},
-			),
+			new Dialog(this.domNode, project ? localize('projects.edit', 'Edit details') : localize('projects.createTitle', 'Create a project'), [], {
+				buttonStyles: defaultButtonStyles,
+				checkboxStyles: defaultCheckboxStyles,
+				inputBoxStyles: defaultInputBoxStyles,
+				dialogStyles: defaultDialogStyles,
+				type: 'none',
+				alignment: DialogContentsAlignment.Vertical,
+				extraClasses: ['ash-projects-dialog'],
+				disableDefaultAction: true,
+				renderBody: body => body.append(form),
+			}),
 		);
 		const reload = store.add(
 			new Button(actions, {
@@ -1054,9 +911,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const submit = store.add(
 			new Button(actions, {
 				...defaultButtonStyles,
-				label: project
-					? localize('projects.save', 'Save changes')
-					: localize('projects.create', 'Create project'),
+				label: project ? localize('projects.save', 'Save changes') : localize('projects.create', 'Create project'),
 				presentation: 'primary',
 				type: 'submit',
 				enabled: !!name.value.trim(),
@@ -1072,21 +927,13 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				return false;
 			}
 			needsMerge = true;
-			feedback.textContent = localize(
-				'projects.editConflict',
-				'This project changed in another window. Reload and merge to keep your draft and include the saved changes.',
-			);
+			feedback.textContent = localize('projects.editConflict', 'This project changed in another window. Reload and merge to keep your draft and include the saved changes.');
 			reload.domNode.hidden = false;
 			updateSubmit();
 			reload.focus();
 			return true;
 		};
-		const mergeField = (
-			input: HTMLInputElement | HTMLTextAreaElement,
-			previous: string,
-			saved: string,
-			label: string,
-		): void => {
+		const mergeField = (input: HTMLInputElement | HTMLTextAreaElement, previous: string, saved: string, label: string): void => {
 			let draft = input.value;
 			if (draft.trim() === previous || draft.trim() === saved) {
 				input.value = saved;
@@ -1101,29 +948,11 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				document,
 				'select',
 				{ attributes: { 'aria-label': label } },
-				h(
-					document,
-					'option',
-					{ properties: { value: '' } },
-					localize('projects.chooseValue', 'Choose which value to keep'),
-				),
+				h(document, 'option', { properties: { value: '' } }, localize('projects.chooseValue', 'Choose which value to keep')),
 				h(document, 'option', { properties: { value: 'draft' } }, localize('projects.keepDraft', 'Keep draft')),
-				h(
-					document,
-					'option',
-					{ properties: { value: 'saved' } },
-					localize('projects.useSaved', 'Use saved value'),
-				),
+				h(document, 'option', { properties: { value: 'saved' } }, localize('projects.useSaved', 'Use saved value')),
 			);
-			choiceLabel.append(
-				h(
-					document,
-					'span',
-					{ properties: { tabIndex: 0 } },
-					localize('projects.savedValue', 'Saved value: {0}', saved),
-				),
-				choice,
-			);
+			choiceLabel.append(h(document, 'span', { properties: { tabIndex: 0 } }, localize('projects.savedValue', 'Saved value: {0}', saved)), choice);
 			conflicts.append(choiceLabel);
 			mergeControls.add(
 				addDisposableListener(input, 'input', () => {
@@ -1163,31 +992,17 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			}
 			const state = this.projects.state.get();
 			if (state.message || latest?.id !== base.id) {
-				feedback.textContent =
-					state.message ?? localize('projects.loadFailed', 'Could not load projects. Try again.');
+				feedback.textContent = state.message ?? localize('projects.loadFailed', 'Could not load projects. Try again.');
 			} else {
 				mergeControls.clear();
 				conflicts.replaceChildren();
 				unresolved.clear();
-				mergeField(
-					name,
-					base.name,
-					latest.name,
-					localize('projects.nameConflict', 'The project name changed in both versions.'),
-				);
-				mergeField(
-					description,
-					base.description,
-					latest.description,
-					localize('projects.descriptionConflict', 'The project goals changed in both versions.'),
-				);
+				mergeField(name, base.name, latest.name, localize('projects.nameConflict', 'The project name changed in both versions.'));
+				mergeField(description, base.description, latest.description, localize('projects.descriptionConflict', 'The project goals changed in both versions.'));
 				// The dialog only adds a folder. Start with the latest materials so a
 				// concurrent addition or removal cannot be undone by the old draft.
 				materials = [...latest.materials];
-				if (
-					chosenFolder &&
-					!materials.some(item => item.resource.toString() === chosenFolder!.resource.toString())
-				) {
+				if (chosenFolder && !materials.some(item => item.resource.toString() === chosenFolder!.resource.toString())) {
 					materials.push(chosenFolder);
 				} else {
 					chosenFolder = undefined;
@@ -1197,14 +1012,8 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				reload.domNode.hidden = true;
 				conflicts.hidden = unresolved.size === 0;
 				feedback.textContent = unresolved.size
-					? localize(
-							'projects.resolveConflict',
-							'Your draft is preserved. Choose which value to keep for each conflict before saving.',
-						)
-					: localize(
-							'projects.merged',
-							'Saved changes and materials have been merged with your draft. Review and save the project.',
-						);
+					? localize('projects.resolveConflict', 'Your draft is preserved. Choose which value to keep for each conflict before saving.')
+					: localize('projects.merged', 'Saved changes and materials have been merged with your draft. Review and save the project.');
 			}
 			reload.enabled = true;
 			name.disabled = false;
@@ -1217,13 +1026,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		store.add(
 			addDisposableListener(form, 'submit', event => {
 				event.preventDefault();
-				if (
-					!name.value.trim() ||
-					this.projects.state.get().busy ||
-					needsMerge ||
-					unresolved.size ||
-					offerMerge()
-				) {
+				if (!name.value.trim() || this.projects.state.get().busy || needsMerge || unresolved.size || offerMerge()) {
 					return;
 				}
 				submit.enabled = false;
@@ -1273,22 +1076,9 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			return;
 		}
 		event.preventDefault();
-		const columns = getComputedStyle(cards[index].parentElement!.parentElement!).gridTemplateColumns.split(
-			' ',
-		).length;
+		const columns = getComputedStyle(cards[index].parentElement!.parentElement!).gridTemplateColumns.split(' ').length;
 		const next =
-			event.key === 'Home'
-				? 0
-				: event.key === 'End'
-					? cards.length - 1
-					: index +
-						(event.key === 'ArrowDown'
-							? columns
-							: event.key === 'ArrowUp'
-								? -columns
-								: event.key === 'ArrowLeft'
-									? -1
-									: 1);
+			event.key === 'Home' ? 0 : event.key === 'End' ? cards.length - 1 : index + (event.key === 'ArrowDown' ? columns : event.key === 'ArrowUp' ? -columns : event.key === 'ArrowLeft' ? -1 : 1);
 		cards[Math.max(0, Math.min(cards.length - 1, next))].focus();
 	}
 }

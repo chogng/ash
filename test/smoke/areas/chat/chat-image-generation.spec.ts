@@ -25,9 +25,7 @@ test(
 					return;
 				}
 				if (request.method === 'GET') {
-					response
-						.writeHead(200, { 'content-type': 'application/json' })
-						.end(JSON.stringify({ data: [{ id: model.model }] }));
+					response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: [{ id: model.model }] }));
 					return;
 				}
 				const chunks: Buffer[] = [];
@@ -35,8 +33,7 @@ test(
 				const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { tools?: { name: string }[] };
 				modelRequests++;
 				const name = body.tools?.find(tool => tool.name?.includes('imagegen'))?.name;
-				if (modelRequests === 1 && !name)
-					throw new Error(`Image tool missing from model request: ${JSON.stringify(body.tools)}`);
+				if (modelRequests === 1 && !name) throw new Error(`Image tool missing from model request: ${JSON.stringify(body.tools)}`);
 				const output =
 					modelRequests === 1
 						? [
@@ -120,14 +117,7 @@ readline.createInterface({ input: process.stdin }).on('line', async line => {
 					enablement: 'enabled',
 				},
 			});
-			await expect
-				.poll(
-					async () =>
-						(await client.request(APP_SERVER_METHODS['mcp/server/status'], {})).servers.find(
-							server => server.id === mcpId,
-						)?.toolCount,
-				)
-				.toBe(1);
+			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['mcp/server/status'], {})).servers.find(server => server.id === mcpId)?.toolCount).toBe(1);
 			config = await client.request(APP_SERVER_METHODS['config/read'], {});
 			await client.request(APP_SERVER_METHODS['provider/configure'], {
 				commandId: 'image-model',
@@ -157,8 +147,7 @@ readline.createInterface({ input: process.stdin }).on('line', async line => {
 			});
 			const sessionId = created.session.sessionId;
 			const threadId = created.session.threads[0]!.threadId;
-			const read = async () =>
-				(await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread;
+			const read = async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread;
 			readThread = async () => {
 				const thread = await read();
 				return {
@@ -197,12 +186,8 @@ readline.createInterface({ input: process.stdin }).on('line', async line => {
 				}),
 			);
 			const images = chat.locator('.ash-chat-generated-image-result');
-			await expect
-				.poll(() => images.locator('img').evaluate(image => (image as HTMLImageElement).naturalWidth))
-				.toBe(360);
-			await expect(
-				chat.locator('.ash-chat-tool-invocation summary').filter({ hasText: 'Generated image' }),
-			).toBeFocused();
+			await expect.poll(() => images.locator('img').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBe(360);
+			await expect(chat.locator('.ash-chat-tool-invocation summary').filter({ hasText: 'Generated image' })).toBeFocused();
 			await expect(chat.locator('.ash-chat-image-glyphs')).toHaveCount(0);
 			await expect.poll(async () => (await read()).turns.at(-1)?.status).toBe('completed');
 			if (!('windows' in application)) throw new Error('This scenario requires Electron');
@@ -216,9 +201,7 @@ readline.createInterface({ input: process.stdin }).on('line', async line => {
 				{ url: page.url(), path: downloadPath },
 			);
 			await images.getByRole('button', { name: 'Download', exact: true }).click();
-			await expect
-				.poll(async () => (await readFile(downloadPath).catch(() => Buffer.alloc(0))).toString('base64'))
-				.toBe(imageData);
+			await expect.poll(async () => (await readFile(downloadPath).catch(() => Buffer.alloc(0))).toString('base64')).toBe(imageData);
 			await capture(page, 'image-completed.png');
 			page = await workbench.reopenAgentsWindow(application, page);
 			imagePage = page;

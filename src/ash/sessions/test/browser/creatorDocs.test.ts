@@ -39,9 +39,7 @@ for (const [preference, provider, extension, recommends] of [
 	test(`Docs ${preference} routes creation with rich provider ${provider}`, async () => {
 		using lifetime = new DisposableStore();
 		const services = lifetime.add(new InstantiationService());
-		const configuration = lifetime.add(
-			new TestConfigurationService({ source: JSON.stringify({ [DOCS_EDITOR_SETTING]: preference }) }),
-		);
+		const configuration = lifetime.add(new TestConfigurationService({ source: JSON.stringify({ [DOCS_EDITOR_SETTING]: preference }) }));
 		const storage = lifetime.add(
 			new BrowserStorageService({
 				ownerWindow: browser.window as unknown as Window,
@@ -72,10 +70,7 @@ for (const [preference, provider, extension, recommends] of [
 				EditorPanes.registerEditorPane({
 					id: 'test.docs.rich',
 					name: 'Rich document',
-					canOpen: input =>
-						input.contentType === GENERAL_DOCUMENT_CONTENT_TYPE
-							? EditorPaneMatch.Default
-							: EditorPaneMatch.None,
+					canOpen: input => (input.contentType === GENERAL_DOCUMENT_CONTENT_TYPE ? EditorPaneMatch.Default : EditorPaneMatch.None),
 					resolveDocumentProfile: async () => generalProfile,
 					create: () => {
 						throw new Error('The layout boundary owns pane creation');
@@ -83,9 +78,7 @@ for (const [preference, provider, extension, recommends] of [
 				}),
 			);
 		}
-		await services.invokeFunction(accessor =>
-			CommandsRegistry.getCommand('sessions.creator.newDocument')!(accessor),
-		);
+		await services.invokeFunction(accessor => CommandsRegistry.getCommand('sessions.creator.newDocument')!(accessor));
 		assert.equal(entries.length, 1);
 		const input = entries[0].editorInput!;
 		assert.ok(input.resource.path.endsWith(extension));

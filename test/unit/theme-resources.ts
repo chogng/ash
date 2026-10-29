@@ -3,30 +3,20 @@ import { pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
 import type { IExtensionApi, ExtensionResourceRequest } from '../../src/ash/platform/extensions/common/extensionApi.js';
 
-const output = resolve(
-	process.env.ASH_UNIT_TEST_OUTPUT_DIRECTORY ?? resolve(import.meta.dirname, '../../.build/desktop/test'),
-	'src/ash',
-);
-const { ExtensionResourceLoaderService } = await import(
-	pathToFileURL(resolve(output, 'platform/extensionResourceLoader/browser/extensionResourceLoaderService.js')).href
-);
-const { normalizeExtensionCatalog } = await import(
-	pathToFileURL(resolve(output, 'platform/extensions/common/extensionApi.js')).href
-);
+const output = resolve(process.env.ASH_UNIT_TEST_OUTPUT_DIRECTORY ?? resolve(import.meta.dirname, '../../.build/desktop/test'), 'src/ash');
+const { ExtensionResourceLoaderService } = await import(pathToFileURL(resolve(output, 'platform/extensionResourceLoader/browser/extensionResourceLoaderService.js')).href);
+const { normalizeExtensionCatalog } = await import(pathToFileURL(resolve(output, 'platform/extensions/common/extensionApi.js')).href);
 const { decodeBase64 } = await import(pathToFileURL(resolve(output, 'base/common/buffer.js')).href);
-const { ExtensionColorThemeService } = await import(
-	pathToFileURL(resolve(output, 'workbench/services/extensions/browser/extensionColorThemeService.js')).href
-);
+const { ExtensionColorThemeService } = await import(pathToFileURL(resolve(output, 'workbench/services/extensions/browser/extensionColorThemeService.js')).href);
 const bundle = JSON.parse(readFileSync(new URL('../../.build/builtin/fixture.json', import.meta.url), 'utf8'));
 const catalog = normalizeExtensionCatalog(bundle.catalog);
 // Test-only bootstrap reads the same prepared fixture used by isolated browser scenarios.
 const api: IExtensionApi = {
 	list: async () => catalog,
-	resources: new ExtensionResourceLoaderService(
-		async (request: ExtensionResourceRequest) =>
-			decodeBase64(bundle.resources[request.extensionId][request.path]).buffer,
-	),
+	resources: new ExtensionResourceLoaderService(async (request: ExtensionResourceRequest) => decodeBase64(bundle.resources[request.extensionId][request.path]).buffer),
 };
-const themes = new ExtensionColorThemeService(api, { subscribe: () => ({ dispose() {} }) });
+const themes = new ExtensionColorThemeService(api, {
+	subscribe: () => ({ dispose() {} }),
+});
 await themes.start();
 process.once('exit', () => themes.dispose());

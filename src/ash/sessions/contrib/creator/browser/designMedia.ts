@@ -29,22 +29,15 @@ export class DesignMediaPreview extends Disposable {
 	private readonly embedded = new WeakMap<ImageResource, string>();
 	private readonly urls = this._register(new DisposableMap<string, ImageResource>());
 
-	public getSources(
-		document: DesignDocument,
-		read: (version: DesignAssetVersion) => Uint8Array,
-	): ReadonlyMap<string, DesignImageSource> {
+	public getSources(document: DesignDocument, read: (version: DesignAssetVersion) => Uint8Array): ReadonlyMap<string, DesignImageSource> {
 		const sources = new Map<string, DesignImageSource>();
-		const needsEmbedded = flattenDesignShapes(document.shapes).some(
-			shape => shape.blendMode === 'plus-darker' || !!shape.effects,
-		);
+		const needsEmbedded = flattenDesignShapes(document.shapes).some(shape => shape.blendMode === 'plus-darker' || !!shape.effects);
 		const used = new Set<string>();
 		for (const shape of flattenDesignShapes(document.shapes)) {
 			if (shape.kind !== 'image') {
 				continue;
 			}
-			const version = document.assets
-				.find(asset => asset.id === shape.assetId)!
-				.versions.find(version => version.id === shape.assetVersionId)!;
+			const version = document.assets.find(asset => asset.id === shape.assetId)!.versions.find(version => version.id === shape.assetVersionId)!;
 			used.add(version.sha256);
 			let resource = this.urls.get(version.sha256);
 			if (!resource) {

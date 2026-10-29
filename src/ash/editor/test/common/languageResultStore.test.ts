@@ -1,17 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
-import {
-	LanguageRequestCoordinator,
-	LanguageRequestStatus,
-	type LanguageWorker,
-	type LanguageWorkerRequest,
-} from '../../common/model/languageRequestCoordinator.js';
-import {
-	LanguageResultAcceptance,
-	LanguageResultStoreChangeReason,
-	VersionedLanguageResultStore,
-	createLanguageDiagnosticStore,
-} from '../../common/model/languageResultStore.js';
+import { LanguageRequestCoordinator, LanguageRequestStatus, type LanguageWorker, type LanguageWorkerRequest } from '../../common/model/languageRequestCoordinator.js';
+import { LanguageResultAcceptance, LanguageResultStoreChangeReason, VersionedLanguageResultStore, createLanguageDiagnosticStore } from '../../common/model/languageResultStore.js';
 import { LanguageDiagnosticSeverity, type LanguageDiagnosticResult } from '../../common/languages.js';
 import { createLanguageTokenStore, type LanguageTokenResult } from '../../common/tokens/languageTokens.js';
 import { Position } from '../../common/core/position.js';
@@ -19,8 +9,7 @@ import { Range } from '../../common/core/range.js';
 import { TextModel } from '../../common/model/textModel.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
-const range = (lineIndex: number, startColumn: number, endColumn: number): Range =>
-	Range.fromPositions(position(lineIndex, startColumn), position(lineIndex, endColumn));
+const range = (lineIndex: number, startColumn: number, endColumn: number): Range => Range.fromPositions(position(lineIndex, startColumn), position(lineIndex, endColumn));
 
 test('Language token stores freeze current-version results and invalidate on edit', () => {
 	using model = new TextModel('const value = 1;\n');
@@ -30,13 +19,26 @@ test('Language token stores freeze current-version results and invalidate on edi
 	const modifiers = ['declaration'];
 	const result: LanguageTokenResult = {
 		tokens: [
-			{ range: range(0, 0, 5), tokenType: 'keyword', modifiers: [] },
-			{ range: range(0, 6, 11), tokenType: 'variable', modifiers },
+			{
+				range: range(0, 0, 5),
+				tokenType: 'keyword',
+				modifiers: [],
+			},
+			{
+				range: range(0, 6, 11),
+				tokenType: 'variable',
+				modifiers,
+			},
 		],
 	};
 
 	assert.equal(
-		store.accept({ requestId: 1, textModel: model, modelVersion: 1, value: result }),
+		store.accept({
+			requestId: 1,
+			textModel: model,
+			modelVersion: 1,
+			value: result,
+		}),
 		LanguageResultAcceptance.Applied,
 	);
 	modifiers.push('readonly');
@@ -47,9 +49,20 @@ test('Language token stores freeze current-version results and invalidate on edi
 	assert.equal(Object.isFrozen(stored.value.tokens[0]), true);
 	assert.equal(Object.isFrozen(stored.value.tokens[1]!.modifiers), true);
 	assert.deepEqual(stored.value.tokens[1]!.modifiers, ['declaration']);
-	assert.deepEqual(events, [{ reason: LanguageResultStoreChangeReason.Result, modelVersion: 1, result: stored }]);
+	assert.deepEqual(events, [
+		{
+			reason: LanguageResultStoreChangeReason.Result,
+			modelVersion: 1,
+			result: stored,
+		},
+	]);
 
-	model.applyEdits([{ range: Range.fromPositions(position(0, 0)), text: '// ' }]);
+	model.applyEdits([
+		{
+			range: Range.fromPositions(position(0, 0)),
+			text: '// ',
+		},
+	]);
 	assert.equal(store.result, undefined);
 	assert.deepEqual(events[1], {
 		reason: LanguageResultStoreChangeReason.ModelChanged,
@@ -57,7 +70,12 @@ test('Language token stores freeze current-version results and invalidate on edi
 		result: undefined,
 	});
 	assert.equal(
-		store.accept({ requestId: 2, textModel: model, modelVersion: 1, value: result }),
+		store.accept({
+			requestId: 2,
+			textModel: model,
+			modelVersion: 1,
+			value: result,
+		}),
 		LanguageResultAcceptance.StaleVersion,
 	);
 	assert.equal(events.length, 2);
@@ -69,36 +87,74 @@ test('Language result stores reject duplicate and superseded request IDs', () =>
 	const value = tokenResult(0, 1, 'variable');
 
 	assert.equal(
-		store.accept({ requestId: 5, textModel: model, modelVersion: 1, value }),
+		store.accept({
+			requestId: 5,
+			textModel: model,
+			modelVersion: 1,
+			value,
+		}),
 		LanguageResultAcceptance.Applied,
 	);
 	assert.equal(
-		store.accept({ requestId: 4, textModel: model, modelVersion: 1, value }),
+		store.accept({
+			requestId: 4,
+			textModel: model,
+			modelVersion: 1,
+			value,
+		}),
 		LanguageResultAcceptance.SupersededRequest,
 	);
 	assert.equal(
-		store.accept({ requestId: 5, textModel: model, modelVersion: 1, value: tokenResult(0, 1, 'keyword') }),
+		store.accept({
+			requestId: 5,
+			textModel: model,
+			modelVersion: 1,
+			value: tokenResult(0, 1, 'keyword'),
+		}),
 		LanguageResultAcceptance.DuplicateRequest,
 	);
 	assert.equal(store.result!.requestId, 5);
 	assert.equal(store.result!.value.tokens[0]!.tokenType, 'variable');
 
 	assert.equal(
-		store.accept({ requestId: 6, textModel: model, modelVersion: 1, value: tokenResult(0, 1, 'keyword') }),
+		store.accept({
+			requestId: 6,
+			textModel: model,
+			modelVersion: 1,
+			value: tokenResult(0, 1, 'keyword'),
+		}),
 		LanguageResultAcceptance.Applied,
 	);
 	assert.equal(store.result!.requestId, 6);
 	using otherModel = new TextModel('x');
 	assert.throws(
-		() => store.accept({ requestId: 7, textModel: otherModel, modelVersion: 1, value }),
+		() =>
+			store.accept({
+				requestId: 7,
+				textModel: otherModel,
+				modelVersion: 1,
+				value,
+			}),
 		/share one text model/,
 	);
 	assert.throws(
-		() => store.accept({ requestId: 0, textModel: model, modelVersion: 1, value }),
+		() =>
+			store.accept({
+				requestId: 0,
+				textModel: model,
+				modelVersion: 1,
+				value,
+			}),
 		/positive safe integer/,
 	);
 	assert.throws(
-		() => store.accept({ requestId: 7, textModel: model, modelVersion: Number.NaN, value }),
+		() =>
+			store.accept({
+				requestId: 7,
+				textModel: model,
+				modelVersion: Number.NaN,
+				value,
+			}),
 		/positive safe integer/,
 	);
 	assert.equal(store.result!.requestId, 6);
@@ -109,18 +165,33 @@ test('Language result clear is explicit and suppresses empty no-ops', () => {
 	using store = createLanguageTokenStore(model);
 	const events: unknown[] = [];
 	using listener = store.onDidChange(event => events.push(event));
-	store.accept({ requestId: 5, textModel: model, modelVersion: 1, value: tokenResult(0, 1, 'variable') });
+	store.accept({
+		requestId: 5,
+		textModel: model,
+		modelVersion: 1,
+		value: tokenResult(0, 1, 'variable'),
+	});
 
 	store.clear();
 	store.clear();
 
 	assert.equal(store.result, undefined);
 	assert.equal(
-		store.accept({ requestId: 5, textModel: model, modelVersion: 1, value: tokenResult(0, 1, 'keyword') }),
+		store.accept({
+			requestId: 5,
+			textModel: model,
+			modelVersion: 1,
+			value: tokenResult(0, 1, 'keyword'),
+		}),
 		LanguageResultAcceptance.DuplicateRequest,
 	);
 	assert.equal(
-		store.accept({ requestId: 4, textModel: model, modelVersion: 1, value: tokenResult(0, 1, 'keyword') }),
+		store.accept({
+			requestId: 4,
+			textModel: model,
+			modelVersion: 1,
+			value: tokenResult(0, 1, 'keyword'),
+		}),
 		LanguageResultAcceptance.SupersededRequest,
 	);
 	assert.deepEqual(
@@ -155,7 +226,12 @@ test('Language diagnostics validate atomically while allowing points and overlap
 		],
 	};
 	assert.equal(
-		store.accept({ requestId: 1, textModel: model, modelVersion: 1, value: valid }),
+		store.accept({
+			requestId: 1,
+			textModel: model,
+			modelVersion: 1,
+			value: valid,
+		}),
 		LanguageResultAcceptance.Applied,
 	);
 	const original = store.result;
@@ -174,10 +250,22 @@ test('Language diagnostics validate atomically while allowing points and overlap
 		},
 		{
 			diagnostics: [
-				{ range: range(0, 0, 1), severity: 'fatal' as LanguageDiagnosticSeverity, message: 'unknown severity' },
+				{
+					range: range(0, 0, 1),
+					severity: 'fatal' as LanguageDiagnosticSeverity,
+					message: 'unknown severity',
+				},
 			],
 		},
-		{ diagnostics: [{ range: range(0, 0, 1), severity: LanguageDiagnosticSeverity.Warning, message: '   ' }] },
+		{
+			diagnostics: [
+				{
+					range: range(0, 0, 1),
+					severity: LanguageDiagnosticSeverity.Warning,
+					message: '   ',
+				},
+			],
+		},
 		{
 			diagnostics: [
 				{
@@ -201,7 +289,12 @@ test('Language diagnostics validate atomically while allowing points and overlap
 	];
 	for (let index = 0; index < invalidResults.length; index += 1) {
 		assert.throws(() =>
-			store.accept({ requestId: index + 2, textModel: model, modelVersion: 1, value: invalidResults[index]! }),
+			store.accept({
+				requestId: index + 2,
+				textModel: model,
+				modelVersion: 1,
+				value: invalidResults[index]!,
+			}),
 		);
 		assert.equal(store.result, original);
 	}
@@ -210,24 +303,58 @@ test('Language diagnostics validate atomically while allowing points and overlap
 test('Language tokens reject ambiguous spans without replacing prior state', () => {
 	using model = new TextModel('abc\ndef');
 	using store = createLanguageTokenStore(model);
-	store.accept({ requestId: 1, textModel: model, modelVersion: 1, value: tokenResult(0, 1, 'variable') });
+	store.accept({
+		requestId: 1,
+		textModel: model,
+		modelVersion: 1,
+		value: tokenResult(0, 1, 'variable'),
+	});
 	const original = store.result;
 	const invalidResults: LanguageTokenResult[] = [
 		tokenResult(1, 1, 'empty'),
 		{
 			tokens: [
-				{ range: Range.fromPositions(position(0, 1), position(1, 1)), tokenType: 'string', modifiers: [] },
+				{
+					range: Range.fromPositions(position(0, 1), position(1, 1)),
+					tokenType: 'string',
+					modifiers: [],
+				},
 			],
 		},
-		{ tokens: [token(0, 0, 2, 'first'), token(0, 1, 3, 'overlap')] },
-		{ tokens: [token(0, 2, 3, 'later'), token(0, 0, 1, 'earlier')] },
-		{ tokens: [{ range: range(0, 0, 1), tokenType: ' variable ', modifiers: [] }] },
-		{ tokens: [{ range: range(0, 0, 1), tokenType: 'variable', modifiers: ['readonly', 'readonly'] }] },
+		{
+			tokens: [token(0, 0, 2, 'first'), token(0, 1, 3, 'overlap')],
+		},
+		{
+			tokens: [token(0, 2, 3, 'later'), token(0, 0, 1, 'earlier')],
+		},
+		{
+			tokens: [
+				{
+					range: range(0, 0, 1),
+					tokenType: ' variable ',
+					modifiers: [],
+				},
+			],
+		},
+		{
+			tokens: [
+				{
+					range: range(0, 0, 1),
+					tokenType: 'variable',
+					modifiers: ['readonly', 'readonly'],
+				},
+			],
+		},
 	];
 
 	for (let index = 0; index < invalidResults.length; index += 1) {
 		assert.throws(() =>
-			store.accept({ requestId: index + 2, textModel: model, modelVersion: 1, value: invalidResults[index]! }),
+			store.accept({
+				requestId: index + 2,
+				textModel: model,
+				modelVersion: 1,
+				value: invalidResults[index]!,
+			}),
 		);
 		assert.equal(store.result, original);
 	}
@@ -238,20 +365,35 @@ test('Model mutation during normalization cannot publish the captured version', 
 	let mutate = false;
 	using store = new VersionedLanguageResultStore<{ readonly value: number }>(model, value => {
 		if (mutate) {
-			model.applyEdits([{ range: Range.fromPositions(position(0, 1)), text: '!' }]);
+			model.applyEdits([
+				{
+					range: Range.fromPositions(position(0, 1)),
+					text: '!',
+				},
+			]);
 		}
 		return Object.freeze({ ...value });
 	});
 	const events: unknown[] = [];
 	using listener = store.onDidChange(event => events.push(event));
 	assert.equal(
-		store.accept({ requestId: 1, textModel: model, modelVersion: 1, value: { value: 1 } }),
+		store.accept({
+			requestId: 1,
+			textModel: model,
+			modelVersion: 1,
+			value: { value: 1 },
+		}),
 		LanguageResultAcceptance.Applied,
 	);
 
 	mutate = true;
 	assert.equal(
-		store.accept({ requestId: 2, textModel: model, modelVersion: 1, value: { value: 2 } }),
+		store.accept({
+			requestId: 2,
+			textModel: model,
+			modelVersion: 1,
+			value: { value: 2 },
+		}),
 		LanguageResultAcceptance.StaleVersion,
 	);
 	assert.equal(model.version, 2);
@@ -268,24 +410,46 @@ test('Normalizer failures preserve accepted state and are not reentrant', () => 
 	store = new VersionedLanguageResultStore(model, value => {
 		if (value < 0) throw new RangeError('negative result');
 		if (value === 2) {
-			store.accept({ requestId: 3, textModel: model, modelVersion: 1, value: 3 });
+			store.accept({
+				requestId: 3,
+				textModel: model,
+				modelVersion: 1,
+				value: 3,
+			});
 		}
 		return value;
 	});
 	using ownedStore = store;
 	assert.equal(
-		store.accept({ requestId: 1, textModel: model, modelVersion: 1, value: 1 }),
+		store.accept({
+			requestId: 1,
+			textModel: model,
+			modelVersion: 1,
+			value: 1,
+		}),
 		LanguageResultAcceptance.Applied,
 	);
 	const original = store.result;
 
 	assert.throws(
-		() => store.accept({ requestId: 2, textModel: model, modelVersion: 1, value: -1 }),
+		() =>
+			store.accept({
+				requestId: 2,
+				textModel: model,
+				modelVersion: 1,
+				value: -1,
+			}),
 		/negative result/,
 	);
 	assert.equal(store.result, original);
 	assert.throws(
-		() => store.accept({ requestId: 2, textModel: model, modelVersion: 1, value: 2 }),
+		() =>
+			store.accept({
+				requestId: 2,
+				textModel: model,
+				modelVersion: 1,
+				value: 2,
+			}),
 		/must not be reentrant/,
 	);
 	assert.equal(store.result, original);
@@ -319,7 +483,12 @@ test('Language result store lifecycle does not own the text model', () => {
 	store.dispose();
 	assert.throws(() => store.result, /already disposed/);
 	assert.throws(() => store.textModel, /already disposed/);
-	liveModel.applyEdits([{ range: range(0, 0, 1), text: 'X' }]);
+	liveModel.applyEdits([
+		{
+			range: range(0, 0, 1),
+			text: 'X',
+		},
+	]);
 	assert.equal(liveModel.getText(), 'X');
 });
 
@@ -327,10 +496,7 @@ test('Language request coordinator publishes directly into a typed result store'
 	using model = new TextModel('x');
 	using store = createLanguageTokenStore(model);
 	const worker = new ImmediateTokenWorker();
-	using coordinator = new LanguageRequestCoordinator<'tokens', LanguageTokenResult, LanguageTokenResult>(
-		model,
-		() => worker,
-	);
+	using coordinator = new LanguageRequestCoordinator<'tokens', LanguageTokenResult, LanguageTokenResult>(model, () => worker);
 	let acceptance: LanguageResultAcceptance | undefined;
 
 	const outcome = await coordinator.runLatest('tokens', tokenResult(0, 1, 'variable'), result => {
@@ -347,10 +513,7 @@ test('Language request coordinator publishes directly into a typed result store'
 class ImmediateTokenWorker implements LanguageWorker<'tokens', LanguageTokenResult, LanguageTokenResult> {
 	disposed = false;
 
-	async run(
-		request: LanguageWorkerRequest<'tokens', LanguageTokenResult>,
-		signal: AbortSignal,
-	): Promise<LanguageTokenResult> {
+	async run(request: LanguageWorkerRequest<'tokens', LanguageTokenResult>, signal: AbortSignal): Promise<LanguageTokenResult> {
 		assert.equal(signal.aborted, false);
 		return request.payload;
 	}
@@ -368,11 +531,10 @@ function tokenResult(startColumn: number, endColumn: number, tokenType: string):
 	return { tokens: [token(0, startColumn, endColumn, tokenType)] };
 }
 
-function token(
-	lineIndex: number,
-	startColumn: number,
-	endColumn: number,
-	tokenType: string,
-): LanguageTokenResult['tokens'][number] {
-	return { range: range(lineIndex, startColumn, endColumn), tokenType, modifiers: [] };
+function token(lineIndex: number, startColumn: number, endColumn: number, tokenType: string): LanguageTokenResult['tokens'][number] {
+	return {
+		range: range(lineIndex, startColumn, endColumn),
+		tokenType,
+		modifiers: [],
+	};
 }

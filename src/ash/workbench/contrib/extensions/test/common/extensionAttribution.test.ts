@@ -4,10 +4,7 @@ import { getExtensionAttribution } from '../../common/extensionAttribution.js';
 
 test('Extension attribution accepts declared authors without inferring authorship from publisher', () => {
 	assert.equal(getExtensionAttribution({ author: '  Upstream team  ', publisher: 'adapter' }), 'Upstream team');
-	assert.equal(
-		getExtensionAttribution({ author: { name: 'Upstream team', url: 'https://example.invalid' } }),
-		'Upstream team',
-	);
+	assert.equal(getExtensionAttribution({ author: { name: 'Upstream team', url: 'https://example.invalid' } }), 'Upstream team');
 	for (const manifest of [
 		undefined,
 		null,

@@ -27,7 +27,11 @@ test('JSON contributions and their resource patterns have separate change notifi
 			associations: registry.getSchemaAssociations()[id],
 			changes,
 		},
-		{ schema: undefined, associations: undefined, changes: [id, 'associations', id, 'associations', id] },
+		{
+			schema: undefined,
+			associations: undefined,
+			changes: [id, 'associations', id, 'associations', id],
+		},
 	);
 });
 

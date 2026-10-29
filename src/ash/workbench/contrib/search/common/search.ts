@@ -15,8 +15,7 @@ export const SearchStateKey = new RawContextKey<SearchUIState>('searchState', Se
 
 /** The Search view owns results; consumers may capture a completed, retained result. */
 export interface ISearchView extends IView {
-	getSearchResultSnapshot():
-		{ readonly query: string; readonly content: string; readonly matchCount: number } | undefined;
+	getSearchResultSnapshot(): { readonly query: string; readonly content: string; readonly matchCount: number } | undefined;
 }
 
 export async function getWorkspaceSymbols(
@@ -40,9 +39,7 @@ export async function getWorkspaceSymbols(
 	return signal.aborted ? Object.freeze([]) : mergeWorkspaceSymbols(completed);
 }
 
-function mergeWorkspaceSymbols(
-	providerResults: readonly (readonly LanguageWorkspaceSymbol[] | undefined)[],
-): readonly LanguageWorkspaceSymbol[] {
+function mergeWorkspaceSymbols(providerResults: readonly (readonly LanguageWorkspaceSymbol[] | undefined)[]): readonly LanguageWorkspaceSymbol[] {
 	const seen = new Set<string>();
 	const merged: LanguageWorkspaceSymbol[] = [];
 	for (const symbols of providerResults) {
@@ -57,13 +54,7 @@ function mergeWorkspaceSymbols(
 }
 
 function normalizeWorkspaceSymbol(symbol: LanguageWorkspaceSymbol): LanguageWorkspaceSymbol {
-	if (
-		!symbol ||
-		typeof symbol !== 'object' ||
-		typeof symbol.name !== 'string' ||
-		symbol.name.trim().length === 0 ||
-		!symbol.resource
-	)
+	if (!symbol || typeof symbol !== 'object' || typeof symbol.name !== 'string' || symbol.name.trim().length === 0 || !symbol.resource)
 		throw new TypeError('Workspace symbol requires a name and resource');
 	return Object.freeze({
 		name: symbol.name,
@@ -76,11 +67,7 @@ function normalizeWorkspaceSymbol(symbol: LanguageWorkspaceSymbol): LanguageWork
 }
 
 /** Captures symbol text only while its local index revision still matches the source. */
-export async function readWorkspaceSymbolSource(
-	symbol: LanguageWorkspaceSymbol,
-	files: IFileService,
-	workingCopies: IWorkingCopyService,
-): Promise<string | undefined> {
+export async function readWorkspaceSymbolSource(symbol: LanguageWorkspaceSymbol, files: IFileService, workingCopies: IWorkingCopyService): Promise<string | undefined> {
 	const revision = getWorkspaceSymbolRevision(symbol);
 	const contents = workingCopies
 		.get(symbol.resource)
@@ -100,9 +87,5 @@ export async function readWorkspaceSymbolSource(
 export function getWorkspaceSymbolRevision(symbol: LanguageWorkspaceSymbol): string | undefined {
 	if (!symbol.data || typeof symbol.data !== 'object') return undefined;
 	const data = symbol.data as { source?: unknown; sourceRevision?: unknown };
-	return data.source === 'codebaseSymbols' &&
-		typeof data.sourceRevision === 'string' &&
-		data.sourceRevision.startsWith('sha256:')
-		? data.sourceRevision
-		: undefined;
+	return data.source === 'codebaseSymbols' && typeof data.sourceRevision === 'string' && data.sourceRevision.startsWith('sha256:') ? data.sourceRevision : undefined;
 }

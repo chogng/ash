@@ -1,12 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { ChatHistoryNavigator } from '../../../common/widget/chatWidgetHistoryService.js';
-import type {
-	IMessageHistoryService,
-	MessageHistoryEntry,
-	MessageHistoryPage,
-	MessageHistoryQuery,
-} from '../../../../../../platform/messageHistory/common/messageHistory.js';
+import type { IMessageHistoryService, MessageHistoryEntry, MessageHistoryPage, MessageHistoryQuery } from '../../../../../../platform/messageHistory/common/messageHistory.js';
 
 function entry(id: string, text = `Input ${id}`): MessageHistoryEntry {
 	return { id, text, kind: 'agent', submittedAtMs: 1 };
@@ -29,9 +24,7 @@ test('Chat history pages older inputs and restores the exact draft after reachin
 	}>(
 		service(async query => {
 			reads.push(query);
-			return query.before
-				? { entries: [entry('2'), entry('1')] }
-				: { entries: [entry('4'), entry('3')], nextBefore: '3' };
+			return query.before ? { entries: [entry('2'), entry('1')] } : { entries: [entry('4'), entry('3')], nextBefore: '3' };
 		}),
 	);
 	const draft = { text: 'original draft', selection: { anchor: 8, active: 3 }, attachments: [{}] };

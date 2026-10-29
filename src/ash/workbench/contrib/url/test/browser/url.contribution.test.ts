@@ -105,10 +105,7 @@ class URLFixture extends Disposable {
 		});
 		this.services.registerInstance(IOpenerService, this.opener);
 		const descriptor = getSingletonServiceDescriptors().find(([id]) => id === ITrustedDomainService)![1];
-		this.services.registerSingleton(
-			ITrustedDomainService,
-			() => this.services.createInstance(descriptor) as ITrustedDomainService,
-		);
+		this.services.registerSingleton(ITrustedDomainService, () => this.services.createInstance(descriptor) as ITrustedDomainService);
 		this.trustedDomains = this.services.get(ITrustedDomainService);
 		this.host = this._register(
 			WorkbenchContributionsRegistry.createHost(
@@ -176,12 +173,7 @@ suite('Workbench external link trust', () => {
 		await assert.rejects(fixture.trustedDomains.setTrustedDomains('["*"] trailing garbage'), /JSONC/);
 		await assert.rejects(fixture.trustedDomains.setTrustedDomains('[true]'), /pattern/);
 		assert.equal(fixture.trustedDomains.content, source);
-		fixture.storage.store(
-			'http.linkProtectionTrustedDomains',
-			'invalid',
-			StorageScope.APPLICATION,
-			StorageTarget.USER,
-		);
+		fixture.storage.store('http.linkProtectionTrustedDomains', 'invalid', StorageScope.APPLICATION, StorageTarget.USER);
 		assert.equal(fixture.trustedDomains.isValid(URI.parse('https://persisted.test')), false);
 		assert.equal(fixture.notifications.model.getNotifications().length, 1);
 	});
@@ -189,18 +181,13 @@ suite('Workbench external link trust', () => {
 	test('complete-value limits and external storage edits do not broaden prior trust', async () => {
 		using fixture = new URLFixture();
 		await fixture.trustedDomains.setTrustedDomains('["https://before.test"]');
-		await assert.rejects(
-			fixture.trustedDomains.setTrustedDomains(JSON.stringify(Array.from({ length: 1025 }, () => '*'))),
-			/1024/,
-		);
+		await assert.rejects(fixture.trustedDomains.setTrustedDomains(JSON.stringify(Array.from({ length: 1025 }, () => '*'))), /1024/);
 		await assert.rejects(fixture.trustedDomains.setTrustedDomains(`// ${'中'.repeat(30_000)}\n["*"]`), /64 KiB/);
 		assert.equal(fixture.trustedDomains.isValid(URI.parse('https://outside.test')), false);
 		const scopeKey = 'ash.storage.application';
 		const document = JSON.parse(fixture.dom.window.localStorage.getItem(scopeKey)!);
 		document.entries['http.linkProtectionTrustedDomains'].value = '["https://after.test"]';
-		fixture.dom.window.dispatchEvent(
-			new fixture.dom.window.StorageEvent('storage', { key: scopeKey, newValue: JSON.stringify(document) }),
-		);
+		fixture.dom.window.dispatchEvent(new fixture.dom.window.StorageEvent('storage', { key: scopeKey, newValue: JSON.stringify(document) }));
 		assert.equal(fixture.trustedDomains.isValid(URI.parse('https://before.test')), false);
 		assert.equal(fixture.trustedDomains.isValid(URI.parse('https://after.test')), true);
 		assert.throws(() => (fixture.trustedDomains.trustedDomains as string[]).push('*'), TypeError);

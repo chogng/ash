@@ -30,12 +30,7 @@ export function handleANSIOutput(
 	}
 	if (offset < text.length) runs.push({ text: text.slice(offset), style });
 	// Linkify the plain text once, so an escape within a URL cannot split its target.
-	const root = linkDetector.linkify(
-		runs.map(run => run.text).join(''),
-		hoverBehavior,
-		true,
-		workspaceFolder,
-	) as HTMLSpanElement;
+	const root = linkDetector.linkify(runs.map(run => run.text).join(''), hoverBehavior, true, workspaceFolder) as HTMLSpanElement;
 	if (!text.includes('\x1b')) return root;
 	const walker = root.ownerDocument.createTreeWalker(root, 4 /* SHOW_TEXT */);
 	const nodes: Text[] = [];
@@ -80,10 +75,8 @@ function applyCodes(previous: Style, parameters: string): Style {
 		else if (code === 4 || code === 24) style.underline = code === 4;
 		else if (code === 39) delete style.foreground;
 		else if (code === 49) delete style.background;
-		else if ((code >= 30 && code <= 37) || (code >= 90 && code <= 97))
-			style.foreground = paletteColor(code % 10, code >= 90);
-		else if ((code >= 40 && code <= 47) || (code >= 100 && code <= 107))
-			style.background = paletteColor(code % 10, code >= 100);
+		else if ((code >= 30 && code <= 37) || (code >= 90 && code <= 97)) style.foreground = paletteColor(code % 10, code >= 90);
+		else if ((code >= 40 && code <= 47) || (code >= 100 && code <= 107)) style.background = paletteColor(code % 10, code >= 100);
 		else if (code === 38 || code === 48) {
 			const kind = codes[++index];
 			let color: string | undefined;
@@ -104,8 +97,7 @@ function applyCodes(previous: Style, parameters: string): Style {
 			} else if (kind === 2) {
 				const rgb = codes.slice(index + 1, index + 4);
 				index += 3;
-				if (rgb.length === 3 && rgb.every(value => value >= 0 && value <= 255))
-					color = `rgb(${rgb.join(', ')})`;
+				if (rgb.length === 3 && rgb.every(value => value >= 0 && value <= 255)) color = `rgb(${rgb.join(', ')})`;
 			}
 			if (color) {
 				if (code === 38) style.foreground = color;

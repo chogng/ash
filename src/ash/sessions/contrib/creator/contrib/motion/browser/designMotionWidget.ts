@@ -49,10 +49,7 @@ export class DesignMotionWidget extends Disposable {
 			ownerDocument,
 			'span',
 			{ className: 'ash-design-motion-hint' },
-			localize(
-				'sessions.design.motionHint',
-				'Select an object, add keyframes, then edit its position, rotation and opacity. Interpolation is linear.',
-			),
+			localize('sessions.design.motionHint', 'Select an object, add keyframes, then edit its position, rotation and opacity. Interpolation is linear.'),
 		);
 		this.playButton = this._register(
 			new Button(playback, {
@@ -79,13 +76,7 @@ export class DesignMotionWidget extends Disposable {
 			attributes: { 'aria-label': localize('sessions.design.keyframe', 'Keyframe') },
 		});
 		properties.append(
-			h(
-				ownerDocument,
-				'label',
-				{},
-				localize('sessions.design.motionDuration', 'Duration (ms)'),
-				this.durationInput,
-			),
+			h(ownerDocument, 'label', {}, localize('sessions.design.motionDuration', 'Duration (ms)'), this.durationInput),
 			h(ownerDocument, 'label', {}, localize('sessions.design.motionLoop', 'Loop'), this.loopInput),
 			h(ownerDocument, 'label', {}, localize('sessions.design.keyframe', 'Keyframe'), this.frameSelect),
 		);
@@ -114,9 +105,7 @@ export class DesignMotionWidget extends Disposable {
 					const motion = this.shape!.motion!;
 					this.commit({
 						...motion,
-						keyframes: motion.keyframes.map((frame, index) =>
-							index === this.frameIndex ? { ...frame, [field]: input.valueAsNumber } : frame,
-						),
+						keyframes: motion.keyframes.map((frame, index) => (index === this.frameIndex ? { ...frame, [field]: input.valueAsNumber } : frame)),
 					});
 				}),
 			);
@@ -168,11 +157,7 @@ export class DesignMotionWidget extends Disposable {
 				this.commit({ ...this.shape!.motion!, duration: this.durationInput.valueAsNumber });
 			}),
 		);
-		this._register(
-			addDisposableListener(this.loopInput, 'change', () =>
-				this.commit({ ...this.shape!.motion!, loop: this.loopInput.checked }),
-			),
-		);
+		this._register(addDisposableListener(this.loopInput, 'change', () => this.commit({ ...this.shape!.motion!, loop: this.loopInput.checked })));
 		this._register(
 			addDisposableListener(this.frameSelect, 'change', () => {
 				this.stop();
@@ -191,9 +176,7 @@ export class DesignMotionWidget extends Disposable {
 			const frame = sampleDesignMotion(shape, this.time);
 			opacity.set(shape.id, frame.opacity);
 			const geometry = { ...shape, x: frame.x, y: frame.y, rotation: frame.rotation };
-			return geometry.kind === 'group' || geometry.kind === 'frame'
-				? { ...geometry, children: geometry.children.map(sample) }
-				: geometry;
+			return geometry.kind === 'group' || geometry.kind === 'frame' ? { ...geometry, children: geometry.children.map(sample) } : geometry;
 		};
 		return { shapes: this.model.value.shapes.map(sample), opacity };
 	}
@@ -222,20 +205,12 @@ export class DesignMotionWidget extends Disposable {
 		this.clearButton.enabled = !!motion && !isBusy;
 		this.playButton.enabled = this.hasMotion(this.model.value.shapes) && !isBusy;
 		this.frameIndex = Math.min(this.frameIndex, (motion?.keyframes.length ?? 1) - 1);
-		this.removeButton.enabled =
-			!!motion && this.frameIndex > 0 && this.frameIndex < motion.keyframes.length - 1 && !isBusy;
+		this.removeButton.enabled = !!motion && this.frameIndex > 0 && this.frameIndex < motion.keyframes.length - 1 && !isBusy;
 		this.durationInput.disabled = this.loopInput.disabled = this.frameSelect.disabled = !motion || isBusy;
 		this.durationInput.value = `${motion?.duration ?? 1000}`;
 		this.loopInput.checked = motion?.loop ?? false;
 		this.frameSelect.replaceChildren(
-			...(motion?.keyframes ?? []).map((frame, index) =>
-				h(
-					this.domNode.ownerDocument,
-					'option',
-					{ properties: { value: `${index}` } },
-					`${Math.round(frame.offset * 100)}%`,
-				),
-			),
+			...(motion?.keyframes ?? []).map((frame, index) => h(this.domNode.ownerDocument, 'option', { properties: { value: `${index}` } }, `${Math.round(frame.offset * 100)}%`)),
 		);
 		this.frameSelect.value = `${this.frameIndex}`;
 		for (const [field, input] of this.fields) {
@@ -246,19 +221,11 @@ export class DesignMotionWidget extends Disposable {
 	}
 
 	private hasMotion(shapes: readonly DesignShape[]): boolean {
-		return shapes.some(
-			shape =>
-				!!shape.motion ||
-				((shape.kind === 'group' || shape.kind === 'frame') && this.hasMotion(shape.children)),
-		);
+		return shapes.some(shape => !!shape.motion || ((shape.kind === 'group' || shape.kind === 'frame') && this.hasMotion(shape.children)));
 	}
 
 	private hasLoop(shapes: readonly DesignShape[]): boolean {
-		return shapes.some(
-			shape =>
-				shape.motion?.loop ||
-				((shape.kind === 'group' || shape.kind === 'frame') && this.hasLoop(shape.children)),
-		);
+		return shapes.some(shape => shape.motion?.loop || ((shape.kind === 'group' || shape.kind === 'frame') && this.hasLoop(shape.children)));
 	}
 
 	private addKeyframe(): void {
@@ -280,9 +247,7 @@ export class DesignMotionWidget extends Disposable {
 				...sampleDesignMotion({ ...shape, motion: { ...motion, loop: false } }, this.time),
 				offset: Math.min(1, this.time / motion.duration),
 			};
-			const keyframes = [...motion.keyframes.filter(current => current.offset !== frame.offset), frame].sort(
-				(a, b) => a.offset - b.offset,
-			);
+			const keyframes = [...motion.keyframes.filter(current => current.offset !== frame.offset), frame].sort((a, b) => a.offset - b.offset);
 			this.frameIndex = keyframes.indexOf(frame);
 			motion = { ...motion, keyframes };
 		}

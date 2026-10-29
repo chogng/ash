@@ -83,10 +83,7 @@ test('OutputService rejects ambiguous channel ownership and invalid entries', ()
 	assert.throws(() => output.createChannel({ id: 'server', label: 'Duplicate' }), /already registered/);
 	assert.throws(() => output.createChannel({ id: 'invalid id', label: 'Invalid' }), /cannot contain whitespace/);
 	assert.throws(() => output.selectChannel('missing'), /Unknown Output channel/);
-	assert.throws(
-		() => channel.append({ severity: 'fatal' as never, text: 'unsupported' }),
-		/Unsupported Output entry severity/,
-	);
+	assert.throws(() => channel.append({ severity: 'fatal' as never, text: 'unsupported' }), /Unsupported Output entry severity/);
 	channel.append({ severity: 'log', text: '  ' });
 	assert.equal(channel.getText(), '  ');
 });
@@ -255,7 +252,12 @@ for (const syntaxVersion of [undefined, 1, 2]) {
 				build: filters.matches({ ...entry, category: 'build' }, 'extension-host'),
 				stored: storage.get('output.filterState', StorageScope.WORKSPACE),
 			},
-			{ first: false, second: false, build: false, stored: raw },
+			{
+				first: false,
+				second: false,
+				build: false,
+				stored: raw,
+			},
 		);
 	});
 }
@@ -284,7 +286,13 @@ for (const visible of [false, true]) {
 					secondBuild: filters.matches({ ...entry, category: 'build' }, 'extension-host'),
 					changes,
 				},
-				{ first: visible, second: true, firstBuild: false, secondBuild: false, changes: 1 },
+				{
+					first: visible,
+					second: true,
+					firstBuild: false,
+					secondBuild: false,
+					changes: 1,
+				},
 			);
 			const stored = JSON.parse(storage.get('output.filterState', StorageScope.WORKSPACE)!);
 			assert.equal(stored.hiddenCategories.includes('lifecycle'), false);
@@ -331,11 +339,7 @@ test('Output category identities keep channel and category separators distinct',
 	assert.equal(filters.matches({ ...entry, category: 'b:c' }, 'a'), false);
 });
 
-for (const category of [
-	'["window","lifecycle"]',
-	String.raw`\0["window","lifecycle"]`,
-	String.raw`\u0000["window","lifecycle"]`,
-]) {
+for (const category of ['["window","lifecycle"]', String.raw`\0["window","lifecycle"]`, String.raw`\u0000["window","lifecycle"]`]) {
 	test(`Output restores literal legacy category text without treating serialized-looking names as channel identities (${category})`, () => {
 		using storageResources = new DisposableStore();
 		const raw = JSON.stringify({ syntaxVersion: 2, text: '', hiddenSeverities: [], hiddenCategories: [category] });
@@ -357,7 +361,12 @@ for (const category of [
 					actualLifecycle: filters.matches(first.entries[1]!, first.id),
 					stored: storage.get('output.filterState', StorageScope.WORKSPACE),
 				},
-				{ firstLiteral: false, secondLiteral: false, actualLifecycle: true, stored: raw },
+				{
+					firstLiteral: false,
+					secondLiteral: false,
+					actualLifecycle: true,
+					stored: raw,
+				},
 			);
 			filters.setCategoryVisible(category, false, first.id);
 			assert.deepEqual(
@@ -366,7 +375,11 @@ for (const category of [
 					secondLiteral: filters.matches(second.entries[0]!, second.id),
 					actualLifecycle: filters.matches(first.entries[1]!, first.id),
 				},
-				{ firstLiteral: false, secondLiteral: true, actualLifecycle: true },
+				{
+					firstLiteral: false,
+					secondLiteral: true,
+					actualLifecycle: true,
+				},
 			);
 		}
 		{
@@ -378,7 +391,11 @@ for (const category of [
 					secondLiteral: filters.matches({ ...entry, category }, 'extension-host'),
 					actualLifecycle: filters.matches(entry, windowLogId),
 				},
-				{ firstLiteral: false, secondLiteral: true, actualLifecycle: true },
+				{
+					firstLiteral: false,
+					secondLiteral: true,
+					actualLifecycle: true,
+				},
 			);
 		}
 	});
@@ -407,7 +424,13 @@ test('Output category identities reject null bytes and survive unrelated saved-f
 				severity: filters.isSeverityVisible('trace'),
 				text: filters.text,
 			},
-			{ selected: false, other: true, original: true, severity: false, text: 'server' },
+			{
+				selected: false,
+				other: true,
+				original: true,
+				severity: false,
+				text: 'server',
+			},
 		);
 	}
 });
@@ -523,7 +546,12 @@ test('Output restores saved queries unchanged and adopts current syntax on ident
 				matches: matches(),
 				stored: storage.get('output.filterState', StorageScope.WORKSPACE),
 			},
-			{ text: scenario.query, notice: 'restored', matches: scenario.restored, stored: raw },
+			{
+				text: scenario.query,
+				notice: 'restored',
+				matches: scenario.restored,
+				stored: raw,
+			},
 		);
 		let changes = 0;
 		resources.add(filters.onDidChange(() => changes++));
@@ -551,10 +579,7 @@ test('Output metadata changes preserve restored syntax through reload until clea
 	for (const action of ['clear', 'reset']) {
 		using storageResources = new DisposableStore();
 		const query = '"server restart" !failed';
-		const storage = filterStorage(
-			storageResources,
-			JSON.stringify({ text: query, hiddenSeverities: [], hiddenCategories: [] }),
-		);
+		const storage = filterStorage(storageResources, JSON.stringify({ text: query, hiddenSeverities: [], hiddenCategories: [] }));
 		{
 			using resources = new DisposableStore();
 			const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
@@ -581,10 +606,7 @@ test('Output metadata changes preserve restored syntax through reload until clea
 		{
 			using resources = new DisposableStore();
 			const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
-			assert.deepEqual(
-				{ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId) },
-				{ text: query, notice: 'restored', matches: true },
-			);
+			assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId) }, { text: query, notice: 'restored', matches: true });
 			if (action === 'clear') {
 				filters.setText('');
 			} else {
@@ -601,10 +623,7 @@ test('Output metadata changes preserve restored syntax through reload until clea
 		{
 			using resources = new DisposableStore();
 			const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
-			assert.deepEqual(
-				{ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId) },
-				{ text: '', notice: undefined, matches: true },
-			);
+			assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId) }, { text: '', notice: undefined, matches: true });
 		}
 	}
 });
@@ -634,10 +653,7 @@ test('Output preserves unknown saved versions and applies only unsaved current-w
 		});
 		const storage = filterStorage(resources, raw);
 		const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
-		assert.deepEqual(
-			{ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId) },
-			{ text: '', notice: 'unsupported', matches: true },
-		);
+		assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId) }, { text: '', notice: 'unsupported', matches: true });
 		filters.setText('server,restart');
 		filters.setSeverityVisible('warning', false);
 		assert.equal(filters.matches(entry, windowLogId), false);
@@ -696,7 +712,13 @@ for (const action of ['empty-input', 'same-input', 'empty-reset']) {
 				stored: storage.get('output.filterState', StorageScope.WORKSPACE),
 				changes,
 			},
-			{ text: query, notice: 'unsupported', matches: true, stored: raw, changes: 1 },
+			{
+				text: query,
+				notice: 'unsupported',
+				matches: true,
+				stored: raw,
+				changes: 1,
+			},
 		);
 		apply();
 		assert.equal(changes, 1);
@@ -738,11 +760,7 @@ for (const syntaxVersion of [undefined, 1, 2, 999]) {
 						...(syntaxVersion === undefined ? {} : { syntaxVersion }),
 						text: 'restart',
 						hiddenSeverities: ['trace'],
-						hiddenCategories: [
-							'\0' + JSON.stringify([windowLogId, 'lifecycle']),
-							'global',
-							'\0["tasks","build"]',
-						],
+						hiddenCategories: ['\0' + JSON.stringify([windowLogId, 'lifecycle']), 'global', '\0["tasks","build"]'],
 					});
 				}
 			}

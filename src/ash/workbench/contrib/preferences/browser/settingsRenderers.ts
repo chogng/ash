@@ -63,9 +63,7 @@ export class SettingsRenderer extends Disposable {
  * Owns retained section controls within Preferences. Search and navigation carry
  * only data references; domain services never implement this renderer contract.
  */
-export abstract class SettingsPageRenderer<
-	T extends ISetting | SettingsSectionReference = ISetting | SettingsSectionReference,
-> extends Disposable {
+export abstract class SettingsPageRenderer<T extends ISetting | SettingsSectionReference = ISetting | SettingsSectionReference> extends Disposable {
 	public readonly rendererId = generateUuid();
 	public abstract readonly categoryId: string;
 	public get settingIds(): readonly string[] | undefined {

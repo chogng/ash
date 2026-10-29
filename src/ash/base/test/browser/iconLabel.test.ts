@@ -67,7 +67,10 @@ test('IconLabel escapes newlines, maps highlights, and exposes compatibility met
 
 test('IconLabel renders unknown inline icons as literal text', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	using label = new IconLabel(dom.window.document.body, { label: '$(not-registered) file.ts', supportIcons: true });
+	using label = new IconLabel(dom.window.document.body, {
+		label: '$(not-registered) file.ts',
+		supportIcons: true,
+	});
 	assert.equal(label.labelElement.textContent, '$(not-registered) file.ts');
 	dom.window.close();
 });
@@ -88,7 +91,14 @@ test('SimpleIconLabel renders semantic icons and owns its hover', () => {
 });
 
 function managedHover(): IManagedHover {
-	return { visible: false, show() {}, hide() {}, update() {}, dispose() {}, [Symbol.dispose]() {} };
+	return {
+		visible: false,
+		show() {},
+		hide() {},
+		update() {},
+		dispose() {},
+		[Symbol.dispose]() {},
+	};
 }
 
 test('IconLabel switches between file renderers, image icons and hidden icons without stale styles', () => {

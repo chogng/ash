@@ -99,12 +99,7 @@ suite('Extension terminal process boundary', () => {
 		await child.start();
 		child.shutdown(true);
 		child.dispose();
-		assert.deepEqual(observed, [
-			{ pid: -1, cwd: '' },
-			'open output',
-			{ type: 'title', value: 'Provider title' },
-			7,
-		]);
+		assert.deepEqual(observed, [{ pid: -1, cwd: '' }, 'open output', { type: 'title', value: 'Provider title' }, 7]);
 		assert.deepEqual(operations, [
 			{ operation: 'openTaskTerminal', payload: { ptyId: 'opaque-pty', dimensions: { columns: 90, rows: 30 } } },
 			{ operation: 'closeTaskTerminal', payload: { ptyId: 'opaque-pty' } },
@@ -164,8 +159,7 @@ suite('Extension terminal process boundary', () => {
 				true,
 				80,
 				24,
-				async operation =>
-					operation === 'openTaskTerminal' ? { events: [{ type: 'data', data: 'x'.repeat(262145) }] } : null,
+				async operation => (operation === 'openTaskTerminal' ? { events: [{ type: 'data', data: 'x'.repeat(262145) }] } : null),
 				() => released++,
 			),
 		);
@@ -216,9 +210,7 @@ suite('Extension terminal process boundary', () => {
 		await Promise.all([input, resize]);
 		assert.equal(confirmed, true);
 		assert.deepEqual(
-			operations.filter(
-				value => value.operation === 'inputTaskTerminal' || value.operation === 'resizeTaskTerminal',
-			),
+			operations.filter(value => value.operation === 'inputTaskTerminal' || value.operation === 'resizeTaskTerminal'),
 			[
 				{ operation: 'inputTaskTerminal', payload: { data: '中文\r', ptyId: 'input-pty' } },
 				{
@@ -305,7 +297,9 @@ suite('Extension terminal process boundary', () => {
 				true,
 				80,
 				24,
-				async operation => ({ events: operation === 'inputTaskTerminal' ? [{ type: 'close', code: 0 }] : [] }),
+				async operation => ({
+					events: operation === 'inputTaskTerminal' ? [{ type: 'close', code: 0 }] : [],
+				}),
 				() => {},
 			),
 		);

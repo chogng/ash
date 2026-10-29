@@ -18,19 +18,11 @@ import { TerminalStorageKeys } from '../../common/terminalStorageKeys.js';
 import { TerminalLocation, TERMINAL_REVIVE_STATE_KEY } from '../../../../../platform/terminal/common/terminal.js';
 import { registerTestTerminalCreationServices } from '../../../../test/browser/workbenchTestServices.js';
 import { ShellEnvDetectionCapability } from '../../../../../platform/terminal/common/capabilities/shellEnvDetectionCapability.js';
-import {
-	TerminalCapabilityStore,
-	TerminalCapabilityStoreMultiplexer,
-} from '../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
+import { TerminalCapabilityStore, TerminalCapabilityStoreMultiplexer } from '../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
 import { TerminalGroupService } from '../../browser/terminalGroupService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
-import {
-	IQuickInputService,
-	type IInputOptions,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IInputOptions, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IConfigurationResolverService } from '../../../../services/configurationResolver/common/configurationResolver.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { TerminalCommandId } from '../../common/terminal.js';
@@ -64,11 +56,7 @@ import { BasePty } from '../../common/basePty.js';
 import { TerminalProcessExtHostProxy } from '../../browser/terminalProcessExtHostProxy.js';
 import { ITerminalService, type ITerminalInstance, type ITerminalCommandStatusEvent } from '../../browser/terminal.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
-import {
-	GeneralShellType,
-	PosixShellType,
-	type TerminalShellType,
-} from '../../../../../platform/terminal/common/terminal.js';
+import { GeneralShellType, PosixShellType, type TerminalShellType } from '../../../../../platform/terminal/common/terminal.js';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
 import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
@@ -79,7 +67,11 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
 import { TerminalStatus } from '../../browser/terminalStatusList.js';
 
-const DEFAULT_PROFILE = { profileId: 'command-prompt', title: 'Command Prompt', isDefault: true } as const;
+const DEFAULT_PROFILE = {
+	profileId: 'command-prompt',
+	title: 'Command Prompt',
+	isDefault: true,
+} as const;
 
 test('resolved hover launch metadata is immutable and stays out of native process requests after relaunch', async () => {
 	const processes = new TestTerminalProcessService([]);
@@ -229,15 +221,9 @@ test('the signal command forwards each supported signal to the Rust process port
 	assert.equal(instance.state, 'running');
 	assert.deepEqual(processes.closeCalls, []);
 	for (const value of [null, 'SIGINT', [], {}, { signal: 42 }]) {
-		await assert.rejects(
-			commands.executeCommand(TerminalSendSignalCommandId.SendSignal, value),
-			/string signal property/,
-		);
+		await assert.rejects(commands.executeCommand(TerminalSendSignalCommandId.SendSignal, value), /string signal property/);
 	}
-	await assert.rejects(
-		commands.executeCommand(TerminalSendSignalCommandId.SendSignal, { signal: 'SIGUNKNOWN' }),
-		/Unsupported terminal process signal/,
-	);
+	await assert.rejects(commands.executeCommand(TerminalSendSignalCommandId.SendSignal, { signal: 'SIGUNKNOWN' }), /Unsupported terminal process signal/);
 	assert.equal(processes.signalCalls.length, 4);
 });
 
@@ -310,17 +296,25 @@ test('TerminalService restores an empty reload checkpoint without a process atta
 	using workspace = new TestWorkspaceService({ id: 'empty-reload' });
 	using services = terminalServices(processes, workspace);
 	const stateKey = 'terminal.reload.12345678-1234-1234-1234-123456789abc';
-	services
-		.get(IStorageService)
-		.store(
+	services.get(IStorageService).store(
+		stateKey,
+		JSON.stringify({
+			version: 1,
+			workspaceId: 'empty-reload',
+			instances: [],
+			groups: [],
+		}),
+		StorageScope.WORKSPACE,
+		StorageTarget.MACHINE,
+	);
+	await services.get(ISecretStorageService).set(
+		TerminalStorageKeys.Reload,
+		JSON.stringify({
 			stateKey,
-			JSON.stringify({ version: 1, workspaceId: 'empty-reload', instances: [], groups: [] }),
-			StorageScope.WORKSPACE,
-			StorageTarget.MACHINE,
-		);
-	await services
-		.get(ISecretStorageService)
-		.set(TerminalStorageKeys.Reload, JSON.stringify({ stateKey, expiresAt: Date.now() + 60_000, leases: [] }));
+			expiresAt: Date.now() + 60_000,
+			leases: [],
+		}),
+	);
 	assert.equal((processes as ITerminalProcessService).attach, undefined);
 	const terminals = services.get(ITerminalService);
 	await terminals.whenConnected;
@@ -394,8 +388,7 @@ for (const rejectFirst of [false, true]) {
 			assert.equal(terminals.activeInstance?.instanceId, 8);
 			assert.deepEqual(terminals.instances.at(-1)!.revivalLaunch, second.launch);
 			assert.equal(errors.length, rejectFirst ? 1 : 0);
-			if (rejectFirst)
-				assert.deepEqual(((errors[0] as Error).cause as AggregateError).errors, [attachmentFailure]);
+			if (rejectFirst) assert.deepEqual(((errors[0] as Error).cause as AggregateError).errors, [attachmentFailure]);
 			assert.equal(services.get(IStorageService).get(stateKey, StorageScope.WORKSPACE), text);
 			assert.equal(await services.get(ISecretStorageService).get(TerminalStorageKeys.Reload), credentials);
 		} finally {
@@ -434,11 +427,7 @@ test('TerminalService creates, splits and relaunches a shell without a workspace
 	const split = await service.createTerminal({ location: { parentTerminal: instance }, deferStart: true });
 	assert.equal(split.dirId, '');
 	assert.equal(processService.createCalls[1]!.dirId, undefined);
-	assert.equal(
-		processService.createCalls[1]!.cwd,
-		'/workspace/current',
-		'splits inherit the backend-reported current directory',
-	);
+	assert.equal(processService.createCalls[1]!.cwd, '/workspace/current', 'splits inherit the backend-reported current directory');
 	await service.relaunchTerminal(instance, { rows: 30, cols: 100 });
 	assert.equal(processService.createCalls[2]!.dirId, undefined);
 	assert.equal(service.instances.length, 2);
@@ -459,16 +448,8 @@ test('empty-window terminal checkpoints revive without a process directory and r
 	const state = reviveState(workspace, snapshot);
 	const text = JSON.stringify(state);
 	assert.deepEqual(parseTerminalReloadState(text), state);
-	assert.throws(
-		() =>
-			parseTerminalReloadState(
-				JSON.stringify(reviveState(workspace, { ...snapshot, processDirId: 'another-folder' })),
-			),
-		/checkpoint/,
-	);
-	services
-		.get(IStorageService)
-		.store(TerminalStorageKeys.Revive, text, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	assert.throws(() => parseTerminalReloadState(JSON.stringify(reviveState(workspace, { ...snapshot, processDirId: 'another-folder' }))), /checkpoint/);
+	services.get(IStorageService).store(TerminalStorageKeys.Revive, text, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	const service = services.get(ITerminalService);
 	await service.whenConnected;
 	assert.equal(service.instances.length, 1);
@@ -497,11 +478,28 @@ test('a single Session folder keeps its process route through creation and closi
 test('TerminalService exposes event-driven instances over the process service', async () => {
 	const processService = new TestTerminalProcessService([
 		readResult({
-			chunks: [{ sequence: 1, data: new TextEncoder().encode('hello') }],
+			chunks: [
+				{
+					sequence: 1,
+					data: new TextEncoder().encode('hello'),
+				},
+			],
 			nextSequence: 1,
 			commandEvents: [
-				{ sequence: 1, commandId: 'command-1', status: 'running', exitCode: undefined, afterOutputSequence: 0 },
-				{ sequence: 2, commandId: 'command-1', status: 'succeeded', exitCode: 0, afterOutputSequence: 1 },
+				{
+					sequence: 1,
+					commandId: 'command-1',
+					status: 'running',
+					exitCode: undefined,
+					afterOutputSequence: 0,
+				},
+				{
+					sequence: 2,
+					commandId: 'command-1',
+					status: 'succeeded',
+					exitCode: 0,
+					afterOutputSequence: 1,
+				},
 			],
 			nextCommandSequence: 2,
 		}),
@@ -527,9 +525,7 @@ test('TerminalService exposes event-driven instances over the process service', 
 	assert.equal(output[0], 'hello');
 	assert.deepEqual(commandStatuses, ['running', 'succeeded']);
 	assert.equal(instance.exitCode, 0);
-	assert.deepEqual(processService.createCalls, [
-		{ dirId: 'workspace', rows: 24, cols: 80, profile: { type: 'default' } },
-	]);
+	assert.deepEqual(processService.createCalls, [{ dirId: 'workspace', rows: 24, cols: 80, profile: { type: 'default' } }]);
 	assert.deepEqual(processService.readCursors, [0, 1]);
 	assert.deepEqual(processService.commandReadCursors, [0, 2]);
 });
@@ -845,17 +841,11 @@ suite('Terminal process identity and raw input', () => {
 			dimensions: { rows: 24, cols: 80 },
 			profile: { type: 'default' },
 		});
-		assert.deepEqual(
-			{ pid: instance.processId, cwd: instance.initialCwd },
-			{ pid: 1001, cwd: '/backend/workspace' },
-		);
+		assert.deepEqual({ pid: instance.processId, cwd: instance.initialCwd }, { pid: 1001, cwd: '/backend/workspace' });
 		processes.emitConnectionState('crashed');
 		processes.emitConnectionState('ready');
 		await service.relaunchTerminal(instance, { rows: 25, cols: 90 });
-		assert.deepEqual(
-			{ pid: instance.processId, cwd: instance.initialCwd },
-			{ pid: 1002, cwd: '/backend/workspace' },
-		);
+		assert.deepEqual({ pid: instance.processId, cwd: instance.initialCwd }, { pid: 1002, cwd: '/backend/workspace' });
 	});
 
 	test('raw mouse bytes stay between preceding and following text, including split batches', async () => {
@@ -912,13 +902,11 @@ suite('Terminal process identity and raw input', () => {
 				async start(): Promise<void> {}
 				shutdown(): void {}
 			}
-			const instance = await services
-				.get(ITerminalService)
-				.createTerminal({
-					dimensions: { cols: 80, rows: 24 },
-					deferStart: true,
-					config: { customPtyImplementation: id => new TestPty(id, false) },
-				});
+			const instance = await services.get(ITerminalService).createTerminal({
+				dimensions: { cols: 80, rows: 24 },
+				deferStart: true,
+				config: { customPtyImplementation: id => new TestPty(id, false) },
+			});
 			if (binary) await instance.processBinary('\0\x80\xff\n');
 			else await assert.rejects(instance.processBinary('\0\x80\xff\n'), isCancellationError);
 			assert.deepEqual(bytes, binary ? ['\0\x80\xff\n'] : []);
@@ -933,8 +921,7 @@ suite('Terminal process identity and raw input', () => {
 		using workspace = folderWorkspaceContext();
 		using services = terminalServices(processes, workspace);
 		const started = deferred<void>();
-		const acknowledgement =
-			deferred<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue>();
+		const acknowledgement = deferred<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue>();
 		const input: string[] = [];
 		const instance = await services.get(ITerminalService).createTerminal({
 			dimensions: { cols: 80, rows: 24 },
@@ -988,19 +975,13 @@ class TestTerminalProcessService implements ITerminalProcessService {
 		dirId?: string;
 		rules: readonly { matchText: string; reply: string }[];
 	}> = [];
-	async setAutoReplies(options: {
-		terminalId: string;
-		dirId?: string;
-		rules: readonly { matchText: string; reply: string }[];
-	}): Promise<void> {
+	async setAutoReplies(options: { terminalId: string; dirId?: string; rules: readonly { matchText: string; reply: string }[] }): Promise<void> {
 		this.autoReplyCalls.push(options);
 	}
 	async sendSignal(options: { terminalId: string; dirId?: string; signal: TerminalProcessSignal }): Promise<void> {
 		this.signalCalls.push(options);
 	}
-	async resolveProfile(): Promise<
-		import('../../../../../platform/terminal/common/terminal.js').ITerminalResolvedProfile
-	> {
+	async resolveProfile(): Promise<import('../../../../../platform/terminal/common/terminal.js').ITerminalResolvedProfile> {
 		return { profile: DEFAULT_PROFILE, executable: 'cmd.exe', args: [] };
 	}
 	profileListCalls = 0;
@@ -1040,9 +1021,7 @@ class TestTerminalProcessService implements ITerminalProcessService {
 		return [DEFAULT_PROFILE];
 	}
 
-	async create(
-		params: ITerminalProcessCreateOptions,
-	): Promise<import('../../../../../platform/terminal/common/terminal.js').ITerminalProcessCreation> {
+	async create(params: ITerminalProcessCreateOptions): Promise<import('../../../../../platform/terminal/common/terminal.js').ITerminalProcessCreation> {
 		this.createCalls.push(params);
 		const terminalId = `terminal-${this.createCalls.length}`;
 		await this.creationGates.shift();
@@ -1071,8 +1050,7 @@ class TestTerminalProcessService implements ITerminalProcessService {
 	async read(params: { terminalId: string; afterSequence: number; afterCommandSequence: number; maxChunks: number }) {
 		this.readCursors.push(params.afterSequence);
 		this.commandReadCursors.push(params.afterCommandSequence);
-		return await (this.reads.shift() ??
-			readResult({ nextSequence: params.afterSequence, nextCommandSequence: params.afterCommandSequence }));
+		return await (this.reads.shift() ?? readResult({ nextSequence: params.afterSequence, nextCommandSequence: params.afterCommandSequence }));
 	}
 
 	public async close(params: { terminalId: string; dirId?: string }): Promise<void> {
@@ -1161,19 +1139,14 @@ test('sendPath uses the execution host Windows quoting and supports the matching
 		folders: [{ id: 'root', uri: createSshRemoteWorkspaceUri('windows', 'C:/work'), name: 'remote', index: 0 }],
 	});
 	using services = terminalServices(processes, workspace);
-	const instance = await services
-		.get(ITerminalService)
-		.createTerminal({ dirId: 'root', profile: { type: 'default' } });
+	const instance = await services.get(ITerminalService).createTerminal({ dirId: 'root', profile: { type: 'default' } });
 	await instance.sendPath(createSshRemoteWorkspaceUri('windows', "C:/work/a'b $x.ps1"), true);
 	await instance.sendPath(createSshRemoteWorkspaceUri('windows', '//server/share/a b'), false);
 	assert.deepEqual(
 		processes.writeCalls.map(call => call.data),
 		["& 'C:\\work\\a''b $x.ps1'\r", "'\\\\server\\share\\a b'"],
 	);
-	await assert.rejects(
-		instance.sendPath(createSshRemoteWorkspaceUri('other', 'C:/work/a.ps1'), true),
-		/execution host/,
-	);
+	await assert.rejects(instance.sendPath(createSshRemoteWorkspaceUri('other', 'C:/work/a.ps1'), true), /execution host/);
 	await assert.rejects(instance.sendPath(URI.file('/work/a.ps1'), true), /execution host/);
 });
 
@@ -1181,16 +1154,13 @@ test('terminal creation resolves a cwd URI using its execution host path rules',
 	for (const os of [OperatingSystem.Linux, OperatingSystem.Windows]) {
 		const processes = new TestTerminalProcessService([]);
 		processes.operatingSystem = os;
-		const resource =
-			os === OperatingSystem.Windows ? createSshRemoteWorkspaceUri('windows', 'C:/work') : URI.file('/workspace');
+		const resource = os === OperatingSystem.Windows ? createSshRemoteWorkspaceUri('windows', 'C:/work') : URI.file('/workspace');
 		using workspace = new TestWorkspaceService({
 			id: 'cwd-host',
 			folders: [{ id: 'root', name: 'root', uri: resource, index: 0 }],
 		});
 		using services = terminalServices(processes, workspace);
-		await services
-			.get(ITerminalService)
-			.createTerminal({ dirId: 'root', profile: { type: 'default' }, cwd: resource });
+		await services.get(ITerminalService).createTerminal({ dirId: 'root', profile: { type: 'default' }, cwd: resource });
 		assert.equal(processes.createCalls[0]!.cwd, os === OperatingSystem.Windows ? 'C:\\work' : '/workspace');
 	}
 });
@@ -1279,9 +1249,7 @@ function terminalServices(
 
 test('TerminalService rejects missing process and workspace registrations before creating a PTY', () => {
 	const processService = new TestTerminalProcessService([]);
-	using missingProcess = new InstantiationService(
-		new ServiceCollection([IWorkspaceContextService, folderWorkspaceContext()]),
-	);
+	using missingProcess = new InstantiationService(new ServiceCollection([IWorkspaceContextService, folderWorkspaceContext()]));
 	assert.throws(() => missingProcess.createInstance(TerminalService), /Unknown service: terminalProcessService/);
 	using missingWorkspace = new InstantiationService(new ServiceCollection([ITerminalProcessService, processService]));
 	assert.throws(() => missingWorkspace.createInstance(TerminalService), /Unknown service: workspaceContextService/);
@@ -1291,15 +1259,7 @@ test('TerminalService rejects missing process and workspace registrations before
 suite('TerminalService lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	for (const phase of [
-		'processInfo',
-		'factory',
-		'constructor',
-		'membership',
-		'screen',
-		'detachment',
-		'processInfoDisconnected',
-	] as const)
+	for (const phase of ['processInfo', 'factory', 'constructor', 'membership', 'screen', 'detachment', 'processInfoDisconnected'] as const)
 		test(`failed transfer ${phase} ${phase === 'detachment' || phase === 'processInfoDisconnected' ? 'releases its unrecoverable PTY' : 'returns a rotated lease while preserving its original PTY'}`, async () => {
 			const originalToken = 'a'.repeat(64);
 			const rotatedToken = 'b'.repeat(64);
@@ -1333,8 +1293,7 @@ suite('TerminalService lifecycle', () => {
 			const mustClose = phase === 'detachment' || phase === 'processInfoDisconnected';
 			const processes = Object.assign(new TestTerminalProcessService([]), {
 				attach: async () => {
-					if (phase === 'processInfo' || phase === 'processInfoDisconnected')
-						throw new Error(`process information failed with ${originalToken}`);
+					if (phase === 'processInfo' || phase === 'processInfoDisconnected') throw new Error(`process information failed with ${originalToken}`);
 					return process;
 				},
 				detach: async (terminalId: string) => {
@@ -1485,9 +1444,7 @@ suite('TerminalService lifecycle', () => {
 		const processes = new TestTerminalProcessService([]);
 		using workspace = folderWorkspaceContext();
 		using services = terminalServices(processes, workspace);
-		const instance = await services
-			.get(ITerminalService)
-			.createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' } });
+		const instance = await services.get(ITerminalService).createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' } });
 		await instance.sendText('first\r\nsecond\n', false);
 		await instance.sendText('command', true);
 		await instance.sendText('already complete\r', true);
@@ -1540,9 +1497,7 @@ suite('TerminalService lifecycle', () => {
 		processes.writeGates.push(Promise.resolve(), acknowledgement.promise);
 		using workspace = folderWorkspaceContext();
 		using services = terminalServices(processes, workspace);
-		const instance = await services
-			.get(ITerminalService)
-			.createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' } });
+		const instance = await services.get(ITerminalService).createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' } });
 		const text = '🙂'.repeat(20_000);
 		let finished = false;
 		const sent = instance.sendText(text, false).then(() => {
@@ -1555,7 +1510,11 @@ suite('TerminalService lifecycle', () => {
 				joined: processes.writeCalls.map(call => call.data).join(''),
 				bytes: processes.writeCalls.map(call => new TextEncoder().encode(call.data as string).length),
 			},
-			{ finished: false, joined: text, bytes: [61_440, 18_560] },
+			{
+				finished: false,
+				joined: text,
+				bytes: [61_440, 18_560],
+			},
 		);
 		acknowledgement.resolve();
 		await sent;
@@ -1570,9 +1529,7 @@ suite('TerminalService lifecycle', () => {
 			processes.writeGates.push(acknowledgement.promise);
 			using workspace = folderWorkspaceContext();
 			using services = terminalServices(processes, workspace);
-			const instance = await services
-				.get(ITerminalService)
-				.createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' } });
+			const instance = await services.get(ITerminalService).createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' } });
 			const inFlight = assert.rejects(instance.sendText('sent', false), isCancellationError);
 			await waitFor(() => processes.writeCalls.length === 1);
 			const binary = assert.rejects(instance.processBinary('\xff'), isCancellationError);
@@ -1595,9 +1552,7 @@ suite('TerminalService lifecycle', () => {
 		processes.writeGates.push(oldAcknowledgement.promise);
 		using workspace = folderWorkspaceContext();
 		using services = terminalServices(processes, workspace);
-		const instance = await services
-			.get(ITerminalService)
-			.createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' } });
+		const instance = await services.get(ITerminalService).createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' } });
 		const cancelled = assert.rejects(instance.sendText('old input', false), isCancellationError);
 		await waitFor(() => processes.writeCalls.length === 1);
 		processes.emitConnectionState('crashed');
@@ -1607,10 +1562,7 @@ suite('TerminalService lifecycle', () => {
 		await instance.sendText('fresh input', false);
 		oldAcknowledgement.reject(new Error('late old transport error'));
 		await Promise.resolve();
-		assert.deepEqual(
-			{ state: instance.state, input: processes.writeCalls.map(call => call.data) },
-			{ state: 'running', input: ['old input', 'fresh input'] },
-		);
+		assert.deepEqual({ state: instance.state, input: processes.writeCalls.map(call => call.data) }, { state: 'running', input: ['old input', 'fresh input'] });
 	});
 
 	test('coalesced dimensions wait for acknowledgement and stop cancels an in-flight resize', async () => {
@@ -1633,10 +1585,7 @@ suite('TerminalService lifecycle', () => {
 			isCancellationError,
 		);
 		await waitFor(() => processes.resizeCalls.length === 1);
-		assert.deepEqual(
-			{ finished, dimensions: processes.resizeCalls },
-			{ finished: 0, dimensions: [{ terminalId: 'terminal-1', rows: 40, cols: 100 }] },
-		);
+		assert.deepEqual({ finished, dimensions: processes.resizeCalls }, { finished: 0, dimensions: [{ terminalId: 'terminal-1', rows: 40, cols: 100 }] });
 		manager.stop();
 		await Promise.all([first, second]);
 		acknowledgement.resolve();
@@ -1730,11 +1679,7 @@ suite('TerminalService lifecycle', () => {
 			const service = services.get(ITerminalService);
 			const outputs: string[] = [];
 			using listeners = new DisposableStore();
-			listeners.add(
-				service.onDidCreateInstance(instance =>
-					listeners.add(instance.onDidWriteData(data => outputs.push(data.data))),
-				),
-			);
+			listeners.add(service.onDidCreateInstance(instance => listeners.add(instance.onDidWriteData(data => outputs.push(data.data)))));
 			const pending = service.createTerminal({
 				dimensions: { rows: 24, cols: 80 },
 				profile: { type: 'default' },
@@ -1793,7 +1738,10 @@ suite('TerminalService lifecycle', () => {
 			await pending;
 			assert.deepEqual(
 				{ state: instance.state, reads: processService.readCursors },
-				{ state: persistence === 'reconnectable' ? 'reconnecting' : 'disconnected', reads: [0] },
+				{
+					state: persistence === 'reconnectable' ? 'reconnecting' : 'disconnected',
+					reads: [0],
+				},
 			);
 			processService.emitConnectionState('ready');
 			if (persistence === 'reconnectable') {
@@ -1821,10 +1769,7 @@ suite('TerminalService lifecycle', () => {
 		services.dispose();
 		creation.resolve();
 		await assert.rejects(pending, isCancellationError);
-		await assert.rejects(
-			service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } }),
-			isCancellationError,
-		);
+		await assert.rejects(service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } }), isCancellationError);
 		assert.deepEqual(
 			{
 				created,
@@ -1833,7 +1778,13 @@ suite('TerminalService lifecycle', () => {
 				closes: processService.closeCalls,
 				creates: processService.createCalls.length,
 			},
-			{ created: [], instances: [], reads: [], closes: ['terminal-1'], creates: 1 },
+			{
+				created: [],
+				instances: [],
+				reads: [],
+				closes: ['terminal-1'],
+				creates: 1,
+			},
 		);
 	});
 
@@ -1864,7 +1815,12 @@ suite('TerminalService lifecycle', () => {
 				instances: service.instances,
 				active: service.activeInstance,
 			},
-			{ closes: ['terminal-1'], disposed: [instance.id], instances: [], active: undefined },
+			{
+				closes: ['terminal-1'],
+				disposed: [instance.id],
+				instances: [],
+				active: undefined,
+			},
 		);
 	});
 
@@ -1895,7 +1851,13 @@ suite('TerminalService lifecycle', () => {
 				closes: processService.closeCalls,
 				instances: service.instances,
 			},
-			{ output: [], writes: [], resizes: [], closes: ['terminal-1'], instances: [] },
+			{
+				output: [],
+				writes: [],
+				resizes: [],
+				closes: ['terminal-1'],
+				instances: [],
+			},
 		);
 	});
 
@@ -2144,11 +2106,7 @@ suite('TerminalService lifecycle', () => {
 				commands: [old],
 				afterOutputSequence: 0,
 			};
-			const processes = new TestTerminalProcessService([
-				readResult({ shellIntegration: oldIntegration }),
-				oldRead.promise,
-				newRead.promise,
-			]);
+			const processes = new TestTerminalProcessService([readResult({ shellIntegration: oldIntegration }), oldRead.promise, newRead.promise]);
 			using workspace = folderWorkspaceContext();
 			using services = terminalServices(processes, workspace);
 			const service = services.get(ITerminalService);
@@ -2219,9 +2177,7 @@ suite('TerminalService lifecycle', () => {
 			assert.deepEqual(instance.shellIntegration?.commands, []);
 			assert.equal(instance.shellIntegration?.hasRichCommandDetection, false);
 			assert.equal(instance.cwd, '/replacement/current');
-			assert.deepEqual(commands, [
-				{ commandId: 'new', status: 'completed', exitCode: undefined, cwd: '/replacement/current' },
-			]);
+			assert.deepEqual(commands, [{ commandId: 'new', status: 'completed', exitCode: undefined, cwd: '/replacement/current' }]);
 			assert.equal(service.activeInstance, instance);
 			assert.equal(service.instances.length, 1);
 		});
@@ -2295,10 +2251,7 @@ suite('TerminalService lifecycle', () => {
 		});
 		await waitFor(() => instance.state === 'exited');
 		processes.creationGates.push(creation.promise);
-		const replacing = assert.rejects(
-			instance.reuseTerminal({ execution: { type: 'process', program: 'second', args: [] }, deferStart: true }),
-			isCancellationError,
-		);
+		const replacing = assert.rejects(instance.reuseTerminal({ execution: { type: 'process', program: 'second', args: [] }, deferStart: true }), isCancellationError);
 		await waitFor(() => processes.createCalls.length === 2);
 		let closed = false;
 		const closing = service.closeTerminal(instance).then(() => {
@@ -2326,17 +2279,11 @@ suite('TerminalService lifecycle', () => {
 		});
 		await waitFor(() => instance.state === 'exited');
 		processes.closeGates.push(release.promise);
-		const replacing = assert.rejects(
-			instance.reuseTerminal({ execution: { type: 'process', program: 'second', args: [] } }),
-			/release failed/,
-		);
+		const replacing = assert.rejects(instance.reuseTerminal({ execution: { type: 'process', program: 'second', args: [] } }), /release failed/);
 		await waitFor(() => processes.closeCalls.length === 1);
 		release.reject(new Error('release failed'));
 		await replacing;
-		assert.deepEqual(
-			{ creates: processes.createCalls.length, state: instance.state },
-			{ creates: 1, state: 'error' },
-		);
+		assert.deepEqual({ creates: processes.createCalls.length, state: instance.state }, { creates: 1, state: 'error' });
 		await assert.rejects(service.closeTerminal(instance), /release failed/);
 	});
 
@@ -2359,10 +2306,7 @@ suite('TerminalService lifecycle', () => {
 		await services.get(IConfigurationService).updateValue('terminal.integrated.confirmOnKill', 'always');
 		const terminals = services.get(ITerminalService);
 		const instance = await terminals.createTerminal({ profile: { type: 'default' }, deferStart: true });
-		const stale = assert.rejects(
-			terminals.relaunchTerminal(instance, { cols: 100, rows: 30 }),
-			isCancellationError,
-		);
+		const stale = assert.rejects(terminals.relaunchTerminal(instance, { cols: 100, rows: 30 }), isCancellationError);
 		await waitFor(() => confirming);
 		await instance.reuseTerminal({ executable: '/replacement', deferStart: true });
 		assert.equal(instance.processId, 77);
@@ -2399,10 +2343,7 @@ suite('TerminalService lifecycle', () => {
 			resolving = true;
 			return environment.promise;
 		};
-		const stale = assert.rejects(
-			terminals.relaunchTerminal(instance, { cols: 100, rows: 30 }),
-			isCancellationError,
-		);
+		const stale = assert.rejects(terminals.relaunchTerminal(instance, { cols: 100, rows: 30 }), isCancellationError);
 		await waitFor(() => resolving);
 		await instance.reuseTerminal({ executable: '/replacement', env: { MODE: 'replacement' }, deferStart: true });
 		environment.resolve({});
@@ -2479,7 +2420,12 @@ suite('TerminalService lifecycle', () => {
 				closes: processService.closeCalls,
 				instances: service.instances,
 			},
-			{ states: [], reads: [0], closes: ['terminal-1', 'terminal-2'], instances: [] },
+			{
+				states: [],
+				reads: [0],
+				closes: ['terminal-1', 'terminal-2'],
+				instances: [],
+			},
 		);
 	});
 
@@ -2506,7 +2452,11 @@ suite('TerminalService lifecycle', () => {
 				closes: processService.closeCalls,
 				instances: service.instances,
 			},
-			{ creates: 1, closes: ['terminal-1'], instances: [] },
+			{
+				creates: 1,
+				closes: ['terminal-1'],
+				instances: [],
+			},
 		);
 	});
 
@@ -2527,10 +2477,7 @@ suite('TerminalService lifecycle', () => {
 		release.reject(failure);
 		await Promise.all([first, second]);
 		services.dispose();
-		assert.deepEqual(
-			{ closes: processService.closeCalls, instances: service.instances },
-			{ closes: ['terminal-1'], instances: [] },
-		);
+		assert.deepEqual({ closes: processService.closeCalls, instances: service.instances }, { closes: ['terminal-1'], instances: [] });
 	});
 
 	test('a failed relaunch can be retried without creating concurrent replacements', async () => {
@@ -2546,10 +2493,7 @@ suite('TerminalService lifecycle', () => {
 		await waitFor(() => instance.state === 'exited');
 		processService.creationGates.push(creation.promise);
 		const failure = new Error('PTY creation failed');
-		const failed = assert.rejects(
-			service.relaunchTerminal(instance, { rows: 30, cols: 100 }),
-			error => error === failure,
-		);
+		const failed = assert.rejects(service.relaunchTerminal(instance, { rows: 30, cols: 100 }), error => error === failure);
 		creation.reject(failure);
 		await failed;
 		assert.equal(instance.state, 'error');
@@ -2574,10 +2518,7 @@ suite('TerminalService lifecycle', () => {
 		const output: string[] = [];
 		using listener = instance.onDidWriteData(event => output.push(event.data));
 		processService.creationGates.push(creation.promise);
-		const cancelled = assert.rejects(
-			service.relaunchTerminal(instance, { rows: 30, cols: 100 }),
-			isCancellationError,
-		);
+		const cancelled = assert.rejects(service.relaunchTerminal(instance, { rows: 30, cols: 100 }), isCancellationError);
 		await waitFor(() => processService.createCalls.length === 2);
 		services.dispose();
 		creation.resolve();
@@ -2586,7 +2527,11 @@ suite('TerminalService lifecycle', () => {
 		assert.deepEqual(instance.statusList?.statuses, []);
 		assert.deepEqual(
 			{ output, instances: service.instances, closes: processService.closeCalls },
-			{ output: [], instances: [], closes: ['terminal-1', 'terminal-2'] },
+			{
+				output: [],
+				instances: [],
+				closes: ['terminal-1', 'terminal-2'],
+			},
 		);
 	});
 
@@ -2697,10 +2642,7 @@ suite('TerminalService output parsing', () => {
 
 	test('process text decoding retains an incomplete UTF-8 prefix across a transport interruption', async () => {
 		const stale = deferred<ITerminalProcessReadResult>();
-		const processes = new TestTerminalProcessService([
-			readResult({ chunks: [{ sequence: 1, data: new Uint8Array([0xe4]) }], nextSequence: 1 }),
-			stale.promise,
-		]);
+		const processes = new TestTerminalProcessService([readResult({ chunks: [{ sequence: 1, data: new Uint8Array([0xe4]) }], nextSequence: 1 }), stale.promise]);
 		using workspace = folderWorkspaceContext();
 		using services = terminalServices(processes, workspace);
 		using manager = services.createInstance(TerminalProcessManager, { terminalId: 'terminal-1' });
@@ -2718,9 +2660,7 @@ suite('TerminalService output parsing', () => {
 			}),
 		);
 		await manager.start(true);
-		stale.resolve(
-			readResult({ chunks: [{ sequence: 2, data: new TextEncoder().encode('stale') }], nextSequence: 2 }),
-		);
+		stale.resolve(readResult({ chunks: [{ sequence: 2, data: new TextEncoder().encode('stale') }], nextSequence: 2 }));
 		await Promise.resolve();
 		assert.deepEqual(output, ['', '中']);
 		assert.deepEqual(processes.readCursors, [0, 1, 1]);
@@ -2823,16 +2763,10 @@ suite('TerminalService output parsing', () => {
 			profile: { type: 'default' },
 		});
 		await waitFor(() => events.includes('first'));
-		assert.deepEqual(
-			{ events, reads: processes.readCursors, state: instance.state },
-			{ events: ['running', 'first'], reads: [0], state: 'running' },
-		);
+		assert.deepEqual({ events, reads: processes.readCursors, state: instance.state }, { events: ['running', 'first'], reads: [0], state: 'running' });
 		parsed.resolve();
 		await waitFor(() => instance.state === 'exited');
-		assert.deepEqual(
-			{ events, reads: processes.readCursors },
-			{ events: ['running', 'first', 'succeeded', 'exit'], reads: [0, 1] },
-		);
+		assert.deepEqual({ events, reads: processes.readCursors }, { events: ['running', 'first', 'succeeded', 'exit'], reads: [0, 1] });
 	});
 
 	test('drains an exited process beyond one page and holds commands positioned after future output', async () => {
@@ -2843,9 +2777,7 @@ suite('TerminalService output parsing', () => {
 					data: new TextEncoder().encode(`line-${index + 1}`),
 				})),
 				nextSequence: 128,
-				commandEvents: [
-					{ sequence: 1, commandId: 'command', status: 'succeeded', exitCode: 0, afterOutputSequence: 129 },
-				],
+				commandEvents: [{ sequence: 1, commandId: 'command', status: 'succeeded', exitCode: 0, afterOutputSequence: 129 }],
 				nextCommandSequence: 1,
 				exited: true,
 				exitCode: 0,
@@ -2883,16 +2815,13 @@ suite('TerminalService output parsing', () => {
 			profile: { type: 'default' },
 		});
 		await waitFor(() => instance.state === 'exited');
-		assert.deepEqual(events, [
-			Array.from({ length: 128 }, (_, index) => `line-${index + 1}`).join(''),
-			'tail',
-			'succeeded',
-			'after',
-			'exit',
-		]);
+		assert.deepEqual(events, [Array.from({ length: 128 }, (_, index) => `line-${index + 1}`).join(''), 'tail', 'succeeded', 'after', 'exit']);
 		assert.deepEqual(
 			{ reads: processes.readCursors, commands: processes.commandReadCursors },
-			{ reads: [0, 128], commands: [0, 1] },
+			{
+				reads: [0, 128],
+				commands: [0, 1],
+			},
 		);
 	});
 
@@ -2927,17 +2856,12 @@ suite('TerminalService output parsing', () => {
 			profile: { type: 'default' },
 		});
 		await waitFor(() => instance.state === 'exited');
-		assert.deepEqual(
-			{ count: events.length, last: events.at(-1), cursors: processes.commandReadCursors },
-			{ count: 130, last: 'exit', cursors: [0, 128] },
-		);
+		assert.deepEqual({ count: events.length, last: events.at(-1), cursors: processes.commandReadCursors }, { count: 130, last: 'exit', cursors: [0, 128] });
 	});
 
 	test('closing cancels an unfinished screen write without waiting for its callback', async () => {
 		const parsed = deferred<void>();
-		const processes = new TestTerminalProcessService([
-			readResult({ chunks: [{ sequence: 1, data: new Uint8Array([65]) }], nextSequence: 1 }),
-		]);
+		const processes = new TestTerminalProcessService([readResult({ chunks: [{ sequence: 1, data: new Uint8Array([65]) }], nextSequence: 1 })]);
 		using workspace = folderWorkspaceContext();
 		using services = terminalServices(processes, workspace);
 		using listeners = new DisposableStore();
@@ -2961,19 +2885,13 @@ suite('TerminalService output parsing', () => {
 		await instance.close();
 		parsed.resolve();
 		await Promise.resolve();
-		assert.deepEqual(
-			{ reads: processes.readCursors, closes: processes.closeCalls, remaining: terminals.instances.length },
-			{ reads: [0], closes: ['terminal-1'], remaining: 0 },
-		);
+		assert.deepEqual({ reads: processes.readCursors, closes: processes.closeCalls, remaining: terminals.instances.length }, { reads: [0], closes: ['terminal-1'], remaining: 0 });
 	});
 
 	test('transport recovery waits for the existing screen write and never replays it', async () => {
 		const parsed = deferred<void>();
 		const processes = new TestTerminalProcessService(
-			[
-				readResult({ chunks: [{ sequence: 1, data: new TextEncoder().encode('once') }], nextSequence: 1 }),
-				readResult({ nextSequence: 1, exited: true, exitCode: 0 }),
-			],
+			[readResult({ chunks: [{ sequence: 1, data: new TextEncoder().encode('once') }], nextSequence: 1 }), readResult({ nextSequence: 1, exited: true, exitCode: 0 })],
 			'reconnectable',
 		);
 		using workspace = folderWorkspaceContext();
@@ -3001,16 +2919,10 @@ suite('TerminalService output parsing', () => {
 		processes.emitConnectionState('crashed');
 		processes.emitConnectionState('ready');
 		await Promise.resolve();
-		assert.deepEqual(
-			{ reads: processes.readCursors, state: instance.state },
-			{ reads: [0], state: 'reconnecting' },
-		);
+		assert.deepEqual({ reads: processes.readCursors, state: instance.state }, { reads: [0], state: 'reconnecting' });
 		parsed.resolve();
 		await waitFor(() => instance.state === 'exited');
-		assert.deepEqual(
-			{ reads: processes.readCursors, output: output.filter(value => value === 'once') },
-			{ reads: [0, 1], output: ['once'] },
-		);
+		assert.deepEqual({ reads: processes.readCursors, output: output.filter(value => value === 'once') }, { reads: [0, 1], output: ['once'] });
 	});
 });
 
@@ -3019,9 +2931,7 @@ suite('TerminalService parser failure and replacement', () => {
 
 	test('a failed screen write stops the stream and exposes a closable error', async () => {
 		const parsed = deferred<void>();
-		const processes = new TestTerminalProcessService([
-			readResult({ chunks: [{ sequence: 1, data: new Uint8Array([65]) }], nextSequence: 1 }),
-		]);
+		const processes = new TestTerminalProcessService([readResult({ chunks: [{ sequence: 1, data: new Uint8Array([65]) }], nextSequence: 1 })]);
 		using workspace = folderWorkspaceContext();
 		using services = terminalServices(processes, workspace);
 		using listeners = new DisposableStore();
@@ -3045,10 +2955,7 @@ suite('TerminalService parser failure and replacement', () => {
 		parsed.reject(new Error('Screen could not parse output'));
 		await waitFor(() => instance.state === 'error');
 		await instance.close();
-		assert.deepEqual(
-			{ reads: processes.readCursors, closes: processes.closeCalls },
-			{ reads: [0], closes: ['terminal-1'] },
-		);
+		assert.deepEqual({ reads: processes.readCursors, closes: processes.closeCalls }, { reads: [0], closes: ['terminal-1'] });
 	});
 
 	test('an old parse callback cannot hold or advance a replacement Shell', async () => {
@@ -3099,7 +3006,11 @@ suite('TerminalService parser failure and replacement', () => {
 				output: output.filter(text => text === 'old' || text === 'new'),
 				closes: processes.closeCalls,
 			},
-			{ reads: [0, 0], output: ['old', 'new'], closes: ['terminal-1', 'terminal-2'] },
+			{
+				reads: [0, 0],
+				output: ['old', 'new'],
+				closes: ['terminal-1', 'terminal-2'],
+			},
 		);
 	});
 });
@@ -3128,10 +3039,7 @@ test('TerminalService evaluates the exit display callback before exit delivery a
 	await instance.reuseTerminal({ name: 'Replacement', deferStart: true });
 	instance.start();
 	await waitFor(() => instance.state === 'exited');
-	assert.deepEqual(
-		{ events, writes: processes.writeCalls, closes: processes.closeCalls },
-		{ events: ['display:7', 'exit:7', 'exit:0'], writes: [], closes: ['terminal-1'] },
-	);
+	assert.deepEqual({ events, writes: processes.writeCalls, closes: processes.closeCalls }, { events: ['display:7', 'exit:7', 'exit:0'], writes: [], closes: ['terminal-1'] });
 });
 
 test('TerminalService retains the spawn environment snapshot when relaunching a terminal', async () => {
@@ -3184,8 +3092,7 @@ suite('Terminal Send Sequence', () => {
 		store.add(TerminalCapability.ShellEnvDetection, env);
 		owner.add((instance.capabilities as TerminalCapabilityStoreMultiplexer).add(store));
 		Object.assign(resolver, {
-			resolveWithEnvironment: async (values: Readonly<Record<string, string | undefined>>) =>
-				values.SHELL_VALUE ?? '',
+			resolveWithEnvironment: async (values: Readonly<Record<string, string | undefined>>) => values.SHELL_VALUE ?? '',
 			resolveAsync: async () => 'frozen host value',
 		});
 		env.setEnvironment({ SHELL_VALUE: 'startup' }, true);
@@ -3214,16 +3121,12 @@ suite('Terminal Send Sequence', () => {
 			return '\x1b[1;5D中文';
 		};
 		let completed = false;
-		const sending = commands
-			.executeCommand(TerminalCommandId.SendSequence, { text: '${workspaceFolder}' })
-			.then(() => {
-				completed = true;
-			});
+		const sending = commands.executeCommand(TerminalCommandId.SendSequence, { text: '${workspaceFolder}' }).then(() => {
+			completed = true;
+		});
 		await waitFor(() => processes.writeCalls.length === 1);
 		assert.deepEqual(resolutions, [{ folder: workspace.getWorkspace().folders[0], value: '${workspaceFolder}' }]);
-		assert.deepEqual(processes.writeCalls, [
-			{ dirId: 'sequence', terminalId: 'terminal-1', data: '\x1b[1;5D中文' },
-		]);
+		assert.deepEqual(processes.writeCalls, [{ dirId: 'sequence', terminalId: 'terminal-1', data: '\x1b[1;5D中文' }]);
 		assert.equal(completed, false);
 		acknowledgement.resolve();
 		await sending;
@@ -3302,10 +3205,7 @@ suite('Terminal Send Sequence', () => {
 			},
 		} as unknown as IQuickInputService);
 		for (const value of [null, 'text', [], {}, { text: 42 }]) {
-			await assert.rejects(
-				commands.executeCommand(TerminalCommandId.SendSequence, value),
-				/string text property/,
-			);
+			await assert.rejects(commands.executeCommand(TerminalCommandId.SendSequence, value), /string text property/);
 		}
 		await commands.executeCommand(TerminalCommandId.SendSequence);
 		const instance = await terminals.createTerminal({
@@ -3393,18 +3293,12 @@ suite('Terminal Send Sequence', () => {
 		resolver.resolveAsync = async () => {
 			throw failure;
 		};
-		await assert.rejects(
-			commands.executeCommand(TerminalCommandId.SendSequence, { text: 'unsent' }),
-			error => error === failure,
-		);
+		await assert.rejects(commands.executeCommand(TerminalCommandId.SendSequence, { text: 'unsent' }), error => error === failure);
 		assert.deepEqual(processes.writeCalls, []);
 		resolver.resolveAsync = async (_folder, value) => value;
 		const acknowledgement = deferred<void>();
 		processes.writeGates.push(acknowledgement.promise);
-		const sending = assert.rejects(
-			commands.executeCommand(TerminalCommandId.SendSequence, { text: 'sent' }),
-			error => error === failure,
-		);
+		const sending = assert.rejects(commands.executeCommand(TerminalCommandId.SendSequence, { text: 'sent' }), error => error === failure);
 		await waitFor(() => processes.writeCalls.length === 1);
 		acknowledgement.reject(failure);
 		await sending;
@@ -3597,11 +3491,7 @@ test('committed shell integration snapshots can withdraw a previously detected p
 	assert.equal(source.shellIntegration?.promptType, 'starship');
 	source.receive({ commandEvents: [], shellIntegration: { ...integration, afterOutputSequence: 1 } });
 	source.commitThrough(0, CancellationToken.None);
-	assert.equal(
-		source.shellIntegration?.promptType,
-		'starship',
-		'Uncommitted metadata cannot replace the visible prompt',
-	);
+	assert.equal(source.shellIntegration?.promptType, 'starship', 'Uncommitted metadata cannot replace the visible prompt');
 	source.commitThrough(1, CancellationToken.None);
 	assert.equal(source.shellIntegration?.promptType, undefined);
 });
@@ -3669,9 +3559,7 @@ test('detected Windows profiles use their shell executable names in terminal tit
 		services.registerInstance(IConfigurationResolverService, {
 			resolveWithEnvironment: async (_environment, _folder, value) => value,
 		} as IConfigurationResolverService);
-		services.registerSingleton(IEnvironmentVariableService, () =>
-			services.createInstance(EnvironmentVariableService),
-		);
+		services.registerSingleton(IEnvironmentVariableService, () => services.createInstance(EnvironmentVariableService));
 		const terminals = services.get(ITerminalService);
 		const instance = await terminals.createTerminal();
 		assert.ok(instance instanceof TerminalInstance);
@@ -3700,12 +3588,10 @@ test('configured shell titles use the executable unless overrideName explicitly 
 		resolveWithEnvironment: async (_environment, _folder, value) => value,
 	} as IConfigurationResolverService);
 	services.registerSingleton(IEnvironmentVariableService, () => services.createInstance(EnvironmentVariableService));
-	await services
-		.get(IConfigurationService)
-		.updateValue('terminal.integrated.profiles.windows', {
-			'Work Shell': { path: 'C:\\Windows\\System32\\cmd.exe' },
-			'Fixed Work Shell': { path: 'C:\\Windows\\System32\\cmd.exe', overrideName: true },
-		});
+	await services.get(IConfigurationService).updateValue('terminal.integrated.profiles.windows', {
+		'Work Shell': { path: 'C:\\Windows\\System32\\cmd.exe' },
+		'Fixed Work Shell': { path: 'C:\\Windows\\System32\\cmd.exe', overrideName: true },
+	});
 	const profiles = services.get(ITerminalProfileService);
 	await profiles.refreshAvailableProfiles();
 	const terminals = services.get(ITerminalService);
@@ -3753,14 +3639,7 @@ suite('TerminalService process revival after exit', () => {
 		using workspace = folderWorkspaceContext();
 		using services = revivalServices(processes, workspace);
 		const snapshot = reviveSnapshot(workspace);
-		services
-			.get(IStorageService)
-			.store(
-				TerminalStorageKeys.Revive,
-				JSON.stringify(reviveState(workspace, snapshot)),
-				StorageScope.WORKSPACE,
-				StorageTarget.MACHINE,
-			);
+		services.get(IStorageService).store(TerminalStorageKeys.Revive, JSON.stringify(reviveState(workspace, snapshot)), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		const terminals = services.get(ITerminalService);
 		await terminals.whenConnected;
 		const instance = terminals.instances[0]!;
@@ -3775,9 +3654,7 @@ suite('TerminalService process revival after exit', () => {
 		};
 		instance.start();
 		await waitFor(() => processes.resizeCalls.length === 1);
-		assert.deepEqual(processes.resizeCalls, [
-			{ terminalId: 'terminal-1', dirId: snapshot.dirId, cols: 60, rows: 30 },
-		]);
+		assert.deepEqual(processes.resizeCalls, [{ terminalId: 'terminal-1', dirId: snapshot.dirId, cols: 60, rows: 30 }]);
 		assert.deepEqual(processes.readCursors, []);
 		acknowledged.resolve();
 		await waitFor(() => processes.readCursors.length > 0);
@@ -3796,14 +3673,7 @@ suite('TerminalService process revival after exit', () => {
 		using workspace = folderWorkspaceContext();
 		using services = revivalServices(processes, workspace);
 		const snapshot = reviveSnapshot(workspace);
-		services
-			.get(IStorageService)
-			.store(
-				TerminalStorageKeys.Revive,
-				JSON.stringify(reviveState(workspace, snapshot)),
-				StorageScope.WORKSPACE,
-				StorageTarget.MACHINE,
-			);
+		services.get(IStorageService).store(TerminalStorageKeys.Revive, JSON.stringify(reviveState(workspace, snapshot)), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		const terminals = services.get(ITerminalService);
 		await terminals.whenConnected;
 		assert.equal((processes as ITerminalProcessService).attach, undefined);
@@ -3830,9 +3700,7 @@ suite('TerminalService process revival after exit', () => {
 		await waitFor(() => processes.readCursors.length > 0);
 		assert.equal(processes.readCursors[0], 0);
 		await instance.sendText('after-revive', false);
-		assert.deepEqual(processes.writeCalls, [
-			{ terminalId: 'terminal-1', dirId: snapshot.dirId, data: 'after-revive' },
-		]);
+		assert.deepEqual(processes.writeCalls, [{ terminalId: 'terminal-1', dirId: snapshot.dirId, data: 'after-revive' }]);
 	});
 
 	for (const [setting, value] of [
@@ -3844,14 +3712,7 @@ suite('TerminalService process revival after exit', () => {
 			using workspace = folderWorkspaceContext();
 			using services = revivalServices(processes, workspace);
 			await services.get(IConfigurationService).updateValue(setting, value);
-			services
-				.get(IStorageService)
-				.store(
-					TerminalStorageKeys.Revive,
-					JSON.stringify(reviveState(workspace, reviveSnapshot(workspace))),
-					StorageScope.WORKSPACE,
-					StorageTarget.MACHINE,
-				);
+			services.get(IStorageService).store(TerminalStorageKeys.Revive, JSON.stringify(reviveState(workspace, reviveSnapshot(workspace))), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 			const terminals = services.get(ITerminalService);
 			await terminals.whenConnected;
 			assert.deepEqual(terminals.instances, []);
@@ -3884,14 +3745,7 @@ suite('TerminalService process revival after exit', () => {
 				...(corruption === 'workspace' ? { workspaceId: 'other-workspace' } : {}),
 				...(corruption === 'host' ? { remoteAuthority: 'ssh-remote+another-host' } : {}),
 			};
-			services
-				.get(IStorageService)
-				.store(
-					TerminalStorageKeys.Revive,
-					JSON.stringify(state),
-					StorageScope.WORKSPACE,
-					StorageTarget.MACHINE,
-				);
+			services.get(IStorageService).store(TerminalStorageKeys.Revive, JSON.stringify(state), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 			const errors: unknown[] = [];
 			const previous = errorHandler.getUnexpectedErrorHandler();
 			setUnexpectedErrorHandler(error => errors.push(error));
@@ -3921,24 +3775,9 @@ suite('TerminalService process revival after exit', () => {
 		await secondServices.get(ISecretStorageService).set(TERMINAL_REVIVE_STATE_KEY, secondKey);
 		const first = { ...reviveSnapshot(workspace), cwd: '/workspace/window-one' };
 		const second = { ...reviveSnapshot(workspace), cwd: '/workspace/window-two' };
-		storage.store(
-			firstKey,
-			JSON.stringify(reviveState(workspace, first)),
-			StorageScope.WORKSPACE,
-			StorageTarget.MACHINE,
-		);
-		storage.store(
-			secondKey,
-			JSON.stringify(reviveState(workspace, second)),
-			StorageScope.WORKSPACE,
-			StorageTarget.MACHINE,
-		);
-		storage.store(
-			TerminalStorageKeys.Revive,
-			'invalid legacy state must not override stable window identity',
-			StorageScope.WORKSPACE,
-			StorageTarget.MACHINE,
-		);
+		storage.store(firstKey, JSON.stringify(reviveState(workspace, first)), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		storage.store(secondKey, JSON.stringify(reviveState(workspace, second)), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		storage.store(TerminalStorageKeys.Revive, 'invalid legacy state must not override stable window identity', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		const firstTerminals = firstServices.get(ITerminalService);
 		const secondTerminals = secondServices.get(ITerminalService);
 		await Promise.all([firstTerminals.whenConnected, secondTerminals.whenConnected]);
@@ -3957,10 +3796,7 @@ suite('TerminalService process revival after exit', () => {
 	test('a revival checkpoint without an interactive launch cannot replay a task', () => {
 		using workspace = folderWorkspaceContext();
 		const { launch: _launch, ...task } = reviveSnapshot(workspace);
-		assert.throws(
-			() => parseTerminalReloadState(JSON.stringify(reviveState(workspace, task))),
-			/Missing terminal revival launch/,
-		);
+		assert.throws(() => parseTerminalReloadState(JSON.stringify(reviveState(workspace, task))), /Missing terminal revival launch/);
 	});
 });
 

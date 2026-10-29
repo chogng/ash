@@ -3,11 +3,7 @@ import { h, WindowIntervalTimer } from '../../../../base/browser/dom.js';
 import { FastDomNode, createFastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { TimeoutTimer } from '../../../../base/common/async.js';
-import {
-	EditorOption,
-	TextEditorCursorBlinkingStyle,
-	TextEditorCursorStyle,
-} from '../../../common/config/editorOptions.js';
+import { EditorOption, TextEditorCursorBlinkingStyle, TextEditorCursorStyle } from '../../../common/config/editorOptions.js';
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
 import { type Selection } from '../../../common/core/selection.js';
 import { type TextModel } from '../../../common/model/textModel.js';
@@ -119,15 +115,7 @@ export class ViewCursors extends ViewPart {
 		while (this.cursors.length < selectionCount) {
 			const selectionIndex = this.cursors.length;
 			this.cursors.push(
-				new ViewCursor(
-					this._context,
-					this.domNode,
-					selectionIndex,
-					this.cursorOptions,
-					this.model,
-					this.semanticTokenSource,
-					cursorPlurality(selectionIndex, selectionCount, 0),
-				),
+				new ViewCursor(this._context, this.domNode, selectionIndex, this.cursorOptions, this.model, this.semanticTokenSource, cursorPlurality(selectionIndex, selectionCount, 0)),
 			);
 		}
 		while (this.cursors.length > selectionCount) this.cursors.pop()!.getDomNode().domNode.remove();
@@ -208,13 +196,7 @@ export class ViewCursors extends ViewPart {
 		return true;
 	}
 	public override onTokensChanged(event: viewEvents.ViewTokensChangedEvent): boolean {
-		return this.cursors.some(cursor =>
-			event.ranges.some(
-				range =>
-					range.fromLineNumber <= cursor.getPosition().lineNumber &&
-					cursor.getPosition().lineNumber <= range.toLineNumber,
-			),
-		);
+		return this.cursors.some(cursor => event.ranges.some(range => range.fromLineNumber <= cursor.getPosition().lineNumber && cursor.getPosition().lineNumber <= range.toLineNumber));
 	}
 	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean {
 		return true;
@@ -239,10 +221,7 @@ export class ViewCursors extends ViewPart {
 		this.updateDomClassName();
 		if (hidden || solid) return;
 		if (blinking === TextEditorCursorBlinkingStyle.Blink) {
-			this.cursorFlatBlinkInterval.cancelAndSet(
-				() => (this.isVisible ? this.hide() : this.show()),
-				ViewCursors.BLINK_INTERVAL,
-			);
+			this.cursorFlatBlinkInterval.cancelAndSet(() => (this.isVisible ? this.hide() : this.show()), ViewCursors.BLINK_INTERVAL);
 			return;
 		}
 		this.startCursorBlinkAnimation.setIfNotSet(() => {

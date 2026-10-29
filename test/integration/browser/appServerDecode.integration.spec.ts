@@ -25,10 +25,7 @@ test('App Server large responses cross the real Worker and retain complete resul
 			[128, 4096],
 			[1, 8 * 1024 * 1024],
 		]) {
-			await page.evaluate(
-				([turns, textBytes]) => window.ashAppServerDecodeIntegration.prepare(turns, textBytes),
-				[turns, textBytes],
-			);
+			await page.evaluate(([turns, textBytes]) => window.ashAppServerDecodeIntegration.prepare(turns, textBytes), [turns, textBytes]);
 			expect(await page.evaluate(() => window.ashAppServerDecodeIntegration.run())).toEqual({
 				turns,
 				textBytes,

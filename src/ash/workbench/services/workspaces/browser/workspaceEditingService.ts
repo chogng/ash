@@ -9,11 +9,7 @@ import { editJsonObjectProperty } from '../../../../base/common/json.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { localize } from '../../../../nls.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import {
-	getStoredWorkspaceFolder,
-	parseStoredWorkspaceFolders,
-	toWorkspaceFolders,
-} from '../../../../platform/workspaces/common/workspaces.js';
+import { getStoredWorkspaceFolder, parseStoredWorkspaceFolders, toWorkspaceFolders } from '../../../../platform/workspaces/common/workspaces.js';
 import { IFileService, FileNotFoundError } from '../../../../platform/files/common/files.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
@@ -43,15 +39,7 @@ export class BrowserWorkspaceEditingService extends AbstractWorkspaceEditingServ
 					if (current !== workspace.getWorkspace()) return;
 					this.ensureConfigurationSaved();
 					await this.enterWorkspace(current.configuration!);
-				}).catch(error =>
-					notifications.error(
-						localize(
-							'workspace.reloadFailed',
-							'Could not update workspace folders. The last accepted folders were kept. {0}',
-							String(error),
-						),
-					),
-				);
+				}).catch(error => notifications.error(localize('workspace.reloadFailed', 'Could not update workspace folders. The last accepted folders were kept. {0}', String(error))));
 			}, 100),
 		);
 		const watchConfiguration = () => {
@@ -61,13 +49,7 @@ export class BrowserWorkspaceEditingService extends AbstractWorkspaceEditingServ
 			this.watch.add(files.watch(configuration, { recursive: false, excludes: [] }));
 			this.watch.add(
 				files.onDidChangeFiles(event => {
-					if (
-						!event.resources ||
-						event.resources.some(resource =>
-							extUriBiasedIgnorePathCase.isEqualOrParent(configuration, resource),
-						)
-					)
-						reload.schedule();
+					if (!event.resources || event.resources.some(resource => extUriBiasedIgnorePathCase.isEqualOrParent(configuration, resource))) reload.schedule();
 				}),
 			);
 		};
@@ -75,41 +57,24 @@ export class BrowserWorkspaceEditingService extends AbstractWorkspaceEditingServ
 		watchConfiguration();
 	}
 
-	updateFolders(
-		index: number,
-		deleteCount = 0,
-		foldersToAdd: readonly { readonly uri: URI; readonly name?: string }[] = [],
-	): Promise<void> {
+	updateFolders(index: number, deleteCount = 0, foldersToAdd: readonly { readonly uri: URI; readonly name?: string }[] = []): Promise<void> {
 		const current = this.workspace.getWorkspace();
 		return this.enqueue(async () => {
 			if (this.isDisposed || current !== this.workspace.getWorkspace()) throw new CancellationError();
-			if (
-				index < 0 ||
-				index > current.folders.length ||
-				deleteCount < 0 ||
-				deleteCount > current.folders.length - index
-			)
-				throw new RangeError(
-					localize('workspace.invalidFolderEdit', 'Workspace folder edit is outside the current list'),
-				);
+			if (index < 0 || index > current.folders.length || deleteCount < 0 || deleteCount > current.folders.length - index)
+				throw new RangeError(localize('workspace.invalidFolderEdit', 'Workspace folder edit is outside the current list'));
 			const folders: { readonly uri: URI; readonly name?: string }[] = current.folders.map(folder => ({
 				uri: folder.uri,
 				name: folder.name,
 			}));
 			folders.splice(index, deleteCount, ...foldersToAdd);
-			const unique = folders.filter(
-				(folder, position) =>
-					folders.findIndex(candidate => extUriBiasedIgnorePathCase.isEqual(candidate.uri, folder.uri)) ===
-					position,
-			);
-			if (unique.length > 256)
-				throw new RangeError(localize('workspace.folderLimit', 'Workspace supports at most 256 folders'));
+			const unique = folders.filter((folder, position) => folders.findIndex(candidate => extUriBiasedIgnorePathCase.isEqual(candidate.uri, folder.uri)) === position);
+			if (unique.length > 256) throw new RangeError(localize('workspace.folderLimit', 'Workspace supports at most 256 folders'));
 			if (
 				unique.length === current.folders.length &&
 				unique.every(
 					(folder, position) =>
-						extUriBiasedIgnorePathCase.isEqual(folder.uri, current.folders[position]!.uri) &&
-						(folder.name === undefined || folder.name === current.folders[position]!.name),
+						extUriBiasedIgnorePathCase.isEqual(folder.uri, current.folders[position]!.uri) && (folder.name === undefined || folder.name === current.folders[position]!.name),
 				)
 			)
 				return;
@@ -145,27 +110,16 @@ export class BrowserWorkspaceEditingService extends AbstractWorkspaceEditingServ
 		return result;
 	}
 
-	private async writeAndEnter(
-		target: URI,
-		folders: readonly { readonly uri: URI; readonly name?: string }[],
-	): Promise<void> {
+	private async writeAndEnter(target: URI, folders: readonly { readonly uri: URI; readonly name?: string }[]): Promise<void> {
 		const current = this.workspace.getWorkspace();
 		const source = current.configuration ? (await this.files.readFile(current.configuration)).content : '{}\n';
 		if (current.configuration) {
-			const stored = toWorkspaceFolders(
-				parseStoredWorkspaceFolders(
-					parseJsonc(source, current.configuration.toString()),
-					current.configuration.toString(),
-				),
-				current.configuration,
-			);
+			const stored = toWorkspaceFolders(parseStoredWorkspaceFolders(parseJsonc(source, current.configuration.toString()), current.configuration.toString()), current.configuration);
 			if (
 				stored.length !== current.folders.length ||
 				stored.some((folder, index) => {
 					const previous = current.folders[index]!;
-					return (
-						!extUriBiasedIgnorePathCase.isEqual(folder.uri, previous.uri) || folder.name !== previous.name
-					);
+					return !extUriBiasedIgnorePathCase.isEqual(folder.uri, previous.uri) || folder.name !== previous.name;
 				})
 			)
 				throw new Error(localize('workspace.changedDuringEdit', 'Workspace file changed during editing'));
@@ -173,14 +127,7 @@ export class BrowserWorkspaceEditingService extends AbstractWorkspaceEditingServ
 		const output = editJsonObjectProperty(
 			source,
 			'folders',
-			folders.map(folder =>
-				getStoredWorkspaceFolder(
-					folder.uri,
-					target.scheme === Schemas.vscodeUserData,
-					folder.name,
-					dirname(target),
-				),
-			),
+			folders.map(folder => getStoredWorkspaceFolder(folder.uri, target.scheme === Schemas.vscodeUserData, folder.name, dirname(target))),
 		);
 		let previous: Awaited<ReturnType<IFileService['readFile']>> | undefined;
 		try {
@@ -189,8 +136,7 @@ export class BrowserWorkspaceEditingService extends AbstractWorkspaceEditingServ
 			if (!(error instanceof FileNotFoundError)) throw error;
 		}
 		if (this.isDisposed || current !== this.workspace.getWorkspace()) throw new CancellationError();
-		if (current.configuration?.toString() === target.toString() && previous?.content !== source)
-			throw new Error(localize('workspace.changedDuringEdit', 'Workspace file changed during editing'));
+		if (current.configuration?.toString() === target.toString() && previous?.content !== source) throw new Error(localize('workspace.changedDuringEdit', 'Workspace file changed during editing'));
 		if (!previous) {
 			try {
 				await this.files.stat(dirname(target));
@@ -199,28 +145,19 @@ export class BrowserWorkspaceEditingService extends AbstractWorkspaceEditingServ
 				await this.files.createDirectory(dirname(target));
 			}
 		}
-		const written = await this.files.writeFile(
-			{ resource: target, content: output, expectedRevision: previous?.revision },
-			{ create: true, overwrite: previous !== undefined },
-		);
+		const written = await this.files.writeFile({ resource: target, content: output, expectedRevision: previous?.revision }, { create: true, overwrite: previous !== undefined });
 		try {
 			await this.hostService.openWindow([{ workspaceUri: target }], {
 				forceReuseWindow: true,
 				preserveEditors: true,
 			});
-			if (this.workspace.getWorkspace().configuration?.toString() !== target.toString())
-				throw new CancellationError();
+			if (this.workspace.getWorkspace().configuration?.toString() !== target.toString()) throw new CancellationError();
 		} catch (error) {
 			if (error instanceof WorkspaceTransitionCommittedError) throw error;
 			try {
-				if (previous)
-					await this.files.writeFile(
-						{ resource: target, content: previous.content, expectedRevision: written.revision },
-						{ create: false, overwrite: true },
-					);
+				if (previous) await this.files.writeFile({ resource: target, content: previous.content, expectedRevision: written.revision }, { create: false, overwrite: true });
 				else {
-					if ((await this.files.readFile(target)).revision !== written.revision)
-						throw new Error('Workspace rollback revision changed');
+					if ((await this.files.readFile(target)).revision !== written.revision) throw new Error('Workspace rollback revision changed');
 					await this.files.delete(target, 'ignore', 'fileOrEmptyDirectory');
 				}
 			} catch (rollback) {

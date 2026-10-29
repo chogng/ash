@@ -1,7 +1,4 @@
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../configuration/common/configurationRegistry.js';
 import { Registry } from '../../registry/common/platform.js';
 
 export const MinimumHoverDelay = 0;
@@ -41,12 +38,7 @@ export const HoverConfiguration = Object.freeze({
 export type HoverDelayMode = 'standard' | 'reduced' | 'instant';
 
 function parseHoverDelay(value: unknown, key: string): number {
-	if (
-		typeof value !== 'number' ||
-		!Number.isFinite(value) ||
-		value < MinimumHoverDelay ||
-		value > MaximumHoverDelay
-	) {
+	if (typeof value !== 'number' || !Number.isFinite(value) || value < MinimumHoverDelay || value > MaximumHoverDelay) {
 		throw new RangeError(`${key} must be a finite number between ${MinimumHoverDelay} and ${MaximumHoverDelay}`);
 	}
 	return value;

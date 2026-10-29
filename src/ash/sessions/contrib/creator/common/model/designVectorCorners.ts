@@ -3,12 +3,7 @@ import type { DesignPathNode } from './document.js';
 import type { DesignPathContour } from './designVector.js';
 
 /** Radius stays on the editable anchor in pixels; the two tangent points exist only in rendered geometry. */
-export function roundDesignVectorCorners(
-	contours: readonly DesignPathContour[],
-	width: number,
-	height: number,
-	smoothing = 0,
-): readonly DesignPathContour[] {
+export function roundDesignVectorCorners(contours: readonly DesignPathContour[], width: number, height: number, smoothing = 0): readonly DesignPathContour[] {
 	const pixel = (p: DesignPoint): DesignPoint => ({ x: p.x * width, y: p.y * height });
 	const normalized = (p: DesignPoint): DesignPoint => ({ x: p.x / width, y: p.y / height });
 	const distance = (a: DesignPoint, b: DesignPoint) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -18,10 +13,7 @@ export function roundDesignVectorCorners(
 			length = distance(p, q);
 		return [a.outgoing, b.incoming].every(handle => {
 			const h = pixel(handle);
-			return (
-				Math.abs((h.x - p.x) * (q.y - p.y) - (h.y - p.y) * (q.x - p.x)) < 1e-7 * Math.max(1, length) &&
-				distance(p, h) + distance(h, q) < length + 1e-7
-			);
+			return Math.abs((h.x - p.x) * (q.y - p.y) - (h.y - p.y) * (q.x - p.x)) < 1e-7 * Math.max(1, length) && distance(p, h) + distance(h, q) < length + 1e-7;
 		});
 	};
 	return contours.map(contour => {
@@ -78,9 +70,7 @@ export function roundDesignVectorCorners(
 					return [
 						{
 							...node,
-							...(corners[(i + nodes.length - 1) % nodes.length]
-								? { incoming: { x: node.x, y: node.y } }
-								: {}),
+							...(corners[(i + nodes.length - 1) % nodes.length] ? { incoming: { x: node.x, y: node.y } } : {}),
 							...(corners[(i + 1) % nodes.length] ? { outgoing: { x: node.x, y: node.y } } : {}),
 						},
 					];

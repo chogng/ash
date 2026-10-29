@@ -18,8 +18,7 @@ export interface TraceSpan {
 	readonly bytes: number;
 }
 
-export type TraceConnectionState =
-	'disconnected' | 'connecting' | 'connected' | 'configurationError' | 'connectionError' | 'protocolError';
+export type TraceConnectionState = 'disconnected' | 'connecting' | 'connected' | 'configurationError' | 'connectionError' | 'protocolError';
 const maxFrameBytes = 64 * 1024;
 const maxSpans = 2000;
 const maxRetainedBytes = 8 * 1024 * 1024;
@@ -31,9 +30,7 @@ export class TraceBuffer {
 	dropped = 0;
 
 	get spans(): readonly TraceSpan[] {
-		return [...this.entries.values()].sort((a, b) =>
-			a.start < b.start ? -1 : a.start > b.start ? 1 : a.key.localeCompare(b.key),
-		);
+		return [...this.entries.values()].sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : a.key.localeCompare(b.key)));
 	}
 
 	append(spans: readonly TraceSpan[]): void {
@@ -86,10 +83,7 @@ export function decodeTrace(value: unknown): TraceSpan[] {
 				const data = object(spanValue);
 				const traceId = identifier(data.traceId, 32);
 				const spanId = identifier(data.spanId, 16);
-				const parentSpanId =
-					data.parentSpanId === undefined || data.parentSpanId === ''
-						? ''
-						: identifier(data.parentSpanId, 16, true);
+				const parentSpanId = data.parentSpanId === undefined || data.parentSpanId === '' ? '' : identifier(data.parentSpanId, 16, true);
 				const start = timestamp(data.startTimeUnixNano);
 				const end = timestamp(data.endTimeUnixNano);
 				if (end < start || typeof data.name !== 'string') {
@@ -177,12 +171,7 @@ export class TraceConnection extends Disposable {
 				}
 				const value = object(JSON.parse(event.data));
 				if (this.state === 'connecting') {
-					if (
-						socket.protocol !== 'ash-trace-v2' ||
-						value.type !== 'ready' ||
-						value.version !== 2 ||
-						value.format !== 'otlp-json'
-					) {
+					if (socket.protocol !== 'ash-trace-v2' || value.type !== 'ready' || value.version !== 2 || value.format !== 'otlp-json') {
 						throw new Error('Invalid handshake');
 					}
 					clearTimeout(this.handshakeTimer);
@@ -248,12 +237,7 @@ function array(value: unknown): unknown[] {
 	return value;
 }
 function identifier(value: unknown, length: number, allowZero = false): string {
-	if (
-		typeof value !== 'string' ||
-		value.length !== length ||
-		!/^[0-9a-fA-F]+$/.test(value) ||
-		(!allowZero && /^0+$/.test(value))
-	) {
+	if (typeof value !== 'string' || value.length !== length || !/^[0-9a-fA-F]+$/.test(value) || (!allowZero && /^0+$/.test(value))) {
 		throw new Error('Invalid identifier');
 	}
 	return value.toLowerCase();

@@ -6,18 +6,9 @@ import { validateJsonValue } from '../../../base/common/jsonValue.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { toValuesTree } from './configuration.js';
-import {
-	Extensions,
-	ConfigurationScope,
-	overrideIdentifiersFromKey,
-	type IConfigurationRegistry,
-} from './configurationRegistry.js';
+import { Extensions, ConfigurationScope, overrideIdentifiersFromKey, type IConfigurationRegistry } from './configurationRegistry.js';
 import { Registry } from '../../registry/common/platform.js';
-import {
-	FileSystemProviderErrorCode,
-	toFileSystemProviderErrorCode,
-	type IFileService,
-} from '../../files/common/files.js';
+import { FileSystemProviderErrorCode, toFileSystemProviderErrorCode, type IFileService } from '../../files/common/files.js';
 import type { IExtUri } from '../../../base/common/resources.js';
 import type { URI } from '../../../base/common/uri.js';
 
@@ -70,8 +61,7 @@ export class ConfigurationModelParser {
 			}
 			const properties: IStringDictionary<unknown> = {};
 			for (const [setting, entry] of Object.entries(values)) {
-				if (!/^[A-Za-z][A-Za-z0-9./-]{0,127}$/u.test(setting))
-					throw new TypeError(`invalid configuration key: ${setting}`);
+				if (!/^[A-Za-z][A-Za-z0-9./-]{0,127}$/u.test(setting)) throw new TypeError(`invalid configuration key: ${setting}`);
 				properties[setting] = validateJsonValue(entry, { path: `${this.name}.${key}.${setting}` });
 			}
 			validated[key] = identifiers.length ? properties : properties[key];
@@ -87,10 +77,7 @@ export class ConfigurationModelParser {
 			if (options.exclude?.includes(key)) return false;
 			if (options.include?.includes(key)) return true;
 			const property = registry.getConfiguration(key);
-			return (
-				(!options.skipUnregistered || property !== undefined) &&
-				(!options.scopes || property?.scope === undefined || options.scopes.includes(property.scope))
-			);
+			return (!options.skipUnregistered || property !== undefined) && (!options.scopes || property?.scope === undefined || options.scopes.includes(property.scope));
 		};
 		const selected: IStringDictionary<unknown> = {};
 		const overrides: IOverrides[] = [];
@@ -98,9 +85,7 @@ export class ConfigurationModelParser {
 		for (const [key, value] of Object.entries(raw)) {
 			const identifiers = overrideIdentifiersFromKey(key);
 			if (identifiers.length) {
-				const properties = Object.fromEntries(
-					Object.entries(value as IStringDictionary<unknown>).filter(([setting]) => include(setting)),
-				);
+				const properties = Object.fromEntries(Object.entries(value as IStringDictionary<unknown>).filter(([setting]) => include(setting)));
 				selected[key] = properties;
 				overrides.push({
 					identifiers,
@@ -146,8 +131,7 @@ export class UserSettings extends Disposable {
 		this._register(fileService.watch(resource));
 		this._register(
 			fileService.onDidChangeFiles(event => {
-				if (event.resources && !event.resources.some(candidate => extUri.isEqualOrParent(resource, candidate)))
-					return;
+				if (event.resources && !event.resources.some(candidate => extUri.isEqualOrParent(resource, candidate))) return;
 				this.generation++;
 				void this.loadConfiguration().then(
 					() => {
@@ -173,8 +157,7 @@ export class UserSettings extends Disposable {
 			try {
 				content = (await this.fileService.readFile(this.resource)).content;
 			} catch (error) {
-				if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileNotFound)
-					throw error;
+				if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileNotFound) throw error;
 				content = '{}';
 			}
 			const parser = new ConfigurationModelParser(this.resource.toString(), this.logService);
@@ -219,11 +202,7 @@ export class ConfigurationModel implements IConfigurationModel {
 			...(rawValues === undefined
 				? {}
 				: {
-						raw: rawValues.flatMap(value =>
-							value instanceof ConfigurationModel
-								? (value.data.raw ?? value.contents)
-								: (copyValue(value) as IStringDictionary<unknown>),
-						),
+						raw: rawValues.flatMap(value => (value instanceof ConfigurationModel ? (value.data.raw ?? value.contents) : (copyValue(value) as IStringDictionary<unknown>))),
 					}),
 		};
 	}
@@ -258,28 +237,14 @@ export class ConfigurationModel implements IConfigurationModel {
 			return undefined;
 		}
 		// A language's own block wins over combined blocks, regardless of document order.
-		const ordered = [
-			...matching.filter(block => block.identifiers.length > 1),
-			...matching.filter(block => block.identifiers.length === 1),
-		];
-		const contents = ordered.reduce<IStringDictionary<unknown>>(
-			(result, block) => combineValues(result, block.contents),
-			{},
-		);
+		const ordered = [...matching.filter(block => block.identifiers.length > 1), ...matching.filter(block => block.identifiers.length === 1)];
+		const contents = ordered.reduce<IStringDictionary<unknown>>((result, block) => combineValues(result, block.contents), {});
 		return copyValue(section ? getConfigurationValue<V>(contents, section) : contents) as V | undefined;
 	}
 
 	override(identifier: string): ConfigurationModel {
 		const contents = this.getOverrideValue<IStringDictionary<unknown>>(undefined, identifier);
-		return contents === undefined
-			? this
-			: new ConfigurationModel(
-					combineValues(this.data.contents, contents),
-					this.data.keys,
-					this.data.overrides,
-					this.data.raw,
-					this.logService,
-				);
+		return contents === undefined ? this : new ConfigurationModel(combineValues(this.data.contents, contents), this.data.keys, this.data.overrides, this.data.raw, this.logService);
 	}
 
 	merge(...others: ConfigurationModel[]): ConfigurationModel {
@@ -310,11 +275,7 @@ export class ConfigurationModel implements IConfigurationModel {
 		const raw = models.some(model => model.data.raw !== undefined)
 			? models.flatMap<IStringDictionary<unknown> | ConfigurationModel>(model => {
 					const source = model.data.raw;
-					return source === undefined
-						? [model]
-						: Array.isArray(source)
-							? source
-							: [source as IStringDictionary<unknown>];
+					return source === undefined ? [model] : Array.isArray(source) ? source : [source as IStringDictionary<unknown>];
 				})
 			: undefined;
 		return new ConfigurationModel(contents, [...keys], [...blocks.values()], raw, this.logService);
@@ -333,10 +294,7 @@ function isDictionary(value: unknown): value is IStringDictionary<unknown> {
 	return prototype === null || prototype === Object.prototype;
 }
 
-function combineValues(
-	base: IStringDictionary<unknown>,
-	update: IStringDictionary<unknown>,
-): IStringDictionary<unknown> {
+function combineValues(base: IStringDictionary<unknown>, update: IStringDictionary<unknown>): IStringDictionary<unknown> {
 	const result = { ...base };
 	for (const [key, value] of Object.entries(update)) {
 		const previous = Object.hasOwn(result, key) ? result[key] : undefined;
@@ -362,9 +320,7 @@ function copyValue(value: unknown): unknown {
 		return copy;
 	}
 	if (isDictionary(value)) {
-		const copy = Object.freeze(
-			Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, copyValue(entry)])),
-		);
+		const copy = Object.freeze(Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, copyValue(entry)])));
 		copiedValues.add(copy);
 		return copy;
 	}

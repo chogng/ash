@@ -26,10 +26,7 @@ export class BrowserPermissionsFeature extends Disposable {
 		return [
 			{
 				id: 'browser.managePermissions',
-				label: localize(
-					{ bundle: 'ash.workbench', key: 'browser.managePermissions' },
-					'Manage website permissions',
-				),
+				label: localize({ bundle: 'ash.workbench', key: 'browser.managePermissions' }, 'Manage website permissions'),
 				enabled: !!toOriginKey(this.model?.state.url),
 				tooltip: '',
 				run: () => this.manage().catch(this.report),
@@ -43,10 +40,7 @@ export class BrowserPermissionsFeature extends Disposable {
 			},
 			{
 				id: 'browser.permissions',
-				label: localize(
-					{ bundle: 'ash.workbench', key: 'browser.resetPermissions' },
-					'Reset all website permissions',
-				),
+				label: localize({ bundle: 'ash.workbench', key: 'browser.resetPermissions' }, 'Reset all website permissions'),
 				enabled: !!this.model,
 				tooltip: '',
 				run: () => this.model && this.pageService.clearPermissions(this.model.id).catch(this.report),
@@ -67,10 +61,7 @@ export class BrowserPermissionsFeature extends Disposable {
 			return;
 		}
 		const category = await this.dialogService.prompt<PermissionCategory>({
-			title: localize(
-				{ bundle: 'ash.workbench', key: 'browser.managePermissions' },
-				'Manage website permissions',
-			),
+			title: localize({ bundle: 'ash.workbench', key: 'browser.managePermissions' }, 'Manage website permissions'),
 			message: origin,
 			buttons: [
 				{
@@ -96,24 +87,12 @@ export class BrowserPermissionsFeature extends Disposable {
 			],
 			cancelButton: localize({ bundle: 'ash.workbench', key: 'browser.cancel' }, 'Cancel'),
 		});
-		if (
-			category.result === undefined ||
-			this.isDisposed ||
-			this.model !== model ||
-			toOriginKey(model.state.url) !== origin
-		) {
+		if (category.result === undefined || this.isDisposed || this.model !== model || toOriginKey(model.state.url) !== origin) {
 			return;
 		}
 		const result = await this.dialogService.prompt<{ state: PermissionDecision | null }>({
-			title: localize(
-				{ bundle: 'ash.workbench', key: 'browser.managePermissions' },
-				'Manage website permissions',
-			),
-			message: localize(
-				{ bundle: 'ash.workbench', key: 'browser.sitePermissionChoice' },
-				'Choose the permission decision for {0}.',
-				origin,
-			),
+			title: localize({ bundle: 'ash.workbench', key: 'browser.managePermissions' }, 'Manage website permissions'),
+			message: localize({ bundle: 'ash.workbench', key: 'browser.sitePermissionChoice' }, 'Choose the permission decision for {0}.', origin),
 			detail: localize(
 				{ bundle: 'ash.workbench', key: 'browser.sitePermissionCurrent' },
 				'Current decision: {0}',
@@ -139,15 +118,8 @@ export class BrowserPermissionsFeature extends Disposable {
 			],
 			cancelButton: localize({ bundle: 'ash.workbench', key: 'browser.cancel' }, 'Cancel'),
 		});
-		if (
-			result.result !== undefined &&
-			!this.isDisposed &&
-			this.model === model &&
-			toOriginKey(model.state.url) === origin
-		) {
-			await this.pageService.setPermissions(model.id, origin, [
-				{ category: category.result, state: result.result.state },
-			]);
+		if (result.result !== undefined && !this.isDisposed && this.model === model && toOriginKey(model.state.url) === origin) {
+			await this.pageService.setPermissions(model.id, origin, [{ category: category.result, state: result.result.state }]);
 		}
 	}
 	private async share(): Promise<void> {
@@ -186,11 +158,7 @@ export class BrowserPermissionsFeature extends Disposable {
 	}
 }
 
-import {
-	PermissionCategory,
-	type PermissionDecision,
-	toOriginKey,
-} from '../../../../../platform/browserView/common/browserPermissions.js';
+import { PermissionCategory, type PermissionDecision, toOriginKey } from '../../../../../platform/browserView/common/browserPermissions.js';
 
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { BrowserViewCommandId } from '../../../../../platform/browserView/common/browserView.js';
@@ -204,17 +172,12 @@ registerAction2(
 		constructor() {
 			super({
 				id: BrowserViewCommandId.ManagePermissions,
-				title: localize2(
-					{ bundle: 'ash.workbench', key: 'browser.managePermissionsCommand' },
-					'Browser: Manage Website Permissions',
-				),
+				title: localize2({ bundle: 'ash.workbench', key: 'browser.managePermissionsCommand' }, 'Browser: Manage Website Permissions'),
 				f1: true,
 				precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId),
 			});
 		}
-		override async run(
-			accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor,
-		): Promise<void> {
+		override async run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): Promise<void> {
 			const pane = accessor.get(IEditorPart).activePane;
 			if (pane?.id === BrowserViewEditorId) {
 				await (pane as BrowserEditor).getContribution(BrowserNavigationFeatures)?.permissions.manage();

@@ -10,13 +10,7 @@ import { generateUuid } from '../../../../../../base/common/uuid.js';
 import { localize } from '../../../../../../nls.js';
 import type { DesignDocumentController } from '../../../browser/designDocumentController.js';
 import type { DocumentCommands } from '../../../common/commands/documentCommands.js';
-import {
-	canAddDesignEffect,
-	createDesignEffect,
-	designEffects,
-	supportsDesignShadowSpread,
-	type DesignEffect,
-} from '../../../common/model/designEffects.js';
+import { canAddDesignEffect, createDesignEffect, designEffects, supportsDesignShadowSpread, type DesignEffect } from '../../../common/model/designEffects.js';
 import { designBlendModes, type DesignBlendMode } from '../../../common/model/designPaint.js';
 import { flattenDesignShapes } from '../../../common/model/document.js';
 import type { DesignSelection } from '../../../common/selection.js';
@@ -49,17 +43,7 @@ export class EffectPropertiesWidget extends Disposable {
 		this.updates.push(() => {
 			effectList.replaceChildren(
 				...this.effects.map((effect, index) =>
-					h(
-						document,
-						'option',
-						{ properties: { value: effect.id } },
-						localize(
-							'sessions.design.effectListEntry',
-							'{0}: {1}',
-							index + 1,
-							designEffectTypeLabel(effect.type),
-						),
-					),
+					h(document, 'option', { properties: { value: effect.id } }, localize('sessions.design.effectListEntry', '{0}: {1}', index + 1, designEffectTypeLabel(effect.type))),
 				),
 			);
 			effectList.value = this.effect?.id ?? '';
@@ -107,10 +91,7 @@ export class EffectPropertiesWidget extends Disposable {
 					[effects[index], effects[index + direction]] = [effects[index + direction], effects[index]];
 					this.setEffects(effects);
 				},
-				() =>
-					!!this.effect &&
-					this.effects.indexOf(this.effect) + direction >= 0 &&
-					this.effects.indexOf(this.effect) + direction < this.effects.length,
+				() => !!this.effect && this.effects.indexOf(this.effect) + direction >= 0 && this.effects.indexOf(this.effect) + direction < this.effects.length,
 			);
 		}
 		const type = this.select(
@@ -130,9 +111,7 @@ export class EffectPropertiesWidget extends Disposable {
 					id: effect.id,
 					...(effect.visible === undefined ? {} : { visible: effect.visible }),
 					blur: effect.blur,
-					...(this.blur?.progressive && (next === 'layer-blur' || next === 'background-blur')
-						? { progressive: this.blur.progressive }
-						: {}),
+					...(this.blur?.progressive && (next === 'layer-blur' || next === 'background-blur') ? { progressive: this.blur.progressive } : {}),
 					...(shadow && (next === 'drop-shadow' || next === 'inner-shadow')
 						? {
 								x: shadow.x,
@@ -147,20 +126,28 @@ export class EffectPropertiesWidget extends Disposable {
 		);
 		this.updates.push(() => {
 			for (const option of type.options) {
-				option.disabled =
-					option.value !== this.effect?.type &&
-					!canAddDesignEffect(this.effects, option.value as DesignEffect['type']);
+				option.disabled = option.value !== this.effect?.type && !canAddDesignEffect(this.effects, option.value as DesignEffect['type']);
 			}
 		});
 		this.checkbox(
 			localize('sessions.design.effectVisible', 'Effect visible'),
 			() => this.effect?.visible !== false,
-			value => this.effect && this.edit({ ...this.effect, visible: value }),
+			value =>
+				this.effect &&
+				this.edit({
+					...this.effect,
+					visible: value,
+				}),
 		);
 		this.number(
 			localize('sessions.design.effectBlur', 'Effect blur'),
 			() => this.effect?.blur,
-			value => this.effect && this.edit({ ...this.effect, blur: value }),
+			value =>
+				this.effect &&
+				this.edit({
+					...this.effect,
+					blur: value,
+				}),
 			() => !!this.effect && !this.blur?.progressive,
 			0,
 		);
@@ -256,29 +243,41 @@ export class EffectPropertiesWidget extends Disposable {
 		this.number(
 			localize('sessions.design.shadowX', 'Shadow X'),
 			() => this.shadow?.x,
-			value => this.shadow && this.edit({ ...this.shadow, x: value }),
+			value =>
+				this.shadow &&
+				this.edit({
+					...this.shadow,
+					x: value,
+				}),
 			() => !!this.shadow,
 		);
 		this.number(
 			localize('sessions.design.shadowY', 'Shadow Y'),
 			() => this.shadow?.y,
-			value => this.shadow && this.edit({ ...this.shadow, y: value }),
+			value =>
+				this.shadow &&
+				this.edit({
+					...this.shadow,
+					y: value,
+				}),
 			() => !!this.shadow,
 		);
 		this.number(
 			localize('sessions.design.effectSpread', 'Shadow spread'),
 			() => this.shadow?.spread ?? 0,
-			value => this.shadow && this.edit({ ...this.shadow, spread: value }),
+			value =>
+				this.shadow &&
+				this.edit({
+					...this.shadow,
+					spread: value,
+				}),
 			() => !!this.shadow && !!this.shape && supportsDesignShadowSpread(this.shape),
 		);
 		const spreadHint = h(
 			document,
 			'p',
 			{ className: 'ash-design-property-wide' },
-			localize(
-				'sessions.design.effectSpreadHint',
-				'Spread is available on rectangles, ellipses, and clipped frames with a visible fill.',
-			),
+			localize('sessions.design.effectSpreadHint', 'Spread is available on rectangles, ellipses, and clipped frames with a visible fill.'),
 		);
 		this.domNode.append(spreadHint);
 		this.updates.push(() => {
@@ -287,14 +286,24 @@ export class EffectPropertiesWidget extends Disposable {
 		this.checkbox(
 			localize('sessions.design.effectShowBehind', 'Show shadow behind transparent areas'),
 			() => this.shadow?.showBehind ?? false,
-			value => this.shadow?.type === 'drop-shadow' && this.edit({ ...this.shadow, showBehind: value }),
+			value =>
+				this.shadow?.type === 'drop-shadow' &&
+				this.edit({
+					...this.shadow,
+					showBehind: value,
+				}),
 			() => this.shadow?.type === 'drop-shadow',
 		);
 		this.select(
 			localize('sessions.design.effectBlend', 'Shadow blend mode'),
 			designBlendModes.map(mode => [mode, designBlendLabel(mode)]),
 			() => this.shadow?.blendMode ?? 'normal',
-			value => this.shadow && this.edit({ ...this.shadow, blendMode: value as DesignBlendMode }),
+			value =>
+				this.shadow &&
+				this.edit({
+					...this.shadow,
+					blendMode: value as DesignBlendMode,
+				}),
 			() => !!this.shadow,
 		);
 		const color = this._register(
@@ -316,17 +325,12 @@ export class EffectPropertiesWidget extends Disposable {
 		this.updates.push(() => {
 			color.domNode.hidden = !this.shadow;
 			color.enabled = this.editable && !!this.shadow;
-			color.setColor(
-				Color.Format.CSS.parseHex(this.shadow?.color ?? '#000000')!,
-				`${this.shape?.id}:${this.effect?.id}`,
-			);
+			color.setColor(Color.Format.CSS.parseHex(this.shadow?.color ?? '#000000')!, `${this.shape?.id}:${this.effect?.id}`);
 		});
 	}
 
 	private get shape() {
-		return this.selection.ids.size === 1
-			? flattenDesignShapes(this.controller.model.value.shapes).find(shape => this.selection.ids.has(shape.id))
-			: undefined;
+		return this.selection.ids.size === 1 ? flattenDesignShapes(this.controller.model.value.shapes).find(shape => this.selection.ids.has(shape.id)) : undefined;
 	}
 
 	private get editable(): boolean {
@@ -353,7 +357,10 @@ export class EffectPropertiesWidget extends Disposable {
 
 	private setEffects(effects: readonly DesignEffect[]): void {
 		if (this.shape && this.editable) {
-			this.commands.updateShape({ ...this.shape, effects });
+			this.commands.updateShape({
+				...this.shape,
+				effects,
+			});
 		}
 	}
 
@@ -382,13 +389,7 @@ export class EffectPropertiesWidget extends Disposable {
 		return button;
 	}
 
-	private select(
-		label: string,
-		choices: readonly (readonly [string, string])[],
-		value: () => string,
-		change: (value: string) => void,
-		visible = () => true,
-	): HTMLSelectElement {
+	private select(label: string, choices: readonly (readonly [string, string])[], value: () => string, change: (value: string) => void, visible = () => true): HTMLSelectElement {
 		const document = this.domNode.ownerDocument,
 			input = h(document, 'select', { attributes: { 'aria-label': label } });
 		input.append(...choices.map(([value, text]) => h(document, 'option', { properties: { value } }, text)));
@@ -410,16 +411,14 @@ export class EffectPropertiesWidget extends Disposable {
 		return input;
 	}
 
-	private number(
-		label: string,
-		value: () => number | undefined,
-		change: (value: number) => void,
-		visible: () => boolean,
-		min?: number,
-	): void {
+	private number(label: string, value: () => number | undefined, change: (value: number) => void, visible: () => boolean, min?: number): void {
 		const document = this.domNode.ownerDocument;
 		const input = h(document, 'input', {
-			properties: { type: 'number', step: 'any', ...(min === undefined ? {} : { min: String(min) }) },
+			properties: {
+				type: 'number',
+				step: 'any',
+				...(min === undefined ? {} : { min: String(min) }),
+			},
 			attributes: { 'aria-label': label },
 		});
 		const row = h(document, 'label', { className: 'ash-design-property-wide' }, label, input);
@@ -449,14 +448,12 @@ export class EffectPropertiesWidget extends Disposable {
 		});
 	}
 
-	private checkbox(
-		label: string,
-		value: () => boolean,
-		change: (value: boolean) => void,
-		visible = () => true,
-	): void {
+	private checkbox(label: string, value: () => boolean, change: (value: boolean) => void, visible = () => true): void {
 		const document = this.domNode.ownerDocument,
-			input = h(document, 'input', { properties: { type: 'checkbox' }, attributes: { 'aria-label': label } });
+			input = h(document, 'input', {
+				properties: { type: 'checkbox' },
+				attributes: { 'aria-label': label },
+			});
 		const row = h(document, 'label', { className: 'ash-design-property-wide' }, input, label);
 		this.domNode.append(row);
 		this._register(
@@ -474,12 +471,7 @@ export class EffectPropertiesWidget extends Disposable {
 	}
 
 	public update(): void {
-		if (
-			!this.blur?.progressive ||
-			!this.editable ||
-			this.blur.visible === false ||
-			this.blur.id !== this.selection.effectId
-		) {
+		if (!this.blur?.progressive || !this.editable || this.blur.visible === false || this.blur.id !== this.selection.effectId) {
 			this.selection.editingBlur = false;
 		}
 		for (const update of this.updates) {

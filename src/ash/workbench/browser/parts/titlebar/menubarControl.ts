@@ -98,33 +98,23 @@ export class BrowserMenubarControl extends Disposable implements IMenubarControl
 		};
 		const leftActionsLabel = () =>
 			localizationService
-				? localize(
-						localizationService,
-						{ bundle: 'ash.regions', key: 'titleBarLeftActions' },
-						'Title bar left actions',
-					)
+				? localize(localizationService, { bundle: 'ash.regions', key: 'titleBarLeftActions' }, 'Title bar left actions')
 				: resolveNls({ bundle: 'ash.regions', key: 'titleBarLeftActions' }, 'Title bar left actions');
 		this.toolbar = this._register(
-			new MenuWorkbenchToolBar(
-				container,
-				menuService,
-				contextMenuService,
-				options.titlebarMenuId ?? MenuId.TitleBarLeft,
-				{
-					contextKeyService,
-					ariaLabel: leftActionsLabel(),
-					presentation: 'inherit-foreground',
-					// Layout actions expose their pressed state without a persistent titlebar fill.
-					highlightToggledItems: false,
-					leadingActions: options.presentation === 'actions-only' ? [] : [action],
-					actionViewItemProvider: candidate => {
-						if (candidate !== action) return undefined;
-						const item = new ApplicationMenuActionViewItem(action, event => this.handleMenuKeyDown(event));
-						this.menuItem = item;
-						return item;
-					},
+			new MenuWorkbenchToolBar(container, menuService, contextMenuService, options.titlebarMenuId ?? MenuId.TitleBarLeft, {
+				contextKeyService,
+				ariaLabel: leftActionsLabel(),
+				presentation: 'inherit-foreground',
+				// Layout actions expose their pressed state without a persistent titlebar fill.
+				highlightToggledItems: false,
+				leadingActions: options.presentation === 'actions-only' ? [] : [action],
+				actionViewItemProvider: candidate => {
+					if (candidate !== action) return undefined;
+					const item = new ApplicationMenuActionViewItem(action, event => this.handleMenuKeyDown(event));
+					this.menuItem = item;
+					return item;
 				},
-			),
+			}),
 		);
 		this.domNode = this.toolbar.element;
 		this.domNode.classList.add('ash-menubar', 'ash-titlebar-left-actions');

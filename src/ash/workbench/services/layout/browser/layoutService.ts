@@ -6,17 +6,7 @@ import { ILayoutService } from '../../../../platform/layout/browser/layoutServic
 import type { WorkbenchLayoutStyle } from '../../../common/configuration.js';
 import type { Direction } from '../../../../base/browser/ui/grid/grid.js';
 
-export const workbenchPartIds = [
-	'titlebar',
-	'banner',
-	'statusbar',
-	'activitybar',
-	'sidebar',
-	'auxiliarybar',
-	'agentSidebar',
-	'editor',
-	'panel',
-] as const;
+export const workbenchPartIds = ['titlebar', 'banner', 'statusbar', 'activitybar', 'sidebar', 'auxiliarybar', 'agentSidebar', 'editor', 'panel'] as const;
 export type WorkbenchPartId = (typeof workbenchPartIds)[number];
 
 export enum Position {

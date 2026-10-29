@@ -5,11 +5,7 @@ import type { IAction } from '../../../../../base/common/actions.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
-import {
-	type ICodeEditor,
-	type IOverlayWidget,
-	OverlayWidgetPositionPreference,
-} from '../../../../../editor/browser/editorBrowser.js';
+import { type ICodeEditor, type IOverlayWidget, OverlayWidgetPositionPreference } from '../../../../../editor/browser/editorBrowser.js';
 import { EditorOption } from '../../../../../editor/common/config/editorOptions.js';
 import { localize } from '../../../../../nls.js';
 import { WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
@@ -25,11 +21,7 @@ import { IContextKeyService } from '../../../../../platform/contextkey/browser/c
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import {
-	IChatEditingService,
-	type IModifiedFileEntry,
-	type IModifiedFileEntryChangeHunk,
-} from '../../common/editing/chatEditingService.js';
+import { IChatEditingService, type IModifiedFileEntry, type IModifiedFileEntryChangeHunk } from '../../common/editing/chatEditingService.js';
 
 /** Owns only the review controls and decorations attached to one existing code editor. */
 export class ChatEditingCodeEditorIntegration extends Disposable implements IOverlayWidget {
@@ -143,10 +135,7 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 					'Review Agent changes\nUse Left and Right arrows to move between toolbar actions. Previous and Next reveal each change. Accept or reject the current change or the file. File operations are reviewed as one atomic change set. Shared file changes affect all contributing chats. Accept all and Reject all apply to the chosen chat and require shared changes to be reviewed separately. Cancel automatic acceptance to keep reviewing when a countdown appears. Use Restore Checkpoint to create a new chat and directory at a recorded message boundary; Files follows that directory. Undo Last Request and Redo Last Request move the current chat history and restore its files. Save unsaved files first. Sending a new request clears Redo. Pending reviews are restored after reopening the workspace; their automatic acceptance stays paused. Press Escape to return to the editor. Use the Review Agent changes command to choose a chat and review closed or deleted files.',
 				) +
 				'\n' +
-				localize(
-					'chatEditing.savePending',
-					'Rejected changes have not been saved. Retry saving to finish this review.',
-				) +
+				localize('chatEditing.savePending', 'Rejected changes have not been saved. Retry saving to finish this review.') +
 				' ' +
 				localize('chatEditing.retrySave', 'Retry saving reviewed changes')
 			);
@@ -154,24 +143,13 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 		const chats = this.entry ? this.chatCount(this.entry) : 0;
 		const content = this.entry?.getAccessibleContent();
 		const review =
-			chats > 1
-				? localize(
-						'chatEditing.sharedContent',
-						'Shared changes from {0} chats. Reviewing this file or change set affects all contributing chats.\n{1}',
-						chats,
-						content,
-					)
-				: content;
+			chats > 1 ? localize('chatEditing.sharedContent', 'Shared changes from {0} chats. Reviewing this file or change set affects all contributing chats.\n{1}', chats, content) : content;
 		return [review, this.countdownDomNode.textContent].filter(Boolean).join('\n');
 	}
 
 	private render(): void {
 		const resource = this.editor.getModel()?.uri;
-		const entry = resource
-			? this.editing.entries.find(candidate =>
-					candidate.resources.some(uri => extUriBiasedIgnorePathCase.isEqual(resource, uri)),
-				)
-			: undefined;
+		const entry = resource ? this.editing.entries.find(candidate => candidate.resources.some(uri => extUriBiasedIgnorePathCase.isEqual(resource, uri))) : undefined;
 		if (entry !== this.entry) {
 			this.index = 0;
 		}
@@ -240,28 +218,14 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 		const chats = this.chatCount(entry);
 		if (entry.hunks.length > 0) {
 			actions.push(
-				this.action('previous', localize('chatEditing.previous', 'Previous change'), Lxicon.chevronUp, () =>
-					this.navigate(-1),
-				),
-				this.action('next', localize('chatEditing.next', 'Next change'), Lxicon.chevronDown, () =>
-					this.navigate(1),
-				),
+				this.action('previous', localize('chatEditing.previous', 'Previous change'), Lxicon.chevronUp, () => this.navigate(-1)),
+				this.action('next', localize('chatEditing.next', 'Next change'), Lxicon.chevronDown, () => this.navigate(1)),
 			);
-			const acceptHunk =
-				chats > 1
-					? localize('chatEditing.acceptSharedHunk', 'Accept change from {0} chats', chats)
-					: localize('chatEditing.acceptHunk', 'Accept change');
-			const rejectHunk =
-				chats > 1
-					? localize('chatEditing.rejectSharedHunk', 'Reject change from {0} chats', chats)
-					: localize('chatEditing.rejectHunk', 'Reject change');
+			const acceptHunk = chats > 1 ? localize('chatEditing.acceptSharedHunk', 'Accept change from {0} chats', chats) : localize('chatEditing.acceptHunk', 'Accept change');
+			const rejectHunk = chats > 1 ? localize('chatEditing.rejectSharedHunk', 'Reject change from {0} chats', chats) : localize('chatEditing.rejectHunk', 'Reject change');
 			actions.push(
-				this.action('acceptHunk', acceptHunk, Lxicon.check, () =>
-					this.decide(entry, true, entry.hunks[this.index]),
-				),
-				this.action('rejectHunk', rejectHunk, Lxicon.discard, () =>
-					this.decide(entry, false, entry.hunks[this.index]),
-				),
+				this.action('acceptHunk', acceptHunk, Lxicon.check, () => this.decide(entry, true, entry.hunks[this.index])),
+				this.action('rejectHunk', rejectHunk, Lxicon.discard, () => this.decide(entry, false, entry.hunks[this.index])),
 			);
 		}
 		const acceptFile =
@@ -283,29 +247,18 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 		);
 		if (this.countingDown) {
 			actions.push(
-				this.action(
-					'cancelAutoAccept',
-					localize('chatEditing.cancelAutoAccept', 'Cancel automatic acceptance'),
-					Lxicon.close,
-					() => {
-						this.editing.cancelAutoAccept(entry);
-						status(
-							localize(
-								'chatEditing.autoAcceptCancelled',
-								'Automatic acceptance cancelled. Changes remain available for review.',
-							),
-						);
-						this.toolbar.focus();
-					},
-				),
+				this.action('cancelAutoAccept', localize('chatEditing.cancelAutoAccept', 'Cancel automatic acceptance'), Lxicon.close, () => {
+					this.editing.cancelAutoAccept(entry);
+					status(localize('chatEditing.autoAcceptCancelled', 'Automatic acceptance cancelled. Changes remain available for review.'));
+					this.toolbar.focus();
+				}),
 			);
 		}
 		this.toolbar.setActions(actions);
 	}
 
 	private chatCount(entry: IModifiedFileEntry): number {
-		return this.editing.editingSessionsObs.get().filter(session => session.getEntry(entry.modifiedURI) === entry)
-			.length;
+		return this.editing.editingSessionsObs.get().filter(session => session.getEntry(entry.modifiedURI) === entry).length;
 	}
 
 	private updateCountdown(): void {
@@ -313,20 +266,13 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 			return;
 		}
 		const seconds = this.editing.getAutoAcceptCountdown(this.entry);
-		this.countdownDomNode.textContent =
-			seconds === undefined ? '' : localize('chatEditing.autoAcceptCountdown', 'Accepting in {0}s', seconds);
+		this.countdownDomNode.textContent = seconds === undefined ? '' : localize('chatEditing.autoAcceptCountdown', 'Accepting in {0}s', seconds);
 		this.countdownDomNode.hidden = seconds === undefined;
 		if (this.countingDown !== (seconds !== undefined)) {
 			this.countingDown = seconds !== undefined;
 			this.renderActions(this.entry);
 			if (this.countingDown) {
-				status(
-					localize(
-						'chatEditing.autoAcceptStarted',
-						'Agent changes will be accepted in {0} seconds. Cancel automatic acceptance to keep reviewing.',
-						seconds,
-					),
-				);
+				status(localize('chatEditing.autoAcceptStarted', 'Agent changes will be accepted in {0} seconds. Cancel automatic acceptance to keep reviewing.', seconds));
 			}
 		}
 		// Ticks update only text, preserving diff zones and the focused toolbar action.
@@ -345,22 +291,10 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 		this.index = (this.index + delta + hunks.length) % hunks.length;
 		this.editor.revealRange(hunks[this.index]!.range);
 		this.labelDomNode.textContent = localize('chatEditing.counter', '{0} of {1}', this.index + 1, hunks.length);
-		status(
-			localize(
-				'chatEditing.atLine',
-				'Change {0} of {1}, line {2}',
-				this.index + 1,
-				hunks.length,
-				hunks[this.index]!.range.startLineNumber,
-			),
-		);
+		status(localize('chatEditing.atLine', 'Change {0} of {1}, line {2}', this.index + 1, hunks.length, hunks[this.index]!.range.startLineNumber));
 	}
 
-	private async decide(
-		entry: IModifiedFileEntry,
-		accept: boolean,
-		hunk?: IModifiedFileEntryChangeHunk,
-	): Promise<void> {
+	private async decide(entry: IModifiedFileEntry, accept: boolean, hunk?: IModifiedFileEntryChangeHunk): Promise<void> {
 		try {
 			if (accept) {
 				await this.editing.acceptEntry(entry, hunk);
@@ -369,11 +303,7 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 			} else {
 				await this.editing.rejectEntry(entry, hunk);
 			}
-			status(
-				accept
-					? localize('chatEditing.accepted', 'Changes accepted.')
-					: localize('chatEditing.rejected', 'Changes rejected.'),
-			);
+			status(accept ? localize('chatEditing.accepted', 'Changes accepted.') : localize('chatEditing.rejected', 'Changes rejected.'));
 			if (this.entry) {
 				this.toolbar.focus();
 			} else {

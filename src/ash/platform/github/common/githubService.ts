@@ -254,8 +254,7 @@ export interface GitHubReview {
 	readonly body: string;
 	readonly comments?: readonly GitHubReviewCommentInput[];
 }
-export type GitHubFileContent =
-	{ readonly kind: 'text'; readonly text: string } | { readonly kind: 'binary' | 'tooLarge' };
+export type GitHubFileContent = { readonly kind: 'text'; readonly text: string } | { readonly kind: 'binary' | 'tooLarge' };
 export interface GitHubReviewComment {
 	readonly id: string;
 	readonly body: string;
@@ -363,25 +362,13 @@ export interface IGitHubService {
 	detachSessionIssue(sessionId: string, reference: GitHubIssueReference): Promise<void>;
 	/** Primary grant first; explicit selection does not change other consumers' primary grant. */
 	listAccounts(token?: CancellationToken): Promise<readonly GitHubAccount[]>;
-	readManagedSettings(
-		accountId: string,
-		token?: CancellationToken,
-	): Promise<Readonly<Record<string, JsonValue>> | null>;
+	readManagedSettings(accountId: string, token?: CancellationToken): Promise<Readonly<Record<string, JsonValue>> | null>;
 	connectToken(host: string, accessToken: string, token?: CancellationToken): Promise<GitHubAccount>;
-	listNotifications(
-		accountId: string,
-		filter: GitHubNotificationFilter,
-		page: number,
-		token?: CancellationToken,
-	): Promise<GitHubPage<GitHubNotification>>;
+	listNotifications(accountId: string, filter: GitHubNotificationFilter, page: number, token?: CancellationToken): Promise<GitHubPage<GitHubNotification>>;
 	markNotificationRead(accountId: string, threadId: string, token?: CancellationToken): Promise<void>;
 	markNotificationsRead(accountId: string, token?: CancellationToken): Promise<void>;
 	createFork(repository: GitHubRepository, fork: GitHubCreateFork, token?: CancellationToken): Promise<GitHubFork>;
-	requestedReviewers(
-		repository: GitHubRepository,
-		number: number,
-		token?: CancellationToken,
-	): Promise<GitHubRequestedReviewers>;
+	requestedReviewers(repository: GitHubRepository, number: number, token?: CancellationToken): Promise<GitHubRequestedReviewers>;
 	changeReviewers(
 		repository: GitHubRepository,
 		number: number,
@@ -390,186 +377,42 @@ export interface IGitHubService {
 		teams: readonly string[],
 		token?: CancellationToken,
 	): Promise<GitHubRequestedReviewers>;
-	updateReviewComment(
-		repository: GitHubRepository,
-		number: number,
-		commentId: string,
-		body: string,
-		token?: CancellationToken,
-	): Promise<GitHubReviewComment>;
-	deleteReviewComment(
-		repository: GitHubRepository,
-		number: number,
-		commentId: string,
-		token?: CancellationToken,
-	): Promise<void>;
+	updateReviewComment(repository: GitHubRepository, number: number, commentId: string, body: string, token?: CancellationToken): Promise<GitHubReviewComment>;
+	deleteReviewComment(repository: GitHubRepository, number: number, commentId: string, token?: CancellationToken): Promise<void>;
 	readCommit(repository: GitHubRepository, sha: string, token?: CancellationToken): Promise<GitHubCommit>;
-	searchRepositories(
-		accountId: string,
-		query: string,
-		page: number,
-		token?: CancellationToken,
-	): Promise<GitHubPage<GitHubRemoteRepository>>;
-	createRepository(
-		accountId: string,
-		name: string,
-		description: string,
-		visibility: GitHubRepositoryVisibility,
-		token?: CancellationToken,
-	): Promise<GitHubRemoteRepository>;
-	listRepositoryBranches(
-		repository: GitHubRepository,
-		page: number,
-		token?: CancellationToken,
-	): Promise<GitHubPage<GitHubRepositoryBranch>>;
+	searchRepositories(accountId: string, query: string, page: number, token?: CancellationToken): Promise<GitHubPage<GitHubRemoteRepository>>;
+	createRepository(accountId: string, name: string, description: string, visibility: GitHubRepositoryVisibility, token?: CancellationToken): Promise<GitHubRemoteRepository>;
+	listRepositoryBranches(repository: GitHubRepository, page: number, token?: CancellationToken): Promise<GitHubPage<GitHubRepositoryBranch>>;
 	readBranchProtection(repository: GitHubRepository, token?: CancellationToken): Promise<GitHubBranchProtection>;
 	shareLink(link: GitHubShareLink, token?: CancellationToken): Promise<string>;
 	readRepository(repository: GitHubRepository, token?: CancellationToken): Promise<GitHubRepositoryInfo>;
-	listIssues(
-		repository: GitHubRepository,
-		state: GitHubIssueState,
-		query: string,
-		page: number,
-		token?: CancellationToken,
-	): Promise<GitHubIssuePage>;
+	listIssues(repository: GitHubRepository, state: GitHubIssueState, query: string, page: number, token?: CancellationToken): Promise<GitHubIssuePage>;
 	readIssue(repository: GitHubRepository, number: number, token?: CancellationToken): Promise<GitHubIssueDetails>;
-	createIssue(
-		repository: GitHubRepository,
-		issue: GitHubCreateIssue,
-		token?: CancellationToken,
-	): Promise<GitHubIssue>;
-	updateIssue(
-		repository: GitHubRepository,
-		number: number,
-		update: GitHubUpdateIssue,
-		token?: CancellationToken,
-	): Promise<GitHubIssue>;
-	listComments(
-		repository: GitHubRepository,
-		number: number,
-		page: number,
-		token?: CancellationToken,
-	): Promise<GitHubPage<GitHubComment>>;
-	createComment(
-		repository: GitHubRepository,
-		number: number,
-		body: string,
-		token?: CancellationToken,
-	): Promise<GitHubComment>;
-	updateComment(
-		repository: GitHubRepository,
-		commentId: number,
-		body: string,
-		token?: CancellationToken,
-	): Promise<GitHubComment>;
+	createIssue(repository: GitHubRepository, issue: GitHubCreateIssue, token?: CancellationToken): Promise<GitHubIssue>;
+	updateIssue(repository: GitHubRepository, number: number, update: GitHubUpdateIssue, token?: CancellationToken): Promise<GitHubIssue>;
+	listComments(repository: GitHubRepository, number: number, page: number, token?: CancellationToken): Promise<GitHubPage<GitHubComment>>;
+	createComment(repository: GitHubRepository, number: number, body: string, token?: CancellationToken): Promise<GitHubComment>;
+	updateComment(repository: GitHubRepository, commentId: number, body: string, token?: CancellationToken): Promise<GitHubComment>;
 	deleteComment(repository: GitHubRepository, commentId: number, token?: CancellationToken): Promise<void>;
-	listPullRequests(
-		repository: GitHubRepository,
-		state: GitHubIssueState,
-		page: number,
-		token?: CancellationToken,
-		options?: { readonly head: string },
-	): Promise<GitHubPage<GitHubPullRequest>>;
-	readPullRequest(
-		repository: GitHubRepository,
-		number: number,
-		token?: CancellationToken,
-	): Promise<GitHubPullRequest>;
-	createPullRequest(
-		repository: GitHubRepository,
-		request: GitHubCreatePullRequest,
-		token?: CancellationToken,
-	): Promise<GitHubPullRequest>;
-	updatePullRequest(
-		repository: GitHubRepository,
-		number: number,
-		update: GitHubUpdatePullRequest,
-		token?: CancellationToken,
-	): Promise<GitHubPullRequest>;
-	listPullRequestFiles(
-		repository: GitHubRepository,
-		number: number,
-		page: number,
-		token?: CancellationToken,
-	): Promise<GitHubPullRequestFiles>;
-	listPullRequestReviews(
-		repository: GitHubRepository,
-		number: number,
-		page: number,
-		token?: CancellationToken,
-	): Promise<GitHubPage<GitHubPullRequestReview>>;
-	readReviewDiff(
-		repository: GitHubRepository,
-		number: number,
-		commit: string,
-		page: number,
-		token?: CancellationToken,
-	): Promise<GitHubReviewDiff>;
-	readFile(
-		repository: GitHubRepository,
-		commit: string,
-		path: string,
-		token?: CancellationToken,
-	): Promise<GitHubFileContent>;
-	listReviewThreads(
-		repository: GitHubRepository,
-		number: number,
-		cursor: string | null,
-		token?: CancellationToken,
-	): Promise<GitHubReviewThreads>;
-	readReviewThreadComments(
-		repository: GitHubRepository,
-		number: number,
-		threadId: string,
-		cursor: string | null,
-		token?: CancellationToken,
-	): Promise<GitHubReviewComments>;
-	replyReviewThread(
-		repository: GitHubRepository,
-		number: number,
-		threadId: string,
-		body: string,
-		token?: CancellationToken,
-	): Promise<GitHubReviewComment>;
-	resolveReviewThread(
-		repository: GitHubRepository,
-		number: number,
-		threadId: string,
-		state: GitHubReviewThreadState,
-		token?: CancellationToken,
-	): Promise<void>;
-	reviewPullRequest(
-		repository: GitHubRepository,
-		number: number,
-		review: GitHubReview,
-		token?: CancellationToken,
-	): Promise<GitHubPullRequestReview>;
-	mergePullRequest(
-		repository: GitHubRepository,
-		number: number,
-		merge: GitHubMerge,
-		token?: CancellationToken,
-	): Promise<GitHubMergeResult>;
-	enableAutoMerge(
-		repository: GitHubRepository,
-		number: number,
-		merge: GitHubMerge,
-		token?: CancellationToken,
-	): Promise<void>;
-	readCheckDetails(
-		repository: GitHubRepository,
-		target: GitHubCheckTarget,
-		page: number,
-		token?: CancellationToken,
-	): Promise<GitHubCheckDetails>;
+	listPullRequests(repository: GitHubRepository, state: GitHubIssueState, page: number, token?: CancellationToken, options?: { readonly head: string }): Promise<GitHubPage<GitHubPullRequest>>;
+	readPullRequest(repository: GitHubRepository, number: number, token?: CancellationToken): Promise<GitHubPullRequest>;
+	createPullRequest(repository: GitHubRepository, request: GitHubCreatePullRequest, token?: CancellationToken): Promise<GitHubPullRequest>;
+	updatePullRequest(repository: GitHubRepository, number: number, update: GitHubUpdatePullRequest, token?: CancellationToken): Promise<GitHubPullRequest>;
+	listPullRequestFiles(repository: GitHubRepository, number: number, page: number, token?: CancellationToken): Promise<GitHubPullRequestFiles>;
+	listPullRequestReviews(repository: GitHubRepository, number: number, page: number, token?: CancellationToken): Promise<GitHubPage<GitHubPullRequestReview>>;
+	readReviewDiff(repository: GitHubRepository, number: number, commit: string, page: number, token?: CancellationToken): Promise<GitHubReviewDiff>;
+	readFile(repository: GitHubRepository, commit: string, path: string, token?: CancellationToken): Promise<GitHubFileContent>;
+	listReviewThreads(repository: GitHubRepository, number: number, cursor: string | null, token?: CancellationToken): Promise<GitHubReviewThreads>;
+	readReviewThreadComments(repository: GitHubRepository, number: number, threadId: string, cursor: string | null, token?: CancellationToken): Promise<GitHubReviewComments>;
+	replyReviewThread(repository: GitHubRepository, number: number, threadId: string, body: string, token?: CancellationToken): Promise<GitHubReviewComment>;
+	resolveReviewThread(repository: GitHubRepository, number: number, threadId: string, state: GitHubReviewThreadState, token?: CancellationToken): Promise<void>;
+	reviewPullRequest(repository: GitHubRepository, number: number, review: GitHubReview, token?: CancellationToken): Promise<GitHubPullRequestReview>;
+	mergePullRequest(repository: GitHubRepository, number: number, merge: GitHubMerge, token?: CancellationToken): Promise<GitHubMergeResult>;
+	enableAutoMerge(repository: GitHubRepository, number: number, merge: GitHubMerge, token?: CancellationToken): Promise<void>;
+	readCheckDetails(repository: GitHubRepository, target: GitHubCheckTarget, page: number, token?: CancellationToken): Promise<GitHubCheckDetails>;
 	readCheckLog(repository: GitHubRepository, target: GitHubCheckTarget, token?: CancellationToken): Promise<string>;
 	rerunCheck(repository: GitHubRepository, target: GitHubCheckTarget, token?: CancellationToken): Promise<void>;
-	readChecks(
-		repository: GitHubRepository,
-		commit: string,
-		page: number,
-		token?: CancellationToken,
-	): Promise<GitHubChecks>;
+	readChecks(repository: GitHubRepository, commit: string, page: number, token?: CancellationToken): Promise<GitHubChecks>;
 	listLabels(repository: GitHubRepository, token?: CancellationToken): Promise<readonly GitHubLabel[]>;
 	createLabel(repository: GitHubRepository, label: GitHubLabel, token?: CancellationToken): Promise<GitHubLabel>;
 	updateLabelColor(repository: GitHubRepository, label: GitHubLabel, token?: CancellationToken): Promise<GitHubLabel>;

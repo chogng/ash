@@ -3,41 +3,31 @@ import { suite, test } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import {
-	TerminalCapability,
-	type ICommandDetectionCapability,
-	type ITerminalCommand,
-} from '../../../../../platform/terminal/common/capabilities/capabilities.js';
+import { TerminalCapability, type ICommandDetectionCapability, type ITerminalCommand } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { TerminalCommand } from '../../../../../platform/terminal/common/capabilities/commandDetection/terminalCommand.js';
 import { CwdDetectionCapability } from '../../../../../platform/terminal/common/capabilities/cwdDetectionCapability.js';
-import {
-	TerminalCapabilityStore,
-	TerminalCapabilityStoreMultiplexer,
-} from '../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
+import { TerminalCapabilityStore, TerminalCapabilityStoreMultiplexer } from '../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
 import type { IOutputChannel, IOutputService } from '../../../../services/output/common/output.js';
 import type { ITerminalInstance, ITerminalService } from '../../browser/terminal.js';
 import { createInstanceCapabilityEventMultiplexer } from '../../browser/terminalEvents.js';
 import { AgentHostOutputChannel } from '../../browser/agentHostOutputChannel.js';
 
 function screenCommand(id: string): ITerminalCommand {
-	return new TerminalCommand(
-		{ buffer: { normal: { cursorX: 0 } } } as ConstructorParameters<typeof TerminalCommand>[0],
-		{
-			id,
-			command: 'screen command',
-			commandLineConfidence: 'high',
-			isTrusted: true,
-			timestamp: 123,
-			duration: 10,
-			marker: undefined,
-			cwd: '/workspace',
-			exitCode: 0,
-			commandStartLineContent: undefined,
-			markProperties: undefined,
-			executedX: undefined,
-			startX: undefined,
-		},
-	);
+	return new TerminalCommand({ buffer: { normal: { cursorX: 0 } } } as ConstructorParameters<typeof TerminalCommand>[0], {
+		id,
+		command: 'screen command',
+		commandLineConfidence: 'high',
+		isTrusted: true,
+		timestamp: 123,
+		duration: 10,
+		marker: undefined,
+		cwd: '/workspace',
+		exitCode: 0,
+		commandStartLineContent: undefined,
+		markProperties: undefined,
+		executedX: undefined,
+		startX: undefined,
+	});
 }
 
 function source(owner: DisposableStore, id: number) {
@@ -174,15 +164,7 @@ suite('Terminal capability event lifetime', () => {
 		const added = owner.add(new Emitter<ITerminalInstance>());
 		const removed = owner.add(new Emitter<ITerminalInstance>());
 		const first = source(owner, 1);
-		const mux = owner.add(
-			createInstanceCapabilityEventMultiplexer(
-				[first.instance],
-				added.event,
-				removed.event,
-				TerminalCapability.CommandDetection,
-				capability => capability.onCommandFinished,
-			),
-		);
+		const mux = owner.add(createInstanceCapabilityEventMultiplexer([first.instance], added.event, removed.event, TerminalCapability.CommandDetection, capability => capability.onCommandFinished));
 		const observed: string[] = [];
 		owner.add(mux.event(event => observed.push(event.instance.id)));
 		const event = screenCommand('command');

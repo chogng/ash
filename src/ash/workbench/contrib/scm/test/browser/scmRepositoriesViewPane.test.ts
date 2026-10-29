@@ -84,9 +84,7 @@ suite('SCMRepositoriesViewPane', () => {
 
 	test('distinguishes same-name worktrees, preserves focus through status updates and localizes rows', async () => {
 		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-		setNlsResolver((bundle, key, fallback, parameters) =>
-			formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-		);
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		try {
 			using environment = fixture();
 			using changes = new Emitter<void>();
@@ -189,15 +187,10 @@ suite('SCMRepositoriesViewPane', () => {
 		await Promise.resolve();
 		assert.equal(environment.views.activeRepository, main);
 		assert.equal(list.getAttribute('aria-busy'), 'false');
-		assert.equal(
-			pane.element.querySelector('[role="status"]')?.textContent,
-			'Could not select repository: Repository unavailable',
-		);
+		assert.equal(pane.element.querySelector('[role="status"]')?.textContent, 'Could not select repository: Repository unavailable');
 
 		const removedActivation = new DeferredPromise<void>();
-		using removed = environment.scm.registerSCMProvider(
-			provider('removed', '/other/ash', () => removedActivation.p),
-		);
+		using removed = environment.scm.registerSCMProvider(provider('removed', '/other/ash', () => removedActivation.p));
 		list.querySelectorAll<HTMLElement>('[role="option"]')[2].click();
 		removed.dispose();
 		await removedActivation.complete();

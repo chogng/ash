@@ -111,17 +111,10 @@ test('record rejection retains precise field paths after valid values warm schem
 		Object.assign(response.result.thread.usage.inputTokens, { reported });
 		assert.throws(
 			() => decodeAppServerResponse('session/thread/read', response),
-			error =>
-				error instanceof AppServerProtocolDecodeError &&
-				error.path === '$.result.thread.usage.inputTokens.reported',
+			error => error instanceof AppServerProtocolDecodeError && error.path === '$.result.thread.usage.inputTokens.reported',
 		);
 	}
-	for (const invalid of [
-		{ reported: 0 },
-		{ complete: true },
-		{ reported: 0, complete: 'true' },
-		Object.assign(Object.create({ complete: true }), { reported: 0 }),
-	]) {
+	for (const invalid of [{ reported: 0 }, { complete: true }, { reported: 0, complete: 'true' }, Object.assign(Object.create({ complete: true }), { reported: 0 })]) {
 		const response = usageResponse();
 		Object.assign(response.result.thread.usage, { inputTokens: invalid });
 		assert.throws(() => decodeAppServerResponse('session/thread/read', response), AppServerProtocolDecodeError);
@@ -156,13 +149,7 @@ test('literal union alternatives retain all turn kinds and validate the selected
 		};
 		response.result.thread.turns.push(turn);
 		assert.deepEqual(decodeAppServerResponse('session/thread/read', response), response);
-		for (const invalid of [
-			{ kind: 'future' },
-			{ kind: null },
-			{ kind: { coding: true } },
-			{ kind: 'coding', status: 'future' },
-			{ kind: 'coding', usage: { modelInvocations: -1 } },
-		]) {
+		for (const invalid of [{ kind: 'future' }, { kind: null }, { kind: { coding: true } }, { kind: 'coding', status: 'future' }, { kind: 'coding', usage: { modelInvocations: -1 } }]) {
 			assert.throws(
 				() =>
 					decodeAppServerResponse('session/thread/read', {
@@ -202,10 +189,7 @@ test('backend state watches retain strict callback shapes and legacy one-shot ca
 		{ ...watching.params.operation, operation: 'unknown' },
 		{ ...watching.params.operation, context },
 	])
-		assert.throws(
-			() => decodeAppServerServerRequest({ ...envelope, params: { ...envelope.params, operation } }),
-			AppServerProtocolDecodeError,
-		);
+		assert.throws(() => decodeAppServerServerRequest({ ...envelope, params: { ...envelope.params, operation } }), AppServerProtocolDecodeError);
 });
 
 test('message phases and loop decisions survive the generated notification boundary', () => {
@@ -278,10 +262,7 @@ test('directory grants reject unknown capabilities and retired names at the gene
 			}),
 		AppServerProtocolDecodeError,
 	);
-	assert.throws(
-		() => Reflect.apply(decodeAppServerRequestParams, undefined, ['config/dirPermissions/set', params]),
-		AppServerProtocolDecodeError,
-	);
+	assert.throws(() => Reflect.apply(decodeAppServerRequestParams, undefined, ['config/dirPermissions/set', params]), AppServerProtocolDecodeError);
 	const initialized = {
 		clientInfo: { name: 'fixture', version: '1' },
 		capabilities: { directoryGrantsHost: { version: 1 } },
@@ -341,15 +322,16 @@ test('Agent identity and replacement origins survive the generated RPC boundary'
 		},
 	};
 	assert.deepEqual(decodeAppServerResponse('agent/read', response), response);
-	assert.deepEqual(
-		decodeAppServerRequestParams('session/create', { commandId: 'create', title: 'Task', agentId: 'agent-1' }),
-		{ commandId: 'create', title: 'Task', agentId: 'agent-1' },
-	);
+	assert.deepEqual(decodeAppServerRequestParams('session/create', { commandId: 'create', title: 'Task', agentId: 'agent-1' }), { commandId: 'create', title: 'Task', agentId: 'agent-1' });
 	assert.throws(() => decodeAppServerRequestParams('agent/read', { agentId: '' }), AppServerProtocolDecodeError);
 });
 
 test('App Server listen info accepts only the generated loopback record', () => {
-	const listenInfo = { kind: 'app-server-listen-info', version: 1, endpoint: 'ws://127.0.0.1:41789' };
+	const listenInfo = {
+		kind: 'app-server-listen-info',
+		version: 1,
+		endpoint: 'ws://127.0.0.1:41789',
+	};
 
 	assert.deepEqual(decodeAppServerListenInfo(listenInfo), listenInfo);
 	assert.throws(() => decodeAppServerListenInfo({ ...listenInfo, kind: 'other' }), AppServerProtocolDecodeError);
@@ -374,10 +356,7 @@ test('App Server response decoding selects the result schema from its pending me
 		id: 7,
 		result: null,
 	});
-	assert.throws(
-		() => decodeAppServerResponse('resource/release', { jsonrpc: '2.0', id: 7, result: {} }),
-		AppServerProtocolDecodeError,
-	);
+	assert.throws(() => decodeAppServerResponse('resource/release', { jsonrpc: '2.0', id: 7, result: {} }), AppServerProtocolDecodeError);
 	assert.deepEqual(
 		decodeAppServerResponse('resource/release', {
 			jsonrpc: '2.0',
@@ -455,13 +434,14 @@ test('account revisions preserve the full unsigned 64-bit value across the gener
 });
 
 test('App Server notification decoding rejects unknown methods and envelope fields', () => {
-	const notification = { jsonrpc: '2.0', method: 'session/deleted', params: { sessionId: 'session-1' } };
+	const notification = {
+		jsonrpc: '2.0',
+		method: 'session/deleted',
+		params: { sessionId: 'session-1' },
+	};
 
 	assert.deepEqual(decodeAppServerNotification(notification), notification);
-	assert.throws(
-		() => decodeAppServerNotification({ ...notification, method: 'session/unknown' }),
-		AppServerProtocolDecodeError,
-	);
+	assert.throws(() => decodeAppServerNotification({ ...notification, method: 'session/unknown' }), AppServerProtocolDecodeError);
 	assert.throws(
 		() => decodeAppServerNotification({ ...notification, result: null }),
 		(error: unknown) => error instanceof AppServerProtocolDecodeError && error.path === '$.result',
@@ -486,10 +466,7 @@ test('App Server server-request decoding validates method, request ID, and param
 		(error: unknown) => error instanceof AppServerProtocolDecodeError && error.path === '$.id',
 	);
 	assert.throws(() => decodeAppServerServerRequest({ ...request, params: {} }), AppServerProtocolDecodeError);
-	assert.throws(
-		() => decodeAppServerServerRequest({ ...request, params: { targetId: 'target-1' } }),
-		AppServerProtocolDecodeError,
-	);
+	assert.throws(() => decodeAppServerServerRequest({ ...request, params: { targetId: 'target-1' } }), AppServerProtocolDecodeError);
 });
 
 test('Resource operations reject the removed Session selector', () => {
@@ -499,18 +476,12 @@ test('Resource operations reject the removed Session selector', () => {
 			...(method === 'resource/read' ? { offset: 0, maxBytes: 1024 } : {}),
 		};
 		assert.deepEqual(decodeAppServerRequestParams(method, params), params);
-		assert.throws(
-			() => decodeAppServerRequestParams(method, { ...params, sessionId: 'session' }),
-			AppServerProtocolDecodeError,
-		);
+		assert.throws(() => decodeAppServerRequestParams(method, { ...params, sessionId: 'session' }), AppServerProtocolDecodeError);
 	}
 });
 
 test('App Server params decoding rejects integers that JSON cannot preserve exactly', () => {
-	assert.deepEqual(
-		decodeAppServerRequestParams('resource/read', { resourceId: 'resource-1', offset: 0, maxBytes: 1024 }),
-		{ resourceId: 'resource-1', offset: 0, maxBytes: 1024 },
-	);
+	assert.deepEqual(decodeAppServerRequestParams('resource/read', { resourceId: 'resource-1', offset: 0, maxBytes: 1024 }), { resourceId: 'resource-1', offset: 0, maxBytes: 1024 });
 	assert.throws(
 		() =>
 			decodeAppServerRequestParams('resource/read', {
@@ -526,7 +497,11 @@ test('Feature map keys and queue edits are validated from the generated schema',
 	const params = { commandId: 'config', expectedRevision: 0, features: { codeMode: false } };
 	assert.deepEqual(decodeAppServerRequestParams('config/update', params), params);
 	assert.throws(
-		() => decodeAppServerRequestParams('config/update', { ...params, features: { code_mode: true } }),
+		() =>
+			decodeAppServerRequestParams('config/update', {
+				...params,
+				features: { code_mode: true },
+			}),
 		AppServerProtocolDecodeError,
 	);
 	assert.throws(
@@ -560,10 +535,7 @@ test('trace configuration patches preserve explicit disable and reject malformed
 			}),
 		AppServerProtocolDecodeError,
 	);
-	assert.throws(
-		() => decodeAppServerRequestParams('config/update', { ...params, trace: { ...params.trace, upload: true } }),
-		AppServerProtocolDecodeError,
-	);
+	assert.throws(() => decodeAppServerRequestParams('config/update', { ...params, trace: { ...params.trace, upload: true } }), AppServerProtocolDecodeError);
 });
 
 test('Memory records and process memory diagnostics use disjoint generated methods', () => {
@@ -575,14 +547,8 @@ test('Memory records and process memory diagnostics use disjoint generated metho
 		body: 'Use Ash for Rust work.',
 	};
 	assert.deepEqual(decodeAppServerRequestParams('memory/add', add), add);
-	assert.throws(
-		() => decodeAppServerRequestParams('memory/add', { ...add, memoryId: 'contains space' }),
-		AppServerProtocolDecodeError,
-	);
-	assert.throws(
-		() => decodeAppServerRequestParams('memory/add', { ...add, scope: { type: 'profile', extra: true } }),
-		AppServerProtocolDecodeError,
-	);
+	assert.throws(() => decodeAppServerRequestParams('memory/add', { ...add, memoryId: 'contains space' }), AppServerProtocolDecodeError);
+	assert.throws(() => decodeAppServerRequestParams('memory/add', { ...add, scope: { type: 'profile', extra: true } }), AppServerProtocolDecodeError);
 	assert.deepEqual(decodeAppServerRequestParams('memoryDiagnostics/read', { sessionId: 'diagnostic-1' }), {
 		sessionId: 'diagnostic-1',
 	});
@@ -592,7 +558,11 @@ test('Memory records and process memory diagnostics use disjoint generated metho
 			method: 'memory/changed',
 			params: { scope: { type: 'profile' }, catalogRevision: 2 },
 		}),
-		{ jsonrpc: '2.0', method: 'memory/changed', params: { scope: { type: 'profile' }, catalogRevision: 2 } },
+		{
+			jsonrpc: '2.0',
+			method: 'memory/changed',
+			params: { scope: { type: 'profile' }, catalogRevision: 2 },
+		},
 	);
 });
 
@@ -615,15 +585,8 @@ test('Git repository invalidation and tag references cross the generated protoco
 test('Git command and partial index requests accept reviewed intents and reject malformed commands', () => {
 	const command = { repositoryId: 'repo', command: { kind: 'continue', operation: 'cherryPick' } };
 	assert.deepEqual(decodeAppServerRequestParams('git/command', command), command);
-	assert.throws(
-		() =>
-			decodeAppServerRequestParams('git/command', { command: { kind: 'exec', arguments: ['reset', '--hard'] } }),
-		AppServerProtocolDecodeError,
-	);
-	assert.throws(
-		() => decodeAppServerRequestParams('git/command', { command: { kind: 'continue', operation: 'reset' } }),
-		AppServerProtocolDecodeError,
-	);
+	assert.throws(() => decodeAppServerRequestParams('git/command', { command: { kind: 'exec', arguments: ['reset', '--hard'] } }), AppServerProtocolDecodeError);
+	assert.throws(() => decodeAppServerRequestParams('git/command', { command: { kind: 'continue', operation: 'reset' } }), AppServerProtocolDecodeError);
 	const selection = {
 		repositoryId: 'repo',
 		path: 'file.txt',
@@ -641,10 +604,7 @@ test('Git command and partial index requests accept reviewed intents and reject 
 			}),
 		AppServerProtocolDecodeError,
 	);
-	assert.throws(
-		() => decodeAppServerRequestParams('git/indexEdit', { ...selection, expectedModified: 'x'.repeat(2097153) }),
-		AppServerProtocolDecodeError,
-	);
+	assert.throws(() => decodeAppServerRequestParams('git/indexEdit', { ...selection, expectedModified: 'x'.repeat(2097153) }), AppServerProtocolDecodeError);
 });
 
 test('generated DAP start decoder admits connection descriptors and rejects invalid endpoint fields', () => {
@@ -747,7 +707,10 @@ test('syntax facts tuples validate fixed fields, coordinates and exact lengths',
 			...response,
 			result: {
 				...response.result,
-				facts: { ...response.result.facts, symbols: { ...response.result.facts.symbols, items: [malformed] } },
+				facts: {
+					...response.result.facts,
+					symbols: { ...response.result.facts.symbols, items: [malformed] },
+				},
 			},
 		};
 		assert.throws(() => decodeAppServerResponse('syntax/query', invalid), AppServerProtocolDecodeError);
@@ -782,16 +745,9 @@ test('cached numeric syntax tuples retain all coordinate and edit boundary check
 		for (let index = 0; index < (tuple === 'edit' ? 6 : 4); index++) {
 			for (const value of [-1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, '0', null, undefined]) {
 				const invalid = structuredClone(response);
-				const target: unknown[] =
-					tuple === 'edit'
-						? invalid.result.facts.edits[0]
-						: (invalid.result.facts.symbols.items[0][tuple === 'range' ? 2 : 3] as number[]);
+				const target: unknown[] = tuple === 'edit' ? invalid.result.facts.edits[0] : (invalid.result.facts.symbols.items[0][tuple === 'range' ? 2 : 3] as number[]);
 				target[index] = value;
-				assert.throws(
-					() => decodeAppServerResponse('syntax/query', invalid),
-					AppServerProtocolDecodeError,
-					`${tuple}[${index}]=${String(value)}`,
-				);
+				assert.throws(() => decodeAppServerResponse('syntax/query', invalid), AppServerProtocolDecodeError, `${tuple}[${index}]=${String(value)}`);
 			}
 		}
 		// A previous invalid value must not poison the immutable schema cache.
@@ -807,26 +763,12 @@ test('renderer snapshot callbacks enforce bounded, closed connection-handle requ
 		params: { handle: 'capture', offset: 0, maxBytes: 262144 },
 	};
 	assert.deepEqual(decodeAppServerServerRequest(request), request);
-	for (const invalid of [
-		{ maxBytes: 0 },
-		{ maxBytes: 262145 },
-		{ offset: -1 },
-		{ offset: 8388609 },
-		{ handle: '' },
-		{ handle: 'x'.repeat(129) },
-		{ path: '/arbitrary/file' },
-	]) {
-		assert.throws(
-			() => decodeAppServerServerRequest({ ...request, params: { ...request.params, ...invalid } }),
-			AppServerProtocolDecodeError,
-		);
+	for (const invalid of [{ maxBytes: 0 }, { maxBytes: 262145 }, { offset: -1 }, { offset: 8388609 }, { handle: '' }, { handle: 'x'.repeat(129) }, { path: '/arbitrary/file' }]) {
+		assert.throws(() => decodeAppServerServerRequest({ ...request, params: { ...request.params, ...invalid } }), AppServerProtocolDecodeError);
 	}
 	const release = { jsonrpc: '2.0', id: 'release', method: 'hostResource/release', params: { handle: 'capture' } };
 	assert.deepEqual(decodeAppServerServerRequest(release), release);
-	assert.throws(
-		() => decodeAppServerServerRequest({ ...release, params: { ...release.params, connectionId: 5 } }),
-		AppServerProtocolDecodeError,
-	);
+	assert.throws(() => decodeAppServerServerRequest({ ...release, params: { ...release.params, connectionId: 5 } }), AppServerProtocolDecodeError);
 });
 
 test('transport snapshot input retains integrity metadata without granting paths or durable handle variants', () => {

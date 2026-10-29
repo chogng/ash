@@ -96,10 +96,7 @@ export class Canvas extends Disposable {
 			for (const key of ['x', 'y', 'width', 'height'] as const) {
 				rect.setAttribute(key, `${bound[key]}`);
 			}
-			rect.setAttribute(
-				'transform',
-				`rotate(${bound.rotation} ${bound.x + bound.width / 2} ${bound.y + bound.height / 2})`,
-			);
+			rect.setAttribute('transform', `rotate(${bound.rotation} ${bound.x + bound.width / 2} ${bound.y + bound.height / 2})`);
 		}
 		this.selectionDomNode.classList.toggle('visible', bounds.length > 0);
 	}

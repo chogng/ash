@@ -10,18 +10,12 @@ export function prepareNativeCanvas(): () => void {
 		bytes: number;
 		sha256: string;
 	};
-	if (
-		!Number.isSafeInteger(metadata.bytes) ||
-		metadata.bytes <= 0 ||
-		metadata.bytes > 64 * 1024 * 1024 ||
-		!/^[a-f0-9]{64}$/u.test(metadata.sha256)
-	)
+	if (!Number.isSafeInteger(metadata.bytes) || metadata.bytes <= 0 || metadata.bytes > 64 * 1024 * 1024 || !/^[a-f0-9]{64}$/u.test(metadata.sha256))
 		throw new Error('Invalid packaged canvas metadata');
 	const compressed = readFileSync(new URL('./canvas.node.gz', import.meta.url));
 	if (compressed.length > 16 * 1024 * 1024) throw new Error('Packaged canvas exceeds its compressed budget');
 	const bytes = gunzipSync(compressed, { maxOutputLength: metadata.bytes });
-	if (bytes.length !== metadata.bytes || createHash('sha256').update(bytes).digest('hex') !== metadata.sha256)
-		throw new Error('Packaged canvas integrity check failed');
+	if (bytes.length !== metadata.bytes || createHash('sha256').update(bytes).digest('hex') !== metadata.sha256) throw new Error('Packaged canvas integrity check failed');
 	const directory = mkdtempSync(join(tmpdir(), 'ash-pdf-canvas-'));
 	const cleanup = (): void => rmSync(directory, { recursive: true, force: true });
 	try {

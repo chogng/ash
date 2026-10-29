@@ -13,12 +13,7 @@ export async function protocolSourceDirectories(signal?: AbortSignal): Promise<s
 			}
 			try {
 				const directories: unknown = JSON.parse(stdout);
-				if (
-					!Array.isArray(directories) ||
-					directories.length === 0 ||
-					!directories.every(directory => typeof directory === 'string')
-				)
-					throw new Error('Invalid protocol source directories');
+				if (!Array.isArray(directories) || directories.length === 0 || !directories.every(directory => typeof directory === 'string')) throw new Error('Invalid protocol source directories');
 				resolvePromise(directories);
 			} catch (error) {
 				reject(error);

@@ -25,10 +25,7 @@ import {
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
-import {
-	IAccessibleViewService,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { SessionsSearchModel, type SearchCategory, type SearchResult, type SearchTarget } from './searchModel.js';
 
 /** Product search owns its DOM and presentation; shared controls supply interaction primitives. */
@@ -74,10 +71,7 @@ export class SessionsSearchDialog extends Disposable {
 		this.input.setAttribute('aria-autocomplete', 'list');
 		this.input.setAttribute('aria-expanded', 'true');
 		const hint = accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.SessionsSearch);
-		this.input.setAttribute(
-			'aria-label',
-			hint ? localize('sessions.search.ariaLabel', 'Search. {0}', hint) : this.input.placeholder,
-		);
+		this.input.setAttribute('aria-label', hint ? localize('sessions.search.ariaLabel', 'Search. {0}', hint) : this.input.placeholder);
 		header.append(this.input);
 		this._register(
 			new Button(header, {
@@ -127,14 +121,7 @@ export class SessionsSearchDialog extends Disposable {
 					listRow.classList.toggle('ash-sessions-search-action', result.category === 'actions');
 					const row = h(document, 'div', { className: 'ash-sessions-search-result' });
 					if (result.category === 'actions') {
-						row.append(
-							h(
-								document,
-								'div',
-								{ className: 'ash-sessions-search-heading' },
-								localize('sessions.search.actions', 'Actions'),
-							),
-						);
+						row.append(h(document, 'div', { className: 'ash-sessions-search-heading' }, localize('sessions.search.actions', 'Actions')));
 					}
 					const line = h(document, 'div', { className: 'ash-sessions-search-result-line' });
 					appendIcon(result.icon, line);
@@ -142,23 +129,11 @@ export class SessionsSearchDialog extends Disposable {
 					hovers.add(hoverService.setupDelayedHover(title, { content: result.title }));
 					line.append(title);
 					if (result.description) {
-						const description = h(
-							document,
-							'span',
-							{ className: 'ash-sessions-search-result-description' },
-							result.description,
-						);
+						const description = h(document, 'span', { className: 'ash-sessions-search-result-description' }, result.description);
 						hovers.add(hoverService.setupDelayedHover(description, { content: result.description }));
 						line.append(description);
 					}
-					line.append(
-						h(
-							document,
-							'span',
-							{ className: 'ash-sessions-search-result-open', attributes: { 'aria-hidden': 'true' } },
-							'↵',
-						),
-					);
+					line.append(h(document, 'span', { className: 'ash-sessions-search-result-open', attributes: { 'aria-hidden': 'true' } }, '↵'));
 					row.append(line);
 					return row;
 				},
@@ -254,12 +229,7 @@ export class SessionsSearchDialog extends Disposable {
 					const target = event.target as HTMLElement | null;
 					if (!target?.classList?.contains('ash-sessions-search-dialog')) return;
 					const bounds = target.getBoundingClientRect();
-					if (
-						event.clientX < bounds.left ||
-						event.clientX > bounds.right ||
-						event.clientY < bounds.top ||
-						event.clientY > bounds.bottom
-					) {
+					if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) {
 						event.preventDefault();
 						this.dialog.dispose();
 					}
@@ -276,11 +246,7 @@ export class SessionsSearchDialog extends Disposable {
 				if (this.results.activeIndex < 0 && state.results.length) {
 					this.results.setActiveIndex(0);
 				}
-				message.textContent =
-					state.error ??
-					(state.loading
-						? localize('sessions.search.loading', 'Searching…')
-						: localize('sessions.search.empty', 'No matching results'));
+				message.textContent = state.error ?? (state.loading ? localize('sessions.search.loading', 'Searching…') : localize('sessions.search.empty', 'No matching results'));
 				message.hidden = !state.error && state.results.length > 0;
 				loading.setVisible(state.loading && !state.error && !state.results.length);
 				if (!loading.element.hidden) message.hidden = true;

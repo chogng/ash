@@ -23,8 +23,5 @@ export const SearchContext = {
 	SearchResultListFocusedKey: new RawContextKey<boolean>('searchResultListFocus', false),
 	SearchViewFocusedKey: new RawContextKey<boolean>('searchViewletFocus', false),
 	FileMatchOrMatchFocusKey: new RawContextKey<boolean>('fileMatchOrMatchFocus', false),
-	FileMatchOrFolderMatchWithResourceFocusKey: new RawContextKey<boolean>(
-		'fileMatchOrFolderMatchWithResourceFocus',
-		false,
-	),
+	FileMatchOrFolderMatchWithResourceFocusKey: new RawContextKey<boolean>('fileMatchOrFolderMatchWithResourceFocus', false),
 };

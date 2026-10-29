@@ -2,11 +2,7 @@ import type { ITerminalAutoReply } from '../../../../platform/terminal/common/te
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { DeferredPromise, raceCancellationError, timeout } from '../../../../base/common/async.js';
-import {
-	CancellationTokenSource,
-	cancelOnDispose,
-	type CancellationToken,
-} from '../../../../base/common/cancellation.js';
+import { CancellationTokenSource, cancelOnDispose, type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import {
@@ -172,11 +168,7 @@ export class TerminalProcessManager extends Disposable {
 				}
 				// The backend reports OS exit independently of pagination. A full page
 				// may still have a tail, so drain both streams before publishing exit.
-				if (
-					result.exited &&
-					result.chunks.length < MAX_READ_CHUNKS &&
-					result.commandEvents.length < MAX_READ_CHUNKS
-				) {
+				if (result.exited && result.chunks.length < MAX_READ_CHUNKS && result.commandEvents.length < MAX_READ_CHUNKS) {
 					const tail = this.decoder.decode();
 					if (tail) await this.emitProcessData(tail, token);
 					this.stopInput();
@@ -217,9 +209,7 @@ export class TerminalProcessManager extends Disposable {
 				processSignal = 'hangup';
 				break;
 			default:
-				throw new Error(
-					localize('terminal.signal.unsupported', 'Unsupported terminal process signal: {0}', signal),
-				);
+				throw new Error(localize('terminal.signal.unsupported', 'Unsupported terminal process signal: {0}', signal));
 		}
 		await this.processService.sendSignal({ ...this.identity, signal: processSignal });
 	}
@@ -282,7 +272,11 @@ export class TerminalProcessManager extends Disposable {
 			if (!pending || !this.acceptingInput || this.isDisposed) return;
 			const generation = this.inputGeneration;
 			const operation = raceCancellationError(
-				this.processService.resize({ ...this.identity, rows: pending.rows, cols: pending.cols }),
+				this.processService.resize({
+					...this.identity,
+					rows: pending.rows,
+					cols: pending.cols,
+				}),
 				this.inputCancellation.value!.token,
 			);
 			for (const waiter of completions) {
@@ -388,11 +382,7 @@ export class TerminalProcessManager extends Disposable {
 		}
 	}
 
-	private async emitProcessData(
-		data: string,
-		token: CancellationToken,
-		shellIntegration?: TerminalShellIntegrationEvent,
-	): Promise<void> {
+	private async emitProcessData(data: string, token: CancellationToken, shellIntegration?: TerminalShellIntegrationEvent): Promise<void> {
 		const event: IProcessDataEvent = {
 			data,
 			trackCommit: true,
@@ -410,18 +400,11 @@ function utf8Suffix(bytes: readonly number[]): number[] {
 		const index = bytes.length - offset;
 		const lead = bytes[index]!;
 		if ((lead & 0xc0) === 0x80) continue;
-		const length =
-			lead >= 0xc2 && lead <= 0xdf ? 2 : lead >= 0xe0 && lead <= 0xef ? 3 : lead >= 0xf0 && lead <= 0xf4 ? 4 : 0;
+		const length = lead >= 0xc2 && lead <= 0xdf ? 2 : lead >= 0xe0 && lead <= 0xef ? 3 : lead >= 0xf0 && lead <= 0xf4 ? 4 : 0;
 		if (length <= offset) return [];
 		const suffix = bytes.slice(index);
 		if (suffix.slice(1).some(byte => (byte & 0xc0) !== 0x80)) return [];
-		if (
-			suffix.length > 1 &&
-			((lead === 0xe0 && suffix[1]! < 0xa0) ||
-				(lead === 0xed && suffix[1]! >= 0xa0) ||
-				(lead === 0xf0 && suffix[1]! < 0x90) ||
-				(lead === 0xf4 && suffix[1]! >= 0x90))
-		)
+		if (suffix.length > 1 && ((lead === 0xe0 && suffix[1]! < 0xa0) || (lead === 0xed && suffix[1]! >= 0xa0) || (lead === 0xf0 && suffix[1]! < 0x90) || (lead === 0xf4 && suffix[1]! >= 0x90)))
 			return [];
 		return suffix;
 	}

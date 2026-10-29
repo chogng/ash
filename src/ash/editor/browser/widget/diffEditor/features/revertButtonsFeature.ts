@@ -33,26 +33,15 @@ export class RevertButtonsFeature extends Disposable {
 		if (!enabled || !diff || this.editor.getOption(EditorOption.readOnly)) return;
 		const selections = this.editor.getSelections() ?? [];
 		const selected = diff.changes.flatMap(change =>
-			(change.innerChanges ?? []).filter(range =>
-				selections.some(
-					selection => !selection.isEmpty() && Range.areIntersecting(selection, range.modifiedRange),
-				),
-			),
+			(change.innerChanges ?? []).filter(range => selections.some(selection => !selection.isEmpty() && Range.areIntersecting(selection, range.modifiedRange))),
 		);
 		if (selected.length > 0) {
-			this.addButton(
-				selections.at(-1)!.positionLineNumber,
-				'selection',
-				localize('diffEditor.revertSelection', 'Revert selected changes'),
-				() => this.widget.revertRangeMappings(selected),
-			);
+			this.addButton(selections.at(-1)!.positionLineNumber, 'selection', localize('diffEditor.revertSelection', 'Revert selected changes'), () => this.widget.revertRangeMappings(selected));
 		}
 		for (const [index, change] of diff.changes.entries()) {
 			if (selected.some(range => change.innerChanges?.includes(range))) continue;
 			const lineNumber = Math.min(this.model.modified.getLineCount(), change.modified.startLineNumber);
-			this.addButton(lineNumber, String(index), localize('diffEditor.revertChange', 'Revert change'), () =>
-				this.widget.revert(change),
-			);
+			this.addButton(lineNumber, String(index), localize('diffEditor.revertChange', 'Revert change'), () => this.widget.revert(change));
 		}
 	}
 

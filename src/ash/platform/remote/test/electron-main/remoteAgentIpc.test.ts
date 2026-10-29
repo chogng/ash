@@ -5,10 +5,7 @@ import type { AppServerConnectionRelay } from '../../../agentHost/electron-main/
 import { createSshRemoteWorkspaceUri } from '../../../../platform/remote/common/remote.js';
 import { REMOTE_AGENT_RECONNECT_CHANNEL } from '../../../../platform/remote/common/remoteAgentApi.js';
 import { REMOTE_AGENT_RUNTIME_ROLLBACK_CHANNEL } from '../../../../platform/remote/common/remoteAgentApi.js';
-import {
-	remoteAgentConnection,
-	remoteAgentIpcRoutes,
-} from '../../../../platform/remote/electron-main/remoteAgentIpc.js';
+import { remoteAgentConnection, remoteAgentIpcRoutes } from '../../../../platform/remote/electron-main/remoteAgentIpc.js';
 import type { IAnyWorkspaceIdentifier } from '../../../../platform/workspace/common/workspace.js';
 
 test('Remote Agent IPC projects only sanitized authority and connection generation', () => {
@@ -29,7 +26,12 @@ test('Remote Agent IPC projects only sanitized authority and connection generati
 			id: 'remote',
 			uri: createSshRemoteWorkspaceUri('work-server', '/home/ash/project'),
 		}),
-		{ kind: 'ssh', generation: 7, authority: 'ssh+work-server', host: 'work-server' },
+		{
+			kind: 'ssh',
+			generation: 7,
+			authority: 'ssh+work-server',
+			host: 'work-server',
+		},
 	);
 });
 

@@ -23,8 +23,7 @@ export function registerChatSessionsActions(): void {
 			}
 
 			override run(accessor: ServicesAccessor): Promise<boolean> {
-				if (accessor.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId))
-					return Promise.resolve(false);
+				if (accessor.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId)) return Promise.resolve(false);
 				return accessor.get(IViewsService).focusView(CHAT_VIEW_ID);
 			}
 		},

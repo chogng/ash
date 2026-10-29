@@ -9,10 +9,7 @@ import { EventEmitter } from 'node:events';
 import type { Session } from 'electron/main';
 import { suite, test } from 'mocha';
 import { StorageScope, StorageTarget } from '../../../storage/common/storage.js';
-import {
-	IApplicationStorageMainService,
-	StorageMainService,
-} from '../../../storage/electron-main/storageMainService.js';
+import { IApplicationStorageMainService, StorageMainService } from '../../../storage/electron-main/storageMainService.js';
 import { ILogService, NullLoggerService } from '../../../log/common/log.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 import { BrowserSession } from '../../electron-main/browserSession.js';
@@ -29,10 +26,7 @@ suite('Persistent browser session history', () => {
 
 	test('history construction requires the application storage registration', () => {
 		using services = new InstantiationService();
-		assert.throws(
-			() => services.createInstance(BrowserSessionHistory, session('missing', BrowserViewStorageScope.Global)),
-			/applicationStorageMainService/,
-		);
+		assert.throws(() => services.createInstance(BrowserSessionHistory, session('missing', BrowserViewStorageScope.Global)), /applicationStorageMainService/);
 	});
 
 	test('actual process restart restores visits and images; deleting and clearing survive the next restart', async () => {
@@ -56,9 +50,7 @@ suite('Persistent browser session history', () => {
 			await run('clear');
 			assert.deepEqual(await run('read'), { items: [], favicons: {} });
 			const document = JSON.parse(await readFile(file, 'utf8'));
-			const values = document.storages.find(
-				(scope: { identity: { scope: string } }) => scope.identity.scope === 'application',
-			).entries;
+			const values = document.storages.find((scope: { identity: { scope: string } }) => scope.identity.scope === 'application').entries;
 			assert.deepEqual(Object.keys(values), ['unrelated']);
 		} finally {
 			assert.equal(dirname(directory), tmpdir());
@@ -133,10 +125,7 @@ suite('Persistent browser session history', () => {
 			await storage.updateItems(applicationStorage, 'browser.history.favicons.corrupt', entry('{bad json'));
 			const before = await storage.getItems(applicationStorage);
 			using services = createServices(storage);
-			using history = services.createInstance(
-				BrowserSessionHistory,
-				session('corrupt', BrowserViewStorageScope.Workspace),
-			);
+			using history = services.createInstance(BrowserSessionHistory, session('corrupt', BrowserViewStorageScope.Workspace));
 			await history.initialize();
 			assert.deepEqual(history.entries.items, [{ id: 1, url: 'https://valid.test/', time: 1, title: 'Valid' }]);
 			assert.deepEqual(history.favicons.serialize(), { map: {} });
@@ -158,10 +147,7 @@ suite('Persistent browser session history', () => {
 			using storage = new StorageMainService(join(directory, 'state.json'));
 			await storage.initialize();
 			using services = createServices(storage);
-			using history = services.createInstance(
-				BrowserSessionHistory,
-				session('timing', BrowserViewStorageScope.Global),
-			);
+			using history = services.createInstance(BrowserSessionHistory, session('timing', BrowserViewStorageScope.Global));
 			await history.initialize();
 			const writes: string[] = [];
 			const update = storage.updateItems.bind(storage);
@@ -194,10 +180,7 @@ suite('Persistent browser session history', () => {
 			using storage = new StorageMainService(join(directory, 'state.json'));
 			await storage.initialize();
 			using services = createServices(storage);
-			using history = services.createInstance(
-				BrowserSessionHistory,
-				session('retry', BrowserViewStorageScope.Workspace),
-			);
+			using history = services.createInstance(BrowserSessionHistory, session('retry', BrowserViewStorageScope.Workspace));
 			await history.initialize();
 			const update = storage.updateItems.bind(storage);
 			storage.updateItems = async () => {
@@ -233,10 +216,7 @@ function createServices(storage: IApplicationStorageMainService): InstantiationS
 	return services;
 }
 
-async function runProcess(
-	file: string,
-	mode: string,
-): Promise<{ items: Array<{ id: number; title: string }>; favicons: Record<string, string> }> {
+async function runProcess(file: string, mode: string): Promise<{ items: Array<{ id: number; title: string }>; favicons: Record<string, string> }> {
 	const script = `
 		import { StorageMainService, IApplicationStorageMainService } from ${JSON.stringify(new URL('../../../storage/electron-main/storageMainService.js', import.meta.url).href)};
 		import { ILogService, NullLoggerService } from ${JSON.stringify(new URL('../../../log/common/log.js', import.meta.url).href)};

@@ -32,9 +32,7 @@ export interface IChatResponseResourceFileSystemProvider extends IFileSystemProv
 	associate(data: Uint8Array, options?: IChatResourceAssociateOptions): IChatResourceAssociation;
 }
 
-export const IChatResponseResourceFileSystemProvider = createServiceIdentifier<IChatResponseResourceFileSystemProvider>(
-	'chatResponseResourceFileSystemProvider',
-);
+export const IChatResponseResourceFileSystemProvider = createServiceIdentifier<IChatResponseResourceFileSystemProvider>('chatResponseResourceFileSystemProvider');
 
 interface Entry {
 	readonly resource: URI;
@@ -44,15 +42,9 @@ interface Entry {
 }
 
 /** Owns immutable view data until its last response association releases it. */
-export class ChatResponseResourceFileSystemProvider
-	extends Disposable
-	implements IChatResponseResourceFileSystemProvider
-{
+export class ChatResponseResourceFileSystemProvider extends Disposable implements IChatResponseResourceFileSystemProvider {
 	declare readonly _serviceBrand: undefined;
-	public readonly capabilities =
-		FileSystemProviderCapabilities.FileReadWrite |
-		FileSystemProviderCapabilities.Readonly |
-		FileSystemProviderCapabilities.PathCaseSensitive;
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.Readonly | FileSystemProviderCapabilities.PathCaseSensitive;
 	public readonly onDidChangeCapabilities = Event.None;
 	public readonly onDidChangeFiles = Event.None;
 	private readonly entries = new Map<string, Entry>();
@@ -143,25 +135,16 @@ export class ChatResponseResourceFileSystemProvider
 export class ChatResponseResourceWorkbenchContribution extends Disposable {
 	public static readonly ID = 'chatResponseResourceWorkbenchContribution';
 
-	constructor(
-		@IFileService files: IFileService,
-		@IChatResponseResourceFileSystemProvider provider: IChatResponseResourceFileSystemProvider,
-	) {
+	constructor(@IFileService files: IFileService, @IChatResponseResourceFileSystemProvider provider: IChatResponseResourceFileSystemProvider) {
 		super();
 		this._register(files.registerProvider(scheme, provider));
 	}
 }
 
 function unavailable(): Error {
-	return new FileSystemProviderError(
-		localize('chat.resource.unavailable', 'This response resource is no longer available.'),
-		FileSystemProviderErrorCode.FileNotFound,
-	);
+	return new FileSystemProviderError(localize('chat.resource.unavailable', 'This response resource is no longer available.'), FileSystemProviderErrorCode.FileNotFound);
 }
 
 function readonlyError(): Error {
-	return new FileSystemProviderError(
-		localize('chat.resource.readonly', 'Response resources are read-only. Save a copy to edit them.'),
-		FileSystemProviderErrorCode.NoPermissions,
-	);
+	return new FileSystemProviderError(localize('chat.resource.readonly', 'Response resources are read-only. Save a copy to edit them.'), FileSystemProviderErrorCode.NoPermissions);
 }

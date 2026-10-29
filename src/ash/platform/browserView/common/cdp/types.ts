@@ -90,10 +90,5 @@ export interface ICDPBrowserHost {
 	activateTarget(targetId: string): void;
 	closeTarget(targetId: string): Promise<void>;
 	/** The host must withhold results if access is revoked while Chromium is executing. */
-	sendCommand(
-		targetId: string,
-		method: string,
-		params: Record<string, unknown>,
-		sessionId?: string,
-	): Promise<unknown>;
+	sendCommand(targetId: string, method: string, params: Record<string, unknown>, sessionId?: string): Promise<unknown>;
 }

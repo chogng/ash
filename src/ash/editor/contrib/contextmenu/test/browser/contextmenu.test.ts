@@ -8,10 +8,7 @@ import { Event } from '../../../../../base/common/event.js';
 import { MenuId } from '../../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import {
-	type IContextMenuMenuDelegate,
-	type IContextMenuService as IContextMenuServiceContract,
-} from '../../../../../platform/contextview/browser/contextView.js';
+import { type IContextMenuMenuDelegate, type IContextMenuService as IContextMenuServiceContract } from '../../../../../platform/contextview/browser/contextView.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { EditorOption } from '../../../../common/config/editorOptions.js';
 import { Position } from '../../../../common/core/position.js';
@@ -20,17 +17,13 @@ import { TextModel } from '../../../../common/model/textModel.js';
 import { installEditorTestDom } from '../../../../test/browser/editorTestGlobals.js';
 
 const environment = new JSDOM('<!doctype html><body></body>');
-const installedGlobals = installEditorTestDom(
-	environment,
-	['Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent', 'MouseEvent'],
-	{
-		ResizeObserver: class TestResizeObserver {
-			observe(): void {}
-			unobserve(): void {}
-			disconnect(): void {}
-		},
+const installedGlobals = installEditorTestDom(environment, ['Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent', 'MouseEvent'], {
+	ResizeObserver: class TestResizeObserver {
+		observe(): void {}
+		unobserve(): void {}
+		disconnect(): void {}
 	},
-);
+});
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
@@ -59,7 +52,12 @@ test('ContextMenuController opens the host menu at the active cursor from Shift+
 	};
 	using services = new InstantiationService();
 	services.registerInstance(IContextMenuService, contextMenuService);
-	using editor = createTestCodeEditor({ container, model, lineHeight: 20, instantiationService: services });
+	using editor = createTestCodeEditor({
+		container,
+		model,
+		lineHeight: 20,
+		instantiationService: services,
+	});
 	editor.layout({ width: 400, height: 100 });
 	editor.setSelection(Selection.fromPositions(new Position(2, 3)));
 	editor.focus();
@@ -141,12 +139,7 @@ test('ContextMenuController opens minimap settings from the scrollbar and closes
 		}),
 	);
 	const disabledMenu = requests.at(-1)! as IContextMenuDelegate;
-	for (const id of [
-		'editor.minimap.renderCharacters',
-		'editor.minimap.size',
-		'editor.minimap.showSlider',
-		'editor.minimap.side',
-	]) {
+	for (const id of ['editor.minimap.renderCharacters', 'editor.minimap.size', 'editor.minimap.showSlider', 'editor.minimap.side']) {
 		assert.equal(disabledMenu.getActions().find(action => action.id === id)?.enabled, false);
 	}
 	editor.dispose();

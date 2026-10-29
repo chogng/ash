@@ -40,19 +40,11 @@ for (const locale of ['en', 'zh-CN']) {
 			expect(style.color).not.toBe('rgba(0, 0, 0, 0)');
 			expect(style.overflow).toBe('auto');
 			if (theme.startsWith('hc')) expect(style.border).toBe('solid');
-			await popup
-				.getByRole('button', { name: locale === 'en' ? 'Interrupt reply' : '打断回复', exact: true })
-				.press('Enter');
+			await popup.getByRole('button', { name: locale === 'en' ? 'Interrupt reply' : '打断回复', exact: true }).press('Enter');
 			await expect.poll(() => page.evaluate(() => window.ashAgentsVoice.controls())).toEqual(['interrupt']);
-			await popup
-				.getByRole('button', { name: locale === 'en' ? 'Disconnect' : '断开连接', exact: true })
-				.press('Enter');
-			await expect
-				.poll(() => page.evaluate(() => window.ashAgentsVoice.controls()))
-				.toEqual(['interrupt', 'stop']);
-			await expect(
-				popup.getByRole('button', { name: locale === 'en' ? 'Disconnect' : '断开连接', exact: true }),
-			).toBeDisabled();
+			await popup.getByRole('button', { name: locale === 'en' ? 'Disconnect' : '断开连接', exact: true }).press('Enter');
+			await expect.poll(() => page.evaluate(() => window.ashAgentsVoice.controls())).toEqual(['interrupt', 'stop']);
+			await expect(popup.getByRole('button', { name: locale === 'en' ? 'Disconnect' : '断开连接', exact: true })).toBeDisabled();
 			await expect(openChat).toBeFocused();
 			await popup.locator('.ash-agents-voice').screenshot({ path: test.info().outputPath('voice-window.png') });
 			await openChat.press('Escape').catch(error => {
@@ -118,25 +110,17 @@ test('A transcript revision gap refreshes the canonical snapshot', async ({ page
 });
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`Voice microphone mute and held input release on keyup, pointer cancel and close in ${locale}`, async ({
-		page,
-	}) => {
+	test(`Voice microphone mute and held input release on keyup, pointer cancel and close in ${locale}`, async ({ page }) => {
 		await page.goto(`/agentsVoice.html?connected=1&locale=${locale}`);
 		const opened = page.waitForEvent('popup');
 		await page.getByRole('button', { name: 'Open voice window' }).click();
 		const popup = await opened;
-		await popup
-			.getByRole('button', { name: locale === 'en' ? 'Mute microphone' : '静音麦克风', exact: true })
-			.click();
+		await popup.getByRole('button', { name: locale === 'en' ? 'Mute microphone' : '静音麦克风', exact: true }).click();
 		await expect(popup.getByRole('status')).toContainText(locale === 'en' ? 'Microphone muted' : '麦克风已静音');
 		const held = popup.getByRole('button', { name: locale === 'en' ? 'Hold to speak' : '按住说话', exact: true });
 		await expect(held).toBeDisabled();
-		await popup
-			.getByRole('button', { name: locale === 'en' ? 'Unmute microphone' : '取消麦克风静音', exact: true })
-			.click();
-		await popup
-			.getByRole('button', { name: locale === 'en' ? 'Use push to talk' : '使用按住说话', exact: true })
-			.click();
+		await popup.getByRole('button', { name: locale === 'en' ? 'Unmute microphone' : '取消麦克风静音', exact: true }).click();
+		await popup.getByRole('button', { name: locale === 'en' ? 'Use push to talk' : '使用按住说话', exact: true }).click();
 		await expect(held).toBeEnabled();
 		await held.focus();
 		await popup.keyboard.down('Space');
@@ -157,19 +141,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(held).toHaveAttribute('aria-pressed', 'true');
 		await page.evaluate(() => window.ashAgentsVoice.close());
 		await expect.poll(() => popup.isClosed()).toBe(true);
-		await expect
-			.poll(() => page.evaluate(() => window.ashAgentsVoice.controls()))
-			.toEqual([
-				'mute:true',
-				'mute:false',
-				'mode:pushToTalk',
-				'hold',
-				'release',
-				'hold',
-				'release',
-				'hold',
-				'release',
-			]);
+		await expect.poll(() => page.evaluate(() => window.ashAgentsVoice.controls())).toEqual(['mute:true', 'mute:false', 'mode:pushToTalk', 'hold', 'release', 'hold', 'release', 'hold', 'release']);
 		expect(await page.evaluate(() => window.ashAgentsVoice.notifications())).toEqual([]);
 	});
 }

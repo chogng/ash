@@ -1,9 +1,5 @@
 import { getDocument } from '../../../base/browser/dom.js';
-import {
-	renderMarkdown,
-	type IRenderedMarkdown,
-	type MarkdownRenderOptions,
-} from '../../../base/browser/markdownRenderer.js';
+import { renderMarkdown, type IRenderedMarkdown, type MarkdownRenderOptions } from '../../../base/browser/markdownRenderer.js';
 import { onUnexpectedError } from '../../../base/common/errors.js';
 import type { IMarkdownString, MarkdownStringTrustedOptions } from '../../../base/common/htmlContent.js';
 import { InstantiationType, registerSingleton } from '../../instantiation/common/extensions.js';
@@ -22,11 +18,7 @@ export interface IMarkdownRendererExtraOptions {
 }
 
 export interface IMarkdownCodeBlockRenderer {
-	renderCodeBlock(
-		languageAlias: string | undefined,
-		value: string,
-		options: IMarkdownRendererExtraOptions,
-	): Promise<HTMLElement>;
+	renderCodeBlock(languageAlias: string | undefined, value: string, options: IMarkdownRendererExtraOptions): Promise<HTMLElement>;
 }
 
 export const IMarkdownRendererService = createDecorator<IMarkdownRendererService>('markdownRendererService');
@@ -34,11 +26,7 @@ export const IMarkdownRendererService = createDecorator<IMarkdownRendererService
 /** Adds shared opening policy and an editor-provided default to the service-free DOM renderer. */
 export interface IMarkdownRendererService extends IMarkdownRenderer {
 	readonly _serviceBrand: undefined;
-	render(
-		markdown: IMarkdownString,
-		options?: MarkdownRenderOptions & IMarkdownRendererExtraOptions,
-		outElement?: HTMLElement,
-	): IRenderedMarkdown;
+	render(markdown: IMarkdownString, options?: MarkdownRenderOptions & IMarkdownRendererExtraOptions, outElement?: HTMLElement): IRenderedMarkdown;
 	setDefaultCodeBlockRenderer(renderer: IMarkdownCodeBlockRenderer): void;
 }
 
@@ -48,20 +36,13 @@ export class MarkdownRendererService implements IMarkdownRendererService {
 
 	constructor(@IOpenerService private readonly opener: IOpenerService) {}
 
-	render(
-		markdown: IMarkdownString,
-		options: MarkdownRenderOptions & IMarkdownRendererExtraOptions = {},
-		outElement?: HTMLElement,
-	): IRenderedMarkdown {
+	render(markdown: IMarkdownString, options: MarkdownRenderOptions & IMarkdownRendererExtraOptions = {}, outElement?: HTMLElement): IRenderedMarkdown {
 		const ownerDocument = outElement?.ownerDocument ?? options.ownerDocument ?? getDocument();
 		const renderer = this.codeBlocks;
 		// Per-render code editors and synchronous placeholders take precedence over the default.
 		const codeBlockRenderer =
 			options.codeBlockRenderer ??
-			(!options.codeBlockRendererSync && renderer
-				? (languageId: string, value: string) =>
-						renderer.renderCodeBlock(languageId, value, { ...options, ownerDocument })
-				: undefined);
+			(!options.codeBlockRendererSync && renderer ? (languageId: string, value: string) => renderer.renderCodeBlock(languageId, value, { ...options, ownerDocument }) : undefined);
 		return renderMarkdown(
 			markdown,
 			{
@@ -84,12 +65,7 @@ export class MarkdownRendererService implements IMarkdownRendererService {
 }
 
 /** Trust is carried into the opener even when a caller supplies an already sanitized link. */
-export async function openLinkFromMarkdown(
-	openerService: IOpenerService,
-	link: string,
-	isTrusted: boolean | MarkdownStringTrustedOptions | undefined,
-	skipValidation?: boolean,
-): Promise<boolean> {
+export async function openLinkFromMarkdown(openerService: IOpenerService, link: string, isTrusted: boolean | MarkdownStringTrustedOptions | undefined, skipValidation?: boolean): Promise<boolean> {
 	const allowCommands = isTrusted === true ? true : isTrusted ? isTrusted.enabledCommands : false;
 	try {
 		return await openerService.open(link, {

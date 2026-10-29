@@ -2,11 +2,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
-import {
-	ResourceEdit,
-	ResourceFileEdit,
-	ResourceTextEdit,
-} from '../../../../editor/browser/services/bulkEditService.js';
+import { ResourceEdit, ResourceFileEdit, ResourceTextEdit } from '../../../../editor/browser/services/bulkEditService.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { IFileTextModelService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
@@ -19,11 +15,7 @@ export class ConflictDetector extends Disposable {
 	private readonly conflictEmitter = this._register(new Emitter<this>());
 	public readonly onDidConflict = this.conflictEmitter.event;
 
-	constructor(
-		edits: ResourceEdit[],
-		@IFileService files: IFileService,
-		@IFileTextModelService models: IFileTextModelService,
-	) {
+	constructor(edits: ResourceEdit[], @IFileService files: IFileService, @IFileTextModelService models: IFileTextModelService) {
 		super();
 		for (const edit of edits) {
 			const resources: (URI | undefined)[] = [];
@@ -55,10 +47,7 @@ export class ConflictDetector extends Disposable {
 		this._register(
 			files.onDidChangeFiles(event => {
 				for (const [key, resource] of this.resources) {
-					if (
-						event.resources === undefined ||
-						event.resources.some(changed => extUriBiasedIgnorePathCase.isEqualOrParent(resource, changed))
-					) {
+					if (event.resources === undefined || event.resources.some(changed => extUriBiasedIgnorePathCase.isEqualOrParent(resource, changed))) {
 						this.markConflict(key);
 					}
 				}

@@ -59,25 +59,13 @@ test('DOCX standard parts and authenticated Ash roundtrip retain sections, forma
 	assert.equal((decode(files.get('word/document.xml')!).match(/<w:sectPr>/g) ?? []).length, 2);
 	for (const [name, bytes] of files)
 		if (name.endsWith('.xml') || name.endsWith('.rels'))
-			assert.equal(
-				new owner.defaultView!.DOMParser()
-					.parseFromString(decode(bytes), 'application/xml')
-					.getElementsByTagName('parsererror').length,
-				0,
-				name,
-			);
+			assert.equal(new owner.defaultView!.DOMParser().parseFromString(decode(bytes), 'application/xml').getElementsByTagName('parsererror').length, 0, name);
 	assert.deepEqual(await importDocx(bytes, schema, owner, signal()), document);
 });
 
 test('DOCX changed interoperable content invalidates the old Ash snapshot', async () => {
-	const files = await unzipFiles(
-		await exportDocx(schema.createDocument([paragraph('Original')]), schema, signal()),
-		signal(),
-	);
-	files.set(
-		'word/document.xml',
-		encode(decode(files.get('word/document.xml')!).replace('Original', 'Edited in Word')),
-	);
+	const files = await unzipFiles(await exportDocx(schema.createDocument([paragraph('Original')]), schema, signal()), signal());
+	files.set('word/document.xml', encode(decode(files.get('word/document.xml')!).replace('Original', 'Edited in Word')));
 	assert.equal(documentToPlainText(await importDocx(zipFiles(files), schema, owner, signal())), 'Edited in Word');
 });
 
@@ -94,28 +82,15 @@ test('DOCX foreign comments and insert/delete revisions enter editable model rev
 	assert.ok(document.content.find(node => node.type === 'reviewComment')!.attrs.anchor);
 	const revision = document.content.find(node => node.type === 'reviewChange')!;
 	using model = DocumentTextModel.create(schema, document);
-	model.dispatch(
-		createResolveRevisionCommand(schema, model.document, revision.id, false, document.content[0]!.id)!.transaction,
-	);
+	model.dispatch(createResolveRevisionCommand(schema, model.document, revision.id, false, document.content[0]!.id)!.transaction);
 	assert.equal(model.getValue(), 'Before old');
 	model.undoBlocks();
 	assert.equal(model.getValue(), 'Before new');
 });
 
 test('DOCX rejects unsupported features, invalid archives, expansion and cancellation', async () => {
-	await assert.rejects(
-		importDocx(foreign('<w:p><w:r><w:object/></w:r></w:p>'), schema, owner, signal()),
-		/Cannot preserve DOCX feature/,
-	);
-	await assert.rejects(
-		importDocx(
-			foreign('<w:p><m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"/></w:p>'),
-			schema,
-			owner,
-			signal(),
-		),
-		/XML namespace/,
-	);
+	await assert.rejects(importDocx(foreign('<w:p><w:r><w:object/></w:r></w:p>'), schema, owner, signal()), /Cannot preserve DOCX feature/);
+	await assert.rejects(importDocx(foreign('<w:p><m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"/></w:p>'), schema, owner, signal()), /XML namespace/);
 	await assert.rejects(unzipFiles(new Uint8Array(70000), signal()), /Invalid ZIP/);
 	const file = zipFiles(new Map([['a', encode('body')]]));
 	file[31] ^= 1;
@@ -127,8 +102,7 @@ test('DOCX rejects unsupported features, invalid archives, expansion and cancell
 });
 
 test('DOCX native Academy imports preserve their profile, paper structure and citation identities', async () => {
-	const { createAcademyDocumentSchema, createEmptyAcademyDocument } =
-		await import('../../browser/contrib/academy/common/schema.js');
+	const { createAcademyDocumentSchema, createEmptyAcademyDocument } = await import('../../browser/contrib/academy/common/schema.js');
 	const { importDocxDocument } = await import('../../browser/contrib/documentOutput/docx.js');
 	const academy = createAcademyDocumentSchema();
 	const empty = createEmptyAcademyDocument(academy);
@@ -138,10 +112,7 @@ test('DOCX native Academy imports preserve their profile, paper structure and ci
 			content: [
 				academy.createNode('heading', { content: [academy.createText('Research')] }),
 				academy.createNode('paragraph', {
-					content: [
-						academy.createText('Evidence '),
-						academy.createNode('citation', { id: 'citation-one', attrs: { key: 'one', label: '[1]' } }),
-					],
+					content: [academy.createText('Evidence '), academy.createNode('citation', { id: 'citation-one', attrs: { key: 'one', label: '[1]' } })],
 				}),
 			],
 		}),

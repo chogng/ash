@@ -11,11 +11,7 @@ import { DeferredPromise } from '../../../../base/common/async.js';
 import { URI } from '../../../../base/common/uri.js';
 import { CancellationToken, CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import type { ICommandService } from '../../../../platform/commands/common/commands.js';
-import type {
-	ExtensionHostFleetSnapshot,
-	IExtensionHostApi,
-	JsonValue,
-} from '../../../../platform/agentHost/common/extensionHostApi.js';
+import type { ExtensionHostFleetSnapshot, IExtensionHostApi, JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { SCMService } from '../../../contrib/scm/common/scmService.js';
 import { SCMViewService } from '../../../contrib/scm/browser/scmViewService.js';
 import { QuickDiffService } from '../../../contrib/scm/common/quickDiffService.js';
@@ -72,11 +68,7 @@ function fleet(providers: JsonValue[] = [provider()]): ExtensionHostFleetSnapsho
 		],
 	};
 }
-function fixture(
-	invoke: IExtensionHostApi['invoke'],
-	providers?: JsonValue[],
-	reconcile?: IExtensionHostApi['reconcile'],
-) {
+function fixture(invoke: IExtensionHostApi['invoke'], providers?: JsonValue[], reconcile?: IExtensionHostApi['reconcile']) {
 	const lifetime = new DisposableStore();
 	const scm = lifetime.add(new SCMService());
 	const view = lifetime.add(new SCMViewService(scm));
@@ -171,16 +163,8 @@ test('SCM file timeline bridges scoped history, paging, open commands and meanin
 	assert.equal(result?.items[0]?.sourceControl?.historyItem.tooltip?.authorName, 'Author');
 	assert.equal(result?.items[1]?.sourceControl, undefined, 'Uncommitted entries keep their ordinary tooltip');
 	assert.equal(result?.items[1]?.tooltip, 'Working tree');
-	assert.equal(
-		calls.filter(call => (call as Record<string, JsonValue>).methodName === 'resolveHistoryItemDetails').length,
-		1,
-		'The item is published with its tooltip already prepared',
-	);
-	assert.equal(
-		calls.filter(call => (call as Record<string, JsonValue>).methodName === 'provideHistoryItems').length,
-		0,
-		'Timeline summaries do not need per-item graph queries',
-	);
+	assert.equal(calls.filter(call => (call as Record<string, JsonValue>).methodName === 'resolveHistoryItemDetails').length, 1, 'The item is published with its tooltip already prepared');
+	assert.equal(calls.filter(call => (call as Record<string, JsonValue>).methodName === 'provideHistoryItems').length, 0, 'Timeline summaries do not need per-item graph queries');
 	assert.equal(result?.paging?.cursor, 'commit:old-name');
 	assert.deepEqual(
 		calls.find(call => (call as Record<string, JsonValue>).methodName === 'provide'),
@@ -206,25 +190,17 @@ test('SCM file timeline bridges scoped history, paging, open commands and meanin
 	assert.equal(calls.length, count, 'Out-of-scope resources never enter the extension');
 	let changes = 0;
 	using listener = value.timeline.onDidChangeTimeline(() => changes++);
-	value.bridge.set(source, 'ash.scm', 2, [
-		{ ...snapshot, inputRevision: 1, input: { ...(snapshot.input as Record<string, JsonValue>), value: 'typing' } },
-	]);
+	value.bridge.set(source, 'ash.scm', 2, [{ ...snapshot, inputRevision: 1, input: { ...(snapshot.input as Record<string, JsonValue>), value: 'typing' } }]);
 	assert.equal(changes, 0, 'Commit drafts and blame updates do not reload file history');
 	value.bridge.set(source, 'ash.scm', 3, [{ ...snapshot, historyRevision: 2 }]);
 	assert.equal(changes, 1);
-	value.bridge.set(source, 'ash.scm', 4, [
-		{ ...snapshot, historyRevision: 2, timeline: { label: 'Git History', resetKey: 'authored' } },
-	]);
+	value.bridge.set(source, 'ash.scm', 4, [{ ...snapshot, historyRevision: 2, timeline: { label: 'Git History', resetKey: 'authored' } }]);
 	assert.equal(changes, 2, 'Timeline policy changes invalidate the visible history');
 	value.bridge.set(source, 'ash.scm', 5, []);
 	assert.deepEqual(value.timeline.getSources(), []);
 	assert.equal(value.commands.getCommand(command.id), undefined, 'A retired entry loses its command');
 	value.bridge.set(source, 'ash.scm', 6, [snapshot]);
-	assert.equal(
-		value.commands.getCommand(command.id),
-		undefined,
-		'Reusing a repository ID cannot restore a stale entry',
-	);
+	assert.equal(value.commands.getCommand(command.id), undefined, 'Reusing a repository ID cannot restore a stale entry');
 });
 
 test('SCM retiring a timeline provider cancels its in-flight extension request', async () => {
@@ -279,9 +255,7 @@ test('SCM graph and timeline publish complete tooltips before the first hover an
 			if (payload.methodName === 'provideHistoryItems') return [item];
 			if (payload.methodName === 'provide')
 				return {
-					items: [
-						{ id: item.id, handle: 'commit:file', label: item.subject, timestamp: 1000, historyItem: item },
-					],
+					items: [{ id: item.id, handle: 'commit:file', label: item.subject, timestamp: 1000, historyItem: item }],
 				};
 			if (payload.methodName === 'resolveHistoryItemDetails') {
 				detailReads++;
@@ -301,12 +275,10 @@ test('SCM graph and timeline publish complete tooltips before the first hover an
 		return items;
 	});
 	using token = new CancellationTokenSource();
-	const timelinePage = value.timeline
-		.getTimeline('scm:ash.git:repo', URI.file('/workspace/file.txt'), {}, token)!
-		.result.then(items => {
-			timelinePublished = true;
-			return items;
-		});
+	const timelinePage = value.timeline.getTimeline('scm:ash.git:repo', URI.file('/workspace/file.txt'), {}, token)!.result.then(items => {
+		timelinePublished = true;
+		return items;
+	});
 	await detailStarted.p;
 	assert.equal(graphPublished, false);
 	assert.equal(timelinePublished, false);
@@ -406,10 +378,7 @@ test('SCM eager tooltip preparation retries failures and releases a retired repo
 	assert.equal(reads, 2);
 	value.bridge.set(source, 'ash.scm', 2, []);
 	value.bridge.set(source, 'ash.scm', 3, [snapshot]);
-	assert.deepEqual(
-		(await value.scm.getRepository('repo')!.provider.historyProvider!.provideHistoryItems({}))?.[0].tooltip,
-		details,
-	);
+	assert.deepEqual((await value.scm.getRepository('repo')!.provider.historyProvider!.provideHistoryItems({}))?.[0].tooltip, details);
 	assert.equal(reads, 3);
 });
 
@@ -431,9 +400,7 @@ test('SCM resource groups survive input-only snapshots and retire changed resour
 		},
 	]);
 	assert.strictEqual(repository.provider.groups, groups);
-	value.bridge.set(source, 'ash.scm', 3, [
-		{ ...snapshot, groups: [{ id: 'changes', label: 'Updated changes', actions: [], resources: [] }] },
-	]);
+	value.bridge.set(source, 'ash.scm', 3, [{ ...snapshot, groups: [{ id: 'changes', label: 'Updated changes', actions: [], resources: [] }] }]);
 	assert.notStrictEqual(repository.provider.groups, groups);
 	assert.ok(!repository.provider.groups.includes(groups[0]!));
 });
@@ -462,27 +429,17 @@ test('SCM reconciles resources by group and ID while replacing changed actions a
 	using cleanup = value.lifetime;
 	const repository = value.scm.getRepository('repo')!;
 	const before = repository.provider.groups;
-	value.bridge.set(source, 'ash.scm', 2, [
-		snapshot([group('staged', [first]), group('changes', [resource('added'), first, resource('second', false)])]),
-	]);
+	value.bridge.set(source, 'ash.scm', 2, [snapshot([group('staged', [first]), group('changes', [resource('added'), first, resource('second', false)])])]);
 	const after = repository.provider.groups;
 	assert.strictEqual(after[0], before[1], 'An unchanged group survives reordering');
-	assert.strictEqual(
-		after[1]!.resources[1],
-		before[0]!.resources[0],
-		'An unchanged resource survives insertion before it',
-	);
+	assert.strictEqual(after[1]!.resources[1], before[0]!.resources[0], 'An unchanged resource survives insertion before it');
 	assert.notStrictEqual(after[1]!.resources[2], before[0]!.resources[1]);
 	assert.equal(after[1]!.resources[2]!.actions[0]!.enabled, false);
 	await after[1]!.resources[1]!.open({}, false);
 	assert.equal((calls.at(-1) as Record<string, JsonValue>).resourceId, 'first');
 	value.bridge.set(source, 'ash.scm', 3, [snapshot([group('changes', [second])])]);
 	assert.equal(repository.provider.groups.length, 1);
-	assert.notStrictEqual(
-		repository.provider.groups[0]!.resources[0],
-		before[0]!.resources[1],
-		'The new action state replaces the disabled action',
-	);
+	assert.notStrictEqual(repository.provider.groups[0]!.resources[0], before[0]!.resources[1], 'The new action state replaces the disabled action');
 });
 
 test('SCM cancels obsolete previews while retained opens survive later selections', async () => {
@@ -522,14 +479,8 @@ test('SCM cancels obsolete previews while retained opens survive later selection
 			if ((request.payload as Record<string, JsonValue>).method !== 'open') return null;
 			signals.push(signal!);
 			if (signals.length === 1) started.complete();
-			if (
-				((request.payload as Record<string, JsonValue>).options as Record<string, JsonValue> | undefined)
-					?.pinned
-			)
-				return pinnedResult.p;
-			return new Promise((_resolve, reject) =>
-				signal!.addEventListener('abort', () => reject(new Error('cancelled')), { once: true }),
-			);
+			if (((request.payload as Record<string, JsonValue>).options as Record<string, JsonValue> | undefined)?.pinned) return pinnedResult.p;
+			return new Promise((_resolve, reject) => signal!.addEventListener('abort', () => reject(new Error('cancelled')), { once: true }));
 		},
 		[snapshot],
 	);
@@ -584,8 +535,7 @@ test('SCM decorates collapsed ancestors from current changes and respects provid
 			const payload = request.payload as Record<string, JsonValue>;
 			if (payload.method !== 'decoration') return null;
 			queries.push(payload.resource as string);
-			if (directFolder && payload.resource === 'file:///workspace/src')
-				return { color: 'description.foreground', letter: '!', tooltip: 'Folder status' };
+			if (directFolder && payload.resource === 'file:///workspace/src') return { color: 'description.foreground', letter: '!', tooltip: 'Folder status' };
 			return enabled && payload.resource === resource.toString()
 				? {
 						color: 'gitDecoration.deletedResourceForeground',
@@ -636,19 +586,14 @@ test('SCM history command contexts revive only the owning live repository', asyn
 		message: 'Commit',
 		remoteLinks: [{ name: 'origin', uri: URI.parse('https://example.com/abc') }],
 	};
-	const encoded = await value.bridge.prepareCommandArguments('ash.git', [
-		{ type: 'historyItemViewModel', repository, historyItemViewModel: { historyItem: item } },
-	]);
+	const encoded = await value.bridge.prepareCommandArguments('ash.git', [{ type: 'historyItemViewModel', repository, historyItemViewModel: { historyItem: item } }]);
 	const [revived] = value.bridge.reviveCommandArguments(source, encoded) as Array<{
 		repository: typeof repository;
 		historyItemViewModel: { historyItem: typeof item };
 	}>;
 	assert.strictEqual(revived.repository, repository);
 	assert.deepEqual(revived.historyItemViewModel.historyItem.remoteLinks, item.remoteLinks);
-	assert.throws(
-		() => value.bridge.reviveCommandArguments({ ...source, extensionId: 'other.extension' }, encoded),
-		/foreign repository/,
-	);
+	assert.throws(() => value.bridge.reviveCommandArguments({ ...source, extensionId: 'other.extension' }, encoded), /foreign repository/);
 	assert.throws(() => value.bridge.reviveCommandArguments({ ...source, incarnation: 2 }, encoded), /retired/);
 	value.bridge.update({ generation: 2, extensions: [] });
 	assert.throws(() => value.bridge.reviveCommandArguments(source, encoded), /retired/);
@@ -670,20 +615,17 @@ test('SCM extension receives captured repository and history arguments and the c
 			historyItem: { id: 'abc', remoteLinks: [{ name: 'origin', uri: URI.parse('https://example.com/abc') }] },
 		},
 	};
-	assert.deepEqual(
-		JSON.parse(JSON.stringify(await value.bridge.prepareCommandArguments('ash.git', [repository, history]))),
-		[
-			{ repositoryId: 'repo', provider: { id: 'repo', providerId: 'git' } },
-			{
-				type: 'historyItemViewModel',
-				repository: { repositoryId: 'repo', provider: { id: 'repo', providerId: 'git' } },
-				historyItemViewModel: {
-					historyItem: { id: 'abc', remoteLinks: [{ name: 'origin', uri: 'https://example.com/abc' }] },
-				},
-				references: null,
+	assert.deepEqual(JSON.parse(JSON.stringify(await value.bridge.prepareCommandArguments('ash.git', [repository, history]))), [
+		{ repositoryId: 'repo', provider: { id: 'repo', providerId: 'git' } },
+		{
+			type: 'historyItemViewModel',
+			repository: { repositoryId: 'repo', provider: { id: 'repo', providerId: 'git' } },
+			historyItemViewModel: {
+				historyItem: { id: 'abc', remoteLinks: [{ name: 'origin', uri: 'https://example.com/abc' }] },
 			},
-		],
-	);
+			references: null,
+		},
+	]);
 	assert.ok(
 		calls.some(
 			call =>
@@ -705,9 +647,7 @@ test('SCM extension receives captured repository and history arguments and the c
 
 test('SCM input completion preserves a draft edited while the command was running', async () => {
 	const completion = new DeferredPromise<JsonValue>();
-	const value = fixture(async request =>
-		(request.payload as { method: string }).method === 'acceptInput' ? completion.p : null,
-	);
+	const value = fixture(async request => ((request.payload as { method: string }).method === 'acceptInput' ? completion.p : null));
 	using cleanup = value.lifetime;
 	const input = value.scm.getRepository('repo')!.provider.input;
 	const accepting = input.accept();
@@ -810,13 +750,7 @@ test('SCM cannot take over another extension repository or change its registered
 	const repository = value.scm.getRepository('repo')!;
 	const otherRepository = value.scm.getRepository('other')!;
 	assert.throws(() => value.bridge.set(source, 'ash.scm', 2, [otherProvider]), /already registered/);
-	assert.throws(
-		() =>
-			value.bridge.set(source, 'ash.scm', 2, [
-				{ ...(provider() as Record<string, JsonValue>), rootUri: 'file:///other' },
-			]),
-		/identity cannot change/,
-	);
+	assert.throws(() => value.bridge.set(source, 'ash.scm', 2, [{ ...(provider() as Record<string, JsonValue>), rootUri: 'file:///other' }]), /identity cannot change/);
 	assert.equal(value.scm.getRepository('repo'), repository);
 	assert.equal(value.scm.getRepository('other'), otherRepository);
 });
@@ -846,15 +780,11 @@ test('SCM history and reference updates leave Changes quiet while working-tree c
 	assert.equal(repository.provider.groups, groups);
 	value.bridge.set(source, 'ash.scm', 4, [{ ...changed, isBusy: true }]);
 	assert.equal(resources, 1, 'Operation state still updates Commit and resource actions');
-	value.bridge.set(source, 'ash.scm', 5, [
-		{ ...changed, input: { ...(initial.input as Record<string, JsonValue>), value: 'new draft' } },
-	]);
+	value.bridge.set(source, 'ash.scm', 5, [{ ...changed, input: { ...(initial.input as Record<string, JsonValue>), value: 'new draft' } }]);
 	assert.equal(resources, 2);
 	assert.equal(diff, 2, 'Completing an index operation can change diff content without changing path statuses');
 	assert.equal(repository.provider.input.value, 'new draft');
-	value.bridge.set(source, 'ash.scm', 6, [
-		{ ...changed, groups: [{ id: 'working', label: 'Changes', resources: [], actions: [] }] },
-	]);
+	value.bridge.set(source, 'ash.scm', 6, [{ ...changed, groups: [{ id: 'working', label: 'Changes', resources: [], actions: [] }] }]);
 	assert.equal(resources, 3, 'Actual working-tree changes still reach Changes');
 	assert.equal(diff, 3);
 	assert.notEqual(repository.provider.groups, groups);
@@ -865,30 +795,16 @@ test('SCM history distinguishes automatic fetch and completed foreground synchro
 	const value = fixture(async () => null, [initial]);
 	using cleanup = value.lifetime;
 	const changes: unknown[] = [];
-	using listener = value.scm
-		.getRepository('repo')!
-		.provider.historyProvider!.onDidChange(event => changes.push(event));
+	using listener = value.scm.getRepository('repo')!.provider.historyProvider!.onDidChange(event => changes.push(event));
 	const background = { ...initial, historyRevision: 2, historyChangeSilent: true };
 	value.bridge.set(source, 'ash.scm', 2, [background]);
 	assert.deepEqual(changes, [{ silent: true }]);
 	value.bridge.set(source, 'ash.scm', 3, [{ ...background, historyOperationRevision: 1 }]);
-	assert.deepEqual(
-		changes,
-		[{ silent: true }, { silent: false }],
-		'A no-op sync remains observable when its in-progress publication was coalesced',
-	);
-	value.bridge.set(source, 'ash.scm', 4, [
-		{ ...background, historyRevision: 3, historyChangeSilent: false, historyOperationRevision: 1 },
-	]);
+	assert.deepEqual(changes, [{ silent: true }, { silent: false }], 'A no-op sync remains observable when its in-progress publication was coalesced');
+	value.bridge.set(source, 'ash.scm', 4, [{ ...background, historyRevision: 3, historyChangeSilent: false, historyOperationRevision: 1 }]);
 	assert.deepEqual(changes, [{ silent: true }, { silent: false }, { silent: false }]);
-	assert.throws(
-		() => value.bridge.set(source, 'ash.scm', 6, [{ ...background, historyChangeSilent: 'yes' }]),
-		/history change origin/u,
-	);
-	assert.throws(
-		() => value.bridge.set(source, 'ash.scm', 7, [{ ...background, historyOperationRevision: -1 }]),
-		/history operation revision/u,
-	);
+	assert.throws(() => value.bridge.set(source, 'ash.scm', 6, [{ ...background, historyChangeSilent: 'yes' }]), /history change origin/u);
+	assert.throws(() => value.bridge.set(source, 'ash.scm', 7, [{ ...background, historyOperationRevision: -1 }]), /history operation revision/u);
 });
 
 test('SCM bridge forwards reference-only HEAD moves once without invalidating history', () => {
@@ -933,15 +849,10 @@ test('SCM bridge forwards reference-only HEAD moves once without invalidating hi
 	assert.equal(updates.length, 1);
 	assert.equal(headChanges, 1, 'Unchanged HEAD in resource snapshots does not redraw history');
 	assert.equal(updates[0]?.[0]?.references?.[0]?.canDelete, false);
-	value.bridge.set(source, 'ash.scm', 4, [
-		{ ...changed, historyRevision: 2, historyRefsRevision: 2, historyRefsItems: [] },
-	]);
+	value.bridge.set(source, 'ash.scm', 4, [{ ...changed, historyRevision: 2, historyRefsRevision: 2, historyRefsItems: [] }]);
 	assert.equal(invalidations, 1, 'Commit-set changes take precedence over ref decoration snapshots');
 	assert.equal(updates.length, 1);
-	assert.throws(
-		() => value.bridge.set(source, 'ash.scm', 5, [{ ...changed, historyRefsRevision: -1 }]),
-		/history refs revision/,
-	);
+	assert.throws(() => value.bridge.set(source, 'ash.scm', 5, [{ ...changed, historyRefsRevision: -1 }]), /history refs revision/);
 });
 
 test('SCM bridges advertised reference filters, upstream changes and immutable binary bytes', async () => {
@@ -975,9 +886,7 @@ test('SCM bridges advertised reference filters, upstream changes and immutable b
 	);
 	using lifetime = value.lifetime;
 	const history = value.scm.getRepository('repo')!.provider.historyProvider!;
-	assert.deepEqual(await history.provideHistoryItemRefs!([ref.id]), [
-		{ ...ref, description: undefined, upstream: undefined, canDelete: false, color: undefined },
-	]);
+	assert.deepEqual(await history.provideHistoryItemRefs!([ref.id]), [{ ...ref, description: undefined, upstream: undefined, canDelete: false, color: undefined }]);
 	assert.deepEqual(calls.at(-1)!.arguments, [[ref.id]]);
 	assert.equal(await history.resolveHistoryItemRefsCommonAncestor!(['head', 'remote']), 'base');
 	assert.deepEqual(calls.at(-1)!.arguments, [['head', 'remote']]);
@@ -989,9 +898,7 @@ test('SCM bridges advertised reference filters, upstream changes and immutable b
 	using listener = history.historyItemRemoteRef!.onDidChange(() => upstreamChanges++);
 	value.bridge.set(source, 'ash.scm', 2, [{ ...snapshot, historyRemoteRef: { ...ref, revision: 'new-remote' } }]);
 	assert.equal(upstreamChanges, 1);
-	value.bridge.set(source, 'ash.scm', 3, [
-		{ ...snapshot, historyBaseRef: { ...ref, id: 'remoteBranch:origin/release', name: 'origin/release' } },
-	]);
+	value.bridge.set(source, 'ash.scm', 3, [{ ...snapshot, historyBaseRef: { ...ref, id: 'remoteBranch:origin/release', name: 'origin/release' } }]);
 	assert.equal(baseChanges, 1);
 	assert.equal(history.historyItemBaseRef!.get()!.name, 'origin/release');
 	const change = { uri: URI.parse('git:/image.bin'), path: 'image.bin', status: 'modified' };
@@ -1028,25 +935,10 @@ test('SCM status command availability and placement survive the extension bridge
 	const statusCommands = () => repository.provider.statusBarCommands;
 	assert.equal(statusCommands()[0]?.run, undefined);
 	assert.equal(statusCommands()[0]?.alignment, 'right');
-	assert.throws(
-		() =>
-			value.bridge.set(source, 'ash.scm', 2, [
-				{ ...snapshot, statusBarCommands: [{ ...command, alignment: 'center' }] },
-			]),
-		/Invalid SCM status command alignment/u,
-	);
+	assert.throws(() => value.bridge.set(source, 'ash.scm', 2, [{ ...snapshot, statusBarCommands: [{ ...command, alignment: 'center' }] }]), /Invalid SCM status command alignment/u);
 	value.bridge.set(source, 'ash.scm', 2, [{ ...snapshot, statusBarCommands: [{ ...command, enabled: true }] }]);
 	await statusCommands()[0]?.run?.();
-	assert.ok(
-		calls.some(
-			call =>
-				typeof call === 'object' &&
-				call !== null &&
-				'method' in call &&
-				call.method === 'statusBar' &&
-				call.commandId === 'git.blame',
-		),
-	);
+	assert.ok(calls.some(call => typeof call === 'object' && call !== null && 'method' in call && call.method === 'statusBar' && call.commandId === 'git.blame'));
 	const { alignment: _alignment, ...defaultCommand } = command;
 	value.bridge.set(source, 'ash.scm', 3, [{ ...snapshot, statusBarCommands: [defaultCommand] }]);
 	assert.equal(statusCommands()[0]?.alignment, 'left');
@@ -1075,9 +967,7 @@ test('SCM decoration bursts leave invocation slots available for refresh and ret
 	});
 	using cleanup = value.lifetime;
 	const decorationProvider = [...value.decorationProviders][0]!;
-	const queries = Array.from({ length: 80 }, (_, index) =>
-		decorationProvider.provideDecorations(URI.file(`/workspace/file-${index}`), CancellationToken.None),
-	);
+	const queries = Array.from({ length: 80 }, (_, index) => decorationProvider.provideDecorations(URI.file(`/workspace/file-${index}`), CancellationToken.None));
 	await value.scm.getRepository('repo')!.provider.refresh();
 	assert.equal(refreshes, 1);
 	assert.equal(pending.length, 4);
@@ -1108,9 +998,7 @@ test('SCM skips cancelled queued decoration queries and retiring a registration 
 	});
 	using cleanup = value.lifetime;
 	const decorationProvider = [...value.decorationProviders][0]!;
-	const queries = Array.from({ length: 20 }, (_, index) =>
-		decorationProvider.provideDecorations(URI.file(`/workspace/file-${index}`), CancellationToken.None),
-	);
+	const queries = Array.from({ length: 20 }, (_, index) => decorationProvider.provideDecorations(URI.file(`/workspace/file-${index}`), CancellationToken.None));
 	const results = Promise.allSettled(queries);
 	await admitted.p;
 	assert.equal(requests, 4);
@@ -1133,9 +1021,7 @@ test('SCM history reads wait for repository initialization before crossing the e
 		[{ ...(provider() as Record<string, JsonValue>), hasHistory: true }],
 	);
 	using cleanup = value.lifetime;
-	const reading = value.scm
-		.getRepository('repo')!
-		.provider.historyProvider!.provideHistoryItems({ skip: 0, limit: 1 });
+	const reading = value.scm.getRepository('repo')!.provider.historyProvider!.provideHistoryItems({ skip: 0, limit: 1 });
 	try {
 		assert.deepEqual(calls, ['initialize']);
 		initialized.complete(null);
@@ -1159,9 +1045,7 @@ test('retiring SCM cancels reads waiting for initialization without admitting an
 		[{ ...(provider() as Record<string, JsonValue>), hasHistory: true }],
 	);
 	using cleanup = value.lifetime;
-	const reading = value.scm
-		.getRepository('repo')!
-		.provider.historyProvider!.provideHistoryItems({ skip: 0, limit: 1 });
+	const reading = value.scm.getRepository('repo')!.provider.historyProvider!.provideHistoryItems({ skip: 0, limit: 1 });
 	value.bridge.update({ generation: 2, extensions: [] });
 	try {
 		await assert.rejects(Promise.resolve(reading), /cancel|abort|retired/iu);
@@ -1176,8 +1060,7 @@ test('SCM retries failed initialization and only reports an empty repository aft
 	try {
 		let attempts = 0;
 		const value = fixture(async request => {
-			if ((request.payload as { method: string }).method === 'initialize' && ++attempts < 3)
-				throw new Error('Transient admission failure');
+			if ((request.payload as { method: string }).method === 'initialize' && ++attempts < 3) throw new Error('Transient admission failure');
 			return null;
 		}, []);
 		using cleanup = value.lifetime;
@@ -1287,10 +1170,7 @@ test('SCM initialization completion preserves another runtime activation failure
 	const ready = fleet([]);
 	value.bridge.update({
 		generation: 2,
-		extensions: [
-			...ready.extensions,
-			{ ...ready.extensions[0]!, id: 'test.failed', lifecycle: 'failed', registrations: [] },
-		],
+		extensions: [...ready.extensions, { ...ready.extensions[0]!, id: 'test.failed', lifecycle: 'failed', registrations: [] }],
 	});
 	await initialized.complete(null);
 	await settleCallbacks();
@@ -1307,9 +1187,7 @@ test('Git welcome predicates distinguish scanning, failure, disconnected and con
 	const connected = contexts.createKey<boolean>('appServerAvailable', true);
 	const state = contexts.createKey<string>('scm.providerState.ash.git', 'initializing');
 	const visible = () =>
-		manifest.contributes.viewsWelcome
-			.filter((entry: { when: string }) => ContextKeyExpr.deserialize(entry.when)!.evaluate(contexts))
-			.map((entry: { contents: string }) => entry.contents);
+		manifest.contributes.viewsWelcome.filter((entry: { when: string }) => ContextKeyExpr.deserialize(entry.when)!.evaluate(contexts)).map((entry: { contents: string }) => entry.contents);
 	for (const locale of ['package.nls.json', 'package.nls.zh-CN.json']) {
 		const messages = JSON.parse(await readFile(`${root}/extensions/git/${locale}`, 'utf8'));
 		for (const [status, key] of [
@@ -1336,15 +1214,9 @@ test('SCM action button retains grouped commands and rejects malformed availabil
 	const descriptor = {
 		command: { id: 'git.commit', title: '$(check) Commit', arguments: ['repo'] },
 		enabled: false,
-		secondaryCommands: [
-			[{ id: 'git.commitAll', title: 'Commit All', arguments: ['repo'] }],
-			[{ id: 'git.commitAmend', title: 'Commit (Amend)' }],
-		],
+		secondaryCommands: [[{ id: 'git.commitAll', title: 'Commit All', arguments: ['repo'] }], [{ id: 'git.commitAmend', title: 'Commit (Amend)' }]],
 	};
-	const value = fixture(
-		async () => null,
-		[{ ...(provider() as Record<string, JsonValue>), actionButton: descriptor }],
-	);
+	const value = fixture(async () => null, [{ ...(provider() as Record<string, JsonValue>), actionButton: descriptor }]);
 	try {
 		const button = value.scm.getRepository('repo')!.provider.actionButton!;
 		assert.equal(button.enabled, false);
@@ -1357,10 +1229,7 @@ test('SCM action button retains grouped commands and rejects malformed availabil
 			...(provider() as Record<string, JsonValue>),
 			actionButton: { ...descriptor, enabled: 'yes' },
 		};
-		assert.throws(
-			() => value.bridge.set(source, 'ash.scm', 2, [malformed]),
-			/Invalid SCM action button availability/u,
-		);
+		assert.throws(() => value.bridge.set(source, 'ash.scm', 2, [malformed]), /Invalid SCM action button availability/u);
 	} finally {
 		value.lifetime.dispose();
 	}

@@ -14,14 +14,8 @@ import { IWorkspaceExtensionsConfigService } from '../../../../services/extensio
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
-import {
-	RecommendationSource,
-	RecommendationsNotificationResult,
-} from '../../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
-import {
-	TestConfigurationService,
-	TestWorkspaceService,
-} from '../../../../services/configuration/test/common/testServices.js';
+import { RecommendationSource, RecommendationsNotificationResult } from '../../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
+import { TestConfigurationService, TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IExtensionIgnoredRecommendationsService } from '../../../../services/extensionRecommendations/common/extensionRecommendations.js';
 import { ExtensionIgnoredRecommendationsService } from '../../../../services/extensionRecommendations/common/extensionIgnoredRecommendationsService.js';
@@ -38,8 +32,7 @@ for (const [key, value] of Object.entries({
 })) {
 	Object.defineProperty(globalThis, key, { configurable: true, value });
 }
-const { ExtensionRecommendationNotificationService } =
-	await import('../../browser/extensionRecommendationNotificationService.js');
+const { ExtensionRecommendationNotificationService } = await import('../../browser/extensionRecommendationNotificationService.js');
 await import('../../browser/extensions.contribution.js');
 const recommendation = { source: RecommendationSource.FILE, extensions: ['ash.academy@ash'], name: 'Docs' };
 
@@ -70,10 +63,7 @@ function fixture(
 	let lookupCount = 0;
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IStorageService, storage);
-	services.registerInstance(
-		IWorkspaceContextService,
-		lifetime.add(new TestWorkspaceService({ id: 'project', uri: URI.file('/fixture') })),
-	);
+	services.registerInstance(IWorkspaceContextService, lifetime.add(new TestWorkspaceService({ id: 'project', uri: URI.file('/fixture') })));
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(ICommandService, {
 		executeCommand: async (...args: unknown[]) => {
@@ -160,10 +150,7 @@ suite('Contextual extension recommendation notifications', () => {
 		const result = service.promptImportantExtensionsInstallNotification(recommendation);
 		const item = await added;
 		assert.match(item.message, /Docs.*Rich documents/u);
-		assert.equal(
-			await service.promptImportantExtensionsInstallNotification(recommendation),
-			RecommendationsNotificationResult.Ignored,
-		);
+		assert.equal(await service.promptImportantExtensionsInstallNotification(recommendation), RecommendationsNotificationResult.Ignored);
 		await item.actions?.primary?.find(action => action.id.endsWith('.show'))?.run();
 		assert.equal(await result, RecommendationsNotificationResult.Accepted);
 		assert.deepEqual(f.commands, [['ash.extensions.open', { mode: 'browse', query: 'Rich documents' }]]);
@@ -174,19 +161,13 @@ suite('Contextual extension recommendation notifications', () => {
 		for (const options of [{ installed: true }, { excluded: true }]) {
 			const f = fixture(options);
 			using lifetime = f.lifetime;
-			assert.equal(
-				await f.create().promptImportantExtensionsInstallNotification(recommendation),
-				RecommendationsNotificationResult.Ignored,
-			);
+			assert.equal(await f.create().promptImportantExtensionsInstallNotification(recommendation), RecommendationsNotificationResult.Ignored);
 			assert.equal(f.lookupCount, 0);
 		}
 		const f = fixture();
 		using lifetime = f.lifetime;
 		await f.configuration.write('{"extensions.ignoreRecommendations":true}');
-		assert.equal(
-			await f.create().promptImportantExtensionsInstallNotification(recommendation),
-			RecommendationsNotificationResult.Ignored,
-		);
+		assert.equal(await f.create().promptImportantExtensionsInstallNotification(recommendation), RecommendationsNotificationResult.Ignored);
 		assert.equal(f.lookupCount, 0);
 	});
 
@@ -200,26 +181,15 @@ suite('Contextual extension recommendation notifications', () => {
 		await result;
 		const reopened = f.create();
 		assert.deepEqual(reopened.ignoredRecommendations, ['ash.academy']);
-		assert.equal(
-			await reopened.promptImportantExtensionsInstallNotification(recommendation),
-			RecommendationsNotificationResult.Ignored,
-		);
-		f.storage.store(
-			'extensionsAssistant/importantRecommendationsIgnore',
-			'{broken',
-			StorageScope.PROFILE,
-			StorageTarget.USER,
-		);
+		assert.equal(await reopened.promptImportantExtensionsInstallNotification(recommendation), RecommendationsNotificationResult.Ignored);
+		f.storage.store('extensionsAssistant/importantRecommendationsIgnore', '{broken', StorageScope.PROFILE, StorageTarget.USER);
 		assert.deepEqual(reopened.ignoredRecommendations, []);
 	});
 
 	test('offline registries do not interrupt editing and window shutdown settles an open suggestion', async () => {
 		const offline = fixture({ offline: true });
 		using offlineLifetime = offline.lifetime;
-		assert.equal(
-			await offline.create().promptImportantExtensionsInstallNotification(recommendation),
-			RecommendationsNotificationResult.Ignored,
-		);
+		assert.equal(await offline.create().promptImportantExtensionsInstallNotification(recommendation), RecommendationsNotificationResult.Ignored);
 		assert.equal(offline.notifications.model.getNotifications().length, 0);
 		const f = fixture();
 		using lifetime = f.lifetime;
@@ -250,14 +220,12 @@ suite('Contextual extension recommendation notifications', () => {
 		const f = fixture();
 		using lifetime = f.lifetime;
 		const added = nextNotification(f.notifications);
-		const result = f
-			.create()
-			.promptImportantExtensionsInstallNotification({
-				...recommendation,
-				name: 'Python',
-				languageId: 'python',
-				searchValue: '',
-			});
+		const result = f.create().promptImportantExtensionsInstallNotification({
+			...recommendation,
+			name: 'Python',
+			languageId: 'python',
+			searchValue: '',
+		});
 		const item = await added;
 		await item.actions?.primary?.find(action => action.id.endsWith('.show'))?.run();
 		await result;
@@ -269,10 +237,7 @@ suite('Contextual extension recommendation notifications', () => {
 		using lifetime = f.lifetime;
 		await f.configuration.write('{"extensions.showRecommendationsOnlyOnDemand":true}');
 		const service = f.create();
-		assert.equal(
-			await service.promptImportantExtensionsInstallNotification(recommendation),
-			RecommendationsNotificationResult.Ignored,
-		);
+		assert.equal(await service.promptImportantExtensionsInstallNotification(recommendation), RecommendationsNotificationResult.Ignored);
 		assert.equal(f.lookupCount, 0);
 		await f.configuration.write('{"extensions.showRecommendationsOnlyOnDemand":false}');
 		const added = nextNotification(f.notifications);
@@ -334,10 +299,7 @@ suite('Contextual extension recommendation notifications', () => {
 		using lifetime = f.lifetime;
 		const service = f.create();
 		f.ignored.toggleGlobalIgnoredRecommendation('ASH.ACADEMY', true);
-		assert.equal(
-			await service.promptImportantExtensionsInstallNotification(recommendation),
-			RecommendationsNotificationResult.Ignored,
-		);
+		assert.equal(await service.promptImportantExtensionsInstallNotification(recommendation), RecommendationsNotificationResult.Ignored);
 		assert.equal(f.lookupCount, 0);
 		f.ignored.toggleGlobalIgnoredRecommendation('ash.academy', false);
 		const added = nextNotification(f.notifications);
@@ -351,9 +313,7 @@ suite('Contextual extension recommendation notifications', () => {
 		const f = fixture();
 		using lifetime = f.lifetime;
 		const added = nextNotification(f.notifications);
-		const result = f
-			.create()
-			.promptImportantExtensionsInstallNotification({ ...recommendation, extensions: ['one@ash', 'two@ash'] });
+		const result = f.create().promptImportantExtensionsInstallNotification({ ...recommendation, extensions: ['one@ash', 'two@ash'] });
 		const item = await added;
 		await item.actions?.primary?.find(action => action.id.endsWith('.show'))?.run();
 		await result;
@@ -374,10 +334,7 @@ suite('Contextual extension recommendation notifications', () => {
 			f.notifications.model.remove(item.id);
 			await result;
 		}
-		assert.equal(
-			await service.promptImportantExtensionsInstallNotification({ ...recommendation, extensions: ['four@ash'] }),
-			RecommendationsNotificationResult.TooMany,
-		);
+		assert.equal(await service.promptImportantExtensionsInstallNotification({ ...recommendation, extensions: ['four@ash'] }), RecommendationsNotificationResult.TooMany);
 		const added = nextNotification(f.notifications);
 		const result = service.promptWorkspaceRecommendations(['workspace@ash']);
 		const item = await added;
@@ -429,34 +386,18 @@ suite('Contextual extension recommendation notifications', () => {
 		const f = fixture();
 		using lifetime = f.lifetime;
 		const service = f.create();
-		f.storage.store(
-			'extensionsAssistant/importantRecommendationsIgnore',
-			'["ash.academy"]',
-			StorageScope.PROFILE,
-			StorageTarget.USER,
-		);
-		f.storage.store(
-			'extensionsAssistant/workspaceRecommendationsIgnore',
-			true,
-			StorageScope.WORKSPACE,
-			StorageTarget.USER,
-		);
+		f.storage.store('extensionsAssistant/importantRecommendationsIgnore', '["ash.academy"]', StorageScope.PROFILE, StorageTarget.USER);
+		f.storage.store('extensionsAssistant/workspaceRecommendationsIgnore', true, StorageScope.WORKSPACE, StorageTarget.USER);
 		service.resetIgnoredRecommendations();
 		assert.deepEqual(service.ignoredRecommendations, []);
-		assert.equal(
-			f.storage.getBoolean('extensionsAssistant/workspaceRecommendationsIgnore', StorageScope.WORKSPACE, false),
-			false,
-		);
+		assert.equal(f.storage.getBoolean('extensionsAssistant/workspaceRecommendationsIgnore', StorageScope.WORKSPACE, false), false);
 		assert.equal(service.hasToIgnoreRecommendationNotifications(), false);
 	});
 
 	test('unavailable installed state does not produce an installation suggestion', async () => {
 		const f = fixture({ installedError: true });
 		using lifetime = f.lifetime;
-		assert.equal(
-			await f.create().promptImportantExtensionsInstallNotification(recommendation),
-			RecommendationsNotificationResult.Ignored,
-		);
+		assert.equal(await f.create().promptImportantExtensionsInstallNotification(recommendation), RecommendationsNotificationResult.Ignored);
 		assert.equal(f.lookupCount, 0);
 	});
 });

@@ -1,13 +1,7 @@
 import type { ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { EditorOption } from '../../../../common/config/editorOptions.js';
 import type { ColorData } from '../../common/languageColors.js';
-import type {
-	HoverAnchor,
-	IEditorHoverParticipant,
-	IEditorHoverRenderContext,
-	IHoverPart,
-	IRenderedHoverParts,
-} from '../../../hover/browser/hoverTypes.js';
+import type { HoverAnchor, IEditorHoverParticipant, IEditorHoverRenderContext, IHoverPart, IRenderedHoverParts } from '../../../hover/browser/hoverTypes.js';
 import { ColorPickerController } from '../colorPickerController.js';
 
 class ColorHover implements IHoverPart {
@@ -29,10 +23,7 @@ export class HoverColorPickerParticipant implements IEditorHoverParticipant {
 			return [];
 		}
 		const activation = this.editor.getOption(EditorOption.colorDecoratorsActivatedOn);
-		if (
-			anchor.source === 'mouse' &&
-			(activation === 'click' || !anchor.target?.closest('.colorpicker-color-decoration'))
-		) {
+		if (anchor.source === 'mouse' && (activation === 'click' || !anchor.target?.closest('.colorpicker-color-decoration'))) {
 			return [];
 		}
 		if (anchor.source === 'click' && activation === 'hover') {
@@ -44,8 +35,6 @@ export class HoverColorPickerParticipant implements IEditorHoverParticipant {
 
 	public renderHoverParts(context: IEditorHoverRenderContext, parts: IHoverPart[]): IRenderedHoverParts {
 		const color = parts[0] as ColorHover;
-		return this.editor
-			.getContribution<ColorPickerController>('editor.contrib.colorPicker')!
-			.renderHover(context, color.data);
+		return this.editor.getContribution<ColorPickerController>('editor.contrib.colorPicker')!.renderHover(context, color.data);
 	}
 }

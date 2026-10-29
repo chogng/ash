@@ -6,11 +6,7 @@ import { Separator } from '../../common/actions.js';
 import { Lxicon } from '../../common/lxicons.js';
 import { ActionBar } from '../../browser/ui/actionbar/actionbar.js';
 import { LabelActionViewItem } from '../../browser/ui/actionbar/actionViewItems.js';
-import {
-	setHoverDelegate,
-	type HoverDelegateSetupOptions,
-	type IManagedHover,
-} from '../../browser/ui/hover/hoverDelegate.js';
+import { setHoverDelegate, type HoverDelegateSetupOptions, type IManagedHover } from '../../browser/ui/hover/hoverDelegate.js';
 import { AnchorPosition } from '../../common/layout.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../common/utils.js';
 import type { IContextMenuDelegate } from '../../browser/contextmenu.js';
@@ -143,12 +139,7 @@ suite('ActionBar open dropdown updates', () => {
 			first!.click();
 			bar.setActions([{ ...action('first'), label: 'Updated first' }, action('second')]);
 			// Match the context view's capture-phase outside-pointer dismissal.
-			using dismissal = addDisposableListener(
-				dom.window.document,
-				'pointerdown',
-				() => menu!.onHide?.(true),
-				true,
-			);
+			using dismissal = addDisposableListener(dom.window.document, 'pointerdown', () => menu!.onHide?.(true), true);
 			icon.dispatchEvent(pointerEvent(dom.window, 'pointerdown'));
 			await Promise.resolve();
 			assert.equal(second!.isConnected, true);
@@ -182,10 +173,7 @@ suite('ActionBar open dropdown updates', () => {
 				await Promise.resolve();
 				assert.equal(trigger.isConnected, true);
 				if (end === 'window blur') dom.window.dispatchEvent(new dom.window.Event('blur'));
-				else
-					dom.window.document.body.dispatchEvent(
-						pointerEvent(dom.window, end === 'pointercancel' ? 'pointercancel' : 'pointerup'),
-					);
+				else dom.window.document.body.dispatchEvent(pointerEvent(dom.window, end === 'pointercancel' ? 'pointercancel' : 'pointerup'));
 				await Promise.resolve();
 				assert.equal(bar.element.textContent, 'Updated first');
 			} finally {
@@ -327,7 +315,10 @@ test('ActionBar enables native drag sources only when its view item opts in', ()
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using actionBar = new ActionBar(dom.window.document.body, {
 		actions: [action('drag-source'), action('ordinary')],
-		actionViewItemProvider: item => new LabelActionViewItem(item, { draggable: item.id === 'drag-source' }),
+		actionViewItemProvider: item =>
+			new LabelActionViewItem(item, {
+				draggable: item.id === 'drag-source',
+			}),
 	});
 	dom.window.document.body.append(actionBar.element);
 
@@ -365,7 +356,9 @@ test('ActionBar reports drop targets without enabling ordinary toolbars', () => 
 	const [first, second] = actionBar.element.querySelectorAll<HTMLElement>('.ash-action-view-item');
 	assert.ok(first);
 	assert.ok(second);
-	Object.defineProperty(second, 'getBoundingClientRect', { value: () => ({ left: 100, width: 100 }) });
+	Object.defineProperty(second, 'getBoundingClientRect', {
+		value: () => ({ left: 100, width: 100 }),
+	});
 
 	first.dispatchEvent(dragEvent(dom.window, 'dragstart'));
 	second.dispatchEvent(dragEvent(dom.window, 'dragover', 175));
@@ -495,7 +488,9 @@ test('ActionBar maps vertical navigation to up and down', () => {
 
 test('ActionBar retains focus when an action view item is updated', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const actionBar = new ActionBar(dom.window.document.body, { actions: [action('first'), action('second')] });
+	const actionBar = new ActionBar(dom.window.document.body, {
+		actions: [action('first'), action('second')],
+	});
 	const second = actionBar.element.querySelector<HTMLButtonElement>('[data-action-id="second"] button');
 	assert.ok(second);
 	second.focus();
@@ -505,9 +500,7 @@ test('ActionBar retains focus when an action view item is updated', () => {
 	assert.notEqual(replacement, second);
 	assert.equal(dom.window.document.activeElement, replacement);
 	actionBar.setActions([action('first'), action('second'), action('third')]);
-	const afterStructuralChange = actionBar.element.querySelector<HTMLButtonElement>(
-		'[data-action-id="second"] button',
-	);
+	const afterStructuralChange = actionBar.element.querySelector<HTMLButtonElement>('[data-action-id="second"] button');
 	assert.ok(afterStructuralChange);
 	assert.equal(dom.window.document.activeElement, afterStructuralChange);
 	actionBar.dispose();
@@ -515,19 +508,24 @@ test('ActionBar retains focus when an action view item is updated', () => {
 });
 
 function action(id: string, enabled = true): IAction {
-	return { id, label: id, tooltip: id, enabled, run() {} };
+	return {
+		id,
+		label: id,
+		tooltip: id,
+		enabled,
+		run() {},
+	};
 }
 
 function keyboardEvent(targetWindow: { readonly KeyboardEvent: typeof KeyboardEvent }, key: string): KeyboardEvent {
-	return new targetWindow.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key });
+	return new targetWindow.KeyboardEvent('keydown', {
+		bubbles: true,
+		cancelable: true,
+		key,
+	});
 }
 
-function dragEvent(
-	targetWindow: { readonly Event: typeof Event },
-	type: string,
-	clientX = 0,
-	dataTransfer?: DataTransfer,
-): DragEvent {
+function dragEvent(targetWindow: { readonly Event: typeof Event }, type: string, clientX = 0, dataTransfer?: DataTransfer): DragEvent {
 	const event = new targetWindow.Event(type, { bubbles: true, cancelable: true }) as DragEvent;
 	Object.defineProperty(event, 'clientX', { value: clientX });
 	if (dataTransfer) Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
@@ -539,5 +537,12 @@ function testDataTransfer(): DataTransfer {
 }
 
 function managedHover(): IManagedHover {
-	return { visible: false, show() {}, hide() {}, update() {}, dispose() {}, [Symbol.dispose]() {} };
+	return {
+		visible: false,
+		show() {},
+		hide() {},
+		update() {},
+		dispose() {},
+		[Symbol.dispose]() {},
+	};
 }

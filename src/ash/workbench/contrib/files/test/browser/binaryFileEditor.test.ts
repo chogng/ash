@@ -45,9 +45,7 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 		},
 	};
 	using services = new InstantiationService();
-	services.registerSingleton(IFileService, () =>
-		createTestFileService(new BinaryEditorTestFileSystemProvider(new Uint8Array([0x48, 0x69, 0x00, 0xff]))),
-	);
+	services.registerSingleton(IFileService, () => createTestFileService(new BinaryEditorTestFileSystemProvider(new Uint8Array([0x48, 0x69, 0x00, 0xff]))));
 	registerTestComponentServices(services, dom.window.document);
 	using quickInput = new TestQuickInputService({ container: dom.window.document.body });
 	services.registerInstance(IQuickInputService, quickInput);
@@ -81,10 +79,7 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 	assert.equal(openOptions?.preferredEditorId, CODE_EDITOR_ID);
 	opened = undefined;
 	const historical = URI.parse('git-commit:/repo/revision/image.bin');
-	await pane.setInput(
-		{ resource: historical, initialBytes: new Uint8Array([0x48, 0x00, 0xff]) },
-		new AbortController().signal,
-	);
+	await pane.setInput({ resource: historical, initialBytes: new Uint8Array([0x48, 0x00, 0xff]) }, new AbortController().signal);
 	assert.match(pane.getControl()!.getModel()!.getValue(), /48 00 ff/);
 	assert.equal(dom.window.document.querySelector<HTMLButtonElement>('.ash-binary-open-with-encoding')!.hidden, true);
 	dom.window.document.querySelector<HTMLButtonElement>('.ash-binary-open-as-text')!.click();

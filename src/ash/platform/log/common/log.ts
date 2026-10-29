@@ -230,20 +230,10 @@ export class ConsoleLogger implements ILogService {
 		this.write('warn', message, argument, arguments_);
 	}
 	error(message: string | Error, argument?: unknown, ...arguments_: unknown[]): void {
-		this.write(
-			'error',
-			message instanceof Error ? message.message : message,
-			argument,
-			message instanceof Error ? [message, ...arguments_] : arguments_,
-		);
+		this.write('error', message instanceof Error ? message.message : message, argument, message instanceof Error ? [message, ...arguments_] : arguments_);
 	}
 
-	private write(
-		method: 'debug' | 'info' | 'warn' | 'error',
-		message: string,
-		argument: unknown,
-		arguments_: readonly unknown[],
-	): void {
+	private write(method: 'debug' | 'info' | 'warn' | 'error', message: string, argument: unknown, arguments_: readonly unknown[]): void {
 		const values = argument === undefined ? arguments_ : [argument, ...arguments_];
 		this.target[method](`[${this.category}] ${message}`, ...values);
 	}

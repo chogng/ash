@@ -55,8 +55,7 @@ export class WorkspaceWatcher extends Disposable {
 		this.rescanRequired = false;
 		this.watches.clear();
 		for (const folder of this.workspace.getWorkspace().folders) {
-			if (this.files.hasProvider(folder.uri))
-				this.watches.add(this.files.watch(folder.uri, { recursive: true, excludes: [] }));
+			if (this.files.hasProvider(folder.uri)) this.watches.add(this.files.watch(folder.uri, { recursive: true, excludes: [] }));
 		}
 	}
 }

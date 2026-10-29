@@ -43,20 +43,24 @@ export class OnEnterSupport {
 		this._regExpRules = opts.onEnterRules || [];
 	}
 
-	public onEnter(
-		autoIndent: EditorAutoIndentStrategy,
-		previousLineText: string,
-		beforeEnterText: string,
-		afterEnterText: string,
-	): EnterAction | null {
+	public onEnter(autoIndent: EditorAutoIndentStrategy, previousLineText: string, beforeEnterText: string, afterEnterText: string): EnterAction | null {
 		// (1): `regExpRules`
 		if (autoIndent >= EditorAutoIndentStrategy.Advanced) {
 			for (let i = 0, len = this._regExpRules.length; i < len; i++) {
 				const rule = this._regExpRules[i];
 				const regResult = [
-					{ reg: rule.beforeText, text: beforeEnterText },
-					{ reg: rule.afterText, text: afterEnterText },
-					{ reg: rule.previousLineText, text: previousLineText },
+					{
+						reg: rule.beforeText,
+						text: beforeEnterText,
+					},
+					{
+						reg: rule.afterText,
+						text: afterEnterText,
+					},
+					{
+						reg: rule.previousLineText,
+						text: previousLineText,
+					},
 				].every((obj): boolean => {
 					if (!obj.reg) {
 						return true;

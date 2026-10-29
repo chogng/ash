@@ -22,9 +22,7 @@ test(
 			const input = page.getByRole('dialog', { name: 'Git: Create Worktree', exact: true }).getByRole('textbox');
 			await input.fill('../escape');
 			await input.press('Enter');
-			await expect(
-				page.getByText('Use 1–64 letters, numbers, hyphens or underscores.', { exact: true }),
-			).toBeVisible();
+			await expect(page.getByText('Use 1–64 letters, numbers, hyphens or underscores.', { exact: true })).toBeVisible();
 			await input.fill('ui-review');
 			await workbench.dialogs.expectMessage(application, 'Git: Open Worktree', () => input.press('Enter'));
 			const primary = await realpath(cwd);
@@ -40,26 +38,17 @@ test(
 			await workbench.git.selectTitleMenu(application, ['Worktrees', 'Delete Worktree…']);
 			const picker = page.locator('.ash-quick-pick');
 			await picker.getByRole('combobox').fill(resolve(checkout));
-			await workbench.dialogs.confirm(application, 'Git: Delete Worktree', 'Delete Worktree', () =>
-				picker.getByRole('option').first().click(),
+			await workbench.dialogs.confirm(application, 'Git: Delete Worktree', 'Delete Worktree', () => picker.getByRole('option').first().click());
+			await expect(page.getByRole('region', { name: 'Notifications' }).getByRole('article').filter({ hasText: 'Could not delete worktree' })).toContainText(
+				'Check local changes, locks and session ownership.',
 			);
-			await expect(
-				page
-					.getByRole('region', { name: 'Notifications' })
-					.getByRole('article')
-					.filter({ hasText: 'Could not delete worktree' }),
-			).toContainText('Check local changes, locks and session ownership.');
 			expect(await readFile(join(checkout, 'main.ts'), 'utf8')).toBe('local edits\n');
 
 			await run('git', ['restore', '--worktree', 'main.ts'], { cwd: checkout });
 			await workbench.git.selectTitleMenu(application, ['Worktrees', 'Delete Worktree…']);
 			await picker.getByRole('combobox').fill(resolve(checkout));
-			await workbench.dialogs.confirm(application, 'Git: Delete Worktree', 'Delete Worktree', () =>
-				picker.getByRole('option').first().click(),
-			);
-			await expect
-				.poll(async () => (await run('git', ['worktree', 'list', '--porcelain'], { cwd })).stdout)
-				.not.toContain(checkout);
+			await workbench.dialogs.confirm(application, 'Git: Delete Worktree', 'Delete Worktree', () => picker.getByRole('option').first().click());
+			await expect.poll(async () => (await run('git', ['worktree', 'list', '--porcelain'], { cwd })).stdout).not.toContain(checkout);
 		} finally {
 			const inventory = (await run('git', ['worktree', 'list', '--porcelain'], { cwd })).stdout;
 			if (checkout && inventory.includes(`worktree ${checkout}\n`)) {
@@ -102,10 +91,7 @@ test(
 				})
 				.toBe(URI.file(await realpath(checkout)).fsPath);
 		} else {
-			await page
-				.getByRole('dialog', { name: 'Authorize Server Folder', exact: true })
-				.getByRole('button', { name: 'Open Folder', exact: true })
-				.click();
+			await page.getByRole('dialog', { name: 'Authorize Server Folder', exact: true }).getByRole('button', { name: 'Open Folder', exact: true }).click();
 			await page.waitForFunction(
 				path => {
 					const workspace = globalThis.ashWebWorkbenchHost?.workspace;
@@ -116,8 +102,6 @@ test(
 			await workbench.waitForReady();
 		}
 
-		await expect(
-			page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }),
-		).toBeVisible();
+		await expect(page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true })).toBeVisible();
 	},
 );

@@ -15,14 +15,12 @@ export const PICK_WORKSPACE_FOLDER_COMMAND_ID = '_workbench.pickWorkspaceFolder'
 CommandsRegistry.register(ADD_ROOT_FOLDER_COMMAND_ID, async accessor => {
 	const workspace = accessor.get(IWorkspaceContextService);
 	const current = workspace.getWorkspace();
-	const folders = await accessor
-		.get(IFileDialogService)
-		.showOpenDialog({
-			canSelectFiles: false,
-			canSelectFolders: true,
-			canSelectMany: true,
-			title: localize('workspace.addFolder', 'Add Folder to Workspace...'),
-		});
+	const folders = await accessor.get(IFileDialogService).showOpenDialog({
+		canSelectFiles: false,
+		canSelectFolders: true,
+		canSelectMany: true,
+		title: localize('workspace.addFolder', 'Add Folder to Workspace...'),
+	});
 	// A dialog belongs to the workspace in which it was opened.
 	if (!folders?.length || current !== workspace.getWorkspace()) return;
 	await accessor.get(IWorkspaceEditingService).addFolders(folders.map(uri => ({ uri })));
@@ -32,9 +30,7 @@ CommandsRegistry.register(ADD_ROOT_FOLDER_COMMAND_ID, async accessor => {
 CommandsRegistry.register(SET_ROOT_FOLDER_COMMAND_ID, async accessor => {
 	const context = accessor.get(IWorkspaceContextService);
 	const current = context.getWorkspace();
-	const folders = await accessor
-		.get(IFileDialogService)
-		.showOpenDialog({ canSelectFiles: false, canSelectFolders: true });
+	const folders = await accessor.get(IFileDialogService).showOpenDialog({ canSelectFiles: false, canSelectFolders: true });
 	if (!folders?.length || current !== context.getWorkspace()) return;
 	await accessor.get(IWorkspaceEditingService).updateFolders(
 		0,
@@ -44,33 +40,24 @@ CommandsRegistry.register(SET_ROOT_FOLDER_COMMAND_ID, async accessor => {
 });
 
 CommandsRegistry.register(PICK_WORKSPACE_FOLDER_COMMAND_ID, async (accessor, args) => {
-	if (args !== undefined && (!Array.isArray(args) || args.length > 2))
-		throw new TypeError('Invalid workspace picker arguments');
+	if (args !== undefined && (!Array.isArray(args) || args.length > 2)) throw new TypeError('Invalid workspace picker arguments');
 	const [options, token = CancellationToken.None] = (args ?? []) as readonly unknown[];
-	if (options !== undefined && (!options || typeof options !== 'object' || Array.isArray(options)))
-		throw new TypeError('Invalid workspace picker options');
+	if (options !== undefined && (!options || typeof options !== 'object' || Array.isArray(options))) throw new TypeError('Invalid workspace picker options');
 	const placeHolder = (options as { placeHolder?: unknown } | undefined)?.placeHolder;
-	if (placeHolder !== undefined && typeof placeHolder !== 'string')
-		throw new TypeError('Invalid workspace picker placeholder');
-	if (!CancellationToken.isCancellationToken(token))
-		throw new TypeError('Invalid workspace picker cancellation token');
+	if (placeHolder !== undefined && typeof placeHolder !== 'string') throw new TypeError('Invalid workspace picker placeholder');
+	if (!CancellationToken.isCancellationToken(token)) throw new TypeError('Invalid workspace picker cancellation token');
 	if (token.isCancellationRequested) return undefined;
 	const workspace = accessor.get(IWorkspaceContextService);
 	const current = workspace.getWorkspace();
 	if (!current.folders.length) return undefined;
 	const lifetime = new DisposableStore();
-	const picker = lifetime.add(
-		accessor
-			.get(IQuickInputService)
-			.createQuickPick<{ label: string; description: string; folder: IWorkspaceFolder }>(),
-	);
+	const picker = lifetime.add(accessor.get(IQuickInputService).createQuickPick<{ label: string; description: string; folder: IWorkspaceFolder }>());
 	picker.items = current.folders.map(folder => ({
 		label: folder.name,
 		description: folder.uri.scheme === 'file' ? folder.uri.fsPath : folder.uri.path,
 		folder,
 	}));
-	picker.ariaLabel = picker.placeholder =
-		placeHolder ?? localize('workspace.selectFolder', 'Select a workspace folder');
+	picker.ariaLabel = picker.placeholder = placeHolder ?? localize('workspace.selectFolder', 'Select a workspace folder');
 	return new Promise<IWorkspaceFolder | undefined>(resolve => {
 		let result: IWorkspaceFolder | undefined;
 		lifetime.add(toDisposable(() => resolve(result)));

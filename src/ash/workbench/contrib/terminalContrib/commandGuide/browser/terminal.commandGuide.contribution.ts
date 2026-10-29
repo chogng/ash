@@ -9,10 +9,7 @@ import { registerColor } from '../../../../../platform/theme/common/colorUtils.j
 import { contrastBorder } from '../../../../../platform/theme/common/colors/baseColors.js';
 import { listInactiveSelectionBackground } from '../../../../../platform/theme/common/colors/listColors.js';
 import type { ITerminalContribution, IXtermTerminal } from '../../../terminal/browser/terminal.js';
-import {
-	registerTerminalContribution,
-	type ITerminalContributionContext,
-} from '../../../terminal/browser/terminalExtensions.js';
+import { registerTerminalContribution, type ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
 import { TerminalCommandGuideSettingId } from '../common/terminalCommandGuideConfiguration.js';
 import './media/terminalCommandGuide.css';
 
@@ -26,10 +23,7 @@ export const TERMINAL_COMMAND_GUIDE_COLOR = registerColor(
 	},
 	{
 		owner: 'workbench.terminal.commandGuide',
-		description: localize(
-			'terminal.commandGuide.foreground',
-			'Color of the guide beside the hovered terminal command and its output.',
-		),
+		description: localize('terminal.commandGuide.foreground', 'Color of the guide beside the hovered terminal command and its output.'),
 	},
 );
 
@@ -100,13 +94,7 @@ class TerminalCommandGuideContribution extends Disposable implements ITerminalCo
 		this.clear();
 		const capability = this.context.instance.capabilities?.get(TerminalCapability.CommandDetection);
 		if (!capability) return;
-		for (const event of [
-			capability.onCommandStarted,
-			capability.onCommandExecuted,
-			capability.onCommandFinished,
-			capability.onCommandInvalidated,
-			capability.onCurrentCommandInvalidated,
-		]) {
+		for (const event of [capability.onCommandStarted, capability.onCommandExecuted, capability.onCommandFinished, capability.onCommandInvalidated, capability.onCurrentCommandInvalidated]) {
 			this.capabilityListeners.add(event(() => this.render()));
 		}
 	}
@@ -130,21 +118,12 @@ class TerminalCommandGuideContribution extends Disposable implements ITerminalCo
 		)
 			return;
 		const bounds = screen.element.querySelector('.xterm-screen')?.getBoundingClientRect();
-		if (
-			!bounds?.height ||
-			this.pointer.x < bounds.left ||
-			this.pointer.x >= bounds.right ||
-			this.pointer.y < bounds.top ||
-			this.pointer.y >= bounds.bottom
-		)
-			return;
+		if (!bounds?.height || this.pointer.x < bounds.left || this.pointer.x >= bounds.right || this.pointer.y < bounds.top || this.pointer.y >= bounds.bottom) return;
 		const raw = screen.raw;
 		const buffer = raw.buffer.active;
 		const rowHeight = bounds.height / raw.rows;
 		const line = buffer.viewportY + Math.floor((this.pointer.y - bounds.top) / rowHeight);
-		const command = this.context.instance.capabilities
-			?.get(TerminalCapability.CommandDetection)
-			?.getCommandForLine(line);
+		const command = this.context.instance.capabilities?.get(TerminalCapability.CommandDetection)?.getCommandForLine(line);
 		if (!command || !isFullTerminalCommand(command)) return;
 		const start = command.promptStartMarker ?? command.marker;
 		const end = command.endMarker;

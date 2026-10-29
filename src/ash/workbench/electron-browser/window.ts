@@ -1,22 +1,13 @@
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import type { INativeHostApi } from '../../platform/native/common/nativeHost.js';
-import {
-	WINDOW_ZOOM_LEVEL_SETTING,
-	WINDOW_ZOOM_PER_WINDOW_SETTING,
-	type IWindowClientSize,
-} from '../../platform/window/common/window.js';
+import { WINDOW_ZOOM_LEVEL_SETTING, WINDOW_ZOOM_PER_WINDOW_SETTING, type IWindowClientSize } from '../../platform/window/common/window.js';
 import { IOpenerService } from '../../platform/opener/common/opener.js';
 import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
 import { URI } from '../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
 import { Range } from '../../editor/common/core/range.js';
-import {
-	WINDOW_OPEN_FILES_CHANNEL,
-	WINDOW_OPEN_FILES_RESPONSE_CHANNEL,
-	validateWindowFilesRequest,
-	type IWindowFilesRequest,
-} from '../../platform/window/common/window.js';
+import { WINDOW_OPEN_FILES_CHANNEL, WINDOW_OPEN_FILES_RESPONSE_CHANNEL, validateWindowFilesRequest, type IWindowFilesRequest } from '../../platform/window/common/window.js';
 import { IEditorService } from '../services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
 import { INativeHostService } from '../common/services.js';
@@ -33,10 +24,7 @@ export class ElectronWindow extends Disposable {
 	private opening: Promise<void> = Promise.resolve();
 
 	constructor(
-		private readonly ipc: Pick<
-			typeof import('../../platform/ipc/electron-browser/rendererIpc.js'),
-			'invoke' | 'subscribe'
-		>,
+		private readonly ipc: Pick<typeof import('../../platform/ipc/electron-browser/rendererIpc.js'), 'invoke' | 'subscribe'>,
 		@IEditorService private readonly editors: IEditorService,
 		@IEditorGroupsService private readonly groups: IEditorGroupsService,
 		@INativeHostService private readonly host: INativeHostApi,
@@ -64,9 +52,7 @@ export class ElectronWindow extends Disposable {
 				return;
 			}
 			this.log.error('integrity', 'Desktop environment detection failed', error);
-			this.notifications.warn(
-				localize('integrity.failed', 'Ash could not verify its desktop environment. See the logs for details.'),
-			);
+			this.notifications.warn(localize('integrity.failed', 'Ash could not verify its desktop environment. See the logs for details.'));
 		});
 	}
 
@@ -82,12 +68,7 @@ export class ElectronWindow extends Disposable {
 		}
 		this.title.updateProperties({ isPure: result.isPure });
 		if (result.isPure === false) {
-			this.notifications.warn(
-				localize(
-					'integrity.modified',
-					'Ash installation files have changed or are missing. Reinstall Ash to restore the published files.',
-				),
-			);
+			this.notifications.warn(localize('integrity.modified', 'Ash installation files have changed or are missing. Reinstall Ash to restore the published files.'));
 		}
 	}
 
@@ -95,14 +76,8 @@ export class ElectronWindow extends Disposable {
 		this.assertNotDisposed();
 		try {
 			for (const file of request.files) {
-				const selection =
-					file.line === undefined
-						? undefined
-						: new Range(file.line, file.column ?? 1, file.line, file.column ?? 1);
-				await this.editors.openEditor(
-					{ resource: URI.parse(file.uri) },
-					{ pinned: true, selection, ignoreError: true },
-				);
+				const selection = file.line === undefined ? undefined : new Range(file.line, file.column ?? 1, file.line, file.column ?? 1);
+				await this.editors.openEditor({ resource: URI.parse(file.uri) }, { pinned: true, selection, ignoreError: true });
 			}
 			if (request.wait) {
 				this.waiting.set(request.id, request);
@@ -119,19 +94,11 @@ export class ElectronWindow extends Disposable {
 	}
 
 	private completeClosedFiles(): void {
-		const open = new Set(
-			this.groups.groups.flatMap(group =>
-				group.inputs.map(input => extUriBiasedIgnorePathCase.getComparisonKey(input.resource)),
-			),
-		);
+		const open = new Set(this.groups.groups.flatMap(group => group.inputs.map(input => extUriBiasedIgnorePathCase.getComparisonKey(input.resource))));
 		for (const [id, request] of this.waiting) {
-			if (
-				request.files.every(file => !open.has(extUriBiasedIgnorePathCase.getComparisonKey(URI.parse(file.uri))))
-			) {
+			if (request.files.every(file => !open.has(extUriBiasedIgnorePathCase.getComparisonKey(URI.parse(file.uri))))) {
 				this.waiting.delete(id);
-				void this.ipc
-					.invoke<void>(WINDOW_OPEN_FILES_RESPONSE_CHANNEL, { kind: 'closed', id })
-					.catch(error => console.error('Failed to acknowledge closed launch files', error));
+				void this.ipc.invoke<void>(WINDOW_OPEN_FILES_RESPONSE_CHANNEL, { kind: 'closed', id }).catch(error => console.error('Failed to acknowledge closed launch files', error));
 			}
 		}
 	}
@@ -150,17 +117,11 @@ export class NativeWindow extends Disposable {
 	) {
 		super();
 		const externalLinks = this.host.onDidRequestOpenExternalUri(target => {
-			void this.opener
-				.open(target, { openExternal: true, allowContributedOpeners: true })
-				.catch(onUnexpectedError);
+			void this.opener.open(target, { openExternal: true, allowContributedOpeners: true }).catch(onUnexpectedError);
 		});
 		this._register(toDisposable(() => externalLinks.dispose()));
 		const updateZoom = (level: number): void => {
-			if (
-				this.applyingConfiguredZoom ||
-				this.configuration.getValue<boolean>(WINDOW_ZOOM_PER_WINDOW_SETTING) !== false
-			)
-				return;
+			if (this.applyingConfiguredZoom || this.configuration.getValue<boolean>(WINDOW_ZOOM_PER_WINDOW_SETTING) !== false) return;
 			this.pendingZoomLevel = Math.round(level);
 			this.zoomWrite = this.zoomWrite.catch(onUnexpectedError).then(async () => {
 				const next = this.pendingZoomLevel;
@@ -176,17 +137,12 @@ export class NativeWindow extends Disposable {
 		const zoomSubscription = this.host.onDidChangeZoomLevel(updateZoom);
 		this._register(toDisposable(() => zoomSubscription.dispose()));
 		const auxiliaryZoom = this.host.onDidChangeAuxiliaryWindowState(({ state }) => {
-			if (state.zoomLevel !== this.configuration.getValue<number>(WINDOW_ZOOM_LEVEL_SETTING))
-				updateZoom(state.zoomLevel);
+			if (state.zoomLevel !== this.configuration.getValue<number>(WINDOW_ZOOM_LEVEL_SETTING)) updateZoom(state.zoomLevel);
 		});
 		this._register(toDisposable(() => auxiliaryZoom.dispose()));
 		this._register(
 			configuration.onDidChangeConfiguration(event => {
-				if (
-					(event.affectsConfiguration(WINDOW_ZOOM_LEVEL_SETTING) ||
-						event.affectsConfiguration(WINDOW_ZOOM_PER_WINDOW_SETTING)) &&
-					this.pendingZoomLevel === undefined
-				)
+				if ((event.affectsConfiguration(WINDOW_ZOOM_LEVEL_SETTING) || event.affectsConfiguration(WINDOW_ZOOM_PER_WINDOW_SETTING)) && this.pendingZoomLevel === undefined)
 					void this.applyConfiguredZoom().catch(onUnexpectedError);
 			}),
 		);

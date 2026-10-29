@@ -33,8 +33,7 @@ test('Prompt files without a complete header preserve their entire body', () => 
 });
 
 test('Prompt YAML AST preserves quoted keys, folded and literal values, maps and sequences with CRLF coordinates', () => {
-	const source =
-		'---\r\n"name": review\r\ndescription: >-\r\n  Review\r\n  changes.\r\nmetadata:\r\n  owner: "team: editor"\r\n  related: [one, two]\r\nlicense: |\r\n  Use freely.\r\n---\r\nBody';
+	const source = '---\r\n"name": review\r\ndescription: >-\r\n  Review\r\n  changes.\r\nmetadata:\r\n  owner: "team: editor"\r\n  related: [one, two]\r\nlicense: |\r\n  Use freely.\r\n---\r\nBody';
 	const header = new PromptFileParser().parse(URI.file('/skills/review/SKILL.md'), source).header!;
 	assert.deepEqual(header.errors, []);
 	assert.deepEqual(header.getAttribute('name')?.range, new Range(2, 1, 2, 15));
@@ -81,10 +80,7 @@ test('Prompt file references use Markdown grammar, exact CRLF coordinates and ex
 		{ content: 'references/guide.md', range: new Range(4, 9, 4, 28), isMarkdownLink: true },
 		{ content: 'assets/text.txt', range: new Range(4, 40, 4, 55), isMarkdownLink: false },
 	]);
-	assert.equal(
-		body.resolveFilePath('references/guide.md')?.toString(),
-		uri.with({ path: '/review/references/guide.md' }).toString(),
-	);
+	assert.equal(body.resolveFilePath('references/guide.md')?.toString(), uri.with({ path: '/review/references/guide.md' }).toString());
 	assert.equal(body.resolveFilePath('javascript:alert(1)'), undefined);
 	assert.equal(body.resolveFilePath('command:run'), undefined);
 	assert.equal(body.resolveFilePath('#heading'), undefined);
@@ -94,46 +90,24 @@ test('Prompt file references use Markdown grammar, exact CRLF coordinates and ex
 test('Pinned package references remain inside the original package, including nested references and fragments', () => {
 	const uri = URI.parse('private://skill/review/references/guide.md?source=pinned');
 	const body = new PromptFileParser().parse(uri, 'Read the guide').body!;
-	assert.equal(
-		body.resolveFilePath('../assets/text.txt#section')?.toString(),
-		uri.with({ path: '/review/assets/text.txt', fragment: 'section' }).toString(),
-	);
-	for (const path of [
-		'../../escape.md',
-		'/review/assets/text.txt',
-		'file:///host/secrets',
-		'private://skill/other/SKILL.md',
-		'https://example.com',
-		'~/secret',
-		'a\\b',
-		'a\0b',
-		'a\nb',
-	])
+	assert.equal(body.resolveFilePath('../assets/text.txt#section')?.toString(), uri.with({ path: '/review/assets/text.txt', fragment: 'section' }).toString());
+	for (const path of ['../../escape.md', '/review/assets/text.txt', 'file:///host/secrets', 'private://skill/other/SKILL.md', 'https://example.com', '~/secret', 'a\\b', 'a\0b', 'a\nb'])
 		assert.equal(body.resolveFilePath(path), undefined, path);
 	const local = new PromptFileParser().parse(URI.file('/work/review/SKILL.md'), 'Local').body!;
 	assert.equal(local.resolveFilePath('../shared.md')?.fsPath, '/work/shared.md');
 });
 
 test('YAML key ranges preserve quoted colons and missing scalars independently from empty text', () => {
-	const header = new PromptFileParser().parse(
-		URI.file('/work/review/SKILL.md'),
-		'---\n"custom:key": text\nlicense:\nmetadata: { owner: "" }\n---',
-	).header!;
+	const header = new PromptFileParser().parse(URI.file('/work/review/SKILL.md'), '---\n"custom:key": text\nlicense:\nmetadata: { owner: "" }\n---').header!;
 	assert.deepEqual(header.attributes[0].keyRange, new Range(2, 1, 2, 13));
 	const license = header.getAttribute('license')!.value;
 	assert.equal(license.type === 'scalar' && license.missing, true);
 	const metadata = header.getAttribute('metadata')!.value;
-	assert.equal(
-		metadata.type === 'map' &&
-			metadata.properties[0].value.type === 'scalar' &&
-			metadata.properties[0].value.missing,
-		undefined,
-	);
+	assert.equal(metadata.type === 'map' && metadata.properties[0].value.type === 'scalar' && metadata.properties[0].value.missing, undefined);
 });
 
 test('Prompt YAML keeps null-like scalars distinct from quoted values and unsupported syntax', () => {
-	const content =
-		'---\r\nempty:\r\nnullValue: null\r\ntilde: ~\r\nquotedEmpty: ""\r\nquotedNull: \'null\'\r\ntagged: !!str null\r\nanchored: &name plain\r\nalias: *name\r\n---';
+	const content = '---\r\nempty:\r\nnullValue: null\r\ntilde: ~\r\nquotedEmpty: ""\r\nquotedNull: \'null\'\r\ntagged: !!str null\r\nanchored: &name plain\r\nalias: *name\r\n---';
 	const header = new PromptFileParser().parse(URI.file('/work/SKILL.md'), content).header!;
 	const values = header.attributes.map(attribute => attribute.value);
 	assert.deepEqual(

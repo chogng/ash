@@ -14,11 +14,7 @@ const MAX_HTML_CLIPBOARD_CHARACTERS = 1_000_000;
  * DOM nodes, styles, event handlers, or arbitrary attributes into the document
  * model; unsupported elements contribute only their textual descendants.
  */
-export function createDocumentFragmentFromHtml(
-	ownerDocument: Document,
-	schema: DocumentSchema,
-	html: string,
-): DocumentFragment | undefined {
+export function createDocumentFragmentFromHtml(ownerDocument: Document, schema: DocumentSchema, html: string): DocumentFragment | undefined {
 	if (typeof html !== 'string' || html.length === 0 || html.length > MAX_HTML_CLIPBOARD_CHARACTERS) return undefined;
 	const sanitized = sanitizeHtmlToFragment(html, { ownerDocument, config: {} });
 	const content = blocksFromNodes(sanitized.childNodes, schema);
@@ -112,13 +108,7 @@ function blocksFromNodes(nodes: NodeListOf<ChildNode> | readonly ChildNode[], sc
 	return blocks;
 }
 
-function appendContainerBlocks(
-	target: DocumentNode[],
-	element: HTMLElement,
-	schema: DocumentSchema,
-	type: 'paragraph' | 'heading',
-	attrs: DocumentAttributes,
-): void {
+function appendContainerBlocks(target: DocumentNode[], element: HTMLElement, schema: DocumentSchema, type: 'paragraph' | 'heading', attrs: DocumentAttributes): void {
 	const inline: DocumentNode[] = [];
 	appendInlineNodes(schema, element.childNodes, [], inline, element.localName.toLowerCase() === 'pre');
 	const block = createNode(schema, type, inline, attrs);
@@ -145,12 +135,7 @@ function appendList(target: DocumentNode[], element: HTMLElement, schema: Docume
 	if (items.length === 0) return;
 	const type = element.localName.toLowerCase() === 'ol' ? 'orderedList' : 'bulletList';
 	const order = Number(element.getAttribute('start') ?? '1');
-	const list = createNode(
-		schema,
-		type,
-		items,
-		type === 'orderedList' && Number.isSafeInteger(order) && order > 0 ? { order } : {},
-	);
+	const list = createNode(schema, type, items, type === 'orderedList' && Number.isSafeInteger(order) && order > 0 ? { order } : {});
 	if (list) target.push(list);
 	else target.push(...items.flatMap(item => item.content));
 }
@@ -189,13 +174,7 @@ function tableRows(element: HTMLElement): readonly HTMLElement[] {
 	return rows;
 }
 
-function appendInlineNodes(
-	schema: DocumentSchema,
-	nodes: NodeListOf<ChildNode> | readonly ChildNode[],
-	marks: readonly DocumentMark[],
-	target: DocumentNode[],
-	preserveWhitespace = false,
-): void {
+function appendInlineNodes(schema: DocumentSchema, nodes: NodeListOf<ChildNode> | readonly ChildNode[], marks: readonly DocumentMark[], target: DocumentNode[], preserveWhitespace = false): void {
 	for (const node of nodes) {
 		if (node.nodeType === 3) {
 			appendText(schema, target, node.textContent ?? '', marks, preserveWhitespace);
@@ -226,16 +205,8 @@ function appendInlineNodes(
 	}
 }
 
-function appendText(
-	schema: DocumentSchema,
-	target: DocumentNode[],
-	value: string,
-	marks: readonly DocumentMark[],
-	preserveWhitespace = false,
-): void {
-	const normalized = preserveWhitespace
-		? value.replaceAll('\r\n', '\n').replaceAll('\r', '\n')
-		: value.replace(/\s+/gu, ' ');
+function appendText(schema: DocumentSchema, target: DocumentNode[], value: string, marks: readonly DocumentMark[], preserveWhitespace = false): void {
+	const normalized = preserveWhitespace ? value.replaceAll('\r\n', '\n').replaceAll('\r', '\n') : value.replace(/\s+/gu, ' ');
 	if (normalized.length === 0 || (normalized === ' ' && target.length === 0)) return;
 	const lines = normalized.split('\n');
 	for (let index = 0; index < lines.length; index += 1) {
@@ -244,11 +215,7 @@ function appendText(
 	}
 }
 
-function markForElement(
-	schema: DocumentSchema,
-	element: HTMLElement,
-	marks: readonly DocumentMark[],
-): readonly DocumentMark[] {
+function markForElement(schema: DocumentSchema, element: HTMLElement, marks: readonly DocumentMark[]): readonly DocumentMark[] {
 	const markSpecs = schema.getMarkSpecs();
 	let mark: DocumentMark | undefined;
 	switch (element.localName.toLowerCase()) {
@@ -269,23 +236,11 @@ function markForElement(
 			break;
 		}
 	}
-	if (
-		!mark ||
-		marks.some(
-			candidate =>
-				candidate.type === mark!.type && JSON.stringify(candidate.attrs) === JSON.stringify(mark!.attrs),
-		)
-	)
-		return marks;
+	if (!mark || marks.some(candidate => candidate.type === mark!.type && JSON.stringify(candidate.attrs) === JSON.stringify(mark!.attrs))) return marks;
 	return Object.freeze([...marks, Object.freeze({ type: mark.type, attrs: Object.freeze({ ...mark.attrs }) })]);
 }
 
-function createNode(
-	schema: DocumentSchema,
-	type: string,
-	content: readonly DocumentNode[],
-	attrs: DocumentAttributes = {},
-): DocumentNode | undefined {
+function createNode(schema: DocumentSchema, type: string, content: readonly DocumentNode[], attrs: DocumentAttributes = {}): DocumentNode | undefined {
 	if (!schema.getNodeSpec(type)) return undefined;
 	try {
 		return schema.createNode(type, { attrs, content });
@@ -332,8 +287,7 @@ function safeImageSource(value: string | null): string | undefined {
 	if (/^data:image\/(?:gif|jpeg|png|webp);base64,[a-z0-9+/=\s]+$/iu.test(source)) return source;
 	try {
 		const url = new URL(source, 'https://stanza.invalid/');
-		if (url.protocol === 'http:' || url.protocol === 'https:' || url.origin === 'https://stanza.invalid')
-			return source;
+		if (url.protocol === 'http:' || url.protocol === 'https:' || url.origin === 'https://stanza.invalid') return source;
 	} catch {
 		return undefined;
 	}

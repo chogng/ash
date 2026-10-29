@@ -9,11 +9,7 @@ interface PaintBounds {
 	height: number;
 }
 const textures = new WeakMap<DesignPaint, Map<string, string>>();
-function element<K extends keyof SVGElementTagNameMap>(
-	document: Document,
-	tag: K,
-	attributes: Record<string, string | number> = {},
-): SVGElementTagNameMap[K] {
+function element<K extends keyof SVGElementTagNameMap>(document: Document, tag: K, attributes: Record<string, string | number> = {}): SVGElementTagNameMap[K] {
 	const value = document.createElementNS(ns, tag);
 	for (const [key, item] of Object.entries(attributes)) {
 		value.setAttribute(key, String(item));
@@ -42,10 +38,7 @@ function texture(document: Document, paint: DesignPaint, width: number, height: 
 	const image = context.createImageData(w, h);
 	for (let y = 0; y < h; y++) {
 		for (let x = 0; x < w; x++) {
-			const color = sampleDesignPaint(
-				paint,
-				paint.type === 'solid' ? 0 : designGradientPosition(paint, { x: (x + 0.5) / w, y: (y + 0.5) / h }),
-			);
+			const color = sampleDesignPaint(paint, paint.type === 'solid' ? 0 : designGradientPosition(paint, { x: (x + 0.5) / w, y: (y + 0.5) / h }));
 			const index = (y * w + x) * 4;
 			for (let channel = 0; channel < 4; channel++) {
 				image.data[index + channel] = color[channel];
@@ -60,11 +53,7 @@ function texture(document: Document, paint: DesignPaint, width: number, height: 
 	cache.set(key, result);
 	return result;
 }
-function paintServer(
-	document: Document,
-	paint: DesignPaint,
-	bounds: PaintBounds,
-): { fill: string; definition?: SVGElement } {
+function paintServer(document: Document, paint: DesignPaint, bounds: PaintBounds): { fill: string; definition?: SVGElement } {
 	if (paint.type === 'solid') {
 		return { fill: paint.color };
 	}
@@ -85,10 +74,7 @@ function paintServer(
 		return { fill: `url(#${id})`, definition: pattern };
 	}
 	const [a, b, c] = paint.handles;
-	const gradient =
-		paint.type === 'linear'
-			? element(document, 'linearGradient', { x1: 0, y1: 0, x2: 1, y2: 0 })
-			: element(document, 'radialGradient', { cx: 0, cy: 0, r: 1 });
+	const gradient = paint.type === 'linear' ? element(document, 'linearGradient', { x1: 0, y1: 0, x2: 1, y2: 0 }) : element(document, 'radialGradient', { cx: 0, cy: 0, r: 1 });
 	gradient.id = id;
 	gradient.setAttribute('gradientUnits', 'userSpaceOnUse');
 	gradient.setAttribute('color-interpolation', 'sRGB');
@@ -122,11 +108,7 @@ export function designPaintBackground(document: Document, paint: DesignPaint, wi
 }
 /** Chromium lacks plus-darker. A backdrop filter computes max(source + backdrop - 1, 0)
  * in sRGB, then restores source coverage, including transparent gradients and an empty backdrop. */
-export function renderDesignPlusDarker(
-	document: Document,
-	source: SVGGraphicsElement,
-	bounds: PaintBounds,
-): SVGGElement {
+export function renderDesignPlusDarker(document: Document, source: SVGGraphicsElement, bounds: PaintBounds): SVGGElement {
 	const group = element(document, 'g'),
 		definitions = element(document, 'defs'),
 		filterId = `blend-filter-${generateUuid()}`;
@@ -179,9 +161,7 @@ export function renderDesignPlusDarker(
 			result: 'burn',
 		}),
 	);
-	filter.append(
-		element(document, 'feComposite', { in: 'burn', in2: 'paint', operator: 'in', result: 'coveredPaint' }),
-	);
+	filter.append(element(document, 'feComposite', { in: 'burn', in2: 'paint', operator: 'in', result: 'coveredPaint' }));
 	filter.append(
 		element(document, 'feComposite', {
 			in: 'coveredPaint',
@@ -259,11 +239,7 @@ export function applyDesignPaints(base: SVGGraphicsElement, shape: DesignShape):
 	let root = base;
 	if (shape.fills !== undefined) {
 		const targets: SVGGraphicsElement[] =
-			container || base.tagName === 'g'
-				? [...base.querySelectorAll<SVGGraphicsElement>(':scope > [data-design-fill]')]
-				: base.getAttribute('fill') === 'none'
-					? []
-					: [base];
+			container || base.tagName === 'g' ? [...base.querySelectorAll<SVGGraphicsElement>(':scope > [data-design-fill]')] : base.getAttribute('fill') === 'none' ? [] : [base];
 		if (targets.length) {
 			if (targets[0] === base) {
 				root = element(document, 'g');
@@ -333,11 +309,7 @@ export function applyDesignPaints(base: SVGGraphicsElement, shape: DesignShape):
 	return root;
 }
 
-export function applyDesignLayerBlend(
-	root: SVGGraphicsElement,
-	shape: DesignShape,
-	layerBounds?: PaintBounds,
-): SVGGraphicsElement {
+export function applyDesignLayerBlend(root: SVGGraphicsElement, shape: DesignShape, layerBounds?: PaintBounds): SVGGraphicsElement {
 	const document = root.ownerDocument;
 	if (shape.blendMode === 'plus-darker') {
 		const placed = layerBounds ?? { x: shape.x, y: shape.y, width: shape.width, height: shape.height },

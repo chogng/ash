@@ -85,23 +85,16 @@ export class PartsSplash extends Disposable {
 			const fill = Color.Format.CSS.parse(style.backgroundColor)?.flatten(background) ?? background;
 			const borders = ['top', 'right', 'bottom', 'left'].map(side => ({
 				width: Number.parseFloat(style.getPropertyValue(`border-${side}-width`)) || 0,
-				color: Color.Format.CSS.formatHex(
-					Color.Format.CSS.parse(style.getPropertyValue(`border-${side}-color`))?.flatten(fill) ?? fill,
-				),
+				color: Color.Format.CSS.formatHex(Color.Format.CSS.parse(style.getPropertyValue(`border-${side}-color`))?.flatten(fill) ?? fill),
 				style: style.getPropertyValue(`border-${side}-style`) || 'none',
 			}));
-			const borderRadii = ['top-left', 'top-right', 'bottom-right', 'bottom-left'].map(
-				(corner): readonly [number, number] => {
-					const [horizontal, vertical = horizontal] = (
-						style.getPropertyValue(`border-${corner}-radius`) || '0'
-					).split(/\s+/);
-					// Computed radii may retain percentages. Resolve each axis against the original border box;
-					// the browser applies the shared overlap reduction when drawing all four corners.
-					const resolve = (value: string, size: number): number =>
-						(Number.parseFloat(value) || 0) * (value.endsWith('%') ? size / 100 : 1);
-					return [resolve(horizontal, rect.width), resolve(vertical, rect.height)];
-				},
-			);
+			const borderRadii = ['top-left', 'top-right', 'bottom-right', 'bottom-left'].map((corner): readonly [number, number] => {
+				const [horizontal, vertical = horizontal] = (style.getPropertyValue(`border-${corner}-radius`) || '0').split(/\s+/);
+				// Computed radii may retain percentages. Resolve each axis against the original border box;
+				// the browser applies the shared overlap reduction when drawing all four corners.
+				const resolve = (value: string, size: number): number => (Number.parseFloat(value) || 0) * (value.endsWith('%') ? size / 100 : 1);
+				return [resolve(horizontal, rect.width), resolve(vertical, rect.height)];
+			});
 			partBounds.push({
 				left,
 				top,
@@ -113,19 +106,12 @@ export class PartsSplash extends Disposable {
 				borders,
 			});
 		}
-		return partBounds.length
-			? { layoutInfo: { version: 2, width: ownerWindow.innerWidth, height: ownerWindow.innerHeight, partBounds } }
-			: {};
+		return partBounds.length ? { layoutInfo: { version: 2, width: ownerWindow.innerWidth, height: ownerWindow.innerHeight, partBounds } } : {};
 	}
 }
 
 /** Keep only resolved paint data, rather than persisting CSS that could load external resources. */
-function captureBackgroundGradient(
-	image: string,
-	width: number,
-	height: number,
-	background: Color,
-): Pick<NonNullable<IPartsSplash['layoutInfo']>['partBounds'][number], 'backgroundGradient'> {
+function captureBackgroundGradient(image: string, width: number, height: number, background: Color): Pick<NonNullable<IPartsSplash['layoutInfo']>['partBounds'][number], 'backgroundGradient'> {
 	const gradient = /^linear-gradient\((to right|to bottom|to left|to top|-?[\d.]+deg),\s*(.*)\)$/.exec(image);
 	if (!gradient) return {};
 	const directions: Readonly<Record<string, number>> = {
@@ -140,9 +126,7 @@ function captureBackgroundGradient(
 	const stops: { color: string; offset: number }[] = [];
 	// Computed rgb()/rgba() colors contain commas of their own, but no nested functions.
 	for (const entry of gradient[2].split(/,(?![^()]*\))/)) {
-		const stop = /^\s*(rgba?\([^)]*\)|#[\da-f]+|[a-z]+)\s+(-?[\d.]+(?:px|%))(?:\s+(-?[\d.]+(?:px|%)))?\s*$/i.exec(
-			entry,
-		);
+		const stop = /^\s*(rgba?\([^)]*\)|#[\da-f]+|[a-z]+)\s+(-?[\d.]+(?:px|%))(?:\s+(-?[\d.]+(?:px|%)))?\s*$/i.exec(entry);
 		const color = stop && Color.Format.CSS.parse(stop[1]);
 		if (!stop || !color) return {};
 		for (const position of stop.slice(2).filter((value): value is string => value !== undefined)) {

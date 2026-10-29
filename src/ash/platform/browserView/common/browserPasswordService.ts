@@ -1,11 +1,7 @@
 import { createDecorator } from '../../instantiation/common/instantiation.js';
 import { Event } from '../../../base/common/event.js';
 import { Registry } from '../../registry/common/platform.js';
-import {
-	ConfigurationScope,
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../configuration/common/configurationRegistry.js';
 import { localize } from '../../../nls.js';
 
 export const IBrowserPasswordService = createDecorator<IBrowserPasswordService>('browserPasswordService');

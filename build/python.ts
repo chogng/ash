@@ -14,17 +14,10 @@ const currentHost: PythonHost = { platform: process.platform, environment: proce
 export function pythonCommand(args: string[], host: PythonHost = currentHost): { command: string; args: string[] } {
 	const configured = host.environment.PYTHON;
 	if (configured) return { command: configured, args };
-	const repositoryPython = resolve(
-		import.meta.dirname,
-		'../scripts/.venv',
-		host.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python',
-	);
+	const repositoryPython = resolve(import.meta.dirname, '../scripts/.venv', host.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
 	if (host.fileExists(repositoryPython) || host.platform === 'win32') return { command: repositoryPython, args };
 	if (host.platform === 'darwin') {
-		for (const candidate of [
-			'/opt/homebrew/opt/python@3.12/libexec/bin/python3',
-			'/usr/local/opt/python@3.12/libexec/bin/python3',
-		]) {
+		for (const candidate of ['/opt/homebrew/opt/python@3.12/libexec/bin/python3', '/usr/local/opt/python@3.12/libexec/bin/python3']) {
 			if (host.fileExists(candidate)) return { command: candidate, args };
 		}
 	}
@@ -32,10 +25,7 @@ export function pythonCommand(args: string[], host: PythonHost = currentHost): {
 }
 
 /** Keep compiler and helper descendants in the same cancellation lifetime as their Python builder. */
-export async function runPython(
-	arguments_: string[],
-	options: { cwd: string; environment?: NodeJS.ProcessEnv; operation: string; signal?: AbortSignal },
-): Promise<void> {
+export async function runPython(arguments_: string[], options: { cwd: string; environment?: NodeJS.ProcessEnv; operation: string; signal?: AbortSignal }): Promise<void> {
 	const { signal } = options;
 	signal?.throwIfAborted();
 	const run = new ProcessRun(options.cwd, undefined, 5_000);
@@ -61,14 +51,7 @@ export async function runPython(
 			child.once('error', reject);
 			child.once('close', (code, termination) => {
 				if (code === 0) resolvePromise();
-				else
-					reject(
-						new Error(
-							termination
-								? `${options.operation} stopped by ${termination}`
-								: `${options.operation} exited with status ${code ?? 'unknown'}`,
-						),
-					);
+				else reject(new Error(termination ? `${options.operation} stopped by ${termination}` : `${options.operation} exited with status ${code ?? 'unknown'}`));
 			});
 		});
 		// Ownership discovery can yield while a failed spawn already rejects.

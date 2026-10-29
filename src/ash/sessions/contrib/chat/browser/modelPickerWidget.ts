@@ -1,21 +1,12 @@
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { isReducedMotion } from '../../../../base/browser/ui/animations/animations.js';
-import {
-	AnchorAlignment,
-	AnchorPosition,
-	ContextViewFocusRestore,
-} from '../../../../base/browser/ui/contextview/contextview.js';
+import { AnchorAlignment, AnchorPosition, ContextViewFocusRestore } from '../../../../base/browser/ui/contextview/contextview.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { createUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
@@ -70,11 +61,7 @@ export class ModelPickerWidget extends Disposable {
 				}
 			}),
 		);
-		this._register(
-			addDisposableListener(this.button, 'click', event =>
-				this.popup ? this.hide() : this.show(event.detail === 0),
-			),
-		);
+		this._register(addDisposableListener(this.button, 'click', event => (this.popup ? this.hide() : this.show(event.detail === 0))));
 		this._register(
 			addDisposableListener(this.button, 'keydown', event => {
 				if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -98,26 +85,10 @@ export class ModelPickerWidget extends Disposable {
 		const model = presentation.models.find(model => model.id === presentation.selectedModel);
 		const thinking = this.thinking;
 		const level = thinking?.levels.find(level => level.id === thinking.selectedLevel);
-		const modelLabel = localize(
-			'sessions.modelPicker.chooseModel',
-			'Choose model: {0}',
-			model?.title ?? localize('sessions.modelPicker.model', 'Model'),
-		);
+		const modelLabel = localize('sessions.modelPicker.chooseModel', 'Choose model: {0}', model?.title ?? localize('sessions.modelPicker.model', 'Model'));
 		this.label.textContent = level?.label ?? model?.title ?? localize('sessions.modelPicker.model', 'Model');
-		this.button.title = thinking
-			? localize('sessions.modelPicker.modelAndThinking', '{0} · {1}', model?.title ?? '', this.label.textContent)
-			: modelLabel;
-		this.button.setAttribute(
-			'aria-label',
-			thinking
-				? localize(
-						'sessions.modelPicker.chooseThinking',
-						'Thinking level: {0}. Model: {1}',
-						this.label.textContent,
-						model?.title ?? '',
-					)
-				: modelLabel,
-		);
+		this.button.title = thinking ? localize('sessions.modelPicker.modelAndThinking', '{0} · {1}', model?.title ?? '', this.label.textContent) : modelLabel;
+		this.button.setAttribute('aria-label', thinking ? localize('sessions.modelPicker.chooseThinking', 'Thinking level: {0}. Model: {1}', this.label.textContent, model?.title ?? '') : modelLabel);
 		this.button.setAttribute('aria-haspopup', this.popup?.getAttribute('role') ?? (thinking ? 'dialog' : 'menu'));
 		this.button.disabled = presentation.disabled || !presentation.models.length;
 		if (this.button.disabled || previous.models !== presentation.models) {
@@ -135,11 +106,7 @@ export class ModelPickerWidget extends Disposable {
 
 	private get thinking(): ModelPickerPresentation['thinking'] {
 		const thinking = this.presentation.thinking;
-		return thinking &&
-			thinking.levels.length > 0 &&
-			thinking.levels.some(level => level.id === thinking.selectedLevel)
-			? thinking
-			: undefined;
+		return thinking && thinking.levels.length > 0 && thinking.levels.some(level => level.id === thinking.selectedLevel) ? thinking : undefined;
 	}
 
 	private show(keyboard: boolean): void {
@@ -176,12 +143,7 @@ export class ModelPickerWidget extends Disposable {
 			view = next;
 			popup.dataset.view = next;
 			popup.setAttribute('role', next === 'thinking' ? 'dialog' : 'menu');
-			popup.setAttribute(
-				'aria-label',
-				next === 'thinking'
-					? localize('sessions.modelPicker.thinking', 'Thinking level')
-					: localize('sessions.modelPicker.models', 'Choose model'),
-			);
+			popup.setAttribute('aria-label', next === 'thinking' ? localize('sessions.modelPicker.thinking', 'Thinking level') : localize('sessions.modelPicker.models', 'Choose model'));
 			this.button.setAttribute('aria-haspopup', popup.getAttribute('role')!);
 			thinkingPage.inert = next !== 'thinking';
 			modelsPage.inert = next !== 'models';
@@ -211,9 +173,7 @@ export class ModelPickerWidget extends Disposable {
 				if (event.target !== popup || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
 					return;
 				}
-				const controls = (view === 'thinking' ? thinkingPage : modelsPage).querySelectorAll<HTMLElement>(
-					'button:not(:disabled), input:not(:disabled)',
-				);
+				const controls = (view === 'thinking' ? thinkingPage : modelsPage).querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)');
 				event.preventDefault();
 				(event.key === 'ArrowUp' || event.key === 'End' ? controls[controls.length - 1] : controls[0])?.focus();
 			}),
@@ -252,10 +212,7 @@ export class ModelPickerWidget extends Disposable {
 		}
 	}
 
-	private renderThinking(
-		popup: HTMLElement,
-		openModels: (event: MouseEvent) => void,
-	): { focus(): HTMLElement; refresh(): void } {
+	private renderThinking(popup: HTMLElement, openModels: (event: MouseEvent) => void): { focus(): HTMLElement; refresh(): void } {
 		const models = h(popup.ownerDocument, 'button');
 		models.type = 'button';
 		models.className = 'ash-sessions-model-picker-heading';
@@ -323,10 +280,7 @@ export class ModelPickerWidget extends Disposable {
 			}
 			Array.from(ticks.children).forEach((tick, i) => tick.setAttribute('data-selected', String(i <= index)));
 			if (pointer === undefined) {
-				track.style.setProperty(
-					'--ash-model-picker-position',
-					String(levels.length > 1 ? index / (levels.length - 1) : 0),
-				);
+				track.style.setProperty('--ash-model-picker-position', String(levels.length > 1 ? index / (levels.length - 1) : 0));
 			}
 		};
 		refresh();
@@ -407,10 +361,7 @@ export class ModelPickerWidget extends Disposable {
 		return { focus: () => models, refresh };
 	}
 
-	private renderModels(
-		popup: HTMLElement,
-		select: (model: string, keyboard: boolean) => void,
-	): { focus(): HTMLElement; refresh(): void } {
+	private renderModels(popup: HTMLElement, select: (model: string, keyboard: boolean) => void): { focus(): HTMLElement; refresh(): void } {
 		const buttons: HTMLButtonElement[] = [];
 		for (const model of this.presentation.models) {
 			const button = h(popup.ownerDocument, 'button');
@@ -430,9 +381,7 @@ export class ModelPickerWidget extends Disposable {
 			check.style.visibility = checked ? 'visible' : 'hidden';
 			popup.append(button);
 			buttons.push(button);
-			this.popupResources.add(
-				addDisposableListener(button, 'click', event => select(model.id, event.detail === 0)),
-			);
+			this.popupResources.add(addDisposableListener(button, 'click', event => select(model.id, event.detail === 0)));
 		}
 		this.popupResources.add(
 			addDisposableListener(popup, 'keydown', event => {
@@ -509,22 +458,10 @@ export class ModelPickerWidget extends Disposable {
 									? help
 									: [
 											...this.presentation.models.map(model =>
-												model.id === this.presentation.selectedModel
-													? localize(
-															'sessions.modelPicker.selected',
-															'{0}, selected',
-															model.title,
-														)
-													: model.title,
+												model.id === this.presentation.selectedModel ? localize('sessions.modelPicker.selected', '{0}, selected', model.title) : model.title,
 											),
 											...(this.thinking?.levels.map(level =>
-												level.id === this.thinking?.selectedLevel
-													? localize(
-															'sessions.modelPicker.selected',
-															'{0}, selected',
-															level.label,
-														)
-													: level.label,
+												level.id === this.thinking?.selectedLevel ? localize('sessions.modelPicker.selected', '{0}, selected', level.label) : level.label,
 											) ?? []),
 										].join('\n'),
 							() => {

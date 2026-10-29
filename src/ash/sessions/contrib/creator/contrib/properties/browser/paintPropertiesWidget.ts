@@ -7,14 +7,7 @@ import { generateUuid } from '../../../../../../base/common/uuid.js';
 import { localize } from '../../../../../../nls.js';
 import type { DesignDocumentController } from '../../../browser/designDocumentController.js';
 import type { DocumentCommands } from '../../../common/commands/documentCommands.js';
-import {
-	createDesignPaint,
-	designBlendModes,
-	designPaints,
-	sampleDesignPaint,
-	type DesignBlendMode,
-	type DesignPaint,
-} from '../../../common/model/designPaint.js';
+import { createDesignPaint, designBlendModes, designPaints, sampleDesignPaint, type DesignBlendMode, type DesignPaint } from '../../../common/model/designPaint.js';
 import { flattenDesignShapes } from '../../../common/model/document.js';
 import type { DesignSelection } from '../../../common/selection.js';
 
@@ -31,14 +24,7 @@ export class PaintPropertiesWidget extends Disposable {
 	) {
 		super();
 		this.domNode = h(document, 'div', { className: 'ash-design-property-fields ash-design-property-wide' });
-		const select = (
-			label: string,
-			options: readonly (readonly [string, string])[],
-			value: () => string,
-			change: (value: string) => void,
-			visible = () => true,
-			enabled = () => true,
-		) => {
+		const select = (label: string, options: readonly (readonly [string, string])[], value: () => string, change: (value: string) => void, visible = () => true, enabled = () => true) => {
 			const input = h(document, 'select', { attributes: { 'aria-label': label } });
 			const row = h(document, 'label', { className: 'ash-design-property-wide' }, label, input);
 			this.domNode.append(row);
@@ -58,14 +44,7 @@ export class PaintPropertiesWidget extends Disposable {
 			});
 			return input;
 		};
-		const number = (
-			label: string,
-			value: () => number | undefined,
-			change: (value: number) => void,
-			visible = () => true,
-			min = 0,
-			max = 100,
-		) => {
+		const number = (label: string, value: () => number | undefined, change: (value: number) => void, visible = () => true, min = 0, max = 100) => {
 			const input = h(document, 'input', {
 				properties: { type: 'number', min: String(min), max: String(max), step: 'any' },
 				attributes: { 'aria-label': label },
@@ -98,13 +77,7 @@ export class PaintPropertiesWidget extends Disposable {
 				}
 			});
 		};
-		const action = (
-			label: string,
-			run: () => void,
-			enabled: () => boolean,
-			pressed?: () => boolean,
-			visible = () => this.canFill,
-		) => {
+		const action = (label: string, run: () => void, enabled: () => boolean, pressed?: () => boolean, visible = () => this.canFill) => {
 			const button = this._register(
 				new Button(this.domNode, {
 					...defaultButtonStyles,
@@ -128,10 +101,7 @@ export class PaintPropertiesWidget extends Disposable {
 		};
 		select(
 			localize('sessions.design.layerBlend', 'Layer blend mode'),
-			[
-				['pass-through', blendLabel('pass-through')],
-				...designBlendModes.map(mode => [mode, blendLabel(mode)] as const),
-			],
+			[['pass-through', blendLabel('pass-through')], ...designBlendModes.map(mode => [mode, blendLabel(mode)] as const)],
 			() => this.shape?.blendMode ?? 'pass-through',
 			value => {
 				const shape = this.shape;
@@ -162,12 +132,7 @@ export class PaintPropertiesWidget extends Disposable {
 		this.updates.push(() => {
 			paints.replaceChildren(
 				...this.paints.map((paint, index) =>
-					h(
-						document,
-						'option',
-						{ properties: { value: paint.id } },
-						localize('sessions.design.paintLayerName', '{0}: {1}', index + 1, this.typeLabel(paint.type)),
-					),
+					h(document, 'option', { properties: { value: paint.id } }, localize('sessions.design.paintLayerName', '{0}: {1}', index + 1, this.typeLabel(paint.type))),
 				),
 			);
 			paints.value = this.paint?.id ?? '';
@@ -188,9 +153,7 @@ export class PaintPropertiesWidget extends Disposable {
 				const copy = {
 					...paint,
 					id: generateUuid(),
-					...(paint.type !== 'solid'
-						? { stops: paint.stops.map(stop => ({ ...stop, id: generateUuid() })) }
-						: {}),
+					...(paint.type !== 'solid' ? { stops: paint.stops.map(stop => ({ ...stop, id: generateUuid() })) } : {}),
 				};
 				const values = this.paints.slice();
 				values.splice(values.indexOf(paint), 0, copy);
@@ -219,11 +182,7 @@ export class PaintPropertiesWidget extends Disposable {
 					[paints[index], paints[index + direction]] = [paints[index + direction], paints[index]];
 					this.setPaints(paints);
 				},
-				() =>
-					this.canFill &&
-					!!this.paint &&
-					this.paints.indexOf(this.paint) + direction >= 0 &&
-					this.paints.indexOf(this.paint) + direction < this.paints.length,
+				() => this.canFill && !!this.paint && this.paints.indexOf(this.paint) + direction >= 0 && this.paints.indexOf(this.paint) + direction < this.paints.length,
 			);
 		}
 		const visibleLabel = localize('sessions.design.paintVisible', 'Fill visible');
@@ -255,19 +214,14 @@ export class PaintPropertiesWidget extends Disposable {
 				if (!paint) {
 					return;
 				}
-				const next = createDesignPaint(
-					value as DesignPaint['type'],
-					paint.type === 'solid' ? paint.color : paint.stops[0].color,
-				);
+				const next = createDesignPaint(value as DesignPaint['type'], paint.type === 'solid' ? paint.color : paint.stops[0].color);
 				this.edit({
 					...next,
 					id: paint.id,
 					...(paint.opacity !== undefined ? { opacity: paint.opacity } : {}),
 					...(paint.visible !== undefined ? { visible: paint.visible } : {}),
 					...(paint.blendMode !== undefined ? { blendMode: paint.blendMode } : {}),
-					...(next.type !== 'solid' && paint.type !== 'solid'
-						? { stops: paint.stops, handles: paint.handles }
-						: {}),
+					...(next.type !== 'solid' && paint.type !== 'solid' ? { stops: paint.stops, handles: paint.handles } : {}),
 				});
 				this.selection.editingGradient = next.type !== 'solid';
 				this.selection.editingBlur = false;
@@ -309,17 +263,7 @@ export class PaintPropertiesWidget extends Disposable {
 		this.updates.push(() => {
 			stops.replaceChildren(
 				...(this.gradient?.stops ?? []).map((stop, index) =>
-					h(
-						document,
-						'option',
-						{ properties: { value: stop.id } },
-						localize(
-							'sessions.design.gradientStopName',
-							'{0}: {1}%',
-							index + 1,
-							Math.round(stop.position * 10000) / 100,
-						),
-					),
+					h(document, 'option', { properties: { value: stop.id } }, localize('sessions.design.gradientStopName', '{0}: {1}%', index + 1, Math.round(stop.position * 10000) / 100)),
 				),
 			);
 			stops.value = this.stop?.id ?? '';
@@ -331,9 +275,7 @@ export class PaintPropertiesWidget extends Disposable {
 				if (this.gradient && this.stop) {
 					this.edit({
 						...this.gradient,
-						stops: this.gradient.stops
-							.map(stop => (stop.id === this.stop!.id ? { ...stop, position: value / 100 } : stop))
-							.sort((a, b) => a.position - b.position),
+						stops: this.gradient.stops.map(stop => (stop.id === this.stop!.id ? { ...stop, position: value / 100 } : stop)).sort((a, b) => a.position - b.position),
 					});
 				}
 			},
@@ -380,27 +322,9 @@ export class PaintPropertiesWidget extends Disposable {
 			() => !!this.gradient,
 		);
 		for (const [index, labels] of [
-			[
-				0,
-				[
-					localize('sessions.design.gradientStartX', 'Gradient start X (%)'),
-					localize('sessions.design.gradientStartY', 'Gradient start Y (%)'),
-				],
-			],
-			[
-				1,
-				[
-					localize('sessions.design.gradientEndX', 'Gradient end X (%)'),
-					localize('sessions.design.gradientEndY', 'Gradient end Y (%)'),
-				],
-			],
-			[
-				2,
-				[
-					localize('sessions.design.gradientAxisX', 'Gradient axis X (%)'),
-					localize('sessions.design.gradientAxisY', 'Gradient axis Y (%)'),
-				],
-			],
+			[0, [localize('sessions.design.gradientStartX', 'Gradient start X (%)'), localize('sessions.design.gradientStartY', 'Gradient start Y (%)')]],
+			[1, [localize('sessions.design.gradientEndX', 'Gradient end X (%)'), localize('sessions.design.gradientEndY', 'Gradient end Y (%)')]],
+			[2, [localize('sessions.design.gradientAxisX', 'Gradient axis X (%)'), localize('sessions.design.gradientAxisY', 'Gradient axis Y (%)')]],
 		] as const) {
 			for (const [axis, label] of [
 				['x', labels[0]],
@@ -414,9 +338,7 @@ export class PaintPropertiesWidget extends Disposable {
 						if (!paint) {
 							return;
 						}
-						const handles = paint.handles.map((point, i) =>
-							i === index ? { ...point, [axis]: value / 100 } : point,
-						) as unknown as typeof paint.handles;
+						const handles = paint.handles.map((point, i) => (i === index ? { ...point, [axis]: value / 100 } : point)) as unknown as typeof paint.handles;
 						const [a, b, c] = handles;
 						if (Math.abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)) >= 1e-8) {
 							this.edit({ ...paint, handles });
@@ -452,19 +374,13 @@ export class PaintPropertiesWidget extends Disposable {
 		}[type];
 	}
 	private get shape() {
-		return this.selection.ids.size === 1
-			? flattenDesignShapes(this.controller.model.value.shapes).find(shape => this.selection.ids.has(shape.id))
-			: undefined;
+		return this.selection.ids.size === 1 ? flattenDesignShapes(this.controller.model.value.shapes).find(shape => this.selection.ids.has(shape.id)) : undefined;
 	}
 	private get editable(): boolean {
 		return !!this.shape && !this.controller.isBusy && !this.commands.components.isInstanceChild(this.shape.id);
 	}
 	private get canFill(): boolean {
-		return (
-			!!this.shape &&
-			(this.shape.kind !== 'group' || !!this.shape.booleanOperation) &&
-			this.shape.kind !== 'image'
-		);
+		return !!this.shape && (this.shape.kind !== 'group' || !!this.shape.booleanOperation) && this.shape.kind !== 'image';
 	}
 	private get paints(): readonly DesignPaint[] {
 		return this.shape ? designPaints(this.shape) : [];

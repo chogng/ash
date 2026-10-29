@@ -37,30 +37,19 @@ export function createAppServerExtensionManagementApi(connection: AppServerProto
 		searchPage: params => {
 			if (connection.capabilities?.contracts.extensionsPaging?.version !== 1) {
 				return Promise.reject(
-					new Error(
-						localize(
-							{ bundle: 'ash.extensions', key: 'marketplacePagingUnsupported' },
-							'This App Server does not support paged extension catalogs. Update the App Server.',
-						),
-					),
+					new Error(localize({ bundle: 'ash.extensions', key: 'marketplacePagingUnsupported' }, 'This App Server does not support paged extension catalogs. Update the App Server.')),
 				);
 			}
 			return appServerRequest(connection, 'extensions/searchPage', params);
 		},
 		builtInProviders: () => appServerRequest(connection, 'extensions/builtInProviders', {}),
-		setBuiltInProviderEnablement: params =>
-			appServerRequest(connection, 'extensions/setBuiltInProviderEnablement', params),
+		setBuiltInProviderEnablement: params => appServerRequest(connection, 'extensions/setBuiltInProviderEnablement', params),
 		sources: () => appServerRequest(connection, 'extensions/sources/list', {}),
 		addSource: params => appServerRequest(connection, 'extensions/sources/add', params),
 		setSourceEnabled: params => appServerRequest(connection, 'extensions/sources/setEnabled', params),
 		search: async params => {
-			if (
-				(params.capabilityKind || params.languageId) &&
-				connection.capabilities?.contracts.extensionsSearch?.version !== 1
-			) {
-				throw new Error(
-					'This App Server does not support Extensions capability and language filters. Update the App Server to search with these filters.',
-				);
+			if ((params.capabilityKind || params.languageId) && connection.capabilities?.contracts.extensionsSearch?.version !== 1) {
+				throw new Error('This App Server does not support Extensions capability and language filters. Update the App Server to search with these filters.');
 			}
 			return appServerRequest(connection, 'extensions/search', params);
 		},

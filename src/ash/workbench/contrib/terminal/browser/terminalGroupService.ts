@@ -3,13 +3,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
-import {
-	ITerminalService,
-	type ITerminalGroup,
-	type ITerminalGroupService,
-	type ITerminalInstance,
-	type ITerminalView,
-} from './terminal.js';
+import { ITerminalService, type ITerminalGroup, type ITerminalGroupService, type ITerminalInstance, type ITerminalView } from './terminal.js';
 import { TERMINAL_VIEW_ID } from '../common/terminal.js';
 import { TerminalGroup } from './terminalGroup.js';
 
@@ -48,8 +42,7 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 	private observeInstance(instance: ITerminalInstance): void {
 		const lifetime = new DisposableStore();
 		const update = (): void => {
-			if (instance.target === TerminalLocation.Editor)
-				this.getGroupForInstance(instance)?.removeInstance(instance);
+			if (instance.target === TerminalLocation.Editor) this.getGroupForInstance(instance)?.removeInstance(instance);
 			else this.createGroup(instance);
 		};
 		if (instance.onDidChangeTarget) lifetime.add(instance.onDidChangeTarget(update));
@@ -66,8 +59,7 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 	}
 
 	createGroup(instance: ITerminalInstance): ITerminalGroup {
-		if (instance.target === TerminalLocation.Editor)
-			throw new Error('Editor terminals do not belong to a panel group');
+		if (instance.target === TerminalLocation.Editor) throw new Error('Editor terminals do not belong to a panel group');
 		const existing = this.getGroupForInstance(instance);
 		if (existing) return existing;
 		const lifetime = new DisposableStore();
@@ -114,12 +106,7 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 	}
 
 	moveInstance(source: ITerminalInstance, target: ITerminalInstance, side: 'before' | 'after'): void {
-		if (
-			source === target ||
-			!this.terminals.instances.includes(source) ||
-			!this.terminals.instances.includes(target)
-		)
-			return;
+		if (source === target || !this.terminals.instances.includes(source) || !this.terminals.instances.includes(target)) return;
 		const sourceGroup = this.getGroupForInstance(source);
 		const targetGroup = this.getGroupForInstance(target);
 		if (!sourceGroup || !targetGroup) return;

@@ -1,10 +1,6 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import {
-	TerminalCapability,
-	type IShellEnvDetectionCapability,
-	type TerminalShellIntegrationEnvironment,
-} from './capabilities.js';
+import { TerminalCapability, type IShellEnvDetectionCapability, type TerminalShellIntegrationEnvironment } from './capabilities.js';
 
 type Values = Map<string, string | undefined>;
 
@@ -25,10 +21,7 @@ export class ShellEnvDetectionCapability extends Disposable implements IShellEnv
 
 	setEnvironment(values: { [key: string]: string | undefined } | undefined, isTrusted: boolean): void {
 		this.pending = undefined;
-		this.commit(
-			values === undefined ? undefined : new Map(Object.entries(values)),
-			values !== undefined && isTrusted,
-		);
+		this.commit(values === undefined ? undefined : new Map(Object.entries(values)), values !== undefined && isTrusted);
 	}
 
 	startEnvironmentSingleVar(clear: boolean, isTrusted: boolean): void {
@@ -66,9 +59,7 @@ export class ShellEnvDetectionCapability extends Disposable implements IShellEnv
 		const equal =
 			values === undefined
 				? this.values === undefined
-				: this.values !== undefined &&
-					values.size === this.values.size &&
-					[...values].every(([key, value]) => this.values!.has(key) && this.values!.get(key) === value);
+				: this.values !== undefined && values.size === this.values.size && [...values].every(([key, value]) => this.values!.has(key) && this.values!.get(key) === value);
 		if (equal && trusted === this.trusted) {
 			return;
 		}

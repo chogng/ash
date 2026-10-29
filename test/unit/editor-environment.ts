@@ -9,4 +9,7 @@ class EditorTestResizeObserver implements ResizeObserver {
 	}
 }
 
-Object.defineProperty(globalThis, 'ResizeObserver', { configurable: true, value: EditorTestResizeObserver });
+Object.defineProperty(globalThis, 'ResizeObserver', {
+	configurable: true,
+	value: EditorTestResizeObserver,
+});

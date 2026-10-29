@@ -40,49 +40,25 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 		['deleteBrowserHistory', ['targetId', 'entryIds']],
 		['getSharing', ['targetId']],
 		['respondToPermission', ['targetId', 'requestId', 'allowed']],
-		...[
-			'goBack',
-			'goForward',
-			'reload',
-			'stop',
-			'focus',
-			'destroyBrowserView',
-			'clearPermissions',
-			'cancelDownloads',
-		].map(command => [command, ['targetId']] as const),
+		...['goBack', 'goForward', 'reload', 'stop', 'focus', 'destroyBrowserView', 'clearPermissions', 'cancelDownloads'].map(command => [command, ['targetId']] as const),
 	]);
 	return {
 		call: async <T>(_context: string, command: string, arg: unknown): Promise<T> => {
 			if (command === 'respondToPasswordSave' || command === 'respondToPasswordFill') {
-				if (
-					!Array.isArray(arg) ||
-					arg.length !== 3 ||
-					typeof arg[1] !== 'string' ||
-					!/^[a-f0-9-]{36}$/u.test(arg[1])
-				) {
+				if (!Array.isArray(arg) || arg.length !== 3 || typeof arg[1] !== 'string' || !/^[a-f0-9-]{36}$/u.test(arg[1])) {
 					throw new TypeError('Invalid password response');
 				}
 				const { targetId } = validateBrowserViewTargetRequest({ targetId: arg[0] });
 				if (command === 'respondToPasswordSave' && typeof arg[2] === 'boolean') {
 					return (await service.respondToPasswordSave(targetId, arg[1], arg[2])) as T;
 				}
-				if (
-					command === 'respondToPasswordFill' &&
-					(arg[2] === null ||
-						(typeof arg[2] === 'string' &&
-							/^browser\.passwords\.[a-f0-9]{64}\.[a-f0-9]{64}$/u.test(arg[2])))
-				) {
+				if (command === 'respondToPasswordFill' && (arg[2] === null || (typeof arg[2] === 'string' && /^browser\.passwords\.[a-f0-9]{64}\.[a-f0-9]{64}$/u.test(arg[2])))) {
 					return (await service.respondToPasswordFill(targetId, arg[1], arg[2])) as T;
 				}
 				throw new TypeError('Invalid password response');
 			}
 			if (command === 'respondToAuthentication') {
-				if (
-					!Array.isArray(arg) ||
-					arg.length !== 3 ||
-					typeof arg[1] !== 'string' ||
-					!/^[a-f0-9-]{36}$/u.test(arg[1])
-				) {
+				if (!Array.isArray(arg) || arg.length !== 3 || typeof arg[1] !== 'string' || !/^[a-f0-9-]{36}$/u.test(arg[1])) {
 					throw new TypeError('Invalid browser authentication response');
 				}
 				const { targetId } = validateBrowserViewTargetRequest({ targetId: arg[0] });
@@ -101,11 +77,7 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 				) {
 					throw new TypeError('Invalid browser authentication response');
 				}
-				return (await service.respondToAuthentication(
-					targetId,
-					arg[1],
-					credentials as { username: string; password: string; remember: boolean } | null,
-				)) as T;
+				return (await service.respondToAuthentication(targetId, arg[1], credentials as { username: string; password: string; remember: boolean } | null)) as T;
 			}
 			if (command === 'setContentVisibility') {
 				if (!Array.isArray(arg) || arg.length !== 2) {
@@ -126,10 +98,7 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 				) {
 					throw new TypeError('Invalid browser rendering rule');
 				}
-				return (await service.setContentVisibility(
-					targetId,
-					rule as import('../common/browserView.js').IBrowserContentVisibilityRule | undefined,
-				)) as T;
+				return (await service.setContentVisibility(targetId, rule as import('../common/browserView.js').IBrowserContentVisibilityRule | undefined)) as T;
 			}
 			if (command === 'setPermissions') {
 				if (
@@ -145,15 +114,7 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 						value =>
 							!isRecord(value) ||
 							Object.keys(value).some(key => !['category', 'state'].includes(key)) ||
-							![
-								'location',
-								'camera',
-								'microphone',
-								'notifications',
-								'sensors',
-								'clipboard',
-								'devices',
-							].includes(value.category as string) ||
+							!['location', 'camera', 'microphone', 'notifications', 'sensors', 'clipboard', 'devices'].includes(value.category as string) ||
 							!['allow', 'deny', null].includes(value.state as string | null),
 					)
 				) {
@@ -163,12 +124,7 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 				return (await service.setPermissions(targetId, arg[1], arg[2] as IPermissionCategoryState[])) as T;
 			}
 			if (command === 'reload') {
-				if (
-					!Array.isArray(arg) ||
-					arg.length < 1 ||
-					arg.length > 2 ||
-					(arg[1] != null && typeof arg[1] !== 'boolean')
-				) {
+				if (!Array.isArray(arg) || arg.length < 1 || arg.length > 2 || (arg[1] != null && typeof arg[1] !== 'boolean')) {
 					throw new TypeError('Invalid browser reload arguments');
 				}
 				const { targetId } = validateBrowserViewTargetRequest({ targetId: arg[0] });
@@ -180,10 +136,7 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 					arg.length !== 3 ||
 					typeof arg[1] !== 'string' ||
 					!/^[a-f0-9-]{36}$/.test(arg[1]) ||
-					(arg[2] !== null &&
-						(typeof arg[2] !== 'string' ||
-							arg[2].length > 24 * 1024 * 1024 ||
-							!/^[A-Za-z0-9+/]*={0,2}$/.test(arg[2])))
+					(arg[2] !== null && (typeof arg[2] !== 'string' || arg[2].length > 24 * 1024 * 1024 || !/^[A-Za-z0-9+/]*={0,2}$/.test(arg[2])))
 				) {
 					throw new TypeError('Invalid browser file response');
 				}
@@ -212,26 +165,12 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 				if (
 					device !== undefined &&
 					(!isRecord(device) ||
-						Object.keys(device).some(
-							key => !['width', 'height', 'mobile', 'deviceScaleFactor', 'userAgent'].includes(key),
-						) ||
-						['width', 'height'].some(
-							key =>
-								device[key] !== undefined &&
-								(!Number.isInteger(device[key]) ||
-									(device[key] as number) < 1 ||
-									(device[key] as number) > 8192),
-						) ||
+						Object.keys(device).some(key => !['width', 'height', 'mobile', 'deviceScaleFactor', 'userAgent'].includes(key)) ||
+						['width', 'height'].some(key => device[key] !== undefined && (!Number.isInteger(device[key]) || (device[key] as number) < 1 || (device[key] as number) > 8192)) ||
 						(device.deviceScaleFactor !== undefined &&
-							(typeof device.deviceScaleFactor !== 'number' ||
-								!Number.isFinite(device.deviceScaleFactor) ||
-								device.deviceScaleFactor <= 0 ||
-								device.deviceScaleFactor > 5)) ||
+							(typeof device.deviceScaleFactor !== 'number' || !Number.isFinite(device.deviceScaleFactor) || device.deviceScaleFactor <= 0 || device.deviceScaleFactor > 5)) ||
 						(device.mobile !== undefined && typeof device.mobile !== 'boolean') ||
-						(device.userAgent !== undefined &&
-							(typeof device.userAgent !== 'string' ||
-								device.userAgent.length > 2048 ||
-								/[\r\n]/u.test(device.userAgent))))
+						(device.userAgent !== undefined && (typeof device.userAgent !== 'string' || device.userAgent.length > 2048 || /[\r\n]/u.test(device.userAgent))))
 				) {
 					throw new TypeError('Invalid browser device profile');
 				}
@@ -259,9 +198,7 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 			}
 			// JSON encodes an explicitly omitted positional argument as null.
 			const values = command === 'deleteBrowserHistory' && arg[1] === null ? [arg[0], undefined] : arg;
-			const request = keys.length
-				? Object.fromEntries(keys.map((key, index) => [key, values[index]]))
-				: undefined;
+			const request = keys.length ? Object.fromEntries(keys.map((key, index) => [key, values[index]])) : undefined;
 			return (await route.invoke(route.validate(request))) as T;
 		},
 		listen: <T>(_context: string, event: string, arg: unknown): Event<T> => {
@@ -274,11 +211,7 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 }
 
 /** This IPC boundary validates the renderer's page commands; preload messages have a separate frame boundary. */
-function callPreloadService(
-	service: IBrowserViewService,
-	command: string,
-	value: unknown,
-): Promise<unknown> | undefined {
+function callPreloadService(service: IBrowserViewService, command: string, value: unknown): Promise<unknown> | undefined {
 	const arity: Record<string, readonly [number, number]> = {
 		updateWindowConfiguration: [2, 2],
 		getConsoleLogs: [1, 1],
@@ -310,9 +243,7 @@ function callPreloadService(
 			!isRecord(configuration.theme) ||
 			!isRecord(configuration.localizedStrings) ||
 			Object.values(configuration.theme).some(value => typeof value !== 'string' || value.length > 256) ||
-			Object.values(configuration.localizedStrings).some(
-				value => typeof value !== 'string' || value.length > 2048,
-			) ||
+			Object.values(configuration.localizedStrings).some(value => typeof value !== 'string' || value.length > 2048) ||
 			[
 				'addComment',
 				'addCommentPlaceholder',
@@ -328,10 +259,7 @@ function callPreloadService(
 		) {
 			invalid();
 		}
-		return service.updateWindowConfiguration(
-			args[0] as number,
-			configuration as unknown as IBrowserViewWindowConfiguration,
-		);
+		return service.updateWindowConfiguration(args[0] as number, configuration as unknown as IBrowserViewWindowConfiguration);
 	}
 	const { targetId } = validateBrowserViewTargetRequest({ targetId: args[0] });
 	const options = args[2] ?? undefined;
@@ -350,9 +278,7 @@ function callPreloadService(
 			!args[1] ||
 			args[1].length > 65536 ||
 			(options !== undefined &&
-				(!isRecord(options) ||
-					Object.keys(options).some(key => !['forward', 'matchCase', 'recompute'].includes(key)) ||
-					Object.values(options).some(value => typeof value !== 'boolean')))
+				(!isRecord(options) || Object.keys(options).some(key => !['forward', 'matchCase', 'recompute'].includes(key)) || Object.values(options).some(value => typeof value !== 'boolean')))
 		) {
 			invalid();
 		}
@@ -372,18 +298,12 @@ function callPreloadService(
 			options !== undefined &&
 			(!isRecord(options) ||
 				Object.keys(options).some(key => !['highlightFocusedElement', 'continuous', 'mode'].includes(key)) ||
-				['highlightFocusedElement', 'continuous'].some(
-					key => options[key] !== undefined && typeof options[key] !== 'boolean',
-				) ||
+				['highlightFocusedElement', 'continuous'].some(key => options[key] !== undefined && typeof options[key] !== 'boolean') ||
 				(options.mode !== undefined && options.mode !== 'select' && options.mode !== 'comment'))
 		) {
 			invalid();
 		}
-		return service.toggleElementSelection(
-			targetId,
-			(args[1] ?? undefined) as boolean | undefined,
-			options as IBrowserElementSelectionOptions | undefined,
-		);
+		return service.toggleElementSelection(targetId, (args[1] ?? undefined) as boolean | undefined, options as IBrowserElementSelectionOptions | undefined);
 	}
 	if (command === 'setElementComments') {
 		const update = args[1];
@@ -393,14 +313,7 @@ function callPreloadService(
 			(update.comments !== undefined &&
 				(!Array.isArray(update.comments) ||
 					update.comments.length > 100 ||
-					update.comments.some(
-						item =>
-							!isRecord(item) ||
-							typeof item.elementId !== 'string' ||
-							item.elementId.length > 140 ||
-							typeof item.body !== 'string' ||
-							item.body.length > 2048,
-					))) ||
+					update.comments.some(item => !isRecord(item) || typeof item.elementId !== 'string' || item.elementId.length > 140 || typeof item.body !== 'string' || item.body.length > 2048))) ||
 			(update.pendingCommentIdsToDiscard !== undefined &&
 				(!Array.isArray(update.pendingCommentIdsToDiscard) ||
 					update.pendingCommentIdsToDiscard.length > 100 ||
@@ -416,15 +329,9 @@ function callPreloadService(
 	}
 	if (
 		!isRecord(capture) ||
-		Object.keys(capture).some(
-			key => !['screenRect', 'format', 'quality', 'awaitNextPaint', 'fullPage'].includes(key),
-		) ||
+		Object.keys(capture).some(key => !['screenRect', 'format', 'quality', 'awaitNextPaint', 'fullPage'].includes(key)) ||
 		(capture.format !== undefined && capture.format !== 'png' && capture.format !== 'jpeg') ||
-		(capture.quality !== undefined &&
-			(typeof capture.quality !== 'number' ||
-				!Number.isInteger(capture.quality) ||
-				capture.quality < 0 ||
-				capture.quality > 100)) ||
+		(capture.quality !== undefined && (typeof capture.quality !== 'number' || !Number.isInteger(capture.quality) || capture.quality < 0 || capture.quality > 100)) ||
 		(capture.fullPage !== undefined && typeof capture.fullPage !== 'boolean') ||
 		(capture.awaitNextPaint !== undefined && typeof capture.awaitNextPaint !== 'boolean')
 	) {
@@ -434,10 +341,7 @@ function callPreloadService(
 		const rect = capture.screenRect;
 		if (
 			!isRecord(rect) ||
-			['x', 'y', 'width', 'height'].some(
-				key =>
-					typeof rect[key] !== 'number' || !Number.isFinite(rect[key]) || rect[key] < 0 || rect[key] > 8192,
-			) ||
+			['x', 'y', 'width', 'height'].some(key => typeof rect[key] !== 'number' || !Number.isFinite(rect[key]) || rect[key] < 0 || rect[key] > 8192) ||
 			!rect.width ||
 			!rect.height ||
 			(rect.width as number) * (rect.height as number) > 16_777_216
@@ -462,12 +366,7 @@ function browserViewIpcRoutes(service: Omit<IBrowserViewService, 'onDidEvent'>):
 				if (!isRecord(value) || Object.keys(value).some(key => key !== 'targetId' && key !== 'entryIds')) {
 					throw new TypeError('Invalid browser history request');
 				}
-				if (
-					value.entryIds !== undefined &&
-					(!Array.isArray(value.entryIds) ||
-						value.entryIds.length > 200 ||
-						value.entryIds.some(id => !Number.isSafeInteger(id) || id < 1))
-				) {
+				if (value.entryIds !== undefined && (!Array.isArray(value.entryIds) || value.entryIds.length > 200 || value.entryIds.some(id => !Number.isSafeInteger(id) || id < 1))) {
 					throw new TypeError('Invalid browser history entries');
 				}
 				return { ...validateBrowserViewTargetRequest({ targetId: value.targetId }), entryIds: value.entryIds };
@@ -480,12 +379,7 @@ function browserViewIpcRoutes(service: Omit<IBrowserViewService, 'onDidEvent'>):
 		{
 			channel: 'respondToPermission',
 			validate: value => {
-				if (
-					!isRecord(value) ||
-					Object.keys(value).length !== 3 ||
-					typeof value.requestId !== 'string' ||
-					typeof value.allowed !== 'boolean'
-				) {
+				if (!isRecord(value) || Object.keys(value).length !== 3 || typeof value.requestId !== 'string' || typeof value.allowed !== 'boolean') {
 					throw new TypeError('Invalid browser permission response');
 				}
 				return {
@@ -519,11 +413,7 @@ function browserViewIpcRoutes(service: Omit<IBrowserViewService, 'onDidEvent'>):
 		{
 			channel: 'getOrCreateBrowserView',
 			validate: validateBrowserViewCreateRequest,
-			invoke: request =>
-				service.getOrCreateBrowserView(
-					(request as IBrowserViewCreateRequest).targetId,
-					(request as IBrowserViewCreateRequest).options,
-				),
+			invoke: request => service.getOrCreateBrowserView((request as IBrowserViewCreateRequest).targetId, (request as IBrowserViewCreateRequest).options),
 		},
 		{
 			channel: 'getState',
@@ -533,29 +423,17 @@ function browserViewIpcRoutes(service: Omit<IBrowserViewService, 'onDidEvent'>):
 		{
 			channel: 'layout',
 			validate: validateBrowserViewLayoutRequest,
-			invoke: request =>
-				service.layout(
-					(request as IBrowserViewLayoutRequest).targetId,
-					(request as IBrowserViewLayoutRequest).bounds,
-				),
+			invoke: request => service.layout((request as IBrowserViewLayoutRequest).targetId, (request as IBrowserViewLayoutRequest).bounds),
 		},
 		{
 			channel: 'setVisible',
 			validate: validateBrowserViewVisibilityRequest,
-			invoke: request =>
-				service.setVisible(
-					(request as IBrowserViewVisibilityRequest).targetId,
-					(request as IBrowserViewVisibilityRequest).visible,
-				),
+			invoke: request => service.setVisible((request as IBrowserViewVisibilityRequest).targetId, (request as IBrowserViewVisibilityRequest).visible),
 		},
 		{
 			channel: 'loadURL',
 			validate: validateBrowserViewNavigateRequest,
-			invoke: request =>
-				service.loadURL(
-					(request as IBrowserViewNavigateRequest).targetId,
-					(request as IBrowserViewNavigateRequest).url,
-				),
+			invoke: request => service.loadURL((request as IBrowserViewNavigateRequest).targetId, (request as IBrowserViewNavigateRequest).url),
 		},
 		targetRoute('goBack', targetId => service.goBack(targetId)),
 		targetRoute('goForward', targetId => service.goForward(targetId)),

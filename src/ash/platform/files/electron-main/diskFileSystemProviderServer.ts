@@ -14,12 +14,7 @@ export class DiskFileSystemProviderChannel extends AbstractDiskFileSystemProvide
 		super(provider);
 	}
 
-	public override async call<T>(
-		context: string,
-		command: string,
-		value?: unknown,
-		token: CancellationToken = CancellationToken.None,
-	): Promise<T> {
+	public override async call<T>(context: string, command: string, value?: unknown, token: CancellationToken = CancellationToken.None): Promise<T> {
 		this.assertNotDisposed();
 		if (command === 'userDataHome' || command === 'userHome') {
 			if (token.isCancellationRequested) {

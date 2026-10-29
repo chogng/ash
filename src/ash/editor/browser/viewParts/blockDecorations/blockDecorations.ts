@@ -71,12 +71,8 @@ export class BlockDecorations extends ViewPart {
 						? context.getVerticalOffsetForLineNumber(decoration.range.startLineNumber, false)
 						: context.getVerticalOffsetAfterLineNumber(decoration.range.endLineNumber, true);
 			}
-			const [paddingTop, paddingRight, paddingBottom, paddingLeft] = decoration.options.blockPadding ?? [
-				0, 0, 0, 0,
-			];
-			block.setClassName(
-				`stanza-editor-block-decoration blockDecorations-block ${decoration.options.blockClassName}`,
-			);
+			const [paddingTop, paddingRight, paddingBottom, paddingLeft] = decoration.options.blockPadding ?? [0, 0, 0, 0];
+			block.setClassName(`stanza-editor-block-decoration blockDecorations-block ${decoration.options.blockClassName}`);
 			block.setLeft(this.contentLeft - paddingLeft);
 			block.setWidth(this.contentWidth + paddingLeft + paddingRight);
 			block.setTop(top - context.scrollTop - paddingTop);

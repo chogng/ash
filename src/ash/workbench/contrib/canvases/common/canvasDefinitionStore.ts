@@ -1,14 +1,7 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { autorun, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
-import {
-	canvasOwnerKey,
-	compareCanvasDefinitions,
-	isOpenableExtensionCanvasDefinition,
-	type CanvasDefinitionSnapshot,
-	type ICanvasDefinition,
-	type ICanvasOwner,
-} from './canvas.js';
+import { canvasOwnerKey, compareCanvasDefinitions, isOpenableExtensionCanvasDefinition, type CanvasDefinitionSnapshot, type ICanvasDefinition, type ICanvasOwner } from './canvas.js';
 
 export interface ICanvasDefinitionSource {
 	readonly owner: ICanvasOwner;
@@ -33,11 +26,7 @@ export class CanvasDefinitionStore extends Disposable {
 		this._register(
 			autorun(reader => {
 				const next = source(reader);
-				if (
-					!next || !this.source
-						? next !== this.source
-						: canvasOwnerKey(next.owner) !== canvasOwnerKey(this.source.owner)
-				) {
+				if (!next || !this.source ? next !== this.source : canvasOwnerKey(next.owner) !== canvasOwnerKey(this.source.owner)) {
 					this.generation++;
 					this.definitions.set([], undefined);
 				}
@@ -72,9 +61,7 @@ export class CanvasDefinitionStore extends Disposable {
 		try {
 			const result = await source.listCanvases();
 			if (result !== undefined && !this.isDisposed && generation === this.generation && source === this.source) {
-				const definitions = result
-					.filter(source.includeDefinition ?? isOpenableExtensionCanvasDefinition)
-					.sort(compareCanvasDefinitions);
+				const definitions = result.filter(source.includeDefinition ?? isOpenableExtensionCanvasDefinition).sort(compareCanvasDefinitions);
 				if (JSON.stringify(definitions) !== JSON.stringify(this.definitions.get())) {
 					this.definitions.set(definitions, undefined);
 				}

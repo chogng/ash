@@ -31,14 +31,12 @@ export class Rulers extends ViewPart {
 		this.domNode.setClassName('stanza-editor-rulers');
 		this.domNode.setAttribute('role', 'presentation');
 		this.domNode.setAttribute('aria-hidden', 'true');
-		({ rulers: this.rulers, typicalHalfwidthCharacterWidth: this.typicalHalfwidthCharacterWidth } =
-			this.readConfiguration());
+		({ rulers: this.rulers, typicalHalfwidthCharacterWidth: this.typicalHalfwidthCharacterWidth } = this.readConfiguration());
 	}
 
 	public override onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): boolean {
 		if (!event.hasChanged(EditorOption.rulers) && !event.hasChanged(EditorOption.fontInfo)) return false;
-		({ rulers: this.rulers, typicalHalfwidthCharacterWidth: this.typicalHalfwidthCharacterWidth } =
-			this.readConfiguration());
+		({ rulers: this.rulers, typicalHalfwidthCharacterWidth: this.typicalHalfwidthCharacterWidth } = this.readConfiguration());
 		return true;
 	}
 

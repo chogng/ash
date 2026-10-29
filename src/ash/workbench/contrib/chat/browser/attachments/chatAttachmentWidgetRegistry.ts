@@ -19,15 +19,10 @@ export interface IChatAttachmentWidgetRegistry {
 	readonly _serviceBrand: undefined;
 	registerFactory(kind: string, factory: ChatAttachmentWidgetFactory): IDisposable;
 	/** The receiving input owns each created widget; unregistered kinds use its existing renderer. */
-	createWidget(
-		attachment: ChatContextAttachment,
-		options: { shouldFocusClearButton: boolean; supportsDeletion: boolean },
-		container: HTMLElement,
-	): IChatAttachmentWidgetInstance | undefined;
+	createWidget(attachment: ChatContextAttachment, options: { shouldFocusClearButton: boolean; supportsDeletion: boolean }, container: HTMLElement): IChatAttachmentWidgetInstance | undefined;
 }
 
-export const IChatAttachmentWidgetRegistry =
-	createServiceIdentifier<IChatAttachmentWidgetRegistry>('chatAttachmentWidgetRegistry');
+export const IChatAttachmentWidgetRegistry = createServiceIdentifier<IChatAttachmentWidgetRegistry>('chatAttachmentWidgetRegistry');
 
 /** Window-owned rendering registrations. References and their snapshots remain input-owned. */
 export class ChatAttachmentWidgetRegistry extends Disposable implements IChatAttachmentWidgetRegistry {
@@ -49,11 +44,7 @@ export class ChatAttachmentWidgetRegistry extends Disposable implements IChatAtt
 		});
 	}
 
-	createWidget(
-		attachment: ChatContextAttachment,
-		options: { shouldFocusClearButton: boolean; supportsDeletion: boolean },
-		container: HTMLElement,
-	): IChatAttachmentWidgetInstance | undefined {
+	createWidget(attachment: ChatContextAttachment, options: { shouldFocusClearButton: boolean; supportsDeletion: boolean }, container: HTMLElement): IChatAttachmentWidgetInstance | undefined {
 		this.assertNotDisposed();
 		return this.factories.get(attachment.kind)?.create(attachment, options, container);
 	}

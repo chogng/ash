@@ -80,15 +80,9 @@ function sha1(input: Uint8Array): string {
 	for (let offset = 0; offset < bytes.length; offset += 64) {
 		for (let index = 0; index < 16; index += 1) {
 			const start = offset + index * 4;
-			words[index] =
-				((bytes[start]! << 24) | (bytes[start + 1]! << 16) | (bytes[start + 2]! << 8) | bytes[start + 3]!) >>>
-				0;
+			words[index] = ((bytes[start]! << 24) | (bytes[start + 1]! << 16) | (bytes[start + 2]! << 8) | bytes[start + 3]!) >>> 0;
 		}
-		for (let index = 16; index < 80; index += 1)
-			words[index] = rotateLeft(
-				words[index - 3]! ^ words[index - 8]! ^ words[index - 14]! ^ words[index - 16]!,
-				1,
-			);
+		for (let index = 16; index < 80; index += 1) words[index] = rotateLeft(words[index - 3]! ^ words[index - 8]! ^ words[index - 14]! ^ words[index - 16]!, 1);
 		let a = h0;
 		let b = h1;
 		let c = h2;

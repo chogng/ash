@@ -44,9 +44,7 @@ export class PrototypePreview extends Disposable {
 	private failure = '';
 	private delayFrame = '';
 	private readonly firedDelays = new Set<string>();
-	private temporary:
-		| { snapshot: PrototypeSnapshot; trigger: 'hover' | 'press'; bounds: DOMRect; transition: PrototypeTransition }
-		| undefined;
+	private temporary: { snapshot: PrototypeSnapshot; trigger: 'hover' | 'press'; bounds: DOMRect; transition: PrototypeTransition } | undefined;
 	private pointer: { id: string; sourceId: string; x: number; y: number; pointerId: number } | undefined;
 	private suppressClick = false;
 	private pan: { id: string; pointerId: number; x: number; y: number; moved: boolean } | undefined;
@@ -119,47 +117,21 @@ export class PrototypePreview extends Disposable {
 				if (event.target !== this.domNode && !this.scene.contains(event.target as Node)) {
 					return;
 				}
-				const hot = this.playback?.hotspots.find(shape =>
-					shape.interactions?.some(
-						item => item.trigger === 'key' && item.key?.toLowerCase() === event.key.toLowerCase(),
-					),
-				);
-				const keyInteraction = hot?.interactions?.find(
-					item => item.trigger === 'key' && item.key?.toLowerCase() === event.key.toLowerCase(),
-				);
+				const hot = this.playback?.hotspots.find(shape => shape.interactions?.some(item => item.trigger === 'key' && item.key?.toLowerCase() === event.key.toLowerCase()));
+				const keyInteraction = hot?.interactions?.find(item => item.trigger === 'key' && item.key?.toLowerCase() === event.key.toLowerCase());
 				if (keyInteraction && !event.repeat) {
 					event.preventDefault();
 					this.perform(keyInteraction, hot?.id);
 					return;
 				}
-				if (
-					this.playback &&
-					!this.animating &&
-					['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'].includes(
-						event.key,
-					)
-				) {
+				if (this.playback && !this.animating && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'].includes(event.key)) {
 					const id = this.scrollTarget(event.target),
-						height =
-							this.playback.scrollFrames.find(frame => frame.id === id)?.height ??
-							this.playback.activeFrame.height;
+						height = this.playback.scrollFrames.find(frame => frame.id === id)?.height ?? this.playback.activeFrame.height;
 					const delta = {
 						x: event.key === 'ArrowLeft' ? -40 : event.key === 'ArrowRight' ? 40 : 0,
-						y:
-							event.key === 'ArrowUp'
-								? -40
-								: event.key === 'ArrowDown'
-									? 40
-									: event.key === 'PageUp'
-										? -height * 0.9
-										: event.key === 'PageDown'
-											? height * 0.9
-											: 0,
+						y: event.key === 'ArrowUp' ? -40 : event.key === 'ArrowDown' ? 40 : event.key === 'PageUp' ? -height * 0.9 : event.key === 'PageDown' ? height * 0.9 : 0,
 					};
-					const changed =
-						event.key === 'Home' || event.key === 'End'
-							? this.playback.scrollEdge(id, event.key === 'End')
-							: this.playback.scrollBy(id, delta);
+					const changed = event.key === 'Home' || event.key === 'End' ? this.playback.scrollEdge(id, event.key === 'End') : this.playback.scrollBy(id, delta);
 					if (changed) {
 						event.preventDefault();
 						event.stopPropagation();
@@ -192,12 +164,8 @@ export class PrototypePreview extends Disposable {
 						return;
 					}
 					const id = this.scrollTarget(event.target),
-						unit =
-							event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? this.playback.activeFrame.height : 1;
-					const delta = this.designDelta(
-						(event.shiftKey && !event.deltaX ? event.deltaY : event.deltaX) * unit,
-						(event.shiftKey && !event.deltaX ? 0 : event.deltaY) * unit,
-					);
+						unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? this.playback.activeFrame.height : 1;
+					const delta = this.designDelta((event.shiftKey && !event.deltaX ? event.deltaY : event.deltaX) * unit, (event.shiftKey && !event.deltaX ? 0 : event.deltaY) * unit);
 					if (this.playback.scrollBy(id, delta)) {
 						event.preventDefault();
 						event.stopPropagation();
@@ -219,10 +187,7 @@ export class PrototypePreview extends Disposable {
 					return;
 				}
 				const overlay = this.playback?.state.overlays.at(-1);
-				if (
-					overlay?.settings.closeOutside &&
-					!(event.target as Element).closest(`[data-shape-id="${overlay.frame.id}"]`)
-				) {
+				if (overlay?.settings.closeOutside && !(event.target as Element).closest(`[data-shape-id="${overlay.frame.id}"]`)) {
 					this.perform({
 						id: '',
 						trigger: 'click',
@@ -282,23 +247,12 @@ export class PrototypePreview extends Disposable {
 				}
 				if (this.temporary?.trigger === 'hover') {
 					const rect = this.temporary.bounds;
-					if (
-						event.clientX < rect.left ||
-						event.clientX > rect.right ||
-						event.clientY < rect.top ||
-						event.clientY > rect.bottom
-					) {
+					if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) {
 						this.revert();
 					}
 				}
-				if (
-					this.pointer &&
-					event.pointerId === this.pointer.pointerId &&
-					Math.hypot(event.clientX - this.pointer.x, event.clientY - this.pointer.y) > 8
-				) {
-					const interaction = this.playback?.hotspots
-						.flatMap(shape => shape.interactions ?? [])
-						.find(item => item.id === this.pointer?.id && item.trigger === 'drag');
+				if (this.pointer && event.pointerId === this.pointer.pointerId && Math.hypot(event.clientX - this.pointer.x, event.clientY - this.pointer.y) > 8) {
+					const interaction = this.playback?.hotspots.flatMap(shape => shape.interactions ?? []).find(item => item.id === this.pointer?.id && item.trigger === 'drag');
 					const sourceId = this.pointer.sourceId;
 					this.pointer = undefined;
 					this.suppressClick = true;
@@ -345,9 +299,7 @@ export class PrototypePreview extends Disposable {
 					if (this.temporary || this.animating) {
 						return;
 					}
-					const match =
-						this.hotspot(event.target, trigger) ??
-						(trigger === 'enter' ? this.hotspot(event.target, 'hover') : undefined);
+					const match = this.hotspot(event.target, trigger) ?? (trigger === 'enter' ? this.hotspot(event.target, 'hover') : undefined);
 					if (match && (!event.relatedTarget || !match.element.contains(event.relatedTarget as Node))) {
 						this.activate(match.interaction, match.element);
 					}
@@ -398,13 +350,7 @@ export class PrototypePreview extends Disposable {
 				sibling.inert = true;
 			}
 		}
-		this.flow.replaceChildren(
-			...frames
-				.filter(frame => frame.flowStart)
-				.map(frame =>
-					h(this.context.ownerDocument, 'option', { properties: { value: frame.id } }, frame.flowStart!),
-				),
-		);
+		this.flow.replaceChildren(...frames.filter(frame => frame.flowStart).map(frame => h(this.context.ownerDocument, 'option', { properties: { value: frame.id } }, frame.flowStart!)));
 		this.restart(selected?.id ?? frames.find(frame => frame.flowStart)?.id ?? frames[0].id);
 		this.focus();
 	}
@@ -446,30 +392,18 @@ export class PrototypePreview extends Disposable {
 		);
 		if (![...this.flow.options].some(option => option.value === id)) {
 			const frame = this.playback.state.frame;
-			this.flow.append(
-				h(
-					this.context.ownerDocument,
-					'option',
-					{ properties: { value: id } },
-					frame.name || localize('sessions.design.prototype.selectedScreen', 'Selected screen'),
-				),
-			);
+			this.flow.append(h(this.context.ownerDocument, 'option', { properties: { value: id } }, frame.name || localize('sessions.design.prototype.selectedScreen', 'Selected screen')));
 		}
 		this.flow.value = id;
 		this.finish();
 	}
-	private hotspot(
-		target: EventTarget | null,
-		trigger?: PrototypeTrigger,
-	): { interaction: PrototypeInteraction; element: Element } | undefined {
+	private hotspot(target: EventTarget | null, trigger?: PrototypeTrigger): { interaction: PrototypeInteraction; element: Element } | undefined {
 		if (this.animating || !this.playback || !(target instanceof this.context.ownerDocument.defaultView!.Element)) {
 			return;
 		}
 		for (let element: Element | null = target; element && element !== this.scene; element = element.parentElement) {
 			const shape = this.playback.hotspots.find(shape => shape.id === element!.getAttribute('data-shape-id'));
-			const interaction = shape?.interactions?.find(item =>
-				trigger ? item.trigger === trigger : !['delay', 'key'].includes(item.trigger),
-			);
+			const interaction = shape?.interactions?.find(item => (trigger ? item.trigger === trigger : !['delay', 'key'].includes(item.trigger)));
 			if (interaction) {
 				return { interaction, element };
 			}
@@ -500,12 +434,7 @@ export class PrototypePreview extends Disposable {
 		this.chain = undefined;
 		this.temporary = undefined;
 		this.playback.restore(snapshot);
-		this.animate(
-			from,
-			transition,
-			() => this.finish(),
-			transition.type === 'scroll' ? { from: scrollFrom, to: snapshot.scroll } : undefined,
-		);
+		this.animate(from, transition, () => this.finish(), transition.type === 'scroll' ? { from: scrollFrom, to: snapshot.scroll } : undefined);
 	}
 	private perform(interaction: PrototypeInteraction, sourceId?: string): void {
 		if (!this.playback || this.animating || this.chain) {
@@ -526,31 +455,20 @@ export class PrototypePreview extends Disposable {
 			}
 			const effect = next.value;
 			if (effect.failed) {
-				this.failure = localize(
-					'sessions.design.prototype.actionFailed',
-					'An action could not run. Check its variable references and expression values.',
-				);
+				this.failure = localize('sessions.design.prototype.actionFailed', 'An action could not run. Check its variable references and expression values.');
 				continue;
 			}
 			if (effect.url) {
 				this.openExternal(effect.url);
 				continue;
 			}
-			if (
-				effect.transition.type !== 'instant' &&
-				!this.context.ownerDocument.defaultView!.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-			) {
+			if (effect.transition.type !== 'instant' && !this.context.ownerDocument.defaultView!.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
 				this.animate(effect.from, effect.transition, () => this.advance(), effect.scroll);
 				return;
 			}
 		}
 	}
-	private animate(
-		from: PrototypeFrame,
-		transition: PrototypeTransition,
-		complete: () => void = () => this.finish(),
-		scroll?: PrototypeEffect['scroll'],
-	): void {
+	private animate(from: PrototypeFrame, transition: PrototypeTransition, complete: () => void = () => this.finish(), scroll?: PrototypeEffect['scroll']): void {
 		this.pending.clear();
 		const window = this.context.ownerDocument.defaultView!;
 		if (transition.type === 'instant' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
@@ -565,10 +483,7 @@ export class PrototypePreview extends Disposable {
 		this.pending.add(toDisposable(() => window.cancelAnimationFrame(frame)));
 		const tick = (now: number): void => {
 			const progress = Math.min(1, (now - start) / duration);
-			this.scene.setAttribute(
-				'viewBox',
-				`0 0 ${from.width + (to.width - from.width) * progress} ${from.height + (to.height - from.height) * progress}`,
-			);
+			this.scene.setAttribute('viewBox', `0 0 ${from.width + (to.width - from.width) * progress} ${from.height + (to.height - from.height) * progress}`);
 			const t =
 				progress >= 1
 					? 1
@@ -584,9 +499,7 @@ export class PrototypePreview extends Disposable {
 						}),
 					)
 				: {};
-			const layers = scroll
-				? [{ shape: this.playback!.sceneAtScroll(offsets), x: 0, y: 0, opacity: 1 }]
-				: samplePrototypeTransition(from, to, transition, progress);
+			const layers = scroll ? [{ shape: this.playback!.sceneAtScroll(offsets), x: 0, y: 0, opacity: 1 }] : samplePrototypeTransition(from, to, transition, progress);
 			this.scene.replaceChildren(
 				...layers.map(layer => {
 					const group = svg(this.context.ownerDocument, 'g', {
@@ -618,11 +531,7 @@ export class PrototypePreview extends Disposable {
 	}
 	private scrollTarget(target: EventTarget | null): string {
 		if (target instanceof this.context.ownerDocument.defaultView!.Element) {
-			for (
-				let element: Element | null = target;
-				element && element !== this.scene;
-				element = element.parentElement
-			) {
+			for (let element: Element | null = target; element && element !== this.scene; element = element.parentElement) {
 				const id = element.getAttribute('data-shape-id');
 				if (id && this.playback?.scrollFrames.some(frame => frame.id === id)) {
 					return id;
@@ -632,15 +541,11 @@ export class PrototypePreview extends Disposable {
 		return this.playback?.activeFrame.id ?? '';
 	}
 	private designDelta(x: number, y: number): DesignPoint {
-		const element = this.scene.querySelector<SVGGraphicsElement>(
-				`[data-shape-id="${this.playback?.activeFrame.id}"]`,
-			),
+		const element = this.scene.querySelector<SVGGraphicsElement>(`[data-shape-id="${this.playback?.activeFrame.id}"]`),
 			matrix = element?.getScreenCTM?.()?.inverse();
 		return matrix ? { x: matrix.a * x + matrix.c * y, y: matrix.b * x + matrix.d * y } : { x, y };
 	}
-	private renderShape(
-		shape: PrototypeFrame | import('../../../common/model/document.js').DesignShape,
-	): SVGGraphicsElement {
+	private renderShape(shape: PrototypeFrame | import('../../../common/model/document.js').DesignShape): SVGGraphicsElement {
 		const element = renderDesignShape(shape, undefined, this.context.documentController.getEmbeddedImageSources());
 		for (const guide of element.querySelectorAll('[data-layout-guide]')) {
 			guide.remove();
@@ -669,9 +574,7 @@ export class PrototypePreview extends Disposable {
 			localize(
 				'sessions.design.prototype.screenNumber',
 				'Screen {0}',
-				prototypeFrames(this.context.documentController.model.value.shapes).findIndex(
-					frame => frame.id === playback.activeFrame.id,
-				) + 1,
+				prototypeFrames(this.context.documentController.model.value.shapes).findIndex(frame => frame.id === playback.activeFrame.id) + 1,
 			);
 		if (this.failure) {
 			this.status.textContent += ' — ' + this.failure;
@@ -709,21 +612,12 @@ export class PrototypePreview extends Disposable {
 			if (!element || !shape.interactions?.some(item => !['delay', 'key'].includes(item.trigger))) {
 				continue;
 			}
-			const label =
-				shape.name ||
-				(shape.kind === 'text' ? shape.text : localize('sessions.design.prototype.hotspot', 'Hotspot'));
+			const label = shape.name || (shape.kind === 'text' ? shape.text : localize('sessions.design.prototype.hotspot', 'Hotspot'));
 			element.setAttribute('tabindex', '0');
 			element.setAttribute('role', 'button');
 			element.setAttribute(
 				'aria-label',
-				label +
-					': ' +
-					shape
-						.interactions!.map(
-							item =>
-								`${triggerLabels()[item.trigger]} · ${item.actions.map(action => actionLabels()[action.action]).join(' → ')}`,
-						)
-						.join(', '),
+				label + ': ' + shape.interactions!.map(item => `${triggerLabels()[item.trigger]} · ${item.actions.map(action => actionLabels()[action.action]).join(' → ')}`).join(', '),
 			);
 			element.classList.add('ash-prototype-hotspot');
 		}
@@ -742,9 +636,7 @@ export class PrototypePreview extends Disposable {
 			}
 		}
 		if (hadFocus) {
-			const target = focusId
-				? this.scene.querySelector<SVGGraphicsElement>(`[data-shape-id="${focusId}"][tabindex="0"]`)
-				: undefined;
+			const target = focusId ? this.scene.querySelector<SVGGraphicsElement>(`[data-shape-id="${focusId}"][tabindex="0"]`) : undefined;
 			if (target) {
 				target.focus();
 			} else {
@@ -755,11 +647,7 @@ export class PrototypePreview extends Disposable {
 	public getAccessibleContent(): string {
 		return this.playback
 			? [
-					localize(
-						'sessions.design.prototype.currentScreen',
-						'Current screen: {0}',
-						this.status.textContent ?? '',
-					),
+					localize('sessions.design.prototype.currentScreen', 'Current screen: {0}', this.status.textContent ?? ''),
 					...this.playback.scrollRegions.map(frame =>
 						localize(
 							'sessions.design.prototype.scrollSummary',

@@ -29,12 +29,8 @@ export class DesignEditorPage extends Disposable {
 
 	public create(parent: HTMLElement): void {
 		this.editor = this._register(
-			this.instantiationService.createInstance(
-				DesignEditorWidget,
-				parent.ownerDocument,
-				this.workingCopy,
-				(context: DesignEditorContributionContext) =>
-					createDesignEditorContributions(context, this.instantiationService),
+			this.instantiationService.createInstance(DesignEditorWidget, parent.ownerDocument, this.workingCopy, (context: DesignEditorContributionContext) =>
+				createDesignEditorContributions(context, this.instantiationService),
 			),
 		);
 		this.domNode = this.editor.domNode;
@@ -46,9 +42,7 @@ export class DesignEditorPage extends Disposable {
 		};
 		this._register(this.workingCopy.onDidChange(updateRestoring));
 		updateRestoring();
-		this._register(
-			addDisposableListener(this.domNode, 'focusin', () => this.designEditors.setActiveEditor(this.editor)),
-		);
+		this._register(addDisposableListener(this.domNode, 'focusin', () => this.designEditors.setActiveEditor(this.editor)));
 		// Desktop drains saves through the lifecycle. Browser unload only prompts for manual-save modes.
 		this._register(
 			addDisposableListener(getWindow(this.domNode), 'beforeunload', (event: BeforeUnloadEvent) => {

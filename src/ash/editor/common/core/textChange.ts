@@ -33,12 +33,7 @@ export class TextChange {
 		readonly newPosition: number,
 		readonly newText: string,
 	) {
-		if (
-			!Number.isSafeInteger(oldPosition) ||
-			!Number.isSafeInteger(newPosition) ||
-			oldPosition < 0 ||
-			newPosition < 0
-		)
+		if (!Number.isSafeInteger(oldPosition) || !Number.isSafeInteger(newPosition) || oldPosition < 0 || newPosition < 0)
 			throw new RangeError('Text change positions must be non-negative safe integers');
 	}
 
@@ -148,8 +143,7 @@ function encodedStringSize(text: string): number {
 }
 
 function writeUInt32BE(buffer: Uint8Array, value: number, offset: number): void {
-	if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff || offset < 0 || offset + 4 > buffer.length)
-		throw new RangeError('Invalid uint32 write');
+	if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff || offset < 0 || offset + 4 > buffer.length) throw new RangeError('Invalid uint32 write');
 	buffer[offset] = value >>> 24;
 	buffer[offset + 1] = value >>> 16;
 	buffer[offset + 2] = value >>> 8;
@@ -157,11 +151,8 @@ function writeUInt32BE(buffer: Uint8Array, value: number, offset: number): void 
 }
 
 function readUInt32BE(buffer: Uint8Array, offset: number): number {
-	if (!Number.isSafeInteger(offset) || offset < 0 || offset + 4 > buffer.length)
-		throw new RangeError('Invalid uint32 read');
-	return (
-		buffer[offset]! * 0x1000000 + buffer[offset + 1]! * 0x10000 + buffer[offset + 2]! * 0x100 + buffer[offset + 3]!
-	);
+	if (!Number.isSafeInteger(offset) || offset < 0 || offset + 4 > buffer.length) throw new RangeError('Invalid uint32 read');
+	return buffer[offset]! * 0x1000000 + buffer[offset + 1]! * 0x10000 + buffer[offset + 2]! * 0x100 + buffer[offset + 3]!;
 }
 
 function writeString(buffer: Uint8Array, text: string, offset: number): number {
@@ -213,19 +204,13 @@ class TextChangeCompressor {
 				continue;
 			}
 			if (current.oldPosition < previous.newPosition) {
-				const [first, rest] = TextChangeCompressor.splitCurrent(
-					current,
-					previous.newPosition - current.oldPosition,
-				);
+				const [first, rest] = TextChangeCompressor.splitCurrent(current, previous.newPosition - current.oldPosition);
 				this.acceptCurrent(first);
 				current = rest;
 				continue;
 			}
 			if (previous.newPosition < current.oldPosition) {
-				const [first, rest] = TextChangeCompressor.splitPrevious(
-					previous,
-					current.oldPosition - previous.newPosition,
-				);
+				const [first, rest] = TextChangeCompressor.splitPrevious(previous, current.oldPosition - previous.newPosition);
 				this.acceptPrevious(first);
 				previous = rest;
 				continue;
@@ -251,14 +236,7 @@ class TextChangeCompressor {
 				previous = this.previous[++previousIndex] ?? null;
 				current = rest;
 			}
-			this.result.push(
-				new TextChange(
-					mergedPrevious.oldPosition,
-					mergedPrevious.oldText,
-					mergedCurrent.newPosition,
-					mergedCurrent.newText,
-				),
-			);
+			this.result.push(new TextChange(mergedPrevious.oldPosition, mergedPrevious.oldText, mergedCurrent.newPosition, mergedCurrent.newText));
 			this.previousDelta += mergedPrevious.newLength - mergedPrevious.oldLength;
 			this.currentDelta += mergedCurrent.newLength - mergedCurrent.oldLength;
 		}
@@ -266,16 +244,12 @@ class TextChangeCompressor {
 	}
 
 	private acceptCurrent(change: TextChange): void {
-		this.result.push(
-			new TextChange(change.oldPosition - this.previousDelta, change.oldText, change.newPosition, change.newText),
-		);
+		this.result.push(new TextChange(change.oldPosition - this.previousDelta, change.oldText, change.newPosition, change.newText));
 		this.currentDelta += change.newLength - change.oldLength;
 	}
 
 	private acceptPrevious(change: TextChange): void {
-		this.result.push(
-			new TextChange(change.oldPosition, change.oldText, change.newPosition + this.currentDelta, change.newText),
-		);
+		this.result.push(new TextChange(change.oldPosition, change.oldText, change.newPosition + this.currentDelta, change.newText));
 		this.previousDelta += change.newLength - change.oldLength;
 	}
 
@@ -299,13 +273,7 @@ class TextChangeCompressor {
 		let previous = changes[0]!;
 		for (let index = 1; index < changes.length; index += 1) {
 			const current = changes[index]!;
-			if (previous.oldEnd === current.oldPosition)
-				previous = new TextChange(
-					previous.oldPosition,
-					previous.oldText + current.oldText,
-					previous.newPosition,
-					previous.newText + current.newText,
-				);
+			if (previous.oldEnd === current.oldPosition) previous = new TextChange(previous.oldPosition, previous.oldText + current.oldText, previous.newPosition, previous.newText + current.newText);
 			else {
 				result.push(previous);
 				previous = current;

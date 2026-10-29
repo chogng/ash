@@ -33,16 +33,7 @@ export async function listProcesses(rootPid: number): Promise<ProcessItem> {
 			if (pid === 0) {
 				continue;
 			}
-			processes.set(
-				pid,
-				processItem(
-					row.Name,
-					pid,
-					Number(row.CreatingProcessID),
-					Number(row.PercentProcessorTime),
-					Number(row.WorkingSet),
-				),
-			);
+			processes.set(pid, processItem(row.Name, pid, Number(row.CreatingProcessID), Number(row.PercentProcessorTime), Number(row.WorkingSet)));
 		}
 	} else {
 		const { stdout } = await execute('ps', ['-axo', 'pid=,ppid=,pcpu=,rss=,comm='], {
@@ -88,16 +79,7 @@ export async function listProcesses(rootPid: number): Promise<ProcessItem> {
 }
 
 function processItem(command: string, pid: number, ppid: number, load: number, mem: number): ProcessItem {
-	if (
-		!Number.isSafeInteger(pid) ||
-		pid <= 0 ||
-		!Number.isSafeInteger(ppid) ||
-		ppid < 0 ||
-		!Number.isFinite(load) ||
-		load < 0 ||
-		!Number.isSafeInteger(mem) ||
-		mem < 0
-	) {
+	if (!Number.isSafeInteger(pid) || pid <= 0 || !Number.isSafeInteger(ppid) || ppid < 0 || !Number.isFinite(load) || load < 0 || !Number.isSafeInteger(mem) || mem < 0) {
 		throw new TypeError('Invalid process metrics');
 	}
 	return { name: command.split(/[\\/]/).pop() || command, cmd: command, pid, ppid, load, mem };

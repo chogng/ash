@@ -4,11 +4,7 @@ import { generateUuid } from '../../../base/common/uuid.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
-import type {
-	IWorkspaceTrustApi,
-	WorkspaceTrustCommandResult,
-	WorkspaceTrustPermission,
-} from '../common/workspaceTrust.js';
+import type { IWorkspaceTrustApi, WorkspaceTrustCommandResult, WorkspaceTrustPermission } from '../common/workspaceTrust.js';
 
 export function createDisconnectedWorkspaceTrustApi(unavailable: UnavailableOperation): IWorkspaceTrustApi {
 	return {
@@ -25,12 +21,7 @@ export function createDisconnectedWorkspaceTrustApi(unavailable: UnavailableOper
 
 /** The existing Rust protocol remains an adapter detail while directory trust moves to its owner. */
 export function createAppServerWorkspaceTrustApi(connection: AppServerProtocolClient): IWorkspaceTrustApi {
-	const writePermissions = async (
-		path: string,
-		permissions: readonly WorkspaceTrustPermission[],
-		expectedRevision: number,
-		commandId: string,
-	): Promise<WorkspaceTrustCommandResult> => {
+	const writePermissions = async (path: string, permissions: readonly WorkspaceTrustPermission[], expectedRevision: number, commandId: string): Promise<WorkspaceTrustCommandResult> => {
 		const result = await appServerRequest(connection, 'config/directoryGrants/set', {
 			path,
 			commandId,
@@ -77,8 +68,7 @@ export function createAppServerWorkspaceTrustApi(connection: AppServerProtocolCl
 				})),
 			};
 		},
-		setDirectoryPermissions: (path, permissions, expectedRevision) =>
-			writePermissions(path, permissions, expectedRevision, generateUuid()),
+		setDirectoryPermissions: (path, permissions, expectedRevision) => writePermissions(path, permissions, expectedRevision, generateUuid()),
 		forgetDirectory: async (dir, expectedRevision) => {
 			const result = await appServerRequest(connection, 'config/directoryGrants/forget', {
 				dir,

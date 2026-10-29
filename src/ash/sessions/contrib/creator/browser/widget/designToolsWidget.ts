@@ -117,9 +117,7 @@ export class DesignToolsWidget extends Disposable {
 					if (!pointer && action.id !== 'sessions.design.tool.shape') {
 						return new DesignToolViewItem(action);
 					}
-					const label = pointer
-						? localize('sessions.design.pointerTools', 'Selection tools')
-						: localize('sessions.design.shapeTools', 'Shape tools');
+					const label = pointer ? localize('sessions.design.pointerTools', 'Selection tools') : localize('sessions.design.shapeTools', 'Shape tools');
 					const dropdown: IAction = {
 						id: `${action.id}.menu`,
 						label,
@@ -127,15 +125,8 @@ export class DesignToolsWidget extends Disposable {
 						enabled: action.enabled,
 						run: () => undefined,
 					};
-					const items = pointer
-						? [DesignTool.Select, DesignTool.Hand]
-						: [DesignTool.Rectangle, DesignTool.Ellipse];
-					return new DesignToolDropdownViewItem(
-						action,
-						dropdown,
-						() => items.map(tool => this.toolActions.get(tool)!),
-						menuProvider,
-					);
+					const items = pointer ? [DesignTool.Select, DesignTool.Hand] : [DesignTool.Rectangle, DesignTool.Ellipse];
+					return new DesignToolDropdownViewItem(action, dropdown, () => items.map(tool => this.toolActions.get(tool)!), menuProvider);
 				},
 			}),
 		);
@@ -174,11 +165,7 @@ export class DesignToolsWidget extends Disposable {
 	}
 
 	public update(tool: DesignTool, mode: DesignMode, isBusy: boolean): void {
-		if (
-			this.renderedState?.tool === tool &&
-			this.renderedState.mode === mode &&
-			this.renderedState.isBusy === isBusy
-		) {
+		if (this.renderedState?.tool === tool && this.renderedState.mode === mode && this.renderedState.isBusy === isBusy) {
 			return;
 		}
 		this.renderedState = { tool, mode, isBusy };
@@ -205,9 +192,7 @@ export class DesignToolsWidget extends Disposable {
 				enabled: !isBusy && mode !== DesignMode.Code && mode !== DesignMode.Motion,
 			})),
 		]);
-		this.modes.updateActions(
-			[...this.modeActions].map(([value, action]) => ({ ...action, checked: value === mode })),
-		);
+		this.modes.updateActions([...this.modeActions].map(([value, action]) => ({ ...action, checked: value === mode })));
 	}
 }
 

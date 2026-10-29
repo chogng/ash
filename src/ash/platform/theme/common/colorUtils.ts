@@ -1,17 +1,6 @@
-import {
-	Colors,
-	type ColorDefaults,
-	type ColorIdentifier,
-	type ColorRegistrationMetadata,
-	type ColorTransform,
-	type ColorValue,
-} from './colorRegistry.js';
+import { Colors, type ColorDefaults, type ColorIdentifier, type ColorRegistrationMetadata, type ColorTransform, type ColorValue } from './colorRegistry.js';
 
-export function registerColor(
-	id: ColorIdentifier,
-	defaults: ColorDefaults,
-	metadata: ColorRegistrationMetadata,
-): ColorIdentifier {
+export function registerColor(id: ColorIdentifier, defaults: ColorDefaults, metadata: ColorRegistrationMetadata): ColorIdentifier {
 	return Colors.registerColor(id, defaults, metadata);
 }
 

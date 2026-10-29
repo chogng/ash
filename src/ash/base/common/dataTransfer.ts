@@ -25,14 +25,19 @@ export function createStringDataTransferItem(value: string | Promise<string>, id
 	};
 }
 
-export function createFileDataTransferItem(
-	name: string,
-	uri: URI | undefined,
-	data: () => Promise<Uint8Array>,
-	id?: string,
-): IDataTransferItem {
-	const file: IDataTransferFile = { id: createUuid(), name, ...(uri === undefined ? {} : { uri }), data };
-	return { ...(id === undefined ? {} : { id }), value: undefined, asString: async () => '', asFile: () => file };
+export function createFileDataTransferItem(name: string, uri: URI | undefined, data: () => Promise<Uint8Array>, id?: string): IDataTransferItem {
+	const file: IDataTransferFile = {
+		id: createUuid(),
+		name,
+		...(uri === undefined ? {} : { uri }),
+		data,
+	};
+	return {
+		...(id === undefined ? {} : { id }),
+		value: undefined,
+		asString: async () => '',
+		asFile: () => file,
+	};
 }
 
 export interface IReadonlyVSDataTransfer extends Iterable<readonly [string, IDataTransferItem]> {

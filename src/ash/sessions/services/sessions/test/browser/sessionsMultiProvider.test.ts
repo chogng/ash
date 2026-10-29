@@ -51,9 +51,7 @@ class Provider extends Disposable implements ISessionsProvider {
 		this.calls.push(`unsubscribe:${id}`);
 	}
 	currentWorkspace(): SessionWorkspaceSelection {
-		return this.id === 'primary'
-			? { type: 'local', root: '/same' }
-			: { type: 'ssh', host: 'remote', root: '/same' };
+		return this.id === 'primary' ? { type: 'local', root: '/same' } : { type: 'ssh', host: 'remote', root: '/same' };
 	}
 	async create(title: string, workspace: SessionWorkspaceSelection): Promise<IActiveSessionThread> {
 		this.calls.push(`create:${workspace.type}`);

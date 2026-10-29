@@ -11,10 +11,7 @@ export class ToggleDevToolsAction extends Action2 {
 	constructor() {
 		super({
 			id: ToggleDeveloperToolsCommandId,
-			title: localize2(
-				{ bundle: 'ash', key: 'workbench.toggleDeveloperTools' },
-				'Developer: Toggle Developer Tools',
-			),
+			title: localize2({ bundle: 'ash', key: 'workbench.toggleDeveloperTools' }, 'Developer: Toggle Developer Tools'),
 			f1: true,
 			menu: { id: MenuId.MenubarHelpMenu, group: '5_tools', order: 1 },
 		});

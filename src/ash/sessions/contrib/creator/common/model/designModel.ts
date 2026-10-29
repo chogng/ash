@@ -3,21 +3,9 @@ import { CreatorMode } from '../creator.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
-import {
-	documentFromShapes,
-	serializeDesignDocument,
-	type DesignAsset,
-	type DesignDocument,
-	type DesignShape,
-} from './document.js';
+import { documentFromShapes, serializeDesignDocument, type DesignAsset, type DesignDocument, type DesignShape } from './document.js';
 import { recordDesignOverrides, resolveDesignComponents } from './components.js';
-import {
-	emptyDesignResources,
-	getDesignLibraryShapes,
-	recordDesignResourceEdits,
-	resolveDesignResources,
-	type DesignResources,
-} from './designResources.js';
+import { emptyDesignResources, getDesignLibraryShapes, recordDesignResourceEdits, resolveDesignResources, type DesignResources } from './designResources.js';
 import { reconcilePrototypeLinks } from './prototype.js';
 import { resolveDesignLayout } from './layout.js';
 
@@ -55,8 +43,7 @@ export class DesignModel extends Disposable {
 
 	/** Save As changes identity across history so undo cannot return to the source document. */
 	public changeIdentity(documentId: string): void {
-		const change = (document: DesignDocument): DesignDocument =>
-			documentFromShapes(document.shapes, { ...document, documentId }, document.assets);
+		const change = (document: DesignDocument): DesignDocument => documentFromShapes(document.shapes, { ...document, documentId }, document.assets);
 		this.document = change(this.document);
 		for (let index = 0; index < this.undoStack.length; index++) {
 			this.undoStack[index] = change(this.undoStack[index]);
@@ -75,17 +62,9 @@ export class DesignModel extends Disposable {
 		// still owns inherited fields when loading an externally edited document.
 		const resources = document.resources ?? emptyDesignResources;
 		const source = resolveDesignResources(document.shapes, resources);
-		const components = resolveDesignComponents(
-			source,
-			resolveDesignResources(getDesignLibraryShapes(resources), resources),
-			this.measureText,
-		);
+		const components = resolveDesignComponents(source, resolveDesignResources(getDesignLibraryShapes(resources), resources), this.measureText);
 		const resolved = resolveDesignResources(components, resources);
-		this.document = documentFromShapes(
-			resolveDesignLayout(resolved, resolved, this.measureText),
-			document,
-			document.assets,
-		);
+		this.document = documentFromShapes(resolveDesignLayout(resolved, resolved, this.measureText), document, document.assets);
 		this.modelEpoch = generateUuid();
 		this.editRevision = 0;
 		this.undoStack.length = 0;
@@ -95,12 +74,7 @@ export class DesignModel extends Disposable {
 
 	/** Font availability changes derived geometry in every history entry, never adds an edit. */
 	public refreshTextLayout(): void {
-		const refresh = (document: DesignDocument): DesignDocument =>
-			documentFromShapes(
-				resolveDesignLayout(document.shapes, document.shapes, this.measureText),
-				document,
-				document.assets,
-			);
+		const refresh = (document: DesignDocument): DesignDocument => documentFromShapes(resolveDesignLayout(document.shapes, document.shapes, this.measureText), document, document.assets);
 		this.document = refresh(this.document);
 		for (let index = 0; index < this.undoStack.length; index++) {
 			this.undoStack[index] = refresh(this.undoStack[index]);
@@ -143,19 +117,9 @@ export class DesignModel extends Disposable {
 		const edits = recordDesignResourceEdits(shapes, this.document.shapes);
 		const source = resolveDesignResources(recordDesignOverrides(edits, this.document.shapes), resources);
 		const layout = resolveDesignLayout(source, this.document.shapes, this.measureText);
-		const components = resolveDesignResources(
-			resolveDesignComponents(
-				layout,
-				resolveDesignResources(getDesignLibraryShapes(resources), resources),
-				this.measureText,
-			),
-			resources,
-		);
+		const components = resolveDesignResources(resolveDesignComponents(layout, resolveDesignResources(getDesignLibraryShapes(resources), resources), this.measureText), resources);
 		// Removing a wire target is derived cleanup, not an explicit instance override.
-		const resolved = reconcilePrototypeLinks(
-			resolveDesignLayout(components, components, this.measureText),
-			this.document.shapes,
-		);
+		const resolved = reconcilePrototypeLinks(resolveDesignLayout(components, components, this.measureText), this.document.shapes);
 		const next = documentFromShapes(
 			resolved,
 			{

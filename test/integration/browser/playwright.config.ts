@@ -55,8 +55,7 @@ export default defineConfig({
 	webServer: process.env.ASH_EDITOR_BROWSER_EXTERNAL_SERVER
 		? undefined
 		: {
-				command:
-					'node ../../../node_modules/vite/bin/vite.js build --config vite.config.ts && node ../../../build/desktop/launch/web.ts ../../../.build/desktop/editor-browser 5185',
+				command: 'node ../../../node_modules/vite/bin/vite.js build --config vite.config.ts && node ../../../build/desktop/launch/web.ts ../../../.build/desktop/editor-browser 5185',
 				url: 'http://127.0.0.1:5185/textModel.html',
 				reuseExistingServer: false,
 				timeout: 120_000,
@@ -66,9 +65,7 @@ export default defineConfig({
 		[
 			'html',
 			{
-				outputFolder: runDirectory
-					? resolve(runDirectory, 'report')
-					: '../../../.build/desktop/playwright/editor-report',
+				outputFolder: runDirectory ? resolve(runDirectory, 'report') : '../../../.build/desktop/playwright/editor-report',
 				open: 'never',
 			},
 		],

@@ -9,14 +9,7 @@ import { ignoreApplicationFile, prepareProductionDependencyWorkspace } from './p
 test('dependency deployment preserves locked inputs and attribution without recursing into build output', async t => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-dependency-workspace-'));
 	t.after(() => rm(root, { recursive: true, force: true }));
-	const files = [
-		'package.json',
-		'pnpm-lock.yaml',
-		'pnpm-workspace.yaml',
-		'patches/runtime.patch',
-		'licenses/dependency.txt',
-		'THIRD_PARTY_NOTICES.md',
-	];
+	const files = ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'patches/runtime.patch', 'licenses/dependency.txt', 'THIRD_PARTY_NOTICES.md'];
 	for (const file of [...files, '.build/previous-package/private.txt', 'src/main.ts']) {
 		await mkdir(join(root, file, '..'), { recursive: true });
 		await writeFile(join(root, file), file);
@@ -61,13 +54,7 @@ test('application copying retains hoisted and nested dependency resolution witho
 	const require = createRequire(join(destination, 'probe.cjs'));
 	assert.equal(require.resolve('runtime'), await realpath(join(destination, 'node_modules/runtime/index.js')));
 	assert.deepEqual(require('runtime'), ['hoisted dependency', 'nested dependency']);
-	for (const path of [
-		'package.json',
-		'dist/main.js',
-		'resources/tray/icon.png',
-		'licenses/dependency.txt',
-		'THIRD_PARTY_NOTICES.md',
-	]) {
+	for (const path of ['package.json', 'dist/main.js', 'resources/tray/icon.png', 'licenses/dependency.txt', 'THIRD_PARTY_NOTICES.md']) {
 		assert.equal(await readFile(join(destination, path), 'utf8'), files[path]);
 	}
 	for (const path of ['.pnpm', '.modules.yaml', '.pnpm-workspace-state-v1.json', '.bin', 'electron']) {
@@ -116,9 +103,7 @@ for (const platform of ['darwin', 'win32', 'linux'] as const) {
 			const expected =
 				path === 'package.json' ||
 				((!path.includes('native-is-elevated') || platform === 'win32') &&
-					/\/(?:package\.json|index\.js|License\.txt|ThirdPartyNotices\.txt|build\/Release\/(?:keymapping|iselevated)\.node)$/u.test(
-						path,
-					));
+					/\/(?:package\.json|index\.js|License\.txt|ThirdPartyNotices\.txt|build\/Release\/(?:keymapping|iselevated)\.node)$/u.test(path));
 			if (expected) assert.equal(await readFile(join(destination, path), 'utf8'), content);
 			else await assert.rejects(stat(join(destination, path)), { code: 'ENOENT' });
 		}

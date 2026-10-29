@@ -5,11 +5,7 @@ import { Disposable } from '../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../configuration/common/configuration.js';
 import { SyncDescriptor } from '../../instantiation/common/descriptors.js';
 import { registerSingleton } from '../../instantiation/common/extensions.js';
-import {
-	IMeteredConnectionService,
-	METERED_CONNECTION_SETTING_KEY,
-	type MeteredConnectionSettingValue,
-} from '../common/meteredConnection.js';
+import { IMeteredConnectionService, METERED_CONNECTION_SETTING_KEY, type MeteredConnectionSettingValue } from '../common/meteredConnection.js';
 import '../common/meteredConnection.config.contribution.js';
 
 /** Owns the effective policy for a Web page without an Electron main process. */
@@ -41,10 +37,7 @@ export class MeteredConnectionService extends Disposable implements IMeteredConn
 
 	private readState(): boolean {
 		const setting = this.configuration.getValue<MeteredConnectionSettingValue>(METERED_CONNECTION_SETTING_KEY);
-		return (
-			setting === 'on' ||
-			(setting === 'auto' && (this.connection?.saveData === true || this.connection?.metered === true))
-		);
+		return setting === 'on' || (setting === 'auto' && (this.connection?.saveData === true || this.connection?.metered === true));
 	}
 
 	private updateState(): void {
@@ -55,7 +48,4 @@ export class MeteredConnectionService extends Disposable implements IMeteredConn
 	}
 }
 
-registerSingleton(
-	IMeteredConnectionService,
-	new SyncDescriptor(MeteredConnectionService, [() => (navigator as NavigatorWithConnection).connection], true),
-);
+registerSingleton(IMeteredConnectionService, new SyncDescriptor(MeteredConnectionService, [() => (navigator as NavigatorWithConnection).connection], true));

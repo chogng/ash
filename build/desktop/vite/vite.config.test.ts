@@ -28,12 +28,7 @@ test('Web development and builds use only browser entries and preserve Desktop o
 	const desktop = (await loadConfigFromFile({ command: 'build', mode: 'production' }, path))!.config;
 	const inputs = web.build!.rolldownOptions!.input as Record<string, string>;
 	const desktopInputs = desktop.build!.rolldownOptions!.input as Record<string, string>;
-	assert.deepEqual(Object.keys(inputs), [
-		'browser/workbench/workbench',
-		'browser/sessions/sessions',
-		'browser/theme-preview/themePreview',
-		'browser/theme-preview/sessionsThemePreview',
-	]);
+	assert.deepEqual(Object.keys(inputs), ['browser/workbench/workbench', 'browser/sessions/sessions', 'browser/theme-preview/themePreview', 'browser/theme-preview/sessionsThemePreview']);
 	assert.deepEqual(web.server!.warmup!.clientFiles, [
 		inputs['browser/workbench/workbench'],
 		resolve(import.meta.dirname, '../../../src/ash/sessions/sessions.web.main.internal.ts'),

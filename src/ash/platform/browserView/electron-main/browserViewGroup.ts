@@ -22,8 +22,7 @@ interface CommandAuthority {
 // browser/target commands are implemented by the logical proxy instead of forwarded.
 const pageCommands = new Set(
 	Object.entries({
-		Accessibility:
-			'enable disable getAXNodeAndAncestors getChildAXNodes getFullAXTree getPartialAXTree getRootAXNode queryAXTree',
+		Accessibility: 'enable disable getAXNodeAndAncestors getChildAXNodes getFullAXTree getPartialAXTree getRootAXNode queryAXTree',
 		CSS: 'enable disable addRule collectClassNames createStyleSheet forcePseudoState getBackgroundColors getComputedStyleForNode getInlineStylesForNode getMatchedStylesForNode getMediaQueries getPlatformFontsForNode getStyleSheetText setEffectivePropertyValueForNode setMediaText setRuleSelector setStyleSheetText setStyleTexts startRuleUsageTracking stopRuleUsageTracking takeCoverageDelta',
 		DOM: 'enable disable describeNode focus getAttributes getBoxModel getContentQuads getDocument getFlattenedDocument getNodeForLocation getOuterHTML getRelayoutBoundary getSearchResults markUndoableState performSearch pushNodeByPathToFrontend pushNodesByBackendIdsToFrontend querySelector querySelectorAll removeAttribute removeNode requestChildNodes requestNode resolveNode scrollIntoViewIfNeeded setAttributeValue setAttributesAsText setNodeName setNodeValue setOuterHTML undo redo discardSearchResults setFileInputFiles',
 		DOMSnapshot: 'captureSnapshot getSnapshot enable disable',
@@ -32,8 +31,7 @@ const pageCommands = new Set(
 		Emulation:
 			'canEmulate clearDeviceMetricsOverride clearGeolocationOverride resetPageScaleFactor setCPUThrottlingRate setDefaultBackgroundColorOverride setDeviceMetricsOverride setEmulatedMedia setEmitTouchEventsForMouse setFocusEmulationEnabled setGeolocationOverride setLocaleOverride setPageScaleFactor setScriptExecutionDisabled setTimezoneOverride setTouchEmulationEnabled setUserAgentOverride setVirtualTimePolicy',
 		Fetch: 'enable disable continueRequest continueResponse failRequest fulfillRequest continueWithAuth getResponseBody',
-		HeapProfiler:
-			'enable disable collectGarbage getHeapObjectId getObjectByHeapObjectId startSampling stopSampling startTrackingHeapObjects stopTrackingHeapObjects takeHeapSnapshot',
+		HeapProfiler: 'enable disable collectGarbage getHeapObjectId getObjectByHeapObjectId startSampling stopSampling startTrackingHeapObjects stopTrackingHeapObjects takeHeapSnapshot',
 		Input: 'cancelDragging dispatchDragEvent dispatchKeyEvent dispatchMouseEvent dispatchTouchEvent emulateTouchFromMouseEvent insertText setIgnoreInputEvents setInterceptDrags synthesizePinchGesture synthesizeScrollGesture synthesizeTapGesture',
 		Log: 'enable disable clear startViolationsReport stopViolationsReport',
 		Network:
@@ -42,8 +40,7 @@ const pageCommands = new Set(
 			'enable disable hideHighlight highlightFrame highlightNode highlightQuad highlightRect setInspectMode setShowDebugBorders setShowFPSCounter setShowPaintRects setShowScrollBottleneckRects',
 		Page: 'enable disable addScriptToEvaluateOnNewDocument bringToFront captureScreenshot captureSnapshot close createIsolatedWorld getAppManifest getFrameTree getLayoutMetrics getNavigationHistory getResourceContent getResourceTree handleJavaScriptDialog navigate navigateToHistoryEntry printToPDF reload removeScriptToEvaluateOnNewDocument resetNavigationHistory screencastFrameAck searchInResource setBypassCSP setDocumentContent setInterceptFileChooserDialog setLifecycleEventsEnabled setWebLifecycleState startScreencast stopLoading stopScreencast',
 		Performance: 'enable disable getMetrics',
-		Profiler:
-			'enable disable start stop startPreciseCoverage stopPreciseCoverage takePreciseCoverage getBestEffortCoverage setSamplingInterval',
+		Profiler: 'enable disable start stop startPreciseCoverage stopPreciseCoverage takePreciseCoverage getBestEffortCoverage setSamplingInterval',
 		Runtime:
 			'enable disable addBinding removeBinding awaitPromise callFunctionOn compileScript discardConsoleEntries evaluate getHeapUsage getIsolateId getProperties globalLexicalScopeNames queryObjects releaseObject releaseObjectGroup runIfWaitingForDebugger runScript setAsyncCallStackDepth setCustomObjectFormatterEnabled terminateExecution',
 		Security: 'enable disable',
@@ -56,24 +53,10 @@ function validatePageCommand(method: string, params: Record<string, unknown>): v
 		throw new Error('BrowserCDPMethodDenied: ' + method);
 	}
 	// These CDP entrypoints can bypass normal page navigation or smuggle paths in drag data.
-	if (
-		method === 'Input.dispatchDragEvent' &&
-		isRecord(params.data) &&
-		params.data.files !== undefined &&
-		(!Array.isArray(params.data.files) || params.data.files.length !== 0)
-	) {
+	if (method === 'Input.dispatchDragEvent' && isRecord(params.data) && params.data.files !== undefined && (!Array.isArray(params.data.files) || params.data.files.length !== 0)) {
 		throw new Error('BrowserFileAccessDenied');
 	}
-	if (
-		[
-			'Page.navigate',
-			'Page.getResourceContent',
-			'Page.searchInResource',
-			'Fetch.continueRequest',
-			'Network.continueInterceptedRequest',
-		].includes(method) &&
-		params.url !== undefined
-	) {
+	if (['Page.navigate', 'Page.getResourceContent', 'Page.searchInResource', 'Fetch.continueRequest', 'Network.continueInterceptedRequest'].includes(method) && params.url !== undefined) {
 		if (typeof params.url !== 'string') {
 			throw new Error('BrowserFileAccessDenied');
 		}
@@ -151,9 +134,7 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 						},
 					};
 				},
-				getBrowserContexts: () => [
-					...new Set([...this.contexts, ...[...this.pages.values()].map(page => page.session.id)]),
-				],
+				getBrowserContexts: () => [...new Set([...this.contexts, ...[...this.pages.values()].map(page => page.session.id)])],
 				createBrowserContext: () => {
 					if (this.filter.browserIds) {
 						throw new Error('BrowserGroupHasFixedTargets');
@@ -172,26 +153,12 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 					if (this.filter.browserIds) {
 						throw new Error('BrowserGroupHasFixedTargets');
 					}
-					if (
-						contextId !== undefined &&
-						!this.contexts.has(contextId) &&
-						![...this.pages.values()].some(
-							page => page.session.id === contextId && page.getInfo().owner.type === 'agent',
-						)
-					) {
+					if (contextId !== undefined && !this.contexts.has(contextId) && ![...this.pages.values()].some(page => page.session.id === contextId && page.getInfo().owner.type === 'agent')) {
 						throw new Error('BrowserContextAccessDenied');
 					}
 					const authority = this.authority.getStore();
-					const signal = AbortSignal.any([
-						this.cancellation.signal,
-						...(authority ? [authority.signal] : []),
-					]);
-					const page = await this.views.createTarget(
-						'about:blank',
-						this.filter.sandboxSessionId,
-						signal,
-						contextId,
-					);
+					const signal = AbortSignal.any([this.cancellation.signal, ...(authority ? [authority.signal] : [])]);
+					const page = await this.views.createTarget('about:blank', this.filter.sandboxSessionId, signal, contextId);
 					try {
 						await page.waitForLoad(signal);
 						await page.loadURL(url, signal, authority?.networkToken ?? null);
@@ -230,11 +197,7 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 										params,
 										actual,
 										authority?.uploads ?? [],
-										AbortSignal.any([
-											this.cancellation.signal,
-											this.views.agentAccessSignal(page.id, this.filter.sandboxSessionId),
-											...(authority ? [authority.signal] : []),
-										]),
+										AbortSignal.any([this.cancellation.signal, this.views.agentAccessSignal(page.id, this.filter.sandboxSessionId), ...(authority ? [authority.signal] : [])]),
 									)
 								: await page.debugger.sendCommand(method, params, actual);
 						if (authority && method === 'Page.navigate') {
@@ -243,13 +206,8 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 						return result;
 					};
 					return raceCancellationError(
-						authority && !unblocks
-							? page.runOperation(authority.signal, send, authority.networkToken)
-							: send(),
-						AbortSignal.any([
-							this.cancellation.signal,
-							this.views.agentAccessSignal(page.id, this.filter.sandboxSessionId),
-						]),
+						authority && !unblocks ? page.runOperation(authority.signal, send, authority.networkToken) : send(),
+						AbortSignal.any([this.cancellation.signal, this.views.agentAccessSignal(page.id, this.filter.sandboxSessionId)]),
 						'BrowserSharingRevoked',
 					);
 				},
@@ -277,13 +235,7 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 		);
 	}
 
-	private async setFileInputFiles(
-		page: BrowserView,
-		params: Record<string, unknown>,
-		sessionId: string | undefined,
-		uploads: readonly IBrowserUploadFile[],
-		signal: AbortSignal,
-	): Promise<unknown> {
+	private async setFileInputFiles(page: BrowserView, params: Record<string, unknown>, sessionId: string | undefined, uploads: readonly IBrowserUploadFile[], signal: AbortSignal): Promise<unknown> {
 		signal.throwIfAborted();
 		if (
 			Object.keys(params).some(key => !['files', 'nodeId', 'backendNodeId', 'objectId'].includes(key)) ||
@@ -320,8 +272,7 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 				throw new Error('BrowserUploadTooLarge');
 			}
 		}
-		const send = (method: string, parameters: Record<string, unknown>) =>
-			page.debugger.sendCommand(method, parameters, sessionId);
+		const send = (method: string, parameters: Record<string, unknown>) => page.debugger.sendCommand(method, parameters, sessionId);
 		let objectId = params.objectId as string | undefined;
 		if (!objectId) {
 			const node = await send('DOM.resolveNode', { [selectors[0]!]: params[selectors[0]!] });
@@ -398,9 +349,7 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 				if (rootSession && !page.signal.aborted) {
 					// Each logical browser owns a real Chromium session, so releasing CDP cannot
 					// leave its enabled domains or paused debugger attached to Playwright's session.
-					const detachment = page.debugger
-						.sendCommand('Target.detachFromTarget', { sessionId: rootSession })
-						.catch(() => {});
+					const detachment = page.debugger.sendCommand('Target.detachFromTarget', { sessionId: rootSession }).catch(() => {});
 					this.detachments.add(detachment);
 					void detachment.finally(() => this.detachments.delete(detachment));
 				}
@@ -415,10 +364,7 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 					this.targetEvents.fire({
 						type: 'message',
 						targetId,
-						message:
-							message.sessionId === rootSession
-								? { method: message.method, params: message.params }
-								: message,
+						message: message.sessionId === rootSession ? { method: message.method, params: message.params } : message,
 					});
 				}
 			}),
@@ -440,9 +386,7 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 				rootSession = attachment.sessionId;
 				if (this.isDisposed || page.signal.aborted || this.attachments.get(page.id) !== resources) {
 					if (!page.signal.aborted) {
-						await page.debugger
-							.sendCommand('Target.detachFromTarget', { sessionId: rootSession })
-							.catch(() => {});
+						await page.debugger.sendCommand('Target.detachFromTarget', { sessionId: rootSession }).catch(() => {});
 					}
 					return;
 				}
@@ -504,9 +448,7 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 	}
 	public sendCDPMessage(message: CDPRequest, authority?: CommandAuthority): Promise<void> {
 		this.assertNotDisposed();
-		return authority
-			? this.authority.run(authority, () => this.debugger.sendMessage(message))
-			: this.debugger.sendMessage(message);
+		return authority ? this.authority.run(authority, () => this.debugger.sendMessage(message)) : this.debugger.sendMessage(message);
 	}
 	public async close(): Promise<void> {
 		this.dispose();
@@ -520,9 +462,7 @@ export class BrowserViewGroup extends Disposable implements IBrowserViewGroup {
 		this.pages.clear();
 		this.targetIds.clear();
 		this.rootSessions.clear();
-		this.contextCleanup = Promise.all(
-			[...this.contexts].map(id => this.views.disposeBrowserContext(id, this.filter.sandboxSessionId)),
-		).then(() => {});
+		this.contextCleanup = Promise.all([...this.contexts].map(id => this.views.disposeBrowserContext(id, this.filter.sandboxSessionId))).then(() => {});
 		void this.contextCleanup.catch(error => console.error('Could not release CDP browser contexts', error));
 		this.contexts.clear();
 		super.disposeCore();

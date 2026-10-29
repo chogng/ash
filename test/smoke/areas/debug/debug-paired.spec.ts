@@ -76,13 +76,7 @@ test.beforeEach(async ({ testWorkspace }) => {
 	await writeFile(join(directory, 'paired-adapter.cjs'), adapter);
 	await writeFile(
 		join(directory, 'paired-source.js'),
-		Array.from({ length: 200 }, (_, index) =>
-			index === 0
-				? 'const answer = 42;'
-				: index === 1
-					? 'console.log(answer);'
-					: `// synthetic source line ${index + 1}`,
-		).join('\n') + '\n',
+		Array.from({ length: 200 }, (_, index) => (index === 0 ? 'const answer = 42;' : index === 1 ? 'console.log(answer);' : `// synthetic source line ${index + 1}`)).join('\n') + '\n',
 	);
 	await writeFile(
 		join(directory, '.vscode', 'launch.json'),
@@ -95,11 +89,7 @@ test.beforeEach(async ({ testWorkspace }) => {
 					request: 'launch',
 					debugAdapter: {
 						program: process.execPath,
-						args: [
-							join(directory, 'paired-adapter.cjs'),
-							join(directory, 'paired-source.js'),
-							join(directory, 'ash-requests.jsonl'),
-						],
+						args: [join(directory, 'paired-adapter.cjs'), join(directory, 'paired-source.js'), join(directory, 'ash-requests.jsonl')],
 					},
 				},
 			],
@@ -118,11 +108,7 @@ interface PairHost {
 }
 
 async function focusedRow(row: Locator): Promise<boolean> {
-	return row.evaluate(
-		element =>
-			element.contains(document.activeElement) ||
-			document.activeElement?.getAttribute('aria-activedescendant') === element.id,
-	);
+	return row.evaluate(element => element.contains(document.activeElement) || document.activeElement?.getAttribute('aria-activedescendant') === element.id);
 }
 
 test(
@@ -190,7 +176,9 @@ test(
 					label: document.activeElement?.getAttribute('aria-label'),
 				})),
 			});
-			await host.page.screenshot({ path: testInfo.outputPath(`${host.kind}-${step}.png`) });
+			await host.page.screenshot({
+				path: testInfo.outputPath(`${host.kind}-${step}.png`),
+			});
 		};
 		let upstream: ElectronApplication | undefined;
 		const referenceResource = await registerRunResource();
@@ -223,10 +211,7 @@ test(
 			await upstream.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
 			referencePage.setDefaultTimeout(15_000);
 			await expect(referencePage.locator('.monaco-workbench')).toBeVisible();
-			const appRoot =
-				process.platform === 'darwin'
-					? resolve(dirname(upstreamExecutable!), '../Resources/app')
-					: join(dirname(upstreamExecutable!), 'resources', 'app');
+			const appRoot = process.platform === 'darwin' ? resolve(dirname(upstreamExecutable!), '../Resources/app') : join(dirname(upstreamExecutable!), 'resources', 'app');
 			const product = JSON.parse(await readFile(join(appRoot, 'product.json'), 'utf8'));
 			evidence.upstream = {
 				version: JSON.parse(await readFile(join(appRoot, 'package.json'), 'utf8')).version,
@@ -234,38 +219,29 @@ test(
 				date: product.date,
 			};
 			await workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
-			const openViews = () =>
-				workbench.page
-					.locator('[data-part="sidebar"] .ash-pane-composite-title')
-					.getByRole('button', { name: 'More Actions', exact: true })
-					.click();
+			const openViews = () => workbench.page.locator('[data-part="sidebar"] .ash-pane-composite-title').getByRole('button', { name: 'More Actions', exact: true }).click();
 			const items = await workbench.menus.inspect(application, openViews);
-			await workbench.menus.select(
-				application,
-				openViews,
-				items.some(item => item.label === 'Call Stack') ? ['Call Stack'] : ['Views', 'Call Stack'],
-			);
+			await workbench.menus.select(application, openViews, items.some(item => item.label === 'Call Stack') ? ['Call Stack'] : ['Views', 'Call Stack']);
 			({ application, workbench } = await reloadWorkbench());
 			workbench.page.setDefaultTimeout(15_000);
-			if (!(await workbench.page.locator('[data-view-container-id="ash.debug"]').isVisible()))
-				await workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+			if (!(await workbench.page.locator('[data-view-container-id="ash.debug"]').isVisible())) await workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 			await expect(workbench.page.locator('[data-view-id="workbench.debug.callStackView"]')).toHaveCount(0);
 			await referencePage.keyboard.press('ControlOrMeta+Shift+D');
-			await referencePage
-				.locator('.part.sidebar')
-				.getByRole('button', { name: 'Views and More Actions...', exact: true })
-				.click();
-			evidence.referenceViewMenu = await referencePage
-				.locator('[role^="menuitem"]')
-				.evaluateAll(elements =>
-					elements.map(element => ({
-						role: element.getAttribute('role'),
-						label: element.getAttribute('aria-label'),
-						text: element.textContent,
-					})),
-				);
+			await referencePage.locator('.part.sidebar').getByRole('button', { name: 'Views and More Actions...', exact: true }).click();
+			evidence.referenceViewMenu = await referencePage.locator('[role^="menuitem"]').evaluateAll(elements =>
+				elements.map(element => ({
+					role: element.getAttribute('role'),
+					label: element.getAttribute('aria-label'),
+					text: element.textContent,
+				})),
+			);
 			await referencePage.getByText('Call Stack', { exact: true }).last().click();
-			await expect(referencePage.getByRole('button', { name: 'Call Stack Section', exact: true })).toHaveCount(0);
+			await expect(
+				referencePage.getByRole('button', {
+					name: 'Call Stack Section',
+					exact: true,
+				}),
+			).toHaveCount(0);
 			const referenceCommand = async (_id: string, label: string) => {
 				await referencePage.keyboard.press('F1');
 				const input = referencePage.locator('.quick-input-widget input');
@@ -277,7 +253,12 @@ test(
 			await referenceReload;
 			console.log('Reference views hidden; reloading');
 			await expect(referencePage.locator('.monaco-workbench')).toBeVisible();
-			await expect(referencePage.getByRole('button', { name: 'Call Stack Section', exact: true })).toHaveCount(0);
+			await expect(
+				referencePage.getByRole('button', {
+					name: 'Call Stack Section',
+					exact: true,
+				}),
+			).toHaveCount(0);
 			const ash: PairHost = {
 				kind: 'ash',
 				page: workbench.page,
@@ -286,24 +267,21 @@ test(
 				cursor: workbench.page.locator('[data-statusbar-item-id="ash.status.editor.cursor"]'),
 				command: id => workbench.quickaccess.runCommand(id),
 				size: async (width, height) => {
-					await (application as ElectronApplication).evaluate(
-						({ BrowserWindow }, bounds) => BrowserWindow.getAllWindows()[0].setBounds(bounds),
-						{ width, height },
-					);
+					await (application as ElectronApplication).evaluate(({ BrowserWindow }, bounds) => BrowserWindow.getAllWindows()[0].setBounds(bounds), { width, height });
 				},
 			};
 			const vscode: PairHost = {
 				kind: 'vscode',
 				page: referencePage,
-				variables: referencePage.getByRole('tree', { name: 'Debug Variables', exact: true }),
+				variables: referencePage.getByRole('tree', {
+					name: 'Debug Variables',
+					exact: true,
+				}),
 				editor: referencePage.locator('.editor-instance .monaco-editor:visible'),
 				cursor: referencePage.locator('[id="status.editor.selection"]'),
 				command: referenceCommand,
 				size: async (width, height) => {
-					await upstream!.evaluate(
-						({ BrowserWindow }, bounds) => BrowserWindow.getAllWindows()[0].setBounds(bounds),
-						{ width, height },
-					);
+					await upstream!.evaluate(({ BrowserWindow }, bounds) => BrowserWindow.getAllWindows()[0].setBounds(bounds), { width, height });
 				},
 			};
 			for (const host of [ash, vscode]) {
@@ -327,13 +305,21 @@ test(
 				const hiddenStack =
 					host.kind === 'ash'
 						? page.locator('[data-view-id="workbench.debug.callStackView"]')
-						: page.getByRole('button', { name: 'Call Stack Section', exact: true });
+						: page.getByRole('button', {
+								name: 'Call Stack Section',
+								exact: true,
+							});
 				await expect(hiddenStack).toHaveCount(0);
-				await capture(host, 'hidden-stack-source', { sourceLine: 2, callStackAbsent: true });
+				await capture(host, 'hidden-stack-source', {
+					sourceLine: 2,
+					callStackAbsent: true,
+				});
 				const variable = (name: string) =>
 					host.kind === 'ash'
 						? host.variables.locator('.ash-debug-variable').filter({ hasText: `${name} =` })
-						: host.variables.getByRole('treeitem', { name: new RegExp(`^${name}, value `) });
+						: host.variables.getByRole('treeitem', {
+								name: new RegExp(`^${name}, value `),
+							});
 				const answer = variable('answer');
 				await answer.dblclick();
 				const edit = host.variables.locator('input:visible');
@@ -361,11 +347,7 @@ test(
 				await edit.press('Enter');
 				await expect(child).toContainText('2');
 				if (host.kind === 'ash') await expect.poll(() => focusedRow(child)).toBe(true);
-				expect(
-					(await requests())
-						.filter(request => request.command === 'setVariable')
-						.map(request => request.arguments),
-				).toEqual([
+				expect((await requests()).filter(request => request.command === 'setVariable').map(request => request.arguments)).toEqual([
 					{ variablesReference: 10, name: 'answer', value: '43' },
 					{ variablesReference: 20, name: 'child', value: '2' },
 				]);
@@ -381,10 +363,7 @@ test(
 				});
 				await watchHeader.hover();
 				await page.getByRole('button', { name: /^Add (?:watch )?Expression$/i }).click();
-				const watchInput =
-					host.kind === 'ash'
-						? page.getByRole('textbox', { name: 'Add watch expression' })
-						: page.locator('.debug-watch input');
+				const watchInput = host.kind === 'ash' ? page.getByRole('textbox', { name: 'Add watch expression' }) : page.locator('.debug-watch input');
 				await watchInput.fill('answer');
 				await watchInput.press('Enter');
 				const watch = page.locator(host.kind === 'ash' ? '.ash-debug-watch-value' : '.debug-watch .expression');
@@ -409,13 +388,9 @@ test(
 				await input.press('Shift+ArrowRight');
 				await expect(host.cursor).toContainText('3 selected');
 				await capture(host, 'source-selection', { selectedCharacters: 3 });
-				await input.press(
-					host.kind === 'vscode' && process.platform === 'darwin' ? 'Meta+ArrowDown' : 'ControlOrMeta+End',
-				);
+				await input.press(host.kind === 'vscode' && process.platform === 'darwin' ? 'Meta+ArrowDown' : 'ControlOrMeta+End');
 				await expect(host.editor).toContainText('synthetic\u00a0source\u00a0line\u00a0200');
-				await input.press(
-					host.kind === 'vscode' && process.platform === 'darwin' ? 'Meta+ArrowUp' : 'ControlOrMeta+Home',
-				);
+				await input.press(host.kind === 'vscode' && process.platform === 'darwin' ? 'Meta+ArrowUp' : 'ControlOrMeta+Home');
 				await expect(host.cursor).toContainText('Ln 1, Col 1');
 				await expect(host.editor).toContainText('const\u00a0answer');
 				await capture(host, 'source-scroll', {
@@ -424,21 +399,13 @@ test(
 					editorFocused: await input.evaluate(element => element === document.activeElement),
 				});
 				await host.command('workbench.debug.action.focusRepl', 'Debug Console: Focus on Debug Console View');
-				const consoleInput = page.locator(
-					host.kind === 'ash'
-						? '.ash-debug-console-form .stanza-editor-input'
-						: '.repl-input-wrapper [role="textbox"]',
-				);
+				const consoleInput = page.locator(host.kind === 'ash' ? '.ash-debug-console-form .stanza-editor-input' : '.repl-input-wrapper [role="textbox"]');
 				await consoleInput.focus();
 				await expect(consoleInput).toBeFocused();
 				await page.keyboard.insertText('answer');
 				await consoleInput.press('Enter');
 				await expect
-					.poll(async () =>
-						(await requests())
-							.filter(request => request.command === 'evaluate' && request.arguments?.context === 'repl')
-							.map(request => request.arguments?.expression),
-					)
+					.poll(async () => (await requests()).filter(request => request.command === 'evaluate' && request.arguments?.context === 'repl').map(request => request.arguments?.expression))
 					.toEqual(['answer']);
 				const consoleOutput = page.locator(host.kind === 'ash' ? '.ash-debug-console-output' : '.repl');
 				await expect(consoleOutput).toContainText('PAIRED_DEBUG_READY');
@@ -457,9 +424,7 @@ test(
 					['hcLight', 'Ash High Contrast Light', 'Light High Contrast'],
 				] as const) {
 					await host.command('workbench.action.selectTheme', 'Preferences: Color Theme');
-					const themeInput = page.locator(
-						host.kind === 'ash' ? '.ash-quick-pick input' : '.quick-input-widget input',
-					);
+					const themeInput = page.locator(host.kind === 'ash' ? '.ash-quick-pick input' : '.quick-input-widget input');
 					await expect(themeInput).not.toHaveValue(/^>/);
 					const selectedTheme = host.kind === 'ash' ? ashTheme : referenceTheme;
 					await themeInput.fill(selectedTheme);
@@ -479,11 +444,7 @@ test(
 							}[name]!,
 						);
 					} else {
-						await expect(page.locator('.monaco-workbench')).toHaveClass(
-							new RegExp(
-								`(?:^|\\s)${{ dark: 'vs-dark', light: 'vs', hcDark: 'hc-black', hcLight: 'hc-light' }[name]}(?:\\s|$)`,
-							),
-						);
+						await expect(page.locator('.monaco-workbench')).toHaveClass(new RegExp(`(?:^|\\s)${{ dark: 'vs-dark', light: 'vs', hcDark: 'hc-black', hcLight: 'hc-light' }[name]}(?:\\s|$)`));
 					}
 					await host.size(1000, 700);
 					await answer.click();
@@ -513,7 +474,12 @@ test(
 					}));
 					expect(colors.background).not.toBe('rgba(0, 0, 0, 0)');
 					await expect.poll(() => focusedRow(answer)).toBe(true);
-					await capture(host, `theme-${name}`, { ...geometry, colors, theme: name, variableFocused: true });
+					await capture(host, `theme-${name}`, {
+						...geometry,
+						colors,
+						theme: name,
+						variableFocused: true,
+					});
 					await host.size(1440, 900);
 				}
 				await host.command('workbench.action.debug.showLoadedScripts', 'Debug: Open Loaded Script');
@@ -522,34 +488,21 @@ test(
 				await expect(sourcePicker).toContainText('paired-generated.js');
 				await sourcePicker.locator('input').press('Enter');
 				await expect(host.editor).toContainText('pairedGenerated');
-				await expect
-					.poll(async () =>
-						(await requests())
-							.filter(request => request.command === 'source')
-							.map(request => request.arguments?.sourceReference),
-					)
-					.toContain(25);
-				await capture(host, 'loaded-source', { sourceReference: 25, content: 'const pairedGenerated = 25;' });
+				await expect.poll(async () => (await requests()).filter(request => request.command === 'source').map(request => request.arguments?.sourceReference)).toContain(25);
+				await capture(host, 'loaded-source', {
+					sourceReference: 25,
+					content: 'const pairedGenerated = 25;',
+				});
 				await host.command('workbench.action.debug.stop', 'Debug: Stop');
-				await expect
-					.poll(async () => (await requests()).filter(request => request.command === 'disconnect').length)
-					.toBe(1);
+				await expect.poll(async () => (await requests()).filter(request => request.command === 'disconnect').length).toBe(1);
 				await expect(host.variables).not.toContainText('answer');
-				await capture(host, 'stop', { disconnected: true, variablesRetired: true });
+				await capture(host, 'stop', {
+					disconnected: true,
+					variablesRetired: true,
+				});
 			}
-			for (const step of [
-				'hidden-stack-source',
-				'variable-edit',
-				'step-watch',
-				'source-selection',
-				'source-scroll',
-				'console-input',
-				'loaded-source',
-				'stop',
-			]) {
-				const results = (snapshots as { step: string; result: unknown }[])
-					.filter(snapshot => snapshot.step === step)
-					.map(snapshot => snapshot.result);
+			for (const step of ['hidden-stack-source', 'variable-edit', 'step-watch', 'source-selection', 'source-scroll', 'console-input', 'loaded-source', 'stop']) {
+				const results = (snapshots as { step: string; result: unknown }[]).filter(snapshot => snapshot.step === step).map(snapshot => snapshot.result);
 				expect(results, step).toHaveLength(2);
 				expect(results[0], step).toEqual(results[1]);
 			}
@@ -559,9 +512,7 @@ test(
 				if (upstream) {
 					for (const page of upstream.windows()) {
 						if (!page.isClosed()) {
-							await page
-								.screenshot({ path: testInfo.outputPath('reference-final.png') })
-								.catch(() => undefined);
+							await page.screenshot({ path: testInfo.outputPath('reference-final.png') }).catch(() => undefined);
 							evidence.referenceFinalText = await page
 								.locator('body')
 								.innerText()

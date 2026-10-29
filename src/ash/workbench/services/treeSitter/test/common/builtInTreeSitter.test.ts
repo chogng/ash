@@ -15,11 +15,7 @@ import type { TreeSitterTokenizationRuntime } from '../../../../../editor/common
 import { TreeSitterWorker } from '../../../../../editor/common/services/treeSitter/treeSitterWorker.js';
 import type { ITreeSitterLibraryService } from '../../../../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import type { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import {
-	editorLanguageForSyntaxLanguage,
-	syntaxLanguageForEditorLanguage,
-	syntaxLanguages,
-} from '../../../../../platform/syntax/common/syntaxApi.js';
+import { editorLanguageForSyntaxLanguage, syntaxLanguageForEditorLanguage, syntaxLanguages } from '../../../../../platform/syntax/common/syntaxApi.js';
 import { getWorkbenchColorTheme } from '../../../../common/theme.js';
 import { createTestSyntaxBackend as createTreeSitterSyntaxTokenBackend } from '../../../../../../../test/fixtures/codeSyntaxBackend.js';
 import { getLanguageFoldingRules } from '../../../../../platform/language/common/languageFolding.generated.js';
@@ -29,8 +25,7 @@ import type { LanguageDiagnostic } from '../../../../../editor/common/languages.
 import { acquireJsonLanguageDiagnostics } from '../../../../../../../test/fixtures/jsonLanguageFeatures.js';
 import { TreeSitterSyntaxProviders } from '../../browser/treeSitterLibraryService.js';
 
-const runtime =
-	(treeSitterNamespace as unknown as { default?: typeof treeSitterNamespace }).default ?? treeSitterNamespace;
+const runtime = (treeSitterNamespace as unknown as { default?: typeof treeSitterNamespace }).default ?? treeSitterNamespace;
 interface Grammar {
 	name: string;
 	languages: { id: string }[];
@@ -43,12 +38,7 @@ const grammarRelease = JSON.parse(readFileSync('third_party/ash-grammars/runtime
 	version: string;
 	wasm: { sha256: string };
 };
-const grammarDirectory = resolve(
-	'third_party/.cache/ash-grammars',
-	grammarRelease.version,
-	`wasm-${grammarRelease.wasm.sha256}`,
-	'wasm',
-);
+const grammarDirectory = resolve('third_party/.cache/ash-grammars', grammarRelease.version, `wasm-${grammarRelease.wasm.sha256}`, 'wasm');
 const grammars = new Map<string, { directory: string; grammar: Grammar }>();
 for (const directory of readdirSync('extensions')) {
 	const file = resolve('extensions', directory, 'tree-sitter/grammars.json');
@@ -79,8 +69,7 @@ async function load(id: string): Promise<TreeSitterTokenizationRuntime | undefin
 	if (!pending) {
 		pending = (async () => {
 			const { directory, grammar } = grammars.get(language)!;
-			const resource = (file: string) =>
-				file.startsWith('@') ? resolve('extensions', file.slice(1)) : resolve('extensions', directory, file);
+			const resource = (file: string) => (file.startsWith('@') ? resolve('extensions', file.slice(1)) : resolve('extensions', directory, file));
 			const queries = (files: string[]) => files.map(file => readFileSync(resource(file), 'utf8')).join('\n');
 			const wasm = resolve(grammarDirectory, `${grammar.name}.wasm`);
 			const highlights = queries(grammar.highlights),
@@ -119,9 +108,7 @@ const library: ITreeSitterLibraryService = {
 			revision: model.version,
 			language: model.getLanguageId(),
 		});
-		const edits = model.onDidChangeContent(change =>
-			worker.handleNotification({ kind: 'update', document: 1, change }),
-		);
+		const edits = model.onDidChangeContent(change => worker.handleNotification({ kind: 'update', document: 1, change }));
 		return {
 			...toDisposable(() => {
 				edits.dispose();
@@ -131,8 +118,7 @@ const library: ITreeSitterLibraryService = {
 			update: () => {
 				/* The model listener synchronizes this in-process session. */
 			},
-			request: (operation, data, signal) =>
-				worker.handleRequest({ ...data, document: 1, revision: model.version, operation }, signal),
+			request: (operation, data, signal) => worker.handleRequest({ ...data, document: 1, revision: model.version, operation }, signal),
 		};
 	},
 };
@@ -144,37 +130,21 @@ async function highlighted(language: string, text: string, themeId = 'ash-dark')
 	using backend = createTreeSitterSyntaxTokenBackend(model, configuration, library, themeService)!;
 	backend.setVisibleLines([{ startLineNumber: 1, endLineNumber: model.getLineCount() }]);
 	await backend.whenReady(new AbortController().signal);
-	return backend.lines.flatMap(row =>
-		row.tokens.map(token => ({ ...token, text: model.getTextInRange(token.range) })),
-	);
+	return backend.lines.flatMap(row => row.tokens.map(token => ({ ...token, text: model.getTextInRange(token.range) })));
 }
 
 for (const id of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 	test(`Markdown Tree-sitter preserves authored styles in ${id}`, async () => {
-		const tokens = await highlighted(
-			'markdown',
-			'# Heading\n\n**strong** *emphasis* ~~removed~~ `inline` [link](https://example.com)\n\n- item\n> quote\n\n```\ncode block\n```',
-			id,
-		);
+		const tokens = await highlighted('markdown', '# Heading\n\n**strong** *emphasis* ~~removed~~ `inline` [link](https://example.com)\n\n- item\n> quote\n\n```\ncode block\n```', id);
 		for (const text of ['Heading', 'inline', 'https://example.com', 'code block', '-', '>']) {
 			const token = tokens.find(token => token.text.includes(text));
 			assert.ok(token?.presentation?.foreground, `${id}: ${text} has a syntax color`);
-			assert.notEqual(
-				token.presentation.foreground.toLowerCase(),
-				getWorkbenchColorTheme(id).getColorCss('editor.foreground')?.toLowerCase(),
-				`${id}: ${text} differs from prose`,
-			);
+			assert.notEqual(token.presentation.foreground.toLowerCase(), getWorkbenchColorTheme(id).getColorCss('editor.foreground')?.toLowerCase(), `${id}: ${text} differs from prose`);
 		}
 		assert.ok(tokens.find(token => token.text.includes('strong'))?.presentation?.fontStyle?.includes('bold'));
 		assert.ok(tokens.find(token => token.text.includes('emphasis'))?.presentation?.fontStyle?.includes('italic'));
-		assert.ok(
-			tokens.find(token => token.text.includes('removed'))?.presentation?.fontStyle?.includes('strikethrough'),
-		);
-		assert.ok(
-			tokens
-				.find(token => token.text.includes('https://example.com'))
-				?.presentation?.fontStyle?.includes('underline'),
-		);
+		assert.ok(tokens.find(token => token.text.includes('removed'))?.presentation?.fontStyle?.includes('strikethrough'));
+		assert.ok(tokens.find(token => token.text.includes('https://example.com'))?.presentation?.fontStyle?.includes('underline'));
 		assert.ok(tokens.find(token => token.text.includes('Heading'))?.presentation?.fontStyle?.includes('bold'));
 	});
 	test(`Git and INI Tree-sitter preserve meaningful colors in ${id}`, async () => {
@@ -240,11 +210,7 @@ test('CoffeeScript parses the official-compiler-validated corpus through edits a
 			const check = () => {
 				assert.equal(tree.rootNode.hasError, false, sample.name);
 				const sequence = tree.rootNode.namedChildren.find(node => node?.type === 'statement_sequence');
-				assert.equal(
-					sequence?.namedChildren.filter(node => node?.type === 'statement').length ?? 0,
-					sample.topLevelStatements,
-					sample.name,
-				);
+				assert.equal(sequence?.namedChildren.filter(node => node?.type === 'statement').length ?? 0, sample.topLevelStatements, sample.name);
 			};
 			try {
 				check();
@@ -317,11 +283,7 @@ test('CoffeeScript recovers from an incomplete parameter list and excessive inde
 			tree.delete();
 		}
 		// Beyond the scanner's serialized-state budget, malformed trees must remain recoverable.
-		const deep = parser.parse(
-			Array.from({ length: 520 }, (_, depth) => '  '.repeat(depth) + 'if yes\n').join('') +
-				'  '.repeat(520) +
-				'value = 1\n',
-		)!;
+		const deep = parser.parse(Array.from({ length: 520 }, (_, depth) => '  '.repeat(depth) + 'if yes\n').join('') + '  '.repeat(520) + 'value = 1\n')!;
 		try {
 			assert.equal(deep.rootNode.hasError, true);
 		} finally {
@@ -373,40 +335,16 @@ test('Embedded script preserves language identity through unstyled text and supp
 	using backend = createTreeSitterSyntaxTokenBackend(model, configuration, library, themeService)!;
 	await backend.whenReady(new AbortController().signal);
 	const unknown = model.getValue().indexOf('unknown') + 1;
-	assert.ok(
-		backend
-			.getLanguageTokens(1)
-			.some(
-				token =>
-					token.languageId === 'javascript' &&
-					token.range.startColumn <= unknown &&
-					token.range.endColumn > unknown,
-			),
-	);
-	assert.ok(
-		backend
-			.getBracketPairs(new Range(1, 1, 1, model.getLineMaxColumn(1)))
-			.some(pair => pair.text === '{' && pair.closeText === '}'),
-	);
-	const preview = await backend.tokenizeLinesAtAsync(
-		1,
-		['<script>const value = "changed";</script>'],
-		new AbortController().signal,
-	);
+	assert.ok(backend.getLanguageTokens(1).some(token => token.languageId === 'javascript' && token.range.startColumn <= unknown && token.range.endColumn > unknown));
+	assert.ok(backend.getBracketPairs(new Range(1, 1, 1, model.getLineMaxColumn(1))).some(pair => pair.text === '{' && pair.closeText === '}'));
+	const preview = await backend.tokenizeLinesAtAsync(1, ['<script>const value = "changed";</script>'], new AbortController().signal);
 	assert.ok(preview[0]!.some(token => token.languageId === 'javascript' && token.tokenType === 'string'));
 	assert.equal(model.getValue(), '<script>const value = { unknown };</script>');
 });
 
 test('Multiline embedded strings cannot consume Diff change markers', async () => {
-	const tokens = await highlighted(
-		'diff',
-		'diff --git a/main.js b/main.js\n--- a/main.js\n+++ b/main.js\n@@ -1,2 +1,2 @@\n-const old = `one\n-two`;\n+const value = `three\n+four`;\n',
-	);
-	assert.ok(
-		tokens.some(
-			token => token.languageId === 'javascript' && token.tokenType === 'string' && token.text.includes('four'),
-		),
-	);
+	const tokens = await highlighted('diff', 'diff --git a/main.js b/main.js\n--- a/main.js\n+++ b/main.js\n@@ -1,2 +1,2 @@\n-const old = `one\n-two`;\n+const value = `three\n+four`;\n');
+	assert.ok(tokens.some(token => token.languageId === 'javascript' && token.tokenType === 'string' && token.text.includes('four')));
 	assert.equal(
 		tokens.some(token => token.languageId === 'javascript' && /^[+-]/.test(token.text)),
 		false,
@@ -419,15 +357,7 @@ test('Markdown hypothetical edits preserve embedded language and relative Unicod
 	using backend = createTreeSitterSyntaxTokenBackend(model, configuration, library, themeService)!;
 	await backend.whenReady(new AbortController().signal);
 	const preview = await backend.tokenizeLinesAtAsync(4, ['print("更新🙂")'], new AbortController().signal);
-	assert.ok(
-		preview[0]!.some(
-			token =>
-				token.languageId === 'python' &&
-				token.tokenType === 'string' &&
-				token.range.startLineNumber === 1 &&
-				token.range.endColumn <= 14,
-		),
-	);
+	assert.ok(preview[0]!.some(token => token.languageId === 'python' && token.tokenType === 'string' && token.range.startLineNumber === 1 && token.range.endColumn <= 14));
 	assert.equal(model.getLineContent(4), 'print("你好🙂")');
 });
 
@@ -438,18 +368,12 @@ test('token inspection reads current UTF-16 captures from the shared backend and
 	assert.deepEqual(backend.getTokenCaptures(1), []);
 	await backend.whenReady(new AbortController().signal);
 	const before = backend.getTokenCaptures(1);
-	assert.ok(
-		before.some(token => token.name === 'function' && model.getValue().slice(token.start, token.end) === 'demo'),
-	);
+	assert.ok(before.some(token => token.name === 'function' && model.getValue().slice(token.start, token.end) === 'demo'));
 	const start = model.getValue().indexOf('demo') + 1;
 	model.applyEdits([{ range: new Range(1, start, 1, start + 4), text: 'renamed' }]);
 	assert.deepEqual(backend.getTokenCaptures(1), []);
 	await backend.whenReady(new AbortController().signal);
-	assert.ok(
-		backend
-			.getTokenCaptures(1)
-			.some(token => token.name === 'function' && model.getValue().slice(token.start, token.end) === 'renamed'),
-	);
+	assert.ok(backend.getTokenCaptures(1).some(token => token.name === 'function' && model.getValue().slice(token.start, token.end) === 'renamed'));
 	assert.notEqual(before, backend.getTokenCaptures(1));
 });
 
@@ -457,12 +381,7 @@ test('Every declared syntax language loads its real WASM grammar and themeable c
 	for (const id of syntaxLanguages) {
 		const grammar = (await load(id))!;
 		for (const capture of grammar.query.captureNames) {
-			if (!capture.startsWith('_'))
-				assert.match(
-					capture,
-					/^[A-Za-z][\w]*(?:\.[\w]+)*$/u,
-					`${id}: ${capture} must be usable as a theme selector`,
-				);
+			if (!capture.startsWith('_')) assert.match(capture, /^[A-Za-z][\w]*(?:\.[\w]+)*$/u, `${id}: ${capture} must be usable as a theme selector`);
 		}
 		const parser = new grammar.Parser();
 		parser.setLanguage(grammar.language);
@@ -481,22 +400,13 @@ test('Hypothetical tokenization uses the shared parser without a legacy token pr
 	using model = new TextModel('fn main() {}', {
 		languageId: 'rs',
 		tokenization: {
-			createSyntaxTokenBackend: value =>
-				createTreeSitterSyntaxTokenBackend(value, configuration, library, themeService),
+			createSyntaxTokenBackend: value => createTreeSitterSyntaxTokenBackend(value, configuration, library, themeService),
 		},
 	});
 	await model.tokenization.whenReady(new AbortController().signal);
-	const tokens = await model.tokenization.tokenizeLinesAtAsync(
-		1,
-		['fn preview() { "preview"; }'],
-		new AbortController().signal,
-	);
+	const tokens = await model.tokenization.tokenizeLinesAtAsync(1, ['fn preview() { "preview"; }'], new AbortController().signal);
 	assert.ok(tokens);
-	assert.ok(
-		Array.from({ length: tokens[0]!.getCount() }, (_, index) => tokens[0]!.getStandardTokenType(index)).includes(
-			StandardTokenType.String,
-		),
-	);
+	assert.ok(Array.from({ length: tokens[0]!.getCount() }, (_, index) => tokens[0]!.getStandardTokenType(index)).includes(StandardTokenType.String));
 	assert.equal(model.getValue(), 'fn main() {}');
 });
 
@@ -513,14 +423,12 @@ for (const [language, text, valid] of [
 			resource,
 			languageId: language,
 			tokenization: {
-				createSyntaxTokenBackend: value =>
-					createTreeSitterSyntaxTokenBackend(value, configuration, library, themeService),
+				createSyntaxTokenBackend: value => createTreeSitterSyntaxTokenBackend(value, configuration, library, themeService),
 			},
 		});
 		await model.tokenization.whenReady(new AbortController().signal);
 		const facts = await model.tokenization.syntaxTree!.getFacts(new AbortController().signal);
-		if (language === 'jsonc' && valid)
-			assert.ok(facts.diagnostics.length > 0, 'exercise the grammar error caused by legal trailing commas');
+		if (language === 'jsonc' && valid) assert.ok(facts.diagnostics.length > 0, 'exercise the grammar error caused by legal trailing commas');
 		using features = new LanguageFeaturesService();
 		using providers = new TreeSitterSyntaxProviders(features);
 		assert.deepEqual(features.syntaxProvider.getDiagnosticProviders(language), []);
@@ -546,9 +454,7 @@ interface StructureFixture {
 	noFolds?: boolean;
 	exactSymbols?: boolean;
 }
-const structureFixtures = JSON.parse(
-	readFileSync('test/fixtures/tree-sitter/structure.json', 'utf8'),
-) as StructureFixture[];
+const structureFixtures = JSON.parse(readFileSync('test/fixtures/tree-sitter/structure.json', 'utf8')) as StructureFixture[];
 
 interface FoldingFixture {
 	language: string;
@@ -570,22 +476,13 @@ for (const [index, fixture] of foldingFixtures.entries())
 			revision: model.version,
 			language: fixture.language,
 		});
-		using changes = model.onDidChangeContent(change =>
-			worker.handleNotification({ kind: 'update', document: 1, change }),
-		);
+		using changes = model.onDidChangeContent(change => worker.handleNotification({ kind: 'update', document: 1, change }));
 		assert.equal(getLanguageFoldingRules(fixture.language)?.offSide ?? false, fixture.offSide);
 		for (let revision = 1; revision <= 3; revision++) {
-			const facts = (
-				await worker.handleRequest(
-					{ document: 1, revision: model.version, operation: 'facts' },
-					new AbortController().signal,
-				)
-			).facts!;
+			const facts = (await worker.handleRequest({ document: 1, revision: model.version, operation: 'facts' }, new AbortController().signal)).facts!;
 			const shift = revision === 2 ? 1 : 0;
 			assert.deepEqual(
-				facts.folds
-					.filter(fold => fold.kind === 'region')
-					.map(fold => [fold.startLineIndex, fold.endLineIndex]),
+				facts.folds.filter(fold => fold.kind === 'region').map(fold => [fold.startLineIndex, fold.endLineIndex]),
 				fixture.regions.map(([start, end]) => [start + shift, end + shift]),
 			);
 			if (fixture.indentFold) {
@@ -615,16 +512,8 @@ for (const [index, fixture] of structureFixtures.entries())
 				revision: model.version,
 				language: fixture.language,
 			});
-			using changes = model.onDidChangeContent(change =>
-				worker.handleNotification({ kind: 'update', document: 1, change }),
-			);
-			const facts = async () =>
-				(
-					await worker.handleRequest(
-						{ document: 1, revision: model.version, operation: 'facts' },
-						new AbortController().signal,
-					)
-				).facts!;
+			using changes = model.onDidChangeContent(change => worker.handleNotification({ kind: 'update', document: 1, change }));
+			const facts = async () => (await worker.handleRequest({ document: 1, revision: model.version, operation: 'facts' }, new AbortController().signal)).facts!;
 			const original = await facts();
 			for (const name of fixture.symbols)
 				assert.ok(
@@ -654,10 +543,7 @@ for (const [index, fixture] of structureFixtures.entries())
 					revision: model.version,
 					language: fixture.language,
 				});
-				const cold = await fresh.handleRequest(
-					{ document: 1, revision: model.version, operation: 'facts' },
-					new AbortController().signal,
-				);
+				const cold = await fresh.handleRequest({ document: 1, revision: model.version, operation: 'facts' }, new AbortController().signal);
 				assert.deepEqual(shifted, cold.facts);
 			} finally {
 				fresh.dispose();

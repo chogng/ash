@@ -1,17 +1,11 @@
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { encodeBase64 } from '../../../base/common/buffer.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
-import {
-	DictationModelState,
-	type ILocalTranscriptionBackendService,
-	type IDictationModelStatus,
-} from '../common/localTranscription.js';
+import { DictationModelState, type ILocalTranscriptionBackendService, type IDictationModelStatus } from '../common/localTranscription.js';
 import type { DictationModelStage, DictationModelStatus } from '../../../../../.build/protocol/typescript/index.js';
 
 /** Converts only this domain's messages on the renderer's existing connection. */
-export function createAppServerLocalTranscriptionBackendService(
-	client: AppServerProtocolClient,
-): ILocalTranscriptionBackendService {
+export function createAppServerLocalTranscriptionBackendService(client: AppServerProtocolClient): ILocalTranscriptionBackendService {
 	return {
 		get isConnected() {
 			return client.state === 'ready';
@@ -57,8 +51,7 @@ export function createAppServerLocalTranscriptionBackendService(
 			const status = await client.request(APP_SERVER_METHODS['dictation/model/read'], { modelId: model });
 			return modelSnapshot(status);
 		},
-		listModels: async () =>
-			(await client.request(APP_SERVER_METHODS['dictation/model/list'], null)).models.map(modelSnapshot),
+		listModels: async () => (await client.request(APP_SERVER_METHODS['dictation/model/list'], null)).models.map(modelSnapshot),
 		getModelCacheInfo: async () => {
 			const cache = await client.request(APP_SERVER_METHODS['dictation/model/list'], null);
 			return { directory: cache.cacheDirectory, version: cache.packageVersion };

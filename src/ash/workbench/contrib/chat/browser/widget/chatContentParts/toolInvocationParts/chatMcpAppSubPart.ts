@@ -12,28 +12,13 @@ import { isWeb } from '../../../../../../../base/common/platform.js';
 import { mainWindow } from '../../../../../../../base/browser/window.js';
 import { Emitter } from '../../../../../../../base/common/event.js';
 import { canceled } from '../../../../../../../base/common/errors.js';
-import {
-	Disposable,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-	type IDisposable,
-} from '../../../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { getNLSLanguage, localize } from '../../../../../../../nls.js';
 import { IAgentThreadService } from '../../../../../../../platform/agentHost/common/agentService.js';
-import {
-	type AgentAttachmentSource,
-	type AgentMcpAppCsp,
-	type ChatContentPart,
-	type ThreadItem,
-} from '../../../../../../../platform/agentHost/common/agent.js';
+import { type AgentAttachmentSource, type AgentMcpAppCsp, type ChatContentPart, type ThreadItem } from '../../../../../../../platform/agentHost/common/agent.js';
 import { INotificationService } from '../../../../../../../platform/notification/common/notification.js';
 import { editorBackground } from '../../../../../../../platform/theme/common/colors/editorColors.js';
-import {
-	foreground,
-	descriptionForeground,
-	focusBorder,
-} from '../../../../../../../platform/theme/common/colors/baseColors.js';
+import { foreground, descriptionForeground, focusBorder } from '../../../../../../../platform/theme/common/colors/baseColors.js';
 import { IThemeService } from '../../../../../../../platform/theme/common/themeService.js';
 import { IWebviewService, type IWebviewElement } from '../../../../../webview/browser/webview.js';
 
@@ -42,17 +27,8 @@ type Artifact = Extract<ChatContentPart, { readonly type: 'artifact' }>['artifac
 
 /** The original Chat owns submission and input context; a View cannot choose another conversation. */
 export interface IChatMcpAppDelegate {
-	updateModelContext(
-		source: AgentAttachmentSource & { readonly contentIndex: number },
-		text: string,
-		images?: readonly ChatContextAttachment[],
-	): IDisposable;
-	sendMessage(
-		source: AgentAttachmentSource & { readonly contentIndex: number },
-		text: string,
-		signal: AbortSignal,
-		images?: readonly ChatContextAttachment[],
-	): Promise<void>;
+	updateModelContext(source: AgentAttachmentSource & { readonly contentIndex: number }, text: string, images?: readonly ChatContextAttachment[]): IDisposable;
+	sendMessage(source: AgentAttachmentSource & { readonly contentIndex: number }, text: string, signal: AbortSignal, images?: readonly ChatContextAttachment[]): Promise<void>;
 }
 
 /** One declared MCP App. The Webview owns isolation; the original tool result owns all data. */
@@ -140,8 +116,7 @@ export class ChatMcpAppSubPart extends Disposable {
 			}),
 		);
 		const resize = new ResizeObserver(() => {
-			if (this.initialized && !this.isDisposed)
-				void this.post('ui/notifications/host-context-changed', this.context());
+			if (this.initialized && !this.isDisposed) void this.post('ui/notifications/host-context-changed', this.context());
 		});
 		resize.observe(this.viewport);
 		this._register(toDisposable(() => resize.disconnect()));
@@ -193,9 +168,7 @@ export class ChatMcpAppSubPart extends Disposable {
 		} catch (error) {
 			if (!controller.signal.aborted && !this.isDisposed) {
 				this.stop();
-				this.notifications.error(
-					localize('chat.mcpApp.openFailed', 'Could not open the interactive view: {0}', String(error)),
-				);
+				this.notifications.error(localize('chat.mcpApp.openFailed', 'Could not open the interactive view: {0}', String(error)));
 			}
 		} finally {
 			if (this.controller === controller) {
@@ -210,12 +183,7 @@ export class ChatMcpAppSubPart extends Disposable {
 		const method = value.method;
 		if (typeof method !== 'string') return;
 		const id = value.id;
-		if (
-			id !== undefined &&
-			!(typeof id === 'string' && id.length > 0 && id.length <= 256) &&
-			!(typeof id === 'number' && Number.isSafeInteger(id))
-		)
-			return;
+		if (id !== undefined && !(typeof id === 'string' && id.length > 0 && id.length <= 256) && !(typeof id === 'number' && Number.isSafeInteger(id))) return;
 		const params = boundedObject(value.params) ? value.params : undefined;
 		if (method === 'ui/notifications/initialized' && id === undefined && this.negotiating) {
 			this.initialized = true;
@@ -230,11 +198,7 @@ export class ChatMcpAppSubPart extends Disposable {
 			}
 			return;
 		}
-		if (
-			method === 'notifications/cancelled' &&
-			id === undefined &&
-			(typeof params?.requestId === 'string' || typeof params?.requestId === 'number')
-		) {
+		if (method === 'notifications/cancelled' && id === undefined && (typeof params?.requestId === 'string' || typeof params?.requestId === 'number')) {
 			this.pendingCalls.get(params.requestId)?.abort();
 			return;
 		}
@@ -250,10 +214,7 @@ export class ChatMcpAppSubPart extends Disposable {
 				id,
 				error: {
 					code: -32600,
-					message: localize(
-						'chat.mcpApp.busy',
-						'The App has too many pending requests or reused an active request ID.',
-					),
+					message: localize('chat.mcpApp.busy', 'The App has too many pending requests or reused an active request ID.'),
 				},
 			});
 			return;
@@ -274,26 +235,20 @@ export class ChatMcpAppSubPart extends Disposable {
 					id,
 					error: {
 						code: -32602,
-						message: localize(
-							'chat.mcpApp.contextInvalid',
-							'App context must contain text, supported images, resources or structured data.',
-						),
+						message: localize('chat.mcpApp.contextInvalid', 'App context must contain text, supported images, resources or structured data.'),
 					},
 				});
 				return;
 			}
 		}
 
-		const messageBlocks =
-			params?.content === undefined ? [] : Array.isArray(params.content) ? params.content : [params.content];
+		const messageBlocks = params?.content === undefined ? [] : Array.isArray(params.content) ? params.content : [params.content];
 		const validMessage =
 			messageBlocks.length > 0 &&
 			messageBlocks.length <= 64 &&
 			messageBlocks.filter(block => boundedObject(block) && block.type !== 'text').length <= 8 &&
 			messageBlocks.every(validContextBlock) &&
-			messageBlocks.some(
-				block => boundedObject(block) && (block.type !== 'text' || (block.text as string).trim()),
-			);
+			messageBlocks.some(block => boundedObject(block) && (block.type !== 'text' || (block.text as string).trim()));
 		const chatMessage = method === 'ui/message' && this.delegate && params?.role === 'user' && validMessage;
 		if (this.initialized && this.delegate && method === 'ui/message' && !chatMessage) {
 			void this.view.value?.postMessage({
@@ -301,10 +256,7 @@ export class ChatMcpAppSubPart extends Disposable {
 				id,
 				error: {
 					code: -32602,
-					message: localize(
-						'chat.mcpApp.messageInvalid',
-						'The App can send a nonempty user message with supported content.',
-					),
+					message: localize('chat.mcpApp.messageInvalid', 'The App can send a nonempty user message with supported content.'),
 				},
 			});
 			return;
@@ -320,18 +272,14 @@ export class ChatMcpAppSubPart extends Disposable {
 					id,
 					error: {
 						code: -32602,
-						message: localize(
-							'chat.mcpApp.downloadInvalid',
-							'App downloads must contain bounded embedded or linked resources.',
-						),
+						message: localize('chat.mcpApp.downloadInvalid', 'App downloads must contain bounded embedded or linked resources.'),
 					},
 				});
 				return;
 			}
 		}
 		const openLink = method === 'ui/open-link' && typeof params?.url === 'string';
-		const displayMode =
-			method === 'ui/request-display-mode' && ['inline', 'fullscreen', 'pip'].includes(String(params?.mode));
+		const displayMode = method === 'ui/request-display-mode' && ['inline', 'fullscreen', 'pip'].includes(String(params?.mode));
 		const toolList = method === 'tools/list' && (!params || params.cursor === undefined);
 		const toolCall =
 			method === 'tools/call' &&
@@ -340,21 +288,8 @@ export class ChatMcpAppSubPart extends Disposable {
 			params.name.length > 0 &&
 			params.name.length <= 256 &&
 			(params.arguments === undefined || boundedObject(params.arguments));
-		const resourceRead =
-			method === 'resources/read' &&
-			params &&
-			typeof params.uri === 'string' &&
-			params.uri.length > 0 &&
-			params.uri.length <= 4096;
-		if (
-			this.initialized &&
-			(contextUpdate ||
-				downloadEntries ||
-				toolList ||
-				openLink ||
-				displayMode ||
-				(params && (toolCall || resourceRead || chatMessage)))
-		) {
+		const resourceRead = method === 'resources/read' && params && typeof params.uri === 'string' && params.uri.length > 0 && params.uri.length <= 4096;
+		if (this.initialized && (contextUpdate || downloadEntries || toolList || openLink || displayMode || (params && (toolCall || resourceRead || chatMessage)))) {
 			if (this.pendingCalls.has(id) || this.pendingCalls.size >= 8) {
 				this.pendingCalls.get(id)?.abort();
 				void this.view.value?.postMessage({
@@ -362,10 +297,7 @@ export class ChatMcpAppSubPart extends Disposable {
 					id,
 					error: {
 						code: -32600,
-						message: localize(
-							'chat.mcpApp.busy',
-							'The App has too many pending requests or reused an active request ID.',
-						),
+						message: localize('chat.mcpApp.busy', 'The App has too many pending requests or reused an active request ID.'),
 					},
 				});
 				return;
@@ -382,59 +314,36 @@ export class ChatMcpAppSubPart extends Disposable {
 						: displayMode
 							? this.changeDisplayMode(params!.mode as string, controller.signal)
 							: toolList
-								? this.threads
-										.listAppTools(this.coordinate, controller.signal)
-										.then(tools => ({ tools }))
+								? this.threads.listAppTools(this.coordinate, controller.signal).then(tools => ({ tools }))
 								: toolCall
 									? this.threads
-											.invokeAppTool(
-												this.coordinate,
-												params!.name as string,
-												JSON.stringify(params!.arguments ?? {}),
-												controller.signal,
-											)
-											.then(result =>
-												resultPayload(result, this.threads, this.coordinate, controller.signal),
-											)
+											.invokeAppTool(this.coordinate, params!.name as string, JSON.stringify(params!.arguments ?? {}), controller.signal)
+											.then(result => resultPayload(result, this.threads, this.coordinate, controller.signal))
 									: chatMessage
 										? Promise.resolve()
 												.then(() => {
 													if (controller.signal.aborted) throw canceled();
 													// Once accepted, an ordinary Chat message belongs to the conversation beyond the View lifetime.
-													return this.sendMessage(
-														messageBlocks as Record<string, unknown>[],
-														controller.signal,
-													);
+													return this.sendMessage(messageBlocks as Record<string, unknown>[], controller.signal);
 												})
 												.then(() => ({}))
-										: this.threads
-												.readAppResource(
-													this.coordinate,
-													params!.uri as string,
-													controller.signal,
-												)
-												.then(resource => ({
-													contents: [
-														{
-															uri: params!.uri,
-															mimeType: resource.mimeType,
-															...(resource.resourceMetadata
-																? { _meta: JSON.parse(resource.resourceMetadata) }
-																: {}),
-															...(resource.encoding === 'text' ||
-															(resource.encoding === undefined &&
-																/^(?:text\/|application\/(?:json|xml)(?:;|$))/iu.test(
-																	resource.mimeType,
-																))
-																? {
-																		text: new TextDecoder('utf-8', {
-																			fatal: true,
-																		}).decode(resource.bytes),
-																	}
-																: { blob: bytesBase64(resource.bytes) }),
-														},
-													],
-												}));
+										: this.threads.readAppResource(this.coordinate, params!.uri as string, controller.signal).then(resource => ({
+												contents: [
+													{
+														uri: params!.uri,
+														mimeType: resource.mimeType,
+														...(resource.resourceMetadata ? { _meta: JSON.parse(resource.resourceMetadata) } : {}),
+														...(resource.encoding === 'text' ||
+														(resource.encoding === undefined && /^(?:text\/|application\/(?:json|xml)(?:;|$))/iu.test(resource.mimeType))
+															? {
+																	text: new TextDecoder('utf-8', {
+																		fatal: true,
+																	}).decode(resource.bytes),
+																}
+															: { blob: bytesBase64(resource.bytes) }),
+													},
+												],
+											}));
 			if (contextUpdate) {
 				this.contextPreparation = operation;
 				const clear = () => {
@@ -445,8 +354,7 @@ export class ChatMcpAppSubPart extends Disposable {
 			void operation
 				.then(
 					result => {
-						if (!controller.signal.aborted && view === this.view.value)
-							void view?.postMessage({ jsonrpc: '2.0', id, result });
+						if (!controller.signal.aborted && view === this.view.value) void view?.postMessage({ jsonrpc: '2.0', id, result });
 					},
 					error => {
 						if (!controller.signal.aborted && view === this.view.value)
@@ -455,11 +363,7 @@ export class ChatMcpAppSubPart extends Disposable {
 								id,
 								error: {
 									code: -32000,
-									message: localize(
-										'chat.mcpApp.requestFailed',
-										'The App request failed: {0}',
-										String(error),
-									),
+									message: localize('chat.mcpApp.requestFailed', 'The App request failed: {0}', String(error)),
 								},
 							});
 					},
@@ -542,34 +446,14 @@ export class ChatMcpAppSubPart extends Disposable {
 			if (signal.aborted || this.isDisposed) throw canceled();
 		}
 		if (signal.aborted || this.isDisposed) throw canceled();
-		if (!prepared.text.trim() && !prepared.images.length)
-			throw new Error(
-				localize(
-					'chat.mcpApp.messageInvalid',
-					'The App can send a nonempty user message with supported content.',
-				),
-			);
+		if (!prepared.text.trim() && !prepared.images.length) throw new Error(localize('chat.mcpApp.messageInvalid', 'The App can send a nonempty user message with supported content.'));
 		await this.delegate!.sendMessage(this.coordinate, prepared.text, signal, prepared.images);
 	}
 
-	private async updateContext(
-		params: Record<string, unknown>,
-		revision: number,
-		signal: AbortSignal,
-	): Promise<object> {
-		const prepared = await this.prepareContent(
-			(params.content ?? []) as Record<string, unknown>[],
-			signal,
-			() => revision === this.contextRevision,
-		);
-		const text = [
-			prepared.text,
-			...(params.structuredContent === undefined ? [] : [JSON.stringify(params.structuredContent)]),
-		]
-			.filter(Boolean)
-			.join('\n\n');
-		if (new TextEncoder().encode(text).byteLength > 262_144)
-			throw new Error(localize('chat.mcpApp.contextTooLarge', 'The App context exceeds the size limit.'));
+	private async updateContext(params: Record<string, unknown>, revision: number, signal: AbortSignal): Promise<object> {
+		const prepared = await this.prepareContent((params.content ?? []) as Record<string, unknown>[], signal, () => revision === this.contextRevision);
+		const text = [prepared.text, ...(params.structuredContent === undefined ? [] : [JSON.stringify(params.structuredContent)])].filter(Boolean).join('\n\n');
+		if (new TextEncoder().encode(text).byteLength > 262_144) throw new Error(localize('chat.mcpApp.contextTooLarge', 'The App context exceeds the size limit.'));
 		if (signal.aborted || this.isDisposed || revision !== this.contextRevision) throw canceled();
 		this.modelContext.value = this.delegate!.updateModelContext(this.coordinate, text, prepared.images);
 		return {};
@@ -612,46 +496,17 @@ export class ChatMcpAppSubPart extends Disposable {
 									};
 				if (signal.aborted || this.isDisposed || !isCurrent()) throw canceled();
 				bytes += resource.bytes.byteLength;
-				if (bytes > 262_144)
-					throw new Error(localize('chat.mcpApp.contextTooLarge', 'The App context exceeds the size limit.'));
-				if (
-					resource.encoding !== 'text' &&
-					['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(resource.mimeType)
-				) {
-					images.push(
-						await createImageAttachment(
-							localize('chat.mcpApp.imageContext', 'App image {0}', images.length + 1),
-							resource.bytes,
-							resource.mimeType,
-						),
-					);
-				} else if (
-					resource.encoding === 'text' ||
-					/^(?:text\/|application\/(?:json|xml)(?:$|;))/u.test(resource.mimeType)
-				) {
+				if (bytes > 262_144) throw new Error(localize('chat.mcpApp.contextTooLarge', 'The App context exceeds the size limit.'));
+				if (resource.encoding !== 'text' && ['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(resource.mimeType)) {
+					images.push(await createImageAttachment(localize('chat.mcpApp.imageContext', 'App image {0}', images.length + 1), resource.bytes, resource.mimeType));
+				} else if (resource.encoding === 'text' || /^(?:text\/|application\/(?:json|xml)(?:$|;))/u.test(resource.mimeType)) {
 					const value = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(resource.bytes);
-					text.push(
-						block.type === 'image'
-							? value
-							: localize(
-									'chat.mcpApp.resourceContext',
-									'Resource {0}:\n{1}',
-									embedded.uri as string,
-									value,
-								),
-					);
-				} else
-					throw new Error(
-						localize(
-							'chat.mcpApp.contextMediaUnsupported',
-							'This resource cannot be included in model context.',
-						),
-					);
+					text.push(block.type === 'image' ? value : localize('chat.mcpApp.resourceContext', 'Resource {0}:\n{1}', embedded.uri as string, value));
+				} else throw new Error(localize('chat.mcpApp.contextMediaUnsupported', 'This resource cannot be included in model context.'));
 			}
 		}
 		const joined = text.join('\n\n');
-		if (new TextEncoder().encode(joined).byteLength > 262_144 || bytes > 262_144)
-			throw new Error(localize('chat.mcpApp.contextTooLarge', 'The App context exceeds the size limit.'));
+		if (new TextEncoder().encode(joined).byteLength > 262_144 || bytes > 262_144) throw new Error(localize('chat.mcpApp.contextTooLarge', 'The App context exceeds the size limit.'));
 		if (signal.aborted || this.isDisposed || !isCurrent()) throw canceled();
 		return { text: joined, images };
 	}
@@ -664,8 +519,7 @@ export class ChatMcpAppSubPart extends Disposable {
 		if (signal.aborted) throw canceled();
 		const document = this.domNode.ownerDocument;
 		try {
-			if (mode === 'fullscreen' && document.fullscreenEnabled && this.displayMode() !== 'fullscreen')
-				await this.domNode.requestFullscreen();
+			if (mode === 'fullscreen' && document.fullscreenEnabled && this.displayMode() !== 'fullscreen') await this.domNode.requestFullscreen();
 			else if (mode === 'inline' && this.displayMode() === 'fullscreen') await document.exitFullscreen();
 		} catch {
 			/* Fullscreen admission is owned by the browser; report its actual mode. */
@@ -680,9 +534,7 @@ export class ChatMcpAppSubPart extends Disposable {
 	private logMessage(params: Record<string, unknown> | undefined): void {
 		if (
 			!params ||
-			!['debug', 'info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency'].includes(
-				String(params.level),
-			) ||
+			!['debug', 'info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency'].includes(String(params.level)) ||
 			!Object.hasOwn(params, 'data') ||
 			(params.logger !== undefined && (typeof params.logger !== 'string' || params.logger.length > 128))
 		)
@@ -721,10 +573,7 @@ export class ChatMcpAppSubPart extends Disposable {
 		}
 	}
 
-	private async download(
-		entries: readonly DownloadEntry[],
-		signal: AbortSignal,
-	): Promise<{ readonly isError?: boolean }> {
+	private async download(entries: readonly DownloadEntry[], signal: AbortSignal): Promise<{ readonly isError?: boolean }> {
 		if (signal.aborted) throw canceled();
 		const confirmation = this.dialogs.show({
 			kind: 'confirmation',
@@ -748,16 +597,10 @@ export class ChatMcpAppSubPart extends Disposable {
 		let total = 0;
 		for (const entry of entries) {
 			if (signal.aborted) throw canceled();
-			const resource =
-				entry.kind === 'linked'
-					? await this.threads.readAppResource(this.coordinate, entry.uri, signal)
-					: entry;
+			const resource = entry.kind === 'linked' ? await this.threads.readAppResource(this.coordinate, entry.uri, signal) : entry;
 			if (signal.aborted) throw canceled();
 			total += resource.bytes.byteLength;
-			if (total > 8 * 1024 * 1024)
-				throw new Error(
-					localize('chat.mcpApp.downloadTooLarge', 'The App export exceeds the download size limit.'),
-				);
+			if (total > 8 * 1024 * 1024) throw new Error(localize('chat.mcpApp.downloadTooLarge', 'The App export exceeds the download size limit.'));
 			files.push({
 				name: entry.name,
 				blob: new Blob([new Uint8Array(resource.bytes)], { type: resource.mimeType }),
@@ -816,9 +659,7 @@ export class ChatMcpAppSubPart extends Disposable {
 			let argumentsValue: unknown;
 			try {
 				argumentsValue = JSON.parse(this.argumentsJson);
-				const app = this.result.content?.find(
-					part => part.type === 'artifact' && part.artifact.source.type === 'mcpApp',
-				);
+				const app = this.result.content?.find(part => part.type === 'artifact' && part.artifact.source.type === 'mcpApp');
 				if (app?.type === 'artifact' && app.artifact.data.type === 'json' && !app.artifact.truncated) {
 					const payload = JSON.parse(app.artifact.data.json);
 					if (boundedObject(payload) && boundedObject(payload.input)) argumentsValue = payload.input;
@@ -848,10 +689,7 @@ export class ChatMcpAppSubPart extends Disposable {
 						});
 				},
 				error => {
-					if (!controller.signal.aborted && view === this.view.value)
-						this.notifications.error(
-							localize('chat.mcpApp.resultFailed', 'Could not load the App result: {0}', String(error)),
-						);
+					if (!controller.signal.aborted && view === this.view.value) this.notifications.error(localize('chat.mcpApp.resultFailed', 'Could not load the App result: {0}', String(error)));
 				},
 			)
 			.finally(() => {
@@ -864,8 +702,7 @@ export class ChatMcpAppSubPart extends Disposable {
 	}
 
 	private stop(): void {
-		if (this.displayMode() === 'fullscreen')
-			void this.domNode.ownerDocument.exitFullscreen().catch(() => undefined);
+		if (this.displayMode() === 'fullscreen') void this.domNode.ownerDocument.exitFullscreen().catch(() => undefined);
 		this.contextRevision++;
 		this.modelContext.clear();
 		this.resultDelivery?.abort();
@@ -896,11 +733,9 @@ export class ChatMcpAppSubPart extends Disposable {
 				);
 				const timer = mainWindow.setTimeout(finish, 250);
 				lifetime.add(toDisposable(() => mainWindow.clearTimeout(timer)));
-				void view
-					.postMessage({ jsonrpc: '2.0', id: 'ash-teardown', method: 'ui/resource-teardown', params: {} })
-					.then(sent => {
-						if (!sent) finish();
-					}, finish);
+				void view.postMessage({ jsonrpc: '2.0', id: 'ash-teardown', method: 'ui/resource-teardown', params: {} }).then(sent => {
+					if (!sent) finish();
+				}, finish);
 			}
 		}
 		this.launch.removeAttribute('aria-busy');
@@ -917,12 +752,7 @@ export class ChatMcpAppSubPart extends Disposable {
 }
 
 /** Reconstructs only MCP result data; provider identities and transport handles never enter the View. */
-async function resultPayload(
-	result: ToolResult,
-	threads: IAgentThreadService,
-	source: AgentAttachmentSource,
-	signal: AbortSignal,
-): Promise<Record<string, unknown>> {
+async function resultPayload(result: ToolResult, threads: IAgentThreadService, source: AgentAttachmentSource, signal: AbortSignal): Promise<Record<string, unknown>> {
 	const content: Record<string, unknown>[] = [];
 	const contentMetadata = new Map<number, Record<string, unknown>>();
 	for (const part of result.content ?? [])
@@ -933,10 +763,7 @@ async function resultPayload(
 			part.artifact.data.type === 'json'
 		) {
 			const entries: unknown = JSON.parse(part.artifact.data.json);
-			if (Array.isArray(entries))
-				for (const entry of entries)
-					if (boundedObject(entry) && typeof entry.index === 'number')
-						contentMetadata.set(entry.index, entry);
+			if (Array.isArray(entries)) for (const entry of entries) if (boundedObject(entry) && typeof entry.index === 'number') contentMetadata.set(entry.index, entry);
 		}
 	let structuredContent: unknown;
 	let metadata: unknown;
@@ -954,18 +781,15 @@ async function resultPayload(
 		} else if (part.type === 'imageUrl' || part.type === 'audioUrl') {
 			// Persisted attachments are preferred. Legacy inline media still contains its exact SDK bytes.
 			const data = /^data:([^;,]+);base64,([A-Za-z0-9+/]*={0,2})$/u.exec(part.url);
-			if (data)
-				content.push({ type: part.type === 'imageUrl' ? 'image' : 'audio', mimeType: data[1], data: data[2] });
+			if (data) content.push({ type: part.type === 'imageUrl' ? 'image' : 'audio', mimeType: data[1], data: data[2] });
 			else content.push({ type: 'text', text: part.url });
 		} else if (part.type === 'artifact') {
 			const artifact = part.artifact;
 			if (artifact.data.type === 'json' && !artifact.truncated) {
 				const json = JSON.parse(artifact.data.json);
 				if (artifact.source.type === 'structuredResult') structuredContent = json;
-				else if (artifact.source.type === 'viewMetadata' && artifact.mimeType === 'application/json')
-					metadata = json;
-				else if (artifact.source.type === 'mcpApp' && boundedObject(json) && Object.hasOwn(json, 'meta'))
-					metadata ??= json.meta ?? undefined;
+				else if (artifact.source.type === 'viewMetadata' && artifact.mimeType === 'application/json') metadata = json;
+				else if (artifact.source.type === 'mcpApp' && boundedObject(json) && Object.hasOwn(json, 'meta')) metadata ??= json.meta ?? undefined;
 			}
 			if (artifact.source.type === 'embeddedResource') {
 				const resource =
@@ -988,8 +812,7 @@ async function resultPayload(
 					},
 				});
 			} else if (artifact.source.type === 'resourceLink') {
-				const description =
-					artifact.data.type === 'json' && !artifact.truncated ? JSON.parse(artifact.data.json) : {};
+				const description = artifact.data.type === 'json' && !artifact.truncated ? JSON.parse(artifact.data.json) : {};
 				content.push({
 					...(boundedObject(description) ? description : {}),
 					type: 'resource_link',
@@ -1015,8 +838,7 @@ async function resultPayload(
 
 function bytesBase64(bytes: Uint8Array): string {
 	const chunks: string[] = [];
-	for (let offset = 0; offset < bytes.length; offset += 8192)
-		chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 8192)));
+	for (let offset = 0; offset < bytes.length; offset += 8192) chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 8192)));
 	return btoa(chunks.join(''));
 }
 
@@ -1035,12 +857,7 @@ function boundedObject(value: unknown): value is Record<string, unknown> {
 		if (input === null || typeof input === 'boolean') return true;
 		if (typeof input === 'number') return Number.isFinite(input);
 		if (typeof input !== 'object' || seen.has(input)) return false;
-		if (
-			!Array.isArray(input) &&
-			Object.getPrototypeOf(input) !== Object.prototype &&
-			Object.getPrototypeOf(input) !== null
-		)
-			return false;
+		if (!Array.isArray(input) && Object.getPrototypeOf(input) !== Object.prototype && Object.getPrototypeOf(input) !== null) return false;
 		seen.add(input);
 		const entries = Object.entries(input);
 		if (entries.length > 4096) return false;
@@ -1053,8 +870,7 @@ function boundedObject(value: unknown): value is Record<string, unknown> {
 }
 
 type DownloadEntry =
-	| { readonly kind: 'embedded'; readonly name: string; readonly bytes: Uint8Array; readonly mimeType: string }
-	| { readonly kind: 'linked'; readonly name: string; readonly uri: string };
+	{ readonly kind: 'embedded'; readonly name: string; readonly bytes: Uint8Array; readonly mimeType: string } | { readonly kind: 'linked'; readonly name: string; readonly uri: string };
 
 /** Normalizes only the View's untrusted export boundary. Linked bytes still belong to agentHost. */
 function downloadContents(value: unknown): readonly DownloadEntry[] {
@@ -1062,26 +878,17 @@ function downloadContents(value: unknown): readonly DownloadEntry[] {
 	return value.map(block => {
 		if (!boundedObject(block)) throw new Error('Invalid download resource');
 		const resource = block.type === 'resource' && boundedObject(block.resource) ? block.resource : block;
-		if (
-			typeof resource.uri !== 'string' ||
-			!resource.uri ||
-			resource.uri.length > 4096 ||
-			/[\u0000-\u001f\u007f]/u.test(resource.uri)
-		)
-			throw new Error('Invalid download URI');
+		if (typeof resource.uri !== 'string' || !resource.uri || resource.uri.length > 4096 || /[\u0000-\u001f\u007f]/u.test(resource.uri)) throw new Error('Invalid download URI');
 		const name = downloadName(resource.uri, block.type === 'resource_link' ? block.name : undefined);
 		if (block.type === 'resource_link' && typeof block.name !== 'string') throw new Error('Missing download name');
 		if (block.type === 'resource_link') return { kind: 'linked', name, uri: resource.uri };
-		if (block.type !== 'resource' || (typeof resource.text === 'string') === (typeof resource.blob === 'string'))
-			throw new Error('Invalid download encoding');
+		if (block.type !== 'resource' || (typeof resource.text === 'string') === (typeof resource.blob === 'string')) throw new Error('Invalid download encoding');
 		const mimeType = resource.mimeType ?? 'application/octet-stream';
-		if (typeof mimeType !== 'string' || !mimeType || mimeType.length > 256 || /[^\x20-\x7e]/u.test(mimeType))
-			throw new Error('Invalid download MIME');
+		if (typeof mimeType !== 'string' || !mimeType || mimeType.length > 256 || /[^\x20-\x7e]/u.test(mimeType)) throw new Error('Invalid download MIME');
 		let bytes: Uint8Array;
 		if (typeof resource.text === 'string') {
 			bytes = new TextEncoder().encode(resource.text);
-			if (new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes) !== resource.text)
-				throw new Error('Invalid export Unicode');
+			if (new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes) !== resource.text) throw new Error('Invalid export Unicode');
 		} else {
 			const blob = resource.blob;
 			if (typeof blob !== 'string') throw new Error('Invalid download base64');
@@ -1091,8 +898,7 @@ function downloadContents(value: unknown): readonly DownloadEntry[] {
 	});
 }
 function downloadName(uri: string, declared: unknown): string {
-	if (declared !== undefined && (typeof declared !== 'string' || !declared.trim() || declared.length > 255))
-		throw new Error('Invalid download name');
+	if (declared !== undefined && (typeof declared !== 'string' || !declared.trim() || declared.length > 255)) throw new Error('Invalid download name');
 	const candidate = typeof declared === 'string' ? declared : (URI.parse(uri).path.split('/').at(-1) ?? '');
 	const name = candidate
 		.replace(/[\/\\<>:"|?*\p{C}]/gu, '_')
@@ -1106,11 +912,7 @@ function validContextBlock(value: unknown): boolean {
 	if (!boundedObject(value)) return false;
 	if (value.type === 'text') return typeof value.text === 'string';
 	if (value.type === 'image') {
-		if (
-			typeof value.data !== 'string' ||
-			!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(String(value.mimeType))
-		)
-			return false;
+		if (typeof value.data !== 'string' || !['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(String(value.mimeType))) return false;
 		try {
 			decodeBase64(value.data);
 			return true;
@@ -1139,8 +941,7 @@ function validContextBlock(value: unknown): boolean {
 	}
 }
 function decodeBase64(value: string): Uint8Array {
-	if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value))
-		throw new Error('Invalid base64');
+	if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value)) throw new Error('Invalid base64');
 	const bytes = Uint8Array.from(atob(value), character => character.charCodeAt(0));
 	if (bytesBase64(bytes) !== value) throw new Error('Noncanonical base64');
 	return bytes;

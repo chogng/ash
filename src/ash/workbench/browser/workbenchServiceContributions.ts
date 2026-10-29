@@ -26,9 +26,7 @@ export class WorkbenchServiceContributionRegistry {
 	install(context: WorkbenchServiceContributionContext): void {
 		const pending = [...this.contributions];
 		while (pending.length > 0) {
-			const readyIndex = pending.findIndex(contribution =>
-				contribution.dependencies.every(dependency => context.container.has(dependency)),
-			);
+			const readyIndex = pending.findIndex(contribution => contribution.dependencies.every(dependency => context.container.has(dependency)));
 			if (readyIndex < 0) {
 				const unresolved = pending
 					.map(

@@ -4,21 +4,12 @@ import { release } from 'node:os';
 import type { BrowserWindow } from 'electron';
 import type { MessageBoxOptions } from '../../../../../../base/parts/sandbox/common/electronTypes.js';
 import { DialogMainService } from '../../../../../../platform/dialogs/electron-main/dialogMainService.js';
-import {
-	validateNativeDialogOperation,
-	type INativeHostApi,
-} from '../../../../../../platform/native/common/nativeHost.js';
+import { validateNativeDialogOperation, type INativeHostApi } from '../../../../../../platform/native/common/nativeHost.js';
 import { NativeDialogHandler } from '../../../../../electron-browser/parts/dialogs/dialogHandler.js';
 import assert from 'node:assert/strict';
 import { test, suite } from 'mocha';
 import '../../dialog.web.contribution.js';
-import {
-	type DialogRequest,
-	DialogResult,
-	DialogSeverity,
-	type IDialogHandler,
-	type IDialogOutcome,
-} from '../../../../../../platform/dialogs/common/dialogs.js';
+import { type DialogRequest, DialogResult, DialogSeverity, type IDialogHandler, type IDialogOutcome } from '../../../../../../platform/dialogs/common/dialogs.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { IDialogsModel, IWorkbenchDialogHandler } from '../../../../../../workbench/common/dialogs.js';
 import { DialogHandlerContribution } from '../../dialog.web.contribution.js';
@@ -61,7 +52,10 @@ test('dialog handler contribution presents the model queue serially', async () =
 	const handler = new TestDialogHandler();
 	using contribution = new DialogHandlerContribution(service.model, handler);
 	const confirmation = service.confirm({ message: 'Continue?' });
-	const message = service.showMessage({ severity: DialogSeverity.Info, message: 'Finished' });
+	const message = service.showMessage({
+		severity: DialogSeverity.Info,
+		message: 'Finished',
+	});
 
 	assert.equal(service.model.dialogs.length, 2);
 	assert.equal(handler.calls.length, 1);
@@ -108,7 +102,10 @@ test('dialog handler contribution continues after a handler failure', async () =
 	using service = new DialogService();
 	const handler = new TestDialogHandler();
 	using contribution = new DialogHandlerContribution(service.model, handler);
-	const failed = service.showMessage({ severity: DialogSeverity.Error, message: 'Failure' });
+	const failed = service.showMessage({
+		severity: DialogSeverity.Error,
+		message: 'Failure',
+	});
 	const next = service.confirm({ message: 'Retry?' });
 
 	handler.calls[0]?.reject(new Error('render failed'));
@@ -138,9 +135,7 @@ function desktopHandler(dialogs: DialogMainService, id: number): NativeDialogHan
 	return new NativeDialogHandler(
 		{
 			async showMessageBox({ signal, ...options }) {
-				const operation = validateNativeDialogOperation(
-					structuredClone({ kind: 'show', id: ++sequence, options }),
-				);
+				const operation = validateNativeDialogOperation(structuredClone({ kind: 'show', id: ++sequence, options }));
 				const result = await dialogs.perform({ id } as BrowserWindow, operation);
 				assert.ok(result);
 				return result;
@@ -164,22 +159,10 @@ test('desktop dialog handler maps message, confirmation, and prompt results', as
 		showSaveDialog: async () => ({ canceled: true, filePath: '' }),
 	});
 	const handler = desktopHandler(dialogs, 1);
-	const message = await handler.showDialog(
-		{ kind: 'message', severity: DialogSeverity.Info, message: 'Notice' },
-		new AbortController().signal,
-	);
-	const confirmation = await handler.showDialog(
-		{ kind: 'confirmation', message: 'Continue?' },
-		new AbortController().signal,
-	);
-	const prompt = await handler.showDialog(
-		{ kind: 'prompt', message: 'Save?', primaryButton: 'Save', secondaryButton: 'Discard' },
-		new AbortController().signal,
-	);
-	const cancelledPrompt = await handler.showDialog(
-		{ kind: 'prompt', message: 'Save?', primaryButton: 'Save', secondaryButton: 'Discard' },
-		new AbortController().signal,
-	);
+	const message = await handler.showDialog({ kind: 'message', severity: DialogSeverity.Info, message: 'Notice' }, new AbortController().signal);
+	const confirmation = await handler.showDialog({ kind: 'confirmation', message: 'Continue?' }, new AbortController().signal);
+	const prompt = await handler.showDialog({ kind: 'prompt', message: 'Save?', primaryButton: 'Save', secondaryButton: 'Discard' }, new AbortController().signal);
+	const cancelledPrompt = await handler.showDialog({ kind: 'prompt', message: 'Save?', primaryButton: 'Save', secondaryButton: 'Discard' }, new AbortController().signal);
 	let expectedButtons = [['OK'], ['Confirm', 'Cancel'], ['Save', 'Discard', 'Cancel'], ['Save', 'Discard', 'Cancel']];
 	if (process.platform === 'linux') {
 		expectedButtons = [['OK'], ['Cancel', 'Confirm'], ['Discard', 'Cancel', 'Save'], ['Discard', 'Cancel', 'Save']];
@@ -238,19 +221,13 @@ suite('dialog browser component', () => {
 		const dialog = page.getByRole('dialog', { name: 'Core dialog' });
 		await expect(dialog).toHaveClass(/base-dialog-contract/);
 		await expect(dialog.getByRole('textbox', { name: 'Name' })).toBeFocused();
-		const gap = await dialog.evaluate(
-			element =>
-				element.querySelector('.ash-checkbox')!.getBoundingClientRect().top -
-				element.querySelector('.ash-dialog-inputs')!.getBoundingClientRect().bottom,
-		);
+		const gap = await dialog.evaluate(element => element.querySelector('.ash-checkbox')!.getBoundingClientRect().top - element.querySelector('.ash-dialog-inputs')!.getBoundingClientRect().bottom);
 		expect(gap).toBe(8);
 		await dialog.getByRole('textbox', { name: 'Name' }).fill('Ada');
 		await dialog.getByPlaceholder('Secret').fill('token');
 		await dialog.getByRole('checkbox', { name: 'Remember values' }).check();
 		await dialog.getByRole('button', { name: 'Discard', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashDialogIntegration.lastCoreResult))
-			.toEqual({ button: 2, checkboxChecked: true, values: ['Ada', 'token'] });
+		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastCoreResult)).toEqual({ button: 2, checkboxChecked: true, values: ['Ada', 'token'] });
 		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.visibility)).toEqual([true, false]);
 	});
 
@@ -473,10 +450,7 @@ suite('dialog browser component', () => {
 		await expect(dialog).toHaveCSS('padding', '0px');
 		await expect(dialog.locator('.ash-dialog-actions')).toHaveCSS('display', 'flex');
 		await expect(dialog.getByRole('button', { name: 'Save' })).toHaveCSS('display', 'flex');
-		await expect(dialog.getByRole('button', { name: 'Save' }).locator('.ash-icon-label')).toHaveCSS(
-			'display',
-			'flex',
-		);
+		await expect(dialog.getByRole('button', { name: 'Save' }).locator('.ash-icon-label')).toHaveCSS('display', 'flex');
 		await expect(dialog.getByRole('button', { name: 'Save' })).toBeFocused();
 		await page.keyboard.press('Shift+Tab');
 		await expect(dialog.getByRole('button', { name: 'Close Dialog' })).toBeFocused();
@@ -507,7 +481,12 @@ suite('dialog browser component', () => {
 		await expect(dialog).toHaveCount(0);
 		await expect
 			.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome))
-			.toEqual({ button: 'primary', buttonIndex: 2, checkboxChecked: true, values: undefined });
+			.toEqual({
+				button: 'primary',
+				buttonIndex: 2,
+				checkboxChecked: true,
+				values: undefined,
+			});
 	});
 
 	test('aborting a dialog settles it as cancelled and removes its modal', async function () {
@@ -609,7 +588,11 @@ suite('dialog browser component', () => {
 		await expect(dialog).toHaveCount(0);
 		await expect
 			.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome))
-			.toEqual({ button: 'primary', checkboxChecked: true, values: ['https://example.test'] });
+			.toEqual({
+				button: 'primary',
+				checkboxChecked: true,
+				values: ['https://example.test'],
+			});
 	});
 
 	test('confirmation returns the checkbox state after the primary action', async function () {
@@ -624,7 +607,11 @@ suite('dialog browser component', () => {
 		await expect(dialog).toHaveCount(0);
 		await expect
 			.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome))
-			.toEqual({ button: 'primary', checkboxChecked: true, values: undefined });
+			.toEqual({
+				button: 'primary',
+				checkboxChecked: true,
+				values: undefined,
+			});
 	});
 
 	test('modified Enter and IME composition do not accept an input dialog', async function () {
@@ -653,7 +640,11 @@ suite('dialog browser component', () => {
 		await expect(dialog).toHaveCount(0);
 		await expect
 			.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome))
-			.toEqual({ button: 'primary', checkboxChecked: false, values: ['https://'] });
+			.toEqual({
+				button: 'primary',
+				checkboxChecked: false,
+				values: ['https://'],
+			});
 	});
 
 	for (const platform of [
@@ -675,7 +666,12 @@ suite('dialog browser component', () => {
 					await expect(dialog).toHaveCount(0);
 					await expect
 						.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome))
-						.toEqual({ button: 'primary', buttonIndex: 1, checkboxChecked: true, values: undefined });
+						.toEqual({
+							button: 'primary',
+							buttonIndex: 1,
+							checkboxChecked: true,
+							values: undefined,
+						});
 				} else {
 					await expect(dialog).toBeVisible();
 					await page.keyboard.press('Escape');
@@ -720,9 +716,7 @@ suite('dialog browser component', () => {
 		await page.evaluate(() => window.ashDialogIntegration.showCommandFailure());
 		const dialog = page.getByRole('dialog', { name: 'Error' });
 		await expect(dialog).toBeVisible();
-		await expect(dialog.locator('.ash-dialog-message')).toHaveText(
-			"Command 'Failing command' resulted in an error",
-		);
+		await expect(dialog.locator('.ash-dialog-message')).toHaveText("Command 'Failing command' resulted in an error");
 		await expect(dialog.locator('.ash-dialog-detail')).toHaveText('The command could not finish.');
 		await expect(dialog.getByRole('button', { name: 'OK' })).toBeFocused();
 		await dialog.getByRole('button', { name: 'OK' }).click();

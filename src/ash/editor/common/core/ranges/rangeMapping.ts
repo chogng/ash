@@ -6,25 +6,16 @@ export class RangeMapping {
 	constructor(readonly mappings: readonly SingleRangeMapping[]) {}
 
 	mapPosition(position: Position): PositionOrRange {
-		const mapping = [...this.mappings]
-			.reverse()
-			.find(candidate => candidate.original.getStartPosition().isBeforeOrEqual(position));
+		const mapping = [...this.mappings].reverse().find(candidate => candidate.original.getStartPosition().isBeforeOrEqual(position));
 		if (!mapping) return PositionOrRange.position(position);
 		if (mapping.original.containsPosition(position)) return PositionOrRange.range(mapping.modified);
-		return PositionOrRange.position(
-			TextLength.betweenPositions(mapping.original.getEndPosition(), position).addToPosition(
-				mapping.modified.getEndPosition(),
-			),
-		);
+		return PositionOrRange.position(TextLength.betweenPositions(mapping.original.getEndPosition(), position).addToPosition(mapping.modified.getEndPosition()));
 	}
 
 	mapRange(range: Range): Range {
 		const start = this.mapPosition(range.getStartPosition());
 		const end = this.mapPosition(range.getEndPosition());
-		return Range.fromPositions(
-			start.range?.getStartPosition() ?? start.position!,
-			end.range?.getEndPosition() ?? end.position!,
-		);
+		return Range.fromPositions(start.range?.getStartPosition() ?? start.position!, end.range?.getEndPosition() ?? end.position!);
 	}
 
 	reverse(): RangeMapping {

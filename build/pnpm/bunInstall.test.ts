@@ -40,17 +40,12 @@ test('the frozen lockfile pins native Bun archives and checksums for supported D
 		['linux', 'arm64'],
 		['linux', 'x64'],
 	]) {
-		const variant = runtime.resolution.variants.find(
-			(entry: { targets: { os: string; cpu: string; libc?: string }[] }) =>
-				entry.targets.some(target => target.os === os && target.cpu === cpu && !target.libc),
+		const variant = runtime.resolution.variants.find((entry: { targets: { os: string; cpu: string; libc?: string }[] }) =>
+			entry.targets.some(target => target.os === os && target.cpu === cpu && !target.libc),
 		);
 		assert.ok(variant, `${os} ${cpu}`);
 		assert.equal(variant.resolution.type, 'binary');
 		assert.match(variant.resolution.integrity, /^sha256-[A-Za-z0-9+/]+=*$/);
-		assert.ok(
-			variant.resolution.url.startsWith(
-				`https://github.com/oven-sh/bun/releases/download/bun-v${runtime.version}/`,
-			),
-		);
+		assert.ok(variant.resolution.url.startsWith(`https://github.com/oven-sh/bun/releases/download/bun-v${runtime.version}/`));
 	}
 });

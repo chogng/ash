@@ -88,12 +88,8 @@ export class SessionsList extends DomWidget {
 		this.heading.textContent = title;
 		this.list = h(ownerDocument, 'div');
 		this.list.className = 'ash-sessions-list-items';
-		this.loading = this._register(
-			new LoadingSkeleton(this.list, localize('sessions.list.loading', 'Loading sessions…')),
-		);
-		this.projectLoading = this._register(
-			new LoadingSkeleton(this.list, localize('projects.loading', 'Loading projects…'), 'list', 3),
-		);
+		this.loading = this._register(new LoadingSkeleton(this.list, localize('sessions.list.loading', 'Loading sessions…')));
+		this.projectLoading = this._register(new LoadingSkeleton(this.list, localize('projects.loading', 'Loading projects…'), 'list', 3));
 		this.empty = h(ownerDocument, 'p');
 		this.empty.className = 'ash-sessions-empty';
 		this.projectError = h(ownerDocument, 'button', { className: 'ash-sessions-list-item' });
@@ -110,18 +106,11 @@ export class SessionsList extends DomWidget {
 		this._register(
 			addDisposableListener(this.list, 'keydown', event => {
 				if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-				const buttons = [...this.list.querySelectorAll<HTMLButtonElement>('button')].filter(
-					button => !button.closest('[hidden]'),
-				);
+				const buttons = [...this.list.querySelectorAll<HTMLButtonElement>('button')].filter(button => !button.closest('[hidden]'));
 				const index = buttons.indexOf(ownerDocument.activeElement as HTMLButtonElement);
 				if (index < 0) return;
 				event.preventDefault();
-				const next =
-					event.key === 'Home'
-						? 0
-						: event.key === 'End'
-							? buttons.length - 1
-							: Math.max(0, Math.min(buttons.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
+				const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : Math.max(0, Math.min(buttons.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
 				buttons[next]?.focus();
 			}),
 		);
@@ -172,8 +161,7 @@ export class SessionsList extends DomWidget {
 				button.enabled = action.enabled;
 				button.domNode.setAttribute('aria-current', action.checked ? 'page' : 'false');
 			}
-			for (const id of this.navigationButtons.keys())
-				if (!this.navigationActions.has(id)) this.navigationButtons.deleteAndDispose(id);
+			for (const id of this.navigationButtons.keys()) if (!this.navigationActions.has(id)) this.navigationButtons.deleteAndDispose(id);
 			this.navigation.hidden = actions.length === 0;
 		};
 		this._register(menu.onDidChange(updateNavigation));
@@ -212,17 +200,12 @@ export class SessionsList extends DomWidget {
 	public restoreViewState(state: ReturnType<SessionsList['getViewState']>): void {
 		this.render();
 		this.list.scrollTop = state.top;
-		if (state.focus?.startsWith('navigation:'))
-			this.navigationButtons.get(state.focus.slice('navigation:'.length))?.focus();
-		else if (state.focus?.startsWith('section:'))
-			this.sections.get(state.focus.slice('section:'.length))?.button.focus({ preventScroll: true });
+		if (state.focus?.startsWith('navigation:')) this.navigationButtons.get(state.focus.slice('navigation:'.length))?.focus();
+		else if (state.focus?.startsWith('section:')) this.sections.get(state.focus.slice('section:'.length))?.button.focus({ preventScroll: true });
 		else if (state.focus) {
 			const item = this.items.get(state.focus)?.domNode;
 			const collapsed = item?.closest<HTMLElement>('[hidden]');
-			(
-				collapsed?.parentElement?.querySelector<HTMLButtonElement>('h3 button') ??
-				item?.querySelector<HTMLButtonElement>('.ash-sessions-list-item')
-			)?.focus({ preventScroll: true });
+			(collapsed?.parentElement?.querySelector<HTMLButtonElement>('h3 button') ?? item?.querySelector<HTMLButtonElement>('.ash-sessions-list-item'))?.focus({ preventScroll: true });
 		}
 	}
 
@@ -232,9 +215,7 @@ export class SessionsList extends DomWidget {
 		this.render();
 		try {
 			const summaries = await this.projectService.list();
-			const projects = await Promise.all(
-				summaries.filter(project => !project.archived).map(project => this.projectService.read(project.id)),
-			);
+			const projects = await Promise.all(summaries.filter(project => !project.archived).map(project => this.projectService.read(project.id)));
 			if (this.isDisposed || generation !== this.projectLoad) return;
 			this.projects = projects.filter(project => !project.archived);
 			this.projectsFailed = false;
@@ -271,9 +252,7 @@ export class SessionsList extends DomWidget {
 
 	private render(): void {
 		const ownerDocument = this.domNode.ownerDocument;
-		const focused = this.list.contains(ownerDocument.activeElement)
-			? (ownerDocument.activeElement as HTMLElement)
-			: undefined;
+		const focused = this.list.contains(ownerDocument.activeElement) ? (ownerDocument.activeElement as HTMLElement) : undefined;
 		const present = new Set<string>();
 		const activeSections = new Set<string>();
 		const pinned: HTMLElement[] = [];
@@ -282,21 +261,11 @@ export class SessionsList extends DomWidget {
 		const activeSelection = this.customViews.activeCustomView.get() ? undefined : this.viewService.activeSelection;
 		const itemFor = (key: string): SessionListItem => {
 			present.add(key);
-			const item =
-				this.items.get(key) ??
-				this.items.set(
-					key,
-					new SessionListItem(ownerDocument, this.mode === 'code' ? Lxicon.chat4 : undefined),
-				);
+			const item = this.items.get(key) ?? this.items.set(key, new SessionListItem(ownerDocument, this.mode === 'code' ? Lxicon.chat4 : undefined));
 			item.domNode.dataset.item = key;
 			return item;
 		};
-		const sectionFor = (
-			key: string,
-			title: string,
-			children: readonly HTMLElement[],
-			subgroup = false,
-		): HTMLElement => {
+		const sectionFor = (key: string, title: string, children: readonly HTMLElement[], subgroup = false): HTMLElement => {
 			activeSections.add(key);
 			const storageKey = `sessions.list.${this.mode}.collapsed.${key}`;
 			const section =
@@ -320,33 +289,19 @@ export class SessionsList extends DomWidget {
 				continue;
 			} // The composer reports unreadable drafts; one must not break the whole list.
 			if (!draft || (!draft.text.trim() && draft.contexts.length === 0)) continue;
-			const selected =
-				activeSelection?.kind === 'untitled' &&
-				activeSelection.session.untitledSessionId === session.untitledSessionId;
+			const selected = activeSelection?.kind === 'untitled' && activeSelection.session.untitledSessionId === session.untitledSessionId;
 			const item = itemFor(`untitled:${session.untitledSessionId}`);
-			item.update(
-				localize(
-					'sessions.list.draft',
-					'{0} (draft)',
-					session.title || localize('chat.sessions.new', 'New Session'),
-				),
-				selected,
-				() => this.viewService.openUntitledSession(session.untitledSessionId),
+			item.update(localize('sessions.list.draft', '{0} (draft)', session.title || localize('chat.sessions.new', 'New Session')), selected, () =>
+				this.viewService.openUntitledSession(session.untitledSessionId),
 			);
 			item.setContextMenu(anchor => this.showItemMenu({ kind: 'untitled', session }, item, anchor));
 			recent.push(item.domNode);
 		}
 		for (const session of this.sessionService.sessions) {
-			const current =
-				activeSelection?.kind === 'session' && activeSelection.active.session.sessionId === session.sessionId
-					? activeSelection.active
-					: undefined;
+			const current = activeSelection?.kind === 'session' && activeSelection.active.session.sessionId === session.sessionId ? activeSelection.active : undefined;
 			const thread = current
-				? session.chats.find(
-						candidate => candidate.threadId === current.threadId && candidate.status === 'active',
-					)
-				: (session.chats.find(candidate => candidate.status === 'active' && candidate.origin.type === 'root') ??
-					session.chats.find(candidate => candidate.status === 'active'));
+				? session.chats.find(candidate => candidate.threadId === current.threadId && candidate.status === 'active')
+				: (session.chats.find(candidate => candidate.status === 'active' && candidate.origin.type === 'root') ?? session.chats.find(candidate => candidate.status === 'active'));
 			if (!thread || session.status !== 'active') continue;
 			const item = itemFor(`session:${session.sessionId}`);
 			item.update(
@@ -355,16 +310,10 @@ export class SessionsList extends DomWidget {
 				() => this.viewService.openSession(session.sessionId, thread.threadId),
 				session.management,
 			);
-			item.setContextMenu(anchor =>
-				this.showItemMenu({ kind: 'session', active: { session, threadId: thread.threadId } }, item, anchor),
-			);
+			item.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: thread.threadId } }, item, anchor));
 			const requests = this.github.getSessionPullRequests(session.sessionId);
-			item.updatePullRequests(
-				getHighestPriorityPullRequestIcon(requests.map(request => request.icon)),
-				requests.map(getPullRequestLabel).join('\n'),
-			);
-			if (this.storage.getBoolean(this.pinKey(session.sessionId), StorageScope.PROFILE, false))
-				pinned.push(item.domNode);
+			item.updatePullRequests(getHighestPriorityPullRequestIcon(requests.map(request => request.icon)), requests.map(getPullRequestLabel).join('\n'));
+			if (this.storage.getBoolean(this.pinKey(session.sessionId), StorageScope.PROFILE, false)) pinned.push(item.domNode);
 			else remaining.set(session.sessionId, item.domNode);
 		}
 		const projects: HTMLElement[] = [];
@@ -373,9 +322,7 @@ export class SessionsList extends DomWidget {
 			if (this.mode === 'chat') {
 				const item = itemFor(`project:${project.id}`);
 				item.update(project.name, false, () => {
-					void this.commands
-						.executeCommand('sessions.open.projects', project.id)
-						.catch(error => this.notifications.error(String(error)));
+					void this.commands.executeCommand('sessions.open.projects', project.id).catch(error => this.notifications.error(String(error)));
 				});
 				projects.push(item.domNode);
 			} else {
@@ -402,9 +349,7 @@ export class SessionsList extends DomWidget {
 					remaining.delete(id);
 				}
 			}
-			(this.mode === 'code' ? recent : chatGroups).push(
-				sectionFor(`group:${group.sectionId}`, group.name, members, this.mode === 'code'),
-			);
+			(this.mode === 'code' ? recent : chatGroups).push(sectionFor(`group:${group.sectionId}`, group.name, members, this.mode === 'code'));
 		}
 		if (this.mode === 'code') {
 			const workspaces = new Map<string, { title: string; items: HTMLElement[] }>();
@@ -412,21 +357,16 @@ export class SessionsList extends DomWidget {
 				const item = remaining.get(session.sessionId);
 				if (!item) continue;
 				const workspace = session.workspace;
-				const key = workspace
-					? JSON.stringify([workspace.authorityId, workspace.root])
-					: `provider:${session.providerId ?? ''}`;
+				const key = workspace ? JSON.stringify([workspace.authorityId, workspace.root]) : `provider:${session.providerId ?? ''}`;
 				let group = workspaces.get(key);
 				if (!group) {
-					const title = workspace
-						? posix.basename(workspace.root.replace(/\\/g, '/')) || workspace.root
-						: (session.providerLabel ?? localize('sessions.list.other', 'Other chats'));
+					const title = workspace ? posix.basename(workspace.root.replace(/\\/g, '/')) || workspace.root : (session.providerLabel ?? localize('sessions.list.other', 'Other chats'));
 					group = { title, items: [] };
 					workspaces.set(key, group);
 				}
 				group.items.push(item);
 			}
-			for (const [key, group] of workspaces)
-				recent.push(sectionFor(`workspace:${key}`, group.title, group.items, true));
+			for (const [key, group] of workspaces) recent.push(sectionFor(`workspace:${key}`, group.title, group.items, true));
 		} else recent.push(...remaining.values());
 		const showEmpty = recent.length === 0 && pinned.length === 0 && chatGroups.length === 0;
 		const loading = this.sessionService.state === 'loading';
@@ -442,31 +382,20 @@ export class SessionsList extends DomWidget {
 		if (pinned.length) ordered.push(sectionFor('pinned', localize('sessions.list.pinned', 'Pinned'), pinned));
 		if (projects.length) ordered.push(sectionFor('projects', localize('projects.title', 'Projects'), projects));
 		ordered.push(...chatGroups);
-		if (recent.length)
-			ordered.push(
-				sectionFor(
-					'recent',
-					this.mode === 'chat'
-						? localize('sessions.list.chats', 'Chats')
-						: localize('sessions.list.recents', 'Recents'),
-					recent,
-				),
-			);
+		if (recent.length) ordered.push(sectionFor('recent', this.mode === 'chat' ? localize('sessions.list.chats', 'Chats') : localize('sessions.list.recents', 'Recents'), recent));
 		if (!this.loading.element.hidden) ordered.push(this.loading.element);
 		else if (showEmpty) ordered.push(this.empty);
 		for (const key of this.items.keys()) if (!present.has(key)) this.items.deleteAndDispose(key);
 		for (const key of this.sections.keys()) if (!activeSections.has(key)) this.sections.deleteAndDispose(key);
 		reconcileChildren(this.list, ordered);
-		if (focused?.isConnected && !focused.closest('[hidden]') && ownerDocument.activeElement !== focused)
-			focused.focus({ preventScroll: true });
+		if (focused?.isConnected && !focused.closest('[hidden]') && ownerDocument.activeElement !== focused) focused.focus({ preventScroll: true });
 	}
 }
 
 /** Retain rows and headings during refreshes so keyboard focus and scroll do not jump. */
 function reconcileChildren(parent: HTMLElement, children: readonly HTMLElement[]): void {
 	for (let index = 0; index < children.length; index++) {
-		if (parent.childNodes[index] !== children[index])
-			parent.insertBefore(children[index], parent.childNodes[index] ?? null);
+		if (parent.childNodes[index] !== children[index]) parent.insertBefore(children[index], parent.childNodes[index] ?? null);
 	}
 	while (parent.childNodes.length > children.length) parent.lastChild!.remove();
 }
@@ -517,19 +446,12 @@ class SessionListSection extends AbstractDisposable {
 		this.button.title = title;
 		this.collapsed = collapsed;
 		this.button.setAttribute('aria-expanded', String(!collapsed));
-		const icon = this.subgroup
-			? collapsed
-				? Lxicon.folder
-				: Lxicon.folderOpened
-			: collapsed
-				? Lxicon.chevronRight
-				: Lxicon.chevronDown;
+		const icon = this.subgroup ? (collapsed ? Lxicon.folder : Lxicon.folderOpened) : collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
 		if (this.icon.firstElementChild?.getAttribute('data-ash-icon-id') !== icon.id) {
 			this.icon.replaceChildren();
 			appendIcon(icon, this.icon);
 		}
-		if (collapsed && this.body.contains(this.domNode.ownerDocument.activeElement))
-			this.button.focus({ preventScroll: true });
+		if (collapsed && this.body.contains(this.domNode.ownerDocument.activeElement)) this.button.focus({ preventScroll: true });
 		this.body.hidden = collapsed;
 		reconcileChildren(this.body, children);
 	}
@@ -631,9 +553,7 @@ class SessionListItem extends AbstractDisposable {
 		if (this.management.textContent !== (state ?? '')) this.management.textContent = state ?? '';
 		this.management.hidden = state === undefined;
 		this.button.classList.toggle('has-management', state !== undefined);
-		this.managementDescription = [state, management?.activity?.text, management?.summary]
-			.filter(Boolean)
-			.join('. ');
+		this.managementDescription = [state, management?.activity?.text, management?.summary].filter(Boolean).join('. ');
 		this.updateDescription();
 		this.domNode.classList.toggle('selected', selected);
 		this.button.setAttribute('aria-current', selected ? 'page' : 'false');

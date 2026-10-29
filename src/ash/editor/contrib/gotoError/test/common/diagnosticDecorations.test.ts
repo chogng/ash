@@ -4,10 +4,7 @@ import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
 import { TextDecorationChangeReason } from '../../../../common/model/decorationCollection.js';
 import { LanguageDiagnosticDecorationBridge } from '../../common/diagnosticDecorations.js';
-import {
-	LanguageResultAcceptance,
-	createLanguageDiagnosticStore,
-} from '../../../../common/model/languageResultStore.js';
+import { LanguageResultAcceptance, createLanguageDiagnosticStore } from '../../../../common/model/languageResultStore.js';
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from '../../../../common/languages.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
@@ -16,21 +13,23 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
-const range = (lineIndex: number, startColumn: number, endColumn: number): Range =>
-	Range.fromPositions(position(lineIndex, startColumn), position(lineIndex, endColumn));
+const range = (lineIndex: number, startColumn: number, endColumn: number): Range => Range.fromPositions(position(lineIndex, startColumn), position(lineIndex, endColumn));
 
 test('Diagnostic bridge projects existing results, replacements, and clear', () => {
 	using model = new TextModel('abc\ndef');
 	using store = createLanguageDiagnosticStore(model);
-	acceptDiagnostics(store, model, 1, [
-		diagnostic(range(0, 0, 2), LanguageDiagnosticSeverity.Error, 'error'),
-		diagnostic(range(1, 1, 3), LanguageDiagnosticSeverity.Warning, 'warning'),
-	]);
+	acceptDiagnostics(store, model, 1, [diagnostic(range(0, 0, 2), LanguageDiagnosticSeverity.Error, 'error'), diagnostic(range(1, 1, 3), LanguageDiagnosticSeverity.Warning, 'warning')]);
 	using bridge = new LanguageDiagnosticDecorationBridge(store);
 	const first = bridge.decorations.decorations;
 	assert.deepEqual(
-		first.map(entry => ({ range: entry.range, metadata: entry.metadata })),
-		store.result!.value.diagnostics.map(metadata => ({ range: metadata.range, metadata })),
+		first.map(entry => ({
+			range: entry.range,
+			metadata: entry.metadata,
+		})),
+		store.result!.value.diagnostics.map(metadata => ({
+			range: metadata.range,
+			metadata,
+		})),
 	);
 	assert.equal(new Set(first.map(entry => entry.id)).size, 2);
 
@@ -61,11 +60,22 @@ test('Model edits clear diagnostics before decoration ranges can drift', () => {
 	const events: unknown[] = [];
 	using listener = bridge.decorations.onDidChange(event => events.push(event));
 
-	model.applyEdits([{ range: Range.fromPositions(position(0, 0)), text: 'X' }]);
+	model.applyEdits([
+		{
+			range: Range.fromPositions(position(0, 0)),
+			text: 'X',
+		},
+	]);
 
 	assert.equal(store.result, undefined);
 	assert.deepEqual(bridge.decorations.decorations, []);
-	assert.deepEqual(events, [{ reason: TextDecorationChangeReason.Content, modelVersion: 2, decorations: [] }]);
+	assert.deepEqual(events, [
+		{
+			reason: TextDecorationChangeReason.Content,
+			modelVersion: 2,
+			decorations: [],
+		},
+	]);
 });
 
 test('Diagnostic bridge merges only current external diagnostics and removes duplicates', () => {
@@ -80,7 +90,10 @@ test('Diagnostic bridge merges only current external diagnostics and removes dup
 	};
 	using bridge = new LanguageDiagnosticDecorationBridge(
 		store,
-		{ onDidChangeDiagnostics: changes.event, getDiagnostics: () => external },
+		{
+			onDidChangeDiagnostics: changes.event,
+			getDiagnostics: () => external,
+		},
 		resource,
 	);
 	acceptDiagnostics(store, model, 1, [diagnostic(range(0, 0, 1), LanguageDiagnosticSeverity.Error, 'shared')]);
@@ -107,24 +120,33 @@ test('Diagnostic bridge disposal owns only its projected collection', () => {
 
 	assert.throws(() => bridge.decorations.decorations, /already disposed/);
 	assert.equal(store.result!.value.diagnostics.length, 1);
-	model.applyEdits([{ range: range(0, 0, 1), text: 'A' }]);
+	model.applyEdits([
+		{
+			range: range(0, 0, 1),
+			text: 'A',
+		},
+	]);
 	assert.equal(model.getText(), 'Abc');
 });
 
-function acceptDiagnostics(
-	store: ReturnType<typeof createLanguageDiagnosticStore>,
-	model: TextModel,
-	requestId: number,
-	diagnostics: readonly LanguageDiagnostic[],
-): void {
+function acceptDiagnostics(store: ReturnType<typeof createLanguageDiagnosticStore>, model: TextModel, requestId: number, diagnostics: readonly LanguageDiagnostic[]): void {
 	assert.equal(
-		store.accept({ requestId, textModel: model, modelVersion: model.version, value: { diagnostics } }),
+		store.accept({
+			requestId,
+			textModel: model,
+			modelVersion: model.version,
+			value: { diagnostics },
+		}),
 		LanguageResultAcceptance.Applied,
 	);
 }
 
 function diagnostic(diagnosticRange: Range, severity: LanguageDiagnosticSeverity, message: string): LanguageDiagnostic {
-	return { range: diagnosticRange, severity, message };
+	return {
+		range: diagnosticRange,
+		severity,
+		message,
+	};
 }
 
 const codeFeatures = registerTestCodeEditorFeatures();

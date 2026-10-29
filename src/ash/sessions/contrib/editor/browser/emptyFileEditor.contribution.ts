@@ -2,12 +2,7 @@ import { registerEditorPane } from '../../../../workbench/browser/editor.js';
 import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { EmptyFileEditor } from './emptyFileEditor.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { localize } from '../../../../nls.js';

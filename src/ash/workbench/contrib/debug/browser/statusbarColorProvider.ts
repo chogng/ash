@@ -28,14 +28,9 @@ export class StatusBarColorProvider extends Disposable {
 		super();
 		const update = (): void => {
 			const active = debug.sessions.some(
-				session =>
-					session.sessionOptions?.noDebug !== true &&
-					session.resolvedConfiguration?.arguments.noDebug !== true &&
-					session.state !== 'terminated' &&
-					session.state !== 'error',
+				session => session.sessionOptions?.noDebug !== true && session.resolvedConfiguration?.arguments.noDebug !== true && session.state !== 'terminated' && session.state !== 'error',
 			);
-			if (active && !this.style.value)
-				this.style.value = statusbar.overrideStyle({ priority: 10, foreground, background, border });
+			if (active && !this.style.value) this.style.value = statusbar.overrideStyle({ priority: 10, foreground, background, border });
 			else if (!active) this.style.clear();
 		};
 		this._register(debug.onDidChangeSession(update));

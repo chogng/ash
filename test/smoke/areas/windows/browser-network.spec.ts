@@ -28,10 +28,7 @@ interface NetworkHarness {
 
 const test = baseTest.extend<{ network: NetworkHarness }>({
 	network: async ({ target }, use, testInfo) => {
-		test.skip(
-			target.kind !== 'electron' || target.appServerMode !== 'disabled',
-			'This Chromium network scenario runs in Electron UI',
-		);
+		test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled', 'This Chromium network scenario runs in Electron UI');
 		const sockets = new Set<Socket>();
 		const track = (socket: Socket): Socket => {
 			sockets.add(socket);
@@ -63,9 +60,7 @@ const test = baseTest.extend<{ network: NetworkHarness }>({
 			const accept = createHash('sha1')
 				.update(String(request.headers['sec-websocket-key']) + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
 				.digest('base64');
-			socket.write(
-				`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`,
-			);
+			socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
 			const message = Buffer.from('remote-ws');
 			socket.write(Buffer.concat([Buffer.from([0x81, message.length]), message]));
 		});
@@ -88,10 +83,7 @@ const test = baseTest.extend<{ network: NetworkHarness }>({
 				if (buffer.length < 5) return;
 				const length = buffer[3] === 3 ? 7 + buffer[4]! : 10;
 				if (buffer.length < length) return;
-				const host =
-					buffer[3] === 3
-						? buffer.subarray(5, 5 + buffer[4]!).toString()
-						: [...buffer.subarray(4, 8)].join('.');
+				const host = buffer[3] === 3 ? buffer.subarray(5, 5 + buffer[4]!).toString() : [...buffer.subarray(4, 8)].join('.');
 				hosts.push(host);
 				if (host !== 'localhost' && host !== '127.0.0.1') {
 					socket.end(Buffer.from([5, 4, 0, 1, 0, 0, 0, 0, 0, 0]));
@@ -158,9 +150,7 @@ startElectronApplication();
 			for (const socket of sockets) socket.destroy();
 			await new Promise<void>(resolve => proxy.close(() => resolve()));
 			await application.evaluate(() => {
-				for (const controller of (globalThis as unknown as { networkScenario: NetworkScenario }).networkScenario
-					.proxies)
-					controller.abort();
+				for (const controller of (globalThis as unknown as { networkScenario: NetworkScenario }).networkScenario.proxies) controller.abort();
 			});
 		};
 		try {
@@ -223,14 +213,8 @@ test(
 				application.evaluate(async ({ BrowserWindow }, url) => {
 					const view = BrowserWindow.getAllWindows()
 						.flatMap(window => window.contentView.children)
-						.find(
-							child =>
-								'webContents' in child &&
-								(child as Electron.WebContentsView).webContents.getURL() === url,
-						) as Electron.WebContentsView;
-					return view.webContents.executeJavaScript(
-						'({ data: window.remoteData, socket: window.remoteSocket, image: document.images[0].naturalWidth })',
-					);
+						.find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL() === url) as Electron.WebContentsView;
+					return view.webContents.executeJavaScript('({ data: window.remoteData, socket: window.remoteSocket, image: document.images[0].naturalWidth })');
 				}, url),
 			)
 			.toEqual({ data: 'remote-data', socket: 'remote-ws', image: 1 });
@@ -244,10 +228,7 @@ test(
 		await application.evaluate(async ({ BrowserWindow }, loopback) => {
 			const view = BrowserWindow.getAllWindows()
 				.flatMap(window => window.contentView.children)
-				.find(
-					child =>
-						'webContents' in child && (child as Electron.WebContentsView).webContents.getURL() === loopback,
-				) as Electron.WebContentsView;
+				.find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL() === loopback) as Electron.WebContentsView;
 			await view.webContents.executeJavaScript("document.cookie = 'remote_login=owned; path=/'");
 		}, loopback);
 		await stopProxy();
@@ -257,13 +238,7 @@ test(
 		await expect(editor.getByRole('status')).toContainText('Unable to load page');
 		expect(requests.length).toBe(count);
 		await page.keyboard.press('ControlOrMeta+w');
-		await expect
-			.poll(() =>
-				application.evaluate(
-					() => (globalThis as unknown as { networkScenario: NetworkScenario }).networkScenario.released,
-				),
-			)
-			.toBe(1);
+		await expect.poll(() => application.evaluate(() => (globalThis as unknown as { networkScenario: NetworkScenario }).networkScenario.released)).toBe(1);
 		await application.evaluate(() => {
 			(globalThis as unknown as { networkScenario: NetworkScenario }).networkScenario.remote = false;
 		});
@@ -275,11 +250,7 @@ test(
 			await application.evaluate(async ({ BrowserWindow }, loopback) => {
 				const view = BrowserWindow.getAllWindows()
 					.flatMap(window => window.contentView.children)
-					.find(
-						child =>
-							'webContents' in child &&
-							(child as Electron.WebContentsView).webContents.getURL() === loopback,
-					) as Electron.WebContentsView;
+					.find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL() === loopback) as Electron.WebContentsView;
 				return view.webContents.executeJavaScript('document.cookie');
 			}, loopback),
 		).toBe('');

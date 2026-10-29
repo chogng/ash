@@ -43,9 +43,7 @@ export class CommandCenterControl extends Disposable {
 		navigationDomNode.className = 'ash-titlebar-command-center-navigation ash-titlebar-interactive-region';
 		this.domNode.append(navigationDomNode);
 		const navigation = options
-			? this._register(
-					new WorkbenchToolBar(navigationDomNode, contextMenuService, { presentation: 'inherit-foreground' }),
-				)
+			? this._register(new WorkbenchToolBar(navigationDomNode, contextMenuService, { presentation: 'inherit-foreground' }))
 			: this._register(
 					new MenuWorkbenchToolBar(navigationDomNode, menuService, contextMenuService, MenuId.CommandCenter, {
 						presentation: 'inherit-foreground',
@@ -53,8 +51,7 @@ export class CommandCenterControl extends Disposable {
 				);
 		this.domNode.classList.toggle('ash-titlebar-command-center-custom', options !== undefined);
 
-		const label = () =>
-			localize(localizationService, { bundle: 'ash.regions', key: 'searchCommands' }, 'Search commands');
+		const label = () => localize(localizationService, { bundle: 'ash.regions', key: 'searchCommands' }, 'Search commands');
 		this.button = this._register(
 			new Button(this.domNode, {
 				label: label(),

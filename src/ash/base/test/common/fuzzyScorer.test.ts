@@ -58,11 +58,7 @@ suite('Fuzzy scorer', () => {
 			scoreFuzzy(repeated + 'b', query + 'b', query + 'b', false)[1],
 			Array.from({ length: query.length + 1 }, (_, index) => repeated.length - query.length + index),
 		);
-		assert.deepEqual(scoreFuzzy(prefix + 'İ😀', 'i😀', 'i😀', true)[1], [
-			prefix.length,
-			prefix.length + 1,
-			prefix.length + 2,
-		]);
+		assert.deepEqual(scoreFuzzy(prefix + 'İ😀', 'i😀', 'i😀', true)[1], [prefix.length, prefix.length + 1, prefix.length + 2]);
 	});
 
 	test('breaks equal alignment scores by their earliest ending position', () => {

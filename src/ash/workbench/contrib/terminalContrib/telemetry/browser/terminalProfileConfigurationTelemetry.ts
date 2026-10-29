@@ -1,18 +1,11 @@
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { equals } from '../../../../../base/common/objects.js';
-import {
-	ConfigurationTargetToString,
-	IConfigurationService,
-	type IConfigurationValue,
-} from '../../../../../platform/configuration/common/configuration.js';
+import { ConfigurationTargetToString, IConfigurationService, type IConfigurationValue } from '../../../../../platform/configuration/common/configuration.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
 
 /** Reports only configuration presence and change kind; profile contents never cross this boundary. */
 export class TerminalProfileConfigurationTelemetry extends Disposable {
-	constructor(
-		@IConfigurationService configuration: IConfigurationService,
-		@ITelemetryService telemetry: ITelemetryService,
-	) {
+	constructor(@IConfigurationService configuration: IConfigurationService, @ITelemetryService telemetry: ITelemetryService) {
 		super();
 		for (const profileType of ['default', 'automation']) {
 			for (const os of ['linux', 'osx', 'windows']) {
@@ -49,13 +42,7 @@ export class TerminalProfileConfigurationTelemetry extends Disposable {
 }
 
 function configuredValue(value: IConfigurationValue<unknown>): unknown {
-	return [
-		value.memoryValue,
-		value.workspaceFolderValue,
-		value.workspaceValue,
-		value.userRemoteValue,
-		value.userLocalValue,
-		value.userValue,
-		value.applicationValue,
-	].find(candidate => candidate !== undefined);
+	return [value.memoryValue, value.workspaceFolderValue, value.workspaceValue, value.userRemoteValue, value.userLocalValue, value.userValue, value.applicationValue].find(
+		candidate => candidate !== undefined,
+	);
 }

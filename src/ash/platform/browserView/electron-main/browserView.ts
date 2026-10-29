@@ -1,12 +1,4 @@
-import type {
-	BrowserWindow,
-	WebContentsView,
-	WebContents,
-	WebFrameMain,
-	IpcMainEvent,
-	ContextMenuParams,
-	Event as ElectronEvent,
-} from 'electron/main';
+import type { BrowserWindow, WebContentsView, WebContents, WebFrameMain, IpcMainEvent, ContextMenuParams, Event as ElectronEvent } from 'electron/main';
 import { addAbortListener, type EventEmitter } from 'node:events';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
@@ -63,8 +55,7 @@ export class BrowserView extends Disposable {
 	// A username step belongs to this page, never to the shared session or the persisted vault.
 	private passwordIdentity: { origin: string; username: string; expires: number } | undefined;
 	private passwordIdentityTimer: ReturnType<typeof setTimeout> | undefined;
-	private passwordSubmission:
-		{ origin: string; username: string; password: string; scope: 'global' | 'workspace' } | undefined;
+	private passwordSubmission: { origin: string; username: string; password: string; scope: 'global' | 'workspace' } | undefined;
 	private passwordSave: { id: string; value: NonNullable<BrowserView['passwordSubmission']> } | undefined;
 	private passwordChoice:
 		| {
@@ -99,12 +90,7 @@ export class BrowserView extends Disposable {
 		}, 120_000);
 	}
 	private passwordUsername(origin: string, username: string): string {
-		return (
-			username ||
-			(this.passwordIdentity?.origin === origin && this.passwordIdentity.expires > Date.now()
-				? this.passwordIdentity.username
-				: '')
-		);
+		return username || (this.passwordIdentity?.origin === origin && this.passwordIdentity.expires > Date.now() ? this.passwordIdentity.username : '');
 	}
 	private clearPasswordSubmission(): void {
 		this.passwordSubmission = undefined;
@@ -122,22 +108,12 @@ export class BrowserView extends Disposable {
 	}
 
 	private passwordOrigin(frame: WebFrameMain, action: unknown): string | undefined {
-		if (
-			this.creation.owner.type !== 'user' ||
-			!['global', 'workspace'].includes(this.session.storageScope) ||
-			frame !== this.webContents.mainFrame ||
-			frame.detached
-		) {
+		if (this.creation.owner.type !== 'user' || !['global', 'workspace'].includes(this.session.storageScope) || frame !== this.webContents.mainFrame || frame.detached) {
 			return undefined;
 		}
 		try {
 			const origin = new URL(normalizeBrowserViewUrl(frame.url)).origin;
-			if (
-				origin === 'null' ||
-				typeof action !== 'string' ||
-				action.length > 8192 ||
-				new URL(action, frame.url).origin !== origin
-			) {
+			if (origin === 'null' || typeof action !== 'string' || action.length > 8192 || new URL(action, frame.url).origin !== origin) {
 				return undefined;
 			}
 			return origin;
@@ -155,9 +131,7 @@ export class BrowserView extends Disposable {
 			this.resetFormPasswords();
 			return;
 		}
-		const existing = (await this.passwords.find(this.session.id, value.origin)).find(
-			entry => entry.username === value.username,
-		);
+		const existing = (await this.passwords.find(this.session.id, value.origin)).find(entry => entry.username === value.username);
 		if (this.passwordSubmission !== value || this.isDisposed) {
 			return;
 		}
@@ -194,27 +168,13 @@ export class BrowserView extends Disposable {
 		}
 	}
 
-	private async offerPasswordFill(
-		frame: WebFrameMain,
-		token: string,
-		formId: string,
-		origin: string,
-		username: string,
-		field: 'username' | 'password',
-	): Promise<void> {
+	private async offerPasswordFill(frame: WebFrameMain, token: string, formId: string, origin: string, username: string, field: 'username' | 'password'): Promise<void> {
 		if (!this.passwords.autofillEnabled) {
 			return;
 		}
 		const version = ++this.passwordFillVersion;
-		const accounts = (await this.passwords.find(this.session.id, origin)).filter(
-			entry => !username || entry.username === username,
-		);
-		if (
-			!accounts.length ||
-			version !== this.passwordFillVersion ||
-			this.preloadFrames.get(frame) !== token ||
-			this.passwordOrigin(frame, origin) !== origin
-		) {
+		const accounts = (await this.passwords.find(this.session.id, origin)).filter(entry => !username || entry.username === username);
+		if (!accounts.length || version !== this.passwordFillVersion || this.preloadFrames.get(frame) !== token || this.passwordOrigin(frame, origin) !== origin) {
 			return;
 		}
 		const request = {
@@ -259,9 +219,7 @@ export class BrowserView extends Disposable {
 			return;
 		}
 		const version = this.passwordFillVersion;
-		const account = (await this.passwords.find(this.session.id, request.origin)).find(
-			value => value.id === accountId,
-		);
+		const account = (await this.passwords.find(this.session.id, request.origin)).find(value => value.id === accountId);
 		if (
 			!account ||
 			version !== this.passwordFillVersion ||
@@ -318,10 +276,7 @@ export class BrowserView extends Disposable {
 		this.attemptedAuthentication.clear();
 	}
 
-	public async respondToAuthentication(
-		requestId: string,
-		credentials: { readonly username: string; readonly password: string; readonly remember: boolean } | null,
-	): Promise<void> {
+	public async respondToAuthentication(requestId: string, credentials: { readonly username: string; readonly password: string; readonly remember: boolean } | null): Promise<void> {
 		const request = this.authenticationRequests.get(requestId);
 		if (!request || request.responding) {
 			return;
@@ -363,11 +318,7 @@ export class BrowserView extends Disposable {
 		return `browser.credentials.${this.session.id}.`;
 	}
 
-	private async authenticate(
-		details: Electron.AuthenticationResponseDetails,
-		auth: Electron.AuthInfo,
-		callback: (username?: string, password?: string) => void,
-	): Promise<void> {
+	private async authenticate(details: Electron.AuthenticationResponseDetails, auth: Electron.AuthInfo, callback: (username?: string, password?: string) => void): Promise<void> {
 		const deny = (): void => {
 			try {
 				callback();
@@ -417,21 +368,11 @@ export class BrowserView extends Disposable {
 			deny();
 			return;
 		}
-		if (
-			!auth.isProxy &&
-			(url.hostname !== host || Number(url.port || (url.protocol === 'https:' ? 443 : 80)) !== auth.port)
-		) {
+		if (!auth.isProxy && (url.hostname !== host || Number(url.port || (url.protocol === 'https:' ? 443 : 80)) !== auth.port)) {
 			deny();
 			return;
 		}
-		const identity = JSON.stringify([
-			url.protocol,
-			auth.isProxy,
-			host,
-			auth.port,
-			auth.scheme.toLowerCase(),
-			auth.realm,
-		]);
+		const identity = JSON.stringify([url.protocol, auth.isProxy, host, auth.port, auth.scheme.toLowerCase(), auth.realm]);
 		const key = this.authenticationPrefix + createHash('sha256').update(identity).digest('hex');
 		if (this.attemptedAuthentication.size >= 64 && !this.attemptedAuthentication.has(key)) {
 			deny();
@@ -444,9 +385,7 @@ export class BrowserView extends Disposable {
 		const requestId = randomUUID();
 		// In memory mode Chromium's auth cache owns credentials for this process;
 		// remembered disk records must remain unread and untouched.
-		const persistent =
-			!this.passwords.useInMemoryStorage &&
-			(this.session.storageScope === 'global' || this.session.storageScope === 'workspace');
+		const persistent = !this.passwords.useInMemoryStorage && (this.session.storageScope === 'global' || this.session.storageScope === 'workspace');
 		let canRemember = false;
 		let storageFailed = false;
 		const finish = (credentials?: { username: string; password: string }): void => {
@@ -474,9 +413,7 @@ export class BrowserView extends Disposable {
 		this.attemptedAuthentication.add(key);
 		if (persistent) {
 			try {
-				canRemember =
-					(await this.encryption.isEncryptionAvailable()) &&
-					(await this.encryption.getKeyStorageProvider()) !== KnownStorageProvider.basicText;
+				canRemember = (await this.encryption.isEncryptionAvailable()) && (await this.encryption.getKeyStorageProvider()) !== KnownStorageProvider.basicText;
 				if (!this.authenticationRequests.has(requestId)) {
 					return;
 				}
@@ -573,13 +510,8 @@ export class BrowserView extends Disposable {
 	private originalUserAgent: string | undefined;
 	private contentVisibilityRule: import('../common/browserView.js').IBrowserContentVisibilityRule | undefined;
 
-	public setContentVisibility(
-		rule: import('../common/browserView.js').IBrowserContentVisibilityRule | undefined,
-	): void {
-		if (
-			rule?.origin === this.contentVisibilityRule?.origin &&
-			rule?.selector === this.contentVisibilityRule?.selector
-		) {
+	public setContentVisibility(rule: import('../common/browserView.js').IBrowserContentVisibilityRule | undefined): void {
+		if (rule?.origin === this.contentVisibilityRule?.origin && rule?.selector === this.contentVisibilityRule?.selector) {
 			return;
 		}
 		this.contentVisibilityRule = rule;
@@ -623,10 +555,7 @@ export class BrowserView extends Disposable {
 	private selectionOptions: IBrowserElementSelectionOptions = {};
 	// Existing markers remain editable after the picker has stopped; only renderer-accepted IDs qualify.
 	private readonly commentIds = new Set<string>();
-	private readonly selectedTextRequests = new Map<
-		string,
-		{ readonly frame: WebFrameMain; readonly resolve: (text: string) => void }
-	>();
+	private readonly selectedTextRequests = new Map<string, { readonly frame: WebFrameMain; readonly resolve: (text: string) => void }>();
 
 	public configurePreload(configuration: IBrowserViewWindowConfiguration): void {
 		this.preloadConfiguration = configuration;
@@ -653,9 +582,7 @@ export class BrowserView extends Disposable {
 		}
 		if (frame === this.webContents.mainFrame) {
 			const text: unknown = await raceCancellationError(
-				this.webContents.executeJavaScriptInIsolatedWorld(browserViewIsolatedWorldId, [
-					{ code: 'window.browserViewAPI.getSelectedText()' },
-				]),
+				this.webContents.executeJavaScriptInIsolatedWorld(browserViewIsolatedWorldId, [{ code: 'window.browserViewAPI.getSelectedText()' }]),
 				this.signal,
 				'BrowserTargetUnavailable',
 			);
@@ -686,10 +613,7 @@ export class BrowserView extends Disposable {
 	public stopFindInPage(keepSelection = false): void {
 		this.webContents.stopFindInPage(keepSelection ? 'keepSelection' : 'clearSelection');
 	}
-	public toggleElementSelection(
-		enabled = this.selectionMode !== 'element',
-		options: IBrowserElementSelectionOptions = {},
-	): void {
+	public toggleElementSelection(enabled = this.selectionMode !== 'element', options: IBrowserElementSelectionOptions = {}): void {
 		this.broadcastPreload('stop');
 		this.selectionMode = enabled ? 'element' : undefined;
 		this.selectionOptions = options;
@@ -731,11 +655,7 @@ export class BrowserView extends Disposable {
 	public getAccessibilityTree(): Promise<string> {
 		return this.runOperation(this.signal, async () => {
 			using attachment = this.debugger.acquire();
-			const tree = await raceCancellationError(
-				this.debugger.sendCommand('Accessibility.getFullAXTree'),
-				this.signal,
-				'BrowserTargetUnavailable',
-			);
+			const tree = await raceCancellationError(this.debugger.sendCommand('Accessibility.getFullAXTree'), this.signal, 'BrowserTargetUnavailable');
 			if (!isRecord(tree) || !Array.isArray(tree.nodes)) {
 				throw new Error('BrowserAccessibilityUnavailable');
 			}
@@ -779,24 +699,14 @@ export class BrowserView extends Disposable {
 					) {
 						throw new Error('BrowserScreenshotTooLarge');
 					}
-					const deviceScale: unknown = await this.webContents.executeJavaScriptInIsolatedWorld(
-						browserViewIsolatedWorldId,
-						[{ code: 'window.devicePixelRatio' }],
-					);
-					if (
-						typeof deviceScale !== 'number' ||
-						!Number.isFinite(deviceScale) ||
-						deviceScale <= 0 ||
-						deviceScale > 100
-					) {
+					const deviceScale: unknown = await this.webContents.executeJavaScriptInIsolatedWorld(browserViewIsolatedWorldId, [{ code: 'window.devicePixelRatio' }]);
+					if (typeof deviceScale !== 'number' || !Number.isFinite(deviceScale) || deviceScale <= 0 || deviceScale > 100) {
 						throw new Error('BrowserScreenshotUnavailable');
 					}
 					// Normalize to CSS pixels so the pixel budget also applies on Retina and zoomed displays.
 					const capture = await this.debugger.sendCommand('Page.captureScreenshot', {
 						format: options.format ?? 'png',
-						...(options.format === 'jpeg' && options.quality !== undefined
-							? { quality: options.quality }
-							: {}),
+						...(options.format === 'jpeg' && options.quality !== undefined ? { quality: options.quality } : {}),
 						captureBeyondViewport: true,
 						clip: {
 							x: 0,
@@ -806,12 +716,7 @@ export class BrowserView extends Disposable {
 							scale: 1 / deviceScale,
 						},
 					});
-					if (
-						!isRecord(capture) ||
-						typeof capture.data !== 'string' ||
-						capture.data.length > 24 * 1024 * 1024 ||
-						!/^[A-Za-z0-9+/]*={0,2}$/u.test(capture.data)
-					) {
+					if (!isRecord(capture) || typeof capture.data !== 'string' || capture.data.length > 24 * 1024 * 1024 || !/^[A-Za-z0-9+/]*={0,2}$/u.test(capture.data)) {
 						throw new Error('BrowserScreenshotTooLarge');
 					}
 					const bytes = Buffer.from(capture.data, 'base64');
@@ -823,13 +728,7 @@ export class BrowserView extends Disposable {
 				const scale = this.webContents.getZoomFactor();
 				const bounds = options.screenRect;
 				const viewport = this.view.getBounds();
-				if (
-					bounds &&
-					(bounds.x < 0 ||
-						bounds.y < 0 ||
-						(bounds.x + bounds.width) * scale > viewport.width + 1 ||
-						(bounds.y + bounds.height) * scale > viewport.height + 1)
-				) {
+				if (bounds && (bounds.x < 0 || bounds.y < 0 || (bounds.x + bounds.width) * scale > viewport.width + 1 || (bounds.y + bounds.height) * scale > viewport.height + 1)) {
 					throw new Error('BrowserScreenshotOutsideViewport');
 				}
 				const image = await this.webContents.capturePage(
@@ -854,12 +753,7 @@ export class BrowserView extends Disposable {
 	}
 
 	private acceptPreload(event: IpcMainEvent, message: unknown): void {
-		if (
-			!isRecord(message) ||
-			typeof message.frameToken !== 'string' ||
-			message.frameToken.length > 64 ||
-			typeof message.type !== 'string'
-		) {
+		if (!isRecord(message) || typeof message.frameToken !== 'string' || message.frameToken.length > 64 || typeof message.type !== 'string') {
 			return;
 		}
 		const frame = event.senderFrame;
@@ -883,12 +777,7 @@ export class BrowserView extends Disposable {
 			return;
 		}
 		const data = message.data;
-		if (
-			message.type === 'passwordSubmitted' ||
-			message.type === 'passwordIdentitySubmitted' ||
-			message.type === 'passwordFill' ||
-			message.type === 'passwordPageState'
-		) {
+		if (message.type === 'passwordSubmitted' || message.type === 'passwordIdentitySubmitted' || message.type === 'passwordFill' || message.type === 'passwordPageState') {
 			if (!isRecord(data)) {
 				return;
 			}
@@ -903,11 +792,7 @@ export class BrowserView extends Disposable {
 					});
 				}
 			} else {
-				if (
-					typeof data.username !== 'string' ||
-					data.username.length > 4096 ||
-					/[\x00-\x1f\x7f]/u.test(data.username)
-				) {
+				if (typeof data.username !== 'string' || data.username.length > 4096 || /[\x00-\x1f\x7f]/u.test(data.username)) {
 					return;
 				}
 				if (message.type === 'passwordIdentitySubmitted') {
@@ -921,14 +806,7 @@ export class BrowserView extends Disposable {
 						return;
 					}
 					const username = data.hasUsername ? data.username : this.passwordUsername(origin, data.username);
-					if (
-						!this.passwords.saveEnabled ||
-						!username ||
-						typeof data.password !== 'string' ||
-						!data.password ||
-						data.password.length > 4096 ||
-						/[\x00\r\n]/u.test(data.password)
-					) {
+					if (!this.passwords.saveEnabled || !username || typeof data.password !== 'string' || !data.password || data.password.length > 4096 || /[\x00\r\n]/u.test(data.password)) {
 						return;
 					}
 					this.resetFormPasswords();
@@ -952,20 +830,13 @@ export class BrowserView extends Disposable {
 						message.frameToken,
 						data.formId,
 						origin,
-						data.field === 'password' && !data.hasUsername
-							? this.passwordUsername(origin, data.username)
-							: data.username,
+						data.field === 'password' && !data.hasUsername ? this.passwordUsername(origin, data.username) : data.username,
 						data.field,
 					).catch(() => {});
 				}
 			}
 		} else if (message.type === 'selectedText') {
-			if (
-				isRecord(data) &&
-				typeof data.requestId === 'string' &&
-				typeof data.text === 'string' &&
-				data.text.length <= 65536
-			) {
+			if (isRecord(data) && typeof data.requestId === 'string' && typeof data.text === 'string' && data.text.length <= 65536) {
 				const request = this.selectedTextRequests.get(data.requestId);
 				if (request?.frame === frame) {
 					request.resolve(data.text);
@@ -994,11 +865,7 @@ export class BrowserView extends Disposable {
 				repeat: data.repeat as boolean,
 			};
 			this.emit({ type: 'keyDown', targetId: this.id, event: keyboardEvent });
-		} else if (
-			message.type === 'elementPicked' &&
-			(this.selectionMode === 'element' ||
-				(isRecord(data) && typeof data.elementId === 'string' && this.commentIds.has(data.elementId)))
-		) {
+		} else if (message.type === 'elementPicked' && (this.selectionMode === 'element' || (isRecord(data) && typeof data.elementId === 'string' && this.commentIds.has(data.elementId)))) {
 			if (
 				!isRecord(data) ||
 				typeof data.elementId !== 'string' ||
@@ -1008,8 +875,7 @@ export class BrowserView extends Disposable {
 				data.outerHTML.length > 16384 ||
 				typeof data.computedStyle !== 'string' ||
 				data.computedStyle.length > 4096 ||
-				(data.innerText !== undefined &&
-					(typeof data.innerText !== 'string' || data.innerText.length > 8192)) ||
+				(data.innerText !== undefined && (typeof data.innerText !== 'string' || data.innerText.length > 8192)) ||
 				(data.comment !== undefined && (typeof data.comment !== 'string' || data.comment.length > 2048)) ||
 				!validPreloadRect(data.bounds)
 			) {
@@ -1033,20 +899,10 @@ export class BrowserView extends Disposable {
 					url: frame.url,
 				},
 			});
-		} else if (
-			message.type === 'areaPicked' &&
-			this.selectionMode === 'area' &&
-			frame === this.webContents.mainFrame &&
-			validPreloadRect(data)
-		) {
+		} else if (message.type === 'areaPicked' && this.selectionMode === 'area' && frame === this.webContents.mainFrame && validPreloadRect(data)) {
 			const bounds = this.view.getBounds();
 			const scale = this.webContents.getZoomFactor();
-			if (
-				data.x < 0 ||
-				data.y < 0 ||
-				data.x + data.width > bounds.width / scale + 1 ||
-				data.y + data.height > bounds.height / scale + 1
-			) {
+			if (data.x < 0 || data.y < 0 || data.x + data.width > bounds.width / scale + 1 || data.y + data.height > bounds.height / scale + 1) {
 				return;
 			}
 			this.emit({
@@ -1054,12 +910,7 @@ export class BrowserView extends Disposable {
 				targetId: this.id,
 				rect: { x: data.x, y: data.y, width: data.width, height: data.height },
 			});
-		} else if (
-			message.type === 'elementCommentRemoved' &&
-			typeof data === 'string' &&
-			data.startsWith(message.frameToken + ':') &&
-			data.length <= 140
-		) {
+		} else if (message.type === 'elementCommentRemoved' && typeof data === 'string' && data.startsWith(message.frameToken + ':') && data.length <= 140) {
 			this.emit({ type: 'elementCommentRemoved', targetId: this.id, elementId: data });
 		} else if (message.type === 'selectionStopped') {
 			this.selectionMode = undefined;
@@ -1226,11 +1077,7 @@ export class BrowserView extends Disposable {
 		if (this.visible) this.webContents.focus();
 	}
 
-	public runOperation<R>(
-		requestSignal: AbortSignal,
-		execute: (signal: AbortSignal) => Promise<R>,
-		networkToken?: string | null,
-	): Promise<R> {
+	public runOperation<R>(requestSignal: AbortSignal, execute: (signal: AbortSignal) => Promise<R>, networkToken?: string | null): Promise<R> {
 		const signal = AbortSignal.any([requestSignal, this.signal]);
 		const operation = this.operationTurn.then(() => {
 			throwIfAborted(signal);
@@ -1272,7 +1119,11 @@ export class BrowserView extends Disposable {
 				return { action: 'deny' };
 			}
 			try {
-				this.emit({ type: 'openRequested', targetId: this.id, url: normalizeBrowserViewUrl(url) });
+				this.emit({
+					type: 'openRequested',
+					targetId: this.id,
+					url: normalizeBrowserViewUrl(url),
+				});
 			} catch {
 				// Invalid and privileged URLs are denied without entering renderer IPC.
 			}
@@ -1282,33 +1133,24 @@ export class BrowserView extends Disposable {
 
 	private listen(): void {
 		const contents = this.view.webContents;
-		this.on(
-			contents,
-			'login',
-			(
-				event: ElectronEvent,
-				details: Electron.AuthenticationResponseDetails,
-				auth: Electron.AuthInfo,
-				callback: (username?: string, password?: string) => void,
-			) => {
-				event.preventDefault();
-				let settled = false;
-				const finish = (username?: string, password?: string): void => {
-					if (settled) {
-						return;
-					}
-					settled = true;
-					callback(username, password);
-				};
-				void this.authenticate(details, auth, finish).catch(() => {
-					try {
-						finish();
-					} catch {
-						/* Request retired. */
-					}
-				});
-			},
-		);
+		this.on(contents, 'login', (event: ElectronEvent, details: Electron.AuthenticationResponseDetails, auth: Electron.AuthInfo, callback: (username?: string, password?: string) => void) => {
+			event.preventDefault();
+			let settled = false;
+			const finish = (username?: string, password?: string): void => {
+				if (settled) {
+					return;
+				}
+				settled = true;
+				callback(username, password);
+			};
+			void this.authenticate(details, auth, finish).catch(() => {
+				try {
+					finish();
+				} catch {
+					/* Request retired. */
+				}
+			});
+		});
 		this.on(contents, 'context-menu', (_event: ElectronEvent, params: ContextMenuParams) => {
 			this.openContextMenu(this, params);
 		});
@@ -1325,47 +1167,40 @@ export class BrowserView extends Disposable {
 				this.acceptPreload(event, message);
 			}
 		});
-		this.on(
-			contents,
-			'did-start-navigation',
-			(_event: ElectronEvent, _url: string, inPlace: boolean, mainFrame: boolean) => {
-				if (mainFrame && !inPlace) {
-					this.cancelPasswordChoice();
-					if (this.passwordSave) {
-						this.emit({
-							type: 'passwordRequestClosed',
-							targetId: this.id,
-							requestId: this.passwordSave.id,
-						});
-						this.passwordSave = undefined;
-						clearTimeout(this.passwordTimer);
-					}
-					try {
-						const origin = new URL(_url).origin;
-						if (
-							this.passwordSubmission?.origin !== origin &&
-							!(this.passwordIdentity?.origin === origin && this.passwordIdentity.expires > Date.now())
-						) {
-							this.resetFormPasswords();
-						}
-					} catch {
+		this.on(contents, 'did-start-navigation', (_event: ElectronEvent, _url: string, inPlace: boolean, mainFrame: boolean) => {
+			if (mainFrame && !inPlace) {
+				this.cancelPasswordChoice();
+				if (this.passwordSave) {
+					this.emit({
+						type: 'passwordRequestClosed',
+						targetId: this.id,
+						requestId: this.passwordSave.id,
+					});
+					this.passwordSave = undefined;
+					clearTimeout(this.passwordTimer);
+				}
+				try {
+					const origin = new URL(_url).origin;
+					if (this.passwordSubmission?.origin !== origin && !(this.passwordIdentity?.origin === origin && this.passwordIdentity.expires > Date.now())) {
 						this.resetFormPasswords();
 					}
+				} catch {
+					this.resetFormPasswords();
 				}
-				if (mainFrame && !inPlace) {
-					this.cancelAuthentication();
-					this.attemptedAuthentication.clear();
-				}
-				if (mainFrame && !inPlace) {
-					this.consoleLogs.length = 0;
-					this.consoleBytes = 0;
-					this.selectionMode = undefined;
-					this.preloadFrames.clear();
-					this.commentIds.clear();
-					this.emit({ type: 'selectionStopped', targetId: this.id });
-				}
-			},
-		);
+			}
+			if (mainFrame && !inPlace) {
+				this.cancelAuthentication();
+				this.attemptedAuthentication.clear();
+			}
+			if (mainFrame && !inPlace) {
+				this.consoleLogs.length = 0;
+				this.consoleBytes = 0;
+				this.selectionMode = undefined;
+				this.preloadFrames.clear();
+				this.commentIds.clear();
+				this.emit({ type: 'selectionStopped', targetId: this.id });
+			}
+		});
 		this.on(contents, 'did-start-loading', () => this.emitState());
 		this.on(contents, 'did-stop-loading', () => this.emitState());
 		this.on(contents, 'did-navigate', (_event: ElectronEvent, url: string) => {
@@ -1390,30 +1225,26 @@ export class BrowserView extends Disposable {
 				this.historyItem?.update({ favicon });
 			}
 		});
-		this.on(
-			contents,
-			'did-fail-load',
-			(
-				_event: ElectronEvent,
-				errorCode: number,
-				errorDescription: string,
-				validatedURL: string,
-				isMainFrame: boolean,
-			) => {
-				if (!isMainFrame) return;
-				this.errorDescription = errorDescription;
-				this.emit({ type: 'loadFailed', targetId: this.id, url: validatedURL, errorCode, errorDescription });
-				this.emitState();
-			},
-		);
-		this.on(
-			contents,
-			'render-process-gone',
-			(_event: ElectronEvent, details: Electron.RenderProcessGoneDetails) => {
-				this.cancelAuthentication();
-				this.emit({ type: 'renderProcessGone', targetId: this.id, reason: details.reason });
-			},
-		);
+		this.on(contents, 'did-fail-load', (_event: ElectronEvent, errorCode: number, errorDescription: string, validatedURL: string, isMainFrame: boolean) => {
+			if (!isMainFrame) return;
+			this.errorDescription = errorDescription;
+			this.emit({
+				type: 'loadFailed',
+				targetId: this.id,
+				url: validatedURL,
+				errorCode,
+				errorDescription,
+			});
+			this.emitState();
+		});
+		this.on(contents, 'render-process-gone', (_event: ElectronEvent, details: Electron.RenderProcessGoneDetails) => {
+			this.cancelAuthentication();
+			this.emit({
+				type: 'renderProcessGone',
+				targetId: this.id,
+				reason: details.reason,
+			});
+		});
 		this.on(contents, 'will-navigate', (event: ElectronEvent, url: string) => this.validateNavigation(event, url));
 		this.on(contents, 'will-redirect', (event: ElectronEvent, url: string) => this.validateNavigation(event, url));
 		this.on(contents, 'will-attach-webview', (event: ElectronEvent) => event.preventDefault());
@@ -1495,11 +1326,7 @@ export class BrowserView extends Disposable {
 			targetId: this.id,
 			permissions: this.session.permissions.snapshot(contents),
 			browserZoomIndex: browserZoomFactors.reduce<number>(
-				(best, factor, index) =>
-					Math.abs(factor - contents.getZoomFactor()) <
-					Math.abs(browserZoomFactors[best]! - contents.getZoomFactor())
-						? index
-						: best,
+				(best, factor, index) => (Math.abs(factor - contents.getZoomFactor()) < Math.abs(browserZoomFactors[best]! - contents.getZoomFactor()) ? index : best),
 				browserZoomDefaultIndex,
 			),
 			deviceEmulation: this.deviceEmulation,
@@ -1549,9 +1376,7 @@ function throwIfAborted(signal: AbortSignal): void {
 function validPreloadRect(value: unknown): value is IBrowserViewRect {
 	return (
 		isRecord(value) &&
-		['x', 'y', 'width', 'height'].every(
-			key => typeof value[key] === 'number' && Number.isFinite(value[key]) && Math.abs(value[key]) <= 100000,
-		) &&
+		['x', 'y', 'width', 'height'].every(key => typeof value[key] === 'number' && Number.isFinite(value[key]) && Math.abs(value[key]) <= 100000) &&
 		(value.width as number) > 0 &&
 		(value.height as number) > 0
 	);

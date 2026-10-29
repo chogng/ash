@@ -29,11 +29,7 @@ export function createScreenPermissionGuide(
 		try {
 			return await action(kind);
 		} catch {
-			if (!disposed)
-				status.textContent = localize(
-					'screenshot.permission.failed',
-					'The action could not be completed. Please try again.',
-				);
+			if (!disposed) status.textContent = localize('screenshot.permission.failed', 'The action could not be completed. Please try again.');
 			return false;
 		}
 	};
@@ -53,14 +49,7 @@ export function createScreenPermissionGuide(
 	});
 	card.className = 'screen-permission-app';
 	card.draggable = true;
-	card.setAttribute(
-		'aria-label',
-		localize(
-			'screenshot.permission.cardLabel',
-			'{0}. Drag to System Settings, or press Enter to copy the application path.',
-			initial.applicationName,
-		),
-	);
+	card.setAttribute('aria-label', localize('screenshot.permission.cardLabel', '{0}. Drag to System Settings, or press Enter to copy the application path.', initial.applicationName));
 	const icon = document.createElement('img');
 	icon.alt = '';
 	icon.draggable = false;

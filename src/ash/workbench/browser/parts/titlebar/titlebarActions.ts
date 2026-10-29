@@ -30,13 +30,14 @@ registerAction2(
 						group: 'navigation',
 						order: 10,
 					},
-					{ id: MenuId.MenubarViewMenu, group: '2_appearance', order: 9 },
+					{
+						id: MenuId.MenubarViewMenu,
+						group: '2_appearance',
+						order: 9,
+					},
 					{
 						id: MenuId.ViewContainerTitleContext,
-						when: ContextKeyExpr.and(
-							SideBarVisibleContext.isEqualTo(true),
-							ContextKeyExpr.equals('viewContainerLocation', 'sidebar'),
-						),
+						when: ContextKeyExpr.and(SideBarVisibleContext.isEqualTo(true), ContextKeyExpr.equals('viewContainerLocation', 'sidebar')),
 						group: '2_visibility',
 						order: 1,
 					},

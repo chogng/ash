@@ -43,15 +43,10 @@ export class ChatGeneratedImageResultSubPart extends Disposable {
 
 	render(content: readonly ChatContentPart[], source: IChatListItem['attachmentSource']): void {
 		const images = content.filter(part => part.type === 'imageUrl' || part.type === 'imageAttachment');
-		this.domNode.setAttribute(
-			'aria-label',
-			localize('chat.imageGeneration.results', 'Generated images ({0})', images.length),
-		);
+		this.domNode.setAttribute('aria-label', localize('chat.imageGeneration.results', 'Generated images ({0})', images.length));
 		// Preserve tool-result content indices: filtering would read the wrong persisted attachment.
 		this.media.updateVariables(
-			content.map(part =>
-				part.type === 'imageUrl' || part.type === 'imageAttachment' ? part : { type: 'text', text: '' },
-			),
+			content.map(part => (part.type === 'imageUrl' || part.type === 'imageAttachment' ? part : { type: 'text', text: '' })),
 			source,
 		);
 	}

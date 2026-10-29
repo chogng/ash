@@ -2,12 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import type { IAppServerApi } from '../../../agentHost/common/appServerApi.js';
-import {
-	WEB_APP_SERVER_CONNECT_EVENT,
-	WEB_APP_SERVER_CONNECTED_EVENT,
-	WEB_APP_SERVER_FRAME_EVENT,
-	type AppServerTransport,
-} from '../../../agentHost/common/appServerTransport.js';
+import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../agentHost/common/appServerTransport.js';
 import { createTestInitializeResult } from '../../../agentHost/test/common/testAppServerProtocol.js';
 import { AppServerDebugAdapterProcessService } from '../../browser/appServerDebugAdapterProcessService.js';
 import type { IDebugAdapterProcessStartOptions } from '../../common/debugAdapterProcessService.js';
@@ -91,9 +86,7 @@ test('Debug adapter handles isolate identical backend IDs across folders and ret
 				descendants: [],
 			};
 			const result =
-				request.method === 'debug/session/prepare' ||
-				request.method === 'debug/session/reserve' ||
-				request.method === 'debug/session/lifecycle'
+				request.method === 'debug/session/prepare' || request.method === 'debug/session/reserve' || request.method === 'debug/session/lifecycle'
 					? relation
 					: request.method === 'debug/session/console'
 						? { revision: 4, entries: [] }
@@ -229,10 +222,7 @@ test('Debug adapter handles isolate identical backend IDs across folders and ret
 		failClose = true;
 		await assert.rejects(service.close(second), /injected close failure/);
 		await assert.rejects(service.send(second, {}), /no longer available/);
-		setNlsMessages(
-			'zh-CN',
-			JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')),
-		);
+		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
 		try {
 			await assert.rejects(service.read(second, 0, 20), { message: '调试适配器会话已不可用。' });
 		} finally {
@@ -288,10 +278,7 @@ test('Debug adapter startup preserves executable and connection options across t
 			} else {
 				assert.equal(request.method, 'initialize');
 			}
-			const result =
-				request.method === 'initialize'
-					? createTestInitializeResult()
-					: { sessionId: `adapter-${requests.length}` };
+			const result = request.method === 'initialize' ? createTestInitializeResult() : { sessionId: `adapter-${requests.length}` };
 			emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) });
 		},
 	};

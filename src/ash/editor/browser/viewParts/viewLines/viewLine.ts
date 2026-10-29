@@ -4,12 +4,7 @@ import { DomReadingContext } from './domReadingContext.js';
 import { RangeUtil } from './rangeUtil.js';
 import { type ViewLineOptions } from './viewLineOptions.js';
 import { EditorFontLigatures } from '../../../common/config/editorOptions.js';
-import {
-	SemanticTokenModifier,
-	SemanticTokenPresentation,
-	type ResolvedSemanticToken,
-	type SemanticTokenSource,
-} from '../../../common/tokens/languageTokens.js';
+import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenSource } from '../../../common/tokens/languageTokens.js';
 import { type LanguageToken } from '../../../common/tokens/languageTokens.js';
 import { CharacterMapping, DomPosition } from '../../../common/viewLayout/viewLineRenderer.js';
 import { InlineDecorationType, type InlineDecoration } from '../../../common/viewModel/inlineDecorations.js';
@@ -36,8 +31,7 @@ export class ViewLine {
 		tabSize: number,
 		viewGpuContext?: ViewGpuContext,
 	) {
-		if (!Number.isSafeInteger(tabSize) || tabSize < 1)
-			throw new RangeError('View line tab size must be a positive safe integer');
+		if (!Number.isSafeInteger(tabSize) || tabSize < 1) throw new RangeError('View line tab size must be a positive safe integer');
 		const domNode = new FastDomNode(h(host.ownerDocument, 'div'));
 		const textElement = h(host.ownerDocument, 'span');
 		domNode.setClassName(ViewLine.CLASS_NAME);
@@ -61,11 +55,7 @@ export class ViewLine {
 		if (!isHTMLElement(textElement) || textElement.tagName !== 'SPAN') {
 			throw new TypeError('A view line DOM node must own one text span');
 		}
-		this._renderedViewLine = new RenderedViewLine(
-			new FastDomNode(domNode),
-			textElement as HTMLSpanElement,
-			this._renderedViewLine.tabSize,
-		);
+		this._renderedViewLine = new RenderedViewLine(new FastDomNode(domNode), textElement as HTMLSpanElement, this._renderedViewLine.tabSize);
 		this._isMaybeInvalid = true;
 	}
 
@@ -89,34 +79,16 @@ export class ViewLine {
 	}
 
 	public onSelectionChanged(): boolean {
-		if (
-			this._options.themeType === 'hcDark' ||
-			this._options.themeType === 'hcLight' ||
-			this._options.renderWhitespace === 'selection'
-		) {
+		if (this._options.themeType === 'hcDark' || this._options.themeType === 'hcLight' || this._options.renderWhitespace === 'selection') {
 			this._isMaybeInvalid = true;
 			return true;
 		}
 		return false;
 	}
 
-	public renderLine(
-		text: string,
-		tokens: readonly ResolvedSemanticToken[],
-		wrappedTextIndentWidth = 0,
-		inlineDecorations: readonly InlineDecoration[] = [],
-		lineNumber = 1,
-	): boolean {
-		if (!Number.isFinite(wrappedTextIndentWidth) || wrappedTextIndentWidth < 0)
-			throw new RangeError('View line indent must be finite and non-negative');
-		const changed = this._renderedViewLine.render(
-			text,
-			tokens,
-			wrappedTextIndentWidth,
-			inlineDecorations,
-			lineNumber,
-			this._options,
-		);
+	public renderLine(text: string, tokens: readonly ResolvedSemanticToken[], wrappedTextIndentWidth = 0, inlineDecorations: readonly InlineDecoration[] = [], lineNumber = 1): boolean {
+		if (!Number.isFinite(wrappedTextIndentWidth) || wrappedTextIndentWidth < 0) throw new RangeError('View line indent must be finite and non-negative');
+		const changed = this._renderedViewLine.render(text, tokens, wrappedTextIndentWidth, inlineDecorations, lineNumber, this._options);
 		this._isMaybeInvalid = false;
 		return changed;
 	}
@@ -142,10 +114,7 @@ export class ViewLine {
 	}
 
 	public monospaceAssumptionsAreValid(): boolean {
-		return (
-			!this.needsMonospaceFontCheck() ||
-			this._renderedViewLine.monospaceAssumptionsAreValid(this._options.spaceWidth)
-		);
+		return !this.needsMonospaceFontCheck() || this._renderedViewLine.monospaceAssumptionsAreValid(this._options.spaceWidth);
 	}
 
 	public onMonospaceAssumptionsInvalidated(): void {
@@ -153,20 +122,11 @@ export class ViewLine {
 		this._isMaybeInvalid = true;
 	}
 
-	public getVisibleRangesForRange(
-		_lineNumber: number,
-		startColumn: number,
-		endColumn: number,
-		context: DomReadingContext,
-	): VisibleRanges | null {
+	public getVisibleRangesForRange(_lineNumber: number, startColumn: number, endColumn: number, context: DomReadingContext): VisibleRanges | null {
 		const ranges = this._renderedViewLine.getVisibleRanges(startColumn, endColumn, context);
 		if (ranges && ranges.length > 0) return new VisibleRanges(false, ranges);
 		if (!this._options.useMonospaceOptimizations || this._renderedViewLine.isRightToLeft()) return null;
-		const fastRange = this._renderedViewLine.getMonospaceVisibleRange(
-			startColumn,
-			endColumn,
-			this._options.spaceWidth,
-		);
+		const fastRange = this._renderedViewLine.getMonospaceVisibleRange(startColumn, endColumn, this._options.spaceWidth);
 		return fastRange ? new VisibleRanges(false, [fastRange]) : null;
 	}
 
@@ -214,11 +174,7 @@ class RenderedViewLine {
 	}
 
 	get canCheckMonospaceAssumptions(): boolean {
-		return (
-			!this.canUseMonospaceMetrics &&
-			this.cachedWidth !== undefined &&
-			(this.cachedWidth > this.wrappedTextIndentWidth || this.renderedText.length === 0)
-		);
+		return !this.canUseMonospaceMetrics && this.cachedWidth !== undefined && (this.cachedWidth > this.wrappedTextIndentWidth || this.renderedText.length === 0);
 	}
 
 	render(
@@ -230,17 +186,8 @@ class RenderedViewLine {
 		options: ViewLineOptions,
 	): boolean {
 		const stopRenderingLineAfter = options.stopRenderingLineAfter;
-		const characterMapping = projectStanzaSemanticTokenLine(
-			this.textElement,
-			text,
-			tokens,
-			this.tabSize,
-			inlineDecorations,
-			lineNumber,
-			stopRenderingLineAfter,
-		);
-		const changed =
-			characterMapping !== this.characterMapping || wrappedTextIndentWidth !== this.wrappedTextIndentWidth;
+		const characterMapping = projectStanzaSemanticTokenLine(this.textElement, text, tokens, this.tabSize, inlineDecorations, lineNumber, stopRenderingLineAfter);
+		const changed = characterMapping !== this.characterMapping || wrappedTextIndentWidth !== this.wrappedTextIndentWidth;
 		if (!changed && !this.shouldUpdateWidth) {
 			return false;
 		}
@@ -275,32 +222,15 @@ class RenderedViewLine {
 		this.domNode.setLineHeight(lineHeight);
 	}
 
-	getVisibleRanges(
-		startColumn: number,
-		endColumn: number,
-		context: DomReadingContext,
-	): ReturnType<typeof RangeUtil.readHorizontalRanges> {
+	getVisibleRanges(startColumn: number, endColumn: number, context: DomReadingContext): ReturnType<typeof RangeUtil.readHorizontalRanges> {
 		if (!this.hasColumn(startColumn) || !this.hasColumn(endColumn) || endColumn < startColumn) return null;
 		const start = this.characterMapping.getDomPosition(startColumn);
 		const end = this.characterMapping.getDomPosition(endColumn);
-		return RangeUtil.readHorizontalRanges(
-			this.textElement,
-			start.partIndex,
-			start.charIndex,
-			end.partIndex,
-			end.charIndex,
-			context,
-		);
+		return RangeUtil.readHorizontalRanges(this.textElement, start.partIndex, start.charIndex, end.partIndex, end.charIndex, context);
 	}
 
 	getMonospaceVisibleRange(startColumn: number, endColumn: number, spaceWidth: number): FloatHorizontalRange | null {
-		if (
-			!this.useMonospaceMeasurement ||
-			!this.hasColumn(startColumn) ||
-			!this.hasColumn(endColumn) ||
-			endColumn < startColumn
-		)
-			return null;
+		if (!this.useMonospaceMeasurement || !this.hasColumn(startColumn) || !this.hasColumn(endColumn) || endColumn < startColumn) return null;
 		const start = this.wrappedTextIndentWidth + this.characterMapping.getHorizontalOffset(startColumn) * spaceWidth;
 		const end = this.wrappedTextIndentWidth + this.characterMapping.getHorizontalOffset(endColumn) * spaceWidth;
 		return new FloatHorizontalRange(start, Math.max(0, end - start));
@@ -321,13 +251,10 @@ class RenderedViewLine {
 	getWidth(context: DomReadingContext | null): number {
 		if (this.cachedWidth !== undefined) return this.cachedWidth;
 		if (this.canUseMonospaceMetrics) {
-			this.cachedWidth =
-				this.wrappedTextIndentWidth + this.renderedText.length * this.monospaceMetrics!.spaceWidth;
+			this.cachedWidth = this.wrappedTextIndentWidth + this.renderedText.length * this.monospaceMetrics!.spaceWidth;
 			return this.cachedWidth;
 		}
-		const width = context
-			? this.textElement.getBoundingClientRect().width / context.clientRectScale
-			: this.textElement.offsetWidth;
+		const width = context ? this.textElement.getBoundingClientRect().width / context.clientRectScale : this.textElement.offsetWidth;
 		context?.markDidDomLayout();
 		this.cachedWidth = this.wrappedTextIndentWidth + Math.max(0, width);
 		return this.cachedWidth;
@@ -375,17 +302,9 @@ export function projectStanzaSemanticTokenLine(
 	stopRenderingLineAfter = -1,
 ): CharacterMapping {
 	validateLineTokens(lineText, tokens);
-	if (!Number.isSafeInteger(tabSize) || tabSize < 1)
-		throw new RangeError('Stanza semantic line tab size must be a positive safe integer');
+	if (!Number.isSafeInteger(tabSize) || tabSize < 1) throw new RangeError('Stanza semantic line tab size must be a positive safe integer');
 	const visibleText = stopRenderingLineAfter < 0 ? lineText : lineText.slice(0, stopRenderingLineAfter);
-	const key = JSON.stringify([
-		visibleText,
-		visibleText.length < lineText.length,
-		tokens,
-		tabSize,
-		inlineDecorations,
-		lineNumber,
-	]);
+	const key = JSON.stringify([visibleText, visibleText.length < lineText.length, tokens, tabSize, inlineDecorations, lineNumber]);
 	const previous = renderedLineInputs.get(element);
 	if (previous?.key === key) {
 		return previous.mapping;
@@ -394,10 +313,7 @@ export function projectStanzaSemanticTokenLine(
 	const fragment = createFragment(ownerDocument);
 	// View ranges can span wrapped rows. Only the first and last row use the range's endpoint columns.
 	const lineDecorations = inlineDecorations
-		.filter(
-			decoration =>
-				decoration.range.startLineNumber <= lineNumber && decoration.range.endLineNumber >= lineNumber,
-		)
+		.filter(decoration => decoration.range.startLineNumber <= lineNumber && decoration.range.endLineNumber >= lineNumber)
 		.map(decoration => ({
 			...decoration,
 			range: new Range(
@@ -414,10 +330,7 @@ export function projectStanzaSemanticTokenLine(
 			0,
 			visibleText.length,
 			...tokens.flatMap(token => [boundary(token.startColumn), boundary(token.endColumn)]),
-			...lineDecorations.flatMap(decoration => [
-				boundary(decoration.range.startColumn - 1),
-				boundary(decoration.range.endColumn - 1),
-			]),
+			...lineDecorations.flatMap(decoration => [boundary(decoration.range.startColumn - 1), boundary(decoration.range.endColumn - 1)]),
 		]),
 	].sort((left, right) => left - right);
 	const characterMapping = new CharacterMapping(visibleText.length + 1, Math.max(1, boundaries.length - 1));
@@ -430,20 +343,14 @@ export function projectStanzaSemanticTokenLine(
 		const startColumn = boundaries[index]!;
 		const endColumn = boundaries[index + 1]!;
 		for (const decoration of lineDecorations) {
-			if (decoration.type !== InlineDecorationType.WidthOnly || decoration.range.startColumn - 1 !== startColumn)
-				continue;
+			if (decoration.type !== InlineDecorationType.WidthOnly || decoration.range.startColumn - 1 !== startColumn) continue;
 			const injectedElement = h(ownerDocument, 'span');
 			injectedElement.className = decoration.inlineClassName;
 			fragment.append(injectedElement);
 		}
-		const token = tokens.find(
-			candidate => candidate.startColumn <= startColumn && candidate.endColumn >= endColumn,
-		);
+		const token = tokens.find(candidate => candidate.startColumn <= startColumn && candidate.endColumn >= endColumn);
 		const decorations = lineDecorations.filter(
-			decoration =>
-				decoration.type !== InlineDecorationType.WidthOnly &&
-				decoration.range.startColumn - 1 <= startColumn &&
-				decoration.range.endColumn - 1 >= endColumn,
+			decoration => decoration.type !== InlineDecorationType.WidthOnly && decoration.range.startColumn - 1 <= startColumn && decoration.range.endColumn - 1 >= endColumn,
 		);
 		const tokenElement = h(ownerDocument, 'span');
 		if (token || decorations.length > 0) tokenElement.className = 'stanza-editor-token';
@@ -455,8 +362,7 @@ export function projectStanzaSemanticTokenLine(
 			if (token.semanticLanguage) tokenElement.dataset.ashSemanticLanguage = token.semanticLanguage;
 		}
 		if (token?.syntaxPresentation) applySyntaxPresentation(tokenElement, token.syntaxPresentation);
-		for (const decoration of decorations)
-			tokenElement.classList.add(...decoration.inlineClassName.split(/\s+/u).filter(Boolean));
+		for (const decoration of decorations) tokenElement.classList.add(...decoration.inlineClassName.split(/\s+/u).filter(Boolean));
 		tokenElement.textContent = visibleText.slice(startColumn, endColumn);
 		const fixedWidth = decorations.find(decoration => decoration.widthInEm !== undefined)?.widthInEm;
 		if (fixedWidth !== undefined) {
@@ -468,8 +374,7 @@ export function projectStanzaSemanticTokenLine(
 			characterMapping.setColumnInfo(offset + 1, index, offset - startColumn, visibleColumn);
 			visibleColumn += visibleText.charCodeAt(offset) === 9 ? tabSize - (visibleColumn % tabSize) : 1;
 		}
-		if (endColumn === visibleText.length)
-			characterMapping.setColumnInfo(visibleText.length + 1, index, endColumn - startColumn, visibleColumn);
+		if (endColumn === visibleText.length) characterMapping.setColumnInfo(visibleText.length + 1, index, endColumn - startColumn, visibleColumn);
 		fragment.append(tokenElement);
 	}
 	if (fragment.textContent !== visibleText) {
@@ -487,9 +392,7 @@ export function projectStanzaSemanticTokenLine(
 }
 
 /** Captures and validates one source before a viewport replaces its snapshot. */
-export function snapshotStanzaSemanticTokenLines(
-	source: SemanticTokenSource,
-): ReadonlyMap<number, readonly ResolvedSemanticToken[]> {
+export function snapshotStanzaSemanticTokenLines(source: SemanticTokenSource): ReadonlyMap<number, readonly ResolvedSemanticToken[]> {
 	const result = new Map<number, readonly ResolvedSemanticToken[]>();
 	for (const line of source.lines) {
 		if (!Number.isSafeInteger(line.lineIndex) || line.lineIndex < 0) {
@@ -504,9 +407,7 @@ export function snapshotStanzaSemanticTokenLines(
 					startColumn: token.startColumn,
 					endColumn: token.endColumn,
 					presentation: token.presentation,
-					...(token.modifiers && token.modifiers.length > 0
-						? { modifiers: Object.freeze([...token.modifiers]) }
-						: {}),
+					...(token.modifiers && token.modifiers.length > 0 ? { modifiers: Object.freeze([...token.modifiers]) } : {}),
 					...(token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
 					...(token.semanticType === undefined
 						? {}
@@ -550,10 +451,7 @@ function validatePresentation(presentation: SemanticTokenPresentation): void {
 
 function validateModifiers(modifiers: readonly SemanticTokenModifier[] | undefined): void {
 	if (modifiers === undefined) return;
-	if (
-		new Set(modifiers).size !== modifiers.length ||
-		modifiers.some(modifier => !Object.values(SemanticTokenModifier).includes(modifier))
-	) {
+	if (new Set(modifiers).size !== modifiers.length || modifiers.some(modifier => !Object.values(SemanticTokenModifier).includes(modifier))) {
 		throw new TypeError('Unknown or duplicate Stanza semantic token modifier');
 	}
 }
@@ -567,10 +465,6 @@ function applySyntaxPresentation(element: HTMLElement, presentation: NonNullable
 		element.style.fontStyle = presentation.fontStyle.includes('italic') ? 'italic' : 'normal';
 		element.style.fontWeight = presentation.fontStyle.includes('bold') ? 'bold' : 'normal';
 	}
-	const decorations =
-		presentation.fontStyle
-			?.filter(style => style === 'underline' || style === 'strikethrough')
-			.map(style => (style === 'strikethrough' ? 'line-through' : style)) ?? [];
-	if (presentation.fontStyle !== undefined)
-		element.style.textDecorationLine = decorations.length ? decorations.join(' ') : 'none';
+	const decorations = presentation.fontStyle?.filter(style => style === 'underline' || style === 'strikethrough').map(style => (style === 'strikethrough' ? 'line-through' : style)) ?? [];
+	if (presentation.fontStyle !== undefined) element.style.textDecorationLine = decorations.length ? decorations.join(' ') : 'none';
 }

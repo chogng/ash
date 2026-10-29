@@ -5,11 +5,7 @@ import { isMacintosh, isWindows } from '../common/platform.js';
  *
  * Editor and terminal implementations own their separate monospace defaults.
  */
-export const DEFAULT_FONT_FAMILY = isWindows
-	? '"Segoe WPC", "Segoe UI", sans-serif'
-	: isMacintosh
-		? '-apple-system, BlinkMacSystemFont, sans-serif'
-		: 'system-ui, "Ubuntu", "Droid Sans", sans-serif';
+export const DEFAULT_FONT_FAMILY = isWindows ? '"Segoe WPC", "Segoe UI", sans-serif' : isMacintosh ? '-apple-system, BlinkMacSystemFont, sans-serif' : 'system-ui, "Ubuntu", "Droid Sans", sans-serif';
 
 interface ILocalFontData {
 	readonly family: string;

@@ -5,12 +5,7 @@ import { ILocalizationService } from '../../../services/localization/common/loca
 import { isMacintosh } from '../../../../base/common/platform.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { BrowserMenubarControl, type IMenubarControl } from '../../../browser/parts/titlebar/menubarControl.js';
-import {
-	BrowserTitlebarPart,
-	BrowserTitleService,
-	AuxiliaryBrowserTitlebarPart,
-	type ITitlebarPartFactoryOptions,
-} from '../../../browser/parts/titlebar/titlebarPart.js';
+import { BrowserTitlebarPart, BrowserTitleService, AuxiliaryBrowserTitlebarPart, type ITitlebarPartFactoryOptions } from '../../../browser/parts/titlebar/titlebarPart.js';
 import { NativeMenubarControl } from './menubarControl.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { titleBarActionForeground, titleBarBackground } from '../../../common/theme.js';
@@ -46,15 +41,7 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 		super(
 			container,
 			options,
-			(menus, contextMenus, localization, contextKeys) =>
-				new ElectronMenubarControl(
-					container,
-					menus,
-					contextMenus,
-					localization,
-					contextKeys,
-					instantiationService,
-				),
+			(menus, contextMenus, localization, contextKeys) => new ElectronMenubarControl(container, menus, contextMenus, localization, contextKeys, instantiationService),
 			instantiationService,
 			menuService,
 			contextMenuService,
@@ -76,13 +63,7 @@ export class ElectronTitleService extends BrowserTitleService {
 		instantiationService: IInstantiationService,
 		onDispose: () => void,
 	): AuxiliaryBrowserTitlebarPart {
-		return instantiationService.createInstance(
-			AuxiliaryElectronTitlebarPart,
-			container,
-			this.productName,
-			editorGroupsContainer,
-			onDispose,
-		);
+		return instantiationService.createInstance(AuxiliaryElectronTitlebarPart, container, this.productName, editorGroupsContainer, onDispose);
 	}
 }
 
@@ -184,14 +165,7 @@ class ElectronMenubarControl extends Disposable implements IMenubarControl {
 	) {
 		super();
 		const browserMenubar = this._register(
-			new BrowserMenubarControl(
-				container,
-				menuService,
-				contextMenuService,
-				localizationService,
-				{ presentation: isMacintosh ? 'actions-only' : 'application-menu' },
-				contextKeyService,
-			),
+			new BrowserMenubarControl(container, menuService, contextMenuService, localizationService, { presentation: isMacintosh ? 'actions-only' : 'application-menu' }, contextKeyService),
 		);
 		this.domNode = browserMenubar.domNode;
 		if (isMacintosh) {

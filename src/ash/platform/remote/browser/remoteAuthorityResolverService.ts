@@ -37,14 +37,7 @@ export class RemoteAuthorityResolverService extends Disposable implements IRemot
 			return Promise.reject(this.errors.get(authority));
 		}
 		const result = this.results.get(authority);
-		return result
-			? Promise.resolve(result)
-			: Promise.reject(
-					new RemoteAuthorityResolverError(
-						'No Web host has resolved this authority',
-						RemoteAuthorityResolverErrorCode.NoResolverFound,
-					),
-				);
+		return result ? Promise.resolve(result) : Promise.reject(new RemoteAuthorityResolverError('No Web host has resolved this authority', RemoteAuthorityResolverErrorCode.NoResolverFound));
 	}
 
 	public getCanonicalURI(uri: URI): Promise<URI> {

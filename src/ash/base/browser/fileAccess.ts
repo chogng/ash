@@ -40,9 +40,7 @@ export function pickFiles(options: FilePickerOptions): Promise<readonly File[] |
 			}
 		};
 
-		registrations.add(
-			addDisposableListener(input, 'change', () => finish(input.files ? [...input.files] : undefined)),
-		);
+		registrations.add(addDisposableListener(input, 'change', () => finish(input.files ? [...input.files] : undefined)));
 		registrations.add(addDisposableListener(input, 'cancel', () => finish(undefined)));
 
 		const signal = options.signal;
@@ -84,13 +82,13 @@ export function triggerDownload(source: Blob | URL, name: string, ownerDocument:
 }
 
 /** Creates a temporary object URL with an explicit disposable lifetime. */
-export function createObjectUrl(
-	ownerWindow: Window,
-	blob: Blob,
-): { readonly url: URL; readonly registration: IDisposable } {
+export function createObjectUrl(ownerWindow: Window, blob: Blob): { readonly url: URL; readonly registration: IDisposable } {
 	const urlApi = (ownerWindow as BrowserWindow).URL;
 	const value = urlApi.createObjectURL(blob);
-	return { url: new urlApi(value), registration: toDisposable(() => urlApi.revokeObjectURL(value)) };
+	return {
+		url: new urlApi(value),
+		registration: toDisposable(() => urlApi.revokeObjectURL(value)),
+	};
 }
 
 function requireOwnerWindow(ownerDocument: Document): BrowserWindow {

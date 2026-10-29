@@ -34,10 +34,7 @@ registerAction2(
 				menu: [
 					{
 						id: MenuId.ExplorerContext,
-						when: ContextKeyExpr.and(
-							ContextKeyExpr.has('ashExplorerHasResource'),
-							ResourceSchemeContext.isEqualTo(Schemas.file),
-						),
+						when: ContextKeyExpr.and(ContextKeyExpr.has('ashExplorerHasResource'), ResourceSchemeContext.isEqualTo(Schemas.file)),
 						group: 'navigation',
 						order: 20,
 					},
@@ -53,11 +50,7 @@ registerAction2(
 
 		override run(accessor: ServicesAccessor, resource?: unknown): Promise<void> {
 			if (resource !== undefined) {
-				return revealResourcesInOS(
-					[resolveFileResource(accessor, resource)],
-					accessor.get(INativeHostService),
-					accessor.get(IWorkspaceContextService),
-				);
+				return revealResourcesInOS([resolveFileResource(accessor, resource)], accessor.get(INativeHostService), accessor.get(IWorkspaceContextService));
 			}
 			const selected = accessor
 				.get(IExplorerService)
@@ -65,11 +58,7 @@ registerAction2(
 				.map(item => item.resource);
 			const active = accessor.get(IEditorService).activeEditor?.resource;
 			const resources = selected.length > 0 ? selected : active ? [active] : [];
-			return revealResourcesInOS(
-				resources,
-				accessor.get(INativeHostService),
-				accessor.get(IWorkspaceContextService),
-			);
+			return revealResourcesInOS(resources, accessor.get(INativeHostService), accessor.get(IWorkspaceContextService));
 		}
 	},
 );
@@ -77,16 +66,16 @@ registerAction2(
 registerAction2(
 	class RevealActiveFileInOSAction extends Action2 {
 		constructor() {
-			super({ id: REVEAL_ACTIVE_FILE_IN_OS_COMMAND_ID, title: revealLabel(), f1: true });
+			super({
+				id: REVEAL_ACTIVE_FILE_IN_OS_COMMAND_ID,
+				title: revealLabel(),
+				f1: true,
+			});
 		}
 
 		override run(accessor: ServicesAccessor): Promise<void> {
 			const active = accessor.get(IEditorService).activeEditor?.resource;
-			return revealResourcesInOS(
-				active ? [active] : [],
-				accessor.get(INativeHostService),
-				accessor.get(IWorkspaceContextService),
-			);
+			return revealResourcesInOS(active ? [active] : [], accessor.get(INativeHostService), accessor.get(IWorkspaceContextService));
 		}
 	},
 );

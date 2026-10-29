@@ -1,8 +1,4 @@
-import type {
-	CodebaseStatusResult,
-	ConfigCommandResult,
-	CodebaseModelsDto,
-} from '../../../../../../.build/protocol/typescript/index.js';
+import type { CodebaseStatusResult, ConfigCommandResult, CodebaseModelsDto } from '../../../../../../.build/protocol/typescript/index.js';
 import type { ICodebaseApi } from '../../../../platform/codebase/common/codebaseApi.js';
 import type {
 	CodebaseConfigurationCommandResult,
@@ -28,11 +24,7 @@ export class AppServerCodebaseService implements ICodebaseService {
 		};
 	}
 
-	async configure(
-		models: CodebaseModels | undefined,
-		automaticContext: CodebaseAutomaticContext,
-		expectedRevision: number,
-	): Promise<CodebaseConfigurationCommandResult> {
+	async configure(models: CodebaseModels | undefined, automaticContext: CodebaseAutomaticContext, expectedRevision: number): Promise<CodebaseConfigurationCommandResult> {
 		return projectCommandResult(
 			await this.api.configure({
 				commandId: commandId('configure'),

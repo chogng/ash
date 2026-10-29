@@ -12,11 +12,7 @@ export interface ResizeObservationOptions extends ResizeObserverOptions {
  * Observes one or more elements using the constructor from their owning
  * window. The returned registration is a no-op when ResizeObserver is absent.
  */
-export function observeResize(
-	targets: Element | readonly Element[],
-	listener: (entries: readonly ResizeObserverEntry[]) => void,
-	options: ResizeObservationOptions = {},
-): IDisposable {
+export function observeResize(targets: Element | readonly Element[], listener: (entries: readonly ResizeObserverEntry[]) => void, options: ResizeObservationOptions = {}): IDisposable {
 	const elements = isElementList(targets) ? targets : [targets];
 	const store = new DisposableStore();
 	const elementsByWindow = new Map<ObserverWindow, Element[]>();
@@ -39,35 +35,20 @@ export function observeResize(
 }
 
 /** Observes the requested box size of one element. */
-export function observeElementSize(
-	target: HTMLElement,
-	listener: (size: Dimension) => void,
-	options: ResizeObservationOptions = { box: 'border-box' },
-): IDisposable {
+export function observeElementSize(target: HTMLElement, listener: (size: Dimension) => void, options: ResizeObservationOptions = { box: 'border-box' }): IDisposable {
 	return observeResize(
 		target,
 		([entry]) => {
 			if (!entry) return;
 			const box = options.box ?? 'border-box';
-			const size =
-				box === 'content-box'
-					? entry.contentBoxSize?.[0]
-					: box === 'device-pixel-content-box'
-						? entry.devicePixelContentBoxSize?.[0]
-						: entry.borderBoxSize?.[0];
-			listener(
-				new Dimension(size?.inlineSize ?? entry.contentRect.width, size?.blockSize ?? entry.contentRect.height),
-			);
+			const size = box === 'content-box' ? entry.contentBoxSize?.[0] : box === 'device-pixel-content-box' ? entry.devicePixelContentBoxSize?.[0] : entry.borderBoxSize?.[0];
+			listener(new Dimension(size?.inlineSize ?? entry.contentRect.width, size?.blockSize ?? entry.contentRect.height));
 		},
 		options,
 	);
 }
 
-export function observeMutations(
-	target: Node,
-	listener: (records: readonly MutationRecord[]) => void,
-	options: MutationObserverInit,
-): IDisposable {
+export function observeMutations(target: Node, listener: (records: readonly MutationRecord[]) => void, options: MutationObserverInit): IDisposable {
 	const Observer = getObserverWindow(target)?.MutationObserver;
 	if (!Observer) return toDisposable(() => {});
 	const observer = new Observer(records => listener(records));
@@ -75,11 +56,7 @@ export function observeMutations(
 	return toDisposable(() => observer.disconnect());
 }
 
-export function observeIntersection(
-	target: Element,
-	listener: (entry: IntersectionObserverEntry) => void,
-	options?: IntersectionObserverInit,
-): IDisposable {
+export function observeIntersection(target: Element, listener: (entry: IntersectionObserverEntry) => void, options?: IntersectionObserverInit): IDisposable {
 	const Observer = getObserverWindow(target)?.IntersectionObserver;
 	if (!Observer) return toDisposable(() => {});
 	const observer = new Observer(([entry]) => {

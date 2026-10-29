@@ -16,10 +16,7 @@ suite('Canvas composer controls', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('Canvas controls use translated action labels while preserving provider titles', async () => {
 		try {
-			setNlsMessages(
-				'zh-CN',
-				JSON.parse(await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')),
-			);
+			setNlsMessages('zh-CN', JSON.parse(await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
 			using lifetime = new DisposableStore();
 			const container = document.createElement('div');
 			const context: ICanvasContext = {
@@ -38,15 +35,7 @@ suite('Canvas composer controls', () => {
 				]),
 				closeCanvas: async () => {},
 			};
-			lifetime.add(
-				new CanvasesPillControl(
-					container,
-					constObservable(context),
-					() => {},
-					{ enabled: constObservable(true) } as unknown as ICanvasService,
-					{} as INotificationService,
-				),
-			);
+			lifetime.add(new CanvasesPillControl(container, constObservable(context), () => {}, { enabled: constObservable(true) } as unknown as ICanvasService, {} as INotificationService));
 			assert.ok(container.querySelector('[aria-label="打开 Canvas 画板"]'));
 			assert.ok(container.querySelector('[aria-label="关闭 Canvas 画板"]'));
 		} finally {

@@ -1,11 +1,5 @@
 import { DataTransfers } from '../../base/browser/dnd.js';
-import {
-	createFileDataTransferItem,
-	createStringDataTransferItem,
-	IDataTransferItem,
-	UriList,
-	VSDataTransfer,
-} from '../../base/common/dataTransfer.js';
+import { createFileDataTransferItem, createStringDataTransferItem, IDataTransferItem, UriList, VSDataTransfer } from '../../base/common/dataTransfer.js';
 import { getExtensionForMimeType, isTextStreamMime, Mimes, normalizeMimeType } from '../../base/common/mime.js';
 import { URI } from '../../base/common/uri.js';
 import type { IClipboardItem } from '../../platform/clipboard/common/clipboardService.js';
@@ -19,20 +13,11 @@ export function toVSDataTransfer(dataTransfer: DataTransfer | readonly IClipboar
 		for (const { type, data } of dataTransfer) {
 			const mime = normalizeMimeType(type, true)?.split(';', 1)[0];
 			// Clipboard events also carry legacy string identifiers that are not MIME types.
-			if (
-				!mime ||
-				mime.startsWith('text/') ||
-				/^application\/(?:json|xml|javascript|[^/]+\+(?:json|xml))$/.test(mime) ||
-				isTextStreamMime(mime)
-			) {
+			if (!mime || mime.startsWith('text/') || /^application\/(?:json|xml|javascript|[^/]+\+(?:json|xml))$/.test(mime) || isTextStreamMime(mime)) {
 				result.append(type, createStringDataTransferItem(new TextDecoder().decode(data)));
 				continue;
 			}
-			const file = createFileDataTransferItem(
-				`clipboard${getExtensionForMimeType(type) ?? '.bin'}`,
-				undefined,
-				async () => data,
-			);
+			const file = createFileDataTransferItem(`clipboard${getExtensionForMimeType(type) ?? '.bin'}`, undefined, async () => data);
 			result.append(type, {
 				...file,
 				// Custom formats can contain text. Decode only when requested and never replace invalid bytes.
@@ -60,19 +45,10 @@ export function toVSDataTransfer(dataTransfer: DataTransfer | readonly IClipboar
 
 function createFileDataTransferItemFromFile(file: File): IDataTransferItem {
 	const path = getPathForFile(file);
-	return createFileDataTransferItem(
-		file.name,
-		path ? URI.file(path) : undefined,
-		async () => new Uint8Array(await file.arrayBuffer()),
-	);
+	return createFileDataTransferItem(file.name, path ? URI.file(path) : undefined, async () => new Uint8Array(await file.arrayBuffer()));
 }
 
-const INTERNAL_DND_MIME_TYPES = Object.freeze([
-	CodeDataTransfers.EDITORS,
-	CodeDataTransfers.FILES,
-	DataTransfers.RESOURCES,
-	DataTransfers.INTERNAL_URI_LIST,
-]);
+const INTERNAL_DND_MIME_TYPES = Object.freeze([CodeDataTransfers.EDITORS, CodeDataTransfers.FILES, DataTransfers.RESOURCES, DataTransfers.INTERNAL_URI_LIST]);
 
 export function toExternalVSDataTransfer(sourceDataTransfer: DataTransfer, overwriteUriList = false): VSDataTransfer {
 	const result = toVSDataTransfer(sourceDataTransfer);
@@ -88,8 +64,7 @@ export function toExternalVSDataTransfer(sourceDataTransfer: DataTransfer, overw
 				resources.push(URI.file(path).toString());
 			}
 		}
-		if (resources.length > 0)
-			result.replace(Mimes.uriList, createStringDataTransferItem(UriList.create(resources)));
+		if (resources.length > 0) result.replace(Mimes.uriList, createStringDataTransferItem(UriList.create(resources)));
 	}
 
 	for (const internal of INTERNAL_DND_MIME_TYPES) {

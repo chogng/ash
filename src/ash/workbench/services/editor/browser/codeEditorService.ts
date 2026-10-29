@@ -18,12 +18,7 @@ export class CodeEditorService extends AbstractCodeEditorService {
 						ignoreError: input.options?.ignoreError,
 						source: input.options?.source,
 						selection: selection
-							? new Range(
-									selection.startLineNumber,
-									selection.startColumn,
-									selection.endLineNumber ?? selection.startLineNumber,
-									selection.endColumn ?? selection.startColumn,
-								)
+							? new Range(selection.startLineNumber, selection.startColumn, selection.endLineNumber ?? selection.startLineNumber, selection.endColumn ?? selection.startColumn)
 							: undefined,
 						selectionSource: TextEditorSelectionSource.NAVIGATION,
 					},

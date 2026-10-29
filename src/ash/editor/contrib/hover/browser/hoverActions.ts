@@ -3,11 +3,7 @@ import { localize2 } from '../../../../nls.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
-import {
-	EditorAction,
-	registerEditorAction,
-	type ServicesAccessor,
-} from '../../../browser/editorFeatureRegistration.js';
+import { EditorAction, registerEditorAction, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { ContentHoverController } from './contentHoverController.js';
 

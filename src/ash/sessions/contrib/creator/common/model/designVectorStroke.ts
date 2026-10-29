@@ -1,17 +1,9 @@
 import { cubicBezierPoint, type DesignPoint } from '../core/geometry.js';
 import type { DesignEndpoint } from './document.js';
-import {
-	designPathContours,
-	designPathStrokeContours,
-	splitDesignPathSegment,
-	type DesignPath,
-	type DesignPathContour,
-} from './designVector.js';
+import { designPathContours, designPathStrokeContours, splitDesignPathSegment, type DesignPath, type DesignPathContour } from './designVector.js';
 
 /** Endpoint identity follows its anchor through reversal and network conversion, not the traversal order. */
-export function designPathEndpoints(
-	path: DesignPath,
-): readonly {
+export function designPathEndpoints(path: DesignPath): readonly {
 	contour: number;
 	index: number;
 	style: DesignEndpoint;
@@ -21,9 +13,7 @@ export function designPathEndpoints(
 }[] {
 	const endpoint = (contour: number, index: number, points: readonly DesignPoint[], style?: DesignEndpoint) => {
 		const point = points[0],
-			next = points
-				.slice(1)
-				.find(p => Math.hypot((p.x - point.x) * path.width, (p.y - point.y) * path.height) > 1e-8);
+			next = points.slice(1).find(p => Math.hypot((p.x - point.x) * path.width, (p.y - point.y) * path.height) > 1e-8);
 		const dx = next ? (point.x - next.x) * path.width : 1,
 			dy = next ? (point.y - next.y) * path.height : 0,
 			length = Math.hypot(dx, dy);
@@ -49,19 +39,7 @@ export function designPathEndpoints(
 			}
 			const edge = edges[incident[index][0]],
 				start = edge.start === index;
-			return [
-				endpoint(
-					0,
-					index,
-					[
-						point,
-						start ? edge.outgoing : edge.incoming,
-						start ? edge.incoming : edge.outgoing,
-						vertices[start ? edge.end : edge.start],
-					],
-					point.endpoint,
-				),
-			];
+			return [endpoint(0, index, [point, start ? edge.outgoing : edge.incoming, start ? edge.incoming : edge.outgoing, vertices[start ? edge.end : edge.start]], point.endpoint)];
 		});
 	}
 	return designPathContours(path).flatMap((contour, ci) =>
@@ -71,29 +49,15 @@ export function designPathEndpoints(
 					const start = index === 0,
 						node = contour.nodes[index],
 						neighbor = contour.nodes[start ? 1 : index - 1];
-					return endpoint(
-						ci,
-						index,
-						[
-							node,
-							start ? node.outgoing : node.incoming,
-							start ? neighbor.incoming : neighbor.outgoing,
-							neighbor,
-						],
-						node.endpoint,
-					);
+					return endpoint(ci, index, [node, start ? node.outgoing : node.incoming, start ? neighbor.incoming : neighbor.outgoing, neighbor], node.endpoint);
 				}),
 	);
 }
 
 /** Open subpaths remain centered; a closed contour's fill rule determines its interior, including holes. */
-export function designStrokeLayers(
-	path: DesignPath,
-): readonly { contours: readonly DesignPathContour[]; width: number; alignment: 'center' | 'inside' | 'outside' }[] {
+export function designStrokeLayers(path: DesignPath): readonly { contours: readonly DesignPathContour[]; width: number; alignment: 'center' | 'inside' | 'outside' }[] {
 	const contours = designPathStrokeContours(path).flatMap(contour => {
-			const trimmed = path.widthPoints?.length
-				? contour
-				: trimArrowStroke(contour, path.width, path.height, path.strokeWidth);
+			const trimmed = path.widthPoints?.length ? contour : trimArrowStroke(contour, path.width, path.height, path.strokeWidth);
 			return trimmed ? [trimmed] : [];
 		}),
 		alignment = path.widthPoints?.length ? 'center' : (path.strokeAlignment ?? 'center');
@@ -207,17 +171,11 @@ export function designEndpointContours(path: DesignPath): readonly DesignPathCon
 
 /** The line stops inside a solid tip, so a thick butt end cannot protrude from its point.
  * Only a split parameter is sampled; the remaining body keeps the exact original cubic. */
-function trimArrowStroke(
-	contour: DesignPathContour,
-	width: number,
-	height: number,
-	weight: number,
-): DesignPathContour | undefined {
+function trimArrowStroke(contour: DesignPathContour, width: number, height: number, weight: number): DesignPathContour | undefined {
 	if (contour.closed) {
 		return contour;
 	}
-	const inset = (style: DesignEndpoint | undefined) =>
-		style === 'triangle-arrow' || style === 'diamond-arrow' ? weight : style === 'circle-arrow' ? weight / 2 : 0;
+	const inset = (style: DesignEndpoint | undefined) => (style === 'triangle-arrow' || style === 'diamond-arrow' ? weight : style === 'circle-arrow' ? weight / 2 : 0);
 	const start = inset(contour.nodes[0]?.endpoint),
 		end = inset(contour.nodes.at(-1)?.endpoint);
 	if (!start && !end) {

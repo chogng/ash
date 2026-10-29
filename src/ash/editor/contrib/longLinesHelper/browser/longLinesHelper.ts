@@ -1,9 +1,6 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { type ICodeEditor, MouseTargetType } from '../../../browser/editorBrowser.js';
-import {
-	EditorContributionInstantiation,
-	registerEditorContribution,
-} from '../../../browser/editorFeatureRegistration.js';
+import { EditorContributionInstantiation, registerEditorContribution } from '../../../browser/editorFeatureRegistration.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { type IEditorContribution } from '../../../common/editorCommon.js';
 
@@ -18,11 +15,7 @@ class LongLinesHelper extends Disposable implements IEditorContribution {
 		this._register(
 			editor.onMouseDown(event => {
 				const limit = editor.getOption(EditorOption.stopRenderingLineAfter);
-				if (
-					limit >= 0 &&
-					event.target.type === MouseTargetType.CONTENT_TEXT &&
-					event.target.position.column >= limit
-				) {
+				if (limit >= 0 && event.target.type === MouseTargetType.CONTENT_TEXT && event.target.position.column >= limit) {
 					editor.updateOptions({ stopRenderingLineAfter: -1 });
 				}
 			}),

@@ -24,15 +24,11 @@ export class SmartSelectController extends Disposable {
 		@ILanguageFeaturesService private readonly languageFeatures: ILanguageFeaturesService,
 	) {
 		super();
-		if (viewport.textModel !== editor.getModel())
-			throw new TypeError('Stanza smart select dependencies must share a text model');
+		if (viewport.textModel !== editor.getModel()) throw new TypeError('Stanza smart select dependencies must share a text model');
 		this._register(addDisposableListener(input, 'keydown', event => this.handleKeydown(event), true));
 		this._register(
 			editor.onDidChangeCursorSelection(event => {
-				if (
-					event.source !== 'editor.action.smartSelect.expand' &&
-					event.source !== 'editor.action.smartSelect.shrink'
-				) {
+				if (event.source !== 'editor.action.smartSelect.expand' && event.source !== 'editor.action.smartSelect.shrink') {
 					this.reset();
 				}
 			}),
@@ -52,14 +48,7 @@ export class SmartSelectController extends Disposable {
 	}
 
 	private handleKeydown(event: KeyboardEvent): void {
-		if (
-			event.defaultPrevented ||
-			event.isComposing ||
-			event.altKey ||
-			(!event.ctrlKey && !event.metaKey) ||
-			!event.shiftKey
-		)
-			return;
+		if (event.defaultPrevented || event.isComposing || event.altKey || (!event.ctrlKey && !event.metaKey) || !event.shiftKey) return;
 		if (event.key === 'ArrowRight') {
 			stopEvent(event, { immediate: true });
 			const before = this.editor.getSelections()!;
@@ -82,11 +71,7 @@ export class SmartSelectController extends Disposable {
 		}
 	}
 
-	private async expand(
-		request: AbortController,
-		before: readonly Selection[],
-		snapshot: TextSnapshot,
-	): Promise<void> {
+	private async expand(request: AbortController, before: readonly Selection[], snapshot: TextSnapshot): Promise<void> {
 		const model = this.viewport.textModel;
 		const context = Object.freeze({
 			...createLanguageFeatureRequest(model, model.getLanguageId(), request.signal),
@@ -117,16 +102,8 @@ export class SmartSelectController extends Disposable {
 		}
 	}
 
-	private commitExpansion(
-		before: readonly Selection[],
-		snapshot: TextSnapshot,
-		syntaxRanges: readonly Range[],
-	): void {
-		if (
-			this.viewport.textModel.version !== snapshot.version ||
-			!Selection.selectionsArrEqual(this.editor.getSelections()!, [...before])
-		)
-			return;
+	private commitExpansion(before: readonly Selection[], snapshot: TextSnapshot, syntaxRanges: readonly Range[]): void {
+		if (this.viewport.textModel.version !== snapshot.version || !Selection.selectionsArrEqual(this.editor.getSelections()!, [...before])) return;
 		this.history.push(before);
 		this.editor.setSelections(
 			before.map(selection => expandSmartSelection(this.viewport.textModel, selection, syntaxRanges)),
@@ -140,12 +117,6 @@ registerEditorContribution({
 	id: 'editor.contrib.smartSelect',
 	install: context => {
 		if (context.kind !== 'text') return;
-		return context.instantiationService.createInstance(
-			SmartSelectController,
-			context.controller.element,
-			context.editor,
-			context.view,
-			context.onLanguageError,
-		);
+		return context.instantiationService.createInstance(SmartSelectController, context.controller.element, context.editor, context.view, context.onLanguageError);
 	},
 });

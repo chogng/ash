@@ -5,10 +5,7 @@ import { suite, test } from 'mocha';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
-import {
-	ISessionsLayoutService,
-	type ISessionsEntry,
-} from '../../../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsLayoutService, type ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { SessionsViewRegistry } from '../../../../common/views.js';
 import { MenusRegistry } from '../../../../../platform/actions/common/actions.js';
@@ -81,17 +78,11 @@ suite('Sessions Execution Trace entry', () => {
 suite('Sessions Trace commands', () => {
 	test('keeps Trace out of the Activity Bar', () => {
 		assert.equal(
-			MenusRegistry.getMenuItems(Menus.ActivityBar).some(
-				item => 'command' in item && item.command.id === 'sessions.open.trace',
-			),
+			MenusRegistry.getMenuItems(Menus.ActivityBar).some(item => 'command' in item && item.command.id === 'sessions.open.trace'),
 			false,
 		);
 	});
-	for (const saved of [
-		undefined,
-		'ash-agent-trace:/previous?threadId=old-thread&turnId=old-turn',
-		'https://example.test/invalid',
-	]) {
+	for (const saved of [undefined, 'ash-agent-trace:/previous?threadId=old-thread&turnId=old-turn', 'https://example.test/invalid']) {
 		test(`opens a retained Trace entry instead of the conversation ${String(saved)}`, async () => {
 			using services = new InstantiationService();
 			const opened: ISessionsEntry[] = [];
@@ -126,9 +117,7 @@ suite('Sessions Trace commands', () => {
 						content: 'editor',
 						sidebar: undefined,
 						restore: 'sessions.open.trace',
-						resource: saved?.startsWith('ash-agent-trace:')
-							? saved
-							: 'ash-agent-trace:/current-session?threadId=current&turnId=current-turn',
+						resource: saved?.startsWith('ash-agent-trace:') ? saved : 'ash-agent-trace:/current-session?threadId=current&turnId=current-turn',
 					},
 				],
 			);

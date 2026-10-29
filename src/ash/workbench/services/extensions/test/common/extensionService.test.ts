@@ -4,20 +4,14 @@ import { createEmptyTestLanguagePacks } from '../../../localization/test/common/
 import { JSDOM } from 'jsdom';
 import { GlobalExtensionEnablementService } from '../../../../../platform/extensionManagement/common/extensionEnablementService.js';
 import { BrowserStorageService } from '../../../storage/browser/storageService.js';
-import {
-	createAppServerExtensionApi,
-	withEnabledBuiltInExtensions,
-} from '../../../../../platform/extensions/browser/extensionApi.js';
+import { createAppServerExtensionApi, withEnabledBuiltInExtensions } from '../../../../../platform/extensions/browser/extensionApi.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import type { AppServerProtocolClient } from '../../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import type { AppServerConnectionState, IResourceApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { ViewsRegistry } from '../../../../common/views.js';
 import { normalizeExtensionCatalog } from '../../../../../platform/extensions/common/extensionApi.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../configuration/test/common/testServices.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { initializeTestLocalization } from '../../../localization/test/common/localizationTestUtils.js';
@@ -29,18 +23,11 @@ import { readFile, readdir } from 'node:fs/promises';
 import { ColorScheme } from '../../../../../platform/theme/common/theme.js';
 import { WorkbenchFileIconThemesRegistry } from '../../../themes/common/themeExtensionPoints.js';
 import { DisposableTracker, installDisposableTracker, toDisposable } from '../../../../../base/common/lifecycle.js';
-import type {
-	ExtensionCatalog,
-	ExtensionDescriptor,
-	IExtensionApi,
-} from '../../../../../platform/extensions/common/extensionApi.js';
+import type { ExtensionCatalog, ExtensionDescriptor, IExtensionApi } from '../../../../../platform/extensions/common/extensionApi.js';
 import type { IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import type { ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
 import { AppServerExtensionService } from '../../browser/appServerExtensionService.js';
-import {
-	parseExtensionManifest,
-	type ExtensionCatalog as WorkbenchExtensionCatalog,
-} from '../../common/extensionService.js';
+import { parseExtensionManifest, type ExtensionCatalog as WorkbenchExtensionCatalog } from '../../common/extensionService.js';
 import { parseJsonc } from '../../common/jsonc.js';
 import { SnippetsService } from '../../../../contrib/snippets/browser/snippetsService.js';
 import { MainThreadLocalization } from '../../../../api/browser/mainThreadLocalization.js';
@@ -100,9 +87,7 @@ test('the Rust LLDB package contributes debugger metadata and settings without a
 			{
 				api: {
 					list: async () => ({ generation: 1, extensions: [entry], diagnostics: [] }),
-					resources: new ExtensionResourceLoaderService(
-						async request => new Uint8Array(await readFile(`extensions/debug-lldb/${request.path}`)),
-					),
+					resources: new ExtensionResourceLoaderService(async request => new Uint8Array(await readFile(`extensions/debug-lldb/${request.path}`))),
 				},
 			},
 			createEmptyTestLanguagePacks(),
@@ -111,11 +96,7 @@ test('the Rust LLDB package contributes debugger metadata and settings without a
 		await service.start();
 		assert.equal(service.debugAdapters.get('lldb-dap')?.extensionId, entry.id);
 		assert.equal(service.debugAdapters.get('lldb-dap')?.program, undefined);
-		assert.equal(
-			adapters.get('lldb-dap'),
-			undefined,
-			'the descriptor comes from the separately activated Rust provider',
-		);
+		assert.equal(adapters.get('lldb-dap'), undefined, 'the descriptor comes from the separately activated Rust provider');
 		assert.equal(service.debugAdapters.get('lldb')?.extensionId, entry.id);
 		assert.equal(adapters.get('lldb'), undefined, 'initial discovery must not download a runtime');
 		assert.equal(registry.getConfiguration('debug.lldb.codeLldbPath')?.defaultValue, '');
@@ -177,9 +158,7 @@ test('fails closed for invalid or escaping grammar contributions', () => {
 					publisher: 'ash',
 					version: '1.0.0',
 					contributes: {
-						grammars: [
-							{ scopeName: 'source.demo', path: 'grammar.json', tokenTypes: { 'source.js': 'invalid' } },
-						],
+						grammars: [{ scopeName: 'source.demo', path: 'grammar.json', tokenTypes: { 'source.js': 'invalid' } }],
 					},
 				}),
 				descriptor,
@@ -195,16 +174,12 @@ test('parses declarative debugger contributions and rejects duplicate adapter ow
 			publisher: 'ash',
 			version: '1.0.0',
 			contributes: {
-				debuggers: [
-					{ type: 'demo', label: 'Demo Debug', debugAdapter: { program: 'demo-adapter', args: ['--stdio'] } },
-				],
+				debuggers: [{ type: 'demo', label: 'Demo Debug', debugAdapter: { program: 'demo-adapter', args: ['--stdio'] } }],
 			},
 		}),
 		descriptor,
 	);
-	assert.deepEqual(manifest.contributes.debuggers, [
-		{ type: 'demo', label: 'Demo Debug', program: 'demo-adapter', arguments: ['--stdio'] },
-	]);
+	assert.deepEqual(manifest.contributes.debuggers, [{ type: 'demo', label: 'Demo Debug', program: 'demo-adapter', arguments: ['--stdio'] }]);
 
 	using registry = new ExtensionDebugAdapterRegistry();
 	registry.replace([{ extensionId: 'ash.demo', ...manifest.contributes.debuggers[0]! }]);
@@ -353,7 +328,11 @@ test('validates extension theme catalogs', () => {
 });
 
 test('activates declarations without fetching legacy TextMate grammar resources', async () => {
-	const catalog: ExtensionCatalog = Object.freeze({ generation: 1, extensions: [descriptor], diagnostics: [] });
+	const catalog: ExtensionCatalog = Object.freeze({
+		generation: 1,
+		extensions: [descriptor],
+		diagnostics: [],
+	});
 	const api: IExtensionApi = {
 		list: async () => catalog,
 		resources: new ExtensionResourceLoaderService(async request => {
@@ -514,9 +493,7 @@ test('rejects a catalog whose canonical manifest digest does not match', async (
 		list: async () =>
 			Object.freeze({
 				generation: 1,
-				extensions: Object.freeze([
-					Object.freeze({ ...descriptor, manifestSha256: `sha256:${'0'.repeat(64)}` }),
-				]),
+				extensions: Object.freeze([Object.freeze({ ...descriptor, manifestSha256: `sha256:${'0'.repeat(64)}` })]),
 				diagnostics: Object.freeze([]),
 			}),
 		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
@@ -562,11 +539,7 @@ test('concurrent startup readiness checks share the current transaction without 
 	await initial;
 	assert.deepEqual(modes, ['cached']);
 	await service.start();
-	assert.deepEqual(
-		modes,
-		['cached', 'cached'],
-		'A later connection readiness check still reads the backend snapshot',
-	);
+	assert.deepEqual(modes, ['cached', 'cached'], 'A later connection readiness check still reads the backend snapshot');
 });
 
 test('enablement updates cannot downgrade a queued source refresh', async () => {
@@ -641,10 +614,7 @@ test('a superseded failed reload does not reject a caller after the latest catal
 	assert.equal(service.reload(), starting);
 	rejectFirst(new Error('Catalog generation changed during a resource read'));
 	await starting;
-	assert.deepEqual(
-		{ requests, generation: service.currentCatalog.generation, failures },
-		{ requests: 2, generation: 2, failures: [] },
-	);
+	assert.deepEqual({ requests, generation: service.currentCatalog.generation, failures }, { requests: 2, generation: 2, failures: [] });
 });
 
 test('queued reloads report the final failure and retain the last committed catalog', async () => {
@@ -673,10 +643,7 @@ test('queued reloads report the final failure and retain the last committed cata
 	assert.equal(service.reload(), loading);
 	rejectFirst(new Error('Superseded generation'));
 	await assert.rejects(loading, error => error === finalFailure);
-	assert.deepEqual(
-		{ requests, generation: service.currentCatalog.generation, failures },
-		{ requests: 3, generation: 1, failures: [finalFailure] },
-	);
+	assert.deepEqual({ requests, generation: service.currentCatalog.generation, failures }, { requests: 3, generation: 1, failures: [finalFailure] });
 });
 
 test('reloads declarations for Plugin activation and Extensions installation changes', async () => {
@@ -726,11 +693,7 @@ test('reloads declarations for Plugin activation and Extensions installation cha
 	});
 	listener?.({ method: 'extensions/changed', params: { instanceId: 'manager-2', generation: 1 } });
 	assert.equal((await restarted.promise).generation, 4, 'a new manager instance can start at a lower generation');
-	assert.deepEqual(
-		modes,
-		['cached', 'cached', 'cached', 'cached'],
-		'notifications read the new backend snapshot without rescanning unchanged sources',
-	);
+	assert.deepEqual(modes, ['cached', 'cached', 'cached', 'cached'], 'notifications read the new backend snapshot without rescanning unchanged sources');
 });
 
 test('dispose suppresses a queued reload and ignores the in-flight result', async () => {
@@ -763,9 +726,7 @@ test('preserves the last active catalog when refreshed theme materialization fai
 	let generation = 1;
 	const api: IExtensionApi = {
 		list: async () => ({ generation, extensions: [extension], diagnostics: [] }),
-		resources: new ExtensionResourceLoaderService(async () =>
-			new TextEncoder().encode(generation === 1 ? '{"colors":{},"semanticTokenColors":{}}' : 'invalid theme'),
-		),
+		resources: new ExtensionResourceLoaderService(async () => new TextEncoder().encode(generation === 1 ? '{"colors":{},"semanticTokenColors":{}}' : 'invalid theme')),
 	};
 	using service = new AppServerExtensionService({ api }, createEmptyTestLanguagePacks(), adapters);
 	await service.start();
@@ -796,17 +757,11 @@ test('publishes one coherent contribution generation to registry listeners', asy
 	});
 	const api: IExtensionApi = {
 		list: async () => catalog,
-		resources: new ExtensionResourceLoaderService(async () =>
-			new TextEncoder().encode('{"colors":{},"semanticTokenColors":{}}'),
-		),
+		resources: new ExtensionResourceLoaderService(async () => new TextEncoder().encode('{"colors":{},"semanticTokenColors":{}}')),
 	};
 	using languageService = new LanguageService();
 	using languages = new LanguageFeaturesService();
-	using service = new AppServerExtensionService(
-		{ api, languageService, languageConfigurationService: languages.languageConfigurationService },
-		createEmptyTestLanguagePacks(),
-		adapters,
-	);
+	using service = new AppServerExtensionService({ api, languageService, languageConfigurationService: languages.languageConfigurationService }, createEmptyTestLanguagePacks(), adapters);
 	const observations: Array<{
 		readonly themeCount: number;
 		readonly adapterCount: number;
@@ -829,10 +784,7 @@ test('resolves extension language first-line patterns after file content is avai
 	using languages = new LanguageService();
 	using registration = languages.registerLanguage({ id: 'demo', firstLine: '^#!.*\\bdemo' }, { priority: 100 });
 
-	assert.equal(
-		languages.resolveLanguageId({ resource: URI.file('C:\\workspace\\script'), firstLine: '#!/usr/bin/env demo' }),
-		'demo',
-	);
+	assert.equal(languages.resolveLanguageId({ resource: URI.file('C:\\workspace\\script'), firstLine: '#!/usr/bin/env demo' }), 'demo');
 	assert.equal(
 		languages.resolveLanguageId({
 			resource: URI.file('C:\\workspace\\script'),
@@ -1079,8 +1031,7 @@ test('themes in one package prepare their includes concurrently without exposing
 		list: async () => ({ generation: 1, extensions: [entry], diagnostics: [] }),
 		resources: new ExtensionResourceLoaderService(async ({ path }) => {
 			reads.push(path);
-			if (!path.includes('/base-'))
-				return new TextEncoder().encode(JSON.stringify({ include: './base-' + path.split('/')[1] }));
+			if (!path.includes('/base-')) return new TextEncoder().encode(JSON.stringify({ include: './base-' + path.split('/')[1] }));
 			peak = Math.max(peak, ++active);
 			if (active === 8) firstBatch.resolve();
 			try {
@@ -1171,8 +1122,7 @@ function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value
 test('extension theme contributions activate together, retain the last valid catalog, and revoke on removal', async () => {
 	const { Colors } = await import('../../../../../platform/theme/common/colorRegistry.js');
 	const { getIconRegistry, getIconDefinition } = await import('../../../../../platform/theme/common/iconRegistry.js');
-	const { getTokenClassificationRegistry } =
-		await import('../../../../../platform/theme/common/tokenClassificationRegistry.js');
+	const { getTokenClassificationRegistry } = await import('../../../../../platform/theme/common/tokenClassificationRegistry.js');
 	const { parseUserColorTheme } = await import('../../../themes/common/colorThemeData.js');
 	let generation = 1;
 	let contributed = true;
@@ -1275,9 +1225,7 @@ test('the packaged browser catalog activates Markdown grammar and configuration 
 		{
 			api: {
 				list: async () => bundle.catalog,
-				resources: new ExtensionResourceLoaderService(async request =>
-					Uint8Array.from(Buffer.from(bundle.resources[request.extensionId][request.path], 'base64')),
-				),
+				resources: new ExtensionResourceLoaderService(async request => Uint8Array.from(Buffer.from(bundle.resources[request.extensionId][request.path], 'base64'))),
 			},
 			languageService,
 			languageConfigurationService: languages.languageConfigurationService,
@@ -1318,8 +1266,7 @@ test('the Rust package defaults to on-demand analysis and preserves explicit set
 				api: {
 					list: async () => ({ generation: 1, extensions: [entry], diagnostics: [] }),
 					resources: new ExtensionResourceLoaderService(request => {
-						if (!resources.has(request.path))
-							throw new Error(`Missing case-sensitive Rust resource: ${request.path}`);
+						if (!resources.has(request.path)) throw new Error(`Missing case-sensitive Rust resource: ${request.path}`);
 						return readFile(`extensions/rust/${request.path}`);
 					}),
 				},
@@ -1337,30 +1284,17 @@ test('the Rust package defaults to on-demand analysis and preserves explicit set
 			'the Settings category is named Rust in every locale',
 		);
 		assert.ok(settings.every(setting => setting.schema?.title && !setting.schema.title.startsWith('%')));
-		assert.ok(
-			settings.every(
-				setting => setting.schema?.markdownDescription && !setting.schema.markdownDescription.startsWith('%'),
-			),
-		);
+		assert.ok(settings.every(setting => setting.schema?.markdownDescription && !setting.schema.markdownDescription.startsWith('%')));
 		assert.equal(configuration.getValue(key), false);
 		assert.equal(explicit.getValue(key), true);
 		assert.equal(configuration.getValue('rust-analyzer.lru.capacity'), null);
 		assert.equal(configuration.getValue('rust-analyzer.check.command'), 'check');
 		assert.equal(configuration.getValue('rust-analyzer.procMacro.enable'), true);
-		assert.throws(
-			() => registry.getConfiguration('rust-analyzer.lru.capacity')!.parse(-1),
-			/declared schema|声明的架构/u,
-		);
+		assert.throws(() => registry.getConfiguration('rust-analyzer.lru.capacity')!.parse(-1), /declared schema|声明的架构/u);
 		assert.throws(() => registry.getConfiguration('rust-analyzer.cargo.features')!.parse('invalid-feature-mode'));
 		assert.equal((await configuration.read()).source.trim(), '{}', 'extension defaults must not write the profile');
-		assert.match(
-			registry.getConfiguration(key)!.schema!.markdownDescription!,
-			locale === 'en' ? /analysis is computed on demand/ : /改为按需分析/,
-		);
-		assert.match(
-			registry.getConfiguration('rust-analyzer.lru.capacity')!.schema!.title!,
-			locale === 'en' ? /Cache: Syntax tree capacity/ : /语法树容量/,
-		);
+		assert.match(registry.getConfiguration(key)!.schema!.markdownDescription!, locale === 'en' ? /analysis is computed on demand/ : /改为按需分析/);
+		assert.match(registry.getConfiguration('rust-analyzer.lru.capacity')!.schema!.title!, locale === 'en' ? /Cache: Syntax tree capacity/ : /语法树容量/);
 		service.dispose();
 		assert.equal(registry.getConfiguration(key), undefined, 'the setting belongs to the Rust extension');
 		assert.equal(explicit.getValue(key), true, 'withdrawing the default preserves the user setting');
@@ -1585,13 +1519,7 @@ test('declarative extension problem contributions activate, roll back failed rel
 	);
 	await service.start();
 	using markers = new MarkerService();
-	using collector = new WatchingProblemCollector(
-		parseProblemMatchers(['$extension-service-matcher']),
-		URI.file('/workspace'),
-		markers,
-		'extension-service',
-		() => false,
-	);
+	using collector = new WatchingProblemCollector(parseProblemMatchers(['$extension-service-matcher']), URI.file('/workspace'), markers, 'extension-service', () => false);
 	collector.accept(new TextEncoder().encode('BUILD\napp.ts:1:2 extension issue\nREADY\n'));
 	assert.equal(collector.isReady, true);
 	assert.equal(markers.read()[0].message, 'extension issue');
@@ -1725,9 +1653,7 @@ test('catalog refresh preserves an unchanged declarative Debug owner and retires
 		{
 			api: {
 				list: async () => ({ generation, extensions: present ? [entry] : [], diagnostics: [] }),
-				resources: new ExtensionResourceLoaderService(async () =>
-					new TextEncoder().encode('{"scopeName":"source.demo","patterns":[]}'),
-				),
+				resources: new ExtensionResourceLoaderService(async () => new TextEncoder().encode('{"scopeName":"source.demo","patterns":[]}')),
 			},
 		},
 		createEmptyTestLanguagePacks(),
@@ -1773,11 +1699,7 @@ test('window package support filters disabled declarations without changing shar
 			assert.deepEqual((await agents.list('cached', { includeDisabled })).extensions, [descriptor, pdf]);
 		}
 		assert.deepEqual(enablement.getDisabledExtensions(), []);
-		assert.deepEqual(
-			catalog.extensions,
-			[descriptor, pdf],
-			'window projections must not mutate the shared catalog',
-		);
+		assert.deepEqual(catalog.extensions, [descriptor, pdf], 'window projections must not mutate the shared catalog');
 	} finally {
 		dom.window.close();
 	}
@@ -1850,12 +1772,7 @@ test('speech provider declarations remain bounded immutable metadata in the orig
 	);
 	assert.deepEqual(manifest.contributes.speechProviders, [{ name: 'acme.speech', description: 'Recognition' }]);
 	assert.equal(Object.isFrozen(manifest.contributes.speechProviders[0]), true);
-	for (const providers of [
-		[{ name: '' }],
-		[{ name: 'a', model: 'untrusted' }],
-		[{ name: 'same' }, { name: 'same' }],
-		[{ name: 'a', description: 1 }],
-	]) {
+	for (const providers of [[{ name: '' }], [{ name: 'a', model: 'untrusted' }], [{ name: 'same' }, { name: 'same' }], [{ name: 'a', description: 1 }]]) {
 		assert.throws(
 			() =>
 				parseExtensionManifest(
@@ -1911,19 +1828,13 @@ test('built-in language associations agree with ash-language on the shared confo
 			});
 		}
 	}
-	const cases: { path: string; firstLine?: string; language: string }[] = JSON.parse(
-		await readFile('test/fixtures/languages/associations.json', 'utf8'),
-	);
+	const cases: { path: string; firstLine?: string; language: string }[] = JSON.parse(await readFile('test/fixtures/languages/associations.json', 'utf8'));
 	assert.equal(languages.getLanguageName('json'), 'JSON');
 	assert.equal(languages.getLanguageName('jsonc'), 'JSON with Comments');
 	assert.equal(languages.getLanguageIdByLanguageName('JSON with Comments'), 'jsonc');
 	for (const entry of cases) {
 		const path = entry.path.startsWith('/') || /^[a-z]:/i.test(entry.path) ? entry.path : `/repo/${entry.path}`;
-		assert.equal(
-			languages.resolveLanguageId({ resource: URI.file(path), firstLine: entry.firstLine }) ?? 'plaintext',
-			entry.language,
-			entry.path,
-		);
+		assert.equal(languages.resolveLanguageId({ resource: URI.file(path), firstLine: entry.firstLine }) ?? 'plaintext', entry.language, entry.path);
 	}
 });
 
@@ -1971,18 +1882,12 @@ test('common project language packages register resources and localize English a
 		initializeTestLocalization(locale);
 		const api: IExtensionApi = {
 			list: async () => ({ generation: 1, extensions, diagnostics: [] }),
-			resources: new ExtensionResourceLoaderService(request =>
-				readFile(`extensions/${request.extensionId.slice('ash.'.length)}/${request.path}`),
-			),
+			resources: new ExtensionResourceLoaderService(request => readFile(`extensions/${request.extensionId.slice('ash.'.length)}/${request.path}`)),
 		};
 		using languageService = new LanguageService();
 		using languages = new LanguageFeaturesService();
 		const languagePacks = createEmptyTestLanguagePacks();
-		using service = new AppServerExtensionService(
-			{ api, languageService, languageConfigurationService: languages.languageConfigurationService },
-			languagePacks,
-			adapters,
-		);
+		using service = new AppServerExtensionService({ api, languageService, languageConfigurationService: languages.languageConfigurationService }, languagePacks, adapters);
 		using snippets = new SnippetsService(service);
 		await service.start();
 		assert.equal(service.currentCatalog.extensions.length, packages.length);
@@ -1990,16 +1895,9 @@ test('common project language packages register resources and localize English a
 		for (const extension of extensions) {
 			const manifest = JSON.parse(await labels.localizeManifest(extension.id, extension.manifestJson, 1));
 			if (extension.name === 'json') {
-				assert.deepEqual(
-					manifest.contributes.languages.find((language: { id: string }) => language.id === 'snippets')
-						.aliases,
-					[locale === 'en' ? 'Code Snippets' : '代码片段', 'snippets'],
-				);
+				assert.deepEqual(manifest.contributes.languages.find((language: { id: string }) => language.id === 'snippets').aliases, [locale === 'en' ? 'Code Snippets' : '代码片段', 'snippets']);
 			} else {
-				assert.match(
-					manifest.displayName,
-					locale === 'en' ? /(?:Language|File) Support$/ : /(?:语言|文件)支持$/,
-				);
+				assert.match(manifest.displayName, locale === 'en' ? /(?:Language|File) Support$/ : /(?:语言|文件)支持$/);
 			}
 		}
 	}
@@ -2018,10 +1916,7 @@ test('custom editor declarations accept MIME-only channel resources and reject e
 			}),
 			descriptor,
 		);
-	assert.deepEqual(
-		parse({ mimeType: 'application/vnd.ash.channel-notes+json' }).contributes.customEditors[0]!.selector,
-		[{ mimeType: 'application/vnd.ash.channel-notes+json' }],
-	);
+	assert.deepEqual(parse({ mimeType: 'application/vnd.ash.channel-notes+json' }).contributes.customEditors[0]!.selector, [{ mimeType: 'application/vnd.ash.channel-notes+json' }]);
 	assert.throws(() => parse({}), /filename pattern or MIME type/);
 });
 

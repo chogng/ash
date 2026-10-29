@@ -13,10 +13,7 @@ import { StandaloneCodeEditorService } from '../../../../../editor/standalone/br
 import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
-import {
-	ILanguageServerService,
-	type LanguageServerControl,
-} from '../../../../../platform/language/common/languageServerService.js';
+import { ILanguageServerService, type LanguageServerControl } from '../../../../../platform/language/common/languageServerService.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -29,16 +26,13 @@ async function flush(): Promise<void> {
 }
 
 function fixture(resources: DisposableStore, source = '{"languageServers.autoSuspend":true}') {
-	const workspace = resources.add(
-		new TestConfigurationService({ workspace: { id: 'project', uri: URI.file('/project') }, source }),
-	);
+	const workspace = resources.add(new TestConfigurationService({ workspace: { id: 'project', uri: URI.file('/project') }, source }));
 	const notifications = resources.add(new Emitter<ServerNotification>());
 	const added = resources.add(new Emitter<TextModel>());
 	const removed = resources.add(new Emitter<TextModel>());
 	const models: TextModel[] = [];
 	const controls: LanguageServerControl[] = [];
-	const state = (type: 'ready' | 'idle' | 'stopped' | 'starting') =>
-		notifications.fire({ method: 'language/serverState', params: { server: 'rust-analyzer', state: { type } } });
+	const state = (type: 'ready' | 'idle' | 'stopped' | 'starting') => notifications.fire({ method: 'language/serverState', params: { server: 'rust-analyzer', state: { type } } });
 	const services = resources.add(new InstantiationService());
 	const editors = resources.add(new StandaloneCodeEditorService());
 	const modelEditors = new Map<TextModel, ICodeEditor>();
@@ -95,9 +89,7 @@ function fixture(resources: DisposableStore, source = '{"languageServers.autoSus
 	capabilities();
 	state('ready');
 	const open = () => {
-		const model = resources.add(
-			new TextModel('fn main() {}', { languageId: 'rust', resource: URI.file('/project/main.rs') }),
-		);
+		const model = resources.add(new TextModel('fn main() {}', { languageId: 'rust', resource: URI.file('/project/main.rs') }));
 		models.push(model);
 		const editor = {
 			getId: () => String(models.length),
@@ -192,12 +184,7 @@ suite('Language server idle lifecycle', () => {
 			mock.timers.tick(600_000);
 			await flush();
 			assert.equal(f.controls[0].action, 'suspend');
-			assert.deepEqual(
-				await Promise.all(
-					[1, 2].map(value => f.lifecycle.withActivity({ languageId: 'rust' }, undefined, async () => value)),
-				),
-				[1, 2],
-			);
+			assert.deepEqual(await Promise.all([1, 2].map(value => f.lifecycle.withActivity({ languageId: 'rust' }, undefined, async () => value))), [1, 2]);
 			assert.deepEqual(
 				f.controls.map(control => control.action),
 				['suspend', 'resume'],

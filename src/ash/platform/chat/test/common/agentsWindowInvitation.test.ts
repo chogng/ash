@@ -19,15 +19,10 @@ function submit(state: AgentsWindowInvitationState, windowId: number, id: string
 		isNewSession,
 		requestSequence: isNewSession ? 1 : 2,
 	});
-	const previous = state
-		.getState()
-		.sessions.filter(session => session.windowId === windowId && session.resource.query !== resource(id).query);
+	const previous = state.getState().sessions.filter(session => session.windowId === windowId && session.resource.query !== resource(id).query);
 	state.update(windowId, {
 		kind: 'sessions',
-		sessions: [
-			...previous.map(({ windowId: _owner, ...session }) => session),
-			{ resource: resource(id).toJSON(), inProgress: true, needsInput: false },
-		],
+		sessions: [...previous.map(({ windowId: _owner, ...session }) => session), { resource: resource(id).toJSON(), inProgress: true, needsInput: false }],
 	});
 }
 
@@ -49,9 +44,7 @@ suite('Agents window invitation activity', () => {
 			kind: 'sessions',
 			sessions: [{ resource: resource('a').toJSON(), inProgress: true, needsInput: false }],
 		});
-		assert.deepEqual(state.getState().sessions, [
-			{ resource: resource('a').toJSON(), windowId: 2, inProgress: true, needsInput: false },
-		]);
+		assert.deepEqual(state.getState().sessions, [{ resource: resource('a').toJSON(), windowId: 2, inProgress: true, needsInput: false }]);
 		assert.equal(state.getState().editorSessionCount, 1);
 		assert.equal(state.getState().invitation, undefined);
 		assert.equal(state.claim(1, resource('a')), undefined);

@@ -1,7 +1,4 @@
-import {
-	syntaxLanguageForEditorLanguage,
-	syntaxEditorLanguageIds,
-} from '../../../../platform/syntax/common/syntaxApi.js';
+import { syntaxLanguageForEditorLanguage, syntaxEditorLanguageIds } from '../../../../platform/syntax/common/syntaxApi.js';
 export { syntaxLanguageForEditorLanguage } from '../../../../platform/syntax/common/syntaxApi.js';
 import { nestDocumentSymbols } from '../../../../editor/common/languages.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
@@ -67,14 +64,7 @@ export class AppServerSyntaxProviders extends Disposable {
 	}
 }
 
-class AppServerSyntaxProvider
-	extends Disposable
-	implements
-		SyntaxProvider,
-		LanguageDocumentSymbolProvider,
-		LanguageFoldingRangeProvider,
-		LanguageSelectionRangeProvider
-{
+class AppServerSyntaxProvider extends Disposable implements SyntaxProvider, LanguageDocumentSymbolProvider, LanguageFoldingRangeProvider, LanguageSelectionRangeProvider {
 	readonly id = 'ash.appServer.syntax';
 	readonly languageIds = APP_SERVER_SYNTAX_LANGUAGE_IDS;
 	readonly diagnosticPriority = 100;
@@ -84,35 +74,23 @@ class AppServerSyntaxProvider
 		super();
 	}
 
-	async provideDiagnostics(
-		request: SyntaxProviderRequest,
-		signal: AbortSignal,
-	): Promise<LanguageDiagnosticResult | undefined> {
+	async provideDiagnostics(request: SyntaxProviderRequest, signal: AbortSignal): Promise<LanguageDiagnosticResult | undefined> {
 		if (!request.model) throw new Error('App Server syntax diagnostics require an editor model');
 		const result = await this.analyze(request.model, request.languageId, request.snapshot, signal);
 		return result ? projectAppServerSyntaxDiagnostics(result, request.snapshot) : undefined;
 	}
 
-	async provideDocumentSymbols(
-		request: LanguageDocumentSymbolRequest,
-		signal: AbortSignal,
-	): Promise<readonly LanguageDocumentSymbol[]> {
+	async provideDocumentSymbols(request: LanguageDocumentSymbolRequest, signal: AbortSignal): Promise<readonly LanguageDocumentSymbol[]> {
 		const result = await this.analyze(request.model, request.languageId, request.snapshot, signal);
 		return result ? projectAppServerSyntaxSymbols(result, request.snapshot, request.languageId) : Object.freeze([]);
 	}
 
-	async provideFoldingRanges(
-		request: LanguageFoldingRangeRequest,
-		signal: AbortSignal,
-	): Promise<readonly LanguageFoldingRange[]> {
+	async provideFoldingRanges(request: LanguageFoldingRangeRequest, signal: AbortSignal): Promise<readonly LanguageFoldingRange[]> {
 		const result = await this.analyze(request.model, request.languageId, request.snapshot, signal);
 		return result ? projectAppServerSyntaxFoldingRanges(result, request.snapshot) : Object.freeze([]);
 	}
 
-	async provideSelectionRanges(
-		request: LanguageSelectionRangeRequest,
-		signal: AbortSignal,
-	): Promise<readonly Range[]> {
+	async provideSelectionRanges(request: LanguageSelectionRangeRequest, signal: AbortSignal): Promise<readonly Range[]> {
 		const language = syntaxLanguageForEditorLanguage(request.languageId);
 		if (request.model.tokenization.syntaxTree || !language || request.ranges.length === 0) return Object.freeze([]);
 		const text = request.snapshot.getText();
@@ -131,17 +109,10 @@ class AppServerSyntaxProvider
 			})),
 			signal,
 		);
-		return result && !request.model.tokenization.syntaxTree
-			? projectAppServerSyntaxSelectionRanges(result, request.snapshot)
-			: Object.freeze([]);
+		return result && !request.model.tokenization.syntaxTree ? projectAppServerSyntaxSelectionRanges(result, request.snapshot) : Object.freeze([]);
 	}
 
-	private async analyze(
-		model: TextModel,
-		languageId: string,
-		snapshot: TextSnapshot,
-		signal: AbortSignal,
-	): Promise<SyntaxAnalyzeResult | undefined> {
+	private async analyze(model: TextModel, languageId: string, snapshot: TextSnapshot, signal: AbortSignal): Promise<SyntaxAnalyzeResult | undefined> {
 		const language = syntaxLanguageForEditorLanguage(languageId);
 		if (model.tokenization.syntaxTree || !language) return undefined;
 		const text = snapshot.getText();
@@ -161,10 +132,7 @@ class AppServerSyntaxProvider
 	private session(model: TextModel): ModelSyntaxSession {
 		let session = this.sessions.get(model);
 		if (!session) {
-			session = this.sessions.set(
-				model,
-				new ModelSyntaxSession(this.syntax, model, () => this.sessions.deleteAndDispose(model)),
-			);
+			session = this.sessions.set(model, new ModelSyntaxSession(this.syntax, model, () => this.sessions.deleteAndDispose(model)));
 		}
 		return session;
 	}
@@ -210,24 +178,11 @@ class ModelSyntaxSession extends Disposable {
 		);
 	}
 
-	public async analyze(
-		language: SyntaxLanguage,
-		version: number,
-		text: string,
-		signal: AbortSignal,
-	): Promise<SyntaxAnalyzeResult | undefined> {
+	public async analyze(language: SyntaxLanguage, version: number, text: string, signal: AbortSignal): Promise<SyntaxAnalyzeResult | undefined> {
 		if (!this.accept(version)) return undefined;
 		let cached = this.cached;
-		if (
-			!cached ||
-			cached.generation !== this.syntax.generation ||
-			cached.language !== language ||
-			cached.version !== version ||
-			cached.text !== text
-		) {
-			const promise = this.run(language, version, text, () =>
-				this.syntax.analyze({ documentId: this.model.id, revision: version }),
-			);
+		if (!cached || cached.generation !== this.syntax.generation || cached.language !== language || cached.version !== version || cached.text !== text) {
+			const promise = this.run(language, version, text, () => this.syntax.analyze({ documentId: this.model.id, revision: version }));
 			cached = Object.freeze({ generation: this.syntax.generation, language, version, text, promise });
 			this.cached = cached;
 			void promise.catch(() => {
@@ -237,17 +192,9 @@ class ModelSyntaxSession extends Disposable {
 		return raceCancellationError(cached.promise, signal, 'App Server syntax request was cancelled');
 	}
 
-	public async selectionRanges(
-		language: SyntaxLanguage,
-		version: number,
-		text: string,
-		ranges: readonly SyntaxRange[],
-		signal: AbortSignal,
-	): Promise<SyntaxSelectionRangesResult | undefined> {
+	public async selectionRanges(language: SyntaxLanguage, version: number, text: string, ranges: readonly SyntaxRange[], signal: AbortSignal): Promise<SyntaxSelectionRangesResult | undefined> {
 		if (!this.accept(version)) return undefined;
-		const promise = this.run(language, version, text, () =>
-			this.syntax.selectionRanges({ documentId: this.model.id, revision: version, ranges }),
-		);
+		const promise = this.run(language, version, text, () => this.syntax.selectionRanges({ documentId: this.model.id, revision: version, ranges }));
 		return raceCancellationError(promise, signal, 'App Server syntax selection request was cancelled');
 	}
 
@@ -296,63 +243,39 @@ class ModelSyntaxSession extends Disposable {
 
 	protected override disposeCore(): void {
 		super.disposeCore();
-		void this.queue
-			.then(() => this.syntax.close({ documentId: this.model.id }))
-			.catch(error => console.error('Failed to release App Server syntax document', error));
+		void this.queue.then(() => this.syntax.close({ documentId: this.model.id })).catch(error => console.error('Failed to release App Server syntax document', error));
 	}
 }
 
 export const APP_SERVER_SYNTAX_LANGUAGE_IDS = syntaxEditorLanguageIds;
 
-export function projectAppServerSyntaxDiagnostics(
-	result: SyntaxAnalyzeResult,
-	snapshot: TextSnapshot,
-): LanguageDiagnosticResult {
+export function projectAppServerSyntaxDiagnostics(result: SyntaxAnalyzeResult, snapshot: TextSnapshot): LanguageDiagnosticResult {
 	assertMatchingRevision(result, snapshot);
 	const lines = snapshotLines(snapshot);
 	return Object.freeze({
-		diagnostics: Object.freeze(
-			result.diagnostics.flatMap(diagnostic => projectAppServerSyntaxDiagnostic(diagnostic, lines)),
-		),
+		diagnostics: Object.freeze(result.diagnostics.flatMap(diagnostic => projectAppServerSyntaxDiagnostic(diagnostic, lines))),
 	});
 }
 
-export function projectAppServerSyntaxSymbols(
-	result: SyntaxAnalyzeResult,
-	snapshot: TextSnapshot,
-	languageId?: string,
-): readonly LanguageDocumentSymbol[] {
+export function projectAppServerSyntaxSymbols(result: SyntaxAnalyzeResult, snapshot: TextSnapshot, languageId?: string): readonly LanguageDocumentSymbol[] {
 	assertMatchingRevision(result, snapshot);
 	const lines = snapshotLines(snapshot);
 	return nestDocumentSymbols(result.symbols.map(symbol => projectAppServerSyntaxSymbol(symbol, lines, languageId)));
 }
 
-export function projectAppServerSyntaxSelectionRanges(
-	result: SyntaxSelectionRangesResult,
-	snapshot: TextSnapshot,
-): readonly Range[] {
+export function projectAppServerSyntaxSelectionRanges(result: SyntaxSelectionRangesResult, snapshot: TextSnapshot): readonly Range[] {
 	assertMatchingRevision(result, snapshot);
 	const lines = snapshotLines(snapshot);
 	return Object.freeze(result.ranges.map(selection => projectRange(selection.range, lines)));
 }
 
-export function projectAppServerSyntaxFoldingRanges(
-	result: SyntaxAnalyzeResult,
-	snapshot: TextSnapshot,
-): readonly LanguageFoldingRange[] {
+export function projectAppServerSyntaxFoldingRanges(result: SyntaxAnalyzeResult, snapshot: TextSnapshot): readonly LanguageFoldingRange[] {
 	assertMatchingRevision(result, snapshot);
 	const ranges: LanguageFoldingRange[] = [];
 	for (const foldingRange of result.foldingRanges) {
 		const startLineIndex = foldingRange.range.start.lineIndex;
 		const endLineIndex = foldingRange.range.end.lineIndex - (foldingRange.range.end.columnIndex === 0 ? 1 : 0);
-		if (
-			!Number.isSafeInteger(startLineIndex) ||
-			!Number.isSafeInteger(endLineIndex) ||
-			startLineIndex < 0 ||
-			endLineIndex <= startLineIndex ||
-			endLineIndex >= snapshot.lineCount
-		)
-			continue;
+		if (!Number.isSafeInteger(startLineIndex) || !Number.isSafeInteger(endLineIndex) || startLineIndex < 0 || endLineIndex <= startLineIndex || endLineIndex >= snapshot.lineCount) continue;
 		ranges.push(Object.freeze({ startLineIndex, endLineIndex }));
 	}
 	return Object.freeze(ranges);
@@ -369,11 +292,7 @@ function projectAppServerSyntaxDiagnostic(diagnostic: SyntaxDiagnostic, lines: r
 	});
 }
 
-function projectAppServerSyntaxSymbol(
-	symbol: SyntaxSymbol,
-	lines: readonly string[],
-	languageId?: string,
-): LanguageDocumentSymbol {
+function projectAppServerSyntaxSymbol(symbol: SyntaxSymbol, lines: readonly string[], languageId?: string): LanguageDocumentSymbol {
 	if (typeof symbol.name !== 'string' || symbol.name.trim().length === 0) {
 		throw new TypeError('App Server syntax symbol must have a non-empty name');
 	}
@@ -389,10 +308,7 @@ function projectRange(range: SyntaxRange, lines: readonly string[]): Range {
 	return Range.fromPositions(projectPosition(range.start, lines), projectPosition(range.end, lines));
 }
 
-function projectPosition(
-	position: { readonly lineIndex: number; readonly columnIndex: number },
-	lines: readonly string[],
-): Position {
+function projectPosition(position: { readonly lineIndex: number; readonly columnIndex: number }, lines: readonly string[]): Position {
 	if (
 		!Number.isSafeInteger(position.lineIndex) ||
 		!Number.isSafeInteger(position.columnIndex) ||

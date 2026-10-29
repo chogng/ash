@@ -20,13 +20,8 @@ test('Explorer file nesting resolves captures, transitive children, and cycles',
 		'readme.md': [],
 	});
 
-	const substitutions = new ExplorerFileNestingTrie([
-		['package.json', ['${dirname}.lock', '${basename}.${extname}.bak']],
-	]);
-	assert.deepEqual(
-		[...(substitutions.nest(['package.json', 'src.lock', 'package.json.bak'], 'src').get('package.json') ?? [])],
-		['src.lock', 'package.json.bak'],
-	);
+	const substitutions = new ExplorerFileNestingTrie([['package.json', ['${dirname}.lock', '${basename}.${extname}.bak']]]);
+	assert.deepEqual([...(substitutions.nest(['package.json', 'src.lock', 'package.json.bak'], 'src').get('package.json') ?? [])], ['src.lock', 'package.json.bak']);
 });
 
 test('Explorer data source nests configured files and keeps folders separate', async () => {
@@ -42,12 +37,7 @@ test('Explorer data source nests configured files and keeps folders separate', a
 	let enabled = true;
 	const configuration = {
 		onDidChangeConfiguration: Event.None,
-		getValue: (key: string) =>
-			key === ExplorerFileNestingSettingId.Enabled
-				? enabled
-				: key === ExplorerFileNestingSettingId.Patterns
-					? { '*.ts': '${capture}.js' }
-					: undefined,
+		getValue: (key: string) => (key === ExplorerFileNestingSettingId.Enabled ? enabled : key === ExplorerFileNestingSettingId.Patterns ? { '*.ts': '${capture}.js' } : undefined),
 	} as IConfigurationService;
 	using workspace = new TestWorkspaceService({ id: 'project', uri: folder });
 	using source = new ExplorerDataSource(new FileSorter(configuration), fileService, configuration, workspace);

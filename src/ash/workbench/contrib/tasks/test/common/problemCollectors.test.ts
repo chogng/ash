@@ -18,10 +18,7 @@ suite('Task problem collection', () => {
 		const cases = [
 			{
 				name: '$msCompile',
-				lines: [
-					'/workspace/build.cs(4,5): category fatal error CS7: MICROSOFT',
-					'/workspace/build.cs: warning : NO_LOCATION',
-				],
+				lines: ['/workspace/build.cs(4,5): category fatal error CS7: MICROSOFT', '/workspace/build.cs: warning : NO_LOCATION'],
 				expected: [['MICROSOFT', MarkerSeverity.Error, 'CS7', '/workspace/build.cs', 4, 5, 4, 5]],
 			},
 			{
@@ -37,9 +34,7 @@ suite('Task problem collection', () => {
 			{
 				name: '$lessCompile',
 				lines: ['LESS_LEGACY in file /workspace/style.less line no. 3'],
-				expected: [
-					['LESS_LEGACY', MarkerSeverity.Error, undefined, '/workspace/style.less', 3, 1, 3, 2147483647],
-				],
+				expected: [['LESS_LEGACY', MarkerSeverity.Error, undefined, '/workspace/style.less', 3, 1, 3, 2147483647]],
 			},
 			{
 				name: '$go',
@@ -52,10 +47,7 @@ suite('Task problem collection', () => {
 			},
 			{
 				name: '$jshint',
-				lines: [
-					'/workspace/lint.js: line 2, col 3, JSHINT_WARNING (W033)',
-					'/workspace/lint.js: line 4, col 5, JSHINT_ERROR (E003)',
-				],
+				lines: ['/workspace/lint.js: line 2, col 3, JSHINT_WARNING (W033)', '/workspace/lint.js: line 4, col 5, JSHINT_ERROR (E003)'],
 				expected: [
 					['JSHINT_WARNING', MarkerSeverity.Warning, '033', '/workspace/lint.js', 2, 3, 2, 3],
 					['JSHINT_ERROR', MarkerSeverity.Error, '003', '/workspace/lint.js', 4, 5, 4, 5],
@@ -85,28 +77,11 @@ suite('Task problem collection', () => {
 		];
 		for (const value of cases) {
 			using markers = new MarkerService();
-			using collector = new WatchingProblemCollector(
-				parseProblemMatchers([value.name]),
-				URI.file('/workspace'),
-				markers,
-				value.name,
-				() => false,
-			);
+			using collector = new WatchingProblemCollector(parseProblemMatchers([value.name]), URI.file('/workspace'), markers, value.name, () => false);
 			collector.accept(new TextEncoder().encode(value.lines.join('\n')));
 			collector.done();
 			assert.deepEqual(
-				markers
-					.read()
-					.map(marker => [
-						marker.message,
-						marker.severity,
-						marker.code,
-						marker.resource.path,
-						marker.startLineNumber,
-						marker.startColumn,
-						marker.endLineNumber,
-						marker.endColumn,
-					]),
+				markers.read().map(marker => [marker.message, marker.severity, marker.code, marker.resource.path, marker.startLineNumber, marker.startColumn, marker.endLineNumber, marker.endColumn]),
 				value.expected,
 				value.name,
 			);
@@ -148,13 +123,7 @@ suite('Task problem collection', () => {
 			assert.equal(collector.hasErrors, expected === MarkerSeverity.Error, severity);
 		}
 		using markers = new MarkerService();
-		using collector = new WatchingProblemCollector(
-			parseProblemMatchers([{ base: '$msCompile', severity: 'warning' }]),
-			URI.file('/workspace'),
-			markers,
-			'compiler-severity',
-			() => false,
-		);
+		using collector = new WatchingProblemCollector(parseProblemMatchers([{ base: '$msCompile', severity: 'warning' }]), URI.file('/workspace'), markers, 'compiler-severity', () => false);
 		collector.processLine('/workspace/main.cs(2,3): category fatal   error C7: COMPILER_FATAL');
 		assert.deepEqual(
 			markers.read().map(marker => [marker.message, marker.severity, marker.code]),
@@ -199,14 +168,7 @@ suite('Task problem collection', () => {
 			);
 			collector.processLine(`main.ts|${value.value} RETAINED_DIAGNOSTIC`);
 			assert.deepEqual(
-				markers
-					.read()
-					.map(marker => [
-						marker.startLineNumber,
-						marker.startColumn,
-						marker.endLineNumber,
-						marker.endColumn,
-					]),
+				markers.read().map(marker => [marker.startLineNumber, marker.startColumn, marker.endLineNumber, marker.endColumn]),
 				value.expected ? [value.expected] : [],
 				value.value,
 			);
@@ -227,9 +189,7 @@ suite('Task problem collection', () => {
 		] as const) {
 			using markers = new MarkerService();
 			using collector = new WatchingProblemCollector(
-				parseProblemMatchers([
-					{ pattern: { regexp: '^(.+)\\|([^|]*) (.+)$', file: 1, location: 2, message: 3 } },
-				]),
+				parseProblemMatchers([{ pattern: { regexp: '^(.+)\\|([^|]*) (.+)$', file: 1, location: 2, message: 3 } }]),
 				URI.file('/workspace'),
 				markers,
 				'combined',
@@ -237,23 +197,14 @@ suite('Task problem collection', () => {
 			);
 			collector.processLine(`main.ts|${location} COMBINED_DIAGNOSTIC`);
 			assert.deepEqual(
-				markers
-					.read()
-					.map(marker => [
-						marker.startLineNumber,
-						marker.startColumn,
-						marker.endLineNumber,
-						marker.endColumn,
-					]),
+				markers.read().map(marker => [marker.startLineNumber, marker.startColumn, marker.endLineNumber, marker.endColumn]),
 				expected ? [expected] : [],
 				location,
 			);
 		}
 		using markers = new MarkerService();
 		using collector = new WatchingProblemCollector(
-			parseProblemMatchers([
-				{ pattern: { kind: 'file', regexp: '^(.+) (.+) (.+)$', file: 1, location: 2, message: 3 } },
-			]),
+			parseProblemMatchers([{ pattern: { kind: 'file', regexp: '^(.+) (.+) (.+)$', file: 1, location: 2, message: 3 } }]),
 			URI.file('/workspace'),
 			markers,
 			'file-coordinate',
@@ -261,9 +212,7 @@ suite('Task problem collection', () => {
 		);
 		collector.processLine('package.json bad FILE_DIAGNOSTIC');
 		assert.deepEqual(
-			markers
-				.read()
-				.map(marker => [marker.startLineNumber, marker.startColumn, marker.endLineNumber, marker.endColumn]),
+			markers.read().map(marker => [marker.startLineNumber, marker.startColumn, marker.endLineNumber, marker.endColumn]),
 			[[1, 1, 1, 1]],
 		);
 	});
@@ -284,21 +233,13 @@ suite('Task problem collection', () => {
 			);
 			collector.processLine(`main.txt(2,3): warning ${code}: NAMED_COMPILER`);
 			assert.deepEqual(
-				markers
-					.read()
-					.map(marker => [marker.message, marker.resource.path, marker.source, marker.code, marker.severity]),
+				markers.read().map(marker => [marker.message, marker.resource.path, marker.source, marker.code, marker.severity]),
 				[['NAMED_COMPILER', '/workspace/main.txt', 'compiler', code, MarkerSeverity.Warning]],
 			);
 			assert.throws(() => parseProblemMatchers([pattern]), /Unknown problem matcher/);
 		}
 		using markers = new MarkerService();
-		using collector = new WatchingProblemCollector(
-			parseProblemMatchers(['$gulp-tsc']),
-			URI.file('/workspace'),
-			markers,
-			'open',
-			() => true,
-		);
+		using collector = new WatchingProblemCollector(parseProblemMatchers(['$gulp-tsc']), URI.file('/workspace'), markers, 'open', () => true);
 		collector.processLine('main.ts(2,3): 101 OMIT_OPEN_FILE');
 		assert.deepEqual(markers.read(), []);
 	});
@@ -309,18 +250,8 @@ suite('Task problem collection', () => {
 			{ regexp: '^FILE (.+) (warning)$', file: 1, severity: 2 },
 			{ regexp: '^(\\d+) (.+?)(?: (error) (E\\d+))?$', line: 1, message: 2, severity: 3, code: 4, loop: true },
 		];
-		using collector = new WatchingProblemCollector(
-			parseProblemMatchers([{ pattern }]),
-			URI.file('/workspace'),
-			markers,
-			'headers',
-			() => false,
-		);
-		collector.accept(
-			new TextEncoder().encode(
-				'FILE first.txt warning\n1 FIRST error E1\n2 SECOND\nFILE second.txt warning\n3 THIRD\n',
-			),
-		);
+		using collector = new WatchingProblemCollector(parseProblemMatchers([{ pattern }]), URI.file('/workspace'), markers, 'headers', () => false);
+		collector.accept(new TextEncoder().encode('FILE first.txt warning\n1 FIRST error E1\n2 SECOND\nFILE second.txt warning\n3 THIRD\n'));
 		assert.deepEqual(
 			markers.read().map(marker => [marker.message, marker.resource.path, marker.severity, marker.code]),
 			[
@@ -342,35 +273,15 @@ suite('Task problem collection', () => {
 				background: { activeOnStart: false, beginsPattern: '^BUILD$', endsPattern: '^READY$' },
 			},
 		];
-		using collector = new WatchingProblemCollector(
-			parseProblemMatchers(matchers),
-			URI.file('/workspace'),
-			markers,
-			'shared',
-			() => false,
-		);
-		collector.accept(
-			new TextEncoder().encode(
-				'REGULAR regular.txt:1:2 RETAINED\nBUILD\nWATCH watching.txt:3:4 REPLACED\nREADY\nBUILD\nREADY\n',
-			),
-		);
+		using collector = new WatchingProblemCollector(parseProblemMatchers(matchers), URI.file('/workspace'), markers, 'shared', () => false);
+		collector.accept(new TextEncoder().encode('REGULAR regular.txt:1:2 RETAINED\nBUILD\nWATCH watching.txt:3:4 REPLACED\nREADY\nBUILD\nREADY\n'));
 		assert.deepEqual(
 			{ markers: markers.read().map(marker => [marker.message, marker.resource.path]), ready: collector.isReady },
 			{ markers: [['RETAINED', '/workspace/regular.txt']], ready: true },
 		);
 		using lintMarkers = new MarkerService();
-		using lint = new WatchingProblemCollector(
-			parseProblemMatchers(['$eslint-compact', '$eslint-stylish']),
-			URI.file('/workspace'),
-			lintMarkers,
-			'lint',
-			() => false,
-		);
-		lint.accept(
-			new TextEncoder().encode(
-				'/workspace/compact.js: line 1, col 2, Warning - COMPACT (semi)\n/workspace/stylish.js\n  3:4 warning STYLISH  semi\n',
-			),
-		);
+		using lint = new WatchingProblemCollector(parseProblemMatchers(['$eslint-compact', '$eslint-stylish']), URI.file('/workspace'), lintMarkers, 'lint', () => false);
+		lint.accept(new TextEncoder().encode('/workspace/compact.js: line 1, col 2, Warning - COMPACT (semi)\n/workspace/stylish.js\n  3:4 warning STYLISH  semi\n'));
 		assert.deepEqual(
 			lintMarkers.read().map(marker => marker.message),
 			['COMPACT', 'STYLISH'],
@@ -384,10 +295,7 @@ suite('Task problem collection', () => {
 				{ pattern, fileLocation: 'search' },
 				{
 					pattern,
-					fileLocation: [
-						'search',
-						{ include: ['${workspaceFolder}/src', '/other'], exclude: '/other/generated' },
-					],
+					fileLocation: ['search', { include: ['${workspaceFolder}/src', '/other'], exclude: '/other/generated' }],
 				},
 				{ pattern, fileLocation: ['search', {}] },
 			]).map(matcher => matcher.searchPaths),
@@ -397,14 +305,7 @@ suite('Task problem collection', () => {
 				{ include: [], exclude: [] },
 			],
 		);
-		for (const paths of [
-			null,
-			[],
-			{ include: false },
-			{ exclude: [1] },
-			{ include: '' },
-			{ unknown: '/workspace' },
-		]) {
+		for (const paths of [null, [], { include: false }, { exclude: [1] }, { include: '' }, { unknown: '/workspace' }]) {
 			assert.throws(() => parseProblemMatchers([{ pattern, fileLocation: ['search', paths] }]));
 		}
 	});
@@ -432,10 +333,7 @@ suite('Task problem collection', () => {
 		let ready = 0;
 		using listener = collector.onDidBecomeReady(() => ready++);
 		collector.accept(new TextEncoder().encode('first.ts:2:3 first\nsecond.ts:4:5 second\nREADY\n'));
-		assert.deepEqual(
-			{ lookedUp, ready, diagnostics: markers.read().length, pending: collector.hasPendingResolutions },
-			{ lookedUp: ['first.ts'], ready: 0, diagnostics: 0, pending: true },
-		);
+		assert.deepEqual({ lookedUp, ready, diagnostics: markers.read().length, pending: collector.hasPendingResolutions }, { lookedUp: ['first.ts'], ready: 0, diagnostics: 0, pending: true });
 		void first.complete(URI.file('/workspace/src/first.ts'));
 		await collector.flush();
 		assert.deepEqual(
@@ -445,10 +343,7 @@ suite('Task problem collection', () => {
 				{ path: '/workspace/src/second.ts', message: 'second' },
 			],
 		);
-		assert.deepEqual(
-			{ lookedUp, ready, pending: collector.hasPendingResolutions },
-			{ lookedUp: ['first.ts', 'second.ts'], ready: 1, pending: false },
-		);
+		assert.deepEqual({ lookedUp, ready, pending: collector.hasPendingResolutions }, { lookedUp: ['first.ts', 'second.ts'], ready: 1, pending: false });
 	});
 
 	test('a new watching cycle discards old lookup replies and evaluates applyTo on the found resource', async () => {
@@ -505,37 +400,26 @@ suite('Task problem collection', () => {
 		assert.equal(signal?.aborted, true);
 		void result.complete(URI.file('/workspace/src/file.ts'));
 		await collector.flush();
-		assert.deepEqual(
-			{ diagnostics: markers.read().length, ready: collector.isReady },
-			{ diagnostics: 0, ready: false },
-		);
+		assert.deepEqual({ diagnostics: markers.read().length, ready: collector.isReady }, { diagnostics: 0, ready: false });
 	});
 
 	test('split UTF-8 and ANSI lines publish one diagnostic and flush the final line on exit', () => {
 		using markers = new MarkerService();
-		using collector = new WatchingProblemCollector(
-			parseProblemMatchers(['$tsc']),
-			URI.file('/workspace'),
-			markers,
-			'compile',
-			() => false,
-		);
+		using collector = new WatchingProblemCollector(parseProblemMatchers(['$tsc']), URI.file('/workspace'), markers, 'compile', () => false);
 		const bytes = new TextEncoder().encode('\x1b[31mfile.ts(2,3): error TS123: 中文\x1b[0m');
 		for (const byte of bytes) collector.accept(new Uint8Array([byte]));
 		assert.equal(markers.read().length, 0);
 		collector.done();
 		assert.deepEqual(
-			markers
-				.read()
-				.map(marker => ({
-					path: marker.resource.path,
-					message: marker.message,
-					code: marker.code,
-					startLineNumber: marker.startLineNumber,
-					startColumn: marker.startColumn,
-					endLineNumber: marker.endLineNumber,
-					endColumn: marker.endColumn,
-				})),
+			markers.read().map(marker => ({
+				path: marker.resource.path,
+				message: marker.message,
+				code: marker.code,
+				startLineNumber: marker.startLineNumber,
+				startColumn: marker.startColumn,
+				endLineNumber: marker.endLineNumber,
+				endColumn: marker.endColumn,
+			})),
 			[
 				{
 					path: '/workspace/file.ts',
@@ -560,13 +444,7 @@ suite('Task problem collection', () => {
 			],
 			background: { activeOnStart: false, beginsPattern: '^BUILD$', endsPattern: '^READY$' },
 		};
-		using collector = new WatchingProblemCollector(
-			parseProblemMatchers([matcher]),
-			URI.parse('vscode-remote://server/project'),
-			markers,
-			'lint',
-			() => false,
-		);
+		using collector = new WatchingProblemCollector(parseProblemMatchers([matcher]), URI.parse('vscode-remote://server/project'), markers, 'lint', () => false);
 		let ready = 0;
 		using listener = collector.onDidBecomeReady(() => ready++);
 		collector.accept(new TextEncoder().encode('BUILD\nFILE src/main.ts\n  1:2 first\n  3:4 second\nREADY\n'));
@@ -599,16 +477,14 @@ suite('Task problem collection', () => {
 		);
 		collector.processLine('main.ts:3:4 error');
 		assert.deepEqual(
-			markers
-				.read()
-				.map(marker => ({
-					message: marker.message,
-					severity: marker.severity,
-					startLineNumber: marker.startLineNumber,
-					startColumn: marker.startColumn,
-					endLineNumber: marker.endLineNumber,
-					endColumn: marker.endColumn,
-				})),
+			markers.read().map(marker => ({
+				message: marker.message,
+				severity: marker.severity,
+				startLineNumber: marker.startLineNumber,
+				startColumn: marker.startColumn,
+				endLineNumber: marker.endLineNumber,
+				endColumn: marker.endColumn,
+			})),
 			[
 				{
 					message: 'main.ts:3:4 error',
@@ -642,17 +518,15 @@ suite('Task problem collection', () => {
 		collector.processLine('5 warning first');
 		collector.processLine('6 error second');
 		assert.deepEqual(
-			markers
-				.read()
-				.map(marker => ({
-					path: marker.resource.path,
-					message: marker.message,
-					severity: marker.severity,
-					startLineNumber: marker.startLineNumber,
-					startColumn: marker.startColumn,
-					endLineNumber: marker.endLineNumber,
-					endColumn: marker.endColumn,
-				})),
+			markers.read().map(marker => ({
+				path: marker.resource.path,
+				message: marker.message,
+				severity: marker.severity,
+				startLineNumber: marker.startLineNumber,
+				startColumn: marker.startColumn,
+				endLineNumber: marker.endLineNumber,
+				endColumn: marker.endColumn,
+			})),
 			[
 				{
 					path: '/workspace/file.ts',
@@ -696,16 +570,14 @@ suite('Task problem collection', () => {
 		collector.processLine('FILE package.json');
 		collector.processLine('MESSAGE error');
 		assert.deepEqual(
-			markers
-				.read()
-				.map(marker => ({
-					message: marker.message,
-					severity: marker.severity,
-					startLineNumber: marker.startLineNumber,
-					startColumn: marker.startColumn,
-					endLineNumber: marker.endLineNumber,
-					endColumn: marker.endColumn,
-				})),
+			markers.read().map(marker => ({
+				message: marker.message,
+				severity: marker.severity,
+				startLineNumber: marker.startLineNumber,
+				startColumn: marker.startColumn,
+				endLineNumber: marker.endLineNumber,
+				endColumn: marker.endColumn,
+			})),
 			[
 				{
 					message: 'error',
@@ -756,31 +628,20 @@ suite('Task problem collection', () => {
 		};
 		using registration = registerProblemMatcherContributions(contributions);
 		using markers = new MarkerService();
-		using collector = new WatchingProblemCollector(
-			parseProblemMatchers(['$ash-test-derived']),
-			URI.file('/workspace'),
-			markers,
-			'contributed',
-			() => false,
-		);
+		using collector = new WatchingProblemCollector(parseProblemMatchers(['$ash-test-derived']), URI.file('/workspace'), markers, 'contributed', () => false);
 		collector.accept(new TextEncoder().encode('BUILD\nmain.ts:2:3 extension issue\nREADY\n'));
 		assert.equal(collector.isReady, true);
 		assert.deepEqual(
-			markers
-				.read()
-				.map(marker => ({
-					message: marker.message,
-					resource: marker.resource.path,
-					severity: marker.severity,
-				})),
+			markers.read().map(marker => ({
+				message: marker.message,
+				resource: marker.resource.path,
+				severity: marker.severity,
+			})),
 			[{ message: 'extension issue', resource: '/workspace/main.ts', severity: MarkerSeverity.Warning }],
 		);
 		contributions.patterns[0].regexp = '^changed$';
 		assert.equal(parseProblemMatchers(['$ash-test-base'])[0].pattern[0].regexp.source, '^(.+):(\\d+):(\\d+) (.+)$');
-		assert.throws(
-			() => registration.replace({ patterns: [], matchers: [{ name: 'ash-test-broken', base: '$absent' }] }),
-			/Unknown problem matcher/,
-		);
+		assert.throws(() => registration.replace({ patterns: [], matchers: [{ name: 'ash-test-broken', base: '$absent' }] }), /Unknown problem matcher/);
 		assert.equal(parseProblemMatchers(['$ash-test-base'])[0].owner, 'contributed');
 		registration.dispose();
 		assert.throws(() => parseProblemMatchers(['$ash-test-base']), /Unknown problem matcher/);

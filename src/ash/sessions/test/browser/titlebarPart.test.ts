@@ -1,7 +1,4 @@
-import {
-	createTestComponentServices,
-	registerTestComponentServices,
-} from '../../../workbench/test/common/testEditorServices.js';
+import { createTestComponentServices, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import '../../../editor/test/browser/testEditorDom.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
@@ -47,14 +44,7 @@ class TestPart extends Part {
 
 test('Sessions titlebar initializes localized actions and closes the application menu before refreshing or disposal', () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
-	using globals = installEditorTestDom(browser, [
-		'Node',
-		'Element',
-		'HTMLElement',
-		'Event',
-		'MouseEvent',
-		'KeyboardEvent',
-	]);
+	using globals = installEditorTestDom(browser, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
 	using changed = new Emitter<void>();
 	using contextKeys = new ContextKeyService();
 	using services = new InstantiationService();
@@ -129,31 +119,18 @@ test('Sessions titlebar initializes localized actions and closes the application
 	services.registerInstance(IMenuService, menus);
 	services.registerInstance(IContextMenuService, contextMenus);
 	services.registerInstance(IContextKeyService, contextKeys);
-	const titlebar = registerTestComponentServices(services).createInstance(
-		TitlebarPart,
-		browser.window.document.body,
-		'application-menu',
-	);
-	const parts = new Map<SessionsPartId, Part>(
-		sessionsPartIds.map(id => [
-			id,
-			id === 'titlebar' ? titlebar : resources.add(new TestPart(browser.window.document.body, id)),
-		]),
-	);
+	const titlebar = registerTestComponentServices(services).createInstance(TitlebarPart, browser.window.document.body, 'application-menu');
+	const parts = new Map<SessionsPartId, Part>(sessionsPartIds.map(id => [id, id === 'titlebar' ? titlebar : resources.add(new TestPart(browser.window.document.body, id))]));
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
 	using actions = registerLayoutActions(layout, sessions, contextKeys);
-	const menuButton = (): HTMLButtonElement =>
-		titlebar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.applicationMenu"] button')!;
+	const menuButton = (): HTMLButtonElement => titlebar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.applicationMenu"] button')!;
 	const modeHost = titlebar.domNode.querySelector<HTMLElement>('.ash-sessions-workspace-mode')!;
 	const chatMode = modeHost.querySelector<HTMLButtonElement>('button')!;
 	try {
 		const firstPage = browser.window.document.createElement('nav');
 		const nextPage = browser.window.document.createElement('nav');
 		const firstMount = titlebar.setPageContent(firstPage);
-		assert.equal(
-			titlebar.domNode.querySelector('.ash-sessions-titlebar-page-content')!.firstElementChild,
-			firstPage,
-		);
+		assert.equal(titlebar.domNode.querySelector('.ash-sessions-titlebar-page-content')!.firstElementChild, firstPage);
 		const nextMount = titlebar.setPageContent(nextPage);
 		assert.equal(firstPage.isConnected, false, 'Replacing a page detaches its retained titlebar content');
 		firstMount.dispose();
@@ -176,10 +153,7 @@ test('Sessions titlebar initializes localized actions and closes the application
 		chatMode.focus();
 		layout.hidePart('sidebar');
 		assert.equal(modeHost.hidden, true);
-		assert.equal(
-			browser.window.document.activeElement,
-			titlebar.domNode.querySelector('[data-action-id="ash.sessions.toggleSidebar"] button'),
-		);
+		assert.equal(browser.window.document.activeElement, titlebar.domNode.querySelector('[data-action-id="ash.sessions.toggleSidebar"] button'));
 		layout.showPart('sidebar');
 		menuButton().click();
 
@@ -191,31 +165,16 @@ test('Sessions titlebar initializes localized actions and closes the application
 		assert.equal(titlebar.domNode.querySelector('[role="toolbar"]')?.getAttribute('aria-label'), '标题栏左侧操作');
 		titlebar.dispose();
 		assert.equal(closedMenus, 2);
-		using systemMenuTitlebar = registerTestComponentServices(services).createInstance(
-			TitlebarPart,
-			browser.window.document.body,
-			'actions-only',
-		);
+		using systemMenuTitlebar = registerTestComponentServices(services).createInstance(TitlebarPart, browser.window.document.body, 'actions-only');
 		assert.deepEqual(
 			[...systemMenuTitlebar.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')),
 			['隐藏侧栏', 'Back', 'Forward', 'Chat / Agents', 'Code', 'Toggle Code panel'],
 		);
-		const sidebarToggle = systemMenuTitlebar.domNode.querySelector<HTMLButtonElement>(
-			'[data-action-id="ash.sessions.toggleSidebar"] button',
-		)!;
+		const sidebarToggle = systemMenuTitlebar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.sessions.toggleSidebar"] button')!;
 		sidebarToggle.click();
-		assert.equal(
-			systemMenuTitlebar.domNode
-				.querySelector('[data-action-id="ash.sessions.toggleSidebar"] button')!
-				.getAttribute('aria-pressed'),
-			'false',
-		);
+		assert.equal(systemMenuTitlebar.domNode.querySelector('[data-action-id="ash.sessions.toggleSidebar"] button')!.getAttribute('aria-pressed'), 'false');
 		systemMenuTitlebar.dispose();
-		using collapsedTitlebar = registerTestComponentServices(services).createInstance(
-			TitlebarPart,
-			browser.window.document.body,
-			'actions-only',
-		);
+		using collapsedTitlebar = registerTestComponentServices(services).createInstance(TitlebarPart, browser.window.document.body, 'actions-only');
 		assert.equal(
 			collapsedTitlebar.domNode.querySelector<HTMLElement>('.ash-sessions-workspace-mode')!.hidden,
 			true,
@@ -261,12 +220,7 @@ test('Sessions layout follows titlebar constraints for content, frame and overla
 		}
 	}
 	const titlebar = resources.add(new ResizableTitlebar(browser.window.document.body, 'titlebar'));
-	const parts = new Map<SessionsPartId, Part>(
-		sessionsPartIds.map(id => [
-			id,
-			id === 'titlebar' ? titlebar : resources.add(new TestPart(browser.window.document.body, id)),
-		]),
-	);
+	const parts = new Map<SessionsPartId, Part>(sessionsPartIds.map(id => [id, id === 'titlebar' ? titlebar : resources.add(new TestPart(browser.window.document.body, id))]));
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
 	layout.layout(new Dimension(1_200, 800));
 	for (const height of [48, 40, 35, 48]) {

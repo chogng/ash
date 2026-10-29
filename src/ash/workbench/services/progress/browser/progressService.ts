@@ -1,13 +1,7 @@
 import { localize } from '../../../../nls.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import {
-	INotificationService,
-	NotificationPriority,
-	NotificationsFilter,
-	Severity,
-	type INotificationHandle,
-} from '../../../../platform/notification/common/notification.js';
+import { INotificationService, NotificationPriority, NotificationsFilter, Severity, type INotificationHandle } from '../../../../platform/notification/common/notification.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import {
 	ProgressLocation,
@@ -18,19 +12,11 @@ import {
 	type IProgressNotificationOptions,
 	type IProgressStep,
 } from '../../../../platform/progress/common/progress.js';
-import {
-	IStatusbarService,
-	StatusbarAlignment,
-	type IStatusbarEntryAccessor,
-} from '../../statusbar/browser/statusbar.js';
+import { IStatusbarService, StatusbarAlignment, type IStatusbarEntryAccessor } from '../../statusbar/browser/statusbar.js';
 import { IViewsService } from '../../views/common/viewsService.js';
 import { IViewDescriptorService, WorkbenchViewContainerId } from '../../../common/views.js';
 import { IPaneCompositePartService } from '../../panecomposite/browser/panecomposite.js';
-import type {
-	IProgressCompositeOptions,
-	IProgressIndicator,
-	IProgressRunner,
-} from '../../../../platform/progress/common/progress.js';
+import type { IProgressCompositeOptions, IProgressIndicator, IProgressRunner } from '../../../../platform/progress/common/progress.js';
 
 interface ProgressTask {
 	readonly options: IProgressOptions;
@@ -69,16 +55,10 @@ export class ProgressService extends Disposable implements IProgressService {
 		onDidCancel?: (choice?: number) => void,
 	): Promise<R> {
 		this.assertNotDisposed();
-		if (
-			typeof options.location === 'string' ||
-			options.location === ProgressLocation.Explorer ||
-			options.location === ProgressLocation.Scm ||
-			options.location === ProgressLocation.Extensions
-		) {
+		if (typeof options.location === 'string' || options.location === ProgressLocation.Explorer || options.location === ProgressLocation.Scm || options.location === ProgressLocation.Extensions) {
 			return this.withViewProgress(options as IProgressCompositeOptions, task);
 		}
-		if (options.location !== ProgressLocation.Window && options.location !== ProgressLocation.Notification)
-			throw new Error(`Bad progress location: ${options.location}`);
+		if (options.location !== ProgressLocation.Window && options.location !== ProgressLocation.Notification) throw new Error(`Bad progress location: ${options.location}`);
 		const resources = new DisposableStore();
 		const record: ProgressTask = {
 			options,
@@ -113,13 +93,9 @@ export class ProgressService extends Disposable implements IProgressService {
 					this.updateWindowProgress();
 				},
 			});
-			const directWindow =
-				options.location === ProgressLocation.Window && !!(options as IProgressWindowOptions).command;
+			const directWindow = options.location === ProgressLocation.Window && !!(options as IProgressWindowOptions).command;
 			if (!directWindow) {
-				const delay =
-					options.location === ProgressLocation.Window
-						? 150
-						: ((options as IProgressNotificationOptions).delay ?? 0);
+				const delay = options.location === ProgressLocation.Window ? 150 : ((options as IProgressNotificationOptions).delay ?? 0);
 				if (delay > 0) {
 					const timer = setTimeout(() => this.showNotification(record), delay);
 					resources.add(toDisposable(() => clearTimeout(timer)));
@@ -133,10 +109,7 @@ export class ProgressService extends Disposable implements IProgressService {
 		}
 	}
 
-	private withViewProgress<R>(
-		options: IProgressCompositeOptions,
-		task: (progress: IProgress<IProgressStep>) => Promise<R>,
-	): Promise<R> {
+	private withViewProgress<R>(options: IProgressCompositeOptions, task: (progress: IProgress<IProgressStep>) => Promise<R>): Promise<R> {
 		const id =
 			typeof options.location === 'string'
 				? options.location
@@ -205,15 +178,9 @@ export class ProgressService extends Disposable implements IProgressService {
 		if (!this.tasks.has(record) || record.cancelled || this.isDisposed) return;
 		const { options } = record;
 		const filtered =
-			this.notifications.getFilter() === NotificationsFilter.ERROR ||
-			(typeof options.source === 'object' &&
-				this.notifications.getFilter(options.source) === NotificationsFilter.ERROR);
+			this.notifications.getFilter() === NotificationsFilter.ERROR || (typeof options.source === 'object' && this.notifications.getFilter(options.source) === NotificationsFilter.ERROR);
 		const requestedPriority = (options as IProgressNotificationOptions).priority;
-		const priority =
-			options.location === ProgressLocation.Window ||
-			(filtered && requestedPriority !== NotificationPriority.URGENT)
-				? NotificationPriority.SILENT
-				: requestedPriority;
+		const priority = options.location === ProgressLocation.Window || (filtered && requestedPriority !== NotificationPriority.URGENT) ? NotificationPriority.SILENT : requestedPriority;
 		record.notificationHidden = priority === NotificationPriority.SILENT;
 		record.notificationWorked = record.total === undefined ? 0 : record.worked;
 		record.notification = this.notifications.notify({
@@ -229,10 +196,7 @@ export class ProgressService extends Disposable implements IProgressService {
 								tooltip: '',
 								enabled: true,
 								id: 'progress.cancel',
-								label:
-									typeof options.cancellable === 'string'
-										? options.cancellable
-										: localize('progress.cancel', 'Cancel'),
+								label: typeof options.cancellable === 'string' ? options.cancellable : localize('progress.cancel', 'Cancel'),
 								run: () => record.cancel(),
 							},
 						],
@@ -274,9 +238,7 @@ export class ProgressService extends Disposable implements IProgressService {
 
 	private taskText(record: ProgressTask): string {
 		const title = record.options.title;
-		return title && record.message
-			? localize('progress.titleMessage', '{0}: {1}', title, record.message)
-			: title || record.message || '';
+		return title && record.message ? localize('progress.titleMessage', '{0}: {1}', title, record.message) : title || record.message || '';
 	}
 
 	private updateWindowProgress(): void {
@@ -285,9 +247,7 @@ export class ProgressService extends Disposable implements IProgressService {
 			record =>
 				!record.cancelled &&
 				!!this.taskText(record) &&
-				((record.options.location === ProgressLocation.Window &&
-					!!(record.options as IProgressWindowOptions).command) ||
-					(!!record.notification && record.notificationHidden)),
+				((record.options.location === ProgressLocation.Window && !!(record.options as IProgressWindowOptions).command) || (!!record.notification && record.notificationHidden)),
 		);
 		// A producer can reach its numeric total before settling its Promise. Keep
 		// that lifetime intact, but only show work that still reports as unfinished.

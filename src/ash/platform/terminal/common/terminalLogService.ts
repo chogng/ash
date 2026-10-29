@@ -15,9 +15,7 @@ export class TerminalLogService extends Disposable implements ITerminalLogServic
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 	) {
 		super();
-		this.logger = this._register(
-			loggers.createLogger('terminal', { name: localize('terminal.editor.title', 'Terminal') }),
-		);
+		this.logger = this._register(loggers.createLogger('terminal', { name: localize('terminal.editor.title', 'Terminal') }));
 		this.onDidChangeLogLevel = this.logger.onDidChangeLogLevel;
 		this.onDidDispose = this.logger.onDidDispose;
 	}
@@ -57,8 +55,6 @@ export class TerminalLogService extends Disposable implements ITerminalLogServic
 	}
 
 	private message(message: string): string {
-		return this.logger.getLevel() === LogLevel.Trace
-			? `[${this.workspace.getWorkspace().id.slice(0, 7)}] ${message}`
-			: message;
+		return this.logger.getLevel() === LogLevel.Trace ? `[${this.workspace.getWorkspace().id.slice(0, 7)}] ${message}` : message;
 	}
 }

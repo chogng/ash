@@ -9,10 +9,7 @@ import { localize } from '../../../../nls.js';
 import type { Automation, IAutomationBackendService } from '../../../../platform/agentHost/common/automation.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import {
-	ISessionProviderScopeService,
-	type ISessionProviderScope,
-} from '../../../browser/agentHost/sessionProviderScopeService.js';
+import { ISessionProviderScopeService, type ISessionProviderScope } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
 import { IGitHubService } from '../../github/browser/githubService.js';
@@ -39,10 +36,7 @@ export class PullRequestFollowUpWidget extends Disposable {
 	private readonly rows = observableValue<readonly FollowUpRow[]>(this, []);
 	private readonly controls = this._register(new DisposableStore());
 	private readonly subscriptions = this._register(new DisposableStore());
-	private readonly rendered = new Map<
-		string,
-		{ element: HTMLElement; button: Button; row: FollowUpRow; busy: boolean; store: DisposableStore }
-	>();
+	private readonly rendered = new Map<string, { element: HTMLElement; button: Button; row: FollowUpRow; busy: boolean; store: DisposableStore }>();
 	private epoch = 0;
 	private selectionKey: string | undefined;
 	private observedBackend: IAutomationBackendService | undefined;
@@ -71,14 +65,7 @@ export class PullRequestFollowUpWidget extends Disposable {
 		);
 		const invalidate = (): void => {
 			const selected = this.sessions.activeSelection;
-			const key =
-				selected?.kind === 'session'
-					? JSON.stringify([
-							selected.active.session.sessionId,
-							selected.active.threadId,
-							selected.active.session.workspace,
-						])
-					: undefined;
+			const key = selected?.kind === 'session' ? JSON.stringify([selected.active.session.sessionId, selected.active.threadId, selected.active.session.workspace]) : undefined;
 			if (key !== this.selectionKey) {
 				this.selectionKey = key;
 				this.epoch++;
@@ -175,14 +162,7 @@ export class PullRequestFollowUpWidget extends Disposable {
 			for (const plan of plans) {
 				const target = plan.definition.session;
 				const condition = plan.definition.condition;
-				if (
-					target.type !== 'continue' ||
-					target.sessionId !== sessionId ||
-					target.threadId !== threadId ||
-					!condition ||
-					rows.some(row => row.id === plan.id)
-				)
-					continue;
+				if (target.type !== 'continue' || target.sessionId !== sessionId || target.threadId !== threadId || !condition || rows.some(row => row.id === plan.id)) continue;
 				rows.push({
 					id: plan.id,
 					label: `${condition.owner}/${condition.repository} #${condition.number}`,
@@ -252,10 +232,7 @@ export class PullRequestFollowUpWidget extends Disposable {
 				this.rendered.set(row.id, control);
 			}
 			control.row = row;
-			control.button.label =
-				row.plan?.status === 'enabled'
-					? localize('sessions.changes.stopFollowUp', 'Stop PR follow-up')
-					: localize('sessions.changes.startFollowUp', 'Follow PR checks');
+			control.button.label = row.plan?.status === 'enabled' ? localize('sessions.changes.stopFollowUp', 'Stop PR follow-up') : localize('sessions.changes.startFollowUp', 'Follow PR checks');
 			control.button.enabled = !control.busy;
 			control.button.domNode.setAttribute('aria-pressed', String(row.plan?.status === 'enabled'));
 		}
@@ -277,17 +254,8 @@ export class PullRequestFollowUpWidget extends Disposable {
 				const accounts = await row.scope.services.host.github.listAccounts();
 				row.scope.assertCurrent();
 				if (this.isDisposed || epoch !== this.epoch) return;
-				const account = accounts.find(
-					account => account.host.toLowerCase() === row.host && account.status === 'ready',
-				);
-				if (!account)
-					throw new Error(
-						localize(
-							'sessions.changes.followUpAccount',
-							'Connect a GitHub account for {0} before following this PR.',
-							row.host,
-						),
-					);
+				const account = accounts.find(account => account.host.toLowerCase() === row.host && account.status === 'ready');
+				if (!account) throw new Error(localize('sessions.changes.followUpAccount', 'Connect a GitHub account for {0} before following this PR.', row.host));
 				await row.backend.save(
 					row.id,
 					row.plan?.revision ?? 0,

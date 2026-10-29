@@ -58,24 +58,17 @@ exports.activate = context => {
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 		await installation.getByRole('textbox').fill('tree-extension');
-		const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-			installation.getByRole('textbox').press('Enter'),
-		);
+		const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 		expect(installed.message).toContain('Installed acme/tree-smoke 1.0.0');
 		const details = page.locator('.ash-extension-editor:visible').filter({ hasText: 'acme/tree-smoke' });
 		const manage = async () => {
 			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-			const option = page
-				.locator('[data-view-id="ash.extensions.plugins"]')
-				.getByRole('option')
-				.filter({ hasText: 'acme/tree-smoke' });
+			const option = page.locator('[data-view-id="ash.extensions.plugins"]').getByRole('option').filter({ hasText: 'acme/tree-smoke' });
 			await expect(option).toBeVisible();
 			await option.click();
 		};
 		await manage();
-		await workbench.dialogs.confirm(application, 'Extension tree smoke', 'Grant permissions', () =>
-			details.getByRole('button', { name: 'Grant permissions', exact: true }).click(),
-		);
+		await workbench.dialogs.confirm(application, 'Extension tree smoke', 'Grant permissions', () => details.getByRole('button', { name: 'Grant permissions', exact: true }).click());
 		await details.getByRole('switch').press('Space');
 		await expect(details.getByRole('switch')).toBeChecked();
 		await workbench.openExplorer();

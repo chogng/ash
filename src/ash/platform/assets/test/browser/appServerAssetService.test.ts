@@ -5,12 +5,7 @@ import { setNlsResolver, resetNlsResolver, formatNlsMessage } from '../../../../
 import { productLanguagePackCatalogs } from '../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { AppServerAssetService } from '../../browser/appServerAssetService.js';
 import { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
-import {
-	WEB_APP_SERVER_CONNECT_EVENT,
-	WEB_APP_SERVER_CONNECTED_EVENT,
-	WEB_APP_SERVER_FRAME_EVENT,
-	type AppServerTransport,
-} from '../../../agentHost/common/appServerTransport.js';
+import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../agentHost/common/appServerTransport.js';
 import { createTestInitializeResult } from '../../../agentHost/test/common/testAppServerProtocol.js';
 
 class Transport implements AppServerTransport {
@@ -192,9 +187,7 @@ test('A failed upload is cancelled and a consumed invalid image reports translat
 		transport.failWrite = false;
 		transport.invalidImage = true;
 		const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-		setNlsResolver((bundle, key, fallback, parameters) =>
-			formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters),
-		);
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
 		await assert.rejects(service.importImage(request), /请选择有效的 PNG、JPEG 或 WebP 图片/);
 		assert.equal(transport.requests.at(-1)!.method, 'asset/import/finish');
 	} finally {

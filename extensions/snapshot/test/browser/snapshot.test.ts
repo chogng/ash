@@ -14,11 +14,7 @@ suite('chatScreenshot browser component', () => {
 			.getByRole('dialog')
 			.getByRole('option', { name: chinese ? '截图…' : 'Screenshot…', exact: true })
 			.click();
-		await expect(
-			page
-				.frameLocator('iframe')
-				.getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true }),
-		).toBeVisible();
+		await expect(page.frameLocator('iframe').getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true })).toBeVisible();
 	}
 
 	test('the existing screenshot shortcut resolves the extension and preserves the draft', async function () {
@@ -51,8 +47,7 @@ suite('chatScreenshot browser component', () => {
 			const element = canvas as HTMLCanvasElement;
 			const image = element.getContext('2d')!.getImageData(0, 0, element.width, element.height).data;
 			let count = 0;
-			for (let offset = 0; offset < image.length; offset += 4)
-				if (image[offset] === 0 && image[offset + 1] === 170 && image[offset + 2] === 0) count++;
+			for (let offset = 0; offset < image.length; offset += 4) if (image[offset] === 0 && image[offset + 1] === 170 && image[offset + 2] === 0) count++;
 			return count;
 		});
 		expect(greenPixels).toBeGreaterThan(10);
@@ -99,9 +94,7 @@ suite('chatScreenshot browser component', () => {
 		await openFixture(page, '/chatInput.html?screenshotFixture=1&inlineCode=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		await page.getByRole('button', { name: 'Create code image', exact: true }).click();
-		await expect(
-			page.frameLocator('iframe').getByRole('dialog', { name: 'Screen Capture', exact: true }),
-		).toBeVisible();
+		await expect(page.frameLocator('iframe').getByRole('dialog', { name: 'Screen Capture', exact: true })).toBeVisible();
 		expect(await page.evaluate(() => window.ashScreenshotIntegration.state().pending)).toBe(false);
 		await page.evaluate(() => window.ashScreenshotIntegration.switchDraft());
 		const overlay = page.frameLocator('iframe').getByRole('dialog', { name: 'Screen Capture', exact: true });
@@ -149,9 +142,7 @@ suite('chatScreenshot browser component', () => {
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			const chinese = locale === 'zh-CN';
 			await openScreenshot(page, chinese);
-			const overlay = page
-				.frameLocator('iframe')
-				.getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true });
+			const overlay = page.frameLocator('iframe').getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true });
 			const surface = overlay.getByRole('group', {
 				name: chinese ? '冻结的屏幕与区域选择' : 'Frozen screen and region selection',
 			});
@@ -168,11 +159,7 @@ suite('chatScreenshot browser component', () => {
 			await expect
 				.poll(() =>
 					toolbar.evaluate(element => {
-						return [...element.ownerDocument.fonts].some(
-							font =>
-								font.family.replaceAll(/["']/g, '') === 'Ash Snapshot Icons' &&
-								font.status === 'loaded',
-						);
+						return [...element.ownerDocument.fonts].some(font => font.family.replaceAll(/["']/g, '') === 'Ash Snapshot Icons' && font.status === 'loaded');
 					}),
 				)
 				.toBe(true);
@@ -188,9 +175,7 @@ suite('chatScreenshot browser component', () => {
 				const box = (await action.boundingBox())!;
 				expect({ width: box.width, height: box.height }).toEqual({ width: 24, height: 24 });
 			}
-			await expect(
-				toolbar.getByRole('button', { name: chinese ? '选择' : 'Select', exact: true }),
-			).toHaveAttribute('aria-pressed', 'true');
+			await expect(toolbar.getByRole('button', { name: chinese ? '选择' : 'Select', exact: true })).toHaveAttribute('aria-pressed', 'true');
 			await overlay.getByRole('button', { name: chinese ? '坐标' : 'Coordinates', exact: true }).click();
 			await expect(overlay.getByLabel('X', { exact: true })).toHaveValue('400');
 			await expect(overlay.getByLabel(chinese ? '宽度' : 'Width', { exact: true })).toHaveValue('200');
@@ -202,25 +187,15 @@ suite('chatScreenshot browser component', () => {
 			await surface.press('ArrowLeft');
 			await surface.press('Shift+ArrowLeft');
 			await surface.press('Alt+F1');
-			const help = page
-				.frameLocator('iframe')
-				.getByRole('dialog', { name: chinese ? '截图帮助' : 'Screenshot Help', exact: true });
-			await expect(help.getByRole('textbox')).toHaveValue(
-				new RegExp(chinese ? 'Shift\\+方向键' : 'Shift\\+arrow keys'),
-			);
+			const help = page.frameLocator('iframe').getByRole('dialog', { name: chinese ? '截图帮助' : 'Screenshot Help', exact: true });
+			await expect(help.getByRole('textbox')).toHaveValue(new RegExp(chinese ? 'Shift\\+方向键' : 'Shift\\+arrow keys'));
 			await page.keyboard.press('Escape');
 			await expect(surface).toBeFocused();
 			await surface.press('Alt+F2');
-			const summary = page
-				.frameLocator('iframe')
-				.getByRole('dialog', { name: chinese ? '截图选区' : 'Screenshot selection', exact: true });
+			const summary = page.frameLocator('iframe').getByRole('dialog', { name: chinese ? '截图选区' : 'Screenshot selection', exact: true });
 			await expect(summary.getByRole('textbox')).toHaveValue(new RegExp(chinese ? '宽度 200' : 'Width 200'));
 			await page.keyboard.press('Escape');
-			expect(
-				await overlay
-					.locator('.ash-screenshot-toolbar')
-					.evaluate(element => getComputedStyle(element).backgroundColor),
-			).not.toBe('rgba(0, 0, 0, 0)');
+			expect(await overlay.locator('.ash-screenshot-toolbar').evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
 			await page.screenshot({ path: browserTests.info.outputPath(`screen-selection-${locale}-${theme}.png`) });
 			await overlay.getByRole('button', { name: chinese ? '加入聊天' : 'Add to Chat', exact: true }).click();
 			await expect(page.locator('iframe')).toHaveCount(0);
@@ -247,13 +222,7 @@ suite('chatScreenshot browser component', () => {
 		await page.mouse.down();
 		await page.mouse.move(point(300, 160).x, point(300, 160).y, { steps: 3 });
 		await page.mouse.up();
-		expect(
-			await overlay
-				.locator('canvas')
-				.evaluate(canvas => [
-					...(canvas as HTMLCanvasElement).getContext('2d')!.getImageData(200, 80, 1, 1).data,
-				]),
-		).toEqual([239, 68, 68, 255]);
+		expect(await overlay.locator('canvas').evaluate(canvas => [...(canvas as HTMLCanvasElement).getContext('2d')!.getImageData(200, 80, 1, 1).data])).toEqual([239, 68, 68, 255]);
 		await overlay.getByRole('button', { name: 'Text', exact: true }).click();
 		await page.mouse.click(point(120, 180).x, point(120, 180).y);
 		await overlay.getByLabel('Annotation text', { exact: true }).fill('Synthetic label');
@@ -300,10 +269,7 @@ suite('chatScreenshot browser component', () => {
 		test(`switching drafts cancels ${phase} and ignores late screenshot results`, async function () {
 			const { page } = browserTests;
 
-			await openFixture(
-				page,
-				`/chatInput.html?screenshotFixture=1${phase === 'capturing' ? '&holdScreenshot=1' : ''}`,
-			);
+			await openFixture(page, `/chatInput.html?screenshotFixture=1${phase === 'capturing' ? '&holdScreenshot=1' : ''}`);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			if (phase === 'selection') await openScreenshot(page);
 			else {
@@ -314,9 +280,7 @@ suite('chatScreenshot browser component', () => {
 			await page.evaluate(() => window.ashScreenshotIntegration.switchDraft());
 			await expect(page.getByRole('dialog')).toHaveCount(0);
 			await page.evaluate(() => window.ashScreenshotIntegration.release());
-			await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toHaveValue(
-				'Next conversation',
-			);
+			await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toHaveValue('Next conversation');
 			expect((await page.evaluate(() => window.ashScreenshotIntegration.state())).pending).toBe(false);
 		});
 	}

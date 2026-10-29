@@ -9,12 +9,7 @@ export const IModelService = createDecorator<IModelService>('modelService');
 
 export interface IModelService {
 	readonly _serviceBrand: undefined;
-	createModel(
-		value: string | ITextBufferFactory,
-		languageSelection: ILanguageSelection | null,
-		resource?: URI,
-		isForSimpleWidget?: boolean,
-	): ITextModel;
+	createModel(value: string | ITextBufferFactory, languageSelection: ILanguageSelection | null, resource?: URI, isForSimpleWidget?: boolean): ITextModel;
 	updateModel(model: ITextModel, value: string | ITextBufferFactory, reason?: TextModelEditSource): void;
 	destroyModel(resource: URI): void;
 	getModel(resource: URI): ITextModel | null;

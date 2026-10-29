@@ -3,22 +3,7 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 import type { Event } from '../../../base/common/event.js';
 
 export type ToolCategory =
-	| 'read'
-	| 'edit'
-	| 'search'
-	| 'execute'
-	| 'browser'
-	| 'web'
-	| 'agent'
-	| 'plan'
-	| 'workbench'
-	| 'sessions'
-	| 'projects'
-	| 'automations'
-	| 'app'
-	| 'memory'
-	| 'skills'
-	| 'image';
+	'read' | 'edit' | 'search' | 'execute' | 'browser' | 'web' | 'agent' | 'plan' | 'workbench' | 'sessions' | 'projects' | 'automations' | 'app' | 'memory' | 'skills' | 'image';
 
 export interface AgentTool {
 	readonly category?: ToolCategory;

@@ -1,11 +1,5 @@
 import type { ITerminalOutputSnapshot, ITerminalReconnectLease } from '../../terminal/common/terminal.js';
-import type {
-	TitleBarStyleConfiguration,
-	IColorScheme,
-	IWindowAlwaysOnTopChangedEvent,
-	IAuxiliaryWindowState,
-	IAuxiliaryWindowStateEvent,
-} from '../../window/common/window.js';
+import type { TitleBarStyleConfiguration, IColorScheme, IWindowAlwaysOnTopChangedEvent, IAuxiliaryWindowState, IAuxiliaryWindowStateEvent } from '../../window/common/window.js';
 import { validateJsonValue, type JsonValue } from '../../../base/common/jsonValue.js';
 import type { SessionMode } from '../../agentHost/common/agent.js';
 import type { DisposableHandle } from '../../ipc/common/ipc.js';
@@ -19,11 +13,7 @@ import type {
 	SaveDialogReturnValue,
 } from '../../../base/parts/sandbox/common/electronTypes.js';
 import type { IWorkbenchWindowInfo, IOpenEmptyWindowOptions } from '../../window/common/window.js';
-import type {
-	AgentHostEditorUpdate,
-	IAgentHostEditorState,
-	IAgentsWindowInvitation,
-} from '../../chat/common/agentsWindowInvitation.js';
+import type { AgentHostEditorUpdate, IAgentHostEditorState, IAgentsWindowInvitation } from '../../chat/common/agentsWindowInvitation.js';
 import { URI, type UriComponents } from '../../../base/common/uri.js';
 import { buildOpenSessionLinkUri, parseOpenSessionLinkUri } from '../../agentHost/common/openSessionLink.js';
 import { isRecord } from '../../../base/common/types.js';
@@ -84,73 +74,35 @@ export const NATIVE_HOST_REVEAL_FILE_CHANNEL = 'ash:native-host:reveal-file';
 export function validateColorScheme(value: unknown): IColorScheme {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid system color scheme');
 	const scheme = value as Record<string, unknown>;
-	if (
-		Object.keys(scheme).sort().join(',') !== 'dark,highContrast' ||
-		typeof scheme.dark !== 'boolean' ||
-		typeof scheme.highContrast !== 'boolean'
-	)
+	if (Object.keys(scheme).sort().join(',') !== 'dark,highContrast' || typeof scheme.dark !== 'boolean' || typeof scheme.highContrast !== 'boolean')
 		throw new TypeError('Invalid system color scheme');
 	return scheme as unknown as IColorScheme;
 }
 
-export type NativeDialogOperation =
-	| { readonly kind: 'show'; readonly id: number; readonly options: Omit<MessageBoxOptions, 'signal'> }
-	| { readonly kind: 'cancel'; readonly id: number };
+export type NativeDialogOperation = { readonly kind: 'show'; readonly id: number; readonly options: Omit<MessageBoxOptions, 'signal'> } | { readonly kind: 'cancel'; readonly id: number };
 
 export function validateNativeDialogOperation(value: unknown): NativeDialogOperation {
 	const operation = dialogFields(value, ['kind', 'id', 'options'], 'dialog operation');
 	if (!Number.isSafeInteger(operation.id) || (operation.id as number) <= 0) throw new TypeError('Invalid dialog ID');
-	if (operation.kind === 'cancel' && Object.keys(operation).sort().join(',') === 'id,kind')
-		return operation as NativeDialogOperation;
-	if (operation.kind !== 'show' || Object.keys(operation).sort().join(',') !== 'id,kind,options')
-		throw new TypeError('Invalid dialog operation');
+	if (operation.kind === 'cancel' && Object.keys(operation).sort().join(',') === 'id,kind') return operation as NativeDialogOperation;
+	if (operation.kind !== 'show' || Object.keys(operation).sort().join(',') !== 'id,kind,options') throw new TypeError('Invalid dialog operation');
 	const options = dialogFields(
 		operation.options,
-		[
-			'message',
-			'type',
-			'buttons',
-			'defaultId',
-			'title',
-			'detail',
-			'checkboxLabel',
-			'checkboxChecked',
-			'textWidth',
-			'cancelId',
-			'noLink',
-			'normalizeAccessKeys',
-		],
+		['message', 'type', 'buttons', 'defaultId', 'title', 'detail', 'checkboxLabel', 'checkboxChecked', 'textWidth', 'cancelId', 'noLink', 'normalizeAccessKeys'],
 		'message box options',
 	);
-	if (
-		typeof options.message !== 'string' ||
-		(options.type !== undefined &&
-			!['none', 'info', 'error', 'question', 'warning'].includes(options.type as string))
-	)
+	if (typeof options.message !== 'string' || (options.type !== undefined && !['none', 'info', 'error', 'question', 'warning'].includes(options.type as string)))
 		throw new TypeError('Invalid message box options');
 	validateDialogStrings(options, ['title', 'detail', 'checkboxLabel']);
 	validateDialogBooleans(options, ['checkboxChecked', 'noLink', 'normalizeAccessKeys']);
-	if (
-		options.buttons !== undefined &&
-		(!Array.isArray(options.buttons) ||
-			options.buttons.length > 100 ||
-			!options.buttons.every(button => typeof button === 'string'))
-	)
+	if (options.buttons !== undefined && (!Array.isArray(options.buttons) || options.buttons.length > 100 || !options.buttons.every(button => typeof button === 'string')))
 		throw new TypeError('Invalid message box buttons');
 	const buttons = Array.isArray(options.buttons) && options.buttons.length ? options.buttons.length : 1;
 	for (const key of ['defaultId', 'cancelId']) {
-		if (
-			options[key] !== undefined &&
-			(!Number.isInteger(options[key]) ||
-				(options[key] as number) < (key === 'cancelId' ? -1 : 0) ||
-				(options[key] as number) >= buttons)
-		)
+		if (options[key] !== undefined && (!Number.isInteger(options[key]) || (options[key] as number) < (key === 'cancelId' ? -1 : 0) || (options[key] as number) >= buttons))
 			throw new TypeError('Invalid message box button index');
 	}
-	if (
-		options.textWidth !== undefined &&
-		(typeof options.textWidth !== 'number' || !Number.isFinite(options.textWidth) || options.textWidth < 0)
-	)
+	if (options.textWidth !== undefined && (typeof options.textWidth !== 'number' || !Number.isFinite(options.textWidth) || options.textWidth < 0))
 		throw new TypeError('Invalid message box text width');
 	return operation as NativeDialogOperation;
 }
@@ -170,13 +122,10 @@ export interface INativeSystemWideKeybindingResult {
 export function validateSystemWideKeybindings(value: unknown): readonly INativeSystemWideKeybinding[] {
 	if (!Array.isArray(value) || value.length > 1_024) throw new TypeError('Invalid system-wide keybindings');
 	return value.map((item: unknown) => {
-		if (!item || typeof item !== 'object' || Array.isArray(item))
-			throw new TypeError('Invalid system-wide keybinding');
+		if (!item || typeof item !== 'object' || Array.isArray(item)) throw new TypeError('Invalid system-wide keybinding');
 		const binding = item as Record<string, unknown>;
 		if (
-			Object.keys(binding).some(
-				key => !['accelerator', 'commandId', 'args', 'userSettingsLabel'].includes(key),
-			) ||
+			Object.keys(binding).some(key => !['accelerator', 'commandId', 'args', 'userSettingsLabel'].includes(key)) ||
 			typeof binding.accelerator !== 'string' ||
 			!binding.accelerator ||
 			typeof binding.commandId !== 'string' ||
@@ -192,14 +141,9 @@ export function validateSystemWideKeybindings(value: unknown): readonly INativeS
 }
 
 export function validateSystemWideKeybindingsResult(value: unknown): INativeSystemWideKeybindingResult {
-	if (!value || typeof value !== 'object' || Array.isArray(value))
-		throw new TypeError('Invalid system-wide keybinding result');
+	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid system-wide keybinding result');
 	const result = value as Record<string, unknown>;
-	if (
-		Object.keys(result).join(',') !== 'failed' ||
-		!Array.isArray(result.failed) ||
-		!result.failed.every(label => typeof label === 'string')
-	) {
+	if (Object.keys(result).join(',') !== 'failed' || !Array.isArray(result.failed) || !result.failed.every(label => typeof label === 'string')) {
 		throw new TypeError('Invalid system-wide keybinding result');
 	}
 	return result as unknown as INativeSystemWideKeybindingResult;
@@ -264,18 +208,12 @@ export function validateTerminalWindowTransfer(value: unknown): ITerminalWindowT
 function validateTerminalTransferLease(value: unknown): ITerminalReconnectLease {
 	if (
 		!isRecord(value) ||
-		Object.keys(value).some(
-			key => !['terminalId', 'dirId', 'reconnectToken', 'reconnectGracePeriodMillis'].includes(key),
-		) ||
+		Object.keys(value).some(key => !['terminalId', 'dirId', 'reconnectToken', 'reconnectGracePeriodMillis'].includes(key)) ||
 		typeof value.terminalId !== 'string' ||
 		value.terminalId.length === 0 ||
 		value.terminalId.length > 1024 ||
 		value.terminalId.includes('\0') ||
-		(value.dirId !== undefined &&
-			(typeof value.dirId !== 'string' ||
-				value.dirId.length === 0 ||
-				value.dirId.length > 4096 ||
-				value.dirId.includes('\0'))) ||
+		(value.dirId !== undefined && (typeof value.dirId !== 'string' || value.dirId.length === 0 || value.dirId.length > 4096 || value.dirId.includes('\0'))) ||
 		typeof value.reconnectToken !== 'string' ||
 		!/^[0-9a-f]{64}$/.test(value.reconnectToken) ||
 		!Number.isSafeInteger(value.reconnectGracePeriodMillis) ||
@@ -298,8 +236,7 @@ export function validateTerminalWindowTransferMove(value: unknown): {
 	if (
 		!isRecord(value) ||
 		Object.keys(value).some(key => !['transfer', 'targetWindowId'].includes(key)) ||
-		(value.targetWindowId !== undefined &&
-			(!Number.isSafeInteger(value.targetWindowId) || (value.targetWindowId as number) <= 0))
+		(value.targetWindowId !== undefined && (!Number.isSafeInteger(value.targetWindowId) || (value.targetWindowId as number) <= 0))
 	)
 		throw new TypeError('Invalid terminal transfer target');
 	return {
@@ -316,8 +253,7 @@ export function validateTerminalWindowTransferResult(value: unknown): ITerminalW
 		value.id.length === 0 ||
 		value.id.length > 128 ||
 		value.id.includes('\0') ||
-		(value.error !== undefined &&
-			(typeof value.error !== 'string' || value.error.length === 0 || value.error.length > 2048)) ||
+		(value.error !== undefined && (typeof value.error !== 'string' || value.error.length === 0 || value.error.length > 2048)) ||
 		(value.lease !== undefined && value.error === undefined)
 	)
 		throw new TypeError('Invalid terminal transfer result');
@@ -362,10 +298,7 @@ export interface INativeHostApi extends ICommonNativeHostService {
 	openWorkspace(root: string, forceNewWindow?: boolean): Promise<void>;
 	openWindow(options: IOpenEmptyWindowOptions): Promise<void>;
 	openAgentsWindow(options?: IOpenAgentsWindowOptions): Promise<void>;
-	moveTerminalToWindow(
-		transfer: ITerminalWindowTransfer,
-		targetWindowId?: number,
-	): Promise<ITerminalWindowTransferResult>;
+	moveTerminalToWindow(transfer: ITerminalWindowTransfer, targetWindowId?: number): Promise<ITerminalWindowTransferResult>;
 	takeTerminalTransfer(): Promise<ITerminalWindowTransfer | undefined>;
 	completeTerminalTransfer(result: ITerminalWindowTransferResult): Promise<void>;
 	onDidRequestTerminalTransfer(listener: () => void): DisposableHandle;
@@ -375,9 +308,7 @@ export interface INativeHostApi extends ICommonNativeHostService {
 	claimAgentsWindowInvitation(resource: UriComponents): Promise<IAgentsWindowInvitation | undefined>;
 	markAgentsWindowInvitationShown(id: string): Promise<void>;
 	releaseAgentsWindowInvitation(id: string): Promise<void>;
-	syncSystemWideKeybindings(
-		keybindings: readonly INativeSystemWideKeybinding[],
-	): Promise<INativeSystemWideKeybindingResult>;
+	syncSystemWideKeybindings(keybindings: readonly INativeSystemWideKeybinding[]): Promise<INativeSystemWideKeybindingResult>;
 	openExternal(target: string): Promise<boolean>;
 	onDidRequestOpenExternalUri(listener: (target: string) => void): DisposableHandle;
 	revealFile(path: string): Promise<void>;
@@ -398,8 +329,7 @@ export function validateRevealFilePath(value: unknown): string {
 
 export function validateOpenWorkspace(value: unknown): { root: string; forceNewWindow: boolean } {
 	const request = typeof value === 'string' ? { root: value } : value;
-	if (!request || typeof request !== 'object' || Array.isArray(request))
-		throw new TypeError('Invalid workspace request');
+	if (!request || typeof request !== 'object' || Array.isArray(request)) throw new TypeError('Invalid workspace request');
 	const options = request as Record<string, unknown>;
 	if (
 		Object.keys(options).some(key => key !== 'root' && key !== 'forceNewWindow') ||
@@ -415,31 +345,20 @@ export function validateOpenWorkspace(value: unknown): { root: string; forceNewW
 
 export function validateOpenAgentsWindow(value: unknown): IOpenAgentsWindowOptions | undefined {
 	if (value === undefined) return undefined;
-	if (!value || typeof value !== 'object' || Array.isArray(value))
-		throw new TypeError('Invalid Agents Window options');
+	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid Agents Window options');
 	const options = value as Record<string, unknown>;
-	if (Object.keys(options).some(key => key !== 'conversation' && key !== 'draft'))
-		throw new TypeError('Invalid Agents Window options');
-	if (options.conversation === undefined && options.draft === undefined)
-		throw new TypeError('Agents Window handoff requires a conversation or draft');
+	if (Object.keys(options).some(key => key !== 'conversation' && key !== 'draft')) throw new TypeError('Invalid Agents Window options');
+	if (options.conversation === undefined && options.draft === undefined) throw new TypeError('Agents Window handoff requires a conversation or draft');
 	if (options.conversation !== undefined) {
 		const conversation = options.conversation;
-		if (!conversation || typeof conversation !== 'object' || Array.isArray(conversation))
-			throw new TypeError('Invalid Agents Window conversation');
+		if (!conversation || typeof conversation !== 'object' || Array.isArray(conversation)) throw new TypeError('Invalid Agents Window conversation');
 		const fields = conversation as Record<string, unknown>;
-		if (
-			Object.keys(fields).sort().join(',') !== 'sessionId,threadId' ||
-			typeof fields.sessionId !== 'string' ||
-			!fields.sessionId ||
-			typeof fields.threadId !== 'string' ||
-			!fields.threadId
-		)
+		if (Object.keys(fields).sort().join(',') !== 'sessionId,threadId' || typeof fields.sessionId !== 'string' || !fields.sessionId || typeof fields.threadId !== 'string' || !fields.threadId)
 			throw new TypeError('Invalid Agents Window conversation');
 	}
 	if (options.draft !== undefined) {
 		const draft = options.draft;
-		if (!draft || typeof draft !== 'object' || Array.isArray(draft))
-			throw new TypeError('Invalid Agents Window draft');
+		if (!draft || typeof draft !== 'object' || Array.isArray(draft)) throw new TypeError('Invalid Agents Window draft');
 		const fields = draft as Record<string, unknown>;
 		if (
 			!['agent', 'plan', 'debug', 'multitask', 'ask'].includes(fields.mode as string) ||
@@ -449,27 +368,17 @@ export function validateOpenAgentsWindow(value: unknown): IOpenAgentsWindowOptio
 		)
 			throw new TypeError('Invalid Agents Window draft');
 		for (const context of fields.contexts) {
-			if (!context || typeof context !== 'object' || Array.isArray(context))
-				throw new TypeError('Invalid Agents Window context');
+			if (!context || typeof context !== 'object' || Array.isArray(context)) throw new TypeError('Invalid Agents Window context');
 			const attachment = context as Record<string, unknown>;
 			if (
 				!['content', 'id', 'kind', 'name'].every(key => typeof attachment[key] === 'string') ||
-				Object.keys(attachment).some(
-					key =>
-						!['content', 'id', 'kind', 'name', 'resource', 'terminalSnapshot', 'reference'].includes(key),
-				) ||
+				Object.keys(attachment).some(key => !['content', 'id', 'kind', 'name', 'resource', 'terminalSnapshot', 'reference'].includes(key)) ||
 				(attachment.resource !== undefined && typeof attachment.resource !== 'string')
 			)
 				throw new TypeError('Invalid Agents Window context');
 			if (attachment.terminalSnapshot !== undefined) {
 				const snapshot = attachment.terminalSnapshot;
-				if (
-					attachment.kind !== 'terminal' ||
-					!snapshot ||
-					typeof snapshot !== 'object' ||
-					Array.isArray(snapshot)
-				)
-					throw new TypeError('Invalid terminal snapshot');
+				if (attachment.kind !== 'terminal' || !snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) throw new TypeError('Invalid terminal snapshot');
 				const data = snapshot as Record<string, unknown>;
 				if (
 					Object.keys(data).sort().join(',') !== 'columns,text' ||
@@ -506,9 +415,7 @@ export function validateOpenAgentsWindow(value: unknown): IOpenAgentsWindowOptio
 export function validateAgentHostEditorResource(value: unknown): UriComponents {
 	if (
 		!isRecord(value) ||
-		Object.keys(value).some(
-			key => !['$mid', 'external', 'scheme', 'authority', 'path', 'query', 'fragment'].includes(key),
-		) ||
+		Object.keys(value).some(key => !['$mid', 'external', 'scheme', 'authority', 'path', 'query', 'fragment'].includes(key)) ||
 		!['scheme', 'authority', 'path', 'query'].every(key => typeof value[key] === 'string') ||
 		(value.$mid !== undefined && value.$mid !== 1) ||
 		(value.fragment !== undefined && typeof value.fragment !== 'string')
@@ -516,8 +423,7 @@ export function validateAgentHostEditorResource(value: unknown): UriComponents {
 		throw new TypeError('Invalid editor conversation resource');
 	const resource = URI.from(value as unknown as UriComponents);
 	// Ash's URI serialization includes its encoded spelling. Neither representation may redirect the other.
-	if (value.external !== undefined && value.external !== resource.toString())
-		throw new TypeError('Inconsistent editor conversation resource');
+	if (value.external !== undefined && value.external !== resource.toString()) throw new TypeError('Inconsistent editor conversation resource');
 	const link = parseOpenSessionLinkUri(resource);
 	if (link.connectionAuthority !== 'local') throw new TypeError('Unknown editor conversation connection');
 	return buildOpenSessionLinkUri(link.sessionId, link.threadId, link.connectionAuthority).toJSON();
@@ -539,12 +445,7 @@ export function validateAgentHostEditorUpdate(value: unknown): AgentHostEditorUp
 			requestSequence: value.requestSequence as number,
 		};
 	}
-	if (
-		value.kind === 'sessions' &&
-		Object.keys(value).sort().join(',') === 'kind,sessions' &&
-		Array.isArray(value.sessions) &&
-		value.sessions.length <= 128
-	) {
+	if (value.kind === 'sessions' && Object.keys(value).sort().join(',') === 'kind,sessions' && Array.isArray(value.sessions) && value.sessions.length <= 128) {
 		return {
 			kind: 'sessions',
 			sessions: value.sessions.map(session => {
@@ -563,12 +464,7 @@ export function validateAgentHostEditorUpdate(value: unknown): AgentHostEditorUp
 			}),
 		};
 	}
-	if (
-		value.kind === 'delete' &&
-		Object.keys(value).sort().join(',') === 'kind,resources' &&
-		Array.isArray(value.resources) &&
-		value.resources.length <= 128
-	) {
+	if (value.kind === 'delete' && Object.keys(value).sort().join(',') === 'kind,resources' && Array.isArray(value.resources) && value.resources.length <= 128) {
 		return { kind: 'delete', resources: value.resources.map(validateAgentHostEditorResource) };
 	}
 	throw new TypeError('Invalid editor activity update');
@@ -603,15 +499,10 @@ export function validateAgentsWindowInvitation(value: unknown): IAgentsWindowInv
 export function validateAgentHostEditorState(value: unknown): IAgentHostEditorState {
 	if (
 		!isRecord(value) ||
-		Object.keys(value).sort().join(',') !==
-			'agentsWindowSessionCount,editorSessionCount,invitation,lastAgentsWindowSessionCreated,lastShown,revision,sessions' ||
-		!['revision', 'editorSessionCount', 'agentsWindowSessionCount'].every(
-			key => Number.isSafeInteger(value[key]) && (value[key] as number) >= 0,
-		) ||
+		Object.keys(value).sort().join(',') !== 'agentsWindowSessionCount,editorSessionCount,invitation,lastAgentsWindowSessionCreated,lastShown,revision,sessions' ||
+		!['revision', 'editorSessionCount', 'agentsWindowSessionCount'].every(key => Number.isSafeInteger(value[key]) && (value[key] as number) >= 0) ||
 		(value.lastAgentsWindowSessionCreated !== undefined &&
-			(typeof value.lastAgentsWindowSessionCreated !== 'number' ||
-				!Number.isFinite(value.lastAgentsWindowSessionCreated) ||
-				value.lastAgentsWindowSessionCreated < 0)) ||
+			(typeof value.lastAgentsWindowSessionCreated !== 'number' || !Number.isFinite(value.lastAgentsWindowSessionCreated) || value.lastAgentsWindowSessionCreated < 0)) ||
 		!Array.isArray(value.sessions) ||
 		value.sessions.length > 4096
 	)
@@ -674,11 +565,7 @@ function validateFileFilters(value: unknown): FileFilter[] | undefined {
 			typeof fields.name !== 'string' ||
 			!fields.name ||
 			!Array.isArray(fields.extensions) ||
-			!fields.extensions.every(
-				extension =>
-					typeof extension === 'string' &&
-					(extension === '*' || /^[a-z0-9][a-z0-9_-]*(?:\.[a-z0-9][a-z0-9_-]*)*$/i.test(extension)),
-			)
+			!fields.extensions.every(extension => typeof extension === 'string' && (extension === '*' || /^[a-z0-9][a-z0-9_-]*(?:\.[a-z0-9][a-z0-9_-]*)*$/i.test(extension)))
 		) {
 			throw new TypeError('Invalid file filter');
 		}
@@ -687,13 +574,7 @@ function validateFileFilters(value: unknown): FileFilter[] | undefined {
 }
 
 function dialogFields(value: unknown, allowed: readonly string[], name: string): Record<string, unknown> {
-	if (
-		!value ||
-		typeof value !== 'object' ||
-		Array.isArray(value) ||
-		Object.keys(value).some(key => !allowed.includes(key))
-	)
-		throw new TypeError(`Invalid ${name}`);
+	if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !allowed.includes(key))) throw new TypeError(`Invalid ${name}`);
 	return value as Record<string, unknown>;
 }
 
@@ -710,21 +591,12 @@ function validateDialogBooleans(fields: Record<string, unknown>, keys: readonly 
 }
 
 function validateDialogProperties(value: unknown, allowed: readonly string[]): void {
-	if (
-		value !== undefined &&
-		(!Array.isArray(value) ||
-			value.length > allowed.length ||
-			!value.every(property => typeof property === 'string' && allowed.includes(property)))
-	)
+	if (value !== undefined && (!Array.isArray(value) || value.length > allowed.length || !value.every(property => typeof property === 'string' && allowed.includes(property))))
 		throw new TypeError('Invalid dialog properties');
 }
 
 export function validateOpenDialogOptions(value: unknown): OpenDialogOptions {
-	const fields = dialogFields(
-		value,
-		['title', 'defaultPath', 'buttonLabel', 'filters', 'properties', 'message', 'securityScopedBookmarks'],
-		'open dialog options',
-	);
+	const fields = dialogFields(value, ['title', 'defaultPath', 'buttonLabel', 'filters', 'properties', 'message', 'securityScopedBookmarks'], 'open dialog options');
 	validateDialogStrings(fields, ['title', 'defaultPath', 'buttonLabel', 'message']);
 	validateDialogBooleans(fields, ['securityScopedBookmarks']);
 	validateFileFilters(fields.filters);
@@ -748,8 +620,7 @@ export function validateOpenDialogResult(value: unknown): OpenDialogReturnValue 
 		typeof fields.canceled !== 'boolean' ||
 		!Array.isArray(fields.filePaths) ||
 		!fields.filePaths.every(path => typeof path === 'string') ||
-		(fields.bookmarks !== undefined &&
-			(!Array.isArray(fields.bookmarks) || !fields.bookmarks.every(bookmark => typeof bookmark === 'string')))
+		(fields.bookmarks !== undefined && (!Array.isArray(fields.bookmarks) || !fields.bookmarks.every(bookmark => typeof bookmark === 'string')))
 	)
 		throw new TypeError('Invalid open dialog result');
 	return fields as unknown as OpenDialogReturnValue;
@@ -757,11 +628,7 @@ export function validateOpenDialogResult(value: unknown): OpenDialogReturnValue 
 
 export function validateSaveDialogResult(value: unknown): SaveDialogReturnValue {
 	const fields = dialogFields(value, ['canceled', 'filePath', 'bookmark'], 'save dialog result');
-	if (
-		typeof fields.canceled !== 'boolean' ||
-		typeof fields.filePath !== 'string' ||
-		(fields.bookmark !== undefined && typeof fields.bookmark !== 'string')
-	)
+	if (typeof fields.canceled !== 'boolean' || typeof fields.filePath !== 'string' || (fields.bookmark !== undefined && typeof fields.bookmark !== 'string'))
 		throw new TypeError('Invalid save dialog result');
 	return fields as unknown as SaveDialogReturnValue;
 }
@@ -769,12 +636,7 @@ export function validateSaveDialogResult(value: unknown): SaveDialogReturnValue 
 export function validateMessageBoxResult(value: unknown): MessageBoxReturnValue {
 	const fields = dialogFields(value, ['response', 'checkboxChecked'], 'message box result');
 	// Electron can return -1 when cancellation is configured without a cancel button.
-	if (
-		!Number.isSafeInteger(fields.response) ||
-		(fields.response as number) < -1 ||
-		typeof fields.checkboxChecked !== 'boolean'
-	)
-		throw new TypeError('Invalid message box result');
+	if (!Number.isSafeInteger(fields.response) || (fields.response as number) < -1 || typeof fields.checkboxChecked !== 'boolean') throw new TypeError('Invalid message box result');
 	return fields as unknown as MessageBoxReturnValue;
 }
 
@@ -795,29 +657,13 @@ export function validateAccessibilitySupportRead(value: unknown): undefined {
 export function validateSaveDialogOptions(value: unknown): SaveDialogOptions {
 	const fields = dialogFields(
 		value,
-		[
-			'title',
-			'defaultPath',
-			'buttonLabel',
-			'filters',
-			'message',
-			'nameFieldLabel',
-			'showsTagField',
-			'properties',
-			'securityScopedBookmarks',
-		],
+		['title', 'defaultPath', 'buttonLabel', 'filters', 'message', 'nameFieldLabel', 'showsTagField', 'properties', 'securityScopedBookmarks'],
 		'save dialog options',
 	);
 	validateDialogStrings(fields, ['title', 'defaultPath', 'buttonLabel', 'message', 'nameFieldLabel']);
 	validateDialogBooleans(fields, ['showsTagField', 'securityScopedBookmarks']);
 	validateFileFilters(fields.filters);
-	validateDialogProperties(fields.properties, [
-		'showHiddenFiles',
-		'createDirectory',
-		'treatPackageAsDirectory',
-		'showOverwriteConfirmation',
-		'dontAddToRecent',
-	]);
+	validateDialogProperties(fields.properties, ['showHiddenFiles', 'createDirectory', 'treatPackageAsDirectory', 'showOverwriteConfirmation', 'dontAddToRecent']);
 	return fields as SaveDialogOptions;
 }
 
@@ -829,12 +675,10 @@ export function validateAccessibilitySupport(value: unknown): boolean {
 }
 
 export function validateNativeWindowTheme(value: unknown): INativeWindowTheme {
-	if (typeof value !== 'object' || value === null || Array.isArray(value))
-		throw new Error('window theme must be an object');
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('window theme must be an object');
 	const candidate = value as Record<string, unknown>;
 	const keys = Object.keys(candidate).sort();
-	if (keys.length !== 3 || keys[0] !== 'backdropColor' || keys[1] !== 'backgroundColor' || keys[2] !== 'symbolColor')
-		throw new Error('window theme contains unknown fields');
+	if (keys.length !== 3 || keys[0] !== 'backdropColor' || keys[1] !== 'backgroundColor' || keys[2] !== 'symbolColor') throw new Error('window theme contains unknown fields');
 	return {
 		backgroundColor: validateOpaqueHexColor(candidate.backgroundColor, 'backgroundColor'),
 		symbolColor: validateOpaqueHexColor(candidate.symbolColor, 'symbolColor'),
@@ -848,13 +692,11 @@ export function validateWindowDimmed(value: unknown): boolean {
 }
 
 function validateOpaqueHexColor(value: unknown, name: string): string {
-	if (typeof value !== 'string' || !/^#[0-9a-f]{6}$/i.test(value))
-		throw new Error(`${name} must be an opaque hexadecimal color`);
+	if (typeof value !== 'string' || !/^#[0-9a-f]{6}$/i.test(value)) throw new Error(`${name} must be an opaque hexadecimal color`);
 	return value.toLowerCase();
 }
 
 function validateHexColor(value: unknown, name: string): string {
-	if (typeof value !== 'string' || !/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(value))
-		throw new TypeError(`${name} must be a hexadecimal color`);
+	if (typeof value !== 'string' || !/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(value)) throw new TypeError(`${name} must be a hexadecimal color`);
 	return value.toLowerCase();
 }

@@ -9,11 +9,7 @@ test('real screenshot command is stable across fresh browsers for all four theme
 	const first = await runScreenshotCommand(testInfo, 'capture', 'first', baseURL);
 	const second = await runScreenshotCommand(testInfo, 'capture', 'second', baseURL);
 	expect(first.manifest.fixtures.length).toBeGreaterThanOrEqual(12);
-	expect(
-		first.manifest.fixtures.every(
-			fixture => !fixture.hasError && fixture.imageHash && fixture.labels.includes('blocks-ci'),
-		),
-	).toBe(true);
+	expect(first.manifest.fixtures.every(fixture => !fixture.hasError && fixture.imageHash && fixture.labels.includes('blocks-ci'))).toBe(true);
 	expect(second.manifest).toEqual(first.manifest);
 });
 

@@ -64,9 +64,7 @@ export class StickyScrollWidget extends Disposable {
 	}
 
 	public focusLineWithIndex(index: number): void {
-		const button = this.domNode.children
-			.item(index)
-			?.querySelector<HTMLButtonElement>('.stanza-editor-sticky-scroll-item');
+		const button = this.domNode.children.item(index)?.querySelector<HTMLButtonElement>('.stanza-editor-sticky-scroll-item');
 		if (!button) {
 			return;
 		}
@@ -85,10 +83,7 @@ export class StickyScrollWidget extends Disposable {
 	}
 
 	public isInFoldingIconDomNode(node: HTMLElement): boolean {
-		return (
-			node.closest('.stanza-editor-sticky-scroll-folding') !== null &&
-			this.getLineIndexFromChildDomNode(node) !== null
-		);
+		return node.closest('.stanza-editor-sticky-scroll-folding') !== null && this.getLineIndexFromChildDomNode(node) !== null;
 	}
 
 	public getEditorPositionFromNode(node: HTMLElement | null): Position | null {
@@ -101,9 +96,7 @@ export class StickyScrollWidget extends Disposable {
 			return null;
 		}
 		const partIndex = Array.from(row.text.children).indexOf(node);
-		const column = this.characterMappings
-			.get(row.text)!
-			.getColumn(new DomPosition(partIndex, 0), node.textContent!.length);
+		const column = this.characterMappings.get(row.text)!.getColumn(new DomPosition(partIndex, 0), node.textContent!.length);
 		return new Position(Number(row.button.dataset.lineNumber), column);
 	}
 
@@ -153,17 +146,9 @@ export class StickyScrollWidget extends Disposable {
 			button.style.paddingLeft = `${layout.contentLeft}px`;
 			text.style.textIndent = `${options.scrollWithEditor ? -this.editor.getScrollLeft() : 0}px`;
 			element.style.marginTop = `${index === this.lines.length - 1 ? state.lastLineRelativePosition : 0}px`;
-			element.style.clipPath =
-				index === this.lines.length - 1 && state.lastLineRelativePosition < 0
-					? `inset(${-state.lastLineRelativePosition}px 0 0)`
-					: '';
+			element.style.clipPath = index === this.lines.length - 1 && state.lastLineRelativePosition < 0 ? `inset(${-state.lastLineRelativePosition}px 0 0)` : '';
 			const label = this.model.getLineContent(displayLine);
-			const mapping = projectStanzaSemanticTokenLine(
-				text,
-				label,
-				this.model.tokenization.renderedTokens.getLineTokens(displayLine - 1),
-				this.model.getOptions().tabSize,
-			);
+			const mapping = projectStanzaSemanticTokenLine(text, label, this.model.tokenization.renderedTokens.getLineTokens(displayLine - 1), this.model.getOptions().tabSize);
 			this.characterMappings.set(text, mapping);
 			button.title = localize('stickyScroll.reveal', 'Reveal line {0}: {1}', displayLine, label);
 			button.setAttribute('aria-label', button.title);
@@ -187,11 +172,7 @@ export class StickyScrollWidget extends Disposable {
 			number.style.left = `${layout.lineNumbersLeft}px`;
 			number.style.width = `${layout.lineNumbersWidth}px`;
 			const region = foldingModel.regions.find(region => region.startLineIndex === lineNumber - 1);
-			folding.hidden =
-				!region ||
-				!this.editor.getOption(EditorOption.folding) ||
-				foldingControls === 'never' ||
-				state.showEndForLine === index;
+			folding.hidden = !region || !this.editor.getOption(EditorOption.folding) || foldingControls === 'never' || state.showEndForLine === index;
 			const foldingIcon = region?.collapsed ? foldingCollapsedIcon : foldingExpandedIcon;
 			if (row.foldingIcon !== foldingIcon) {
 				folding.replaceChildren();

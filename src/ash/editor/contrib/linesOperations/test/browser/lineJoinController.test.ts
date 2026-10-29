@@ -10,17 +10,13 @@ import { operatingSystem, OperatingSystem } from '../../../../../base/common/pla
 import { installEditorTestDom } from '../../../../test/browser/editorTestGlobals.js';
 
 const moduleDom = new JSDOM('<!doctype html><body></body>');
-const installedGlobals = installEditorTestDom(
-	moduleDom,
-	['Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent'],
-	{
-		ResizeObserver: class TestResizeObserver {
-			observe(): void {}
-			unobserve(): void {}
-			disconnect(): void {}
-		},
+const installedGlobals = installEditorTestDom(moduleDom, ['Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent'], {
+	ResizeObserver: class TestResizeObserver {
+		observe(): void {}
+		unobserve(): void {}
+		disconnect(): void {}
 	},
-);
+});
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { JoinLinesAction } = await import('../../browser/linesOperations.js');

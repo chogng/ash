@@ -5,26 +5,11 @@ import { ISimpleModel } from './viewModel/screenReaderSimpleModel.js';
 import { ICoordinatesConverter } from './coordinatesConverter.js';
 import { IPosition, Position } from './core/position.js';
 import { Range } from './core/range.js';
-import {
-	CursorConfiguration,
-	CursorState,
-	EditOperationType,
-	IColumnSelectData,
-	ICursorSimpleModel,
-	PartialCursorState,
-} from './cursorCommon.js';
+import { CursorConfiguration, CursorState, EditOperationType, IColumnSelectData, ICursorSimpleModel, PartialCursorState } from './cursorCommon.js';
 import { CursorChangeReason } from './cursorEvents.js';
 import { ICommand, INewScrollPosition, ScrollType } from './editorCommon.js';
 import { EditorTheme } from './editorTheme.js';
-import {
-	EndOfLinePreference,
-	ICursorStateComputer,
-	IGlyphMarginLanesModel,
-	IIdentifiedSingleEditOperation,
-	IModelDecorationOptions,
-	ITextModel,
-	TextDirection,
-} from './model.js';
+import { EndOfLinePreference, ICursorStateComputer, IGlyphMarginLanesModel, IIdentifiedSingleEditOperation, IModelDecorationOptions, ITextModel, TextDirection } from './model.js';
 import { ILineBreaksComputer, ILineBreaksComputerContext, InjectedText } from './modelLineProjectionData.js';
 import { InternalModelContentChangeEvent, ModelInjectedTextChangedEvent } from './textModelEvents.js';
 import { BracketGuideOptions, IActiveIndentGuideInfo, IndentGuide } from './textModelGuides.js';
@@ -74,11 +59,7 @@ export interface IViewModel extends ICursorSimpleModel, ISimpleModel {
 	getViewLineData(lineNumber: number): ViewLineData;
 	/** Shares the current model-owned mapping with rendering and hit testing. */
 	getVisualLineProjection(): EditorVisualLineProjection;
-	getMinimapLinesRenderingData(
-		startLineNumber: number,
-		endLineNumber: number,
-		needed: boolean[],
-	): MinimapLinesRenderingData;
+	getMinimapLinesRenderingData(startLineNumber: number, endLineNumber: number, needed: boolean[]): MinimapLinesRenderingData;
 	getCompletelyVisibleViewRange(): Range;
 	getCompletelyVisibleViewRangeAtScrollTop(scrollTop: number): Range;
 	getViewRangeWithCursorPadding(viewRange: Range): Range;
@@ -91,12 +72,7 @@ export interface IViewModel extends ICursorSimpleModel, ISimpleModel {
 	getLineLength(lineNumber: number): number;
 	getActiveIndentGuide(lineNumber: number, minLineNumber: number, maxLineNumber: number): IActiveIndentGuideInfo;
 	getLinesIndentGuides(startLineNumber: number, endLineNumber: number): number[];
-	getBracketGuidesInRangeByLine(
-		startLineNumber: number,
-		endLineNumber: number,
-		activePosition: IPosition | null,
-		options: BracketGuideOptions,
-	): IndentGuide[][];
+	getBracketGuidesInRangeByLine(startLineNumber: number, endLineNumber: number, activePosition: IPosition | null, options: BracketGuideOptions): IndentGuide[][];
 	getLineMinColumn(lineNumber: number): number;
 	getLineMaxColumn(lineNumber: number): number;
 	getLineFirstNonWhitespaceColumn(lineNumber: number): number;
@@ -108,16 +84,8 @@ export interface IViewModel extends ICursorSimpleModel, ISimpleModel {
 
 	getInjectedTextAt(viewPosition: Position): InjectedText | null;
 
-	deduceModelPositionRelativeToViewPosition(
-		viewAnchorPosition: Position,
-		deltaOffset: number,
-		lineFeedCnt: number,
-	): Position;
-	getPlainTextToCopy(
-		modelRanges: Range[],
-		emptySelectionClipboard: boolean,
-		forceCRLF: boolean,
-	): { sourceRanges: Range[]; sourceText: string | string[] };
+	deduceModelPositionRelativeToViewPosition(viewAnchorPosition: Position, deltaOffset: number, lineFeedCnt: number): Position;
+	getPlainTextToCopy(modelRanges: Range[], emptySelectionClipboard: boolean, forceCRLF: boolean): { sourceRanges: Range[]; sourceText: string | string[] };
 	getRichTextToCopy(modelRanges: Range[], emptySelectionClipboard: boolean): { html: string; mode: string } | null;
 
 	onDidChangeContentOrInjectedText(e: InternalModelContentChangeEvent | ModelInjectedTextChangedEvent): void;
@@ -129,11 +97,7 @@ export interface IViewModel extends ICursorSimpleModel, ISimpleModel {
 	getPrimaryCursorState(): CursorState;
 	getLastAddedCursorIndex(): number;
 	getCursorStates(): CursorState[];
-	setCursorStates(
-		source: string | null | undefined,
-		reason: CursorChangeReason,
-		states: PartialCursorState[] | null,
-	): boolean;
+	setCursorStates(source: string | null | undefined, reason: CursorChangeReason, states: PartialCursorState[] | null): boolean;
 	getCursorColumnSelectData(): IColumnSelectData;
 	getCursorAutoClosedCharacters(): Range[];
 	setCursorColumnSelectData(columnSelectData: IColumnSelectData): void;
@@ -142,29 +106,14 @@ export interface IViewModel extends ICursorSimpleModel, ISimpleModel {
 	getSelection(): Selection;
 	getSelections(): Selection[];
 	getPosition(): Position;
-	setSelections(
-		source: string | null | undefined,
-		selections: readonly ISelection[],
-		reason?: CursorChangeReason,
-	): void;
+	setSelections(source: string | null | undefined, selections: readonly ISelection[], reason?: CursorChangeReason): void;
 	saveCursorState(): import('./editorCommon.js').ICursorState[];
 	restoreCursorState(states: import('./editorCommon.js').ICursorState[]): void;
-	executeEdits(
-		source: string | null | undefined,
-		edits: IIdentifiedSingleEditOperation[],
-		cursorStateComputer: ICursorStateComputer,
-		reason: TextModelEditSource,
-	): void;
+	executeEdits(source: string | null | undefined, edits: IIdentifiedSingleEditOperation[], cursorStateComputer: ICursorStateComputer, reason: TextModelEditSource): void;
 	startComposition(): void;
 	endComposition(source?: string | null): void;
 	type(text: string, source?: string | null): void;
-	compositionType(
-		text: string,
-		replacePrevCharCnt: number,
-		replaceNextCharCnt: number,
-		positionDelta: number,
-		source?: string | null,
-	): void;
+	compositionType(text: string, replacePrevCharCnt: number, replaceNextCharCnt: number, positionDelta: number, source?: string | null): void;
 	paste(text: string, pasteOnNewLine: boolean, multicursorText?: string[] | null, source?: string | null): void;
 	cut(source?: string | null): void;
 	executeCommand(command: ICommand, source?: string | null): void;
@@ -173,13 +122,7 @@ export interface IViewModel extends ICursorSimpleModel, ISimpleModel {
 	revealPrimaryCursor(source: string | null | undefined, revealHorizontal: boolean, minimalReveal?: boolean): void;
 	revealTopMostCursor(source: string | null | undefined): void;
 	revealBottomMostCursor(source: string | null | undefined): void;
-	revealRange(
-		source: string | null | undefined,
-		revealHorizontal: boolean,
-		viewRange: Range,
-		verticalType: VerticalRevealType,
-		scrollType: ScrollType,
-	): void;
+	revealRange(source: string | null | undefined, revealHorizontal: boolean, viewRange: Range, verticalType: VerticalRevealType, scrollType: ScrollType): void;
 	//#endregion
 
 	//#region viewLayout
@@ -244,12 +187,7 @@ export interface IWhitespaceChangeAccessor {
 }
 
 export interface ILineHeightChangeAccessor {
-	insertOrChangeCustomLineHeight(
-		decorationId: string,
-		startLineNumber: number,
-		endLineNumber: number,
-		lineHeight: number,
-	): void;
+	insertOrChangeCustomLineHeight(decorationId: string, startLineNumber: number, endLineNumber: number, lineHeight: number): void;
 	removeCustomLineHeight(decorationId: string): void;
 }
 
@@ -550,12 +488,7 @@ export interface EditorViewportModelSource {
 
 /** Batch mutation boundary used by view-layout custom line-height owners. */
 export interface EditorLineHeightChangeAccessor {
-	insertOrChangeCustomLineHeight(
-		decorationId: string,
-		startLineNumber: number,
-		endLineNumber: number,
-		lineHeight: number,
-	): void;
+	insertOrChangeCustomLineHeight(decorationId: string, startLineNumber: number, endLineNumber: number, lineHeight: number): void;
 	removeCustomLineHeight(decorationId: string): void;
 }
 

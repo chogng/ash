@@ -10,12 +10,9 @@ for (const platform of ['darwin', 'win32']) {
 		const buildPath = await mkdtemp(join(tmpdir(), 'ash-packaged-locales-'));
 		t.after(() => rm(buildPath, { recursive: true, force: true }));
 		const mac = platform === 'darwin';
-		const directory = mac
-			? join(buildPath, 'Electron.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources')
-			: join(buildPath, 'locales');
+		const directory = mac ? join(buildPath, 'Electron.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources') : join(buildPath, 'locales');
 		await mkdir(directory, { recursive: true });
-		const file = (locale: string) =>
-			mac ? join(directory, `${locale}.lproj/locale.pak`) : join(directory, `${locale}.pak`);
+		const file = (locale: string) => (mac ? join(directory, `${locale}.lproj/locale.pak`) : join(directory, `${locale}.pak`));
 		const selected = mac ? ['en', 'zh_CN', 'zh_CN_FEMININE'] : ['en-US', 'zh-CN', 'zh-CN_FEMININE'];
 		for (const locale of [...selected, 'fr', 'fr_FEMININE', mac ? 'en_GB' : 'en-GB']) {
 			await mkdir(join(file(locale), '..'), { recursive: true });
@@ -27,14 +24,7 @@ for (const platform of ['darwin', 'win32']) {
 			await writeFile(join(directory, 'Base.lproj/shared.nib'), 'Shared interface resource');
 		}
 		await pruneElectronLocales({ buildPath, platform });
-		assert.deepEqual(
-			(await readdir(directory)).sort(),
-			[
-				...selected.map(locale => (mac ? `${locale}.lproj` : `${locale}.pak`)),
-				'icudtl.dat',
-				...(mac ? ['Base.lproj'] : []),
-			].sort(),
-		);
+		assert.deepEqual((await readdir(directory)).sort(), [...selected.map(locale => (mac ? `${locale}.lproj` : `${locale}.pak`)), 'icudtl.dat', ...(mac ? ['Base.lproj'] : [])].sort());
 		assert.equal(await readFile(join(directory, 'icudtl.dat'), 'utf8'), 'Internationalization data');
 		for (const locale of selected) {
 			assert.equal(await readFile(file(locale), 'utf8'), locale);

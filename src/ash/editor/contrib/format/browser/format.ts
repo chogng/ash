@@ -10,12 +10,7 @@ import { FormattingEdit } from './formattingEdit.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { ExtensionIdentifier } from '../../../../platform/extensions/common/extensions.js';
 import { type LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry.js';
-import {
-	type DocumentFormattingEditProvider,
-	type DocumentRangeFormattingEditProvider,
-	type FormattingOptions,
-	type TextEdit,
-} from '../../../common/languages.js';
+import { type DocumentFormattingEditProvider, type DocumentRangeFormattingEditProvider, type FormattingOptions, type TextEdit } from '../../../common/languages.js';
 import { type ITextModel } from '../../../common/model.js';
 
 export function getRealAndSyntheticDocumentFormattersOrdered(
@@ -25,9 +20,7 @@ export function getRealAndSyntheticDocumentFormattersOrdered(
 ): DocumentFormattingEditProvider[] {
 	const providers = documentFormattingEditProvider.ordered(model);
 	const seen = new Set<DocumentFormattingEditProvider | DocumentRangeFormattingEditProvider>(providers);
-	const extensions = new Set(
-		providers.flatMap(provider => (provider.extensionId ? [ExtensionIdentifier.toKey(provider.extensionId)] : [])),
-	);
+	const extensions = new Set(providers.flatMap(provider => (provider.extensionId ? [ExtensionIdentifier.toKey(provider.extensionId)] : [])));
 	for (const provider of documentRangeFormattingEditProvider.ordered(model)) {
 		// Adapters can implement both contracts without claiming an extension identity.
 		if (seen.has(provider)) continue;
@@ -42,8 +35,7 @@ export function getRealAndSyntheticDocumentFormattersOrdered(
 		providers.push({
 			extensionId: provider.extensionId,
 			displayName: provider.displayName,
-			provideDocumentFormattingEdits: (model, options, token) =>
-				provider.provideDocumentRangeFormattingEdits(model, model.getFullModelRange(), options, token),
+			provideDocumentFormattingEdits: (model, options, token) => provider.provideDocumentRangeFormattingEdits(model, model.getFullModelRange(), options, token),
 		});
 	}
 	return providers;
@@ -108,12 +100,7 @@ export async function formatEditor(
 	kind: FormattingKind,
 	mode = FormattingMode.Explicit,
 ): Promise<boolean> {
-	return runFormatting(
-		editor,
-		worker,
-		(model, token) => provideEdits(editor, model, features, kind, mode, model.getFormattingOptions(), token),
-		true,
-	);
+	return runFormatting(editor, worker, (model, token) => provideEdits(editor, model, features, kind, mode, model.getFormattingOptions(), token), true);
 }
 
 /** Formats only declared trigger characters after the keyboard edit has committed. */
@@ -127,31 +114,17 @@ export async function formatEditorOnType(
 	const model = editor.getModel();
 	if (!model || !editor.getOption(EditorOption.formatOnType) || !text) return false;
 	const ch = [...text].at(-1)!;
-	const provider = features.onTypeFormattingEditProvider
-		.ordered(model)
-		.find(provider => provider.autoFormatTriggerCharacters.includes(ch));
+	const provider = features.onTypeFormattingEditProvider.ordered(model).find(provider => provider.autoFormatTriggerCharacters.includes(ch));
 	if (!provider) return false;
 	const positions = (editor.getSelections() ?? []).map(selection => selection.getPosition());
 	return runFormatting(
 		editor,
 		worker,
 		async (model, token) => {
-			const batches = await Promise.all(
-				positions.map(position =>
-					provider.provideOnTypeFormattingEdits(model, position, ch, model.getFormattingOptions(), token),
-				),
-			);
+			const batches = await Promise.all(positions.map(position => provider.provideOnTypeFormattingEdits(model, position, ch, model.getFormattingOptions(), token)));
 			const edits: TextEdit[] = [];
 			for (const edit of batches.flatMap(batch => batch ?? [])) {
-				if (
-					edits.some(
-						other =>
-							Range.equalsRange(edit.range, other.range) &&
-							edit.text === other.text &&
-							edit.eol === other.eol,
-					)
-				)
-					continue;
+				if (edits.some(other => Range.equalsRange(edit.range, other.range) && edit.text === other.text && edit.eol === other.eol)) continue;
 				// Independent cursors must not submit conflicting replacements.
 				if (edits.some(other => Range.areIntersectingOrTouching(edit.range, other.range))) return undefined;
 				edits.push(edit);
@@ -175,10 +148,7 @@ async function runFormatting(
 		return false;
 	}
 	requests.get(editor)?.cancel();
-	const source = new EditorStateCancellationTokenSource(
-		editor,
-		CodeEditorStateFlag.Value | CodeEditorStateFlag.Position | CodeEditorStateFlag.Selection,
-	);
+	const source = new EditorStateCancellationTokenSource(editor, CodeEditorStateFlag.Value | CodeEditorStateFlag.Position | CodeEditorStateFlag.Selection);
 	requests.set(editor, source);
 	using resources = new DisposableStore();
 	const abort = new AbortController();
@@ -229,15 +199,8 @@ async function provideEdits(
 	token: CancellationToken,
 ): Promise<TextEdit[] | null | undefined> {
 	if (kind === FormattingKind.File) {
-		const providers = getRealAndSyntheticDocumentFormattersOrdered(
-			features.documentFormattingEditProvider,
-			features.documentRangeFormattingEditProvider,
-			model,
-		);
-		const provider = await raceCancellationError(
-			FormattingConflicts.select(providers, model, mode, FormattingKind.File, token),
-			token,
-		);
+		const providers = getRealAndSyntheticDocumentFormattersOrdered(features.documentFormattingEditProvider, features.documentRangeFormattingEditProvider, model);
+		const provider = await raceCancellationError(FormattingConflicts.select(providers, model, mode, FormattingKind.File, token), token);
 		if (!provider || token.isCancellationRequested) {
 			return undefined;
 		}
@@ -245,14 +208,7 @@ async function provideEdits(
 	}
 	const ranges: Range[] = [];
 	const selections = (editor.getSelections() ?? []).map(selection =>
-		selection.isEmpty()
-			? new Range(
-					selection.startLineNumber,
-					1,
-					selection.startLineNumber,
-					model.getLineMaxColumn(selection.startLineNumber),
-				)
-			: Range.lift(selection),
+		selection.isEmpty() ? new Range(selection.startLineNumber, 1, selection.startLineNumber, model.getLineMaxColumn(selection.startLineNumber)) : Range.lift(selection),
 	);
 	for (const range of selections.sort(Range.compareRangesUsingStarts)) {
 		const previous = ranges[ranges.length - 1];
@@ -266,10 +222,7 @@ async function provideEdits(
 		return;
 	}
 	const providers = features.documentRangeFormattingEditProvider.ordered(model);
-	const provider = await raceCancellationError(
-		FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.Selection, token),
-		token,
-	);
+	const provider = await raceCancellationError(FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.Selection, token), token);
 	if (!provider || token.isCancellationRequested) {
 		return undefined;
 	}
@@ -283,19 +236,11 @@ async function provideEdits(
 			return undefined;
 		}
 		let range = pending.shift()!;
-		const edits =
-			(await raceCancellationError(
-				Promise.resolve(provider.provideDocumentRangeFormattingEdits(model, range, options, token)),
-				token,
-			)) ?? [];
+		const edits = (await raceCancellationError(Promise.resolve(provider.provideDocumentRangeFormattingEdits(model, range, options, token)), token)) ?? [];
 		let merged = false;
 		for (let index = completed.length - 1; index >= 0; index--) {
 			const previous = completed[index];
-			if (
-				edits.some(edit =>
-					previous.edits.some(other => Range.areIntersectingOrTouching(edit.range, other.range)),
-				)
-			) {
+			if (edits.some(edit => previous.edits.some(other => Range.areIntersectingOrTouching(edit.range, other.range)))) {
 				range = range.plusRange(previous.range);
 				completed.splice(index, 1);
 				merged = true;
@@ -308,7 +253,5 @@ async function provideEdits(
 			completed.push({ range, edits });
 		}
 	}
-	return completed
-		.sort((left, right) => Range.compareRangesUsingStarts(left.range, right.range))
-		.flatMap(result => result.edits);
+	return completed.sort((left, right) => Range.compareRangesUsingStarts(left.range, right.range)).flatMap(result => result.edits);
 }

@@ -24,13 +24,7 @@ export class WorkspacePdfDocumentLoader implements IPdfDocumentLoader {
 		}
 		const content = await this.fileService.readFileStream(input.resource, {}, cancellation.token);
 		try {
-			return (
-				await raceCancellationError(
-					streamToBuffer(content.value),
-					cancellation.token,
-					'PDF document loading was cancelled',
-				)
-			).buffer;
+			return (await raceCancellationError(streamToBuffer(content.value), cancellation.token, 'PDF document loading was cancelled')).buffer;
 		} finally {
 			content.value.destroy();
 		}

@@ -19,19 +19,11 @@ import { IWorkingCopyService } from '../../../../../services/workingCopy/common/
 import '../../../browser/chat.shared.contribution.js';
 import { IChatAttachmentResolveService } from '../../../browser/attachments/chatAttachmentResolveService.js';
 
-function services(
-	resources: DisposableStore,
-	read: () => Promise<string>,
-	options: { readonly text?: string; readonly files?: IFileService } = {},
-): InstantiationService {
+function services(resources: DisposableStore, read: () => Promise<string>, options: { readonly text?: string; readonly files?: IFileService } = {}): InstantiationService {
 	const owner = resources.add(new InstantiationService());
 	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatAttachmentResolveService)![1];
 	owner.registerCollection(new ServiceCollection([IChatAttachmentResolveService, descriptor]));
-	owner.registerInstance(
-		IFileService,
-		options.files ??
-			({ hasProvider: () => true, readFile: async () => ({ content: await read() }) } as unknown as IFileService),
-	);
+	owner.registerInstance(IFileService, options.files ?? ({ hasProvider: () => true, readFile: async () => ({ content: await read() }) } as unknown as IFileService));
 	owner.registerInstance(IWorkingCopyService, {
 		get: () => (options.text === undefined ? [] : [{ backupKind: 'text', backup: () => options.text }]),
 	} as unknown as IWorkingCopyService);
@@ -57,10 +49,7 @@ test('Editor context reads the modified working copy and freezes the selected co
 	);
 	const resolver = owner.get(IChatAttachmentResolveService);
 	const modified = URI.file('/workspace/modified.ts');
-	const input = createDiffEditorInput(
-		{ resource: URI.file('/workspace/original.ts') },
-		{ resource: modified, initialText: 'Initial text' },
-	);
+	const input = createDiffEditorInput({ resource: URI.file('/workspace/original.ts') }, { resource: modified, initialText: 'Initial text' });
 	const attachment = await resolver.resolveEditorAttachContext(input);
 	assert.equal(attachment!.resource?.toString(), modified.toString());
 	assert.deepEqual(await attachment!.resolve(), { name: 'modified.ts', content: 'Unsaved modified text' });
@@ -79,14 +68,8 @@ test('Editor context retains providerless snapshots and rejects binary editor in
 		readOnly: true,
 	});
 	assert.deepEqual(await attachment!.resolve(), { name: 'file.ts', content: 'Index snapshot' });
-	assert.equal(
-		await resolver.resolveEditorAttachContext({ resource, initialBytes: new Uint8Array([0, 1]) }),
-		undefined,
-	);
-	const binary = createBinaryDiffEditorInput(
-		{ resource: URI.file('/workspace/before.bin') },
-		{ resource: URI.file('/workspace/after.bin') },
-	);
+	assert.equal(await resolver.resolveEditorAttachContext({ resource, initialBytes: new Uint8Array([0, 1]) }), undefined);
+	const binary = createBinaryDiffEditorInput({ resource: URI.file('/workspace/before.bin') }, { resource: URI.file('/workspace/after.bin') });
 	assert.equal(await resolver.resolveEditorAttachContext(binary), undefined);
 });
 
@@ -99,9 +82,7 @@ test('Cancelling resource preparation rejects even when its file provider finish
 		return read.p;
 	});
 	const controller = new AbortController();
-	const pending = owner
-		.get(IChatAttachmentResolveService)
-		.resolveResourceAttachContext(URI.file('/workspace/file.ts'), false, controller.signal);
+	const pending = owner.get(IChatAttachmentResolveService).resolveResourceAttachContext(URI.file('/workspace/file.ts'), false, controller.signal);
 	await started.p;
 	controller.abort();
 	await read.complete('Late text');
@@ -125,10 +106,7 @@ test('Resource images exceeding the processing limit are rejected before their b
 			} as unknown as IFileService,
 		},
 	);
-	await assert.rejects(
-		owner.get(IChatAttachmentResolveService).resolveResourceAttachContext(URI.file('/workspace/large.PNG'), false),
-		/20 MB image limit/u,
-	);
+	await assert.rejects(owner.get(IChatAttachmentResolveService).resolveResourceAttachContext(URI.file('/workspace/large.PNG'), false), /20 MB image limit/u);
 });
 
 test('Open editor resolution skips providerless pages without losing versioned text snapshots', async () => {
@@ -138,7 +116,9 @@ test('Open editor resolution skips providerless pages without losing versioned t
 		async () => {
 			assert.fail('Providerless pages must not be read as files');
 		},
-		{ files: { hasProvider: () => false } as unknown as IFileService },
+		{
+			files: { hasProvider: () => false } as unknown as IFileService,
+		},
 	);
 	const resolver = owner.get(IChatAttachmentResolveService);
 	assert.equal(await resolver.resolveEditorAttachContext({ resource: URI.parse('ash-welcome:/welcome') }), undefined);
@@ -194,16 +174,8 @@ test('Symbol admission captures the declaration range while Search retains revis
 	const [captured] = await resolver.resolveSymbolsAttachContext([symbol]);
 	options.text = 'Changed after capture';
 	assert.equal(captured!.resource!.fragment, '2,1-2,23');
-	assert.equal(
-		(await captured!.resolve()).content,
-		'Symbol: captured\nSource: file:///workspace/source.ts#2,1-2,23\n\nfunction captured() {}',
-	);
-	await assert.rejects(
-		resolver.resolveSymbolsAttachContext([
-			{ ...symbol, data: { source: 'codebaseSymbols', sourceRevision: 'sha256:stale' } },
-		]),
-		/source changed/u,
-	);
+	assert.equal((await captured!.resolve()).content, 'Symbol: captured\nSource: file:///workspace/source.ts#2,1-2,23\n\nfunction captured() {}');
+	await assert.rejects(resolver.resolveSymbolsAttachContext([{ ...symbol, data: { source: 'codebaseSymbols', sourceRevision: 'sha256:stale' } }]), /source changed/u);
 });
 
 suite('Displayed editor attachment versions', () => {
@@ -224,14 +196,7 @@ suite('Displayed editor attachment versions', () => {
 				initialText: 'Displayed readonly version',
 				readOnly: true,
 			};
-			const input = diff
-				? resources.add(
-						createDiffEditorInput(
-							{ resource: URI.file('/workspace/before.ts'), initialText: 'Before', readOnly: true },
-							displayed,
-						),
-					)
-				: displayed;
+			const input = diff ? resources.add(createDiffEditorInput({ resource: URI.file('/workspace/before.ts'), initialText: 'Before', readOnly: true }, displayed)) : displayed;
 			const attachment = await owner.get(IChatAttachmentResolveService).resolveEditorAttachContext(input);
 			assert.deepEqual(await attachment!.resolve(), {
 				name: 'version.ts',
@@ -255,9 +220,7 @@ suite('Dropped source ranges', () => {
 				{ text },
 			);
 			const source = URI.parse('file:///workspace/source.ts#2,5-3,5');
-			const attachment = await owner
-				.get(IChatAttachmentResolveService)
-				.resolveResourceAttachContext(source, false);
+			const attachment = await owner.get(IChatAttachmentResolveService).resolveResourceAttachContext(source, false);
 			assert.equal(attachment.resource?.toString(), source.toString());
 			assert.equal(attachment.kind, 'codeSelection');
 			assert.deepEqual(await attachment.resolve(), {
@@ -291,11 +254,6 @@ suite('Dropped source ranges', () => {
 		test(`unavailable source range ${range} rejects without a misleading whole-file snapshot`, async () => {
 			using resources = new DisposableStore();
 			const owner = services(resources, async () => 'first\nsecond');
-			await assert.rejects(
-				owner
-					.get(IChatAttachmentResolveService)
-					.resolveResourceAttachContext(URI.parse(`file:///workspace/source.ts#${range}`), false),
-				/source range/u,
-			);
+			await assert.rejects(owner.get(IChatAttachmentResolveService).resolveResourceAttachContext(URI.parse(`file:///workspace/source.ts#${range}`), false), /source range/u);
 		});
 });

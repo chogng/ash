@@ -17,6 +17,5 @@ registerCreatorMode({
 		'sessions.creator.design.help',
 		'Design uses the canvas, Layers and Shape properties. The canvas context menu offers Add frame, Import image, Open design, Save a copy and Export SVG. Use the Artifacts navigation item to return home. Draw, Motion and Code are editing tools within this workspace.',
 	),
-	create: (instantiation, ownerDocument) =>
-		instantiation.createInstance(DesignWorkspace, ownerDocument, CreatorMode.Design),
+	create: (instantiation, ownerDocument) => instantiation.createInstance(DesignWorkspace, ownerDocument, CreatorMode.Design),
 });

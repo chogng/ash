@@ -3,12 +3,7 @@ import { CancellationError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { observableValue, type IObservable } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
-import {
-	IGitHubService,
-	type GitHubChecks,
-	type GitHubIssueDetails,
-	type GitHubPullRequest,
-} from '../../../../platform/github/common/githubService.js';
+import { IGitHubService, type GitHubChecks, type GitHubIssueDetails, type GitHubPullRequest } from '../../../../platform/github/common/githubService.js';
 
 export type GitHubReferenceKind = 'pullRequest' | 'issue';
 
@@ -23,8 +18,7 @@ export interface IPullRequestHoverDetails {
 	readonly checks: GitHubChecks | undefined;
 }
 
-export type LazyGitHubResourceState<T> =
-	{ readonly status: 'idle' | 'loading' | 'failed' } | { readonly status: 'resolved'; readonly value: T };
+export type LazyGitHubResourceState<T> = { readonly status: 'idle' | 'loading' | 'failed' } | { readonly status: 'resolved'; readonly value: T };
 
 interface ResourceEntry<T> extends IDisposable {
 	readonly cancellation: CancellationTokenSource;
@@ -41,9 +35,7 @@ enum ResourceDetail {
 /** Core metadata appears with the link; checks are requested only on hover intent. */
 export class LazyGitHubResourceResolver extends Disposable {
 	private readonly issues = this._register(new DisposableMap<string, ResourceEntry<GitHubIssueDetails>>());
-	private readonly pullRequests = this._register(
-		new DisposableMap<string, ResourceEntry<IPullRequestHoverDetails>>(),
-	);
+	private readonly pullRequests = this._register(new DisposableMap<string, ResourceEntry<IPullRequestHoverDetails>>());
 
 	constructor(@IGitHubService private readonly github: IGitHubService) {
 		super();
@@ -53,17 +45,13 @@ export class LazyGitHubResourceResolver extends Disposable {
 		return this.entry(this.issues, target).state;
 	}
 
-	public getPullRequestState(
-		target: IGitHubReferenceTarget,
-	): IObservable<LazyGitHubResourceState<IPullRequestHoverDetails>> {
+	public getPullRequestState(target: IGitHubReferenceTarget): IObservable<LazyGitHubResourceState<IPullRequestHoverDetails>> {
 		return this.entry(this.pullRequests, target).state;
 	}
 
 	public resolveIssue(target: IGitHubReferenceTarget): Promise<GitHubIssueDetails> {
 		const entry = this.entry(this.issues, target);
-		return this.load(entry, () =>
-			this.github.readIssue(repository(target), target.number, entry.cancellation.token),
-		);
+		return this.load(entry, () => this.github.readIssue(repository(target), target.number, entry.cancellation.token));
 	}
 
 	public prefetchPullRequest(target: IGitHubReferenceTarget): Promise<IPullRequestHoverDetails> {
@@ -94,12 +82,7 @@ export class LazyGitHubResourceResolver extends Disposable {
 				let page: number | null = 1;
 				let result!: GitHubChecks;
 				while (page !== null) {
-					result = await this.github.readChecks(
-						repository(target),
-						pullRequest.headCommit,
-						page,
-						entry.cancellation.token,
-					);
+					result = await this.github.readChecks(repository(target), pullRequest.headCommit, page, entry.cancellation.token);
 					statuses.push(...result.statuses);
 					checks.push(...result.checks);
 					page = result.nextPage;
@@ -181,17 +164,9 @@ export class LazyGitHubResourceResolver extends Disposable {
 	}
 }
 
-export function parseGitHubReferenceTarget(
-	resource: URI,
-	kind: GitHubReferenceKind,
-): IGitHubReferenceTarget | undefined {
+export function parseGitHubReferenceTarget(resource: URI, kind: GitHubReferenceKind): IGitHubReferenceTarget | undefined {
 	const match = /^\/([\w.-]+)\/([\w.-]+)\/(issues|pull)\/([1-9]\d*)$/.exec(resource.path);
-	if (
-		resource.scheme !== 'https' ||
-		resource.authority.toLowerCase() !== 'github.com' ||
-		!match ||
-		match[3] !== (kind === 'issue' ? 'issues' : 'pull')
-	) {
+	if (resource.scheme !== 'https' || resource.authority.toLowerCase() !== 'github.com' || !match || match[3] !== (kind === 'issue' ? 'issues' : 'pull')) {
 		return undefined;
 	}
 	const number = Number(match[4]);

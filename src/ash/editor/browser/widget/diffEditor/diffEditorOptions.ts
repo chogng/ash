@@ -7,8 +7,7 @@ import type { IDiffEditorOptions, IEditorOptions } from '../../../common/config/
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { localize } from '../../../../nls.js';
 
-export interface DiffEditorWidgetOptions
-	extends IDiffEditorOptions, Pick<CodeEditorWidgetOptions, 'onOpenLocation' | 'onApplyWorkspaceEdit'> {
+export interface DiffEditorWidgetOptions extends IDiffEditorOptions, Pick<CodeEditorWidgetOptions, 'onOpenLocation' | 'onApplyWorkspaceEdit'> {
 	readonly container: HTMLElement;
 	readonly model: DiffModel;
 	readonly lineHeight?: number;
@@ -58,10 +57,8 @@ export class DiffEditorOptions {
 		this.diffWordWrap = options.diffWordWrap ?? 'inherit';
 		this.renderSideBySide = options.renderSideBySide ?? true;
 		this.useInlineViewWhenSpaceIsLimited = options.useInlineViewWhenSpaceIsLimited ?? false;
-		this.inlineBreakpoint =
-			options.renderSideBySideInlineBreakpoint ?? diffEditorDefaultOptions.renderSideBySideInlineBreakpoint;
-		this.splitViewResizingEnabled =
-			options.enableSplitViewResizing ?? diffEditorDefaultOptions.enableSplitViewResizing;
+		this.inlineBreakpoint = options.renderSideBySideInlineBreakpoint ?? diffEditorDefaultOptions.renderSideBySideInlineBreakpoint;
+		this.splitViewResizingEnabled = options.enableSplitViewResizing ?? diffEditorDefaultOptions.enableSplitViewResizing;
 		this.defaultSplitViewRatio = options.splitViewDefaultRatio ?? diffEditorDefaultOptions.splitViewDefaultRatio;
 		this.featureOptions = {
 			renderIndicators: options.renderIndicators,
@@ -73,36 +70,23 @@ export class DiffEditorOptions {
 	}
 
 	public get renderIndicators(): boolean {
-		return (
-			this.featureOptions.renderIndicators ?? this.configuration.getValue<boolean>('diffEditor.renderIndicators')
-		);
+		return this.featureOptions.renderIndicators ?? this.configuration.getValue<boolean>('diffEditor.renderIndicators');
 	}
 
 	public get renderMarginRevertIcon(): boolean {
-		return (
-			this.featureOptions.renderMarginRevertIcon ??
-			this.configuration.getValue<boolean>('diffEditor.renderMarginRevertIcon')
-		);
+		return this.featureOptions.renderMarginRevertIcon ?? this.configuration.getValue<boolean>('diffEditor.renderMarginRevertIcon');
 	}
 
 	public get renderGutterMenu(): boolean {
-		return (
-			this.featureOptions.renderGutterMenu ?? this.configuration.getValue<boolean>('diffEditor.renderGutterMenu')
-		);
+		return this.featureOptions.renderGutterMenu ?? this.configuration.getValue<boolean>('diffEditor.renderGutterMenu');
 	}
 
 	public get renderOverviewRuler(): boolean {
-		return (
-			this.featureOptions.renderOverviewRuler ??
-			this.configuration.getValue<boolean>('diffEditor.renderOverviewRuler')
-		);
+		return this.featureOptions.renderOverviewRuler ?? this.configuration.getValue<boolean>('diffEditor.renderOverviewRuler');
 	}
 
 	public get showMoves(): boolean {
-		return (
-			this.featureOptions.experimental?.showMoves ??
-			this.configuration.getValue<boolean>('diffEditor.experimental.showMoves')
-		);
+		return this.featureOptions.experimental?.showMoves ?? this.configuration.getValue<boolean>('diffEditor.experimental.showMoves');
 	}
 
 	public updateOptions(options: IDiffEditorOptions): void {
@@ -116,9 +100,7 @@ export class DiffEditorOptions {
 	}
 
 	public get wordWrap(): NonNullable<IEditorOptions['wordWrap']> {
-		return (
-			this.temporaryWordWrap ?? (this.diffWordWrap === 'inherit' ? this.configuredWordWrap : this.diffWordWrap)
-		);
+		return this.temporaryWordWrap ?? (this.diffWordWrap === 'inherit' ? this.configuredWordWrap : this.diffWordWrap);
 	}
 
 	public get enableSplitViewResizing(): boolean {
@@ -134,15 +116,10 @@ export class DiffEditorOptions {
 	}
 
 	public toggleWordWrap(): void {
-		this.temporaryWordWrap =
-			this.temporaryWordWrap === undefined ? (this.wordWrap === 'off' ? 'on' : 'off') : undefined;
+		this.temporaryWordWrap = this.temporaryWordWrap === undefined ? (this.wordWrap === 'off' ? 'on' : 'off') : undefined;
 	}
 
-	public setViewMode(
-		renderSideBySide: boolean,
-		useInlineViewWhenSpaceIsLimited: boolean,
-		inlineBreakpoint: number,
-	): void {
+	public setViewMode(renderSideBySide: boolean, useInlineViewWhenSpaceIsLimited: boolean, inlineBreakpoint: number): void {
 		if (!Number.isSafeInteger(inlineBreakpoint) || inlineBreakpoint < 0) {
 			throw new RangeError('Diff editor inline breakpoint must be a non-negative integer');
 		}
@@ -167,12 +144,9 @@ function validateOptions(options: DiffEditorWidgetOptions): void {
 	if (!options || typeof options !== 'object' || !isHTMLElement(options.container)) {
 		throw new TypeError('Diff editor widget requires a browser container');
 	}
-	if (!options.model || typeof options.model !== 'object')
-		throw new TypeError('Diff editor widget requires a diff model');
+	if (!options.model || typeof options.model !== 'object') throw new TypeError('Diff editor widget requires a diff model');
 	if (options.lineHeight !== undefined && (!isFiniteNumber(options.lineHeight) || options.lineHeight < 0)) {
-		throw new RangeError(
-			localize('diffEditor.lineHeight.invalid', 'Diff editor line height must be non-negative and finite.'),
-		);
+		throw new RangeError(localize('diffEditor.lineHeight.invalid', 'Diff editor line height must be non-negative and finite.'));
 	}
 	if (options.fontFamily !== undefined && (typeof options.fontFamily !== 'string' || !options.fontFamily.trim())) {
 		throw new TypeError('Diff editor font family must be a non-empty string');
@@ -196,14 +170,9 @@ function validateOptions(options: DiffEditorWidgetOptions): void {
 		['renderOverviewRuler', options.renderOverviewRuler],
 		['experimental.showMoves', options.experimental?.showMoves],
 	] as const) {
-		if (value !== undefined && typeof value !== 'boolean')
-			throw new TypeError(`Diff editor option '${name}' must be boolean`);
+		if (value !== undefined && typeof value !== 'boolean') throw new TypeError(`Diff editor option '${name}' must be boolean`);
 	}
-	if (
-		options.renderSideBySideInlineBreakpoint !== undefined &&
-		(!Number.isSafeInteger(options.renderSideBySideInlineBreakpoint) ||
-			options.renderSideBySideInlineBreakpoint < 0)
-	) {
+	if (options.renderSideBySideInlineBreakpoint !== undefined && (!Number.isSafeInteger(options.renderSideBySideInlineBreakpoint) || options.renderSideBySideInlineBreakpoint < 0)) {
 		throw new RangeError('Diff editor inline breakpoint must be a non-negative integer');
 	}
 	if (options.wordWrap !== undefined && !['off', 'on', 'bounded', 'wordWrapColumn'].includes(options.wordWrap)) {

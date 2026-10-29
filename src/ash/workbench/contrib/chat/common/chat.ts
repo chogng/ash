@@ -15,10 +15,7 @@ export enum AgentSessionsOrientation {
 	SideBySide = 'sideBySide',
 	Stacked = 'stacked',
 }
-export const AgentSessionsOrientationContext = new RawContextKey<AgentSessionsOrientation>(
-	'agentSessionsOrientation',
-	AgentSessionsOrientation.SideBySide,
-);
+export const AgentSessionsOrientationContext = new RawContextKey<AgentSessionsOrientation>('agentSessionsOrientation', AgentSessionsOrientation.SideBySide);
 export const OPEN_CHAT_BROWSER_COMMAND_ID = 'workbench.action.chat.openBrowser';
 export const MOVE_CHAT_TO_EDITOR_COMMAND_ID = 'workbench.action.chat.moveToEditor';
 export const MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID = 'workbench.action.chat.moveToNewWindow';

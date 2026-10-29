@@ -4,11 +4,7 @@ import { localize } from '../../../nls.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { OPEN_EXTENSIONS_COMMAND_ID } from '../../../platform/extensionManagement/common/extensionManagementService.js';
 import { IExtensionApi } from '../../../platform/extensions/common/extensionApi.js';
-import {
-	INotificationService,
-	Severity,
-	type INotificationHandle,
-} from '../../../platform/notification/common/notification.js';
+import { INotificationService, Severity, type INotificationHandle } from '../../../platform/notification/common/notification.js';
 import type { ExtensionClientOperation, ExtensionClientResult } from '../common/extHost.protocol.js';
 
 /** Adapts extension messages to the window's notification owner and returns button selections. */
@@ -23,35 +19,21 @@ export class MainThreadMessageService extends Disposable {
 		super();
 	}
 
-	public async handle(
-		operation: Extract<ExtensionClientOperation, { operation: 'showMessage' }>,
-		extensionId: string,
-		signal: AbortSignal,
-	): Promise<ExtensionClientResult> {
+	public async handle(operation: Extract<ExtensionClientOperation, { operation: 'showMessage' }>, extensionId: string, signal: AbortSignal): Promise<ExtensionClientResult> {
 		const choices = operation.items ?? [];
-		if (
-			choices.length > 16 ||
-			choices.some(item => typeof item !== 'string' || !item.trim() || item.length > 512)
-		) {
+		if (choices.length > 16 || choices.some(item => typeof item !== 'string' || !item.trim() || item.length > 512)) {
 			throw new TypeError('Extension messages require at most 16 non-empty button labels');
 		}
 		let label = extensionId;
 		try {
 			const catalog = await this.extensions.list('cached');
-			label =
-				catalog.extensions.find(extension => extension.id.toLowerCase() === extensionId.toLowerCase())
-					?.displayName || extensionId;
+			label = catalog.extensions.find(extension => extension.id.toLowerCase() === extensionId.toLowerCase())?.displayName || extensionId;
 		} catch {
 			// Catalog failures must not hide the original message; the authenticated identity remains usable.
 		}
 		throwIfCancelled(signal);
 		this.assertNotDisposed();
-		const severity =
-			operation.severity === 'information'
-				? Severity.Info
-				: operation.severity === 'warning'
-					? Severity.Warning
-					: Severity.Error;
+		const severity = operation.severity === 'information' ? Severity.Info : operation.severity === 'warning' ? Severity.Warning : Severity.Error;
 		let select: (index: number | null) => void = () => {};
 		const selection = new Promise<ExtensionClientResult>(resolve => {
 			select = index => resolve({ result: 'selection', index });

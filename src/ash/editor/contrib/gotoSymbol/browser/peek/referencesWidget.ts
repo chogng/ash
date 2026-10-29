@@ -2,12 +2,7 @@ import { defaultButtonStyles } from '../../../../../platform/theme/browser/defau
 import './referencesWidget.css';
 import { h, addDisposableListener, stopEvent } from '../../../../../base/browser/dom.js';
 import { Emitter } from '../../../../../base/common/event.js';
-import {
-	Disposable,
-	DisposableStore,
-	MutableDisposable,
-	type IReference,
-} from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, type IReference } from '../../../../../base/common/lifecycle.js';
 import { extUri } from '../../../../../base/common/resources.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../../nls.js';
@@ -97,9 +92,7 @@ export class ReferenceWidget extends PeekViewWidget {
 			return;
 		}
 		this.setTitle(model.title, model.ariaMessage);
-		const first =
-			model.references.find(reference => extUri.isEqual(reference.uri, this.editor.getModel()!.uri)) ??
-			model.firstReference();
+		const first = model.references.find(reference => extUri.isEqual(reference.uri, this.editor.getModel()!.uri)) ?? model.firstReference();
 		if (first) {
 			await this.setSelection(first);
 		}

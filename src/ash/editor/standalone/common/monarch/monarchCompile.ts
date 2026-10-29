@@ -131,8 +131,6 @@ function copyAction(lexer: ILexer, action: IMonarchLanguageAction): IMonarchLang
 	return {
 		...action,
 		group: action.group?.map(item => copyAction(lexer, item)),
-		cases:
-			action.cases &&
-			Object.fromEntries(Object.entries(action.cases).map(([guard, value]) => [guard, copyAction(lexer, value)])),
+		cases: action.cases && Object.fromEntries(Object.entries(action.cases).map(([guard, value]) => [guard, copyAction(lexer, value)])),
 	};
 }

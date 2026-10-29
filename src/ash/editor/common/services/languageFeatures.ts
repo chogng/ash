@@ -1,10 +1,6 @@
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
-import {
-	type LanguageFeatureRegistry,
-	type LanguageCompletionProviderRegistry,
-	type SyntaxProviderRegistry,
-} from '../languageFeatureRegistry.js';
+import { type LanguageFeatureRegistry, type LanguageCompletionProviderRegistry, type SyntaxProviderRegistry } from '../languageFeatureRegistry.js';
 import type { LanguageSelector } from '../languageSelector.js';
 import type * as languages from '../languages.js';
 
@@ -68,11 +64,7 @@ export interface LanguageProviderBatch {
 	readonly selectionRanges?: readonly LanguageProviderBatchEntry<languages.LanguageSelectionRangeProvider>[];
 	readonly completions?: readonly languages.LanguageCompletionProvider[];
 	readonly hovers?: readonly LanguageProviderBatchEntry<languages.LanguageHoverProvider>[];
-	readonly formatting?: readonly LanguageProviderBatchEntry<
-		| languages.DocumentFormattingEditProvider
-		| languages.DocumentRangeFormattingEditProvider
-		| languages.OnTypeFormattingEditProvider
-	>[];
+	readonly formatting?: readonly LanguageProviderBatchEntry<languages.DocumentFormattingEditProvider | languages.DocumentRangeFormattingEditProvider | languages.OnTypeFormattingEditProvider>[];
 	readonly inlayHints?: readonly LanguageProviderBatchEntry<languages.LanguageInlayHintsProvider>[];
 	readonly linkedEditing?: readonly LanguageProviderBatchEntry<languages.LinkedEditingRangeProvider>[];
 	readonly parameterHints?: readonly LanguageProviderBatchEntry<languages.LanguageParameterHintsProvider>[];

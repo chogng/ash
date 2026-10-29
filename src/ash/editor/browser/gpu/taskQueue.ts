@@ -66,9 +66,7 @@ abstract class TaskQueue extends Disposable implements ITaskQueue {
 			deadlineRemaining = deadline.timeRemaining();
 			if (longestTask * 1.5 > deadlineRemaining) {
 				if (lastDeadlineRemaining - taskDuration < -20) {
-					this._logService.warn(
-						`task queue exceeded allotted deadline by ${Math.abs(Math.round(lastDeadlineRemaining - taskDuration))}ms`,
-					);
+					this._logService.warn(`task queue exceeded allotted deadline by ${Math.abs(Math.round(lastDeadlineRemaining - taskDuration))}ms`);
 				}
 				this._start();
 				return;
@@ -105,9 +103,7 @@ export class IdleTaskQueue extends PriorityTaskQueue {
 	}
 
 	protected override _requestCallback(callback: CallbackWithDeadline): number {
-		return this.useIdleCallback
-			? getActiveWindow().requestIdleCallback(callback)
-			: super._requestCallback(callback);
+		return this.useIdleCallback ? getActiveWindow().requestIdleCallback(callback) : super._requestCallback(callback);
 	}
 
 	protected override _cancelCallback(identifier: number): void {
@@ -166,17 +162,12 @@ class WindowTaskQueue extends Disposable implements ITaskQueue {
 	}
 
 	private request(callback: CallbackWithDeadline): number {
-		const requestIdleCallback = (
-			this.ownerWindow as Window & { requestIdleCallback?: (callback: CallbackWithDeadline) => number }
-		).requestIdleCallback;
-		return requestIdleCallback
-			? requestIdleCallback.call(this.ownerWindow, callback)
-			: this.ownerWindow.setTimeout(() => callback({ timeRemaining: () => 1 }), 0);
+		const requestIdleCallback = (this.ownerWindow as Window & { requestIdleCallback?: (callback: CallbackWithDeadline) => number }).requestIdleCallback;
+		return requestIdleCallback ? requestIdleCallback.call(this.ownerWindow, callback) : this.ownerWindow.setTimeout(() => callback({ timeRemaining: () => 1 }), 0);
 	}
 
 	private cancel(identifier: number): void {
-		const cancelIdleCallback = (this.ownerWindow as Window & { cancelIdleCallback?: (identifier: number) => void })
-			.cancelIdleCallback;
+		const cancelIdleCallback = (this.ownerWindow as Window & { cancelIdleCallback?: (identifier: number) => void }).cancelIdleCallback;
 		if (cancelIdleCallback) cancelIdleCallback.call(this.ownerWindow, identifier);
 		else this.ownerWindow.clearTimeout(identifier);
 	}

@@ -1,12 +1,6 @@
 import type { Event } from '../../../base/common/event.js';
 import type { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
-import {
-	validateInstallRequest,
-	validateUpdateRequest,
-	type UpdateCheckResult,
-	type UpdateReadyResult,
-	type UpdateState,
-} from './updateService.js';
+import { validateInstallRequest, validateUpdateRequest, type UpdateCheckResult, type UpdateReadyResult, type UpdateState } from './updateService.js';
 
 interface UpdateHost {
 	readonly state: UpdateState;

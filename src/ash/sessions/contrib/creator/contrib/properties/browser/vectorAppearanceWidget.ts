@@ -9,14 +9,7 @@ import { loadDesignVectorGeometry, offsetDesignVector } from '../../../browser/d
 import type { DocumentCommands } from '../../../common/commands/documentCommands.js';
 import { flattenDesignVector } from '../../../common/commands/vectorCommands.js';
 import { flattenDesignShapes, type DesignWidthPoint, type DesignEndpoint } from '../../../common/model/document.js';
-import {
-	designPathEditingContours,
-	designPathStrokeContours,
-	fitDesignPathBounds,
-	isDesignVector,
-	withDesignPathContours,
-	type DesignPath,
-} from '../../../common/model/designVector.js';
+import { designPathEditingContours, designPathStrokeContours, fitDesignPathBounds, isDesignVector, withDesignPathContours, type DesignPath } from '../../../common/model/designVector.js';
 import { designWidthPointAt, supportsDesignVariableWidth } from '../../../common/model/designVariableWidth.js';
 import { withDesignVectorNetwork } from '../../../common/model/designVectorNetwork.js';
 import type { DesignSelection } from '../../../common/selection.js';
@@ -27,9 +20,7 @@ export class VectorAppearanceWidget extends Disposable {
 	private readonly updates: (() => void)[] = [];
 	private readonly message: HTMLElement;
 	private running = false;
-	private offset:
-		| { source: DesignPath; version: string; result: DesignPath; amount: number; join: 'miter' | 'round' }
-		| undefined;
+	private offset: { source: DesignPath; version: string; result: DesignPath; amount: number; join: 'miter' | 'round' } | undefined;
 	constructor(
 		private readonly controller: DesignDocumentController,
 		private readonly commands: DocumentCommands,
@@ -40,14 +31,7 @@ export class VectorAppearanceWidget extends Disposable {
 	) {
 		super();
 		this.domNode = h(document, 'div', { className: 'ash-design-property-fields ash-design-property-wide' });
-		const number = (
-			label: string,
-			value: () => number | undefined,
-			change: (value: number) => void,
-			available: () => boolean,
-			min = 0,
-			max?: number,
-		) => {
+		const number = (label: string, value: () => number | undefined, change: (value: number) => void, available: () => boolean, min = 0, max?: number) => {
 			const input = h(document, 'input', {
 				properties: {
 					type: 'number',
@@ -75,9 +59,7 @@ export class VectorAppearanceWidget extends Disposable {
 						return;
 					}
 					if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-						const next =
-							(Number.isFinite(input.valueAsNumber) ? input.valueAsNumber : (value() ?? 0)) +
-							(event.key === 'ArrowUp' ? 1 : -1) * (event.shiftKey ? 10 : 1);
+						const next = (Number.isFinite(input.valueAsNumber) ? input.valueAsNumber : (value() ?? 0)) + (event.key === 'ArrowUp' ? 1 : -1) * (event.shiftKey ? 10 : 1);
 						input.value = String(Math.max(min, Math.min(max ?? Infinity, next)));
 						change(input.valueAsNumber);
 						this.refresh();
@@ -105,11 +87,7 @@ export class VectorAppearanceWidget extends Disposable {
 			() => {
 				const nodes = this.path
 					? designPathEditingContours(this.path).flatMap((contour, ci) =>
-							contour.nodes.filter(
-								(_, i) =>
-									!this.selection.editingVector ||
-									(ci === this.selection.contourIndex && this.selection.nodeIndices.has(i)),
-							),
+							contour.nodes.filter((_, i) => !this.selection.editingVector || (ci === this.selection.contourIndex && this.selection.nodeIndices.has(i))),
 						)
 					: [];
 				const values = new Set(nodes.map(node => node.cornerRadius ?? 0));
@@ -120,16 +98,12 @@ export class VectorAppearanceWidget extends Disposable {
 				if (!path) {
 					return;
 				}
-				const selected = (ci: number, i: number) =>
-					!this.selection.editingVector ||
-					(ci === this.selection.contourIndex && this.selection.nodeIndices.has(i));
+				const selected = (ci: number, i: number) => !this.selection.editingVector || (ci === this.selection.contourIndex && this.selection.nodeIndices.has(i));
 				if (path.network) {
 					this.commands.vector.update(
 						withDesignVectorNetwork(path, {
 							...path.network,
-							vertices: path.network.vertices.map((node, i) =>
-								selected(0, i) ? { ...node, cornerRadius: radius } : node,
-							),
+							vertices: path.network.vertices.map((node, i) => (selected(0, i) ? { ...node, cornerRadius: radius } : node)),
 						}),
 					);
 				} else {
@@ -138,9 +112,7 @@ export class VectorAppearanceWidget extends Disposable {
 							path,
 							designPathEditingContours(path).map((contour, ci) => ({
 								...contour,
-								nodes: contour.nodes.map((node, i) =>
-									selected(ci, i) ? { ...node, cornerRadius: radius } : node,
-								),
+								nodes: contour.nodes.map((node, i) => (selected(ci, i) ? { ...node, cornerRadius: radius } : node)),
 							})),
 						),
 					);
@@ -160,20 +132,8 @@ export class VectorAppearanceWidget extends Disposable {
 			0,
 			100,
 		);
-		const select = (
-			label: string,
-			options: readonly (readonly [string, string])[],
-			value: () => string,
-			change: (value: string) => void,
-			visible: () => boolean,
-			enabled = () => true,
-		) => {
-			const input = h(
-				document,
-				'select',
-				{ attributes: { 'aria-label': label } },
-				...options.map(([value, label]) => h(document, 'option', { properties: { value } }, label)),
-			);
+		const select = (label: string, options: readonly (readonly [string, string])[], value: () => string, change: (value: string) => void, visible: () => boolean, enabled = () => true) => {
+			const input = h(document, 'select', { attributes: { 'aria-label': label } }, ...options.map(([value, label]) => h(document, 'option', { properties: { value } }, label)));
 			const row = h(document, 'label', { className: 'ash-design-property-wide' }, label, input);
 			this.domNode.append(row);
 			this._register(
@@ -207,10 +167,7 @@ export class VectorAppearanceWidget extends Disposable {
 				}
 			},
 			() => !!this.path,
-			() =>
-				!!this.path &&
-				!this.path.widthPoints?.length &&
-				designPathStrokeContours(this.path).some(contour => contour.closed),
+			() => !!this.path && !this.path.widthPoints?.length && designPathStrokeContours(this.path).some(contour => contour.closed),
 		);
 		const endpointOptions: readonly (readonly [DesignEndpoint, string])[] = [
 			['butt', localize('sessions.design.endpointNone', 'None')],
@@ -223,12 +180,7 @@ export class VectorAppearanceWidget extends Disposable {
 			['circle-arrow', localize('sessions.design.endpointCircle', 'Circle arrow')],
 		];
 		const endpoints = () => (this.path ? designPathEndpoints(this.path) : []);
-		const selectedEnds = () =>
-			endpoints().filter(
-				end =>
-					!this.selection.editingVector ||
-					(end.contour === this.selection.contourIndex && this.selection.nodeIndices.has(end.index)),
-			);
+		const selectedEnds = () => endpoints().filter(end => !this.selection.editingVector || (end.contour === this.selection.contourIndex && this.selection.nodeIndices.has(end.index)));
 		for (const [index, label] of [
 			[0, localize('sessions.design.endpointStart', 'Start endpoint')],
 			[1, localize('sessions.design.endpointEnd', 'End endpoint')],
@@ -271,9 +223,7 @@ export class VectorAppearanceWidget extends Disposable {
 				['start', localize('sessions.design.widthTaperStart', 'Taper start')],
 				['end', localize('sessions.design.widthTaperEnd', 'Taper end')],
 				['custom', localize('sessions.design.widthCustom', 'Custom')],
-			].map(([value, label]) =>
-				h(document, 'option', { properties: { value, disabled: value === 'custom' } }, label),
-			),
+			].map(([value, label]) => h(document, 'option', { properties: { value, disabled: value === 'custom' } }, label)),
 		);
 		const profileRow = h(document, 'label', { className: 'ash-design-property-wide' }, profileLabel, profile);
 		this.domNode.append(profileRow);
@@ -291,12 +241,7 @@ export class VectorAppearanceWidget extends Disposable {
 									id: generateUuid(),
 									contour,
 									position,
-									width:
-										position === 0.5 ||
-										(position === 0 && profile.value === 'end') ||
-										(position === 1 && profile.value === 'start')
-											? 1
-											: 0,
+									width: position === 0.5 || (position === 0 && profile.value === 'end') || (position === 1 && profile.value === 'start') ? 1 : 0,
 								})),
 							);
 				this.commands.vector.update({ ...path, widthPoints });
@@ -321,11 +266,7 @@ export class VectorAppearanceWidget extends Disposable {
 		);
 		this.updates.push(() => {
 			pointRow.hidden = !this.path?.widthPoints?.length || !!this.offset;
-			point.replaceChildren(
-				...(this.path?.widthPoints ?? []).map((value, i) =>
-					h(document, 'option', { properties: { value: value.id } }, String(i + 1)),
-				),
-			);
+			point.replaceChildren(...(this.path?.widthPoints ?? []).map((value, i) => h(document, 'option', { properties: { value: value.id } }, String(i + 1))));
 			point.value = this.widthPoint?.id ?? '';
 			point.disabled = !this.editable;
 		});
@@ -362,18 +303,8 @@ export class VectorAppearanceWidget extends Disposable {
 				document,
 				'select',
 				{ attributes: { 'aria-label': joinLabel } },
-				h(
-					document,
-					'option',
-					{ properties: { value: 'miter' } },
-					localize('sessions.design.vectorSquare', 'Square'),
-				),
-				h(
-					document,
-					'option',
-					{ properties: { value: 'round' } },
-					localize('sessions.design.vectorRound', 'Round'),
-				),
+				h(document, 'option', { properties: { value: 'miter' } }, localize('sessions.design.vectorSquare', 'Square')),
+				h(document, 'option', { properties: { value: 'round' } }, localize('sessions.design.vectorRound', 'Round')),
 			);
 		const joinRow = h(document, 'label', { className: 'ash-design-property-wide' }, joinLabel, join);
 		this.domNode.append(joinRow);
@@ -417,30 +348,20 @@ export class VectorAppearanceWidget extends Disposable {
 		this.domNode.append(this.message);
 	}
 	private get shape() {
-		return this.selection.ids.size === 1
-			? flattenDesignShapes(this.controller.model.value.shapes).find(shape => this.selection.ids.has(shape.id))
-			: undefined;
+		return this.selection.ids.size === 1 ? flattenDesignShapes(this.controller.model.value.shapes).find(shape => this.selection.ids.has(shape.id)) : undefined;
 	}
 	private get path(): DesignPath | undefined {
 		const shape = this.shape;
 		return shape?.kind === 'path' ? shape : undefined;
 	}
 	private get editable(): boolean {
-		return (
-			!this.running &&
-			!this.controller.isBusy &&
-			!!this.shape &&
-			!this.commands.components.isInstanceChild(this.shape.id)
-		);
+		return !this.running && !this.controller.isBusy && !!this.shape && !this.commands.components.isInstanceChild(this.shape.id);
 	}
 	private get canWidth(): boolean {
 		return !!this.path?.strokeWidth && supportsDesignVariableWidth(this.path);
 	}
 	private get widthPoint(): DesignWidthPoint | undefined {
-		return (
-			this.path?.widthPoints?.find(point => this.selection.widthPointIds.has(point.id)) ??
-			this.path?.widthPoints?.[0]
-		);
+		return this.path?.widthPoints?.find(point => this.selection.widthPointIds.has(point.id)) ?? this.path?.widthPoints?.[0];
 	}
 	private editWidth(edit: Partial<DesignWidthPoint>): void {
 		const path = this.path,
@@ -450,17 +371,11 @@ export class VectorAppearanceWidget extends Disposable {
 		}
 		this.commands.vector.update({
 			...path,
-			widthPoints: path.widthPoints!.map(value =>
-				value.id === point.id || this.selection.widthPointIds.has(value.id)
-					? { ...value, ...edit, slope: 0 }
-					: value,
-			),
+			widthPoints: path.widthPoints!.map(value => (value.id === point.id || this.selection.widthPointIds.has(value.id) ? { ...value, ...edit, slope: 0 } : value)),
 		});
 	}
 	public get preview(): DesignPath | undefined {
-		return this.offset?.version === this.controller.model.version && this.shape?.id === this.offset.source.id
-			? this.offset.result
-			: undefined;
+		return this.offset?.version === this.controller.model.version && this.shape?.id === this.offset.source.id ? this.offset.result : undefined;
 	}
 	public cancel(): void {
 		this.offset = undefined;
@@ -478,19 +393,9 @@ export class VectorAppearanceWidget extends Disposable {
 				join,
 				result: contours ? fitDesignPathBounds(withDesignPathContours(state.source, contours)) : state.source,
 			};
-			this.message.textContent =
-				contours?.length === 0
-					? localize(
-							'sessions.design.offsetEmpty',
-							'This offset removes the path. Apply to confirm, or cancel to keep it.',
-						)
-					: '';
+			this.message.textContent = contours?.length === 0 ? localize('sessions.design.offsetEmpty', 'This offset removes the path. Apply to confirm, or cancel to keep it.') : '';
 		} catch (error) {
-			this.message.textContent = localize(
-				'sessions.design.vectorFailed',
-				'Could not calculate the vector: {0}',
-				String(error),
-			);
+			this.message.textContent = localize('sessions.design.vectorFailed', 'Could not calculate the vector: {0}', String(error));
 		}
 	}
 	private applyOffset(): void {
@@ -526,108 +431,62 @@ export class VectorAppearanceWidget extends Disposable {
 			},
 		});
 		return [
-			action(
-				'smoothingIos',
-				localize('sessions.design.smoothingIos', 'iOS smoothing (60%)'),
-				!!this.path && !this.offset,
-				() => {
-					if (this.path) {
-						this.commands.vector.update({ ...this.path, cornerSmoothing: 0.6 });
+			action('smoothingIos', localize('sessions.design.smoothingIos', 'iOS smoothing (60%)'), !!this.path && !this.offset, () => {
+				if (this.path) {
+					this.commands.vector.update({ ...this.path, cornerSmoothing: 0.6 });
+				}
+			}),
+			action('variableWidth', localize('sessions.design.variableWidth', 'Variable width tool'), this.canWidth && !this.offset, () => {
+				this.selection.editingVector = true;
+				this.selection.paintingVector = false;
+				this.selection.editingWidth = !this.selection.editingWidth;
+			}),
+			action('widthAdd', localize('sessions.design.widthAdd', 'Add width point'), this.canWidth && !this.offset && (this.path?.widthPoints?.length ?? 0) < 1000, () => {
+				const path = this.path!;
+				const point = {
+					id: generateUuid(),
+					contour: Math.min(this.selection.contourIndex, designPathStrokeContours(path).length - 1),
+					position: 0.5,
+					...designWidthPointAt(path, Math.min(this.selection.contourIndex, designPathStrokeContours(path).length - 1), 0.5),
+				};
+				this.commands.vector.update({ ...path, widthPoints: [...(path.widthPoints ?? []), point] });
+				this.selection.selectWidth(point.id);
+			}),
+			action('widthRemove', localize('sessions.design.widthRemove', 'Remove width point'), !!this.widthPoint && !this.offset, () => {
+				const id = this.widthPoint!.id;
+				this.commands.vector.update({
+					...this.path!,
+					widthPoints: this.path!.widthPoints!.filter(point => point.id !== id && !this.selection.widthPointIds.has(point.id)),
+				});
+				this.selection.widthPointIds.clear();
+			}),
+			action('vectorOffset', localize('sessions.design.vectorOffset', 'Offset vector'), !!this.shape && isDesignVector(this.shape) && !this.offset, async () => {
+				const shape = this.shape!,
+					version = this.controller.model.version;
+				this.running = true;
+				this.refresh();
+				try {
+					await loadDesignVectorGeometry();
+					if (this.isDisposed || version !== this.controller.model.version || this.shape?.id !== shape.id) {
+						return;
 					}
-				},
-			),
-			action(
-				'variableWidth',
-				localize('sessions.design.variableWidth', 'Variable width tool'),
-				this.canWidth && !this.offset,
-				() => {
-					this.selection.editingVector = true;
-					this.selection.paintingVector = false;
-					this.selection.editingWidth = !this.selection.editingWidth;
-				},
-			),
-			action(
-				'widthAdd',
-				localize('sessions.design.widthAdd', 'Add width point'),
-				this.canWidth && !this.offset && (this.path?.widthPoints?.length ?? 0) < 1000,
-				() => {
-					const path = this.path!;
-					const point = {
-						id: generateUuid(),
-						contour: Math.min(this.selection.contourIndex, designPathStrokeContours(path).length - 1),
-						position: 0.5,
-						...designWidthPointAt(
-							path,
-							Math.min(this.selection.contourIndex, designPathStrokeContours(path).length - 1),
-							0.5,
-						),
-					};
-					this.commands.vector.update({ ...path, widthPoints: [...(path.widthPoints ?? []), point] });
-					this.selection.selectWidth(point.id);
-				},
-			),
-			action(
-				'widthRemove',
-				localize('sessions.design.widthRemove', 'Remove width point'),
-				!!this.widthPoint && !this.offset,
-				() => {
-					const id = this.widthPoint!.id;
-					this.commands.vector.update({
-						...this.path!,
-						widthPoints: this.path!.widthPoints!.filter(
-							point => point.id !== id && !this.selection.widthPointIds.has(point.id),
-						),
-					});
-					this.selection.widthPointIds.clear();
-				},
-			),
-			action(
-				'vectorOffset',
-				localize('sessions.design.vectorOffset', 'Offset vector'),
-				!!this.shape && isDesignVector(this.shape) && !this.offset,
-				async () => {
-					const shape = this.shape!,
-						version = this.controller.model.version;
-					this.running = true;
-					this.refresh();
-					try {
-						await loadDesignVectorGeometry();
-						if (
-							this.isDisposed ||
-							version !== this.controller.model.version ||
-							this.shape?.id !== shape.id
-						) {
-							return;
-						}
-						const source =
-							shape.kind === 'path'
-								? shape
-								: flattenDesignVector(shape, offsetDesignVector(shape, 0, 'miter'));
-						this.offset = { source, result: source, version, amount: 0, join: 'miter' };
-						this.selection.editingWidth = false;
-						this.previewOffset(10);
-					} catch (error) {
-						if (!this.isDisposed) {
-							this.message.textContent = localize(
-								'sessions.design.vectorFailed',
-								'Could not calculate the vector: {0}',
-								String(error),
-							);
-						}
-					} finally {
-						this.running = false;
-						if (!this.isDisposed) {
-							this.refresh();
-						}
+					const source = shape.kind === 'path' ? shape : flattenDesignVector(shape, offsetDesignVector(shape, 0, 'miter'));
+					this.offset = { source, result: source, version, amount: 0, join: 'miter' };
+					this.selection.editingWidth = false;
+					this.previewOffset(10);
+				} catch (error) {
+					if (!this.isDisposed) {
+						this.message.textContent = localize('sessions.design.vectorFailed', 'Could not calculate the vector: {0}', String(error));
 					}
-				},
-			),
-			action('offsetApply', localize('sessions.design.offsetApply', 'Apply offset'), !!this.offset, () =>
-				this.applyOffset(),
-			),
-			action('offsetCancel', localize('sessions.design.offsetCancel', 'Cancel offset'), !!this.offset, () =>
-				this.cancel(),
-			),
+				} finally {
+					this.running = false;
+					if (!this.isDisposed) {
+						this.refresh();
+					}
+				}
+			}),
+			action('offsetApply', localize('sessions.design.offsetApply', 'Apply offset'), !!this.offset, () => this.applyOffset()),
+			action('offsetCancel', localize('sessions.design.offsetCancel', 'Cancel offset'), !!this.offset, () => this.cancel()),
 		];
 	}
 	public update(): void {

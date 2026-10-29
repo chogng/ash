@@ -4,18 +4,9 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { TerminalEditorService } from '../../browser/terminalEditorService.js';
-import {
-	ITerminalService,
-	type ITerminalInstance,
-	type ICreateTerminalOptions,
-	type TerminalInstanceState,
-} from '../../browser/terminal.js';
+import { ITerminalService, type ITerminalInstance, type ICreateTerminalOptions, type TerminalInstanceState } from '../../browser/terminal.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import {
-	IEditorGroupsService,
-	GroupDirection,
-	type IEditorGroup,
-} from '../../../../services/editor/common/editorGroupsService.js';
+import { IEditorGroupsService, GroupDirection, type IEditorGroup } from '../../../../services/editor/common/editorGroupsService.js';
 import { TerminalLocation } from '../../../../../platform/terminal/common/terminal.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -43,10 +34,7 @@ suite('Terminal editor resource boundary', () => {
 	test('incarnations with a reused instance number cannot bind an old resource', () => {
 		const instance = { resource: getTerminalUri('current-session', 1, 'New') };
 		assert.equal(getInstanceFromResource([instance], getTerminalUri('old-session', 1)), undefined);
-		assert.equal(
-			getInstanceFromResource([instance], instance.resource.with({ fragment: 'Old label', query: 'command' })),
-			instance,
-		);
+		assert.equal(getInstanceFromResource([instance], instance.resource.with({ fragment: 'Old label', query: 'command' })), instance);
 	});
 
 	test('rejects forged resource schemes, authorities, IDs and persistence values', () => {
@@ -61,8 +49,7 @@ suite('Terminal editor resource boundary', () => {
 			assert.throws(() => parseTerminalUri(URI.parse(value)), TypeError);
 		}
 		const serializer = new TerminalInputSerializer();
-		for (const value of [null, [], {}, { resource: 3 }, { resource: 'file:/session/1' }])
-			assert.throws(() => serializer.deserialize(value), TypeError);
+		for (const value of [null, [], {}, { resource: 3 }, { resource: 'file:/session/1' }]) assert.throws(() => serializer.deserialize(value), TypeError);
 	});
 });
 
@@ -186,9 +173,7 @@ function splitFixture() {
 			return true;
 		},
 	} as unknown as IEditorGroupsService;
-	const service = lifetime.add(
-		new TerminalEditorService(terminals, { onDidActiveEditorChange: Event.None } as IEditorService, groups),
-	);
+	const service = lifetime.add(new TerminalEditorService(terminals, { onDidActiveEditorChange: Event.None } as IEditorService, groups));
 	return {
 		lifetime,
 		source,
@@ -208,9 +193,7 @@ test('editor terminal split captures the original group and reuses parent launch
 	const f = splitFixture();
 	using lifetime = f.lifetime;
 	assert.equal(await f.service.splitInstance(f.source), f.created);
-	assert.deepEqual(f.requests, [
-		{ config: f.source.shellLaunchConfig, location: { parentTerminal: f.source, viewColumn: 8 } },
-	]);
+	assert.deepEqual(f.requests, [{ config: f.source.shellLaunchConfig, location: { parentTerminal: f.source, viewColumn: 8 } }]);
 	assert.deepEqual(f.closed, []);
 	assert.deepEqual(f.removed, []);
 });

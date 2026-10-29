@@ -32,8 +32,7 @@ class PieceTreeTextBufferFactory implements ITextBufferFactory {
 	}
 
 	getFirstLineText(lengthLimit: number): string {
-		if (!Number.isSafeInteger(lengthLimit) || lengthLimit < 0)
-			throw new RangeError('First-line length limit must be a non-negative safe integer');
+		if (!Number.isSafeInteger(lengthLimit) || lengthLimit < 0) throw new RangeError('First-line length limit must be a non-negative safe integer');
 		return this._chunks
 			.join('')
 			.slice(0, lengthLimit)
@@ -105,24 +104,13 @@ export class PieceTreeTextBufferBuilder implements ITextBufferBuilder {
 		if (!isBasicASCII(chunk)) {
 			this.isBasicASCII = false;
 			if (!this.containsRTL) this.containsRTL = containsRTL(chunk);
-			if (!this.containsUnusualLineTerminators)
-				this.containsUnusualLineTerminators = chunk.includes('\u2028') || chunk.includes('\u2029');
+			if (!this.containsUnusualLineTerminators) this.containsUnusualLineTerminators = chunk.includes('\u2028') || chunk.includes('\u2029');
 		}
 	}
 
 	finish(normalizeEOL = true): PieceTreeTextBufferFactory {
 		this._finish();
-		return new PieceTreeTextBufferFactory(
-			this.chunks,
-			this.BOM,
-			this.cr,
-			this.lf,
-			this.crlf,
-			this.containsRTL,
-			this.containsUnusualLineTerminators,
-			this.isBasicASCII,
-			normalizeEOL,
-		);
+		return new PieceTreeTextBufferFactory(this.chunks, this.BOM, this.cr, this.lf, this.crlf, this.containsRTL, this.containsUnusualLineTerminators, this.isBasicASCII, normalizeEOL);
 	}
 
 	private _finish(): void {
@@ -134,10 +122,7 @@ export class PieceTreeTextBufferBuilder implements ITextBufferBuilder {
 }
 
 /** Selects the private TextBuffer implementation used by TextModel and worker mirrors. */
-export function createPieceTreeTextBuffer(
-	text: string,
-	defaultEOL: DefaultEndOfLine = DefaultEndOfLine.LF,
-): ITextBuffer {
+export function createPieceTreeTextBuffer(text: string, defaultEOL: DefaultEndOfLine = DefaultEndOfLine.LF): ITextBuffer {
 	const builder = new PieceTreeTextBufferBuilder();
 	builder.acceptChunk(text);
 	return builder.finish().create(defaultEOL).textBuffer;

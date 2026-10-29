@@ -3,7 +3,16 @@ import { accentForeground, errorForeground, foreground, successForeground, warni
 
 const owner = 'platform.theme.charts';
 const alias = (id: string, value: string, description: string): string =>
-	registerColor(id, { dark: value, light: value, hcDark: value, hcLight: value }, { description, owner });
+	registerColor(
+		id,
+		{
+			dark: value,
+			light: value,
+			hcDark: value,
+			hcLight: value,
+		},
+		{ description, owner },
+	);
 
 export const chartsForeground = alias('charts.foreground', foreground, 'Chart label foreground.');
 export const chartsLines = registerColor(
@@ -21,12 +30,22 @@ export const chartsBlue = alias('charts.blue', accentForeground, 'Blue chart ser
 export const chartsYellow = alias('charts.yellow', warningForeground, 'Yellow chart series.');
 export const chartsOrange = registerColor(
 	'charts.orange',
-	{ dark: '#d18616', light: '#a65b00', hcDark: '#ffb454', hcLight: '#804400' },
+	{
+		dark: '#d18616',
+		light: '#a65b00',
+		hcDark: '#ffb454',
+		hcLight: '#804400',
+	},
 	{ description: 'Orange chart series.', owner },
 );
 export const chartsGreen = alias('charts.green', successForeground, 'Green chart series.');
 export const chartsPurple = registerColor(
 	'charts.purple',
-	{ dark: '#b180d7', light: '#652d90', hcDark: '#d6a5ff', hcLight: '#652d90' },
+	{
+		dark: '#b180d7',
+		light: '#652d90',
+		hcDark: '#d6a5ff',
+		hcLight: '#652d90',
+	},
 	{ description: 'Purple chart series.', owner },
 );

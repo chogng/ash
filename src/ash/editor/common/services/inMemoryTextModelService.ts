@@ -2,12 +2,7 @@ import { toDisposable, type IDisposable, type IReference } from '../../../base/c
 import type { URI } from '../../../base/common/uri.js';
 import type { ITextModel } from '../model.js';
 import { IModelService, type IModelService as IModelServiceContract } from './model.js';
-import {
-	createResolvedTextEditorModelReference,
-	type IResolvedTextEditorModel,
-	type ITextModelContentProvider,
-	type ITextModelService,
-} from './resolverService.js';
+import { createResolvedTextEditorModelReference, type IResolvedTextEditorModel, type ITextModelContentProvider, type ITextModelService } from './resolverService.js';
 
 /** Resolves standalone models by resource without taking ownership of caller-created models. */
 export class InMemoryTextModelService implements ITextModelService {
@@ -29,8 +24,7 @@ export class InMemoryTextModelService implements ITextModelService {
 	}
 
 	registerTextModelContentProvider(scheme: string, provider: ITextModelContentProvider): IDisposable {
-		if (this.contentProviders.has(scheme))
-			throw new Error(`Text model content provider already registered: ${scheme}`);
+		if (this.contentProviders.has(scheme)) throw new Error(`Text model content provider already registered: ${scheme}`);
 		this.contentProviders.set(scheme, provider);
 		return toDisposable(() => {
 			if (this.contentProviders.get(scheme) === provider) this.contentProviders.delete(scheme);

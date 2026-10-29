@@ -7,12 +7,7 @@ import { OutlineModel } from '../../../../../editor/contrib/documentSymbols/brow
 import { FoldingRangeService } from '../../../../../editor/contrib/folding/common/languageFoldingRanges.js';
 import { createLanguageFeatureRequest } from '../../../../../editor/common/languages.js';
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
-import {
-	AppServerSyntaxProviders,
-	projectAppServerSyntaxFoldingRanges,
-	projectAppServerSyntaxSymbols,
-	syntaxLanguageForEditorLanguage,
-} from '../../browser/appServerSyntaxProviders.js';
+import { AppServerSyntaxProviders, projectAppServerSyntaxFoldingRanges, projectAppServerSyntaxSymbols, syntaxLanguageForEditorLanguage } from '../../browser/appServerSyntaxProviders.js';
 import { createSyntaxWorker, SyntaxProviderWorker } from '../../../../../editor/common/services/editorWebWorker.js';
 
 test('Frontend tokens remain independent of App Server diagnostics, symbols, folds, and selection ranges', async () => {
@@ -54,9 +49,7 @@ test('Frontend tokens remain independent of App Server diagnostics, symbols, fol
 						range: { start: { lineIndex: 1, columnIndex: 2 }, end: { lineIndex: 2, columnIndex: 4 } },
 					},
 				],
-				foldingRanges: [
-					{ range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 3, columnIndex: 1 } } },
-				],
+				foldingRanges: [{ range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 3, columnIndex: 1 } } }],
 				symbols: [
 					{
 						name: 'main',
@@ -105,10 +98,7 @@ test('Frontend tokens remain independent of App Server diagnostics, symbols, fol
 	using folding = new FoldingRangeService(model, languages.foldingRangeProvider);
 	using diagnosticsWorker = new SyntaxProviderWorker(languages.syntaxProvider, undefined, undefined, model);
 
-	const tokens = await syntax.run(
-		{ requestId: 1, lane: 'tokens', payload: { languageId: 'rust' }, snapshot: model.createVersionedSnapshot() },
-		new AbortController().signal,
-	);
+	const tokens = await syntax.run({ requestId: 1, lane: 'tokens', payload: { languageId: 'rust' }, snapshot: model.createVersionedSnapshot() }, new AbortController().signal);
 	assert.equal(analyzeCalls, 0, 'Lexical tokens must not request backend analysis');
 	assert.equal(workerCalls, 1);
 	const diagnostics = await diagnosticsWorker.run(
@@ -123,23 +113,19 @@ test('Frontend tokens remain independent of App Server diagnostics, symbols, fol
 	assert.equal(tokens.lane, 'tokens');
 	assert.equal(diagnostics.lane, 'diagnostics');
 	if (tokens.lane !== 'tokens' || diagnostics.lane !== 'diagnostics') throw new Error('Unexpected lane');
-	const outline = await OutlineModel.create(
-		languages.documentSymbolProvider,
-		model,
-		new AbortController().signal,
-		error => {
-			throw error;
-		},
-	);
+	const outline = await OutlineModel.create(languages.documentSymbolProvider, model, new AbortController().signal, error => {
+		throw error;
+	});
 	const documentSymbols = outline?.getTopLevelSymbols() ?? [];
 	const foldingRanges = await folding.provideFoldingRanges('rust');
 	const signal = new AbortController().signal;
-	const structural = await languages.selectionRangeProvider
-		.ordered(model)[0]!
-		.provideSelectionRanges(
-			{ ...createLanguageFeatureRequest(model, model.getLanguageId(), signal), ranges: [new Range(1, 4, 1, 8)] },
-			signal,
-		);
+	const structural = await languages.selectionRangeProvider.ordered(model)[0]!.provideSelectionRanges(
+		{
+			...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
+			ranges: [new Range(1, 4, 1, 8)],
+		},
+		signal,
+	);
 
 	assert.equal(analyzeCalls, 1);
 	assert.equal(workerCalls, 1);
@@ -153,11 +139,7 @@ test('Frontend tokens remain independent of App Server diagnostics, symbols, fol
 		]),
 		[[1, 1, 1, 3, 'keyword']],
 	);
-	assert.ok(
-		diagnostics.value.diagnostics.some(
-			diagnostic => diagnostic.code === 'syntax-missing' && diagnostic.source === 'ash-syntax',
-		),
-	);
+	assert.ok(diagnostics.value.diagnostics.some(diagnostic => diagnostic.code === 'syntax-missing' && diagnostic.source === 'ash-syntax'));
 	assert.deepEqual(
 		documentSymbols.map(symbol => [symbol.name, symbol.kind]),
 		[['main', 'function']],
@@ -225,10 +207,7 @@ test('App Server parser sessions follow each model revision and release independ
 	const signal = new AbortController().signal;
 	const symbols = async (model: TextModel): Promise<void> => {
 		const provider = languages.documentSymbolProvider.ordered(model)[0]!;
-		await provider.provideDocumentSymbols(
-			createLanguageFeatureRequest(model, model.getLanguageId(), signal),
-			signal,
-		);
+		await provider.provideDocumentSymbols(createLanguageFeatureRequest(model, model.getLanguageId(), signal), signal);
 	};
 
 	await symbols(first);
@@ -245,9 +224,7 @@ test('App Server parser sessions follow each model revision and release independ
 		{ documentId: first.id, revision: 1, text: 'fn first() {}\n' },
 		{ documentId: second.id, revision: 1, text: 'fn second() {}\n' },
 	]);
-	assert.deepEqual(updated, [
-		{ documentId: first.id, previousRevision: 1, revision: first.version, text: 'fn renamed() {}\n' },
-	]);
+	assert.deepEqual(updated, [{ documentId: first.id, previousRevision: 1, revision: first.version, text: 'fn renamed() {}\n' }]);
 	first.dispose();
 	await Promise.resolve();
 	await Promise.resolve();
@@ -289,7 +266,10 @@ test('Selection-only parser sessions close with their editor model', async () =>
 	const stale = createLanguageFeatureRequest(model, model.getLanguageId(), signal);
 	model.setValue('fn renamed() {}\n');
 	await provider.provideSelectionRanges(
-		{ ...createLanguageFeatureRequest(model, model.getLanguageId(), signal), ranges: [new Range(1, 4, 1, 12)] },
+		{
+			...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
+			ranges: [new Range(1, 4, 1, 12)],
+		},
 		signal,
 	);
 	await provider.provideSelectionRanges({ ...stale, ranges: [new Range(1, 4, 1, 12)] }, signal);
@@ -332,8 +312,7 @@ test('oversized intermediate revisions reopen from the current bounded snapshot'
 	});
 	const signal = new AbortController().signal;
 	const provider = languages.documentSymbolProvider.ordered(model)[0]!;
-	const request = () =>
-		provider.provideDocumentSymbols(createLanguageFeatureRequest(model, model.getLanguageId(), signal), signal);
+	const request = () => provider.provideDocumentSymbols(createLanguageFeatureRequest(model, model.getLanguageId(), signal), signal);
 	await request();
 	model.setValue('x'.repeat(4 * 1024 * 1024 + 1));
 	model.setValue('fn compact() {}\n');
@@ -364,9 +343,8 @@ test('syntax document symbols reconstruct containing scopes from unsorted flat p
 		},
 		model.createVersionedSnapshot(),
 	);
-	const names = (
-		entries: readonly import('../../../../../editor/common/languages.js').LanguageDocumentSymbol[],
-	): unknown => entries.map(entry => ({ name: entry.name, children: names(entry.children ?? []) }));
+	const names = (entries: readonly import('../../../../../editor/common/languages.js').LanguageDocumentSymbol[]): unknown =>
+		entries.map(entry => ({ name: entry.name, children: names(entry.children ?? []) }));
 	assert.deepEqual(names(symbols), [
 		{ name: 'outer', children: [{ name: 'inner', children: [{ name: 'leaf', children: [] }] }] },
 		{ name: 'other', children: [] },
@@ -387,9 +365,7 @@ test('syntax folds ending at a line start leave the following heading or propert
 			{ range: { start: { lineIndex: 2, columnIndex: 0 }, end: { lineIndex: 3, columnIndex: 0 } } },
 		],
 	};
-	assert.deepEqual(projectAppServerSyntaxFoldingRanges(result, model.createVersionedSnapshot()), [
-		{ startLineIndex: 0, endLineIndex: 1 },
-	]);
+	assert.deepEqual(projectAppServerSyntaxFoldingRanges(result, model.createVersionedSnapshot()), [{ startLineIndex: 0, endLineIndex: 1 }]);
 });
 
 test('Markdown syntax modules become heading symbols while code modules keep their kind', () => {

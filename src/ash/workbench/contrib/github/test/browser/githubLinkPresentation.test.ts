@@ -7,18 +7,9 @@ import { autorun } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { IAccountService, type AccountState } from '../../../../../platform/accounts/common/accountService.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import {
-	ILinkPresentationService,
-	type ILinkPresentationWatcher,
-} from '../../../../../platform/dataChannel/common/dataChannel.js';
+import { ILinkPresentationService, type ILinkPresentationWatcher } from '../../../../../platform/dataChannel/common/dataChannel.js';
 import { createDisconnectedGitHubService } from '../../../../../platform/github/browser/appServerGitHubService.js';
-import {
-	GitHubError,
-	GitHubErrorCode,
-	IGitHubService,
-	type IGitHubService as GitHubService,
-	type GitHubRepositoryInfo,
-} from '../../../../../platform/github/common/githubService.js';
+import { GitHubError, GitHubErrorCode, IGitHubService, type IGitHubService as GitHubService, type GitHubRepositoryInfo } from '../../../../../platform/github/common/githubService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
@@ -95,10 +86,7 @@ function settled(resources: DisposableStore, watcher: ILinkPresentationWatcher):
 	return new Promise(resolve =>
 		resources.add(
 			autorun(reader => {
-				if (
-					watcher.presentation.read(reader)?.isLoading === false ||
-					watcher.presentation.read(reader)?.status?.kind === 'error'
-				) {
+				if (watcher.presentation.read(reader)?.isLoading === false || watcher.presentation.read(reader)?.status?.kind === 'error') {
 					resolve();
 				}
 			}),
@@ -114,12 +102,9 @@ test('production contribution registers the four GitHub link kinds and prompts o
 			throw new GitHubError(GitHubErrorCode.AuthenticationRequired);
 		},
 	});
-	const kinds = [
-		'https://github.com/team/repo',
-		'https://github.com/team/repo/issues/7',
-		'https://github.com/team/repo/pull/7',
-		`https://github.com/team/repo/commit/${'a'.repeat(40)}`,
-	].map(value => links.getLinkPresentationRule(URI.parse(value))?.kind);
+	const kinds = ['https://github.com/team/repo', 'https://github.com/team/repo/issues/7', 'https://github.com/team/repo/pull/7', `https://github.com/team/repo/commit/${'a'.repeat(40)}`].map(
+		value => links.getLinkPresentationRule(URI.parse(value))?.kind,
+	);
 	assert.deepEqual(kinds, ['repository', 'issue', 'pullRequest', 'commit']);
 	const uri = URI.parse('https://github.com/team/repo');
 	const rule = links.getLinkPresentationRule(uri)!;

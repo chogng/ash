@@ -26,29 +26,19 @@ suite('collaboration browser component', () => {
 				await expect(channel(page, 'general')).toHaveCount(0);
 				await search.press('Escape');
 				await expect(channel(page, 'general')).toBeVisible();
-				await page
-					.getByRole('button', { name: locale === 'en' ? 'Create call' : '创建通话', exact: true })
-					.click();
-				await expect(
-					page.getByRole('list', { name: locale === 'en' ? 'People in this call' : '通话参与者' }),
-				).toContainText(locale === 'en' ? 'Participant 2' : '参与者 2');
+				await page.getByRole('button', { name: locale === 'en' ? 'Create call' : '创建通话', exact: true }).click();
+				await expect(page.getByRole('list', { name: locale === 'en' ? 'People in this call' : '通话参与者' })).toContainText(locale === 'en' ? 'Participant 2' : '参与者 2');
 				expect(await page.evaluate(() => window.ashCollaboration.operations())).toEqual(['local']);
-				await page
-					.getByRole('button', { name: locale === 'en' ? 'Leave call' : '离开通话', exact: true })
-					.click();
+				await page.getByRole('button', { name: locale === 'en' ? 'Leave call' : '离开通话', exact: true }).click();
 				await search.focus();
 				await page.locator('#app').screenshot({ path: browserTests.info.outputPath('collaboration.png') });
 				await page.setViewportSize({ width: 260, height: 650 });
 				await expect(search).toBeVisible();
-				expect(await page.locator('#app').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(
-					true,
-				);
+				expect(await page.locator('#app').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 				await search.focus();
 				const outline = await search.evaluate(element => getComputedStyle(element).outlineStyle);
 				expect(outline).toBe('solid');
-				expect(await page.evaluate(() => window.ashCollaboration.accessible('view'))).toContain(
-					'# projects / ash / desktop',
-				);
+				expect(await page.evaluate(() => window.ashCollaboration.accessible('view'))).toContain('# projects / ash / desktop');
 				expect(await page.evaluate(() => window.ashCollaboration.accessible('help'))).toContain('F2');
 				await page.evaluate(() => window.ashCollaboration.verbosity(false));
 				await expect(page.getByRole('tree')).not.toHaveAttribute('aria-label', /Alt\+F1/);
@@ -86,10 +76,7 @@ suite('collaboration browser component', () => {
 		await expect(channel(page, 'rooms')).toHaveAttribute('aria-expanded', 'true');
 		await expect(page.locator('.collaboration-selection-label')).toHaveText('# rooms / meeting');
 		await expect(page.getByRole('tree')).toBeFocused();
-		await expect(page.getByRole('tree')).toHaveAttribute(
-			'aria-activedescendant',
-			(await meeting.getAttribute('id'))!,
-		);
+		await expect(page.getByRole('tree')).toHaveAttribute('aria-activedescendant', (await meeting.getAttribute('id'))!);
 		await page.keyboard.press('F2');
 		await input.fill('planning');
 		await input.press('Enter');

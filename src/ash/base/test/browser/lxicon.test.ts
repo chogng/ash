@@ -35,10 +35,7 @@ test('native font icons retain their identity through font theme overrides', () 
 		const first = appendIcon(icon, firstDocument.body);
 		const second = appendIcon(icon, secondDocument.body);
 		assert.equal(first.getAttribute('data-ash-icon-id'), 'dialog-error');
-		assert.equal(
-			first.getAttribute('data-ash-icon-character'),
-			(defaultDefinition as { fontCharacter: string }).fontCharacter,
-		);
+		assert.equal(first.getAttribute('data-ash-icon-character'), (defaultDefinition as { fontCharacter: string }).fontCharacter);
 		assert.equal(first.childElementCount, 0);
 		assert.equal(first.textContent, '');
 		assert.equal(first.getAttribute('aria-hidden'), 'true');

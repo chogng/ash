@@ -1,22 +1,12 @@
 import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
-import {
-	DisposableMap,
-	Disposable,
-	MutableDisposable,
-	DisposableStore,
-	type IDisposable,
-	toDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { DisposableMap, Disposable, MutableDisposable, DisposableStore, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { type IWorkingCopy, type IWorkingCopyService } from '../common/workingCopyService.js';
 import { type IWorkingCopyBackupService } from '../common/workingCopyBackupService.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
-import type {
-	TextModelSaveCompletion,
-	TextModelSaveRecoveryContext,
-} from '../../textmodelResolver/common/textModelResourceService.js';
+import type { TextModelSaveCompletion, TextModelSaveRecoveryContext } from '../../textmodelResolver/common/textModelResourceService.js';
 import type { WorkingCopyBackup } from '../common/workingCopyBackupService.js';
 
 const BACKUP_DELAY_MS = 250;
@@ -42,8 +32,7 @@ export class WorkingCopyBackupTracker extends Disposable {
 		private readonly workingCopies: IWorkingCopyService,
 		private readonly backups: IWorkingCopyBackupService,
 		private readonly ownerWindow: Window,
-		private readonly onError: (error: unknown) => void = error =>
-			console.error('Failed to update working-copy backup', error),
+		private readonly onError: (error: unknown) => void = error => console.error('Failed to update working-copy backup', error),
 		private readonly retainRecovery?: (resource: URI) => boolean,
 	) {
 		super();
@@ -65,29 +54,16 @@ export class WorkingCopyBackupTracker extends Disposable {
 		const copies = this.workingCopies.getAll().filter(copy => copy.isDirty || this.timers.get(copy)?.value);
 		const captured = new Set(copies.map(copy => copy.resource.toString()));
 		const remaining = [...this.pendingResources.values()].filter(resource => !captured.has(resource.toString()));
-		return Promise.all([
-			...copies.map(copy => this.persist(copy.resource, copy)),
-			...remaining.map(resource => this.persist(resource)),
-		])
+		return Promise.all([...copies.map(copy => this.persist(copy.resource, copy)), ...remaining.map(resource => this.persist(resource))])
 			.then(() => Promise.all(this.queues.values()))
 			.then(() => undefined);
 	}
 
 	/** A failed post-save discard must leave current recovery content, never an older draft. */
-	public async prepareSave(
-		model: TextModel,
-		signal: AbortSignal,
-		recovery?: TextModelSaveRecoveryContext,
-	): Promise<TextModelSaveCompletion | undefined> {
+	public async prepareSave(model: TextModel, signal: AbortSignal, recovery?: TextModelSaveRecoveryContext): Promise<TextModelSaveCompletion | undefined> {
 		throwIfCancelled(signal);
 		if (this.paused || this.stopped || this.isDisposed) throw new CancellationError();
-		const copy = this.workingCopies
-			.get(model.uri)
-			.find(
-				candidate =>
-					candidate.backupKind === 'text' &&
-					(candidate.isDirty || this.edited.has(candidate) || recovery?.retry),
-			);
+		const copy = this.workingCopies.get(model.uri).find(candidate => candidate.backupKind === 'text' && (candidate.isDirty || this.edited.has(candidate) || recovery?.retry));
 		if (!copy) return undefined;
 		const metadata = { contentType: copy.backupContentType, label: copy.backupLabel };
 		const key = model.uri.toString();
@@ -97,8 +73,7 @@ export class WorkingCopyBackupTracker extends Disposable {
 			generation = this.resourceGenerations.get(key) ?? 0;
 			content = model.getText();
 			await this.persist(model.uri, undefined, () => textBackup(model, metadata));
-			if (generation === (this.resourceGenerations.get(key) ?? 0) && content === model.getText())
-				recovery?.acknowledge(model.version);
+			if (generation === (this.resourceGenerations.get(key) ?? 0) && content === model.getText()) recovery?.acknowledge(model.version);
 			throwIfCancelled(signal);
 			if (this.paused || this.stopped || this.isDisposed) throw new CancellationError();
 		} while (generation !== (this.resourceGenerations.get(key) ?? 0) || content !== model.getText());
@@ -117,9 +92,7 @@ export class WorkingCopyBackupTracker extends Disposable {
 				try {
 					await this.persist(model.uri, undefined, () => {
 						if (model.getText() !== savedText) return textBackup(model, metadata);
-						const dirty = this.workingCopies
-							.get(model.uri)
-							.find(candidate => candidate.isDirty && candidate.backup() !== savedText);
+						const dirty = this.workingCopies.get(model.uri).find(candidate => candidate.isDirty && candidate.backup() !== savedText);
 						return dirty
 							? {
 									resource: dirty.resource,
@@ -137,10 +110,7 @@ export class WorkingCopyBackupTracker extends Disposable {
 					try {
 						await reconcile();
 					} catch (checkpointError) {
-						throw new AggregateError(
-							[error, checkpointError],
-							'Recovery discard and current checkpoint failed',
-						);
+						throw new AggregateError([error, checkpointError], 'Recovery discard and current checkpoint failed');
 					}
 					throw error;
 				}
@@ -150,22 +120,18 @@ export class WorkingCopyBackupTracker extends Disposable {
 
 	/** Whether final content still matches the current registry and working-copy generation. */
 	get isShutdownCurrent(): boolean {
-		return (
-			this.paused && this.shutdownSettled && !this.shutdownFailed && this.drainedGeneration === this.generation
-		);
+		return this.paused && this.shutdownSettled && !this.shutdownFailed && this.drainedGeneration === this.generation;
 	}
 
 	/** Pauses timers, retaining change listeners until the lifecycle reports its overall result. */
 	shutdown(): Promise<void> {
-		if (this.shutdownPromise && (!this.shutdownSettled || this.shutdownFailed || this.isShutdownCurrent))
-			return this.shutdownPromise;
+		if (this.shutdownPromise && (!this.shutdownSettled || this.shutdownFailed || this.isShutdownCurrent)) return this.shutdownPromise;
 		this.assertNotDisposed();
 		this.paused = true;
 		this.shutdownSettled = false;
 		this.shutdownFailed = false;
 		for (const copy of this.workingCopies.getAll()) {
-			if (copy.isDirty || this.timers.get(copy)?.value)
-				this.pendingResources.set(copy.resource.toString(), copy.resource);
+			if (copy.isDirty || this.timers.get(copy)?.value) this.pendingResources.set(copy.resource.toString(), copy.resource);
 			this.cancel(copy);
 		}
 		// Publish before capture: backup serialization can reenter content or registry listeners.
@@ -298,11 +264,7 @@ export class WorkingCopyBackupTracker extends Disposable {
 		this.resourceGenerations.set(key, (this.resourceGenerations.get(key) ?? 0) + 1);
 	}
 
-	private persist(
-		resource: IWorkingCopy['resource'],
-		copy?: IWorkingCopy,
-		capture?: () => WorkingCopyBackup | undefined,
-	): Promise<void> {
+	private persist(resource: IWorkingCopy['resource'], copy?: IWorkingCopy, capture?: () => WorkingCopyBackup | undefined): Promise<void> {
 		for (const candidate of this.workingCopies.get(resource)) this.cancel(candidate);
 		const key = resource.toString();
 		this.pendingResources.delete(key);

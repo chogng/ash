@@ -73,8 +73,7 @@ function cargoManifest(pkg: Package, paths: Map<string, string>, library?: strin
 export async function exportExtensionSdk(sdk: string, project: string, devHost: string): Promise<void> {
 	sdk = resolve(sdk);
 	project = resolve(project);
-	if (sdk === project || sdk.startsWith(project + '/') || project.startsWith(sdk + '/'))
-		throw new Error('SDK and project must be separate directories');
+	if (sdk === project || sdk.startsWith(project + '/') || project.startsWith(sdk + '/')) throw new Error('SDK and project must be separate directories');
 	await fresh(sdk);
 	await fresh(project);
 	if (!(await stat(devHost)).isFile()) throw new Error('Build the native editor_dev example first');
@@ -104,10 +103,7 @@ export async function exportExtensionSdk(sdk: string, project: string, devHost: 
 			await writeFile(resolve(root, 'Cargo.toml'), manifest);
 			await copyFile(resolve(repository, 'LICENSE'), resolve(root, 'LICENSE'));
 		}
-		await writeFile(
-			resolve(sdkStage, 'Cargo.toml'),
-			'[workspace]\nresolver = "2"\nmembers = ["rust", "protocol", "editor-client-build"]\n',
-		);
+		await writeFile(resolve(sdkStage, 'Cargo.toml'), '[workspace]\nresolver = "2"\nmembers = ["rust", "protocol", "editor-client-build"]\n');
 		await writeFile(resolve(sdkStage, 'editor-api.json'), JSON.stringify(api, null, 2) + '\n');
 		await copyFile(resolve(repository, 'LICENSE'), resolve(sdkStage, 'LICENSE'));
 		const require = createRequire(import.meta.url);
@@ -147,16 +143,11 @@ export async function exportExtensionSdk(sdk: string, project: string, devHost: 
 				rolldownOptions: { platform: 'node', external: ['vite', 'typescript', /^node:/u] },
 			},
 		});
-		const chunks = (
-			Array.isArray(output) ? output.flatMap(value => value.output) : 'output' in output ? output.output : []
-		).filter(file => file.type === 'chunk');
+		const chunks = (Array.isArray(output) ? output.flatMap(value => value.output) : 'output' in output ? output.output : []).filter(file => file.type === 'chunk');
 		if (chunks.length !== 1) throw new Error('Development SDK must be one portable entrypoint');
 		await writeFile(resolve(sdkStage, 'dev.mjs'), chunks[0].code);
 		await mkdir(resolve(sdkStage, 'bin'));
-		await copyFile(
-			devHost,
-			resolve(sdkStage, 'bin', process.platform === 'win32' ? 'editor_dev.exe' : 'editor_dev'),
-		);
+		await copyFile(devHost, resolve(sdkStage, 'bin', process.platform === 'win32' ? 'editor_dev.exe' : 'editor_dev'));
 		// Emit declarations only. Runtime implementations remain in the admitted Ash host.
 		const sourcePath = (key: string): string => {
 			const file = resolve(repository, 'src/ash', key.replace(/\.js$/u, '.ts'));
@@ -200,10 +191,7 @@ export async function exportExtensionSdk(sdk: string, project: string, devHost: 
 				.map(symbol => symbol.name)
 				.filter(name => name !== 'default' && !api.modules[key]?.includes(name));
 			const destination = resolve(sdkStage, 'types/api', key.replace(/\.js$/u, '.d.ts'));
-			const internal = relative(
-				dirname(destination),
-				resolve(sdkStage, 'types/internal/src/ash', key),
-			).replaceAll('\\', '/');
+			const internal = relative(dirname(destination), resolve(sdkStage, 'types/internal/src/ash', key)).replaceAll('\\', '/');
 			await mkdir(dirname(destination), { recursive: true });
 			await writeFile(
 				destination,
@@ -211,17 +199,7 @@ export async function exportExtensionSdk(sdk: string, project: string, devHost: 
 			);
 		}
 		const academy = resolve(repository, 'extensions/academy');
-		for (const name of [
-			'src',
-			'browser',
-			'common',
-			'tests',
-			'build.rs',
-			'package.json',
-			'package.nls.json',
-			'package.nls.zh-CN.json',
-			'README.md',
-		])
+		for (const name of ['src', 'browser', 'common', 'tests', 'build.rs', 'package.json', 'package.nls.json', 'package.nls.zh-CN.json', 'README.md'])
 			await cp(resolve(academy, name), resolve(projectStage, name), { recursive: true });
 		await copyFile(resolve(repository, 'LICENSE'), resolve(projectStage, 'LICENSE'));
 		const pkg = metadata.packages.find(pkg => pkg.name === 'ash-academy')!;
@@ -253,21 +231,13 @@ export async function exportExtensionSdk(sdk: string, project: string, devHost: 
 						types: [],
 						paths: { 'ash:editor/*': [`${sdkRelative}/types/api/*`] },
 					},
-					include: [
-						'styles.d.ts',
-						'browser/**/*.ts',
-						'common/**/*.ts',
-						`${sdkRelative}/types/internal/src/typings/thenable.d.ts`,
-					],
+					include: ['styles.d.ts', 'browser/**/*.ts', 'common/**/*.ts', `${sdkRelative}/types/internal/src/typings/thenable.d.ts`],
 				},
 				null,
 				2,
 			) + '\n',
 		);
-		await writeFile(
-			resolve(sdkStage, 'README.md'),
-			await readFile(resolve(repository, 'sdk/docs/development.md'), 'utf8'),
-		);
+		await writeFile(resolve(sdkStage, 'README.md'), await readFile(resolve(repository, 'sdk/docs/development.md'), 'utf8'));
 		await rename(sdkStage, sdk);
 		try {
 			await rename(projectStage, project);
@@ -283,7 +253,6 @@ export async function exportExtensionSdk(sdk: string, project: string, devHost: 
 
 if (process.argv[1] && import.meta.url === pathToFileURL(await realpath(process.argv[1]).catch(() => '')).href) {
 	const [sdk, project, devHost, ...extra] = process.argv.slice(2);
-	if (!sdk || !project || !devHost || extra.length)
-		throw new Error('Usage: extension:sdk <new-sdk-directory> <new-project-directory> <editor_dev-executable>');
+	if (!sdk || !project || !devHost || extra.length) throw new Error('Usage: extension:sdk <new-sdk-directory> <new-project-directory> <editor_dev-executable>');
 	await exportExtensionSdk(sdk, project, resolve(devHost));
 }

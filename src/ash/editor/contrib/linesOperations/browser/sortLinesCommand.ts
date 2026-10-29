@@ -1,11 +1,7 @@
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { Selection } from '../../../common/core/selection.js';
-import {
-	type ICommand,
-	type ICursorStateComputerData,
-	type IEditOperationBuilder,
-} from '../../../common/editorCommon.js';
+import { type ICommand, type ICursorStateComputerData, type IEditOperationBuilder } from '../../../common/editorCommon.js';
 import { type ITextModel } from '../../../common/model.js';
 
 /** Sorts the selected physical lines while preserving the selection. */
@@ -54,10 +50,7 @@ function sortData(model: ITextModel, selection: Selection, descending: boolean):
 	const after = [...before].sort((left, right) => collator.compare(left, right));
 	if (descending) after.reverse();
 	return {
-		range: Range.fromPositions(
-			new Position(startLineNumber, 1),
-			new Position(endLineNumber, model.getLineMaxColumn(endLineNumber)),
-		),
+		range: Range.fromPositions(new Position(startLineNumber, 1), new Position(endLineNumber, model.getLineMaxColumn(endLineNumber))),
 		before,
 		after,
 	};

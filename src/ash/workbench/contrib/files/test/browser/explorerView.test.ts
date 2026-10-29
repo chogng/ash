@@ -20,32 +20,17 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DecorationsService } from '../../../../services/decorations/browser/decorationsService.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import {
-	ConfigurationRegistry,
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationRegistry, Extensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { ExplorerFileNestingSettingId } from '../../common/explorerFileNestingTrie.js';
 import '../../../../services/filesConfiguration/common/filesConfigurationService.js';
 import '../../browser/files.contribution.js';
-import {
-	FileKind,
-	FileNotFoundError,
-	type IFileSystemProvider,
-	type IFileWriteOptions,
-	type IFileWriteResult,
-	FileSystemProviderCapabilities,
-} from '../../../../../platform/files/common/files.js';
+import { FileKind, FileNotFoundError, type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { IResourceIconRenderer } from '../../../../browser/labels.js';
 import { IHoverService, type IManagedHover } from '../../../../../platform/hover/browser/hoverService.js';
 import { ListConfiguration } from '../../../../../platform/list/browser/listService.js';
-import type {
-	EditorOpenOptions,
-	EditorOpenTarget,
-	IEditorService,
-} from '../../../../../workbench/services/editor/common/editorService.js';
+import type { EditorOpenOptions, EditorOpenTarget, IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
@@ -53,10 +38,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
-import type {
-	IContextMenuMenuDelegate,
-	IContextMenuService,
-} from '../../../../../platform/contextview/browser/contextView.js';
+import type { IContextMenuMenuDelegate, IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
@@ -118,28 +100,68 @@ test('ExplorerView opens workspace files on single click', async () => {
 					throw new Error('Workspace files are temporarily unavailable');
 				}
 				return [
-					{ resource: URI.file('/project/README.md'), name: 'README.md', kind: FileKind.File },
+					{
+						resource: URI.file('/project/README.md'),
+						name: 'README.md',
+						kind: FileKind.File,
+					},
 					...(sourceExists
-						? [{ resource: URI.file('/project/src'), name: 'src', kind: FileKind.Directory }]
+						? [
+								{
+									resource: URI.file('/project/src'),
+									name: 'src',
+									kind: FileKind.Directory,
+								},
+							]
 						: []),
 					...(addedRootFile
-						? [{ resource: URI.file('/project/new.txt'), name: 'new.txt', kind: FileKind.File }]
+						? [
+								{
+									resource: URI.file('/project/new.txt'),
+									name: 'new.txt',
+									kind: FileKind.File,
+								},
+							]
 						: []),
 				];
 			}
 			if (resource.toString() === nextRoot.toString()) {
 				return [
-					{ resource: URI.file('/next-project/next.txt'), name: 'next.txt', kind: FileKind.File },
-					{ resource: URI.file('/next-project/link'), name: 'link', kind: FileKind.SymbolicLink },
-					{ resource: URI.file('/next-project/unknown'), name: 'unknown', kind: FileKind.Other },
+					{
+						resource: URI.file('/next-project/next.txt'),
+						name: 'next.txt',
+						kind: FileKind.File,
+					},
+					{
+						resource: URI.file('/next-project/link'),
+						name: 'link',
+						kind: FileKind.SymbolicLink,
+					},
+					{
+						resource: URI.file('/next-project/unknown'),
+						name: 'unknown',
+						kind: FileKind.Other,
+					},
 				];
 			}
 			return [
 				...(mainExists
-					? [{ resource: URI.file('/project/src/main.ts'), name: 'main.ts', kind: mainKind }]
+					? [
+							{
+								resource: URI.file('/project/src/main.ts'),
+								name: 'main.ts',
+								kind: mainKind,
+							},
+						]
 					: []),
 				...(addedNestedFile
-					? [{ resource: URI.file('/project/src/nested.ts'), name: 'nested.ts', kind: FileKind.File }]
+					? [
+							{
+								resource: URI.file('/project/src/nested.ts'),
+								name: 'nested.ts',
+								kind: FileKind.File,
+							},
+						]
 					: []),
 			];
 		},
@@ -174,7 +196,10 @@ test('ExplorerView opens workspace files on single click', async () => {
 		},
 	};
 	using fileService = createTestFileService(fileProvider);
-	using workspaceContextService = new TestWorkspaceService({ id: 'workspace', uri: root });
+	using workspaceContextService = new TestWorkspaceService({
+		id: 'workspace',
+		uri: root,
+	});
 	using activeEditorChanges = new Emitter<void>();
 	let activeEditor: IResourceEditorInput | undefined;
 	const editorService: IEditorService = {
@@ -194,9 +219,7 @@ test('ExplorerView opens workspace files on single click', async () => {
 		},
 	};
 	const configurationRegistry = new ConfigurationRegistry();
-	for (const registered of Registry.as<IConfigurationRegistry>(
-		Extensions.Configuration,
-	).getRegisteredConfigurations()) {
+	for (const registered of Registry.as<IConfigurationRegistry>(Extensions.Configuration).getRegisteredConfigurations()) {
 		configurationRegistry.registerConfiguration({
 			key: registered.key,
 			defaultValue: registered.defaultValue,
@@ -250,7 +273,10 @@ test('ExplorerView opens workspace files on single click', async () => {
 		contexts.setContext('openFolderWorkspaceSupport', true);
 		using emptyView = new EmptyView(
 			browser.window.document.body,
-			{ id: EmptyView.ID, title: EmptyView.TITLE },
+			{
+				id: EmptyView.ID,
+				title: EmptyView.TITLE,
+			},
 			{
 				pickFolderAndOpen: async () => {
 					folderOpens++;
@@ -259,10 +285,7 @@ test('ExplorerView opens workspace files on single click', async () => {
 			contexts,
 		);
 		assert.equal(emptyView.element.dataset.viewId, EmptyView.ID);
-		assert.equal(
-			emptyView.element.querySelector('.ash-empty-explorer-message')?.textContent,
-			'Open a folder to explore its files.',
-		);
+		assert.equal(emptyView.element.querySelector('.ash-empty-explorer-message')?.textContent, 'Open a folder to explore its files.');
 		const openFolderButton = emptyView.element.querySelector<HTMLButtonElement>('.ash-empty-explorer-open-folder');
 		assert.equal(openFolderButton?.textContent, 'Open Folder');
 		openFolderButton?.click();
@@ -272,8 +295,7 @@ test('ExplorerView opens workspace files on single click', async () => {
 		using decorations = new DecorationsService(browser.window.document, new NullLoggerService());
 		using services = new InstantiationService();
 		const getValue = configurationService.getValue.bind(configurationService);
-		configurationService.getValue = ((section?: string) =>
-			section ? getValue(section) : getValue()) as typeof configurationService.getValue;
+		configurationService.getValue = ((section?: string) => (section ? getValue(section) : getValue())) as typeof configurationService.getValue;
 		services.registerInstance(IConfigurationService, configurationService);
 		services.registerInstance(IWorkspaceContextService, workspaceContextService);
 		services.registerInstance(IFileService, fileService);
@@ -300,7 +322,10 @@ test('ExplorerView opens workspace files on single click', async () => {
 		services.registerInstance(IExplorerService, explorerService);
 		using pane = new ExplorerView(
 			browser.window.document.body,
-			{ id: 'ash.explorer', title: 'Explorer' },
+			{
+				id: 'ash.explorer',
+				title: 'Explorer',
+			},
 			fileService,
 			workspaceContextService,
 			editorService,
@@ -329,10 +354,7 @@ test('ExplorerView opens workspace files on single click', async () => {
 
 		await waitFor(() => pane.element.querySelectorAll('.ash-tree-row').length === 2);
 		assert.equal(pane.element.querySelector('.ash-pane-view-header-title')?.textContent, 'project');
-		assert.equal(
-			pane.element.querySelector('.ash-pane-view-header')?.classList.contains('ash-explorer-title'),
-			true,
-		);
+		assert.equal(pane.element.querySelector('.ash-pane-view-header')?.classList.contains('ash-explorer-title'), true);
 		assert.deepEqual(rowLabels(pane.element), ['src', 'README.md']);
 		assert.deepEqual(
 			pane.getActions().map(action => action.id),
@@ -344,30 +366,19 @@ test('ExplorerView opens workspace files on single click', async () => {
 			],
 		);
 		pane.setHeaderVisible(false);
-		assert.equal(
-			pane.element.querySelector('[data-action-id="workbench.files.action.createFileFromExplorer"]'),
-			null,
-		);
+		assert.equal(pane.element.querySelector('[data-action-id="workbench.files.action.createFileFromExplorer"]'), null);
 		assert.equal(pane.getActions().length, 4, 'The merged title keeps the same actions');
 		pane.setHeaderVisible(true);
-		assert.equal(
-			pane.element.querySelectorAll('[data-action-id="workbench.files.action.createFileFromExplorer"]').length,
-			1,
-		);
+		assert.equal(pane.element.querySelectorAll('[data-action-id="workbench.files.action.createFileFromExplorer"]').length, 1);
 		assert.equal(pane.element.querySelector('.ash-icon-label-description'), null);
 		assert.match(explorerService.getAccessibleContent() ?? '', /README\.md/);
 		assert.match(pane.element.querySelector('.ash-tree')?.getAttribute('aria-label') ?? '', /Alt\+F1/);
-		assert.equal(
-			pane.element.querySelector('.ash-explorer .ash-scrollable-element')?.getAttribute('data-scroll-direction'),
-			'vertical',
-		);
+		assert.equal(pane.element.querySelector('.ash-explorer .ash-scrollable-element')?.getAttribute('data-scroll-direction'), 'vertical');
 		assert.equal(pane.element.querySelectorAll('.ash-tree-twistie .ash-icon').length, 1);
 		assert.ok(pane.element.querySelector('.ash-tree-indent-guides-onHover'));
 		assert.equal(pane.element.querySelectorAll('.ash-seti-file-icon').length, 1);
 
-		const sourceFolder = [...pane.element.querySelectorAll<HTMLButtonElement>('.ash-tree-row')].find(
-			row => rowLabel(row) === 'src',
-		);
+		const sourceFolder = [...pane.element.querySelectorAll<HTMLButtonElement>('.ash-tree-row')].find(row => rowLabel(row) === 'src');
 		assert.ok(sourceFolder);
 		pauseSourceRead = true;
 		const oldSelection = explorerService.select(URI.file('/project/src/main.ts'), 'force');
@@ -380,9 +391,7 @@ test('ExplorerView opens workspace files on single click', async () => {
 		await oldSelection;
 		await waitFor(() => pane.element.querySelector<HTMLProgressElement>('progress')?.hidden === true);
 		assert.equal(explorerService.getContext()[0]?.name, 'README.md');
-		pane.element
-			.querySelector('.ash-tree')!
-			.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+		pane.element.querySelector('.ash-tree')!.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
 		assert.equal(explorerService.getContext()[0]?.name, 'README.md');
 		assert.deepEqual(contextMenu?.getActionsContext?.(), []);
 		contextMenu?.onHide?.(true);
@@ -396,65 +405,36 @@ test('ExplorerView opens workspace files on single click', async () => {
 
 		await waitFor(() => rowLabels(pane.element).includes('main.ts'));
 		assert.equal(hoverCreations, 3);
-		const mainRow = [...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(
-			row => rowLabel(row) === 'main.ts',
-		);
+		const mainRow = [...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'main.ts');
 		assert.ok(mainRow);
-		const readmeRow = [...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(
-			row => rowLabel(row) === 'README.md',
-		);
+		const readmeRow = [...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'README.md');
 		assert.ok(readmeRow);
 		assert.equal(mainRow.querySelector('.ash-icon-label-description'), null);
-		assert.equal(
-			mainRow.querySelector('.ash-icon-label')?.getAttribute('aria-label'),
-			isWindows ? 'src\\main.ts' : 'src/main.ts',
-		);
-		assert.equal(
-			sourceFolder.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-with-icon-gap'),
-			true,
-		);
+		assert.equal(mainRow.querySelector('.ash-icon-label')?.getAttribute('aria-label'), isWindows ? 'src\\main.ts' : 'src/main.ts');
+		assert.equal(sourceFolder.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-with-icon-gap'), true);
 		assert.equal(readmeRow.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'), true);
 		assert.equal(mainRow.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'), true);
-		assert.equal(
-			sourceFolder.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'),
-			false,
-		);
+		assert.equal(sourceFolder.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'), false);
 		fileIconTheme = { ...noFileIconTheme };
 		iconChanges.fire();
-		assert.equal(
-			readmeRow.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'),
-			false,
-		);
+		assert.equal(readmeRow.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'), false);
 		fileIconTheme = { ...noFileIconTheme, hasFileIcons: true, hidesExplorerArrows: true };
 		iconChanges.fire();
-		assert.equal(
-			sourceFolder.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'),
-			true,
-		);
+		assert.equal(sourceFolder.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'), true);
 		fileIconTheme = { ...noFileIconTheme, hasFileIcons: true };
 		iconChanges.fire();
-		assert.equal(
-			sourceFolder.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'),
-			false,
-		);
+		assert.equal(sourceFolder.querySelector('.ash-tree-twistie')?.classList.contains('ash-tree-twistie-hidden'), false);
 		assert.equal(readmeRow.isConnected, true);
-		mainRow.dispatchEvent(
-			new browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 12, clientY: 24 }),
-		);
+		mainRow.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 12, clientY: 24 }));
 		assert.equal(contextMenu?.menuId?.id, 'ExplorerContext');
-		assert.equal(
-			(contextMenu?.menuActionOptions?.arg as URI).toString(),
-			URI.file('/project/src/main.ts').toString(),
-		);
+		assert.equal((contextMenu?.menuActionOptions?.arg as URI).toString(), URI.file('/project/src/main.ts').toString());
 		assert.equal(contextMenu?.contextKeyService?.getValue('ashExplorerIsFile'), true);
 		assert.equal(contextMenu?.contextKeyService?.getValue('ashExplorerCanModify'), true);
 		assert.equal(contextMenu?.contextKeyService?.getValue('ashExplorerCanCreate'), false);
 		assert.equal(explorerService.getContext()[0]?.name, 'main.ts');
 		readmeRow.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
 		assert.equal(explorerService.getContext()[0]?.name, 'README.md');
-		pane.element
-			.querySelector<HTMLElement>('.ash-tree')
-			?.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true }));
+		pane.element.querySelector<HTMLElement>('.ash-tree')?.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true }));
 		assert.equal(contextMenu?.menuId?.id, 'ExplorerContext');
 		sourceFolder.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
 		assert.equal(contextMenu?.contextKeyService?.getValue('ashExplorerCanCreate'), true);
@@ -538,8 +518,7 @@ test('ExplorerView opens workspace files on single click', async () => {
 		const observer = new browser.window.MutationObserver(records => {
 			for (const record of records) {
 				for (const node of record.addedNodes) {
-					if (node instanceof browser.window.Element && node.classList.contains('ash-explorer-tree-loading'))
-						loadingStates.push('loading');
+					if (node instanceof browser.window.Element && node.classList.contains('ash-explorer-tree-loading')) loadingStates.push('loading');
 				}
 			}
 		});
@@ -548,30 +527,20 @@ test('ExplorerView opens workspace files on single click', async () => {
 		browser.window.document.body.append(editorFocusTarget);
 		try {
 			editorFocusTarget.focus();
-			for (const resource of [
-				URI.file('/project/README.md'),
-				URI.file('/project/src/main.ts'),
-				URI.file('/project/README.md'),
-				URI.file('/project/src/main.ts'),
-			]) {
+			for (const resource of [URI.file('/project/README.md'), URI.file('/project/src/main.ts'), URI.file('/project/README.md'), URI.file('/project/src/main.ts')]) {
 				directoryReads.length = 0;
 				activeEditor = { resource, label: resource.path.split('/').at(-1)! };
 				activeEditorChanges.fire();
 				await waitFor(() => explorerService.getContext()[0]?.resource.toString() === resource.toString());
 				const selectedRow = pane.element.querySelector<HTMLElement>(`[data-tree-id="${resource.toString()}"]`);
-				assert.equal(
-					pane.element.querySelector('.ash-tree')?.getAttribute('aria-activedescendant'),
-					selectedRow?.id,
-				);
+				assert.equal(pane.element.querySelector('.ash-tree')?.getAttribute('aria-activedescendant'), selectedRow?.id);
 				assert.deepEqual(directoryReads, []);
 				assert.equal(mainRow.querySelector('.ash-icon-label'), mainLabel);
 				assert.equal(sourceFolder.querySelector('.ash-tree-twistie .ash-icon'), folderArrow);
 				assert.equal(browser.window.document.activeElement, editorFocusTarget);
 			}
 			pane.focus();
-			pane.element
-				.querySelector('.ash-tree')
-				?.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
+			pane.element.querySelector('.ash-tree')?.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
 			assert.equal(explorerService.getContext()[0]?.name, 'README.md');
 			const treeElement = pane.element.querySelector<HTMLElement>('.ash-tree')!;
 			treeElement.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'm' }));
@@ -653,12 +622,7 @@ test('ExplorerView opens workspace files on single click', async () => {
 		assert.deepEqual(directoryReads, [URI.file('/project/src').toString()]);
 		await configurationService.updateValue(ExplorerFileNestingSettingId.Patterns, { 'main.ts': 'nested.ts' });
 		await configurationService.updateValue(ExplorerFileNestingSettingId.Enabled, true);
-		await waitFor(
-			() =>
-				pane.element
-					.querySelector('[data-tree-id="file:///project/src/main.ts"]')
-					?.getAttribute('aria-expanded') === 'true',
-		);
+		await waitFor(() => pane.element.querySelector('[data-tree-id="file:///project/src/main.ts"]')?.getAttribute('aria-expanded') === 'true');
 		const nestedGroup = pane.element.querySelector<HTMLElement>('[data-tree-id="file:///project/src/main.ts"]');
 		assert.ok(nestedGroup);
 		nestedGroup.querySelector<HTMLElement>('.ash-tree-twistie')?.click();
@@ -707,19 +671,13 @@ test('ExplorerView opens workspace files on single click', async () => {
 		assert.equal(sourceFolder.getAttribute('aria-expanded'), 'false');
 		assert.deepEqual(rowLabels(pane.element), ['src', 'README.md']);
 		sourceFolder.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true, button: 0, detail: 2 }));
-		const expandedSourceFolder = [...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(
-			row => rowLabel(row) === 'src',
-		);
+		const expandedSourceFolder = [...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'src');
 		assert.ok(expandedSourceFolder);
-		expandedSourceFolder.dispatchEvent(
-			new browser.window.MouseEvent('dblclick', { bubbles: true, button: 0, detail: 2 }),
-		);
+		expandedSourceFolder.dispatchEvent(new browser.window.MouseEvent('dblclick', { bubbles: true, button: 0, detail: 2 }));
 		assert.equal(sourceFolder.getAttribute('aria-expanded'), 'true');
 		assert.deepEqual(rowLabels(pane.element), ['src', 'main.ts', 'README.md']);
 
-		const readme = [...pane.element.querySelectorAll<HTMLButtonElement>('.ash-tree-row')].find(
-			row => rowLabel(row) === 'README.md',
-		);
+		const readme = [...pane.element.querySelectorAll<HTMLButtonElement>('.ash-tree-row')].find(row => rowLabel(row) === 'README.md');
 		assert.ok(readme);
 		readme.click();
 		await waitFor(() => openedInput !== undefined);
@@ -739,9 +697,7 @@ test('ExplorerView opens workspace files on single click', async () => {
 		assert.equal(browser.window.document.activeElement, treeElement);
 		directoryReads.length = 0;
 		addedRootFile = true;
-		const refreshButton = pane.element.querySelector<HTMLButtonElement>(
-			'[data-action-id="workbench.files.action.refreshFilesExplorer"] button',
-		);
+		const refreshButton = pane.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.files.action.refreshFilesExplorer"] button');
 		assert.ok(refreshButton);
 		refreshButton.click();
 		await waitFor(() => rowLabels(pane.element).includes('new.txt'));
@@ -764,11 +720,7 @@ test('ExplorerView opens workspace files on single click', async () => {
 		assert.deepEqual(directoryReads, [root.toString(), URI.file('/project/src').toString()]);
 		failNextRootRead = true;
 		fileChanges.fire({ resources: [root] });
-		await waitFor(
-			() =>
-				pane.element.querySelector('.ash-explorer-error')?.textContent ===
-				'Workspace files are temporarily unavailable',
-		);
+		await waitFor(() => pane.element.querySelector('.ash-explorer-error')?.textContent === 'Workspace files are temporarily unavailable');
 		fileChanges.fire({ resources: [root] });
 		await waitFor(() => pane.element.querySelector('.ash-explorer-error') === null);
 		assert.deepEqual(rowLabels(pane.element), ['src', 'main.ts', 'nested.ts', 'new.txt', 'README.md']);
@@ -777,10 +729,7 @@ test('ExplorerView opens workspace files on single click', async () => {
 		fileChanges.fire({ resources: [URI.file('/project/src/main.ts')] });
 		fileChanges.fire({ resources: [URI.file('/project/src/nested.ts')] });
 		await waitFor(() => directoryReads.length > 0);
-		assert.deepEqual(
-			{ reads: directoryReads, stats: metadataChecks },
-			{ reads: [URI.file('/project/src').toString()], stats: [] },
-		);
+		assert.deepEqual({ reads: directoryReads, stats: metadataChecks }, { reads: [URI.file('/project/src').toString()], stats: [] });
 		directoryReads.length = 0;
 		fileChanges.fire({ resources: [URI.file('/project/src/main.ts')] });
 		await waitFor(() => metadataChecks.length === 1);
@@ -802,7 +751,10 @@ test('ExplorerView opens workspace files on single click', async () => {
 		await waitFor(() => rowLabels(pane.element).includes('main.ts'));
 		assert.deepEqual(
 			{ reads: directoryReads, labels: rowLabels(pane.element) },
-			{ reads: [URI.file('/project/src').toString()], labels: ['src', 'main.ts', 'new.txt', 'README.md'] },
+			{
+				reads: [URI.file('/project/src').toString()],
+				labels: ['src', 'main.ts', 'new.txt', 'README.md'],
+			},
 		);
 
 		directoryReads.length = 0;
@@ -814,62 +766,37 @@ test('ExplorerView opens workspace files on single click', async () => {
 		mainExists = true;
 		mainKind = FileKind.Directory;
 		fileChanges.fire({ resources: [URI.file('/project/src/main.ts')] });
-		await waitFor(
-			() =>
-				pane.element
-					.querySelector('[data-tree-id="file:///project/src/main.ts"]')
-					?.getAttribute('aria-expanded') === 'false',
-		);
+		await waitFor(() => pane.element.querySelector('[data-tree-id="file:///project/src/main.ts"]')?.getAttribute('aria-expanded') === 'false');
 		assert.deepEqual(directoryReads, [URI.file('/project/src').toString()]);
 		directoryReads.length = 0;
 		sourceExists = false;
 		fileChanges.fire({ resources: [URI.file('/project/src')] });
 		await waitFor(() => !rowLabels(pane.element).includes('src'));
-		assert.deepEqual(
-			{ reads: directoryReads, error: pane.element.querySelector('.ash-explorer-error') },
-			{ reads: [root.toString()], error: null },
-		);
+		assert.deepEqual({ reads: directoryReads, error: pane.element.querySelector('.ash-explorer-error') }, { reads: [root.toString()], error: null });
 
-		workspaceContextService.updateWorkspace({ id: 'next-workspace', uri: nextRoot });
-		await waitFor(
-			() =>
-				pane.element.querySelector('.ash-pane-view-header-title')?.textContent === 'next-project' &&
-				rowLabels(pane.element).includes('next.txt'),
-		);
+		workspaceContextService.updateWorkspace({
+			id: 'next-workspace',
+			uri: nextRoot,
+		});
+		await waitFor(() => pane.element.querySelector('.ash-pane-view-header-title')?.textContent === 'next-project' && rowLabels(pane.element).includes('next.txt'));
 		assert.deepEqual(rowLabels(pane.element), ['link', 'next.txt', 'unknown']);
 		const decoratedRows = [...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')];
 		assert.equal(decoratedRows[0]?.querySelector('.ash-icon-label-suffix')?.textContent, '↷');
-		assert.equal(
-			decoratedRows[0]?.querySelector('.ash-icon-label')?.getAttribute('aria-label'),
-			'link, Symbolic Link',
-		);
+		assert.equal(decoratedRows[0]?.querySelector('.ash-icon-label')?.getAttribute('aria-label'), 'link, Symbolic Link');
 		assert.equal(decoratedRows[1]?.querySelector('.ash-icon-label-suffix'), null);
 		assert.equal(decoratedRows[2]?.querySelector('.ash-icon-label-suffix')?.textContent, '?');
-		assert.equal(
-			decoratedRows[2]?.querySelector('.ash-icon-label')?.getAttribute('aria-label'),
-			'unknown, Unknown File Type',
-		);
+		assert.equal(decoratedRows[2]?.querySelector('.ash-icon-label')?.getAttribute('aria-label'), 'unknown, Unknown File Type');
 		using decorationRegistration = decorations.registerDecorationsProvider({
 			label: 'Test status',
 			onDidChange: Event.None,
-			provideDecorations: resource =>
-				resource.path === '/next-project/next.txt'
-					? { color: 'gitDecoration.modifiedResourceForeground', letter: 'M' }
-					: undefined,
+			provideDecorations: resource => (resource.path === '/next-project/next.txt' ? { color: 'gitDecoration.modifiedResourceForeground', letter: 'M' } : undefined),
 		});
-		const nextLabel = () =>
-			[...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')]
-				.find(row => rowLabel(row) === 'next.txt')
-				?.querySelector<HTMLElement>('.ash-icon-label');
+		const nextLabel = () => [...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => rowLabel(row) === 'next.txt')?.querySelector<HTMLElement>('.ash-icon-label');
 		await waitFor(() => nextLabel()?.className.includes('-color') === true);
 		await configurationService.updateValue('explorer.decorations.colors', false);
 		await waitFor(() => nextLabel()?.className.includes('-color') === false);
 		await configurationService.updateValue('explorer.decorations.badges', false);
-		await waitFor(
-			() =>
-				pane.element.querySelectorAll('.ash-icon-label-suffix').length === 0 &&
-				nextLabel()?.className.includes('-badge') === false,
-		);
+		await waitFor(() => pane.element.querySelectorAll('.ash-icon-label-suffix').length === 0 && nextLabel()?.className.includes('-badge') === false);
 		assert.equal(
 			[...pane.element.querySelectorAll<HTMLElement>('.ash-tree-row')]
 				.find(row => rowLabel(row) === 'link')
@@ -935,7 +862,10 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
 		navigator: browser.window.navigator,
 	};
 	for (const [name, value] of Object.entries(globals)) {
-		Object.defineProperty(globalThis, name, { configurable: true, value });
+		Object.defineProperty(globalThis, name, {
+			configurable: true,
+			value,
+		});
 	}
 	return Object.keys(globals);
 }

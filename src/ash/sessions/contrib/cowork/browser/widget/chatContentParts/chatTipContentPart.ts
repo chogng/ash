@@ -11,12 +11,7 @@ import type { IChatTip } from '../../chatTipService.js';
 export class ChatTipContentPart extends Disposable {
 	public readonly domNode: HTMLElement;
 
-	constructor(
-		document: Document,
-		tip: IChatTip,
-		dismiss: () => void,
-		@IMarkdownRendererService markdownRenderer: IMarkdownRendererService,
-	) {
+	constructor(document: Document, tip: IChatTip, dismiss: () => void, @IMarkdownRendererService markdownRenderer: IMarkdownRendererService) {
 		super();
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-cowork-input-tip';

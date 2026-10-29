@@ -8,10 +8,7 @@ import { wrapInReloadableClass1 } from '../../common/wrapInReloadableClass.js';
 import { hotClassGetOriginalInstance } from '../../common/wrapInHotClass.js';
 
 type HotReloadGlobal = typeof globalThis & {
-	$hotReload_applyNewExports?: (request: {
-		readonly oldExports: Record<string, unknown>;
-		readonly newSrc: string;
-	}) => ((newExports: Record<string, unknown>) => boolean) | undefined;
+	$hotReload_applyNewExports?: (request: { readonly oldExports: Record<string, unknown>; readonly newSrc: string }) => ((newExports: Record<string, unknown>) => boolean) | undefined;
 };
 
 test('wrapInReloadableClass1 keeps one caller argument and resolves services for every instance', () => {
@@ -58,13 +55,7 @@ test('wrapInReloadableClass1 keeps one caller argument and resolves services for
 	assert.ok(accept);
 	assert.equal(accept({ InitialContribution: ReplacementContribution }), true);
 	assert.ok(hotClassGetOriginalInstance(contribution) instanceof ReplacementContribution);
-	assert.deepEqual(events, [
-		'initial:production:1',
-		'initial:dispose',
-		'initial:value:2',
-		'initial:dispose',
-		'replacement:value:3',
-	]);
+	assert.deepEqual(events, ['initial:production:1', 'initial:dispose', 'initial:value:2', 'initial:dispose', 'replacement:value:3']);
 	const secondAccept = (globalThis as HotReloadGlobal).$hotReload_applyNewExports?.({
 		oldExports: { InitialContribution: ReplacementContribution },
 		newSrc: 'replacementContribution.ts',
@@ -82,16 +73,7 @@ test('wrapInReloadableClass1 keeps one caller argument and resolves services for
 
 	contribution.dispose();
 	assert.strictEqual(hotClassGetOriginalInstance(contribution), contribution);
-	assert.deepEqual(events, [
-		'initial:production:1',
-		'initial:dispose',
-		'initial:value:2',
-		'initial:dispose',
-		'replacement:value:3',
-		'replacement:dispose',
-		'final:value:4',
-		'final:dispose',
-	]);
+	assert.deepEqual(events, ['initial:production:1', 'initial:dispose', 'initial:value:2', 'initial:dispose', 'replacement:value:3', 'replacement:dispose', 'final:value:4', 'final:dispose']);
 	assert.equal(
 		(globalThis as HotReloadGlobal).$hotReload_applyNewExports?.({
 			oldExports: { InitialContribution: FinalContribution },

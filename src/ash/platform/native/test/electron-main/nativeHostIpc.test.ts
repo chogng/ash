@@ -6,35 +6,21 @@ import { Emitter } from '../../../../base/common/event.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { colorSchemeChannel } from '../../electron-main/nativeHostIpc.js';
 import type { IColorScheme } from '../../../window/common/window.js';
-import {
-	WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL,
-	type IWindowAlwaysOnTopChangedEvent,
-} from '../../../window/common/window.js';
+import { WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL, type IWindowAlwaysOnTopChangedEvent } from '../../../window/common/window.js';
 import { isAdmin } from '../../electron-main/nativeHostMainService.js';
 import { nativeHostIpcRoutes, type INativeHostMainService } from '../../electron-main/nativeHostIpc.js';
-import {
-	NATIVE_HOST_IS_ADMIN_CHANNEL,
-	NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL,
-	NATIVE_HOST_OPEN_WORKSPACE_CHANNEL,
-} from '../../common/nativeHost.js';
+import { NATIVE_HOST_IS_ADMIN_CHANNEL, NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, NATIVE_HOST_OPEN_WORKSPACE_CHANNEL } from '../../common/nativeHost.js';
 import type { BrowserWindow } from 'electron';
 import type { MessageBoxReturnValue } from '../../../../base/parts/sandbox/common/electronTypes.js';
 import type { ISandboxGlobals } from '../../../../base/parts/sandbox/electron-browser/sandboxTypes.js';
 import type { IMainProcessService } from '../../../ipc/common/mainProcessService.js';
 import { DialogMainService } from '../../../dialogs/electron-main/dialogMainService.js';
-import {
-	validateNativeDialogOperation,
-	validateOpenDialogResult,
-	validateSaveDialogResult,
-	validateMessageBoxResult,
-} from '../../common/nativeHost.js';
+import { validateNativeDialogOperation, validateOpenDialogResult, validateSaveDialogResult, validateMessageBoxResult } from '../../common/nativeHost.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
 test('window frame reads use the creation value and reject renderer arguments', async () => {
-	const route = nativeHostIpcRoutes({ getTitleBarStyle: () => 'custom' } as INativeHostMainService).find(
-		route => route.channel === 'ash:native-host:get-title-bar-style',
-	)!;
+	const route = nativeHostIpcRoutes({ getTitleBarStyle: () => 'custom' } as INativeHostMainService).find(route => route.channel === 'ash:native-host:get-title-bar-style')!;
 	assert.throws(() => route.validate({ titleBarStyle: 'system' }), /no arguments/);
 	assert.equal(await route.invoke(route.validate(undefined)), 'custom');
 });
@@ -81,20 +67,11 @@ test('the Main color channel exposes only its named read and change event withou
 	});
 	assert.deepEqual(await channel.call('window:1', 'getOSColorScheme'), scheme);
 	await assert.rejects(channel.call('window:1', 'saveWindowTheme'), /Invalid system color scheme read/);
-	await assert.rejects(
-		channel.call('window:1', 'getOSColorScheme', { windowId: 2 }),
-		/Invalid system color scheme read/,
-	);
+	await assert.rejects(channel.call('window:1', 'getOSColorScheme', { windowId: 2 }), /Invalid system color scheme read/);
 	assert.throws(() => channel.listen('window:1', 'unknown'), /Invalid system color scheme subscription/);
-	assert.throws(
-		() => channel.listen('window:1', 'onDidChangeColorScheme', true),
-		/Invalid system color scheme subscription/,
-	);
+	assert.throws(() => channel.listen('window:1', 'onDidChangeColorScheme', true), /Invalid system color scheme subscription/);
 	const received: IColorScheme[] = [];
-	using subscription = channel.listen<IColorScheme>(
-		'window:1',
-		'onDidChangeColorScheme',
-	)(value => received.push(value));
+	using subscription = channel.listen<IColorScheme>('window:1', 'onDidChangeColorScheme')(value => received.push(value));
 	changes.fire(scheme);
 	subscription.dispose();
 	changes.fire({ dark: true, highContrast: false });
@@ -124,22 +101,13 @@ test('Agents Window handoff preserves optional context sources and rejects malfo
 	};
 	await route.invoke(route.validate(options));
 	assert.deepEqual(opened, options);
-	for (const attachment of [
-		{ ...context, resource: 42 },
-		{ ...context, unexpected: true },
-		{ resource: context.resource },
-	]) {
-		assert.throws(
-			() => route.validate({ draft: { ...options.draft, contexts: [attachment] } }),
-			/Invalid Agents Window context/,
-		);
+	for (const attachment of [{ ...context, resource: 42 }, { ...context, unexpected: true }, { resource: context.resource }]) {
+		assert.throws(() => route.validate({ draft: { ...options.draft, contexts: [attachment] } }), /Invalid Agents Window context/);
 	}
 });
 
 test('Agents Window handoff validates inline code reference positions against the message', async () => {
-	const route = nativeHostIpcRoutes({ openAgentsWindow: async () => {} } as INativeHostMainService).find(
-		route => route.channel === NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL,
-	)!;
+	const route = nativeHostIpcRoutes({ openAgentsWindow: async () => {} } as INativeHostMainService).find(route => route.channel === NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL)!;
 	const context = {
 		id: 'selection',
 		kind: 'codeSelection',
@@ -155,31 +123,16 @@ test('Agents Window handoff validates inline code reference positions against th
 	assert.deepEqual(route.validate({ draft: { ...options.draft, contexts: [{ ...context, kind: 'image' }] } }), {
 		draft: { ...options.draft, contexts: [{ ...context, kind: 'image' }] },
 	});
-	for (const reference of [
-		{ start: -1, end: 21 },
-		{ start: 8.5, end: 21 },
-		{ start: 8, end: 22 },
-		{ start: 7, end: 21 },
-		{ start: 8, end: 8 },
-		null,
-		{ start: 8, end: 21, extra: true },
-	]) {
-		assert.throws(
-			() => route.validate({ draft: { ...options.draft, contexts: [{ ...context, reference }] } }),
-			/Invalid Agents Window context reference/,
-		);
+	for (const reference of [{ start: -1, end: 21 }, { start: 8.5, end: 21 }, { start: 8, end: 22 }, { start: 7, end: 21 }, { start: 8, end: 8 }, null, { start: 8, end: 21, extra: true }]) {
+		assert.throws(() => route.validate({ draft: { ...options.draft, contexts: [{ ...context, reference }] } }), /Invalid Agents Window context reference/);
 	}
 });
 
 test('Agents Window handoff accepts validated inline references for folders, sessions and tool configuration', () => {
-	const route = nativeHostIpcRoutes({ openAgentsWindow: async () => {} } as INativeHostMainService).find(
-		route => route.channel === NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL,
-	)!;
+	const route = nativeHostIpcRoutes({ openAgentsWindow: async () => {} } as INativeHostMainService).find(route => route.channel === NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL)!;
 	for (const kind of ['directory', 'session', 'toolSelection', 'instruction', 'registeredSource']) {
 		const context = { id: kind, kind, name: 'context', content: 'snapshot', reference: { start: 7, end: 14 } };
-		assert.doesNotThrow(() =>
-			route.validate({ draft: { mode: 'agent', text: 'Review context please', contexts: [context] } }),
-		);
+		assert.doesNotThrow(() => route.validate({ draft: { mode: 'agent', text: 'Review context please', contexts: [context] } }));
 	}
 });
 
@@ -221,8 +174,7 @@ test('the Renderer Host transports shared dialog options, complete results, and 
 	let frameStyle: unknown = 'custom';
 	let pinListener: ((value: unknown) => void) | undefined;
 	const routes = nativeHostIpcRoutes({
-		getAgentHostEditorState: () =>
-			malformedState ? { ...invitations.getState(), revision: NaN } : invitations.getState(),
+		getAgentHostEditorState: () => (malformedState ? { ...invitations.getState(), revision: NaN } : invitations.getState()),
 		updateAgentHostEditorState: async update => invitations.update(7, update),
 		claimAgentsWindowInvitation: resource => invitations.claim(7, resource),
 		markAgentsWindowInvitationShown: async id => invitations.markShown(7, id),
@@ -357,10 +309,7 @@ test('the Renderer Host transports shared dialog options, complete results, and 
 		assert.equal(mainSignal.aborted, true);
 		finish({ response: 0, checkboxChecked: true });
 		assert.deepEqual(await pending, { response: 1, checkboxChecked: false });
-		assert.deepEqual(
-			await host.showMessageBox({ message: 'Already cancelled', cancelId: 0, signal: controller.signal }),
-			{ response: 0, checkboxChecked: false },
-		);
+		assert.deepEqual(await host.showMessageBox({ message: 'Already cancelled', cancelId: 0, signal: controller.signal }), { response: 0, checkboxChecked: false });
 		assert.equal(messageShows, 1);
 		const withoutCancelButton = new AbortController();
 		const cancellable = host.showMessageBox({
@@ -415,9 +364,7 @@ test('Agents Window handoff keeps terminal snapshots and inline positions in the
 		reference: { start: 7, end: 22 },
 	};
 	const options = { draft: { mode: 'agent', text: 'Review Terminal: Shell ', contexts: [context] } };
-	const route = nativeHostIpcRoutes({ openAgentsWindow: async () => {} } as INativeHostMainService).find(
-		route => route.channel === NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL,
-	)!;
+	const route = nativeHostIpcRoutes({ openAgentsWindow: async () => {} } as INativeHostMainService).find(route => route.channel === NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL)!;
 	assert.deepEqual(route.validate(options), options);
 	assert.throws(
 		() =>
@@ -443,13 +390,7 @@ test('invitation IPC binds ownership to trusted windows and normalizes resources
 	const { AgentsWindowInvitationState } = await import('../../../chat/common/agentsWindowInvitation.js');
 	const { buildOpenSessionLinkUri } = await import('../../../agentHost/common/openSessionLink.js');
 	const channels = await import('../../common/nativeHost.js');
-	const handlers = new Map<
-		string,
-		(
-			event: import('../../../ipc/electron-main/trustedIpcRouter.js').IpcMainInvokeEventLike,
-			params: unknown,
-		) => unknown
-	>();
+	const handlers = new Map<string, (event: import('../../../ipc/electron-main/trustedIpcRouter.js').IpcMainInvokeEventLike, params: unknown) => unknown>();
 	using router = new TrustedIpcRouter({
 		handle: (channel, listener) => {
 			handlers.set(channel, listener);
@@ -480,11 +421,7 @@ test('invitation IPC binds ownership to trusted windows and normalizes resources
 		} as INativeHostMainService);
 	using firstRegistration = router.register(first, routes(1));
 	using secondRegistration = router.register(second, routes(2));
-	const call = (owner: typeof first, channel: string, value?: unknown) =>
-		handlers.get(channel)!(
-			{ sender: owner.webContents, senderFrame: owner.webContents.mainFrame },
-			structuredClone(value),
-		);
+	const call = (owner: typeof first, channel: string, value?: unknown) => handlers.get(channel)!({ sender: owner.webContents, senderFrame: owner.webContents.mainFrame }, structuredClone(value));
 	const resource = buildOpenSessionLinkUri('session', 'thread', 'local').toJSON();
 	const request = { kind: 'request', resource, isNewSession: true, requestSequence: 1 };
 	for (const malformed of [
@@ -503,25 +440,14 @@ test('invitation IPC binds ownership to trusted windows and normalizes resources
 		assert.throws(() => call(first, channels.AGENT_HOST_EDITOR_UPDATE_CHANNEL, malformed));
 	}
 	assert.throws(() => call(target(), channels.AGENT_HOST_EDITOR_UPDATE_CHANNEL, request), /Untrusted/);
-	assert.throws(
-		() =>
-			handlers.get(channels.AGENT_HOST_EDITOR_UPDATE_CHANNEL)!(
-				{ sender: first.webContents, senderFrame: { url: 'file:///trusted.html' } },
-				request,
-			),
-		/main frame/,
-	);
+	assert.throws(() => handlers.get(channels.AGENT_HOST_EDITOR_UPDATE_CHANNEL)!({ sender: first.webContents, senderFrame: { url: 'file:///trusted.html' } }, request), /main frame/);
 	assert.deepEqual(state.getState().sessions, []);
 	await call(first, channels.AGENT_HOST_EDITOR_UPDATE_CHANNEL, request);
 	await call(first, channels.AGENT_HOST_EDITOR_UPDATE_CHANNEL, {
 		kind: 'sessions',
 		sessions: [{ resource, inProgress: true, needsInput: false }],
 	});
-	const claim = (await call(
-		first,
-		channels.AGENTS_WINDOW_INVITATION_CLAIM_CHANNEL,
-		resource,
-	)) as import('../../../chat/common/agentsWindowInvitation.js').IAgentsWindowInvitation;
+	const claim = (await call(first, channels.AGENTS_WINDOW_INVITATION_CLAIM_CHANNEL, resource)) as import('../../../chat/common/agentsWindowInvitation.js').IAgentsWindowInvitation;
 	assert.equal(claim.windowId, 1);
 	await call(second, channels.AGENTS_WINDOW_INVITATION_SHOWN_CHANNEL, claim.id);
 	await call(second, channels.AGENTS_WINDOW_INVITATION_RELEASE_CHANNEL, claim.id);
@@ -546,12 +472,7 @@ test('workspace IPC preserves the new-window policy and validates legacy and str
 		{ root: '/workspace', forceNewWindow: false },
 		{ root: '/clone', forceNewWindow: true },
 	]);
-	for (const value of [
-		'',
-		{ root: '/clone', forceNewWindow: 'true' },
-		{ root: '/clone', other: true },
-		{ root: '/clone\0' },
-	]) {
+	for (const value of ['', { root: '/clone', forceNewWindow: 'true' }, { root: '/clone', other: true }, { root: '/clone\0' }]) {
 		assert.throws(() => route.validate(value), /Invalid workspace request/);
 	}
 	assert.equal(opened.length, 2);
@@ -603,11 +524,7 @@ test('transfer preflight accepts a persistent credential but Main requires detac
 });
 
 test('terminal handoff IPC validates bounded opaque payloads and excludes sender identities', async () => {
-	const {
-		NATIVE_HOST_TERMINAL_MOVE_CHANNEL,
-		NATIVE_HOST_TERMINAL_TAKE_CHANNEL,
-		NATIVE_HOST_TERMINAL_COMPLETE_CHANNEL,
-	} = await import('../../common/nativeHost.js');
+	const { NATIVE_HOST_TERMINAL_MOVE_CHANNEL, NATIVE_HOST_TERMINAL_TAKE_CHANNEL, NATIVE_HOST_TERMINAL_COMPLETE_CHANNEL } = await import('../../common/nativeHost.js');
 	const received: unknown[] = [];
 	const routes = nativeHostIpcRoutes({
 		moveTerminalToWindow: async (...args) => {
@@ -635,10 +552,7 @@ test('terminal handoff IPC validates bounded opaque payloads and excludes sender
 	assert.deepEqual(await take.invoke(take.validate(undefined)), terminalTransfer);
 	const complete = routes.find(route => route.channel === NATIVE_HOST_TERMINAL_COMPLETE_CHANNEL)!;
 	assert.throws(() => complete.validate({ id: 'handoff-1', windowId: 8 }), /Invalid terminal transfer result/);
-	assert.throws(
-		() => complete.validate({ id: 'handoff-1', lease: terminalTransfer.lease }),
-		/Invalid terminal transfer result/,
-	);
+	assert.throws(() => complete.validate({ id: 'handoff-1', lease: terminalTransfer.lease }), /Invalid terminal transfer result/);
 	assert.throws(() => complete.validate({ id: 'handoff-1', error: '' }), /Invalid terminal transfer result/);
 	await complete.invoke(complete.validate({ id: 'handoff-1' }));
 	assert.deepEqual(received[1], { id: 'handoff-1' });
@@ -647,12 +561,7 @@ test('terminal handoff IPC validates bounded opaque payloads and excludes sender
 test('terminal handoff is claimed once by its target and completion resolves only its source', async () => {
 	const { TerminalWindowTransferHost } = await import('../../electron-main/nativeHostMainService.js');
 	const requests: number[] = [];
-	const windows = new Map(
-		[1, 2, 3].map(id => [
-			id,
-			{ workspaceId: 'workspace', remoteAuthority: undefined, requestTransfer: () => requests.push(id) },
-		]),
-	);
+	const windows = new Map([1, 2, 3].map(id => [id, { workspaceId: 'workspace', remoteAuthority: undefined, requestTransfer: () => requests.push(id) }]));
 	using transfers = new TerminalWindowTransferHost({ getWindow: id => windows.get(id), openWindow: async () => 2 });
 	let completed = false;
 	const moving = transfers.move(1, terminalTransfer, 2).then(result => {
@@ -674,10 +583,7 @@ test('terminal handoff is claimed once by its target and completion resolves onl
 
 test('terminal handoff rejects different workspaces or execution hosts and fails on target closure', async () => {
 	const { TerminalWindowTransferHost } = await import('../../electron-main/nativeHostMainService.js');
-	const windows = new Map<
-		number,
-		{ workspaceId: string; remoteAuthority: string | undefined; requestTransfer(): void }
-	>([
+	const windows = new Map<number, { workspaceId: string; remoteAuthority: string | undefined; requestTransfer(): void }>([
 		[1, { workspaceId: 'workspace', remoteAuthority: 'ssh+first', requestTransfer() {} }],
 		[2, { workspaceId: 'other-workspace', remoteAuthority: 'ssh+first', requestTransfer() {} }],
 		[3, { workspaceId: 'workspace', remoteAuthority: 'ssh+second', requestTransfer() {} }],
@@ -721,20 +627,14 @@ test('terminal handoff returns rollback leases and opening errors or expiry rele
 	);
 	transfers.complete(2, { id: terminalTransfer.id, error: 'attach failed', lease: rotated });
 	assert.deepEqual(await moving, { id: terminalTransfer.id, error: 'attach failed', lease: rotated });
-	const expiring = transfers.move(
-		1,
-		{ ...terminalTransfer, lease: { ...terminalTransfer.lease, reconnectGracePeriodMillis: 1_001 } },
-		2,
-	);
+	const expiring = transfers.move(1, { ...terminalTransfer, lease: { ...terminalTransfer.lease, reconnectGracePeriodMillis: 1_001 } }, 2);
 	await assert.rejects(expiring, /timed out/);
 	assert.equal(transfers.take(2), undefined);
 });
 
 test('a claimed terminal handoff completes after the source window exits without rolling back its target', async () => {
 	const { TerminalWindowTransferHost } = await import('../../electron-main/nativeHostMainService.js');
-	const windows = new Map(
-		[1, 2].map(id => [id, { workspaceId: 'workspace', remoteAuthority: undefined, requestTransfer() {} }]),
-	);
+	const windows = new Map([1, 2].map(id => [id, { workspaceId: 'workspace', remoteAuthority: undefined, requestTransfer() {} }]));
 	using transfers = new TerminalWindowTransferHost({ getWindow: id => windows.get(id), openWindow: async () => 2 });
 	const moving = transfers.move(1, terminalTransfer, 2);
 	assert.deepEqual(transfers.take(2), terminalTransfer);

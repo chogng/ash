@@ -1,23 +1,13 @@
 import { defaultButtonStyles } from '../../theme/browser/defaultStyles.js';
 import type { ActionBarOrientation, ActionViewItemProvider } from '../../../base/browser/ui/actionbar/actionbar.js';
 import type { AnchorPosition } from '../../../base/browser/ui/contextview/contextview.js';
-import {
-	ToolBar,
-	type MoreActionsPlacement,
-	type ToolBarPresentation,
-} from '../../../base/browser/ui/toolbar/toolbar.js';
+import { ToolBar, type MoreActionsPlacement, type ToolBarPresentation } from '../../../base/browser/ui/toolbar/toolbar.js';
 import { SubmenuAction, type IAction } from '../../../base/common/actions.js';
 import { Emitter } from '../../../base/common/event.js';
 import type { IContextMenuProvider } from '../../../base/browser/contextmenu.js';
 import type { IContextKeyService } from '../../contextkey/browser/contextKeyService.js';
 import { createActionViewItem, getActionBarActions } from './menuEntryActionViewItem.js';
-import {
-	MenuId,
-	type IMenu,
-	type IMenuActionOptions,
-	type IMenuChangeEvent,
-	type IMenuService,
-} from '../common/actions.js';
+import { MenuId, type IMenu, type IMenuActionOptions, type IMenuChangeEvent, type IMenuService } from '../common/actions.js';
 
 export interface IWorkbenchToolBarOptions {
 	readonly ariaLabel?: string;
@@ -36,11 +26,7 @@ export interface IWorkbenchToolBarOptions {
  * population belongs to MenuWorkbenchToolBar.
  */
 export class WorkbenchToolBar extends ToolBar {
-	constructor(
-		container: HTMLElement,
-		contextMenuProvider: IContextMenuProvider,
-		options: IWorkbenchToolBarOptions = {},
-	) {
+	constructor(container: HTMLElement, contextMenuProvider: IContextMenuProvider, options: IWorkbenchToolBarOptions = {}) {
 		super(container, {
 			buttonStyles: defaultButtonStyles,
 			contextMenuProvider,
@@ -51,8 +37,7 @@ export class WorkbenchToolBar extends ToolBar {
 			moreActionsPlacement: options.moreActionsPlacement,
 			hoverAnchorPosition: options.hoverAnchorPosition,
 			actionViewItemProvider: (action, actionViewItemOptions) =>
-				options.actionViewItemProvider?.(action, actionViewItemOptions) ??
-				createActionViewItem(action, contextMenuProvider, actionViewItemOptions),
+				options.actionViewItemProvider?.(action, actionViewItemOptions) ?? createActionViewItem(action, contextMenuProvider, actionViewItemOptions),
 		});
 	}
 }
@@ -80,13 +65,7 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
 	private menuTrailingActions: readonly IAction[] = [];
 	private readonly menu: IMenu;
 
-	constructor(
-		container: HTMLElement,
-		menuService: IMenuService,
-		contextMenuProvider: IContextMenuProvider,
-		menuId: MenuId,
-		options: IMenuWorkbenchToolBarOptions = {},
-	) {
+	constructor(container: HTMLElement, menuService: IMenuService, contextMenuProvider: IContextMenuProvider, menuId: MenuId, options: IMenuWorkbenchToolBarOptions = {}) {
 		super(container, contextMenuProvider, options);
 		this.leadingActions = options.leadingActions ?? [];
 		this.menuOptions = options.menuOptions;
@@ -117,12 +96,7 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
 
 	private update(event?: IMenuChangeEvent): void {
 		const groups = this.menu.getActions(this.menuOptions);
-		const { primary, secondary } = getActionBarActions(
-			groups,
-			this.toolbarOptions?.primaryGroup,
-			this.toolbarOptions?.shouldInlineSubmenu,
-			this.toolbarOptions?.useSeparatorsInPrimaryActions,
-		);
+		const { primary, secondary } = getActionBarActions(groups, this.toolbarOptions?.primaryGroup, this.toolbarOptions?.shouldInlineSubmenu, this.toolbarOptions?.useSeparatorsInPrimaryActions);
 		const actions = [...this.leadingActions, ...primary];
 		const empty = actions.length === 0 && secondary.length === 0 && this.menuTrailingActions.length === 0;
 		this.element.hidden = empty;

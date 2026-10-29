@@ -5,11 +5,7 @@ import { JSDOM } from 'jsdom';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
-import {
-	ConfigurationScope,
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { createServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
@@ -23,25 +19,12 @@ import { getVisibleViewContextKey } from '../../../workbench/common/contextkeys.
 import { createTestWorkbenchContextKeysHandler } from './testWorkbenchContextKeys.js';
 import { WorkbenchContributionRegistry, WorkbenchPhase } from '../../../workbench/common/contributions.js';
 import { WorkbenchConfiguration } from '../../../workbench/common/configuration.js';
-import {
-	EditorTabSizingConfiguration,
-	EditorTabSizingFixedMinWidthConfiguration,
-	EditorTabSizingFixedMaxWidthConfiguration,
-} from '../../services/editor/common/editorConfiguration.js';
+import { EditorTabSizingConfiguration, EditorTabSizingFixedMinWidthConfiguration, EditorTabSizingFixedMaxWidthConfiguration } from '../../services/editor/common/editorConfiguration.js';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 import { DialogsModel } from '../../../workbench/common/dialogs.js';
-import {
-	getWorkbenchColorTheme,
-	SystemColorThemePreference,
-	WorkbenchThemeRegistry,
-} from '../../../workbench/common/theme.js';
-import {
-	type IView,
-	ViewContainerLocation,
-	WorkbenchViewContainerId,
-	WorkbenchViewRegistry,
-} from '../../../workbench/common/views.js';
+import { getWorkbenchColorTheme, SystemColorThemePreference, WorkbenchThemeRegistry } from '../../../workbench/common/theme.js';
+import { type IView, ViewContainerLocation, WorkbenchViewContainerId, WorkbenchViewRegistry } from '../../../workbench/common/views.js';
 import { DialogResult, DialogSeverity } from '../../../platform/dialogs/common/dialogs.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
@@ -49,7 +32,10 @@ suiteTeardown(() => uriIdentityServices.dispose());
 
 test('workbench context keys describe the current workspace', () => {
 	using contextKeys = new ContextKeyService();
-	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('C:\\project') });
+	using workspace = new TestWorkspaceService({
+		id: 'workspace',
+		uri: URI.file('C:\\project'),
+	});
 	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	const initialChanges: string[][] = [];
 	using listener = contextKeys.onDidChangeContext(event => initialChanges.push([...event.keys].sort()));
@@ -179,11 +165,7 @@ test('workbench configuration resolves registered color themes', () => {
 	assert.equal(colorTheme.defaultValue, SystemColorThemePreference);
 	assert.equal(colorTheme.parse(SystemColorThemePreference), SystemColorThemePreference);
 	assert.equal(colorTheme.parse(lightColorTheme.id), lightColorTheme.id);
-	assert.equal(
-		colorTheme.parse('extension.theme'),
-		'extension.theme',
-		'Themes installed after startup retain their persisted identity',
-	);
+	assert.equal(colorTheme.parse('extension.theme'), 'extension.theme', 'Themes installed after startup retain their persisted identity');
 	assert.equal(getWorkbenchColorTheme(lightColorTheme.id).id, lightColorTheme.id);
 });
 
@@ -217,10 +199,7 @@ test('editor tab style defaults to standard and preserves persisted rounded styl
 
 test('editor tab widths validate sizing modes and fixed bounds before applying persisted values', () => {
 	const sizing = configurationRegistry.getConfiguration(EditorTabSizingConfiguration)!;
-	assert.deepEqual(
-		[sizing.key, sizing.defaultValue, sizing.scope],
-		['workbench.editor.tabSizing', 'fit', ConfigurationScope.WINDOW],
-	);
+	assert.deepEqual([sizing.key, sizing.defaultValue, sizing.scope], ['workbench.editor.tabSizing', 'fit', ConfigurationScope.WINDOW]);
 	assert.deepEqual(
 		['fit', 'shrink', 'fixed'].map(value => sizing.serialize(sizing.parse(value))),
 		['fit', 'shrink', 'fixed'],
@@ -231,10 +210,7 @@ test('editor tab widths validate sizing modes and fixed bounds before applying p
 		[EditorTabSizingFixedMaxWidthConfiguration, 160],
 	] as const) {
 		const width = configurationRegistry.getConfiguration(key)!;
-		assert.deepEqual(
-			[width.defaultValue, width.scope, width.schema],
-			[defaultValue, ConfigurationScope.WINDOW, { type: 'number', minimum: 38 }],
-		);
+		assert.deepEqual([width.defaultValue, width.scope, width.schema], [defaultValue, ConfigurationScope.WINDOW, { type: 'number', minimum: 38 }]);
 		assert.deepEqual(
 			[38, 90.5, 240].map(value => width.serialize(width.parse(value))),
 			[38, 90.5, 240],
@@ -260,10 +236,12 @@ test('dialogs model publishes and settles renderer items', async () => {
 	using model = new DialogsModel();
 	const events: string[] = [];
 	using willShow = model.onWillShowDialog(item => events.push(`show:${item.request.kind}`));
-	using didClose = model.onDidCloseDialog(event =>
-		events.push(event.kind === 'result' ? `close:${event.result.button}` : 'close:error'),
-	);
-	const handle = model.show({ kind: 'message', severity: DialogSeverity.Info, message: 'Saved' });
+	using didClose = model.onDidCloseDialog(event => events.push(event.kind === 'result' ? `close:${event.result.button}` : 'close:error'));
+	const handle = model.show({
+		kind: 'message',
+		severity: DialogSeverity.Info,
+		message: 'Saved',
+	});
 
 	assert.equal(model.dialogs.length, 1);
 	handle.item.close({ button: DialogResult.Primary });
@@ -275,19 +253,20 @@ test('dialogs model publishes and settles renderer items', async () => {
 test('view registrations are ordered and disposed atomically', () => {
 	using registry = new WorkbenchViewRegistry();
 	const changes: string[] = [];
-	using registered = registry.onDidRegisterViews(event =>
-		changes.push(`add:${event.views.map(view => view.id).join(',')}`),
-	);
-	using removed = registry.onDidDeregisterViews(event =>
-		changes.push(`remove:${event.views.map(view => view.id).join(',')}`),
-	);
+	using registered = registry.onDidRegisterViews(event => changes.push(`add:${event.views.map(view => view.id).join(',')}`));
+	using removed = registry.onDidDeregisterViews(event => changes.push(`remove:${event.views.map(view => view.id).join(',')}`));
 	using container = registry.registerViewContainer({
 		id: 'ash.sidebar',
 		title: 'Navigation',
 		location: ViewContainerLocation.Sidebar,
 	});
 	using views = registry.registerViews('ash.sidebar', [
-		{ id: 'ash.search', title: 'Search', order: 20, ctorDescriptor: new SyncDescriptor(TestView, ['ash.search']) },
+		{
+			id: 'ash.search',
+			title: 'Search',
+			order: 20,
+			ctorDescriptor: new SyncDescriptor(TestView, ['ash.search']),
+		},
 		{
 			id: 'ash.explorer',
 			title: 'Explorer',
@@ -329,7 +308,10 @@ test('file views register after their host container', async () => {
 		location: ViewContainerLocation.Sidebar,
 	});
 	const browserEnvironment = new JSDOM('<!doctype html><body></body>');
-	Object.defineProperty(globalThis, 'window', { configurable: true, value: browserEnvironment.window });
+	Object.defineProperty(globalThis, 'window', {
+		configurable: true,
+		value: browserEnvironment.window,
+	});
 	try {
 		const { registerFilesViews } = await import('../../../workbench/contrib/files/browser/explorerViewlet.js');
 		const { EmptyView } = await import('../../../workbench/contrib/files/browser/views/emptyView.js');

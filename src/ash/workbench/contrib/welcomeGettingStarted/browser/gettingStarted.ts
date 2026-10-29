@@ -41,9 +41,7 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 		@IStorageService storageService: IStorageService,
 	) {
 		super(GettingStartedPageId, themeService, storageService);
-		this._register(
-			CommandsRegistry.onDidChangeCommands(() => this.content?.setCloneRepositoryAction(this.cloneAction())),
-		);
+		this._register(CommandsRegistry.onDidChangeCommands(() => this.content?.setCloneRepositoryAction(this.cloneAction())));
 		this._register(
 			this.workspacesService.onDidChangeRecentlyOpened(() => {
 				void this.refreshProjects();
@@ -101,18 +99,11 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 	}
 
 	private cloneAction(): (() => Promise<void>) | undefined {
-		return CommandsRegistry.hasCommand('git.clone') && this.canOpenFolder
-			? () => this.commandService.executeCommand('git.clone')
-			: undefined;
+		return CommandsRegistry.hasCommand('git.clone') && this.canOpenFolder ? () => this.commandService.executeCommand('git.clone') : undefined;
 	}
 
 	private get canOpenFolder(): boolean {
-		return this.contextKeyService.contextMatchesRules(
-			ContextKeyExpr.or(
-				OpenFolderWorkspaceSupportContext.isEqualTo(true),
-				BrowserLocalFolderSupportContext.isEqualTo(true),
-			),
-		);
+		return this.contextKeyService.contextMatchesRules(ContextKeyExpr.or(OpenFolderWorkspaceSupportContext.isEqualTo(true), BrowserLocalFolderSupportContext.isEqualTo(true)));
 	}
 
 	private async refreshProjects(): Promise<void> {
@@ -128,10 +119,7 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 					onRemove: () => this.workspacesService.removeRecentlyOpened([resource]),
 					...(this.canOpenFolder
 						? {
-								onOpen: () =>
-									this.host.openWindow([
-										'workspace' in recent ? { workspaceUri: resource } : { folderUri: resource },
-									]),
+								onOpen: () => this.host.openWindow(['workspace' in recent ? { workspaceUri: resource } : { folderUri: resource }]),
 							}
 						: {}),
 				};

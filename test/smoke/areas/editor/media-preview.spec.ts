@@ -37,9 +37,7 @@ test(
 		if (target.kind === 'browser' && target.appServerMode === 'disabled') {
 			await page.evaluate(
 				async files => {
-					const folder = await (
-						await navigator.storage.getDirectory()
-					).getDirectoryHandle(`media-preview-${crypto.randomUUID()}`, { create: true });
+					const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(`media-preview-${crypto.randomUUID()}`, { create: true });
 					for (const file of files) {
 						const writer = await (await folder.getFileHandle(file.name, { create: true })).createWritable();
 						await writer.write(Uint8Array.from(atob(file.encoded), character => character.charCodeAt(0)));
@@ -52,10 +50,7 @@ test(
 				},
 				files.map(file => ({ name: file.name, encoded: file.bytes.toString('base64') })),
 			);
-			await workbench.editors
-				.groupAt(0)
-				.welcome.getByRole('button', { name: 'Open folder', exact: true })
-				.click();
+			await workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Open folder', exact: true }).click();
 		} else {
 			for (const file of files) {
 				await writeFile(join(testWorkspace.directory, file.name), file.bytes);
@@ -74,9 +69,7 @@ test(
 		await explorer.getByRole('treeitem', { name: 'song.wav', exact: true }).dblclick();
 		const group = workbench.editors.groupAt(0);
 		const audio = group.content.locator('.ash-media-preview:visible audio');
-		await expect(
-			group.title.getByRole('button', { name: 'Select editor: Audio preview', exact: true }),
-		).toBeVisible();
+		await expect(group.title.getByRole('button', { name: 'Select editor: Audio preview', exact: true })).toBeVisible();
 		await expect.poll(() => audio.evaluate(element => (element as HTMLMediaElement).duration)).toBe(2);
 		const audioHandle = await audio.elementHandle();
 		const audioURL = await audio.getAttribute('src');
@@ -86,24 +79,18 @@ test(
 		await audio.press('Space');
 		await expect.poll(() => audio.evaluate(element => (element as HTMLMediaElement).paused)).toBe(true);
 		await audio.press('Alt+F1');
-		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(
-			/Press Space[\s\S]*Closing the tab stops playback/,
-		);
+		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Press Space[\s\S]*Closing the tab stops playback/);
 		await page.keyboard.press('Escape');
 		await expect(audio).toBeFocused();
 		await audio.press('Alt+F2');
-		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(
-			/Audio preview: song.wav[\s\S]*Duration: 2 seconds/,
-		);
+		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Audio preview: song.wav[\s\S]*Duration: 2 seconds/);
 		await page.keyboard.press('Escape');
 		await audio.press('Space');
 		await explorer.getByRole('treeitem', { name: 'movie.webm', exact: true }).dblclick();
 		await expect.poll(() => audioHandle!.evaluate(element => (element as HTMLMediaElement).paused)).toBe(true);
 		const player = group.content.locator('.ash-media-preview:visible video');
 		await expect.poll(() => player.evaluate(element => (element as HTMLVideoElement).videoWidth)).toBe(64);
-		await expect(
-			group.title.getByRole('button', { name: 'Select editor: Video preview', exact: true }),
-		).toBeVisible();
+		await expect(group.title.getByRole('button', { name: 'Select editor: Video preview', exact: true })).toBeVisible();
 		const videoURL = await player.getAttribute('src');
 		await player.focus();
 		await player.press('Space');
@@ -151,9 +138,7 @@ test(
 				const retry = preview.getByRole('button', { name: 'Retry', exact: true });
 				await retry.focus();
 				await retry.press('Enter');
-				await expect
-					.poll(() => player.evaluate(element => Number.isFinite((element as HTMLMediaElement).duration)))
-					.toBe(true);
+				await expect.poll(() => player.evaluate(element => Number.isFinite((element as HTMLMediaElement).duration))).toBe(true);
 				await expect(preview.getByRole('alert')).toBeHidden();
 				await expect(retry).toBeHidden();
 				const url = (await player.getAttribute('src'))!;
@@ -161,21 +146,15 @@ test(
 				try {
 					await player.focus();
 					await player.press('Space');
-					await expect
-						.poll(() => player.evaluate(element => (element as HTMLMediaElement).paused))
-						.toBe(false);
+					await expect.poll(() => player.evaluate(element => (element as HTMLMediaElement).paused)).toBe(false);
 					await player.press('Space');
-					await expect
-						.poll(() => player.evaluate(element => (element as HTMLMediaElement).paused))
-						.toBe(true);
+					await expect.poll(() => player.evaluate(element => (element as HTMLMediaElement).paused)).toBe(true);
 					await player.evaluate(element => {
 						const media = element as HTMLMediaElement;
 						media.currentTime = 0.5;
 						media.volume = 0.4;
 					});
-					await expect
-						.poll(() => player.evaluate(element => (element as HTMLMediaElement).currentTime))
-						.toBeCloseTo(0.5, 1);
+					await expect.poll(() => player.evaluate(element => (element as HTMLMediaElement).currentTime)).toBeCloseTo(0.5, 1);
 					await expect.poll(() => player.evaluate(element => (element as HTMLMediaElement).volume)).toBe(0.4);
 					await testInfo.attach(`${kind}-retry-success`, {
 						body: await preview.screenshot(),
@@ -220,9 +199,7 @@ test(
 						replaced: element !== current,
 						source,
 						sourceAfter: current.src,
-						failureHidden: current
-							.closest('.ash-media-preview')!
-							.querySelector<HTMLElement>('[role="alert"]')!.hidden,
+						failureHidden: current.closest('.ash-media-preview')!.querySelector<HTMLElement>('[role="alert"]')!.hidden,
 					};
 				});
 				expect(staleEvent).toEqual({
@@ -245,10 +222,7 @@ test(
 			await expect
 				.poll(async () => {
 					const evidence = await mediaPreviewEvidence(page);
-					return (
-						evidence.created.every(url => evidence.revoked.includes(url)) &&
-						evidence.liveResources.length === 0
-					);
+					return evidence.created.every(url => evidence.revoked.includes(url)) && evidence.liveResources.length === 0;
 				})
 				.toBe(true);
 			await testInfo.attach('media-lifecycle', {
@@ -281,13 +255,9 @@ test(
 			await page.evaluate(() => window.mediaRetryProbe.pending.get('retry.wav')!());
 			await expect.poll(async () => (await mediaPreviewEvidence(page)).pending).toEqual([]);
 			if (target.appServerMode === 'required') {
-				await expect
-					.poll(async () => (await mediaPreviewEvidence(page)).releasedResources.length)
-					.toBeGreaterThan(beforeRefresh.releasedResources.length);
+				await expect.poll(async () => (await mediaPreviewEvidence(page)).releasedResources.length).toBeGreaterThan(beforeRefresh.releasedResources.length);
 			} else {
-				await expect
-					.poll(async () => (await mediaPreviewEvidence(page)).completedReads.length)
-					.toBeGreaterThan(beforeRefresh.completedReads.length);
+				await expect.poll(async () => (await mediaPreviewEvidence(page)).completedReads.length).toBeGreaterThan(beforeRefresh.completedReads.length);
 			}
 			const evidence = await mediaPreviewEvidence(page);
 			expect({

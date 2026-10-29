@@ -3,12 +3,7 @@ import { localize } from '../../../../nls.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
-import {
-	IDebugAdapterProcessService,
-	type DebugWorkspaceState,
-	type DebugWorkspaceSnapshot,
-	type DebugWorkspaceEdit,
-} from '../../../../platform/debug/common/debugAdapterProcessService.js';
+import { IDebugAdapterProcessService, type DebugWorkspaceState, type DebugWorkspaceSnapshot, type DebugWorkspaceEdit } from '../../../../platform/debug/common/debugAdapterProcessService.js';
 import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
@@ -119,26 +114,18 @@ export class DebugStorage extends Disposable {
 		const current = this.current;
 		const edits = [...changes(domainState(current.state), domainState(state)), ...commands];
 		if (!edits.length) return;
-		if (!this.backend)
-			throw new Error(localize('debug.workspaceUnavailable', 'Debug workspace storage is unavailable.'));
-		if (current.blocked)
-			throw new Error(
-				localize('debug.workspaceBlocked', 'Resolve the debug workspace storage conflict before editing.'),
-			);
+		if (!this.backend) throw new Error(localize('debug.workspaceUnavailable', 'Debug workspace storage is unavailable.'));
+		if (current.blocked) throw new Error(localize('debug.workspaceBlocked', 'Resolve the debug workspace storage conflict before editing.'));
 		current.state = state;
 		const version = ++current.edits;
 		current.pending++;
 		current.queue = current.queue.then(async () => {
-			if (current.blocked || !this.backend || !current.snapshot)
-				throw new Error(localize('debug.workspaceUnavailable', 'Debug workspace storage is unavailable.'));
+			if (current.blocked || !this.backend || !current.snapshot) throw new Error(localize('debug.workspaceUnavailable', 'Debug workspace storage is unavailable.'));
 			const result = await this.backend.editWorkspaceState(current.id, current.snapshot.revision, edits);
 			if (result.status === 'conflict') {
 				current.blocked = true;
 				throw new Error(
-					localize(
-						'debug.workspaceConflict',
-						'Debug workspace definitions changed in another window. Local edits were retained; reopen the workspace to load the saved definitions.',
-					),
+					localize('debug.workspaceConflict', 'Debug workspace definitions changed in another window. Local edits were retained; reopen the workspace to load the saved definitions.'),
 				);
 			}
 			current.snapshot = result.snapshot;
@@ -166,13 +153,7 @@ export class DebugStorage extends Disposable {
 		await queue;
 		if (this.isDisposed || this.current !== current || queue !== current.queue) return;
 		const result = await this.backend.readWorkspaceState(current.id);
-		if (
-			this.isDisposed ||
-			this.current !== current ||
-			queue !== current.queue ||
-			(current.snapshot !== undefined && result.snapshot.revision <= current.snapshot.revision)
-		)
-			return;
+		if (this.isDisposed || this.current !== current || queue !== current.queue || (current.snapshot !== undefined && result.snapshot.revision <= current.snapshot.revision)) return;
 		current.snapshot = result.snapshot;
 		current.state = fromDomain(result.snapshot.state);
 		this.changeEmitter.fire(current.state);
@@ -190,10 +171,7 @@ export class DebugStorage extends Disposable {
 		const legacy = this.storage.get(LEGACY_KEY, StorageScope.WORKSPACE);
 		const decoded: unknown = legacy === undefined ? undefined : JSON.parse(legacy);
 		const state =
-			decoded === undefined ||
-			(decoded && typeof decoded === 'object' && !Array.isArray(decoded) && Object.keys(decoded).length === 0)
-				? EMPTY_STATE
-				: parsePersistedDebugState(decoded);
+			decoded === undefined || (decoded && typeof decoded === 'object' && !Array.isArray(decoded) && Object.keys(decoded).length === 0) ? EMPTY_STATE : parsePersistedDebugState(decoded);
 		const current: WorkspaceRead = {
 			id,
 			state,
@@ -207,28 +185,15 @@ export class DebugStorage extends Disposable {
 		// migrate them or own pending writes to the backend document.
 		if (!this.backend) return current;
 		current.queue = Promise.resolve().then(async () => {
-			const result = await this.backend!.readWorkspaceState(
-				id,
-				legacy === undefined ? undefined : domainState(state),
-			);
+			const result = await this.backend!.readWorkspaceState(id, legacy === undefined ? undefined : domainState(state));
 			if (result.status === 'conflict') {
 				current.blocked = true;
-				throw new Error(
-					localize(
-						'debug.workspaceMigrationConflict',
-						'Existing debug workspace definitions conflict with legacy data. Both copies were retained.',
-					),
-				);
+				throw new Error(localize('debug.workspaceMigrationConflict', 'Existing debug workspace definitions conflict with legacy data. Both copies were retained.'));
 			}
 			current.snapshot = result.snapshot;
 			// Cleanup belongs to the captured storage scope and exact source.
 			// A later workspace or externally changed Memento must remain intact.
-			if (
-				!this.isDisposed &&
-				this.current === current &&
-				legacy !== undefined &&
-				this.storage.get(LEGACY_KEY, StorageScope.WORKSPACE) === legacy
-			) {
+			if (!this.isDisposed && this.current === current && legacy !== undefined && this.storage.get(LEGACY_KEY, StorageScope.WORKSPACE) === legacy) {
 				this.storage.remove(LEGACY_KEY, StorageScope.WORKSPACE);
 			}
 			if (!current.edits) {
@@ -245,11 +210,7 @@ export class DebugStorage extends Disposable {
 	}
 
 	private report(error: unknown): void {
-		this.log.error(
-			'debug.storage',
-			localize('debug.workspaceStorageFailed', 'Debug workspace storage failed.'),
-			error,
-		);
+		this.log.error('debug.storage', localize('debug.workspaceStorageFailed', 'Debug workspace storage failed.'), error);
 	}
 }
 
@@ -301,12 +262,7 @@ function fromDomain(state: DebugWorkspaceState): PersistedDebugState {
 function changes(before: DebugWorkspaceState, after: DebugWorkspaceState): DebugWorkspaceEdit[] {
 	const edits: DebugWorkspaceEdit[] = [];
 	const removed = [...before.breakpoints, ...before.functionBreakpoints, ...before.dataBreakpoints]
-		.filter(
-			point =>
-				![...after.breakpoints, ...after.functionBreakpoints, ...after.dataBreakpoints].some(
-					value => value.id === point.id,
-				),
-		)
+		.filter(point => ![...after.breakpoints, ...after.functionBreakpoints, ...after.dataBreakpoints].some(value => value.id === point.id))
 		.map(point => point.id);
 	if (removed.length) edits.push({ kind: 'remove', ids: removed });
 	const different = (left: unknown, right: unknown) => JSON.stringify(left) !== JSON.stringify(right);
@@ -334,19 +290,15 @@ function changes(before: DebugWorkspaceState, after: DebugWorkspaceState): Debug
 			)
 		)
 			edits.push({ kind: 'data', point });
-	for (const expression of before.watchExpressions)
-		if (!after.watchExpressions.includes(expression)) edits.push({ kind: 'removeWatch', expression });
-	for (const expression of after.watchExpressions)
-		if (!before.watchExpressions.includes(expression)) edits.push({ kind: 'addWatch', expression });
+	for (const expression of before.watchExpressions) if (!after.watchExpressions.includes(expression)) edits.push({ kind: 'removeWatch', expression });
+	for (const expression of after.watchExpressions) if (!before.watchExpressions.includes(expression)) edits.push({ kind: 'addWatch', expression });
 	for (const [adapterType, filters] of Object.entries(after.exceptionBreakpoints))
-		if (different(before.exceptionBreakpoints[adapterType], filters))
-			edits.push({ kind: 'exceptions', adapterType, filters });
+		if (different(before.exceptionBreakpoints[adapterType], filters)) edits.push({ kind: 'exceptions', adapterType, filters });
 	return edits;
 }
 
 function parsePersistedDebugState(value: unknown): PersistedDebugState {
-	if (!value || typeof value !== 'object' || Array.isArray(value))
-		throw new TypeError('Debug workspace state must be an object');
+	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Debug workspace state must be an object');
 	const input = value as Record<string, unknown>;
 	if (input.version !== 1 && input.version !== 2) throw new TypeError('Debug workspace state version is unsupported');
 	if (
@@ -357,27 +309,13 @@ function parsePersistedDebugState(value: unknown): PersistedDebugState {
 		Array.isArray(input.exceptionBreakpoints)
 	)
 		throw new TypeError('Debug workspace state is malformed');
-	const breakpoints = Object.freeze(
-		input.breakpoints.map((candidate, index) => parsePersistedBreakpoint(candidate, index)),
-	);
-	const watchExpressions = Object.freeze(
-		input.watchExpressions.map((candidate, index) =>
-			normalizePersistedString(candidate, `watchExpressions[${index}]`, 32_768),
-		),
-	);
+	const breakpoints = Object.freeze(input.breakpoints.map((candidate, index) => parsePersistedBreakpoint(candidate, index)));
+	const watchExpressions = Object.freeze(input.watchExpressions.map((candidate, index) => normalizePersistedString(candidate, `watchExpressions[${index}]`, 32_768)));
 	const exceptionBreakpoints = Object.freeze(
 		Object.fromEntries(
 			Object.entries(input.exceptionBreakpoints as Record<string, unknown>).map(([type, filters]) => {
-				if (!type || type.length > 128 || !Array.isArray(filters))
-					throw new TypeError('Debug exception breakpoint state is malformed');
-				return [
-					type,
-					Object.freeze(
-						filters.map((filter, index) =>
-							normalizePersistedString(filter, `exceptionBreakpoints.${type}[${index}]`, 256),
-						),
-					),
-				];
+				if (!type || type.length > 128 || !Array.isArray(filters)) throw new TypeError('Debug exception breakpoint state is malformed');
+				return [type, Object.freeze(filters.map((filter, index) => normalizePersistedString(filter, `exceptionBreakpoints.${type}[${index}]`, 256)))];
 			}),
 		),
 	);
@@ -386,8 +324,7 @@ function parsePersistedDebugState(value: unknown): PersistedDebugState {
 	let functionBreakpoints: readonly IFunctionBreakpoint[] = Object.freeze([]);
 	let dataBreakpoints: readonly IDataBreakpoint[] = Object.freeze([]);
 	if (input.version === 2) {
-		if (!Array.isArray(input.functionBreakpoints) || !Array.isArray(input.dataBreakpoints))
-			throw new TypeError('Debug breakpoint state is malformed');
+		if (!Array.isArray(input.functionBreakpoints) || !Array.isArray(input.dataBreakpoints)) throw new TypeError('Debug breakpoint state is malformed');
 		functionBreakpoints = Object.freeze(input.functionBreakpoints.map(parsePersistedFunctionBreakpoint));
 		dataBreakpoints = Object.freeze(input.dataBreakpoints.map(parsePersistedDataBreakpoint));
 	}
@@ -410,9 +347,7 @@ function parsePersistedFunctionBreakpoint(value: unknown): IFunctionBreakpoint {
 		...point.state,
 		kind: 'function',
 		name: normalizePersistedString(point.input.name, 'function breakpoint name', 32_768),
-		...(point.input.logMessage === undefined
-			? {}
-			: { logMessage: normalizeBreakpointExpression(point.input.logMessage, 'logMessage') }),
+		...(point.input.logMessage === undefined ? {} : { logMessage: normalizeBreakpointExpression(point.input.logMessage, 'logMessage') }),
 	});
 }
 
@@ -440,8 +375,7 @@ function parsePersistedDataBreakpoint(value: unknown): IDataBreakpoint {
 }
 
 function parsePersistedBreakpointState(value: unknown): { input: Record<string, unknown>; state: IBaseBreakpoint } {
-	if (!value || typeof value !== 'object' || Array.isArray(value))
-		throw new TypeError('Breakpoint state must be an object');
+	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Breakpoint state must be an object');
 	const input = value as Record<string, unknown>;
 	if (typeof input.enabled !== 'boolean') throw new TypeError('Breakpoint enabled state must be a boolean');
 	const expressions: { condition?: string; hitCondition?: string } = {};
@@ -462,28 +396,17 @@ function parsePersistedBreakpointState(value: unknown): { input: Record<string, 
 }
 
 function parsePersistedBreakpoint(value: unknown, index: number): PersistedBreakpoint {
-	if (!value || typeof value !== 'object' || Array.isArray(value))
-		throw new TypeError(`breakpoints[${index}] must be an object`);
+	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`breakpoints[${index}] must be an object`);
 	const input = value as Record<string, unknown>;
-	const resource = URI.parse(
-		normalizePersistedString(input.resource, `breakpoints[${index}].resource`, 16_384),
-	).toString();
-	if (
-		!Number.isSafeInteger(input.lineNumber) ||
-		(input.lineNumber as number) <= 0 ||
-		typeof input.enabled !== 'boolean'
-	)
-		throw new TypeError(`breakpoints[${index}] is malformed`);
+	const resource = URI.parse(normalizePersistedString(input.resource, `breakpoints[${index}].resource`, 16_384)).toString();
+	if (!Number.isSafeInteger(input.lineNumber) || (input.lineNumber as number) <= 0 || typeof input.enabled !== 'boolean') throw new TypeError(`breakpoints[${index}] is malformed`);
 	const expressions: { condition?: string; hitCondition?: string; logMessage?: string } = {};
 	for (const field of ['condition', 'hitCondition', 'logMessage'] as const) {
 		if (input[field] === undefined) continue;
 		if (typeof input[field] !== 'string') throw new TypeError(`breakpoints[${index}].${field} must be a string`);
 		expressions[field] = normalizeBreakpointExpression(input[field], field);
 	}
-	if (
-		input.columnNumber !== undefined &&
-		(!Number.isSafeInteger(input.columnNumber) || (input.columnNumber as number) < 1)
-	)
+	if (input.columnNumber !== undefined && (!Number.isSafeInteger(input.columnNumber) || (input.columnNumber as number) < 1))
 		throw new TypeError('Debug breakpoint column must be a positive integer');
 	return Object.freeze({
 		resource,
@@ -496,14 +419,12 @@ function parsePersistedBreakpoint(value: unknown, index: number): PersistedBreak
 }
 
 function normalizePersistedString(value: unknown, path: string, maximum: number): string {
-	if (typeof value !== 'string' || !value.trim() || value.length > maximum || value.includes('\0'))
-		throw new TypeError(`${path} must contain 1 to ${maximum} characters`);
+	if (typeof value !== 'string' || !value.trim() || value.length > maximum || value.includes('\0')) throw new TypeError(`${path} must contain 1 to ${maximum} characters`);
 	return value.trim();
 }
 
 function normalizeBreakpointExpression(value: string, field: string): string | undefined {
-	if (value.length > 32_768 || value.includes('\0'))
-		throw new TypeError(`${field} must contain at most 32768 characters and no null characters`);
+	if (value.length > 32_768 || value.includes('\0')) throw new TypeError(`${field} must contain at most 32768 characters and no null characters`);
 	return value.trim() ? value : undefined;
 }
 function breakpointExpressions(value: Pick<IDebugBreakpoint, 'condition' | 'hitCondition' | 'logMessage'>) {
@@ -516,7 +437,6 @@ function breakpointExpressions(value: Pick<IDebugBreakpoint, 'condition' | 'hitC
 
 function normalizeBreakpointReference(value: unknown, field: string): string {
 	// DAP references are opaque adapter identifiers; whitespace is part of their identity.
-	if (typeof value !== 'string' || !value.trim() || value.length > 32_768 || value.includes('\0'))
-		throw new TypeError(`${field} must contain 1 to 32768 characters`);
+	if (typeof value !== 'string' || !value.trim() || value.length > 32_768 || value.includes('\0')) throw new TypeError(`${field} must contain 1 to 32768 characters`);
 	return value;
 }

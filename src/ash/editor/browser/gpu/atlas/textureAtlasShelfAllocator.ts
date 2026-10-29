@@ -21,26 +21,14 @@ export class TextureAtlasShelfAllocator implements ITextureAtlasAllocator {
 	public allocate(source: IRasterizedGlyph): ITextureAtlasPageGlyph | undefined {
 		const width = source.boundingBox.right - source.boundingBox.left + 1;
 		const height = source.boundingBox.bottom - source.boundingBox.top + 1;
-		if (width > this.canvas.width || height > this.canvas.height)
-			throw new BugIndicatingError('Glyph is too large for the atlas page');
+		if (width > this.canvas.width || height > this.canvas.height) throw new BugIndicatingError('Glyph is too large for the atlas page');
 		if (this.x + width > this.canvas.width) {
 			this.x = 0;
 			this.y += this.rowHeight;
 			this.rowHeight = 0;
 		}
 		if (this.y + height > this.canvas.height) return undefined;
-		if (width > 0 && height > 0)
-			this.context.drawImage(
-				source.source,
-				source.boundingBox.left,
-				source.boundingBox.top,
-				width,
-				height,
-				this.x,
-				this.y,
-				width,
-				height,
-			);
+		if (width > 0 && height > 0) this.context.drawImage(source.source, source.boundingBox.left, source.boundingBox.top, width, height, this.x, this.y, width, height);
 		const glyph = Object.freeze({
 			pageIndex: this.pageIndex,
 			glyphIndex: this.nextIndex++,

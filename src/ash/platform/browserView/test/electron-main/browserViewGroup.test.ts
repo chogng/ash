@@ -73,10 +73,7 @@ suite('Browser view groups', () => {
 				['Future.readLocalFile', { path: '/unapproved/secret.txt' }],
 			] as const) {
 				await groups.sendCDPMessage(group, { id: ++id, method, params, sessionId });
-				assert.match(
-					(messages.at(-1) as CDPResponse).error!.message,
-					/Browser(FileAccessDenied|CDPMethodDenied)/,
-				);
+				assert.match((messages.at(-1) as CDPResponse).error!.message, /Browser(FileAccessDenied|CDPMethodDenied)/);
 			}
 		}
 		assert.equal(f.commands.length, before);
@@ -95,10 +92,7 @@ suite('Browser view groups', () => {
 		using host = f.createHost();
 		const page = await f.create();
 		const perform = (operation: BrowserCdpOperationDto, targetId = page.id, threadId = 'thread-one') =>
-			host.perform(
-				{ threadId, action: { type: 'cdp', targetId, operation } },
-				{ signal: new AbortController().signal },
-			);
+			host.perform({ threadId, action: { type: 'cdp', targetId, operation } }, { signal: new AbortController().signal });
 		await assert.rejects(perform({ type: 'command', method: 'Runtime.enable', params: {} }), /BrowserCDPDisabled/);
 		await host.configure({ enabled: true, cdpEnabled: true });
 		await perform({ type: 'command', method: 'Runtime.enable', params: {} });
@@ -116,9 +110,7 @@ suite('Browser view groups', () => {
 			params: { url: 'about:blank', browserContextId: page.session.id },
 		});
 		assert.equal(f.manager.tryGetBrowserView(sibling.createdTargetId!)!.session, page.session);
-		const context = JSON.parse(
-			(await perform({ type: 'command', method: 'Target.createBrowserContext', params: {} })).output!,
-		).result.browserContextId;
+		const context = JSON.parse((await perform({ type: 'command', method: 'Target.createBrowserContext', params: {} })).output!).result.browserContextId;
 		const created = await perform({
 			type: 'command',
 			method: 'Target.createTarget',
@@ -144,10 +136,7 @@ suite('Browser view groups', () => {
 		await assert.rejects(perform({ type: 'readEvents' }), /BrowserCDPDisabled/);
 		await host.configure({ enabled: false, cdpEnabled: false });
 		assert.equal(f.manager.tryGetBrowserView(page.id), undefined);
-		await assert.rejects(
-			host.create({ threadId: 'thread-one', url: 'about:blank' }, { signal: new AbortController().signal }),
-			/BrowserCapabilityUnavailable/,
-		);
+		await assert.rejects(host.create({ threadId: 'thread-one', url: 'about:blank' }, { signal: new AbortController().signal }), /BrowserCapabilityUnavailable/);
 	});
 
 	test('disabling CDP cancels an evaluation and excludes shared user pages from its targets', async () => {
@@ -163,13 +152,8 @@ suite('Browser view groups', () => {
 		});
 		await f.manager.setSharing(userId, ['thread-one']);
 		const perform = (operation: BrowserCdpOperationDto) =>
-			host.perform(
-				{ threadId: 'thread-one', action: { type: 'cdp', targetId: page.id, operation } },
-				{ signal: new AbortController().signal },
-			);
-		const targets = JSON.parse(
-			(await perform({ type: 'command', method: 'Target.getTargets', params: {} })).output!,
-		).result.targetInfos;
+			host.perform({ threadId: 'thread-one', action: { type: 'cdp', targetId: page.id, operation } }, { signal: new AbortController().signal });
+		const targets = JSON.parse((await perform({ type: 'command', method: 'Target.getTargets', params: {} })).output!).result.targetInfos;
 		assert.deepEqual(
 			targets.map((target: { browserViewId: string }) => target.browserViewId),
 			[page.id],
@@ -218,9 +202,7 @@ suite('Browser view groups', () => {
 		await f.manager.createTarget('about:blank', 'one', new AbortController().signal);
 		await groups.sendCDPMessage(id, { id: 4, method: 'Target.getTargets' });
 		assert.deepEqual(
-			messages
-				.filter(message => 'method' in message && message.method === 'Target.attachedToTarget')
-				.map(message => message.sessionId),
+			messages.filter(message => 'method' in message && message.method === 'Target.attachedToTarget').map(message => message.sessionId),
 			parents,
 		);
 		await groups.sendCDPMessage(id, {
@@ -229,17 +211,12 @@ suite('Browser view groups', () => {
 			params: { autoAttach: false, flatten: true },
 			sessionId: parents[0],
 		});
-		assert.equal(
-			messages.filter(message => 'method' in message && message.method === 'Target.detachedFromTarget').length,
-			1,
-		);
+		assert.equal(messages.filter(message => 'method' in message && message.method === 'Target.detachedFromTarget').length, 1);
 		messages.length = 0;
 		await f.manager.createTarget('about:blank', 'one', new AbortController().signal);
 		await groups.sendCDPMessage(id, { id: 6, method: 'Target.getTargets' });
 		assert.deepEqual(
-			messages
-				.filter(message => 'method' in message && message.method === 'Target.attachedToTarget')
-				.map(message => message.sessionId),
+			messages.filter(message => 'method' in message && message.method === 'Target.attachedToTarget').map(message => message.sessionId),
 			[parents[1]],
 		);
 	});
@@ -291,10 +268,7 @@ suite('Browser view groups', () => {
 		const first = await f.manager.createTarget('about:blank', 'one', new AbortController().signal);
 		const other = await f.manager.createTarget('about:blank', 'two', new AbortController().signal);
 		const groups = f.store.add(f.instantiation.createInstance(BrowserViewGroupMainService));
-		await assert.rejects(
-			groups.createGroup({ sandboxSessionId: 'one', browserIds: [other.id] }),
-			/BrowserTargetAccessDenied/,
-		);
+		await assert.rejects(groups.createGroup({ sandboxSessionId: 'one', browserIds: [other.id] }), /BrowserTargetAccessDenied/);
 		const id = await groups.createGroup({ sandboxSessionId: 'one' });
 		const messages: Array<CDPEvent | CDPResponse> = [];
 		f.store.add(groups.onDynamicCDPMessage(id)(message => messages.push(message)));
@@ -326,10 +300,7 @@ suite('Browser view groups', () => {
 		});
 		const sibling = await f.manager.createTarget('about:blank', 'one', new AbortController().signal);
 		await groups.sendCDPMessage(id, { id: 4, method: 'Target.getTargets' });
-		assert.equal(
-			messages.filter(message => 'method' in message && message.method === 'Target.attachedToTarget').length,
-			2,
-		);
+		assert.equal(messages.filter(message => 'method' in message && message.method === 'Target.attachedToTarget').length, 2);
 		await groups.destroyGroup(id);
 		assert.ok(f.manager.tryGetBrowserView(first.id));
 		assert.ok(f.manager.tryGetBrowserView(sibling.id));
@@ -366,9 +337,7 @@ suite('Browser view groups', () => {
 		assert.notEqual(f.debugSessions[0], f.debugSessions[1]);
 		await groups.sendCDPMessage(first, { id: 4, method: 'Target.getTargets', sessionId });
 		assert.deepEqual(
-			((messages.at(-1) as CDPResponse).result as { targetInfos: { browserViewId: string }[] }).targetInfos.map(
-				info => info.browserViewId,
-			),
+			((messages.at(-1) as CDPResponse).result as { targetInfos: { browserViewId: string }[] }).targetInfos.map(info => info.browserViewId),
 			[page.id],
 		);
 		page.webContents.debugger.emit('message', {}, 'Runtime.consoleAPICalled', { value: 'one' }, f.debugSessions[0]);
@@ -457,9 +426,7 @@ suite('Browser view groups', () => {
 		await groups.sendCDPMessage(id, { id: 3, method: 'Target.getTargets' });
 		assert.deepEqual((messages.at(-1) as CDPResponse).result, { targetInfos: [] });
 		assert.equal(
-			messages.some(
-				message => 'result' in message && (message.result as { secret?: string } | undefined)?.secret,
-			),
+			messages.some(message => 'result' in message && (message.result as { secret?: string } | undefined)?.secret),
 			false,
 		);
 		await f.manager.loadURL(pageId, 'https://example.test/still-private');
@@ -475,9 +442,6 @@ suite('Browser view groups', () => {
 			session: { scope: BrowserViewStorageScope.Workspace },
 		});
 		const groups = f.store.add(f.instantiation.createInstance(BrowserViewGroupMainService));
-		await assert.rejects(
-			groups.createGroup({ sandboxSessionId: 'one', browserIds: [id] }),
-			/BrowserTargetAccessDenied/,
-		);
+		await assert.rejects(groups.createGroup({ sandboxSessionId: 'one', browserIds: [id] }), /BrowserTargetAccessDenied/);
 	});
 });

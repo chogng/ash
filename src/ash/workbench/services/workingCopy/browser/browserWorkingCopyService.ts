@@ -63,12 +63,7 @@ export class BrowserWorkingCopyService extends Disposable implements IWorkingCop
 }
 
 function validateWorkingCopy(workingCopy: IWorkingCopy): void {
-	if (
-		!workingCopy ||
-		typeof workingCopy !== 'object' ||
-		!workingCopy.resource ||
-		typeof workingCopy.resource.toString !== 'function'
-	) {
+	if (!workingCopy || typeof workingCopy !== 'object' || !workingCopy.resource || typeof workingCopy.resource.toString !== 'function') {
 		throw new TypeError('Working copy registration requires a resource');
 	}
 	if (
@@ -81,8 +76,6 @@ function validateWorkingCopy(workingCopy: IWorkingCopy): void {
 		typeof workingCopy.saveAs !== 'function' ||
 		typeof workingCopy.revert !== 'function'
 	) {
-		throw new TypeError(
-			'Working copy registration requires content events, backup restoration, save, saveAs, and revert operations',
-		);
+		throw new TypeError('Working copy registration requires content events, backup restoration, save, saveAs, and revert operations');
 	}
 }

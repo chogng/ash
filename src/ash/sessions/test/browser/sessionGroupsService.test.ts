@@ -134,9 +134,7 @@ test('restored group membership removes already archived Sessions before later e
 		} as unknown as ISessionsManagementService;
 		using restored = new SessionGroupsService(storage, management);
 		await restored.rename(group.sectionId, 'After restart');
-		assert.deepEqual(restored.groups, [
-			{ sectionId: group.sectionId, name: 'After restart', sessionIds: ['active'] },
-		]);
+		assert.deepEqual(restored.groups, [{ sectionId: group.sectionId, name: 'After restart', sessionIds: ['active'] }]);
 	} finally {
 		dom.window.close();
 	}

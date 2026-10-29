@@ -1,16 +1,5 @@
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-	type IDisposable,
-} from '../../../../../base/common/lifecycle.js';
-import {
-	IBrowserViewService,
-	BrowserViewStorageScope,
-	browserZoomFactors,
-} from '../../../../../platform/browserView/common/browserView.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { IBrowserViewService, BrowserViewStorageScope, browserZoomFactors } from '../../../../../platform/browserView/common/browserView.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IBrowserZoomService, MATCH_WINDOW_ZOOM_LABEL } from '../../common/browserZoomService.js';
 import type { IBrowserViewModel } from '../../common/browserView.js';
@@ -20,11 +9,7 @@ import type { INativeHostApi } from '../../../../../platform/native/common/nativ
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../common/contributions.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
-import {
-	ConfigurationScope,
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { onUnexpectedError } from '../../../../../base/common/errors.js';
 import { IBrowserViewWorkbenchService } from '../../common/browserView.js';
 import { BrowserEditorInput } from '../../common/browserEditorInput.js';
@@ -41,17 +26,10 @@ function zoomHost(model: IBrowserViewModel): string | undefined {
 	return url.protocol === 'http:' || url.protocol === 'https:' ? url.host : undefined;
 }
 
-async function setZoom(
-	model: IBrowserViewModel,
-	index: number,
-	zoom: IBrowserZoomService,
-	pages: IBrowserViewService,
-): Promise<void> {
+async function setZoom(model: IBrowserViewModel, index: number, zoom: IBrowserZoomService, pages: IBrowserViewService): Promise<void> {
 	const host = zoomHost(model);
 	if (host) {
-		const memory =
-			model.info.session.scope === BrowserViewStorageScope.Agent ||
-			model.info.session.scope === BrowserViewStorageScope.Ephemeral;
+		const memory = model.info.session.scope === BrowserViewStorageScope.Agent || model.info.session.scope === BrowserViewStorageScope.Ephemeral;
 		zoom.setHostZoomIndex(host, index, memory);
 	} else {
 		await pages.setBrowserZoomIndex(model.id, index);
@@ -101,14 +79,7 @@ for (const command of [
 				const index =
 					command.step === 0
 						? zoom.getEffectiveZoomIndex(undefined, false)
-						: Math.max(
-								0,
-								Math.min(
-									browserZoomFactors.length - 1,
-									(input.model.state.browserZoomIndex ??
-										zoom.getEffectiveZoomIndex(undefined, false)) + command.step,
-								),
-							);
+						: Math.max(0, Math.min(browserZoomFactors.length - 1, (input.model.state.browserZoomIndex ?? zoom.getEffectiveZoomIndex(undefined, false)) + command.step));
 				await setZoom(input.model, index, zoom, accessor.get(IBrowserViewService));
 			}
 		},
@@ -163,9 +134,7 @@ class WindowZoomSynchronizer extends Disposable {
 					}
 					const apply = (): void => {
 						try {
-							const memory =
-								model.info.session.scope === BrowserViewStorageScope.Agent ||
-								model.info.session.scope === BrowserViewStorageScope.Ephemeral;
+							const memory = model.info.session.scope === BrowserViewStorageScope.Agent || model.info.session.scope === BrowserViewStorageScope.Ephemeral;
 							const index = zoom.getEffectiveZoomIndex(zoomHost(model), memory);
 							if (model.state.browserZoomIndex !== index) {
 								void pages.setBrowserZoomIndex(id, index).catch(onUnexpectedError);
@@ -178,19 +147,8 @@ class WindowZoomSynchronizer extends Disposable {
 					let index = model.state.browserZoomIndex;
 					binding.add(
 						model.onDidChangeState(state => {
-							if (
-								index !== undefined &&
-								index !== state.browserZoomIndex &&
-								state.browserZoomIndex !== undefined &&
-								editors.activeEditor === input
-							) {
-								status(
-									localize(
-										{ bundle: 'ash.workbench', key: 'browser.zoomApplied' },
-										'Page zoom: {0}%',
-										Math.round(browserZoomFactors[state.browserZoomIndex]! * 100),
-									),
-								);
+							if (index !== undefined && index !== state.browserZoomIndex && state.browserZoomIndex !== undefined && editors.activeEditor === input) {
+								status(localize({ bundle: 'ash.workbench', key: 'browser.zoomApplied' }, 'Page zoom: {0}%', Math.round(browserZoomFactors[state.browserZoomIndex]! * 100)));
 							}
 							index = state.browserZoomIndex;
 							if (url === state.url) {
@@ -214,10 +172,8 @@ class WindowZoomSynchronizer extends Disposable {
 	}
 }
 
-registerWorkbenchContribution(
-	'workbench.contrib.browserView.windowZoomSynchronizer',
-	WorkbenchPhase.BlockRestore,
-	services => services.get(IInstantiationService).createInstance(WindowZoomSynchronizer),
+registerWorkbenchContribution('workbench.contrib.browserView.windowZoomSynchronizer', WorkbenchPhase.BlockRestore, services =>
+	services.get(IInstantiationService).createInstance(WindowZoomSynchronizer),
 );
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
@@ -225,11 +181,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	defaultValue: MATCH_WINDOW_ZOOM_LABEL,
 	scope: ConfigurationScope.MACHINE,
 	parse: value => {
-		if (
-			typeof value !== 'string' ||
-			(value !== MATCH_WINDOW_ZOOM_LABEL &&
-				!browserZoomFactors.some(factor => `${Math.round(factor * 100)}%` === value))
-		) {
+		if (typeof value !== 'string' || (value !== MATCH_WINDOW_ZOOM_LABEL && !browserZoomFactors.some(factor => `${Math.round(factor * 100)}%` === value))) {
 			throw new TypeError('Invalid browser page zoom');
 		}
 		return value;
@@ -237,10 +189,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	setting: {
 		valueType: 'select',
 		title: localize({ bundle: 'ash.workbench', key: 'browser.defaultZoom' }, 'Default browser page zoom'),
-		description: localize(
-			{ bundle: 'ash.workbench', key: 'browser.defaultZoomDescription' },
-			'Choose the default zoom for websites, or follow the application window zoom.',
-		),
+		description: localize({ bundle: 'ash.workbench', key: 'browser.defaultZoomDescription' }, 'Choose the default zoom for websites, or follow the application window zoom.'),
 		options: [
 			{
 				value: MATCH_WINDOW_ZOOM_LABEL,

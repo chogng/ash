@@ -4,16 +4,10 @@ import { autorun } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
 import { CanvasesEnabledSettingId } from '../../../../platform/agentHost/common/agentService.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import {
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -21,10 +15,7 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/c
 import { EditorPanes } from '../../../browser/editor.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import {
-	EditorInputSerializers,
-	UnknownEditorInputSerializerError,
-} from '../../../services/editor/common/editorInputSerializer.js';
+import { EditorInputSerializers, UnknownEditorInputSerializerError } from '../../../services/editor/common/editorInputSerializer.js';
 import { CanvasInput, ICanvasService, ICanvasContextService } from '../common/canvas.js';
 import { CanvasAvailableContext, CanvasOwnerAvailableContext } from '../browser/editorCanvasActions.js';
 import { CanvasService } from './canvasService.js';
@@ -46,10 +37,7 @@ for (const [key, title, description] of [
 	[
 		AccessibilityVerbositySettingId.SessionCanvas,
 		localize('canvas.verbosityTitle', 'Canvas accessibility help'),
-		localize(
-			'canvas.verbosityDescription',
-			'Announce how to open accessibility help when a Canvas receives focus.',
-		),
+		localize('canvas.verbosityDescription', 'Announce how to open accessibility help when a Canvas receives focus.'),
 	],
 ]) {
 	Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
@@ -73,14 +61,7 @@ registerWorkbenchContribution('workbench.contrib.canvases', WorkbenchPhase.Block
 	const ownerAvailable = CanvasOwnerAvailableContext.bindTo(accessor.get(IContextKeyService));
 	const contexts = accessor.get(ICanvasContextService);
 	resources.add(registerCanvasContextPicker(accessor));
-	resources.add(
-		autorun(reader =>
-			ownerAvailable.set(
-				canvases.enabled.read(reader) &&
-					contexts.contexts.read(reader).some(context => contexts.isOwnerVisible(context.owner)),
-			),
-		),
-	);
+	resources.add(autorun(reader => ownerAvailable.set(canvases.enabled.read(reader) && contexts.contexts.read(reader).some(context => contexts.isOwnerVisible(context.owner)))));
 	resources.add(autorun(reader => available.set(canvases.reopenableCanvases.read(reader).length > 0)));
 	resources.add(
 		EditorPanes.registerEditorPane({

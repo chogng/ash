@@ -1,16 +1,10 @@
 import { Event } from '../../../../base/common/event.js';
 import { AbstractDisposable } from '../../../../base/common/lifecycle.js';
-import type {
-	ILocalTranscriptionService,
-	ILocalTranscriptionModelService,
-} from '../../../../platform/localTranscription/common/localTranscription.js';
+import type { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../../../platform/localTranscription/common/localTranscription.js';
 import { localize } from '../../../../nls.js';
 
 /** A browser host has no device-local Rust capture capability. */
-export class NullLocalTranscriptionService
-	extends AbstractDisposable
-	implements ILocalTranscriptionService, ILocalTranscriptionModelService
-{
+export class NullLocalTranscriptionService extends AbstractDisposable implements ILocalTranscriptionService, ILocalTranscriptionModelService {
 	public async pushAudio(): Promise<never> {
 		throw unavailable();
 	}

@@ -10,64 +10,53 @@ import { connectProfile } from './sessionProfileFixture.js';
 
 test.use({ video: 'on' });
 
-test(
-	'Sessions sidebar hides blank drafts and restores parked content drafts',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ application, target, workbench }, testInfo) => {
-		let page = await workbench.openAgentsWindow(target.kind);
-		if (target.kind === 'browser') {
-			await expect
-				.poll(() => page.evaluate(() => globalThis.ashWebWorkbenchHost?.api.appServer.getConnectionState()))
-				.toBe('ready');
-		}
-		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-		const active = () => page.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork):visible');
-		const drafts = () => page.locator('.ash-sessions-list:visible [data-item^="untitled:"]');
-		await page.locator('[data-action-id="sessions.newSession"] button').click();
-		await expect(drafts()).toHaveCount(0);
-		const identity = await active().getAttribute('data-untitled-session-id');
-		expect(identity).toBeTruthy();
-		let editor = new Editor(active());
-		await editor.waitForEditorFocus();
-		await page.keyboard.insertText('Keep this unsent sidebar draft');
-		await expect(drafts()).toHaveCount(1);
-		await expect(drafts().locator('.ash-sessions-list-item')).toHaveText('New Session (draft)');
-		await expect(editor.input).toBeFocused();
+test('Sessions sidebar hides blank drafts and restores parked content drafts', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
+	let page = await workbench.openAgentsWindow(target.kind);
+	if (target.kind === 'browser') {
+		await expect.poll(() => page.evaluate(() => globalThis.ashWebWorkbenchHost?.api.appServer.getConnectionState())).toBe('ready');
+	}
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	const active = () => page.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork):visible');
+	const drafts = () => page.locator('.ash-sessions-list:visible [data-item^="untitled:"]');
+	await page.locator('[data-action-id="sessions.newSession"] button').click();
+	await expect(drafts()).toHaveCount(0);
+	const identity = await active().getAttribute('data-untitled-session-id');
+	expect(identity).toBeTruthy();
+	let editor = new Editor(active());
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText('Keep this unsent sidebar draft');
+	await expect(drafts()).toHaveCount(1);
+	await expect(drafts().locator('.ash-sessions-list-item')).toHaveText('New Session (draft)');
+	await expect(editor.input).toBeFocused();
 
-		await page.locator('[data-action-id="sessions.newSession"] button').click();
-		await expect(active()).not.toHaveAttribute('data-untitled-session-id', identity!);
-		await expect(drafts()).toHaveCount(1);
-		await expect(drafts()).toHaveAttribute('data-item', `untitled:${identity}`);
-		const row = drafts().locator('.ash-sessions-list-item');
-		await row.focus();
-		await row.press('Enter');
-		await expect(active()).toHaveAttribute('data-untitled-session-id', identity!);
-		await new Editor(active()).waitForEditorContents(text => text === 'Keep this unsent sidebar draft');
+	await page.locator('[data-action-id="sessions.newSession"] button').click();
+	await expect(active()).not.toHaveAttribute('data-untitled-session-id', identity!);
+	await expect(drafts()).toHaveCount(1);
+	await expect(drafts()).toHaveAttribute('data-item', `untitled:${identity}`);
+	const row = drafts().locator('.ash-sessions-list-item');
+	await row.focus();
+	await row.press('Enter');
+	await expect(active()).toHaveAttribute('data-untitled-session-id', identity!);
+	await new Editor(active()).waitForEditorContents(text => text === 'Keep this unsent sidebar draft');
 
-		page = await workbench.reopenAgentsWindow(application, page);
-		if (target.kind === 'browser') {
-			await expect
-				.poll(() => page.evaluate(() => globalThis.ashWebWorkbenchHost?.api.appServer.getConnectionState()))
-				.toBe('ready');
-		}
-		await expect(drafts()).toHaveCount(1);
-		await expect(drafts()).toHaveAttribute('data-item', `untitled:${identity}`);
-		await expect(active()).toHaveAttribute('data-untitled-session-id', identity!);
-		await new Editor(active()).waitForEditorContents(text => text === 'Keep this unsent sidebar draft');
-		await page
-			.locator('.ash-window-mode-control')
-			.getByRole('button', { name: 'Chat / Agents', exact: true })
-			.click();
-		await expect(drafts()).toHaveCount(1);
-		editor = new Editor(active());
-		await editor.waitForEditorFocus();
-		await page.keyboard.press('ControlOrMeta+A');
-		await page.keyboard.press('Backspace');
-		await expect(drafts()).toHaveCount(0);
-		await expect(editor.input).toBeFocused();
-		await page.screenshot({ path: testInfo.outputPath('empty-draft-hidden.png') });
-	},
-);
+	page = await workbench.reopenAgentsWindow(application, page);
+	if (target.kind === 'browser') {
+		await expect.poll(() => page.evaluate(() => globalThis.ashWebWorkbenchHost?.api.appServer.getConnectionState())).toBe('ready');
+	}
+	await expect(drafts()).toHaveCount(1);
+	await expect(drafts()).toHaveAttribute('data-item', `untitled:${identity}`);
+	await expect(active()).toHaveAttribute('data-untitled-session-id', identity!);
+	await new Editor(active()).waitForEditorContents(text => text === 'Keep this unsent sidebar draft');
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+	await expect(drafts()).toHaveCount(1);
+	editor = new Editor(active());
+	await editor.waitForEditorFocus();
+	await page.keyboard.press('ControlOrMeta+A');
+	await page.keyboard.press('Backspace');
+	await expect(drafts()).toHaveCount(0);
+	await expect(editor.input).toBeFocused();
+	await page.screenshot({ path: testInfo.outputPath('empty-draft-hidden.png') });
+});
 
 for (const locale of ['en', 'zh-CN']) {
 	test(
@@ -77,9 +66,7 @@ for (const locale of ['en', 'zh-CN']) {
 			test.setTimeout(180_000);
 			if (locale === 'zh-CN') {
 				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-				const language = workbench.page
-					.getByRole('dialog', { name: 'Select Display Language' })
-					.getByRole('combobox');
+				const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 				await language.fill('简体中文');
 				await language.press('Enter');
 				({ application, workbench } = await restartWorkbench());
@@ -130,12 +117,7 @@ for (const locale of ['en', 'zh-CN']) {
 					control = await workbench.page.context().newPage();
 					await control.goto(workbench.page.url(), { waitUntil: 'domcontentloaded' });
 				}
-				connection = await connectProfile(
-					application,
-					webAppServer,
-					testWorkspace.directory,
-					control ?? workbench.page,
-				);
+				connection = await connectProfile(application, webAppServer, testWorkspace.directory, control ?? workbench.page);
 				const { client } = connection;
 				const address = server.address();
 				if (!address || typeof address === 'string') throw new Error('Missing fixture port');
@@ -171,10 +153,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await expect(enabled).toBeChecked();
 				await workbench.page.locator('.ash-modal-editor-close').click();
 				let page = await workbench.openAgentsWindow(target.kind);
-				await page
-					.locator('.ash-window-mode-control')
-					.getByRole('button', { name: copy.code, exact: true })
-					.click();
+				await page.locator('.ash-window-mode-control').getByRole('button', { name: copy.code, exact: true }).click();
 				await page.locator('[data-action-id="sessions.newSession"] button').click();
 				const active = () => page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 				await active().locator('.ash-chat-input-model-action').press('ArrowDown');
@@ -208,8 +187,7 @@ for (const locale of ['en', 'zh-CN']) {
 				const sessionId = await active().getAttribute('data-session-id');
 				const threadId = await active().getAttribute('data-thread-id');
 				if (!sessionId || !threadId) throw new Error('Missing accepted conversation identity');
-				const read = async () =>
-					(await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread;
+				const read = async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread;
 				await expect.poll(async () => (await read()).turns.at(-1)?.status).toBe('completed');
 				const accepted = await read();
 				expect(
@@ -231,9 +209,7 @@ for (const locale of ['en', 'zh-CN']) {
 				const commands = new QuickAccess(page);
 				await commands.open('draft-source.txt');
 				await commands.select('draft-source.txt');
-				await new Editor(page.locator('[data-part="editor"]')).waitForEditorContents(
-					text => text.trimEnd() === 'original draft source snapshot',
-				);
+				await new Editor(page.locator('[data-part="editor"]')).waitForEditorContents(text => text.trimEnd() === 'original draft source snapshot');
 				await active().getByRole('button', { name: copy.addContext, exact: true }).click();
 				const attachments = page.getByRole('dialog', { name: copy.attachments, exact: true });
 				await expect(attachments).toBeVisible();
@@ -251,10 +227,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await page.keyboard.insertText('Keep this source draft');
 				const identity = await active().getAttribute('data-untitled-session-id');
 				page = await workbench.reopenAgentsWindow(application, page);
-				await page
-					.locator('.ash-window-mode-control')
-					.getByRole('button', { name: copy.code, exact: true })
-					.click();
+				await page.locator('.ash-window-mode-control').getByRole('button', { name: copy.code, exact: true }).click();
 				await expect(active()).toHaveAttribute('data-untitled-session-id', identity!);
 				await expect(source()).toBeVisible();
 				await source().hover();
@@ -266,9 +239,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await connection?.close();
 				await control?.close();
 				server.closeAllConnections();
-				await new Promise<void>((resolve, reject) =>
-					server.close(error => (error ? reject(error) : resolve())),
-				);
+				await new Promise<void>((resolve, reject) => server.close(error => (error ? reject(error) : resolve())));
 			}
 		},
 	);

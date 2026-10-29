@@ -8,11 +8,7 @@ import type { DesignDocumentController } from '../../../browser/designDocumentCo
 import type { ComponentCommands } from '../../../common/commands/componentCommands.js';
 import { flattenDesignShapes, type DesignOverride, type DesignShape } from '../../../common/model/document.js';
 import { designPropertyLabel } from './resourcePropertiesWidget.js';
-import {
-	getDesignResourceCatalog,
-	type DesignResources,
-	type DesignBindableProperty,
-} from '../../../common/model/designResources.js';
+import { getDesignResourceCatalog, type DesignResources, type DesignBindableProperty } from '../../../common/model/designResources.js';
 import type { DesignSelection } from '../../../common/selection.js';
 
 /** Local component authoring shares the same properties surface and document command boundary. */
@@ -54,19 +50,11 @@ export class ComponentPropertiesWidget extends Disposable {
 		}
 		this.revision = revision;
 		const active = this.domNode.ownerDocument.activeElement;
-		const focusKey =
-			active && this.fields.contains(active) ? active.getAttribute('data-component-control') : undefined;
-		const focusIndex = [...this.fields.querySelectorAll('[data-component-control]')].findIndex(
-			control => control === active,
-		);
+		const focusKey = active && this.fields.contains(active) ? active.getAttribute('data-component-control') : undefined;
+		const focusIndex = [...this.fields.querySelectorAll('[data-component-control]')].findIndex(control => control === active);
 		this.controls.clear();
 		this.fields.replaceChildren();
-		const selected =
-			this.selection.ids.size === 1
-				? flattenDesignShapes(this.documentController.model.value.shapes).find(shape =>
-						this.selection.ids.has(shape.id),
-					)
-				: undefined;
+		const selected = this.selection.ids.size === 1 ? flattenDesignShapes(this.documentController.model.value.shapes).find(shape => this.selection.ids.has(shape.id)) : undefined;
 		const frame = selected?.kind === 'frame' ? selected : undefined;
 		const main = selected ? this.commands.getMain(selected.id) : undefined;
 		const instance = selected ? this.commands.getInstance(selected.id) : undefined;
@@ -79,22 +67,14 @@ export class ComponentPropertiesWidget extends Disposable {
 			}
 		};
 		if (this.commands.canCreate(this.selection.ids)) {
-			this.button('create', localize('sessions.design.createComponent', 'Create component'), () =>
-				select(this.commands.create(this.selection.ids)),
-			);
+			this.button('create', localize('sessions.design.createComponent', 'Create component'), () => select(this.commands.create(this.selection.ids)));
 		}
 		if (this.commands.canCombine(this.selection.ids)) {
-			this.button('combine', localize('sessions.design.combineVariants', 'Combine as variants'), () =>
-				select(this.commands.combine(this.selection.ids)),
-			);
+			this.button('combine', localize('sessions.design.combineVariants', 'Combine as variants'), () => select(this.commands.combine(this.selection.ids)));
 		}
 		if (frame?.component) {
-			this.button('insert', localize('sessions.design.createInstance', 'Create instance'), () =>
-				select(this.commands.createInstance(frame.id)),
-			);
-			this.button('variant', localize('sessions.design.addVariant', 'Add variant'), () =>
-				select(this.commands.addVariant(frame.id)),
-			);
+			this.button('insert', localize('sessions.design.createInstance', 'Create instance'), () => select(this.commands.createInstance(frame.id)));
+			this.button('variant', localize('sessions.design.addVariant', 'Add variant'), () => select(this.commands.addVariant(frame.id)));
 		}
 		if (instance && selected) {
 			this.fields.append(
@@ -103,38 +83,24 @@ export class ComponentPropertiesWidget extends Disposable {
 					'span',
 					{ className: 'ash-design-property-wide' },
 					main
-						? localize(
-								'sessions.design.instanceOf',
-								'Instance of {0}',
-								main.name || localize('sessions.design.component', 'Component'),
-							)
+						? localize('sessions.design.instanceOf', 'Instance of {0}', main.name || localize('sessions.design.component', 'Component'))
 						: localize('sessions.design.missingMain', 'Main component is missing'),
 				),
 			);
 			if (main) {
 				if (this.commands.isLocal(main.id)) {
-					this.button('main', localize('sessions.design.goToMain', 'Go to main component'), () =>
-						select(main.id),
-					);
+					this.button('main', localize('sessions.design.goToMain', 'Go to main component'), () => select(main.id));
 				}
-				this.button('reset', localize('sessions.design.resetOverrides', 'Reset all overrides'), () =>
-					this.commands.reset(selected.id),
-				);
+				this.button('reset', localize('sessions.design.resetOverrides', 'Reset all overrides'), () => this.commands.reset(selected.id));
 				if (frame?.instance && this.commands.canPush(frame.id)) {
-					this.button('push', localize('sessions.design.pushOverrides', 'Push overrides to main'), () =>
-						this.commands.push(frame.id),
-					);
+					this.button('push', localize('sessions.design.pushOverrides', 'Push overrides to main'), () => this.commands.push(frame.id));
 				}
 			} else {
-				this.button('restore', localize('sessions.design.restoreMain', 'Restore main component'), () =>
-					select(this.commands.restore(instance.id)),
-				);
+				this.button('restore', localize('sessions.design.restoreMain', 'Restore main component'), () => select(this.commands.restore(instance.id)));
 			}
 			if (frame?.instance) {
 				if (!this.commands.isInstanceChild(frame.id)) {
-					this.button('detach', localize('sessions.design.detachInstance', 'Detach instance'), () =>
-						this.commands.detach(frame.id),
-					);
+					this.button('detach', localize('sessions.design.detachInstance', 'Detach instance'), () => this.commands.detach(frame.id));
 				}
 				const candidates = this.commands.mains.filter(source => this.commands.canSwap(frame.id, source.id));
 				this.select(
@@ -146,15 +112,7 @@ export class ComponentPropertiesWidget extends Disposable {
 				);
 				if (set?.component?.kind === 'set' && main?.component?.kind === 'main') {
 					for (const property of set.component.properties) {
-						const values = [
-							...new Set(
-								set.children.flatMap(child =>
-									child.kind === 'frame' && child.component?.kind === 'main'
-										? [child.component.variant![property]]
-										: [],
-								),
-							),
-						];
+						const values = [...new Set(set.children.flatMap(child => (child.kind === 'frame' && child.component?.kind === 'main' ? [child.component.variant![property]] : [])))];
 						this.select(
 							`variant:${property}`,
 							localize('sessions.design.variantChoice', 'Variant: {0}', property),
@@ -173,10 +131,7 @@ export class ComponentPropertiesWidget extends Disposable {
 					'',
 					[
 						['', localize('sessions.design.chooseOverride', 'Choose an override')],
-						...overrides.map(
-							field =>
-								[field, overrideLabel(field, this.documentController.model.value.resources)] as const,
-						),
+						...overrides.map(field => [field, overrideLabel(field, this.documentController.model.value.resources)] as const),
 					],
 					value => {
 						if (value) {
@@ -189,44 +144,28 @@ export class ComponentPropertiesWidget extends Disposable {
 		if (!instance && set?.component?.kind === 'set') {
 			const properties = set.component.properties;
 			for (const property of properties) {
-				this.input(
-					`property:${property}`,
-					localize('sessions.design.variantPropertyName', 'Property name: {0}', property),
-					property,
-					value =>
-						this.commands.setProperties(
-							set.id,
-							properties.map(name => (name === property ? value : name)),
-							[property, value],
-						),
+				this.input(`property:${property}`, localize('sessions.design.variantPropertyName', 'Property name: {0}', property), property, value =>
+					this.commands.setProperties(
+						set.id,
+						properties.map(name => (name === property ? value : name)),
+						[property, value],
+					),
 				);
 				if (properties.length > 1) {
-					this.button(
-						`remove:${property}`,
-						localize('sessions.design.removeVariantProperty', 'Remove {0}', property),
-						() => {
-							if (
-								!this.commands.setProperties(
-									set.id,
-									properties.filter(name => name !== property),
-								)
-							) {
-								status(
-									localize(
-										'sessions.design.ambiguousVariants',
-										'Each variant must have a unique combination of property values.',
-									),
-								);
-							}
-						},
-					);
+					this.button(`remove:${property}`, localize('sessions.design.removeVariantProperty', 'Remove {0}', property), () => {
+						if (
+							!this.commands.setProperties(
+								set.id,
+								properties.filter(name => name !== property),
+							)
+						) {
+							status(localize('sessions.design.ambiguousVariants', 'Each variant must have a unique combination of property values.'));
+						}
+					});
 				}
 				if (frame?.component?.kind === 'main') {
-					this.input(
-						`value:${property}`,
-						localize('sessions.design.variantValue', 'Value: {0}', property),
-						frame.component.variant![property],
-						value => this.commands.setVariantValue(frame.id, property, value),
+					this.input(`value:${property}`, localize('sessions.design.variantValue', 'Value: {0}', property), frame.component.variant![property], value =>
+						this.commands.setVariantValue(frame.id, property, value),
 					);
 				}
 			}
@@ -244,10 +183,7 @@ export class ComponentPropertiesWidget extends Disposable {
 				'library',
 				localize('sessions.design.insertComponent', 'Insert component'),
 				'',
-				[
-					['', localize('sessions.design.chooseComponent', 'Choose a component')],
-					...this.commands.mains.map(source => [source.id, componentLabel(source)] as const),
-				],
+				[['', localize('sessions.design.chooseComponent', 'Choose a component')], ...this.commands.mains.map(source => [source.id, componentLabel(source)] as const)],
 				value => {
 					if (value) {
 						select(this.commands.createInstance(value));
@@ -257,10 +193,7 @@ export class ComponentPropertiesWidget extends Disposable {
 		}
 		if (focusKey) {
 			const controls = [...this.fields.querySelectorAll<HTMLElement>('[data-component-control]')];
-			(
-				controls.find(control => control.dataset.componentControl === focusKey) ??
-				controls[Math.min(focusIndex, controls.length - 1)]
-			)?.focus();
+			(controls.find(control => control.dataset.componentControl === focusKey) ?? controls[Math.min(focusIndex, controls.length - 1)])?.focus();
 		}
 	}
 	private button(key: string, label: string, run: () => void): void {
@@ -278,13 +211,7 @@ export class ComponentPropertiesWidget extends Disposable {
 		button.domNode.dataset.componentControl = key;
 		button.enabled = !this.documentController.isBusy;
 	}
-	private select(
-		key: string,
-		label: string,
-		value: string,
-		options: readonly (readonly [string, string])[],
-		change: (value: string) => void,
-	): void {
+	private select(key: string, label: string, value: string, options: readonly (readonly [string, string])[], change: (value: string) => void): void {
 		const doc = this.domNode.ownerDocument;
 		const input = h(
 			doc,
@@ -319,10 +246,7 @@ export class ComponentPropertiesWidget extends Disposable {
 					return;
 				}
 				if (!change(input.value.trim())) {
-					const message = localize(
-						'sessions.design.invalidVariantProperty',
-						'Use a non-empty, unique property name and a unique combination of variant values.',
-					);
+					const message = localize('sessions.design.invalidVariantProperty', 'Use a non-empty, unique property name and a unique combination of variant values.');
 					input.setCustomValidity(message);
 					input.reportValidity();
 					status(message);
@@ -343,11 +267,7 @@ function componentLabel(shape: Extract<DesignShape, { kind: 'frame' }>): string 
 
 function overrideLabel(field: DesignOverride, resources: DesignResources | undefined): string {
 	if (field.startsWith('bindings:')) {
-		return localize(
-			'sessions.design.bindingOverride',
-			'Variable: {0}',
-			designPropertyLabel(field.slice(9) as DesignBindableProperty),
-		);
+		return localize('sessions.design.bindingOverride', 'Variable: {0}', designPropertyLabel(field.slice(9) as DesignBindableProperty));
 	}
 	if (field.startsWith('styleBindings:')) {
 		return localize(
@@ -365,8 +285,7 @@ function overrideLabel(field: DesignOverride, resources: DesignResources | undef
 		return localize(
 			'sessions.design.modeOverride',
 			'Mode: {0}',
-			getDesignResourceCatalog(resources).collections.find(collection => collection.id === field.slice(14))
-				?.name ?? localize('sessions.design.collection', 'Collection'),
+			getDesignResourceCatalog(resources).collections.find(collection => collection.id === field.slice(14))?.name ?? localize('sessions.design.collection', 'Collection'),
 		);
 	}
 	const labels: Partial<Record<DesignOverride, string>> = {

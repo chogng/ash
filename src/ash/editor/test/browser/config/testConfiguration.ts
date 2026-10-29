@@ -1,9 +1,5 @@
 import { EditorConfiguration } from '../../../browser/config/editorConfiguration.js';
-import {
-	EditorFontLigatures,
-	EditorFontVariations,
-	type IEditorOptions,
-} from '../../../common/config/editorOptions.js';
+import { EditorFontLigatures, EditorFontVariations, type IEditorOptions } from '../../../common/config/editorOptions.js';
 import { type BareFontInfo, FontInfo } from '../../../common/config/fontInfo.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
@@ -42,12 +38,7 @@ export function createTestConfiguration(container: HTMLElement, options: IEditor
 }
 
 class TestEditorConfiguration extends EditorConfiguration {
-	constructor(
-		options: IEditorOptions,
-		container: HTMLElement,
-		resources: DisposableStore,
-		@IAccessibilityService accessibilityService: IAccessibilityService,
-	) {
+	constructor(options: IEditorOptions, container: HTMLElement, resources: DisposableStore, @IAccessibilityService accessibilityService: IAccessibilityService) {
 		super(false, MenuId.EditorContext, options, container, accessibilityService);
 		this._register(resources);
 	}

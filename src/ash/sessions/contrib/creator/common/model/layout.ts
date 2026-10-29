@@ -7,29 +7,18 @@ type Dimensions = Partial<Record<Axis, number>>;
 const minimumSize = 0.001;
 
 /** Resolve at the history boundary so canvas, hit testing, files and exports share one geometry. */
-export function resolveDesignLayout(
-	shapes: readonly DesignShape[],
-	previous: readonly DesignShape[] = [],
-	measureText?: DesignTextMeasurer,
-): readonly DesignShape[] {
+export function resolveDesignLayout(shapes: readonly DesignShape[], previous: readonly DesignShape[] = [], measureText?: DesignTextMeasurer): readonly DesignShape[] {
 	const before = new Map(previous.map(shape => [shape.id, shape]));
 	return shapes.map(shape => layoutShape(shape, before.get(shape.id), {}, measureText));
 }
 
 function lowerBound(shape: DesignShape, axis: Axis): number {
 	const padding = shape.kind === 'frame' ? shape.autoLayout?.padding : undefined;
-	return Math.max(
-		minimumSize,
-		shape.sizeLimits?.[axis === 'width' ? 'minWidth' : 'minHeight'] ?? 0,
-		padding ? (axis === 'width' ? padding.left + padding.right : padding.top + padding.bottom) : 0,
-	);
+	return Math.max(minimumSize, shape.sizeLimits?.[axis === 'width' ? 'minWidth' : 'minHeight'] ?? 0, padding ? (axis === 'width' ? padding.left + padding.right : padding.top + padding.bottom) : 0);
 }
 
 function limit(shape: DesignShape, axis: Axis, value: number): number {
-	return Math.max(
-		lowerBound(shape, axis),
-		Math.min(value, shape.sizeLimits?.[axis === 'width' ? 'maxWidth' : 'maxHeight'] ?? Infinity),
-	);
+	return Math.max(lowerBound(shape, axis), Math.min(value, shape.sizeLimits?.[axis === 'width' ? 'maxWidth' : 'maxHeight'] ?? Infinity));
 }
 
 function move(shape: DesignShape, x: number, y: number): DesignShape {
@@ -55,13 +44,7 @@ function move(shape: DesignShape, x: number, y: number): DesignShape {
 	};
 }
 
-function constrain(
-	position: number,
-	size: number,
-	oldSize: number,
-	newSize: number,
-	mode: DesignConstraint,
-): [number, number] {
+function constrain(position: number, size: number, oldSize: number, newSize: number, mode: DesignConstraint): [number, number] {
 	const delta = newSize - oldSize;
 	switch (mode) {
 		case 'center':
@@ -77,40 +60,22 @@ function constrain(
 	}
 }
 
-function layoutShape(
-	input: DesignShape,
-	previous?: DesignShape,
-	imposed: Dimensions = {},
-	measureText?: DesignTextMeasurer,
-): DesignShape {
+function layoutShape(input: DesignShape, previous?: DesignShape, imposed: Dimensions = {}, measureText?: DesignTextMeasurer): DesignShape {
 	const shape = layoutContents(input, previous, imposed, measureText);
 	if (shape.kind !== 'frame' && shape.kind !== 'group') {
 		return shape;
 	}
 	// Fixed layers must leave auto layout before they can be pinned. Paint order is canonical.
 	const children = shape.children.map(child =>
-		shape.kind === 'frame' &&
-		shape.autoLayout &&
-		child.scrollPosition === 'fixed' &&
-		child.layoutPositioning !== 'absolute'
-			? { ...child, scrollPosition: 'scroll' as const }
-			: child,
+		shape.kind === 'frame' && shape.autoLayout && child.scrollPosition === 'fixed' && child.layoutPositioning !== 'absolute' ? { ...child, scrollPosition: 'scroll' as const } : child,
 	);
 	return {
 		...shape,
-		children: [
-			...children.filter(child => child.scrollPosition !== 'fixed'),
-			...children.filter(child => child.scrollPosition === 'fixed'),
-		],
+		children: [...children.filter(child => child.scrollPosition !== 'fixed'), ...children.filter(child => child.scrollPosition === 'fixed')],
 	};
 }
 
-function layoutContents(
-	input: DesignShape,
-	previous?: DesignShape,
-	imposed: Dimensions = {},
-	measureText?: DesignTextMeasurer,
-): DesignShape {
+function layoutContents(input: DesignShape, previous?: DesignShape, imposed: Dimensions = {}, measureText?: DesignTextMeasurer): DesignShape {
 	const shape = {
 		...input,
 		width: limit(input, 'width', imposed.width ?? input.width),
@@ -119,19 +84,14 @@ function layoutContents(
 	if (shape.kind === 'group') {
 		return {
 			...shape,
-			children: resolveDesignLayout(
-				shape.children,
-				previous?.kind === 'group' ? previous.children : [],
-				measureText,
-			),
+			children: resolveDesignLayout(shape.children, previous?.kind === 'group' ? previous.children : [], measureText),
 		};
 	}
 	if (shape.kind === 'text' && measureText && shape.textAutoResize && shape.textAutoResize !== 'none') {
 		const autoWidth = shape.textAutoResize === 'width' && imposed.width === undefined;
 		const natural = measureText(shape, autoWidth ? undefined : shape.width);
 		const width = autoWidth ? limit(shape, 'width', natural.width) : shape.width;
-		const measured =
-			autoWidth && width < natural.width ? measureText({ ...shape, textAutoResize: 'height' }, width) : natural;
+		const measured = autoWidth && width < natural.width ? measureText({ ...shape, textAutoResize: 'height' }, width) : natural;
 		const height = measured.height;
 		return {
 			...shape,
@@ -148,20 +108,8 @@ function layoutContents(
 	const freeChild = (child: DesignShape, frame: Frame): DesignShape => {
 		let resized = child;
 		if (oldFrame && before.has(child.id) && (oldFrame.width !== frame.width || oldFrame.height !== frame.height)) {
-			const [x, width] = constrain(
-				child.x,
-				child.width,
-				oldFrame.width,
-				frame.width,
-				child.constraints?.horizontal ?? 'start',
-			);
-			const [y, height] = constrain(
-				child.y,
-				child.height,
-				oldFrame.height,
-				frame.height,
-				child.constraints?.vertical ?? 'start',
-			);
+			const [x, width] = constrain(child.x, child.width, oldFrame.width, frame.width, child.constraints?.horizontal ?? 'start');
+			const [y, height] = constrain(child.y, child.height, oldFrame.height, frame.height, child.constraints?.vertical ?? 'start');
 			resized = { ...move(child, x, y), width, height };
 		}
 		return layoutShape(resized, before.get(child.id), {}, measureText);
@@ -173,8 +121,7 @@ function layoutContents(
 	const measured = visible.map(child => layoutShape(child, before.get(child.id), {}, measureText));
 	// Each allocation starts from the input tree, not an already resized subtree: free-frame
 	// constraints and animation offsets must be applied only once to the final dimensions.
-	const resize = (index: number, size: Dimensions): DesignShape =>
-		layoutShape(visible[index], before.get(visible[index].id), size, measureText);
+	const resize = (index: number, size: Dimensions): DesignShape => layoutShape(visible[index], before.get(visible[index].id), size, measureText);
 	const result =
 		layout.direction === 'grid' && layout.grid
 			? layoutGrid({ ...shape, children: visible }, layout, layout.grid, measured, imposed, resize)
@@ -182,10 +129,7 @@ function layoutContents(
 	const resolved = new Map(result.children.map(child => [child.id, child]));
 	return {
 		...result,
-		children: shape.children.map(
-			child =>
-				resolved.get(child.id) ?? (child.layoutPositioning === 'absolute' ? freeChild(child, result) : child),
-		),
+		children: shape.children.map(child => resolved.get(child.id) ?? (child.layoutPositioning === 'absolute' ? freeChild(child, result) : child)),
 	};
 }
 
@@ -200,9 +144,7 @@ function allocateFill(children: readonly DesignShape[], axis: Axis, available: n
 	while (pending.length) {
 		const share = available / pending.length;
 		const total = pending.reduce((sum, child) => sum + limit(child, axis, share), 0);
-		const frozen = pending.filter(child =>
-			total > available ? limit(child, axis, share) > share : limit(child, axis, share) < share,
-		);
+		const frozen = pending.filter(child => (total > available ? limit(child, axis, share) > share : limit(child, axis, share) < share));
 		if (!frozen.length) {
 			for (const child of pending) {
 				result.set(child, limit(child, axis, share));
@@ -219,13 +161,7 @@ function allocateFill(children: readonly DesignShape[], axis: Axis, available: n
 	return result;
 }
 
-function layoutFlow(
-	shape: Frame,
-	layout: DesignAutoLayout,
-	measured: readonly DesignShape[],
-	imposed: Dimensions,
-	resize: (index: number, size: Dimensions) => DesignShape,
-): Frame {
+function layoutFlow(shape: Frame, layout: DesignAutoLayout, measured: readonly DesignShape[], imposed: Dimensions, resize: (index: number, size: Dimensions) => DesignShape): Frame {
 	const horizontal = layout.direction === 'horizontal';
 	const main: Axis = horizontal ? 'width' : 'height';
 	const cross: Axis = horizontal ? 'height' : 'width';
@@ -236,8 +172,7 @@ function layoutFlow(
 	const crossPadding = horizontal ? pad.top + pad.bottom : pad.left + pad.right;
 	const dimensions = { width: shape.width, height: shape.height };
 	const hug = (axis: Axis): boolean => layout[axis] === 'hug' && imposed[axis] === undefined;
-	const fills = (child: DesignShape, axis: Axis): boolean =>
-		child.kind !== 'group' && child.sizing?.[axis] === 'fill' && !hug(axis);
+	const fills = (child: DesignShape, axis: Axis): boolean => child.kind !== 'group' && child.sizing?.[axis] === 'fill' && !hug(axis);
 	const allocations: Dimensions[] = measured.map(() => ({}));
 	if (!layout.wrap && !hug(cross)) {
 		measured = measured.map((child, index) => {
@@ -248,10 +183,7 @@ function layoutFlow(
 			return resize(index, allocations[index]);
 		});
 	}
-	const naturalMain =
-		measured.reduce((sum, child) => sum + child[main], 0) +
-		Math.max(0, measured.length - 1) * layout.gap +
-		mainPadding;
+	const naturalMain = measured.reduce((sum, child) => sum + child[main], 0) + Math.max(0, measured.length - 1) * layout.gap + mainPadding;
 	if (hug(main)) {
 		dimensions[main] = limit(shape, main, naturalMain);
 	}
@@ -275,11 +207,7 @@ function layoutFlow(
 	for (const line of lines) {
 		const filling = line.map(index => measured[index]).filter(child => fills(child, main));
 		const fixed = line.reduce((sum, index) => sum + (fills(measured[index], main) ? 0 : measured[index][main]), 0);
-		const allocated = allocateFill(
-			filling,
-			main,
-			availableMain - fixed - Math.max(0, line.length - 1) * layout.gap,
-		);
+		const allocated = allocateFill(filling, main, availableMain - fixed - Math.max(0, line.length - 1) * layout.gap);
 		for (const index of line) {
 			const size = allocated.get(measured[index]);
 			if (size !== undefined) {
@@ -290,8 +218,7 @@ function layoutFlow(
 	}
 	const crossGap = layout.crossGap ?? layout.gap;
 	const lineSizes = lines.map(line => Math.max(0, ...line.map(index => children[index][cross])));
-	const naturalCross =
-		lineSizes.reduce((sum, size) => sum + size, 0) + Math.max(0, lines.length - 1) * crossGap + crossPadding;
+	const naturalCross = lineSizes.reduce((sum, size) => sum + size, 0) + Math.max(0, lines.length - 1) * crossGap + crossPadding;
 	if (hug(cross)) {
 		dimensions[cross] = limit(shape, cross, naturalCross);
 	}
@@ -308,15 +235,9 @@ function layoutFlow(
 				children[index] = resize(index, allocations[index]);
 			}
 		}
-		const remaining = Math.max(
-			0,
-			availableMain -
-				Math.max(0, line.length - 1) * layout.gap -
-				line.reduce((sum, index) => sum + children[index][main], 0),
-		);
+		const remaining = Math.max(0, availableMain - Math.max(0, line.length - 1) * layout.gap - line.reduce((sum, index) => sum + children[index][main], 0));
 		let cursor = mainStart + offset(layout.justify, remaining);
-		const gap =
-			layout.gap + (layout.justify === 'space-between' && line.length > 1 ? remaining / (line.length - 1) : 0);
+		const gap = layout.gap + (layout.justify === 'space-between' && line.length > 1 ? remaining / (line.length - 1) : 0);
 		for (const index of line) {
 			const child = children[index];
 			const crossPosition = crossCursor + offset(layout.align, lineSizes[lineIndex] - child[cross]);
@@ -329,23 +250,15 @@ function layoutFlow(
 }
 
 /** Shared with HTML export; positions are zero-based, spans include occupied gaps. */
-export function getDesignGridCells(
-	children: readonly DesignShape[],
-	grid: DesignGrid,
-): { column: number; row: number; columnSpan: number; rowSpan: number }[] {
+export function getDesignGridCells(children: readonly DesignShape[], grid: DesignGrid): { column: number; row: number; columnSpan: number; rowSpan: number }[] {
 	const columns = grid.columns.length;
 	const occupied = new Map<number, Set<number>>();
 	let cursor = 0;
 	return children.map(child => {
 		const columnSpan = Math.min(columns, child.gridCell?.columnSpan ?? 1);
 		const rowSpan = child.gridCell?.rowSpan ?? 1;
-		const manual =
-			grid.positioning === 'manual' &&
-			(child.gridCell?.column !== undefined || child.gridCell?.row !== undefined);
-		let cell = manual
-			? ((child.gridCell?.row ?? 1) - 1) * columns +
-				Math.min(columns - columnSpan, (child.gridCell?.column ?? 1) - 1)
-			: cursor;
+		const manual = grid.positioning === 'manual' && (child.gridCell?.column !== undefined || child.gridCell?.row !== undefined);
+		let cell = manual ? ((child.gridCell?.row ?? 1) - 1) * columns + Math.min(columns - columnSpan, (child.gridCell?.column ?? 1) - 1) : cursor;
 		const fits = (): boolean => {
 			if ((cell % columns) + columnSpan > columns) {
 				return false;
@@ -381,12 +294,7 @@ export function getDesignGridCells(
 	});
 }
 
-function trackSizes(
-	tracks: readonly DesignGridTrack[],
-	contributions: readonly { start: number; span: number; size: number }[],
-	gap: number,
-	available?: number,
-): number[] {
+function trackSizes(tracks: readonly DesignGridTrack[], contributions: readonly { start: number; span: number; size: number }[], gap: number, available?: number): number[] {
 	const sizes = tracks.map(track => (track.sizing === 'fixed' ? track.value : 0));
 	// Single-cell contributions establish track minima before spanning items distribute
 	// their remaining content over flexible tracks. Fixed tracks never grow implicitly.
@@ -404,16 +312,8 @@ function trackSizes(
 	if (fractions) {
 		const fraction =
 			available === undefined
-				? Math.max(
-						0,
-						...tracks.map((track, index) => (track.sizing === 'fill' ? sizes[index] / track.value : 0)),
-					)
-				: Math.max(
-						0,
-						available -
-							Math.max(0, tracks.length - 1) * gap -
-							tracks.reduce((sum, track, index) => sum + (track.sizing === 'fill' ? 0 : sizes[index]), 0),
-					) / fractions;
+				? Math.max(0, ...tracks.map((track, index) => (track.sizing === 'fill' ? sizes[index] / track.value : 0)))
+				: Math.max(0, available - Math.max(0, tracks.length - 1) * gap - tracks.reduce((sum, track, index) => sum + (track.sizing === 'fill' ? 0 : sizes[index]), 0)) / fractions;
 		for (const [index, track] of tracks.entries()) {
 			if (track.sizing === 'fill') {
 				sizes[index] = fraction * track.value;
@@ -423,20 +323,10 @@ function trackSizes(
 	return sizes;
 }
 
-function layoutGrid(
-	shape: Frame,
-	layout: DesignAutoLayout,
-	grid: DesignGrid,
-	measured: readonly DesignShape[],
-	imposed: Dimensions,
-	resize: (index: number, size: Dimensions) => DesignShape,
-): Frame {
+function layoutGrid(shape: Frame, layout: DesignAutoLayout, grid: DesignGrid, measured: readonly DesignShape[], imposed: Dimensions, resize: (index: number, size: Dimensions) => DesignShape): Frame {
 	const cells = getDesignGridCells(measured, grid);
 	const rowCount = Math.max(grid.autoRows ? 0 : grid.rows.length, ...cells.map(cell => cell.row + cell.rowSpan));
-	const rows = Array.from(
-		{ length: rowCount },
-		(_, index) => grid.rows[index] ?? ({ sizing: 'fill', value: 1 } as const),
-	);
+	const rows = Array.from({ length: rowCount }, (_, index) => grid.rows[index] ?? ({ sizing: 'fill', value: 1 } as const));
 	const pad = layout.padding;
 	const rowGap = layout.crossGap ?? layout.gap;
 	const dimensions = { width: shape.width, height: shape.height };
@@ -449,43 +339,23 @@ function layoutGrid(
 		}));
 		if (layout[axis] === 'hug' && imposed[axis] === undefined) {
 			const natural = trackSizes(tracks, contributions, gap);
-			dimensions[axis] = limit(
-				shape,
-				axis,
-				natural.reduce((sum, size) => sum + size, 0) + Math.max(0, tracks.length - 1) * gap + padding,
-			);
+			dimensions[axis] = limit(shape, axis, natural.reduce((sum, size) => sum + size, 0) + Math.max(0, tracks.length - 1) * gap + padding);
 		}
 		return trackSizes(tracks, contributions, gap, dimensions[axis] - padding);
 	};
-	const spanSize = (tracks: readonly number[], start: number, span: number, gap: number): number =>
-		tracks.slice(start, start + span).reduce((sum, size) => sum + size, 0) + (span - 1) * gap;
+	const spanSize = (tracks: readonly number[], start: number, span: number, gap: number): number => tracks.slice(start, start + span).reduce((sum, size) => sum + size, 0) + (span - 1) * gap;
 	const tracks: Record<Axis, number[]> = { width: [], height: [] };
 	const allocated: Dimensions[] = children.map(() => ({}));
 	// Resolve the definite dimension first, so nested horizontal or vertical wrapping
 	// can report its new content size before the other dimension hugs it.
-	const axes: Axis[] =
-		layout.width === 'hug' &&
-		imposed.width === undefined &&
-		(layout.height === 'fixed' || imposed.height !== undefined)
-			? ['height', 'width']
-			: ['width', 'height'];
+	const axes: Axis[] = layout.width === 'hug' && imposed.width === undefined && (layout.height === 'fixed' || imposed.height !== undefined) ? ['height', 'width'] : ['width', 'height'];
 	for (const axis of axes) {
 		const horizontal = axis === 'width';
 		const gap = horizontal ? layout.gap : rowGap;
-		tracks[axis] = sizes(
-			axis,
-			horizontal ? grid.columns : rows,
-			gap,
-			horizontal ? pad.left + pad.right : pad.top + pad.bottom,
-		);
+		tracks[axis] = sizes(axis, horizontal ? grid.columns : rows, gap, horizontal ? pad.left + pad.right : pad.top + pad.bottom);
 		for (const [index, cell] of cells.entries()) {
 			if (children[index].kind !== 'group' && children[index].sizing?.[axis] === 'fill') {
-				allocated[index][axis] = spanSize(
-					tracks[axis],
-					horizontal ? cell.column : cell.row,
-					horizontal ? cell.columnSpan : cell.rowSpan,
-					gap,
-				);
+				allocated[index][axis] = spanSize(tracks[axis], horizontal ? cell.column : cell.row, horizontal ? cell.columnSpan : cell.rowSpan, gap);
 				children[index] = resize(index, allocated[index]);
 			}
 		}
@@ -496,16 +366,8 @@ function layoutGrid(
 		const width = spanSize(columns, cell.column, cell.columnSpan, layout.gap);
 		const height = spanSize(heights, cell.row, cell.rowSpan, rowGap);
 		const child = children[index];
-		const x =
-			pad.left +
-			columns.slice(0, cell.column).reduce((sum, size) => sum + size, 0) +
-			cell.column * layout.gap +
-			offset(child.gridCell?.horizontal ?? 'start', width - child.width);
-		const y =
-			pad.top +
-			heights.slice(0, cell.row).reduce((sum, size) => sum + size, 0) +
-			cell.row * rowGap +
-			offset(child.gridCell?.vertical ?? 'start', height - child.height);
+		const x = pad.left + columns.slice(0, cell.column).reduce((sum, size) => sum + size, 0) + cell.column * layout.gap + offset(child.gridCell?.horizontal ?? 'start', width - child.width);
+		const y = pad.top + heights.slice(0, cell.row).reduce((sum, size) => sum + size, 0) + cell.row * rowGap + offset(child.gridCell?.vertical ?? 'start', height - child.height);
 		children[index] = move(child, x, y);
 	}
 	return { ...shape, ...dimensions, children };

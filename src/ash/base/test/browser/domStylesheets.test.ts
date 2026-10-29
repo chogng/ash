@@ -19,10 +19,7 @@ test('global styles follow live windows and release each window independently', 
 		using secondRegistration = registerWindow(second.window as unknown as Window);
 		const firstStyle = first.window.document.querySelector('style')!;
 		const secondStyle = second.window.document.querySelector('style')!;
-		assert.deepEqual(
-			[firstStyle.textContent, secondStyle.textContent],
-			[':root { --test-layer: 10; }', ':root { --test-layer: 10; }'],
-		);
+		assert.deepEqual([firstStyle.textContent, secondStyle.textContent], [':root { --test-layer: 10; }', ':root { --test-layer: 10; }']);
 		firstRegistration.dispose();
 		styles.setText(':root { --test-layer: 20; }');
 		assert.equal(first.window.document.querySelector('style'), null);
@@ -38,10 +35,9 @@ test('global styles follow live windows and release each window independently', 
 });
 
 test('document style mirror retains loaded links while synchronizing changed styles', async () => {
-	const source = new JSDOM(
-		'<!doctype html><head><link id="sheet" rel="stylesheet" href="/editor.css"><style id="theme">.editor { color: red; }</style></head><body></body>',
-		{ url: 'https://ash.test/workbench' },
-	);
+	const source = new JSDOM('<!doctype html><head><link id="sheet" rel="stylesheet" href="/editor.css"><style id="theme">.editor { color: red; }</style></head><body></body>', {
+		url: 'https://ash.test/workbench',
+	});
 	const target = new JSDOM('<!doctype html><head></head><body></body>', { url: 'https://ash.test/popup' });
 	using mirror = cloneDocumentStyles(source.window.document, target.window.document);
 	try {

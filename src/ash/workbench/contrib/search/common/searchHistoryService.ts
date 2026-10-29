@@ -53,12 +53,7 @@ export class SearchHistoryService extends Disposable implements ISearchHistorySe
 	}
 
 	public save(history: ISearchHistoryValues): void {
-		this.storage.store(
-			SearchHistoryService.SEARCH_HISTORY_KEY,
-			JSON.stringify(history),
-			StorageScope.WORKSPACE,
-			StorageTarget.USER,
-		);
+		this.storage.store(SearchHistoryService.SEARCH_HISTORY_KEY, JSON.stringify(history), StorageScope.WORKSPACE, StorageTarget.USER);
 	}
 
 	public clearHistory(): void {

@@ -11,9 +11,7 @@ export function containsExternalEditorDrop(event: DragEvent): boolean {
 }
 
 /** Converts native URI and file transfers into frontend-owned editor inputs. */
-export async function extractExternalEditorInputs(
-	dataTransfer: DataTransfer,
-): Promise<readonly IResourceEditorInput[]> {
+export async function extractExternalEditorInputs(dataTransfer: DataTransfer): Promise<readonly IResourceEditorInput[]> {
 	const uriList = dataTransfer.getData(Mimes.uriList);
 	const files = [...dataTransfer.files];
 	const inputs: IResourceEditorInput[] = [];
@@ -29,9 +27,7 @@ export async function extractExternalEditorInputs(
 	for (const file of files) {
 		const nativePath = getPathForFile(file);
 		const resource =
-			typeof nativePath === 'string' && nativePath.length > 0
-				? URI.file(nativePath)
-				: URI.parse(`untitled:/dropped/${createUuid()}/${encodeURIComponent(file.name || 'Dropped file')}`);
+			typeof nativePath === 'string' && nativePath.length > 0 ? URI.file(nativePath) : URI.parse(`untitled:/dropped/${createUuid()}/${encodeURIComponent(file.name || 'Dropped file')}`);
 		if (resources.has(resource.toString())) continue;
 		resources.add(resource.toString());
 		inputs.push({

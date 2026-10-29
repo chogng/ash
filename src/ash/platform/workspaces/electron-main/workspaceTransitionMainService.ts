@@ -81,10 +81,7 @@ export type WorkspaceTransitionState =
 			readonly previous: IAnyWorkspaceIdentifier;
 	  }
 	| {
-			readonly phase:
-				| WorkspaceTransitionPhase.SwitchingRuntime
-				| WorkspaceTransitionPhase.Committing
-				| WorkspaceTransitionPhase.Recovering;
+			readonly phase: WorkspaceTransitionPhase.SwitchingRuntime | WorkspaceTransitionPhase.Committing | WorkspaceTransitionPhase.Recovering;
 			readonly transitionId: number;
 			readonly requestedPath: string;
 			readonly previous: IAnyWorkspaceIdentifier;
@@ -144,10 +141,7 @@ export class WorkspaceTransitionMainService extends Disposable {
 		return this._state;
 	}
 
-	transitionToFolder(
-		path: string,
-		grant: WorkspaceTrustGrant = { type: 'config' },
-	): Promise<IWorkspaceTransitionResult> {
+	transitionToFolder(path: string, grant: WorkspaceTrustGrant = { type: 'config' }): Promise<IWorkspaceTransitionResult> {
 		const transition = this.transitionQueue.then(() => this.doTransitionToFolder(path, grant));
 		this.transitionQueue = transition.then(
 			() => undefined,
@@ -157,13 +151,8 @@ export class WorkspaceTransitionMainService extends Disposable {
 	}
 
 	/** Transitions to an already validated local or Remote single-folder Workspace identity. */
-	transitionToWorkspace(
-		target: IResolvedWorkspaceTransitionTarget,
-		grant: WorkspaceTrustGrant = { type: 'config' },
-	): Promise<IWorkspaceTransitionResult> {
-		const transition = this.transitionQueue.then(() =>
-			this.doTransitionToWorkspace(target.root, target.workspace, grant),
-		);
+	transitionToWorkspace(target: IResolvedWorkspaceTransitionTarget, grant: WorkspaceTrustGrant = { type: 'config' }): Promise<IWorkspaceTransitionResult> {
+		const transition = this.transitionQueue.then(() => this.doTransitionToWorkspace(target.root, target.workspace, grant));
 		this.transitionQueue = transition.then(
 			() => undefined,
 			() => undefined,
@@ -171,10 +160,7 @@ export class WorkspaceTransitionMainService extends Disposable {
 		return transition;
 	}
 
-	private async doTransitionToFolder(
-		requestedPath: string,
-		grant: WorkspaceTrustGrant,
-	): Promise<IWorkspaceTransitionResult> {
+	private async doTransitionToFolder(requestedPath: string, grant: WorkspaceTrustGrant): Promise<IWorkspaceTransitionResult> {
 		const transitionId = this.nextTransitionId++;
 		const previous = this.context.getWorkspace();
 		this.setState({ phase: WorkspaceTransitionPhase.Resolving, transitionId, requestedPath, previous });
@@ -221,10 +207,7 @@ export class WorkspaceTransitionMainService extends Disposable {
 		};
 	}
 
-	private async switchRuntime(
-		requestedPath: string,
-		context: IWorkspaceTransitionContext,
-	): Promise<IRuntimeSwitchResult> {
+	private async switchRuntime(requestedPath: string, context: IWorkspaceTransitionContext): Promise<IRuntimeSwitchResult> {
 		let recovered = false;
 		for (let attempt = 0; attempt < 2; attempt += 1) {
 			this.setActiveState(WorkspaceTransitionPhase.SwitchingRuntime, requestedPath, context);
@@ -265,10 +248,7 @@ export class WorkspaceTransitionMainService extends Disposable {
 	private finishBeforeCommit(failure: IWorkspaceTransitionFailure): IWorkspaceTransitionResult {
 		this.setState({ phase: WorkspaceTransitionPhase.Idle });
 		return {
-			status:
-				failure.kind === WorkspaceTransitionFailureKind.RuntimeBusy
-					? WorkspaceTransitionStatus.Blocked
-					: WorkspaceTransitionStatus.Failed,
+			status: failure.kind === WorkspaceTransitionFailureKind.RuntimeBusy ? WorkspaceTransitionStatus.Blocked : WorkspaceTransitionStatus.Failed,
 			previous: failure.previous,
 			workspace: failure.workspace,
 			failure,
@@ -276,10 +256,7 @@ export class WorkspaceTransitionMainService extends Disposable {
 	}
 
 	private setActiveState(
-		phase:
-			| WorkspaceTransitionPhase.SwitchingRuntime
-			| WorkspaceTransitionPhase.Committing
-			| WorkspaceTransitionPhase.Recovering,
+		phase: WorkspaceTransitionPhase.SwitchingRuntime | WorkspaceTransitionPhase.Committing | WorkspaceTransitionPhase.Recovering,
 		requestedPath: string,
 		context: IWorkspaceTransitionContext,
 	): void {

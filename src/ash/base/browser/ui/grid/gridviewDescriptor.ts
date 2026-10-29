@@ -2,11 +2,7 @@ import { type IPositionedRectangle } from '../../geometry.js';
 import type { IBoundarySashes } from '../sash/sash.js';
 import { type Event } from '../../../common/event.js';
 import { isFiniteNumber } from '../../../common/numbers.js';
-import {
-	type SplitViewLayoutPriority,
-	type SplitViewOrientation,
-	type SplitViewSizing,
-} from '../splitview/splitview.js';
+import { type SplitViewLayoutPriority, type SplitViewOrientation, type SplitViewSizing } from '../splitview/splitview.js';
 
 /** A leaf hosted by a GridView. */
 export interface IView {
@@ -69,15 +65,16 @@ export type SerializedGridViewDescriptor =
 			readonly priority: SplitViewLayoutPriority;
 	  };
 
-export type GridViewSizing =
-	| number
-	| { readonly type: 'distribute' }
-	| { readonly type: 'split'; readonly index: number }
-	| { readonly type: 'invisible'; readonly cachedVisibleSize: number };
+export type GridViewSizing = number | { readonly type: 'distribute' } | { readonly type: 'split'; readonly index: number } | { readonly type: 'invisible'; readonly cachedVisibleSize: number };
 
 export function normalizeRootDescriptor(descriptor: GridViewDescriptor<IView>): GridViewDescriptor<IView> {
 	if (descriptor.type === 'branch') return descriptor;
-	return { type: 'branch', orientation: 'horizontal', size: descriptor.size, children: [descriptor] };
+	return {
+		type: 'branch',
+		orientation: 'horizontal',
+		size: descriptor.size,
+		children: [descriptor],
+	};
 }
 
 export function normalizeDescriptor(descriptor: GridViewDescriptor<IView>, root: boolean): GridViewDescriptor<IView> {
@@ -88,14 +85,9 @@ export function normalizeDescriptor(descriptor: GridViewDescriptor<IView>, root:
 	return normalizeRootDescriptor(normalized);
 }
 
-function normalizeDescriptorNode(
-	descriptor: GridViewDescriptor<IView>,
-	root: boolean,
-): GridViewDescriptor<IView> | undefined {
+function normalizeDescriptorNode(descriptor: GridViewDescriptor<IView>, root: boolean): GridViewDescriptor<IView> | undefined {
 	if (descriptor.type === 'leaf') return descriptor;
-	const normalized = descriptor.children
-		.map(child => normalizeDescriptorNode(child, false))
-		.filter((child): child is GridViewDescriptor<IView> => child !== undefined);
+	const normalized = descriptor.children.map(child => normalizeDescriptorNode(child, false)).filter((child): child is GridViewDescriptor<IView> => child !== undefined);
 	if (normalized.length === 0) return undefined;
 	const flattened: GridViewDescriptor<IView>[] = [];
 	for (const child of normalized) {
@@ -126,11 +118,7 @@ export function descriptorNode(root: GridViewDescriptor<IView>, location: GridLo
 	return node;
 }
 
-export function replaceDescriptorNode(
-	root: GridViewDescriptor<IView>,
-	location: GridLocation,
-	replacement: GridViewDescriptor<IView>,
-): GridViewDescriptor<IView> {
+export function replaceDescriptorNode(root: GridViewDescriptor<IView>, location: GridLocation, replacement: GridViewDescriptor<IView>): GridViewDescriptor<IView> {
 	if (location.length === 0) return replacement;
 	if (root.type !== 'branch') {
 		throw new Error('GridView replacement parent is not a branch');
@@ -143,16 +131,10 @@ export function replaceDescriptorNode(
 }
 
 export function descriptorSizing(descriptor: GridViewDescriptor<IView>): SplitViewSizing {
-	return descriptor.type === 'leaf' && descriptor.visible === false
-		? { type: 'invisible', cachedVisibleSize: descriptor.size }
-		: descriptor.size;
+	return descriptor.type === 'leaf' && descriptor.visible === false ? { type: 'invisible', cachedVisibleSize: descriptor.size } : descriptor.size;
 }
 
-export function validateDescriptor(
-	descriptor: GridViewDescriptor<IView>,
-	seenViews: Set<IView>,
-	parentOrientation: SplitViewOrientation | undefined,
-): void {
+export function validateDescriptor(descriptor: GridViewDescriptor<IView>, seenViews: Set<IView>, parentOrientation: SplitViewOrientation | undefined): void {
 	assertDimension(descriptor.size, 'descriptor size');
 	assertPriority(descriptor.priority ?? 'normal');
 	if (descriptor.type === 'leaf') {
@@ -174,10 +156,7 @@ export function validateDescriptor(
 	}
 }
 
-export function validateSerializedGridViewDescriptor(
-	descriptor: SerializedGridViewDescriptor,
-	parentOrientation?: SplitViewOrientation,
-): void {
+export function validateSerializedGridViewDescriptor(descriptor: SerializedGridViewDescriptor, parentOrientation?: SplitViewOrientation): void {
 	assertDimension(descriptor.size, 'serialized descriptor size');
 	assertPriority(descriptor.priority);
 	if (descriptor.type === 'leaf') {
@@ -197,10 +176,7 @@ export function validateSerializedGridViewDescriptor(
 	}
 }
 
-export function deserializeGridViewDescriptor<TView extends ISerializableView>(
-	descriptor: SerializedGridViewDescriptor,
-	deserializer: IViewDeserializer<TView>,
-): GridViewDescriptor<TView> {
+export function deserializeGridViewDescriptor<TView extends ISerializableView>(descriptor: SerializedGridViewDescriptor, deserializer: IViewDeserializer<TView>): GridViewDescriptor<TView> {
 	if (descriptor.type === 'leaf') {
 		return {
 			type: 'leaf',

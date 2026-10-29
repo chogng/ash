@@ -20,12 +20,7 @@ export type DebugLinkHoverBehaviorTypeData = { readonly type: DebugLinkHoverBeha
 
 /** The console's used linkification port; row owners supply the listener lifetime. */
 export interface ILinkDetector {
-	linkify(
-		text: string,
-		hoverBehavior: DebugLinkHoverBehaviorTypeData,
-		splitLines?: boolean,
-		workspaceFolder?: IWorkspaceFolder,
-	): HTMLElement;
+	linkify(text: string, hoverBehavior: DebugLinkHoverBehaviorTypeData, splitLines?: boolean, workspaceFolder?: IWorkspaceFolder): HTMLElement;
 }
 
 /** Projects text into links. File identity and opening remain with the window services. */
@@ -39,12 +34,7 @@ export class LinkDetector implements ILinkDetector {
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 	) {}
 
-	linkify(
-		text: string,
-		hoverBehavior: DebugLinkHoverBehaviorTypeData,
-		splitLines = false,
-		workspaceFolder?: IWorkspaceFolder,
-	): HTMLElement {
+	linkify(text: string, hoverBehavior: DebugLinkHoverBehaviorTypeData, splitLines = false, workspaceFolder?: IWorkspaceFolder): HTMLElement {
 		const root = h(document, 'span');
 		const store = hoverBehavior.store;
 		let current = !store.isDisposed;
@@ -58,21 +48,14 @@ export class LinkDetector implements ILinkDetector {
 			current &&
 			(!workspaceFolder ||
 				(this.workspace.getWorkspace().id === workspaceId &&
-					this.workspace
-						.getWorkspace()
-						.folders.some(
-							folder =>
-								folder.id === workspaceFolder.id &&
-								folder.uri.toString() === workspaceFolder.uri.toString(),
-						)));
+					this.workspace.getWorkspace().folders.some(folder => folder.id === workspaceFolder.id && folder.uri.toString() === workspaceFolder.uri.toString())));
 		const lines = splitLines ? (text.match(/[^\n]*\n|[^\n]+$/g) ?? []) : [text];
 		for (const line of lines) {
 			const host = splitLines ? root.appendChild(h(document, 'span')) : root;
 			let offset = 0;
 			// URLs take precedence over embedded paths. A token boundary keeps long
 			// unbroken output from retrying the relative-path pattern at every character.
-			const candidates =
-				/\b(?:https?:\/\/|mailto:|file:\/\/)[^\s<>"\x00-\x1f]+|(?<![\p{L}\p{N}_.-])(?:[A-Za-z]:[\\/]|\/|\.{1,2}[\\/]|[\p{L}\p{N}_.-]+[\\/])[^\s<>"\x00-\x1f]+/giu;
+			const candidates = /\b(?:https?:\/\/|mailto:|file:\/\/)[^\s<>"\x00-\x1f]+|(?<![\p{L}\p{N}_.-])(?:[A-Za-z]:[\\/]|\/|\.{1,2}[\\/]|[\p{L}\p{N}_.-]+[\\/])[^\s<>"\x00-\x1f]+/giu;
 			for (const match of line.matchAll(candidates)) {
 				const value = match[0].length > 32768 ? match[0] : trimPunctuation(match[0]);
 				host.append(document.createTextNode(line.slice(offset, match.index)));
@@ -84,11 +67,7 @@ export class LinkDetector implements ILinkDetector {
 				if (/^(?:https?:\/\/|mailto:)/i.test(value)) {
 					try {
 						const uri = URI.parse(value);
-						if (
-							(/^https?$/i.test(uri.scheme) && !uri.authority) ||
-							(uri.scheme === 'mailto' && !uri.path.includes('@'))
-						)
-							continue;
+						if ((/^https?$/i.test(uri.scheme) && !uri.authority) || (uri.scheme === 'mailto' && !uri.path.includes('@'))) continue;
 						this.activate(label, hoverBehavior, isCurrent, async side => {
 							await this.openers.open(uri, {
 								fromUserGesture: true,
@@ -106,11 +85,7 @@ export class LinkDetector implements ILinkDetector {
 							stat => {
 								if (isCurrent() && stat.kind === FileKind.File)
 									this.activate(label, hoverBehavior, isCurrent, async side => {
-										await this.editors.openEditor(
-											{ resource: location.resource },
-											{ selection: location.selection },
-											side ? 'sideGroup' : 'activeGroup',
-										);
+										await this.editors.openEditor({ resource: location.resource }, { selection: location.selection }, side ? 'sideGroup' : 'activeGroup');
 									});
 							},
 							() => {
@@ -124,20 +99,14 @@ export class LinkDetector implements ILinkDetector {
 		return root;
 	}
 
-	private activate(
-		label: HTMLElement,
-		hover: DebugLinkHoverBehaviorTypeData,
-		isCurrent: () => boolean,
-		open: (side: boolean) => Promise<void>,
-	): void {
+	private activate(label: HTMLElement, hover: DebugLinkHoverBehaviorTypeData, isCurrent: () => boolean, open: (side: boolean) => Promise<void>): void {
 		if (!isCurrent()) return;
 		label.className = 'ash-debug-link';
 		label.setAttribute('role', 'link');
 		label.tabIndex = 0;
 		const hint = localize('debug.repl.followLink', 'Ctrl/Cmd+click or Enter to follow link');
 		label.setAttribute('aria-description', hint);
-		if (hover.type === DebugLinkHoverBehavior.Rich)
-			hover.store.add(this.hovers.setupDelayedHover(label, { content: hint }));
+		if (hover.type === DebugLinkHoverBehavior.Rich) hover.store.add(this.hovers.setupDelayedHover(label, { content: hint }));
 		else if (hover.type === DebugLinkHoverBehavior.Basic) label.title = hint;
 		const follow = (side: boolean) => {
 			if (!isCurrent()) return;
@@ -148,8 +117,7 @@ export class LinkDetector implements ILinkDetector {
 		hover.store.add(
 			addDisposableListener(label, 'click', event => {
 				event.stopPropagation();
-				if ((event.ctrlKey || event.metaKey) && !label.ownerDocument.getSelection()?.toString())
-					follow(event.shiftKey);
+				if ((event.ctrlKey || event.metaKey) && !label.ownerDocument.getSelection()?.toString()) follow(event.shiftKey);
 			}),
 		);
 		hover.store.add(
@@ -179,10 +147,7 @@ function trimPunctuation(text: string): string {
 	return result;
 }
 
-function fileLocation(
-	text: string,
-	folder: IWorkspaceFolder | undefined,
-): { resource: URI; selection?: Range } | undefined {
+function fileLocation(text: string, folder: IWorkspaceFolder | undefined): { resource: URI; selection?: Range } | undefined {
 	const suffix = /:(\d+)(?::(\d+))?$/.exec(text);
 	const line = suffix ? Number(suffix[1]) : 1;
 	const column = suffix?.[2] ? Number(suffix[2]) : 1;
@@ -199,9 +164,7 @@ function fileLocation(
 			if (!folder) return undefined;
 			const windows = /^[A-Za-z]:[\\/]/.test(path);
 			if (path.startsWith('/') || windows) {
-				resource = isRemoteResource(folder.uri)
-					? withRemoteWorkspacePath(folder.uri, path)
-					: URI.from({ scheme: 'file', path: windows ? path.replaceAll('\\', '/') : path });
+				resource = isRemoteResource(folder.uri) ? withRemoteWorkspacePath(folder.uri, path) : URI.from({ scheme: 'file', path: windows ? path.replaceAll('\\', '/') : path });
 			} else resource = URI.joinPath(folder.uri, path.replaceAll('\\', '/'));
 		}
 		return { resource, selection: suffix ? new Range(line, column, line, column) : undefined };

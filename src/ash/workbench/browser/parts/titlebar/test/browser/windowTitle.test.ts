@@ -5,10 +5,7 @@ import { createDisconnectedRendererApi } from '../../../../rendererApi.js';
 import type { IResourceEditorInput } from '../../../../../common/editor.js';
 import { isWindows } from '../../../../../../base/common/platform.js';
 import { Registry } from '../../../../../../platform/registry/common/platform.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../../../platform/configuration/common/configurationRegistry.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -20,10 +17,7 @@ import { ILabelService } from '../../../../../../platform/label/common/label.js'
 import { LabelService } from '../../../../../services/label/common/labelService.js';
 import { IWorkspaceContextService, type IWorkspace } from '../../../../../../platform/workspace/common/workspace.js';
 import { BrowserWorkingCopyService } from '../../../../../services/workingCopy/browser/browserWorkingCopyService.js';
-import {
-	IWorkingCopyService,
-	type IWorkingCopy,
-} from '../../../../../services/workingCopy/common/workingCopyService.js';
+import { IWorkingCopyService, type IWorkingCopy } from '../../../../../services/workingCopy/common/workingCopyService.js';
 import { TestWorkspaceService } from '../../../../../services/configuration/test/common/testServices.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -32,10 +26,7 @@ import { IContextKeyService } from '../../../../../../platform/contextkey/common
 import { ILocalizationService } from '../../../../../services/localization/common/localizationService.js';
 import { WorkbenchLocalizationService } from '../../../../../services/localization/browser/workbenchLocalizationService.js';
 import { initializeTestLocalization } from '../../../../../services/localization/test/common/localizationTestUtils.js';
-import type {
-	IEditorGroup,
-	IEditorGroupsContainer,
-} from '../../../../../services/editor/common/editorGroupsService.js';
+import type { IEditorGroup, IEditorGroupsContainer } from '../../../../../services/editor/common/editorGroupsService.js';
 import type { EditorGroupChangeEvent } from '../../../../../services/editor/common/editorState.js';
 import { WindowTitle } from '../../windowTitle.js';
 
@@ -79,14 +70,7 @@ test('WindowTitle replaces the startup title and follows workspace changes in ea
 	for (const product of ['Ash Code', 'Embedded Ash']) {
 		using resources = new DisposableStore();
 		const context = createContext(resources);
-		resources.add(
-			context.services.createInstance(
-				WindowTitle,
-				context.dom.window as unknown as Window,
-				product,
-				context.editors,
-			),
-		);
+		resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, product, context.editors));
 		assert.equal(context.dom.window.document.title, product);
 		context.workspace.updateWorkspace({
 			id: 'project',
@@ -108,14 +92,7 @@ test('WindowTitle replaces the startup title and follows workspace changes in ea
 test('WindowTitle follows active resources, labels, dirty registrations, save and unregister', async () => {
 	using resources = new DisposableStore();
 	const context = createContext(resources);
-	resources.add(
-		context.services.createInstance(
-			WindowTitle,
-			context.dom.window as unknown as Window,
-			'Ash Code',
-			context.editors,
-		),
-	);
+	resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, 'Ash Code', context.editors));
 	const input = {
 		resource: URI.file('/project/draft.ts'),
 		label: '草稿.ts',
@@ -146,14 +123,7 @@ test('WindowTitle releases the previous editor label and all subscriptions on di
 	const labelChanged = resources.add(new Emitter<void>());
 	const input = { resource: URI.file('/draft.ts'), label: 'Draft', onDidChangeLabel: labelChanged.event };
 	await context.editors.openEditor(input);
-	const title = resources.add(
-		context.services.createInstance(
-			WindowTitle,
-			context.dom.window as unknown as Window,
-			'Ash Code',
-			context.editors,
-		),
-	);
+	const title = resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, 'Ash Code', context.editors));
 	input.label = 'Renamed';
 	labelChanged.fire();
 	assert.equal(context.dom.window.document.title, 'Renamed — Ash Code');
@@ -174,29 +144,14 @@ test('WindowTitle keeps main and auxiliary editor scopes independent', async () 
 	resources.add(toDisposable(() => popup.window.close()));
 	const scope = resources.add(context.services.createChild());
 	const popupEditors = resources.add(new TestEditorService());
-	resources.add(
-		context.services.createInstance(
-			WindowTitle,
-			context.dom.window as unknown as Window,
-			'Ash Code',
-			context.editors,
-		),
-	);
-	const popupTitle = resources.add(
-		scope.createInstance(WindowTitle, popup.window as unknown as Window, 'Ash Code', popupEditors),
-	);
+	resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, 'Ash Code', context.editors));
+	const popupTitle = resources.add(scope.createInstance(WindowTitle, popup.window as unknown as Window, 'Ash Code', popupEditors));
 	await context.editors.openEditor({ resource: URI.file('/main.ts') });
 	await popupEditors.openEditor({ resource: URI.file('/detached.ts') });
-	assert.deepEqual(
-		[context.dom.window.document.title, popup.window.document.title],
-		['main.ts — Ash Code', 'detached.ts — Ash Code'],
-	);
+	assert.deepEqual([context.dom.window.document.title, popup.window.document.title], ['main.ts — Ash Code', 'detached.ts — Ash Code']);
 	const workspace: IWorkspace = { id: 'shared', folders: [], name: 'Shared workspace' };
 	context.workspace.updateWorkspace(workspace);
-	assert.deepEqual(
-		[context.dom.window.document.title, popup.window.document.title],
-		['main.ts — Shared workspace — Ash Code', 'detached.ts — Shared workspace — Ash Code'],
-	);
+	assert.deepEqual([context.dom.window.document.title, popup.window.document.title], ['main.ts — Shared workspace — Ash Code', 'detached.ts — Shared workspace — Ash Code']);
 	popupTitle.dispose();
 	assert.equal(popupEditors.hasListeners, false);
 	assert.equal(context.editors.hasListeners, true);
@@ -204,10 +159,7 @@ test('WindowTitle keeps main and auxiliary editor scopes independent', async () 
 
 test('WindowTitle rejects creation without its required services', () => {
 	using services = new InstantiationService();
-	assert.throws(
-		() => services.createInstance(WindowTitle, {} as Window, 'Ash Code', {} as IEditorGroupsContainer),
-		/Unknown service: workspaceContextService/,
-	);
+	assert.throws(() => services.createInstance(WindowTitle, {} as Window, 'Ash Code', {} as IEditorGroupsContainer), /Unknown service: workspaceContextService/);
 });
 
 test('WindowTitle renders path variables and updates templates, separators and context values live', async () => {
@@ -218,25 +170,12 @@ test('WindowTitle renders path variables and updates templates, separators and c
 		folders: [{ id: 'root', index: 0, name: 'Project', uri: URI.file('/project') }],
 	});
 	await context.editors.openEditor({ resource: URI.file('/project/src/main.ts') });
-	const title = resources.add(
-		context.services.createInstance(
-			WindowTitle,
-			context.dom.window as unknown as Window,
-			'Ash Code',
-			context.editors,
-		),
-	);
-	await context.configuration.updateValue(
-		'window.title',
-		'${activeEditorMedium}${separator}${activeFolderShort}${separator}${folderName}${separator}${folderPath}${separator}${rootPath}',
-	);
+	const title = resources.add(context.services.createInstance(WindowTitle, context.dom.window as unknown as Window, 'Ash Code', context.editors));
+	await context.configuration.updateValue('window.title', '${activeEditorMedium}${separator}${activeFolderShort}${separator}${folderName}${separator}${folderPath}${separator}${rootPath}');
 	const rootPath = URI.file('/project').fsPath;
 	const relativePath = URI.file('/project/src/main.ts').fsPath.slice(rootPath.length + 1);
 	assert.equal(title.value, `${relativePath} — src — Project — ${rootPath} — ${rootPath}`);
-	await context.configuration.updateValue(
-		'window.title',
-		'${branch}${separator}${activeEditorShort}${separator}${appName}',
-	);
+	await context.configuration.updateValue('window.title', '${branch}${separator}${activeEditorShort}${separator}${appName}');
 	await context.configuration.updateValue('window.titleSeparator', ' | ');
 	context.contextKeys.setContext('git.branch', 'feature/title');
 	title.registerVariables([{ name: 'branch', contextKey: 'git.branch' }]);
@@ -263,14 +202,7 @@ test('WindowTitle uses the selected Chinese language for administrator decoratio
 		const context = createContext(resources);
 		const translatedServices = resources.add(context.services.createChild());
 		translatedServices.registerInstance(ILocalizationService, resources.add(new WorkbenchLocalizationService()));
-		const title = resources.add(
-			translatedServices.createInstance(
-				WindowTitle,
-				context.dom.window as unknown as Window,
-				'Ash Code',
-				context.editors,
-			),
-		);
+		const title = resources.add(translatedServices.createInstance(WindowTitle, context.dom.window as unknown as Window, 'Ash Code', context.editors));
 		title.updateProperties({ isAdmin: true });
 		assert.equal(title.value, `Ash Code ${isWindows ? '[管理员]' : '[超级用户]'}`);
 		const registry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
@@ -342,10 +274,7 @@ class TestWorkingCopy extends Disposable implements IWorkingCopy {
 	}
 }
 
-function createTestLabelService(
-	workspace: ConstructorParameters<typeof LabelService>[0],
-	os: OperatingSystem = operatingSystem,
-): LabelService {
+function createTestLabelService(workspace: ConstructorParameters<typeof LabelService>[0], os: OperatingSystem = operatingSystem): LabelService {
 	const api = createDisconnectedRendererApi();
 	const host = { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: os } };
 	return new LabelService(workspace, new BrowserPathService(host, workspace), host);

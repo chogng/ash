@@ -16,10 +16,7 @@ import type { INetworkDiagnosticsService } from '../../networkDiagnostics/common
 import type { IChannelService } from '../../collab/common/channelService.js';
 import type { ICallService } from '../../call/common/callService.js';
 import type { IVoiceCodeTranscriptionBackendService } from './dictation.js';
-import type {
-	ILocalTranscriptionService,
-	ILocalTranscriptionModelService,
-} from '../../localTranscription/common/localTranscription.js';
+import type { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../localTranscription/common/localTranscription.js';
 import type { IApprovalEnvironmentService } from '../../approvalEnvironment/common/approvalEnvironmentService.js';
 import type { IMemoriesService } from '../../memories/common/memoriesService.js';
 import type { IMemoryDiagnosticsService } from '../../memory/common/memoryDiagnosticsService.js';
@@ -31,11 +28,7 @@ import type { IFileApi } from '../../files/common/fileApi.js';
 import type { ISyntaxApi } from '../../syntax/common/syntaxApi.js';
 import type { IContentSearchConfigurationService } from '../../search/common/search.js';
 import type { IContentSearchApi } from '../../search/common/searchApi.js';
-import type {
-	IAgentSessionService,
-	IAgentThreadService,
-	IAgentTurnService,
-} from '../../agentHost/common/agentService.js';
+import type { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../agentHost/common/agentService.js';
 import type { IAgentModelsService } from '../../agentHost/common/agentModels.js';
 import type { IAppServerSkillApi, IAppServerHookApi } from '../../agentHost/common/appServerApi.js';
 import type { ILanguageServerService } from '../../language/common/languageServerService.js';
@@ -77,15 +70,12 @@ export interface RendererHostCapabilities {
 }
 
 /** Merges product capabilities while rejecting two contributions that claim the same slot. */
-export function mergeRendererHostCapabilities(
-	capabilities: readonly RendererHostCapabilities[],
-): RendererHostCapabilities {
+export function mergeRendererHostCapabilities(capabilities: readonly RendererHostCapabilities[]): RendererHostCapabilities {
 	const merged: Record<string, unknown> = {};
 	for (const capability of capabilities) {
 		for (const [name, value] of Object.entries(capability)) {
 			if (value === undefined) continue;
-			if (Object.hasOwn(merged, name))
-				throw new Error(`Renderer host capability '${name}' was contributed more than once`);
+			if (Object.hasOwn(merged, name)) throw new Error(`Renderer host capability '${name}' was contributed more than once`);
 			merged[name] = value;
 		}
 	}

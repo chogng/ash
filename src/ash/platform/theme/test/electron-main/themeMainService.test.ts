@@ -158,11 +158,7 @@ test('window splash IPC uses the host scope and preserves validated geometry acr
 			assert.deepEqual(await read.invoke(read.validate(undefined)), snapshot);
 			assert.deepEqual(backgrounds, ['#123456']);
 			scope = 'sessions:first';
-			assert.equal(
-				((await read.invoke(read.validate(undefined))) as { colorInfo: { background: string } }).colorInfo
-					.background,
-				'#ffffff',
-			);
+			assert.equal(((await read.invoke(read.validate(undefined))) as { colorInfo: { background: string } }).colorInfo.background, '#ffffff');
 			assert.equal(state.getItem('windowSplash.sessions:first'), undefined);
 		} finally {
 			await state.close();

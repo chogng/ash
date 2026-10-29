@@ -1,10 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import type { AppServerProtocolClient } from '../../browser/appServerProtocolClient.js';
-import type {
-	ConfigUpdateParams,
-	ModelPreferencesUpdateParams,
-} from '../../../../../../.build/protocol/typescript/index.js';
+import type { ConfigUpdateParams, ModelPreferencesUpdateParams } from '../../../../../../.build/protocol/typescript/index.js';
 import { createAppServerAgentModelsService } from '../../browser/appServerAgentModels.js';
 import { SecretStorageError } from '../../../secrets/common/secrets.js';
 import { AppServerRemoteError } from '../../common/appServerError.js';
@@ -20,19 +17,11 @@ test('Credential operations preserve storage failures as domain errors and trans
 				throw new AppServerRemoteError(-32094, 'Untrusted diagnostic', { kind: 'SecretStorageAccessDenied' });
 			},
 		} as unknown as AppServerProtocolClient);
-		for (const operation of [
-			() => api.listProviders(),
-			() => api.listModels(),
-			() => api.setProviderApiKey({ connection: 'openai', apiKey: 'fake' }),
-			() => api.removeProviderApiKey('openai'),
-		]) {
+		for (const operation of [() => api.listProviders(), () => api.listModels(), () => api.setProviderApiKey({ connection: 'openai', apiKey: 'fake' }), () => api.removeProviderApiKey('openai')]) {
 			await assert.rejects(operation(), error => {
 				assert.ok(error instanceof SecretStorageError);
 				assert.equal(error.status, 'accessDenied');
-				assert.equal(
-					error.message,
-					'凭据存储访问被拒绝。请检查配置目录权限，或使用“授权系统钥匙串”请求访问。后台操作不会显示系统窗口。',
-				);
+				assert.equal(error.message, '凭据存储访问被拒绝。请检查配置目录权限，或使用“授权系统钥匙串”请求访问。后台操作不会显示系统窗口。');
 				return true;
 			});
 		}

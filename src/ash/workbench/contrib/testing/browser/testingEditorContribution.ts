@@ -50,25 +50,16 @@ export class TestingEditorContribution extends Disposable {
 		this._register(
 			editor.onMouseDown(event => {
 				const target = event.target;
-				if (
-					target.type !== MouseTargetType.GUTTER_GLYPH_MARGIN ||
-					target.detail.glyphMarginLane !== GlyphMarginLane.Right ||
-					!target.position
-				) {
+				if (target.type !== MouseTargetType.GUTTER_GLYPH_MARGIN || target.detail.glyphMarginLane !== GlyphMarginLane.Right || !target.position) {
 					return;
 				}
-				const tests = this.decorations.decorations.filter(
-					decoration => decoration.range.startLineNumber === target.position!.lineNumber,
-				);
+				const tests = this.decorations.decorations.filter(decoration => decoration.range.startLineNumber === target.position!.lineNumber);
 				if (tests.length === 0 || testing.isRunningTests || testing.isDiscovering) {
 					return;
 				}
 				event.event.preventDefault();
 				event.event.stopPropagation();
-				const execution =
-					event.event.altKey && tests[0]!.metadata.debuggable
-						? testing.debugTest(tests[0]!.metadata.key)
-						: testing.runTests(tests.map(test => test.metadata.key));
+				const execution = event.event.altKey && tests[0]!.metadata.debuggable ? testing.debugTest(tests[0]!.metadata.key) : testing.runTests(tests.map(test => test.metadata.key));
 				void execution.catch(error => this.report(error));
 			}),
 		);
@@ -78,15 +69,7 @@ export class TestingEditorContribution extends Disposable {
 		const model = this.decorations.textModel;
 		const dirty = this.copies.get(model.uri).some(copy => copy.isDirty);
 		const tests =
-			this.invalidated || dirty
-				? []
-				: this.testing.tests.filter(
-						test =>
-							test.resource &&
-							test.source &&
-							extUri.isEqual(test.resource, model.uri) &&
-							test.source.line <= model.lineCount,
-					);
+			this.invalidated || dirty ? [] : this.testing.tests.filter(test => test.resource && test.source && extUri.isEqual(test.resource, model.uri) && test.source.line <= model.lineCount);
 		this.decorations.replaceAll(
 			tests.map(test => ({
 				range: Range.fromPositions(new Position(test.source!.line, 1)),
@@ -98,15 +81,8 @@ export class TestingEditorContribution extends Disposable {
 					glyphMargin: { position: GlyphMarginLane.Right, persistLane: true },
 					glyphMarginHoverMessage: {
 						value:
-							localize(
-								'testing.runGutter',
-								'Run {0} · {1}',
-								test.name,
-								testStateLabel(this.testing.testResults.find(result => result.key === test.key)?.state),
-							) +
-							(test.debuggable
-								? '\n' + localize('testing.debugGutter', 'Alt+Click to debug this test.')
-								: ''),
+							localize('testing.runGutter', 'Run {0} · {1}', test.name, testStateLabel(this.testing.testResults.find(result => result.key === test.key)?.state)) +
+							(test.debuggable ? '\n' + localize('testing.debugGutter', 'Alt+Click to debug this test.') : ''),
 					},
 					zIndex: 10,
 				},
@@ -115,8 +91,6 @@ export class TestingEditorContribution extends Disposable {
 	}
 
 	private report(error: unknown): void {
-		this.notifications.error(
-			error instanceof Error ? error.message : localize('testing.operationFailed', 'Test operation failed.'),
-		);
+		this.notifications.error(error instanceof Error ? error.message : localize('testing.operationFailed', 'Test operation failed.'));
 	}
 }

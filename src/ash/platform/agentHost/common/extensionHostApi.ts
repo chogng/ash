@@ -5,8 +5,7 @@ import type { DisposableHandle } from '../../ipc/common/ipc.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export type ExtensionHostReconcileMode = 'refresh' | 'restartFailed';
-export type ExtensionHostRuntimeLifecycle =
-	'dormant' | 'stopped' | 'starting' | 'handshaking' | 'ready' | 'recovering' | 'crashLoop' | 'failed';
+export type ExtensionHostRuntimeLifecycle = 'dormant' | 'stopped' | 'starting' | 'handshaking' | 'ready' | 'recovering' | 'crashLoop' | 'failed';
 export type ExtensionHostFailureCode =
 	| 'authorityDenied'
 	| 'staleSnapshot'
@@ -377,11 +376,7 @@ export interface ExtensionClientSource {
 }
 
 /** Host boundaries validate callback messages before forwarding them to the owning client adapter. */
-export type ExtensionHostClientHandler = (
-	operation: unknown,
-	signal: AbortSignal,
-	source: ExtensionClientSource,
-) => Promise<unknown>;
+export type ExtensionHostClientHandler = (operation: unknown, signal: AbortSignal, source: ExtensionClientSource) => Promise<unknown>;
 
 export const IExtensionHostApi = createServiceIdentifier<IExtensionHostApi>('extensionHostApi');
 

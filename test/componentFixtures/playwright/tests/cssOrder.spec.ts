@@ -39,9 +39,7 @@ test('component explorer discovers themed fixtures and exposes real CSS source o
 	await expect(frame.locator('html')).toHaveAttribute('data-color-theme', 'ash-high-contrast-light');
 	const original = await frame.locator('body').evaluate(() => window.componentFixture.order());
 	await page.getByRole('button', { name: 'Reverse CSS', exact: true }).click();
-	expect(await frame.locator('body').evaluate(() => window.componentFixture.order())).toEqual(
-		[...original].reverse(),
-	);
+	expect(await frame.locator('body').evaluate(() => window.componentFixture.order())).toEqual([...original].reverse());
 	await page.getByRole('button', { name: 'Reset CSS', exact: true }).click();
 	expect(await frame.locator('body').evaluate(() => window.componentFixture.order())).toEqual(original);
 	await expect(page.locator('#stylesheets')).toContainText('selectbox.css');
@@ -62,20 +60,16 @@ test('component explorer discovers themed fixtures and exposes real CSS source o
 		await frame.getByRole('combobox', { name: 'Fixture choice' }).click();
 		await frame.getByRole('combobox', { name: 'Fixture choice' }).press('ArrowDown');
 		const assertPresentation = async (): Promise<void> => {
-			for (const side of ['top', 'right', 'bottom', 'left'])
-				await expect(popup).toHaveCSS(`padding-${side}`, '4px');
+			for (const side of ['top', 'right', 'bottom', 'left']) await expect(popup).toHaveCSS(`padding-${side}`, '4px');
 			await expect(popup.getByRole('option')).toHaveCount(3);
-			for (const name of ['First choice', 'Last choice'])
-				await expect(popup.getByRole('option', { name, exact: true })).toHaveCSS('cursor', 'pointer');
+			for (const name of ['First choice', 'Last choice']) await expect(popup.getByRole('option', { name, exact: true })).toHaveCSS('cursor', 'pointer');
 			const disabled = popup.getByRole('option', { name: 'Unavailable choice', exact: true });
 			await expect(disabled).toHaveAttribute('aria-disabled', 'true');
 			await expect(disabled).toHaveCSS('cursor', 'default');
 			expect(
 				await popup.evaluate(element => ({
 					height: element.getBoundingClientRect().height,
-					rows: [...element.querySelectorAll('[role="option"]')].map(
-						row => row.getBoundingClientRect().height,
-					),
+					rows: [...element.querySelectorAll('[role="option"]')].map(row => row.getBoundingClientRect().height),
 				})),
 			).toEqual({ height: 74, rows: [22, 22, 22] });
 			const plainList = frame.getByRole('listbox', { name: 'Fixture list', exact: true });
@@ -93,17 +87,12 @@ test('component explorer discovers themed fixtures and exposes real CSS source o
 			await expect(focused).toBeFocused();
 			await expect(focused).toHaveCSS('outline-style', 'solid');
 			await expect(focused).toHaveCSS('outline-width', '1px');
-			await expect(frame.getByRole('combobox', { name: 'Fixture choice' })).toHaveAttribute(
-				'aria-activedescendant',
-				(await focused.getAttribute('id'))!,
-			);
+			await expect(frame.getByRole('combobox', { name: 'Fixture choice' })).toHaveAttribute('aria-activedescendant', (await focused.getAttribute('id'))!);
 		};
 		await assertPresentation();
 		await frame.locator('body').evaluate(() => {
 			const order = window.componentFixture.order();
-			const list = window.componentFixture
-				.documents()
-				.find(document => document.source.endsWith('/list/list.css'))!;
+			const list = window.componentFixture.documents().find(document => document.source.endsWith('/list/list.css'))!;
 			window.componentFixture.setOrder([...order.filter(index => index !== list.index), list.index]);
 		});
 		await assertPresentation();
@@ -118,96 +107,60 @@ test('component explorer discovers themed fixtures and exposes real CSS source o
 test('CSS scan localizes an injected conflict to its two actual source files', async ({ page }, testInfo) => {
 	const id = 'shared/ButtonsAndMenu/ash-dark';
 	const recorder = await imageRecorder(testInfo, id);
-	const result = await scanFixture(
-		page,
-		id,
-		Date.now() + 60_000,
-		/fixtures\/cssOrder\/(earlier|later)\.css$/,
-		recorder.save,
-		async page => {
-			await page.evaluate(async () => {
-				document.querySelector('.ash-component-fixture')!.classList.add('ash-fixture-order-probe');
-				await import('/test/componentFixtures/fixtures/cssOrder/earlier.css');
-				await import('/test/componentFixtures/fixtures/cssOrder/later.css');
-				window.componentFixture.refreshStyles();
-			});
-		},
-	);
+	const result = await scanFixture(page, id, Date.now() + 60_000, /fixtures\/cssOrder\/(earlier|later)\.css$/, recorder.save, async page => {
+		await page.evaluate(async () => {
+			document.querySelector('.ash-component-fixture')!.classList.add('ash-fixture-order-probe');
+			await import('/test/componentFixtures/fixtures/cssOrder/earlier.css');
+			await import('/test/componentFixtures/fixtures/cssOrder/later.css');
+			window.componentFixture.refreshStyles();
+		});
+	});
 	const report = testInfo.outputPath('injected-conflict.json');
-	await writeFile(
-		report,
-		`${JSON.stringify({ fault: 'Injected border-width conflict', result, images: recorder.images }, null, 2)}\n`,
-	);
+	await writeFile(report, `${JSON.stringify({ fault: 'Injected border-width conflict', result, images: recorder.images }, null, 2)}\n`);
 	await testInfo.attach('injected-conflict', { path: report, contentType: 'application/json' });
 	expect(result.status, JSON.stringify(result)).toBe('localized');
-	expect(result.conflict?.map(document => document.source)).toEqual([
-		'test/componentFixtures/fixtures/cssOrder/earlier.css',
-		'test/componentFixtures/fixtures/cssOrder/later.css',
-	]);
+	expect(result.conflict?.map(document => document.source)).toEqual(['test/componentFixtures/fixtures/cssOrder/earlier.css', 'test/componentFixtures/fixtures/cssOrder/later.css']);
 	expect(result.probes).toBeLessThan(15);
 	expect(result.difference?.styles.some(change => change.property === '/border-top-width')).toBe(true);
 });
 
 test('a dynamic stylesheet between source documents prevents a false pair attribution', async ({ page }, testInfo) => {
 	const recorder = await imageRecorder(testInfo, 'dynamic-stylesheet-boundary');
-	const result = await scanFixture(
-		page,
-		'shared/ButtonsAndMenu/ash-dark',
-		Date.now() + 60_000,
-		/fixtures\/cssOrder\/(earlier|later)\.css$/,
-		recorder.save,
-		async page => {
-			await page.evaluate(async () => {
-				document.querySelector('.ash-component-fixture')!.classList.add('ash-fixture-order-probe');
-				await import('/test/componentFixtures/fixtures/cssOrder/earlier.css');
-				const dynamic = document.createElement('style');
-				dynamic.textContent = '.ash-fixture-order-probe .ash-button { border-width: 4px; }';
-				document.head.append(dynamic);
-				await import('/test/componentFixtures/fixtures/cssOrder/later.css');
-				window.componentFixture.refreshStyles();
-			});
-		},
-	);
+	const result = await scanFixture(page, 'shared/ButtonsAndMenu/ash-dark', Date.now() + 60_000, /fixtures\/cssOrder\/(earlier|later)\.css$/, recorder.save, async page => {
+		await page.evaluate(async () => {
+			document.querySelector('.ash-component-fixture')!.classList.add('ash-fixture-order-probe');
+			await import('/test/componentFixtures/fixtures/cssOrder/earlier.css');
+			const dynamic = document.createElement('style');
+			dynamic.textContent = '.ash-fixture-order-probe .ash-button { border-width: 4px; }';
+			document.head.append(dynamic);
+			await import('/test/componentFixtures/fixtures/cssOrder/later.css');
+			window.componentFixture.refreshStyles();
+		});
+	});
 	expect(result.detected).toBe(true);
 	expect(result.status).toBe('unlocalized');
 	expect(result.reason).toContain('dynamic stylesheet');
 	expect(result.conflict).toBeUndefined();
 });
 
-test('scanner rediscovers the original SelectBox and List conflict through real source documents', async ({
-	page,
-}, testInfo) => {
+test('scanner rediscovers the original SelectBox and List conflict through real source documents', async ({ page }, testInfo) => {
 	const recorder = await imageRecorder(testInfo, 'original-selectbox-conflict');
-	const result = await scanFixture(
-		page,
-		'shared/SelectAndList/ash-dark',
-		Date.now() + 60_000,
-		/.*/,
-		recorder.save,
-		async page => {
-			await page.evaluate(() => {
-				// Restore the fragile selectors only in this page's actual source node.
-				// The checked-out CSS stays fixed, and the source mapping still names its owner.
-				const source = [...document.querySelectorAll<HTMLStyleElement>('style[data-vite-dev-id]')].find(style =>
-					style.dataset.viteDevId?.endsWith('/selectbox/selectbox.css'),
-				)!;
-				source.textContent = source
-					.textContent!.replace('.ash-select-box-list.ash-list', '.ash-select-box-list')
-					.replace('.ash-select-box-option:not(.ash-select-box-option-disabled)', '.ash-select-box-option');
-				window.componentFixture.refreshStyles();
-			});
-		},
-	);
+	const result = await scanFixture(page, 'shared/SelectAndList/ash-dark', Date.now() + 60_000, /.*/, recorder.save, async page => {
+		await page.evaluate(() => {
+			// Restore the fragile selectors only in this page's actual source node.
+			// The checked-out CSS stays fixed, and the source mapping still names its owner.
+			const source = [...document.querySelectorAll<HTMLStyleElement>('style[data-vite-dev-id]')].find(style => style.dataset.viteDevId?.endsWith('/selectbox/selectbox.css'))!;
+			source.textContent = source
+				.textContent!.replace('.ash-select-box-list.ash-list', '.ash-select-box-list')
+				.replace('.ash-select-box-option:not(.ash-select-box-option-disabled)', '.ash-select-box-option');
+			window.componentFixture.refreshStyles();
+		});
+	});
 	const report = testInfo.outputPath('selectbox-conflict.json');
-	await writeFile(
-		report,
-		`${JSON.stringify({ fault: 'Original fragile selectors restored only in this browser document', result, images: recorder.images }, null, 2)}\n`,
-	);
+	await writeFile(report, `${JSON.stringify({ fault: 'Original fragile selectors restored only in this browser document', result, images: recorder.images }, null, 2)}\n`);
 	await testInfo.attach('selectbox-conflict', { path: report, contentType: 'application/json' });
 	expect(result.status, JSON.stringify(result)).toBe('localized');
-	expect(new Set(result.conflict?.map(document => document.source))).toEqual(
-		new Set(['src/ash/base/browser/ui/selectbox/selectbox.css', 'src/ash/base/browser/ui/list/list.css']),
-	);
+	expect(new Set(result.conflict?.map(document => document.source))).toEqual(new Set(['src/ash/base/browser/ui/selectbox/selectbox.css', 'src/ash/base/browser/ui/list/list.css']));
 });
 
 test('scan command covers registered fixtures within the shared time budget', async ({ baseURL }, testInfo) => {
@@ -240,25 +193,16 @@ test('scan command covers registered fixtures within the shared time budget', as
 		});
 });
 
-test('bisection command selects exactly one fixture and saves its actual CSS manifest', async ({
-	baseURL,
-}, testInfo) => {
+test('bisection command selects exactly one fixture and saves its actual CSS manifest', async ({ baseURL }, testInfo) => {
 	const id = 'shared/SelectAndList/ash-high-contrast-light';
 	const report = await runCssOrderCommand(testInfo, baseURL!, 'Bisect', ['--fixture-id-regex', `^${id}$`]);
 	expect(report.results.map(result => result.id)).toEqual([id]);
 	expect(report.results[0].status).toBe('clean');
-	expect(report.results[0].documents.map(document => document.source)).toContain(
-		'src/ash/base/browser/ui/selectbox/selectbox.css',
-	);
+	expect(report.results[0].documents.map(document => document.source)).toContain('src/ash/base/browser/ui/selectbox/selectbox.css');
 });
 
 test('scan command records every skipped batch when its budget expires', async ({ baseURL }, testInfo) => {
-	const report = await runCssOrderCommand(testInfo, baseURL!, 'Scan', [
-		'--time-budget-minutes',
-		'0.00001',
-		'--batch-size',
-		'2',
-	]);
+	const report = await runCssOrderCommand(testInfo, baseURL!, 'Scan', ['--time-budget-minutes', '0.00001', '--batch-size', '2']);
 	expect(report.results.length).toBeGreaterThanOrEqual(12);
 	expect(report.results.every(result => result.status === 'not-scanned')).toBe(true);
 	expect(report.results.every(result => result.reason === 'Scan time budget exceeded')).toBe(true);

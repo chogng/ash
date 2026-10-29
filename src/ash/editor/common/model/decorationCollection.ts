@@ -110,11 +110,7 @@ export class TextDecorationCollection<TMetadata> extends Disposable {
 			throw new RangeError(`Unknown text decoration ${id}`);
 		}
 		this.validateSpec(spec);
-		const [modelDecorationId] = this.model.deltaDecorations(
-			[previous.modelDecorationId],
-			[toModelDecoration(spec)],
-			this.ownerId,
-		);
+		const [modelDecorationId] = this.model.deltaDecorations([previous.modelDecorationId], [toModelDecoration(spec)], this.ownerId);
 		const next: DecorationEntry<TMetadata> = {
 			id,
 			modelDecorationId,
@@ -140,10 +136,7 @@ export class TextDecorationCollection<TMetadata> extends Disposable {
 	}
 
 	/** Atomically replaces one caller-owned decoration list while retaining reusable IDs. */
-	deltaDecorations(
-		previousIds: readonly TextDecorationId[],
-		specs: readonly TextDecorationSpec<TMetadata>[],
-	): readonly TextDecorationId[] {
+	deltaDecorations(previousIds: readonly TextDecorationId[], specs: readonly TextDecorationSpec<TMetadata>[]): readonly TextDecorationId[] {
 		this.assertNotDisposed();
 		for (const spec of specs) this.validateSpec(spec);
 		const previousEntries = previousIds.map(id => {
@@ -151,8 +144,7 @@ export class TextDecorationCollection<TMetadata> extends Disposable {
 			if (!entry) throw new RangeError(`Unknown text decoration ${id}`);
 			return entry;
 		});
-		if (new Set(previousIds).size !== previousIds.length)
-			throw new RangeError('Text decoration delta contains duplicate IDs');
+		if (new Set(previousIds).size !== previousIds.length) throw new RangeError('Text decoration delta contains duplicate IDs');
 		if (previousIds.length === 0 && specs.length === 0) return Object.freeze([]);
 
 		const modelDecorationIds = this.model.deltaDecorations(
@@ -160,9 +152,7 @@ export class TextDecorationCollection<TMetadata> extends Disposable {
 			specs.map(toModelDecoration),
 			this.ownerId,
 		);
-		const staged = specs.map((spec, index) =>
-			this.createEntryWithId(previousEntries[index]?.id ?? nextDecorationId(), modelDecorationIds[index], spec),
-		);
+		const staged = specs.map((spec, index) => this.createEntryWithId(previousEntries[index]?.id ?? nextDecorationId(), modelDecorationIds[index], spec));
 
 		for (const entry of previousEntries) this.entries.delete(entry.id);
 		for (const entry of staged) this.entries.set(entry.id, entry);
@@ -179,12 +169,13 @@ export class TextDecorationCollection<TMetadata> extends Disposable {
 		return this.createEntryWithId(nextDecorationId(), modelDecorationId, spec);
 	}
 
-	private createEntryWithId(
-		id: TextDecorationId,
-		modelDecorationId: string,
-		spec: TextDecorationSpec<TMetadata>,
-	): DecorationEntry<TMetadata> {
-		return { id, modelDecorationId, metadata: spec.metadata, lastRange: spec.range };
+	private createEntryWithId(id: TextDecorationId, modelDecorationId: string, spec: TextDecorationSpec<TMetadata>): DecorationEntry<TMetadata> {
+		return {
+			id,
+			modelDecorationId,
+			metadata: spec.metadata,
+			lastRange: spec.range,
+		};
 	}
 
 	private validateSpec(spec: TextDecorationSpec<TMetadata>): void {
@@ -217,13 +208,21 @@ export class TextDecorationCollection<TMetadata> extends Disposable {
 
 	private emitChange(reason: TextDecorationChangeReason): void {
 		this.changeEmitter.fire(
-			Object.freeze({ reason, modelVersion: this.model.version, decorations: this.createSnapshot() }),
+			Object.freeze({
+				reason,
+				modelVersion: this.model.version,
+				decorations: this.createSnapshot(),
+			}),
 		);
 	}
 }
 
 function snapshotEntry<TMetadata>(entry: DecorationEntry<TMetadata>, range: Range): TextDecorationSnapshot<TMetadata> {
-	return Object.freeze({ id: entry.id, range, metadata: entry.metadata });
+	return Object.freeze({
+		id: entry.id,
+		range,
+		metadata: entry.metadata,
+	});
 }
 
 function nextDecorationId(): TextDecorationId {
@@ -235,13 +234,13 @@ function nextDecorationId(): TextDecorationId {
 function toModelDecoration<TMetadata>(spec: TextDecorationSpec<TMetadata>) {
 	return {
 		range: spec.range,
-		options: { ...(spec.options ?? { description: 'TextDecorationCollection' }), stickiness: spec.stickiness },
+		options: {
+			...(spec.options ?? { description: 'TextDecorationCollection' }),
+			stickiness: spec.stickiness,
+		},
 	};
 }
 
 function rangesEqual(left: Range, right: Range): boolean {
-	return (
-		Position.compare(left.getStartPosition(), right.getStartPosition()) === 0 &&
-		Position.compare(left.getEndPosition(), right.getEndPosition()) === 0
-	);
+	return Position.compare(left.getStartPosition(), right.getStartPosition()) === 0 && Position.compare(left.getEndPosition(), right.getEndPosition()) === 0;
 }

@@ -46,11 +46,7 @@ function lowercaseLabel(source: string): LowercaseLabel {
 	for (const character of source) {
 		const length = character.toLowerCase().length;
 		for (let index = 0; index < length; index++) {
-			sourceRanges.push(
-				length === character.length
-					? { start: offset + index, end: offset + index + 1 }
-					: { start: offset, end: offset + character.length },
-			);
+			sourceRanges.push(length === character.length ? { start: offset + index, end: offset + index + 1 } : { start: offset, end: offset + character.length });
 		}
 		offset += character.length;
 	}

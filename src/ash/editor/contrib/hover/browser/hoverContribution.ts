@@ -13,19 +13,11 @@ registerEditorContribution({
 		if (context.kind !== 'text') {
 			return;
 		}
-		return context.instantiationService.createInstance(
-			ContentHoverController,
-			context.view,
-			context.editor,
-			context.onLanguageError,
-		);
+		return context.instantiationService.createInstance(ContentHoverController, context.view, context.editor, context.onLanguageError);
 	},
 });
 
 registerEditorContribution({
 	id: GlyphHoverController.ID,
-	install: context =>
-		context.kind === 'text'
-			? context.instantiationService.createInstance(GlyphHoverController, context.editor)
-			: undefined,
+	install: context => (context.kind === 'text' ? context.instantiationService.createInstance(GlyphHoverController, context.editor) : undefined),
 });

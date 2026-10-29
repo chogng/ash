@@ -105,8 +105,7 @@ export class OutlineModel extends TreeElement {
 			for (let index = 0; index < result.symbols.length; index++) {
 				if (index > 0 && index % 4096 === 0) {
 					await new Promise<void>(resolve => setTimeout(resolve, 0));
-					if (!isLanguageFeatureRequestCurrent(request) || !sameProviders(providers, registry.ordered(model)))
-						return null;
+					if (!isLanguageFeatureRequestCurrent(request) || !sameProviders(providers, registry.ordered(model))) return null;
 				}
 				appendSymbol(group, result.symbols[index], collisionSuffixes);
 			}
@@ -116,9 +115,7 @@ export class OutlineModel extends TreeElement {
 	}
 
 	public getTopLevelSymbols(): readonly LanguageDocumentSymbol[] {
-		const symbols = [...this.children.values()].flatMap(group =>
-			[...group.children.values()].map(element => element.symbol),
-		);
+		const symbols = [...this.children.values()].flatMap(group => [...group.children.values()].map(element => element.symbol));
 		return symbols.sort((left, right) => Range.compareRangesUsingStarts(left.range, right.range));
 	}
 
@@ -129,17 +126,11 @@ export class OutlineModel extends TreeElement {
 			for (const child of symbol.children ?? []) visit(child);
 		};
 		for (const symbol of this.getTopLevelSymbols()) visit(symbol);
-		return symbols.sort((left, right) =>
-			Position.compare(left.selectionRange.getStartPosition(), right.selectionRange.getStartPosition()),
-		);
+		return symbols.sort((left, right) => Position.compare(left.selectionRange.getStartPosition(), right.selectionRange.getStartPosition()));
 	}
 }
 
-function appendSymbol(
-	parent: OutlineGroup | OutlineElement,
-	symbol: LanguageDocumentSymbol,
-	collisionSuffixes: Map<string, number>,
-): void {
+function appendSymbol(parent: OutlineGroup | OutlineElement, symbol: LanguageDocumentSymbol, collisionSuffixes: Map<string, number>): void {
 	const base = `${parent.id}/${encodeURIComponent(symbol.name)}`;
 	let id = base;
 	if (parent.children.has(id)) {
@@ -156,37 +147,16 @@ function appendSymbol(
 	for (const child of symbol.children ?? []) appendSymbol(element, child, collisionSuffixes);
 }
 
-function normalizeSymbols(
-	symbols: readonly LanguageDocumentSymbol[],
-	model: TextModel,
-): readonly LanguageDocumentSymbol[] {
+function normalizeSymbols(symbols: readonly LanguageDocumentSymbol[], model: TextModel): readonly LanguageDocumentSymbol[] {
 	if (!Array.isArray(symbols)) throw new TypeError('Document symbols must be an array');
 	return Object.freeze(
 		symbols.map(symbol => {
-			if (
-				!symbol ||
-				typeof symbol.name !== 'string' ||
-				(typeof symbol.kind !== 'string' && typeof symbol.kind !== 'number')
-			) {
+			if (!symbol || typeof symbol.name !== 'string' || (typeof symbol.kind !== 'string' && typeof symbol.kind !== 'number')) {
 				throw new TypeError('Document symbol has invalid identity');
 			}
-			const range = new Range(
-				symbol.range.startLineNumber,
-				symbol.range.startColumn,
-				symbol.range.endLineNumber,
-				symbol.range.endColumn,
-			);
-			const selectionRange = new Range(
-				symbol.selectionRange.startLineNumber,
-				symbol.selectionRange.startColumn,
-				symbol.selectionRange.endLineNumber,
-				symbol.selectionRange.endColumn,
-			);
-			if (
-				!model.isValidRange(range) ||
-				!model.isValidRange(selectionRange) ||
-				!range.containsRange(selectionRange)
-			) {
+			const range = new Range(symbol.range.startLineNumber, symbol.range.startColumn, symbol.range.endLineNumber, symbol.range.endColumn);
+			const selectionRange = new Range(symbol.selectionRange.startLineNumber, symbol.selectionRange.startColumn, symbol.selectionRange.endLineNumber, symbol.selectionRange.endColumn);
+			if (!model.isValidRange(range) || !model.isValidRange(selectionRange) || !range.containsRange(selectionRange)) {
 				throw new RangeError('Document symbol range is outside its document scope');
 			}
 			return Object.freeze({
@@ -210,9 +180,6 @@ function idForProvider(provider: LanguageDocumentSymbolProvider): number {
 	return id;
 }
 
-function sameProviders(
-	left: readonly LanguageDocumentSymbolProvider[],
-	right: readonly LanguageDocumentSymbolProvider[],
-): boolean {
+function sameProviders(left: readonly LanguageDocumentSymbolProvider[], right: readonly LanguageDocumentSymbolProvider[]): boolean {
 	return left.length === right.length && left.every((provider, index) => provider === right[index]);
 }

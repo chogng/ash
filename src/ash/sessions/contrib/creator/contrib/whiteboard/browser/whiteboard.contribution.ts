@@ -54,9 +54,7 @@ class WhiteboardWorkspace extends CreatorCanvasWorkspace {
 		this.editor.revealShape(note.children[1].id);
 	}
 	private connect(): void {
-		const selected = getDesignShapeEntries(this.document.model.value.shapes).filter(entry =>
-			this.editor.selection.ids.has(entry.shape.id),
-		);
+		const selected = getDesignShapeEntries(this.document.model.value.shapes).filter(entry => this.editor.selection.ids.has(entry.shape.id));
 		if (selected.length !== 2) {
 			return;
 		}
@@ -89,12 +87,7 @@ class WhiteboardWorkspace extends CreatorCanvasWorkspace {
 	protected override getModeActions(): readonly IAction[] {
 		return [
 			this.action('note', localize('sessions.creator.whiteboard.addNote', 'Add note'), () => this.addNote()),
-			this.action(
-				'connect',
-				localize('sessions.creator.whiteboard.connect', 'Connect selection'),
-				() => this.connect(),
-				this.editor.selection.ids.size === 2,
-			),
+			this.action('connect', localize('sessions.creator.whiteboard.connect', 'Connect selection'), () => this.connect(), this.editor.selection.ids.size === 2),
 		];
 	}
 }
@@ -102,15 +95,11 @@ class WhiteboardWorkspace extends CreatorCanvasWorkspace {
 registerCreatorMode({
 	id: CreatorMode.Whiteboard,
 	title: getCreatorModeTitle(CreatorMode.Whiteboard),
-	description: localize(
-		'sessions.creator.whiteboard.description',
-		'Sketch ideas, arrange notes and connect your thinking.',
-	),
+	description: localize('sessions.creator.whiteboard.description', 'Sketch ideas, arrange notes and connect your thinking.'),
 	icon: Lxicon.pen,
 	help: localize(
 		'sessions.creator.whiteboard.help',
 		'Add note creates a movable note. Select its text in Layers to edit the idea in Shape properties. Select two objects and choose Connect selection to draw a line. Draw provides freehand sketching. Lines keep their drawn geometry when objects move.',
 	),
-	create: (instantiation, ownerDocument) =>
-		instantiation.createInstance(WhiteboardWorkspace, ownerDocument, CreatorMode.Whiteboard),
+	create: (instantiation, ownerDocument) => instantiation.createInstance(WhiteboardWorkspace, ownerDocument, CreatorMode.Whiteboard),
 });

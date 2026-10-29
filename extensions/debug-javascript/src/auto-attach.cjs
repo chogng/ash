@@ -1,12 +1,7 @@
 // Runtime interaction only. Selection, authorization and launch policy live in Rust.
 'use strict';
 (() => {
-	if (
-		!require('node:worker_threads').isMainThread ||
-		!process.env.ASH_JS_DEBUG_TOKEN ||
-		process.env.VSCODE_INSPECTOR_OPTIONS
-	)
-		return;
+	if (!require('node:worker_threads').isMainThread || !process.env.ASH_JS_DEBUG_TOKEN || process.env.VSCODE_INSPECTOR_OPTIONS) return;
 	const inspector = require('node:inspector');
 	const flagged = !!inspector.url();
 	if (!flagged && process.env.ASH_JS_DEBUG_MODE === 'onlyWithFlag') return;
@@ -17,14 +12,7 @@
 		const address = inspector.url();
 		const endpoint = new URL(address);
 		// Match the Rust helper's address contract before entering a wait it must release.
-		if (
-			Buffer.byteLength(address) > 2048 ||
-			endpoint.protocol !== 'ws:' ||
-			endpoint.hostname !== '127.0.0.1' ||
-			endpoint.username ||
-			endpoint.password ||
-			!endpoint.port
-		) {
+		if (Buffer.byteLength(address) > 2048 || endpoint.protocol !== 'ws:' || endpoint.hostname !== '127.0.0.1' || endpoint.username || endpoint.password || !endpoint.port) {
 			if (!flagged) inspector.close();
 			return;
 		}

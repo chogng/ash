@@ -29,9 +29,5 @@ test('workspace launch arguments distinguish automatic and named targets', () =>
 	assert.throws(() => parseWorkspaceLaunchArguments(['one', 'two']), /only one project/);
 	assert.throws(() => parseWorkspaceLaunchArguments(['--folder']), /requires a path/);
 	assert.throws(() => parseWorkspaceLaunchArguments(['--remote-ssh', 'work-server']), /requires a Remote folder/);
-	assert.throws(
-		() =>
-			parseWorkspaceLaunchArguments(['--remote-ssh', 'work-server', '--workspace', '/remote/team.ash-workspace']),
-		/multi-root/,
-	);
+	assert.throws(() => parseWorkspaceLaunchArguments(['--remote-ssh', 'work-server', '--workspace', '/remote/team.ash-workspace']), /multi-root/);
 });

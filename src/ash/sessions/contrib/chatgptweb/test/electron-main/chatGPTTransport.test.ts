@@ -54,18 +54,8 @@ suite('ChatGPT transport', () => {
 			using resources = new DisposableStore();
 			const fromRenderer = resources.add(new Emitter<VSBuffer>()),
 				fromMain = resources.add(new Emitter<VSBuffer>());
-			const renderer = resources.add(
-				new IPCClient(
-					{ onMessage: fromMain.event, send: buffer => queueMicrotask(() => fromRenderer.fire(buffer)) },
-					'renderer',
-				),
-			);
-			const main = resources.add(
-				new IPCClient(
-					{ onMessage: fromRenderer.event, send: buffer => queueMicrotask(() => fromMain.fire(buffer)) },
-					'main',
-				),
-			);
+			const renderer = resources.add(new IPCClient({ onMessage: fromMain.event, send: buffer => queueMicrotask(() => fromRenderer.fire(buffer)) }, 'renderer'));
+			const main = resources.add(new IPCClient({ onMessage: fromRenderer.event, send: buffer => queueMicrotask(() => fromMain.fire(buffer)) }, 'main'));
 			let requests = 0;
 			const transport = resources.add(
 				new ChatGPTTransport({
@@ -100,15 +90,8 @@ suite('ChatGPT transport', () => {
 			});
 			assert.equal(response.status, 201);
 			assert.match(await response.text(), /^v=0/u);
-			for (const path of [
-				'/service/voice/get_token',
-				'/service/realtime/vp?dcid=1',
-				'/service/realtime/vp?dcid=0&other=1',
-			]) {
-				await assert.rejects(
-					createChatGPTFetch(adapter)(path, { method: 'POST', body: form }),
-					/Invalid ChatGPT/u,
-				);
+			for (const path of ['/service/voice/get_token', '/service/realtime/vp?dcid=1', '/service/realtime/vp?dcid=0&other=1']) {
+				await assert.rejects(createChatGPTFetch(adapter)(path, { method: 'POST', body: form }), /Invalid ChatGPT/u);
 			}
 			assert.equal(requests, 1);
 		}));
@@ -118,18 +101,8 @@ suite('ChatGPT transport', () => {
 			using resources = new DisposableStore();
 			const fromRenderer = resources.add(new Emitter<VSBuffer>()),
 				fromMain = resources.add(new Emitter<VSBuffer>());
-			const renderer = resources.add(
-				new IPCClient(
-					{ onMessage: fromMain.event, send: buffer => queueMicrotask(() => fromRenderer.fire(buffer)) },
-					'renderer',
-				),
-			);
-			const main = resources.add(
-				new IPCClient(
-					{ onMessage: fromRenderer.event, send: buffer => queueMicrotask(() => fromMain.fire(buffer)) },
-					'main',
-				),
-			);
+			const renderer = resources.add(new IPCClient({ onMessage: fromMain.event, send: buffer => queueMicrotask(() => fromRenderer.fire(buffer)) }, 'renderer'));
+			const main = resources.add(new IPCClient({ onMessage: fromRenderer.event, send: buffer => queueMicrotask(() => fromMain.fire(buffer)) }, 'main'));
 			const bytes = new Uint8Array([0, 128, 255, 137, 80, 78, 71]);
 			let received = false;
 			const transport = resources.add(
@@ -148,25 +121,13 @@ suite('ChatGPT transport', () => {
 			const adapter = new ElectronChatGPTTransport({
 				getChannel: name => renderer.getChannel(name),
 			} as IMainProcessService);
-			const path =
-				'/service/.upload?' +
-				new URLSearchParams({ url: 'https://files.oaiusercontent.com/test?signature=fixture' });
+			const path = '/service/.upload?' + new URLSearchParams({ url: 'https://files.oaiusercontent.com/test?signature=fixture' });
 			const response = await createChatGPTFetch(adapter)(path, { method: 'PUT', body: new Blob([bytes]) });
 			assert.equal(response.status, 201);
 			await response.text();
 			assert.equal(received, true);
-			for (const body of [
-				{ base64: 'AAAA=' },
-				{ base64: 'AA==garbage' },
-				{ base64: 'AA==', extra: true },
-				{ base64: 'x'.repeat(Math.ceil((20 * 1024 * 1024) / 3) * 4 + 1) },
-			]) {
-				await assert.rejects(
-					renderer
-						.getChannel('sessions.chatgpt.transport')
-						.call('request', [randomUUID(), { path, method: 'PUT', headers: {}, body }]),
-					/Invalid ChatGPT upload/u,
-				);
+			for (const body of [{ base64: 'AAAA=' }, { base64: 'AA==garbage' }, { base64: 'AA==', extra: true }, { base64: 'x'.repeat(Math.ceil((20 * 1024 * 1024) / 3) * 4 + 1) }]) {
+				await assert.rejects(renderer.getChannel('sessions.chatgpt.transport').call('request', [randomUUID(), { path, method: 'PUT', headers: {}, body }]), /Invalid ChatGPT upload/u);
 			}
 		}));
 
@@ -183,16 +144,14 @@ suite('ChatGPT transport', () => {
 						return new Response(null, { status: 201, headers: { 'Set-Cookie': 'private' } });
 					}) as typeof fetch),
 			});
-			const path =
-				'/service/.upload?' +
-				new URLSearchParams({ url: 'https://files.oaiusercontent.com/test?signature=fixture' });
+			const path = '/service/.upload?' + new URLSearchParams({ url: 'https://files.oaiusercontent.com/test?signature=fixture' });
 			const body = VSBuffer.wrap(new Uint8Array([0, 128, 255]));
 			const channel = transport.getChannel();
 			const id = randomUUID();
-			const result = (await channel.call('', 'request', [
-				id,
-				{ path, method: 'PUT', headers: { 'Content-Type': 'image/png', 'x-ms-blob-type': 'BlockBlob' }, body },
-			])) as { status: number; headers: object };
+			const result = (await channel.call('', 'request', [id, { path, method: 'PUT', headers: { 'Content-Type': 'image/png', 'x-ms-blob-type': 'BlockBlob' }, body }])) as {
+				status: number;
+				headers: object;
+			};
 			assert.equal(result.status, 201);
 			assert.deepEqual(result.headers, {});
 			assert.deepEqual([...(calls[0]!.body as Uint8Array)], [0, 128, 255]);
@@ -213,10 +172,7 @@ suite('ChatGPT transport', () => {
 					'http://127.0.0.1/test?signature=x',
 				].map(url => ({ path: '/service/.upload?' + new URLSearchParams({ url }) })),
 			]) {
-				await assert.rejects(
-					channel.call('', 'request', [randomUUID(), { path, method: 'PUT', headers: {}, body, ...change }]),
-					TypeError,
-				);
+				await assert.rejects(channel.call('', 'request', [randomUUID(), { path, method: 'PUT', headers: {}, body, ...change }]), TypeError);
 			}
 			assert.equal(calls.length, 1);
 		}));
@@ -240,15 +196,11 @@ suite('ChatGPT transport', () => {
 					}) as typeof fetch),
 			});
 			const channel = transport.getChannel();
-			for (const url of [
-				'https://chatgpt.com/backend-api/files/file-test/download',
-				'https://files.oaiusercontent.com/file-test?signature=fixture',
-			]) {
+			for (const url of ['https://chatgpt.com/backend-api/files/file-test/download', 'https://files.oaiusercontent.com/file-test?signature=fixture']) {
 				const id = randomUUID();
-				const response = (await channel.call('', 'request', [
-					id,
-					{ path: '/service/.resource?' + new URLSearchParams({ url }), method: 'GET', headers: {} },
-				])) as { headers: Record<string, string> };
+				const response = (await channel.call('', 'request', [id, { path: '/service/.resource?' + new URLSearchParams({ url }), method: 'GET', headers: {} }])) as {
+					headers: Record<string, string>;
+				};
 				assert.equal(response.headers['content-type'], 'image/png');
 				assert.equal(response.headers['Set-Cookie'], undefined);
 				assert.deepEqual([...(await transport.read(id))!.buffer], [3, 4]);
@@ -263,13 +215,7 @@ suite('ChatGPT transport', () => {
 				'https://files.oaiusercontent.com.evil.test/file',
 				'https://files.oaiusercontent.com/redirect',
 			]) {
-				await assert.rejects(
-					channel.call('', 'request', [
-						randomUUID(),
-						{ path: '/service/.resource?' + new URLSearchParams({ url }), method: 'GET', headers: {} },
-					]),
-					TypeError,
-				);
+				await assert.rejects(channel.call('', 'request', [randomUUID(), { path: '/service/.resource?' + new URLSearchParams({ url }), method: 'GET', headers: {} }]), TypeError);
 			}
 		}));
 	test('uses current login credentials only for ChatGPT web requests without binding the chat to an account', async () =>
@@ -301,21 +247,12 @@ suite('ChatGPT transport', () => {
 			await first.text();
 			assert.equal(new Headers(calls[0]!.headers).get('Authorization'), 'Bearer fixture-one');
 			assert.equal(calls[0]!.redirect, 'error');
-			assert.equal(
-				(await authorize(new URL('https://chatgpt.com/backend-api/models'))).get('Authorization'),
-				'Bearer fixture-one',
-			);
+			assert.equal((await authorize(new URL('https://chatgpt.com/backend-api/models'))).get('Authorization'), 'Bearer fixture-one');
 			assert.equal((await authorize(new URL('https://other.test/backend-api/models'))).get('Authorization'), '');
 			assert.equal((await authorize(new URL('https://chatgpt.com/not-allowed'))).get('Authorization'), '');
 			assert.equal(await readFile(file, 'utf8'), original);
-			await writeFile(
-				file,
-				JSON.stringify({ tokens: { access_token: 'fixture-two', account_id: 'account-two' } }),
-			);
-			assert.equal(
-				(await authorize(new URL('https://chatgpt.com/backend-api/sentinel/prepare'))).get('Authorization'),
-				'Bearer fixture-two',
-			);
+			await writeFile(file, JSON.stringify({ tokens: { access_token: 'fixture-two', account_id: 'account-two' } }));
+			assert.equal((await authorize(new URL('https://chatgpt.com/backend-api/sentinel/prepare'))).get('Authorization'), 'Bearer fixture-two');
 			const next = await fetcher('/service/backend-api/f/conversation', { method: 'POST', body: '{}' });
 			assert.equal(next.status, 200);
 			await next.text();
@@ -377,13 +314,7 @@ suite('ChatGPT transport', () => {
 				['GET', '/f/conversation/resume', undefined],
 				['POST', '/f/conversation/resume/other', '{}'],
 			] as const) {
-				await assert.rejects(
-					channel.call('', 'request', [
-						randomUUID(),
-						{ path: '/service/backend-api' + path, method, headers: {}, body },
-					]),
-					TypeError,
-				);
+				await assert.rejects(channel.call('', 'request', [randomUUID(), { path: '/service/backend-api' + path, method, headers: {}, body }]), TypeError);
 			}
 			assert.equal(calls.length, 8);
 		}));
@@ -461,9 +392,7 @@ suite('ChatGPT transport', () => {
 		fixture(async file => {
 			let verifying!: () => void, finish!: () => void;
 			const started = new Promise<void>(resolve => (verifying = resolve));
-			const proof = new Promise<unknown>(
-				resolve => (finish = () => resolve({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' })),
-			);
+			const proof = new Promise<unknown>(resolve => (finish = () => resolve({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' })));
 			using transport = new ChatGPTTransport({
 				credentialFile: file,
 				readVerificationScript: async () => '',
@@ -481,10 +410,7 @@ suite('ChatGPT transport', () => {
 			});
 			await started;
 			controller.abort();
-			await assert.rejects(
-				pending,
-				error => (error as Error).name === 'AbortError' || (error as Error).name === 'Canceled',
-			);
+			await assert.rejects(pending, error => (error as Error).name === 'AbortError' || (error as Error).name === 'Canceled');
 			finish();
 			assert.equal(await transport.read(randomUUID()), null);
 		}));

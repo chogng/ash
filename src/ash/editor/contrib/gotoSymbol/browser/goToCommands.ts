@@ -5,11 +5,7 @@ import { MenuId, MenusRegistry } from '../../../../platform/actions/common/actio
 import { type ContextKeyExpression } from '../../../../platform/contextkey/common/contextkey.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import {
-	EditorAction,
-	registerInstantiatedEditorAction,
-	type ServicesAccessor,
-} from '../../../browser/editorFeatureRegistration.js';
+import { EditorAction, registerInstantiatedEditorAction, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { type ReferencesController, type SymbolNavigationKind } from './peek/referencesController.js';
 
@@ -45,12 +41,10 @@ class SymbolNavigationAction extends EditorAction {
 
 	public async run(_accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> {
 		editor.focus();
-		await editor
-			.getContribution<ReferencesController>('editor.contrib.referencesController')
-			?.navigate(this.command.kind, {
-				peek: this.command.peek,
-				includeDeclaration: this.command.kind === 'references' ? !this.command.peek : undefined,
-			});
+		await editor.getContribution<ReferencesController>('editor.contrib.referencesController')?.navigate(this.command.kind, {
+			peek: this.command.peek,
+			includeDeclaration: this.command.kind === 'references' ? !this.command.peek : undefined,
+		});
 	}
 }
 

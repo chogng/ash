@@ -7,12 +7,7 @@ import { EditorOption, ShowLightbulbIconMode } from '../../../common/config/edit
 import { Range } from '../../../common/core/range.js';
 import { type Position } from '../../../common/core/position.js';
 import { type TextDecorationCollection } from '../../../common/model/decorationCollection.js';
-import {
-	CodeActionTriggerType,
-	createLanguageFeatureRequest,
-	type LanguageCodeActionRequest,
-	type LanguageDiagnostic,
-} from '../../../common/languages.js';
+import { CodeActionTriggerType, createLanguageFeatureRequest, type LanguageCodeActionRequest, type LanguageDiagnostic } from '../../../common/languages.js';
 import { CodeActionTriggerSource, type CodeActionSet, type CodeActionTrigger } from '../common/types.js';
 import { getCodeActions } from './codeAction.js';
 
@@ -81,10 +76,7 @@ export class CodeActionModel extends Disposable {
 			editor.onDidBlurEditorWidget(() => {
 				this.automatic.cancel();
 				// Manual actions hand focus to ActionWidget; that menu owns dismissal and cancellation.
-				if (
-					this.current.type === CodeActionsState.Type.Triggered &&
-					this.current.trigger.type === CodeActionTriggerType.Auto
-				) {
+				if (this.current.type === CodeActionsState.Type.Triggered && this.current.trigger.type === CodeActionTriggerType.Auto) {
 					this.reset();
 				}
 			}),
@@ -108,12 +100,7 @@ export class CodeActionModel extends Disposable {
 		}
 		const model = this.diagnostics.textModel;
 		const range = this.editor.getSelection();
-		if (
-			this.editor.getModel() !== model ||
-			model.isDisposed() ||
-			!range ||
-			this.editor.getOption(EditorOption.readOnly)
-		) {
+		if (this.editor.getModel() !== model || model.isDisposed() || !range || this.editor.getOption(EditorOption.readOnly)) {
 			return undefined;
 		}
 		const request = new AbortController();
@@ -122,18 +109,11 @@ export class CodeActionModel extends Disposable {
 			resource: model.uri,
 			range,
 			...(trigger.filter?.include?.value ? { only: [trigger.filter.include.value] } : {}),
-			diagnostics: this.diagnostics.decorations
-				.filter(item => Range.areIntersectingOrTouching(item.range, range))
-				.map(item => item.metadata),
+			diagnostics: this.diagnostics.decorations.filter(item => Range.areIntersectingOrTouching(item.range, range)).map(item => item.metadata),
 		});
 		// The model retains results for both the lightbulb and manual menus. Late results
 		// must never replace the collection belonging to a newer request.
-		const actions = getCodeActions(
-			this.features.codeActionProvider,
-			context,
-			trigger.filter ?? {},
-			this.onError,
-		).then(result => {
+		const actions = getCodeActions(this.features.codeActionProvider, context, trigger.filter ?? {}, this.onError).then(result => {
 			if (request.signal.aborted) {
 				result.dispose();
 			} else {
@@ -159,12 +139,7 @@ export class CodeActionModel extends Disposable {
 
 	private scheduleAutomatic(): void {
 		const model = this.editor.getModel();
-		if (
-			model &&
-			this.editor.hasTextFocus() &&
-			this.editor.getOption(EditorOption.lightbulb).enabled !== ShowLightbulbIconMode.Off &&
-			this.features.codeActionProvider.has(model)
-		) {
+		if (model && this.editor.hasTextFocus() && this.editor.getOption(EditorOption.lightbulb).enabled !== ShowLightbulbIconMode.Off && this.features.codeActionProvider.has(model)) {
 			this.automatic.schedule();
 		}
 	}

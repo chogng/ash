@@ -19,10 +19,7 @@ import type { IEditorOptions } from '../../common/config/editorOptions.js';
 import { IStandaloneThemeService } from '../common/standaloneTheme.js';
 import { StandaloneThemeService } from './standaloneThemeService.js';
 
-type StandaloneCodeEditorOptions = Omit<
-	CodeEditorWidgetOptions,
-	'container' | 'model' | 'editorWorkerFactory' | 'completionWorkerFactory' | 'registerBeforeSave' | 'formatOnSave'
->;
+type StandaloneCodeEditorOptions = Omit<CodeEditorWidgetOptions, 'container' | 'model' | 'editorWorkerFactory' | 'completionWorkerFactory' | 'registerBeforeSave' | 'formatOnSave'>;
 
 export interface IStandaloneEditorConstructionOptions extends StandaloneCodeEditorOptions {
 	readonly model?: ITextModel | null;
@@ -47,11 +44,7 @@ export interface IActionDescriptor {
 }
 
 export interface IStandaloneCodeEditor extends ICodeEditor, IDisposable {
-	updateOptions(
-		newOptions: Readonly<
-			IEditorOptions & Pick<IStandaloneEditorConstructionOptions, 'theme' | 'autoDetectHighContrast'>
-		>,
-	): void;
+	updateOptions(newOptions: Readonly<IEditorOptions & Pick<IStandaloneEditorConstructionOptions, 'theme' | 'autoDetectHighContrast'>>): void;
 	getModel(): TextModel | null;
 	getValue(): string;
 	setValue(value: string): void;
@@ -83,17 +76,7 @@ export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCod
 		// Theme variables must be ready before the view handles a theme event.
 		const themeBinding = standaloneThemeService.registerEditorContainer(options.container);
 		try {
-			super(
-				options,
-				instantiationService,
-				standaloneThemeService,
-				languageConfigurationService,
-				languageFeaturesService,
-				contextKeyService,
-				codeEditorService,
-				logService,
-				configurationService,
-			);
+			super(options, instantiationService, standaloneThemeService, languageConfigurationService, languageFeaturesService, contextKeyService, codeEditorService, logService, configurationService);
 		} catch (error) {
 			themeBinding.dispose();
 			throw error;
@@ -105,11 +88,7 @@ export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCod
 		this.registerWithService();
 	}
 
-	public override updateOptions(
-		newOptions: Readonly<
-			IEditorOptions & Pick<IStandaloneEditorConstructionOptions, 'theme' | 'autoDetectHighContrast'>
-		>,
-	): void {
+	public override updateOptions(newOptions: Readonly<IEditorOptions & Pick<IStandaloneEditorConstructionOptions, 'theme' | 'autoDetectHighContrast'>>): void {
 		this.assertNotDisposed();
 		if (newOptions.theme !== undefined) {
 			this.standaloneThemeService.setTheme(newOptions.theme);
@@ -125,8 +104,7 @@ export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCod
 			throw new ReferenceError('Standalone editor model is not registered with the model service');
 		}
 		const previousModel = this.getModel();
-		const ownedModel =
-			previousModel !== model && previousModel === this.modelToDispose ? this.modelToDispose : null;
+		const ownedModel = previousModel !== model && previousModel === this.modelToDispose ? this.modelToDispose : null;
 		try {
 			super.setModel(model);
 		} finally {
@@ -149,32 +127,16 @@ export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCod
 }
 
 /** @internal */
-export function createTextModel(
-	modelService: IModelService,
-	languageService: ILanguageService,
-	value: string,
-	languageId: string | undefined,
-	uri: URI | undefined,
-): ITextModel {
+export function createTextModel(modelService: IModelService, languageService: ILanguageService, value: string, languageId: string | undefined, uri: URI | undefined): ITextModel {
 	value ||= '';
 	if (!languageId) {
 		const firstLineBreak = value.indexOf('\n');
 		const firstLine = firstLineBreak === -1 ? value : value.substring(0, firstLineBreak);
-		return createModel(
-			modelService,
-			value,
-			languageService.createByFilepathOrFirstLine(uri ?? null, firstLine),
-			uri,
-		);
+		return createModel(modelService, value, languageService.createByFilepathOrFirstLine(uri ?? null, firstLine), uri);
 	}
 	return createModel(modelService, value, languageService.createById(languageId), uri);
 }
 
-function createModel(
-	modelService: IModelService,
-	value: string,
-	languageSelection: ILanguageSelection,
-	uri: URI | undefined,
-): ITextModel {
+function createModel(modelService: IModelService, value: string, languageSelection: ILanguageSelection, uri: URI | undefined): ITextModel {
 	return modelService.createModel(value, languageSelection, uri);
 }

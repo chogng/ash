@@ -22,10 +22,7 @@ export class CustomEditorInputSerializer implements EditorInputSerializer {
 	}
 	public deserialize(value: unknown, registry: EditorInputSerializerRegistry): CustomEditorInput {
 		const input = requireRecord(value, 'custom editor input');
-		return new CustomEditorInput(
-			registry.deserialize(input.source as SerializedEditorInput),
-			requireString(input.editorId, 'custom editor ID'),
-		);
+		return new CustomEditorInput(registry.deserialize(input.source as SerializedEditorInput), requireString(input.editorId, 'custom editor ID'));
 	}
 }
 

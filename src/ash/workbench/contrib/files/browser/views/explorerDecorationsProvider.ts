@@ -11,9 +11,15 @@ interface ExplorerDecoration {
 export function provideDecorations(item: ExplorerItem): ExplorerDecoration | undefined {
 	switch (item.kind) {
 		case FileKind.SymbolicLink:
-			return { letter: '↷', tooltip: localize('workbench.explorerSymbolicLink', 'Symbolic Link') };
+			return {
+				letter: '↷',
+				tooltip: localize('workbench.explorerSymbolicLink', 'Symbolic Link'),
+			};
 		case FileKind.Other:
-			return { letter: '?', tooltip: localize('workbench.explorerUnknownFileType', 'Unknown File Type') };
+			return {
+				letter: '?',
+				tooltip: localize('workbench.explorerUnknownFileType', 'Unknown File Type'),
+			};
 		default:
 			return undefined;
 	}

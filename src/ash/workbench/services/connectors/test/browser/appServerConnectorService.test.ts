@@ -27,10 +27,7 @@ test('Connector adapter preserves distinct declaration and runtime identities in
 			],
 		}),
 	};
-	using service = new AppServerConnectorService(
-		api as IConnectorApi,
-		{ subscribe: () => ({ dispose() {} }) } as IServerEventApi,
-	);
+	using service = new AppServerConnectorService(api as IConnectorApi, { subscribe: () => ({ dispose() {} }) } as IServerEventApi);
 	assert.deepEqual(await service.list(), {
 		generation: 3,
 		connectors: [
@@ -64,10 +61,7 @@ test('Connector enablement uses the non-destructive backend operation and retain
 			return { generation: 5, disposition: 'updated' };
 		},
 	};
-	using service = new AppServerConnectorService(
-		api as IConnectorApi,
-		{ subscribe: () => ({ dispose() {} }) } as IServerEventApi,
-	);
+	using service = new AppServerConnectorService(api as IConnectorApi, { subscribe: () => ({ dispose() {} }) } as IServerEventApi);
 	const connector = {
 		id: 'account-7',
 		connectionGeneration: 2,

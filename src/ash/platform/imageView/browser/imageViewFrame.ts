@@ -1,11 +1,6 @@
 import { addDisposableListener } from '../../../base/browser/dom.js';
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
-import {
-	validateImageViewCompletion,
-	validateImageViewPermissionAction,
-	type ImageViewCompletion,
-	type ImageViewPermissionAction,
-} from '../common/imageView.js';
+import { validateImageViewCompletion, validateImageViewPermissionAction, type ImageViewCompletion, type ImageViewPermissionAction } from '../common/imageView.js';
 
 /** Extension HTML runs in an opaque sandbox. Only the finite image-view message contract crosses it. */
 export function createImageViewFrame(
@@ -21,8 +16,7 @@ export function createImageViewFrame(
 	const originalFocus = document.activeElement as HTMLElement | null;
 	const container = document.createElement('dialog');
 	container.setAttribute('role', 'presentation');
-	container.style.cssText =
-		'position:fixed;inset:0;width:100vw;height:100vh;max-width:none;max-height:none;margin:0;padding:0;border:0;background:transparent;';
+	container.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;max-width:none;max-height:none;margin:0;padding:0;border:0;background:transparent;';
 	const frame = document.createElement('iframe');
 	frame.title = title;
 	frame.sandbox.add('allow-scripts');
@@ -59,10 +53,7 @@ export function createImageViewFrame(
 						const accepted = await permissionAction(action);
 						frame.contentWindow?.postMessage({ type: 'permissionResult', action, accepted }, '*');
 					} catch (error) {
-						frame.contentWindow?.postMessage(
-							{ type: 'permissionResult', action, error: String(error) },
-							'*',
-						);
+						frame.contentWindow?.postMessage({ type: 'permissionResult', action, error: String(error) }, '*');
 					} finally {
 						pendingPermissions.delete(action);
 					}

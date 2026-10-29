@@ -1,11 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
 import { LanguageResultAcceptance } from '../../common/model/languageResultStore.js';
-import {
-	LanguageCompletionItemKind,
-	type LanguageCompletionItem,
-	createLanguageCompletionSnapshotNormalizer,
-} from '../../common/languages.js';
+import { LanguageCompletionItemKind, type LanguageCompletionItem, createLanguageCompletionSnapshotNormalizer } from '../../common/languages.js';
 import { createLanguageCompletionStore } from '../../contrib/suggest/browser/suggest.js';
 import { Position } from '../../common/core/position.js';
 import { Range } from '../../common/core/range.js';
@@ -29,7 +25,11 @@ test('Completion stores normalize immutable current-version results', () => {
 			requestId: 1,
 			textModel: model,
 			modelVersion: model.version,
-			value: { position: new Position(0 + 1, 3 + 1), items: [item], isIncomplete: true },
+			value: {
+				position: new Position(0 + 1, 3 + 1),
+				items: [item],
+				isIncomplete: true,
+			},
 		}),
 		LanguageResultAcceptance.Applied,
 	);
@@ -65,7 +65,11 @@ test('Completion normalization rejects ambiguous items atomically', () => {
 				range: Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 2 + 1)),
 			}),
 		],
-		[completion('kind', 'kind', 0, 3, { kind: 'mystery' as LanguageCompletionItemKind })],
+		[
+			completion('kind', 'kind', 0, 3, {
+				kind: 'mystery' as LanguageCompletionItemKind,
+			}),
+		],
 		[completion('one', 'one', 0, 3, { preselect: true }), completion('two', 'two', 0, 3, { preselect: true })],
 		[completion(' spaced ', 'spaced', 0, 3)],
 		[completion('duplicate-commit', 'duplicate-commit', 0, 3, { commitCharacters: ['.', '.'] })],
@@ -78,7 +82,11 @@ test('Completion normalization rejects ambiguous items atomically', () => {
 				requestId: index + 2,
 				textModel: model,
 				modelVersion: model.version,
-				value: { position: new Position(0 + 1, 3 + 1), items, isIncomplete: false },
+				value: {
+					position: new Position(0 + 1, 3 + 1),
+					items,
+					isIncomplete: false,
+				},
 			}),
 		);
 		assert.equal(store.result, prior);
@@ -90,7 +98,12 @@ test('Completion stores invalidate results on model edits', () => {
 	using store = createLanguageCompletionStore(model);
 	accept(store, model, 1, [completion('abc', 'abc', 0, 3)]);
 
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 3 + 1)), text: '!' }]);
+	model.applyEdits([
+		{
+			range: Range.fromPositions(new Position(0 + 1, 3 + 1)),
+			text: '!',
+		},
+	]);
 
 	assert.equal(store.result, undefined);
 });
@@ -108,9 +121,7 @@ test('Completion stores normalize immutable non-overlapping additional text edit
 				items: [
 					{
 						...completion('console', 'console', 1, 4),
-						additionalTextEdits: [
-							{ range: Range.fromPositions(new Position(0 + 1, 0 + 1)), text: 'import ' },
-						],
+						additionalTextEdits: [{ range: Range.fromPositions(new Position(0 + 1, 0 + 1)), text: 'import ' }],
 					},
 				],
 				isIncomplete: false,
@@ -174,18 +185,17 @@ test('Snapshot completion normalization indexes captured text once', () => {
 	assert.equal(reads, 1);
 });
 
-function accept(
-	store: ReturnType<typeof createLanguageCompletionStore>,
-	model: TextModel,
-	requestId: number,
-	items: readonly LanguageCompletionItem[],
-): void {
+function accept(store: ReturnType<typeof createLanguageCompletionStore>, model: TextModel, requestId: number, items: readonly LanguageCompletionItem[]): void {
 	assert.equal(
 		store.accept({
 			requestId,
 			textModel: model,
 			modelVersion: model.version,
-			value: { position: new Position(0 + 1, 3 + 1), items, isIncomplete: false },
+			value: {
+				position: new Position(0 + 1, 3 + 1),
+				items,
+				isIncomplete: false,
+			},
 		}),
 		LanguageResultAcceptance.Applied,
 	);
@@ -204,21 +214,13 @@ interface CompletionOverrides {
 	readonly kind?: LanguageCompletionItemKind;
 }
 
-function completion(
-	id: string,
-	label: string,
-	startColumn: number,
-	endColumn: number,
-	overrides: CompletionOverrides = {},
-): LanguageCompletionItem & { label: string } {
+function completion(id: string, label: string, startColumn: number, endColumn: number, overrides: CompletionOverrides = {}): LanguageCompletionItem & { label: string } {
 	return {
 		providerId: overrides.providerId ?? 'test',
 		id,
 		label,
 		kind: overrides.kind ?? LanguageCompletionItemKind.Keyword,
-		range:
-			overrides.range ??
-			Range.fromPositions(new Position(0 + 1, startColumn + 1), new Position(0 + 1, endColumn + 1)),
+		range: overrides.range ?? Range.fromPositions(new Position(0 + 1, startColumn + 1), new Position(0 + 1, endColumn + 1)),
 		insertText: overrides.insertText ?? label,
 		...(overrides.detail === undefined ? {} : { detail: overrides.detail }),
 		...(overrides.documentation === undefined ? {} : { documentation: overrides.documentation }),

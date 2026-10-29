@@ -9,19 +9,12 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import type {
-	ISocket,
-	SocketCloseEvent,
-	SocketDiagnosticsEventType,
-} from '../../../../base/parts/ipc/common/ipc.net.js';
+import type { ISocket, SocketCloseEvent, SocketDiagnosticsEventType } from '../../../../base/parts/ipc/common/ipc.net.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 import { ILogService, type LogEntry } from '../../../log/common/log.js';
 import { LogService } from '../../../log/common/logServiceImpl.js';
 import { ManagedRemoteConnection, RemoteConnectionType } from '../../../remote/common/remoteAuthorityResolver.js';
-import {
-	IRemoteSocketFactoryService,
-	RemoteSocketFactoryService,
-} from '../../../remote/common/remoteSocketFactoryService.js';
+import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../../remote/common/remoteSocketFactoryService.js';
 import { RemoteAgentHostService } from '../../browser/remoteAgentHostServiceImpl.js';
 import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
 
@@ -35,11 +28,7 @@ class RemotePeer extends Disposable implements ISocket {
 	write(buffer: VSBuffer): void {
 		const frame = JSON.parse(buffer.toString());
 		if (frame.method === 'initialize') {
-			this.data.fire(
-				VSBuffer.fromString(
-					JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: createTestInitializeResult() }) + '\n',
-				),
-			);
+			this.data.fire(VSBuffer.fromString(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: createTestInitializeResult() }) + '\n'));
 		}
 	}
 	end(): void {
@@ -97,10 +86,7 @@ test('remote service reacquires its endpoint and reinitializes extensions after 
 	await service.whenConnected();
 	assert.equal(service.client, client);
 	assert.equal(client.state, 'ready');
-	assert.deepEqual(
-		{ initialized, resolutions, generation: client.generation },
-		{ initialized: 2, resolutions: 2, generation: 2 },
-	);
+	assert.deepEqual({ initialized, resolutions, generation: client.generation }, { initialized: 2, resolutions: 2, generation: 2 });
 	assert.equal(reconnects, 1);
 	assert.equal(sockets[0].isDisposed, true);
 	service.dispose();
@@ -117,9 +103,10 @@ test('remote extension initialization failure is logged and retried even while t
 		using logger = new LogService({ sinks: [{ log: entry => entries.push(entry) }] });
 		using localRestart = new Emitter<void>();
 		registerServices(services, logger);
-		using registration = services
-			.get(IRemoteSocketFactoryService)
-			.register(RemoteConnectionType.Managed, { supports: () => true, connect: async () => new RemotePeer() });
+		using registration = services.get(IRemoteSocketFactoryService).register(RemoteConnectionType.Managed, {
+			supports: () => true,
+			connect: async () => new RemotePeer(),
+		});
 		let initialized = 0;
 		using service = services.createInstance(RemoteAgentHostService, {
 			protocol: {},
@@ -443,9 +430,10 @@ suite('remote extension initialization retirement', () => {
 		using localRestart = new Emitter<void>();
 		registerServices(services, logger);
 		const socket = new RemotePeer();
-		using registration = services
-			.get(IRemoteSocketFactoryService)
-			.register(RemoteConnectionType.Managed, { supports: () => true, connect: async () => socket });
+		using registration = services.get(IRemoteSocketFactoryService).register(RemoteConnectionType.Managed, {
+			supports: () => true,
+			connect: async () => socket,
+		});
 		const entered = new DeferredPromise<void>();
 		const obsolete = new DeferredPromise<void>();
 		using service = services.createInstance(RemoteAgentHostService, {

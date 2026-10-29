@@ -12,7 +12,10 @@ const repository = resolve(import.meta.dirname, '..');
 // The optional executable and isolated extension directory are provisioned by the caller.
 test(
 	'VS Code save formatting matches the pinned Bun CI formatter',
-	{ skip: !process.env.ASH_VSCODE_EXECUTABLE, timeout: 120_000 },
+	{
+		skip: !process.env.ASH_VSCODE_EXECUTABLE,
+		timeout: 120_000,
+	},
 	async t => {
 		const directory = await mkdtemp(join(tmpdir(), 'ash-format-editor-'));
 		const workspace = join(directory, 'workspace');
@@ -28,27 +31,9 @@ test(
 				await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 			}
 		});
-		for (const path of [
-			join(workspace, '.vscode'),
-			join(workspace, 'node_modules'),
-			harness,
-			join(profile, 'User'),
-			output,
-		])
-			await mkdir(path, { recursive: true });
-		for (const name of [
-			'.prettierrc.toml',
-			'.prettierignore',
-			'.gitignore',
-			'.editorconfig',
-			'.vscode/settings.json',
-		])
-			await copyFile(join(repository, name), join(workspace, name));
-		await symlink(
-			join(repository, 'node_modules/bun'),
-			join(workspace, 'node_modules/bun'),
-			process.platform === 'win32' ? 'junction' : 'dir',
-		);
+		for (const path of [join(workspace, '.vscode'), join(workspace, 'node_modules'), harness, join(profile, 'User'), output]) await mkdir(path, { recursive: true });
+		for (const name of ['.prettierrc.toml', '.prettierignore', '.gitignore', '.editorconfig', '.vscode/settings.json']) await copyFile(join(repository, name), join(workspace, name));
+		await symlink(join(repository, 'node_modules/bun'), join(workspace, 'node_modules/bun'), process.platform === 'win32' ? 'junction' : 'dir');
 		assert.equal(spawnSync('git', ['init', '--quiet', workspace], { encoding: 'utf8' }).status, 0);
 		await writeFile(
 			join(profile, 'User/settings.json'),
@@ -84,14 +69,9 @@ test(
 			const file = join(workspace, name);
 			await mkdir(dirname(file), { recursive: true });
 			await writeFile(file, '');
-			const formatted = spawnSync(
-				bun,
-				['fmt', '--ignore-path', '.gitignore', '--ignore-path', '.prettierignore', '--stdin-filepath', file],
-				{ cwd: workspace, input, encoding: 'utf8' },
-			);
+			const formatted = spawnSync(bun, ['fmt', '--ignore-path', '.gitignore', '--ignore-path', '.prettierignore', '--stdin-filepath', file], { cwd: workspace, input, encoding: 'utf8' });
 			assert.equal(formatted.status, 0, formatted.stdout + formatted.stderr);
-			if (!name.startsWith('fixtures/') && !name.startsWith('output/'))
-				assert.notEqual(formatted.stdout, input, name);
+			if (!name.startsWith('fixtures/') && !name.startsWith('output/')) assert.notEqual(formatted.stdout, input, name);
 			cases.push({ language, name, file, input, expected: formatted.stdout });
 		}
 		await writeFile(
@@ -142,9 +122,7 @@ exports.activate = async () => {
 };
 `,
 		);
-		const environment = Object.fromEntries(
-			Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
-		);
+		const environment = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
 		delete environment.ELECTRON_RUN_AS_NODE;
 		application = await _electron.launch({
 			executablePath: process.env.ASH_VSCODE_EXECUTABLE,
@@ -179,16 +157,11 @@ exports.activate = async () => {
 		if (report.passed) {
 			const checked = spawnSync(
 				bun,
-				[
-					'fmt',
-					'--ignore-path',
-					'.gitignore',
-					'--ignore-path',
-					'.prettierignore',
-					'--check',
-					'**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,json,jsonc,yml,yaml,md,css,html}',
-				],
-				{ cwd: workspace, encoding: 'utf8' },
+				['fmt', '--ignore-path', '.gitignore', '--ignore-path', '.prettierignore', '--check', '**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,json,jsonc,yml,yaml,md,css,html}'],
+				{
+					cwd: workspace,
+					encoding: 'utf8',
+				},
 			);
 			report.ciCheck = { status: checked.status, output: checked.stdout + checked.stderr };
 			report.passed = checked.status === 0;

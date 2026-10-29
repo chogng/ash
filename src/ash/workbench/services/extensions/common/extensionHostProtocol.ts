@@ -1,25 +1,14 @@
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { getNLSLanguage } from '../../../../nls.js';
-import type {
-	ExtensionHostInitialization,
-	IExtensionHostApi,
-	JsonValue,
-} from '../../../../platform/agentHost/common/extensionHostApi.js';
+import type { ExtensionHostInitialization, IExtensionHostApi, JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
 
 /** Collects a snapshot from the existing window owners, without retaining a second fact store. */
-export function createExtensionHostInitialization(
-	workspace: IWorkspaceContextService,
-	configuration: IConfigurationService,
-): ExtensionHostInitialization {
+export function createExtensionHostInitialization(workspace: IWorkspaceContextService, configuration: IConfigurationService): ExtensionHostInitialization {
 	const current = workspace.getWorkspace();
 	return Object.freeze({
 		language: getNLSLanguage(),
-		workspaceFolders: Object.freeze(
-			current.folders.map(folder =>
-				Object.freeze({ uri: folder.uri.toString(), name: folder.name, index: folder.index }),
-			),
-		),
+		workspaceFolders: Object.freeze(current.folders.map(folder => Object.freeze({ uri: folder.uri.toString(), name: folder.name, index: folder.index }))),
 		workspaceName: current.name ?? null,
 		workspaceFile: current.configuration?.toString() ?? null,
 		configurationValues: configuration.getValue<Readonly<Record<string, unknown>>>() ?? {},

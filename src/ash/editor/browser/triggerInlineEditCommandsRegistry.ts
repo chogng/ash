@@ -23,8 +23,7 @@ export abstract class TriggerInlineEditCommandsRegistry {
 	}
 
 	private static entry(commandId: string): { permanent: boolean; leases: number } {
-		if (typeof commandId !== 'string' || !commandId.trim())
-			throw new TypeError('Inline edit trigger command ID must be a non-empty string');
+		if (typeof commandId !== 'string' || !commandId.trim()) throw new TypeError('Inline edit trigger command ID must be a non-empty string');
 		let entry = this.commands.get(commandId);
 		if (!entry) {
 			entry = { permanent: false, leases: 0 };

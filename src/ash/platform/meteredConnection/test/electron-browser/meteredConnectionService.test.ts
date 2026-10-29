@@ -171,65 +171,62 @@ suite('Desktop metered connection renderer', () => {
 		assert.deepEqual(calls, ['checkForUpdates', 'downloadUpdate', 'checkAutomatically']);
 	});
 
-	(isMacintosh || isWindows ? test : test.skip)(
-		'the production contribution retries on unmetered transitions and releases timers and subscriptions',
-		async () => {
-			mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
-			try {
-				using services = new InstantiationService();
-				using networkChanges = new Emitter<boolean>();
-				using notifications = new TestNotificationService();
-				services.registerInstance(INotificationService, notifications);
-				using contextKeys = new ContextKeyService();
-				services.registerInstance(IContextKeyService, contextKeys);
-				services.registerInstance(IMeteredConnectionService, {
-					_serviceBrand: undefined,
-					isConnectionMetered: true,
-					onDidChangeIsConnectionMetered: networkChanges.event,
-				});
-				let attempts = 0;
-				services.registerInstance(IUpdateService, {
-					state: 'idle',
-					onDidChangeState: AshEvent.None,
-					async checkAutomatically() {
-						attempts++;
-						return undefined;
-					},
-					async checkForUpdates() {
-						throw new Error('Unexpected manual check');
-					},
-					async downloadUpdate() {
-						throw new Error('Unexpected download');
-					},
-					async installUpdate() {
-						throw new Error('Unexpected install');
-					},
-				});
-				using host = WorkbenchContributionsRegistry.createHost(
-					services,
-					error => {
-						throw error;
-					},
-					['workbench.contrib.desktopAutomaticUpdate'],
-				);
-				host.advance(WorkbenchPhase.AfterRestored);
-				networkChanges.fire(false);
-				assert.equal(attempts, 0);
-				mock.timers.tick(60_000);
-				await Promise.resolve();
-				assert.equal(attempts, 1);
-				networkChanges.fire(true);
-				assert.equal(attempts, 1);
-				networkChanges.fire(false);
-				await Promise.resolve();
-				assert.equal(attempts, 2);
-				host.dispose();
-				networkChanges.fire(false);
-				mock.timers.tick(24 * 60 * 60 * 1000);
-				assert.equal(attempts, 2);
-			} finally {
-				mock.timers.reset();
-			}
-		},
-	);
+	(isMacintosh || isWindows ? test : test.skip)('the production contribution retries on unmetered transitions and releases timers and subscriptions', async () => {
+		mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+		try {
+			using services = new InstantiationService();
+			using networkChanges = new Emitter<boolean>();
+			using notifications = new TestNotificationService();
+			services.registerInstance(INotificationService, notifications);
+			using contextKeys = new ContextKeyService();
+			services.registerInstance(IContextKeyService, contextKeys);
+			services.registerInstance(IMeteredConnectionService, {
+				_serviceBrand: undefined,
+				isConnectionMetered: true,
+				onDidChangeIsConnectionMetered: networkChanges.event,
+			});
+			let attempts = 0;
+			services.registerInstance(IUpdateService, {
+				state: 'idle',
+				onDidChangeState: AshEvent.None,
+				async checkAutomatically() {
+					attempts++;
+					return undefined;
+				},
+				async checkForUpdates() {
+					throw new Error('Unexpected manual check');
+				},
+				async downloadUpdate() {
+					throw new Error('Unexpected download');
+				},
+				async installUpdate() {
+					throw new Error('Unexpected install');
+				},
+			});
+			using host = WorkbenchContributionsRegistry.createHost(
+				services,
+				error => {
+					throw error;
+				},
+				['workbench.contrib.desktopAutomaticUpdate'],
+			);
+			host.advance(WorkbenchPhase.AfterRestored);
+			networkChanges.fire(false);
+			assert.equal(attempts, 0);
+			mock.timers.tick(60_000);
+			await Promise.resolve();
+			assert.equal(attempts, 1);
+			networkChanges.fire(true);
+			assert.equal(attempts, 1);
+			networkChanges.fire(false);
+			await Promise.resolve();
+			assert.equal(attempts, 2);
+			host.dispose();
+			networkChanges.fire(false);
+			mock.timers.tick(24 * 60 * 60 * 1000);
+			assert.equal(attempts, 2);
+		} finally {
+			mock.timers.reset();
+		}
+	});
 });

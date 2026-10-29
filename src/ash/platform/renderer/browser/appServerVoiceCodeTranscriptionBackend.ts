@@ -3,9 +3,7 @@ import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/in
 import type { IVoiceCodeTranscriptionBackendService } from '../common/dictation.js';
 
 /** Converts transcription operations on the renderer's existing App Server connection. */
-export function createAppServerVoiceCodeTranscriptionBackend(
-	client: AppServerProtocolClient,
-): IVoiceCodeTranscriptionBackendService {
+export function createAppServerVoiceCodeTranscriptionBackend(client: AppServerProtocolClient): IVoiceCodeTranscriptionBackendService {
 	return {
 		get isConnected() {
 			return client.state === 'ready';
@@ -26,8 +24,7 @@ export function createAppServerVoiceCodeTranscriptionBackend(
 					});
 				}
 			}),
-		getOptions: backend =>
-			client.request(APP_SERVER_METHODS['dictation/options'], { backend, audioInput: 'pcm16' }),
+		getOptions: backend => client.request(APP_SERVER_METHODS['dictation/options'], { backend, audioInput: 'pcm16' }),
 		start: async (resourceId, options) => {
 			await client.request(APP_SERVER_METHODS['dictation/start'], {
 				resourceId,
@@ -39,8 +36,7 @@ export function createAppServerVoiceCodeTranscriptionBackend(
 		pushAudio: async (resourceId, audio) => {
 			await client.request(APP_SERVER_METHODS['dictation/audio'], { resourceId, audio });
 		},
-		stop: async resourceId =>
-			(await client.request(APP_SERVER_METHODS['dictation/stop'], { resourceId })).text ?? undefined,
+		stop: async resourceId => (await client.request(APP_SERVER_METHODS['dictation/stop'], { resourceId })).text ?? undefined,
 		cancel: async resourceId => {
 			await client.request(APP_SERVER_METHODS['dictation/cancel'], { resourceId });
 		},

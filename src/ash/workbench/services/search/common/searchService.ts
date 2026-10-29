@@ -6,28 +6,14 @@ import { escapeRegExpCharacters } from '../../../../base/common/strings.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { USUAL_WORD_SEPARATORS } from '../../../../editor/common/core/wordHelper.js';
-import {
-	IContentSearchService,
-	type ContentSearchMatch,
-	type IContentSearchQuery,
-} from '../../../../platform/search/common/search.js';
+import { IContentSearchService, type ContentSearchMatch, type IContentSearchQuery } from '../../../../platform/search/common/search.js';
 import { IWorkspaceContextService, type IWorkspace } from '../../../../platform/workspace/common/workspace.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { AgentHostFileSearchProvider } from '../../agentHost/common/agentHostFileSearchProvider.js';
 import { IFileTextModelService } from '../../textmodelResolver/common/textModelResourceService.js';
 import { localize } from '../../../../nls.js';
-import type {
-	IFileMatch,
-	IFileQuery,
-	ISearchComplete,
-	ISearchProgressItem,
-	ISearchService,
-	ISearchResultProvider,
-	ISearchRange,
-	ITextQuery,
-	ITextSearchMatch,
-} from './search.js';
+import type { IFileMatch, IFileQuery, ISearchComplete, ISearchProgressItem, ISearchService, ISearchResultProvider, ISearchRange, ITextQuery, ITextSearchMatch } from './search.js';
 import { editorMatchesToTextSearchResults } from './searchHelpers.js';
 
 const DEFAULT_MAX_RESULTS = 2_000;
@@ -62,11 +48,7 @@ export class SearchService extends Disposable implements ISearchService {
 		return this.fileSearchProvider.fileSearch(query, token);
 	}
 
-	public async textSearch(
-		query: ITextQuery,
-		token: CancellationToken = CancellationToken.None,
-		onProgress?: (result: ISearchProgressItem) => void,
-	): Promise<ISearchComplete> {
+	public async textSearch(query: ITextQuery, token: CancellationToken = CancellationToken.None, onProgress?: (result: ISearchProgressItem) => void): Promise<ISearchComplete> {
 		if (this.isDisposed) {
 			throw new CancellationError();
 		}
@@ -85,9 +67,7 @@ export class SearchService extends Disposable implements ISearchService {
 		const folders = query.folderQueries.map(folderQuery => {
 			const folder = workspaceFolders.find(folder => extUri.isEqual(folder.uri, folderQuery.folder));
 			if (!folder) {
-				throw new RangeError(
-					localize('search.folderOutsideWorkspace', 'Search folder is outside the current workspace.'),
-				);
+				throw new RangeError(localize('search.folderOutsideWorkspace', 'Search folder is outside the current workspace.'));
 			}
 			return folder;
 		});
@@ -97,21 +77,15 @@ export class SearchService extends Disposable implements ISearchService {
 		}
 		const limit = query.maxResults ?? DEFAULT_MAX_RESULTS;
 		if (!Number.isSafeInteger(limit) || limit < 1 || limit > 5_000) {
-			throw new RangeError(
-				localize('search.invalidResultLimit', 'Search result limit must be between 1 and 5000.'),
-			);
+			throw new RangeError(localize('search.invalidResultLimit', 'Search result limit must be between 1 and 5000.'));
 		}
 		const directoryQuery: IContentSearchQuery = {
 			text: query.contentPattern.pattern,
 			patternKind: query.contentPattern.isRegExp ? 'regex' : 'literal',
 			wholeWord: query.contentPattern.isWordMatch,
 			caseSensitivity: query.contentPattern.isCaseSensitive ? 'sensitive' : 'insensitive',
-			includePatterns: Object.keys(query.includePattern ?? {}).filter(
-				pattern => query.includePattern![pattern] === true,
-			),
-			excludePatterns: Object.keys(query.excludePattern ?? {}).filter(
-				pattern => query.excludePattern![pattern] === true,
-			),
+			includePatterns: Object.keys(query.includePattern ?? {}).filter(pattern => query.includePattern![pattern] === true),
+			excludePatterns: Object.keys(query.excludePattern ?? {}).filter(pattern => query.excludePattern![pattern] === true),
 			freshness: 'current',
 		};
 		const overridden = new Set<string>();
@@ -132,13 +106,7 @@ export class SearchService extends Disposable implements ISearchService {
 				const available = limit - resultCount;
 				const replays: ITextSearchMatch['rangeLocations'] = [];
 				const unique = result.rangeLocations.filter(location => {
-					const rangeKey = JSON.stringify([
-						key,
-						location.source.startLineNumber,
-						location.source.startColumn,
-						location.source.endLineNumber,
-						location.source.endColumn,
-					]);
+					const rangeKey = JSON.stringify([key, location.source.startLineNumber, location.source.startColumn, location.source.endLineNumber, location.source.endColumn]);
 					const owner = seenRanges.get(rangeKey);
 					if (owner !== undefined) {
 						// A provider replay may restore a dismissed UI row; overlapping roots do not republish it.
@@ -191,15 +159,11 @@ export class SearchService extends Disposable implements ISearchService {
 			// Capture model results before awaiting disk. A zero-match model still suppresses stale disk hits.
 			for (const model of this.models.getModels()) {
 				checkCancellation();
-				const folder = [...folders]
-					.sort((a, b) => b.uri.path.length - a.uri.path.length)
-					.find(folder => extUri.isEqualOrParent(model.uri, folder.uri));
+				const folder = [...folders].sort((a, b) => b.uri.path.length - a.uri.path.length).find(folder => extUri.isEqualOrParent(model.uri, folder.uri));
 				if (!folder && !extraResources.has(extUri.getComparisonKey(model.uri))) {
 					continue;
 				}
-				const path = folder
-					? model.uri.path.slice(folder.uri.path.replace(/\/$/, '').length + 1)
-					: model.uri.path.replace(/^\//, '');
+				const path = folder ? model.uri.path.slice(folder.uri.path.replace(/\/$/, '').length + 1) : model.uri.path.replace(/^\//, '');
 				if (!included(path, directoryQuery)) {
 					continue;
 				}
@@ -207,12 +171,7 @@ export class SearchService extends Disposable implements ISearchService {
 				overridden.add(extUri.getComparisonKey(model.uri));
 				const multiline = /[\r\n]/.test(directoryQuery.text);
 				const text = directoryQuery.text.replace(/\r\n|\r/g, '\n');
-				const expression = multiline
-					? (directoryQuery.patternKind === 'regex' ? text : escapeRegExpCharacters(text)).replaceAll(
-							'\n',
-							'\\r?\\n',
-						)
-					: text;
+				const expression = multiline ? (directoryQuery.patternKind === 'regex' ? text : escapeRegExpCharacters(text)).replaceAll('\n', '\\r?\\n') : text;
 				const matches = model.findMatches(
 					expression,
 					false,
@@ -222,10 +181,7 @@ export class SearchService extends Disposable implements ISearchService {
 					false,
 					limit - resultCount + 1,
 				);
-				publish(
-					{ resource: model.uri, results: editorMatchesToTextSearchResults(matches, model) },
-					folder?.id ?? extUri.getComparisonKey(model.uri),
-				);
+				publish({ resource: model.uri, results: editorMatchesToTextSearchResults(matches, model) }, folder?.id ?? extUri.getComparisonKey(model.uri));
 			}
 			for (const folder of folders) {
 				checkCancellation();
@@ -280,16 +236,11 @@ export class SearchService extends Disposable implements ISearchService {
 }
 
 function included(path: string, query: IContentSearchQuery): boolean {
-	const matches = (pattern: string, value: string): boolean =>
-		match(pattern, value) || (pattern.startsWith('**/') && match(pattern.slice(3), value));
+	const matches = (pattern: string, value: string): boolean => match(pattern, value) || (pattern.startsWith('**/') && match(pattern.slice(3), value));
 	if (
 		query.excludePatterns.some(pattern => {
 			const segments = path.split('/');
-			return segments.some(
-				(_, index) =>
-					matches(pattern, segments.slice(0, index + 1).join('/')) ||
-					matches(pattern, segments.slice(0, index + 1).join('/') + '/'),
-			);
+			return segments.some((_, index) => matches(pattern, segments.slice(0, index + 1).join('/')) || matches(pattern, segments.slice(0, index + 1).join('/') + '/'));
 		})
 	) {
 		return false;

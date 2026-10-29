@@ -25,39 +25,22 @@ test('Join lines removes indentation, retains one separator, and restores undo',
 
 test('Join lines joins ranges, reduces overlapping cursors, and preserves the primary group', () => {
 	using model = new TextModel('zero\none\ntwo\nthree\nfour\nfive');
-	using selections = createTestCursorsController(
-		model,
-		primaryFirst(
-			[caret(0, 1), caret(1, 2), Selection.fromPositions(new Position(3 + 1, 1 + 1), new Position(4 + 1, 2 + 1))],
-			2,
-		),
-	);
+	using selections = createTestCursorsController(model, primaryFirst([caret(0, 1), caret(1, 2), Selection.fromPositions(new Position(3 + 1, 1 + 1), new Position(4 + 1, 2 + 1))], 2));
 
 	runJoin(model, selections);
 	assert.equal(model.getText(), 'zero one\ntwo\nthree four\nfive');
 	assert.deepEqual(
 		selections.getSelections(),
-		primaryFirst(
-			[
-				Selection.fromPositions(new Position(0 + 1, 1 + 1), new Position(0 + 1, 7 + 1)),
-				Selection.fromPositions(new Position(2 + 1, 1 + 1), new Position(2 + 1, 8 + 1)),
-			],
-			1,
-		),
+		primaryFirst([Selection.fromPositions(new Position(0 + 1, 1 + 1), new Position(0 + 1, 7 + 1)), Selection.fromPositions(new Position(2 + 1, 1 + 1), new Position(2 + 1, 8 + 1))], 1),
 	);
 });
 
 test('Join lines at the final line leaves collapsed and range selections unchanged', () => {
 	using model = new TextModel('first\nlast');
-	using selections = createTestCursorsController(model, [
-		Selection.fromPositions(new Position(1 + 1, 1 + 1), new Position(1 + 1, 3 + 1)),
-	]);
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position(1 + 1, 1 + 1), new Position(1 + 1, 3 + 1))]);
 	runJoin(model, selections);
 	assert.equal(model.getText(), 'first\nlast');
-	assert.deepEqual(
-		selections.getSelections()[0]!,
-		Selection.fromPositions(new Position(1 + 1, 1 + 1), new Position(1 + 1, 3 + 1)),
-	);
+	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(new Position(1 + 1, 1 + 1), new Position(1 + 1, 3 + 1)));
 });
 
 function runJoin(model: TextModel, selections: ReturnType<typeof createTestCursorsController>): void {
@@ -68,14 +51,8 @@ function runJoin(model: TextModel, selections: ReturnType<typeof createTestCurso
 			selections.pushUndoStop();
 			return true;
 		},
-		executeEdits: (
-			_source: unknown,
-			edits: Parameters<TextModel['pushEditOperations']>[1],
-			endCursorState?: unknown,
-		) => {
-			const result = model.pushEditOperations(selections.getSelections(), edits, () =>
-				Array.isArray(endCursorState) ? endCursorState : null,
-			);
+		executeEdits: (_source: unknown, edits: Parameters<TextModel['pushEditOperations']>[1], endCursorState?: unknown) => {
+			const result = model.pushEditOperations(selections.getSelections(), edits, () => (Array.isArray(endCursorState) ? endCursorState : null));
 			if (result) selections.setSelections(result);
 			return true;
 		},

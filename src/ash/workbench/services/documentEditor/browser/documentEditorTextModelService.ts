@@ -5,10 +5,7 @@ import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { AbstractDisposable, Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
 import { extUri } from '../../../../base/common/resources.js';
 import type { DocumentTextModel } from '../common/documentCodec.js';
-import type {
-	TextModelBlockInput,
-	TextModelWorkingCopyReference,
-} from '../../textmodelResolver/common/textModelResourceService.js';
+import type { TextModelBlockInput, TextModelWorkingCopyReference } from '../../textmodelResolver/common/textModelResourceService.js';
 import { ITextFileService } from '../../textfile/common/textfiles.js';
 import { IWorkingCopyService } from '../../workingCopy/common/workingCopyService.js';
 import type { IDocumentEditorTextModelService } from '../common/documentTypes.js';
@@ -40,7 +37,10 @@ export class DocumentEditorTextModelService extends Disposable implements IDocum
 		// a working-copy backup or the collaboration room after the pane opens.
 		const initialText = input.initialText ?? (input.resource.scheme === 'untitled' ? '' : undefined);
 		const content = await this.textFiles.resolve(
-			{ resource: input.resource, ...(initialText === undefined ? {} : { bootstrapText: initialText }) },
+			{
+				resource: input.resource,
+				...(initialText === undefined ? {} : { bootstrapText: initialText }),
+			},
 			signal,
 		);
 		throwIfCancelled(signal, 'Stanza document editor TextModel acquisition was cancelled');
@@ -72,24 +72,12 @@ export class DocumentEditorTextModelService extends Disposable implements IDocum
 		this.entries.get(extUri.getComparisonKey(resource))?.workingCopy.acceptCollaborationSnapshot(document);
 	}
 
-	private reference(
-		key: string,
-		entry: DocumentModelEntry,
-		input: TextModelBlockInput,
-	): TextModelWorkingCopyReference {
-		if (
-			entry.workingCopy.backupContentType !== input.contentType ||
-			entry.model.documentType !== input.codec.documentType
-		) {
+	private reference(key: string, entry: DocumentModelEntry, input: TextModelBlockInput): TextModelWorkingCopyReference {
+		if (entry.workingCopy.backupContentType !== input.contentType || entry.model.documentType !== input.codec.documentType) {
 			throw new Error('The resource is already open with a different document type');
 		}
 		if (entry.compatibility !== (input.modelCompatibility ?? input.codec.documentType)) {
-			throw new Error(
-				localize(
-					'document.model.incompatible',
-					'The document is open with a different editor version. Save or recover its existing content before reopening it.',
-				),
-			);
+			throw new Error(localize('document.model.incompatible', 'The document is open with a different editor version. Save or recover its existing content before reopening it.'));
 		}
 		entry.references += 1;
 		const reference = new TextModelWorkingCopyReferenceImpl(entry.model, entry.workingCopy, () => {

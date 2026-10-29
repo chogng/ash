@@ -8,17 +8,12 @@ import { LanguageDiagnosticSeverity } from '../../../../../editor/common/languag
 import { MarkerSeverity } from '../../../../../platform/markers/common/markers.js';
 import { MarkerService } from '../../../../../platform/markers/common/markerService.js';
 import { LanguageDiagnosticsMarkerBridge } from '../../browser/languageDiagnosticsMarkerBridge.js';
-import type {
-	ILanguageDiagnosticsService,
-	LanguageDiagnosticSnapshot,
-} from '../../common/languageDiagnosticsService.js';
+import type { ILanguageDiagnosticsService, LanguageDiagnosticSnapshot } from '../../common/languageDiagnosticsService.js';
 
 test('language diagnostics bridge projects current diagnostics into markers', () => {
 	const resource = URI.file('C:\\project\\src\\main.rs');
 	using changes = new Emitter<URI>();
-	let snapshots: readonly LanguageDiagnosticSnapshot[] = [
-		snapshot(resource, LanguageDiagnosticSeverity.Error, 'broken'),
-	];
+	let snapshots: readonly LanguageDiagnosticSnapshot[] = [snapshot(resource, LanguageDiagnosticSeverity.Error, 'broken')];
 	const diagnostics = {
 		onDidChangeDiagnostics: changes.event,
 		getAllDiagnostics: () => snapshots,
@@ -27,19 +22,17 @@ test('language diagnostics bridge projects current diagnostics into markers', ()
 	using bridge = new LanguageDiagnosticsMarkerBridge(diagnostics, markerService);
 
 	assert.deepEqual(
-		markerService
-			.read()
-			.map(marker => ({
-				severity: marker.severity,
-				message: marker.message,
-				source: marker.source,
-				code: marker.code,
-				modelVersionId: marker.modelVersionId,
-				startLineNumber: marker.startLineNumber,
-				startColumn: marker.startColumn,
-				endLineNumber: marker.endLineNumber,
-				endColumn: marker.endColumn,
-			})),
+		markerService.read().map(marker => ({
+			severity: marker.severity,
+			message: marker.message,
+			source: marker.source,
+			code: marker.code,
+			modelVersionId: marker.modelVersionId,
+			startLineNumber: marker.startLineNumber,
+			startColumn: marker.startColumn,
+			endLineNumber: marker.endLineNumber,
+			endColumn: marker.endColumn,
+		})),
 		[
 			{
 				severity: MarkerSeverity.Error,

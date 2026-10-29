@@ -40,6 +40,4 @@ class WorkbenchSessionsStartupContribution extends Disposable {
 
 registerSingleton(ISessionsManagementService, WorkbenchSessionsManagementService, InstantiationType.Delayed);
 registerSingleton(IDevContainerAgentHostService, DevContainerAgentHostService, InstantiationType.Delayed);
-registerWorkbenchContribution('sessions.contrib.workbenchStartup', WorkbenchPhase.BlockRestore, accessor =>
-	accessor.get(IInstantiationService).createInstance(WorkbenchSessionsStartupContribution),
-);
+registerWorkbenchContribution('sessions.contrib.workbenchStartup', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(WorkbenchSessionsStartupContribution));

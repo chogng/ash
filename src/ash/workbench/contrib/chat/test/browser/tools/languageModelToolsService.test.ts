@@ -4,10 +4,7 @@ import type { AgentToolsCatalog } from '../../../../../../platform/agentHost/com
 import { createDisconnectedAgentToolsApi } from '../../../../../../platform/agentHost/browser/agentToolsApi.js';
 import { IAgentToolsApi } from '../../../../../../platform/agentHost/common/agentToolsApi.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
-import {
-	unavailableOperation,
-	WebAppServerUnavailableError,
-} from '../../../../../../platform/renderer/browser/disconnectedHost.js';
+import { unavailableOperation, WebAppServerUnavailableError } from '../../../../../../platform/renderer/browser/disconnectedHost.js';
 import { LanguageModelToolsService } from '../../../browser/tools/languageModelToolsService.js';
 import { createDisconnectedAppServerApi } from '../../../../../../platform/agentHost/browser/appServerApi.js';
 import { IAppServerApi } from '../../../../../../platform/agentHost/common/appServerApi.js';
@@ -241,10 +238,7 @@ test('References qualify external tools and tool sets, round-trip to catalog obj
 		}),
 	});
 	await service.refresh();
-	assert.deepEqual(
-		[...service.getFullReferenceNames()],
-		['read_file', 'mcp/docs%2Fserver/search_docs', 'local/directory', 'mcp/docs%2Fserver/*'],
-	);
+	assert.deepEqual([...service.getFullReferenceNames()], ['read_file', 'mcp/docs%2Fserver/search_docs', 'local/directory', 'mcp/docs%2Fserver/*']);
 	for (const name of service.getFullReferenceNames()) {
 		const item = service.getToolByFullReferenceName(name)!;
 		assert.equal(service.getFullReferenceName(item), name);
@@ -259,11 +253,7 @@ test('References qualify external tools and tool sets, round-trip to catalog obj
 	assert.equal(service.getToolByFullReferenceName('model_only'), undefined);
 	assert.equal(service.getToolByFullReferenceName('missing'), undefined);
 	await service.refresh();
-	assert.equal(
-		service.getFullReferenceName(tool!),
-		'mcp/docs%2Fserver/search_docs',
-		'An open picker keeps qualified names after another consumer refreshes',
-	);
+	assert.equal(service.getFullReferenceName(tool!), 'mcp/docs%2Fserver/search_docs', 'An open picker keeps qualified names after another consumer refreshes');
 	assert.notEqual(service.getToolByFullReferenceName('mcp/docs%2Fserver/search_docs'), tool);
 });
 
@@ -378,9 +368,7 @@ test('Tool sets observe actual snapshot replacement and a retired connection can
 		},
 	);
 	const observed: string[][] = [];
-	using subscription = service.toolSets.onDidChange(sets =>
-		observed.push([...sets].flatMap(set => [...set.getTools()].map(tool => tool.id))),
-	);
+	using subscription = service.toolSets.onDidChange(sets => observed.push([...sets].flatMap(set => [...set.getTools()].map(tool => tool.id))));
 	await service.refresh();
 	const old = service.refresh();
 	const rejected = assert.rejects(old, isCancellationError);

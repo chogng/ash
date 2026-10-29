@@ -47,11 +47,7 @@ export class AppServerTestExecutionService implements ITestExecutionService {
 	}
 
 	public prepareDebug(operationId: string, dirId: string, catalogId: string, testId: string): Promise<void> {
-		return this.request(
-			voidResult(
-				appServerRequest(this.connection, 'testing/prepareDebug', { operationId, dirId, catalogId, testId }),
-			),
-		);
+		return this.request(voidResult(appServerRequest(this.connection, 'testing/prepareDebug', { operationId, dirId, catalogId, testId })));
 	}
 
 	public read(operationId: string): Promise<TestSnapshot> {
@@ -71,10 +67,7 @@ export class AppServerTestExecutionService implements ITestExecutionService {
 			return await request;
 		} catch (error) {
 			if (error instanceof AppServerRemoteError) {
-				throw new Error(
-					localize('testing.backendError', 'Could not complete the test operation ({0}).', error.errorName),
-					{ cause: error },
-				);
+				throw new Error(localize('testing.backendError', 'Could not complete the test operation ({0}).', error.errorName), { cause: error });
 			}
 			throw error;
 		}

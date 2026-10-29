@@ -8,44 +8,32 @@ const sdk = process.env.ASH_EDITOR_DEV_TEST_SDK;
 const project = process.env.ASH_ACADEMY_DEVELOPMENT_PROJECT;
 const enabled = !!sdk && !!project;
 
-test(
-	'real independent Academy development host gates local code, describes, reloads and stops',
-	{ skip: !enabled },
-	async () => {
-		const cwd = resolve(project!);
-		const binary = resolve(sdk!, 'bin', process.platform === 'win32' ? 'editor_dev.exe' : 'editor_dev');
-		const refused = spawnSync(binary, [cwd, 'target/debug/ash-academy', 'ash.academy'], {
-			cwd,
-			encoding: 'utf8',
-			timeout: 20_000,
-		});
-		assert.notEqual(refused.status, 0);
-		assert.match(refused.stderr, /allow-local-code/u);
-		const result = spawnSync(process.execPath, [resolve(sdk!, 'dev.mjs'), 'debug', cwd, '--allow-local-code'], {
-			cwd,
-			input: 'status\ndescribe zh-CN\nreload\nquit\n',
-			encoding: 'utf8',
-			timeout: 20_000,
-		});
-		assert.equal(result.status, 0, result.stderr + result.stdout);
-		const events = result.stdout
-			.trim()
-			.split('\n')
-			.map(line => JSON.parse(line));
-		assert.equal(events.filter(event => event.event === 'description').length, 3);
-		assert.equal(events.find(event => event.language === 'zh-CN').result.editors[0].displayName, 'Academy 文档');
-		assert.equal(events.at(-1).event, 'stopped');
-		assert.ok(
-			events.some(
-				event =>
-					event.event === 'status' &&
-					event.registrations.some(
-						(item: { registrationId: string }) => item.registrationId === 'editor.client.v1',
-					),
-			),
-		);
-	},
-);
+test('real independent Academy development host gates local code, describes, reloads and stops', { skip: !enabled }, async () => {
+	const cwd = resolve(project!);
+	const binary = resolve(sdk!, 'bin', process.platform === 'win32' ? 'editor_dev.exe' : 'editor_dev');
+	const refused = spawnSync(binary, [cwd, 'target/debug/ash-academy', 'ash.academy'], {
+		cwd,
+		encoding: 'utf8',
+		timeout: 20_000,
+	});
+	assert.notEqual(refused.status, 0);
+	assert.match(refused.stderr, /allow-local-code/u);
+	const result = spawnSync(process.execPath, [resolve(sdk!, 'dev.mjs'), 'debug', cwd, '--allow-local-code'], {
+		cwd,
+		input: 'status\ndescribe zh-CN\nreload\nquit\n',
+		encoding: 'utf8',
+		timeout: 20_000,
+	});
+	assert.equal(result.status, 0, result.stderr + result.stdout);
+	const events = result.stdout
+		.trim()
+		.split('\n')
+		.map(line => JSON.parse(line));
+	assert.equal(events.filter(event => event.event === 'description').length, 3);
+	assert.equal(events.find(event => event.language === 'zh-CN').result.editors[0].displayName, 'Academy 文档');
+	assert.equal(events.at(-1).event, 'stopped');
+	assert.ok(events.some(event => event.event === 'status' && event.registrations.some((item: { registrationId: string }) => item.registrationId === 'editor.client.v1')));
+});
 
 test('development load rejects a stale native/client source binding', { skip: !enabled }, async () => {
 	const path = resolve(project!, 'dist/client.json');
@@ -54,11 +42,7 @@ test('development load rejects a stale native/client source binding', { skip: !e
 		const client = JSON.parse(original);
 		client.sourceDigest = `sha256:${'0'.repeat(64)}`;
 		await writeFile(path, JSON.stringify(client));
-		const result = spawnSync(
-			process.execPath,
-			[resolve(sdk!, 'dev.mjs'), 'debug', resolve(project!), '--allow-local-code'],
-			{ input: '', encoding: 'utf8', timeout: 20_000 },
-		);
+		const result = spawnSync(process.execPath, [resolve(sdk!, 'dev.mjs'), 'debug', resolve(project!), '--allow-local-code'], { input: '', encoding: 'utf8', timeout: 20_000 });
 		assert.notEqual(result.status, 0);
 		assert.match(result.stderr, /Native\/client source mismatch/u);
 	} finally {
@@ -67,11 +51,7 @@ test('development load rejects a stale native/client source binding', { skip: !e
 });
 
 test('SIGTERM shuts down a supervised independent Academy process', { skip: !enabled }, async () => {
-	const child = spawn(
-		process.execPath,
-		[resolve(sdk!, 'dev.mjs'), 'debug', resolve(project!), '--allow-local-code'],
-		{ stdio: ['pipe', 'pipe', 'pipe'] },
-	);
+	const child = spawn(process.execPath, [resolve(sdk!, 'dev.mjs'), 'debug', resolve(project!), '--allow-local-code'], { stdio: ['pipe', 'pipe', 'pipe'] });
 	let output = '';
 	let diagnostics = '';
 	let signalled = false;

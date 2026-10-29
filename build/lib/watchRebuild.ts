@@ -12,12 +12,7 @@ export interface RebuildServer {
 }
 
 /** Coalesces changes for generators that reread all their inputs on every run. */
-export function watchRebuild(
-	server: RebuildServer,
-	accepts: (path: string) => boolean,
-	build: () => Promise<boolean>,
-	debounceMilliseconds = 50,
-): () => Promise<void> {
+export function watchRebuild(server: RebuildServer, accepts: (path: string) => boolean, build: () => Promise<boolean>, debounceMilliseconds = 50): () => Promise<void> {
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let running = false;
 	let completion: Promise<void> = Promise.resolve();

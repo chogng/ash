@@ -1,21 +1,12 @@
 import { createDefineParagraphStyleCommand } from '../../../../../extensions/academy/common/commands/documentParagraphCommands.js';
-import {
-	createReplaceDocumentMatchesCommand,
-	findDocumentText,
-} from '../../../../../extensions/academy/common/commands/documentFindCommands.js';
+import { createReplaceDocumentMatchesCommand, findDocumentText } from '../../../../../extensions/academy/common/commands/documentFindCommands.js';
 import { getDocumentParagraphStyles } from '../../../../../extensions/academy/common/model/documentParagraph.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import {
-	createDefaultDocumentSchema,
-	type DocumentSchema,
-} from '../../../../../extensions/academy/common/model/documentSchema.js';
+import { createDefaultDocumentSchema, type DocumentSchema } from '../../../../../extensions/academy/common/model/documentSchema.js';
 import { textSelection } from '../../../../../extensions/academy/common/core/documentSelection.js';
 import { DocumentTransaction } from '../../../../../extensions/academy/common/model/documentTransaction.js';
-import {
-	DocumentCollaborationSynchronizer,
-	DocumentCollaborationError,
-} from '../../../../../extensions/academy/common/contrib/collaboration/synchronizer.js';
+import { DocumentCollaborationSynchronizer, DocumentCollaborationError } from '../../../../../extensions/academy/common/contrib/collaboration/synchronizer.js';
 
 function createDocument(schema: DocumentSchema) {
 	return schema.createDocument(
@@ -35,10 +26,7 @@ for (const side of ['prefix', 'suffix'] as const) {
 		const document = schema.createDocument([
 			schema.createNode('paragraph', {
 				id: 'p',
-				content: [
-					schema.createText('before hello', { id: 'a' }),
-					schema.createText('world after', { id: 'b', marks: [{ type: 'strong', attrs: {} }] }),
-				],
+				content: [schema.createText('before hello', { id: 'a' }), schema.createText('world after', { id: 'b', marks: [{ type: 'strong', attrs: {} }] })],
 			}),
 		]);
 		using synchronizer = new DocumentCollaborationSynchronizer({ schema, document, clientId: 'local' });
@@ -47,19 +35,13 @@ for (const side of ['prefix', 'suffix'] as const) {
 		const command = createReplaceDocumentMatchesCommand(schema, document, matches, 'replacement');
 		assert.ok(command);
 		synchronizer.dispatchLocal(command.transaction);
-		const remote =
-			side === 'prefix'
-				? new DocumentTransaction().replaceText('a', 0, 6, 'PEER')
-				: new DocumentTransaction().replaceText('b', 6, 11, 'PEER');
+		const remote = side === 'prefix' ? new DocumentTransaction().replaceText('a', 0, 6, 'PEER') : new DocumentTransaction().replaceText('b', 6, 11, 'PEER');
 		synchronizer.receiveRemote({ clientId: 'peer', sequence: 1, baseVersion: 0, version: 1, transaction: remote });
 		const submission = synchronizer.takeNextSubmission();
 		assert.ok(submission);
 		assert.equal(submission.baseVersion, 1);
 		synchronizer.acknowledge({ ...submission, version: 2 });
-		assert.equal(
-			synchronizer.canonicalDocument.content[0]!.content.map(node => node.text).join(''),
-			side === 'prefix' ? 'PEER replacement after' : 'before replacement PEER',
-		);
+		assert.equal(synchronizer.canonicalDocument.content[0]!.content.map(node => node.text).join(''), side === 'prefix' ? 'PEER replacement after' : 'before replacement PEER');
 		assert.equal(synchronizer.pending, undefined);
 	});
 }
@@ -174,12 +156,7 @@ test('Stanza collaboration synchronizer rejects stale updates and local echoes',
 			}),
 		DocumentCollaborationError,
 	);
-	assert.equal(
-		synchronizer.dispatchLocal(
-			new DocumentTransaction().withSelection(textSelection({ nodeId: 'text-1', offset: 2 })),
-		),
-		undefined,
-	);
+	assert.equal(synchronizer.dispatchLocal(new DocumentTransaction().withSelection(textSelection({ nodeId: 'text-1', offset: 2 }))), undefined);
 	assert.equal(synchronizer.document.content[0]?.content[0]?.text, 'Hello');
 });
 
@@ -219,11 +196,7 @@ test('Stanza collaboration synchronizer reports dropped pending steps after remo
 
 test('Academy concurrent style definitions keep independent identities and references during rebase', () => {
 	const schema = createDefaultDocumentSchema();
-	const document = schema.createDocument(
-		['one', 'two'].map((value, i) =>
-			schema.createNode('paragraph', { id: `p${i}`, content: [schema.createText(value, { id: `t${i}` })] }),
-		),
-	);
+	const document = schema.createDocument(['one', 'two'].map((value, i) => schema.createNode('paragraph', { id: `p${i}`, content: [schema.createText(value, { id: `t${i}` })] })));
 	using synchronizer = new DocumentCollaborationSynchronizer({ schema, document, clientId: 'local' });
 	const local = createDefineParagraphStyleCommand(document, 'p0', 'Local')!;
 	const remote = createDefineParagraphStyleCommand(document, 'p1', 'Remote')!;

@@ -48,10 +48,7 @@ export class WindowTitle extends Disposable {
 		this._register(workingCopyService.onDidUnregister(() => this.updateTitle()));
 		this._register(
 			configurationService.onDidChangeConfiguration(event => {
-				if (
-					event.affectsConfiguration(WorkbenchConfiguration.windowTitle) ||
-					event.affectsConfiguration(WorkbenchConfiguration.windowTitleSeparator)
-				) {
+				if (event.affectsConfiguration(WorkbenchConfiguration.windowTitle) || event.affectsConfiguration(WorkbenchConfiguration.windowTitleSeparator)) {
 					this.updateTitle();
 				}
 			}),
@@ -88,9 +85,7 @@ export class WindowTitle extends Disposable {
 	}
 
 	private handleActiveEditorChange(): void {
-		this.editorLabelListener.value = this.editorGroupsContainer.activeGroup.activeInput?.onDidChangeLabel?.(() =>
-			this.updateTitle(),
-		);
+		this.editorLabelListener.value = this.editorGroupsContainer.activeGroup.activeInput?.onDidChangeLabel?.(() => this.updateTitle());
 		this.updateTitle();
 	}
 
@@ -100,8 +95,7 @@ export class WindowTitle extends Disposable {
 		const resource = editor?.resource;
 		const folder = resource ? this.workspaceService.getWorkspaceFolder(resource) : undefined;
 		const activeFolder = resource ? dirname(resource) : undefined;
-		const workspaceResource =
-			workspace.configuration ?? (workspace.folders.length === 1 ? workspace.folders[0]!.uri : undefined);
+		const workspaceResource = workspace.configuration ?? (workspace.folders.length === 1 ? workspace.folders[0]!.uri : undefined);
 		// Working copies remain owned by editor domains; the title only reads their persistence state.
 		const dirty = resource && this.workingCopyService.get(resource).some(copy => copy.isDirty);
 		const customValues: Record<string, string> = {};

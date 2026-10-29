@@ -4,11 +4,7 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
-import {
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../accessibility/browser/accessibleView.js';
+import { AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../accessibility/browser/accessibleViewRegistry.js';
 import { setIconResolver } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { IConfigurationService } from '../../../configuration/common/configuration.js';
@@ -109,15 +105,7 @@ test('action lists focus the current choice, preserve navigation on refresh and 
 			{ kind: ActionListItemKind.Separator, label: '' },
 			{ kind: ActionListItemKind.Action, item: 2, label: 'Plan', checked: true },
 		];
-		using list = new ActionList(
-			'choices',
-			items,
-			{ onSelect: () => {}, onHide: () => {} },
-			document.body,
-			undefined,
-			false,
-			{},
-		);
+		using list = new ActionList('choices', items, { onSelect: () => {}, onHide: () => {} }, document.body, undefined, false, {});
 		list.focus();
 		assert.equal(document.activeElement?.getAttribute('aria-label'), 'Plan');
 		list.domNode.querySelector<HTMLButtonElement>('[aria-label="Agent"]')!.focus();
@@ -162,7 +150,11 @@ test('replacing the action menu cancels its owner once and outside dismissal rel
 		service.hide();
 		assert.deepEqual(
 			{ closed, visible: service.isVisible, focus: dom.window.document.activeElement },
-			{ closed: ['first:true', 'second:true'], visible: false, focus: outside },
+			{
+				closed: ['first:true', 'second:true'],
+				visible: false,
+				focus: outside,
+			},
 		);
 	} finally {
 		dom.window.close();
@@ -198,13 +190,7 @@ test('an async action runs once and finishing a retired list leaves its replacem
 		button.click();
 		assert.equal(selected, 1);
 		assert.equal(dom.window.document.querySelector('.ash-action-widget')?.getAttribute('aria-busy'), 'true');
-		service.show(
-			'second',
-			false,
-			[{ kind: ActionListItemKind.Action, item: 2, label: 'Next' }],
-			{ onSelect: () => {}, onHide: () => {} },
-			source,
-		);
+		service.show('second', false, [{ kind: ActionListItemKind.Action, item: 2, label: 'Next' }], { onSelect: () => {}, onHide: () => {} }, source);
 		finish();
 		await pending;
 		await Promise.resolve();
@@ -253,7 +239,11 @@ test('a menu with no available actions keeps keyboard focus and disposal closes 
 				menu: dom.window.document.querySelector('.ash-action-widget'),
 				focus: dom.window.document.activeElement,
 			},
-			{ closed: 1, menu: null, focus: source },
+			{
+				closed: 1,
+				menu: null,
+				focus: source,
+			},
 		);
 	} finally {
 		dom.window.close();
@@ -276,10 +266,7 @@ test('accessibility hint verbosity can be disabled without removing action label
 				dom.window.document.querySelector<HTMLButtonElement>('#source')!,
 			);
 		const menu = dom.window.document.querySelector('.ash-action-widget')!;
-		assert.deepEqual(
-			{ label: menu.getAttribute('aria-label'), hint: menu.getAttribute('aria-description') },
-			{ label: 'Actions', hint: null },
-		);
+		assert.deepEqual({ label: menu.getAttribute('aria-label'), hint: menu.getAttribute('aria-description') }, { label: 'Actions', hint: null });
 	} finally {
 		dom.window.close();
 	}
@@ -290,9 +277,7 @@ test('accessibility help is available to the workbench only while the action men
 	try {
 		using resources = new DisposableStore();
 		const services = createServices(dom.window.document, resources);
-		const implementation = AccessibleViewRegistry.getImplementations().find(
-			entry => entry.name === 'action-widget',
-		)!;
+		const implementation = AccessibleViewRegistry.getImplementations().find(entry => entry.name === 'action-widget')!;
 		assert.equal(implementation.type, AccessibleViewType.Help);
 		assert.equal(
 			services.invokeFunction(accessor => implementation.getProvider(accessor)),
@@ -368,7 +353,11 @@ test('filtering removes empty groups and keeps the typed action associated with 
 				headers: root.querySelectorAll('.ash-action-widget-header').length,
 				status: root.querySelector('[role=status]')!.textContent,
 			},
-			{ rows: 0, headers: 0, status: 'No matching actions.' },
+			{
+				rows: 0,
+				headers: 0,
+				status: 'No matching actions.',
+			},
 		);
 	} finally {
 		dom.window.close();
@@ -464,14 +453,8 @@ test('changing action tabs preserves the filter and the pending execution gate',
 		root.querySelectorAll<HTMLButtonElement>('[role=tab]')[1]!.click();
 		const second = root.querySelector<HTMLButtonElement>('[role=menuitem]')!;
 		second.click();
-		assert.deepEqual(
-			{ selected, hidden, filter: filter.value, root: dom.window.document.querySelector('.ash-action-widget') },
-			{ selected: [1], hidden: 0, filter: 'run', root },
-		);
-		assert.equal(
-			root.querySelector('[role=tabpanel]')!.getAttribute('aria-labelledby'),
-			root.querySelectorAll('[role=tab]')[1]!.id,
-		);
+		assert.deepEqual({ selected, hidden, filter: filter.value, root: dom.window.document.querySelector('.ash-action-widget') }, { selected: [1], hidden: 0, filter: 'run', root });
+		assert.equal(root.querySelector('[role=tabpanel]')!.getAttribute('aria-labelledby'), root.querySelectorAll('[role=tab]')[1]!.id);
 		finish();
 		await Promise.resolve();
 		await Promise.resolve();
@@ -507,22 +490,14 @@ test('a dropdown opens typed actions and disposal cannot close a replacement men
 			}),
 		);
 		dropdown.element.focus();
-		dropdown.element.dispatchEvent(
-			new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }),
-		);
+		dropdown.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
 		assert.equal(dropdown.element.getAttribute('aria-expanded'), 'true');
 		dom.window.document.querySelector<HTMLButtonElement>('[role=menuitem]')!.click();
 		await Promise.resolve();
 		assert.deepEqual(selected, ['edit']);
 		assert.equal(dropdown.element.getAttribute('aria-expanded'), 'false');
 		dropdown.show();
-		service.show(
-			'replacement',
-			false,
-			[{ kind: ActionListItemKind.Action, item: 1, label: 'Replacement' }],
-			{ onSelect: () => {}, onHide: () => {} },
-			dropdown.element,
-		);
+		service.show('replacement', false, [{ kind: ActionListItemKind.Action, item: 1, label: 'Replacement' }], { onSelect: () => {}, onHide: () => {} }, dropdown.element);
 		dropdown.dispose();
 		assert.equal(service.isVisible, true);
 		assert.equal(dom.window.document.querySelector('[role=menuitem]')!.textContent, 'Replacement');
@@ -568,13 +543,7 @@ test('dropdown providers refresh choices and a dismissed request cannot reopen o
 		dropdown.show();
 		await pending.complete([{ ...choice, label: 'Updated' }]);
 		assert.equal(dom.window.document.querySelector('[role=menuitemradio]')!.textContent, 'Updated');
-		service.show(
-			'replacement',
-			false,
-			[{ kind: ActionListItemKind.Action, item: 1, label: 'Replacement' }],
-			{ onSelect: () => {}, onHide: () => {} },
-			dropdown.element,
-		);
+		service.show('replacement', false, [{ kind: ActionListItemKind.Action, item: 1, label: 'Replacement' }], { onSelect: () => {}, onHide: () => {} }, dropdown.element);
 		dropdown.dispose();
 		assert.equal(dom.window.document.querySelector('[role=menuitem]')!.textContent, 'Replacement');
 		assert.deepEqual(visibility, [true, false, true, false]);
@@ -662,13 +631,9 @@ test('filtered action updates retain model identity and expose metadata without 
 		filter.value = 'model-2';
 		filter.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 		assert.equal(root.querySelectorAll('[role=menuitemradio]').length, 1);
-		filter.dispatchEvent(
-			new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
-		);
+		filter.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 		assert.deepEqual(selected, [4]);
-		filter.dispatchEvent(
-			new dom.window.KeyboardEvent('keydown', { key: 'F1', altKey: true, bubbles: true, cancelable: true }),
-		);
+		filter.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F1', altKey: true, bubbles: true, cancelable: true }));
 		assert.equal(help, 1);
 		service.updateItems([], { filterVisible: false, itemsVisible: false });
 		assert.equal(filter.closest<HTMLElement>('.ash-action-widget-filter')?.hidden, true);
@@ -693,10 +658,7 @@ suite('actionWidget browser component', () => {
 			element.style.lineHeight = '1.4';
 		});
 		const labels = Array.from({ length: 19 }, (_, index) => `Configuration ${index + 1}`);
-		await page.evaluate(
-			labels => window.ashActionWidgetIntegration.show(labels, { showFilter: true, focusFilterOnOpen: true }),
-			labels,
-		);
+		await page.evaluate(labels => window.ashActionWidgetIntegration.show(labels, { showFilter: true, focusFilterOnOpen: true }), labels);
 		const widget = page.locator('.ash-action-widget');
 		const rows = widget.getByRole('menuitemradio');
 		await expect(rows).toHaveCount(labels.length);
@@ -770,8 +732,7 @@ suite('actionWidget browser component', () => {
 		expect(
 			await widget.evaluate(element => ({
 				hasOverflow: element.scrollWidth > element.clientWidth,
-				insideViewport:
-					element.getBoundingClientRect().left >= 0 && element.getBoundingClientRect().right <= innerWidth,
+				insideViewport: element.getBoundingClientRect().left >= 0 && element.getBoundingClientRect().right <= innerWidth,
 			})),
 		).toEqual({ hasOverflow: false, insideViewport: true });
 		await page.setViewportSize({ width: 1000, height: 600 });
@@ -810,9 +771,7 @@ suite('actionWidget browser component', () => {
 		const widget = page.locator('.ash-action-widget');
 		const shortWidth = await widget.evaluate(element => element.getBoundingClientRect().width);
 		await widget.getByRole('tab', { name: 'Long' }).click();
-		await expect(widget.getByRole('menuitemradio')).toHaveText(
-			'Run the selected action with a longer descriptive label',
-		);
+		await expect(widget.getByRole('menuitemradio')).toHaveText('Run the selected action with a longer descriptive label');
 		expect(await widget.evaluate(element => element.getBoundingClientRect().width)).toBeGreaterThan(shortWidth);
 		await widget.getByRole('tab', { name: 'Short' }).click();
 		expect(await widget.evaluate(element => element.getBoundingClientRect().width)).toBe(shortWidth);

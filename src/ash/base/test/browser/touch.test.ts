@@ -74,10 +74,7 @@ suite('Gesture', () => {
 		const second = new JSDOM('<body><button>Second</button></body>');
 		try {
 			using resources = new DisposableStore();
-			const targets = [
-				first.window.document.querySelector('button')!,
-				second.window.document.querySelector('button')!,
-			];
+			const targets = [first.window.document.querySelector('button')!, second.window.document.querySelector('button')!];
 			const taps: string[] = [];
 			for (const target of targets) {
 				resources.add(Gesture.addTarget(target));

@@ -12,11 +12,7 @@ import { registerChatOpenAgentDebugPanelAction } from '../../browser/actions/cha
 registerChatOpenAgentDebugPanelAction();
 
 suite('Execution Trace command', () => {
-	for (const target of [
-		undefined,
-		'session',
-		{ sessionId: 'session', threadId: 'child', turnId: 'turn', eventId: 'event' },
-	]) {
+	for (const target of [undefined, 'session', { sessionId: 'session', threadId: 'child', turnId: 'turn', eventId: 'event' }]) {
 		test(`opens the saved location through the registered command ${JSON.stringify(target)}`, async () => {
 			using services = new InstantiationService();
 			const opened: IResourceEditorInput[] = [];
@@ -36,11 +32,7 @@ suite('Execution Trace command', () => {
 });
 
 suite('Workbench Trace navigation', () => {
-	for (const saved of [
-		undefined,
-		'ash-agent-trace:/session?threadId=child&turnId=turn',
-		'https://example.test/untrusted',
-	]) {
+	for (const saved of [undefined, 'ash-agent-trace:/session?threadId=child&turnId=turn', 'https://example.test/untrusted']) {
 		test(`resumes only a valid readonly Trace locator ${String(saved)}`, async () => {
 			using services = new InstantiationService();
 			const opened: IResourceEditorInput[] = [];

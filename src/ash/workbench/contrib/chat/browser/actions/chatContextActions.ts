@@ -23,11 +23,7 @@ import { basename, extUri } from '../../../../../base/common/resources.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { FileKind } from '../../../../../platform/files/common/files.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import {
-	IQuickInputService,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import {
 	IChatContextPickService,
@@ -42,41 +38,21 @@ import { autorun, observableValue } from '../../../../../base/common/observable.
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
 import { IOutputService } from '../../../../services/output/common/output.js';
-import {
-	IInstantiationService,
-	type ServicesAccessor,
-} from '../../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { type AnythingQuickAccessProviderRunOptions } from '../../../../../platform/quickinput/common/quickAccess.js';
-import {
-	SymbolsContextPickerPick,
-	SearchViewResultChatContextPick,
-} from '../../../search/browser/searchChatContext.js';
+import { SymbolsContextPickerPick, SearchViewResultChatContextPick } from '../../../search/browser/searchChatContext.js';
 import { IChatAttachmentResolveService } from '../attachments/chatAttachmentResolveService.js';
 import type { IAnythingQuickPickItem } from '../../../search/browser/anythingQuickAccess.js';
-import {
-	ClipboardImageContextValuePick,
-	GitHubContextValuePick,
-	ScreenshotContextValuePick,
-	SessionReferenceContextPickerPick,
-	TerminalContext,
-	ToolsContextPickerPick,
-} from './chatContext.js';
+import { ClipboardImageContextValuePick, GitHubContextValuePick, ScreenshotContextValuePick, SessionReferenceContextPickerPick, TerminalContext, ToolsContextPickerPick } from './chatContext.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { raceCancellationError } from '../../../../../base/common/async.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
-import type {
-	ChatContextAttachment,
-	ChatImageCapture,
-	IChatContextTarget,
-} from '../../../../services/chat/common/chatContextService.js';
+import type { ChatContextAttachment, ChatImageCapture, IChatContextTarget } from '../../../../services/chat/common/chatContextService.js';
 
 /** Registers editor context commands for the lifetime of their Workbench host. */
-export function registerChatContextActions(
-	imageEditors: IImageEditorService,
-	commands: ICommandService,
-): DisposableStore {
+export function registerChatContextActions(imageEditors: IImageEditorService, commands: ICommandService): DisposableStore {
 	const store = new DisposableStore();
 	store.add(imageEditors.registerAttachmentHandler(capture => commands.executeCommand(ScreenshotCommandId, capture)));
 	store.add(
@@ -87,10 +63,7 @@ export function registerChatContextActions(
 						id: 'workbench.action.chat.attachSelection',
 						title: localize2('chat.context.addSelection', 'Add Selection to Chat'),
 						f1: true,
-						precondition: ContextKeyExpr.and(
-							EditorContextKeys.hasNonEmptySelection.isEqualTo(true),
-							ContextKeyExpr.notEquals(EditorContextKeys.languageId.key, 'ash-chat-input'),
-						),
+						precondition: ContextKeyExpr.and(EditorContextKeys.hasNonEmptySelection.isEqualTo(true), ContextKeyExpr.notEquals(EditorContextKeys.languageId.key, 'ash-chat-input')),
 						menu: { id: MenuId.EditorContext, group: 'z_chat', order: 1 },
 						keybinding: {
 							primary: KeyMod.CtrlCmd | KeyCode.KeyL,
@@ -103,35 +76,18 @@ export function registerChatContextActions(
 				override async runEditorCommand(accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> {
 					const model = editor.getModel();
 					const selection = editor.getSelection();
-					if (!model || !selection || selection.isEmpty() || model.getLanguageId() === 'ash-chat-input')
-						return;
+					if (!model || !selection || selection.isEmpty() || model.getLanguageId() === 'ash-chat-input') return;
 					// Capture before opening Chat can change focus, the active editor, or its unsaved text.
 					const code = model.getValueInRange(selection);
-					const lastLine =
-						selection.endColumn === 1 && selection.endLineNumber > selection.startLineNumber
-							? selection.endLineNumber - 1
-							: selection.endLineNumber;
+					const lastLine = selection.endColumn === 1 && selection.endLineNumber > selection.startLineNumber ? selection.endLineNumber - 1 : selection.endLineNumber;
 					// Output URIs contain registry IDs; use the channel's presentation name in the composer.
-					const channel =
-						model.uri.scheme === 'output'
-							? accessor.get(IOutputService).getChannel(model.uri.path.slice(1))
-							: undefined;
-					const sourceName =
-						channel?.label ??
-						(model.getLanguageId() === 'debug-repl'
-							? localize('chat.context.debugConsole', 'Debug Console')
-							: basename(model.uri));
+					const channel = model.uri.scheme === 'output' ? accessor.get(IOutputService).getChannel(model.uri.path.slice(1)) : undefined;
+					const sourceName = channel?.label ?? (model.getLanguageId() === 'debug-repl' ? localize('chat.context.debugConsole', 'Debug Console') : basename(model.uri));
 					const file = sourceName.replace(/\s/gu, ' ');
 					const name =
 						selection.startLineNumber === lastLine
 							? localize('chat.context.selectionLine', '{0} ({1})', file, selection.startLineNumber)
-							: localize(
-									'chat.context.selectionLines',
-									'{0} ({1}-{2})',
-									file,
-									selection.startLineNumber,
-									lastLine,
-								);
+							: localize('chat.context.selectionLines', '{0} ({1}-{2})', file, selection.startLineNumber, lastLine);
 					const resource = withSelection(model.uri, selection);
 					const content = `Source: ${resource.toString()}\n\n${code}`;
 					const target = await accessor.get(IViewsService).openView<IView & IChatContextTarget>(CHAT_VIEW_ID);
@@ -165,8 +121,7 @@ export function registerChatContextActions(
 				}
 
 				override async run(accessor: ServicesAccessor, capture?: ChatImageCapture): Promise<void> {
-					if (capture !== undefined && typeof capture !== 'function')
-						throw new TypeError('Expected a host-owned image capture');
+					if (capture !== undefined && typeof capture !== 'function') throw new TypeError('Expected a host-owned image capture');
 					if (!capture) {
 						await accessor.get(IImageEditorService).show({}, new AbortController().signal);
 						return;
@@ -184,10 +139,7 @@ export function registerChatContextActions(
 interface AttachContextHost {
 	readonly target: {
 		attachFiles(files: readonly File[], signal?: AbortSignal): Promise<void>;
-		acquireContext(
-			prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>,
-			signal?: AbortSignal,
-		): Promise<readonly ChatContextAttachment[]>;
+		acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal?: AbortSignal): Promise<readonly ChatContextAttachment[]>;
 	};
 	readonly container: HTMLElement;
 	readonly focusInput: () => void;
@@ -253,9 +205,7 @@ export class AttachContextAction extends Disposable {
 				return typeof value === 'function' ? value.bind(owner) : value;
 			},
 		});
-		const instantiation = this.pickers.add(
-			this.instantiation.createChild(new ServiceCollection([IQuickInputService, scopedQuickInput])),
-		);
+		const instantiation = this.pickers.add(this.instantiation.createChild(new ServiceCollection([IQuickInputService, scopedQuickInput])));
 		try {
 			const sources: ContextSourceItem[] = [
 				{
@@ -271,36 +221,18 @@ export class AttachContextAction extends Disposable {
 					source: 'workspace',
 				});
 			const contexts: readonly IChatContextValueItem[] = [
-				...(this.host.supportsImages()
-					? [
-							instantiation.createInstance(ClipboardImageContextValuePick),
-							instantiation.createInstance(ScreenshotContextValuePick),
-						]
-					: []),
-				instantiation.createInstance(
-					SessionReferenceContextPickerPick,
-					this.navigation.getActiveConversation(),
-				),
+				...(this.host.supportsImages() ? [instantiation.createInstance(ClipboardImageContextValuePick), instantiation.createInstance(ScreenshotContextValuePick)] : []),
+				instantiation.createInstance(SessionReferenceContextPickerPick, this.navigation.getActiveConversation()),
 				instantiation.createInstance(GitHubContextValuePick, 'issue'),
 				instantiation.createInstance(GitHubContextValuePick, 'pullRequest'),
 				instantiation.createInstance(TerminalContext),
-				instantiation.createInstance(
-					ToolsContextPickerPick,
-					(await raceCancellationError(Promise.resolve(this.host.getDisabledTools?.()), controller.signal)) ??
-						[],
-				),
+				instantiation.createInstance(ToolsContextPickerPick, (await raceCancellationError(Promise.resolve(this.host.getDisabledTools?.()), controller.signal)) ?? []),
 				instantiation.createInstance(SymbolsContextPickerPick),
 				instantiation.createInstance(SearchViewResultChatContextPick),
-				instantiation.createInstance(
-					ChatInstructionsPickerPick,
-					this.navigation.getActiveConversation()?.sessionId,
-				),
+				instantiation.createInstance(ChatInstructionsPickerPick, this.navigation.getActiveConversation()?.sessionId),
 			];
 			const registered = [...this.contextPicks.items];
-			const available = await raceCancellationError(
-				Promise.all(registered.map(picker => picker.isEnabled?.() ?? true)),
-				controller.signal,
-			);
+			const available = await raceCancellationError(Promise.all(registered.map(picker => picker.isEnabled?.() ?? true)), controller.signal);
 			const inline = registered.filter((picker, index) => picker.presentation === 'inline' && available[index]);
 			for (const context of contexts.filter(context => context.isEnabled?.() !== false)) {
 				sources.push({
@@ -335,8 +267,7 @@ export class AttachContextAction extends Disposable {
 			if (this.isDisposed || controller.signal.aborted) return;
 			await this.showAttachments(sources, controller.signal, scopedQuickInput, contextBackground, anchor);
 		} catch (error) {
-			if (!this.isDisposed && !controller.signal.aborted && !isCancellationError(error))
-				this.notifications.error(localize('chat.context.failed', 'Could not add context: {0}', String(error)));
+			if (!this.isDisposed && !controller.signal.aborted && !isCancellationError(error)) this.notifications.error(localize('chat.context.failed', 'Could not add context: {0}', String(error)));
 		} finally {
 			this.pending = undefined;
 			this.pickers.clear();
@@ -347,13 +278,7 @@ export class AttachContextAction extends Disposable {
 		}
 	}
 
-	private showAttachments(
-		sources: readonly ContextSourceItem[],
-		signal: AbortSignal,
-		quickInput: IQuickInputService,
-		contextBackground: { value: boolean },
-		anchor?: HTMLElement,
-	): Promise<void> {
+	private showAttachments(sources: readonly ContextSourceItem[], signal: AbortSignal, quickInput: IQuickInputService, contextBackground: { value: boolean }, anchor?: HTMLElement): Promise<void> {
 		const lifetime = this.pickers.add(new DisposableStore());
 		const ownedPicker = lifetime.add(new MutableDisposable());
 		return new Promise((resolve, reject) => {
@@ -392,9 +317,7 @@ export class AttachContextAction extends Disposable {
 				this.quickInput.quickAccess.show('', {
 					anchor,
 					anchorPosition: 'above',
-					placeholder: folders
-						? localize('chat.context.searchFilesAndFolders', 'Search file or folder by name')
-						: localize('chat.context.searchAttachments', 'Search attachments'),
+					placeholder: folders ? localize('chat.context.searchFilesAndFolders', 'Search file or folder by name') : localize('chat.context.searchAttachments', 'Search attachments'),
 					enabledProviderPrefixes: [''],
 					providerOptions,
 				});
@@ -428,22 +351,13 @@ export class AttachContextAction extends Disposable {
 						picker?.hide();
 						if (item.source === 'contextPicker') {
 							const selected = item as Extract<ContextSourceItem, { source: 'contextPicker' }>;
-							const selection = await pickRegisteredChatContext(
-								this.contextPicks,
-								quickInput,
-								this.commands,
-								signal,
-								selected.picker,
-							);
+							const selection = await pickRegisteredChatContext(this.contextPicks, quickInput, this.commands, signal, selected.picker);
 							if (selection === 'noop') {
 								finish();
 								return;
 							}
 							if (selection) {
-								await this.host.target.acquireContext(
-									async () => (Array.isArray(selection) ? selection : [selection]),
-									signal,
-								);
+								await this.host.target.acquireContext(async () => (Array.isArray(selection) ? selection : [selection]), signal);
 								finish();
 							} else {
 								show();
@@ -452,20 +366,11 @@ export class AttachContextAction extends Disposable {
 						}
 						if (item.source === 'context') {
 							const context = (item as Extract<ContextSourceItem, { source: 'context' }>).context;
-							if (
-								(context instanceof ClipboardImageContextValuePick ||
-									context instanceof ScreenshotContextValuePick) &&
-								!this.host.supportsImages()
-							)
-								throw new Error(
-									localize('chat.image.unsupported', 'The selected model does not support images'),
-								);
+							if ((context instanceof ClipboardImageContextValuePick || context instanceof ScreenshotContextValuePick) && !this.host.supportsImages())
+								throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
 							contextBackground.value = false;
 							const attachments = await this.host.target.acquireContext(async draftSignal => {
-								const selection = await context.asAttachment(
-									undefined,
-									AbortSignal.any([signal, draftSignal]),
-								);
+								const selection = await context.asAttachment(undefined, AbortSignal.any([signal, draftSignal]));
 								return selection ? (Array.isArray(selection) ? selection : [selection]) : [];
 							}, signal);
 							const attachment = attachments[0];
@@ -486,25 +391,10 @@ export class AttachContextAction extends Disposable {
 						if (item.source === 'providers') {
 							contextBackground.value = false;
 							const attachments = await this.host.target.acquireContext(async draftSignal => {
-								const selection = await pickRegisteredChatContext(
-									this.contextPicks,
-									quickInput,
-									this.commands,
-									AbortSignal.any([signal, draftSignal]),
-								);
-								const entries =
-									!selection || selection === 'noop'
-										? []
-										: Array.isArray(selection)
-											? selection
-											: [selection];
+								const selection = await pickRegisteredChatContext(this.contextPicks, quickInput, this.commands, AbortSignal.any([signal, draftSignal]));
+								const entries = !selection || selection === 'noop' ? [] : Array.isArray(selection) ? selection : [selection];
 								if (entries.some(entry => entry.kind === 'image') && !this.host.supportsImages())
-									throw new Error(
-										localize(
-											'chat.image.unsupported',
-											'The selected model does not support images',
-										),
-									);
+									throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
 								return entries;
 							}, signal);
 							const attachment = attachments[0];
@@ -512,48 +402,22 @@ export class AttachContextAction extends Disposable {
 							else show();
 							return;
 						}
-						const editors = [
-							...new Map(
-								this.editors.groups
-									.flatMap(group => group.inputs)
-									.map(input => [extUri.getComparisonKey(input.resource), input]),
-							).values(),
-						];
+						const editors = [...new Map(this.editors.groups.flatMap(group => group.inputs).map(input => [extUri.getComparisonKey(input.resource), input])).values()];
 						await this.host.target.acquireContext(async draftSignal => {
-							const attachments = await Promise.all(
-								editors.map(editor =>
-									this.attachmentResolver.resolveEditorAttachContext(
-										editor,
-										AbortSignal.any([signal, draftSignal]),
-									),
-								),
-							);
-							if (
-								attachments.some(attachment => attachment?.kind === 'image') &&
-								!this.host.supportsImages()
-							) {
-								throw new Error(
-									localize('chat.image.unsupported', 'The selected model does not support images'),
-								);
+							const attachments = await Promise.all(editors.map(editor => this.attachmentResolver.resolveEditorAttachContext(editor, AbortSignal.any([signal, draftSignal]))));
+							if (attachments.some(attachment => attachment?.kind === 'image') && !this.host.supportsImages()) {
+								throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
 							}
-							return attachments.filter(
-								(attachment): attachment is ChatContextAttachment => attachment !== undefined,
-							);
+							return attachments.filter((attachment): attachment is ChatContextAttachment => attachment !== undefined);
 						}, signal);
 						finish();
 						return;
 					}
 					const resource = item as IAnythingQuickPickItem;
 					const attachments = await this.host.target.acquireContext(async draftSignal => {
-						const attachment = await this.attachmentResolver.resolveResourceAttachContext(
-							resource.resource,
-							resource.kind === FileKind.Directory,
-							AbortSignal.any([signal, draftSignal]),
-						);
+						const attachment = await this.attachmentResolver.resolveResourceAttachContext(resource.resource, resource.kind === FileKind.Directory, AbortSignal.any([signal, draftSignal]));
 						if (attachment.kind === 'image' && !this.host.supportsImages()) {
-							throw new Error(
-								localize('chat.image.unsupported', 'The selected model does not support images'),
-							);
+							throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
 						}
 						return [attachment];
 					}, signal);
@@ -593,13 +457,8 @@ async function pickRegisteredChatContext(
 	signal: AbortSignal,
 	selectedProvider?: IChatContextValueItem | IChatContextPickerItem,
 ): Promise<ChatContextPickAttachment | undefined> {
-	const items = selectedProvider
-		? [selectedProvider]
-		: [...service.items].filter(item => item.presentation !== 'inline');
-	const available = await raceCancellationError(
-		Promise.all(items.map(async item => (await item.isEnabled?.()) ?? true)),
-		signal,
-	);
+	const items = selectedProvider ? [selectedProvider] : [...service.items].filter(item => item.presentation !== 'inline');
+	const available = await raceCancellationError(Promise.all(items.map(async item => (await item.isEnabled?.()) ?? true)), signal);
 	const enabled = items.filter((item, index) => available[index] && [...service.items].includes(item));
 	if (signal.aborted || enabled.length === 0) return undefined;
 	const provider =
@@ -607,11 +466,7 @@ async function pickRegisteredChatContext(
 			? enabled[0]
 			: await new Promise<IChatContextValueItem | IChatContextPickerItem | undefined>(resolve => {
 					const resources = new DisposableStore();
-					const picker = resources.add(
-						quickInput.createQuickPick<
-							IQuickPickItem & { provider: IChatContextValueItem | IChatContextPickerItem }
-						>(),
-					);
+					const picker = resources.add(quickInput.createQuickPick<IQuickPickItem & { provider: IChatContextValueItem | IChatContextPickerItem }>());
 					let done = false;
 					const finish = (value: IChatContextValueItem | IChatContextPickerItem | undefined) => {
 						if (done) return;
@@ -642,9 +497,7 @@ async function pickRegisteredChatContext(
 	const cancellation = new CancellationTokenSource();
 	resources.add(toDisposable(() => cancellation.dispose(true)));
 	resources.add(toDisposable(() => context.dispose?.()));
-	const picker = resources.add(
-		quickInput.createQuickPick<IChatContextPickerPickItem & { action?: 'back' | 'configure' }>(),
-	);
+	const picker = resources.add(quickInput.createQuickPick<IChatContextPickerPickItem & { action?: 'back' | 'configure' }>());
 	picker.canAcceptInBackground = true;
 	picker.sortByLabel = false;
 	picker.filterValue = () => '';
@@ -712,9 +565,7 @@ async function pickRegisteredChatContext(
 				void Promise.resolve()
 					.then(() => {
 						if (!current()) return undefined;
-						return item.action === 'configure'
-							? commands.executeCommand(context.configure!.commandId).then(() => undefined)
-							: item.asAttachment();
+						return item.action === 'configure' ? commands.executeCommand(context.configure!.commandId).then(() => undefined) : item.asAttachment();
 					})
 					.then(
 						value => finish(current() ? value : undefined),

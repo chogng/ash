@@ -2,13 +2,7 @@ import './sash.css';
 import { addDisposableListener, getWindow, h } from '../../dom.js';
 import { ManagedStyleSheet } from '../../domStylesheets.js';
 import { disposableWindowTimeout } from '../../scheduler.js';
-import {
-	type IDisposable,
-	MutableDisposable,
-	Disposable,
-	DisposableStore,
-	toDisposable,
-} from '../../../common/lifecycle.js';
+import { type IDisposable, MutableDisposable, Disposable, DisposableStore, toDisposable } from '../../../common/lifecycle.js';
 import { isFiniteNumber } from '../../../common/numbers.js';
 
 export type SashOrientation = 'vertical' | 'horizontal';
@@ -259,11 +253,7 @@ export class Sash extends Disposable {
 		this.dragListeners.clear();
 		const start = this.coordinate(event);
 		this.fire(this.startListeners);
-		if (
-			!fromLinkedSash &&
-			typeof event.pointerId === 'number' &&
-			typeof this.element.setPointerCapture === 'function'
-		) {
+		if (!fromLinkedSash && typeof event.pointerId === 'number' && typeof this.element.setPointerCapture === 'function') {
 			this.element.setPointerCapture(event.pointerId);
 		}
 		const move = (next: PointerEvent) => {
@@ -277,12 +267,7 @@ export class Sash extends Disposable {
 		const stop = () => {
 			this.dragListeners.clear();
 			this.element.classList.remove('ash-sash-active');
-			if (
-				!fromLinkedSash &&
-				typeof event.pointerId === 'number' &&
-				typeof this.element.hasPointerCapture === 'function' &&
-				this.element.hasPointerCapture(event.pointerId)
-			) {
+			if (!fromLinkedSash && typeof event.pointerId === 'number' && typeof this.element.hasPointerCapture === 'function' && this.element.hasPointerCapture(event.pointerId)) {
 				this.element.releasePointerCapture(event.pointerId);
 			}
 			this.fire(this.endListeners);

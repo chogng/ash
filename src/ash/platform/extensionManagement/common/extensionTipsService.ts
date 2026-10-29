@@ -50,21 +50,12 @@ export function readExtensionTips(value: unknown): ExtensionTips {
 		name: text(entry.name),
 	});
 	const root = record(value);
-	if (
-		root.schemaVersion !== 1 ||
-		Object.keys(root).some(
-			key => !['schemaVersion', 'editors', 'projects', 'executables', 'keymaps', 'remote', 'web'].includes(key),
-		)
-	) {
+	if (root.schemaVersion !== 1 || Object.keys(root).some(key => !['schemaVersion', 'editors', 'projects', 'executables', 'keymaps', 'remote', 'web'].includes(key))) {
 		throw new TypeError('Unsupported extension recommendation catalog');
 	}
 	return {
 		editors: entries(root.editors).map(entry => {
-			if (
-				!Array.isArray(entry.extensions) ||
-				!entry.extensions.length ||
-				!['docs', 'pdf'].includes(String(entry.kind))
-			) {
+			if (!Array.isArray(entry.extensions) || !entry.extensions.length || !['docs', 'pdf'].includes(String(entry.kind))) {
 				throw new TypeError('Invalid editor recommendation');
 			}
 			return {
@@ -79,12 +70,7 @@ export function readExtensionTips(value: unknown): ExtensionTips {
 			language: text(entry.language, /^[a-z0-9][a-z0-9._-]*$/u),
 		})),
 		executables: entries(root.executables).map(entry => {
-			if (
-				!Array.isArray(entry.executables) ||
-				!entry.executables.length ||
-				entry.executables.length > 10 ||
-				typeof entry.important !== 'boolean'
-			) {
+			if (!Array.isArray(entry.executables) || !entry.executables.length || entry.executables.length > 10 || typeof entry.important !== 'boolean') {
 				throw new TypeError('Invalid executable recommendation');
 			}
 			return {

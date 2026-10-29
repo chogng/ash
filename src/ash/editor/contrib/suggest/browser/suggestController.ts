@@ -3,12 +3,7 @@ import { KeybindingWeight } from '../../../../platform/keybinding/common/keybind
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { localize2 } from '../../../../nls.js';
 import { WordBasedCompletionItemProvider } from '../../../browser/services/editorWorkerService.js';
-import {
-	EditorAction,
-	registerEditorAction,
-	registerEditorContribution,
-	type ServicesAccessor,
-} from '../../../browser/editorFeatureRegistration.js';
+import { EditorAction, registerEditorAction, registerEditorContribution, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
 import { createSnippetVariables } from '../../snippet/common/snippetParser.js';
 import { isCompletionsEnabledFromObject } from '../../../common/services/completionsEnablement.js';
 import { Position } from '../../../common/core/position.js';
@@ -17,17 +12,9 @@ import { stopEvent } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
-import {
-	createLanguageCompletionIncompleteRefreshContext,
-	createLanguageCompletionInvokeContext,
-	type LanguageCompletionContext,
-} from '../../../common/languages.js';
+import { createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, type LanguageCompletionContext } from '../../../common/languages.js';
 import { LanguageCompletionService } from './suggest.js';
-import {
-	type EditorViewDidEditEvent,
-	type EditorViewTextUpdateEvent,
-	type ViewController,
-} from '../../../browser/view/viewController.js';
+import { type EditorViewDidEditEvent, type EditorViewTextUpdateEvent, type ViewController } from '../../../browser/view/viewController.js';
 import { SuggestModel, type LanguageCompletionSessionState } from './suggestModel.js';
 import { CompletionWidget } from './suggestWidget.js';
 
@@ -73,9 +60,7 @@ export class SuggestController extends Disposable {
 				view.viewport.textModel !== session.textModel ||
 				service.results !== session.resultStore
 			) {
-				throw new TypeError(
-					'Stanza Suggest dependencies must share one text model and completion result store',
-				);
+				throw new TypeError('Stanza Suggest dependencies must share one text model and completion result store');
 			}
 			if (options.onRequestError !== undefined && typeof options.onRequestError !== 'function') {
 				throw new TypeError('Stanza Suggest request error handler must be a function');
@@ -88,9 +73,7 @@ export class SuggestController extends Disposable {
 					if (change.result) this.completionIsIncomplete = change.result.value.isIncomplete;
 				}),
 			);
-			this.widget = this._register(
-				new CompletionWidget(editor, view, view.viewport, session, languageService, options.widgetContainer),
-			);
+			this.widget = this._register(new CompletionWidget(editor, view, view.viewport, session, languageService, options.widgetContainer));
 			this._register(view.onWillBeforeInput(event => this.handleBeforeInput(event)));
 			this._register(view.onWillTextUpdate(event => this.handleTextUpdate(event)));
 			this._register(view.onWillKeydown(event => this.handleKeydown(event)));
@@ -123,12 +106,7 @@ export class SuggestController extends Disposable {
 	}
 
 	private handleBeforeInput(event: InputEvent): void {
-		if (
-			event.defaultPrevented ||
-			(event.inputType !== 'insertText' && event.inputType !== 'insertReplacementText') ||
-			!event.data
-		)
-			return;
+		if (event.defaultPrevented || (event.inputType !== 'insertText' && event.inputType !== 'insertReplacementText') || !event.data) return;
 		if (!this.session.acceptSelectedWithCommitCharacter(event.data)) return;
 		stopEvent(event);
 		this.view.clearInput();
@@ -138,8 +116,7 @@ export class SuggestController extends Disposable {
 	}
 
 	private handleTextUpdate(event: EditorViewTextUpdateEvent): void {
-		if (event.defaultPrevented || !event.text || !this.session.acceptSelectedWithCommitCharacter(event.text))
-			return;
+		if (event.defaultPrevented || !event.text || !this.session.acceptSelectedWithCommitCharacter(event.text)) return;
 		event.preventDefault();
 		this.view.clearInput();
 		const position = this.editor.getPosition();
@@ -150,28 +127,13 @@ export class SuggestController extends Disposable {
 	private handleKeydown(event: KeyboardEvent): void {
 		if (this.isDisposed || event.defaultPrevented || event.isComposing) return;
 		const state = this.readState();
-		if (
-			!event.shiftKey &&
-			!event.ctrlKey &&
-			!event.altKey &&
-			!event.metaKey &&
-			state &&
-			(event.key === 'ArrowDown' || event.key === 'ArrowUp')
-		) {
+		if (!event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey && state && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
 			stopEvent(event);
 			if (event.key === 'ArrowDown') this.session.selectNext();
 			else this.session.selectPrevious();
 			return;
 		}
-		if (
-			!event.shiftKey &&
-			!event.ctrlKey &&
-			!event.altKey &&
-			!event.metaKey &&
-			event.key === 'Enter' &&
-			state &&
-			state.selectedIndex >= 0
-		) {
+		if (!event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey && event.key === 'Enter' && state && state.selectedIndex >= 0) {
 			stopEvent(event);
 			this.acceptSelected();
 			return;
@@ -323,10 +285,7 @@ export class SuggestController extends Disposable {
 		try {
 			this.onRequestError(error);
 		} catch (reportingError) {
-			console.error(
-				'Stanza completion request and error reporting both failed',
-				new AggregateError([error, reportingError]),
-			);
+			console.error('Stanza completion request and error reporting both failed', new AggregateError([error, reportingError]));
 		}
 	}
 }
@@ -339,20 +298,12 @@ registerEditorContribution({
 	id: SuggestController.ID,
 	install: context => {
 		if (context.kind !== 'text') return;
-		if (
-			context.options.suggestions !== undefined &&
-			!isCompletionsEnabledFromObject(context.options.suggestions, context.model.getLanguageId())
-		)
-			return;
+		if (context.options.suggestions !== undefined && !isCompletionsEnabledFromObject(context.options.suggestions, context.model.getLanguageId())) return;
 		const completions = context.register(
 			new LanguageCompletionService(context.model, context.languageFeaturesService.completionProvider, {
 				resource: context.model.uri,
-				providers: context.options.completionProviders ?? [
-					new WordBasedCompletionItemProvider(context.editorWorker),
-				],
-				...(context.options.completionWorkerFactory
-					? { workerFactory: context.options.completionWorkerFactory }
-					: {}),
+				providers: context.options.completionProviders ?? [new WordBasedCompletionItemProvider(context.editorWorker)],
+				...(context.options.completionWorkerFactory ? { workerFactory: context.options.completionWorkerFactory } : {}),
 			}),
 		);
 		const fileVariables = createSnippetVariables(context.model.uri);
@@ -360,26 +311,17 @@ registerEditorContribution({
 			new SuggestModel(completions.results, context.editor, {
 				resolver: completions,
 				onResolveError: context.onLanguageError,
-				onDidAccept: item =>
-					completions.executeCompletionCommand(
-						context.model.getLanguageId(),
-						item,
-						new AbortController().signal,
-					),
+				onDidAccept: item => completions.executeCompletionCommand(context.model.getLanguageId(), item, new AbortController().signal),
 				snippetVariables: {
 					// Completion acceptance requires a collapsed selection, so selected text is empty.
 					resolveVariable: name => (name === 'TM_SELECTED_TEXT' ? '' : fileVariables.resolveVariable(name)),
 				},
 			}),
 		);
-		return context.instantiationService.createInstance(
-			SuggestController,
-			context.editor,
-			context.controller,
-			completions,
-			session,
-			{ onRequestError: context.onLanguageError, widgetContainer: context.options.completionWidgetContainer },
-		);
+		return context.instantiationService.createInstance(SuggestController, context.editor, context.controller, completions, session, {
+			onRequestError: context.onLanguageError,
+			widgetContainer: context.options.completionWidgetContainer,
+		});
 	},
 });
 

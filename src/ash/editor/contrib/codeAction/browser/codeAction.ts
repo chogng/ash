@@ -1,16 +1,6 @@
 import { type LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry.js';
-import {
-	isLanguageFeatureRequestCurrent,
-	type LanguageCodeActionProvider,
-	type LanguageCodeActionRequest,
-} from '../../../common/languages.js';
-import {
-	CodeActionItem,
-	CodeActionKind,
-	filtersAction,
-	type CodeActionFilter,
-	type CodeActionSet,
-} from '../common/types.js';
+import { isLanguageFeatureRequestCurrent, type LanguageCodeActionProvider, type LanguageCodeActionRequest } from '../../../common/languages.js';
+import { CodeActionItem, CodeActionKind, filtersAction, type CodeActionFilter, type CodeActionSet } from '../common/types.js';
 import { HierarchicalKind } from '../../../../base/common/hierarchicalKind.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { Disposable, type IDisposable } from '../../../../base/common/lifecycle.js';
@@ -38,11 +28,7 @@ class CodeActionResults extends Disposable implements CodeActionSet {
 	}
 
 	public get hasAutoFix(): boolean {
-		return this.validActions.some(
-			item =>
-				CodeActionKind.QuickFix.contains(new HierarchicalKind(item.action.kind ?? '')) &&
-				item.action.isPreferred === true,
-		);
+		return this.validActions.some(item => CodeActionKind.QuickFix.contains(new HierarchicalKind(item.action.kind ?? '')) && item.action.isPreferred === true);
 	}
 
 	public get hasAIFix(): boolean {
@@ -96,12 +82,7 @@ export async function getCodeActions(
 				const accepted: CodeActionItem[] = [];
 				for (const original of entries) {
 					const item = new CodeActionItem(original, provider);
-					if (
-						request.only &&
-						!request.only.some(
-							kind => item.action.kind === kind || item.action.kind?.startsWith(kind + '.'),
-						)
-					) {
+					if (request.only && !request.only.some(kind => item.action.kind === kind || item.action.kind?.startsWith(kind + '.'))) {
 						continue;
 					}
 					if (filtersAction(filter, item.action)) {

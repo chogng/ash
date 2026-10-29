@@ -15,11 +15,7 @@ import { IContextViewService } from '../../../../platform/contextview/browser/co
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
-import {
-	defaultButtonStyles,
-	defaultInputBoxStyles,
-	defaultSelectBoxStyles,
-} from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultInputBoxStyles, defaultSelectBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { BreakpointWidgetContext, IDebugService } from '../common/debug.js';
 
 /** Edits one source breakpoint draft in space owned by the editor's ZoneWidget. */
@@ -55,33 +51,19 @@ export class BreakpointWidget extends ZoneWidget {
 			keepEditorSelection: true,
 		});
 		this.resource = editor.getModel()!.uri;
-		const breakpoint = debug.breakpoints.find(
-			point =>
-				point.resource.toString() === this.resource.toString() &&
-				point.lineNumber === lineNumber &&
-				point.columnNumber === column,
-		);
+		const breakpoint = debug.breakpoints.find(point => point.resource.toString() === this.resource.toString() && point.lineNumber === lineNumber && point.columnNumber === column);
 		this.breakpointId = breakpoint?.id;
 		this.values.set(BreakpointWidgetContext.CONDITION, breakpoint?.condition ?? '');
 		this.values.set(BreakpointWidgetContext.HIT_COUNT, breakpoint?.hitCondition ?? '');
 		this.values.set(BreakpointWidgetContext.LOG_MESSAGE, breakpoint?.logMessage ?? '');
 		this.context =
 			context ??
-			(breakpoint?.logMessage
-				? BreakpointWidgetContext.LOG_MESSAGE
-				: breakpoint?.hitCondition && !breakpoint.condition
-					? BreakpointWidgetContext.HIT_COUNT
-					: BreakpointWidgetContext.CONDITION);
+			(breakpoint?.logMessage ? BreakpointWidgetContext.LOG_MESSAGE : breakpoint?.hitCondition && !breakpoint.condition ? BreakpointWidgetContext.HIT_COUNT : BreakpointWidgetContext.CONDITION);
 		this.create();
 		this.show(new Position(lineNumber, column ?? 1), this.heightInRows);
 		this._register(
 			debug.onDidChangeBreakpoints(() => {
-				if (
-					!this.saving &&
-					this.breakpointId &&
-					!debug.breakpoints.some(point => point.id === this.breakpointId)
-				)
-					this.close();
+				if (!this.saving && this.breakpointId && !debug.breakpoints.some(point => point.id === this.breakpointId)) this.close();
 			}),
 		);
 	}
@@ -162,14 +144,8 @@ export class BreakpointWidget extends ZoneWidget {
 							'Log a message without stopping. Put expressions in braces, for example: value = {value}. Enter saves; Shift+Enter adds a line; Escape cancels.',
 						)
 					: this.context === BreakpointWidgetContext.HIT_COUNT
-						? localize(
-								'debug.hitCountInputHelp',
-								'Break when the hit count condition is met. Enter saves; Shift+Enter adds a line; Escape cancels.',
-							)
-						: localize(
-								'debug.conditionInputHelp',
-								'Break when the expression evaluates to true. Enter saves; Shift+Enter adds a line; Escape cancels.',
-							);
+						? localize('debug.hitCountInputHelp', 'Break when the hit count condition is met. Enter saves; Shift+Enter adds a line; Escape cancels.')
+						: localize('debug.conditionInputHelp', 'Break when the expression evaluates to true. Enter saves; Shift+Enter adds a line; Escape cancels.');
 			const binding = this.keybindings.lookupKeybinding('editor.action.accessibilityHelp');
 			const shortcut = binding ? getKeybindingLabel(binding) : undefined;
 			const hint =
@@ -177,14 +153,8 @@ export class BreakpointWidget extends ZoneWidget {
 					? ''
 					: shortcut
 						? localize('debug.breakpointHelpShortcut', 'Press {0} for breakpoint editing help.', shortcut)
-						: localize(
-								'debug.breakpointHelpHint',
-								'Open Accessibility Help for breakpoint editing instructions.',
-							);
-			this.input!.inputElement.setAttribute(
-				'aria-description',
-				[this.help!.textContent, hint].filter(Boolean).join(' '),
-			);
+						: localize('debug.breakpointHelpHint', 'Open Accessibility Help for breakpoint editing instructions.');
+			this.input!.inputElement.setAttribute('aria-description', [this.help!.textContent, hint].filter(Boolean).join(' '));
 		};
 		this._register(this.input.onDidChange(value => this.values.set(this.context, value)));
 		this._register(
@@ -229,10 +199,7 @@ export class BreakpointWidget extends ZoneWidget {
 		);
 		this._register(
 			observeResize(form, () => {
-				const rows = Math.max(
-					4,
-					Math.ceil(form.scrollHeight / this.editor.getOption(EditorOption.lineHeight)) + 1,
-				);
+				const rows = Math.max(4, Math.ceil(form.scrollHeight / this.editor.getOption(EditorOption.lineHeight)) + 1);
 				if (rows !== this.heightInRows) {
 					this.heightInRows = rows;
 					this._relayout(rows);
@@ -259,11 +226,7 @@ export class BreakpointWidget extends ZoneWidget {
 			const hitCondition = this.values.get(BreakpointWidgetContext.HIT_COUNT)!;
 			const logMessage = this.values.get(BreakpointWidgetContext.LOG_MESSAGE)!;
 			if (this.breakpointId) {
-				await this.debug.updateBreakpoints(
-					this.resource,
-					new Map([[this.breakpointId, { condition, hitCondition, logMessage }]]),
-					false,
-				);
+				await this.debug.updateBreakpoints(this.resource, new Map([[this.breakpointId, { condition, hitCondition, logMessage }]]), false);
 			} else {
 				this.debug.addBreakpoints([
 					{

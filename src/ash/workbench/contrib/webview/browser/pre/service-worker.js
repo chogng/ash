@@ -5,8 +5,7 @@ self.addEventListener('activate', event => event.waitUntil(self.clients.claim())
 
 function documentChannelFromUrl(url) {
 	const prefix = new URL('document/', self.location.href).pathname;
-	if (url.protocol !== self.location.protocol || url.host !== self.location.host || !url.pathname.startsWith(prefix))
-		return undefined;
+	if (url.protocol !== self.location.protocol || url.host !== self.location.host || !url.pathname.startsWith(prefix)) return undefined;
 	const channel = decodeURIComponent(url.pathname.slice(prefix.length));
 	return /^ash-webview:[\da-f-]+:\d+$/.test(channel) ? channel : undefined;
 }
@@ -17,10 +16,7 @@ async function loadFromBootstrap(event, type, documentChannel) {
 	const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
 	const bootstrap = windows.find(client => {
 		const url = new URL(client.url);
-		return (
-			/\/index(?:-[\w-]+)?\.html$/.test(url.pathname) &&
-			new URLSearchParams(url.hash.slice(1)).get('channel') === ownerChannel
-		);
+		return /\/index(?:-[\w-]+)?\.html$/.test(url.pathname) && new URLSearchParams(url.hash.slice(1)).get('channel') === ownerChannel;
 	});
 	if (!bootstrap) return new Response(null, { status: 410 });
 	const connection = new MessageChannel();
@@ -56,11 +52,7 @@ self.addEventListener('fetch', event => {
 		(async () => {
 			if (!['GET', 'HEAD'].includes(event.request.method)) return new Response(null, { status: 403 });
 			const client = await self.clients.get(event.clientId);
-			return loadFromBootstrap(
-				event,
-				'load-resource',
-				client ? documentChannelFromUrl(new URL(client.url)) : undefined,
-			);
+			return loadFromBootstrap(event, 'load-resource', client ? documentChannelFromUrl(new URL(client.url)) : undefined);
 		})(),
 	);
 });

@@ -13,12 +13,8 @@ export function serializeSearchResultForEditor(query: IContentSearchQuery, resul
 		lines.push(fileHeader + file.resource.toString());
 		for (const match of file.matches) {
 			const range = match.range;
-			const preview = match.preview
-				.slice(match.previewRange.start, match.previewRange.end)
-				.replace(/\r\n|\r|\n/g, ' ↵ ');
-			lines.push(
-				`  ${range.startLineNumber}:${range.startColumn}-${range.endLineNumber}:${range.endColumn}: ${preview}`,
-			);
+			const preview = match.preview.slice(match.previewRange.start, match.previewRange.end).replace(/\r\n|\r|\n/g, ' ↵ ');
+			lines.push(`  ${range.startLineNumber}:${range.startColumn}-${range.endLineNumber}:${range.endColumn}: ${preview}`);
 		}
 		lines.push('');
 	}
@@ -47,8 +43,7 @@ export function parseSearchEditor(text: string): IContentSearchQuery {
 		!query.includePatterns.every(pattern => typeof pattern === 'string') ||
 		!Array.isArray(query.excludePatterns) ||
 		!query.excludePatterns.every(pattern => typeof pattern === 'string') ||
-		(query.maxResults !== undefined &&
-			(!Number.isInteger(query.maxResults) || query.maxResults < 1 || query.maxResults > 5000)) ||
+		(query.maxResults !== undefined && (!Number.isInteger(query.maxResults) || query.maxResults < 1 || query.maxResults > 5000)) ||
 		(query.freshness !== undefined && query.freshness !== 'current' && query.freshness !== 'indexed')
 	) {
 		throw new TypeError('Invalid search editor query');

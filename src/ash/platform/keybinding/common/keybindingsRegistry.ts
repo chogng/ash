@@ -67,8 +67,7 @@ export interface IRegisteredKeybindingPassThrough extends IKeybindingPassThrough
 	readonly order: number;
 }
 
-export type IRegisteredKeybindingRule =
-	IRegisteredCommandKeybindingRule | IRegisteredKeybindingBlocker | IRegisteredKeybindingPassThrough;
+export type IRegisteredKeybindingRule = IRegisteredCommandKeybindingRule | IRegisteredKeybindingBlocker | IRegisteredKeybindingPassThrough;
 
 /** Stores realm-wide keybinding contributions and their override order. */
 export class KeybindingRegistry {

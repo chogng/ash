@@ -8,10 +8,7 @@ import { BrowserTextModelService } from '../../../textmodelResolver/browser/brow
 import { EditorTitleControl } from '../../../../browser/parts/editor/editorTitleControl.js';
 import { EditorGroupModel } from '../../../../common/editor/editorGroupModel.js';
 import { createDiffEditorInput } from '../../../../common/editor/diffEditorInput.js';
-import {
-	EditorShowIconsConfiguration,
-	EditorTabsModeConfiguration,
-} from '../../../editor/common/editorConfiguration.js';
+import { EditorShowIconsConfiguration, EditorTabsModeConfiguration } from '../../../editor/common/editorConfiguration.js';
 import type { EditorTabsDelegate } from '../../../../browser/parts/editor/editorTabsControl.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../../../../platform/telemetry/common/telemetryUtils.js';
@@ -46,32 +43,15 @@ test('Seti TODO filenames retain their checkbox glyph and Markdown color in ever
 	const theme = await FileIconThemeData.load('vs-seti', 'Seti', document, path => readFile(directory + path));
 	using languages = new LanguageService();
 	using markdown = languages.registerLanguage({ id: 'markdown', extensions: ['.md'] });
-	for (const scheme of [
-		ColorScheme.Dark,
-		ColorScheme.Light,
-		ColorScheme.HighContrastDark,
-		ColorScheme.HighContrastLight,
-	]) {
+	for (const scheme of [ColorScheme.Dark, ColorScheme.Light, ColorScheme.HighContrastDark, ColorScheme.HighContrastLight]) {
 		for (const name of ['TODO', 'todo.txt', 'TODO.md', 'ToDo.md']) {
-			const icon = theme.resolveFileIcon(
-				getIconClasses(undefined, languages, URI.file('/workspace/' + name)),
-				scheme,
-			);
+			const icon = theme.resolveFileIcon(getIconClasses(undefined, languages, URI.file('/workspace/' + name)), scheme);
 			assert.equal(icon?.character, '\uE096', `${name} in ${scheme}`);
 		}
-		const todo = theme.resolveFileIcon(
-			getIconClasses(undefined, languages, URI.file('/workspace/TODO.md')),
-			scheme,
-		);
-		const markdown = theme.resolveFileIcon(
-			getIconClasses(undefined, languages, URI.file('/workspace/notes.md')),
-			scheme,
-		);
+		const todo = theme.resolveFileIcon(getIconClasses(undefined, languages, URI.file('/workspace/TODO.md')), scheme);
+		const markdown = theme.resolveFileIcon(getIconClasses(undefined, languages, URI.file('/workspace/notes.md')), scheme);
 		assert.equal(todo?.color, markdown?.color);
-		assert.equal(
-			todo?.color,
-			scheme === ColorScheme.Light || scheme === ColorScheme.HighContrastLight ? '#498ba7' : '#519aba',
-		);
+		assert.equal(todo?.color, scheme === ColorScheme.Light || scheme === ColorScheme.HighContrastLight ? '#498ba7' : '#519aba');
 	}
 });
 
@@ -187,19 +167,7 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 			dropExternal() {},
 			endDrag() {},
 		};
-		using title = editorServices.createInstance(
-			EditorTitleControl,
-			browser.window.document.body,
-			delegate,
-			group,
-			undefined,
-			configuration,
-			undefined,
-			undefined,
-			undefined,
-			undefined,
-			undefined,
-		);
+		using title = editorServices.createInstance(EditorTitleControl, browser.window.document.body, delegate, group, undefined, configuration, undefined, undefined, undefined, undefined, undefined);
 		const editors = [{ instanceId: 'main', input, panelId: 'main-panel', tabId: 'main-tab' }];
 		title.setEditors(editors, input);
 		const tab = title.domNode.querySelector<HTMLButtonElement>('[role="tab"]')!;
@@ -220,24 +188,15 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		await configuration.updateValue(EditorTabsModeConfiguration, 'single');
 		assert.notEqual(title.domNode.querySelector('.ash-icon-label-icon')?.textContent, '');
 		await configuration.updateValue(EditorTabsModeConfiguration, 'multiple');
-		const comparison = createDiffEditorInput(
-			{ resource: URI.file('/project/old.rs') },
-			{ resource: URI.parse('git-change:/unstaged/main.test.ts?revision=1') },
-			'Renamed test',
-		);
-		const comparisons = [
-			{ instanceId: 'comparison', input: comparison, panelId: 'comparison-panel', tabId: 'comparison-tab' },
-		];
+		const comparison = createDiffEditorInput({ resource: URI.file('/project/old.rs') }, { resource: URI.parse('git-change:/unstaged/main.test.ts?revision=1') }, 'Renamed test');
+		const comparisons = [{ instanceId: 'comparison', input: comparison, panelId: 'comparison-panel', tabId: 'comparison-tab' }];
 		group.closeEditor(input);
 		group.openEditor(comparison);
 		title.setEditors(comparisons, comparison);
 		const assertComparisonIcon = (): void => {
 			const comparisonTab = title.domNode.querySelector<HTMLElement>('[role="tab"]')!;
 			const comparisonIcon = comparisonTab.querySelector<HTMLElement>('.ash-icon-label-icon')!;
-			assert.deepEqual(
-				[comparisonIcon.textContent, comparisonIcon.style.color],
-				[render('main.test.ts').textContent, render('main.test.ts').style.color],
-			);
+			assert.deepEqual([comparisonIcon.textContent, comparisonIcon.style.color], [render('main.test.ts').textContent, render('main.test.ts').style.color]);
 			assert(comparisonIcon.classList.contains('typescript-lang-file-icon'));
 			assert.equal(comparisonIcon.classList.contains('rust-lang-file-icon'), false);
 			assert.equal(comparisonIcon.getAttribute('aria-hidden'), 'true');
@@ -254,10 +213,7 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		title.setEditors(editors, input);
 		group.stick(input);
 		title.setEditors([{ ...editors[0]!, sticky: true }], input);
-		assert.notEqual(
-			title.domNode.querySelector('.ash-sticky-editor-tabs-row .ash-icon-label-icon')?.textContent,
-			'',
-		);
+		assert.notEqual(title.domNode.querySelector('.ash-sticky-editor-tabs-row .ash-icon-label-icon')?.textContent, '');
 		const labelIcon = label.element.querySelector('.ash-icon-label-icon');
 		const beforeRegistration = labelIcon?.textContent;
 		using custom = languages.registerLanguage({ id: 'javascript', extensions: ['.custom'] });
@@ -294,24 +250,10 @@ test('icon documents reject escaping assets and missing definitions before activ
 		reads++;
 		return new Uint8Array();
 	};
-	await assert.rejects(
-		FileIconThemeData.load(
-			'bad',
-			'Bad',
-			{ fonts: [{ id: 'font', src: [{ path: '../outside.woff', format: 'woff' }] }], iconDefinitions: {} },
-			read,
-		),
-		/inside/,
-	);
+	await assert.rejects(FileIconThemeData.load('bad', 'Bad', { fonts: [{ id: 'font', src: [{ path: '../outside.woff', format: 'woff' }] }], iconDefinitions: {} }, read), /inside/);
 	assert.equal(reads, 0);
-	await assert.rejects(
-		FileIconThemeData.load('bad', 'Bad', { iconDefinitions: {}, file: 'absent' }, read),
-		/Unknown file icon/,
-	);
-	await assert.rejects(
-		FileIconThemeData.load('bad', 'Bad', { iconDefinitions: {}, hidesExplorerArrows: 'yes' }, read),
-		/must be a boolean/,
-	);
+	await assert.rejects(FileIconThemeData.load('bad', 'Bad', { iconDefinitions: {}, file: 'absent' }, read), /Unknown file icon/);
+	await assert.rejects(FileIconThemeData.load('bad', 'Bad', { iconDefinitions: {}, hidesExplorerArrows: 'yes' }, read), /must be a boolean/);
 });
 
 test('folder completion classes resolve folder theme associations', async () => {

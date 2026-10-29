@@ -3,18 +3,10 @@ import { addDisposableListener, h, type IDimension } from '../../../../base/brow
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { CancellationError } from '../../../../base/common/errors.js';
-import {
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-	type IDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { basename, extUri } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
-import {
-	AccessibilityVerbositySettingId,
-	IAccessibleViewService,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
@@ -106,15 +98,7 @@ export class MediaPreview extends EditorPane {
 		// Browser playback controls own their keys; handle Space only on the surrounding region.
 		this._register(
 			addDisposableListener(this.domNode, 'keydown', event => {
-				if (
-					event.key !== ' ' ||
-					event.ctrlKey ||
-					event.metaKey ||
-					event.altKey ||
-					event.repeat ||
-					event.target !== this.domNode ||
-					!this.source.value
-				) {
+				if (event.key !== ' ' || event.ctrlKey || event.metaKey || event.altKey || event.repeat || event.target !== this.domNode || !this.source.value) {
 					return;
 				}
 				event.preventDefault();
@@ -127,12 +111,7 @@ export class MediaPreview extends EditorPane {
 				const player = this.playerDomNode;
 				const generation = this.generation;
 				void player.play().catch(error => {
-					if (
-						!this.isCurrentPlayer(player, generation) ||
-						!input ||
-						this.input !== input ||
-						error.name === 'AbortError'
-					) {
+					if (!this.isCurrentPlayer(player, generation) || !input || this.input !== input || error.name === 'AbortError') {
 						return;
 					}
 					this.failure = localize('media.playback.failed', 'Could not play media: {0}', String(error));
@@ -143,10 +122,7 @@ export class MediaPreview extends EditorPane {
 		this._register(
 			this.files.onDidChangeFiles(event => {
 				const input = this.input;
-				if (
-					!input ||
-					(event.resources && !event.resources.some(resource => extUri.isEqual(resource, input.resource)))
-				) {
+				if (!input || (event.resources && !event.resources.some(resource => extUri.isEqual(resource, input.resource)))) {
 					return;
 				}
 				void this.setInput(input, new AbortController().signal).catch(error => {
@@ -235,9 +211,7 @@ export class MediaPreview extends EditorPane {
 		const duration = Number.isFinite(this.playerDomNode.duration)
 			? localize('media.playback.duration', '{0} seconds', Math.round(this.playerDomNode.duration * 100) / 100)
 			: localize('media.playback.durationUnknown', 'Duration unavailable');
-		const state = this.playerDomNode.paused
-			? localize('media.playback.paused', 'Paused')
-			: localize('media.playback.playing', 'Playing');
+		const state = this.playerDomNode.paused ? localize('media.playback.paused', 'Paused') : localize('media.playback.playing', 'Playing');
 		return localize(
 			'media.playback.content',
 			'{0}: {1}\nResource: {2}\nFile size: {3} bytes\nDuration: {4}\nPlayback: {5}',
@@ -253,22 +227,12 @@ export class MediaPreview extends EditorPane {
 	private updateLabels(): void {
 		const hint = this.accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.MediaPreview);
 		this.domNode.setAttribute('aria-label', [this.name, hint].filter(Boolean).join('. '));
-		this.playerDomNode.setAttribute(
-			'aria-label',
-			this.input ? `${this.name}: ${this.input.label ?? basename(this.input.resource)}` : this.name,
-		);
+		this.playerDomNode.setAttribute('aria-label', this.input ? `${this.name}: ${this.input.label ?? basename(this.input.resource)}` : this.name);
 		this.failureDomNode.hidden = this.failure === undefined;
 		this.failureDomNode.textContent = this.failure ?? '';
 		this.retryButton.hidden = this.failure === undefined || this.input === undefined;
 		this.summaryDomNode.textContent =
-			this.input && this.failure === undefined
-				? localize(
-						'media.playback.summary',
-						'{0} · {1} bytes',
-						this.input.label ?? basename(this.input.resource),
-						this.byteLength,
-					)
-				: '';
+			this.input && this.failure === undefined ? localize('media.playback.summary', '{0} · {1} bytes', this.input.label ?? basename(this.input.resource), this.byteLength) : '';
 		this.summaryDomNode.title = this.summaryDomNode.textContent;
 	}
 
@@ -297,10 +261,7 @@ export class MediaPreview extends EditorPane {
 				if (!this.isCurrentPlayer(player, generation) || !this.input) {
 					return;
 				}
-				this.failure = localize(
-					'media.playback.unsupported',
-					'This media file could not be played. Its data or codec may not be supported.',
-				);
+				this.failure = localize('media.playback.unsupported', 'This media file could not be played. Its data or codec may not be supported.');
 				this.updateLabels();
 			}),
 		);
@@ -312,10 +273,8 @@ export class MediaPreview extends EditorPane {
 
 	private updatePlaybackSettings(): void {
 		// Audio keeps explicit playback; these preferences belong to the video preview.
-		this.playerDomNode.autoplay =
-			this.kind === 'video' && this.configuration.getValue<boolean>('mediaPreview.video.autoPlay') === true;
-		this.playerDomNode.loop =
-			this.kind === 'video' && this.configuration.getValue<boolean>('mediaPreview.video.loop') === true;
+		this.playerDomNode.autoplay = this.kind === 'video' && this.configuration.getValue<boolean>('mediaPreview.video.autoPlay') === true;
+		this.playerDomNode.loop = this.kind === 'video' && this.configuration.getValue<boolean>('mediaPreview.video.loop') === true;
 	}
 
 	private isCurrentInput(input: IResourceEditorInput, generation: number): boolean {

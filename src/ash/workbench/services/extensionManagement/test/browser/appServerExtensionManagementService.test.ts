@@ -22,10 +22,7 @@ test('Extensions paged adapter preserves source, cursor and filters without keep
 			return { packages: [summary], total: 257n, nextCursor: 'backend-page-two' };
 		},
 	};
-	using service = new AppServerExtensionManagementService(
-		api as IExtensionManagementApi,
-		{ subscribe: () => ({ dispose() {} }) } as IServerEventApi,
-	);
+	using service = new AppServerExtensionManagementService(api as IExtensionManagementApi, { subscribe: () => ({ dispose() {} }) } as IServerEventApi);
 	assert.deepEqual(
 		await service.searchPage('review', {
 			sourceId: 'signed',
@@ -153,11 +150,7 @@ test('Extensions browse snapshots survive view recreation and invalidate after l
 	assert.deepEqual(first.packages[0]!.summary.uiTargets, [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents]);
 	assert.deepEqual(detailRequests, [summary.id, extension.id], 'browsing reads signed metadata for each Ash package');
 	await service.get(extension.id, extension.version);
-	assert.deepEqual(
-		detailRequests,
-		[summary.id, extension.id, extension.id],
-		'an explicit details refresh reads the selected Ash metadata',
-	);
+	assert.deepEqual(detailRequests, [summary.id, extension.id, extension.id], 'an explicit details refresh reads the selected Ash metadata');
 
 	await service.install(summary.id, summary.version);
 	assert.equal(installedChanges, 0);
@@ -207,18 +200,10 @@ test('Extensions browse snapshots survive view recreation and invalidate after l
 		},
 		0,
 	);
-	assert.equal(
-		service.cachedBrowse('', { capabilityKind: 'skill' }),
-		undefined,
-		'source changes invalidate browsing before a notification arrives',
-	);
+	assert.equal(service.cachedBrowse('', { capabilityKind: 'skill' }), undefined, 'source changes invalidate browsing before a notification arrives');
 	await service.browse('', { capabilityKind: 'skill' });
 	await service.setSourceEnabled('vendor', false, 1);
-	assert.equal(
-		service.cachedBrowse('', { capabilityKind: 'skill' }),
-		undefined,
-		'pausing a source cannot reuse its cached search results',
-	);
+	assert.equal(service.cachedBrowse('', { capabilityKind: 'skill' }), undefined, 'pausing a source cannot reuse its cached search results');
 });
 
 test('Legacy summaries and details keep their missing UI declaration through the adapter', async () => {
@@ -243,10 +228,7 @@ test('Legacy summaries and details keep their missing UI declaration through the
 		search: async () => ({ packages: [summary], unavailableSources: [] }),
 		get: async () => details,
 	};
-	using service = new AppServerExtensionManagementService(
-		api as IExtensionManagementApi,
-		{ subscribe: () => ({ dispose() {} }) } as IServerEventApi,
-	);
+	using service = new AppServerExtensionManagementService(api as IExtensionManagementApi, { subscribe: () => ({ dispose() {} }) } as IServerEventApi);
 	assert.deepEqual(await service.search('legacy'), [summary]);
 	assert.deepEqual(await service.get(summary.id), details);
 });
@@ -256,10 +238,7 @@ test('Tool recommendations read the current host through the API without keeping
 	const api: Pick<IExtensionManagementApi, 'recommendationEnvironment'> = {
 		recommendationEnvironment: async () => ({ platform: 'linux', executables }),
 	};
-	using service = new AppServerExtensionManagementService(
-		api as IExtensionManagementApi,
-		{ subscribe: () => ({ dispose() {} }) } as IServerEventApi,
-	);
+	using service = new AppServerExtensionManagementService(api as IExtensionManagementApi, { subscribe: () => ({ dispose() {} }) } as IServerEventApi);
 	assert.deepEqual(await service.recommendationEnvironment(), { platform: 'linux', executables: ['python3'] });
 	executables = ['node'];
 	assert.deepEqual(await service.recommendationEnvironment(), { platform: 'linux', executables: ['node'] });

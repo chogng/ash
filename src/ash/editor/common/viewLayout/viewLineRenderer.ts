@@ -177,11 +177,7 @@ export class CharacterMapping {
 	}
 
 	inflate(): [number, number, number][] {
-		return this.positions.map((position, index) => [
-			position.partIndex,
-			position.charIndex,
-			this.horizontalOffsets[index]!,
-		]);
+		return this.positions.map((position, index) => [position.partIndex, position.charIndex, this.horizontalOffsets[index]!]);
 	}
 }
 
@@ -227,10 +223,7 @@ interface RenderedLine {
 
 function render(input: RenderLineInput): RenderedLine {
 	if (input.lineContent.length === 0) return renderEmpty(input);
-	const limit =
-		input.stopRenderingLineAfter < 0
-			? input.lineContent.length
-			: Math.min(input.lineContent.length, input.stopRenderingLineAfter);
+	const limit = input.stopRenderingLineAfter < 0 ? input.lineContent.length : Math.min(input.lineContent.length, input.stopRenderingLineAfter);
 	const text = input.lineContent.slice(0, limit);
 	const boundaries = collectBoundaries(input, limit);
 	const mapping = new CharacterMapping(text.length + 1, boundaries.length);
@@ -243,13 +236,10 @@ function render(input: RenderLineInput): RenderedLine {
 	for (let boundaryIndex = 0; boundaryIndex + 1 < boundaries.length; boundaryIndex++) {
 		const start = boundaries[boundaryIndex]!;
 		const end = boundaries[boundaryIndex + 1]!;
-		const pseudo = input.lineDecorations.filter(
-			decoration => decoration.startColumn - 1 === start && isForeign(decoration.type),
-		);
+		const pseudo = input.lineDecorations.filter(decoration => decoration.startColumn - 1 === start && isForeign(decoration.type));
 		for (const decoration of pseudo) {
 			parts.push(`<span class="${escapeAttribute(decoration.className)}"></span>`);
-			foreignElements |=
-				decoration.type === InlineDecorationType.After ? ForeignElementType.After : ForeignElementType.Before;
+			foreignElements |= decoration.type === InlineDecorationType.After ? ForeignElementType.After : ForeignElementType.Before;
 			partIndex++;
 		}
 		if (end <= start) continue;
@@ -263,11 +253,7 @@ function render(input: RenderLineInput): RenderedLine {
 			charIndex += cell.domLength;
 			visibleColumn += cell.width;
 		}
-		parts.push(
-			classes.length > 0
-				? `<span class="${escapeAttribute(classes.join(' '))}">${content}</span>`
-				: `<span>${content}</span>`,
-		);
+		parts.push(classes.length > 0 ? `<span class="${escapeAttribute(classes.join(' '))}">${content}</span>` : `<span>${content}</span>`);
 		if (end === text.length) mapping.setColumnInfo(text.length + 1, partIndex, charIndex, visibleColumn);
 		partIndex++;
 	}
@@ -286,19 +272,13 @@ function renderEmpty(input: RenderLineInput): RenderedLine {
 	let foreignElements = ForeignElementType.None;
 	const spans = decorations
 		.map(decoration => {
-			foreignElements |=
-				decoration.type === InlineDecorationType.After ? ForeignElementType.After : ForeignElementType.Before;
+			foreignElements |= decoration.type === InlineDecorationType.After ? ForeignElementType.After : ForeignElementType.Before;
 			return `<span class="${escapeAttribute(decoration.className)}"></span>`;
 		})
 		.join('');
 	if (decorations.length > 0) {
 		const mapping = new CharacterMapping(1, decorations.length);
-		mapping.setColumnInfo(
-			1,
-			decorations.filter(decoration => decoration.type !== InlineDecorationType.After).length,
-			0,
-			0,
-		);
+		mapping.setColumnInfo(1, decorations.filter(decoration => decoration.type !== InlineDecorationType.After).length, 0, 0);
 		return { html: `<span>${spans}</span>`, mapping, foreignElements };
 	}
 	return {
@@ -310,8 +290,7 @@ function renderEmpty(input: RenderLineInput): RenderedLine {
 
 function collectBoundaries(input: RenderLineInput, length: number): number[] {
 	const boundaries = new Set<number>([0, length]);
-	for (let index = 0; index < input.lineTokens.getCount(); index++)
-		boundaries.add(clamp(input.lineTokens.getEndOffset(index), 0, length));
+	for (let index = 0; index < input.lineTokens.getCount(); index++) boundaries.add(clamp(input.lineTokens.getEndOffset(index), 0, length));
 	for (const decoration of input.lineDecorations) {
 		boundaries.add(clamp(decoration.startColumn - 1, 0, length));
 		boundaries.add(clamp(decoration.endColumn - 1, 0, length));
@@ -326,8 +305,7 @@ function classesAt(input: RenderLineInput, offset: number): string[] {
 	if (tokenClass) classes.push(tokenClass);
 	for (const decoration of input.lineDecorations) {
 		if (isForeign(decoration.type)) continue;
-		if (decoration.startColumn - 1 <= offset && offset < decoration.endColumn - 1)
-			classes.push(decoration.className);
+		if (decoration.startColumn - 1 <= offset && offset < decoration.endColumn - 1) classes.push(decoration.className);
 	}
 	return classes;
 }
@@ -338,13 +316,7 @@ interface RenderedCell {
 	readonly width: number;
 }
 
-function renderCell(
-	input: RenderLineInput,
-	text: string,
-	offset: number,
-	visibleColumn: number,
-	trailingStart: number,
-): RenderedCell {
+function renderCell(input: RenderLineInput, text: string, offset: number, visibleColumn: number, trailingStart: number): RenderedCell {
 	const code = text.charCodeAt(offset);
 	if (code === 9) {
 		const width = input.tabSize - (visibleColumn % input.tabSize);
@@ -376,13 +348,7 @@ function shouldRenderWhitespace(input: RenderLineInput, offset: number, trailing
 			return input.selectionsOnLine?.some(range => range.start <= offset && offset < range.endExclusive) ?? false;
 		case RenderWhitespace.Boundary: {
 			const text = input.lineContent;
-			return (
-				offset >= trailingStart ||
-				offset === 0 ||
-				offset === text.length - 1 ||
-				!/\s/.test(text[offset - 1]!) ||
-				!/\s/.test(text[offset + 1]!)
-			);
+			return offset >= trailingStart || offset === 0 || offset === text.length - 1 || !/\s/.test(text[offset - 1]!) || !/\s/.test(text[offset + 1]!);
 		}
 		default:
 			return false;
@@ -403,19 +369,11 @@ function sameRanges(left: readonly OffsetRange[] | null, right: readonly OffsetR
 }
 
 function isForeign(type: InlineDecorationType): boolean {
-	return (
-		type === InlineDecorationType.Before ||
-		type === InlineDecorationType.After ||
-		type === InlineDecorationType.WidthOnly
-	);
+	return type === InlineDecorationType.Before || type === InlineDecorationType.After || type === InlineDecorationType.WidthOnly;
 }
 
 function escapeText(value: string): string {
-	return value
-		.replaceAll('&', '&amp;')
-		.replaceAll('<', '&lt;')
-		.replaceAll('>', '&gt;')
-		.replaceAll('\u00a0', '&nbsp;');
+	return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\u00a0', '&nbsp;');
 }
 
 function escapeAttribute(value: string): string {

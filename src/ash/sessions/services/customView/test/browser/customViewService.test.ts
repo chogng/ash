@@ -56,10 +56,7 @@ test('An unavailable Custom View cannot restore, and unregistering the active de
 		});
 		storage.store('sessions.activeCustomView', 'test', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		using service = new CustomViewService(new NullLoggerService(), storage);
-		using registration = service.registerCustomView(
-			{ id: 'test', ctor: new SyncDescriptor(TestView) },
-			{ restore: false },
-		);
+		using registration = service.registerCustomView({ id: 'test', ctor: new SyncDescriptor(TestView) }, { restore: false });
 		assert.equal(service.activeCustomView.get(), undefined);
 		assert.equal(storage.get('sessions.activeCustomView', StorageScope.WORKSPACE), undefined);
 		service.showCustomView('test');

@@ -45,10 +45,7 @@ suite('OutlineService', () => {
 		assert.throws(() => service.registerOutlineCreator(creator), /already registered/);
 		assert.equal(await service.createOutline(pane, OutlineTarget.OutlinePane, CancellationToken.None), undefined);
 		registration.dispose();
-		assert.deepEqual(
-			{ calls, changes, supported: service.canCreateOutline(pane) },
-			{ calls: [OutlineTarget.OutlinePane], changes: [true, false], supported: false },
-		);
+		assert.deepEqual({ calls, changes, supported: service.canCreateOutline(pane) }, { calls: [OutlineTarget.OutlinePane], changes: [true, false], supported: false });
 	});
 
 	for (const stop of ['cancel', 'unregister', 'dispose'] as const) {

@@ -13,12 +13,7 @@ import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/tes
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { AppServerProtocolClient } from '../../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { createTestInitializeResult } from '../../../../../platform/agentHost/test/common/testAppServerProtocol.js';
-import {
-	WEB_APP_SERVER_CONNECT_EVENT,
-	WEB_APP_SERVER_CONNECTED_EVENT,
-	WEB_APP_SERVER_FRAME_EVENT,
-	type AppServerTransport,
-} from '../../../../../platform/agentHost/common/appServerTransport.js';
+import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../../../platform/agentHost/common/appServerTransport.js';
 import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { IWorkingCopyService } from '../../../workingCopy/common/workingCopyService.js';
 import { BrowserWorkingCopyService } from '../../../workingCopy/browser/browserWorkingCopyService.js';
@@ -133,8 +128,7 @@ async function fixture() {
 		services.registerInstance(IWorkingCopyService, workingCopies);
 		let selection = new Selection(1, 1, 1, 8);
 		services.registerInstance(ICodeEditorService, {
-			getActiveCodeEditor: () =>
-				({ getModel: () => model, getSelections: () => [selection] }) as unknown as ICodeEditor,
+			getActiveCodeEditor: () => ({ getModel: () => model, getSelections: () => [selection] }) as unknown as ICodeEditor,
 		} as ICodeEditorService);
 		services.registerInstance(IEditorGroupsService, {
 			groups: [{ inputs: [{ resource }, { resource: URI.file('/other/private.rs') }] }],
@@ -205,9 +199,7 @@ test('IDE registration and context use the live editor model and filter unrelate
 			activeFile: {
 				path: '/project/lib.rs',
 				version: 1,
-				selections: [
-					{ startLine: 1, startColumn: 1, endLine: 1, endColumn: 8, text: 'unsaved', truncated: false },
-				],
+				selections: [{ startLine: 1, startColumn: 1, endLine: 1, endColumn: 8, text: 'unsaved', truncated: false }],
 			},
 			openTabs: ['/project/lib.rs'],
 			dirtyFiles: ['/project/lib.rs'],
@@ -232,11 +224,7 @@ test('IDE display uses the existing file and diff editor owners and rejects anot
 	});
 	assert.equal(f.opened[0]!.input.resource.fsPath, '/project/lib.rs');
 	assert.equal(f.opened[0]!.options!.selection!.startLineNumber, 4);
-	assert.deepEqual(
-		(await f.transport.call({ type: 'openReview', original: '/project/old.rs', modified: '/project/lib.rs' }))
-			.result,
-		{ type: 'opened' },
-	);
+	assert.deepEqual((await f.transport.call({ type: 'openReview', original: '/project/old.rs', modified: '/project/lib.rs' })).result, { type: 'opened' });
 	assert.ok(isDiffEditorInput(f.opened[1]!.input));
 	assert.ok((await f.transport.call({ type: 'openFile', path: '/other/private.rs', line: null })).error);
 	assert.equal(f.opened.length, 2);

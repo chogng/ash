@@ -6,12 +6,7 @@ import { LanguageResultAcceptance, LanguageResultStoreChangeReason } from '../..
 import { LanguageTokenLineIndex, StyledTokenSource } from '../../common/tokens/languageTokenLineIndex.js';
 import { Emitter } from '../../../base/common/event.js';
 import { syntaxWireCodec, attachLanguageTokenResultDelta } from '../../common/services/semanticTokensDto.js';
-import {
-	createLanguageTokenSnapshotNormalizer,
-	createLanguageTokenStore,
-	type LanguageToken,
-	type SemanticTokenModelSource,
-} from '../../common/tokens/languageTokens.js';
+import { createLanguageTokenSnapshotNormalizer, createLanguageTokenStore, type LanguageToken, type SemanticTokenModelSource } from '../../common/tokens/languageTokens.js';
 import { Position } from '../../common/core/position.js';
 import { Range } from '../../common/core/range.js';
 import { TextModel } from '../../common/model/textModel.js';
@@ -61,9 +56,7 @@ for (const retainedAtStart of [true, false]) {
 		acceptTokens(store, model, 1, [token(retainedLine, 0, 1, 'retained')]);
 		using index = new LanguageTokenLineIndex(store);
 		const retained = index.getLineTokens(retainedLine);
-		const tokens = Array.from({ length: lineCount }, (_, line) =>
-			token(line, 0, 1, line === retainedLine ? 'retained' : 'added'),
-		);
+		const tokens = Array.from({ length: lineCount }, (_, line) => token(line, 0, 1, line === retainedLine ? 'retained' : 'added'));
 		const result = createLanguageTokenSnapshotNormalizer(model.createVersionedSnapshot())({ tokens });
 		attachLanguageTokenResultDelta(result, {
 			baseRequestId: 1,
@@ -79,10 +72,7 @@ for (const retainedAtStart of [true, false]) {
 			],
 		});
 
-		assert.equal(
-			store.accept({ requestId: 2, textModel: model, modelVersion: model.version, value: result }),
-			LanguageResultAcceptance.Applied,
-		);
+		assert.equal(store.accept({ requestId: 2, textModel: model, modelVersion: model.version, value: result }), LanguageResultAcceptance.Applied);
 		assert.deepEqual(
 			index.lines.map(line => line.tokens[0]),
 			tokens,
@@ -94,13 +84,7 @@ for (const retainedAtStart of [true, false]) {
 test('Token line index groups sparse lines and answers constant-time line queries', () => {
 	using model = new TextModel('const one = 1;\n\nreturn one;');
 	using store = createLanguageTokenStore(model);
-	acceptTokens(store, model, 1, [
-		token(0, 0, 5, 'keyword'),
-		token(0, 6, 9, 'variable'),
-		token(0, 12, 13, 'number'),
-		token(2, 0, 6, 'keyword'),
-		token(2, 7, 10, 'variable'),
-	]);
+	acceptTokens(store, model, 1, [token(0, 0, 5, 'keyword'), token(0, 6, 9, 'variable'), token(0, 12, 13, 'number'), token(2, 0, 6, 'keyword'), token(2, 7, 10, 'variable')]);
 	using index = new LanguageTokenLineIndex(store);
 
 	assert.equal(index.textModel, model);
@@ -108,7 +92,10 @@ test('Token line index groups sparse lines and answers constant-time line querie
 	assert.equal(index.requestId, 1);
 	assert.equal(index.tokenCount, 5);
 	assert.deepEqual(
-		index.lines.map(line => ({ lineIndex: line.lineIndex, tokenTypes: line.tokens.map(entry => entry.tokenType) })),
+		index.lines.map(line => ({
+			lineIndex: line.lineIndex,
+			tokenTypes: line.tokens.map(entry => entry.tokenType),
+		})),
 		[
 			{ lineIndex: 0, tokenTypes: ['keyword', 'variable', 'number'] },
 			{ lineIndex: 2, tokenTypes: ['keyword', 'variable'] },
@@ -161,10 +148,19 @@ test('Model changes invalidate token lines before consumers observe new text', (
 	using index = new LanguageTokenLineIndex(store);
 	const events: unknown[] = [];
 	using listener = index.onDidChange(event =>
-		events.push({ event, text: model.getText(), tokens: index.getLineTokens(0) }),
+		events.push({
+			event,
+			text: model.getText(),
+			tokens: index.getLineTokens(0),
+		}),
 	);
 
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 0 + 1)), text: 'X' }]);
+	model.applyEdits([
+		{
+			range: Range.fromPositions(new Position(0 + 1, 0 + 1)),
+			text: 'X',
+		},
+	]);
 
 	assert.equal(store.result, undefined);
 	assert.equal(index.modelVersion, 2);
@@ -202,7 +198,12 @@ test('Model changes preserve unaffected token lines and shift later lines', () =
 			text: 'changed\ninserted',
 		},
 	]);
-	model.applyEdits([{ range: Range.fromPositions(new Position(2 + 1, 8 + 1)), text: '\n' }]);
+	model.applyEdits([
+		{
+			range: Range.fromPositions(new Position(2 + 1, 8 + 1)),
+			text: '\n',
+		},
+	]);
 
 	assert.equal(store.result, undefined);
 	assert.equal(index.modelVersion, 3);
@@ -229,8 +230,16 @@ test('Model changes preserve unaffected token lines and shift later lines', () =
 			reusedLineCount: (event as { readonly reusedLineCount: number }).reusedLineCount,
 		})),
 		[
-			{ reason: LanguageResultStoreChangeReason.ModelChanged, tokenCount: 2, reusedLineCount: 2 },
-			{ reason: LanguageResultStoreChangeReason.ModelChanged, tokenCount: 2, reusedLineCount: 2 },
+			{
+				reason: LanguageResultStoreChangeReason.ModelChanged,
+				tokenCount: 2,
+				reusedLineCount: 2,
+			},
+			{
+				reason: LanguageResultStoreChangeReason.ModelChanged,
+				tokenCount: 2,
+				reusedLineCount: 2,
+			},
 		],
 	);
 });
@@ -247,7 +256,12 @@ test('Token line index validates queries and owns neither store nor model', () =
 
 	acceptTokens(store, model, 1, [token(0, 0, 1, 'word')]);
 	assert.equal(store.result!.value.tokens.length, 1);
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 3 + 1)), text: '!' }]);
+	model.applyEdits([
+		{
+			range: Range.fromPositions(new Position(0 + 1, 3 + 1)),
+			text: '!',
+		},
+	]);
 	assert.equal(model.getText(), 'abc!');
 });
 
@@ -270,9 +284,7 @@ test('Token line index reuses unchanged sparse lines from a confirmed delta', ()
 			text: 'changed',
 		},
 	]);
-	const currentTokens = initialTokens.map((entry, lineIndex) =>
-		lineIndex === changedLine ? token(changedLine, 0, 7, 'keyword') : entry,
-	);
+	const currentTokens = initialTokens.map((entry, lineIndex) => (lineIndex === changedLine ? token(changedLine, 0, 7, 'keyword') : entry));
 	const result = createLanguageTokenSnapshotNormalizer(model.createVersionedSnapshot())({ tokens: currentTokens });
 	attachLanguageTokenResultDelta(result, {
 		baseRequestId: 1,
@@ -288,10 +300,7 @@ test('Token line index reuses unchanged sparse lines from a confirmed delta', ()
 		],
 	});
 
-	assert.equal(
-		store.accept({ requestId: 2, textModel: model, modelVersion: model.version, value: result }),
-		LanguageResultAcceptance.Applied,
-	);
+	assert.equal(store.accept({ requestId: 2, textModel: model, modelVersion: model.version, value: result }), LanguageResultAcceptance.Applied);
 
 	assert.equal(index.lines[0], originalLines[0]);
 	assert.notEqual(index.lines[changedLine], originalLines[changedLine]);
@@ -324,9 +333,7 @@ test('Token line index rebuilds only two disjoint splice lines', () => {
 			text: 'changed900',
 		},
 	]);
-	const currentTokens = initialTokens.map((entry, lineIndex) =>
-		lineIndex === 100 || lineIndex === 900 ? token(lineIndex, 0, 10, 'keyword') : entry,
-	);
+	const currentTokens = initialTokens.map((entry, lineIndex) => (lineIndex === 100 || lineIndex === 900 ? token(lineIndex, 0, 10, 'keyword') : entry));
 	const result = createLanguageTokenSnapshotNormalizer(model.createVersionedSnapshot())({ tokens: currentTokens });
 	attachLanguageTokenResultDelta(result, {
 		baseRequestId: 1,
@@ -340,10 +347,7 @@ test('Token line index rebuilds only two disjoint splice lines', () => {
 		})),
 	});
 
-	assert.equal(
-		store.accept({ requestId: 2, textModel: model, modelVersion: model.version, value: result }),
-		LanguageResultAcceptance.Applied,
-	);
+	assert.equal(store.accept({ requestId: 2, textModel: model, modelVersion: model.version, value: result }), LanguageResultAcceptance.Applied);
 
 	assert.equal(index.lines[99], originalLines[99]);
 	assert.notEqual(index.lines[100], originalLines[100]);
@@ -360,16 +364,19 @@ test('Token line index reuses relative suffix payloads across line insertion', (
 	using store = createLanguageTokenStore(model);
 	using index = new LanguageTokenLineIndex(store);
 	const firstSnapshot = model.createVersionedSnapshot();
-	const firstResult: SyntaxResult = Object.freeze({ lane: SYNTAX_TOKEN_LANE, value: testTokens(firstSnapshot) });
-	const firstDecoded = syntaxWireCodec.decodeResult(
-		SYNTAX_TOKEN_LANE,
-		syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, firstResult, firstSnapshot, undefined),
-		firstSnapshot,
-		undefined,
-	);
+	const firstResult: SyntaxResult = Object.freeze({
+		lane: SYNTAX_TOKEN_LANE,
+		value: testTokens(firstSnapshot),
+	});
+	const firstDecoded = syntaxWireCodec.decodeResult(SYNTAX_TOKEN_LANE, syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, firstResult, firstSnapshot, undefined), firstSnapshot, undefined);
 	assert.equal(firstDecoded.lane, SYNTAX_TOKEN_LANE);
 	assert.equal(
-		store.accept({ requestId: 1, textModel: model, modelVersion: model.version, value: firstDecoded.value }),
+		store.accept({
+			requestId: 1,
+			textModel: model,
+			modelVersion: model.version,
+			value: firstDecoded.value,
+		}),
 		LanguageResultAcceptance.Applied,
 	);
 	const originalLines = index.lines;
@@ -377,9 +384,17 @@ test('Token line index reuses relative suffix payloads across line insertion', (
 	using listener = index.onDidChange(event => events.push(event));
 	const insertionLine = 100;
 	const insertionOffset = lines.slice(0, insertionLine).reduce((offset, line) => offset + line.length + 1, 0);
-	model.applyEdits([{ range: Range.fromPositions(model.positionAt(insertionOffset)), text: 'inserted\n' }]);
+	model.applyEdits([
+		{
+			range: Range.fromPositions(model.positionAt(insertionOffset)),
+			text: 'inserted\n',
+		},
+	]);
 	const snapshot = model.createVersionedSnapshot();
-	const currentResult: SyntaxResult = Object.freeze({ lane: SYNTAX_TOKEN_LANE, value: testTokens(snapshot) });
+	const currentResult: SyntaxResult = Object.freeze({
+		lane: SYNTAX_TOKEN_LANE,
+		value: testTokens(snapshot),
+	});
 	const serverBase = Object.freeze({ requestId: 1, snapshot: firstSnapshot, result: firstResult });
 	const clientBase = Object.freeze({ requestId: 1, snapshot: firstSnapshot, result: firstDecoded });
 	const encoded = syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, currentResult, snapshot, serverBase);
@@ -387,7 +402,12 @@ test('Token line index reuses relative suffix payloads across line insertion', (
 	assert.equal(decoded.lane, SYNTAX_TOKEN_LANE);
 
 	assert.equal(
-		store.accept({ requestId: 2, textModel: model, modelVersion: model.version, value: decoded.value }),
+		store.accept({
+			requestId: 2,
+			textModel: model,
+			modelVersion: model.version,
+			value: decoded.value,
+		}),
 		LanguageResultAcceptance.Applied,
 	);
 
@@ -417,23 +437,23 @@ test('Token line index matches full results across random wire deltas', () => {
 
 	for (let requestId = 1; requestId <= 100; requestId += 1) {
 		const snapshot = model.createVersionedSnapshot();
-		const serverResult: SyntaxResult = Object.freeze({ lane: SYNTAX_TOKEN_LANE, value: testTokens(snapshot) });
+		const serverResult: SyntaxResult = Object.freeze({
+			lane: SYNTAX_TOKEN_LANE,
+			value: testTokens(snapshot),
+		});
 		const encoded = syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, serverResult, snapshot, serverState);
-		const clientResult = syntaxWireCodec.decodeResult(
-			SYNTAX_TOKEN_LANE,
-			structuredClone(encoded),
-			snapshot,
-			clientState,
-		);
+		const clientResult = syntaxWireCodec.decodeResult(SYNTAX_TOKEN_LANE, structuredClone(encoded), snapshot, clientState);
 		assert.equal(clientResult.lane, SYNTAX_TOKEN_LANE);
 		assert.equal(
-			store.accept({ requestId, textModel: model, modelVersion: model.version, value: clientResult.value }),
+			store.accept({
+				requestId,
+				textModel: model,
+				modelVersion: model.version,
+				value: clientResult.value,
+			}),
 			LanguageResultAcceptance.Applied,
 		);
-		assert.deepEqual(
-			serializeTokens(index.lines.flatMap(line => line.tokens)),
-			serializeTokens(clientResult.value.tokens),
-		);
+		assert.deepEqual(serializeTokens(index.lines.flatMap(line => line.tokens)), serializeTokens(clientResult.value.tokens));
 		serverState = Object.freeze({ requestId, snapshot, result: serverResult });
 		clientState = Object.freeze({ requestId, snapshot, result: clientResult });
 
@@ -442,10 +462,7 @@ test('Token line index matches full results across random wire deltas', () => {
 		const removedLength = Math.min(randomInteger(4), length - startOffset);
 		model.applyEdits([
 			{
-				range: Range.fromPositions(
-					model.positionAt(startOffset),
-					model.positionAt(startOffset + removedLength),
-				),
+				range: Range.fromPositions(model.positionAt(startOffset), model.positionAt(startOffset + removedLength)),
 				text: insertions[randomInteger(insertions.length)]!,
 			},
 		]);
@@ -459,35 +476,26 @@ test('Token line index matches full results across random wire deltas', () => {
 	}
 });
 
-function acceptTokens(
-	store: ReturnType<typeof createLanguageTokenStore>,
-	model: TextModel,
-	requestId: number,
-	tokens: readonly LanguageToken[],
-): void {
+function acceptTokens(store: ReturnType<typeof createLanguageTokenStore>, model: TextModel, requestId: number, tokens: readonly LanguageToken[]): void {
 	assert.equal(
-		store.accept({ requestId, textModel: model, modelVersion: model.version, value: { tokens } }),
+		store.accept({
+			requestId,
+			textModel: model,
+			modelVersion: model.version,
+			value: { tokens },
+		}),
 		LanguageResultAcceptance.Applied,
 	);
 }
 
 function token(lineIndex: number, startColumn: number, endColumn: number, tokenType: string): LanguageToken {
 	return {
-		range: Range.fromPositions(
-			new Position(lineIndex + 1, startColumn + 1),
-			new Position(lineIndex + 1, endColumn + 1),
-		),
+		range: Range.fromPositions(new Position(lineIndex + 1, startColumn + 1), new Position(lineIndex + 1, endColumn + 1)),
 		tokenType,
 		modifiers: [],
 	};
 }
 
 function serializeTokens(tokens: readonly LanguageToken[]): readonly unknown[] {
-	return tokens.map(entry => [
-		entry.range.getStartPosition().lineNumber,
-		entry.range.getStartPosition().column,
-		entry.range.getEndPosition().column,
-		entry.tokenType,
-		entry.modifiers,
-	]);
+	return tokens.map(entry => [entry.range.getStartPosition().lineNumber, entry.range.getStartPosition().column, entry.range.getEndPosition().column, entry.tokenType, entry.modifiers]);
 }

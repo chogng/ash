@@ -21,13 +21,7 @@ export async function prepareIncrementalOutput(configFile: string): Promise<void
 		throw new Error(`Incremental compilation requires tsBuildInfoFile and outDir: ${configFile}`);
 	}
 	const ownedOutput = relative(dirname(configFile), outDir);
-	if (
-		!ownedOutput ||
-		isAbsolute(ownedOutput) ||
-		ownedOutput === '..' ||
-		ownedOutput.startsWith('../') ||
-		ownedOutput.startsWith('..\\')
-	) {
+	if (!ownedOutput || isAbsolute(ownedOutput) || ownedOutput === '..' || ownedOutput.startsWith('../') || ownedOutput.startsWith('..\\')) {
 		throw new Error(`Compiler outDir must stay inside the project: ${outDir}`);
 	}
 	let info: unknown;
@@ -57,14 +51,7 @@ export async function prepareIncrementalOutput(configFile: string): Promise<void
 		for (const root of roots) {
 			if (Number.isInteger(root) && root > 0 && root <= files.length) {
 				rootIds.push(root);
-			} else if (
-				Array.isArray(root) &&
-				root.length === 2 &&
-				root.every(Number.isInteger) &&
-				root[0] > 0 &&
-				root[1] >= root[0] &&
-				root[1] <= files.length
-			) {
+			} else if (Array.isArray(root) && root.length === 2 && root.every(Number.isInteger) && root[0] > 0 && root[1] >= root[0] && root[1] <= files.length) {
 				for (let id = root[0]; id <= root[1]; id++) {
 					rootIds.push(id);
 				}
@@ -74,8 +61,7 @@ export async function prepareIncrementalOutput(configFile: string): Promise<void
 			}
 		}
 	}
-	const canonical = (path: string): string =>
-		ts.sys.useCaseSensitiveFileNames ? path.replaceAll('\\', '/') : path.replaceAll('\\', '/').toLowerCase();
+	const canonical = (path: string): string => (ts.sys.useCaseSensitiveFileNames ? path.replaceAll('\\', '/') : path.replaceAll('\\', '/').toLowerCase());
 	const previousRoots = rootIds.map(id => canonical(previous.fileNames[id - 1]!)).sort();
 	const currentRoots = parsed.fileNames.map(canonical).sort();
 	if (JSON.stringify(previousRoots) !== JSON.stringify(currentRoots)) {

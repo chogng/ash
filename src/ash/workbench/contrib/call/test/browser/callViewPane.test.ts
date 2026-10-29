@@ -108,13 +108,7 @@ function fixture() {
 	const registration = DocumentTypes.registerTypes();
 	registration.replace([{ id: 'test', contentType: shared.contentType, extensions: ['.ashdoc'] }]);
 	const configuration = new TestConfigurationService();
-	const view = new CallViewPane(
-		browser.window.document.body,
-		{ id: 'calls', title: 'Calls' },
-		calls,
-		configuration,
-		editors,
-	);
+	const view = new CallViewPane(browser.window.document.body, { id: 'calls', title: 'Calls' }, calls, configuration, editors);
 	return {
 		browser,
 		view,
@@ -171,19 +165,12 @@ test('Calls links references and opens a new document without touching a dirty l
 });
 
 test('Calls exposes translated shared-document actions and keeps management controls owner-only', () => {
-	const translations = JSON.parse(
-		readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'),
-	) as Record<string, Record<string, string>>;
+	const translations = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')) as Record<string, Record<string, string>>;
 	setNlsMessages('zh-CN', translations);
 	const test = fixture();
 	try {
 		assert.equal(button(test.view, '打开文档').getAttribute('aria-label'), '打开 Shared notes');
-		assert.equal(
-			test.view.element
-				.querySelector('ul[aria-label="此通话中共享的文档"]')
-				?.textContent?.includes('Shared notes'),
-			true,
-		);
+		assert.equal(test.view.element.querySelector('ul[aria-label="此通话中共享的文档"]')?.textContent?.includes('Shared notes'), true);
 		test.setOwner(false);
 		assert.equal(button(test.view, '关联当前文档').hidden, true);
 		assert.equal(button(test.view, '取消文档关联').hidden, true);

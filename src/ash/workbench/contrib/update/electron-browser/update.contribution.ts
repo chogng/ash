@@ -4,11 +4,7 @@ import { isMacintosh, isWindows } from '../../../../base/common/platform.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import {
-	Severity,
-	INotificationService,
-	type INotificationHandle,
-} from '../../../../platform/notification/common/notification.js';
+import { Severity, INotificationService, type INotificationHandle } from '../../../../platform/notification/common/notification.js';
 import { IUpdateService, type UpdateCheckResult } from '../../../../platform/update/common/updateService.js';
 import { IMeteredConnectionService } from '../../../../platform/meteredConnection/common/meteredConnection.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
@@ -37,12 +33,7 @@ class CheckForUpdatesAction extends Action2 {
 		try {
 			const result = await update.checkForUpdates();
 			if (result.status === 'available') {
-				showAvailableUpdate(
-					notifications,
-					update,
-					result,
-					!services.get(IContextKeyService).getValue(IsSessionsWindowContext.key),
-				);
+				showAvailableUpdate(notifications, update, result, !services.get(IContextKeyService).getValue(IsSessionsWindowContext.key));
 			} else {
 				notifications.info(localize('update.current', 'Ash {0} is up to date.', result.version));
 			}
@@ -55,21 +46,11 @@ class CheckForUpdatesAction extends Action2 {
 	}
 }
 
-function showAvailableUpdate(
-	notifications: INotificationService,
-	update: IUpdateService,
-	result: Extract<UpdateCheckResult, { status: 'available' }>,
-	showUpdateNotifications: boolean,
-): void {
+function showAvailableUpdate(notifications: INotificationService, update: IUpdateService, result: Extract<UpdateCheckResult, { status: 'available' }>, showUpdateNotifications: boolean): void {
 	let prompt: INotificationHandle;
 	prompt = notifications.notify({
 		severity: Severity.Info,
-		message: localize(
-			'update.available',
-			'Ash {0} is available. You are using {1}.',
-			result.version,
-			result.currentVersion,
-		),
+		message: localize('update.available', 'Ash {0} is available. You are using {1}.', result.version, result.currentVersion),
 		actions: {
 			primary: [
 				{
@@ -130,47 +111,42 @@ function showReadyUpdate(notifications: INotificationService, update: IUpdateSer
 
 if (isWindows || isMacintosh) {
 	registerAction2(CheckForUpdatesAction);
-	registerWorkbenchContribution(
-		'workbench.contrib.desktopAutomaticUpdate',
-		WorkbenchPhase.AfterRestored,
-		accessor => {
-			const update = accessor.get(IUpdateService);
-			const notifications = accessor.get(INotificationService);
-			const meteredConnection = accessor.get(IMeteredConnectionService);
-			const showUpdateNotifications = !accessor.get(IContextKeyService).getValue(IsSessionsWindowContext.key);
-			let disposed = false;
-			let started = false;
-			const check = async (): Promise<void> => {
-				try {
-					const result = await update.checkAutomatically();
-					if (!disposed && result?.status === 'available')
-						showAvailableUpdate(notifications, update, result, showUpdateNotifications);
-				} catch (error) {
-					console.error('Automatic Desktop update check failed', error);
-				}
-			};
-			let interval: ReturnType<typeof setInterval> | undefined;
-			const networkChange = meteredConnection.onDidChangeIsConnectionMetered(isMetered => {
-				if (started && !isMetered) void check();
-			});
-			const initial = setTimeout(() => {
-				started = true;
-				void check();
-				interval = setInterval(
-					() => {
-						void check();
-					},
-					24 * 60 * 60 * 1000,
-				);
-			}, 60_000);
-			return toDisposable(() => {
-				disposed = true;
-				networkChange.dispose();
-				clearTimeout(initial);
-				if (interval) clearInterval(interval);
-			});
-		},
-	);
+	registerWorkbenchContribution('workbench.contrib.desktopAutomaticUpdate', WorkbenchPhase.AfterRestored, accessor => {
+		const update = accessor.get(IUpdateService);
+		const notifications = accessor.get(INotificationService);
+		const meteredConnection = accessor.get(IMeteredConnectionService);
+		const showUpdateNotifications = !accessor.get(IContextKeyService).getValue(IsSessionsWindowContext.key);
+		let disposed = false;
+		let started = false;
+		const check = async (): Promise<void> => {
+			try {
+				const result = await update.checkAutomatically();
+				if (!disposed && result?.status === 'available') showAvailableUpdate(notifications, update, result, showUpdateNotifications);
+			} catch (error) {
+				console.error('Automatic Desktop update check failed', error);
+			}
+		};
+		let interval: ReturnType<typeof setInterval> | undefined;
+		const networkChange = meteredConnection.onDidChangeIsConnectionMetered(isMetered => {
+			if (started && !isMetered) void check();
+		});
+		const initial = setTimeout(() => {
+			started = true;
+			void check();
+			interval = setInterval(
+				() => {
+					void check();
+				},
+				24 * 60 * 60 * 1000,
+			);
+		}, 60_000);
+		return toDisposable(() => {
+			disposed = true;
+			networkChange.dispose();
+			clearTimeout(initial);
+			if (interval) clearInterval(interval);
+		});
+	});
 	MenusRegistry.appendMenuItem(MenuId.GlobalActivity, {
 		command: {
 			id: CHECK_FOR_UPDATES_COMMAND_ID,

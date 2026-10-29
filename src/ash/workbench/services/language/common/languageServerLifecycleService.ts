@@ -1,11 +1,7 @@
 import { localize } from '../../../../nls.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import {
-	ConfigurationScope,
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 
 export const LanguageServerLifecycleConfiguration = {
 	autoSuspend: 'languageServers.autoSuspend',
@@ -19,13 +15,7 @@ registry.registerConfiguration({
 	defaultValue: false,
 	scope: ConfigurationScope.APPLICATION,
 	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean')
-			throw new TypeError(
-				localize(
-					{ bundle: 'ash.settings', key: 'lsp.idle.invalidEnabled' },
-					'Automatic language server release must be true or false.',
-				),
-			);
+		if (typeof value !== 'boolean') throw new TypeError(localize({ bundle: 'ash.settings', key: 'lsp.idle.invalidEnabled' }, 'Automatic language server release must be true or false.'));
 		return value;
 	},
 	setting: {
@@ -47,12 +37,7 @@ registry.registerConfiguration({
 	scope: ConfigurationScope.APPLICATION,
 	parse(value: unknown): number {
 		if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 120)
-			throw new TypeError(
-				localize(
-					{ bundle: 'ash.settings', key: 'lsp.idle.invalidMinutes' },
-					'The idle waiting time must be a whole number from 1 to 120 minutes.',
-				),
-			);
+			throw new TypeError(localize({ bundle: 'ash.settings', key: 'lsp.idle.invalidMinutes' }, 'The idle waiting time must be a whole number from 1 to 120 minutes.'));
 		return value;
 	},
 	setting: {
@@ -74,13 +59,7 @@ registry.registerConfiguration({
 /** Editor-owned eligibility and activity leases for connection-local LSP processes. */
 export interface ILanguageServerLifecycleService {
 	start(): void;
-	withActivity<T>(
-		document: { readonly dirId?: string; readonly languageId: string },
-		signal: AbortSignal | undefined,
-		operation: () => Promise<T>,
-	): Promise<T>;
+	withActivity<T>(document: { readonly dirId?: string; readonly languageId: string }, signal: AbortSignal | undefined, operation: () => Promise<T>): Promise<T>;
 }
 
-export const ILanguageServerLifecycleService = createServiceIdentifier<ILanguageServerLifecycleService>(
-	'languageServerLifecycleService',
-);
+export const ILanguageServerLifecycleService = createServiceIdentifier<ILanguageServerLifecycleService>('languageServerLifecycleService');

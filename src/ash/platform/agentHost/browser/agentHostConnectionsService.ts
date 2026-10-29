@@ -2,12 +2,7 @@ import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
 import { IRendererHostService, type IRendererHost } from '../../renderer/common/rendererHost.js';
-import {
-	AMBIENT_AGENT_HOST_AUTHORITY,
-	agentHostConnectionAddress,
-	type IAgentHostConnectionInfo,
-	type IAgentHostConnectionsService,
-} from '../common/agentHostConnectionsService.js';
+import { AMBIENT_AGENT_HOST_AUTHORITY, agentHostConnectionAddress, type IAgentHostConnectionInfo, type IAgentHostConnectionsService } from '../common/agentHostConnectionsService.js';
 import type { AppServerConnectionState } from '../common/appServerApi.js';
 
 /** Projects one selected window host and its runtime endpoint registry without owning another connection table. */

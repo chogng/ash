@@ -9,10 +9,7 @@ import { ILogService } from '../../log/common/log.js';
 export class RequestStore<T, RequestArgs> extends Disposable {
 	private readonly requested = this._register(new Emitter<RequestArgs & { requestId: number }>());
 	readonly onCreateRequest = this.requested.event;
-	private readonly waiting = new Map<
-		number,
-		{ completion: DeferredPromise<T>; timer: ReturnType<typeof setTimeout> }
-	>();
+	private readonly waiting = new Map<number, { completion: DeferredPromise<T>; timer: ReturnType<typeof setTimeout> }>();
 	private nextId = 0;
 	private readonly timeout: number;
 

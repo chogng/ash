@@ -10,12 +10,7 @@ import { DisassemblyView } from './disassemblyView.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
-import {
-	FileNotFoundError,
-	FileSystemProviderErrorCode,
-	toFileSystemProviderErrorCode,
-	IFileService,
-} from '../../../../platform/files/common/files.js';
+import { FileNotFoundError, FileSystemProviderErrorCode, toFileSystemProviderErrorCode, IFileService } from '../../../../platform/files/common/files.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import {
@@ -32,14 +27,7 @@ import {
 	CALLSTACK_VIEW_ID,
 	BREAKPOINTS_VIEW_ID,
 } from '../common/debug.js';
-import {
-	CONTEXT_DEBUG_STATE,
-	CONTINUE_DEBUG_COMMAND_ID,
-	PAUSE_DEBUG_COMMAND_ID,
-	RESTART_DEBUG_COMMAND_ID,
-	STOP_ALL_DEBUG_COMMAND_ID,
-	STOP_DEBUG_COMMAND_ID,
-} from '../common/debug.js';
+import { CONTEXT_DEBUG_STATE, CONTINUE_DEBUG_COMMAND_ID, PAUSE_DEBUG_COMMAND_ID, RESTART_DEBUG_COMMAND_ID, STOP_ALL_DEBUG_COMMAND_ID, STOP_DEBUG_COMMAND_ID } from '../common/debug.js';
 import {
 	CLEAR_DEBUG_CONSOLE_COMMAND_ID,
 	DEBUG_CONSOLE_VIEW_ID,
@@ -101,10 +89,7 @@ registerAction2(
 			}
 			await debug.refresh();
 			const selected = debug.getConfigurationManager().selectedConfiguration;
-			if (!selected)
-				throw new Error(
-					localize('debug.noConfiguration', 'No debug configuration found in .vscode/launch.json'),
-				);
+			if (!selected) throw new Error(localize('debug.noConfiguration', 'No debug configuration found in .vscode/launch.json'));
 			if ('configurations' in selected) await debug.startCompound(selected);
 			else await debug.start(selected);
 		}
@@ -138,10 +123,7 @@ registerAction2(
 				const picker = resources.add(quickInput.createQuickPick<DebugConfigurationPick>());
 				const controller = new AbortController();
 				resources.add(toDisposable(() => controller.abort()));
-				picker.ariaLabel = picker.placeholder = localize(
-					{ bundle: 'ash', key: 'debug.selectConfiguration' },
-					'Select a debug configuration',
-				);
+				picker.ariaLabel = picker.placeholder = localize({ bundle: 'ash', key: 'debug.selectConfiguration' }, 'Select a debug configuration');
 				picker.busy = true;
 				selected = await new Promise<DebugConfigurationPick | undefined>((resolve, reject) => {
 					// Hiding the picker revokes discovery, including pending extension callbacks.
@@ -177,11 +159,7 @@ registerAction2(
 						throwIfCancelled(controller.signal);
 						const dynamic = await Promise.all(
 							workspace.getWorkspace().folders.map(async folder => {
-								const configurations = await debug.provideDebugConfigurations(
-									folder.uri,
-									controller.signal,
-									DebugConfigurationProviderTriggerKind.Dynamic,
-								);
+								const configurations = await debug.provideDebugConfigurations(folder.uri, controller.signal, DebugConfigurationProviderTriggerKind.Dynamic);
 								return configurations.map(configuration => ({
 									kind: 'dynamic' as const,
 									label: configuration.name,
@@ -226,8 +204,7 @@ registerAction2(
 			} else if (selected?.kind === 'compound') {
 				await debug.getConfigurationManager().selectConfiguration(selected.compound);
 				await debug.startCompound(selected.compound);
-			} else if (selected?.kind === 'dynamic')
-				await debug.startDynamicDebugging(selected.folder, selected.configuration);
+			} else if (selected?.kind === 'dynamic') await debug.startDynamicDebugging(selected.folder, selected.configuration);
 		}
 	},
 );
@@ -244,16 +221,10 @@ registerAction2(
 			});
 		}
 
-		public override async run(
-			accessor: ServicesAccessor,
-			selectedFolder?: URI,
-			preserveFocus = false,
-			signal?: AbortSignal,
-		): Promise<void> {
+		public override async run(accessor: ServicesAccessor, selectedFolder?: URI, preserveFocus = false, signal?: AbortSignal): Promise<void> {
 			const workspace = accessor.get(IWorkspaceContextService);
 			const editor = accessor.get(IEditorService);
-			if ((selectedFolder !== undefined && !URI.isUri(selectedFolder)) || typeof preserveFocus !== 'boolean')
-				throw new CancellationError();
+			if ((selectedFolder !== undefined && !URI.isUri(selectedFolder)) || typeof preserveFocus !== 'boolean') throw new CancellationError();
 			const activeResource = editor.activeEditor?.resource;
 			const selected = accessor.get(IDebugService).getConfigurationManager().selectedConfiguration;
 			const folders = workspace.getWorkspace().folders;
@@ -264,23 +235,13 @@ registerAction2(
 						(folders.length === 1
 							? folders[0]
 							: folders.length
-								? await accessor
-										.get(ICommandService)
-										.executeCommand<IWorkspaceFolder | undefined>(
-											PICK_WORKSPACE_FOLDER_COMMAND_ID,
-											[
-												{
-													placeHolder: localize(
-														'debug.selectFolder',
-														'Select a workspace folder to configure debugging.',
-													),
-												},
-											],
-										)
+								? await accessor.get(ICommandService).executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [
+										{
+											placeHolder: localize('debug.selectFolder', 'Select a workspace folder to configure debugging.'),
+										},
+									])
 								: undefined))
-					: workspace
-							.getWorkspace()
-							.folders.find(folder => folder.uri.toString() === selectedFolder.toString());
+					: workspace.getWorkspace().folders.find(folder => folder.uri.toString() === selectedFolder.toString());
 			if (selectedFolder && !folder) throw new CancellationError();
 			if (!folder) {
 				if (!folders.length) await accessor.get(IFileDialogService).pickFolderAndOpen();
@@ -311,18 +272,12 @@ registerAction2(
 					// Another editor or window may create this file while templates are pending.
 					await files.writeFileBytes(
 						resource,
-						new TextEncoder().encode(
-							JSON.stringify({ version: '0.2.0', configurations }, null, '\t') + '\n',
-						),
+						new TextEncoder().encode(JSON.stringify({ version: '0.2.0', configurations }, null, '\t') + '\n'),
 						{ create: true, overwrite: false },
 						controller.signal,
 					);
 				} catch (writeError) {
-					if (
-						!(writeError instanceof Error) ||
-						toFileSystemProviderErrorCode(writeError) !== FileSystemProviderErrorCode.FileExists
-					)
-						throw writeError;
+					if (!(writeError instanceof Error) || toFileSystemProviderErrorCode(writeError) !== FileSystemProviderErrorCode.FileExists) throw writeError;
 				}
 			}
 			throwIfCancelled(controller.signal);
@@ -389,10 +344,7 @@ registerAction2(
 		constructor() {
 			super({
 				id: FOCUS_DEBUG_CONSOLE_COMMAND_ID,
-				title: localize2(
-					{ bundle: 'ash.workbench', key: 'command.FocusDebugConsoleAction' },
-					'Focus on Debug Console View',
-				),
+				title: localize2({ bundle: 'ash.workbench', key: 'command.FocusDebugConsoleAction' }, 'Focus on Debug Console View'),
 				f1: true,
 			});
 		}
@@ -420,24 +372,9 @@ registerAction2(
 for (const [id, title, keybinding, operation] of [
 	[CONTINUE_DEBUG_COMMAND_ID, localize2('debug.continue', 'Continue'), undefined, 'continue'],
 	[PAUSE_DEBUG_COMMAND_ID, localize2('debug.pause', 'Pause'), Keybinding.single(logicalKey('F6')), 'pause'],
-	[
-		STEP_OVER_DEBUG_COMMAND_ID,
-		localize2('debug.stepOver', 'Step Over'),
-		Keybinding.single(logicalKey('F10')),
-		'stepOver',
-	],
-	[
-		STEP_INTO_DEBUG_COMMAND_ID,
-		localize2('debug.stepInto', 'Step Into'),
-		Keybinding.single(logicalKey('F11')),
-		'stepInto',
-	],
-	[
-		STEP_OUT_DEBUG_COMMAND_ID,
-		localize2('debug.stepOut', 'Step Out'),
-		Keybinding.single(logicalKey('F11', { shiftKey: true })),
-		'stepOut',
-	],
+	[STEP_OVER_DEBUG_COMMAND_ID, localize2('debug.stepOver', 'Step Over'), Keybinding.single(logicalKey('F10')), 'stepOver'],
+	[STEP_INTO_DEBUG_COMMAND_ID, localize2('debug.stepInto', 'Step Into'), Keybinding.single(logicalKey('F11')), 'stepInto'],
+	[STEP_OUT_DEBUG_COMMAND_ID, localize2('debug.stepOut', 'Step Out'), Keybinding.single(logicalKey('F11', { shiftKey: true })), 'stepOut'],
 ] as const) {
 	registerAction2(
 		class DebugSessionAction extends Action2 {
@@ -451,9 +388,7 @@ for (const [id, title, keybinding, operation] of [
 						? {
 								keybinding: {
 									primary: keybinding,
-									...(operation === 'pause'
-										? { when: CONTEXT_DEBUG_STATE.isEqualTo('running') }
-										: {}),
+									...(operation === 'pause' ? { when: CONTEXT_DEBUG_STATE.isEqualTo('running') } : {}),
 								},
 							}
 						: {}),
@@ -507,13 +442,7 @@ registerAction2(
 			const frame = debug.getViewModel().focusedStackFrame;
 			await accessor.get(IViewsService).openViewContainer(WorkbenchViewContainerId.Debug);
 			const view = await accessor.get(IViewsService).openView<BreakpointsView>(BREAKPOINTS_VIEW_ID, true);
-			if (
-				view &&
-				debug.session === session &&
-				session.state === 'stopped' &&
-				debug.getViewModel().focusedStackFrame === frame
-			)
-				view.renderInputBox({ kind: 'data', options });
+			if (view && debug.session === session && session.state === 'stopped' && debug.getViewModel().focusedStackFrame === frame) view.renderInputBox({ kind: 'data', options });
 		}
 	},
 );
@@ -530,17 +459,11 @@ registerAction2(
 			if (typeof instructionReference !== 'string') throw new CancellationError();
 			const debug = accessor.get(IDebugService);
 			const session = debug.session;
-			if (!session || session.state !== 'stopped' || !session.capabilities.supportsInstructionBreakpoints)
-				throw new CancellationError();
+			if (!session || session.state !== 'stopped' || !session.capabilities.supportsInstructionBreakpoints) throw new CancellationError();
 			const frame = debug.getViewModel().focusedStackFrame;
 			await accessor.get(IViewsService).openViewContainer(WorkbenchViewContainerId.Debug);
 			const view = await accessor.get(IViewsService).openView<BreakpointsView>(BREAKPOINTS_VIEW_ID, true);
-			if (
-				view &&
-				debug.session === session &&
-				session.state === 'stopped' &&
-				debug.getViewModel().focusedStackFrame === frame
-			)
+			if (view && debug.session === session && session.state === 'stopped' && debug.getViewModel().focusedStackFrame === frame)
 				view.renderInputBox({ kind: 'instruction', instructionReference });
 		}
 	},
@@ -592,55 +515,29 @@ registerAction2(
 		}
 		override async run(accessor: ServicesAccessor, sessionId?: string, reference?: string): Promise<void> {
 			const debug = accessor.get(IDebugService);
-			const session =
-				sessionId === undefined
-					? debug.session
-					: typeof sessionId === 'string'
-						? debug.getSession(sessionId)
-						: undefined;
+			const session = sessionId === undefined ? debug.session : typeof sessionId === 'string' ? debug.getSession(sessionId) : undefined;
 			if (!session || session.state !== 'stopped' || !session.capabilities.supportsReadMemoryRequest)
-				throw new Error(
-					localize(
-						'debug.memoryUnavailable',
-						'Pause a debug adapter that supports this memory operation first.',
-					),
-				);
+				throw new Error(localize('debug.memoryUnavailable', 'Pause a debug adapter that supports this memory operation first.'));
 			if (reference !== undefined && typeof reference !== 'string') throw new CancellationError();
 			const revision = session.inspectionRevision;
-			reference ??= await accessor
-				.get(IQuickInputService)
-				.input({ placeHolder: localize('debug.memoryReference', 'Memory reference or address') });
+			reference ??= await accessor.get(IQuickInputService).input({ placeHolder: localize('debug.memoryReference', 'Memory reference or address') });
 			if (!reference) return;
-			const countText = await accessor
-				.get(IQuickInputService)
-				.input({ placeHolder: localize('debug.memoryCount', 'Byte count (1–4096)'), value: '256' });
+			const countText = await accessor.get(IQuickInputService).input({ placeHolder: localize('debug.memoryCount', 'Byte count (1–4096)'), value: '256' });
 			if (countText === undefined) return;
 			const count = Number(countText);
 			if (!Number.isSafeInteger(count) || count < 1 || count > 4096)
-				throw new RangeError(
-					localize(
-						'debug.invalidMemoryRange',
-						'A memory request requires a reference and between 1 and 4096 bytes.',
-					),
-				);
-			if (
-				debug.getSession(session.id) !== session ||
-				session.state !== 'stopped' ||
-				session.inspectionRevision !== revision
-			)
-				return;
-			await accessor
-				.get(IEditorService)
-				.openEditor(
-					{
-						resource: memoryResource(session.id, revision, reference, 0, count),
-						label: localize('debug.memoryLabel', 'Memory: {0}', reference),
-						encoding: 'utf8',
-						languageId: 'plaintext',
-						readOnly: !session.capabilities.supportsWriteMemoryRequest,
-					},
-					{ pinned: true },
-				);
+				throw new RangeError(localize('debug.invalidMemoryRange', 'A memory request requires a reference and between 1 and 4096 bytes.'));
+			if (debug.getSession(session.id) !== session || session.state !== 'stopped' || session.inspectionRevision !== revision) return;
+			await accessor.get(IEditorService).openEditor(
+				{
+					resource: memoryResource(session.id, revision, reference, 0, count),
+					label: localize('debug.memoryLabel', 'Memory: {0}', reference),
+					encoding: 'utf8',
+					languageId: 'plaintext',
+					readOnly: !session.capabilities.supportsWriteMemoryRequest,
+				},
+				{ pinned: true },
+			);
 		}
 	},
 );
@@ -660,11 +557,7 @@ registerAction2(
 			const frame = debug.getViewModel().focusedStackFrame;
 			if (!session || session.state !== 'stopped' || !frame) return;
 			const revision = session.inspectionRevision;
-			const current = () =>
-				debug.session === session &&
-				session.state === 'stopped' &&
-				session.inspectionRevision === revision &&
-				debug.getViewModel().focusedStackFrame === frame;
+			const current = () => debug.session === session && session.state === 'stopped' && session.inspectionRevision === revision && debug.getViewModel().focusedStackFrame === frame;
 			const scopes = await session.inspectFrame(frame.id, 'all');
 			if (!current()) return;
 			const quickInput = accessor.get(IQuickInputService);
@@ -695,18 +588,16 @@ registerAction2(
 			try {
 				const result = await selected.visualizer.visualize(controller.signal);
 				if (!current() || controller.signal.aborted) return;
-				await accessor
-					.get(IEditorService)
-					.openEditor(
-						{
-							resource: URI.from({ scheme: 'untitled', path: `/debug-${generateUuid()}` }),
-							label: `${variable.label}: ${selected.label}`,
-							languageId: result.languageId,
-							initialText: result.content,
-							readOnly: true,
-						},
-						{ pinned: true },
-					);
+				await accessor.get(IEditorService).openEditor(
+					{
+						resource: URI.from({ scheme: 'untitled', path: `/debug-${generateUuid()}` }),
+						label: `${variable.label}: ${selected.label}`,
+						languageId: result.languageId,
+						initialText: result.content,
+						readOnly: true,
+					},
+					{ pinned: true },
+				);
 			} catch (error) {
 				if (!isCancellationError(error)) throw error;
 			}
@@ -714,11 +605,7 @@ registerAction2(
 	},
 );
 
-async function pickDebugItem<T extends IQuickPickItem>(
-	quickInput: IQuickInputService,
-	items: readonly T[],
-	placeholder: string,
-): Promise<T | undefined> {
+async function pickDebugItem<T extends IQuickPickItem>(quickInput: IQuickInputService, items: readonly T[], placeholder: string): Promise<T | undefined> {
 	using lifetime = new DisposableStore();
 	const picker = lifetime.add(quickInput.createQuickPick<T>());
 	picker.items = items;

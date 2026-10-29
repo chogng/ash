@@ -6,10 +6,7 @@ import { createTestInitializeResult } from '../../../platform/agentHost/test/com
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
 import { CancellationError, isCancellationError } from '../../../base/common/errors.js';
-import {
-	AppServerProtocolDecodeError,
-	decodeAppServerServerResponse,
-} from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
+import { AppServerProtocolDecodeError, decodeAppServerServerResponse } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
 import { AppServerRemoteError } from '../../../platform/agentHost/common/appServerError.js';
@@ -33,17 +30,9 @@ import {
 } from '../../../platform/agentHost/common/appServerTransport.js';
 import { AppServerProtocolClient } from '../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { CancellationTokenSource } from '../../../base/common/cancellation.js';
-import {
-	GitHubError,
-	GitHubErrorCode,
-	GitHubIssueState,
-	GitHubMergeMethod,
-} from '../../../platform/github/common/githubService.js';
+import { GitHubError, GitHubErrorCode, GitHubIssueState, GitHubMergeMethod } from '../../../platform/github/common/githubService.js';
 import type { BrowserCreateParams } from '../../../../../.build/protocol/typescript/index.js';
-import {
-	createAppServerAppServerApi,
-	createAppServerSkillOperations,
-} from '../../../platform/agentHost/browser/appServerApi.js';
+import { createAppServerAppServerApi, createAppServerSkillOperations } from '../../../platform/agentHost/browser/appServerApi.js';
 import { OperatingSystem } from '../../../base/common/platform.js';
 import { createHash } from 'node:crypto';
 import { SecretStorageError } from '../../../platform/secrets/common/secrets.js';
@@ -64,11 +53,7 @@ test('Session runtime adapter negotiates its contract and preserves cancellation
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	using cleanup = toDisposable(() => connected.dispose());
 	const cancellation = new AbortController();
-	const pending = connected.api.session.invokeRuntime!(
-		'ash.dev-containers',
-		{ operation: 'prepare', workspace: 'C:\\work' },
-		cancellation.signal,
-	);
+	const pending = connected.api.session.invokeRuntime!('ash.dev-containers', { operation: 'prepare', workspace: 'C:\\work' }, cancellation.signal);
 	const index = transport.requests.length - 1;
 	const request = transport.requests[index]!;
 	assert.equal(request.method, 'session/runtime/invoke');
@@ -91,14 +76,10 @@ test('Session runtime discovery reports unavailable when its contract was not ne
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	using cleanup = toDisposable(() => connected.dispose());
 	const before = transport.requests.length;
-	assert.deepEqual(
-		await connected.api.session.invokeRuntime!(
-			'ash.dev-containers',
-			{ operation: 'probe', workspace: 'C:\\work' },
-			new AbortController().signal,
-		),
-		{ type: 'availability', available: false },
-	);
+	assert.deepEqual(await connected.api.session.invokeRuntime!('ash.dev-containers', { operation: 'probe', workspace: 'C:\\work' }, new AbortController().signal), {
+		type: 'availability',
+		available: false,
+	});
 	assert.equal(transport.requests.length, before);
 });
 
@@ -219,10 +200,7 @@ test('Renderer host separates the tool transport from sandbox and connection dia
 		],
 	};
 	const toolRead = connected.api.agentTools.read();
-	assert.deepEqual(
-		{ method: transport.requests.at(-1)?.method, params: transport.requests.at(-1)?.params },
-		{ method: 'agent/capabilities/read', params: {} },
-	);
+	assert.deepEqual({ method: transport.requests.at(-1)?.method, params: transport.requests.at(-1)?.params }, { method: 'agent/capabilities/read', params: {} });
 	transport.respondAt(-1, { tools, toolSets, sourceGroups: [], profiles: [], ...environment });
 	assert.deepEqual(await toolRead, { tools, toolSets, sourceGroups: [], profiles: [] });
 	const environmentRead = connected.api.agentCapabilities.read();
@@ -235,21 +213,11 @@ test('Skill body reading opens exact authorized bytes lazily and releases the co
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
-	const body = await createAppServerSkillOperations(client).readTextResource(
-		pinnedSkill,
-		'SKILL.md',
-		new AbortController().signal,
-		'skill-session',
-	);
+	const body = await createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', new AbortController().signal, 'skill-session');
 	assert.equal(body, '# Review\n审阅 changes\n');
 	assert.deepEqual(
 		transport.requests
-			.filter(
-				request =>
-					request.method === 'skill/resource/open' ||
-					request.method === 'resource/read' ||
-					request.method === 'resource/release',
-			)
+			.filter(request => request.method === 'skill/resource/open' || request.method === 'resource/read' || request.method === 'resource/release')
 			.map(request => [request.method, request.params]),
 		[
 			[
@@ -261,10 +229,7 @@ test('Skill body reading opens exact authorized bytes lazily and releases the co
 					path: 'SKILL.md',
 				},
 			],
-			[
-				'resource/read',
-				{ resourceId: 'resource_0000000000000001', offset: 0, maxBytes: Buffer.byteLength(body) },
-			],
+			['resource/read', { resourceId: 'resource_0000000000000001', offset: 0, maxBytes: Buffer.byteLength(body) }],
 			['resource/release', { resourceId: 'resource_0000000000000001' }],
 		],
 	);
@@ -275,15 +240,7 @@ test('Skill reference reading uses the same exact identity and connection resour
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
-	assert.equal(
-		await createAppServerSkillOperations(client).readTextResource(
-			pinnedSkill,
-			'references/checks.md',
-			new AbortController().signal,
-			'reference-session',
-		),
-		'Reference text',
-	);
+	assert.equal(await createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'references/checks.md', new AbortController().signal, 'reference-session'), 'Reference text');
 	assert.deepEqual(transport.requests.find(request => request.method === 'skill/resource/open')?.params, {
 		sessionId: 'reference-session',
 		skillId: pinnedSkill.id,
@@ -300,14 +257,9 @@ test('Cancellation while opening a Skill releases its late handle without reques
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
-	await assert.rejects(
-		createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', controller.signal),
-		isCancellationError,
-	);
+	await assert.rejects(createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', controller.signal), isCancellationError);
 	assert.deepEqual(
-		transport.requests
-			.filter(request => String(request.method).startsWith('resource/'))
-			.map(request => request.method),
+		transport.requests.filter(request => String(request.method).startsWith('resource/')).map(request => request.method),
 		['resource/release'],
 	);
 });
@@ -317,10 +269,7 @@ test('Skill snapshots reject invalid UTF-8 after releasing the resource', async 
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
-	await assert.rejects(
-		createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', new AbortController().signal),
-		TypeError,
-	);
+	await assert.rejects(createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', new AbortController().signal), TypeError);
 	assert.equal(transport.requests.at(-1)?.method, 'resource/release');
 });
 
@@ -329,14 +278,9 @@ test('Skill snapshots reject oversized instructions before reading chunks and re
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
-	await assert.rejects(
-		createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', new AbortController().signal),
-		/size/u,
-	);
+	await assert.rejects(createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', new AbortController().signal), /size/u);
 	assert.deepEqual(
-		transport.requests
-			.filter(request => String(request.method).startsWith('resource/'))
-			.map(request => request.method),
+		transport.requests.filter(request => String(request.method).startsWith('resource/')).map(request => request.method),
 		['resource/release'],
 	);
 });
@@ -351,10 +295,7 @@ test('A replaced connection never receives a Skill resource read or release from
 		client.disconnect();
 		reconnecting = client.connect();
 	};
-	await assert.rejects(
-		createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', new AbortController().signal),
-		/replaced/u,
-	);
+	await assert.rejects(createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', new AbortController().signal), /replaced/u);
 	await reconnecting;
 	assert.equal(client.state, 'ready');
 	assert.equal(transport.requests.filter(request => request.method === 'resource/release').length, 0);
@@ -440,11 +381,7 @@ test('Skill adapter exposes immutable domain metadata for enabled, disabled and 
 	};
 	assert.deepEqual(catalog, {
 		generation: 4,
-		skills: [
-			descriptor,
-			{ ...descriptor, id: { ...id, name: 'disabled' }, enabled: false },
-			{ ...descriptor, id: { ...id, name: 'unknown' }, compatible: false },
-		],
+		skills: [descriptor, { ...descriptor, id: { ...id, name: 'disabled' }, enabled: false }, { ...descriptor, id: { ...id, name: 'unknown' }, compatible: false }],
 	});
 	assert.ok(Object.isFrozen(catalog) && Object.isFrozen(catalog.skills));
 	assert.ok(catalog.skills.every(skill => Object.isFrozen(skill) && Object.isFrozen(skill.id)));
@@ -520,10 +457,7 @@ test('instruction catalog uses the shared connection and exposes metadata withou
 	using cleanup = toDisposable(() => connected.dispose());
 	assert.equal(connected.api.instructions.isAvailable, true);
 	const catalog = connected.api.instructions.list('instruction-session');
-	assert.deepEqual(
-		{ method: transport.requests.at(-1)?.method, params: transport.requests.at(-1)?.params },
-		{ method: 'instructions/list', params: { sessionId: 'instruction-session' } },
-	);
+	assert.deepEqual({ method: transport.requests.at(-1)?.method, params: transport.requests.at(-1)?.params }, { method: 'instructions/list', params: { sessionId: 'instruction-session' } });
 	transport.respondAt(-1, {
 		instructions: [
 			{
@@ -537,9 +471,7 @@ test('instruction catalog uses the shared connection and exposes metadata withou
 		],
 		diagnostics: [],
 	});
-	assert.deepEqual(await catalog, [
-		{ path: '/workspace/.ash/instructions/review.md', name: 'Review', description: undefined, scope: 'directory' },
-	]);
+	assert.deepEqual(await catalog, [{ path: '/workspace/.ash/instructions/review.md', name: 'Review', description: undefined, scope: 'directory' }]);
 });
 
 test('Terminal host adapts raw bytes and command exit codes at the protocol boundary', async () => {
@@ -648,10 +580,7 @@ test('GitHub domain service is assembled on the shared connection and maps issue
 	const pending = connected.api.github.readIssue(githubRepository, 7);
 	const request = transport.requests.at(-1)!;
 	assert.equal(request.method, 'github/issue/read');
-	assert.deepEqual(
-		{ ...(request.params as object), operationId: 'generated' },
-		{ repository: githubRepository, number: 7, operationId: 'generated' },
-	);
+	assert.deepEqual({ ...(request.params as object), operationId: 'generated' }, { repository: githubRepository, number: 7, operationId: 'generated' });
 	const comment = {
 		id: 9,
 		body: 'Discussion',
@@ -679,10 +608,7 @@ test('GitHub retains error categories independently of product issue reporting',
 		['GitHubOperationFailed', GitHubErrorCode.OperationFailed],
 	] as const) {
 		const pending = connected.api.github.readIssue(githubRepository, 7);
-		const rejected = assert.rejects(
-			pending,
-			(error: unknown) => error instanceof GitHubError && error.code === code,
-		);
+		const rejected = assert.rejects(pending, (error: unknown) => error instanceof GitHubError && error.code === code);
 		transport.rejectAt(-1, { code: -32070, message: kind, data: { kind } });
 		await rejected;
 	}
@@ -726,11 +652,7 @@ test('GitHub keeps a confirmed write when cancellation races with its response',
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	using cleanup = toDisposable(() => connected.dispose());
 	using cancellation = new CancellationTokenSource();
-	const pending = connected.api.github.createIssue(
-		githubRepository,
-		{ title: 'Issue', body: 'Body', labels: ['bug'], assignees: ['owner'] },
-		cancellation.token,
-	);
+	const pending = connected.api.github.createIssue(githubRepository, { title: 'Issue', body: 'Body', labels: ['bug'], assignees: ['owner'] }, cancellation.token);
 	const originalIndex = transport.requests.length - 1;
 	cancellation.cancel();
 	transport.respondAt(-1, { status: 'completed' });
@@ -743,10 +665,7 @@ test('GitHub reports a lost write response as uncertain and never resubmits it',
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	using cleanup = toDisposable(() => connected.dispose());
 	const pending = connected.api.github.createComment(githubRepository, 7, 'Discussion');
-	const rejected = assert.rejects(
-		pending,
-		(error: unknown) => error instanceof GitHubError && error.code === GitHubErrorCode.SubmissionUncertain,
-	);
+	const rejected = assert.rejects(pending, (error: unknown) => error instanceof GitHubError && error.code === GitHubErrorCode.SubmissionUncertain);
 	transport.close('connection lost');
 	await rejected;
 	assert.equal(transport.requests.filter(request => request.method === 'github/comment/create').length, 1);
@@ -786,10 +705,7 @@ test('GitHub rejects an unavailable contract before dispatching a mutation', asy
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	using cleanup = toDisposable(() => connected.dispose());
 	const count = transport.requests.length;
-	await assert.rejects(
-		connected.api.github.deleteComment(githubRepository, 9),
-		(error: unknown) => error instanceof GitHubError && error.code === GitHubErrorCode.Unavailable,
-	);
+	await assert.rejects(connected.api.github.deleteComment(githubRepository, 9), (error: unknown) => error instanceof GitHubError && error.code === GitHubErrorCode.Unavailable);
 	assert.equal(transport.requests.length, count);
 });
 
@@ -1069,10 +985,7 @@ test('elevated file cancellation retains the original response and routes to its
 	try {
 		const controller = new AbortController();
 		const sessionDirectory = { sessionId: 'session', path: '/workspace/worktree' };
-		const pending = connected.api.fs.writeFileElevated(
-			{ operationId: 'save', sessionDirectory, path: 'notes.txt', dataBase64: 'bmV3', expectedRevision: 'old' },
-			controller.signal,
-		);
+		const pending = connected.api.fs.writeFileElevated({ operationId: 'save', sessionDirectory, path: 'notes.txt', dataBase64: 'bmV3', expectedRevision: 'old' }, controller.signal);
 		let settled = false;
 		void pending.then(() => (settled = true));
 		controller.abort();
@@ -1097,10 +1010,7 @@ test('elevated cancellation errors preserve the backend terminal result and neve
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	try {
 		const controller = new AbortController();
-		const pending = connected.api.fs.writeFileElevated(
-			{ operationId: 'save', dirId: 'workspace', path: 'notes.txt', dataBase64: 'bmV3' },
-			controller.signal,
-		);
+		const pending = connected.api.fs.writeFileElevated({ operationId: 'save', dirId: 'workspace', path: 'notes.txt', dataBase64: 'bmV3' }, controller.signal);
 		const rejected = assert.rejects(pending, isCancellationError);
 		controller.abort();
 		assert.deepEqual(transport.requests.at(-1)?.params, { operationId: 'save', dirId: 'workspace' });
@@ -1112,13 +1022,7 @@ test('elevated cancellation errors preserve the backend terminal result and neve
 		});
 		await rejected;
 		assert.equal(transport.requests.filter(request => request.method === 'fs/writeFileElevated').length, 1);
-		await assert.rejects(
-			connected.api.fs.writeFileElevated(
-				{ operationId: 'other', dirId: 'workspace', path: 'notes.txt', dataBase64: 'bmV3' },
-				controller.signal,
-			),
-			isCancellationError,
-		);
+		await assert.rejects(connected.api.fs.writeFileElevated({ operationId: 'other', dirId: 'workspace', path: 'notes.txt', dataBase64: 'bmV3' }, controller.signal), isCancellationError);
 		assert.equal(transport.requests.filter(request => request.method === 'fs/writeFileElevated').length, 1);
 	} finally {
 		connected.dispose();
@@ -1280,7 +1184,10 @@ for (const stage of ['bridge', 'initialize'] as const) {
 			const requestCount = transport.requests.length;
 			await rejected;
 			assert.deepEqual(
-				{ state: client.state, newRequests: transport.requests.length - requestCount },
+				{
+					state: client.state,
+					newRequests: transport.requests.length - requestCount,
+				},
 				{ state: close === 'transport' ? 'crashed' : 'stopped', newRequests: 0 },
 			);
 		});
@@ -1368,7 +1275,10 @@ test('a synchronous bridge send failure settles its waiter and permits a new con
 });
 
 test('a matching schema initializes and decodes additive result fields', async () => {
-	const transport = new FakeTransport(value => ({ ...value, futureCapability: true }));
+	const transport = new FakeTransport(value => ({
+		...value,
+		futureCapability: true,
+	}));
 	const client = new AppServerProtocolClient(transport);
 	try {
 		await client.connect();
@@ -1392,10 +1302,7 @@ test('incompatible versions and missing required capabilities never make a conne
 	]) {
 		const client = new AppServerProtocolClient(new FakeTransport(initialize));
 		try {
-			await assert.rejects(
-				client.connect(),
-				/protocol major mismatch|protocol schema mismatch|capability sessions/,
-			);
+			await assert.rejects(client.connect(), /protocol major mismatch|protocol schema mismatch|capability sessions/);
 			assert.equal(client.state, 'crashed');
 			await assert.rejects(client.request(APP_SERVER_METHODS['session/list'], {}), /not ready/);
 		} finally {
@@ -1429,11 +1336,7 @@ test('connects, initializes, maps renderer requests, and disposes the Web connec
 		hot.requests.map(request => request.method),
 		['initialize', 'session/list'],
 	);
-	assert.equal(
-		(hot.requests[0]?.params as { capabilities: { directoryGrantsHost?: unknown } }).capabilities
-			.directoryGrantsHost,
-		undefined,
-	);
+	assert.equal((hot.requests[0]?.params as { capabilities: { directoryGrantsHost?: unknown } }).capabilities.directoryGrantsHost, undefined);
 	connected.dispose();
 	assert.equal(hot.sentEvents.at(-1), WEB_APP_SERVER_DISCONNECT_EVENT);
 });
@@ -1470,7 +1373,10 @@ test('routes bounded syntax analysis through the connected renderer host', async
 		edits: [{ startOffset: 3, endOffset: 7, text: 'entry' }],
 	});
 	assert.equal(hot.requests.at(-1)?.method, 'syntax/update');
-	const result = await connected.api.syntax.analyze({ documentId: 'model-1', revision: 4 });
+	const result = await connected.api.syntax.analyze({
+		documentId: 'model-1',
+		revision: 4,
+	});
 
 	assert.deepEqual(result, {
 		revision: 4,
@@ -1572,10 +1478,7 @@ test('keeps the language failure when completion wins the cancel race', async ()
 	hot.rejectAt(-2, { code: -32072, message: 'LanguageRequestFailed', data: { kind: 'LanguageRequestFailed' } });
 	hot.respondAt(-1, { status: 'completed' });
 
-	await assert.rejects(
-		pending,
-		(error: unknown) => error instanceof AppServerRemoteError && error.errorName === 'LanguageRequestFailed',
-	);
+	await assert.rejects(pending, (error: unknown) => error instanceof AppServerRemoteError && error.errorName === 'LanguageRequestFailed');
 	connected.dispose();
 });
 
@@ -1710,16 +1613,10 @@ test('extension backend routes validate generated parameters before dispatch', a
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	using cleanup = toDisposable(() => connected.dispose());
 	const signal = new AbortController().signal;
-	assert.deepEqual(
-		JSON.parse(JSON.stringify(await connected.api.extensionBackend.request('session/list', {}, signal))),
-		{ sessions: [] },
-	);
+	assert.deepEqual(JSON.parse(JSON.stringify(await connected.api.extensionBackend.request('session/list', {}, signal))), { sessions: [] });
 	const count = transport.requests.length;
 	for (const params of [[], { unknown: true }]) {
-		await assert.rejects(
-			connected.api.extensionBackend.request('session/list', params, signal),
-			AppServerProtocolDecodeError,
-		);
+		await assert.rejects(connected.api.extensionBackend.request('session/list', params, signal), AppServerProtocolDecodeError);
 	}
 	for (const method of ['unknown/route', '__proto__']) {
 		await assert.rejects(connected.api.extensionBackend.request(method, {}, signal), TypeError);
@@ -1850,10 +1747,7 @@ test('Call service is assembled from the negotiated contract and ignores stale o
 
 for (const [operation, message] of [
 	[{ operation: 'readWorkspaceFile', path: 'data.txt' }, 'Workspace file requests must be handled by App Server'],
-	[
-		{ operation: 'coreService', request: { service: 'secretLoad', key: 'token' } },
-		'Core service requests must be handled by App Server',
-	],
+	[{ operation: 'coreService', request: { service: 'secretLoad', key: 'token' } }, 'Core service requests must be handled by App Server'],
 	[
 		{
 			operation: 'coreService',
@@ -2015,10 +1909,7 @@ test('file fuzzy cancellation keeps its request until the terminal reply and dis
 	transport.respondAt(-2, { matches: [{ path: 'stale.txt', score: 50 }], totalMatches: 1, freshness: 'indexed' });
 	await rejected;
 	const count = transport.requests.length;
-	await assert.rejects(
-		connected.api.fileSearch.fuzzy(directory, { query: 'stale', maxResults: 10 }, controller.signal),
-		isCancellationError,
-	);
+	await assert.rejects(connected.api.fileSearch.fuzzy(directory, { query: 'stale', maxResults: 10 }, controller.signal), isCancellationError);
 	assert.equal(transport.requests.length, count);
 });
 
@@ -2179,10 +2070,7 @@ test('Voice adapter binds task requests to the original decoded media source and
 	const voice = cleanup.add(new AppServerAgentVoiceService(client));
 	const tasks: string[] = [];
 	cleanup.add(voice.onDidRequestTask(task => tasks.push(task.commandId)));
-	const pending = voice.start(
-		{ sessionId: 'source', threadId: 'thread' },
-		{ connectionId: 'openai', modelId: 'speech', voice: 'alloy' },
-	);
+	const pending = voice.start({ sessionId: 'source', threadId: 'thread' }, { connectionId: 'openai', modelId: 'speech', voice: 'alloy' });
 	const params = transport.requests.at(-1)!.params as { resourceId: string; operationId: string };
 	const status = {
 		resourceId: params.resourceId,
@@ -2245,11 +2133,7 @@ test('Voice start cancellation retires its original operation and stops an ackno
 	await client.connect();
 	const voice = cleanup.add(new AppServerAgentVoiceService(client));
 	const controller = new AbortController();
-	const pending = voice.start(
-		{ sessionId: 'source', threadId: 'thread' },
-		{ connectionId: 'openai' },
-		controller.signal,
-	);
+	const pending = voice.start({ sessionId: 'source', threadId: 'thread' }, { connectionId: 'openai' }, controller.signal);
 	const rejected = assert.rejects(pending, isCancellationError);
 	const requestIndex = transport.requests.length - 1;
 	const params = transport.requests.at(-1)!.params as { resourceId: string; operationId: string };
@@ -2305,11 +2189,7 @@ test('Voice cancellation preserves cancellation semantics when the original star
 	await client.connect();
 	const voice = cleanup.add(new AppServerAgentVoiceService(client));
 	const controller = new AbortController();
-	const pending = voice.start(
-		{ sessionId: 'source', threadId: 'thread' },
-		{ connectionId: 'openai' },
-		controller.signal,
-	);
+	const pending = voice.start({ sessionId: 'source', threadId: 'thread' }, { connectionId: 'openai' }, controller.signal);
 	const rejected = assert.rejects(pending, isCancellationError);
 	const startIndex = transport.requests.length - 1;
 	controller.abort();

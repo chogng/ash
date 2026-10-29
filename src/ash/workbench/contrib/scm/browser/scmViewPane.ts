@@ -1,9 +1,6 @@
 import { defaultButtonStyles, defaultCountBadgeStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import {
-	ButtonActionViewItem,
-	type ActionViewItemOptions,
-} from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { ButtonActionViewItem, type ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button, ButtonWithDropdown } from '../../../../base/browser/ui/button/button.js';
 import { CountBadge } from '../../../../base/browser/ui/countBadge/countBadge.js';
 import type { TreeElement as ObjectTreeElement } from '../../../../base/browser/ui/tree/tree.js';
@@ -50,10 +47,7 @@ import type { IContextKey } from '../../../../platform/contextkey/common/context
 import { Action2, IMenuService, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
-import {
-	IContextKeyService,
-	type IScopedContextKeyService,
-} from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextKeyService, type IScopedContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -79,10 +73,7 @@ export class ScmViewPane extends ViewPane {
 	private renderedProvider: ISCMProvider | undefined;
 	private renderedGroups: readonly ISCMResourceGroup[] | undefined;
 	private readonly resourceElements = new WeakMap<ISCMResource, Extract<TreeElement, { resource: ISCMResource }>>();
-	private readonly groupElements = new WeakMap<
-		ISCMResourceGroup,
-		Extract<TreeElement, { group: ISCMResourceGroup }>
-	>();
+	private readonly groupElements = new WeakMap<ISCMResourceGroup, Extract<TreeElement, { group: ISCMResourceGroup }>>();
 	private readonly titleToolbar = this._register(new MutableDisposable<MenuWorkbenchToolBar>());
 	private readonly titleContext: IScopedContextKeyService;
 	private readonly providerContext: IContextKey<string>;
@@ -147,40 +138,25 @@ export class ScmViewPane extends ViewPane {
 				scrolling: 'managed',
 				modelOptions: { identityProvider: { getId: element => element.id } },
 				keyboardNavigationLabelProvider: {
-					getKeyboardNavigationLabel: element =>
-						'group' in element
-							? element.group.label
-							: 'folder' in element
-								? element.folder.name
-								: element.resource.path,
+					getKeyboardNavigationLabel: element => ('group' in element ? element.group.label : 'folder' in element ? element.folder.name : element.resource.path),
 				},
 				expandOnlyOnTwistieClick: false,
 				expandOnDoubleClick: false,
 				reuseRows: true,
 				onDidRemoveRow: row => {
-					const content = row.querySelector<HTMLElement>(
-						'.ash-scm-section-heading, .ash-scm-change, .ash-scm-folder',
-					);
+					const content = row.querySelector<HTMLElement>('.ash-scm-section-heading, .ash-scm-change, .ash-scm-folder');
 					if (content) {
 						this.renderedRows.deleteAndDispose(content);
 					}
 				},
-				renderElement: element =>
-					'group' in element
-						? this.renderGroup(element.group)
-						: 'folder' in element
-							? this.renderFolder(element.folder)
-							: this.renderResource(element),
+				renderElement: element => ('group' in element ? this.renderGroup(element.group) : 'folder' in element ? this.renderFolder(element.folder) : this.renderResource(element)),
 			}),
 		);
 		const updateTwistieLayout = () => {
 			const theme = resourceIconRenderer.getFileIconTheme();
 			// Leaf file icons occupy the unused arrow column; folders retain their expansion arrows.
 			this.tree.updateOptions({
-				twistieAdditionalCssClass: element =>
-					'resource' in element && theme.hasFileIcons
-						? 'ash-tree-twistie-hidden'
-						: 'ash-tree-twistie-with-icon-gap',
+				twistieAdditionalCssClass: element => ('resource' in element && theme.hasFileIcons ? 'ash-tree-twistie-hidden' : 'ash-tree-twistie-with-icon-gap'),
 			});
 		};
 		updateTwistieLayout();
@@ -192,16 +168,11 @@ export class ScmViewPane extends ViewPane {
 				'Use the title toolbar and More Actions to run provider actions or change list, tree and sorting. Files are grouped by directory. Use Up and Down to navigate and preview files, Left to collapse, and Right to expand a group or directory. Press Enter or Space on a directory to toggle it. Press Shift+F10 on a group in tree view, then choose Collapse All to fold its directories. Press Enter on a file to open and pin it, or Space to preview while keeping focus here. Hold Ctrl, Command, or Alt when clicking or pressing Enter to open in a side group. Double-click pins the file and focuses its editor. Use Tab to reach the inline group and file actions. The View All action on a group opens its files together in a multi-file diff editor. The inline Open File action opens the editable working file, including from staged changes. Press F1 to find commands contributed by the provider. Previous resource group: workbench.scm.action.focusPreviousResourceGroup. Next resource group: workbench.scm.action.focusNextResourceGroup. Assign shortcuts in Keyboard Shortcuts to cycle through this repository’s groups without changing their expansion.',
 			),
 		);
-		this.welcomeController = this._register(
-			instantiationService.createInstance(ViewWelcomeController, this.contentElement, this, ViewsRegistry),
-		);
+		this.welcomeController = this._register(instantiationService.createInstance(ViewWelcomeController, this.contentElement, this, ViewsRegistry));
 		this.trackBodyMinimum(changesContainer, options.minimumBodySize ?? 120, () => !this.welcomeController.enabled);
 		this._register(
 			this.onDidFocus(() => {
-				if (
-					this.welcomeController.enabled &&
-					configurationService.getValue<boolean>(AccessibilityVerbositySettingId.Scm) !== false
-				) {
+				if (this.welcomeController.enabled && configurationService.getValue<boolean>(AccessibilityVerbositySettingId.Scm) !== false) {
 					status(localize('scm.welcome.helpHint', 'Press Alt+F1 for accessibility help.'));
 				}
 			}),
@@ -210,10 +181,7 @@ export class ScmViewPane extends ViewPane {
 			this.tree.onDidOpen(event => {
 				if ('resource' in event.element) {
 					void event.element.resource.open(event.editorOptions, event.sideBySide);
-				} else if (
-					'key' in event.browserEvent &&
-					(event.browserEvent.key === 'Enter' || event.browserEvent.key === ' ')
-				) {
+				} else if ('key' in event.browserEvent && (event.browserEvent.key === 'Enter' || event.browserEvent.key === ' ')) {
 					this.tree.toggleCollapsed(event.element.id);
 				}
 			}),
@@ -222,23 +190,14 @@ export class ScmViewPane extends ViewPane {
 			addDisposableListener(this.tree.element, 'keydown', event => {
 				const keyboardEvent = event as KeyboardEvent;
 				// macOS menu-key events keep the host path, whose keyboard normalization differs from other platforms.
-				if (
-					keyboardEvent.target !== this.tree.element ||
-					!(
-						(!isMacintosh && keyboardEvent.key === 'ContextMenu') ||
-						(keyboardEvent.shiftKey && keyboardEvent.key === 'F10')
-					)
-				) {
+				if (keyboardEvent.target !== this.tree.element || !((!isMacintosh && keyboardEvent.key === 'ContextMenu') || (keyboardEvent.shiftKey && keyboardEvent.key === 'F10'))) {
 					return;
 				}
 				const focused = this.tree.focus;
 				if (focused && 'group' in focused && this.viewMode === 'tree') {
 					keyboardEvent.preventDefault();
 					keyboardEvent.stopPropagation();
-					const anchor =
-						this.tree.element.ownerDocument.getElementById(
-							this.tree.element.getAttribute('aria-activedescendant') ?? '',
-						) ?? this.tree.element;
+					const anchor = this.tree.element.ownerDocument.getElementById(this.tree.element.getAttribute('aria-activedescendant') ?? '') ?? this.tree.element;
 					this.showGroupMenu(focused.group, anchor);
 				}
 			}),
@@ -256,13 +215,7 @@ export class ScmViewPane extends ViewPane {
 				'keydown',
 				event => {
 					const keyboardEvent = event as KeyboardEvent;
-					if (
-						!keyboardEvent.isComposing &&
-						!keyboardEvent.altKey &&
-						!keyboardEvent.shiftKey &&
-						keyboardEvent.key === 'Enter' &&
-						(keyboardEvent.ctrlKey || keyboardEvent.metaKey)
-					) {
+					if (!keyboardEvent.isComposing && !keyboardEvent.altKey && !keyboardEvent.shiftKey && keyboardEvent.key === 'Enter' && (keyboardEvent.ctrlKey || keyboardEvent.metaKey)) {
 						event.preventDefault();
 						event.stopPropagation();
 						void this.commit();
@@ -304,17 +257,11 @@ export class ScmViewPane extends ViewPane {
 		this.providerListener.value = provider?.onDidChangeResources(() => this.render());
 		// Capture the repository when constructing actions; a later selection must not retarget an open menu.
 		this.titleToolbar.clear();
-		this.titleToolbar.value = new MenuWorkbenchToolBar(
-			this.headerActionsElement,
-			this.menuService,
-			this.contextMenuProvider,
-			MenuId.SCMTitle,
-			{
-				ariaLabel: localize('scm.titleActions', 'Source control actions'),
-				contextKeyService: this.titleContext,
-				menuOptions: { arg: this.scmViewService.activeRepository?.id },
-			},
-		);
+		this.titleToolbar.value = new MenuWorkbenchToolBar(this.headerActionsElement, this.menuService, this.contextMenuProvider, MenuId.SCMTitle, {
+			ariaLabel: localize('scm.titleActions', 'Source control actions'),
+			contextKeyService: this.titleContext,
+			menuOptions: { arg: this.scmViewService.activeRepository?.id },
+		});
 		this.render();
 	}
 
@@ -335,8 +282,7 @@ export class ScmViewPane extends ViewPane {
 		const groups = this.tree.model.rootNodes;
 		if (groups.length === 0) return;
 		// Only a group header with DOM focus continues a cycle; files, folders and other controls start at the first group.
-		const focused =
-			this.tree.element.ownerDocument.activeElement === this.tree.element ? this.tree.focus : undefined;
+		const focused = this.tree.element.ownerDocument.activeElement === this.tree.element ? this.tree.focus : undefined;
 		const current = groups.findIndex(node => node.element === focused);
 		if (current >= 0 && groups.length === 1) return;
 		const target = groups[current < 0 ? 0 : (current + direction + groups.length) % groups.length]!;
@@ -460,18 +406,13 @@ export class ScmViewPane extends ViewPane {
 		this.titleContext.bufferChangeEvents(() => {
 			this.providerContext.set(provider?.providerId ?? '');
 			this.busyContext.set(provider?.isBusy === true);
-			this.canCommitContext.set(
-				provider?.isBusy !== true && provider?.input.enabled === true && provider.input.canAccept,
-			);
+			this.canCommitContext.set(provider?.isBusy !== true && provider?.input.enabled === true && provider.input.canAccept);
 		});
 		const descriptor = provider?.actionButton;
 		const hasDropdown = descriptor?.secondaryCommands?.some(group => group.length > 0) === true;
 		let actionButton = this.commitActionButton.value;
 		if (!actionButton || actionButton instanceof ButtonWithDropdown !== hasDropdown) {
-			const hadFocus =
-				actionButton instanceof ButtonWithDropdown
-					? actionButton.element.contains(this.element.ownerDocument.activeElement)
-					: actionButton?.hasFocus();
+			const hadFocus = actionButton instanceof ButtonWithDropdown ? actionButton.element.contains(this.element.ownerDocument.activeElement) : actionButton?.hasFocus();
 			const options = {
 				...defaultButtonStyles,
 				label: localize('scm.commit', 'Commit'),
@@ -492,10 +433,7 @@ export class ScmViewPane extends ViewPane {
 			if (actionButton instanceof ButtonWithDropdown) {
 				const dropdown = actionButton.dropdownButton;
 				dropdown.toggleClassName('ash-scm-commit-dropdown', true);
-				dropdown.domNode.setAttribute(
-					'aria-label',
-					localize('scm.actionButton.moreActions', 'More commit actions'),
-				);
+				dropdown.domNode.setAttribute('aria-label', localize('scm.actionButton.moreActions', 'More commit actions'));
 				dropdown.setTitle(localize('scm.actionButton.moreActions', 'More commit actions'));
 			}
 			this.commitTooltip = '';
@@ -503,14 +441,7 @@ export class ScmViewPane extends ViewPane {
 				this.commitButton.focus();
 			}
 		}
-		if (
-			actionButton instanceof ButtonWithDropdown &&
-			(!provider ||
-				provider !== this.renderedProvider ||
-				provider.isBusy ||
-				provider.input.buttonVisible === false ||
-				!descriptor?.enabled)
-		) {
+		if (actionButton instanceof ButtonWithDropdown && (!provider || provider !== this.renderedProvider || provider.isBusy || provider.input.buttonVisible === false || !descriptor?.enabled)) {
 			actionButton.enabled = false;
 		}
 		this.commitForm.hidden = !provider;
@@ -518,16 +449,11 @@ export class ScmViewPane extends ViewPane {
 		this.commitInput.input = provider?.input;
 		this.commitInput.domNode.hidden = provider?.input.visible === false;
 		this.commitActions.hidden = provider?.input.buttonVisible === false;
-		const buttonTitle =
-			descriptor?.command.title ?? provider?.input.buttonLabel ?? localize('scm.commit', 'Commit');
+		const buttonTitle = descriptor?.command.title ?? provider?.input.buttonLabel ?? localize('scm.commit', 'Commit');
 		const buttonLabel = stripIcons(buttonTitle).trim();
 		const iconToken = buttonTitle.match(/^\$\(([a-z0-9-]+)(?:~([a-z]+))?\)/u);
 		const icon = iconToken?.[1];
-		this.commitButton.icon = icon
-			? getRegisteredIcon(icon, this.element.ownerDocument)
-			: descriptor
-				? undefined
-				: Lxicon.check;
+		this.commitButton.icon = icon ? getRegisteredIcon(icon, this.element.ownerDocument) : descriptor ? undefined : Lxicon.check;
 		this.commitButton.toggleClassName('ash-scm-commit-spinning', iconToken?.[2] === 'spin');
 		if (this.commitButton.label !== buttonLabel) this.commitButton.label = buttonLabel;
 		const buttonTooltip = descriptor?.command.tooltip ?? provider?.input.buttonTooltip ?? buttonLabel;
@@ -535,10 +461,7 @@ export class ScmViewPane extends ViewPane {
 			this.commitTooltip = buttonTooltip;
 			this.commitButton.setTitle(buttonTooltip);
 		}
-		actionButton.enabled =
-			provider?.isBusy !== true &&
-			provider?.input.enabled === true &&
-			(descriptor?.enabled ?? provider.input.canAccept);
+		actionButton.enabled = provider?.isBusy !== true && provider?.input.enabled === true && (descriptor?.enabled ?? provider.input.canAccept);
 		this.statusElement.classList.toggle('ash-aria-live', !!provider);
 		this.statusElement.hidden = !provider;
 		this.statusElement.textContent = provider?.input.validationMessage || provider?.statusMessage || '';
@@ -550,11 +473,7 @@ export class ScmViewPane extends ViewPane {
 			// unchanged row DOM, listeners and focus when another resource changes.
 			this.tree.setChildren(
 				(groups ?? []).map(group => {
-					const resources = new ResourceTree<ISCMResource, ISCMResourceGroup>(
-						group,
-						provider!.rootUri,
-						extUriBiasedIgnorePathCase,
-					);
+					const resources = new ResourceTree<ISCMResource, ISCMResourceGroup>(group, provider!.rootUri, extUriBiasedIgnorePathCase);
 					for (const resource of group.resources) {
 						resources.add(resource.sourceUri, resource);
 					}
@@ -566,10 +485,7 @@ export class ScmViewPane extends ViewPane {
 					}
 					return {
 						element,
-						children:
-							this.viewMode === 'tree'
-								? this.resourceChildren(resources.root, active!.id)
-								: this.listChildren(group, active!.id),
+						children: this.viewMode === 'tree' ? this.resourceChildren(resources.root, active!.id) : this.listChildren(group, active!.id),
 					};
 				}),
 			);
@@ -590,14 +506,7 @@ export class ScmViewPane extends ViewPane {
 				return primary || left.path.localeCompare(right.path);
 			})
 			.map(resource => ({
-				element: this.resourceElement(
-					resource,
-					JSON.stringify([
-						repositoryId,
-						group.id,
-						extUriBiasedIgnorePathCase.getComparisonKey(resource.sourceUri),
-					]),
-				),
+				element: this.resourceElement(resource, JSON.stringify([repositoryId, group.id, extUriBiasedIgnorePathCase.getComparisonKey(resource.sourceUri)])),
 			}));
 	}
 	private resourceElement(resource: ISCMResource, id: string): Extract<TreeElement, { resource: ISCMResource }> {
@@ -609,24 +518,11 @@ export class ScmViewPane extends ViewPane {
 		return element;
 	}
 
-	private resourceChildren(
-		parent: IResourceNode<ISCMResource, ISCMResourceGroup>,
-		repositoryId: string,
-	): ObjectTreeElement<TreeElement>[] {
-		const nodes = [...parent.children].sort(
-			(left, right) =>
-				Number(left.element !== undefined) - Number(right.element !== undefined) ||
-				left.name.localeCompare(right.name),
-		);
+	private resourceChildren(parent: IResourceNode<ISCMResource, ISCMResourceGroup>, repositoryId: string): ObjectTreeElement<TreeElement>[] {
+		const nodes = [...parent.children].sort((left, right) => Number(left.element !== undefined) - Number(right.element !== undefined) || left.name.localeCompare(right.name));
 		return nodes.map(node => {
-			const id = JSON.stringify([
-				repositoryId,
-				node.context.id,
-				extUriBiasedIgnorePathCase.getComparisonKey(node.uri),
-			]);
-			return node.element
-				? { element: this.resourceElement(node.element, id) }
-				: { element: { id, folder: node }, children: this.resourceChildren(node, repositoryId) };
+			const id = JSON.stringify([repositoryId, node.context.id, extUriBiasedIgnorePathCase.getComparisonKey(node.uri)]);
+			return node.element ? { element: this.resourceElement(node.element, id) } : { element: { id, folder: node }, children: this.resourceChildren(node, repositoryId) };
 		});
 	}
 
@@ -664,13 +560,13 @@ export class ScmViewPane extends ViewPane {
 				this.showGroupMenu(group, heading, event as MouseEvent);
 			}),
 		);
-		this.renderActionToolbar(heading, group.actions, `${group.label} actions`, resources).classList.add(
-			'ash-scm-section-actions',
-		);
+		this.renderActionToolbar(heading, group.actions, `${group.label} actions`, resources).classList.add('ash-scm-section-actions');
 		const count = resources.add(
 			new CountBadge(
 				heading,
-				{ titleFormat: localize('scm.resourceCount', '{0} changes') },
+				{
+					titleFormat: localize('scm.resourceCount', '{0} changes'),
+				},
 				defaultCountBadgeStyles,
 			),
 		);
@@ -724,9 +620,7 @@ export class ScmViewPane extends ViewPane {
 			}),
 		);
 		item.append(open);
-		this.renderActionToolbar(item, resource.actions, `Actions for ${resource.path}`, resources).classList.add(
-			'ash-scm-change-actions',
-		);
+		this.renderActionToolbar(item, resource.actions, `Actions for ${resource.path}`, resources).classList.add('ash-scm-change-actions');
 		const badge = h(document, 'span');
 		badge.className = `ash-scm-change-status status-${resource.decorations.kind}`;
 		badge.textContent = resource.decorations.badge;
@@ -735,12 +629,7 @@ export class ScmViewPane extends ViewPane {
 		return item;
 	}
 
-	private renderActionToolbar(
-		container: HTMLElement,
-		actions: readonly IAction[],
-		ariaLabel: string,
-		resources: DisposableStore,
-	): HTMLDivElement {
+	private renderActionToolbar(container: HTMLElement, actions: readonly IAction[], ariaLabel: string, resources: DisposableStore): HTMLDivElement {
 		const toolbar = resources.add(
 			new WorkbenchToolBar(container, this.contextMenuProvider, {
 				ariaLabel,

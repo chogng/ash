@@ -29,53 +29,28 @@ import { IEditorGroupsService } from '../../../../services/editor/common/editorG
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { FileEditorInput } from '../../browser/editors/fileEditorInput.js';
 import { REVEAL_IN_EXPLORER_COMMAND_ID } from '../../browser/fileConstants.js';
-import {
-	ActiveEditorPinnedContext,
-	ActiveEditorStickyContext,
-	EditorsVisibleContext,
-	MultipleEditorsSelectedInGroupContext,
-	ResourceSchemeContext,
-} from '../../../../common/contextkeys.js';
+import { ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorsVisibleContext, MultipleEditorsSelectedInGroupContext, ResourceSchemeContext } from '../../../../common/contextkeys.js';
 import { createBinaryDiffEditorInput, createDiffEditorInput } from '../../../../common/editor/diffEditorInput.js';
 import { JSDOM } from 'jsdom';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { Schemas } from '../../../../../base/common/network.js';
-import {
-	IClipboardService,
-	type IClipboardResources,
-} from '../../../../../platform/clipboard/common/clipboardService.js';
+import { IClipboardService, type IClipboardResources } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IDialogService, type IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import { Event } from '../../../../../base/common/event.js';
-import {
-	IFileService,
-	FileKind,
-	FileNotFoundError,
-	type IFileService as FileServiceContract,
-} from '../../../../../platform/files/common/files.js';
+import { IFileService, FileKind, FileNotFoundError, type IFileService as FileServiceContract } from '../../../../../platform/files/common/files.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { ISystemFileTransferService } from '../../../../../platform/files/common/systemFileTransferService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import {
-	IQuickInputService,
-	type IQuickInputService as QuickInputServiceContract,
-} from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickInputService as QuickInputServiceContract } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import {
-	IEditorService,
-	type IEditorService as EditorServiceContract,
-} from '../../../../services/editor/common/editorService.js';
+import { IEditorService, type IEditorService as EditorServiceContract } from '../../../../services/editor/common/editorService.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import type { IEditorPart as EditorPartContract } from '../../../../browser/parts/editor/editorPart.js';
-import {
-	COPY_PATH_COMMAND_ID,
-	COPY_RELATIVE_PATH_COMMAND_ID,
-	OPEN_FILE_COMMAND_ID,
-	SAVE_FILE_COMMAND_ID,
-} from '../../browser/fileConstants.js';
+import { COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID, OPEN_FILE_COMMAND_ID, SAVE_FILE_COMMAND_ID } from '../../browser/fileConstants.js';
 import {
 	CANCEL_CUT_COMMAND_ID,
 	COPY_FILE_COMMAND_ID,
@@ -95,10 +70,7 @@ import { INativeHostService } from '../../../../common/services.js';
 import type { INativeHostApi } from '../../../../../platform/native/common/nativeHost.js';
 import { REVEAL_IN_OS_COMMAND_ID } from '../../electron-browser/fileActions.contribution.js';
 import { NATIVE_HOST_REVEAL_FILE_CHANNEL } from '../../../../../platform/native/common/nativeHost.js';
-import {
-	nativeHostIpcRoutes,
-	type INativeHostMainService,
-} from '../../../../../platform/native/electron-main/nativeHostIpc.js';
+import { nativeHostIpcRoutes, type INativeHostMainService } from '../../../../../platform/native/electron-main/nativeHostIpc.js';
 
 const configurations = new DisposableStore();
 afterEach(() => configurations.clear());
@@ -135,18 +107,14 @@ test('attachment side-open commands preserve explicit source and range without c
 			target: 'sideGroup',
 		},
 	]);
-	await assert.rejects(
-		commands.executeCommand(OPEN_TO_SIDE_COMMAND_ID, 'file:///project/invalid.ts'),
-		/requires a resource URI/,
-	);
+	await assert.rejects(commands.executeCommand(OPEN_TO_SIDE_COMMAND_ID, 'file:///project/invalid.ts'), /requires a resource URI/);
 });
 
 test('Explorer path and side-opening defaults match VS Code inside and outside editor focus', async () => {
 	await import('../../browser/fileActions.contribution.js');
 	using contexts = new ContextKeyService();
 	const resolver = new KeybindingResolver();
-	const label = (command: string) =>
-		getKeybindingLabel(resolver.lookupKeybinding(command, contexts)!, KeybindingLabelStyle.UserSettings);
+	const label = (command: string) => getKeybindingLabel(resolver.lookupKeybinding(command, contexts)!, KeybindingLabelStyle.UserSettings);
 	const path = isWindows ? 'shift+alt+c' : isMacintosh ? 'alt+cmd+c' : 'ctrl+alt+c';
 	const relative = isMacintosh ? 'shift+alt+cmd+c' : isWindows ? 'ctrl+k ctrl+shift+c' : 'ctrl+shift+alt+c';
 	assert.equal(label(COPY_PATH_COMMAND_ID), path);
@@ -154,10 +122,7 @@ test('Explorer path and side-opening defaults match VS Code inside and outside e
 	assert.equal(label(OPEN_TO_SIDE_COMMAND_ID), 'ctrl+enter');
 	contexts.setContext('editorFocus', true);
 	assert.equal(label(COPY_PATH_COMMAND_ID), isWindows ? path : `${isMacintosh ? 'cmd' : 'ctrl'}+k ${path}`);
-	assert.equal(
-		label(COPY_RELATIVE_PATH_COMMAND_ID),
-		isWindows ? relative : `${isMacintosh ? 'cmd' : 'ctrl'}+k ${relative}`,
-	);
+	assert.equal(label(COPY_RELATIVE_PATH_COMMAND_ID), isWindows ? relative : `${isMacintosh ? 'cmd' : 'ctrl'}+k ${relative}`);
 });
 
 test('Save File command saves the active editor', async () => {
@@ -253,10 +218,7 @@ for (const fileRoot of fileCommandRoots) {
 			services.registerInstance(IQuickInputService, {
 				input: async options => {
 					assert.equal(options.title, 'New File Name');
-					assert.equal(
-						await options.validateInput?.('../escape'),
-						'Enter a valid file name for the target file system.',
-					);
+					assert.equal(await options.validateInput?.('../escape'), 'Enter a valid file name for the target file system.');
 					assert.equal(await options.validateInput?.('new %中.txt'), undefined);
 					return 'new %中.txt';
 				},
@@ -408,10 +370,7 @@ test('Explorer copy and cut paste selected files with conflict names', async () 
 	await commands.executeCommand(COPY_FILE_COMMAND_ID);
 	selected = [folder];
 	await commands.executeCommand(PASTE_FILE_COMMAND_ID);
-	assert.deepEqual(copied, [
-		'/project/one.txt -> /project/dest/one copy.txt',
-		'/project/two.txt -> /project/dest/two.txt',
-	]);
+	assert.deepEqual(copied, ['/project/one.txt -> /project/dest/one copy.txt', '/project/two.txt -> /project/dest/two.txt']);
 	selected = [second];
 	await commands.executeCommand(CUT_FILE_COMMAND_ID);
 	selected = [folder];
@@ -424,10 +383,7 @@ test('Explorer copy and cut paste selected files with conflict names', async () 
 	await commands.executeCommand(CANCEL_CUT_COMMAND_ID);
 	assert.equal(explorer.getToCopy().items.length, 0);
 	assert.deepEqual(resourceClipboard, { resources: [first.resource], operation: 'copy' });
-	selected = [
-		new ExplorerItem(URI.file('/project/src'), 'src', FileKind.Directory),
-		new ExplorerItem(URI.file('/project/src/child.txt'), 'child.txt', FileKind.File),
-	];
+	selected = [new ExplorerItem(URI.file('/project/src'), 'src', FileKind.Directory), new ExplorerItem(URI.file('/project/src/child.txt'), 'child.txt', FileKind.File)];
 	await commands.executeCommand(COPY_FILE_COMMAND_ID);
 	assert.deepEqual(
 		explorer.getToCopy().items.map(item => item.name),
@@ -490,8 +446,7 @@ test('Explorer paste keeps copy and cut operations across windows', async () => 
 	secondServices.registerInstance(ISystemFileTransferService, { pasteSystemFiles: async () => false });
 	secondServices.registerInstance(IFileService, {
 		stat: async (resource: URI) => {
-			if (resource.toString() === source.toString())
-				return { resource, kind: FileKind.File, sizeBytes: 3, readonly: false, modifiedAtMillis: undefined };
+			if (resource.toString() === source.toString()) return { resource, kind: FileKind.File, sizeBytes: 3, readonly: false, modifiedAtMillis: undefined };
 			throw new FileNotFoundError(resource);
 		},
 		copy: async (from: URI, to: URI) => {
@@ -507,10 +462,7 @@ test('Explorer paste keeps copy and cut operations across windows', async () => 
 	await firstCommands.executeCommand(CUT_FILE_COMMAND_ID);
 	pasteDestination = URI.file('/project/other');
 	await secondCommands.executeCommand(PASTE_FILE_COMMAND_ID);
-	assert.deepEqual(operations, [
-		'copy /project/100% ready.bin -> /project/destination/100% ready.bin',
-		'move /project/100% ready.bin -> /project/other/100% ready.bin',
-	]);
+	assert.deepEqual(operations, ['copy /project/100% ready.bin -> /project/destination/100% ready.bin', 'move /project/100% ready.bin -> /project/other/100% ready.bin']);
 });
 
 test('Explorer cut across nested workspace roots copies before deleting the source', async () => {
@@ -737,10 +689,7 @@ test('Copy Path commands copy the active file and its workspace-relative path', 
 		await commands.executeCommand(COPY_RELATIVE_PATH_COMMAND_ID);
 
 		assert.deepEqual(copied, [file.fsPath, 'src/main.ts']);
-		activeEditor = createDiffEditorInput(
-			{ resource: URI.parse('git-change:/src/main.ts?revision=1') },
-			{ resource: file },
-		);
+		activeEditor = createDiffEditorInput({ resource: URI.parse('git-change:/src/main.ts?revision=1') }, { resource: file });
 		await commands.executeCommand(COPY_PATH_COMMAND_ID);
 		await commands.executeCommand(COPY_RELATIVE_PATH_COMMAND_ID);
 		assert.deepEqual(copied.slice(2), [file.fsPath, 'src/main.ts']);
@@ -748,10 +697,7 @@ test('Copy Path commands copy the active file and its workspace-relative path', 
 		await commands.executeCommand(COPY_PATH_COMMAND_ID);
 		await commands.executeCommand(COPY_RELATIVE_PATH_COMMAND_ID);
 		assert.deepEqual(copied.slice(4), [file.fsPath, 'src/main.ts']);
-		await assert.rejects(
-			commands.executeCommand(COPY_RELATIVE_PATH_COMMAND_ID, URI.file('/outside/other.ts')),
-			/outside the current workspace/,
-		);
+		await assert.rejects(commands.executeCommand(COPY_RELATIVE_PATH_COMMAND_ID, URI.file('/outside/other.ts')), /outside the current workspace/);
 		assert.equal(copied.length, 6);
 	} finally {
 		if (previousDocument) {
@@ -828,10 +774,7 @@ test('Explorer menu commands rename, open beside the editor, and delete the sele
 	services.registerInstance(IQuickInputService, {
 		input: async options => {
 			assert.equal(options.value, 'old.ts');
-			assert.equal(
-				await options.validateInput?.('../escape'),
-				'Enter a valid file name for the target file system.',
-			);
+			assert.equal(await options.validateInput?.('../escape'), 'Enter a valid file name for the target file system.');
 			return 'new.ts';
 		},
 	} as QuickInputServiceContract);
@@ -950,12 +893,7 @@ test('Explorer bulk commands retain multi-selection and deduplicate nested delet
 });
 
 test('Reveal in OS command sends the selected local file to the desktop host', async () => {
-	const locations = [
-		MenuId.ExplorerContext,
-		MenuId.EditorTitleContext,
-		MenuId.EditorTitle,
-		MenuId.CommandPalette,
-	].filter(menu =>
+	const locations = [MenuId.ExplorerContext, MenuId.EditorTitleContext, MenuId.EditorTitle, MenuId.CommandPalette].filter(menu =>
 		MenusRegistry.getMenuItems(menu).some(item => isMenuItem(item) && item.command.id === REVEAL_IN_OS_COMMAND_ID),
 	);
 	assert.deepEqual(locations, [MenuId.ExplorerContext, MenuId.EditorTitleContext, MenuId.CommandPalette]);
@@ -1046,12 +984,7 @@ test('tab copy actions copy clicked and selected file paths without changing the
 	group.selectedInputs = [clicked, second];
 	for (const action of actions) await action.run();
 	const separator = process.platform === 'win32' ? '\r\n' : '\n';
-	assert.deepEqual(copied, [
-		clicked.resource.fsPath,
-		'src/clicked.ts',
-		[clicked.resource.fsPath, second.resource.fsPath].join(separator),
-		['src/clicked.ts', 'src/second.ts'].join(separator),
-	]);
+	assert.deepEqual(copied, [clicked.resource.fsPath, 'src/clicked.ts', [clicked.resource.fsPath, second.resource.fsPath].join(separator), ['src/clicked.ts', 'src/second.ts'].join(separator)]);
 	assert.equal(group.activeInput, active);
 	await assert.rejects(commands.executeCommand(COPY_PATH_COMMAND_ID, { groupId: 'missing' }), TypeError);
 	assert.equal(copied.length, 4);
@@ -1127,9 +1060,7 @@ test('Reveal tab menu groups both destinations and targets the clicked inactive 
 	context.setContext(ActiveEditorPinnedContext.key, false);
 	context.setContext(ActiveEditorStickyContext.key, false);
 	const menus = new MenuService(commands, context);
-	const actions = menus
-		.getMenuActions(MenuId.EditorTitleContext, { arg: { groupId: group.id, editorIndex: 1 } })
-		.find(([name]) => name === '2_files')![1];
+	const actions = menus.getMenuActions(MenuId.EditorTitleContext, { arg: { groupId: group.id, editorIndex: 1 } }).find(([name]) => name === '2_files')![1];
 	assert.deepEqual(
 		menus.getMenuActions(MenuId.EditorTitleContext).map(([name]) => name),
 		['1_close', '1_open', '2_files', '3_preview', '5_split', '7_new_window'],
@@ -1138,16 +1069,8 @@ test('Reveal tab menu groups both destinations and targets the clicked inactive 
 		actions.map(action => action.id),
 		[COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID, REVEAL_IN_EXPLORER_COMMAND_ID, REVEAL_IN_OS_COMMAND_ID],
 	);
-	for (const action of actions.filter(
-		action => action.id === REVEAL_IN_EXPLORER_COMMAND_ID || action.id === REVEAL_IN_OS_COMMAND_ID,
-	))
-		await action.run();
-	assert.deepEqual(effects, [
-		['open', 'ash.explorer'],
-		['select', clicked.resource.toString(), 'force'],
-		['focus'],
-		['finder', clicked.resource.fsPath],
-	]);
+	for (const action of actions.filter(action => action.id === REVEAL_IN_EXPLORER_COMMAND_ID || action.id === REVEAL_IN_OS_COMMAND_ID)) await action.run();
+	assert.deepEqual(effects, [['open', 'ash.explorer'], ['select', clicked.resource.toString(), 'force'], ['focus'], ['finder', clicked.resource.fsPath]]);
 	context.setContext(MultipleEditorsSelectedInGroupContext.key, true);
 	assert.deepEqual(
 		menus
@@ -1202,10 +1125,7 @@ for (const scenario of [
 			const original = scenario.root.joinPathSegment('original.txt');
 			using view = explorer.registerView({
 				refresh: async () => {},
-				getContext: () =>
-					command === RENAME_FILE_COMMAND_ID
-						? [new ExplorerItem(original, 'original.txt', FileKind.File)]
-						: [],
+				getContext: () => (command === RENAME_FILE_COMMAND_ID ? [new ExplorerItem(original, 'original.txt', FileKind.File)] : []),
 				getAccessibleContent: () => '',
 				selectResource: async () => {},
 				focus() {},
@@ -1429,18 +1349,12 @@ test('Explorer read-only policy blocks rename and makes deletion override explic
 });
 
 function createExplorerService(workspace: TestWorkspaceService): ExplorerService {
-	return new ExplorerService(
-		workspace,
-		configurations.add(new FileService()),
-		configurations.add(new InMemoryConfigurationService()),
-	);
+	return new ExplorerService(workspace, configurations.add(new FileService()), configurations.add(new InMemoryConfigurationService()));
 }
 
 function createFileActionServices(os: OperatingSystem = OperatingSystem.Linux): InstantiationService {
 	const host = createDisconnectedRendererApi();
-	const services = configurations.add(
-		new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors())),
-	);
+	const services = configurations.add(new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors())));
 	services.registerInstance(IRendererHostService, {
 		...host,
 		hasAppServer: true,
@@ -1533,11 +1447,7 @@ suite('fileMenus browser component', () => {
 			const compact = rows.filter({ hasText: 'examples/extensions/inspector-with-a-long-folder-name' });
 			await expect(compact).toHaveCount(1);
 			const label = compact.locator('.ash-icon-label-text');
-			await expect(label.locator('.ash-icon-label-segment')).toHaveText([
-				'examples',
-				'extensions',
-				'inspector-with-a-long-folder-name',
-			]);
+			await expect(label.locator('.ash-icon-label-segment')).toHaveText(['examples', 'extensions', 'inspector-with-a-long-folder-name']);
 			await page.locator('#explorer').evaluate(element => (element.style.width = '240px'));
 			const geometry = await label.evaluate(element => {
 				const style = getComputedStyle(element);
@@ -1564,9 +1474,7 @@ suite('fileMenus browser component', () => {
 			});
 			for (const segment of geometry.segments) expect(Math.abs(segment.box - segment.text)).toBeLessThan(1);
 			await label.hover();
-			await expect(page.locator('.ash-hover')).toContainText(
-				'examples/extensions/inspector-with-a-long-folder-name',
-			);
+			await expect(page.locator('.ash-hover')).toContainText('examples/extensions/inspector-with-a-long-folder-name');
 			await page.mouse.move(700, 600);
 			await page.keyboard.press('ArrowLeft');
 			await expect(compact.locator('.ash-explorer-active-segment')).toHaveText('extensions');
@@ -1602,9 +1510,7 @@ suite('fileMenus browser component', () => {
 			await expect(page.locator('.ash-tree')).toBeFocused();
 			await page.locator('#editor-menu').click({ button: 'right' });
 			for (const { title, chords } of labels.slice(4, 6)) {
-				await expect(
-					page.getByRole('menuitem', { name: title, exact: true }).locator('.ash-menu-keybinding kbd'),
-				).toHaveText(chords);
+				await expect(page.getByRole('menuitem', { name: title, exact: true }).locator('.ash-menu-keybinding kbd')).toHaveText(chords);
 			}
 			expect(errors).toEqual([]);
 		});
@@ -1637,21 +1543,13 @@ suite('fileMenus browser component', () => {
 				await page.keyboard.press(shortcut);
 			}
 		};
-		const expectedPath = await page.evaluate(() =>
-			navigator.userAgent.includes('Windows') ? '\\workspace\\main.ts' : '/workspace/main.ts',
-		);
+		const expectedPath = await page.evaluate(() => (navigator.userAgent.includes('Windows') ? '\\workspace\\main.ts' : '/workspace/main.ts'));
 		await pressCommand('copyFilePath');
-		await expect
-			.poll(() => page.evaluate(() => window.ashFileMenusIntegration.clipboard()))
-			.toEqual([expectedPath]);
+		await expect.poll(() => page.evaluate(() => window.ashFileMenusIntegration.clipboard())).toEqual([expectedPath]);
 		await pressCommand('copyRelativeFilePath');
-		await expect
-			.poll(() => page.evaluate(() => window.ashFileMenusIntegration.clipboard()))
-			.toEqual([expectedPath, 'main.ts']);
+		await expect.poll(() => page.evaluate(() => window.ashFileMenusIntegration.clipboard())).toEqual([expectedPath, 'main.ts']);
 		await pressCommand('explorer.openToSide');
-		await expect
-			.poll(() => page.evaluate(() => window.ashFileMenusIntegration.opened()))
-			.toEqual([{ resource: 'file:///workspace/main.ts', target: 'sideGroup' }]);
+		await expect.poll(() => page.evaluate(() => window.ashFileMenusIntegration.opened())).toEqual([{ resource: 'file:///workspace/main.ts', target: 'sideGroup' }]);
 	});
 
 	suite('Windows file menu defaults', () => {
@@ -1679,9 +1577,7 @@ suite('fileMenus browser component', () => {
 
 		await page.goto('/fileMenus.html?applicationMenu');
 		await page.waitForFunction(() => !!window.ashFileMenusIntegration);
-		const trigger = page
-			.getByRole('toolbar', { name: 'Title bar left actions' })
-			.getByRole('button', { name: 'Application menu' });
+		const trigger = page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('button', { name: 'Application menu' });
 		await expect(trigger).toHaveCount(1);
 		await expect(trigger).toHaveAccessibleName('Application menu');
 		await expect(trigger.locator('.ash-icon')).toBeVisible();
@@ -1795,11 +1691,7 @@ suite('fileMenus browser component', () => {
 			const slot = item.locator('.ash-menu-leading-slot');
 			const icon = item.locator(iconSelector);
 			const label = item.locator('.ash-button-label');
-			const [slotBounds, iconBounds, labelBounds] = await Promise.all([
-				slot.boundingBox(),
-				icon.boundingBox(),
-				label.boundingBox(),
-			]);
+			const [slotBounds, iconBounds, labelBounds] = await Promise.all([slot.boundingBox(), icon.boundingBox(), label.boundingBox()]);
 			expect(slotBounds).not.toBeNull();
 			expect(iconBounds).not.toBeNull();
 			expect(labelBounds).not.toBeNull();

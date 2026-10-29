@@ -76,9 +76,7 @@ export class PositionOffsetTransformer extends PositionOffsetTransformerBase {
 		for (let index = 0; index < this.text.length; index += 1) {
 			if (this.text.charCodeAt(index) !== CharCode.LineFeed) continue;
 			this._lineStartOffsetByLineIdx.push(index + 1);
-			this._lineEndOffsetByLineIdx.push(
-				index > 0 && this.text.charCodeAt(index - 1) === CharCode.CarriageReturn ? index - 1 : index,
-			);
+			this._lineEndOffsetByLineIdx.push(index > 0 && this.text.charCodeAt(index - 1) === CharCode.CarriageReturn ? index - 1 : index);
 		}
 		this._lineEndOffsetByLineIdx.push(this.text.length);
 	}

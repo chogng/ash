@@ -5,12 +5,7 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { observableValue, type IReader } from '../../../../../base/common/observable.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import {
-	IBrowserViewService,
-	BrowserViewStorageScope,
-	type BrowserViewEvent,
-	type IBrowserViewInfo,
-} from '../../../../../platform/browserView/common/browserView.js';
+import { IBrowserViewService, BrowserViewStorageScope, type BrowserViewEvent, type IBrowserViewInfo } from '../../../../../platform/browserView/common/browserView.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
@@ -25,10 +20,7 @@ import type { EditorPartChangeEvent } from '../../../../../workbench/services/ed
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import type { AgentTreeNode, ISession, IUntitledChatSession } from '../../../../services/sessions/common/session.js';
-import {
-	ISessionsManagementService,
-	type SessionsManagementState,
-} from '../../../../services/sessions/common/sessionsManagement.js';
+import { ISessionsManagementService, type SessionsManagementState } from '../../../../services/sessions/common/sessionsManagement.js';
 import { SessionBrowserViewController } from '../../browser/sessionBrowserView.js';
 
 const first = session('session-one', 'thread-one');
@@ -55,10 +47,7 @@ suite('Session browser page policy', () => {
 		assert.deepEqual([...f.views.getContextualBrowserViews().values()], [foreground]);
 		f.selection.set(selected(second));
 		assert.deepEqual([...f.views.getContextualBrowserViews().values()], [background]);
-		assert.deepEqual(
-			[...f.views.getContextualBrowserViews({ activeSessionId: 'thread-one' }).values()],
-			[foreground],
-		);
+		assert.deepEqual([...f.views.getContextualBrowserViews({ activeSessionId: 'thread-one' }).values()], [foreground]);
 		assert.deepEqual(f.destroyed, []);
 		const model = await foreground.resolve();
 		f.groupInputs.length = 0;
@@ -123,9 +112,7 @@ suite('Session browser page policy', () => {
 		f.drafts = [draft];
 		f.selection.set({ kind: 'untitled', session: draft });
 		const input = await f.create();
-		f.materialized.set(
-			new Map([[draft.untitledSessionId, { sessionId: first.sessionId, threadId: 'thread-one' }]]),
-		);
+		f.materialized.set(new Map([[draft.untitledSessionId, { sessionId: first.sessionId, threadId: 'thread-one' }]]));
 		f.drafts = [];
 		f.selection.set(selected(first));
 		f.catalogChanged.fire();
@@ -139,10 +126,7 @@ suite('Session browser page policy', () => {
 
 	test('nested Agent Thread pages belong to their root Session rather than the foreground Session', async () => {
 		using f = fixture();
-		f.catalog = [
-			first,
-			{ ...second, agentTree: [node('thread-two', [node('peer-thread', [node('child-thread')])])] },
-		];
+		f.catalog = [first, { ...second, agentTree: [node('thread-two', [node('peer-thread', [node('child-thread')])])] }];
 		f.catalogChanged.fire();
 		const child = await f.create('child-thread');
 		assert.deepEqual(f.opened, []);
@@ -204,10 +188,7 @@ function fixture() {
 	const editorEvents = resources.add(new Emitter<EditorPartChangeEvent>());
 	const catalogChanged = resources.add(new Emitter<void>());
 	const selection = observableValue<SessionsViewSelection | undefined>('browser foreground', selected(first));
-	const materialized = observableValue<ReadonlyMap<string, { sessionId: string; threadId: string }>>(
-		'browser draft promotion',
-		new Map(),
-	);
+	const materialized = observableValue<ReadonlyMap<string, { sessionId: string; threadId: string }>>('browser draft promotion', new Map());
 	const f = {
 		pages: new Map<string, IBrowserViewInfo>(),
 		catalog: [first, second] as readonly ISession[],
@@ -403,19 +384,14 @@ function fixture() {
 			views.createBrowserView({
 				initialUrl: 'https://example.test/',
 				owner: threadId ? { type: 'agent', sessionId: threadId } : { type: 'user' },
-				session: threadId
-					? { scope: BrowserViewStorageScope.Agent, affinity: threadId }
-					: { scope: BrowserViewStorageScope.Workspace },
+				session: threadId ? { scope: BrowserViewStorageScope.Agent, affinity: threadId } : { scope: BrowserViewStorageScope.Workspace },
 			}),
 	});
 }
 
 import { IFileService } from '../../../../../platform/files/common/files.js';
 
-import {
-	IConfigurationService,
-	ConfigurationTarget,
-} from '../../../../../platform/configuration/common/configuration.js';
+import { IConfigurationService, ConfigurationTarget } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IWorkspaceContextService, WorkbenchState } from '../../../../../platform/workspace/common/workspace.js';
 import { IWorkspaceTrustManagementService } from '../../../../../platform/workspace/common/workspaceTrust.js';

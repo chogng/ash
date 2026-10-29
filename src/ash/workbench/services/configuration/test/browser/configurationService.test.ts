@@ -67,17 +67,10 @@ test('Workspace membership preserves URI boundaries, root ranking and casing', (
 			const matches = workspace
 				.getWorkspace()
 				.folders.filter(folder => {
-					const comparison =
-						folder.uri.scheme === 'file' &&
-						(folder.uri.authority || /^\/[a-z]:($|\/)/i.test(folder.uri.path))
-							? extUriIgnorePathCase
-							: extUriBiasedIgnorePathCase;
+					const comparison = folder.uri.scheme === 'file' && (folder.uri.authority || /^\/[a-z]:($|\/)/i.test(folder.uri.path)) ? extUriIgnorePathCase : extUriBiasedIgnorePathCase;
 					return comparison.isEqualOrParent(candidate, folder.uri);
 				})
-				.sort(
-					(left, right) =>
-						right.uri.toEncodedComponents().path.length - left.uri.toEncodedComponents().path.length,
-				);
+				.sort((left, right) => right.uri.toEncodedComponents().path.length - left.uri.toEncodedComponents().path.length);
 			assert.equal(workspace.getWorkspaceFolder(resource), matches[0] ?? null, source);
 		}
 	}
@@ -114,16 +107,12 @@ test('provider settings retain JSONC, layered directory values and external chan
 	const second = URI.joinPath(root, 'second');
 	const workspaceFile = URI.joinPath(root, 'test.code-workspace');
 	for (const folder of [first, second]) await files.createDirectory(URI.joinPath(folder, '.vscode'));
-	await files.writeFile(
-		{ resource: workspaceFile, content: '{ "settings": { "rust-analyzer.cargo.allTargets": false } }' },
-		{ create: true, overwrite: false },
-	);
+	await files.writeFile({ resource: workspaceFile, content: '{ "settings": { "rust-analyzer.cargo.allTargets": false } }' }, { create: true, overwrite: false });
 	const settings = URI.joinPath(first, '.vscode', 'settings.json');
 	await files.writeFile(
 		{
 			resource: settings,
-			content:
-				'// provider-owned settings\n{ "rust-analyzer.cargo.buildScripts.enable": false, "rust-analyzer.cargo.extraEnv": { "WORKSPACE_LIB": "/workspace/lib" }, }',
+			content: '// provider-owned settings\n{ "rust-analyzer.cargo.buildScripts.enable": false, "rust-analyzer.cargo.extraEnv": { "WORKSPACE_LIB": "/workspace/lib" }, }',
 		},
 		{ create: true, overwrite: false },
 	);
@@ -156,8 +145,5 @@ test('provider settings retain JSONC, layered directory values and external chan
 	await files.writeFile({ resource: settings, content: '{}' }, { create: false, overwrite: true });
 	await configuration.reloadConfiguration();
 	assert.equal(changed, true);
-	assert.deepEqual(
-		configuration.getValue('rust-analyzer', { resource: first }),
-		configuration.getValue('rust-analyzer', { resource: second }),
-	);
+	assert.deepEqual(configuration.getValue('rust-analyzer', { resource: first }), configuration.getValue('rust-analyzer', { resource: second }));
 });

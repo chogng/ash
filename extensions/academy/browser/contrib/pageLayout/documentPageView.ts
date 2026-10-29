@@ -70,11 +70,8 @@ export class DocumentPageView extends Disposable {
 				container.className = 'ash-document-page-section';
 				if (section) container.dataset.nodeId = section.id;
 				const content = this.container.ownerDocument.createDocumentFragment();
-				if (section)
-					content.append(...elements.find(element => element.dataset.nodeId === section.id)!.childNodes);
-				else
-					for (const node of nodes)
-						content.append(elements.find(element => element.dataset.nodeId === node.id)!);
+				if (section) content.append(...elements.find(element => element.dataset.nodeId === section.id)!.childNodes);
+				else for (const node of nodes) content.append(elements.find(element => element.dataset.nodeId === node.id)!);
 				const view = this.sectionStore.add(new DocumentPageView(container, () => {}, false));
 				view.setZoom(this.zoom);
 				this.sectionViews.set(container, view);
@@ -154,8 +151,7 @@ export class DocumentPageView extends Disposable {
 			for (const view of this.sectionViews.values()) {
 				view.pageOffset = offset;
 				view.pageTotal = total;
-				for (const [index, page] of [...(view.backgrounds?.children ?? [])].entries())
-					view.renderRunningText(page as HTMLElement, index, total, view.paper!.margin);
+				for (const [index, page] of [...(view.backgrounds?.children ?? [])].entries()) view.renderRunningText(page as HTMLElement, index, total, view.paper!.margin);
 				offset += Number(view.shell?.dataset.pageCount ?? 0);
 			}
 			return;
@@ -196,14 +192,7 @@ export class DocumentPageView extends Disposable {
 		}
 	}
 
-	private layoutBlock(
-		unit: HTMLElement,
-		units: readonly HTMLElement[],
-		unitIndex: number,
-		origin: number,
-		stride: number,
-		bodyHeight: number,
-	): void {
+	private layoutBlock(unit: HTMLElement, units: readonly HTMLElement[], unitIndex: number, origin: number, stride: number, bodyHeight: number): void {
 		const lines = this.groupLines(this.measureLines(unit));
 		if (!lines.length) return;
 		const first = lines[0]!;
@@ -221,10 +210,7 @@ export class DocumentPageView extends Disposable {
 				if (next.dataset.pageBreakBefore === 'true') break;
 				const nextLines = this.groupLines(this.measureLines(next));
 				const chained = next.dataset.keepWithNext === 'true';
-				const required =
-					next.dataset.keepTogether === 'true' || chained
-						? nextLines.at(-1)
-						: nextLines[Math.min(1, nextLines.length - 1)];
+				const required = next.dataset.keepTogether === 'true' || chained ? nextLines.at(-1) : nextLines[Math.min(1, nextLines.length - 1)];
 				if (required) requiredEnd = (required.bottom - origin) / this.zoom;
 				if (!chained || requiredEnd - start > bodyHeight) break;
 			}
@@ -232,10 +218,7 @@ export class DocumentPageView extends Disposable {
 
 		const manual = unit.dataset.pageBreakBefore === 'true';
 		const keep = unit.dataset.keepTogether === 'true' || requiredEnd !== end;
-		if (
-			start > page * stride + 0.5 &&
-			(manual || (keep && requiredEnd - start <= bodyHeight && requiredEnd > page * stride + bodyHeight))
-		) {
+		if (start > page * stride + 0.5 && (manual || (keep && requiredEnd - start <= bodyHeight && requiredEnd > page * stride + bodyHeight))) {
 			shift = (page + 1) * stride - start;
 			breaks.push({ line: first.first, height: shift });
 		}
@@ -262,8 +245,7 @@ export class DocumentPageView extends Disposable {
 			pageFirst = split;
 		}
 		// Later insertions must not invalidate earlier UTF-16 offsets in the same Text.
-		for (const entry of breaks.reverse())
-			this.insertLineGap(entry.line, entry.height, entry.line === first.first ? unit : undefined);
+		for (const entry of breaks.reverse()) this.insertLineGap(entry.line, entry.height, entry.line === first.first ? unit : undefined);
 	}
 
 	private layoutRow(row: HTMLElement, origin: number, stride: number, bodyHeight: number): void {
@@ -272,12 +254,7 @@ export class DocumentPageView extends Disposable {
 		const height = rect.height / this.zoom;
 		const page = Math.floor(start / stride);
 		const manual = row.querySelector('[data-page-break-before="true"]') !== null;
-		if (
-			!manual &&
-			height <= bodyHeight &&
-			start + height > page * stride + bodyHeight + 0.5 &&
-			start > page * stride + 0.5
-		) {
+		if (!manual && height <= bodyHeight && start + height > page * stride + bodyHeight + 0.5 && start > page * stride + 0.5) {
 			// A real table row is required here. An inline spacer in one cell would
 			// move its neighbours by a different amount and corrupt page geometry.
 			const gap = h(this.container.ownerDocument, 'tr');
@@ -296,8 +273,7 @@ export class DocumentPageView extends Disposable {
 			const units = this.getUnits(cell as HTMLElement, row);
 			for (const [index, unit] of units.entries()) {
 				const currentOrigin = this.flow!.getBoundingClientRect().top;
-				if (unit.classList.contains('stanza-document-table-row'))
-					this.layoutRow(unit, currentOrigin, stride, bodyHeight);
+				if (unit.classList.contains('stanza-document-table-row')) this.layoutRow(unit, currentOrigin, stride, bodyHeight);
 				else this.layoutBlock(unit, units, index, currentOrigin, stride, bodyHeight);
 			}
 		}
@@ -305,9 +281,7 @@ export class DocumentPageView extends Disposable {
 
 	private getUnits(root: HTMLElement, row: HTMLElement | null): HTMLElement[] {
 		return [
-			...root.querySelectorAll<HTMLElement>(
-				'.stanza-document-paragraph, .stanza-document-heading, .stanza-document-code-block, .stanza-document-table-row, .stanza-document-horizontal-rule',
-			),
+			...root.querySelectorAll<HTMLElement>('.stanza-document-paragraph, .stanza-document-heading, .stanza-document-code-block, .stanza-document-table-row, .stanza-document-horizontal-rule'),
 		].filter(unit => unit.parentElement?.closest('.stanza-document-table-row') === row);
 	}
 
@@ -347,16 +321,11 @@ export class DocumentPageView extends Disposable {
 				const range = root.ownerDocument.createRange();
 				range.selectNodeContents(node);
 				for (const rect of range.getClientRects()) {
-					if (rect.width > 0 && rect.height > 0)
-						lines.push({ node: node as Text, order, top: rect.top, bottom: rect.bottom });
+					if (rect.width > 0 && rect.height > 0) lines.push({ node: node as Text, order, top: rect.top, bottom: rect.bottom });
 				}
-			} else if (
-				node.nodeType === 1 &&
-				(node as HTMLElement).matches('textarea, img, br, [data-inline-node-id]')
-			) {
+			} else if (node.nodeType === 1 && (node as HTMLElement).matches('textarea, img, br, [data-inline-node-id]')) {
 				const rect = (node as HTMLElement).getBoundingClientRect();
-				if (rect.height > 0)
-					lines.push({ node: node as HTMLElement, order, top: rect.top, bottom: rect.bottom });
+				if (rect.height > 0) lines.push({ node: node as HTMLElement, order, top: rect.top, bottom: rect.bottom });
 			}
 		}
 		if (!lines.length) {

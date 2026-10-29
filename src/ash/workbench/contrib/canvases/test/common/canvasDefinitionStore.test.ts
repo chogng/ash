@@ -29,10 +29,7 @@ suite('Canvas definition refreshes', () => {
 
 	test('retains authoritative definitions through pending, failed and non-authoritative refreshes', async () => {
 		using resources = new DisposableStore();
-		let result: readonly ICanvasDefinition[] | undefined = [
-			definition,
-			{ ...definition, canvasId: 'input', requiresInput: true },
-		];
+		let result: readonly ICanvasDefinition[] | undefined = [definition, { ...definition, canvasId: 'input', requiresInput: true }];
 		let failure = false;
 		const source = observableValue<ICanvasDefinitionSource | undefined>(resources, undefined);
 		const update = () =>

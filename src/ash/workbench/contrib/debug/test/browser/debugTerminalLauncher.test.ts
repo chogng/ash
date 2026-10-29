@@ -3,17 +3,10 @@ import { AbstractLifecycleService } from '../../../../services/lifecycle/common/
 import { ILabelService } from '../../../../../platform/label/common/label.js';
 import { LabelService } from '../../../../services/label/common/labelService.js';
 import { installDebugClientFixture } from '../common/debugClientFixture.js';
-import {
-	registerTestTerminalCreationServices,
-	workbenchInstantiationService,
-} from '../../../../test/browser/workbenchTestServices.js';
+import { registerTestTerminalCreationServices, workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { MergedEnvironmentVariableCollection } from '../../../../../platform/terminal/common/environmentVariableCollection.js';
 import { IEnvironmentVariableService } from '../../../terminal/common/environmentVariable.js';
-import {
-	ITerminalContributionService,
-	ITerminalProfileResolverService,
-	ITerminalProfileService,
-} from '../../../terminal/common/terminal.js';
+import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../terminal/common/terminal.js';
 import { TerminalProfileService } from '../../../terminal/browser/terminalProfileService.js';
 import { BrowserTerminalProfileResolverService } from '../../../terminal/browser/terminalProfileResolverService.js';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
@@ -178,11 +171,7 @@ suite('DAP terminal availability', () => {
 			registerTestTerminalCreationServices(services);
 			const terminals = resources.add(services.createInstance(TerminalService));
 			let finished = false;
-			const pending = launchWithTerminalRequest(
-				terminals,
-				{ kind: 'integrated', args: ['app'] },
-				{ terminalProcesses: processes },
-			).then(response => {
+			const pending = launchWithTerminalRequest(terminals, { kind: 'integrated', args: ['app'] }, { terminalProcesses: processes }).then(response => {
 				finished = true;
 				return response;
 			});
@@ -257,19 +246,12 @@ suite('DAP terminal availability', () => {
 			);
 			registerTestTerminalCreationServices(services);
 			const terminals = resources.add(services.createInstance(TerminalService));
-			const response = await launchWithTerminalRequest(
-				terminals,
-				{ kind: 'integrated', args: ['app'] },
-				{ terminalProcesses: processes },
-			);
+			const response = await launchWithTerminalRequest(terminals, { kind: 'integrated', args: ['app'] }, { terminalProcesses: processes });
 			assert.deepEqual(
 				{ success: response.success, message: response.message, calls, terminals: terminals.instances },
 				{
 					success: false,
-					message:
-						persistence === 'reconnectable'
-							? '终端不可用，调试命令尚未执行。请重新启动调试。'
-							: 'The terminal is unavailable. The debug command was not sent. Restart debugging.',
+					message: persistence === 'reconnectable' ? '终端不可用，调试命令尚未执行。请重新启动调试。' : 'The terminal is unavailable. The debug command was not sent. Restart debugging.',
 					calls: ['close:debug-process'],
 					terminals: [],
 				},
@@ -282,13 +264,10 @@ suite('DAP terminal launch policies through execution owners', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	function assemble(owner: DisposableStore, os: OperatingSystem = OperatingSystem.Linux) {
-		const connection = owner.add(
-			new Emitter<import('../../../../../platform/terminal/common/terminal.js').TerminalProcessConnectionState>(),
-		);
+		const connection = owner.add(new Emitter<import('../../../../../platform/terminal/common/terminal.js').TerminalProcessConnectionState>());
 		const workspace = owner.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') }));
 		const configuration = owner.add(new WorkbenchConfigurationService());
-		const created: import('../../../../../platform/terminal/common/terminal.js').ITerminalProcessCreateOptions[] =
-			[];
+		const created: import('../../../../../platform/terminal/common/terminal.js').ITerminalProcessCreateOptions[] = [];
 		const writes: string[] = [];
 		const closes: string[] = [];
 		const disposed = new DeferredPromise<void>();
@@ -339,13 +318,7 @@ suite('DAP terminal launch policies through execution owners', () => {
 			},
 		};
 		const services = owner.add(
-			new InstantiationService(
-				new ServiceCollection(
-					[IConfigurationService, configuration],
-					[ITerminalProcessService, processes],
-					[IWorkspaceContextService, workspace],
-				),
-			),
+			new InstantiationService(new ServiceCollection([IConfigurationService, configuration], [ITerminalProcessService, processes], [IWorkspaceContextService, workspace])),
 		);
 		registerTestTerminalCreationServices(services);
 		const terminals = owner.add(services.createInstance(TerminalService));
@@ -560,8 +533,7 @@ suite('DAP terminal launch policies through execution owners', () => {
 						onReady: async (debug, session) => {
 							await entered.p;
 							if (invalidation === 'connection') fixture.connection.fire('crashed');
-							if (invalidation === 'workspace')
-								fixture.workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
+							if (invalidation === 'workspace') fixture.workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
 							if (invalidation === 'stop') await debug.stop(session);
 							await release.complete(undefined);
 						},
@@ -660,8 +632,7 @@ async function launchWithTerminalRequest(
 			flushInterval: 0,
 		}),
 	);
-	const workspace =
-		options.workspace ?? resources.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') }));
+	const workspace = options.workspace ?? resources.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') }));
 	const unexpectedProcess = async (): Promise<never> => {
 		throw new Error('Fake terminal must not access a PTY');
 	};
@@ -711,8 +682,7 @@ async function launchWithTerminalRequest(
 			openEditor: async () => {},
 			focusActiveEditor() {},
 		} as unknown as import('../../../../services/editor/common/editorService.js').IEditorService);
-	if (!services.has(IEditorGroupsService))
-		services.registerInstance(IEditorGroupsService, {} as IEditorGroupsService);
+	if (!services.has(IEditorGroupsService)) services.registerInstance(IEditorGroupsService, {} as IEditorGroupsService);
 	services.registerInstance(ITerminalContributionService, {
 		terminalProfiles: [],
 		onDidChangeTerminalProfiles: Event.None,
@@ -728,13 +698,9 @@ async function launchWithTerminalRequest(
 		delete: () => {},
 		registerCollectionProvider: () => Disposable.None,
 	});
-	services.registerSingleton(ITerminalProfileResolverService, () =>
-		services.createInstance(BrowserTerminalProfileResolverService),
-	);
+	services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService));
 	services.registerSingleton(ILifecycleService, () => services.createInstance(DebugTerminalLifecycle, undefined));
-	services.registerSingleton(ITextFileService, () =>
-		createTestTextFileService(services.get(IFileService), services.get(IConfigurationService)),
-	);
+	services.registerSingleton(ITextFileService, () => createTestTextFileService(services.get(IFileService), services.get(IConfigurationService)));
 	using service = services.createInstance(DebugService);
 	const session = await service.startDebugging({
 		id: 'debug-terminal',
@@ -757,33 +723,16 @@ async function launchWithTerminalRequest(
 	}
 }
 
-async function resolveTerminalProfile(
-	selection: import('../../../../../platform/terminal/common/terminal.js').TerminalProcessProfileSelection,
-) {
-	const profileId =
-		selection.type === 'profile'
-			? selection.profileId
-			: selection.type === 'custom'
-				? `custom:${selection.name}`
-				: 'shell';
+async function resolveTerminalProfile(selection: import('../../../../../platform/terminal/common/terminal.js').TerminalProcessProfileSelection) {
+	const profileId = selection.type === 'profile' ? selection.profileId : selection.type === 'custom' ? `custom:${selection.name}` : 'shell';
 	return {
 		profile: {
 			profileId,
 			title: selection.type === 'custom' ? selection.name : profileId,
 			isDefault: selection.type === 'default',
 		},
-		executable:
-			selection.type === 'custom'
-				? selection.path[0]!
-				: /powershell|pwsh/.test(profileId)
-					? `/tools/${profileId}.exe`
-					: `/bin/${profileId === 'shell' ? 'sh' : profileId}`,
-		args:
-			selection.type === 'custom'
-				? typeof selection.args === 'string'
-					? selection.args
-					: [...selection.args]
-				: [],
+		executable: selection.type === 'custom' ? selection.path[0]! : /powershell|pwsh/.test(profileId) ? `/tools/${profileId}.exe` : `/bin/${profileId === 'shell' ? 'sh' : profileId}`,
+		args: selection.type === 'custom' ? (typeof selection.args === 'string' ? selection.args : [...selection.args]) : [],
 	};
 }
 
@@ -811,11 +760,7 @@ test('activity-selected debug roots bind the adapter and integrated terminal to 
 			};
 		},
 	} as unknown as ITerminalService;
-	const response = await launchWithTerminalRequest(
-		terminals,
-		{ args: ['app'] },
-		{ workspace, activeResource: URI.file('/second/main.rs'), adapterRoutes },
-	);
+	const response = await launchWithTerminalRequest(terminals, { args: ['app'] }, { workspace, activeResource: URI.file('/second/main.rs'), adapterRoutes });
 	assert.equal(response.success, true);
 	assert.deepEqual(adapterRoutes, ['two']);
 	assert.equal(created[0]?.dirId, 'two');

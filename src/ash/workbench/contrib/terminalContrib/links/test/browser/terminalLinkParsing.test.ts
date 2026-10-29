@@ -23,11 +23,7 @@ test('Terminal links parse compiler, stack trace and quoted Python locations', (
 
 test('Terminal links retain separate paths and exclude URLs and invalid locations', () => {
 	assert.deepEqual(
-		detectLinks('see ./src/a.ts:3:2 and ../b.rs:7', OperatingSystem.Linux).map(link => [
-			link.path.text,
-			link.suffix?.row,
-			link.suffix?.col,
-		]),
+		detectLinks('see ./src/a.ts:3:2 and ../b.rs:7', OperatingSystem.Linux).map(link => [link.path.text, link.suffix?.row, link.suffix?.col]),
 		[
 			['./src/a.ts', 3, 2],
 			['../b.rs', 7, undefined],

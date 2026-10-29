@@ -1,10 +1,7 @@
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { localize2 } from '../../../../nls.js';
 import { showWindowLogActionId, windowLogId } from '../../../services/log/common/logConstants.js';
-import {
-	IInstantiationService,
-	type ServicesAccessor,
-} from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { ILoggerService, type ILoggerResource } from '../../../../platform/log/common/log.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
@@ -52,8 +49,7 @@ class LogsContribution extends Disposable {
 				logger.registerSink(
 					{
 						log: entry => {
-							const error =
-								entry.error instanceof Error ? (entry.error.stack ?? entry.error.message) : entry.error;
+							const error = entry.error instanceof Error ? (entry.error.stack ?? entry.error.message) : entry.error;
 							channel.appendLine({
 								timestamp: entry.timestampMillis,
 								severity: entry.level,
@@ -83,6 +79,4 @@ class LogsContribution extends Disposable {
 	}
 }
 
-registerWorkbenchContribution('workbench.contrib.logs', WorkbenchPhase.AfterRestored, services =>
-	services.get(IInstantiationService).createInstance(LogsContribution),
-);
+registerWorkbenchContribution('workbench.contrib.logs', WorkbenchPhase.AfterRestored, services => services.get(IInstantiationService).createInstance(LogsContribution));

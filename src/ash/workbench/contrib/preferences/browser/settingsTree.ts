@@ -2,13 +2,7 @@ import './media/settingsTree.css';
 import './media/settingsCard.css';
 import type { ObjectTreeNode } from '../../../../base/browser/ui/tree/objectTreeModel.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import type {
-	SettingsSectionReference,
-	SettingsTreeElement,
-	SettingsTreeGroup,
-	SettingsTreeItem,
-	SettingsTreeModel,
-} from './settingsTreeModels.js';
+import type { SettingsSectionReference, SettingsTreeElement, SettingsTreeGroup, SettingsTreeItem, SettingsTreeModel } from './settingsTreeModels.js';
 import { h } from '../../../../base/browser/dom.js';
 
 export interface SettingsTreeOptions<T> {
@@ -117,9 +111,7 @@ export class SettingsTree<T> extends Disposable {
 		const element = this.options.renderItem(item);
 		element.dataset.settingsTreeItemId = item.id;
 		if (element.dataset.settingsItemId && element.dataset.settingsItemId !== item.id) {
-			throw new TypeError(
-				`Rendered Settings item '${item.id}' has conflicting identity '${element.dataset.settingsItemId}'`,
-			);
+			throw new TypeError(`Rendered Settings item '${item.id}' has conflicting identity '${element.dataset.settingsItemId}'`);
 		}
 		if (!element.dataset.settingsItemId) {
 			element.dataset.settingsItemId = item.id;
@@ -152,17 +144,12 @@ export class SettingsTree<T> extends Disposable {
 		rendered.element.classList.toggle('collapsed', node.collapsed);
 		rendered.element.classList.toggle('is-navigation-target', this.model.navigationTarget === group.id);
 		rendered.element.dataset.settingsTreeGroupId = group.id;
-		const children = node.collapsed
-			? []
-			: node.children.filter(child => child.visible).map(child => this.renderNode(child));
+		const children = node.collapsed ? [] : node.children.filter(child => child.visible).map(child => this.renderNode(child));
 		reconcileSettingsChildren(rendered.items, children);
 		return rendered.element;
 	}
 
-	private createGroup(
-		node: ObjectTreeNode<SettingsTreeElement<T>>,
-		group: SettingsTreeGroup,
-	): RenderedSettingsGroup<T> {
+	private createGroup(node: ObjectTreeNode<SettingsTreeElement<T>>, group: SettingsTreeGroup): RenderedSettingsGroup<T> {
 		const document = this.element.ownerDocument;
 		const element = h(document, 'section');
 		element.className = `ash-settings-tree-group ${this.options.groupClassName}`;

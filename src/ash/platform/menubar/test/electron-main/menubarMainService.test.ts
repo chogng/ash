@@ -94,11 +94,7 @@ class TestMenubarHost implements INativeMenubarMainHost {
 		this.template = template;
 	}
 
-	setWindowTouchBar(
-		_window: INativeMenubarMainWindow,
-		items: readonly import('../../../../platform/menubar/common/nativeMenubar.js').INativeTouchBarItem[],
-		select: (id: string) => void,
-	): void {
+	setWindowTouchBar(_window: INativeMenubarMainWindow, items: readonly import('../../../../platform/menubar/common/nativeMenubar.js').INativeTouchBarItem[], select: (id: string) => void): void {
 		if (_window.isDestroyed()) throw new Error('Touch Bar cannot be changed after its window is destroyed');
 		this.touchBar = items;
 		this.touchBarSelect = select;
@@ -149,15 +145,16 @@ class TestBrowserWindow {
 function menuData(revision: number, label: string, id: string, altId?: string): INativeMenubarData {
 	return {
 		revision,
-		menus: [{ label: 'File', items: [{ type: 'action', id, ...(altId ? { altId } : {}), label, enabled: true }] }],
+		menus: [
+			{
+				label: 'File',
+				items: [{ type: 'action', id, ...(altId ? { altId } : {}), label, enabled: true }],
+			},
+		],
 	};
 }
 
-function invokeAction(
-	template: readonly INativeMenubarMainMenuItem[] | undefined,
-	label: string,
-	altKey: boolean,
-): void {
+function invokeAction(template: readonly INativeMenubarMainMenuItem[] | undefined, label: string, altKey: boolean): void {
 	assert.ok(template);
 	const fileMenu = template.find(item => item.label === 'File');
 	assert.ok(fileMenu && Array.isArray(fileMenu.submenu));

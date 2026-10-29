@@ -35,15 +35,9 @@ test('Line selection normalizes reverse multi-selections while retaining the pri
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using model = new TextModel('zero\none\ntwo\nthree');
 	using view = createView(dom, model);
-	setSelections(view, [
-		Selection.fromPositions(new Position(4, 5)),
-		Selection.fromPositions(new Position(3, 3), new Position(2, 2)),
-	]);
+	setSelections(view, [Selection.fromPositions(new Position(4, 5)), Selection.fromPositions(new Position(3, 3), new Position(2, 2))]);
 	expand(view);
-	assert.deepEqual(modelSelections(view), [
-		Selection.fromPositions(new Position(4, 1), new Position(4, 6)),
-		Selection.fromPositions(new Position(2, 1), new Position(4, 1)),
-	]);
+	assert.deepEqual(modelSelections(view), [Selection.fromPositions(new Position(4, 1), new Position(4, 6)), Selection.fromPositions(new Position(2, 1), new Position(4, 1))]);
 	dom.window.close();
 });
 
@@ -57,19 +51,11 @@ function createView(dom: JSDOM, model: TextModel): InstanceType<typeof TestView>
 }
 
 function setSelections(view: InstanceType<typeof TestView>, selections: readonly Selection[]): void {
-	view.testViewModel.setCursorStates(
-		'test',
-		CursorChangeReason.Explicit,
-		CursorState.fromModelSelections(selections),
-	);
+	view.testViewModel.setCursorStates('test', CursorChangeReason.Explicit, CursorState.fromModelSelections(selections));
 }
 
 function expand(view: InstanceType<typeof TestView>): void {
-	view.testViewModel.setCursorStates(
-		'test',
-		CursorChangeReason.Explicit,
-		CursorMoveCommands.expandLineSelection(view.testViewModel, view.testViewModel.getCursorStates()),
-	);
+	view.testViewModel.setCursorStates('test', CursorChangeReason.Explicit, CursorMoveCommands.expandLineSelection(view.testViewModel, view.testViewModel.getCursorStates()));
 }
 
 function modelSelections(view: InstanceType<typeof TestView>): Selection[] {

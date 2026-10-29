@@ -20,19 +20,12 @@ export class ExtensionResourceLoaderService implements IExtensionResourceLoaderS
 			}
 			return this.readInstalled(request);
 		}
-		throw new Error(
-			localize('extensions.resources.unsupported', 'The resource is not an installed extension resource.'),
-		);
+		throw new Error(localize('extensions.resources.unsupported', 'The resource is not an installed extension resource.'));
 	}
 }
 
 function validatePath(path: string): void {
-	if (
-		!path ||
-		path.length > 1024 ||
-		/[\\:\0]/u.test(path) ||
-		path.split('/').some(part => !part || part === '.' || part === '..')
-	) {
+	if (!path || path.length > 1024 || /[\\:\0]/u.test(path) || path.split('/').some(part => !part || part === '.' || part === '..')) {
 		throw new TypeError('Invalid extension resource path');
 	}
 }

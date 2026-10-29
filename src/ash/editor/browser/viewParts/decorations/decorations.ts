@@ -16,9 +16,7 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 		private readonly readTextLeft: () => number,
 	) {
 		super();
-		this._typicalHalfwidthCharacterWidth = this._context.configuration.options.get(
-			EditorOption.fontInfo,
-		).typicalHalfwidthCharacterWidth;
+		this._typicalHalfwidthCharacterWidth = this._context.configuration.options.get(EditorOption.fontInfo).typicalHalfwidthCharacterWidth;
 		this._context.addEventHandler(this);
 	}
 
@@ -29,9 +27,7 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 	}
 
 	public override onConfigurationChanged(_event: viewEvents.ViewConfigurationChangedEvent): boolean {
-		this._typicalHalfwidthCharacterWidth = this._context.configuration.options.get(
-			EditorOption.fontInfo,
-		).typicalHalfwidthCharacterWidth;
+		this._typicalHalfwidthCharacterWidth = this._context.configuration.options.get(EditorOption.fontInfo).typicalHalfwidthCharacterWidth;
 		return true;
 	}
 	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean {
@@ -61,10 +57,7 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 			.getDecorationsInViewport()
 			.filter(decoration => Boolean(decoration.options.className))
 			.sort(compareModelDecorations);
-		const output = Array.from(
-			{ length: context.visibleRange.endLineNumber - context.visibleRange.startLineNumber + 1 },
-			() => '',
-		);
+		const output = Array.from({ length: context.visibleRange.endLineNumber - context.visibleRange.startLineNumber + 1 }, () => '');
 		this.renderWholeLineDecorations(context, decorations, output);
 		this.renderNormalDecorations(context, decorations, output);
 		this._renderResult = output;
@@ -74,11 +67,7 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 		return this._renderResult?.[lineNumber - startLineNumber] ?? '';
 	}
 
-	private renderWholeLineDecorations(
-		context: RenderingContext,
-		decorations: readonly ViewModelDecoration[],
-		output: string[],
-	): void {
+	private renderWholeLineDecorations(context: RenderingContext, decorations: readonly ViewModelDecoration[], output: string[]): void {
 		for (const decoration of decorations) {
 			if (!decoration.options.isWholeLine) continue;
 			const html = `<div class="cdr ${escapeAttribute(decoration.options.className!)}" style="left:0;width:100%;"></div>`;
@@ -90,25 +79,14 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 		}
 	}
 
-	private renderNormalDecorations(
-		context: RenderingContext,
-		decorations: readonly ViewModelDecoration[],
-		output: string[],
-	): void {
+	private renderNormalDecorations(context: RenderingContext, decorations: readonly ViewModelDecoration[], output: string[]): void {
 		let previousClassName: string | undefined;
 		let previousRange: Range | undefined;
 		let previousShowIfCollapsed = false;
 		let previousShouldFillLineOnLineBreak = false;
 		const flush = (): void => {
 			if (!previousClassName || !previousRange) return;
-			this.renderNormalDecoration(
-				context,
-				previousRange,
-				previousClassName,
-				previousShouldFillLineOnLineBreak,
-				previousShowIfCollapsed,
-				output,
-			);
+			this.renderNormalDecoration(context, previousRange, previousClassName, previousShouldFillLineOnLineBreak, previousShowIfCollapsed, output);
 		};
 		for (const decoration of decorations) {
 			if (decoration.options.isWholeLine) continue;
@@ -116,19 +94,9 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 			const showIfCollapsed = Boolean(decoration.options.showIfCollapsed);
 			let range = decoration.range;
 			if (showIfCollapsed && range.endColumn === 1 && range.endLineNumber !== range.startLineNumber) {
-				range = new Range(
-					range.startLineNumber,
-					range.startColumn,
-					range.endLineNumber - 1,
-					this._context.viewModel.getLineMaxColumn(range.endLineNumber - 1),
-				);
+				range = new Range(range.startLineNumber, range.startColumn, range.endLineNumber - 1, this._context.viewModel.getLineMaxColumn(range.endLineNumber - 1));
 			}
-			if (
-				previousClassName === className &&
-				previousShowIfCollapsed === showIfCollapsed &&
-				previousRange &&
-				Range.areIntersectingOrTouching(previousRange, range)
-			) {
+			if (previousClassName === className && previousShowIfCollapsed === showIfCollapsed && previousRange && Range.areIntersectingOrTouching(previousRange, range)) {
 				previousRange = Range.plusRange(previousRange, range);
 				continue;
 			}
@@ -141,37 +109,21 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 		flush();
 	}
 
-	private renderNormalDecoration(
-		context: RenderingContext,
-		range: Range,
-		className: string,
-		shouldFillLineOnLineBreak: boolean,
-		showIfCollapsed: boolean,
-		output: string[],
-	): void {
+	private renderNormalDecoration(context: RenderingContext, range: Range, className: string, shouldFillLineOnLineBreak: boolean, showIfCollapsed: boolean, output: string[]): void {
 		const linesVisibleRanges = context.linesVisibleRangesForRange(range, className === 'findMatch');
 		if (!linesVisibleRanges) return;
 		// Measured ranges start at the text row; this overlay shares the content origin with selections.
 		const textLeft = this.readTextLeft();
 		for (const lineVisibleRanges of linesVisibleRanges) {
 			if (lineVisibleRanges.outsideRenderedLine) continue;
-			if (
-				showIfCollapsed &&
-				lineVisibleRanges.ranges.length === 1 &&
-				lineVisibleRanges.ranges[0]!.width < this._typicalHalfwidthCharacterWidth
-			) {
-				const rangeCenter = Math.round(
-					lineVisibleRanges.ranges[0]!.left + lineVisibleRanges.ranges[0]!.width / 2,
-				);
+			if (showIfCollapsed && lineVisibleRanges.ranges.length === 1 && lineVisibleRanges.ranges[0]!.width < this._typicalHalfwidthCharacterWidth) {
+				const rangeCenter = Math.round(lineVisibleRanges.ranges[0]!.left + lineVisibleRanges.ranges[0]!.width / 2);
 				const left = Math.max(0, Math.round(rangeCenter - this._typicalHalfwidthCharacterWidth / 2));
 				lineVisibleRanges.ranges[0] = new HorizontalRange(left, this._typicalHalfwidthCharacterWidth);
 			}
 			for (let index = 0; index < lineVisibleRanges.ranges.length; index += 1) {
 				const visibleRange = lineVisibleRanges.ranges[index]!;
-				const fillToLineEnd =
-					shouldFillLineOnLineBreak &&
-					lineVisibleRanges.continuesOnNextLine &&
-					lineVisibleRanges.ranges.length === 1;
+				const fillToLineEnd = shouldFillLineOnLineBreak && lineVisibleRanges.continuesOnNextLine && lineVisibleRanges.ranges.length === 1;
 				output[lineVisibleRanges.lineNumber - context.visibleRange.startLineNumber] +=
 					`<div class="cdr ${escapeAttribute(className)}" style="left:${textLeft + visibleRange.left}px;width:${fillToLineEnd ? '100%' : `${visibleRange.width}px`};"></div>`;
 			}
@@ -180,16 +132,9 @@ export class DecorationsOverlay extends DynamicViewOverlay {
 }
 
 function compareModelDecorations(left: ViewModelDecoration, right: ViewModelDecoration): number {
-	return (
-		(left.options.zIndex ?? 0) - (right.options.zIndex ?? 0) ||
-		left.options.className!.localeCompare(right.options.className!) ||
-		Range.compareRangesUsingStarts(left.range, right.range)
-	);
+	return (left.options.zIndex ?? 0) - (right.options.zIndex ?? 0) || left.options.className!.localeCompare(right.options.className!) || Range.compareRangesUsingStarts(left.range, right.range);
 }
 
 function escapeAttribute(value: string): string {
-	return value.replace(
-		/[&"<>]/gu,
-		character => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;' })[character]!,
-	);
+	return value.replace(/[&"<>]/gu, character => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;' })[character]!);
 }

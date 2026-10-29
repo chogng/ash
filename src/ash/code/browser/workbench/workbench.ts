@@ -20,11 +20,7 @@ try {
 	showPartsSplash(document, readBrowserPartsSplash(window));
 	{
 		using provider = await IndexedDBFileSystemProvider.create(window.indexedDB, Schemas.vscodeUserData);
-		await migrateLegacyBrowserSettings(
-			window.indexedDB,
-			provider,
-			URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }),
-		);
+		await migrateLegacyBrowserSettings(window.indexedDB, provider, URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }));
 		using files = new FileService();
 		using registration = files.registerProvider(Schemas.vscodeUserData, provider);
 		await initializeBrowserLocalization(files, new BrowserLanguagePackStore());
@@ -41,10 +37,7 @@ try {
 			constructor() {
 				super({
 					id: codeSessionsProfile.titlebarActionId,
-					title: localize2(
-						{ bundle: 'ash.workbench', key: 'command.OpenCodeSessionsAction' },
-						'Open Code Sessions',
-					),
+					title: localize2({ bundle: 'ash.workbench', key: 'command.OpenCodeSessionsAction' }, 'Open Code Sessions'),
 					tooltip: 'Open Code Sessions',
 					icon: ashTitlebarMark,
 					menu: { id: MenuId.TitleBarAdjacentCenter, group: 'navigation', order: 1 },

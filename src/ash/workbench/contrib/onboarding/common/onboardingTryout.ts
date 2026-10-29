@@ -72,16 +72,7 @@ export function createOnboardingTryoutLink(id: string): string {
 export function parseOnboardingTryoutLink(href: string): string | undefined {
 	try {
 		const url = new URL(href);
-		if (
-			url.protocol !== 'ash:' ||
-			url.hostname !== 'tryout' ||
-			url.username ||
-			url.password ||
-			url.port ||
-			url.search ||
-			url.hash ||
-			!/^\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(url.pathname)
-		)
+		if (url.protocol !== 'ash:' || url.hostname !== 'tryout' || url.username || url.password || url.port || url.search || url.hash || !/^\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(url.pathname))
 			return undefined;
 		return url.pathname.slice(1);
 	} catch {

@@ -14,32 +14,15 @@ import { IMenuService } from '../../platform/actions/common/actions.js';
 import { IAccessibleViewService } from '../../platform/accessibility/browser/accessibleView.js';
 import { IContextMenuService, IContextViewService } from '../../platform/contextview/browser/contextView.js';
 import { ICommandService } from '../../platform/commands/common/commands.js';
-import {
-	ViewPane,
-	type IViewPaneOptions,
-	type PartTitleProjection,
-} from '../../workbench/browser/parts/views/viewPane.js';
+import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from '../../workbench/browser/parts/views/viewPane.js';
 import { IWorkbenchLayoutService } from '../../workbench/services/layout/browser/layoutService.js';
 import { IChatService } from '../../workbench/services/chat/common/chatService.js';
-import type {
-	IActiveSessionThread,
-	IChat,
-	ISession,
-	IUntitledChatSession,
-	ThreadId,
-} from '../services/sessions/common/session.js';
+import type { IActiveSessionThread, IChat, ISession, IUntitledChatSession, ThreadId } from '../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
-import {
-	ChatWidget,
-	resolveMarkdownWorkspaceResource,
-} from '../../workbench/contrib/chat/browser/widget/chatWidget.js';
+import { ChatWidget, resolveMarkdownWorkspaceResource } from '../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { ChatViewTitleControl } from '../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewTitleControl.js';
 import { addDisposableListener, h, isHTMLElement } from '../../base/browser/dom.js';
-import {
-	type ChatContextAttachment,
-	type ChatImageCapture,
-	type IChatContextTarget,
-} from '../../workbench/services/chat/common/chatContextService.js';
+import { type ChatContextAttachment, type ChatImageCapture, type IChatContextTarget } from '../../workbench/services/chat/common/chatContextService.js';
 import { IOpenerService } from '../../platform/opener/common/opener.js';
 import { IEditorService } from '../../workbench/services/editor/common/editorService.js';
 import { IFileService } from '../../platform/files/common/files.js';
@@ -66,11 +49,7 @@ import { INotificationService } from '../../platform/notification/common/notific
 import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { Sash, SashState } from '../../base/browser/ui/sash/sash.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
-import {
-	FileRevisionConflictError,
-	FileSystemProviderErrorCode,
-	toFileSystemProviderErrorCode,
-} from '../../platform/files/common/files.js';
+import { FileRevisionConflictError, FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../platform/files/common/files.js';
 import { IUserDataProfileService } from '../../workbench/services/userDataProfile/common/userDataProfile.js';
 import { editJsonObjectProperty, parseJsonDocument } from '../../base/common/json.js';
 
@@ -122,10 +101,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	private editorVisible = true;
 	private readonly inEditor: IContextKey<boolean>;
 	private focusReturn: (() => void) | undefined;
-	private readonly popouts = new Map<
-		ChatWidget<ChatWidgetModel>,
-		{ shell: SessionAuxiliaryWindow; resources: DisposableStore; placeholder: HTMLElement }
-	>();
+	private readonly popouts = new Map<ChatWidget<ChatWidgetModel>, { shell: SessionAuxiliaryWindow; resources: DisposableStore; placeholder: HTMLElement }>();
 	private readonly openingPopouts = new Map<ChatWidget<ChatWidgetModel>, Promise<void>>();
 
 	constructor(
@@ -162,9 +138,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.contentElement.classList.add('ash-chat-view');
 		const viewId = `ash-chat-view-${++chatViewInstanceId}`;
 		this.titleControl = this._register(
-			this.instantiationService.createInstance(ChatViewTitleControl, this.element, viewId, () =>
-				this.commandService.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID),
-			),
+			this.instantiationService.createInstance(ChatViewTitleControl, this.element, viewId, () => this.commandService.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID)),
 		);
 		this.paneHost = h(container.ownerDocument, 'div');
 		this.paneHost.className = 'ash-chat-pane-host';
@@ -211,10 +185,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 					sessionService,
 					storage,
 					groups,
-					selection =>
-						createSessionItemActions(selection, commandService, storage, notifications, () =>
-							this.openInNewWindow(selection),
-						),
+					selection => createSessionItemActions(selection, commandService, storage, notifications, () => this.openInNewWindow(selection)),
 					() => {
 						if (this.sessionsPresentation !== 'sideBySide') this.setSessionsSidebarVisible(false);
 						this.focus();
@@ -224,10 +195,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		);
 		this.sessionsSidebar.hidden = true;
 		const storedWidth = storage.getNumber(sessionsSidebarWidthKey, StorageScope.WORKSPACE);
-		this.sessionsSidebarWidth =
-			storedWidth !== undefined && storedWidth >= minimumSessionsSidebarWidth
-				? storedWidth
-				: defaultSessionsSidebarWidth;
+		this.sessionsSidebarWidth = storedWidth !== undefined && storedWidth >= minimumSessionsSidebarWidth ? storedWidth : defaultSessionsSidebarWidth;
 		this.sessionsSash = this._register(new Sash(this.body, 'vertical'));
 		this.sessionsSash.element.classList.add('ash-chat-sessions-sash');
 		this.sessionsSash.element.setAttribute('aria-label', localize('chat.sessions.resize', 'Resize Sessions list'));
@@ -254,12 +222,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 					return;
 				}
 				resizeStartWidth = undefined;
-				this.storage.store(
-					sessionsSidebarWidthKey,
-					this.sessionsSidebarWidth,
-					StorageScope.WORKSPACE,
-					StorageTarget.MACHINE,
-				);
+				this.storage.store(sessionsSidebarWidthKey, this.sessionsSidebarWidth, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 			}),
 		);
 		this._register(
@@ -284,9 +247,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		);
 		const ResizeObserver = container.ownerDocument.defaultView?.ResizeObserver;
 		if (ResizeObserver) {
-			const observer = new ResizeObserver(() =>
-				this.layoutSessionsSidebar(this.body.getBoundingClientRect().width),
-			);
+			const observer = new ResizeObserver(() => this.layoutSessionsSidebar(this.body.getBoundingClientRect().width));
 			observer.observe(this.body);
 			this._register(toDisposable(() => observer.disconnect()));
 		}
@@ -295,8 +256,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this._register(
 			sessionService.onDidChange(() => {
 				this.syncSessions();
-				if (!this.restoringViewState && this.failedSelectionRevision !== sessionService.navigationRevision)
-					this.failedSelectionRevision = undefined;
+				if (!this.restoringViewState && this.failedSelectionRevision !== sessionService.navigationRevision) this.failedSelectionRevision = undefined;
 				this.saveViewState();
 			}),
 		);
@@ -340,25 +300,14 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			.catch(error => {
 				if (this.viewDisposed) return;
 				this.restoringViewState = false;
-				this.failedSelectionRevision =
-					storedSelection && sessionService.navigationRevision === restoringRevision
-						? restoringRevision
-						: undefined;
+				this.failedSelectionRevision = storedSelection && sessionService.navigationRevision === restoringRevision ? restoringRevision : undefined;
 				this.saveViewState();
-				this.notifications.error(
-					localize(
-						'chat.selection.restoreFailed',
-						'Could not restore the Chat selection: {0}',
-						String(error),
-					),
-				);
+				this.notifications.error(localize('chat.selection.restoreFailed', 'Could not restore the Chat selection: {0}', String(error)));
 			});
 		void this.getProgressIndicator().showWhile(restoring, 150);
 	}
 
-	private restoreViewState(
-		raw: string | undefined,
-	): { readonly sessionId: string; readonly threadId: string } | undefined {
+	private restoreViewState(raw: string | undefined): { readonly sessionId: string; readonly threadId: string } | undefined {
 		if (!raw || this.sessionService.active || this.sessionService.activeUntitledSession) return undefined;
 		try {
 			const value: unknown = JSON.parse(raw);
@@ -376,26 +325,17 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 				active !== undefined &&
 				(!isRecord(active) ||
 					(active.kind === 'untitled'
-						? typeof active.id !== 'string' ||
-							!value.drafts.some(draft => draft.untitledSessionId === active.id)
-						: active.kind !== 'session' ||
-							typeof active.sessionId !== 'string' ||
-							!active.sessionId ||
-							typeof active.threadId !== 'string' ||
-							!active.threadId))
+						? typeof active.id !== 'string' || !value.drafts.some(draft => draft.untitledSessionId === active.id)
+						: active.kind !== 'session' || typeof active.sessionId !== 'string' || !active.sessionId || typeof active.threadId !== 'string' || !active.threadId))
 			) {
 				throw new TypeError(localize('chat.selection.invalid', 'Invalid stored Chat selection.'));
 			}
 			for (const draft of value.drafts) this.sessionService.restoreUntitledSession(draft);
-			if (isRecord(value.active) && value.active.kind === 'untitled')
-				this.sessionService.selectUntitledSession(value.active.id as string);
-			if (isRecord(value.active) && value.active.kind === 'session')
-				return { sessionId: value.active.sessionId as string, threadId: value.active.threadId as string };
+			if (isRecord(value.active) && value.active.kind === 'untitled') this.sessionService.selectUntitledSession(value.active.id as string);
+			if (isRecord(value.active) && value.active.kind === 'session') return { sessionId: value.active.sessionId as string, threadId: value.active.threadId as string };
 		} catch (error) {
 			this.failedSelectionRevision = this.sessionService.navigationRevision;
-			this.notifications.error(
-				localize('chat.selection.restoreFailed', 'Could not restore the Chat selection: {0}', String(error)),
-			);
+			this.notifications.error(localize('chat.selection.restoreFailed', 'Could not restore the Chat selection: {0}', String(error)));
 		}
 		return undefined;
 	}
@@ -404,25 +344,15 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		if (this.restoringViewState || this.failedSelectionRevision !== undefined || this.viewDisposed) return;
 		const draft = this.sessionService.activeUntitledSession;
 		const selected = this.sessionService.active;
-		const active = draft
-			? { kind: 'untitled', id: draft.untitledSessionId }
-			: selected
-				? { kind: 'session', sessionId: selected.session.sessionId, threadId: selected.threadId }
-				: undefined;
-		this.storage.store(
-			'chat.viewState',
-			JSON.stringify({ version: 1, drafts: this.sessionService.untitledSessions, active }),
-			StorageScope.WORKSPACE,
-			StorageTarget.MACHINE,
-		);
+		const active = draft ? { kind: 'untitled', id: draft.untitledSessionId } : selected ? { kind: 'session', sessionId: selected.session.sessionId, threadId: selected.threadId } : undefined;
+		this.storage.store('chat.viewState', JSON.stringify({ version: 1, drafts: this.sessionService.untitledSessions, active }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	}
 
 	async moveToEditor(): Promise<void> {
 		const revision = this.sessionService.navigationRevision;
 		const pane = this.activePane;
 		await pane?.captureDraft();
-		if (this.viewDisposed || pane !== this.activePane || revision !== this.sessionService.navigationRevision)
-			return;
+		if (this.viewDisposed || pane !== this.activePane || revision !== this.sessionService.navigationRevision) return;
 		await this.editorService!.openEditor(new ChatEditorInput(), { pinned: true });
 	}
 
@@ -466,10 +396,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	}
 
 	override get minimumWidth(): number {
-		return this.sessionsSidebarVisible.get() === true &&
-			this.sessionsPresentation === AgentSessionsOrientation.SideBySide
-			? minimumSideBySideWidth
-			: minimumChatWidth;
+		return this.sessionsSidebarVisible.get() === true && this.sessionsPresentation === AgentSessionsOrientation.SideBySide ? minimumSideBySideWidth : minimumChatWidth;
 	}
 
 	toggleSessionsSidebar(): void {
@@ -486,9 +413,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		return this.activePane?.captureScreenshot(capture) ?? Promise.resolve();
 	}
 
-	captureActiveDraft(): Promise<
-		{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined
-	> {
+	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined> {
 		return this.activePane?.captureDraft() ?? Promise.resolve(undefined);
 	}
 	async openInNewWindow(selection?: SessionsViewSelection): Promise<void> {
@@ -499,19 +424,11 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		}
 		if (!selection) return;
 		if (selection.kind === 'untitled') {
-			const materialized = this.sessionService.materializedSessions
-				.get()
-				.get(selection.session.untitledSessionId);
-			const session =
-				materialized &&
-				this.sessionService.sessions.find(session => session.sessionId === materialized.sessionId);
-			if (session && materialized)
-				selection = { kind: 'session', active: { session, threadId: materialized.threadId } };
+			const materialized = this.sessionService.materializedSessions.get().get(selection.session.untitledSessionId);
+			const session = materialized && this.sessionService.sessions.find(session => session.sessionId === materialized.sessionId);
+			if (session && materialized) selection = { kind: 'session', active: { session, threadId: materialized.threadId } };
 		}
-		const paneId =
-			selection.kind === 'untitled'
-				? untitledSessionPaneId(selection.session)
-				: sessionPaneId(selection.active.session);
+		const paneId = selection.kind === 'untitled' ? untitledSessionPaneId(selection.session) : sessionPaneId(selection.active.session);
 		// Open a catalog entry without navigating the IDE's foreground conversation.
 		this.syncSessions(paneId);
 		const pane = this.panes.get(paneId);
@@ -524,10 +441,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		}
 		let pending = this.openingPopouts.get(pane);
 		if (!pending) {
-			pending = this.detachPane(
-				pane,
-				selection.kind === 'session' ? selection.active.session.title : selection.session.title,
-			);
+			pending = this.detachPane(pane, selection.kind === 'session' ? selection.active.session.title : selection.session.title);
 			this.openingPopouts.set(pane, pending);
 		}
 		try {
@@ -545,9 +459,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		}
 		const resources = new DisposableStore();
 		try {
-			const shell = resources.add(
-				this.instantiationService.createInstance(SessionAuxiliaryWindow, window, title),
-			);
+			const shell = resources.add(this.instantiationService.createInstance(SessionAuxiliaryWindow, window, title));
 			const placeholder = h(this.paneHost.ownerDocument, 'div', { className: 'ash-sessions-detached-chat' });
 			placeholder.id = `${pane.element.id}-detached`;
 			resources.add(
@@ -569,10 +481,8 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 					this.paneHost.append(pane.element);
 					placeholder.remove();
 					if (!this.viewDisposed && [...this.panes.values()].includes(pane)) {
-						if (pane.sessionId && pane.threadId)
-							this.sessionService.selectThread(pane.sessionId, pane.threadId);
-						else if (pane.model.untitledSessionId)
-							this.sessionService.selectUntitledSession(pane.model.untitledSessionId);
+						if (pane.sessionId && pane.threadId) this.sessionService.selectThread(pane.sessionId, pane.threadId);
+						else if (pane.model.untitledSessionId) this.sessionService.selectUntitledSession(pane.model.untitledSessionId);
 						this.syncSessions();
 						if (!this.editorMount) this.layoutService.showPart('auxiliarybar');
 						this.paneHost.ownerDocument.defaultView?.focus();
@@ -596,8 +506,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	}
 
 	startVoiceConversation(): Promise<void> {
-		if (!this.activePane)
-			return Promise.reject(new Error(localize('agentsVoice.noChat', 'Open a Chat before starting voice.')));
+		if (!this.activePane) return Promise.reject(new Error(localize('agentsVoice.noChat', 'Open a Chat before starting voice.')));
 		return this.activePane.startVoiceConversation();
 	}
 
@@ -633,12 +542,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 					ChatWidget,
 					this.paneHost,
 					`ash-chat-pane-${++chatPaneInstanceId}`,
-					this.instantiationService.createInstance(
-						ChatWidgetModel,
-						this.chatService,
-						{ kind: 'untitled', session: untitledSession },
-						this.sessionService,
-					),
+					this.instantiationService.createInstance(ChatWidgetModel, this.chatService, { kind: 'untitled', session: untitledSession }, this.sessionService),
 					() => {
 						this.sessionService.createUntitledSession();
 					},
@@ -682,12 +586,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 					ChatWidget,
 					this.paneHost,
 					`ash-chat-pane-${++chatPaneInstanceId}`,
-					this.instantiationService.createInstance(
-						ChatWidgetModel,
-						this.chatService,
-						{ kind: 'session', active: selection },
-						this.sessionService,
-					),
+					this.instantiationService.createInstance(ChatWidgetModel, this.chatService, { kind: 'session', active: selection }, this.sessionService),
 					() => {
 						this.sessionService.createUntitledSession();
 					},
@@ -728,38 +627,26 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			pane.dispose();
 		}
 		const activePane = activePaneId ? this.panes.get(activePaneId) : undefined;
-		const orderedNodes = [
-			...entries.map(entry => this.popouts.get(entry.pane)?.placeholder ?? entry.pane.element),
-			this.empty,
-		];
+		const orderedNodes = [...entries.map(entry => this.popouts.get(entry.pane)?.placeholder ?? entry.pane.element), this.empty];
 		for (let index = 0; index < orderedNodes.length; index += 1) {
 			const node = orderedNodes[index]!;
 			// Keep retained Chat editors attached while Session details refresh.
-			if (this.paneHost.children[index] !== node)
-				this.paneHost.insertBefore(node, this.paneHost.children[index] ?? null);
+			if (this.paneHost.children[index] !== node) this.paneHost.insertBefore(node, this.paneHost.children[index] ?? null);
 		}
 		this.activePane = activePane;
 		for (const entry of entries) {
 			const popup = this.popouts.get(entry.pane);
-			entry.pane.setVisible(
-				!!popup || (entry.pane === this.activePane && (!this.editorMount || this.editorVisible)),
-			);
+			entry.pane.setVisible(!!popup || (entry.pane === this.activePane && (!this.editorMount || this.editorVisible)));
 			if (popup) {
 				popup.placeholder.hidden = entry.pane !== activePane;
 				popup.shell.setTitle(entry.label);
 			}
 		}
 		this.empty.hidden = entries.length > 0;
-		this.titleControl.update(
-			entries.find(entry => entry.pane === activePane)?.label,
-			activePane ? (this.popouts.get(activePane)?.placeholder.id ?? activePane.element.id) : undefined,
-		);
+		this.titleControl.update(entries.find(entry => entry.pane === activePane)?.label, activePane ? (this.popouts.get(activePane)?.placeholder.id ?? activePane.element.id) : undefined);
 		for (const entry of entries) {
 			entry.pane.element.setAttribute('role', 'region');
-			entry.pane.setTabId(
-				this.popouts.get(entry.pane)?.shell.title.id ??
-					(entry.pane === activePane ? this.titleControl.titleId : undefined),
-			);
+			entry.pane.setTabId(this.popouts.get(entry.pane)?.shell.title.id ?? (entry.pane === activePane ? this.titleControl.titleId : undefined));
 		}
 		this.updateSessionsLayout();
 		if (restoreFocus && activePane?.element.contains(focusedElement)) focusedElement.focus();
@@ -790,11 +677,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		const untitledSessionId = this.initialUntitledSessionId;
 		this.initialUntitledSessionId = undefined;
 		if (!untitledSessionId || !this.panes.has(`untitled:${untitledSessionId}`)) return;
-		if (
-			this.sessionService.sessions.some(
-				session => session.status === 'active' && this.selectionForSession(session),
-			)
-		) {
+		if (this.sessionService.sessions.some(session => session.status === 'active' && this.selectionForSession(session))) {
 			this.sessionService.discardUntitledSession(untitledSessionId);
 		}
 	}
@@ -809,9 +692,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	private rekeyMaterializedPanes(): void {
 		for (const [paneId, pane] of [...this.panes]) {
 			const draftId = pane.model.untitledSessionId;
-			const sessionId =
-				pane.sessionId ??
-				(draftId ? this.sessionService.materializedSessions.get().get(draftId)?.sessionId : undefined);
+			const sessionId = pane.sessionId ?? (draftId ? this.sessionService.materializedSessions.get().get(draftId)?.sessionId : undefined);
 			if (!sessionId) continue;
 			const materializedPaneId = sessionPaneIdFromId(sessionId);
 			if (paneId === materializedPaneId) continue;
@@ -821,13 +702,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 				const active = this.sessionService.active;
 				// Keep the first submission's editor and lifetime when the catalog arrived
 				// before its create response. A deliberately selected durable draft wins.
-				if (
-					origin &&
-					paneId === `untitled:${origin}` &&
-					pane === this.activePane &&
-					active?.session.sessionId === sessionId &&
-					active.threadId === pane.threadId
-				) {
+				if (origin && paneId === `untitled:${origin}` && pane === this.activePane && active?.session.sessionId === sessionId && active.threadId === pane.threadId) {
 					this.panes.delete(materializedPaneId);
 					this.popouts.get(existing)?.resources.dispose();
 					existing.dispose();
@@ -848,16 +723,13 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		const previousMinimum = this.minimumWidth;
 		const width = this.body.getBoundingClientRect().width;
 		const size =
-			(visible && width > 0 && this.sessionsPresentation === AgentSessionsOrientation.SideBySide) ||
-			(!visible && this.auxiliaryBarWidthBeforeSessions !== undefined)
+			(visible && width > 0 && this.sessionsPresentation === AgentSessionsOrientation.SideBySide) || (!visible && this.auxiliaryBarWidthBeforeSessions !== undefined)
 				? this.layoutService.getPartSize('auxiliarybar')
 				: undefined;
 		if (visible) {
 			const active = this.contentElement.ownerDocument.activeElement;
 			const HTMLElement = this.contentElement.ownerDocument.defaultView?.HTMLElement;
-			this.focusReturn =
-				this.titleControl.captureFocus() ??
-				(HTMLElement && active instanceof HTMLElement ? () => active.focus() : undefined);
+			this.focusReturn = this.titleControl.captureFocus() ?? (HTMLElement && active instanceof HTMLElement ? () => active.focus() : undefined);
 		}
 		this.sessionsSidebarVisible.set(visible);
 		this.body.classList.toggle('sessions-sidebar-visible', visible);
@@ -892,10 +764,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		const orientation = this.configuration.getValue<AgentSessionsOrientation>(AGENT_SESSIONS_ORIENTATION_SETTING);
 		const width = this.body.getBoundingClientRect().width;
 		const expand =
-			this.sessionsSidebarVisible.get() &&
-			orientation === AgentSessionsOrientation.SideBySide &&
-			this.sessionsPresentation !== orientation &&
-			width > 0
+			this.sessionsSidebarVisible.get() && orientation === AgentSessionsOrientation.SideBySide && this.sessionsPresentation !== orientation && width > 0
 				? this.layoutService.getPartSize('auxiliarybar')
 				: undefined;
 		if (expand) this.auxiliaryBarWidthBeforeSessions = expand.width;
@@ -930,37 +799,16 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			const snapshot = await this.fileService.readFile(resource);
 			if (this.viewDisposed) return;
 			const value = parseJsonDocument(snapshot.content, { allowComments: true, allowTrailingComma: true }).value;
-			if (
-				!value ||
-				typeof value !== 'object' ||
-				!(AGENT_SESSIONS_ORIENTATION_SETTING in value) ||
-				value[AGENT_SESSIONS_ORIENTATION_SETTING] !== 'auto'
-			)
-				return;
+			if (!value || typeof value !== 'object' || !(AGENT_SESSIONS_ORIENTATION_SETTING in value) || value[AGENT_SESSIONS_ORIENTATION_SETTING] !== 'auto') return;
 			// The revision check preserves a layout the user chose while the old profile was loading.
 			await this.fileService.writeFile({
 				resource,
-				content: editJsonObjectProperty(
-					snapshot.content,
-					AGENT_SESSIONS_ORIENTATION_SETTING,
-					AgentSessionsOrientation.SideBySide,
-				),
+				content: editJsonObjectProperty(snapshot.content, AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation.SideBySide),
 				expectedRevision: snapshot.revision,
 			});
 		} catch (error) {
-			if (
-				this.viewDisposed ||
-				error instanceof FileRevisionConflictError ||
-				toFileSystemProviderErrorCode(error as Error) === FileSystemProviderErrorCode.FileNotFound
-			)
-				return;
-			this.notifications.error(
-				localize(
-					'chat.sessions.layout.migrationFailed',
-					'Could not save the Sessions layout preference: {0}',
-					String(error),
-				),
-			);
+			if (this.viewDisposed || error instanceof FileRevisionConflictError || toFileSystemProviderErrorCode(error as Error) === FileSystemProviderErrorCode.FileNotFound) return;
+			this.notifications.error(localize('chat.sessions.layout.migrationFailed', 'Could not save the Sessions layout preference: {0}', String(error)));
 		}
 	}
 
@@ -991,10 +839,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.sessionsSash.element.setAttribute('aria-valuemin', String(minimumSessionsSidebarWidth));
 		this.sessionsSash.element.setAttribute('aria-valuemax', String(maximumWidth));
 		this.sessionsSash.element.setAttribute('aria-valuenow', String(sidebarWidth));
-		this.sessionsSash.element.setAttribute(
-			'aria-valuetext',
-			localize('chat.sessions.resizeWidth', '{0} pixels', Math.round(sidebarWidth)),
-		);
+		this.sessionsSash.element.setAttribute('aria-valuetext', localize('chat.sessions.resizeWidth', '{0} pixels', Math.round(sidebarWidth)));
 	}
 }
 

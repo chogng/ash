@@ -6,11 +6,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { test } from 'node:test';
 import { checkStyles, checkStyleSuggestions, resolveStylelintMatches } from '../../stylelint.ts';
-import {
-	findClassAttributeSubstringSelector,
-	findRootAnchoredHas,
-	findSessionsReference,
-} from '../stylelint/validateHasSelectors.ts';
+import { findClassAttributeSubstringSelector, findRootAnchoredHas, findSessionsReference } from '../stylelint/validateHasSelectors.ts';
 import { validateDesignTokens } from '../stylelint/validateDesignTokens.ts';
 import { getVariableNameValidator, readKnownVariables } from '../stylelint/validateVariableNames.ts';
 
@@ -40,10 +36,7 @@ test('CSS variable checks find unknown names in nested fallbacks without treatin
 test('Snapshot webview variables pass production checks while misspellings still fail', () => {
 	assert.deepEqual(checkStyles([join(root, 'extensions/snapshot/browser/screenshotEditor.css')]), []);
 	const errors: string[] = [];
-	getVariableNameValidator()(
-		'.capture { color: var(--snapshot-foregound); padding: var(--snapshot-spacing-5); }',
-		name => errors.push(name),
-	);
+	getVariableNameValidator()('.capture { color: var(--snapshot-foregound); padding: var(--snapshot-spacing-5); }', name => errors.push(name));
 	assert.deepEqual(errors, ['--snapshot-foregound', '--snapshot-spacing-5']);
 });
 
@@ -74,15 +67,10 @@ test('source selection deduplicates files, excludes fixtures, and rejects unmatc
 		mkdirSync(join(directory, 'browser/test'), { recursive: true });
 		writeFileSync(join(directory, 'browser/one.css'), '');
 		writeFileSync(join(directory, 'browser/test/fixture.css'), '');
-		assert.deepEqual(resolveStylelintMatches(['browser', 'browser/**/*.css', 'browser/one.css'], directory), [
-			join(directory, 'browser/one.css'),
-		]);
+		assert.deepEqual(resolveStylelintMatches(['browser', 'browser/**/*.css', 'browser/one.css'], directory), [join(directory, 'browser/one.css')]);
 		assert.throws(() => resolveStylelintMatches(['missing/**/*.css'], directory), /No production CSS/);
 		assert.throws(() => resolveStylelintMatches(['browser/test/fixture.css'], directory), /No production CSS/);
-		assert.throws(
-			() => resolveStylelintMatches([join(root, 'src/ash/base/browser/ui/button/button.css')], directory),
-			/must belong/,
-		);
+		assert.throws(() => resolveStylelintMatches([join(root, 'src/ash/base/browser/ui/button/button.css')], directory), /must belong/);
 	} finally {
 		rmSync(directory, { recursive: true });
 	}
@@ -95,10 +83,7 @@ test('CLI reports file and location, fails on misspellings, and never updates th
 	const manifest = join(root, 'build/lib/stylelint/ash-known-variables.json');
 	const before = readFileSync(manifest, 'utf8');
 	try {
-		writeFileSync(
-			file,
-			'.a {\n  color: var(--ash-foreground);\n  gap: var(--ash-nonexistent-spacing, var(--ash-foreground));\n}',
-		);
+		writeFileSync(file, '.a {\n  color: var(--ash-foreground);\n  gap: var(--ash-nonexistent-spacing, var(--ash-foreground));\n}');
 		const errors = checkStyles([file], getVariableNameValidator(known), directory);
 		assert.deepEqual(errors, ['example.css:3:8: Unknown CSS variable --ash-nonexistent-spacing']);
 		const failure = spawnSync(process.execPath, ['build/stylelint.ts', file], { cwd: root, encoding: 'utf8' });
@@ -130,10 +115,7 @@ test('hygiene stops before registry verification on CSS errors and preserves the
 		}
 		writeFileSync(join(directory, 'build/lib/stylelint/ash-known-variables.json'), JSON.stringify(known));
 		mkdirSync(join(directory, 'src'), { recursive: true });
-		writeFileSync(
-			manager,
-			"require('node:fs').writeFileSync('called.json', JSON.stringify(process.argv.slice(2))); process.exitCode = 23;",
-		);
+		writeFileSync(manager, "require('node:fs').writeFileSync('called.json', JSON.stringify(process.argv.slice(2))); process.exitCode = 23;");
 		writeFileSync(source, '.a { color: var(--not-registered); }');
 		const options = { cwd: directory, encoding: 'utf8' as const, env: { ...process.env, npm_execpath: manager } };
 		const failure = spawnSync(process.execPath, ['build/hygiene.ts'], options);
@@ -142,34 +124,18 @@ test('hygiene stops before registry verification on CSS errors and preserves the
 		writeFileSync(source, '.a { color: var(--ash-foreground); }');
 		const verification = spawnSync(process.execPath, ['build/hygiene.ts'], options);
 		assert.equal(verification.status, 23, verification.stderr);
-		assert.deepEqual(JSON.parse(readFileSync(join(directory, 'called.json'), 'utf8')), [
-			'--dir',
-			'.',
-			'test:unit',
-			'--run',
-			'src/ash/workbench/test/common/design-tokens.test.ts',
-		]);
+		assert.deepEqual(JSON.parse(readFileSync(join(directory, 'called.json'), 'utf8')), ['--dir', '.', 'test:unit', '--run', 'src/ash/workbench/test/common/design-tokens.test.ts']);
 	} finally {
 		rmSync(directory, { recursive: true });
 	}
 });
 
 test('selector checks distinguish page roots and class substrings from component-local selectors and examples', () => {
-	for (const selector of [
-		'body:has(.open)',
-		'html.busy:has(.open)',
-		':root:has(.open)',
-		'.ash-workbench.active:is(.focused, .busy):has(.open)',
-	]) {
+	for (const selector of ['body:has(.open)', 'html.busy:has(.open)', ':root:has(.open)', '.ash-workbench.active:is(.focused, .busy):has(.open)']) {
 		const source = `@media (min-width: 600px) {\n${selector} { color: red; }\n}`;
 		assert.equal(findRootAnchoredHas(source), source.lastIndexOf(':has('), selector);
 	}
-	for (const selector of [
-		'.panel:has(.open)',
-		'body .panel:has(.open)',
-		'.ash-workbench-shell:has(.open)',
-		'.ash-workbench > .panel:has(.open)',
-	]) {
+	for (const selector of ['.panel:has(.open)', 'body .panel:has(.open)', '.ash-workbench-shell:has(.open)', '.ash-workbench > .panel:has(.open)']) {
 		assert.equal(findRootAnchoredHas(`${selector} { color: red; }`), undefined, selector);
 	}
 	for (const operator of ['*=', '^=', '$=']) {
@@ -184,9 +150,7 @@ test('selector checks distinguish page roots and class substrings from component
 test('CSS layer checks reject Workbench roots only in lower-layer production CSS', () => {
 	const directory = mkdtempSync(join(tmpdir(), 'ash-stylelint-layers-'));
 	try {
-		const files = ['base', 'platform', 'editor', 'workbench'].map(layer =>
-			join(directory, `src/ash/${layer}/browser/component.css`),
-		);
+		const files = ['base', 'platform', 'editor', 'workbench'].map(layer => join(directory, `src/ash/${layer}/browser/component.css`));
 		for (const file of files) {
 			mkdirSync(join(file, '..'), { recursive: true });
 			writeFileSync(file, '.ash-workbench .component { color: var(--ash-foreground); }');
@@ -194,10 +158,7 @@ test('CSS layer checks reject Workbench roots only in lower-layer production CSS
 		const errors = checkStyles(files, getVariableNameValidator(known), directory);
 		assert.equal(errors.length, 3);
 		for (const [index, layer] of ['base', 'platform', 'editor'].entries()) {
-			assert.equal(
-				errors[index],
-				`src/ash/${layer}/browser/component.css:1:1: Lower-layer CSS must not depend on the .ash-workbench root owned by Workbench.`,
-			);
+			assert.equal(errors[index], `src/ash/${layer}/browser/component.css:1:1: Lower-layer CSS must not depend on the .ash-workbench root owned by Workbench.`);
 		}
 	} finally {
 		rmSync(directory, { recursive: true });
@@ -229,10 +190,7 @@ test('CSS layer checks keep Agent Window selectors and tokens in Sessions', () =
 		const layers = ['base', 'platform', 'editor', 'workbench', 'sessions'];
 		const files = layers.map(layer => join(directory, `src/ash/${layer}/browser/component.css`));
 		for (const file of files) mkdirSync(join(file, '..'), { recursive: true });
-		for (const source of [
-			'.ash-sessions-window .component { color: var(--ash-foreground); }',
-			'.component { --sessions-accent: var(--ash-foreground); }',
-		]) {
+		for (const source of ['.ash-sessions-window .component { color: var(--ash-foreground); }', '.component { --sessions-accent: var(--ash-foreground); }']) {
 			for (const file of files) writeFileSync(file, source);
 			const errors = checkStyles(files, getVariableNameValidator(known), directory);
 			assert.equal(errors.length, 4);

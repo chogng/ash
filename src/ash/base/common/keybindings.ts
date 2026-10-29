@@ -51,14 +51,22 @@ export const MAX_KEYBINDING_CHORDS = 4;
 export function logicalKey(key: string, modifiers: KeybindingModifiers = {}): LogicalKeybindingChord {
 	const normalizedKey = normalizeLogicalKey(key);
 	if (!normalizedKey) throw new TypeError('Logical key must not be empty');
-	return { kind: KeybindingChordKind.Logical, key: normalizedKey, modifiers: { ...modifiers } };
+	return {
+		kind: KeybindingChordKind.Logical,
+		key: normalizedKey,
+		modifiers: { ...modifiers },
+	};
 }
 
 /** Creates a physical chord from a browser `KeyboardEvent.code` value. */
 export function physicalKey(code: string, modifiers: KeybindingModifiers = {}): PhysicalKeybindingChord {
 	const normalizedCode = code.trim();
 	if (!normalizedCode) throw new TypeError('Physical key code must not be empty');
-	return { kind: KeybindingChordKind.Physical, code: normalizedCode, modifiers: { ...modifiers } };
+	return {
+		kind: KeybindingChordKind.Physical,
+		code: normalizedCode,
+		modifiers: { ...modifiers },
+	};
 }
 
 /** One command shortcut consisting of one or more ordered chords. */
@@ -79,21 +87,13 @@ export class Keybinding {
 		return new Keybinding([chord]);
 	}
 
-	static chord(
-		first: KeybindingChord,
-		second: KeybindingChord,
-		...remaining: readonly KeybindingChord[]
-	): Keybinding {
+	static chord(first: KeybindingChord, second: KeybindingChord, ...remaining: readonly KeybindingChord[]): Keybinding {
 		return new Keybinding([first, second, ...remaining]);
 	}
 }
 
-export function decodeKeybinding(
-	keybinding: number | readonly number[],
-	targetOperatingSystem: OperatingSystem,
-): Keybinding | null {
-	const encodedChords =
-		typeof keybinding === 'number' ? [keybinding & 0x0000ffff, (keybinding & 0xffff0000) >>> 16] : keybinding;
+export function decodeKeybinding(keybinding: number | readonly number[], targetOperatingSystem: OperatingSystem): Keybinding | null {
+	const encodedChords = typeof keybinding === 'number' ? [keybinding & 0x0000ffff, (keybinding & 0xffff0000) >>> 16] : keybinding;
 	const chords = encodedChords
 		.filter(encoded => encoded !== 0)
 		.map(encoded => {
@@ -150,10 +150,7 @@ export interface KeybindingEvent {
 	readonly isComposing?: boolean;
 }
 
-export type PhysicalKeyLabelProvider = (
-	code: string,
-	modifiers: Readonly<{ ctrlKey: boolean; shiftKey: boolean; altKey: boolean; metaKey: boolean }>,
-) => string | undefined;
+export type PhysicalKeyLabelProvider = (code: string, modifiers: Readonly<{ ctrlKey: boolean; shiftKey: boolean; altKey: boolean; metaKey: boolean }>) => string | undefined;
 
 export function resolveKeybinding(
 	keybinding: Keybinding,
@@ -167,24 +164,11 @@ export function resolveKeybinding(
 }
 
 export function matchesResolvedChord(chord: ResolvedKeybindingChord, event: KeybindingEvent): boolean {
-	const keyMatches =
-		chord.kind === KeybindingChordKind.Physical
-			? chord.key === event.code
-			: chord.key === normalizeLogicalKey(event.key);
-	return (
-		keyMatches &&
-		chord.ctrlKey === event.ctrlKey &&
-		chord.shiftKey === event.shiftKey &&
-		chord.altKey === event.altKey &&
-		chord.metaKey === event.metaKey
-	);
+	const keyMatches = chord.kind === KeybindingChordKind.Physical ? chord.key === event.code : chord.key === normalizeLogicalKey(event.key);
+	return keyMatches && chord.ctrlKey === event.ctrlKey && chord.shiftKey === event.shiftKey && chord.altKey === event.altKey && chord.metaKey === event.metaKey;
 }
 
-function resolveChord(
-	chord: KeybindingChord,
-	targetOperatingSystem: OperatingSystem,
-	physicalKeyLabels: ReadonlyMap<string, string> | PhysicalKeyLabelProvider | undefined,
-): ResolvedKeybindingChord {
+function resolveChord(chord: KeybindingChord, targetOperatingSystem: OperatingSystem, physicalKeyLabels: ReadonlyMap<string, string> | PhysicalKeyLabelProvider | undefined): ResolvedKeybindingChord {
 	const modifiers = chord.modifiers;
 	const primaryKey = Boolean(modifiers.primaryKey);
 	const primaryIsMeta = targetOperatingSystem === OperatingSystem.Macintosh;
@@ -195,11 +179,7 @@ function resolveChord(
 		metaKey: Boolean(modifiers.metaKey) || (primaryKey && primaryIsMeta),
 	};
 	const label =
-		chord.kind === KeybindingChordKind.Physical
-			? typeof physicalKeyLabels === 'function'
-				? physicalKeyLabels(chord.code, resolvedModifiers)
-				: physicalKeyLabels?.get(chord.code)
-			: undefined;
+		chord.kind === KeybindingChordKind.Physical ? (typeof physicalKeyLabels === 'function' ? physicalKeyLabels(chord.code, resolvedModifiers) : physicalKeyLabels?.get(chord.code)) : undefined;
 	return {
 		kind: chord.kind,
 		key: chord.kind === KeybindingChordKind.Physical ? chord.code : chord.key,

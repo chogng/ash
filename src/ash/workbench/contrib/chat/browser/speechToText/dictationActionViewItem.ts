@@ -1,7 +1,4 @@
-import {
-	MenuEntryActionViewItem,
-	type IMenuEntryActionViewItemOptions,
-} from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
+import { MenuEntryActionViewItem, type IMenuEntryActionViewItemOptions } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import type { MenuItemAction } from '../../../../../platform/actions/common/actions.js';
 import type { IObservable } from '../../../../../base/common/observable.js';
 import { autorun } from '../../../../../base/common/observable.js';
@@ -32,16 +29,7 @@ export class DictationActionViewItem extends MenuEntryActionViewItem {
 		this.button.toggleClassName('ash-chat-input-action', true);
 		this.button.toggleClassName('ash-chat-input-mic-action', true);
 		this.button.toggleClassName('disabled', !this.action.enabled);
-		this._register(
-			autorun(reader => this.button.domNode.setAttribute('aria-pressed', String(this.isActive.read(reader)))),
-		);
-		this._register(
-			addMicButtonContextMenuListener(
-				container,
-				() =>
-					getDictationContextMenuActions(this.commands, this.configuration, this.keybindings, this.action.id),
-				this.contextMenus,
-			),
-		);
+		this._register(autorun(reader => this.button.domNode.setAttribute('aria-pressed', String(this.isActive.read(reader)))));
+		this._register(addMicButtonContextMenuListener(container, () => getDictationContextMenuActions(this.commands, this.configuration, this.keybindings, this.action.id), this.contextMenus));
 	}
 }

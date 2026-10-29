@@ -7,10 +7,7 @@ import { DisposableStore, toDisposable } from '../../../../../base/common/lifecy
 import { Emitter } from '../../../../../base/common/event.js';
 import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import type {
-	IBrowserPasswordService,
-	BrowserPasswordState,
-} from '../../../../../platform/browserView/common/browserPasswordService.js';
+import type { IBrowserPasswordService, BrowserPasswordState } from '../../../../../platform/browserView/common/browserPasswordService.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { DialogResult } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -24,9 +21,7 @@ suite('Saved website password settings', () => {
 		const store = new DisposableStore();
 		const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test/' });
 		store.add(toDisposable(() => dom.window.close()));
-		store.add(
-			installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']),
-		);
+		store.add(installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']));
 		store.add(getWindowById(1)!.disposables);
 		const changed = store.add(new Emitter<void>());
 		const node = document.createElement('div');
@@ -54,15 +49,7 @@ suite('Saved website password settings', () => {
 		};
 		const dialogs = store.add(new DialogService());
 		const configuration = store.add(new InMemoryConfigurationService());
-		const renderer = store.add(
-			new BrowserPasswordSettingsRenderer(
-				node,
-				service,
-				dialogs,
-				{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService,
-				configuration,
-			),
-		);
+		const renderer = store.add(new BrowserPasswordSettingsRenderer(node, service, dialogs, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, configuration));
 		return {
 			[Symbol.dispose]: () => store.dispose(),
 			renderer,

@@ -22,17 +22,11 @@ test('Outline preferences restore after storage reload without leaking into anot
 		await storage.flush();
 		using restoredStorage = new BrowserStorageService({ ...options, workspaceId: 'first' });
 		using restored = new OutlineViewState(restoredStorage);
-		assert.deepEqual(
-			[restored.followCursor, restored.filterOnType, restored.sortBy],
-			[true, false, OutlineSortOrder.ByName],
-		);
+		assert.deepEqual([restored.followCursor, restored.filterOnType, restored.sortBy], [true, false, OutlineSortOrder.ByName]);
 		assert.deepEqual(restoredStorage.keys(StorageScope.WORKSPACE, StorageTarget.MACHINE), ['outline/state']);
 		using otherStorage = new BrowserStorageService({ ...options, workspaceId: 'other' });
 		using other = new OutlineViewState(otherStorage);
-		assert.deepEqual(
-			[other.followCursor, other.filterOnType, other.sortBy],
-			[false, true, OutlineSortOrder.ByPosition],
-		);
+		assert.deepEqual([other.followCursor, other.filterOnType, other.sortBy], [false, true, OutlineSortOrder.ByPosition]);
 	} finally {
 		dom.window.close();
 	}

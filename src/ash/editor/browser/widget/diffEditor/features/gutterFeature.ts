@@ -80,10 +80,7 @@ export class DiffEditorGutter extends Disposable {
 		}
 		this._register(
 			editor.onDidChangeCursorSelection(() => {
-				if (
-					this.items.some(item => item.isSelection) ||
-					editor.getSelections()?.some(selection => !selection.isEmpty())
-				) {
+				if (this.items.some(item => item.isSelection) || editor.getSelections()?.some(selection => !selection.isEmpty())) {
 					this.update(this.enabled, this.inlineView);
 				}
 			}),
@@ -100,8 +97,7 @@ export class DiffEditorGutter extends Disposable {
 				this.domNode,
 				'wheel',
 				event => {
-					if (editor.getOption(EditorOption.scrollbar).handleMouseWheel)
-						editor.delegateScrollFromMouseWheelEvent(new StandardWheelEvent(event));
+					if (editor.getOption(EditorOption.scrollbar).handleMouseWheel) editor.delegateScrollFromMouseWheelEvent(new StandardWheelEvent(event));
 				},
 				{ passive: false },
 			),
@@ -129,23 +125,15 @@ export class DiffEditorGutter extends Disposable {
 		}
 		const selections = this.editor.getSelections() ?? [];
 		const ranges = diff.changes.flatMap(change =>
-			(change.innerChanges ?? []).filter(range =>
-				selections.some(
-					selection => !selection.isEmpty() && Range.areIntersecting(selection, range.modifiedRange),
-				),
-			),
+			(change.innerChanges ?? []).filter(range => selections.some(selection => !selection.isEmpty() && Range.areIntersecting(selection, range.modifiedRange))),
 		);
 		if (ranges.length > 0) {
 			const original = LineRange.join(ranges.map(range => LineRange.fromRangeInclusive(range.originalRange)));
 			const modified = LineRange.join(ranges.map(range => LineRange.fromRangeInclusive(range.modifiedRange)));
-			this.addToolbar(
-				new DetailedLineRangeMapping(original, modified, ranges),
-				MenuId.DiffEditorSelectionToolbar,
-			);
+			this.addToolbar(new DetailedLineRangeMapping(original, modified, ranges), MenuId.DiffEditorSelectionToolbar);
 		}
 		for (const change of diff.changes) {
-			if (!ranges.some(range => change.innerChanges?.includes(range)))
-				this.addToolbar(change, MenuId.DiffEditorHunkToolbar);
+			if (!ranges.some(range => change.innerChanges?.includes(range))) this.addToolbar(change, MenuId.DiffEditorHunkToolbar);
 		}
 		this.renderedItems.set([...this.items]);
 		if (previousHeight !== this.getContentHeight()) this.contentHeightEmitter.fire();
@@ -159,9 +147,7 @@ export class DiffEditorGutter extends Disposable {
 	private hasActions(): boolean {
 		return (
 			this.canRevert ||
-			[MenuId.DiffEditorHunkToolbar, MenuId.DiffEditorSelectionToolbar].some(id =>
-				this.menus.getMenuActions(id, undefined, this.scope).some(([, actions]) => actions.length > 0),
-			)
+			[MenuId.DiffEditorHunkToolbar, MenuId.DiffEditorSelectionToolbar].some(id => this.menus.getMenuActions(id, undefined, this.scope).some(([, actions]) => actions.length > 0))
 		);
 	}
 
@@ -184,9 +170,7 @@ export class DiffEditorGutter extends Disposable {
 		lines.splice(
 			mapping.original.startLineNumber - 1,
 			mapping.original.length,
-			...modified
-				.getLinesContent()
-				.slice(mapping.modified.startLineNumber - 1, mapping.modified.endLineNumberExclusive - 1),
+			...modified.getLinesContent().slice(mapping.modified.startLineNumber - 1, mapping.modified.endLineNumberExclusive - 1),
 		);
 		return lines.join(original.getEOL());
 	}
@@ -223,10 +207,7 @@ export class DiffEditorGutter extends Disposable {
 			originalUri: this.model.original.uri,
 			modifiedUri: this.model.modified.uri,
 		};
-		const revertLabel =
-			menuId === MenuId.DiffEditorSelectionToolbar
-				? localize('diffEditor.revertSelection', 'Revert selected changes')
-				: localize('diffEditor.revertChange', 'Revert change');
+		const revertLabel = menuId === MenuId.DiffEditorSelectionToolbar ? localize('diffEditor.revertSelection', 'Revert selected changes') : localize('diffEditor.revertChange', 'Revert change');
 		const toolbar = store.add(
 			new MenuWorkbenchToolBar(node, this.menus, this.contextMenu, menuId, {
 				leadingActions: this.canRevert
@@ -237,10 +218,7 @@ export class DiffEditorGutter extends Disposable {
 								tooltip: revertLabel,
 								icon: this.inlineView ? Lxicon.discard : Lxicon.arrowRight,
 								enabled: true,
-								run: () =>
-									menuId === MenuId.DiffEditorSelectionToolbar
-										? this.widget.revertRangeMappings(mapping.innerChanges ?? [])
-										: this.widget.revert(mapping),
+								run: () => (menuId === MenuId.DiffEditorSelectionToolbar ? this.widget.revertRangeMappings(mapping.innerChanges ?? []) : this.widget.revert(mapping)),
 							},
 						]
 					: [],
@@ -267,19 +245,10 @@ export class DiffEditorGutter extends Disposable {
 			...toDisposable(() => store.dispose()),
 			layout: (itemRange, viewport) => {
 				const cursor = this.editor.getPosition();
-				node.classList.toggle(
-					'active',
-					isSelection || (!!cursor && mapping.modified.contains(cursor.lineNumber)),
-				);
+				node.classList.toggle('active', isSelection || (!!cursor && mapping.modified.contains(cursor.lineNumber)));
 				const visibleTop = Math.max(viewport.start, itemRange.start);
 				const visibleBottom = Math.min(viewport.endExclusive, itemRange.endExclusive);
-				const toolbarTop = Math.max(
-					viewport.start,
-					Math.min(
-						Math.max(viewport.start, viewport.endExclusive - item.height),
-						(visibleTop + visibleBottom - item.height) / 2,
-					),
-				);
+				const toolbarTop = Math.max(viewport.start, Math.min(Math.max(viewport.start, viewport.endExclusive - item.height), (visibleTop + visibleBottom - item.height) / 2));
 				toolbar.element.style.top = `${toolbarTop - itemRange.start}px`;
 			},
 		};

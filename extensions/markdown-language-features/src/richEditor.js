@@ -79,13 +79,7 @@ class MarkdownEditor extends Disposable {
 			['list', () => this.prefix('- ')],
 			['quote', () => this.prefix('> ')],
 			['link', () => this.openLinkForm()],
-			[
-				'table',
-				() =>
-					this.replace(
-						`\n\n| ${this.messages.tableHeader} | ${this.messages.tableHeader} |\n| --- | --- |\n| ${this.messages.tableCell} | ${this.messages.tableCell} |\n\n`,
-					),
-			],
+			['table', () => this.replace(`\n\n| ${this.messages.tableHeader} | ${this.messages.tableHeader} |\n| --- | --- |\n| ${this.messages.tableCell} | ${this.messages.tableCell} |\n\n`)],
 			['source', () => this.activate(0, this.text.length, true)],
 			['undo', () => this.history('undo')],
 			['redo', () => this.history('redo')],
@@ -198,21 +192,16 @@ class MarkdownEditor extends Disposable {
 	}
 
 	updateButtons() {
-		for (const button of this.buttons)
-			button.disabled = button.dataset.edits === 'true' && (this.readOnly || this.conflict);
+		for (const button of this.buttons) button.disabled = button.dataset.edits === 'true' && (this.readOnly || this.conflict);
 		const first = this.buttons.find(button => !button.hidden && !button.disabled);
-		if (first && !this.buttons.some(button => !button.hidden && !button.disabled && button.tabIndex === 0))
-			first.tabIndex = 0;
+		if (first && !this.buttons.some(button => !button.hidden && !button.disabled && button.tabIndex === 0)) first.tabIndex = 0;
 		this.view.setAttribute('aria-readonly', String(this.readOnly || this.conflict));
 		if (this.active && !this.composing) this.active.input.readOnly = this.readOnly || this.conflict;
-		for (const checkbox of this.view.querySelectorAll('input[type=checkbox]'))
-			checkbox.disabled = this.readOnly || this.conflict;
+		for (const checkbox of this.view.querySelectorAll('input[type=checkbox]')) checkbox.disabled = this.readOnly || this.conflict;
 	}
 
 	render() {
-		const activeContainer = this.active?.whole
-			? this.view
-			: this.active?.input.element.closest('.ash-markdown-block');
+		const activeContainer = this.active?.whole ? this.view : this.active?.input.element.closest('.ash-markdown-block');
 		this.inputLifetime.clear();
 		this.active = undefined;
 		// Parsing belongs to this extension's Rust provider. Only results for
@@ -332,11 +321,7 @@ class MarkdownEditor extends Disposable {
 				const label = children(document.createElement('span'), detail).textContent;
 				// Opening a document must not load tracking images over the network.
 				if (/[\u0000-\u0020\u007f]/u.test(value)) return document.createTextNode(label);
-				if (
-					/^(?:[a-z][\w+.-]*:|\/\/)/iu.test(value) &&
-					!/^data:image\/(?:png|jpeg|gif|webp|avif);base64,/iu.test(value)
-				)
-					return document.createTextNode(label);
+				if (/^(?:[a-z][\w+.-]*:|\/\/)/iu.test(value) && !/^data:image\/(?:png|jpeg|gif|webp|avif);base64,/iu.test(value)) return document.createTextNode(label);
 				const image = document.createElement('img');
 				image.alt = label;
 				image.src = value;
@@ -352,13 +337,7 @@ class MarkdownEditor extends Disposable {
 					checkbox,
 					'change',
 					() => {
-						if (
-							this.readOnly ||
-							this.conflict ||
-							this.composing ||
-							!/^\[[ xX]\]$/u.test(this.text.slice(detail, detail + 3))
-						)
-							return;
+						if (this.readOnly || this.conflict || this.composing || !/^\[[ xX]\]$/u.test(this.text.slice(detail, detail + 3))) return;
 						this.commitInput();
 						this.patch(detail + 1, detail + 2, checkbox.checked ? 'x' : ' ');
 						this.render();
@@ -390,9 +369,7 @@ class MarkdownEditor extends Disposable {
 		if (!whole && !block) return;
 		start = whole ? 0 : block.start;
 		end = whole ? this.text.length : block.end;
-		const container = whole
-			? this.view
-			: [...this.view.children].find(element => Number(element.dataset.start) === start);
+		const container = whole ? this.view : [...this.view.children].find(element => Number(element.dataset.start) === start);
 		container.replaceChildren();
 		container.removeAttribute('aria-hidden');
 		container.classList.remove('ash-markdown-gap');
@@ -474,10 +451,7 @@ class MarkdownEditor extends Disposable {
 		this.updating = true;
 		this.active.input.value = this.text.slice(this.active.start, this.active.end);
 		this.updating = false;
-		const caret = normalizedOffset(
-			this.text.slice(this.active.start, this.active.end),
-			selection.start - this.active.start + value.length,
-		);
+		const caret = normalizedOffset(this.text.slice(this.active.start, this.active.end), selection.start - this.active.start + value.length);
 		this.active.input.select({ start: caret, end: caret });
 		this.focus();
 	}
@@ -486,17 +460,9 @@ class MarkdownEditor extends Disposable {
 		const selection = this.selection();
 		if (!selection) return;
 		const selected = this.text.slice(selection.start, selection.end);
-		const surrounded =
-			this.text.slice(selection.start - marker.length, selection.start) === marker &&
-			this.text.slice(selection.end, selection.end + marker.length) === marker;
-		this.replace(
-			surrounded ? selected : marker + selected + marker,
-			surrounded ? { start: selection.start - marker.length, end: selection.end + marker.length } : selection,
-		);
-		const start = normalizedOffset(
-			this.text.slice(this.active.start, this.active.end),
-			selection.start - this.active.start + (surrounded ? -marker.length : marker.length),
-		);
+		const surrounded = this.text.slice(selection.start - marker.length, selection.start) === marker && this.text.slice(selection.end, selection.end + marker.length) === marker;
+		this.replace(surrounded ? selected : marker + selected + marker, surrounded ? { start: selection.start - marker.length, end: selection.end + marker.length } : selection);
+		const start = normalizedOffset(this.text.slice(this.active.start, this.active.end), selection.start - this.active.start + (surrounded ? -marker.length : marker.length));
 		this.active.input.select({ start, end: start + selected.replace(/\r\n?/gu, '\n').length });
 	}
 
@@ -532,10 +498,7 @@ class MarkdownEditor extends Disposable {
 		const start = this.active?.start ?? 0;
 		this.render();
 		this.api.postMessage({ type: 'ready' });
-		(
-			[...this.view.children].find(element => Number(element.dataset.start) >= start && element.tabIndex === 0) ??
-			this.view
-		).focus();
+		([...this.view.children].find(element => Number(element.dataset.start) >= start && element.tabIndex === 0) ?? this.view).focus();
 	}
 
 	focus() {
@@ -623,9 +586,7 @@ class MarkdownEditor extends Disposable {
 		this.reload.hidden = true;
 		this.render();
 		if (previous && !this.readOnly) {
-			const block =
-				this.blocks.find(block => block.start <= previous.start && previous.start < block.end) ??
-				this.blocks.at(-1);
+			const block = this.blocks.find(block => block.start <= previous.start && previous.start < block.end) ?? this.blocks.at(-1);
 			this.activate(block.start, block.end, previous.whole);
 			if (this.active)
 				this.active.input.select({
@@ -678,8 +639,7 @@ class MarkdownEditor extends Disposable {
 				this.readOnly = message.readOnly;
 				this.updateButtons();
 				this.flush();
-			} else if (this.pending !== undefined || this.text !== this.confirmed || this.composing)
-				this.reject({ reason: 'conflict', document: message });
+			} else if (this.pending !== undefined || this.text !== this.confirmed || this.composing) this.reject({ reason: 'conflict', document: message });
 			else {
 				this.adopt(message);
 				this.flush();

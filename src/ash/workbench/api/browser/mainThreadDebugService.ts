@@ -2,22 +2,11 @@ import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../base/common/errors.js';
 import { AbstractDisposable, Disposable, DisposableMap, DisposableStore } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
-import {
-	IExtensionHostApi,
-	type ExtensionHostFleetSnapshot,
-	type JsonValue,
-} from '../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
 import { type ExtensionClientOperation, type ExtensionClientResult } from '../common/extHost.protocol.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
-import {
-	IDebugService,
-	type DebugConfiguration,
-	type IDebugSessionOptions,
-	type IDebugSession,
-	type IDebugBreakpoint,
-	type IFunctionBreakpoint,
-} from '../../contrib/debug/common/debug.js';
+import { IDebugService, type DebugConfiguration, type IDebugSessionOptions, type IDebugSession, type IDebugBreakpoint, type IFunctionBreakpoint } from '../../contrib/debug/common/debug.js';
 
 /** Exposes the existing Workbench sessions to connection-owned extension callbacks. */
 export class MainThreadDebugService extends Disposable {
@@ -64,15 +53,9 @@ export class MainThreadDebugService extends Disposable {
 				}
 			}),
 		);
-		this._register(
-			debug.onDidWriteTerminalData(event =>
-				this.emit({ type: 'terminalOutput', sessionId: event.session.id, output: event.data }),
-			),
-		);
+		this._register(debug.onDidWriteTerminalData(event => this.emit({ type: 'terminalOutput', sessionId: event.session.id, output: event.data })));
 		this._register(debug.onWillNewSession(session => this.observeSession(session)));
-		this._register(
-			debug.onDidNewSession(session => this.emit({ type: 'start', session: this.sessionSnapshot(session) })),
-		);
+		this._register(debug.onDidNewSession(session => this.emit({ type: 'start', session: this.sessionSnapshot(session) })));
 		this._register(
 			debug.onDidEndSession(session => {
 				this.emit({ type: 'end', session: this.sessionSnapshot(session) });
@@ -134,12 +117,7 @@ export class MainThreadDebugService extends Disposable {
 					incarnation: runtime.incarnation,
 					registrationId: registration.registrationId,
 				};
-				const key = JSON.stringify([
-					identity.extensionId,
-					identity.activationGeneration,
-					identity.incarnation,
-					identity.registrationId,
-				]);
+				const key = JSON.stringify([identity.extensionId, identity.activationGeneration, identity.incarnation, identity.registrationId]);
 				retained.add(key);
 				if (this.observers.has(key)) {
 					continue;
@@ -181,8 +159,7 @@ export class MainThreadDebugService extends Disposable {
 		if (!session || session.state !== 'stopped' || session.threadId === undefined) return null;
 		const frame = this.debug.getViewModel().focusedStackFrame;
 		// A stack reply retains the thread that requested it. Selection can change before its frame is focused.
-		const frameId =
-			frame && (frame.threadId === undefined || frame.threadId === session.threadId) ? frame.id : undefined;
+		const frameId = frame && (frame.threadId === undefined || frame.threadId === session.threadId) ? frame.id : undefined;
 		return {
 			kind: frameId === undefined ? 'thread' : 'frame',
 			session: this.sessionSnapshot(session),
@@ -281,10 +258,7 @@ export class MainThreadDebugService extends Disposable {
 			if (!session) {
 				throw new Error('Debug session has ended');
 			}
-			const value = await session.customRequest(
-				operation.command,
-				operation.hasArguments ? operation.arguments : undefined,
-			);
+			const value = await session.customRequest(operation.command, operation.hasArguments ? operation.arguments : undefined);
 			throwIfCancelled(signal);
 			return {
 				result: 'debugResponse',
@@ -292,19 +266,12 @@ export class MainThreadDebugService extends Disposable {
 				hasBody: value !== undefined,
 			};
 		}
-		const folder =
-			operation.folder === null
-				? undefined
-				: (this.workspace.getWorkspaceFolder(URI.parse(operation.folder)) ?? undefined);
+		const folder = operation.folder === null ? undefined : (this.workspace.getWorkspaceFolder(URI.parse(operation.folder)) ?? undefined);
 		if (operation.folder !== null && !folder) {
 			throw new Error('Debugging requires a current workspace folder');
 		}
-		const parentSession =
-			operation.options?.parentSessionId === undefined
-				? undefined
-				: this.debug.getSession(operation.options.parentSessionId);
-		if (operation.options?.parentSessionId !== undefined && !parentSession)
-			throw new Error('The parent debug session has ended');
+		const parentSession = operation.options?.parentSessionId === undefined ? undefined : this.debug.getSession(operation.options.parentSessionId);
+		if (operation.options?.parentSessionId !== undefined && !parentSession) throw new Error('The parent debug session has ended');
 		const { parentSessionId, ...values } = operation.options ?? {};
 		const options: IDebugSessionOptions = { ...values, ...(parentSession === undefined ? {} : { parentSession }) };
 		let session: IDebugSession;
@@ -312,10 +279,7 @@ export class MainThreadDebugService extends Disposable {
 			if (typeof operation.configuration === 'string') {
 				const configurations = await this.debug.refresh();
 				throwIfCancelled(signal);
-				const matches = configurations.filter(
-					value =>
-						value.name === operation.configuration && (folder === undefined || value.dirId === folder.id),
-				);
+				const matches = configurations.filter(value => value.name === operation.configuration && (folder === undefined || value.dirId === folder.id));
 				if (matches.length !== 1) {
 					throw new Error('Debug configuration name must identify one configuration in the workspace folder');
 				}
@@ -371,12 +335,7 @@ export class MainThreadDebugService extends Disposable {
 	}
 
 	private currentBreakpoints(): Map<string, JsonValue> {
-		return new Map(
-			[...this.debug.breakpoints, ...this.debug.functionBreakpoints].map(point => [
-				point.id,
-				breakpointSnapshot(point),
-			]),
-		);
+		return new Map([...this.debug.breakpoints, ...this.debug.functionBreakpoints].map(point => [point.id, breakpointSnapshot(point)]));
 	}
 
 	private snapshot(): {
@@ -466,15 +425,7 @@ function decodeBreakpoint(input: JsonValue): IDebugBreakpoint | IFunctionBreakpo
 		throw new TypeError('Invalid debug breakpoint');
 	}
 	const value = input as Readonly<Record<string, JsonValue>>;
-	const allowed = new Set([
-		'kind',
-		'id',
-		'enabled',
-		'condition',
-		'hitCondition',
-		'logMessage',
-		...(value.kind === 'source' ? ['uri', 'line', 'column'] : ['name']),
-	]);
+	const allowed = new Set(['kind', 'id', 'enabled', 'condition', 'hitCondition', 'logMessage', ...(value.kind === 'source' ? ['uri', 'line', 'column'] : ['name'])]);
 	if (Object.keys(value).some(key => !allowed.has(key)) || typeof value.enabled !== 'boolean') {
 		throw new TypeError('Invalid debug breakpoint fields');
 	}
@@ -497,11 +448,7 @@ function decodeBreakpoint(input: JsonValue): IDebugBreakpoint | IFunctionBreakpo
 		!Number.isSafeInteger(value.line) ||
 		value.line < 0 ||
 		value.line >= Number.MAX_SAFE_INTEGER ||
-		(value.column !== null &&
-			(typeof value.column !== 'number' ||
-				!Number.isSafeInteger(value.column) ||
-				value.column < 0 ||
-				value.column >= Number.MAX_SAFE_INTEGER))
+		(value.column !== null && (typeof value.column !== 'number' || !Number.isSafeInteger(value.column) || value.column < 0 || value.column >= Number.MAX_SAFE_INTEGER))
 	) {
 		throw new TypeError('Invalid source breakpoint position');
 	}

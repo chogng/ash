@@ -4,18 +4,8 @@ import { Emitter, type Event } from '../../../common/event.js';
 import { Disposable } from '../../../common/lifecycle.js';
 import type { ListScrolling } from '../list/list.js';
 import { AbstractTree } from './abstractTree.js';
-import {
-	CompressibleObjectTreeModel,
-	type CompressibleObjectTreeModelOptions,
-	type CompressibleTreeElement,
-	type CompressedTreeNode,
-} from './compressedObjectTreeModel.js';
-import {
-	ObjectTreeModel,
-	type ObjectTreeElement,
-	type ObjectTreeModelOptions,
-	type ObjectTreeNode,
-} from './objectTreeModel.js';
+import { CompressibleObjectTreeModel, type CompressibleObjectTreeModelOptions, type CompressibleTreeElement, type CompressedTreeNode } from './compressedObjectTreeModel.js';
+import { ObjectTreeModel, type ObjectTreeElement, type ObjectTreeModelOptions, type ObjectTreeNode } from './objectTreeModel.js';
 import {
 	flattenTreeNodes,
 	mapTreeDragData,
@@ -114,9 +104,7 @@ export class ObjectTree<TNode> extends Disposable {
 	private readonly _onDidAccept = this._register(new Emitter<ObjectTreeAcceptEvent<TNode>>());
 	private readonly _onDidChangeFocus = this._register(new Emitter<ObjectTreeFocusChangeEvent<TNode>>());
 	private readonly _onDidChangeSelection = this._register(new Emitter<ObjectTreeSelectionChangeEvent<TNode>>());
-	private readonly _onDidChangeCollapseState = this._register(
-		new Emitter<ObjectTreeCollapseStateChangeEvent<TNode>>(),
-	);
+	private readonly _onDidChangeCollapseState = this._register(new Emitter<ObjectTreeCollapseStateChangeEvent<TNode>>());
 	private readonly _onDidActivate = this._register(new Emitter<ObjectTreeActivateEvent<TNode>>());
 	private readonly _onDidChangeFind = this._register(new Emitter<ObjectTreeFindResult<TNode>>());
 	private readonly onWillRender: (() => void) | undefined;
@@ -127,24 +115,16 @@ export class ObjectTree<TNode> extends Disposable {
 	readonly onDidAccept: Event<ObjectTreeAcceptEvent<TNode>> = this._onDidAccept.event;
 	readonly onDidChangeFocus: Event<ObjectTreeFocusChangeEvent<TNode>> = this._onDidChangeFocus.event;
 	readonly onDidChangeSelection: Event<ObjectTreeSelectionChangeEvent<TNode>> = this._onDidChangeSelection.event;
-	readonly onDidChangeCollapseState: Event<ObjectTreeCollapseStateChangeEvent<TNode>> =
-		this._onDidChangeCollapseState.event;
+	readonly onDidChangeCollapseState: Event<ObjectTreeCollapseStateChangeEvent<TNode>> = this._onDidChangeCollapseState.event;
 	/** @deprecated Prefer the semantic pointer, accept, and collapse events. */
 	readonly onDidActivate: Event<ObjectTreeActivateEvent<TNode>> = this._onDidActivate.event;
 	readonly onDidChangeFind: Event<ObjectTreeFindResult<TNode>> = this._onDidChangeFind.event;
 	readonly onDidScroll: Event<number>;
 
-	public updateOptions(
-		options: Pick<
-			ObjectTreeOptions<TNode>,
-			'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'
-		>,
-	): void {
+	public updateOptions(options: Pick<ObjectTreeOptions<TNode>, 'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'>): void {
 		this.tree.updateOptions({
 			...options,
-			twistieAdditionalCssClass: options.twistieAdditionalCssClass
-				? node => options.twistieAdditionalCssClass!(node.element)
-				: undefined,
+			twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element) : undefined,
 		});
 	}
 
@@ -162,20 +142,14 @@ export class ObjectTree<TNode> extends Disposable {
 				smoothScrolling: options.smoothScrolling,
 				indent: options.indent,
 				indentGuides: options.indentGuides,
-				twistieAdditionalCssClass: options.twistieAdditionalCssClass
-					? node => options.twistieAdditionalCssClass!(node.element)
-					: undefined,
+				twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element) : undefined,
 				expandOnDoubleClick: options.expandOnDoubleClick,
-				expandOnlyOnTwistieClick:
-					typeof expandOnlyOnTwistieClick === 'function'
-						? node => expandOnlyOnTwistieClick(node.element)
-						: expandOnlyOnTwistieClick,
+				expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === 'function' ? node => expandOnlyOnTwistieClick(node.element) : expandOnlyOnTwistieClick,
 				getHeight: options.getHeight ? node => options.getHeight!(node.element) : undefined,
 				dnd: options.dnd ? mapDragAndDrop(options.dnd) : undefined,
 				keyboardNavigationLabelProvider: options.keyboardNavigationLabelProvider
 					? {
-							getKeyboardNavigationLabel: element =>
-								options.keyboardNavigationLabelProvider!.getKeyboardNavigationLabel(element),
+							getKeyboardNavigationLabel: element => options.keyboardNavigationLabelProvider!.getKeyboardNavigationLabel(element),
 						}
 					: undefined,
 				findMode: options.findMode,
@@ -187,9 +161,7 @@ export class ObjectTree<TNode> extends Disposable {
 				reuseRows: options.reuseRows,
 				onDidRemoveRow: options.onDidRemoveRow,
 				renderElement: node => options.renderElement(node.element, node),
-				renderTwistie: options.renderTwistie
-					? (node, state, container) => options.renderTwistie!(node.element, state, container)
-					: undefined,
+				renderTwistie: options.renderTwistie ? (node, state, container) => options.renderTwistie!(node.element, state, container) : undefined,
 			}),
 		);
 		this.element = this.tree.element;
@@ -211,8 +183,7 @@ export class ObjectTree<TNode> extends Disposable {
 					element: node.element,
 					node,
 					collapsed,
-					browserEvent:
-						this.collapseBrowserEvent?.id === node.id ? this.collapseBrowserEvent.event : undefined,
+					browserEvent: this.collapseBrowserEvent?.id === node.id ? this.collapseBrowserEvent.event : undefined,
 				});
 			}),
 		);
@@ -454,10 +425,7 @@ export interface CompressibleObjectTreeOptions<T> {
 	readonly enableStickyScroll?: boolean;
 	readonly stickyScrollMaxItemCount?: number;
 	readonly modelOptions: CompressibleObjectTreeModelOptions<T>;
-	readonly renderCompressedElements: (
-		elements: readonly T[],
-		node: ObjectTreeNode<CompressedTreeNode<T>>,
-	) => HTMLElement;
+	readonly renderCompressedElements: (elements: readonly T[], node: ObjectTreeNode<CompressedTreeNode<T>>) => HTMLElement;
 	readonly renderTwistie?: (elements: readonly T[], state: TreeTwistieState, container: HTMLSpanElement) => void;
 }
 
@@ -520,17 +488,10 @@ export class CompressibleObjectTree<T> extends Disposable {
 		readonly browserEvent: MouseEvent | KeyboardEvent | undefined;
 	}> = this._onDidChangeCollapseState.event;
 
-	public updateOptions(
-		options: Pick<
-			CompressibleObjectTreeOptions<T>,
-			'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'
-		>,
-	): void {
+	public updateOptions(options: Pick<CompressibleObjectTreeOptions<T>, 'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'>): void {
 		this.tree.updateOptions({
 			...options,
-			twistieAdditionalCssClass: options.twistieAdditionalCssClass
-				? node => options.twistieAdditionalCssClass!(node.element.elements)
-				: undefined,
+			twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element.elements) : undefined,
 		});
 	}
 
@@ -551,22 +512,14 @@ export class CompressibleObjectTree<T> extends Disposable {
 				smoothScrolling: options.smoothScrolling,
 				indent: options.indent,
 				indentGuides: options.indentGuides,
-				twistieAdditionalCssClass: options.twistieAdditionalCssClass
-					? node => options.twistieAdditionalCssClass!(node.element.elements)
-					: undefined,
+				twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element.elements) : undefined,
 				expandOnDoubleClick: options.expandOnDoubleClick,
-				expandOnlyOnTwistieClick:
-					typeof expandOnlyOnTwistieClick === 'function'
-						? node => expandOnlyOnTwistieClick(node.element.elements)
-						: expandOnlyOnTwistieClick,
+				expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === 'function' ? node => expandOnlyOnTwistieClick(node.element.elements) : expandOnlyOnTwistieClick,
 				getHeight: options.getHeight ? node => options.getHeight!(node.element.elements) : undefined,
 				dnd: options.dnd ? mapCompressedDragAndDrop(options.dnd) : undefined,
 				keyboardNavigationLabelProvider: options.keyboardNavigationLabelProvider
 					? {
-							getKeyboardNavigationLabel: compressed =>
-								options.keyboardNavigationLabelProvider!.getCompressedNodeKeyboardNavigationLabel(
-									compressed.elements,
-								),
+							getKeyboardNavigationLabel: compressed => options.keyboardNavigationLabelProvider!.getCompressedNodeKeyboardNavigationLabel(compressed.elements),
 						}
 					: undefined,
 				findMode: options.findMode,
@@ -576,9 +529,7 @@ export class CompressibleObjectTree<T> extends Disposable {
 				reuseRows: options.reuseRows,
 				onDidRemoveRow: options.onDidRemoveRow,
 				renderElement: node => options.renderCompressedElements(node.element.elements, node),
-				renderTwistie: options.renderTwistie
-					? (node, state, container) => options.renderTwistie!(node.element.elements, state, container)
-					: undefined,
+				renderTwistie: options.renderTwistie ? (node, state, container) => options.renderTwistie!(node.element.elements, state, container) : undefined,
 			}),
 		);
 		this.element = this.tree.element;
@@ -747,8 +698,7 @@ export class CompressibleObjectTree<T> extends Disposable {
 }
 
 function mapCompressedDragAndDrop<T>(dnd: TreeDragAndDrop<T>): TreeDragAndDrop<ObjectTreeNode<CompressedTreeNode<T>>> {
-	const originals = (nodes: readonly ObjectTreeNode<CompressedTreeNode<T>>[]) =>
-		nodes.map(node => lastCompressedElement(node.element.elements));
+	const originals = (nodes: readonly ObjectTreeNode<CompressedTreeNode<T>>[]) => nodes.map(node => lastCompressedElement(node.element.elements));
 	return {
 		getDragURI: node => dnd.getDragURI(lastCompressedElement(node.element.elements)),
 		getDragLabel: dnd.getDragLabel ? (nodes, event) => dnd.getDragLabel!(originals(nodes), event) : undefined,

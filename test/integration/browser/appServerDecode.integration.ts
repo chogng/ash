@@ -124,11 +124,9 @@ async function run() {
 	const frame = `{"jsonrpc":"2.0","id":${transport.requestId},"result":${wireResult}}`;
 	transport.emit(WEB_APP_SERVER_FRAME_EVENT, new AppServerFrame(frame, new TextEncoder().encode(frame).byteLength));
 	const result = await pending;
-	if (result.thread.turns.length !== expectedTurns || result.transcript.entries.length !== expectedTurns)
-		throw new Error('Decode workload did not complete');
+	if (result.thread.turns.length !== expectedTurns || result.transcript.entries.length !== expectedTurns) throw new Error('Decode workload did not complete');
 	const last = result.thread.turns.at(-1)!.items[0];
-	if (last.type !== 'agentMessage' || last.text !== 'x'.repeat(expectedTextBytes))
-		throw new Error('Decode content changed');
+	if (last.type !== 'agentMessage' || last.text !== 'x'.repeat(expectedTextBytes)) throw new Error('Decode content changed');
 	return { turns: result.thread.turns.length, textBytes: last.text.length, state: client.state };
 }
 

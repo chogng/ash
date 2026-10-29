@@ -1,17 +1,6 @@
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
-import {
-	AbstractLoggerService,
-	canLog,
-	DEFAULT_LOG_LEVEL,
-	LogLevel,
-	type ILogger,
-	type ILoggerService,
-	type ILogServiceHost,
-	type ILogSink,
-	type LogEntry,
-	type LogEntryLevel,
-} from './log.js';
+import { AbstractLoggerService, canLog, DEFAULT_LOG_LEVEL, LogLevel, type ILogger, type ILoggerService, type ILogServiceHost, type ILogSink, type LogEntry, type LogEntryLevel } from './log.js';
 
 export interface LogServiceOptions {
 	readonly sinks?: readonly ILogSink[];
@@ -88,22 +77,11 @@ export class LogService extends AbstractLoggerService<LogService> implements ILo
 		this.publishArguments(LogLevel.Warning, categoryOrMessage, messageOrArgument, arguments_);
 	}
 	error(categoryOrError: string | Error, messageOrArgument?: unknown, ...arguments_: unknown[]): void {
-		if (categoryOrError instanceof Error)
-			this.publish(
-				LogLevel.Error,
-				this.options.category ?? 'application',
-				categoryOrError.message,
-				categoryOrError,
-			);
+		if (categoryOrError instanceof Error) this.publish(LogLevel.Error, this.options.category ?? 'application', categoryOrError.message, categoryOrError);
 		else this.publishArguments(LogLevel.Error, categoryOrError, messageOrArgument, arguments_);
 	}
 
-	private publishArguments(
-		level: LogEntryLevel,
-		categoryOrMessage: string,
-		messageOrArgument: unknown,
-		arguments_: readonly unknown[],
-	): void {
+	private publishArguments(level: LogEntryLevel, categoryOrMessage: string, messageOrArgument: unknown, arguments_: readonly unknown[]): void {
 		if (!this.options.category && typeof messageOrArgument === 'string') {
 			this.publish(
 				level,
@@ -139,12 +117,7 @@ export class LogService extends AbstractLoggerService<LogService> implements ILo
 	private dispatch(entry: LogEntry): void {
 		if (this.isDisposed) return;
 		// Late subscribers need text diagnostics, never retained exception object graphs.
-		const error =
-			entry.error instanceof Error
-				? (entry.error.stack ?? entry.error.message)
-				: entry.error === undefined
-					? undefined
-					: String(entry.error);
+		const error = entry.error instanceof Error ? (entry.error.stack ?? entry.error.message) : entry.error === undefined ? undefined : String(entry.error);
 		this.history.push(Object.freeze({ ...entry, error }));
 		this.historyBytes += entry.message.length + (error?.length ?? 0);
 		while (this.historyBytes > 512 * 1024 || this.history.length > 2000) {

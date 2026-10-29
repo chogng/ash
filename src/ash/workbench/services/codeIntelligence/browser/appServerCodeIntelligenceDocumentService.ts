@@ -1,8 +1,5 @@
 import { type ICodebaseSymbolsApi } from '../../../../platform/codebaseSymbols/common/codebaseSymbolsApi.js';
-import {
-	type CodeIntelligenceDocumentSnapshot,
-	type ICodeIntelligenceDocumentService,
-} from '../common/codeIntelligenceDocumentService.js';
+import { type CodeIntelligenceDocumentSnapshot, type ICodeIntelligenceDocumentService } from '../common/codeIntelligenceDocumentService.js';
 
 /** App Server adapter for ephemeral code-intelligence document overlays. */
 export class AppServerCodeIntelligenceDocumentService implements ICodeIntelligenceDocumentService {

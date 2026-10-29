@@ -1,12 +1,7 @@
 import { localize } from '../../../../nls.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import type { IAccessibleViewImplementation } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { CHANGES_VIEW_ID } from '../common/changes.js';
@@ -26,9 +21,7 @@ export function getSessionsChangesAccessibilityProviders(): readonly IAccessible
 			priority: 110,
 			when: CreatePullRequestFocusedContext.isEqualTo(true),
 			getProvider: accessor => {
-				const form = accessor
-					.get(IContextViewService)
-					.container.querySelector<HTMLElement>('.ash-sessions-create-pr');
+				const form = accessor.get(IContextViewService).container.querySelector<HTMLElement>('.ash-sessions-create-pr');
 				if (!form) {
 					return undefined;
 				}
@@ -53,27 +46,13 @@ export function getSessionsChangesAccessibilityProviders(): readonly IAccessible
 								)
 							);
 						}
-						const fields = [
-							...form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
-								'input, textarea, select',
-							),
-						].filter(field => !field.hidden);
+						const fields = [...form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input, textarea, select')].filter(field => !field.hidden);
 						const values = fields.map(field => {
 							let value = field.value;
-							if (
-								field instanceof form.ownerDocument.defaultView!.HTMLInputElement &&
-								field.type === 'checkbox'
-							) {
-								value = field.checked
-									? localize('sessions.changes.prChecked', 'Checked')
-									: localize('sessions.changes.prUnchecked', 'Unchecked');
+							if (field instanceof form.ownerDocument.defaultView!.HTMLInputElement && field.type === 'checkbox') {
+								value = field.checked ? localize('sessions.changes.prChecked', 'Checked') : localize('sessions.changes.prUnchecked', 'Unchecked');
 							}
-							return localize(
-								'sessions.changes.prField',
-								'{0}: {1}',
-								field.getAttribute('aria-label') ?? '',
-								value,
-							);
+							return localize('sessions.changes.prField', '{0}: {1}', field.getAttribute('aria-label') ?? '', value);
 						});
 						return [form.textContent, ...values].join('\n');
 					},

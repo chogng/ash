@@ -9,10 +9,7 @@ import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
 import type { IModelService } from '../../../../../editor/common/services/model.js';
-import type {
-	ITextModelService,
-	ITextModelContentProvider,
-} from '../../../../../editor/common/services/resolverService.js';
+import type { ITextModelService, ITextModelContentProvider } from '../../../../../editor/common/services/resolverService.js';
 import type { IMarkerService } from '../../../../../platform/markers/common/markers.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILanguageModelToolsService } from '../../common/tools/languageModelToolsService.js';
@@ -87,9 +84,7 @@ for (const end of ['disposed', 'created'] as const)
 					onModelRemoved: Event.None,
 					onModelLanguageChanged: Event.None,
 					createModel: (text: string, language: { languageId: string }, uri: URI) => {
-						const model = resources.add(
-							new TextModel(text, { languageId: language.languageId, resource: uri }),
-						);
+						const model = resources.add(new TextModel(text, { languageId: language.languageId, resource: uri }));
 						models.push(model);
 						return model;
 					},

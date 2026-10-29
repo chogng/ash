@@ -58,21 +58,15 @@ export class AgentTraceViewModel {
 		this.entriesByKey.clear();
 		this.eventCount = 0;
 		this.savedRelations.clear();
-		const performance = new Map(
-			trace?.performance?.calls.map(call => [performanceKey(call.threadId, call.eventId), call]),
-		);
-		const threads = new Map<
-			string,
-			{ element: TraceEntry; children: ObjectTreeElement<TraceEntry>[]; collapsed: boolean }
-		>();
+		const performance = new Map(trace?.performance?.calls.map(call => [performanceKey(call.threadId, call.eventId), call]));
+		const threads = new Map<string, { element: TraceEntry; children: ObjectTreeElement<TraceEntry>[]; collapsed: boolean }>();
 		for (const thread of trace?.threads ?? []) {
 			const created = thread.events.find(record => record.event.type === 'threadCreated')?.event;
 			const entry: TraceEntry = {
 				id: JSON.stringify(['thread', thread.threadId]),
 				kind: 'thread',
 				threadId: thread.threadId,
-				label:
-					typeof created?.title === 'string' ? created.title : localize('agentTrace.threadShort', 'Thread'),
+				label: typeof created?.title === 'string' ? created.title : localize('agentTrace.threadShort', 'Thread'),
 				description: localize('agentTrace.threadShort', 'Thread'),
 				failed: false,
 			};
@@ -96,10 +90,7 @@ export class AgentTraceViewModel {
 		}
 		const lastTurn = new Map<string, { collapsed: boolean }>();
 		const ordinals = new Map<string, number>();
-		const turns = new Map<
-			string,
-			{ element: TraceEntry; children: ObjectTreeElement<TraceEntry>[]; collapsed: boolean }
-		>();
+		const turns = new Map<string, { element: TraceEntry; children: ObjectTreeElement<TraceEntry>[]; collapsed: boolean }>();
 		const add = (threadId: string, raw: AgentTraceEvent | AgentTraceDiagnosticEvent, diagnostic: boolean): void => {
 			let entry = this.records.get(raw);
 			const metrics = diagnostic ? undefined : performance.get(performanceKey(threadId, raw.eventId));
@@ -113,9 +104,7 @@ export class AgentTraceViewModel {
 							: isRecord(raw.event.seed) && typeof raw.event.seed.parentTurnId === 'string'
 								? raw.event.seed.parentTurnId
 								: undefined;
-				const record: AgentTraceEvent = diagnostic
-					? { ...raw, event: { ...raw.event, threadId, turnId } }
-					: (raw as AgentTraceEvent);
+				const record: AgentTraceEvent = diagnostic ? { ...raw, event: { ...raw.event, threadId, turnId } } : (raw as AgentTraceEvent);
 				entry = {
 					id: JSON.stringify([diagnostic ? 'diagnostic' : 'durable', threadId, raw.sequence]),
 					kind: 'event',
@@ -179,28 +168,15 @@ export class AgentTraceViewModel {
 		// records. Wall clocks and independent child sequence numbers cannot establish causality.
 		const prefixes = new Map<string, number>();
 		for (const record of trace?.diagnostics?.events ?? []) {
-			if (
-				record.event.type === 'modelAttemptStarted' &&
-				Number.isSafeInteger(record.event.sourceThreadSequence) &&
-				(record.event.sourceThreadSequence as number) >= 0
-			) {
-				prefixes.set(
-					JSON.stringify([record.threadId, record.turnId, record.event.attemptId]),
-					record.event.sourceThreadSequence as number,
-				);
+			if (record.event.type === 'modelAttemptStarted' && Number.isSafeInteger(record.event.sourceThreadSequence) && (record.event.sourceThreadSequence as number) >= 0) {
+				prefixes.set(JSON.stringify([record.threadId, record.turnId, record.event.attemptId]), record.event.sourceThreadSequence as number);
 			}
 		}
 		const position = (entry: TraceEntry): number =>
-			entry.diagnostic
-				? (prefixes.get(JSON.stringify([entry.threadId, entry.turnId, entry.diagnostic.event.attemptId])) ??
-					Number.POSITIVE_INFINITY)
-				: entry.record!.sequence;
+			entry.diagnostic ? (prefixes.get(JSON.stringify([entry.threadId, entry.turnId, entry.diagnostic.event.attemptId])) ?? Number.POSITIVE_INFINITY) : entry.record!.sequence;
 		for (const turn of turns.values()) {
 			turn.children.sort(
-				(a, b) =>
-					position(a.element) - position(b.element) ||
-					Number(!!a.element.diagnostic) - Number(!!b.element.diagnostic) ||
-					a.element.record!.sequence - b.element.record!.sequence,
+				(a, b) => position(a.element) - position(b.element) || Number(!!a.element.diagnostic) - Number(!!b.element.diagnostic) || a.element.record!.sequence - b.element.record!.sequence,
 			);
 		}
 		for (const group of [...threads.values(), ...turns.values()]) {
@@ -209,11 +185,7 @@ export class AgentTraceViewModel {
 		const roots = [...threads.values()];
 		for (const thread of trace?.threads ?? []) {
 			const origin = thread.events.find(record => record.event.type === 'threadCreated')?.event.origin;
-			if (
-				!isRecord(origin) ||
-				typeof origin.parentThreadId !== 'string' ||
-				origin.parentThreadId === thread.threadId
-			) {
+			if (!isRecord(origin) || typeof origin.parentThreadId !== 'string' || origin.parentThreadId === thread.threadId) {
 				continue;
 			}
 			const parent = threads.get(origin.parentThreadId);
@@ -223,13 +195,8 @@ export class AgentTraceViewModel {
 			const seen = new Set([thread.threadId]);
 			while (cursor && !seen.has(cursor)) {
 				seen.add(cursor);
-				const ancestor = trace?.threads
-					.find(thread => thread.threadId === cursor)
-					?.events.find(record => record.event.type === 'threadCreated')?.event.origin;
-				cursor =
-					isRecord(ancestor) && typeof ancestor.parentThreadId === 'string'
-						? ancestor.parentThreadId
-						: undefined;
+				const ancestor = trace?.threads.find(thread => thread.threadId === cursor)?.events.find(record => record.event.type === 'threadCreated')?.event.origin;
+				cursor = isRecord(ancestor) && typeof ancestor.parentThreadId === 'string' ? ancestor.parentThreadId : undefined;
 			}
 			if (parent && !cursor) {
 				parent.children.push(child);
@@ -250,8 +217,7 @@ export class AgentTraceViewModel {
 			}
 			let text = this.searchText.get(entry);
 			if (state.hasTextTerms && text === undefined) {
-				text =
-					`${entry.threadId} ${entry.turnId ?? ''} ${eventLabel(entry.record, entry.performance)} ${JSON.stringify(entry.record)}`.toLowerCase();
+				text = `${entry.threadId} ${entry.turnId ?? ''} ${eventLabel(entry.record, entry.performance)} ${JSON.stringify(entry.record)}`.toLowerCase();
 				this.searchText.set(entry, text);
 			}
 			if (state.matches(entry.record, entry.turnId, entry.failed, text ?? '')) {
@@ -262,25 +228,14 @@ export class AgentTraceViewModel {
 	}
 
 	findEvent(threadId: string, turnId?: string, eventId?: string): TraceEntry | undefined {
-		return [...this.entries.values()].find(
-			entry =>
-				entry.record &&
-				entry.threadId === threadId &&
-				(!turnId || entry.turnId === turnId) &&
-				(!eventId || entry.record.eventId === eventId),
-		);
+		return [...this.entries.values()].find(entry => entry.record && entry.threadId === threadId && (!turnId || entry.turnId === turnId) && (!eventId || entry.record.eventId === eventId));
 	}
 
 	graphTarget(node: AgentTraceNode): TraceEntry | undefined {
 		if (node.eventKey === null) {
 			return this.entries.get(JSON.stringify(['thread', node.threadId]));
 		}
-		const candidates =
-			this.entriesByKey
-				.get(node.eventKey)
-				?.filter(
-					entry => entry.threadId === node.threadId && (node.turnId === null || entry.turnId === node.turnId),
-				) ?? [];
+		const candidates = this.entriesByKey.get(node.eventKey)?.filter(entry => entry.threadId === node.threadId && (node.turnId === null || entry.turnId === node.turnId)) ?? [];
 		// Graph model attempts use the diagnostic namespace; a durable Thread named
 		// "diagnostic" can otherwise share the exact external event key.
 		return candidates.find(entry => (node.kind === 'modelAttempt' ? !!entry.diagnostic : !entry.diagnostic));
@@ -308,8 +263,7 @@ export class AgentTraceViewModel {
 			values.push(entry);
 			map.set(identity, values);
 		};
-		const unique = (values: TraceEntry[] | undefined): TraceEntry | undefined =>
-			values?.length === 1 ? values[0] : undefined;
+		const unique = (values: TraceEntry[] | undefined): TraceEntry | undefined => (values?.length === 1 ? values[0] : undefined);
 		const link = (source: TraceEntry | undefined, target: TraceEntry | undefined, kind: string): void => {
 			if (!source || !target || source === target) {
 				return;
@@ -319,9 +273,7 @@ export class AgentTraceViewModel {
 				[target, source, false],
 			] as const) {
 				const values = this.savedRelations.get(owner.id) ?? [];
-				if (
-					!values.some(value => value.target === other && value.kind === kind && value.outgoing === outgoing)
-				) {
+				if (!values.some(value => value.target === other && value.kind === kind && value.outgoing === outgoing)) {
 					values.push({ target: other, kind, outgoing });
 					this.savedRelations.set(owner.id, values);
 				}
@@ -329,12 +281,7 @@ export class AgentTraceViewModel {
 		};
 		for (const entry of records) {
 			const event = entry.record!.event;
-			if (
-				!entry.diagnostic &&
-				event.type === 'modelInvocationRecorded' &&
-				isRecord(event.record) &&
-				typeof event.record.invocationId === 'string'
-			) {
+			if (!entry.diagnostic && event.type === 'modelInvocationRecorded' && isRecord(event.record) && typeof event.record.invocationId === 'string') {
 				index(invocations, key(entry.threadId, entry.turnId, event.record.invocationId), entry);
 			}
 			if (entry.diagnostic && event.type === 'modelAttemptStarted' && typeof event.attemptId === 'string') {
@@ -353,20 +300,12 @@ export class AgentTraceViewModel {
 					index(results, key(entry.threadId, entry.turnId, item.toolCallId), entry);
 				}
 			}
-			if (
-				event.type === 'delegationRequested' &&
-				isRecord(event.seed) &&
-				typeof event.seed.delegationId === 'string'
-			) {
+			if (event.type === 'delegationRequested' && isRecord(event.seed) && typeof event.seed.delegationId === 'string') {
 				index(requests, key(entry.threadId, event.seed.delegationId), entry);
 			}
 			if (isRecord(event.result)) {
 				const result = event.result;
-				if (
-					typeof result.delegationId === 'string' &&
-					typeof result.childThreadId === 'string' &&
-					typeof result.digest === 'string'
-				) {
+				if (typeof result.delegationId === 'string' && typeof result.childThreadId === 'string' && typeof result.digest === 'string') {
 					const identity = key(result.delegationId, result.childThreadId, result.digest);
 					if (event.type === 'delegationResultProduced' && entry.threadId === result.childThreadId) {
 						index(produced, identity, entry);
@@ -386,19 +325,9 @@ export class AgentTraceViewModel {
 		for (const [identity, entries] of received) {
 			const source = unique(produced.get(identity));
 			const target = unique(entries);
-			const origin =
-				source &&
-				this.capture?.threads
-					.find(thread => thread.threadId === source.threadId)
-					?.events.find(record => record.event.type === 'threadCreated')?.event.origin;
+			const origin = source && this.capture?.threads.find(thread => thread.threadId === source.threadId)?.events.find(record => record.event.type === 'threadCreated')?.event.origin;
 			const result = target?.record?.event.result;
-			if (
-				isRecord(origin) &&
-				origin.type === 'agentSpawn' &&
-				origin.parentThreadId === target?.threadId &&
-				isRecord(result) &&
-				origin.delegationId === result.delegationId
-			) {
+			if (isRecord(origin) && origin.type === 'agentSpawn' && origin.parentThreadId === target?.threadId && isRecord(result) && origin.delegationId === result.delegationId) {
 				link(source, target, 'returnsResult');
 			}
 		}
@@ -412,57 +341,29 @@ export class AgentTraceViewModel {
 					target?.record?.sequence === event.sourceThreadSequence
 				) {
 					link(entry, target, 'accountsFor');
-					link(
-						unique(attempts.get(key(entry.threadId, entry.turnId, event.attemptId))),
-						target,
-						'accountsFor',
-					);
+					link(unique(attempts.get(key(entry.threadId, entry.turnId, event.attemptId))), target, 'accountsFor');
 				}
 			}
-			if (
-				event.type === 'delegationStarted' &&
-				typeof event.delegationId === 'string' &&
-				typeof event.childThreadId === 'string'
-			) {
+			if (event.type === 'delegationStarted' && typeof event.delegationId === 'string' && typeof event.childThreadId === 'string') {
 				const child = this.entries.get(key('thread', event.childThreadId));
-				const origin = this.capture?.threads
-					.find(thread => thread.threadId === event.childThreadId)
-					?.events.find(record => record.event.type === 'threadCreated')?.event.origin;
-				if (
-					isRecord(origin) &&
-					origin.type === 'agentSpawn' &&
-					origin.parentThreadId === entry.threadId &&
-					origin.delegationId === event.delegationId
-				) {
+				const origin = this.capture?.threads.find(thread => thread.threadId === event.childThreadId)?.events.find(record => record.event.type === 'threadCreated')?.event.origin;
+				if (isRecord(origin) && origin.type === 'agentSpawn' && origin.parentThreadId === entry.threadId && origin.delegationId === event.delegationId) {
 					link(entry, child, 'delegates');
 					link(unique(requests.get(key(entry.threadId, event.delegationId))), entry, 'startsDelegation');
 				}
 			}
-			if (
-				event.type === 'agentJoinSatisfied' &&
-				typeof event.joinId === 'string' &&
-				Array.isArray(event.satisfiedBy)
-			) {
+			if (event.type === 'agentJoinSatisfied' && typeof event.joinId === 'string' && Array.isArray(event.satisfiedBy)) {
 				const requested = unique(joins.get(key(entry.threadId, event.joinId)));
 				if (requested && isRecord(requested.record?.event.join)) {
 					const expected = requested.record.event.join.delegations;
 					link(requested, entry, 'satisfiesJoin');
 					for (const delegationId of event.satisfiedBy) {
-						if (
-							typeof delegationId !== 'string' ||
-							!Array.isArray(expected) ||
-							!expected.includes(delegationId)
-						) {
+						if (typeof delegationId !== 'string' || !Array.isArray(expected) || !expected.includes(delegationId)) {
 							continue;
 						}
 						const candidates = [...received.values()]
 							.flat()
-							.filter(
-								candidate =>
-									candidate.threadId === entry.threadId &&
-									isRecord(candidate.record?.event.result) &&
-									candidate.record.event.result.delegationId === delegationId,
-							);
+							.filter(candidate => candidate.threadId === entry.threadId && isRecord(candidate.record?.event.result) && candidate.record.event.result.delegationId === delegationId);
 						link(unique(candidates), entry, 'satisfiesJoin');
 					}
 				}
@@ -492,18 +393,10 @@ export class AgentTraceViewModel {
 
 	payload(entry: TraceEntry, output: boolean): { ref?: AgentTracePayloadRef; record?: AgentTraceDiagnosticEvent } {
 		const run = entry.record?.event.run;
-		const runId = isRecord(run)
-			? run.runId
-			: entry.diagnostic?.event.type === 'hookRunRecorded'
-				? entry.diagnostic.event.runId
-				: undefined;
+		const runId = isRecord(run) ? run.runId : entry.diagnostic?.event.type === 'hookRunRecorded' ? entry.diagnostic.event.runId : undefined;
 		if (typeof runId === 'string') {
 			const record = this.capture?.diagnostics?.events.find(
-				record =>
-					record.threadId === entry.threadId &&
-					(record.turnId ?? undefined) === entry.turnId &&
-					record.event.type === 'hookRunRecorded' &&
-					record.event.runId === runId,
+				record => record.threadId === entry.threadId && (record.turnId ?? undefined) === entry.turnId && record.event.type === 'hookRunRecorded' && record.event.runId === runId,
 			);
 			return { ref: record && diagnosticPayload(record), record };
 		}
@@ -512,29 +405,14 @@ export class AgentTraceViewModel {
 			return {};
 		}
 		const candidates =
-			this.capture?.diagnostics?.events.filter(
-				record =>
-					record.threadId === selected.threadId &&
-					record.turnId === selected.turnId &&
-					record.event.attemptId === selected.event.attemptId,
-			) ?? [];
+			this.capture?.diagnostics?.events.filter(record => record.threadId === selected.threadId && record.turnId === selected.turnId && record.event.attemptId === selected.event.attemptId) ?? [];
 		const own = diagnosticPayload(selected);
-		if (
-			own &&
-			(output
-				? ['modelResponse', 'partialOutput'].includes(own.kind)
-				: ['coreRequest', 'materializedRequest'].includes(own.kind))
-		) {
+		if (own && (output ? ['modelResponse', 'partialOutput'].includes(own.kind) : ['coreRequest', 'materializedRequest'].includes(own.kind))) {
 			return { ref: own, record: selected };
 		}
 		const record = candidates.find(record => {
 			const ref = diagnosticPayload(record);
-			return (
-				ref &&
-				(output
-					? ['modelResponse', 'partialOutput'].includes(ref.kind)
-					: ['coreRequest', 'materializedRequest'].includes(ref.kind))
-			);
+			return ref && (output ? ['modelResponse', 'partialOutput'].includes(ref.kind) : ['coreRequest', 'materializedRequest'].includes(ref.kind));
 		});
 		return { ref: record && diagnosticPayload(record), record };
 	}
@@ -542,15 +420,8 @@ export class AgentTraceViewModel {
 
 function compactEventLabel(record: AgentTraceEvent, performance?: InvocationPerformance): string {
 	const full = eventLabel(record, performance);
-	const label = full.slice(
-		full.indexOf(' · ') + 3,
-		full.lastIndexOf(' · ' + new Date(record.recordedAt).toISOString()),
-	);
-	if (
-		record.event.type.startsWith('modelAttempt') ||
-		record.event.type === 'modelRequestPrepared' ||
-		(isRecord(record.event.item) && record.event.item.type === 'toolResult')
-	) {
+	const label = full.slice(full.indexOf(' · ') + 3, full.lastIndexOf(' · ' + new Date(record.recordedAt).toISOString()));
+	if (record.event.type.startsWith('modelAttempt') || record.event.type === 'modelRequestPrepared' || (isRecord(record.event.item) && record.event.item.type === 'toolResult')) {
 		return label.split(' · ')[0];
 	}
 	return label;
@@ -581,13 +452,7 @@ export function eventLabel(record: AgentTraceEvent, performance?: InvocationPerf
 		case 'hookRunUpdated': {
 			const run = isRecord(event.run) ? event.run : undefined;
 			const status = isRecord(run?.status) ? run.status.type : undefined;
-			detail = localize(
-				'agentTrace.hookRun',
-				'Hook · {0} · {1} · {2} ms',
-				String(run?.event ?? ''),
-				hookStatusLabel(status),
-				String(run?.durationMs ?? 0),
-			);
+			detail = localize('agentTrace.hookRun', 'Hook · {0} · {1} · {2} ms', String(run?.event ?? ''), hookStatusLabel(status), String(run?.durationMs ?? 0));
 			break;
 		}
 		case 'hookRunRecorded':
@@ -612,11 +477,7 @@ export function eventLabel(record: AgentTraceEvent, performance?: InvocationPerf
 			detail = localize('agentTrace.attemptAbandoned', 'Model attempt abandoned');
 			break;
 		case 'modelAttemptAccounted':
-			detail = localize(
-				'agentTrace.attemptAccounted',
-				'Model attempt linked to accounting · {0}',
-				String(event.invocationId),
-			);
+			detail = localize('agentTrace.attemptAccounted', 'Model attempt linked to accounting · {0}', String(event.invocationId));
 			break;
 		case 'threadCreated':
 			detail = localize('agentTrace.created', 'Thread created');
@@ -643,18 +504,11 @@ export function eventLabel(record: AgentTraceEvent, performance?: InvocationPerf
 			detail = localize('agentTrace.input', 'User input · {0}', String(item?.text ?? '').slice(0, 100));
 			break;
 		case 'agentMessage':
-			detail = localize(
-				'agentTrace.phasedOutput',
-				'Agent output · {0} · {1}',
-				phaseLabel(item?.phase),
-				String(item?.text ?? '').slice(0, 100),
-			);
+			detail = localize('agentTrace.phasedOutput', 'Agent output · {0} · {1}', phaseLabel(item?.phase), String(item?.text ?? '').slice(0, 100));
 			break;
 		case 'modelResponseEvaluated': {
 			const decision = isRecord(event.decision) ? event.decision : undefined;
-			const phases = Array.isArray(decision?.messagePhases)
-				? decision.messagePhases.map(phaseLabel).join(', ')
-				: phaseLabel(undefined);
+			const phases = Array.isArray(decision?.messagePhases) ? decision.messagePhases.map(phaseLabel).join(', ') : phaseLabel(undefined);
 			detail = localize(
 				'agentTrace.loopDecision',
 				'Loop · {0} · {1} · stop: {2} · phases: {3}',
@@ -672,18 +526,10 @@ export function eventLabel(record: AgentTraceEvent, performance?: InvocationPerf
 			detail = localize('agentTrace.delegationStarted', 'Child task started');
 			break;
 		case 'delegationResultProduced':
-			detail = localize(
-				'agentTrace.resultProduced',
-				'Child result produced · {0}',
-				isRecord(event.result) ? String(event.result.status) : '',
-			);
+			detail = localize('agentTrace.resultProduced', 'Child result produced · {0}', isRecord(event.result) ? String(event.result.status) : '');
 			break;
 		case 'delegationResultReceived':
-			detail = localize(
-				'agentTrace.resultReceived',
-				'Child result received · {0}',
-				isRecord(event.result) ? String(event.result.status) : '',
-			);
+			detail = localize('agentTrace.resultReceived', 'Child result received · {0}', isRecord(event.result) ? String(event.result.status) : '');
 			break;
 		case 'agentJoinRequested':
 			detail = localize('agentTrace.joinRequested', 'Waiting for child tasks');
@@ -711,19 +557,9 @@ export function eventLabel(record: AgentTraceEvent, performance?: InvocationPerf
 		case 'modelInvocationRecorded': {
 			const model = isRecord(invocation?.requestedModel) ? invocation.requestedModel : undefined;
 			const usage = isRecord(invocation?.usage) ? invocation.usage : undefined;
-			detail = localize(
-				'agentTrace.modelCall',
-				'Model call · {0} · {1}',
-				String(invocation?.resolvedModel ?? model?.model ?? ''),
-				String(invocation?.outcome ?? ''),
-			);
+			detail = localize('agentTrace.modelCall', 'Model call · {0} · {1}', String(invocation?.resolvedModel ?? model?.model ?? ''), String(invocation?.outcome ?? ''));
 			if (typeof usage?.inputTokens === 'number' && typeof usage.outputTokens === 'number') {
-				detail += localize(
-					'agentTrace.tokens',
-					' · {0} input / {1} output tokens',
-					usage.inputTokens,
-					usage.outputTokens,
-				);
+				detail += localize('agentTrace.tokens', ' · {0} input / {1} output tokens', usage.inputTokens, usage.outputTokens);
 			}
 			detail += ' · ' + invocationTimingLabel(performance);
 			break;
@@ -735,8 +571,7 @@ export function eventLabel(record: AgentTraceEvent, performance?: InvocationPerf
 }
 
 export function invocationTimingLabel(performance: InvocationPerformance | undefined): string {
-	const unknown = (reason: PerformanceUnknownReason | undefined) =>
-		localize('agentTrace.performanceUnknown', 'unknown ({0})', performanceUnknownLabel(reason));
+	const unknown = (reason: PerformanceUnknownReason | undefined) => localize('agentTrace.performanceUnknown', 'unknown ({0})', performanceUnknownLabel(reason));
 	const duration = (metric: PerformanceDuration | undefined): string => {
 		if (!metric || metric.type === 'unknown') {
 			return unknown(metric?.reason);
@@ -752,9 +587,7 @@ export function invocationTimingLabel(performance: InvocationPerformance | undef
 		duration(performance?.firstText),
 		duration(performance?.generation),
 		duration(performance?.total),
-		rate?.type === 'estimated'
-			? localize('agentTrace.metricTps', '{0} tok/s', rate.tokensPerSecond)
-			: unknown(rate?.reason),
+		rate?.type === 'estimated' ? localize('agentTrace.metricTps', '{0} tok/s', rate.tokensPerSecond) : unknown(rate?.reason),
 	);
 }
 
@@ -801,11 +634,7 @@ function phaseLabel(phase: unknown): string {
 		case undefined:
 			return localize('agentTrace.phaseUnspecified', 'Unspecified');
 		default:
-			return typeof phase === 'string'
-				? phase
-				: isRecord(phase) && typeof phase.other === 'string'
-					? phase.other
-					: localize('agentTrace.phaseUnspecified', 'Unspecified');
+			return typeof phase === 'string' ? phase : isRecord(phase) && typeof phase.other === 'string' ? phase.other : localize('agentTrace.phaseUnspecified', 'Unspecified');
 	}
 }
 
@@ -877,11 +706,7 @@ export function recordingLabel(trace: AgentTrace): string {
 			return localize('agentTrace.recording', 'Local diagnostic evidence enabled.');
 		case 'incomplete':
 			return trace.diagnostics.pendingRecords === undefined
-				? localize(
-						'agentTrace.incomplete',
-						'Diagnostic evidence incomplete · {0} records omitted.',
-						trace.diagnostics.droppedRecords,
-					)
+				? localize('agentTrace.incomplete', 'Diagnostic evidence incomplete · {0} records omitted.', trace.diagnostics.droppedRecords)
 				: localize(
 						'agentTrace.incompletePending',
 						'Diagnostic evidence incomplete · {0} records omitted · {1} records pending.',
@@ -889,16 +714,10 @@ export function recordingLabel(trace: AgentTrace): string {
 						trace.diagnostics.pendingRecords,
 					);
 		case 'unavailable':
-			return localize(
-				'agentTrace.unavailable',
-				'Diagnostic storage unavailable; execution history remains readable.',
-			);
+			return localize('agentTrace.unavailable', 'Diagnostic storage unavailable; execution history remains readable.');
 		case 'disabled':
 		case undefined:
-			return localize(
-				'agentTrace.disabled',
-				'Request evidence was not enabled. Enable detailed recording in Execution trace settings, then restart the owning App Server.',
-			);
+			return localize('agentTrace.disabled', 'Request evidence was not enabled. Enable detailed recording in Execution trace settings, then restart the owning App Server.');
 	}
 }
 export function evidenceLabel(kind: string): string {
@@ -908,10 +727,7 @@ export function evidenceLabel(kind: string): string {
 		case 'coreRequest':
 			return localize('agentTrace.coreRequest', 'Core semantic request · before attachment materialization');
 		case 'materializedRequest':
-			return localize(
-				'agentTrace.materializedRequest',
-				'Model service semantic request · after attachment materialization',
-			);
+			return localize('agentTrace.materializedRequest', 'Model service semantic request · after attachment materialization');
 		case 'modelResponse':
 			return localize('agentTrace.response', 'Model service response');
 		case 'partialOutput':

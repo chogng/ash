@@ -6,11 +6,7 @@ import { Range } from '../../../common/core/range.js';
 import { type ITextModel } from '../../../common/model.js';
 import * as nls from '../../../../nls.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import {
-	EditorAction,
-	registerEditorAction,
-	type ServicesAccessor,
-} from '../../../browser/editorFeatureRegistration.js';
+import { EditorAction, registerEditorAction, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
 import { MoveOperations } from '../../../common/cursor/cursorMoveOperations.js';
 import { type ICommand } from '../../../common/editorCommon.js';
 import { type IActionOptions } from '../../../browser/editorFeatureRegistration.js';
@@ -88,12 +84,7 @@ export class DuplicateSelectionAction extends EditorAction {
 		const model = editor.getModel();
 		if (!model) return;
 		const commands = (editor.getSelections() ?? []).map(selection =>
-			selection.isEmpty()
-				? new CopyLinesCommand(selection, true)
-				: new ReplaceCommandThatSelectsText(
-						Selection.fromPositions(selection.getEndPosition()),
-						model.getValueInRange(selection),
-					),
+			selection.isEmpty() ? new CopyLinesCommand(selection, true) : new ReplaceCommandThatSelectsText(Selection.fromPositions(selection.getEndPosition()), model.getValueInRange(selection)),
 		);
 		editor.pushUndoStop();
 		editor.executeCommands(this.id, commands);
@@ -111,9 +102,7 @@ abstract class MoveLinesAction extends EditorAction {
 
 	public run(accessor: ServicesAccessor, editor: ICodeEditor): void {
 		const configurations = accessor.get(ILanguageConfigurationService);
-		const commands = (editor.getSelections() ?? []).map(
-			selection => new MoveLinesCommand(selection, this.down, EditorAutoIndentStrategy.None, configurations),
-		);
+		const commands = (editor.getSelections() ?? []).map(selection => new MoveLinesCommand(selection, this.down, EditorAutoIndentStrategy.None, configurations));
 		editor.pushUndoStop();
 		editor.executeCommands(this.id, commands);
 		editor.pushUndoStop();
@@ -310,25 +299,15 @@ function createTransposeCommands(model: ITextModel, selections: readonly Selecti
 
 function selectTransposeOperations(candidates: readonly TransposeOperation[]): readonly TransposeOperation[] {
 	const selected: TransposeOperation[] = [];
-	for (const candidate of [...candidates].sort(
-		(left, right) =>
-			left.startOffset - right.startOffset ||
-			left.endOffset - right.endOffset ||
-			left.selectionIndex - right.selectionIndex,
-	)) {
-		const overlapIndex = selected.findIndex(
-			existing => candidate.startOffset < existing.endOffset && existing.startOffset < candidate.endOffset,
-		);
+	for (const candidate of [...candidates].sort((left, right) => left.startOffset - right.startOffset || left.endOffset - right.endOffset || left.selectionIndex - right.selectionIndex)) {
+		const overlapIndex = selected.findIndex(existing => candidate.startOffset < existing.endOffset && existing.startOffset < candidate.endOffset);
 		if (overlapIndex < 0) {
 			selected.push(candidate);
 			continue;
 		}
-		if (candidate.selectionIndex === 0 && selected[overlapIndex]!.selectionIndex !== 0)
-			selected[overlapIndex] = candidate;
+		if (candidate.selectionIndex === 0 && selected[overlapIndex]!.selectionIndex !== 0) selected[overlapIndex] = candidate;
 	}
-	return Object.freeze(
-		selected.sort((left, right) => left.startOffset - right.startOffset || left.endOffset - right.endOffset),
-	);
+	return Object.freeze(selected.sort((left, right) => left.startOffset - right.startOffset || left.endOffset - right.endOffset));
 }
 
 function deleteLines(editor: ICodeEditor): void {
@@ -338,10 +317,7 @@ function deleteLines(editor: ICodeEditor): void {
 	const groups = contiguousLineGroups(selectedLineIndices(selections));
 	const edit = new TextEdit(groups.map(group => deleteLineGroup(model, group)));
 	const cursorState = selections.map(selection =>
-		Selection.fromPositions(
-			edit.mapRange(Range.fromPositions(selection.getSelectionStart())).getStartPosition(),
-			edit.mapRange(Range.fromPositions(selection.getPosition())).getStartPosition(),
-		),
+		Selection.fromPositions(edit.mapRange(Range.fromPositions(selection.getSelectionStart())).getStartPosition(), edit.mapRange(Range.fromPositions(selection.getPosition())).getStartPosition()),
 	);
 	editor.pushUndoStop();
 	editor.executeEdits(
@@ -357,9 +333,7 @@ function insertLine(editor: ICodeEditor, before: boolean): void {
 	const selections = editor.getSelections();
 	const viewModel = editor._getViewModel();
 	if (!model || !selections || !viewModel) return;
-	const commands = before
-		? EnterOperation.lineInsertBefore(viewModel.cursorConfig, model, selections)
-		: EnterOperation.lineInsertAfter(viewModel.cursorConfig, model, selections);
+	const commands = before ? EnterOperation.lineInsertBefore(viewModel.cursorConfig, model, selections) : EnterOperation.lineInsertAfter(viewModel.cursorConfig, model, selections);
 	editor.pushUndoStop();
 	editor.executeCommands(before ? InsertLineBeforeAction.ID : InsertLineAfterAction.ID, commands);
 	editor.pushUndoStop();
@@ -401,12 +375,7 @@ function joinLines(editor: ICodeEditor): void {
 	}
 	const textEdit = new TextEdit(operations.map(operation => new TextReplacement(operation.range, operation.text)));
 	const coordinates = new StringText(textEdit.apply(new TextModelText(model))).getTransformer();
-	const cursorState = selectionOffsets.map(offsets =>
-		Selection.fromPositions(
-			coordinates.getPosition(offsets.anchorOffset),
-			coordinates.getPosition(offsets.activeOffset),
-		),
-	);
+	const cursorState = selectionOffsets.map(offsets => Selection.fromPositions(coordinates.getPosition(offsets.anchorOffset), coordinates.getPosition(offsets.activeOffset)));
 	if (primarySelectionIndex > 0) cursorState.unshift(cursorState.splice(primarySelectionIndex, 1)[0]!);
 	editor.pushUndoStop();
 	editor.executeEdits('editor.action.joinLines', operations, cursorState);
@@ -433,9 +402,7 @@ function reduceJoinTargets(selections: readonly Selection[]): readonly JoinTarge
 			result[result.length - 1] = { ...target, primary: previous.primary || target.primary };
 			continue;
 		}
-		const separate = previousCollapsed
-			? target.start.lineNumber > previous.end.lineNumber + 1
-			: target.start.lineNumber > previous.end.lineNumber;
+		const separate = previousCollapsed ? target.start.lineNumber > previous.end.lineNumber + 1 : target.start.lineNumber > previous.end.lineNumber;
 		if (separate) {
 			result.push(target);
 			continue;
@@ -451,9 +418,7 @@ function reduceJoinTargets(selections: readonly Selection[]): readonly JoinTarge
 
 function joinEdit(model: ITextModel, target: JoinTarget): JoinEdit {
 	const collapsed = Position.compare(target.start, target.end) === 0;
-	const endLineNumber = collapsed
-		? Math.min(target.start.lineNumber + 1, model.getLineCount())
-		: target.end.lineNumber;
+	const endLineNumber = collapsed ? Math.min(target.start.lineNumber + 1, model.getLineCount()) : target.end.lineNumber;
 	if (endLineNumber === target.start.lineNumber) {
 		const lineStart = new Position(target.start.lineNumber, 1);
 		const offset = model.getOffsetAt(lineStart);
@@ -482,11 +447,7 @@ function joinEdit(model: ITextModel, target: JoinTarget): JoinEdit {
 	};
 }
 
-function joinText(
-	model: ITextModel,
-	startLineNumber: number,
-	endLineNumber: number,
-): { readonly text: string; readonly lastPartLength: number } {
+function joinText(model: ITextModel, startLineNumber: number, endLineNumber: number): { readonly text: string; readonly lastPartLength: number } {
 	let text = model.getLineContent(startLineNumber);
 	let lastPartLength = 0;
 	for (let lineNumber = startLineNumber + 1; lineNumber <= endLineNumber; lineNumber += 1) {
@@ -519,10 +480,7 @@ function deleteLineGroup(model: ITextModel, group: EditorLineGroup): TextReplace
 	}
 	const previousLineIndex = first - 1;
 	return TextReplacement.delete(
-		Range.fromPositions(
-			new Position(previousLineIndex + 1, model.getLineContent(previousLineIndex + 1).length + 1),
-			new Position(last + 1, model.getLineContent(last + 1).length + 1),
-		),
+		Range.fromPositions(new Position(previousLineIndex + 1, model.getLineContent(previousLineIndex + 1).length + 1), new Position(last + 1, model.getLineContent(last + 1).length + 1)),
 	);
 }
 
@@ -539,8 +497,7 @@ function selectedLineIndices(selections: readonly Selection[]): readonly number[
 		if (!selection.isEmpty() && range.endColumn === 1 && endLineIndex > range.startLineNumber - 1) {
 			endLineIndex -= 1;
 		}
-		for (let lineIndex = range.startLineNumber - 1; lineIndex <= endLineIndex; lineIndex += 1)
-			indices.add(lineIndex);
+		for (let lineIndex = range.startLineNumber - 1; lineIndex <= endLineIndex; lineIndex += 1) indices.add(lineIndex);
 	}
 	return Object.freeze([...indices].sort((left, right) => left - right));
 }

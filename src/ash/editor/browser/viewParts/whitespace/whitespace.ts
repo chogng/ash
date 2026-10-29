@@ -71,11 +71,7 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 	}
 
 	public prepareRender(context: RenderingContext): void {
-		if (
-			this.mode === 'none' ||
-			(this.mode === 'selection' &&
-				this.viewModel.getCursorStates().every(state => state.modelState.selection.isEmpty()))
-		) {
+		if (this.mode === 'none' || (this.mode === 'selection' && this.viewModel.getCursorStates().every(state => state.modelState.selection.isEmpty()))) {
 			this._renderResult = [];
 			return;
 		}
@@ -87,9 +83,7 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 				if (!visualLine) {
 					continue;
 				}
-				const text = this.model
-					.getLineContent(visualLine.logicalLineIndex + 1)
-					.slice(visualLine.startColumn, visualLine.endColumn);
+				const text = this.model.getLineContent(visualLine.logicalLineIndex + 1).slice(visualLine.startColumn, visualLine.endColumn);
 				const trailingStart = text.search(/\s*$/u);
 				for (let index = 0; index < text.length; index += 1) {
 					const character = text[index];
@@ -102,10 +96,7 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 					if (this.mode === 'boundary' && index > 0 && index < trailingStart) {
 						continue;
 					}
-					if (
-						this.mode === 'selection' &&
-						!this.isSelected(visualLine.logicalLineIndex, visualLine.startColumn + index)
-					) {
+					if (this.mode === 'selection' && !this.isSelected(visualLine.logicalLineIndex, visualLine.startColumn + index)) {
 						continue;
 					}
 					const marker = h(row.ownerDocument, 'span');
@@ -123,12 +114,7 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 	}
 
 	private isSelected(lineIndex: number, columnIndex: number): boolean {
-		const characterRange = Range.fromPositions(
-			new Position(lineIndex + 1, columnIndex + 1),
-			new Position(lineIndex + 1, columnIndex + 1 + 1),
-		);
-		return this.viewModel
-			.getCursorStates()
-			.some(state => Range.areIntersecting(state.modelState.selection, characterRange));
+		const characterRange = Range.fromPositions(new Position(lineIndex + 1, columnIndex + 1), new Position(lineIndex + 1, columnIndex + 1 + 1));
+		return this.viewModel.getCursorStates().some(state => Range.areIntersecting(state.modelState.selection, characterRange));
 	}
 }

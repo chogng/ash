@@ -1,10 +1,6 @@
 import { Event } from '../../../../../base/common/event.js';
 import type { VSBuffer } from '../../../../../base/common/buffer.js';
-import type {
-	IOpenEmptyWindowOptions,
-	IOpenWindowOptions,
-	IWindowOpenable,
-} from '../../../../../platform/window/common/window.js';
+import type { IOpenEmptyWindowOptions, IOpenWindowOptions, IWindowOpenable } from '../../../../../platform/window/common/window.js';
 import type { IHostService } from '../../browser/host.js';
 
 /** Records host requests without opening windows in service tests. */
@@ -15,15 +11,8 @@ export class TestHostService implements IHostService {
 
 	openWindow(options?: IOpenEmptyWindowOptions): Promise<void>;
 	openWindow(toOpen: readonly IWindowOpenable[], options?: IOpenWindowOptions): Promise<void>;
-	async openWindow(
-		targetsOrOptions: readonly IWindowOpenable[] | IOpenEmptyWindowOptions = {},
-		options: IOpenWindowOptions = {},
-	): Promise<void> {
-		this.opened.push(
-			Array.isArray(targetsOrOptions)
-				? { targets: targetsOrOptions, options }
-				: { targets: [], options: targetsOrOptions as IOpenEmptyWindowOptions },
-		);
+	async openWindow(targetsOrOptions: readonly IWindowOpenable[] | IOpenEmptyWindowOptions = {}, options: IOpenWindowOptions = {}): Promise<void> {
+		this.opened.push(Array.isArray(targetsOrOptions) ? { targets: targetsOrOptions, options } : { targets: [], options: targetsOrOptions as IOpenEmptyWindowOptions });
 	}
 	async restart(): Promise<void> {
 		throw new Error('Unexpected host restart');

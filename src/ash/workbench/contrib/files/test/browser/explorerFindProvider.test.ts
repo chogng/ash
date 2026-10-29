@@ -52,16 +52,12 @@ test('Explorer find reads collapsed workspace names and cancels late results on 
 		await tree.setInput(root);
 		using provider = new ExplorerFindProvider(tree, header);
 		const input = header.querySelector('input')!;
-		const open = () =>
-			tree.element.dispatchEvent(
-				new browser.window.KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true }),
-			);
+		const open = () => tree.element.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true }));
 		const query = (value: string) => {
 			input.value = value;
 			input.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
 		};
-		const escape = () =>
-			input.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		const escape = () => input.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 		open();
 		assert.equal(browser.window.document.activeElement, input);
 		query('report');

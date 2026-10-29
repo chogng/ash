@@ -1,9 +1,5 @@
 import type { DocumentNode, DocumentNodeId } from '../../../../common/model/document.js';
-import {
-	createDocumentPlugin,
-	DocumentPluginKey,
-	type DocumentPlugin,
-} from '../../../../common/model/documentPlugin.js';
+import { createDocumentPlugin, DocumentPluginKey, type DocumentPlugin } from '../../../../common/model/documentPlugin.js';
 
 export interface ReferenceEntry {
 	readonly key: string;

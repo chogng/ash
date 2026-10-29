@@ -6,13 +6,7 @@ import { createDesignColorPicker } from '../../../browser/widgets/designColorPic
 import { VectorAppearanceWidget } from './vectorAppearanceWidget.js';
 import { importDesignOutlineFont, outlineDesignText } from '../../../browser/designTextOutlines.js';
 import { clearDesignTextMeasurements } from '../../../browser/designTextMeasurement.js';
-import {
-	connectDesignNetwork,
-	designNetworkRegions,
-	paintDesignNetworkFromPath,
-	toDesignVectorNetwork,
-	withDesignVectorNetwork,
-} from '../../../common/model/designVectorNetwork.js';
+import { connectDesignNetwork, designNetworkRegions, paintDesignNetworkFromPath, toDesignVectorNetwork, withDesignVectorNetwork } from '../../../common/model/designVectorNetwork.js';
 import { intersectDesignNetwork, simplifyDesignNetwork } from '../../../common/model/designVectorTopology.js';
 import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
@@ -20,21 +14,10 @@ import type { IAction } from '../../../../../../base/common/actions.js';
 import { Disposable } from '../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../nls.js';
 import type { DesignDocumentController } from '../../../browser/designDocumentController.js';
-import {
-	getDesignNetworkIntersections,
-	getDesignVectorContours,
-	loadDesignVectorGeometry,
-} from '../../../browser/designVectorGeometry.js';
+import { getDesignNetworkIntersections, getDesignVectorContours, loadDesignVectorGeometry } from '../../../browser/designVectorGeometry.js';
 import type { DocumentCommands } from '../../../common/commands/documentCommands.js';
 import { flattenDesignShapes, type DesignShape } from '../../../common/model/document.js';
-import {
-	designPathContours,
-	designPathEditingContours,
-	designPathFillContours,
-	isDesignVector,
-	type DesignBooleanOperation,
-	type DesignPath,
-} from '../../../common/model/designVector.js';
+import { designPathContours, designPathEditingContours, designPathFillContours, isDesignVector, type DesignBooleanOperation, type DesignPath } from '../../../common/model/designVector.js';
 import type { DesignSelection } from '../../../common/selection.js';
 
 function operations(): readonly [DesignBooleanOperation, string][] {
@@ -80,20 +63,18 @@ export class VectorPropertiesWidget extends Disposable {
 			document,
 			'details',
 			{ className: 'ash-design-property-section ash-design-vector-properties', properties: { open: true } },
-			h(
-				document,
-				'summary',
-				{ className: 'ash-design-property-disclosure' },
-				localize('sessions.design.vectorTools', 'Vector tools'),
-			),
+			h(document, 'summary', { className: 'ash-design-property-disclosure' }, localize('sessions.design.vectorTools', 'Vector tools')),
 		);
 		const content = h(document, 'div', { className: 'ash-design-property-fields' });
 		this.domNode.append(content);
-		this.appearance = this._register(
-			new VectorAppearanceWidget(controller, commands, selection, document, refresh, focusCanvas),
-		);
+		this.appearance = this._register(new VectorAppearanceWidget(controller, commands, selection, document, refresh, focusCanvas));
 		for (const action of this.getActions()) {
-			const button = this._register(new Button(content, { ...defaultButtonStyles, label: action.label }));
+			const button = this._register(
+				new Button(content, {
+					...defaultButtonStyles,
+					label: action.label,
+				}),
+			);
 			this.buttons.set(action.id, button);
 			this._register(
 				button.onDidClick(() => {
@@ -110,14 +91,7 @@ export class VectorPropertiesWidget extends Disposable {
 			attributes: { 'aria-label': simplifyLabel },
 		});
 		const simplifyCount = h(document, 'span', { attributes: { role: 'status', 'aria-live': 'polite' } });
-		const simplifyFields = h(
-			document,
-			'label',
-			{ className: 'ash-design-property-wide' },
-			simplifyLabel,
-			simplifyInput,
-			simplifyCount,
-		);
+		const simplifyFields = h(document, 'label', { className: 'ash-design-property-wide' }, simplifyLabel, simplifyInput, simplifyCount);
 		content.append(simplifyFields);
 		this._register(
 			addDisposableListener(simplifyInput, 'input', () => {
@@ -146,10 +120,7 @@ export class VectorPropertiesWidget extends Disposable {
 			simplifyFields.hidden = !this.simplification;
 			if (this.simplification) {
 				simplifyInput.value = String(this.simplification.amount);
-				simplifyInput.setAttribute(
-					'aria-valuetext',
-					localize('sessions.design.vectorSimplificationValue', '{0} percent', this.simplification.amount),
-				);
+				simplifyInput.setAttribute('aria-valuetext', localize('sessions.design.vectorSimplificationValue', '{0} percent', this.simplification.amount));
 				simplifyCount.textContent = localize(
 					'sessions.design.vectorSimplificationCount',
 					'{0} → {1} points',
@@ -180,10 +151,7 @@ export class VectorPropertiesWidget extends Disposable {
 					await importDesignOutlineFont(file);
 					if (!this.isDisposed) {
 						clearDesignTextMeasurements();
-						this.message.textContent = localize(
-							'sessions.design.outlineFontLoaded',
-							'Font loaded. You can now convert matching text to outlines.',
-						);
+						this.message.textContent = localize('sessions.design.outlineFontLoaded', 'Font loaded. You can now convert matching text to outlines.');
 						this.refresh();
 					}
 				} catch (error) {
@@ -201,18 +169,8 @@ export class VectorPropertiesWidget extends Disposable {
 		});
 		this.fields = h(document, 'div', { className: 'ash-design-property-fields ash-design-property-wide' });
 		content.append(this.fields);
-		const select = (
-			label: string,
-			options: readonly (readonly [string, string])[],
-			value: () => string,
-			change: (value: string) => void,
-		) => {
-			const input = h(
-				document,
-				'select',
-				{ attributes: { 'aria-label': label } },
-				...options.map(([value, label]) => h(document, 'option', { properties: { value } }, label)),
-			);
+		const select = (label: string, options: readonly (readonly [string, string])[], value: () => string, change: (value: string) => void) => {
+			const input = h(document, 'select', { attributes: { 'aria-label': label } }, ...options.map(([value, label]) => h(document, 'option', { properties: { value } }, label)));
 			this.fields.append(h(document, 'label', { className: 'ash-design-property-wide' }, label, input));
 			this._register(
 				addDisposableListener(input, 'change', () => {
@@ -239,11 +197,7 @@ export class VectorPropertiesWidget extends Disposable {
 			},
 		);
 		this.updates.unshift(() => {
-			contour.replaceChildren(
-				...(this.path ? designPathEditingContours(this.path) : []).map((_, i) =>
-					h(document, 'option', { properties: { value: String(i) } }, String(i + 1)),
-				),
-			);
+			contour.replaceChildren(...(this.path ? designPathEditingContours(this.path) : []).map((_, i) => h(document, 'option', { properties: { value: String(i) } }, String(i + 1))));
 		});
 		select(
 			localize('sessions.design.vectorMirroring', 'Handle mirroring'),
@@ -252,20 +206,10 @@ export class VectorPropertiesWidget extends Disposable {
 				['angle', localize('sessions.design.vectorAngle', 'Angle')],
 				['angle-length', localize('sessions.design.vectorAngleLength', 'Angle and length')],
 			],
-			() =>
-				this.path
-					? (designPathEditingContours(this.path)[this.selection.contourIndex]?.nodes[
-							this.selection.nodeIndex
-						]?.mirroring ?? 'none')
-					: 'none',
+			() => (this.path ? (designPathEditingContours(this.path)[this.selection.contourIndex]?.nodes[this.selection.nodeIndex]?.mirroring ?? 'none') : 'none'),
 			value => {
 				if (this.path) {
-					this.commands.vector.setMirroring(
-						this.path,
-						this.selection.contourIndex,
-						this.selection.nodeIndices,
-						value as 'none' | 'angle' | 'angle-length',
-					);
+					this.commands.vector.setMirroring(this.path, this.selection.contourIndex, this.selection.nodeIndices, value as 'none' | 'angle' | 'angle-length');
 				}
 			},
 		);
@@ -292,11 +236,7 @@ export class VectorPropertiesWidget extends Disposable {
 			() => this.path?.strokeCap ?? 'butt',
 			value => {
 				if (this.path) {
-					this.commands.vector.setEndpoints(
-						{ ...this.path, strokeCap: value as 'butt' | 'round' | 'square' },
-						designPathEndpoints(this.path),
-						undefined,
-					);
+					this.commands.vector.setEndpoints({ ...this.path, strokeCap: value as 'butt' | 'round' | 'square' }, designPathEndpoints(this.path), undefined);
 				}
 			},
 		);
@@ -343,24 +283,13 @@ export class VectorPropertiesWidget extends Disposable {
 		);
 		this.updates.push(() => {
 			stroke.enabled = this.editable;
-			stroke.setColor(
-				Color.Format.CSS.parseHex(this.path?.stroke ?? this.path?.fill ?? '#000000')!,
-				this.path?.id,
-			);
+			stroke.setColor(Color.Format.CSS.parseHex(this.path?.stroke ?? this.path?.fill ?? '#000000')!, this.path?.id);
 			resetStroke.enabled = this.editable && this.path?.stroke !== undefined;
 		});
 		const dash = h(document, 'input', {
 			attributes: { 'aria-label': localize('sessions.design.vectorDash', 'Dash pattern') },
 		});
-		this.fields.append(
-			h(
-				document,
-				'label',
-				{ className: 'ash-design-property-wide' },
-				localize('sessions.design.vectorDash', 'Dash pattern'),
-				dash,
-			),
-		);
+		this.fields.append(h(document, 'label', { className: 'ash-design-property-wide' }, localize('sessions.design.vectorDash', 'Dash pattern'), dash));
 		this._register(
 			addDisposableListener(dash, 'change', () => {
 				if (!this.path || !this.editable) {
@@ -370,12 +299,8 @@ export class VectorPropertiesWidget extends Disposable {
 					.trim()
 					.split(/[\s,]+/u)
 					.map(Number);
-				const valid =
-					!dash.value.trim() ||
-					(values.length <= 32 && values.every(value => Number.isFinite(value) && value >= 0.01));
-				dash.setCustomValidity(
-					valid ? '' : localize('sessions.design.vectorInvalidStyle', 'Enter positive dash lengths.'),
-				);
+				const valid = !dash.value.trim() || (values.length <= 32 && values.every(value => Number.isFinite(value) && value >= 0.01));
+				dash.setCustomValidity(valid ? '' : localize('sessions.design.vectorInvalidStyle', 'Enter positive dash lengths.'));
 				if (!valid) {
 					dash.reportValidity();
 					return;
@@ -440,10 +365,7 @@ export class VectorPropertiesWidget extends Disposable {
 			);
 			this.updates.push(() => {
 				const path = this.path;
-				input.value = String(
-					(path?.network?.edges[this.edgeIndex]?.[point][axis] ?? 0) *
-						(axis === 'x' ? (path?.width ?? 1) : (path?.height ?? 1)),
-				);
+				input.value = String((path?.network?.edges[this.edgeIndex]?.[point][axis] ?? 0) * (axis === 'x' ? (path?.width ?? 1) : (path?.height ?? 1)));
 				input.disabled = !this.editable;
 			});
 		}
@@ -454,10 +376,7 @@ export class VectorPropertiesWidget extends Disposable {
 			properties: { type: 'checkbox' },
 			attributes: { 'aria-label': filledLabel },
 		});
-		networkFields.append(
-			h(document, 'label', {}, regionLabel, regionInput),
-			h(document, 'label', {}, filledLabel, filled),
-		);
+		networkFields.append(h(document, 'label', {}, regionLabel, regionInput), h(document, 'label', {}, filledLabel, filled));
 		this._register(
 			addDisposableListener(regionInput, 'change', () => {
 				this.regionIndex = Number(regionInput.value);
@@ -552,35 +471,20 @@ export class VectorPropertiesWidget extends Disposable {
 			this.edgeIndex = Math.min(this.edgeIndex, Math.max(0, (network?.edges.length ?? 1) - 1));
 			edgeInput.replaceChildren(
 				...(network?.edges ?? []).map((edge, i) =>
-					h(
-						document,
-						'option',
-						{ properties: { value: String(i) } },
-						localize(
-							'sessions.design.networkEdgeLabel',
-							'{0}: {1} → {2}',
-							i + 1,
-							edge.start + 1,
-							edge.end + 1,
-						),
-					),
+					h(document, 'option', { properties: { value: String(i) } }, localize('sessions.design.networkEdgeLabel', '{0}: {1} → {2}', i + 1, edge.start + 1, edge.end + 1)),
 				),
 			);
 			edgeInput.value = String(this.edgeIndex);
 			edgeInput.disabled = !this.editable;
 			const regions = network ? designNetworkRegions(network) : [];
 			this.regionIndex = Math.min(this.regionIndex, Math.max(0, regions.length - 1));
-			regionInput.replaceChildren(
-				...regions.map((_, i) => h(document, 'option', { properties: { value: String(i) } }, String(i + 1))),
-			);
+			regionInput.replaceChildren(...regions.map((_, i) => h(document, 'option', { properties: { value: String(i) } }, String(i + 1))));
 			regionInput.value = String(this.regionIndex);
 			paint.checked = this.selection.paintingVector;
 			paint.disabled = !this.editable;
 			regionColor.enabled = this.editable && !!regions.length;
 			regionColor.setColor(
-				Color.Format.CSS.parseHex(
-					network?.regionFills?.[regions[this.regionIndex]?.key] ?? this.path?.fill ?? '#000000',
-				)!,
+				Color.Format.CSS.parseHex(network?.regionFills?.[regions[this.regionIndex]?.key] ?? this.path?.fill ?? '#000000')!,
 				`${this.path?.id}:${regions[this.regionIndex]?.key}`,
 			);
 			resetRegion.enabled = this.editable && !!network?.regionFills?.[regions[this.regionIndex]?.key];
@@ -595,36 +499,23 @@ export class VectorPropertiesWidget extends Disposable {
 		content.append(this.message);
 	}
 	private get selected(): readonly DesignShape[] {
-		return flattenDesignShapes(this.controller.model.value.shapes).filter(shape =>
-			this.selection.ids.has(shape.id),
-		);
+		return flattenDesignShapes(this.controller.model.value.shapes).filter(shape => this.selection.ids.has(shape.id));
 	}
 	private get shape(): DesignShape | undefined {
-		return this.selection.ids.size === 1
-			? flattenDesignShapes(this.controller.model.value.shapes).find(shape => this.selection.ids.has(shape.id))
-			: undefined;
+		return this.selection.ids.size === 1 ? flattenDesignShapes(this.controller.model.value.shapes).find(shape => this.selection.ids.has(shape.id)) : undefined;
 	}
 	private get path(): DesignPath | undefined {
 		const shape = this.shape;
 		return shape?.kind === 'path' ? shape : undefined;
 	}
 	private get editable(): boolean {
-		return (
-			!this.running &&
-			!this.appearance.preview &&
-			!this.controller.isBusy &&
-			this.selected.every(shape => !this.commands.components.isInstanceChild(shape.id))
-		);
+		return !this.running && !this.appearance.preview && !this.controller.isBusy && this.selected.every(shape => !this.commands.components.isInstanceChild(shape.id));
 	}
 	public get preview(): DesignPath | undefined {
 		if (this.appearance.preview) {
 			return this.appearance.preview;
 		}
-		return this.simplification &&
-			this.simplification.version === this.controller.model.version &&
-			this.path?.id === this.simplification.source.id
-			? this.simplification.result
-			: undefined;
+		return this.simplification && this.simplification.version === this.controller.model.version && this.path?.id === this.simplification.source.id ? this.simplification.result : undefined;
 	}
 	public cancel(): void {
 		this.simplification = undefined;
@@ -638,10 +529,7 @@ export class VectorPropertiesWidget extends Disposable {
 		let network = this.simplification?.network;
 		if (!network) {
 			const original = toDesignVectorNetwork(source);
-			network = intersectDesignNetwork(
-				original,
-				getDesignNetworkIntersections(original, source.width, source.height),
-			).network;
+			network = intersectDesignNetwork(original, getDesignNetworkIntersections(original, source.width, source.height)).network;
 			if (!source.network) {
 				network = paintDesignNetworkFromPath(source, network);
 			}
@@ -674,10 +562,7 @@ export class VectorPropertiesWidget extends Disposable {
 			path = this.path,
 			editable = this.editable;
 		const hasText = this.selected.some(shape => shape.kind === 'text');
-		const canFlattenText =
-			hasText &&
-			this.selected.every(shape => shape.kind === 'text' || isDesignVector(shape)) &&
-			(this.selected.length === 1 || this.commands.canGroup(this.selection.ids));
+		const canFlattenText = hasText && this.selected.every(shape => shape.kind === 'text' || isDesignVector(shape)) && (this.selected.length === 1 || this.commands.canGroup(this.selection.ids));
 		const action = (id: string, label: string, enabled: boolean, run: () => unknown): IAction => ({
 			id: `sessions.design.${id}`,
 			label,
@@ -689,46 +574,28 @@ export class VectorPropertiesWidget extends Disposable {
 					this.focusCanvas();
 					return result;
 				} catch (error) {
-					this.message.textContent = localize(
-						'sessions.design.vectorFailed',
-						'Could not calculate the vector: {0}',
-						String(error),
-					);
+					this.message.textContent = localize('sessions.design.vectorFailed', 'Could not calculate the vector: {0}', String(error));
 				}
 			},
 		});
 		return [
-			...this.appearance
-				.getActions()
-				.map(action => ({ ...action, enabled: action.enabled && !this.simplification && !this.running })),
-			action(
-				'networkIntersections',
-				localize('sessions.design.networkIntersections', 'Add intersection nodes'),
-				!!path && !this.simplification,
-				() =>
-					this.geometry(() => {
-						if (!path) {
-							return;
-						}
-						const network = toDesignVectorNetwork(path),
-							hits = getDesignNetworkIntersections(network, path.width, path.height);
-						if (hits.length) {
-							const result = intersectDesignNetwork(network, hits);
-							this.commands.vector.update(
-								withDesignVectorNetwork(
-									path,
-									path.network ? result.network : paintDesignNetworkFromPath(path, result.network),
-								),
-							);
-							this.selection.selectNode(0, result.vertices.get(this.selection.nodeIndex) ?? 0);
-						}
-						this.message.textContent = hits.length
-							? localize(
-									'sessions.design.networkIntersectionsComplete',
-									'Crossings now share editable nodes.',
-								)
-							: localize('sessions.design.networkNoIntersections', 'No unconnected intersections found.');
-					}),
+			...this.appearance.getActions().map(action => ({ ...action, enabled: action.enabled && !this.simplification && !this.running })),
+			action('networkIntersections', localize('sessions.design.networkIntersections', 'Add intersection nodes'), !!path && !this.simplification, () =>
+				this.geometry(() => {
+					if (!path) {
+						return;
+					}
+					const network = toDesignVectorNetwork(path),
+						hits = getDesignNetworkIntersections(network, path.width, path.height);
+					if (hits.length) {
+						const result = intersectDesignNetwork(network, hits);
+						this.commands.vector.update(withDesignVectorNetwork(path, path.network ? result.network : paintDesignNetworkFromPath(path, result.network)));
+						this.selection.selectNode(0, result.vertices.get(this.selection.nodeIndex) ?? 0);
+					}
+					this.message.textContent = hits.length
+						? localize('sessions.design.networkIntersectionsComplete', 'Crossings now share editable nodes.')
+						: localize('sessions.design.networkNoIntersections', 'No unconnected intersections found.');
+				}),
 			),
 			action(
 				'networkMerge',
@@ -736,11 +603,7 @@ export class VectorPropertiesWidget extends Disposable {
 				!!path && this.selection.editingVector && this.selection.nodeIndices.size > 1 && !this.simplification,
 				() => {
 					if (path) {
-						const index = this.commands.vector.mergeNodes(
-							path,
-							this.selection.contourIndex,
-							this.selection.nodeIndices,
-						);
+						const index = this.commands.vector.mergeNodes(path, this.selection.contourIndex, this.selection.nodeIndices);
 						this.selection.selectNode(0, index);
 						this.refresh();
 					}
@@ -758,44 +621,24 @@ export class VectorPropertiesWidget extends Disposable {
 					}
 				},
 			),
-			action(
-				'vectorSimplify',
-				localize('sessions.design.vectorSimplify', 'Simplify vector'),
-				!!path && !this.simplification,
-				() => this.geometry(() => this.previewSimplification(20)),
-			),
-			action(
-				'vectorSimplifyApply',
-				localize('sessions.design.vectorSimplifyApply', 'Apply simplification'),
-				!!this.simplification,
-				() => this.applySimplification(),
-			),
-			action(
-				'vectorSimplifyCancel',
-				localize('sessions.design.vectorSimplifyCancel', 'Cancel simplification'),
-				!!this.simplification,
-				() => {
-					this.cancel();
-					this.refresh();
-				},
-			),
+			action('vectorSimplify', localize('sessions.design.vectorSimplify', 'Simplify vector'), !!path && !this.simplification, () => this.geometry(() => this.previewSimplification(20))),
+			action('vectorSimplifyApply', localize('sessions.design.vectorSimplifyApply', 'Apply simplification'), !!this.simplification, () => this.applySimplification()),
+			action('vectorSimplifyCancel', localize('sessions.design.vectorSimplifyCancel', 'Cancel simplification'), !!this.simplification, () => {
+				this.cancel();
+				this.refresh();
+			}),
 			...operations().map(([operation, label]) =>
-				action(
-					`vector${operation}`,
-					label,
-					this.commands.canCombine(this.selection.ids) ||
-						(shape?.kind === 'group' && !!shape.booleanOperation),
-					() =>
-						this.geometry(() => {
-							if (shape?.kind === 'group' && shape.booleanOperation) {
-								this.commands.updateShape({ ...shape, booleanOperation: operation });
-							} else {
-								const id = this.commands.group(this.selection.ids, operation);
-								if (id) {
-									this.selection.set([id]);
-								}
+				action(`vector${operation}`, label, this.commands.canCombine(this.selection.ids) || (shape?.kind === 'group' && !!shape.booleanOperation), () =>
+					this.geometry(() => {
+						if (shape?.kind === 'group' && shape.booleanOperation) {
+							this.commands.updateShape({ ...shape, booleanOperation: operation });
+						} else {
+							const id = this.commands.group(this.selection.ids, operation);
+							if (id) {
+								this.selection.set([id]);
 							}
-						}),
+						}
+					}),
 				),
 			),
 			action(
@@ -813,116 +656,74 @@ export class VectorPropertiesWidget extends Disposable {
 										this.selection.editingVector = true;
 									}
 								} else if (shape) {
-									const contours =
-										shape.kind === 'path' && !shape.strokeWidth
-											? designPathFillContours(shape)
-											: getDesignVectorContours(shape);
+									const contours = shape.kind === 'path' && !shape.strokeWidth ? designPathFillContours(shape) : getDesignVectorContours(shape);
 									if (contours.length) {
 										this.commands.vector.replace(shape, contours);
 										this.selection.editingVector = true;
 									} else {
-										this.message.textContent = localize(
-											'sessions.design.vectorEmpty',
-											'The result is empty. Move the original layers to change the overlap.',
-										);
+										this.message.textContent = localize('sessions.design.vectorEmpty', 'The result is empty. Move the original layers to change the overlap.');
 									}
 								}
 							}),
 			),
-			action(
-				'vectorOutline',
-				localize('sessions.design.vectorOutline', 'Outline stroke'),
-				(hasText && this.selected.every(shape => shape.kind === 'text')) || !!path?.strokeWidth,
-				() =>
-					hasText
-						? this.outlineText(true)
-						: this.geometry(() => {
-								if (path) {
-									this.commands.vector.replace(path, getDesignVectorContours(path, true), true);
-									this.selection.editingVector = true;
-								}
-							}),
+			action('vectorOutline', localize('sessions.design.vectorOutline', 'Outline stroke'), (hasText && this.selected.every(shape => shape.kind === 'text')) || !!path?.strokeWidth, () =>
+				hasText
+					? this.outlineText(true)
+					: this.geometry(() => {
+							if (path) {
+								this.commands.vector.replace(path, getDesignVectorContours(path, true), true);
+								this.selection.editingVector = true;
+							}
+						}),
 			),
-			action(
-				'vectorConvert',
-				localize('sessions.design.vectorConvert', 'Convert to path'),
-				shape?.kind === 'rectangle' || shape?.kind === 'ellipse',
-				() => {
-					if (shape) {
-						this.commands.vector.convert(shape);
-						this.selection.editingVector = true;
-						this.refresh();
-					}
-				},
-			),
+			action('vectorConvert', localize('sessions.design.vectorConvert', 'Convert to path'), shape?.kind === 'rectangle' || shape?.kind === 'ellipse', () => {
+				if (shape) {
+					this.commands.vector.convert(shape);
+					this.selection.editingVector = true;
+					this.refresh();
+				}
+			}),
 			action('vectorEdit', localize('sessions.design.vectorEdit', 'Edit vector'), !!path, () => {
 				this.selection.editingVector = true;
 				this.refresh();
 			}),
-			action(
-				'vectorNetwork',
-				localize('sessions.design.vectorNetwork', 'Convert to vector network'),
-				!!path && !path.network,
-				() => {
-					if (path) {
-						this.selection.selectNode(0, 0);
-						this.commands.vector.update(withDesignVectorNetwork(path, toDesignVectorNetwork(path)));
+			action('vectorNetwork', localize('sessions.design.vectorNetwork', 'Convert to vector network'), !!path && !path.network, () => {
+				if (path) {
+					this.selection.selectNode(0, 0);
+					this.commands.vector.update(withDesignVectorNetwork(path, toDesignVectorNetwork(path)));
+				}
+			}),
+			action('networkConnect', localize('sessions.design.networkConnect', 'Connect selected nodes'), !!path?.network && this.selection.nodeIndices.size === 2, () => {
+				const indices = [...this.selection.nodeIndices];
+				return this.geometry(() => {
+					if (path?.network) {
+						const [start, end] = indices,
+							network = connectDesignNetwork(path.network, start, end);
+						const result = intersectDesignNetwork(network, getDesignNetworkIntersections(network, path.width, path.height), path.network);
+						this.commands.vector.update(withDesignVectorNetwork(path, result.network));
+						this.selection.selectNode(0, result.vertices.get(end) ?? 0);
 					}
-				},
-			),
-			action(
-				'networkConnect',
-				localize('sessions.design.networkConnect', 'Connect selected nodes'),
-				!!path?.network && this.selection.nodeIndices.size === 2,
-				() => {
-					const indices = [...this.selection.nodeIndices];
-					return this.geometry(() => {
-						if (path?.network) {
-							const [start, end] = indices,
-								network = connectDesignNetwork(path.network, start, end);
-							const result = intersectDesignNetwork(
-								network,
-								getDesignNetworkIntersections(network, path.width, path.height),
-								path.network,
-							);
-							this.commands.vector.update(withDesignVectorNetwork(path, result.network));
-							this.selection.selectNode(0, result.vertices.get(end) ?? 0);
-						}
-					});
-				},
-			),
+				});
+			}),
 			action('networkSplit', localize('sessions.design.networkSplit', 'Split segment'), !!path?.network, () => {
 				if (path?.network) {
 					this.selection.nodeIndex = path.network.vertices.length;
 					this.commands.vector.insertNode(path, this.edgeIndex, 0);
 				}
 			}),
-			action(
-				'networkDeleteEdge',
-				localize('sessions.design.networkDeleteEdge', 'Delete segment'),
-				!!path?.network && path.network.edges.length > 1,
-				() => {
-					if (path?.network) {
-						const removed = path.network.edges[this.edgeIndex].id;
-						this.commands.vector.update(
-							withDesignVectorNetwork(path, {
-								...path.network,
-								edges: path.network.edges.filter((_, i) => i !== this.edgeIndex),
-								unfilledRegions: path.network.unfilledRegions?.filter(
-									key => !key.split(',').includes(removed),
-								),
-								regionFills: path.network.regionFills
-									? Object.fromEntries(
-											Object.entries(path.network.regionFills).filter(
-												([key]) => !key.split(',').includes(removed),
-											),
-										)
-									: undefined,
-							}),
-						);
-					}
-				},
-			),
+			action('networkDeleteEdge', localize('sessions.design.networkDeleteEdge', 'Delete segment'), !!path?.network && path.network.edges.length > 1, () => {
+				if (path?.network) {
+					const removed = path.network.edges[this.edgeIndex].id;
+					this.commands.vector.update(
+						withDesignVectorNetwork(path, {
+							...path.network,
+							edges: path.network.edges.filter((_, i) => i !== this.edgeIndex),
+							unfilledRegions: path.network.unfilledRegions?.filter(key => !key.split(',').includes(removed)),
+							regionFills: path.network.regionFills ? Object.fromEntries(Object.entries(path.network.regionFills).filter(([key]) => !key.split(',').includes(removed))) : undefined,
+						}),
+					);
+				}
+			}),
 			action('vectorCorner', localize('sessions.design.vectorCorner', 'Make corner'), !!path, () => {
 				if (path) {
 					this.commands.vector.corner(path, this.selection.contourIndex, this.selection.nodeIndices);
@@ -930,12 +731,7 @@ export class VectorPropertiesWidget extends Disposable {
 			}),
 			action('vectorSmooth', localize('sessions.design.vectorSmooth', 'Make smooth'), !!path, () => {
 				if (path) {
-					this.commands.vector.setMirroring(
-						path,
-						this.selection.contourIndex,
-						this.selection.nodeIndices,
-						'angle-length',
-					);
+					this.commands.vector.setMirroring(path, this.selection.contourIndex, this.selection.nodeIndices, 'angle-length');
 				}
 			}),
 			action('vectorReverse', localize('sessions.design.vectorReverse', 'Reverse path'), !!path, () => {
@@ -955,9 +751,7 @@ export class VectorPropertiesWidget extends Disposable {
 				() => {
 					if (path) {
 						const contours = designPathContours(path);
-						const next = contours.findIndex(
-							(contour, index) => index !== this.selection.contourIndex && !contour.closed,
-						);
+						const next = contours.findIndex((contour, index) => index !== this.selection.contourIndex && !contour.closed);
 						this.commands.vector.join(path, this.selection.contourIndex, next);
 					}
 				},
@@ -981,38 +775,23 @@ export class VectorPropertiesWidget extends Disposable {
 			if (!splitGlyphs && converted.length > 1) {
 				await loadDesignVectorGeometry();
 			}
-			if (
-				this.isDisposed ||
-				version !== this.controller.model.version ||
-				ids !== [...this.selection.ids].join(',')
-			) {
+			if (this.isDisposed || version !== this.controller.model.version || ids !== [...this.selection.ids].join(',')) {
 				return;
 			}
 			if (splitGlyphs || converted.length === 1) {
 				this.commands.updateShapes(converted);
 			} else {
-				const id = this.commands.flatten(
-					this.selection.ids,
-					getDesignVectorContours,
-					new Map(converted.map(shape => [shape.id, shape])),
-				);
+				const id = this.commands.flatten(this.selection.ids, getDesignVectorContours, new Map(converted.map(shape => [shape.id, shape])));
 				if (id) {
 					this.selection.set([id]);
 				}
 			}
 			this.selection.editingVector = !splitGlyphs;
-			this.message.textContent = localize(
-				'sessions.design.outlineComplete',
-				'Text converted to editable vector paths. Undo restores the text.',
-			);
+			this.message.textContent = localize('sessions.design.outlineComplete', 'Text converted to editable vector paths. Undo restores the text.');
 			this.refresh();
 		} catch (error) {
 			if (!this.isDisposed) {
-				this.message.textContent = localize(
-					'sessions.design.vectorFailed',
-					'Could not calculate the vector: {0}',
-					String(error),
-				);
+				this.message.textContent = localize('sessions.design.vectorFailed', 'Could not calculate the vector: {0}', String(error));
 			}
 		} finally {
 			this.running = false;
@@ -1031,21 +810,13 @@ export class VectorPropertiesWidget extends Disposable {
 		this.update();
 		try {
 			await loadDesignVectorGeometry();
-			if (
-				!this.isDisposed &&
-				version === this.controller.model.version &&
-				ids === [...this.selection.ids].join(',')
-			) {
+			if (!this.isDisposed && version === this.controller.model.version && ids === [...this.selection.ids].join(',')) {
 				edit();
 				this.refresh();
 			}
 		} catch (error) {
 			if (!this.isDisposed) {
-				this.message.textContent = localize(
-					'sessions.design.vectorFailed',
-					'Could not calculate the vector: {0}',
-					String(error),
-				);
+				this.message.textContent = localize('sessions.design.vectorFailed', 'Could not calculate the vector: {0}', String(error));
 			}
 		} finally {
 			this.running = false;
@@ -1061,10 +832,7 @@ export class VectorPropertiesWidget extends Disposable {
 		}
 		this.domNode.hidden = !this.path && !this.getActions().some(action => action.enabled) && !this.running;
 		if (this.path) {
-			this.selection.contourIndex = Math.min(
-				this.selection.contourIndex,
-				designPathEditingContours(this.path).length - 1,
-			);
+			this.selection.contourIndex = Math.min(this.selection.contourIndex, designPathEditingContours(this.path).length - 1);
 		}
 		for (const action of this.getActions()) {
 			const button = this.buttons.get(action.id);

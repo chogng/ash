@@ -1,10 +1,6 @@
 import { URI } from '../../../../base/common/uri.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
-import {
-	requireRecord,
-	requireString,
-	type EditorInputSerializer,
-} from '../../../services/editor/common/editorInputSerializer.js';
+import { requireRecord, requireString, type EditorInputSerializer } from '../../../services/editor/common/editorInputSerializer.js';
 import { TerminalEditorInput } from './terminalEditorInput.js';
 
 /** Persist identity only. A missing live instance is displayed as unavailable, never relaunched. */

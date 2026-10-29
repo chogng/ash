@@ -3,12 +3,7 @@ import type { Constructor } from '../../../../platform/instantiation/common/desc
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { localize } from '../../../../nls.js';
@@ -39,10 +34,7 @@ export interface IBrowserUrlSuggestionProvider {
 	readonly label?: string;
 	readonly order?: number;
 	readonly onDidChange?: import('../../../../base/common/event.js').Event<void>;
-	getSuggestions(
-		context: IBrowserUrlSuggestionContext,
-		token: import('../../../../base/common/cancellation.js').CancellationToken,
-	): Promise<readonly IBrowserUrlSuggestion[]>;
+	getSuggestions(context: IBrowserUrlSuggestionContext, token: import('../../../../base/common/cancellation.js').CancellationToken): Promise<readonly IBrowserUrlSuggestion[]>;
 }
 
 /** A feature's model subscriptions end before another page is attached. */
@@ -91,9 +83,7 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 	private currentInput: BrowserEditorInput | undefined;
 	private currentModel: IBrowserViewModel | undefined;
 	private readonly modelListeners = this._register(new DisposableStore());
-	private readonly modelChanges = this._register(
-		new Emitter<{ model: IBrowserViewModel | undefined; isNew: boolean }>(),
-	);
+	private readonly modelChanges = this._register(new Emitter<{ model: IBrowserViewModel | undefined; isNew: boolean }>());
 	readonly onDidChangeModel = this.modelChanges.event;
 	private readonly statusChanges = this._register(new Emitter<string>());
 	readonly onDidChangeStatus = this.statusChanges.event;
@@ -146,22 +136,14 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		this.viewportDomNode = h(document, 'div');
 		this.viewportDomNode.className = 'ash-browser-viewport';
 		this.viewportDomNode.tabIndex = 0;
-		this.viewportDomNode.setAttribute(
-			'aria-label',
-			localize(
-				{ bundle: 'ash.workbench', key: 'browser.webpage' },
-				'Webpage. Press F6 to return to the address field.',
-			),
-		);
+		this.viewportDomNode.setAttribute('aria-label', localize({ bundle: 'ash.workbench', key: 'browser.webpage' }, 'Webpage. Press F6 to return to the address field.'));
 		this.domNode.append(this.viewportDomNode);
 		container.append(this.domNode);
 		super.create(this.domNode);
 		for (const ctor of BrowserEditor.contributionTypes) {
 			this.contributions.set(ctor, this._register(this.instantiation.createInstance(ctor, this)));
 		}
-		const widgets = [...this.getContributions()]
-			.flatMap(contribution => [...contribution.widgets])
-			.sort((a, b) => a.order - b.order);
+		const widgets = [...this.getContributions()].flatMap(contribution => [...contribution.widgets]).sort((a, b) => a.order - b.order);
 		for (const widget of widgets) {
 			if (widget.location === BrowserWidgetLocation.Toolbar) {
 				this.domNode.insertBefore(widget.element, this.viewportDomNode);
@@ -262,12 +244,7 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 			}
 		}
 		if (this.configuration.getValue<boolean>('accessibility.verbosity.browser')) {
-			this.statusChanges.fire(
-				localize(
-					{ bundle: 'ash.workbench', key: 'browser.focusHelp' },
-					'Enter a URL and press Enter. Press Alt+F1 for browser help.',
-				),
-			);
+			this.statusChanges.fire(localize({ bundle: 'ash.workbench', key: 'browser.focusHelp' }, 'Enter a URL and press Enter. Press Alt+F1 for browser help.'));
 		}
 	}
 	public ensureBrowserFocus(): void {
@@ -286,15 +263,9 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		if (!this.isDisposed) {
 			this.statusChanges.fire(
 				error instanceof Error && error.message === 'BrowserScreenshotTooLarge'
-					? localize(
-							{ bundle: 'ash.workbench', key: 'browser.screenshotTooLarge' },
-							'The full page exceeds the screenshot size limit.',
-						)
+					? localize({ bundle: 'ash.workbench', key: 'browser.screenshotTooLarge' }, 'The full page exceeds the screenshot size limit.')
 					: error instanceof Error && error.message === 'BrowserScreenshotUnavailable'
-						? localize(
-								{ bundle: 'ash.workbench', key: 'browser.screenshotUnavailable' },
-								'The page could not be captured.',
-							)
+						? localize({ bundle: 'ash.workbench', key: 'browser.screenshotUnavailable' }, 'The page could not be captured.')
 						: error instanceof Error
 							? error.message
 							: String(error),
@@ -315,31 +286,13 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 			},
 			localizedStrings: {
 				addComment: localize({ bundle: 'ash.workbench', key: 'browser.addComment' }, 'Add Comment'),
-				addCommentPlaceholder: localize(
-					{ bundle: 'ash.workbench', key: 'browser.commentPlaceholder' },
-					'Add a comment',
-				),
-				commentOnSelectedElement: localize(
-					{ bundle: 'ash.workbench', key: 'browser.commentOnSelectedElement' },
-					'Comment on selected element',
-				),
-				elementComment: localize(
-					{ bundle: 'ash.workbench', key: 'browser.elementComment' },
-					'Element comment {0}',
-				),
-				elementCommentWithBody: localize(
-					{ bundle: 'ash.workbench', key: 'browser.elementCommentWithBody' },
-					'Element comment {0}: {1}',
-				),
-				emptyElementComment: localize(
-					{ bundle: 'ash.workbench', key: 'browser.emptyElementComment' },
-					'Empty element comment {0}',
-				),
+				addCommentPlaceholder: localize({ bundle: 'ash.workbench', key: 'browser.commentPlaceholder' }, 'Add a comment'),
+				commentOnSelectedElement: localize({ bundle: 'ash.workbench', key: 'browser.commentOnSelectedElement' }, 'Comment on selected element'),
+				elementComment: localize({ bundle: 'ash.workbench', key: 'browser.elementComment' }, 'Element comment {0}'),
+				elementCommentWithBody: localize({ bundle: 'ash.workbench', key: 'browser.elementCommentWithBody' }, 'Element comment {0}: {1}'),
+				emptyElementComment: localize({ bundle: 'ash.workbench', key: 'browser.emptyElementComment' }, 'Empty element comment {0}'),
 				removeComment: localize({ bundle: 'ash.workbench', key: 'browser.removeComment' }, 'Remove Comment'),
-				removeElementComment: localize(
-					{ bundle: 'ash.workbench', key: 'browser.removeElementComment' },
-					'Remove element comment',
-				),
+				removeElementComment: localize({ bundle: 'ash.workbench', key: 'browser.removeElementComment' }, 'Remove element comment'),
 				cancel: localize({ bundle: 'ash.workbench', key: 'browser.cancel' }, 'Cancel'),
 				selectionHelp: localize(
 					{ bundle: 'ash.workbench', key: 'browser.selectionHelp' },
@@ -395,10 +348,7 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 	public showHelp(): Promise<void> {
 		return this.dialogService.showMessage({
 			severity: DialogSeverity.Info,
-			title: localize(
-				{ bundle: 'ash.workbench', key: 'browser.accessibilityHelpTitle' },
-				'Browser accessibility help',
-			),
+			title: localize({ bundle: 'ash.workbench', key: 'browser.accessibilityHelpTitle' }, 'Browser accessibility help'),
 			message: this.helpContent(),
 		});
 	}

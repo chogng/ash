@@ -270,26 +270,10 @@ export class LineInjectedText {
 		const result: LineInjectedText[] = [];
 		for (const decoration of decorations) {
 			if (decoration.options.before && occupiesHorizontalSpace(decoration.options.before)) {
-				result.push(
-					new LineInjectedText(
-						decoration.ownerId,
-						decoration.range.startLineNumber,
-						decoration.range.startColumn,
-						decoration.options.before,
-						0,
-					),
-				);
+				result.push(new LineInjectedText(decoration.ownerId, decoration.range.startLineNumber, decoration.range.startColumn, decoration.options.before, 0));
 			}
 			if (decoration.options.after && occupiesHorizontalSpace(decoration.options.after)) {
-				result.push(
-					new LineInjectedText(
-						decoration.ownerId,
-						decoration.range.endLineNumber,
-						decoration.range.endColumn,
-						decoration.options.after,
-						1,
-					),
-				);
+				result.push(new LineInjectedText(decoration.ownerId, decoration.range.endLineNumber, decoration.range.endColumn, decoration.options.after, 1));
 			}
 		}
 		result.sort((a, b) => {
@@ -314,9 +298,7 @@ export class LineInjectedText {
 	 * overlaps: injections at the same column are laid out one after the other, so only an injection
 	 * with empty content leaves the next one starting at the same offset.
 	 */
-	public static getFixedWidthInjectedTextRanges(
-		injectedTexts: readonly LineInjectedText[] | null,
-	): FixedWidthInjectedTextRange[] {
+	public static getFixedWidthInjectedTextRanges(injectedTexts: readonly LineInjectedText[] | null): FixedWidthInjectedTextRange[] {
 		const result: FixedWidthInjectedTextRange[] = [];
 		let injectedTextLength = 0;
 		for (const injectedText of injectedTexts ?? []) {
@@ -341,13 +323,7 @@ export class LineInjectedText {
 	) {}
 
 	public withText(text: string): LineInjectedText {
-		return new LineInjectedText(
-			this.ownerId,
-			this.lineNumber,
-			this.column,
-			{ ...this.options, content: text },
-			this.order,
-		);
+		return new LineInjectedText(this.ownerId, this.lineNumber, this.column, { ...this.options, content: text }, this.order);
 	}
 }
 
@@ -496,8 +472,7 @@ export class ModelRawEOLChanged {
 /**
  * @internal
  */
-export type ModelRawChange =
-	ModelRawFlush | ModelRawLineChanged | ModelRawLinesDeleted | ModelRawLinesInserted | ModelRawEOLChanged;
+export type ModelRawChange = ModelRawFlush | ModelRawLineChanged | ModelRawLinesDeleted | ModelRawLinesInserted | ModelRawEOLChanged;
 
 /**
  * An event describing a change in the text of a model.
@@ -573,10 +548,7 @@ export class ModelLineHeightChangedEvent {
 	public affects(rangeOrPosition: IRange | IPosition) {
 		if (Range.isIRange(rangeOrPosition)) {
 			for (const change of this.changes) {
-				if (
-					change.lineNumber >= rangeOrPosition.startLineNumber &&
-					change.lineNumber <= rangeOrPosition.endLineNumber
-				) {
+				if (change.lineNumber >= rangeOrPosition.startLineNumber && change.lineNumber <= rangeOrPosition.endLineNumber) {
 					return true;
 				}
 			}
@@ -614,21 +586,12 @@ export class InternalModelContentChangeEvent {
 	) {}
 
 	public merge(other: InternalModelContentChangeEvent): InternalModelContentChangeEvent {
-		const rawContentChangedEvent = ModelRawContentChangedEvent.merge(
-			this.rawContentChangedEvent,
-			other.rawContentChangedEvent,
-		);
-		const contentChangedEvent = InternalModelContentChangeEvent._mergeChangeEvents(
-			this.contentChangedEvent,
-			other.contentChangedEvent,
-		);
+		const rawContentChangedEvent = ModelRawContentChangedEvent.merge(this.rawContentChangedEvent, other.rawContentChangedEvent);
+		const contentChangedEvent = InternalModelContentChangeEvent._mergeChangeEvents(this.contentChangedEvent, other.contentChangedEvent);
 		return new InternalModelContentChangeEvent(rawContentChangedEvent, contentChangedEvent);
 	}
 
-	private static _mergeChangeEvents(
-		a: IModelContentChangedEvent,
-		b: IModelContentChangedEvent,
-	): IModelContentChangedEvent {
+	private static _mergeChangeEvents(a: IModelContentChangedEvent, b: IModelContentChangedEvent): IModelContentChangedEvent {
 		const changes = ([] as IModelContentChange[]).concat(a.changes).concat(b.changes);
 		const eol = b.eol;
 		const versionId = b.versionId;

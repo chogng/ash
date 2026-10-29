@@ -79,19 +79,13 @@ export class CallHierarchyModel extends Disposable {
 	public async resolveOutgoingCalls(item: LanguageHierarchyItem): Promise<readonly LanguageCallHierarchyEntry[]> {
 		return this.query(item, 'outgoing');
 	}
-	private async query(
-		item: LanguageHierarchyItem,
-		direction: 'incoming' | 'outgoing',
-	): Promise<readonly LanguageCallHierarchyEntry[]> {
+	private async query(item: LanguageHierarchyItem, direction: 'incoming' | 'outgoing'): Promise<readonly LanguageCallHierarchyEntry[]> {
 		if (this.isDisposed || !isLanguageFeatureRequestCurrent(this.request)) {
 			return [];
 		}
 		const provider = this.providerFor(item);
 		const request = { ...this.request, item };
-		const entries =
-			direction === 'incoming'
-				? await provider.provideIncomingCalls(request, request.signal)
-				: await provider.provideOutgoingCalls(request, request.signal);
+		const entries = direction === 'incoming' ? await provider.provideIncomingCalls(request, request.signal) : await provider.provideOutgoingCalls(request, request.signal);
 		if (this.isDisposed || !isLanguageFeatureRequestCurrent(request)) {
 			return [];
 		}
@@ -119,10 +113,7 @@ export class CallHierarchyModel extends Disposable {
 
 function normalizeItem(item: LanguageHierarchyItem): LanguageHierarchyItem {
 	const range = Range.fromPositions(item.range.getStartPosition(), item.range.getEndPosition());
-	const selectionRange = Range.fromPositions(
-		item.selectionRange.getStartPosition(),
-		item.selectionRange.getEndPosition(),
-	);
+	const selectionRange = Range.fromPositions(item.selectionRange.getStartPosition(), item.selectionRange.getEndPosition());
 	if (!range.containsRange(selectionRange)) {
 		throw new RangeError('Hierarchy selection range must be contained by its symbol range');
 	}

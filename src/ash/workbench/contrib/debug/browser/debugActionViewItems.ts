@@ -53,8 +53,7 @@ export class StartDebugActionViewItem extends ActionViewItem {
 				void Promise.resolve()
 					.then(() => this.action.run())
 					.catch(error => {
-						if (!isCancellationError(error))
-							this.notifications.error(error instanceof Error ? error.message : String(error));
+						if (!isCancellationError(error)) this.notifications.error(error instanceof Error ? error.message : String(error));
 					});
 			},
 		});
@@ -148,15 +147,10 @@ export class StartDebugActionViewItem extends ActionViewItem {
 	private update(): void {
 		if (!this.startButton || !this.dropdown || !this.label) return;
 		const selected = this.debug.getConfigurationManager().selectedConfiguration;
-		const label = selected
-			? this.configurationLabel(selected)
-			: localize('debug.noConfigurations', 'No debug configurations');
+		const label = selected ? this.configurationLabel(selected) : localize('debug.noConfigurations', 'No debug configurations');
 		this.label.textContent = label;
 		this.dropdown.element.title = label;
-		this.dropdown.element.setAttribute(
-			'aria-label',
-			localize('debug.configurationSelected', 'Debug configuration: {0}', label),
-		);
+		this.dropdown.element.setAttribute('aria-label', localize('debug.configurationSelected', 'Debug configuration: {0}', label));
 		this.dropdown.setEnabled(selected !== undefined);
 		this.startButton.disabled = !selected || this.debug.session?.state === 'starting';
 		this.setTabbable(this.tabbable);

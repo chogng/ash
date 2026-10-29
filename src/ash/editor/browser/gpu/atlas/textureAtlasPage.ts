@@ -1,17 +1,11 @@
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { NKeyMap } from '../../../../base/common/map.js';
 import { type IBoundingBox, type IGlyphRasterizer } from '../raster/raster.js';
-import {
-	type GlyphMap,
-	type IReadableTextureAtlasPage,
-	type ITextureAtlasAllocator,
-	type ITextureAtlasPageGlyph,
-} from './atlas.js';
+import { type GlyphMap, type IReadableTextureAtlasPage, type ITextureAtlasAllocator, type ITextureAtlasPageGlyph } from './atlas.js';
 import { TextureAtlasShelfAllocator } from './textureAtlasShelfAllocator.js';
 import { TextureAtlasSlabAllocator } from './textureAtlasSlabAllocator.js';
 
-export type AllocatorType =
-	'shelf' | 'slab' | ((canvas: OffscreenCanvas, textureIndex: number) => ITextureAtlasAllocator);
+export type AllocatorType = 'shelf' | 'slab' | ((canvas: OffscreenCanvas, textureIndex: number) => ITextureAtlasAllocator);
 
 export class TextureAtlasPage extends Disposable implements IReadableTextureAtlasPage {
 	public static readonly maximumGlyphCount = 5_000;
@@ -57,28 +51,13 @@ export class TextureAtlasPage extends Disposable implements IReadableTextureAtla
 		return this._glyphInOrderSet.values();
 	}
 
-	public getGlyph(
-		rasterizer: IGlyphRasterizer,
-		chars: string,
-		tokenMetadata: number,
-		decorationStyleSetId: number,
-	): Readonly<ITextureAtlasPageGlyph> | undefined {
-		return (
-			this._glyphMap.get(chars, tokenMetadata, decorationStyleSetId, rasterizer.cacheKey) ??
-			this._createGlyph(rasterizer, chars, tokenMetadata, decorationStyleSetId)
-		);
+	public getGlyph(rasterizer: IGlyphRasterizer, chars: string, tokenMetadata: number, decorationStyleSetId: number): Readonly<ITextureAtlasPageGlyph> | undefined {
+		return this._glyphMap.get(chars, tokenMetadata, decorationStyleSetId, rasterizer.cacheKey) ?? this._createGlyph(rasterizer, chars, tokenMetadata, decorationStyleSetId);
 	}
 
-	private _createGlyph(
-		rasterizer: IGlyphRasterizer,
-		chars: string,
-		tokenMetadata: number,
-		decorationStyleSetId: number,
-	): Readonly<ITextureAtlasPageGlyph> | undefined {
+	private _createGlyph(rasterizer: IGlyphRasterizer, chars: string, tokenMetadata: number, decorationStyleSetId: number): Readonly<ITextureAtlasPageGlyph> | undefined {
 		if (this._glyphInOrderSet.size >= TextureAtlasPage.maximumGlyphCount) return undefined;
-		const glyph = this._allocator.allocate(
-			rasterizer.rasterizeGlyph(chars, tokenMetadata, decorationStyleSetId, this._colorMap),
-		);
+		const glyph = this._allocator.allocate(rasterizer.rasterizeGlyph(chars, tokenMetadata, decorationStyleSetId, this._colorMap));
 		if (!glyph) return undefined;
 		this._glyphMap.set(glyph, chars, tokenMetadata, decorationStyleSetId, rasterizer.cacheKey);
 		this._glyphInOrderSet.add(glyph);

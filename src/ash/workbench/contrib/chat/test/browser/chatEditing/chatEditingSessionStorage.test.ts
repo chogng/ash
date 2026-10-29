@@ -4,10 +4,7 @@ import { JSDOM } from 'jsdom';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../../../services/storage/browser/storageService.js';
-import {
-	ChatEditingSessionStorage,
-	type StoredSessionState,
-} from '../../../browser/chatEditing/chatEditingSessionStorage.js';
+import { ChatEditingSessionStorage, type StoredSessionState } from '../../../browser/chatEditing/chatEditingSessionStorage.js';
 
 const state: StoredSessionState = {
 	version: 1,
@@ -101,9 +98,7 @@ test('review storage rejects malformed snapshots and duplicate resource owners w
 			JSON.stringify({ version: 1, entries: [{ ...state.entries[0], sources: [] }] }),
 			JSON.stringify({
 				version: 1,
-				entries: [
-					{ ...state.entries[0], sources: [{ threadId: 'chat', turnId: 'turn', outcome: 'unexpected' }] },
-				],
+				entries: [{ ...state.entries[0], sources: [{ threadId: 'chat', turnId: 'turn', outcome: 'unexpected' }] }],
 			}),
 		]) {
 			storage.store('chatEditing.sessions', invalid, StorageScope.WORKSPACE, StorageTarget.MACHINE);

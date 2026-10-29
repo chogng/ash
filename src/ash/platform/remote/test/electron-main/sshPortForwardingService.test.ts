@@ -7,10 +7,7 @@ import { isCancellationError } from '../../../../base/common/errors.js';
 import { URI } from '../../../../base/common/uri.js';
 import { createSshRemoteWorkspaceUri } from '../../../../platform/remote/common/remote.js';
 import type { IAnyWorkspaceIdentifier } from '../../../../platform/workspace/common/workspace.js';
-import {
-	SshPortForwardingService,
-	sshTunnelArguments,
-} from '../../../../platform/remote/electron-main/sshPortForwardingService.js';
+import { SshPortForwardingService, sshTunnelArguments } from '../../../../platform/remote/electron-main/sshPortForwardingService.js';
 import type { SshPortForwardChange } from '../../../../platform/remote/electron-main/sshPortForwardingService.js';
 
 test('SSH startup cleanup settles when a real subprocess has already closed by signal', async () => {
@@ -69,7 +66,10 @@ test('SSH tunnel coordinator fixes both ends of the forward to loopback', async 
 		remotePort: 3_000,
 		state: 'open',
 	});
-	assert.deepEqual(launch, { executable: 'ssh', args: sshTunnelArguments('build-server', 41_234, 3_000) });
+	assert.deepEqual(launch, {
+		executable: 'ssh',
+		args: sshTunnelArguments('build-server', 41_234, 3_000),
+	});
 
 	await service.close(tunnel.id);
 	assert.deepEqual(await service.list(), []);
@@ -460,10 +460,7 @@ test('Workspace change cancels an SSH forward waiting for startup and allows a n
 	await startupWait;
 	await service.closeAll();
 	await assert.rejects(opening, error => isCancellationError(error));
-	assert.deepEqual(
-		{ childExit: children[0]?.exitCode, tunnels: await service.list() },
-		{ childExit: 0, tunnels: [] },
-	);
+	assert.deepEqual({ childExit: children[0]?.exitCode, tunnels: await service.list() }, { childExit: 0, tunnels: [] });
 
 	isReady = true;
 	const replacement = await service.open({ remotePort: 3000 });

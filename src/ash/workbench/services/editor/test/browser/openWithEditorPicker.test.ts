@@ -6,11 +6,7 @@ import { DisposableStore, toDisposable } from '../../../../../base/common/lifecy
 import { URI } from '../../../../../base/common/uri.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import {
-	IQuickInputService,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { EditorPaneRegistry } from '../../../../browser/editor.js';
@@ -30,9 +26,7 @@ function setup() {
 	lifetime.add(toDisposable(() => container.remove()));
 	const services = lifetime.add(new InstantiationService());
 	const contexts = lifetime.add(new ContextKeyService());
-	const quickInput = lifetime.add(
-		new TestQuickInputService({ container, instantiationService: services, contextKeyService: contexts }),
-	);
+	const quickInput = lifetime.add(new TestQuickInputService({ container, instantiationService: services, contextKeyService: contexts }));
 	services.registerInstance(IQuickInputService, quickInput);
 	const registry = lifetime.add(new EditorPaneRegistry());
 	for (const id of ['test.first', 'test.second', 'test.unsupported']) {
@@ -65,8 +59,7 @@ function setup() {
 	services.registerInstance(IEditorPart, {
 		groups,
 		activeGroup: group,
-		getEditorPaneChoices: (input: IResourceEditorInput | undefined) =>
-			input ? registry.getEditorPanesForInput(input) : [],
+		getEditorPaneChoices: (input: IResourceEditorInput | undefined) => (input ? registry.getEditorPanesForInput(input) : []),
 	} as unknown as IEditorPart);
 	const commands = lifetime.add(new CommandService(services));
 	const currentPicker = () => {
@@ -112,10 +105,7 @@ test('OpenWithEditorPicker localizes the prompt and accessible label in Chinese'
 	try {
 		const result = context.services.createInstance(OpenWithEditorPicker).pick(context.input);
 		const picker = context.currentPicker();
-		assert.deepEqual(
-			{ placeholder: picker.placeholder, ariaLabel: picker.ariaLabel },
-			{ placeholder: '选择编辑器', ariaLabel: '选择编辑器' },
-		);
+		assert.deepEqual({ placeholder: picker.placeholder, ariaLabel: picker.ariaLabel }, { placeholder: '选择编辑器', ariaLabel: '选择编辑器' });
 		picker.hide();
 		assert.equal(await result, undefined);
 	} finally {
@@ -142,9 +132,7 @@ test('Reopen With waits for the selected editor to finish opening', async () => 
 	});
 	await context.currentPicker().accept(true);
 	await context.whenOpenStarts;
-	assert.deepEqual(context.opened, [
-		{ input: context.input, options: { preferredEditorId: 'test.first', preserveFocus: true, pinned: true } },
-	]);
+	assert.deepEqual(context.opened, [{ input: context.input, options: { preferredEditorId: 'test.first', preserveFocus: true, pinned: true } }]);
 	assert.equal(completed, false);
 	await opening.complete(undefined);
 	await result;
@@ -169,9 +157,7 @@ test('Reopen With keeps the captured tab when the active tab changes during sele
 	context.group.activeInput = { resource: URI.file('/workspace/other.ts') };
 	await context.currentPicker().accept();
 	await result;
-	assert.deepEqual(context.opened, [
-		{ input: context.input, options: { preferredEditorId: 'test.first', preserveFocus: false, pinned: true } },
-	]);
+	assert.deepEqual(context.opened, [{ input: context.input, options: { preferredEditorId: 'test.first', preserveFocus: false, pinned: true } }]);
 });
 
 test('Reopen With rejects an opening failure through its command promise', async () => {

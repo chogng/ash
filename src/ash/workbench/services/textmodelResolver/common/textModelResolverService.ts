@@ -2,17 +2,10 @@ import type { FileReadOperation } from '../../../../platform/files/common/files.
 import { toDisposable, type IDisposable, type IReference } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { ITextModel } from '../../../../editor/common/model.js';
-import {
-	ITextModelService,
-	type IResolvedTextEditorModel,
-	type ITextModelContentProvider,
-} from '../../../../editor/common/services/resolverService.js';
+import { ITextModelService, type IResolvedTextEditorModel, type ITextModelContentProvider } from '../../../../editor/common/services/resolverService.js';
 import { BaseTextEditorModel } from '../../../common/editor/textEditorModel.js';
 import { TextResourceEditorModel } from '../../../common/editor/textResourceEditorModel.js';
-import {
-	ITextModelResourceService,
-	type ITextModelResourceService as ITextModelResourceServiceContract,
-} from './textModelResourceService.js';
+import { ITextModelResourceService, type ITextModelResourceService as ITextModelResourceServiceContract } from './textModelResourceService.js';
 
 /** Resolves Workbench resources through the existing reference-counted text model owner. */
 export class TextModelResolverService implements ITextModelService {
@@ -22,10 +15,7 @@ export class TextModelResolverService implements ITextModelService {
 
 	constructor(@ITextModelResourceService private readonly models: ITextModelResourceServiceContract) {}
 
-	async createModelReference(
-		resource: URI,
-		options?: { readonly readFile: FileReadOperation },
-	): Promise<IReference<IResolvedTextEditorModel>> {
+	async createModelReference(resource: URI, options?: { readonly readFile: FileReadOperation }): Promise<IReference<IResolvedTextEditorModel>> {
 		const provider = options ? undefined : this.contentProviders.get(resource.scheme);
 		if (provider) {
 			const model = await provider.provideTextContent(resource);
@@ -35,10 +25,7 @@ export class TextModelResolverService implements ITextModelService {
 			const object = new TextResourceEditorModel({ object: model, ...release });
 			return this.createReference(object);
 		}
-		const reference = await this.models.acquire(
-			{ resource, ...(options ? { readFile: options.readFile } : {}) },
-			new AbortController().signal,
-		);
+		const reference = await this.models.acquire({ resource, ...(options ? { readFile: options.readFile } : {}) }, new AbortController().signal);
 		const object = new BaseTextEditorModel(reference.model, false);
 		return this.createReference(object, reference);
 	}
@@ -60,8 +47,7 @@ export class TextModelResolverService implements ITextModelService {
 	}
 
 	registerTextModelContentProvider(scheme: string, provider: ITextModelContentProvider): IDisposable {
-		if (this.contentProviders.has(scheme))
-			throw new Error(`Text model content provider already registered: ${scheme}`);
+		if (this.contentProviders.has(scheme)) throw new Error(`Text model content provider already registered: ${scheme}`);
 		this.contentProviders.set(scheme, provider);
 		return toDisposable(() => {
 			if (this.contentProviders.get(scheme) === provider) this.contentProviders.delete(scheme);

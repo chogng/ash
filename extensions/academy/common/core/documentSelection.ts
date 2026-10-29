@@ -1,20 +1,8 @@
 import { isNonNegativeSafeInteger } from 'ash:editor/base/common/numbers.js';
 import { findDocumentNode, type DocumentNode, type DocumentNodeId } from '../model/document.js';
 
-import type {
-	DocumentPoint,
-	DocumentTextSelection,
-	NodeSelection,
-	AllSelection,
-	DocumentSelection,
-} from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
-export type {
-	DocumentPoint,
-	DocumentTextSelection,
-	NodeSelection,
-	AllSelection,
-	DocumentSelection,
-} from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
+import type { DocumentPoint, DocumentTextSelection, NodeSelection, AllSelection, DocumentSelection } from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
+export type { DocumentPoint, DocumentTextSelection, NodeSelection, AllSelection, DocumentSelection } from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
 
 export function textSelection(anchor: DocumentPoint, head = anchor): DocumentTextSelection {
 	validatePoint(anchor);
@@ -39,8 +27,7 @@ export function validateDocumentSelection(document: DocumentNode, selection: Doc
 			return;
 		case 'node': {
 			const location = findDocumentNode(document, selection.nodeId);
-			if (!location || !location.parent)
-				throw new RangeError(`Node selection target '${selection.nodeId}' does not exist`);
+			if (!location || !location.parent) throw new RangeError(`Node selection target '${selection.nodeId}' does not exist`);
 			return;
 		}
 		case 'all':
@@ -53,8 +40,7 @@ export function selectionsEqual(left: DocumentSelection | undefined, right: Docu
 	if (!left || !right || left.kind !== right.kind) return false;
 	if (left.kind === 'all' || right.kind === 'all') return true;
 	if (left.kind === 'node' && right.kind === 'node') return left.nodeId === right.nodeId;
-	if (left.kind === 'text' && right.kind === 'text')
-		return pointsEqual(left.anchor, right.anchor) && pointsEqual(left.head, right.head);
+	if (left.kind === 'text' && right.kind === 'text') return pointsEqual(left.anchor, right.anchor) && pointsEqual(left.head, right.head);
 	return false;
 }
 
@@ -70,16 +56,13 @@ export function isDocumentSelectionValid(document: DocumentNode, selection: Docu
 
 function validatePointInDocument(document: DocumentNode, point: DocumentPoint): void {
 	const node = findDocumentNode(document, point.nodeId)?.node;
-	if (!node || node.text === undefined)
-		throw new RangeError(`Text selection target '${point.nodeId}' is not a text node`);
-	if (!isNonNegativeSafeInteger(point.offset) || point.offset > node.text.length)
-		throw new RangeError(`Text selection offset must be between 0 and ${node.text.length}`);
+	if (!node || node.text === undefined) throw new RangeError(`Text selection target '${point.nodeId}' is not a text node`);
+	if (!isNonNegativeSafeInteger(point.offset) || point.offset > node.text.length) throw new RangeError(`Text selection offset must be between 0 and ${node.text.length}`);
 }
 
 function validatePoint(point: DocumentPoint): void {
 	validateNodeId(point.nodeId);
-	if (!isNonNegativeSafeInteger(point.offset))
-		throw new RangeError('Document point offset must be a non-negative safe integer');
+	if (!isNonNegativeSafeInteger(point.offset)) throw new RangeError('Document point offset must be a non-negative safe integer');
 }
 
 function validateNodeId(id: string): void {

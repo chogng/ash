@@ -10,10 +10,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
-import {
-	ITerminalProcessService,
-	type ITerminalProcessCreation,
-} from '../../../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, type ITerminalProcessCreation } from '../../../../../platform/terminal/common/terminal.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { TerminalService } from '../../browser/terminalService.js';
 import { ITerminalService, type ITerminalView } from '../../browser/terminal.js';
@@ -31,9 +28,7 @@ function fixture(owner: DisposableStore, remote: boolean) {
 	const workspace = owner.add(
 		new TestWorkspaceService({
 			id: 'workspace',
-			uri: remote
-				? URI.from({ scheme: 'ash-remote', authority: 'host-one', path: '/project' })
-				: URI.file('/project'),
+			uri: remote ? URI.from({ scheme: 'ash-remote', authority: 'host-one', path: '/project' }) : URI.file('/project'),
 		}),
 	);
 	const creation = new DeferredPromise<ITerminalProcessCreation>();
@@ -62,11 +57,7 @@ function fixture(owner: DisposableStore, remote: boolean) {
 			return queryResult;
 		},
 	} as unknown as ITerminalProcessService;
-	const services = owner.add(
-		new InstantiationService(
-			new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace]),
-		),
-	);
+	const services = owner.add(new InstantiationService(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
 	registerTestTerminalCreationServices(services);
 	const terminals = owner.add(services.createInstance(TerminalService));
 	services.registerInstance(ITerminalService, terminals);
@@ -182,10 +173,7 @@ suite('Terminal execution host boundaries', () => {
 				cols: number;
 			}>();
 			f.setQuery(response.p);
-			const rejected = assert.rejects(
-				instance.capabilities!.get(TerminalCapability.NaiveCwdDetection)!.getCwd(),
-				isCancellationError,
-			);
+			const rejected = assert.rejects(instance.capabilities!.get(TerminalCapability.NaiveCwdDetection)!.getCwd(), isCancellationError);
 			assert.equal(f.queries.length, 1);
 			f.workspace.updateWorkspace({
 				id: 'replacement',

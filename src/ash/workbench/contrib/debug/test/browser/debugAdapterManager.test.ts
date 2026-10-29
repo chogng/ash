@@ -27,9 +27,7 @@ test('AdapterManager registration shares factories within a window and isolates 
 
 test('AdapterManager composes independent producers and removes only its owner', () => {
 	using registry = new AdapterManager();
-	const declarative = registry.registerFactories([
-		createStaticDebugAdapterFactory('node', 'Node', 'declarative.node', { program: 'node-adapter', arguments: [] }),
-	]);
+	const declarative = registry.registerFactories([createStaticDebugAdapterFactory('node', 'Node', 'declarative.node', { program: 'node-adapter', arguments: [] })]);
 	using hosted = registry.registerFactories([
 		createStaticDebugAdapterFactory('python', 'Python', 'hosted.python', {
 			program: 'python-adapter',
@@ -54,20 +52,10 @@ test('AdapterManager composes independent producers and removes only its owner',
 
 test('AdapterManager rejects conflicting replacement atomically', () => {
 	using registry = new AdapterManager();
-	using first = registry.registerFactories([
-		createStaticDebugAdapterFactory('node', 'Node', 'first', { program: 'first', arguments: [] }),
-	]);
-	using second = registry.registerFactories([
-		createStaticDebugAdapterFactory('python', 'Python', 'second', { program: 'second', arguments: [] }),
-	]);
+	using first = registry.registerFactories([createStaticDebugAdapterFactory('node', 'Node', 'first', { program: 'first', arguments: [] })]);
+	using second = registry.registerFactories([createStaticDebugAdapterFactory('python', 'Python', 'second', { program: 'second', arguments: [] })]);
 
-	assert.throws(
-		() =>
-			second.replace([
-				createStaticDebugAdapterFactory('node', 'Other Node', 'second', { program: 'other', arguments: [] }),
-			]),
-		/already registered/,
-	);
+	assert.throws(() => second.replace([createStaticDebugAdapterFactory('node', 'Other Node', 'second', { program: 'other', arguments: [] })]), /already registered/);
 	assert.equal(registry.get('node')?.sourceId, 'first');
 	assert.equal(registry.get('python')?.sourceId, 'second');
 });

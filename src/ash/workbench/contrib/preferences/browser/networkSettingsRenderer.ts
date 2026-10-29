@@ -18,10 +18,7 @@ import {
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import {
@@ -52,10 +49,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize('network.verbosity', 'Network accessibility help');
 		},
 		get description() {
-			return localize(
-				'network.verbosityDescription',
-				'Announce how to open accessibility help in network settings.',
-			);
+			return localize('network.verbosityDescription', 'Announce how to open accessibility help in network settings.');
 		},
 	},
 });
@@ -102,7 +96,10 @@ export class NetworkSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 		this.protocol = this._register(
 			new SelectBox(
 				this.protocolControls,
-				{ options: [], ariaLabel: localize('network.http.title', 'HTTP compatibility mode') },
+				{
+					options: [],
+					ariaLabel: localize('network.http.title', 'HTTP compatibility mode'),
+				},
 				defaultSelectBoxStyles,
 			),
 		);
@@ -234,13 +231,7 @@ export class NetworkSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 					when: ContextKeyExpr.has('networkSettingsFocused'),
 					getProvider: () => {
 						const focused = document.activeElement;
-						if (
-							!this.visible ||
-							!isHTMLElement(focused) ||
-							![this.protocolControls, this.domains, this.diagnostics].some(element =>
-								element.contains(focused),
-							)
-						) {
+						if (!this.visible || !isHTMLElement(focused) || ![this.protocolControls, this.domains, this.diagnostics].some(element => element.contains(focused))) {
 							return undefined;
 						}
 						return new AccessibleContentProvider(
@@ -253,11 +244,7 @@ export class NetworkSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 											'Network settings\nUse Tab to reach HTTP compatibility mode, Copy domains, Show, Refresh, and Run diagnostic. HTTP/2 negotiates the supported protocol; HTTP/1.1 restricts subsequent application HTTP requests. Existing requests continue. Show lists configured service hosts and routes. An HTTP response proves reachability, including 401 and 404; account checks are separate. Refresh reads the current backend configuration. Use the accessible view to read domains and diagnostic results.',
 										)
 									: [
-											this.snapshot
-												? this.snapshot.httpMode === 'http1'
-													? 'HTTP/1.1'
-													: 'HTTP/2'
-												: '',
+											this.snapshot ? (this.snapshot.httpMode === 'http1' ? 'HTTP/1.1' : 'HTTP/2') : '',
 											...(this.snapshot?.targets.map(target => this.targetText(target)) ?? []),
 											this.status.textContent,
 											...Array.from(this.results.children, element => element.textContent),
@@ -301,10 +288,7 @@ export class NetworkSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 							kind: 'item' as const,
 							id: 'network.domains',
 							title: localize('network.domains.title', 'Required domains'),
-							description: localize(
-								'network.domains.description',
-								'Service hosts used by configured model connections and Ash services. Add them to your firewall or proxy allowlist.',
-							),
+							description: localize('network.domains.description', 'Service hosts used by configured model connections and Ash services. Add them to your firewall or proxy allowlist.'),
 							keywords: ['firewall', 'hosts', 'allowlist', 'domains'],
 							value: this.retainElement('network.domains', this.domains),
 						},
@@ -379,10 +363,7 @@ export class NetworkSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 			}
 			this.snapshot = undefined;
 			this.report = undefined;
-			this.setStatus(
-				'network.readFailed',
-				'Could not read network configuration. Connect to App Server and refresh.',
-			);
+			this.setStatus('network.readFailed', 'Could not read network configuration. Connect to App Server and refresh.');
 		} finally {
 			if (!this.isDisposed && version === this.version) {
 				this.busy = false;
@@ -407,18 +388,12 @@ export class NetworkSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 			}
 			this.snapshot = snapshot;
 			this.report = undefined;
-			this.setStatus(
-				'network.saved',
-				'HTTP compatibility mode saved. Subsequent requests use the selected mode.',
-			);
+			this.setStatus('network.saved', 'HTTP compatibility mode saved. Subsequent requests use the selected mode.');
 		} catch {
 			if (this.isDisposed || version !== this.version) {
 				return;
 			}
-			this.setStatus(
-				'network.saveFailed',
-				'Could not save HTTP compatibility mode. Refresh the configuration before trying again.',
-			);
+			this.setStatus('network.saveFailed', 'Could not save HTTP compatibility mode. Refresh the configuration before trying again.');
 		} finally {
 			if (!this.isDisposed && version === this.version) {
 				this.busy = false;
@@ -463,9 +438,7 @@ export class NetworkSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 		}
 		const version = this.version;
 		try {
-			await this.clipboard.writeText(
-				[...new Set(this.snapshot.targets.map(target => target.host))].sort().join('\n'),
-			);
+			await this.clipboard.writeText([...new Set(this.snapshot.targets.map(target => target.host))].sort().join('\n'));
 			if (!this.isDisposed && version === this.version) {
 				this.setStatus('network.copied', 'Domains copied.');
 			}
@@ -497,11 +470,7 @@ export class NetworkSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 			{ value: 'http1', label: 'HTTP/1.1' },
 		]);
 		this.protocol.value = this.snapshot?.httpMode ?? 'http2';
-		this.protocol.enabled =
-			this.copy.enabled =
-			this.show.enabled =
-			this.runButton.enabled =
-				!!this.snapshot && !this.busy;
+		this.protocol.enabled = this.copy.enabled = this.show.enabled = this.runButton.enabled = !!this.snapshot && !this.busy;
 		this.refreshButton.enabled = !this.busy;
 		this.copy.enabled = !!this.snapshot?.targets.length && !this.busy;
 		this.copy.label = localize('network.copy', 'Copy domains');
@@ -521,9 +490,7 @@ export class NetworkSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 		for (const check of this.report?.checks ?? []) {
 			const line = h(this.results.ownerDocument, 'li');
 			const target = this.report!.network.targets.find(target => target.id === check.targetId);
-			const name = target
-				? this.targetText(target)
-				: localize('network.account', '{0} account', check.connection);
+			const name = target ? this.targetText(target) : localize('network.account', '{0} account', check.connection);
 			let outcome: string;
 			switch (check.outcome.type) {
 				case 'reachable':
@@ -560,15 +527,7 @@ export class NetworkSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 				route = localize('network.route.proxy', 'Proxy {0}:{1}', target.route.host, target.route.port);
 				break;
 		}
-		return localize(
-			'network.target',
-			'{0}:{1} · {2} · {3} · {4}',
-			target.host,
-			target.port,
-			target.displayName,
-			purposes[target.purpose],
-			route,
-		);
+		return localize('network.target', '{0}:{1} · {2} · {3} · {4}', target.host, target.port, target.displayName, purposes[target.purpose], route);
 	}
 
 	private failureText(failure: NetworkFailure): string {
@@ -576,10 +535,7 @@ export class NetworkSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 			dns: localize('network.failure.dns', 'DNS lookup failed'),
 			proxy: localize('network.failure.proxy', 'Proxy connection failed'),
 			tls: localize('network.failure.tls', 'TLS handshake failed'),
-			certificateConfiguration: localize(
-				'network.failure.certificateConfiguration',
-				'Certificate configuration failed',
-			),
+			certificateConfiguration: localize('network.failure.certificateConfiguration', 'Certificate configuration failed'),
 			connect: localize('network.failure.connect', 'Connection failed'),
 			timeout: localize('network.failure.timeout', 'Request timed out'),
 			policy: localize('network.failure.policy', 'Blocked by network policy'),

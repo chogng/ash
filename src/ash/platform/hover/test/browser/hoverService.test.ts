@@ -10,9 +10,7 @@ import type { IContextMenuService } from '../../../contextview/browser/contextVi
 import { HoverConfiguration } from '../../common/hoverService.js';
 import { h } from '../../../../base/browser/dom.js';
 
-const environment = new JSDOM(
-	"<!doctype html><html><body><main><button id='first'>First</button><button id='second'>Second</button></main></body></html>",
-);
+const environment = new JSDOM("<!doctype html><html><body><main><button id='first'>First</button><button id='second'>Second</button></main></body></html>");
 Object.defineProperties(globalThis, {
 	window: { configurable: true, value: environment.window },
 	document: { configurable: true, value: environment.window.document },
@@ -41,7 +39,11 @@ test('HoverService coordinates grouped Hovers and context menus', async () => {
 	await configuration.updateValue(HoverConfiguration.delay, 1_000);
 	const hoverService = new HoverService(configuration, contextViews, contextMenus);
 
-	const first = hoverService.showHover({ target: firstTarget, content: 'First Hover', groupId: 'test.items' });
+	const first = hoverService.showHover({
+		target: firstTarget,
+		content: 'First Hover',
+		groupId: 'test.items',
+	});
 	assert.equal(first.visible, true);
 	assert.equal(contextViewElement.textContent, 'First Hover');
 
@@ -150,9 +152,7 @@ test('HoverService suppresses replacement Hovers until the pointer moves after a
 	await nextTimer();
 	assert.equal(replacementHover.visible, false);
 
-	replacementTarget.dispatchEvent(
-		new environment.window.MouseEvent('pointermove', { bubbles: true, buttons: 0, clientX: 145, clientY: 100 }),
-	);
+	replacementTarget.dispatchEvent(new environment.window.MouseEvent('pointermove', { bubbles: true, buttons: 0, clientX: 145, clientY: 100 }));
 	replacementTarget.dispatchEvent(new environment.window.MouseEvent('pointerenter'));
 	await nextTimer();
 	assert.equal(replacementHover.visible, true);
@@ -161,9 +161,7 @@ test('HoverService suppresses replacement Hovers until the pointer moves after a
 	target.dispatchEvent(new environment.window.FocusEvent('focusout', { bubbles: true }));
 	target.dispatchEvent(new environment.window.FocusEvent('focusin', { bubbles: true }));
 	assert.equal(hover.visible, false);
-	target.dispatchEvent(
-		new environment.window.FocusEvent('focusin', { bubbles: true, relatedTarget: previousTarget }),
-	);
+	target.dispatchEvent(new environment.window.FocusEvent('focusin', { bubbles: true, relatedTarget: previousTarget }));
 	await nextTimer();
 	assert.equal(hover.visible, true);
 

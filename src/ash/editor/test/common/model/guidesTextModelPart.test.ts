@@ -21,9 +21,12 @@ test('Bracket guides remain available when bracket colors are disabled', () => {
 
 	assert.deepEqual(model.getLineDecorations(1), []);
 	assert.deepEqual(
-		model.guides
-			.getLinesBracketGuides(2, 2, null, guideOptions)
-			.map(line => line.map(guide => ({ visibleColumn: guide.visibleColumn, className: guide.className }))),
+		model.guides.getLinesBracketGuides(2, 2, null, guideOptions).map(line =>
+			line.map(guide => ({
+				visibleColumn: guide.visibleColumn,
+				className: guide.className,
+			})),
+		),
 		[[{ visibleColumn: 1, className: 'stanza-editor-guide-level-1' }]],
 	);
 });
@@ -41,13 +44,8 @@ test('Bracket guide levels follow the model color pool', () => {
 			['[', ']'],
 		],
 	});
-	const classes = () =>
-		model.guides.getLinesBracketGuides(4, 4, null, guideOptions)[0]!.map(guide => guide.className);
-	assert.deepEqual(classes(), [
-		'stanza-editor-guide-level-1',
-		'stanza-editor-guide-level-2',
-		'stanza-editor-guide-level-3',
-	]);
+	const classes = () => model.guides.getLinesBracketGuides(4, 4, null, guideOptions)[0]!.map(guide => guide.className);
+	assert.deepEqual(classes(), ['stanza-editor-guide-level-1', 'stanza-editor-guide-level-2', 'stanza-editor-guide-level-3']);
 
 	model.updateOptions({ bracketColorizationOptions: { enabled: true, independentColorPoolPerBracketType: true } });
 	assert.deepEqual(classes(), Array(3).fill('stanza-editor-guide-level-1'));
@@ -60,10 +58,7 @@ test('Bracket guides use minimum indentation and refresh after edits', () => {
 		languageConfigurationService: configurations,
 	});
 	using registration = configurations.register('typescript', { brackets: [['(', ')']] });
-	const columns = () =>
-		model.guides
-			.getLinesBracketGuides(2, 3, null, guideOptions)
-			.map(line => line.map(guide => guide.visibleColumn));
+	const columns = () => model.guides.getLinesBracketGuides(2, 3, null, guideOptions).map(line => line.map(guide => guide.visibleColumn));
 	assert.deepEqual(columns(), [[3], [3]]);
 
 	model.applyEdits([{ range: new Range(3, 1, 3, 3), text: '    ' }]);
@@ -77,12 +72,7 @@ test('Bracket guides include the closing half-stroke and active pair', () => {
 		languageConfigurationService: configurations,
 	});
 	using registration = configurations.register('typescript', { brackets: [['{', '}']] });
-	const guides = model.guides.getLinesBracketGuides(
-		1,
-		3,
-		{ lineNumber: 2, column: 3 },
-		{ ...guideOptions, includeInactive: false },
-	);
+	const guides = model.guides.getLinesBracketGuides(1, 3, { lineNumber: 2, column: 3 }, { ...guideOptions, includeInactive: false });
 	assert.deepEqual(
 		guides.map(line =>
 			line.map(guide => ({
@@ -114,11 +104,7 @@ test('Multiline bracket guide stays active inside a single-line pair', () => {
 	const guides = model.guides.getLinesBracketGuides(1, 3, { lineNumber: 2, column: 10 }, guideOptions);
 	assert.deepEqual(
 		guides.map(line => line.filter(guide => !guide.horizontalLine).map(guide => guide.className)),
-		[
-			['stanza-editor-guide-level-1 active'],
-			['stanza-editor-guide-level-1 active'],
-			['stanza-editor-guide-level-1 active'],
-		],
+		[['stanza-editor-guide-level-1 active'], ['stanza-editor-guide-level-1 active'], ['stanza-editor-guide-level-1 active']],
 	);
 });
 

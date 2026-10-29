@@ -3,15 +3,8 @@ import { editJsonObjectProperty, parseJsonDocument } from '../../../../base/comm
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { dirname, extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import type { URI } from '../../../../base/common/uri.js';
-import {
-	FileSystemProviderErrorCode,
-	toFileSystemProviderErrorCode,
-	type IFileService,
-} from '../../../../platform/files/common/files.js';
-import {
-	ConfigurationModel,
-	ConfigurationModelParser,
-} from '../../../../platform/configuration/common/configurationModels.js';
+import { FileSystemProviderErrorCode, toFileSystemProviderErrorCode, type IFileService } from '../../../../platform/files/common/files.js';
+import { ConfigurationModel, ConfigurationModelParser } from '../../../../platform/configuration/common/configurationModels.js';
 import { NullLoggerService } from '../../../../platform/log/common/log.js';
 import { equals } from '../../../../base/common/objects.js';
 const settingsLog = new NullLoggerService();
@@ -35,17 +28,9 @@ export async function migrateSettings(source: string, onError: (error: unknown) 
 	// Language overrides are independent settings maps and migrate independently.
 	for (const block of [undefined, ...Object.keys(original).filter(key => /^\[.+\]$/u.test(key))]) {
 		const parsed = parseJsonDocument(output, { allowComments: true, allowTrailingComma: true });
-		const node =
-			block === undefined || parsed.root?.type !== 'object'
-				? undefined
-				: parsed.root.properties.find(property => property.key === block)?.valueNode;
+		const node = block === undefined || parsed.root?.type !== 'object' ? undefined : parsed.root.properties.find(property => property.key === block)?.valueNode;
 		let text = node ? output.slice(node.offset, node.offset + node.length) : output;
-		if (
-			!text ||
-			(block !== undefined &&
-				(typeof original[block] !== 'object' || !original[block] || Array.isArray(original[block])))
-		)
-			continue;
+		if (!text || (block !== undefined && (typeof original[block] !== 'object' || !original[block] || Array.isArray(original[block])))) continue;
 		for (const migration of migrations) {
 			const values = parse(text);
 			if (!Object.hasOwn(values, migration.key)) continue;
@@ -60,8 +45,7 @@ export async function migrateSettings(source: string, onError: (error: unknown) 
 			}
 		}
 		if (block === undefined) output = text;
-		else if (node && !equals(parse(text), original[block]))
-			output = output.slice(0, node.offset) + text + output.slice(node.offset + node.length);
+		else if (node && !equals(parse(text), original[block])) output = output.slice(0, node.offset) + text + output.slice(node.offset + node.length);
 	}
 	return output;
 }
@@ -85,10 +69,7 @@ class SettingsFile extends Disposable {
 		this._register(files.watch(dirname(resource), { recursive: false, excludes: [] }));
 		this._register(
 			files.onDidChangeFiles(event => {
-				if (
-					!event.resources ||
-					event.resources.some(candidate => extUriBiasedIgnorePathCase.isEqualOrParent(resource, candidate))
-				) {
+				if (!event.resources || event.resources.some(candidate => extUriBiasedIgnorePathCase.isEqualOrParent(resource, candidate))) {
 					void this.loadConfiguration().catch(error => {
 						if (!this.stopped) onError(error);
 					});
@@ -111,11 +92,7 @@ class SettingsFile extends Disposable {
 			const document = this.parseSource(migrated);
 			if (migrated !== settings.source) {
 				const output = this.replaceSettings(source, migrated);
-				await this.files.writeFile(
-					{ resource: this.resource, content: output, expectedRevision: revision },
-					{ create: true, overwrite: revision !== undefined },
-					this.cancellation.signal,
-				);
+				await this.files.writeFile({ resource: this.resource, content: output, expectedRevision: revision }, { create: true, overwrite: revision !== undefined }, this.cancellation.signal);
 			}
 			if (!this.stopped && !equals(document.model.toJSON(), this.document.toJSON())) {
 				this.document = document.model;
@@ -134,11 +111,7 @@ class SettingsFile extends Disposable {
 			const output = this.replaceSettings(source, next.source);
 			if (output !== source) {
 				await this.files.createDirectory(dirname(this.resource));
-				await this.files.writeFile(
-					{ resource: this.resource, content: output, expectedRevision: revision },
-					{ create: true, overwrite: revision !== undefined },
-					this.cancellation.signal,
-				);
+				await this.files.writeFile({ resource: this.resource, content: output, expectedRevision: revision }, { create: true, overwrite: revision !== undefined }, this.cancellation.signal);
 			}
 			if (!this.stopped) {
 				this.document = next.model;
@@ -150,17 +123,10 @@ class SettingsFile extends Disposable {
 	private replaceSettings(source: string, settings: string): string {
 		if (!this.nested) return settings;
 		const parsed = parseJsonDocument(source, { allowComments: true, allowTrailingComma: true });
-		const node =
-			parsed.root?.type === 'object'
-				? parsed.root.properties.find(property => property.key === 'settings')?.valueNode
-				: undefined;
+		const node = parsed.root?.type === 'object' ? parsed.root.properties.find(property => property.key === 'settings')?.valueNode : undefined;
 		return node
 			? source.slice(0, node.offset) + settings + source.slice(node.offset + node.length)
-			: editJsonObjectProperty(
-					source,
-					'settings',
-					parseJsonDocument(settings, { allowComments: true, allowTrailingComma: true }).value,
-				);
+			: editJsonObjectProperty(source, 'settings', parseJsonDocument(settings, { allowComments: true, allowTrailingComma: true }).value);
 	}
 
 	private async read(): Promise<{ source: string; revision?: string }> {
@@ -168,8 +134,7 @@ class SettingsFile extends Disposable {
 			const file = await this.files.readFile(this.resource);
 			return { source: file.content, revision: file.revision };
 		} catch (error) {
-			if (toFileSystemProviderErrorCode(error as Error) === FileSystemProviderErrorCode.FileNotFound)
-				return { source: '{}' };
+			if (toFileSystemProviderErrorCode(error as Error) === FileSystemProviderErrorCode.FileNotFound) return { source: '{}' };
 			throw error;
 		}
 	}
@@ -177,14 +142,7 @@ class SettingsFile extends Disposable {
 	private parseSource(source: string): { source: string; model: ConfigurationModel } {
 		const parser = new ConfigurationModelParser(this.resource.toString(), settingsLog);
 		parser.parse(source);
-		if (parser.errors.length)
-			throw new TypeError(
-				localize(
-					'configuration.invalidWorkspace',
-					'Workspace settings in {0} contain invalid JSONC.',
-					this.resource.toString(),
-				),
-			);
+		if (parser.errors.length) throw new TypeError(localize('configuration.invalidWorkspace', 'Workspace settings in {0} contain invalid JSONC.', this.resource.toString()));
 		return { source, model: parser.configurationModel };
 	}
 
@@ -192,13 +150,7 @@ class SettingsFile extends Disposable {
 		if (!this.nested) return this.parseSource(source);
 		const parsed = parseJsonDocument(source, { allowComments: true, allowTrailingComma: true });
 		if (parsed.errors.length || parsed.root?.type !== 'object')
-			throw new TypeError(
-				localize(
-					'configuration.invalidWorkspace',
-					'Workspace settings in {0} contain invalid JSONC.',
-					this.resource.toString(),
-				),
-			);
+			throw new TypeError(localize('configuration.invalidWorkspace', 'Workspace settings in {0} contain invalid JSONC.', this.resource.toString()));
 		const settings = parsed.root.properties.find(property => property.key === 'settings')?.valueNode;
 		return this.parseSource(settings ? source.slice(settings.offset, settings.offset + settings.length) : '{}');
 	}

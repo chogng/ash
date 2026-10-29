@@ -32,11 +32,7 @@ export class QueryBuilder {
 		};
 	}
 
-	public text(
-		contentPattern: IPatternInfo,
-		folderResources: URI[] = [],
-		options: ITextQueryBuilderOptions = {},
-	): ITextQuery {
+	public text(contentPattern: IPatternInfo, folderResources: URI[] = [], options: ITextQueryBuilderOptions = {}): ITextQuery {
 		return {
 			type: QueryType.Text,
 			contentPattern: { ...contentPattern },

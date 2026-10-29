@@ -92,9 +92,7 @@ export class AnimatedCounterWidget extends Disposable {
 		);
 		this.animations.push(departure);
 		if (Math.abs(previousWidth - nextWidth) > 0.5) {
-			this.animations.push(
-				this.element.animate([{ width: `${previousWidth}px` }, { width: `${nextWidth}px` }], timing),
-			);
+			this.animations.push(this.element.animate([{ width: `${previousWidth}px` }, { width: `${nextWidth}px` }], timing));
 		}
 		departure.onfinish = departure.oncancel = () => this.stopAnimation();
 	}

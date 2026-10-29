@@ -32,19 +32,13 @@ export class SessionsPromptsService extends Disposable implements IPromptsServic
 	getHooks(...args: Parameters<IPromptsService['getHooks']>): ReturnType<IPromptsService['getHooks']> {
 		return new SessionScopedPromptsService(this.scopes.getScope(args[1])).getHooks(...args);
 	}
-	findAgentSkills(
-		...args: Parameters<IPromptsService['findAgentSkills']>
-	): ReturnType<IPromptsService['findAgentSkills']> {
+	findAgentSkills(...args: Parameters<IPromptsService['findAgentSkills']>): ReturnType<IPromptsService['findAgentSkills']> {
 		return new SessionScopedPromptsService(this.scopes.getScope(args[1])).findAgentSkills(...args);
 	}
-	readSkillManagement(
-		...args: Parameters<IPromptsService['readSkillManagement']>
-	): ReturnType<IPromptsService['readSkillManagement']> {
+	readSkillManagement(...args: Parameters<IPromptsService['readSkillManagement']>): ReturnType<IPromptsService['readSkillManagement']> {
 		return new SessionScopedPromptsService(this.scopes.getScope(args[0])).readSkillManagement(...args);
 	}
-	setSkillEnablement(
-		...args: Parameters<IPromptsService['setSkillEnablement']>
-	): ReturnType<IPromptsService['setSkillEnablement']> {
+	setSkillEnablement(...args: Parameters<IPromptsService['setSkillEnablement']>): ReturnType<IPromptsService['setSkillEnablement']> {
 		return new SessionScopedPromptsService(this.scopes.getScope(args[3])).setSkillEnablement(...args);
 	}
 	registerSkillSource(rootReference: string): Promise<void> {

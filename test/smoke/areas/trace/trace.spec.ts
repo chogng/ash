@@ -7,9 +7,7 @@ import { createInterface } from 'node:readline';
 import { developmentAshPackagePath } from '../../../../build/desktop/runtimeStore.ts';
 import { expect, test } from '../../../automation/test.js';
 
-test('developer trace viewer validates connection settings and restores focus after keyboard help', async ({
-	workbench,
-}) => {
+test('developer trace viewer validates connection settings and restores focus after keyboard help', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+Shift+P');
 	await page.getByPlaceholder('Type the name of a command to run').fill('Developer: Open trace viewer');
@@ -37,10 +35,7 @@ test(
 		const profile = await mkdtemp(join(tmpdir(), 'ash-trace-'));
 		const token = randomBytes(32).toString('hex');
 		const root = resolve(import.meta.dirname, '../../../..');
-		const packageRoot = developmentAshPackagePath(
-			root,
-			target.kind === 'browser' ? 'packaged-node' : 'host-provided-node',
-		);
+		const packageRoot = developmentAshPackagePath(root, target.kind === 'browser' ? 'packaged-node' : 'host-provided-node');
 		const environment: NodeJS.ProcessEnv = {
 			...process.env,
 			ASH_HOME: profile,
@@ -48,11 +43,12 @@ test(
 			ASH_TRACE_WEBSOCKET_TOKEN: token,
 		};
 		delete environment.ASH_WORKSPACE_ROOT;
-		const child = spawn(
-			join(packageRoot, 'bin', process.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server'),
-			['--listen', 'stdio://'],
-			{ cwd: root, windowsHide: true, env: environment, stdio: ['pipe', 'pipe', 'pipe'] },
-		);
+		const child = spawn(join(packageRoot, 'bin', process.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server'), ['--listen', 'stdio://'], {
+			cwd: root,
+			windowsHide: true,
+			env: environment,
+			stdio: ['pipe', 'pipe', 'pipe'],
+		});
 		const errors = createInterface({ input: child.stderr });
 		let stderr = '';
 		errors.on('line', line => {
@@ -149,14 +145,7 @@ test(
 					});
 				}, exportedPath);
 				await viewer.getByRole('button', { name: 'Export filtered OTLP' }).click();
-				await expect
-					.poll(() =>
-						application.evaluate(
-							() =>
-								(globalThis as typeof globalThis & { traceDownloadState?: string }).traceDownloadState,
-						),
-					)
-					.toBe('completed');
+				await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & { traceDownloadState?: string }).traceDownloadState)).toBe('completed');
 			} else {
 				const downloadPromise = page.waitForEvent('download');
 				await viewer.getByRole('button', { name: 'Export filtered OTLP' }).click();

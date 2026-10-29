@@ -74,9 +74,7 @@ export class BulkFileEdits {
 		let actual: string | undefined;
 		try {
 			if ((await this.files.stat(resource)).kind !== FileKind.File) {
-				throw new WorkspaceEditConflictError(
-					`Workspace edit target '${resource.toString()}' is no longer a regular file`,
-				);
+				throw new WorkspaceEditConflictError(`Workspace edit target '${resource.toString()}' is no longer a regular file`);
 			}
 			actual = (await this.files.readFile(resource)).content;
 		} catch (error) {
@@ -85,9 +83,7 @@ export class BulkFileEdits {
 			}
 		}
 		if (actual !== expected) {
-			throw new WorkspaceEditConflictError(
-				`Workspace edit target '${resource.toString()}' changed before replacement`,
-			);
+			throw new WorkspaceEditConflictError(`Workspace edit target '${resource.toString()}' changed before replacement`);
 		}
 	}
 }

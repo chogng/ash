@@ -2,13 +2,7 @@ import { ISymbolNavigationService } from '../symbolNavigation.js';
 import { ReferenceWidget } from './referencesWidget.js';
 import { localize } from '../../../../../nls.js';
 import { registerEditorContribution } from '../../../../browser/editorFeatureRegistration.js';
-import {
-	getDefinitionsAtPosition,
-	getDeclarationsAtPosition,
-	getImplementationsAtPosition,
-	getTypeDefinitionsAtPosition,
-	getReferencesAtPosition,
-} from '../goToSymbol.js';
+import { getDefinitionsAtPosition, getDeclarationsAtPosition, getImplementationsAtPosition, getTypeDefinitionsAtPosition, getReferencesAtPosition } from '../goToSymbol.js';
 import { ReferencesModel } from '../referencesModel.js';
 import { addDisposableListener, stopEvent } from '../../../../../base/browser/dom.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -69,10 +63,7 @@ export class ReferencesController extends Disposable {
 		}
 	}
 
-	public navigate(
-		kind: SymbolNavigationKind,
-		options: { readonly peek?: boolean; readonly includeDeclaration?: boolean; readonly openToSide?: boolean } = {},
-	): Promise<void> {
+	public navigate(kind: SymbolNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean; readonly openToSide?: boolean } = {}): Promise<void> {
 		return this.requestLocations(kind, options);
 	}
 
@@ -102,10 +93,7 @@ export class ReferencesController extends Disposable {
 		void action.run().catch(this.onError);
 	}
 
-	private async requestLocations(
-		kind: SymbolNavigationKind,
-		options: { readonly peek?: boolean; readonly includeDeclaration?: boolean; readonly openToSide?: boolean } = {},
-	): Promise<void> {
+	private async requestLocations(kind: SymbolNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean; readonly openToSide?: boolean } = {}): Promise<void> {
 		this.closePeek();
 		const request = (this.request = new AbortController());
 		const position = this.editor.getSelections()![0]!.getPosition();
@@ -114,55 +102,19 @@ export class ReferencesController extends Disposable {
 			let links;
 			switch (kind) {
 				case 'definition':
-					links = await getDefinitionsAtPosition(
-						this.languageFeatures.definitionProvider,
-						model,
-						position,
-						false,
-						request.signal,
-						this.onError,
-					);
+					links = await getDefinitionsAtPosition(this.languageFeatures.definitionProvider, model, position, false, request.signal, this.onError);
 					break;
 				case 'declaration':
-					links = await getDeclarationsAtPosition(
-						this.languageFeatures.declarationProvider,
-						model,
-						position,
-						false,
-						request.signal,
-						this.onError,
-					);
+					links = await getDeclarationsAtPosition(this.languageFeatures.declarationProvider, model, position, false, request.signal, this.onError);
 					break;
 				case 'implementation':
-					links = await getImplementationsAtPosition(
-						this.languageFeatures.implementationProvider,
-						model,
-						position,
-						false,
-						request.signal,
-						this.onError,
-					);
+					links = await getImplementationsAtPosition(this.languageFeatures.implementationProvider, model, position, false, request.signal, this.onError);
 					break;
 				case 'typeDefinition':
-					links = await getTypeDefinitionsAtPosition(
-						this.languageFeatures.typeDefinitionProvider,
-						model,
-						position,
-						false,
-						request.signal,
-						this.onError,
-					);
+					links = await getTypeDefinitionsAtPosition(this.languageFeatures.typeDefinitionProvider, model, position, false, request.signal, this.onError);
 					break;
 				case 'references':
-					links = await getReferencesAtPosition(
-						this.languageFeatures.referenceProvider,
-						model,
-						position,
-						!(options.includeDeclaration ?? true),
-						false,
-						request.signal,
-						this.onError,
-					);
+					links = await getReferencesAtPosition(this.languageFeatures.referenceProvider, model, position, !(options.includeDeclaration ?? true), false, request.signal, this.onError);
 					break;
 			}
 			using results = new ReferencesModel(links, navigationLabel(kind));
@@ -170,18 +122,14 @@ export class ReferencesController extends Disposable {
 				Object.freeze({
 					resource: reference.uri,
 					range: Range.lift(reference.link.range),
-					...(reference.link.targetSelectionRange
-						? { selectionRange: Range.lift(reference.link.targetSelectionRange) }
-						: {}),
+					...(reference.link.targetSelectionRange ? { selectionRange: Range.lift(reference.link.targetSelectionRange) } : {}),
 				}),
 			);
 			if (request.signal.aborted) {
 				return;
 			}
 			if (locations.length === 0) {
-				this.viewport.announceAccessibilityStatus(
-					localize('references.noResults', 'No {0} found.', navigationLabel(kind)),
-				);
+				this.viewport.announceAccessibilityStatus(localize('references.noResults', 'No {0} found.', navigationLabel(kind)));
 				return;
 			}
 			if (options.peek || locations.length > 1) {
@@ -199,9 +147,7 @@ export class ReferencesController extends Disposable {
 	private showPeek(anchor: Position, results: ReferencesModel, openToSide = false): void {
 		this.peek.clear();
 		const model = this.peek.add(results.clone());
-		const widget = this.peek.add(
-			this.instantiationService.createInstance(ReferenceWidget, this.editor, this.onError),
-		);
+		const widget = this.peek.add(this.instantiationService.createInstance(ReferenceWidget, this.editor, this.onError));
 		this.peek.add(widget.onDidClose(() => this.closePeek()));
 		this.peek.add(
 			widget.onDidSelectReference(reference => {
@@ -233,26 +179,17 @@ export class ReferencesController extends Disposable {
 		this.closePeek();
 		const range = location.selectionRange ?? location.range;
 		if (openToSide) {
-			await this.codeEditors.openCodeEditor(
-				{ resource: location.resource, options: { selection: range } },
-				this.editor,
-				true,
-			);
+			await this.codeEditors.openCodeEditor({ resource: location.resource, options: { selection: range } }, this.editor, true);
 			return;
 		}
 		if (extUri.isEqual(location.resource, this.resource)) {
-			this.editor.setSelections(
-				[Selection.fromPositions(range.getStartPosition(), range.getEndPosition())],
-				'editor.action.goToLocation',
-			);
+			this.editor.setSelections([Selection.fromPositions(range.getStartPosition(), range.getEndPosition())], 'editor.action.goToLocation');
 			this.viewport.revealPosition(range.getStartPosition());
 			this.input.focus({ preventScroll: true });
 			return;
 		}
 		if (!this.openLocation) {
-			this.viewport.announceAccessibilityStatus(
-				localize('references.cannotOpen', 'This editor host cannot open the target resource.'),
-			);
+			this.viewport.announceAccessibilityStatus(localize('references.cannotOpen', 'This editor host cannot open the target resource.'));
 			return;
 		}
 		await this.openLocation(location);

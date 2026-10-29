@@ -2,22 +2,12 @@ import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { basename, dirname, extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
-import {
-	DialogSeverity,
-	type FileFilter,
-	type IDialogService,
-	type IFileDialogService,
-	type IOpenDialogOptions,
-	type ISaveDialogOptions,
-} from '../../../../platform/dialogs/common/dialogs.js';
+import { DialogSeverity, type FileFilter, type IDialogService, type IFileDialogService, type IOpenDialogOptions, type ISaveDialogOptions } from '../../../../platform/dialogs/common/dialogs.js';
 import type { HTMLFileSystemProvider } from '../../../../platform/files/browser/htmlFileSystemProvider.js';
 import { FileKind, FileNotFoundError, type IFileService } from '../../../../platform/files/common/files.js';
 import type { IQuickInputService, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { IPathService } from '../../../../platform/path/common/pathService.js';
-import type {
-	IWebWorkspaceClient,
-	IWebWorkspaceDirectoryList,
-} from '../../workspaces/browser/appServerWebWorkspaceClient.js';
+import type { IWebWorkspaceClient, IWebWorkspaceDirectoryList } from '../../workspaces/browser/appServerWebWorkspaceClient.js';
 import { AbstractFileDialogService } from './abstractFileDialogService.js';
 import { IHostService } from '../../host/browser/host.js';
 
@@ -29,11 +19,7 @@ interface FileDialogHostBase {
 
 function matchesFileFilters(name: string, filters: readonly FileFilter[]): boolean {
 	const lowerName = name.toLocaleLowerCase('en-US');
-	return filters.some(filter =>
-		filter.extensions.some(
-			extension => extension === '*' || lowerName.endsWith(`.${extension.toLocaleLowerCase('en-US')}`),
-		),
-	);
+	return filters.some(filter => filter.extensions.some(extension => extension === '*' || lowerName.endsWith(`.${extension.toLocaleLowerCase('en-US')}`)));
 }
 
 type FileDialogHost = FileDialogHostBase &
@@ -55,11 +41,7 @@ type ServerDirectoryItem = IQuickPickItem &
 	);
 
 type WorkspaceFileItem = IQuickPickItem &
-	(
-		| { readonly kind: 'file' | 'directory' | 'parent'; readonly resource: URI }
-		| { readonly kind: 'navigate'; readonly resource: URI }
-		| { readonly kind: 'done' }
-	);
+	({ readonly kind: 'file' | 'directory' | 'parent'; readonly resource: URI } | { readonly kind: 'navigate'; readonly resource: URI } | { readonly kind: 'done' });
 
 /** Selects folders and Save As targets for a browser Workbench. */
 export class FileDialogService extends AbstractFileDialogService implements IFileDialogService {
@@ -84,17 +66,14 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 			const paths = await this.pickServerDirectories(this.host, options);
 			return paths && Promise.all(paths.map(path => this.paths.fileURI(path)));
 		}
-		let startIn = options.defaultUri?.path.startsWith('/@browser/')
-			? await this.host.provider.getDirectoryHandle(options.defaultUri)
-			: undefined;
+		let startIn = options.defaultUri?.path.startsWith('/@browser/') ? await this.host.provider.getDirectoryHandle(options.defaultUri) : undefined;
 		const folders: URI[] = [];
 		for (;;) {
 			let handle: FileSystemDirectoryHandle;
 			try {
 				handle = await this.host.pickDirectory(startIn);
 			} catch (error) {
-				if (error instanceof DOMException && error.name === 'AbortError')
-					return folders.length ? folders : undefined;
+				if (error instanceof DOMException && error.name === 'AbortError') return folders.length ? folders : undefined;
 				throw error;
 			}
 			const folder = await this.host.provider.registerDirectoryHandle(handle);
@@ -124,17 +103,11 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 		if (options.filters?.length && !filter) return undefined;
 		let defaultDirectory: URI | undefined;
 		const defaultIsAccessible =
-			options.defaultUri &&
-			(this.host.kind === 'local'
-				? options.defaultUri.path.startsWith('/@browser/')
-				: !!workspaceRoot && extUri.isEqualOrParent(options.defaultUri, workspaceRoot));
+			options.defaultUri && (this.host.kind === 'local' ? options.defaultUri.path.startsWith('/@browser/') : !!workspaceRoot && extUri.isEqualOrParent(options.defaultUri, workspaceRoot));
 		if (options.defaultUri && defaultIsAccessible) {
 			const parent = dirname(options.defaultUri);
 			try {
-				defaultDirectory =
-					(await this.host.fileService().stat(options.defaultUri)).kind === FileKind.Directory
-						? options.defaultUri
-						: parent;
+				defaultDirectory = (await this.host.fileService().stat(options.defaultUri)).kind === FileKind.Directory ? options.defaultUri : parent;
 			} catch (error) {
 				if (!(error instanceof FileNotFoundError)) throw error;
 				defaultDirectory = parent;
@@ -151,10 +124,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 					)?.[0]
 				: (defaultDirectory ?? workspaceRoot);
 		if (!directory) return undefined;
-		const defaultName =
-			options.defaultUri && !extUri.isEqual(defaultDirectory, options.defaultUri)
-				? basename(options.defaultUri)
-				: '';
+		const defaultName = options.defaultUri && !extUri.isEqual(defaultDirectory, options.defaultUri) ? basename(options.defaultUri) : '';
 		for (;;) {
 			const result = await this.dialogs().input({
 				title: options.title ?? localize('dialog.saveFileTitle', 'Save File'),
@@ -168,10 +138,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 				if (filter && !matchesFileFilters(name, [filter])) {
 					await this.dialogs().showMessage({
 						severity: DialogSeverity.Error,
-						message: localize(
-							'dialog.fileTypeMismatch',
-							'Choose a file name matching the selected file types.',
-						),
+						message: localize('dialog.fileTypeMismatch', 'Choose a file name matching the selected file types.'),
 					});
 					continue;
 				}
@@ -204,10 +171,8 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 	}
 
 	private validateFileSystem(availableFileSystems: readonly string[] | undefined, defaultUri: URI | undefined): void {
-		if (availableFileSystems && !availableFileSystems.includes('file'))
-			throw new Error('This file dialog supports the file scheme only');
-		if (defaultUri && defaultUri.scheme !== 'file')
-			throw new Error('This file dialog supports the file scheme only');
+		if (availableFileSystems && !availableFileSystems.includes('file')) throw new Error('This file dialog supports the file scheme only');
+		if (defaultUri && defaultUri.scheme !== 'file') throw new Error('This file dialog supports the file scheme only');
 	}
 
 	private async pickWorkspaceFiles(options: IOpenDialogOptions): Promise<readonly URI[] | undefined> {
@@ -215,10 +180,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 		// Standalone document editors choose a browser folder without changing the workspace.
 		if (!root && this.host.kind === 'local') {
 			let defaultDirectory = options.defaultUri;
-			if (
-				defaultDirectory &&
-				(await this.host.fileService().stat(defaultDirectory)).kind !== FileKind.Directory
-			) {
+			if (defaultDirectory && (await this.host.fileService().stat(defaultDirectory)).kind !== FileKind.Directory) {
 				defaultDirectory = dirname(defaultDirectory);
 			}
 			root = (
@@ -241,13 +203,11 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 		}
 		const filter = await this.chooseFileFilter(options.filters);
 		if (options.filters?.length && !filter) return undefined;
-		const initial =
-			options.defaultUri && extUri.isEqualOrParent(options.defaultUri, root) ? options.defaultUri : root;
+		const initial = options.defaultUri && extUri.isEqualOrParent(options.defaultUri, root) ? options.defaultUri : root;
 		let directory = initial;
 		if (initial !== root) {
 			try {
-				if ((await this.host.fileService().stat(initial)).kind !== FileKind.Directory)
-					directory = dirname(initial);
+				if ((await this.host.fileService().stat(initial)).kind !== FileKind.Directory) directory = dirname(initial);
 			} catch (error) {
 				if (!(error instanceof FileNotFoundError)) throw error;
 				directory = root;
@@ -267,25 +227,25 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 					: []),
 				...(directory.toString() === root.toString()
 					? []
-					: [{ kind: 'parent' as const, resource: dirname(directory), label: '..' }]),
+					: [
+							{
+								kind: 'parent' as const,
+								resource: dirname(directory),
+								label: '..',
+							},
+						]),
 				...entries
 					.filter(entry => entry.kind === FileKind.Directory)
 					.map(entry => ({
 						kind: 'directory' as const,
 						resource: entry.resource,
 						label: entry.name,
-						...(options.canSelectFolders
-							? { buttons: [{ id: 'navigate', label: localize('dialog.openFolder', 'Open Folder') }] }
-							: {}),
+						...(options.canSelectFolders ? { buttons: [{ id: 'navigate', label: localize('dialog.openFolder', 'Open Folder') }] } : {}),
 					})),
 				...(options.canSelectFiles === false
 					? []
 					: entries
-							.filter(
-								entry =>
-									entry.kind === FileKind.File &&
-									(!filter || matchesFileFilters(entry.name, [filter])),
-							)
+							.filter(entry => entry.kind === FileKind.File && (!filter || matchesFileFilters(entry.name, [filter])))
 							.map(entry => ({ kind: 'file' as const, resource: entry.resource, label: entry.name }))),
 			];
 			const choice = await this.showWorkspaceFiles(this.host.quickInput(), directory, items, options, selected);
@@ -344,8 +304,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 			);
 			disposables.add(
 				picker.onDidTriggerItemButton(({ item, button }) => {
-					if (button.id === 'navigate' && item.kind === 'directory')
-						finish({ kind: 'navigate', resource: item.resource, label: item.label });
+					if (button.id === 'navigate' && item.kind === 'directory') finish({ kind: 'navigate', resource: item.resource, label: item.label });
 				}),
 			);
 			disposables.add(picker.onDidHide(() => finish(undefined)));
@@ -385,10 +344,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 		});
 	}
 
-	private async pickServerDirectories(
-		host: Extract<FileDialogHost, { kind: 'server' }>,
-		options: IOpenDialogOptions,
-	): Promise<readonly string[] | undefined> {
+	private async pickServerDirectories(host: Extract<FileDialogHost, { kind: 'server' }>, options: IOpenDialogOptions): Promise<readonly string[] | undefined> {
 		let path = '';
 		const initial = options.defaultUri ?? (this.paths.resolvedUserHome ? await this.paths.userHome() : undefined);
 		if (initial) {
@@ -420,8 +376,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 		const disposables = new DisposableStore();
 		disposables.add(picker);
 		picker.placeholder = listing.path;
-		picker.ariaLabel =
-			options.title ?? localize({ bundle: 'ash', key: 'workbench.serverFolderChoose' }, 'Choose a server folder');
+		picker.ariaLabel = options.title ?? localize({ bundle: 'ash', key: 'workbench.serverFolderChoose' }, 'Choose a server folder');
 		picker.items = [
 			...(options.canSelectMany && selected.size
 				? [
@@ -437,13 +392,10 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 				path: listing.path,
 				label: options.canSelectMany
 					? `${selected.has(listing.path) ? localize('dialog.deselect', 'Deselect') : localize('dialog.select', 'Select')} ${listing.path}`
-					: (options.openLabel ??
-						localize({ bundle: 'ash', key: 'workbench.serverFolderSelect' }, 'Select this folder')),
+					: (options.openLabel ?? localize({ bundle: 'ash', key: 'workbench.serverFolderSelect' }, 'Select this folder')),
 				description: listing.path,
 			},
-			...(listing.parent
-				? [{ kind: 'parent' as const, path: listing.parent, label: '..', description: listing.parent }]
-				: []),
+			...(listing.parent ? [{ kind: 'parent' as const, path: listing.parent, label: '..', description: listing.parent }] : []),
 			...listing.directories.map(directory => ({
 				kind: 'directory' as const,
 				path: directory.path,

@@ -10,12 +10,7 @@ import {
 	type AppServerTransport,
 } from '../../../agentHost/common/appServerTransport.js';
 import { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
-import {
-	APP_SERVER_SCHEMA_HASH,
-	APP_SERVER_PROTOCOL_MAJOR,
-	type InitializeResult,
-	type ServerCapabilities,
-} from '../../../../../../.build/protocol/typescript/index.js';
+import { APP_SERVER_SCHEMA_HASH, APP_SERVER_PROTOCOL_MAJOR, type InitializeResult, type ServerCapabilities } from '../../../../../../.build/protocol/typescript/index.js';
 import { DisposableTracker, installDisposableTracker } from '../../../../base/common/lifecycle.js';
 import type { MemoryObservation } from '../../common/memoryDiagnosticsService.js';
 
@@ -203,9 +198,7 @@ test('stop followed immediately by start finishes cleanup before starting the ne
 		assert.equal((await stop).status, 'stopped');
 		assert.equal((await start).status, 'recording');
 		assert.deepEqual(
-			transport.requests.filter(
-				method => method === 'memoryDiagnostics/start' || method === 'memoryDiagnostics/stop',
-			),
+			transport.requests.filter(method => method === 'memoryDiagnostics/start' || method === 'memoryDiagnostics/stop'),
 			['memoryDiagnostics/start', 'memoryDiagnostics/stop', 'memoryDiagnostics/start'],
 		);
 	} finally {

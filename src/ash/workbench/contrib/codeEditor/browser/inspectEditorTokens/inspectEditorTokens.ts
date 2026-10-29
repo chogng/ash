@@ -1,9 +1,4 @@
-import {
-	defaultDialogStyles,
-	defaultButtonStyles,
-	defaultCheckboxStyles,
-	defaultInputBoxStyles,
-} from '../../../../../platform/theme/browser/defaultStyles.js';
+import { defaultDialogStyles, defaultButtonStyles, defaultCheckboxStyles, defaultInputBoxStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { localize2, localize } from '../../../../../nls.js';
 import './inspectEditorTokens.css';
 import { h } from '../../../../../base/browser/dom.js';
@@ -62,17 +57,9 @@ class InspectEditorTokens extends Action2 {
 			throw error;
 		}
 		if (controller.signal.aborted || model.tokenization.syntaxTree !== tree) return;
-		if (
-			editor.getModel() !== model ||
-			model.getVersionId() !== version ||
-			model.getLanguageId() !== language ||
-			editor.getPosition()?.equals(position) !== true
-		)
-			return;
+		if (editor.getModel() !== model || model.getVersionId() !== version || model.getLanguageId() !== language || editor.getPosition()?.equals(position) !== true) return;
 		const offset = Math.min(position.column - 1, Math.max(0, model.getLineLength(position.lineNumber) - 1));
-		const captures =
-			tree?.getTokenCaptures(position.lineNumber).filter(token => token.start <= offset && offset < token.end) ??
-			[];
+		const captures = tree?.getTokenCaptures(position.lineNumber).filter(token => token.start <= offset && offset < token.end) ?? [];
 		const token = captures.at(-1);
 		const text = token ? model.getLineContent(position.lineNumber).slice(token.start, token.end) : '';
 		const style = tree
@@ -83,35 +70,15 @@ class InspectEditorTokens extends Action2 {
 		const report = [
 			localize('inspectEditorTokens.position', 'Position: {0}:{1}', position.lineNumber, position.column),
 			localize('inspectEditorTokens.language', 'Language: {0}', language),
-			...(token?.languageId && token.languageId !== language
-				? [localize('inspectEditorTokens.embeddedLanguage', 'Embedded language: {0}', token.languageId)]
-				: []),
-			...(tree
-				? [
-						localize(
-							'inspectEditorTokens.engine',
-							'Syntax engine: {0}',
-							tree.execution === 'rust' ? 'Tree-sitter / Rust' : 'Tree-sitter / WASM',
-						),
-					]
-				: []),
+			...(token?.languageId && token.languageId !== language ? [localize('inspectEditorTokens.embeddedLanguage', 'Embedded language: {0}', token.languageId)] : []),
+			...(tree ? [localize('inspectEditorTokens.engine', 'Syntax engine: {0}', tree.execution === 'rust' ? 'Tree-sitter / Rust' : 'Tree-sitter / WASM')] : []),
 			localize('inspectEditorTokens.theme', 'Theme: {0}', theme.label),
 			localize('inspectEditorTokens.text', 'Token: {0}', JSON.stringify(text)),
-			localize(
-				'inspectEditorTokens.color',
-				'Syntax color: {0}',
-				style?.foreground ?? theme.getColorCss('editor.foreground'),
-			),
-			localize(
-				'inspectEditorTokens.font',
-				'Syntax font style: {0}',
-				style?.fontStyle?.join(' ') || localize('inspectEditorTokens.regular', 'regular'),
-			),
+			localize('inspectEditorTokens.color', 'Syntax color: {0}', style?.foreground ?? theme.getColorCss('editor.foreground')),
+			localize('inspectEditorTokens.font', 'Syntax font style: {0}', style?.fontStyle?.join(' ') || localize('inspectEditorTokens.regular', 'regular')),
 			'',
 			localize('inspectEditorTokens.captures', 'Tree-sitter captures:'),
-			...(captures.length
-				? captures.map(capture => capture.name)
-				: [localize('inspectEditorTokens.noCaptures', 'No Tree-sitter capture at this position.')]),
+			...(captures.length ? captures.map(capture => capture.name) : [localize('inspectEditorTokens.noCaptures', 'No Tree-sitter capture at this position.')]),
 		].join('\n');
 		const root = layout.mainContainer;
 		const content = h(root.ownerDocument, 'textarea');
@@ -122,23 +89,18 @@ class InspectEditorTokens extends Action2 {
 		const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.InspectEditorTokens);
 		if (hint) content.setAttribute('aria-description', hint);
 		const dialog = lifetime.add(
-			new Dialog(
-				root,
-				localize('inspectEditorTokens.title', 'Editor Tokens'),
-				[localize('inspectEditorTokens.close', 'Close')],
-				{
-					buttonStyles: defaultButtonStyles,
-					dialogStyles: defaultDialogStyles,
-					checkboxStyles: defaultCheckboxStyles,
-					inputBoxStyles: defaultInputBoxStyles,
-					renderBody: body => {
-						body.append(content);
-						// Keep the feature's help available when its standard footer action receives focus.
-						lifetime.add(contextKeys.createScoped(body)).createKey('inspectEditorTokensVisible', true);
-					},
-					cancelId: 0,
+			new Dialog(root, localize('inspectEditorTokens.title', 'Editor Tokens'), [localize('inspectEditorTokens.close', 'Close')], {
+				buttonStyles: defaultButtonStyles,
+				dialogStyles: defaultDialogStyles,
+				checkboxStyles: defaultCheckboxStyles,
+				inputBoxStyles: defaultInputBoxStyles,
+				renderBody: body => {
+					body.append(content);
+					// Keep the feature's help available when its standard footer action receives focus.
+					lifetime.add(contextKeys.createScoped(body)).createKey('inspectEditorTokensVisible', true);
 				},
-			),
+				cancelId: 0,
+			}),
 		);
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			lifetime.add(

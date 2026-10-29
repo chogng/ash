@@ -49,16 +49,8 @@ export class CodeLensWidget extends Disposable {
 		this._register(toDisposable(() => viewport.changeViewZones(accessor => accessor.removeZone(this.viewZoneId))));
 		this._register(
 			addDisposableListener<MouseEvent>(this.domNode, 'click', event => {
-				const button = (event.target as Element | null)?.closest<HTMLButtonElement>(
-					'.stanza-editor-codelens-command',
-				);
-				if (
-					!isHTMLElement(button) ||
-					button.tagName !== 'BUTTON' ||
-					button.parentElement !== this.domNode ||
-					!this.executeCommand
-				)
-					return;
+				const button = (event.target as Element | null)?.closest<HTMLButtonElement>('.stanza-editor-codelens-command');
+				if (!isHTMLElement(button) || button.tagName !== 'BUTTON' || button.parentElement !== this.domNode || !this.executeCommand) return;
 				const command = this.currentCommands[Number(button.dataset.commandIndex)];
 				if (command) this.executeCommand(command);
 			}),
@@ -72,10 +64,7 @@ export class CodeLensWidget extends Disposable {
 	}
 
 	public get needsResolve(): boolean {
-		return (
-			!this.commandsResolved &&
-			this.items.some(item => !item.symbol.command && item.provider.resolveCodeLens !== undefined)
-		);
+		return !this.commandsResolved && this.items.some(item => !item.symbol.command && item.provider.resolveCodeLens !== undefined);
 	}
 
 	public updateCodeLensItems(items: readonly CodeLensItem[]): void {
@@ -86,9 +75,7 @@ export class CodeLensWidget extends Disposable {
 	}
 
 	public updateCommands(symbols: ReadonlyArray<CodeLens | undefined | null>): void {
-		this.items = this.items.map((item, index) =>
-			symbols[index] ? Object.freeze({ symbol: symbols[index]!, provider: item.provider }) : item,
-		);
+		this.items = this.items.map((item, index) => (symbols[index] ? Object.freeze({ symbol: symbols[index]!, provider: item.provider }) : item));
 		this.commandsResolved = true;
 		this.render(this.initialSymbols);
 	}
@@ -98,9 +85,7 @@ export class CodeLensWidget extends Disposable {
 		this.viewZone.heightInPx = this.codeLensHeight;
 		this.viewport.changeViewZones(accessor => accessor.layoutZone(this.viewZoneId));
 		const range = this.items[0]!.symbol.range;
-		const coordinates = this.viewport.getPositionContentCoordinates(
-			new Position(range.startLineNumber, range.startColumn),
-		);
+		const coordinates = this.viewport.getPositionContentCoordinates(new Position(range.startLineNumber, range.startColumn));
 		this.domNode.style.left = `${Math.max(4, coordinates.left)}px`;
 	}
 
@@ -139,10 +124,7 @@ export class CodeLensWidget extends Disposable {
 				children.push(separator);
 			}
 			const command = commands[index]!;
-			const element = h(
-				this.domNode.ownerDocument,
-				this.executeCommand && command.id.length > 0 ? 'button' : 'span',
-			);
+			const element = h(this.domNode.ownerDocument, this.executeCommand && command.id.length > 0 ? 'button' : 'span');
 			element.className = 'stanza-editor-codelens-command';
 			element.textContent = command.title.trim();
 			if (element.tagName === 'BUTTON') {

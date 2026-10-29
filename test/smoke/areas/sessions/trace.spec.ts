@@ -14,25 +14,15 @@ async function openTrace(page: Page): Promise<void> {
 }
 
 /** Menus read current operation state when opened, including a busy export. */
-async function inspectTraceAction(
-	viewer: Locator,
-	application: PlaywrightApplication,
-	name: string,
-): Promise<ElectronMenuItem> {
-	const items = await new Menus(viewer.page()).inspect(application, () =>
-		viewer.locator('.ash-toolbar-more-actions button').click(),
-	);
+async function inspectTraceAction(viewer: Locator, application: PlaywrightApplication, name: string): Promise<ElectronMenuItem> {
+	const items = await new Menus(viewer.page()).inspect(application, () => viewer.locator('.ash-toolbar-more-actions button').click());
 	const item = items.find(item => item.label === name);
 	expect(item, `Execution Trace menu must include ${name}`).toBeDefined();
 	return item!;
 }
 
 async function selectTraceAction(viewer: Locator, application: PlaywrightApplication, name: string): Promise<void> {
-	await new Menus(viewer.page()).select(
-		application,
-		() => viewer.locator('.ash-toolbar-more-actions button').click(),
-		[name],
-	);
+	await new Menus(viewer.page()).select(application, () => viewer.locator('.ash-toolbar-more-actions button').click(), [name]);
 }
 async function inspectInput(viewer: Locator, label = 'Input', body = 'Saved body'): Promise<void> {
 	await viewer.getByRole('tab', { name: label, exact: true }).click();
@@ -50,30 +40,22 @@ test('Workbench opens the shared Execution Trace editor and imports a capture', 
 	await expect((await inspectTraceAction(viewer, application, 'Export trace')).enabled).toBe(false);
 	await viewer.page().keyboard.press('Escape');
 	const trace = { formatVersion: 3, sessionId: 'workbench-import', threads: [], historyPrefixes: [] };
-	await viewer
-		.locator('input[type=file]')
-		.setInputFiles({
-			name: 'workbench.trace.json',
-			mimeType: 'application/json',
-			buffer: Buffer.from(JSON.stringify(trace)),
-		});
+	await viewer.locator('input[type=file]').setInputFiles({
+		name: 'workbench.trace.json',
+		mimeType: 'application/json',
+		buffer: Buffer.from(JSON.stringify(trace)),
+	});
 	await expect(viewer.getByRole('status')).toContainText('Imported');
 	await expect((await inspectTraceAction(viewer, application, 'Export trace')).enabled).toBe(true);
 	await viewer.page().keyboard.press('Escape');
 	await selectTraceAction(viewer, application, 'Help');
-	await expect(workbench.page.getByRole('dialog', { name: 'Accessibility Help' }).getByRole('textbox')).toHaveValue(
-		/Execution Trace[\s\S]*Hiding or closing the editor stops polling/u,
-	);
+	await expect(workbench.page.getByRole('dialog', { name: 'Accessibility Help' }).getByRole('textbox')).toHaveValue(/Execution Trace[\s\S]*Hiding or closing the editor stops polling/u);
 	await workbench.page.keyboard.press('Escape');
 	await workbench.page.getByRole('button', { name: 'Close Execution Trace', exact: true }).click();
 	await expect(viewer).toHaveCount(0);
 });
 
-test('Execution Trace imports evaluation history, nests child Threads and exports every event', async ({
-	target,
-	application,
-	workbench,
-}, testInfo) => {
+test('Execution Trace imports evaluation history, nests child Threads and exports every event', async ({ target, application, workbench }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await openTrace(page);
 	const viewer = page.locator('.ash-agent-trace');
@@ -176,20 +158,14 @@ test('Execution Trace imports evaluation history, nests child Threads and export
 			},
 		],
 	};
-	await viewer
-		.locator('input[type=file]')
-		.setInputFiles({
-			name: 'evaluation.trace.json',
-			mimeType: 'application/json',
-			buffer: Buffer.from(JSON.stringify(trace)),
-		});
+	await viewer.locator('input[type=file]').setInputFiles({
+		name: 'evaluation.trace.json',
+		mimeType: 'application/json',
+		buffer: Buffer.from(JSON.stringify(trace)),
+	});
 	await expect(viewer.getByRole('status')).toContainText('Imported');
-	const rootRow = viewer
-		.getByRole('treeitem')
-		.filter({ has: page.locator('.ash-agent-trace-thread[data-thread-id="root"]') });
-	const childRow = viewer
-		.getByRole('treeitem')
-		.filter({ has: page.locator('.ash-agent-trace-thread[data-thread-id="child"]') });
+	const rootRow = viewer.getByRole('treeitem').filter({ has: page.locator('.ash-agent-trace-thread[data-thread-id="root"]') });
+	const childRow = viewer.getByRole('treeitem').filter({ has: page.locator('.ash-agent-trace-thread[data-thread-id="child"]') });
 	await expect(rootRow).toHaveAttribute('aria-level', '1');
 	await expect(childRow).toHaveAttribute('aria-level', '2');
 	await expect(viewer.locator('.ash-agent-trace-turn')).toHaveCount(2);
@@ -208,9 +184,7 @@ test('Execution Trace imports evaluation history, nests child Threads and export
 	await page.keyboard.press('Escape');
 	await expect(filter).toBeFocused();
 	await page.keyboard.press('Alt+F2');
-	await expect(page.getByRole('dialog', { name: 'Accessible View' }).getByRole('textbox')).toHaveValue(
-		/Evaluation root[\s\S]*Child agent/u,
-	);
+	await expect(page.getByRole('dialog', { name: 'Accessible View' }).getByRole('textbox')).toHaveValue(/Evaluation root[\s\S]*Child agent/u);
 	await page.keyboard.press('Escape');
 	await expect(filter).toBeFocused();
 	await viewer.getByRole('button', { name: 'Errors only', exact: true }).click();
@@ -226,9 +200,7 @@ test('Execution Trace imports evaluation history, nests child Threads and export
 	if ('windows' in application) {
 		exportedPath = testInfo.outputPath('exported.trace.json');
 		await application.evaluate(({ BrowserWindow }, path) => {
-			BrowserWindow.getAllWindows()[0]!.webContents.session.once('will-download', (_event, item) =>
-				item.setSavePath(path),
-			);
+			BrowserWindow.getAllWindows()[0]!.webContents.session.once('will-download', (_event, item) => item.setSavePath(path));
 		}, exportedPath);
 		await selectTraceAction(viewer, application, 'Export trace');
 		await expect
@@ -260,33 +232,24 @@ test('Execution Trace imports evaluation history, nests child Threads and export
 		await expect(viewer.getByRole('tabpanel')).toContainText('after attachment materialization');
 		await expect(viewer.getByRole('tabpanel')).toContainText('instructions');
 	}
-	await viewer
-		.locator('input[type=file]')
-		.setInputFiles({
-			name: 'invalid.json',
-			mimeType: 'application/json',
-			buffer: Buffer.from('{"formatVersion":2}'),
-		});
+	await viewer.locator('input[type=file]').setInputFiles({
+		name: 'invalid.json',
+		mimeType: 'application/json',
+		buffer: Buffer.from('{"formatVersion":2}'),
+	});
 	await expect(viewer.getByRole('status')).toContainText('Expected rollout format version 3');
 	await page.getByRole('button', { name: 'Close Execution Trace', exact: true }).click();
 	await expect(viewer).toHaveCount(0);
 });
 
-test('Execution Trace command and help use Chinese in the real Sessions window', async ({
-	target,
-	application,
-	workbench,
-	restartWorkbench,
-}) => {
+test('Execution Trace command and help use Chinese in the real Sessions window', async ({ target, application, workbench, restartWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 	await language.fill('简体中文');
 	await language.press('Enter');
 	({ application, workbench } = await restartWorkbench());
 	await workbench.quickaccess.runCommand('workbench.action.chat.openAgentDebugPanel');
-	await expect(
-		(await inspectTraceAction(workbench.page.locator('.ash-agent-trace'), application, '导入 Trace')).label,
-	).toBe('导入 Trace');
+	await expect((await inspectTraceAction(workbench.page.locator('.ash-agent-trace'), application, '导入 Trace')).label).toBe('导入 Trace');
 	await workbench.page.keyboard.press('Escape');
 	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
 	await expect(workbench.page.locator('.ash-agent-trace')).toHaveCount(0);
@@ -327,16 +290,12 @@ test('Execution Trace command and help use Chinese in the real Sessions window',
 			},
 		],
 	};
-	await viewer
-		.locator('input[type=file]')
-		.setInputFiles({
-			name: 'loop-zh.trace.json',
-			mimeType: 'application/json',
-			buffer: Buffer.from(JSON.stringify(trace)),
-		});
-	await expect(viewer.locator('.ash-agent-trace-tree')).toContainText(
-		'循环决策 · 继续生成 · 当前消息尚未结束任务 · 停止原因：本次生成完成 · 消息阶段：进度说明',
-	);
+	await viewer.locator('input[type=file]').setInputFiles({
+		name: 'loop-zh.trace.json',
+		mimeType: 'application/json',
+		buffer: Buffer.from(JSON.stringify(trace)),
+	});
+	await expect(viewer.locator('.ash-agent-trace-tree')).toContainText('循环决策 · 继续生成 · 当前消息尚未结束任务 · 停止原因：本次生成完成 · 消息阶段：进度说明');
 	await viewer.getByRole('textbox', { name: '筛选执行事件' }).fill('继续生成');
 	await expect(viewer.locator('.ash-agent-trace-event:visible')).toHaveCount(1);
 	await viewer.getByRole('textbox', { name: '筛选执行事件' }).fill('');
@@ -348,11 +307,7 @@ test('Execution Trace command and help use Chinese in the real Sessions window',
 	if (process.env.ASH_AGENT_TRACE_EVAL_FIXTURE) {
 		await viewer.locator('input[type=file]').setInputFiles(process.env.ASH_AGENT_TRACE_EVAL_FIXTURE);
 		await expect(viewer.getByRole('status')).toContainText('已导入');
-		await expect(
-			page
-				.locator('.ash-agent-trace-navigation-view')
-				.getByRole('button', { name: '恢复执行 Trace', exact: true }),
-		).toBeVisible();
+		await expect(page.locator('.ash-agent-trace-navigation-view').getByRole('button', { name: '恢复执行 Trace', exact: true })).toBeVisible();
 		await viewer.getByRole('textbox', { name: '筛选执行事件' }).fill('modelRequestPrepared');
 		await viewer.locator('.ash-agent-trace-event:visible').first().click();
 		await inspectInput(viewer, '输入', '已保存正文');
@@ -399,17 +354,8 @@ test(
 						approvalMode: 'bypassPermissions',
 					},
 				});
-				await expect
-					.poll(
-						async () =>
-							(
-								await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })
-							).thread.turns.at(-1)?.status,
-					)
-					.toBe('completed');
-				return (
-					await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })
-				).thread.turns.at(-1)!.turnId;
+				await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread.turns.at(-1)?.status).toBe('completed');
+				return (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread.turns.at(-1)!.turnId;
 			};
 			await shell('trace-earlier-turn', 'echo trace-earlier');
 			const historyTurn = await shell('trace-history-turn', 'echo trace-history');
@@ -417,23 +363,13 @@ test(
 			await openTrace(page);
 			const viewer = page.locator('.ash-agent-trace');
 			await expect(viewer.getByRole('status')).toContainText('Live');
-			await expect(viewer.locator('.ash-agent-trace-location')).toHaveText(
-				`Located ${threadId} / ${historyTurn}.`,
-			);
+			await expect(viewer.locator('.ash-agent-trace-location')).toHaveText(`Located ${threadId} / ${historyTurn}.`);
 			await expect(selectedEvent(viewer)).toHaveAttribute('data-turn-id', historyTurn);
 			await expect(viewer.getByRole('tabpanel')).toContainText(historyTurn);
 			await expect(viewer.locator('.ash-agent-trace-tree')).toContainText('Turn completed');
-			const before = Number(
-				(await viewer.locator('.ash-agent-trace-summary').textContent())!.match(/\/ (\d+) events/)![1],
-			);
+			const before = Number((await viewer.locator('.ash-agent-trace-summary').textContent())!.match(/\/ (\d+) events/)![1]);
 			await shell('trace-new-turn', 'echo trace-live');
-			await expect
-				.poll(async () =>
-					Number(
-						(await viewer.locator('.ash-agent-trace-summary').textContent())!.match(/\/ (\d+) events/)![1],
-					),
-				)
-				.toBeGreaterThan(before);
+			await expect.poll(async () => Number((await viewer.locator('.ash-agent-trace-summary').textContent())!.match(/\/ (\d+) events/)![1])).toBeGreaterThan(before);
 			await viewer.getByRole('textbox', { name: 'Filter execution events' }).fill('trace-live');
 			await expect(viewer.locator('.ash-agent-trace-location')).toContainText('hidden by the display filter');
 			await expect(viewer.getByRole('tabpanel')).toContainText(historyTurn);
@@ -450,19 +386,13 @@ test(
 				throw new Error('Expected child Thread');
 			}
 			await viewer.getByRole('textbox', { name: 'Filter execution events' }).fill(child.value.threadId);
-			await expect(
-				viewer
-					.getByRole('treeitem')
-					.filter({ has: page.locator(`.ash-agent-trace-thread[data-thread-id="${child.value.threadId}"]`) }),
-			).toHaveAttribute('aria-level', '2');
+			await expect(viewer.getByRole('treeitem').filter({ has: page.locator(`.ash-agent-trace-thread[data-thread-id="${child.value.threadId}"]`) })).toHaveAttribute('aria-level', '2');
 			await page.getByRole('button', { name: 'Close Execution Trace', exact: true }).click();
 			await expect(viewer).toHaveCount(0);
 			const afterCloseTurn = await shell('trace-after-close', 'echo trace-after-close');
 			await openTrace(page);
 			await expect(viewer.getByRole('status')).toContainText('Live');
-			await expect(viewer.locator('.ash-agent-trace-location')).toHaveText(
-				`Located ${threadId} / ${afterCloseTurn}.`,
-			);
+			await expect(viewer.locator('.ash-agent-trace-location')).toHaveText(`Located ${threadId} / ${afterCloseTurn}.`);
 			await expect(viewer.getByRole('tabpanel')).toContainText(afterCloseTurn);
 			await viewer.getByRole('textbox', { name: 'Filter execution events' }).fill('trace-after-close');
 			await viewer.locator('.ash-agent-trace-event:visible').first().click();
@@ -474,10 +404,7 @@ test(
 	},
 );
 
-test('Execution Trace keeps the latest import and reviews exported evidence offline', async ({
-	application,
-	workbench,
-}, testInfo) => {
+test('Execution Trace keeps the latest import and reviews exported evidence offline', async ({ application, workbench }, testInfo) => {
 	await workbench.quickaccess.runCommand('workbench.action.chat.openAgentDebugPanel');
 	const page = workbench.page;
 	const viewer = page.locator('.ash-agent-trace');
@@ -617,25 +544,13 @@ test('Execution Trace keeps the latest import and reviews exported evidence offl
 			warnings: ['one historical record omitted'],
 		},
 	};
-	await viewer
-		.locator('input[type=file]')
-		.setInputFiles({ name: 'earlier.json', mimeType: 'application/json', buffer: Buffer.from('{}') });
-	await viewer
-		.locator('input[type=file]')
-		.setInputFiles({ name: 'latest.json', mimeType: 'application/json', buffer: Buffer.from('{}') });
+	await viewer.locator('input[type=file]').setInputFiles({ name: 'earlier.json', mimeType: 'application/json', buffer: Buffer.from('{}') });
+	await viewer.locator('input[type=file]').setInputFiles({ name: 'latest.json', mimeType: 'application/json', buffer: Buffer.from('{}') });
 	await expect
-		.poll(() =>
-			page.evaluate(() =>
-				(
-					globalThis as typeof globalThis & { ashTraceImportFixture: { names(): string[] } }
-				).ashTraceImportFixture.names(),
-			),
-		)
+		.poll(() => page.evaluate(() => (globalThis as typeof globalThis & { ashTraceImportFixture: { names(): string[] } }).ashTraceImportFixture.names()))
 		.toEqual(['earlier.json', 'latest.json']);
 	await page.evaluate(() =>
-		(
-			globalThis as typeof globalThis & { ashTraceImportFixture: { finish(name: string, text: string): void } }
-		).ashTraceImportFixture.finish(
+		(globalThis as typeof globalThis & { ashTraceImportFixture: { finish(name: string, text: string): void } }).ashTraceImportFixture.finish(
 			'earlier.json',
 			JSON.stringify({ formatVersion: 3, sessionId: 'earlier', threads: [], historyPrefixes: [] }),
 		),
@@ -668,9 +583,7 @@ test('Execution Trace keeps the latest import and reviews exported evidence offl
 	if ('windows' in application) {
 		exportedPath = testInfo.outputPath('offline-review.json');
 		await application.evaluate(({ BrowserWindow }, path) => {
-			BrowserWindow.getAllWindows()[0]!.webContents.session.once('will-download', (_event, item) =>
-				item.setSavePath(path),
-			);
+			BrowserWindow.getAllWindows()[0]!.webContents.session.once('will-download', (_event, item) => item.setSavePath(path));
 		}, exportedPath);
 		await selectTraceAction(viewer, application, 'Export trace');
 		await expect
@@ -689,9 +602,7 @@ test('Execution Trace keeps the latest import and reviews exported evidence offl
 	}
 	const exported = await readFile(exportedPath);
 	expect(JSON.parse(exported.toString())).toEqual(trace);
-	await viewer
-		.locator('input[type=file]')
-		.setInputFiles({ name: 'reviewed.json', mimeType: 'application/json', buffer: exported });
+	await viewer.locator('input[type=file]').setInputFiles({ name: 'reviewed.json', mimeType: 'application/json', buffer: exported });
 	await expect(viewer.getByRole('status')).toHaveText('Imported · reviewed.json');
 	await viewer.locator('.ash-agent-trace-event[data-key="root:4"]').click();
 	await expect(viewer.getByRole('tabpanel')).toContainText('offline failure: exit 1');

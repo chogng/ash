@@ -28,11 +28,7 @@ export class ExtensionColorThemeService extends Disposable {
 				if (event.params.activationGeneration === activationGeneration) return;
 				activationGeneration = event.params.activationGeneration;
 			} else if (event.method === 'extensions/changed') {
-				if (
-					extensionManagementRevision?.instanceId === event.params.instanceId &&
-					event.params.generation <= extensionManagementRevision.generation
-				)
-					return;
+				if (extensionManagementRevision?.instanceId === event.params.instanceId && event.params.generation <= extensionManagementRevision.generation) return;
 				extensionManagementRevision = event.params;
 			} else {
 				return;
@@ -98,8 +94,7 @@ export class ExtensionColorThemeService extends Disposable {
 				loads.push(async () => {
 					const read = (path: string): Promise<Uint8Array> => {
 						this.assertNotDisposed();
-						if (extension.extensionLocation)
-							sourceFiles.add(URI.joinPath(URI.parse(extension.extensionLocation), path).toString());
+						if (extension.extensionLocation) sourceFiles.add(URI.joinPath(URI.parse(extension.extensionLocation), path).toString());
 						const key = `${extension.id}\0${path}`;
 						let bytes = resources.get(key);
 						if (!bytes) {
@@ -112,9 +107,7 @@ export class ExtensionColorThemeService extends Disposable {
 						}
 						return bytes;
 					};
-					return createExtensionWorkbenchColorTheme(
-						await loadExtensionTheme(read, extension.id, contribution, index),
-					);
+					return createExtensionWorkbenchColorTheme(await loadExtensionTheme(read, extension.id, contribution, index));
 				});
 			}
 		}

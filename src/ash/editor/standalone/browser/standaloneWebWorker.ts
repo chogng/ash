@@ -1,17 +1,7 @@
 import { Emitter, Event } from '../../../base/common/event.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	toDisposable,
-	type IDisposable,
-} from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
-import {
-	WebWorkerServer,
-	type IWebWorkerClient,
-	type WebWorkerClientPort,
-} from '../../../base/common/worker/webWorker.js';
+import { WebWorkerServer, type IWebWorkerClient, type WebWorkerClientPort } from '../../../base/common/worker/webWorker.js';
 import { type IModelService } from '../../common/services/model.js';
 import { LanguageWorkerDocumentMirror } from '../../common/services/textModelSync/textModelSync.impl.js';
 import type { IWebWorkerService } from '../../../platform/webWorker/browser/webWorkerService.js';
@@ -38,11 +28,7 @@ export interface MonacoWebWorker<T extends object> extends IDisposable {
 }
 
 /** Creates a Worker whose foreign methods can read synchronized editor models. */
-export function createWebWorker<T extends object>(
-	modelService: IModelService,
-	webWorkerService: IWebWorkerService,
-	options: StandaloneWorkerOptions,
-): MonacoWebWorker<T> {
+export function createWebWorker<T extends object>(modelService: IModelService, webWorkerService: IWebWorkerService, options: StandaloneWorkerOptions): MonacoWebWorker<T> {
 	return new MonacoWebWorkerImpl<T>(modelService, webWorkerService, options);
 }
 
@@ -64,10 +50,7 @@ export interface StandaloneWorkerScope {
 }
 
 /** Called once by the supplied Worker module to serve foreign method requests. */
-export function startStandaloneWebWorker<T extends object>(
-	scope: StandaloneWorkerScope,
-	create: (context: StandaloneWorkerContext) => T | Promise<T>,
-): IDisposable {
+export function startStandaloneWebWorker<T extends object>(scope: StandaloneWorkerScope, create: (context: StandaloneWorkerContext) => T | Promise<T>): IDisposable {
 	const store = new DisposableStore();
 	const messages = store.add(new Emitter<unknown>());
 	const listener = (event: MessageEvent<unknown>): void => messages.fire(event.data);
@@ -90,8 +73,7 @@ export function startStandaloneWebWorker<T extends object>(
 				},
 				getValue: () => document.createSnapshot().getText(),
 			})),
-		callHost: (method, ...args) =>
-			server.getChannel<Record<string, (...args: unknown[]) => Promise<unknown>>>('host')[method]!(...args),
+		callHost: (method, ...args) => server.getChannel<Record<string, (...args: unknown[]) => Promise<unknown>>>('host')[method]!(...args),
 	};
 	const instance = Promise.resolve().then(() => create(context));
 	void instance.catch(() => {});
@@ -103,16 +85,10 @@ export function startStandaloneWebWorker<T extends object>(
 						await instance;
 						return null;
 					case 'sync': {
-						if (!Array.isArray(message.snapshots))
-							throw new TypeError('Invalid standalone Worker snapshots');
+						if (!Array.isArray(message.snapshots)) throw new TypeError('Invalid standalone Worker snapshots');
 						for (const value of message.snapshots) {
 							const item = value as StandaloneWorkerSnapshot;
-							if (
-								typeof item.uri !== 'string' ||
-								typeof item.text !== 'string' ||
-								!Number.isSafeInteger(item.version) ||
-								!Number.isSafeInteger(item.lineCount)
-							) {
+							if (typeof item.uri !== 'string' || typeof item.text !== 'string' || !Number.isSafeInteger(item.version) || !Number.isSafeInteger(item.lineCount)) {
 								throw new TypeError('Invalid standalone Worker snapshot');
 							}
 							const old = mirrors.get(item.uri);
@@ -135,23 +111,12 @@ export function startStandaloneWebWorker<T extends object>(
 			handleNotification: message => {
 				switch (message.kind) {
 					case 'change': {
-						if (typeof message.uri !== 'string' || !Array.isArray(message.changes))
-							throw new TypeError('Invalid standalone Worker change');
+						if (typeof message.uri !== 'string' || !Array.isArray(message.changes)) throw new TypeError('Invalid standalone Worker change');
 						const mirror = mirrors.get(message.uri);
 						if (!mirror) return;
-						if (
-							message.previousVersion !== mirror.document.version ||
-							message.modelVersion !== mirror.document.version + 1
-						)
-							throw new Error(
-								`Standalone Worker mirror ${message.uri} is at ${mirror.document.version}, received ${String(message.previousVersion)} -> ${String(message.modelVersion)}`,
-							);
-						mirror.document.synchronize(
-							message.previousVersion as number,
-							message.modelVersion as number,
-							message.changes,
-							message.eol as '\n' | '\r\n',
-						);
+						if (message.previousVersion !== mirror.document.version || message.modelVersion !== mirror.document.version + 1)
+							throw new Error(`Standalone Worker mirror ${message.uri} is at ${mirror.document.version}, received ${String(message.previousVersion)} -> ${String(message.modelVersion)}`);
+						mirror.document.synchronize(message.previousVersion as number, message.modelVersion as number, message.changes, message.eol as '\n' | '\r\n');
 						return;
 					}
 					case 'drop': {
@@ -180,8 +145,7 @@ export function startStandaloneWebWorker<T extends object>(
 					async (...args: unknown[]) => {
 						const target = await instance;
 						const fn = (target as Record<string, unknown>)[method as string];
-						if (typeof fn !== 'function')
-							throw new ReferenceError(`Unknown standalone Worker method '${String(method)}'`);
+						if (typeof fn !== 'function') throw new ReferenceError(`Unknown standalone Worker method '${String(method)}'`);
 						return fn.apply(target, args);
 					},
 			},
@@ -211,9 +175,7 @@ class MonacoWebWorkerImpl<T extends object> extends Disposable {
 		private readonly options: StandaloneWorkerOptions,
 	) {
 		super();
-		const client = this._register(
-			webWorkerService.createWorkerClient<object>(options.worker, standaloneWorkerChannel),
-		);
+		const client = this._register(webWorkerService.createWorkerClient<object>(options.worker, standaloneWorkerChannel));
 		this.client = client;
 		client.setChannel('host', options.host ?? {});
 		this._register(client.onDidFail(() => this.clearModels()));
@@ -230,9 +192,7 @@ class MonacoWebWorkerImpl<T extends object> extends Disposable {
 					if (property === 'then') return undefined;
 					if (typeof property !== 'string') throw new TypeError('Invalid standalone Worker method');
 					return (...args: unknown[]) => {
-						return (remote as Record<string, (...args: unknown[]) => Promise<unknown>>)[property]!(
-							...args,
-						).then(result => {
+						return (remote as Record<string, (...args: unknown[]) => Promise<unknown>>)[property]!(...args).then(result => {
 							this.scheduleIdle();
 							return result;
 						});
@@ -245,15 +205,9 @@ class MonacoWebWorkerImpl<T extends object> extends Disposable {
 
 	async withSyncedResources(resources: readonly URI[]): Promise<T> {
 		const client = this.client;
-		const models = resources
-			.map(resource => this.modelService.getModel(resource))
-			.filter((model): model is ITextModel => model !== null);
+		const models = resources.map(resource => this.modelService.getModel(resource)).filter((model): model is ITextModel => model !== null);
 		for (const model of models) this.track(model, client);
-		await client.request(
-			++this.requestId,
-			{ operation: 'sync', snapshots: models.map(snapshot) },
-			new AbortController().signal,
-		);
+		await client.request(++this.requestId, { operation: 'sync', snapshots: models.map(snapshot) }, new AbortController().signal);
 		this.scheduleIdle();
 		return this.getProxy();
 	}

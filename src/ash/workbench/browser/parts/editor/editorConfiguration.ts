@@ -1,10 +1,6 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { match as globMatch } from '../../../../base/common/glob.js';
-import {
-	ConfigurationScope,
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { localize } from '../../../../nls.js';
 import type { IWorkbenchContribution } from '../../../common/contributions.js';
@@ -26,10 +22,7 @@ export const EditorEnablePreviewConfiguration = configurationRegistry.registerCo
 	schema: { type: 'boolean' },
 	defaultValue: true,
 	parse(value): boolean {
-		if (typeof value !== 'boolean')
-			throw new TypeError(
-				localize('workbench.editor.enablePreview.invalid', 'Enable Preview must be true or false.'),
-			);
+		if (typeof value !== 'boolean') throw new TypeError(localize('workbench.editor.enablePreview.invalid', 'Enable Preview must be true or false.'));
 		return value;
 	},
 	setting: {
@@ -37,10 +30,7 @@ export const EditorEnablePreviewConfiguration = configurationRegistry.registerCo
 			return localize('workbench.editor.enablePreview.title', 'Workbench › Editor: Enable Preview');
 		},
 		get description() {
-			return localize(
-				'workbench.editor.enablePreview.description',
-				'Open files in a reusable preview tab. Editing a file or choosing Keep Open keeps its tab open.',
-			);
+			return localize('workbench.editor.enablePreview.description', 'Open files in a reusable preview tab. Editing a file or choosing Keep Open keeps its tab open.');
 		},
 		valueType: 'boolean',
 	},
@@ -50,10 +40,7 @@ export const EditorOpenErrorDialogConfiguration = configurationRegistry.register
 	key: 'workbench.editor.openErrorDialog',
 	defaultValue: true,
 	parse(value): boolean {
-		if (typeof value !== 'boolean')
-			throw new TypeError(
-				localize('workbench.editor.openErrorDialog.invalid', 'File Open Error Dialog must be true or false.'),
-			);
+		if (typeof value !== 'boolean') throw new TypeError(localize('workbench.editor.openErrorDialog.invalid', 'File Open Error Dialog must be true or false.'));
 		return value;
 	},
 	setting: {
@@ -111,12 +98,10 @@ export const AutoLockGroupsConfiguration = configurationRegistry.registerConfigu
 	key: 'workbench.editor.autoLockGroups',
 	defaultValue: {},
 	parse(value): AutoLockGroups {
-		if (typeof value !== 'object' || value === null || Array.isArray(value))
-			throw new TypeError('Auto lock groups must map editor IDs to booleans');
+		if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError('Auto lock groups must map editor IDs to booleans');
 		const result: Record<string, boolean> = {};
 		for (const [editorId, enabled] of Object.entries(value)) {
-			if (!editorId || typeof enabled !== 'boolean')
-				throw new TypeError('Auto lock groups require editor IDs and boolean values');
+			if (!editorId || typeof enabled !== 'boolean') throw new TypeError('Auto lock groups require editor IDs and boolean values');
 			result[editorId] = enabled;
 		}
 		return result;
@@ -127,8 +112,7 @@ export const EditorLargeFileConfirmationConfiguration = configurationRegistry.re
 	key: 'workbench.editorLargeFileConfirmation',
 	defaultValue: 1024,
 	parse(value): number {
-		if (typeof value !== 'number' || !Number.isFinite(value) || value < 1)
-			throw new TypeError('Large file confirmation must be at least one MiB');
+		if (typeof value !== 'number' || !Number.isFinite(value) || value < 1) throw new TypeError('Large file confirmation must be at least one MiB');
 		return value;
 	},
 	setting: {
@@ -136,10 +120,7 @@ export const EditorLargeFileConfirmationConfiguration = configurationRegistry.re
 			return localize('workbench.editorLargeFileConfirmation.title', 'Large File Confirmation (MiB)');
 		},
 		get description() {
-			return localize(
-				'workbench.editorLargeFileConfirmation.description',
-				'Ask before opening a file at or above this size in MiB.',
-			);
+			return localize('workbench.editorLargeFileConfirmation.description', 'Ask before opening a file at or above this size in MiB.');
 		},
 		keywords: ['file', 'open', 'large', 'size'],
 		valueType: 'number',
@@ -149,12 +130,10 @@ export const EditorLargeFileConfirmationConfiguration = configurationRegistry.re
 });
 
 function parseEditorAssociations(value: unknown): EditorAssociations {
-	if (typeof value !== 'object' || value === null || Array.isArray(value))
-		throw new TypeError('Editor associations must map file patterns to editor IDs');
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError('Editor associations must map file patterns to editor IDs');
 	const result: Record<string, string> = {};
 	for (const [pattern, editorId] of Object.entries(value)) {
-		if (!pattern || typeof editorId !== 'string' || !editorId)
-			throw new TypeError('Editor associations require non-empty patterns and editor IDs');
+		if (!pattern || typeof editorId !== 'string' || !editorId) throw new TypeError('Editor associations require non-empty patterns and editor IDs');
 		result[pattern] = editorId;
 	}
 	return result;
@@ -174,7 +153,10 @@ export class DynamicEditorConfigurations extends Disposable implements IWorkbenc
 		binaryEditorOptions.splice(
 			1,
 			binaryEditorOptions.length - 1,
-			...registry.getEditorPanes().map(descriptor => ({ value: descriptor.id, label: descriptor.name })),
+			...registry.getEditorPanes().map(descriptor => ({
+				value: descriptor.id,
+				label: descriptor.name,
+			})),
 		);
 	}
 }
@@ -185,8 +167,7 @@ export function associatedEditorId(path: string, associations: EditorAssociation
 	const normalized = path.replaceAll('\\', '/');
 	const name = normalized.slice(normalized.lastIndexOf('/') + 1);
 	for (const [pattern, editorId] of Object.entries(associations)) {
-		if (globMatch(pattern.toLowerCase(), (pattern.includes('/') ? normalized : name).toLowerCase()))
-			matched = editorId;
+		if (globMatch(pattern.toLowerCase(), (pattern.includes('/') ? normalized : name).toLowerCase())) matched = editorId;
 	}
 	return matched;
 }

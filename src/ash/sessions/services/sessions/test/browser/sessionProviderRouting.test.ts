@@ -6,10 +6,7 @@ import { AppServerChatDebugService } from '../../../../../workbench/contrib/chat
 import { diagnosticPayload } from '../../../../../workbench/contrib/chat/common/chatDebugEvents.js';
 import { SessionsAgentSessionService } from '../../../../browser/agentHost/sessionsAgentSessionService.js';
 import { SessionConversationLinks } from '../../../../browser/agentHost/sessionConversationLinks.js';
-import {
-	buildOpenSessionLinkUri,
-	parseOpenSessionLinkUri,
-} from '../../../../../platform/agentHost/common/openSessionLink.js';
+import { buildOpenSessionLinkUri, parseOpenSessionLinkUri } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import type { ISessionsService } from '../../browser/sessionsService.js';
 import { SessionFileSystemContribution } from '../../../../contrib/providers/agentHost/browser/sessionFileSystemContribution.js';
 import type { IAgentHostFileSystemService } from '../../../../../workbench/services/agentHost/common/agentHostFileSystemService.js';
@@ -31,10 +28,7 @@ import { ILanguageModelsService } from '../../../../../workbench/contrib/chat/co
 import { IPromptsService } from '../../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { createDisconnectedRendererApi } from '../../../../../workbench/browser/rendererApi.js';
 import { SessionsProvidersService } from '../../browser/sessionsProvidersService.js';
-import {
-	SessionProviderServices,
-	SessionProviderScopeService,
-} from '../../../../browser/agentHost/sessionProviderScopeService.js';
+import { SessionProviderServices, SessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { SessionsChatService } from '../../../../browser/agentHost/sessionsChatService.js';
 import { SessionsSearchService } from '../../../../contrib/providers/agentHost/browser/sessionsSearchService.js';
 import type { ISessionsManagementService } from '../../common/sessionsManagement.js';
@@ -69,9 +63,7 @@ function fixture() {
 	const models = { onDidChangeModels: Event.None } as ILanguageModelsService;
 	const prompts = { onDidChangeSkills: Event.None, onDidChangeHooks: Event.None } as IPromptsService;
 	const execution = { onDidChange: Event.None } as IAgentExecutionSettingsService;
-	const tools = lifetime.add(
-		createTestLanguageModelToolsService({ isAvailable: true, read: async () => ({ tools: [], sourceGroups: [] }) }),
-	);
+	const tools = lifetime.add(createTestLanguageModelToolsService({ isAvailable: true, read: async () => ({ tools: [], sourceGroups: [] }) }));
 	child.registerInstance(IChatService, remoteChat);
 	child.registerInstance(ILanguageModelsService, models);
 	child.registerInstance(IPromptsService, prompts);
@@ -84,10 +76,7 @@ function fixture() {
 			label: id,
 			order: 0,
 			instantiationService,
-			currentWorkspace: () =>
-				id === 'remote'
-					? { type: 'ssh' as const, host: 'remote', root: '/workspace' }
-					: { type: 'local' as const, root: '/primary' },
+			currentWorkspace: () => (id === 'remote' ? { type: 'ssh' as const, host: 'remote', root: '/workspace' } : { type: 'local' as const, root: '/primary' }),
 		}) as unknown as ISessionsProvider;
 	const primary = provider('primary');
 	const remote = provider('remote', child);
@@ -97,15 +86,7 @@ function fixture() {
 		onDidChange: changed.event,
 		sessions: [] as ISession[],
 	} as unknown as ISessionsManagementService;
-	const scopes = lifetime.add(
-		new SessionProviderScopeService(
-			'primary',
-			new SessionProviderServices(primaryChat, models, prompts, execution, primaryHost, tools),
-			registry,
-			management,
-			root,
-		),
-	);
+	const scopes = lifetime.add(new SessionProviderScopeService('primary', new SessionProviderServices(primaryChat, models, prompts, execution, primaryHost, tools), registry, management, root));
 	return {
 		lifetime,
 		registry,
@@ -168,9 +149,7 @@ test('Chat send unwraps the source address and never sends a removed remote Sess
 		source: { sessionId: context.sessionId, threadId: context.threadId },
 	};
 	await chat.startTurn(options);
-	assert.deepEqual(calls, [
-		{ ...options, sessionId: 'same', threadId: 'thread', source: { sessionId: 'same', threadId: 'thread' } },
-	]);
+	assert.deepEqual(calls, [{ ...options, sessionId: 'same', threadId: 'thread', source: { sessionId: 'same', threadId: 'thread' } }]);
 	context.registration.dispose();
 	await assert.rejects(chat.startTurn(options), isCancellationError);
 });
@@ -213,10 +192,7 @@ test('conversation child services retain their models and route attachment coord
 	});
 	assert.deepEqual(calls, [{ sessionId: 'same', threadId: 'thread', itemId: 'item' }]);
 	context.registration.dispose();
-	await assert.rejects(
-		async () => context.scopes.getScope(context.sessionId).thread.readAttachment(source),
-		isCancellationError,
-	);
+	await assert.rejects(async () => context.scopes.getScope(context.sessionId).thread.readAttachment(source), isCancellationError);
 });
 
 test('conversation instructions unwrap Session identity and retain their host URI outside its workspace', async () => {
@@ -234,11 +210,7 @@ test('conversation instructions unwrap Session identity and retain their host UR
 	const catalog = await instructions.list(context.sessionId);
 	assert.deepEqual(calls, ['same']);
 	assert.equal(catalog[0]!.resource?.toString(), 'ash-remote://ssh+remote/home/user/instructions/review.md');
-	assert.equal(
-		scope.get(IAgentVoiceService),
-		undefined,
-		'a host without voice must mask the ambient optional service',
-	);
+	assert.equal(scope.get(IAgentVoiceService), undefined, 'a host without voice must mask the ambient optional service');
 	context.registration.dispose();
 	assert.equal(instructions.isAvailable, false);
 	await assert.rejects(instructions.list(context.sessionId), isCancellationError);
@@ -260,12 +232,7 @@ test('filename search captures the remote SessionDirectory and cancels on scope 
 			return response.p;
 		},
 	});
-	const search = new SessionsSearchService(
-		'primary',
-		() => ({ id: 'primary', folders: [] }),
-		context.scopes,
-		context.registry,
-	);
+	const search = new SessionsSearchService('primary', () => ({ id: 'primary', folders: [] }), context.scopes, context.registry);
 	const pending = search.fuzzy(
 		{
 			resource: URI.parse('ash-remote://ssh+remote/worktree'),
@@ -327,18 +294,9 @@ test('Session worktree mounts use raw authority metadata, share roots and releas
 		chats: [],
 	};
 	Object.assign(context.management, {
-		sessions: [
-			session,
-			{ ...session, sessionId: sessionIdentity('remote', 'second', 'primary'), backendSessionId: 'second' },
-		],
+		sessions: [session, { ...session, sessionId: sessionIdentity('remote', 'second', 'primary'), backendSessionId: 'second' }],
 	});
-	using contribution = new SessionFileSystemContribution(
-		'primary',
-		context.management,
-		context.registry,
-		context.scopes,
-		files,
-	);
+	using contribution = new SessionFileSystemContribution('primary', context.management, context.registry, context.scopes, files);
 	assert.equal(registrations.length, 1);
 	assert.equal(registrations[0]!.connection.api, context.remoteHost.fs);
 	assert.deepEqual(registrations[0]!.connection.directories(), [
@@ -371,12 +329,7 @@ test('content search sends SessionDirectory to the selected host and retains fro
 		},
 		cancel: async () => {},
 	});
-	const search = new SessionsSearchService(
-		'primary',
-		() => ({ id: 'primary', folders: [] }),
-		context.scopes,
-		context.registry,
-	);
+	const search = new SessionsSearchService('primary', () => ({ id: 'primary', folders: [] }), context.scopes, context.registry);
 	const id = `session:${encodeURIComponent(context.sessionId)}:${encodeURIComponent('/worktree')}`;
 	const progress: unknown[] = [];
 	const result = await search.search(
@@ -385,11 +338,7 @@ test('content search sends SessionDirectory to the selected host and retains fro
 		{ onProgress: matches => progress.push(...matches) },
 	);
 	assert.equal(result.resultCount, 1);
-	assert.ok(
-		calls.every(
-			params => (params as { sessionDirectory: { sessionId: string } }).sessionDirectory.sessionId === 'same',
-		),
-	);
+	assert.ok(calls.every(params => (params as { sessionDirectory: { sessionId: string } }).sessionDirectory.sessionId === 'same'));
 	assert.ok(calls.every(params => !('dirId' in (params as object))));
 	assert.equal((progress[0] as { dirId: string }).dirId, id);
 });
@@ -423,13 +372,8 @@ test('long provider conversation links preserve short backend coordinates and ca
 	const threadId = sessionIdentity(providerId, 'thread', 'primary');
 	assert.ok(sessionId.length > 256);
 	const address = await links.prepare(sessionId, threadId);
-	assert.deepEqual(
-		{ sessionId: address.sessionId, threadId: address.threadId },
-		{ sessionId: 'same', threadId: 'thread' },
-	);
-	const parsed = parseOpenSessionLinkUri(
-		URI.parse(buildOpenSessionLinkUri(address.sessionId, address.threadId, address.connectionAuthority).toString()),
-	);
+	assert.deepEqual({ sessionId: address.sessionId, threadId: address.threadId }, { sessionId: 'same', threadId: 'thread' });
+	const parsed = parseOpenSessionLinkUri(URI.parse(buildOpenSessionLinkUri(address.sessionId, address.threadId, address.connectionAuthority).toString()));
 	await links.open(parsed);
 	assert.deepEqual(opened, [{ sessionId, threadId }]);
 	assert.deepEqual(reads, [
@@ -571,27 +515,14 @@ test('the real trace reader projects remote identity and round-trips backend pag
 	assert.equal(first.trace.sessionId, context.sessionId);
 	assert.equal(first.trace.threads[0]!.threadId, context.threadId);
 	assert.deepEqual(first.cursors, { [context.threadId]: 1 });
-	assert.equal(
-		(first.trace.threads[0]!.events[0]!.event.origin as { parentThreadId: string }).parentThreadId,
-		sessionIdentity('remote', 'parent', 'primary'),
-	);
-	assert.equal(
-		first.trace.threads[0]!.events[0]!.event.payload,
-		payload,
-		'model evidence is never recursively rewritten',
-	);
+	assert.equal((first.trace.threads[0]!.events[0]!.event.origin as { parentThreadId: string }).parentThreadId, sessionIdentity('remote', 'parent', 'primary'));
+	assert.equal(first.trace.threads[0]!.events[0]!.event.payload, payload, 'model evidence is never recursively rewritten');
 	const second = await debug.readTrace(context.sessionId, first.cursors);
 	assert.deepEqual(second.cursors, { [context.threadId]: 2 });
 	assert.deepEqual((calls[1] as { after: unknown }).after, { thread: 1 });
 	const page = await debug.readTraceDiagnostics(context.sessionId, 0);
-	const selected = page.diagnostics.events
-		.filter(record => new Set([context.threadId]).has(record.threadId))
-		.map(diagnosticPayload);
-	assert.equal(
-		selected[0]?.payloadId,
-		'payload-1',
-		'the export selection must retain the exact remote conversation payload',
-	);
+	const selected = page.diagnostics.events.filter(record => new Set([context.threadId]).has(record.threadId)).map(diagnosticPayload);
+	assert.equal(selected[0]?.payloadId, 'payload-1', 'the export selection must retain the exact remote conversation payload');
 	assert.equal(await debug.readTracePayload(context.sessionId, 'capture-1', selected[0]!.payloadId), payload);
 	assert.deepEqual(calls.at(-1), { sessionId: 'same', captureId: 'capture-1', payloadId: 'payload-1' });
 	const graph = await debug.readTraceGraph(context.sessionId);

@@ -55,25 +55,11 @@ export class SettingsSearchQuery {
 		this.tagFilters = [...tagFilters].sort();
 		this.stableOnly = stableOnly;
 		this.languageFilter = languageFilter;
-		this.key = JSON.stringify([
-			this.text,
-			idFilter,
-			hasModifiedFilter,
-			this.tagFilters,
-			stableOnly,
-			languageFilter,
-		]);
+		this.key = JSON.stringify([this.text, idFilter, hasModifiedFilter, this.tagFilters, stableOnly, languageFilter]);
 	}
 
 	public get isEmpty(): boolean {
-		return (
-			this.terms.length === 0 &&
-			!this.idFilter &&
-			!this.hasModifiedFilter &&
-			!this.tagFilters.length &&
-			!this.stableOnly &&
-			!this.languageFilter
-		);
+		return this.terms.length === 0 && !this.idFilter && !this.hasModifiedFilter && !this.tagFilters.length && !this.stableOnly && !this.languageFilter;
 	}
 
 	public matches(target: SettingsSearchTarget): boolean {
@@ -82,21 +68,11 @@ export class SettingsSearchQuery {
 		if (this.tagFilters.some(tag => !tags.has(tag))) return false;
 		if (this.idFilter) {
 			const id = target.id?.toLocaleLowerCase();
-			const matchesId = this.idFilter.endsWith('*')
-				? id?.startsWith(this.idFilter.slice(0, -1))
-				: id === this.idFilter;
+			const matchesId = this.idFilter.endsWith('*') ? id?.startsWith(this.idFilter.slice(0, -1)) : id === this.idFilter;
 			if (!matchesId) return false;
 		}
 		if (this.terms.length === 0) return true;
-		const searchableText = [
-			target.id,
-			target.title,
-			target.description,
-			...(target.keywords ?? []),
-			...(target.tags ?? []),
-		]
-			.join(' ')
-			.toLocaleLowerCase();
+		const searchableText = [target.id, target.title, target.description, ...(target.keywords ?? []), ...(target.tags ?? [])].join(' ').toLocaleLowerCase();
 		return this.terms.every(term => searchableText.includes(term));
 	}
 }

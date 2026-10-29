@@ -74,12 +74,7 @@ export class BrowserHistoryEntriesStore extends Disposable {
 		const index = this.visits.findIndex(entry => entry.id === id);
 		const entry = this.visits[index];
 		const icon = patch.faviconHash === null ? undefined : (patch.faviconHash ?? entry?.icon);
-		if (
-			!entry ||
-			((patch.url ?? entry.url) === entry.url &&
-				(patch.title ?? entry.title) === entry.title &&
-				icon === entry.icon)
-		) {
+		if (!entry || ((patch.url ?? entry.url) === entry.url && (patch.title ?? entry.title) === entry.title && icon === entry.icon)) {
 			return false;
 		}
 		const { icon: previousIcon, ...rest } = entry;
@@ -125,8 +120,7 @@ export class BrowserHistoryEntriesStore extends Disposable {
 
 	hydrate(snapshot: ISerializedBrowserHistoryEntriesSnapshot | undefined): void {
 		// The session owner transfers this typed snapshot when its last UI lease retires.
-		this.visits =
-			this.limit > 0 ? (snapshot?.items ?? []).slice(-this.limit).map(entry => Object.freeze({ ...entry })) : [];
+		this.visits = this.limit > 0 ? (snapshot?.items ?? []).slice(-this.limit).map(entry => Object.freeze({ ...entry })) : [];
 		this.nextId = Math.max(this.nextId, ...this.visits.map(entry => entry.id + 1));
 		this.changes.fire();
 	}
@@ -216,12 +210,7 @@ export class BrowserHistoryStore extends Disposable {
 				if (!this.entries.items.some(entry => entry.id === id)) {
 					return;
 				}
-				const faviconHash =
-					patch.favicon === null
-						? null
-						: patch.favicon === undefined
-							? undefined
-							: this.favicons.register(patch.favicon);
+				const faviconHash = patch.favicon === null ? null : patch.favicon === undefined ? undefined : this.favicons.register(patch.favicon);
 				this.entries.update(id, { url: patch.url, title: patch.title, faviconHash });
 			},
 			delete: () => {

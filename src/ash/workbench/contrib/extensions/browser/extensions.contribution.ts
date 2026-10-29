@@ -1,21 +1,12 @@
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
-import {
-	IExtensionRecommendationsService,
-	IExtensionIgnoredRecommendationsService,
-} from '../../../services/extensionRecommendations/common/extensionRecommendations.js';
+import { IExtensionRecommendationsService, IExtensionIgnoredRecommendationsService } from '../../../services/extensionRecommendations/common/extensionRecommendations.js';
 import { ExtensionIgnoredRecommendationsService } from '../../../services/extensionRecommendations/common/extensionIgnoredRecommendationsService.js';
 import '../../../services/extensionRecommendations/common/workspaceExtensionsConfig.js';
 import { ExtensionRecommendationsService } from './extensionRecommendationsService.js';
-import {
-	IExtensionRecommendationNotificationService,
-	RecommendationSource,
-} from '../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
+import { IExtensionRecommendationNotificationService, RecommendationSource } from '../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { ExtensionRecommendationNotificationService } from './extensionRecommendationNotificationService.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 
 import { localize, localize2 } from '../../../../nls.js';
@@ -35,41 +26,22 @@ import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { registerExtensionManagementActions } from './extensionsActions.js';
 import { openExtensionsView, registerExtensionsViewContainer } from './extensionsViewlet.js';
 
-registerSingleton(
-	IExtensionRecommendationsService,
-	new SyncDescriptor(ExtensionRecommendationsService, [ExtensionUiTarget.IDE], true),
-);
-registerSingleton(
-	IExtensionIgnoredRecommendationsService,
-	ExtensionIgnoredRecommendationsService,
-	InstantiationType.Delayed,
-);
-registerSingleton(
-	IExtensionRecommendationNotificationService,
-	ExtensionRecommendationNotificationService,
-	InstantiationType.Delayed,
-);
+registerSingleton(IExtensionRecommendationsService, new SyncDescriptor(ExtensionRecommendationsService, [ExtensionUiTarget.IDE], true));
+registerSingleton(IExtensionIgnoredRecommendationsService, ExtensionIgnoredRecommendationsService, InstantiationType.Delayed);
+registerSingleton(IExtensionRecommendationNotificationService, ExtensionRecommendationNotificationService, InstantiationType.Delayed);
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: 'extensions.ignoreRecommendations',
 	defaultValue: false,
 	parse(value: unknown): boolean {
 		if (typeof value !== 'boolean') {
-			throw new TypeError(
-				localize(
-					{ bundle: 'ash.extensions', key: 'invalidIgnoreRecommendations' },
-					'Extension recommendation notifications must be enabled or disabled.',
-				),
-			);
+			throw new TypeError(localize({ bundle: 'ash.extensions', key: 'invalidIgnoreRecommendations' }, 'Extension recommendation notifications must be enabled or disabled.'));
 		}
 		return value;
 	},
 	setting: {
 		valueType: 'boolean',
-		title: localize(
-			{ bundle: 'ash.extensions', key: 'ignoreRecommendationsTitle' },
-			'Ignore extension recommendations',
-		),
+		title: localize({ bundle: 'ash.extensions', key: 'ignoreRecommendationsTitle' }, 'Ignore extension recommendations'),
 		description: localize(
 			{ bundle: 'ash.extensions', key: 'ignoreRecommendationsDescription' },
 			'Hide automatic extension recommendation notifications. Recommendations remain available in Extensions.',
@@ -82,21 +54,13 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	defaultValue: false,
 	parse(value: unknown): boolean {
 		if (typeof value !== 'boolean') {
-			throw new TypeError(
-				localize(
-					{ bundle: 'ash.extensions', key: 'invalidIgnoreRecommendations' },
-					'Extension recommendation notifications must be enabled or disabled.',
-				),
-			);
+			throw new TypeError(localize({ bundle: 'ash.extensions', key: 'invalidIgnoreRecommendations' }, 'Extension recommendation notifications must be enabled or disabled.'));
 		}
 		return value;
 	},
 	setting: {
 		valueType: 'boolean',
-		title: localize(
-			{ bundle: 'ash.extensions', key: 'recommendationsOnDemandTitle' },
-			'Show extension recommendations only on demand',
-		),
+		title: localize({ bundle: 'ash.extensions', key: 'recommendationsOnDemandTitle' }, 'Show extension recommendations only on demand'),
 		description: localize(
 			{ bundle: 'ash.extensions', key: 'recommendationsOnDemandDescription' },
 			'Discover recommendations in Extensions without automatic notifications when opening files or workspaces.',
@@ -122,10 +86,7 @@ registerWorkbenchContribution('workbench.contrib.extensionRecommendations', Work
 				return;
 			}
 			const workspace: string[] = [];
-			const contexts = new Map<
-				string,
-				{ context: NonNullable<(typeof snapshot.recommendations)[number]['context']>; extensions: string[] }
-			>();
+			const contexts = new Map<string, { context: NonNullable<(typeof snapshot.recommendations)[number]['context']>; extensions: string[] }>();
 			for (const item of snapshot.recommendations) {
 				if (!item.context) {
 					continue;
@@ -177,14 +138,8 @@ registerWorkbenchContribution('workbench.contrib.extensions', WorkbenchPhase.Blo
 						f1: true,
 					});
 				}
-				public override async run(
-					accessor: ServicesAccessor,
-					options?: ExtensionsOpenOptions | string,
-				): Promise<void> {
-					await openExtensionsView(
-						accessor.get(IViewsService),
-						typeof options === 'string' ? { query: options.trim() } : options,
-					);
+				public override async run(accessor: ServicesAccessor, options?: ExtensionsOpenOptions | string): Promise<void> {
+					await openExtensionsView(accessor.get(IViewsService), typeof options === 'string' ? { query: options.trim() } : options);
 				}
 			},
 		),
@@ -195,10 +150,7 @@ registerWorkbenchContribution('workbench.contrib.extensions', WorkbenchPhase.Blo
 				constructor() {
 					super({
 						id: OPEN_INSTALLED_EXTENSIONS_COMMAND_ID,
-						title: localize2(
-							{ bundle: 'ash.workbench', key: 'command.OpenPlugins' },
-							'Manage Installed Extensions',
-						),
+						title: localize2({ bundle: 'ash.workbench', key: 'command.OpenPlugins' }, 'Manage Installed Extensions'),
 						f1: true,
 					});
 				}

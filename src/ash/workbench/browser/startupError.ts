@@ -49,10 +49,7 @@ export function showStartupError(error: unknown, writeClipboard: (text: string) 
 					copyStatus.textContent = localize('workbench.startupError.copied', 'Error details copied.');
 				},
 				() => {
-					copyStatus.textContent = localize(
-						'workbench.startupError.copyFailed',
-						'Could not copy. Select the details above to copy them manually.',
-					);
+					copyStatus.textContent = localize('workbench.startupError.copyFailed', 'Could not copy. Select the details above to copy them manually.');
 				},
 			);
 		}),

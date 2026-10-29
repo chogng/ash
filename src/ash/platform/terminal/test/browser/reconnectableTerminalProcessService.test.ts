@@ -1,7 +1,4 @@
-import {
-	AppServerTerminalProcessService,
-	decodeTerminalProcessReadResult,
-} from '../../browser/appServerTerminalProcessService.js';
+import { AppServerTerminalProcessService, decodeTerminalProcessReadResult } from '../../browser/appServerTerminalProcessService.js';
 import type { IAppServerApi } from '../../../agentHost/common/appServerApi.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
 import { GeneralShellType } from '../../common/terminal.js';
@@ -36,8 +33,7 @@ suite('terminal directory recovery readiness', () => {
 				profiles: () => service.listProfiles('workspace-folder'),
 				resolve: () => service.resolveProfile({ type: 'default' }, 'workspace-folder'),
 				environment: () => service.getEnvironment(undefined, 'workspace-folder'),
-				create: () =>
-					service.create({ dirId: 'workspace-folder', rows: 24, cols: 80, profile: { type: 'default' } }),
+				create: () => service.create({ dirId: 'workspace-folder', rows: 24, cols: 80, profile: { type: 'default' } }),
 			}[operation]();
 			await Promise.resolve();
 			assert.deepEqual(supervisor.requests, []);
@@ -206,10 +202,7 @@ suite('reconnectable terminal operations after retirement', () => {
 				const reply = new DeferredPromise<void>();
 				supervisor.attachReply = reply.p;
 				const failures: unknown[] = [];
-				using service = new ReconnectableTerminalProcessService(
-					supervisor as unknown as AppServerProtocolClient,
-					{ reportError: (_message, error) => failures.push(error) },
-				);
+				using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient, { reportError: (_message, error) => failures.push(error) });
 				await service.create({ dirId: 'original-folder', rows: 24, cols: 80, profile: { type: 'default' } });
 				supervisor.emit('crashed');
 				supervisor.generation++;
@@ -220,16 +213,12 @@ suite('reconnectable terminal operations after retirement', () => {
 					read: () => service.read({ ...identity, afterSequence: 0, afterCommandSequence: 0, maxChunks: 1 }),
 					resize: () => service.resize({ ...identity, rows: 30, cols: 100 }),
 					signal: () => service.sendSignal({ ...identity, signal: 'interrupt' }),
-					autoReplies: () =>
-						service.setAutoReplies({ ...identity, rules: [{ matchText: 'Confirm?', reply: 'yes\r' }] }),
+					autoReplies: () => service.setAutoReplies({ ...identity, rules: [{ matchText: 'Confirm?', reply: 'yes\r' }] }),
 					processInfo: () => service.getProcessInfo(identity),
 					lease: () => service.getReconnectLease(identity.terminalId),
 				};
 				const request = operations[operation]();
-				const rejected =
-					operation === 'lease'
-						? request.then(value => assert.equal(value, undefined))
-						: assert.rejects(request, isCancellationError);
+				const rejected = operation === 'lease' ? request.then(value => assert.equal(value, undefined)) : assert.rejects(request, isCancellationError);
 				const closing = retirement === 'close' ? service.close(identity) : undefined;
 				if (retirement === 'dispose') service.dispose();
 				else if (retirement === 'replacement') service.prepareForServerReplacement();
@@ -237,9 +226,7 @@ suite('reconnectable terminal operations after retirement', () => {
 				await rejected;
 				await closing;
 				assert.equal(
-					supervisor.requests.some(
-						request => !['terminal/create', 'terminal/attach', 'terminal/close'].includes(request.method),
-					),
+					supervisor.requests.some(request => !['terminal/create', 'terminal/attach', 'terminal/close'].includes(request.method)),
 					false,
 				);
 				assert.ok(supervisor.requests.some(request => request.method === 'terminal/close'));
@@ -283,11 +270,7 @@ suite('reconnectable terminal operations after retirement', () => {
 				reconnectToken: FIRST_TOKEN,
 				reconnectGracePeriodMillis: 30_000,
 			};
-			const restoring = service.attach(
-				lease,
-				{ rows: 24, cols: 80 },
-				{ profileId: 'shell', title: 'Shell', isDefault: true },
-			);
+			const restoring = service.attach(lease, { rows: 24, cols: 80 }, { profileId: 'shell', title: 'Shell', isDefault: true });
 			const failure = new Error('connection closed during process information');
 			const rejected = assert.rejects(restoring, error => error === failure);
 			await waitFor(() => supervisor.requests.some(request => request.method === 'terminal/processInfo'));
@@ -319,18 +302,14 @@ suite('reconnectable terminal operations after retirement', () => {
 					await service.close(lease);
 				}
 				assert.deepEqual(
-					supervisor.requests
-						.filter(request => request.method === 'terminal/attach')
-						.map(request => (request.params as { reconnectToken: string }).reconnectToken),
+					supervisor.requests.filter(request => request.method === 'terminal/attach').map(request => (request.params as { reconnectToken: string }).reconnectToken),
 					[FIRST_TOKEN, SECOND_TOKEN],
 				);
 				assert.equal(await service.getReconnectLease(lease.terminalId), undefined);
 				assert.equal(supervisor.requests.filter(request => request.method === 'terminal/close').length, 1);
 			}
 			assert.equal(
-				supervisor.requests.some(request =>
-					['terminal/create', 'terminal/write', 'terminal/writeBinary'].includes(request.method),
-				),
+				supervisor.requests.some(request => ['terminal/create', 'terminal/write', 'terminal/writeBinary'].includes(request.method)),
 				false,
 			);
 		});
@@ -501,7 +480,12 @@ test('Remote terminal leases stay in the renderer and rotate across connection g
 	assert.equal(JSON.stringify(created).includes(FIRST_TOKEN), false);
 	assert.deepEqual(supervisor.requests[0], {
 		method: 'terminal/create',
-		params: { rows: 24, cols: 80, profile: { type: 'default' }, lifecycle: { type: 'reconnectable' } },
+		params: {
+			rows: 24,
+			cols: 80,
+			profile: { type: 'default' },
+			lifecycle: { type: 'reconnectable' },
+		},
 	});
 
 	supervisor.attachFailures = 1;
@@ -559,10 +543,7 @@ test('Remote terminal creation rejects malformed leases before exposing a termin
 	supervisor.invalidCreateLease = true;
 	using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
 
-	await assert.rejects(
-		() => service.create({ rows: 24, cols: 80, profile: { type: 'default' } }),
-		/invalid terminal reconnect lease/,
-	);
+	await assert.rejects(() => service.create({ rows: 24, cols: 80, profile: { type: 'default' } }), /invalid terminal reconnect lease/);
 	assert.equal(supervisor.requests.at(-1)?.method, 'terminal/close');
 });
 
@@ -655,22 +636,14 @@ test('window lifetime credentials accompany create and replacement attachments w
 		lifetimeToken: async () => token,
 	});
 	const created = await service.create({ rows: 24, cols: 80, profile: { type: 'default' } });
-	assert.equal(
-		(supervisor.requests.find(request => request.method === 'terminal/create')!.params as { lifetimeToken: string })
-			.lifetimeToken,
-		token,
-	);
+	assert.equal((supervisor.requests.find(request => request.method === 'terminal/create')!.params as { lifetimeToken: string }).lifetimeToken, token);
 	assert.equal('lifetimeToken' in (await service.getReconnectLease(created.terminalId))!, false);
 	token = 'c'.repeat(64);
 	supervisor.emit('crashed');
 	supervisor.generation++;
 	supervisor.emit('ready');
 	await service.getReconnectLease(created.terminalId);
-	assert.equal(
-		(supervisor.requests.find(request => request.method === 'terminal/attach')!.params as { lifetimeToken: string })
-			.lifetimeToken,
-		token,
-	);
+	assert.equal((supervisor.requests.find(request => request.method === 'terminal/attach')!.params as { lifetimeToken: string }).lifetimeToken, token);
 });
 
 test('intentional server replacement abandons old broker leases without recovery retries', async () => {
@@ -691,7 +664,13 @@ test('intentional server replacement abandons old broker leases without recovery
 	supervisor.emit('ready');
 
 	await assert.rejects(
-		() => service.read({ terminalId: 'terminal-1', afterSequence: 0, afterCommandSequence: 0, maxChunks: 1 }),
+		() =>
+			service.read({
+				terminalId: 'terminal-1',
+				afterSequence: 0,
+				afterCommandSequence: 0,
+				maxChunks: 1,
+			}),
 		/no longer recoverable/,
 	);
 	assert.equal(
@@ -735,7 +714,13 @@ test('SSH terminal service supplies profiles, connection events and decoded outp
 		nextSequence: 1,
 		outputGap: false,
 		commandEvents: [
-			{ sequence: 1, commandId: 'command-1', status: 'running', exitCode: undefined, afterOutputSequence: 1 },
+			{
+				sequence: 1,
+				commandId: 'command-1',
+				status: 'running',
+				exitCode: undefined,
+				afterOutputSequence: 1,
+			},
 		],
 		nextCommandSequence: 1,
 		commandEventGap: false,
@@ -878,9 +863,7 @@ class TestSupervisor {
 									status: 'running',
 									exitCode: null,
 									afterOutputSequence: 1,
-									...(this.cwd
-										? { cwd: '/invocation', command: 'echo 中文; \"quoted\"', isTrusted: false }
-										: {}),
+									...(this.cwd ? { cwd: '/invocation', command: 'echo 中文; \"quoted\"', isTrusted: false } : {}),
 								},
 							]
 						: [],
@@ -908,12 +891,7 @@ for (const remote of [false, true])
 		const supervisor = new TestSupervisor();
 		supervisor.operatingSystem = OperatingSystem.Windows;
 		using adapter = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
-		const service: ITerminalProcessService = remote
-			? adapter
-			: new AppServerTerminalProcessService(
-					supervisor as unknown as AppServerProtocolClient,
-					{} as IAppServerApi,
-				);
+		const service: ITerminalProcessService = remote ? adapter : new AppServerTerminalProcessService(supervisor as unknown as AppServerProtocolClient, {} as IAppServerApi);
 		for (const args of ['/d /s /c "echo two words & literal;$HOME"', '', ['', 'two words', 'literal;$HOME']]) {
 			const profile = { type: 'custom' as const, name: 'Raw', path: ['cmd.exe'], args };
 			assert.deepEqual((await service.resolveProfile(profile)).args, args);
@@ -936,11 +914,7 @@ for (const remote of [false, true])
 			});
 			if (Array.isArray(args)) {
 				args.push('later mutation');
-				assert.deepEqual((create.params as { execution: { args: string[] } }).execution.args, [
-					'',
-					'two words',
-					'literal;$HOME',
-				]);
+				assert.deepEqual((create.params as { execution: { args: string[] } }).execution.args, ['', 'two words', 'literal;$HOME']);
 			}
 			await service.close({ terminalId: 'terminal-1' });
 		}
@@ -966,12 +940,7 @@ for (const remote of [false, true])
 		supervisor.cwd = { value: 'C:\\work; with spaces', isTrusted: true, afterOutputSequence: 2 };
 		supervisor.output = Buffer.from('command output');
 		using adapter = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
-		const service: ITerminalProcessService = remote
-			? adapter
-			: new AppServerTerminalProcessService(
-					supervisor as unknown as AppServerProtocolClient,
-					{} as IAppServerApi,
-				);
+		const service: ITerminalProcessService = remote ? adapter : new AppServerTerminalProcessService(supervisor as unknown as AppServerProtocolClient, {} as IAppServerApi);
 		await service.create({
 			rows: 24,
 			cols: 80,

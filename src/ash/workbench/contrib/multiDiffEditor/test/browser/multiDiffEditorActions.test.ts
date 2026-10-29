@@ -47,11 +47,7 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		class TrackingMultiDiffEditor extends MultiDiffEditor {
 			public readonly calls: string[] = [];
 
-			constructor(
-				@IInstantiationService instantiationService: IInstantiationService,
-				@IThemeService themes: IThemeService,
-				@IStorageService storage: IStorageService,
-			) {
+			constructor(@IInstantiationService instantiationService: IInstantiationService, @IThemeService themes: IThemeService, @IStorageService storage: IStorageService) {
 				super(
 					{
 						modelService: {
@@ -130,23 +126,13 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		assert.deepEqual(menus.getMenuActions(MenuId.EditorTitle), []);
 		contexts.setContext(ActiveEditorContext.key, MULTI_DIFF_EDITOR_ID);
 		assert.deepEqual(
-			menus
-				.getMenuActions(MenuId.EditorTitle)
-				.map(([group, actions]) => [group, actions.map(action => action.id)]),
+			menus.getMenuActions(MenuId.EditorTitle).map(([group, actions]) => [group, actions.map(action => action.id)]),
 			[
-				[
-					'navigation',
-					[
-						MultiDiffGoToPreviousChangeCommandId,
-						MultiDiffGoToNextChangeCommandId,
-						MultiDiffToggleCollapseAllCommandId,
-					],
-				],
+				['navigation', [MultiDiffGoToPreviousChangeCommandId, MultiDiffGoToNextChangeCommandId, MultiDiffToggleCollapseAllCommandId]],
 				['1_diff', [MultiDiffToggleCollapseUnchangedRegionsCommandId]],
 			],
 		);
-		const { MultiDiffEditorAllCollapsed, MultiDiffEditorHideUnchangedRegions } =
-			await import('../../browser/multiDiffEditor.js');
+		const { MultiDiffEditorAllCollapsed, MultiDiffEditorHideUnchangedRegions } = await import('../../browser/multiDiffEditor.js');
 		contexts.setContext(MultiDiffEditorHideUnchangedRegions.key, true);
 		assert.equal(menus.getMenuActions(MenuId.EditorTitle)[1]![1][0]!.checked, true);
 		contexts.setContext(MultiDiffEditorHideUnchangedRegions.key, false);
@@ -178,11 +164,7 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsMessages(chinese.locale, chinese.bundles);
 		assert.deepEqual(
-			[
-				new MultiDiffCollapseAllAction(),
-				new MultiDiffExpandAllAction(),
-				new MultiDiffToggleCollapseUnchangedRegionsAction(),
-			].map(action => commandActionLabel(action.desc.title)),
+			[new MultiDiffCollapseAllAction(), new MultiDiffExpandAllAction(), new MultiDiffToggleCollapseUnchangedRegionsAction()].map(action => commandActionLabel(action.desc.title)),
 			['折叠所有差异', '展开所有差异', '切换折叠未变更区域'],
 		);
 		const chineseToggle = new MultiDiffToggleCollapseAllAction().desc;

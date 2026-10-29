@@ -7,12 +7,7 @@ import type { IServerChannel } from '../../../../base/parts/ipc/common/ipc.js';
 import type { ChatGPTRequest, ChatGPTResponse, IChatGPTTransport } from '../common/chatGPTTransport.js';
 import type { IChatGPTVerificationRuntime } from './chatGPTVerificationRuntime.js';
 
-const readPaths = new Set([
-	'/backend-api/models',
-	'/backend-api/conversations',
-	'/backend-api/pins',
-	'/backend-api/gizmos/snorlax/sidebar',
-]);
+const readPaths = new Set(['/backend-api/models', '/backend-api/conversations', '/backend-api/pins', '/backend-api/gizmos/snorlax/sidebar']);
 const writePaths = new Set([
 	'/backend-api/f/conversation/prepare',
 	'/backend-api/f/conversation',
@@ -26,22 +21,9 @@ const uploadedPath = (path: string): boolean => /^\/backend-api\/files\/[^/]+\/u
 const conversationPath = (path: string): boolean => /^\/backend-api\/conversation\/[^/]+$/u.test(path);
 const renamePath = (path: string): boolean => /^\/backend-api\/conversation\/id\/[^/]+\/rename$/u.test(path);
 const deletePath = (path: string): boolean => /^\/backend-api\/conversation\/id\/[^/]+$/u.test(path);
-const filePath = (path: string): boolean =>
-	/^\/backend-api\/(?:files\/[^/]+(?:\/download)?|conversation\/[^/]+\/(?:interpreter\/download|files\/[^/]+(?:\/download)?)|estuary\/content)$/u.test(
-		path,
-	);
-const proofHeaders = [
-	'OpenAI-Sentinel-Chat-Requirements-Token',
-	'OpenAI-Sentinel-Proof-Token',
-	'OpenAI-Sentinel-Turnstile-Token',
-];
-const requestHeaders = new Set([
-	'accept',
-	'content-type',
-	'x-conduit-token',
-	'x-ms-blob-type',
-	...proofHeaders.map(name => name.toLowerCase()),
-]);
+const filePath = (path: string): boolean => /^\/backend-api\/(?:files\/[^/]+(?:\/download)?|conversation\/[^/]+\/(?:interpreter\/download|files\/[^/]+(?:\/download)?)|estuary\/content)$/u.test(path);
+const proofHeaders = ['OpenAI-Sentinel-Chat-Requirements-Token', 'OpenAI-Sentinel-Proof-Token', 'OpenAI-Sentinel-Turnstile-Token'];
+const requestHeaders = new Set(['accept', 'content-type', 'x-conduit-token', 'x-ms-blob-type', ...proofHeaders.map(name => name.toLowerCase())]);
 interface PendingRequest {
 	readonly controller: AbortController;
 	bytesRead?: number;
@@ -186,10 +168,7 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 		}
 		signal.throwIfAborted();
 		const headersOnly = request.path.startsWith('/service/.headers/');
-		const url = new URL(
-			request.path.replace(headersOnly ? '/service/.headers' : '/service', ''),
-			'https://chatgpt.com',
-		);
+		const url = new URL(request.path.replace(headersOnly ? '/service/.headers' : '/service', ''), 'https://chatgpt.com');
 		const runtime = this.getRuntime();
 		if (headersOnly) {
 			try {
@@ -242,15 +221,16 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 			});
 			const contentType = response.headers.get('content-type') ?? '';
 			const sdp = url.pathname === '/realtime/vp' && /^text\/plain(?:;|$)/iu.test(contentType);
-			if (
-				response.status !== 204 &&
-				!sdp &&
-				!/^(?:application\/(?:[\w.-]+\+)?json|text\/event-stream)(?:;|$)/iu.test(contentType)
-			) {
+			if (response.status !== 204 && !sdp && !/^(?:application\/(?:[\w.-]+\+)?json|text\/event-stream)(?:;|$)/iu.test(contentType)) {
 				await response.body?.cancel();
 				return new Response(null, { status: response.ok ? 502 : response.status });
 			}
-			return new Response(response.body, { status: response.status, headers: { 'Content-Type': contentType } });
+			return new Response(response.body, {
+				status: response.status,
+				headers: {
+					'Content-Type': contentType,
+				},
+			});
 		} catch {
 			signal.throwIfAborted();
 			return new Response(null, { status: 502 });
@@ -331,11 +311,7 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 				throw new Error('ChatGPT credential document exceeds the limit');
 			}
 			const value: unknown = JSON.parse(bytes.subarray(0, length).toString('utf8'));
-			if (
-				!isRecord(value) ||
-				(value.auth_mode !== undefined && value.auth_mode !== 'chatgpt') ||
-				!isRecord(value.tokens)
-			) {
+			if (!isRecord(value) || (value.auth_mode !== undefined && value.auth_mode !== 'chatgpt') || !isRecord(value.tokens)) {
 				throw new Error('ChatGPT login is unavailable');
 			}
 			const token = value.tokens.access_token;
@@ -345,11 +321,7 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 				!token.trim() ||
 				token.length > 16384 ||
 				/[\r\n\0]/u.test(token) ||
-				(accountId != null &&
-					(typeof accountId !== 'string' ||
-						!accountId.trim() ||
-						accountId.length > 16384 ||
-						/[\r\n\0]/u.test(accountId)))
+				(accountId != null && (typeof accountId !== 'string' || !accountId.trim() || accountId.length > 16384 || /[\r\n\0]/u.test(accountId)))
 			) {
 				throw new Error('ChatGPT credential field is unavailable');
 			}
@@ -368,12 +340,7 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 function readRequest(value: unknown): ChatGPTRequest {
 	if (isRecord(value) && isRecord(value.body) && !(value.body instanceof VSBuffer)) {
 		const encoded = value.body.base64;
-		if (
-			Object.keys(value.body).length !== 1 ||
-			typeof encoded !== 'string' ||
-			encoded.length > Math.ceil((20 * 1024 * 1024) / 3) * 4 ||
-			/[^A-Za-z0-9+/=]/u.test(encoded)
-		) {
+		if (Object.keys(value.body).length !== 1 || typeof encoded !== 'string' || encoded.length > Math.ceil((20 * 1024 * 1024) / 3) * 4 || /[^A-Za-z0-9+/=]/u.test(encoded)) {
 			throw new TypeError('Invalid ChatGPT upload bytes');
 		}
 		const bytes = decodeBase64(encoded);
@@ -391,17 +358,8 @@ function readRequest(value: unknown): ChatGPTRequest {
 		/[\r\n\0\\#]/u.test(value.path) ||
 		!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(value.method as string) ||
 		!isRecord(value.headers) ||
-		Object.entries(value.headers).some(
-			([name, header]) =>
-				!requestHeaders.has(name.toLowerCase()) ||
-				typeof header !== 'string' ||
-				header.length > 65536 ||
-				/[\r\n\0]/u.test(header),
-		) ||
-		(value.body !== undefined &&
-			!(typeof value.body === 'string'
-				? Buffer.byteLength(value.body) <= 2 * 1024 * 1024
-				: value.body instanceof VSBuffer && value.body.byteLength <= 20 * 1024 * 1024))
+		Object.entries(value.headers).some(([name, header]) => !requestHeaders.has(name.toLowerCase()) || typeof header !== 'string' || header.length > 65536 || /[\r\n\0]/u.test(header)) ||
+		(value.body !== undefined && !(typeof value.body === 'string' ? Buffer.byteLength(value.body) <= 2 * 1024 * 1024 : value.body instanceof VSBuffer && value.body.byteLength <= 20 * 1024 * 1024))
 	) {
 		throw new TypeError('Invalid ChatGPT request');
 	}
@@ -425,9 +383,7 @@ function readRequest(value: unknown): ChatGPTRequest {
 		value.body instanceof VSBuffer &&
 		value.body.byteLength <= 128 * 1024 &&
 		Object.keys(value.headers).length === 1 &&
-		/^multipart\/form-data; boundary=[\w-]{1,100}$/u.test(
-			new Headers(value.headers as Record<string, string>).get('Content-Type') ?? '',
-		)
+		/^multipart\/form-data; boundary=[\w-]{1,100}$/u.test(new Headers(value.headers as Record<string, string>).get('Content-Type') ?? '')
 	) {
 		return value as unknown as ChatGPTRequest;
 	}
@@ -435,12 +391,7 @@ function readRequest(value: unknown): ChatGPTRequest {
 		throw new TypeError('Invalid ChatGPT upload endpoint');
 	}
 	const headersOnly = value.path.startsWith('/service/.headers/');
-	if (
-		value.path.startsWith('/service/.resource?') &&
-		value.method === 'GET' &&
-		value.body === undefined &&
-		Object.keys(value.headers).length === 0
-	) {
+	if (value.path.startsWith('/service/.resource?') && value.method === 'GET' && value.body === undefined && Object.keys(value.headers).length === 0) {
 		const url = new URL(value.path, 'https://chatgpt.com');
 		if (url.searchParams.size !== 1 || !url.searchParams.has('url')) {
 			throw new TypeError('Invalid ChatGPT resource request');
@@ -453,10 +404,7 @@ function readRequest(value: unknown): ChatGPTRequest {
 		url.origin === 'https://chatgpt.com' &&
 		!/%(?:2f|5c|00|25)/iu.test(url.pathname) &&
 		(headersOnly
-			? value.method === 'POST' &&
-				url.pathname === '/backend-api/f/conversation' &&
-				!url.search &&
-				value.body === undefined
+			? value.method === 'POST' && url.pathname === '/backend-api/f/conversation' && !url.search && value.body === undefined
 			: value.method === 'GET'
 				? readPaths.has(url.pathname) || conversationPath(url.pathname)
 				: !url.search &&
@@ -484,14 +432,9 @@ function readRequest(value: unknown): ChatGPTRequest {
 		const valid =
 			value.method === 'PATCH'
 				? Object.keys(body).length === 1 &&
-					(typeof body.is_starred === 'boolean' ||
-						body.is_archived === true ||
-						(typeof body.gizmo_id === 'string' && /^g-p-[A-Za-z0-9_-]{1,240}$/u.test(body.gizmo_id)))
+					(typeof body.is_starred === 'boolean' || body.is_archived === true || (typeof body.gizmo_id === 'string' && /^g-p-[A-Za-z0-9_-]{1,240}$/u.test(body.gizmo_id)))
 				: renamePath(url.pathname)
-					? Object.keys(body).length === 1 &&
-						typeof body.title === 'string' &&
-						!!body.title.trim() &&
-						body.title.length <= 256
+					? Object.keys(body).length === 1 && typeof body.title === 'string' && !!body.title.trim() && body.title.length <= 256
 					: Object.keys(body).length === 3 &&
 						body.is_anonymous === true &&
 						typeof body.conversation_id === 'string' &&
@@ -515,21 +458,11 @@ function readUploadUrl(value: string): URL {
 
 function readResourceUrl(value: string): URL {
 	const url = new URL(value, 'https://chatgpt.com');
-	if (
-		value.length > 8192 ||
-		url.protocol !== 'https:' ||
-		url.port ||
-		url.username ||
-		url.password ||
-		url.hash ||
-		/[\r\n\0\\]|%(?:2f|5c|00|25)/iu.test(url.pathname)
-	) {
+	if (value.length > 8192 || url.protocol !== 'https:' || url.port || url.username || url.password || url.hash || /[\r\n\0\\]|%(?:2f|5c|00|25)/iu.test(url.pathname)) {
 		throw new TypeError('Invalid ChatGPT resource URL');
 	}
 	const webAsset = url.origin === 'https://chatgpt.com' && filePath(url.pathname);
-	const signedAsset = ['oaiusercontent.com', 'blob.core.windows.net'].some(domain =>
-		url.hostname.endsWith('.' + domain),
-	);
+	const signedAsset = ['oaiusercontent.com', 'blob.core.windows.net'].some(domain => url.hostname.endsWith('.' + domain));
 	if (!webAsset && !signedAsset) {
 		throw new TypeError('Invalid ChatGPT resource origin');
 	}

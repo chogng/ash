@@ -3,20 +3,12 @@ import { KeyChord, KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { localize2 } from '../../../../nls.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
-import {
-	EditorAction,
-	registerEditorAction,
-	registerEditorContribution,
-	type ServicesAccessor,
-} from '../../../browser/editorFeatureRegistration.js';
+import { EditorAction, registerEditorAction, registerEditorContribution, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { IVersionedEditorWorkerClient } from '../../../browser/services/editorWorkerService.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { formatEditor, formatEditorOnType, FormattingKind, FormattingMode } from './format.js';
-import {
-	AccessibilitySignal,
-	IAccessibilitySignalService,
-} from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
+import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
@@ -79,8 +71,7 @@ export class FormatOnType extends Disposable {
 
 registerEditorContribution({
 	id: FormatOnType.ID,
-	install: context =>
-		context.instantiationService.createInstance(FormatOnType, context.editor, context.onLanguageError),
+	install: context => context.instantiationService.createInstance(FormatOnType, context.editor, context.onLanguageError),
 });
 
 class FormatDocumentAction extends EditorAction {
@@ -89,10 +80,7 @@ class FormatDocumentAction extends EditorAction {
 			id: 'editor.action.formatDocument',
 			contextMenuOpts: { group: '1_modification', order: 1.3 },
 			label: localize2('formatDocument.label', 'Format Document'),
-			precondition: ContextKeyExpr.and(
-				EditorContextKeys.writable,
-				EditorContextKeys.hasDocumentFormattingProvider.isEqualTo(true),
-			),
+			precondition: ContextKeyExpr.and(EditorContextKeys.writable, EditorContextKeys.hasDocumentFormattingProvider.isEqualTo(true)),
 			kbOpts: {
 				kbExpr: EditorContextKeys.editorTextFocus.isEqualTo(true),
 				primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyI,
@@ -106,12 +94,7 @@ class FormatDocumentAction extends EditorAction {
 			return;
 		}
 		const signals = accessor.get(IAccessibilitySignalService);
-		const applied = await formatEditor(
-			editor,
-			accessor.get(ILanguageFeaturesService),
-			accessor.get(IVersionedEditorWorkerClient),
-			FormattingKind.File,
-		);
+		const applied = await formatEditor(editor, accessor.get(ILanguageFeaturesService), accessor.get(IVersionedEditorWorkerClient), FormattingKind.File);
 		if (applied) {
 			void signals.playSignal(AccessibilitySignal.format);
 		}
@@ -130,10 +113,7 @@ class FormatSelectionAction extends EditorAction {
 				when: EditorContextKeys.hasNonEmptySelection.isEqualTo(true),
 			},
 			label: localize2('formatSelection.label', 'Format Selection'),
-			precondition: ContextKeyExpr.and(
-				EditorContextKeys.writable,
-				EditorContextKeys.hasDocumentSelectionFormattingProvider.isEqualTo(true),
-			),
+			precondition: ContextKeyExpr.and(EditorContextKeys.writable, EditorContextKeys.hasDocumentSelectionFormattingProvider.isEqualTo(true)),
 			kbOpts: {
 				kbExpr: EditorContextKeys.editorTextFocus.isEqualTo(true),
 				primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KeyK, KeyMod.CtrlCmd | KeyCode.KeyF),
@@ -147,12 +127,7 @@ class FormatSelectionAction extends EditorAction {
 			return;
 		}
 		const signals = accessor.get(IAccessibilitySignalService);
-		const applied = await formatEditor(
-			editor,
-			accessor.get(ILanguageFeaturesService),
-			accessor.get(IVersionedEditorWorkerClient),
-			FormattingKind.Selection,
-		);
+		const applied = await formatEditor(editor, accessor.get(ILanguageFeaturesService), accessor.get(IVersionedEditorWorkerClient), FormattingKind.Selection);
 		if (applied) {
 			void signals.playSignal(AccessibilitySignal.format);
 		}
@@ -169,15 +144,7 @@ registerEditorContribution({
 		}
 		context.register(
 			context.editor.onKeyDown(event => {
-				if (
-					event.browserEvent.defaultPrevented ||
-					event.isComposing ||
-					event.altKey ||
-					(!event.ctrlKey && !event.metaKey) ||
-					!event.shiftKey ||
-					event.key.toLowerCase() !== 'i'
-				)
-					return;
+				if (event.browserEvent.defaultPrevented || event.isComposing || event.altKey || (!event.ctrlKey && !event.metaKey) || !event.shiftKey || event.key.toLowerCase() !== 'i') return;
 				const action = context.editor.getAction(formatDocumentAction.id);
 				if (!action?.isSupported()) return;
 				event.stop();
@@ -189,13 +156,7 @@ registerEditorContribution({
 		}
 		context.register(
 			context.registerBeforeSave(async () => {
-				await formatEditor(
-					context.editor,
-					context.languageFeaturesService,
-					context.editorWorker,
-					FormattingKind.File,
-					FormattingMode.Silent,
-				).catch(context.onLanguageError);
+				await formatEditor(context.editor, context.languageFeaturesService, context.editorWorker, FormattingKind.File, FormattingMode.Silent).catch(context.onLanguageError);
 			}),
 		);
 	},

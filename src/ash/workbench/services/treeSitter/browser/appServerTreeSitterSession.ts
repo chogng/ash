@@ -1,9 +1,4 @@
-import type {
-	TreeSitterSyntaxSession,
-	TreeSitterFacts,
-	TreeSitterSyntaxResult,
-	TreeSitterTokenizationMeasure,
-} from '../../../../editor/common/services/treeSitter/treeSitterLibraryService.js';
+import type { TreeSitterSyntaxSession, TreeSitterFacts, TreeSitterSyntaxResult, TreeSitterTokenizationMeasure } from '../../../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import { syntaxLanguageForEditorLanguage } from '../../../../platform/syntax/common/syntaxApi.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { CancellationError } from '../../../../base/common/errors.js';
@@ -12,21 +7,10 @@ import { StringEdit, StringReplacement } from '../../../../editor/common/core/ed
 import { OffsetRange } from '../../../../editor/common/core/ranges/offsetRange.js';
 import { TextModelChangeReason } from '../../../../editor/common/core/textChange.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
-import type {
-	ISyntaxApi,
-	SyntaxQueryResult,
-	SyntaxRange,
-	SyntaxFactsDelta,
-	SyntaxFactsSplice,
-	SyntaxPosition,
-} from '../../../../platform/syntax/common/syntaxApi.js';
+import type { ISyntaxApi, SyntaxQueryResult, SyntaxRange, SyntaxFactsDelta, SyntaxFactsSplice, SyntaxPosition } from '../../../../platform/syntax/common/syntaxApi.js';
 
 /** The editor owns text; this handle owns only one connection-scoped Rust analysis document. */
-export function createAppServerTreeSitterSession(
-	api: ISyntaxApi,
-	model: TextModel,
-	documentId: string,
-): TreeSitterSyntaxSession {
+export function createAppServerTreeSitterSession(api: ISyntaxApi, model: TextModel, documentId: string): TreeSitterSyntaxSession {
 	const generation = api.generation;
 	let tabSize = model.getOptions().tabSize;
 	let length = model.getValueLength();
@@ -81,9 +65,7 @@ export function createAppServerTreeSitterSession(
 			endOffset: edit.replaceRange.endExclusive,
 			text: edit.newText,
 		}));
-		void send(() =>
-			api.update({ documentId, previousRevision: batch.previousRevision, revision: batch.revision, edits }),
-		).catch(error => {
+		void send(() => api.update({ documentId, previousRevision: batch.previousRevision, revision: batch.revision, edits })).catch(error => {
 			failure = error;
 		});
 	}
@@ -99,15 +81,7 @@ export function createAppServerTreeSitterSession(
 			if (disposed) return;
 			const edit = change.isEolChange
 				? StringEdit.replace(new OffsetRange(0, length), model.getValue())
-				: new StringEdit(
-						change.changes.map(
-							edit =>
-								new StringReplacement(
-									OffsetRange.ofStartAndLength(edit.rangeOffset, edit.rangeLength),
-									edit.text,
-								),
-						),
-					);
+				: new StringEdit(change.changes.map(edit => new StringReplacement(OffsetRange.ofStartAndLength(edit.rangeOffset, edit.rangeLength), edit.text)));
 			const combined = pending ? pending.edit.compose(edit) : edit;
 			// Composition uses old-document UTF-16 offsets, including edits inside
 			// an earlier insertion. Keep batches within the transport's edit limit.
@@ -120,11 +94,7 @@ export function createAppServerTreeSitterSession(
 			length = model.getValueLength();
 			// History already reports a complete replay. Send it while synchronous
 			// editor listeners run, so parsing can overlap their work as before.
-			if (
-				change.reason === TextModelChangeReason.Undo ||
-				change.reason === TextModelChangeReason.Redo ||
-				change.reason === TextModelChangeReason.HistoryCancellation
-			) {
+			if (change.reason === TextModelChangeReason.Undo || change.reason === TextModelChangeReason.Redo || change.reason === TextModelChangeReason.HistoryCancellation) {
 				flush();
 				return;
 			}
@@ -149,10 +119,7 @@ export function createAppServerTreeSitterSession(
 			if (operation === 'selection') {
 				const { ranges } = data as { ranges: readonly IRange[] };
 				const result = await raceCancellationError(
-					send(
-						() => api.selectionRanges({ documentId, revision, ranges: ranges.map(toSyntaxRange) }),
-						signal,
-					),
+					send(() => api.selectionRanges({ documentId, revision, ranges: ranges.map(toSyntaxRange) }), signal),
 					signal,
 					'Syntax selection cancelled',
 				);
@@ -225,14 +192,14 @@ export function createAppServerTreeSitterSession(
 	};
 }
 
-function editorResult(
-	result: SyntaxQueryResult,
-	operation: 'highlight' | 'facts' | 'preview',
-	lineCount: number,
-): TreeSitterSyntaxResult {
+function editorResult(result: SyntaxQueryResult, operation: 'highlight' | 'facts' | 'preview', lineCount: number): TreeSitterSyntaxResult {
 	const timing = { incremental: result.incremental, completed: true, lines: lineCount };
 	const measures: TreeSitterTokenizationMeasure[] = [
-		{ ...timing, operation: operation === 'facts' ? 'facts' : 'query', duration: result.queryMs },
+		{
+			...timing,
+			operation: operation === 'facts' ? 'facts' : 'query',
+			duration: result.queryMs,
+		},
 	];
 	if (result.parseMs > 0) measures.unshift({ ...timing, operation: 'parse', duration: result.parseMs });
 	const common = { revision: result.revision, measures };
@@ -269,12 +236,7 @@ function editorResult(
 }
 
 function fromSyntaxRange(range: SyntaxRange): Range {
-	return new Range(
-		range.start.lineIndex + 1,
-		range.start.columnIndex + 1,
-		range.end.lineIndex + 1,
-		range.end.columnIndex + 1,
-	);
+	return new Range(range.start.lineIndex + 1, range.start.columnIndex + 1, range.end.lineIndex + 1, range.end.columnIndex + 1);
 }
 function toSyntaxRange(range: IRange): SyntaxRange {
 	return {
@@ -283,10 +245,7 @@ function toSyntaxRange(range: IRange): SyntaxRange {
 	};
 }
 
-function applyFactsDelta(
-	delta: SyntaxFactsDelta,
-	base: { revision: number; value: TreeSitterFacts } | undefined,
-): TreeSitterFacts {
+function applyFactsDelta(delta: SyntaxFactsDelta, base: { revision: number; value: TreeSitterFacts } | undefined): TreeSitterFacts {
 	if (delta.baseRevision !== null && delta.baseRevision !== base?.revision) {
 		throw new Error('Syntax facts base revision mismatch');
 	}
@@ -298,24 +257,12 @@ function applyFactsDelta(
 		const shift = (range: IRange): IRange => {
 			// Most nodes are on unrelated lines. Preserve their objects, especially
 			// during a name edit that moves no following rows.
-			if (
-				range.endLineNumber - 1 < edit.range.start.lineIndex ||
-				(edit.range.end.lineIndex === edit.end.lineIndex &&
-					range.startLineNumber - 1 > edit.range.end.lineIndex)
-			) {
+			if (range.endLineNumber - 1 < edit.range.start.lineIndex || (edit.range.end.lineIndex === edit.end.lineIndex && range.startLineNumber - 1 > edit.range.end.lineIndex)) {
 				return range;
 			}
-			const start = shiftPosition(
-				{ lineIndex: range.startLineNumber - 1, columnIndex: range.startColumn - 1 },
-				edit,
-			);
+			const start = shiftPosition({ lineIndex: range.startLineNumber - 1, columnIndex: range.startColumn - 1 }, edit);
 			const end = shiftPosition({ lineIndex: range.endLineNumber - 1, columnIndex: range.endColumn - 1 }, edit);
-			if (
-				start.lineNumber === range.startLineNumber &&
-				start.column === range.startColumn &&
-				end.lineNumber === range.endLineNumber &&
-				end.column === range.endColumn
-			) {
+			if (start.lineNumber === range.startLineNumber && start.column === range.startColumn && end.lineNumber === range.endLineNumber && end.column === range.endColumn) {
 				return range;
 			}
 			return Range.fromPositions(start, end);
@@ -323,14 +270,9 @@ function applyFactsDelta(
 		symbols = symbols.map(symbol => {
 			const range = shift(symbol.range),
 				selectionRange = shift(symbol.selectionRange);
-			return range === symbol.range && selectionRange === symbol.selectionRange
-				? symbol
-				: { ...symbol, range, selectionRange };
+			return range === symbol.range && selectionRange === symbol.selectionRange ? symbol : { ...symbol, range, selectionRange };
 		});
-		if (
-			edit.range.start.lineIndex !== edit.range.end.lineIndex ||
-			edit.range.end.lineIndex !== edit.end.lineIndex
-		) {
+		if (edit.range.start.lineIndex !== edit.range.end.lineIndex || edit.range.end.lineIndex !== edit.end.lineIndex) {
 			folds = folds.map(fold => ({
 				...fold,
 				startLineIndex: shiftPosition({ lineIndex: fold.startLineIndex, columnIndex: 0 }, edit).lineNumber - 1,
@@ -368,23 +310,15 @@ function spliceFacts<T>(previous: readonly T[], change: SyntaxFactsSplice<T>): r
 	if (change.deleteCount === 0 && change.items.length === 0) return previous;
 	return [...previous.slice(0, change.start), ...change.items, ...previous.slice(change.start + change.deleteCount)];
 }
-function shiftPosition(
-	point: SyntaxPosition,
-	edit: SyntaxFactsDelta['edits'][number],
-): { lineNumber: number; column: number } {
-	const before = (left: SyntaxPosition, right: SyntaxPosition): boolean =>
-		left.lineIndex < right.lineIndex ||
-		(left.lineIndex === right.lineIndex && left.columnIndex < right.columnIndex);
+function shiftPosition(point: SyntaxPosition, edit: SyntaxFactsDelta['edits'][number]): { lineNumber: number; column: number } {
+	const before = (left: SyntaxPosition, right: SyntaxPosition): boolean => left.lineIndex < right.lineIndex || (left.lineIndex === right.lineIndex && left.columnIndex < right.columnIndex);
 	let shifted = point;
 	if (!before(point, edit.range.start)) {
 		shifted = before(point, edit.range.end)
 			? edit.range.start
 			: {
 					lineIndex: point.lineIndex - edit.range.end.lineIndex + edit.end.lineIndex,
-					columnIndex:
-						point.lineIndex === edit.range.end.lineIndex
-							? point.columnIndex - edit.range.end.columnIndex + edit.end.columnIndex
-							: point.columnIndex,
+					columnIndex: point.lineIndex === edit.range.end.lineIndex ? point.columnIndex - edit.range.end.columnIndex + edit.end.columnIndex : point.columnIndex,
 				};
 	}
 	return { lineNumber: shifted.lineIndex + 1, column: shifted.columnIndex + 1 };

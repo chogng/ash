@@ -1,22 +1,11 @@
 import { resolveSemanticTokenStyling } from '../services/semanticTokensProviderStyling.js';
-import {
-	type ResolvedSemanticToken,
-	type SemanticTokenLine,
-	type SemanticTokenModelSource,
-	type SemanticTokenSource,
-	type LanguageToken,
-	type LanguageTokenResult,
-} from './languageTokens.js';
+import { type ResolvedSemanticToken, type SemanticTokenLine, type SemanticTokenModelSource, type SemanticTokenSource, type LanguageToken, type LanguageTokenResult } from './languageTokens.js';
 import { arraysEqual, pushMany } from '../../../base/common/arrays.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, combinedDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { type VersionedLanguageResult } from '../model/languageRequestCoordinator.js';
 import { LanguageResultStoreChangeReason, type VersionedLanguageResultStore } from '../model/languageResultStore.js';
-import {
-	getLanguageTokenResultDelta,
-	type LanguageTokenResultDelta,
-	type LanguageTokenResultSplice,
-} from '../services/semanticTokensDto.js';
+import { getLanguageTokenResultDelta, type LanguageTokenResultDelta, type LanguageTokenResultSplice } from '../services/semanticTokensDto.js';
 import { Position } from '../core/position.js';
 import { Range } from '../core/range.js';
 import { type TextModelChange } from '../core/textChange.js';
@@ -164,11 +153,7 @@ export class LanguageTokenLineIndex extends Disposable {
 		return this.state.statesByLine.get(lineIndex)?.line.tokens ?? EMPTY_TOKENS;
 	}
 
-	private acceptStoreChange(
-		reason: LanguageResultStoreChangeReason,
-		modelVersion: number,
-		result: VersionedLanguageResult<LanguageTokenResult> | undefined,
-	): void {
+	private acceptStoreChange(reason: LanguageResultStoreChangeReason, modelVersion: number, result: VersionedLanguageResult<LanguageTokenResult> | undefined): void {
 		if (!result) {
 			this.invalidatedBase = undefined;
 			this.indexedModelVersion = modelVersion;
@@ -179,8 +164,7 @@ export class LanguageTokenLineIndex extends Disposable {
 		}
 		const delta = getLanguageTokenResultDelta(result.value);
 		const base = delta ? this.findBase(delta.baseRequestId) : undefined;
-		const update =
-			delta && base ? applyDelta(base.state, result.value.tokens, delta) : fullUpdate(result.value.tokens);
+		const update = delta && base ? applyDelta(base.state, result.value.tokens, delta) : fullUpdate(result.value.tokens);
 		this.invalidatedBase = undefined;
 		this.indexedModelVersion = result.modelVersion;
 		this.indexedRequestId = result.requestId;
@@ -189,8 +173,7 @@ export class LanguageTokenLineIndex extends Disposable {
 	}
 
 	private acceptModelChange(modelVersion: number, change: TextModelChange): void {
-		if (this.indexedRequestId !== undefined)
-			this.invalidatedBase = Object.freeze({ requestId: this.indexedRequestId, state: this.state });
+		if (this.indexedRequestId !== undefined) this.invalidatedBase = Object.freeze({ requestId: this.indexedRequestId, state: this.state });
 		const update = preserveUnaffectedLines(this.state, change);
 		this.indexedModelVersion = modelVersion;
 		this.indexedRequestId = undefined;
@@ -223,23 +206,13 @@ function fullUpdate(tokens: readonly LanguageToken[]): LanguageTokenIndexUpdate 
 }
 
 function preserveUnaffectedLines(state: LanguageTokenIndexState, change: TextModelChange): LanguageTokenIndexUpdate {
-	if (state.tokenCount === 0 || change.changes.length === 0)
-		return Object.freeze({ state, rebuiltLineCount: 0, reusedLineCount: state.lines.length });
-	const changes = [...change.changes].sort((left, right) =>
-		Position.compare(left.range.getStartPosition(), right.range.getStartPosition()),
-	);
+	if (state.tokenCount === 0 || change.changes.length === 0) return Object.freeze({ state, rebuiltLineCount: 0, reusedLineCount: state.lines.length });
+	const changes = [...change.changes].sort((left, right) => Position.compare(left.range.getStartPosition(), right.range.getStartPosition()));
 	const lineStates: LanguageTokenLineState[] = [];
 	const ranges: LanguageTokenLineItemRange[] = [];
 	let tokenCount = 0;
 	for (const lineState of state.lineStates) {
-		if (
-			changes.some(
-				entry =>
-					entry.range.startLineNumber - 1 <= lineState.lineIndex &&
-					lineState.lineIndex <= entry.range.endLineNumber - 1,
-			)
-		)
-			continue;
+		if (changes.some(entry => entry.range.startLineNumber - 1 <= lineState.lineIndex && lineState.lineIndex <= entry.range.endLineNumber - 1)) continue;
 		let lineDelta = 0;
 		for (const entry of changes) {
 			if (entry.range.endLineNumber - 1 >= lineState.lineIndex) break;
@@ -265,11 +238,7 @@ function countLineBreaks(text: string): number {
 	return count;
 }
 
-function applyDelta(
-	base: LanguageTokenIndexState,
-	tokens: readonly LanguageToken[],
-	delta: LanguageTokenResultDelta,
-): LanguageTokenIndexUpdate {
+function applyDelta(base: LanguageTokenIndexState, tokens: readonly LanguageToken[], delta: LanguageTokenResultDelta): LanguageTokenIndexUpdate {
 	const segments = createUnchangedSegments(base.tokenCount, tokens.length, delta.splices);
 	if (!segments) return fullUpdate(tokens);
 	const candidates = createReusedLineCandidates(base, tokens, segments);
@@ -298,11 +267,7 @@ function applyDelta(
 	});
 }
 
-function createUnchangedSegments(
-	baseTokenCount: number,
-	resultTokenCount: number,
-	splices: readonly LanguageTokenResultSplice[],
-): readonly UnchangedItemSegment[] | undefined {
+function createUnchangedSegments(baseTokenCount: number, resultTokenCount: number, splices: readonly LanguageTokenResultSplice[]): readonly UnchangedItemSegment[] | undefined {
 	const segments: UnchangedItemSegment[] = [];
 	let baseItemIndex = 0;
 	let resultItemIndex = 0;
@@ -349,40 +314,22 @@ function createUnchangedSegments(
 	return Object.freeze(segments);
 }
 
-function createReusedLineCandidates(
-	base: LanguageTokenIndexState,
-	tokens: readonly LanguageToken[],
-	segments: readonly UnchangedItemSegment[],
-): readonly ReusedLineCandidate[] {
+function createReusedLineCandidates(base: LanguageTokenIndexState, tokens: readonly LanguageToken[], segments: readonly UnchangedItemSegment[]): readonly ReusedLineCandidate[] {
 	const candidates: ReusedLineCandidate[] = [];
 	let segmentIndex = 0;
 	for (let lineIndex = 0; lineIndex < base.lineStates.length; lineIndex += 1) {
 		const line = base.lineStates[lineIndex]!;
 		const range = base.lineItemRanges[lineIndex]!;
-		while (segmentIndex < segments.length && segments[segmentIndex]!.baseEndItemIndex <= range.startItemIndex)
-			segmentIndex += 1;
+		while (segmentIndex < segments.length && segments[segmentIndex]!.baseEndItemIndex <= range.startItemIndex) segmentIndex += 1;
 		const segment = segments[segmentIndex];
-		if (
-			!segment ||
-			range.startItemIndex < segment.baseStartItemIndex ||
-			range.endItemIndex > segment.baseEndItemIndex
-		)
-			continue;
+		if (!segment || range.startItemIndex < segment.baseStartItemIndex || range.endItemIndex > segment.baseEndItemIndex) continue;
 		const resultStartItemIndex = segment.resultStartItemIndex + range.startItemIndex - segment.baseStartItemIndex;
 		const resultEndItemIndex = resultStartItemIndex + range.endItemIndex - range.startItemIndex;
 		const shiftedLineIndex = line.lineIndex + segment.lineDelta;
-		if (
-			shiftedLineIndex < 0 ||
-			!lineMatchesResult(line.payload, shiftedLineIndex, tokens, resultStartItemIndex, resultEndItemIndex)
-		)
-			continue;
+		if (shiftedLineIndex < 0 || !lineMatchesResult(line.payload, shiftedLineIndex, tokens, resultStartItemIndex, resultEndItemIndex)) continue;
 		const previousToken = tokens[resultStartItemIndex - 1];
 		const nextToken = tokens[resultEndItemIndex];
-		if (
-			previousToken?.range.startLineNumber - 1 === shiftedLineIndex ||
-			nextToken?.range.startLineNumber - 1 === shiftedLineIndex
-		)
-			continue;
+		if (previousToken?.range.startLineNumber - 1 === shiftedLineIndex || nextToken?.range.startLineNumber - 1 === shiftedLineIndex) continue;
 		candidates.push(
 			Object.freeze({
 				state: segment.lineDelta === 0 ? line : createLineState(shiftedLineIndex, line.payload),
@@ -443,10 +390,7 @@ function createLineState(lineIndex: number, payload: LanguageTokenLinePayload): 
 			materializedTokens ??= Object.freeze(
 				payload.tokens.map(token =>
 					Object.freeze({
-						range: Range.fromPositions(
-							new Position(lineIndex + 1, token.startColumn + 1),
-							new Position(lineIndex + 1, token.endColumn + 1),
-						),
+						range: Range.fromPositions(new Position(lineIndex + 1, token.startColumn + 1), new Position(lineIndex + 1, token.endColumn + 1)),
 						tokenType: token.tokenType,
 						modifiers: token.modifiers,
 						...(token.languageId === undefined ? {} : { languageId: token.languageId }),
@@ -461,11 +405,7 @@ function createLineState(lineIndex: number, payload: LanguageTokenLinePayload): 
 	return Object.freeze({ lineIndex, payload, line });
 }
 
-function createState(
-	tokenCount: number,
-	lineStates: readonly LanguageTokenLineState[],
-	ranges: readonly LanguageTokenLineItemRange[],
-): LanguageTokenIndexState {
+function createState(tokenCount: number, lineStates: readonly LanguageTokenLineState[], ranges: readonly LanguageTokenLineItemRange[]): LanguageTokenIndexState {
 	const frozenStates = Object.freeze([...lineStates]);
 	const statesByLine = new Map<number, LanguageTokenLineState>();
 	for (const state of frozenStates) statesByLine.set(state.lineIndex, state);
@@ -478,13 +418,7 @@ function createState(
 	});
 }
 
-function lineMatchesResult(
-	payload: LanguageTokenLinePayload,
-	lineIndex: number,
-	tokens: readonly LanguageToken[],
-	startItemIndex: number,
-	endItemIndex: number,
-): boolean {
+function lineMatchesResult(payload: LanguageTokenLinePayload, lineIndex: number, tokens: readonly LanguageToken[], startItemIndex: number, endItemIndex: number): boolean {
 	if (endItemIndex - startItemIndex !== payload.tokens.length) return false;
 	return payload.tokens.every((relative, index) => {
 		const token = tokens[startItemIndex + index]!;
@@ -503,11 +437,7 @@ function lineMatchesResult(
 }
 
 function presentationsEqual(left: LanguageToken['presentation'], right: LanguageToken['presentation']): boolean {
-	return (
-		left?.foreground === right?.foreground &&
-		left?.background === right?.background &&
-		arraysEqual(left?.fontStyle ?? [], right?.fontStyle ?? [])
-	);
+	return left?.foreground === right?.foreground && left?.background === right?.background && arraysEqual(left?.fontStyle ?? [], right?.fontStyle ?? []);
 }
 
 const EMPTY_TOKENS: readonly LanguageToken[] = Object.freeze([]);
@@ -520,8 +450,7 @@ const EMPTY_STATE: LanguageTokenIndexState = Object.freeze({
 });
 
 function assertLineIndex(lineIndex: number): void {
-	if (!Number.isSafeInteger(lineIndex) || lineIndex < 0)
-		throw new RangeError('Language token line index must be a non-negative safe integer');
+	if (!Number.isSafeInteger(lineIndex) || lineIndex < 0) throw new RangeError('Language token line index must be a non-negative safe integer');
 }
 
 /** Lazily styles one model token index and invalidates its cached lines with that index. */
@@ -550,11 +479,7 @@ export class StyledTokenSource extends Disposable implements SemanticTokenSource
 
 	public get lines(): readonly SemanticTokenLine[] {
 		this.assertNotDisposed();
-		return Object.freeze(
-			this.source.lines.map(line =>
-				Object.freeze({ lineIndex: line.lineIndex, tokens: this.getLineTokens(line.lineIndex) }),
-			),
-		);
+		return Object.freeze(this.source.lines.map(line => Object.freeze({ lineIndex: line.lineIndex, tokens: this.getLineTokens(line.lineIndex) })));
 	}
 
 	public getLineTokens(lineIndex: number): readonly ResolvedSemanticToken[] {
@@ -569,11 +494,7 @@ export class StyledTokenSource extends Disposable implements SemanticTokenSource
 		}
 		let tokens = this.lineTokens.get(lineIndex);
 		if (!tokens) {
-			tokens = resolveLineTokens(
-				this.source.getLineTokens(lineIndex),
-				this.kind,
-				this.source.textModel.getLanguageId(),
-			);
+			tokens = resolveLineTokens(this.source.getLineTokens(lineIndex), this.kind, this.source.textModel.getLanguageId());
 			this.lineTokens.set(lineIndex, tokens);
 		}
 		return tokens;
@@ -589,32 +510,19 @@ export function overlayTokenSources(base: SemanticTokenSource, overlay: Semantic
 	if (base.textModel !== overlay.textModel) {
 		throw new TypeError('Semantic-token overlay sources must share one text model');
 	}
-	const getLineTokens = (lineIndex: number): readonly ResolvedSemanticToken[] =>
-		mergeResolvedLineTokens(base.getLineTokens(lineIndex), overlay.getLineTokens(lineIndex));
+	const getLineTokens = (lineIndex: number): readonly ResolvedSemanticToken[] => mergeResolvedLineTokens(base.getLineTokens(lineIndex), overlay.getLineTokens(lineIndex));
 	return Object.freeze({
 		textModel: base.textModel,
-		onDidChange: (listener: () => void) =>
-			combinedDisposable(base.onDidChange(listener), overlay.onDidChange(listener)),
+		onDidChange: (listener: () => void) => combinedDisposable(base.onDidChange(listener), overlay.onDidChange(listener)),
 		get lines(): readonly SemanticTokenLine[] {
-			const lineIndexes = new Set([
-				...base.lines.map(line => line.lineIndex),
-				...overlay.lines.map(line => line.lineIndex),
-			]);
-			return Object.freeze(
-				[...lineIndexes]
-					.sort((left, right) => left - right)
-					.map(lineIndex => Object.freeze({ lineIndex, tokens: getLineTokens(lineIndex) })),
-			);
+			const lineIndexes = new Set([...base.lines.map(line => line.lineIndex), ...overlay.lines.map(line => line.lineIndex)]);
+			return Object.freeze([...lineIndexes].sort((left, right) => left - right).map(lineIndex => Object.freeze({ lineIndex, tokens: getLineTokens(lineIndex) })));
 		},
 		getLineTokens,
 	});
 }
 
-function resolveLineTokens(
-	tokens: readonly LanguageToken[],
-	kind: 'syntax' | 'semantic',
-	languageId: string,
-): readonly ResolvedSemanticToken[] {
+function resolveLineTokens(tokens: readonly LanguageToken[], kind: 'syntax' | 'semantic', languageId: string): readonly ResolvedSemanticToken[] {
 	const resolved: ResolvedSemanticToken[] = [];
 	for (const token of tokens) {
 		const tokenStyling = resolveSemanticTokenStyling(token);
@@ -639,18 +547,12 @@ function resolveLineTokens(
 	return Object.freeze(resolved);
 }
 
-function mergeResolvedLineTokens(
-	base: readonly ResolvedSemanticToken[],
-	overlay: readonly ResolvedSemanticToken[],
-): readonly ResolvedSemanticToken[] {
+function mergeResolvedLineTokens(base: readonly ResolvedSemanticToken[], overlay: readonly ResolvedSemanticToken[]): readonly ResolvedSemanticToken[] {
 	if (overlay.length === 0) return base;
 	if (base.length === 0) return overlay;
-	const boundaries = [
-		...new Set([
-			...base.flatMap(token => [token.startColumn, token.endColumn]),
-			...overlay.flatMap(token => [token.startColumn, token.endColumn]),
-		]),
-	].sort((left, right) => left - right);
+	const boundaries = [...new Set([...base.flatMap(token => [token.startColumn, token.endColumn]), ...overlay.flatMap(token => [token.startColumn, token.endColumn])])].sort(
+		(left, right) => left - right,
+	);
 	const result: ResolvedSemanticToken[] = [];
 	for (let index = 0; index + 1 < boundaries.length; index += 1) {
 		const startColumn = boundaries[index]!;
@@ -672,9 +574,7 @@ function mergeResolvedLineTokens(
 							semanticModifiers: token.semanticModifiers,
 							semanticLanguage: token.semanticLanguage,
 						}),
-				...(semantic || token.syntaxPresentation === undefined
-					? {}
-					: { syntaxPresentation: token.syntaxPresentation }),
+				...(semantic || token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
 			}),
 		);
 	}

@@ -1,11 +1,6 @@
 import { isHotReloadEnabled } from '../../../base/common/hotReload.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../base/common/lifecycle.js';
-import {
-	constObservable,
-	observableValue,
-	type IObservable,
-	type ISettableObservable,
-} from '../../../base/common/observable.js';
+import { constObservable, observableValue, type IObservable, type ISettableObservable } from '../../../base/common/observable.js';
 import type { IInstantiationService } from '../../instantiation/common/instantiation.js';
 
 type WidgetConstructor = new (...args: never[]) => DomWidget;
@@ -18,13 +13,8 @@ export abstract class DomWidget extends Disposable {
 	public abstract get element(): HTMLElement;
 
 	/** The supplied scope owns every instance and the subscription to future replacements. */
-	public static createObservable<TArgs extends unknown[], T extends DomWidget>(
-		this: new (...args: TArgs) => T,
-		store: DisposableStore,
-		...params: TArgs
-	): IObservable<T> {
-		const create = (constructor: WidgetConstructor): T =>
-			new (constructor as unknown as new (...args: TArgs) => T)(...params);
+	public static createObservable<TArgs extends unknown[], T extends DomWidget>(this: new (...args: TArgs) => T, store: DisposableStore, ...params: TArgs): IObservable<T> {
+		const create = (constructor: WidgetConstructor): T => new (constructor as unknown as new (...args: TArgs) => T)(...params);
 		return createWidgetObservable(this as unknown as WidgetConstructor, store, create);
 	}
 
@@ -35,9 +25,7 @@ export abstract class DomWidget extends Disposable {
 		store: DisposableStore,
 		...params: unknown[]
 	): IObservable<T> {
-		return createWidgetObservable(this, store, constructor =>
-			instantiationService.createInstance(constructor as unknown as new (...args: unknown[]) => T, ...params),
-		);
+		return createWidgetObservable(this, store, constructor => instantiationService.createInstance(constructor as unknown as new (...args: unknown[]) => T, ...params));
 	}
 
 	/** Called by the development transform; the identity includes the module path and class name. */
@@ -55,11 +43,7 @@ export abstract class DomWidget extends Disposable {
 	}
 }
 
-function createWidgetObservable<T extends DomWidget>(
-	constructor: WidgetConstructor,
-	store: DisposableStore,
-	create: (constructor: WidgetConstructor) => T,
-): IObservable<T> {
+function createWidgetObservable<T extends DomWidget>(constructor: WidgetConstructor, store: DisposableStore, create: (constructor: WidgetConstructor) => T): IObservable<T> {
 	const versions = isHotReloadEnabled() ? constructors.get(constructor) : undefined;
 	const instance = store.add(new MutableDisposable<T>());
 	instance.value = create(versions?.get() ?? constructor);

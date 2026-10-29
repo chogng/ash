@@ -86,18 +86,14 @@ export class LineDiffRows implements Iterable<LineDiffRow> {
 
 	/** Materializes only a requested hunk, never the entire unchanged document. */
 	slice(start: number, end: number): LineDiffRow[] {
-		return Array.from({ length: Math.max(0, Math.min(end, this.length) - start) }, (_, offset) =>
-			this.get(start + offset)!,
-		);
+		return Array.from({ length: Math.max(0, Math.min(end, this.length) - start) }, (_, offset) => this.get(start + offset)!);
 	}
 
 	/** A run's last unchanged row is sufficient to anchor unwrapped alignment zones. */
 	*alignmentEntries(): IterableIterator<[number, LineDiffRow]> {
 		for (const segment of this.segments) {
 			if (!segment.changed) yield [segment.end - 1, this.row(segment, segment.end - 1)];
-			else
-				for (let index = segment.start; index < segment.end; index++)
-					yield [index, segment.changed[index - segment.start]!];
+			else for (let index = segment.start; index < segment.end; index++) yield [index, segment.changed[index - segment.start]!];
 		}
 	}
 
@@ -110,8 +106,7 @@ export class LineDiffRows implements Iterable<LineDiffRow> {
 	*changedEntries(): IterableIterator<[number, LineDiffRow]> {
 		for (const segment of this.segments) {
 			if (!segment.changed) continue;
-			for (let index = segment.start; index < segment.end; index++)
-				yield [index, segment.changed[index - segment.start]!];
+			for (let index = segment.start; index < segment.end; index++) yield [index, segment.changed[index - segment.start]!];
 		}
 	}
 
@@ -125,12 +120,7 @@ export class LineDiffRows implements Iterable<LineDiffRow> {
 }
 
 /** Builds a sparse aligned projection, retaining mapping identities for edit and move controls. */
-export function toLineDiff(
-	diff: Pick<IDocumentDiff, 'changes' | 'moves'>,
-	originalLineCount: number,
-	modifiedLineCount: number,
-	range?: LineRangeMapping,
-): LineDiff {
+export function toLineDiff(diff: Pick<IDocumentDiff, 'changes' | 'moves'>, originalLineCount: number, modifiedLineCount: number, range?: LineRangeMapping): LineDiff {
 	const segments: RowSegment[] = [];
 	const hunks: LineDiffHunk[] = [];
 	let rowCount = 0;
@@ -167,10 +157,7 @@ export function toLineDiff(
 		originalIndex = change.original.endLineNumberExclusive - 1;
 		modifiedIndex = change.modified.endLineNumberExclusive - 1;
 	}
-	appendUnchanged(
-		range ? range.original.endLineNumberExclusive - 1 : originalLineCount,
-		range ? range.modified.endLineNumberExclusive - 1 : modifiedLineCount,
-	);
+	appendUnchanged(range ? range.original.endLineNumberExclusive - 1 : originalLineCount, range ? range.modified.endLineNumberExclusive - 1 : modifiedLineCount);
 	return { rows: new LineDiffRows(segments), hunks, changes: diff.changes, moves: diff.moves };
 }
 
@@ -182,12 +169,7 @@ function appendChangedRows(rows: LineDiffRow[], change: DetailedLineRangeMapping
 			const left = originalIndex < originalEnd ? originalIndex++ : undefined;
 			const right = modifiedIndex < modifiedEnd ? modifiedIndex++ : undefined;
 			rows.push({
-				kind:
-					left === undefined
-						? LineDiffKind.Added
-						: right === undefined
-							? LineDiffKind.Removed
-							: LineDiffKind.Modified,
+				kind: left === undefined ? LineDiffKind.Added : right === undefined ? LineDiffKind.Removed : LineDiffKind.Modified,
 				originalLineIndex: left,
 				modifiedLineIndex: right,
 				originalChanges: left === undefined ? [] : changesForLine(change.innerChanges, left + 1, 'original'),
@@ -209,15 +191,9 @@ function appendChangedRows(rows: LineDiffRow[], change: DetailedLineRangeMapping
 	appendUntil(change.original.endLineNumberExclusive - 1, change.modified.endLineNumberExclusive - 1);
 }
 
-function changesForLine(
-	changes: readonly RangeMapping[] | undefined,
-	lineNumber: number,
-	side: 'original' | 'modified',
-): DiffRange[] {
+function changesForLine(changes: readonly RangeMapping[] | undefined, lineNumber: number, side: 'original' | 'modified'): DiffRange[] {
 	return (changes ?? []).flatMap(change => {
 		const range = side === 'original' ? change.originalRange : change.modifiedRange;
-		return range.startLineNumber === lineNumber
-			? [{ startColumn: range.startColumn - 1, endColumn: range.endColumn - 1 }]
-			: [];
+		return range.startLineNumber === lineNumber ? [{ startColumn: range.startColumn - 1, endColumn: range.endColumn - 1 }] : [];
 	});
 }

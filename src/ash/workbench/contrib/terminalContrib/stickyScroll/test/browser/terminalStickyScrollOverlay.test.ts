@@ -8,9 +8,7 @@ suite('TerminalStickyScrollOverlay', () => {
 	async function openTerminal(page: Page, locale = 'en'): Promise<void> {
 		await page.goto(`/terminal.html?stream&commandModel&browser&locale=${locale}`);
 		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration?.model().input)).toBe('|');
-		await page.evaluate(() =>
-			window.ashTerminalStreamIntegration.environmentFrame({ type: 'hasRichCommandDetection', value: true }),
-		);
+		await page.evaluate(() => window.ashTerminalStreamIntegration.environmentFrame({ type: 'hasRichCommandDetection', value: true }));
 	}
 
 	test('the next multi-line prompt pushes the previous header away without covering it', async () => {
@@ -45,28 +43,18 @@ suite('TerminalStickyScrollOverlay', () => {
 				terminal.feedModel('second-output\r\n'.repeat(50));
 				terminal.environmentFrame({ type: 'commandFinished', exitCode: 0, durationMillis: 1 });
 			});
-			await expect
-				.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().commands?.length))
-				.toBe(3);
-			const second = await page.evaluate(() =>
-				window.ashTerminalStreamIntegration.serializeModel().commands.find(command => command.id === 'second')!,
-			);
+			await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().commands?.length)).toBe(3);
+			const second = await page.evaluate(() => window.ashTerminalStreamIntegration.serializeModel().commands.find(command => command.id === 'second')!);
 			expect(second.startLine! - second.promptStartLine!).toBe(1);
 			const header = page.locator('.ash-terminal-sticky-scroll');
 			for (const distance of [3, 2, 1]) {
-				await page.evaluate(
-					line => window.ashTerminalStreamIntegration.stickyScroll.scroll(line),
-					second.promptStartLine! - distance,
-				);
+				await page.evaluate(line => window.ashTerminalStreamIntegration.stickyScroll.scroll(line), second.promptStartLine! - distance);
 				await expect(header).toBeVisible();
 				await expect
 					.poll(() =>
 						header.evaluate(element => {
 							const bounds = element.getBoundingClientRect();
-							const screen = element
-								.closest('.ash-terminal-instance')!
-								.querySelector('.xterm-screen')!
-								.getBoundingClientRect();
+							const screen = element.closest('.ash-terminal-instance')!.querySelector('.xterm-screen')!.getBoundingClientRect();
 							const rowHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
 							return {
 								bottom: Math.round((bounds.bottom - screen.top) / rowHeight),
@@ -78,18 +66,10 @@ suite('TerminalStickyScrollOverlay', () => {
 					.toMatchObject({ bottom: distance, clippedRows: 3 - distance });
 			}
 			await header.screenshot({ path: browserTests.info.outputPath('header-at-next-prompt.png') });
-			await page
-				.locator('.ash-terminal-instance:visible')
-				.screenshot({ path: browserTests.info.outputPath('next-prompt-visible.png') });
-			await page.evaluate(
-				line => window.ashTerminalStreamIntegration.stickyScroll.scroll(line),
-				second.promptStartLine!,
-			);
+			await page.locator('.ash-terminal-instance:visible').screenshot({ path: browserTests.info.outputPath('next-prompt-visible.png') });
+			await page.evaluate(line => window.ashTerminalStreamIntegration.stickyScroll.scroll(line), second.promptStartLine!);
 			await expect(header).toBeHidden();
-			await page.evaluate(
-				line => window.ashTerminalStreamIntegration.stickyScroll.scroll(line),
-				second.executedLine! + 3,
-			);
+			await page.evaluate(line => window.ashTerminalStreamIntegration.stickyScroll.scroll(line), second.executedLine! + 3);
 			await expect(header).toHaveAttribute('aria-label', 'Scroll to command: echo second');
 			await expect(header).toHaveCSS('clip-path', 'inset(0px)');
 		} finally {
@@ -116,9 +96,7 @@ suite('TerminalStickyScrollOverlay', () => {
 					});
 					terminal.feedModel('truncated-output\r\n'.repeat(60));
 				});
-				await expect
-					.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed()))
-					.toContain('truncated-output');
+				await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed())).toContain('truncated-output');
 				await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.scroll(8));
 				const label = `${locale === 'zh-CN' ? '滚动到命令：' : 'Scroll to command: '}echo first 中文🙂\nmiddle\nlast`;
 				const header = page.getByRole('button', { name: label, exact: true });
@@ -131,18 +109,12 @@ suite('TerminalStickyScrollOverlay', () => {
 				await header.focus();
 				await header.press('Escape');
 				await expect(page.locator('.ash-terminal-instance:visible .xterm-helper-textarea')).toBeFocused();
-				await page.evaluate(() =>
-					window.ashTerminalStreamIntegration.stickyScroll.configure('maxLineCount', 1),
-				);
+				await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.configure('maxLineCount', 1));
 				await expect(header.locator(':scope > span')).toHaveCount(1);
-				await page.evaluate(() =>
-					window.ashTerminalStreamIntegration.stickyScroll.configure('maxLineCount', 5),
-				);
+				await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.configure('maxLineCount', 5));
 				await expect(header).not.toHaveClass(/truncated/);
 				await expect(header.locator(':scope > span')).toHaveCount(3);
-				await page
-					.locator('.ash-terminal-instance:visible')
-					.screenshot({ path: browserTests.info.outputPath(`multiline-${locale}.png`) });
+				await page.locator('.ash-terminal-instance:visible').screenshot({ path: browserTests.info.outputPath(`multiline-${locale}.png`) });
 				await header.press('Enter');
 				await expect(header).toBeHidden();
 				await expect(page.locator('.ash-terminal-instance:visible .xterm-helper-textarea')).toBeFocused();
@@ -157,9 +129,7 @@ suite('TerminalStickyScrollOverlay', () => {
 			await page.waitForFunction(() => Boolean(window.ashTerminalClipboardIntegration));
 			try {
 				const help = await page.evaluate(() => window.ashTerminalClipboardIntegration.help());
-				expect(help).toContain(
-					locale === 'zh-CN' ? '省略号表示有命令行被隐藏' : 'An ellipsis indicates hidden command lines',
-				);
+				expect(help).toContain(locale === 'zh-CN' ? '省略号表示有命令行被隐藏' : 'An ellipsis indicates hidden command lines');
 			} finally {
 				await page.evaluate(() => window.ashTerminalInputIntegration.close());
 			}
@@ -185,9 +155,7 @@ suite('TerminalStickyScrollOverlay', () => {
 				});
 				terminal.feedModel('colored-output\r\n'.repeat(60));
 			});
-			await expect
-				.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed()))
-				.toContain('colored-output');
+			await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed())).toContain('colored-output');
 			await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.scroll(8));
 			const header = page.locator('.ash-terminal-sticky-scroll');
 			await expect(header).toBeVisible();
@@ -196,25 +164,13 @@ suite('TerminalStickyScrollOverlay', () => {
 				await header.click();
 				await expect(header).toBeHidden();
 				await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
-				const original = page
-					.locator('.ash-terminal-instance:visible .xterm-rows > div')
-					.filter({ hasText: 'red 中文🙂 rgb cube gray inverse background bold styled flip' });
+				const original = page.locator('.ash-terminal-instance:visible .xterm-rows > div').filter({ hasText: 'red 中文🙂 rgb cube gray inverse background bold styled flip' });
 				await expect(original).toBeVisible();
 				// Compare against the original renderer, including its configured contrast adjustment.
 				const colors = await original.evaluate(element => {
 					const text = element.textContent!;
 					const result: Record<string, { foreground: string; background: string }> = {};
-					for (const word of [
-						'red',
-						'rgb',
-						'cube',
-						'gray',
-						'inverse',
-						'background',
-						'bold',
-						'flip',
-						'\ue0b0█',
-					]) {
+					for (const word of ['red', 'rgb', 'cube', 'gray', 'inverse', 'background', 'bold', 'flip', '\ue0b0█']) {
 						const index = text.indexOf(word);
 						const walker = element.ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT);
 						let offset = 0;
@@ -255,27 +211,13 @@ suite('TerminalStickyScrollOverlay', () => {
 					const span = word === 'red' ? red : header.getByText(word, { exact: true });
 					await expect(span).toHaveCSS('color', colors[word]!.foreground);
 				}
-				await expect(header.getByText('inverse', { exact: true })).toHaveCSS(
-					'background-color',
-					colors.inverse!.background,
-				);
-				await expect(header.getByText('background', { exact: true })).toHaveCSS(
-					'background-color',
-					colors.background!.background,
-				);
-				await expect(header.getByText('flip', { exact: true })).toHaveCSS(
-					'background-color',
-					colors.flip!.background,
-				);
+				await expect(header.getByText('inverse', { exact: true })).toHaveCSS('background-color', colors.inverse!.background);
+				await expect(header.getByText('background', { exact: true })).toHaveCSS('background-color', colors.background!.background);
+				await expect(header.getByText('flip', { exact: true })).toHaveCSS('background-color', colors.flip!.background);
 				await expect(header.getByText('styled', { exact: true })).toHaveCSS('font-style', 'italic');
-				await expect(header.getByText('styled', { exact: true })).toHaveCSS(
-					'text-decoration-line',
-					'underline',
-				);
+				await expect(header.getByText('styled', { exact: true })).toHaveCSS('text-decoration-line', 'underline');
 				expect((await red.boundingBox())!.width).toBeCloseTo(originalWidth, 1);
-				await page
-					.locator('.ash-terminal-instance:visible')
-					.screenshot({ path: browserTests.info.outputPath(`colors-${theme}.png`) });
+				await page.locator('.ash-terminal-instance:visible').screenshot({ path: browserTests.info.outputPath(`colors-${theme}.png`) });
 			}
 		} finally {
 			await page.evaluate(() => window.ashTerminalStreamIntegration.close());
@@ -299,30 +241,20 @@ suite('TerminalStickyScrollOverlay', () => {
 				});
 				terminal.feedModel('blank-output\r\n'.repeat(60));
 			});
-			await expect
-				.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed()))
-				.toContain('blank-output');
+			await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed())).toContain('blank-output');
 			await page.evaluate(async () => {
 				await window.ashTerminalStreamIntegration.stickyScroll.configure('maxLineCount', 10);
 				window.ashTerminalStreamIntegration.stickyScroll.scroll(10);
 			});
 			const header = page.locator('.ash-terminal-sticky-scroll');
 			await expect(header.locator(':scope > span')).toHaveCount(6);
-			const rowHeights = await header
-				.locator(':scope > span')
-				.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().height));
+			const rowHeights = await header.locator(':scope > span').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().height));
 			expect(new Set(rowHeights).size).toBe(1);
 			expect(rowHeights[1]).toBeGreaterThan(0);
 			await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.resize(80, 10));
 			await expect(header.locator(':scope > span')).toHaveCount(4);
 			await expect(header).toHaveClass(/truncated/);
-			expect(
-				await header.evaluate(
-					element =>
-						element.getBoundingClientRect().height /
-						Number.parseFloat(getComputedStyle(element).lineHeight),
-				),
-			).toBeCloseTo(4, 1);
+			expect(await header.evaluate(element => element.getBoundingClientRect().height / Number.parseFloat(getComputedStyle(element).lineHeight))).toBeCloseTo(4, 1);
 		} finally {
 			await page.evaluate(() => window.ashTerminalStreamIntegration.close());
 		}

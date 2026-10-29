@@ -32,12 +32,7 @@ export async function importDesignOutlineFont(file: File): Promise<void> {
 	const bytes = await file.arrayBuffer();
 	const fonts = await readFonts(bytes);
 	if (importedFonts.length + fonts.length > 32) {
-		throw new Error(
-			localize(
-				'sessions.design.outlineFontLimit',
-				'Too many outline fonts are loaded. Reopen the app to clear the font cache.',
-			),
-		);
+		throw new Error(localize('sessions.design.outlineFontLimit', 'Too many outline fonts are loaded. Reopen the app to clear the font cache.'));
 	}
 	const fontFaces: FontFace[] = [];
 	for (const font of fonts) {
@@ -64,12 +59,7 @@ export async function importDesignOutlineFont(file: File): Promise<void> {
 async function readFonts(bytes: ArrayBuffer): Promise<readonly Font[]> {
 	const signature = new DataView(bytes).getUint32(0);
 	if (![0x00010000, 0x4f54544f, 0x74727565, 0x74746366].includes(signature)) {
-		throw new Error(
-			localize(
-				'sessions.design.outlineFontFormat',
-				'Load a TrueType (.ttf) or OpenType (.otf) font for outlines.',
-			),
-		);
+		throw new Error(localize('sessions.design.outlineFontFormat', 'Load a TrueType (.ttf) or OpenType (.otf) font for outlines.'));
 	}
 	const { create } = await import('fontkit');
 	// Fontkit 2 accepts Uint8Array in browsers; its community declaration still names Node's Buffer.
@@ -105,16 +95,10 @@ class OutlineFonts {
 				.replace(/^["']|["']$/gu, '')
 				.toLowerCase(),
 		);
-		const candidates = [
-			...new Set([...importedFonts.map(item => item.family), ...this.available.map(item => item.family)]),
-		];
+		const candidates = [...new Set([...importedFonts.map(item => item.family), ...this.available.map(item => item.family)])];
 		candidates.sort((a, b) => {
 			const rank = (name: string) =>
-				names.includes(name.toLowerCase())
-					? names.indexOf(name.toLowerCase())
-					: /^(Arial|Helvetica|Times New Roman|Courier New|Liberation Sans|Noto Sans)$/u.test(name)
-						? 50
-						: 100;
+				names.includes(name.toLowerCase()) ? names.indexOf(name.toLowerCase()) : /^(Arial|Helvetica|Times New Roman|Courier New|Liberation Sans|Noto Sans)$/u.test(name) ? 50 : 100;
 			return rank(a) - rank(b);
 		});
 		for (const candidate of candidates) {
@@ -133,11 +117,7 @@ class OutlineFonts {
 					this.loaded.set(source.postscriptName, loading);
 				}
 				try {
-					fonts.push(
-						...(await loading).filter(
-							font => font.postscriptName === source.postscriptName || font.familyName === source.family,
-						),
-					);
+					fonts.push(...(await loading).filter(font => font.postscriptName === source.postscriptName || font.familyName === source.family));
 				} catch {
 					/* Another installed face can supply the requested style. */
 				}
@@ -149,13 +129,7 @@ class OutlineFonts {
 				if (!font.variationAxes.wght && (font['OS/2']?.usWeightClass ?? 400) !== weight) {
 					continue;
 				}
-				if (
-					[...text].some(
-						char =>
-							!/[\s\u200c\u200d\ufe00-\ufe0f]/u.test(char) &&
-							!font.hasGlyphForCodePoint(char.codePointAt(0)!),
-					)
-				) {
+				if ([...text].some(char => !/[\s\u200c\u200d\ufe00-\ufe0f]/u.test(char) && !font.hasGlyphForCodePoint(char.codePointAt(0)!))) {
 					continue;
 				}
 				const axes: Record<string, number> = {
@@ -223,9 +197,7 @@ class OutlineFonts {
 			shapingFont = new hb.Font(face);
 			shapingFont.setScale(font.unitsPerEm, font.unitsPerEm);
 			if (source.variations) {
-				shapingFont.setVariations(
-					Object.entries(source.variations).map(([tag, value]) => new hb.Variation(tag, value)),
-				);
+				shapingFont.setVariations(Object.entries(source.variations).map(([tag, value]) => new hb.Variation(tag, value)));
 			}
 			this.shapingFonts.set(font, shapingFont);
 		}
@@ -245,9 +217,7 @@ class OutlineFonts {
 			glyphs: infos.map(info =>
 				font.getGlyph(
 					info.codepoint,
-					[...text.slice(info.cluster, ends[ends.indexOf(info.cluster) + 1])].map(char =>
-						char.codePointAt(0)!,
-					),
+					[...text.slice(info.cluster, ends[ends.indexOf(info.cluster) + 1])].map(char => char.codePointAt(0)!),
 				),
 			),
 			positions: buffer.getGlyphPositions(),
@@ -276,13 +246,7 @@ class OutlineFonts {
 }
 
 /** Convert TrueType quadratics to exact cubics; counter contours retain their winding. */
-function glyphContours(
-	commands: readonly PathCommand[],
-	x: number,
-	baseline: number,
-	scale: number,
-	shape: DesignTextShape,
-): readonly DesignPathContour[] {
+function glyphContours(commands: readonly PathCommand[], x: number, baseline: number, scale: number, shape: DesignTextShape): readonly DesignPathContour[] {
 	const contours: DesignPathContour[] = [];
 	let nodes: DesignPathNode[] = [];
 	const point = (xValue: number, yValue: number) => ({
@@ -347,8 +311,7 @@ interface TextPiece {
 /** DOM ranges retain browser line breaking and placement; HarfBuzz shapes runs and Fontkit supplies glyph outlines. */
 export async function outlineDesignText(shape: DesignTextShape, splitGlyphs: boolean): Promise<DesignShape> {
 	const document = mainWindow.document;
-	const query = (mainWindow as Window & { queryLocalFonts?: () => Promise<readonly LocalFontData[]> })
-		.queryLocalFonts;
+	const query = (mainWindow as Window & { queryLocalFonts?: () => Promise<readonly LocalFontData[]> }).queryLocalFonts;
 	let available: readonly LocalFontData[] = [];
 	if (query && !importedFonts.length) {
 		try {
@@ -398,11 +361,7 @@ export async function outlineDesignText(shape: DesignTextShape, splitGlyphs: boo
 					}
 				}
 				const pieces: TextPiece[] = [];
-				const wordStarts = new Set(
-					[...new Intl.Segmenter(undefined, { granularity: 'word' }).segment(text)]
-						.filter(segment => segment.isWordLike)
-						.map(segment => segment.index),
-				);
+				const wordStarts = new Set([...new Intl.Segmenter(undefined, { granularity: 'word' }).segment(text)].filter(segment => segment.isWordLike).map(segment => segment.index));
 				for (const segment of new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)) {
 					const range = document.createRange();
 					range.setStart(node, segment.index);
@@ -482,43 +441,21 @@ export async function outlineDesignText(shape: DesignTextShape, splitGlyphs: boo
 					let x = Math.min(...group.map(piece => piece.rect.left)) - origin.left;
 					for (const [index, glyph] of run.glyphs.entries()) {
 						const position = run.positions[index],
-							tracking =
-								index === run.glyphs.length - 1 || run.clusters[index] !== run.clusters[index + 1]
-									? spacing
-									: 0;
+							tracking = index === run.glyphs.length - 1 || run.clusters[index] !== run.clusters[index + 1] ? spacing : 0;
 						if (glyph.codePoints.length && /^\s+$/u.test(String.fromCodePoint(...glyph.codePoints))) {
 							x += position.xAdvance * scale + tracking;
 							continue;
 						}
 						if (glyph.id === 0 && !/^\s*$/u.test(String.fromCodePoint(...glyph.codePoints))) {
-							throw new Error(
-								localize(
-									'sessions.design.outlineMissingGlyph',
-									'This font cannot outline one or more characters.',
-								),
-							);
+							throw new Error(localize('sessions.design.outlineMissingGlyph', 'This font cannot outline one or more characters.'));
 						}
-						if (
-							!glyph.path.commands.length &&
-							!/^[\s\u200c\u200d\ufe00-\ufe0f]*$/u.test(String.fromCodePoint(...glyph.codePoints))
-						) {
-							throw new Error(
-								localize(
-									'sessions.design.outlineBitmapGlyph',
-									'This glyph has no vector outline. Bitmap-only color fonts cannot be converted to paths.',
-								),
-							);
+						if (!glyph.path.commands.length && !/^[\s\u200c\u200d\ufe00-\ufe0f]*$/u.test(String.fromCodePoint(...glyph.codePoints))) {
+							throw new Error(localize('sessions.design.outlineBitmapGlyph', 'This glyph has no vector outline. Bitmap-only color fonts cannot be converted to paths.'));
 						}
 						const bounds = glyph.path.bbox;
 						const width = Math.max(0.001, (bounds.maxX - bounds.minX) * scale),
 							height = Math.max(0.001, (bounds.maxY - bounds.minY) * scale);
-						const contours = glyphContours(
-							glyph.path.commands,
-							-bounds.minX * scale,
-							bounds.maxY * scale,
-							scale,
-							{ ...shape, width, height },
-						);
+						const contours = glyphContours(glyph.path.commands, -bounds.minX * scale, bounds.maxY * scale, scale, { ...shape, width, height });
 						if (contours.length) {
 							const path = flattenDesignVector(shape, contours);
 							paths.push({
@@ -546,17 +483,13 @@ export async function outlineDesignText(shape: DesignTextShape, splitGlyphs: boo
 						}
 						x += position.xAdvance * scale + tracking;
 					}
-					const width =
-						Math.max(...group.map(piece => piece.rect.right)) -
-						Math.min(...group.map(piece => piece.rect.left));
+					const width = Math.max(...group.map(piece => piece.rect.right)) - Math.min(...group.map(piece => piece.rect.left));
 					const left = Math.min(...group.map(piece => piece.rect.left)) - origin.left;
 					for (const decoration of ['underline', 'line-through']) {
 						if (!style.textDecorationLine.includes(decoration)) {
 							continue;
 						}
-						const y =
-								baseline -
-								(decoration === 'underline' ? font.underlinePosition : font.xHeight / 2) * scale,
+						const y = baseline - (decoration === 'underline' ? font.underlinePosition : font.xHeight / 2) * scale,
 							height = Math.max(0.5, font.underlineThickness * scale);
 						const nodes = [
 							[left, y],
@@ -631,25 +564,12 @@ export async function outlineDesignText(shape: DesignTextShape, splitGlyphs: boo
 					: [],
 			);
 			if (contours.length > 1001 || contours.reduce((sum, contour) => sum + contour.nodes.length, 0) > 10000) {
-				throw new Error(
-					localize(
-						'sessions.design.outlineTooComplex',
-						'This text exceeds the single-path point limit. Use Outline stroke to keep separate glyph layers.',
-					),
-				);
+				throw new Error(localize('sessions.design.outlineTooComplex', 'This text exceeds the single-path point limit. Use Outline stroke to keep separate glyph layers.'));
 			}
 			return stripTextBindings({ ...flattenDesignVector(shape, contours), fill });
 		}
 		const geometry = stripTextBindings(flattenDesignVector(shape, [{ nodes: [], closed: false }]));
-		const {
-			nodes: _nodes,
-			closed: _closed,
-			subpaths: _subpaths,
-			strokeWidth: _strokeWidth,
-			fillRule: _fillRule,
-			kind: _kind,
-			...common
-		} = geometry;
+		const { nodes: _nodes, closed: _closed, subpaths: _subpaths, strokeWidth: _strokeWidth, fillRule: _fillRule, kind: _kind, ...common } = geometry;
 		return { ...common, kind: 'group', contentWidth: shape.width, contentHeight: shape.height, children: paths };
 	} finally {
 		frame.remove();
@@ -688,12 +608,7 @@ function materializeOutlineText(frame: HTMLElement, shape: DesignTextShape): voi
 	root.style.display = 'block';
 	root.style.webkitLineClamp = '';
 	root.style.overflow = 'visible';
-	const lineHeight =
-		shape.lineHeight === undefined
-			? shape.fontSize * 1.2
-			: shape.lineHeightUnit === 'percent'
-				? (shape.fontSize * shape.lineHeight) / 100
-				: shape.lineHeight;
+	const lineHeight = shape.lineHeight === undefined ? shape.fontSize * 1.2 : shape.lineHeightUnit === 'percent' ? (shape.fontSize * shape.lineHeight) / 100 : shape.lineHeight;
 	const maxLines = shape.maxLines ?? Math.max(1, Math.floor(shape.height / Math.max(0.001, lineHeight)));
 	const characters: { node: Text; start: number; end: number; top: number }[] = [];
 	for (const span of root.querySelectorAll('span')) {
@@ -744,11 +659,7 @@ function materializeOutlineText(frame: HTMLElement, shape: DesignTextShape): voi
 				const style = getComputedStyle(lastSpan),
 					context = document.createElement('canvas').getContext('2d')!;
 				context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-				if (
-					Math.round(range.getBoundingClientRect().top + context.measureText('…').fontBoundingBoxAscent) <=
-						lastTop ||
-					!content
-				) {
+				if (Math.round(range.getBoundingClientRect().top + context.measureText('…').fontBoundingBoxAscent) <= lastTop || !content) {
 					break;
 				}
 				const segments = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(content)];
@@ -761,16 +672,8 @@ function materializeOutlineText(frame: HTMLElement, shape: DesignTextShape): voi
 function stripTextBindings(path: Extract<DesignShape, { kind: 'path' }>): typeof path {
 	return {
 		...path,
-		bindings: path.bindings
-			? Object.fromEntries(
-					Object.entries(path.bindings).filter(([key]) =>
-						['fill', 'opacity', 'visible', 'width', 'height'].includes(key),
-					),
-				)
-			: undefined,
-		styleBindings: path.styleBindings
-			? Object.fromEntries(Object.entries(path.styleBindings).filter(([key]) => key !== 'text'))
-			: undefined,
+		bindings: path.bindings ? Object.fromEntries(Object.entries(path.bindings).filter(([key]) => ['fill', 'opacity', 'visible', 'width', 'height'].includes(key))) : undefined,
+		styleBindings: path.styleBindings ? Object.fromEntries(Object.entries(path.styleBindings).filter(([key]) => key !== 'text')) : undefined,
 	};
 }
 function glyphName(glyph: Glyph): string {

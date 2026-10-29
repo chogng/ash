@@ -2,13 +2,7 @@ import type { Session, WebContents, DownloadItem } from 'electron/main';
 import { randomUUID } from 'node:crypto';
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import type { BrowserViewEvent } from '../common/browserView.js';
-import {
-	BrowserPermissionStore,
-	electronPermissionToCategories,
-	toOriginKey,
-	type IPermissionCategoryState,
-	type ISerializedBrowserPermissionsSnapshot,
-} from '../common/browserPermissions.js';
+import { BrowserPermissionStore, electronPermissionToCategories, toOriginKey, type IPermissionCategoryState, type ISerializedBrowserPermissionsSnapshot } from '../common/browserPermissions.js';
 
 interface Page {
 	readonly id: string;
@@ -44,14 +38,10 @@ export class BrowserSessionPermissions {
 			const requestingOrigin = toOriginKey(origin);
 			const embeddedOrigin = toOriginKey(embeddingOrigin);
 			if (!requestingOrigin || !embeddedOrigin) return false;
-			const media =
-				details.mediaType === 'video' || details.mediaType === 'audio' ? [details.mediaType] : undefined;
+			const media = details.mediaType === 'video' || details.mediaType === 'audio' ? [details.mediaType] : undefined;
 			const categories = electronPermissionToCategories(permission, media);
 			return categories.length > 0
-				? categories.every(
-						category =>
-							this.siteGrants.get(embeddedOrigin)?.getDecision(requestingOrigin, category) === 'allow',
-					)
+				? categories.every(category => this.siteGrants.get(embeddedOrigin)?.getDecision(requestingOrigin, category) === 'allow')
 				: this.grants.get(this.key(requestingOrigin, embeddedOrigin, permission)) === true;
 		});
 		session.setPermissionRequestHandler((contents, permission, callback, details) => {
@@ -66,40 +56,20 @@ export class BrowserSessionPermissions {
 				callback(false);
 				return;
 			}
-			const categories =
-				permission === 'media' && 'mediaTypes' in details && details.mediaTypes
-					? details.mediaTypes.map(type => `media:${type}`)
-					: [permission];
+			const categories = permission === 'media' && 'mediaTypes' in details && details.mediaTypes ? details.mediaTypes.map(type => `media:${type}`) : [permission];
 			const keys = categories.map(category => this.key(origin, embeddingOrigin, category));
-			if (
-				!keys.length ||
-				this.pending.size >= 16 ||
-				![
-					'geolocation',
-					'notifications',
-					'media',
-					'clipboard-read',
-					'clipboard-sanitized-write',
-					'fullscreen',
-				].includes(permission)
-			) {
+			if (!keys.length || this.pending.size >= 16 || !['geolocation', 'notifications', 'media', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen'].includes(permission)) {
 				callback(false);
 				return;
 			}
 			const media = permission === 'media' && 'mediaTypes' in details ? details.mediaTypes : undefined;
 			const siteCategories = electronPermissionToCategories(permission, media);
-			const decisions = siteCategories.map(category =>
-				this.siteGrants.get(embeddingOrigin)?.getDecision(origin, category),
-			);
+			const decisions = siteCategories.map(category => this.siteGrants.get(embeddingOrigin)?.getDecision(origin, category));
 			if (decisions.some(decision => decision === 'deny')) {
 				callback(false);
 				return;
 			}
-			if (
-				siteCategories.length
-					? decisions.every(decision => decision === 'allow')
-					: keys.every(key => this.grants.has(key))
-			) {
+			if (siteCategories.length ? decisions.every(decision => decision === 'allow') : keys.every(key => this.grants.has(key))) {
 				callback(siteCategories.length > 0 || keys.every(key => this.grants.get(key) === true));
 				return;
 			}
@@ -156,8 +126,7 @@ export class BrowserSessionPermissions {
 			}
 			const requestId = randomUUID();
 			// Electron owns the save-location dialog; this host never selects a destination for the user.
-			const updated = (_event: Electron.Event, state: 'progressing' | 'interrupted'): void =>
-				this.progress(page, item, state);
+			const updated = (_event: Electron.Event, state: 'progressing' | 'interrupted'): void => this.progress(page, item, state);
 			const done = (_event: Electron.Event, state: 'completed' | 'cancelled' | 'interrupted'): void => {
 				this.downloads.delete(requestId);
 				cleanup();
@@ -214,11 +183,7 @@ export class BrowserSessionPermissions {
 			store.set(origin, grant.category, grant.state);
 		}
 		for (const pending of [...this.pending.values()]) {
-			if (
-				pending.embeddingOrigin !== embeddingOrigin ||
-				pending.origin !== origin ||
-				pending.categories.length === 0
-			) {
+			if (pending.embeddingOrigin !== embeddingOrigin || pending.origin !== origin || pending.categories.length === 0) {
 				continue;
 			}
 			const decisions = pending.categories.map(category => store.getDecision(origin, category));
@@ -270,11 +235,7 @@ export class BrowserSessionPermissions {
 	private key(origin: string, embeddingOrigin: string, permission: string): string {
 		return JSON.stringify([origin, embeddingOrigin, permission]);
 	}
-	private progress(
-		page: Page,
-		item: DownloadItem,
-		state: 'progressing' | 'completed' | 'cancelled' | 'interrupted',
-	): void {
+	private progress(page: Page, item: DownloadItem, state: 'progressing' | 'completed' | 'cancelled' | 'interrupted'): void {
 		page.emit({
 			type: 'downloadProgress',
 			targetId: page.id,

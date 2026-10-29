@@ -64,17 +64,10 @@ export class ArrayReplacement<T> extends BaseReplacement<ArrayReplacement<T>> {
 		return this.newValue.length;
 	}
 	equals(other: ArrayReplacement<T>): boolean {
-		return (
-			this.replaceRange.equals(other.replaceRange) &&
-			this.newValue.length === other.newValue.length &&
-			this.newValue.every((value, index) => value === other.newValue[index])
-		);
+		return this.replaceRange.equals(other.replaceRange) && this.newValue.length === other.newValue.length && this.newValue.every((value, index) => value === other.newValue[index]);
 	}
 	tryJoinTouching(other: ArrayReplacement<T>): ArrayReplacement<T> | undefined {
-		return new ArrayReplacement(this.replaceRange.joinRightTouching(other.replaceRange), [
-			...this.newValue,
-			...other.newValue,
-		]);
+		return new ArrayReplacement(this.replaceRange.joinRightTouching(other.replaceRange), [...this.newValue, ...other.newValue]);
 	}
 	slice(range: OffsetRange, rangeInReplacement: OffsetRange): ArrayReplacement<T> {
 		return new ArrayReplacement(range, rangeInReplacement.slice(this.newValue));

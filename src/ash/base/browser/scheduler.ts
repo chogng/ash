@@ -17,7 +17,11 @@ const animationFrameQueues = new WeakMap<Window, AnimationFrameQueue>();
 /** Schedules a cancellable callback in the next animation frame. */
 export function scheduleAtNextAnimationFrame(targetWindow: Window, callback: () => void, priority = 0): IDisposable {
 	const queue = getAnimationFrameQueue(targetWindow);
-	const task: ScheduledAnimationFrame = { callback, priority, cancelled: false };
+	const task: ScheduledAnimationFrame = {
+		callback,
+		priority,
+		cancelled: false,
+	};
 	queue.tasks.push(task);
 	if (queue.frame === undefined) {
 		const flush = (): void => {
@@ -42,10 +46,7 @@ export function scheduleAtNextAnimationFrame(targetWindow: Window, callback: () 
 				queue.currentTasks = undefined;
 			}
 		};
-		queue.frame =
-			typeof targetWindow.requestAnimationFrame === 'function'
-				? targetWindow.requestAnimationFrame(flush)
-				: targetWindow.setTimeout(flush, 16);
+		queue.frame = typeof targetWindow.requestAnimationFrame === 'function' ? targetWindow.requestAnimationFrame(flush) : targetWindow.setTimeout(flush, 16);
 	}
 	return toDisposable(() => {
 		task.cancelled = true;
@@ -56,16 +57,16 @@ export function scheduleAtNextAnimationFrame(targetWindow: Window, callback: () 
  * Runs during the current animation-frame flush when possible, otherwise
  * schedules the callback for the next frame.
  */
-export function runAtThisOrScheduleAtNextAnimationFrame(
-	targetWindow: Window,
-	callback: () => void,
-	priority = 0,
-): IDisposable {
+export function runAtThisOrScheduleAtNextAnimationFrame(targetWindow: Window, callback: () => void, priority = 0): IDisposable {
 	const queue = getAnimationFrameQueue(targetWindow);
 	if (!queue.currentTasks) {
 		return scheduleAtNextAnimationFrame(targetWindow, callback, priority);
 	}
-	const task: ScheduledAnimationFrame = { callback, priority, cancelled: false };
+	const task: ScheduledAnimationFrame = {
+		callback,
+		priority,
+		cancelled: false,
+	};
 	queue.currentTasks.push(task);
 	return toDisposable(() => {
 		task.cancelled = true;
@@ -89,12 +90,7 @@ export function disposableWindowTimeout(targetWindow: Window, callback: () => vo
 }
 
 /** Creates a cancellable interval scoped to a particular browser window. */
-export function disposableWindowInterval(
-	targetWindow: Window,
-	callback: () => void | boolean | Promise<unknown>,
-	intervalMs: number,
-	iterations?: number,
-): IDisposable {
+export function disposableWindowInterval(targetWindow: Window, callback: () => void | boolean | Promise<unknown>, intervalMs: number, iterations?: number): IDisposable {
 	let iteration = 0;
 	const handle = targetWindow.setInterval(() => {
 		iteration += 1;

@@ -10,10 +10,7 @@ import { HookEvents } from '../../common/promptSyntax/hookTypes.js';
 import { IPromptsService } from '../../common/promptSyntax/service/promptsService.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { IWorkbenchHostService } from '../../../../services/host/common/workbenchHostService.js';
-import {
-	IInstantiationService,
-	type ServicesAccessor,
-} from '../../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { filterQuickPickItems } from '../../../../../platform/quickinput/browser/quickInputList.js';
@@ -33,10 +30,7 @@ export interface IHookQuickPickOptions {
 	readonly openEditor?: (resource: URI) => Promise<void>;
 }
 
-export function getHookConfigurationResource(
-	accessor: ServicesAccessor,
-	source: HookConfigurationTarget,
-): URI | undefined {
+export function getHookConfigurationResource(accessor: ServicesAccessor, source: HookConfigurationTarget): URI | undefined {
 	if (source.namespace === 'user') {
 		return undefined;
 	}
@@ -50,30 +44,15 @@ export function getHookConfigurationResource(
 
 export function canEditHookConfiguration(accessor: ServicesAccessor, source: HookConfigurationTarget): boolean {
 	if (source.namespace === 'user') {
-		return (
-			accessor.get(IAppServerRemoteAgentService).connection?.kind === 'local' &&
-			accessor.get(IWorkbenchHostService).editUserConfiguration !== undefined
-		);
+		return accessor.get(IAppServerRemoteAgentService).connection?.kind === 'local' && accessor.get(IWorkbenchHostService).editUserConfiguration !== undefined;
 	}
-	return (
-		accessor.get(IWorkspaceContextService).getWorkspaceFolder(getHookConfigurationResource(accessor, source)!) !==
-		null
-	);
+	return accessor.get(IWorkspaceContextService).getWorkspaceFolder(getHookConfigurationResource(accessor, source)!) !== null;
 }
 
 /** Opens the owning TOML without changing existing declarations or granting execution permission. */
-export async function openHookConfiguration(
-	accessor: ServicesAccessor,
-	source: HookConfigurationTarget,
-	options?: IHookQuickPickOptions,
-): Promise<void> {
+export async function openHookConfiguration(accessor: ServicesAccessor, source: HookConfigurationTarget, options?: IHookQuickPickOptions): Promise<void> {
 	if (!canEditHookConfiguration(accessor, source)) {
-		throw new Error(
-			localize(
-				{ bundle: 'ash.settings', key: 'hooks.editUnavailable' },
-				'Edit this configuration on its owning host, or ask Ash to configure it.',
-			),
-		);
+		throw new Error(localize({ bundle: 'ash.settings', key: 'hooks.editUnavailable' }, 'Edit this configuration on its owning host, or ask Ash to configure it.'));
 	}
 	if (source.namespace === 'user') {
 		await accessor.get(IWorkbenchHostService).editUserConfiguration!();
@@ -85,8 +64,7 @@ export async function openHookConfiguration(
 	const workspaceSnapshot = workspace.getWorkspace();
 	// File IO can outlive a workspace or connection; do not create or focus an old host's file.
 	const checkContext = (): void => {
-		if (connection !== remote.connection || workspaceSnapshot !== workspace.getWorkspace())
-			throw new CancellationError();
+		if (connection !== remote.connection || workspaceSnapshot !== workspace.getWorkspace()) throw new CancellationError();
 	};
 	const resource = getHookConfigurationResource(accessor, source)!;
 	const files = accessor.get(IFileService);
@@ -103,10 +81,7 @@ export async function openHookConfiguration(
 }
 
 /** Selects a lifecycle event, then opens an existing Hook or its configuration scope. */
-export async function showConfigureHooksQuickPick(
-	accessor: ServicesAccessor,
-	options?: IHookQuickPickOptions,
-): Promise<void> {
+export async function showConfigureHooksQuickPick(accessor: ServicesAccessor, options?: IHookQuickPickOptions): Promise<void> {
 	const instantiation = accessor.get(IInstantiationService);
 	const prompts = accessor.get(IPromptsService);
 	const remote = accessor.get(IAppServerRemoteAgentService);
@@ -158,10 +133,7 @@ export async function showConfigureHooksQuickPick(
 	const connection = remote.connection;
 	const sessionId = chats.getActiveConversation()?.sessionId;
 	const workspaceSnapshot = workspace.getWorkspace();
-	const current = (): boolean =>
-		connection === remote.connection &&
-		workspaceSnapshot === workspace.getWorkspace() &&
-		sessionId === chats.getActiveConversation()?.sessionId;
+	const current = (): boolean => connection === remote.connection && workspaceSnapshot === workspace.getWorkspace() && sessionId === chats.getActiveConversation()?.sessionId;
 	picker.busy = true;
 	picker.items = [];
 	try {
@@ -179,23 +151,17 @@ export async function showConfigureHooksQuickPick(
 			for (const hook of source.hooks.filter(hook => hook.event === event)) {
 				const item = {
 					label: hook.id,
-					description: hook.enabled
-						? localize({ bundle: 'ash.settings', key: 'hooks.enabled' }, 'Enabled')
-						: localize({ bundle: 'ash.settings', key: 'hooks.disabled' }, 'Disabled'),
+					description: hook.enabled ? localize({ bundle: 'ash.settings', key: 'hooks.enabled' }, 'Enabled') : localize({ bundle: 'ash.settings', key: 'hooks.disabled' }, 'Disabled'),
 					detail: `${hook.program} ${JSON.stringify(hook.args)} · ${source.configPath}`,
 				};
 				entries.push(item);
 				targets.set(item, source);
 			}
 		}
-		const scopes: HookConfigurationTarget[] = sources.filter(
-			source => source.namespace === 'user' && instantiation.invokeFunction(canEditHookConfiguration, source),
-		);
+		const scopes: HookConfigurationTarget[] = sources.filter(source => source.namespace === 'user' && instantiation.invokeFunction(canEditHookConfiguration, source));
 		for (const folder of workspace.getWorkspace().folders) {
 			const resource = URI.joinPath(folder.uri, '.ash', 'config.toml');
-			const discovered = sources.find(source =>
-				extUri.isEqual(instantiation.invokeFunction(getHookConfigurationResource, source), resource),
-			);
+			const discovered = sources.find(source => extUri.isEqual(instantiation.invokeFunction(getHookConfigurationResource, source), resource));
 			scopes.push(
 				discovered ?? {
 					configPath: resource.scheme === Schemas.file ? resource.fsPath : resource.path,
@@ -208,15 +174,9 @@ export async function showConfigureHooksQuickPick(
 				label: localize(
 					'hooks.configureScope',
 					'Configure in {0}',
-					source.namespace === 'user'
-						? localize({ bundle: 'ash.settings', key: 'hooks.user' }, 'User configuration')
-						: source.configPath,
+					source.namespace === 'user' ? localize({ bundle: 'ash.settings', key: 'hooks.user' }, 'User configuration') : source.configPath,
 				),
-				detail: localize(
-					'hooks.configureScopeDetail',
-					'Open TOML for {0}. Save your changes, then refresh Hooks.',
-					selectedEvent.label,
-				),
+				detail: localize('hooks.configureScopeDetail', 'Open TOML for {0}. Save your changes, then refresh Hooks.', selectedEvent.label),
 			};
 			entries.push(item);
 			targets.set(item, source);
@@ -236,13 +196,7 @@ export async function showConfigureHooksQuickPick(
 		await instantiation.invokeFunction(openHookConfiguration, targets.get(chosen)!, options);
 	} catch (error) {
 		if ((!cancelled || opening) && !isCancellationError(error)) {
-			notifications.error(
-				localize(
-					{ bundle: 'ash.settings', key: 'hooks.actionFailed' },
-					'Could not configure Hooks: {0}',
-					error instanceof Error ? error.message : String(error),
-				),
-			);
+			notifications.error(localize({ bundle: 'ash.settings', key: 'hooks.actionFailed' }, 'Could not configure Hooks: {0}', error instanceof Error ? error.message : String(error)));
 		}
 	} finally {
 		picker.hide();

@@ -1,11 +1,6 @@
 import type { RemoteRuntimeInstallProgress } from '../common/remoteRuntimeInstallProgress.js';
 import { PackagedRemoteRuntimeCatalog, type RemoteRuntimeCatalogSource } from './packagedRemoteRuntimeCatalog.js';
-import {
-	normalizeCredentialFreeSshHost,
-	type RunRemoteCommand,
-	runRemoteCommand,
-	validLocalCommand,
-} from './remoteCommand.js';
+import { normalizeCredentialFreeSshHost, type RunRemoteCommand, runRemoteCommand, validLocalCommand } from './remoteCommand.js';
 import { RemoteRuntimeFetcher } from './remoteRuntimeFetcher.js';
 import type { RemoteRuntimeInstallRequestOptions } from './remoteRuntimeInstaller.js';
 import { RemoteRuntimeInstaller } from './remoteRuntimeInstaller.js';
@@ -56,12 +51,8 @@ export class RemoteRuntimeProvisioner {
 	}
 
 	private loadCatalog(): Promise<PackagedRemoteRuntimeCatalog> {
-		if (this.options.source.kind !== 'packaged')
-			throw new Error('Network Remote runtime sources do not have a packaged catalog');
-		this.catalog ??= PackagedRemoteRuntimeCatalog.load(
-			this.options.source.bundleRoot,
-			this.options.source.expectedSha256,
-		);
+		if (this.options.source.kind !== 'packaged') throw new Error('Network Remote runtime sources do not have a packaged catalog');
+		this.catalog ??= PackagedRemoteRuntimeCatalog.load(this.options.source.bundleRoot, this.options.source.expectedSha256);
 		return this.catalog;
 	}
 
@@ -73,8 +64,7 @@ export class RemoteRuntimeProvisioner {
 			signal === undefined ? undefined : { onStderrData: () => {}, signal },
 		);
 		if (result.exitCode !== 0) {
-			const diagnostic =
-				result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode ?? 'unknown'}`;
+			const diagnostic = result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode ?? 'unknown'}`;
 			throw new Error(`Remote platform probe failed: ${diagnostic}`);
 		}
 		const targets = result.stdout

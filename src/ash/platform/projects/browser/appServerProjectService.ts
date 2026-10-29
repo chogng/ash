@@ -53,12 +53,7 @@ export class AppServerProjectService implements IProjectService {
 		}
 	}
 
-	public async create(
-		id: string,
-		name: string,
-		description: string,
-		materials: readonly ProjectMaterial[],
-	): Promise<Project> {
+	public async create(id: string, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<Project> {
 		try {
 			return fromDto(
 				(
@@ -93,12 +88,7 @@ export class AppServerProjectService implements IProjectService {
 		}
 	}
 
-	public async update(
-		project: Project,
-		name: string,
-		description: string,
-		materials: readonly ProjectMaterial[],
-	): Promise<Project> {
+	public async update(project: Project, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<Project> {
 		try {
 			return fromDto(
 				(
@@ -175,13 +165,7 @@ function toMaterials(materials: readonly ProjectMaterial[]) {
 
 function projectError(error: unknown): Error {
 	if (error instanceof AppServerRemoteError && error.errorName === 'ProjectRevisionConflict') {
-		return new Error(
-			localize('projects.conflict', 'This project changed in another window. Refresh and try again.'),
-			{ cause: error },
-		);
+		return new Error(localize('projects.conflict', 'This project changed in another window. Refresh and try again.'), { cause: error });
 	}
-	return new Error(
-		localize('projects.requestFailed', 'Could not access projects. Check the connection and try again.'),
-		{ cause: error },
-	);
+	return new Error(localize('projects.requestFailed', 'Could not access projects. Check the connection and try again.'), { cause: error });
 }

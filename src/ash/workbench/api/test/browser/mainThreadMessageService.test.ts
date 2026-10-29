@@ -31,11 +31,7 @@ test('extension message identity comes from its authenticated caller, and second
 	using command = CommandsRegistry.register(OPEN_EXTENSIONS_COMMAND_ID, (_accessor, options) => {
 		managed = options;
 	});
-	const result = messages.handle(
-		{ operation: 'showMessage', message: 'Git failed', severity: 'error', items: ['Output', 'Retry'] },
-		'fixture.git',
-		new AbortController().signal,
-	);
+	const result = messages.handle({ operation: 'showMessage', message: 'Git failed', severity: 'error', items: ['Output', 'Retry'] }, 'fixture.git', new AbortController().signal);
 	await added.promise;
 	const item = notifications.model.getNotifications()[0];
 	assert.deepEqual(
@@ -73,11 +69,7 @@ for (const dismissal of ['remove', 'abort', 'dispose', 'removeOnArrival'] as con
 			added.resolve();
 		});
 		const controller = new AbortController();
-		const result = messages.handle(
-			{ operation: 'showMessage', message: 'Choose', severity: 'warning', items: ['Continue'] },
-			'fixture.git',
-			controller.signal,
-		);
+		const result = messages.handle({ operation: 'showMessage', message: 'Choose', severity: 'warning', items: ['Continue'] }, 'fixture.git', controller.signal);
 		await added.promise;
 		if (dismissal === 'remove') notifications.model.clear();
 		else if (dismissal === 'abort') controller.abort();
@@ -93,25 +85,8 @@ test('an extension message without choices completes immediately with an identit
 		throw new Error('Catalog unavailable');
 	};
 	using messages = services.createInstance(MainThreadMessageService);
-	assert.deepEqual(
-		await messages.handle(
-			{ operation: 'showMessage', message: 'Hello', severity: 'information' },
-			'fixture.unknown',
-			new AbortController().signal,
-		),
-		{ result: 'done' },
-	);
-	assert.equal(
-		(services.get(INotificationService) as NotificationService).model.getNotifications()[0].source,
-		'fixture.unknown',
-	);
-	await assert.rejects(
-		messages.handle(
-			{ operation: 'showMessage', message: 'Invalid', severity: 'error', items: [''] },
-			'fixture.unknown',
-			new AbortController().signal,
-		),
-		/button labels/,
-	);
+	assert.deepEqual(await messages.handle({ operation: 'showMessage', message: 'Hello', severity: 'information' }, 'fixture.unknown', new AbortController().signal), { result: 'done' });
+	assert.equal((services.get(INotificationService) as NotificationService).model.getNotifications()[0].source, 'fixture.unknown');
+	await assert.rejects(messages.handle({ operation: 'showMessage', message: 'Invalid', severity: 'error', items: [''] }, 'fixture.unknown', new AbortController().signal), /button labels/);
 	assert.equal((services.get(INotificationService) as NotificationService).model.getNotifications().length, 1);
 });

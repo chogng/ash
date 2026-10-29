@@ -11,11 +11,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IContextKeyService, ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import {
-	IChatService,
-	type ThreadSubscription,
-	type ThreadUpdateEnvelope,
-} from '../../../../services/chat/common/chatService.js';
+import { IChatService, type ThreadSubscription, type ThreadUpdateEnvelope } from '../../../../services/chat/common/chatService.js';
 import type { AgentTracePage } from '../../common/chatDebugEvents.js';
 import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import { ChatDebugEditor } from '../../browser/chatDebug/chatDebugEditor.js';
@@ -119,20 +115,12 @@ suite('Execution Trace editor', () => {
 			measureTreeViewport(dom.window.document);
 			await pane.setInput({ resource: URI.parse('ash-agent-trace:/s') }, new AbortController().signal);
 			assert.match(pane.getAccessibleContent(), /Agent output · Commentary · working/);
-			assert.match(
-				pane.getAccessibleContent(),
-				/Continue generation · Nonterminal message received · stop: Generation completed · phases: Commentary/,
-			);
+			assert.match(pane.getAccessibleContent(), /Continue generation · Nonterminal message received · stop: Generation completed · phases: Commentary/);
 			const buttons = [...dom.window.document.querySelectorAll<HTMLButtonElement>('button')];
 			buttons.find(button => button.textContent === 'Errors only')!.click();
-			const visible = [
-				...dom.window.document.querySelectorAll<HTMLButtonElement>('.ash-agent-trace-event'),
-			].filter(row => !row.hidden);
+			const visible = [...dom.window.document.querySelectorAll<HTMLButtonElement>('.ash-agent-trace-event')].filter(row => !row.hidden);
 			assert.equal(visible.length, 1);
-			assert.match(
-				visible[0].textContent!,
-				/Fail Turn · Output was truncated · stop: Output token limit · phases: Partial answer/,
-			);
+			assert.match(visible[0].textContent!, /Fail Turn · Output was truncated · stop: Output token limit · phases: Partial answer/);
 			visible[0].click();
 			assert.match(pane.getAccessibleContent(), /"toolCallCount": 0/);
 		} finally {
@@ -169,10 +157,7 @@ suite('Execution Trace editor', () => {
 				onDidChangeSession: changes.event,
 				onDidUpdateThread: Event.None,
 				onDidBecomeReady: Event.None,
-				readTrace: async (
-					_session: string,
-					after: Readonly<Record<string, number>>,
-				): Promise<AgentTracePage> => {
+				readTrace: async (_session: string, after: Readonly<Record<string, number>>): Promise<AgentTracePage> => {
 					reads++;
 					if (reads > 1) {
 						assert.deepEqual(after, { root: 1 });
@@ -249,12 +234,8 @@ suite('Execution Trace editor', () => {
 			await Promise.resolve();
 			assert.equal(reads, 2);
 			assert.deepEqual(subscribed, ['root', 'child']);
-			const root = dom.window.document
-				.querySelector('.ash-agent-trace-thread[data-thread-id="root"]')!
-				.closest('[role=treeitem]')!;
-			const child = dom.window.document
-				.querySelector('.ash-agent-trace-thread[data-thread-id="child"]')!
-				.closest('[role=treeitem]')!;
+			const root = dom.window.document.querySelector('.ash-agent-trace-thread[data-thread-id="root"]')!.closest('[role=treeitem]')!;
+			const child = dom.window.document.querySelector('.ash-agent-trace-thread[data-thread-id="child"]')!.closest('[role=treeitem]')!;
 			assert.equal(Number(child.getAttribute('aria-level')), Number(root.getAttribute('aria-level')) + 1);
 			pane.clearInput();
 			changes.fire({ sessionId: 's', agentTreeChanged: true });
@@ -406,10 +387,7 @@ suite('Execution Trace editor', () => {
 					cursor: 0,
 					hasMore: false,
 				}),
-				readTrace: async (
-					_session: string,
-					after: Readonly<Record<string, number>>,
-				): Promise<AgentTracePage> => {
+				readTrace: async (_session: string, after: Readonly<Record<string, number>>): Promise<AgentTracePage> => {
 					reads++;
 					const sequence = reads === 1 ? 1 : 2;
 					if (reads === 2) {
@@ -635,10 +613,7 @@ suite('Execution Trace editor', () => {
 					onDidChangeSession: Event.None,
 					onDidUpdateThread: Event.None,
 					onDidBecomeReady: Event.None,
-					readTrace: async (
-						_session: string,
-						after: Readonly<Record<string, number>>,
-					): Promise<AgentTracePage> => {
+					readTrace: async (_session: string, after: Readonly<Record<string, number>>): Promise<AgentTracePage> => {
 						if (after.root) {
 							void reading.complete();
 							return page.p;
@@ -698,10 +673,7 @@ suite('Execution Trace editor', () => {
 						released.push(thread);
 					},
 				} as unknown as IChatService);
-				services.registerInstance(
-					IChatDebugService,
-					services.get(IChatService) as unknown as IChatDebugService,
-				);
+				services.registerInstance(IChatDebugService, services.get(IChatService) as unknown as IChatDebugService);
 				registerCodeEditorServices(services);
 				using pane = registerTestComponentServices(services).createInstance(ChatDebugEditor);
 				pane.create(dom.window.document.body);
@@ -709,20 +681,11 @@ suite('Execution Trace editor', () => {
 				const resource = URI.parse(createAgentTraceResource(scenario.target).toString());
 				const pending = pane.setInput({ resource }, new AbortController().signal);
 				await reading.p;
-				assert.equal(
-					dom.window.document.querySelector('[role=treeitem][aria-selected=true] .ash-agent-trace-event'),
-					null,
-				);
-				assert.match(
-					dom.window.document.querySelector('.ash-agent-trace-details')!.textContent!,
-					/Finding saved execution event/,
-				);
+				assert.equal(dom.window.document.querySelector('[role=treeitem][aria-selected=true] .ash-agent-trace-event'), null);
+				assert.match(dom.window.document.querySelector('.ash-agent-trace-details')!.textContent!, /Finding saved execution event/);
 				if (scenario.name === 'closed input') {
 					pane.clearInput();
-					assert.equal(
-						dom.window.document.querySelector<HTMLProgressElement>('.ash-progress-bar')?.hidden,
-						true,
-					);
+					assert.equal(dom.window.document.querySelector<HTMLProgressElement>('.ash-progress-bar')?.hidden, true);
 				}
 				await page.complete({
 					trace: {
@@ -769,30 +732,18 @@ suite('Execution Trace editor', () => {
 					hasMore: false,
 				});
 				await pending;
-				const selected = dom.window.document.querySelector<HTMLButtonElement>(
-					'[role=treeitem][aria-selected=true] .ash-agent-trace-event',
-				);
+				const selected = dom.window.document.querySelector<HTMLButtonElement>('[role=treeitem][aria-selected=true] .ash-agent-trace-event');
 				assert.equal(selected?.dataset.key, scenario.key);
 				if (scenario.eventId) {
 					assert.match(pane.getAccessibleContent(), new RegExp(`"eventId": "${scenario.eventId}"`));
-					const filter = dom.window.document.querySelector<HTMLInputElement>(
-						'input[aria-label="Filter execution events"]',
-					)!;
+					const filter = dom.window.document.querySelector<HTMLInputElement>('input[aria-label="Filter execution events"]')!;
 					filter.value = 'no-such-filter-match';
 					filter.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 					assert.equal(dom.window.document.querySelectorAll('.ash-agent-trace-event').length, 0);
 					assert.equal(selected!.isConnected, false);
 					assert.match(pane.getAccessibleContent(), /hidden by the display filter/);
-					await pane.setInput(
-						{ resource: createAgentTraceResource({ sessionId: 's', threadId: 'root', turnId: 'before' }) },
-						new AbortController().signal,
-					);
-					assert.equal(
-						dom.window.document.querySelector<HTMLButtonElement>(
-							'[role=treeitem][aria-selected=true] .ash-agent-trace-event',
-						)?.dataset.key,
-						'root:1',
-					);
+					await pane.setInput({ resource: createAgentTraceResource({ sessionId: 's', threadId: 'root', turnId: 'before' }) }, new AbortController().signal);
+					assert.equal(dom.window.document.querySelector<HTMLButtonElement>('[role=treeitem][aria-selected=true] .ash-agent-trace-event')?.dataset.key, 'root:1');
 					assert.deepEqual(released, ['root', 'child']);
 				} else if (scenario.name === 'missing event') {
 					assert.match(pane.getAccessibleContent(), /No saved execution event matches child \/ missing/);
@@ -833,10 +784,7 @@ suite('Execution Trace editor', () => {
 					onDidUpdateThread: Event.None,
 					onDidBecomeReady: Event.None,
 				} as unknown as IChatService);
-				services.registerInstance(
-					IChatDebugService,
-					services.get(IChatService) as unknown as IChatDebugService,
-				);
+				services.registerInstance(IChatDebugService, services.get(IChatService) as unknown as IChatDebugService);
 				registerCodeEditorServices(services);
 				using pane = registerTestComponentServices(services).createInstance(ChatDebugEditor);
 				pane.create(dom.window.document.body);
@@ -893,10 +841,7 @@ suite('Execution Trace editor', () => {
 					assert.equal(dom.window.document.querySelectorAll('.ash-agent-trace-event').length, 0);
 				} else {
 					assert.match(pane.getAccessibleContent(), /Imported · newer.json/);
-					assert.equal(
-						dom.window.document.querySelector<HTMLElement>('.ash-agent-trace-thread')?.dataset.threadId,
-						'newer',
-					);
+					assert.equal(dom.window.document.querySelector<HTMLElement>('.ash-agent-trace-thread')?.dataset.threadId, 'newer');
 				}
 			} finally {
 				dom.window.close();
@@ -904,15 +849,7 @@ suite('Execution Trace editor', () => {
 		});
 	}
 
-	for (const scenario of [
-		'refresh',
-		'hide',
-		'close',
-		'replace',
-		'payload failure',
-		'captured relationships',
-		'colliding graph keys',
-	] as const) {
+	for (const scenario of ['refresh', 'hide', 'close', 'replace', 'payload failure', 'captured relationships', 'colliding graph keys'] as const) {
 		test(`keeps one bounded export while ${scenario}`, async () => {
 			const dom = new JSDOM('<!doctype html><body></body>');
 			try {
@@ -1195,10 +1132,7 @@ suite('Execution Trace editor', () => {
 					}),
 					unsubscribeThread: async () => {},
 				} as unknown as IChatService);
-				services.registerInstance(
-					IChatDebugService,
-					services.get(IChatService) as unknown as IChatDebugService,
-				);
+				services.registerInstance(IChatDebugService, services.get(IChatService) as unknown as IChatDebugService);
 				registerCodeEditorServices(services);
 				using pane = registerTestComponentServices(services).createInstance(ChatDebugEditor);
 				pane.create(dom.window.document.body);
@@ -1218,9 +1152,7 @@ suite('Execution Trace editor', () => {
 				button.click();
 				await requested.p;
 				assert.equal(button.disabled, true);
-				const filter = dom.window.document.querySelector<HTMLInputElement>(
-					'input[aria-label="Filter execution events"]',
-				)!;
+				const filter = dom.window.document.querySelector<HTMLInputElement>('input[aria-label="Filter execution events"]')!;
 				filter.value = 'no visible rows';
 				filter.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 				assert.equal(button.disabled, true);
@@ -1233,9 +1165,7 @@ suite('Execution Trace editor', () => {
 				} else if (scenario === 'replace') {
 					await pane.setInput({ resource: createAgentTraceResource('other') }, new AbortController().signal);
 				} else {
-					[...dom.window.document.querySelectorAll<HTMLButtonElement>('button')]
-						.find(button => button.textContent === 'Refresh')!
-						.click();
+					[...dom.window.document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Refresh')!.click();
 					await refreshed.p;
 					await Promise.resolve();
 					assert.match(pane.getAccessibleContent(), new RegExp(`${captured || colliding ? 5 : 4} events`));
@@ -1260,18 +1190,10 @@ suite('Execution Trace editor', () => {
 						artifact.threads[0].events.map((event: { sequence: number }) => event.sequence),
 						captured ? [1, 2, 3] : [1, 2],
 					);
-					assert.deepEqual(
-						Object.keys(artifact.graph.nodes),
-						captured
-							? Object.keys(graph.nodes)
-							: ['root', 'tool', 'attempt', ...(colliding ? ['savedTool'] : [])],
-					);
+					assert.deepEqual(Object.keys(artifact.graph.nodes), captured ? Object.keys(graph.nodes) : ['root', 'tool', 'attempt', ...(colliding ? ['savedTool'] : [])]);
 					assert.deepEqual(artifact.graph.edges, captured ? graph.edges : graph.edges.slice(0, 2));
 					assert.equal(artifact.graph.warnings.length > 0, !captured);
-					assert.equal(
-						artifact.diagnostics.recordingStatus,
-						scenario === 'payload failure' ? 'incomplete' : 'disabled',
-					);
+					assert.equal(artifact.diagnostics.recordingStatus, scenario === 'payload failure' ? 'incomplete' : 'disabled');
 					assert.equal(button.disabled, false);
 				}
 			} finally {
@@ -1344,14 +1266,8 @@ suite('Execution Trace editor', () => {
 			pane.create(dom.window.document.body);
 			measureTreeViewport(dom.window.document);
 			pane.layout({ width: 900, height: 600 });
-			await pane.setInput(
-				{ resource: createAgentTraceResource({ sessionId: 's', threadId: 'root', eventId: 'event-1999' }) },
-				new AbortController().signal,
-			);
-			assert.ok(
-				dom.window.document.querySelectorAll('.ash-agent-trace-event').length < 60,
-				'only a bounded viewport may be mounted',
-			);
+			await pane.setInput({ resource: createAgentTraceResource({ sessionId: 's', threadId: 'root', eventId: 'event-1999' }) }, new AbortController().signal);
+			assert.ok(dom.window.document.querySelectorAll('.ash-agent-trace-event').length < 60, 'only a bounded viewport may be mounted');
 			assert.match(pane.getAccessibleContent(), /line 0/);
 			assert.match(pane.getAccessibleContent(), /line 1999/);
 			assert.match(pane.getAccessibleContent(), /event-1999/);
@@ -1496,24 +1412,14 @@ suite('Execution Trace editor', () => {
 				},
 				new AbortController().signal,
 			);
-			assert.equal(
-				dom.window.document
-					.querySelector('[role=treeitem][aria-selected=true] [data-event-id]')
-					?.getAttribute('data-event-id'),
-				'diagnostic-model',
-			);
+			assert.equal(dom.window.document.querySelector('[role=treeitem][aria-selected=true] [data-event-id]')?.getAttribute('data-event-id'), 'diagnostic-model');
 			dom.window.document.querySelector<HTMLButtonElement>('[role=tab][id$="-relations"]')!.click();
 			await Promise.resolve();
 			await Promise.resolve();
 			const relation = dom.window.document.querySelector<HTMLElement>('.ash-agent-trace-relation')!;
 			assert.match(relation.textContent!, /Outgoing.*Model requested tool.*Shell/);
 			relation.click();
-			assert.equal(
-				dom.window.document
-					.querySelector('[role=treeitem][aria-selected=true] [data-event-id]')
-					?.getAttribute('data-event-id'),
-				'durable-tool',
-			);
+			assert.equal(dom.window.document.querySelector('[role=treeitem][aria-selected=true] [data-event-id]')?.getAttribute('data-event-id'), 'durable-tool');
 		} finally {
 			dom.window.close();
 		}
@@ -1681,10 +1587,7 @@ suite('Execution Trace editor', () => {
 					subscribeThread: async () => ({ thread: { sequence: 0 } }),
 					unsubscribeThread: async () => {},
 				} as unknown as IChatService);
-				services.registerInstance(
-					IChatDebugService,
-					services.get(IChatService) as unknown as IChatDebugService,
-				);
+				services.registerInstance(IChatDebugService, services.get(IChatService) as unknown as IChatDebugService);
 				registerCodeEditorServices(services);
 				using pane = registerTestComponentServices(services).createInstance(ChatDebugEditor);
 				pane.create(dom.window.document.body);
@@ -1712,9 +1615,7 @@ suite('Execution Trace editor', () => {
 				await second.complete({ instructions: 'resumed body' });
 				await Promise.resolve();
 				await Promise.resolve();
-				[...dom.window.document.querySelectorAll<HTMLButtonElement>('button')]
-					.find(button => button.textContent === 'Saved body')!
-					.click();
+				[...dom.window.document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Saved body')!.click();
 				const editor = services.get(ICodeEditorService).listCodeEditors()[0];
 				assert.match(services.get(IModelService).getModels()[0].getValue(), /resumed body/);
 				editor.setPosition({ lineNumber: 2, column: 1 });
@@ -1825,9 +1726,7 @@ suite('Execution Trace editor', () => {
 			await second.complete({ instructions: 'current body' });
 			await Promise.resolve();
 			await Promise.resolve();
-			[...dom.window.document.querySelectorAll<HTMLButtonElement>('button')]
-				.find(button => button.textContent === 'Saved body')!
-				.click();
+			[...dom.window.document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Saved body')!.click();
 			const models = services.get(IModelService);
 			assert.match(models.getModels()[0].getValue(), /current body/);
 			await first.complete({ instructions: 'earlier body', input: [{ type: 'toolResult', callId: 'call' }] });
@@ -1839,10 +1738,7 @@ suite('Execution Trace editor', () => {
 			dom.window.document.querySelector<HTMLButtonElement>('[role=tab][id$="-relations"]')!.click();
 			await Promise.resolve();
 			await Promise.resolve();
-			assert.match(
-				dom.window.document.querySelector('.ash-agent-trace-relation')?.textContent ?? '',
-				/Result present in model input/,
-			);
+			assert.match(dom.window.document.querySelector('.ash-agent-trace-relation')?.textContent ?? '', /Result present in model input/);
 			assert.deepEqual(reads, ['payload-1', 'payload-2']);
 		} finally {
 			dom.window.close();
@@ -1864,10 +1760,7 @@ function measureTreeViewport(document: Document): void {
 		clientWidth: { configurable: true, value: 300 },
 		scrollHeight: {
 			configurable: true,
-			get: () =>
-				Number.parseFloat(
-					document.querySelector<HTMLElement>('.ash-agent-trace-tree .ash-list')!.style.height,
-				) || 0,
+			get: () => Number.parseFloat(document.querySelector<HTMLElement>('.ash-agent-trace-tree .ash-list')!.style.height) || 0,
 		},
 	});
 }

@@ -3,10 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Event } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
-import type {
-	IWorkspaceTrustManagementService,
-	WorkspaceTrustPermission,
-} from '../../../../../platform/workspace/common/workspaceTrust.js';
+import type { IWorkspaceTrustManagementService, WorkspaceTrustPermission } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { resolveAppServerLanguageDirAccess } from '../../browser/appServerLanguageWorkspace.js';
 

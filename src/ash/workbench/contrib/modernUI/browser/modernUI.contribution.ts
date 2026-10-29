@@ -3,10 +3,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { WorkbenchConfiguration, type WorkbenchLayoutStyle } from '../../../common/configuration.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
-import {
-	IAuxiliaryWindowService,
-	type IAuxiliaryWindow,
-} from '../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { IWorkbenchLayoutService } from '../../../services/layout/browser/layoutService.js';
 import './media/editorBorder.css';
 import './media/padding.css';
@@ -82,6 +79,4 @@ export class ModernUIContribution extends Disposable {
 	}
 }
 
-registerWorkbenchContribution(ModernUIContribution.ID, WorkbenchPhase.BlockRestore, accessor =>
-	accessor.get(IInstantiationService).createInstance(ModernUIContribution),
-);
+registerWorkbenchContribution(ModernUIContribution.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ModernUIContribution));

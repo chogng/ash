@@ -7,23 +7,21 @@ interface StandaloneHelpPick extends IQuickPickItem {
 	readonly action: IEditorAction;
 }
 
-const helpActions = [
-	'editor.action.quickCommand',
-	'editor.action.quickOutline',
-	'editor.action.gotoLine',
-	'editor.action.gotoOffset',
-] as const;
+const helpActions = ['editor.action.quickCommand', 'editor.action.quickOutline', 'editor.action.gotoLine', 'editor.action.gotoOffset'] as const;
 
-export function getStandaloneHelpPicks(
-	editor: ICodeEditor,
-	keybindings: IKeybindingService,
-): readonly StandaloneHelpPick[] {
+export function getStandaloneHelpPicks(editor: ICodeEditor, keybindings: IKeybindingService): readonly StandaloneHelpPick[] {
 	return helpActions.flatMap(id => {
 		const action = editor.getAction(id);
 		if (!action?.isSupported()) {
 			return [];
 		}
 		const keybinding = keybindings.lookupKeybinding(id);
-		return [{ action, label: `? ${action.label}`, keybinding }];
+		return [
+			{
+				action,
+				label: `? ${action.label}`,
+				keybinding,
+			},
+		];
 	});
 }

@@ -9,13 +9,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import type { ModelProviderCredentialStatus } from '../../../../../platform/agentHost/common/agentModels.js';
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
 import { ILanguageModelsService } from '../../common/languageModels.js';
-import {
-	ChatModelsViewModel,
-	isLanguageModelProviderEntry,
-	isStatusEntry,
-	type ILanguageModelEntry,
-	type IViewModelEntry,
-} from '../../browser/chatManagement/chatModelsViewModel.js';
+import { ChatModelsViewModel, isLanguageModelProviderEntry, isStatusEntry, type ILanguageModelEntry, type IViewModelEntry } from '../../browser/chatManagement/chatModelsViewModel.js';
 import { getModelHoverContent } from '../../browser/chatManagement/chatModelsWidget.js';
 
 const catalog: readonly ModelCatalogEntry[] = [
@@ -69,8 +63,7 @@ function setup(resources: DisposableStore) {
 		},
 	} as ILanguageModelsService);
 	const view = resources.add(services.createInstance(ChatModelsViewModel));
-	const models = (filter: string): ILanguageModelEntry[] =>
-		view.filter(filter).filter((entry): entry is ILanguageModelEntry => entry.type === 'model');
+	const models = (filter: string): ILanguageModelEntry[] => view.filter(filter).filter((entry): entry is ILanguageModelEntry => entry.type === 'model');
 	return { view, source, changed, enabled, writes, models };
 }
 
@@ -133,11 +126,7 @@ test('Group visibility is scoped by connection identity even when provider label
 	);
 	view.filter('@provider:first older');
 	const filteredGroup = view.viewModelEntries.find(isLanguageModelProviderEntry)!;
-	assert.equal(
-		filteredGroup.hidden,
-		false,
-		'A hidden search result does not hide another enabled model in the same connection',
-	);
+	assert.equal(filteredGroup.hidden, false, 'A hidden search result does not hide another enabled model in the same connection');
 	await view.toggleGroupHidden(filteredGroup);
 	assert.deepEqual(
 		writes.map(write => [write.provider, write.model, write.visible]),
@@ -166,11 +155,7 @@ test('Collapsing provider groups and searching uses one projection and preserves
 	assert.equal(view.viewModelEntries.filter(entry => entry.type === 'model').length, 2);
 	assert.equal(models('other').length, 1, 'A new search expands its matching groups');
 	view.collapseAll();
-	assert.equal(
-		view.viewModelEntries.filter(entry => entry.type === 'model').length,
-		0,
-		'Collapse remains effective while searching',
-	);
+	assert.equal(view.viewModelEntries.filter(entry => entry.type === 'model').length, 0, 'Collapse remains effective while searching');
 	assert.equal(models('').length, 3);
 });
 

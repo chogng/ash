@@ -45,11 +45,7 @@ export async function launchWeb(
 	const resource = await registerRunResource(() => {
 		const packageRoot = developmentAshPackagePath(root, 'packaged-node');
 		return {
-			executable: join(
-				packageRoot,
-				'bin',
-				process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon',
-			),
+			executable: join(packageRoot, 'bin', process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon'),
 			profile: profileDirectory,
 		};
 	});
@@ -60,11 +56,7 @@ export async function launchWeb(
 		} finally {
 			try {
 				const packageRoot = developmentAshPackagePath(root, 'packaged-node');
-				const daemon = join(
-					packageRoot,
-					'bin',
-					process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon',
-				);
+				const daemon = join(packageRoot, 'bin', process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon');
 				await promisify(execFile)(daemon, ['stop'], {
 					env: { ...environment, ASH_HOME: profileDirectory },
 					windowsHide: true,

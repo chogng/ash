@@ -4,10 +4,7 @@ import assert from 'node:assert/strict';
 import { test, suite } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import type {
-	ExecutionSettingsSnapshot,
-	IAgentExecutionSettingsService,
-} from '../../../../../platform/agentHost/common/agentExecutionSettingsService.js';
+import type { ExecutionSettingsSnapshot, IAgentExecutionSettingsService } from '../../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import type { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
 import { SandboxSettingsModel } from '../../browser/sandboxSettingsModel.js';
 
@@ -145,9 +142,7 @@ suite('sandboxSettings browser component', () => {
 				await expect(save).toBeDisabled();
 				await expect(root).toContainText(':readOnly');
 				await expect(root).toContainText(locale === 'en' ? 'Managed host constraints' : '管理员宿主约束');
-				await expect(root).toContainText(
-					locale === 'en' ? 'Workbench terminals are separate' : '工作台终端使用独立路径',
-				);
+				await expect(root).toContainText(locale === 'en' ? 'Workbench terminals are separate' : '工作台终端使用独立路径');
 				await root.screenshot({ path: browserTests.info.outputPath('sandbox-settings.png') });
 				expect(errors).toEqual([]);
 			});

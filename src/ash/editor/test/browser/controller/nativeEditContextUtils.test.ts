@@ -3,13 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { EditContext } from '../../../browser/controller/editContext/native/editContextFactory.js';
-import {
-	clampOffset,
-	createNativeTextWindow,
-	FocusTracker,
-	isNativeTextUpdateEvent,
-	NATIVE_TEXT_WINDOW_LENGTH,
-} from '../../../browser/controller/editContext/native/nativeEditContextUtils.js';
+import { clampOffset, createNativeTextWindow, FocusTracker, isNativeTextUpdateEvent, NATIVE_TEXT_WINDOW_LENGTH } from '../../../browser/controller/editContext/native/nativeEditContextUtils.js';
 import { NullLoggerService } from '../../../../platform/log/common/log.js';
 
 test('native edit-context offsets are clamped and validated', () => {

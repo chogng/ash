@@ -1,21 +1,11 @@
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
-import {
-	Disposable,
-	DisposableMap,
-	toDisposable,
-	type IDisposable,
-	type IReference,
-} from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, toDisposable, type IDisposable, type IReference } from '../../../../base/common/lifecycle.js';
 import { isCancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { URI } from '../../../../base/common/uri.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { Schemas } from '../../../../base/common/network.js';
 import type { LanguageWorkspaceEdit, LanguageWorkspaceEditEntry } from '../../../../editor/common/languages.js';
-import {
-	ITextModelService,
-	type ITextModelService as ITextModelServiceContract,
-	type IResolvedTextEditorModel,
-} from '../../../../editor/common/services/resolverService.js';
+import { ITextModelService, type ITextModelService as ITextModelServiceContract, type IResolvedTextEditorModel } from '../../../../editor/common/services/resolverService.js';
 import { AppServerProtocolClient } from '../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import {
 	APP_SERVER_METHODS,
@@ -29,18 +19,11 @@ import {
 import { AppServerRemoteError } from '../../../../platform/agentHost/common/appServerError.js';
 import { FileNotFoundError } from '../../../../platform/files/common/files.js';
 import { WorkspaceEditConflictError } from '../../../../editor/browser/services/bulkEditService.js';
-import {
-	IWorkingCopyService,
-	type IWorkingCopyService as IWorkingCopyServiceContract,
-} from '../../workingCopy/common/workingCopyService.js';
+import { IWorkingCopyService, type IWorkingCopyService as IWorkingCopyServiceContract } from '../../workingCopy/common/workingCopyService.js';
 import type { ChatEditSource, ChatEditOutcome } from '../../chat/common/chatService.js';
 
 interface DocumentEditReview {
-	applyEdits(
-		edit: LanguageWorkspaceEdit,
-		signal: AbortSignal,
-		source: ChatEditSource,
-	): Promise<{ readonly isApplied: boolean }>;
+	applyEdits(edit: LanguageWorkspaceEdit, signal: AbortSignal, source: ChatEditSource): Promise<{ readonly isApplied: boolean }>;
 	finishTurn(source: ChatEditSource, outcome: ChatEditOutcome): Promise<void>;
 }
 
@@ -61,21 +44,9 @@ export class AppServerTextDocumentHost extends Disposable {
 		@IWorkingCopyService private readonly workingCopies: IWorkingCopyServiceContract,
 	) {
 		super();
-		this._register(
-			client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/read'], (params, context) =>
-				this.read(params, context.signal),
-			),
-		);
-		this._register(
-			client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/list'], (params, context) =>
-				this.list(params.root, context.signal),
-			),
-		);
-		this._register(
-			client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/apply'], (params, context) =>
-				this.apply(params, context.signal),
-			),
-		);
+		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/read'], (params, context) => this.read(params, context.signal)));
+		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/list'], (params, context) => this.list(params.root, context.signal)));
+		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/apply'], (params, context) => this.apply(params, context.signal)));
 		this._register(
 			client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/release'], params => {
 				for (const snapshot of params.snapshots) {
@@ -94,12 +65,7 @@ export class AppServerTextDocumentHost extends Disposable {
 		this._register(
 			client.onNotification(notification => {
 				if (notification.method === 'textDocument/turnFinished') {
-					void this.review
-						.finishTurn(
-							{ threadId: notification.params.threadId, turnId: notification.params.turnId },
-							notification.params.outcome,
-						)
-						.catch(onUnexpectedError);
+					void this.review.finishTurn({ threadId: notification.params.threadId, turnId: notification.params.turnId }, notification.params.outcome).catch(onUnexpectedError);
 				}
 			}),
 		);
@@ -110,12 +76,7 @@ export class AppServerTextDocumentHost extends Disposable {
 		const root = documentComparisonResource(documentResource(path));
 		const documents = this.workingCopies
 			.getAll()
-			.filter(
-				copy =>
-					copy.backupKind === 'text' &&
-					copy.isDirty &&
-					extUri.isEqualOrParent(documentComparisonResource(copy.resource), root),
-			)
+			.filter(copy => copy.backupKind === 'text' && copy.isDirty && extUri.isEqualOrParent(documentComparisonResource(copy.resource), root))
 			.map(copy => ({
 				relativePath: copy.resource.path.slice(root.path.replace(/\/$/u, '').length).replace(/^\//u, ''),
 				text: copy.backup(),
@@ -138,9 +99,7 @@ export class AppServerTextDocumentHost extends Disposable {
 						readAccess: params.readAccess,
 						encoding,
 						...decoding,
-						...(candidateGuessEncodings === undefined
-							? {}
-							: { candidateGuessEncodings: [...candidateGuessEncodings] }),
+						...(candidateGuessEncodings === undefined ? {} : { candidateGuessEncodings: [...candidateGuessEncodings] }),
 					});
 					throwIfCancelled(signal);
 					throwIfCancelled(readSignal);
@@ -175,10 +134,7 @@ export class AppServerTextDocumentHost extends Disposable {
 			if (isCancellationError(error)) {
 				throw error;
 			}
-			if (
-				error instanceof FileNotFoundError ||
-				(error instanceof AppServerRemoteError && error.errorName === 'FileSystemNotFound')
-			) {
+			if (error instanceof FileNotFoundError || (error instanceof AppServerRemoteError && error.errorName === 'FileSystemNotFound')) {
 				return { kind: 'notFound' };
 			}
 			return { kind: 'failed', message: String(error) };

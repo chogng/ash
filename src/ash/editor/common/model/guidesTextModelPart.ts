@@ -7,14 +7,7 @@ import type { TextModel } from './textModel.js';
 import { TextModelPart } from './textModelPart.js';
 import { computeIndentLevel } from './utils.js';
 import { ResolvedLanguageConfiguration } from '../languages/languageConfigurationRegistry.js';
-import {
-	BracketGuideOptions,
-	HorizontalGuidesState,
-	IActiveIndentGuideInfo,
-	IGuidesTextModelPart,
-	IndentGuide,
-	IndentGuideHorizontalLine,
-} from '../textModelGuides.js';
+import { BracketGuideOptions, HorizontalGuidesState, IActiveIndentGuideInfo, IGuidesTextModelPart, IndentGuide, IndentGuideHorizontalLine } from '../textModelGuides.js';
 import { BugIndicatingError } from '../../../base/common/errors.js';
 
 export class GuidesTextModelPart extends TextModelPart implements IGuidesTextModelPart {
@@ -33,11 +26,7 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 		return computeIndentLevel(this.textModel.getLineContent(lineIndex + 1), this.textModel.getOptions().tabSize);
 	}
 
-	public getActiveIndentGuide(
-		lineNumber: number,
-		minLineNumber: number,
-		maxLineNumber: number,
-	): IActiveIndentGuideInfo {
+	public getActiveIndentGuide(lineNumber: number, minLineNumber: number, maxLineNumber: number): IActiveIndentGuideInfo {
 		this.assertNotDisposed();
 		const lineCount = this.textModel.getLineCount();
 
@@ -53,10 +42,7 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 		let up_belowContentLineIndex = -2; /* -2 is a marker for not having computed it */
 		let up_belowContentLineIndent = -1;
 		const up_resolveIndents = (lineNumber: number) => {
-			if (
-				up_aboveContentLineIndex !== -1 &&
-				(up_aboveContentLineIndex === -2 || up_aboveContentLineIndex > lineNumber - 1)
-			) {
+			if (up_aboveContentLineIndex !== -1 && (up_aboveContentLineIndex === -2 || up_aboveContentLineIndex > lineNumber - 1)) {
 				up_aboveContentLineIndex = -1;
 				up_aboveContentLineIndent = -1;
 
@@ -104,10 +90,7 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 				}
 			}
 
-			if (
-				down_belowContentLineIndex !== -1 &&
-				(down_belowContentLineIndex === -2 || down_belowContentLineIndex < lineNumber - 1)
-			) {
+			if (down_belowContentLineIndex !== -1 && (down_belowContentLineIndex === -2 || down_belowContentLineIndex < lineNumber - 1)) {
 				down_belowContentLineIndex = -1;
 				down_belowContentLineIndent = -1;
 
@@ -153,11 +136,7 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 					upLineIndentLevel = Math.ceil(currentIndent / this.textModel.getOptions().indentSize);
 				} else {
 					up_resolveIndents(upLineNumber);
-					upLineIndentLevel = this._getIndentLevelForWhitespaceLine(
-						offSide,
-						up_aboveContentLineIndent,
-						up_belowContentLineIndent,
-					);
+					upLineIndentLevel = this._getIndentLevelForWhitespaceLine(offSide, up_aboveContentLineIndent, up_belowContentLineIndent);
 				}
 			}
 
@@ -170,11 +149,7 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 					downLineIndentLevel = Math.ceil(currentIndent / this.textModel.getOptions().indentSize);
 				} else {
 					down_resolveIndents(downLineNumber);
-					downLineIndentLevel = this._getIndentLevelForWhitespaceLine(
-						offSide,
-						down_aboveContentLineIndent,
-						down_belowContentLineIndent,
-					);
+					downLineIndentLevel = this._getIndentLevelForWhitespaceLine(offSide, down_aboveContentLineIndent, down_belowContentLineIndent);
 				}
 			}
 
@@ -184,11 +159,7 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 			}
 
 			if (distance === 1) {
-				if (
-					downLineNumber <= lineCount &&
-					downLineIndentLevel >= 0 &&
-					initialIndent + 1 === downLineIndentLevel
-				) {
+				if (downLineNumber <= lineCount && downLineIndentLevel >= 0 && initialIndent + 1 === downLineIndentLevel) {
 					goUp = false;
 					startLineNumber = downLineNumber;
 					endLineNumber = downLineNumber;
@@ -231,21 +202,14 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 		return { startLineNumber, endLineNumber, indent };
 	}
 
-	public getLinesBracketGuides(
-		startLineNumber: number,
-		endLineNumber: number,
-		activePosition: IPosition | null,
-		options: BracketGuideOptions,
-	): IndentGuide[][] {
+	public getLinesBracketGuides(startLineNumber: number, endLineNumber: number, activePosition: IPosition | null, options: BracketGuideOptions): IndentGuide[][] {
 		const result: IndentGuide[][] = [];
 		for (let lineNumber = startLineNumber; lineNumber <= endLineNumber; lineNumber++) {
 			result.push([]);
 		}
 
 		const bracketPairs = this.textModel.bracketPairs
-			.getBracketPairsInRangeWithMinIndentation(
-				new Range(startLineNumber, 1, endLineNumber, this.textModel.getLineMaxColumn(endLineNumber)),
-			)
+			.getBracketPairsInRangeWithMinIndentation(new Range(startLineNumber, 1, endLineNumber, this.textModel.getLineMaxColumn(endLineNumber)))
 			.toArray();
 
 		let activeBracketPairRange: Range | undefined = undefined;
@@ -257,14 +221,10 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 			).filter(bp => Range.strictContainsPosition(bp.range, activePosition));
 
 			// A single-line pair has no vertical guide, so it cannot take the active stroke.
-			activeBracketPairRange = findLast(
-				bracketsContainingActivePosition,
-				i => i.range.startLineNumber !== i.range.endLineNumber,
-			)?.range;
+			activeBracketPairRange = findLast(bracketsContainingActivePosition, i => i.range.startLineNumber !== i.range.endLineNumber)?.range;
 		}
 
-		const independentColorPoolPerBracketType =
-			this.textModel.getOptions().bracketPairColorizationOptions.independentColorPoolPerBracketType;
+		const independentColorPoolPerBracketType = this.textModel.getOptions().bracketPairColorizationOptions.independentColorPoolPerBracketType;
 		const colorProvider = new BracketPairGuidesClassNames();
 
 		for (const pair of bracketPairs) {
@@ -278,30 +238,19 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 			}
 
 			const className =
-				colorProvider.getInlineClassName(
-					pair.nestingLevel,
-					pair.nestingLevelOfEqualBracketType,
-					independentColorPoolPerBracketType,
-				) + (options.highlightActive && isActive ? ' ' + colorProvider.activeClassName : '');
+				colorProvider.getInlineClassName(pair.nestingLevel, pair.nestingLevelOfEqualBracketType, independentColorPoolPerBracketType) +
+				(options.highlightActive && isActive ? ' ' + colorProvider.activeClassName : '');
 
 			const start = pair.openingBracketRange.getStartPosition();
 			const end = pair.closingBracketRange.getStartPosition();
-			const horizontalGuides =
-				options.horizontalGuides === HorizontalGuidesState.Enabled ||
-				(options.horizontalGuides === HorizontalGuidesState.EnabledForActive && isActive);
+			const horizontalGuides = options.horizontalGuides === HorizontalGuidesState.Enabled || (options.horizontalGuides === HorizontalGuidesState.EnabledForActive && isActive);
 
 			const endVisibleColumn = this.getVisibleColumnFromPosition(end);
 			const startVisibleColumn = this.getVisibleColumnFromPosition(pair.openingBracketRange.getStartPosition());
-			const guideVisibleColumn = Math.min(
-				startVisibleColumn,
-				endVisibleColumn,
-				pair.minVisibleColumnIndentation + 1,
-			);
+			const guideVisibleColumn = Math.min(startVisibleColumn, endVisibleColumn, pair.minVisibleColumnIndentation + 1);
 
 			let renderHorizontalEndLineAtTheBottom = false;
-			const firstNonWsIndex = strings.firstNonWhitespaceIndex(
-				this.textModel.getLineContent(pair.closingBracketRange.startLineNumber),
-			);
+			const firstNonWsIndex = strings.firstNonWhitespaceIndex(this.textModel.getLineContent(pair.closingBracketRange.startLineNumber));
 			const hasTextBeforeClosingBracket = firstNonWsIndex < pair.closingBracketRange.startColumn - 1;
 			if (hasTextBeforeClosingBracket) {
 				renderHorizontalEndLineAtTheBottom = true;
@@ -311,42 +260,17 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 			const visibleGuideEndLineNumber = Math.min(end.lineNumber, endLineNumber);
 			// The browser draws the closing row's final half-stroke from this guide.
 			for (let l = visibleGuideStartLineNumber; l <= visibleGuideEndLineNumber; l++) {
-				result[l - startLineNumber].push(
-					new IndentGuide(
-						guideVisibleColumn,
-						-1,
-						className,
-						null,
-						l === start.lineNumber ? start.column : -1,
-						l === end.lineNumber ? end.column : -1,
-					),
-				);
+				result[l - startLineNumber].push(new IndentGuide(guideVisibleColumn, -1, className, null, l === start.lineNumber ? start.column : -1, l === end.lineNumber ? end.column : -1));
 			}
 
 			if (horizontalGuides) {
 				if (start.lineNumber >= startLineNumber && startVisibleColumn > guideVisibleColumn) {
-					result[start.lineNumber - startLineNumber].push(
-						new IndentGuide(
-							guideVisibleColumn,
-							-1,
-							className,
-							new IndentGuideHorizontalLine(false, start.column),
-							-1,
-							-1,
-						),
-					);
+					result[start.lineNumber - startLineNumber].push(new IndentGuide(guideVisibleColumn, -1, className, new IndentGuideHorizontalLine(false, start.column), -1, -1));
 				}
 
 				if (end.lineNumber <= endLineNumber && endVisibleColumn > guideVisibleColumn) {
 					result[end.lineNumber - startLineNumber].push(
-						new IndentGuide(
-							guideVisibleColumn,
-							-1,
-							className,
-							new IndentGuideHorizontalLine(!renderHorizontalEndLineAtTheBottom, end.column),
-							-1,
-							-1,
-						),
+						new IndentGuide(guideVisibleColumn, -1, className, new IndentGuideHorizontalLine(!renderHorizontalEndLineAtTheBottom, end.column), -1, -1),
 					);
 				}
 			}
@@ -360,13 +284,7 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 	}
 
 	private getVisibleColumnFromPosition(position: Position): number {
-		return (
-			CursorColumns.visibleColumnFromColumn(
-				this.textModel.getLineContent(position.lineNumber),
-				position.column,
-				this.textModel.getOptions().tabSize,
-			) + 1
-		);
+		return CursorColumns.visibleColumnFromColumn(this.textModel.getLineContent(position.lineNumber), position.column, this.textModel.getOptions().tabSize) + 1;
 	}
 
 	public getLinesIndentGuides(startLineNumber: number, endLineNumber: number): number[] {
@@ -415,10 +333,7 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 				}
 			}
 
-			if (
-				belowContentLineIndex !== -1 &&
-				(belowContentLineIndex === -2 || belowContentLineIndex < lineNumber - 1)
-			) {
+			if (belowContentLineIndex !== -1 && (belowContentLineIndex === -2 || belowContentLineIndex < lineNumber - 1)) {
 				belowContentLineIndex = -1;
 				belowContentLineIndent = -1;
 
@@ -432,20 +347,12 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 				}
 			}
 
-			result[resultIndex] = this._getIndentLevelForWhitespaceLine(
-				offSide,
-				aboveContentLineIndent,
-				belowContentLineIndent,
-			);
+			result[resultIndex] = this._getIndentLevelForWhitespaceLine(offSide, aboveContentLineIndent, belowContentLineIndent);
 		}
 		return result;
 	}
 
-	private _getIndentLevelForWhitespaceLine(
-		offSide: boolean,
-		aboveContentLineIndent: number,
-		belowContentLineIndent: number,
-	): number {
+	private _getIndentLevelForWhitespaceLine(offSide: boolean, aboveContentLineIndent: number, belowContentLineIndent: number): number {
 		const options = this.textModel.getOptions();
 
 		if (aboveContentLineIndent === -1 || belowContentLineIndent === -1) {
@@ -467,14 +374,8 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 export class BracketPairGuidesClassNames {
 	public readonly activeClassName = 'active';
 
-	getInlineClassName(
-		nestingLevel: number,
-		nestingLevelOfEqualBracketType: number,
-		independentColorPoolPerBracketType: boolean,
-	): string {
-		return this.getInlineClassNameOfLevel(
-			independentColorPoolPerBracketType ? nestingLevelOfEqualBracketType : nestingLevel,
-		);
+	getInlineClassName(nestingLevel: number, nestingLevelOfEqualBracketType: number, independentColorPoolPerBracketType: boolean): string {
+		return this.getInlineClassNameOfLevel(independentColorPoolPerBracketType ? nestingLevelOfEqualBracketType : nestingLevel);
 	}
 
 	getInlineClassNameOfLevel(level: number): string {

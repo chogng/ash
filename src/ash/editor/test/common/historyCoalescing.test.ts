@@ -14,8 +14,7 @@ import { createTestCursorsController } from './testCursorConfiguration.js';
 import { ViewModelEventsCollector } from '../../common/viewModelEventDispatcher.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
-const range = (startColumn: number, endColumn: number): Range =>
-	Range.fromPositions(position(0, startColumn), position(0, endColumn));
+const range = (startColumn: number, endColumn: number): Range => Range.fromPositions(position(0, startColumn), position(0, endColumn));
 const cursors = (offsets: readonly number[], primaryIndex = 0): readonly Selection[] =>
 	primaryFirst(
 		offsets.map(offset => Selection.fromPositions(position(0, offset))),
@@ -23,17 +22,11 @@ const cursors = (offsets: readonly number[], primaryIndex = 0): readonly Selecti
 	);
 const selections = (offsets: readonly (readonly [number, number])[], primaryIndex = 0): readonly Selection[] =>
 	primaryFirst(
-		offsets.map(([anchorOffset, activeOffset]) =>
-			Selection.fromPositions(position(0, anchorOffset), position(0, activeOffset)),
-		),
+		offsets.map(([anchorOffset, activeOffset]) => Selection.fromPositions(position(0, anchorOffset), position(0, activeOffset))),
 		primaryIndex,
 	);
 
-function pushEdits(
-	model: TextModel,
-	edits: IIdentifiedSingleEditOperation[],
-	group?: UndoRedoGroup,
-): TextModelChange | undefined {
+function pushEdits(model: TextModel, edits: IIdentifiedSingleEditOperation[], group?: UndoRedoGroup): TextModelChange | undefined {
 	let change: TextModelChange | undefined;
 	const listener = model.onDidChangeContent(event => {
 		change = event;
@@ -62,13 +55,7 @@ function typeText(controller: CursorsController, model: TextModel, text: string)
 }
 
 function deleteLeft(controller: CursorsController, model: TextModel): TextModelChange | undefined {
-	const [shouldPushUndoStop, commands] = DeleteOperations.deleteLeft(
-		controller.getPrevEditOperationType(),
-		controller.context.cursorConfig,
-		model,
-		controller.getSelections(),
-		[],
-	);
+	const [shouldPushUndoStop, commands] = DeleteOperations.deleteLeft(controller.getPrevEditOperationType(), controller.context.cursorConfig, model, controller.getSelections(), []);
 	if (shouldPushUndoStop) controller.pushUndoStop();
 	const change = captureChange(model, () => controller.executeCommands(commands, 'deleteLeft'));
 	controller.setPrevEditOperationType(EditOperationType.DeletingLeft);
@@ -76,12 +63,7 @@ function deleteLeft(controller: CursorsController, model: TextModel): TextModelC
 }
 
 function deleteRight(controller: CursorsController, model: TextModel): TextModelChange | undefined {
-	const [shouldPushUndoStop, commands] = DeleteOperations.deleteRight(
-		controller.getPrevEditOperationType(),
-		controller.context.cursorConfig,
-		model,
-		controller.getSelections(),
-	);
+	const [shouldPushUndoStop, commands] = DeleteOperations.deleteRight(controller.getPrevEditOperationType(), controller.context.cursorConfig, model, controller.getSelections());
 	if (shouldPushUndoStop) controller.pushUndoStop();
 	const change = captureChange(model, () => controller.executeCommands(commands, 'deleteRight'));
 	controller.setPrevEditOperationType(EditOperationType.DeletingRight);
@@ -139,7 +121,12 @@ test('TextModel starts a new step for non-adjacent group edits', () => {
 			afterFirstUndo,
 			afterSecondUndo: model.getText(),
 		},
-		{ first: 1, second: 2, afterFirstUndo: 'A', afterSecondUndo: '' },
+		{
+			first: 1,
+			second: 2,
+			afterFirstUndo: 'A',
+			afterSecondUndo: '',
+		},
 	);
 });
 
@@ -197,8 +184,16 @@ test('Explicit selection changes break typing coalescing', () => {
 	controller.context.model.undo();
 
 	assert.deepEqual(
-		{ first: first?.transactionId, second: second?.transactionId, text: model.getText() },
-		{ first: 1, second: 2, text: 'A' },
+		{
+			first: first?.transactionId,
+			second: second?.transactionId,
+			text: model.getText(),
+		},
+		{
+			first: 1,
+			second: 2,
+			text: 'A',
+		},
 	);
 });
 
@@ -226,7 +221,10 @@ test('Typing coalesces an initial replacement and following insertions', () => {
 
 	const afterTyping = model.getText();
 	controller.context.model.undo();
-	const afterUndo = { text: model.getText(), selections: controller.getSelections() };
+	const afterUndo = {
+		text: model.getText(),
+		selections: controller.getSelections(),
+	};
 	controller.context.model.redo();
 
 	assert.deepEqual(
@@ -234,13 +232,22 @@ test('Typing coalesces an initial replacement and following insertions', () => {
 			transactionIds: [first?.transactionId, second?.transactionId, third?.transactionId],
 			afterTyping,
 			afterUndo,
-			afterRedo: { text: model.getText(), selections: controller.getSelections() },
+			afterRedo: {
+				text: model.getText(),
+				selections: controller.getSelections(),
+			},
 		},
 		{
 			transactionIds: [1, 1, 1],
 			afterTyping: 'hXYZo',
-			afterUndo: { text: 'hello', selections: selections([[1, 4]]) },
-			afterRedo: { text: 'hXYZo', selections: cursors([4]) },
+			afterUndo: {
+				text: 'hello',
+				selections: selections([[1, 4]]),
+			},
+			afterRedo: {
+				text: 'hXYZo',
+				selections: cursors([4]),
+			},
 		},
 	);
 });
@@ -262,7 +269,10 @@ test('Typing coalesces replacements independently at multiple selections', () =>
 
 	controller.context.model.undo();
 	assert.deepEqual(
-		{ text: model.getText(), selections: controller.getSelections() },
+		{
+			text: model.getText(),
+			selections: controller.getSelections(),
+		},
 		{
 			text: 'ab__CD',
 			selections: selections(
@@ -276,8 +286,14 @@ test('Typing coalesces replacements independently at multiple selections', () =>
 	);
 	controller.context.model.redo();
 	assert.deepEqual(
-		{ text: model.getText(), selections: controller.getSelections() },
-		{ text: 'XY__XY', selections: cursors([2, 6], 1) },
+		{
+			text: model.getText(),
+			selections: controller.getSelections(),
+		},
+		{
+			text: 'XY__XY',
+			selections: cursors([2, 6], 1),
+		},
 	);
 });
 
@@ -299,7 +315,12 @@ test('TextModel normalizes converged inverse insertions', () => {
 });
 
 test('Coalesced history obeys the text-unit budget', () => {
-	using model = new TextModel('ab', { historyLimit: { transactions: 10, textUnits: 1 } });
+	using model = new TextModel('ab', {
+		historyLimit: {
+			transactions: 10,
+			textUnits: 1,
+		},
+	});
 	using controller = createTestCursorsController(model, cursors([2]));
 	const first = deleteLeft(controller, model);
 	const second = deleteLeft(controller, model);
@@ -310,7 +331,11 @@ test('Coalesced history obeys the text-unit budget', () => {
 			text: model.getText(),
 			undo: controller.context.model.undo(),
 		},
-		{ transactionIds: [1, 1], text: '', undo: undefined },
+		{
+			transactionIds: [1, 1],
+			text: '',
+			undo: undefined,
+		},
 	);
 });
 
@@ -331,7 +356,12 @@ test('CursorsController coalesces Backspace commands', () => {
 			afterUndo,
 			afterRedo: controller.getSelections(),
 		},
-		{ transactionIds: [1, 1], text: 'ab', afterUndo: cursors([4]), afterRedo: cursors([2]) },
+		{
+			transactionIds: [1, 1],
+			text: 'ab',
+			afterUndo: cursors([4]),
+			afterRedo: cursors([2]),
+		},
 	);
 });
 
@@ -346,8 +376,16 @@ test('CursorsController coalesces forward Delete commands', () => {
 	controller.context.model.redo();
 
 	assert.deepEqual(
-		{ transactionIds: [first?.transactionId, second?.transactionId], afterUndo, afterRedo: model.getText() },
-		{ transactionIds: [1, 1], afterUndo: 'abcd', afterRedo: 'ad' },
+		{
+			transactionIds: [first?.transactionId, second?.transactionId],
+			afterUndo,
+			afterRedo: model.getText(),
+		},
+		{
+			transactionIds: [1, 1],
+			afterUndo: 'abcd',
+			afterRedo: 'ad',
+		},
 	);
 });
 
@@ -360,8 +398,14 @@ test('Backspace coalescing adjusts separated multi-cursor offsets', () => {
 	controller.context.model.undo();
 
 	assert.deepEqual(
-		{ text: model.getText(), selections: controller.getSelections() },
-		{ text: 'ab__CD', selections: cursors([2, 6]) },
+		{
+			text: model.getText(),
+			selections: controller.getSelections(),
+		},
+		{
+			text: 'ab__CD',
+			selections: cursors([2, 6]),
+		},
 	);
 });
 

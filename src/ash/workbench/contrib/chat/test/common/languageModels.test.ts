@@ -6,19 +6,8 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Event, Emitter } from '../../../../../base/common/event.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
-import type {
-	AccountDto,
-	AccountReadResult,
-	ModelListResult,
-	ProviderListResult,
-	ProviderModelsListResult,
-	ServerNotification,
-} from '../../../../../../../.build/protocol/typescript/index.js';
-import {
-	IAppServerApi,
-	IServerEventApi,
-	type AppServerConnectionState,
-} from '../../../../../platform/agentHost/common/appServerApi.js';
+import type { AccountDto, AccountReadResult, ModelListResult, ProviderListResult, ProviderModelsListResult, ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
+import { IAppServerApi, IServerEventApi, type AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IAgentModelsService } from '../../../../../platform/agentHost/common/agentModels.js';
 import type { IAccountApi } from '../../../../../platform/accounts/common/accountApi.js';
 import { IAccountService } from '../../../../../platform/accounts/common/accountService.js';
@@ -190,9 +179,7 @@ function catalogFixture(resources: DisposableStore, omitAccounts = false) {
 		...modelCatalogApi(
 			async () => {
 				source.catalogReads++;
-				return source.readCatalog
-					? source.readCatalog()
-					: { models: source.catalog, catalog_scopes: source.catalogScopes };
+				return source.readCatalog ? source.readCatalog() : { models: source.catalog, catalog_scopes: source.catalogScopes };
 			},
 			async () => {
 				source.providerReads++;
@@ -299,10 +286,7 @@ for (const result of [{ type: 'empty' }, { type: 'failed', failure: { code: 'rat
 		source.catalog = [modelEntry('bundled')];
 		events.fire(modelsUpdated(result));
 		await settleCatalogEvents();
-		assert.deepEqual(
-			{ names: (await models.listModels()).map(entry => entry.model.model), reads: source.catalogReads },
-			{ names: ['bundled'], reads: 2 },
-		);
+		assert.deepEqual({ names: (await models.listModels()).map(entry => entry.model.model), reads: source.catalogReads }, { names: ['bundled'], reads: 2 });
 	});
 }
 
@@ -394,10 +378,7 @@ for (const rejects of [false, true]) {
 		if (rejects) await pending.error(new Error('Retired catalog read'));
 		else await pending.complete({ models: [modelEntry('obsolete')] });
 		const refreshed = await refresh;
-		assert.deepEqual(
-			{ names: refreshed.map(entry => entry.model.model), reads: source.catalogReads, changes: source.changes },
-			{ names: ['latest'], reads: 3, changes: 2 },
-		);
+		assert.deepEqual({ names: refreshed.map(entry => entry.model.model), reads: source.catalogReads, changes: source.changes }, { names: ['latest'], reads: 3, changes: 2 });
 	});
 }
 
@@ -479,10 +460,7 @@ test('a notification at the failure completion boundary is not lost', async () =
 	await pending.error(new Error('Retired failed read'));
 	await refresh;
 	await settleCatalogEvents();
-	assert.deepEqual(
-		{ names: (await models.listModels()).map(entry => entry.model.model), reads: source.catalogReads },
-		{ names: ['latest'], reads: 3 },
-	);
+	assert.deepEqual({ names: (await models.listModels()).map(entry => entry.model.model), reads: source.catalogReads }, { names: ['latest'], reads: 3 });
 });
 
 test('disposing a pending catalog read rejects late data and does not start dynamic discovery', async () => {
@@ -511,12 +489,7 @@ test('disposing a pending catalog read rejects late data and does not start dyna
 	assert.deepEqual({ changes: source.changes, discoveries: source.discoveries }, { changes: 0, discoveries: [] });
 });
 
-for (const changed of [
-	{ accountId: 'account-b' },
-	{ organization: 'org-b' },
-	{ plan: 'Pro' },
-	{ status: 'reauthenticationRequired' },
-] as const) {
+for (const changed of [{ accountId: 'account-b' }, { organization: 'org-b' }, { plan: 'Pro' }, { status: 'reauthenticationRequired' }] as const) {
 	test(`account scope changes clear prior selectable rows even when rereading fails (${Object.keys(changed)[0]})`, async () => {
 		using resources = new DisposableStore();
 		const { source, models, events } = catalogFixture(resources);
@@ -783,10 +756,7 @@ for (const event of [
 		events.fire(event);
 		await settleCatalogEvents();
 		assert.equal(await models.listModelCatalog(), snapshot);
-		assert.deepEqual(
-			{ changes: source.changes, accountReads: source.accountReads, catalogReads: source.catalogReads },
-			{ changes, accountReads: 1, catalogReads: 2 },
-		);
+		assert.deepEqual({ changes: source.changes, accountReads: source.accountReads, catalogReads: source.catalogReads }, { changes, accountReads: 1, catalogReads: 2 });
 	});
 }
 
@@ -821,10 +791,7 @@ test('the first unrelated account event keeps a loaded catalog when rereading fa
 	});
 	await settleCatalogEvents();
 	assert.equal(await models.listModelCatalog(), snapshot);
-	assert.deepEqual(
-		{ changes: source.changes, accountReads: source.accountReads, catalogReads: source.catalogReads },
-		{ changes, accountReads: 1, catalogReads: 2 },
-	);
+	assert.deepEqual({ changes: source.changes, accountReads: source.accountReads, catalogReads: source.catalogReads }, { changes, accountReads: 1, catalogReads: 2 });
 });
 
 test('the first changed model account clears a loaded catalog before a failing reread', async () => {
@@ -970,10 +937,7 @@ test('ready external connections read cached authoritative rows without remote d
 		throw new Error('Network unavailable');
 	};
 	source.catalogScopes = [{ connection: 'kimi-desktop', identity: 'scope-a' }];
-	assert.deepEqual(
-		{ names: (await models.listModels()).map(entry => entry.model.model), discoveries: source.discoveries },
-		{ names: ['initial'], discoveries: [] },
-	);
+	assert.deepEqual({ names: (await models.listModels()).map(entry => entry.model.model), discoveries: source.discoveries }, { names: ['initial'], discoveries: [] });
 });
 
 for (const identity of ['scope-b', null]) {
@@ -1058,25 +1022,20 @@ test('Model and effort saves serialize against fresh backend revisions while Aut
 	let defaults = {
 		revision: 1,
 		model: null as import('../../../../../platform/agentHost/common/agentModels.js').ModelRef | null,
-		reasoningEffort: null as
-			import('../../../../../platform/agentHost/common/agentModels.js').ModelReasoningEffort | null,
+		reasoningEffort: null as import('../../../../../platform/agentHost/common/agentModels.js').ModelReasoningEffort | null,
 	};
 	const writes: unknown[] = [];
 	const api = {
 		...modelCatalogApi(async () => ({ models: [] })),
 		readDefaults: async () => defaults,
-		configureDefaults: async (
-			update: import('../../../../../platform/agentHost/common/agentModels.js').AgentModelDefaultsUpdate,
-			revision: number,
-		) => {
+		configureDefaults: async (update: import('../../../../../platform/agentHost/common/agentModels.js').AgentModelDefaultsUpdate, revision: number) => {
 			writes.push({ update, revision });
 			if (writes.length === 1) await first.p;
 			assert.equal(revision, defaults.revision);
 			defaults = {
 				revision: revision + 1,
 				model: update.model === undefined ? defaults.model : update.model,
-				reasoningEffort:
-					update.reasoningEffort === undefined ? defaults.reasoningEffort : update.reasoningEffort,
+				reasoningEffort: update.reasoningEffort === undefined ? defaults.reasoningEffort : update.reasoningEffort,
 			};
 		},
 	};
@@ -1088,14 +1047,8 @@ test('Model and effort saves serialize against fresh backend revisions while Aut
 			{
 				onDidChangeModels: Event.None,
 				getDefaultNewChatModel: () => undefined,
-				rememberSelectedModel: (
-					value:
-						import('../../../../../platform/agentHost/common/agentModels.js').ModelRef | undefined | null,
-				) =>
-					assert.ok(
-						value === null || value === undefined,
-						'Backend model references must not duplicate UI profile state',
-					),
+				rememberSelectedModel: (value: import('../../../../../platform/agentHost/common/agentModels.js').ModelRef | undefined | null) =>
+					assert.ok(value === null || value === undefined, 'Backend model references must not duplicate UI profile state'),
 			} as unknown as ILanguageModelsConfigurationService,
 			{ onDidChangeAccounts: Event.None } as IAccountService,
 		),

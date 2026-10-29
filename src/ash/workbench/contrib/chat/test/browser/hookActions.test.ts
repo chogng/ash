@@ -6,11 +6,7 @@ import { Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
-import {
-	IAppServerHookApi,
-	IAppServerSkillApi,
-	type HookSource,
-} from '../../../../../platform/agentHost/common/appServerApi.js';
+import { IAppServerHookApi, IAppServerSkillApi, type HookSource } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -41,9 +37,7 @@ for (const change of ['workspace', 'dismiss'] as const)
 		using resources = new DisposableStore();
 		const services = resources.add(new InstantiationService());
 		const context = resources.add(new ContextKeyService());
-		const quick = resources.add(
-			new TestQuickInputService({ container: document.body, contextKeyService: context }),
-		);
+		const quick = resources.add(new TestQuickInputService({ container: document.body, contextKeyService: context }));
 		const workspace = resources.add(
 			new TestWorkspaceService({
 				id: 'original',
@@ -154,9 +148,7 @@ test('Opening a generic remote Hook configuration preserves its owning authority
 	using resources = new DisposableStore();
 	const services = resources.add(new InstantiationService());
 	const root = URI.parse('ash-remote://fixture-cloud/fixture');
-	const workspace = resources.add(
-		new TestWorkspaceService({ id: 'fixture', folders: [{ id: 'folder', name: 'fixture', index: 0, uri: root }] }),
-	);
+	const workspace = resources.add(new TestWorkspaceService({ id: 'fixture', folders: [{ id: 'folder', name: 'fixture', index: 0, uri: root }] }));
 	const calls: string[] = [];
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IAppServerRemoteAgentService, {

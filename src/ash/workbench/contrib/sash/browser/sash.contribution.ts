@@ -6,6 +6,5 @@ import { SashSettingsController } from './sash.js';
 registerWorkbenchContribution(
 	'workbench.contrib.sash',
 	WorkbenchPhase.AfterRestored,
-	accessor =>
-		new SashSettingsController(accessor.get(IConfigurationService), accessor.get(ILayoutService).mainContainer),
+	accessor => new SashSettingsController(accessor.get(IConfigurationService), accessor.get(ILayoutService).mainContainer),
 );

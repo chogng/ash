@@ -1,12 +1,7 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { observableValue, type IObservable } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
-import {
-	IProjectService,
-	type Project,
-	type ProjectMaterial,
-	type ProjectSummary,
-} from '../../../../platform/projects/common/projectService.js';
+import { IProjectService, type Project, type ProjectMaterial, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 
@@ -34,12 +29,7 @@ export interface IProjectsService {
 	showProjects(): void;
 	reload(): Promise<void>;
 	create(id: string, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<boolean>;
-	update(
-		project: Project,
-		name: string,
-		description: string,
-		materials: readonly ProjectMaterial[],
-	): Promise<boolean>;
+	update(project: Project, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<boolean>;
 	readProject(id: string): Promise<Project | undefined>;
 	archive(project: ProjectSummary): Promise<boolean>;
 	remove(project: ProjectSummary): Promise<boolean>;
@@ -112,12 +102,7 @@ export class ProjectsService extends Disposable implements IProjectsService {
 		return this.storage.getBoolean(`sessions.projects.pinned.${id}`, StorageScope.PROFILE, false);
 	}
 	public togglePinned(id: string): void {
-		this.storage.store(
-			`sessions.projects.pinned.${id}`,
-			!this.isPinned(id),
-			StorageScope.PROFILE,
-			StorageTarget.USER,
-		);
+		this.storage.store(`sessions.projects.pinned.${id}`, !this.isPinned(id), StorageScope.PROFILE, StorageTarget.USER);
 	}
 	public showProjects(): void {
 		this.loadSequence++;
@@ -139,10 +124,7 @@ export class ProjectsService extends Disposable implements IProjectsService {
 			if (this.isDisposed || sequence !== this.loadSequence) {
 				return;
 			}
-			const selected =
-				selectedId && projects.some(project => project.id === selectedId && !project.archived)
-					? await this.projects.read(selectedId)
-					: undefined;
+			const selected = selectedId && projects.some(project => project.id === selectedId && !project.archived) ? await this.projects.read(selectedId) : undefined;
 			if (this.isDisposed || sequence !== this.loadSequence) {
 				return;
 			}
@@ -151,29 +133,16 @@ export class ProjectsService extends Disposable implements IProjectsService {
 			if (!this.isDisposed && sequence === this.loadSequence) {
 				this.patch({
 					loading: false,
-					message:
-						error instanceof Error
-							? error.message
-							: localize('projects.loadFailed', 'Could not load projects. Try again.'),
+					message: error instanceof Error ? error.message : localize('projects.loadFailed', 'Could not load projects. Try again.'),
 				});
 			}
 		}
 	}
 
-	public create(
-		id: string,
-		name: string,
-		description: string,
-		materials: readonly ProjectMaterial[],
-	): Promise<boolean> {
+	public create(id: string, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<boolean> {
 		return this.mutate(() => this.projects.create(id, name, description, materials), true);
 	}
-	public update(
-		project: Project,
-		name: string,
-		description: string,
-		materials: readonly ProjectMaterial[],
-	): Promise<boolean> {
+	public update(project: Project, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<boolean> {
 		return this.mutate(() => this.projects.update(project, name, description, materials));
 	}
 	public async readProject(id: string): Promise<Project | undefined> {
@@ -182,10 +151,7 @@ export class ProjectsService extends Disposable implements IProjectsService {
 		} catch (error) {
 			if (!this.isDisposed) {
 				this.patch({
-					message:
-						error instanceof Error
-							? error.message
-							: localize('projects.loadFailed', 'Could not load projects. Try again.'),
+					message: error instanceof Error ? error.message : localize('projects.loadFailed', 'Could not load projects. Try again.'),
 				});
 			}
 			return undefined;
@@ -238,10 +204,7 @@ export class ProjectsService extends Disposable implements IProjectsService {
 				this.reloadRequested = false;
 				await this.reload();
 				this.patch({
-					message:
-						error instanceof Error
-							? error.message
-							: localize('projects.saveFailed', 'Could not save the project. Try again.'),
+					message: error instanceof Error ? error.message : localize('projects.saveFailed', 'Could not save the project. Try again.'),
 				});
 			}
 			return false;
@@ -264,12 +227,7 @@ export class ProjectsService extends Disposable implements IProjectsService {
 			.filter(project => !project.archived && project.name.toLocaleLowerCase().includes(query))
 			.sort((a, b) => {
 				const pinned = Number(this.isPinned(b.id)) - Number(this.isPinned(a.id));
-				const time =
-					state.sortOrder === 'updated'
-						? (b.updatedAtMs ?? 0) - (a.updatedAtMs ?? 0)
-						: state.sortOrder === 'created'
-							? (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0)
-							: 0;
+				const time = state.sortOrder === 'updated' ? (b.updatedAtMs ?? 0) - (a.updatedAtMs ?? 0) : state.sortOrder === 'created' ? (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0) : 0;
 				return pinned || time || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
 			});
 	}
@@ -277,20 +235,7 @@ export class ProjectsService extends Disposable implements IProjectsService {
 	public getAccessibleContent(): string {
 		const state = this.state.get();
 		return state.selected
-			? [
-					state.selected.name,
-					state.selected.description,
-					...state.selected.materials.map(material => material.name),
-					state.message,
-				]
-					.filter(Boolean)
-					.join('\n')
-			: [
-					localize('projects.title', 'Projects'),
-					...this.getProjects().map(project => project.name),
-					state.message,
-				]
-					.filter(Boolean)
-					.join('\n');
+			? [state.selected.name, state.selected.description, ...state.selected.materials.map(material => material.name), state.message].filter(Boolean).join('\n')
+			: [localize('projects.title', 'Projects'), ...this.getProjects().map(project => project.name), state.message].filter(Boolean).join('\n');
 	}
 }

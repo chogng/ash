@@ -3,11 +3,7 @@ import { Schemas } from '../../../base/common/network.js';
 import { isRemoteResource } from '../../../platform/remote/common/remote.js';
 import { isResourceDiffEditorInput, type IResourceDiffEditorInput, type IResourceEditorInput } from '../editor.js';
 
-import {
-	EditorInputSerializers,
-	requireRecord,
-	requireSerializedEditorInput,
-} from '../../services/editor/common/editorInputSerializer.js';
+import { EditorInputSerializers, requireRecord, requireSerializedEditorInput } from '../../services/editor/common/editorInputSerializer.js';
 import { SideBySideEditorInput } from './sideBySideEditorInput.js';
 
 export const DIFF_EDITOR_ID = 'stanza.editor.diff';
@@ -26,8 +22,7 @@ EditorInputSerializers.registerStatic({
 	},
 	deserialize: (value, registry) => {
 		const record = requireRecord(value, 'serialized diff editor input');
-		if (record.label !== undefined && typeof record.label !== 'string')
-			throw new TypeError('Serialized diff editor label must be a string');
+		if (record.label !== undefined && typeof record.label !== 'string') throw new TypeError('Serialized diff editor label must be a string');
 		return createDiffEditorInput(
 			registry.deserialize(requireSerializedEditorInput(record.original, 'serialized diff original input')),
 			registry.deserialize(requireSerializedEditorInput(record.modified, 'serialized diff modified input')),
@@ -49,29 +44,19 @@ export class DiffEditorInput extends SideBySideEditorInput implements IResourceD
 }
 
 /** Creates a stable synthetic tab identity for an original/modified comparison. */
-export function createDiffEditorInput(
-	original: IResourceEditorInput,
-	modified: IResourceEditorInput,
-	label?: string,
-): DiffEditorInput {
+export function createDiffEditorInput(original: IResourceEditorInput, modified: IResourceEditorInput, label?: string): DiffEditorInput {
 	assertTextResourceInput(original, 'Diff original input');
 	assertTextResourceInput(modified, 'Diff modified input');
 	if (label !== undefined && (typeof label !== 'string' || label.trim().length === 0)) {
 		throw new TypeError('Diff editor label must be a non-empty string');
 	}
-	const resource = URI.parse(
-		`ash-diff:/compare?original=${encodeURIComponent(original.resource.toString())}&modified=${encodeURIComponent(modified.resource.toString())}`,
-	);
+	const resource = URI.parse(`ash-diff:/compare?original=${encodeURIComponent(original.resource.toString())}&modified=${encodeURIComponent(modified.resource.toString())}`);
 	return new DiffEditorInput(resource, original, modified, label?.trim());
 }
 
 /** Narrows a generic Workbench editor input to the two-resource diff contract. */
 export function isDiffEditorInput(input: IResourceEditorInput): input is DiffEditorInput {
-	return (
-		input instanceof DiffEditorInput &&
-		input.contentType === DIFF_EDITOR_CONTENT_TYPE &&
-		isResourceDiffEditorInput(input)
-	);
+	return input instanceof DiffEditorInput && input.contentType === DIFF_EDITOR_CONTENT_TYPE && isResourceDiffEditorInput(input);
 }
 
 function assertTextResourceInput(value: unknown, owner: string): asserts value is IResourceEditorInput {
@@ -79,12 +64,7 @@ function assertTextResourceInput(value: unknown, owner: string): asserts value i
 }
 
 function isTextResourceInput(value: unknown): value is IResourceEditorInput {
-	return (
-		typeof value === 'object' &&
-		value !== null &&
-		'resource' in value &&
-		typeof (value as IResourceEditorInput).resource?.toString === 'function'
-	);
+	return typeof value === 'object' && value !== null && 'resource' in value && typeof (value as IResourceEditorInput).resource?.toString === 'function';
 }
 
 export const BINARY_DIFF_EDITOR_CONTENT_TYPE = 'application/vnd.ash.binary-diff';
@@ -101,17 +81,11 @@ export class BinaryDiffEditorInput extends SideBySideEditorInput implements IRes
 }
 
 /** Compares two file resources without decoding their contents as text. */
-export function createBinaryDiffEditorInput(
-	original: IResourceEditorInput,
-	modified: IResourceEditorInput,
-	label?: string,
-): BinaryDiffEditorInput {
+export function createBinaryDiffEditorInput(original: IResourceEditorInput, modified: IResourceEditorInput, label?: string): BinaryDiffEditorInput {
 	if (!canReadBinary(original) || !canReadBinary(modified)) {
 		throw new TypeError('Binary comparison requires two file resources');
 	}
-	const resource = URI.parse(
-		`ash-binary-diff:/compare?original=${encodeURIComponent(original.resource.toString())}&modified=${encodeURIComponent(modified.resource.toString())}`,
-	);
+	const resource = URI.parse(`ash-binary-diff:/compare?original=${encodeURIComponent(original.resource.toString())}&modified=${encodeURIComponent(modified.resource.toString())}`);
 	return new BinaryDiffEditorInput(resource, original, modified, label);
 }
 
@@ -152,10 +126,5 @@ EditorInputSerializers.registerStatic({
 function canReadBinary(value: unknown): value is IResourceEditorInput {
 	if (typeof value !== 'object' || value === null || !('resource' in value)) return false;
 	const resource = (value as IResourceEditorInput).resource;
-	return (
-		resource instanceof URI &&
-		(resource.scheme === Schemas.file ||
-			isRemoteResource(resource) ||
-			(value as IResourceEditorInput).initialBytes instanceof Uint8Array)
-	);
+	return resource instanceof URI && (resource.scheme === Schemas.file || isRemoteResource(resource) || (value as IResourceEditorInput).initialBytes instanceof Uint8Array);
 }

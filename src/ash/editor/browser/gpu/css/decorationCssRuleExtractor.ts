@@ -56,10 +56,7 @@ export class DecorationCssRuleExtractor extends Disposable {
 					const index = rule.selectorText.indexOf(searchTerm);
 					if (index !== -1) {
 						const endOfResult = index + searchTerm.length;
-						if (
-							rule.selectorText.length === endOfResult ||
-							rule.selectorText.substring(endOfResult, endOfResult + 1).match(/[ :.]/)
-						) {
+						if (rule.selectorText.length === endOfResult || rule.selectorText.substring(endOfResult, endOfResult + 1).match(/[ :.]/)) {
 							result.push(rule);
 							break;
 						}

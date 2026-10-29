@@ -62,9 +62,7 @@ export class MainThreadLocalization {
 					path: `${manifest.l10n.replace(/\/$/u, '')}/bundle.l10n.${locale}.json`,
 				});
 				try {
-					const bundle = parseTranslationMessages(
-						parseJsonc(await this.$fetchBundleContents(resource), 'Extension translations'),
-					);
+					const bundle = parseTranslationMessages(parseJsonc(await this.$fetchBundleContents(resource), 'Extension translations'));
 					if (bundle) {
 						return { uri: resource.toString(), bundle, package: {} };
 					}
@@ -84,8 +82,7 @@ export class MainThreadLocalization {
 		}
 		const language = getNLSLanguage();
 		const messages: Record<string, unknown> = {};
-		const suffixes =
-			language === 'en' ? [''] : ['', '.' + language.split('-')[0], '.' + language, '.' + language.toLowerCase()];
+		const suffixes = language === 'en' ? [''] : ['', '.' + language.split('-')[0], '.' + language, '.' + language.toLowerCase()];
 		for (const suffix of new Set(suffixes)) {
 			try {
 				const uri = toExtensionResourceURI({
@@ -93,9 +90,7 @@ export class MainThreadLocalization {
 					extensionId: id,
 					path: 'package.nls' + suffix + '.json',
 				});
-				const parsed = parseTranslationMessages(
-					parseJsonc(await this.$fetchBundleContents(uri), 'Extension messages'),
-				);
+				const parsed = parseTranslationMessages(parseJsonc(await this.$fetchBundleContents(uri), 'Extension messages'));
 				if (parsed) {
 					Object.assign(messages, parsed);
 				}

@@ -1,8 +1,4 @@
-import {
-	defaultCheckboxStyles,
-	defaultKeybindingLabelStyles,
-	defaultListStyles,
-} from '../../theme/browser/defaultStyles.js';
+import { defaultCheckboxStyles, defaultKeybindingLabelStyles, defaultListStyles } from '../../theme/browser/defaultStyles.js';
 import { scoreFuzzy } from '../../../base/common/fuzzyScorer.js';
 import { List } from '../../../base/browser/ui/list/listWidget.js';
 import { KeybindingLabel } from '../../../base/browser/ui/keybindinglabel/keybindinglabel.js';
@@ -35,9 +31,7 @@ export class QuickInputList<TItem extends IQuickPickItem> extends Disposable {
 	private readonly rowCheckboxes = this._register(new DisposableMap<HTMLDivElement, DisposableStore>());
 	private readonly _onDidAccept = this._register(new Emitter<TItem>());
 	private readonly _onDidChangeActive = this._register(new Emitter<QuickInputListActiveChangeEvent<TItem>>());
-	private readonly buttonEmitter = this._register(
-		new Emitter<{ readonly item: TItem; readonly button: IQuickPickItemButton }>(),
-	);
+	private readonly buttonEmitter = this._register(new Emitter<{ readonly item: TItem; readonly button: IQuickPickItemButton }>());
 	private _items: readonly (TItem | IQuickPickSeparator)[] = [];
 	private readonly headings = new Map<TItem, IQuickPickSeparator>();
 	public keyMods: IKeyMods = { ctrlCmd: false, alt: false, shift: false };
@@ -324,9 +318,7 @@ export class QuickInputList<TItem extends IQuickPickItem> extends Disposable {
 			this.list.setActiveIndex(activeIndex);
 		}
 		if (this.multiple) {
-			this.list.setSelection(
-				this._visibleItems.flatMap((item, index) => (this.checked.has(item) ? [index] : [])),
-			);
+			this.list.setSelection(this._visibleItems.flatMap((item, index) => (this.checked.has(item) ? [index] : [])));
 		}
 		const empty = this._visibleItems.length === 0;
 		this.list.domNode.hidden = empty;
@@ -424,11 +416,7 @@ export class QuickInputList<TItem extends IQuickPickItem> extends Disposable {
 			const buttons = item.buttons;
 			const actions = new ActionBar(content, {
 				ariaLabel: localize('quickInput.itemActions', 'Actions for {0}', item.label),
-				actionViewItemProvider: action =>
-					new QuickInputButtonActionViewItem(
-						action,
-						buttons.find(button => button.id === action.id)?.iconClass,
-					),
+				actionViewItemProvider: action => new QuickInputButtonActionViewItem(action, buttons.find(button => button.id === action.id)?.iconClass),
 				actions: buttons.map(button => ({
 					id: button.id,
 					label: button.label,
@@ -509,14 +497,15 @@ class QuickInputButtonActionViewItem extends ActionViewItem {
 	}
 }
 
-export function filterQuickPickItems<TItem extends IQuickPickItem>(
-	items: readonly TItem[],
-	query: string,
-): readonly TItem[] {
+export function filterQuickPickItems<TItem extends IQuickPickItem>(items: readonly TItem[], query: string): readonly TItem[] {
 	const tokens = normalize(query).split(/\s+/).filter(Boolean);
 	if (tokens.length === 0) return [...items];
 	return items
-		.map((item, index) => ({ item, index, score: item.alwaysShow ? 0 : scoreItem(item, tokens) }))
+		.map((item, index) => ({
+			item,
+			index,
+			score: item.alwaysShow ? 0 : scoreItem(item, tokens),
+		}))
 		.filter(entry => entry.score >= 0)
 		.sort((left, right) => right.score - left.score || left.index - right.index)
 		.map(entry => entry.item);
@@ -530,8 +519,7 @@ function scoreItem(item: IQuickPickItem, tokens: readonly string[]): number {
 		const [labelMatch] = scoreFuzzy(label, token, token, true);
 		const [searchableMatch] = scoreFuzzy(searchable, token, token, true);
 		const labelScore = labelMatch > 0 ? labelMatch - Math.max(0, label.length - token.length) / 100 : -1;
-		const searchableScore =
-			searchableMatch > 0 ? searchableMatch - Math.max(0, searchable.length - token.length) / 100 : -1;
+		const searchableScore = searchableMatch > 0 ? searchableMatch - Math.max(0, searchable.length - token.length) / 100 : -1;
 		const tokenScore = labelScore >= 0 ? Math.max(labelScore + 40, searchableScore) : searchableScore;
 		if (tokenScore < 0) return -1;
 		score += tokenScore;
@@ -539,12 +527,7 @@ function scoreItem(item: IQuickPickItem, tokens: readonly string[]): number {
 	return score;
 }
 
-function appendOptionalText(
-	container: HTMLElement,
-	value: string | undefined,
-	className: string,
-	ownerDocument: Document,
-): void {
+function appendOptionalText(container: HTMLElement, value: string | undefined, className: string, ownerDocument: Document): void {
 	if (!value) return;
 	const element = h(ownerDocument, 'span');
 	element.className = className;

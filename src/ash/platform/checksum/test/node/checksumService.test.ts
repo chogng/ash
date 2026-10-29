@@ -8,11 +8,7 @@ import { URI } from '../../../../base/common/uri.js';
 import type { ApplicationChecksums } from '../../common/checksumService.js';
 import { ChecksumService, checksumChannel } from '../../node/checksumService.js';
 
-const entrypoints = [
-	'dist/main/src/main.js',
-	'dist/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs',
-	'dist/renderer/ash/electron-browser/workbench/workbench.html',
-];
+const entrypoints = ['dist/main/src/main.js', 'dist/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs', 'dist/renderer/ash/electron-browser/workbench/workbench.html'];
 
 test('application checksums compare published files and detect modified and removed files', async () => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-checksum-'));
@@ -33,20 +29,13 @@ test('application checksums compare published files and detect modified and remo
 		);
 		await writeFile(join(root, entrypoints[0]!), 'modified');
 		await unlink(join(root, entrypoints[1]!));
-		const modified = await checksumChannel(root, true, service).call<ApplicationChecksums>(
-			'window:2',
-			'getApplicationChecksums',
-		);
+		const modified = await checksumChannel(root, true, service).call<ApplicationChecksums>('window:2', 'getApplicationChecksums');
 		assert.deepEqual(
 			modified.proof.map(pair => pair.actual === pair.expected),
 			[false, false, true],
 		);
 		assert.equal(modified.proof[1]!.actual, null);
-		assert.deepEqual(
-			await channel.call('window:3', 'getApplicationChecksums'),
-			original,
-			'Windows share one startup scan',
-		);
+		assert.deepEqual(await channel.call('window:3', 'getApplicationChecksums'), original, 'Windows share one startup scan');
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}
@@ -64,14 +53,8 @@ test('application checksum channel rejects renderer paths and malformed or incom
 			},
 		};
 		const channel = checksumChannel(root, true, service);
-		await assert.rejects(
-			channel.call('window:1', 'checksum', '/private/file'),
-			/Invalid application checksum read/,
-		);
-		await assert.rejects(
-			channel.call('window:1', 'getApplicationChecksums', { root: '/' }),
-			/Invalid application checksum read/,
-		);
+		await assert.rejects(channel.call('window:1', 'checksum', '/private/file'), /Invalid application checksum read/);
+		await assert.rejects(channel.call('window:1', 'getApplicationChecksums', { root: '/' }), /Invalid application checksum read/);
 		assert.throws(() => channel.listen('window:1', 'changed'), /no subscription/);
 		for (const checksums of [
 			{},
@@ -81,10 +64,7 @@ test('application checksum channel rejects renderer paths and malformed or incom
 			},
 		]) {
 			await writeFile(join(root, 'package.json'), JSON.stringify({ checksums }));
-			await assert.rejects(
-				checksumChannel(root, true, service).call('window:1', 'getApplicationChecksums'),
-				/checksum/,
-			);
+			await assert.rejects(checksumChannel(root, true, service).call('window:1', 'getApplicationChecksums'), /checksum/);
 		}
 		assert.equal(accessed, false);
 	} finally {
@@ -93,10 +73,7 @@ test('application checksum channel rejects renderer paths and malformed or incom
 });
 
 test('development checksum reads explicitly omit an installation scan', async () => {
-	const result = await checksumChannel('/no-published-installation', false, new ChecksumService()).call(
-		'window:1',
-		'getApplicationChecksums',
-	);
+	const result = await checksumChannel('/no-published-installation', false, new ChecksumService()).call('window:1', 'getApplicationChecksums');
 	assert.deepEqual(result, { isBuilt: false, proof: [] });
 });
 

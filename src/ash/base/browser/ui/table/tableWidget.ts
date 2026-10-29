@@ -7,13 +7,7 @@ import { Disposable, toDisposable } from '../../../common/lifecycle.js';
 import { ListView } from '../list/listView.js';
 import type { ListScrolling } from '../list/list.js';
 import { SplitView } from '../splitview/splitview.js';
-import {
-	TableError,
-	type ITableColumn,
-	type ITableEvent,
-	type ITableRenderer,
-	type ITableVirtualDelegate,
-} from './table.js';
+import { TableError, type ITableColumn, type ITableEvent, type ITableRenderer, type ITableVirtualDelegate } from './table.js';
 
 export interface ITableOptions<TRow> {
 	readonly ariaLabel?: string;
@@ -100,9 +94,7 @@ export class Table<TRow> extends Disposable {
 					get maximumSize() {
 						return column.maximumWidth ?? Number.POSITIVE_INFINITY;
 					},
-					onDidChange: column.onDidChangeWidthConstraints
-						? listener => column.onDidChangeWidthConstraints!(() => listener(undefined))
-						: undefined,
+					onDidChange: column.onDidChangeWidthConstraints ? listener => column.onDidChangeWidthConstraints!(() => listener(undefined)) : undefined,
 					layout: size => {
 						this.columnWidths[index] = size;
 						for (const cells of this.templates.values()) {
@@ -179,18 +171,9 @@ export class Table<TRow> extends Disposable {
 				}
 			}),
 		);
-		this._register(
-			this.header.onDidSashReset(index =>
-				this.resizeColumn(
-					index,
-					(columns[index]!.weight / columns.reduce((sum, column) => sum + column.weight, 0)) * 100,
-				),
-			),
-		);
+		this._register(this.header.onDidSashReset(index => this.resizeColumn(index, (columns[index]!.weight / columns.reduce((sum, column) => sum + column.weight, 0)) * 100)));
 		let observedWidth = 0;
-		const resizeLayout = this._register(
-			new AnimationFrameScheduler(document.defaultView!, () => this.layout(undefined, observedWidth)),
-		);
+		const resizeLayout = this._register(new AnimationFrameScheduler(document.defaultView!, () => this.layout(undefined, observedWidth)));
 		// Column sizing can change horizontal overflow and ancestor heights; write outside resize observation.
 		this._register(
 			observeElementSize(
@@ -240,9 +223,7 @@ export class Table<TRow> extends Disposable {
 		}
 		this.view.splice(start, deleteCount, records);
 		const focused = this.view.items.findIndex(record => record.id === focusedId);
-		this.setFocus(
-			this.length ? [focused < 0 ? Math.min(Math.max(this.focusedIndex, 0), this.length - 1) : focused] : [],
-		);
+		this.setFocus(this.length ? [focused < 0 ? Math.min(Math.max(this.focusedIndex, 0), this.length - 1) : focused] : []);
 		this.setSelection(this.view.items.flatMap((record, index) => (selectedIds.has(record.id) ? [index] : [])));
 		this.domNode.setAttribute('aria-rowcount', String(this.length + 1));
 		this.updateTraits();
@@ -297,10 +278,7 @@ export class Table<TRow> extends Disposable {
 	}
 
 	public setSelection(indexes: number[], browserEvent?: UIEvent): void {
-		if (
-			indexes.length === this.selectedIndexes.length &&
-			indexes.every((index, position) => index === this.selectedIndexes[position])
-		) {
+		if (indexes.length === this.selectedIndexes.length && indexes.every((index, position) => index === this.selectedIndexes[position])) {
 			return;
 		}
 		this.selectedIndexes = [...indexes];
@@ -361,10 +339,7 @@ export class Table<TRow> extends Disposable {
 			case 'ArrowLeft':
 			case 'ArrowRight': {
 				const cells = this.templates.get(this.view.row(next)!)!;
-				const index = Math.max(
-					0,
-					Math.min(columnIndex + (event.key === 'ArrowLeft' ? -1 : 1), cells.length - 1),
-				);
+				const index = Math.max(0, Math.min(columnIndex + (event.key === 'ArrowLeft' ? -1 : 1), cells.length - 1));
 				cells[index]!.container.focus();
 				event.preventDefault();
 				return;

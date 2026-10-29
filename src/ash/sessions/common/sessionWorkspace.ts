@@ -7,8 +7,5 @@ export function sessionWorkspaceUri(workspace: ISessionWorkspace): URI {
 	if (workspace.authorityId === 'local') {
 		return URI.file(workspace.root);
 	}
-	return withRemoteWorkspacePath(
-		URI.from({ scheme: ASH_REMOTE_SCHEME, authority: workspace.authorityId }),
-		workspace.root,
-	);
+	return withRemoteWorkspacePath(URI.from({ scheme: ASH_REMOTE_SCHEME, authority: workspace.authorityId }), workspace.root);
 }

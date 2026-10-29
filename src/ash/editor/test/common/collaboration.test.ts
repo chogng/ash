@@ -3,17 +3,10 @@ import { readFileSync } from 'node:fs';
 import { resetNlsResolver, setNlsMessages } from '../../../nls.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import {
-	DocumentRebaseError,
-	rebaseDocumentHistory,
-	rebaseDocumentTransaction,
-} from '../../../../../extensions/academy/common/contrib/collaboration/rebase.js';
+import { DocumentRebaseError, rebaseDocumentHistory, rebaseDocumentTransaction } from '../../../../../extensions/academy/common/contrib/collaboration/rebase.js';
 import { TextModel } from '../../common/model/textModel.js';
 import { TextModelRemoteHistoryPolicy } from '../../../../../extensions/academy/common/model/textModelBlockState.js';
-import {
-	createDefaultDocumentSchema,
-	type DocumentSchema,
-} from '../../../../../extensions/academy/common/model/documentSchema.js';
+import { createDefaultDocumentSchema, type DocumentSchema } from '../../../../../extensions/academy/common/model/documentSchema.js';
 import { nodeSelection, textSelection } from '../../../../../extensions/academy/common/core/documentSelection.js';
 import { DocumentTransaction } from '../../../../../extensions/academy/common/model/documentTransaction.js';
 
@@ -36,24 +29,17 @@ function createDocument(schema: DocumentSchema) {
 test('Academy structural snapshot replacement reports conflict when a retained node changed remotely', () => {
 	const schema = createDefaultDocumentSchema();
 	const base = createDocument(schema);
-	const local = new DocumentTransaction()
-		.deleteNode('text-1')
-		.insertNode('paragraph-1', 0, schema.createText('Hxllo', { id: 'text-1' }));
+	const local = new DocumentTransaction().deleteNode('text-1').insertNode('paragraph-1', 0, schema.createText('Hxllo', { id: 'text-1' }));
 	const remote = new DocumentTransaction().replaceText('text-1', 0, 0, 'Peer ');
 	assert.throws(() => rebaseDocumentTransaction(base, schema, local, remote), DocumentRebaseError);
 });
 
 test('Academy structural conflict uses the Chinese client translation', () => {
-	setNlsMessages(
-		'zh-CN',
-		JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')),
-	);
+	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
 	try {
 		const schema = createDefaultDocumentSchema();
 		const base = createDocument(schema);
-		const local = new DocumentTransaction()
-			.deleteNode('text-1')
-			.insertNode('paragraph-1', 0, schema.createText('Hxllo', { id: 'text-1' }));
+		const local = new DocumentTransaction().deleteNode('text-1').insertNode('paragraph-1', 0, schema.createText('Hxllo', { id: 'text-1' }));
 		const remote = new DocumentTransaction().replaceText('text-1', 0, 0, 'Peer ');
 		assert.throws(() => rebaseDocumentTransaction(base, schema, local, remote), {
 			name: 'DocumentRebaseError',
@@ -67,9 +53,7 @@ test('Academy structural conflict uses the Chinese client translation', () => {
 test('Stanza collaboration rebases text offsets and selections through remote insertion', () => {
 	const schema = createDefaultDocumentSchema();
 	const base = createDocument(schema);
-	const local = new DocumentTransaction()
-		.replaceText('text-1', 1, 1, 'L')
-		.withSelection(textSelection({ nodeId: 'text-1', offset: 2 }));
+	const local = new DocumentTransaction().replaceText('text-1', 1, 1, 'L').withSelection(textSelection({ nodeId: 'text-1', offset: 2 }));
 	const remote = new DocumentTransaction().replaceText('text-1', 0, 0, 'R');
 
 	const result = rebaseDocumentTransaction(base, schema, local, remote);
@@ -128,10 +112,7 @@ test('Stanza collaboration preserves local transaction dependencies and local no
 		id: 'paragraph-local',
 		content: [schema.createText('Local', { id: 'text-local' })],
 	});
-	const local = new DocumentTransaction()
-		.insertNode('document-1', 1, localNode)
-		.setNodeAttributes('paragraph-local', { alignment: 'center' })
-		.withSelection(nodeSelection('paragraph-local'));
+	const local = new DocumentTransaction().insertNode('document-1', 1, localNode).setNodeAttributes('paragraph-local', { alignment: 'center' }).withSelection(nodeSelection('paragraph-local'));
 	const remote = new DocumentTransaction().insertNode(
 		'document-1',
 		0,

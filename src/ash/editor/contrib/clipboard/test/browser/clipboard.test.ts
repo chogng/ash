@@ -7,10 +7,7 @@ import { JSDOM } from 'jsdom';
 import { Selection } from '../../../../common/core/selection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
-import {
-	IClipboardService,
-	type IClipboardService as IClipboardServiceContract,
-} from '../../../../../platform/clipboard/common/clipboardService.js';
+import { IClipboardService, type IClipboardService as IClipboardServiceContract } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
@@ -19,33 +16,21 @@ import { installEditorTestDom } from '../../../../test/browser/editorTestGlobals
 import { getWindowId, registerWindow } from '../../../../../base/browser/window.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { DisposableTracker, installDisposableTracker } from '../../../../../base/common/lifecycle.js';
-import {
-	KeybindingResolveKind,
-	KeybindingResolver,
-} from '../../../../../platform/keybinding/common/keybindingResolver.js';
-import {
-	KeybindingRegistry,
-	KeybindingsRegistry,
-	KeybindingSource,
-	type IRegisteredCommandKeybindingRule,
-} from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
+import { KeybindingResolveKind, KeybindingResolver } from '../../../../../platform/keybinding/common/keybindingResolver.js';
+import { KeybindingRegistry, KeybindingsRegistry, KeybindingSource, type IRegisteredCommandKeybindingRule } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { resolveKeybinding } from '../../../../../base/common/keybindings.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { EditorContextKeys } from '../../../../common/editorContextKeys.js';
 
 const environment = new JSDOM('<!doctype html><body></body>');
-const installedGlobals = installEditorTestDom(
-	environment,
-	['Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent', 'MouseEvent'],
-	{
-		navigator: { userAgent: environment.window.navigator.userAgent, clipboard: {} },
-		ResizeObserver: class TestResizeObserver {
-			observe(): void {}
-			unobserve(): void {}
-			disconnect(): void {}
-		},
+const installedGlobals = installEditorTestDom(environment, ['Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent', 'MouseEvent'], {
+	navigator: { userAgent: environment.window.navigator.userAgent, clipboard: {} },
+	ResizeObserver: class TestResizeObserver {
+		observe(): void {}
+		unobserve(): void {}
+		disconnect(): void {}
 	},
-);
+});
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
@@ -72,9 +57,7 @@ test('default clipboard shortcuts resolve only for editor text and preserve expl
 	const terminalScope = resources.add(contexts.createScoped(terminal));
 	terminalScope.createKey('terminalFocus', true);
 	const commands = new Set([CutAction.id, CopyAction.id, PasteAction.id]);
-	const rules = KeybindingsRegistry.getKeybindings().filter(
-		(rule): rule is IRegisteredCommandKeybindingRule => rule.kind === 'command' && commands.has(rule.command),
-	);
+	const rules = KeybindingsRegistry.getKeybindings().filter((rule): rule is IRegisteredCommandKeybindingRule => rule.kind === 'command' && commands.has(rule.command));
 	assert.ok(rules.length >= 3, 'native clipboard shortcuts must be registered');
 	for (const rule of rules) resources.add(registry.registerKeybindingRule(rule));
 	for (const rule of rules) {
@@ -83,8 +66,7 @@ test('default clipboard shortcuts resolve only for editor text and preserve expl
 		const resolved = resolver.resolve(contexts.getContext(editor), events);
 		assert.equal(resolved.kind, KeybindingResolveKind.Command);
 		if (resolved.kind === KeybindingResolveKind.Command) assert.equal(resolved.command, rule.command);
-		for (const target of [terminal, input])
-			assert.equal(resolver.resolve(contexts.getContext(target), events).kind, KeybindingResolveKind.NoMatch);
+		for (const target of [terminal, input]) assert.equal(resolver.resolve(contexts.getContext(target), events).kind, KeybindingResolveKind.NoMatch);
 		using override = registry.registerKeybindingRule({
 			command: 'user.clipboard',
 			keybinding: rule.keybinding,
@@ -109,7 +91,12 @@ test('clipboard actions use the focused code editor and platform clipboard servi
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerInstance(IClipboardService, clipboard);
 	services.registerInstance(ICodeEditorService, codeEditorService);
-	using editor = createTestCodeEditor({ container, model, lineHeight: 20, instantiationService: services });
+	using editor = createTestCodeEditor({
+		container,
+		model,
+		lineHeight: 20,
+		instantiationService: services,
+	});
 	editor.focus();
 	editor.setSelection(new Selection(1, 1, 1, 6));
 	await CopyAction.runCommand(services, undefined);
@@ -175,10 +162,7 @@ test('paste commands use the trigger port before text fallback and reach the exi
 		html = event.clipboardData?.getData('text/html') ?? '';
 	});
 	await PasteAction.runCommand(services, undefined);
-	assert.deepEqual(
-		[requests, model.getText(), html],
-		[[getWindowId(dom.window as unknown as Window)], 'event text', '<b>event text</b>'],
-	);
+	assert.deepEqual([requests, model.getText(), html], [[getWindowId(dom.window as unknown as Window)], 'event text', '<b>event text</b>']);
 });
 
 test('paste command drops a delayed clipboard read after focus, selection, or model changes', async () => {
@@ -248,9 +232,7 @@ test('paste command drops a delayed clipboard read after focus, selection, or mo
 			first
 				.getContainerDomNode()
 				.querySelector('.stanza-editor-input')!
-				.dispatchEvent(
-					new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
-				);
+				.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 		}
 		clipboard.resolveRead(request, 'stale');
 		await pending;
@@ -300,9 +282,7 @@ test('paste command releases cancelled work before the clipboard read settles an
 		using tracking = installDisposableTracker(tracker);
 		const pending = PasteAction.runCommand(services, undefined);
 		// The request owns its editor listeners; the race alone owns this separate subscription.
-		const subscriptions = tracker
-			.leaks()
-			.filter(leak => leak.label === 'toDisposable' && leak.ownerLabel === undefined);
+		const subscriptions = tracker.leaks().filter(leak => leak.label === 'toDisposable' && leak.ownerLabel === undefined);
 		assert.equal(subscriptions.length, 1);
 		const subscription = subscriptions[0]!.disposable;
 		editor.setSelection(new Selection(1, 1, 1, 1));
@@ -370,9 +350,7 @@ for (const outcome of ['resolve', 'reject'] as const) {
 		try {
 			const pending = PasteAction.runCommand(services, undefined);
 			assert.equal(clipboard.triggers, 1);
-			const subscriptions = tracker
-				.leaks()
-				.filter(leak => leak.label === 'toDisposable' && leak.ownerLabel === undefined);
+			const subscriptions = tracker.leaks().filter(leak => leak.label === 'toDisposable' && leak.ownerLabel === undefined);
 			assert.equal(subscriptions.length, 1);
 			const subscription = subscriptions[0]!.disposable;
 			editor.setSelection(new Selection(1, 1, 1, 1));
@@ -456,9 +434,7 @@ test('cut command keeps text when clipboard writing completes after selection or
 			first
 				.getContainerDomNode()
 				.querySelector('.stanza-editor-input')!
-				.dispatchEvent(
-					new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
-				);
+				.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 		}
 		clipboard.resolveWrite(clipboard.writtenTexts.length - 1);
 		await pending;
@@ -568,10 +544,5 @@ class DeferredClipboardService implements IClipboardServiceContract {
 	}
 }
 
-const codeFeatures = registerTestCodeEditorFeatures([
-	'editor.contrib.codeServices',
-	'editor.contrib.clipboard',
-	'editor.contrib.copyPasteActionController',
-	'snippetController2',
-]);
+const codeFeatures = registerTestCodeEditorFeatures(['editor.contrib.codeServices', 'editor.contrib.clipboard', 'editor.contrib.copyPasteActionController', 'snippetController2']);
 afterCodeFeatures(() => codeFeatures.dispose());

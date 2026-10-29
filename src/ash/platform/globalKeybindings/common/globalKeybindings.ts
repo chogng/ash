@@ -39,15 +39,9 @@ export function validateGlobalKeybindingRequest(value: unknown): GlobalKeybindin
 }
 
 export function validateGlobalKeybindingResult(value: unknown): GlobalKeybindingResult {
-	if (!value || typeof value !== 'object' || Array.isArray(value))
-		throw new TypeError('Invalid global keybinding result');
+	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid global keybinding result');
 	const result = value as Record<string, unknown>;
-	if (
-		Object.keys(result).sort().join(',') !== 'activeLabel,available' ||
-		typeof result.available !== 'boolean' ||
-		typeof result.activeLabel !== 'string' ||
-		result.activeLabel.length > 256
-	)
+	if (Object.keys(result).sort().join(',') !== 'activeLabel,available' || typeof result.available !== 'boolean' || typeof result.activeLabel !== 'string' || result.activeLabel.length > 256)
 		throw new TypeError('Invalid global keybinding result');
 	return result as unknown as GlobalKeybindingResult;
 }

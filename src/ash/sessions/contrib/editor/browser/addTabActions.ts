@@ -10,11 +10,7 @@ import { SessionsCategories } from '../../../common/categories.js';
 import { VIEW_SESSION_CHANGES_COMMAND_ID } from '../../changes/common/changes.js';
 
 /** Callbacks retain the window's layout queue; tab actions do not own layout state. */
-export function registerAddTabActions(
-	openFiles: () => Promise<void> | false,
-	openChanges: () => Promise<void> | false,
-	when: ContextKeyExpression,
-): IDisposable {
+export function registerAddTabActions(openFiles: () => Promise<void> | false, openChanges: () => Promise<void> | false, when: ContextKeyExpression): IDisposable {
 	const registrations = new DisposableStore();
 	const actions = [
 		{

@@ -37,8 +37,5 @@ test('Debug hover discards inspection work after caller cancellation or continui
 	await held.complete([]);
 	await assert.rejects(result, isCancellationError);
 	session.state = 'running';
-	await assert.rejects(
-		findExpressionInStackFrame(session, frame, ['answer'], new AbortController().signal),
-		isCancellationError,
-	);
+	await assert.rejects(findExpressionInStackFrame(session, frame, ['answer'], new AbortController().signal), isCancellationError);
 });

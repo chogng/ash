@@ -44,12 +44,7 @@ for (const [key, property, write, initial, next] of [
 				return undefined;
 			},
 		} as ICommandService;
-		using binding = new ExtensionSettingBinding(
-			registry.getConfiguration(key)!,
-			commands,
-			{ subscribe: listener => events.event(listener) },
-			new NullLoggerService(),
-		);
+		using binding = new ExtensionSettingBinding(registry.getConfiguration(key)!, commands, { subscribe: listener => events.event(listener) }, new NullLoggerService());
 		await new Promise<void>(resolve => setImmediate(resolve));
 		assert.equal(binding.getValue(), initial);
 		await binding.updateValue(next);

@@ -10,25 +10,16 @@ import type { ITerminalInstance, ITerminalView } from './terminal.js';
 import { DetachedTerminal } from './detachedTerminal.js';
 
 /** Capture after xterm parses queued writes; the resulting draft never rereads a live PTY. */
-export async function captureTerminalAttachment(
-	instance: ITerminalInstance,
-	view: ITerminalView | null | undefined,
-	signal: AbortSignal,
-): Promise<ChatContextAttachment | undefined> {
+export async function captureTerminalAttachment(instance: ITerminalInstance, view: ITerminalView | null | undefined, signal: AbortSignal): Promise<ChatContextAttachment | undefined> {
 	const output = await view?.getTerminalOutput(instance, 100_000, signal);
 	if (signal.aborted) return undefined;
-	if (!output?.trim())
-		throw new Error(
-			localize('chat.context.terminalUnavailable', 'The terminal has closed or has no output to attach'),
-		);
+	if (!output?.trim()) throw new Error(localize('chat.context.terminalUnavailable', 'The terminal has closed or has no output to attach'));
 	const name = localize('chat.context.terminalName', 'Terminal: {0}', instance.title);
 	const integration = instance.shellIntegration;
 	const commands = integration?.commandDetection && !integration.commandStorageDisabled ? integration.commands : [];
 	const content =
 		`Terminal: ${instance.title}\nDirectory: ${instance.cwd ?? instance.initialCwd}\n\n${output}` +
-		(commands.length
-			? `\n\n${JSON.stringify({ hasRichCommandDetection: integration!.hasRichCommandDetection, commands }, null, 2)}`
-			: '');
+		(commands.length ? `\n\n${JSON.stringify({ hasRichCommandDetection: integration!.hasRichCommandDetection, commands }, null, 2)}` : '');
 	return Object.freeze({
 		id: `terminal:${instance.id}`,
 		kind: 'terminal',

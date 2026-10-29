@@ -12,12 +12,7 @@ import { createTestCursorConfiguration } from './testCursorConfiguration.js';
 test('CursorCollection preserves primary-first selection order', () => {
 	using model = new TextModel('abcdef\nsecond');
 	using languages = createTestLanguageConfigurationService();
-	const context = new CursorContext(
-		model,
-		model,
-		new IdentityCoordinatesConverter(model),
-		createTestCursorConfiguration(model, languages),
-	);
+	const context = new CursorContext(model, model, new IdentityCoordinatesConverter(model), createTestCursorConfiguration(model, languages));
 	const selections = primaryFirst([new Selection(1, 1, 1, 3), new Selection(2, 2, 2, 2)], 1);
 	const cursors = new CursorCollection(context);
 	using cleanup = toDisposable(() => cursors.dispose());
@@ -31,12 +26,7 @@ test('CursorCollection preserves primary-first selection order', () => {
 test('CursorCollection tracks edits and can remove secondary cursors', () => {
 	using model = new TextModel('abcdef');
 	using languages = createTestLanguageConfigurationService();
-	const context = new CursorContext(
-		model,
-		model,
-		new IdentityCoordinatesConverter(model),
-		createTestCursorConfiguration(model, languages),
-	);
+	const context = new CursorContext(model, model, new IdentityCoordinatesConverter(model), createTestCursorConfiguration(model, languages));
 	const cursors = new CursorCollection(context);
 	using cleanup = toDisposable(() => cursors.dispose());
 	cursors.setSelections([new Selection(1, 2, 1, 2), new Selection(1, 5, 1, 5)]);

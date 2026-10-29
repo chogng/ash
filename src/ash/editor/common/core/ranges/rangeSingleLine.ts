@@ -13,11 +13,6 @@ export class RangeSingleLine {
 	) {}
 
 	toRange(): Range {
-		return new Range(
-			this.lineNumber,
-			this.columnRange.startColumn,
-			this.lineNumber,
-			this.columnRange.endColumnExclusive,
-		);
+		return new Range(this.lineNumber, this.columnRange.startColumn, this.lineNumber, this.columnRange.endColumnExclusive);
 	}
 }

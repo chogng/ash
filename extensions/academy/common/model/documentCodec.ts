@@ -13,8 +13,7 @@ import {
 
 /** Versioned Academy persistence and collaboration formats, independent of host transport. */
 export const documentCodec = Object.freeze({
-	createModel: (schema: DocumentSchema, document: DocumentNode, plugins?: readonly DocumentPlugin<unknown>[]) =>
-		DocumentTextModel.create(schema, document, { plugins }),
+	createModel: (schema: DocumentSchema, document: DocumentNode, plugins?: readonly DocumentPlugin<unknown>[]) => DocumentTextModel.create(schema, document, { plugins }),
 	parse: (text: string, schema: DocumentSchema, createEmptyDocument?: () => DocumentNode) => {
 		if (text.trim().length === 0) {
 			const document = createEmptyDocument?.() ?? schema.createDocument([]);

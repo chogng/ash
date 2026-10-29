@@ -5,13 +5,7 @@ import type { AppServerProtocolClient } from '../../agentHost/browser/appServerP
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import type { AssetVersionResult } from '../../../../../.build/protocol/typescript/index.js';
-import type {
-	AssetCatalog,
-	AssetCollection,
-	AssetImport,
-	AssetVersion,
-	IAssetService,
-} from '../common/assetService.js';
+import type { AssetCatalog, AssetCollection, AssetImport, AssetVersion, IAssetService } from '../common/assetService.js';
 
 /** Only this adapter handles generated DTOs; the backend owns all committed content and metadata. */
 export class AppServerAssetService implements IAssetService {
@@ -86,27 +80,20 @@ export class AppServerAssetService implements IAssetService {
 					dataBase64: bytesToBase64(chunk),
 				});
 				if (result.nextOffset !== offset + chunk.length) {
-					throw new Error(
-						localize('assets.invalidResponse', 'The asset service returned inconsistent content.'),
-					);
+					throw new Error(localize('assets.invalidResponse', 'The asset service returned inconsistent content.'));
 				}
 				offset = result.nextOffset;
 			}
 			// Finish consumes the upload, including validation failures. Cancellation only applies
 			// to the staged bytes; a lost publication response is recovered by its stable identities.
 			uploading = false;
-			return versionFromResult(
-				await appServerRequest(this.connection, 'asset/import/finish', { versionId: request.versionId }),
-			);
+			return versionFromResult(await appServerRequest(this.connection, 'asset/import/finish', { versionId: request.versionId }));
 		} catch (error) {
 			if (uploading) {
 				try {
 					await appServerRequest(this.connection, 'asset/import/cancel', { versionId: request.versionId });
 				} catch (cleanupError) {
-					throw new AggregateError(
-						[assetError(error), assetError(cleanupError)],
-						localize('assets.cleanupFailed', 'Could not import the asset or release its upload.'),
-					);
+					throw new AggregateError([assetError(error), assetError(cleanupError)], localize('assets.cleanupFailed', 'Could not import the asset or release its upload.'));
 				}
 			}
 			throw assetError(error);
@@ -142,9 +129,7 @@ export class AppServerAssetService implements IAssetService {
 					chunk.length > bytes.length - offset ||
 					result.eof !== (offset + chunk.length === bytes.length)
 				) {
-					throw new Error(
-						localize('assets.invalidResponse', 'The asset service returned inconsistent content.'),
-					);
+					throw new Error(localize('assets.invalidResponse', 'The asset service returned inconsistent content.'));
 				}
 				bytes.set(chunk, offset);
 				offset += chunk.length;
@@ -173,10 +158,7 @@ function assetError(error: unknown): unknown {
 				cause: error,
 			});
 		}
-		return new Error(
-			localize('assets.operationFailed', 'Could not complete the asset operation ({0}).', error.errorName),
-			{ cause: error },
-		);
+		return new Error(localize('assets.operationFailed', 'Could not complete the asset operation ({0}).', error.errorName), { cause: error });
 	}
 	return error;
 }

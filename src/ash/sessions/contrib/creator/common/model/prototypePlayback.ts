@@ -15,14 +15,7 @@ import { evaluatePrototypeExpression, type PrototypeValue } from './prototypeExp
 import { resolveDesignLayout } from './layout.js';
 import { flattenDesignShapes, type DesignShape } from './document.js';
 import { remapDesignInstance, resolveDesignComponents } from './components.js';
-import {
-	emptyDesignResources,
-	getDesignResourceCatalog,
-	resolveDesignVariable,
-	getDesignLibraryShapes,
-	resolveDesignResources,
-	type DesignResources,
-} from './designResources.js';
+import { emptyDesignResources, getDesignResourceCatalog, resolveDesignVariable, getDesignLibraryShapes, resolveDesignResources, type DesignResources } from './designResources.js';
 import {
 	prototypeComponent,
 	prototypeVariants,
@@ -100,16 +93,11 @@ export class PrototypePlayback {
 	/** Pausing at each yield lets the browser finish one animation before evaluating the next action. */
 	public *run(interaction: PrototypeInteraction, sourceId?: string): Generator<PrototypeEffect> {
 		const componentId = sourceId ? prototypeComponent([this.activeFrame], sourceId)?.id : undefined;
-		const visit = function* (
-			this: PrototypePlayback,
-			actions: readonly PrototypeStep[],
-		): Generator<PrototypeEffect> {
+		const visit = function* (this: PrototypePlayback, actions: readonly PrototypeStep[]): Generator<PrototypeEffect> {
 			for (const action of actions) {
 				if (action.action === 'conditional') {
 					for (const branch of action.branches!) {
-						const matches = branch.condition
-							? evaluatePrototypeExpression(branch.condition, id => this.variable(id))
-							: true;
+						const matches = branch.condition ? evaluatePrototypeExpression(branch.condition, id => this.variable(id)) : true;
 						if (matches === undefined) {
 							yield { from: this.scene, transition: action.transition, failed: true };
 							break;
@@ -124,11 +112,7 @@ export class PrototypePlayback {
 				const from = this.scene;
 				if (action.action === 'scrollTo') {
 					const component = sourceId ? prototypeComponent([this.activeFrame], sourceId) : undefined;
-					const target =
-						(component &&
-							flattenDesignShapes([component]).find(shape => shape.sourceId === action.destination)
-								?.id) ||
-						action.destination!;
+					const target = (component && flattenDesignShapes([component]).find(shape => shape.sourceId === action.destination)?.id) || action.destination!;
 					const before = this.scroll;
 					this.scroll = prototypeScrollTo(this.activeFrame, target, this.scroll);
 					if (before !== this.scroll) {
@@ -143,16 +127,10 @@ export class PrototypePlayback {
 					continue;
 				}
 				if (action.action === 'setVariable') {
-					const variable = getDesignResourceCatalog(this.resources).variables.find(
-						item => item.id === action.variableId,
-					);
+					const variable = getDesignResourceCatalog(this.resources).variables.find(item => item.id === action.variableId);
 					const value = evaluatePrototypeExpression(action.value!, id => this.variable(id));
 					const valid =
-						variable &&
-						value !== undefined &&
-						(variable.type === 'color'
-							? typeof value === 'string' && /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(value)
-							: typeof value === variable.type);
+						variable && value !== undefined && (variable.type === 'color' ? typeof value === 'string' && /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(value) : typeof value === variable.type);
 					if (valid) {
 						this.values = { ...this.values, [variable.id]: value! };
 					}
@@ -160,9 +138,7 @@ export class PrototypePlayback {
 					continue;
 				}
 				if (action.action === 'setMode') {
-					const collection = getDesignResourceCatalog(this.resources).collections.find(
-						item => item.id === action.collectionId,
-					);
+					const collection = getDesignResourceCatalog(this.resources).collections.find(item => item.id === action.collectionId);
 					const valid = collection?.modes.some(mode => mode.id === action.modeId);
 					if (valid) {
 						this.modes = { ...this.modes, [collection!.id]: action.modeId! };
@@ -170,14 +146,7 @@ export class PrototypePlayback {
 					yield { from, transition: action.transition, ...(!valid ? { failed: true } : {}) };
 					continue;
 				}
-				if (
-					this.execute(
-						action,
-						sourceId && prototypeComponent([this.activeFrame], sourceId)
-							? sourceId
-							: (componentId ?? sourceId),
-					)
-				) {
+				if (this.execute(action, sourceId && prototypeComponent([this.activeFrame], sourceId) ? sourceId : (componentId ?? sourceId))) {
 					yield { from, transition: action.transition };
 				}
 			}
@@ -185,21 +154,11 @@ export class PrototypePlayback {
 		yield* visit.call(this, interaction.actions);
 	}
 	private variable(id: string): PrototypeValue | undefined {
-		return resolveDesignVariable(
-			this.resources,
-			id,
-			{ ...this.resources.modes, ...this.modes },
-			undefined,
-			this.values,
-		);
+		return resolveDesignVariable(this.resources, id, { ...this.resources.modes, ...this.modes }, undefined, this.values);
 	}
 	private materialize(frame: PrototypeFrame): PrototypeFrame {
 		return resolveDesignLayout(
-			resolveDesignResources(
-				[frame],
-				{ ...this.resources, modes: { ...this.resources.modes, ...this.modes } },
-				this.values,
-			),
+			resolveDesignResources([frame], { ...this.resources, modes: { ...this.resources.modes, ...this.modes } }, this.values),
 			[frame],
 			this.measureText,
 		)[0] as PrototypeFrame;
@@ -229,11 +188,7 @@ export class PrototypePlayback {
 		if (!destination || !['navigate', 'overlay', 'swap'].includes(action)) {
 			return false;
 		}
-		if (
-			action !== 'navigate' &&
-			(destination.id === this.state.frame.id ||
-				this.state.overlays.some(item => item.frame.id === destination.id))
-		) {
+		if (action !== 'navigate' && (destination.id === this.state.frame.id || this.state.overlays.some(item => item.frame.id === destination.id))) {
 			return false;
 		}
 		this.rememberScroll(destination, !!interaction.resetScroll);
@@ -248,10 +203,7 @@ export class PrototypePlayback {
 			this.history = [...this.history, this.state];
 			this.state = { frame: destination, overlays: [] };
 		} else {
-			if (
-				destination.id === this.state.frame.id ||
-				this.state.overlays.some(item => item.frame.id === destination.id)
-			) {
+			if (destination.id === this.state.frame.id || this.state.overlays.some(item => item.frame.id === destination.id)) {
 				return false;
 			}
 			const overlay = {
@@ -279,17 +231,11 @@ export class PrototypePlayback {
 		if (!instance?.instance || !target) {
 			return false;
 		}
-		const previous = flattenDesignShapes(this.sources).find(
-			shape => shape.id === instance.instance!.componentId,
-		) as PrototypeFrame | undefined;
+		const previous = flattenDesignShapes(this.sources).find(shape => shape.id === instance.instance!.componentId) as PrototypeFrame | undefined;
 		const remapped = remapDesignInstance(instance, target, previous, true);
 		const resolved = resolveDesignResources(resolveDesignComponents([remapped], this.sources), this.resources)[0];
 		const update = (shape: DesignShape): DesignShape =>
-			shape.id === instance.id
-				? resolved
-				: shape.kind === 'frame' || shape.kind === 'group'
-					? { ...shape, children: shape.children.map(update) }
-					: shape;
+			shape.id === instance.id ? resolved : shape.kind === 'frame' || shape.kind === 'group' ? { ...shape, children: shape.children.map(update) } : shape;
 		if (this.state.overlays.length) {
 			this.state = {
 				...this.state,
@@ -297,10 +243,7 @@ export class PrototypePlayback {
 					index === this.state.overlays.length - 1
 						? {
 								...overlay,
-								frame: resolveDesignResources(
-									[update(overlay.frame)],
-									this.resources,
-								)[0] as PrototypeFrame,
+								frame: resolveDesignResources([update(overlay.frame)], this.resources)[0] as PrototypeFrame,
 							}
 						: overlay,
 				),
@@ -317,8 +260,7 @@ export class PrototypePlayback {
 	/** Offsets are session state, including remembered screens, and never become authored geometry. */
 	public get scrollRegions(): readonly PrototypeFrame[] {
 		return prototypeVisibleShapes(applyPrototypeScroll(this.activeFrame, this.scroll)).filter(
-			(shape): shape is PrototypeFrame =>
-				shape.kind === 'frame' && !!shape.overflowDirection && shape.overflowDirection !== 'none',
+			(shape): shape is PrototypeFrame => shape.kind === 'frame' && !!shape.overflowDirection && shape.overflowDirection !== 'none',
 		);
 	}
 	public get scrollFrames(): readonly PrototypeFrame[] {
@@ -354,10 +296,7 @@ export class PrototypePlayback {
 	public scrollEdge(id: string, end: boolean): boolean {
 		const frame = [...prototypePath([this.activeFrame], id)]
 			.reverse()
-			.find(
-				(shape): shape is PrototypeFrame =>
-					shape.kind === 'frame' && !!shape.overflowDirection && shape.overflowDirection !== 'none',
-			);
+			.find((shape): shape is PrototypeFrame => shape.kind === 'frame' && !!shape.overflowDirection && shape.overflowDirection !== 'none');
 		if (!frame) {
 			return false;
 		}
@@ -380,15 +319,10 @@ export class PrototypePlayback {
 					if (from.kind === 'frame' && to.kind === 'frame') {
 						next[to.id] = prototypeScrollOffset(to, { [to.id]: prototypeScrollOffset(from, this.scroll) });
 					}
-					if (
-						(from.kind === 'frame' || from.kind === 'group') &&
-						(to.kind === 'frame' || to.kind === 'group')
-					) {
+					if ((from.kind === 'frame' || from.kind === 'group') && (to.kind === 'frame' || to.kind === 'group')) {
 						const remaining = [...from.children];
 						for (const child of to.children) {
-							const index = remaining.findIndex(
-								item => (item.name ?? item.kind) === (child.name ?? child.kind),
-							);
+							const index = remaining.findIndex(item => (item.name ?? item.kind) === (child.name ?? child.kind));
 							if (index >= 0) {
 								match(remaining.splice(index, 1)[0], child);
 							}
@@ -416,15 +350,11 @@ export class PrototypePlayback {
 	public get delayHotspots(): readonly DesignShape[] {
 		const frame = this.activeFrame;
 		const visit = (shape: DesignShape): readonly DesignShape[] =>
-			shape.visible === false
-				? []
-				: [shape, ...(shape.kind === 'frame' || shape.kind === 'group' ? shape.children.flatMap(visit) : [])];
+			shape.visible === false ? [] : [shape, ...(shape.kind === 'frame' || shape.kind === 'group' ? shape.children.flatMap(visit) : [])];
 		return visit(frame).filter(shape => shape.interactions?.some(item => item.trigger === 'delay'));
 	}
 	public get hotspots(): readonly DesignShape[] {
-		return prototypeVisibleShapes(applyPrototypeScroll(this.activeFrame, this.scroll)).filter(
-			shape => shape.interactions?.length,
-		);
+		return prototypeVisibleShapes(applyPrototypeScroll(this.activeFrame, this.scroll)).filter(shape => shape.interactions?.length);
 	}
 }
 
@@ -444,18 +374,8 @@ export function prototypeScene(state: PrototypeState): PrototypeFrame {
 				fill: '#00000066',
 			});
 		}
-		const x =
-			settings.position === 'center'
-				? (state.frame.width - frame.width) / 2
-				: settings.position.endsWith('Right')
-					? state.frame.width - frame.width
-					: 0;
-		const y =
-			settings.position === 'center'
-				? (state.frame.height - frame.height) / 2
-				: settings.position.startsWith('bottom')
-					? state.frame.height - frame.height
-					: 0;
+		const x = settings.position === 'center' ? (state.frame.width - frame.width) / 2 : settings.position.endsWith('Right') ? state.frame.width - frame.width : 0;
+		const y = settings.position === 'center' ? (state.frame.height - frame.height) / 2 : settings.position.startsWith('bottom') ? state.frame.height - frame.height : 0;
 		children.push({ ...frame, x, y, rotation: 0 });
 	}
 	return { ...state.frame, x: 0, y: 0, rotation: 0, clip: true, children };
@@ -467,10 +387,8 @@ export function prototypeProgress(time: number, easing: PrototypeTransition['eas
 	if (easing === 'linear' || t === 0 || t === 1) {
 		return t;
 	}
-	const [x1, y1, x2, y2] =
-		easing === 'easeIn' ? [0.42, 0, 1, 1] : easing === 'easeOut' ? [0, 0, 0.58, 1] : [0.42, 0, 0.58, 1];
-	const curve = (u: number, a: number, b: number): number =>
-		3 * (1 - u) ** 2 * u * a + 3 * (1 - u) * u ** 2 * b + u ** 3;
+	const [x1, y1, x2, y2] = easing === 'easeIn' ? [0.42, 0, 1, 1] : easing === 'easeOut' ? [0, 0, 0.58, 1] : [0.42, 0, 0.58, 1];
+	const curve = (u: number, a: number, b: number): number => 3 * (1 - u) ** 2 * u * a + 3 * (1 - u) * u ** 2 * b + u ** 3;
 	let low = 0,
 		high = 1;
 	for (let iteration = 0; iteration < 24; iteration++) {
@@ -515,22 +433,13 @@ export function smartAnimate(from: DesignShape, to: DesignShape, t: number): Des
 		height: Math.max(0.001, lerp(from.height, to.height)),
 		rotation: lerp(from.rotation, to.rotation),
 		fill: blendColor(from.fill, to.fill, t),
-		opacity: Math.max(
-			0,
-			Math.min(
-				1,
-				lerp(from.visible === false ? 0 : (from.opacity ?? 1), to.visible === false ? 0 : (to.opacity ?? 1)),
-			),
-		),
+		opacity: Math.max(0, Math.min(1, lerp(from.visible === false ? 0 : (from.opacity ?? 1), to.visible === false ? 0 : (to.opacity ?? 1)))),
 		visible: true,
 	};
 	if ((from.kind === 'frame' || from.kind === 'group') && (result.kind === 'frame' || result.kind === 'group')) {
 		const remaining = [...from.children];
 		const children = result.children.flatMap(child => {
-			const index = remaining.findIndex(
-				candidate =>
-					candidate.kind === child.kind && (candidate.name ?? candidate.kind) === (child.name ?? child.kind),
-			);
+			const index = remaining.findIndex(candidate => candidate.kind === child.kind && (candidate.name ?? candidate.kind) === (child.name ?? child.kind));
 			if (index < 0) {
 				return [{ ...child, opacity: (child.opacity ?? 1) * Math.max(0, Math.min(1, t)) }];
 			}
@@ -538,12 +447,8 @@ export function smartAnimate(from: DesignShape, to: DesignShape, t: number): Des
 			// Text, image content and vector topology are not interpolated by Smart Animate.
 			const changedContent =
 				(previous.kind === 'text' && child.kind === 'text' && previous.text !== child.text) ||
-				(previous.kind === 'image' &&
-					child.kind === 'image' &&
-					previous.assetVersionId !== child.assetVersionId) ||
-				(previous.kind === 'path' &&
-					child.kind === 'path' &&
-					JSON.stringify(previous.nodes) !== JSON.stringify(child.nodes));
+				(previous.kind === 'image' && child.kind === 'image' && previous.assetVersionId !== child.assetVersionId) ||
+				(previous.kind === 'path' && child.kind === 'path' && JSON.stringify(previous.nodes) !== JSON.stringify(child.nodes));
 			if (changedContent) {
 				return [
 					{
@@ -574,12 +479,7 @@ export interface PrototypeAnimationLayer {
 	readonly y: number;
 	readonly opacity: number;
 }
-export function samplePrototypeTransition(
-	from: PrototypeFrame,
-	to: PrototypeFrame,
-	transition: PrototypeTransition,
-	progress: number,
-): readonly PrototypeAnimationLayer[] {
+export function samplePrototypeTransition(from: PrototypeFrame, to: PrototypeFrame, transition: PrototypeTransition, progress: number): readonly PrototypeAnimationLayer[] {
 	const t =
 		transition.easing === 'spring' && transition.spring
 			? springProgress((progress * prototypeTransitionDuration(transition)) / 1000, transition.spring)
@@ -599,33 +499,16 @@ export function samplePrototypeTransition(
 	if (transition.type === 'dissolve') {
 		return [layer(from, 0, 0, 1 - t), layer(to, 0, 0, t)];
 	}
-	const dx =
-		transition.direction === 'left'
-			? -Math.max(from.width, to.width)
-			: transition.direction === 'right'
-				? Math.max(from.width, to.width)
-				: 0;
-	const dy =
-		transition.direction === 'top'
-			? -Math.max(from.height, to.height)
-			: transition.direction === 'bottom'
-				? Math.max(from.height, to.height)
-				: 0;
+	const dx = transition.direction === 'left' ? -Math.max(from.width, to.width) : transition.direction === 'right' ? Math.max(from.width, to.width) : 0;
+	const dy = transition.direction === 'top' ? -Math.max(from.height, to.height) : transition.direction === 'bottom' ? Math.max(from.height, to.height) : 0;
 	if (transition.type === 'moveOut' || transition.type === 'slideOut') {
 		return [
-			layer(
-				to,
-				transition.type === 'slideOut' ? -dx * (1 - t) * 0.25 : 0,
-				transition.type === 'slideOut' ? -dy * (1 - t) * 0.25 : 0,
-			),
+			layer(to, transition.type === 'slideOut' ? -dx * (1 - t) * 0.25 : 0, transition.type === 'slideOut' ? -dy * (1 - t) * 0.25 : 0),
 			layer(from, dx * t, dy * t, transition.type === 'slideOut' ? 1 - t : 1),
 		];
 	}
 	const distance = transition.type === 'push' ? 1 : transition.type === 'slideIn' ? 0.25 : 0;
-	return [
-		layer(from, -dx * t * distance, -dy * t * distance, transition.type === 'slideIn' ? 1 - t : 1),
-		layer(to, dx * (1 - t), dy * (1 - t)),
-	];
+	return [layer(from, -dx * t * distance, -dy * t * distance, transition.type === 'slideIn' ? 1 - t : 1), layer(to, dx * (1 - t), dy * (1 - t))];
 }
 
 /** Unit step response with an initial velocity, solved for all three damping regimes. Time is seconds. */

@@ -16,27 +16,17 @@ import { browserEnvironment } from '../testEditorDom.js';
 import { Event as EditorEvent } from '../../../../base/common/event.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import {
-	ContentWidgetPositionPreference,
-	type ICodeEditor,
-	type IContentWidget,
-} from '../../../browser/editorBrowser.js';
+import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget } from '../../../browser/editorBrowser.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import { IContextKeyService, ContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import {
-	AccessibilitySupport,
-	IAccessibilityService,
-} from '../../../../platform/accessibility/common/accessibility.js';
+import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import { type TextEditorContributionContext } from '../../../browser/editorExtensions.js';
-import {
-	IInstantiationService,
-	createServiceIdentifier,
-} from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 
 const { CodeEditorWidget } = await import('../../../browser/widget/codeEditor/codeEditorWidget.js');
@@ -44,8 +34,7 @@ const { createTestCodeEditor } = await import('../testCodeEditor.js');
 const { EditorContributionInstantiation } = await import('../../../browser/editorExtensions.js');
 const { InstantiationService } = await import('../../../../platform/instantiation/common/instantiationService.js');
 const { ILogService, NullLoggerService } = await import('../../../../platform/log/common/log.js');
-const { PlaceholderTextContribution } =
-	await import('../../../contrib/placeholderText/browser/placeholderTextContribution.js');
+const { PlaceholderTextContribution } = await import('../../../contrib/placeholderText/browser/placeholderTextContribution.js');
 const { VersionedEditorWorkerClient } = await import('../../../browser/services/editorWorkerService.js');
 const { EditorWorker } = await import('../../../common/services/editorWebWorker.js');
 await import('../../../contrib/inPlaceReplace/browser/inPlaceReplace.js');
@@ -134,15 +123,11 @@ test('CodeEditorWidget switches models without replacing its identity or retaini
 		};
 		editor.addContentWidget(widget);
 		assert.equal(root.contains(widgetDomNode), true);
-		const decorations = editor.createDecorationsCollection([
-			{ range: new Range(1, 1, 1, 2), options: { description: 'first model' } },
-		]);
+		const decorations = editor.createDecorationsCollection([{ range: new Range(1, 1, 1, 2), options: { description: 'first model' } }]);
 		assert.equal(decorations.length, 1);
 		const modelEvents: string[] = [];
 		const focusedAtChange: boolean[] = [];
-		using willChange = editor.onWillChangeModel(event =>
-			modelEvents.push(`will:${event.oldModelUrl?.toString()}->${event.newModelUrl?.toString()}`),
-		);
+		using willChange = editor.onWillChangeModel(event => modelEvents.push(`will:${event.oldModelUrl?.toString()}->${event.newModelUrl?.toString()}`));
 		using didChange = editor.onDidChangeModel(event => {
 			modelEvents.push(`did:${event.oldModelUrl?.toString()}->${event.newModelUrl?.toString()}`);
 			focusedAtChange.push(editor.hasTextFocus());
@@ -180,7 +165,13 @@ test('CodeEditorWidget switches models without replacing its identity or retaini
 				mounted: container.contains(root),
 				input: root.querySelector('.stanza-editor-input'),
 			},
-			{ model: null, hasModel: false, value: '', mounted: true, input: null },
+			{
+				model: null,
+				hasModel: false,
+				value: '',
+				mounted: true,
+				input: null,
+			},
 		);
 		assert.equal(widgetDomNode.isConnected, false);
 		assert.equal(decorations.length, 0);
@@ -191,13 +182,7 @@ test('CodeEditorWidget switches models without replacing its identity or retaini
 		assert.equal(root.contains(widgetDomNode), true);
 		decorations.set([{ range: new Range(1, 2, 1, 3), options: { description: 'reattached' } }]);
 		assert.deepEqual(decorations.getRanges(), [new Range(1, 2, 1, 3)]);
-		assert.deepEqual(contributionEvents, [
-			`create:${first.uri}`,
-			`dispose:${first.uri}`,
-			`create:${second.uri}`,
-			`dispose:${second.uri}`,
-			`create:${first.uri}`,
-		]);
+		assert.deepEqual(contributionEvents, [`create:${first.uri}`, `dispose:${first.uri}`, `create:${second.uri}`, `dispose:${second.uri}`, `create:${first.uri}`]);
 		assert.deepEqual(modelEvents, [
 			`will:${first.uri}->${second.uri}`,
 			`did:${first.uri}->${second.uri}`,
@@ -261,9 +246,7 @@ test('CodeEditorWidget leaves a usable empty editor when replacement setup fails
 	try {
 		const root = editor.getDomNode();
 		const changes: string[] = [];
-		using listener = editor.onDidChangeModel(event =>
-			changes.push(`${event.oldModelUrl?.toString()}->${event.newModelUrl?.toString()}`),
-		);
+		using listener = editor.onDidChangeModel(event => changes.push(`${event.oldModelUrl?.toString()}->${event.newModelUrl?.toString()}`));
 		assert.throws(() => editor.setModel(failed), /worker unavailable/);
 		assert.deepEqual(
 			{
@@ -300,7 +283,12 @@ test('CodeEditorWidget stops a model switch when a will-change listener disposes
 			firstDisposed: first.isDisposed(),
 			secondDisposed: second.isDisposed(),
 		},
-		{ disposed: true, rootMounted: false, firstDisposed: false, secondDisposed: false },
+		{
+			disposed: true,
+			rootMounted: false,
+			firstDisposed: false,
+			secondDisposed: false,
+		},
 	);
 	dom.window.close();
 });
@@ -332,9 +320,7 @@ test('CodeEditorWidget clears its model state when contribution disposal fails d
 	try {
 		const root = editor.getDomNode();
 		const events: string[] = [];
-		using listener = editor.onDidChangeModel(event =>
-			events.push(`${event.oldModelUrl?.toString()}->${event.newModelUrl?.toString()}`),
-		);
+		using listener = editor.onDidChangeModel(event => events.push(`${event.oldModelUrl?.toString()}->${event.newModelUrl?.toString()}`));
 		assert.throws(() => editor.setModel(second));
 		assert.deepEqual(
 			{
@@ -343,7 +329,12 @@ test('CodeEditorWidget clears its model state when contribution disposal fails d
 				input: root.querySelector('.stanza-editor-input'),
 				events,
 			},
-			{ model: null, mounted: true, input: null, events: [`${first.uri}->undefined`] },
+			{
+				model: null,
+				mounted: true,
+				input: null,
+				events: [`${first.uri}->undefined`],
+			},
 		);
 	} finally {
 		editor.dispose();
@@ -385,8 +376,16 @@ test('CodeEditorWidget stages and owns per-instance contributions', () => {
 		model,
 		lineHeight: 20,
 		contributions: [
-			{ id: 'test.eager', instantiation: EditorContributionInstantiation.Eager, ctor: EagerContribution },
-			{ id: 'test.lazy', instantiation: EditorContributionInstantiation.Lazy, ctor: LazyContribution },
+			{
+				id: 'test.eager',
+				instantiation: EditorContributionInstantiation.Eager,
+				ctor: EagerContribution,
+			},
+			{
+				id: 'test.lazy',
+				instantiation: EditorContributionInstantiation.Lazy,
+				ctor: LazyContribution,
+			},
 		],
 	});
 
@@ -410,11 +409,7 @@ test('CodeEditorWidget owns configured resources and deferred controllers across
 	const events: string[] = [];
 	const modelService = createServiceIdentifier<TextModel>('test.editor.model');
 	class Controller extends Disposable {
-		constructor(
-			context: TextEditorContributionContext,
-			@IInstantiationService services: IInstantiationService,
-			@modelService providedModel: TextModel,
-		) {
+		constructor(context: TextEditorContributionContext, @IInstantiationService services: IInstantiationService, @modelService providedModel: TextModel) {
 			super();
 			assert.equal(services, context.instantiationService);
 			assert.equal(providedModel, model);
@@ -535,9 +530,7 @@ test('CodeEditorWidget injects scoped services into contributions and releases t
 			model,
 			lineHeight: 20,
 			instantiationService: parent,
-			contributions: [
-				{ id: 'test.injected', ctor: Contribution, instantiation: EditorContributionInstantiation.Eager },
-			],
+			contributions: [{ id: 'test.injected', ctor: Contribution, instantiation: EditorContributionInstantiation.Eager }],
 		});
 		assert.equal(instances.length, 1);
 		assert.equal(instances[0].editor, editor);
@@ -625,11 +618,7 @@ test('Contribution selection distinguishes defaults, an empty list, and an expli
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
 	try {
-		for (const contributions of [
-			undefined,
-			[],
-			EditorExtensionsRegistry.getSomeEditorContributions([FindController.ID]),
-		]) {
+		for (const contributions of [undefined, [], EditorExtensionsRegistry.getSomeEditorContributions([FindController.ID])]) {
 			using editor = createTestCodeEditor({
 				container: requiredElement(dom.window.document, 'main'),
 				model,
@@ -648,11 +637,7 @@ test('Contribution selection distinguishes defaults, an empty list, and an expli
 			assert.equal(editor.getContainerDomNode().querySelector('.stanza-editor-find-options-widget'), null);
 			const state = find.saveViewState();
 			find.restoreViewState(state);
-			assert.equal(
-				editor.getContainerDomNode().querySelector('.stanza-editor-find-widget'),
-				null,
-				'Saving and restoring an unused controller must not construct its overlays',
-			);
+			assert.equal(editor.getContainerDomNode().querySelector('.stanza-editor-find-widget'), null, 'Saving and restoring an unused controller must not construct its overlays');
 			await find.start({
 				forceRevealReplace: false,
 				seedSearchStringFromSelection: 'none',
@@ -759,34 +744,27 @@ test('CodeEditorWidget rejects missing shared services before creating its surfa
 	using theme = new TestThemeService(darkColorTheme);
 	using model = new TextModel('text');
 	using contextKeys = new ContextKeyService();
-	for (const missing of [
-		IThemeService,
-		ILanguageConfigurationService,
-		ILanguageFeaturesService,
-		IContextKeyService,
-		IAccessibilityService,
-		ICodeEditorService,
-		ILogService,
-		IConfigurationService,
-	]) {
+	for (const missing of [IThemeService, ILanguageConfigurationService, ILanguageFeaturesService, IContextKeyService, IAccessibilityService, ICodeEditorService, ILogService, IConfigurationService]) {
 		using services = new InstantiationService();
 		if (missing !== ICodeEditorService) {
 			services.registerSingleton(ICodeEditorService, () => services.createInstance(StandaloneCodeEditorService));
 		}
 		if (missing !== IContextKeyService) services.registerInstance(IContextKeyService, contextKeys);
 		if (missing !== IThemeService) services.registerInstance(IThemeService, theme);
-		if (missing !== ILanguageConfigurationService)
-			services.registerInstance(ILanguageConfigurationService, configurations);
+		if (missing !== ILanguageConfigurationService) services.registerInstance(ILanguageConfigurationService, configurations);
 		if (missing !== ILanguageFeaturesService) services.registerInstance(ILanguageFeaturesService, features);
-		if (missing !== IAccessibilityService)
-			services.registerInstance(IAccessibilityService, enabledAccessibilityService);
+		if (missing !== IAccessibilityService) services.registerInstance(IAccessibilityService, enabledAccessibilityService);
 		if (missing !== ILogService) services.registerInstance(ILogService, new NullLoggerService());
-		if (missing !== IConfigurationService)
-			services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
+		if (missing !== IConfigurationService) services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 		const container = h(browserEnvironment.window.document, 'div');
 		for (const initialModel of [null, model]) {
 			assert.throws(
-				() => services.createInstance(CodeEditorWidget, { container, model: initialModel, contributions: [] }),
+				() =>
+					services.createInstance(CodeEditorWidget, {
+						container,
+						model: initialModel,
+						contributions: [],
+					}),
 				error => error instanceof Error && error.message.includes(missing.description),
 			);
 			assert.equal(container.childElementCount, 0);

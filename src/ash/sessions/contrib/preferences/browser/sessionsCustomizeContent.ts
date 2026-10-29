@@ -1,7 +1,4 @@
-import {
-	SettingsPageRenderer,
-	SettingsRenderer,
-} from '../../../../workbench/contrib/preferences/browser/settingsRenderers.js';
+import { SettingsPageRenderer, SettingsRenderer } from '../../../../workbench/contrib/preferences/browser/settingsRenderers.js';
 import { h } from '../../../../base/browser/dom.js';
 import { TabList, type TabListItem } from '../../../../base/browser/ui/tablist/tabList.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
@@ -10,18 +7,11 @@ import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { AICustomizationManagementEditorInput } from '../../../../workbench/contrib/chat/browser/aiCustomization/aiCustomizationManagementEditorInput.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import {
-	AccessibleViewProviderId,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { SettingsSectionRenderer } from '../../../../workbench/contrib/preferences/browser/settingsSectionRenderer.js';
 import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
 import { SettingsTree } from '../../../../workbench/contrib/preferences/browser/settingsTree.js';
-import {
-	SettingsTreeModel,
-	type SettingsSectionReference,
-	type SettingsTreeNode,
-} from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
+import { SettingsTreeModel, type SettingsSectionReference, type SettingsTreeNode } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
 
 type CustomizeTab = 'settings' | 'hooks';
 
@@ -115,10 +105,7 @@ export class SessionsCustomizeContent extends SettingsPageRenderer {
 	protected override buildNodes(query: SettingsSearchQuery): readonly SettingsTreeNode<SettingsSectionReference>[] {
 		this.query = query;
 		this.render();
-		const keywords = [
-			...this.tabItems.flatMap(tab => [tab.id, tab.label]),
-			...this.treeModel.visibleItems.flatMap(item => [item.title, item.description, ...(item.keywords ?? [])]),
-		];
+		const keywords = [...this.tabItems.flatMap(tab => [tab.id, tab.label]), ...this.treeModel.visibleItems.flatMap(item => [item.title, item.description, ...(item.keywords ?? [])])];
 		return [
 			{
 				element: {
@@ -145,10 +132,7 @@ export class SessionsCustomizeContent extends SettingsPageRenderer {
 					{
 						categoryId: 'customize-settings',
 						title: this.tabItems[0].label,
-						description: localize(
-							'sessions.customize.settingsDescription',
-							'Edit shared Workbench preferences using the settings editor or the current profile’s settings.json file.',
-						),
+						description: localize('sessions.customize.settingsDescription', 'Edit shared Workbench preferences using the settings editor or the current profile’s settings.json file.'),
 						help: localize(
 							'sessions.customize.settingsHelp',
 							'Open Workbench Settings to search, change or reset settings. Open User Settings (JSON) to edit the profile’s settings.json file. Both use the same configuration owner as the Workbench.',
@@ -166,10 +150,7 @@ export class SessionsCustomizeContent extends SettingsPageRenderer {
 								id: 'json',
 								kind: 'action',
 								enabled: true,
-								label: localize(
-									{ bundle: 'ash.settings', key: 'json.openCommand' },
-									'Preferences: Open User Settings (JSON)',
-								),
+								label: localize({ bundle: 'ash.settings', key: 'json.openCommand' }, 'Preferences: Open User Settings (JSON)'),
 								run: this.openUserSettings,
 							},
 						],
@@ -190,10 +171,7 @@ export class SessionsCustomizeContent extends SettingsPageRenderer {
 					{
 						categoryId: 'hooks',
 						title: localize({ bundle: 'ash.settings', key: 'hooks.aria' }, 'Agent Hooks'),
-						description: localize(
-							{ bundle: 'ash.settings', key: 'hooks.managementLink' },
-							'Manage Hooks in Agent Customizations.',
-						),
+						description: localize({ bundle: 'ash.settings', key: 'hooks.managementLink' }, 'Manage Hooks in Agent Customizations.'),
 						help: localize(
 							{ bundle: 'ash.settings', key: 'hooks.managementLinkHelp' },
 							'Open Manage Hooks to search events, inspect declarations, edit TOML, or ask Ash to configure a Hook.',
@@ -207,9 +185,7 @@ export class SessionsCustomizeContent extends SettingsPageRenderer {
 								enabled: true,
 								run: async () => {
 									// Closing the modal releases its child service scope. Resolve the window owner first.
-									const editors = this.instantiation.invokeFunction(accessor =>
-										accessor.get(IEditorService),
-									);
+									const editors = this.instantiation.invokeFunction(accessor => accessor.get(IEditorService));
 									await this.closeSettings();
 									await editors.openEditor(new AICustomizationManagementEditorInput(), {
 										pinned: true,

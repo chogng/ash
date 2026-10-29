@@ -43,10 +43,7 @@ test('file resource names remain decoded and retain identity through restoration
 	const restored = EditorInputSerializers.deserialize(EditorInputSerializers.serialize(input));
 	assert.ok(restored instanceof FileEditorInput);
 	try {
-		assert.deepEqual(
-			[input.getName(), restored.getName(), restored.matches(input)],
-			['hello %中.txt', 'hello %中.txt', true],
-		);
+		assert.deepEqual([input.getName(), restored.getName(), restored.matches(input)], ['hello %中.txt', 'hello %中.txt', true]);
 	} finally {
 		restored.dispose();
 	}

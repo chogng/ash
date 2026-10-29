@@ -119,10 +119,7 @@ async function exportBundle(window: Workbench, application: PlaywrightApplicatio
 		const length = bytes.readUInt32LE(offset + 18);
 		const nameLength = bytes.readUInt16LE(offset + 26);
 		const start = offset + 30 + nameLength;
-		files.set(
-			bytes.subarray(offset + 30, start).toString('utf8'),
-			bytes.subarray(start, start + length).toString('utf8'),
-		);
+		files.set(bytes.subarray(offset + 30, start).toString('utf8'), bytes.subarray(start, start + length).toString('utf8'));
 		offset = start + length;
 	}
 	const manifest = JSON.parse(files.get('manifest.json')!);
@@ -132,16 +129,8 @@ async function exportBundle(window: Workbench, application: PlaywrightApplicatio
 		.join('\n');
 	expect(bodies).toContain('debug-logs-saved-user-request');
 	expect(bodies).toContain('debug-logs-saved-model-response');
-	expect(
-		manifest.coverage.requestPayloads.references.some(
-			(entry: { kind: string; status: string }) => entry.kind === 'coreRequest' && entry.status === 'saved',
-		),
-	).toBe(true);
-	expect(
-		manifest.coverage.requestPayloads.references.some(
-			(entry: { kind: string; status: string }) => entry.kind === 'modelResponse' && entry.status === 'saved',
-		),
-	).toBe(true);
+	expect(manifest.coverage.requestPayloads.references.some((entry: { kind: string; status: string }) => entry.kind === 'coreRequest' && entry.status === 'saved')).toBe(true);
+	expect(manifest.coverage.requestPayloads.references.some((entry: { kind: string; status: string }) => entry.kind === 'modelResponse' && entry.status === 'saved')).toBe(true);
 	await testInfo.attach('debug-logs.zip', { path: archivePath, contentType: 'application/zip' });
 	return { files, manifest };
 }
@@ -162,35 +151,19 @@ for (const surface of ['IDE', 'Agent Window'] as const) {
 					await page.locator('.ash-sessions-list-item').filter({ hasText: 'Debug logs source' }).click();
 				} else {
 					await window.quickaccess.runCommand('workbench.action.chat.open');
-					if (!(await page.locator('.ash-chat-sessions-sidebar').isVisible()))
-						await window.quickaccess.runCommand('agentSessions.toggleAgentSessionsSidebar');
-					await page
-						.locator('.ash-chat-sessions-sidebar .ash-agent-session-row')
-						.filter({ hasText: 'Debug logs source' })
-						.click();
+					if (!(await page.locator('.ash-chat-sessions-sidebar').isVisible())) await window.quickaccess.runCommand('agentSessions.toggleAgentSessionsSidebar');
+					await page.locator('.ash-chat-sessions-sidebar .ash-agent-session-row').filter({ hasText: 'Debug logs source' }).click();
 				}
-				const chat = page
-					.locator(
-						agents
-							? '.ash-sessions-chat-slot.active:visible [data-thread-id]'
-							: '.ash-chat-view-pane .ash-chat:visible',
-					)
-					.first();
+				const chat = page.locator(agents ? '.ash-sessions-chat-slot.active:visible [data-thread-id]' : '.ash-chat-view-pane .ash-chat:visible').first();
 				await expect(chat).toHaveAttribute('data-thread-id', threadId);
 				const { files, manifest } = await exportBundle(window, application, testInfo);
 				expect(manifest.conversation).toEqual({ sessionId: session.sessionId, threadId });
-				expect(
-					manifest.issues.filter((issue: { source: string }) => issue.source.startsWith('session')),
-				).toEqual([]);
+				expect(manifest.issues.filter((issue: { source: string }) => issue.source.startsWith('session'))).toEqual([]);
 				expect(JSON.parse(files.get('session/trace-1.json')!).trace.sessionId).toBe(session.sessionId);
 				expect(files.has('session/diagnostics-1.json')).toBe(true);
 				if (target.kind === 'electron') {
-					expect(manifest.sources.some((source: { source: string }) => source.source === 'app-server')).toBe(
-						true,
-					);
-					expect(
-						manifest.sources.some((source: { source: string }) => /window-\d+\.log$/u.test(source.source)),
-					).toBe(true);
+					expect(manifest.sources.some((source: { source: string }) => source.source === 'app-server')).toBe(true);
+					expect(manifest.sources.some((source: { source: string }) => /window-\d+\.log$/u.test(source.source))).toBe(true);
 				}
 				await expect(chat).toHaveAttribute('data-thread-id', threadId);
 			} finally {
@@ -200,72 +173,61 @@ for (const surface of ['IDE', 'Agent Window'] as const) {
 	);
 }
 
-test(
-	'SSH debug logs contain the remote process, its rotations and saved model bodies',
-	{ tag: ['@electron-app-server', '@darwin'] },
-	async ({ debugModel }, testInfo) => {
-		test.setTimeout(180_000);
-		const packageRoot = developmentAshPackagePath(process.env.ASH_SMOKE_DESKTOP_DIRECTORY ?? resolve('.'));
-		const daemon = join(packageRoot, 'bin/ash-app-server-daemon');
-		const fixture = await createSshFixture(daemon);
-		const workspace = join(fixture.root, 'workspace');
-		const profile = join(fixture.root, 'remote-profile');
-		let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
-		let connection: Awaited<ReturnType<typeof connectProfile>> | undefined;
+test('SSH debug logs contain the remote process, its rotations and saved model bodies', { tag: ['@electron-app-server', '@darwin'] }, async ({ debugModel }, testInfo) => {
+	test.setTimeout(180_000);
+	const packageRoot = developmentAshPackagePath(process.env.ASH_SMOKE_DESKTOP_DIRECTORY ?? resolve('.'));
+	const daemon = join(packageRoot, 'bin/ash-app-server-daemon');
+	const fixture = await createSshFixture(daemon);
+	const workspace = join(fixture.root, 'workspace');
+	const profile = join(fixture.root, 'remote-profile');
+	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
+	let connection: Awaited<ReturnType<typeof connectProfile>> | undefined;
+	try {
+		await mkdir(workspace);
+		await writeFile(join(profile, 'config.toml'), configuration(profile, debugModel.url));
+		desktop = await launchElectron({
+			appServerMode: 'required',
+			userDataDirectory: join(fixture.root, 'desktop'),
+			workspaceDirectory: workspace,
+			workspacePermissions: 'development',
+			extraArgs: [`--remote-ssh=${fixture.host}`],
+			environment: {
+				...process.env,
+				ASH_SSH_PATH: fixture.ssh,
+				ASH_REMOTE_ASH_PATH: join(packageRoot, 'bin/ash-remote-server'),
+			},
+		});
+		const window = desktop.driver.workbench;
+		await expect(window.page.locator('[data-statusbar-item-id="ash.status.remote"]')).toHaveAttribute('aria-label', `Remote connection to SSH host ${fixture.host} is ready`);
+		// Seed only the isolated remote profile through its public API. The window's export uses OpenSSH.
+		connection = await connectProfile(desktop.application, undefined, workspace, window.page, {
+			profileRoot: profile,
+		});
+		const session = await seedSession(connection.client, workspace, 'SSH debug logs source');
+		const { stdout } = await promisify(execFile)(daemon, ['version'], {
+			env: { ...process.env, ASH_HOME: profile },
+		});
+		const log = JSON.parse(stdout).logPath as string;
+		await appendFile(log, 'remote-process-debug-export-marker\n');
+		await writeFile(`${log}.1`, 'remote-rotated-debug-export-marker\n');
+		await window.quickaccess.runCommand('workbench.action.chat.open');
+		if (!(await window.page.locator('.ash-chat-sessions-sidebar').isVisible())) await window.quickaccess.runCommand('agentSessions.toggleAgentSessionsSidebar');
+		await window.page.locator('.ash-chat-sessions-sidebar .ash-agent-session-row').filter({ hasText: 'SSH debug logs source' }).click();
+		const { files, manifest } = await exportBundle(window, desktop.application, testInfo);
+		expect(manifest.conversation.sessionId).toBe(session.sessionId);
+		expect(manifest.coverage.sessionHostProcessLogs).toBe('collected');
+		const hostLogs = [...files]
+			.filter(([name]) => name.startsWith('host/'))
+			.map(([, content]) => content)
+			.join('\n');
+		expect(hostLogs).toContain('remote-process-debug-export-marker');
+		expect(hostLogs).toContain('remote-rotated-debug-export-marker');
+	} finally {
 		try {
-			await mkdir(workspace);
-			await writeFile(join(profile, 'config.toml'), configuration(profile, debugModel.url));
-			desktop = await launchElectron({
-				appServerMode: 'required',
-				userDataDirectory: join(fixture.root, 'desktop'),
-				workspaceDirectory: workspace,
-				workspacePermissions: 'development',
-				extraArgs: [`--remote-ssh=${fixture.host}`],
-				environment: {
-					...process.env,
-					ASH_SSH_PATH: fixture.ssh,
-					ASH_REMOTE_ASH_PATH: join(packageRoot, 'bin/ash-remote-server'),
-				},
-			});
-			const window = desktop.driver.workbench;
-			await expect(window.page.locator('[data-statusbar-item-id="ash.status.remote"]')).toHaveAttribute(
-				'aria-label',
-				`Remote connection to SSH host ${fixture.host} is ready`,
-			);
-			// Seed only the isolated remote profile through its public API. The window's export uses OpenSSH.
-			connection = await connectProfile(desktop.application, undefined, workspace, window.page, {
-				profileRoot: profile,
-			});
-			const session = await seedSession(connection.client, workspace, 'SSH debug logs source');
-			const { stdout } = await promisify(execFile)(daemon, ['version'], {
-				env: { ...process.env, ASH_HOME: profile },
-			});
-			const log = JSON.parse(stdout).logPath as string;
-			await appendFile(log, 'remote-process-debug-export-marker\n');
-			await writeFile(`${log}.1`, 'remote-rotated-debug-export-marker\n');
-			await window.quickaccess.runCommand('workbench.action.chat.open');
-			if (!(await window.page.locator('.ash-chat-sessions-sidebar').isVisible()))
-				await window.quickaccess.runCommand('agentSessions.toggleAgentSessionsSidebar');
-			await window.page
-				.locator('.ash-chat-sessions-sidebar .ash-agent-session-row')
-				.filter({ hasText: 'SSH debug logs source' })
-				.click();
-			const { files, manifest } = await exportBundle(window, desktop.application, testInfo);
-			expect(manifest.conversation.sessionId).toBe(session.sessionId);
-			expect(manifest.coverage.sessionHostProcessLogs).toBe('collected');
-			const hostLogs = [...files]
-				.filter(([name]) => name.startsWith('host/'))
-				.map(([, content]) => content)
-				.join('\n');
-			expect(hostLogs).toContain('remote-process-debug-export-marker');
-			expect(hostLogs).toContain('remote-rotated-debug-export-marker');
+			await connection?.close();
+			await desktop?.close();
 		} finally {
-			try {
-				await connection?.close();
-				await desktop?.close();
-			} finally {
-				await fixture.close();
-			}
+			await fixture.close();
 		}
-	},
-);
+	}
+});

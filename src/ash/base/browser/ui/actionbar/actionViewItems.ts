@@ -70,9 +70,16 @@ export abstract class ActionViewItem extends Disposable {
 	/** Installs an action tooltip for view items that render a custom target. */
 	protected setupDelayedHover(target: HTMLElement, content: string): IDisposable {
 		return this._register(
-			getHoverDelegate().setupDelayedHover(target, () => ({ content, ...this.getHoverOptions() }), {
-				groupId: ActionHoverGroupId,
-			}),
+			getHoverDelegate().setupDelayedHover(
+				target,
+				() => ({
+					content,
+					...this.getHoverOptions(),
+				}),
+				{
+					groupId: ActionHoverGroupId,
+				},
+			),
 		);
 	}
 
@@ -91,10 +98,7 @@ export abstract class ActionViewItem extends Disposable {
 	protected getHoverOptions(): Pick<IDelayedHoverOptions, 'position'> {
 		return {
 			position: {
-				hoverPosition:
-					this.actionViewItemOptions.hoverAnchorPosition === AnchorPosition.Below
-						? HoverPosition.BELOW
-						: HoverPosition.ABOVE,
+				hoverPosition: this.actionViewItemOptions.hoverAnchorPosition === AnchorPosition.Below ? HoverPosition.BELOW : HoverPosition.ABOVE,
 			},
 		};
 	}
@@ -227,7 +231,5 @@ export class SeparatorActionViewItem extends ActionViewItem {
 
 /** Creates the base representation used when a platform has no override. */
 export function createActionViewItem(action: IAction, options: ActionViewItemOptions = {}): ActionViewItem {
-	return action instanceof Separator
-		? new SeparatorActionViewItem(action)
-		: new ButtonActionViewItem(action, options);
+	return action instanceof Separator ? new SeparatorActionViewItem(action) : new ButtonActionViewItem(action, options);
 }

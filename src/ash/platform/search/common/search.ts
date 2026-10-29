@@ -46,11 +46,7 @@ export interface IContentSearchOptions {
 
 /** Renderer-facing directory search lifecycle independent of Electron IPC. */
 export interface IContentSearchService {
-	search(
-		directory: IWorkspaceFolder,
-		query: IContentSearchQuery,
-		options?: IContentSearchOptions,
-	): Promise<IContentSearchComplete>;
+	search(directory: IWorkspaceFolder, query: IContentSearchQuery, options?: IContentSearchOptions): Promise<IContentSearchComplete>;
 }
 
 export const IContentSearchService = createServiceIdentifier<IContentSearchService>('contentSearchService');
@@ -68,6 +64,4 @@ export interface IContentSearchConfigurationService {
 	configure(engine: ContentSearchEngine, expectedRevision: number): Promise<void>;
 }
 
-export const IContentSearchConfigurationService = createServiceIdentifier<IContentSearchConfigurationService>(
-	'contentSearchConfigurationService',
-);
+export const IContentSearchConfigurationService = createServiceIdentifier<IContentSearchConfigurationService>('contentSearchConfigurationService');

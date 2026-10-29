@@ -1,17 +1,7 @@
-import {
-	AbstractDisposable,
-	toDisposable,
-	type IDisposable,
-	type DisposableStore,
-} from '../../../base/common/lifecycle.js';
+import { AbstractDisposable, toDisposable, type IDisposable, type DisposableStore } from '../../../base/common/lifecycle.js';
 import type { BrowserWindow } from 'electron';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
-import {
-	GLOBAL_KEYBINDING_UPDATE_CHANNEL,
-	GLOBAL_KEYBINDING_TRIGGER_CHANNEL,
-	validateGlobalKeybindingRequest,
-	type GlobalKeybindingRequest,
-} from '../common/globalKeybindings.js';
+import { GLOBAL_KEYBINDING_UPDATE_CHANNEL, GLOBAL_KEYBINDING_TRIGGER_CHANNEL, validateGlobalKeybindingRequest, type GlobalKeybindingRequest } from '../common/globalKeybindings.js';
 import type { JsonValue } from '../../../base/common/jsonValue.js';
 import type { INativeSystemWideKeybinding, INativeSystemWideKeybindingResult } from '../../native/common/nativeHost.js';
 
@@ -78,8 +68,7 @@ export class GlobalKeybindingsMainService extends AbstractDisposable {
 				channel: GLOBAL_KEYBINDING_UPDATE_CHANNEL,
 				validate: validateGlobalKeybindingRequest,
 				invoke: value => {
-					if (disposed || window.isDestroyed() || contents.isDestroyed())
-						throw new Error('Global keybinding scope has closed');
+					if (disposed || window.isDestroyed() || contents.isDestroyed()) throw new Error('Global keybinding scope has closed');
 					const request = value as GlobalKeybindingRequest;
 					let lease = leases.get(request.id);
 					if (!request.global) {
@@ -93,8 +82,7 @@ export class GlobalKeybindingsMainService extends AbstractDisposable {
 					if (!lease) {
 						if (leases.size >= 64) throw new RangeError('Too many global keybinding leases');
 						lease = this.createOwner(window.id, () => {
-							if (!window.isDestroyed() && !contents.isDestroyed())
-								contents.send(GLOBAL_KEYBINDING_TRIGGER_CHANNEL, { id: request.id });
+							if (!window.isDestroyed() && !contents.isDestroyed()) contents.send(GLOBAL_KEYBINDING_TRIGGER_CHANNEL, { id: request.id });
 						});
 						leases.set(request.id, lease);
 					}
@@ -111,21 +99,12 @@ export class GlobalKeybindingsMainService extends AbstractDisposable {
 		];
 	}
 
-	updateKeybindings(
-		windowId: number,
-		keybindings: readonly INativeSystemWideKeybinding[],
-	): INativeSystemWideKeybindingResult {
+	updateKeybindings(windowId: number, keybindings: readonly INativeSystemWideKeybinding[]): INativeSystemWideKeybindingResult {
 		this.assertNotDisposed();
 		const bindings = new Map<string, INativeSystemWideKeybinding>();
 		const conflicts: string[] = [];
 		for (const binding of keybindings) {
-			if (
-				[...this.scoped].some(
-					owner =>
-						owner.binding?.accelerator === binding.accelerator &&
-						owner.binding.commandId !== binding.commandId,
-				)
-			) {
+			if ([...this.scoped].some(owner => owner.binding?.accelerator === binding.accelerator && owner.binding.commandId !== binding.commandId)) {
 				conflicts.push(binding.userSettingsLabel);
 				continue;
 			}
@@ -134,12 +113,7 @@ export class GlobalKeybindingsMainService extends AbstractDisposable {
 		this.byWindow.set(windowId, bindings);
 		this.reconcile();
 		return {
-			failed: [
-				...conflicts,
-				...[...bindings]
-					.filter(([accelerator]) => this.failed.has(accelerator))
-					.map(([, binding]) => binding.userSettingsLabel),
-			],
+			failed: [...conflicts, ...[...bindings].filter(([accelerator]) => this.failed.has(accelerator)).map(([, binding]) => binding.userSettingsLabel)],
 		};
 	}
 
@@ -165,18 +139,8 @@ export class GlobalKeybindingsMainService extends AbstractDisposable {
 							[...this.byWindow.values()].some(bindings => {
 								const current = bindings.get(binding.accelerator);
 								return current && current.commandId !== binding.commandId;
-							}) ||
-							[...this.scoped].some(
-								other =>
-									other !== owner &&
-									other.binding?.accelerator === binding.accelerator &&
-									other.binding.commandId !== binding.commandId,
-							);
-						if (
-							conflicting ||
-							(!this.registered.has(binding.accelerator) && !this.register(binding.accelerator))
-						)
-							return false;
+							}) || [...this.scoped].some(other => other !== owner && other.binding?.accelerator === binding.accelerator && other.binding.commandId !== binding.commandId);
+						if (conflicting || (!this.registered.has(binding.accelerator) && !this.register(binding.accelerator))) return false;
 					}
 					// Acquire a replacement before releasing the old shortcut; a failed attempt leaves it effective.
 					owner.binding = binding;
@@ -194,10 +158,7 @@ export class GlobalKeybindingsMainService extends AbstractDisposable {
 				![...this.byWindow.values()].some(bindings => {
 					const current = bindings.get(accelerator);
 					return current && current.commandId !== commandId;
-				}) &&
-				![...this.scoped].some(
-					owner => owner.binding?.accelerator === accelerator && owner.binding.commandId !== commandId,
-				)
+				}) && ![...this.scoped].some(owner => owner.binding?.accelerator === accelerator && owner.binding.commandId !== commandId)
 			);
 		}
 		// isRegistered covers registrations in this process outside this owner. Never release those.
@@ -249,11 +210,7 @@ export class GlobalKeybindingsMainService extends AbstractDisposable {
 	}
 
 	private reconcile(): void {
-		const desired = new Set(
-			[...this.byWindow.values()]
-				.flatMap(bindings => [...bindings.keys()])
-				.concat([...this.scoped].flatMap(owner => (owner.binding ? [owner.binding.accelerator] : []))),
-		);
+		const desired = new Set([...this.byWindow.values()].flatMap(bindings => [...bindings.keys()]).concat([...this.scoped].flatMap(owner => (owner.binding ? [owner.binding.accelerator] : []))));
 		for (const accelerator of this.registered) {
 			if (desired.has(accelerator)) continue;
 			this.options.shortcuts.unregister(accelerator);
@@ -270,9 +227,7 @@ export class GlobalKeybindingsMainService extends AbstractDisposable {
 	private trigger(accelerator: string): void {
 		const active = this.options.activeWindowId();
 		const scoped = [...this.scoped].filter(owner => owner.binding?.accelerator === accelerator);
-		const contribution =
-			scoped.find(owner => owner.windowId === active) ??
-			(active === undefined || !this.byWindow.get(active)?.has(accelerator) ? scoped[0] : undefined);
+		const contribution = scoped.find(owner => owner.windowId === active) ?? (active === undefined || !this.byWindow.get(active)?.has(accelerator) ? scoped[0] : undefined);
 		if (contribution?.binding) {
 			try {
 				contribution.run(contribution.binding);
@@ -285,13 +240,9 @@ export class GlobalKeybindingsMainService extends AbstractDisposable {
 		const selected =
 			owner && active !== undefined
 				? { windowId: active, binding: owner }
-				: [...this.byWindow]
-						.map(([windowId, bindings]) => ({ windowId, binding: bindings.get(accelerator) }))
-						.find(item => item.binding);
+				: [...this.byWindow].map(([windowId, bindings]) => ({ windowId, binding: bindings.get(accelerator) })).find(item => item.binding);
 		const binding = selected?.binding;
 		if (!binding) return;
-		void (async () => this.options.runCommand(selected.windowId, binding.commandId, binding.args))().catch(
-			this.options.onError,
-		);
+		void (async () => this.options.runCommand(selected.windowId, binding.commandId, binding.args))().catch(this.options.onError);
 	}
 }

@@ -37,7 +37,12 @@ test('ASCII and line helpers share editor text boundary semantics', () => {
 			unicode: isBasicASCII('你好'),
 			lines: splitLines('first\rsecond\r\nthird\nfourth'),
 		},
-		{ plain: true, control: false, unicode: false, lines: ['first', 'second', 'third', 'fourth'] },
+		{
+			plain: true,
+			control: false,
+			unicode: false,
+			lines: ['first', 'second', 'third', 'fourth'],
+		},
 	);
 });
 

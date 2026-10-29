@@ -5,18 +5,8 @@ import { observableValue, transaction, type IObservable } from '../../../../../b
 import { URI } from '../../../../../base/common/uri.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
-import type {
-	Automation,
-	AutomationDefinition,
-	AutomationRun,
-	IAutomationBackendService,
-} from '../../../../../platform/agentHost/common/automation.js';
-import type {
-	IAutomationDescriptor,
-	IAutomationRun,
-	IAutomationRunResult,
-	IAutomationSchedule,
-} from '../../../../../workbench/contrib/chat/common/automations/automation.js';
+import type { Automation, AutomationDefinition, AutomationRun, IAutomationBackendService } from '../../../../../platform/agentHost/common/automation.js';
+import type { IAutomationDescriptor, IAutomationRun, IAutomationRunResult, IAutomationSchedule } from '../../../../../workbench/contrib/chat/common/automations/automation.js';
 import type {
 	AutomationCatalogueState,
 	ICreateAutomationOptions,
@@ -46,10 +36,7 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 		@IRendererHostService host: IRendererHost,
 	) {
 		super();
-		if (!host.automation)
-			throw new Error(
-				localize('automations.hostUnavailable', 'Connect to the owning automation host and try again.'),
-			);
+		if (!host.automation) throw new Error(localize('automations.hostUnavailable', 'Connect to the owning automation host and try again.'));
 		this.backend = host.automation;
 		this._register(
 			this.backend.onDidChange(() => {
@@ -123,13 +110,10 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 				const batch = definitions.slice(index, index + 4);
 				const results = await Promise.allSettled(batch.map(item => this.backend.runs(item.id)));
 				for (const [offset, result] of results.entries()) {
-					if (result.status === 'fulfilled')
-						history.push(...result.value.map(item => this.runDescriptor(item)));
+					if (result.status === 'fulfilled') history.push(...result.value.map(item => this.runDescriptor(item)));
 					else {
 						historyError ??= { error: result.reason };
-						history.push(
-							...this.runs.get().filter(run => run.automationId === this.identity(batch[offset]!.id)),
-						);
+						history.push(...this.runs.get().filter(run => run.automationId === this.identity(batch[offset]!.id)));
 					}
 				}
 			}
@@ -174,62 +158,36 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 		this.assertReady();
 		this.assertTarget(options.target.providerId);
 		const connectionEpoch = this.connectionEpoch;
-		const value = await this.backend.save(
-			generateUuid(),
-			0,
-			definition(options),
-			options.enabled === false ? 'paused' : 'enabled',
-		);
+		const value = await this.backend.save(generateUuid(), 0, definition(options), options.enabled === false ? 'paused' : 'enabled');
 		return this.acceptAutomation(value, connectionEpoch);
 	}
 
 	async updateAutomation(id: string, patch: IUpdateAutomationOptions): Promise<IAutomationDescriptor> {
 		const expected = this.requireAutomation(id);
 		const result = await this.updateAutomationIfUnchanged(id, patch, expected);
-		if (result.kind === 'conflict')
-			throw new Error(localize('automations.editConflict', 'This automation changed. Refresh it before saving.'));
+		if (result.kind === 'conflict') throw new Error(localize('automations.editConflict', 'This automation changed. Refresh it before saving.'));
 		return result.automation;
 	}
 
-	async updateAutomationIfUnchanged(
-		id: string,
-		patch: IUpdateAutomationOptions,
-		expected: IAutomationDescriptor,
-	): Promise<IGuardedAutomationUpdateResult> {
+	async updateAutomationIfUnchanged(id: string, patch: IUpdateAutomationOptions, expected: IAutomationDescriptor): Promise<IGuardedAutomationUpdateResult> {
 		this.assertReady();
 		const current = this.getAutomation(id);
 		if (!current || current.revision !== expected.revision) return { kind: 'conflict', current };
 		if (current.kind) {
 			if (Object.keys(patch).some(key => key !== 'enabled')) {
-				throw new Error(
-					localize(
-						'automations.followUpControls',
-						'Use the PR follow-up controls in Checks to change this automation.',
-					),
-				);
+				throw new Error(localize('automations.followUpControls', 'Use the PR follow-up controls in Checks to change this automation.'));
 			}
 			const connectionEpoch = this.connectionEpoch;
 			const source = (await this.backend.list()).find(plan => plan.id === this.backendId(id));
 			if (!this.isCurrentConnection(connectionEpoch)) throw canceled();
-			if (!source || source.revision !== expected.revision)
-				return { kind: 'conflict', current: this.getAutomation(id) };
-			const value = await this.backend.save(
-				source.id,
-				source.revision,
-				source.definition,
-				patch.enabled ? 'enabled' : 'paused',
-			);
+			if (!source || source.revision !== expected.revision) return { kind: 'conflict', current: this.getAutomation(id) };
+			const value = await this.backend.save(source.id, source.revision, source.definition, patch.enabled ? 'enabled' : 'paused');
 			return { kind: 'updated', automation: this.acceptAutomation(value, connectionEpoch) };
 		}
 		const options = { ...current, ...patch };
 		this.assertTarget(options.target.providerId);
 		const connectionEpoch = this.connectionEpoch;
-		const value = await this.backend.save(
-			this.backendId(id),
-			expected.revision,
-			definition(options),
-			options.enabled ? 'enabled' : 'paused',
-		);
+		const value = await this.backend.save(this.backendId(id), expected.revision, definition(options), options.enabled ? 'enabled' : 'paused');
 		return { kind: 'updated', automation: this.acceptAutomation(value, connectionEpoch) };
 	}
 
@@ -319,9 +277,7 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 			// A successful write is final. Subsequent catalogue/history reads cannot turn it into a failed save.
 			this.epoch++;
 			this.automations.set(
-				[automation, ...this.automations.get().filter(item => item.id !== automation.id)].sort(
-					(a, b) => b.createdAt - a.createdAt,
-				),
+				[automation, ...this.automations.get().filter(item => item.id !== automation.id)].sort((a, b) => b.createdAt - a.createdAt),
 				undefined,
 			);
 			void this.refresh().catch(() => {});
@@ -363,14 +319,7 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 				const run = this.runs.get().find(item => item.id === id);
 				if (!this.isCurrentConnection(connectionEpoch)) {
 					watching.dispose();
-					reject(
-						new Error(
-							localize(
-								'automations.observationLost',
-								'The automation host is unavailable. Its run may still be active.',
-							),
-						),
-					);
+					reject(new Error(localize('automations.observationLost', 'The automation host is unavailable. Its run may still be active.')));
 				} else if (run && terminal(run)) {
 					watching.dispose();
 					resolve();
@@ -445,33 +394,18 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 		} catch {
 			/* Invalid public identity follows the same unavailable path. */
 		}
-		if (
-			Array.isArray(value) &&
-			value.length === 2 &&
-			value[0] === this.providerId &&
-			typeof value[1] === 'string' &&
-			value[1]
-		)
-			return value[1];
-		throw new Error(
-			localize('automations.missing', 'This automation or run is unavailable on its owning provider.'),
-		);
+		if (Array.isArray(value) && value.length === 2 && value[0] === this.providerId && typeof value[1] === 'string' && value[1]) return value[1];
+		throw new Error(localize('automations.missing', 'This automation or run is unavailable on its owning provider.'));
 	}
 
 	private requireAutomation(id: string): IAutomationDescriptor {
 		const value = this.getAutomation(id);
-		if (!value)
-			throw new Error(
-				localize('automations.missing', 'This automation or run is unavailable on its owning provider.'),
-			);
+		if (!value) throw new Error(localize('automations.missing', 'This automation or run is unavailable on its owning provider.'));
 		return value;
 	}
 
 	private assertReady(): void {
-		if (this.isDisposed || this.connection.get() !== 'connected')
-			throw new Error(
-				localize('automations.hostUnavailable', 'Connect to the owning automation host and try again.'),
-			);
+		if (this.isDisposed || this.connection.get() !== 'connected') throw new Error(localize('automations.hostUnavailable', 'Connect to the owning automation host and try again.'));
 	}
 
 	private isCurrentConnection(connectionEpoch: number): boolean {
@@ -479,13 +413,7 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 	}
 
 	private assertTarget(providerId: string): void {
-		if (providerId !== this.providerId)
-			throw new Error(
-				localize(
-					'automations.providerMismatch',
-					'An automation cannot be moved to another provider. Create a new automation on that provider.',
-				),
-			);
+		if (providerId !== this.providerId) throw new Error(localize('automations.providerMismatch', 'An automation cannot be moved to another provider. Create a new automation on that provider.'));
 	}
 }
 

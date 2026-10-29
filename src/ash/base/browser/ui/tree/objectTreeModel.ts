@@ -51,16 +51,13 @@ export interface ObjectTreeModelCollapseStateChangeEvent<TNode> {
  */
 export class ObjectTreeModel<TNode> extends Disposable {
 	private readonly _onDidChange = this._register(new Emitter<ObjectTreeModelChangeEvent<TNode>>());
-	private readonly _onDidChangeCollapseState = this._register(
-		new Emitter<ObjectTreeModelCollapseStateChangeEvent<TNode>>(),
-	);
+	private readonly _onDidChangeCollapseState = this._register(new Emitter<ObjectTreeModelCollapseStateChangeEvent<TNode>>());
 	private readonly index: IndexTreeModel<TNode>;
 	private sorter: TreeSorter<TNode> | undefined;
 	private changeKindOverride: ObjectTreeModelChangeKind | undefined;
 
 	readonly onDidChange: Event<ObjectTreeModelChangeEvent<TNode>> = this._onDidChange.event;
-	readonly onDidChangeCollapseState: Event<ObjectTreeModelCollapseStateChangeEvent<TNode>> =
-		this._onDidChangeCollapseState.event;
+	readonly onDidChangeCollapseState: Event<ObjectTreeModelCollapseStateChangeEvent<TNode>> = this._onDidChangeCollapseState.event;
 
 	constructor(options: ObjectTreeModelOptions<TNode>) {
 		super();
@@ -125,9 +122,7 @@ export class ObjectTreeModel<TNode> extends Disposable {
 
 	setNodeChildren(parentId: string, children: readonly ObjectTreeElement<TNode>[]): void {
 		const parent = this.requireNode(parentId);
-		this.withChangeKind('structure', () =>
-			this.index.setNodeChildren(parent.location, this.prepareElements(children)),
-		);
+		this.withChangeKind('structure', () => this.index.setNodeChildren(parent.location, this.prepareElements(children)));
 	}
 
 	collapse(id: string): boolean {
@@ -169,9 +164,7 @@ export class ObjectTreeModel<TNode> extends Disposable {
 	}
 
 	rerender(id?: string): void {
-		this.withChangeKind('rerender', () =>
-			this.index.rerender(id === undefined ? undefined : this.requireNode(id).location),
-		);
+		this.withChangeKind('rerender', () => this.index.rerender(id === undefined ? undefined : this.requireNode(id).location));
 	}
 
 	private prepareElements(elements: readonly ObjectTreeElement<TNode>[]): readonly ObjectTreeElement<TNode>[] {

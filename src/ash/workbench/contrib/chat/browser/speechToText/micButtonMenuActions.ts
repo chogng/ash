@@ -28,19 +28,13 @@ export function getDictationContextMenuActions(
 	const binding = keybindingService.lookupKeybinding(keybindingCommandId);
 	const shortcut = binding ? getKeybindingLabel(binding) : undefined;
 	return [
-		action(
-			'dictation.configureShortcut',
-			localize('dictation.configureShortcut', 'Configure shortcut{0}', shortcut ? ` (${shortcut})` : ''),
-			() => commandService.executeCommand(OpenKeyboardShortcutsCommandId),
+		action('dictation.configureShortcut', localize('dictation.configureShortcut', 'Configure shortcut{0}', shortcut ? ` (${shortcut})` : ''), () =>
+			commandService.executeCommand(OpenKeyboardShortcutsCommandId),
 		),
 		action(
 			'dictation.toggleButton',
 			localize('dictation.showButton.title', 'Show microphone button'),
-			() =>
-				configurationService.updateValue(
-					'dictation.showButton',
-					configurationService.getValue('dictation.showButton') === false,
-				),
+			() => configurationService.updateValue('dictation.showButton', configurationService.getValue('dictation.showButton') === false),
 			configurationService.getValue('dictation.showButton') !== false,
 		),
 		action('dictation.disable', localize('dictation.disable', 'Disable dictation'), async () => {
@@ -48,20 +42,12 @@ export function getDictationContextMenuActions(
 			await configurationService.updateValue('dictation.enabled', false);
 		}),
 		new Separator(),
-		action(SELECT_MICROPHONE_COMMAND, localize('dictation.selectMicrophone', 'Select microphone'), () =>
-			commandService.executeCommand(SELECT_MICROPHONE_COMMAND),
-		),
-		action('dictation.openSettings', localize('dictation.openSettings', 'Dictation settings'), () =>
-			commandService.executeCommand(OpenSettingsCommandId, { section: 'dictation' }),
-		),
+		action(SELECT_MICROPHONE_COMMAND, localize('dictation.selectMicrophone', 'Select microphone'), () => commandService.executeCommand(SELECT_MICROPHONE_COMMAND)),
+		action('dictation.openSettings', localize('dictation.openSettings', 'Dictation settings'), () => commandService.executeCommand(OpenSettingsCommandId, { section: 'dictation' })),
 	];
 }
 
-export function addMicButtonContextMenuListener(
-	container: HTMLElement,
-	getActions: () => IAction[],
-	contextMenuService: IContextMenuService,
-): IDisposable {
+export function addMicButtonContextMenuListener(container: HTMLElement, getActions: () => IAction[], contextMenuService: IContextMenuService): IDisposable {
 	return addDisposableListener(container, 'contextmenu', event => {
 		event.preventDefault();
 		event.stopPropagation();

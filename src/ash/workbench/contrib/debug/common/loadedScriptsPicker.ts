@@ -76,12 +76,7 @@ export async function showLoadedScriptMenu(accessor: ServicesAccessor): Promise<
 		);
 	});
 	if (!selected) return;
-	if (
-		debug.getSession(selected.session.id) !== selected.session ||
-		selected.session.state === 'terminated' ||
-		selected.session.state === 'error'
-	)
-		throw new CancellationError();
+	if (debug.getSession(selected.session.id) !== selected.session || selected.session.state === 'terminated' || selected.session.state === 'error') throw new CancellationError();
 	const resource = getUriFromSource(selected.source, selected.source.path, selected.session.id, identity, log);
 	await editors.openEditor(
 		{

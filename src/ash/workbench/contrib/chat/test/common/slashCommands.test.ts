@@ -3,12 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'mocha';
 import { ProductSlashCommands, type SlashCommandDefinition } from '../../../../services/chat/common/chatService.js';
-import {
-	DesktopSlashCommands,
-	matchedCharacterIndices,
-	parseSlashCommandInput,
-	SlashCommandCatalog,
-} from '../../common/slashCommands.js';
+import { DesktopSlashCommands, matchedCharacterIndices, parseSlashCommandInput, SlashCommandCatalog } from '../../common/slashCommands.js';
 
 const local = [
 	{
@@ -63,9 +58,7 @@ test('Slash Command input switches only for a leading slash', () => {
 });
 
 test('Slash Command catalog composes local and server definitions', () => {
-	const catalog = new SlashCommandCatalog(local, [
-		{ name: 'diagnose', description: 'Inspect workspace', argumentMode: 'optional' },
-	]);
+	const catalog = new SlashCommandCatalog(local, [{ name: 'diagnose', description: 'Inspect workspace', argumentMode: 'optional' }]);
 	assert.equal(catalog.binding('history')?.origin, 'local');
 	assert.equal(catalog.binding('chats'), undefined);
 	assert.equal(parseSlashCommandInput('/chats', catalog).kind, 'unknown');
@@ -94,24 +87,13 @@ test('Slash Command catalog composes local and server definitions', () => {
 });
 
 test('Slash Command catalog rejects invalid and colliding definitions', () => {
-	assert.throws(
-		() => new SlashCommandCatalog(local, [{ name: 'history', description: 'Collision', argumentMode: 'none' }]),
-		/Duplicate/,
-	);
-	assert.throws(
-		() => new SlashCommandCatalog([], [{ name: 'Invalid', description: 'Bad name', argumentMode: 'none' }]),
-		/Invalid/,
-	);
-	assert.throws(
-		() => new SlashCommandCatalog([], [{ name: 'valid', description: ' ', argumentMode: 'none' }]),
-		/description/,
-	);
+	assert.throws(() => new SlashCommandCatalog(local, [{ name: 'history', description: 'Collision', argumentMode: 'none' }]), /Duplicate/);
+	assert.throws(() => new SlashCommandCatalog([], [{ name: 'Invalid', description: 'Bad name', argumentMode: 'none' }]), /Invalid/);
+	assert.throws(() => new SlashCommandCatalog([], [{ name: 'valid', description: ' ', argumentMode: 'none' }]), /description/);
 });
 
 test('Desktop adapter matches the shared Slash Commands conformance fixture', () => {
-	const fixture = JSON.parse(
-		readFileSync(join(process.cwd(), 'crates', 'slash-commands', 'fixtures', 'conformance.json'), 'utf8'),
-	) as {
+	const fixture = JSON.parse(readFileSync(join(process.cwd(), 'crates', 'slash-commands', 'fixtures', 'conformance.json'), 'utf8')) as {
 		definitions: SlashCommandDefinition[];
 		matching: { query: string; names: string[] }[];
 		inputs: { text: string; kind: string; name?: string; arguments?: string }[];

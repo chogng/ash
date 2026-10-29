@@ -17,8 +17,7 @@ export class ElectronWorkbenchEnvironmentService implements IWorkbenchEnvironmen
 		if (value === undefined) return;
 		if (
 			!isRecord(value) ||
-			(value.logLevel !== undefined &&
-				(typeof value.logLevel !== 'string' || parseLogLevel(value.logLevel) === undefined)) ||
+			(value.logLevel !== undefined && (typeof value.logLevel !== 'string' || parseLogLevel(value.logLevel) === undefined)) ||
 			(value.initialLogLevel !== undefined && !isLogLevel(value.initialLogLevel)) ||
 			!Array.isArray(value.extensionLogLevel) ||
 			value.extensionLogLevel.length > 512 ||

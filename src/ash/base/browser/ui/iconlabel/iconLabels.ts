@@ -11,11 +11,7 @@ export interface RenderLabelWithIconsOptions {
 }
 
 /** Renders Ash's literal icon syntax without exposing the icon registry to common code. */
-export function renderLabelWithIcons(
-	container: HTMLElement,
-	label: string,
-	options: RenderLabelWithIconsOptions = {},
-): void {
+export function renderLabelWithIcons(container: HTMLElement, label: string, options: RenderLabelWithIconsOptions = {}): void {
 	container.replaceChildren();
 	iconToken.lastIndex = 0;
 	let cursor = 0;
@@ -60,12 +56,7 @@ export function appendLabelIcon(container: HTMLElement, icon: Icon, modifier?: s
 	return iconElement;
 }
 
-function appendLabelText(
-	container: HTMLElement,
-	text: string,
-	start: number,
-	matches: readonly IMatch[] | undefined,
-): void {
+function appendLabelText(container: HTMLElement, text: string, start: number, matches: readonly IMatch[] | undefined): void {
 	if (!text) return;
 	if (!matches || matches.length === 0) {
 		container.append(createText(container.ownerDocument, text));

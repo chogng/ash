@@ -1,15 +1,7 @@
 import { localize } from '../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
 import { ThemeEditor, ThemeEditorFocused } from './themeEditor.js';
@@ -18,10 +10,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	key: AccessibilityVerbositySettingId.ThemeEditor,
 	defaultValue: true,
 	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean')
-			throw new TypeError(
-				localize('themeEditor.invalidVerbosity', 'Theme Editor accessibility verbosity must be a boolean.'),
-			);
+		if (typeof value !== 'boolean') throw new TypeError(localize('themeEditor.invalidVerbosity', 'Theme Editor accessibility verbosity must be a boolean.'));
 		return value;
 	},
 	setting: {
@@ -30,10 +19,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize('themeEditor.verbosityTitle', 'Theme Editor accessibility help');
 		},
 		get description() {
-			return localize(
-				'themeEditor.verbosityDescription',
-				'Announce how to open accessibility help when Theme Editor receives focus.',
-			);
+			return localize('themeEditor.verbosityDescription', 'Announce how to open accessibility help when Theme Editor receives focus.');
 		},
 	},
 });

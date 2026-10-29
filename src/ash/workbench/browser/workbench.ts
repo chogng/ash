@@ -1,36 +1,18 @@
 import { ILanguageServerStatusService } from '../services/language/common/languageServerStatusService.js';
 import { IProjectService } from '../../platform/projects/common/projectService.js';
-import {
-	readDefaultLogLevels,
-	DefaultLogLevelsService,
-	IDefaultLogLevelsService,
-} from '../services/log/common/defaultLogLevels.js';
+import { readDefaultLogLevels, DefaultLogLevelsService, IDefaultLogLevelsService } from '../services/log/common/defaultLogLevels.js';
 import '../services/configuration/common/jsonEditingService.js';
-import {
-	IWorkspaceEditingService,
-	WorkspaceTransitionCommittedError,
-} from '../services/workspaces/common/workspaceEditing.js';
-import {
-	IBrowserPasswordService,
-	UnavailableBrowserPasswordService,
-} from '../../platform/browserView/common/browserPasswordService.js';
+import { IWorkspaceEditingService, WorkspaceTransitionCommittedError } from '../services/workspaces/common/workspaceEditing.js';
+import { IBrowserPasswordService, UnavailableBrowserPasswordService } from '../../platform/browserView/common/browserPasswordService.js';
 import { IWorkspacesService } from '../../platform/workspaces/common/workspaces.js';
 import { IChannelService } from '../../platform/collab/common/channelService.js';
-import {
-	TreeSitterLibraryService,
-	TreeSitterSyntaxProviders,
-	createTreeSitterSyntaxSession,
-} from '../services/treeSitter/browser/treeSitterLibraryService.js';
+import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxSession } from '../services/treeSitter/browser/treeSitterLibraryService.js';
 import { ITreeSitterLibraryService } from '../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import { UserSettings } from '../../platform/configuration/common/configurationModels.js';
 import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
 import { NullLoggerService } from '../../platform/log/common/log.js';
 import type { IConfigurationModel } from '../../platform/configuration/common/configuration.js';
-import {
-	ISecretStorageStatusService,
-	ISecretStorageService,
-	BaseSecretStorageService,
-} from '../../platform/secrets/common/secrets.js';
+import { ISecretStorageStatusService, ISecretStorageService, BaseSecretStorageService } from '../../platform/secrets/common/secrets.js';
 import { IPolicyService, NullPolicyService } from '../../platform/policy/common/policy.js';
 import { MultiplexPolicyService } from '../../platform/policy/common/multiplexPolicyService.js';
 import { AccountPolicyService, IAccountPolicyService } from '../services/policies/common/accountPolicyService.js';
@@ -54,10 +36,7 @@ import { Schemas } from '../../base/common/network.js';
 import type { IFileSystemProvider } from '../../platform/files/common/files.js';
 import { IUserDataProfileService } from '../services/userDataProfile/common/userDataProfile.js';
 import { UserDataProfileService } from '../services/userDataProfile/browser/userDataProfileService.js';
-import {
-	IKeybindingEditingService,
-	KeybindingsEditingService,
-} from '../services/keybinding/common/keybindingEditing.js';
+import { IKeybindingEditingService, KeybindingsEditingService } from '../services/keybinding/common/keybindingEditing.js';
 import type { PaneCompositePart } from './parts/paneCompositePart.js';
 import { ITextResourcePropertiesService } from '../../editor/common/services/textResourceConfiguration.js';
 import { TextResourcePropertiesService } from '../services/textresourceProperties/common/textResourcePropertiesService.js';
@@ -65,43 +44,24 @@ import { IModelService } from '../../editor/common/services/model.js';
 import { ModelService } from '../../editor/common/services/modelService.js';
 import { IAssetService } from '../../platform/assets/common/assetService.js';
 import { INetworkDiagnosticsService } from '../../platform/networkDiagnostics/common/networkDiagnosticsService.js';
-import {
-	IAgentThreadService,
-	IAgentTurnService,
-	IAgentSessionService,
-} from '../../platform/agentHost/common/agentService.js';
+import { IAgentThreadService, IAgentTurnService, IAgentSessionService } from '../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../platform/agentHost/common/agentModels.js';
 import { ITurnChangesApi } from '../../platform/turnChanges/common/turnChangesApi.js';
-import {
-	IAppServerApi as AppServerApiId,
-	IServerEventApi as ServerEventApiId,
-} from '../../platform/agentHost/common/appServerApi.js';
+import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/agentHost/common/appServerApi.js';
 import { ILanguageModelsService, LanguageModelsService } from '../contrib/chat/common/languageModels.js';
 import { ILanguageModelsConfigurationService } from '../contrib/chat/common/languageModelsConfiguration.js';
-import {
-	ChatModelPreferences,
-	LanguageModelsConfigurationService,
-} from '../contrib/chat/browser/languageModelsConfigurationService.js';
+import { ChatModelPreferences, LanguageModelsConfigurationService } from '../contrib/chat/browser/languageModelsConfigurationService.js';
 import { IAgentVoiceService } from '../../platform/agentHost/common/agentService.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../platform/renderer/common/dictation.js';
 import { ExtensionColorThemeService } from '../services/extensions/browser/extensionColorThemeService.js';
 import { IWorkbenchThemeService } from '../services/themes/common/workbenchThemeService.js';
-import {
-	IHostColorSchemeService,
-	type IHostColorSchemeService as HostColorSchemeService,
-} from '../services/themes/common/hostColorSchemeService.js';
+import { IHostColorSchemeService, type IHostColorSchemeService as HostColorSchemeService } from '../services/themes/common/hostColorSchemeService.js';
 import { BrowserHostColorSchemeService } from '../services/themes/browser/browserHostColorSchemeService.js';
 import { getActivityHoverPosition } from './parts/compositeBarActions.js';
 import { IAppServerHookApi, IAppServerSkillApi } from '../../platform/agentHost/common/appServerApi.js';
 import { ILanguageServerService } from '../../platform/language/common/languageServerService.js';
-import {
-	ILanguageFeatureDebounceService,
-	LanguageFeatureDebounceService,
-} from '../../editor/common/services/languageFeatureDebounce.js';
-import {
-	IInlineCompletionsService,
-	InlineCompletionsService,
-} from '../../editor/browser/services/inlineCompletionsService.js';
+import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../editor/common/services/languageFeatureDebounce.js';
+import { IInlineCompletionsService, InlineCompletionsService } from '../../editor/browser/services/inlineCompletionsService.js';
 import { ICallService } from '../../platform/call/common/callService.js';
 import { MarkerDecorationsService } from '../../editor/common/services/markerDecorationsService.js';
 import { FontMeasurements } from '../../editor/browser/config/fontMeasurements.js';
@@ -118,12 +78,7 @@ import { TextFileSaveErrorHandler } from '../contrib/files/browser/editors/textF
 import { mainWindow } from '../../base/browser/window.js';
 import { PixelRatio } from '../../base/browser/pixelRatio.js';
 import { type IDisposable, Disposable, DisposableStore, toDisposable } from '../../base/common/lifecycle.js';
-import {
-	CancellationError,
-	getErrorMessage,
-	onUnexpectedError,
-	setUnexpectedErrorHandler,
-} from '../../base/common/errors.js';
+import { CancellationError, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
 import { assertDefined } from '../../base/common/types.js';
 import { URI } from '../../base/common/uri.js';
 import { AccessibilityService } from '../../platform/accessibility/browser/accessibilityService.js';
@@ -143,45 +98,27 @@ import { ISyntaxApi } from '../../platform/syntax/common/syntaxApi.js';
 import { IRendererHostService, type IRendererHost } from '../../platform/renderer/common/rendererHost.js';
 import { AgentHostConnectionsService } from '../../platform/agentHost/browser/agentHostConnectionsService.js';
 import { IAgentHostConnectionsService } from '../../platform/agentHost/common/agentHostConnectionsService.js';
-import {
-	ILocalTranscriptionService,
-	ILocalTranscriptionModelService,
-} from '../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../platform/localTranscription/common/localTranscription.js';
 import { NullLocalTranscriptionService } from '../services/localTranscription/browser/localTranscriptionService.js';
 import { IAgentCapabilitiesService } from '../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IAgentToolsApi } from '../../platform/agentHost/common/agentToolsApi.js';
 import { IMcpServerStatusService } from '../../platform/mcp/common/mcpServerStatusService.js';
 import { IMcpServerManagementService } from '../../platform/mcp/common/mcpServerManagementService.js';
 import { ITraceSettingsService } from '../../platform/trace/common/traceSettingsService.js';
-import {
-	IRemoteConnectionApi,
-	IRemoteConnectionService,
-	RemoteConnectionService,
-} from '../../platform/remote/common/remoteConnectionService.js';
+import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService } from '../../platform/remote/common/remoteConnectionService.js';
 import { UnavailableRemoteConnectionApi } from '../../platform/remote/common/remoteConnectionService.js';
 import type { INativeHostApi } from '../../platform/native/common/nativeHost.js';
 import { MenuId } from '../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
-import {
-	IStorageService,
-	StorageScope,
-	StorageTarget,
-	WillSaveStateReason,
-} from '../../platform/storage/common/storage.js';
+import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } from '../../platform/storage/common/storage.js';
 import '../../platform/layout/browser/zIndexRegistry.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 import { type IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import { getSingletonServiceDescriptors, InstantiationType } from '../../platform/instantiation/common/extensions.js';
-import {
-	IEmbedderTerminalService,
-	type IEmbedderTerminalOptions,
-} from '../services/terminal/common/embedderTerminalService.js';
+import { IEmbedderTerminalService, type IEmbedderTerminalOptions } from '../services/terminal/common/embedderTerminalService.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { NotificationService } from '../services/notification/common/notificationService.js';
-import {
-	IAccessibleViewService,
-	AccessibilityVerbositySettingId,
-} from '../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../platform/accessibility/browser/accessibleView.js';
 import { INotificationsCenter, NotificationsCenter } from './parts/notifications/notificationsCenter.js';
 import { NotificationActionRunner } from './parts/notifications/notificationsCommands.js';
 import { INotificationService } from '../../platform/notification/common/notification.js';
@@ -194,10 +131,7 @@ import type { IKeyboardLayoutProvider } from '../../platform/keyboardLayout/comm
 import { BrowserDialogHandler } from './parts/dialogs/dialog.js';
 import { IDialogService, IFileDialogService, type IDialogHandler } from '../../platform/dialogs/common/dialogs.js';
 import { AgentHostFileSystemProvider } from '../../platform/agentHost/common/agentHostFileSystemProvider.js';
-import {
-	AgentHostFileSystemService,
-	IAgentHostFileSystemService,
-} from '../services/agentHost/common/agentHostFileSystemService.js';
+import { AgentHostFileSystemService, IAgentHostFileSystemService } from '../services/agentHost/common/agentHostFileSystemService.js';
 import { FileService } from '../../platform/files/common/fileService.js';
 import { IQuickInputService } from '../../platform/quickinput/common/quickInput.js';
 import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
@@ -206,33 +140,14 @@ import { IFileService } from '../../platform/files/common/files.js';
 import { DecorationsService } from '../services/decorations/browser/decorationsService.js';
 import { IDecorationsService } from '../services/decorations/common/decorations.js';
 import { IThemeService } from '../../platform/theme/common/themeService.js';
-import {
-	type IWorkspace,
-	IWorkspaceContextService,
-	WorkbenchState,
-	workbenchStateFromWorkspace,
-	workspaceOpenTarget,
-} from '../../platform/workspace/common/workspace.js';
-import {
-	ActivityBarPosition,
-	WorkbenchConfiguration,
-	type SideBarLocation,
-	type WorkbenchLayoutStyle,
-} from '../common/configuration.js';
-import {
-	type WorkbenchContributionHost,
-	WorkbenchContributionsRegistry,
-	WorkbenchPhase,
-} from '../common/contributions.js';
+import { type IWorkspace, IWorkspaceContextService, WorkbenchState, workbenchStateFromWorkspace, workspaceOpenTarget } from '../../platform/workspace/common/workspace.js';
+import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation, type WorkbenchLayoutStyle } from '../common/configuration.js';
+import { type WorkbenchContributionHost, WorkbenchContributionsRegistry, WorkbenchPhase } from '../common/contributions.js';
 import { IDialogsModel, IWorkbenchDialogHandler } from '../common/dialogs.js';
 import { INativeHostService } from '../common/services.js';
 import { FileDialogService } from '../services/dialogs/electron-browser/fileDialogService.js';
 import { FileDialogService as BrowserFileDialogService } from '../services/dialogs/browser/fileDialogService.js';
-import {
-	IUserThemeService,
-	type IUserThemeService as IUserThemeServiceContract,
-	UnavailableUserThemeService,
-} from '../common/userThemes.js';
+import { IUserThemeService, type IUserThemeService as IUserThemeServiceContract, UnavailableUserThemeService } from '../common/userThemes.js';
 import { ViewContainerLocation, type IView } from '../common/views.js';
 import { IStatusbarService } from '../services/statusbar/browser/statusbar.js';
 import type { IWebWorkspaceClient } from '../services/workspaces/browser/appServerWebWorkspaceClient.js';
@@ -278,10 +193,7 @@ import { type BrowserTitleService } from './parts/titlebar/titlebarPart.js';
 import { PaneCompositePartService } from './parts/paneCompositePartService.js';
 import { IPaneCompositePartService } from '../services/panecomposite/browser/panecomposite.js';
 import { WorkbenchWindow } from './window.js';
-import {
-	BrowserAuxiliaryWindowService,
-	IAuxiliaryWindowService,
-} from '../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from '../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { ITerminalProcessService } from '../../platform/terminal/common/terminal.js';
 import { ITextFileService } from '../services/textfile/common/textfiles.js';
 import { TextFileService } from '../services/textfile/browser/textFileService.js';
@@ -304,10 +216,7 @@ import { ICodebaseService } from '../../platform/codebase/common/codebaseService
 import { AppServerCodebaseService } from '../services/codebase/browser/appServerCodebaseService.js';
 import { IToolSearchService } from '../../platform/toolSearch/common/toolSearchService.js';
 import { IKeyboardLayoutService } from '../../platform/keyboardLayout/common/keyboardLayout.js';
-import {
-	IWorkspaceTrustApi,
-	IWorkspaceTrustManagementService,
-} from '../../platform/workspace/common/workspaceTrust.js';
+import { IWorkspaceTrustApi, IWorkspaceTrustManagementService } from '../../platform/workspace/common/workspaceTrust.js';
 import { WorkspaceTrustManagementService } from '../services/workspaces/common/workspaceTrust.js';
 import { IConnectorService } from '../../platform/connectors/common/connectorService.js';
 import { AppServerConnectorService } from '../services/connectors/browser/appServerConnectorService.js';
@@ -328,21 +237,12 @@ import { ILocaleService } from '../services/localization/common/locale.js';
 import { WorkbenchLocaleService } from '../services/localization/browser/localeService.js';
 import { ILocalizationService } from '../services/localization/common/localizationService.js';
 import { WorkbenchLocalizationService } from '../services/localization/browser/workbenchLocalizationService.js';
-import {
-	builtinLanguagePackCatalogs,
-	preinstalledLanguagePacks,
-} from '../services/localization/common/localizationCatalogs.js';
+import { builtinLanguagePackCatalogs, preinstalledLanguagePacks } from '../services/localization/common/localizationCatalogs.js';
 import { AppServerToolSearchService } from '../services/toolSearch/browser/appServerToolSearchService.js';
 import { ICodebaseSymbolsApi } from '../../platform/codebaseSymbols/common/codebaseSymbolsApi.js';
-import {
-	AccessibleViewInformationService,
-	IAccessibleViewInformationService,
-} from '../services/accessibility/common/accessibleViewInformationService.js';
+import { AccessibleViewInformationService, IAccessibleViewInformationService } from '../services/accessibility/common/accessibleViewInformationService.js';
 import { NativeAccessibilityService } from '../services/accessibility/electron-browser/accessibilityService.js';
-import {
-	IUntitledTextEditorService,
-	UntitledTextEditorService,
-} from '../services/untitled/common/untitledTextEditorService.js';
+import { IUntitledTextEditorService, UntitledTextEditorService } from '../services/untitled/common/untitledTextEditorService.js';
 import { UntitledTextEditorInput } from '../services/untitled/common/untitledTextEditorInput.js';
 import { BrowserWorkingCopyService } from '../services/workingCopy/browser/browserWorkingCopyService.js';
 import { ITitleService } from '../services/title/browser/titleService.js';
@@ -350,14 +250,8 @@ import { IWorkingCopyService } from '../services/workingCopy/common/workingCopyS
 import { IActivityService } from '../services/activity/common/activity.js';
 import { ActivityService } from '../services/activity/browser/activityService.js';
 import { WorkingCopyBackupTracker } from '../services/workingCopy/browser/workingCopyBackupTracker.js';
-import {
-	IWorkingCopyBackupService,
-	type WorkingCopyBackup,
-} from '../services/workingCopy/common/workingCopyBackupService.js';
-import {
-	IFileTextModelService,
-	ITextModelResourceService,
-} from '../services/textmodelResolver/common/textModelResourceService.js';
+import { IWorkingCopyBackupService, type WorkingCopyBackup } from '../services/workingCopy/common/workingCopyBackupService.js';
+import { IFileTextModelService, ITextModelResourceService } from '../services/textmodelResolver/common/textModelResourceService.js';
 import { IDocumentEditorTextModelService } from '../services/documentEditor/common/documentTypes.js';
 import { DocumentEditorTextModelService } from '../services/documentEditor/browser/documentEditorTextModelService.js';
 import { ITextModelService } from '../../editor/common/services/resolverService.js';
@@ -391,10 +285,7 @@ import { IContextMenuService, IContextViewService } from '../../platform/context
 import { BrowserContextViewService } from '../../platform/contextview/browser/contextViewService.js';
 import { HoverService, IHoverService } from '../../platform/hover/browser/hoverService.js';
 import { IKeybindingService } from '../../platform/keybinding/common/keybinding.js';
-import {
-	IUserKeyboardLayoutService,
-	UnavailableUserKeyboardLayoutService,
-} from '../../platform/keyboardLayout/common/userKeyboardLayout.js';
+import { IUserKeyboardLayoutService, UnavailableUserKeyboardLayoutService } from '../../platform/keyboardLayout/common/userKeyboardLayout.js';
 import { IOpenerService } from '../../platform/opener/common/opener.js';
 import { IMarkdownRendererService } from '../../platform/markdown/browser/markdownRenderer.js';
 import { EditorMarkdownCodeBlockRenderer } from '../../editor/browser/widget/markdownRenderer/browser/editorMarkdownCodeBlockRenderer.js';
@@ -437,13 +328,8 @@ export interface IStartWorkbenchOptions {
 	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
 	readonly createBrowserHost?: (services: IInstantiationService) => IDisposable;
 	readonly createWindow?: (services: IInstantiationService) => IDisposable;
-	readonly createStorageService: (
-		options: BrowserStorageServiceOptions,
-	) => Promise<IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void> }>;
-	readonly createWorkingCopyBackupService: (
-		services: IInstantiationService,
-		workspaceId: string,
-	) => IWorkingCopyBackupService;
+	readonly createStorageService: (options: BrowserStorageServiceOptions) => Promise<IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void> }>;
+	readonly createWorkingCopyBackupService: (services: IInstantiationService, workspaceId: string) => IWorkingCopyBackupService;
 	readonly createLogService: () => LogService;
 	readonly initialConfiguration?: IConfigurationModel;
 	readonly createUserDataFileSystemProvider: () => Promise<IFileSystemProvider & IDisposable>;
@@ -455,17 +341,8 @@ export interface IStartWorkbenchOptions {
 	readonly dialogHandler?: IDialogHandler;
 	readonly userThemeService?: IUserThemeServiceContract;
 	readonly createContextMenuService: (services: IInstantiationService) => IContextMenuService & IDisposable;
-	readonly createAuxiliaryWindowService?: (
-		ownerWindow: Window,
-		root: HTMLElement,
-		services: IInstantiationService,
-	) => IAuxiliaryWindowService;
-	readonly createTitleService: (
-		container: HTMLElement,
-		productName: string,
-		editorGroupsContainer: IEditorGroupsContainer,
-		services: IInstantiationService,
-	) => BrowserTitleService;
+	readonly createAuxiliaryWindowService?: (ownerWindow: Window, root: HTMLElement, services: IInstantiationService) => IAuxiliaryWindowService;
+	readonly createTitleService: (container: HTMLElement, productName: string, editorGroupsContainer: IEditorGroupsContainer, services: IInstantiationService) => BrowserTitleService;
 }
 
 /** Starts the browser workbench and binds its commands to the initial UI. */
@@ -536,13 +413,7 @@ export async function startWorkbench({
 		if (!initialConfiguration) {
 			using profileFiles = new FileService();
 			using registration = profileFiles.registerProvider(Schemas.vscodeUserData, userDataFiles);
-			using settings = new UserSettings(
-				URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }),
-				{},
-				extUriBiasedIgnorePathCase,
-				profileFiles,
-				new NullLoggerService(),
-			);
+			using settings = new UserSettings(URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }), {}, extUriBiasedIgnorePathCase, profileFiles, new NullLoggerService());
 			initialConfiguration = (await settings.loadConfiguration()).toJSON();
 		}
 		workbench = new Workbench(
@@ -633,8 +504,7 @@ export class Workbench extends Disposable {
 		keyboardLayoutProvider: IKeyboardLayoutProvider | undefined,
 		userKeyboardLayoutApi: IUserKeyboardLayoutApi | undefined,
 		nativeHostApi: INativeHostApi | undefined,
-		createHostColorSchemeService:
-			((services: IInstantiationService) => HostColorSchemeService & IDisposable) | undefined,
+		createHostColorSchemeService: ((services: IInstantiationService) => HostColorSchemeService & IDisposable) | undefined,
 		clipboardService: IClipboardService | undefined,
 		dialogHandler: IDialogHandler | undefined,
 		userThemeService: IUserThemeServiceContract | undefined,
@@ -676,9 +546,7 @@ export class Workbench extends Disposable {
 										kind: 'local',
 										provider: browserFileSystemProvider,
 										updateWorkspace: async (next: IWorkspace, preserveEditors = false) => {
-											services
-												.get(IWorkspaceEditingService)
-												.validateFolders(next.folders.map(folder => folder.uri));
+											services.get(IWorkspaceEditingService).validateFolders(next.folders.map(folder => folder.uri));
 											await this.updateWorkspace(next, preserveEditors);
 										},
 									}
@@ -686,33 +554,21 @@ export class Workbench extends Disposable {
 									? {
 											kind: 'server',
 											client: webWorkspaceClient,
-											validateFolders: (folders: readonly URI[]) =>
-												services.get(IWorkspaceEditingService).validateFolders(folders),
+											validateFolders: (folders: readonly URI[]) => services.get(IWorkspaceEditingService).validateFolders(folders),
 											updateWorkspace: async (next: IWorkspace, preserveEditors = false) => {
-												services
-													.get(IWorkspaceEditingService)
-													.validateFolders(next.folders.map(folder => folder.uri));
+												services.get(IWorkspaceEditingService).validateFolders(next.folders.map(folder => folder.uri));
 												try {
 													await this.updateWorkspace(next, preserveEditors);
 												} catch (error) {
 													const current = this.workspaceContext.getWorkspace();
 													if (
 														current.id === next.id &&
-														current.configuration?.toString() ===
-															next.configuration?.toString() &&
+														current.configuration?.toString() === next.configuration?.toString() &&
 														current.folders.length === next.folders.length &&
-														current.folders.every(
-															(folder, index) =>
-																folder.id === next.folders[index]!.id &&
-																folder.uri.toString() ===
-																	next.folders[index]!.uri.toString(),
-														)
+														current.folders.every((folder, index) => folder.id === next.folders[index]!.id && folder.uri.toString() === next.folders[index]!.uri.toString())
 													) {
 														throw new WorkspaceTransitionCommittedError(
-															localize(
-																'workspace.committedRecovery',
-																'The workspace changed. Some window state still needs to be restored.',
-															),
+															localize('workspace.committedRecovery', 'The workspace changed. Some window state still needs to be restored.'),
 															error,
 														);
 													}
@@ -721,8 +577,7 @@ export class Workbench extends Disposable {
 											},
 											prepareSwitch: async () => {
 												await this.workingCopyBackupTracker.flush();
-												if (!(await this.editor.closeAllEditors({ reason: 'reset' })))
-													return false;
+												if (!(await this.editor.closeAllEditors({ reason: 'reset' }))) return false;
 												await this.workingCopyBackupTracker.flush();
 												await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
 												return true;
@@ -740,30 +595,18 @@ export class Workbench extends Disposable {
 				serviceCollection.set(id, descriptor);
 			}
 		}
-		const hostPolicies = new ServiceCollection(
-			...[...serviceCollection.entries()].filter(([id]) => id === IPolicyService),
-		);
-		const windowServices = new ServiceCollection(
-			...[...serviceCollection.entries()].filter(([id]) => id !== IPolicyService),
-		);
+		const hostPolicies = new ServiceCollection(...[...serviceCollection.entries()].filter(([id]) => id === IPolicyService));
+		const windowServices = new ServiceCollection(...[...serviceCollection.entries()].filter(([id]) => id !== IPolicyService));
 		const hostServices = this._register(new InstantiationService(hostPolicies));
 		const services = this._register(hostServices.createChild(windowServices));
 		services.registerInstance(IStorageService, storageService);
-		if (!services.has(ISecretStorageService))
-			services.registerInstance(ISecretStorageService, this._register(new BaseSecretStorageService()));
-		const extensionManagementService = this._register(
-			new AppServerExtensionManagementService(api.extensionManagement, api.events),
-		);
+		if (!services.has(ISecretStorageService)) services.registerInstance(ISecretStorageService, this._register(new BaseSecretStorageService()));
+		const extensionManagementService = this._register(new AppServerExtensionManagementService(api.extensionManagement, api.events));
 		services.registerInstance(IExtensionManagementService, extensionManagementService);
 		const enablement = this._register(services.createInstance(GlobalExtensionEnablementService));
 		services.registerInstance(IGlobalExtensionEnablementService, enablement);
 		// PDF reading belongs to the Agents Window, including installed packages and Chat previews.
-		const enabledExtensions = withEnabledBuiltInExtensions(
-			api.extensions,
-			enablement,
-			extensionManagementService,
-			extension => extension.id !== 'ash.pdf-viewer',
-		);
+		const enabledExtensions = withEnabledBuiltInExtensions(api.extensions, enablement, extensionManagementService, extension => extension.id !== 'ash.pdf-viewer');
 		services.registerInstance(IWorkbenchEnvironmentService, environmentService);
 		const embedderTerminals = services.get(IEmbedderTerminalService);
 		this.window = {
@@ -782,9 +625,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILogService, logService);
 		if (!services.has(ILoggerService)) services.registerInstance(ILoggerService, logService);
 		services.registerInstance(IRendererHostService, api);
-		services.registerSingleton(IAgentHostConnectionsService, () =>
-			services.createInstance(AgentHostConnectionsService),
-		);
+		services.registerSingleton(IAgentHostConnectionsService, () => services.createInstance(AgentHostConnectionsService));
 		services.registerInstance(IMessageHistoryService, api.messageHistory);
 		services.registerInstance(IExtensionResourceLoaderService, enabledExtensions.resources);
 		services.registerInstance(IExtensionApi, enabledExtensions);
@@ -794,9 +635,7 @@ export class Workbench extends Disposable {
 		this._register(fileService.registerProvider(Schemas.vscodeUserData, userDataFileSystemProvider));
 		services.registerInstance(IUserDataProfileService, new UserDataProfileService());
 		services.registerInstance(IFileService, fileService);
-		const workspaceContext = this._register(
-			services.createInstance(WorkspaceService, { workspace, initialConfiguration }),
-		);
+		const workspaceContext = this._register(services.createInstance(WorkspaceService, { workspace, initialConfiguration }));
 		const configuration = workspaceContext;
 		this.configurationService = configuration;
 		services.registerInstance(IConfigurationService, configuration);
@@ -812,10 +651,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILocalTranscriptionService, localTranscription);
 		services.registerInstance(
 			ILocalTranscriptionModelService,
-			api.localTranscriptionModels ??
-				(localTranscription instanceof NullLocalTranscriptionService
-					? localTranscription
-					: this._register(new NullLocalTranscriptionService())),
+			api.localTranscriptionModels ?? (localTranscription instanceof NullLocalTranscriptionService ? localTranscription : this._register(new NullLocalTranscriptionService())),
 		);
 		services.registerInstance(IAgentCapabilitiesService, api.agentCapabilities);
 		services.registerInstance(IAgentToolsApi, api.agentTools);
@@ -830,11 +666,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ICommandService, commandService);
 		// Hosts can disable executable extensions while keeping declarative assets.
 		// Otherwise browser packages execute in Workers and server packages keep their process host.
-		services.registerInstance(
-			IExtensionHostApi,
-			extensionHost ??
-				this._register(services.createInstance(WebWorkerExtensionHost, enabledExtensions, api.extensionHost)),
-		);
+		services.registerInstance(IExtensionHostApi, extensionHost ?? this._register(services.createInstance(WebWorkerExtensionHost, enabledExtensions, api.extensionHost)));
 		services.registerInstance(ITelemetryService, NullTelemetryService);
 		services.registerInstance(ICodebaseSymbolsApi, api.codebaseSymbols);
 		services.registerInstance(ISyntaxApi, api.syntax);
@@ -859,9 +691,7 @@ export class Workbench extends Disposable {
 			services.registerInstance(IBrowserPasswordService, UnavailableBrowserPasswordService);
 		}
 		services.registerInstance(AppServerApiId, api.appServer);
-		const remoteAgentService = this._register(
-			services.createInstance(AppServerRemoteAgentService, { remoteApi: api.remote }),
-		);
+		const remoteAgentService = this._register(services.createInstance(AppServerRemoteAgentService, { remoteApi: api.remote }));
 		services.registerInstance(IAppServerRemoteAgentService, remoteAgentService);
 		services.registerInstance(IRemoteConnectionApi, api.remoteConnections ?? UnavailableRemoteConnectionApi);
 		services.registerSingleton(IRemoteConnectionService, () => services.createInstance(RemoteConnectionService));
@@ -883,9 +713,7 @@ export class Workbench extends Disposable {
 						pickDirectory: (startIn: FileSystemDirectoryHandle | undefined) =>
 							(
 								window as unknown as {
-									showDirectoryPicker: (options?: {
-										startIn?: FileSystemDirectoryHandle;
-									}) => Promise<FileSystemDirectoryHandle>;
+									showDirectoryPicker: (options?: { startIn?: FileSystemDirectoryHandle }) => Promise<FileSystemDirectoryHandle>;
 								}
 							).showDirectoryPicker(startIn ? { startIn } : undefined),
 						quickInput: () => services.get(IQuickInputService),
@@ -912,10 +740,7 @@ export class Workbench extends Disposable {
 			);
 		}
 		const labelService = services.get(ILabelService);
-		services.registerInstance(
-			IDecorationsService,
-			this._register(services.createInstance(DecorationsService, workbenchRoot.ownerDocument)),
-		);
+		services.registerInstance(IDecorationsService, this._register(services.createInstance(DecorationsService, workbenchRoot.ownerDocument)));
 		services.registerInstance(ServerEventApiId, api.events);
 		services.registerInstance(IWorkspaceTrustApi, api.workspaceTrust);
 		const workspaceTrustService = this._register(services.createInstance(WorkspaceTrustManagementService));
@@ -925,10 +750,7 @@ export class Workbench extends Disposable {
 			configuration: () => workspaceContext.getWorkspace().configuration,
 			api: api.fs,
 			resourceApi: api.resource,
-			directories: () =>
-				workspaceContext
-					.getWorkspace()
-					.folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
+			directories: () => workspaceContext.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			onDidChange: listener => {
 				const subscriptions = new DisposableStore();
 				const subscription = api.events.subscribe(event => {
@@ -948,18 +770,10 @@ export class Workbench extends Disposable {
 		});
 		this._register(workspaceFileService);
 		if (workspaceFileSystemProvider) this._register(workspaceFileSystemProvider);
-		const agentHostFiles = this._register(
-			services.createInstance(
-				AgentHostFileSystemService,
-				workspaceFileService,
-				workspaceFileSystemProvider ?? browserFileSystemProvider,
-			),
-		);
+		const agentHostFiles = this._register(services.createInstance(AgentHostFileSystemService, workspaceFileService, workspaceFileSystemProvider ?? browserFileSystemProvider));
 		services.registerInstance(IAgentHostFileSystemService, agentHostFiles);
 		services.registerInstance(ISystemFileTransferService, workspaceFileService);
-		const languagePackService = this._register(
-			services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks),
-		);
+		const languagePackService = this._register(services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
 		services.registerInstance(ILanguagePackService, languagePackService);
 		const textFileService = this._register(services.createInstance(TextFileService));
 		themes.watchSourceSaves(textFileService);
@@ -980,19 +794,10 @@ export class Workbench extends Disposable {
 		const languageConfigurationService = services.get(ILanguageConfigurationService);
 		const languageFeaturesService = this._register(new LanguageFeaturesService());
 		services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
-		services.registerSingleton(ITextResourcePropertiesService, () =>
-			services.createInstance(TextResourcePropertiesService),
-		);
+		services.registerSingleton(ITextResourcePropertiesService, () => services.createInstance(TextResourcePropertiesService));
 		services.registerSingleton(
 			IModelService,
-			() =>
-				new ModelService(
-					configuration,
-					services.get(ITextResourcePropertiesService),
-					languageService,
-					languageFeaturesService,
-					languageConfigurationService,
-				),
+			() => new ModelService(configuration, services.get(ITextResourcePropertiesService), languageService, languageFeaturesService, languageConfigurationService),
 		);
 		// Markdown and opener services receive this before EditorParts exists;
 		// defer construction until an editor operation needs the completed Parts.
@@ -1000,9 +805,7 @@ export class Workbench extends Disposable {
 			instantiation: InstantiationType.Delayed,
 		});
 		services.registerSingleton(IInlineCompletionsService, () => services.createInstance(InlineCompletionsService));
-		services.registerSingleton(ILanguageFeatureDebounceService, () =>
-			services.createInstance(LanguageFeatureDebounceService),
-		);
+		services.registerSingleton(ILanguageFeatureDebounceService, () => services.createInstance(LanguageFeatureDebounceService));
 		const treeSitterLibrary = this._register(services.createInstance(TreeSitterLibraryService));
 		services.registerInstance(ITreeSitterLibraryService, treeSitterLibrary);
 		this._register(new TreeSitterSyntaxProviders(languageFeaturesService));
@@ -1012,22 +815,15 @@ export class Workbench extends Disposable {
 				languageService,
 				languageConfigurationService,
 				languageFeaturesService,
-				createSyntaxSession: model =>
-					createTreeSitterSyntaxSession(model, configuration, treeSitterLibrary, themeService),
+				createSyntaxSession: model => createTreeSitterSyntaxSession(model, configuration, treeSitterLibrary, themeService),
 				onDidChangeSyntaxBackend: Event.any(
 					treeSitterLibrary.onDidChange,
 					// Models subscribe after the window's theme service has been initialized.
-					(listener, thisArgs, disposables) =>
-						themeService.onDidColorThemeChange(
-							() => listener.call(thisArgs, undefined),
-							undefined,
-							disposables,
-						),
+					(listener, thisArgs, disposables) => themeService.onDidColorThemeChange(() => listener.call(thisArgs, undefined), undefined, disposables),
 					(listener, thisArgs, disposables) =>
 						configuration.onDidChangeConfiguration(
 							event => {
-								if (event.affectsConfiguration('editor.experimental.treeSitterTelemetry'))
-									listener.call(thisArgs, undefined);
+								if (event.affectsConfiguration('editor.experimental.treeSitterTelemetry')) listener.call(thisArgs, undefined);
 							},
 							undefined,
 							disposables,
@@ -1044,36 +840,21 @@ export class Workbench extends Disposable {
 		// are authorized by the server for the authenticated workspace.
 		const checkWorkspaceTrust = !!nativeHostApi;
 		services.registerInstance(ILanguageServerService, api.languageServers);
-		services.registerSingleton(ILanguageServerLifecycleService, () =>
-			services.createInstance(AppServerLanguageLifecycleService),
-		);
+		services.registerSingleton(ILanguageServerLifecycleService, () => services.createInstance(AppServerLanguageLifecycleService));
 		const languageLifecycle = api.hasAppServer ? services.get(ILanguageServerLifecycleService) : undefined;
-		const languageProviders = api.hasAppServer
-			? this._register(services.createInstance(AppServerLanguageProviders, api.language, { checkWorkspaceTrust }))
-			: undefined;
+		const languageProviders = api.hasAppServer ? this._register(services.createInstance(AppServerLanguageProviders, api.language, { checkWorkspaceTrust })) : undefined;
 		const diffService = services.createInstance(DiffService);
 		services.registerInstance(IDiffService, diffService);
-		services.registerSingleton(
-			ICodeIntelligenceDocumentService,
-			() => new AppServerCodeIntelligenceDocumentService(api.codebaseSymbols),
-		);
+		services.registerSingleton(ICodeIntelligenceDocumentService, () => new AppServerCodeIntelligenceDocumentService(api.codebaseSymbols));
 		// Disconnected hosts render local syntax without backend document synchronization.
-		const createDiagnostics = () =>
-			services.createInstance(
-				AppServerLanguageDiagnosticsService,
-				api.language,
-				services.get(ICodeIntelligenceDocumentService),
-				checkWorkspaceTrust,
-			);
+		const createDiagnostics = () => services.createInstance(AppServerLanguageDiagnosticsService, api.language, services.get(ICodeIntelligenceDocumentService), checkWorkspaceTrust);
 		const languageDiagnosticsService = api.hasAppServer ? this._register(createDiagnostics()) : undefined;
-		if (languageDiagnosticsService)
-			services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
+		if (languageDiagnosticsService) services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
 		else services.registerSingleton(ILanguageDiagnosticsService, createDiagnostics);
 		const markerService = this._register(new MarkerService());
 		services.registerInstance(IMarkerService, markerService);
 		services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));
-		if (languageDiagnosticsService)
-			this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, markerService));
+		if (languageDiagnosticsService) this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, markerService));
 		const extensionService = this._register(
 			services.createInstance(AppServerExtensionService, {
 				api: enabledExtensions,
@@ -1085,37 +866,18 @@ export class Workbench extends Disposable {
 		services.registerInstance(IExtensionService, extensionService);
 		services.get(ISnippetsService);
 		const extensionReady = extensionService.start();
-		void extensionReady.catch(error =>
-			logService.error('extensions', 'Declarative extension activation failed', error),
-		);
-		services.registerInstance(
-			IFileSearchService,
-			api.hasAppServer ? api.fileSearch : services.createInstance(BrowserFileSearchService),
-		);
-		services.registerInstance(
-			IContentSearchService,
-			api.hasAppServer
-				? new BrowserContentSearchService(api.contentSearch)
-				: new FileContentSearchService(fileService),
-		);
+		void extensionReady.catch(error => logService.error('extensions', 'Declarative extension activation failed', error));
+		services.registerInstance(IFileSearchService, api.hasAppServer ? api.fileSearch : services.createInstance(BrowserFileSearchService));
+		services.registerInstance(IContentSearchService, api.hasAppServer ? new BrowserContentSearchService(api.contentSearch) : new FileContentSearchService(fileService));
 		services.registerInstance(ISearchService, this._register(services.createInstance(SearchService)));
 		services.registerInstance(ITerminalProcessService, api.terminal);
 		services.registerInstance(ICodebaseService, new AppServerCodebaseService(api.codebase));
-		services.registerInstance(
-			IConnectorService,
-			this._register(new AppServerConnectorService(api.connectors, api.events)),
-		);
-		services.registerInstance(
-			IAccountService,
-			this._register(new AppServerAccountService(api.accounts, api.events)),
-		);
+		services.registerInstance(IConnectorService, this._register(new AppServerConnectorService(api.connectors, api.events)));
+		services.registerInstance(IAccountService, this._register(new AppServerAccountService(api.accounts, api.events)));
 		services.registerInstance(IIssueReporterService, api.issueReporter);
 		services.registerInstance(IGitHubService, api.github);
 		services.registerInstance(ILocalGitService, api.localGit);
-		services.registerInstance(
-			IPluginManagementService,
-			this._register(services.createInstance(AppServerPluginManagementService, api.plugins, api.events)),
-		);
+		services.registerInstance(IPluginManagementService, this._register(services.createInstance(AppServerPluginManagementService, api.plugins, api.events)));
 		services.registerInstance(IAppServerSkillApi, api.skills);
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		services.registerInstance(IInstructionService, api.instructions);
@@ -1156,9 +918,7 @@ export class Workbench extends Disposable {
 			});
 		}
 		const workingCopyBackupTracker = this._register(
-			new WorkingCopyBackupTracker(workingCopyService, workingCopyBackups, ownerWindow, undefined, resource =>
-				textModelService.hasPendingSaveRecovery(resource),
-			),
+			new WorkingCopyBackupTracker(workingCopyService, workingCopyBackups, ownerWindow, undefined, resource => textModelService.hasPendingSaveRecovery(resource)),
 		);
 		this.workingCopyBackupTracker = workingCopyBackupTracker;
 		this._register(
@@ -1182,20 +942,14 @@ export class Workbench extends Disposable {
 		if (nativeHostApi && !createHostColorSchemeService) {
 			throw new Error('Desktop Workbench requires its system appearance service');
 		}
-		const hostColors = this._register(
-			createHostColorSchemeService
-				? createHostColorSchemeService(services)
-				: new BrowserHostColorSchemeService(this.ownerWindow),
-		);
+		const hostColors = this._register(createHostColorSchemeService ? createHostColorSchemeService(services) : new BrowserHostColorSchemeService(this.ownerWindow));
 		services.registerInstance(IHostColorSchemeService, hostColors);
 		const themeService = this._register(services.createInstance(WorkbenchThemeService, workbenchRoot));
 		services.registerInstance(IThemeService, themeService);
 		services.registerInstance(IWorkbenchThemeService, themeService);
 		themeService.initialize();
 		const auxiliaryWindows = this._register(
-			createAuxiliaryWindowService
-				? createAuxiliaryWindowService(ownerWindow, workbenchRoot, services)
-				: services.createInstance(BrowserAuxiliaryWindowService, ownerWindow, workbenchRoot),
+			createAuxiliaryWindowService ? createAuxiliaryWindowService(ownerWindow, workbenchRoot, services) : services.createInstance(BrowserAuxiliaryWindowService, ownerWindow, workbenchRoot),
 		);
 		services.registerInstance(IAuxiliaryWindowService, auxiliaryWindows);
 		const layoutService = this._register(
@@ -1215,14 +969,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(ITurnChangesApi, api.turnChanges);
 		const chatService = this._register(services.createInstance(ChatService));
 		services.registerInstance(IChatService, chatService);
-		services.registerInstance(
-			ILanguageModelsConfigurationService,
-			this._register(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)),
-		);
-		services.registerInstance(
-			ILanguageModelsService,
-			this._register(services.createInstance(LanguageModelsService)),
-		);
+		services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
+		services.registerInstance(ILanguageModelsService, this._register(services.createInstance(LanguageModelsService)));
 		const savedFontInfo = storage.get('editorFontInfo', StorageScope.APPLICATION);
 		if (savedFontInfo !== undefined) {
 			try {
@@ -1234,22 +982,11 @@ export class Workbench extends Disposable {
 				logService.warn('editor', 'Discarded invalid saved font information', error);
 			}
 		}
-		FontMeasurements.readFontInfo(
-			ownerWindow,
-			createBareFontInfoFromRawSettings(
-				configuration.getValue<IEditorOptions>('editor'),
-				PixelRatio.getInstance(ownerWindow).value,
-			),
-		);
+		FontMeasurements.readFontInfo(ownerWindow, createBareFontInfoFromRawSettings(configuration.getValue<IEditorOptions>('editor'), PixelRatio.getInstance(ownerWindow).value));
 		const saveFontInfo = (): void => {
 			const entries = FontMeasurements.serializeFontInfo(ownerWindow);
 			if (entries !== undefined) {
-				storage.store(
-					'editorFontInfo',
-					JSON.stringify(entries),
-					StorageScope.APPLICATION,
-					StorageTarget.MACHINE,
-				);
+				storage.store('editorFontInfo', JSON.stringify(entries), StorageScope.APPLICATION, StorageTarget.MACHINE);
 			}
 		};
 		this._register(
@@ -1291,11 +1028,7 @@ export class Workbench extends Disposable {
 			lifecycleService.onWillShutdown(event => {
 				// UI state is best effort; unsaved content has its own required backup join below.
 				event.join(
-					storage
-						.flush(WillSaveStateReason.SHUTDOWN)
-						.catch(error =>
-							logService.error('storage', 'Could not save Workbench state during shutdown', error),
-						),
+					storage.flush(WillSaveStateReason.SHUTDOWN).catch(error => logService.error('storage', 'Could not save Workbench state during shutdown', error)),
 					'Workbench storage flush',
 				);
 				event.join(
@@ -1314,15 +1047,10 @@ export class Workbench extends Disposable {
 		);
 		const outputService = services.get(IOutputService);
 		services.get(IDefaultLogLevelsService);
-		const systemOutputService = this._register(
-			new SystemOutputService(outputService, api.appServer, logService, services.get(ILoggerService).files),
-		);
+		const systemOutputService = this._register(new SystemOutputService(outputService, api.appServer, logService, services.get(ILoggerService).files));
 		this._register(logService.registerSink(systemOutputService, true));
 		const serviceContributionReady: Promise<void>[] = [];
-		services.registerInstance(
-			IAccessibleViewInformationService,
-			this._register(new AccessibleViewInformationService(storage)),
-		);
+		services.registerInstance(IAccessibleViewInformationService, this._register(new AccessibleViewInformationService(storage)));
 		services.registerInstance(IUserThemeService, userThemeService ?? UnavailableUserThemeService);
 		services.registerInstance(IResourceIconRenderer, themeService);
 		services.registerInstance(IResourceLabelService, services.createInstance(ResourceLabelService));
@@ -1358,20 +1086,12 @@ export class Workbench extends Disposable {
 		);
 		services.registerInstance(IKeybindingService, keybindings);
 		const keybindingsReady = keybindings.initialize().catch(error => {
-			notificationService.warn(
-				localize(
-					{ bundle: 'ash', key: 'keybindings.invalid' },
-					'Could not load keybindings.json: {0}',
-					getErrorMessage(error),
-				),
-			);
+			notificationService.warn(localize({ bundle: 'ash', key: 'keybindings.invalid' }, 'Could not load keybindings.json: {0}', getErrorMessage(error)));
 		});
 		services.registerInstance(IKeyboardShortcutTroubleshootingService, keybindings);
 		const menus = new MenuService(commandService, contextKeys);
 		services.registerInstance(IMenuService, menus);
-		const contextViews = this._register(
-			new BrowserContextViewService(layoutService.activeContainer, layoutService),
-		);
+		const contextViews = this._register(new BrowserContextViewService(layoutService.activeContainer, layoutService));
 		services.registerInstance(IContextViewService, contextViews);
 		services.registerSingleton(IPreferencesService, () => services.createInstance(PreferencesService));
 		const contextMenus = this._register(createContextMenuService(services));
@@ -1379,9 +1099,7 @@ export class Workbench extends Disposable {
 		const hoverService = this._register(new HoverService(configuration, contextViews, contextMenus));
 		services.registerInstance(IHoverService, hoverService);
 		this._register(setHoverDelegate(hoverService));
-		const systemPolicies = hostServices.has(IPolicyService)
-			? hostServices.get(IPolicyService)
-			: new NullPolicyService();
+		const systemPolicies = hostServices.has(IPolicyService) ? hostServices.get(IPolicyService) : new NullPolicyService();
 		const accountPolicies = this._register(services.createInstance(AccountPolicyService));
 		services.registerInstance(IAccountPolicyService, accountPolicies);
 		const policies = this._register(new MultiplexPolicyService([systemPolicies, accountPolicies]));
@@ -1389,13 +1107,11 @@ export class Workbench extends Disposable {
 		// Language-server initialization consumes extension-contributed defaults too.
 		// Starting earlier can launch expensive server work with upstream defaults.
 		serviceContributionReady.push(
-			Promise.all([configuration.initialize(fileService, policies, workingCopyService), extensionReady]).then(
-				() => {
-					languageLifecycle?.start();
-					languageProviders?.start();
-					languageDiagnosticsService?.start();
-				},
-			),
+			Promise.all([configuration.initialize(fileService, policies, workingCopyService), extensionReady]).then(() => {
+				languageLifecycle?.start();
+				languageProviders?.start();
+				languageDiagnosticsService?.start();
+			}),
 		);
 		const accessibilityService = this._register(
 			nativeHostApi
@@ -1407,26 +1123,14 @@ export class Workbench extends Disposable {
 					}),
 		);
 		services.registerInstance(IAccessibilityService, accessibilityService);
-		services.registerSingleton(ILanguageServerStatusService, () =>
-			services.createInstance(AppServerLanguageServerStatusService),
-		);
+		services.registerSingleton(ILanguageServerStatusService, () => services.createInstance(AppServerLanguageServerStatusService));
 		const notificationsCenter = this._register(
-			services.createInstance(
-				NotificationsCenter,
-				workbenchRoot,
-				notificationService.model,
-				feedbackHost,
-				notificationActionRunner,
-				statusbarService,
-				() =>
-					services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications),
+			services.createInstance(NotificationsCenter, workbenchRoot, notificationService.model, feedbackHost, notificationActionRunner, statusbarService, () =>
+				services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications),
 			),
 		);
 		services.registerInstance(INotificationsCenter, notificationsCenter);
-		services.registerInstance(
-			IGitHubConnectionService,
-			this._register(services.createInstance(GitHubConnectionService)),
-		);
+		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));
 		const viewContainerLocationsKey = 'workbench.viewContainerLocations';
 		const readViewContainerLocations = (): Record<string, ViewContainerLocation> => {
 			const saved = storage.get(viewContainerLocationsKey, StorageScope.PROFILE);
@@ -1436,14 +1140,9 @@ export class Workbench extends Disposable {
 				!parsed ||
 				typeof parsed !== 'object' ||
 				Array.isArray(parsed) ||
-				Object.entries(parsed).some(
-					([id, location]) =>
-						!id || !Object.values(ViewContainerLocation).includes(location as ViewContainerLocation),
-				)
+				Object.entries(parsed).some(([id, location]) => !id || !Object.values(ViewContainerLocation).includes(location as ViewContainerLocation))
 			) {
-				throw new TypeError(
-					localize('workbench.invalidViewContainerLocations', 'Saved view container locations are invalid.'),
-				);
+				throw new TypeError(localize('workbench.invalidViewContainerLocations', 'Saved view container locations are invalid.'));
 			}
 			return parsed as Record<string, ViewContainerLocation>;
 		};
@@ -1458,29 +1157,19 @@ export class Workbench extends Disposable {
 			viewDescriptors.onDidChangeContainerLocation(({ viewContainer, to }) => {
 				if (restoringViewContainerLocations) return;
 				const saved = readViewContainerLocations();
-				if (to === viewDescriptors.getDefaultViewContainerLocation(viewContainer))
-					delete saved[viewContainer.id];
+				if (to === viewDescriptors.getDefaultViewContainerLocation(viewContainer)) delete saved[viewContainer.id];
 				else saved[viewContainer.id] = to;
-				storage.store(
-					viewContainerLocationsKey,
-					JSON.stringify(saved),
-					StorageScope.PROFILE,
-					StorageTarget.USER,
-				);
+				storage.store(viewContainerLocationsKey, JSON.stringify(saved), StorageScope.PROFILE, StorageTarget.USER);
 			}),
 		);
 		this._register(
 			storage.onDidChangeValue(event => {
-				if (!event.external || event.scope !== StorageScope.PROFILE || event.key !== viewContainerLocationsKey)
-					return;
+				if (!event.external || event.scope !== StorageScope.PROFILE || event.key !== viewContainerLocationsKey) return;
 				const saved = readViewContainerLocations();
 				restoringViewContainerLocations = true;
 				try {
 					for (const container of viewDescriptors.viewContainers) {
-						viewDescriptors.moveViewContainerToLocation(
-							container,
-							saved[container.id] ?? viewDescriptors.getDefaultViewContainerLocation(container)!,
-						);
+						viewDescriptors.moveViewContainerToLocation(container, saved[container.id] ?? viewDescriptors.getDefaultViewContainerLocation(container)!);
 					}
 				} finally {
 					restoringViewContainerLocations = false;
@@ -1489,9 +1178,7 @@ export class Workbench extends Disposable {
 		);
 		services.registerInstance(IViewDescriptorService, viewDescriptors);
 		services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
-		const contributions = this._register(
-			WorkbenchContributionsRegistry.createHost(services, undefined, contributionIds),
-		);
+		const contributions = this._register(WorkbenchContributionsRegistry.createHost(services, undefined, contributionIds));
 		this.contributions = contributions;
 
 		const sidebar = this._register(
@@ -1528,23 +1215,13 @@ export class Workbench extends Disposable {
 			}),
 		);
 		const globalCompositeBar = this._register(services.createInstance(GlobalCompositeBar, workbenchRoot));
-		const activitybar = this._register(
-			services.createInstance(ActivitybarPart, workbenchRoot, sidebar.compositeBar, globalCompositeBar),
-		);
-		const initialActivityBarLocation = configuration.getValue<ActivityBarPosition>(
-			WorkbenchConfiguration.activityBarLocation,
-		);
+		const activitybar = this._register(services.createInstance(ActivitybarPart, workbenchRoot, sidebar.compositeBar, globalCompositeBar));
+		const initialActivityBarLocation = configuration.getValue<ActivityBarPosition>(WorkbenchConfiguration.activityBarLocation);
 		sidebar.setActivityBarLocation(initialActivityBarLocation);
-		sidebar.domNode.classList.toggle(
-			'sidebar-right',
-			configuration.getValue(WorkbenchConfiguration.sideBarLocation) === 'right',
-		);
+		sidebar.domNode.classList.toggle('sidebar-right', configuration.getValue(WorkbenchConfiguration.sideBarLocation) === 'right');
 		const agentSidebar = this._register(
 			services.createInstance(SidebarPart, workbenchRoot, {
-				openComposite: (id: string, preserveFocus?: boolean) =>
-					services.invokeFunction(accessor =>
-						accessor.get(IViewsService).openViewContainer(id, !preserveFocus),
-					),
+				openComposite: (id: string, preserveFocus?: boolean) => services.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
 				viewDescriptorService: viewDescriptors,
 				contextKeyService: contextKeys,
 				localizationService,
@@ -1593,8 +1270,7 @@ export class Workbench extends Disposable {
 			documentCollaborationApi: api.documentCollaboration,
 			serverEvents: api.events,
 			workingCopyService,
-			replaceEditorResource: (source, input, replacement) =>
-				editorParts.replaceEditorResource(source, input, replacement),
+			replaceEditorResource: (source, input, replacement) => editorParts.replaceEditorResource(source, input, replacement),
 			dialogService,
 			fileDialogService: services.getOptional(IFileDialogService),
 			bulkEditService,
@@ -1602,7 +1278,10 @@ export class Workbench extends Disposable {
 				nativeHostApi || browserFileSystemProvider || (webWorkspaceClient && workspace.folders.length > 0)
 					? defaultName => services.get(IFileDialogService).pickFileToSave(URI.file(`/${defaultName}`))
 					: undefined,
-			titleActions: { menuService: menus, contextMenuProvider: contextMenus },
+			titleActions: {
+				menuService: menus,
+				contextMenuProvider: contextMenus,
+			},
 			showBreadcrumbPicker: (element, openFile) => {
 				const picker = instantiationService.createInstance(BreadcrumbsFilePicker, element, openFile);
 				void picker.show().catch(error => {
@@ -1615,9 +1294,7 @@ export class Workbench extends Disposable {
 		if (nativeHostApi) {
 			this._register(
 				editor.onDidChangeModalVisibility(visible => {
-					void nativeHostApi
-						.setWindowDimmed(visible)
-						.catch(error => console.error('Failed to update window controls', error));
+					void nativeHostApi.setWindowDimmed(visible).catch(error => console.error('Failed to update window controls', error));
 				}),
 			);
 		}
@@ -1638,10 +1315,12 @@ export class Workbench extends Disposable {
 						const windowServices = resources.add(services.createChild());
 						windowServices.registerSingleton(IEditorService, () => new BrowserEditorService(editorPart));
 						windowServices.registerInstance(IContextKeyService, contextKeyService);
-						const titlebar = services
-							.get(ITitleService)
-							.createAuxiliaryTitlebarPart(container, editorPart, windowServices);
-						return { part: editorPart, titlebar, resources: [resources] };
+						const titlebar = services.get(ITitleService).createAuxiliaryTitlebarPart(container, editorPart, windowServices);
+						return {
+							part: editorPart,
+							titlebar,
+							resources: [resources],
+						};
 					} catch (error) {
 						part?.dispose();
 						resources.dispose();
@@ -1668,19 +1347,14 @@ export class Workbench extends Disposable {
 			this._register(createBrowserHost(services));
 		}
 		// Markdown rendering resolves the code editor service, which depends on the registered editor parts.
-		services
-			.get(IMarkdownRendererService)
-			.setDefaultCodeBlockRenderer(services.createInstance(EditorMarkdownCodeBlockRenderer));
+		services.get(IMarkdownRendererService).setDefaultCodeBlockRenderer(services.createInstance(EditorMarkdownCodeBlockRenderer));
 		// The URL opener requires the completed editor service graph before the window announces readiness.
 		services.get(IURLService);
 		// Commands follow focus across windows; each window title follows only that window's EditorPart.
 		const titleService = this._register(createTitleService(workbenchRoot, productName, editor, services));
 		services.registerInstance(ITitleService, titleService);
 		const titlebar = titleService.getPart(workbenchRoot);
-		if (
-			initialActivityBarLocation === ActivityBarPosition.TOP ||
-			initialActivityBarLocation === ActivityBarPosition.BOTTOM
-		) {
+		if (initialActivityBarLocation === ActivityBarPosition.TOP || initialActivityBarLocation === ActivityBarPosition.BOTTOM) {
 			titlebar.setActivityActions({
 				bar: globalCompositeBar,
 				showContextMenu: event => activitybar.showContextMenu(event),
@@ -1716,12 +1390,9 @@ export class Workbench extends Disposable {
 					const style = configuration.getValue<WorkbenchLayoutStyle>(WorkbenchConfiguration.layoutStyle);
 					activitybar.setLayoutStyle(style);
 				}
-				if (event.affectsConfiguration(WorkbenchConfiguration.activityBarCompact))
-					activitybar.setCompact(configuration.getValue<boolean>(WorkbenchConfiguration.activityBarCompact));
+				if (event.affectsConfiguration(WorkbenchConfiguration.activityBarCompact)) activitybar.setCompact(configuration.getValue<boolean>(WorkbenchConfiguration.activityBarCompact));
 				if (event.affectsConfiguration(WorkbenchConfiguration.activityBarLocation)) {
-					const location = configuration.getValue<ActivityBarPosition>(
-						WorkbenchConfiguration.activityBarLocation,
-					);
+					const location = configuration.getValue<ActivityBarPosition>(WorkbenchConfiguration.activityBarLocation);
 					sidebar.setActivityBarLocation(location);
 					if (location === ActivityBarPosition.TOP || location === ActivityBarPosition.BOTTOM) {
 						titlebar.setActivityActions({
@@ -1769,16 +1440,8 @@ export class Workbench extends Disposable {
 			storage.onWillSaveState(() => {
 				const empty = viewDescriptors
 					.getViewContainers(ViewContainerLocation.AuxiliaryBar)
-					.every(
-						container =>
-							viewDescriptors.getViewContainerModel(container.id).activeViewDescriptors.length === 0,
-					);
-				storage.store(
-					'workbench.layout.auxiliarybar.empty',
-					empty,
-					StorageScope.PROFILE,
-					StorageTarget.MACHINE,
-				);
+					.every(container => viewDescriptors.getViewContainerModel(container.id).activeViewDescriptors.length === 0);
+				storage.store('workbench.layout.auxiliarybar.empty', empty, StorageScope.PROFILE, StorageTarget.MACHINE);
 			}),
 		);
 		const panes = this._register(instantiationService.createInstance(PaneCompositePartService, paneParts));
@@ -1813,11 +1476,7 @@ export class Workbench extends Disposable {
 					continue;
 				}
 				const visible = layout.isPartVisible(panes.getPartId(location));
-				const container = requiredViewContainerToRestore(
-					viewDescriptors,
-					location,
-					part.getCompositeIdToRestore(),
-				);
+				const container = requiredViewContainerToRestore(viewDescriptors, location, part.getCompositeIdToRestore());
 				// Restore retained content without changing the saved visibility of its region.
 				if (isStartup) {
 					if (location === ViewContainerLocation.Sidebar) {
@@ -1906,8 +1565,7 @@ export class Workbench extends Disposable {
 		if (!message) return;
 
 		const now = Date.now();
-		if (message === this.previousUnexpectedError.message && now - this.previousUnexpectedError.time <= 1_000)
-			return;
+		if (message === this.previousUnexpectedError.message && now - this.previousUnexpectedError.time <= 1_000) return;
 		this.previousUnexpectedError = { message, time: now };
 		logService.error('runtime', message);
 	}
@@ -1955,11 +1613,7 @@ export class Workbench extends Disposable {
 			return;
 		}
 		for (const backup of pending) {
-			if (
-				backup.kind === 'text' &&
-				this.untitledTextEditorService.isUntitled(backup.resource) &&
-				!this.workingCopies.get(backup.resource).some(copy => copy.backupKind === backup.kind)
-			) {
+			if (backup.kind === 'text' && this.untitledTextEditorService.isUntitled(backup.resource) && !this.workingCopies.get(backup.resource).some(copy => copy.backupKind === backup.kind)) {
 				this.untitledTextEditorService.create({
 					untitledResource: backup.resource,
 					initialValue: backup.content,
@@ -1978,8 +1632,7 @@ export class Workbench extends Disposable {
 					continue;
 				}
 				let pane;
-				const untitled =
-					backup.kind === 'text' ? this.untitledTextEditorService.get(backup.resource) : undefined;
+				const untitled = backup.kind === 'text' ? this.untitledTextEditorService.get(backup.resource) : undefined;
 				if (untitled) {
 					pane = await editor.openEditor(new UntitledTextEditorInput(untitled));
 				} else {
@@ -2001,15 +1654,10 @@ export class Workbench extends Disposable {
 					}
 				}
 				const workingCopy = pane.workingCopy;
-				if (!workingCopy || workingCopy.backupKind !== backup.kind)
-					throw new Error(`Restored editor does not support ${backup.kind} backups`);
+				if (!workingCopy || workingCopy.backupKind !== backup.kind) throw new Error(`Restored editor does not support ${backup.kind} backups`);
 				workingCopy.restoreBackup(backup.content);
 			} catch (error) {
-				this.logService.error(
-					'workingCopy',
-					`Failed to restore working-copy backup '${backup.resource.toString()}'`,
-					error,
-				);
+				this.logService.error('workingCopy', `Failed to restore working-copy backup '${backup.resource.toString()}'`, error);
 			}
 		}
 	}
@@ -2061,8 +1709,7 @@ export class Workbench extends Disposable {
 		await this.workingCopyBackupTracker.flush();
 		await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
 		using editorStatePause = this.editor.pauseStatePersistence();
-		if (!(await this.editor.closeAllEditors({ reason: 'reset' })))
-			throw new CancellationError('Workspace switch was cancelled');
+		if (!(await this.editor.closeAllEditors({ reason: 'reset' }))) throw new CancellationError('Workspace switch was cancelled');
 		await this.workingCopyBackupTracker.flush();
 		this.untitledTextEditorService.reset();
 		this.workingCopyBackups.switchWorkspace(workspace.id);
@@ -2078,11 +1725,7 @@ export class Workbench extends Disposable {
 	}
 }
 
-function requiredViewContainerToRestore(
-	service: IViewDescriptorService,
-	location: ViewContainerLocation,
-	containerId: string | undefined,
-) {
+function requiredViewContainerToRestore(service: IViewDescriptorService, location: ViewContainerLocation, containerId: string | undefined) {
 	const container = service.getViewContainers(location).find(candidate => candidate.id === containerId);
 	if (!container) {
 		throw new Error(`Workbench has no ${location} view container to restore`);

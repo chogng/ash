@@ -14,13 +14,7 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { KeybindingsRegistry, KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
-import {
-	EditorsVisibleContext,
-	MultipleEditorsSelectedInGroupContext,
-	ResourceSchemeContext,
-	ResourceSetContext,
-	WorkspaceFolderCountContext,
-} from '../../../common/contextkeys.js';
+import { EditorsVisibleContext, MultipleEditorsSelectedInGroupContext, ResourceSchemeContext, ResourceSetContext, WorkspaceFolderCountContext } from '../../../common/contextkeys.js';
 import { IUntitledTextEditorService } from '../../../services/untitled/common/untitledTextEditorService.js';
 import { UntitledTextEditorInput } from '../../../services/untitled/common/untitledTextEditorInput.js';
 import { ASH_REMOTE_SCHEME, isRemoteResource } from '../../../../platform/remote/common/remote.js';
@@ -29,14 +23,7 @@ import { IsWebContext } from '../../../../platform/contextkey/common/contextkeys
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import {
-	COPY_PATH_COMMAND_ID,
-	COPY_RELATIVE_PATH_COMMAND_ID,
-	NEW_UNTITLED_FILE_COMMAND_ID,
-	OPEN_FILE_COMMAND_ID,
-	REVEAL_IN_EXPLORER_COMMAND_ID,
-	SAVE_FILE_COMMAND_ID,
-} from './fileConstants.js';
+import { COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID, NEW_UNTITLED_FILE_COMMAND_ID, OPEN_FILE_COMMAND_ID, REVEAL_IN_EXPLORER_COMMAND_ID, SAVE_FILE_COMMAND_ID } from './fileConstants.js';
 import { copyFilePath, copyRelativeFilePath, resolveFileResource, revealInExplorer } from './fileCommands.js';
 import {
 	cancelExplorerCut,
@@ -79,10 +66,7 @@ registerAction2(
 		constructor() {
 			super({
 				id: 'workbench.action.compareActiveFileAsBinary',
-				title: localize2(
-					{ bundle: 'ash.workbench', key: 'command.CompareBinaryEditorsAction' },
-					'Compare Active File as Binary With...',
-				),
+				title: localize2({ bundle: 'ash.workbench', key: 'command.CompareBinaryEditorsAction' }, 'Compare Active File as Binary With...'),
 				f1: true,
 			});
 		}
@@ -93,9 +77,7 @@ registerAction2(
 			if (!modified || !isFileInput(modified)) {
 				return;
 			}
-			const candidates = editors.editorsMru
-				.map(editor => editor.input)
-				.filter(input => isFileInput(input) && !extUri.isEqual(input.resource, modified.resource));
+			const candidates = editors.editorsMru.map(editor => editor.input).filter(input => isFileInput(input) && !extUri.isEqual(input.resource, modified.resource));
 			if (candidates.length === 0) {
 				return;
 			}
@@ -140,11 +122,8 @@ registerAction2(
 		}
 
 		override async run(accessor: ServicesAccessor): Promise<void> {
-			const resources = await accessor
-				.get(IFileDialogService)
-				.showOpenDialog({ canSelectFiles: true, canSelectFolders: false, canSelectMany: true });
-			for (const resource of resources ?? [])
-				await accessor.get(IEditorService).openEditor(new FileEditorInput(resource));
+			const resources = await accessor.get(IFileDialogService).showOpenDialog({ canSelectFiles: true, canSelectFolders: false, canSelectMany: true });
+			for (const resource of resources ?? []) await accessor.get(IEditorService).openEditor(new FileEditorInput(resource));
 		}
 	},
 );
@@ -159,7 +138,9 @@ registerAction2(
 				icon: Lxicon.add,
 				f1: true,
 				menu: { id: MenuId.MenubarFileMenu, group: '1_file', order: -1 },
-				keybinding: { primary: Keybinding.single(logicalKey('n', { primaryKey: true })) },
+				keybinding: {
+					primary: Keybinding.single(logicalKey('n', { primaryKey: true })),
+				},
 			});
 		}
 
@@ -184,7 +165,9 @@ registerAction2(
 					group: '3_save',
 					order: 1,
 				},
-				keybinding: { primary: Keybinding.single(logicalKey('s', { primaryKey: true })) },
+				keybinding: {
+					primary: Keybinding.single(logicalKey('s', { primaryKey: true })),
+				},
 			});
 		}
 
@@ -194,10 +177,7 @@ registerAction2(
 	},
 );
 
-const fileResourceWhen = ContextKeyExpr.or(
-	ResourceSchemeContext.isEqualTo(Schemas.file),
-	ResourceSchemeContext.isEqualTo(ASH_REMOTE_SCHEME),
-);
+const fileResourceWhen = ContextKeyExpr.or(ResourceSchemeContext.isEqualTo(Schemas.file), ResourceSchemeContext.isEqualTo(ASH_REMOTE_SCHEME));
 
 registerAction2(
 	class RevealInExplorerAction extends Action2 {
@@ -205,11 +185,12 @@ registerAction2(
 			super({
 				id: REVEAL_IN_EXPLORER_COMMAND_ID,
 				title: localize2({ bundle: 'ash', key: 'files.revealInExplorer' }, 'Reveal in Explorer View'),
-				precondition: ContextKeyExpr.and(
-					fileResourceWhen,
-					ContextKeyExpr.not(MultipleEditorsSelectedInGroupContext.key),
-				),
-				menu: { id: MenuId.EditorTitleContext, group: '2_files', order: 30 },
+				precondition: ContextKeyExpr.and(fileResourceWhen, ContextKeyExpr.not(MultipleEditorsSelectedInGroupContext.key)),
+				menu: {
+					id: MenuId.EditorTitleContext,
+					group: '2_files',
+					order: 30,
+				},
 			});
 		}
 
@@ -224,10 +205,7 @@ const canCreateWhen = ContextKeyExpr.has('ashExplorerCanCreate');
 const selectedResourceWhen = ContextKeyExpr.and(ContextKeyExpr.has('ashExplorerHasResource'), fileResourceWhen);
 const canModifyWhen = ContextKeyExpr.has('ashExplorerCanModify');
 const explorerShortcutWhen = ContextKeyExpr.and(ExplorerFocusedContext.isEqualTo(true), canModifyWhen);
-const downloadWhen = ContextKeyExpr.and(
-	selectedFileWhen,
-	ContextKeyExpr.or(IsWebContext.isEqualTo(true), ResourceSchemeContext.isEqualTo(ASH_REMOTE_SCHEME)),
-);
+const downloadWhen = ContextKeyExpr.and(selectedFileWhen, ContextKeyExpr.or(IsWebContext.isEqualTo(true), ResourceSchemeContext.isEqualTo(ASH_REMOTE_SCHEME)));
 
 const explorerTitleWhen = ContextKeyExpr.equals('view', VIEW_ID);
 for (const action of [
@@ -299,8 +277,7 @@ CommandsRegistry.registerMany([
 	{ id: OPEN_TO_SIDE_COMMAND_ID, handler: openExplorerItemToSide },
 	{
 		id: DOWNLOAD_COMMAND_ID,
-		handler: (accessor, resource) =>
-			new FileDownload(accessor.get(IFileService)).download(resolveFileResource(accessor, resource), document),
+		handler: (accessor, resource) => new FileDownload(accessor.get(IFileService)).download(resolveFileResource(accessor, resource), document),
 	},
 	{ id: COPY_PATH_COMMAND_ID, handler: copyFilePath },
 	{ id: COPY_RELATIVE_PATH_COMMAND_ID, handler: copyRelativeFilePath },
@@ -314,10 +291,7 @@ CommandsRegistry.registerMany([
 
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
 	command: { id: ADD_ROOT_FOLDER_COMMAND_ID, title: localize2('workspace.addFolder', 'Add Folder to Workspace...') },
-	when: ContextKeyExpr.and(
-		ExplorerRootContext.isEqualTo(true),
-		EnterMultiRootWorkspaceSupportContext.isEqualTo(true),
-	),
+	when: ContextKeyExpr.and(ExplorerRootContext.isEqualTo(true), EnterMultiRootWorkspaceSupportContext.isEqualTo(true)),
 	group: '2_workspace',
 	order: 10,
 });
@@ -512,9 +486,7 @@ KeybindingsRegistry.registerKeybindingRule({
 });
 KeybindingsRegistry.registerKeybindingRule({
 	command: DELETE_FILE_COMMAND_ID,
-	keybinding: isMacintosh
-		? Keybinding.single(logicalKey('Backspace', { primaryKey: true, altKey: true }))
-		: Keybinding.single(logicalKey('Delete', { shiftKey: true })),
+	keybinding: isMacintosh ? Keybinding.single(logicalKey('Backspace', { primaryKey: true, altKey: true })) : Keybinding.single(logicalKey('Delete', { shiftKey: true })),
 	when: explorerShortcutWhen,
 	priority: KeybindingWeight.WorkbenchContrib + 10,
 });
@@ -565,24 +537,14 @@ const pathChordPrefix = logicalKey('k', { primaryKey: true });
 for (const editorFocused of [false, true]) {
 	KeybindingsRegistry.registerKeybindingRule({
 		command: COPY_PATH_COMMAND_ID,
-		keybinding:
-			editorFocused && !isWindows
-				? Keybinding.chord(pathChordPrefix, copyPathKey)
-				: Keybinding.single(copyPathKey),
-		when: editorFocused
-			? ContextKeyExpr.has(EditorContextKeys.focus.key)
-			: ContextKeyExpr.not(EditorContextKeys.focus.key),
+		keybinding: editorFocused && !isWindows ? Keybinding.chord(pathChordPrefix, copyPathKey) : Keybinding.single(copyPathKey),
+		when: editorFocused ? ContextKeyExpr.has(EditorContextKeys.focus.key) : ContextKeyExpr.not(EditorContextKeys.focus.key),
 		priority: KeybindingWeight.WorkbenchContrib,
 	});
 	KeybindingsRegistry.registerKeybindingRule({
 		command: COPY_RELATIVE_PATH_COMMAND_ID,
-		keybinding:
-			editorFocused || isWindows
-				? Keybinding.chord(pathChordPrefix, copyRelativePathKey)
-				: Keybinding.single(copyRelativePathKey),
-		when: editorFocused
-			? ContextKeyExpr.has(EditorContextKeys.focus.key)
-			: ContextKeyExpr.not(EditorContextKeys.focus.key),
+		keybinding: editorFocused || isWindows ? Keybinding.chord(pathChordPrefix, copyRelativePathKey) : Keybinding.single(copyRelativePathKey),
+		when: editorFocused ? ContextKeyExpr.has(EditorContextKeys.focus.key) : ContextKeyExpr.not(EditorContextKeys.focus.key),
 		priority: KeybindingWeight.WorkbenchContrib,
 	});
 }

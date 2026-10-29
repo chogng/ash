@@ -112,13 +112,7 @@ export default { testDir: '.', testMatch: '*.spec.ts', outputDir: ${JSON.stringi
 	await assert.rejects(readFile(fixture.marker), { code: 'ENOENT' });
 	// A custom config may omit collection filtering; applicability still precedes setup.
 	const configurationPath = join(fixture.directory, 'playwright.config.ts');
-	await writeFile(
-		configurationPath,
-		(await readFile(configurationPath, 'utf8')).replace(
-			"grepInvert: testTargetExclusions('electron-ui', process.platform)",
-			'',
-		),
-	);
+	await writeFile(configurationPath, (await readFile(configurationPath, 'utf8')).replace("grepInvert: testTargetExclusions('electron-ui', process.platform)", ''));
 	const guarded = await invoke(fixture, ['--grep', 'supported|backend only|other OS']);
 	assert.equal(guarded.code, 0, guarded.output);
 	assert.match(guarded.output, /2 skipped/u);
@@ -130,12 +124,9 @@ for (const [signal, exitCode] of [
 	['SIGINT', 130],
 	['SIGTERM', 143],
 ] as const) {
-	test(
-		`${signal} stops the runner and detached resource descendants without stopping unrelated processes`,
-		{ skip: process.platform === 'win32', timeout: 75_000 },
-		async t => {
-			const fixture = await createFixture(
-				`
+	test(`${signal} stops the runner and detached resource descendants without stopping unrelated processes`, { skip: process.platform === 'win32', timeout: 75_000 }, async t => {
+		const fixture = await createFixture(
+			`
 import { test } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
@@ -157,41 +148,36 @@ test('running', async () => {
   await new Promise(() => {});
 });
 `,
-				120_000,
-			);
-			const sentinel = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
-			const child = start(fixture, []);
-			const result = completion(child);
-			let pids: { parent: number; child: number } | undefined;
-			t.after(async () => {
-				for (const pid of [child.pid, sentinel.pid, pids?.parent, pids?.child]) {
-					if (pid)
-						try {
-							process.kill(pid, 'SIGKILL');
-						} catch (error) {
-							if (error.code !== 'ESRCH') throw error;
-						}
-				}
-				await result;
-				await rm(fixture.directory, { recursive: true, force: true });
-			});
-			pids = JSON.parse(await waitForFile(fixture.marker));
-			child.kill(signal);
-			const stopped = await result;
-			assert.equal(stopped.code, exitCode, stopped.output);
-			for (const pid of [pids!.parent, pids!.child])
-				assert.equal(await alive(pid), false, `Leaked test PID ${pid}`);
-			assert.equal(await alive(sentinel.pid!), true, 'Unrelated process was stopped');
-		},
-	);
+			120_000,
+		);
+		const sentinel = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+		const child = start(fixture, []);
+		const result = completion(child);
+		let pids: { parent: number; child: number } | undefined;
+		t.after(async () => {
+			for (const pid of [child.pid, sentinel.pid, pids?.parent, pids?.child]) {
+				if (pid)
+					try {
+						process.kill(pid, 'SIGKILL');
+					} catch (error) {
+						if (error.code !== 'ESRCH') throw error;
+					}
+			}
+			await result;
+			await rm(fixture.directory, { recursive: true, force: true });
+		});
+		pids = JSON.parse(await waitForFile(fixture.marker));
+		child.kill(signal);
+		const stopped = await result;
+		assert.equal(stopped.code, exitCode, stopped.output);
+		for (const pid of [pids!.parent, pids!.child]) assert.equal(await alive(pid), false, `Leaked test PID ${pid}`);
+		assert.equal(await alive(sentinel.pid!), true, 'Unrelated process was stopped');
+	});
 }
 
-test(
-	'interrupting again stops a Playwright teardown that refuses to finish',
-	{ skip: process.platform === 'win32', timeout: 75_000 },
-	async t => {
-		const fixture = await createFixture(
-			`
+test('interrupting again stops a Playwright teardown that refuses to finish', { skip: process.platform === 'win32', timeout: 75_000 }, async t => {
+	const fixture = await createFixture(
+		`
 import { test } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 test.afterAll(async () => {
@@ -203,30 +189,32 @@ test('running', async () => {
   await new Promise(() => {});
 });
 `,
-			120_000,
-		);
-		const child = start(fixture, []);
-		const result = completion(child);
-		let pids: number[] = [];
-		t.after(async () => {
-			for (const pid of [child.pid, ...pids]) if (pid && (await alive(pid))) process.kill(pid, 'SIGKILL');
-			await result;
-			await rm(fixture.directory, { recursive: true, force: true });
-		});
-		pids = JSON.parse(await waitForFile(fixture.marker));
-		child.kill('SIGINT');
-		assert.equal(await waitForFile(fixture.marker + '.teardown'), 'blocked teardown');
-		child.kill('SIGINT');
-		const stopped = await result;
-		assert.equal(stopped.code, 130, stopped.output);
-		for (const pid of pids) assert.equal(await alive(pid), false, `Leaked Playwright PID ${pid}`);
-	},
-);
+		120_000,
+	);
+	const child = start(fixture, []);
+	const result = completion(child);
+	let pids: number[] = [];
+	t.after(async () => {
+		for (const pid of [child.pid, ...pids]) if (pid && (await alive(pid))) process.kill(pid, 'SIGKILL');
+		await result;
+		await rm(fixture.directory, { recursive: true, force: true });
+	});
+	pids = JSON.parse(await waitForFile(fixture.marker));
+	child.kill('SIGINT');
+	assert.equal(await waitForFile(fixture.marker + '.teardown'), 'blocked teardown');
+	child.kill('SIGINT');
+	const stopped = await result;
+	assert.equal(stopped.code, 130, stopped.output);
+	for (const pid of pids) assert.equal(await alive(pid), false, `Leaked Playwright PID ${pid}`);
+});
 
 for (const surface of ['Electron', 'Web']) {
 	test(
 		`stopping a runner closes ${surface} and its managed backend after the worker exits`,
-		{ skip: !process.env.ASH_SMOKE_RUNNER_PRODUCT_TESTS || process.platform === 'win32', timeout: 90_000 },
+		{
+			skip: !process.env.ASH_SMOKE_RUNNER_PRODUCT_TESTS || process.platform === 'win32',
+			timeout: 90_000,
+		},
 		async t => {
 			// The worker intentionally dies without closing its launcher. This covers the
 			// registry fallback instead of merely checking a normal fixture teardown.
@@ -301,15 +289,11 @@ async function createFixture(source: string | ((directory: string) => string), t
 }
 
 function start(fixture: Fixture, args: string[]): ChildProcess {
-	return spawn(
-		process.execPath,
-		['test/smoke/run.ts', 'electron-ui', '--config', join(fixture.directory, 'playwright.config.ts'), ...args],
-		{
-			cwd: repository,
-			env: { ...process.env, ASH_RUNNER_MARKER: fixture.marker },
-			stdio: ['ignore', 'pipe', 'pipe'],
-		},
-	);
+	return spawn(process.execPath, ['test/smoke/run.ts', 'electron-ui', '--config', join(fixture.directory, 'playwright.config.ts'), ...args], {
+		cwd: repository,
+		env: { ...process.env, ASH_RUNNER_MARKER: fixture.marker },
+		stdio: ['ignore', 'pipe', 'pipe'],
+	});
 }
 
 async function invoke(fixture: Fixture, args: string[]): Promise<{ code: number | null; output: string }> {

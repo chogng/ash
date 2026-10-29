@@ -137,11 +137,8 @@ export class FontMeasurementsImpl extends Disposable {
 		readCharWidths(targetWindow, bareFontInfo, requests);
 		const referenceWidth = monospace[0]!.width;
 		// Symbol fallback fonts can have different advances without changing ASCII spacing.
-		const isMonospace =
-			bareFontInfo.fontFeatureSettings === EditorFontLigatures.OFF &&
-			monospace.every(request => Math.abs(request.width - referenceWidth) <= 0.001);
-		const canUseHalfwidthRightwardsArrow =
-			(!isMonospace || halfArrow.width === referenceWidth) && halfArrow.width <= arrow.width;
+		const isMonospace = bareFontInfo.fontFeatureSettings === EditorFontLigatures.OFF && monospace.every(request => Math.abs(request.width - referenceWidth) <= 0.001);
+		const canUseHalfwidthRightwardsArrow = (!isMonospace || halfArrow.width === referenceWidth) && halfArrow.width <= arrow.width;
 		return new FontInfo(
 			{
 				pixelRatio: PixelRatio.getInstance(targetWindow).value,
@@ -168,20 +165,11 @@ export class FontMeasurementsImpl extends Disposable {
 
 function isSerializedFontInfo(value: unknown): value is ISerializedFontInfo {
 	if (!isRecord(value) || value.version !== SERIALIZED_FONT_INFO_VERSION) return false;
-	if (typeof value.isMonospace !== 'boolean' || typeof value.canUseHalfwidthRightwardsArrow !== 'boolean')
-		return false;
+	if (typeof value.isMonospace !== 'boolean' || typeof value.canUseHalfwidthRightwardsArrow !== 'boolean') return false;
 	for (const key of ['fontFamily', 'fontWeight', 'fontFeatureSettings', 'fontVariationSettings']) {
 		if (typeof value[key] !== 'string') return false;
 	}
-	for (const key of [
-		'pixelRatio',
-		'fontSize',
-		'lineHeight',
-		'typicalHalfwidthCharacterWidth',
-		'typicalFullwidthCharacterWidth',
-		'spaceWidth',
-		'maxDigitWidth',
-	]) {
+	for (const key of ['pixelRatio', 'fontSize', 'lineHeight', 'typicalHalfwidthCharacterWidth', 'typicalFullwidthCharacterWidth', 'spaceWidth', 'maxDigitWidth']) {
 		if (typeof value[key] !== 'number' || !Number.isFinite(value[key]) || value[key] <= 0) return false;
 	}
 	for (const key of ['middotWidth', 'wsmiddotWidth']) {
@@ -191,12 +179,7 @@ function isSerializedFontInfo(value: unknown): value is ISerializedFontInfo {
 }
 
 function minimumWidth(fontInfo: FontInfo): number {
-	return Math.min(
-		fontInfo.typicalHalfwidthCharacterWidth,
-		fontInfo.typicalFullwidthCharacterWidth,
-		fontInfo.spaceWidth,
-		fontInfo.maxDigitWidth,
-	);
+	return Math.min(fontInfo.typicalHalfwidthCharacterWidth, fontInfo.typicalFullwidthCharacterWidth, fontInfo.spaceWidth, fontInfo.maxDigitWidth);
 }
 
 function clampUnreliableFontInfo(fontInfo: FontInfo): FontInfo {

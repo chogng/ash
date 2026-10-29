@@ -59,9 +59,7 @@ export class TrustedIpcRouter extends AbstractDisposable {
 					registrations = new Set();
 					this.routesByChannel.set(route.channel, registrations);
 					try {
-						this.ipcMain.handle(route.channel, (event, rawParams) =>
-							this.invoke(route.channel, event, rawParams),
-						);
+						this.ipcMain.handle(route.channel, (event, rawParams) => this.invoke(route.channel, event, rawParams));
 					} catch (error) {
 						this.routesByChannel.delete(route.channel);
 						throw error;
@@ -113,11 +111,7 @@ export class TrustedIpcRouter extends AbstractDisposable {
 }
 
 /** Registers finite IPC routes with one shared sender, main-frame, URL, and params gate. */
-export function registerTrustedIpcRoutes(
-	ipcMain: IpcMainLike,
-	target: TrustedIpcTarget,
-	routes: readonly IpcRoute<unknown, unknown>[],
-): IDisposable {
+export function registerTrustedIpcRoutes(ipcMain: IpcMainLike, target: TrustedIpcTarget, routes: readonly IpcRoute<unknown, unknown>[]): IDisposable {
 	const router = new TrustedIpcRouter(ipcMain);
 	const registration = router.register(target, routes);
 	return toDisposable(() => {

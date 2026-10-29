@@ -4,13 +4,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import type { IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { FocusedViewContext } from '../../../common/contextkeys.js';
 import type { IPaneComposite } from '../../../common/panecomposite.js';
-import {
-	IViewDescriptorService,
-	type IView,
-	type IViewContainerDescriptor,
-	type IViewDescriptor,
-	type ViewContainerLocation,
-} from '../../../common/views.js';
+import { IViewDescriptorService, type IView, type IViewContainerDescriptor, type IViewDescriptor, type ViewContainerLocation } from '../../../common/views.js';
 import { IPaneCompositePartService } from '../../panecomposite/browser/panecomposite.js';
 import { IViewsService } from '../common/viewsService.js';
 import type { IProgressIndicator } from '../../../../platform/progress/common/progress.js';
@@ -22,9 +16,7 @@ export class ViewsService extends Disposable implements IViewsService {
 	private readonly visibleViews = new Set<string>();
 	private focusedViewId: string | undefined;
 	private readonly focusedViewContext: IContextKey<string>;
-	private readonly containerVisibility = this._register(
-		new Emitter<{ id: string; visible: boolean; location: ViewContainerLocation }>(),
-	);
+	private readonly containerVisibility = this._register(new Emitter<{ id: string; visible: boolean; location: ViewContainerLocation }>());
 	private readonly viewVisibility = this._register(new Emitter<{ id: string; visible: boolean }>());
 	private readonly focusedView = this._register(new Emitter<void>());
 	public readonly onDidChangeViewContainerVisibility = this.containerVisibility.event;
@@ -122,18 +114,12 @@ export class ViewsService extends Disposable implements IViewsService {
 
 	public isViewVisible(id: string): boolean {
 		const container = this.descriptors.getViewContainerForView(id);
-		return (
-			container !== undefined &&
-			this.getActiveViewPaneContainerWithId(container.id)?.getView(id)?.isBodyVisible() === true
-		);
+		return container !== undefined && this.getActiveViewPaneContainerWithId(container.id)?.getView(id)?.isBodyVisible() === true;
 	}
 
 	public async openView<T extends IView>(id: string, focus = false): Promise<T | null> {
 		const container = this.descriptors.getViewContainerForView(id);
-		if (
-			!container ||
-			!this.descriptors.getViewContainerModel(container.id).activeViewDescriptors.some(view => view.id === id)
-		) {
+		if (!container || !this.descriptors.getViewContainerModel(container.id).activeViewDescriptors.some(view => view.id === id)) {
 			return null;
 		}
 		const composite = await this.openViewContainer(container.id);
@@ -164,9 +150,7 @@ export class ViewsService extends Disposable implements IViewsService {
 
 	public getActiveViewWithId<T extends IView>(id: string): T | null {
 		const container = this.descriptors.getViewContainerForView(id);
-		return (
-			((container && this.getActiveViewPaneContainerWithId(container.id)?.getView(id)) as T | undefined) ?? null
-		);
+		return ((container && this.getActiveViewPaneContainerWithId(container.id)?.getView(id)) as T | undefined) ?? null;
 	}
 
 	public getViewWithId<T extends IView>(id: string): T | null {

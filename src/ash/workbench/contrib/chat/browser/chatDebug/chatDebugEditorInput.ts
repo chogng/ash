@@ -15,20 +15,12 @@ export interface AgentTraceLocation {
 }
 
 function validateLocation(value: unknown): AgentTraceLocation {
-	if (
-		!isRecord(value) ||
-		typeof value.sessionId !== 'string' ||
-		!value.sessionId.trim() ||
-		value.sessionId === 'import'
-	) {
+	if (!isRecord(value) || typeof value.sessionId !== 'string' || !value.sessionId.trim() || value.sessionId === 'import') {
 		return invalidLocation();
 	}
 	for (const key of ['sessionId', 'threadId', 'turnId', 'eventId']) {
 		const field = value[key];
-		if (
-			field !== undefined &&
-			(typeof field !== 'string' || !field.trim() || /[\u0000-\u001f\u007f]/.test(field))
-		) {
+		if (field !== undefined && (typeof field !== 'string' || !field.trim() || /[\u0000-\u001f\u007f]/.test(field))) {
 			return invalidLocation();
 		}
 	}
@@ -39,12 +31,7 @@ function validateLocation(value: unknown): AgentTraceLocation {
 }
 
 function invalidLocation(): never {
-	throw new Error(
-		localize(
-			'agentTrace.invalidLocation',
-			'Invalid execution trace location. A Turn or event requires its Thread ID.',
-		),
-	);
+	throw new Error(localize('agentTrace.invalidLocation', 'Invalid execution trace location. A Turn or event requires its Thread ID.'));
 }
 
 /** Keeps the locator in editor identity so reopening or switching Turns restores the same target. */
@@ -63,12 +50,7 @@ export function createAgentTraceResource(target?: string | AgentTraceLocation): 
 }
 
 export function readAgentTraceLocation(resource: URI): AgentTraceLocation | undefined {
-	if (
-		resource.scheme !== 'ash-agent-trace' ||
-		resource.authority ||
-		resource.fragment ||
-		!resource.path.startsWith('/')
-	) {
+	if (resource.scheme !== 'ash-agent-trace' || resource.authority || resource.fragment || !resource.path.startsWith('/')) {
 		return invalidLocation();
 	}
 	if (resource.path === '/import' && !resource.query) {

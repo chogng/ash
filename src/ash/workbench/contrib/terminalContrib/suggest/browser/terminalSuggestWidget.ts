@@ -10,10 +10,7 @@ import './media/terminalSuggestWidget.css';
 const SuggestionRowHeight = 22;
 
 /** A transient presentation of query results; input and history stay with the terminal. */
-export class TerminalSuggestWidget<T extends { readonly label: string; readonly description?: string }>
-	extends Disposable
-	implements ITerminalWidget
-{
+export class TerminalSuggestWidget<T extends { readonly label: string; readonly description?: string }> extends Disposable implements ITerminalWidget {
 	readonly id = 'terminal.suggest.widget';
 	private readonly element: HTMLDivElement;
 	private readonly list: List<T>;
@@ -29,10 +26,7 @@ export class TerminalSuggestWidget<T extends { readonly label: string; readonly 
 		this.element = document.createElement('div');
 		this.element.className = 'ash-terminal-suggest';
 		this.element.hidden = true;
-		const instructions = localize(
-			'terminal.suggest.instructions',
-			'Enter inserts without running. Tab completes in the shell. Escape closes suggestions.',
-		);
+		const instructions = localize('terminal.suggest.instructions', 'Enter inserts without running. Tab completes in the shell. Escape closes suggestions.');
 		const listHost = document.createElement('div');
 		this.element.append(listHost);
 		this.list = this._register(
@@ -79,15 +73,7 @@ export class TerminalSuggestWidget<T extends { readonly label: string; readonly 
 				screen.element,
 				'keydown',
 				(event: KeyboardEvent) => {
-					if (
-						this.element.hidden ||
-						event.isComposing ||
-						event.ctrlKey ||
-						event.metaKey ||
-						event.altKey ||
-						event.shiftKey
-					)
-						return;
+					if (this.element.hidden || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
 					if (event.key === 'ArrowDown') this.list.focusNext(event);
 					else if (event.key === 'ArrowUp') this.list.focusPrevious(event);
 					else if (event.key === 'Enter') {
@@ -120,12 +106,7 @@ export class TerminalSuggestWidget<T extends { readonly label: string; readonly 
 		}
 		this.accept = accept;
 		if (!this.previousAria && this.screen.raw.textarea)
-			this.previousAria = new Map(
-				['aria-controls', 'aria-expanded', 'aria-activedescendant', 'aria-autocomplete'].map(name => [
-					name,
-					this.screen.raw.textarea!.getAttribute(name),
-				]),
-			);
+			this.previousAria = new Map(['aria-controls', 'aria-expanded', 'aria-activedescendant', 'aria-autocomplete'].map(name => [name, this.screen.raw.textarea!.getAttribute(name)]));
 		this.element.hidden = false;
 		this.list.items = items;
 		const bounds = this.screen.element.querySelector('.xterm-screen')?.getBoundingClientRect();
@@ -158,10 +139,7 @@ export class TerminalSuggestWidget<T extends { readonly label: string; readonly 
 				'terminal.suggest.available',
 				'{0} terminal suggestions. {1}',
 				items.length,
-				localize(
-					'terminal.suggest.instructions',
-					'Enter inserts without running. Tab completes in the shell. Escape closes suggestions.',
-				),
+				localize('terminal.suggest.instructions', 'Enter inserts without running. Tab completes in the shell. Escape closes suggestions.'),
 			),
 		);
 	}

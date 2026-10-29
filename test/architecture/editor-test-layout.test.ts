@@ -7,17 +7,12 @@ const desktopRoot = findDesktopRoot(import.meta.dirname);
 
 test('browser integration entrypoints narrow file filters within their suite', () => {
 	function list(editorOnly: boolean, file: string) {
-		const result = spawnSync(
-			process.execPath,
-			[
-				'test/integration/browser/run.ts',
-				...(editorOnly ? ['--editor'] : []),
-				file,
-				'--project=chromium',
-				'--list',
-			],
-			{ cwd: desktopRoot, encoding: 'utf8', timeout: 30_000, windowsHide: true },
-		);
+		const result = spawnSync(process.execPath, ['test/integration/browser/run.ts', ...(editorOnly ? ['--editor'] : []), file, '--project=chromium', '--list'], {
+			cwd: desktopRoot,
+			encoding: 'utf8',
+			timeout: 30_000,
+			windowsHide: true,
+		});
 		if (result.error) throw result.error;
 		return { status: result.status, output: result.stdout + result.stderr };
 	}
@@ -29,11 +24,7 @@ test('browser integration entrypoints narrow file filters within their suite', (
 	const outsideEditor = list(true, 'webview.integration.spec.ts');
 	assert.equal(outsideEditor.status, 1, outsideEditor.output);
 	assert.match(outsideEditor.output, /No tests found/u);
-	for (const file of [
-		'academy.integration.spec.ts',
-		'pdfExtension.integration.spec.ts',
-		'referenceManager.integration.spec.ts',
-	]) {
+	for (const file of ['academy.integration.spec.ts', 'pdfExtension.integration.spec.ts', 'referenceManager.integration.spec.ts']) {
 		const extension = list(true, file);
 		assert.equal(extension.status, 1, extension.output);
 		assert.match(extension.output, /No tests found/u);

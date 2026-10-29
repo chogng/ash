@@ -59,15 +59,7 @@ export class LinesDecorationsOverlay extends DedupOverlay {
 		for (const decoration of context.getDecorationsInViewport()) {
 			const tooltip = decoration.options.linesDecorationsTooltip ?? null;
 			if (decoration.options.linesDecorationsClassName) {
-				result.push(
-					new DecorationToRender(
-						decoration.range.startLineNumber,
-						decoration.range.endLineNumber,
-						decoration.options.linesDecorationsClassName,
-						tooltip,
-						decoration.options.zIndex,
-					),
-				);
+				result.push(new DecorationToRender(decoration.range.startLineNumber, decoration.range.endLineNumber, decoration.options.linesDecorationsClassName, tooltip, decoration.options.zIndex));
 			}
 			if (decoration.options.firstLineDecorationClassName) {
 				result.push(
@@ -111,16 +103,11 @@ export class LinesDecorationsOverlay extends DedupOverlay {
 
 /** Materializes semantic decoration icons after the overlay HTML is mounted. */
 export function renderLineDecorationIcons(container: HTMLElement): void {
-	for (const decoration of container.querySelectorAll<HTMLElement>(
-		'.stanza-editor-line-decoration[data-ash-icon-id]',
-	)) {
+	for (const decoration of container.querySelectorAll<HTMLElement>('.stanza-editor-line-decoration[data-ash-icon-id]')) {
 		appendIcon(Icon.fromId(decoration.dataset.ashIconId!), decoration);
 	}
 }
 
 function escapeAttribute(value: string): string {
-	return value.replace(
-		/[&"<>]/gu,
-		character => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;' })[character]!,
-	);
+	return value.replace(/[&"<>]/gu, character => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;' })[character]!);
 }

@@ -21,10 +21,7 @@ export interface TestWorkbenchContextKeyServices {
 }
 
 /** Creates the production handler with explicit no-op services for unrelated test domains. */
-export function createTestWorkbenchContextKeysHandler(
-	contextKeyService: IContextKeyService,
-	services: TestWorkbenchContextKeyServices = {},
-): WorkbenchContextKeysHandler {
+export function createTestWorkbenchContextKeysHandler(contextKeyService: IContextKeyService, services: TestWorkbenchContextKeyServices = {}): WorkbenchContextKeysHandler {
 	return new WorkbenchContextKeysHandler(
 		contextKeyService,
 		services.workspaceContextService ?? emptyWorkspaceContextService,

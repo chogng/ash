@@ -9,12 +9,7 @@ export const nodeViews: Readonly<Record<string, NodeViewFactory>> = Object.freez
 	[ACADEMY_NODE_TYPES.section]: context => createWrapper(context, 'section', 'section'),
 });
 
-function createWrapper(
-	context: NodeViewContext,
-	tagName: 'header' | 'section',
-	role: string,
-	label?: string,
-): HTMLElement {
+function createWrapper(context: NodeViewContext, tagName: 'header' | 'section', role: string, label?: string): HTMLElement {
 	const element = context.previousElement ?? h(context.ownerDocument, tagName);
 	element.className = 'ash-academy-' + role;
 	element.dataset.academyRole = role;

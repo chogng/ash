@@ -1,11 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
-import {
-	darkColorTheme,
-	highContrastDarkColorTheme,
-	highContrastLightColorTheme,
-	lightColorTheme,
-} from '../../common/colorTheme.js';
+import { darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../common/colorTheme.js';
 import { TestThemeService } from './testThemeService.js';
 import { Colors } from '../../common/colorRegistry.js';
 

@@ -47,29 +47,14 @@ registerAction2(
 			const data = await quickInput.input(
 				{
 					title: localize('terminal.developer.writeData', 'Developer: Write Data to Terminal'),
-					placeHolder: localize(
-						'terminal.developer.writeData.prompt',
-						'Write display data directly to the terminal screen. Supports \\n, \\r and \\xNN escapes.',
-					),
+					placeHolder: localize('terminal.developer.writeData.prompt', 'Write display data directly to the terminal screen. Supports \\n, \\r and \\xNN escapes.'),
 				},
 				cancellation.token,
 			);
-			if (
-				!data ||
-				cancellation.token.isCancellationRequested ||
-				screen.isDisposed ||
-				instance.processId !== processId
-			)
-				return;
+			if (!data || cancellation.token.isCancellationRequested || screen.isDisposed || instance.processId !== processId) return;
 			// This is renderer debug data, never shell stdin. Decode only one layer so
 			// a hex-escaped backslash cannot turn ordinary text into a second escape.
-			const decoded = data.replace(/\\(?:n|r|x[0-9a-fA-F]{2})/g, escape =>
-				escape === '\\n'
-					? '\n'
-					: escape === '\\r'
-						? '\r'
-						: String.fromCharCode(Number.parseInt(escape.slice(2), 16)),
-			);
+			const decoded = data.replace(/\\(?:n|r|x[0-9a-fA-F]{2})/g, escape => (escape === '\\n' ? '\n' : escape === '\\r' ? '\r' : String.fromCharCode(Number.parseInt(escape.slice(2), 16))));
 			await new Promise<void>(resolve => screen.raw.write(decoded, resolve));
 			screen.focus();
 		}
@@ -144,14 +129,14 @@ registerAction2(
 					if (timer) clearTimeout(timer);
 				}),
 			);
-			const text = localize(
-				'terminal.developer.recording',
-				'Recording terminal session — select to stop and copy',
-			);
+			const text = localize('terminal.developer.recording', 'Recording terminal session — select to stop and copy');
 			lifetime.add(
 				statusbar.addEntry(
 					{ text, ariaLabel: text, tooltip: text, showProgress: true, run: stop },
-					{ id: `terminal.recordSession.${instance.instanceId}`, alignment: StatusbarAlignment.Left },
+					{
+						id: `terminal.recordSession.${instance.instanceId}`,
+						alignment: StatusbarAlignment.Left,
+					},
 				),
 			);
 			const record = (type: 'input' | 'command', data: string): void => {

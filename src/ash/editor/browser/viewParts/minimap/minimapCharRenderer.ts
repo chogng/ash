@@ -34,30 +34,10 @@ export class MinimapCharRenderer {
 		const glyphHeight = Constants.BASE_CHAR_HEIGHT * this.scale;
 		const glyph = useLighterFont ? this.light : this.normal;
 		const start = getCharIndex(charCode, fontScale) * width * glyphHeight;
-		paint(
-			target,
-			x,
-			y,
-			width,
-			height,
-			foreground,
-			foregroundAlpha,
-			background,
-			backgroundAlpha,
-			offset => glyph[start + offset] / 255,
-		);
+		paint(target, x, y, width, height, foreground, foregroundAlpha, background, backgroundAlpha, offset => glyph[start + offset] / 255);
 	}
 
-	blockRenderChar(
-		target: ImageData,
-		x: number,
-		y: number,
-		foreground: RGBA8,
-		foregroundAlpha: number,
-		background: RGBA8,
-		backgroundAlpha: number,
-		force1pxHeight: boolean,
-	): void {
+	blockRenderChar(target: ImageData, x: number, y: number, foreground: RGBA8, foregroundAlpha: number, background: RGBA8, backgroundAlpha: number, force1pxHeight: boolean): void {
 		const width = Constants.BASE_CHAR_WIDTH * this.scale;
 		const height = force1pxHeight ? 1 : Constants.BASE_CHAR_HEIGHT * this.scale;
 		if (!fits(target, x, y, width, height)) return warnOutside();

@@ -1,10 +1,6 @@
 import type { ILanguageApi } from '../../../../platform/language/common/languageApi.js';
 import type { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import {
-	addToValueTree,
-	isConfigured,
-	type IConfigurationService,
-} from '../../../../platform/configuration/common/configuration.js';
+import { addToValueTree, isConfigured, type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { JsonValue } from '../../../../base/common/jsonValue.js';
 import type { JsonValue as ProtocolJsonValue } from '../../../../../../.build/protocol/typescript/index.js';
 import { equals } from '../../../../base/common/arrays.js';
@@ -17,11 +13,7 @@ interface LanguageServer {
 export class AppServerLanguageSupport {
 	constructor(private readonly directories: ReadonlyMap<string, readonly LanguageServer[]> = new Map()) {}
 
-	static async read(
-		api: ILanguageApi,
-		workspace: IWorkspaceContextService,
-		configuration: IConfigurationService,
-	): Promise<AppServerLanguageSupport> {
+	static async read(api: ILanguageApi, workspace: IWorkspaceContextService, configuration: IConfigurationService): Promise<AppServerLanguageSupport> {
 		const folders = workspace.getWorkspace().folders;
 		const entries = await Promise.all(
 			folders.map(async folder => {
@@ -31,24 +23,12 @@ export class AppServerLanguageSupport {
 				// explicit App Server launch options. Only Ash's memory default is implicit.
 				const keys = configuration.keys();
 				const registered = new Set(keys.default);
-				for (const key of new Set([
-					'rust-analyzer.cachePriming.enable',
-					...keys.user,
-					...keys.workspace,
-					...keys.workspaceFolder,
-					...(keys.memory ?? []),
-					...keys.policy,
-				])) {
+				for (const key of new Set(['rust-analyzer.cachePriming.enable', ...keys.user, ...keys.workspace, ...keys.workspaceFolder, ...(keys.memory ?? []), ...keys.policy])) {
 					if (!key.startsWith('rust-analyzer.')) continue;
 					if (key !== 'rust-analyzer.cachePriming.enable' && registered.has(key)) {
 						// keys() includes every folder; inspect only the current directory's layer.
 						const inspected = configuration.inspect<JsonValue>(key, overrides);
-						if (
-							!isConfigured(inspected) &&
-							inspected.memoryValue === undefined &&
-							inspected.policyValue === undefined
-						)
-							continue;
+						if (!isConfigured(inspected) && inspected.memoryValue === undefined && inspected.policyValue === undefined) continue;
 					}
 					const value = configuration.getValue<JsonValue | undefined>(key, overrides);
 					if (value !== undefined)
@@ -61,7 +41,10 @@ export class AppServerLanguageSupport {
 				const result = await api.servers({ ...(folders.length > 1 ? { dirId: folder.id } : {}), settings });
 				return [
 					folder.id,
-					result.servers.map(server => ({ id: server.id, languageIds: server.languageIds })),
+					result.servers.map(server => ({
+						id: server.id,
+						languageIds: server.languageIds,
+					})),
 				] as const;
 			}),
 		);
@@ -69,11 +52,7 @@ export class AppServerLanguageSupport {
 	}
 
 	get languageIds(): readonly string[] {
-		return [
-			...new Set(
-				[...this.directories.values()].flatMap(servers => servers.flatMap(server => server.languageIds)),
-			),
-		];
+		return [...new Set([...this.directories.values()].flatMap(servers => servers.flatMap(server => server.languageIds)))];
 	}
 
 	equals(other: AppServerLanguageSupport): boolean {
@@ -81,14 +60,7 @@ export class AppServerLanguageSupport {
 			this.directories.size === other.directories.size &&
 			[...this.directories].every(([dirId, servers]) => {
 				const candidates = other.directories.get(dirId);
-				return (
-					candidates !== undefined &&
-					equals(
-						servers,
-						candidates,
-						(left, right) => left.id === right.id && equals(left.languageIds, right.languageIds),
-					)
-				);
+				return candidates !== undefined && equals(servers, candidates, (left, right) => left.id === right.id && equals(left.languageIds, right.languageIds));
 			})
 		);
 	}

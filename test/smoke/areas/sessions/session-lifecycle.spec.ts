@@ -15,17 +15,12 @@ for (const locale of ['en', 'zh-CN']) {
 			test.setTimeout(240_000);
 			if (locale === 'zh-CN') {
 				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-				const language = workbench.page
-					.getByRole('dialog', { name: 'Select Display Language' })
-					.getByRole('combobox');
+				const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 				await language.fill('简体中文');
 				await language.press('Enter');
 				({ application, workbench } = await restartWorkbench());
 			}
-			const copy =
-				locale === 'zh-CN'
-					? { code: '代码', picker: '选择聊天模型', auto: '自动', enable: '启用' }
-					: { code: 'Code', picker: 'Choose a chat model', auto: 'Auto', enable: 'Enable' };
+			const copy = locale === 'zh-CN' ? { code: '代码', picker: '选择聊天模型', auto: '自动', enable: '启用' } : { code: 'Code', picker: 'Choose a chat model', auto: 'Auto', enable: 'Enable' };
 			const invokedModels: string[] = [];
 			const modelServer = createServer(async (request, response) => {
 				if (request.method === 'GET') {
@@ -99,13 +94,9 @@ for (const locale of ['en', 'zh-CN']) {
 					await agentsWorkbench.waitForReady();
 				}
 				page = await agentsWorkbench.openAgentsWindow(target.kind);
-				await page
-					.locator('.ash-window-mode-control')
-					.getByRole('button', { name: copy.code, exact: true })
-					.click();
+				await page.locator('.ash-window-mode-control').getByRole('button', { name: copy.code, exact: true }).click();
 				await page.locator('[data-action-id="sessions.newSession"] button').click();
-				const active = (): ReturnType<Page['locator']> =>
-					page!.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+				const active = (): ReturnType<Page['locator']> => page!.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 				const editor = new Editor(active());
 				await editor.waitForEditorFocus();
 				await editor.waitForTypeInEditor('Return the isolated lifecycle answer without using tools.');
@@ -120,9 +111,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await search.press('Enter');
 				await editor.waitForEditorFocus();
 				await page.keyboard.press('Enter');
-				await expect
-					.poll(async () => (await client.request(APP_SERVER_METHODS['session/list'], {})).sessions.length)
-					.toBe(1);
+				await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/list'], {})).sessions.length).toBe(1);
 				const created = (await client.request(APP_SERVER_METHODS['session/list'], {})).sessions[0]!;
 				// Inspect the product-created Session, not a fixture-created backend Session.
 				expect(created.threads).toHaveLength(1);
@@ -151,21 +140,13 @@ for (const locale of ['en', 'zh-CN']) {
 				const draftId = await active().getAttribute('data-untitled-session-id');
 				expect(draftId).toBeTruthy();
 				page = await agentsWorkbench.reopenAgentsWindow(application, page);
-				await page
-					.locator('.ash-window-mode-control')
-					.getByRole('button', { name: copy.code, exact: true })
-					.click();
+				await page.locator('.ash-window-mode-control').getByRole('button', { name: copy.code, exact: true }).click();
 				await expect(active()).toHaveAttribute('data-untitled-session-id', draftId!);
 				await new Editor(active()).waitForEditorContents(text => text === 'Keep this unsent lifecycle draft.');
-				const readCatalog = async () =>
-					(await client.request(APP_SERVER_METHODS['session/catalog/read'], { sessionId: created.sessionId }))
-						.session;
+				const readCatalog = async () => (await client.request(APP_SERVER_METHODS['session/catalog/read'], { sessionId: created.sessionId })).session;
 				const persisted = await readCatalog();
 				expect(persisted?.threads).toHaveLength(1);
-				const durableRows = (): ReturnType<Page['locator']> =>
-					page!
-						.locator('.ash-sessions-list-item')
-						.filter({ has: page!.locator('.ash-sessions-list-management:not([hidden])') });
+				const durableRows = (): ReturnType<Page['locator']> => page!.locator('.ash-sessions-list-item').filter({ has: page!.locator('.ash-sessions-list-management:not([hidden])') });
 				await expect(durableRows()).toHaveCount(1);
 				await client.request(APP_SERVER_METHODS['session/request'], {
 					commandId: 'lifecycle-archive',

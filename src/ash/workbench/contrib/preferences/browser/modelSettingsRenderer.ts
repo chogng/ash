@@ -26,13 +26,7 @@ import { type ModelProviderCredentialStatus } from '../../../services/chat/commo
 import { ChatModelsWidget } from '../../chat/browser/chatManagement/chatModelsWidget.js';
 import type { ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';
 import type { SettingsSectionReference, SettingsTreeNode } from './settingsTreeModels.js';
-import {
-	ISecretStorageStatusService,
-	SecretStorageError,
-	secretStorageMessage,
-	type SecretStorageStatus,
-	type SecretStorageMode,
-} from '../../../../platform/secrets/common/secrets.js';
+import { ISecretStorageStatusService, SecretStorageError, secretStorageMessage, type SecretStorageStatus, type SecretStorageMode } from '../../../../platform/secrets/common/secrets.js';
 
 /** Model and credential rows shared by Workbench and Sessions; the host owns navigation and search. */
 export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionReference> {
@@ -186,26 +180,14 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 					getProvider: () => {
 						const focused = this.document.activeElement;
 						if (!this.visible || !isHTMLElement(focused)) return undefined;
-						const nodes = [
-							this.providerTitle,
-							this.storageStatus,
-							...this.apiElements.map(provider => provider.row),
-							...[...this.customProviders].map(([, card]) => card.domNode),
-						];
+						const nodes = [this.providerTitle, this.storageStatus, ...this.apiElements.map(provider => provider.row), ...[...this.customProviders].map(([, card]) => card.domNode)];
 						if (!nodes.some(node => node.contains(focused))) return undefined;
 						return new AccessibleContentProvider(
 							AccessibleViewProviderId.ChatModelConfiguration,
 							{ type },
 							() =>
 								type === AccessibleViewType.View
-									? [
-											this.storageMessage.textContent,
-											[...this.customProviders]
-												.map(([, card]) => card.getAccessibleContent())
-												.join('\n\n'),
-										]
-											.filter(Boolean)
-											.join('\n\n')
+									? [this.storageMessage.textContent, [...this.customProviders].map(([, card]) => card.getAccessibleContent()).join('\n\n')].filter(Boolean).join('\n\n')
 									: localize(
 											'models.settings.help',
 											'Models shows the newest model from each provider. Enabled models appear first; each group keeps the catalog order. Turning a model off restores its place among disabled models. Search models filters the full list by model name or ID. Clear the search to restore the list. Use viewall models to expand or collapse the full list. API keys save when the field loses focus; clear the field to remove a key. Credential storage checks and retries are silent. Use Authorize system keyring to explicitly request system access. Use file storage migrates credentials to unencrypted private files after confirmation. Use encrypted storage migrates them back and may request system authorization. Missing original encryption keys block migration and preserve existing credentials. New provider adds a card with provider name, Base URL, API key and API format. Test models tests the current table, fetching the endpoint list first when empty. Refresh models fetches the list again. Use Add model for a missing ID or to declare its context window. Edit context and delete manual declarations from the row actions. Each Enabled switch controls picker availability independently of test results. Test status: orange means it has not passed and green means it passed. Use Tab and Shift+Tab to move between fields and buttons.',
@@ -225,27 +207,15 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 	}
 
 	protected override buildNodes(query?: SettingsSearchQuery): readonly SettingsTreeNode<SettingsSectionReference>[] {
-		const item = (
-			id: string,
-			title: string,
-			description: string,
-			domNode: HTMLElement,
-			keywords?: readonly string[],
-		): SettingsTreeNode<SettingsSectionReference> => ({
+		const item = (id: string, title: string, description: string, domNode: HTMLElement, keywords?: readonly string[]): SettingsTreeNode<SettingsSectionReference> => ({
 			element: { kind: 'item', id, title, description, keywords, value: this.retainElement(id, domNode) },
 		});
 		if (query && query.key !== this.catalogQuery.key) {
 			this.catalogQuery = query;
 			this.modelsWidget.render();
 		}
-		const customNodes = [...this.customProviders]
-			.reverse()
-			.map(([id, card]) =>
-				item(`models.providers.${id}`, card.title, card.domNode.textContent ?? '', card.domNode),
-			);
-		const providerNodes = this.apiElements.map(({ provider, row }) =>
-			item(`models.providers.${provider.connection}`, provider.displayName, provider.provider, row, ['API key']),
-		);
+		const customNodes = [...this.customProviders].reverse().map(([id, card]) => item(`models.providers.${id}`, card.title, card.domNode.textContent ?? '', card.domNode));
+		const providerNodes = this.apiElements.map(({ provider, row }) => item(`models.providers.${provider.connection}`, provider.displayName, provider.provider, row, ['API key']));
 		return [
 			{
 				element: {
@@ -274,27 +244,11 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 					description: '',
 				},
 				children: [
-					...(this.storageStatus.hidden
-						? []
-						: [
-								item(
-									'models.credentials.storage',
-									localize('models.keys.title', 'API key'),
-									this.storageMessage.textContent ?? '',
-									this.storageStatus,
-								),
-							]),
+					...(this.storageStatus.hidden ? [] : [item('models.credentials.storage', localize('models.keys.title', 'API key'), this.storageMessage.textContent ?? '', this.storageStatus)]),
 					...customNodes,
 					...(this.apiElements.length
 						? providerNodes
-						: [
-								item(
-									`${this.categoryId}.providers.status`,
-									localize('models.keys.title', 'API key'),
-									this.providersStatus.textContent ?? '',
-									this.providersStatus,
-								),
-							]),
+						: [item(`${this.categoryId}.providers.status`, localize('models.keys.title', 'API key'), this.providersStatus.textContent ?? '', this.providersStatus)]),
 				],
 			},
 		];
@@ -328,16 +282,8 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 				this.changed.fire();
 				return;
 			}
-			const [catalog, custom] = await Promise.all([
-				this.languageModels.listModelProviders(),
-				this.languageModels.listCustomModelProviders(),
-			]);
-			const providers = catalog.filter(
-				provider =>
-					provider.apiKeyPolicy !== 'unsupported' &&
-					provider.connection !== 'openai-compatible' &&
-					!provider.connection.startsWith('custom-'),
-			);
+			const [catalog, custom] = await Promise.all([this.languageModels.listModelProviders(), this.languageModels.listCustomModelProviders()]);
+			const providers = catalog.filter(provider => provider.apiKeyPolicy !== 'unsupported' && provider.connection !== 'openai-compatible' && !provider.connection.startsWith('custom-'));
 			if (version !== this.apiLoadVersion || this.isDisposed) return;
 			for (const provider of [...custom].sort((left, right) => left.order - right.order)) {
 				const configured = catalog.some(entry => entry.connection === provider.id && entry.apiKeyConfigured);
@@ -345,13 +291,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 				if (existing) {
 					existing.updateKeyConfigured(configured);
 				} else {
-					const card = this.instantiation.createInstance(
-						ModelProviderSettingsRenderer,
-						this.document,
-						provider,
-						configured,
-						false,
-					);
+					const card = this.instantiation.createInstance(ModelProviderSettingsRenderer, this.document, provider, configured, false);
 					this.customProviders.set(provider.id, card);
 					void card.initialize();
 				}
@@ -372,10 +312,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 				this.apiRows.set(provider.connection, resources);
 				return { provider, ...this.apiConnectionRow(provider, resources) };
 			});
-			this.providersStatus.textContent = localize(
-				'sessions.settings.noApiConnections',
-				'No API key providers available.',
-			);
+			this.providersStatus.textContent = localize('sessions.settings.noApiConnections', 'No API key providers available.');
 		} catch (error) {
 			if (version !== this.apiLoadVersion || this.isDisposed) return;
 			if (error instanceof SecretStorageError) {
@@ -411,15 +348,9 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 		this.storageAvailable = available;
 		this.storageMessage.textContent = available
 			? this.storageMode === 'file'
-				? localize(
-						'credentials.storage.file',
-						'Credentials are stored without encryption in private files protected by your account permissions.',
-					)
+				? localize('credentials.storage.file', 'Credentials are stored without encryption in private files protected by your account permissions.')
 				: this.storageMode === 'encrypted'
-					? localize(
-							'credentials.storage.encrypted',
-							'Credentials are encrypted using a key in your system keyring.',
-						)
+					? localize('credentials.storage.encrypted', 'Credentials are encrypted using a key in your system keyring.')
 					: ''
 			: secretStorageMessage(status);
 		this.storageStatus.hidden = available && !this.storageMode;
@@ -427,9 +358,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 		this.storageAuthorize.domNode.hidden = this.storageMode !== 'encrypted' || available;
 		this.storageModeButton.domNode.hidden = !this.storageMode;
 		this.storageModeButton.label =
-			this.storageMode === 'file'
-				? localize('credentials.storage.useEncrypted', 'Use encrypted storage')
-				: localize('credentials.storage.useFile', 'Use file storage');
+			this.storageMode === 'file' ? localize('credentials.storage.useEncrypted', 'Use encrypted storage') : localize('credentials.storage.useFile', 'Use file storage');
 		this.storageAuthorize.enabled = !this.storageBusy;
 		this.storageModeButton.enabled = !this.storageBusy;
 		for (const { key } of this.apiElements) key.setEnabled(available);
@@ -458,10 +387,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 			// Invalidate background observations before the explicit request. Only these actions
 			// may request OS authorization; refreshes and ordinary credential operations stay silent.
 			this.apiLoadVersion++;
-			const state =
-				action === 'authorize'
-					? await this.secretStorage.authorizeAccess()
-					: await this.secretStorage.setStorageMode(mode);
+			const state = action === 'authorize' ? await this.secretStorage.authorizeAccess() : await this.secretStorage.setStorageMode(mode);
 			if (this.isDisposed) return;
 			this.storageMode = state.mode;
 			this.updateStorageStatus(state.status);
@@ -475,11 +401,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 				if (this.visible) {
 					// Disabling the focused button or hiding it after authorization moves focus to
 					// the document. Restore a surviving control before the background refresh.
-					if (
-						restoreFocus &&
-						(this.document.activeElement === this.document.body ||
-							this.storageStatus.contains(this.document.activeElement))
-					) {
+					if (restoreFocus && (this.document.activeElement === this.document.body || this.storageStatus.contains(this.document.activeElement))) {
 						if (isHTMLElement(focused) && !focused.hidden) focused.focus();
 						else this.storageModeButton.focus();
 					}
@@ -490,10 +412,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 		}
 	}
 
-	private apiConnectionRow(
-		provider: ModelProviderCredentialStatus,
-		resources: DisposableStore,
-	): { readonly row: HTMLElement; readonly key: ProviderApiKeyInput } {
+	private apiConnectionRow(provider: ModelProviderCredentialStatus, resources: DisposableStore): { readonly row: HTMLElement; readonly key: ProviderApiKeyInput } {
 		const row = h(this.document, 'div');
 		row.className = 'ash-models-settings-api-row';
 		const name = h(this.document, 'h5');
@@ -501,16 +420,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 		name.title = provider.displayName;
 		const controls = h(this.document, 'div');
 		controls.className = 'ash-models-settings-api-controls';
-		const key = resources.add(
-			this.instantiation.createInstance(
-				ProviderApiKeyInput,
-				controls,
-				provider.connection,
-				provider.displayName,
-				provider.apiKeyConfigured,
-				async () => {},
-			),
-		);
+		const key = resources.add(this.instantiation.createInstance(ProviderApiKeyInput, controls, provider.connection, provider.displayName, provider.apiKeyConfigured, async () => {}));
 		row.append(name, controls);
 		return { row, key };
 	}

@@ -18,7 +18,10 @@ export abstract class AbstractTextCodeEditor<T extends ITextCodeEditorControl> e
 	protected dimension: IDimension = { width: 0, height: 0 };
 
 	public override layout(dimension: IDimension): void {
-		this.dimension = { width: Math.max(0, dimension.width), height: Math.max(0, dimension.height) };
+		this.dimension = {
+			width: Math.max(0, dimension.width),
+			height: Math.max(0, dimension.height),
+		};
 		this.getControl()?.layout(this.dimension);
 	}
 
@@ -49,10 +52,5 @@ export abstract class AbstractTextCodeEditor<T extends ITextCodeEditorControl> e
 function isCodeEditorViewState(value: unknown): value is ICodeEditorViewState {
 	if (!value || typeof value !== 'object') return false;
 	const state = value as Partial<ICodeEditorViewState>;
-	return (
-		Array.isArray(state.cursorState) &&
-		Boolean(state.viewState) &&
-		typeof state.viewState?.scrollLeft === 'number' &&
-		Boolean(state.viewState?.firstPosition)
-	);
+	return Array.isArray(state.cursorState) && Boolean(state.viewState) && typeof state.viewState?.scrollLeft === 'number' && Boolean(state.viewState?.firstPosition);
 }

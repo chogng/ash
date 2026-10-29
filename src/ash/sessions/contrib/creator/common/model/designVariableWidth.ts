@@ -43,16 +43,8 @@ function samples(path: DesignPath): readonly (readonly Sample[])[] {
 			const curve = [a, a.outgoing, b.incoming, b].map(pixel);
 			const split = (a: DesignPoint, b: DesignPoint, c: DesignPoint, d: DesignPoint, depth: number): void => {
 				const chord = Math.hypot(d.x - a.x, d.y - a.y),
-					polygon =
-						Math.hypot(b.x - a.x, b.y - a.y) +
-						Math.hypot(c.x - b.x, c.y - b.y) +
-						Math.hypot(d.x - c.x, d.y - c.y);
-				const flatness = chord
-					? Math.max(
-							Math.abs((b.x - a.x) * (d.y - a.y) - (b.y - a.y) * (d.x - a.x)),
-							Math.abs((c.x - a.x) * (d.y - a.y) - (c.y - a.y) * (d.x - a.x)),
-						) / chord
-					: polygon;
+					polygon = Math.hypot(b.x - a.x, b.y - a.y) + Math.hypot(c.x - b.x, c.y - b.y) + Math.hypot(d.x - c.x, d.y - c.y);
+				const flatness = chord ? Math.max(Math.abs((b.x - a.x) * (d.y - a.y) - (b.y - a.y) * (d.x - a.x)), Math.abs((c.x - a.x) * (d.y - a.y) - (c.y - a.y) * (d.x - a.x))) / chord : polygon;
 				if (depth >= 12 || (polygon - chord < 0.02 && flatness < 0.05)) {
 					append(d);
 					return;
@@ -79,11 +71,7 @@ function samples(path: DesignPath): readonly (readonly Sample[])[] {
 }
 
 /** Used by the canvas handles, the numeric editor, and the stroke outline. */
-export function designWidthLocation(
-	path: DesignPath,
-	contour: number,
-	position: number,
-): { point: DesignPoint; normal: DesignPoint; length: number } | undefined {
+export function designWidthLocation(path: DesignPath, contour: number, position: number): { point: DesignPoint; normal: DesignPoint; length: number } | undefined {
 	const points = samples(path)[contour];
 	if (!points || points.length < 2) {
 		return undefined;
@@ -111,11 +99,7 @@ export function designWidthLocation(
 	};
 }
 
-export function nearestDesignWidthLocation(
-	path: DesignPath,
-	point: DesignPoint,
-	tolerance = Infinity,
-): { contour: number; position: number } | undefined {
+export function nearestDesignWidthLocation(path: DesignPath, point: DesignPoint, tolerance = Infinity): { contour: number; position: number } | undefined {
 	let best: { contour: number; position: number } | undefined,
 		distance = tolerance;
 	for (const [contour, points] of samples(path).entries()) {
@@ -136,12 +120,7 @@ export function nearestDesignWidthLocation(
 	return best;
 }
 
-export function snapDesignWidthPosition(
-	path: DesignPath,
-	contour: number,
-	position: number,
-	tolerance: number,
-): number {
+export function snapDesignWidthPosition(path: DesignPath, contour: number, position: number, tolerance: number): number {
 	const value = designPathStrokeContours(path)[contour],
 		length = samples(path)[contour]?.at(-1)?.distance;
 	if (!value || !length) {
@@ -157,26 +136,15 @@ export function snapDesignWidthPosition(
 		.sort((a, b) => a - b);
 	const stops = [...new Set([0, 1, ...anchors, ...widths])].sort((a, b) => a - b);
 	const candidates = [...stops, ...stops.slice(1).map((value, i) => (value + stops[i]) / 2)];
-	return (
-		candidates
-			.sort((a, b) => Math.abs(a - position) - Math.abs(b - position))
-			.find(value => Math.abs(value - position) * length <= tolerance) ?? position
-	);
+	return candidates.sort((a, b) => Math.abs(a - position) - Math.abs(b - position)).find(value => Math.abs(value - position) * length <= tolerance) ?? position;
 }
 
-const widthsCache = new WeakMap<
-	DesignPath,
-	Map<number, readonly { position: number; width: number; slope?: number }[]>
->();
+const widthsCache = new WeakMap<DesignPath, Map<number, readonly { position: number; width: number; slope?: number }[]>>();
 export function designWidthAt(path: DesignPath, contour: number, position: number): number {
 	return designWidthPointAt(path, contour, position).width * path.strokeWidth;
 }
 /** Hermite derivatives make insertion a subdivision of the existing width curve, with no visible change. */
-export function designWidthPointAt(
-	path: DesignPath,
-	contour: number,
-	position: number,
-): { width: number; slope: number } {
+export function designWidthPointAt(path: DesignPath, contour: number, position: number): { width: number; slope: number } {
 	let byContour = widthsCache.get(path);
 	if (!byContour) {
 		byContour = new Map();
@@ -191,9 +159,7 @@ export function designWidthPointAt(
 				unique.set(closed && point.position === 1 ? 0 : point.position, point);
 			}
 		}
-		const points = [...unique]
-			.map(([position, point]) => ({ ...point, position }))
-			.sort((a, b) => a.position - b.position);
+		const points = [...unique].map(([position, point]) => ({ ...point, position })).sort((a, b) => a.position - b.position);
 		if (!points.length) {
 			stops = [
 				{ position: 0, width: 1 },
@@ -201,16 +167,8 @@ export function designWidthPointAt(
 			];
 		} else {
 			stops = closed
-				? [
-						{ ...points.at(-1)!, position: points.at(-1)!.position - 1 },
-						...points,
-						{ ...points[0], position: points[0].position + 1 },
-					]
-				: [
-						...(points[0].position ? [{ position: 0, width: 1 }] : []),
-						...points,
-						...(points.at(-1)!.position !== 1 ? [{ position: 1, width: 1 }] : []),
-					];
+				? [{ ...points.at(-1)!, position: points.at(-1)!.position - 1 }, ...points, { ...points[0], position: points[0].position + 1 }]
+				: [...(points[0].position ? [{ position: 0, width: 1 }] : []), ...points, ...(points.at(-1)!.position !== 1 ? [{ position: 1, width: 1 }] : [])];
 		}
 		byContour.set(contour, stops);
 	}
@@ -226,23 +184,12 @@ export function designWidthPointAt(
 	}
 	const a = stops[Math.max(0, low - 1)],
 		b = stops[low];
-	const t =
-		a.position === b.position ? 0 : Math.max(0, Math.min(1, (position - a.position) / (b.position - a.position)));
+	const t = a.position === b.position ? 0 : Math.max(0, Math.min(1, (position - a.position) / (b.position - a.position)));
 	const span = b.position - a.position,
 		left = (a.slope ?? 0) * span,
 		right = (b.slope ?? 0) * span;
-	const width =
-		(2 * t ** 3 - 3 * t * t + 1) * a.width +
-		(t ** 3 - 2 * t * t + t) * left +
-		(-2 * t ** 3 + 3 * t * t) * b.width +
-		(t ** 3 - t * t) * right;
-	const slope = span
-		? ((6 * t * t - 6 * t) * a.width +
-				(3 * t * t - 4 * t + 1) * left +
-				(-6 * t * t + 6 * t) * b.width +
-				(3 * t * t - 2 * t) * right) /
-			span
-		: (a.slope ?? 0);
+	const width = (2 * t ** 3 - 3 * t * t + 1) * a.width + (t ** 3 - 2 * t * t + t) * left + (-2 * t ** 3 + 3 * t * t) * b.width + (t ** 3 - t * t) * right;
+	const slope = span ? ((6 * t * t - 6 * t) * a.width + (3 * t * t - 4 * t + 1) * left + (-6 * t * t + 6 * t) * b.width + (3 * t * t - 2 * t) * right) / span : (a.slope ?? 0);
 	return { width: Math.max(0, width), slope };
 }
 
@@ -300,31 +247,18 @@ export function designVariableStrokeContours(path: DesignPath): readonly DesignP
 				first = i === 0,
 				last = i === centers.length - 1,
 				radius = designWidthAt(path, index, refined[i]) / 2;
-			const before = unit(
-				first ? (closed ? centers.at(-1)! : p) : centers[i - 1],
-				first && !closed ? centers[1] : p,
-			);
+			const before = unit(first ? (closed ? centers.at(-1)! : p) : centers[i - 1], first && !closed ? centers[1] : p);
 			const after = last && !closed ? before : unit(p, centers[(i + 1) % centers.length]);
 			for (const [side, sign] of [1, -1].entries()) {
 				const n1 = { x: -before.y * sign, y: before.x * sign },
 					n2 = { x: -after.y * sign, y: after.x * sign };
 				const dot = Math.max(-1, Math.min(1, n1.x * n2.x + n1.y * n2.y)),
 					cross = before.x * after.y - before.y * after.x;
-				const append = (normal: DesignPoint) =>
-					sides[side].push({ x: p.x + normal.x * radius, y: p.y + normal.y * radius });
+				const append = (normal: DesignPoint) => sides[side].push({ x: p.x + normal.x * radius, y: p.y + normal.y * radius });
 				if (path.strokeJoin === 'round' && cross * sign < -1e-6) {
 					const start = Math.atan2(n1.y, n1.x),
 						angle = Math.atan2(n1.x * n2.y - n1.y * n2.x, dot),
-						steps = Math.max(
-							1,
-							Math.ceil(
-								Math.abs(angle) /
-									Math.max(
-										0.001,
-										Math.min(0.15, 2 * Math.acos(Math.max(-1, 1 - 0.05 / Math.max(0.05, radius)))),
-									),
-							),
-						);
+						steps = Math.max(1, Math.ceil(Math.abs(angle) / Math.max(0.001, Math.min(0.15, 2 * Math.acos(Math.max(-1, 1 - 0.05 / Math.max(0.05, radius)))))));
 					for (let step = 0; step <= steps; step++) {
 						append({
 							x: Math.cos(start + (angle * step) / steps),
@@ -350,12 +284,7 @@ export function designVariableStrokeContours(path: DesignPath): readonly DesignP
 				radius = designWidthAt(path, index, end ? 1 : 0) / 2;
 			const across = { x: -tangent.y, y: tangent.x };
 			if (path.strokeCap === 'round') {
-				const steps = Math.max(
-					20,
-					Math.ceil(
-						Math.PI / Math.max(0.001, 2 * Math.acos(Math.max(-1, 1 - 0.05 / Math.max(0.05, radius)))),
-					),
-				);
+				const steps = Math.max(20, Math.ceil(Math.PI / Math.max(0.001, 2 * Math.acos(Math.max(-1, 1 - 0.05 / Math.max(0.05, radius))))));
 				return Array.from({ length: steps + 1 }, (_, i) => {
 					const angle = (Math.PI * i) / steps;
 					return {

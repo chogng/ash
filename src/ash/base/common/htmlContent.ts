@@ -78,10 +78,7 @@ function isMarkdownStringTrust(value: unknown): boolean {
 	if (value === undefined || typeof value === 'boolean') return true;
 	if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
 	const enabledCommands = (value as MarkdownStringTrustedOptions).enabledCommands;
-	return (
-		enabledCommands === undefined ||
-		(Array.isArray(enabledCommands) && enabledCommands.every(command => typeof command === 'string'))
-	);
+	return enabledCommands === undefined || (Array.isArray(enabledCommands) && enabledCommands.every(command => typeof command === 'string'));
 }
 
 export function escapeMarkdownSyntaxTokens(value: string): string {

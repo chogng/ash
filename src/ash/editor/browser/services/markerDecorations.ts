@@ -8,11 +8,7 @@ import { type ICodeEditor } from '../editorBrowser.js';
 export class MarkerDecorationsContribution extends Disposable implements IEditorContribution {
 	public static readonly ID = 'editor.contrib.markerDecorations';
 
-	constructor(
-		editor: ICodeEditor,
-		diagnostics: LanguageDiagnosticsSource | undefined,
-		@IMarkerDecorationsService markerDecorationsService: IMarkerDecorationsService,
-	) {
+	constructor(editor: ICodeEditor, diagnostics: LanguageDiagnosticsSource | undefined, @IMarkerDecorationsService markerDecorationsService: IMarkerDecorationsService) {
 		super();
 		const model = editor.getModel();
 		if (model) this._register(markerDecorationsService.acquire(model, diagnostics));

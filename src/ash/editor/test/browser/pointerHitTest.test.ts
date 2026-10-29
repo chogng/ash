@@ -7,13 +7,7 @@ import { EditorHitTargetKind, hitTestStanzaVisualEditorPoint } from '../../commo
 import { EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
 import { Position } from '../../common/core/position.js';
 import { TextModel } from '../../common/model/textModel.js';
-import {
-	ContentWidgetPositionPreference,
-	type IContentWidget,
-	type IEditorMouseEvent,
-	type IViewZoneChangeAccessor,
-	MouseTargetType,
-} from '../../browser/editorBrowser.js';
+import { ContentWidgetPositionPreference, type IContentWidget, type IEditorMouseEvent, type IViewZoneChangeAccessor, MouseTargetType } from '../../browser/editorBrowser.js';
 import { type TextMeasurer } from '../../common/viewModel.js';
 
 class FixedTextMeasurer implements TextMeasurer {
@@ -44,26 +38,21 @@ test('Pointer hit testing distinguishes gutter, text, empty content, and lines',
 		Array.from({ length: model.lineCount }, (_, index) => [model.getLineContent(index + 1).length]),
 	);
 	const measurer = new FixedTextMeasurer();
-	const layout = { lineHeight: 20, viewportSize: { width: 200, height: 80 }, scrollPosition: { left: 0, top: 0 } };
+	const layout = {
+		lineHeight: 20,
+		viewportSize: { width: 200, height: 80 },
+		scrollPosition: { left: 0, top: 0 },
+	};
 	const metrics = { gutterWidth: 30, textLeft: 40 };
-	const hit = (left: number, top: number) =>
-		hitTestStanzaVisualEditorPoint(model, projection, layout, { left, top }, metrics, measurer);
+	const hit = (left: number, top: number) => hitTestStanzaVisualEditorPoint(model, projection, layout, { left, top }, metrics, measurer);
 
 	assert.equal(hit(-1, 0), undefined);
 	assert.equal(hit(0, 80), undefined);
-	assert.throws(
-		() =>
-			hitTestStanzaVisualEditorPoint(
-				model,
-				projection,
-				{ ...layout, lineHeight: 0 },
-				{ left: 0, top: 0 },
-				metrics,
-				measurer,
-			),
-		/layout is invalid/,
-	);
-	assert.deepEqual(hit(10, 25), { kind: EditorHitTargetKind.Gutter, position: new Position(1 + 1, 0 + 1) });
+	assert.throws(() => hitTestStanzaVisualEditorPoint(model, projection, { ...layout, lineHeight: 0 }, { left: 0, top: 0 }, metrics, measurer), /layout is invalid/);
+	assert.deepEqual(hit(10, 25), {
+		kind: EditorHitTargetKind.Gutter,
+		position: new Position(1 + 1, 0 + 1),
+	});
 	assert.deepEqual(hit(35, 5), {
 		kind: EditorHitTargetKind.EmptyContent,
 		position: new Position(0 + 1, 0 + 1),
@@ -112,7 +101,10 @@ test('Pointer hit testing distinguishes gutter, text, empty content, and lines',
 		viewPosition: new Position(2 + 1, 0 + 1),
 		injectedText: null,
 	});
-	assert.deepEqual(hit(40, 65), { kind: EditorHitTargetKind.AfterLines, position: new Position(2 + 1, 0 + 1) });
+	assert.deepEqual(hit(40, 65), {
+		kind: EditorHitTargetKind.AfterLines,
+		position: new Position(2 + 1, 0 + 1),
+	});
 });
 
 test('Pointer hit testing applies sticky gutter and viewport scrolling', () => {
@@ -121,36 +113,23 @@ test('Pointer hit testing applies sticky gutter and viewport scrolling', () => {
 		model,
 		Array.from({ length: model.lineCount }, (_, index) => [model.getLineContent(index + 1).length]),
 	);
-	const layout = { lineHeight: 20, viewportSize: { width: 100, height: 40 }, scrollPosition: { left: 20, top: 20 } };
+	const layout = {
+		lineHeight: 20,
+		viewportSize: { width: 100, height: 40 },
+		scrollPosition: { left: 20, top: 20 },
+	};
 	const metrics = { gutterWidth: 30, textLeft: 40 };
 
-	assert.deepEqual(
-		hitTestStanzaVisualEditorPoint(
-			model,
-			projection,
-			layout,
-			{ left: 10, top: 5 },
-			metrics,
-			new FixedTextMeasurer(),
-		),
-		{ kind: EditorHitTargetKind.Gutter, position: new Position(1 + 1, 0 + 1) },
-	);
-	assert.deepEqual(
-		hitTestStanzaVisualEditorPoint(
-			model,
-			projection,
-			layout,
-			{ left: 30, top: 5 },
-			metrics,
-			new FixedTextMeasurer(),
-		),
-		{
-			kind: EditorHitTargetKind.Text,
-			position: new Position(1 + 1, 2 + 1),
-			viewPosition: new Position(1 + 1, 2 + 1),
-			injectedText: null,
-		},
-	);
+	assert.deepEqual(hitTestStanzaVisualEditorPoint(model, projection, layout, { left: 10, top: 5 }, metrics, new FixedTextMeasurer()), {
+		kind: EditorHitTargetKind.Gutter,
+		position: new Position(1 + 1, 0 + 1),
+	});
+	assert.deepEqual(hitTestStanzaVisualEditorPoint(model, projection, layout, { left: 30, top: 5 }, metrics, new FixedTextMeasurer()), {
+		kind: EditorHitTargetKind.Text,
+		position: new Position(1 + 1, 2 + 1),
+		viewPosition: new Position(1 + 1, 2 + 1),
+		injectedText: null,
+	});
 });
 
 const { TestView: View } = await import('./viewModel/testViewModel.js');
@@ -206,10 +185,7 @@ test('View zones expose one accessor lifetime and stable pointer identity', () =
 		}),
 	);
 	assert.equal(mouseDown?.target.type, MouseTargetType.CONTENT_VIEW_ZONE);
-	assert.equal(
-		mouseDown?.target.type === MouseTargetType.CONTENT_VIEW_ZONE ? mouseDown.target.detail.viewZoneId : undefined,
-		id,
-	);
+	assert.equal(mouseDown?.target.type === MouseTargetType.CONTENT_VIEW_ZONE ? mouseDown.target.detail.viewZoneId : undefined, id);
 	viewport.changeViewZones(value => value.removeZone(id));
 	assert.equal(domNode.parentElement, null);
 	dom.window.close();
@@ -248,10 +224,7 @@ test('Content widget pointer identity comes from the registered widget owner', (
 		}),
 	);
 	assert.equal(mouseDown?.target.type, MouseTargetType.CONTENT_WIDGET);
-	assert.equal(
-		mouseDown?.target.type === MouseTargetType.CONTENT_WIDGET ? mouseDown.target.detail : undefined,
-		'pointer.content.widget',
-	);
+	assert.equal(mouseDown?.target.type === MouseTargetType.CONTENT_WIDGET ? mouseDown.target.detail : undefined, 'pointer.content.widget');
 	viewport.removeContentWidget(widget);
 	dom.window.close();
 });
@@ -283,28 +256,65 @@ test('Viewport maps client coordinates through its bounds and scroll state', () 
 	});
 	const textClientX = 100 + viewport.getLayoutInfo().contentLeft + 2;
 
-	assert.deepEqual(viewport.getTargetAtClientPoint({ clientX: 110, clientY: 55 }), {
-		kind: EditorHitTargetKind.Gutter,
-		position: new Position(1 + 1, 0 + 1),
-	});
-	assert.deepEqual(viewport.getTargetAtClientPoint({ clientX: textClientX, clientY: 55 }), {
-		kind: EditorHitTargetKind.Text,
-		position: new Position(1 + 1, 1 + 1),
-		viewPosition: new Position(1 + 1, 1 + 1),
-		injectedText: null,
-	});
-	assert.equal(viewport.getTargetAtClientPoint({ clientX: 99, clientY: 55 }), undefined);
-	assert.deepEqual(viewport.getNearestTargetAtClientPoint({ clientX: 50, clientY: 55 }), {
-		kind: EditorHitTargetKind.Gutter,
-		position: new Position(1 + 1, 0 + 1),
-	});
-	assert.deepEqual(viewport.getNearestTargetAtClientPoint({ clientX: textClientX, clientY: 100 }), {
-		kind: EditorHitTargetKind.Text,
-		position: new Position(2 + 1, 1 + 1),
-		viewPosition: new Position(2 + 1, 1 + 1),
-		injectedText: null,
-	});
-	assert.throws(() => viewport.getTargetAtClientPoint({ clientX: Number.NaN, clientY: 55 }), /finite coordinates/);
+	assert.deepEqual(
+		viewport.getTargetAtClientPoint({
+			clientX: 110,
+			clientY: 55,
+		}),
+		{
+			kind: EditorHitTargetKind.Gutter,
+			position: new Position(1 + 1, 0 + 1),
+		},
+	);
+	assert.deepEqual(
+		viewport.getTargetAtClientPoint({
+			clientX: textClientX,
+			clientY: 55,
+		}),
+		{
+			kind: EditorHitTargetKind.Text,
+			position: new Position(1 + 1, 1 + 1),
+			viewPosition: new Position(1 + 1, 1 + 1),
+			injectedText: null,
+		},
+	);
+	assert.equal(
+		viewport.getTargetAtClientPoint({
+			clientX: 99,
+			clientY: 55,
+		}),
+		undefined,
+	);
+	assert.deepEqual(
+		viewport.getNearestTargetAtClientPoint({
+			clientX: 50,
+			clientY: 55,
+		}),
+		{
+			kind: EditorHitTargetKind.Gutter,
+			position: new Position(1 + 1, 0 + 1),
+		},
+	);
+	assert.deepEqual(
+		viewport.getNearestTargetAtClientPoint({
+			clientX: textClientX,
+			clientY: 100,
+		}),
+		{
+			kind: EditorHitTargetKind.Text,
+			position: new Position(2 + 1, 1 + 1),
+			viewPosition: new Position(2 + 1, 1 + 1),
+			injectedText: null,
+		},
+	);
+	assert.throws(
+		() =>
+			viewport.getTargetAtClientPoint({
+				clientX: Number.NaN,
+				clientY: 55,
+			}),
+		/finite coordinates/,
+	);
 
 	dom.window.close();
 });

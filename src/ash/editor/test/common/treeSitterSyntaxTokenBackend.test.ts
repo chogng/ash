@@ -13,8 +13,7 @@ import { TextModel } from '../../common/model/textModel.js';
 import { Range } from '../../common/core/range.js';
 import { TreeSitterTree, type TreeSitterTokenizationRuntime } from '../../common/services/treeSitter/treeSitterTree.js';
 
-const runtime =
-	(treeSitterNamespace as unknown as { default?: typeof treeSitterNamespace }).default ?? treeSitterNamespace;
+const runtime = (treeSitterNamespace as unknown as { default?: typeof treeSitterNamespace }).default ?? treeSitterNamespace;
 const grammars = new Map<string, TreeSitterTokenizationRuntime>();
 const signal = () => new AbortController().signal;
 
@@ -23,28 +22,16 @@ before(async () => {
 		locateFile: () => resolve('node_modules/@vscode/tree-sitter-wasm/wasm/tree-sitter.wasm'),
 	});
 	for (const language of ['javascript', 'javascriptreact', 'typescript', 'typescriptreact', 'rust', 'python']) {
-		const grammarName =
-			language === 'javascriptreact' ? 'javascript' : language === 'typescriptreact' ? 'tsx' : language;
-		const grammar = await runtime.Language.load(
-			resolve(`node_modules/@vscode/tree-sitter-wasm/wasm/tree-sitter-${grammarName}.wasm`),
-		);
+		const grammarName = language === 'javascriptreact' ? 'javascript' : language === 'typescriptreact' ? 'tsx' : language;
+		const grammar = await runtime.Language.load(resolve(`node_modules/@vscode/tree-sitter-wasm/wasm/tree-sitter-${grammarName}.wasm`));
 		const query = (name: string) =>
-			readFileSync(
-				resolve(
-					`extensions/${name === 'python' ? 'python' : name === 'rust' ? 'rust' : name === 'typescript' ? 'typescript-basics' : 'javascript'}/queries/${name}.scm`,
-				),
-				'utf8',
-			);
+			readFileSync(resolve(`extensions/${name === 'python' ? 'python' : name === 'rust' ? 'rust' : name === 'typescript' ? 'typescript-basics' : 'javascript'}/queries/${name}.scm`), 'utf8');
 		const queries =
 			language === 'python'
 				? ['python']
 				: language === 'rust'
 					? ['rust']
-					: [
-							'javascript',
-							...(language.endsWith('react') ? ['jsx'] : []),
-							...(language.startsWith('typescript') ? ['typescript'] : []),
-						];
+					: ['javascript', ...(language.endsWith('react') ? ['jsx'] : []), ...(language.startsWith('typescript') ? ['typescript'] : [])];
 		grammars.set(language, {
 			Parser: runtime.Parser,
 			language: grammar,
@@ -87,10 +74,7 @@ async function assertFresh(incremental: TreeSitterTree, model: TextModel, langua
 }
 
 test('Tree-sitter reuses the tree and queries only the edited scope while retaining other cached rows', async () => {
-	using model = new TextModel(
-		'// comment\n' +
-			Array.from({ length: 1000 }, (_, index) => `function item${index}() { return "value"; }`).join('\n'),
-	);
+	using model = new TextModel('// comment\n' + Array.from({ length: 1000 }, (_, index) => `function item${index}() { return "value"; }`).join('\n'));
 	const samples: TreeSitterTokenizationMeasure[] = [];
 	using value = backend(model, 'javascript', samples);
 	await value.whenReady(signal());
@@ -102,9 +86,7 @@ test('Tree-sitter reuses the tree and queries only the edited scope while retain
 	await value.whenReady(signal());
 	assert.ok(samples.filter(sample => sample.operation === 'parse').every(sample => sample.incremental));
 	assert.deepEqual(changed, [{ fromLineNumber: 1, toLineNumber: 1 }]);
-	assert.ok(
-		samples.filter(sample => sample.operation === 'query').reduce((sum, sample) => sum + sample.lines, 0) <= 2,
-	);
+	assert.ok(samples.filter(sample => sample.operation === 'query').reduce((sum, sample) => sum + sample.lines, 0) <= 2);
 	await assertFresh(value, model);
 });
 
@@ -127,9 +109,7 @@ test('Tree-sitter invalidates multiline syntax and shifted rows, including error
 });
 
 test('Tree-sitter composes TypeScript and JavaScript queries and preserves Unicode columns', async () => {
-	using model = new TextModel(
-		'const label: string = "😀中文";\nfunction answer(value: number): number { return value + 42; }',
-	);
+	using model = new TextModel('const label: string = "😀中文";\nfunction answer(value: number): number { return value + 42; }');
 	using value = backend(model, 'typescript');
 	await value.whenReady(signal());
 	const all = tokens(value, model).flatMap(row => row.tokens);
@@ -241,9 +221,7 @@ test('Tree-sitter reads long strings across UTF-16 chunk boundaries without losi
 });
 
 test('Tree-sitter parses and edits through buffer chunks without materializing a full-document string', async () => {
-	using model = new TextModel(
-		Array.from({ length: 10000 }, (_, index) => `const item${index} = "value";`).join('\n'),
-	);
+	using model = new TextModel(Array.from({ length: 10000 }, (_, index) => `const item${index} = "value";`).join('\n'));
 	const originalGetValue = model.getValue;
 	const originalGetValueLength = model.getValueLength;
 	model.getValue = () => {
@@ -339,10 +317,7 @@ test('disposing preempted structure work cancels consumers and prevents its retr
 			[Symbol.dispose]() {},
 			async request(operation, _data, signal) {
 				calls.push(operation);
-				if (operation === 'facts')
-					await new Promise((_, reject) =>
-						signal.addEventListener('abort', () => reject(new Error('cancelled')), { once: true }),
-					);
+				if (operation === 'facts') await new Promise((_, reject) => signal.addEventListener('abort', () => reject(new Error('cancelled')), { once: true }));
 				return { revision: model.version, rows: [], measures: [] };
 			},
 		},
@@ -361,38 +336,14 @@ function workerFor(language: string): TreeSitterWorker {
 		const grammar = grammars.get(language)!;
 		const query = (name: string) =>
 			readFileSync(
-				resolve(
-					`extensions/${name === 'python' ? 'python' : name === 'rust' ? 'rust' : name === 'typescript' ? 'typescript-basics' : 'javascript'}/queries/${name}.tags.scm`,
-				),
+				resolve(`extensions/${name === 'python' ? 'python' : name === 'rust' ? 'rust' : name === 'typescript' ? 'typescript-basics' : 'javascript'}/queries/${name}.tags.scm`),
 				'utf8',
 			);
-		const tags =
-			language === 'python'
-				? query('python')
-				: language === 'rust'
-					? query('rust')
-					: query('javascript') + (language.startsWith('typescript') ? '\n' + query('typescript') : '');
+		const tags = language === 'python' ? query('python') : language === 'rust' ? query('rust') : query('javascript') + (language.startsWith('typescript') ? '\n' + query('typescript') : '');
 		const symbols = new runtime.Query(grammar.language, tags);
-		const foldName =
-			language === 'python'
-				? 'python'
-				: language === 'rust'
-					? 'rust'
-					: language === 'typescriptreact'
-						? 'tsx'
-						: language;
-		const folder =
-			language === 'python'
-				? 'python'
-				: language === 'rust'
-					? 'rust'
-					: language.startsWith('typescript')
-						? 'typescript-basics'
-						: 'javascript';
-		const folds = new runtime.Query(
-			grammar.language,
-			readFileSync(resolve(`extensions/${folder}/queries/${foldName}.folds.scm`), 'utf8'),
-		);
+		const foldName = language === 'python' ? 'python' : language === 'rust' ? 'rust' : language === 'typescriptreact' ? 'tsx' : language;
+		const folder = language === 'python' ? 'python' : language === 'rust' ? 'rust' : language.startsWith('typescript') ? 'typescript-basics' : 'javascript';
+		const folds = new runtime.Query(grammar.language, readFileSync(resolve(`extensions/${folder}/queries/${foldName}.folds.scm`), 'utf8'));
 		ownedQueries.push(symbols, folds);
 		return { ...grammar, symbols, folds, foldingRules: getLanguageFoldingRules(language) };
 	});
@@ -404,11 +355,7 @@ after(() => {
 
 for (const language of ['javascript', 'typescript', 'rust'])
 	test(`shared Worker ${language}: highlighting, folding, outline, diagnostics and selection reuse one incremental tree`, async () => {
-		using model = new TextModel(
-			language === 'rust'
-				? 'fn hello() {\n  let label = "😀中文";\n}\n'
-				: 'function hello() {\n  const label = "😀中文";\n}\n',
-		);
+		using model = new TextModel(language === 'rust' ? 'fn hello() {\n  let label = "😀中文";\n}\n' : 'function hello() {\n  const label = "😀中文";\n}\n');
 		using worker = workerFor(language);
 		worker.handleNotification({
 			kind: 'open',
@@ -418,8 +365,7 @@ for (const language of ['javascript', 'typescript', 'rust'])
 			text: model.getValue(),
 			eol: model.getEOL(),
 		});
-		const request = (operation: string, data = {}) =>
-			worker.handleRequest({ document: 1, revision: model.version, operation, ...data }, signal());
+		const request = (operation: string, data = {}) => worker.handleRequest({ document: 1, revision: model.version, operation, ...data }, signal());
 		const [highlight, facts, selection] = await Promise.all([
 			request('highlight', { ranges: [{ startLineNumber: 1, endLineNumber: 4 }] }),
 			request('facts'),
@@ -431,28 +377,16 @@ for (const language of ['javascript', 'typescript', 'rust'])
 		assert.ok(facts.facts?.folds.some(fold => fold.startLineIndex === 0 && fold.endLineIndex >= 2));
 		assert.deepEqual(facts.facts?.diagnostics, []);
 		assert.ok(selection.selections?.some(range => range.startLineNumber === 1 && range.endLineNumber === 3));
-		assert.equal(
-			[...highlight.measures, ...facts.measures, ...selection.measures].filter(
-				measure => measure.operation === 'parse' && measure.completed,
-			).length,
-			1,
-		);
+		assert.equal([...highlight.measures, ...facts.measures, ...selection.measures].filter(measure => measure.operation === 'parse' && measure.completed).length, 1);
 		const again = await request('facts');
 		assert.equal(again.measures.length, 0, 'facts are cached for all feature consumers');
-		using listener = model.onDidChangeContent(change =>
-			worker.handleNotification({ kind: 'update', document: 1, change }),
-		);
-		model.applyEdits([
-			{ range: new Range(1, language === 'rust' ? 4 : 10, 1, language === 'rust' ? 9 : 15), text: '世界' },
-		]);
+		using listener = model.onDidChangeContent(change => worker.handleNotification({ kind: 'update', document: 1, change }));
+		model.applyEdits([{ range: new Range(1, language === 'rust' ? 4 : 10, 1, language === 'rust' ? 9 : 15), text: '世界' }]);
 		const changed = await request('facts');
 		assert.equal(changed.revision, model.version);
 		assert.ok(changed.facts?.symbols.some(symbol => symbol.name === '世界'));
 		assert.ok(changed.measures.some(measure => measure.operation === 'parse' && measure.incremental));
-		await assert.rejects(
-			worker.handleRequest({ document: 1, revision: model.version - 1, operation: 'facts' }, signal()),
-			/Obsolete/,
-		);
+		await assert.rejects(worker.handleRequest({ document: 1, revision: model.version - 1, operation: 'facts' }, signal()), /Obsolete/);
 		worker.handleNotification({ kind: 'close', document: 1 });
 		await assert.rejects(request('facts'), /Unknown/);
 	});
@@ -469,9 +403,7 @@ test('Worker validates mirror deltas before mutation and handles EOL changes', a
 		eol: model.getEOL(),
 	});
 	await worker.handleRequest({ document: 1, revision: model.version, operation: 'facts' }, signal());
-	using listener = model.onDidChangeContent(change =>
-		worker.handleNotification({ kind: 'update', document: 1, change }),
-	);
+	using listener = model.onDidChangeContent(change => worker.handleNotification({ kind: 'update', document: 1, change }));
 	model.setEOL(1);
 	const value = await worker.handleRequest({ document: 1, revision: model.version, operation: 'facts' }, signal());
 	assert.ok(value.facts?.symbols.some(symbol => symbol.name === 'hello'));
@@ -643,10 +575,7 @@ for (const interruption of ['failure', 'cancellation', 'disposal'] as const) {
 		});
 		const controller = new AbortController();
 		const ready = model.tokenization.whenReady(controller.signal);
-		const rejected = assert.rejects(
-			ready,
-			interruption === 'failure' ? error => error === failure : /cancel|disposed/i,
-		);
+		const rejected = assert.rejects(ready, interruption === 'failure' ? error => error === failure : /cancel|disposed/i);
 		await started.p;
 		if (interruption === 'failure') release.complete();
 		else if (interruption === 'cancellation') controller.abort();
@@ -685,10 +614,7 @@ test('model bracket matching, coloring and guides consume the shared Worker tree
 							worker.handleNotification({ kind: 'options', document: 1, tabSize });
 						},
 						request(operation, data, signal) {
-							return worker.handleRequest(
-								{ ...data, document: 1, revision: document.version, operation },
-								signal,
-							);
+							return worker.handleRequest({ ...data, document: 1, revision: document.version, operation }, signal);
 						},
 						dispose() {
 							worker.handleNotification({ kind: 'close', document: 1 });
@@ -705,22 +631,10 @@ test('model bracket matching, coloring and guides consume the shared Worker tree
 	model.tokenization.setVisibleLines([{ startLineNumber: 1, endLineNumber: 5 }]);
 	await model.tokenization.whenReady(signal());
 	assert.equal(model.bracketPairs.getBracketsInRange(model.getFullModelRange()).toArray().length, 6);
-	assert.deepEqual(model.bracketPairs.matchBracket(new Position(1, 14)), [
-		new Range(1, 14, 1, 15),
-		new Range(4, 1, 4, 2),
-	]);
-	assert.deepEqual(model.bracketPairs.findEnclosingBrackets(new Position(2, 3)), [
-		new Range(1, 14, 1, 15),
-		new Range(4, 1, 4, 2),
-	]);
-	assert.equal(
-		model.bracketPairs.getBracketPairsInRangeWithMinIndentation(model.getFullModelRange()).toArray().length,
-		3,
-	);
-	assert.equal(
-		model.getLineDecorations(2).filter(value => value.options.description === 'BracketPairColorization').length,
-		0,
-	);
+	assert.deepEqual(model.bracketPairs.matchBracket(new Position(1, 14)), [new Range(1, 14, 1, 15), new Range(4, 1, 4, 2)]);
+	assert.deepEqual(model.bracketPairs.findEnclosingBrackets(new Position(2, 3)), [new Range(1, 14, 1, 15), new Range(4, 1, 4, 2)]);
+	assert.equal(model.bracketPairs.getBracketPairsInRangeWithMinIndentation(model.getFullModelRange()).toArray().length, 3);
+	assert.equal(model.getLineDecorations(2).filter(value => value.options.description === 'BracketPairColorization').length, 0);
 	model.applyOperations([{ range: new Range(1, 10, 1, 11), text: 'renamed' }]);
 	await model.tokenization.whenReady(signal());
 	assert.equal((await model.tokenization.syntaxTree!.getFacts(signal())).symbols[0]?.name, 'renamed');
@@ -728,8 +642,7 @@ test('model bracket matching, coloring and guides consume the shared Worker tree
 
 test('shared folds retain closing rows for multiline imports, exports and destructuring', async () => {
 	using worker = workerFor('javascript');
-	const text =
-		'import {\n  value\n} from "module";\nexport {\n  value\n};\nconst {\n  field\n} = value;\nconst [\n  first\n] = value;';
+	const text = 'import {\n  value\n} from "module";\nexport {\n  value\n};\nconst {\n  field\n} = value;\nconst [\n  first\n] = value;';
 	worker.handleNotification({ kind: 'open', document: 1, revision: 1, language: 'javascript', text, eol: '\n' });
 	const result = await worker.handleRequest({ document: 1, revision: 1, operation: 'facts' }, signal());
 	assert.deepEqual(
@@ -787,25 +700,13 @@ test('large shared symbols yield to input while keeping concurrent consumers can
 		live = new AbortController();
 	const timer = setTimeout(() => cancelled.abort(), 0);
 	try {
-		const first = provider.provideDocumentSymbols(
-			createLanguageFeatureRequest(model, 'javascript', cancelled.signal),
-			cancelled.signal,
-		);
-		const second = provider.provideDocumentSymbols(
-			createLanguageFeatureRequest(model, 'javascript', live.signal),
-			live.signal,
-		);
+		const first = provider.provideDocumentSymbols(createLanguageFeatureRequest(model, 'javascript', cancelled.signal), cancelled.signal);
+		const second = provider.provideDocumentSymbols(createLanguageFeatureRequest(model, 'javascript', live.signal), live.signal);
 		await assert.rejects(Promise.resolve(first));
 		const symbols = await second;
 		assert.equal(symbols.length, 8192);
 		assert.equal(symbols.at(-1)?.name, 'item8191');
-		assert.strictEqual(
-			await provider.provideDocumentSymbols(
-				createLanguageFeatureRequest(model, 'javascript', live.signal),
-				live.signal,
-			),
-			symbols,
-		);
+		assert.strictEqual(await provider.provideDocumentSymbols(createLanguageFeatureRequest(model, 'javascript', live.signal), live.signal), symbols);
 	} finally {
 		clearTimeout(timer);
 	}
@@ -981,8 +882,7 @@ test('Rust input batches preserve Unicode, overlapping edits, multiple cursors, 
 		async update(params) {
 			assert.equal(params.previousRevision, revision);
 			assert.ok(params.edits.length <= 1024);
-			for (const edit of [...params.edits].reverse())
-				text = text.slice(0, edit.startOffset) + edit.text + text.slice(edit.endOffset);
+			for (const edit of [...params.edits].reverse()) text = text.slice(0, edit.startOffset) + edit.text + text.slice(edit.endOffset);
 			revision = params.revision;
 			updates.push(revision);
 		},
@@ -1029,11 +929,7 @@ test('Rust input batches preserve Unicode, overlapping edits, multiple cursors, 
 	model.applyOperations(cursors.filter((_, index) => index % 2 === 0));
 	model.applyOperations(cursors.filter((_, index) => index % 2 !== 0));
 	await session.request('facts', {}, signal());
-	assert.deepEqual(
-		updates.slice(-2),
-		[model.version - 1, model.version],
-		'disjoint edits split at the transport limit without losing their base',
-	);
+	assert.deepEqual(updates.slice(-2), [model.version - 1, model.version], 'disjoint edits split at the transport limit without losing their base');
 });
 
 test('Rust session drops cancelled intermediate queries and unsent edits on disposal', async () => {
@@ -1178,11 +1074,7 @@ test('Rust facts apply text shifts and splices, and recover from a cancelled uno
 		}),
 	);
 	const replaced = (await session.request('facts', {}, signal())).facts!;
-	assert.deepEqual(
-		replaced.folds,
-		[{ startLineIndex: 0, endLineIndex: 2 }],
-		'a multiline replacement can move interior starts even with zero net line delta',
-	);
+	assert.deepEqual(replaced.folds, [{ startLineIndex: 0, endLineIndex: 2 }], 'a multiline replacement can move interior starts even with zero net line delta');
 
 	const controller = new AbortController();
 	const cancelled = session.request('facts', {}, controller.signal);

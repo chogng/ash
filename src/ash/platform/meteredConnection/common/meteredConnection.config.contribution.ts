@@ -1,9 +1,5 @@
 import { localize } from '../../../nls.js';
-import {
-	ConfigurationScope,
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../configuration/common/configurationRegistry.js';
 import { Registry } from '../../registry/common/platform.js';
 import { METERED_CONNECTION_SETTING_KEY, type MeteredConnectionSettingValue } from './meteredConnection.js';
 

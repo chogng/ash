@@ -35,11 +35,7 @@ export class CodeLensModel {
 }
 
 /** Collects CodeLens results and keeps every result owned by its provider. */
-export async function getCodeLensModel(
-	registry: LanguageFeatureRegistry<CodeLensProvider>,
-	model: ITextModel,
-	token: CancellationToken,
-): Promise<CodeLensModel> {
+export async function getCodeLensModel(registry: LanguageFeatureRegistry<CodeLensProvider>, model: ITextModel, token: CancellationToken): Promise<CodeLensModel> {
 	const providers = registry.ordered(model);
 	const ranks = new Map(providers.map((provider, index) => [provider, index] as const));
 	const result = new CodeLensModel();
@@ -82,8 +78,7 @@ export async function getCodeLensModel(
 }
 
 function validateCodeLens(model: ITextModel, lens: CodeLens): void {
-	if (!lens || typeof lens !== 'object' || !Range.isIRange(lens.range))
-		throw new TypeError('CodeLens must provide a range');
+	if (!lens || typeof lens !== 'object' || !Range.isIRange(lens.range)) throw new TypeError('CodeLens must provide a range');
 	model.validateRange(lens.range);
 	if (lens.command && !Command.is(lens.command)) throw new TypeError('CodeLens command must provide an ID and title');
 }

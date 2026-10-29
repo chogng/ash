@@ -10,10 +10,7 @@ import type { ISandboxGlobals } from '../../../../base/parts/sandbox/electron-br
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 import { ILogService, type LogEntry } from '../../../log/common/log.js';
 import { LogService } from '../../../log/common/logServiceImpl.js';
-import {
-	IRemoteSocketFactoryService,
-	RemoteSocketFactoryService,
-} from '../../../remote/common/remoteSocketFactoryService.js';
+import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../../remote/common/remoteSocketFactoryService.js';
 import { AppServerCallService } from '../../../call/browser/appServerCallService.js';
 import { createAppServerVoiceCodeTranscriptionBackend } from '../../../renderer/browser/appServerVoiceCodeTranscriptionBackend.js';
 import { APP_SERVER_METHODS } from '../../../../../../.build/protocol/typescript/index.js';
@@ -84,11 +81,7 @@ suite('Local Agent Host connection service', () => {
 						}
 						const response = JSON.stringify({ jsonrpc: '2.0', id: frame.id, result }) + '\n';
 						ports.port2.postMessage({ data: new TextEncoder().encode(response) });
-					} else if (
-						frame.method === 'dictation/audio' ||
-						frame.method === 'session/list' ||
-						frame.method === 'call/start'
-					) {
+					} else if (frame.method === 'dictation/audio' || frame.method === 'session/list' || frame.method === 'call/start') {
 						const response =
 							frame.method === 'call/start'
 								? {
@@ -176,9 +169,7 @@ suite('Local Agent Host connection service', () => {
 
 	function assemble(services: InstantiationService, logger: ILogService) {
 		services.registerInstance(ILogService, logger);
-		services.registerSingleton(IRemoteSocketFactoryService, () =>
-			services.createInstance(RemoteSocketFactoryService),
-		);
+		services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
 		return services.createInstance(Service, { clientName: 'test-desktop' });
 	}
 
@@ -187,9 +178,7 @@ suite('Local Agent Host connection service', () => {
 		services.registerInstance(IWebWorkerService, new WebWorkerService());
 		using logger = new LogService({ sinks: [] });
 		services.registerInstance(ILogService, logger);
-		services.registerSingleton(IRemoteSocketFactoryService, () =>
-			services.createInstance(RemoteSocketFactoryService),
-		);
+		services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
 		using local = services.createInstance(Service, { clientName: 'desktop-media', connection: 'local' });
 		using workspace = services.createInstance(Service, { clientName: 'desktop-workspace' });
 		assert.equal(await local.connect(), true);
@@ -214,9 +203,7 @@ suite('Local Agent Host connection service', () => {
 		services.registerInstance(IWebWorkerService, new WebWorkerService());
 		using logger = new LogService({ sinks: [] });
 		services.registerInstance(ILogService, logger);
-		services.registerSingleton(IRemoteSocketFactoryService, () =>
-			services.createInstance(RemoteSocketFactoryService),
-		);
+		services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
 		const firstId = '00000000-0000-0000-0000-000000000001';
 		const secondId = '00000000-0000-0000-0000-000000000002';
 		using first = services.createInstance(Service, { clientName: 'host-a', connection: { id: firstId } });
@@ -239,9 +226,7 @@ suite('Local Agent Host connection service', () => {
 	test('production assembly requires the connection log service', () => {
 		using services = new InstantiationService();
 		services.registerInstance(IWebWorkerService, new WebWorkerService());
-		services.registerSingleton(IRemoteSocketFactoryService, () =>
-			services.createInstance(RemoteSocketFactoryService),
-		);
+		services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
 		assert.throws(() => services.createInstance(Service, {}), /Unknown service: logService/);
 	});
 
@@ -274,9 +259,7 @@ suite('Local Agent Host connection service', () => {
 			services.registerInstance(IWebWorkerService, new WebWorkerService());
 			using logger = new LogService({ sinks: [] });
 			services.registerInstance(ILogService, logger);
-			services.registerSingleton(IRemoteSocketFactoryService, () =>
-				services.createInstance(RemoteSocketFactoryService),
-			);
+			services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
 			using service = services.createInstance(Service, { clientName: 'cold-ssh', initializeTimeoutMs: 180_000 });
 			let settled = false;
 			const ready = service.connect().finally(() => {

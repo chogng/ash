@@ -24,16 +24,11 @@ test('locked scrolling preserves offsets through real wheel input and keeps diff
 		.first()
 		.hover({ position: { x: 180, y: 180 } });
 	await page.mouse.wheel(0, 80);
-	await expect
-		.poll(() => page.evaluate(() => window.ashScrollLockingIntegration.read()[0].scrollTop))
-		.toBeGreaterThan(100);
+	await expect.poll(() => page.evaluate(() => window.ashScrollLockingIntegration.read()[0].scrollTop)).toBeGreaterThan(100);
 	const positions = await page.evaluate(() => window.ashScrollLockingIntegration.read());
 	expect(positions[1].scrollTop - positions[0].scrollTop).toBeCloseTo(200, 0);
 	expect(positions[2].scrollTop - positions[0].scrollTop).toBeCloseTo(400, 0);
-	expect(await page.evaluate(() => window.ashScrollLockingIntegration.diffSides())).toEqual([
-		positions[2].scrollTop,
-		positions[2].scrollTop,
-	]);
+	expect(await page.evaluate(() => window.ashScrollLockingIntegration.diffSides())).toEqual([positions[2].scrollTop, positions[2].scrollTop]);
 	await page.evaluate(() => window.ashScrollLockingIntegration.scroll(0, 180, 50));
 	expect(await page.evaluate(() => window.ashScrollLockingIntegration.read())).toEqual([
 		{ scrollTop: 180, scrollLeft: 50 },
@@ -52,9 +47,7 @@ test('locked scrolling preserves offsets through real wheel input and keeps diff
 	expect(errors).toEqual([]);
 });
 
-test('held locked scrolling restores state on release and blur, while explicit toggles retain ownership', async ({
-	page,
-}) => {
+test('held locked scrolling restores state on release and blur, while explicit toggles retain ownership', async ({ page }) => {
 	await page.goto('/scrollLocking.html');
 	await expect.poll(() => page.evaluate(() => window.ashScrollLockingIntegration?.read().length)).toBe(3);
 	await page.evaluate(() => {
@@ -107,19 +100,13 @@ test('locked scrolling rebuilds its baseline for hidden groups, modal panes and 
 		await h.hideSecond();
 		h.scroll(0, 140, 0);
 	});
-	expect((await page.evaluate(() => window.ashScrollLockingIntegration.read())).map(p => p.scrollTop)).toEqual([
-		140, 540,
-	]);
+	expect((await page.evaluate(() => window.ashScrollLockingIntegration.read())).map(p => p.scrollTop)).toEqual([140, 540]);
 	await page.evaluate(() => window.ashScrollLockingIntegration.modal());
 	await expect.poll(() => page.evaluate(() => window.ashScrollLockingIntegration.read().length)).toBe(3);
 	await page.evaluate(() => window.ashScrollLockingIntegration.scroll(0, 30, 0));
-	expect((await page.evaluate(() => window.ashScrollLockingIntegration.read())).map(p => p.scrollTop)).toEqual([
-		30, 170, 570,
-	]);
+	expect((await page.evaluate(() => window.ashScrollLockingIntegration.read())).map(p => p.scrollTop)).toEqual([30, 170, 570]);
 	await page.evaluate(() => window.ashScrollLockingIntegration.closeLast());
 	await expect.poll(() => page.evaluate(() => window.ashScrollLockingIntegration.read().length)).toBe(2);
 	await page.evaluate(() => window.ashScrollLockingIntegration.scroll(0, 200, 0));
-	expect((await page.evaluate(() => window.ashScrollLockingIntegration.read())).map(p => p.scrollTop)).toEqual([
-		200, 600,
-	]);
+	expect((await page.evaluate(() => window.ashScrollLockingIntegration.read())).map(p => p.scrollTop)).toEqual([200, 600]);
 });

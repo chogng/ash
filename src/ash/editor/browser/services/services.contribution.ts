@@ -2,10 +2,7 @@ import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import type { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
-import {
-	DefaultDropProvidersFeature,
-	DefaultPasteProvidersFeature,
-} from '../../contrib/dropOrPasteInto/browser/defaultProviders.js';
+import { DefaultDropProvidersFeature, DefaultPasteProvidersFeature } from '../../contrib/dropOrPasteInto/browser/defaultProviders.js';
 import { getCodeLensCache } from '../../contrib/codelens/browser/codeLensCache.js';
 import { registerEditorContribution } from '../editorFeatureRegistration.js';
 

@@ -4,11 +4,7 @@ import { localize } from '../../../../nls.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { sanitizeHtmlToFragment } from '../../../../base/browser/domSanitize.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import {
-	IExtensionHostApi,
-	type ExtensionHostFleetSnapshot,
-	type ExtensionHostRuntime,
-} from '../../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostRuntime } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { SanitizeAttributeRule } from '../../../../base/browser/domSanitize.js';
 import type { MarkdownSanitizerConfig } from '../../../../base/browser/markdownRenderer.js';
@@ -114,8 +110,7 @@ type MathResult =
 	| { readonly status: 'rendered'; readonly html: string }
 	| {
 			readonly status: 'source';
-			readonly diagnostic:
-				{ readonly code: 'invalidFormula'; readonly message: string } | { readonly code: 'outputLimit' };
+			readonly diagnostic: { readonly code: 'invalidFormula'; readonly message: string } | { readonly code: 'outputLimit' };
 	  };
 
 /** Validate the complete optional-provider response before changing any formula nodes. */
@@ -213,9 +208,7 @@ export class MarkedKatexSupport extends Disposable {
 	private async getSnapshot(): Promise<ExtensionHostFleetSnapshot> {
 		const pending = (this.snapshot ??= this.host.list().then(snapshot => {
 			const runtime = snapshot.extensions.find(entry => entry.id === 'ash.markdown-math');
-			return !this.isDisposed &&
-				this.configuration.getValue<boolean>('markdown.math.enabled') !== false &&
-				runtime?.lifecycle === 'dormant'
+			return !this.isDisposed && this.configuration.getValue<boolean>('markdown.math.enabled') !== false && runtime?.lifecycle === 'dormant'
 				? this.host.activateByEvent({
 						extensionId: runtime.id,
 						activationGeneration: runtime.activationGeneration,
@@ -229,12 +222,7 @@ export class MarkedKatexSupport extends Disposable {
 				throw new Error('Math provider changed');
 			}
 			const runtime = snapshot.extensions.find(entry => entry.id === 'ash.markdown-math');
-			const identity = JSON.stringify([
-				runtime?.activationGeneration,
-				runtime?.incarnation,
-				runtime?.lifecycle,
-				runtime?.registrations,
-			]);
+			const identity = JSON.stringify([runtime?.activationGeneration, runtime?.incarnation, runtime?.lifecycle, runtime?.registrations]);
 			if (identity !== this.providerIdentity) {
 				this.clearBatches();
 				this.providerIdentity = identity;
@@ -248,21 +236,11 @@ export class MarkedKatexSupport extends Disposable {
 		}
 	}
 
-	private acquireBatch(
-		runtime: ExtensionHostRuntime,
-		registrationId: string,
-		formulas: readonly { source: string; display: string }[],
-	): { result: Promise<readonly MathResult[]>; dispose(): void } {
+	private acquireBatch(runtime: ExtensionHostRuntime, registrationId: string, formulas: readonly { source: string; display: string }[]): { result: Promise<readonly MathResult[]>; dispose(): void } {
 		const macros = { ...this.configuration.getValue<Record<string, string>>('markdown.math.macros') };
 		// Cache the entire ordered batch: a preceding formula may define macros used
 		// by every subsequent formula. Text-only keys would break that scope.
-		const key = JSON.stringify([
-			runtime.activationGeneration,
-			runtime.incarnation,
-			registrationId,
-			formulas,
-			Object.entries(macros).sort(([a], [b]) => a.localeCompare(b)),
-		]);
+		const key = JSON.stringify([runtime.activationGeneration, runtime.incarnation, registrationId, formulas, Object.entries(macros).sort(([a], [b]) => a.localeCompare(b))]);
 		let batch = this.batches.get(key);
 		if (!batch) {
 			const controller = new AbortController();
@@ -349,17 +327,9 @@ export class MarkedKatexSupport extends Disposable {
 		}
 	}
 
-	public static getSanitizerOptions(baseConfig: {
-		readonly allowedTags: readonly string[];
-		readonly allowedAttributes: ReadonlyArray<string | SanitizeAttributeRule>;
-	}): MarkdownSanitizerConfig {
+	public static getSanitizerOptions(baseConfig: { readonly allowedTags: readonly string[]; readonly allowedAttributes: ReadonlyArray<string | SanitizeAttributeRule> }): MarkdownSanitizerConfig {
 		const dimensions: SanitizeAttributeRule[] = ['width', 'height'].map(attributeName => {
-			const base = [...baseConfig.allowedAttributes]
-				.reverse()
-				.find(
-					attribute =>
-						(typeof attribute === 'string' ? attribute : attribute.attributeName) === attributeName,
-				);
+			const base = [...baseConfig.allowedAttributes].reverse().find(attribute => (typeof attribute === 'string' ? attribute : attribute.attributeName) === attributeName);
 			return {
 				attributeName,
 				shouldKeep: (element, data) => {
@@ -390,9 +360,7 @@ export class MarkedKatexSupport extends Disposable {
 									const property = declaration.slice(0, separator).trim().toLowerCase();
 									const value = declaration.slice(separator + 1).trim();
 									return styleProperties.has(property) &&
-										/^(?:-?(?:\d*\.)?\d+(?:em|ex|px|pt|rem|%)?|[a-z-]+|#[\da-f]{3,8})(?:\s+(?:-?(?:\d*\.)?\d+(?:em|ex|px|pt|rem|%)?|[a-z-]+)){0,3}$/iu.test(
-											value,
-										)
+										/^(?:-?(?:\d*\.)?\d+(?:em|ex|px|pt|rem|%)?|[a-z-]+|#[\da-f]{3,8})(?:\s+(?:-?(?:\d*\.)?\d+(?:em|ex|px|pt|rem|%)?|[a-z-]+)){0,3}$/iu.test(value)
 										? [`${property}:${value}`]
 										: [];
 								})
@@ -433,15 +401,9 @@ export class MarkedKatexSupport extends Disposable {
 				element.removeAttribute('data-math-diagnostic');
 			}
 		};
-		const provider = (snapshot: ExtensionHostFleetSnapshot): ExtensionHostRuntime | undefined =>
-			snapshot.extensions.find(runtime => runtime.id === 'ash.markdown-math');
+		const provider = (snapshot: ExtensionHostFleetSnapshot): ExtensionHostRuntime | undefined => snapshot.extensions.find(runtime => runtime.id === 'ash.markdown-math');
 		const providerIdentity = (runtime: ExtensionHostRuntime | undefined): string =>
-			JSON.stringify([
-				runtime?.activationGeneration,
-				runtime?.incarnation,
-				runtime?.lifecycle,
-				runtime?.registrations,
-			]);
+			JSON.stringify([runtime?.activationGeneration, runtime?.incarnation, runtime?.lifecycle, runtime?.registrations]);
 		const refresh = async (force = false): Promise<void> => {
 			const epoch = connectionEpoch;
 			const currentRevision = ++revision;
@@ -457,12 +419,7 @@ export class MarkedKatexSupport extends Disposable {
 			}
 			try {
 				const snapshot = await this.getSnapshot();
-				if (
-					store.isDisposed ||
-					epoch !== connectionEpoch ||
-					currentRevision !== revision ||
-					snapshot.generation < generation
-				) {
+				if (store.isDisposed || epoch !== connectionEpoch || currentRevision !== revision || snapshot.generation < generation) {
 					return;
 				}
 				generation = snapshot.generation;
@@ -480,9 +437,7 @@ export class MarkedKatexSupport extends Disposable {
 					didRender?.();
 					return;
 				}
-				const registration = runtime?.registrations.find(
-					entry => entry.kind === 'dataChannel' && entry.channelId === 'math.render.v2',
-				);
+				const registration = runtime?.registrations.find(entry => entry.kind === 'dataChannel' && entry.channelId === 'math.render.v2');
 				if (!runtime || runtime.lifecycle !== 'ready' || runtime.incarnation === undefined || !registration) {
 					return;
 				}
@@ -514,10 +469,7 @@ export class MarkedKatexSupport extends Disposable {
 							element.title =
 								result.diagnostic.code === 'invalidFormula'
 									? `${localize('markdown.math.invalidFormula', 'This formula could not be rendered.')}\n${result.diagnostic.message}`
-									: localize(
-											'markdown.math.outputLimit',
-											'This formula exceeds the rendering output limit.',
-										);
+									: localize('markdown.math.outputLimit', 'This formula exceeds the rendering output limit.');
 						}
 					}
 					didRender?.();

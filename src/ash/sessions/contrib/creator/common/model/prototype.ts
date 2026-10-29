@@ -5,20 +5,8 @@ import { getDesignResourceCatalog, type DesignResources } from './designResource
 import { localize } from '../../../../../nls.js';
 import { flattenDesignShapes, type DesignShape, type DesignShapeGeometry } from './document.js';
 
-export type PrototypeTrigger =
-	'click' | 'hover' | 'press' | 'drag' | 'enter' | 'leave' | 'down' | 'up' | 'key' | 'delay';
-export type PrototypeAction =
-	| 'navigate'
-	| 'back'
-	| 'overlay'
-	| 'swap'
-	| 'close'
-	| 'url'
-	| 'changeTo'
-	| 'setVariable'
-	| 'setMode'
-	| 'conditional'
-	| 'scrollTo';
+export type PrototypeTrigger = 'click' | 'hover' | 'press' | 'drag' | 'enter' | 'leave' | 'down' | 'up' | 'key' | 'delay';
+export type PrototypeAction = 'navigate' | 'back' | 'overlay' | 'swap' | 'close' | 'url' | 'changeTo' | 'setVariable' | 'setMode' | 'conditional' | 'scrollTo';
 export interface PrototypeTransition {
 	readonly type: 'instant' | 'dissolve' | 'smart' | 'moveIn' | 'moveOut' | 'push' | 'slideIn' | 'slideOut' | 'scroll';
 	readonly duration: number;
@@ -68,15 +56,9 @@ export const defaultPrototypeSpring: PrototypeSpring = Object.freeze({
 });
 /** All consumers traverse the same action tree, including conditional destinations. */
 export function flattenPrototypeActions(actions: readonly PrototypeStep[]): readonly PrototypeStep[] {
-	return actions.flatMap(action => [
-		action,
-		...(action.branches?.flatMap(branch => flattenPrototypeActions(branch.actions)) ?? []),
-	]);
+	return actions.flatMap(action => [action, ...(action.branches?.flatMap(branch => flattenPrototypeActions(branch.actions)) ?? [])]);
 }
-export function mapPrototypeActions(
-	actions: readonly PrototypeStep[],
-	map: (action: PrototypeStep) => PrototypeStep | undefined,
-): readonly PrototypeStep[] {
+export function mapPrototypeActions(actions: readonly PrototypeStep[], map: (action: PrototypeStep) => PrototypeStep | undefined): readonly PrototypeStep[] {
 	return actions.flatMap(action => {
 		const next = map(action);
 		return next
@@ -127,31 +109,13 @@ export function prototypeComponent(shapes: readonly DesignShape[], id: string): 
 		return;
 	};
 	const chain = shapes.map(path).find(Boolean);
-	return (
-		chain &&
-		[...chain]
-			.reverse()
-			.find(
-				(shape): shape is PrototypeFrame =>
-					shape.kind === 'frame' && (!!shape.instance || shape.component?.kind === 'main'),
-			)
-	);
+	return chain && [...chain].reverse().find((shape): shape is PrototypeFrame => shape.kind === 'frame' && (!!shape.instance || shape.component?.kind === 'main'));
 }
 export function prototypeVariants(shapes: readonly DesignShape[], id: string): readonly PrototypeFrame[] {
 	const component = prototypeComponent(shapes, id);
 	const mainId = component?.instance?.componentId ?? component?.id;
-	const set = flattenDesignShapes(shapes).find(
-		shape =>
-			shape.kind === 'frame' &&
-			shape.component?.kind === 'set' &&
-			shape.children.some(child => child.id === mainId),
-	);
-	return set?.kind === 'frame'
-		? set.children.filter(
-				(shape): shape is PrototypeFrame =>
-					shape.kind === 'frame' && shape.component?.kind === 'main' && shape.id !== mainId,
-			)
-		: [];
+	const set = flattenDesignShapes(shapes).find(shape => shape.kind === 'frame' && shape.component?.kind === 'set' && shape.children.some(child => child.id === mainId));
+	return set?.kind === 'frame' ? set.children.filter((shape): shape is PrototypeFrame => shape.kind === 'frame' && shape.component?.kind === 'main' && shape.id !== mainId) : [];
 }
 /** Scroll actions stay within one screen, or within their reusable component definition. */
 export function prototypeScrollScope(shapes: readonly DesignShape[], id: string): PrototypeFrame | undefined {
@@ -170,28 +134,13 @@ export function isPrototypeUrl(value: string): boolean {
 }
 
 /** File boundary: legacy single actions are migrated once; the model only owns action arrays. */
-export function parsePrototypeProperties(
-	value: Record<string, unknown>,
-): Pick<
-	DesignShapeGeometry,
-	'interactions' | 'flowStart' | 'overflowDirection' | 'scrollPosition' | 'layoutPositioning'
-> {
+export function parsePrototypeProperties(value: Record<string, unknown>): Pick<DesignShapeGeometry, 'interactions' | 'flowStart' | 'overflowDirection' | 'scrollPosition' | 'layoutPositioning'> {
 	const invalid = (): never => {
-		throw new TypeError(
-			localize('sessions.design.prototype.invalid', 'Invalid prototype interaction or flow starting point.'),
-		);
+		throw new TypeError(localize('sessions.design.prototype.invalid', 'Invalid prototype interaction or flow starting point.'));
 	};
-	const only = (value: Record<string, unknown>, keys: readonly string[]): boolean =>
-		Object.keys(value).every(key => keys.includes(key));
-	const finite = (value: unknown, min: number, max: number): boolean =>
-		typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
-	if (
-		value.flowStart !== undefined &&
-		(value.kind !== 'frame' ||
-			typeof value.flowStart !== 'string' ||
-			!value.flowStart.trim() ||
-			value.flowStart.length > 1024)
-	) {
+	const only = (value: Record<string, unknown>, keys: readonly string[]): boolean => Object.keys(value).every(key => keys.includes(key));
+	const finite = (value: unknown, min: number, max: number): boolean => typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+	if (value.flowStart !== undefined && (value.kind !== 'frame' || typeof value.flowStart !== 'string' || !value.flowStart.trim() || value.flowStart.length > 1024)) {
 		invalid();
 	}
 	for (const [key, options] of [
@@ -215,66 +164,22 @@ export function parsePrototypeProperties(
 			if (
 				++actionCount > 1000 ||
 				!isRecord(raw) ||
-				!only(raw, [
-					'action',
-					'destination',
-					'url',
-					'transition',
-					'overlay',
-					'variableId',
-					'value',
-					'collectionId',
-					'modeId',
-					'branches',
-					'resetScroll',
-				]) ||
-				![
-					'navigate',
-					'back',
-					'overlay',
-					'swap',
-					'close',
-					'url',
-					'changeTo',
-					'setVariable',
-					'setMode',
-					'conditional',
-					'scrollTo',
-				].includes(String(raw.action))
+				!only(raw, ['action', 'destination', 'url', 'transition', 'overlay', 'variableId', 'value', 'collectionId', 'modeId', 'branches', 'resetScroll']) ||
+				!['navigate', 'back', 'overlay', 'swap', 'close', 'url', 'changeTo', 'setVariable', 'setMode', 'conditional', 'scrollTo'].includes(String(raw.action))
 			) {
 				return invalid();
 			}
 			const { transition, overlay } = raw;
-			if (
-				(raw.destination !== undefined && !isUuid(raw.destination)) ||
-				(['navigate', 'overlay', 'swap', 'changeTo', 'scrollTo'].includes(String(raw.action)) &&
-					!isUuid(raw.destination))
-			) {
+			if ((raw.destination !== undefined && !isUuid(raw.destination)) || (['navigate', 'overlay', 'swap', 'changeTo', 'scrollTo'].includes(String(raw.action)) && !isUuid(raw.destination))) {
 				invalid();
 			}
-			if (
-				(raw.url !== undefined &&
-					(typeof raw.url !== 'string' ||
-						raw.url.length > 2048 ||
-						(raw.url !== '' && !isPrototypeUrl(raw.url)))) ||
-				(raw.action === 'url' && raw.url === undefined)
-			) {
+			if ((raw.url !== undefined && (typeof raw.url !== 'string' || raw.url.length > 2048 || (raw.url !== '' && !isPrototypeUrl(raw.url)))) || (raw.action === 'url' && raw.url === undefined)) {
 				invalid();
 			}
 			if (
 				!isRecord(transition) ||
 				!only(transition, ['type', 'duration', 'easing', 'direction', 'spring']) ||
-				![
-					'instant',
-					'dissolve',
-					'smart',
-					'moveIn',
-					'moveOut',
-					'push',
-					'slideIn',
-					'slideOut',
-					'scroll',
-				].includes(String(transition.type)) ||
+				!['instant', 'dissolve', 'smart', 'moveIn', 'moveOut', 'push', 'slideIn', 'slideOut', 'scroll'].includes(String(transition.type)) ||
 				!finite(transition.duration, 1, transition.easing === 'spring' ? 60000 : 10000) ||
 				!['linear', 'easeIn', 'easeOut', 'easeInOut', 'spring'].includes(String(transition.easing)) ||
 				!['left', 'right', 'top', 'bottom'].includes(String(transition.direction))
@@ -282,12 +187,8 @@ export function parsePrototypeProperties(
 				return invalid();
 			}
 			if (
-				(raw.resetScroll !== undefined &&
-					(typeof raw.resetScroll !== 'boolean' ||
-						!['navigate', 'overlay', 'swap'].includes(String(raw.action)))) ||
-				(raw.action === 'scrollTo'
-					? !['instant', 'scroll'].includes(String(transition.type))
-					: transition.type === 'scroll')
+				(raw.resetScroll !== undefined && (typeof raw.resetScroll !== 'boolean' || !['navigate', 'overlay', 'swap'].includes(String(raw.action)))) ||
+				(raw.action === 'scrollTo' ? !['instant', 'scroll'].includes(String(transition.type)) : transition.type === 'scroll')
 			) {
 				invalid();
 			}
@@ -308,50 +209,30 @@ export function parsePrototypeProperties(
 				overlay !== undefined &&
 				(!isRecord(overlay) ||
 					!only(overlay, ['position', 'closeOutside', 'background']) ||
-					!['center', 'topLeft', 'topRight', 'bottomLeft', 'bottomRight'].includes(
-						String(overlay.position),
-					) ||
+					!['center', 'topLeft', 'topRight', 'bottomLeft', 'bottomRight'].includes(String(overlay.position)) ||
 					typeof overlay.closeOutside !== 'boolean' ||
 					typeof overlay.background !== 'boolean')
 			) {
 				invalid();
 			}
-			if (
-				(raw.variableId !== undefined && !isUuid(raw.variableId)) ||
-				(raw.collectionId !== undefined && !isUuid(raw.collectionId)) ||
-				(raw.modeId !== undefined && !isUuid(raw.modeId))
-			) {
+			if ((raw.variableId !== undefined && !isUuid(raw.variableId)) || (raw.collectionId !== undefined && !isUuid(raw.collectionId)) || (raw.modeId !== undefined && !isUuid(raw.modeId))) {
 				invalid();
 			}
-			if (
-				(raw.action === 'setVariable' && (!isUuid(raw.variableId) || raw.value === undefined)) ||
-				(raw.action === 'setMode' && (!isUuid(raw.collectionId) || !isUuid(raw.modeId)))
-			) {
+			if ((raw.action === 'setVariable' && (!isUuid(raw.variableId) || raw.value === undefined)) || (raw.action === 'setMode' && (!isUuid(raw.collectionId) || !isUuid(raw.modeId)))) {
 				invalid();
 			}
 			const expression = raw.value === undefined ? undefined : readPrototypeExpression(raw.value);
 			let branches: PrototypeStep['branches'];
 			if (raw.branches !== undefined) {
-				if (
-					raw.action !== 'conditional' ||
-					!Array.isArray(raw.branches) ||
-					!raw.branches.length ||
-					raw.branches.length > 100
-				) {
+				if (raw.action !== 'conditional' || !Array.isArray(raw.branches) || !raw.branches.length || raw.branches.length > 100) {
 					return invalid();
 				}
 				branches = raw.branches.map((branch, index, all) => {
-					if (
-						!isRecord(branch) ||
-						!only(branch, ['condition', 'actions']) ||
-						(branch.condition === undefined && (index === 0 || index !== all.length - 1))
-					) {
+					if (!isRecord(branch) || !only(branch, ['condition', 'actions']) || (branch.condition === undefined && (index === 0 || index !== all.length - 1))) {
 						return invalid();
 					}
 					return {
-						...(branch.condition === undefined
-							? {}
-							: { condition: readPrototypeExpression(branch.condition) }),
+						...(branch.condition === undefined ? {} : { condition: readPrototypeExpression(branch.condition) }),
 						actions: parseActions(branch.actions, depth + 1),
 					};
 				});
@@ -372,43 +253,17 @@ export function parsePrototypeProperties(
 		}
 		const ids = new Set<string>();
 		interactions = value.interactions.map(raw => {
-			if (
-				!isRecord(raw) ||
-				!only(raw, [
-					'id',
-					'trigger',
-					'actions',
-					'action',
-					'destination',
-					'delay',
-					'key',
-					'url',
-					'transition',
-					'overlay',
-				])
-			) {
+			if (!isRecord(raw) || !only(raw, ['id', 'trigger', 'actions', 'action', 'destination', 'delay', 'key', 'url', 'transition', 'overlay'])) {
 				return invalid();
 			}
-			if (
-				!isUuid(raw.id) ||
-				ids.has(raw.id) ||
-				!['click', 'hover', 'press', 'drag', 'enter', 'leave', 'down', 'up', 'key', 'delay'].includes(
-					String(raw.trigger),
-				)
-			) {
+			if (!isUuid(raw.id) || ids.has(raw.id) || !['click', 'hover', 'press', 'drag', 'enter', 'leave', 'down', 'up', 'key', 'delay'].includes(String(raw.trigger))) {
 				return invalid();
 			}
 			ids.add(raw.id);
-			if (
-				(raw.delay !== undefined && !finite(raw.delay, 1, 60000)) ||
-				(raw.trigger === 'delay' && raw.delay === undefined)
-			) {
+			if ((raw.delay !== undefined && !finite(raw.delay, 1, 60000)) || (raw.trigger === 'delay' && raw.delay === undefined)) {
 				invalid();
 			}
-			if (
-				(raw.key !== undefined && (typeof raw.key !== 'string' || !raw.key || raw.key.length > 64)) ||
-				(raw.trigger === 'key' && raw.key === undefined)
-			) {
+			if ((raw.key !== undefined && (typeof raw.key !== 'string' || !raw.key || raw.key.length > 64)) || (raw.trigger === 'key' && raw.key === undefined)) {
 				invalid();
 			}
 			const { id, trigger, delay, key, actions, ...legacy } = raw;
@@ -430,11 +285,7 @@ export function parsePrototypeProperties(
 		});
 	}
 	return {
-		...Object.fromEntries(
-			['overflowDirection', 'scrollPosition', 'layoutPositioning']
-				.filter(key => value[key] !== undefined)
-				.map(key => [key, value[key]]),
-		),
+		...Object.fromEntries(['overflowDirection', 'scrollPosition', 'layoutPositioning'].filter(key => value[key] !== undefined).map(key => [key, value[key]])),
 		...(interactions ? { interactions } : {}),
 		...(value.flowStart === undefined ? {} : { flowStart: value.flowStart as string }),
 	};
@@ -446,12 +297,7 @@ export function validatePrototypeExpressions(shapes: readonly DesignShape[], res
 		for (const interaction of shape.interactions ?? []) {
 			for (const action of flattenPrototypeActions(interaction.actions)) {
 				const invalid = (): never => {
-					throw new TypeError(
-						localize(
-							'sessions.design.prototype.invalidExpression',
-							'Enter a valid expression with compatible values and operators.',
-						),
-					);
+					throw new TypeError(localize('sessions.design.prototype.invalidExpression', 'Enter a valid expression with compatible values and operators.'));
 				};
 				if (action.action === 'setVariable') {
 					const type = prototypeExpressionType(action.value!, catalog.variables),
@@ -460,12 +306,7 @@ export function validatePrototypeExpressions(shapes: readonly DesignShape[], res
 						type &&
 						variable &&
 						type !== variable.type &&
-						!(
-							variable.type === 'color' &&
-							type === 'string' &&
-							action.value!.kind === 'literal' &&
-							/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(String(action.value!.value))
-						)
+						!(variable.type === 'color' && type === 'string' && action.value!.kind === 'literal' && /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(String(action.value!.value)))
 					) {
 						invalid();
 					}
@@ -484,10 +325,7 @@ export function validatePrototypeExpressions(shapes: readonly DesignShape[], res
 }
 
 /** Deleting a target removes its wires in the same undo entry. Missing library targets stay inert. */
-export function reconcilePrototypeLinks(
-	shapes: readonly DesignShape[],
-	previous: readonly DesignShape[],
-): readonly DesignShape[] {
+export function reconcilePrototypeLinks(shapes: readonly DesignShape[], previous: readonly DesignShape[]): readonly DesignShape[] {
 	const roots = new Set(prototypeFrames(shapes).map(shape => shape.id));
 	const targets = new Set([
 		...roots,
@@ -497,12 +335,7 @@ export function reconcilePrototypeLinks(
 	]);
 	const removed = new Set(
 		flattenDesignShapes(previous)
-			.filter(
-				shape =>
-					shape.kind === 'frame' &&
-					(!shape.component || shape.component.kind === 'main') &&
-					!targets.has(shape.id),
-			)
+			.filter(shape => shape.kind === 'frame' && (!shape.component || shape.component.kind === 'main') && !targets.has(shape.id))
 			.map(shape => shape.id),
 	);
 	const currentIds = new Set(flattenDesignShapes(shapes).map(shape => shape.id));
@@ -515,9 +348,7 @@ export function reconcilePrototypeLinks(
 		let result = shape;
 		if (shape.interactions) {
 			const scope = prototypeScrollScope(shapes, shape.id),
-				allowed = new Set(
-					scope ? flattenDesignShapes([scope]).flatMap(shape => [shape.id, shape.sourceId]) : [],
-				);
+				allowed = new Set(scope ? flattenDesignShapes([scope]).flatMap(shape => [shape.id, shape.sourceId]) : []);
 			result = {
 				...result,
 				interactions: shape.interactions
@@ -531,11 +362,7 @@ export function reconcilePrototypeLinks(
 								return;
 							}
 							// Reparenting a target to another screen also removes the wire in this history entry.
-							return action.action === 'scrollTo' &&
-								currentIds.has(action.destination) &&
-								!allowed.has(action.destination)
-								? undefined
-								: action;
+							return action.action === 'scrollTo' && currentIds.has(action.destination) && !allowed.has(action.destination) ? undefined : action;
 						}),
 					}))
 					.filter(interaction => interaction.actions.length),
@@ -545,9 +372,7 @@ export function reconcilePrototypeLinks(
 			const { flowStart: _flowStart, ...rest } = result;
 			result = rest;
 		}
-		return result.kind === 'frame' || result.kind === 'group'
-			? { ...result, children: result.children.map(update) }
-			: result;
+		return result.kind === 'frame' || result.kind === 'group' ? { ...result, children: result.children.map(update) } : result;
 	};
 	return shapes.map(update);
 }

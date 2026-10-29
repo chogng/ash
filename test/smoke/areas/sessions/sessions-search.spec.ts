@@ -10,10 +10,7 @@ async function installHistory(application: ElectronApplication): Promise<void> {
 			const path = process.getBuiltinModule('path');
 			const home = path.join(process.env.HOME!, '.codex');
 			await fs.mkdir(home, { recursive: true });
-			await fs.writeFile(
-				path.join(home, 'auth.json'),
-				JSON.stringify({ auth_mode: 'chatgpt', tokens: { access_token: 'synthetic-search-login' } }),
-			);
+			await fs.writeFile(path.join(home, 'auth.json'), JSON.stringify({ auth_mode: 'chatgpt', tokens: { access_token: 'synthetic-search-login' } }));
 			const installed = new WeakSet<Electron.Session>();
 			const install = (storage: Electron.Session) => {
 				if (installed.has(storage)) {
@@ -28,9 +25,7 @@ async function installHistory(application: ElectronApplication): Promise<void> {
 						}),
 				);
 				storage.fetch = async input => {
-					const url = new URL(
-						typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
-					);
+					const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
 					if (url.hostname !== 'chatgpt.com') {
 						throw new Error('Unexpected search fixture origin');
 					}
@@ -84,10 +79,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		test(
 			'finds native conversations through Search and preserves sidebar groups',
 			{ tag: ['@electron-ui', '@electron-app-server'] },
-			async (
-				{ application: initialApplication, workbench: initialWorkbench, target, restartWorkbench },
-				testInfo,
-			) => {
+			async ({ application: initialApplication, workbench: initialWorkbench, target, restartWorkbench }, testInfo) => {
 				let application = initialApplication as ElectronApplication;
 				let workbench = initialWorkbench;
 				if (locale === 'zh-CN') {
@@ -131,17 +123,11 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					await expect(button).toHaveCSS('border-radius', '8px');
 					await expect(button).toHaveCSS('font-size', '14px');
 				}
-				await categories
-					.getByRole('button', { name: locale === 'en' ? 'Sessions' : '会话', exact: true })
-					.click();
-				await expect(
-					categories.getByRole('button', { name: locale === 'en' ? 'Sessions' : '会话', exact: true }),
-				).toHaveAttribute('aria-pressed', 'true');
+				await categories.getByRole('button', { name: locale === 'en' ? 'Sessions' : '会话', exact: true }).click();
+				await expect(categories.getByRole('button', { name: locale === 'en' ? 'Sessions' : '会话', exact: true })).toHaveAttribute('aria-pressed', 'true');
 				await expect(dialog.getByRole('option')).toContainText('First native history');
 				await expect(recent).toHaveAttribute('aria-expanded', 'false');
-				await categories.evaluate(element =>
-					Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished)),
-				);
+				await categories.evaluate(element => Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished)));
 				await testInfo.attach(`unified-conversation-search-${locale}`, {
 					body: await page.screenshot(),
 					contentType: 'image/png',
@@ -156,11 +142,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await input.press('Enter');
 				await expect(dialog).toBeHidden();
 				await expect(page.locator('.ash-chatgpt-widget')).toContainText('History one answer');
-				await expect(
-					page
-						.locator('.ash-chatgpt-widget')
-						.getByRole('textbox', { name: locale === 'en' ? 'Ask ChatGPT' : '询问 ChatGPT', exact: true }),
-				).toBeFocused();
+				await expect(page.locator('.ash-chatgpt-widget').getByRole('textbox', { name: locale === 'en' ? 'Ask ChatGPT' : '询问 ChatGPT', exact: true })).toBeFocused();
 				await expect(recent).toHaveAttribute('aria-expanded', 'false');
 			},
 		);

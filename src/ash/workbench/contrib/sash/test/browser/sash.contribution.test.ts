@@ -14,24 +14,22 @@ for (const [name, value] of Object.entries({
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
 	PointerEvent: browserEnvironment.window.MouseEvent,
 })) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
+	Object.defineProperty(globalThis, name, {
+		configurable: true,
+		value,
+	});
 }
 
 const { InstantiationService } = await import('../../../../../platform/instantiation/common/instantiationService.js');
 const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
-const { ConfigurationRegistry, Extensions: ConfigurationExtensions } =
-	await import('../../../../../platform/configuration/common/configurationRegistry.js');
+const { ConfigurationRegistry, Extensions: ConfigurationExtensions } = await import('../../../../../platform/configuration/common/configurationRegistry.js');
 const { ILayoutService } = await import('../../../../../platform/layout/browser/layoutService.js');
 const { Registry } = await import('../../../../../platform/registry/common/platform.js');
-const { WorkbenchContributionsRegistry, WorkbenchPhase } =
-	await import('../../../../../workbench/common/contributions.js');
+const { WorkbenchContributionsRegistry, WorkbenchPhase } = await import('../../../../../workbench/common/contributions.js');
 const { SashConfiguration } = await import('../../../../../workbench/contrib/sash/common/sash.js');
 const { SashSettingsController } = await import('../../../../../workbench/contrib/sash/browser/sash.js');
-const { TestConfigurationService: WorkbenchConfigurationService } =
-	await import('../../../../services/configuration/test/common/testServices.js');
-const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(
-	ConfigurationExtensions.Configuration,
-);
+const { TestConfigurationService: WorkbenchConfigurationService } = await import('../../../../services/configuration/test/common/testServices.js');
+const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
 await import('../../../../../workbench/contrib/sash/browser/sash.contribution.js');
 
 type LayoutService = import('../../../../../platform/layout/browser/layoutService.js').ILayoutService;
@@ -94,12 +92,7 @@ test('Sash contribution starts after restoration', () => {
 	dom.window.close();
 });
 
-function assertSashStyles(
-	sash: HTMLElement,
-	dragAreaSize: string,
-	hoverFeedbackSize: string,
-	hoverDelay: string,
-): void {
+function assertSashStyles(sash: HTMLElement, dragAreaSize: string, hoverFeedbackSize: string, hoverDelay: string): void {
 	const targetWindow = sash.ownerDocument.defaultView;
 	assert.ok(targetWindow);
 	const style = targetWindow.getComputedStyle(sash);

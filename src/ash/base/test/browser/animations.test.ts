@@ -1,13 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import {
-	animateElement,
-	bounceElement,
-	isReducedMotion,
-	UI_ANIMATION_DURATION,
-	UI_ANIMATION_EASING,
-} from '../../browser/ui/animations/animations.js';
+import { animateElement, bounceElement, isReducedMotion, UI_ANIMATION_DURATION, UI_ANIMATION_EASING } from '../../browser/ui/animations/animations.js';
 import { h } from '../../browser/dom.js';
 
 test('UI animations use shared timing and honor reduced motion', () => {
@@ -33,7 +27,12 @@ test('UI animations use shared timing and honor reduced motion', () => {
 		iterations: 1,
 	});
 
-	assert.ok(bounceElement(element, { scale: [1, 1.05, 1], duration: UI_ANIMATION_DURATION.fast }));
+	assert.ok(
+		bounceElement(element, {
+			scale: [1, 1.05, 1],
+			duration: UI_ANIMATION_DURATION.fast,
+		}),
+	);
 	assert.deepEqual(calls[1]?.keyframes, [
 		{ offset: 0, transform: 'scale(1)' },
 		{ offset: 0.5, transform: 'scale(1.05)' },

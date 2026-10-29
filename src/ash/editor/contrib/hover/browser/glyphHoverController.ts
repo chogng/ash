@@ -32,12 +32,7 @@ export class GlyphHoverController extends Disposable {
 	private schedule(event: IEditorMouseEvent): void {
 		const target = event.target;
 		const options = this.editor.getOption(EditorOption.hover);
-		const modifier =
-			this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey'
-				? isMacintosh
-					? event.event.metaKey
-					: event.event.ctrlKey
-				: event.event.altKey;
+		const modifier = this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey' ? (isMacintosh ? event.event.metaKey : event.event.ctrlKey) : event.event.altKey;
 		if (
 			target.type !== MouseTargetType.GUTTER_GLYPH_MARGIN ||
 			target.detail.isAfterLines ||
@@ -49,11 +44,7 @@ export class GlyphHoverController extends Disposable {
 			return;
 		}
 		const previous = this.pending?.target;
-		if (
-			previous?.type === target.type &&
-			previous.position.lineNumber === target.position.lineNumber &&
-			previous.detail.glyphMarginLane === target.detail.glyphMarginLane
-		) {
+		if (previous?.type === target.type && previous.position.lineNumber === target.position.lineNumber && previous.detail.glyphMarginLane === target.detail.glyphMarginLane) {
 			this.pending = event;
 			return;
 		}
@@ -72,13 +63,11 @@ export class GlyphHoverController extends Disposable {
 		const cell = element?.closest<HTMLElement>('.stanza-editor-glyph-margin-decoration');
 		if (!cell || !root.contains(cell)) return;
 		const lane = Number(cell.dataset.glyphMarginLane) as GlyphMarginLane;
-		const messages = (this.editor.getLineDecorations(event.target.position.lineNumber) ?? []).flatMap(
-			decoration => {
-				if ((decoration.options.glyphMargin?.position ?? GlyphMarginLane.Center) !== lane) return [];
-				const message = decoration.options.glyphMarginHoverMessage;
-				return (Array.isArray(message) ? message : message ? [message] : []).map(value => value.value);
-			},
-		);
+		const messages = (this.editor.getLineDecorations(event.target.position.lineNumber) ?? []).flatMap(decoration => {
+			if ((decoration.options.glyphMargin?.position ?? GlyphMarginLane.Center) !== lane) return [];
+			const message = decoration.options.glyphMarginHoverMessage;
+			return (Array.isArray(message) ? message : message ? [message] : []).map(value => value.value);
+		});
 		if (!messages.length) return;
 		this.hover.value = this.hoverService.showHover({
 			target: cell,

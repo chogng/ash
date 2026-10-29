@@ -105,14 +105,7 @@ export const OPEN_SAVED_LOGS_COMMAND_ID = 'workbench.action.output.openSavedLogs
 
 export const OUTPUT_MODE_ID = 'Log';
 export const LOG_MODE_ID = 'log';
-export const OutputSeverities: readonly OutputEntrySeverity[] = Object.freeze([
-	'trace',
-	'debug',
-	'information',
-	'warning',
-	'error',
-	'log',
-]);
+export const OutputSeverities: readonly OutputEntrySeverity[] = Object.freeze(['trace', 'debug', 'information', 'warning', 'error', 'log']);
 
 /** Structured producer metadata drives view filtering without changing shared text. */
 export interface IOutputViewFilters {

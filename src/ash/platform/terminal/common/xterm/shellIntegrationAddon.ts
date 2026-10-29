@@ -1,23 +1,12 @@
 import { localize } from '../../../../nls.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import {
-	ITerminalLogService,
-	ShellIntegrationStatus,
-	type IShellIntegration,
-	type ITerminalCommandScreen,
-	type TerminalShellIntegrationEvent,
-	type TerminalShellType,
-} from '../terminal.js';
+import { ITerminalLogService, ShellIntegrationStatus, type IShellIntegration, type ITerminalCommandScreen, type TerminalShellIntegrationEvent, type TerminalShellType } from '../terminal.js';
 import { BufferMarkCapability } from '../capabilities/bufferMarkCapability.js';
 import { ShellEnvDetectionCapability } from '../capabilities/shellEnvDetectionCapability.js';
 import { CommandDetectionCapability } from '../capabilities/commandDetectionCapability.js';
 import { PartialCommandDetectionCapability } from '../capabilities/partialCommandDetectionCapability.js';
-import {
-	TerminalCapability,
-	type ITerminalCapabilityImplMap,
-	type ISerializedCommandDetectionCapability,
-} from '../capabilities/capabilities.js';
+import { TerminalCapability, type ITerminalCapabilityImplMap, type ISerializedCommandDetectionCapability } from '../capabilities/capabilities.js';
 import { TerminalCapabilityStore } from '../capabilities/terminalCapabilityStore.js';
 
 /** Adapts decoded, committed shell boundaries to screen models. Nonce parsing stays with Rust. */
@@ -59,10 +48,7 @@ export class ShellIntegrationAddon extends Disposable implements IShellIntegrati
 		this.terminal = terminal;
 		this.add(TerminalCapability.BufferMarkDetection, new BufferMarkCapability(terminal));
 		if (!terminal.options?.disableStdin) {
-			this.add(
-				TerminalCapability.PartialCommandDetection,
-				new PartialCommandDetectionCapability(terminal, this.onDidExecuteText),
-			);
+			this.add(TerminalCapability.PartialCommandDetection, new PartialCommandDetectionCapability(terminal, this.onDidExecuteText));
 		}
 	}
 
@@ -102,13 +88,7 @@ export class ShellIntegrationAddon extends Disposable implements IShellIntegrati
 		if (event.type === 'promptType') {
 			return;
 		}
-		if (
-			event.type === 'environment' ||
-			event.type === 'environmentStart' ||
-			event.type === 'environmentEntry' ||
-			event.type === 'environmentDelete' ||
-			event.type === 'environmentEnd'
-		) {
+		if (event.type === 'environment' || event.type === 'environmentStart' || event.type === 'environmentEntry' || event.type === 'environmentDelete' || event.type === 'environmentEnd') {
 			if (!this.environment) {
 				this.environment = this.add(TerminalCapability.ShellEnvDetection, new ShellEnvDetectionCapability());
 			}
@@ -194,20 +174,14 @@ export class ShellIntegrationAddon extends Disposable implements IShellIntegrati
 
 	private ensureCommandDetection(): CommandDetectionCapability {
 		if (!this.command) {
-			this.command = this.add(
-				TerminalCapability.CommandDetection,
-				new CommandDetectionCapability(this.terminal!, this.log),
-			);
+			this.command = this.add(TerminalCapability.CommandDetection, new CommandDetectionCapability(this.terminal!, this.log));
 			this.command.setIsWindowsPty(this.windowsPty);
 			this.command.promptInputModel.setShellType(this.shellType);
 		}
 		return this.command;
 	}
 
-	private add<T extends TerminalCapability, M extends ITerminalCapabilityImplMap[T] & IDisposable>(
-		id: T,
-		model: M,
-	): M {
+	private add<T extends TerminalCapability, M extends ITerminalCapabilityImplMap[T] & IDisposable>(id: T, model: M): M {
 		this._register(model);
 		this.capabilities.add(id, model);
 		this._register(

@@ -29,8 +29,7 @@ registerSingleton(IChecksOperationService, ChecksOperationService, Instantiation
 registerEditorPane({
 	id: SessionChangesEditor.ID,
 	name: 'Changes',
-	canOpen: input =>
-		input.resource.scheme === 'ash-session-changes' ? EditorPaneMatch.Default : EditorPaneMatch.None,
+	canOpen: input => (input.resource.scheme === 'ash-session-changes' ? EditorPaneMatch.Default : EditorPaneMatch.None),
 	create: options => options.instantiationService!.createInstance(SessionChangesEditor, options),
 });
 

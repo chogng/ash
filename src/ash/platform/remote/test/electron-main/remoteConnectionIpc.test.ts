@@ -41,16 +41,9 @@ test('Remote connection IPC exposes only credential-free canonical catalog opera
 	};
 	const routes = remoteConnectionIpcRoutes(service);
 
-	assert.deepEqual(
-		await route(routes, REMOTE_CONNECTION_LIST_CHANNEL).invoke(
-			route(routes, REMOTE_CONNECTION_LIST_CHANNEL).validate(undefined),
-		),
-		[build],
-	);
+	assert.deepEqual(await route(routes, REMOTE_CONNECTION_LIST_CHANNEL).invoke(route(routes, REMOTE_CONNECTION_LIST_CHANNEL).validate(undefined)), [build]);
 	const save = route(routes, REMOTE_CONNECTION_SAVE_CHANNEL);
-	await save.invoke(
-		save.validate({ connection: { name: ' BUILD ', host: 'BUILD-LINUX', workspace: '/srv/project' } }),
-	);
+	await save.invoke(save.validate({ connection: { name: ' BUILD ', host: 'BUILD-LINUX', workspace: '/srv/project' } }));
 	const update = route(routes, REMOTE_CONNECTION_UPDATE_CHANNEL);
 	await update.invoke(
 		update.validate({
@@ -84,19 +77,9 @@ test('Remote connection IPC rejects credentials, extra fields, invalid paths, an
 			}),
 		/exactly required keys/,
 	);
-	assert.throws(
-		() => save.validate({ connection: { name: 'build', host: 'user@host', workspace: '/srv/project' } }),
-		/without credentials/,
-	);
-	assert.throws(
-		() => save.validate({ connection: { name: 'build', host: 'build', workspace: '/srv/project/' } }),
-		/canonical/,
-	);
-	assert.throws(
-		() =>
-			save.validate({ connection: { name: 'build', host: 'build', workspace: '/srv/project' }, mode: 'replace' }),
-		/exactly required keys/,
-	);
+	assert.throws(() => save.validate({ connection: { name: 'build', host: 'user@host', workspace: '/srv/project' } }), /without credentials/);
+	assert.throws(() => save.validate({ connection: { name: 'build', host: 'build', workspace: '/srv/project/' } }), /canonical/);
+	assert.throws(() => save.validate({ connection: { name: 'build', host: 'build', workspace: '/srv/project' }, mode: 'replace' }), /exactly required keys/);
 	assert.throws(
 		() =>
 			update.validate({
@@ -146,14 +129,8 @@ test('Remote connection IPC pins the confirmation to the exact canonical target'
 	);
 	await connect.invoke(connect.validate({ name: 'build', expectedConnection: target }));
 	assert.deepEqual(expected, target);
-	assert.throws(
-		() => connect.validate({ name: 'build', expectedConnection: { ...target, name: 'other' } }),
-		/same saved target/,
-	);
-	assert.throws(
-		() => connect.validate({ name: 'build', expectedConnection: { ...target, identityFile: '/tmp/key' } }),
-		/exactly required keys/,
-	);
+	assert.throws(() => connect.validate({ name: 'build', expectedConnection: { ...target, name: 'other' } }), /same saved target/);
+	assert.throws(() => connect.validate({ name: 'build', expectedConnection: { ...target, identityFile: '/tmp/key' } }), /exactly required keys/);
 });
 
 const leaseA = '00000000-0000-0000-0000-000000000001';
@@ -175,10 +152,7 @@ test('Agent host leases retain independent carriers and close only the selected 
 			closed.push(id);
 		});
 	});
-	await Promise.all([
-		invokeLease(pool, REMOTE_AGENT_HOST_OPEN_CHANNEL, { id: leaseA, connection: hostA }),
-		invokeLease(pool, REMOTE_AGENT_HOST_OPEN_CHANNEL, { id: leaseB, connection: hostB }),
-	]);
+	await Promise.all([invokeLease(pool, REMOTE_AGENT_HOST_OPEN_CHANNEL, { id: leaseA, connection: hostA }), invokeLease(pool, REMOTE_AGENT_HOST_OPEN_CHANNEL, { id: leaseB, connection: hostB })]);
 	assert.deepEqual(opened, [
 		[leaseA, hostA],
 		[leaseB, hostB],
@@ -212,15 +186,12 @@ test('Agent host navigation retires setup and does not retire a reused successor
 	let reads = 0;
 	let created = 0;
 	let closed = 0;
-	using pool = new RemoteAgentHostConnectionPool(
-		{ list: () => (++reads === 1 ? catalog.p : Promise.resolve([hostA])) },
-		() => {
-			created++;
-			return toDisposable(() => {
-				closed++;
-			});
-		},
-	);
+	using pool = new RemoteAgentHostConnectionPool({ list: () => (++reads === 1 ? catalog.p : Promise.resolve([hostA])) }, () => {
+		created++;
+		return toDisposable(() => {
+			closed++;
+		});
+	});
 	const pending = invokeLease(pool, REMOTE_AGENT_HOST_OPEN_CHANNEL, {
 		id: leaseA,
 		connection: hostA,
@@ -268,14 +239,8 @@ test('Agent host leases reject changed targets, duplicate IDs and arbitrary tran
 	);
 	assert.equal(created, 0);
 	await invokeLease(pool, REMOTE_AGENT_HOST_OPEN_CHANNEL, { id: leaseA, connection: hostA });
-	await assert.rejects(
-		invokeLease(pool, REMOTE_AGENT_HOST_OPEN_CHANNEL, { id: leaseA, connection: hostA }) as Promise<void>,
-		/already exists/,
-	);
-	assert.throws(
-		() => invokeLease(pool, REMOTE_AGENT_HOST_OPEN_CHANNEL, { id: '../local', connection: hostA }),
-		/Invalid Agent host/,
-	);
+	await assert.rejects(invokeLease(pool, REMOTE_AGENT_HOST_OPEN_CHANNEL, { id: leaseA, connection: hostA }) as Promise<void>, /already exists/);
+	assert.throws(() => invokeLease(pool, REMOTE_AGENT_HOST_OPEN_CHANNEL, { id: '../local', connection: hostA }), /Invalid Agent host/);
 	assert.throws(
 		() =>
 			invokeLease(pool, REMOTE_AGENT_HOST_OPEN_CHANNEL, {
@@ -299,12 +264,6 @@ test('Agent host leases are owned by their requesting window and release on disp
 	assert.equal(closed, 0);
 	first.dispose();
 	assert.equal(closed, 1);
-	assert.throws(
-		() => first.routes()[0].validate({ id: leaseA, connection: { ...hostA, host: 'user@host' } }),
-		/without credentials/,
-	);
-	await assert.rejects(
-		invokeLease(first, REMOTE_AGENT_HOST_OPEN_CHANNEL, { id: leaseB, connection: hostA }) as Promise<void>,
-		/disposed/,
-	);
+	assert.throws(() => first.routes()[0].validate({ id: leaseA, connection: { ...hostA, host: 'user@host' } }), /without credentials/);
+	await assert.rejects(invokeLease(first, REMOTE_AGENT_HOST_OPEN_CHANNEL, { id: leaseB, connection: hostA }) as Promise<void>, /disposed/);
 });

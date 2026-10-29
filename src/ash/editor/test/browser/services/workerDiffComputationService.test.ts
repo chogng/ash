@@ -55,10 +55,7 @@ suite('Frontend diff Worker', () => {
 		failures.fire(new Error('Preparation failed'));
 		using original = new TextModel('old');
 		using modified = new TextModel('new');
-		assert.equal(
-			(await provider.computeDiff(original, modified, options, CancellationToken.None)).changes.length,
-			1,
-		);
+		assert.equal((await provider.computeDiff(original, modified, options, CancellationToken.None)).changes.length, 1);
 		assert.equal(ports.length, 2);
 		assert.equal(ports[0]!.isDisposed, true);
 	});
@@ -80,10 +77,7 @@ suite('Frontend diff Worker', () => {
 		failures.fire(new Error('Worker crashed'));
 		await rejected;
 		assert.equal(ports[0]!.isDisposed, true);
-		assert.equal(
-			(await provider.computeDiff(original, modified, options, CancellationToken.None)).changes.length,
-			1,
-		);
+		assert.equal((await provider.computeDiff(original, modified, options, CancellationToken.None)).changes.length, 1);
 		assert.equal(ports.length, 2);
 	});
 	test('factory reuses its Worker across disposed providers while cancelling only their own requests', async () => {
@@ -109,10 +103,7 @@ suite('Frontend diff Worker', () => {
 		assert.equal(ports.length, 1);
 		assert.equal(ports[0]!.isDisposed, false);
 		using replacement = factory.createDiffProvider();
-		assert.equal(
-			(await replacement.computeDiff(original, modified, options, CancellationToken.None)).changes.length,
-			1,
-		);
+		assert.equal((await replacement.computeDiff(original, modified, options, CancellationToken.None)).changes.length, 1);
 		assert.equal(ports.length, 1);
 		const closing = replacement.computeDiff(original, modified, options, CancellationToken.None);
 		const closed = assert.rejects(closing, /disposed/);
@@ -123,27 +114,17 @@ suite('Frontend diff Worker', () => {
 	});
 	test('uses the same frontend provider for concurrent comparisons', async () => {
 		using service = new WorkerDiffComputationService(() => new DiffTestPort());
-		const [first, second] = await Promise.all([
-			compute(service, 'before 😀 after', 'before 🤖 after'),
-			compute(service, 'same\n', 'same'),
-		]);
+		const [first, second] = await Promise.all([compute(service, 'before 😀 after', 'before 🤖 after'), compute(service, 'same\n', 'same')]);
 		assert.equal(first.identical, false);
 		assert.equal(first.quitEarly, false);
 		assert.deepEqual(
-			first.changes[0]!.innerChanges?.map(change => [
-				change.originalRange.startColumn,
-				change.originalRange.endColumn,
-			]),
+			first.changes[0]!.innerChanges?.map(change => [change.originalRange.startColumn, change.originalRange.endColumn]),
 			[[8, 10]],
 		);
 		assert.ok(first.changes[0] instanceof DetailedLineRangeMapping);
 		assert.equal(first.changes[0]!.flip().original.startLineNumber, 1);
 		assert.deepEqual(
-			second.changes.map(change => [
-				change.original.startLineNumber,
-				change.original.endLineNumberExclusive,
-				change.modified.startLineNumber,
-			]),
+			second.changes.map(change => [change.original.startLineNumber, change.original.endLineNumberExclusive, change.modified.startLineNumber]),
 			[[2, 3, 2]],
 		);
 	});
@@ -161,10 +142,7 @@ suite('Frontend diff Worker', () => {
 			computeMoves: true,
 		});
 		assert.deepEqual(
-			moved.moves.map(move => [
-				move.lineRangeMapping.original.startLineNumber,
-				move.lineRangeMapping.modified.startLineNumber,
-			]),
+			moved.moves.map(move => [move.lineRangeMapping.original.startLineNumber, move.lineRangeMapping.modified.startLineNumber]),
 			[[1, 3]],
 		);
 	});
@@ -177,21 +155,11 @@ suite('Frontend diff Worker', () => {
 		const changed = await compute(service, 'first\r\nold\r\nlast', 'first\nnew\nlast');
 		assert.equal(changed.identical, false);
 		assert.deepEqual(
-			changed.changes.map(change => [
-				change.original.startLineNumber,
-				change.original.endLineNumberExclusive,
-				change.modified.startLineNumber,
-				change.modified.endLineNumberExclusive,
-			]),
+			changed.changes.map(change => [change.original.startLineNumber, change.original.endLineNumberExclusive, change.modified.startLineNumber, change.modified.endLineNumberExclusive]),
 			[[2, 3, 2, 3]],
 		);
 		assert.deepEqual(
-			changed.changes[0]!.innerChanges?.map(change => [
-				change.originalRange.startColumn,
-				change.originalRange.endColumn,
-				change.modifiedRange.startColumn,
-				change.modifiedRange.endColumn,
-			]),
+			changed.changes[0]!.innerChanges?.map(change => [change.originalRange.startColumn, change.originalRange.endColumn, change.modifiedRange.startColumn, change.modifiedRange.endColumn]),
 			[[1, 4, 1, 4]],
 		);
 	});
@@ -223,14 +191,8 @@ suite('Frontend diff Worker', () => {
 		);
 		assert.deepEqual(
 			result.moves.map(move => ({
-				original: [
-					move.lineRangeMapping.original.startLineNumber,
-					move.lineRangeMapping.original.endLineNumberExclusive,
-				],
-				modified: [
-					move.lineRangeMapping.modified.startLineNumber,
-					move.lineRangeMapping.modified.endLineNumberExclusive,
-				],
+				original: [move.lineRangeMapping.original.startLineNumber, move.lineRangeMapping.original.endLineNumberExclusive],
+				modified: [move.lineRangeMapping.modified.startLineNumber, move.lineRangeMapping.modified.endLineNumberExclusive],
 				changes: move.changes.map(change => [change.original.startLineNumber, change.modified.startLineNumber]),
 			})),
 			[{ original: [2, 5], modified: [7, 10], changes: [[3, 8]] }],
@@ -341,12 +303,7 @@ suite('Frontend diff Worker', () => {
 	});
 });
 
-async function compute(
-	service: WorkerDiffComputationService,
-	originalText: string,
-	modifiedText: string,
-	diffOptions = options,
-): Promise<IDocumentDiff> {
+async function compute(service: WorkerDiffComputationService, originalText: string, modifiedText: string, diffOptions = options): Promise<IDocumentDiff> {
 	using original = new TextModel(originalText);
 	using modified = new TextModel(modifiedText);
 	return service.computeDiff(original, modified, diffOptions, CancellationToken.None);

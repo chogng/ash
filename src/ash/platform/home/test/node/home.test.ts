@@ -22,10 +22,7 @@ test('a missing home is resolved without creating directories', async () => {
 	const user = await mkdtemp(join(tmpdir(), 'ash-home-'));
 	try {
 		const path = join(user, 'new', 'data');
-		assert.equal(
-			resolveHome({ environment: { ASH_HOME: path }, userHome: '' }),
-			join(realpathSync.native(user), 'new', 'data'),
-		);
+		assert.equal(resolveHome({ environment: { ASH_HOME: path }, userHome: '' }), join(realpathSync.native(user), 'new', 'data'));
 		assert.equal(resolveHome({ environment: {}, userHome: user }), join(realpathSync.native(user), '.ash'));
 		assert.equal(existsSync(path), false);
 	} finally {
@@ -54,11 +51,7 @@ test('invalid home overrides and missing user homes fail without selecting anoth
 
 test('retired home overrides require migration even when both variables agree', () => {
 	for (const configured of [undefined, tmpdir()]) {
-		assert.throws(
-			() =>
-				resolveHome({ environment: { ASH_PROFILE_ROOT: tmpdir(), ASH_HOME: configured }, userHome: tmpdir() }),
-			/remove ASH_PROFILE_ROOT/,
-		);
+		assert.throws(() => resolveHome({ environment: { ASH_PROFILE_ROOT: tmpdir(), ASH_HOME: configured }, userHome: tmpdir() }), /remove ASH_PROFILE_ROOT/);
 	}
 });
 
@@ -77,10 +70,7 @@ test('home resolves directory aliases and rejects dangling links', async functio
 		await mkdir(real);
 		const alias = join(user, 'alias');
 		await symlink(real, alias);
-		assert.equal(
-			resolveHome({ environment: { ASH_HOME: join(alias, 'new') }, userHome: '' }),
-			join(realpathSync.native(real), 'new'),
-		);
+		assert.equal(resolveHome({ environment: { ASH_HOME: join(alias, 'new') }, userHome: '' }), join(realpathSync.native(real), 'new'));
 		const dangling = join(user, 'dangling');
 		await symlink(join(user, 'missing'), dangling);
 		assert.throws(() => resolveHome({ environment: { ASH_HOME: dangling }, userHome: '' }));

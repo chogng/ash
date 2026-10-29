@@ -14,10 +14,7 @@ import {
 	type ICustomizationMarketplaceSourceInfo,
 	type ICustomizationMarketplaceProvider,
 } from '../../../../../platform/customizationMarketplace/common/customizationMarketplaceService.js';
-import {
-	CustomizationMarketplaceConfiguration,
-	getEnabledCustomizationMarketplaceSources,
-} from '../../../../../platform/customizationMarketplace/common/customizationMarketplaceSources.js';
+import { CustomizationMarketplaceConfiguration, getEnabledCustomizationMarketplaceSources } from '../../../../../platform/customizationMarketplace/common/customizationMarketplaceSources.js';
 import { IExtensionManagementService } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
 
 /** Backend registries own catalogs and trust; this renderer retains source metadata and disposable page continuations. */
@@ -55,10 +52,7 @@ export class CustomizationMarketplaceWorkbenchService extends Disposable impleme
 		return getEnabledCustomizationMarketplaceSources(this.configuration, this.metadata);
 	}
 
-	async query(
-		options: ICustomizationMarketplaceQuery,
-		token: CancellationToken,
-	): Promise<ICustomizationMarketplacePage> {
+	async query(options: ICustomizationMarketplaceQuery, token: CancellationToken): Promise<ICustomizationMarketplacePage> {
 		if (token.isCancellationRequested || this.isDisposed) {
 			throw new CancellationError();
 		}
@@ -85,14 +79,9 @@ export class CustomizationMarketplaceWorkbenchService extends Disposable impleme
 			this.catalog.clear();
 		}
 		if (!this.catalog.value) {
-			this.catalog.value = new CustomizationMarketplaceService(
-				this.sources.map(source => this.provider(source.id)),
-			);
+			this.catalog.value = new CustomizationMarketplaceService(this.sources.map(source => this.provider(source.id)));
 		}
-		return await this.catalog.value.query(
-			{ ...options, sourceIds: options.sourceIds ?? this.sources.map(source => source.id) },
-			cancellation.token,
-		);
+		return await this.catalog.value.query({ ...options, sourceIds: options.sourceIds ?? this.sources.map(source => source.id) }, cancellation.token);
 	}
 
 	private provider(sourceId: string): ICustomizationMarketplaceProvider {
@@ -100,12 +89,7 @@ export class CustomizationMarketplaceWorkbenchService extends Disposable impleme
 			id: sourceId,
 			sourceId,
 			query: async (options, token) => {
-				const kind =
-					options.mediaType === CustomizationMarketplaceMediaType.Skill
-						? 'skill'
-						: options.mediaType === CustomizationMarketplaceMediaType.McpServer
-							? 'mcp'
-							: undefined;
+				const kind = options.mediaType === CustomizationMarketplaceMediaType.Skill ? 'skill' : options.mediaType === CustomizationMarketplaceMediaType.McpServer ? 'mcp' : undefined;
 				const page = await raceCancellationError(
 					this.extensions.searchPage(options.query ?? '', {
 						sourceId,
@@ -118,16 +102,8 @@ export class CustomizationMarketplaceWorkbenchService extends Disposable impleme
 				const items = await raceCancellationError(
 					Promise.all(
 						page.packages.map(async summary => {
-							const capabilities = (
-								await this.extensions.get(summary.id, summary.version)
-							).capabilities.map(capability => capability.kind);
-							const resourceKind =
-								kind ??
-								(capabilities.includes('skill')
-									? 'skill'
-									: capabilities.includes('mcp')
-										? 'mcp'
-										: undefined);
+							const capabilities = (await this.extensions.get(summary.id, summary.version)).capabilities.map(capability => capability.kind);
+							const resourceKind = kind ?? (capabilities.includes('skill') ? 'skill' : capabilities.includes('mcp') ? 'mcp' : undefined);
 							if (!resourceKind) {
 								return undefined;
 							}
@@ -137,10 +113,7 @@ export class CustomizationMarketplaceWorkbenchService extends Disposable impleme
 								version: summary.version,
 								displayName: summary.displayName,
 								description: summary.description,
-								mediaType:
-									resourceKind === 'skill'
-										? CustomizationMarketplaceMediaType.Skill
-										: CustomizationMarketplaceMediaType.McpServer,
+								mediaType: resourceKind === 'skill' ? CustomizationMarketplaceMediaType.Skill : CustomizationMarketplaceMediaType.McpServer,
 								capabilities,
 								installation: { kind: 'providerCatalog', resourceKind, selectionId: summary.id },
 							};

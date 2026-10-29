@@ -14,13 +14,7 @@ import { toDisposable } from '../../../base/common/lifecycle.js';
 import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { SyncDescriptor } from '../../../platform/instantiation/common/descriptors.js';
-import {
-	IViewDescriptorService,
-	type IView,
-	type IViewDescriptor,
-	ViewContainerLocation,
-	WorkbenchViewRegistry,
-} from '../../../workbench/common/views.js';
+import { IViewDescriptorService, type IView, type IViewDescriptor, ViewContainerLocation, WorkbenchViewRegistry } from '../../../workbench/common/views.js';
 import { IViewsService } from '../../services/views/common/viewsService.js';
 
 test('container commands open in the invoking window and expire with their declaration', async () => {
@@ -60,9 +54,7 @@ test('moving a container changes routing while retaining its model and independe
 	const model = first.getViewContainerModel('test.movable');
 	model.setVisible('test.movable.view', false);
 	const events: string[] = [];
-	using listener = first.onDidChangeViewContainers(event =>
-		events.push(`${event.removed[0]?.location}->${event.added[0]?.location}`),
-	);
+	using listener = first.onDidChangeViewContainers(event => events.push(`${event.removed[0]?.location}->${event.added[0]?.location}`));
 	const container = first.getViewContainerById('test.movable')!;
 	first.moveViewContainerToLocation(container, ViewContainerLocation.Panel);
 	assert.equal(first.getViewContainers(ViewContainerLocation.Sidebar).length, 0);
@@ -75,10 +67,7 @@ test('moving a container changes routing while retaining its model and independe
 	assert.equal(first.getDefaultViewContainerLocation(container), ViewContainerLocation.Sidebar);
 	first.moveViewContainerToLocation(container, ViewContainerLocation.Panel);
 	assert.deepEqual(events, ['sidebar->panel']);
-	using restored = new TestViewDescriptorService(
-		{ registry, viewContainerLocations: { 'test.movable': ViewContainerLocation.Panel } },
-		contexts,
-	);
+	using restored = new TestViewDescriptorService({ registry, viewContainerLocations: { 'test.movable': ViewContainerLocation.Panel } }, contexts);
 	assert.equal(restored.getViewContainerLocation(container), ViewContainerLocation.Panel);
 	first.moveViewContainerToLocation(container, ViewContainerLocation.Sidebar);
 	assert.deepEqual(events, ['sidebar->panel', 'panel->sidebar']);
@@ -98,10 +87,7 @@ test('host view presentations preserve model identity and leave other windows an
 	const replacement = new SyncDescriptor(TestView);
 	using contexts = new ContextKeyService();
 	using otherContexts = new ContextKeyService();
-	using preview = new TestViewDescriptorService(
-		{ registry, viewConstructors: new Map([[original.id, replacement]]) },
-		contexts,
-	);
+	using preview = new TestViewDescriptorService({ registry, viewConstructors: new Map([[original.id, replacement]]) }, contexts);
 	using other = new TestViewDescriptorService({ registry }, otherContexts);
 	const projected = preview.getViewDescriptorById(original.id)!;
 	const model = preview.getViewContainerModel('test.preview');
@@ -139,14 +125,20 @@ test('view descriptor models project registry and context visibility', () => {
 	const model = descriptors.getViewContainerModel('test.sidebar');
 	const changes: string[] = [];
 	using listener = model.onDidChangeVisibleViewDescriptors(event => {
-		changes.push(
-			`+${event.added.map(view => view.id).join(',')}` + ` -${event.removed.map(view => view.id).join(',')}`,
-		);
+		changes.push(`+${event.added.map(view => view.id).join(',')}` + ` -${event.removed.map(view => view.id).join(',')}`);
 	});
 	using viewRegistrations = registry.registerViews('test.sidebar', [
-		testView('test.always', 'Always', { order: 10 }),
-		testView('test.conditional', 'Conditional', { order: 20, when: ContextKeyExpr.has('test.featureEnabled') }),
-		testView('test.hidden', 'Hidden', { order: 30, hideByDefault: true }),
+		testView('test.always', 'Always', {
+			order: 10,
+		}),
+		testView('test.conditional', 'Conditional', {
+			order: 20,
+			when: ContextKeyExpr.has('test.featureEnabled'),
+		}),
+		testView('test.hidden', 'Hidden', {
+			order: 30,
+			hideByDefault: true,
+		}),
 	]);
 
 	assert.deepEqual(
@@ -283,15 +275,11 @@ test('view customizations restore late contributions and reject malformed comple
 		title: 'Late',
 		location: ViewContainerLocation.Sidebar,
 	});
-	using registration = registry.registerViews('test.late.container', [
-		testView('test.late', 'Late', { canMoveView: true }),
-	]);
+	using registration = registry.registerViews('test.late.container', [testView('test.late', 'Late', { canMoveView: true })]);
 	assert.equal(service.getViewContainerForView('test.late')?.id, generatedId);
 	registration.dispose();
 	assert.equal(service.getViewContainerById(generatedId), null);
-	using replacement = registry.registerViews('test.late.container', [
-		testView('test.late', 'Returned', { canMoveView: true }),
-	]);
+	using replacement = registry.registerViews('test.late.container', [testView('test.late', 'Returned', { canMoveView: true })]);
 	assert.equal(service.getViewContainerForView('test.late')?.id, generatedId);
 	assert.equal(service.getViewContainerById(generatedId)?.title, 'Returned');
 	for (const invalid of [
@@ -301,10 +289,7 @@ test('view customizations restore late contributions and reject malformed comple
 		JSON.stringify({ viewLocations: {}, generatedViewContainerLocations: { [generatedId]: 'editor' } }),
 	]) {
 		storage.store('views.customizations', invalid, StorageScope.PROFILE, StorageTarget.USER);
-		assert.throws(
-			() => new TestViewDescriptorService({ registry }, contexts, storage),
-			/Saved view locations are invalid/u,
-		);
+		assert.throws(() => new TestViewDescriptorService({ registry }, contexts, storage), /Saved view locations are invalid/u);
 	}
 });
 
@@ -423,7 +408,12 @@ test('view descriptor service keeps a window-local container order', () => {
 type TestViewDescriptorOptions = Omit<IViewDescriptor, 'id' | 'title' | 'ctorDescriptor'>;
 
 function testView(id: string, title: string, options: TestViewDescriptorOptions = {}): IViewDescriptor {
-	return { id, title, ctorDescriptor: new SyncDescriptor(TestView, [id]), ...options };
+	return {
+		id,
+		title,
+		ctorDescriptor: new SyncDescriptor(TestView, [id]),
+		...options,
+	};
 }
 
 class TestView implements IView {
@@ -507,11 +497,7 @@ test('view visibility menus execute in the invoking window and expire with decla
 	const menus = new MenuService(commands, firstContext);
 	const items = () => {
 		const model = first.getViewContainerModel('test.visibility');
-		for (const view of model.allViewDescriptors)
-			containerContext.setContext(
-				`viewContainer.${view.id}`,
-				containerContext.getValue('viewContainer') === 'test.visibility',
-			);
+		for (const view of model.allViewDescriptors) containerContext.setContext(`viewContainer.${view.id}`, containerContext.getValue('viewContainer') === 'test.visibility');
 		containerContext.setContext('viewContainer.visibleViewCount', model.visibleViewDescriptors.length);
 		return menus
 			.getMenuActions(MenuId.ViewContainerTitleContext, undefined, containerContext)
@@ -642,23 +628,14 @@ test('view visibility observes stored changes, retains late views and rejects ma
 			flushInterval: 0,
 		});
 		const key = 'test.stored.state.hidden';
-		storage.store(
-			key,
-			JSON.stringify([{ id: 'test.stored.later', isHidden: true }]),
-			StorageScope.PROFILE,
-			StorageTarget.MACHINE,
-		);
+		storage.store(key, JSON.stringify([{ id: 'test.stored.later', isHidden: true }]), StorageScope.PROFILE, StorageTarget.MACHINE);
 		using contexts = new ContextKeyService();
 		using descriptors = new TestViewDescriptorService({ registry }, contexts, storage);
 		const model = descriptors.getViewContainerModel('test.stored');
 		model.setVisible('test.stored.first', false);
 		registry.registerStaticViews('test.stored', [testView('test.stored.later', 'Later')]);
 		assert.equal(model.isVisible('test.stored.later'), false);
-		for (const invalid of [
-			'{',
-			'[{"id":"test.stored.first","isHidden":"false"}]',
-			'[{"id":"test.stored.first","isHidden":false},{"id":"test.stored.first","isHidden":true}]',
-		]) {
+		for (const invalid of ['{', '[{"id":"test.stored.first","isHidden":"false"}]', '[{"id":"test.stored.first","isHidden":false},{"id":"test.stored.first","isHidden":true}]']) {
 			storage.store(key, invalid, StorageScope.PROFILE, StorageTarget.MACHINE);
 			assert.equal(model.isVisible('test.stored.first'), false);
 		}
@@ -679,10 +656,7 @@ test('view models require storage at the production constructor and preserve ree
 		title: 'Required',
 		location: ViewContainerLocation.Sidebar,
 	});
-	registry.registerStaticViews('test.required', [
-		testView('test.required.first', 'First'),
-		testView('test.required.second', 'Second'),
-	]);
+	registry.registerStaticViews('test.required', [testView('test.required.first', 'First'), testView('test.required.second', 'Second')]);
 	using contexts = new ContextKeyService();
 	using incomplete = new InstantiationService();
 	incomplete.registerInstance(IContextKeyService, contexts);
@@ -690,8 +664,7 @@ test('view models require storage at the production constructor and preserve ree
 	using descriptors = new TestViewDescriptorService({ registry }, contexts);
 	const model = descriptors.getViewContainerModel('test.required');
 	using subscription = model.onDidChangeVisibleViewDescriptors(event => {
-		if (event.removed.some(view => view.id === 'test.required.first'))
-			model.setVisible('test.required.second', false);
+		if (event.removed.some(view => view.id === 'test.required.first')) model.setVisible('test.required.second', false);
 	});
 	model.setVisible('test.required.first', false);
 	assert.deepEqual(model.visibleViewDescriptors, []);

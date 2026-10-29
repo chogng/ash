@@ -3,10 +3,7 @@ import { ExtensionIdentifier } from '../../../../platform/extensions/common/exte
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
-import type {
-	DocumentFormattingEditProvider,
-	DocumentRangeFormattingEditProvider,
-} from '../../../../editor/common/languages.js';
+import type { DocumentFormattingEditProvider, DocumentRangeFormattingEditProvider } from '../../../../editor/common/languages.js';
 import type { ITextModel } from '../../../../editor/common/model.js';
 import { FormattingConflicts, FormattingMode } from '../../../../editor/contrib/format/browser/format.js';
 import { localize } from '../../../../nls.js';
@@ -25,24 +22,13 @@ export class DefaultFormatter extends Disposable {
 		@ICodeEditorService private readonly codeEditors: ICodeEditorService,
 	) {
 		super();
-		this._register(
-			FormattingConflicts.setFormatterSelector((providers, model, mode, _kind, token) =>
-				this.select(providers, model, mode, token),
-			),
-		);
+		this._register(FormattingConflicts.setFormatterSelector((providers, model, mode, _kind, token) => this.select(providers, model, mode, token)));
 	}
 
-	private async select<T extends FormattingProvider>(
-		providers: T[],
-		model: ITextModel,
-		mode: FormattingMode,
-		token: CancellationToken,
-	): Promise<T | undefined> {
+	private async select<T extends FormattingProvider>(providers: T[], model: ITextModel, mode: FormattingMode, token: CancellationToken): Promise<T | undefined> {
 		const overrides = { resource: model.uri, overrideIdentifier: model.getLanguageId() };
 		const configured = this.configuration.getValue<string | null>(DefaultFormatter.configName, overrides);
-		const preferred = configured
-			? providers.find(provider => ExtensionIdentifier.equals(provider.extensionId, configured))
-			: undefined;
+		const preferred = configured ? providers.find(provider => ExtensionIdentifier.equals(provider.extensionId, configured)) : undefined;
 		if (preferred) return preferred;
 		if (!configured && providers.length === 1) return providers[0];
 		// Automatic formatting must never silently choose a different provider or open UI.
@@ -59,17 +45,11 @@ export class DefaultFormatter extends Disposable {
 		);
 		const focused = this.codeEditors.getFocusedCodeEditor();
 		const choices = providers.map((provider, index) => ({
-			label:
-				provider.displayName ??
-				provider.extensionId?.value ??
-				localize('format.numbered', 'Formatter {0}', index + 1),
+			label: provider.displayName ?? provider.extensionId?.value ?? localize('format.numbered', 'Formatter {0}', index + 1),
 			description: provider.extensionId?.value,
 			provider,
 		}));
-		picker.items = [
-			...choices,
-			{ label: localize('format.configure', 'Configure Default Formatter...'), configure: true },
-		];
+		picker.items = [...choices, { label: localize('format.configure', 'Configure Default Formatter...'), configure: true }];
 		picker.placeholder = localize('format.select', 'Select a Formatter');
 		picker.ariaLabel = picker.placeholder;
 		let saveDefault = false;
@@ -80,11 +60,7 @@ export class DefaultFormatter extends Disposable {
 						const item = picker.selectedItems[0] ?? picker.activeItems[0];
 						if (item?.configure) {
 							saveDefault = true;
-							picker.placeholder = localize(
-								'format.default.select',
-								'Select the Default Formatter for {0}',
-								model.getLanguageId(),
-							);
+							picker.placeholder = localize('format.default.select', 'Select the Default Formatter for {0}', model.getLanguageId());
 							picker.items = choices.filter(item => item.provider.extensionId);
 							picker.value = '';
 							return;

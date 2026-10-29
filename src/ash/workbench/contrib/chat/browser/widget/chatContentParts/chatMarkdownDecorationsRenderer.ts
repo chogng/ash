@@ -1,12 +1,7 @@
 import { addDisposableListener } from '../../../../../../base/browser/dom.js';
 import { appendLabelIcon } from '../../../../../../base/browser/ui/iconlabel/iconLabels.js';
 import { createPixelSpinner, type IPixelSpinner } from '../../../../../../base/browser/ui/pixelSpinner/pixelSpinner.js';
-import {
-	Disposable,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-} from '../../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { autorun, observableFromEvent, type IObservable } from '../../../../../../base/common/observable.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { ILinkPresentationService } from '../../../../../../platform/dataChannel/common/dataChannel.js';
@@ -15,10 +10,7 @@ import { IConfigurationService } from '../../../../../../platform/configuration/
 import { AccessibilityVerbositySettingId } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { localize } from '../../../../../../nls.js';
 import { colorCssVariable } from '../../../../../../platform/theme/common/colorUtils.js';
-import {
-	GitHubResourcePresentation,
-	type IGitHubResourceHover,
-} from '../../../../github/browser/githubResourceHover.js';
+import { GitHubResourcePresentation, type IGitHubResourceHover } from '../../../../github/browser/githubResourceHover.js';
 
 /** Owns provider decorations for the sanitized anchors in one rendered Markdown block. */
 export class ChatMarkdownDecorationsRenderer extends Disposable {
@@ -39,9 +31,7 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 		@IConfigurationService configuration: IConfigurationService,
 	) {
 		super();
-		this.verbosity = observableFromEvent(this, configuration.onDidChangeConfiguration, () =>
-			configuration.getValue<boolean>(AccessibilityVerbositySettingId.GitHub),
-		);
+		this.verbosity = observableFromEvent(this, configuration.onDidChangeConfiguration, () => configuration.getValue<boolean>(AccessibilityVerbositySettingId.GitHub));
 		this.anchors = [...root.querySelectorAll<HTMLAnchorElement>('a[href]')].map(anchor => ({
 			anchor,
 			contents: [...anchor.childNodes],
@@ -125,9 +115,7 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 						presentation.detail,
 						presentation.status?.label,
 						presentation.secondaryStatus?.label,
-						presentation.changes
-							? `+${presentation.changes.insertions} −${presentation.changes.deletions}`
-							: undefined,
+						presentation.changes ? `+${presentation.changes.insertions} −${presentation.changes.deletions}` : undefined,
 					]
 						.filter(value => value !== undefined && value !== '')
 						.join(' · ');
@@ -150,8 +138,7 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 						}
 						return presentation.tooltip ?? label;
 					};
-					const focusedIndex =
-						card.value?.tabbableElements.indexOf(anchor.ownerDocument.activeElement as HTMLElement) ?? -1;
+					const focusedIndex = card.value?.tabbableElements.indexOf(anchor.ownerDocument.activeElement as HTMLElement) ?? -1;
 					hover.update(content);
 					if (focusedIndex >= 0) {
 						card.value?.tabbableElements[focusedIndex]?.focus();
@@ -159,13 +146,7 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 					if (presentation instanceof GitHubResourcePresentation) {
 						anchor.dataset.githubContent = presentation.tooltip ?? label;
 						if (this.verbosity.read(reader)) {
-							anchor.setAttribute(
-								'aria-description',
-								localize(
-									'github.helpHint',
-									'Press F2 to focus link details. Open accessibility help for keyboard instructions.',
-								),
-							);
+							anchor.setAttribute('aria-description', localize('github.helpHint', 'Press F2 to focus link details. Open accessibility help for keyboard instructions.'));
 						} else if (ariaDescription === null) {
 							anchor.removeAttribute('aria-description');
 						} else {

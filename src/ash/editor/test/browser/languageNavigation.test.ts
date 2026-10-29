@@ -24,9 +24,7 @@ test('definition navigation sends the requested side group and target selection 
 			return fixture.editor;
 		}),
 	);
-	await fixture.editor
-		.getContribution<ReferencesController>('editor.contrib.referencesController')!
-		.navigate('definition', { openToSide: true });
+	await fixture.editor.getContribution<ReferencesController>('editor.contrib.referencesController')!.navigate('definition', { openToSide: true });
 	assert.deepEqual(opened, [
 		{
 			input: { resource: target.resource, options: { selection: target.selectionRange } },
@@ -52,9 +50,7 @@ test('navigation keeps source identity and deduplicates targets before opening',
 		},
 	});
 	using duplicate = fixture.features.definitionProvider.register('typescript', { provideDefinition: () => [target] });
-	await fixture.editor
-		.getContribution<ReferencesController>('editor.contrib.referencesController')!
-		.navigate('definition');
+	await fixture.editor.getContribution<ReferencesController>('editor.contrib.referencesController')!.navigate('definition');
 	assert.equal(resource, fixture.model.uri);
 	assert.deepEqual(fixture.opened, [target]);
 	assert.equal(Object.isFrozen(fixture.opened[0]), true);
@@ -100,9 +96,7 @@ for (const change of ['content', 'language', 'dispose', 'provider', 'selection']
 				});
 			},
 		});
-		const pending = fixture.editor
-			.getContribution<ReferencesController>('editor.contrib.referencesController')!
-			.navigate('definition');
+		const pending = fixture.editor.getContribution<ReferencesController>('editor.contrib.referencesController')!.navigate('definition');
 		if (change === 'content') fixture.model.setValue('changed');
 		if (change === 'language') fixture.model.setLanguage('javascript');
 		if (change === 'dispose') fixture.model.dispose();

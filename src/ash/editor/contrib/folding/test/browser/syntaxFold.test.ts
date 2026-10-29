@@ -72,11 +72,7 @@ test('structural folding follows newly registered tokens instead of retaining a 
 		languageId: 'typescript',
 		languageConfigurationService: configurations,
 	});
-	const ranges = () =>
-		computeEditorLanguageFoldingRanges(model, 'typescript', configurations).map(range => [
-			range.startLineIndex,
-			range.endLineIndex,
-		]);
+	const ranges = () => computeEditorLanguageFoldingRanges(model, 'typescript', configurations).map(range => [range.startLineIndex, range.endLineIndex]);
 	assert.deepEqual(ranges(), [[0, 1]]);
 
 	using tokens = registerTestTokens(new Map([['"}"', [{ offset: 0, type: 'string' }]]]));
@@ -96,9 +92,7 @@ test('token change listeners see bracket ranges for the edited text immediately'
 	model.bracketPairs.getBracketPairsInRange(model.getFullModelRange()).toArray();
 	const observations: number[][] = [];
 	using listener = model.onDidChangeTokens(() => {
-		observations.push(
-			computeEditorLanguageFoldingRanges(model, 'typescript', configurations).map(range => range.endLineIndex),
-		);
+		observations.push(computeEditorLanguageFoldingRanges(model, 'typescript', configurations).map(range => range.endLineIndex));
 	});
 
 	model.applyEdits([{ range: new Range(1, 1, 1, 8), text: '' }]);

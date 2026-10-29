@@ -30,11 +30,8 @@ export class DesktopDockedTabsCoordinator extends Disposable {
 		}
 		const active = this.sessions.activeSelection;
 		return active?.kind === 'session' && selection.kind === 'session'
-			? active.active.session.sessionId === selection.active.session.sessionId &&
-					active.active.threadId === selection.active.threadId
-			: active?.kind === 'untitled' &&
-					selection.kind === 'untitled' &&
-					active.session.untitledSessionId === selection.session.untitledSessionId;
+			? active.active.session.sessionId === selection.active.session.sessionId && active.active.threadId === selection.active.threadId
+			: active?.kind === 'untitled' && selection.kind === 'untitled' && active.session.untitledSessionId === selection.session.untitledSessionId;
 	}
 
 	public async reconcile(selection: SessionsViewSelection, detailsOnly: boolean): Promise<void> {
@@ -43,11 +40,7 @@ export class DesktopDockedTabsCoordinator extends Disposable {
 		}
 		const changes = new SessionChangesEditorInput(selection);
 		for (const group of this.documentGroups) {
-			for (const input of group.inputs.filter(
-				input =>
-					input.resource.scheme === 'ash-session-changes' &&
-					input.resource.toString() !== changes.resource.toString(),
-			)) {
+			for (const input of group.inputs.filter(input => input.resource.scheme === 'ash-session-changes' && input.resource.toString() !== changes.resource.toString())) {
 				try {
 					await group.replaceEditor(input, changes);
 				} catch (error) {
@@ -61,8 +54,7 @@ export class DesktopDockedTabsCoordinator extends Disposable {
 				}
 			}
 		}
-		const target =
-			this.documentGroups.find(group => group.id === this.editor.activeGroup.id) ?? this.documentGroups[0];
+		const target = this.documentGroups.find(group => group.id === this.editor.activeGroup.id) ?? this.documentGroups[0];
 		if (!target) {
 			return;
 		}
@@ -72,22 +64,14 @@ export class DesktopDockedTabsCoordinator extends Disposable {
 			if (!inputs.some(input => input.resource.scheme === 'ash-sessions-files')) {
 				const files = new EmptyFileEditorInput();
 				files.capabilities = detailsOnly ? EditorInputCapabilities.CannotClose : EditorInputCapabilities.None;
-				await this.editors.openEditor(
-					files,
-					{ pinned: true, preserveFocus: true, inactive: true },
-					{ groupId: target.id },
-				);
+				await this.editors.openEditor(files, { pinned: true, preserveFocus: true, inactive: true }, { groupId: target.id });
 				if (!this.isCurrent(selection) || !this.documentGroups.includes(target)) {
 					return;
 				}
 			}
 			if (!inputs.some(input => input.resource.scheme === 'ash-session-changes')) {
 				changes.capabilities = detailsOnly ? EditorInputCapabilities.CannotClose : EditorInputCapabilities.None;
-				await this.editors.openEditor(
-					changes,
-					{ pinned: true, preserveFocus: true, inactive: true },
-					{ groupId: target.id },
-				);
+				await this.editors.openEditor(changes, { pinned: true, preserveFocus: true, inactive: true }, { groupId: target.id });
 				if (!this.isCurrent(selection) || !this.documentGroups.includes(target)) {
 					return;
 				}
@@ -96,14 +80,8 @@ export class DesktopDockedTabsCoordinator extends Disposable {
 		for (const group of this.documentGroups) {
 			for (const input of group.inputs) {
 				if (input instanceof DockedEditorInput) {
-					input.capabilities = detailsOnly
-						? EditorInputCapabilities.CannotClose
-						: EditorInputCapabilities.None;
-					await this.editors.openEditor(
-						input,
-						{ pinned: true, preserveFocus: true, inactive: true },
-						{ groupId: group.id },
-					);
+					input.capabilities = detailsOnly ? EditorInputCapabilities.CannotClose : EditorInputCapabilities.None;
+					await this.editors.openEditor(input, { pinned: true, preserveFocus: true, inactive: true }, { groupId: group.id });
 					if (!this.isCurrent(selection) || !this.documentGroups.includes(group)) {
 						return;
 					}
@@ -130,8 +108,7 @@ export class DesktopDockedTabsCoordinator extends Disposable {
 		if (this.isDisposed) {
 			return;
 		}
-		const target =
-			this.documentGroups.find(group => group.id === this.editor.activeGroup.id) ?? this.documentGroups[0];
+		const target = this.documentGroups.find(group => group.id === this.editor.activeGroup.id) ?? this.documentGroups[0];
 		if (target) {
 			await this.editors.openEditor(new EmptyFileEditorInput(), { pinned: true }, { groupId: target.id });
 		}

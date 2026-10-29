@@ -13,23 +13,10 @@ import { IAppServerApi, type AppServerConnectionState } from '../../../../../pla
 import { IAgentSessionService } from '../../../../../platform/agentHost/common/agentService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
-import {
-	ILoggerService,
-	NullLoggerService,
-	type ILogFile,
-	type ILogFileReadResult,
-	type ILogFileService,
-} from '../../../../../platform/log/common/log.js';
-import {
-	INotificationService,
-	NotificationsFilter,
-	type NotificationMessage,
-} from '../../../../../platform/notification/common/notification.js';
+import { ILoggerService, NullLoggerService, type ILogFile, type ILogFileReadResult, type ILogFileService } from '../../../../../platform/log/common/log.js';
+import { INotificationService, NotificationsFilter, type NotificationMessage } from '../../../../../platform/notification/common/notification.js';
 import { IProgressService } from '../../../../../platform/progress/common/progress.js';
-import {
-	IChatSessionNavigationService,
-	type IChatSessionConnection,
-} from '../../../../services/chat/common/chatSessionNavigationService.js';
+import { IChatSessionNavigationService, type IChatSessionConnection } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { IOutputService, type IOutputChannel } from '../../../../services/output/common/output.js';
@@ -78,12 +65,11 @@ class ExportFixture extends Disposable {
 		cursor: { generation: '1', offset: 20 },
 		gap: false,
 	});
-	trace: (sessionId: string, after: Readonly<Record<string, number>>) => Promise<AgentTracePage> =
-		async sessionId => ({
-			trace: { formatVersion: 3, sessionId, threads: [], historyPrefixes: [] },
-			cursors: {},
-			hasMore: false,
-		});
+	trace: (sessionId: string, after: Readonly<Record<string, number>>) => Promise<AgentTracePage> = async sessionId => ({
+		trace: { formatVersion: 3, sessionId, threads: [], historyPrefixes: [] },
+		cursors: {},
+		hasMore: false,
+	});
 	diagnostics: () => Promise<AgentTraceDiagnosticPage> = async () => ({
 		diagnostics: {
 			formatVersion: 2,
@@ -109,10 +95,7 @@ class ExportFixture extends Disposable {
 				return await this.read(id);
 			},
 		};
-		this.services.registerInstance(
-			ILoggerService,
-			Object.assign(new NullLoggerService(), { files: persistentLogs ? logs : undefined }),
-		);
+		this.services.registerInstance(ILoggerService, Object.assign(new NullLoggerService(), { files: persistentLogs ? logs : undefined }));
 		this.services.registerInstance(IChatSessionNavigationService, {
 			getActiveConversation: () => this.active,
 			get captureConnection() {
@@ -353,10 +336,7 @@ suite('Export Agent Host debug logs', () => {
 		await fixture.run();
 		const files = await unzip(fixture.downloads[0]);
 		assert.deepEqual(reads, ['payload-1', 'payload-2']);
-		assert.deepEqual(JSON.parse(files.get('manifest.json')!).coverage.requestPayloads.threadIds, [
-			'chat-1',
-			'child',
-		]);
+		assert.deepEqual(JSON.parse(files.get('manifest.json')!).coverage.requestPayloads.threadIds, ['chat-1', 'child']);
 	});
 	test('exports all saved body kinds, deduplicates references and keeps bodies larger than one MiB', async () => {
 		using fixture = new ExportFixture();
@@ -400,10 +380,7 @@ suite('Export Agent Host debug logs', () => {
 		const manifest = JSON.parse(files.get('manifest.json')!);
 		assert.deepEqual(reads, ['payload-1', 'payload-2', 'payload-3', 'payload-4', 'payload-5']);
 		assert.deepEqual(
-			manifest.coverage.requestPayloads.references.map((entry: { kind: string; status: string }) => [
-				entry.kind,
-				entry.status,
-			]),
+			manifest.coverage.requestPayloads.references.map((entry: { kind: string; status: string }) => [entry.kind, entry.status]),
 			kinds.map(kind => [kind, 'saved']),
 		);
 		assert.equal(JSON.parse(files.get('session/payloads/1.json')!).body.length, 2 * 1024 * 1024);
@@ -476,12 +453,7 @@ suite('Export Agent Host debug logs', () => {
 		const manifest = JSON.parse(files.get('manifest.json')!);
 		assert.equal(manifest.coverage.requestPayloads.captureId, 'original');
 		assert(!files.has('session/diagnostics-2.json'));
-		assert(
-			manifest.issues.some(
-				(issue: { source: string; reason: string }) =>
-					issue.source === 'sessionDiagnostics' && issue.reason === 'readFailed',
-			),
-		);
+		assert(manifest.issues.some((issue: { source: string; reason: string }) => issue.source === 'sessionDiagnostics' && issue.reason === 'readFailed'));
 	});
 
 	test('keeps local evidence when the owning host log collection fails', async () => {
@@ -511,12 +483,7 @@ suite('Export Agent Host debug logs', () => {
 		await fixture.run();
 		assert.deepEqual(fixture.names, ['ash-agent-host-debug-logs.zip']);
 		const files = await unzip(fixture.downloads[0]);
-		assert.deepEqual(fixture.reads, [
-			'current/main.log',
-			'current/window-1.log',
-			'current/window-1.log.1',
-			'app-server',
-		]);
+		assert.deepEqual(fixture.reads, ['current/main.log', 'current/window-1.log', 'current/window-1.log.1', 'app-server']);
 		assert.equal(files.get('logs/2.log'), '日志 current/window-1.log\n');
 		assert.equal(files.get('output/6.log'), 'provider diagnostic\n');
 		const manifest = JSON.parse(files.get('manifest.json')!);
@@ -727,11 +694,7 @@ suite('Export Agent Host debug logs', () => {
 	test('keeps the manifest inside the file and byte budgets', async () => {
 		using fixture = new ExportFixture(false);
 		fixture.active = undefined;
-		fixture.channels = Array.from(
-			{ length: 70 },
-			(_, index) =>
-				({ id: `channel-${index}`, kind: 'log', getText: () => 'x'.repeat(1024 * 1024) }) as IOutputChannel,
-		);
+		fixture.channels = Array.from({ length: 70 }, (_, index) => ({ id: `channel-${index}`, kind: 'log', getText: () => 'x'.repeat(1024 * 1024) }) as IOutputChannel);
 		await fixture.run();
 		const files = await unzip(fixture.downloads[0]);
 		const manifest = JSON.parse(files.get('manifest.json')!);
@@ -745,9 +708,7 @@ suite('Export Agent Host debug logs', () => {
 		try {
 			using fixture = new ExportFixture(false);
 			fixture.active = undefined;
-			const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(
-				item => isMenuItem(item) && item.command.id === ExportAgentHostDebugLogsAction.ID,
-			);
+			const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(item => isMenuItem(item) && item.command.id === ExportAgentHostDebugLogsAction.ID);
 			assert(item && isMenuItem(item));
 			assert.deepEqual(item.command.title, {
 				original: 'Export Agent Host Debug Logs…',

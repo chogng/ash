@@ -17,42 +17,23 @@ import type { ServicesAccessor } from '../../platform/instantiation/common/insta
 import { IViewDescriptorService, ViewContainerLocation, type IViewDescriptor } from '../common/views.js';
 import { IViewsService } from '../services/views/common/viewsService.js';
 
-type ViewDropTarget =
-	| { readonly element: HTMLElement; readonly containerId: string }
-	| { readonly element: HTMLElement; readonly location: ViewContainerLocation };
+type ViewDropTarget = { readonly element: HTMLElement; readonly containerId: string } | { readonly element: HTMLElement; readonly location: ViewContainerLocation };
 
 /** Writes source identities for native resource drops; captured Chat content stays with its draft. */
-export function fillEditorsDragData(
-	accessor: ServicesAccessor,
-	resources: URI[] | IResourceStat[],
-	event: DragEvent,
-	options?: { disableStandardTransfer: boolean },
-): void {
+export function fillEditorsDragData(accessor: ServicesAccessor, resources: URI[] | IResourceStat[], event: DragEvent, options?: { disableStandardTransfer: boolean }): void {
 	const transfer = event.dataTransfer;
 	if (!transfer || !resources.length) return;
 	const entries = resources.map((entry): IResourceStat => (URI.isUri(entry) ? { resource: entry } : entry));
-	const uris = entries.map(entry =>
-		entry.selection ? withSelection(entry.resource, entry.selection) : entry.resource,
-	);
+	const uris = entries.map(entry => (entry.selection ? withSelection(entry.resource, entry.selection) : entry.resource));
 	const values = uris.map(resource => resource.toString());
 	transfer.setData(DataTransfers.RESOURCES, JSON.stringify(values));
 	transfer.setData(Mimes.uriList, values.join('\r\n'));
-	const localFiles = entries
-		.filter(entry => !entry.isDirectory && entry.resource.scheme === Schemas.file)
-		.map(entry => entry.resource);
-	if (localFiles.length)
-		transfer.setData(CodeDataTransfers.FILES, JSON.stringify(localFiles.map(resource => resource.fsPath)));
+	const localFiles = entries.filter(entry => !entry.isDirectory && entry.resource.scheme === Schemas.file).map(entry => entry.resource);
+	if (localFiles.length) transfer.setData(CodeDataTransfers.FILES, JSON.stringify(localFiles.map(resource => resource.fsPath)));
 	if (!options?.disableStandardTransfer) {
 		const labels = accessor.get(ILabelService);
-		transfer.setData(
-			DataTransfers.TEXT,
-			uris.map(resource => labels.getUriLabel(resource, { noPrefix: true })).join(isWindows ? '\r\n' : '\n'),
-		);
-		if (localFiles[0])
-			transfer.setData(
-				DataTransfers.DOWNLOAD_URL,
-				`${Mimes.binary}:${basename(localFiles[0])}:${localFiles[0].toString()}`,
-			);
+		transfer.setData(DataTransfers.TEXT, uris.map(resource => labels.getUriLabel(resource, { noPrefix: true })).join(isWindows ? '\r\n' : '\n'));
+		if (localFiles[0]) transfer.setData(DataTransfers.DOWNLOAD_URL, `${Mimes.binary}:${basename(localFiles[0])}:${localFiles[0].toString()}`);
 	}
 }
 
@@ -99,15 +80,9 @@ export class ViewDragAndDropController extends Disposable {
 					const sourceContainerId = this.draggedContainerId;
 					this.clear();
 					if ('containerId' in target) {
-						this.descriptors.moveViewsToContainer(
-							dragged,
-							this.descriptors.getViewContainerById(target.containerId)!,
-						);
+						this.descriptors.moveViewsToContainer(dragged, this.descriptors.getViewContainerById(target.containerId)!);
 					} else if (sourceContainerId) {
-						this.descriptors.moveViewContainerToLocation(
-							this.descriptors.getViewContainerById(sourceContainerId)!,
-							target.location,
-						);
+						this.descriptors.moveViewContainerToLocation(this.descriptors.getViewContainerById(sourceContainerId)!, target.location);
 					} else {
 						for (const view of dragged) this.descriptors.moveViewToLocation(view, target.location);
 					}
@@ -158,35 +133,18 @@ export class ViewDragAndDropController extends Disposable {
 		if (!this.draggedViews.length || !(target instanceof this.root.ownerDocument.defaultView!.Element)) return;
 		const bar = target.closest<HTMLElement>('.ash-composite-bar[data-view-container-location]');
 		// Reordering an entry within its own selector remains owned by CompositeBar.
-		if (
-			bar &&
-			this.draggedContainerId &&
-			this.descriptors.getViewContainerById(this.draggedContainerId)?.location ===
-				bar.dataset.viewContainerLocation
-		)
-			return;
+		if (bar && this.draggedContainerId && this.descriptors.getViewContainerById(this.draggedContainerId)?.location === bar.dataset.viewContainerLocation) return;
 		const container = target.closest<HTMLElement>('[data-view-container-id]');
 		const item = target.closest<HTMLElement>('.ash-composite-bar-destination[data-action-id]');
 		const containerId = container?.dataset.viewContainerId ?? item?.dataset.actionId;
 		if (containerId) {
 			const descriptor = this.descriptors.getViewContainerById(containerId);
-			if (
-				!descriptor ||
-				descriptor.rejectAddedViews ||
-				this.draggedViews.every(view => this.descriptors.getViewContainerForView(view.id)?.id === containerId)
-			)
-				return;
+			if (!descriptor || descriptor.rejectAddedViews || this.draggedViews.every(view => this.descriptors.getViewContainerForView(view.id)?.id === containerId)) return;
 			return { element: container ?? item!, containerId };
 		}
 		const part = target.closest<HTMLElement>('[data-part]');
-		const location =
-			bar?.dataset.viewContainerLocation ??
-			(part?.dataset.part === 'activitybar' ? ViewContainerLocation.Sidebar : part?.dataset.part);
-		if (
-			location === ViewContainerLocation.Sidebar ||
-			location === ViewContainerLocation.Panel ||
-			location === ViewContainerLocation.AuxiliaryBar
-		) {
+		const location = bar?.dataset.viewContainerLocation ?? (part?.dataset.part === 'activitybar' ? ViewContainerLocation.Sidebar : part?.dataset.part);
+		if (location === ViewContainerLocation.Sidebar || location === ViewContainerLocation.Panel || location === ViewContainerLocation.AuxiliaryBar) {
 			return { element: bar ?? part!, location };
 		}
 		return undefined;

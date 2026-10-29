@@ -1,10 +1,6 @@
 import * as nls from '../../../../nls.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import {
-	EditorAction,
-	registerEditorAction,
-	type ServicesAccessor,
-} from '../../../browser/editorFeatureRegistration.js';
+import { EditorAction, registerEditorAction, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
 import { EditorZoom } from '../../../common/config/editorZoom.js';
 
 class EditorFontZoomIn extends EditorAction {

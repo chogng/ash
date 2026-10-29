@@ -106,11 +106,7 @@ export namespace Iterable {
 		}
 	}
 
-	export function reduce<T, R>(
-		iterable: Iterable<T>,
-		reducer: (previousValue: R, currentValue: T) => R,
-		initialValue: R,
-	): R {
+	export function reduce<T, R>(iterable: Iterable<T>, reducer: (previousValue: R, currentValue: T) => R, initialValue: R): R {
 		let value = initialValue;
 		for (const element of iterable) {
 			value = reducer(value, element);

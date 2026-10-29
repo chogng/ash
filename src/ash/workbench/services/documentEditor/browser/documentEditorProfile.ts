@@ -1,12 +1,5 @@
 import type { IEditorExtensionApi } from '../../../common/editor.js';
-import type {
-	DocumentCodec,
-	DocumentNode,
-	DocumentTextFormat,
-	DocumentTextModel,
-	DocumentSelection,
-	DocumentOutline,
-} from '../common/documentCodec.js';
+import type { DocumentCodec, DocumentNode, DocumentTextFormat, DocumentTextModel, DocumentSelection, DocumentOutline } from '../common/documentCodec.js';
 import type { Constructor } from '../../../../platform/instantiation/common/descriptors.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { Event } from '../../../../base/common/event.js';
@@ -50,23 +43,12 @@ export interface DocumentEditorConfiguration {
 		readonly mimeType: string;
 		readonly canImport: boolean;
 	}[];
-	importBinary?(
-		bytes: Uint8Array,
-		format: string,
-		ownerDocument: Document,
-		signal: AbortSignal,
-	): Promise<{ readonly document: DocumentNode; readonly documentType: string }>;
+	importBinary?(bytes: Uint8Array, format: string, ownerDocument: Document, signal: AbortSignal): Promise<{ readonly document: DocumentNode; readonly documentType: string }>;
 	readonly codec: DocumentCodec;
 	readonly widget: Constructor<DocumentEditorWidget>;
 	readonly createEmptyDocument?: () => DocumentNode;
 	/** The host supplies resource IO without interpreting the package's document structure. */
-	importText(
-		text: string,
-		format: DocumentTextFormat,
-		ownerDocument: Document,
-		source: URI,
-		readResource: (resource: URI) => Promise<Uint8Array>,
-	): DocumentNode | Promise<DocumentNode>;
+	importText(text: string, format: DocumentTextFormat, ownerDocument: Document, source: URI, readResource: (resource: URI) => Promise<Uint8Array>): DocumentNode | Promise<DocumentNode>;
 	exportText(document: DocumentNode, format: DocumentTextFormat): string;
 }
 

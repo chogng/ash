@@ -5,21 +5,13 @@ import { suite, test, setup, teardown } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
 import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
-import {
-	IKeybindingService,
-	type IUserFriendlyKeybinding,
-} from '../../../../../platform/keybinding/common/keybinding.js';
+import { IKeybindingService, type IUserFriendlyKeybinding } from '../../../../../platform/keybinding/common/keybinding.js';
 import { KeybindingsRegistry } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import type {
-	INativeHostApi,
-	INativeSystemWideKeybinding,
-	INativeSystemWideKeybindingResult,
-	IOpenAgentsWindowOptions,
-} from '../../../../../platform/native/common/nativeHost.js';
+import type { INativeHostApi, INativeSystemWideKeybinding, INativeSystemWideKeybindingResult, IOpenAgentsWindowOptions } from '../../../../../platform/native/common/nativeHost.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../../workbench/common/contributions.js';
 import { INativeHostService } from '../../../../../workbench/common/services.js';
 import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../../../../workbench/contrib/chat/common/constants.js';
@@ -214,10 +206,7 @@ suite('OpenAgentsWindowSystemWideKeybindingContribution', () => {
 		await flush();
 		assert.deepEqual(fixture.payloads, [[]]);
 		using incompleteServices = new InstantiationService();
-		assert.throws(
-			() => incompleteServices.createInstance(OpenAgentsWindowSystemWideKeybindingContribution),
-			/Unknown service|Missing service/,
-		);
+		assert.throws(() => incompleteServices.createInstance(OpenAgentsWindowSystemWideKeybindingContribution), /Unknown service|Missing service/);
 	});
 
 	test('selects across all commands before filtering and keeps direct command arguments', async () => {
@@ -231,10 +220,16 @@ suite('OpenAgentsWindowSystemWideKeybindingContribution', () => {
 		fixture.start();
 		await flush();
 		assert.deepEqual(
-			fixture.payloads.map(payload =>
-				payload.map(({ commandId, args, userSettingsLabel }) => ({ commandId, args, userSettingsLabel })),
-			),
-			[[{ commandId: OPEN_AGENTS_WINDOW_COMMAND_ID, args, userSettingsLabel: 'ctrl+shift+c' }]],
+			fixture.payloads.map(payload => payload.map(({ commandId, args, userSettingsLabel }) => ({ commandId, args, userSettingsLabel }))),
+			[
+				[
+					{
+						commandId: OPEN_AGENTS_WINDOW_COMMAND_ID,
+						args,
+						userSettingsLabel: 'ctrl+shift+c',
+					},
+				],
+			],
 		);
 		assert.deepEqual(fixture.log.warnings, ['[OpenAgentsWindow] duplicate system-wide shortcut ctrl+shift+a']);
 	});
@@ -268,10 +263,7 @@ suite('OpenAgentsWindowSystemWideKeybindingContribution', () => {
 		await fixture.resource.updateKeybindings(fixture.resource.bindings);
 		mock.timers.tick(100);
 		await flush();
-		assert.deepEqual(
-			{ attempts: fixture.payloads.length, messages: fixture.notifications.model.getNotifications().length },
-			{ attempts: 2, messages: 1 },
-		);
+		assert.deepEqual({ attempts: fixture.payloads.length, messages: fixture.notifications.model.getNotifications().length }, { attempts: 2, messages: 1 });
 		fixture.result = { failed: [] };
 		await fixture.resource.updateKeybindings([]);
 		mock.timers.tick(100);
@@ -309,10 +301,7 @@ suite('OpenAgentsWindowSystemWideKeybindingContribution', () => {
 		result.resolve({ failed: ['ctrl+shift+a'] });
 		mock.timers.tick(100);
 		await flush();
-		assert.deepEqual(
-			{ attempts: fixture.payloads.length, messages: fixture.notifications.model.getNotifications().length },
-			{ attempts: 1, messages: 0 },
-		);
+		assert.deepEqual({ attempts: fixture.payloads.length, messages: fixture.notifications.model.getNotifications().length }, { attempts: 1, messages: 0 });
 	});
 
 	test('Sessions command forwards options without adding palette or default keybinding entries', async () => {
@@ -324,10 +313,7 @@ suite('OpenAgentsWindowSystemWideKeybindingContribution', () => {
 		const options = { draft: { mode: 'agent', text: 'Keep this draft', contexts: [] } };
 		await commands.executeCommand(OPEN_AGENTS_WINDOW_COMMAND_ID, options);
 		await commands.executeCommand(OPEN_AGENTS_WINDOW_COMMAND_ID);
-		await assert.rejects(
-			commands.executeCommand(OPEN_AGENTS_WINDOW_COMMAND_ID, { unexpected: true }),
-			/Invalid Agents Window options/,
-		);
+		await assert.rejects(commands.executeCommand(OPEN_AGENTS_WINDOW_COMMAND_ID, { unexpected: true }), /Invalid Agents Window options/);
 		assert.deepEqual(
 			{
 				opened: fixture.opened,

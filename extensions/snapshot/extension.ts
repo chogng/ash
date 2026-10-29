@@ -8,9 +8,7 @@ export function activate(context: ash.ExtensionContext): void {
 	const resources = () =>
 		(assets ??= (async () => {
 			const bytes = Uint8Array.from(atob(viewBundle), character => character.charCodeAt(0));
-			const decoded = (await new Response(
-				new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip')),
-			).json()) as { script: string; style: string };
+			const decoded = (await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).json()) as { script: string; style: string };
 			const uri = (text: string, type: string) => {
 				const url = URL.createObjectURL(new Blob([text], { type }));
 				urls.push(url);
@@ -27,32 +25,16 @@ export function activate(context: ash.ExtensionContext): void {
 				const configuration = ash.workspace.getConfiguration('snapshot.code');
 				view.setState({
 					messages: { ...ash.l10n.bundle },
-					accessibilityHints:
-						ash.workspace.getConfiguration('accessibility.verbosity').get('chatScreenshot') !== false,
-					help: (
-						context.extension.packageJSON.contributes as { imageEditors: { accessibilityHelp: string }[] }
-					).imageEditors[0].accessibilityHelp,
+					accessibilityHints: ash.workspace.getConfiguration('accessibility.verbosity').get('chatScreenshot') !== false,
+					help: (context.extension.packageJSON.contributes as { imageEditors: { accessibilityHelp: string }[] }).imageEditors[0].accessibilityHelp,
 					code: Object.fromEntries(
-						[
-							'padding',
-							'scale',
-							'background',
-							'lineNumbers',
-							'realLineNumbers',
-							'windowControls',
-							'windowTitle',
-							'transparent',
-						].map(key => [key, configuration.get(key)]),
+						['padding', 'scale', 'background', 'lineNumbers', 'realLineNumbers', 'windowControls', 'windowTitle', 'transparent'].map(key => [key, configuration.get(key)]),
 					) as ash.JsonValue,
 				});
 			},
 		}),
 	);
-	context.subscriptions.push(
-		ash.commands.register('snapshot.code', () =>
-			ash.window.showImageEditor('snapshot.editor', { source: 'selection' }),
-		),
-	);
+	context.subscriptions.push(ash.commands.register('snapshot.code', () => ash.window.showImageEditor('snapshot.editor', { source: 'selection' })));
 	context.subscriptions.push(
 		new ash.Disposable(() => {
 			for (const url of urls) URL.revokeObjectURL(url);

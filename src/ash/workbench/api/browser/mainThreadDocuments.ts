@@ -2,11 +2,7 @@ import { Disposable, DisposableMap, DisposableStore } from '../../../base/common
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import type { ITextModel } from '../../../editor/common/model.js';
 import { IFileTextModelService } from '../../services/textmodelResolver/common/textModelResourceService.js';
-import {
-	IExtensionHostApi,
-	type ExtensionHostFleetSnapshot,
-	type JsonValue,
-} from '../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { type ExtensionDocumentSnapshot } from '../common/extHost.protocol.js';
 
 /** Model events belong to the window connection; a restarted extension receives a fresh open sequence. */
@@ -67,8 +63,7 @@ export class MainThreadDocuments extends Disposable {
 					this.reportError,
 				);
 				this.observers.set(key, observer);
-				for (const model of this.models.getModels())
-					observer.send({ type: 'open', document: { ...extensionDocumentSnapshot(model) } });
+				for (const model of this.models.getModels()) observer.send({ type: 'open', document: { ...extensionDocumentSnapshot(model) } });
 			}
 		}
 		for (const key of this.observers.keys()) if (!retained.has(key)) this.observers.deleteAndDispose(key);

@@ -33,26 +33,18 @@ suite('composite browser component', () => {
 			await expect(output.locator('.stanza-editor-link-target')).toHaveCount(1);
 			await link.click();
 			await page.keyboard.up('ControlOrMeta');
-			await expect
-				.poll(() => page.evaluate(() => window.ashCompositeIntegration.openedAgentEvents))
-				.toEqual([{ sessionId: 'first', threadId: 'root', turnId: 'turn', eventId: 'event-1' }]);
+			await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.openedAgentEvents)).toEqual([{ sessionId: 'first', threadId: 'root', turnId: 'turn', eventId: 'event-1' }]);
 			await page.locator('[data-action-id="ash.output.clear"] button').click();
 			await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.outputState().text)).toBe('');
 			const follow = page.locator('[data-action-id="ash.output.autoScroll"] button');
 			if ((await follow.getAttribute('aria-pressed')) === 'true') await follow.click();
 			await page.evaluate(() => window.ashCompositeIntegration.appendAgentEvent());
-			await expect
-				.poll(() => page.evaluate(() => window.ashCompositeIntegration.outputState().text))
-				.toContain('eventId=event-2');
-			expect(await page.evaluate(() => window.ashCompositeIntegration.outputState().text)).not.toContain(
-				'eventId=event-1',
-			);
+			await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.outputState().text)).toContain('eventId=event-2');
+			expect(await page.evaluate(() => window.ashCompositeIntegration.outputState().text)).not.toContain('eventId=event-1');
 			await expect(follow).toHaveAttribute('aria-pressed', 'false');
 			await page.evaluate(() => window.ashCompositeIntegration.showAgentOutput());
 			await expect(channel).toContainText('Agent output second');
-			await page
-				.locator('.ash-workbench-panel')
-				.screenshot({ path: testInfo.outputPath(`agent-output-${locale}.png`) });
+			await page.locator('.ash-workbench-panel').screenshot({ path: testInfo.outputPath(`agent-output-${locale}.png`) });
 			expect(errors).toEqual([]);
 		});
 	}
@@ -83,12 +75,8 @@ suite('composite browser component', () => {
 			await expect(follow).toHaveAttribute('aria-pressed', 'true');
 			await follow.click();
 			await expect(follow).toHaveAttribute('aria-pressed', 'false');
-			await page.evaluate(() =>
-				window.ashCompositeIntegration.appendOutput('new message while following is off'),
-			);
-			await expect
-				.poll(() => page.evaluate(() => window.ashCompositeIntegration.outputState().text))
-				.toContain('new message while following is off');
+			await page.evaluate(() => window.ashCompositeIntegration.appendOutput('new message while following is off'));
+			await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.outputState().text)).toContain('new message while following is off');
 			await expect(follow.locator('[data-ash-icon-id="follow"]')).toBeVisible();
 			await follow.press('Enter');
 			await expect(follow).toHaveAttribute('aria-pressed', 'true');
@@ -107,19 +95,10 @@ suite('composite browser component', () => {
 				});
 				await expect(input).toBeFocused();
 				await expect(input).toHaveValue('restored');
-				expect(
-					await input.evaluate(element => [
-						(element as HTMLInputElement).selectionStart,
-						(element as HTMLInputElement).selectionEnd,
-					]),
-				).toEqual([2, 5]);
+				expect(await input.evaluate(element => [(element as HTMLInputElement).selectionStart, (element as HTMLInputElement).selectionEnd])).toEqual([2, 5]);
 				await expect(title.locator('.ash-output-filter-input')).toHaveCount(inHeader ? 1 : 0);
-				await expect
-					.poll(() => page.evaluate(() => window.ashCompositeIntegration.outputState().filter))
-					.toBe('restored');
-				await expect
-					.poll(() => title.evaluate(element => element.scrollWidth - element.clientWidth))
-					.toBeLessThanOrEqual(1);
+				await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.outputState().filter)).toBe('restored');
+				await expect.poll(() => title.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
 				if (width === 480) await panel.screenshot({ path: testInfo.outputPath(`output-${locale}-narrow.png`) });
 			}
 			for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-light', 'ash-high-contrast-dark']) {
@@ -143,10 +122,7 @@ suite('composite browser component', () => {
 			});
 			await expect(errorOption).toBeVisible();
 			await errorOption.click();
-			await expect(filter).toHaveAttribute(
-				'aria-label',
-				locale === 'en' ? 'Filter Output (Filters Active)' : '筛选输出（已启用筛选条件）',
-			);
+			await expect(filter).toHaveAttribute('aria-label', locale === 'en' ? 'Filter Output (Filters Active)' : '筛选输出（已启用筛选条件）');
 			await clear.click();
 			await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.outputState().text)).toBe('');
 			await expect(clear).toBeDisabled();
@@ -167,9 +143,7 @@ suite('composite browser component', () => {
 		await page.goto('/composite.html?partWidth');
 		await expect.poll(() => page.evaluate(() => window.ashPartWidthIntegration.state().minimum)).toBe(301);
 		await page.evaluate(() => window.ashPartWidthIntegration.setMinimum(520));
-		await expect
-			.poll(() => page.evaluate(() => window.ashPartWidthIntegration.state()))
-			.toEqual({ minimum: 521, frameMinimum: 537, width: 537 });
+		await expect.poll(() => page.evaluate(() => window.ashPartWidthIntegration.state())).toEqual({ minimum: 521, frameMinimum: 537, width: 537 });
 		const sash = page.locator('#part-width-host .ash-grid > .ash-split-view > .ash-sash');
 		const bounds = await sash.boundingBox();
 		expect(bounds).not.toBeNull();
@@ -184,16 +158,12 @@ suite('composite browser component', () => {
 		const part = page.locator('#part-width-host .ash-workbench-auxiliarybar');
 		await expect(part.getByLabel('First input')).toBeVisible();
 		await expect.poll(() => part.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-		await page
-			.locator('#part-width-host')
-			.screenshot({ path: browserTests.info.outputPath('auxiliary-part-minimum.png') });
+		await page.locator('#part-width-host').screenshot({ path: browserTests.info.outputPath('auxiliary-part-minimum.png') });
 		await page.evaluate(() => {
 			window.ashPartWidthIntegration.setMinimum(300);
 			window.ashPartWidthIntegration.resize(1);
 		});
-		await expect
-			.poll(() => page.evaluate(() => window.ashPartWidthIntegration.state()))
-			.toEqual({ minimum: 301, frameMinimum: 317, width: 317 });
+		await expect.poll(() => page.evaluate(() => window.ashPartWidthIntegration.state())).toEqual({ minimum: 301, frameMinimum: 317, width: 317 });
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
@@ -207,10 +177,7 @@ suite('composite browser component', () => {
 			const shortcuts = host.locator('.ash-editor-group-watermark-shortcuts');
 			const entries = shortcuts.locator('.ash-editor-group-watermark-entries');
 			const rows = entries.getByRole('button');
-			const names =
-				locale === 'zh-CN'
-					? ['打开文件', '在文件中搜索', '显示所有命令']
-					: ['Go to File', 'Search in Files', 'Show All Commands'];
+			const names = locale === 'zh-CN' ? ['打开文件', '在文件中搜索', '显示所有命令'] : ['Go to File', 'Search in Files', 'Show All Commands'];
 			await expect(rows).toHaveCount(3);
 			for (const name of names) await expect(entries.getByRole('button', { name, exact: true })).toBeVisible();
 			await expect(shortcuts.getByRole('heading')).toHaveText(locale === 'zh-CN' ? '开始工作' : 'Start Working');
@@ -219,8 +186,7 @@ suite('composite browser component', () => {
 				const block = await entries.evaluate(element => {
 					const bounds = element.getBoundingClientRect();
 					const heading = element.previousElementSibling!;
-					const top =
-						getComputedStyle(heading).display === 'none' ? bounds.top : heading.getBoundingClientRect().top;
+					const top = getComputedStyle(heading).display === 'none' ? bounds.top : heading.getBoundingClientRect().top;
 					return { x: bounds.x, width: bounds.width, y: top, height: bounds.bottom - top };
 				});
 				expect(block.x + block.width / 2).toBeCloseTo(content.x + content.width / 2, 0);
@@ -232,12 +198,8 @@ suite('composite browser component', () => {
 			};
 			for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 				await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
-				await expect(rows.nth(0).locator('kbd')).toHaveText(
-					process.platform === 'darwin' ? ['⌘', 'P'] : ['Ctrl', 'P'],
-				);
-				await expect(rows.nth(1).locator('kbd')).toHaveText(
-					process.platform === 'darwin' ? ['⇧', '⌘', 'F'] : ['Ctrl', 'Shift', 'F'],
-				);
+				await expect(rows.nth(0).locator('kbd')).toHaveText(process.platform === 'darwin' ? ['⌘', 'P'] : ['Ctrl', 'P']);
+				await expect(rows.nth(1).locator('kbd')).toHaveText(process.platform === 'darwin' ? ['⇧', '⌘', 'F'] : ['Ctrl', 'Shift', 'F']);
 				const caps = await entries.locator('kbd').evaluateAll(elements =>
 					elements.map(element => {
 						const bounds = element.getBoundingClientRect();
@@ -254,10 +216,7 @@ suite('composite browser component', () => {
 					[800, 520],
 					[320, 180],
 				]) {
-					await page.evaluate(
-						([width, height]) => window.ashCompositeIntegration.resizeEditor(width!, height!),
-						[width!, height!],
-					);
+					await page.evaluate(([width, height]) => window.ashCompositeIntegration.resizeEditor(width!, height!), [width!, height!]);
 					await assertCentered();
 				}
 				await page.evaluate(() => window.ashCompositeIntegration.resizeEditor(800, 520));
@@ -269,24 +228,16 @@ suite('composite browser component', () => {
 			await rows.nth(1).press('Tab');
 			await expect(rows.nth(2)).toBeFocused();
 			await expect(rows.nth(2)).toHaveCSS('outline-style', 'solid');
-			await page.evaluate(() =>
-				window.ashCompositeIntegration.setWatermarkBinding('workbench.action.showCommands', 'F2'),
-			);
+			await page.evaluate(() => window.ashCompositeIntegration.setWatermarkBinding('workbench.action.showCommands', 'F2'));
 			await expect(rows.nth(2).locator('.ash-keybinding-label')).toHaveText('F2');
 			await expect(rows.nth(2)).toBeFocused();
-			await page.evaluate(() =>
-				window.ashCompositeIntegration.setWatermarkBinding('workbench.action.showCommands', null),
-			);
+			await page.evaluate(() => window.ashCompositeIntegration.setWatermarkBinding('workbench.action.showCommands', null));
 			await expect(rows.nth(2).locator('.ash-keybinding-label')).toHaveCount(0);
 			await expect(rows.nth(2)).toBeFocused();
 			await rows.nth(2).press('Space');
 			await expect
 				.poll(() => page.evaluate(() => window.ashCompositeIntegration.watermarkCommands))
-				.toEqual([
-					'workbench.action.quickOpen',
-					'workbench.action.findInFiles',
-					'workbench.action.showCommands',
-				]);
+				.toEqual(['workbench.action.quickOpen', 'workbench.action.findInFiles', 'workbench.action.showCommands']);
 			await page.evaluate(() => window.ashCompositeIntegration.openEditor('watermark'));
 			await expect(shortcuts).toBeHidden();
 			await expect(host.locator('.ash-editor-pane-host:visible')).toHaveCount(1);
@@ -329,14 +280,9 @@ suite('composite browser component', () => {
 					lineHeight: style.lineHeight,
 					padding: style.padding,
 					radius: style.borderRadius,
-					inside:
-						badge.left >= tab.left &&
-						badge.right <= tab.right &&
-						badge.top >= tab.top &&
-						badge.bottom <= tab.bottom,
+					inside: badge.left >= tab.left && badge.right <= tab.right && badge.top >= tab.top && badge.bottom <= tab.bottom,
 					overlap:
-						(Math.max(0, Math.min(badge.right, icon.right) - Math.max(badge.left, icon.left)) *
-							Math.max(0, Math.min(badge.bottom, icon.bottom) - Math.max(badge.top, icon.top))) /
+						(Math.max(0, Math.min(badge.right, icon.right) - Math.max(badge.left, icon.left)) * Math.max(0, Math.min(badge.bottom, icon.bottom) - Math.max(badge.top, icon.top))) /
 						(icon.width * icon.height),
 					foreground: style.color,
 					background: style.backgroundColor,
@@ -503,9 +449,7 @@ suite('composite browser component', () => {
 			if (theme.includes('high-contrast')) {
 				expect(selectedStyle.outline).toBe('solid');
 				await other.hover();
-				await expect
-					.poll(() => other.evaluate(element => getComputedStyle(element, '::after').outlineStyle))
-					.toBe('dashed');
+				await expect.poll(() => other.evaluate(element => getComputedStyle(element, '::after').outlineStyle)).toBe('dashed');
 			}
 			await tab.focus();
 			await tab.hover();
@@ -567,9 +511,7 @@ suite('composite browser component', () => {
 			await page.evaluate(style => window.ashCompositeIntegration.configureEditorTabs(style), style);
 			await expect(alpha).toBeFocused();
 			expect(await retained!.evaluate(element => element.isConnected)).toBe(true);
-			await expect(host.locator('.ash-ordinary-editor-tabs-row .ash-tab-list')).toHaveClass(
-				new RegExp(`ash-tab-list-${style === 'standard' ? 'flush' : 'inset'}`),
-			);
+			await expect(host.locator('.ash-ordinary-editor-tabs-row .ash-tab-list')).toHaveClass(new RegExp(`ash-tab-list-${style === 'standard' ? 'flush' : 'inset'}`));
 		}
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
@@ -589,9 +531,7 @@ suite('composite browser component', () => {
 			}
 		}
 		await page.evaluate(async () => {
-			await window.ashCompositeIntegration.openEditor(
-				'a-file-with-a-name-that-is-much-longer-than-the-fixed-editor-tab-width',
-			);
+			await window.ashCompositeIntegration.openEditor('a-file-with-a-name-that-is-much-longer-than-the-fixed-editor-tab-width');
 			await window.ashCompositeIntegration.configureEditorTabs('standard', 'fixed');
 		});
 		const longTab = host.getByRole('tab', { name: /a-file-with-a-name/ });
@@ -620,13 +560,7 @@ suite('composite browser component', () => {
 		expect(await first.evaluate((element, original) => element === original, originalFirst)).toBe(true);
 		expect(await second.evaluate((element, original) => element === original, originalSecond)).toBe(true);
 		await first.dragTo(second, { targetPosition: { x: 100, y: 10 } });
-		await expect
-			.poll(() =>
-				panel
-					.locator('.ash-composite-bar-destination')
-					.evaluateAll(tabs => tabs.map(tab => tab.getAttribute('data-action-id'))),
-			)
-			.toEqual(['second', 'first']);
+		await expect.poll(() => panel.locator('.ash-composite-bar-destination').evaluateAll(tabs => tabs.map(tab => tab.getAttribute('data-action-id')))).toEqual(['second', 'first']);
 		expect(await first.evaluate((element, original) => element === original, originalFirst)).toBe(true);
 		expect(await second.evaluate((element, original) => element === original, originalSecond)).toBe(true);
 		await second.click();
@@ -653,10 +587,7 @@ suite('composite browser component', () => {
 			await expect(overflow).toHaveAttribute('aria-expanded', 'false');
 			await overflow.press('Enter');
 			await page.getByRole('menu').getByText('second container', { exact: true }).click();
-			await expect(panel.getByRole('tab', { name: 'second container', exact: true })).toHaveAttribute(
-				'aria-selected',
-				'true',
-			);
+			await expect(panel.getByRole('tab', { name: 'second container', exact: true })).toHaveAttribute('aria-selected', 'true');
 			await expect(panel.getByRole('textbox', { name: 'First input', exact: true })).toBeFocused();
 			expect(await overflow.evaluate((element, previous) => element === previous, original)).toBe(true);
 			await page.evaluate(() => window.ashCompositeIntegration.resize(800, 280));
@@ -746,9 +677,7 @@ suite('composite browser component', () => {
 				const expanded = (await button.getAttribute('aria-expanded')) === 'true';
 				// Start recording at the click so protocol round trips cannot miss a short transition.
 				const framesPromise = host.evaluate(async element => {
-					await new Promise<void>(resolve =>
-						element.addEventListener('click', () => resolve(), { once: true, capture: true }),
-					);
+					await new Promise<void>(resolve => element.addEventListener('click', () => resolve(), { once: true, capture: true }));
 					const split = element.querySelector<HTMLElement>('.ash-split-view')!;
 					const origin = split.getBoundingClientRect().top;
 					const panes = [...split.querySelectorAll<HTMLElement>(':scope > .ash-split-view-pane')];
@@ -788,11 +717,7 @@ suite('composite browser component', () => {
 					expect(position.actual).toBeCloseTo(position.allocated, 0);
 				}
 				if (title === 'Changes') {
-					expect(
-						frames.some(frame =>
-							frame.positions.some(position => Math.abs(position.actual - position.allocated) > 1),
-						),
-					).toBe(reducedMotion === 'no-preference');
+					expect(frames.some(frame => frame.positions.some(position => Math.abs(position.actual - position.allocated) > 1))).toBe(reducedMotion === 'no-preference');
 				}
 			}
 			const graph = host.getByRole('button', { name: 'Graph', exact: true });
@@ -840,14 +765,10 @@ suite('composite browser component', () => {
 		});
 		const modal = page.getByRole('dialog');
 		const initial = (await modal.boundingBox())!;
-		await page.evaluate(() =>
-			window.ashCompositeIntegration.openModalEditor('compact', { width: 560, height: 360 }),
-		);
+		await page.evaluate(() => window.ashCompositeIntegration.openModalEditor('compact', { width: 560, height: 360 }));
 		await expect(modal).toHaveCSS('width', '560px');
 		await expect(modal).toHaveCSS('height', '360px');
-		await page.evaluate(() =>
-			window.ashCompositeIntegration.openModalEditor('compact', { width: 600, height: 400 }),
-		);
+		await page.evaluate(() => window.ashCompositeIntegration.openModalEditor('compact', { width: 600, height: 400 }));
 		await expect(modal).toHaveCSS('width', '600px');
 		await expect(modal).toHaveCSS('height', '400px');
 		await page.setViewportSize({ width: 420, height: 280 });
@@ -882,13 +803,8 @@ suite('composite browser component', () => {
 		await expect(page.getByRole('textbox', { name: 'First input', exact: true })).toBeFocused();
 		expect(await page.evaluate(() => window.ashCompositeIntegration.events)).toEqual(['first:focus']);
 		await page.getByRole('button', { name: 'Outside content' }).focus();
-		await expect
-			.poll(() => page.evaluate(() => window.ashCompositeIntegration.events))
-			.toEqual(['first:focus', 'first:blur']);
-		expect(await page.evaluate(() => window.ashCompositeIntegration.state().map(state => state.focused))).toEqual([
-			false,
-			false,
-		]);
+		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.events)).toEqual(['first:focus', 'first:blur']);
+		expect(await page.evaluate(() => window.ashCompositeIntegration.state().map(state => state.focused))).toEqual([false, false]);
 	});
 
 	test('switching and hiding content releases focus while retaining the same control', async function () {
@@ -896,22 +812,13 @@ suite('composite browser component', () => {
 
 		await page.evaluate(() => window.ashCompositeIntegration.open('first', true));
 		await page.evaluate(() => window.ashCompositeIntegration.open('second', true));
-		await expect
-			.poll(() => page.evaluate(() => window.ashCompositeIntegration.state().map(state => state.focused)))
-			.toEqual([false, true]);
+		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.state().map(state => state.focused))).toEqual([false, true]);
 		await page.evaluate(() => window.ashCompositeIntegration.hide());
-		await expect
-			.poll(() => page.evaluate(() => window.ashCompositeIntegration.state().map(state => state.focused)))
-			.toEqual([false, false]);
+		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.state().map(state => state.focused))).toEqual([false, false]);
 		await page.evaluate(() => window.ashCompositeIntegration.open('first', true));
 		await expect(page.getByRole('textbox', { name: 'First input', exact: true })).toBeFocused();
-		expect(await page.evaluate(() => window.ashCompositeIntegration.state().map(state => state.retained))).toEqual([
-			true,
-			true,
-		]);
-		await expect
-			.poll(() => page.evaluate(() => window.ashCompositeIntegration.events))
-			.toEqual(['first:focus', 'second:focus', 'first:blur', 'second:blur', 'first:focus']);
+		expect(await page.evaluate(() => window.ashCompositeIntegration.state().map(state => state.retained))).toEqual([true, true]);
+		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.events)).toEqual(['first:focus', 'second:focus', 'first:blur', 'second:blur', 'first:focus']);
 	});
 
 	test('disposed content stops reporting focus even if its old root is mounted again', async function () {
@@ -919,9 +826,7 @@ suite('composite browser component', () => {
 
 		await page.evaluate(() => window.ashCompositeIntegration.open('first', true));
 		await page.getByRole('button', { name: 'Outside content' }).focus();
-		await expect
-			.poll(() => page.evaluate(() => window.ashCompositeIntegration.events))
-			.toEqual(['first:focus', 'first:blur']);
+		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.events)).toEqual(['first:focus', 'first:blur']);
 		await page.evaluate(() => {
 			window.ashCompositeIntegration.dispose();
 			window.ashCompositeIntegration.reattachDisposed();
@@ -946,9 +851,7 @@ suite('composite browser component', () => {
 			{ id: 'second', visible: false },
 			{ id: 'second', visible: true, focus: true },
 		]);
-		expect(await page.evaluate(() => window.ashCompositeIntegration.state().every(state => state.retained))).toBe(
-			true,
-		);
+		expect(await page.evaluate(() => window.ashCompositeIntegration.state().every(state => state.retained))).toBe(true);
 	});
 
 	test('real text editor panes report focus across tab switches and stop after closing', async function () {
@@ -967,21 +870,15 @@ suite('composite browser component', () => {
 			]);
 		await page.evaluate(() => window.ashCompositeIntegration.openEditor('alpha'));
 		await expect(input).toBeFocused();
-		await expect
-			.poll(() => page.evaluate(() => window.ashCompositeIntegration.editorEvents))
-			.toEqual(['alpha:focus', 'beta:focus', 'alpha:blur', 'alpha:focus', 'beta:blur']);
+		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.editorEvents)).toEqual(['alpha:focus', 'beta:focus', 'alpha:blur', 'alpha:focus', 'beta:blur']);
 		await page.evaluate(() => window.ashCompositeIntegration.closeEditor('alpha'));
-		await expect
-			.poll(() => page.evaluate(() => window.ashCompositeIntegration.editorState()[0]!.focused))
-			.toBe(false);
+		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.editorState()[0]!.focused)).toBe(false);
 	});
 
 	test('storage flush captures the live pane size and stops after the panel is disposed', async function () {
 		const { page } = browserTests;
 
-		const height = await page
-			.locator('[data-view-id="first.view"]')
-			.evaluate(element => element.getBoundingClientRect().height);
+		const height = await page.locator('[data-view-id="first.view"]').evaluate(element => element.getBoundingClientRect().height);
 		expect(height).toBeGreaterThan(0);
 		expect(await page.evaluate(() => window.ashCompositeIntegration.flushPaneState())).toBeCloseTo(height, 0);
 		await page.evaluate(() => window.ashCompositeIntegration.dispose());
@@ -1032,13 +929,7 @@ suite('composite browser component', () => {
 		await expect.poll(async () => (await region.boundingBox())!.width).toBeLessThan(before - 50);
 		const resizedWidth = (await region.boundingBox())!.width;
 		await expect(alpha).toHaveValue('Keep this draft');
-		expect(
-			await retainedInput.evaluate(
-				element =>
-					element.isConnected &&
-					element === element.ownerDocument.querySelector('[aria-label="alpha prompt"]'),
-			),
-		).toBe(true);
+		expect(await retainedInput.evaluate(element => element.isConnected && element === element.ownerDocument.querySelector('[aria-label="alpha prompt"]'))).toBe(true);
 		await expect(alpha).toBeFocused();
 		await page.reload();
 		await page.waitForFunction(() => !!window.ashSessionGridIntegration);
@@ -1056,9 +947,7 @@ suite('composite browser component', () => {
 		const draft = host.getByRole('textbox', { name: 'conversation prompt', exact: true });
 		await draft.fill('Keep this conversation');
 		await page.evaluate(() => window.ashCompositeIntegration.openEditor('document'));
-		const source = page
-			.locator('.ash-tab')
-			.filter({ has: page.getByRole('tab', { name: 'document.ts', exact: true }) });
+		const source = page.locator('.ash-tab').filter({ has: page.getByRole('tab', { name: 'document.ts', exact: true }) });
 		const target = host.getByRole('region', { name: 'conversation', exact: true });
 		const bounds = (await target.boundingBox())!;
 		await source.dragTo(target, { targetPosition: { x: bounds.width / 2, y: bounds.height - 5 } });
@@ -1094,9 +983,7 @@ suite('composite browser component', () => {
 			await page.waitForFunction(() => !!window.ashCompositeIntegration);
 			const samples = await page.locator('#pane-transitions').evaluate(async host => {
 				const panes = [...host.querySelectorAll<HTMLElement>('.ash-pane-view')];
-				const buttons = panes.map(pane =>
-					pane.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')!,
-				);
+				const buttons = panes.map(pane => pane.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')!);
 				const samples: {
 					title: string;
 					paintedBottom: number;
@@ -1113,13 +1000,8 @@ suite('composite browser component', () => {
 						if (body.hidden) {
 							continue;
 						}
-						const paintedBottom = Math.min(
-							body.getBoundingClientRect().bottom,
-							pane.getBoundingClientRect().bottom,
-							pane.parentElement!.getBoundingClientRect().bottom,
-						);
-						const nextHeaderTop =
-							panes[paneIndex + 1]!.querySelector('.ash-pane-view-header')!.getBoundingClientRect().top;
+						const paintedBottom = Math.min(body.getBoundingClientRect().bottom, pane.getBoundingClientRect().bottom, pane.parentElement!.getBoundingClientRect().bottom);
+						const nextHeaderTop = panes[paneIndex + 1]!.querySelector('.ash-pane-view-header')!.getBoundingClientRect().top;
 						const sash = host.querySelectorAll('.ash-sash')[paneIndex]!.getBoundingClientRect();
 						samples.push({
 							title: buttons[paneIndex]!.textContent!,
@@ -1301,9 +1183,7 @@ suite('composite browser component', () => {
 			await page.evaluate(style => window.ashCompositeIntegration.configureEditorTabs(style, 'fixed'), style);
 			await expect(selected).toBeFocused();
 			await expect(host.getByRole('tab')).toHaveCount(0);
-			const editorTitleHeight = await page
-				.locator('#editor-tabs-host .ash-editor-tabs-and-actions')
-				.evaluate(element => getComputedStyle(element).height);
+			const editorTitleHeight = await page.locator('#editor-tabs-host .ash-editor-tabs-and-actions').evaluate(element => getComputedStyle(element).height);
 			await expect(host.locator('.ash-pane-composite-title')).toHaveCSS('height', editorTitleHeight);
 		}
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
@@ -1331,26 +1211,19 @@ suite('composite browser component', () => {
 			await expect(copy).toBeVisible();
 			await page.evaluate(() => window.ashChatTitleIntegration.select('chat-beta'));
 			await copy.click();
-			await expect
-				.poll(() => page.evaluate(() => window.ashChatTitleIntegration.clipboard()))
-				.toEqual(['agent-host-session://local/open?sessionId=session&threadId=chat-alpha']);
+			await expect.poll(() => page.evaluate(() => window.ashChatTitleIntegration.clipboard())).toEqual(['agent-host-session://local/open?sessionId=session&threadId=chat-alpha']);
 			await title.focus();
 			await title.press('Shift+F10');
 			await expect(copy).toBeVisible();
 			await page.keyboard.press('Escape');
 			await expect(copy).toBeHidden();
 			await expect(title).toBeFocused();
-			await host
-				.getByRole('button', { name: locale === 'en' ? 'More Actions' : '更多操作', exact: true })
-				.click();
+			await host.getByRole('button', { name: locale === 'en' ? 'More Actions' : '更多操作', exact: true }).click();
 			await expect(copy).toBeVisible();
 			await copy.click();
 			await expect
 				.poll(() => page.evaluate(() => window.ashChatTitleIntegration.clipboard()))
-				.toEqual([
-					'agent-host-session://local/open?sessionId=session&threadId=chat-alpha',
-					'agent-host-session://local/open?sessionId=session&threadId=chat-beta',
-				]);
+				.toEqual(['agent-host-session://local/open?sessionId=session&threadId=chat-alpha', 'agent-host-session://local/open?sessionId=session&threadId=chat-beta']);
 			await title.press('Shift+F10');
 			await expect(copy).toBeVisible();
 			await page.evaluate(() => window.ashChatTitleIntegration.dispose());
@@ -1406,9 +1279,7 @@ suite('composite browser component', () => {
 							[image.width - 2, image.height - 2],
 						].map(([x, y]) => [...context.getImageData(x!, y!, 1, 1).data]);
 					}, screenshot.toString('base64'));
-					expect(corners, `${theme}, ${style}, ${part === editorPart ? 'editor' : 'chat'}`).toEqual(
-						Array.from({ length: 4 }, () => [255, 0, 255, 255]),
-					);
+					expect(corners, `${theme}, ${style}, ${part === editorPart ? 'editor' : 'chat'}`).toEqual(Array.from({ length: 4 }, () => [255, 0, 255, 255]));
 				}
 				await expect(chatHost.getByRole('tab')).toHaveCount(0);
 			}
@@ -1448,31 +1319,17 @@ suite('composite browser component', () => {
 			const names =
 				locale === 'zh-CN'
 					? ['显示已打开的编辑器', '全部关闭', '关闭已保存', '启用预览编辑器', '锁定组', '配置编辑器']
-					: [
-							'Show Opened Editors',
-							'Close All',
-							'Close Saved',
-							'Enable Preview Editors',
-							'Lock Group',
-							'Configure Editors',
-						];
+					: ['Show Opened Editors', 'Close All', 'Close Saved', 'Enable Preview Editors', 'Lock Group', 'Configure Editors'];
 			const menu = page.getByRole('menu');
 			const primary = await page.evaluate(() => (navigator.platform.includes('Mac') ? 'Meta' : 'Control'));
 			const primaryLabel = primary === 'Meta' ? '⌘' : 'Ctrl+';
 			const openMenu = async (index = 0) => {
-				await host
-					.locator('.ash-editor-group')
-					.nth(index)
-					.locator('.ash-editor-title-actions [aria-haspopup="menu"]')
-					.click();
+				await host.locator('.ash-editor-group').nth(index).locator('.ash-editor-title-actions [aria-haspopup="menu"]').click();
 				await expect(menu).toBeVisible();
 			};
 			await page.evaluate(() => window.ashEditorTitleIntegration.open('first', true));
 			await openMenu();
-			const trigger = host
-				.locator('.ash-editor-group')
-				.first()
-				.locator('.ash-editor-title-actions [aria-haspopup="menu"]');
+			const trigger = host.locator('.ash-editor-group').first().locator('.ash-editor-title-actions [aria-haspopup="menu"]');
 			await expect(trigger).toHaveAttribute('aria-expanded', 'true');
 			await trigger.click();
 			await expect(menu).toHaveCount(0);
@@ -1480,12 +1337,8 @@ suite('composite browser component', () => {
 			await expect(trigger).toBeFocused();
 			await openMenu();
 			await expect(menu.locator('[role^=menuitem] .ash-button-label')).toHaveText(names);
-			await expect(
-				menu.getByRole('menuitem', { name: names[1], exact: true }).locator('.ash-menu-keybinding kbd'),
-			).toHaveText([`${primaryLabel}K`, 'W']);
-			await expect(
-				menu.getByRole('menuitem', { name: names[2], exact: true }).locator('.ash-menu-keybinding kbd'),
-			).toHaveText([`${primaryLabel}K`, 'U']);
+			await expect(menu.getByRole('menuitem', { name: names[1], exact: true }).locator('.ash-menu-keybinding kbd')).toHaveText([`${primaryLabel}K`, 'W']);
+			await expect(menu.getByRole('menuitem', { name: names[2], exact: true }).locator('.ash-menu-keybinding kbd')).toHaveText([`${primaryLabel}K`, 'U']);
 			await page.keyboard.press('Escape');
 			await expect(trigger).toHaveAttribute('aria-expanded', 'false');
 			await expect(trigger).toBeFocused();
@@ -1500,68 +1353,40 @@ suite('composite browser component', () => {
 			await page.evaluate(() => window.ashEditorTitleIntegration.open('second'));
 			await openMenu(0);
 			await menu.getByRole('menuitemcheckbox', { name: names[4], exact: true }).click();
-			await expect
-				.poll(() =>
-					page.evaluate(() => window.ashEditorTitleIntegration.state().groups.map(group => group.locked)),
-				)
-				.toEqual([true, false]);
+			await expect.poll(() => page.evaluate(() => window.ashEditorTitleIntegration.state().groups.map(group => group.locked))).toEqual([true, false]);
 			await openMenu(0);
-			await expect(menu.getByRole('menuitemcheckbox', { name: names[4], exact: true })).toHaveAttribute(
-				'aria-checked',
-				'true',
-			);
+			await expect(menu.getByRole('menuitemcheckbox', { name: names[4], exact: true })).toHaveAttribute('aria-checked', 'true');
 			await menu.getByRole('menuitem', { name: names[0], exact: true }).click();
 			await expect(page.locator('.ash-quick-pick-row-label')).toHaveText(['first.ts']);
 			await page.keyboard.press('Escape');
 			await openMenu(0);
 			await menu.getByRole('menuitemcheckbox', { name: names[3], exact: true }).click();
 			await page.evaluate(() => window.ashEditorTitleIntegration.open('kept', true));
-			await expect
-				.poll(() => page.evaluate(() => window.ashEditorTitleIntegration.state().groups[0]!.previews))
-				.toEqual([false, false]);
+			await expect.poll(() => page.evaluate(() => window.ashEditorTitleIntegration.state().groups[0]!.previews)).toEqual([false, false]);
 			const groups = host.locator('.ash-editor-group');
-			const before = await groups.evaluateAll(elements =>
-				elements.map(element => element.getBoundingClientRect().width),
-			);
+			const before = await groups.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().width));
 			await openMenu(0);
 			const maximize = menu.getByRole('menuitem', {
 				name: locale === 'zh-CN' ? '最大化组' : 'Maximize Group',
 				exact: true,
 			});
-			await expect(maximize.locator('.ash-menu-keybinding kbd')).toHaveText([
-				`${primaryLabel}K`,
-				`${primaryLabel}M`,
-			]);
+			await expect(maximize.locator('.ash-menu-keybinding kbd')).toHaveText([`${primaryLabel}K`, `${primaryLabel}M`]);
 			await page.keyboard.press('Escape');
 			await host.getByRole('textbox', { name: 'kept.ts', exact: true }).focus();
 			await page.keyboard.press(`${primary}+KeyK`);
 			await page.keyboard.press(`${primary}+KeyM`);
-			await expect
-				.poll(() =>
-					page.evaluate(() => window.ashEditorTitleIntegration.state().groups.map(group => group.visible)),
-				)
-				.toEqual([true, false]);
-			const maximized = await groups
-				.nth(0)
-				.evaluate(element => ({
-					width: element.getBoundingClientRect().width,
-					available: element.closest('.ash-grid')!.getBoundingClientRect().width,
-				}));
+			await expect.poll(() => page.evaluate(() => window.ashEditorTitleIntegration.state().groups.map(group => group.visible))).toEqual([true, false]);
+			const maximized = await groups.nth(0).evaluate(element => ({
+				width: element.getBoundingClientRect().width,
+				available: element.closest('.ash-grid')!.getBoundingClientRect().width,
+			}));
 			// The Workbench frame reserves its border inside the Grid's CSS width.
 			expect(maximized.width).toBeGreaterThan(before[0]! * 1.9);
 			expect(maximized.available - maximized.width).toBeLessThanOrEqual(2);
 			await openMenu(0);
-			await menu
-				.getByRole('menuitem', { name: locale === 'zh-CN' ? '还原组' : 'Unmaximize Group', exact: true })
-				.click();
-			await expect
-				.poll(() =>
-					page.evaluate(() => window.ashEditorTitleIntegration.state().groups.map(group => group.visible)),
-				)
-				.toEqual([true, true]);
-			const after = await groups.evaluateAll(elements =>
-				elements.map(element => element.getBoundingClientRect().width),
-			);
+			await menu.getByRole('menuitem', { name: locale === 'zh-CN' ? '还原组' : 'Unmaximize Group', exact: true }).click();
+			await expect.poll(() => page.evaluate(() => window.ashEditorTitleIntegration.state().groups.map(group => group.visible))).toEqual([true, true]);
+			const after = await groups.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().width));
 			for (let index = 0; index < before.length; index++) expect(after[index]).toBeCloseTo(before[index]!, 0);
 			await openMenu(0);
 			await host.screenshot({ path: testInfo.outputPath(`editor-title-menu-${locale}.png`) });
@@ -1569,11 +1394,7 @@ suite('composite browser component', () => {
 			await host.getByRole('textbox', { name: 'kept.ts', exact: true }).focus();
 			await page.keyboard.press(`${primary}+KeyK`);
 			await page.keyboard.press('KeyU');
-			await expect
-				.poll(() =>
-					page.evaluate(() => window.ashEditorTitleIntegration.state().groups.flatMap(group => group.tabs)),
-				)
-				.toEqual(['first.ts', 'second.ts']);
+			await expect.poll(() => page.evaluate(() => window.ashEditorTitleIntegration.state().groups.flatMap(group => group.tabs))).toEqual(['first.ts', 'second.ts']);
 			await page.evaluate(() => window.ashEditorTitleIntegration.split());
 			await page.evaluate(async () => {
 				await window.ashEditorTitleIntegration.open('close-all-a');
@@ -1582,11 +1403,7 @@ suite('composite browser component', () => {
 			await host.getByRole('textbox', { name: 'close-all-b.ts', exact: true }).focus();
 			await page.keyboard.press(`${primary}+KeyK`);
 			await page.keyboard.press('KeyW');
-			await expect
-				.poll(() =>
-					page.evaluate(() => window.ashEditorTitleIntegration.state().groups.map(group => group.tabs)),
-				)
-				.toEqual([['first.ts', 'second.ts']]);
+			await expect.poll(() => page.evaluate(() => window.ashEditorTitleIntegration.state().groups.map(group => group.tabs))).toEqual([['first.ts', 'second.ts']]);
 		});
 	}
 
@@ -1607,11 +1424,7 @@ suite('composite browser component', () => {
 			const controls = title.locator('.ash-problems-controls');
 			const sharedActions = title.locator('.ash-pane-composite-title-part-actions');
 			const sharedActionIds = ['workbench.action.toggleMaximizedPanel', 'workbench.action.closePanel'];
-			expect(
-				await sharedActions
-					.locator('[data-action-id]')
-					.evaluateAll(elements => elements.map(element => element.getAttribute('data-action-id'))),
-			).toEqual(sharedActionIds);
+			expect(await sharedActions.locator('[data-action-id]').evaluateAll(elements => elements.map(element => element.getAttribute('data-action-id')))).toEqual(sharedActionIds);
 			for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-light', 'ash-high-contrast-dark']) {
 				await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
 				await expect(panel).toHaveAttribute('data-color-theme', theme);
@@ -1668,33 +1481,20 @@ suite('composite browser component', () => {
 			});
 			for (const width of [1200, 600, 300]) {
 				await page.evaluate(width => window.ashCompositeIntegration.resize(width, 240), width);
-				await expect
-					.poll(() => title.evaluate(element => element.scrollWidth - element.clientWidth))
-					.toBeLessThanOrEqual(1);
-				const [inputBounds, filterBounds, controlsBounds, titleBounds] = await Promise.all([
-					input.boundingBox(),
-					filter.boundingBox(),
-					controls.boundingBox(),
-					title.boundingBox(),
-				]);
+				await expect.poll(() => title.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+				const [inputBounds, filterBounds, controlsBounds, titleBounds] = await Promise.all([input.boundingBox(), filter.boundingBox(), controls.boundingBox(), title.boundingBox()]);
 				expect(filterBounds!.x).toBeGreaterThan(inputBounds!.x);
-				expect(controlsBounds!.x + controlsBounds!.width).toBeLessThanOrEqual(
-					titleBounds!.x + titleBounds!.width,
-				);
+				expect(controlsBounds!.x + controlsBounds!.width).toBeLessThanOrEqual(titleBounds!.x + titleBounds!.width);
 				await expect(copy).toBeInViewport();
 			}
 			await collapse.press('Enter');
 			await expect(panel.locator('.ash-problems-file-heading').first()).toHaveAttribute('aria-expanded', 'false');
 			await copy.press('Enter');
-			await expect
-				.poll(() => page.evaluate(() => window.ashCompositeIntegration.copiedProblems[0]?.split('\n').length))
-				.toBe(2);
+			await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.copiedProblems[0]?.split('\n').length)).toBe(2);
 			await input.fill('utils.ts');
 			await copy.press('Enter');
 			await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.copiedProblems.length)).toBe(2);
-			const expectedPath = await page.evaluate(() =>
-				navigator.userAgent.includes('Windows') ? '\\project\\src\\utils.ts' : '/project/src/utils.ts',
-			);
+			const expectedPath = await page.evaluate(() => (navigator.userAgent.includes('Windows') ? '\\project\\src\\utils.ts' : '/project/src/utils.ts'));
 			expect(await page.evaluate(() => window.ashCompositeIntegration.copiedProblems[1])).toContain(expectedPath);
 			await page.evaluate(() => window.ashCompositeIntegration.resize(1000, 240));
 			await page.evaluate(() => window.ashCompositeIntegration.setEditorTheme('ash-light'));
@@ -1704,11 +1504,7 @@ suite('composite browser component', () => {
 			await input.fill('utils.ts');
 			await page.evaluate(() => window.ashCompositeIntegration.open('first'));
 			await expect(title.locator('.ash-problems-controls')).toHaveCount(0);
-			expect(
-				await sharedActions
-					.locator('[data-action-id]')
-					.evaluateAll(elements => elements.map(element => element.getAttribute('data-action-id'))),
-			).toEqual(sharedActionIds);
+			expect(await sharedActions.locator('[data-action-id]').evaluateAll(elements => elements.map(element => element.getAttribute('data-action-id')))).toEqual(sharedActionIds);
 			await expect(sharedActions.getByRole('separator')).toBeVisible();
 
 			await page.evaluate(() => window.ashCompositeIntegration.open('ash.panel.problems'));
@@ -1742,12 +1538,7 @@ suite('composite browser component', () => {
 			await expect(save).toBeEnabled();
 			await save.focus();
 			await page.keyboard.press('Enter');
-			await expect
-				.poll(
-					async () =>
-						(await page.evaluate(() => window.ashCompositeIntegration.logDefaultsState())).defaultLevel,
-				)
-				.toBe('trace');
+			await expect.poll(async () => (await page.evaluate(() => window.ashCompositeIntegration.logDefaultsState())).defaultLevel).toBe('trace');
 			const saved = await page.evaluate(() => window.ashCompositeIntegration.logDefaultsState());
 			expect(JSON.parse(saved.file)['log-level']).toEqual(['trace']);
 			await page.reload();
@@ -1799,9 +1590,7 @@ suite('composite browser component', () => {
 						const x = Math.floor(bounds.left + bounds.width / 2 - titleBounds.left);
 						const y = Math.floor(bounds.bottom - titleBounds.top) - 1;
 						const actual = Array.from(context.getImageData(x, y, 1, 1).data);
-						const expectedColor = item.classList.contains('checked')
-							? getComputedStyle(item).backgroundColor
-							: getComputedStyle(title, '::after').backgroundColor;
+						const expectedColor = item.classList.contains('checked') ? getComputedStyle(item).backgroundColor : getComputedStyle(title, '::after').backgroundColor;
 						context.fillStyle = expectedColor;
 						context.fillRect(0, 0, 1, 1);
 						return { actual, expected: Array.from(context.getImageData(0, 0, 1, 1).data) };
@@ -1843,10 +1632,7 @@ suite('composite browser component', () => {
 			await tab.focus();
 			await expect(tab).toHaveCSS('outline-style', 'solid');
 			await page.evaluate(() => window.ashCompositeIntegration.setActiveEditorSticky(true));
-			await expect(title.locator('.ash-sticky-editor-tabs-row .ash-tab.checked')).toHaveCSS(
-				'background-color',
-				documentColor,
-			);
+			await expect(title.locator('.ash-sticky-editor-tabs-row .ash-tab.checked')).toHaveCSS('background-color', documentColor);
 			await expect(strip).toHaveCSS('background-color', stripColor);
 			await active.getByRole('button', { name: 'Unpin', exact: true }).click();
 		}
@@ -1868,9 +1654,7 @@ suite('composite browser component', () => {
 		const second = title.getByRole('tab', { name: secondName, exact: true });
 		await first.focus();
 		await first.press('Alt+Enter');
-		await expect(
-			title.locator('.ash-sticky-editor-tabs-row').getByRole('tab', { name: firstName!, exact: true }),
-		).toHaveCount(1);
+		await expect(title.locator('.ash-sticky-editor-tabs-row').getByRole('tab', { name: firstName!, exact: true })).toHaveCount(1);
 		await expect(second).toHaveAttribute('aria-selected', 'true');
 		await expect(first).toHaveAttribute('aria-selected', 'false');
 		await expect(first).toBeFocused();
@@ -2016,14 +1800,7 @@ suite('composite browser component', () => {
 			await expect(bar).toHaveCSS('height', '3px');
 		}
 		const changeSetting = async (key: string, option: string): Promise<void> => {
-			await page.evaluate(
-				({ key, value }) =>
-					window.ashCompositeIntegration.setEditorConfiguration(
-						`workbench.editor.titleScrollbar${key}`,
-						value,
-					),
-				{ key, value: option.toLowerCase() },
-			);
+			await page.evaluate(({ key, value }) => window.ashCompositeIntegration.setEditorConfiguration(`workbench.editor.titleScrollbar${key}`, value), { key, value: option.toLowerCase() });
 		};
 		const exercise = async (viewport: Locator, bar: Locator): Promise<void> => {
 			await viewport.evaluate(element => {

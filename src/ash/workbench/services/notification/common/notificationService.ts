@@ -77,12 +77,7 @@ export class NotificationService extends Disposable implements INotificationServ
 		if (this.filter === filter) {
 			return;
 		}
-		this.storageService.store(
-			NotificationService.filterKey,
-			filter === NotificationsFilter.ERROR,
-			StorageScope.APPLICATION,
-			StorageTarget.MACHINE,
-		);
+		this.storageService.store(NotificationService.filterKey, filter === NotificationsFilter.ERROR, StorageScope.APPLICATION, StorageTarget.MACHINE);
 		// Storage implementations may deliver the local change synchronously.
 		if (this.filter !== filter) {
 			this.filter = filter;
@@ -106,24 +101,15 @@ export class NotificationService extends Disposable implements INotificationServ
 	}
 
 	private saveSources(): void {
-		this.storageService.store(
-			NotificationService.sourcesKey,
-			JSON.stringify([...this.sources.values()]),
-			StorageScope.APPLICATION,
-			StorageTarget.MACHINE,
-		);
+		this.storageService.store(NotificationService.sourcesKey, JSON.stringify([...this.sources.values()]), StorageScope.APPLICATION, StorageTarget.MACHINE);
 		this.filterChanges.fire();
 	}
 
 	private readSources(): Map<string, INotificationSourceFilter> {
 		try {
-			const stored: unknown = JSON.parse(
-				this.storageService.get(NotificationService.sourcesKey, StorageScope.APPLICATION, '[]'),
-			);
+			const stored: unknown = JSON.parse(this.storageService.get(NotificationService.sourcesKey, StorageScope.APPLICATION, '[]'));
 			if (Array.isArray(stored) && stored.every(isSourceFilter)) {
-				return new Map(
-					stored.map(source => [source.id, { id: source.id, label: source.label, filter: source.filter }]),
-				);
+				return new Map(stored.map(source => [source.id, { id: source.id, label: source.label, filter: source.filter }]));
 			}
 		} catch {
 			/* A damaged state entry must not prevent the workbench from starting. */
@@ -132,9 +118,7 @@ export class NotificationService extends Disposable implements INotificationServ
 	}
 
 	private readFilter(): NotificationsFilter {
-		return this.storageService.getBoolean(NotificationService.filterKey, StorageScope.APPLICATION, false)
-			? NotificationsFilter.ERROR
-			: NotificationsFilter.OFF;
+		return this.storageService.getBoolean(NotificationService.filterKey, StorageScope.APPLICATION, false) ? NotificationsFilter.ERROR : NotificationsFilter.OFF;
 	}
 
 	notify(options: INotification): INotificationHandle {
@@ -146,8 +130,7 @@ export class NotificationService extends Disposable implements INotificationServ
 		if (
 			options.priority !== NotificationPriority.URGENT &&
 			options.severity !== Severity.Error &&
-			(this.filter === NotificationsFilter.ERROR ||
-				(typeof options.source === 'object' && this.getFilter(options.source) === NotificationsFilter.ERROR))
+			(this.filter === NotificationsFilter.ERROR || (typeof options.source === 'object' && this.getFilter(options.source) === NotificationsFilter.ERROR))
 		) {
 			return this.model.addNotification({ ...options, priority: NotificationPriority.SILENT });
 		}
@@ -202,27 +185,19 @@ function isSourceFilter(value: unknown): value is INotificationSourceFilter {
 }
 
 function validateNotification(options: INotification): void {
-	if (![Severity.Info, Severity.Warning, Severity.Error].includes(options.severity))
-		throw new TypeError('Unknown notification severity');
+	if (![Severity.Info, Severity.Warning, Severity.Error].includes(options.severity)) throw new TypeError('Unknown notification severity');
 	const message = options.message instanceof Error ? options.message.message : options.message;
-	if (typeof message !== 'string' || message.trim().length === 0)
-		throw new TypeError('Notification message must not be empty');
-	if (options.sticky !== undefined && typeof options.sticky !== 'boolean')
-		throw new TypeError('Notification sticky state must be a boolean');
+	if (typeof message !== 'string' || message.trim().length === 0) throw new TypeError('Notification message must not be empty');
+	if (options.sticky !== undefined && typeof options.sticky !== 'boolean') throw new TypeError('Notification sticky state must be a boolean');
 	const source = typeof options.source === 'object' ? options.source?.label : options.source;
-	if (options.source !== undefined && (typeof source !== 'string' || source.trim().length === 0))
-		throw new TypeError('Notification source must not be empty');
-	if (typeof options.source === 'object' && (typeof options.source.id !== 'string' || !options.source.id.trim()))
-		throw new TypeError('Notification source ID must not be empty');
+	if (options.source !== undefined && (typeof source !== 'string' || source.trim().length === 0)) throw new TypeError('Notification source must not be empty');
+	if (typeof options.source === 'object' && (typeof options.source.id !== 'string' || !options.source.id.trim())) throw new TypeError('Notification source ID must not be empty');
 	const actionIds = new Set<string>();
 	for (const action of [...(options.actions?.primary ?? []), ...(options.actions?.secondary ?? [])]) {
-		if (!/^[A-Za-z][A-Za-z0-9._-]{0,127}$/.test(action.id))
-			throw new TypeError(`Invalid notification action ID: ${action.id}`);
+		if (!/^[A-Za-z][A-Za-z0-9._-]{0,127}$/.test(action.id)) throw new TypeError(`Invalid notification action ID: ${action.id}`);
 		if (actionIds.has(action.id)) throw new RangeError(`Duplicate notification action ID: ${action.id}`);
 		actionIds.add(action.id);
-		if (typeof action.label !== 'string' || action.label.trim().length === 0)
-			throw new TypeError('Notification action label must not be empty');
-		if (typeof action.run !== 'function')
-			throw new TypeError(`Notification action '${action.id}' must provide a callback`);
+		if (typeof action.label !== 'string' || action.label.trim().length === 0) throw new TypeError('Notification action label must not be empty');
+		if (typeof action.run !== 'function') throw new TypeError(`Notification action '${action.id}' must provide a callback`);
 	}
 }

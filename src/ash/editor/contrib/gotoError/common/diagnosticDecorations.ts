@@ -1,26 +1,11 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 import { type VersionedLanguageResultStore } from '../../../common/model/languageResultStore.js';
-import {
-	type LanguageDiagnostic,
-	type LanguageDiagnosticResult,
-	type LanguageDiagnosticsPublisher,
-	type LanguageDiagnosticsSource,
-	LanguageDiagnosticSeverity,
-} from '../../../common/languages.js';
+import { type LanguageDiagnostic, type LanguageDiagnosticResult, type LanguageDiagnosticsPublisher, type LanguageDiagnosticsSource, LanguageDiagnosticSeverity } from '../../../common/languages.js';
 import { type URI } from '../../../../base/common/uri.js';
-import {
-	MinimapPosition,
-	OverviewRulerLane,
-	TrackedRangeStickiness,
-	type IModelDecorationOptions,
-} from '../../../common/model.js';
+import { MinimapPosition, OverviewRulerLane, TrackedRangeStickiness, type IModelDecorationOptions } from '../../../common/model.js';
 import { themeColorFromId } from '../../../../base/common/themables.js';
-import {
-	accentForeground,
-	errorForeground,
-	warningForeground,
-} from '../../../../platform/theme/common/colors/baseColors.js';
+import { accentForeground, errorForeground, warningForeground } from '../../../../platform/theme/common/colors/baseColors.js';
 
 /**
  * Projects current-version diagnostics into generic text decorations.
@@ -71,9 +56,7 @@ export class LanguageDiagnosticDecorationBridge extends Disposable {
 	}
 }
 
-export function diagnosticDecorationOptions(
-	diagnostic: LanguageDiagnostic,
-): Omit<IModelDecorationOptions, 'stickiness'> {
+export function diagnosticDecorationOptions(diagnostic: LanguageDiagnostic): Omit<IModelDecorationOptions, 'stickiness'> {
 	const hoverMessage = { value: diagnosticHoverText(diagnostic) };
 	switch (diagnostic.severity) {
 		case LanguageDiagnosticSeverity.Error:
@@ -93,12 +76,7 @@ export function diagnosticDecorationOptions(
 	}
 }
 
-function markerOptions(
-	className: string,
-	colorId: string,
-	zIndex: number,
-	hoverMessage: { readonly value: string },
-): Omit<IModelDecorationOptions, 'stickiness'> {
+function markerOptions(className: string, colorId: string, zIndex: number, hoverMessage: { readonly value: string }): Omit<IModelDecorationOptions, 'stickiness'> {
 	const color = themeColorFromId(colorId);
 	return {
 		description: 'marker-decoration',

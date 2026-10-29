@@ -16,7 +16,10 @@ for (const [name, value] of Object.entries({
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
 	PointerEvent: browserEnvironment.window.MouseEvent,
 })) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
+	Object.defineProperty(globalThis, name, {
+		configurable: true,
+		value,
+	});
 }
 
 const { GridView } = await import('../../browser/ui/grid/gridview.js');

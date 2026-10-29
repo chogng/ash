@@ -6,41 +6,17 @@ import { type ViewportData } from '../../common/viewLayout/viewLinesViewportData
 import { type ViewContext } from '../../common/viewModel/viewContext.js';
 import { GPULifecycle } from './gpuDisposable.js';
 import { quadVertices } from './gpuUtils.js';
-import {
-	createObjectCollectionBuffer,
-	type IObjectCollectionBuffer,
-	type IObjectCollectionBufferEntry,
-} from './objectCollectionBuffer.js';
+import { createObjectCollectionBuffer, type IObjectCollectionBuffer, type IObjectCollectionBufferEntry } from './objectCollectionBuffer.js';
 import { RectangleRendererBindingId, rectangleRendererWgsl } from './rectangleRenderer.wgsl.js';
 import { raceCancellation } from '../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../base/common/cancellation.js';
 
-export type RectangleRendererEntrySpec = [
-	{ name: 'x' },
-	{ name: 'y' },
-	{ name: 'width' },
-	{ name: 'height' },
-	{ name: 'red' },
-	{ name: 'green' },
-	{ name: 'blue' },
-	{ name: 'alpha' },
-];
+export type RectangleRendererEntrySpec = [{ name: 'x' }, { name: 'y' }, { name: 'width' }, { name: 'height' }, { name: 'red' }, { name: 'green' }, { name: 'blue' }, { name: 'alpha' }];
 
-const rectangleProperties: RectangleRendererEntrySpec = [
-	{ name: 'x' },
-	{ name: 'y' },
-	{ name: 'width' },
-	{ name: 'height' },
-	{ name: 'red' },
-	{ name: 'green' },
-	{ name: 'blue' },
-	{ name: 'alpha' },
-];
+const rectangleProperties: RectangleRendererEntrySpec = [{ name: 'x' }, { name: 'y' }, { name: 'width' }, { name: 'height' }, { name: 'red' }, { name: 'green' }, { name: 'blue' }, { name: 'alpha' }];
 
 export class RectangleRenderer extends ViewEventHandler {
-	private readonly shapes: IObjectCollectionBuffer<RectangleRendererEntrySpec> = this._register(
-		createObjectCollectionBuffer(rectangleProperties, 32),
-	);
+	private readonly shapes: IObjectCollectionBuffer<RectangleRendererEntrySpec> = this._register(createObjectCollectionBuffer(rectangleProperties, 32));
 	private readonly shapeBuffer = this._register(new MutableDisposable<IReference<GPUBuffer>>());
 	private readonly vertexBuffer = this._register(new MutableDisposable<IReference<GPUBuffer>>());
 	private readonly layoutBuffer = this._register(new MutableDisposable<IReference<GPUBuffer>>());
@@ -72,16 +48,7 @@ export class RectangleRenderer extends ViewEventHandler {
 		void this.initialize(device).catch(() => this.dispose());
 	}
 
-	public register(
-		x: number,
-		y: number,
-		width: number,
-		height: number,
-		red: number,
-		green: number,
-		blue: number,
-		alpha: number,
-	): IObjectCollectionBufferEntry<RectangleRendererEntrySpec> {
+	public register(x: number, y: number, width: number, height: number, red: number, green: number, blue: number, alpha: number): IObjectCollectionBufferEntry<RectangleRendererEntrySpec> {
 		return this.shapes.createEntry({ x, y, width, height, red, green, blue, alpha });
 	}
 
@@ -93,32 +60,17 @@ export class RectangleRenderer extends ViewEventHandler {
 		const device = this.device;
 		const pipeline = this.pipeline;
 		const bindGroup = this.bindGroup;
-		if (
-			!device ||
-			!pipeline ||
-			!bindGroup ||
-			!this.vertexBuffer.value ||
-			!this.layoutBuffer.value ||
-			!this.scrollBuffer.value
-		)
-			return;
+		if (!device || !pipeline || !bindGroup || !this.vertexBuffer.value || !this.layoutBuffer.value || !this.scrollBuffer.value) return;
 		this.updateShapeBuffer();
 		const width = this.canvas.width;
 		const height = this.canvas.height;
 		const devicePixelRatio = this.devicePixelRatio.get();
 		const contentLeft = Math.min(width, Math.max(0, Math.ceil(this.contentLeft.get() * devicePixelRatio)));
-		device.queue.writeBuffer(
-			this.layoutBuffer.value.object,
-			0,
-			new Float32Array([width, height, contentLeft, 0, Math.max(0, width - contentLeft), height]),
-		);
+		device.queue.writeBuffer(this.layoutBuffer.value.object, 0, new Float32Array([width, height, contentLeft, 0, Math.max(0, width - contentLeft), height]));
 		device.queue.writeBuffer(
 			this.scrollBuffer.value.object,
 			0,
-			new Float32Array([
-				this.context.viewLayout.getCurrentScrollLeft() * devicePixelRatio,
-				(this.context.viewLayout.getCurrentScrollTop() - viewportData.bigNumbersDelta) * devicePixelRatio,
-			]),
+			new Float32Array([this.context.viewLayout.getCurrentScrollLeft() * devicePixelRatio, (this.context.viewLayout.getCurrentScrollTop() - viewportData.bigNumbersDelta) * devicePixelRatio]),
 		);
 		const encoder = device.createCommandEncoder({ label: 'Ash rectangle frame' });
 		const pass = encoder.beginRenderPass({
@@ -213,13 +165,7 @@ export class RectangleRenderer extends ViewEventHandler {
 			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
 		});
 		if (this.shapes.viewUsedSize > 0) {
-			device.queue.writeBuffer(
-				this.shapeBuffer.value.object,
-				0,
-				this.shapes.view as Float32Array<ArrayBuffer>,
-				0,
-				this.shapes.viewUsedSize,
-			);
+			device.queue.writeBuffer(this.shapeBuffer.value.object, 0, this.shapes.view as Float32Array<ArrayBuffer>, 0, this.shapes.viewUsedSize);
 		}
 		this.shapes.dirtyTracker.clear();
 	}
@@ -244,13 +190,7 @@ export class RectangleRenderer extends ViewEventHandler {
 
 	private updateShapeBuffer(): void {
 		const dirty = this.shapes.dirtyTracker;
-		if (
-			!dirty.isDirty ||
-			dirty.dataOffset === undefined ||
-			dirty.dirtySize === undefined ||
-			!this.shapeBuffer.value
-		)
-			return;
+		if (!dirty.isDirty || dirty.dataOffset === undefined || dirty.dirtySize === undefined || !this.shapeBuffer.value) return;
 		this.device!.queue.writeBuffer(
 			this.shapeBuffer.value.object,
 			dirty.dataOffset * Float32Array.BYTES_PER_ELEMENT,

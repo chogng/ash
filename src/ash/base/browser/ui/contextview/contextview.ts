@@ -1,13 +1,7 @@
 import './contextview.css';
 import { Emitter } from '../../../common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../common/lifecycle.js';
-import {
-	AnchorAlignment,
-	AnchorAxisAlignment,
-	AnchorPosition,
-	type IRectangle,
-	layout2d,
-} from '../../../common/layout.js';
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, type IRectangle, layout2d } from '../../../common/layout.js';
 import { addDisposableListener, getActiveElement, getWindow, isHTMLElement, isNode, h } from '../../dom.js';
 import { isAncestorOfActiveElement, isFocusable, restoreFocus } from '../../focus.js';
 import { getViewport } from '../../geometry.js';
@@ -119,12 +113,7 @@ export class ContextView extends Disposable implements IContextViewProvider {
 				(event: PointerEvent) => {
 					const target = event.target;
 					if (isTargetInAnotherModal(target, this.element)) return;
-					if (
-						isNode(target) &&
-						!this.element.contains(target) &&
-						!anchorContains(options.anchor, target) &&
-						!options.isTargetWithin?.(target)
-					) {
+					if (isNode(target) && !this.element.contains(target) && !anchorContains(options.anchor, target) && !options.isTargetWithin?.(target)) {
 						this.hide(ContextViewHideReason.OutsidePointer);
 					}
 				},
@@ -136,12 +125,7 @@ export class ContextView extends Disposable implements IContextViewProvider {
 				ownerDocument,
 				'keydown',
 				(event: KeyboardEvent) => {
-					if (
-						event.isComposing ||
-						event.key !== 'Escape' ||
-						!isTopmostContextView(this) ||
-						isTargetInAnotherModal(event.target, this.element)
-					) {
+					if (event.isComposing || event.key !== 'Escape' || !isTopmostContextView(this) || isTargetInAnotherModal(event.target, this.element)) {
 						return;
 					}
 					event.preventDefault();
@@ -151,9 +135,7 @@ export class ContextView extends Disposable implements IContextViewProvider {
 				true,
 			),
 		);
-		this.visibleListeners.add(
-			addDisposableListener(targetWindow, 'blur', () => this.hide(ContextViewHideReason.WindowBlur)),
-		);
+		this.visibleListeners.add(addDisposableListener(targetWindow, 'blur', () => this.hide(ContextViewHideReason.WindowBlur)));
 		this.visibleListeners.add(addDisposableListener(targetWindow, 'resize', () => this.layout()));
 		const visualViewport = targetWindow.visualViewport;
 		if (visualViewport) {
@@ -161,11 +143,7 @@ export class ContextView extends Disposable implements IContextViewProvider {
 			this.visibleListeners.add(addDisposableListener(visualViewport, 'scroll', () => this.layout()));
 		}
 		this.visibleListeners.add(addDisposableListener(ownerDocument, 'scroll', () => this.layout(), true));
-		this.visibleListeners.add(
-			observeResize(isElementAnchor(options.anchor) ? [this.element, options.anchor] : this.element, () =>
-				this.layout(),
-			),
-		);
+		this.visibleListeners.add(observeResize(isElementAnchor(options.anchor) ? [this.element, options.anchor] : this.element, () => this.layout()));
 		return true;
 	}
 
@@ -180,35 +158,18 @@ export class ContextView extends Disposable implements IContextViewProvider {
 		const targetWindow = getWindow(this.element);
 		const anchor = getAnchorRectangle(options.anchor);
 		const bounds = this.element.getBoundingClientRect();
-		const result = layout2d(
-			getViewport(targetWindow),
-			{ width: bounds.width, height: bounds.height },
-			anchor,
-			options,
-		);
+		const result = layout2d(getViewport(targetWindow), { width: bounds.width, height: bounds.height }, anchor, options);
 		this.element.classList.toggle('ash-context-view-above', result.anchorPosition === AnchorPosition.Above);
 		this.element.classList.toggle('ash-context-view-below', result.anchorPosition === AnchorPosition.Below);
 		this.element.classList.toggle('ash-context-view-align-right', result.anchorAlignment === AnchorAlignment.Right);
 		this.element.classList.toggle('ash-context-view-align-left', result.anchorAlignment === AnchorAlignment.Left);
-		this.element.classList.toggle(
-			'ash-context-view-align-center',
-			result.anchorAlignment === AnchorAlignment.Center,
-		);
-		if (
-			result.anchorAlignment === AnchorAlignment.Center &&
-			options.anchorAxisAlignment !== AnchorAxisAlignment.Horizontal
-		) {
-			this.element.style.setProperty(
-				'--ash-context-view-anchor-offset',
-				`${anchor.left + anchor.width / 2 - result.left}px`,
-			);
+		this.element.classList.toggle('ash-context-view-align-center', result.anchorAlignment === AnchorAlignment.Center);
+		if (result.anchorAlignment === AnchorAlignment.Center && options.anchorAxisAlignment !== AnchorAxisAlignment.Horizontal) {
+			this.element.style.setProperty('--ash-context-view-anchor-offset', `${anchor.left + anchor.width / 2 - result.left}px`);
 		} else {
 			this.element.style.removeProperty('--ash-context-view-anchor-offset');
 		}
-		this.element.classList.toggle(
-			'ash-context-view-axis-horizontal',
-			options.anchorAxisAlignment === AnchorAxisAlignment.Horizontal,
-		);
+		this.element.classList.toggle('ash-context-view-axis-horizontal', options.anchorAxisAlignment === AnchorAxisAlignment.Horizontal);
 		this.element.style.left = `${result.left}px`;
 		this.element.style.top = `${result.top}px`;
 	}
@@ -222,8 +183,7 @@ export class ContextView extends Disposable implements IContextViewProvider {
 		const shouldRestoreFocus =
 			options.focusRestore === ContextViewFocusRestore.Previous &&
 			!isTargetInAnotherModal(activeElement, this.element) &&
-			((isTopmostContextView(this) && isAncestorOfActiveElement(this.element)) ||
-				(activeElement !== null && options.isTargetWithin?.(activeElement) === true));
+			((isTopmostContextView(this) && isAncestorOfActiveElement(this.element)) || (activeElement !== null && options.isTargetWithin?.(activeElement) === true));
 		this.options = undefined;
 		unregisterVisibleContextView(this);
 		this.visibleListeners.clear();
@@ -277,15 +237,19 @@ function isTargetInAnotherModal(target: EventTarget | null, view: HTMLElement): 
 
 function getAnchorDocument(anchor: ContextViewAnchor, fallback: Document): Document {
 	if (isElementAnchor(anchor)) return anchor.ownerDocument;
-	const targetWindow =
-		'targetWindow' in anchor ? (anchor as IRectangle & { readonly targetWindow?: Window }).targetWindow : undefined;
+	const targetWindow = 'targetWindow' in anchor ? (anchor as IRectangle & { readonly targetWindow?: Window }).targetWindow : undefined;
 	return targetWindow?.document ?? fallback;
 }
 
 function getAnchorRectangle(anchor: ContextViewAnchor): IRectangle {
 	if (!isElementAnchor(anchor)) return anchor;
 	const bounds = anchor.getBoundingClientRect();
-	return { left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height };
+	return {
+		left: bounds.left,
+		top: bounds.top,
+		width: bounds.width,
+		height: bounds.height,
+	};
 }
 
 function anchorContains(anchor: ContextViewAnchor, target: Node): boolean {

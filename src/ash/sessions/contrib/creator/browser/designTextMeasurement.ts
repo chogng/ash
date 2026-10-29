@@ -47,17 +47,10 @@ export const measureDesignText: DesignTextMeasurer = (shape, width) => {
 };
 function fallbackMeasurement(shape: DesignTextShape, width: number | undefined): { width: number; height: number } {
 	const lines = shape.text.split('\n');
-	const lineHeight =
-		shape.lineHeight === undefined
-			? shape.fontSize * 1.2
-			: shape.lineHeightUnit === 'percent'
-				? (shape.fontSize * shape.lineHeight) / 100
-				: shape.lineHeight;
+	const lineHeight = shape.lineHeight === undefined ? shape.fontSize * 1.2 : shape.lineHeightUnit === 'percent' ? (shape.fontSize * shape.lineHeight) / 100 : shape.lineHeight;
 	const widths = lines.map(line => [...line].length * (shape.fontSize * 0.6 + (shape.letterSpacing ?? 0)));
 	return {
 		width: width ?? Math.max(shape.fontSize * 0.1, ...widths),
-		height:
-			widths.reduce((sum, value) => sum + Math.max(1, width ? Math.ceil(value / width) : 1) * lineHeight, 0) +
-			(lines.length - 1) * (shape.paragraphSpacing ?? 0),
+		height: widths.reduce((sum, value) => sum + Math.max(1, width ? Math.ceil(value / width) : 1) * lineHeight, 0) + (lines.length - 1) * (shape.paragraphSpacing ?? 0),
 	};
 }

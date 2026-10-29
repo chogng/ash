@@ -4,11 +4,7 @@ import { localize } from '../../../nls.js';
 import type { OpenSessionLink } from '../../../platform/agentHost/common/openSessionLink.js';
 import { ISessionProviderScopeService } from './sessionProviderScopeService.js';
 import { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
-import {
-	sessionIdentity,
-	sessionProviderAuthority,
-	parseSessionProviderAuthority,
-} from '../../services/sessions/common/sessionIdentity.js';
+import { sessionIdentity, sessionProviderAuthority, parseSessionProviderAuthority } from '../../services/sessions/common/sessionIdentity.js';
 
 /** Backend coordinates stay short and host-owned; window identities never enter copied links. */
 export class SessionConversationLinks {
@@ -34,9 +30,7 @@ export class SessionConversationLinks {
 		scope.assertCurrent();
 		if (retired || appServer.connectionGeneration !== generation || state !== 'ready') throw canceled();
 		if (result.thread.sessionId !== backendSessionId || result.thread.threadId !== backendThreadId)
-			throw new Error(
-				localize('chat.sessionLink.missing', 'This conversation is unavailable on this connection.'),
-			);
+			throw new Error(localize('chat.sessionLink.missing', 'This conversation is unavailable on this connection.'));
 		return {
 			connectionAuthority: sessionProviderAuthority(scope.providerId, this.defaultProviderId),
 			sessionId: backendSessionId,

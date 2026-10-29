@@ -1,11 +1,6 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
-import {
-	BrowserPermissionStore,
-	PermissionCategory,
-	electronPermissionToCategories,
-	toOriginKey,
-} from '../../common/browserPermissions.js';
+import { BrowserPermissionStore, PermissionCategory, electronPermissionToCategories, toOriginKey } from '../../common/browserPermissions.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 
 suite('Browser site permission decisions', () => {

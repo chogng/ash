@@ -3,8 +3,7 @@ import { test } from 'mocha';
 import { parse, type YamlNode, type YamlParseError } from '../../common/yaml.js';
 
 test('YAML syntax keeps string scalars, collection styles and original UTF-16 offsets', () => {
-	const source =
-		'name: "🌲: tree"\r\nvalues: [true, 12, null, "", ~]\r\nbody: >-\r\n  first\r\n  next\r\nnested:\r\n  item: {a: one}\r\n';
+	const source = 'name: "🌲: tree"\r\nvalues: [true, 12, null, "", ~]\r\nbody: >-\r\n  first\r\n  next\r\nnested:\r\n  item: {a: one}\r\n';
 	const errors: YamlParseError[] = [];
 	const root = parse(source, errors);
 	assert.deepEqual(errors, []);

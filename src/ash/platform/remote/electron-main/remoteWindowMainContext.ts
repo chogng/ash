@@ -64,32 +64,22 @@ export class RemoteWindowMainContext extends Disposable {
 				return current.rollback();
 			},
 		};
-		this.ipcRoutes = Object.freeze([
-			...remoteAgentIpcRoutes(options.supervisor, () => options.workspaceContext.getWorkspace(), recovery),
-			...remoteConnectionIpcRoutes(options.connections),
-		]);
+		this.ipcRoutes = Object.freeze([...remoteAgentIpcRoutes(options.supervisor, () => options.workspaceContext.getWorkspace(), recovery), ...remoteConnectionIpcRoutes(options.connections)]);
 		this._register(options.tunnels);
 		this._register(
 			options.workspaceContext.onDidChangeWorkspace(() => {
-				void options.tunnels
-					.closeAll()
-					.catch(error => this.reportError('Failed to close Remote tunnels after Workspace change', error));
+				void options.tunnels.closeAll().catch(error => this.reportError('Failed to close Remote tunnels after Workspace change', error));
 			}),
 		);
 		this._register(
 			options.supervisor.onStateChange(() => {
-				options.host.send(
-					REMOTE_AGENT_CONNECTION_CHANGED_CHANNEL,
-					remoteAgentConnection(options.supervisor, options.workspaceContext.getWorkspace()),
-				);
+				options.host.send(REMOTE_AGENT_CONNECTION_CHANGED_CHANNEL, remoteAgentConnection(options.supervisor, options.workspaceContext.getWorkspace()));
 			}),
 		);
 	}
 
 	private createConnectionRecovery(): IRemoteAgentRecoveryMainService | undefined {
-		const launcher = this.options.supervisor.options.enabled
-			? this.options.supervisor.options.processLauncher
-			: undefined;
+		const launcher = this.options.supervisor.options.enabled ? this.options.supervisor.options.processLauncher : undefined;
 		if (!(launcher instanceof RemoteAppServerProcessLauncher)) return undefined;
 		const prepareForRuntimeReplacement = (): void => {
 			try {
@@ -98,16 +88,11 @@ export class RemoteWindowMainContext extends Disposable {
 				this.reportError('Failed to prepare Remote terminals for runtime replacement', error);
 			}
 		};
-		const coordinator = new RemoteConnectionRecoveryCoordinator(
-			this.options.supervisor,
-			launcher,
-			prepareForRuntimeReplacement,
-		);
+		const coordinator = new RemoteConnectionRecoveryCoordinator(this.options.supervisor, launcher, prepareForRuntimeReplacement);
 		return {
 			reconnect: () => coordinator.reconnect(),
 			rollback: async () => {
-				if (!launcher.runtimeRollbackAvailable)
-					throw new Error('Remote runtime rollback is not available for this connection');
+				if (!launcher.runtimeRollbackAvailable) throw new Error('Remote runtime rollback is not available for this connection');
 				const confirmation = await this.options.host.confirmRuntimeRollback();
 				if (confirmation === 'cancelled') return { kind: 'cancelled' };
 				try {

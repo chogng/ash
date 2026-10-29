@@ -1,12 +1,7 @@
 import './scrollbar.css';
 import { localize } from '../../../../nls.js';
 import { RunOnceScheduler } from '../../../common/async.js';
-import {
-	Scrollable,
-	SmoothScrollingOperation,
-	ScrollbarVisibility as ScrollbarVisibilityOption,
-	type INewScrollPosition,
-} from '../../../common/scrollable.js';
+import { Scrollable, SmoothScrollingOperation, ScrollbarVisibility as ScrollbarVisibilityOption, type INewScrollPosition } from '../../../common/scrollable.js';
 import { isReducedMotion } from '../animations/animations.js';
 import type { IMouseWheelEvent } from '../../mouseEvent.js';
 import type { ScrollableElementCreationOptions, ScrollableElementChangeOptions } from './scrollableElementOptions.js';
@@ -16,13 +11,7 @@ import { StandardWheelEvent } from '../../mouseEvent.js';
 import { observeResize } from '../../observer.js';
 import { disposableWindowTimeout, scheduleAtNextAnimationFrame } from '../../scheduler.js';
 import { Emitter, type Event } from '../../../common/event.js';
-import {
-	Disposable,
-	DisposableStore,
-	MutableDisposable,
-	type IDisposable,
-	toDisposable,
-} from '../../../common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from '../../../common/lifecycle.js';
 import type { ScrollbarAxis } from './abstractScrollbar.js';
 import { HorizontalScrollbar } from './horizontalScrollbar.js';
 import { clampScrollbarPosition, createScrollbarAxisMetrics, type ScrollbarAxisMetrics } from './scrollbarState.js';
@@ -35,12 +24,7 @@ import {
 } from './scrollableElementOptions.js';
 import { VerticalScrollbar } from './verticalScrollbar.js';
 
-export type {
-	ScrollableElementOptions,
-	ScrollbarVisibility,
-	ScrollbarWheelOptions,
-	ScrollDirection,
-} from './scrollableElementOptions.js';
+export type { ScrollableElementOptions, ScrollbarVisibility, ScrollbarWheelOptions, ScrollDirection } from './scrollableElementOptions.js';
 export type { ScrollbarAxis } from './abstractScrollbar.js';
 
 export interface ScrollPosition {
@@ -184,9 +168,7 @@ export class ScrollableElement extends Disposable {
 				passive: false,
 			}),
 		);
-		this._register(
-			addDisposableListener(element, 'keydown', (event: KeyboardEvent) => this.handleContainerKeydown(event)),
-		);
+		this._register(addDisposableListener(element, 'keydown', (event: KeyboardEvent) => this.handleContainerKeydown(event)));
 		// Direct manipulation and focus navigation interrupt an outstanding wheel gesture.
 		for (const type of ['pointerdown', 'keydown']) {
 			this._register(addDisposableListener(element, type, () => this.smoothScroll.clear(), true));
@@ -235,18 +217,11 @@ export class ScrollableElement extends Disposable {
 	layout(): void {
 		const width = Math.max(0, this.scrollableElement.clientWidth);
 		const height = Math.max(0, this.scrollableElement.clientHeight);
-		const scrollWidth =
-			this.options.direction === 'vertical' ? width : Math.max(width, this.scrollableElement.scrollWidth);
-		const scrollHeight =
-			this.options.direction === 'horizontal' ? height : Math.max(height, this.scrollableElement.scrollHeight);
+		const scrollWidth = this.options.direction === 'vertical' ? width : Math.max(width, this.scrollableElement.scrollWidth);
+		const scrollHeight = this.options.direction === 'horizontal' ? height : Math.max(height, this.scrollableElement.scrollHeight);
 		const maximumLeft = Math.max(0, scrollWidth - width);
 		const maximumTop = Math.max(0, scrollHeight - height);
-		if (
-			width !== this._state.width ||
-			height !== this._state.height ||
-			scrollWidth !== this._state.scrollWidth ||
-			scrollHeight !== this._state.scrollHeight
-		) {
+		if (width !== this._state.width || height !== this._state.height || scrollWidth !== this._state.scrollWidth || scrollHeight !== this._state.scrollHeight) {
 			this.smoothScroll.clear();
 		}
 		const left = clampScrollbarPosition(this.scrollableElement.scrollLeft, maximumLeft);
@@ -255,7 +230,16 @@ export class ScrollableElement extends Disposable {
 			this.scrollableElement.scrollLeft = left;
 			this.scrollableElement.scrollTop = top;
 		}
-		this.commitState({ left, top, width, height, scrollWidth, scrollHeight, maximumLeft, maximumTop });
+		this.commitState({
+			left,
+			top,
+			width,
+			height,
+			scrollWidth,
+			scrollHeight,
+			maximumLeft,
+			maximumTop,
+		});
 		this.applyPendingReveal();
 	}
 
@@ -283,11 +267,7 @@ export class ScrollableElement extends Disposable {
 			this.pendingReveal = undefined;
 			return;
 		}
-		if (
-			(this.options.direction !== 'vertical' && this._state.width <= 0) ||
-			(this.options.direction !== 'horizontal' && this._state.height <= 0)
-		)
-			return;
+		if ((this.options.direction !== 'vertical' && this._state.width <= 0) || (this.options.direction !== 'horizontal' && this._state.height <= 0)) return;
 		this.pendingReveal = undefined;
 		const viewportBounds = this.scrollableElement.getBoundingClientRect();
 		const elementBounds = element.getBoundingClientRect();
@@ -295,8 +275,7 @@ export class ScrollableElement extends Disposable {
 		let top = this._state.top;
 		if (this.options.direction !== 'vertical') {
 			const viewportLeft = viewportBounds.left;
-			const viewportRight =
-				viewportBounds.left + this._state.width - (this.vertical.rendered ? this.options.scrollbarSize : 0);
+			const viewportRight = viewportBounds.left + this._state.width - (this.vertical.rendered ? this.options.scrollbarSize : 0);
 			if (elementBounds.left < viewportLeft) {
 				left += elementBounds.left - viewportLeft;
 			} else if (elementBounds.right > viewportRight) {
@@ -305,8 +284,7 @@ export class ScrollableElement extends Disposable {
 		}
 		if (this.options.direction !== 'horizontal') {
 			const viewportTop = viewportBounds.top;
-			const viewportBottom =
-				viewportBounds.top + this._state.height - (this.horizontal.rendered ? this.options.scrollbarSize : 0);
+			const viewportBottom = viewportBounds.top + this._state.height - (this.horizontal.rendered ? this.options.scrollbarSize : 0);
 			if (elementBounds.top < viewportTop) {
 				top += elementBounds.top - viewportTop;
 			} else if (elementBounds.bottom > viewportBottom) {
@@ -318,8 +296,7 @@ export class ScrollableElement extends Disposable {
 
 	private handleNativeScroll(): void {
 		const previous = this._state;
-		if (this.scrollableElement.scrollLeft !== previous.left || this.scrollableElement.scrollTop !== previous.top)
-			this.smoothScroll.clear();
+		if (this.scrollableElement.scrollLeft !== previous.left || this.scrollableElement.scrollTop !== previous.top) this.smoothScroll.clear();
 		this.layout();
 		if (previous.left === this._state.left && previous.top === this._state.top) return;
 		this.showScrollbars();
@@ -330,10 +307,7 @@ export class ScrollableElement extends Disposable {
 			pageWidth: this._state.width,
 			pageHeight: this._state.height,
 		});
-		const smooth =
-			this.options.mouseWheelSmoothScroll &&
-			!this.wheelClassifier.isContinuousWheel(wheel) &&
-			!isReducedMotion(this.element);
+		const smooth = this.options.mouseWheelSmoothScroll && !this.wheelClassifier.isContinuousWheel(wheel) && !isReducedMotion(this.element);
 		let deltaX = wheel.deltaX;
 		let deltaY = wheel.deltaY;
 		if (wheel.shiftKey && this.options.wheel.shift === 'horizontal' && deltaX === 0) {
@@ -415,9 +389,7 @@ export class ScrollableElement extends Disposable {
 	}
 
 	private setAxisPosition(axis: ScrollbarAxis, position: number): boolean {
-		return axis === 'horizontal'
-			? this.setScrollPosition(position, this._state.top)
-			: this.setScrollPosition(this._state.left, position);
+		return axis === 'horizontal' ? this.setScrollPosition(position, this._state.top) : this.setScrollPosition(this._state.left, position);
 	}
 
 	private setScrollPosition(left: number, top: number): boolean {
@@ -429,15 +401,10 @@ export class ScrollableElement extends Disposable {
 		left = clampScrollbarPosition(left, this._state.maximumLeft);
 		top = clampScrollbarPosition(top, this._state.maximumTop);
 		const previous = this.smoothScrolling?.to;
-		if (left === (previous?.scrollLeft ?? this._state.left) && top === (previous?.scrollTop ?? this._state.top))
-			return false;
+		if (left === (previous?.scrollLeft ?? this._state.left) && top === (previous?.scrollTop ?? this._state.top)) return false;
 		this.smoothScroll.clear();
 		const dimensions = { width: this._state.width, height: this._state.height };
-		const operation = SmoothScrollingOperation.start(
-			{ ...dimensions, scrollLeft: this._state.left, scrollTop: this._state.top },
-			{ ...dimensions, scrollLeft: left, scrollTop: top },
-			125,
-		);
+		const operation = SmoothScrollingOperation.start({ ...dimensions, scrollLeft: this._state.left, scrollTop: this._state.top }, { ...dimensions, scrollLeft: left, scrollTop: top }, 125);
 		this.smoothScrolling = operation;
 		this.smoothScroll.value = toDisposable(() => {
 			operation.dispose();
@@ -481,8 +448,14 @@ export class ScrollableElement extends Disposable {
 		this._state = next;
 		this.render();
 		if (previous.left === next.left && previous.top === next.top) return;
-		const previousPosition = { left: previous.left, top: previous.top };
-		this.onDidScrollEmitter.fire({ previous: previousPosition, current: next });
+		const previousPosition = {
+			left: previous.left,
+			top: previous.top,
+		};
+		this.onDidScrollEmitter.fire({
+			previous: previousPosition,
+			current: next,
+		});
 		this.onScrollOption?.({ left: next.left, top: next.top });
 	}
 
@@ -495,56 +468,18 @@ export class ScrollableElement extends Disposable {
 		this.vertical.trackNode.setBottom(horizontalRendered ? this.options.scrollbarSize : 0);
 		const cornerHidden = !(horizontalRendered && verticalRendered);
 		if (this.corner.hidden !== cornerHidden) this.corner.hidden = cornerHidden;
-		const horizontalTrackSize = Math.max(
-			0,
-			this._state.width - (verticalRendered ? this.options.scrollbarSize : 0),
-		);
-		const verticalTrackSize = Math.max(
-			0,
-			this._state.height - (horizontalRendered ? this.options.scrollbarSize : 0),
-		);
-		this.horizontal.render(
-			createScrollbarAxisMetrics(
-				this._state.width,
-				this._state.scrollWidth,
-				this._state.left,
-				horizontalTrackSize,
-				this.options.minimumThumbSize,
-			),
-			horizontalRendered,
-		);
-		this.vertical.render(
-			createScrollbarAxisMetrics(
-				this._state.height,
-				this._state.scrollHeight,
-				this._state.top,
-				verticalTrackSize,
-				this.options.minimumThumbSize,
-			),
-			verticalRendered,
-		);
+		const horizontalTrackSize = Math.max(0, this._state.width - (verticalRendered ? this.options.scrollbarSize : 0));
+		const verticalTrackSize = Math.max(0, this._state.height - (horizontalRendered ? this.options.scrollbarSize : 0));
+		this.horizontal.render(createScrollbarAxisMetrics(this._state.width, this._state.scrollWidth, this._state.left, horizontalTrackSize, this.options.minimumThumbSize), horizontalRendered);
+		this.vertical.render(createScrollbarAxisMetrics(this._state.height, this._state.scrollHeight, this._state.top, verticalTrackSize, this.options.minimumThumbSize), verticalRendered);
 	}
 
 	private axisMetrics(axis: ScrollbarAxis): ScrollbarAxisMetrics {
 		const oppositeRendered = axis === 'horizontal' ? this.vertical.rendered : this.horizontal.rendered;
-		const trackSize =
-			(axis === 'horizontal' ? this._state.width : this._state.height) -
-			(oppositeRendered ? this.options.scrollbarSize : 0);
+		const trackSize = (axis === 'horizontal' ? this._state.width : this._state.height) - (oppositeRendered ? this.options.scrollbarSize : 0);
 		return axis === 'horizontal'
-			? createScrollbarAxisMetrics(
-					this._state.width,
-					this._state.scrollWidth,
-					this._state.left,
-					trackSize,
-					this.options.minimumThumbSize,
-				)
-			: createScrollbarAxisMetrics(
-					this._state.height,
-					this._state.scrollHeight,
-					this._state.top,
-					trackSize,
-					this.options.minimumThumbSize,
-				);
+			? createScrollbarAxisMetrics(this._state.width, this._state.scrollWidth, this._state.left, trackSize, this.options.minimumThumbSize)
+			: createScrollbarAxisMetrics(this._state.height, this._state.scrollHeight, this._state.top, trackSize, this.options.minimumThumbSize);
 	}
 
 	private showScrollbars(): void {
@@ -593,9 +528,7 @@ function ownerWindow(element: HTMLElement): Window {
 
 /** Device evidence is shared by viewport-owned and caller-owned scroll containers. */
 class WheelInputClassifier {
-	private wheelInput:
-		| { magnitude: number; horizontal: boolean; quantum: number; discreteCount: number; continuousTime: number }
-		| undefined;
+	private wheelInput: { magnitude: number; horizontal: boolean; quantum: number; discreteCount: number; continuousTime: number } | undefined;
 
 	isContinuousWheel(event: IMouseWheelEvent): boolean {
 		if (event.browserEvent.deltaMode !== 0) {
@@ -608,11 +541,7 @@ class WheelInputClassifier {
 		if (magnitude === 0) return false;
 		const horizontal = event.deltaX !== 0;
 		const previous = this.wheelInput;
-		const repeated =
-			previous !== undefined &&
-			previous.horizontal === horizontal &&
-			magnitude >= 1 &&
-			Math.abs(previous.magnitude - magnitude) < 0.00001;
+		const repeated = previous !== undefined && previous.horizontal === horizontal && magnitude >= 1 && Math.abs(previous.magnitude - magnitude) < 0.00001;
 		let quantum = previous?.quantum ?? 0;
 		if (repeated) quantum = quantum > 0 ? Math.min(quantum, magnitude) : magnitude;
 		const wholeStep = Math.abs(magnitude - Math.round(magnitude)) < 0.00001;
@@ -620,10 +549,7 @@ class WheelInputClassifier {
 		const discreteCount = wholeStep || learnedStep ? (previous?.discreteCount ?? 0) + 1 : 0;
 		const now = event.browserEvent.timeStamp;
 		const continuousTime = previous?.continuousTime ?? -Infinity;
-		const continuous =
-			(event.deltaX !== 0 && event.deltaY !== 0) ||
-			discreteCount === 0 ||
-			(now - continuousTime <= 100 && discreteCount < 2 && !repeated);
+		const continuous = (event.deltaX !== 0 && event.deltaY !== 0) || discreteCount === 0 || (now - continuousTime <= 100 && discreteCount < 2 && !repeated);
 		this.wheelInput = {
 			magnitude,
 			horizontal,
@@ -711,11 +637,7 @@ export class SmoothScrollableElement extends Disposable {
 			const activate = (): void => {
 				this.inertia.clear();
 				const position = scrollable.getCurrentScrollPosition();
-				scrollable.setScrollPositionNow(
-					axis === 'horizontal'
-						? { scrollLeft: position.scrollLeft + direction * 40 }
-						: { scrollTop: position.scrollTop + direction * 40 },
-				);
+				scrollable.setScrollPositionNow(axis === 'horizontal' ? { scrollLeft: position.scrollLeft + direction * 40 } : { scrollTop: position.scrollTop + direction * 40 });
 			};
 			this._register(
 				addDisposableListener(button, 'click', (event: MouseEvent) => {
@@ -741,9 +663,7 @@ export class SmoothScrollableElement extends Disposable {
 							}
 						}),
 					);
-					this.arrowPress.add(
-						addDisposableListener(button, 'lostpointercapture', () => this.arrowPress.clear()),
-					);
+					this.arrowPress.add(addDisposableListener(button, 'lostpointercapture', () => this.arrowPress.clear()));
 					const targetWindow = element.ownerDocument.defaultView!;
 					const repeat = this.arrowPress.add(new MutableDisposable<IDisposable>());
 					const tick = (): void => {
@@ -794,22 +714,14 @@ export class SmoothScrollableElement extends Disposable {
 				'wheel',
 				(event: WheelEvent) => {
 					const dimensions = scrollable.getScrollDimensions();
-					this.delegateScrollFromMouseWheelEvent(
-						new StandardWheelEvent(event, { pageWidth: dimensions.width, pageHeight: dimensions.height }),
-					);
+					this.delegateScrollFromMouseWheelEvent(new StandardWheelEvent(event, { pageWidth: dimensions.width, pageHeight: dimensions.height }));
 				},
 				{ passive: false },
 			),
 		);
 		this._register(
 			scrollable.onScroll(event => {
-				if (
-					!this.applyingInertia ||
-					event.widthChanged ||
-					event.heightChanged ||
-					event.scrollWidthChanged ||
-					event.scrollHeightChanged
-				) {
+				if (!this.applyingInertia || event.widthChanged || event.heightChanged || event.scrollWidthChanged || event.scrollHeightChanged) {
 					this.inertia.clear();
 				}
 				if (event.scrollLeftChanged || event.scrollTopChanged) {
@@ -863,22 +775,14 @@ export class SmoothScrollableElement extends Disposable {
 			if (Math.abs(deltaY) >= Math.abs(deltaX)) deltaX = 0;
 			else deltaY = 0;
 		}
-		const speed =
-			(this.options.mouseWheelScrollSensitivity ?? 1) *
-			(event.altKey ? (this.options.fastScrollSensitivity ?? 5) : 1);
+		const speed = (this.options.mouseWheelScrollSensitivity ?? 1) * (event.altKey ? (this.options.fastScrollSensitivity ?? 5) : 1);
 		// Preserve both directions of subpixel input in integer scroll viewports.
 		const distanceX = Math.sign(deltaX * speed) * Math.ceil(Math.abs(deltaX * speed));
 		const distanceY = Math.sign(deltaY * speed) * Math.ceil(Math.abs(deltaY * speed));
 		const previous = this.scrollable.getFutureScrollPosition();
 		const dimensions = this.scrollable.getScrollDimensions();
-		const scrollLeft = clampScrollbarPosition(
-			previous.scrollLeft + distanceX,
-			dimensions.scrollWidth - dimensions.width,
-		);
-		const scrollTop = clampScrollbarPosition(
-			previous.scrollTop + distanceY,
-			dimensions.scrollHeight - dimensions.height,
-		);
+		const scrollLeft = clampScrollbarPosition(previous.scrollLeft + distanceX, dimensions.scrollWidth - dimensions.width);
+		const scrollTop = clampScrollbarPosition(previous.scrollTop + distanceY, dimensions.scrollHeight - dimensions.height);
 		const changed = scrollLeft !== previous.scrollLeft || scrollTop !== previous.scrollTop;
 		if (changed) {
 			if (this.options.inertialScroll && continuous) {
@@ -940,41 +844,19 @@ export class SmoothScrollableElement extends Disposable {
 		this.vertical.trackNode.setWidth(verticalSize);
 		const horizontalLength = Math.max(0, width - (verticalRendered ? verticalSize : 0));
 		const verticalLength = Math.max(0, height - (horizontalRendered ? horizontalSize : 0));
-		const horizontalArrow = this.options.horizontalHasArrows
-			? Math.min(this.options.arrowSize ?? 11, horizontalLength / 2)
-			: 0;
-		const verticalArrow = this.options.verticalHasArrows
-			? Math.min(this.options.arrowSize ?? 11, verticalLength / 2)
-			: 0;
+		const horizontalArrow = this.options.horizontalHasArrows ? Math.min(this.options.arrowSize ?? 11, horizontalLength / 2) : 0;
+		const verticalArrow = this.options.verticalHasArrows ? Math.min(this.options.arrowSize ?? 11, verticalLength / 2) : 0;
 		this.horizontal.trackNode.setLeft(horizontalArrow);
 		this.horizontal.trackNode.setRight((verticalRendered ? verticalSize : 0) + horizontalArrow);
 		this.vertical.trackNode.setTop(verticalArrow);
 		this.vertical.trackNode.setBottom((horizontalRendered ? horizontalSize : 0) + verticalArrow);
-		this.horizontal.track.style.setProperty(
-			'--ash-scrollbar-slider-size',
-			`${Math.min(horizontalSize, this.options.horizontalSliderSize ?? horizontalSize)}px`,
-		);
-		this.vertical.track.style.setProperty(
-			'--ash-scrollbar-slider-size',
-			`${Math.min(verticalSize, this.options.verticalSliderSize ?? verticalSize)}px`,
-		);
+		this.horizontal.track.style.setProperty('--ash-scrollbar-slider-size', `${Math.min(horizontalSize, this.options.horizontalSliderSize ?? horizontalSize)}px`);
+		this.vertical.track.style.setProperty('--ash-scrollbar-slider-size', `${Math.min(verticalSize, this.options.verticalSliderSize ?? verticalSize)}px`);
 		const transform = `translate3d(${scrollLeft}px, ${scrollTop}px, 0)`;
 		this.horizontal.trackNode.setTransform(transform);
 		this.vertical.trackNode.setTransform(transform);
-		this.horizontalMetrics = createScrollbarAxisMetrics(
-			width,
-			scrollWidth,
-			scrollLeft,
-			horizontalLength - 2 * horizontalArrow,
-			20,
-		);
-		this.verticalMetrics = createScrollbarAxisMetrics(
-			height,
-			scrollHeight,
-			scrollTop,
-			verticalLength - 2 * verticalArrow,
-			20,
-		);
+		this.horizontalMetrics = createScrollbarAxisMetrics(width, scrollWidth, scrollLeft, horizontalLength - 2 * horizontalArrow, 20);
+		this.verticalMetrics = createScrollbarAxisMetrics(height, scrollHeight, scrollTop, verticalLength - 2 * verticalArrow, 20);
 		this.horizontal.render(this.horizontalMetrics, horizontalRendered);
 		this.vertical.render(this.verticalMetrics, verticalRendered);
 		for (const { button, axis, direction } of this.arrows) {
@@ -995,10 +877,7 @@ export class SmoothScrollableElement extends Disposable {
 	}
 
 	private isRendered(visibility: ScrollbarVisibilityOption | undefined, needed: boolean): boolean {
-		return (
-			visibility === ScrollbarVisibilityOption.Visible ||
-			(visibility !== ScrollbarVisibilityOption.Hidden && needed)
-		);
+		return visibility === ScrollbarVisibilityOption.Visible || (visibility !== ScrollbarVisibilityOption.Hidden && needed);
 	}
 
 	private updateVisibility(): void {
@@ -1008,10 +887,7 @@ export class SmoothScrollableElement extends Disposable {
 		this.horizontal.setShouldBeVisible(reveal);
 		this.vertical.setShouldBeVisible(reveal);
 		for (const { button, axis } of this.arrows) {
-			button.dataset.visibility =
-				axis === 'horizontal'
-					? this.horizontal.track.dataset.visibility
-					: this.vertical.track.dataset.visibility;
+			button.dataset.visibility = axis === 'horizontal' ? this.horizontal.track.dataset.visibility : this.vertical.track.dataset.visibility;
 		}
 	}
 }

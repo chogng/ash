@@ -15,8 +15,7 @@ export type IAutomationSchedule =
 export interface AutomationTarget {
 	readonly providerId: string;
 	readonly directory: string;
-	readonly session:
-		{ readonly type: 'new' } | { readonly type: 'continue'; readonly sessionId: string; readonly threadId: string };
+	readonly session: { readonly type: 'new' } | { readonly type: 'continue'; readonly sessionId: string; readonly threadId: string };
 }
 
 export interface IAutomationDescriptor {

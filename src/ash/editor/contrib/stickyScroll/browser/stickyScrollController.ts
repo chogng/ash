@@ -33,8 +33,7 @@ export class StickyScrollController extends Disposable {
 	private menuOpen = false;
 	private pointer: { x: number; y: number } | undefined;
 	private definitionRequest: AbortController | undefined;
-	private definitionTarget:
-		{ node: HTMLElement; lineNumber: number; startColumn: number; endColumn: number } | undefined;
+	private definitionTarget: { node: HTMLElement; lineNumber: number; startColumn: number; endColumn: number } | undefined;
 
 	constructor(
 		private readonly editor: ICodeEditor,
@@ -50,18 +49,13 @@ export class StickyScrollController extends Disposable {
 		if (folding.model !== viewport.textModel) {
 			throw new TypeError('Stanza sticky scroll dependencies must share a text model');
 		}
-		this.candidateProvider = this._register(
-			instantiationService.createInstance(StickyLineCandidateProvider, editor, folding, onError),
-		);
+		this.candidateProvider = this._register(instantiationService.createInstance(StickyLineCandidateProvider, editor, folding, onError));
 		this.widget = this._register(new StickyScrollWidget(editor, viewport.textModel));
 		const element = this.widget.getDomNode();
 		viewport.domNode.domNode.append(element);
 		const focused = EditorContextKeys.stickyScrollFocused.bindTo(contextKeyService);
 		this.visible = EditorContextKeys.stickyScrollVisible.bindTo(contextKeyService);
-		const enabled = contextKeyService.createKey(
-			'config.editor.stickyScroll.enabled',
-			editor.getOption(EditorOption.stickyScroll).enabled,
-		);
+		const enabled = contextKeyService.createKey('config.editor.stickyScroll.enabled', editor.getOption(EditorOption.stickyScroll).enabled);
 		this._register(
 			toDisposable(() => {
 				this.clearDefinitionLink();
@@ -97,14 +91,7 @@ export class StickyScrollController extends Disposable {
 					this.showContextMenu(target, this.widget.getLineIndexFromChildDomNode(target));
 					return;
 				}
-				if (
-					event.defaultPrevented ||
-					event.isComposing ||
-					event.altKey ||
-					event.ctrlKey ||
-					event.metaKey ||
-					event.shiftKey
-				) {
+				if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
 					return;
 				}
 				let command: string;
@@ -162,10 +149,7 @@ export class StickyScrollController extends Disposable {
 		this._register(
 			addDisposableListener(element, 'contextmenu', event => {
 				stopEvent(event);
-				this.showContextMenu(
-					{ x: event.clientX, y: event.clientY, targetWindow: element.ownerDocument.defaultView! },
-					this.widget.getLineIndexFromChildDomNode(event.target as HTMLElement),
-				);
+				this.showContextMenu({ x: event.clientX, y: event.clientY, targetWindow: element.ownerDocument.defaultView! }, this.widget.getLineIndexFromChildDomNode(event.target as HTMLElement));
 			}),
 		);
 		this._register(
@@ -221,14 +205,9 @@ export class StickyScrollController extends Disposable {
 					if (position && range && range.startContainer.parentElement === event.target) {
 						stopEvent(event);
 						this.clearDefinitionLink();
-						this.editor.setPosition(
-							new Position(position.lineNumber, position.column + range.startOffset),
-							'stickyScroll',
-						);
+						this.editor.setPosition(new Position(position.lineNumber, position.column + range.startOffset), 'stickyScroll');
 						this.editor.focus();
-						void this.editor
-							.getContribution<ReferencesController>('editor.contrib.referencesController')
-							?.navigate('definition');
+						void this.editor.getContribution<ReferencesController>('editor.contrib.referencesController')?.navigate('definition');
 					}
 					return;
 				}
@@ -247,11 +226,7 @@ export class StickyScrollController extends Disposable {
 					try {
 						const line = state.startLineNumbers[index]!;
 						this.folding.toggleAtLine(line - 1);
-						this.editor.setScrollTop(
-							this.editor.getTopForLineNumber(line) -
-								index * this.editor.getOption(EditorOption.lineHeight) +
-								1,
-						);
+						this.editor.setScrollTop(this.editor.getTopForLineNumber(line) - index * this.editor.getOption(EditorOption.lineHeight) + 1);
 					} finally {
 						this.changingFold = false;
 						this.render();
@@ -317,14 +292,10 @@ export class StickyScrollController extends Disposable {
 		if (ranges.length === 0) {
 			return StickyScrollWidgetState.Empty;
 		}
-		const candidates = this.candidateProvider.getCandidateStickyLinesIntersecting(
-			new StickyRange(ranges[0]!.startLineNumber, ranges.at(-1)!.endLineNumber),
-		);
+		const candidates = this.candidateProvider.getCandidateStickyLinesIntersecting(new StickyRange(ranges[0]!.startLineNumber, ranges.at(-1)!.endLineNumber));
 		const starts: number[] = [];
 		const ends: number[] = [];
-		const heightLimit = Math.round(
-			this.editor.getLayoutInfo().height / (4 * this.editor.getOption(EditorOption.lineHeight)),
-		);
+		const heightLimit = Math.round(this.editor.getLayoutInfo().height / (4 * this.editor.getOption(EditorOption.lineHeight)));
 		const lineLimit = Math.min(options.maxLineCount, heightLimit);
 		let offset = 0;
 		const scrollTop = this.editor.getScrollTop();
@@ -360,11 +331,7 @@ export class StickyScrollController extends Disposable {
 		if (event.shiftKey || event.getModifierState('AltGraph')) {
 			return false;
 		}
-		return this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey'
-			? isMacintosh
-				? event.metaKey
-				: event.ctrlKey
-			: event.altKey;
+		return this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey' ? (isMacintosh ? event.metaKey : event.ctrlKey) : event.altKey;
 	}
 
 	private updateDefinitionLink(enabled: boolean): void {
@@ -383,12 +350,7 @@ export class StickyScrollController extends Disposable {
 			return;
 		}
 		const target = this.definitionTarget;
-		if (
-			target?.node === node &&
-			target.lineNumber === position.lineNumber &&
-			target.startColumn === word.startColumn &&
-			target.endColumn === word.endColumn
-		) {
+		if (target?.node === node && target.lineNumber === position.lineNumber && target.startColumn === word.startColumn && target.endColumn === word.endColumn) {
 			return;
 		}
 		this.clearDefinitionLink();

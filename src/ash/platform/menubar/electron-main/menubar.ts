@@ -44,10 +44,7 @@ export class Menubar extends Disposable {
 export function createElectronMenubarHost(): INativeMenubarMainHost {
 	return {
 		applicationName: app.name,
-		setApplicationMenu: template =>
-			Menu.setApplicationMenu(
-				template ? Menu.buildFromTemplate([...template] as MenuItemConstructorOptions[]) : null,
-			),
+		setApplicationMenu: template => Menu.setApplicationMenu(template ? Menu.buildFromTemplate([...template] as MenuItemConstructorOptions[]) : null),
 		setWindowTouchBar: (window, items, select) => {
 			const buttons = items.map(
 				item =>

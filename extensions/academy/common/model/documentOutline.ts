@@ -1,13 +1,7 @@
 import type { DocumentNode, DocumentNodeId } from './document.js';
 
-import type {
-	DocumentOutlineEntry,
-	DocumentOutline,
-} from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
-export type {
-	DocumentOutlineEntry,
-	DocumentOutline,
-} from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
+import type { DocumentOutlineEntry, DocumentOutline } from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
+export type { DocumentOutlineEntry, DocumentOutline } from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
 
 export interface DocumentOutlineOptions {
 	/** Selects nodes that participate in the outline. Defaults to `heading`. */

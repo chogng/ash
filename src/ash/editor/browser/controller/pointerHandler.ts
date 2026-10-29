@@ -1,12 +1,7 @@
 import { addDisposableListener, getWindow } from '../../../base/browser/dom.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import {
-	EditorMouseEvent,
-	EditorMouseEventFactory,
-	EditorPointerEventFactory,
-	GlobalEditorPointerMoveMonitor,
-} from '../editorDom.js';
+import { EditorMouseEvent, EditorMouseEventFactory, EditorPointerEventFactory, GlobalEditorPointerMoveMonitor } from '../editorDom.js';
 
 export interface PointerTrackingHandlers {
 	readonly onMove: (event: EditorMouseEvent) => void;
@@ -86,11 +81,7 @@ export class PointerHandler extends Disposable {
 	}
 
 	releasePointer(pointerId: number | undefined): void {
-		if (
-			pointerId !== undefined &&
-			typeof this.element.hasPointerCapture === 'function' &&
-			this.element.hasPointerCapture(pointerId)
-		) {
+		if (pointerId !== undefined && typeof this.element.hasPointerCapture === 'function' && this.element.hasPointerCapture(pointerId)) {
 			this.element.releasePointerCapture(pointerId);
 		}
 	}

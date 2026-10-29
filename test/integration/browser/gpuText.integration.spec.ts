@@ -69,15 +69,9 @@ test('GPU device loss restores DOM text, caret and typing without another GPU fr
 	expect(Math.abs(after!.x - before!.x)).toBeLessThan(2);
 	await page.evaluate(() => window.ashGpuTextIntegration.resetGpuFrameTrace());
 	await page.keyboard.insertText('X');
-	await expect
-		.poll(() => page.evaluate(() => window.ashGpuTextIntegration.getValue().startsWith('iXnterface')))
-		.toBe(true);
+	await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.getValue().startsWith('iXnterface'))).toBe(true);
 	await page.keyboard.press('ControlOrMeta+z');
-	await expect
-		.poll(() =>
-			page.evaluate(() => window.ashGpuTextIntegration.getValue() === window.ashGpuTextIntegration.initialText),
-		)
-		.toBe(true);
+	await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.getValue() === window.ashGpuTextIntegration.initialText)).toBe(true);
 	expect(await page.evaluate(() => window.ashGpuTextIntegration.readGpuFrameTrace())).toEqual([]);
 	expect(await page.evaluate(() => window.ashGpuTextIntegration.mountReplacementGpuEditor())).toEqual({
 		deviceReady: true,
@@ -97,11 +91,7 @@ for (const failure of ['missing-api', 'missing-context', 'no-adapter', 'device-r
 				Object.defineProperty(navigator, 'gpu', { configurable: true, value: undefined });
 			} else if (failure === 'missing-context') {
 				const getContext = HTMLCanvasElement.prototype.getContext;
-				HTMLCanvasElement.prototype.getContext = function (
-					this: HTMLCanvasElement,
-					type: string,
-					...args: unknown[]
-				) {
+				HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, ...args: unknown[]) {
 					return type === 'webgpu' ? null : Reflect.apply(getContext, this, [type, ...args]);
 				} as typeof getContext;
 			} else if (failure === 'frame-rejected') {
@@ -114,8 +104,7 @@ for (const failure of ['missing-api', 'missing-context', 'no-adapter', 'device-r
 						const device = await requestDevice.call(adapter, descriptor);
 						const createPipeline = device.createRenderPipeline;
 						device.createRenderPipeline = descriptor => {
-							if (descriptor.label === 'Ash ViewLinesGpu pipeline')
-								throw new Error('Deliberate GPU frame failure');
+							if (descriptor.label === 'Ash ViewLinesGpu pipeline') throw new Error('Deliberate GPU frame failure');
 							return createPipeline.call(device, descriptor);
 						};
 						return device;
@@ -140,20 +129,14 @@ for (const failure of ['missing-api', 'missing-context', 'no-adapter', 'device-r
 		await input.focus();
 		await page.keyboard.press('Control+Home');
 		await page.keyboard.insertText('X');
-		await expect
-			.poll(() => page.evaluate(() => window.ashGpuTextIntegration.getValue().startsWith('Xinterface')))
-			.toBe(true);
+		await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.getValue().startsWith('Xinterface'))).toBe(true);
 	});
 }
 
 test('GPU text keeps wrapped rows disjoint and the gutter in VS Code order', async ({ page }) => {
 	await page.goto('/gpuText.html');
 	await expect(page.locator('.stanza-editor-gpu-canvas')).toBeVisible();
-	await expect(
-		page.locator(
-			'.margin-view-overlays .view-overlay-line[data-line-index="0"] .stanza-editor-line-decoration.ash-icon-folding-expanded',
-		),
-	).toBeVisible();
+	await expect(page.locator('.margin-view-overlays .view-overlay-line[data-line-index="0"] .stanza-editor-line-decoration.ash-icon-folding-expanded')).toBeVisible();
 	await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
 	await expectGpuAdvanceMatchesDom(page);
 
@@ -164,16 +147,18 @@ test('GPU text keeps wrapped rows disjoint and the gutter in VS Code order', asy
 	await page.keyboard.press('Backspace');
 	await expect
 		.poll(() => clearedGpuEditorState(page))
-		.toEqual({ value: '', lineNumber: '1', renderedRowCount: 1, gpuRowCount: 1, text: '' });
+		.toEqual({
+			value: '',
+			lineNumber: '1',
+			renderedRowCount: 1,
+			gpuRowCount: 1,
+			text: '',
+		});
 	await expect.poll(() => gpuFrameLayeringState(page)).toEqual({ hasFrame: true, everyFrameIsLayered: true });
 
 	await page.evaluate(() => window.ashGpuTextIntegration.resetGpuFrameTrace());
 	await page.keyboard.press('ControlOrMeta+z');
-	await expect(
-		page.locator(
-			'.margin-view-overlays .view-overlay-line[data-line-index="0"] .stanza-editor-line-decoration.ash-icon-folding-expanded',
-		),
-	).toBeVisible();
+	await expect(page.locator('.margin-view-overlays .view-overlay-line[data-line-index="0"] .stanza-editor-line-decoration.ash-icon-folding-expanded')).toBeVisible();
 	await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
 	await expect.poll(() => gpuFrameLayeringState(page)).toEqual({ hasFrame: true, everyFrameIsLayered: true });
 	await expectGpuAdvanceMatchesDom(page);
@@ -222,10 +207,7 @@ test('GPU rows and advances follow font size and line height changes', async ({ 
 		[18, 28],
 		[22, 34],
 	] as const) {
-		await page.evaluate(
-			({ fontSize, lineHeight }) => window.ashGpuTextIntegration.setFontMetrics(fontSize, lineHeight),
-			{ fontSize, lineHeight },
-		);
+		await page.evaluate(({ fontSize, lineHeight }) => window.ashGpuTextIntegration.setFontMetrics(fontSize, lineHeight), { fontSize, lineHeight });
 		await expect(page.locator('.view-line').first()).toHaveCSS('height', `${lineHeight}px`);
 		await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
 		await expectGpuAdvanceMatchesDom(page);
@@ -259,9 +241,7 @@ test('GPU text clicks retain the rendered insertion position through pointer cap
 			})
 			.toBeLessThan(2);
 		await page.keyboard.insertText('!');
-		await expect
-			.poll(() => page.evaluate(() => window.ashGpuTextIntegration.getValue().split('\n')[0]))
-			.toBe(`${text.slice(0, offset)}!${text.slice(offset)}`);
+		await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.getValue().split('\n')[0])).toBe(`${text.slice(0, offset)}!${text.slice(offset)}`);
 		await page.keyboard.press('Backspace');
 		await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.getValue().split('\n')[0])).toBe(text);
 	}
@@ -304,9 +284,7 @@ test('GPU dragging keeps the highlight and active caret on the selected glyphs',
 			})
 			.toBeLessThan(2);
 		await page.keyboard.insertText('!');
-		await expect
-			.poll(() => page.evaluate(() => window.ashGpuTextIntegration.getValue().split('\n')[0]))
-			.toBe(`${text.slice(0, 4)}!${text.slice(17)}`);
+		await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.getValue().split('\n')[0])).toBe(`${text.slice(0, 4)}!${text.slice(17)}`);
 		await page.keyboard.press('ControlOrMeta+z');
 		await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
 	}
@@ -319,17 +297,12 @@ async function expectGpuAdvanceMatchesDom(page: Page): Promise<void> {
 	await expect
 		.poll(() =>
 			page.evaluate(() => {
-				const line = [...document.querySelectorAll<HTMLElement>('.view-line')].find(
-					row => row.textContent === 'console.log(describe(sample));',
-				);
+				const line = [...document.querySelectorAll<HTMLElement>('.view-line')].find(row => row.textContent === 'console.log(describe(sample));');
 				const text = line?.querySelector<HTMLElement>('.stanza-editor-line-text');
 				if (!text) return Number.POSITIVE_INFINITY;
 				const range = document.createRange();
 				range.selectNodeContents(text);
-				return Math.abs(
-					window.ashGpuTextIntegration.measureGpuAdvance(text.textContent ?? '') -
-						range.getBoundingClientRect().width,
-				);
+				return Math.abs(window.ashGpuTextIntegration.measureGpuAdvance(text.textContent ?? '') - range.getBoundingClientRect().width);
 			}),
 		)
 		.toBeLessThan(0.1);
@@ -355,11 +328,7 @@ function healthyGpuEditorState(): GpuEditorState {
 async function gpuEditorState(page: Page): Promise<GpuEditorState> {
 	// Folding ranges arrive asynchronously after model creation and undo. The
 	// geometry probe requires their DOM; poll assertions cannot retry thrown errors.
-	await expect(
-		page.locator(
-			'#editor-root .margin-view-overlays .view-overlay-line[data-line-index="0"] .stanza-editor-line-decoration.ash-icon-folding-expanded',
-		),
-	).toBeAttached();
+	await expect(page.locator('#editor-root .margin-view-overlays .view-overlay-line[data-line-index="0"] .stanza-editor-line-decoration.ash-icon-folding-expanded')).toBeAttached();
 	return page.evaluate(() => {
 		const requireElement = <T extends Element = HTMLElement>(root: ParentNode, selector: string): T => {
 			const element = root.querySelector<T>(selector);
@@ -370,15 +339,9 @@ async function gpuEditorState(page: Page): Promise<GpuEditorState> {
 		const canvas = requireElement<HTMLCanvasElement>(document, '.stanza-editor-gpu-canvas');
 		const firstLine = requireElement(document, '.view-line[data-logical-line-index="0"]');
 		const glyphMargin = requireElement(document, '.glyph-margin');
-		const lineNumber = requireElement(
-			document,
-			'.margin-view-overlays .view-overlay-line[data-line-index="0"] .line-numbers',
-		);
+		const lineNumber = requireElement(document, '.margin-view-overlays .view-overlay-line[data-line-index="0"] .line-numbers');
 		// Measure the gutter cell rather than its nested font glyph.
-		const folding = requireElement(
-			document,
-			'.margin-view-overlays .view-overlay-line[data-line-index="0"] .stanza-editor-line-decoration.ash-icon-folding-expanded',
-		);
+		const folding = requireElement(document, '.margin-view-overlays .view-overlay-line[data-line-index="0"] .stanza-editor-line-decoration.ash-icon-folding-expanded');
 		const text = requireElement(firstLine, '.stanza-editor-line-text');
 		const rows = [...editor.querySelectorAll<HTMLElement>('.view-line')];
 		const rowRectangles = rows.map(row => row.getBoundingClientRect());
@@ -397,9 +360,7 @@ async function gpuEditorState(page: Page): Promise<GpuEditorState> {
 			canvasVisible: !canvas.hidden && getComputedStyle(canvas).display !== 'none',
 			allRowsUseGpu: rows.length > 0 && rows.every(row => row.classList.contains('gpu-rendered')),
 			longLineWrapped: rows.length > window.ashGpuTextIntegration.initialText.split('\n').length,
-			rowsHaveCanonicalSpacing: rowRectangles.every(
-				(rectangle, index) => index === 0 || equal(rectangle.top, rowRectangles[index - 1]!.bottom),
-			),
+			rowsHaveCanonicalSpacing: rowRectangles.every((rectangle, index) => index === 0 || equal(rectangle.top, rowRectangles[index - 1]!.bottom)),
 			hiddenCanvasUsesDisplayNone,
 			glyphMarginTouchesLineNumber: equal(glyphMarginRectangle.right, lineNumberRectangle.left),
 			lineNumberTouchesFolding: equal(lineNumberRectangle.right, foldingRectangle.left),
@@ -433,7 +394,10 @@ async function gpuFrameLayeringState(page: Page): Promise<GpuFrameLayeringState>
 				textPass.loadOp === 'load' &&
 				textPass.submissionId === rectanglePass.submissionId + 1;
 		}
-		return { hasFrame, everyFrameIsLayered };
+		return {
+			hasFrame,
+			everyFrameIsLayered,
+		};
 	});
 }
 
@@ -444,37 +408,27 @@ for (const length of [16, 240]) {
 		await page.evaluate(length => window.ashGpuTextIntegration.prepareBracketText(length), length);
 		await page.evaluate(() => window.ashGpuTextIntegration.setSelectionColor('#1387c9'));
 		await expect(page.locator('.view-line.gpu-rendered')).toHaveCount(1);
-		await expect
-			.poll(() => page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(19, 135, 201)))
-			.toBeGreaterThan(0);
+		await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(19, 135, 201))).toBeGreaterThan(0);
 		await page.evaluate(() => window.ashGpuTextIntegration.setSelectionColor('#46ac72'));
-		await expect
-			.poll(() => page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(70, 172, 114)))
-			.toBeGreaterThan(0);
+		await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(70, 172, 114))).toBeGreaterThan(0);
 		expect(await page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(19, 135, 201))).toBe(0);
 		expect(await page.evaluate(() => window.ashGpuTextIntegration.getValue())).toBe(`(${'x'.repeat(length)})`);
 	});
 
-	test(`GPU bracket glyphs refresh for ${length}-column text when only decoration colors change`, async ({
-		page,
-	}) => {
+	test(`GPU bracket glyphs refresh for ${length}-column text when only decoration colors change`, async ({ page }) => {
 		await page.goto('/gpuText.html');
 		await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
 		await page.evaluate(length => window.ashGpuTextIntegration.prepareBracketText(length), length);
 		await expect(page.locator('.view-line.gpu-rendered')).toHaveCount(1);
 		expect(await page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(19, 135, 201))).toBe(0);
 		await page.evaluate(() => window.ashGpuTextIntegration.setBracketColor('#1387c9'));
-		await expect
-			.poll(() => page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(19, 135, 201)))
-			.toBeGreaterThan(0);
+		await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(19, 135, 201))).toBeGreaterThan(0);
 		const baseColor = await page.locator('.stanza-editor').evaluate(element => getComputedStyle(element).color);
 		await page.evaluate(() => {
 			window.ashGpuTextIntegration.resetGpuFrameTrace();
 			window.ashGpuTextIntegration.setBracketColor('#46ac72');
 		});
-		await expect
-			.poll(() => page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(70, 172, 114)))
-			.toBeGreaterThan(0);
+		await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(70, 172, 114))).toBeGreaterThan(0);
 		expect(await page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(19, 135, 201))).toBe(0);
 		await expect(page.locator('.stanza-editor')).toHaveCSS('color', baseColor);
 		await expect(page.locator('.view-line.gpu-rendered')).toHaveCount(1);
@@ -509,15 +463,11 @@ test('GPU text uses semantic token colors from the active theme', async ({ page 
 	await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
 	await page.evaluate(() => window.ashGpuTextIntegration.prepareSemanticText());
 	await expect(page.locator('.view-line.gpu-rendered')).toHaveCount(1);
-	await expect
-		.poll(() => page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(225, 55, 171)))
-		.toBeGreaterThan(0);
+	await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(225, 55, 171))).toBeGreaterThan(0);
 	await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.getValue())).toBe('sample');
 	await page.evaluate(() => window.ashGpuTextIntegration.clearSemanticFontStyles());
 	await expect(page.locator('.view-line.gpu-rendered')).toHaveCount(1);
-	await expect
-		.poll(() => page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(70, 172, 114)))
-		.toBeGreaterThan(0);
+	await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(70, 172, 114))).toBeGreaterThan(0);
 });
 
 test('DOM semantic styles update with the theme and explicit false clears font styles', async ({ page }) => {

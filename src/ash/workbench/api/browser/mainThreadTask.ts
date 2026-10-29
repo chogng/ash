@@ -1,17 +1,8 @@
-import {
-	extensionHostTaskSnapshot,
-	extensionHostWorkflowProviderId,
-	normalizeTaskResult,
-} from './extensionHostWorkflowBridge.js';
+import { extensionHostTaskSnapshot, extensionHostWorkflowProviderId, normalizeTaskResult } from './extensionHostWorkflowBridge.js';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { Disposable, DisposableMap } from '../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../base/common/uuid.js';
-import {
-	IExtensionHostApi,
-	type ExtensionClientSource,
-	type ExtensionHostFleetSnapshot,
-	type JsonValue,
-} from '../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionClientSource, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
 import { type ExtensionClientOperation, type ExtensionClientResult } from '../common/extHost.protocol.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
@@ -50,10 +41,7 @@ export class MainThreadTask extends Disposable {
 						}
 						const completed = { ...execution, active: false, exitCode: exitCode ?? null };
 						if (run.processId !== undefined) {
-							this.emit(
-								{ type: 'processEnd', execution: completed, exitCode: exitCode ?? null },
-								observers,
-							);
+							this.emit({ type: 'processEnd', execution: completed, exitCode: exitCode ?? null }, observers);
 						}
 						this.emit({ type: 'end', execution: completed }, observers);
 					},
@@ -105,12 +93,7 @@ export class MainThreadTask extends Disposable {
 					incarnation: runtime.incarnation,
 					registrationId: registration.registrationId,
 				};
-				const key = JSON.stringify([
-					identity.extensionId,
-					identity.activationGeneration,
-					identity.incarnation,
-					identity.registrationId,
-				]);
+				const key = JSON.stringify([identity.extensionId, identity.activationGeneration, identity.incarnation, identity.registrationId]);
 				retained.add(key);
 				if (this.observers.has(key)) {
 					continue;
@@ -153,10 +136,7 @@ export class MainThreadTask extends Disposable {
 		this.observers.clearAndDisposeAll();
 	}
 
-	private emit(
-		event: Readonly<Record<string, JsonValue>>,
-		observers = [...this.observers].map(([, observer]) => observer),
-	): void {
+	private emit(event: Readonly<Record<string, JsonValue>>, observers = [...this.observers].map(([, observer]) => observer)): void {
 		const value = normalizeExtensionHostPayload({ ...event, sequence: ++this.sequence });
 		for (const observer of observers) {
 			observer.send(value);
@@ -196,12 +176,7 @@ export class MainThreadTask extends Disposable {
 			if (!source) {
 				throw new TypeError('A provided task requires an authenticated extension owner');
 			}
-			const key = JSON.stringify([
-				source.extensionId,
-				source.activationGeneration,
-				source.incarnation,
-				'ash.tasks.events',
-			]);
+			const key = JSON.stringify([source.extensionId, source.activationGeneration, source.incarnation, 'ash.tasks.events']);
 			const observer = this.observers.get(key);
 			if (!observer) {
 				throw new Error('Task extension owner has retired');
@@ -229,11 +204,7 @@ export class MainThreadTask extends Disposable {
 				// invocation authority. TaskService retains the caller's run lifetime.
 				task = { ...task, execution: original.execution };
 			}
-			const run = await this.tasks.runProvidedTask(
-				extensionHostWorkflowProviderId(source.extensionId, 'ash.tasks.events'),
-				task,
-				AbortSignal.any([signal, observer.signal]),
-			);
+			const run = await this.tasks.runProvidedTask(extensionHostWorkflowProviderId(source.extensionId, 'ash.tasks.events'), task, AbortSignal.any([signal, observer.signal]));
 			observer.track(run);
 			return { result: 'taskExecution', sequence: this.sequence, execution: this.executionSnapshot(run) };
 		}

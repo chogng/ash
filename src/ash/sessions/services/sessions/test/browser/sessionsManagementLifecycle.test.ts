@@ -44,12 +44,7 @@ class Provider extends Disposable implements ISessionsProvider {
 	currentWorkspace(): SessionWorkspaceSelection {
 		return { type: 'current' };
 	}
-	async create(
-		_title: string,
-		_workspace: SessionWorkspaceSelection,
-		_agent?: ChatAgent,
-		_creationId?: string,
-	): Promise<IActiveSessionThread> {
+	async create(_title: string, _workspace: SessionWorkspaceSelection, _agent?: ChatAgent, _creationId?: string): Promise<IActiveSessionThread> {
 		this.createCount++;
 		const created = session(`created-${this.createCount}`);
 		this.items.push(created);
@@ -95,8 +90,7 @@ for (const reentrant of [false, true]) {
 		const draft = management.createUntitledSession('Send once');
 		let repeated: Promise<IActiveSessionThread> | undefined;
 		using listener = management.onDidChange(() => {
-			if (reentrant && management.state === 'creating')
-				repeated = management.materializeUntitledSession(draft.untitledSessionId);
+			if (reentrant && management.state === 'creating') repeated = management.materializeUntitledSession(draft.untitledSessionId);
 		});
 		const first = management.materializeUntitledSession(draft.untitledSessionId);
 		const second = management.materializeUntitledSession(draft.untitledSessionId);
@@ -105,10 +99,7 @@ for (const reentrant of [false, true]) {
 		assert.equal(await second, created);
 		if (reentrant) assert.equal(await repeated, created);
 		assert.equal(await management.materializeUntitledSession(draft.untitledSessionId), created);
-		assert.deepEqual(
-			{ count: provider.createCount, state: management.state, drafts: management.untitledSessions },
-			{ count: 1, state: 'ready', drafts: [draft] },
-		);
+		assert.deepEqual({ count: provider.createCount, state: management.state, drafts: management.untitledSessions }, { count: 1, state: 'ready', drafts: [draft] });
 	});
 }
 
@@ -137,10 +128,7 @@ test('failed draft creation remains editable and can retry with its chosen value
 		return create(...args);
 	};
 	await management.materializeUntitledSession(draft.untitledSessionId);
-	assert.deepEqual(
-		{ requests, state: management.state, error: management.error },
-		{ requests: [chosen], state: 'ready', error: undefined },
-	);
+	assert.deepEqual({ requests, state: management.state, error: management.error }, { requests: [chosen], state: 'ready', error: undefined });
 });
 
 test('completion of one draft leaves another pending creation in creating state', async () => {
@@ -202,10 +190,7 @@ for (const later of ['thread', 'draft'] as const) {
 		if (later === 'thread') management.selectThread('first', 'first-thread');
 		await held.complete({ ...provider.items[1]!, agentTree: [] });
 		await opening;
-		assert.deepEqual(
-			{ thread: management.active?.threadId, draft: management.activeUntitledSession?.untitledSessionId },
-			{ thread: 'first-thread', draft: draft?.untitledSessionId },
-		);
+		assert.deepEqual({ thread: management.active?.threadId, draft: management.activeUntitledSession?.untitledSessionId }, { thread: 'first-thread', draft: draft?.untitledSessionId });
 	});
 }
 
@@ -283,10 +268,7 @@ test('cancelled preparation restores ready state and allows retry', async () => 
 	using management = new SessionsManagementService(provider);
 	const draft = management.createUntitledSession('Retry cancel');
 	await assert.rejects(management.materializeUntitledSession(draft.untitledSessionId), isCancellationError);
-	assert.deepEqual(
-		{ state: management.state, error: management.error, draft: management.activeUntitledSession },
-		{ state: 'ready', error: undefined, draft },
-	);
+	assert.deepEqual({ state: management.state, error: management.error, draft: management.activeUntitledSession }, { state: 'ready', error: undefined, draft });
 	await management.materializeUntitledSession(draft.untitledSessionId);
 	assert.equal(provider.createCount, 1);
 });
@@ -314,12 +296,7 @@ test('closing a sibling while it opens preserves both visible and management sel
 			sessionId: value.sessionId,
 			threadId: value.chats[0]!.threadId,
 		}));
-		storage.store(
-			'sessions.viewState',
-			JSON.stringify({ version: 2, drafts: [], visible, active: 0 }),
-			StorageScope.WORKSPACE,
-			StorageTarget.MACHINE,
-		);
+		storage.store('sessions.viewState', JSON.stringify({ version: 2, drafts: [], visible, active: 0 }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		using customViews = new CustomViewService(new NullLoggerService(), storage);
 		using view = new SessionsService(management, storage, customViews);
 		await view.initialize();
@@ -330,15 +307,10 @@ test('closing a sibling while it opens preserves both visible and management sel
 		await opening;
 		assert.equal(management.active?.threadId, 'first-thread');
 		assert.deepEqual(
-			view.visibleSelections.map(selection =>
-				selection.kind === 'session' ? selection.active.threadId : selection.session.untitledSessionId,
-			),
+			view.visibleSelections.map(selection => (selection.kind === 'session' ? selection.active.threadId : selection.session.untitledSessionId)),
 			['first-thread'],
 		);
-		assert.equal(
-			view.activeSelection?.kind === 'session' ? view.activeSelection.active.threadId : undefined,
-			'first-thread',
-		);
+		assert.equal(view.activeSelection?.kind === 'session' ? view.activeSelection.active.threadId : undefined, 'first-thread');
 	} finally {
 		dom.window.close();
 	}
@@ -360,10 +332,7 @@ test('graduated draft lookup reads the canonical Session after catalog facts cha
 	};
 	await management.openThread(created.session.sessionId, 'peer');
 	const lookedUp = await management.materializeUntitledSession(draft.untitledSessionId);
-	assert.deepEqual(
-		{ title: lookedUp.session.title, thread: lookedUp.threadId, creates: provider.createCount },
-		{ title: 'Renamed by another window', thread: created.threadId, creates: 1 },
-	);
+	assert.deepEqual({ title: lookedUp.session.title, thread: lookedUp.threadId, creates: provider.createCount }, { title: 'Renamed by another window', thread: created.threadId, creates: 1 });
 	assert.equal(
 		lookedUp.session,
 		management.sessions.find(value => value.sessionId === created.session.sessionId),

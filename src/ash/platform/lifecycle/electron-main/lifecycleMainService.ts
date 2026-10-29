@@ -1,10 +1,6 @@
 import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { raceCancellationError } from '../../../base/common/async.js';
-import {
-	CancellationTokenSource,
-	throwIfCancelled,
-	type CancellationToken,
-} from '../../../base/common/cancellation.js';
+import { CancellationTokenSource, throwIfCancelled, type CancellationToken } from '../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../base/common/errors.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { IStateService } from '../../state/node/state.js';
@@ -66,10 +62,7 @@ export interface ILifecycleMainService<TWindow = Electron.BrowserWindow> {
 export const ILifecycleMainService = createDecorator<ILifecycleMainService>('lifecycleMainService');
 
 /** Owns startup cancellation and the close handshake for Workbench and Sessions windows. */
-export class LifecycleMainService<TWindow extends ILifecycleWindow>
-	extends Disposable
-	implements ILifecycleMainService<TWindow>
-{
+export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disposable implements ILifecycleMainService<TWindow> {
 	private static readonly updateRestartStateKey = 'updateRestartVersion';
 	private readonly windowRegistrations = this._register(new DisposableMap<TWindow, IDisposable>());
 	private readonly closeStates = new Map<TWindow, WindowCloseState>();
@@ -159,10 +152,7 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow>
 			state.pendingToken = token;
 			const reason = this.getCloseReason();
 			this.waitForResponse(window, state, reason);
-			window.webContents.send(
-				reason === 'quit' ? WINDOW_PREPARE_QUIT_CHANNEL : WINDOW_PREPARE_CLOSE_CHANNEL,
-				token,
-			);
+			window.webContents.send(reason === 'quit' ? WINDOW_PREPARE_QUIT_CHANNEL : WINDOW_PREPARE_CLOSE_CHANNEL, token);
 		};
 		const onRendererLoading = (): void => {
 			state.ready = false;
@@ -191,8 +181,7 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow>
 	/** The renderer must finish its shutdown participants before this window loads another workspace. */
 	public unload(window: TWindow, reason: 'load' | 'reload' = 'load'): Promise<boolean> {
 		const state = this.closeStates.get(window);
-		if (!state || window.isDestroyed() || (!state.ready && reason !== 'reload'))
-			throw new Error('Workbench window is not ready to unload');
+		if (!state || window.isDestroyed() || (!state.ready && reason !== 'reload')) throw new Error('Workbench window is not ready to unload');
 		// Startup failures have no renderer shutdown participants to acknowledge Retry.
 		if (!state.ready) return Promise.resolve(true);
 		if (state.pendingToken !== undefined) throw new Error('Workbench window already has a shutdown request');
@@ -201,10 +190,7 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow>
 			state.pendingToken = token;
 			state.completeUnload = resolve;
 			this.waitForResponse(window, state, reason);
-			window.webContents.send(
-				reason === 'reload' ? WINDOW_PREPARE_RELOAD_CHANNEL : WINDOW_PREPARE_LOAD_CHANNEL,
-				token,
-			);
+			window.webContents.send(reason === 'reload' ? WINDOW_PREPARE_RELOAD_CHANNEL : WINDOW_PREPARE_LOAD_CHANNEL, token);
 		});
 	}
 
@@ -238,12 +224,7 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow>
 		}
 	}
 
-	private waitForResponse(
-		window: TWindow,
-		state: WindowCloseState,
-		reason: 'windowClose' | 'quit' | 'load' | 'reload',
-		started = performance.now(),
-	): void {
+	private waitForResponse(window: TWindow, state: WindowCloseState, reason: 'windowClose' | 'quit' | 'load' | 'reload', started = performance.now()): void {
 		const token = state.pendingToken!;
 		state.timer = setTimeout(() => {
 			state.timer = undefined;
@@ -265,23 +246,17 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow>
 				.finally(() => {
 					if (state.timeoutPrompt !== prompt) return;
 					state.timeoutPrompt = undefined;
-					if (!prompt.signal.aborted && state.pendingToken === token)
-						this.waitForResponse(window, state, reason, started);
+					if (!prompt.signal.aborted && state.pendingToken === token) this.waitForResponse(window, state, reason, started);
 				});
 		}, 30_000);
 	}
 
 	private reportFailure(window: TWindow, message: string): void {
-		void Promise.resolve(this.reportCloseFailure(window, { kind: 'failed', message })).catch(error =>
-			console.error('Failed to report window close error', error),
-		);
+		void Promise.resolve(this.reportCloseFailure(window, { kind: 'failed', message })).catch(error => console.error('Failed to report window close error', error));
 	}
 }
 
-export function windowCloseResponseIpcRoute<TWindow extends ILifecycleWindow>(
-	service: LifecycleMainService<TWindow>,
-	window: TWindow,
-): IpcRoute<unknown, unknown> {
+export function windowCloseResponseIpcRoute<TWindow extends ILifecycleWindow>(service: LifecycleMainService<TWindow>, window: TWindow): IpcRoute<unknown, unknown> {
 	return {
 		channel: WINDOW_CLOSE_RESPONSE_CHANNEL,
 		validate: validateWindowCloseResponse,

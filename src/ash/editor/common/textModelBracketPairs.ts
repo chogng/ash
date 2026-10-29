@@ -115,13 +115,6 @@ export class BracketPairWithMinIndentationInfo extends BracketPairInfo {
 		 */
 		public readonly minVisibleColumnIndentation: number,
 	) {
-		super(
-			range,
-			openingBracketRange,
-			closingBracketRange,
-			nestingLevel,
-			nestingLevelOfEqualBracketType,
-			bracketPairNode,
-		);
+		super(range, openingBracketRange, closingBracketRange, nestingLevel, nestingLevelOfEqualBracketType, bracketPairNode);
 	}
 }

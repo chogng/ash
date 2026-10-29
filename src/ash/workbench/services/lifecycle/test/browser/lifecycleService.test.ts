@@ -8,17 +8,9 @@ import { BrowserLifecycleService } from '../../browser/lifecycleService.js';
 import { LifecyclePhase, StartupKind, ShutdownVetoError } from '../../common/lifecycle.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
-import {
-	IStorageService,
-	StorageScope,
-	StorageTarget,
-	WillSaveStateReason,
-} from '../../../../../platform/storage/common/storage.js';
+import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } from '../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../storage/browser/storageService.js';
-import {
-	LifecycleMainService,
-	windowCloseResponseIpcRoute,
-} from '../../../../../platform/lifecycle/electron-main/lifecycleMainService.js';
+import { LifecycleMainService, windowCloseResponseIpcRoute } from '../../../../../platform/lifecycle/electron-main/lifecycleMainService.js';
 import type { ISandboxIpcRenderer } from '../../../../../base/parts/sandbox/common/sandboxTypes.js';
 import type { WindowCloseResponse } from '../../../../../platform/window/common/window.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -96,9 +88,7 @@ suite('Window shutdown diagnostics', () => {
 			});
 			const pending = new DeferredPromise<void>();
 			let attempts = 0;
-			using willShutdown = lifecycle.onWillShutdown(event =>
-				event.join(++attempts === 1 ? Promise.reject(new Error('save failed')) : pending.p, 'storage'),
-			);
+			using willShutdown = lifecycle.onWillShutdown(event => event.join(++attempts === 1 ? Promise.reject(new Error('save failed')) : pending.p, 'storage'));
 			await assert.rejects(lifecycle.shutdown('reload'), /shutdown participants failed/);
 			mock.timers.tick(10_000);
 			assert.deepEqual(warnings, []);
@@ -188,9 +178,7 @@ test('BrowserLifecycleService retries a failed shutdown without publishing compl
 	});
 	let attempts = 0;
 	const completed: string[] = [];
-	lifecycle.onWillShutdown(event =>
-		event.join(++attempts === 1 ? Promise.reject(new Error('save failed')) : Promise.resolve(), 'backup'),
-	);
+	lifecycle.onWillShutdown(event => event.join(++attempts === 1 ? Promise.reject(new Error('save failed')) : Promise.resolve(), 'backup'));
 	lifecycle.onDidShutdown(reason => completed.push(reason));
 	await assert.rejects(lifecycle.shutdown('windowClose'), /shutdown participants failed/);
 	assert.equal(lifecycle.willShutdown, false);
@@ -239,10 +227,7 @@ test('BrowserLifecycleService treats a rejected pre-shutdown check as a veto err
 	lifecycle.onBeforeShutdownError(event => errors.push(event.error.message));
 	lifecycle.onWillShutdown(() => errors.push('will'));
 	await assert.rejects(lifecycle.shutdown('windowClose'), /shutdown vetoes failed/);
-	assert.deepEqual(
-		{ errors, willShutdown: lifecycle.willShutdown },
-		{ errors: ["Shutdown veto 'backup' failed"], willShutdown: false },
-	);
+	assert.deepEqual({ errors, willShutdown: lifecycle.willShutdown }, { errors: ["Shutdown veto 'backup' failed"], willShutdown: false });
 	browser.window.close();
 });
 
@@ -269,10 +254,7 @@ test('window lifecycle releases all reached startup milestones and rejects backw
 	await lifecycle.when(LifecyclePhase.Ready);
 	assert.deepEqual(milestones, [LifecyclePhase.Ready, LifecyclePhase.Restored, LifecyclePhase.Eventually]);
 	await lifecycle.shutdown('quit');
-	assert.deepEqual(
-		{ phase: lifecycle.phase, willShutdown: lifecycle.willShutdown },
-		{ phase: LifecyclePhase.Eventually, willShutdown: true },
-	);
+	assert.deepEqual({ phase: lifecycle.phase, willShutdown: lifecycle.willShutdown }, { phase: LifecyclePhase.Eventually, willShutdown: true });
 	browser.window.close();
 });
 
@@ -289,9 +271,7 @@ for (const [reason, expected] of [
 			onError: () => undefined,
 		});
 		assert.equal(first.startupKind, StartupKind.NewWindow);
-		first.onWillShutdown(event =>
-			event.join(firstServices.get(IStorageService).flush(WillSaveStateReason.SHUTDOWN), 'storage'),
-		);
+		first.onWillShutdown(event => event.join(firstServices.get(IStorageService).flush(WillSaveStateReason.SHUTDOWN), 'storage'));
 		await first.shutdown(reason);
 		first.dispose();
 		using nextServices = createLifecycleServices(browser);
@@ -300,10 +280,7 @@ for (const [reason, expected] of [
 			onError: () => undefined,
 		});
 		assert.equal(next.startupKind, expected);
-		assert.equal(
-			nextServices.get(IStorageService).get('lifecycle.lastShutdownReason', StorageScope.WORKSPACE),
-			undefined,
-		);
+		assert.equal(nextServices.get(IStorageService).get('lifecycle.lastShutdownReason', StorageScope.WORKSPACE), undefined);
 		using thirdServices = createLifecycleServices(browser);
 		using third = thirdServices.createInstance(BrowserLifecycleService, {
 			ownerWindow: browser.window as unknown as Window,
@@ -317,9 +294,7 @@ for (const [reason, expected] of [
 test('browser reload detection takes precedence over the previous shutdown reason', () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	using services = createLifecycleServices(browser, 'reload');
-	services
-		.get(IStorageService)
-		.store('lifecycle.lastShutdownReason', 'load', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	services.get(IStorageService).store('lifecycle.lastShutdownReason', 'load', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	using lifecycle = services.createInstance(BrowserLifecycleService, {
 		ownerWindow: browser.window as unknown as Window,
 		onError: () => undefined,
@@ -385,14 +360,7 @@ test('shutdown final callbacks run after all ordinary joins settle and retain ev
 			}, 'final backup');
 		});
 		const shutdown = lifecycle.shutdown('windowClose');
-		const rejected = assert.rejects(
-			shutdown,
-			error =>
-				error instanceof AggregateError &&
-				error.errors.length === 2 &&
-				error.errors[0].cause === failure &&
-				error.errors[1].cause === finalFailure,
-		);
+		const rejected = assert.rejects(shutdown, error => error instanceof AggregateError && error.errors.length === 2 && error.errors[0].cause === failure && error.errors[1].cause === finalFailure);
 		assert.deepEqual(events, []);
 		await ordinary.error(failure);
 		await rejected;
@@ -473,10 +441,7 @@ test('shutdown final callbacks recapture stale state before publishing overall s
 		);
 		lifecycle.onDidShutdown(() => completed.push(captured));
 		await lifecycle.shutdown('quit');
-		assert.deepEqual(
-			{ captured, generation, captures, completed },
-			{ captured: 1, generation: 1, captures: 2, completed: [1] },
-		);
+		assert.deepEqual({ captured, generation, captures, completed }, { captured: 1, generation: 1, captures: 2, completed: [1] });
 	} finally {
 		browser.window.close();
 	}
@@ -590,7 +555,13 @@ test('Electron reports completion IPC rejection accurately and keeps the committ
 				recoveries: fixture.recoveries.length,
 				responses: fixture.responses.map(response => response.kind),
 			},
-			{ shutdowns: 1, committed: 1, destroyed: false, recoveries: 1, responses: ['ready', 'complete'] },
+			{
+				shutdowns: 1,
+				committed: 1,
+				destroyed: false,
+				recoveries: 1,
+				responses: ['ready', 'complete'],
+			},
 		);
 	} finally {
 		fixture.dispose();
@@ -601,12 +572,7 @@ test('Electron restores editing only when shutdown itself fails and permits a la
 	const fixture = await createElectronLifecycleFixture();
 	try {
 		let attempts = 0;
-		fixture.lifecycle.onWillShutdown(event =>
-			event.join(
-				++attempts === 1 ? Promise.reject(new Error('Injected backup failure')) : Promise.resolve(),
-				'backup',
-			),
-		);
+		fixture.lifecycle.onWillShutdown(event => event.join(++attempts === 1 ? Promise.reject(new Error('Injected backup failure')) : Promise.resolve(), 'backup'));
 		fixture.request('windowClose');
 		await fixture.failedResponse.p;
 		assert.deepEqual(
@@ -616,19 +582,18 @@ test('Electron restores editing only when shutdown itself fails and permits a la
 				committed: fixture.committed,
 				responses: fixture.responses.map(response => response.kind),
 			},
-			{ inert: false, willShutdown: false, committed: 0, responses: ['ready', 'failed'] },
+			{
+				inert: false,
+				willShutdown: false,
+				committed: 0,
+				responses: ['ready', 'failed'],
+			},
 		);
 		fixture.request('windowClose');
 		await fixture.firstCompletion.p;
-		assert.deepEqual(
-			{ attempts, committed: fixture.committed, destroyed: fixture.window.isDestroyed() },
-			{ attempts: 2, committed: 1, destroyed: true },
-		);
+		assert.deepEqual({ attempts, committed: fixture.committed, destroyed: fixture.window.isDestroyed() }, { attempts: 2, committed: 1, destroyed: true });
 		assert.equal(fixture.errors.length, 1);
-		assert.match(
-			fixture.errors[0]!,
-			/^Failed to save window state before closing One or more shutdown participants failed$/u,
-		);
+		assert.match(fixture.errors[0]!, /^Failed to save window state before closing One or more shutdown participants failed$/u);
 	} finally {
 		fixture.dispose();
 	}

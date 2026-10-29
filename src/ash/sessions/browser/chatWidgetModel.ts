@@ -32,19 +32,9 @@ import type {
 import { localize } from '../../nls.js';
 import type { SkillReference } from '../../platform/agentHost/common/appServerApi.js';
 import type { ResolvedChatContext } from '../../workbench/services/chat/common/chatContextService.js';
-import type {
-	IActiveSessionThread,
-	ISession,
-	IUntitledChatSession,
-	ModelRef,
-	SessionId,
-	ThreadId,
-} from '../services/sessions/common/session.js';
+import type { IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from '../services/sessions/common/session.js';
 import type { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
-import {
-	chatTranscriptListItems,
-	type IChatListItem,
-} from '../../workbench/contrib/chat/browser/widget/chatListItems.js';
+import { chatTranscriptListItems, type IChatListItem } from '../../workbench/contrib/chat/browser/widget/chatListItems.js';
 import type { ChatInputState } from '../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { modelRefIdentity, type ModelReasoningEffort } from '../../workbench/services/chat/common/modelCatalog.js';
 import type { ApprovalMode } from '../../workbench/services/chat/common/chatService.js';
@@ -60,9 +50,7 @@ const historyPageTurns = 20;
 export type ChatWidgetState = 'loading' | 'ready' | 'submitting' | 'error';
 
 /** The local or durable identity currently displayed by a Chat pane. */
-export type ChatWidgetSelection =
-	| { readonly kind: 'session'; readonly active: IActiveSessionThread }
-	| { readonly kind: 'untitled'; readonly session: IUntitledChatSession };
+export type ChatWidgetSelection = { readonly kind: 'session'; readonly active: IActiveSessionThread } | { readonly kind: 'untitled'; readonly session: IUntitledChatSession };
 
 /**
  * State for one Chat tab, before or after it acquires a durable Thread.
@@ -76,8 +64,7 @@ export class ChatWidgetModel extends Disposable {
 	private readonly _onDidChange = this._register(new Emitter<void>());
 	private readonly _onDidChangeComposer = this._register(new Emitter<void>());
 	private _composerGeneration = 0;
-	private materializingComposer:
-		{ readonly untitledSessionId: string; readonly generation: number; readonly threadId: ThreadId } | undefined;
+	private materializingComposer: { readonly untitledSessionId: string; readonly generation: number; readonly threadId: ThreadId } | undefined;
 	private transcriptEntries: ThreadTranscriptEntry[] = [];
 	private transcriptRevision = 0;
 	private historyBoundary: ThreadHistoryBoundary | undefined;
@@ -115,10 +102,7 @@ export class ChatWidgetModel extends Disposable {
 	private readonly selectedApprovalModes = observableValue<ReadonlyMap<string, ApprovalMode>>(this, new Map());
 	private readonly automaticModels = new Set<ThreadId>();
 	// A New Chat's key is replaced with its Thread ID when the first message materializes it.
-	private readonly selectedReasoningEfforts = new Map<
-		string,
-		{ model: string; effort: ModelReasoningEffort | undefined }
-	>();
+	private readonly selectedReasoningEfforts = new Map<string, { model: string; effort: ModelReasoningEffort | undefined }>();
 	private _slashCommands: readonly SlashCommandDefinition[] = [];
 	private _skillSelectors: readonly SkillSelectorDefinition[] = [];
 	private skillCatalogGeneration = 0;
@@ -128,8 +112,7 @@ export class ChatWidgetModel extends Disposable {
 	private threadChanges: ThreadChangesSummary | undefined;
 	private threadChangesError: string | undefined;
 	private summaryRequest = 0;
-	private summaryRead:
-		{ readonly generation: number; sequence: number; promise: Promise<void>; invalidated: boolean } | undefined;
+	private summaryRead: { readonly generation: number; sequence: number; promise: Promise<void>; invalidated: boolean } | undefined;
 
 	readonly onDidChange: Event<void> = this._onDidChange.event;
 	/** Navigation retires input synchronously, including A-B-A. First materialization keeps its composer. */
@@ -142,9 +125,7 @@ export class ChatWidgetModel extends Disposable {
 	/** Only the selected initiating draft can replace an incidental early catalog pane. */
 	get materializingUntitledSessionId(): string | undefined {
 		const composer = this.materializingComposer;
-		return composer?.generation === this.composerGeneration && composer.threadId === this.threadId
-			? composer.untitledSessionId
-			: undefined;
+		return composer?.generation === this.composerGeneration && composer.threadId === this.threadId ? composer.untitledSessionId : undefined;
 	}
 
 	constructor(
@@ -217,8 +198,7 @@ export class ChatWidgetModel extends Disposable {
 			activeMode: activeTurn(this._thread)?.mode,
 			queuedMessages: this.queuedMessages,
 			phase: this._state,
-			inputBlocked:
-				this.historyStatus !== undefined || this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
+			inputBlocked: this.historyStatus !== undefined || this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
 			aiDisabled: this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
 			error: this.historyStatus ? undefined : this._error,
 			canInterrupt: this.canInterrupt,
@@ -227,10 +207,7 @@ export class ChatWidgetModel extends Disposable {
 			changesScope: this.selection.kind === 'session' ? 'conversation' : 'workspace',
 			changesError: this.threadChangesError,
 			contextUsage: this.contextUsage,
-			approvalMode:
-				this.selectedApprovalModes.get().get(this.composerIdentity) ??
-				this._thread?.turns.at(-1)?.approvalMode ??
-				this.defaultApprovalMode.get(),
+			approvalMode: this.selectedApprovalModes.get().get(this.composerIdentity) ?? this._thread?.turns.at(-1)?.approvalMode ?? this.defaultApprovalMode.get(),
 			models: this._models,
 			modelsError: this.modelsError,
 			slashCommands: this._slashCommands,
@@ -239,10 +216,7 @@ export class ChatWidgetModel extends Disposable {
 			selectedReasoningEffort: this.selectedReasoningEffort,
 			isAutomaticModel: this.isAutomaticModel,
 			selectedAgent: this.selection.kind === 'untitled' ? this.selection.session.agent : undefined,
-			agentName:
-				this.selection.kind === 'session'
-					? this.selection.active.session.agentTree?.find(node => node.threadId === this.threadId)?.role?.name
-					: undefined,
+			agentName: this.selection.kind === 'session' ? this.selection.active.session.agentTree?.find(node => node.threadId === this.threadId)?.role?.name : undefined,
 			canSelectAgent: this.selection.kind === 'untitled',
 			interaction: this.interaction,
 		};
@@ -257,9 +231,7 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	get olderHistory(): { readonly loading: boolean; readonly error?: string } | undefined {
-		return this.historyBoundary?.hasOlderTurns && this.historyBoundary.oldestTurnId
-			? { loading: !!this.olderHistoryRequest, error: this.olderHistoryError }
-			: undefined;
+		return this.historyBoundary?.hasOlderTurns && this.historyBoundary.oldestTurnId ? { loading: !!this.olderHistoryRequest, error: this.olderHistoryError } : undefined;
 	}
 
 	/** Older pages never replace the live cursor, execution state or interaction offer. */
@@ -279,11 +251,7 @@ export class ChatWidgetModel extends Disposable {
 					turnLimit: historyPageTurns,
 				});
 				if (this.isDisposed || generation !== this.generation || this.historyBoundary !== boundary) return;
-				if (
-					!this._thread ||
-					page.thread.threadId !== active.threadId ||
-					page.thread.sequence < this.durableSequence
-				) {
+				if (!this._thread || page.thread.threadId !== active.threadId || page.thread.sequence < this.durableSequence) {
 					this.scheduleRefresh();
 					throw new Error(localize('chat.history.changed', 'Chat history changed. Try loading again.'));
 				}
@@ -292,19 +260,12 @@ export class ChatWidgetModel extends Disposable {
 					...this._thread,
 					turns: [...page.thread.turns.filter(turn => !existing.has(turn.turnId)), ...this._thread.turns],
 				};
-				this.transcriptEntries = mergeTranscriptEntries(
-					page.transcript.entries.map(cloneTranscriptEntry),
-					this.transcriptEntries,
-				);
+				this.transcriptEntries = mergeTranscriptEntries(page.transcript.entries.map(cloneTranscriptEntry), this.transcriptEntries);
 				this.historyBoundary = page.history;
 				if (page.thread.sequence > this._thread.sequence) this.scheduleRefresh();
 			} catch (error) {
 				if (!this.isDisposed && generation === this.generation && this.historyBoundary === boundary) {
-					this.olderHistoryError = localize(
-						'chat.history.olderFailed',
-						'Could not load earlier messages: {0}',
-						String(error),
-					);
+					this.olderHistoryError = localize('chat.history.olderFailed', 'Could not load earlier messages: {0}', String(error));
 				}
 			} finally {
 				if (!this.isDisposed && this.olderHistoryRequest === pending) {
@@ -355,18 +316,12 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	get mode(): ChatMode {
-		const key =
-			this.selection.kind === 'untitled'
-				? this.selection.session.untitledSessionId
-				: this.selection.active.threadId;
+		const key = this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : this.selection.active.threadId;
 		return this.selectedModes.get(key) ?? 'agent';
 	}
 
 	selectMode(mode: ChatMode): void {
-		const key =
-			this.selection.kind === 'untitled'
-				? this.selection.session.untitledSessionId
-				: this.selection.active.threadId;
+		const key = this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : this.selection.active.threadId;
 		this.selectedModes.set(key, mode);
 		this._onDidChange.fire();
 	}
@@ -375,25 +330,18 @@ export class ChatWidgetModel extends Disposable {
 		return this.selection.kind === 'untitled'
 			? this.selection.session.model
 			: (this.selectedModels.get(this.selection.active.threadId) ??
-					(this._thread?.threadId === this.selection.active.threadId
-						? this._thread.turns.at(-1)?.model
-						: undefined) ??
+					(this._thread?.threadId === this.selection.active.threadId ? this._thread.turns.at(-1)?.model : undefined) ??
 					this.selection.active.session.model ??
 					undefined);
 	}
 
 	get isAutomaticModel(): boolean {
-		return this.selection.kind === 'untitled'
-			? this.selection.session.model === undefined
-			: this.automaticModels.has(this.selection.active.threadId);
+		return this.selection.kind === 'untitled' ? this.selection.session.model === undefined : this.automaticModels.has(this.selection.active.threadId);
 	}
 
 	get selectedReasoningEffort(): ModelReasoningEffort | undefined {
 		const model = this.selectedModel;
-		const key =
-			this.selection.kind === 'untitled'
-				? this.selection.session.untitledSessionId
-				: this.selection.active.threadId;
+		const key = this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : this.selection.active.threadId;
 		if (this.isAutomaticModel || !model) return undefined;
 		const identity = modelRefIdentity(model);
 		const selection = this.selectedReasoningEfforts.get(key);
@@ -409,9 +357,7 @@ export class ChatWidgetModel extends Disposable {
 					? (this.defaults.reasoningEffort ?? undefined)
 					: undefined;
 		const entry = this._models.find(candidate => modelRefIdentity(candidate.model) === identity);
-		return effort && entry?.supportedReasoningEfforts?.some(option => option.effort === effort)
-			? effort
-			: undefined;
+		return effort && entry?.supportedReasoningEfforts?.some(option => option.effort === effort) ? effort : undefined;
 	}
 
 	get items(): readonly IChatListItem[] {
@@ -437,12 +383,7 @@ export class ChatWidgetModel extends Disposable {
 	async generateChangeMessage(changeSet: TurnChangeSetSummary): Promise<void> {
 		const owner = this.requireChangeOwner();
 		const operation = this.captureOperation();
-		const changes = await this.chatService.generateTurnChangeMessage(
-			owner.sessionId,
-			owner.threadId,
-			changeSet.changeSetId,
-			changeSet.revision,
-		);
+		const changes = await this.chatService.generateTurnChangeMessage(owner.sessionId, owner.threadId, changeSet.changeSetId, changeSet.revision);
 		this.requireCurrentOperation(operation);
 		this.acceptChangeSets(changes);
 	}
@@ -450,13 +391,7 @@ export class ChatWidgetModel extends Disposable {
 	async updateChangeDraft(changeSet: TurnChangeSetSummary, message: string): Promise<void> {
 		const owner = this.requireChangeOwner();
 		const operation = this.captureOperation();
-		const changes = await this.chatService.updateTurnChangeDraft(
-			owner.sessionId,
-			owner.threadId,
-			changeSet.changeSetId,
-			changeSet.revision,
-			message,
-		);
+		const changes = await this.chatService.updateTurnChangeDraft(owner.sessionId, owner.threadId, changeSet.changeSetId, changeSet.revision, message);
 		this.requireCurrentOperation(operation);
 		this.acceptChangeSets(changes);
 		await this.loadChangeDetails(changeSet.changeSetId, this.changesGeneration);
@@ -520,13 +455,8 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	selectUntitledSession(session: IUntitledChatSession): void {
-		if (
-			this.selection.kind !== 'untitled' ||
-			this.selection.session.untitledSessionId !== session.untitledSessionId
-		) {
-			throw new Error(
-				`ChatWidgetModel cannot select another Untitled Chat Session: ${session.untitledSessionId}`,
-			);
+		if (this.selection.kind !== 'untitled' || this.selection.session.untitledSessionId !== session.untitledSessionId) {
+			throw new Error(`ChatWidgetModel cannot select another Untitled Chat Session: ${session.untitledSessionId}`);
 		}
 		this.selection = { kind: 'untitled', session };
 		void this.loadModels();
@@ -576,23 +506,14 @@ export class ChatWidgetModel extends Disposable {
 		const model = this.selectedModel;
 		if (!model || this.isAutomaticModel) throw new Error('Select a model before setting its thinking effort');
 		const entry = this._models.find(candidate => modelRefIdentity(candidate.model) === modelRefIdentity(model));
-		if (
-			!entry ||
-			(effort !== undefined && !entry.supportedReasoningEfforts?.some(option => option.effort === effort))
-		) {
+		if (!entry || (effort !== undefined && !entry.supportedReasoningEfforts?.some(option => option.effort === effort))) {
 			throw new Error('The selected model does not support this thinking effort');
 		}
 		const identity = this.composerIdentity;
 		await this.saveModelSelection(
 			() => this.languageModels.saveReasoningEffort(model, effort),
 			() => {
-				if (
-					this.isDisposed ||
-					identity !== this.composerIdentity ||
-					!sameModel(model, this.selectedModel) ||
-					this.isAutomaticModel
-				)
-					return;
+				if (this.isDisposed || identity !== this.composerIdentity || !sameModel(model, this.selectedModel) || this.isAutomaticModel) return;
 				this.selectedReasoningEfforts.set(identity, { model: modelRefIdentity(model), effort });
 				this._onDidChange.fire();
 			},
@@ -615,27 +536,15 @@ export class ChatWidgetModel extends Disposable {
 
 	selectAgent(agent: ChatAgent | undefined): void {
 		if (this.selection.kind !== 'untitled') throw new Error('Start a new Chat to select an Agent');
-		if (
-			this.selection.session.agent?.name === agent?.name &&
-			this.selection.session.agent?.sourceId === agent?.sourceId
-		)
-			return;
+		if (this.selection.session.agent?.name === agent?.name && this.selection.session.agent?.sourceId === agent?.sourceId) return;
 		const untitledSessionId = this.selection.session.untitledSessionId;
 		this.sessionService.setUntitledSessionAgent(untitledSessionId, agent);
-		const session = this.sessionService.untitledSessions.find(
-			candidate => candidate.untitledSessionId === untitledSessionId,
-		)!;
+		const session = this.sessionService.untitledSessions.find(candidate => candidate.untitledSessionId === untitledSessionId)!;
 		this.selection = { kind: 'untitled', session };
 		this._onDidChange.fire();
 	}
 
-	async send(
-		text: string,
-		mode: ChatMode = this.mode,
-		skills?: readonly SkillReference[],
-		contexts?: readonly ResolvedChatContext[],
-		options?: ChatSubmissionOptions,
-	): Promise<void> {
+	async send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], options?: ChatSubmissionOptions): Promise<void> {
 		if (!text.trim() && !contexts?.length) return;
 		this.assertAIEnabled();
 		const operation = this.captureOperation(options);
@@ -651,13 +560,7 @@ export class ChatWidgetModel extends Disposable {
 			this.setState('submitting');
 			this.requireCurrentOperation(operation);
 			const active = await this.ensureActiveSession();
-			if (
-				this.isDisposed ||
-				operation.signal?.aborted ||
-				operation.generation !== this.composerGeneration ||
-				active.session.sessionId !== this.sessionId ||
-				active.threadId !== this.threadId
-			)
+			if (this.isDisposed || operation.signal?.aborted || operation.generation !== this.composerGeneration || active.session.sessionId !== this.sessionId || active.threadId !== this.threadId)
 				throw canceled();
 			// Materializing this composer changes its identity from draft to durable Thread.
 			operation.identity = active.threadId;
@@ -669,13 +572,7 @@ export class ChatWidgetModel extends Disposable {
 			if (!thread || thread.threadId !== active.threadId) {
 				throw new Error('Chat Thread is not available');
 			}
-			if (
-				options?.signal?.aborted ||
-				(options?.source &&
-					(active.session.sessionId !== options.source.sessionId ||
-						active.threadId !== options.source.threadId))
-			)
-				throw canceled();
+			if (options?.signal?.aborted || (options?.source && (active.session.sessionId !== options.source.sessionId || active.threadId !== options.source.threadId))) throw canceled();
 			const turn = activeTurn(thread);
 			const submission = {
 				isNewSession: thread.turns.length === 0,
@@ -686,9 +583,7 @@ export class ChatWidgetModel extends Disposable {
 				text,
 				mode,
 				// An unknown/default choice stays with the backend authority; only conversation choices override it.
-				approvalMode:
-					this.selectedApprovalModes.get().get(this.composerIdentity) ??
-					this._thread?.turns.at(-1)?.approvalMode,
+				approvalMode: this.selectedApprovalModes.get().get(this.composerIdentity) ?? this._thread?.turns.at(-1)?.approvalMode,
 				model: this.isAutomaticModel ? undefined : this.selectedModel,
 				reasoningEffort: this.selectedReasoningEffort,
 				contexts,
@@ -697,12 +592,7 @@ export class ChatWidgetModel extends Disposable {
 				source: options?.source,
 				skills,
 			};
-			if (
-				turn &&
-				((turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review') ||
-					turn.mode !== mode ||
-					skills?.length)
-			) {
+			if (turn && ((turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review') || turn.mode !== mode || skills?.length)) {
 				// A frozen Turn keeps its approach. A new approach gets its own durable submission.
 				await this.chatService.queueTurn(submission);
 				if (!this.isCurrentOperation(operation)) {
@@ -737,22 +627,14 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	/** Voice obtains a durable owner through the same draft materialization as typed input. */
-	async prepareConversation(
-		signal?: AbortSignal,
-	): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId }> {
+	async prepareConversation(signal?: AbortSignal): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId }> {
 		this.assertAIEnabled();
 		const operation = this.captureOperation({ signal });
 		await this.waitForModelSelection(operation);
 		await this.awaitOperationPreparation(this.initialize(), operation);
 		this.requireCurrentOperation(operation);
 		const active = await this.ensureActiveSession();
-		if (
-			this.isDisposed ||
-			signal?.aborted ||
-			operation.generation !== this.composerGeneration ||
-			active.threadId !== this.threadId ||
-			active.session.sessionId !== this.sessionId
-		)
+		if (this.isDisposed || signal?.aborted || operation.generation !== this.composerGeneration || active.threadId !== this.threadId || active.session.sessionId !== this.sessionId)
 			throw canceled();
 		return { sessionId: active.session.sessionId, threadId: active.threadId };
 	}
@@ -763,9 +645,7 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	private get composerIdentity(): string {
-		return this.selection.kind === 'untitled'
-			? this.selection.session.untitledSessionId
-			: this.selection.active.threadId;
+		return this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : this.selection.active.threadId;
 	}
 
 	async executeServerCommand(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void> {
@@ -794,16 +674,10 @@ export class ChatWidgetModel extends Disposable {
 					if (current) await this.chatService.saveAdvisorDefault({ ...current, enabled: false });
 					this.requireCurrentOperation(operation);
 				} else {
-					const models = await this.awaitOperationPreparation(
-						this.languageModels.listAdvisorModels(),
-						operation,
-					);
+					const models = await this.awaitOperationPreparation(this.languageModels.listAdvisorModels(), operation);
 					this.requireCurrentOperation(operation);
 					const chosen = models.find(entry => `${entry.model.provider}/${entry.model.model}` === argument);
-					if (!chosen)
-						throw new Error(
-							localize('chat.advisor.modelUnavailable', 'Advisor model is unavailable: {0}', argument),
-						);
+					if (!chosen) throw new Error(localize('chat.advisor.modelUnavailable', 'Advisor model is unavailable: {0}', argument));
 					const config =
 						current?.model.provider === chosen.model.provider && current.model.model === chosen.model.model
 							? { ...current, enabled: true }
@@ -814,33 +688,14 @@ export class ChatWidgetModel extends Disposable {
 				if (stateRequest === this.stateRequest) this.setState('ready');
 				return;
 			}
-			const advisorDefault =
-				name === 'advisor'
-					? await this.awaitOperationPreparation(this.chatService.readAdvisorDefault(), operation)
-					: null;
+			const advisorDefault = name === 'advisor' ? await this.awaitOperationPreparation(this.chatService.readAdvisorDefault(), operation) : null;
 			this.requireCurrentOperation(operation);
-			if (name === 'advisor' && !argument)
-				throw new Error(localize('chat.advisor.questionRequired', 'Enter a question after /advisor'));
-			if (
-				name === 'advisor' &&
-				this.selection.kind === 'untitled' &&
-				(!advisorDefault || !advisorDefault.enabled)
-			) {
-				throw new Error(
-					localize(
-						'chat.advisor.configure',
-						'Configure an advisor model in Chat Settings before asking for a second opinion',
-					),
-				);
+			if (name === 'advisor' && !argument) throw new Error(localize('chat.advisor.questionRequired', 'Enter a question after /advisor'));
+			if (name === 'advisor' && this.selection.kind === 'untitled' && (!advisorDefault || !advisorDefault.enabled)) {
+				throw new Error(localize('chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'));
 			}
 			const active = await this.ensureActiveSession();
-			if (
-				this.isDisposed ||
-				operation.generation !== this.composerGeneration ||
-				active.session.sessionId !== this.sessionId ||
-				active.threadId !== this.threadId
-			)
-				throw canceled();
+			if (this.isDisposed || operation.generation !== this.composerGeneration || active.session.sessionId !== this.sessionId || active.threadId !== this.threadId) throw canceled();
 			operation.identity = active.threadId;
 			if (this._thread?.threadId !== active.threadId) {
 				await this.awaitOperationPreparation(this.subscribe(active), operation);
@@ -857,20 +712,8 @@ export class ChatWidgetModel extends Disposable {
 					expectedSequence: thread.sequence,
 					isNewSession: thread.turns.length === 0,
 				};
-				if (activeTurn(thread))
-					throw new Error(
-						localize(
-							'chat.advisor.turnActive',
-							'Wait for the active Turn to finish before starting a consultation',
-						),
-					);
-				if (!advisorDefault || !advisorDefault.enabled)
-					throw new Error(
-						localize(
-							'chat.advisor.configure',
-							'Configure an advisor model in Chat Settings before asking for a second opinion',
-						),
-					);
+				if (activeTurn(thread)) throw new Error(localize('chat.advisor.turnActive', 'Wait for the active Turn to finish before starting a consultation'));
+				if (!advisorDefault || !advisorDefault.enabled) throw new Error(localize('chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'));
 				await this.chatService.consultAdvisor({ ...options, question: argument });
 				this.requireCurrentOperation(operation);
 				await this.refreshThread();
@@ -902,24 +745,14 @@ export class ChatWidgetModel extends Disposable {
 
 	private assertAIEnabled(): void {
 		if (this.configuration.getValue<boolean>(ChatAIDisabledSettingId)) {
-			throw new Error(
-				localize(
-					'chat.ai.disabled.message',
-					'AI features are disabled. Turn off Disable AI features in Settings to send messages.',
-				),
-			);
+			throw new Error(localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.'));
 		}
 	}
 
 	async retryFailedTurn(turnId: string): Promise<void> {
 		const turns = this._thread?.turns ?? [];
 		const turn = turns.at(-1);
-		if (
-			turn?.turnId !== turnId ||
-			turn.status !== 'failed' ||
-			turn.error?.retryable !== true ||
-			(turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review')
-		) {
+		if (turn?.turnId !== turnId || turn.status !== 'failed' || turn.error?.retryable !== true || (turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review')) {
 			throw new Error('Only the latest retryable failed Turn can be retried');
 		}
 		await this.send('Try again.', turn.mode);
@@ -931,10 +764,7 @@ export class ChatWidgetModel extends Disposable {
 		if (!thread || !turn) return;
 		const operation = this.captureOperation();
 		const stateRequest = ++this.stateRequest;
-		const isCurrent = () =>
-			stateRequest === this.stateRequest &&
-			this.isCurrentOperation(operation) &&
-			activeTurn(this._thread)?.turnId === turn.turnId;
+		const isCurrent = () => stateRequest === this.stateRequest && this.isCurrentOperation(operation) && activeTurn(this._thread)?.turnId === turn.turnId;
 		try {
 			this.setState('submitting');
 			this.requireCurrentOperation(operation);
@@ -961,10 +791,7 @@ export class ChatWidgetModel extends Disposable {
 		}
 		const operation = this.captureOperation();
 		const stateRequest = ++this.stateRequest;
-		const isCurrent = () =>
-			stateRequest === this.stateRequest &&
-			this.isCurrentOperation(operation) &&
-			this.chatService.getInteractionOffer(thread.sessionId, thread.threadId) === offer;
+		const isCurrent = () => stateRequest === this.stateRequest && this.isCurrentOperation(operation) && this.chatService.getInteractionOffer(thread.sessionId, thread.threadId) === offer;
 		try {
 			this.setState('submitting');
 			this.requireCurrentOperation(operation);
@@ -978,12 +805,7 @@ export class ChatWidgetModel extends Disposable {
 				response,
 			});
 			const currentOffer = this.chatService.getInteractionOffer(thread.sessionId, thread.threadId);
-			if (
-				!this.isCurrentOperation(operation) ||
-				stateRequest !== this.stateRequest ||
-				(currentOffer && currentOffer !== offer)
-			)
-				return;
+			if (!this.isCurrentOperation(operation) || stateRequest !== this.stateRequest || (currentOffer && currentOffer !== offer)) return;
 			await this.refreshThread();
 		} catch (error) {
 			if (isCurrent()) this.setError(error);
@@ -1075,9 +897,7 @@ export class ChatWidgetModel extends Disposable {
 	private refreshUntitledSelection(): void {
 		if (this.selection.kind !== 'untitled') return;
 		const previous = this.selection.session;
-		const session = this.sessionService.untitledSessions.find(
-			candidate => candidate.untitledSessionId === previous.untitledSessionId,
-		);
+		const session = this.sessionService.untitledSessions.find(candidate => candidate.untitledSessionId === previous.untitledSessionId);
 		if (!session || session === previous) return;
 		this.selection = { kind: 'untitled', session };
 		this._onDidChange.fire();
@@ -1141,13 +961,7 @@ export class ChatWidgetModel extends Disposable {
 			void this.chatService.unsubscribeThread(active.session.sessionId, oldThreadId, this);
 		}
 		try {
-			const subscribed = await this.chatService.subscribeThread(
-				active.session.sessionId,
-				active.threadId,
-				this.durableSequence,
-				this,
-				{ type: 'latest', turnLimit: historyPageTurns },
-			);
+			const subscribed = await this.chatService.subscribeThread(active.session.sessionId, active.threadId, this.durableSequence, this, { type: 'latest', turnLimit: historyPageTurns });
 			if (this.isDisposed || generation !== this.generation) return;
 			const result = { ...(await this.bridgeHistoryGap(subscribed, generation)), updates: subscribed.updates };
 			if (this.isDisposed || generation !== this.generation) return;
@@ -1180,11 +994,7 @@ export class ChatWidgetModel extends Disposable {
 		if (update.threadId !== selectedThreadId || update.sessionId !== this.sessionId) return;
 		if (update.update.type !== 'committed') return;
 		this.durableSequence = Math.max(this.durableSequence, update.durableSequence);
-		if (
-			update.update.event.type === 'voiceTranscriptRecorded' &&
-			this._thread &&
-			update.durableSequence === this._thread.sequence + 1
-		) {
+		if (update.update.event.type === 'voiceTranscriptRecorded' && this._thread && update.durableSequence === this._thread.sequence + 1) {
 			// Speech changes the journal boundary, never execution state or model inputs.
 			this._thread = { ...this._thread, sequence: update.durableSequence };
 			return;
@@ -1256,11 +1066,7 @@ export class ChatWidgetModel extends Disposable {
 				await this.readChangesSummary(owner, generation);
 				// Durable history may advance while its summary is being read. Request
 				// one fresh summary instead of concurrent reads whose results will be discarded.
-			} while (
-				!this.isDisposed &&
-				generation === this.generation &&
-				(read.invalidated || this.durableSequence > read.sequence)
-			);
+			} while (!this.isDisposed && generation === this.generation && (read.invalidated || this.durableSequence > read.sequence));
 		})().finally(() => {
 			if (this.summaryRead === read) this.summaryRead = undefined;
 		});
@@ -1271,22 +1077,13 @@ export class ChatWidgetModel extends Disposable {
 		const request = ++this.summaryRequest;
 		try {
 			const summary = await this.chatService.readThreadChanges(owner.session.sessionId, owner.threadId);
-			if (
-				this.isDisposed ||
-				generation !== this.generation ||
-				request !== this.summaryRequest ||
-				summary.sequence < this.durableSequence
-			)
-				return;
+			if (this.isDisposed || generation !== this.generation || request !== this.summaryRequest || summary.sequence < this.durableSequence) return;
 			this.threadChanges = summary;
 			this.threadChangesError = undefined;
 		} catch {
 			if (this.isDisposed || generation !== this.generation || request !== this.summaryRequest) return;
 			this.threadChanges = undefined;
-			this.threadChangesError = localize(
-				'chat.changes.loadFailed',
-				'Changes are unavailable. Open Changes to retry.',
-			);
+			this.threadChangesError = localize('chat.changes.loadFailed', 'Changes are unavailable. Open Changes to retry.');
 		}
 		this._onDidChange.fire();
 	}
@@ -1297,8 +1094,7 @@ export class ChatWidgetModel extends Disposable {
 		const changesGeneration = ++this.changesGeneration;
 		try {
 			const changeSets = await this.chatService.listTurnChanges(owner.session.sessionId, owner.threadId);
-			if (this.isDisposed || threadGeneration !== this.generation || changesGeneration !== this.changesGeneration)
-				return;
+			if (this.isDisposed || threadGeneration !== this.generation || changesGeneration !== this.changesGeneration) return;
 			this._changeSets = changeSets;
 			this._onDidChange.fire();
 			for (const changeSet of changeSets) void this.loadChangeDetails(changeSet.changeSetId, changesGeneration);
@@ -1321,8 +1117,7 @@ export class ChatWidgetModel extends Disposable {
 		if (!owner) return;
 		try {
 			const details = await this.chatService.readTurnChange(owner.session.sessionId, owner.threadId, changeSetId);
-			if (this.isDisposed || generation !== this.changesGeneration || details.summary.threadId !== this.threadId)
-				return;
+			if (this.isDisposed || generation !== this.changesGeneration || details.summary.threadId !== this.threadId) return;
 			this.changeDetails.set(changeSetId, details);
 			this._onDidChange.fire();
 		} catch {
@@ -1336,12 +1131,7 @@ export class ChatWidgetModel extends Disposable {
 		switch (event.type) {
 			case 'turnModeChanged':
 				// Follow an Agent's switch unless the user has chosen a different next-turn mode.
-				if (
-					this._thread &&
-					update.durableSequence > this._thread.sequence &&
-					this._thread.turns.at(-1)?.turnId === event.turnId &&
-					this.mode === event.fromMode
-				) {
+				if (this._thread && update.durableSequence > this._thread.sequence && this._thread.turns.at(-1)?.turnId === event.turnId && this.mode === event.fromMode) {
 					this.selectedModes.set(update.threadId, event.mode);
 					this._onDidChange.fire();
 				}
@@ -1438,9 +1228,7 @@ export class ChatWidgetModel extends Disposable {
 			if (
 				this.isDisposed ||
 				generation !== this.generation ||
-				(request !== this.readRequest &&
-					result.thread.sequence <= (this._thread?.sequence ?? 0) &&
-					result.transcript.revision <= this.transcriptRevision) ||
+				(request !== this.readRequest && result.thread.sequence <= (this._thread?.sequence ?? 0) && result.transcript.revision <= this.transcriptRevision) ||
 				result.thread.threadId !== this.threadId
 			)
 				return;
@@ -1477,8 +1265,7 @@ export class ChatWidgetModel extends Disposable {
 				run: () => {
 					if (recovery) return recovery;
 					// A retained action must never recover a different selection or a newer connection.
-					if (this.isDisposed || generation !== this.generation || this.historyStatus !== status)
-						return Promise.resolve();
+					if (this.isDisposed || generation !== this.generation || this.historyStatus !== status) return Promise.resolve();
 					this.setState('loading');
 					recovery = kind === 'history' ? this.subscribe(active) : this.refreshThread();
 					return recovery;
@@ -1490,16 +1277,9 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	/** Hydration and refresh obey the same sequence floor; streaming revisions advance independently. */
-	private acceptThreadSnapshot(
-		result: Awaited<ReturnType<IChatService['readThread']>>,
-		request: number,
-		refresh = false,
-	): { readonly thread: boolean; readonly transcript: boolean } {
+	private acceptThreadSnapshot(result: Awaited<ReturnType<IChatService['readThread']>>, request: number, refresh = false): { readonly thread: boolean; readonly transcript: boolean } {
 		const sequence = this._thread?.sequence ?? 0;
-		const thread =
-			result.thread.sequence >= this.durableSequence &&
-			(result.thread.sequence > sequence ||
-				(result.thread.sequence === sequence && request >= this.snapshotRequest));
+		const thread = result.thread.sequence >= this.durableSequence && (result.thread.sequence > sequence || (result.thread.sequence === sequence && request >= this.snapshotRequest));
 		const incoming = new Set(result.thread.turns.map(turn => turn.turnId));
 		const overlap = this._thread?.turns.findIndex(turn => incoming.has(turn.turnId)) ?? -1;
 		const prefix = result.history && overlap > 0 ? this._thread!.turns.slice(0, overlap) : [];
@@ -1513,34 +1293,21 @@ export class ChatWidgetModel extends Disposable {
 		// A bounded stale snapshot cannot describe Turns already added past its tail.
 		// Recover with a fresh window rather than erasing their transcript entries.
 		const transcript = result.transcript.revision >= this.transcriptRevision && (thread || !result.history);
-		if (
-			!thread &&
-			result.history &&
-			(result.thread.sequence < this.durableSequence || result.transcript.revision > this.transcriptRevision)
-		) {
+		if (!thread && result.history && (result.thread.sequence < this.durableSequence || result.transcript.revision > this.transcriptRevision)) {
 			if (!refresh) this.scheduleRefresh();
 			else if (!this.threadRead?.invalidated) {
 				// A response alone must not keep the refresh loop alive when the
 				// backend repeatedly returns a checkpoint behind our known history.
-				this.setHistoryError(
-					new Error(localize('chat.history.changed', 'Chat history changed. Try loading again.')),
-					'live',
-				);
+				this.setHistoryError(new Error(localize('chat.history.changed', 'Chat history changed. Try loading again.')), 'live');
 			}
 		}
 		if (transcript) {
 			const retained = new Set(prefix.map(turn => turn.turnId));
 			const retainedItems = new Set(prefix.flatMap(turn => turn.items.map(item => item.itemId)));
 			const entries = this.transcriptEntries.filter(entry =>
-				entry.type === 'voiceTranscript'
-					? prefix.length > 0 &&
-						(!entry.transcript.afterItemId || retainedItems.has(entry.transcript.afterItemId))
-					: retained.has(entry.turnId),
+				entry.type === 'voiceTranscript' ? prefix.length > 0 && (!entry.transcript.afterItemId || retainedItems.has(entry.transcript.afterItemId)) : retained.has(entry.turnId),
 			);
-			this.transcriptEntries = mergeTranscriptEntries(
-				entries,
-				result.transcript.entries.map(cloneTranscriptEntry),
-			);
+			this.transcriptEntries = mergeTranscriptEntries(entries, result.transcript.entries.map(cloneTranscriptEntry));
 			this.transcriptRevision = result.transcript.revision;
 		}
 		return { thread, transcript };
@@ -1553,12 +1320,7 @@ export class ChatWidgetModel extends Disposable {
 		const existing = new Set(this._thread?.turns.map(turn => turn.turnId));
 		const pages: ThreadRead[] = [snapshot];
 		let oldest = snapshot;
-		while (
-			existing.size &&
-			oldest.history?.hasOlderTurns &&
-			oldest.history.oldestTurnId &&
-			!oldest.thread.turns.some(turn => existing.has(turn.turnId))
-		) {
+		while (existing.size && oldest.history?.hasOlderTurns && oldest.history.oldestTurnId && !oldest.thread.turns.some(turn => existing.has(turn.turnId))) {
 			const cursor = oldest.history.oldestTurnId;
 			const page = await this.chatService.readThread(snapshot.thread.sessionId, snapshot.thread.threadId, {
 				type: 'before',
@@ -1617,11 +1379,7 @@ export class ChatWidgetModel extends Disposable {
 		identity: string;
 		readonly signal?: AbortSignal;
 	} {
-		if (
-			options?.source &&
-			(options.source.sessionId !== this.sessionId || options.source.threadId !== this.threadId)
-		)
-			throw canceled();
+		if (options?.source && (options.source.sessionId !== this.sessionId || options.source.threadId !== this.threadId)) throw canceled();
 		return { generation: this.composerGeneration, identity: this.composerIdentity, signal: options?.signal };
 	}
 
@@ -1633,38 +1391,22 @@ export class ChatWidgetModel extends Disposable {
 		}
 	}
 
-	private async awaitOperationPreparation<T>(
-		pending: Promise<T>,
-		operation: ReturnType<ChatWidgetModel['captureOperation']>,
-	): Promise<T> {
+	private async awaitOperationPreparation<T>(pending: Promise<T>, operation: ReturnType<ChatWidgetModel['captureOperation']>): Promise<T> {
 		const result = operation.signal ? await raceCancellationError(pending, operation.signal) : await pending;
 		this.requireCurrentOperation(operation);
 		return result;
 	}
 
 	private isCurrentTarget(operation: ReturnType<ChatWidgetModel['captureOperation']>): boolean {
-		return (
-			!this.isDisposed &&
-			operation.generation === this.composerGeneration &&
-			operation.identity === this.composerIdentity
-		);
+		return !this.isDisposed && operation.generation === this.composerGeneration && operation.identity === this.composerIdentity;
 	}
 
 	private isCurrentOperation(operation: ReturnType<ChatWidgetModel['captureOperation']>): boolean {
 		return !operation.signal?.aborted && this.isCurrentTarget(operation);
 	}
 
-	private recoverCancelledSubmission(
-		operation: ReturnType<ChatWidgetModel['captureOperation']>,
-		stateRequest: number,
-	): void {
-		if (
-			operation.signal?.aborted &&
-			stateRequest === this.stateRequest &&
-			this.isCurrentTarget(operation) &&
-			this._state === 'submitting'
-		)
-			this.setState('ready');
+	private recoverCancelledSubmission(operation: ReturnType<ChatWidgetModel['captureOperation']>, stateRequest: number): void {
+		if (operation.signal?.aborted && stateRequest === this.stateRequest && this.isCurrentTarget(operation) && this._state === 'submitting') this.setState('ready');
 	}
 
 	private requireCurrentOperation(operation: ReturnType<ChatWidgetModel['captureOperation']>): void {
@@ -1738,8 +1480,7 @@ function activeTurn(thread: Thread | undefined): Turn | undefined {
 
 function isSteerableTurn(turn: Turn): boolean {
 	return (
-		(turn.kind === undefined || turn.kind === 'coding' || turn.kind === 'review') &&
-		(turn.status === 'running' || turn.status === 'waitingForApproval' || turn.status === 'waitingForUserInput')
+		(turn.kind === undefined || turn.kind === 'coding' || turn.kind === 'review') && (turn.status === 'running' || turn.status === 'waitingForApproval' || turn.status === 'waitingForUserInput')
 	);
 }
 
@@ -1769,10 +1510,7 @@ function cloneTranscriptEntry(entry: ThreadTranscriptEntry): ThreadTranscriptEnt
 
 /** Stable IDs deduplicate speech and overlaps. Callers clone incoming entries only,
  * retaining the owned prefix without copying every previously loaded page. */
-function mergeTranscriptEntries(
-	older: readonly ThreadTranscriptEntry[],
-	newer: readonly ThreadTranscriptEntry[],
-): ThreadTranscriptEntry[] {
+function mergeTranscriptEntries(older: readonly ThreadTranscriptEntry[], newer: readonly ThreadTranscriptEntry[]): ThreadTranscriptEntry[] {
 	const entries = new Map(older.map(entry => [entry.entryId, entry]));
 	for (const entry of newer) entries.set(entry.entryId, entry);
 	return [...entries.values()];

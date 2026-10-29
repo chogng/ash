@@ -6,11 +6,7 @@ import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import { EDIT_USER_CONFIGURATION_CHANNEL } from '../../native/common/nativeHost.js';
 
 /** The host chooses the profile path; Renderer cannot request an arbitrary file or a remote path. */
-export function userConfigurationIpcRoute(
-	profileRoot: string,
-	isLocalConnection: () => boolean,
-	openTextFile: (path: string) => Promise<void>,
-): IpcRoute<unknown, void> {
+export function userConfigurationIpcRoute(profileRoot: string, isLocalConnection: () => boolean, openTextFile: (path: string) => Promise<void>): IpcRoute<unknown, void> {
 	return {
 		channel: EDIT_USER_CONFIGURATION_CHANNEL,
 		validate: value => {

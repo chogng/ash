@@ -34,13 +34,7 @@ export class TerminalCommandHistory {
 			.reverse();
 	}
 
-	record(
-		shellId: string,
-		status: 'running' | 'completed' | 'succeeded' | 'failed' | 'canceled',
-		command: string | undefined,
-		isTrusted: boolean | undefined,
-		storageDisabled: boolean,
-	): void {
+	record(shellId: string, status: 'running' | 'completed' | 'succeeded' | 'failed' | 'canceled', command: string | undefined, isTrusted: boolean | undefined, storageDisabled: boolean): void {
 		const historyLimit = this.historyLimit();
 		if (
 			status === 'running' ||
@@ -57,9 +51,7 @@ export class TerminalCommandHistory {
 		}
 
 		const entry = { shellId, command };
-		const existingEntries = this.readEntries().filter(
-			candidate => candidate.shellId !== shellId || candidate.command !== command,
-		);
+		const existingEntries = this.readEntries().filter(candidate => candidate.shellId !== shellId || candidate.command !== command);
 		existingEntries.push(entry);
 		const entries = retainLatestPerProfile(existingEntries, historyLimit);
 
@@ -77,8 +69,7 @@ export class TerminalCommandHistory {
 
 	private readEntries(): ITerminalHistoryCommand[] {
 		const raw = this.storageService.get(STORAGE_KEY, StorageScope.APPLICATION);
-		if (!raw || raw.length > MAX_HISTORY_BYTES || VSBuffer.fromString(raw).byteLength > MAX_HISTORY_BYTES)
-			return [];
+		if (!raw || raw.length > MAX_HISTORY_BYTES || VSBuffer.fromString(raw).byteLength > MAX_HISTORY_BYTES) return [];
 		let value: unknown;
 		try {
 			value = JSON.parse(raw);
@@ -88,16 +79,9 @@ export class TerminalCommandHistory {
 		if (!value || typeof value !== 'object' || !('entries' in value) || !Array.isArray(value.entries)) return [];
 		const entries: ITerminalHistoryCommand[] = [];
 		for (const candidate of value.entries) {
-			if (!candidate || typeof candidate !== 'object' || !('shellId' in candidate) || !('command' in candidate))
-				continue;
+			if (!candidate || typeof candidate !== 'object' || !('shellId' in candidate) || !('command' in candidate)) continue;
 			const { shellId, command } = candidate;
-			if (
-				isValidShellId(shellId) &&
-				typeof command === 'string' &&
-				command.length > 0 &&
-				command.length <= MAX_COMMAND_CHARACTERS &&
-				!command.includes('\0')
-			) {
+			if (isValidShellId(shellId) && typeof command === 'string' && command.length > 0 && command.length <= MAX_COMMAND_CHARACTERS && !command.includes('\0')) {
 				entries.push({ shellId, command });
 			}
 		}
@@ -105,9 +89,7 @@ export class TerminalCommandHistory {
 	}
 
 	private historyLimit(): number {
-		const value = this.configurationService.getValue<number>(
-			TerminalHistorySettingId.ShellIntegrationCommandHistory,
-		);
+		const value = this.configurationService.getValue<number>(TerminalHistorySettingId.ShellIntegrationCommandHistory);
 		return Number.isSafeInteger(value) && value >= 0 ? value : DEFAULT_HISTORY_LIMIT;
 	}
 }
@@ -169,8 +151,7 @@ export class TerminalDirectoryHistory {
 				return count <= limit;
 			})
 			.reverse();
-		while (retained.length && VSBuffer.fromString(JSON.stringify(retained)).byteLength > MAX_HISTORY_BYTES)
-			retained.shift();
+		while (retained.length && VSBuffer.fromString(JSON.stringify(retained)).byteLength > MAX_HISTORY_BYTES) retained.shift();
 		this.storage.store(this.key, JSON.stringify(retained), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	}
 
@@ -185,26 +166,18 @@ export class TerminalDirectoryHistory {
 
 	private validPath(value: unknown): value is string {
 		return (
-			typeof value === 'string' &&
-			value.length > 0 &&
-			value.length <= 32768 &&
-			!/[\x00-\x1f\x7f]/.test(value) &&
-			(/^\//.test(value) || /^[a-z]:[\\/]/i.test(value) || /^\\\\[^\\]/.test(value))
+			typeof value === 'string' && value.length > 0 && value.length <= 32768 && !/[\x00-\x1f\x7f]/.test(value) && (/^\//.test(value) || /^[a-z]:[\\/]/i.test(value) || /^\\\\[^\\]/.test(value))
 		);
 	}
 
 	private read(): { scope: string; path: string }[] {
 		if (!this.limit()) return [];
 		const raw = this.storage.get(this.key, StorageScope.WORKSPACE);
-		if (!raw || raw.length > MAX_HISTORY_BYTES || VSBuffer.fromString(raw).byteLength > MAX_HISTORY_BYTES)
-			return [];
+		if (!raw || raw.length > MAX_HISTORY_BYTES || VSBuffer.fromString(raw).byteLength > MAX_HISTORY_BYTES) return [];
 		try {
 			const value: unknown = JSON.parse(raw);
 			if (!Array.isArray(value)) return [];
-			return value.filter(
-				(entry): entry is { scope: string; path: string } =>
-					!!entry && typeof entry === 'object' && isValidShellId(entry.scope) && this.validPath(entry.path),
-			);
+			return value.filter((entry): entry is { scope: string; path: string } => !!entry && typeof entry === 'object' && isValidShellId(entry.scope) && this.validPath(entry.path));
 		} catch {
 			return [];
 		}

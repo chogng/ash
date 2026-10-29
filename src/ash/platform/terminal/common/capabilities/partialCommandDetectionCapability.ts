@@ -23,10 +23,7 @@ export class PartialCommandDetectionCapability extends Disposable implements IPa
 			onData(listener: (data: string) => void): { dispose(): void };
 			registerMarker(offset: number): Marker | undefined;
 			readonly parser: {
-				registerCsiHandler(
-					id: { final: string },
-					handler: (params: (number | number[])[]) => boolean,
-				): { dispose(): void };
+				registerCsiHandler(id: { final: string }, handler: (params: (number | number[])[]) => boolean): { dispose(): void };
 			};
 		},
 		onDidExecuteText: Event<void> | undefined,
@@ -39,8 +36,7 @@ export class PartialCommandDetectionCapability extends Disposable implements IPa
 		const erase = terminal.parser.registerCsiHandler({ final: 'J' }, params => {
 			if (params[0] === 2 || params[0] === 3) {
 				for (const marker of this.commands) {
-					if (params[0] === 3 || marker.line >= terminal.buffer.active.baseY)
-						this.lifetimes.deleteAndDispose(marker.id);
+					if (params[0] === 3 || marker.line >= terminal.buffer.active.baseY) this.lifetimes.deleteAndDispose(marker.id);
 				}
 			}
 			return false;

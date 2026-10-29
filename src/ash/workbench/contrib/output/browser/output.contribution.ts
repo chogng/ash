@@ -2,24 +2,12 @@ import { IDefaultLogLevelsService } from '../../../services/log/common/defaultLo
 import '../../../services/configuration/common/jsonEditingService.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import {
-	ConfigurationScope,
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import {
-	IInstantiationService,
-	type ServicesAccessor,
-} from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
-import {
-	ViewContainerLocation,
-	WorkbenchViewContainerId,
-	ViewsRegistry,
-	type WorkbenchViewRegistry,
-} from '../../../common/views.js';
+import { ViewContainerLocation, WorkbenchViewContainerId, ViewsRegistry, type WorkbenchViewRegistry } from '../../../common/views.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import './outputServices.js';
 import { OutputViewPane } from './outputView.js';
@@ -63,10 +51,7 @@ registerAction2(
 		override async run(accessor: ServicesAccessor): Promise<void> {
 			const channel = accessor.get(IOutputService).activeChannel;
 			const logger = channel?.descriptor.logger?.control;
-			if (channel && logger)
-				await accessor
-					.get(IDefaultLogLevelsService)
-					.setDefaultLogLevel(logger.getLevel(), channel.descriptor.extensionId);
+			if (channel && logger) await accessor.get(IDefaultLogLevelsService).setDefaultLogLevel(logger.getLevel(), channel.descriptor.extensionId);
 		}
 	},
 );
@@ -76,10 +61,7 @@ registerAction2(
 		constructor() {
 			super({
 				id: OPEN_SAVED_LOGS_COMMAND_ID,
-				title: localize2(
-					{ bundle: 'ash.workbench', key: 'command.OpenSavedLogsAction' },
-					'Output: Open Saved Logs…',
-				),
+				title: localize2({ bundle: 'ash.workbench', key: 'command.OpenSavedLogsAction' }, 'Output: Open Saved Logs…'),
 				f1: true,
 				precondition: CONTEXT_SAVED_LOGS_AVAILABLE.isEqualTo(true),
 			});
@@ -137,10 +119,7 @@ registerAction2(
 		constructor() {
 			super({
 				id: SHOW_OUTPUT_CHANNELS_COMMAND_ID,
-				title: localize2(
-					{ bundle: 'ash.workbench', key: 'command.ShowOutputChannelsAction' },
-					'Output: Show Output Channels',
-				),
+				title: localize2({ bundle: 'ash.workbench', key: 'command.ShowOutputChannelsAction' }, 'Output: Show Output Channels'),
 				f1: true,
 			});
 		}
@@ -190,21 +169,15 @@ registerAction2(
 		constructor() {
 			super({
 				id: OPEN_OUTPUT_IN_EDITOR_COMMAND_ID,
-				title: localize2(
-					{ bundle: 'ash.workbench', key: 'command.OpenOutputInEditorAction' },
-					'Output: Open Output in Editor',
-				),
+				title: localize2({ bundle: 'ash.workbench', key: 'command.OpenOutputInEditorAction' }, 'Output: Open Output in Editor'),
 				f1: true,
 			});
 		}
 		public override async run(accessor: ServicesAccessor): Promise<void> {
 			const channel = accessor.get(IOutputService).activeChannel;
 			if (channel) {
-				const languageId =
-					channel.descriptor.languageId ?? (channel.kind === 'log' ? LOG_MODE_ID : OUTPUT_MODE_ID);
-				await accessor
-					.get(IEditorService)
-					.openEditor({ resource: channel.uri, label: channel.label, languageId, readOnly: true });
+				const languageId = channel.descriptor.languageId ?? (channel.kind === 'log' ? LOG_MODE_ID : OUTPUT_MODE_ID);
+				await accessor.get(IEditorService).openEditor({ resource: channel.uri, label: channel.label, languageId, readOnly: true });
 			}
 		}
 	},
@@ -215,23 +188,18 @@ registerAction2(
 		constructor() {
 			super({
 				id: EXPORT_OUTPUT_COMMAND_ID,
-				title: localize2(
-					{ bundle: 'ash.workbench', key: 'command.ExportOutputAction' },
-					'Output: Export Output…',
-				),
+				title: localize2({ bundle: 'ash.workbench', key: 'command.ExportOutputAction' }, 'Output: Export Output…'),
 				f1: true,
 			});
 		}
 		override run(accessor: ServicesAccessor): void {
 			const channel = accessor.get(IOutputService).activeChannel;
 			if (channel) {
-				accessor
-					.get(IWorkbenchHostService)
-					.downloadText({
-						fileName: `${channel.label.replace(/[\\/:*?"<>|\u0000-\u001F]/g, '-')}.log`,
-						content: channel.getText(),
-						mediaType: 'text/plain;charset=utf-8',
-					});
+				accessor.get(IWorkbenchHostService).downloadText({
+					fileName: `${channel.label.replace(/[\\/:*?"<>|\u0000-\u001F]/g, '-')}.log`,
+					content: channel.getText(),
+					mediaType: 'text/plain;charset=utf-8',
+				});
 			}
 		}
 	},
@@ -261,12 +229,7 @@ export function registerOutputView(registry: WorkbenchViewRegistry = ViewsRegist
 AccessibleViewRegistry.register(new OutputAccessibilityHelp());
 
 class OutputContribution extends Disposable {
-	constructor(
-		@IOutputService output: IOutputService,
-		@IViewsService views: IViewsService,
-		@ILoggerService loggers: ILoggerService,
-		@IContextKeyService contextKeys: IContextKeyService,
-	) {
+	constructor(@IOutputService output: IOutputService, @IViewsService views: IViewsService, @ILoggerService loggers: ILoggerService, @IContextKeyService contextKeys: IContextKeyService) {
 		super();
 		const savedLogs = CONTEXT_SAVED_LOGS_AVAILABLE.bindTo(contextKeys);
 		savedLogs.set(Boolean(loggers.files));
@@ -282,9 +245,7 @@ class OutputContribution extends Disposable {
 		);
 	}
 }
-registerWorkbenchContribution('workbench.contrib.output', WorkbenchPhase.BlockRestore, accessor =>
-	accessor.get(IInstantiationService).createInstance(OutputContribution),
-);
+registerWorkbenchContribution('workbench.contrib.output', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(OutputContribution));
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.Output,
@@ -298,10 +259,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	setting: {
 		valueType: 'boolean',
 		title: localize('output.verbosityTitle', 'Output accessibility help'),
-		description: localize(
-			'output.verbosityDescription',
-			'Announce how to open accessibility help when Output receives focus.',
-		),
+		description: localize('output.verbosityDescription', 'Announce how to open accessibility help when Output receives focus.'),
 	},
 });
 

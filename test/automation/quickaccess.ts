@@ -22,18 +22,14 @@ export class QuickAccess {
 	}
 
 	public async select(label: string): Promise<void> {
-		await this.items
-			.filter({ has: this.page.locator('.ash-quick-pick-row-label').getByText(label, { exact: true }) })
-			.click();
+		await this.items.filter({ has: this.page.locator('.ash-quick-pick-row-label').getByText(label, { exact: true }) }).click();
 	}
 
 	public async runCommand(commandId: string): Promise<void> {
 		await this.open(`>${commandId}`);
 		const commandList = this.page.locator(`[id="${await this.input.getAttribute('aria-controls')}"]`);
 		// Command descriptions carry stable IDs, independent of the display language.
-		await this.items
-			.filter({ has: this.page.locator('.ash-quick-pick-row-description').getByText(commandId, { exact: true }) })
-			.click();
+		await this.items.filter({ has: this.page.locator('.ash-quick-pick-row-description').getByText(commandId, { exact: true }) }).click();
 		// The command may open another picker; only the command list must close.
 		await commandList.waitFor({ state: 'hidden' });
 	}

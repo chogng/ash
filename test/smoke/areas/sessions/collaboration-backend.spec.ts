@@ -8,8 +8,7 @@ import { expect, test } from '../../../automation/test.js';
 import type { Locator } from '@playwright/test';
 
 // Remote selections can switch a paragraph from textarea to the rich text surface.
-const noteText = (input: Locator) =>
-	input.evaluate(element => (element instanceof HTMLTextAreaElement ? element.value : (element.textContent ?? '')));
+const noteText = (input: Locator) => input.evaluate(element => (element instanceof HTMLTextAreaElement ? element.value : (element.textContent ?? '')));
 
 test(
 	'Persistent collaboration channels share across windows and enforce member permissions',
@@ -24,10 +23,7 @@ test(
 		const url = `http://127.0.0.1:${address.port}`;
 		const administrator = randomBytes(32).toString('hex');
 		const origin = await workbench.page.evaluate(() => location.origin);
-		const packageRoot = developmentAshPackagePath(
-			resolve(import.meta.dirname, '../../../..'),
-			target.kind === 'browser' ? 'packaged-node' : 'host-provided-node',
-		);
+		const packageRoot = developmentAshPackagePath(resolve(import.meta.dirname, '../../../..'), target.kind === 'browser' ? 'packaged-node' : 'host-provided-node');
 		let child: ChildProcess | undefined;
 		let originalClipboard: string | undefined;
 		const start = async () => {
@@ -119,24 +115,15 @@ test(
 			await name.press('Enter');
 			await expect(page.getByRole('treeitem', { name: 'engineering', exact: true })).toBeVisible();
 			await page.getByRole('treeitem', { name: 'engineering', exact: true }).dblclick();
-			await expect(page.locator('.stanza-document-collaboration-toolbar')).toHaveAttribute(
-				'data-state',
-				'connected',
-			);
+			await expect(page.locator('.stanza-document-collaboration-toolbar')).toHaveAttribute('data-state', 'connected');
 			const notes = page.getByRole('textbox', { name: 'Paragraph', exact: true }).first();
 			await notes.fill('Channel notes survive restart');
 			const agents = await workbench.openAgentsWindow(target.kind);
 			await agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-			await agents
-				.locator('.ash-sessions-activity-content')
-				.getByRole('button', { name: 'Collab', exact: true })
-				.click();
+			await agents.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Collab', exact: true }).click();
 			await expect(agents.getByRole('treeitem', { name: 'engineering', exact: true })).toBeVisible();
 			await agents.getByRole('treeitem', { name: 'engineering', exact: true }).dblclick();
-			await expect(agents.locator('.stanza-document-collaboration-toolbar')).toHaveAttribute(
-				'data-state',
-				'connected',
-			);
+			await expect(agents.locator('.stanza-document-collaboration-toolbar')).toHaveAttribute('data-state', 'connected');
 			const sharedNotes = agents.getByRole('textbox', { name: 'Paragraph', exact: true }).first();
 			await expect.poll(() => noteText(sharedNotes)).toBe('Channel notes survive restart');
 			await sharedNotes.fill('Channel notes survive restart and sync across clients');
@@ -151,10 +138,7 @@ test(
 			await member.press('Enter');
 			await page.getByRole('option', { name: 'Viewer', exact: true }).click();
 			await page.getByRole('option', { name: 'Copy Invitation', exact: true }).click();
-			const copied =
-				'windows' in application
-					? await application.evaluate(({ clipboard }) => clipboard.readText())
-					: await page.evaluate(() => navigator.clipboard.readText());
+			const copied = 'windows' in application ? await application.evaluate(({ clipboard }) => clipboard.readText()) : await page.evaluate(() => navigator.clipboard.readText());
 			const invitation = JSON.parse(copied) as { credential: string };
 			const headers = { authorization: `Bearer ${invitation.credential}`, 'content-type': 'application/json' };
 			const snapshot = (await (await fetch(`${url}/v1/channels/read`, { headers })).json()) as {
@@ -180,13 +164,8 @@ test(
 			await workbench.quickaccess.runCommand('ash.collaboration.open');
 			await expect(page.getByRole('treeitem', { name: 'engineering', exact: true })).toBeVisible();
 			await page.getByRole('treeitem', { name: 'engineering', exact: true }).dblclick();
-			await expect(page.locator('.stanza-document-collaboration-toolbar')).toHaveAttribute(
-				'data-state',
-				'connected',
-			);
-			await expect
-				.poll(() => noteText(page.getByRole('textbox', { name: 'Paragraph', exact: true }).first()))
-				.toBe('Channel notes survive restart and sync across clients');
+			await expect(page.locator('.stanza-document-collaboration-toolbar')).toHaveAttribute('data-state', 'connected');
+			await expect.poll(() => noteText(page.getByRole('textbox', { name: 'Paragraph', exact: true }).first())).toBe('Channel notes survive restart and sync across clients');
 			await workbench.quickaccess.runCommand('ash.collaboration.open');
 			await page.getByRole('searchbox', { name: 'Search channels' }).focus();
 			await page.getByRole('button', { name: 'Members and Permissions', exact: true }).click();
@@ -197,14 +176,8 @@ test(
 			await page.screenshot({ path: testInfo.outputPath('collaboration-connected.png') });
 		} finally {
 			if (originalClipboard !== undefined) {
-				if ('windows' in application)
-					await application
-						.evaluate(({ clipboard }, value) => clipboard.writeText(value), originalClipboard)
-						.catch(() => undefined);
-				else
-					await workbench.page
-						.evaluate(value => navigator.clipboard.writeText(value), originalClipboard)
-						.catch(() => undefined);
+				if ('windows' in application) await application.evaluate(({ clipboard }, value) => clipboard.writeText(value), originalClipboard).catch(() => undefined);
+				else await workbench.page.evaluate(value => navigator.clipboard.writeText(value), originalClipboard).catch(() => undefined);
 			}
 			await stop();
 		}

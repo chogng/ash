@@ -98,20 +98,13 @@ export class StatusbarPart extends Part implements IStatusbarEntryContainer {
 		this._register(addDisposableListener(this.domNode, 'contextmenu', event => this.showContextMenu(event)));
 		this._register(
 			addDisposableListener(this.domNode, 'keydown', event => {
-				if (
-					event.key === 'ContextMenu' ||
-					(event.key === 'F10' && event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey)
-				) {
+				if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey)) {
 					this.showContextMenu(event);
 				}
 			}),
 		);
-		this._register(
-			addDisposableListener(this.domNode, 'mouseover', event => this.updateCompactHover(event.target)),
-		);
-		this._register(
-			addDisposableListener(this.domNode, 'mouseout', event => this.updateCompactHover(event.relatedTarget)),
-		);
+		this._register(addDisposableListener(this.domNode, 'mouseover', event => this.updateCompactHover(event.target)));
+		this._register(addDisposableListener(this.domNode, 'mouseout', event => this.updateCompactHover(event.relatedTarget)));
 
 		this.leftItems = createItemsContainer(ownerDocument, 'left');
 		this.rightItems = createItemsContainer(ownerDocument, 'right');
@@ -148,8 +141,7 @@ export class StatusbarPart extends Part implements IStatusbarEntryContainer {
 	private render(): void {
 		const document = this.domNode.ownerDocument;
 		const activeElement = document.activeElement;
-		const focused =
-			isHTMLElement(activeElement) && this.domNode.contains(activeElement) ? activeElement : undefined;
+		const focused = isHTMLElement(activeElement) && this.domNode.contains(activeElement) ? activeElement : undefined;
 		const leftEntries = this.visibleEntries(StatusbarAlignment.Left);
 		const rightEntries = this.visibleEntries(StatusbarAlignment.Right);
 		const visibleIds = new Set([...leftEntries, ...rightEntries].map(({ id }) => id));
@@ -164,19 +156,13 @@ export class StatusbarPart extends Part implements IStatusbarEntryContainer {
 		this.renderItems(this.leftItems, leftEntries);
 		this.renderItems(this.rightItems, rightEntries);
 		// Structural regrouping can move retained items. Respect focus moved by update callbacks.
-		if (
-			focused?.isConnected &&
-			this.domNode.contains(focused) &&
-			(document.activeElement === document.body || document.activeElement === focused)
-		) {
+		if (focused?.isConnected && this.domNode.contains(focused) && (document.activeElement === document.body || document.activeElement === focused)) {
 			focused.focus();
 		}
 	}
 
 	private renderItems(container: HTMLDivElement, entries: readonly IStatusbarEntryItem[]): void {
-		const previousGroups = Array.from(
-			container.querySelectorAll<HTMLDivElement>(':scope > .ash-statusbar-compact-group'),
-		);
+		const previousGroups = Array.from(container.querySelectorAll<HTMLDivElement>(':scope > .ash-statusbar-compact-group'));
 		const groupChildren = new Map<HTMLDivElement, HTMLElement[]>();
 		const children: HTMLElement[] = [];
 		let compactGroupDomNode: HTMLDivElement | undefined;
@@ -201,16 +187,10 @@ export class StatusbarPart extends Part implements IStatusbarEntryContainer {
 				group.push(item);
 				this.compactGroups.set(entry.compactGroup, group);
 			}
-			const belongsToCompactRun =
-				entry.compactGroup !== undefined &&
-				(entries[index - 1]?.compactGroup === entry.compactGroup ||
-					entries[index + 1]?.compactGroup === entry.compactGroup);
+			const belongsToCompactRun = entry.compactGroup !== undefined && (entries[index - 1]?.compactGroup === entry.compactGroup || entries[index + 1]?.compactGroup === entry.compactGroup);
 			if (belongsToCompactRun) {
 				if (!compactGroupDomNode || compactGroupId !== entry.compactGroup) {
-					compactGroupDomNode =
-						previousGroups.find(
-							group => group.dataset.compactGroup === entry.compactGroup && !groupChildren.has(group),
-						) ?? h(container.ownerDocument, 'div');
+					compactGroupDomNode = previousGroups.find(group => group.dataset.compactGroup === entry.compactGroup && !groupChildren.has(group)) ?? h(container.ownerDocument, 'div');
 					compactGroupDomNode.className = 'ash-statusbar-compact-group';
 					compactGroupDomNode.dataset.compactGroup = entry.compactGroup;
 					compactGroupId = entry.compactGroup;
@@ -243,8 +223,7 @@ export class StatusbarPart extends Part implements IStatusbarEntryContainer {
 
 	focus(preserveEntryFocus = true): void {
 		if (this.isDisposed || this.domNode.closest('[hidden]')) return;
-		const remembered =
-			preserveEntryFocus && this.lastFocusedEntryId ? this.items.get(this.lastFocusedEntryId) : undefined;
+		const remembered = preserveEntryFocus && this.lastFocusedEntryId ? this.items.get(this.lastFocusedEntryId) : undefined;
 		if (remembered?.isFocusable()) remembered.focus();
 		else this.domNode.focus();
 	}
@@ -279,15 +258,9 @@ export class StatusbarPart extends Part implements IStatusbarEntryContainer {
 		event.stopPropagation();
 		const focused = this.domNode.ownerDocument.activeElement;
 		const target = this.itemForTarget(event.target);
-		const entries = [
-			...this.statusbarService.getEntries(StatusbarAlignment.Left),
-			...this.statusbarService.getEntries(StatusbarAlignment.Right),
-		];
-		const name = (item: IStatusbarEntryItem): string =>
-			item.entry.ariaLabel || item.entry.text || item.entry.tooltip || item.id;
-		const actions: IAction[] = entries.map(
-			item => new ToggleStatusbarEntryVisibilityAction(item.id, name(item), this.viewModel),
-		);
+		const entries = [...this.statusbarService.getEntries(StatusbarAlignment.Left), ...this.statusbarService.getEntries(StatusbarAlignment.Right)];
+		const name = (item: IStatusbarEntryItem): string => item.entry.ariaLabel || item.entry.text || item.entry.tooltip || item.id;
+		const actions: IAction[] = entries.map(item => new ToggleStatusbarEntryVisibilityAction(item.id, name(item), this.viewModel));
 		const entry = target && entries.find(item => item.id === target.id);
 		if (entry) actions.push(new Separator(), new HideStatusbarEntryAction(entry.id, name(entry), this.viewModel));
 		for (const item of this.items.values()) item.hideHover();
@@ -312,8 +285,7 @@ export class StatusbarPart extends Part implements IStatusbarEntryContainer {
 					this.contextMenu = undefined;
 					source.dispose();
 					if (this.isDisposed) return;
-					if (isHTMLElement(focused) && focused.isConnected && this.domNode.contains(focused))
-						focused.focus();
+					if (isHTMLElement(focused) && focused.isConnected && this.domNode.contains(focused)) focused.focus();
 					else this.focus(false);
 				},
 			});
@@ -331,13 +303,8 @@ export class StatusbarPart extends Part implements IStatusbarEntryContainer {
 	}
 
 	private focusableItems(): StatusbarEntryItem[] {
-		const entries = [
-			...this.visibleEntries(StatusbarAlignment.Left),
-			...this.visibleEntries(StatusbarAlignment.Right).slice().reverse(),
-		];
-		return entries
-			.map(({ id }) => this.items.get(id))
-			.filter((item): item is StatusbarEntryItem => item?.isFocusable() === true);
+		const entries = [...this.visibleEntries(StatusbarAlignment.Left), ...this.visibleEntries(StatusbarAlignment.Right).slice().reverse()];
+		return entries.map(({ id }) => this.items.get(id)).filter((item): item is StatusbarEntryItem => item?.isFocusable() === true);
 	}
 
 	private itemForTarget(target: EventTarget | null): StatusbarEntryItem | undefined {
@@ -347,12 +314,10 @@ export class StatusbarPart extends Part implements IStatusbarEntryContainer {
 
 	private updateCompactHover(target: EventTarget | null): void {
 		const hoveredItem = this.itemForTarget(target);
-		const compactGroup =
-			hoveredItem && hoveredItem.isFocusable() ? this.compactGroupByItemId.get(hoveredItem.id) : undefined;
+		const compactGroup = hoveredItem && hoveredItem.isFocusable() ? this.compactGroupByItemId.get(hoveredItem.id) : undefined;
 		this.clearCompactHover();
 		if (!compactGroup || !hoveredItem) return;
-		for (const item of this.compactGroups.get(compactGroup) ?? [])
-			item.setCompactHoverState(item === hoveredItem ? 'entry' : 'group');
+		for (const item of this.compactGroups.get(compactGroup) ?? []) item.setCompactHoverState(item === hoveredItem ? 'entry' : 'group');
 	}
 
 	private clearCompactHover(): void {
@@ -425,9 +390,7 @@ export class StatusbarService extends Disposable implements IStatusbarService {
 	}
 
 	getPart(container: HTMLElement): IStatusbarEntryContainer {
-		const element = container.matches('[data-part="statusbar"]')
-			? container
-			: container.querySelector<HTMLElement>('[data-part="statusbar"]');
+		const element = container.matches('[data-part="statusbar"]') ? container : container.querySelector<HTMLElement>('[data-part="statusbar"]');
 		const part = element && statusbarParts.get(element);
 		if (!part) throw new Error('No status bar is registered in this container');
 		return part;
@@ -463,7 +426,10 @@ export class StatusbarService extends Disposable implements IStatusbarService {
 		return new StatusbarEntryAccessor(
 			nextEntry => {
 				if (this.isDisposed || this.entries.get(stored.id) !== stored) return;
-				stored = { ...stored, entry: { ...nextEntry } };
+				stored = {
+					...stored,
+					entry: { ...nextEntry },
+				};
 				this.entries.set(stored.id, stored);
 				this._onDidChangeEntries.fire();
 			},

@@ -12,10 +12,7 @@ import { IStatusbarService, StatusbarAlignment } from '../../../../services/stat
 
 test('SCM status renders provider commands on their declared side and follows updates', async () => {
 	using fixture = createFixture();
-	using cursor = fixture.statusbar.addEntry(
-		{ text: 'Ln 1, Col 1' },
-		{ id: 'editor.cursor', alignment: StatusbarAlignment.Right, priority: 40 },
-	);
+	using cursor = fixture.statusbar.addEntry({ text: 'Ln 1, Col 1' }, { id: 'editor.cursor', alignment: StatusbarAlignment.Right, priority: 40 });
 	let invoked = 0;
 	const blame: ISCMStatusBarCommand = {
 		id: 'test.blame',
@@ -79,9 +76,7 @@ test('SCM status renders provider commands on their declared side and follows up
 
 test('SCM status retires entries and listeners when its repository is removed', () => {
 	using fixture = createFixture();
-	fixture.provider.statusBarCommands = [
-		{ id: 'test.branch', text: 'main', ariaLabel: 'Branch main', tooltip: 'Switch branch', priority: 900 },
-	];
+	fixture.provider.statusBarCommands = [{ id: 'test.branch', text: 'main', ariaLabel: 'Branch main', tooltip: 'Switch branch', priority: 900 }];
 	fixture.changed.fire();
 	assert.equal(fixture.statusbar.getEntries(StatusbarAlignment.Left).length, 1);
 	fixture.registration.dispose();

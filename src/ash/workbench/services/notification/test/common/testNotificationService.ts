@@ -53,13 +53,10 @@ class NotificationTestStorage extends Disposable implements IStorageService {
 		this.changes.fire({ key, scope, target, external: false });
 	}
 	remove(key: string, scope: StorageScope): void {
-		if (this.entries.delete(`${scope}/${key}`))
-			this.changes.fire({ key, scope, target: undefined, external: false });
+		if (this.entries.delete(`${scope}/${key}`)) this.changes.fire({ key, scope, target: undefined, external: false });
 	}
 	keys(scope: StorageScope, target: StorageTarget): readonly string[] {
-		return [...this.entries]
-			.filter(([key, entry]) => key.startsWith(`${scope}/`) && entry.target === target)
-			.map(([key]) => key.slice(scope.length + 1));
+		return [...this.entries].filter(([key, entry]) => key.startsWith(`${scope}/`) && entry.target === target).map(([key]) => key.slice(scope.length + 1));
 	}
 	isNew(): boolean {
 		return true;

@@ -1,11 +1,4 @@
-import {
-	Keybinding,
-	type KeybindingChord,
-	KeybindingChordKind,
-	logicalKey,
-	MAX_KEYBINDING_CHORDS,
-	physicalKey,
-} from './keybindings.js';
+import { Keybinding, type KeybindingChord, KeybindingChordKind, logicalKey, MAX_KEYBINDING_CHORDS, physicalKey } from './keybindings.js';
 import { KeyCode, KeyCodeUtils, ScanCode, ScanCodeUtils } from './keyCodes.js';
 
 const modifierNames = new Map<string, ModifierName>([
@@ -100,7 +93,11 @@ function parseChord(value: string): KeybindingChord | undefined {
 	}
 
 	const chordModifiers = modifiers.primaryKey
-		? ({ primaryKey: true, shiftKey: modifiers.shiftKey, altKey: modifiers.altKey } as const)
+		? ({
+				primaryKey: true,
+				shiftKey: modifiers.shiftKey,
+				altKey: modifiers.altKey,
+			} as const)
 		: ({
 				ctrlKey: modifiers.ctrlKey,
 				shiftKey: modifiers.shiftKey,
@@ -109,9 +106,7 @@ function parseChord(value: string): KeybindingChord | undefined {
 			} as const);
 	const physicalMatch = /^\[([^\]]+)\]$/.exec(key);
 	if (physicalMatch) {
-		return ScanCodeUtils.toEnum(physicalMatch[1]) === ScanCode.None
-			? undefined
-			: physicalKey(ScanCodeUtils.toString(ScanCodeUtils.toEnum(physicalMatch[1])), chordModifiers);
+		return ScanCodeUtils.toEnum(physicalMatch[1]) === ScanCode.None ? undefined : physicalKey(ScanCodeUtils.toString(ScanCodeUtils.toEnum(physicalMatch[1])), chordModifiers);
 	}
 	if (KeyCodeUtils.fromString(key) === KeyCode.Unknown && [...key].length !== 1) {
 		return undefined;

@@ -1,22 +1,12 @@
 import { localize } from '../../../../nls.js';
-import {
-	Disposable,
-	DisposableStore,
-	MutableDisposable,
-	combinedDisposable,
-	toDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, combinedDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { RemoteExtensionHost } from '../common/remoteExtensionHost.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import {
-	IExtensionHostApi,
-	type ExtensionHostRuntime,
-	type ExtensionHostFleetSnapshot,
-} from '../../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostRuntime, type ExtensionHostFleetSnapshot } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import {
 	IRemoteAuthorityResolverService,
 	getRemoteAuthorityPrefix,
@@ -44,9 +34,7 @@ export class NativeExtensionService extends Disposable {
 	private remoteHost: RemoteExtensionHost | undefined;
 	private windowApi: IExtensionHostApi | undefined;
 	private readonly hostChanges = this._register(new Emitter<number>());
-	private readonly connectionChanges = this._register(
-		new Emitter<Awaited<ReturnType<IExtensionHostApi['getConnectionState']>>>(),
-	);
+	private readonly connectionChanges = this._register(new Emitter<Awaited<ReturnType<IExtensionHostApi['getConnectionState']>>>());
 	private hostGeneration = 1;
 	private hosts = new Map<string, ExtensionHostRoute>();
 	private remoteEpoch = 0;
@@ -83,15 +71,8 @@ export class NativeExtensionService extends Disposable {
 						return;
 					}
 					const current = snapshot.extensions.find(entry => entry.id === runtime.id);
-					const sameIncarnation =
-						current?.lifecycle === 'ready' &&
-						current.incarnation === runtime.incarnation &&
-						current.activationGeneration === runtime.activationGeneration;
-					const stillRegistered = current?.registrations.some(
-						entry =>
-							entry.kind === 'remoteAuthorityResolver' &&
-							this.authority?.startsWith(`${entry.authorityPrefix}+`),
-					);
+					const sameIncarnation = current?.lifecycle === 'ready' && current.incarnation === runtime.incarnation && current.activationGeneration === runtime.activationGeneration;
+					const stillRegistered = current?.registrations.some(entry => entry.kind === 'remoteAuthorityResolver' && this.authority?.startsWith(`${entry.authorityPrefix}+`));
 					if (!sameIncarnation || !stillRegistered) {
 						this.retireResolver();
 					}
@@ -118,17 +99,12 @@ export class NativeExtensionService extends Disposable {
 				return uri;
 			}
 			if (this.authority && uri.authority !== this.authority) {
-				throw new RemoteAuthorityResolverError(
-					'The URI belongs to another remote authority',
-					RemoteAuthorityResolverErrorCode.InvalidAuthority,
-				);
+				throw new RemoteAuthorityResolverError('The URI belongs to another remote authority', RemoteAuthorityResolverErrorCode.InvalidAuthority);
 			}
 			this.assertNotDisposed();
 			const revision = this.revision;
 			const runtime = await this.getResolver(uri.authority);
-			const canonical = await this.instantiation
-				.createInstance(ExtensionHostManager, runtime)
-				.getCanonicalURI(uri.authority, uri);
+			const canonical = await this.instantiation.createInstance(ExtensionHostManager, runtime).getCanonicalURI(uri.authority, uri);
 			if (revision !== this.revision || this.isDisposed) {
 				throw new CancellationError();
 			}
@@ -139,10 +115,7 @@ export class NativeExtensionService extends Disposable {
 	public async resolveAuthority(authority: string, resolveAttempt: number): Promise<ResolverResult> {
 		this.assertNotDisposed();
 		if (this.remoteHost && this.authority !== authority) {
-			throw new RemoteAuthorityResolverError(
-				'The window belongs to another remote authority',
-				RemoteAuthorityResolverErrorCode.InvalidAuthority,
-			);
+			throw new RemoteAuthorityResolverError('The window belongs to another remote authority', RemoteAuthorityResolverErrorCode.InvalidAuthority);
 		}
 		const revision = ++this.revision;
 		if (this.authority && this.authority !== authority) {
@@ -155,23 +128,14 @@ export class NativeExtensionService extends Disposable {
 		try {
 			const prefix = getRemoteAuthorityPrefix(authority);
 			const runtime = await this.getResolver(authority);
-			const result = await this.instantiation
-				.createInstance(ExtensionHostManager, runtime)
-				.resolveAuthority(authority, resolveAttempt);
+			const result = await this.instantiation.createInstance(ExtensionHostManager, runtime).resolveAuthority(authority, resolveAttempt);
 			if (revision !== this.revision || this.isDisposed) {
 				throw new CancellationError();
 			}
 			this.runtime = runtime;
 			if (result.authority.connectTo.type === RemoteConnectionType.Managed) {
-				const registration = runtime.registrations.find(
-					entry => entry.kind === 'remoteAuthorityResolver' && entry.authorityPrefix === prefix,
-				)!;
-				this.managed.value = this.instantiation.createInstance(
-					MainThreadManagedSockets,
-					runtime,
-					registration.registrationId,
-					-result.authority.connectTo.id,
-				);
+				const registration = runtime.registrations.find(entry => entry.kind === 'remoteAuthorityResolver' && entry.authorityPrefix === prefix)!;
+				this.managed.value = this.instantiation.createInstance(MainThreadManagedSockets, runtime, registration.registrationId, -result.authority.connectTo.id);
 			}
 			this.resolver._setResolvedAuthority(result.authority, result.options);
 			return this.resolver.resolveAuthority(authority);
@@ -243,13 +207,9 @@ export class NativeExtensionService extends Disposable {
 					);
 				},
 				registerClientHandler: handler => {
-					const local = this.api.registerClientHandler((operation, signal, source) =>
-						handler(operation, signal, this.clientIdentity(source, this.api)),
-					);
+					const local = this.api.registerClientHandler((operation, signal, source) => handler(operation, signal, this.clientIdentity(source, this.api)));
 					try {
-						const remote = api.registerClientHandler((operation, signal, source) =>
-							handler(operation, signal, this.clientIdentity(source, api)),
-						);
+						const remote = api.registerClientHandler((operation, signal, source) => handler(operation, signal, this.clientIdentity(source, api)));
 						return combinedDisposable(
 							toDisposable(() => local.dispose()),
 							toDisposable(() => remote.dispose()),
@@ -280,11 +240,7 @@ export class NativeExtensionService extends Disposable {
 		const epoch = this.remoteEpoch;
 		const [local, remote] = await Promise.all([this.api.list(), this.remoteHost!.api.list()]);
 		this.assertNotDisposed();
-		if (
-			epoch !== this.remoteEpoch ||
-			local.generation < this.localSnapshotGeneration ||
-			remote.generation < this.remoteSnapshotGeneration
-		) {
+		if (epoch !== this.remoteEpoch || local.generation < this.localSnapshotGeneration || remote.generation < this.remoteSnapshotGeneration) {
 			throw new CancellationError();
 		}
 		this.localSnapshotGeneration = local.generation;
@@ -296,22 +252,10 @@ export class NativeExtensionService extends Disposable {
 			const epoch = local ? 0 : this.remoteEpoch;
 			const sameHost = previous?.api === api && previous.epoch === epoch;
 			// Never reuse a front-end fence when a new backend connection restarts its counters.
-			const generation =
-				sameHost && previous.runtime.activationGeneration === runtime.activationGeneration
-					? previous.generation
-					: ++this.nextIdentity;
-			const incarnation =
-				runtime.incarnation === undefined
-					? undefined
-					: sameHost && previous.runtime.incarnation === runtime.incarnation
-						? previous.incarnation
-						: ++this.nextIdentity;
+			const generation = sameHost && previous.runtime.activationGeneration === runtime.activationGeneration ? previous.generation : ++this.nextIdentity;
+			const incarnation = runtime.incarnation === undefined ? undefined : sameHost && previous.runtime.incarnation === runtime.incarnation ? previous.incarnation : ++this.nextIdentity;
 			const outputEvents = runtime.outputEvents
-				.filter(
-					event =>
-						event.activationGeneration === runtime.activationGeneration &&
-						event.incarnation === runtime.incarnation,
-				)
+				.filter(event => event.activationGeneration === runtime.activationGeneration && event.incarnation === runtime.incarnation)
 				.map(event => ({ ...event, activationGeneration: generation, incarnation: incarnation! }));
 			extensions.set(runtime.id, { ...runtime, activationGeneration: generation, incarnation, outputEvents });
 			hosts.set(runtime.id, { api, epoch, runtime, generation, incarnation });
@@ -323,13 +267,8 @@ export class NativeExtensionService extends Disposable {
 			// Resolver and saved-connection providers continue executing on the local control client.
 			const localRuntime = local.extensions.find(entry => entry.id === runtime.id);
 			const localResolver =
-				localRuntime?.registrations.some(
-					entry => entry.kind === 'remoteAuthorityResolver' || entry.kind === 'remoteConnectionResolver',
-				) ||
-				localRuntime?.activation?.events.some(
-					event =>
-						event === 'onDemand:remoteAuthorityResolver' || event.startsWith('onResolveRemoteAuthority:'),
-				);
+				localRuntime?.registrations.some(entry => entry.kind === 'remoteAuthorityResolver' || entry.kind === 'remoteConnectionResolver') ||
+				localRuntime?.activation?.events.some(event => event === 'onDemand:remoteAuthorityResolver' || event.startsWith('onResolveRemoteAuthority:'));
 			if (localResolver) {
 				continue;
 			}
@@ -346,17 +285,9 @@ export class NativeExtensionService extends Disposable {
 		return field === 'generation' ? host.runtime.activationGeneration : host.runtime.incarnation!;
 	}
 
-	private clientIdentity(
-		source: Parameters<Parameters<IExtensionHostApi['registerClientHandler']>[0]>[2],
-		api: IExtensionHostApi,
-	): typeof source {
+	private clientIdentity(source: Parameters<Parameters<IExtensionHostApi['registerClientHandler']>[0]>[2], api: IExtensionHostApi): typeof source {
 		const host = this.hosts.get(source.extensionId);
-		if (
-			!host ||
-			host.api !== api ||
-			host.runtime.activationGeneration !== source.activationGeneration ||
-			host.runtime.incarnation !== source.incarnation
-		) {
+		if (!host || host.api !== api || host.runtime.activationGeneration !== source.activationGeneration || host.runtime.incarnation !== source.incarnation) {
 			throw new CancellationError();
 		}
 		return { ...source, activationGeneration: host.generation, incarnation: host.incarnation! };
@@ -376,11 +307,7 @@ export class NativeExtensionService extends Disposable {
 		const prefix = getRemoteAuthorityPrefix(authority);
 		for (const runtime of snapshot.extensions.filter(
 			extension =>
-				extension.lifecycle === 'dormant' &&
-				extension.activation?.events.some(
-					event =>
-						event === 'onDemand:remoteAuthorityResolver' || event === `onResolveRemoteAuthority:${prefix}`,
-				),
+				extension.lifecycle === 'dormant' && extension.activation?.events.some(event => event === 'onDemand:remoteAuthorityResolver' || event === `onResolveRemoteAuthority:${prefix}`),
 		)) {
 			snapshot = await this.api.activateByEvent({
 				extensionId: runtime.id,
@@ -389,30 +316,16 @@ export class NativeExtensionService extends Disposable {
 			});
 		}
 		const candidates = snapshot.extensions.filter(
-			runtime =>
-				runtime.lifecycle === 'ready' &&
-				runtime.registrations.some(
-					entry => entry.kind === 'remoteAuthorityResolver' && entry.authorityPrefix === prefix,
-				),
+			runtime => runtime.lifecycle === 'ready' && runtime.registrations.some(entry => entry.kind === 'remoteAuthorityResolver' && entry.authorityPrefix === prefix),
 		);
 		if (!candidates.length) {
 			throw new RemoteAuthorityResolverError(
-				localize(
-					'remote.authorityResolver.missing',
-					"No enabled local extension can resolve '{0}'.",
-					authority,
-				),
+				localize('remote.authorityResolver.missing', "No enabled local extension can resolve '{0}'.", authority),
 				RemoteAuthorityResolverErrorCode.NoResolverFound,
 			);
 		}
 		if (candidates.length > 1) {
-			throw new RemoteAuthorityResolverError(
-				localize(
-					'remote.resolver.duplicate',
-					"More than one extension resolves '{0}'. Disable the duplicate resolver.",
-					prefix,
-				),
-			);
+			throw new RemoteAuthorityResolverError(localize('remote.resolver.duplicate', "More than one extension resolves '{0}'. Disable the duplicate resolver.", prefix));
 		}
 		return candidates[0]!;
 	}

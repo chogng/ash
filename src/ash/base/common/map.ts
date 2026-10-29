@@ -352,9 +352,7 @@ export class NKeyMap<TValue, TKeys extends readonly [NKey, ...NKey[]]> {
 		return node;
 	}
 
-	private getPath(
-		keys: readonly NKey[],
-	): Array<{ readonly parent: NKeyMapNode<TValue>; readonly key: NKey; readonly node: NKeyMapNode<TValue> }> {
+	private getPath(keys: readonly NKey[]): Array<{ readonly parent: NKeyMapNode<TValue>; readonly key: NKey; readonly node: NKeyMapNode<TValue> }> {
 		const path: Array<{
 			readonly parent: NKeyMapNode<TValue>;
 			readonly key: NKey;

@@ -1,20 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import {
-	constants,
-	copyFileSync,
-	cpSync,
-	existsSync,
-	mkdirSync,
-	mkdtempSync,
-	readFileSync,
-	readdirSync,
-	realpathSync,
-	renameSync,
-	rmSync,
-	statSync,
-	writeFileSync,
-} from 'node:fs';
+import { constants, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { basename, dirname, join, resolve } from 'node:path';
 import { AshApplicationId, AshApplicationName } from '../../src/ash/code/common/application.ts';
@@ -60,11 +46,7 @@ export function prepareDevelopmentElectron(repositoryRoot: string): string {
 			}
 		}
 		// Changed bundle metadata invalidates upstream signatures. Preserve execution entitlements.
-		execFileSync(
-			'/usr/bin/codesign',
-			['--force', '--deep', '--sign', '-', '--preserve-metadata=entitlements,flags,runtime', bundle],
-			{ stdio: 'pipe' },
-		);
+		execFileSync('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', '--preserve-metadata=entitlements,flags,runtime', bundle], { stdio: 'pipe' });
 		writeFileSync(join(staging, 'ready'), `${stamp}\n`);
 		try {
 			renameSync(staging, output);
@@ -106,19 +88,10 @@ function developmentRuntime(repositoryRoot: string): {
 	};
 }
 
-function brandBundle(
-	bundle: string,
-	original: string,
-	name: string,
-	identifier: string,
-	icon: string,
-	executable = name,
-): void {
+function brandBundle(bundle: string, original: string, name: string, identifier: string, icon: string, executable = name): void {
 	const contents = join(bundle, 'Contents');
 	const plist = join(contents, 'Info.plist');
-	const metadata = JSON.parse(
-		execFileSync('/usr/bin/plutil', ['-convert', 'json', '-o', '-', plist], { encoding: 'utf8' }),
-	);
+	const metadata = JSON.parse(execFileSync('/usr/bin/plutil', ['-convert', 'json', '-o', '-', plist], { encoding: 'utf8' }));
 	Object.assign(metadata, {
 		CFBundleName: name,
 		CFBundleDisplayName: name,

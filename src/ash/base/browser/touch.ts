@@ -69,9 +69,7 @@ export class Gesture extends Disposable {
 					if (event.pointerType === 'mouse' || !event.isPrimary || event.button !== 0) {
 						return;
 					}
-					const target = event
-						.composedPath()
-						.find(candidate => this.targets.has(candidate as HTMLElement)) as HTMLElement | undefined;
+					const target = event.composedPath().find(candidate => this.targets.has(candidate as HTMLElement)) as HTMLElement | undefined;
 					if (!target) {
 						return;
 					}
@@ -100,9 +98,7 @@ export class Gesture extends Disposable {
 				true,
 			),
 		);
-		listeners.add(
-			addDisposableListener(window, 'pointercancel', event => this.sequences.delete(event.pointerId), true),
-		);
+		listeners.add(addDisposableListener(window, 'pointercancel', event => this.sequences.delete(event.pointerId), true));
 		listeners.add(
 			addDisposableListener(
 				window,
@@ -114,8 +110,7 @@ export class Gesture extends Disposable {
 						return;
 					}
 					const now = event.timeStamp;
-					const tapCount =
-						this.previousTap?.target === sequence.target && now - this.previousTap.time < 400 ? 2 : 1;
+					const tapCount = this.previousTap?.target === sequence.target && now - this.previousTap.time < 400 ? 2 : 1;
 					this.previousTap = tapCount === 1 ? { target: sequence.target, time: now } : undefined;
 					const tap = new window.MouseEvent(EventType.Tap, {
 						bubbles: true,

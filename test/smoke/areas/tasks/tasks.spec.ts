@@ -38,10 +38,7 @@ test.beforeEach(async ({ target, testWorkspace }) => {
 		join(testWorkspace.directory, 'smoke-env.cjs'),
 		"require('node:fs').writeFileSync('task-environment.json', JSON.stringify({ args: process.argv.slice(2), value: process.env.ASH_TASK_VALUE, folder: process.env.ASH_TASK_FOLDER, keyed: process.env['ASH_TASK_' + process.argv[2]], removed: process.env.TERM_PROGRAM === undefined }));\n",
 	);
-	await writeFile(
-		join(testWorkspace.directory, 'smoke-watch.cjs'),
-		"console.log('ASH_TASK_WATCH_READY'); setInterval(() => {}, 1000);\n",
-	);
+	await writeFile(join(testWorkspace.directory, 'smoke-watch.cjs'), "console.log('ASH_TASK_WATCH_READY'); setInterval(() => {}, 1000);\n");
 });
 
 test(
@@ -61,25 +58,19 @@ test(
 		// diagnostics now that Tasks no longer contributes a separate panel.
 		await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
 		await workbench.quickaccess.select('Tasks');
-		await expect(workbench.page.locator('[data-view-id="ash.output"] .view-lines')).toContainText(
-			"Task 'Smoke build' succeeded (exit code 0).",
-		);
+		await expect(workbench.page.locator('[data-view-id="ash.output"] .view-lines')).toContainText("Task 'Smoke build' succeeded (exit code 0).");
 	},
 );
 
-test(
-	'terminating a running workspace task stops its terminal and records cancellation',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ application, workbench }) => {
-		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
-		await workbench.quickaccess.select('Smoke watch');
-		await expect(workbench.terminal.activeInstance).toContainText('ASH_TASK_WATCH_READY');
-		await workbench.quickaccess.runCommand('workbench.action.tasks.terminate');
-		await expect(workbench.terminal.instances).toHaveCount(0);
-		await openTasksView(application, workbench);
-		await expect(workbench.page.locator('.ash-task-run')).toContainText('Smoke watch — Canceled');
-	},
-);
+test('terminating a running workspace task stops its terminal and records cancellation', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench }) => {
+	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
+	await workbench.quickaccess.select('Smoke watch');
+	await expect(workbench.terminal.activeInstance).toContainText('ASH_TASK_WATCH_READY');
+	await workbench.quickaccess.runCommand('workbench.action.tasks.terminate');
+	await expect(workbench.terminal.instances).toHaveCount(0);
+	await openTasksView(application, workbench);
+	await expect(workbench.page.locator('.ash-task-run')).toContainText('Smoke watch — Canceled');
+});
 
 test(
 	'command-only tasks own their shell process and retain output and exit without terminal input echo',
@@ -107,23 +98,15 @@ test(
 			await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 			await workbench.quickaccess.select(`Command-only ${name}`);
 			await expect(workbench.terminal.activeInstance).toContainText('COMMAND_ONLY_OUTPUT');
-			await expect(
-				workbench.page.locator('.ash-terminal-tabs [role="tab"][aria-selected="true"]').locator('..'),
-			).toHaveAttribute('data-state', 'exited');
+			await expect(workbench.page.locator('.ash-terminal-tabs [role="tab"][aria-selected="true"]').locator('..')).toHaveAttribute('data-state', 'exited');
 			await expect(workbench.terminal.activeInstance).not.toContainText(`ARGUMENT_${name.toUpperCase()}`);
 			const tasksTab = workbench.page.getByRole('tab', { name: 'Tasks', exact: true });
 			if (await tasksTab.isVisible()) {
 				await tasksTab.click();
 			} else {
-				await workbench.menus.select(
-					application,
-					() => workbench.page.getByRole('tab', { name: 'Additional views', exact: true }).click(),
-					['Tasks'],
-				);
+				await workbench.menus.select(application, () => workbench.page.getByRole('tab', { name: 'Additional views', exact: true }).click(), ['Tasks']);
 			}
-			await expect(
-				workbench.page.locator('.ash-task-run').filter({ hasText: `Command-only ${name}` }),
-			).toContainText(name === 'Success' ? 'Succeeded (exit code 0)' : 'Failed (exit code 7)');
+			await expect(workbench.page.locator('.ash-task-run').filter({ hasText: `Command-only ${name}` })).toContainText(name === 'Success' ? 'Succeeded (exit code 0)' : 'Failed (exit code 7)');
 		}
 		const executed: { pid: number; argument: string }[] = (await readFile(log, 'utf8'))
 			.trim()
@@ -153,9 +136,7 @@ for (const locale of ['en', 'zh-CN']) {
 		async ({ application, workbench, testWorkspace, restartWorkbench }) => {
 			if (locale === 'zh-CN') {
 				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-				const language = workbench.page
-					.getByRole('dialog', { name: 'Select Display Language' })
-					.getByRole('combobox');
+				const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 				await language.fill('简体中文');
 				await language.press('Enter');
 				({ application, workbench } = await restartWorkbench());
@@ -206,21 +187,13 @@ for (const locale of ['en', 'zh-CN']) {
 					if (echo === false) {
 						await expect(workbench.terminal.activeInstance).not.toContainText('DISPLAY_ONLY');
 					} else {
-						await expect(workbench.terminal.activeInstance).toContainText(
-							locale === 'zh-CN' ? '正在执行任务：' : 'Executing task:',
-						);
-						await expect(workbench.terminal.activeInstance).toContainText(
-							'"" "$HOME" "two words" "ECHO_PHANTOM.ts:1:1: error: DISPLAY_ONLY"',
-						);
+						await expect(workbench.terminal.activeInstance).toContainText(locale === 'zh-CN' ? '正在执行任务：' : 'Executing task:');
+						await expect(workbench.terminal.activeInstance).toContainText('"" "$HOME" "two words" "ECHO_PHANTOM.ts:1:1: error: DISPLAY_ONLY"');
 					}
 					if (!screen) {
 						screen = await workbench.terminal.activeInstance.elementHandle();
 					}
-					expect(
-						await screen!.evaluate(
-							element => element === document.querySelector('.ash-terminal-instance:not([hidden])'),
-						),
-					).toBe(true);
+					expect(await screen!.evaluate(element => element === document.querySelector('.ash-terminal-instance:not([hidden])'))).toBe(true);
 					await expect(tabs).toHaveCount(1);
 					const problems = workbench.page.getByRole('tab', {
 						name: locale === 'zh-CN' ? '问题' : 'Problems',
@@ -268,14 +241,8 @@ test(
 		await mkdir(excluded, { recursive: true });
 		await writeFile(join(included, 'search[entry].ts'), '\nlet SEARCH_MATCHER_FOUND = true;\n');
 		await writeFile(join(excluded, 'search[entry].ts'), '\nlet SEARCH_MATCHER_EXCLUDED = true;\n');
-		await writeFile(
-			join(directory, 'search-matcher.cjs'),
-			"process.stdout.write('search[entry].ts(2,3): warning TS321: SEARCH_FILE_DIAGNOSTIC');",
-		);
-		await writeFile(
-			join(directory, 'search-follow.cjs'),
-			"require('node:fs').writeFileSync('search-followed.txt', 'completed');",
-		);
+		await writeFile(join(directory, 'search-matcher.cjs'), "process.stdout.write('search[entry].ts(2,3): warning TS321: SEARCH_FILE_DIAGNOSTIC');");
+		await writeFile(join(directory, 'search-follow.cjs'), "require('node:fs').writeFileSync('search-followed.txt', 'completed');");
 		await writeFile(
 			join(directory, '.vscode', 'tasks.json'),
 			JSON.stringify({
@@ -311,20 +278,14 @@ test(
 		);
 		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 		await workbench.quickaccess.select('After search');
-		await expect
-			.poll(async () => readFile(join(directory, 'search-followed.txt'), 'utf8').catch(() => ''))
-			.toBe('completed');
+		await expect.poll(async () => readFile(join(directory, 'search-followed.txt'), 'utf8').catch(() => '')).toBe('completed');
 		const diagnostics = workbench.page.locator('.ash-problems-results');
 		await expect(diagnostics).toBeVisible();
 		await expect(diagnostics).toContainText('SEARCH_FILE_DIAGNOSTIC');
 		const problem = diagnostics.getByRole('button', { name: /SEARCH_FILE_DIAGNOSTIC/ });
 		await expect(problem).toHaveAttribute('title', 'SEARCH_FILE_DIAGNOSTIC — search[entry].ts:2:3');
 		await problem.click();
-		await workbench.editors
-			.groupAt(0)
-			.editor.waitForEditorContents(
-				contents => contents.includes('SEARCH_MATCHER_FOUND') && !contents.includes('SEARCH_MATCHER_EXCLUDED'),
-			);
+		await workbench.editors.groupAt(0).editor.waitForEditorContents(contents => contents.includes('SEARCH_MATCHER_FOUND') && !contents.includes('SEARCH_MATCHER_EXCLUDED'));
 	},
 );
 
@@ -347,26 +308,11 @@ test(
 			'  line 3 col 4 BUILTIN_JSHINT_CODE (W033)',
 			'  line 5 col 6 BUILTIN_JSHINT_NO_CODE',
 		];
-		for (const file of [
-			'main.cs',
-			'main.ts',
-			'main.go',
-			'style.less',
-			'compact.js',
-			'stylish.js',
-			'jshint.js',
-			'jshint-stylish.js',
-		]) {
+		for (const file of ['main.cs', 'main.ts', 'main.go', 'style.less', 'compact.js', 'stylish.js', 'jshint.js', 'jshint-stylish.js']) {
 			await writeFile(join(directory, file), '\n\n\nBUILTIN_SOURCE_TARGET\n\n\n');
 		}
-		await writeFile(
-			join(directory, 'builtin-matchers.cjs'),
-			`console.log(${JSON.stringify(lines.slice(0, 8).join('\n'))});`,
-		);
-		await writeFile(
-			join(directory, 'builtin-jshint.cjs'),
-			`console.log(${JSON.stringify(lines.slice(8).join('\n'))});`,
-		);
+		await writeFile(join(directory, 'builtin-matchers.cjs'), `console.log(${JSON.stringify(lines.slice(0, 8).join('\n'))});`);
+		await writeFile(join(directory, 'builtin-jshint.cjs'), `console.log(${JSON.stringify(lines.slice(8).join('\n'))});`);
 		const presentation = { echo: false, reveal: 'never', revealProblems: 'onProblem' };
 		await writeFile(
 			join(directory, '.vscode', 'tasks.json'),
@@ -379,14 +325,7 @@ test(
 						command: process.execPath,
 						args: ['${workspaceFolder}/builtin-matchers.cjs'],
 						presentation,
-						problemMatcher: [
-							'$msCompile',
-							'$gulp-tsc',
-							'$lessCompile',
-							'$go',
-							'$eslint-compact',
-							'$eslint-stylish',
-						],
+						problemMatcher: ['$msCompile', '$gulp-tsc', '$lessCompile', '$go', '$eslint-compact', '$eslint-stylish'],
 					},
 					{
 						label: 'Builtin JSHint',
@@ -421,25 +360,11 @@ test(
 		]) {
 			await expect(diagnostics.getByRole('button', { name: new RegExp(message + '(?:\\s|$)') })).toBeVisible();
 		}
-		await expect(
-			diagnostics
-				.locator('.ash-problems-item')
-				.filter({ hasText: 'BUILTIN_STYLISH_NO_CODE' })
-				.locator('.ash-problems-source'),
-		).toHaveText('eslint');
-		await expect(
-			diagnostics.locator('.ash-problems-item').filter({ hasText: 'BUILTIN_JSHINT_NO_CODE' }),
-		).toHaveClass(/\berror\b/);
-		await expect(
-			diagnostics
-				.locator('.ash-problems-item')
-				.filter({ hasText: 'BUILTIN_JSHINT_NO_CODE' })
-				.locator('.ash-problems-source'),
-		).toHaveText('jshint');
+		await expect(diagnostics.locator('.ash-problems-item').filter({ hasText: 'BUILTIN_STYLISH_NO_CODE' }).locator('.ash-problems-source')).toHaveText('eslint');
+		await expect(diagnostics.locator('.ash-problems-item').filter({ hasText: 'BUILTIN_JSHINT_NO_CODE' })).toHaveClass(/\berror\b/);
+		await expect(diagnostics.locator('.ash-problems-item').filter({ hasText: 'BUILTIN_JSHINT_NO_CODE' }).locator('.ash-problems-source')).toHaveText('jshint');
 		await diagnostics.getByRole('button', { name: /BUILTIN_GO/ }).click();
-		await workbench.editors
-			.groupAt(0)
-			.editor.waitForEditorContents(contents => contents.includes('BUILTIN_SOURCE_TARGET'));
+		await workbench.editors.groupAt(0).editor.waitForEditorContents(contents => contents.includes('BUILTIN_SOURCE_TARGET'));
 	},
 );
 
@@ -493,183 +418,161 @@ test(
 		);
 		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 		await workbench.quickaccess.select('Unknown pattern');
-		await expect(
-			workbench.page.locator('.ash-notification', { hasText: '未知的问题模式“$missing-pattern”' }),
-		).toBeVisible();
+		await expect(workbench.page.locator('.ash-notification', { hasText: '未知的问题模式“$missing-pattern”' })).toBeVisible();
 		expect(await readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('0');
 		await expect(workbench.page.locator('.ash-terminal-tab')).toHaveCount(0);
 	},
 );
 
-test(
-	'captured severity aliases and configured compiler fallback reach Problems',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ workbench, testWorkspace }) => {
-		const directory = testWorkspace.directory;
-		const lines = [
-			join(directory, 'severity.ts') + '(2,3): category fatal   error C7: SEVERITY_FATAL',
-			'severity.ts|2|WARN SEVERITY_WARN',
-			'severity.ts|2|Hint SEVERITY_HINT',
-			'severity.ts|2|E SEVERITY_ERROR',
-			'severity.ts|2|i SEVERITY_FALLBACK',
-		];
-		await writeFile(join(directory, 'severity.cjs'), `console.log(${JSON.stringify(lines.join('\n'))});`);
-		await writeFile(join(directory, 'severity.ts'), '\nlet severity = true;\n');
-		await writeFile(
-			join(directory, '.vscode', 'tasks.json'),
-			JSON.stringify({
-				version: '2.0.0',
-				tasks: [
-					{
-						label: 'Matcher severity',
-						type: 'process',
-						command: process.execPath,
-						args: ['${workspaceFolder}/severity.cjs'],
-						presentation: { echo: false, reveal: 'never', revealProblems: 'onProblem' },
-						problemMatcher: [
-							{ base: '$msCompile', severity: 'warning' },
-							{
-								severity: 'warning',
-								pattern: {
-									regexp: '^(.+)\\|(\\d+)\\|([^ ]+) (.+)$',
-									file: 1,
-									line: 2,
-									severity: 3,
-									message: 4,
+test('captured severity aliases and configured compiler fallback reach Problems', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+	const directory = testWorkspace.directory;
+	const lines = [
+		join(directory, 'severity.ts') + '(2,3): category fatal   error C7: SEVERITY_FATAL',
+		'severity.ts|2|WARN SEVERITY_WARN',
+		'severity.ts|2|Hint SEVERITY_HINT',
+		'severity.ts|2|E SEVERITY_ERROR',
+		'severity.ts|2|i SEVERITY_FALLBACK',
+	];
+	await writeFile(join(directory, 'severity.cjs'), `console.log(${JSON.stringify(lines.join('\n'))});`);
+	await writeFile(join(directory, 'severity.ts'), '\nlet severity = true;\n');
+	await writeFile(
+		join(directory, '.vscode', 'tasks.json'),
+		JSON.stringify({
+			version: '2.0.0',
+			tasks: [
+				{
+					label: 'Matcher severity',
+					type: 'process',
+					command: process.execPath,
+					args: ['${workspaceFolder}/severity.cjs'],
+					presentation: { echo: false, reveal: 'never', revealProblems: 'onProblem' },
+					problemMatcher: [
+						{ base: '$msCompile', severity: 'warning' },
+						{
+							severity: 'warning',
+							pattern: {
+								regexp: '^(.+)\\|(\\d+)\\|([^ ]+) (.+)$',
+								file: 1,
+								line: 2,
+								severity: 3,
+								message: 4,
+							},
+						},
+					],
+				},
+			],
+		}),
+	);
+	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
+	await workbench.quickaccess.select('Matcher severity');
+	const diagnostics = workbench.page.locator('.ash-problems-results');
+	await expect(diagnostics.locator('.ash-problems-item')).toHaveCount(5);
+	for (const [message, severity] of [
+		['SEVERITY_FATAL', 'warning'],
+		['SEVERITY_WARN', 'warning'],
+		['SEVERITY_HINT', 'information'],
+		['SEVERITY_ERROR', 'error'],
+		['SEVERITY_FALLBACK', 'warning'],
+	]) {
+		await expect(diagnostics.locator('.ash-problems-item').filter({ hasText: message })).toHaveClass(new RegExp(`\\b${severity}\\b`, 'u'));
+	}
+});
+
+test('compiler zero and backward coordinates reach Problems and navigate to normalized positions', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+	const directory = testWorkspace.directory;
+	await writeFile(join(directory, 'coordinates.ts'), 'COORDINATE_SOURCE_TARGET\n\nlet third = true;\n');
+	await writeFile(
+		join(directory, 'coordinates.cjs'),
+		`console.log(${JSON.stringify(join(directory, 'coordinates.ts') + '(0,0): error Z0: ZERO_COORDINATE')}); console.log(${JSON.stringify(join(directory, 'coordinates.ts') + '(3,4,1,0): warning B0: BACKWARD_COORDINATE')}); console.log(${JSON.stringify(join(directory, 'coordinates.ts') + ': warning : ABSENT_COORDINATE')});`,
+	);
+	await writeFile(
+		join(directory, '.vscode', 'tasks.json'),
+		JSON.stringify({
+			version: '2.0.0',
+			tasks: [
+				{
+					label: 'Compiler coordinates',
+					type: 'process',
+					command: process.execPath,
+					args: ['${workspaceFolder}/coordinates.cjs'],
+					problemMatcher: '$msCompile',
+					presentation: { echo: false, reveal: 'never', revealProblems: 'onProblem' },
+				},
+			],
+		}),
+	);
+	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
+	await workbench.quickaccess.select('Compiler coordinates');
+	const page = workbench.page;
+	const diagnostics = page.locator('.ash-problems-results');
+	await expect(diagnostics.locator('.ash-problems-item')).toHaveCount(2);
+	await expect(diagnostics).toContainText('ZERO_COORDINATE');
+	await expect(diagnostics).toContainText('BACKWARD_COORDINATE');
+	await expect(diagnostics).not.toContainText('ABSENT_COORDINATE');
+	await diagnostics.getByRole('button', { name: /ZERO_COORDINATE/u }).click();
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(contents => contents.includes('COORDINATE_SOURCE_TARGET'));
+	await expect(page.getByRole('button', { name: 'Ln 1, Col 1', exact: true })).toBeVisible();
+	await diagnostics.getByRole('button', { name: /BACKWARD_COORDINATE/u }).click();
+	await expect(page.getByRole('button', { name: 'Ln 3, Col 4', exact: true })).toBeVisible();
+});
+
+test('task pattern defaults and multiline line-only diagnostics reach Problems', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
+	const directory = testWorkspace.directory;
+	await writeFile(
+		join(directory, 'pattern-defaults.cjs'),
+		"console.log('single.ts:2:3 error'); console.log('FILE multiline.ts'); console.log('4 warning LINE_ONLY_DIAGNOSTIC'); console.log('5 error SECOND_LINE_DIAGNOSTIC');",
+	);
+	await writeFile(join(directory, 'single.ts'), '\nlet single = true;\n');
+	await writeFile(join(directory, 'multiline.ts'), '\n\n\nlet first = true;\nlet second = true;\n');
+	await writeFile(
+		join(directory, '.vscode', 'tasks.json'),
+		JSON.stringify({
+			version: '2.0.0',
+			tasks: [
+				{
+					label: 'Pattern defaults',
+					type: 'process',
+					command: process.execPath,
+					args: ['${workspaceFolder}/pattern-defaults.cjs'],
+					presentation: { echo: false },
+					problemMatcher: [
+						{
+							owner: 'single-pattern',
+							severity: 'warning',
+							pattern: { regexp: '^(single\\.ts):(\\d+):(\\d+) (.+)$' },
+						},
+						{
+							owner: 'array-pattern',
+							pattern: [
+								{ regexp: '^FILE (.+)$', file: 1 },
+								{
+									regexp: '^(\\d+) (error|warning) (.+)$',
+									line: 1,
+									severity: 2,
+									message: 3,
+									loop: true,
 								},
-							},
-						],
-					},
-				],
-			}),
-		);
-		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
-		await workbench.quickaccess.select('Matcher severity');
-		const diagnostics = workbench.page.locator('.ash-problems-results');
-		await expect(diagnostics.locator('.ash-problems-item')).toHaveCount(5);
-		for (const [message, severity] of [
-			['SEVERITY_FATAL', 'warning'],
-			['SEVERITY_WARN', 'warning'],
-			['SEVERITY_HINT', 'information'],
-			['SEVERITY_ERROR', 'error'],
-			['SEVERITY_FALLBACK', 'warning'],
-		]) {
-			await expect(diagnostics.locator('.ash-problems-item').filter({ hasText: message })).toHaveClass(
-				new RegExp(`\\b${severity}\\b`, 'u'),
-			);
-		}
-	},
-);
-
-test(
-	'compiler zero and backward coordinates reach Problems and navigate to normalized positions',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ workbench, testWorkspace }) => {
-		const directory = testWorkspace.directory;
-		await writeFile(join(directory, 'coordinates.ts'), 'COORDINATE_SOURCE_TARGET\n\nlet third = true;\n');
-		await writeFile(
-			join(directory, 'coordinates.cjs'),
-			`console.log(${JSON.stringify(join(directory, 'coordinates.ts') + '(0,0): error Z0: ZERO_COORDINATE')}); console.log(${JSON.stringify(join(directory, 'coordinates.ts') + '(3,4,1,0): warning B0: BACKWARD_COORDINATE')}); console.log(${JSON.stringify(join(directory, 'coordinates.ts') + ': warning : ABSENT_COORDINATE')});`,
-		);
-		await writeFile(
-			join(directory, '.vscode', 'tasks.json'),
-			JSON.stringify({
-				version: '2.0.0',
-				tasks: [
-					{
-						label: 'Compiler coordinates',
-						type: 'process',
-						command: process.execPath,
-						args: ['${workspaceFolder}/coordinates.cjs'],
-						problemMatcher: '$msCompile',
-						presentation: { echo: false, reveal: 'never', revealProblems: 'onProblem' },
-					},
-				],
-			}),
-		);
-		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
-		await workbench.quickaccess.select('Compiler coordinates');
-		const page = workbench.page;
-		const diagnostics = page.locator('.ash-problems-results');
-		await expect(diagnostics.locator('.ash-problems-item')).toHaveCount(2);
-		await expect(diagnostics).toContainText('ZERO_COORDINATE');
-		await expect(diagnostics).toContainText('BACKWARD_COORDINATE');
-		await expect(diagnostics).not.toContainText('ABSENT_COORDINATE');
-		await diagnostics.getByRole('button', { name: /ZERO_COORDINATE/u }).click();
-		await workbench.editors
-			.groupAt(0)
-			.editor.waitForEditorContents(contents => contents.includes('COORDINATE_SOURCE_TARGET'));
-		await expect(page.getByRole('button', { name: 'Ln 1, Col 1', exact: true })).toBeVisible();
-		await diagnostics.getByRole('button', { name: /BACKWARD_COORDINATE/u }).click();
-		await expect(page.getByRole('button', { name: 'Ln 3, Col 4', exact: true })).toBeVisible();
-	},
-);
-
-test(
-	'task pattern defaults and multiline line-only diagnostics reach Problems',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ application, workbench, testWorkspace }) => {
-		const directory = testWorkspace.directory;
-		await writeFile(
-			join(directory, 'pattern-defaults.cjs'),
-			"console.log('single.ts:2:3 error'); console.log('FILE multiline.ts'); console.log('4 warning LINE_ONLY_DIAGNOSTIC'); console.log('5 error SECOND_LINE_DIAGNOSTIC');",
-		);
-		await writeFile(join(directory, 'single.ts'), '\nlet single = true;\n');
-		await writeFile(join(directory, 'multiline.ts'), '\n\n\nlet first = true;\nlet second = true;\n');
-		await writeFile(
-			join(directory, '.vscode', 'tasks.json'),
-			JSON.stringify({
-				version: '2.0.0',
-				tasks: [
-					{
-						label: 'Pattern defaults',
-						type: 'process',
-						command: process.execPath,
-						args: ['${workspaceFolder}/pattern-defaults.cjs'],
-						presentation: { echo: false },
-						problemMatcher: [
-							{
-								owner: 'single-pattern',
-								severity: 'warning',
-								pattern: { regexp: '^(single\\.ts):(\\d+):(\\d+) (.+)$' },
-							},
-							{
-								owner: 'array-pattern',
-								pattern: [
-									{ regexp: '^FILE (.+)$', file: 1 },
-									{
-										regexp: '^(\\d+) (error|warning) (.+)$',
-										line: 1,
-										severity: 2,
-										message: 3,
-										loop: true,
-									},
-								],
-							},
-						],
-					},
-				],
-			}),
-		);
-		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
-		await workbench.quickaccess.select('Pattern defaults');
-		await expect(workbench.terminal.activeInstance).toContainText('SECOND_LINE_DIAGNOSTIC');
-		const problems = workbench.page.getByRole('tab', { name: 'Problems', exact: true });
-		if (await problems.isVisible()) {
-			await problems.click();
-		} else {
-			await workbench.menus.select(
-				application,
-				() => workbench.page.getByRole('tab', { name: 'Additional views', exact: true }).click(),
-				['Problems'],
-			);
-		}
-		const diagnostics = workbench.page.locator('.ash-problems-results');
-		await expect(diagnostics).toContainText('single.ts:2:3 error');
-		await expect(diagnostics).toContainText('LINE_ONLY_DIAGNOSTIC');
-		await expect(diagnostics).toContainText('SECOND_LINE_DIAGNOSTIC');
-	},
-);
+							],
+						},
+					],
+				},
+			],
+		}),
+	);
+	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
+	await workbench.quickaccess.select('Pattern defaults');
+	await expect(workbench.terminal.activeInstance).toContainText('SECOND_LINE_DIAGNOSTIC');
+	const problems = workbench.page.getByRole('tab', { name: 'Problems', exact: true });
+	if (await problems.isVisible()) {
+		await problems.click();
+	} else {
+		await workbench.menus.select(application, () => workbench.page.getByRole('tab', { name: 'Additional views', exact: true }).click(), ['Problems']);
+	}
+	const diagnostics = workbench.page.locator('.ash-problems-results');
+	await expect(diagnostics).toContainText('single.ts:2:3 error');
+	await expect(diagnostics).toContainText('LINE_ONLY_DIAGNOSTIC');
+	await expect(diagnostics).toContainText('SECOND_LINE_DIAGNOSTIC');
+});
 
 for (const locale of ['en', 'zh-CN']) {
 	test(
@@ -679,9 +582,7 @@ for (const locale of ['en', 'zh-CN']) {
 			const directory = testWorkspace.directory;
 			if (locale === 'zh-CN') {
 				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-				const language = workbench.page
-					.getByRole('dialog', { name: 'Select Display Language' })
-					.getByRole('combobox');
+				const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 				await language.fill('简体中文');
 				await language.press('Enter');
 				({ application, workbench } = await restartWorkbench());
@@ -709,10 +610,7 @@ for (const locale of ['en', 'zh-CN']) {
 					}),
 				);
 			};
-			const notice =
-				locale === 'zh-CN'
-					? '终端将被任务重用，按任意键关闭。'
-					: 'Terminal will be reused by tasks, press any key to close it.';
+			const notice = locale === 'zh-CN' ? '终端将被任务重用，按任意键关闭。' : 'Terminal will be reused by tasks, press any key to close it.';
 			const page = workbench.page;
 			const input = workbench.terminal.activeInstance.locator('textarea.xterm-helper-textarea');
 			const tabs = page.locator('.ash-terminal-tabs [role="tab"]');
@@ -776,9 +674,7 @@ for (const locale of ['en', 'zh-CN']) {
 		async ({ workbench, testWorkspace, restartWorkbench }) => {
 			if (locale === 'zh-CN') {
 				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-				const language = workbench.page
-					.getByRole('dialog', { name: 'Select Display Language' })
-					.getByRole('combobox');
+				const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 				await language.fill('简体中文');
 				await language.press('Enter');
 				({ workbench } = await restartWorkbench());
@@ -800,9 +696,7 @@ for (const locale of ['en', 'zh-CN']) {
 			);
 			await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 			await workbench.quickaccess.select('New close notice');
-			await expect(workbench.terminal.activeInstance).toContainText(
-				locale === 'zh-CN' ? '按任意键关闭终端。' : 'Press any key to close the terminal.',
-			);
+			await expect(workbench.terminal.activeInstance).toContainText(locale === 'zh-CN' ? '按任意键关闭终端。' : 'Press any key to close the terminal.');
 			const tabs = workbench.page.locator('.ash-terminal-tabs [role="tab"]');
 			await expect(tabs.locator('..')).toHaveAttribute('data-state', 'exited');
 			const input = workbench.terminal.activeInstance.locator('textarea.xterm-helper-textarea');
@@ -857,31 +751,19 @@ for (const panel of [undefined, 'shared', 'dedicated', 'new'] as const) {
 				await workbench.quickaccess.select(name);
 				await expect(workbench.terminal.activeInstance).toContainText(`ASH_PANEL_${name}_${count}`);
 				// A process can write its result before it exits; only completed task slots may be reused.
-				await expect(
-					workbench.page.locator('.ash-terminal-tabs [role="tab"][aria-selected="true"]').locator('..'),
-				).toHaveAttribute('data-state', 'exited');
+				await expect(workbench.page.locator('.ash-terminal-tabs [role="tab"][aria-selected="true"]').locator('..')).toHaveAttribute('data-state', 'exited');
 			};
 			await configure();
 			await run('First', 1);
 			const firstScreen = await workbench.terminal.activeInstance.elementHandle();
 			expect(firstScreen).not.toBeNull();
 			await run('Second', 2);
-			expect(
-				await firstScreen!.evaluate(
-					element => element === document.querySelector('.ash-terminal-instance:not([hidden])'),
-				),
-			).toBe(effectivePanel === 'shared');
+			expect(await firstScreen!.evaluate(element => element === document.querySelector('.ash-terminal-instance:not([hidden])'))).toBe(effectivePanel === 'shared');
 			await run('First', 3);
-			expect(
-				await firstScreen!.evaluate(
-					element => element === document.querySelector('.ash-terminal-instance:not([hidden])'),
-				),
-			).toBe(panel !== 'new');
+			expect(await firstScreen!.evaluate(element => element === document.querySelector('.ash-terminal-instance:not([hidden])'))).toBe(panel !== 'new');
 			await expect(tabs).toHaveCount(effectivePanel === 'shared' ? 1 : panel === 'dedicated' ? 2 : 3);
 			const processes = await executed();
-			expect(processes.map(({ name, cwd, value }) => ({ name, cwd, value }))).toEqual(
-				['First', 'Second', 'First'].map(name => ({ name, cwd: join(directory, name), value: name })),
-			);
+			expect(processes.map(({ name, cwd, value }) => ({ name, cwd, value }))).toEqual(['First', 'Second', 'First'].map(name => ({ name, cwd: join(directory, name), value: name })));
 			expect(new Set(processes.map(process => process.pid)).size).toBe(3);
 			if (panel !== 'new') {
 				const input = workbench.terminal.activeInstance.locator('.xterm-helper-textarea');
@@ -937,10 +819,7 @@ test(
 	async ({ workbench, testWorkspace }) => {
 		const directory = testWorkspace.directory;
 		const log = join(directory, 'task-presentation.jsonl');
-		await writeFile(
-			join(directory, 'package.json'),
-			JSON.stringify({ name: 'task-presentation', version: '1.0.0' }),
-		);
+		await writeFile(join(directory, 'package.json'), JSON.stringify({ name: 'task-presentation', version: '1.0.0' }));
 		await unlink(join(directory, 'Cargo.toml'));
 		await writeFile(join(directory, 'main.ts'), 'export const presentation = true;\n');
 		await writeFile(log, '');
@@ -970,10 +849,7 @@ test(
 			}),
 		);
 		await workbench.openExplorer();
-		await workbench.page
-			.locator('.ash-explorer')
-			.getByRole('treeitem', { name: 'main.ts', exact: true })
-			.dblclick();
+		await workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
 		const editor = workbench.editors.groupAt(0).editor;
 		await editor.waitForEditorContents(content => content.includes('export const presentation'));
 		const records = async (): Promise<{ name: string; pid: number }[]> =>
@@ -1039,9 +915,7 @@ test(
 		await hide();
 		await run('Close output');
 		await expect(workbench.terminal.activeInstance).toContainText('ASH_PRESENTATION_Close output');
-		const id = await workbench.page
-			.locator('.ash-terminal-tabs [role="tab"][aria-selected="true"]')
-			.getAttribute('id');
+		const id = await workbench.page.locator('.ash-terminal-tabs [role="tab"][aria-selected="true"]').getAttribute('id');
 		expect(id).not.toBeNull();
 		await writeFile(join(directory, 'close-permission'), 'release');
 		await expect(workbench.page.locator(`[id="${id}"]`)).toHaveCount(0);
@@ -1127,8 +1001,7 @@ if (['Always', 'Warning', 'Background'].includes(name)) {
 			const editor = workbench.editors.groupAt(0).editor;
 			await editor.waitForEditorContents(value => value.includes('export const reveal'));
 			const hide = async (): Promise<void> => {
-				if (await page.locator('.ash-workbench-panel').isVisible())
-					await workbench.quickaccess.runCommand('workbench.action.closePanel');
+				if (await page.locator('.ash-workbench-panel').isVisible()) await workbench.quickaccess.runCommand('workbench.action.closePanel');
 				await expect(page.locator('.ash-workbench-panel')).toBeHidden();
 				await editor.waitForEditorFocus();
 			};
@@ -1233,9 +1106,7 @@ test(
 				state.played++;
 			};
 			const observer = new MutationObserver(() => {
-				if (
-					[...document.querySelectorAll('.ash-aria-status')].some(region => region.textContent === 'Progress')
-				) {
+				if ([...document.querySelectorAll('.ash-aria-status')].some(region => region.textContent === 'Progress')) {
 					state.announcements++;
 				}
 			});
@@ -1279,9 +1150,7 @@ test(
 			await announcement.press('Tab');
 			await expect(announcement).toBeEnabled();
 			await workbench.settingsEditor.selectCategory('accessibility');
-			const reader = settings
-				.locator('[data-configuration-key="editor.accessibilitySupport"]')
-				.getByRole('combobox');
+			const reader = settings.locator('[data-configuration-key="editor.accessibilitySupport"]').getByRole('combobox');
 			await reader.click();
 			await page.getByRole('option', { name: 'On', exact: true }).click();
 			await workbench.settingsEditor.selectCategory('accessibilitySignals');
@@ -1354,14 +1223,7 @@ test(
 		const page = workbench.page;
 		const assets = Object.fromEntries(
 			await Promise.all(
-				['success', 'error'].map(async name => [
-					(
-						await readFile(
-							join(process.cwd(), 'src/ash/platform/accessibilitySignal/browser/media', `${name}.mp3`),
-						)
-					).toString('base64'),
-					name,
-				]),
+				['success', 'error'].map(async name => [(await readFile(join(process.cwd(), 'src/ash/platform/accessibilitySignal/browser/media', `${name}.mp3`))).toString('base64'), name]),
 			),
 		);
 		await page.evaluate(assets => {
@@ -1379,20 +1241,13 @@ test(
 			};
 			Object.assign(window, { ashTestOutcomeCues: cues, ashTestOutcomePlay: original });
 		}, assets);
-		const readCues = () =>
-			page.evaluate(
-				() =>
-					(window as unknown as { ashTestOutcomeCues: { name: string; duration?: number }[] })
-						.ashTestOutcomeCues,
-			);
+		const readCues = () => page.evaluate(() => (window as unknown as { ashTestOutcomeCues: { name: string; duration?: number }[] }).ashTestOutcomeCues);
 		try {
 			await workbench.settingsEditor.openUserSettingsUI();
 			await workbench.settingsEditor.selectGroup('features');
 			await workbench.settingsEditor.selectCategory('accessibilitySignals');
 			for (const name of ['taskCompleted', 'taskFailed', 'terminalCommandSucceeded', 'terminalCommandFailed']) {
-				const sound = workbench.settingsEditor.element
-					.locator(`[data-configuration-key="accessibility.signals.${name}"]`)
-					.getByRole('textbox', { name: 'Mode 1', exact: true });
+				const sound = workbench.settingsEditor.element.locator(`[data-configuration-key="accessibility.signals.${name}"]`).getByRole('textbox', { name: 'Mode 1', exact: true });
 				await sound.fill('on');
 				await sound.press('Tab');
 				await expect(sound).toBeEnabled();
@@ -1406,84 +1261,76 @@ test(
 			await workbench.quickaccess.select('Smoke fail');
 			await expect(workbench.terminal.activeInstance).toContainText('process exited with code 7');
 			await openTasksView(application, workbench);
-			await expect(page.locator('.ash-task-run').filter({ hasText: 'Smoke fail' })).toContainText(
-				'Smoke fail — Failed (exit code 7)',
-			);
+			await expect(page.locator('.ash-task-run').filter({ hasText: 'Smoke fail' })).toContainText('Smoke fail — Failed (exit code 7)');
 			await expect.poll(async () => (await readCues()).filter(cue => cue.duration !== undefined).length).toBe(2);
 			const cues = await readCues();
 			expect(cues.map(cue => cue.name)).toEqual(['success', 'error']);
 			expect(cues.every(cue => cue.duration! > 0)).toBe(true);
 		} finally {
 			await page.evaluate(() => {
-				HTMLMediaElement.prototype.play = (
-					window as unknown as { ashTestOutcomePlay: typeof HTMLMediaElement.prototype.play }
-				).ashTestOutcomePlay;
+				HTMLMediaElement.prototype.play = (window as unknown as { ashTestOutcomePlay: typeof HTMLMediaElement.prototype.play }).ashTestOutcomePlay;
 			});
 		}
 	},
 );
 
-test(
-	'task platform overrides resolve the execution host command, cwd and merged environment',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ workbench, testWorkspace }) => {
-		const directory = testWorkspace.directory;
-		const key = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'osx' : 'linux';
-		await mkdir(join(directory, 'platform-work'), { recursive: true });
-		await writeFile(
-			join(directory, 'platform-run.cjs'),
-			`require('node:fs').writeFileSync(${JSON.stringify(join(directory, 'platform-result.json'))}, JSON.stringify({ cwd: process.cwd(), args: process.argv.slice(2), inherited: process.env.ASH_PLATFORM_INHERITED, selected: process.env.ASH_PLATFORM_SELECTED, removed: process.env.TERM_PROGRAM === undefined }));`,
-		);
-		const platformBlocks = {
-			windows: { command: 'wrong-windows-executable' },
-			osx: { command: 'wrong-mac-executable' },
-			linux: { command: 'wrong-linux-executable' },
-		};
-		await writeFile(
-			join(directory, '.vscode', 'tasks.json'),
-			JSON.stringify({
-				version: '2.0.0',
-				options: { env: { ASH_PLATFORM_INHERITED: 'document', ASH_PLATFORM_SELECTED: 'document' } },
-				tasks: [
-					{
-						label: 'Platform smoke',
-						type: 'process',
-						command: 'wrong-base-executable',
-						...platformBlocks,
-						options: { env: { ASH_PLATFORM_SELECTED: 'task' } },
-						[key]: {
-							command: process.execPath,
-							args: ['${workspaceFolder}/platform-run.cjs', '', '${env:TERM_PROGRAM}', '$HOME'],
-							options: {
-								cwd: '${workspaceFolder}/platform-work',
-								env: { ASH_PLATFORM_SELECTED: '${env:TERM_PROGRAM}', TERM_PROGRAM: null },
-							},
+test('task platform overrides resolve the execution host command, cwd and merged environment', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+	const directory = testWorkspace.directory;
+	const key = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'osx' : 'linux';
+	await mkdir(join(directory, 'platform-work'), { recursive: true });
+	await writeFile(
+		join(directory, 'platform-run.cjs'),
+		`require('node:fs').writeFileSync(${JSON.stringify(join(directory, 'platform-result.json'))}, JSON.stringify({ cwd: process.cwd(), args: process.argv.slice(2), inherited: process.env.ASH_PLATFORM_INHERITED, selected: process.env.ASH_PLATFORM_SELECTED, removed: process.env.TERM_PROGRAM === undefined }));`,
+	);
+	const platformBlocks = {
+		windows: { command: 'wrong-windows-executable' },
+		osx: { command: 'wrong-mac-executable' },
+		linux: { command: 'wrong-linux-executable' },
+	};
+	await writeFile(
+		join(directory, '.vscode', 'tasks.json'),
+		JSON.stringify({
+			version: '2.0.0',
+			options: { env: { ASH_PLATFORM_INHERITED: 'document', ASH_PLATFORM_SELECTED: 'document' } },
+			tasks: [
+				{
+					label: 'Platform smoke',
+					type: 'process',
+					command: 'wrong-base-executable',
+					...platformBlocks,
+					options: { env: { ASH_PLATFORM_SELECTED: 'task' } },
+					[key]: {
+						command: process.execPath,
+						args: ['${workspaceFolder}/platform-run.cjs', '', '${env:TERM_PROGRAM}', '$HOME'],
+						options: {
+							cwd: '${workspaceFolder}/platform-work',
+							env: { ASH_PLATFORM_SELECTED: '${env:TERM_PROGRAM}', TERM_PROGRAM: null },
 						},
 					},
-				],
-			}),
-		);
-		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
-		await expect(workbench.quickaccess.items.filter({ hasText: 'Platform smoke' })).toBeVisible();
-		await workbench.quickaccess.select('Platform smoke');
-		await expect
-			.poll(async () => {
-				try {
-					return JSON.parse(await readFile(join(directory, 'platform-result.json'), 'utf8'));
-				} catch (error) {
-					if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-					throw error;
-				}
-			})
-			.toEqual({
-				cwd: join(directory, 'platform-work'),
-				args: ['', 'ash', '$HOME'],
-				inherited: 'document',
-				selected: 'ash',
-				removed: true,
-			});
-	},
-);
+				},
+			],
+		}),
+	);
+	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
+	await expect(workbench.quickaccess.items.filter({ hasText: 'Platform smoke' })).toBeVisible();
+	await workbench.quickaccess.select('Platform smoke');
+	await expect
+		.poll(async () => {
+			try {
+				return JSON.parse(await readFile(join(directory, 'platform-result.json'), 'utf8'));
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+				throw error;
+			}
+		})
+		.toEqual({
+			cwd: join(directory, 'platform-work'),
+			args: ['', 'ash', '$HOME'],
+			inherited: 'document',
+			selected: 'ash',
+			removed: true,
+		});
+});
 
 test(
 	'installed declarative extension matchers parse task diagnostics and retire when disabled',
@@ -1558,12 +1405,9 @@ test(
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 		await installation.getByRole('textbox').fill('matcher-extension');
-		const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-			installation.getByRole('textbox').press('Enter'),
-		);
+		const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 		expect(installed.message).toContain('Installed acme/matcher-smoke 1.0.0');
-		const manage = (button: string): Promise<void> =>
-			manageTaskExtension(application, workbench, 'Matcher smoke', button);
+		const manage = (button: string): Promise<void> => manageTaskExtension(application, workbench, 'Matcher smoke', button);
 		await manage('Enable');
 		await manage('Grant permissions');
 		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
@@ -1579,9 +1423,7 @@ test(
 		await manage('Disable');
 		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 		await workbench.quickaccess.select('Matcher smoke');
-		await expect(page.locator('.ash-notification-host')).toContainText(
-			"Unknown problem matcher '$smoke-contributed'",
-		);
+		await expect(page.locator('.ash-notification-host')).toContainText("Unknown problem matcher '$smoke-contributed'");
 		expect(await readFile(join(directory, 'matcher-runs.txt'), 'utf8')).toBe('1');
 		await manage('Revoke permissions');
 		await manage('Uninstall');
@@ -1595,9 +1437,7 @@ for (const locale of ['en', 'zh-CN']) {
 		async ({ application, workbench, testWorkspace, restartWorkbench }) => {
 			if (locale === 'zh-CN') {
 				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-				const language = workbench.page
-					.getByRole('dialog', { name: 'Select Display Language' })
-					.getByRole('combobox');
+				const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 				await language.fill('简体中文');
 				await language.press('Enter');
 				({ application, workbench } = await restartWorkbench());
@@ -1607,10 +1447,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await workbench.quickaccess.runCommand('workbench.action.togglePanel');
 			await expect(workbench.terminal.activeInstance).toBeVisible();
 			const initialTerminalCount = await workbench.terminal.instances.count();
-			const unsupportedMessage =
-				locale === 'zh-CN'
-					? /任务“Smoke configured”尚未启动，因为 Ash 尚不支持：/u
-					: /Task 'Smoke configured' was not started because Ash does not yet support:/;
+			const unsupportedMessage = locale === 'zh-CN' ? /任务“Smoke configured”尚未启动，因为 Ash 尚不支持：/u : /Task 'Smoke configured' was not started because Ash does not yet support:/;
 			const configurationPath = join(testWorkspace.directory, '.vscode', 'tasks.json');
 			await writeFile(
 				configurationPath,
@@ -1655,9 +1492,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect.poll(() => readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('1');
 			await expect(workbench.terminal.instances).toHaveCount(initialTerminalCount + 1);
 			await openTasksView(application, workbench, locale === 'zh-CN' ? '任务' : 'Tasks');
-			await expect(workbench.page.locator('.ash-task-run')).toContainText(
-				locale === 'zh-CN' ? 'Smoke process — 成功（退出代码 0）' : 'Smoke process — Succeeded (exit code 0)',
-			);
+			await expect(workbench.page.locator('.ash-task-run')).toContainText(locale === 'zh-CN' ? 'Smoke process — 成功（退出代码 0）' : 'Smoke process — Succeeded (exit code 0)');
 
 			await writeFile(
 				configurationPath,
@@ -1676,28 +1511,16 @@ for (const locale of ['en', 'zh-CN']) {
 			);
 			// The fixture also contributes four Cargo tasks; correcting this task must keep those siblings.
 			// File changes must clear the prior error before the user retries.
-			await expect(
-				workbench.page.locator('.ash-tasks-run').filter({ hasText: 'Smoke configured' }),
-			).toBeVisible();
+			await expect(workbench.page.locator('.ash-tasks-run').filter({ hasText: 'Smoke configured' })).toBeVisible();
 			await expect(workbench.page.locator('.ash-tasks-status')).toHaveText('5 workspace tasks.');
-			await expect(workbench.page.locator('.ash-task-label')).toHaveText([
-				'cargo build',
-				'cargo check',
-				'cargo test',
-				'cargo run',
-				'Smoke configured',
-			]);
+			await expect(workbench.page.locator('.ash-task-label')).toHaveText(['cargo build', 'cargo check', 'cargo test', 'cargo run', 'Smoke configured']);
 			await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 			await workbench.quickaccess.select('Smoke configured');
 			await expect.poll(() => readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('2');
 			await expect(workbench.terminal.activeInstance).toContainText('ASH_TASK_RUN_2');
 			await openTasksView(application, workbench, locale === 'zh-CN' ? '任务' : 'Tasks');
 			await expect(workbench.page.locator('.ash-tasks-status')).toHaveText('5 workspace tasks.');
-			await expect(workbench.page.locator('.ash-task-run')).toContainText(
-				locale === 'zh-CN'
-					? 'Smoke configured — 成功（退出代码 0）'
-					: 'Smoke configured — Succeeded (exit code 0)',
-			);
+			await expect(workbench.page.locator('.ash-task-run')).toContainText(locale === 'zh-CN' ? 'Smoke configured — 成功（退出代码 0）' : 'Smoke configured — Succeeded (exit code 0)');
 			expect(await readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('2');
 		},
 	);
@@ -1710,10 +1533,7 @@ for (const reevaluate of [true, false]) {
 		async ({ application, workbench, testWorkspace }) => {
 			const page = workbench.page;
 			const directory = testWorkspace.directory;
-			await writeFile(
-				join(directory, 'smoke-input-task.cjs'),
-				"require('node:fs').writeFileSync('task-inputs.json', JSON.stringify(process.argv.slice(2))); require('./smoke-task.cjs');\n",
-			);
+			await writeFile(join(directory, 'smoke-input-task.cjs'), "require('node:fs').writeFileSync('task-inputs.json', JSON.stringify(process.argv.slice(2))); require('./smoke-task.cjs');\n");
 			await writeFile(
 				join(directory, '.vscode', 'tasks.json'),
 				JSON.stringify({
@@ -1747,9 +1567,7 @@ for (const reevaluate of [true, false]) {
 			const initialTerminals = await workbench.terminal.instances.count();
 			await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 			await workbench.quickaccess.select('Smoke inputs');
-			const prompt = page
-				.getByRole('dialog', { name: 'Task input name', exact: true })
-				.getByLabel('Task input name', { exact: true });
+			const prompt = page.getByRole('dialog', { name: 'Task input name', exact: true }).getByLabel('Task input name', { exact: true });
 			await expect(prompt).toBeFocused();
 			await expect(prompt).toHaveValue('initial');
 			await expect(prompt).toHaveAttribute('type', 'password');
@@ -1769,17 +1587,11 @@ for (const reevaluate of [true, false]) {
 			await workbench.quickaccess.select('Smoke inputs');
 			await prompt.fill('first');
 			await prompt.press('Enter');
-			const pick = page
-				.getByRole('dialog', { name: 'Task build mode', exact: true })
-				.getByRole('combobox', { name: 'Task build mode', exact: true });
+			const pick = page.getByRole('dialog', { name: 'Task build mode', exact: true }).getByRole('combobox', { name: 'Task build mode', exact: true });
 			await expect(pick).toBeFocused();
 			await pick.press('Enter');
 			await expect.poll(() => readFile(join(directory, 'task-runs.txt'), 'utf8')).toBe('1');
-			expect(JSON.parse(await readFile(join(directory, 'task-inputs.json'), 'utf8'))).toEqual([
-				'first',
-				'release',
-				'first',
-			]);
+			expect(JSON.parse(await readFile(join(directory, 'task-inputs.json'), 'utf8'))).toEqual(['first', 'release', 'first']);
 			await openTasksView(application, workbench);
 			await expect(page.locator('.ash-task-run')).toContainText('Smoke inputs — Succeeded (exit code 0)');
 
@@ -1791,18 +1603,10 @@ for (const reevaluate of [true, false]) {
 				await pick.fill('debug');
 				await pick.press('Enter');
 				await expect.poll(() => readFile(join(directory, 'task-runs.txt'), 'utf8')).toBe('2');
-				expect(JSON.parse(await readFile(join(directory, 'task-inputs.json'), 'utf8'))).toEqual([
-					'second',
-					'debug',
-					'second',
-				]);
+				expect(JSON.parse(await readFile(join(directory, 'task-inputs.json'), 'utf8'))).toEqual(['second', 'debug', 'second']);
 			} else {
 				await expect.poll(() => readFile(join(directory, 'task-runs.txt'), 'utf8')).toBe('2');
-				expect(JSON.parse(await readFile(join(directory, 'task-inputs.json'), 'utf8'))).toEqual([
-					'first',
-					'release',
-					'first',
-				]);
+				expect(JSON.parse(await readFile(join(directory, 'task-inputs.json'), 'utf8'))).toEqual(['first', 'release', 'first']);
 				await expect(prompt).not.toBeVisible();
 				await expect(pick).not.toBeVisible();
 			}
@@ -1810,44 +1614,35 @@ for (const reevaluate of [true, false]) {
 	);
 }
 
-test(
-	'task command resolves environment values from the execution host',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ workbench, testWorkspace }) => {
-		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
-		await workbench.quickaccess.select('Smoke environment');
-		await expect
-			.poll(async () =>
-				JSON.parse(
-					await readFile(join(testWorkspace.directory, 'task-environment.json'), 'utf8').catch(error => {
-						if (error.code === 'ENOENT') return 'null';
-						throw error;
-					}),
-				),
-			)
-			.toEqual({
-				args: ['ash', ''],
-				value: 'task value',
-				folder: testWorkspace.directory,
-				keyed: 'resolved key',
-				removed: true,
-			});
-	},
-);
+test('task command resolves environment values from the execution host', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
+	await workbench.quickaccess.select('Smoke environment');
+	await expect
+		.poll(async () =>
+			JSON.parse(
+				await readFile(join(testWorkspace.directory, 'task-environment.json'), 'utf8').catch(error => {
+					if (error.code === 'ENOENT') return 'null';
+					throw error;
+				}),
+			),
+		)
+		.toEqual({
+			args: ['ash', ''],
+			value: 'task value',
+			folder: testWorkspace.directory,
+			keyed: 'resolved key',
+			removed: true,
+		});
+});
 
 test(
 	'task execution resolves host paths and current settings through the shared variable owner',
 	{ tag: ['@browser-app-server', '@electron-app-server'] },
 	async ({ application, workbench, testWorkspace, webAppServer }) => {
 		const directory = testWorkspace.directory;
-		const home =
-			webAppServer?.profileDirectory ??
-			('windows' in application ? await application.evaluate(() => process.env.HOME!) : undefined);
+		const home = webAppServer?.profileDirectory ?? ('windows' in application ? await application.evaluate(() => process.env.HOME!) : undefined);
 		expect(home).toBeTruthy();
-		await writeFile(
-			join(directory, 'variable-run.cjs'),
-			"require('node:fs').writeFileSync('variable-result.json', JSON.stringify({ args: process.argv.slice(2), cwd: process.cwd() }));",
-		);
+		await writeFile(join(directory, 'variable-run.cjs'), "require('node:fs').writeFileSync('variable-result.json', JSON.stringify({ args: process.argv.slice(2), cwd: process.cwd() }));");
 		await writeFile(
 			join(directory, '.vscode', 'tasks.json'),
 			JSON.stringify({
@@ -1857,14 +1652,7 @@ test(
 						label: 'Variable smoke',
 						type: 'process',
 						command: process.execPath,
-						args: [
-							'${cwd}${/}variable-run.cjs',
-							'${workspaceFolder}',
-							'${config:editor.fontSize}',
-							'${userHome}',
-							'${pathSeparator}',
-							'${/}',
-						],
+						args: ['${cwd}${/}variable-run.cjs', '${workspaceFolder}', '${config:editor.fontSize}', '${userHome}', '${pathSeparator}', '${/}'],
 						options: { cwd: '${cwd}' },
 					},
 				],
@@ -1899,10 +1687,7 @@ test(
 		const selected = 'chosen $HOME ${env:SHOULD_STAY_LITERAL}';
 		await mkdir(join(directory, 'variable-source'));
 		await writeFile(join(directory, 'variable-source', 'editor-variable.ts'), `first line\n${selected}\n`);
-		await writeFile(
-			join(directory, 'editor-variable-run.cjs'),
-			"require('node:fs').writeFileSync('editor-variable-result.json', JSON.stringify(process.argv.slice(2)));",
-		);
+		await writeFile(join(directory, 'editor-variable-run.cjs'), "require('node:fs').writeFileSync('editor-variable-result.json', JSON.stringify(process.argv.slice(2)));");
 		const references = [
 			'file',
 			'fileDirname',
@@ -1927,10 +1712,7 @@ test(
 						label: 'Editor variable smoke',
 						type: 'process',
 						command: process.execPath,
-						args: [
-							'${workspaceFolder}/editor-variable-run.cjs',
-							...references.map(name => '${' + name + '}'),
-						],
+						args: ['${workspaceFolder}/editor-variable-run.cjs', ...references.map(name => '${' + name + '}')],
 					},
 				],
 			}),
@@ -1979,10 +1761,7 @@ test(
 	async ({ workbench, testWorkspace }) => {
 		const directory = testWorkspace.directory;
 		const script = join(directory, 'shell task.cjs');
-		await writeFile(
-			script,
-			"require('node:fs').writeFileSync(process.argv[2], JSON.stringify({args: process.argv.slice(3), mode: process.env.ASH_SHELL_MODE, cwd: process.cwd()}));\n",
-		);
+		await writeFile(script, "require('node:fs').writeFileSync(process.argv[2], JSON.stringify({args: process.argv.slice(3), mode: process.env.ASH_SHELL_MODE, cwd: process.cwd()}));\n");
 		const args = [
 			'${workspaceFolder}/shell task.cjs',
 			'',
@@ -2035,14 +1814,7 @@ test(
 					),
 				)
 				.toEqual({
-					args: [
-						'',
-						'$HOME',
-						'two words $(touch not-evaluated)',
-						'two words',
-						"one'two",
-						'$(touch injected)',
-					],
+					args: ['', '$HOME', 'two words $(touch not-evaluated)', 'two words', "one'two", '$(touch injected)'],
 					mode: 'two words $(touch not-evaluated)',
 					cwd: directory,
 				});
@@ -2079,105 +1851,94 @@ test(
 	},
 );
 
-test(
-	'process task dependencies wait for background diagnostics and preserve cwd and literal argv',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ workbench, testWorkspace }) => {
-		const directory = testWorkspace.directory;
-		await mkdir(join(directory, 'child'));
-		await writeFile(
-			join(directory, 'compile-watch.cjs'),
-			"const fs = require('node:fs'); const path = require('node:path'); const root = process.argv[2]; fs.writeFileSync(path.join(root, 'compiler-pid.txt'), String(process.pid)); console.log('BUILD'); console.log('ASH_COMPILER_WAITING'); const timer = setInterval(() => { if (fs.existsSync(path.join(root, 'release-compiler'))) { clearInterval(timer); console.log('file.ts(2,3): warning TS1000: Smoke compiler warning'); console.log('READY'); setInterval(() => {}, 1000); } }, 40);\n",
-		);
-		await writeFile(
-			join(directory, 'process-result.cjs'),
-			"require('node:fs').writeFileSync(process.argv[2], JSON.stringify({cwd: process.cwd(), args: process.argv.slice(3), mode: process.env.ASH_PROCESS_MODE}));\n",
-		);
-		await writeFile(
-			join(directory, '.vscode', 'tasks.json'),
-			JSON.stringify({
-				version: '2.0.0',
-				tasks: [
-					{
-						label: 'Compiler watch',
-						type: 'process',
-						command: process.execPath,
-						args: [join(directory, 'compile-watch.cjs'), directory],
-						isBackground: true,
-						problemMatcher: {
-							base: '$tsc',
-							background: { activeOnStart: true, beginsPattern: '^BUILD$', endsPattern: '^READY$' },
-						},
+test('process task dependencies wait for background diagnostics and preserve cwd and literal argv', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+	const directory = testWorkspace.directory;
+	await mkdir(join(directory, 'child'));
+	await writeFile(
+		join(directory, 'compile-watch.cjs'),
+		"const fs = require('node:fs'); const path = require('node:path'); const root = process.argv[2]; fs.writeFileSync(path.join(root, 'compiler-pid.txt'), String(process.pid)); console.log('BUILD'); console.log('ASH_COMPILER_WAITING'); const timer = setInterval(() => { if (fs.existsSync(path.join(root, 'release-compiler'))) { clearInterval(timer); console.log('file.ts(2,3): warning TS1000: Smoke compiler warning'); console.log('READY'); setInterval(() => {}, 1000); } }, 40);\n",
+	);
+	await writeFile(
+		join(directory, 'process-result.cjs'),
+		"require('node:fs').writeFileSync(process.argv[2], JSON.stringify({cwd: process.cwd(), args: process.argv.slice(3), mode: process.env.ASH_PROCESS_MODE}));\n",
+	);
+	await writeFile(
+		join(directory, '.vscode', 'tasks.json'),
+		JSON.stringify({
+			version: '2.0.0',
+			tasks: [
+				{
+					label: 'Compiler watch',
+					type: 'process',
+					command: process.execPath,
+					args: [join(directory, 'compile-watch.cjs'), directory],
+					isBackground: true,
+					problemMatcher: {
+						base: '$tsc',
+						background: { activeOnStart: true, beginsPattern: '^BUILD$', endsPattern: '^READY$' },
 					},
-					{
-						label: 'Process with dependency',
-						type: 'process',
-						command: process.execPath,
-						args: [
-							join(directory, 'process-result.cjs'),
-							join(directory, 'process-result.json'),
-							'',
-							'two words',
-							'$HOME',
-							'$(touch injected)',
-						],
-						options: {
-							cwd: '${workspaceFolder}/child',
-							env: { ASH_PROCESS_MODE: 'resolved ${env:TERM_PROGRAM}' },
-						},
-						dependsOn: 'Compiler watch',
+				},
+				{
+					label: 'Process with dependency',
+					type: 'process',
+					command: process.execPath,
+					args: [join(directory, 'process-result.cjs'), join(directory, 'process-result.json'), '', 'two words', '$HOME', '$(touch injected)'],
+					options: {
+						cwd: '${workspaceFolder}/child',
+						env: { ASH_PROCESS_MODE: 'resolved ${env:TERM_PROGRAM}' },
 					},
-				],
-			}),
-		);
-		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
-		await workbench.quickaccess.select('Process with dependency');
-		await workbench.quickaccess.runCommand('workbench.action.togglePanel');
-		await workbench.quickaccess.runCommand('workbench.action.terminal.focus');
-		await expect(workbench.terminal.activeInstance).toContainText('ASH_COMPILER_WAITING');
-		await expect
-			.poll(() =>
-				readFile(join(directory, 'process-result.json'), 'utf8').then(
-					() => true,
-					error => {
-						if (error.code === 'ENOENT') return false;
-						throw error;
-					},
-				),
-			)
-			.toBe(false);
-		await writeFile(join(directory, 'release-compiler'), 'ready');
-		await expect
-			.poll(async () =>
-				JSON.parse(
-					await readFile(join(directory, 'process-result.json'), 'utf8').catch(error => {
-						if (error.code === 'ENOENT') return 'null';
-						throw error;
-					}),
-				),
-			)
-			.toEqual({
-				cwd: join(directory, 'child'),
-				args: ['', 'two words', '$HOME', '$(touch injected)'],
-				mode: 'resolved ash',
-			});
-		await workbench.page.getByRole('tab', { name: 'Problems', exact: true }).click();
-		await expect(workbench.page.locator('.ash-problems-results')).toContainText('Smoke compiler warning');
-		await workbench.quickaccess.runCommand('workbench.action.tasks.terminate');
-		const pid = Number(await readFile(join(directory, 'compiler-pid.txt'), 'utf8'));
-		await expect
-			.poll(() => {
-				try {
-					process.kill(pid, 0);
-					return true;
-				} catch (error) {
-					if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false;
+					dependsOn: 'Compiler watch',
+				},
+			],
+		}),
+	);
+	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
+	await workbench.quickaccess.select('Process with dependency');
+	await workbench.quickaccess.runCommand('workbench.action.togglePanel');
+	await workbench.quickaccess.runCommand('workbench.action.terminal.focus');
+	await expect(workbench.terminal.activeInstance).toContainText('ASH_COMPILER_WAITING');
+	await expect
+		.poll(() =>
+			readFile(join(directory, 'process-result.json'), 'utf8').then(
+				() => true,
+				error => {
+					if (error.code === 'ENOENT') return false;
 					throw error;
-				}
-			})
-			.toBe(false);
-	},
-);
+				},
+			),
+		)
+		.toBe(false);
+	await writeFile(join(directory, 'release-compiler'), 'ready');
+	await expect
+		.poll(async () =>
+			JSON.parse(
+				await readFile(join(directory, 'process-result.json'), 'utf8').catch(error => {
+					if (error.code === 'ENOENT') return 'null';
+					throw error;
+				}),
+			),
+		)
+		.toEqual({
+			cwd: join(directory, 'child'),
+			args: ['', 'two words', '$HOME', '$(touch injected)'],
+			mode: 'resolved ash',
+		});
+	await workbench.page.getByRole('tab', { name: 'Problems', exact: true }).click();
+	await expect(workbench.page.locator('.ash-problems-results')).toContainText('Smoke compiler warning');
+	await workbench.quickaccess.runCommand('workbench.action.tasks.terminate');
+	const pid = Number(await readFile(join(directory, 'compiler-pid.txt'), 'utf8'));
+	await expect
+		.poll(() => {
+			try {
+				process.kill(pid, 0);
+				return true;
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false;
+				throw error;
+			}
+		})
+		.toBe(false);
+});
 
 // Product-host extension activation is deliberately unavailable to Browser connections.
 test(
@@ -2219,10 +1980,7 @@ test(
 			JSON.stringify({
 				...taskDocument,
 				[platform]: { group: 'build' },
-				tasks: [
-					...taskDocument.tasks,
-					{ label: 'Configured platform build', type: 'lazy-build', target: 'configured' },
-				],
+				tasks: [...taskDocument.tasks, { label: 'Configured platform build', type: 'lazy-build', target: 'configured' }],
 			}),
 		);
 		await writeFile(join(directory, 'lazy-task-runs.txt'), '0');
@@ -2257,12 +2015,9 @@ exports.activate = function(context) {
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 		await installation.getByRole('textbox').fill('task-extension');
-		const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-			installation.getByRole('textbox').press('Enter'),
-		);
+		const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 		expect(installed.message).toContain('Installed acme/lazy-task-smoke 1.0.0');
-		const manage = (button: string): Promise<void> =>
-			manageTaskExtension(application, workbench, 'Lazy task smoke', button);
+		const manage = (button: string): Promise<void> => manageTaskExtension(application, workbench, 'Lazy task smoke', button);
 		await manage('Enable');
 		await manage('Grant permissions');
 		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
@@ -2272,26 +2027,18 @@ exports.activate = function(context) {
 		await expect.poll(() => readFile(join(directory, 'lazy-task-runs.txt'), 'utf8')).toBe('1');
 		await expect(page.locator('.ash-notification', { hasText: 'PROVIDED_GROUP_RETAINED' })).toBeVisible();
 		await expect(workbench.terminal.activeInstance).toContainText('LAZY_TASK_RUN_1');
-		await expect(
-			page.locator('.ash-terminal-tabs [role="tab"][aria-selected="true"]').locator('..'),
-		).toHaveAttribute('data-state', 'exited');
+		await expect(page.locator('.ash-terminal-tabs [role="tab"][aria-selected="true"]').locator('..')).toHaveAttribute('data-state', 'exited');
 		const screen = await workbench.terminal.activeInstance.elementHandle();
 		expect(screen).not.toBeNull();
 		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 		await workbench.quickaccess.select('Lazy provider build');
 		await expect(workbench.terminal.activeInstance).toContainText('LAZY_TASK_RUN_2');
 		await expect(workbench.terminal.activeInstance).not.toContainText('LAZY_TASK_RUN_1');
-		expect(
-			await screen!.evaluate(
-				element => element === document.querySelector('.ash-terminal-instance:not([hidden])'),
-			),
-		).toBe(true);
+		expect(await screen!.evaluate(element => element === document.querySelector('.ash-terminal-instance:not([hidden])'))).toBe(true);
 		await screen!.dispose();
 		await workbench.quickaccess.runCommand('workbench.action.tasks.build');
 		await workbench.quickaccess.select('Configured platform build');
-		await expect(
-			page.locator('.ash-notification', { hasText: 'CONFIGURED_PLATFORM_GROUP_RETAINED' }),
-		).toBeVisible();
+		await expect(page.locator('.ash-notification', { hasText: 'CONFIGURED_PLATFORM_GROUP_RETAINED' })).toBeVisible();
 		await expect.poll(() => readFile(join(directory, 'lazy-task-runs.txt'), 'utf8')).toBe('3');
 		await expect(workbench.terminal.activeInstance).toContainText('LAZY_TASK_RUN_3');
 		await manage('Disable');
@@ -2305,101 +2052,90 @@ exports.activate = function(context) {
 	},
 );
 
-test(
-	'a standard command-only extension starts the built-in build Task and receives a void result',
-	{ tag: ['@electron-app-server', '@darwin'] },
-	async ({ application, workbench, testWorkspace }) => {
-		const directory = testWorkspace.directory;
-		const root = join(directory, 'command-task-extension');
-		await mkdir(join(root, '.ash-plugin'), { recursive: true });
-		await writeFile(
-			join(root, '.ash-plugin', 'plugin.json'),
-			JSON.stringify({
-				schemaVersion: 1,
-				id: 'acme/command-task-smoke',
-				version: '1.0.0',
-				displayName: 'Command task smoke',
-				compatibility: { ash: '>=0.1.0' },
-				contributions: {
-					editorExtensions: [
-						{
-							id: 'commands',
-							runtime: 'javascript',
-							api: 'ash',
-							entrypoint: 'extension.cjs',
-							runtimeApiVersion: 1,
-							activationEvents: [{ type: 'onCommand', id: 'acme.commandTask.build' }],
-							capabilities: ['command'],
-						},
-					],
-				},
-				permissions: [{ type: 'directory', access: 'read' }],
-			}),
-		);
-		await writeFile(
-			join(root, 'package.json'),
-			JSON.stringify({
-				name: 'command-task',
-				publisher: 'acme',
-				version: '1.0.0',
-				engines: { ash: '*' },
-				main: './extension.cjs',
-				contributes: {
-					commands: [{ command: 'acme.commandTask.build', title: 'Build through standard command API' }],
-				},
-			}),
-		);
-		await writeFile(
-			join(root, 'extension.cjs'),
-			`const v = require('@ash/sdk');
+test('a standard command-only extension starts the built-in build Task and receives a void result', { tag: ['@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
+	const directory = testWorkspace.directory;
+	const root = join(directory, 'command-task-extension');
+	await mkdir(join(root, '.ash-plugin'), { recursive: true });
+	await writeFile(
+		join(root, '.ash-plugin', 'plugin.json'),
+		JSON.stringify({
+			schemaVersion: 1,
+			id: 'acme/command-task-smoke',
+			version: '1.0.0',
+			displayName: 'Command task smoke',
+			compatibility: { ash: '>=0.1.0' },
+			contributions: {
+				editorExtensions: [
+					{
+						id: 'commands',
+						runtime: 'javascript',
+						api: 'ash',
+						entrypoint: 'extension.cjs',
+						runtimeApiVersion: 1,
+						activationEvents: [{ type: 'onCommand', id: 'acme.commandTask.build' }],
+						capabilities: ['command'],
+					},
+				],
+			},
+			permissions: [{ type: 'directory', access: 'read' }],
+		}),
+	);
+	await writeFile(
+		join(root, 'package.json'),
+		JSON.stringify({
+			name: 'command-task',
+			publisher: 'acme',
+			version: '1.0.0',
+			engines: { ash: '*' },
+			main: './extension.cjs',
+			contributes: {
+				commands: [{ command: 'acme.commandTask.build', title: 'Build through standard command API' }],
+			},
+		}),
+	);
+	await writeFile(
+		join(root, 'extension.cjs'),
+		`const v = require('@ash/sdk');
 exports.activate = context => context.subscriptions.push(v.commands.register('acme.commandTask.build', async () => {
 	const result = await v.commands.execute('workbench.action.tasks.build');
 	if (result !== undefined) throw Error('Void command result changed');
 	await v.window.showInformationMessage('STANDARD_TASK_COMMAND_RETURNED_VOID');
 }));`,
-		);
-		await writeFile(
-			join(directory, '.vscode', 'tasks.json'),
-			JSON.stringify({
-				version: '2.0.0',
-				tasks: [
-					{
-						label: 'Command API build',
-						type: 'process',
-						command: process.execPath,
-						args: ['${workspaceFolder}/smoke-task.cjs'],
-						group: { kind: 'build', isDefault: true },
-						presentation: { echo: false },
-					},
-				],
-			}),
-		);
-		const page = workbench.page;
-		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
-		const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
-		await installation.getByRole('textbox').fill('command-task-extension');
-		const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-			installation.getByRole('textbox').press('Enter'),
-		);
-		expect(installed.message).toContain('Installed acme/command-task-smoke 1.0.0');
-		const manage = (button: string): Promise<void> =>
-			manageTaskExtension(application, workbench, 'Command task smoke', button);
-		await manage('Enable');
-		await manage('Grant permissions');
-		await workbench.quickaccess.runCommand('acme.commandTask.build');
-		await expect(
-			page.locator('.ash-notification', { hasText: 'STANDARD_TASK_COMMAND_RETURNED_VOID' }),
-		).toBeVisible();
-		await expect.poll(() => readFile(join(directory, 'task-runs.txt'), 'utf8')).toBe('1');
-		await expect(workbench.terminal.activeInstance).toContainText('ASH_TASK_RUN_1');
-		await expect(
-			page.locator('.ash-terminal-tabs [role="tab"][aria-selected="true"]').locator('..'),
-		).toHaveAttribute('data-state', 'exited');
-		await manage('Disable');
-		await manage('Revoke permissions');
-		await manage('Uninstall');
-	},
-);
+	);
+	await writeFile(
+		join(directory, '.vscode', 'tasks.json'),
+		JSON.stringify({
+			version: '2.0.0',
+			tasks: [
+				{
+					label: 'Command API build',
+					type: 'process',
+					command: process.execPath,
+					args: ['${workspaceFolder}/smoke-task.cjs'],
+					group: { kind: 'build', isDefault: true },
+					presentation: { echo: false },
+				},
+			],
+		}),
+	);
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('ash.extensions.installLocal');
+	const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
+	await installation.getByRole('textbox').fill('command-task-extension');
+	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
+	expect(installed.message).toContain('Installed acme/command-task-smoke 1.0.0');
+	const manage = (button: string): Promise<void> => manageTaskExtension(application, workbench, 'Command task smoke', button);
+	await manage('Enable');
+	await manage('Grant permissions');
+	await workbench.quickaccess.runCommand('acme.commandTask.build');
+	await expect(page.locator('.ash-notification', { hasText: 'STANDARD_TASK_COMMAND_RETURNED_VOID' })).toBeVisible();
+	await expect.poll(() => readFile(join(directory, 'task-runs.txt'), 'utf8')).toBe('1');
+	await expect(workbench.terminal.activeInstance).toContainText('ASH_TASK_RUN_1');
+	await expect(page.locator('.ash-terminal-tabs [role="tab"][aria-selected="true"]').locator('..')).toHaveAttribute('data-state', 'exited');
+	await manage('Disable');
+	await manage('Revoke permissions');
+	await manage('Uninstall');
+});
 
 test(
 	'standard Task command variables receive variable arrays once per process and shell run and cancel before execution',
@@ -2477,11 +2213,7 @@ exports.activate = context => context.subscriptions.push(
 					label: 'Variable ' + type,
 					type,
 					command: process.execPath,
-					args: [
-						'${workspaceFolder}/task-variables.cjs',
-						'${command:acme.taskVariables.pick}',
-						'${command:acme.taskVariables.pick}',
-					],
+					args: ['${workspaceFolder}/task-variables.cjs', '${command:acme.taskVariables.pick}', '${command:acme.taskVariables.pick}'],
 					presentation: { echo: false, panel: 'dedicated' },
 				})),
 			}),
@@ -2490,29 +2222,16 @@ exports.activate = context => context.subscriptions.push(
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 		await installation.getByRole('textbox').fill('task-variable-map-extension');
-		const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-			installation.getByRole('textbox').press('Enter'),
-		);
+		const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 		expect(installed.message).toContain('Installed acme/task-variable-map-smoke 1.0.0');
-		const manage = (button: string): Promise<void> =>
-			manageTaskExtension(application, workbench, 'Task variable map smoke', button);
+		const manage = (button: string): Promise<void> => manageTaskExtension(application, workbench, 'Task variable map smoke', button);
 		await manage('Enable');
 		await manage('Grant permissions');
 		for (const type of ['process', 'shell']) {
 			await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 			await workbench.quickaccess.select('Variable ' + type);
-			await expect
-				.poll(
-					async () =>
-						(await readFile(join(directory, 'task-variable-args.jsonl'), 'utf8'))
-							.trim()
-							.split('\n')
-							.filter(Boolean).length,
-				)
-				.toBe(type === 'process' ? 1 : 2);
-			await expect(
-				page.locator('.ash-terminal-tabs [role="tab"][aria-selected="true"]').locator('..'),
-			).toHaveAttribute('data-state', 'exited');
+			await expect.poll(async () => (await readFile(join(directory, 'task-variable-args.jsonl'), 'utf8')).trim().split('\n').filter(Boolean).length).toBe(type === 'process' ? 1 : 2);
+			await expect(page.locator('.ash-terminal-tabs [role="tab"][aria-selected="true"]').locator('..')).toHaveAttribute('data-state', 'exited');
 		}
 		const expected = [
 			['picked-1 literal value', 'picked-1 literal value'],
@@ -2643,12 +2362,9 @@ exports.activate = context => context.subscriptions.push(v.commands.register('ac
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 		await installation.getByRole('textbox').fill('fetched-task-extension');
-		const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-			installation.getByRole('textbox').press('Enter'),
-		);
+		const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 		expect(installed.message).toContain('Installed acme/fetched-task-smoke 1.0.0');
-		const manage = (button: string): Promise<void> =>
-			manageTaskExtension(application, workbench, 'Fetched task smoke', button);
+		const manage = (button: string): Promise<void> => manageTaskExtension(application, workbench, 'Fetched task smoke', button);
 		await manage('Enable');
 		await manage('Grant permissions');
 		for (const edits of [1, 2]) {
@@ -2659,15 +2375,10 @@ exports.activate = context => context.subscriptions.push(v.commands.register('ac
 				await editor.editor.input.evaluate(element => {
 					const clipboardData = new DataTransfer();
 					clipboardData.setData('text/plain', '{"fetchedTask.argument":"USER_SETTING"}');
-					element.dispatchEvent(
-						new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }),
-					);
+					element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
 				});
 				await editor.editor.input.press('ControlOrMeta+S');
-				await expect(editor.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute(
-					'data-state',
-					/dirty|conflict/u,
-				);
+				await expect(editor.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 			}
 			await workbench.quickaccess.runCommand('acme.fetchedTask.edit');
 			await expect(page.locator('.ash-notification', { hasText: `EDITED_TASK_STARTED_${edits}` })).toBeVisible();
@@ -2681,18 +2392,9 @@ exports.activate = context => context.subscriptions.push(v.commands.register('ac
 						.filter(Boolean)
 						.map(line => JSON.parse(line)),
 				)
-				.toEqual(
-					Array.from({ length: edits }, (_, index) => [
-						`TASK_EDITED_${index + 1}`,
-						'$HOME',
-						'',
-						index === 0 ? 'EXTENSION_DEFAULT' : 'USER_SETTING',
-					]),
-				);
+				.toEqual(Array.from({ length: edits }, (_, index) => [`TASK_EDITED_${index + 1}`, '$HOME', '', index === 0 ? 'EXTENSION_DEFAULT' : 'USER_SETTING']));
 			await workbench.quickaccess.runCommand('workbench.action.terminal.focus');
-			await expect(
-				page.locator('.ash-terminal-tabs [role="tab"][aria-selected="true"]').locator('..'),
-			).toHaveAttribute('data-state', 'exited');
+			await expect(page.locator('.ash-terminal-tabs [role="tab"][aria-selected="true"]').locator('..')).toHaveAttribute('data-state', 'exited');
 			await workbench.quickaccess.runCommand('workbench.action.togglePanel');
 		}
 		await manage('Disable');
@@ -2716,9 +2418,7 @@ exports.activate = context => context.subscriptions.push(v.commands.register('ac
 		);
 		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 		await workbench.quickaccess.select('After configuration withdrawal');
-		await expect(page.locator('.ash-notification-host')).toContainText(
-			"Cannot resolve configuration 'fetchedTask.argument'",
-		);
+		await expect(page.locator('.ash-notification-host')).toContainText("Cannot resolve configuration 'fetchedTask.argument'");
 		expect((await readFile(join(directory, 'fetched-runs.jsonl'), 'utf8')).trim().split('\n')).toHaveLength(2);
 
 		await manage('Revoke permissions');
@@ -2826,23 +2526,16 @@ exports.activate = context => {
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 		await installation.getByRole('textbox').fill('fetched-custom-extension');
-		const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-			installation.getByRole('textbox').press('Enter'),
-		);
+		const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 		expect(installed.message).toContain('Installed acme/fetched-custom-smoke 1.0.0');
-		const manage = (button: string): Promise<void> =>
-			manageTaskExtension(application, workbench, 'Fetched custom smoke', button);
+		const manage = (button: string): Promise<void> => manageTaskExtension(application, workbench, 'Fetched custom smoke', button);
 		await manage('Enable');
 		await manage('Grant permissions');
 		for (const edits of [1, 2, 3]) {
 			await workbench.quickaccess.runCommand('acme.fetchedCustom.edit');
-			await expect(
-				page.locator('.ash-notification', { hasText: `CUSTOM_EXECUTION_STARTED_${edits}` }),
-			).toBeVisible();
+			await expect(page.locator('.ash-notification', { hasText: `CUSTOM_EXECUTION_STARTED_${edits}` })).toBeVisible();
 			await expect(page.locator('.ash-terminal-tabs [role="tab"]')).toHaveCount(edits === 1 ? 1 : 2);
-			await expect(
-				page.locator('.ash-terminal-tabs [role="tab"][aria-selected="true"]').locator('..'),
-			).toHaveAttribute('data-state', edits <= 2 ? 'exited' : 'running');
+			await expect(page.locator('.ash-terminal-tabs [role="tab"][aria-selected="true"]').locator('..')).toHaveAttribute('data-state', edits <= 2 ? 'exited' : 'running');
 		}
 		await workbench.quickaccess.runCommand('acme.fetchedCustom.stop');
 		await expect(page.locator('.ash-notification', { hasText: 'CUSTOM_EXECUTION_RELEASED_3' })).toBeVisible();
@@ -2915,12 +2608,9 @@ exports.activate = function(context) {
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 		await installation.getByRole('textbox').fill('task-events-extension');
-		const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-			installation.getByRole('textbox').press('Enter'),
-		);
+		const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 		expect(installed.message).toContain('Installed acme/task-events-smoke 1.0.0');
-		const manage = (button: string): Promise<void> =>
-			manageTaskExtension(application, workbench, 'Task events smoke', button);
+		const manage = (button: string): Promise<void> => manageTaskExtension(application, workbench, 'Task events smoke', button);
 		await manage('Enable');
 		await manage('Grant permissions');
 		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
@@ -2967,9 +2657,7 @@ test(
 		for (let index = 1; index <= 3; index++) {
 			await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 			await workbench.quickaccess.select('Limited task');
-			await expect
-				.poll(() => readFile(join(directory, 'task-runs.txt'), 'utf8'))
-				.toBe(String(Math.min(index, 2)));
+			await expect.poll(() => readFile(join(directory, 'task-runs.txt'), 'utf8')).toBe(String(Math.min(index, 2)));
 		}
 		await expect(workbench.terminal.tabs).toHaveCount(2);
 		await workbench.quickaccess.runCommand('workbench.action.tasks.terminate');
@@ -3062,24 +2750,16 @@ test(
 				await expect.poll(() => readFile(join(directory, `${policy}-runs`), 'utf8')).toBe(String(index));
 				await expect(workbench.terminal.activeInstance).toContainText(`POLICY_READY_${index}`);
 			}
-			const pids = await Promise.all(
-				[1, 2].map(async index => Number(await readFile(join(directory, `${policy}-pid-${index}`), 'utf8'))),
-			);
+			const pids = await Promise.all([1, 2].map(async index => Number(await readFile(join(directory, `${policy}-pid-${index}`), 'utf8'))));
 			await run();
 			if (policy === 'prompt') {
-				await expect(workbench.quickaccess.input).toHaveAttribute(
-					'aria-label',
-					`Task '${label}' is at its instance limit. Select an instance to terminate and restart.`,
-				);
+				await expect(workbench.quickaccess.input).toHaveAttribute('aria-label', `Task '${label}' is at its instance limit. Select an instance to terminate and restart.`);
 				await expect(workbench.quickaccess.input).toBeFocused();
 				await workbench.quickaccess.close();
 				expect(await readFile(join(directory, `${policy}-runs`), 'utf8')).toBe('2');
 				expect(pids.map(alive)).toEqual([true, true]);
 				await run();
-				await expect(workbench.quickaccess.input).toHaveAttribute(
-					'aria-label',
-					`Task '${label}' is at its instance limit. Select an instance to terminate and restart.`,
-				);
+				await expect(workbench.quickaccess.input).toHaveAttribute('aria-label', `Task '${label}' is at its instance limit. Select an instance to terminate and restart.`);
 				await workbench.quickaccess.input.fill('instance 2');
 				await expect(workbench.quickaccess.items).toHaveCount(1);
 				await workbench.quickaccess.input.press('Enter');
@@ -3111,40 +2791,37 @@ test(
 	},
 );
 
-test(
-	'superseding an extension task query delivers cancellation and retains the active provider',
-	{ tag: ['@electron-app-server'] },
-	async ({ workbench, application, testWorkspace }) => {
-		const directory = testWorkspace.directory;
-		const root = join(directory, 'cancellation-extension');
-		await mkdir(join(root, '.ash-plugin'), { recursive: true });
-		await writeFile(
-			join(root, '.ash-plugin', 'plugin.json'),
-			JSON.stringify({
-				schemaVersion: 1,
-				id: 'acme/task-cancellation',
-				version: '1.0.0',
-				displayName: 'Task cancellation smoke',
-				compatibility: { ash: '>=0.1.0' },
-				contributions: {
-					editorExtensions: [
-						{
-							id: 'tasks',
-							runtime: 'javascript',
-							api: 'ash',
-							entrypoint: 'extension.js',
-							runtimeApiVersion: 1,
-							activationEvents: [{ type: 'onCommand', id: 'acme.taskCancellation.arm' }],
-							capabilities: ['command', 'taskProvider'],
-						},
-					],
-				},
-				permissions: [{ type: 'directory', access: 'read' }],
-			}),
-		);
-		await writeEditorExtensionFixture(
-			root,
-			`
+test('superseding an extension task query delivers cancellation and retains the active provider', { tag: ['@electron-app-server'] }, async ({ workbench, application, testWorkspace }) => {
+	const directory = testWorkspace.directory;
+	const root = join(directory, 'cancellation-extension');
+	await mkdir(join(root, '.ash-plugin'), { recursive: true });
+	await writeFile(
+		join(root, '.ash-plugin', 'plugin.json'),
+		JSON.stringify({
+			schemaVersion: 1,
+			id: 'acme/task-cancellation',
+			version: '1.0.0',
+			displayName: 'Task cancellation smoke',
+			compatibility: { ash: '>=0.1.0' },
+			contributions: {
+				editorExtensions: [
+					{
+						id: 'tasks',
+						runtime: 'javascript',
+						api: 'ash',
+						entrypoint: 'extension.js',
+						runtimeApiVersion: 1,
+						activationEvents: [{ type: 'onCommand', id: 'acme.taskCancellation.arm' }],
+						capabilities: ['command', 'taskProvider'],
+					},
+				],
+			},
+			permissions: [{ type: 'directory', access: 'read' }],
+		}),
+	);
+	await writeEditorExtensionFixture(
+		root,
+		`
 const ash = require('@ash/sdk'); const { commands, tasks, window } = ash;
 let armed = false;
 let cancellations = 0;
@@ -3172,48 +2849,44 @@ exports.activate = function(context) {
 		}
 	}));
 }`,
-		);
-		// Commands whose titles equal their IDs stay out of the Command Palette.
-		const manifestPath = join(root, 'package.json');
-		const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-		manifest.contributes.commands = [
-			{ command: 'acme.taskCancellation.arm', title: 'Arm task query cancellation' },
-			{ command: 'acme.taskCancellation.probe', title: 'Inspect task query cancellation' },
-		];
-		await writeFile(manifestPath, JSON.stringify(manifest));
-		const page = workbench.page;
-		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
-		const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
-		await installation.getByRole('textbox').fill('cancellation-extension');
-		const installed = await workbench.dialogs.expectMessage(application, 'Information', () =>
-			installation.getByRole('textbox').press('Enter'),
-		);
-		expect(installed.message).toContain('Installed acme/task-cancellation 1.0.0');
-		const manage = (button: string): Promise<void> =>
-			manageTaskExtension(application, workbench, 'Task cancellation smoke', button);
-		await manage('Enable');
-		await manage('Grant permissions');
-		await workbench.quickaccess.runCommand('acme.taskCancellation.arm');
-		await expect(page.locator('.ash-notification', { hasText: 'Task cancellation armed' })).toBeVisible();
-		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
-		await expect(page.locator('.ash-notification', { hasText: 'Task query waiting' })).toBeVisible();
-		await writeFile(join(directory, '.vscode', 'tasks.json'), JSON.stringify({ version: '2.0.0', tasks: [] }));
-		await expect(workbench.quickaccess.items.filter({ hasText: 'Retained task provider' })).toBeVisible();
-		await workbench.quickaccess.close();
-		await expect
-			.poll(async () => {
-				await workbench.quickaccess.runCommand('acme.taskCancellation.probe');
-				return page.locator('.ash-notification', { hasText: 'Task cancellation count: 1' }).first().isVisible();
-			})
-			.toBe(true);
-		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
-		await workbench.quickaccess.select('Retained task provider');
-		await expect.poll(() => readFile(join(directory, 'task-runs.txt'), 'utf8')).toBe('1');
-		await manage('Disable');
-		await manage('Revoke permissions');
-		await manage('Uninstall');
-	},
-);
+	);
+	// Commands whose titles equal their IDs stay out of the Command Palette.
+	const manifestPath = join(root, 'package.json');
+	const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+	manifest.contributes.commands = [
+		{ command: 'acme.taskCancellation.arm', title: 'Arm task query cancellation' },
+		{ command: 'acme.taskCancellation.probe', title: 'Inspect task query cancellation' },
+	];
+	await writeFile(manifestPath, JSON.stringify(manifest));
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('ash.extensions.installLocal');
+	const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
+	await installation.getByRole('textbox').fill('cancellation-extension');
+	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
+	expect(installed.message).toContain('Installed acme/task-cancellation 1.0.0');
+	const manage = (button: string): Promise<void> => manageTaskExtension(application, workbench, 'Task cancellation smoke', button);
+	await manage('Enable');
+	await manage('Grant permissions');
+	await workbench.quickaccess.runCommand('acme.taskCancellation.arm');
+	await expect(page.locator('.ash-notification', { hasText: 'Task cancellation armed' })).toBeVisible();
+	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
+	await expect(page.locator('.ash-notification', { hasText: 'Task query waiting' })).toBeVisible();
+	await writeFile(join(directory, '.vscode', 'tasks.json'), JSON.stringify({ version: '2.0.0', tasks: [] }));
+	await expect(workbench.quickaccess.items.filter({ hasText: 'Retained task provider' })).toBeVisible();
+	await workbench.quickaccess.close();
+	await expect
+		.poll(async () => {
+			await workbench.quickaccess.runCommand('acme.taskCancellation.probe');
+			return page.locator('.ash-notification', { hasText: 'Task cancellation count: 1' }).first().isVisible();
+		})
+		.toBe(true);
+	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
+	await workbench.quickaccess.select('Retained task provider');
+	await expect.poll(() => readFile(join(directory, 'task-runs.txt'), 'utf8')).toBe('1');
+	await manage('Disable');
+	await manage('Revoke permissions');
+	await manage('Uninstall');
+});
 
 test(
 	'configured default globs select the active file before boolean defaults and retain unmatched fallback',
@@ -3221,16 +2894,10 @@ test(
 	async ({ workbench, testWorkspace }) => {
 		const directory = testWorkspace.directory;
 		const log = join(directory, 'task-default-globs.jsonl');
-		await writeFile(
-			join(directory, 'package.json'),
-			JSON.stringify({ name: 'task-default-globs', version: '1.0.0' }),
-		);
+		await writeFile(join(directory, 'package.json'), JSON.stringify({ name: 'task-default-globs', version: '1.0.0' }));
 		await unlink(join(directory, 'Cargo.toml'));
 		await writeFile(log, '');
-		await writeFile(
-			join(directory, 'task-default-globs.cjs'),
-			"require('node:fs').appendFileSync('task-default-globs.jsonl', JSON.stringify(process.argv[2]) + '\\n');\n",
-		);
+		await writeFile(join(directory, 'task-default-globs.cjs'), "require('node:fs').appendFileSync('task-default-globs.jsonl', JSON.stringify(process.argv[2]) + '\\n');\n");
 		await writeFile(join(directory, 'default.TS'), 'export const value = 1;\n');
 		await writeFile(join(directory, 'default.md'), 'Task defaults\n');
 		const configure = async (secondary: boolean | string, fallback = true): Promise<void> => {
@@ -3271,9 +2938,7 @@ test(
 		const explorer = workbench.page.locator('.ash-explorer');
 		await explorer.getByRole('treeitem', { name: 'default.TS', exact: true }).dblclick();
 		await expect(workbench.editors.groupAt(0).tabs.getByText('default.TS', { exact: true })).toBeVisible();
-		await workbench.editors
-			.groupAt(0)
-			.editor.waitForEditorContents(content => content.includes('export const value = 1'));
+		await workbench.editors.groupAt(0).editor.waitForEditorContents(content => content.includes('export const value = 1'));
 		await workbench.quickaccess.runCommand('workbench.action.tasks.build');
 		await assertRun('Build TypeScript');
 		await workbench.quickaccess.runCommand('workbench.action.tasks.test');
@@ -3310,16 +2975,10 @@ test(
 	async ({ workbench, testWorkspace, restartWorkbench }) => {
 		const directory = testWorkspace.directory;
 		const log = join(directory, 'task-groups.jsonl');
-		await writeFile(
-			join(directory, 'package.json'),
-			JSON.stringify({ name: 'task-group-commands', version: '1.0.0' }),
-		);
+		await writeFile(join(directory, 'package.json'), JSON.stringify({ name: 'task-group-commands', version: '1.0.0' }));
 		await unlink(join(directory, 'Cargo.toml'));
 		await writeFile(log, '');
-		await writeFile(
-			join(directory, 'group-task.cjs'),
-			"require('node:fs').appendFileSync('task-groups.jsonl', JSON.stringify(process.argv[2]) + '\\n');\n",
-		);
+		await writeFile(join(directory, 'group-task.cjs'), "require('node:fs').appendFileSync('task-groups.jsonl', JSON.stringify(process.argv[2]) + '\\n');\n");
 		const names = ['Build primary', 'Build secondary', 'Test primary', 'Test secondary', 'Clean default'];
 		const configure = async (defaults: readonly string[], included: readonly string[] = names): Promise<void> => {
 			await writeFile(
@@ -3348,9 +3007,7 @@ test(
 		await configure(['Build primary', 'Test primary', 'Clean default']);
 		await workbench.quickaccess.runCommand('workbench.action.tasks.build');
 		await expect.poll(executed).toEqual(['Build primary']);
-		await expect(
-			workbench.page.getByRole('dialog', { name: 'Select the build task to run', exact: true }),
-		).toHaveCount(0);
+		await expect(workbench.page.getByRole('dialog', { name: 'Select the build task to run', exact: true })).toHaveCount(0);
 		await workbench.quickaccess.runCommand('workbench.action.tasks.test');
 		await expect.poll(executed).toEqual(['Build primary', 'Test primary']);
 
@@ -3375,9 +3032,7 @@ test(
 
 		await configure(['Clean default'], ['Clean default']);
 		await workbench.quickaccess.runCommand('workbench.action.tasks.build');
-		await expect(
-			workbench.page.locator('.ash-notification', { hasText: 'No build task is available.' }),
-		).toBeVisible();
+		await expect(workbench.page.locator('.ash-notification', { hasText: 'No build task is available.' })).toBeVisible();
 		expect(await executed()).toEqual(['Build primary', 'Test primary', 'Build secondary', 'Test secondary']);
 
 		await workbench.quickaccess.runCommand('workbench.action.configureLocale');
@@ -3424,64 +3079,58 @@ const developerEnvironmentTest = test.extend({
 	},
 });
 
-developerEnvironmentTest(
-	'developer environment reaches process and shell tasks with variable resolution and child overrides',
-	async ({ workbench, testWorkspace }) => {
-		const directory = testWorkspace.directory;
-		await writeFile(
-			join(directory, 'developer-env.cjs'),
-			`require('node:fs').writeFileSync(process.argv[2] + '.json', JSON.stringify({ resolved: process.argv[3], credential: process.env.OPENAI_API_KEY, removed: process.env.ASH_DEVELOPER_REMOVED === undefined, privateExcluded: process.env.CODEX_EXEC_SERVER_NOISE_AUTH_TOKEN === undefined }));`,
-		);
-		await writeFile(
-			join(directory, '.vscode', 'tasks.json'),
-			JSON.stringify({
-				version: '2.0.0',
-				tasks: ['process', 'shell'].map(type => ({
-					label: 'Developer ' + type,
-					type,
-					command: process.execPath,
-					args: ['developer-env.cjs', type, '${env:OPENAI_API_KEY}'],
-					options: {
-						env: {
-							OPENAI_API_KEY: 'child credential',
-							ASH_DEVELOPER_REMOVED: null,
-							CODEX_EXEC_SERVER_NOISE_AUTH_TOKEN: 'blocked child control',
-						},
+developerEnvironmentTest('developer environment reaches process and shell tasks with variable resolution and child overrides', async ({ workbench, testWorkspace }) => {
+	const directory = testWorkspace.directory;
+	await writeFile(
+		join(directory, 'developer-env.cjs'),
+		`require('node:fs').writeFileSync(process.argv[2] + '.json', JSON.stringify({ resolved: process.argv[3], credential: process.env.OPENAI_API_KEY, removed: process.env.ASH_DEVELOPER_REMOVED === undefined, privateExcluded: process.env.CODEX_EXEC_SERVER_NOISE_AUTH_TOKEN === undefined }));`,
+	);
+	await writeFile(
+		join(directory, '.vscode', 'tasks.json'),
+		JSON.stringify({
+			version: '2.0.0',
+			tasks: ['process', 'shell'].map(type => ({
+				label: 'Developer ' + type,
+				type,
+				command: process.execPath,
+				args: ['developer-env.cjs', type, '${env:OPENAI_API_KEY}'],
+				options: {
+					env: {
+						OPENAI_API_KEY: 'child credential',
+						ASH_DEVELOPER_REMOVED: null,
+						CODEX_EXEC_SERVER_NOISE_AUTH_TOKEN: 'blocked child control',
 					},
-				})),
-			}),
-		);
-		for (const type of ['process', 'shell']) {
-			await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
-			await workbench.quickaccess.select('Developer ' + type);
-			await expect
-				.poll(async () =>
-					JSON.parse(
-						await readFile(join(directory, type + '.json'), 'utf8').catch(error => {
-							if (error.code === 'ENOENT') return 'null';
-							throw error;
-						}),
-					),
-				)
-				.toEqual({
-					resolved: 'ash-synthetic-developer-key',
-					credential: 'child credential',
-					removed: true,
-					privateExcluded: true,
-				});
-		}
-	},
-);
+				},
+			})),
+		}),
+	);
+	for (const type of ['process', 'shell']) {
+		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
+		await workbench.quickaccess.select('Developer ' + type);
+		await expect
+			.poll(async () =>
+				JSON.parse(
+					await readFile(join(directory, type + '.json'), 'utf8').catch(error => {
+						if (error.code === 'ENOENT') return 'null';
+						throw error;
+					}),
+				),
+			)
+			.toEqual({
+				resolved: 'ash-synthetic-developer-key',
+				credential: 'child credential',
+				removed: true,
+				privateExcluded: true,
+			});
+	}
+});
 
 test(
 	'task presentation groups keep live processes in adjacent panes and preserve keyboard navigation',
 	{ tag: ['@browser-app-server', '@electron-app-server'] },
 	async ({ workbench, testWorkspace }) => {
 		const directory = testWorkspace.directory;
-		await writeFile(
-			join(directory, 'group-watch.cjs'),
-			'console.log(process.argv[2]); setInterval(() => {}, 1000);\n',
-		);
+		await writeFile(join(directory, 'group-watch.cjs'), 'console.log(process.argv[2]); setInterval(() => {}, 1000);\n');
 		await writeFile(
 			join(directory, '.vscode', 'tasks.json'),
 			JSON.stringify({
@@ -3508,9 +3157,7 @@ test(
 		const second = await panes.nth(1).boundingBox();
 		expect(first!.width).toBeGreaterThan(120);
 		expect(second!.x).toBeGreaterThanOrEqual(first!.x + first!.width);
-		await test
-			.info()
-			.attach('tasks-split-group', { body: await workbench.page.screenshot(), contentType: 'image/png' });
+		await test.info().attach('tasks-split-group', { body: await workbench.page.screenshot(), contentType: 'image/png' });
 		await workbench.quickaccess.runCommand('workbench.action.terminal.focusPreviousPane');
 		await expect(panes.nth(0).locator('.xterm-helper-textarea')).toBeFocused();
 		await workbench.quickaccess.runCommand('workbench.action.terminal.focusNextPane');
@@ -3532,9 +3179,7 @@ for (const locale of ['en', 'zh-CN']) {
 		async ({ workbench, testWorkspace, restartWorkbench, reloadWorkbench }) => {
 			if (locale === 'zh-CN') {
 				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-				const language = workbench.page
-					.getByRole('dialog', { name: 'Select Display Language' })
-					.getByRole('combobox');
+				const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 				await language.fill('简体中文');
 				await language.press('Enter');
 				({ workbench } = await restartWorkbench());
@@ -3542,9 +3187,7 @@ for (const locale of ['en', 'zh-CN']) {
 			const config = join(testWorkspace.directory, '.vscode', 'tasks.json');
 			const document = {
 				version: '2.0.0',
-				tasks: [
-					{ label: 'Automatic build', command: 'node smoke-task.cjs', runOptions: { runOn: 'folderOpen' } },
-				],
+				tasks: [{ label: 'Automatic build', command: 'node smoke-task.cjs', runOptions: { runOn: 'folderOpen' } }],
 			};
 			await writeFile(config, JSON.stringify(document));
 			await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
@@ -3554,10 +3197,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await workbench.quickaccess.runCommand('workbench.action.tasks.manageAutomaticRunning');
 			await workbench.quickaccess.select(locale === 'en' ? 'Allow Automatic Tasks' : '允许自动任务');
 			await expect.poll(() => readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('1');
-			await writeFile(
-				config,
-				JSON.stringify({ ...document, tasks: [{ ...document.tasks[0], detail: 'refreshed metadata' }] }),
-			);
+			await writeFile(config, JSON.stringify({ ...document, tasks: [{ ...document.tasks[0], detail: 'refreshed metadata' }] }));
 			await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 			await expect(workbench.quickaccess.items.filter({ hasText: 'Automatic build' })).toBeVisible();
 			await workbench.page.keyboard.press('Escape');
@@ -3566,11 +3206,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect.poll(() => readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('2');
 			await workbench.quickaccess.runCommand('workbench.action.tasks.manageAutomaticRunning');
 			await workbench.quickaccess.select(locale === 'en' ? 'Disallow Automatic Tasks' : '禁止自动任务');
-			await expect(
-				workbench.page
-					.locator('.ash-notification-host')
-					.getByText(locale === 'en' ? 'Automatic tasks disabled.' : '自动任务已禁用。', { exact: true }),
-			).toBeVisible();
+			await expect(workbench.page.locator('.ash-notification-host').getByText(locale === 'en' ? 'Automatic tasks disabled.' : '自动任务已禁用。', { exact: true })).toBeVisible();
 			({ workbench } = await reloadWorkbench());
 			await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 			await expect(workbench.quickaccess.items.filter({ hasText: 'Automatic build' })).toBeVisible();
@@ -3631,9 +3267,7 @@ test(
 				)
 				.toEqual(['', '$HOME $(touch injected)', 'value $HOME', 'two words', "one'two"]);
 			await openTasksView(application, workbench);
-			await expect(workbench.page.locator('.ash-task-run')).toContainText(
-				`Profile ${shell} — Failed (exit code 7)`,
-			);
+			await expect(workbench.page.locator('.ash-task-run')).toContainText(`Profile ${shell} — Failed (exit code 7)`);
 		}
 		expect(
 			await readFile(join(directory, 'injected'), 'utf8').then(
@@ -3649,31 +3283,17 @@ test(
 
 /** Uses the current Panel destination, including its system-menu overflow on Desktop. */
 async function openTasksView(application: PlaywrightApplication, workbench: Workbench, label = 'Tasks'): Promise<void> {
-	if (await workbench.page.locator('[data-part="auxiliarybar"]').isVisible())
-		await workbench.quickaccess.runCommand('workbench.action.closeAuxiliaryBar');
+	if (await workbench.page.locator('[data-part="auxiliarybar"]').isVisible()) await workbench.quickaccess.runCommand('workbench.action.closeAuxiliaryBar');
 	const panel = workbench.page.locator('[data-part="panel"]');
 	if (!(await panel.isVisible())) await workbench.quickaccess.runCommand('workbench.action.focusPanel');
 	await workbench.waitForUiIdle();
 	const tab = panel.getByRole('tab', { name: label, exact: true });
 	if (await tab.isVisible()) await tab.click();
-	else
-		await workbench.menus.select(
-			application,
-			() =>
-				panel
-					.getByRole('tab', { name: label === '任务' ? '其他视图' : 'Additional views', exact: true })
-					.click(),
-			[label],
-		);
+	else await workbench.menus.select(application, () => panel.getByRole('tab', { name: label === '任务' ? '其他视图' : 'Additional views', exact: true }).click(), [label]);
 }
 
 /** Local packages are managed in their retained details editor. Only permission review and removal open dialogs. */
-async function manageTaskExtension(
-	application: PlaywrightApplication,
-	workbench: Workbench,
-	label: string,
-	action: string,
-): Promise<void> {
+async function manageTaskExtension(application: PlaywrightApplication, workbench: Workbench, label: string, action: string): Promise<void> {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
 	await page
@@ -3681,25 +3301,15 @@ async function manageTaskExtension(
 		.getByRole('option')
 		.filter({ has: page.getByText(label, { exact: true }) })
 		.click();
-	const editor = page
-		.locator('.ash-extension-editor')
-		.filter({ has: page.getByRole('heading', { name: label, exact: true }) });
+	const editor = page.locator('.ash-extension-editor').filter({ has: page.getByRole('heading', { name: label, exact: true }) });
 	const click = () => editor.getByRole('button', { name: action, exact: true }).click();
 	if (action === 'Enable' || action === 'Disable') {
 		await click();
-		await expect(
-			editor.getByRole('button', { name: action === 'Enable' ? 'Disable' : 'Enable', exact: true }),
-		).toBeEnabled();
+		await expect(editor.getByRole('button', { name: action === 'Enable' ? 'Disable' : 'Enable', exact: true })).toBeEnabled();
 	} else {
-		await workbench.dialogs.confirm(
-			application,
-			action === 'Uninstall' ? 'Uninstall extension' : label,
-			action,
-			click,
-		);
+		await workbench.dialogs.confirm(application, action === 'Uninstall' ? 'Uninstall extension' : label, action, click);
 		if (action === 'Uninstall') await expect(editor.getByRole('status')).toHaveText('Uninstalled');
-		else if (action === 'Grant permissions')
-			await expect(editor.getByRole('button', { name: 'Revoke permissions', exact: true })).toBeEnabled();
+		else if (action === 'Grant permissions') await expect(editor.getByRole('button', { name: 'Revoke permissions', exact: true })).toBeEnabled();
 		else await expect(editor.getByRole('button', { name: 'Grant permissions', exact: true })).toBeVisible();
 	}
 }

@@ -60,9 +60,7 @@ export class DiffEditorViewModel extends Disposable {
 				this.movedTextToCompare.set(
 					range
 						? model.diff.moves.find(
-								move =>
-									move.lineRangeMapping.original.intersect(range.original)?.isEmpty === false &&
-									move.lineRangeMapping.modified.intersect(range.modified)?.isEmpty === false,
+								move => move.lineRangeMapping.original.intersect(range.original)?.isEmpty === false && move.lineRangeMapping.modified.intersect(range.modified)?.isEmpty === false,
 							)
 						: undefined,
 				);
@@ -72,14 +70,7 @@ export class DiffEditorViewModel extends Disposable {
 		this.diff = derived(reader => {
 			const diff = result.read(reader);
 			const move = this.movedTextToCompare.read(reader);
-			return diff && move
-				? toLineDiff(
-						{ changes: move.changes, moves: [move] },
-						model.original.lineCount,
-						model.modified.lineCount,
-						move.lineRangeMapping,
-					)
-				: diff;
+			return diff && move ? toLineDiff({ changes: move.changes, moves: [move] }, model.original.lineCount, model.modified.lineCount, move.lineRangeMapping) : diff;
 		});
 	}
 
@@ -89,8 +80,6 @@ export class DiffEditorViewModel extends Disposable {
 		}
 		const original = this.originalAnchor.getRange(0);
 		const modified = this.modifiedAnchor.getRange(0);
-		return original && modified
-			? new LineRangeMapping(LineRange.fromRangeInclusive(original), LineRange.fromRangeInclusive(modified))
-			: undefined;
+		return original && modified ? new LineRangeMapping(LineRange.fromRangeInclusive(original), LineRange.fromRangeInclusive(modified)) : undefined;
 	}
 }

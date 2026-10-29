@@ -1,10 +1,6 @@
 import type { SelectBox } from 'ash:editor/base/browser/ui/selectbox/selectbox.js';
 import { localize } from 'ash:editor/nls.js';
-import {
-	type DocumentEditorContributionContext,
-	type DocumentFormattingContribution,
-	type DocumentFormattingState,
-} from '../../documentContributions.js';
+import { type DocumentEditorContributionContext, type DocumentFormattingContribution, type DocumentFormattingState } from '../../documentContributions.js';
 import { DocumentFormattingControls } from '../../widget/documentFormattingControls.js';
 import type { InputBox } from 'ash:editor/base/browser/ui/inputbox/inputbox.js';
 import type { Button } from 'ash:editor/base/browser/ui/button/button.js';
@@ -51,39 +47,27 @@ export class ParagraphStyleContribution extends DocumentFormattingControls imple
 		this.name = this.addInput(localize('document.style.name', 'Style name'));
 		this.name.inputElement.maxLength = 80;
 		this.createStyle = this.addButton(localize('document.style.create', 'Create style'), () =>
-			context.runDocumentCommand((_schema, document, blockId) =>
-				createDefineParagraphStyleCommand(document, blockId, this.name.value),
-			),
+			context.runDocumentCommand((_schema, document, blockId) => createDefineParagraphStyleCommand(document, blockId, this.name.value)),
 		);
 		this.updateStyle = this.addButton(localize('document.style.update', 'Update style from paragraph'), () => {
 			const id = this.currentStyleId;
 			if (!id) return;
 			context.runDocumentCommand((_schema, document, blockId) => {
-				const name =
-					this.name.value.trim() ||
-					getDocumentParagraphStyles(document).find(style => style.id === id)?.name ||
-					'';
+				const name = this.name.value.trim() || getDocumentParagraphStyles(document).find(style => style.id === id)?.name || '';
 				return createDefineParagraphStyleCommand(document, blockId, name, id);
 			});
 		});
 		this.deleteStyle = this.addButton(localize('document.style.delete', 'Delete style'), () => {
 			const id = this.currentStyleId;
-			if (id)
-				context.runDocumentCommand((_schema, document, blockId) =>
-					createDeleteParagraphStyleCommand(document, blockId, id),
-				);
+			if (id) context.runDocumentCommand((_schema, document, blockId) => createDeleteParagraphStyleCommand(document, blockId, id));
 		});
 		this._register(
 			this.name.onDidChange(() => {
 				this.createStyle.enabled = this.name.enabled && this.name.value.trim().length > 0;
 			}),
 		);
-		this.clearOverrides = this.addButton(
-			localize('document.style.clearOverrides', 'Reset paragraph overrides'),
-			() =>
-				context.runDocumentCommand((_schema, document, blockId, selection) =>
-					createClearParagraphOverridesCommand(document, blockId, selection),
-				),
+		this.clearOverrides = this.addButton(localize('document.style.clearOverrides', 'Reset paragraph overrides'), () =>
+			context.runDocumentCommand((_schema, document, blockId, selection) => createClearParagraphOverridesCommand(document, blockId, selection)),
 		);
 	}
 
@@ -104,15 +88,9 @@ export class ParagraphStyleContribution extends DocumentFormattingControls imple
 					: []),
 			]);
 		}
-		this.currentStyleId =
-			paragraphs.length && paragraphs.every(node => node.attrs.styleId === paragraphs[0]!.attrs.styleId)
-				? (paragraphs[0]!.attrs.styleId as string | undefined)
-				: undefined;
+		this.currentStyleId = paragraphs.length && paragraphs.every(node => node.attrs.styleId === paragraphs[0]!.attrs.styleId) ? (paragraphs[0]!.attrs.styleId as string | undefined) : undefined;
 		this.name.enabled = this.clearOverrides.enabled = !state.readOnly && paragraphs.length > 0;
-		this.createStyle.enabled =
-			this.name.enabled &&
-			this.name.value.trim().length > 0 &&
-			(state.document ? getDocumentParagraphStyles(state.document).length < 100 : false);
+		this.createStyle.enabled = this.name.enabled && this.name.value.trim().length > 0 && (state.document ? getDocumentParagraphStyles(state.document).length < 100 : false);
 		this.updateStyle.enabled = this.deleteStyle.enabled = !state.readOnly && this.currentStyleId !== undefined;
 		const levels = paragraphs.map(node => (node.type === 'heading' ? Number(node.attrs.level) : 0));
 		this.setSelectValue(

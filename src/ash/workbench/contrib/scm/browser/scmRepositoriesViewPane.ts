@@ -62,9 +62,7 @@ export class SCMRepositoriesViewPane extends ViewPane {
 		);
 		this.list.element.classList.add('ash-scm-repositories-list');
 		const updateHelp = (): void => {
-			const hint = configurationService.getValue<boolean>(AccessibilityVerbositySettingId.ScmRepositories)
-				? localize('scm.repositories.helpHint', 'Press Alt+F1 for accessibility help.')
-				: '';
+			const hint = configurationService.getValue<boolean>(AccessibilityVerbositySettingId.ScmRepositories) ? localize('scm.repositories.helpHint', 'Press Alt+F1 for accessibility help.') : '';
 			this.list.element.setAttribute('aria-description', hint);
 		};
 		updateHelp();
@@ -138,9 +136,7 @@ export class SCMRepositoriesViewPane extends ViewPane {
 	}
 
 	private updateSelection(): void {
-		const index = this.list.items.findIndex(
-			repository => repository.id === this.scmViewService.activeRepository?.id,
-		);
+		const index = this.list.items.findIndex(repository => repository.id === this.scmViewService.activeRepository?.id);
 		this.list.setSelection(index < 0 ? [] : [index]);
 	}
 
@@ -159,34 +155,26 @@ export class SCMRepositoriesViewPane extends ViewPane {
 		const badge = resources.add(
 			new CountBadge(
 				domNode,
-				{ count: 0, titleFormat: localize('scm.repositories.changes', '{0} changed files') },
+				{
+					count: 0,
+					titleFormat: localize('scm.repositories.changes', '{0} changed files'),
+				},
 				defaultCountBadgeStyles,
 			),
 		);
 		domNode.append(name, branch, badge.domNode, path);
 		this.rows.set(repository.id, { domNode, name, branch, path, badge });
 		resources.add(toDisposable(() => this.rows.delete(repository.id)));
-		resources.add(
-			this.hoverService.setupDelayedHover(domNode, () => ({ content: this.repositoryDescription(repository) })),
-		);
+		resources.add(this.hoverService.setupDelayedHover(domNode, () => ({ content: this.repositoryDescription(repository) })));
 		this.updateRepository(repository);
 		return domNode;
 	}
 
 	private repositoryDescription(repository: ISCMRepository): string {
-		const count = new Set(
-			repository.provider.groups.flatMap(group =>
-				group.resources.map(resource => extUriBiasedIgnorePathCase.getComparisonKey(resource.sourceUri)),
-			),
-		).size;
+		const count = new Set(repository.provider.groups.flatMap(group => group.resources.map(resource => extUriBiasedIgnorePathCase.getComparisonKey(resource.sourceUri)))).size;
 		return (
-			localize(
-				'scm.repositories.description',
-				'{0}, {1}, {2} changed files',
-				repository.provider.label,
-				repository.provider.activeRepositoryName ?? '',
-				count,
-			) + (repository.provider.rootUri ? `\n${repository.provider.rootUri.fsPath}` : '')
+			localize('scm.repositories.description', '{0}, {1}, {2} changed files', repository.provider.label, repository.provider.activeRepositoryName ?? '', count) +
+			(repository.provider.rootUri ? `\n${repository.provider.rootUri.fsPath}` : '')
 		);
 	}
 
@@ -196,21 +184,14 @@ export class SCMRepositoriesViewPane extends ViewPane {
 		row.name.textContent = repository.provider.label;
 		const branch = repository.provider.activeRepositoryName ?? '';
 		row.branch.textContent = /^[\da-f]{40,64}$/u.test(branch) ? branch.slice(0, 8) : branch;
-		const duplicates = [...this.scmService.repositories].filter(
-			candidate => candidate.provider.label === repository.provider.label && candidate.provider.rootUri,
-		);
+		const duplicates = [...this.scmService.repositories].filter(candidate => candidate.provider.label === repository.provider.label && candidate.provider.rootUri);
 		let path = '';
 		if (duplicates.length > 1 && repository.provider.rootUri) {
 			const segments = repository.provider.rootUri.fsPath.split(/[\\/]/u);
 			let length = 1;
 			while (
 				length < segments.length &&
-				duplicates.some(
-					candidate =>
-						candidate.id !== repository.id &&
-						candidate.provider.rootUri!.fsPath.split(/[\\/]/u).slice(-length).join('/') ===
-							segments.slice(-length).join('/'),
-				)
+				duplicates.some(candidate => candidate.id !== repository.id && candidate.provider.rootUri!.fsPath.split(/[\\/]/u).slice(-length).join('/') === segments.slice(-length).join('/'))
 			)
 				length++;
 			path = segments.slice(-length).join('/');
@@ -219,16 +200,8 @@ export class SCMRepositoriesViewPane extends ViewPane {
 		row.domNode.classList.toggle('has-path', path.length > 0);
 		row.domNode.classList.toggle('checked', repository.id === this.scmViewService.activeRepository?.id);
 		row.domNode.classList.toggle('focused', repository.id === this.list.activeItem?.id);
-		row.badge.setCount(
-			new Set(
-				repository.provider.groups.flatMap(group =>
-					group.resources.map(resource => extUriBiasedIgnorePathCase.getComparisonKey(resource.sourceUri)),
-				),
-			).size,
-		);
-		this.list
-			.row(this.list.items.indexOf(repository))
-			?.setAttribute('aria-label', this.repositoryDescription(repository));
+		row.badge.setCount(new Set(repository.provider.groups.flatMap(group => group.resources.map(resource => extUriBiasedIgnorePathCase.getComparisonKey(resource.sourceUri)))).size);
+		this.list.row(this.list.items.indexOf(repository))?.setAttribute('aria-label', this.repositoryDescription(repository));
 	}
 
 	private async selectRepository(repository: ISCMRepository): Promise<void> {
@@ -236,11 +209,7 @@ export class SCMRepositoriesViewPane extends ViewPane {
 			this.pendingRepository = repository;
 			return;
 		}
-		if (
-			repository.id === this.scmViewService.activeRepository?.id ||
-			this.scmService.getRepository(repository.id) !== repository
-		)
-			return;
+		if (repository.id === this.scmViewService.activeRepository?.id || this.scmService.getRepository(repository.id) !== repository) return;
 		this.isSwitching = true;
 		this.list.element.setAttribute('aria-busy', 'true');
 		this.statusDomNode.textContent = '';
@@ -251,11 +220,7 @@ export class SCMRepositoriesViewPane extends ViewPane {
 			status(localize('scm.repositories.selected', 'Selected repository {0}', repository.provider.label));
 		} catch (error) {
 			if (!this.isDisposed)
-				this.statusDomNode.textContent = localize(
-					'scm.repositories.selectFailed',
-					'Could not select repository: {0}',
-					error instanceof Error ? error.message : String(error),
-				);
+				this.statusDomNode.textContent = localize('scm.repositories.selectFailed', 'Could not select repository: {0}', error instanceof Error ? error.message : String(error));
 		} finally {
 			this.isSwitching = false;
 			if (!this.isDisposed) {

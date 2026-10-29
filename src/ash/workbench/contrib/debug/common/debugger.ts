@@ -11,10 +11,7 @@ export class Debugger {
 		@IExtensionService private readonly extensions: IExtensionService,
 	) {}
 
-	public async substituteVariables(
-		folder: IWorkspaceFolder | undefined,
-		config: IDebugConfiguration,
-	): Promise<IDebugConfiguration | undefined> {
+	public async substituteVariables(folder: IWorkspaceFolder | undefined, config: IDebugConfiguration): Promise<IDebugConfiguration | undefined> {
 		// Command variables receive launch.json fields rather than the Workbench's session identity.
 		const execution = await this.resolver.resolveWithInteractionReplace(
 			folder,
@@ -40,21 +37,13 @@ export class Debugger {
 			debugAdapter &&
 			debugAdapter.connection === undefined &&
 			debugAdapter.inline === undefined &&
-			(!debugAdapter.program.trim() ||
-				[debugAdapter.program, ...debugAdapter.arguments].some(value => value.includes('\0')))
+			(!debugAdapter.program.trim() || [debugAdapter.program, ...debugAdapter.arguments].some(value => value.includes('\0')))
 		) {
-			throw new Error(
-				localize(
-					'debug.invalidResolvedAdapter',
-					'The resolved debug adapter executable is empty or contains an invalid process argument.',
-				),
-			);
+			throw new Error(localize('debug.invalidResolvedAdapter', 'The resolved debug adapter executable is empty or contains an invalid process argument.'));
 		}
 		return {
 			...config,
-			adapter: debugAdapter?.connection
-				? normalizeDebugAdapterDescriptor(debugAdapter, config.name)
-				: debugAdapter,
+			adapter: debugAdapter?.connection ? normalizeDebugAdapterDescriptor(debugAdapter, config.name) : debugAdapter,
 			arguments: args,
 			preLaunchTask,
 			postDebugTask,

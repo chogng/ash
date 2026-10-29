@@ -89,9 +89,7 @@ class TestStorageService implements IStorageService {
 		this.entries.delete(`${scope}:${key}`);
 	}
 	keys(scope: StorageScope, target: StorageTarget): readonly string[] {
-		return [...this.entries]
-			.filter(([key, entry]) => key.startsWith(`${scope}:`) && entry.target === target)
-			.map(([key]) => key.slice(scope.length + 1));
+		return [...this.entries].filter(([key, entry]) => key.startsWith(`${scope}:`) && entry.target === target).map(([key]) => key.slice(scope.length + 1));
 	}
 	isNew(): boolean {
 		return this.entries.size === 0;

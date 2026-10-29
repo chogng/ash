@@ -37,24 +37,9 @@ export const TEAMS_NAVIGATION_CONTAINER_ID = 'sessions.navigation.teams';
 export function registerSessionsNavigation(listRoles: () => Promise<readonly TeamRoleOption[]>): IDisposable {
 	const registrations = new DisposableStore();
 	for (const [id, title, key, ctorDescriptor] of [
-		[
-			SESSIONS_NAVIGATION_CONTAINER_ID,
-			localize('sessions.activity.chat', 'Chat'),
-			'sessions.activity.chat',
-			new SyncDescriptor(SessionsNavigationView, ['chat']),
-		],
-		[
-			CODE_NAVIGATION_CONTAINER_ID,
-			localize({ bundle: 'ash', key: 'sessions.mode.code' }, 'Code'),
-			'sessions.mode.code',
-			new SyncDescriptor(SessionsNavigationView, ['code']),
-		],
-		[
-			TEAMS_NAVIGATION_CONTAINER_ID,
-			'Agent Teams',
-			'sessions.activity.teams',
-			new SyncDescriptor(TeamsNavigationView, [listRoles]),
-		],
+		[SESSIONS_NAVIGATION_CONTAINER_ID, localize('sessions.activity.chat', 'Chat'), 'sessions.activity.chat', new SyncDescriptor(SessionsNavigationView, ['chat'])],
+		[CODE_NAVIGATION_CONTAINER_ID, localize({ bundle: 'ash', key: 'sessions.mode.code' }, 'Code'), 'sessions.mode.code', new SyncDescriptor(SessionsNavigationView, ['code'])],
+		[TEAMS_NAVIGATION_CONTAINER_ID, 'Agent Teams', 'sessions.activity.teams', new SyncDescriptor(TeamsNavigationView, [listRoles])],
 	] as const) {
 		registrations.add(
 			SessionsViewRegistry.registerViewContainer({
@@ -101,13 +86,7 @@ class SessionsNavigationView extends ViewPane {
 		};
 		this._register(management.onDidChange(updateLoading));
 		updateLoading();
-		const lists = SessionsList.instantiateObservable(
-			instantiation,
-			this._store,
-			h(this.contentElement.ownerDocument, 'div'),
-			options.title,
-			mode,
-		);
+		const lists = SessionsList.instantiateObservable(instantiation, this._store, h(this.contentElement.ownerDocument, 'div'), options.title, mode);
 		this.list = lists.get();
 		this.contentElement.append(this.list.element);
 		this._register(
@@ -206,10 +185,7 @@ export class SidebarPart extends WorkbenchSidebarPart {
 				viewDescriptorService: descriptors,
 				contextKeyService: contextKeys,
 				compositeBarVisible: false,
-				openComposite: (id, preserveFocus) =>
-					instantiationService.invokeFunction(accessor =>
-						accessor.get(IViewsService).openViewContainer(id, !preserveFocus),
-					),
+				openComposite: (id, preserveFocus) => instantiationService.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
 			},
 			themeService,
 			storage,
@@ -257,8 +233,7 @@ export class SidebarPart extends WorkbenchSidebarPart {
 			label.textContent = state === 'downloading' ? message : '';
 			restart.hidden = state !== 'ready' && state !== 'installing';
 			restart.enabled = state === 'ready';
-			restart.label =
-				state === 'installing' ? localize('sessions.update.restarting', 'Restarting...') : restartLabel;
+			restart.label = state === 'installing' ? localize('sessions.update.restarting', 'Restarting...') : restartLabel;
 		};
 		this._register(
 			restart.onDidClick(async () => {
@@ -268,8 +243,7 @@ export class SidebarPart extends WorkbenchSidebarPart {
 				try {
 					await updateService.installUpdate();
 				} catch {
-					if (!this.isDisposed)
-						notifications.error(localize('update.installFailed', 'Could not install the update.'));
+					if (!this.isDisposed) notifications.error(localize('update.installFailed', 'Could not install the update.'));
 				} finally {
 					if (!this.isDisposed) {
 						updateStatus();

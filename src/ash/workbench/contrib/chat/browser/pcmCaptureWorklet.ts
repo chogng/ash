@@ -5,11 +5,7 @@ export type IPcmCapturePort = Pick<MessagePort, 'postMessage' | 'onmessage'>;
 export type IPcmCaptureTimers = Pick<Window & typeof globalThis, 'setTimeout' | 'clearTimeout'>;
 
 /** The caller owns the port and clears onmessage when disconnecting its capture node. */
-export function wirePcmCapturePort(
-	port: IPcmCapturePort,
-	timers: IPcmCaptureTimers,
-	onChunk: (samples: Float32Array) => void,
-): { flush(): Promise<void> } {
+export function wirePcmCapturePort(port: IPcmCapturePort, timers: IPcmCaptureTimers, onChunk: (samples: Float32Array) => void): { flush(): Promise<void> } {
 	let pending: Promise<void> | undefined;
 	let acknowledge: (() => void) | undefined;
 	port.onmessage = event => {
@@ -19,14 +15,8 @@ export function wirePcmCapturePort(
 			return;
 		}
 		// Treat worklet messages as a boundary, including malformed or detached buffers.
-		const samples =
-			data instanceof Float32Array
-				? data
-				: data instanceof ArrayBuffer && data.byteLength % 4 === 0
-					? new Float32Array(data)
-					: undefined;
-		if (samples && samples.length > 0 && samples.length <= 16000 && samples.every(Number.isFinite))
-			onChunk(samples);
+		const samples = data instanceof Float32Array ? data : data instanceof ArrayBuffer && data.byteLength % 4 === 0 ? new Float32Array(data) : undefined;
+		if (samples && samples.length > 0 && samples.length <= 16000 && samples.every(Number.isFinite)) onChunk(samples);
 	};
 	return {
 		flush: () => {
@@ -55,14 +45,8 @@ export interface IPcmCaptureNode {
 }
 
 /** Captures audio off the UI thread; the main-thread accumulator owns chunk sizing and the final tail. */
-export async function createPcmCaptureNode(
-	window: Window & typeof globalThis,
-	context: AudioContext,
-	chunkSize: number,
-	onChunk: (samples: Float32Array) => void,
-): Promise<IPcmCaptureNode> {
-	if (!Number.isInteger(chunkSize) || chunkSize < 128 || chunkSize > 16000)
-		throw new RangeError('Invalid PCM capture chunk size');
+export async function createPcmCaptureNode(window: Window & typeof globalThis, context: AudioContext, chunkSize: number, onChunk: (samples: Float32Array) => void): Promise<IPcmCaptureNode> {
+	if (!Number.isInteger(chunkSize) || chunkSize < 128 || chunkSize > 16000) throw new RangeError('Invalid PCM capture chunk size');
 	const source = `class AshPcmTap extends AudioWorkletProcessor {
         constructor() {
             super();

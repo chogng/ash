@@ -40,8 +40,7 @@ export class Link extends Disposable {
 		this.anchorDomNode = container.ownerDocument.createElement('a');
 		this.anchorDomNode.className = 'ash-link';
 		this.anchorDomNode.setAttribute('role', 'button');
-		if (options.textLinkForeground)
-			this.anchorDomNode.style.setProperty('--ash-link-foreground', options.textLinkForeground);
+		if (options.textLinkForeground) this.anchorDomNode.style.setProperty('--ash-link-foreground', options.textLinkForeground);
 		container.append(this.anchorDomNode);
 		this._register(toDisposable(() => this.anchorDomNode.remove()));
 		this._register(addDisposableListener(this.anchorDomNode, 'click', event => this.activate(event)));
@@ -94,9 +93,6 @@ export class Link extends Disposable {
 		stopEvent(event);
 		if (!this.isEnabled) return;
 		if (this.options.opener) this.options.opener(this.descriptor.href);
-		else
-			void this.openerService
-				.open(this.descriptor.href, { fromUserGesture: true, allowContributedOpeners: true })
-				.catch(onUnexpectedError);
+		else void this.openerService.open(this.descriptor.href, { fromUserGesture: true, allowContributedOpeners: true }).catch(onUnexpectedError);
 	}
 }

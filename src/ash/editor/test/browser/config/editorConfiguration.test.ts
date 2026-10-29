@@ -17,10 +17,7 @@ import { createBareFontInfoFromRawSettings } from '../../../common/config/fontIn
 import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { createConfigurationServices, createTestConfiguration, TEST_FONT_INFO } from './testConfiguration.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
-import {
-	AccessibilitySupport,
-	IAccessibilityService,
-} from '../../../../platform/accessibility/common/accessibility.js';
+import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import { installEditorTestGlobals } from '../editorTestGlobals.js';
 
@@ -70,7 +67,11 @@ test('FontMeasurements caches one window/font result and evicts unreliable readi
 	request.fulfill(9);
 	assert.deepEqual(
 		{ chr: request.chr, type: request.type, width: request.width },
-		{ chr: 'n', type: CharWidthRequestType.Bold, width: 9 },
+		{
+			chr: 'n',
+			type: CharWidthRequestType.Bold,
+			width: 9,
+		},
 	);
 
 	const dom = new JSDOM('<div></div>');
@@ -109,11 +110,7 @@ test('EditorConfiguration requires the registered accessibility service at const
 	const dom = new JSDOM('<div></div>');
 	using services = new InstantiationService();
 	try {
-		assert.throws(
-			() =>
-				services.createInstance(EditorConfiguration, false, MenuId.EditorContext, {}, dom.window.document.body),
-			/accessibilityService/,
-		);
+		assert.throws(() => services.createInstance(EditorConfiguration, false, MenuId.EditorContext, {}, dom.window.document.body), /accessibilityService/);
 	} finally {
 		dom.window.close();
 	}
@@ -124,13 +121,7 @@ test('EditorConfiguration follows host accessibility and gives explicit editor s
 	using resources = new DisposableStore();
 	const services = createConfigurationServices(resources, dom.window.document.body);
 	const accessibility = services.get(IAccessibilityService);
-	const configuration = services.createInstance(
-		EditorConfiguration,
-		false,
-		MenuId.EditorContext,
-		{ wrappingIndent: 'indent' },
-		dom.window.document.body,
-	);
+	const configuration = services.createInstance(EditorConfiguration, false, MenuId.EditorContext, { wrappingIndent: 'indent' }, dom.window.document.body);
 	const notifications: string[] = [];
 	using fast = configuration.onDidChangeFast(event => {
 		if (event.hasChanged(EditorOption.accessibilitySupport)) notifications.push('fast');
@@ -208,13 +199,7 @@ test('EditorConfiguration recomputes measured font options when the cache change
 	const container = dom.window.document.querySelector<HTMLElement>('#editor')!;
 	using resources = new DisposableStore();
 	const services = createConfigurationServices(resources, container);
-	using configuration = services.createInstance(
-		MeasuredConfiguration,
-		false,
-		MenuId.EditorContext,
-		{ fontSize: 14 },
-		container,
-	);
+	using configuration = services.createInstance(MeasuredConfiguration, false, MenuId.EditorContext, { fontSize: 14 }, container);
 	let changed = false;
 	configuration.onDidChange(event => (changed ||= event.hasChanged(EditorOption.fontInfo)));
 	width = 10;
@@ -235,13 +220,7 @@ test('EditorConfiguration resolves character-sized decoration columns with fract
 		const container = dom.window.document.querySelector<HTMLElement>('#editor')!;
 		using resources = new DisposableStore();
 		const services = createConfigurationServices(resources, container);
-		using configuration = services.createInstance(
-			FractionalConfiguration,
-			false,
-			MenuId.EditorContext,
-			{ lineDecorationsWidth: '2ch', folding: false },
-			container,
-		);
+		using configuration = services.createInstance(FractionalConfiguration, false, MenuId.EditorContext, { lineDecorationsWidth: '2ch', folding: false }, container);
 		assert.equal(configuration.options.get(EditorOption.lineDecorationsWidth), 15);
 		assert.equal(configuration.options.get(EditorOption.layoutInfo).decorationsWidth, 15);
 		configuration.updateOptions({ lineDecorationsWidth: '3.5ch' });
@@ -300,10 +279,7 @@ test('EditorConfiguration owns automatic container observation and stops it with
 
 		configuration.updateOptions({ automaticLayout: true });
 		using restart = configuration.onDidChange(event => {
-			if (
-				event.hasChanged(EditorOption.layoutInfo) &&
-				configuration.options.get(EditorOption.layoutInfo).width === 320
-			) {
+			if (event.hasChanged(EditorOption.layoutInfo) && configuration.options.get(EditorOption.layoutInfo).width === 320) {
 				configuration.updateOptions({ automaticLayout: false });
 				configuration.updateOptions({ automaticLayout: true });
 			}
@@ -334,8 +310,16 @@ test('TabFocus updates computed editor configuration and reports every global as
 		TabFocus.setTabFocusMode(true);
 		TabFocus.setTabFocusMode(true);
 		assert.deepEqual(
-			{ assignments, tabFocusMode: configuration.options.get(EditorOption.tabFocusMode), configurationChanges },
-			{ assignments: [true, true], tabFocusMode: true, configurationChanges: 1 },
+			{
+				assignments,
+				tabFocusMode: configuration.options.get(EditorOption.tabFocusMode),
+				configurationChanges,
+			},
+			{
+				assignments: [true, true],
+				tabFocusMode: true,
+				configurationChanges: 1,
+			},
 		);
 	} finally {
 		TabFocus.setTabFocusMode(false);
@@ -347,7 +331,10 @@ test('migrateOptions upgrades nested legacy settings through their current owner
 	const options = migrate({
 		wordBasedSuggestions: true,
 		hover: true,
-		suggest: { filteredTypes: { method: false, function: true, variable: false }, showMethods: true },
+		suggest: {
+			filteredTypes: { method: false, function: true, variable: false },
+			showMethods: true,
+		},
 		experimental: { stickyScroll: { enabled: true, maxLineCount: 7 } },
 		stickyScroll: { enabled: false },
 		editor: { experimentalEditContextEnabled: true },
@@ -360,7 +347,11 @@ test('migrateOptions upgrades nested legacy settings through their current owner
 	assert.deepEqual(options, {
 		wordBasedSuggestions: 'matchingDocuments',
 		hover: { enabled: 'on' },
-		suggest: { filteredTypes: undefined, showMethods: true, showVariables: false },
+		suggest: {
+			filteredTypes: undefined,
+			showMethods: true,
+			showVariables: false,
+		},
 		experimental: { stickyScroll: { enabled: undefined, maxLineCount: undefined } },
 		stickyScroll: { enabled: false, maxLineCount: 7 },
 		editor: { experimentalEditContextEnabled: undefined, editContext: true },
@@ -398,7 +389,10 @@ test('EditorConfiguration keeps migrated nested options private to each editor',
 		first.updateOptions({ hover: { enabled: 'on', delay: 900 } });
 		using second = createTestConfiguration(dom.window.document.body, { hover: false } as unknown as IEditorOptions);
 		assert.deepEqual(
-			{ first: first.options.get(EditorOption.hover), second: second.getRawOptions().hover },
+			{
+				first: first.options.get(EditorOption.hover),
+				second: second.getRawOptions().hover,
+			},
 			{
 				first: { ...second.options.get(EditorOption.hover), enabled: 'on', delay: 900 },
 				second: { enabled: 'off' },

@@ -1,11 +1,6 @@
 import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
-import {
-	autorunWithStore,
-	constObservable,
-	observableValue,
-	type IObservable,
-} from '../../../../../base/common/observable.js';
+import { autorunWithStore, constObservable, observableValue, type IObservable } from '../../../../../base/common/observable.js';
 import type { Icon } from '../../../../../base/common/icon.js';
 import { createServiceIdentifier } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { IQuickPickItem, IQuickPickSeparator } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -21,9 +16,7 @@ export interface IChatContextPickerPickItem extends IQuickPickItem {
 export type ChatContextPickAttachment = ChatContextAttachment | ChatContextAttachment[] | 'noop';
 
 export function isChatContextPickerPickItem(item: unknown): item is IChatContextPickerPickItem {
-	return (
-		typeof item === 'object' && item !== null && 'asAttachment' in item && typeof item.asAttachment === 'function'
-	);
+	return typeof item === 'object' && item !== null && 'asAttachment' in item && typeof item.asAttachment === 'function';
 }
 
 interface IChatContextItem {
@@ -39,22 +32,14 @@ interface IChatContextItem {
 
 export interface IChatContextValueItem extends IChatContextItem {
 	readonly type: 'valuePick';
-	asAttachment(
-		widget?: IChatWidget,
-		signal?: AbortSignal,
-	): Promise<ChatContextAttachment | ChatContextAttachment[] | undefined>;
+	asAttachment(widget?: IChatWidget, signal?: AbortSignal): Promise<ChatContextAttachment | ChatContextAttachment[] | undefined>;
 }
 
 export type ChatContextPick = IChatContextPickerPickItem | IQuickPickSeparator;
 
 export interface IChatContextPicker {
 	readonly placeholder: string;
-	readonly picks:
-		| Promise<ChatContextPick[]>
-		| ((
-				query: IObservable<string>,
-				token: CancellationToken,
-		  ) => IObservable<{ busy: boolean; picks: ChatContextPick[]; error?: unknown }>);
+	readonly picks: Promise<ChatContextPick[]> | ((query: IObservable<string>, token: CancellationToken) => IObservable<{ busy: boolean; picks: ChatContextPick[]; error?: unknown }>);
 	readonly goBack?: () => boolean;
 	readonly configure?: { readonly label: string; readonly commandId: string };
 	readonly dispose?: () => void;
@@ -68,16 +53,10 @@ export interface IChatContextPickerItem extends IChatContextItem {
 /** Gives a query one cancellable acquisition; only its current result can replace the displayed choices. */
 export function picksWithPromiseFn(
 	fn: (query: string, token: CancellationToken) => Promise<ChatContextPick[]>,
-): (
-	query: IObservable<string>,
-	token: CancellationToken,
-) => IObservable<{ busy: boolean; picks: ChatContextPick[]; error?: unknown }> {
+): (query: IObservable<string>, token: CancellationToken) => IObservable<{ busy: boolean; picks: ChatContextPick[]; error?: unknown }> {
 	return (query, token) => {
 		if (token.isCancellationRequested) return constObservable({ busy: false, picks: [] });
-		const result = observableValue<{ busy: boolean; picks: ChatContextPick[]; error?: unknown }>(
-			'chatContextPicks',
-			{ busy: true, picks: [] },
-		);
+		const result = observableValue<{ busy: boolean; picks: ChatContextPick[]; error?: unknown }>('chatContextPicks', { busy: true, picks: [] });
 		const lifetime = new DisposableStore();
 		lifetime.add(
 			autorunWithStore((reader, store) => {
@@ -116,9 +95,7 @@ export class ChatContextPickService implements IChatContextPickService {
 	private readonly registrations = new Set<IChatContextValueItem | IChatContextPickerItem>();
 
 	get items(): readonly (IChatContextValueItem | IChatContextPickerItem)[] {
-		return [...this.registrations].sort(
-			(a, b) => (b.ordinal ?? 0) - (a.ordinal ?? 0) || a.label.localeCompare(b.label),
-		);
+		return [...this.registrations].sort((a, b) => (b.ordinal ?? 0) - (a.ordinal ?? 0) || a.label.localeCompare(b.label));
 	}
 
 	registerChatContextItem(item: IChatContextValueItem | IChatContextPickerItem): IDisposable {

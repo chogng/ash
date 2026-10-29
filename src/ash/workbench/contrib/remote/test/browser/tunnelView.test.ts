@@ -5,11 +5,7 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import type { RemoteConnectionState } from '../../../../../platform/remote/common/remote.js';
 import type { RemoteAgentConnection } from '../../../../../platform/remote/common/remoteAgentApi.js';
-import {
-	TunnelPrivacyId,
-	type ITunnelService,
-	type RemoteTunnel,
-} from '../../../../../platform/tunnel/common/tunnel.js';
+import { TunnelPrivacyId, type ITunnelService, type RemoteTunnel } from '../../../../../platform/tunnel/common/tunnel.js';
 import type { IAddressProvider } from '../../../../../platform/remote/common/remoteAgentConnection.js';
 import type { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
 
@@ -18,30 +14,18 @@ test('Remote Ports renders tunnel service state changes', async () => {
 	const installedGlobals = installDomGlobals(browser);
 	using tunnels = new TestTunnelService([tunnel('one', 4100, 3000, 'open')]);
 	const tunnelService = tunnels;
-	using remoteAgent = new TestRemoteAgentService(
-		{ kind: 'ssh', generation: 1, authority: 'ssh+work-server', host: 'work-server' },
-		'connected',
-	);
+	using remoteAgent = new TestRemoteAgentService({ kind: 'ssh', generation: 1, authority: 'ssh+work-server', host: 'work-server' }, 'connected');
 	try {
 		const { TunnelPanel } = await import('../../browser/tunnelView.js');
-		using pane = new TunnelPanel(
-			browser.window.document.body,
-			{ id: 'ash.ports.test', title: 'Ports' },
-			tunnelService,
-			remoteAgent,
-		);
+		using pane = new TunnelPanel(browser.window.document.body, { id: 'ash.ports.test', title: 'Ports' }, tunnelService, remoteAgent);
 		browser.window.document.body.append(pane.element);
 		const titleActions = pane.partTitleProjection?.actions;
 		assert.ok(titleActions);
 		browser.window.document.body.append(titleActions);
 		await waitFor(() => pane.element.querySelectorAll('.ash-remote-port').length === 1);
 
-		const forwardPortAction = titleActions.querySelector<HTMLButtonElement>(
-			"[data-action-id='ash.ports.focusForwardPort'] button",
-		);
-		const refreshPortsAction = titleActions.querySelector<HTMLButtonElement>(
-			"[data-action-id='ash.ports.refresh'] button",
-		);
+		const forwardPortAction = titleActions.querySelector<HTMLButtonElement>("[data-action-id='ash.ports.focusForwardPort'] button");
+		const refreshPortsAction = titleActions.querySelector<HTMLButtonElement>("[data-action-id='ash.ports.refresh'] button");
 		assert.ok(forwardPortAction);
 		assert.ok(refreshPortsAction);
 		assert.ok(forwardPortAction.querySelector('.ash-icon'));
@@ -71,18 +55,10 @@ test('Remote Ports forwards and stops ports through the tunnel service', async (
 	const installedGlobals = installDomGlobals(browser);
 	using tunnels = new TestTunnelService();
 	const tunnelService = tunnels;
-	using remoteAgent = new TestRemoteAgentService(
-		{ kind: 'ssh', generation: 1, authority: 'ssh+work-server', host: 'work-server' },
-		'connected',
-	);
+	using remoteAgent = new TestRemoteAgentService({ kind: 'ssh', generation: 1, authority: 'ssh+work-server', host: 'work-server' }, 'connected');
 	try {
 		const { TunnelPanel } = await import('../../browser/tunnelView.js');
-		using pane = new TunnelPanel(
-			browser.window.document.body,
-			{ id: 'ash.ports.actions.test', title: 'Ports' },
-			tunnelService,
-			remoteAgent,
-		);
+		using pane = new TunnelPanel(browser.window.document.body, { id: 'ash.ports.actions.test', title: 'Ports' }, tunnelService, remoteAgent);
 		browser.window.document.body.append(pane.element);
 		const input = pane.element.querySelector<HTMLInputElement>('.ash-remote-ports-input')!;
 		input.value = '3000';
@@ -114,12 +90,7 @@ test('Remote Ports enables forwarding only for a connected SSH workspace', async
 	using remoteAgent = new TestRemoteAgentService({ kind: 'local', generation: 1 }, 'connected');
 	try {
 		const { TunnelPanel } = await import('../../browser/tunnelView.js');
-		using pane = new TunnelPanel(
-			browser.window.document.body,
-			{ id: 'ash.ports.connection.test', title: 'Ports' },
-			tunnelService,
-			remoteAgent,
-		);
+		using pane = new TunnelPanel(browser.window.document.body, { id: 'ash.ports.connection.test', title: 'Ports' }, tunnelService, remoteAgent);
 		browser.window.document.body.append(pane.element);
 		assert.equal(pane.element.querySelector<HTMLInputElement>('.ash-remote-ports-input')?.disabled, true);
 		assert.match(pane.element.querySelector('.ash-remote-ports-status')?.textContent ?? '', /SSH Remote Workspace/);
@@ -144,18 +115,10 @@ test('Remote Ports does not let an initial list overwrite a newer tunnel event',
 	});
 	using tunnels = new TestTunnelService([], initialList);
 	const tunnelService = tunnels;
-	using remoteAgent = new TestRemoteAgentService(
-		{ kind: 'ssh', generation: 1, authority: 'ssh+work-server', host: 'work-server' },
-		'connected',
-	);
+	using remoteAgent = new TestRemoteAgentService({ kind: 'ssh', generation: 1, authority: 'ssh+work-server', host: 'work-server' }, 'connected');
 	try {
 		const { TunnelPanel } = await import('../../browser/tunnelView.js');
-		using pane = new TunnelPanel(
-			browser.window.document.body,
-			{ id: 'ash.ports.race.test', title: 'Ports' },
-			tunnelService,
-			remoteAgent,
-		);
+		using pane = new TunnelPanel(browser.window.document.body, { id: 'ash.ports.race.test', title: 'Ports' }, tunnelService, remoteAgent);
 		browser.window.document.body.append(pane.element);
 		tunnels.upsert(tunnel('new', 4300, 3003, 'open'));
 		resolveInitialList([]);
@@ -173,22 +136,14 @@ test('Remote Ports releases an open result from a retired connection generation'
 	const installedGlobals = installDomGlobals(browser);
 	using tunnels = new TestTunnelService();
 	const tunnelService = tunnels;
-	using remoteAgent = new TestRemoteAgentService(
-		{ kind: 'ssh', generation: 1, authority: 'ssh+work-server', host: 'work-server' },
-		'connected',
-	);
+	using remoteAgent = new TestRemoteAgentService({ kind: 'ssh', generation: 1, authority: 'ssh+work-server', host: 'work-server' }, 'connected');
 	let finish!: () => void;
 	tunnels.pendingOpen = new Promise(resolve => {
 		finish = resolve;
 	});
 	try {
 		const { TunnelPanel } = await import('../../browser/tunnelView.js');
-		using pane = new TunnelPanel(
-			browser.window.document.body,
-			{ id: 'ash.ports.retired.test', title: 'Ports' },
-			tunnelService,
-			remoteAgent,
-		);
+		using pane = new TunnelPanel(browser.window.document.body, { id: 'ash.ports.retired.test', title: 'Ports' }, tunnelService, remoteAgent);
 		browser.window.document.body.append(pane.element);
 		const input = pane.element.querySelector<HTMLInputElement>('.ash-remote-ports-input')!;
 		input.value = '3000';
@@ -196,9 +151,7 @@ test('Remote Ports releases an open result from a retired connection generation'
 		await waitFor(() => tunnels.openedPorts.length === 1);
 		remoteAgent.emitConnection({ kind: 'ssh', generation: 2, authority: 'ssh+work-server', host: 'work-server' });
 		finish();
-		await waitFor(
-			() => tunnels.closedIds.length === 1 && pane.element.querySelectorAll('.ash-remote-port').length === 0,
-		);
+		await waitFor(() => tunnels.closedIds.length === 1 && pane.element.querySelectorAll('.ash-remote-port').length === 0);
 		assert.deepEqual(tunnels.closedIds, ['tunnel-3000']);
 	} finally {
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
@@ -239,11 +192,7 @@ class TestTunnelService extends Disposable implements ITunnelService {
 		return initialList ?? Promise.resolve([...this.entries.values()]);
 	}
 
-	public async openTunnel(
-		_addressProvider: IAddressProvider | undefined,
-		_remoteHost: string | undefined,
-		remotePort: number,
-	): Promise<RemoteTunnel> {
+	public async openTunnel(_addressProvider: IAddressProvider | undefined, _remoteHost: string | undefined, remotePort: number): Promise<RemoteTunnel> {
 		this.openedPorts.push(remotePort);
 		await this.pendingOpen;
 		const opened = tunnel(`tunnel-${remotePort}`, remotePort + 10_000, remotePort, 'open');
@@ -262,14 +211,10 @@ class TestTunnelService extends Disposable implements ITunnelService {
 		return [...this.entries.values()].find(t => t.tunnelRemoteHost === host && t.tunnelRemotePort === port);
 	}
 	public async closeAll(): Promise<void> {
-		await Promise.all(
-			[...this.entries.values()].map(t => this.closeTunnel(t.tunnelRemoteHost, t.tunnelRemotePort)),
-		);
+		await Promise.all([...this.entries.values()].map(t => this.closeTunnel(t.tunnelRemoteHost, t.tunnelRemotePort)));
 	}
 	public async closeTunnel(remoteHost: string, remotePort: number): Promise<void> {
-		const entry = [...this.entries.values()].find(
-			entry => entry.tunnelRemoteHost === remoteHost && entry.tunnelRemotePort === remotePort,
-		);
+		const entry = [...this.entries.values()].find(entry => entry.tunnelRemoteHost === remoteHost && entry.tunnelRemotePort === remotePort);
 		if (entry) {
 			this.closedIds.push(entry.id);
 			this.remove(entry.id);
@@ -353,7 +298,6 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
 		MouseEvent: browser.window.MouseEvent,
 		navigator: browser.window.navigator,
 	};
-	for (const [name, value] of Object.entries(globals))
-		Object.defineProperty(globalThis, name, { configurable: true, value });
+	for (const [name, value] of Object.entries(globals)) Object.defineProperty(globalThis, name, { configurable: true, value });
 	return Object.keys(globals);
 }

@@ -9,10 +9,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { extUri, basename } from '../../../../base/common/resources.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
-import {
-	AccessibilityVerbositySettingId,
-	IAccessibleViewService,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
@@ -113,13 +110,7 @@ export class TimelinePane extends ViewPane {
 				this.tree.element,
 				'keydown',
 				event => {
-					if (
-						event.altKey &&
-						!event.ctrlKey &&
-						!event.metaKey &&
-						!event.shiftKey &&
-						event.key === 'ArrowDown'
-					) {
+					if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key === 'ArrowDown') {
 						const focused = this.tree.focus;
 						const details = focused && this.itemHovers.get(focused.id);
 						if (!details) return;
@@ -139,10 +130,7 @@ export class TimelinePane extends ViewPane {
 					return;
 				}
 				const command = element.item.command;
-				if (command)
-					void this.commands
-						.executeCommand(command.id, ...(command.arguments ?? []))
-						.catch(error => this.log.error('timeline', 'Could not open timeline entry', error));
+				if (command) void this.commands.executeCommand(command.id, ...(command.arguments ?? [])).catch(error => this.log.error('timeline', 'Could not open timeline entry', error));
 			}),
 		);
 		this._register(
@@ -221,13 +209,7 @@ export class TimelinePane extends ViewPane {
 
 	public getAccessibleContent(): string {
 		const entries = this.items().map(({ item }) => [item!.label, item!.description].filter(Boolean).join(', '));
-		return [
-			localize('timeline.title', 'Timeline'),
-			this.uri ? basename(this.uri) : '',
-			entries.length ? entries.join('\n') : this.messageDomNode.textContent,
-		]
-			.filter(Boolean)
-			.join('\n');
+		return [localize('timeline.title', 'Timeline'), this.uri ? basename(this.uri) : '', entries.length ? entries.join('\n') : this.messageDomNode.textContent].filter(Boolean).join('\n');
 	}
 
 	private activeUri(): URI | undefined {
@@ -278,21 +260,11 @@ export class TimelinePane extends ViewPane {
 				token,
 			);
 			const result = await request?.result;
-			if (
-				this.isDisposed ||
-				generation !== this.generation ||
-				this.pending.get(source) !== lifetime ||
-				token.token.isCancellationRequested
-			)
-				return;
+			if (this.isDisposed || generation !== this.generation || this.pending.get(source) !== lifetime || token.token.isCancellationRequested) return;
 			if (result) {
 				const items = new Map((append ? (previous?.items ?? []) : []).map(item => [item.handle, item]));
 				// A failed or stalled continuation must wait for an explicit retry, not loop while visible.
-				if (
-					append &&
-					result.paging?.cursor === previous?.paging?.cursor &&
-					result.items.every(item => items.has(item.handle))
-				) {
+				if (append && result.paging?.cursor === previous?.paging?.cursor && result.items.every(item => items.has(item.handle))) {
 					throw new Error('Timeline provider did not advance pagination');
 				}
 				for (const item of result.items) items.set(item.handle, item);
@@ -331,9 +303,7 @@ export class TimelinePane extends ViewPane {
 
 	private render(): void {
 		const entries = this.items();
-		const more = [...this.timelines]
-			.filter(([, timeline]) => timeline.paging?.cursor !== undefined)
-			.map(([source]) => ({ id: `more:${source}`, source }));
+		const more = [...this.timelines].filter(([, timeline]) => timeline.paging?.cursor !== undefined).map(([source]) => ({ id: `more:${source}`, source }));
 		const focus = this.tree.focus?.id;
 		const selection = this.tree.selection.map(row => row.id);
 		this.tree.setChildren([...entries, ...more].map(element => ({ element })));
@@ -344,10 +314,8 @@ export class TimelinePane extends ViewPane {
 		this.messageDomNode.hidden = !this.tree.element.hidden;
 		this.updateTitleDescription(this.uri ? basename(this.uri) : undefined);
 		if (this.pending.size > 0) this.messageDomNode.textContent = localize('timeline.loading', 'Loading timeline…');
-		else if (!this.uri)
-			this.messageDomNode.textContent = localize('timeline.noFile', 'Select a file to view its timeline.');
-		else if (this.failedSources.size > 0)
-			this.messageDomNode.textContent = localize('timeline.failed', 'Could not load timeline entries.');
+		else if (!this.uri) this.messageDomNode.textContent = localize('timeline.noFile', 'Select a file to view its timeline.');
+		else if (this.failedSources.size > 0) this.messageDomNode.textContent = localize('timeline.failed', 'Could not load timeline entries.');
 		else this.messageDomNode.textContent = localize('timeline.empty', 'No timeline information was provided.');
 	}
 
@@ -361,8 +329,7 @@ export class TimelinePane extends ViewPane {
 		content.append(label);
 		const description = h(content.ownerDocument, 'span');
 		description.className = 'ash-timeline-description';
-		description.textContent =
-			row.item?.description ?? this.timeline.getSources().find(source => source.id === row.source)?.label ?? '';
+		description.textContent = row.item?.description ?? this.timeline.getSources().find(source => source.id === row.source)?.label ?? '';
 		content.append(description);
 		if (!row.item || !this.setupHistoryHover(content, row.id, row.item)) {
 			this.rows.add(
@@ -413,8 +380,7 @@ export class TimelinePane extends ViewPane {
 							references: historyItem.references ?? [],
 							scope,
 							layout,
-							openChanges: () =>
-								this.commands.executeCommand('workbench.scm.action.graph.viewChanges', menuTarget),
+							openChanges: () => this.commands.executeCommand('workbench.scm.action.graph.viewChanges', menuTarget),
 						},
 						this.menus,
 						this.clipboard,
@@ -491,12 +457,7 @@ export class TimelinePane extends ViewPane {
 						const excluded = new Set(this.excludedSources);
 						if (excluded.has(source.id)) excluded.delete(source.id);
 						else excluded.add(source.id);
-						this.storage.store(
-							'timeline.excludeSources',
-							JSON.stringify([...excluded]),
-							StorageScope.PROFILE,
-							StorageTarget.USER,
-						);
+						this.storage.store('timeline.excludeSources', JSON.stringify([...excluded]), StorageScope.PROFILE, StorageTarget.USER);
 					},
 				})),
 			],

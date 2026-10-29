@@ -16,22 +16,13 @@ const mainOutput = join(desktop, '.build/desktop/main/src');
 
 for (const mode of ['hardware', 'software'] as const) {
 	test(`Desktop GPU diagnostics follow the real process in ${mode} mode`, async ({ target }, testInfo) => {
-		test.skip(
-			target.kind !== 'electron' || target.appServerMode !== 'disabled',
-			'Requires the Electron UI project.',
-		);
+		test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled', 'Requires the Electron UI project.');
 		const fixture = testInfo.outputPath('gpu-process-app');
 		await mkdir(join(fixture, 'test/automation'), { recursive: true });
-		await copyFile(
-			join(desktop, 'test/automation/electronWindow.cjs'),
-			join(fixture, 'test/automation/electronWindow.cjs'),
-		);
+		await copyFile(join(desktop, 'test/automation/electronWindow.cjs'), join(fixture, 'test/automation/electronWindow.cjs'));
 		await writeFile(join(fixture, 'package.json'), JSON.stringify({ name: 'ash-gpu-test', main: 'main.mjs' }));
 		const rendererEntry = join(fixture, 'gpu.html');
-		await writeFile(
-			rendererEntry,
-			'<!doctype html><html lang="en"><title>GPU lifecycle test</title><body>GPU lifecycle test</body></html>',
-		);
+		await writeFile(rendererEntry, '<!doctype html><html lang="en"><title>GPU lifecycle test</title><body>GPU lifecycle test</body></html>');
 		const entry = join(fixture, 'main.mjs');
 		await writeFile(
 			entry,
@@ -81,21 +72,10 @@ await window.loadURL(entryUrl);
 		});
 		try {
 			const page = await application.firstWindow();
-			await page.waitForFunction(() =>
-				Boolean((globalThis as unknown as { ash?: { ipcRenderer?: unknown } }).ash?.ipcRenderer),
-			);
+			await page.waitForFunction(() => Boolean((globalThis as unknown as { ash?: { ipcRenderer?: unknown } }).ash?.ipcRenderer));
 			await installMainChannelTestClient(page);
-			await page.evaluate(() =>
-				(
-					globalThis as unknown as { ash: { ipcRenderer: { send(channel: string): void } } }
-				).ash.ipcRenderer.send('ash:hello'),
-			);
-			const readFromRenderer = () =>
-				page.evaluate(
-					async () =>
-						(await globalThis.ashTestMainProcess.call<SystemInfo>('process', 'getSystemInfo', []))
-							.gpuStatus,
-				);
+			await page.evaluate(() => (globalThis as unknown as { ash: { ipcRenderer: { send(channel: string): void } } }).ash.ipcRenderer.send('ash:hello'));
+			const readFromRenderer = () => page.evaluate(async () => (await globalThis.ashTestMainProcess.call<SystemInfo>('process', 'getSystemInfo', [])).gpuStatus);
 			const snapshot = () =>
 				application.evaluate(async ({ app }) => {
 					const status = await (globalThis as unknown as { gpuScenario: GpuScenario }).gpuScenario.read();
@@ -105,13 +85,9 @@ await window.loadURL(entryUrl);
 					};
 				});
 			await expect.poll(snapshot).toEqual({ initialized: true, consistent: true });
-			expect(await readFromRenderer()).toEqual(
-				await application.evaluate(({ app }) => app.getGPUFeatureStatus()),
-			);
+			expect(await readFromRenderer()).toEqual(await application.evaluate(({ app }) => app.getGPUFeatureStatus()));
 			if (mode === 'software') {
-				const status = await application.evaluate(() =>
-					(globalThis as unknown as { gpuScenario: GpuScenario }).gpuScenario.read(),
-				);
+				const status = await application.evaluate(() => (globalThis as unknown as { gpuScenario: GpuScenario }).gpuScenario.read());
 				expect(status.gpu_compositing).not.toBe('enabled');
 				return;
 			}
@@ -126,30 +102,16 @@ await window.loadURL(entryUrl);
 					}
 				});
 				await expect
-					.poll(() =>
-						application.evaluate(
-							() => (globalThis as unknown as { gpuScenario: GpuScenario }).gpuScenario.exits,
-						),
-					)
+					.poll(() => application.evaluate(() => (globalThis as unknown as { gpuScenario: GpuScenario }).gpuScenario.exits))
 					.toEqual(Array.from({ length: crash }, () => ({ reason: 'crashed', status: {} })));
 				await expect.poll(snapshot).toEqual({ initialized: true, consistent: true });
-				expect(await readFromRenderer()).toEqual(
-					await application.evaluate(({ app }) => app.getGPUFeatureStatus()),
-				);
+				expect(await readFromRenderer()).toEqual(await application.evaluate(({ app }) => app.getGPUFeatureStatus()));
 				if (crash === 1) {
 					await page.reload({ waitUntil: 'commit' });
-					await page.waitForFunction(() =>
-						Boolean((globalThis as unknown as { ash?: { ipcRenderer?: unknown } }).ash?.ipcRenderer),
-					);
+					await page.waitForFunction(() => Boolean((globalThis as unknown as { ash?: { ipcRenderer?: unknown } }).ash?.ipcRenderer));
 					await installMainChannelTestClient(page);
-					await page.evaluate(() =>
-						(
-							globalThis as unknown as { ash: { ipcRenderer: { send(channel: string): void } } }
-						).ash.ipcRenderer.send('ash:hello'),
-					);
-					expect(await readFromRenderer()).toEqual(
-						await application.evaluate(({ app }) => app.getGPUFeatureStatus()),
-					);
+					await page.evaluate(() => (globalThis as unknown as { ash: { ipcRenderer: { send(channel: string): void } } }).ash.ipcRenderer.send('ash:hello'));
+					expect(await readFromRenderer()).toEqual(await application.evaluate(({ app }) => app.getGPUFeatureStatus()));
 				}
 			}
 		} finally {

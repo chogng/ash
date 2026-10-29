@@ -6,10 +6,6 @@ export interface ILanguageDiagnosticsService extends LanguageDiagnosticsHost {
 	getAllDiagnostics(): readonly LanguageDiagnosticSnapshot[];
 }
 
-export const ILanguageDiagnosticsService =
-	createServiceIdentifier<ILanguageDiagnosticsService>('languageDiagnosticsService');
+export const ILanguageDiagnosticsService = createServiceIdentifier<ILanguageDiagnosticsService>('languageDiagnosticsService');
 
-export {
-	type LanguageDiagnosticSnapshot,
-	type LanguageDiagnosticsPublisher,
-} from '../../../../editor/common/languages.js';
+export { type LanguageDiagnosticSnapshot, type LanguageDiagnosticsPublisher } from '../../../../editor/common/languages.js';

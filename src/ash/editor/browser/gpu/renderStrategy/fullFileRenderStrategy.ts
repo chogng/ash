@@ -50,15 +50,9 @@ function writeCells(
 		let tokenEndOffset = tokens.getCount() > 0 ? tokens.getEndOffset(0) : lineData.content.length;
 		let absoluteOffsetX = (lineData.minColumn - 1) * viewLineOptions.spaceWidth * devicePixelRatio;
 		let tabColumnOffset = 0;
-		const lineTop =
-			viewportData.relativeVerticalOffset[lineNumber - viewportData.startLineNumber]! * devicePixelRatio;
-		for (
-			let columnIndex = 0;
-			columnIndex < lineData.content.length && columnIndex < maximumColumns;
-			columnIndex++
-		) {
-			while (semanticIndex < semanticTokens.length && semanticTokens[semanticIndex]!.endColumn <= columnIndex)
-				semanticIndex++;
+		const lineTop = viewportData.relativeVerticalOffset[lineNumber - viewportData.startLineNumber]! * devicePixelRatio;
+		for (let columnIndex = 0; columnIndex < lineData.content.length && columnIndex < maximumColumns; columnIndex++) {
+			while (semanticIndex < semanticTokens.length && semanticTokens[semanticIndex]!.endColumn <= columnIndex) semanticIndex++;
 			while (tokenIndex + 1 < tokens.getCount() && columnIndex >= tokenEndOffset) {
 				tokenIndex++;
 				tokenEndOffset = tokens.getEndOffset(tokenIndex);
@@ -66,9 +60,7 @@ function writeCells(
 			const chars = segmenter.getSegmentAtIndex(columnIndex);
 			if (chars === undefined) continue;
 			const useFixedAdvance = lineData.isBasicASCII && viewLineOptions.useMonospaceOptimizations;
-			const advance = useFixedAdvance
-				? viewLineOptions.spaceWidth * devicePixelRatio
-				: glyphRasterizer.getTextMetrics(chars === '\t' ? ' ' : chars).width;
+			const advance = useFixedAdvance ? viewLineOptions.spaceWidth * devicePixelRatio : glyphRasterizer.getTextMetrics(chars === '\t' ? ' ' : chars).width;
 			if (chars === '\t') {
 				const previousColumn = columnIndex + tabColumnOffset;
 				const nextColumn = CursorColumns.nextRenderTabStop(previousColumn, lineData.tabSize);
@@ -93,30 +85,10 @@ function writeCells(
 						selection.containsPosition({ lineNumber, column: columnIndex + 1 }) &&
 						(selection.endLineNumber !== lineNumber || columnIndex + 1 < selection.endColumn),
 				);
-			const styleSetId = decorationStyleSetId(
-				viewGpuContext,
-				lineNumber,
-				columnIndex,
-				lineData.inlineDecorations,
-				style.color,
-				isSelected ? selectionForeground : undefined,
-			);
-			const glyph = viewGpuContext.atlas.getGlyph(
-				glyphRasterizer,
-				chars,
-				style.tokenMetadata,
-				styleSetId,
-				absoluteOffsetX,
-			);
+			const styleSetId = decorationStyleSetId(viewGpuContext, lineNumber, columnIndex, lineData.inlineDecorations, style.color, isSelected ? selectionForeground : undefined);
+			const glyph = viewGpuContext.atlas.getGlyph(glyphRasterizer, chars, style.tokenMetadata, styleSetId, absoluteOffsetX);
 			const baseline = Math.round(
-				lineTop +
-					Math.floor(
-						(viewportData.lineHeight * devicePixelRatio -
-							glyph.fontBoundingBoxAscent -
-							glyph.fontBoundingBoxDescent) /
-							2,
-					) +
-					glyph.fontBoundingBoxAscent,
+				lineTop + Math.floor((viewportData.lineHeight * devicePixelRatio - glyph.fontBoundingBoxAscent - glyph.fontBoundingBoxDescent) / 2) + glyph.fontBoundingBoxAscent,
 			);
 			const cellIndex = ((lineNumber - targetStartLineNumber) * maximumColumns + columnIndex) * FLOATS_PER_CELL;
 			if (cellIndex < 0 || cellIndex + FLOATS_PER_CELL > target.length) continue;
@@ -148,10 +120,7 @@ function decorationStyleSetId(
 		if (lineNumber < decoration.range.startLineNumber || lineNumber > decoration.range.endLineNumber) continue;
 		if (lineNumber === decoration.range.startLineNumber && columnIndex < decoration.range.startColumn - 1) continue;
 		if (lineNumber === decoration.range.endLineNumber && columnIndex >= decoration.range.endColumn - 1) continue;
-		for (const rule of ViewGpuContext.decorationCssRuleExtractor.getStyleRules(
-			viewGpuContext.canvas.domNode,
-			decoration.inlineClassName,
-		)) {
+		for (const rule of ViewGpuContext.decorationCssRuleExtractor.getStyleRules(viewGpuContext.canvas.domNode, decoration.inlineClassName)) {
 			for (const property of rule.style) {
 				const value = rule.style.getPropertyValue(property).trim();
 				switch (property) {
@@ -172,22 +141,13 @@ function decorationStyleSetId(
 						strikethroughThickness = parsePixelSize(value);
 						break;
 					case 'text-decoration-color':
-						strikethroughColor = Color.Format.CSS.parse(
-							resolveCssColor(viewGpuContext, value),
-						)?.toNumber32Bit();
+						strikethroughColor = Color.Format.CSS.parse(resolveCssColor(viewGpuContext, value))?.toNumber32Bit();
 						break;
 				}
 			}
 		}
 	}
-	return ViewGpuContext.decorationStyleCache.getOrCreateEntry(
-		selectionColor ?? color,
-		bold,
-		opacity,
-		strikethrough,
-		strikethroughThickness,
-		strikethroughColor,
-	);
+	return ViewGpuContext.decorationStyleCache.getOrCreateEntry(selectionColor ?? color, bold, opacity, strikethrough, strikethroughThickness, strikethroughColor);
 }
 
 function parseFontWeight(value: string): number {
@@ -208,9 +168,7 @@ function parsePixelSize(value: string): number | undefined {
 
 function resolveCssColor(viewGpuContext: ViewGpuContext, value: string): string {
 	const match = /^var\((--[^,)]+)(?:,[^)]+)?\)$/.exec(value);
-	return match
-		? ViewGpuContext.decorationCssRuleExtractor.resolveCssVariable(viewGpuContext.canvas.domNode, match[1]!)
-		: value;
+	return match ? ViewGpuContext.decorationCssRuleExtractor.resolveCssVariable(viewGpuContext.canvas.domNode, match[1]!) : value;
 }
 
 export class FullFileRenderStrategy extends BaseRenderStrategy {
@@ -231,21 +189,12 @@ export class FullFileRenderStrategy extends BaseRenderStrategy {
 		];
 	}
 
-	constructor(
-		context: ViewContext,
-		viewGpuContext: ViewGpuContext,
-		device: GPUDevice,
-		glyphRasterizer: { value: GlyphRasterizer },
-	) {
+	constructor(context: ViewContext, viewGpuContext: ViewGpuContext, device: GPUDevice, glyphRasterizer: { value: GlyphRasterizer }) {
 		super(context, viewGpuContext, device, glyphRasterizer);
 		this._cellBindBuffer = this._register(
 			GPULifecycle.createBuffer(device, {
 				label: 'Ash full-file GPU cells',
-				size:
-					FullFileRenderStrategy.maxSupportedLines *
-					FullFileRenderStrategy.maxSupportedColumns *
-					FLOATS_PER_CELL *
-					Float32Array.BYTES_PER_ELEMENT,
+				size: FullFileRenderStrategy.maxSupportedLines * FullFileRenderStrategy.maxSupportedColumns * FLOATS_PER_CELL * Float32Array.BYTES_PER_ELEMENT,
 				usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
 			}),
 		).object;
@@ -298,16 +247,9 @@ export class FullFileRenderStrategy extends BaseRenderStrategy {
 	public override onScrollChanged(event?: ViewScrollChangedEvent): boolean {
 		if (this.isDisposed) return false;
 		const devicePixelRatio = this._viewGpuContext.devicePixelRatio.get();
-		this._scrollOffsetValueBuffer[0] =
-			(event?.scrollLeft ?? this._context.viewLayout.getCurrentScrollLeft()) * devicePixelRatio;
-		this._scrollOffsetValueBuffer[1] =
-			((event?.scrollTop ?? this._context.viewLayout.getCurrentScrollTop()) - this._bigNumbersDelta) *
-			devicePixelRatio;
-		this._device.queue.writeBuffer(
-			this._scrollOffsetBindBuffer,
-			0,
-			this._scrollOffsetValueBuffer as Float32Array<ArrayBuffer>,
-		);
+		this._scrollOffsetValueBuffer[0] = (event?.scrollLeft ?? this._context.viewLayout.getCurrentScrollLeft()) * devicePixelRatio;
+		this._scrollOffsetValueBuffer[1] = ((event?.scrollTop ?? this._context.viewLayout.getCurrentScrollTop()) - this._bigNumbersDelta) * devicePixelRatio;
+		this._device.queue.writeBuffer(this._scrollOffsetBindBuffer, 0, this._scrollOffsetValueBuffer as Float32Array<ArrayBuffer>);
 		return true;
 	}
 
@@ -330,27 +272,15 @@ export class FullFileRenderStrategy extends BaseRenderStrategy {
 			FullFileRenderStrategy.maxSupportedColumns,
 			this._context.theme.value.getColor(editorSelectionForeground)?.toNumber32Bit(),
 		);
-		const rowByteLength =
-			FullFileRenderStrategy.maxSupportedColumns * FLOATS_PER_CELL * Float32Array.BYTES_PER_ELEMENT;
+		const rowByteLength = FullFileRenderStrategy.maxSupportedColumns * FLOATS_PER_CELL * Float32Array.BYTES_PER_ELEMENT;
 		for (let lineOffset = 0; lineOffset < lineCount; lineOffset++) {
-			this._device.queue.writeBuffer(
-				this._cellBindBuffer,
-				(viewportData.startLineNumber - 1 + lineOffset) * rowByteLength,
-				cells.buffer,
-				lineOffset * rowByteLength,
-				rowByteLength,
-			);
+			this._device.queue.writeBuffer(this._cellBindBuffer, (viewportData.startLineNumber - 1 + lineOffset) * rowByteLength, cells.buffer, lineOffset * rowByteLength, rowByteLength);
 		}
 		return this._visibleObjectCount;
 	}
 
 	public draw(pass: GPURenderPassEncoder, viewportData: ViewportData): void {
 		if (this._visibleObjectCount === 0) return;
-		pass.draw(
-			quadVertices.length / 2,
-			this._visibleObjectCount,
-			0,
-			(viewportData.startLineNumber - 1) * FullFileRenderStrategy.maxSupportedColumns,
-		);
+		pass.draw(quadVertices.length / 2, this._visibleObjectCount, 0, (viewportData.startLineNumber - 1) * FullFileRenderStrategy.maxSupportedColumns);
 	}
 }

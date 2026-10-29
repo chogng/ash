@@ -1,16 +1,8 @@
-import {
-	defaultMenuStyles,
-	defaultButtonStyles,
-	defaultKeybindingLabelStyles,
-} from '../../../../../../../platform/theme/browser/defaultStyles.js';
+import { defaultMenuStyles, defaultButtonStyles, defaultKeybindingLabelStyles } from '../../../../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from '../../../../../../../base/browser/dom.js';
 import { status } from '../../../../../../../base/browser/ui/aria/aria.js';
 import { ActionViewItem } from '../../../../../../../base/browser/ui/actionbar/actionViewItems.js';
-import {
-	AnchorPosition,
-	ContextView,
-	ContextViewFocusRestore,
-} from '../../../../../../../base/browser/ui/contextview/contextview.js';
+import { AnchorPosition, ContextView, ContextViewFocusRestore } from '../../../../../../../base/browser/ui/contextview/contextview.js';
 import { Menu } from '../../../../../../../base/browser/ui/menu/menu.js';
 import { Separator, type IAction } from '../../../../../../../base/common/actions.js';
 import { Disposable, MutableDisposable } from '../../../../../../../base/common/lifecycle.js';
@@ -95,9 +87,7 @@ export class ModelPickerConfiguration extends Disposable {
 		this.trigger.hidden = this.delegate.isAutomaticModel() || summary.length === 0;
 		this.trigger.classList.toggle('hidden', this.trigger.hidden);
 		this.trigger.querySelector('.ash-chat-input-picker-label')!.textContent = summary;
-		const label = entry?.supportedReasoningEfforts?.length
-			? localize('chat.modelPicker.configurationAriaLabel', 'Model options: {0}', summary)
-			: summary;
+		const label = entry?.supportedReasoningEfforts?.length ? localize('chat.modelPicker.configurationAriaLabel', 'Model options: {0}', summary) : summary;
 		this.trigger.setAttribute('aria-label', label);
 		this.hover.clear();
 		this.hover.value = getHoverDelegate().setupHover({ target: this.trigger, content: label, groupId: 'actions' });
@@ -106,16 +96,12 @@ export class ModelPickerConfiguration extends Disposable {
 
 	private get selectedEntry(): ModelCatalogEntry | undefined {
 		const selected = this.delegate.getSelectedModel();
-		return this.delegate
-			.getModels()
-			.find(entry => entry.model.provider === selected?.provider && entry.model.model === selected.model);
+		return this.delegate.getModels().find(entry => entry.model.provider === selected?.provider && entry.model.model === selected.model);
 	}
 
 	private updateHelpHint(): void {
 		const entry = this.selectedEntry;
-		const selected = entry
-			? modelPickerEffortOptions(entry, this.delegate.getSelectedReasoningEffort()).find(option => option.checked)
-			: undefined;
+		const selected = entry ? modelPickerEffortOptions(entry, this.delegate.getSelectedReasoningEffort()).find(option => option.checked) : undefined;
 		const hint = this.accessibleViewService.getOpenAriaHint(AccessibilityVerbositySettingId.ChatModelConfiguration);
 		const description = [selected?.description, hint].filter(Boolean).join(' ');
 		if (description) {
@@ -132,9 +118,7 @@ export class ModelPickerConfiguration extends Disposable {
 		}
 		const entry = this.selectedEntry;
 		if (!entry || this.delegate.isAutomaticModel() || this.trigger.getAttribute('aria-disabled') === 'true') return;
-		const options = entry.supportedReasoningEfforts?.length
-			? modelPickerEffortOptions(entry, this.delegate.getSelectedReasoningEffort())
-			: [];
+		const options = entry.supportedReasoningEfforts?.length ? modelPickerEffortOptions(entry, this.delegate.getSelectedReasoningEffort()) : [];
 		const headings = new Set<IAction>();
 		const actions: IAction[] = [];
 		if (options.length) {
@@ -181,9 +165,7 @@ export class ModelPickerConfiguration extends Disposable {
 			headings.add(heading);
 			actions.push(heading);
 			for (const longContext of [false, true]) {
-				const label = longContext
-					? localize('chat.modelPicker.longContextOn', 'Long context on')
-					: localize('chat.modelPicker.longContextOff', 'Long context off');
+				const label = longContext ? localize('chat.modelPicker.longContextOn', 'Long context on') : localize('chat.modelPicker.longContextOff', 'Long context off');
 				actions.push({
 					id: `ash.chat.input.context.${longContext}`,
 					label,
@@ -211,8 +193,7 @@ export class ModelPickerConfiguration extends Disposable {
 				contextViewContainer: this.contextViewService.container,
 				layer: 20,
 				getCheckedActionsRepresentation: () => 'radio',
-				actionViewItemProvider: action =>
-					headings.has(action) ? new ModelConfigurationHeading(action) : undefined,
+				actionViewItemProvider: action => (headings.has(action) ? new ModelConfigurationHeading(action) : undefined),
 			},
 			defaultMenuStyles,
 		);
@@ -220,19 +201,11 @@ export class ModelPickerConfiguration extends Disposable {
 		menu.element.setAttribute('aria-label', localize('chat.modelPicker.configuration', 'Model options'));
 		for (const option of options) {
 			if (option.description)
-				menu.element
-					.querySelector<HTMLButtonElement>(
-						`[data-action-id='ash.chat.input.effort.${option.effort ?? 'default'}'] button`,
-					)
-					?.setAttribute('aria-description', option.description);
+				menu.element.querySelector<HTMLButtonElement>(`[data-action-id='ash.chat.input.effort.${option.effort ?? 'default'}'] button`)?.setAttribute('aria-description', option.description);
 		}
 		for (const longContext of [false, true]) {
-			const description = longContext
-				? localize('chat.modelPicker.longContextOn', 'Long context on')
-				: localize('chat.modelPicker.longContextOff', 'Long context off');
-			menu.element
-				.querySelector<HTMLButtonElement>(`[data-action-id='ash.chat.input.context.${longContext}'] button`)
-				?.setAttribute('aria-description', description);
+			const description = longContext ? localize('chat.modelPicker.longContextOn', 'Long context on') : localize('chat.modelPicker.longContextOff', 'Long context off');
+			menu.element.querySelector<HTMLButtonElement>(`[data-action-id='ash.chat.input.context.${longContext}'] button`)?.setAttribute('aria-description', description);
 		}
 		this.menu.value = menu;
 		const shown = this.contextView.show({
@@ -254,10 +227,7 @@ export class ModelPickerConfiguration extends Disposable {
 			return;
 		}
 		this.trigger.setAttribute('aria-expanded', 'true');
-		(
-			menu.element.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]') ??
-			menu.element.querySelector<HTMLElement>('[role="menuitemradio"]')
-		)?.focus();
+		(menu.element.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]') ?? menu.element.querySelector<HTMLElement>('[role="menuitemradio"]'))?.focus();
 	}
 }
 

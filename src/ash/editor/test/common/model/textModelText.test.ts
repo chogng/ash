@@ -14,7 +14,11 @@ test('Model text reads current text and coordinates after edits and EOL changes'
 	model.applyEdits([{ range: new Range(1, 1, 1, 3), text: 'x\r\ny' }]);
 	assert.deepEqual(
 		{ range: text.length.toRange(), lineLength: text.getLineLength(2), start: coordinates.getPosition(6) },
-		{ range: new Range(1, 1, 3, 5), lineLength: 1, start: model.getPositionAt(6) },
+		{
+			range: new Range(1, 1, 3, 5),
+			lineLength: 1,
+			start: model.getPositionAt(6),
+		},
 	);
 	model.setEOL(0);
 	assert.equal(text.getValueOfOffsetRange(new OffsetRange(4, 8)), 'last');

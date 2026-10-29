@@ -53,25 +53,18 @@ test('Agent Sessions keeps visible rows through catalog updates and translates i
 			[...control.domNode.querySelectorAll('h3')].map(heading => heading.textContent),
 			['草稿', '会话'],
 		);
-		const firstRow = control.domNode.querySelector<HTMLButtonElement>(
-			'.ash-agent-session-row[aria-current="page"]',
-		);
+		const firstRow = control.domNode.querySelector<HTMLButtonElement>('.ash-agent-session-row[aria-current="page"]');
 		assert.equal(firstRow?.title, 'First Session');
 		const search = control.domNode.querySelector<HTMLInputElement>('input');
 		assert.ok(search);
 		search.focus();
 		search.dispatchEvent(new document.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
 		assert.equal(document.window.document.activeElement?.closest('button')?.title, 'Draft One');
-		control.domNode
-			.querySelector<HTMLButtonElement>('.ash-agent-session-row')
-			?.dispatchEvent(new document.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+		control.domNode.querySelector<HTMLButtonElement>('.ash-agent-session-row')?.dispatchEvent(new document.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
 		assert.equal(document.window.document.activeElement, firstRow);
 		items = [items[0]!, { ...items[1]!, title: 'Renamed Session' }];
 		changed.fire();
-		assert.equal(
-			control.domNode.querySelector<HTMLButtonElement>('.ash-agent-session-row[aria-current="page"]'),
-			firstRow,
-		);
+		assert.equal(control.domNode.querySelector<HTMLButtonElement>('.ash-agent-session-row[aria-current="page"]'), firstRow);
 		firstRow?.click();
 		assert.deepEqual(opened, ['session:one']);
 		search.value = 'missing';
@@ -96,9 +89,7 @@ test('Agent Sessions exposes the captured row menu by pointer and keyboard and r
 		kind: 'session',
 		active: false,
 		open: () => invoked.push('open'),
-		getActions: () => [
-			{ id: 'rename', label: 'Rename', enabled: true, tooltip: '', run: () => invoked.push('rename') },
-		],
+		getActions: () => [{ id: 'rename', label: 'Rename', enabled: true, tooltip: '', run: () => invoked.push('rename') }],
 	};
 	try {
 		using control = new AgentSessionsControl(

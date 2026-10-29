@@ -47,9 +47,7 @@ export class LanguageModelsConfigurationService extends Disposable implements IL
 			if (requested.toLowerCase() === 'auto') {
 				return undefined;
 			}
-			const match = models.find(
-				entry => `${entry.model.provider}/${entry.model.model}`.toLowerCase() === requested.toLowerCase(),
-			);
+			const match = models.find(entry => `${entry.model.provider}/${entry.model.model}`.toLowerCase() === requested.toLowerCase());
 			if (match) {
 				return match.model;
 			}

@@ -11,9 +11,7 @@ for (const enablement of [undefined, 'disabled', 'enabled'] as const) {
 		const connection = {
 			async request(definition: { method: string }, params: Record<string, unknown>) {
 				calls.push({ method: definition.method, params });
-				return definition.method === 'config/read'
-					? { revision: 12, skillSources: enablement ? { [id]: { id, rootReference, enablement } } : {} }
-					: {};
+				return definition.method === 'config/read' ? { revision: 12, skillSources: enablement ? { [id]: { id, rootReference, enablement } } : {} } : {};
 			},
 		} as unknown as AppServerProtocolClient;
 		await createAppServerSkillOperations(connection).registerSource(rootReference);
@@ -48,9 +46,6 @@ test('Skill source configuration conflicts are returned without retrying the mut
 			throw conflict;
 		},
 	} as unknown as AppServerProtocolClient;
-	await assert.rejects(
-		createAppServerSkillOperations(connection).registerSource('/fixture-home/.ash/skills'),
-		error => error === conflict,
-	);
+	await assert.rejects(createAppServerSkillOperations(connection).registerSource('/fixture-home/.ash/skills'), error => error === conflict);
 	assert.deepEqual(methods, ['config/read', 'skill/source/add']);
 });

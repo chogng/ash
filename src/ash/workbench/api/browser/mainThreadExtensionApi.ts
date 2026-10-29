@@ -37,20 +37,12 @@ import { MainThreadWorkspace } from './mainThreadWorkspace.js';
 import { IHostService } from '../../services/host/browser/host.js';
 import { getRemoteAuthorityPrefix } from '../../../platform/remote/common/remoteAuthorityResolver.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
-import {
-	IRemoteConnectionService,
-	type RemoteConnectionResolver,
-	type RemoteConnectionResolverRegistration,
-} from '../../../platform/remote/common/remoteConnectionService.js';
+import { IRemoteConnectionService, type RemoteConnectionResolver, type RemoteConnectionResolverRegistration } from '../../../platform/remote/common/remoteConnectionService.js';
 import { localize } from '../../../nls.js';
 import { MainThreadStatusBar } from './mainThreadStatusBar.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { MenuId, MenusRegistry, type IMenuItem } from '../../../platform/actions/common/actions.js';
-import type {
-	CommandDefinition,
-	CommandRegistration,
-	CommandRegistry,
-} from '../../../platform/commands/common/commands.js';
+import type { CommandDefinition, CommandRegistration, CommandRegistry } from '../../../platform/commands/common/commands.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { createExtensionHostInitialization } from '../../services/extensions/common/extensionHostProtocol.js';
 import {
@@ -61,24 +53,11 @@ import {
 	type ExtensionHostRuntime,
 } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
-import {
-	ILanguageFeaturesService,
-	type LanguageProviderBatch,
-	type LanguageProviderBatchRegistration,
-} from '../../../editor/common/services/languageFeatures.js';
+import { ILanguageFeaturesService, type LanguageProviderBatch, type LanguageProviderBatchRegistration } from '../../../editor/common/services/languageFeatures.js';
 import { ITaskService } from '../../contrib/tasks/common/taskService.js';
 import { type TaskProvider, type TaskProviderRegistration } from '../../contrib/tasks/common/tasks.js';
-import {
-	ITestingService,
-	type TestProfileProvider,
-	type TestProfileProviderRegistration,
-} from '../../services/testing/common/testingService.js';
-import {
-	IOutputService,
-	OUTPUT_VIEW_ID,
-	type IOutputChannel,
-	type OutputEntrySeverity,
-} from '../../services/output/common/output.js';
+import { ITestingService, type TestProfileProvider, type TestProfileProviderRegistration } from '../../services/testing/common/testingService.js';
+import { IOutputService, OUTPUT_VIEW_ID, type IOutputChannel, type OutputEntrySeverity } from '../../services/output/common/output.js';
 import {
 	createExtensionHostLanguageProviderBatch,
 	extensionHostLanguageProviderId,
@@ -110,11 +89,7 @@ import { URI } from '../../../base/common/uri.js';
 import { Range } from '../../../editor/common/core/range.js';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { CancellationError } from '../../../base/common/errors.js';
-import type {
-	ExtensionClientOperation,
-	ExtensionClientResult,
-	ExtensionQuickPickItem,
-} from '../common/extHost.protocol.js';
+import type { ExtensionClientOperation, ExtensionClientResult, ExtensionQuickPickItem } from '../common/extHost.protocol.js';
 import type { JsonValue, ExtensionClientSource } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { MainThreadDocuments, extensionDocumentSnapshot } from './mainThreadDocuments.js';
 import { MainThreadDiagnostics } from './mainThreadDiagnostics.js';
@@ -244,54 +219,31 @@ export class MainThreadExtensionApi extends Disposable {
 		super();
 		this.messages = this._register(instantiation.createInstance(MainThreadMessageService));
 		this.scmApi = this._register(
-			instantiation.createInstance(
-				MainThreadSCM,
-				this.invocationTimeoutMillis,
-				(error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' }),
-				commands,
-			),
+			instantiation.createInstance(MainThreadSCM, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' }), commands),
 		);
 		this.backendApi = this._register(instantiation.createInstance(MainThreadExtensionBackend));
 		this.terminalApi = this._register(instantiation.createInstance(MainThreadTerminalService));
 		this.speechApi = this._register(instantiation.createInstance(MainThreadSpeech, this.invocationTimeoutMillis));
 		this.configurationApi = this._register(
-			instantiation.createInstance(MainThreadConfiguration, this.invocationTimeoutMillis, (error: unknown) =>
-				this.fleetOutput.appendLine({ text: String(error), severity: 'error' }),
-			),
+			instantiation.createInstance(MainThreadConfiguration, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })),
 		);
 		this.workspaceApi = this._register(
-			instantiation.createInstance(MainThreadWorkspace, this.invocationTimeoutMillis, (error: unknown) =>
-				this.fleetOutput.appendLine({ text: String(error), severity: 'error' }),
-			),
+			instantiation.createInstance(MainThreadWorkspace, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })),
 		);
 		// Host adapters validate callback messages; editor contracts stay in the Workbench.
-		const clientHandler = this.api.registerClientHandler((operation, signal, source) =>
-			this.handleClientOperation(operation as ExtensionClientOperation, signal, source),
-		);
+		const clientHandler = this.api.registerClientHandler((operation, signal, source) => this.handleClientOperation(operation as ExtensionClientOperation, signal, source));
 		this._register(toDisposable(() => clientHandler.dispose()));
-		this.customEditors = this._register(
-			instantiation.createInstance(MainThreadCustomEditors, this.invocationTimeoutMillis),
-		);
+		this.customEditors = this._register(instantiation.createInstance(MainThreadCustomEditors, this.invocationTimeoutMillis));
 		this.diagnostics = this._register(instantiation.createInstance(MainThreadDiagnostics));
-		this.statusbar = this._register(
-			instantiation.createInstance(MainThreadStatusBar, (error: unknown) =>
-				this.fleetOutput.appendLine({ text: String(error), severity: 'error' }),
-			),
-		);
+		this.statusbar = this._register(instantiation.createInstance(MainThreadStatusBar, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
 		this.documents = this._register(
-			instantiation.createInstance(MainThreadDocuments, this.invocationTimeoutMillis, (error: unknown) =>
-				this.fleetOutput.appendLine({ text: String(error), severity: 'error' }),
-			),
+			instantiation.createInstance(MainThreadDocuments, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })),
 		);
 		this.taskApi = this._register(
-			instantiation.createInstance(MainThreadTask, this.invocationTimeoutMillis, (error: unknown) =>
-				this.fleetOutput.appendLine({ text: String(error), severity: 'error' }),
-			),
+			instantiation.createInstance(MainThreadTask, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })),
 		);
 		this.debugApi = this._register(
-			instantiation.createInstance(MainThreadDebugService, this.invocationTimeoutMillis, (error: unknown) =>
-				this.fleetOutput.appendLine({ text: String(error), severity: 'error' }),
-			),
+			instantiation.createInstance(MainThreadDebugService, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })),
 		);
 		this.commandRegistration = this._register(commands.registerMany([]));
 		this.languageRegistration = this._register(languageFeatures.registerProviderBatch({}));
@@ -317,11 +269,7 @@ export class MainThreadExtensionApi extends Disposable {
 		return this.activeContributions !== undefined;
 	}
 
-	private async handleClientOperation(
-		operation: ExtensionClientOperation,
-		signal: AbortSignal,
-		source: ExtensionClientSource,
-	): Promise<ExtensionClientResult> {
+	private async handleClientOperation(operation: ExtensionClientOperation, signal: AbortSignal, source: ExtensionClientSource): Promise<ExtensionClientResult> {
 		this.assertNotDisposed();
 		throwIfCancelled(signal);
 		switch (operation.operation) {
@@ -335,38 +283,15 @@ export class MainThreadExtensionApi extends Disposable {
 			case 'backendRequest':
 				return {
 					result: 'value',
-					value: await this.backendApi.handle(
-						source,
-						operation.capability,
-						operation.method,
-						operation.params,
-						0,
-						signal,
-						operation.progress,
-					),
+					value: await this.backendApi.handle(source, operation.capability, operation.method, operation.params, 0, signal, operation.progress),
 				};
 			case 'backendState':
 				return {
 					result: 'value',
-					value: await this.backendApi.handle(
-						source,
-						operation.capability,
-						undefined,
-						{},
-						operation.after,
-						signal,
-						undefined,
-						operation.waitForChange === true,
-					),
+					value: await this.backendApi.handle(source, operation.capability, undefined, {}, operation.after, signal, undefined, operation.waitForChange === true),
 				};
 			case 'editorOperation':
-				if (
-					operation.payload &&
-					typeof operation.payload === 'object' &&
-					!Array.isArray(operation.payload) &&
-					'method' in operation.payload &&
-					operation.payload.method === 'canvasChanged'
-				) {
+				if (operation.payload && typeof operation.payload === 'object' && !Array.isArray(operation.payload) && 'method' in operation.payload && operation.payload.method === 'canvasChanged') {
 					if (!this.canvases) {
 						throw new Error('Canvas providers are unavailable');
 					}
@@ -380,8 +305,7 @@ export class MainThreadExtensionApi extends Disposable {
 					'method' in operation.payload &&
 					operation.payload.method === 'jsonSchemaContributions'
 				) {
-					if (Object.keys(operation.payload).length !== 1)
-						throw new TypeError('Invalid JSON schema contribution request');
+					if (Object.keys(operation.payload).length !== 1) throw new TypeError('Invalid JSON schema contribution request');
 					return { result: 'value', value: this.configurationApi.getJsonSchemaContributions() };
 				}
 				if (
@@ -391,20 +315,15 @@ export class MainThreadExtensionApi extends Disposable {
 					'method' in operation.payload &&
 					operation.payload.method === 'showImageEditor'
 				) {
-					await (this.imageEditors ??= this._register(
-						this.instantiation.createInstance(MainThreadImageEditors, this.invocationTimeoutMillis),
-					)).show(operation.payload, signal, source);
+					await (this.imageEditors ??= this._register(this.instantiation.createInstance(MainThreadImageEditors, this.invocationTimeoutMillis))).show(operation.payload, signal, source);
 					return { result: 'value', value: null };
 				}
 				return {
 					result: 'value',
 					value:
-						this.treeViews?.handleChange(operation.payload, source) ||
-						this.handleOutput(source, operation.payload)
+						this.treeViews?.handleChange(operation.payload, source) || this.handleOutput(source, operation.payload)
 							? null
-							: await (this.editorsApi ??= this._register(
-									this.instantiation.createInstance(MainThreadEditors),
-								)).handle(operation.payload, signal, source),
+							: await (this.editorsApi ??= this._register(this.instantiation.createInstance(MainThreadEditors))).handle(operation.payload, signal, source),
 				};
 			case 'addDebugBreakpoints':
 			case 'removeDebugBreakpoints':
@@ -421,30 +340,15 @@ export class MainThreadExtensionApi extends Disposable {
 				return this.taskApi.handle(operation, signal, source);
 			case 'openRemoteConnection': {
 				const runtime = this.remoteSources.get(source.extensionId);
-				if (
-					!runtime ||
-					runtime.incarnation !== source.incarnation ||
-					runtime.activationGeneration !== source.activationGeneration
-				) {
+				if (!runtime || runtime.incarnation !== source.incarnation || runtime.activationGeneration !== source.activationGeneration) {
 					throw new Error('Remote extension authority was revoked');
 				}
-				const isStandard = runtime.registrations.some(
-					entry =>
-						entry.kind === 'remoteAuthorityResolver' &&
-						entry.authorityPrefix === getRemoteAuthorityPrefix(operation.authority),
-				);
-				const connection = isStandard
-					? undefined
-					: await this.remoteConnections.resolveConnection(operation.authority, signal);
+				const isStandard = runtime.registrations.some(entry => entry.kind === 'remoteAuthorityResolver' && entry.authorityPrefix === getRemoteAuthorityPrefix(operation.authority));
+				const connection = isStandard ? undefined : await this.remoteConnections.resolveConnection(operation.authority, signal);
 				throwIfCancelled(signal);
 				const result = await this.dialogs.confirm({
 					title: localize('remote.extension.openTitle', 'Open Remote Window'),
-					message: localize(
-						'remote.extension.openMessage',
-						"Extension '{0}' wants to open '{1}'.",
-						source.extensionId,
-						connection?.name ?? operation.authority,
-					),
+					message: localize('remote.extension.openMessage', "Extension '{0}' wants to open '{1}'.", source.extensionId, connection?.name ?? operation.authority),
 					detail: connection ? `${connection.host}:${connection.workspace}` : operation.authority,
 					primaryButton: localize('remote.extension.openButton', 'Open Remote Window'),
 				});
@@ -473,10 +377,7 @@ export class MainThreadExtensionApi extends Disposable {
 				this.diagnostics.set(source, operation.collection, operation.entries, operation.merge);
 				return { result: 'done' };
 			case 'executeCommand': {
-				const value = await this.commandService.executeCommand(
-					operation.command,
-					...this.scmApi.reviveCommandArguments(source, operation.arguments),
-				);
+				const value = await this.commandService.executeCommand(operation.command, ...this.scmApi.reviveCommandArguments(source, operation.arguments));
 				return {
 					result: 'command',
 					value: value === undefined ? null : normalizeExtensionHostPayload(value),
@@ -489,14 +390,7 @@ export class MainThreadExtensionApi extends Disposable {
 				const resource = URI.parse(operation.uri);
 				// Filesystem permissions and virtual resource identity belong to the existing client provider.
 				if (!this.workspace.getWorkspaceFolder(resource)) throw new Error('Resource is outside the workspace');
-				const type = (kind: FileKind): number =>
-					kind === FileKind.Directory
-						? 2
-						: kind === FileKind.File
-							? 1
-							: kind === FileKind.SymbolicLink
-								? 64
-								: 0;
+				const type = (kind: FileKind): number => (kind === FileKind.Directory ? 2 : kind === FileKind.File ? 1 : kind === FileKind.SymbolicLink ? 64 : 0);
 				if (operation.operation === 'readResourceFile') {
 					const value = await this.files.readFileBytes(resource);
 					throwIfCancelled(signal);
@@ -539,9 +433,7 @@ export class MainThreadExtensionApi extends Disposable {
 						if (
 							!Number.isSafeInteger(document.version) ||
 							document.version < 1 ||
-							[edit.start.line, edit.start.character, edit.end.line, edit.end.character].some(
-								value => !Number.isSafeInteger(value) || value < 0,
-							) ||
+							[edit.start.line, edit.start.character, edit.end.line, edit.end.character].some(value => !Number.isSafeInteger(value) || value < 0) ||
 							edit.start.line > edit.end.line ||
 							(edit.start.line === edit.end.line && edit.start.character > edit.end.character)
 						) {
@@ -550,12 +442,7 @@ export class MainThreadExtensionApi extends Disposable {
 						return new ResourceTextEdit(
 							URI.parse(document.uri),
 							{
-								range: new Range(
-									edit.start.line + 1,
-									edit.start.character + 1,
-									edit.end.line + 1,
-									edit.end.character + 1,
-								),
+								range: new Range(edit.start.line + 1, edit.start.character + 1, edit.end.line + 1, edit.end.character + 1),
 								text: edit.text,
 							},
 							document.version,
@@ -566,9 +453,7 @@ export class MainThreadExtensionApi extends Disposable {
 				return { result: 'applied', applied: result.isApplied };
 			}
 			case 'readInitialization': {
-				const localization = await this.instantiation
-					.createInstance(MainThreadLocalization)
-					.getLocalization(source.extensionId);
+				const localization = await this.instantiation.createInstance(MainThreadLocalization).getLocalization(source.extensionId);
 				return {
 					result: 'initialization',
 					initialization: {
@@ -578,35 +463,21 @@ export class MainThreadExtensionApi extends Disposable {
 				};
 			}
 			case 'readConfiguration': {
-				const value = this.configuration.getValue(
-					operation.section,
-					operation.resource === null ? {} : { resource: URI.parse(operation.resource) },
-				);
+				const value = this.configuration.getValue(operation.section, operation.resource === null ? {} : { resource: URI.parse(operation.resource) });
 				return {
 					result: 'configuration',
 					value: value === undefined ? null : normalizeExtensionHostPayload(value),
 				};
 			}
 			case 'inspectConfiguration': {
-				const value = this.configuration.inspect(
-					operation.section,
-					operation.resource === null ? {} : { resource: URI.parse(operation.resource) },
-				);
+				const value = this.configuration.inspect(operation.section, operation.resource === null ? {} : { resource: URI.parse(operation.resource) });
 				return { result: 'configuration', value: normalizeExtensionHostPayload(value) };
 			}
 			case 'resetConfiguration':
-				await this.configuration.updateValue(
-					operation.section,
-					undefined,
-					operation.target === 'user' ? ConfigurationTarget.USER_LOCAL : ConfigurationTarget.WORKSPACE,
-				);
+				await this.configuration.updateValue(operation.section, undefined, operation.target === 'user' ? ConfigurationTarget.USER_LOCAL : ConfigurationTarget.WORKSPACE);
 				return { result: 'done' };
 			case 'updateConfiguration':
-				await this.configuration.updateValue(
-					operation.section,
-					operation.value,
-					operation.target === 'user' ? ConfigurationTarget.USER_LOCAL : ConfigurationTarget.WORKSPACE,
-				);
+				await this.configuration.updateValue(operation.section, operation.value, operation.target === 'user' ? ConfigurationTarget.USER_LOCAL : ConfigurationTarget.WORKSPACE);
 				return { result: 'done' };
 			case 'showMessage':
 				return this.messages.handle(operation, source.extensionId, signal);
@@ -615,11 +486,7 @@ export class MainThreadExtensionApi extends Disposable {
 		}
 	}
 
-	private showQuickPick(
-		items: readonly ExtensionQuickPickItem[],
-		placeholder: string,
-		signal: AbortSignal,
-	): Promise<ExtensionClientResult> {
+	private showQuickPick(items: readonly ExtensionQuickPickItem[], placeholder: string, signal: AbortSignal): Promise<ExtensionClientResult> {
 		if (
 			!Array.isArray(items) ||
 			typeof placeholder !== 'string' ||
@@ -680,14 +547,8 @@ export class MainThreadExtensionApi extends Disposable {
 		this.remoteSources.clear();
 		for (const runtime of snapshot.extensions) {
 			if (
-				(runtime.lifecycle === 'ready' &&
-					runtime.registrations.some(
-						registration =>
-							registration.kind === 'remoteConnectionResolver' ||
-							registration.kind === 'remoteAuthorityResolver',
-					)) ||
-				(['dormant', 'starting', 'handshaking'].includes(runtime.lifecycle) &&
-					runtime.activation?.events.some(event => event.startsWith('onResolveRemoteAuthority:')))
+				(runtime.lifecycle === 'ready' && runtime.registrations.some(registration => registration.kind === 'remoteConnectionResolver' || registration.kind === 'remoteAuthorityResolver')) ||
+				(['dormant', 'starting', 'handshaking'].includes(runtime.lifecycle) && runtime.activation?.events.some(event => event.startsWith('onResolveRemoteAuthority:')))
 			)
 				this.remoteSources.set(runtime.id, runtime);
 		}
@@ -696,30 +557,13 @@ export class MainThreadExtensionApi extends Disposable {
 		this.speechApi.update(snapshot);
 		if (
 			this.instantiation.getOptional(IAgentHostCanvasCollection) &&
-			(this.canvases ||
-				snapshot.extensions.some(owner =>
-					owner.registrations.some(
-						registration =>
-							registration.kind === 'dataChannel' && registration.channelId === 'canvas.provider.v1',
-					),
-				))
+			(this.canvases || snapshot.extensions.some(owner => owner.registrations.some(registration => registration.kind === 'dataChannel' && registration.channelId === 'canvas.provider.v1')))
 		) {
-			(this.canvases ??= this._register(
-				this.instantiation.createInstance(MainThreadCanvases, this.invocationTimeoutMillis),
-			)).update(snapshot);
+			(this.canvases ??= this._register(this.instantiation.createInstance(MainThreadCanvases, this.invocationTimeoutMillis))).update(snapshot);
 		}
 		this.customEditors.update(snapshot);
-		if (
-			this.imageEditors ||
-			snapshot.extensions.some(owner =>
-				owner.registrations.some(
-					registration => registration.kind === 'dataChannel' && registration.channelId === 'image.editor.v1',
-				),
-			)
-		)
-			(this.imageEditors ??= this._register(
-				this.instantiation.createInstance(MainThreadImageEditors, this.invocationTimeoutMillis),
-			)).update(snapshot);
+		if (this.imageEditors || snapshot.extensions.some(owner => owner.registrations.some(registration => registration.kind === 'dataChannel' && registration.channelId === 'image.editor.v1')))
+			(this.imageEditors ??= this._register(this.instantiation.createInstance(MainThreadImageEditors, this.invocationTimeoutMillis))).update(snapshot);
 		this.diagnostics.update(snapshot);
 		this.documents.update(snapshot);
 		this.configurationApi.update(snapshot);
@@ -730,13 +574,8 @@ export class MainThreadExtensionApi extends Disposable {
 		this.statusbar.update(snapshot);
 		this.scmApi.update(snapshot);
 		const treeIssues =
-			this.treeViews ||
-			snapshot.extensions.some(runtime =>
-				runtime.registrations.some(registration => registration.kind === 'treeDataProvider'),
-			)
-				? (this.treeViews ??= this._register(
-						this.instantiation.createInstance(MainThreadTreeViews, this.invocationTimeoutMillis),
-					)).update(snapshot)
+			this.treeViews || snapshot.extensions.some(runtime => runtime.registrations.some(registration => registration.kind === 'treeDataProvider'))
+				? (this.treeViews ??= this._register(this.instantiation.createInstance(MainThreadTreeViews, this.invocationTimeoutMillis))).update(snapshot)
 				: [];
 		this.editorsApi?.updateSources(snapshot);
 		return [...(this.activeContributions?.issues ?? []), ...treeIssues];
@@ -793,23 +632,14 @@ export class MainThreadExtensionApi extends Disposable {
 				// Preserve its first call while the actual registration replaces that selector.
 				const resolverPrefixes =
 					runtime.lifecycle === 'ready'
-						? runtime.registrations.flatMap(registration =>
-								registration.kind === 'remoteConnectionResolver' ? [registration.authorityPrefix] : [],
-							)
+						? runtime.registrations.flatMap(registration => (registration.kind === 'remoteConnectionResolver' ? [registration.authorityPrefix] : []))
 						: ['dormant', 'starting', 'handshaking'].includes(runtime.lifecycle)
-							? (runtime.activation?.events.flatMap(event =>
-									event.startsWith('onResolveRemoteAuthority:')
-										? [event.slice('onResolveRemoteAuthority:'.length)]
-										: [],
-								) ?? [])
+							? (runtime.activation?.events.flatMap(event => (event.startsWith('onResolveRemoteAuthority:') ? [event.slice('onResolveRemoteAuthority:'.length)] : [])) ?? [])
 							: [];
 				const activatingResolver = resolverPrefixes.some(prefix => {
 					const pending = previous?.contributions.registrations.get(`remoteResolver:${runtime.id}:${prefix}`);
 					return (
-						pending?.remoteResolver &&
-						pending.incarnation === undefined &&
-						pending.identity ===
-							JSON.stringify([runtime.id, runtime.activationGeneration, runtime.packageDigest, prefix])
+						pending?.remoteResolver && pending.incarnation === undefined && pending.identity === JSON.stringify([runtime.id, runtime.activationGeneration, runtime.packageDigest, prefix])
 					);
 				});
 				owners.set(
@@ -821,20 +651,14 @@ export class MainThreadExtensionApi extends Disposable {
 								runtimeIdentity,
 								contributions: this.buildExtensionContributions(
 									{ ...snapshot, extensions: [runtime] },
-									previous && (previous.runtimeIdentity === runtimeIdentity || activatingResolver)
-										? previous.contributions
-										: undefined,
+									previous && (previous.runtimeIdentity === runtimeIdentity || activatingResolver) ? previous.contributions : undefined,
 								),
 							},
 				);
 			}
 		} catch (error) {
 			for (const [id, owner] of owners) {
-				retireExtensionContributions(
-					owner.contributions,
-					this.activeContributions?.owners.get(id)?.contributions,
-					error,
-				);
+				retireExtensionContributions(owner.contributions, this.activeContributions?.owners.get(id)?.contributions, error);
 			}
 			throw error;
 		}
@@ -861,30 +685,21 @@ export class MainThreadExtensionApi extends Disposable {
 		});
 	}
 
-	private retireContributions(
-		previous: ContributionSet | undefined,
-		current: ContributionSet | undefined,
-		reason: unknown,
-	): void {
+	private retireContributions(previous: ContributionSet | undefined, current: ContributionSet | undefined, reason: unknown): void {
 		if (!previous) return;
 		for (const [id, owner] of previous.owners) {
 			retireExtensionContributions(owner.contributions, current?.owners.get(id)?.contributions, reason);
 		}
 	}
 
-	private createRemoteConnectionResolver(
-		owner: ExtensionHostRuntime,
-		prefix: string,
-		lifetime: AbortSignal,
-	): RemoteConnectionResolver {
+	private createRemoteConnectionResolver(owner: ExtensionHostRuntime, prefix: string, lifetime: AbortSignal): RemoteConnectionResolver {
 		return {
 			authorityPrefix: prefix,
 			resolve: async (authority, signal) => {
 				const requestSignal = AbortSignal.any([lifetime, signal, this.activationController.signal]);
 				requestSignal.throwIfAborted();
 				let current = this.remoteSources.get(owner.id);
-				if (!current || current.activationGeneration !== owner.activationGeneration)
-					throw new CancellationError();
+				if (!current || current.activationGeneration !== owner.activationGeneration) throw new CancellationError();
 				if (current.lifecycle !== 'ready') {
 					const activated = await this.api.activateByEvent({
 						extensionId: owner.id,
@@ -894,9 +709,7 @@ export class MainThreadExtensionApi extends Disposable {
 					current = activated.extensions.find(runtime => runtime.id === owner.id);
 				}
 				requestSignal.throwIfAborted();
-				const registration = current?.registrations.find(
-					entry => entry.kind === 'remoteConnectionResolver' && entry.authorityPrefix === prefix,
-				);
+				const registration = current?.registrations.find(entry => entry.kind === 'remoteConnectionResolver' && entry.authorityPrefix === prefix);
 				if (
 					current?.lifecycle !== 'ready' ||
 					current.incarnation === undefined ||
@@ -905,11 +718,7 @@ export class MainThreadExtensionApi extends Disposable {
 					!registration
 				)
 					throw new CancellationError();
-				const result = await this.registrationInvoker(current, registration, requestSignal)(
-					'resolveConnection',
-					{ authority },
-					requestSignal,
-				);
+				const result = await this.registrationInvoker(current, registration, requestSignal)('resolveConnection', { authority }, requestSignal);
 				if (
 					!result ||
 					typeof result !== 'object' ||
@@ -924,10 +733,7 @@ export class MainThreadExtensionApi extends Disposable {
 		};
 	}
 
-	private buildExtensionContributions(
-		snapshot: ExtensionHostFleetSnapshot,
-		previous?: ExtensionContributionSet,
-	): ExtensionContributionSet {
+	private buildExtensionContributions(snapshot: ExtensionHostFleetSnapshot, previous?: ExtensionContributionSet): ExtensionContributionSet {
 		const controller = previous?.controller ?? new AbortController();
 		const registrations = new Map<string, RegistrationLifetime>();
 		const commands: CommandDefinition[] = [];
@@ -949,42 +755,27 @@ export class MainThreadExtensionApi extends Disposable {
 		for (const runtime of snapshot.extensions) {
 			const providers = new Map<string, string>();
 			for (const registration of runtime.registrations)
-				if (registration.kind === 'taskProvider')
-					providers.set(
-						registration.registrationId,
-						extensionHostWorkflowProviderId(runtime.id, registration.registrationId),
-					);
+				if (registration.kind === 'taskProvider') providers.set(registration.registrationId, extensionHostWorkflowProviderId(runtime.id, registration.registrationId));
 			taskProviders.set(runtime.id, providers);
 		}
 		for (const runtime of snapshot.extensions) {
 			const extensionId = runtime.id;
 			const activationGeneration = runtime.activationGeneration;
 			const remotePrefixes = ['dormant', 'starting', 'handshaking'].includes(runtime.lifecycle)
-				? (runtime.activation?.events ?? [])
-						.filter(event => event.startsWith('onResolveRemoteAuthority:'))
-						.map(event => event.slice('onResolveRemoteAuthority:'.length))
-				: runtime.registrations.flatMap(registration =>
-						registration.kind === 'remoteConnectionResolver' ? [registration.authorityPrefix] : [],
-					);
+				? (runtime.activation?.events ?? []).filter(event => event.startsWith('onResolveRemoteAuthority:')).map(event => event.slice('onResolveRemoteAuthority:'.length))
+				: runtime.registrations.flatMap(registration => (registration.kind === 'remoteConnectionResolver' ? [registration.authorityPrefix] : []));
 			for (const prefix of remotePrefixes) {
 				const key = `remoteResolver:${extensionId}:${prefix}`;
 				const identity = JSON.stringify([extensionId, activationGeneration, runtime.packageDigest, prefix]);
 				const previousLifetime = previous?.registrations.get(key);
 				let lifetime =
-					previousLifetime?.identity === identity &&
-					(previousLifetime.incarnation === undefined || previousLifetime.incarnation === runtime.incarnation)
-						? previousLifetime
-						: undefined;
+					previousLifetime?.identity === identity && (previousLifetime.incarnation === undefined || previousLifetime.incarnation === runtime.incarnation) ? previousLifetime : undefined;
 				if (!lifetime) {
 					const resolverController = new AbortController();
 					lifetime = {
 						identity,
 						controller: resolverController,
-						remoteResolver: this.createRemoteConnectionResolver(
-							runtime,
-							prefix,
-							AbortSignal.any([controller.signal, resolverController.signal]),
-						),
+						remoteResolver: this.createRemoteConnectionResolver(runtime, prefix, AbortSignal.any([controller.signal, resolverController.signal])),
 					};
 				}
 				lifetime.incarnation = runtime.lifecycle === 'ready' ? runtime.incarnation : undefined;
@@ -1011,21 +802,12 @@ export class MainThreadExtensionApi extends Disposable {
 							});
 							signal.throwIfAborted();
 							const current = activated.extensions.find(
-								candidate =>
-									candidate.id === extensionId &&
-									candidate.activationGeneration === activationGeneration &&
-									candidate.lifecycle === 'ready',
+								candidate => candidate.id === extensionId && candidate.activationGeneration === activationGeneration && candidate.lifecycle === 'ready',
 							);
-							const registration = current?.registrations.find(
-								candidate => candidate.kind === 'command' && candidate.command === command.command,
-							);
+							const registration = current?.registrations.find(candidate => candidate.kind === 'command' && candidate.command === command.command);
 							if (!current || !registration) {
 								throw new Error(
-									localize(
-										{ bundle: 'ash.workbench', key: 'missingCommandAfterActivation' },
-										"Extension command '{0}' was not registered after activation.",
-										command.command,
-									),
+									localize({ bundle: 'ash.workbench', key: 'missingCommandAfterActivation' }, "Extension command '{0}' was not registered after activation.", command.command),
 								);
 							}
 							// Activating replaces process registrations. This command retains the connection
@@ -1034,10 +816,7 @@ export class MainThreadExtensionApi extends Disposable {
 								'execute',
 								normalizeExtensionHostPayload({
 									arguments: await this.scmApi.prepareCommandArguments(extensionId, args),
-									...(registration.kind === 'command' &&
-									registration.menus?.some(placement => placement.menu.startsWith('editor/'))
-										? { activeEditor }
-										: {}),
+									...(registration.kind === 'command' && registration.menus?.some(placement => placement.menu.startsWith('editor/')) ? { activeEditor } : {}),
 								}),
 								signal,
 							);
@@ -1047,27 +826,19 @@ export class MainThreadExtensionApi extends Disposable {
 			}
 			if (runtime.lifecycle !== 'ready' || runtime.incarnation === undefined) continue;
 			for (const registration of runtime.registrations) {
-				if (!ownsExecutableContribution(registration) || registration.kind === 'remoteConnectionResolver')
-					continue;
+				if (!ownsExecutableContribution(registration) || registration.kind === 'remoteConnectionResolver') continue;
 				const runtimeId = runtime.id;
 				const identity = JSON.stringify(registration);
 				const oldLifetime = previous?.registrations.get(registration.registrationId);
-				const lifetime =
-					oldLifetime?.identity === identity ? oldLifetime : { identity, controller: new AbortController() };
+				const lifetime = oldLifetime?.identity === identity ? oldLifetime : { identity, controller: new AbortController() };
 				registrations.set(registration.registrationId, lifetime);
-				const invoke = this.registrationInvoker(
-					runtime,
-					registration,
-					AbortSignal.any([controller.signal, lifetime.controller.signal]),
-				);
+				const invoke = this.registrationInvoker(runtime, registration, AbortSignal.any([controller.signal, lifetime.controller.signal]));
 				if (registration.kind === 'command') {
 					commands.push(
 						Object.freeze({
 							id: registration.command,
 							metadata: {
-								description: registration.category
-									? `${registration.category}: ${registration.title}`
-									: registration.title,
+								description: registration.category ? `${registration.category}: ${registration.title}` : registration.title,
 							},
 							handler: async (accessor: ServicesAccessor, ...args: readonly unknown[]) => {
 								if (!registration.menus?.some(placement => placement.menu.startsWith('editor/'))) {
@@ -1097,9 +868,7 @@ export class MainThreadExtensionApi extends Disposable {
 						if (order !== undefined && !Number.isFinite(order)) {
 							throw new TypeError(`Invalid menu order for extension command '${registration.command}'`);
 						}
-						const alternate = runtime.registrations.find(
-							candidate => candidate.kind === 'command' && candidate.command === placement.alt,
-						);
+						const alternate = runtime.registrations.find(candidate => candidate.kind === 'command' && candidate.command === placement.alt);
 						let id = extensionMenuId(placement.menu);
 						if (placement.menu === 'editor/title') {
 							id = MenuId.EditorTitle;
@@ -1112,9 +881,7 @@ export class MainThreadExtensionApi extends Disposable {
 								command: {
 									id: registration.command,
 									title: registration.title,
-									precondition: registration.enablement
-										? ContextKeyExpr.deserialize(registration.enablement)
-										: undefined,
+									precondition: registration.enablement ? ContextKeyExpr.deserialize(registration.enablement) : undefined,
 									icon: registration.icon ? Icon.fromId(registration.icon) : undefined,
 								},
 								alt:
@@ -1122,9 +889,7 @@ export class MainThreadExtensionApi extends Disposable {
 										? {
 												id: alternate.command,
 												title: alternate.title,
-												precondition: alternate.enablement
-													? ContextKeyExpr.deserialize(alternate.enablement)
-													: undefined,
+												precondition: alternate.enablement ? ContextKeyExpr.deserialize(alternate.enablement) : undefined,
 												icon: alternate.icon ? Icon.fromId(alternate.icon) : undefined,
 											}
 										: undefined,
@@ -1139,16 +904,10 @@ export class MainThreadExtensionApi extends Disposable {
 				if (registration.kind === 'languageProvider') {
 					appendLanguageBatch(
 						languages,
-						createExtensionHostLanguageProviderBatch(
-							registration,
-							runtime.id,
-							extensionHostLanguageProviderId(runtime.id, registration.registrationId),
-							invoke,
-						),
+						createExtensionHostLanguageProviderBatch(registration, runtime.id, extensionHostLanguageProviderId(runtime.id, registration.registrationId), invoke),
 					);
 					const unsupported = unsupportedExtensionHostLanguageOperations(registration);
-					if (unsupported.length > 0)
-						issues.push(unsupportedLanguageIssue(runtime, registration, unsupported));
+					if (unsupported.length > 0) issues.push(unsupportedLanguageIssue(runtime, registration, unsupported));
 					continue;
 				}
 				if (registration.kind === 'terminalCompletionProvider') {
@@ -1199,53 +958,29 @@ export class MainThreadExtensionApi extends Disposable {
 						invoke,
 						pty: {
 							signal: controller.signal,
-							invoker: registrationId =>
-								this.registrationInvoker(
-									fence,
-									{ kind: 'terminalPty', registrationId },
-									controller.signal,
-								),
+							invoker: registrationId => this.registrationInvoker(fence, { kind: 'terminalPty', registrationId }, controller.signal),
 						},
 					});
 					continue;
 				}
 				if (registration.kind === 'taskProvider') {
-					tasks.push(
-						createExtensionHostTaskProvider(
-							extensionHostWorkflowProviderId(runtime.id, registration.registrationId),
-							invoke,
-							this.workspace,
-							registration.taskType,
-						),
-					);
+					tasks.push(createExtensionHostTaskProvider(extensionHostWorkflowProviderId(runtime.id, registration.registrationId), invoke, this.workspace, registration.taskType));
 					continue;
 				}
 				if (registration.kind === 'testProfileProvider') {
 					const localTaskProviders = taskProviders.get(runtime.id)!;
 					tests.push(
-						createExtensionHostTestProfileProvider(
-							extensionHostWorkflowProviderId(runtime.id, registration.registrationId),
-							invoke,
-							(taskProviderRegistrationId, taskId) => {
-								const providerId = localTaskProviders.get(taskProviderRegistrationId);
-								if (!providerId)
-									throw new TypeError(
-										`Test Profile references unknown Task provider registration '${taskProviderRegistrationId}' in extension '${extensionId}'`,
-									);
-								return extensionHostCanonicalTaskId(providerId, taskId);
-							},
-						),
+						createExtensionHostTestProfileProvider(extensionHostWorkflowProviderId(runtime.id, registration.registrationId), invoke, (taskProviderRegistrationId, taskId) => {
+							const providerId = localTaskProviders.get(taskProviderRegistrationId);
+							if (!providerId) throw new TypeError(`Test Profile references unknown Task provider registration '${taskProviderRegistrationId}' in extension '${extensionId}'`);
+							return extensionHostCanonicalTaskId(providerId, taskId);
+						}),
 					);
 					continue;
 				}
 				if (registration.kind === 'debugAdapterTracker') {
 					debugTrackers.push(
-						createExtensionHostDebugAdapterTrackerFactory(
-							registration.debuggerType,
-							extensionHostWorkflowProviderId(runtime.id, registration.registrationId),
-							invoke,
-							this.workspace,
-						),
+						createExtensionHostDebugAdapterTrackerFactory(registration.debuggerType, extensionHostWorkflowProviderId(runtime.id, registration.registrationId), invoke, this.workspace),
 					);
 					continue;
 				}
@@ -1261,14 +996,7 @@ export class MainThreadExtensionApi extends Disposable {
 					);
 					continue;
 				}
-				debugAdapters.push(
-					createExtensionHostDebugAdapterFactory(
-						registration.debuggerType,
-						extensionHostWorkflowProviderId(runtime.id, registration.registrationId),
-						invoke,
-						this.workspace,
-					),
-				);
+				debugAdapters.push(createExtensionHostDebugAdapterFactory(registration.debuggerType, extensionHostWorkflowProviderId(runtime.id, registration.registrationId), invoke, this.workspace));
 			}
 		}
 		return Object.freeze({
@@ -1295,15 +1023,9 @@ export class MainThreadExtensionApi extends Disposable {
 	private commandEditorContext(accessor: ServicesAccessor, args: readonly unknown[]) {
 		const part = accessor.get(IEditorPart);
 		const context = args[0] as { groupId?: number; editorIndex?: number } | undefined;
-		const group =
-			typeof context?.groupId === 'number'
-				? part.groups.find(group => group.id === context.groupId)
-				: part.activeGroup;
-		const input =
-			typeof context?.editorIndex === 'number' ? group?.inputs[context.editorIndex] : group?.activeInput;
-		return input
-			? { resource: input.resource.toJSON(), groupId: group!.id, editorIndex: group!.inputs.indexOf(input) }
-			: null;
+		const group = typeof context?.groupId === 'number' ? part.groups.find(group => group.id === context.groupId) : part.activeGroup;
+		const input = typeof context?.editorIndex === 'number' ? group?.inputs[context.editorIndex] : group?.activeInput;
+		return input ? { resource: input.resource.toJSON(), groupId: group!.id, editorIndex: group!.inputs.indexOf(input) } : null;
 	}
 
 	private registrationInvoker(
@@ -1316,8 +1038,7 @@ export class MainThreadExtensionApi extends Disposable {
 		const { id: extensionId, activationGeneration, incarnation } = runtime;
 		const { registrationId } = registration;
 		return async (operation, payload, callerSignal) => {
-			if (incarnation === undefined)
-				throw new Error(`Extension '${extensionId}' has no active runtime incarnation`);
+			if (incarnation === undefined) throw new Error(`Extension '${extensionId}' has no active runtime incarnation`);
 			const combined = combineSignals(generationSignal, callerSignal);
 			try {
 				combined.signal.throwIfAborted();
@@ -1331,11 +1052,7 @@ export class MainThreadExtensionApi extends Disposable {
 						payload,
 						// Adapter creation can prepare a runtime on first use. Cancellation still
 						// follows this launch and the registration's activation generation.
-						deadlineUnixMillis:
-							Date.now() +
-							(registration.kind === 'debugAdapter'
-								? Math.max(this.invocationTimeoutMillis, 300_000)
-								: this.invocationTimeoutMillis),
+						deadlineUnixMillis: Date.now() + (registration.kind === 'debugAdapter' ? Math.max(this.invocationTimeoutMillis, 300_000) : this.invocationTimeoutMillis),
 					},
 					combined.signal,
 				);
@@ -1356,11 +1073,7 @@ export class MainThreadExtensionApi extends Disposable {
 		// to domains whose executable owners actually changed.
 		const changed = {
 			commands: !sameContributions(previous?.commands, next.commands),
-			languages:
-				!previous ||
-				(Object.keys(next.languages) as (keyof LanguageProviderBatch)[]).some(
-					key => !sameContributions(previous.languages[key], next.languages[key]),
-				),
+			languages: !previous || (Object.keys(next.languages) as (keyof LanguageProviderBatch)[]).some(key => !sameContributions(previous.languages[key], next.languages[key])),
 			tasks: !sameContributions(previous?.tasks, next.tasks),
 			debugAdapters: !sameContributions(previous?.debugAdapters, next.debugAdapters),
 			debugConfigurations: !sameContributions(previous?.debugConfigurations, next.debugConfigurations),
@@ -1393,19 +1106,15 @@ export class MainThreadExtensionApi extends Disposable {
 				if (changed.languages) this.languageRegistration.replace(previous?.languages ?? {});
 				if (changed.tasks) this.taskRegistration.replace(previous?.tasks ?? []);
 				if (changed.debugAdapters) this.debugAdapterRegistration.replace(previous?.debugAdapters ?? []);
-				if (changed.debugConfigurations)
-					this.debugConfigurationRegistration.replace(previous?.debugConfigurations ?? []);
+				if (changed.debugConfigurations) this.debugConfigurationRegistration.replace(previous?.debugConfigurations ?? []);
 				if (changed.debugTrackers) this.debugTrackerRegistration.replace(previous?.debugTrackers ?? []);
 				if (changed.tests) this.testRegistration.replace(previous?.tests ?? []);
 				if (changed.remoteResolvers) this.remoteRegistration.replace(previous?.remoteResolvers ?? []);
 				if (changed.terminalProfiles) this.terminalApi.replaceProfiles(previous?.terminalProfiles ?? []);
-				if (changed.terminalEnvironments)
-					this.terminalApi.replaceEnvironmentProviders(previous?.terminalEnvironments ?? []);
+				if (changed.terminalEnvironments) this.terminalApi.replaceEnvironmentProviders(previous?.terminalEnvironments ?? []);
 				if (changed.terminalLinks) this.terminalApi.replaceLinkProviders(previous?.terminalLinks ?? []);
-				if (changed.terminalCompletions)
-					this.terminalApi.replaceCompletionProviders(previous?.terminalCompletions ?? []);
-				if (changed.terminalQuickFixes)
-					this.terminalApi.replaceQuickFixProviders(previous?.terminalQuickFixes ?? []);
+				if (changed.terminalCompletions) this.terminalApi.replaceCompletionProviders(previous?.terminalCompletions ?? []);
+				if (changed.terminalQuickFixes) this.terminalApi.replaceQuickFixProviders(previous?.terminalQuickFixes ?? []);
 				this.activeContributions = previous;
 			} catch (rollbackError) {
 				this.commandRegistration.replace([]);
@@ -1425,23 +1134,14 @@ export class MainThreadExtensionApi extends Disposable {
 				this.terminalApi.replaceQuickFixProviders([]);
 				this.activeContributions = undefined;
 				this.retireContributions(previous, undefined, rollbackError);
-				throw new AggregateError(
-					[error, rollbackError],
-					'Extension Host contribution commit and rollback both failed',
-				);
+				throw new AggregateError([error, rollbackError], 'Extension Host contribution commit and rollback both failed');
 			}
 			throw error;
 		}
 		this.activeContributions = next;
 		this.commandMenus.clear();
 		for (const command of next.commands) {
-			if (
-				command.metadata?.description === command.id ||
-				next.menus.some(
-					placement => placement.id === MenuId.CommandPalette && placement.item.command.id === command.id,
-				)
-			)
-				continue;
+			if (command.metadata?.description === command.id || next.menus.some(placement => placement.id === MenuId.CommandPalette && placement.item.command.id === command.id)) continue;
 			this.commandMenus.add(
 				MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
 					command: { id: command.id, title: command.metadata!.description },
@@ -1503,17 +1203,10 @@ export class MainThreadExtensionApi extends Disposable {
 					text: runtimeLifecycleMessage(runtime),
 				});
 			}
-			const stderrStart =
-				previous &&
-				previous.incarnation === runtime.incarnation &&
-				runtime.stderr.length >= previous.stderrLength
-					? previous.stderrLength
-					: 0;
+			const stderrStart = previous && previous.incarnation === runtime.incarnation && runtime.stderr.length >= previous.stderrLength ? previous.stderrLength : 0;
 			const stderrDelta = runtime.stderr.slice(stderrStart);
 			if (stderrDelta) channel.append({ severity: 'log', category: 'stderr', text: stderrDelta });
-			const failureKey = runtime.failure
-				? `${runtime.failure.code}\0${runtime.failure.incarnation ?? ''}\0${runtime.failure.message}`
-				: '';
+			const failureKey = runtime.failure ? `${runtime.failure.code}\0${runtime.failure.incarnation ?? ''}\0${runtime.failure.message}` : '';
 			if (runtime.failure && failureKey !== previous?.failureKey)
 				channel.appendLine({
 					severity: 'error',
@@ -1531,13 +1224,7 @@ export class MainThreadExtensionApi extends Disposable {
 	}
 
 	private handleOutput(source: ExtensionClientSource, payload: JsonValue): boolean {
-		if (
-			!payload ||
-			typeof payload !== 'object' ||
-			Array.isArray(payload) ||
-			!('method' in payload) ||
-			payload.method !== 'output'
-		) {
+		if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !('method' in payload) || payload.method !== 'output') {
 			return false;
 		}
 		const value = payload as Record<string, JsonValue>;
@@ -1550,11 +1237,7 @@ export class MainThreadExtensionApi extends Disposable {
 		const id = text(value.channelId, 256),
 			key = namedOutputKey(source.extensionId, id);
 		const cursor = this.namedOutputCursors.get(source.extensionId);
-		if (
-			cursor &&
-			(cursor.incarnation !== source.incarnation || cursor.activationGeneration !== source.activationGeneration)
-		)
-			this.disposeNamedOutputChannels(source.extensionId);
+		if (cursor && (cursor.incarnation !== source.incarnation || cursor.activationGeneration !== source.activationGeneration)) this.disposeNamedOutputChannels(source.extensionId);
 		this.namedOutputCursors.set(source.extensionId, {
 			incarnation: source.incarnation,
 			activationGeneration: source.activationGeneration,
@@ -1562,15 +1245,9 @@ export class MainThreadExtensionApi extends Disposable {
 		});
 		if (value.action === 'create') {
 			if (this.namedOutputChannels.has(key)) throw new TypeError('Output channel is already registered');
-			if (
-				[...this.namedOutputChannels].filter(
-					([, channel]) => channel.descriptor.extensionId === source.extensionId,
-				).length >= 128
-			)
-				throw new RangeError('Too many extension output channels');
+			if ([...this.namedOutputChannels].filter(([, channel]) => channel.descriptor.extensionId === source.extensionId).length >= 128) throw new RangeError('Too many extension output channels');
 			const label = text(value.label, 512).trim();
-			if (!label || (value.kind !== undefined && value.kind !== 'log' && value.kind !== 'output'))
-				throw new TypeError('Invalid output channel metadata');
+			if (!label || (value.kind !== undefined && value.kind !== 'log' && value.kind !== 'output')) throw new TypeError('Invalid output channel metadata');
 			const languageId = value.languageId === undefined ? undefined : text(value.languageId, 256).trim();
 			if (languageId === '') throw new TypeError('Invalid output channel language');
 			const logger =
@@ -1611,21 +1288,18 @@ export class MainThreadExtensionApi extends Disposable {
 		if (!channel) throw new TypeError('Output channel is unavailable');
 		const logger = this.outputLoggers.get(key);
 		if (value.action === 'log') {
-			if (!logger || !isLogLevel(value.severity) || value.severity === LogLevel.Off)
-				throw new TypeError('Invalid extension log entry');
+			if (!logger || !isLogLevel(value.severity) || value.severity === LogLevel.Off) throw new TypeError('Invalid extension log entry');
 			const message = text(value.text, 524_288);
 			if (message.trim()) log(logger, value.severity, message);
 		} else if (value.action === 'append') {
 			const message = text(value.text, 524_288);
-			if (!logger || canLog(logger.getLevel(), LogLevel.Info))
-				channel.append({ text: message, severity: logger ? 'information' : 'log' });
+			if (!logger || canLog(logger.getLevel(), LogLevel.Info)) channel.append({ text: message, severity: logger ? 'information' : 'log' });
 		} else if (value.action === 'replace') channel.replace({ text: text(value.text, 524_288) });
 		else if (value.action === 'clear') channel.clear();
 		else if (value.action === 'show') channel.show({ focus: value.preserveFocus === true ? 'preserve' : 'take' });
 		else if (value.action === 'dispose') this.namedOutputChannels.deleteAndDispose(key);
 		else if (value.action === 'hide') {
-			if (this.outputService.activeChannel === channel && this.views.isViewVisible(OUTPUT_VIEW_ID))
-				this.views.closeView(OUTPUT_VIEW_ID);
+			if (this.outputService.activeChannel === channel && this.views.isViewVisible(OUTPUT_VIEW_ID)) this.views.closeView(OUTPUT_VIEW_ID);
 		} else throw new TypeError('Invalid extension output operation');
 		return true;
 	}
@@ -1639,12 +1313,7 @@ export class MainThreadExtensionApi extends Disposable {
 			for (const [key, logger] of this.outputLoggers) {
 				const channel = this.namedOutputChannels.get(key);
 				if (channel?.descriptor.extensionId !== runtime.id) continue;
-				const identity = JSON.stringify([
-					key,
-					runtime.incarnation,
-					runtime.activationGeneration,
-					registration.registrationId,
-				]);
+				const identity = JSON.stringify([key, runtime.incarnation, runtime.activationGeneration, registration.registrationId]);
 				retained.add(identity);
 				if (this.outputLevelBindings.has(identity)) continue;
 				const lifetime = new DisposableStore();
@@ -1654,14 +1323,7 @@ export class MainThreadExtensionApi extends Disposable {
 				const { id: extensionId, incarnation, activationGeneration } = runtime;
 				const channelId = key.slice(extensionId.length + 1);
 				const send = (level: LogLevel): void => {
-					const numericLevel = [
-						LogLevel.Off,
-						LogLevel.Trace,
-						LogLevel.Debug,
-						LogLevel.Info,
-						LogLevel.Warning,
-						LogLevel.Error,
-					].indexOf(level);
+					const numericLevel = [LogLevel.Off, LogLevel.Trace, LogLevel.Debug, LogLevel.Info, LogLevel.Warning, LogLevel.Error].indexOf(level);
 					queue = queue
 						.then(async () => {
 							if (controller.signal.aborted) return;
@@ -1679,8 +1341,7 @@ export class MainThreadExtensionApi extends Disposable {
 							);
 						})
 						.catch(error => {
-							if (!controller.signal.aborted)
-								this.fleetOutput.appendLine({ severity: 'error', text: String(error) });
+							if (!controller.signal.aborted) this.fleetOutput.appendLine({ severity: 'error', text: String(error) });
 						});
 				};
 				lifetime.add(logger.onDidChangeLogLevel(send));
@@ -1689,26 +1350,17 @@ export class MainThreadExtensionApi extends Disposable {
 				send(logger.getLevel());
 			}
 		}
-		for (const key of this.outputLevelBindings.keys())
-			if (!retained.has(key)) this.outputLevelBindings.deleteAndDispose(key);
+		for (const key of this.outputLevelBindings.keys()) if (!retained.has(key)) this.outputLevelBindings.deleteAndDispose(key);
 	}
 
 	private projectNamedOutput(runtime: ExtensionHostRuntime): void {
 		const previous = this.namedOutputCursors.get(runtime.id);
-		const reset =
-			previous !== undefined &&
-			(previous.activationGeneration !== runtime.activationGeneration ||
-				previous.incarnation !== runtime.incarnation);
+		const reset = previous !== undefined && (previous.activationGeneration !== runtime.activationGeneration || previous.incarnation !== runtime.incarnation);
 		if (reset) this.disposeNamedOutputChannels(runtime.id);
 		const initial = previous === undefined || reset;
 		let sequence = reset ? 0 : (previous?.sequence ?? 0);
 		for (const event of runtime.outputEvents) {
-			if (
-				event.activationGeneration !== runtime.activationGeneration ||
-				event.incarnation !== runtime.incarnation ||
-				event.sequence <= sequence
-			)
-				continue;
+			if (event.activationGeneration !== runtime.activationGeneration || event.incarnation !== runtime.incarnation || event.sequence <= sequence) continue;
 			sequence = event.sequence;
 			const operation = event.operation;
 			const key = namedOutputKey(runtime.id, operation.channelId);
@@ -1735,10 +1387,8 @@ export class MainThreadExtensionApi extends Disposable {
 				});
 				continue;
 			}
-			if (operation.operation === 'append')
-				channel.append({ text: operation.text, severity: operation.severity, category: operation.category });
-			else if (operation.operation === 'replace')
-				channel.replace({ text: operation.text, severity: operation.severity, category: operation.category });
+			if (operation.operation === 'append') channel.append({ text: operation.text, severity: operation.severity, category: operation.category });
+			else if (operation.operation === 'replace') channel.replace({ text: operation.text, severity: operation.severity, category: operation.category });
 			else if (operation.operation === 'clear') channel.clear();
 			else if (operation.operation === 'show') {
 				if (!initial) channel.show({ focus: operation.preserveFocus ? 'preserve' : 'take' });
@@ -1791,11 +1441,7 @@ function runtimeLifecycleMessage(runtime: ExtensionHostRuntime): string {
 	return `Extension Host ${runtime.lifecycle}${incarnation}.`;
 }
 
-function unsupportedLanguageIssue(
-	runtime: ExtensionHostRuntime,
-	registration: ExtensionHostLanguageRegistration,
-	operations: readonly string[],
-): ExtensionApiIssue {
+function unsupportedLanguageIssue(runtime: ExtensionHostRuntime, registration: ExtensionHostLanguageRegistration, operations: readonly string[]): ExtensionApiIssue {
 	return {
 		extensionId: runtime.id,
 		registrationId: registration.registrationId,
@@ -1805,15 +1451,7 @@ function unsupportedLanguageIssue(
 
 /** Process authority and provider data have separate lifetimes. */
 function runtimeLifetimeIdentity(runtime: ExtensionHostRuntime): string {
-	return JSON.stringify([
-		runtime.id,
-		runtime.version,
-		runtime.packageDigest,
-		runtime.runtimeApiVersion,
-		runtime.activationGeneration,
-		runtime.incarnation,
-		runtime.lifecycle,
-	]);
+	return JSON.stringify([runtime.id, runtime.version, runtime.packageDigest, runtime.runtimeApiVersion, runtime.activationGeneration, runtime.incarnation, runtime.lifecycle]);
 }
 
 function runtimeContributionIdentity(runtime: ExtensionHostRuntime): string {
@@ -1881,11 +1519,7 @@ function ownsExecutableContribution(registration: ExtensionHostRegistration): re
 	}
 }
 
-function retireExtensionContributions(
-	previous: ExtensionContributionSet,
-	current: ExtensionContributionSet | undefined,
-	reason: unknown,
-): void {
+function retireExtensionContributions(previous: ExtensionContributionSet, current: ExtensionContributionSet | undefined, reason: unknown): void {
 	if (previous.controller !== current?.controller) previous.controller.abort(reason);
 	for (const [id, lifetime] of previous.registrations) {
 		if (lifetime !== current?.registrations.get(id)) lifetime.controller.abort(reason);
@@ -1893,11 +1527,7 @@ function retireExtensionContributions(
 }
 
 function sameContributions(previous: readonly unknown[] | undefined, current: readonly unknown[]): boolean {
-	return (
-		previous !== undefined &&
-		previous.length === current.length &&
-		current.every((value, index) => value === previous[index])
-	);
+	return previous !== undefined && previous.length === current.length && current.every((value, index) => value === previous[index]);
 }
 
 type MutableLanguageBatch = {

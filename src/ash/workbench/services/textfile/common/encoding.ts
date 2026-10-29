@@ -1,9 +1,7 @@
 import { localize } from '../../../../nls.js';
 
 /** File encodings offered by the editor, using codec identifiers at the byte boundary. */
-export const SUPPORTED_ENCODINGS: Readonly<
-	Record<string, { readonly labelShort: string; readonly encodeOnly?: boolean; readonly hidden?: boolean }>
-> = Object.freeze(
+export const SUPPORTED_ENCODINGS: Readonly<Record<string, { readonly labelShort: string; readonly encodeOnly?: boolean; readonly hidden?: boolean }>> = Object.freeze(
 	Object.fromEntries(
 		[
 			['utf8', 'UTF-8'],
@@ -90,14 +88,10 @@ const guessableIds = [
 	'euckr',
 	'gb2312',
 ];
-export const GUESSABLE_ENCODINGS = Object.freeze(
-	Object.fromEntries(guessableIds.map(id => [id, SUPPORTED_ENCODINGS[id]])),
-);
+export const GUESSABLE_ENCODINGS = Object.freeze(Object.fromEntries(guessableIds.map(id => [id, SUPPORTED_ENCODINGS[id]])));
 
 export function getEncodingLabel(encoding: string): string {
-	return encoding === 'utf8bom'
-		? localize('status.editor.utf8Bom', 'UTF-8 with BOM')
-		: (SUPPORTED_ENCODINGS[encoding]?.labelShort ?? encoding);
+	return encoding === 'utf8bom' ? localize('status.editor.utf8Bom', 'UTF-8 with BOM') : (SUPPORTED_ENCODINGS[encoding]?.labelShort ?? encoding);
 }
 
 export function assertEncoding(encoding: unknown): asserts encoding is string {

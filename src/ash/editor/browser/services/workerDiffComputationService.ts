@@ -2,18 +2,9 @@ import { throwIfCancelled, type CancellationToken } from '../../../base/common/c
 import { Event } from '../../../base/common/event.js';
 import { CancellationError } from '../../../base/common/errors.js';
 import { Disposable, MutableDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import {
-	WebWorkerClient,
-	type WebWorkerClientPort,
-	type IWebWorkerClient,
-} from '../../../base/common/worker/webWorker.js';
+import { WebWorkerClient, type WebWorkerClientPort, type IWebWorkerClient } from '../../../base/common/worker/webWorker.js';
 import { type DiffComputationRequest } from '../../common/diff/diffComputationService.js';
-import {
-	nullDocumentDiff,
-	type IDocumentDiff,
-	type IDocumentDiffProvider,
-	type IDocumentDiffProviderOptions,
-} from '../../common/diff/documentDiffProvider.js';
+import { nullDocumentDiff, type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from '../../common/diff/documentDiffProvider.js';
 import { diffWorkerChannel, readDiffResult } from '../../common/diff/diffWorker.js';
 import { type ITextModel } from '../../common/model.js';
 
@@ -28,12 +19,7 @@ export class WorkerDiffComputationService extends Disposable implements IDocumen
 		super();
 	}
 
-	public async computeDiff(
-		original: ITextModel,
-		modified: ITextModel,
-		options: IDocumentDiffProviderOptions,
-		cancellationToken: CancellationToken,
-	): Promise<IDocumentDiff> {
+	public async computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, cancellationToken: CancellationToken): Promise<IDocumentDiff> {
 		this.assertNotDisposed();
 		throwIfCancelled(cancellationToken);
 		const controller = new AbortController();
@@ -54,7 +40,12 @@ export class WorkerDiffComputationService extends Disposable implements IDocumen
 			this.assertNotDisposed();
 			throwIfCancelled(cancellationToken);
 			const diff = readDiffResult(result, request);
-			return { identical: false, quitEarly: diff.hitTimeout, changes: diff.changes, moves: diff.moves };
+			return {
+				identical: false,
+				quitEarly: diff.hitTimeout,
+				changes: diff.changes,
+				moves: diff.moves,
+			};
 		} finally {
 			cancellation.dispose();
 		}

@@ -3,21 +3,8 @@ import { RunOnceScheduler } from '../../../base/common/async.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
-import {
-	APP_SERVER_METHODS,
-	type CallStatus,
-	type CallControl,
-} from '../../../../../.build/protocol/typescript/index.js';
-import type {
-	CallDeployment,
-	CallDocument,
-	CallInvitation,
-	CallState,
-	ICallService,
-	ScreenFrame,
-	ScreenSource,
-	ScreenTarget,
-} from '../common/callService.js';
+import { APP_SERVER_METHODS, type CallStatus, type CallControl } from '../../../../../.build/protocol/typescript/index.js';
+import type { CallDeployment, CallDocument, CallInvitation, CallState, ICallService, ScreenFrame, ScreenSource, ScreenTarget } from '../common/callService.js';
 
 export class AppServerCallService extends Disposable implements ICallService {
 	private readonly changed = this._register(new Emitter<void>());
@@ -152,9 +139,7 @@ export class AppServerCallService extends Disposable implements ICallService {
 		);
 	}
 	public async leave(): Promise<void> {
-		this.accept(
-			await this.client.request(APP_SERVER_METHODS['call/leave'], { resourceId: this.requireResource() }),
-		);
+		this.accept(await this.client.request(APP_SERVER_METHODS['call/leave'], { resourceId: this.requireResource() }));
 	}
 	public async end(): Promise<void> {
 		this.accept(
@@ -267,13 +252,7 @@ export class AppServerCallService extends Disposable implements ICallService {
 			this.screenError = undefined;
 			this.screensChanged.fire();
 		} catch (error) {
-			if (
-				!this.isDisposed &&
-				resource === this.resource &&
-				epoch === this.mediaEpoch &&
-				generation === this.screenGeneration &&
-				this.current?.connection === 'connected'
-			) {
+			if (!this.isDisposed && resource === this.resource && epoch === this.mediaEpoch && generation === this.screenGeneration && this.current?.connection === 'connected') {
 				this.frames.clear();
 				this.screenError = error instanceof Error ? error.message : 'Could not receive shared screens.';
 				this.screensChanged.fire();

@@ -98,17 +98,10 @@ export class ErrorPlaceholderEditor extends EditorPane implements IEditorPane {
 		this.title.textContent = error?.forceMessage
 			? error.message
 			: this.input
-				? localize(
-						'workbench.editorOpenFailure',
-						'Unable to open {0}',
-						this.input.label || basename(this.input.resource),
-					)
+				? localize('workbench.editorOpenFailure', 'Unable to open {0}', this.input.label || basename(this.input.resource))
 				: localize('workbench.editorOpenFailureGeneric', 'Unable to open editor');
 		this.detail.hidden = error?.forceMessage === true;
-		this.detail.textContent =
-			this.error instanceof Error
-				? this.error.message
-				: localize('workbench.editorOpenUnknownError', 'An unknown error occurred while opening this editor.');
+		this.detail.textContent = this.error instanceof Error ? this.error.message : localize('workbench.editorOpenUnknownError', 'An unknown error occurred while opening this editor.');
 		const actions: readonly IAction[] = error?.actions.length
 			? error.actions
 			: [

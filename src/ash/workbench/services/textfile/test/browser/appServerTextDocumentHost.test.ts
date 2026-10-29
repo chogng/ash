@@ -1,11 +1,6 @@
 import '../../../../contrib/chat/browser/chat.shared.contribution.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
-import {
-	type IFileSystemProvider,
-	type IFileWriteOptions,
-	type IFileWriteResult,
-	FileSystemProviderCapabilities,
-} from '../../../../../platform/files/common/files.js';
+import { type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { createTestFileService, createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -24,12 +19,7 @@ import { Schemas } from '../../../../../base/common/network.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
 import { AppServerProtocolClient } from '../../../../../platform/agentHost/browser/appServerProtocolClient.js';
-import {
-	WEB_APP_SERVER_CONNECT_EVENT,
-	WEB_APP_SERVER_CONNECTED_EVENT,
-	WEB_APP_SERVER_FRAME_EVENT,
-	type AppServerTransport,
-} from '../../../../../platform/agentHost/common/appServerTransport.js';
+import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../../../platform/agentHost/common/appServerTransport.js';
 import {
 	APP_SERVER_SCHEMA_HASH,
 	APP_SERVER_PROTOCOL_MAJOR,
@@ -41,14 +31,7 @@ import {
 	type ServerRequestParams,
 	type ServerRequestResult,
 } from '../../../../../../../.build/protocol/typescript/index.js';
-import {
-	FileKind,
-	FileNotFoundError,
-	FileRevisionConflictError,
-	IFileService,
-	type IFileWriteRequest,
-	type FileExistingTargetBehavior,
-} from '../../../../../platform/files/common/files.js';
+import { FileKind, FileNotFoundError, FileRevisionConflictError, IFileService, type IFileWriteRequest, type FileExistingTargetBehavior } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { BrowserTextResourceStore } from '../../../../contrib/codeEditor/browser/browserTextResourceStore.js';
 import { BrowserTextModelService } from '../../../textmodelResolver/browser/browserTextModelService.js';
@@ -94,11 +77,7 @@ class Transport implements AppServerTransport {
 			listener(value);
 		}
 	}
-	public finishTurn(
-		threadId: string,
-		turnId: string,
-		outcome: 'completed' | 'failed' | 'interrupted' = 'completed',
-	): void {
+	public finishTurn(threadId: string, turnId: string, outcome: 'completed' | 'failed' | 'interrupted' = 'completed'): void {
 		this.emit(WEB_APP_SERVER_FRAME_EVENT, {
 			frame: JSON.stringify({
 				jsonrpc: '2.0',
@@ -107,14 +86,9 @@ class Transport implements AppServerTransport {
 			}),
 		});
 	}
-	public call<M extends AppServerServerRequestMethod>(
-		method: M,
-		params: ServerRequestParams<M>,
-	): Promise<ServerRequestResult<M>> {
+	public call<M extends AppServerServerRequestMethod>(method: M, params: ServerRequestParams<M>): Promise<ServerRequestResult<M>> {
 		const id = `client-host:7:${++this.sequence}`;
-		const reply = new Promise<ServerRequestResult<M>>(resolve =>
-			this.replies.set(id, result => resolve(result as ServerRequestResult<M>)),
-		);
+		const reply = new Promise<ServerRequestResult<M>>(resolve => this.replies.set(id, result => resolve(result as ServerRequestResult<M>)));
 		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id, method, params }) });
 		return reply;
 	}
@@ -194,10 +168,7 @@ class Transport implements AppServerTransport {
 								code: -32043,
 								message: String(error),
 								data: {
-									kind:
-										error instanceof FileNotFoundError
-											? 'FileSystemNotFound'
-											: 'FileSystemPermissionDenied',
+									kind: error instanceof FileNotFoundError ? 'FileSystemNotFound' : 'FileSystemPermissionDenied',
 								},
 							},
 						}),
@@ -211,8 +182,7 @@ class Transport implements AppServerTransport {
 }
 
 class Files extends Disposable implements IFileSystemProvider {
-	public readonly capabilities =
-		FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
 	public readonly onDidChangeCapabilities = Event.None;
 	public watch(): IDisposable {
 		return Disposable.None;
@@ -248,21 +218,14 @@ class Files extends Disposable implements IFileSystemProvider {
 	}
 	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
 		if (!options.overwrite) {
-			return this.writeFile(
-				resource,
-				new TextEncoder().encode(new TextDecoder('utf8', { ignoreBOM: true }).decode(bytes)),
-				{ create: true, overwrite: true },
-			);
+			return this.writeFile(resource, new TextEncoder().encode(new TextDecoder('utf8', { ignoreBOM: true }).decode(bytes)), { create: true, overwrite: true });
 		}
 		const request = {
 			resource,
 			content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes),
 			...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }),
 		};
-		if (
-			request.expectedRevision !== undefined &&
-			request.expectedRevision !== this.contents.get(request.resource.toString())
-		) {
+		if (request.expectedRevision !== undefined && request.expectedRevision !== this.contents.get(request.resource.toString())) {
 			throw new FileRevisionConflictError(request.resource);
 		}
 		this.contents.set(request.resource.toString(), request.content);
@@ -317,13 +280,7 @@ async function fixture(options: { contents?: ReadonlyMap<string, string>; backen
 			flushInterval: 0,
 		}),
 	);
-	const models = lifetime.add(
-		uriIdentityServices.createInstance(
-			BrowserTextModelService,
-			new BrowserTextResourceStore(lifetime.add(createTestTextFileService(files))),
-			{},
-		),
-	);
+	const models = lifetime.add(uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(lifetime.add(createTestTextFileService(files))), {}));
 	const workingCopies = lifetime.add(uriIdentityServices.createInstance(BrowserWorkingCopyService));
 	const configuration = lifetime.add(new InMemoryConfigurationService());
 	const dialogs = new TestDialogService();
@@ -713,10 +670,7 @@ test('restored reviews stay manual even when the saved reply completed and autom
 	await createReview(host, 'restored-manual.txt');
 	host.transport.finishTurn('review-thread', 'review-turn');
 	await flushReviews(host);
-	assert.equal(
-		JSON.parse(host.storage.get('chatEditing.sessions', StorageScope.WORKSPACE)!).entries[0].sources[0].outcome,
-		'completed',
-	);
+	assert.equal(JSON.parse(host.storage.get('chatEditing.sessions', StorageScope.WORKSPACE)!).entries[0].sources[0].outcome, 'completed');
 	await host.lifecycle.shutdown('reload');
 	const { backend } = host;
 	const contents = new Map(host.files.contents);
@@ -873,11 +827,10 @@ test('a queued chat decision rechecks attribution after another chat writes the 
 		await gate.p;
 		return apply(edit, options);
 	};
-	const write = host.editing.applyEdits(
-		{ entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 6), text: 'second' }] }] },
-		new AbortController().signal,
-		{ threadId: 'second-chat', turnId: 'second' },
-	);
+	const write = host.editing.applyEdits({ entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 6), text: 'second' }] }] }, new AbortController().signal, {
+		threadId: 'second-chat',
+		turnId: 'second',
+	});
 	await started.p;
 	const rejected = assert.rejects(session.reject(), /other chats/);
 	const staleFileDecision = assert.rejects(host.editing.rejectEntry(host.editing.entries[0]!), /Review it again/);
@@ -1038,11 +991,10 @@ test('review decisions wait for an in-flight Agent write', async () => {
 		await gate.p;
 		return apply(edit, options);
 	};
-	const write = host.editing.applyEdits(
-		{ entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 6), text: 'second' }] }] },
-		new AbortController().signal,
-		{ threadId: 'review-thread', turnId: 'review-turn' },
-	);
+	const write = host.editing.applyEdits({ entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 6), text: 'second' }] }] }, new AbortController().signal, {
+		threadId: 'review-thread',
+		turnId: 'review-turn',
+	});
 	await started.p;
 	const reject = host.editing.rejectEntry(entry);
 	assert.equal(entry.isBusy, true);
@@ -1237,8 +1189,7 @@ for (const scenario of [
 ]) {
 	test('document search snapshots respect ' + scenario.name, async () => {
 		using host = await fixture();
-		const resource =
-			scenario.resource.scheme === Schemas.file ? scenario.resource : URI.file('/document-list-fixture.txt');
+		const resource = scenario.resource.scheme === Schemas.file ? scenario.resource : URI.file('/document-list-fixture.txt');
 		host.files.contents.set(resource.toString(), 'disk');
 		using reference = await host.models.acquire({ resource }, new AbortController().signal);
 		using copy = workingCopy(reference);
@@ -1252,8 +1203,7 @@ for (const scenario of [
 		reference.model.applyOperations([{ range: reference.model.getFullModelRange(), text: 'unsaved' }]);
 		assert.deepEqual(await host.transport.call('textDocument/list', { root: scenario.root }), {
 			kind: 'documents',
-			documents:
-				scenario.relativePath === undefined ? [] : [{ relativePath: scenario.relativePath, text: 'unsaved' }],
+			documents: scenario.relativePath === undefined ? [] : [{ relativePath: scenario.relativePath, text: 'unsaved' }],
 		});
 		assert.equal(host.files.contents.get(resource.toString()), 'disk');
 	});
@@ -1382,16 +1332,10 @@ test('stale documents reject the entire transaction and consume its snapshots', 
 		{ kind: 'update' as const, snapshot: a, text: 'agent' },
 		{ kind: 'update' as const, snapshot: b, text: 'agent' },
 	];
-	assert.deepEqual(
-		await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes }),
-		{ kind: 'conflict' },
-	);
+	assert.deepEqual(await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes }), { kind: 'conflict' });
 	assert.equal(host.files.contents.get(first.toString()), 'original');
 	assert.equal(reference.model.getText(), 'user original');
-	assert.deepEqual(
-		await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes }),
-		{ kind: 'conflict' },
-	);
+	assert.deepEqual(await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes }), { kind: 'conflict' });
 	assert.equal(host.models.getModel(first), null);
 });
 
@@ -1439,11 +1383,7 @@ test('reads cannot starve a writer and snapshot capacity never evicts its baseli
 	host.files.contents.set(resource.toString(), 'original');
 	const writer = await snapshot(host.transport, resource);
 	const readers = await Promise.all(Array.from({ length: 127 }, () => snapshot(host.transport, resource)));
-	assert.equal(
-		(await host.transport.call('textDocument/read', { path: resource.fsPath, readAccess: 'test-read-access' }))
-			.kind,
-		'failed',
-	);
+	assert.equal((await host.transport.call('textDocument/read', { path: resource.fsPath, readAccess: 'test-read-access' })).kind, 'failed');
 	assert.deepEqual(
 		await host.transport.call('textDocument/apply', {
 			threadId: 'writer',
@@ -1544,17 +1484,13 @@ test('closing during scoped model resolution discards the late read', async () =
 	const settled = new DeferredPromise<void>();
 	const modelService = host.services.get(ITextModelService);
 	const createReference = modelService.createModelReference.bind(modelService);
-	const resolver = mock.method(
-		modelService,
-		'createModelReference',
-		async (...args: Parameters<typeof createReference>) => {
-			try {
-				return await createReference(...args);
-			} finally {
-				settled.complete();
-			}
-		},
-	);
+	const resolver = mock.method(modelService, 'createModelReference', async (...args: Parameters<typeof createReference>) => {
+		try {
+			return await createReference(...args);
+		} finally {
+			settled.complete();
+		}
+	});
 	void host.transport.call('textDocument/read', { path: resource.fsPath, readAccess: 'test-read-access' });
 	await reading;
 	host.client.disconnect();
@@ -1565,9 +1501,7 @@ test('closing during scoped model resolution discards the late read', async () =
 });
 
 function reviewSession(host: Awaited<ReturnType<typeof fixture>>, threadId = 'review-thread') {
-	const session = host.editing.editingSessionsObs
-		.get()
-		.find(session => new URLSearchParams(session.chatSessionResource.query).get('threadId') === threadId);
+	const session = host.editing.editingSessionsObs.get().find(session => new URLSearchParams(session.chatSessionResource.query).get('threadId') === threadId);
 	assert.ok(session, `Missing review session for ${threadId}`);
 	return session;
 }
@@ -1687,9 +1621,7 @@ test('an atomic review waits for every contributing reply while unrelated files 
 		turnId: 'second-turn',
 		changes: [{ kind: 'update', snapshot: id, text: 'second' }],
 	});
-	const shared = host.editing.entries.find(
-		entry => entry.modifiedURI.toString() === original.modifiedURI.toString(),
-	)!;
+	const shared = host.editing.entries.find(entry => entry.modifiedURI.toString() === original.modifiedURI.toString())!;
 	host.transport.finishTurn('review-thread', 'second-turn');
 	host.transport.finishTurn('review-thread', 'other-turn');
 	await flushReviews(host);

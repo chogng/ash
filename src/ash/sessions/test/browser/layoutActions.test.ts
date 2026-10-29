@@ -41,23 +41,14 @@ class TestPart extends Part {
 
 test('Sessions layout commands update menu state from their owners and release window registrations', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
-	using globals = installEditorTestDom(browser, [
-		'Node',
-		'Element',
-		'HTMLElement',
-		'Event',
-		'MouseEvent',
-		'KeyboardEvent',
-	]);
+	using globals = installEditorTestDom(browser, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
 	using resources = new DisposableStore();
 	using changed = new Emitter<void>();
 	using contextKeys = new ContextKeyService();
 	using services = new InstantiationService();
 	using commands = new CommandService(services);
 	services.registerInstance(ICommandService, commands);
-	const parts = new Map(
-		sessionsPartIds.map(id => [id, resources.add(new TestPart(browser.window.document.body, id))]),
-	);
+	const parts = new Map(sessionsPartIds.map(id => [id, resources.add(new TestPart(browser.window.document.body, id))]));
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
 	let historyIndex = 1;
 	const sessions: ISessionsService = {
@@ -101,10 +92,7 @@ test('Sessions layout commands update menu state from their owners and release w
 			.flatMap(([, actions]) => actions)
 			.filter(action => action.id !== 'ash.sessions.togglePanel')
 			.map(action => [action.label, action.tooltip, action.enabled, action.checked]);
-	const navigationState = (): unknown => [
-		contextKeys.getValue(CanGoBackContext.key),
-		contextKeys.getValue(CanGoForwardContext.key),
-	];
+	const navigationState = (): unknown => [contextKeys.getValue(CanGoBackContext.key), contextKeys.getValue(CanGoForwardContext.key)];
 	try {
 		assert.deepEqual(navigationState(), [true, false]);
 		assert.equal(contextKeys.getValue(PanelPositionContext.key), 'bottom');

@@ -37,7 +37,12 @@ export class ChatChangesPill extends Disposable {
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this.button = this._register(
-			new Button(this.domNode, { ...defaultButtonStyles, label: '', icon: Lxicon.diff, onClick: openChanges }),
+			new Button(this.domNode, {
+				...defaultButtonStyles,
+				label: '',
+				icon: Lxicon.diff,
+				onClick: openChanges,
+			}),
 		);
 		this.button.domNode.classList.add('ash-chat-changes-pill');
 		this.counts = h(container.ownerDocument, 'span', { className: 'ash-chat-changes-statistics' });
@@ -49,9 +54,7 @@ export class ChatChangesPill extends Disposable {
 				this.counts,
 				derived(reader => {
 					const statistics = this.statistics.read(reader);
-					return statistics
-						? { files: statistics.files, insertions: statistics.additions, deletions: statistics.deletions }
-						: undefined;
+					return statistics ? { files: statistics.files, insertions: statistics.additions, deletions: statistics.deletions } : undefined;
 				}),
 				false,
 			),
@@ -71,12 +74,7 @@ export class ChatChangesPill extends Disposable {
 		if (visible && this.scope === 'workspace') this.refresh.schedule(0);
 	}
 
-	render(
-		statistics: ChatChangesStatistics | undefined,
-		enabled: boolean,
-		scope: 'workspace' | 'conversation' = 'conversation',
-		error?: string,
-	): void {
+	render(statistics: ChatChangesStatistics | undefined, enabled: boolean, scope: 'workspace' | 'conversation' = 'conversation', error?: string): void {
 		this.enabled = enabled;
 		if (scope !== this.scope) {
 			this.generation++;
@@ -123,26 +121,9 @@ export class ChatChangesPill extends Disposable {
 		this.button.label = getChangesStatsFilesLabel(statistics.files);
 		let label =
 			this.scope === 'workspace'
-				? localize(
-						'chat.changes.openWorkspace',
-						'Open Workspace Changes: {0} files, {1} lines added, {2} lines removed',
-						statistics.files,
-						statistics.additions,
-						statistics.deletions,
-					)
-				: localize(
-						'chat.changes.openConversation',
-						'Open Conversation Changes: {0} files, {1} lines added, {2} lines removed',
-						statistics.files,
-						statistics.additions,
-						statistics.deletions,
-					);
-		if (statistics.partial)
-			label = localize(
-				'chat.changes.partialStatistics',
-				'{0}. Line counts exclude files that cannot be compared as text.',
-				label,
-			);
+				? localize('chat.changes.openWorkspace', 'Open Workspace Changes: {0} files, {1} lines added, {2} lines removed', statistics.files, statistics.additions, statistics.deletions)
+				: localize('chat.changes.openConversation', 'Open Conversation Changes: {0} files, {1} lines added, {2} lines removed', statistics.files, statistics.additions, statistics.deletions);
+		if (statistics.partial) label = localize('chat.changes.partialStatistics', '{0}. Line counts exclude files that cannot be compared as text.', label);
 		if (this.button.domNode.getAttribute('aria-label') !== label) {
 			this.button.domNode.setAttribute('aria-label', label);
 			this.button.setTitle(label);

@@ -1,17 +1,8 @@
 import { OperatingSystem } from '../../../base/common/platform.js';
-import type {
-	IKeyboardLayoutDefinition,
-	IKeyboardLayoutInfo,
-	IKeyboardMapping,
-	IKeyboardMappingEntry,
-	KeyboardLayoutSource,
-} from './keyboardLayout.js';
+import type { IKeyboardLayoutDefinition, IKeyboardLayoutInfo, IKeyboardMapping, IKeyboardMappingEntry, KeyboardLayoutSource } from './keyboardLayout.js';
 
 /** Validates a canonical keyboard-layout snapshot crossing a host boundary. */
-export function validateKeyboardLayoutDefinition(
-	value: unknown,
-	expectedSource: KeyboardLayoutSource,
-): IKeyboardLayoutDefinition | undefined {
+export function validateKeyboardLayoutDefinition(value: unknown, expectedSource: KeyboardLayoutSource): IKeyboardLayoutDefinition | undefined {
 	if (value === undefined || value === null) {
 		return undefined;
 	}
@@ -70,17 +61,7 @@ function validateMappingEntry(value: unknown, code: string): IKeyboardMappingEnt
 	const entry = expectRecord(value, `keyboard mapping ${code}`);
 	expectKeys(
 		entry,
-		[
-			'value',
-			'valueIsDeadKey',
-			'vkey',
-			'withAltGr',
-			'withAltGrIsDeadKey',
-			'withShift',
-			'withShiftAltGr',
-			'withShiftAltGrIsDeadKey',
-			'withShiftIsDeadKey',
-		],
+		['value', 'valueIsDeadKey', 'vkey', 'withAltGr', 'withAltGrIsDeadKey', 'withShift', 'withShiftAltGr', 'withShiftAltGrIsDeadKey', 'withShiftIsDeadKey'],
 		`keyboard mapping ${code}`,
 	);
 	return Object.freeze({
@@ -91,10 +72,7 @@ function validateMappingEntry(value: unknown, code: string): IKeyboardMappingEnt
 		valueIsDeadKey: expectOptionalBoolean(entry.valueIsDeadKey, `${code}.valueIsDeadKey`),
 		withShiftIsDeadKey: expectOptionalBoolean(entry.withShiftIsDeadKey, `${code}.withShiftIsDeadKey`),
 		withAltGrIsDeadKey: expectOptionalBoolean(entry.withAltGrIsDeadKey, `${code}.withAltGrIsDeadKey`),
-		withShiftAltGrIsDeadKey: expectOptionalBoolean(
-			entry.withShiftAltGrIsDeadKey,
-			`${code}.withShiftAltGrIsDeadKey`,
-		),
+		withShiftAltGrIsDeadKey: expectOptionalBoolean(entry.withShiftAltGrIsDeadKey, `${code}.withShiftAltGrIsDeadKey`),
 		vkey: entry.vkey === undefined ? undefined : expectOutput(entry.vkey, `${code}.vkey`),
 	});
 }
@@ -103,11 +81,7 @@ export function expectKeyboardLayoutRecord(value: unknown, name: string): Record
 	return expectRecord(value, name);
 }
 
-export function expectKeyboardLayoutKeys(
-	value: Record<string, unknown>,
-	allowed: readonly string[],
-	name: string,
-): void {
+export function expectKeyboardLayoutKeys(value: Record<string, unknown>, allowed: readonly string[], name: string): void {
 	expectKeys(value, allowed, name);
 }
 

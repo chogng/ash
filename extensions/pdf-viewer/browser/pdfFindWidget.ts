@@ -207,9 +207,7 @@ export class PdfFindWidget extends Disposable {
 	}
 
 	private revealCurrent(): void {
-		this.matches[this.current]?.page.element
-			.querySelector('.ash-pdf-search-match.current')
-			?.scrollIntoView({ block: 'center', inline: 'nearest' });
+		this.matches[this.current]?.page.element.querySelector('.ash-pdf-search-match.current')?.scrollIntoView({ block: 'center', inline: 'nearest' });
 	}
 
 	private updateStatus(): void {
@@ -218,20 +216,8 @@ export class PdfFindWidget extends Disposable {
 			? ''
 			: match
 				? this.limited
-					? localize(
-							'pdf.viewer.matchesLimited',
-							'{0} of the first {1} matches · page {2}',
-							this.current + 1,
-							maximumMatches,
-							match.page.pageNumber,
-						)
-					: localize(
-							'pdf.viewer.matches',
-							'{0} of {1} · page {2}',
-							this.current + 1,
-							this.matches.length,
-							match.page.pageNumber,
-						)
+					? localize('pdf.viewer.matchesLimited', '{0} of the first {1} matches · page {2}', this.current + 1, maximumMatches, match.page.pageNumber)
+					: localize('pdf.viewer.matches', '{0} of {1} · page {2}', this.current + 1, this.matches.length, match.page.pageNumber)
 				: this.pages.some(page => page.text.trim())
 					? localize('pdf.viewer.noMatches', 'No matches')
 					: localize('pdf.viewer.noSearchableText', 'No searchable text in this PDF');

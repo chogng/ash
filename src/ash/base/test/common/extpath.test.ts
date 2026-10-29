@@ -38,9 +38,7 @@ suite('isValidBasename', () => {
 			[],
 		);
 		assert.deepEqual(
-			['console', 'auxiliary.txt', 'COM10', 'LPT00', '.gitignore', 'file %中.txt'].filter(
-				name => !isValidBasename(name, true),
-			),
+			['console', 'auxiliary.txt', 'COM10', 'LPT00', '.gitignore', 'file %中.txt'].filter(name => !isValidBasename(name, true)),
 			[],
 		);
 	});

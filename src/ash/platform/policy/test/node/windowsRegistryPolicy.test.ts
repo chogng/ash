@@ -16,9 +16,7 @@ test('Native registry snapshots preserve Unicode, numeric types, live updates an
 	const create = registry.func(
 		'int32_t __stdcall RegCreateKeyExW(void *key, const char16_t *path, uint32_t reserved, void *className, uint32_t options, uint32_t access, void *security, _Out_ void **result, void *disposition)',
 	);
-	const set = registry.func(
-		'int32_t __stdcall RegSetValueExW(void *key, const char16_t *name, uint32_t reserved, uint32_t type, const uint8_t *data, uint32_t size)',
-	);
+	const set = registry.func('int32_t __stdcall RegSetValueExW(void *key, const char16_t *name, uint32_t reserved, uint32_t type, const uint8_t *data, uint32_t size)');
 	const remove = registry.func('int32_t __stdcall RegDeleteValueW(void *key, const char16_t *name)');
 	const close = registry.func('int32_t __stdcall RegCloseKey(void *key)');
 	const deleteTree = registry.func('int32_t __stdcall RegDeleteTreeW(void *key, const char16_t *path)');
@@ -27,11 +25,7 @@ test('Native registry snapshots preserve Unicode, numeric types, live updates an
 	const root = BigInt.asUintN(process.arch === 'ia32' ? 32 : 64, -2147483647n);
 	const key: [bigint | null] = [null];
 	using log = new NullLoggerService();
-	using source = new SystemPolicyService(
-		log,
-		async definitions => readWindowsRegistryPolicies(definitions, location),
-		20,
-	);
+	using source = new SystemPolicyService(log, async definitions => readWindowsRegistryPolicies(definitions, location), 20);
 	const definitions = {
 		Text: { type: 'string' as const },
 		Count: { type: 'number' as const },

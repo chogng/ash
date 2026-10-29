@@ -24,11 +24,7 @@ export class IndentRulesSupport {
 
 	public shouldIncrease(text: string): boolean {
 		if (this._indentationRules) {
-			if (
-				this._indentationRules.increaseIndentPattern &&
-				resetGlobalRegex(this._indentationRules.increaseIndentPattern) &&
-				this._indentationRules.increaseIndentPattern.test(text)
-			) {
+			if (this._indentationRules.increaseIndentPattern && resetGlobalRegex(this._indentationRules.increaseIndentPattern) && this._indentationRules.increaseIndentPattern.test(text)) {
 				return true;
 			}
 			// if (this._indentationRules.indentNextLinePattern && this._indentationRules.indentNextLinePattern.test(text)) {

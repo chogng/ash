@@ -9,12 +9,18 @@ import { StandardTokenType } from '../../common/encodedTokenAttributes.js';
 
 test('language configuration contributions compose by priority and unregister independently', () => {
 	using service = new TestLanguageConfigurationService();
-	using base = service.register('demo', { comments: { lineComment: '//' }, brackets: [['(', ')']] });
+	using base = service.register('demo', {
+		comments: { lineComment: '//' },
+		brackets: [['(', ')']],
+	});
 	const changes: Array<string | undefined> = [];
 	using listener = service.onDidChange(event => changes.push(event.languageId));
 	const override = service.register(
 		'demo',
-		{ comments: { lineComment: '#' }, folding: { markers: { start: /^region$/u, end: /^endregion$/u } } },
+		{
+			comments: { lineComment: '#' },
+			folding: { markers: { start: /^region$/u, end: /^endregion$/u } },
+		},
 		10,
 	);
 
@@ -37,7 +43,12 @@ test('resolved language configuration exposes canonical pair and enter supports'
 		autoClosingPairs: [{ open: '"', close: '"', notIn: ['string'] }],
 		surroundingPairs: [{ open: '<', close: '>' }],
 		autoCloseBefore: ';',
-		onEnterRules: [{ beforeText: /\{$/u, action: { indentAction: IndentAction.Indent, appendText: 'next' } }],
+		onEnterRules: [
+			{
+				beforeText: /\{$/u,
+				action: { indentAction: IndentAction.Indent, appendText: 'next' },
+			},
+		],
 	});
 	const resolved = service.getLanguageConfiguration('demo');
 

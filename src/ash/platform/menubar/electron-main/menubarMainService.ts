@@ -12,11 +12,7 @@ import {
 export interface INativeMenubarMainHost {
 	readonly applicationName: string;
 	setApplicationMenu(template: readonly INativeMenubarMainMenuItem[] | undefined): void;
-	setWindowTouchBar(
-		window: INativeMenubarMainWindow,
-		items: readonly INativeTouchBarItem[],
-		select: (id: string) => void,
-	): void;
+	setWindowTouchBar(window: INativeMenubarMainWindow, items: readonly INativeTouchBarItem[], select: (id: string) => void): void;
 }
 
 export interface INativeMenubarMainWindow {
@@ -30,8 +26,7 @@ export interface INativeMenubarMainWindow {
 
 export interface INativeMenubarMainMenuItem {
 	readonly type?: 'normal' | 'separator' | 'submenu' | 'checkbox';
-	readonly role?:
-		'about' | 'services' | 'hide' | 'hideOthers' | 'unhide' | 'quit' | 'windowMenu' | 'minimize' | 'zoom' | 'front';
+	readonly role?: 'about' | 'services' | 'hide' | 'hideOthers' | 'unhide' | 'quit' | 'windowMenu' | 'minimize' | 'zoom' | 'front';
 	readonly label?: string;
 	readonly enabled?: boolean;
 	readonly checked?: boolean;
@@ -130,14 +125,14 @@ export class NativeMenubarMainService extends Disposable {
 
 	private select(window: INativeMenubarMainWindow, revision: number, id: string): void {
 		if (window.isDestroyed()) return;
-		window.webContents.send(NATIVE_MENUBAR_SELECT_CHANNEL, { revision, id });
+		window.webContents.send(NATIVE_MENUBAR_SELECT_CHANNEL, {
+			revision,
+			id,
+		});
 	}
 }
 
-export function nativeMenubarIpcRoutes(
-	service: NativeMenubarMainService,
-	window: INativeMenubarMainWindow,
-): readonly IpcRoute<unknown, unknown>[] {
+export function nativeMenubarIpcRoutes(service: NativeMenubarMainService, window: INativeMenubarMainWindow): readonly IpcRoute<unknown, unknown>[] {
 	return [
 		{
 			channel: NATIVE_MENUBAR_UPDATE_CHANNEL,

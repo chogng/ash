@@ -115,9 +115,7 @@ export class Scanner {
 					}
 				}
 				if (offset === this.source.length) {
-					tokens.push(
-						this.error(start, offset, localize('contextkey.unterminatedString', 'Unterminated string.')),
-					);
+					tokens.push(this.error(start, offset, localize('contextkey.unterminatedString', 'Unterminated string.')));
 				} else {
 					tokens.push({ type: TokenType.QuotedStr, offset: start + 1, lexeme: value });
 					offset++;
@@ -128,13 +126,7 @@ export class Scanner {
 				const end = regexEnd(this.source, offset);
 				if (end === undefined) {
 					offset = this.source.length;
-					tokens.push(
-						this.error(
-							start,
-							offset,
-							localize('contextkey.unterminatedRegex', 'Unterminated regular expression.'),
-						),
-					);
+					tokens.push(this.error(start, offset, localize('contextkey.unterminatedRegex', 'Unterminated regular expression.')));
 				} else {
 					offset = end;
 					tokens.push({ type: TokenType.RegexStr, offset: start, lexeme: this.source.slice(start, offset) });
@@ -146,13 +138,7 @@ export class Scanner {
 			}
 			if (offset === start) {
 				offset++;
-				tokens.push(
-					this.error(
-						start,
-						offset,
-						localize('contextkey.unexpectedToken', 'Unexpected token "{0}".', character),
-					),
-				);
+				tokens.push(this.error(start, offset, localize('contextkey.unexpectedToken', 'Unexpected token "{0}".', character)));
 				continue;
 			}
 			const lexeme = this.source.slice(start, offset);

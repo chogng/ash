@@ -2,18 +2,12 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IWorkspaceExtensionsConfigService } from './workspaceExtensionsConfig.js';
-import {
-	extensionRecommendationKey,
-	type IExtensionIgnoredRecommendationsService,
-} from './extensionRecommendations.js';
+import { extensionRecommendationKey, type IExtensionIgnoredRecommendationsService } from './extensionRecommendations.js';
 
 const ignoredKey = 'extensionsAssistant/ignored_recommendations';
 
 /** Global user choices are stored once; workspace exclusions remain owned by their configuration files. */
-export class ExtensionIgnoredRecommendationsService
-	extends Disposable
-	implements IExtensionIgnoredRecommendationsService
-{
+export class ExtensionIgnoredRecommendationsService extends Disposable implements IExtensionIgnoredRecommendationsService {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChangeIgnoredRecommendations = this.changed.event;
 	private readonly globalChanged = this._register(new Emitter<{ extensionId: string; isRecommended: boolean }>());
@@ -51,10 +45,7 @@ export class ExtensionIgnoredRecommendationsService
 						...new Set(
 							value
 								.slice(0, 1000)
-								.filter(
-									(id): id is string =>
-										typeof id === 'string' && /^[a-z0-9][a-z0-9_.@/-]{0,255}$/iu.test(id),
-								)
+								.filter((id): id is string => typeof id === 'string' && /^[a-z0-9][a-z0-9_.@/-]{0,255}$/iu.test(id))
 								.map(extensionRecommendationKey),
 						),
 					]
@@ -72,12 +63,7 @@ export class ExtensionIgnoredRecommendationsService
 		if (current.includes(id) === ignore) {
 			return;
 		}
-		this.storage.store(
-			ignoredKey,
-			JSON.stringify(ignore ? [...current, id] : current.filter(candidate => candidate !== id)),
-			StorageScope.PROFILE,
-			StorageTarget.USER,
-		);
+		this.storage.store(ignoredKey, JSON.stringify(ignore ? [...current, id] : current.filter(candidate => candidate !== id)), StorageScope.PROFILE, StorageTarget.USER);
 		this.globalChanged.fire({ extensionId: id, isRecommended: !ignore });
 	}
 	private async readWorkspace(): Promise<void> {
@@ -87,9 +73,7 @@ export class ExtensionIgnoredRecommendationsService
 			if (this.isDisposed || generation !== this.generation) {
 				return;
 			}
-			this.workspaceIgnored = configs
-				.flatMap(config => config.unwantedRecommendations)
-				.map(extensionRecommendationKey);
+			this.workspaceIgnored = configs.flatMap(config => config.unwantedRecommendations).map(extensionRecommendationKey);
 		} catch {
 			/* A workspace transition may cancel the old configuration read. */
 		}

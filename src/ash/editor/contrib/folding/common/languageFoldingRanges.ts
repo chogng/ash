@@ -41,12 +41,7 @@ export class FoldingRangeService extends Disposable {
 }
 
 function normalizeLanguageFoldingRange(range: LanguageFoldingRange): LanguageFoldingRange {
-	if (
-		!Number.isSafeInteger(range.startLineIndex) ||
-		!Number.isSafeInteger(range.endLineIndex) ||
-		range.startLineIndex < 0 ||
-		range.endLineIndex <= range.startLineIndex
-	)
+	if (!Number.isSafeInteger(range.startLineIndex) || !Number.isSafeInteger(range.endLineIndex) || range.startLineIndex < 0 || range.endLineIndex <= range.startLineIndex)
 		throw new RangeError('Language folding range is invalid');
 	return Object.freeze({
 		startLineIndex: range.startLineIndex,

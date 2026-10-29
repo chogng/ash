@@ -1,9 +1,5 @@
 import { registerSingleton, InstantiationType } from '../../../../../platform/instantiation/common/extensions.js';
-import {
-	ITerminalCompletionService,
-	TerminalCompletionService,
-	type ITerminalCompletion,
-} from './terminalCompletionService.js';
+import { ITerminalCompletionService, TerminalCompletionService, type ITerminalCompletion } from './terminalCompletionService.js';
 import { raceCancellationError, RunOnceScheduler } from '../../../../../base/common/async.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { TerminalSuggestWidget } from './terminalSuggestWidget.js';
@@ -28,15 +24,8 @@ import { PromptInputState } from '../../../../../platform/terminal/common/capabi
 import { PosixShellType } from '../../../../../platform/terminal/common/terminal.js';
 import { escapeNonWindowsPath } from '../../../../../platform/terminal/common/terminalEnvironment.js';
 import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../../platform/workspace/common/workspace.js';
-import {
-	ITerminalService,
-	type ITerminalContribution,
-	type IXtermTerminal,
-} from '../../../terminal/browser/terminal.js';
-import {
-	registerTerminalContribution,
-	type ITerminalContributionContext,
-} from '../../../terminal/browser/terminalExtensions.js';
+import { ITerminalService, type ITerminalContribution, type IXtermTerminal } from '../../../terminal/browser/terminal.js';
+import { registerTerminalContribution, type ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
 import { TerminalContextKeys } from '../../../terminal/common/terminalContextKey.js';
 import { TerminalCommandHistory } from '../../history/common/history.js';
 import { TerminalSuggestCommandId } from '../common/terminal.suggest.js';
@@ -66,11 +55,7 @@ registerAction2(
 		}
 
 		public override async run(accessor: ServicesAccessor, triggerCharacter?: string): Promise<void> {
-			if (
-				triggerCharacter !== undefined &&
-				(typeof triggerCharacter !== 'string' || [...triggerCharacter].length !== 1)
-			)
-				return;
+			if (triggerCharacter !== undefined && (typeof triggerCharacter !== 'string' || [...triggerCharacter].length !== 1)) return;
 			if (!accessor.get(IConfigurationService).getValue<boolean>(TerminalSuggestSettingId.Enabled)) return;
 			const terminals = accessor.get(ITerminalService);
 			const instance = terminals.activeInstance;
@@ -99,18 +84,12 @@ registerAction2(
 			const cwd = capability.cwd ?? instance.cwd ?? instance.initialCwd;
 			const workspace = accessor.get(IWorkspaceContextService);
 			const folder = workspace.getWorkspace().folders.find(folder => folder.id === instance.dirId);
-			const history = new TerminalCommandHistory(
-				accessor.get(IConfigurationService),
-				accessor.get(IStorageService),
-			);
+			const history = new TerminalCommandHistory(accessor.get(IConfigurationService), accessor.get(IStorageService));
 			const items = historyPicks(history, profileId, prefix, cursorIndex);
 			using lifetime = new DisposableStore();
 			const picker = lifetime.add(accessor.get(IQuickInputService).createQuickPick<CompletionPick>());
 			picker.ariaLabel = localize('terminal.suggest.ariaLabel', 'Terminal suggestions');
-			picker.placeholder = localize(
-				'terminal.suggest.placeholder',
-				'Select a suggestion to insert without running it',
-			);
+			picker.placeholder = localize('terminal.suggest.placeholder', 'Select a suggestion to insert without running it');
 			picker.items = items;
 			picker.sortByLabel = false;
 			const request = new AbortController();
@@ -126,13 +105,7 @@ registerAction2(
 					retired = true;
 				}),
 			);
-			for (const event of [
-				model.onDidStartInput,
-				model.onDidChangeInput,
-				model.onDidFinishInput,
-				model.onDidInterrupt,
-			])
-				lifetime.add(event(retire));
+			for (const event of [model.onDidStartInput, model.onDidChangeInput, model.onDidFinishInput, model.onDidInterrupt]) lifetime.add(event(retire));
 			lifetime.add(instance.onDidChangeState(retire));
 			lifetime.add(instance.onDidExit(retire));
 			lifetime.add(terminals.onDidChangeActiveInstance(retire));
@@ -178,15 +151,7 @@ registerAction2(
 			}
 			picker.busy = true;
 			void activation
-				.then(() =>
-					completionService.provideCompletions(
-						instance,
-						prefix,
-						cursorIndex,
-						request.signal,
-						triggerCharacter,
-					),
-				)
+				.then(() => completionService.provideCompletions(instance, prefix, cursorIndex, request.signal, triggerCharacter))
 				.then(completions => {
 					if (!canSend()) return;
 					const providerItems = providerPicks(completions, prefix, cursorIndex);
@@ -198,19 +163,13 @@ registerAction2(
 				});
 			// The file provider may complete after Escape, input changes or a terminal switch.
 			// Keep its result local until the original prompt's lifetime is still current.
-			if (
-				cursorIndex === prefix.length &&
-				folder &&
-				(shell === PosixShellType.Bash || shell === PosixShellType.Zsh)
-			) {
+			if (cursorIndex === prefix.length && folder && (shell === PosixShellType.Bash || shell === PosixShellType.Zsh)) {
 				picker.busy = true;
-				void pathCompletions(prefix, cwd, folder, accessor.get(IPathService), accessor.get(IFileService)).then(
-					paths => {
-						if (!canSend()) return;
-						picker.busy = false;
-						picker.items = [...picker.items, ...paths];
-					},
-				);
+				void pathCompletions(prefix, cwd, folder, accessor.get(IPathService), accessor.get(IFileService)).then(paths => {
+					if (!canSend()) return;
+					picker.busy = false;
+					picker.items = [...picker.items, ...paths];
+				});
 			}
 			let selected: CompletionPick | undefined;
 			await new Promise<void>(resolve => {
@@ -230,21 +189,11 @@ registerAction2(
 	},
 );
 
-function historyPicks(
-	history: TerminalCommandHistory,
-	profileId: string,
-	prefix: string,
-	cursorIndex: number,
-): CompletionPick[] {
+function historyPicks(history: TerminalCommandHistory, profileId: string, prefix: string, cursorIndex: number): CompletionPick[] {
 	if (cursorIndex !== prefix.length) return [];
 	return history
 		.getCommands(profileId)
-		.filter(
-			entry =>
-				entry.command.startsWith(prefix) &&
-				entry.command.length > prefix.length &&
-				!/[\x00-\x1f\x7f]/.test(entry.command),
-		)
+		.filter(entry => entry.command.startsWith(prefix) && entry.command.length > prefix.length && !/[\x00-\x1f\x7f]/.test(entry.command))
 		.slice(0, 200)
 		.map(entry => ({
 			label: entry.command,
@@ -253,43 +202,26 @@ function historyPicks(
 		}));
 }
 
-function providerPicks(
-	completions: readonly ITerminalCompletion[],
-	prefix: string,
-	cursorIndex: number,
-): CompletionPick[] {
+function providerPicks(completions: readonly ITerminalCompletion[], prefix: string, cursorIndex: number): CompletionPick[] {
 	return completions
 		.map((item): CompletionPick | undefined => {
 			const [start, end] = item.replacementRange;
 			// Shell line editing consumes characters rather than UTF-16 code units.
 			// Do not let an extension split a surrogate pair at either range boundary.
-			if (
-				[start, end].some(index => index > 0 && index < prefix.length && /[\uDC00-\uDFFF]/.test(prefix[index]!))
-			)
-				return undefined;
-			const movement =
-				end < cursorIndex
-					? '\x1b[D'.repeat([...prefix.slice(end, cursorIndex)].length)
-					: '\x1b[C'.repeat([...prefix.slice(cursorIndex, end)].length);
+			if ([start, end].some(index => index > 0 && index < prefix.length && /[\uDC00-\uDFFF]/.test(prefix[index]!))) return undefined;
+			const movement = end < cursorIndex ? '\x1b[D'.repeat([...prefix.slice(end, cursorIndex)].length) : '\x1b[C'.repeat([...prefix.slice(cursorIndex, end)].length);
 			return {
 				label: item.label,
 				description: item.detail,
 				detail: item.documentation,
 				isValid: item.isValid,
-				inputData:
-					movement + '\x7f'.repeat([...prefix.slice(start, end)].length) + (item.insertText ?? item.label),
+				inputData: movement + '\x7f'.repeat([...prefix.slice(start, end)].length) + (item.insertText ?? item.label),
 			};
 		})
 		.filter((item): item is CompletionPick => item !== undefined);
 }
 
-async function pathCompletions(
-	prefix: string,
-	cwd: string,
-	folder: IWorkspaceFolder,
-	paths: IPathService,
-	files: IFileService,
-): Promise<CompletionPick[]> {
+async function pathCompletions(prefix: string, cwd: string, folder: IWorkspaceFolder, paths: IPathService, files: IFileService): Promise<CompletionPick[]> {
 	// A partial quote, expansion, escape or shell operator needs a shell-owned parser.
 	// Restrict this producer to plain tokens rather than guessing the shell's editing rules.
 	if (!/^[\p{L}\p{N}._/@%+=~ -]*$/u.test(prefix)) return [];
@@ -307,12 +239,7 @@ async function pathCompletions(
 		const typedName = token.slice(slash + 1);
 		const entries = await files.readDirectory(resource);
 		return entries
-			.filter(
-				entry =>
-					(entry.kind === FileKind.File || entry.kind === FileKind.Directory) &&
-					entry.name.startsWith(typedName) &&
-					!/[\x00-\x1f\x7f]/.test(entry.name),
-			)
+			.filter(entry => (entry.kind === FileKind.File || entry.kind === FileKind.Directory) && entry.name.startsWith(typedName) && !/[\x00-\x1f\x7f]/.test(entry.name))
 			.slice(0, 200)
 			.flatMap(entry => {
 				const suffix = entry.name.slice(typedName.length) + (entry.kind === FileKind.Directory ? '/' : '');
@@ -321,10 +248,7 @@ async function pathCompletions(
 					{
 						label: token.slice(0, slash + 1) + entry.name + (entry.kind === FileKind.Directory ? '/' : ''),
 						inputData: /^[\p{L}\p{N}._/@%+=-]*$/u.test(suffix) ? suffix : escapeNonWindowsPath(suffix),
-						description:
-							entry.kind === FileKind.Directory
-								? localize('terminal.suggest.folder', 'Folder')
-								: localize('terminal.suggest.file', 'File'),
+						description: entry.kind === FileKind.Directory ? localize('terminal.suggest.folder', 'Folder') : localize('terminal.suggest.file', 'File'),
 					},
 				];
 			});
@@ -376,9 +300,7 @@ class TerminalSuggestContribution extends Disposable implements ITerminalContrib
 		const input = screen.raw.onKey(({ key: data, domEvent }) => {
 			const pending = this.pendingInput;
 			this.clearQuery();
-			const model = this.context.instance.capabilities?.get(
-				TerminalCapability.CommandDetection,
-			)?.promptInputModel;
+			const model = this.context.instance.capabilities?.get(TerminalCapability.CommandDetection)?.promptInputModel;
 			if (
 				this.composing ||
 				domEvent.isComposing ||
@@ -392,9 +314,7 @@ class TerminalSuggestContribution extends Disposable implements ITerminalContrib
 				return;
 			}
 			const unconfirmed = pending && model.value !== pending.prefix + pending.value;
-			this.pendingInput = unconfirmed
-				? { prefix: pending.prefix, value: pending.value + data }
-				: { prefix: model.value, value: data };
+			this.pendingInput = unconfirmed ? { prefix: pending.prefix, value: pending.value + data } : { prefix: model.value, value: data };
 			if (this.pendingInput.value.length > 1024) {
 				this.retire();
 				return;
@@ -402,11 +322,7 @@ class TerminalSuggestContribution extends Disposable implements ITerminalContrib
 			this.inputExpiry.schedule();
 		});
 		this._register(toDisposable(() => input.dispose()));
-		for (const listener of [
-			screen.raw.onScroll(() => this.retire()),
-			screen.raw.onResize(() => this.retire()),
-			screen.raw.buffer.onBufferChange(() => this.retire()),
-		])
+		for (const listener of [screen.raw.onScroll(() => this.retire()), screen.raw.onResize(() => this.retire()), screen.raw.buffer.onBufferChange(() => this.retire())])
 			this._register(toDisposable(() => listener.dispose()));
 		this._register(
 			addDisposableListener(screen.element, 'compositionstart', () => {
@@ -437,12 +353,9 @@ class TerminalSuggestContribution extends Disposable implements ITerminalContrib
 		const bind = (): void => {
 			this.promptListeners.clear();
 			this.retire();
-			const model = this.context.instance.capabilities?.get(
-				TerminalCapability.CommandDetection,
-			)?.promptInputModel;
+			const model = this.context.instance.capabilities?.get(TerminalCapability.CommandDetection)?.promptInputModel;
 			if (!model) return;
-			for (const event of [model.onDidStartInput, model.onDidFinishInput, model.onDidInterrupt])
-				this.promptListeners.add(event(() => this.retire()));
+			for (const event of [model.onDidStartInput, model.onDidFinishInput, model.onDidInterrupt]) this.promptListeners.add(event(() => this.retire()));
 			this.promptListeners.add(
 				model.onDidChangeInput(() => {
 					const pending = this.pendingInput;
@@ -451,31 +364,20 @@ class TerminalSuggestContribution extends Disposable implements ITerminalContrib
 					// Match the complete bounded input run, not only its last character:
 					// an earlier echo fragment may already end in the same trigger.
 					this.clearQuery();
-					if (!pending || !character || !this.eligible() || model.value !== pending.prefix + pending.value)
-						return;
+					if (!pending || !character || !this.eligible() || model.value !== pending.prefix + pending.value) return;
 					const triggered =
 						this.configuration.getValue<boolean>(TerminalSuggestSettingId.SuggestOnTriggerCharacters) &&
-						[...this.completions.providers].some(provider =>
-							provider.triggerCharacters?.includes(character),
-						);
-					const quick = this.configuration.getValue<boolean | TerminalQuickSuggestions>(
-						TerminalSuggestSettingId.QuickSuggestions,
-					);
-					const category = /^[\p{L}\p{N}._/@%+=~ -]*$/u.test(model.value)
-						? /\s/.test(model.value.slice(0, model.cursorIndex))
-							? 'arguments'
-							: 'commands'
-						: 'unknown';
-					const automatic =
-						typeof quick === 'boolean' ? quick && category !== 'unknown' : quick?.[category] === 'on';
+						[...this.completions.providers].some(provider => provider.triggerCharacters?.includes(character));
+					const quick = this.configuration.getValue<boolean | TerminalQuickSuggestions>(TerminalSuggestSettingId.QuickSuggestions);
+					const category = /^[\p{L}\p{N}._/@%+=~ -]*$/u.test(model.value) ? (/\s/.test(model.value.slice(0, model.cursorIndex)) ? 'arguments' : 'commands') : 'unknown';
+					const automatic = typeof quick === 'boolean' ? quick && category !== 'unknown' : quick?.[category] === 'on';
 					if (!triggered && !automatic) return;
 					this.triggerCharacter = triggered ? character : undefined;
 					this.scheduler.schedule();
 				}),
 			);
 		};
-		if (this.context.instance.capabilities)
-			this._register(this.context.instance.capabilities.onDidChangeCapabilities(bind));
+		if (this.context.instance.capabilities) this._register(this.context.instance.capabilities.onDidChangeCapabilities(bind));
 		this._register(toDisposable(() => this.retire()));
 		bind();
 	}
@@ -537,12 +439,7 @@ class TerminalSuggestContribution extends Disposable implements ITerminalContrib
 			model.value === prefix &&
 			model.cursorIndex === cursor &&
 			(capability.cwd ?? instance.cwd ?? instance.initialCwd) === cwd;
-		let items = historyPicks(
-			new TerminalCommandHistory(this.configuration, this.storage),
-			profileId,
-			prefix,
-			cursor,
-		);
+		let items = historyPicks(new TerminalCommandHistory(this.configuration, this.storage), profileId, prefix, cursor);
 		const publish = (): void => {
 			if (!valid()) return;
 			this.widget?.show(items, item => {
@@ -557,9 +454,7 @@ class TerminalSuggestContribution extends Disposable implements ITerminalContrib
 		publish();
 		const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === instance.dirId);
 		const paths =
-			folder && (instance.shellType === PosixShellType.Bash || instance.shellType === PosixShellType.Zsh)
-				? pathCompletions(prefix, cwd, folder, this.paths, this.files)
-				: Promise.resolve([]);
+			folder && (instance.shellType === PosixShellType.Bash || instance.shellType === PosixShellType.Zsh) ? pathCompletions(prefix, cwd, folder, this.paths, this.files) : Promise.resolve([]);
 		const providers = this.extensions
 			.activateByEvent('onTerminal:terminalCompletionProvider', request.signal)
 			.then(() => this.completions.provideCompletions(instance, prefix, cursor, request.signal, trigger));

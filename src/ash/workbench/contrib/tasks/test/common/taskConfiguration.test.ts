@@ -27,10 +27,7 @@ test('workspace tasks parse supported VS Code shell tasks and preserve explicit 
 });
 
 test('package and Cargo task discovery stays deterministic', () => {
-	const packageTasks = parsePackageTasks(
-		'{"scripts":{"test":"node --test","build":"vite build","dev":"vite","bad name":"ignored"}}',
-		'pnpm',
-	);
+	const packageTasks = parsePackageTasks('{"scripts":{"test":"node --test","build":"vite build","dev":"vite","bad name":"ignored"}}', 'pnpm');
 	assert.deepEqual(
 		packageTasks.map(task => [task.label, task.command, task.group]),
 		[
@@ -178,10 +175,7 @@ test('workspace tasks ignore inactive platform execution fields and reject inval
 	};
 	assert.equal(parseWorkspaceTasks(JSON.stringify(document), OperatingSystem.Linux)[0].command, 'portable');
 	assert.throws(() => parseWorkspaceTasks(JSON.stringify(document), OperatingSystem.Windows), /Task environment/);
-	assert.throws(
-		() => parseWorkspaceTasks(JSON.stringify({ ...document, linux: 42 }), OperatingSystem.Linux),
-		/linux must be an object/,
-	);
+	assert.throws(() => parseWorkspaceTasks(JSON.stringify({ ...document, linux: 42 }), OperatingSystem.Linux), /linux must be an object/);
 });
 
 test('unresolved provider labels remain discoverable and structured shell quoting retains its explicit style', () => {
@@ -230,15 +224,9 @@ test('empty task environments retain inherited variables', () => {
 		tasks: [{ label: 'Inherited env', command: 'build', options: { env: {} } }],
 	};
 	const task = parseWorkspaceTasks(JSON.stringify(source))[0];
-	assert.deepEqual(
-		{ unsupported: task.unsupportedFeatures, environment: task.environment },
-		{ unsupported: [], environment: { MODE: 'test' } },
-	);
+	assert.deepEqual({ unsupported: task.unsupportedFeatures, environment: task.environment }, { unsupported: [], environment: { MODE: 'test' } });
 	assert.deepEqual(task.configuration?.task.options, { env: {} });
-	assert.deepEqual(
-		parseWorkspaceTasks(JSON.stringify({ ...source, options: { env: {} } }))[0].unsupportedFeatures,
-		[],
-	);
+	assert.deepEqual(parseWorkspaceTasks(JSON.stringify({ ...source, options: { env: {} } }))[0].unsupportedFeatures, []);
 });
 
 test('task environment removals override defaults while preserving literal values', () => {
@@ -293,9 +281,7 @@ test('shell arguments cannot supply a missing or empty command', () => {
 				parseWorkspaceTasks(
 					JSON.stringify({
 						version: '2.0.0',
-						tasks: [
-							{ label: 'Missing command', type: 'shell', command, args: ['touch', 'should-not-exist'] },
-						],
+						tasks: [{ label: 'Missing command', type: 'shell', command, args: ['touch', 'should-not-exist'] }],
 					}),
 				),
 			/command must contain/,
@@ -304,12 +290,7 @@ test('shell arguments cannot supply a missing or empty command', () => {
 });
 
 test('workspace tasks admit environment, workspace, command and configured input variables', () => {
-	const commands = [
-		'${workspaceFolder:Server}/build ${workspaceFolderBasename:Client} ${command:target}',
-		'${env:HOME}',
-		'${input:target}',
-		'${workspaceFolder:}',
-	];
+	const commands = ['${workspaceFolder:Server}/build ${workspaceFolderBasename:Client} ${command:target}', '${env:HOME}', '${input:target}', '${workspaceFolder:}'];
 	const tasks = parseWorkspaceTasks(
 		JSON.stringify({
 			version: '2.0.0',
@@ -609,13 +590,7 @@ test('task reveal, focus and close inherit independently and validate their valu
 		],
 	);
 	for (const presentation of [{ reveal: 1 }, { reveal: 'sometimes' }, { focus: 'true' }, { close: 1 }]) {
-		assert.throws(
-			() =>
-				parseWorkspaceTasks(
-					JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Invalid', command: 'build', presentation }] }),
-				),
-			/Invalid task presentation/,
-		);
+		assert.throws(() => parseWorkspaceTasks(JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Invalid', command: 'build', presentation }] })), /Invalid task presentation/);
 	}
 });
 
@@ -683,9 +658,7 @@ test('task shell args alone override default profiles but stay an argv-only cont
 	const tasks = parseWorkspaceTasks(
 		JSON.stringify({
 			version: '2.0.0',
-			tasks: [
-				{ label: 'Override', type: 'shell', command: 'compiler', options: { shell: { args: ['/q', '/c'] } } },
-			],
+			tasks: [{ label: 'Override', type: 'shell', command: 'compiler', options: { shell: { args: ['/q', '/c'] } } }],
 		}),
 		OperatingSystem.Windows,
 	);

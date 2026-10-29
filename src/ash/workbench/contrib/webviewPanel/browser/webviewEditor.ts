@@ -8,10 +8,7 @@ import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.j
 import { getWindow, h, type IDimension } from '../../../../base/browser/dom.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import type { Event } from '../../../../base/common/event.js';
-import {
-	AccessibilityVerbositySettingId,
-	IAccessibleViewService,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -121,9 +118,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 				reference.dispose();
 				inputSignal.throwIfAborted();
 			}
-			this.model = resources.add(
-				this.instantiation.createInstance(CustomTextEditorModel, reference, input, this.saveUntitled),
-			);
+			this.model = resources.add(this.instantiation.createInstance(CustomTextEditorModel, reference, input, this.saveUntitled));
 			inputSignal.throwIfAborted();
 			this.input = input;
 			const model = this.model;
@@ -155,10 +150,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 					this.editable = content.editable ?? content.update !== undefined;
 					this.renderedUpdate = content.update;
 					this.renderedVersion = document.version;
-					const base = asWebviewUri(input.resource)
-						.toString()
-						.replaceAll('&', '&amp;')
-						.replaceAll('"', '&quot;');
+					const base = asWebviewUri(input.resource).toString().replaceAll('&', '&amp;').replaceAll('"', '&quot;');
 					this.renderedHtml = `<base href="${base}"><style>:root{${variables}}</style>${content.html}`;
 					if (this.webview.value) {
 						if (content.update !== undefined) {
@@ -227,10 +219,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 			options: { forwardKeyboardEvents: true },
 			contentOptions: {
 				allowScripts: true,
-				localResourceRoots: [
-					...this.workspace.getWorkspace().folders.map(folder => folder.uri),
-					...(input.resource.scheme === Schemas.untitled ? [] : [dirname(input.resource)]),
-				],
+				localResourceRoots: [...this.workspace.getWorkspace().folders.map(folder => folder.uri), ...(input.resource.scheme === Schemas.untitled ? [] : [dirname(input.resource)])],
 			},
 		});
 		const webview = this.webview.value;
@@ -263,12 +252,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 					this.handleEditMessage(message, webview);
 					return;
 				}
-				if (
-					typeof message !== 'object' ||
-					message === null ||
-					!('href' in message) ||
-					typeof message.href !== 'string'
-				) {
+				if (typeof message !== 'object' || message === null || !('href' in message) || typeof message.href !== 'string') {
 					return;
 				}
 				if (!URL.canParse(message.href, input.resource.toString())) {
@@ -293,12 +277,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 			return;
 		}
 		if (message.type !== 'edit' && message.type !== 'undo' && message.type !== 'redo') return;
-		if (
-			!('version' in message) ||
-			!Number.isSafeInteger(message.version) ||
-			message.version !== model.getVersionId() ||
-			this.readOnly
-		) {
+		if (!('version' in message) || !Number.isSafeInteger(message.version) || message.version !== model.getVersionId() || this.readOnly) {
 			webview.postMessage({
 				type: 'editRejected',
 				reason: this.readOnly ? 'readonly' : 'conflict',
@@ -342,8 +321,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 				start = message.start;
 				end = message.end;
 			} else {
-				while (start < previous.length && start < replacement.length && previous[start] === replacement[start])
-					start++;
+				while (start < previous.length && start < replacement.length && previous[start] === replacement[start]) start++;
 				let nextEnd = replacement.length;
 				while (end > start && nextEnd > start && previous[end - 1] === replacement[nextEnd - 1]) {
 					end--;

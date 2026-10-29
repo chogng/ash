@@ -11,13 +11,7 @@ import { test, suiteTeardown } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { type ITaskService } from '../../../../contrib/tasks/common/taskService.js';
-import {
-	type ITaskRun,
-	type IWorkspaceTask,
-	type TaskProvider,
-	type TaskProviderRegistration,
-	type TaskRunStatus,
-} from '../../../../contrib/tasks/common/tasks.js';
+import { type ITaskRun, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskRunStatus } from '../../../../contrib/tasks/common/tasks.js';
 import type { ITerminalInstance } from '../../../../contrib/terminal/browser/terminal.js';
 import { TestingService } from '../../browser/testingService.js';
 
@@ -25,11 +19,7 @@ const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
 
 test('TestingService exposes only test tasks and projects passed and failed runs', async () => {
-	using tasks = new FakeTaskService([
-		task('build', 'Build', 'build'),
-		task('unit', 'Unit', 'test'),
-		task('integration', 'Integration', 'test'),
-	]);
+	using tasks = new FakeTaskService([task('build', 'Build', 'build'), task('unit', 'Unit', 'test'), task('integration', 'Integration', 'test')]);
 	using workspace = new TestWorkspaceService({ id: 'empty', folders: [] });
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using debug = new TestDebugService();
@@ -63,9 +53,7 @@ test('TestingService owns dynamic Test Profile providers and maps profiles to te
 	const registration = service.registerTestProfileProviders([
 		{
 			id: 'demo.tests',
-			provideTestProfiles: () => [
-				{ id: 'focused', label: 'Focused', taskId: 'unit', detail: 'Extension profile' },
-			],
+			provideTestProfiles: () => [{ id: 'focused', label: 'Focused', taskId: 'unit', detail: 'Extension profile' }],
 		},
 	]);
 
@@ -81,10 +69,7 @@ test('TestingService owns dynamic Test Profile providers and maps profiles to te
 	const run = await service.run(profile);
 	assert.equal(run.taskRun.task.id, 'unit');
 
-	assert.throws(
-		() => service.registerTestProfileProvider({ id: 'demo.tests', provideTestProfiles: () => [] }),
-		/already registered/,
-	);
+	assert.throws(() => service.registerTestProfileProvider({ id: 'demo.tests', provideTestProfiles: () => [] }), /already registered/);
 	registration.dispose();
 	assert.deepEqual(
 		service.profiles.map(candidate => candidate.id),
@@ -337,11 +322,7 @@ test('TestingService starts the prepared exact test with the DAP owner and cance
 		terminal: 'console',
 	});
 	assert.equal(debug.launches[0]!.type, 'lldb');
-	assert.equal(
-		debug.launches[0]!.adapter,
-		undefined,
-		'The Debug provider must select the adapter, including configured runtime settings',
-	);
+	assert.equal(debug.launches[0]!.adapter, undefined, 'The Debug provider must select the adapter, including configured runtime settings');
 	assert.equal(debug.launches[0]!.dirId, 'workspace');
 	assert.equal(service.isDebuggingTest, true);
 	assert.equal(backend.runs.length, 0);

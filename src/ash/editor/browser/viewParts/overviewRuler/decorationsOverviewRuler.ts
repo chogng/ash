@@ -76,11 +76,7 @@ export class DecorationsOverviewRuler extends ViewPart {
 		this.cursorPositions = event.selections
 			.map((selection, index) => ({
 				position: selection.getPosition(),
-				color: multiple
-					? index === 0
-						? this.settings.cursorColorPrimary
-						: this.settings.cursorColorSecondary
-					: this.settings.cursorColorSingle,
+				color: multiple ? (index === 0 ? this.settings.cursorColorPrimary : this.settings.cursorColorSecondary) : this.settings.cursorColorSingle,
 			}))
 			.sort((left, right) => Position.compare(left.position, right.position));
 		return this.markMaybe();
@@ -103,9 +99,7 @@ export class DecorationsOverviewRuler extends ViewPart {
 
 	public override prepareRender(_context: RenderingContext): void {
 		if (this.renderState === RenderState.Clean) return;
-		this.preparedDecorations = this._context.viewModel
-			.getAllOverviewRulerDecorations(this._context.theme)
-			.sort(OverviewRulerDecorationsGroup.compareByRenderingProps);
+		this.preparedDecorations = this._context.viewModel.getAllOverviewRulerDecorations(this._context.theme).sort(OverviewRulerDecorationsGroup.compareByRenderingProps);
 		if (
 			this.renderState === RenderState.Maybe &&
 			OverviewRulerDecorationsGroup.equalsArr(this.renderedDecorations, this.preparedDecorations) &&
@@ -147,9 +141,7 @@ export class DecorationsOverviewRuler extends ViewPart {
 				const startLineNumber = group.data[index + 1]!;
 				const endLineNumber = group.data[index + 2]!;
 				const top = Math.floor(viewLayout.getVerticalOffsetForLineNumber(startLineNumber) * scaleY);
-				const bottom = Math.ceil(
-					(viewLayout.getVerticalOffsetForLineNumber(endLineNumber) + this.settings.lineHeight) * scaleY,
-				);
+				const bottom = Math.ceil((viewLayout.getVerticalOffsetForLineNumber(endLineNumber) + this.settings.lineHeight) * scaleY);
 				const horizontal = this.settings.laneBounds(lane);
 				const marker = verticallyCenter(top, bottom, minimumHeight, canvasHeight);
 				painter.fillRect(horizontal.left, marker.top, horizontal.width, marker.height);
@@ -174,9 +166,7 @@ export class DecorationsOverviewRuler extends ViewPart {
 		const horizontal = this.settings.laneBounds(OverviewRulerLane.Full);
 		for (const cursor of this.cursorPositions) {
 			if (!cursor.color) continue;
-			const center = Math.floor(
-				this._context.viewLayout.getVerticalOffsetForLineNumber(cursor.position.lineNumber) * scaleY,
-			);
+			const center = Math.floor(this._context.viewLayout.getVerticalOffsetForLineNumber(cursor.position.lineNumber) * scaleY);
 			const top = Math.max(0, Math.min(this.settings.canvasHeight - height, center - Math.floor(height / 2)));
 			painter.fillStyle = cursor.color;
 			painter.fillRect(horizontal.left, top, horizontal.width, height);
@@ -189,12 +179,7 @@ export class DecorationsOverviewRuler extends ViewPart {
 		this.settings = next;
 		this.cursorPositions = this.cursorPositions.map((cursor, index) => ({
 			position: cursor.position,
-			color:
-				this.cursorPositions.length > 1
-					? index === 0
-						? next.cursorColorPrimary
-						: next.cursorColorSecondary
-					: next.cursorColorSingle,
+			color: this.cursorPositions.length > 1 ? (index === 0 ? next.cursorColorPrimary : next.cursorColorSecondary) : next.cursorColorSingle,
 		}));
 		this.applySettings();
 		return this.markNeeded();
@@ -250,10 +235,8 @@ class OverviewRulerSettings {
 		this.backgroundColor = context.theme.getColor(editorOverviewRulerBackground)?.toString() ?? null;
 		this.hideCursor = options.get(EditorOption.hideCursorInOverviewRuler);
 		this.cursorColorSingle = context.theme.getColor(editorCursorForeground)?.transparent(0.7).toString() ?? null;
-		this.cursorColorPrimary =
-			context.theme.getColor(editorMultiCursorPrimaryForeground)?.transparent(0.7).toString() ?? null;
-		this.cursorColorSecondary =
-			context.theme.getColor(editorMultiCursorSecondaryForeground)?.transparent(0.7).toString() ?? null;
+		this.cursorColorPrimary = context.theme.getColor(editorMultiCursorPrimaryForeground)?.transparent(0.7).toString() ?? null;
+		this.cursorColorSecondary = context.theme.getColor(editorMultiCursorSecondaryForeground)?.transparent(0.7).toString() ?? null;
 		this.top = position.top;
 		this.right = position.right;
 		this.domWidth = position.width;
@@ -273,13 +256,11 @@ class OverviewRulerSettings {
 			if (lane === OverviewRulerLane.Right) return { left: rightLeft, width: rightWidth };
 			return {
 				left: 0,
-				width:
-					lane === OverviewRulerLane.Left || lane === OverviewRulerLane.Center ? leftWidth : this.canvasWidth,
+				width: lane === OverviewRulerLane.Left || lane === OverviewRulerLane.Center ? leftWidth : this.canvasWidth,
 			};
 		}
 		const first = lane & OverviewRulerLane.Left ? 0 : lane & OverviewRulerLane.Center ? leftWidth : rightLeft;
-		const last =
-			lane & OverviewRulerLane.Right ? this.canvasWidth : lane & OverviewRulerLane.Center ? rightLeft : leftWidth;
+		const last = lane & OverviewRulerLane.Right ? this.canvasWidth : lane & OverviewRulerLane.Center ? rightLeft : leftWidth;
 		return { left: first, width: Math.max(0, last - first) };
 	}
 
@@ -303,12 +284,7 @@ class OverviewRulerSettings {
 	}
 }
 
-function verticallyCenter(
-	top: number,
-	bottom: number,
-	minimumHeight: number,
-	canvasHeight: number,
-): { readonly top: number; readonly height: number } {
+function verticallyCenter(top: number, bottom: number, minimumHeight: number, canvasHeight: number): { readonly top: number; readonly height: number } {
 	const height = Math.max(minimumHeight, bottom - top);
 	const centeredTop = top - Math.floor((height - (bottom - top)) / 2);
 	return { top: Math.max(0, Math.min(canvasHeight - height, centeredTop)), height: Math.min(canvasHeight, height) };

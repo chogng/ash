@@ -3,16 +3,9 @@ import { localize, localize2 } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import {
-	ConfigurationScope,
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
-import {
-	IInstantiationService,
-	type ServicesAccessor,
-} from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { Menus } from '../../../browser/menus.js';
@@ -29,12 +22,7 @@ import { registerSingleton, InstantiationType } from '../../../../platform/insta
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { getActiveElement } from '../../../../base/browser/dom.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
@@ -70,10 +58,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	setting: {
 		valueType: 'boolean',
 		title: localize('sessions.chatgpt.navigationVerbosity', 'ChatGPT accessibility help'),
-		description: localize(
-			'sessions.chatgpt.navigationVerbosityDescription',
-			'Announce how to open accessibility help when ChatGPT receives focus.',
-		),
+		description: localize('sessions.chatgpt.navigationVerbosityDescription', 'Announce how to open accessibility help when ChatGPT receives focus.'),
 	},
 });
 
@@ -147,9 +132,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	},
 });
 
-registerWorkbenchContribution(ChatGPTWebContribution.ID, WorkbenchPhase.BlockRestore, services =>
-	services.get(IInstantiationService).createInstance(ChatGPTWebContribution),
-);
+registerWorkbenchContribution(ChatGPTWebContribution.ID, WorkbenchPhase.BlockRestore, services => services.get(IInstantiationService).createInstance(ChatGPTWebContribution));
 
 registerAction2(
 	class OpenChatGPT extends Action2 {
@@ -179,10 +162,7 @@ registerAction2(
 		}
 		public override async run(accessor: ServicesAccessor): Promise<void> {
 			const configuration = accessor.get(IConfigurationService);
-			await configuration.updateValue(
-				chatGPTScrollOptimization,
-				!configuration.getValue<boolean>(chatGPTScrollOptimization),
-			);
+			await configuration.updateValue(chatGPTScrollOptimization, !configuration.getValue<boolean>(chatGPTScrollOptimization));
 		}
 	},
 );
@@ -196,10 +176,7 @@ registerAction2(
 				shortTitle: localize2('sessions.chatgpt.reloadShort', 'Reload'),
 				menu: {
 					id: Menus.ActivityBarContext,
-					when: ContextKeyExpr.and(
-						ActivityBarItemContext.isEqualTo('sessions.newSession'),
-						ContextKeyExpr.has('sessions.activity.chatgptSelected'),
-					),
+					when: ContextKeyExpr.and(ActivityBarItemContext.isEqualTo('sessions.newSession'), ContextKeyExpr.has('sessions.activity.chatgptSelected')),
 					group: 'navigation',
 				},
 				f1: true,

@@ -58,10 +58,7 @@ test('File editor tracker reloads clean visible files after window focus and kee
 	revision += 1;
 	browser.window.dispatchEvent(new browser.window.Event('focus'));
 	await models.refresh(resource);
-	assert.deepEqual(
-		[reference.model.getText(), reference.isDirty, reference.hasExternalChange, reads],
-		['mine', true, false, 2],
-	);
+	assert.deepEqual([reference.model.getText(), reference.isDirty, reference.hasExternalChange, reads], ['mine', true, false, 2]);
 	browser.window.close();
 });
 

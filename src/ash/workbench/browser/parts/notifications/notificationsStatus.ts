@@ -1,21 +1,10 @@
-import {
-	getNotificationsPosition,
-	NotificationsPosition,
-	NotificationsSettings,
-	type NotificationsModel,
-	type NotificationItem,
-} from '../../../common/notifications.js';
+import { getNotificationsPosition, NotificationsPosition, NotificationsSettings, type NotificationsModel, type NotificationItem } from '../../../common/notifications.js';
 import { Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { INotificationService, NotificationsFilter } from '../../../../platform/notification/common/notification.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import {
-	StatusbarAlignment,
-	type IStatusbarEntry,
-	type IStatusbarEntryAccessor,
-	type IStatusbarService,
-} from '../../../services/statusbar/browser/statusbar.js';
+import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from '../../../services/statusbar/browser/statusbar.js';
 
 /** Owns notification history and status messages in the window's status bar. */
 export class NotificationsStatus extends Disposable {
@@ -81,10 +70,7 @@ export class NotificationsStatus extends Disposable {
 
 	private entry(): IStatusbarEntry {
 		const muted = this.notificationService.getFilter() === NotificationsFilter.ERROR;
-		const running =
-			this.centerVisible || this.toastsVisible
-				? 0
-				: this.model.getNotifications().filter(item => item.hasActiveProgress).length;
+		const running = this.centerVisible || this.toastsVisible ? 0 : this.model.getNotifications().filter(item => item.hasActiveProgress).length;
 		const attention = this.unread.size > 0 || running > 0;
 		let icon = attention ? Lxicon.bellDot : Lxicon.bell;
 		let label: string;
@@ -106,9 +92,7 @@ export class NotificationsStatus extends Disposable {
 			icon = attention ? Lxicon.bellSlashDot : Lxicon.bellSlash;
 			label = localize('notifications.doNotDisturbStatus', 'Do Not Disturb Mode is Enabled. {0}', label);
 		}
-		const action = this.centerVisible
-			? localize('notifications.hideCenter', 'Hide Notification Center')
-			: localize('notifications.showCenter', 'Show Notification Center');
+		const action = this.centerVisible ? localize('notifications.hideCenter', 'Hide Notification Center') : localize('notifications.showCenter', 'Show Notification Center');
 		return {
 			showInAllWindows: true,
 			icon,
@@ -125,8 +109,7 @@ export class NotificationsStatus extends Disposable {
 			this.bell.clear();
 			this.alignment = undefined;
 		} else if (this.statusbar) {
-			const alignment =
-				position === NotificationsPosition.BOTTOM_LEFT ? StatusbarAlignment.Left : StatusbarAlignment.Right;
+			const alignment = position === NotificationsPosition.BOTTOM_LEFT ? StatusbarAlignment.Left : StatusbarAlignment.Right;
 			if (this.alignment !== alignment) {
 				this.bell.clear();
 				this.alignment = alignment;
@@ -149,10 +132,7 @@ export class NotificationsStatus extends Disposable {
 		}
 		let entry: IStatusbarEntryAccessor | undefined;
 		const show = setTimeout(() => {
-			entry = this.statusbar!.addEntry(
-				{ text: item.message, ariaLabel: item.message },
-				{ id: 'status.message', alignment: StatusbarAlignment.Left, priority: -Number.MAX_SAFE_INTEGER },
-			);
+			entry = this.statusbar!.addEntry({ text: item.message, ariaLabel: item.message }, { id: 'status.message', alignment: StatusbarAlignment.Left, priority: -Number.MAX_SAFE_INTEGER });
 		}, item.options?.showAfter ?? 0);
 		const hideAfter = item.options?.hideAfter ?? 0;
 		const hide = hideAfter > 0 ? setTimeout(() => this.statusMessage.clear(), hideAfter) : undefined;

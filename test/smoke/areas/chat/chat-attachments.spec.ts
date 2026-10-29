@@ -1,112 +1,104 @@
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 
-test(
-	'Attachment resource gestures reach the Workbench file, editor and clipboard owners',
-	{ tag: ['@browser-ui'] },
-	async ({ workbench }) => {
-		const page = workbench.page;
-		await page.evaluate(async () => {
-			const root = await navigator.storage.getDirectory();
-			const folder = await root.getDirectoryHandle(`chat-resources-${crypto.randomUUID()}`, { create: true });
-			const file = await folder.getFileHandle('main.ts', { create: true });
-			const writer = await file.createWritable();
-			await writer.write('first live line\nsecond live line\nthird live line');
-			await writer.close();
-			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
-		});
-		await workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Open folder', exact: true }).click();
-		const file = page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true });
-		await expect(file).toBeVisible();
-		const resource = (await file.locator('[data-resource]').getAttribute('data-resource'))!;
-		await file.dblclick();
-		await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text.includes('second live line'));
-		const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
-		const input = chat.getByRole('textbox', { name: 'Chat message', exact: true });
-		await input.focus();
-		await input.evaluate((element, resource) => {
-			const text = 'Explain main.ts';
-			const transfer = new DataTransfer();
-			transfer.setData('text/plain', text);
-			transfer.setData(
-				'application/vnd.chat.attachment+json',
-				JSON.stringify({
-					version: 1,
-					draft: {
-						mode: 'agent',
-						text,
-						contexts: [
-							{
-								id: 'source',
-								kind: 'file',
-								name: 'main.ts',
-								resource: `${resource}#2,3-2,7`,
-								content: 'Frozen before the live source changed',
-								reference: { start: 8, end: text.length },
-							},
-						],
-					},
-				}),
-			);
-			element.dispatchEvent(
-				new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }),
-			);
-		}, resource);
-		const source = chat.getByRole('button', { name: 'Open main.ts', exact: true });
-		await expect(source).toBeVisible();
-		await source.dragTo(workbench.editors.groupAt(0).tabs.filter({ hasText: 'main.ts' }));
-		await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text.includes('second live line'));
-		await expect(page.getByText('Ln 2, Col 7 (4 selected)', { exact: true })).toBeVisible();
-		await source.click({ button: 'right' });
-		await expect(page.getByRole('menuitem', { name: 'Copy Relative Path', exact: true })).toBeVisible();
-		await page.keyboard.press('Escape');
-		await expect(source).toBeFocused();
-		await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
-		const previousClipboard = await page.evaluate(() => navigator.clipboard.readText());
-		try {
-			await source.press('Shift+F10');
-			await page.getByRole('menuitem', { name: 'Copy Relative Path', exact: true }).click();
-			expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('main.ts');
-		} finally {
-			await page.evaluate(value => navigator.clipboard.writeText(value), previousClipboard);
-		}
+test('Attachment resource gestures reach the Workbench file, editor and clipboard owners', { tag: ['@browser-ui'] }, async ({ workbench }) => {
+	const page = workbench.page;
+	await page.evaluate(async () => {
+		const root = await navigator.storage.getDirectory();
+		const folder = await root.getDirectoryHandle(`chat-resources-${crypto.randomUUID()}`, { create: true });
+		const file = await folder.getFileHandle('main.ts', { create: true });
+		const writer = await file.createWritable();
+		await writer.write('first live line\nsecond live line\nthird live line');
+		await writer.close();
+		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+	});
+	await workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Open folder', exact: true }).click();
+	const file = page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true });
+	await expect(file).toBeVisible();
+	const resource = (await file.locator('[data-resource]').getAttribute('data-resource'))!;
+	await file.dblclick();
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text.includes('second live line'));
+	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
+	const input = chat.getByRole('textbox', { name: 'Chat message', exact: true });
+	await input.focus();
+	await input.evaluate((element, resource) => {
+		const text = 'Explain main.ts';
+		const transfer = new DataTransfer();
+		transfer.setData('text/plain', text);
+		transfer.setData(
+			'application/vnd.chat.attachment+json',
+			JSON.stringify({
+				version: 1,
+				draft: {
+					mode: 'agent',
+					text,
+					contexts: [
+						{
+							id: 'source',
+							kind: 'file',
+							name: 'main.ts',
+							resource: `${resource}#2,3-2,7`,
+							content: 'Frozen before the live source changed',
+							reference: { start: 8, end: text.length },
+						},
+					],
+				},
+			}),
+		);
+		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
+	}, resource);
+	const source = chat.getByRole('button', { name: 'Open main.ts', exact: true });
+	await expect(source).toBeVisible();
+	await source.dragTo(workbench.editors.groupAt(0).tabs.filter({ hasText: 'main.ts' }));
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text.includes('second live line'));
+	await expect(page.getByText('Ln 2, Col 7 (4 selected)', { exact: true })).toBeVisible();
+	await source.click({ button: 'right' });
+	await expect(page.getByRole('menuitem', { name: 'Copy Relative Path', exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(source).toBeFocused();
+	await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+	const previousClipboard = await page.evaluate(() => navigator.clipboard.readText());
+	try {
 		await source.press('Shift+F10');
-		await page.getByRole('menuitem', { name: 'Open to the Side', exact: true }).click();
-		await expect(workbench.editors.groups).toHaveCount(2);
-		await workbench.editors.groupAt(1).editor.waitForEditorContents(text => text.includes('second live line'));
-		await source.press('Backspace');
-		await expect(source).toHaveCount(0);
-		await expect(input).toBeFocused();
-		await input.press('ControlOrMeta+z');
-		await source.click();
-		const saved = workbench.editors.groupAt(1).editor;
-		await saved.waitForEditorContents(text => text === 'Frozen before the live source changed');
-		await expect(saved.input).toHaveAttribute('aria-readonly', 'true');
-		await input.focus();
-		await input.press('ControlOrMeta+End');
-		await source.dragTo(chat.locator('form.ash-chat-input-container'));
-		const received = chat.getByRole('button', { name: 'Open main.ts (2)', exact: true });
-		await expect(received).toBeVisible();
-		await expect(source).toBeVisible();
-		await workbench.editors.groupAt(0).editor.waitForEditorFocus();
-		await page.keyboard.press('ControlOrMeta+a');
-		await page.keyboard.insertText('Live source changed after receiving the drop');
-		await input.focus();
-		await input.press('ControlOrMeta+z');
-		await expect(received).toHaveCount(0);
-		await expect(source).toBeVisible();
-		await input.press('ControlOrMeta+Shift+z');
-		await received.click();
-		const receivedSaved = workbench.editors.groupAt(0).editor;
-		await receivedSaved.waitForEditorContents(text => text === 'cond');
-		await expect(receivedSaved.input).toHaveAttribute('aria-readonly', 'true');
-		await expect(chat.locator('.ash-chat-item')).toHaveCount(0);
-	},
-);
+		await page.getByRole('menuitem', { name: 'Copy Relative Path', exact: true }).click();
+		expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('main.ts');
+	} finally {
+		await page.evaluate(value => navigator.clipboard.writeText(value), previousClipboard);
+	}
+	await source.press('Shift+F10');
+	await page.getByRole('menuitem', { name: 'Open to the Side', exact: true }).click();
+	await expect(workbench.editors.groups).toHaveCount(2);
+	await workbench.editors.groupAt(1).editor.waitForEditorContents(text => text.includes('second live line'));
+	await source.press('Backspace');
+	await expect(source).toHaveCount(0);
+	await expect(input).toBeFocused();
+	await input.press('ControlOrMeta+z');
+	await source.click();
+	const saved = workbench.editors.groupAt(1).editor;
+	await saved.waitForEditorContents(text => text === 'Frozen before the live source changed');
+	await expect(saved.input).toHaveAttribute('aria-readonly', 'true');
+	await input.focus();
+	await input.press('ControlOrMeta+End');
+	await source.dragTo(chat.locator('form.ash-chat-input-container'));
+	const received = chat.getByRole('button', { name: 'Open main.ts (2)', exact: true });
+	await expect(received).toBeVisible();
+	await expect(source).toBeVisible();
+	await workbench.editors.groupAt(0).editor.waitForEditorFocus();
+	await page.keyboard.press('ControlOrMeta+a');
+	await page.keyboard.insertText('Live source changed after receiving the drop');
+	await input.focus();
+	await input.press('ControlOrMeta+z');
+	await expect(received).toHaveCount(0);
+	await expect(source).toBeVisible();
+	await input.press('ControlOrMeta+Shift+z');
+	await received.click();
+	const receivedSaved = workbench.editors.groupAt(0).editor;
+	await receivedSaved.waitForEditorContents(text => text === 'cond');
+	await expect(receivedSaved.input).toHaveAttribute('aria-readonly', 'true');
+	await expect(chat.locator('.ash-chat-item')).toHaveCount(0);
+});
 
-test('Restored session references use the window widget factory through removal, undo and copy-paste', async ({
-	workbench,
-}) => {
+test('Restored session references use the window widget factory through removal, undo and copy-paste', async ({ workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.chat.new');
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
@@ -136,9 +128,7 @@ test('Restored session references use the window widget factory through removal,
 				},
 			}),
 		);
-		element.dispatchEvent(
-			new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }),
-		);
+		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 	});
 	const source = chat.getByRole('button', { name: 'Open Earlier design', exact: true });
 	const remove = chat.getByRole('button', { name: 'Remove Earlier design', exact: true });
@@ -162,9 +152,7 @@ test('Restored session references use the window widget factory through removal,
 	await input.evaluate((element, values) => {
 		const transfer = new DataTransfer();
 		for (const [type, value] of values) transfer.setData(type!, value!);
-		element.dispatchEvent(
-			new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }),
-		);
+		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 	}, copied);
 	await expect(source).toBeVisible();
 	await expect(chat.locator('.ash-chat-item')).toHaveCount(0);
@@ -191,9 +179,7 @@ test('Code copied before Chat opens can be pasted as a snapshot after its source
 	await input.evaluate((element, values) => {
 		const transfer = new DataTransfer();
 		for (const [type, value] of values) transfer.setData(type!, value!);
-		element.dispatchEvent(
-			new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }),
-		);
+		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 	}, copied);
 	const selector = page.locator('.stanza-editor-post-edit-selector button');
 	await selector.click();
@@ -252,9 +238,7 @@ test('Chat copies an unsaved editor snapshot through paste, undo and redo withou
 	await input.evaluate((element, values) => {
 		const transfer = new DataTransfer();
 		for (const [type, value] of values) transfer.setData(type!, value!);
-		element.dispatchEvent(
-			new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }),
-		);
+		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 	}, copied);
 	await expect(reference).toHaveCount(1);
 	await expect(input).toBeFocused();
@@ -271,15 +255,10 @@ test('Chat copies an unsaved editor snapshot through paste, undo and redo withou
 	// Browser transfers may carry an image file name without any MIME information.
 	await input.focus();
 	await input.evaluate(element => {
-		const bytes = Uint8Array.from(
-			atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DQAAAEgQGALFXOsAAAAABJRU5ErkJggg=='),
-			char => char.charCodeAt(0),
-		);
+		const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DQAAAEgQGALFXOsAAAAABJRU5ErkJggg=='), char => char.charCodeAt(0));
 		const transfer = new DataTransfer();
 		transfer.items.add(new File([bytes], 'capture.PNG'));
-		element.dispatchEvent(
-			new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }),
-		);
+		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 	});
 	const preview = chat.getByRole('button', { name: 'Preview capture.PNG', exact: true });
 	await expect(preview).toBeVisible();
@@ -324,9 +303,7 @@ test('Chat copies an unsaved editor snapshot through paste, undo and redo withou
 				},
 			}),
 		);
-		element.dispatchEvent(
-			new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }),
-		);
+		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 	});
 	const failed = chat.getByRole('button', { name: 'Preview unavailable: broken.png', exact: true });
 	await expect(failed).toBeDisabled();
@@ -342,9 +319,7 @@ test('Chat copies an unsaved editor snapshot through paste, undo and redo withou
 	await page.keyboard.press('Escape');
 });
 
-test('Terminal attachment controls retain a frozen snapshot through preview, removal, undo and copy-paste', async ({
-	workbench,
-}) => {
+test('Terminal attachment controls retain a frozen snapshot through preview, removal, undo and copy-paste', async ({ workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.chat.new');
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
@@ -374,9 +349,7 @@ test('Terminal attachment controls retain a frozen snapshot through preview, rem
 				},
 			}),
 		);
-		element.dispatchEvent(
-			new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }),
-		);
+		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 	});
 	const preview = chat.getByRole('button', { name: 'Preview terminal snapshot', exact: true });
 	await expect(preview).toBeVisible();
@@ -384,9 +357,7 @@ test('Terminal attachment controls retain a frozen snapshot through preview, rem
 	await input.press('Alt+Enter');
 	const dialog = page.getByRole('dialog', { name: 'Saved terminal output: Saved terminal', exact: true });
 	await expect(dialog.locator('.xterm-rows')).toContainText('captured before source closed');
-	await expect(
-		dialog.getByRole('textbox', { name: 'Saved terminal output (read only)', exact: true }),
-	).toHaveAttribute('readonly', '');
+	await expect(dialog.getByRole('textbox', { name: 'Saved terminal output (read only)', exact: true })).toHaveAttribute('readonly', '');
 	await page.keyboard.press('Escape');
 	await expect(preview).toBeFocused();
 	await preview.press('Tab');
@@ -407,9 +378,7 @@ test('Terminal attachment controls retain a frozen snapshot through preview, rem
 	await input.evaluate((element, values) => {
 		const transfer = new DataTransfer();
 		for (const [type, value] of values) transfer.setData(type!, value!);
-		element.dispatchEvent(
-			new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }),
-		);
+		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 	}, copied);
 	await preview.press('Enter');
 	await expect(dialog.locator('.xterm-rows')).toContainText('captured before source closed');
@@ -418,9 +387,7 @@ test('Terminal attachment controls retain a frozen snapshot through preview, rem
 	await expect(chat.locator('.ash-chat-item')).toHaveCount(0);
 });
 
-test('Other captured contexts use native controls and retain readonly content after removal and copy-paste', async ({
-	workbench,
-}) => {
+test('Other captured contexts use native controls and retain readonly content after removal and copy-paste', async ({ workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.chat.new');
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
@@ -450,9 +417,7 @@ test('Other captured contexts use native controls and retain readonly content af
 				},
 			}),
 		);
-		element.dispatchEvent(
-			new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }),
-		);
+		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 	});
 	const source = chat.getByRole('button', { name: 'Open Captured commit', exact: true });
 	const remove = chat.getByRole('button', { name: 'Remove Captured commit', exact: true });
@@ -461,9 +426,7 @@ test('Other captured contexts use native controls and retain readonly content af
 	await expect(source).toBeFocused();
 	await source.press('Enter');
 	const editor = new Editor(page.locator('[data-part="editor"]'));
-	await editor.waitForEditorContents(
-		contents => contents === 'Commit captured before repository closed\n+ original change',
-	);
+	await editor.waitForEditorContents(contents => contents === 'Commit captured before repository closed\n+ original change');
 	await expect(editor.input).toHaveAttribute('aria-readonly', 'true');
 	await expect(source).toBeVisible();
 	await remove.focus();
@@ -482,33 +445,24 @@ test('Other captured contexts use native controls and retain readonly content af
 	await input.evaluate((element, values) => {
 		const transfer = new DataTransfer();
 		for (const [type, value] of values) transfer.setData(type!, value!);
-		element.dispatchEvent(
-			new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }),
-		);
+		element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 	}, copied);
 	await expect(source).toBeVisible();
 	await input.press('End');
 	await input.press('Alt+Enter');
-	await editor.waitForEditorContents(
-		contents => contents === 'Commit captured before repository closed\n+ original change',
-	);
+	await editor.waitForEditorContents(contents => contents === 'Commit captured before repository closed\n+ original change');
 	await expect(editor.input).toHaveAttribute('aria-readonly', 'true');
 	await expect(chat.locator('.ash-chat-item')).toHaveCount(0);
 });
 
 for (const kind of ['browserElement', 'scmHistoryItemChange'])
-	test(`${kind} dedicated controls keep captured content and source identity through clipboard, undo and readonly opening`, async ({
-		workbench,
-	}) => {
+	test(`${kind} dedicated controls keep captured content and source identity through clipboard, undo and readonly opening`, async ({ workbench }) => {
 		const page = workbench.page;
 		await workbench.quickaccess.runCommand('workbench.action.chat.new');
 		const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 		const input = chat.getByRole('textbox', { name: 'Chat message', exact: true });
 		const name = kind === 'browserElement' ? 'Captured element' : 'src/captured.ts';
-		const content =
-			kind === 'browserElement'
-				? '<button onclick="captured()">Original element</button>\ncolor: red;'
-				: 'History file captured before repository closed\n+ original change';
+		const content = kind === 'browserElement' ? '<button onclick="captured()">Original element</button>\ncolor: red;' : 'History file captured before repository closed\n+ original change';
 		const resource =
 			kind === 'browserElement'
 				? 'https://example.test/original#element'
@@ -530,9 +484,7 @@ for (const kind of ['browserElement', 'scmHistoryItemChange'])
 						},
 					}),
 				);
-				element.dispatchEvent(
-					new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }),
-				);
+				element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 			},
 			{ kind, name, content, resource },
 		);
@@ -557,18 +509,14 @@ for (const kind of ['browserElement', 'scmHistoryItemChange'])
 		await input.press('ControlOrMeta+a');
 		const copied = await input.evaluate(element => {
 			const transfer = new DataTransfer();
-			element.dispatchEvent(
-				new ClipboardEvent('copy', { clipboardData: transfer, bubbles: true, cancelable: true }),
-			);
+			element.dispatchEvent(new ClipboardEvent('copy', { clipboardData: transfer, bubbles: true, cancelable: true }));
 			return transfer.types.map(type => [type, transfer.getData(type)]);
 		});
 		await input.press('Backspace');
 		await input.evaluate((element, values) => {
 			const transfer = new DataTransfer();
 			for (const [type, value] of values) transfer.setData(type!, value!);
-			element.dispatchEvent(
-				new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }),
-			);
+			element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 		}, copied);
 		await expect(origin).toBeVisible();
 		await open.hover();
@@ -580,9 +528,7 @@ for (const kind of ['browserElement', 'scmHistoryItemChange'])
 		await input.press('ControlOrMeta+i');
 		const hover = page.locator('.stanza-editor-hover:not([hidden])');
 		await expect(hover.locator('.stanza-editor-hover-content')).toBeFocused();
-		await expect
-			.poll(async () => (await hover.locator('pre').innerText()).replace(/\u00a0/gu, ' ').trim())
-			.toBe(content);
+		await expect.poll(async () => (await hover.locator('pre').innerText()).replace(/\u00a0/gu, ' ').trim()).toBe(content);
 		await page.keyboard.press('Escape');
 		await expect(input).toBeFocused();
 		await input.press('End');

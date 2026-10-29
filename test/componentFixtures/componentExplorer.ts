@@ -40,17 +40,10 @@ class StylesheetOrder {
 
 	setOrder(order: readonly number[]): void {
 		// This is also the interactive explorer's input boundary.
-		if (
-			order.length !== this.documents.length ||
-			new Set(order).size !== order.length ||
-			order.some(index => !Number.isInteger(index) || index < 0 || index >= order.length)
-		) {
+		if (order.length !== this.documents.length || new Set(order).size !== order.length || order.some(index => !Number.isInteger(index) || index < 0 || index >= order.length)) {
 			throw new Error('Stylesheet order must be a permutation of the manifest indices');
 		}
-		if (
-			this.document.querySelectorAll('style[data-vite-dev-id]').length !== this.documents.length ||
-			this.documents.some(({ node, text }) => !node.isConnected || node.textContent !== text)
-		) {
+		if (this.document.querySelectorAll('style[data-vite-dev-id]').length !== this.documents.length || this.documents.some(({ node, text }) => !node.isConnected || node.textContent !== text)) {
 			throw new Error('Stylesheets changed during the scan; reload the fixture');
 		}
 		for (const [index, { slot }] of this.documents.entries()) slot.after(this.documents[order[index]].node);
@@ -74,8 +67,7 @@ const modules = import.meta.glob<{ default: readonly ThemedFixture[] }>('../../s
 const fixtures = Object.values(modules)
 	.flatMap(module => module.default)
 	.sort((left, right) => left.id.localeCompare(right.id));
-if (new Set(fixtures.map(fixture => fixture.id)).size !== fixtures.length)
-	throw new Error('Duplicate component fixture id');
+if (new Set(fixtures.map(fixture => fixture.id)).size !== fixtures.length) throw new Error('Duplicate component fixture id');
 const catalog = fixtures.map(({ id, name, theme, labels }) => ({ id, name, theme: theme.id, labels: labels ?? [] }));
 const resources = new DisposableStore();
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
@@ -180,17 +172,10 @@ if (!fixture) {
 			list.append(item);
 		}
 		filter.addEventListener('input', () => {
-			for (const item of list.children)
-				(item as HTMLElement).hidden = !item.textContent!.toLowerCase().includes(filter.value.toLowerCase());
+			for (const item of list.children) (item as HTMLElement).hidden = !item.textContent!.toLowerCase().includes(filter.value.toLowerCase());
 		});
 		const ready = (event: MessageEvent): void => {
-			if (
-				event.origin !== location.origin ||
-				event.source !== preview.contentWindow ||
-				event.data?.type !== 'ash-component-fixture-ready' ||
-				event.data.id !== selected
-			)
-				return;
+			if (event.origin !== location.origin || event.source !== preview.contentWindow || event.data?.type !== 'ash-component-fixture-ready' || event.data.id !== selected) return;
 			status.textContent = selected;
 			reverse.disabled = reset.disabled = false;
 			showSources();

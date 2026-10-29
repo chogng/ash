@@ -6,31 +6,15 @@ import { test } from 'mocha';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { SyntaxProviderRegistry } from '../../common/languageFeatureRegistry.js';
-import {
-	type SyntaxRequest,
-	SYNTAX_DIAGNOSTIC_LANE,
-	SYNTAX_TOKENIZE_LANE,
-	SYNTAX_TOKEN_LANE,
-	type SyntaxLane,
-	type SyntaxResult,
-	type SyntaxWorker,
-} from '../../common/languages.js';
+import { type SyntaxRequest, SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKENIZE_LANE, SYNTAX_TOKEN_LANE, type SyntaxLane, type SyntaxResult, type SyntaxWorker } from '../../common/languages.js';
 import { SyntaxProviderWorker } from '../../common/services/editorWebWorker.js';
 import { testSyntaxProvider } from './testSyntaxProvider.js';
-import {
-	LanguageRequestCoordinator,
-	LanguageRequestStatus,
-	LanguageWorkerResultDisposition,
-	type LanguageWorkerRequest,
-} from '../../common/model/languageRequestCoordinator.js';
+import { LanguageRequestCoordinator, LanguageRequestStatus, LanguageWorkerResultDisposition, type LanguageWorkerRequest } from '../../common/model/languageRequestCoordinator.js';
 import { Position } from '../../common/core/position.js';
 import { Range } from '../../common/core/range.js';
 import { TextModel } from '../../common/model/textModel.js';
 import { syntaxWireCodec } from '../../common/services/semanticTokensDto.js';
-import {
-	WorkerTextModelSyncClient,
-	WorkerTextModelSyncServer,
-} from '../../common/services/textModelSync/textModelSync.impl.js';
+import { WorkerTextModelSyncClient, WorkerTextModelSyncServer } from '../../common/services/textModelSync/textModelSync.impl.js';
 import { type WebWorkerClientPort } from '../../../base/common/worker/webWorker.js';
 
 test('Token and diagnostic lanes share one structured-clone incremental document mirror', async () => {
@@ -40,10 +24,7 @@ test('Token and diagnostic lanes share one structured-clone incremental document
 	using registration = remoteRegistry.register(testSyntaxProvider());
 	const [clientPort, serverPort] = createPortPair();
 	using server = new WorkerTextModelSyncServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(remoteRegistry));
-	using coordinator = new LanguageRequestCoordinator(
-		model,
-		() => new WorkerTextModelSyncClient(clientPort, syntaxWireCodec),
-	);
+	using coordinator = new LanguageRequestCoordinator(model, () => new WorkerTextModelSyncClient(clientPort, syntaxWireCodec));
 	let tokens: Extract<SyntaxResult, { lane: typeof SYNTAX_TOKEN_LANE }> | undefined;
 	const requestTokens = () =>
 		coordinator.runLatest(SYNTAX_TOKEN_LANE, { languageId: 'typescript' }, result => {
@@ -51,10 +32,7 @@ test('Token and diagnostic lanes share one structured-clone incremental document
 			tokens = result.value;
 		});
 
-	const [tokenOutcome, diagnosticOutcome] = await Promise.all([
-		requestTokens(),
-		coordinator.runLatest(SYNTAX_DIAGNOSTIC_LANE, { languageId: 'typescript' }, () => undefined),
-	]);
+	const [tokenOutcome, diagnosticOutcome] = await Promise.all([requestTokens(), coordinator.runLatest(SYNTAX_DIAGNOSTIC_LANE, { languageId: 'typescript' }, () => undefined)]);
 
 	assert.equal(tokenOutcome.status, LanguageRequestStatus.Applied);
 	assert.equal(diagnosticOutcome.status, LanguageRequestStatus.Applied);
@@ -74,7 +52,10 @@ test('Token and diagnostic lanes share one structured-clone incremental document
 	assert.equal(initialMessages[1]!.snapshot?.kind, 'reference');
 
 	model.applyEdits([
-		{ range: Range.fromPositions(new Position(0 + 1, model.getText().length + 1)), text: '\nreturn value;' },
+		{
+			range: Range.fromPositions(new Position(0 + 1, model.getText().length + 1)),
+			text: '\nreturn value;',
+		},
 	]);
 	assert.equal((await requestTokens()).status, LanguageRequestStatus.Applied);
 
@@ -124,12 +105,18 @@ test('Syntax wire rejects malformed lane DTOs in the client realm', async () => 
 			kind: 'full',
 			items: [
 				{
-					range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 4 } },
+					range: {
+						start: { lineIndex: 0, columnIndex: 0 },
+						end: { lineIndex: 0, columnIndex: 4 },
+					},
 					tokenType: 'variable',
 					modifiers: [],
 				},
 				{
-					range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 5 } },
+					range: {
+						start: { lineIndex: 0, columnIndex: 3 },
+						end: { lineIndex: 0, columnIndex: 5 },
+					},
 					tokenType: 'variable',
 					modifiers: [],
 				},
@@ -150,8 +137,7 @@ test('Syntax service replaces a failed wire Worker on the next request', async (
 	using coordinator = new LanguageRequestCoordinator(model, () => {
 		workerCount += 1;
 		const [clientPort, serverPort] = createPortPair();
-		const worker: SyntaxWorker =
-			workerCount === 1 ? new FailingSyntaxWorker() : new SyntaxProviderWorker(remoteRegistry);
+		const worker: SyntaxWorker = workerCount === 1 ? new FailingSyntaxWorker() : new SyntaxProviderWorker(remoteRegistry);
 		workerResources.add(new WorkerTextModelSyncServer(serverPort, syntaxWireCodec, worker));
 		return new WorkerTextModelSyncClient(clientPort, syntaxWireCodec);
 	});
@@ -230,10 +216,7 @@ test('Syntax wire does not confirm a result rejected by renderer application', a
 		}),
 		applicationFailure,
 	);
-	assert.equal(
-		(await coordinator.runLatest(SYNTAX_TOKEN_LANE, { languageId: 'typescript' }, () => undefined)).status,
-		LanguageRequestStatus.Applied,
-	);
+	assert.equal((await coordinator.runLatest(SYNTAX_TOKEN_LANE, { languageId: 'typescript' }, () => undefined)).status, LanguageRequestStatus.Applied);
 
 	const requests = (clientPort.sentMessages as WireMessage[]).filter(message => message.kind === 'request');
 	assert.equal(requests[0]!.resultBaseRequestId, undefined);
@@ -332,7 +315,9 @@ test('hypothetical syntax travels across the wire without changing the shared sn
 	using model = new TextModel('x', {
 		languageId: 'demo',
 		tokenization: {
-			syntaxService: { workerFactory: () => new WorkerTextModelSyncClient(clientPort, syntaxWireCodec) },
+			syntaxService: {
+				workerFactory: () => new WorkerTextModelSyncClient(clientPort, syntaxWireCodec),
+			},
 		},
 	});
 	const signal = new AbortController().signal;
@@ -344,9 +329,7 @@ test('hypothetical syntax travels across the wire without changing the shared sn
 	await model.tokenization.tokenizeLinesAtAsync(1, ['another'], signal);
 	assert.ok(observed.length >= 2);
 	assert.ok(observed.every(text => text === 'x'));
-	const requests = (clientPort.sentMessages as WireMessage[]).filter(
-		message => message.lane === SYNTAX_TOKENIZE_LANE,
-	);
+	const requests = (clientPort.sentMessages as WireMessage[]).filter(message => message.lane === SYNTAX_TOKENIZE_LANE);
 	assert.equal(requests.length, 2);
 	assert.ok(requests.every(message => message.resultBaseRequestId === undefined));
 	assert.equal(model.getText(), 'x');
@@ -361,19 +344,9 @@ test('hypothetical syntax wire rejects wrong lanes, line endings and out of docu
 		{ lineNumber: 1, lines: ['a\nb'] },
 		{ lineNumber: 1, lines: [] },
 	]) {
-		assert.throws(() =>
-			syntaxWireCodec.decodePayload(SYNTAX_TOKENIZE_LANE, { languageId: 'demo', tokenize }, snapshot),
-		);
+		assert.throws(() => syntaxWireCodec.decodePayload(SYNTAX_TOKENIZE_LANE, { languageId: 'demo', tokenize }, snapshot));
 	}
-	assert.throws(
-		() =>
-			syntaxWireCodec.decodePayload(
-				SYNTAX_TOKEN_LANE,
-				{ languageId: 'demo', tokenize: { lineNumber: 1, lines: ['x'] } },
-				snapshot,
-			),
-		/lane/,
-	);
+	assert.throws(() => syntaxWireCodec.decodePayload(SYNTAX_TOKEN_LANE, { languageId: 'demo', tokenize: { lineNumber: 1, lines: ['x'] } }, snapshot), /lane/);
 	assert.throws(() => syntaxWireCodec.decodePayload(SYNTAX_TOKENIZE_LANE, { languageId: 'demo' }, snapshot), /lane/);
 });
 

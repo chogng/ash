@@ -88,14 +88,9 @@ export class OutputService extends Disposable implements IOutputService {
 	createChannel(descriptor: IOutputChannelDescriptor): IOutputChannel {
 		this.assertAvailable();
 		const normalized = normalizeDescriptor(descriptor);
-		if (this.channelsById.has(normalized.id))
-			throw new Error(`Output channel is already registered: ${normalized.id}`);
+		if (this.channelsById.has(normalized.id)) throw new Error(`Output channel is already registered: ${normalized.id}`);
 		const uri = URI.from({ scheme: 'output', path: `/${normalized.id}` });
-		const model = this.instantiationService.createInstance(
-			InMemoryOutputChannelModel,
-			uri,
-			normalized.languageId ?? (normalized.kind === 'log' ? LOG_MODE_ID : OUTPUT_MODE_ID),
-		);
+		const model = this.instantiationService.createInstance(InMemoryOutputChannelModel, uri, normalized.languageId ?? (normalized.kind === 'log' ? LOG_MODE_ID : OUTPUT_MODE_ID));
 		const channel = new OutputChannel(
 			uri,
 			normalized,
@@ -125,8 +120,7 @@ export class OutputService extends Disposable implements IOutputService {
 	}
 
 	showChannel(id: string, options: IOutputChannelRevealOptions = DefaultRevealOptions): void {
-		if (options.focus !== 'take' && options.focus !== 'preserve')
-			throw new TypeError(`Unsupported Output reveal focus: ${String(options.focus)}`);
+		if (options.focus !== 'take' && options.focus !== 'preserve') throw new TypeError(`Unsupported Output reveal focus: ${String(options.focus)}`);
 		this.selectChannel(id);
 		const channel = this.activeChannel;
 		if (channel) this.requestShowChannelEmitter.fire(Object.freeze({ channel, focus: options.focus }));
@@ -233,16 +227,10 @@ function normalizeDescriptor(descriptor: IOutputChannelDescriptor): IOutputChann
 	const kind = descriptor.kind ?? 'output';
 	if (kind !== 'output' && kind !== 'log') throw new TypeError(`Unsupported Output channel kind: ${String(kind)}`);
 	const source = descriptor.source ?? 'core';
-	if (source !== 'core' && source !== 'extension' && source !== 'user')
-		throw new TypeError(`Unsupported Output channel source: ${String(source)}`);
-	const extensionId =
-		descriptor.extensionId === undefined
-			? undefined
-			: validateIdentity(descriptor.extensionId, 'Output extension id');
-	const languageId =
-		descriptor.languageId === undefined ? undefined : validateIdentity(descriptor.languageId, 'Output language id');
-	if (source === 'extension' && !extensionId)
-		throw new TypeError('Extension Output channels require an extension id');
+	if (source !== 'core' && source !== 'extension' && source !== 'user') throw new TypeError(`Unsupported Output channel source: ${String(source)}`);
+	const extensionId = descriptor.extensionId === undefined ? undefined : validateIdentity(descriptor.extensionId, 'Output extension id');
+	const languageId = descriptor.languageId === undefined ? undefined : validateIdentity(descriptor.languageId, 'Output language id');
+	if (source === 'extension' && !extensionId) throw new TypeError('Extension Output channels require an extension id');
 	return Object.freeze({
 		id,
 		label,
@@ -256,8 +244,7 @@ function normalizeDescriptor(descriptor: IOutputChannelDescriptor): IOutputChann
 
 function validateIdentity(value: string, label: string): string {
 	const normalized = value.trim();
-	if (!normalized || normalized.includes('\0'))
-		throw new TypeError(`${label} must be non-empty and cannot contain null bytes`);
+	if (!normalized || normalized.includes('\0')) throw new TypeError(`${label} must be non-empty and cannot contain null bytes`);
 	if (normalized !== value) throw new TypeError(`${label} cannot contain leading or trailing whitespace`);
 	return value;
 }
@@ -342,21 +329,17 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 		if (!OutputSeverities.includes(minimum)) throw new TypeError(`Unsupported Output severity: ${minimum}`);
 		const rank = SeverityRanks[minimum];
 		let changed = false;
-		for (const severity of OutputSeverities)
-			changed = updateHiddenSet(this.hiddenSeverities, severity, SeverityRanks[severity] >= rank) || changed;
+		for (const severity of OutputSeverities) changed = updateHiddenSet(this.hiddenSeverities, severity, SeverityRanks[severity] >= rank) || changed;
 		if (changed) this.persistAndFire();
 	}
 
 	isCategoryVisible(category: string, channelId: string): boolean {
-		return (
-			!this.hiddenCategories.has(category) && !this.hiddenCategories.has(channelCategoryKey(category, channelId))
-		);
+		return !this.hiddenCategories.has(category) && !this.hiddenCategories.has(channelCategoryKey(category, channelId));
 	}
 
 	setCategoryVisible(category: string, visible: boolean, channelId: string): void {
 		const normalized = category.trim();
-		if (!normalized || normalized.includes('\0'))
-			throw new TypeError('Output category must be non-empty and cannot contain null bytes');
+		if (!normalized || normalized.includes('\0')) throw new TypeError('Output category must be non-empty and cannot contain null bytes');
 		const key = channelCategoryKey(normalized, validateChannelId(channelId));
 		// An old category has no channel identity. Only explicit input can move
 		// that choice; restoration and unrelated filters keep its global effect.
@@ -366,12 +349,7 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 	}
 
 	reset(): void {
-		if (
-			!this._text &&
-			this.hiddenSeverities.size === 0 &&
-			this.hiddenCategories.size === 0 &&
-			this.textSyntaxVersion === CurrentTextSyntaxVersion
-		) {
+		if (!this._text && this.hiddenSeverities.size === 0 && this.hiddenCategories.size === 0 && this.textSyntaxVersion === CurrentTextSyntaxVersion) {
 			if (this.preserveNewerStoredState()) {
 				this.changeEmitter.fire();
 			}
@@ -385,17 +363,11 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 	}
 
 	matches(entry: IOutputEntry, channelId: string): boolean {
-		if (
-			this.hiddenSeverities.has(entry.severity) ||
-			(entry.category && !this.isCategoryVisible(entry.category, channelId))
-		)
-			return false;
+		if (this.hiddenSeverities.has(entry.severity) || (entry.category && !this.isCategoryVisible(entry.category, channelId))) return false;
 		const restored = this.textSyntaxVersion === 1;
 		const haystack = (restored ? `${entry.category ?? ''} ${entry.text}` : entry.text).toLocaleLowerCase();
 		const terms = restored ? parseRestoredFilterTerms(this._text) : parseFilterTerms(this._text);
-		const included = restored
-			? terms.includes.every(term => haystack.includes(term))
-			: terms.includes.length === 0 || terms.includes.some(term => haystack.includes(term));
+		const included = restored ? terms.includes.every(term => haystack.includes(term)) : terms.includes.length === 0 || terms.includes.some(term => haystack.includes(term));
 		return included && terms.excludes.every(term => !haystack.includes(term));
 	}
 
@@ -413,14 +385,10 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 			}
 			if (typeof stored.text === 'string') {
 				this._text = stored.text;
-				this.textSyntaxVersion =
-					stored.syntaxVersion === CurrentTextSyntaxVersion || stored.text.length === 0
-						? CurrentTextSyntaxVersion
-						: 1;
+				this.textSyntaxVersion = stored.syntaxVersion === CurrentTextSyntaxVersion || stored.text.length === 0 ? CurrentTextSyntaxVersion : 1;
 			}
 			if (Array.isArray(stored.hiddenSeverities)) {
-				for (const severity of stored.hiddenSeverities)
-					if (OutputSeverities.includes(severity)) this.hiddenSeverities.add(severity);
+				for (const severity of stored.hiddenSeverities) if (OutputSeverities.includes(severity)) this.hiddenSeverities.add(severity);
 			}
 			if (Array.isArray(stored.hiddenCategories)) {
 				let migrated = false;
@@ -432,12 +400,7 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 					if (key.startsWith('\0')) {
 						try {
 							const tuple: unknown = JSON.parse(key.slice(1));
-							if (
-								Array.isArray(tuple) &&
-								tuple.length === 2 &&
-								tuple[0] === 'window' &&
-								typeof tuple[1] === 'string'
-							) {
+							if (Array.isArray(tuple) && tuple.length === 2 && tuple[0] === 'window' && typeof tuple[1] === 'string') {
 								key = channelCategoryKey(tuple[1], windowLogId);
 								migrated = true;
 							}
@@ -457,12 +420,7 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 		}
 		// A failed write must not be mistaken for malformed persisted input.
 		if (migratedState !== undefined) {
-			this.storageService.store(
-				OutputFilterStorageKey,
-				migratedState,
-				StorageScope.WORKSPACE,
-				StorageTarget.MACHINE,
-			);
+			this.storageService.store(OutputFilterStorageKey, migratedState, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		}
 	}
 
@@ -490,12 +448,7 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 				hiddenSeverities: [...this.hiddenSeverities],
 				hiddenCategories: [...this.hiddenCategories],
 			};
-			this.storageService.store(
-				OutputFilterStorageKey,
-				JSON.stringify(stored),
-				StorageScope.WORKSPACE,
-				StorageTarget.MACHINE,
-			);
+			this.storageService.store(OutputFilterStorageKey, JSON.stringify(stored), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		}
 		this.changeEmitter.fire();
 	}

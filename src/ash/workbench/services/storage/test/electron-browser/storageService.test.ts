@@ -31,10 +31,7 @@ suite('Desktop window storage', () => {
 			services.registerInstance(IMainProcessService, {
 				_serviceBrand: undefined,
 				getChannel: () => ({
-					call: (command, arg) =>
-						command === 'updateItems' && unavailable
-							? Promise.reject(failure)
-							: channel.call('window:1', command, arg),
+					call: (command, arg) => (command === 'updateItems' && unavailable ? Promise.reject(failure) : channel.call('window:1', command, arg)),
 					listen: (event, arg) => channel.listen('window:1', event, arg),
 				}),
 				registerChannel: () => {
@@ -64,11 +61,7 @@ suite('Desktop window storage', () => {
 			});
 			await reopened.initialize();
 			assert.deepEqual(
-				[
-					reopened.get('layout:sidebar', StorageScope.WORKSPACE),
-					reopened.get('removed', StorageScope.WORKSPACE),
-					reopened.get('subsequent', StorageScope.PROFILE),
-				],
+				[reopened.get('layout:sidebar', StorageScope.WORKSPACE), reopened.get('removed', StorageScope.WORKSPACE), reopened.get('subsequent', StorageScope.PROFILE)],
 				['latest', undefined, 'saved'],
 			);
 		} finally {
@@ -122,14 +115,7 @@ suite('Desktop window storage', () => {
 			assert.equal(sentWrites, 4, 'All mutations are sent before any reply is awaited');
 			await Promise.all([first.flush(), second.flush()]);
 			assert.equal(second.get('__proto__', StorageScope.APPLICATION), 'ordinary-key');
-			assert.deepEqual(
-				[
-					first.get('first', StorageScope.APPLICATION),
-					second.get('first', StorageScope.APPLICATION),
-					first.get('second', StorageScope.APPLICATION),
-				],
-				['latest', 'latest', 'two'],
-			);
+			assert.deepEqual([first.get('first', StorageScope.APPLICATION), second.get('first', StorageScope.APPLICATION), first.get('second', StorageScope.APPLICATION)], ['latest', 'latest', 'two']);
 			second.remove('first', StorageScope.APPLICATION);
 			await second.flush();
 			assert.equal(first.get('first', StorageScope.APPLICATION), undefined);
@@ -163,10 +149,7 @@ suite('Desktop window storage', () => {
 				},
 			});
 			const key = 'ash.code.storage.application';
-			browser.window.localStorage.setItem(
-				key,
-				JSON.stringify({ version: 1, entries: { saved: { value: 'yes', target: StorageTarget.USER } } }),
-			);
+			browser.window.localStorage.setItem(key, JSON.stringify({ version: 1, entries: { saved: { value: 'yes', target: StorageTarget.USER } } }));
 			browser.window.localStorage.setItem(
 				'ash.code.storage.workspace.sessions',
 				JSON.stringify({
@@ -188,21 +171,12 @@ suite('Desktop window storage', () => {
 			});
 			await storage.initialize();
 			assert.deepEqual(
-				[
-					storage.get('saved', StorageScope.APPLICATION),
-					browser.window.localStorage.getItem(key),
-					browser.window.localStorage.getItem('ash.storage.application'),
-				],
+				[storage.get('saved', StorageScope.APPLICATION), browser.window.localStorage.getItem(key), browser.window.localStorage.getItem('ash.storage.application')],
 				['yes', null, null],
 			);
+			assert.deepEqual([storage.get('draft', StorageScope.WORKSPACE), storage.get('sidebar', StorageScope.PROFILE)], ['retained', 'hidden']);
 			assert.deepEqual(
-				[storage.get('draft', StorageScope.WORKSPACE), storage.get('sidebar', StorageScope.PROFILE)],
-				['retained', 'hidden'],
-			);
-			assert.deepEqual(
-				['ash.storage.workspace.sessions', 'ash.storage.profile.code-sessions'].map(key =>
-					browser.window.localStorage.getItem(key),
-				),
+				['ash.storage.workspace.sessions', 'ash.storage.profile.code-sessions'].map(key => browser.window.localStorage.getItem(key)),
 				[null, null],
 			);
 			assert.ok(browser.window.localStorage.getItem('ash.storage.v1.code.application'));
@@ -234,10 +208,7 @@ suite('Desktop window storage', () => {
 				},
 			});
 			const key = 'ash.storage.application';
-			for (const source of [
-				'{"version":1,"entries":{"saved":{"value":1,"target":"user"}}}',
-				'{"version":1,"entries":{"saved":{"value":"conflict","target":"user"}}}',
-			]) {
+			for (const source of ['{"version":1,"entries":{"saved":{"value":1,"target":"user"}}}', '{"version":1,"entries":{"saved":{"value":"conflict","target":"user"}}}']) {
 				browser.window.localStorage.setItem(key, source);
 				using storage = services.createInstance(NativeWorkbenchStorageService, {
 					ownerWindow: browser.window as unknown as Window,

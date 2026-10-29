@@ -55,9 +55,7 @@ function run(request: PdfReadRequest, signal: AbortSignal): Promise<ReadingResul
 		const abort = (): void => finish(new Error('PDF reading cancelled'));
 		const timer = setTimeout(() => finish(new Error('PDF reading exceeded its 30-second time budget')), 30000);
 		signal.addEventListener('abort', abort, { once: true });
-		worker.once('message', (message: { result?: ReadingResult; error?: string }) =>
-			finish(message.error ? new Error(message.error) : undefined, message.result),
-		);
+		worker.once('message', (message: { result?: ReadingResult; error?: string }) => finish(message.error ? new Error(message.error) : undefined, message.result));
 		worker.once('error', error => finish(error));
 		worker.once('exit', code => {
 			if (!settled) finish(new Error(`PDF worker exited before returning a result (${code})`));

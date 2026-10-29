@@ -1,10 +1,5 @@
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
@@ -15,9 +10,7 @@ import { IEditorService } from '../../../services/editor/common/editorService.js
 import { ILanguageStatusService } from '../../../services/languageStatus/common/languageStatusService.js';
 import { LanguageStatusContribution } from './languageStatus.js';
 
-registerWorkbenchContribution(LanguageStatusContribution.Id, WorkbenchPhase.AfterRestored, accessor =>
-	accessor.get(IInstantiationService).createInstance(LanguageStatusContribution),
-);
+registerWorkbenchContribution(LanguageStatusContribution.Id, WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(LanguageStatusContribution));
 
 for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 	AccessibleViewRegistry.register({
@@ -26,11 +19,8 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 		priority: 110,
 		getProvider: accessor => {
 			const document = accessor.get(IContextViewService).container.ownerDocument;
-			const anchor = document.querySelector<HTMLElement>(
-				`[data-statusbar-item-id="${LanguageStatusContribution.Id}"] .ash-statusbar-item-label`,
-			);
-			if (!accessor.get(IContextKeyService).getValue('languageStatusFocus') && document.activeElement !== anchor)
-				return undefined;
+			const anchor = document.querySelector<HTMLElement>(`[data-statusbar-item-id="${LanguageStatusContribution.Id}"] .ash-statusbar-item-label`);
+			if (!accessor.get(IContextKeyService).getValue('languageStatusFocus') && document.activeElement !== anchor) return undefined;
 			const model = getCodeEditor(accessor.get(IEditorService).activeEditorPane?.getControl())?.getModel();
 			const statuses = model ? accessor.get(ILanguageStatusService).getLanguageStatus(model) : [];
 			return new AccessibleContentProvider(

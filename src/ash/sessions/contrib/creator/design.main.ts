@@ -12,10 +12,7 @@ import { generateDesignCode } from './contrib/code/browser/designCodeGenerator.j
 import type { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 
 /** Product assembly selects concrete features; the browser editor consumes only their contracts. */
-export function createDesignEditorContributions(
-	context: DesignEditorContributionContext,
-	instantiationService: IInstantiationService,
-): IDesignEditorContributions {
+export function createDesignEditorContributions(context: DesignEditorContributionContext, instantiationService: IInstantiationService): IDesignEditorContributions {
 	const resources = new DisposableStore();
 	const { ownerDocument, documentController, commands, selection } = context;
 	const exportDesign = (format: 'svg' | 'html'): Promise<void> =>
@@ -26,10 +23,7 @@ export function createDesignEditorContributions(
 						title: localize('sessions.design.exportCode', 'Export code'),
 						filename: 'design.html',
 						extension: 'html',
-						content: generateDesignCode(
-							documentController.model.value,
-							documentController.getEmbeddedImageSources(),
-						),
+						content: generateDesignCode(documentController.model.value, documentController.getEmbeddedImageSources()),
 					}),
 		);
 	const text = resources.add(instantiationService.createInstance(DesignTextEditor, context));

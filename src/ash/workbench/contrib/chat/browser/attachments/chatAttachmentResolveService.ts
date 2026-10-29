@@ -2,11 +2,7 @@ import { Range } from '../../../../../editor/common/core/range.js';
 import type { LanguageWorkspaceSymbol } from '../../../../../editor/common/languages.js';
 import { withSelection } from '../../../../../platform/opener/common/opener.js';
 import { readWorkspaceSymbolSource } from '../../../search/common/search.js';
-import {
-	SCMHistoryItemUri,
-	type SCMHistoryItemViewModelTreeElement,
-	type SCMHistoryItemChangeViewModelTreeElement,
-} from '../../../scm/common/history.js';
+import { SCMHistoryItemUri, type SCMHistoryItemViewModelTreeElement, type SCMHistoryItemChangeViewModelTreeElement } from '../../../scm/common/history.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
 import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { basename, extUri } from '../../../../../base/common/resources.js';
@@ -39,42 +35,18 @@ const imageMimeTypes: Readonly<Record<string, string>> = {
 	'.webp': 'image/webp',
 };
 
-export const IChatAttachmentResolveService =
-	createServiceIdentifier<IChatAttachmentResolveService>('chatAttachmentResolveService');
+export const IChatAttachmentResolveService = createServiceIdentifier<IChatAttachmentResolveService>('chatAttachmentResolveService');
 
 /** Captures selected resources; draft ownership and admission remain with the composer. */
 export interface IChatAttachmentResolveService {
 	readonly _serviceBrand: undefined;
-	resolveUntitledEditorAttachContext(
-		editor: IResourceEditorInput,
-		signal?: AbortSignal,
-	): Promise<ChatContextAttachment | undefined>;
-	resolveSymbolsAttachContext(
-		symbols: readonly LanguageWorkspaceSymbol[],
-		signal?: AbortSignal,
-	): Promise<ChatContextAttachment[]>;
-	resolveSourceControlHistoryItemAttachContext(
-		data: readonly (SCMHistoryItemViewModelTreeElement | SCMHistoryItemChangeViewModelTreeElement)[],
-	): ChatContextAttachment[];
-	resolveEditorAttachContext(
-		editor: IResourceEditorInput,
-		signal?: AbortSignal,
-	): Promise<ChatContextAttachment | undefined>;
-	resolveResourceAttachContext(
-		resource: URI,
-		isDirectory: boolean,
-		signal?: AbortSignal,
-	): Promise<ChatContextAttachment>;
-	resolveImageEditorAttachContext(
-		resource: URI,
-		data?: VSBuffer,
-		mimeType?: string,
-		signal?: AbortSignal,
-	): Promise<ChatContextAttachment | undefined>;
-	resolveImageAttachContext(
-		images: readonly ImageTransferData[],
-		signal?: AbortSignal,
-	): Promise<ChatContextAttachment[]>;
+	resolveUntitledEditorAttachContext(editor: IResourceEditorInput, signal?: AbortSignal): Promise<ChatContextAttachment | undefined>;
+	resolveSymbolsAttachContext(symbols: readonly LanguageWorkspaceSymbol[], signal?: AbortSignal): Promise<ChatContextAttachment[]>;
+	resolveSourceControlHistoryItemAttachContext(data: readonly (SCMHistoryItemViewModelTreeElement | SCMHistoryItemChangeViewModelTreeElement)[]): ChatContextAttachment[];
+	resolveEditorAttachContext(editor: IResourceEditorInput, signal?: AbortSignal): Promise<ChatContextAttachment | undefined>;
+	resolveResourceAttachContext(resource: URI, isDirectory: boolean, signal?: AbortSignal): Promise<ChatContextAttachment>;
+	resolveImageEditorAttachContext(resource: URI, data?: VSBuffer, mimeType?: string, signal?: AbortSignal): Promise<ChatContextAttachment | undefined>;
+	resolveImageAttachContext(images: readonly ImageTransferData[], signal?: AbortSignal): Promise<ChatContextAttachment[]>;
 }
 
 export class ChatAttachmentResolveService implements IChatAttachmentResolveService {
@@ -86,10 +58,7 @@ export class ChatAttachmentResolveService implements IChatAttachmentResolveServi
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 	) {}
 
-	public async resolveEditorAttachContext(
-		editor: IResourceEditorInput,
-		signal?: AbortSignal,
-	): Promise<ChatContextAttachment | undefined> {
+	public async resolveEditorAttachContext(editor: IResourceEditorInput, signal?: AbortSignal): Promise<ChatContextAttachment | undefined> {
 		if (editor.resource.scheme === 'untitled') return this.resolveUntitledEditorAttachContext(editor, signal);
 		if (isBinaryDiffEditorInput(editor)) {
 			return undefined;
@@ -119,10 +88,7 @@ export class ChatAttachmentResolveService implements IChatAttachmentResolveServi
 		return this.capture(input.resource, false, signal, snapshotText);
 	}
 
-	public async resolveUntitledEditorAttachContext(
-		editor: IResourceEditorInput,
-		signal?: AbortSignal,
-	): Promise<ChatContextAttachment | undefined> {
+	public async resolveUntitledEditorAttachContext(editor: IResourceEditorInput, signal?: AbortSignal): Promise<ChatContextAttachment | undefined> {
 		const content =
 			editor.readOnly && editor.initialText !== undefined
 				? editor.initialText
@@ -133,27 +99,15 @@ export class ChatAttachmentResolveService implements IChatAttachmentResolveServi
 		return content === undefined ? undefined : this.capture(editor.resource, false, signal, content);
 	}
 
-	public async resolveSymbolsAttachContext(
-		symbols: readonly LanguageWorkspaceSymbol[],
-		signal?: AbortSignal,
-	): Promise<ChatContextAttachment[]> {
+	public async resolveSymbolsAttachContext(symbols: readonly LanguageWorkspaceSymbol[], signal?: AbortSignal): Promise<ChatContextAttachment[]> {
 		return Promise.all(
 			symbols.map(async symbol => {
 				if (signal?.aborted) throw new CancellationError();
 				const source = await readWorkspaceSymbolSource(symbol, this.files, this.workingCopies);
 				if (signal?.aborted) throw new CancellationError();
-				if (source === undefined)
-					throw new Error(
-						localize(
-							'chat.context.symbolChanged',
-							'The symbol source changed. Search again to attach its current code.',
-						),
-					);
+				if (source === undefined) throw new Error(localize('chat.context.symbolChanged', 'The symbol source changed. Search again to attach its current code.'));
 				const data = symbol.data as { source?: unknown; declarationRange?: unknown } | undefined;
-				const range =
-					data?.source === 'codebaseSymbols' && Range.isIRange(data.declarationRange)
-						? Range.lift(data.declarationRange)
-						: symbol.range;
+				const range = data?.source === 'codebaseSymbols' && Range.isIRange(data.declarationRange) ? Range.lift(data.declarationRange) : symbol.range;
 				const lines = source.split(/\r\n|\r|\n/u);
 				const first = lines[range.startLineNumber - 1];
 				const last = lines[range.endLineNumber - 1];
@@ -167,23 +121,13 @@ export class ChatAttachmentResolveService implements IChatAttachmentResolveServi
 					range.endLineNumber < range.startLineNumber ||
 					(range.endLineNumber === range.startLineNumber && range.endColumn < range.startColumn)
 				) {
-					throw new Error(
-						localize(
-							'chat.context.symbolRangeUnavailable',
-							'The symbol source range is no longer available',
-						),
-					);
+					throw new Error(localize('chat.context.symbolRangeUnavailable', 'The symbol source range is no longer available'));
 				}
 				const code =
 					range.startLineNumber === range.endLineNumber
 						? first.slice(range.startColumn - 1, range.endColumn - 1)
-						: [
-								first.slice(range.startColumn - 1),
-								...lines.slice(range.startLineNumber, range.endLineNumber - 1),
-								last.slice(0, range.endColumn - 1),
-							].join('\n');
-				if (!code.trim())
-					throw new Error(localize('chat.context.symbolEmpty', 'The symbol has no source text to attach'));
+						: [first.slice(range.startColumn - 1), ...lines.slice(range.startLineNumber, range.endLineNumber - 1), last.slice(0, range.endColumn - 1)].join('\n');
+				if (!code.trim()) throw new Error(localize('chat.context.symbolEmpty', 'The symbol has no source text to attach'));
 				const resource = withSelection(symbol.resource, range);
 				const name = symbol.name;
 				const content = `Symbol: ${name}\nSource: ${resource.toString()}\n\n${code.length > 100_000 ? code.slice(0, 100_000) + '\n[Additional code omitted]' : code}`;
@@ -198,9 +142,7 @@ export class ChatAttachmentResolveService implements IChatAttachmentResolveServi
 		);
 	}
 
-	public resolveSourceControlHistoryItemAttachContext(
-		data: readonly (SCMHistoryItemViewModelTreeElement | SCMHistoryItemChangeViewModelTreeElement)[],
-	): ChatContextAttachment[] {
+	public resolveSourceControlHistoryItemAttachContext(data: readonly (SCMHistoryItemViewModelTreeElement | SCMHistoryItemChangeViewModelTreeElement)[]): ChatContextAttachment[] {
 		return data.map(element => {
 			const { repository, historyItemViewModel } = element;
 			const item = historyItemViewModel.historyItem;
@@ -219,37 +161,17 @@ export class ChatAttachmentResolveService implements IChatAttachmentResolveServi
 				resource: SCMHistoryItemUri.toUri({ repositoryId: repository.id, revision, baseRevision, path }),
 				resolve: async () => {
 					const content =
-						path === undefined
-							? await provider.resolveHistoryItemChatContext(revision)
-							: await provider.resolveHistoryItemChangeRangeChatContext(
-									revision,
-									baseRevision ?? '',
-									path,
-								);
-					if (content === undefined)
-						throw new Error(
-							path === undefined
-								? `History item '${revision}' is unavailable`
-								: `History change '${path}' is unavailable`,
-						);
+						path === undefined ? await provider.resolveHistoryItemChatContext(revision) : await provider.resolveHistoryItemChangeRangeChatContext(revision, baseRevision ?? '', path);
+					if (content === undefined) throw new Error(path === undefined ? `History item '${revision}' is unavailable` : `History change '${path}' is unavailable`);
 					return { name: contentName, content };
 				},
 			};
 		});
 	}
 
-	public async resolveResourceAttachContext(
-		resource: URI,
-		isDirectory: boolean,
-		signal?: AbortSignal,
-	): Promise<ChatContextAttachment> {
+	public async resolveResourceAttachContext(resource: URI, isDirectory: boolean, signal?: AbortSignal): Promise<ChatContextAttachment> {
 		if (!isDirectory) {
-			const image = await this.resolveImageEditorAttachContext(
-				extractSelection(resource).uri,
-				undefined,
-				undefined,
-				signal,
-			);
+			const image = await this.resolveImageEditorAttachContext(extractSelection(resource).uri, undefined, undefined, signal);
 			if (image) {
 				return { ...image, resource };
 			}
@@ -257,15 +179,8 @@ export class ChatAttachmentResolveService implements IChatAttachmentResolveServi
 		return this.capture(resource, isDirectory, signal);
 	}
 
-	public async resolveImageEditorAttachContext(
-		resource: URI,
-		data?: VSBuffer,
-		mimeType?: string,
-		signal?: AbortSignal,
-	): Promise<ChatContextAttachment | undefined> {
-		mimeType = Object.values(imageMimeTypes).includes(mimeType ?? '')
-			? mimeType
-			: imageMimeTypes[extname(resource.path).toLowerCase()];
+	public async resolveImageEditorAttachContext(resource: URI, data?: VSBuffer, mimeType?: string, signal?: AbortSignal): Promise<ChatContextAttachment | undefined> {
+		mimeType = Object.values(imageMimeTypes).includes(mimeType ?? '') ? mimeType : imageMimeTypes[extname(resource.path).toLowerCase()];
 		if (!mimeType) {
 			return undefined;
 		}
@@ -291,10 +206,7 @@ export class ChatAttachmentResolveService implements IChatAttachmentResolveServi
 		return attachment;
 	}
 
-	public async resolveImageAttachContext(
-		images: readonly ImageTransferData[],
-		signal?: AbortSignal,
-	): Promise<ChatContextAttachment[]> {
+	public async resolveImageAttachContext(images: readonly ImageTransferData[], signal?: AbortSignal): Promise<ChatContextAttachment[]> {
 		return Promise.all(
 			images.map(async image => {
 				if (signal?.aborted) {
@@ -309,12 +221,7 @@ export class ChatAttachmentResolveService implements IChatAttachmentResolveServi
 		);
 	}
 
-	private async capture(
-		resource: URI,
-		isDirectory: boolean,
-		signal?: AbortSignal,
-		snapshotText?: string,
-	): Promise<ChatContextAttachment> {
+	private async capture(resource: URI, isDirectory: boolean, signal?: AbortSignal, snapshotText?: string): Promise<ChatContextAttachment> {
 		if (signal?.aborted) {
 			throw new CancellationError();
 		}
@@ -324,9 +231,7 @@ export class ChatAttachmentResolveService implements IChatAttachmentResolveServi
 		if (isDirectory) {
 			const folder = this.workspace.getWorkspaceFolder(resource);
 			if (!folder) {
-				throw new Error(
-					localize('chat.context.folderUnavailable', 'The folder is outside the current workspace'),
-				);
+				throw new Error(localize('chat.context.folderUnavailable', 'The folder is outside the current workspace'));
 			}
 			const relative = resource.path.slice(folder.uri.path.replace(/\/$/u, '').length).replace(/^\//u, '');
 			const prefix = relative ? `${relative}/` : '';
@@ -365,22 +270,10 @@ export class ChatAttachmentResolveService implements IChatAttachmentResolveServi
 					selection.endLineNumber < selection.startLineNumber ||
 					(selection.endLineNumber === selection.startLineNumber && endColumn < selection.startColumn)
 				) {
-					throw new Error(
-						localize(
-							'chat.attach.rangeUnavailable',
-							'The source range for {0} is no longer available.',
-							name,
-						),
-					);
+					throw new Error(localize('chat.attach.rangeUnavailable', 'The source range for {0} is no longer available.', name));
 				}
-				const offsets = [
-					0,
-					...[...content.matchAll(/\r\n|\r|\n/gu)].map(match => match.index + match[0].length),
-				];
-				content = content.slice(
-					offsets[selection.startLineNumber - 1]! + selection.startColumn - 1,
-					offsets[selection.endLineNumber - 1]! + endColumn - 1,
-				);
+				const offsets = [0, ...[...content.matchAll(/\r\n|\r|\n/gu)].map(match => match.index + match[0].length)];
+				content = content.slice(offsets[selection.startLineNumber - 1]! + selection.startColumn - 1, offsets[selection.endLineNumber - 1]! + endColumn - 1);
 				name += ` (${selection.startLineNumber}${selection.endLineNumber === selection.startLineNumber ? '' : `-${selection.endLineNumber}`})`;
 			}
 			if (content.includes('\0') || !content.trim()) {

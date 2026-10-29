@@ -51,8 +51,7 @@ test('Session files preserve their original directory through selection, directo
 		using workspaceSelection = services.createInstance(
 			SessionsWorkspaceContextService,
 			() => ({ id: 'host', folders: [] }),
-			(next: import('../../../platform/workspace/common/workspace.js').IWorkspace) =>
-				workspace.updateWorkspace(next),
+			(next: import('../../../platform/workspace/common/workspace.js').IWorkspace) => workspace.updateWorkspace(next),
 		);
 		services.registerInstance(IWorkspaceContextService, workspace);
 		const calls: unknown[] = [];
@@ -72,11 +71,7 @@ test('Session files preserve their original directory through selection, directo
 			fs: {
 				...host.fs,
 				resolvePath: async resource => {
-					const root = resource.path.startsWith('/C:/managed/')
-						? 'C:/managed/restored'
-						: resource.path.includes('/second/')
-							? 'C:/sessions/second'
-							: 'C:/sessions/first';
+					const root = resource.path.startsWith('/C:/managed/') ? 'C:/managed/restored' : resource.path.includes('/second/') ? 'C:/sessions/second' : 'C:/sessions/first';
 					return {
 						uri: URI.file(root),
 						target: {
@@ -155,11 +150,7 @@ test('Session files preserve their original directory through selection, directo
 		await files.readFile(first);
 		await sessions.openThread('second', 'second-thread');
 		assert.equal(workspace.getWorkspace().folders[0]!.uri.toString(), URI.file('C:/sessions/second').toString());
-		assert.equal(
-			workspace.getWorkspaceFolder(first),
-			null,
-			'Workspace membership must not keep historical file routes',
-		);
+		assert.equal(workspace.getWorkspaceFolder(first), null, 'Workspace membership must not keep historical file routes');
 		await files.writeFile(first, new TextEncoder().encode('updated'), {
 			create: true,
 			overwrite: true,
@@ -177,11 +168,7 @@ test('Session files preserve their original directory through selection, directo
 			{ includePatterns: ['**/*.ts'], excludePatterns: [], maxResults: 100 },
 			controller.signal,
 		);
-		await files.fuzzy(
-			{ resource: originalFolder.uri, target: { type: 'workspace', dirId: originalFolder.id } },
-			{ query: 'MAIN', maxResults: 10 },
-			controller.signal,
-		);
+		await files.fuzzy({ resource: originalFolder.uri, target: { type: 'workspace', dirId: originalFolder.id } }, { query: 'MAIN', maxResults: 10 }, controller.signal);
 		const owner = { sessionId: 'first', path: 'C:/sessions/first' };
 		assert.deepEqual(calls, [
 			{ sessionDirectory: owner, path: 'main.ts' },
@@ -202,10 +189,7 @@ test('Session files preserve their original directory through selection, directo
 			},
 			{ target: { type: 'session', ...owner }, query: { query: 'MAIN', maxResults: 10 }, aborted: false },
 		]);
-		await assert.rejects(
-			async () => files.copy(first, URI.file('C:/sessions/second/copied.ts')),
-			/between Session/,
-		);
+		await assert.rejects(async () => files.copy(first, URI.file('C:/sessions/second/copied.ts')), /between Session/);
 	} finally {
 		browser.window.close();
 	}
@@ -331,9 +315,7 @@ test('Workbench file and content search retain Session directory authorization a
 	services.registerInstance(IFileSearchService, files);
 	services.registerInstance(IFileTextModelService, editing.models);
 	using search = services.createInstance(SearchService);
-	const result = await search.fileSearch(
-		new QueryBuilder().file([uri], { filePattern: 'main', sortByScore: true, maxResults: 1 }),
-	);
+	const result = await search.fileSearch(new QueryBuilder().file([uri], { filePattern: 'main', sortByScore: true, maxResults: 1 }));
 	assert.deepEqual(
 		result.results.map(file => file.resource.toString()),
 		[URI.joinPath(uri, 'main.ts').toString()],
@@ -370,8 +352,7 @@ test('restored file identity waits for backend routing independently of Session 
 		using workspaceSelection = services.createInstance(
 			SessionsWorkspaceContextService,
 			() => ({ id: 'source', folders: [{ id: 'source', index: 0, name: 'source', uri: URI.file('/source') }] }),
-			(next: import('../../../platform/workspace/common/workspace.js').IWorkspace) =>
-				workspace.updateWorkspace(next),
+			(next: import('../../../platform/workspace/common/workspace.js').IWorkspace) => workspace.updateWorkspace(next),
 		);
 		services.registerInstance(IWorkspaceContextService, workspace);
 		const calls: unknown[] = [];
@@ -405,9 +386,7 @@ test('restored file identity waits for backend routing independently of Session 
 			target: { type: 'session', sessionId: 'first', path: '/managed/first' },
 		});
 		assert.equal(await opening, 'resolved');
-		assert.deepEqual(calls, [
-			{ sessionDirectory: { sessionId: 'first', path: '/managed/first' }, path: 'main.ts' },
-		]);
+		assert.deepEqual(calls, [{ sessionDirectory: { sessionId: 'first', path: '/managed/first' }, path: 'main.ts' }]);
 		await assert.rejects(files.resolvePathIdentity(URI.file('/outside/main.ts')), /PermissionRequired/);
 	} finally {
 		browser.window.close();

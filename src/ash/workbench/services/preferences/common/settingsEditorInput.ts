@@ -25,10 +25,7 @@ export class SettingsEditorInput extends Disposable implements IResourceEditorIn
 }
 
 /** Creates the singleton input routed to the Workbench Settings editor. */
-export function createSettingsEditorInput(
-	target?: string,
-	parameters: Readonly<Record<string, string>> = {},
-): IResourceEditorInput {
+export function createSettingsEditorInput(target?: string, parameters: Readonly<Record<string, string>> = {}): IResourceEditorInput {
 	const query = Object.entries(target ? { ...parameters, target } : parameters)
 		.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
 		.join('&');
@@ -44,10 +41,7 @@ export function createSettingsEditorInput(
 }
 
 export function isSettingsEditorInput(input: IResourceEditorInput): boolean {
-	return (
-		input.contentType === SettingsEditorContentType ||
-		input.resource.toString() === SettingsEditorResource.toString()
-	);
+	return input.contentType === SettingsEditorContentType || input.resource.toString() === SettingsEditorResource.toString();
 }
 
 /** Opens the current profile settings file as an editable JSONC resource. */
@@ -67,8 +61,7 @@ EditorInputSerializers.registerStatic({
 	canSerialize: input => input.resource.toString() === UserSettingsResource.toString(),
 	serialize: () => UserSettingsResource.toString(),
 	deserialize: value => {
-		if (value !== UserSettingsResource.toString() && value !== 'ash-settings:/user/settings.json')
-			throw new TypeError('Invalid user settings editor resource');
+		if (value !== UserSettingsResource.toString() && value !== 'ash-settings:/user/settings.json') throw new TypeError('Invalid user settings editor resource');
 		return createUserSettingsEditorInput();
 	},
 });

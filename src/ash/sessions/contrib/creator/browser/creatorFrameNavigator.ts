@@ -31,12 +31,7 @@ export class CreatorFrameNavigator extends Disposable {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.editorDomNode = content.firstElementChild as HTMLElement;
-		this.domNode = h(
-			ownerDocument,
-			'label',
-			{ className: 'ash-creator-frame-selector' },
-			localize('sessions.creator.page', 'Page'),
-		);
+		this.domNode = h(ownerDocument, 'label', { className: 'ash-creator-frame-selector' }, localize('sessions.creator.page', 'Page'));
 		this.selectDomNode = h(ownerDocument, 'select', {
 			attributes: { 'aria-label': localize('sessions.creator.pages', 'Pages') },
 		});
@@ -90,10 +85,7 @@ export class CreatorFrameNavigator extends Disposable {
 				if (event.key === 'Escape') {
 					event.preventDefault();
 					this.showPreview(false);
-				} else if (
-					event.target === this.previewDomNode &&
-					(event.key === 'ArrowLeft' || event.key === 'ArrowRight')
-				) {
+				} else if (event.target === this.previewDomNode && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
 					event.preventDefault();
 					this.move(event.key === 'ArrowLeft' ? -1 : 1);
 				}
@@ -148,20 +140,10 @@ export class CreatorFrameNavigator extends Disposable {
 		if (!frames.some(frame => frame.id === this.frameId)) {
 			this.frameId = frames[0]?.id;
 		}
-		if (
-			frames.length !== this.renderedFrames.length ||
-			frames.some((frame, index) => frame !== this.renderedFrames[index])
-		) {
+		if (frames.length !== this.renderedFrames.length || frames.some((frame, index) => frame !== this.renderedFrames[index])) {
 			this.renderedFrames = frames;
 			this.selectDomNode.replaceChildren(
-				...frames.map((frame, index) =>
-					h(
-						this.domNode.ownerDocument,
-						'option',
-						{ properties: { value: frame.id } },
-						localize('sessions.creator.pageNumber', 'Page {0}', index + 1),
-					),
-				),
+				...frames.map((frame, index) => h(this.domNode.ownerDocument, 'option', { properties: { value: frame.id } }, localize('sessions.creator.pageNumber', 'Page {0}', index + 1))),
 			);
 		}
 		this.selectDomNode.disabled = frames.length === 0;
@@ -173,12 +155,7 @@ export class CreatorFrameNavigator extends Disposable {
 		const index = frames.findIndex(frame => frame.id === this.frameId);
 		this.previous.enabled = index > 0;
 		this.next.enabled = index >= 0 && index < frames.length - 1;
-		this.counterDomNode.textContent = localize(
-			'sessions.creator.pageCount',
-			'{0} of {1}',
-			index + 1,
-			frames.length,
-		);
+		this.counterDomNode.textContent = localize('sessions.creator.pageCount', '{0} of {1}', index + 1, frames.length);
 		const frame = frames[index];
 		if (!frame) {
 			this.sceneDomNode.replaceChildren();
@@ -188,12 +165,6 @@ export class CreatorFrameNavigator extends Disposable {
 			return;
 		}
 		this.sceneDomNode.setAttribute('viewBox', `0 0 ${frame.width} ${frame.height}`);
-		this.sceneDomNode.replaceChildren(
-			renderDesignShape(
-				{ ...frame, x: 0, y: 0, rotation: 0 },
-				undefined,
-				this.document.getEmbeddedImageSources(),
-			),
-		);
+		this.sceneDomNode.replaceChildren(renderDesignShape({ ...frame, x: 0, y: 0, rotation: 0 }, undefined, this.document.getEmbeddedImageSources()));
 	}
 }

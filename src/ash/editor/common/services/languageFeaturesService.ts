@@ -1,21 +1,10 @@
 import { runWithBufferedEvents } from '../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import {
-	LanguageFeatureRegistry,
-	type NotebookInfo,
-	type NotebookInfoResolver,
-	LanguageCompletionProviderRegistry,
-	SyntaxProviderRegistry,
-} from '../languageFeatureRegistry.js';
+import { LanguageFeatureRegistry, type NotebookInfo, type NotebookInfoResolver, LanguageCompletionProviderRegistry, SyntaxProviderRegistry } from '../languageFeatureRegistry.js';
 import { type URI } from '../../../base/common/uri.js';
 import type * as languages from '../languages.js';
 import type { ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
-import type {
-	ILanguageFeaturesService,
-	LanguageProviderBatch,
-	LanguageProviderBatchEntry,
-	LanguageProviderBatchRegistration,
-} from './languageFeatures.js';
+import type { ILanguageFeaturesService, LanguageProviderBatch, LanguageProviderBatchEntry, LanguageProviderBatchRegistration } from './languageFeatures.js';
 
 /** Owns the Editor provider registries without knowing their Workbench implementations. */
 export class LanguageFeaturesService extends Disposable implements ILanguageFeaturesService {
@@ -253,18 +242,10 @@ function disposeRegistrations(registrations: readonly IDisposable[]): void {
 	}
 }
 
-function replaceProviderRegistrations(
-	registrations: LanguageProviderRegistrations,
-	providers: Required<LanguageProviderBatch>,
-	previous?: Required<LanguageProviderBatch>,
-): void {
+function replaceProviderRegistrations(registrations: LanguageProviderRegistrations, providers: Required<LanguageProviderBatch>, previous?: Required<LanguageProviderBatch>): void {
 	// Syntax invalidation restarts analysis for every open model. A navigation-only
 	// extension update must retain the existing normalized syntax providers.
-	if (
-		!previous ||
-		providers.syntax.length !== previous.syntax.length ||
-		providers.syntax.some((provider, index) => provider !== previous.syntax[index])
-	) {
+	if (!previous || providers.syntax.length !== previous.syntax.length || providers.syntax.some((provider, index) => provider !== previous.syntax[index])) {
 		registrations.syntax.replace(providers.syntax);
 	}
 	registrations.documentHighlights.replace(providers.documentHighlights);
@@ -282,22 +263,19 @@ function replaceProviderRegistrations(
 	registrations.documentFormatting.replace(
 		providers.formatting.filter(
 			(entry): entry is LanguageProviderBatchEntry<languages.DocumentFormattingEditProvider> =>
-				'provideDocumentFormattingEdits' in entry.provider &&
-				typeof entry.provider.provideDocumentFormattingEdits === 'function',
+				'provideDocumentFormattingEdits' in entry.provider && typeof entry.provider.provideDocumentFormattingEdits === 'function',
 		),
 	);
 	registrations.documentRangeFormatting.replace(
 		providers.formatting.filter(
 			(entry): entry is LanguageProviderBatchEntry<languages.DocumentRangeFormattingEditProvider> =>
-				'provideDocumentRangeFormattingEdits' in entry.provider &&
-				typeof entry.provider.provideDocumentRangeFormattingEdits === 'function',
+				'provideDocumentRangeFormattingEdits' in entry.provider && typeof entry.provider.provideDocumentRangeFormattingEdits === 'function',
 		),
 	);
 	registrations.onTypeFormatting.replace(
 		providers.formatting.filter(
 			(entry): entry is LanguageProviderBatchEntry<languages.OnTypeFormattingEditProvider> =>
-				'provideOnTypeFormattingEdits' in entry.provider &&
-				typeof entry.provider.provideOnTypeFormattingEdits === 'function',
+				'provideOnTypeFormattingEdits' in entry.provider && typeof entry.provider.provideOnTypeFormattingEdits === 'function',
 		),
 	);
 	registrations.inlayHints.replace(providers.inlayHints);
@@ -386,20 +364,11 @@ function frozenProviderArray<T>(value: readonly T[] | undefined, owner: string):
 	return Object.freeze([...value]);
 }
 
-function frozenLanguageFeatureEntries<TProvider>(
-	value: readonly LanguageProviderBatchEntry<TProvider>[] | undefined,
-	owner: string,
-): readonly LanguageProviderBatchEntry<TProvider>[] {
+function frozenLanguageFeatureEntries<TProvider>(value: readonly LanguageProviderBatchEntry<TProvider>[] | undefined, owner: string): readonly LanguageProviderBatchEntry<TProvider>[] {
 	const entries = frozenProviderArray(value, owner);
 	return Object.freeze(
 		entries.map(entry => {
-			if (
-				!entry ||
-				typeof entry !== 'object' ||
-				!('selector' in entry) ||
-				!entry.provider ||
-				typeof entry.provider !== 'object'
-			) {
+			if (!entry || typeof entry !== 'object' || !('selector' in entry) || !entry.provider || typeof entry.provider !== 'object') {
 				throw new TypeError(`Language ${owner} provider entry must contain a selector and provider`);
 			}
 			return Object.freeze({ selector: entry.selector, provider: entry.provider });

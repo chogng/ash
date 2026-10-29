@@ -4,12 +4,7 @@ import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle
 import { promiseWithResolvers } from '../../../../base/common/async.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import type {
-	IExtensionHostApi,
-	ExtensionHostFleetSnapshot,
-	ExtensionHostInvocationRequest,
-	JsonValue,
-} from '../../../../platform/agentHost/common/extensionHostApi.js';
+import type { IExtensionHostApi, ExtensionHostFleetSnapshot, ExtensionHostInvocationRequest, JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import type { ILogService } from '../../../../platform/log/common/log.js';
 import type { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import type { IAgentHostCanvasCollection, ICanvasProvider } from '../../../contrib/canvases/common/agentHostCanvas.js';
@@ -28,9 +23,7 @@ suite('Extension Canvas bridge', () => {
 							lifecycle: 'ready',
 							incarnation: 2,
 							activationGeneration: 3,
-							registrations: [
-								{ kind: 'dataChannel', registrationId: 'board', channelId: 'canvas.provider.v1' },
-							],
+							registrations: [{ kind: 'dataChannel', registrationId: 'board', channelId: 'canvas.provider.v1' }],
 						},
 					]
 				: [],
@@ -47,11 +40,7 @@ suite('Extension Canvas bridge', () => {
 	test('discovers provider metadata through its admitted callback and fences every source operation', async () => {
 		using f = fixture(async (request): Promise<JsonValue> => {
 			const action = (request.payload as { data: { action: string } }).data.action;
-			return action === 'describe'
-				? definition
-				: action === 'close'
-					? { state: 'closed' }
-					: { state: 'ready', url: 'http://localhost:9000/board', title: 'Board' };
+			return action === 'describe' ? definition : action === 'close' ? { state: 'closed' } : { state: 'ready', url: 'http://localhost:9000/board', title: 'Board' };
 		});
 		f.bridge.update(snapshot());
 		await settle();
@@ -70,16 +59,8 @@ suite('Extension Canvas bridge', () => {
 			},
 		});
 		assert.equal(f.calls[1]!.incarnation, 2);
-		await assert.rejects(
-			f.bridge.handleChange(
-				{ method: 'canvasChanged', canvasId: 'board' },
-				{ extensionId: 'plugin:runtime', incarnation: 1, activationGeneration: 3 },
-			),
-		);
-		await f.bridge.handleChange(
-			{ method: 'canvasChanged', canvasId: 'board' },
-			{ extensionId: 'plugin:runtime', incarnation: 2, activationGeneration: 3 },
-		);
+		await assert.rejects(f.bridge.handleChange({ method: 'canvasChanged', canvasId: 'board' }, { extensionId: 'plugin:runtime', incarnation: 1, activationGeneration: 3 }));
+		await f.bridge.handleChange({ method: 'canvasChanged', canvasId: 'board' }, { extensionId: 'plugin:runtime', incarnation: 2, activationGeneration: 3 });
 		assert.equal(f.refreshes.length, 2);
 		f.bridge.update(snapshot(false));
 		assert.equal(provider.signal.aborted, true);
@@ -98,11 +79,7 @@ suite('Extension Canvas bridge', () => {
 	});
 
 	test('recovery suspends sources until the replacement incarnation settles, while removal retires them', async () => {
-		using f = fixture(async request =>
-			(request.payload as { data: { action: string } }).data.action === 'describe'
-				? definition
-				: { state: 'unchanged' },
-		);
+		using f = fixture(async request => ((request.payload as { data: { action: string } }).data.action === 'describe' ? definition : { state: 'unchanged' }));
 		f.bridge.update(snapshot());
 		await settle();
 		const first = f.providers[0]!;

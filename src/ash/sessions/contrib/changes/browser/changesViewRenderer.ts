@@ -73,16 +73,10 @@ export class ChangesTreeRenderer {
 		const statistics = getChangesEditorFileStats(row.uri, [row])!;
 		counts.textContent = `+${statistics.insertions} −${statistics.deletions}`;
 		const state = h(this.document, 'span', { className: 'ash-sessions-change-state' });
-		state.textContent = [
-			localize('sessions.changes.turn', 'Turn {0}', row.turnNumber),
-			fileState(row),
-			reviewed ? localize('sessions.changes.reviewed', 'Reviewed') : undefined,
-		]
+		state.textContent = [localize('sessions.changes.turn', 'Turn {0}', row.turnNumber), fileState(row), reviewed ? localize('sessions.changes.reviewed', 'Reviewed') : undefined]
 			.filter(Boolean)
 			.join(' · ');
-		state.title = [state.textContent, row.summary.failureMessage, ...row.summary.warnings]
-			.filter(Boolean)
-			.join('\n');
+		state.title = [state.textContent, row.summary.failureMessage, ...row.summary.warnings].filter(Boolean).join('\n');
 		element.append(label, state, counts);
 		return element;
 	}

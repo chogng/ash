@@ -8,13 +8,7 @@ import { EditorOption } from '../../../common/config/editorOptions.js';
 import { Range } from '../../../common/core/range.js';
 import { Selection } from '../../../common/core/selection.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-import {
-	findTextMatches,
-	TextSearchPatternKind,
-	TextSearchQueryError,
-	type TextSearchMatch,
-	type TextModelSearchQuery,
-} from '../../../common/model/textModelSearch.js';
+import { findTextMatches, TextSearchPatternKind, TextSearchQueryError, type TextSearchMatch, type TextModelSearchQuery } from '../../../common/model/textModelSearch.js';
 import { FindDecorations } from './findDecorations.js';
 import { FindReplaceState } from './findState.js';
 import { ReplaceAllCommand } from './replaceAllCommand.js';
@@ -92,15 +86,7 @@ export class FindModelBoundToEditorModel extends Disposable {
 					this.matches = [];
 					this.decorations.value?.reset();
 					this.state.changeMatchInfo(0, 0, undefined);
-				} else if (
-					state.isRevealed &&
-					(event.isRevealed ||
-						event.searchString ||
-						event.isRegex ||
-						event.matchCase ||
-						event.wholeWord ||
-						event.searchScope)
-				) {
+				} else if (state.isRevealed && (event.isRevealed || event.searchString || event.isRegex || event.matchCase || event.wholeWord || event.searchScope)) {
 					this.research(event.moveCursor);
 				}
 			}),
@@ -140,10 +126,7 @@ export class FindModelBoundToEditorModel extends Disposable {
 		this.changingModel = true;
 		try {
 			this.editor.pushUndoStop();
-			this.editor.executeCommand(
-				FIND_IDS.ReplaceOneAction,
-				new ReplaceCommand(match.range, this.replacementFor(match)),
-			);
+			this.editor.executeCommand(FIND_IDS.ReplaceOneAction, new ReplaceCommand(match.range, this.replacementFor(match)));
 			this.editor.pushUndoStop();
 		} finally {
 			this.changingModel = false;
@@ -152,8 +135,7 @@ export class FindModelBoundToEditorModel extends Disposable {
 	}
 
 	public replaceAll(): void {
-		if (!this.model || !this.state.searchString || this.searchError || this.editor.getOption(EditorOption.readOnly))
-			return;
+		if (!this.model || !this.state.searchString || this.searchError || this.editor.getOption(EditorOption.readOnly)) return;
 		const matches = this.search(REPLACE_ALL_LIMIT);
 		if (!matches.length) return;
 		for (const match of matches) this.assertCurrentMatch(match);
@@ -162,10 +144,7 @@ export class FindModelBoundToEditorModel extends Disposable {
 		this.changingModel = true;
 		try {
 			this.editor.pushUndoStop();
-			this.editor.executeCommand(
-				FIND_IDS.ReplaceAllAction,
-				new ReplaceAllCommand(this.selection, ranges, replacements),
-			);
+			this.editor.executeCommand(FIND_IDS.ReplaceAllAction, new ReplaceAllCommand(this.selection, ranges, replacements));
 			this.editor.pushUndoStop();
 		} finally {
 			this.changingModel = false;
@@ -203,10 +182,7 @@ export class FindModelBoundToEditorModel extends Disposable {
 			this.matches = [];
 			this.searchError = error;
 		}
-		const scopes =
-			this.state.searchScope === null
-				? null
-				: (this.decorations.value?.getFindScopes() ?? this.state.searchScope);
+		const scopes = this.state.searchScope === null ? null : (this.decorations.value?.getFindScopes() ?? this.state.searchScope);
 		this.decorations.value?.set(this.matches, scopes);
 		const index = this.findCurrentIndex();
 		this.decorations.value?.setCurrentFindMatch(this.matches[index]?.range ?? null);
@@ -216,10 +192,7 @@ export class FindModelBoundToEditorModel extends Disposable {
 
 	private search(limit: number): readonly TextSearchMatch[] {
 		if (!this.model) return [];
-		const scopes =
-			this.state.searchScope === null
-				? null
-				: (this.decorations.value?.getFindScopes() ?? this.state.searchScope);
+		const scopes = this.state.searchScope === null ? null : (this.decorations.value?.getFindScopes() ?? this.state.searchScope);
 		if (!scopes?.length) return findTextMatches(this.model, this.query, { resultLimit: limit });
 		const found: TextSearchMatch[] = [];
 		for (const scope of scopes) {
@@ -248,9 +221,7 @@ export class FindModelBoundToEditorModel extends Disposable {
 				}
 			}
 		}
-		const index = this.state.loop
-			? rot(candidate, this.matches.length)
-			: Math.max(0, Math.min(this.matches.length - 1, candidate));
+		const index = this.state.loop ? rot(candidate, this.matches.length) : Math.max(0, Math.min(this.matches.length - 1, candidate));
 		this.select(index);
 	}
 
@@ -275,22 +246,15 @@ export class FindModelBoundToEditorModel extends Disposable {
 	}
 
 	private replacementFor(match: TextSearchMatch): string {
-		const pattern = this.state.isRegex
-			? parseReplaceString(this.state.replaceString)
-			: ReplacePattern.fromStaticValue(this.state.replaceString);
-		const captures: string[] & { groups?: Record<string, string | undefined> } = [
-			match.text,
-			...match.captures.map(value => value ?? ''),
-		];
+		const pattern = this.state.isRegex ? parseReplaceString(this.state.replaceString) : ReplacePattern.fromStaticValue(this.state.replaceString);
+		const captures: string[] & { groups?: Record<string, string | undefined> } = [match.text, ...match.captures.map(value => value ?? '')];
 		captures.groups = { ...match.namedCaptures };
 		return pattern.buildReplaceString(captures, this.state.preserveCase);
 	}
 
 	private assertCurrentMatch(match: TextSearchMatch): void {
-		if (!this.model || match.modelVersion !== this.model.version)
-			throw new Error('Text search match belongs to a stale model version');
-		if (this.model.getTextInRange(match.range) !== match.text)
-			throw new Error('Text search match no longer identifies the same text');
+		if (!this.model || match.modelVersion !== this.model.version) throw new Error('Text search match belongs to a stale model version');
+		if (this.model.getTextInRange(match.range) !== match.text) throw new Error('Text search match no longer identifies the same text');
 	}
 
 	private get query(): TextModelSearchQuery {

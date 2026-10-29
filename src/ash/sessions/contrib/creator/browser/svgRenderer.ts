@@ -31,12 +31,7 @@ function renderStrokePadding(shape: DesignShape): number {
 	return 0;
 }
 
-function paintShape(
-	element: SVGGraphicsElement,
-	shape: DesignShape,
-	images: ReadonlyMap<string, DesignImageSource>,
-	backdrop: readonly SVGGraphicsElement[],
-): SVGGraphicsElement {
+function paintShape(element: SVGGraphicsElement, shape: DesignShape, images: ReadonlyMap<string, DesignImageSource>, backdrop: readonly SVGGraphicsElement[]): SVGGraphicsElement {
 	const effects = designEffects(shape).some(effect => effect.visible !== false);
 	// Backdrop snapshots and blend filter inputs cannot reference session-local blob URLs.
 	for (const image of element.querySelectorAll('image')) {
@@ -98,16 +93,10 @@ export function renderDesignShape(
 						image: 'svg',
 					} as const
 				)[shape.kind];
-	const element =
-		shape.fills === undefined && !shape.effects && previous?.tagName === tag
-			? previous
-			: mainWindow.document.createElementNS(SVG_NAMESPACE, tag);
+	const element = shape.fills === undefined && !shape.effects && previous?.tagName === tag ? previous : mainWindow.document.createElementNS(SVG_NAMESPACE, tag);
 	element.dataset.shapeId = shape.id;
 	element.removeAttribute('visibility');
-	element.setAttribute(
-		'transform',
-		`rotate(${shape.rotation} ${shape.x + shape.width / 2} ${shape.y + shape.height / 2})`,
-	);
+	element.setAttribute('transform', `rotate(${shape.rotation} ${shape.x + shape.width / 2} ${shape.y + shape.height / 2})`);
 	element.setAttribute('fill', shape.fill);
 	element.style.display = shape.visible === false ? 'none' : '';
 	element.setAttribute('opacity', `${shape.opacity ?? 1}`);
@@ -124,12 +113,7 @@ export function renderDesignShape(
 	} else if (shape.kind === 'path') {
 		if (tag === 'g') {
 			const contours = designPathFillContours(shape),
-				colors = [
-					...new Set([
-						...(shape.network ? [shape.fill] : []),
-						...contours.map(contour => contour.fill ?? shape.fill),
-					]),
-				];
+				colors = [...new Set([...(shape.network ? [shape.fill] : []), ...contours.map(contour => contour.fill ?? shape.fill)])];
 			const children: SVGElement[] = colors.map(color => {
 				const fill = mainWindow.document.createElementNS(SVG_NAMESPACE, 'path');
 				fill.setAttribute('data-design-fill', '');
@@ -174,10 +158,7 @@ export function renderDesignShape(
 						if (layer.alignment !== 'center') {
 							const id = `stroke-${generateUuid()}`,
 								outside = layer.alignment === 'outside',
-								clip = mainWindow.document.createElementNS(
-									SVG_NAMESPACE,
-									outside ? 'mask' : 'clipPath',
-								);
+								clip = mainWindow.document.createElementNS(SVG_NAMESPACE, outside ? 'mask' : 'clipPath');
 							clip.id = id;
 							const boundary = mainWindow.document.createElementNS(SVG_NAMESPACE, 'path');
 							boundary.setAttribute('d', designPathData(layer.contours, shape));
@@ -187,9 +168,7 @@ export function renderDesignShape(
 							if (outside) {
 								clip.setAttribute('maskUnits', 'userSpaceOnUse');
 								clip.setAttribute('maskContentUnits', 'userSpaceOnUse');
-								const points = layer.contours.flatMap(contour =>
-										contour.nodes.flatMap(node => [node, node.incoming, node.outgoing]),
-									),
+								const points = layer.contours.flatMap(contour => contour.nodes.flatMap(node => [node, node.incoming, node.outgoing])),
 									pad = layer.width * 4 + 1;
 								const left = Math.min(...points.map(p => p.x)) * shape.width + shape.x - pad,
 									top = Math.min(...points.map(p => p.y)) * shape.height + shape.y - pad;
@@ -219,10 +198,7 @@ export function renderDesignShape(
 			return paintShape(element, shape, images, backdrop);
 		}
 		element.setAttribute('d', designPathData(designPathStrokeContours(shape), shape));
-		element.setAttribute(
-			'fill',
-			designPathStrokeContours(shape).some(contour => contour.closed) ? shape.fill : 'none',
-		);
+		element.setAttribute('fill', designPathStrokeContours(shape).some(contour => contour.closed) ? shape.fill : 'none');
 		element.setAttribute('fill-rule', shape.fillRule ?? 'nonzero');
 		element.setAttribute('stroke', shape.stroke ?? shape.fill);
 		element.setAttribute('stroke-width', `${shape.strokeWidth}`);
@@ -234,19 +210,13 @@ export function renderDesignShape(
 			element.setAttribute(key, `${shape[key]}`);
 		}
 		if (shape.kind === 'group' || shape.kind === 'frame') {
-			element.setAttribute(
-				'viewBox',
-				shape.kind === 'group'
-					? `0 0 ${shape.contentWidth} ${shape.contentHeight}`
-					: `0 0 ${shape.width} ${shape.height}`,
-			);
+			element.setAttribute('viewBox', shape.kind === 'group' ? `0 0 ${shape.contentWidth} ${shape.contentHeight}` : `0 0 ${shape.width} ${shape.height}`);
 			element.setAttribute('overflow', shape.kind === 'frame' && shape.clip ? 'hidden' : 'visible');
 			element.setAttribute('preserveAspectRatio', 'none');
 			const children: SVGElement[] = [];
 			if (shape.kind === 'frame') {
 				const background =
-					element.firstElementChild?.tagName === 'rect' &&
-					!element.firstElementChild.hasAttribute('data-shape-id')
+					element.firstElementChild?.tagName === 'rect' && !element.firstElementChild.hasAttribute('data-shape-id')
 						? element.firstElementChild
 						: mainWindow.document.createElementNS(SVG_NAMESPACE, 'rect');
 				background.setAttribute('data-design-fill', '');
@@ -271,9 +241,7 @@ export function renderDesignShape(
 				path.setAttribute('fill-rule', 'nonzero');
 				children.push(path);
 			} else {
-				const needsBackdrop = flattenDesignShapes(shape.children).some(child =>
-					designEffects(child).some(effect => effect.visible !== false && effect.type === 'background-blur'),
-				);
+				const needsBackdrop = flattenDesignShapes(shape.children).some(child => designEffects(child).some(effect => effect.visible !== false && effect.type === 'background-blur'));
 				const behind = needsBackdrop ? designChildBackdrop(shape, backdrop, element.ownerDocument) : [];
 				if (needsBackdrop && shape.kind === 'frame') {
 					const background = mainWindow.document.createElementNS(SVG_NAMESPACE, 'rect');
@@ -292,12 +260,7 @@ export function renderDesignShape(
 					);
 				}
 				for (const [index, child] of shape.children.entries()) {
-					const rendered = renderDesignShape(
-						child,
-						element.children[index + (shape.kind === 'frame' ? 1 : 0)] as SVGGraphicsElement | undefined,
-						images,
-						behind,
-					);
+					const rendered = renderDesignShape(child, element.children[index + (shape.kind === 'frame' ? 1 : 0)] as SVGGraphicsElement | undefined, images, behind);
 					children.push(rendered);
 					behind.push(rendered);
 				}
@@ -340,25 +303,13 @@ export function renderDesignShape(
 		} else if (shape.kind === 'image') {
 			const source = images.get(shape.assetVersionId);
 			if (!source) {
-				throw new Error(
-					localize(
-						'sessions.design.imageSourceMissing',
-						'Image preview is missing: {0}',
-						shape.assetVersionId,
-					),
-				);
+				throw new Error(localize('sessions.design.imageSourceMissing', 'Image preview is missing: {0}', shape.assetVersionId));
 			}
 			const crop = shape.crop;
-			element.setAttribute(
-				'viewBox',
-				`${crop.x * source.width} ${crop.y * source.height} ${crop.width * source.width} ${crop.height * source.height}`,
-			);
+			element.setAttribute('viewBox', `${crop.x * source.width} ${crop.y * source.height} ${crop.width * source.width} ${crop.height * source.height}`);
 			element.setAttribute('overflow', 'hidden');
 			element.setAttribute('preserveAspectRatio', 'xMidYMid slice');
-			const image =
-				element.firstElementChild?.tagName === 'image'
-					? element.firstElementChild
-					: mainWindow.document.createElementNS(SVG_NAMESPACE, 'image');
+			const image = element.firstElementChild?.tagName === 'image' ? element.firstElementChild : mainWindow.document.createElementNS(SVG_NAMESPACE, 'image');
 			image.setAttribute('href', source.url);
 			image.setAttribute('width', `${source.width}`);
 			image.setAttribute('height', `${source.height}`);
@@ -381,21 +332,12 @@ export function renderDesignShape(
 	return paintShape(element, shape, images, backdrop);
 }
 
-export function exportDesignSvg(
-	document: DesignDocument,
-	images: ReadonlyMap<string, DesignImageSource> = new Map(),
-): string {
+export function exportDesignSvg(document: DesignDocument, images: ReadonlyMap<string, DesignImageSource> = new Map()): string {
 	const svg = mainWindow.document.createElementNS(SVG_NAMESPACE, 'svg');
 	const bounds = getDesignRenderBounds(document.shapes);
 
-	const padding = Math.max(
-		0,
-		...document.shapes.map(shape => renderStrokePadding(shape) + designEffectPadding(shape)),
-	);
-	svg.setAttribute(
-		'viewBox',
-		`${bounds.x - padding} ${bounds.y - padding} ${bounds.width + padding * 2} ${bounds.height + padding * 2}`,
-	);
+	const padding = Math.max(0, ...document.shapes.map(shape => renderStrokePadding(shape) + designEffectPadding(shape)));
+	svg.setAttribute('viewBox', `${bounds.x - padding} ${bounds.y - padding} ${bounds.width + padding * 2} ${bounds.height + padding * 2}`);
 	svg.setAttribute('width', `${bounds.width + padding * 2}`);
 	svg.setAttribute('height', `${bounds.height + padding * 2}`);
 	const backdrop: SVGGraphicsElement[] = [];
@@ -428,11 +370,7 @@ export function getDesignRenderBounds(shapes: readonly DesignShape[]): {
 			.flatMap(shape => {
 				if (shape.kind === 'path') {
 					const angle = (shape.rotation * Math.PI) / 180;
-					const points = [
-						...designPathStrokeContours(shape),
-						...designEndpointContours(shape),
-						...designVariableStrokeContours(shape),
-					]
+					const points = [...designPathStrokeContours(shape), ...designEndpointContours(shape), ...designVariableStrokeContours(shape)]
 						.flatMap(contour => contour.nodes.flatMap(node => [node, node.incoming, node.outgoing]))
 						.map(point => {
 							const dx = (point.x - 0.5) * shape.width,
@@ -456,20 +394,8 @@ export function getDesignRenderBounds(shapes: readonly DesignShape[]): {
 					];
 				}
 				if (shape.kind === 'text' && !shape.textTruncate) {
-					const size = measureDesignText(
-						shape,
-						shape.textAutoResize === 'width' &&
-							shape.sizing?.width !== 'fill' &&
-							!shape.sizeLimits?.maxWidth
-							? undefined
-							: shape.width,
-					);
-					const offset =
-						shape.textVerticalAlign === 'center'
-							? (shape.height - size.height) / 2
-							: shape.textVerticalAlign === 'bottom'
-								? shape.height - size.height
-								: 0;
+					const size = measureDesignText(shape, shape.textAutoResize === 'width' && shape.sizing?.width !== 'fill' && !shape.sizeLimits?.maxWidth ? undefined : shape.width);
+					const offset = shape.textVerticalAlign === 'center' ? (shape.height - size.height) / 2 : shape.textVerticalAlign === 'bottom' ? shape.height - size.height : 0;
 					const dy = offset + size.height / 2 - shape.height / 2;
 					const radians = (shape.rotation * Math.PI) / 180;
 					return [
@@ -483,11 +409,7 @@ export function getDesignRenderBounds(shapes: readonly DesignShape[]): {
 						},
 					];
 				}
-				if (
-					(shape.kind !== 'frame' && shape.kind !== 'group') ||
-					(shape.kind === 'frame' && shape.clip) ||
-					shape.children.length === 0
-				) {
+				if ((shape.kind !== 'frame' && shape.kind !== 'group') || (shape.kind === 'frame' && shape.clip) || shape.children.length === 0) {
 					return [shape];
 				}
 				const child = getDesignRenderBounds(shape.children);
@@ -498,18 +420,8 @@ export function getDesignRenderBounds(shapes: readonly DesignShape[]): {
 				return [
 					shape,
 					{
-						x:
-							shape.x +
-							shape.width / 2 +
-							dx * Math.cos(angle) -
-							dy * Math.sin(angle) -
-							(child.width * scale) / 2,
-						y:
-							shape.y +
-							shape.height / 2 +
-							dx * Math.sin(angle) +
-							dy * Math.cos(angle) -
-							(child.height * scale) / 2,
+						x: shape.x + shape.width / 2 + dx * Math.cos(angle) - dy * Math.sin(angle) - (child.width * scale) / 2,
+						y: shape.y + shape.height / 2 + dx * Math.sin(angle) + dy * Math.cos(angle) - (child.height * scale) / 2,
 						width: child.width * scale,
 						height: child.height * scale,
 						rotation: shape.rotation,

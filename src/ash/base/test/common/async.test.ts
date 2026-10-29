@@ -49,10 +49,7 @@ suite('Cancellation races', () => {
 		const cancellation = new AbortController();
 		assert.equal(await raceCancellationError(Promise.resolve(42), cancellation.signal), 42);
 		const failure = new Error('work failed');
-		await assert.rejects(
-			raceCancellationError(Promise.reject(failure), cancellation.signal),
-			error => error === failure,
-		);
+		await assert.rejects(raceCancellationError(Promise.reject(failure), cancellation.signal), error => error === failure);
 		assert.equal(getEventListeners(cancellation.signal, 'abort').length, 0);
 	});
 
@@ -125,10 +122,7 @@ suite('Cancellation races', () => {
 	});
 
 	test('a pre-cancelled race keeps its default when work has already resolved', async () => {
-		assert.equal(
-			await raceCancellation(Promise.resolve('clipboard text'), CancellationToken.Cancelled, 'cancelled'),
-			'cancelled',
-		);
+		assert.equal(await raceCancellation(Promise.resolve('clipboard text'), CancellationToken.Cancelled, 'cancelled'), 'cancelled');
 	});
 
 	test('cancellation during listener registration releases the returned subscription', async () => {
@@ -173,10 +167,7 @@ suite('Cancellation races', () => {
 				work.resolve('late result');
 				assert.equal(await pending, 'cancelled');
 			}
-			assert.deepEqual(
-				{ removals, hasListeners: cancellation.hasListeners() },
-				{ removals: 1, hasListeners: false },
-			);
+			assert.deepEqual({ removals, hasListeners: cancellation.hasListeners() }, { removals: 1, hasListeners: false });
 		});
 	}
 
@@ -295,10 +286,7 @@ suite('Rejecting cancellation races', () => {
 		assert.equal(await raceCancellationError(Promise.resolve(42), controller.signal), 42);
 		assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
 		const failure = new Error('work failed');
-		await assert.rejects(
-			raceCancellationError(Promise.reject(failure), controller.signal),
-			error => error === failure,
-		);
+		await assert.rejects(raceCancellationError(Promise.reject(failure), controller.signal), error => error === failure);
 		assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
 	});
 
@@ -308,14 +296,7 @@ suite('Rejecting cancellation races', () => {
 		const work = promiseWithResolvers<string>();
 		const pending = raceCancellationError(work.promise, controller.signal, 'Catalog wait cancelled');
 		controller.abort(reason);
-		await assert.rejects(
-			pending,
-			error =>
-				isCancellationError(error) &&
-				error.message === 'Catalog wait cancelled' &&
-				error.reason === reason &&
-				error.cause === reason,
-		);
+		await assert.rejects(pending, error => isCancellationError(error) && error.message === 'Catalog wait cancelled' && error.reason === reason && error.cause === reason);
 		assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
 		work.resolve('late result');
 	});
@@ -360,10 +341,7 @@ suite('Rejecting cancellation races', () => {
 				resolve(7);
 			},
 		} as unknown as PromiseLike<number>;
-		await assert.rejects(
-			raceCancellationError(thenable, controller.signal),
-			error => isCancellationError(error) && error.reason === reason && error.cause === reason,
-		);
+		await assert.rejects(raceCancellationError(thenable, controller.signal), error => isCancellationError(error) && error.reason === reason && error.cause === reason);
 		assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
 	});
 

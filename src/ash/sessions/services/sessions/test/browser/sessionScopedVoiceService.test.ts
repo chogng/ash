@@ -8,10 +8,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import type { AgentVoiceSessionState, AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agent.js';
 import type { IAgentVoiceService } from '../../../../../platform/agentHost/common/agentService.js';
 import { createDisconnectedRendererApi } from '../../../../../workbench/browser/rendererApi.js';
-import type {
-	ISessionProviderScope,
-	SessionProviderServices,
-} from '../../../../browser/agentHost/sessionProviderScopeService.js';
+import type { ISessionProviderScope, SessionProviderServices } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { createSessionVoiceService } from '../../../../browser/agentHost/sessionScopedVoiceService.js';
 import { parseSessionIdentity, sessionIdentity } from '../../common/sessionIdentity.js';
 
@@ -187,10 +184,7 @@ test('a retired voice scope rejects late asynchronous results while retaining co
 test('voice absence and foreign frontend Session identities never inherit the primary voice owner', async () => {
 	using context = fixture();
 	const voice = createSessionVoiceService(context.scope)!;
-	await assert.rejects(
-		voice.start({ sessionId: 'same', threadId: 'thread' }, { connectionId: 'connection' }),
-		isCancellationError,
-	);
+	await assert.rejects(voice.start({ sessionId: 'same', threadId: 'thread' }, { connectionId: 'connection' }), isCancellationError);
 	assert.deepEqual(context.calls, []);
 	const missing = {
 		...context.scope,

@@ -27,12 +27,8 @@ registerSingleton(IAccessibleViewService, AccessibleViewService, InstantiationTy
 registerWorkbenchContribution(EditorAccessibilityHelpContribution.ID, WorkbenchPhase.AfterRestored, accessor =>
 	accessor.get(IInstantiationService).createInstance(EditorAccessibilityHelpContribution),
 );
-registerWorkbenchContribution(AccessibilityStatus.ID, WorkbenchPhase.BlockRestore, accessor =>
-	accessor.get(IInstantiationService).createInstance(AccessibilityStatus),
-);
-registerWorkbenchContribution('workbench.contrib.unfocusedViewDimming', WorkbenchPhase.AfterRestored, accessor =>
-	accessor.get(IInstantiationService).createInstance(UnfocusedViewDimmingContribution),
-);
+registerWorkbenchContribution(AccessibilityStatus.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(AccessibilityStatus));
+registerWorkbenchContribution('workbench.contrib.unfocusedViewDimming', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(UnfocusedViewDimmingContribution));
 
 for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 	AccessibleViewRegistry.register({
@@ -57,14 +53,11 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 						);
 					}
 					const message = region.querySelector('.ash-banner-message')?.textContent?.trim();
-					const actions = [...region.querySelectorAll<HTMLElement>('a, button')].map(
-						action => action.textContent || action.getAttribute('aria-label'),
-					);
+					const actions = [...region.querySelectorAll<HTMLElement>('a, button')].map(action => action.textContent || action.getAttribute('aria-label'));
 					return [message, ...actions].filter(Boolean).join('\n');
 				},
 				() => {
-					if (isHTMLElement(focused) && focused.isConnected && focused.getClientRects().length)
-						focused.focus();
+					if (isHTMLElement(focused) && focused.isConnected && focused.getClientRects().length) focused.focus();
 					else if (!region.hidden) banners.focus();
 					else layout.focus();
 				},

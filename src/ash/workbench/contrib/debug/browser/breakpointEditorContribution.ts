@@ -10,19 +10,10 @@ import { MouseTargetType, type ICodeEditor, type IEditorMouseEvent } from '../..
 import { type TextModel } from '../../../../editor/common/model/textModel.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { Range } from '../../../../editor/common/core/range.js';
-import {
-	TextDecorationCollection,
-	TextDecorationChangeReason,
-	type TextDecorationId,
-} from '../../../../editor/common/model/decorationCollection.js';
+import { TextDecorationCollection, TextDecorationChangeReason, type TextDecorationId } from '../../../../editor/common/model/decorationCollection.js';
 import { GlyphMarginLane, TrackedRangeStickiness, type ITextModel } from '../../../../editor/common/model.js';
 import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
-import {
-	BreakpointWidgetContext,
-	type IBreakpointUpdateData,
-	type IDebugBreakpoint,
-	IDebugService,
-} from '../common/debug.js';
+import { BreakpointWidgetContext, type IBreakpointUpdateData, type IDebugBreakpoint, IDebugService } from '../common/debug.js';
 import { isMacintosh } from '../../../../base/common/platform.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -84,15 +75,11 @@ export class BreakpointEditorContribution extends Disposable {
 					return;
 				}
 				const eligible =
-					(target.type === MouseTargetType.GUTTER_GLYPH_MARGIN ||
-						target.type === MouseTargetType.GUTTER_LINE_NUMBERS) &&
+					(target.type === MouseTargetType.GUTTER_GLYPH_MARGIN || target.type === MouseTargetType.GUTTER_LINE_NUMBERS) &&
 					!target.detail.isAfterLines &&
 					!event.event.buttons &&
 					this.canSetBreakpoints() &&
-					this.marginIsAvailable(
-						target.position.lineNumber,
-						target.type === MouseTargetType.GUTTER_GLYPH_MARGIN ? target.detail.glyphMarginLane : undefined,
-					);
+					this.marginIsAvailable(target.position.lineNumber, target.type === MouseTargetType.GUTTER_GLYPH_MARGIN ? target.detail.glyphMarginLane : undefined);
 				this.setHint(eligible ? target.position!.lineNumber : undefined);
 			}),
 		);
@@ -115,8 +102,7 @@ export class BreakpointEditorContribution extends Disposable {
 			editor.onContextMenu(event => {
 				const target = event.target;
 				if (
-					(target.type !== MouseTargetType.GUTTER_GLYPH_MARGIN &&
-						target.type !== MouseTargetType.GUTTER_LINE_NUMBERS) ||
+					(target.type !== MouseTargetType.GUTTER_GLYPH_MARGIN && target.type !== MouseTargetType.GUTTER_LINE_NUMBERS) ||
 					target.detail.isAfterLines ||
 					!this.marginIsAvailable(target.position.lineNumber, target.detail.glyphMarginLane)
 				)
@@ -150,13 +136,9 @@ export class BreakpointEditorContribution extends Disposable {
 					if (!point) continue;
 					const lineNumber = decoration.range.startLineNumber;
 					const column = point.columnNumber === undefined ? undefined : decoration.range.startColumn;
-					if (point.lineNumber !== lineNumber || point.columnNumber !== column)
-						updates.set(point.id, { lineNumber, column });
+					if (point.lineNumber !== lineNumber || point.columnNumber !== column) updates.set(point.id, { lineNumber, column });
 				}
-				if (updates.size)
-					void debugService
-						.updateBreakpoints(resource, updates, true)
-						.catch(error => this.notifications.error(error));
+				if (updates.size) void debugService.updateBreakpoints(resource, updates, true).catch(error => this.notifications.error(error));
 			}),
 		);
 	}
@@ -164,36 +146,18 @@ export class BreakpointEditorContribution extends Disposable {
 	private canSetBreakpoints(): boolean {
 		if (this.isDisposed) return false;
 		const model = this.decorations.textModel;
-		return (
-			(model.uri.scheme === 'file' || isRemoteResource(model.uri)) &&
-			canSetBreakpointsIn(model.getLanguageId(), this.extensions, this.configuration, this.context)
-		);
+		return (model.uri.scheme === 'file' || isRemoteResource(model.uri)) && canSetBreakpointsIn(model.getLanguageId(), this.extensions, this.configuration, this.context);
 	}
 
 	private pointsAt(lineNumber: number): readonly IDebugBreakpoint[] {
-		return this.debugService.breakpoints.filter(
-			point =>
-				point.resource.toString() === this.decorations.textModel.uri.toString() &&
-				point.lineNumber === lineNumber,
-		);
+		return this.debugService.breakpoints.filter(point => point.resource.toString() === this.decorations.textModel.uri.toString() && point.lineNumber === lineNumber);
 	}
 
-	public showBreakpointWidget(
-		lineNumber: number,
-		column: number | undefined,
-		context?: BreakpointWidgetContext,
-	): void {
+	public showBreakpointWidget(lineNumber: number, column: number | undefined, context?: BreakpointWidgetContext): void {
 		if (this.isDisposed || this.decorations.textModel.isDisposed()) return;
 		if (!this.canSetBreakpoints() && !this.pointsAt(lineNumber).length) return;
 		this.closeBreakpointWidget();
-		this.widget.value = this.instantiation.createInstance(
-			BreakpointWidget,
-			this.editor,
-			lineNumber,
-			column,
-			context,
-			() => this.closeBreakpointWidget(),
-		);
+		this.widget.value = this.instantiation.createInstance(BreakpointWidget, this.editor, lineNumber, column, context, () => this.closeBreakpointWidget());
 	}
 
 	public closeBreakpointWidget(): void {
@@ -215,14 +179,12 @@ export class BreakpointEditorContribution extends Disposable {
 						breakpointAction({
 							id: 'addConditionalBreakpoint',
 							label: localize('debug.addConditionalBreakpoint', 'Add Conditional Breakpoint...'),
-							run: async () =>
-								this.showBreakpointWidget(lineNumber, undefined, BreakpointWidgetContext.CONDITION),
+							run: async () => this.showBreakpointWidget(lineNumber, undefined, BreakpointWidgetContext.CONDITION),
 						}),
 						breakpointAction({
 							id: 'addLogPoint',
 							label: localize('debug.addLogpoint', 'Add Logpoint...'),
-							run: async () =>
-								this.showBreakpointWidget(lineNumber, undefined, BreakpointWidgetContext.LOG_MESSAGE),
+							run: async () => this.showBreakpointWidget(lineNumber, undefined, BreakpointWidgetContext.LOG_MESSAGE),
 						}),
 					]
 				: [];
@@ -242,9 +204,7 @@ export class BreakpointEditorContribution extends Disposable {
 			}),
 			breakpointAction({
 				id: 'workbench.debug.viewlet.action.toggleBreakpoint',
-				label: point.enabled
-					? localize('debug.disableBreakpoint', 'Disable Breakpoint')
-					: localize('debug.enableBreakpointMenu', 'Enable Breakpoint'),
+				label: point.enabled ? localize('debug.disableBreakpoint', 'Disable Breakpoint') : localize('debug.enableBreakpointMenu', 'Enable Breakpoint'),
 				run: async () => this.debugService.updateBreakpoint(point.id, { enabled: !point.enabled }),
 			}),
 			breakpointAction({
@@ -255,17 +215,10 @@ export class BreakpointEditorContribution extends Disposable {
 						title: localize('debug.moveBreakpoint', 'Move Breakpoint...'),
 						value: String(point.lineNumber),
 						placeHolder: localize('debug.breakpointTargetLine', 'Enter a source line number'),
-						validateInput: async value =>
-							this.validTargetLine(value)
-								? undefined
-								: localize('debug.invalidBreakpointLine', 'Enter a valid line number in this file.'),
+						validateInput: async value => (this.validTargetLine(value) ? undefined : localize('debug.invalidBreakpointLine', 'Enter a valid line number in this file.')),
 					});
 					if (value === undefined || model.isDisposed() || !this.validTargetLine(value)) return;
-					await this.debugService.updateBreakpoints(
-						model.uri,
-						new Map([[point.id, { lineNumber: Number(value) }]]),
-						false,
-					);
+					await this.debugService.updateBreakpoints(model.uri, new Map([[point.id, { lineNumber: Number(value) }]]), false);
 				},
 			}),
 		];
@@ -275,9 +228,7 @@ export class BreakpointEditorContribution extends Disposable {
 					point =>
 						new SubmenuAction(
 							point.id,
-							point.columnNumber === undefined
-								? localize('debug.lineBreakpoint', 'Line breakpoint')
-								: localize('debug.columnBreakpoint', 'Column {0}', point.columnNumber),
+							point.columnNumber === undefined ? localize('debug.lineBreakpoint', 'Line breakpoint') : localize('debug.columnBreakpoint', 'Column {0}', point.columnNumber),
 							actionsFor(point),
 						),
 				);
@@ -286,12 +237,7 @@ export class BreakpointEditorContribution extends Disposable {
 	private validTargetLine(value: string): boolean {
 		if (this.isDisposed) return false;
 		const model = this.decorations.textModel;
-		return (
-			/^\d+$/.test(value) &&
-			Number.isSafeInteger(Number(value)) &&
-			Number(value) > 0 &&
-			Number(value) <= model.lineCount
-		);
+		return /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) && Number(value) > 0 && Number(value) <= model.lineCount;
 	}
 
 	private beginGesture(event: IEditorMouseEvent): void {
@@ -349,9 +295,7 @@ export class BreakpointEditorContribution extends Disposable {
 		gesture.moved ||= Math.hypot(event.event.clientX - gesture.x, event.event.clientY - gesture.y) >= 4;
 		const target = event.target;
 		gesture.targetLine =
-			target.type === MouseTargetType.GUTTER_GLYPH_MARGIN &&
-			!target.detail.isAfterLines &&
-			this.marginIsAvailable(target.position.lineNumber, target.detail.glyphMarginLane)
+			target.type === MouseTargetType.GUTTER_GLYPH_MARGIN && !target.detail.isAfterLines && this.marginIsAvailable(target.position.lineNumber, target.detail.glyphMarginLane)
 				? target.position.lineNumber
 				: undefined;
 		if (gesture.moved && gesture.ids.length) this.setHint(gesture.targetLine, true);
@@ -362,24 +306,12 @@ export class BreakpointEditorContribution extends Disposable {
 		if (!gesture || event.button !== 0) return;
 		const bounds = this.editor.getDomNode()!.getBoundingClientRect();
 		this.cancelGesture();
-		if (
-			event.clientX < bounds.left ||
-			event.clientX >= bounds.right ||
-			event.clientY < bounds.top ||
-			event.clientY >= bounds.bottom ||
-			gesture.targetLine === undefined
-		)
-			return;
+		if (event.clientX < bounds.left || event.clientX >= bounds.right || event.clientY < bounds.top || event.clientY >= bounds.bottom || gesture.targetLine === undefined) return;
 		const points = this.debugService.breakpoints.filter(point => gesture.ids.includes(point.id));
 		if (gesture.moved) {
-			if (gesture.targetLine === gesture.lineNumber || !points.length || this.pointsAt(gesture.targetLine).length)
-				return;
+			if (gesture.targetLine === gesture.lineNumber || !points.length || this.pointsAt(gesture.targetLine).length) return;
 			void this.debugService
-				.updateBreakpoints(
-					this.decorations.textModel.uri,
-					new Map(points.map(point => [point.id, { lineNumber: gesture.targetLine }])),
-					false,
-				)
+				.updateBreakpoints(this.decorations.textModel.uri, new Map(points.map(point => [point.id, { lineNumber: gesture.targetLine }])), false)
 				.catch(error => this.notifications.error(error));
 		} else if (points.length && (gesture.shift || !points.some(point => point.enabled))) {
 			const enabled = !points.some(point => point.enabled);
@@ -397,8 +329,7 @@ export class BreakpointEditorContribution extends Disposable {
 
 	private marginIsAvailable(lineNumber: number, lane?: GlyphMarginLane): boolean {
 		return !this.decorations.textModel.getLineDecorations(lineNumber).some(decoration => {
-			if (!decoration.options.glyphMarginClassName || decoration.options.description?.startsWith('debug-'))
-				return false;
+			if (!decoration.options.glyphMarginClassName || decoration.options.description?.startsWith('debug-')) return false;
 			return lane === undefined || (decoration.options.glyphMargin?.position ?? GlyphMarginLane.Center) === lane;
 		});
 	}
@@ -406,11 +337,7 @@ export class BreakpointEditorContribution extends Disposable {
 	private setHint(lineNumber: number | undefined, move = false): void {
 		if (
 			lineNumber !== undefined &&
-			this.debugService.breakpoints.some(
-				breakpoint =>
-					breakpoint.resource.toString() === this.decorations.textModel.uri.toString() &&
-					breakpoint.lineNumber === lineNumber,
-			)
+			this.debugService.breakpoints.some(breakpoint => breakpoint.resource.toString() === this.decorations.textModel.uri.toString() && breakpoint.lineNumber === lineNumber)
 		)
 			lineNumber = undefined;
 		if (this.hintLine === lineNumber && this.hintIsMove === move) return;
@@ -428,13 +355,7 @@ export class BreakpointEditorContribution extends Disposable {
 								glyphMarginClassName: 'ash-debug-breakpoint-gutter hint',
 								glyphMargin: { position: GlyphMarginLane.Left },
 								glyphMarginHoverMessage: {
-									value: move
-										? localize(
-												'debug.breakpointMoveHint',
-												'Move breakpoint to line {0}',
-												lineNumber,
-											)
-										: localize('debug.breakpointHint', 'Click to add a breakpoint'),
+									value: move ? localize('debug.breakpointMoveHint', 'Move breakpoint to line {0}', lineNumber) : localize('debug.breakpointHint', 'Click to add a breakpoint'),
 								},
 								zIndex: 1,
 							},
@@ -448,17 +369,12 @@ export class BreakpointEditorContribution extends Disposable {
 		const model = this.decorations.textModel;
 		const resource = model.uri;
 		const breakpoints = this.debugService.breakpoints.filter(
-			candidate =>
-				candidate.resource.toString() === resource.toString() &&
-				candidate.lineNumber >= 1 &&
-				candidate.lineNumber <= model.lineCount,
+			candidate => candidate.resource.toString() === resource.toString() && candidate.lineNumber >= 1 && candidate.lineNumber <= model.lineCount,
 		);
 		this.decorationIds = this.decorations.deltaDecorations(
 			this.decorationIds,
 			breakpoints.map(breakpoint => ({
-				range: Range.fromPositions(
-					model.validatePosition(new Position(breakpoint.lineNumber, breakpoint.columnNumber ?? 1)),
-				),
+				range: Range.fromPositions(model.validatePosition(new Position(breakpoint.lineNumber, breakpoint.columnNumber ?? 1))),
 				stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 				options: breakpointDecoration(breakpoint),
 				metadata: breakpoint,
@@ -481,17 +397,11 @@ function breakpointDecoration(breakpoint: IDebugBreakpoint) {
 			'ash-debug-breakpoint-gutter',
 			breakpoint.enabled ? 'enabled' : 'disabled',
 			breakpoint.verified ? 'verified' : 'unverified',
-			...(breakpoint.logMessage
-				? ['logpoint']
-				: breakpoint.condition || breakpoint.hitCondition
-					? ['conditional']
-					: []),
+			...(breakpoint.logMessage ? ['logpoint'] : breakpoint.condition || breakpoint.hitCondition ? ['conditional'] : []),
 		].join(' '),
 		glyphMargin: { position: GlyphMarginLane.Left, persistLane: true },
 		glyphMarginHoverMessage: {
-			value: [breakpoint.message ?? label, breakpoint.condition, breakpoint.hitCondition, breakpoint.logMessage]
-				.filter(Boolean)
-				.join('\n'),
+			value: [breakpoint.message ?? label, breakpoint.condition, breakpoint.hitCondition, breakpoint.logMessage].filter(Boolean).join('\n'),
 		},
 		zIndex: 10,
 	};

@@ -5,7 +5,5 @@ import { RunAutomaticTasks, ManageAutomaticTaskRunning } from './runAutomaticTas
 import './taskService.js';
 import './abstractTaskService.js';
 
-registerWorkbenchContribution('workbench.contrib.runAutomaticTasks', WorkbenchPhase.AfterRestored, accessor =>
-	accessor.get(IInstantiationService).createInstance(RunAutomaticTasks),
-);
+registerWorkbenchContribution('workbench.contrib.runAutomaticTasks', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(RunAutomaticTasks));
 registerAction2(ManageAutomaticTaskRunning);

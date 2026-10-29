@@ -33,10 +33,7 @@ export function toOriginKey(url: string | undefined | null): string {
 	}
 }
 
-export function electronPermissionToCategories(
-	permission: string,
-	mediaKinds?: ReadonlyArray<'video' | 'audio'>,
-): PermissionCategory[] {
+export function electronPermissionToCategories(permission: string, mediaKinds?: ReadonlyArray<'video' | 'audio'>): PermissionCategory[] {
 	switch (permission) {
 		case 'geolocation':
 		case 'geolocation-approximate':
@@ -53,13 +50,7 @@ export function electronPermissionToCategories(
 		case 'hid':
 			return [PermissionCategory.Devices];
 		case 'media':
-			return [
-				...new Set(
-					(mediaKinds ?? ['video', 'audio']).map(kind =>
-						kind === 'video' ? PermissionCategory.Camera : PermissionCategory.Microphone,
-					),
-				),
-			];
+			return [...new Set((mediaKinds ?? ['video', 'audio']).map(kind => (kind === 'video' ? PermissionCategory.Camera : PermissionCategory.Microphone)))];
 		default:
 			return [];
 	}
@@ -98,9 +89,7 @@ export class BrowserPermissionStore extends Disposable {
 
 	serialize(): ISerializedBrowserPermissionsSnapshot {
 		return {
-			origins: Object.fromEntries(
-				[...this.decisions].map(([origin, values]) => [origin, Object.fromEntries(values)]),
-			),
+			origins: Object.fromEntries([...this.decisions].map(([origin, values]) => [origin, Object.fromEntries(values)])),
 		};
 	}
 	clear(): void {

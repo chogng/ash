@@ -11,7 +11,9 @@ import { merge } from './configuration.js';
 
 type ConfigurationPolicy = Omit<PolicyDefinition, 'type'> & { readonly name: string; readonly minimumVersion?: string };
 
-export const Extensions = { Configuration: 'base.contributions.configuration' };
+export const Extensions = {
+	Configuration: 'base.contributions.configuration',
+};
 
 export enum ConfigurationScope {
 	APPLICATION = 1,
@@ -52,9 +54,7 @@ export interface INumberConfigurationSettingSchema extends IConfigurationSetting
 	readonly maximum: number;
 }
 
-export interface ISelectConfigurationSettingSchema<
-	T extends string | boolean = string,
-> extends IConfigurationSettingSchemaBase {
+export interface ISelectConfigurationSettingSchema<T extends string | boolean = string> extends IConfigurationSettingSchemaBase {
 	readonly valueType: 'select';
 	readonly options: readonly { readonly value: T; readonly label: string }[];
 }
@@ -184,11 +184,7 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 	private changeEmitter: Emitter<{ properties: ReadonlySet<string> }> | undefined;
 	// The registry belongs to the realm. A temporary test registry's event channel
 	// belongs to its consumers and releases when its last subscription ends.
-	public readonly onDidUpdateConfiguration: IConfigurationRegistry['onDidUpdateConfiguration'] = (
-		listener,
-		thisArgs,
-		disposables,
-	) => {
+	public readonly onDidUpdateConfiguration: IConfigurationRegistry['onDidUpdateConfiguration'] = (listener, thisArgs, disposables) => {
 		const emitter: Emitter<{ properties: ReadonlySet<string> }> = (this.changeEmitter ??= new Emitter({
 			onDidRemoveLastListener: () => {
 				this.changeEmitter = undefined;
@@ -218,31 +214,14 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 		for (const node of add) {
 			if (nodes.has(node)) continue;
 			const keys: string[] = [];
-			const visit = (
-				node: IConfigurationNode,
-				inheritedScope?: ConfigurationScope,
-				source = node.extensionInfo,
-			): void => {
+			const visit = (node: IConfigurationNode, inheritedScope?: ConfigurationScope, source = node.extensionInfo): void => {
 				for (const [key, schema] of Object.entries(node.properties ?? {})) {
 					if (schema.included === false) continue;
-					if (!isConfigurationKey(key) || next.has(key))
-						throw new TypeError(
-							localize(
-								'configuration.contributedKey',
-								"Invalid or duplicate contributed setting '{0}'.",
-								key,
-							),
-						);
+					if (!isConfigurationKey(key) || next.has(key)) throw new TypeError(localize('configuration.contributedKey', "Invalid or duplicate contributed setting '{0}'.", key));
 					const parse = (value: unknown): JsonValue => {
 						const normalized = validateJsonValue(value);
 						if (validateJsonSchema(parseJsonDocument(JSON.stringify(normalized)), schema).length)
-							throw new TypeError(
-								localize(
-									'configuration.contributedValue',
-									"Setting '{0}' does not match its declared schema.",
-									key,
-								),
-							);
+							throw new TypeError(localize('configuration.contributedValue', "Setting '{0}' does not match its declared schema.", key));
 						return normalized;
 					};
 					const type = Array.isArray(schema.type) ? schema.type[0] : schema.type;
@@ -274,9 +253,7 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 							setting: schema.ashSetting,
 							extensionBinding: schema.ashBinding,
 							scope: schema.scope ?? node.scope ?? inheritedScope ?? ConfigurationScope.WINDOW,
-							agentsWindow: schema.agentsWindow
-								? Object.freeze({ ...schema.agentsWindow, default: parse(schema.agentsWindow.default) })
-								: undefined,
+							agentsWindow: schema.agentsWindow ? Object.freeze({ ...schema.agentsWindow, default: parse(schema.agentsWindow.default) }) : undefined,
 						}),
 					);
 					keys.push(key);
@@ -359,43 +336,22 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 	}
 }
 
-function configurationDefaultOverrides(
-	configurations: ReadonlyMap<string, IRegisteredConfiguration>,
-	defaults: readonly IConfigurationDefaults[],
-): Map<string, IConfigurationDefaultOverrideValue> {
+function configurationDefaultOverrides(configurations: ReadonlyMap<string, IRegisteredConfiguration>, defaults: readonly IConfigurationDefaults[]): Map<string, IConfigurationDefaultOverrideValue> {
 	const values: Record<string, unknown> = {};
 	for (const entry of defaults) {
 		for (const [key, candidate] of Object.entries(entry.overrides)) {
 			const language = overrideIdentifiersFromKey(key).length > 0;
 			const properties = language ? candidate : { [key]: candidate };
 			if (!properties || typeof properties !== 'object' || Array.isArray(properties))
-				throw new TypeError(
-					localize(
-						'configuration.contributedValue',
-						"Setting '{0}' does not match its declared schema.",
-						key,
-					),
-				);
+				throw new TypeError(localize('configuration.contributedValue', "Setting '{0}' does not match its declared schema.", key));
 			const parsed: Record<string, unknown> = {};
 			for (const [property, value] of Object.entries(properties)) {
-				if (!isConfigurationKey(property))
-					throw new TypeError(
-						localize(
-							'configuration.contributedKey',
-							"Invalid or duplicate contributed setting '{0}'.",
-							property,
-						),
-					);
+				if (!isConfigurationKey(property)) throw new TypeError(localize('configuration.contributedKey', "Invalid or duplicate contributed setting '{0}'.", property));
 				const setting = configurations.get(property);
 				// Contributions may precede the setting's registration or target an
 				// unsupported setting. Resolution includes only registered contracts.
 				if (!setting) continue;
-				if (
-					language &&
-					setting.scope !== undefined &&
-					setting.scope !== ConfigurationScope.LANGUAGE_OVERRIDABLE
-				)
-					continue;
+				if (language && setting.scope !== undefined && setting.scope !== ConfigurationScope.LANGUAGE_OVERRIDABLE) continue;
 				parsed[property] = structuredClone(setting.parse(value));
 			}
 			merge(values, language ? { [key]: parsed } : parsed, true);
@@ -419,11 +375,7 @@ function isConfigurationKey(value: string): boolean {
 	return /^[A-Za-z][A-Za-z0-9./-]{0,127}$/.test(value);
 }
 
-function registeredPolicy(
-	value: unknown,
-	defaultValue: unknown,
-	existing: Iterable<IRegisteredConfiguration>,
-): IRegisteredConfiguration['policy'] {
+function registeredPolicy(value: unknown, defaultValue: unknown, existing: Iterable<IRegisteredConfiguration>): IRegisteredConfiguration['policy'] {
 	if (value === undefined) return undefined;
 	const policy = value as Partial<NonNullable<IRegisteredConfiguration['policy']>> | null;
 	if (
@@ -434,28 +386,15 @@ function registeredPolicy(
 		!['string', 'boolean', 'number'].includes(typeof defaultValue) ||
 		[...existing].some(setting => setting.policy?.name === policy.name)
 	) {
-		throw new TypeError(
-			localize('configuration.contributedValue', "Setting '{0}' does not match its declared schema.", 'policy'),
-		);
+		throw new TypeError(localize('configuration.contributedValue', "Setting '{0}' does not match its declared schema.", 'policy'));
 	}
-	if (policy.value !== undefined && typeof policy.value !== 'function')
-		throw new TypeError('Invalid account policy mapping');
+	if (policy.value !== undefined && typeof policy.value !== 'function') throw new TypeError('Invalid account policy mapping');
 	const managedSettings: Record<string, IManagedSettingPolicyDefinition> = {};
 	if (policy.managedSettings !== undefined) {
-		if (
-			!policy.managedSettings ||
-			typeof policy.managedSettings !== 'object' ||
-			Array.isArray(policy.managedSettings) ||
-			Object.keys(policy.managedSettings).length > 128
-		)
+		if (!policy.managedSettings || typeof policy.managedSettings !== 'object' || Array.isArray(policy.managedSettings) || Object.keys(policy.managedSettings).length > 128)
 			throw new TypeError('Invalid managed setting definitions');
 		for (const [path, definition] of Object.entries(policy.managedSettings)) {
-			if (
-				!/^[A-Za-z][A-Za-z0-9._-]{0,255}$/.test(path) ||
-				!definition ||
-				!['string', 'number', 'boolean'].includes(definition.type)
-			)
-				throw new TypeError('Invalid managed setting definition');
+			if (!/^[A-Za-z][A-Za-z0-9._-]{0,255}$/.test(path) || !definition || !['string', 'number', 'boolean'].includes(definition.type)) throw new TypeError('Invalid managed setting definition');
 			Object.defineProperty(managedSettings, path, {
 				value: Object.freeze({ type: definition.type }),
 				enumerable: true,

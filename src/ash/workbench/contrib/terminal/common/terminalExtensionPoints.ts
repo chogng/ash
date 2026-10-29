@@ -24,21 +24,19 @@ export class TerminalContributionService extends Disposable implements ITerminal
 
 	private update(): void {
 		this.profiles = Object.freeze(
-			this.extensions
-				.getExtensionPointContributions<ExtensionManifest['contributes']['terminal']>('terminal')
-				.flatMap(user =>
-					user.value.profiles.map(profile =>
-						Object.freeze({
-							extensionIdentifier: user.description.id,
-							id: profile.id,
-							title: profile.title,
-							options: Object.freeze({
-								icon: profile.icon ? ThemeIcon.fromId(profile.icon) : undefined,
-								color: profile.color,
-							}),
+			this.extensions.getExtensionPointContributions<ExtensionManifest['contributes']['terminal']>('terminal').flatMap(user =>
+				user.value.profiles.map(profile =>
+					Object.freeze({
+						extensionIdentifier: user.description.id,
+						id: profile.id,
+						title: profile.title,
+						options: Object.freeze({
+							icon: profile.icon ? ThemeIcon.fromId(profile.icon) : undefined,
+							color: profile.color,
 						}),
-					),
+					}),
 				),
+			),
 		);
 		this.changed.fire(this.profiles);
 	}

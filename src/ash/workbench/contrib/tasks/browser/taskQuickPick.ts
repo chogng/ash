@@ -40,9 +40,7 @@ export class TaskQuickPick extends Disposable {
 					if (item.task) {
 						// A catalog refresh can replace configuration without changing the
 						// row identity. Always return the object owned by the current catalog.
-						const current = this.selectTasks(this.tasks.tasks).find(
-							task => task.id === item.task!.id && task.command === item.task!.command,
-						);
+						const current = this.selectTasks(this.tasks.tasks).find(task => task.id === item.task!.id && task.command === item.task!.command);
 						if (!current) return;
 						selected = current;
 					} else {

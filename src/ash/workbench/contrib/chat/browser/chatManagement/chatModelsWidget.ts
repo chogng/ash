@@ -3,13 +3,7 @@ import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../../base/browser/ui/inputbox/inputbox.js';
 import { Switch } from '../../../../../base/browser/ui/toggle/toggle.js';
 import { Emitter } from '../../../../../base/common/event.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-} from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
@@ -24,11 +18,7 @@ import { AccessibleViewRegistry } from '../../../../../platform/accessibility/br
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { SecretStorageError } from '../../../../../platform/secrets/common/secrets.js';
-import {
-	defaultButtonStyles,
-	defaultInputBoxStyles,
-	defaultToggleStyles,
-} from '../../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultInputBoxStyles, defaultToggleStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { MarkdownString } from '../../../../../base/common/htmlContent.js';
@@ -70,9 +60,7 @@ export function getModelHoverContent(model: ILanguageModel): MarkdownString {
 		content.appendText(`\n\n${model.description}`);
 	}
 	if (model.contextWindow) {
-		content.appendText(
-			`\n${localize('models.provider.contextTokens', '{0} tokens', model.contextWindow.toLocaleString())}`,
-		);
+		content.appendText(`\n${localize('models.provider.contextTokens', '{0} tokens', model.contextWindow.toLocaleString())}`);
 	}
 	return content;
 }
@@ -152,11 +140,7 @@ export class ChatModelsWidget extends Disposable {
 		this.suggestions.hidden = this.host.compact === true;
 		const filterSummary = h(document, 'summary');
 		filterSummary.textContent = localize('models.catalog.filters', 'Search filters');
-		filterSummary.title = localize(
-			'models.catalog.filterHint',
-			'Filters: {0}',
-			SEARCH_SUGGESTIONS.FILTER_TYPES.join(', '),
-		);
+		filterSummary.title = localize('models.catalog.filterHint', 'Filters: {0}', SEARCH_SUGGESTIONS.FILTER_TYPES.join(', '));
 		this.filterActions = h(document, 'div');
 		this.filterActions.className = 'ash-chat-models-filter-actions';
 		this.suggestions.append(filterSummary, this.filterActions);
@@ -228,12 +212,7 @@ export class ChatModelsWidget extends Disposable {
 					name: `chat-models-${type}-${createUuid()}`,
 					getProvider: () => {
 						const focused = document.activeElement;
-						if (
-							this.element.hidden ||
-							!this.element.isConnected ||
-							!isHTMLElement(focused) ||
-							!this.element.contains(focused)
-						) {
+						if (this.element.hidden || !this.element.isConnected || !isHTMLElement(focused) || !this.element.contains(focused)) {
 							return undefined;
 						}
 						return new AccessibleContentProvider(
@@ -362,10 +341,7 @@ export class ChatModelsWidget extends Disposable {
 			row.entry = entry;
 			row.name.textContent = entry.model.displayName;
 			row.element.title = entry.model.displayName;
-			row.toggle.input.setAttribute(
-				'aria-label',
-				localize('sessions.settings.modelVisibility', 'Show {0} in model picker', entry.model.displayName),
-			);
+			row.toggle.input.setAttribute('aria-label', localize('sessions.settings.modelVisibility', 'Show {0} in model picker', entry.model.displayName));
 			row.toggle.checked = !entry.model.hidden;
 			return row;
 		});
@@ -406,11 +382,7 @@ export class ChatModelsWidget extends Disposable {
 				this.list.insertBefore(node, this.list.children[index] ?? null);
 			}
 		}
-		if (
-			isHTMLElement(focused) &&
-			this.list.contains(focused) &&
-			focused.ownerDocument.activeElement === focused.ownerDocument.body
-		) {
+		if (isHTMLElement(focused) && this.list.contains(focused) && focused.ownerDocument.activeElement === focused.ownerDocument.body) {
 			focused.focus();
 		}
 		this.count = shown.length;
@@ -434,9 +406,7 @@ export class ChatModelsWidget extends Disposable {
 	private updateFilterSuggestions(): void {
 		const options = [
 			...SEARCH_SUGGESTIONS.CAPABILITIES.map(value => ({ value, label: value })),
-			...this.viewModel
-				.getVendors()
-				.map(vendor => ({ value: `@provider:"${vendor.vendor}"`, label: `@provider:${vendor.displayName}` })),
+			...this.viewModel.getVendors().map(vendor => ({ value: `@provider:"${vendor.vendor}"`, label: `@provider:${vendor.displayName}` })),
 		];
 		const ids = new Set(options.map(option => option.value));
 		for (const [id] of this.filterResources) {
@@ -479,18 +449,12 @@ export class ChatModelsWidget extends Disposable {
 			this.resources.set(entry.id, resources);
 			const element = h(this.element.ownerDocument, 'div');
 			element.className = 'ash-chat-models-provider';
-			const expand = resources.add(
-				new Button(element, { ...defaultButtonStyles, label: entry.label, presentation: 'quiet' }),
-			);
+			const expand = resources.add(new Button(element, { ...defaultButtonStyles, label: entry.label, presentation: 'quiet' }));
 			const toggle = resources.add(
 				new Switch(element, {
 					...defaultToggleStyles,
 					checked: !entry.hidden,
-					ariaLabel: localize(
-						'models.catalog.providerVisibility',
-						'Show {0} models in model picker',
-						entry.label,
-					),
+					ariaLabel: localize('models.catalog.providerVisibility', 'Show {0} models in model picker', entry.label),
 				}),
 			);
 			row = { entry, element, expand, toggle };
@@ -510,12 +474,7 @@ export class ChatModelsWidget extends Disposable {
 							}
 							toggle.busy = false;
 							this.updateRows();
-							if (
-								focused &&
-								!this.element.hidden &&
-								element.isConnected &&
-								element.ownerDocument.activeElement === element.ownerDocument.body
-							) {
+							if (focused && !this.element.hidden && element.isConnected && element.ownerDocument.activeElement === element.ownerDocument.body) {
 								toggle.focus();
 							}
 						});
@@ -528,10 +487,7 @@ export class ChatModelsWidget extends Disposable {
 		row.expand.icon = entry.collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
 		row.expand.domNode.setAttribute('aria-expanded', String(!entry.collapsed));
 		row.toggle.checked = !entry.hidden;
-		row.toggle.input.setAttribute(
-			'aria-label',
-			localize('models.catalog.providerVisibility', 'Show {0} models in model picker', entry.label),
-		);
+		row.toggle.input.setAttribute('aria-label', localize('models.catalog.providerVisibility', 'Show {0} models in model picker', entry.label));
 		return row.element;
 	}
 
@@ -559,11 +515,7 @@ export class ChatModelsWidget extends Disposable {
 		const toggle = resources.add(
 			new Switch(element, {
 				...defaultToggleStyles,
-				ariaLabel: localize(
-					'sessions.settings.modelVisibility',
-					'Show {0} in model picker',
-					entry.model.displayName,
-				),
+				ariaLabel: localize('sessions.settings.modelVisibility', 'Show {0} in model picker', entry.model.displayName),
 				checked: !entry.model.hidden,
 				content: copy,
 				contentPlacement: 'before-control',
@@ -603,12 +555,7 @@ export class ChatModelsWidget extends Disposable {
 						}
 						toggle.busy = false;
 						this.updateRows();
-						if (
-							focused &&
-							!this.element.hidden &&
-							element.isConnected &&
-							document.activeElement === document.body
-						) {
+						if (focused && !this.element.hidden && element.isConnected && document.activeElement === document.body) {
 							toggle.focus();
 						}
 					});

@@ -4,11 +4,7 @@ import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
 import { TabList, type TabListItem, type TabListOptions } from '../../../../base/browser/ui/tablist/tabList.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import {
-	WorkbenchConfiguration,
-	type ModernUIEditorTabStyle,
-	type WorkbenchLayoutStyle,
-} from '../../../common/configuration.js';
+import { WorkbenchConfiguration, type ModernUIEditorTabStyle, type WorkbenchLayoutStyle } from '../../../common/configuration.js';
 import {
 	EditorTabSizingConfiguration,
 	EditorTabSizingFixedMinWidthConfiguration,
@@ -41,9 +37,7 @@ export class WorkbenchTabsControl<T> extends Disposable {
 		super();
 		container.classList.add('ash-workbench-tabs-control');
 		this.tabList = this._register(new TabList(container, options));
-		this.layoutScheduler = this._register(
-			new AnimationFrameScheduler(container.ownerDocument.defaultView!, () => this.updateClipping()),
-		);
+		this.layoutScheduler = this._register(new AnimationFrameScheduler(container.ownerDocument.defaultView!, () => this.updateClipping()));
 		this.updatePresentation();
 		this.updateSizing();
 		this.updateScrollbar();
@@ -51,10 +45,7 @@ export class WorkbenchTabsControl<T> extends Disposable {
 		this._register(observeResize(this.tabList.scrollableElement, () => this.layout()));
 		this._register(
 			configuration.onDidChangeConfiguration(event => {
-				if (
-					event.affectsConfiguration(WorkbenchConfiguration.layoutStyle) ||
-					event.affectsConfiguration(WorkbenchConfiguration.modernUIEditorTabStyle)
-				) {
+				if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle) || event.affectsConfiguration(WorkbenchConfiguration.modernUIEditorTabStyle)) {
 					this.updatePresentation();
 				}
 				if (
@@ -64,10 +55,7 @@ export class WorkbenchTabsControl<T> extends Disposable {
 				) {
 					this.updateSizing();
 				}
-				if (
-					event.affectsConfiguration(EditorTitleScrollbarSizingConfiguration) ||
-					event.affectsConfiguration(EditorTitleScrollbarVisibilityConfiguration)
-				) {
+				if (event.affectsConfiguration(EditorTitleScrollbarSizingConfiguration) || event.affectsConfiguration(EditorTitleScrollbarVisibilityConfiguration)) {
 					this.updateScrollbar();
 				}
 			}),
@@ -91,9 +79,7 @@ export class WorkbenchTabsControl<T> extends Disposable {
 
 	private updatePresentation(): void {
 		const layout = this.configuration.getValue<WorkbenchLayoutStyle>(WorkbenchConfiguration.layoutStyle);
-		const style = this.configuration.getValue<ModernUIEditorTabStyle>(
-			WorkbenchConfiguration.modernUIEditorTabStyle,
-		);
+		const style = this.configuration.getValue<ModernUIEditorTabStyle>(WorkbenchConfiguration.modernUIEditorTabStyle);
 		const inset = layout === 'modern' && style !== 'standard';
 		this.container.classList.toggle('ash-standard-editor-tabs', style === 'standard');
 		this.tabList.setPresentation(inset ? 'inset' : 'flush');
@@ -118,14 +104,8 @@ export class WorkbenchTabsControl<T> extends Disposable {
 
 	private updateScrollbar(): void {
 		this.tabList.updateScrollbarOptions({
-			scrollbarSize:
-				this.configuration.getValue<EditorTitleScrollbarSizing>(EditorTitleScrollbarSizingConfiguration) ===
-				'large'
-					? 10
-					: 3,
-			horizontal: this.configuration.getValue<EditorTitleScrollbarVisibility>(
-				EditorTitleScrollbarVisibilityConfiguration,
-			),
+			scrollbarSize: this.configuration.getValue<EditorTitleScrollbarSizing>(EditorTitleScrollbarSizingConfiguration) === 'large' ? 10 : 3,
+			horizontal: this.configuration.getValue<EditorTitleScrollbarVisibility>(EditorTitleScrollbarVisibilityConfiguration),
 		});
 	}
 

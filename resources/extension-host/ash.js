@@ -20,11 +20,9 @@ export function createApi(configuration, initialization) {
 	const localization = initialization?.localization ?? configuration.localization;
 	if (localization?.package) {
 		const visit = value => {
-			if (typeof value === 'string')
-				return value.replace(/^%(.+)%$/, (text, key) => localization.package[key] ?? text);
+			if (typeof value === 'string') return value.replace(/^%(.+)%$/, (text, key) => localization.package[key] ?? text);
 			if (Array.isArray(value)) return value.map(visit);
-			if (value && typeof value === 'object')
-				return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, visit(entry)]));
+			if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, visit(entry)]));
 			return value;
 		};
 		configuration = {
@@ -34,28 +32,17 @@ export function createApi(configuration, initialization) {
 		};
 	}
 	const terminalContribution = configuration.manifest?.contributes?.terminal;
-	if (
-		terminalContribution !== undefined &&
-		(!terminalContribution || typeof terminalContribution !== 'object' || Array.isArray(terminalContribution))
-	)
+	if (terminalContribution !== undefined && (!terminalContribution || typeof terminalContribution !== 'object' || Array.isArray(terminalContribution)))
 		throw new TypeError('Invalid terminal contributions');
 	const declaredProfiles = terminalContribution?.profiles;
 	const legacyProfiles = configuration.manifest?.contributes?.terminalProfiles;
-	if (declaredProfiles !== undefined && legacyProfiles !== undefined)
-		throw new TypeError('Conflicting terminal profile declarations');
+	if (declaredProfiles !== undefined && legacyProfiles !== undefined) throw new TypeError('Conflicting terminal profile declarations');
 	const terminalProfiles = declaredProfiles ?? legacyProfiles ?? [];
-	if (!Array.isArray(terminalProfiles) || terminalProfiles.length > 128)
-		throw new TypeError('Invalid terminal profile declarations');
+	if (!Array.isArray(terminalProfiles) || terminalProfiles.length > 128) throw new TypeError('Invalid terminal profile declarations');
 	const titles = new Map();
 	if (!Array.isArray(configuration.commands)) throw new TypeError('Invalid command contributions');
 	for (const entry of configuration.commands) {
-		if (
-			typeof entry.command !== 'string' ||
-			!entry.command ||
-			typeof entry.title !== 'string' ||
-			!entry.title ||
-			titles.has(entry.command)
-		) {
+		if (typeof entry.command !== 'string' || !entry.command || typeof entry.title !== 'string' || !entry.title || titles.has(entry.command)) {
 			throw new TypeError('Invalid command contribution');
 		}
 		titles.set(entry.command, entry.title);
@@ -76,15 +63,11 @@ export function createApi(configuration, initialization) {
 	let terminalCompletionsAdmitted = false;
 	let terminalQuickFixesAdmitted = false;
 	function requireEnvironmentCapability() {
-		if (!environmentAdmitted)
-			throw new Error('Terminal environment collections require the admitted terminal provider capability');
+		if (!environmentAdmitted) throw new Error('Terminal environment collections require the admitted terminal provider capability');
 	}
 	function environmentCollection(scope) {
 		const scopeId = scope?.workspaceFolder?.uri.toString() ?? '';
-		const entries = () =>
-			[...environmentMutators.values()].filter(
-				entry => (entry.scope?.workspaceFolder?.uri.toString() ?? '') === scopeId,
-			);
+		const entries = () => [...environmentMutators.values()].filter(entry => (entry.scope?.workspaceFolder?.uri.toString() ?? '') === scopeId);
 		const key = variable => JSON.stringify([scopeId, variable]);
 		const view = Object.freeze({
 			get persistent() {
@@ -92,8 +75,7 @@ export function createApi(configuration, initialization) {
 			},
 			set persistent(value) {
 				requireEnvironmentCapability();
-				if (typeof value !== 'boolean')
-					throw new TypeError('Environment collection persistence must be a boolean');
+				if (typeof value !== 'boolean') throw new TypeError('Environment collection persistence must be a boolean');
 				environmentPersistent = value;
 			},
 			get description() {
@@ -101,8 +83,7 @@ export function createApi(configuration, initialization) {
 			},
 			set description(value) {
 				requireEnvironmentCapability();
-				if (value !== undefined && (typeof value !== 'string' || value.length > 32768 || value.includes('\0')))
-					throw new TypeError('Invalid terminal environment description');
+				if (value !== undefined && (typeof value !== 'string' || value.length > 32768 || value.includes('\0'))) throw new TypeError('Invalid terminal environment description');
 				if (value === undefined) environmentDescriptions.delete(scopeId);
 				else environmentDescriptions.set(scopeId, { description: value, ...(scope ? { scope } : {}) });
 			},
@@ -138,14 +119,7 @@ export function createApi(configuration, initialization) {
 				requireEnvironmentCapability();
 				if (scope === undefined || scope.workspaceFolder === undefined) return environmentVariableCollection;
 				const folder = scope.workspaceFolder;
-				if (
-					!folder ||
-					!(folder.uri instanceof Uri) ||
-					typeof folder.name !== 'string' ||
-					!folder.name ||
-					!Number.isSafeInteger(folder.index) ||
-					folder.index < 0
-				)
+				if (!folder || !(folder.uri instanceof Uri) || typeof folder.name !== 'string' || !folder.name || !Number.isSafeInteger(folder.index) || folder.index < 0)
 					throw new TypeError('Invalid terminal environment scope');
 				return environmentCollection(
 					Object.freeze({
@@ -159,18 +133,9 @@ export function createApi(configuration, initialization) {
 	const environmentVariableCollection = environmentCollection();
 	function setEnvironmentMutator(key, variable, value, type, scope, options = { applyAtProcessCreation: true }) {
 		requireEnvironmentCapability();
-		if (
-			typeof variable !== 'string' ||
-			!variable ||
-			variable.length > 32768 ||
-			/[=\0]/.test(variable) ||
-			typeof value !== 'string' ||
-			value.length > 32768 ||
-			value.includes('\0')
-		)
+		if (typeof variable !== 'string' || !variable || variable.length > 32768 || /[=\0]/.test(variable) || typeof value !== 'string' || value.length > 32768 || value.includes('\0'))
 			throw new TypeError('Invalid terminal environment mutator');
-		if (!environmentMutators.has(key) && environmentMutators.size >= 1024)
-			throw new RangeError('Terminal environment collection quota exceeded');
+		if (!environmentMutators.has(key) && environmentMutators.size >= 1024) throw new RangeError('Terminal environment collection quota exceeded');
 		if (
 			!options ||
 			typeof options !== 'object' ||
@@ -267,13 +232,7 @@ export function createApi(configuration, initialization) {
 	let breakpointSequence = 0;
 
 	function debugSession(value) {
-		if (
-			typeof value?.id !== 'string' ||
-			typeof value.type !== 'string' ||
-			typeof value.name !== 'string' ||
-			!value.configuration ||
-			typeof value.configuration !== 'object'
-		)
+		if (typeof value?.id !== 'string' || typeof value.type !== 'string' || typeof value.name !== 'string' || !value.configuration || typeof value.configuration !== 'object')
 			throw new TypeError('Invalid debug session snapshot');
 		let entry = debugSessions.get(value.id);
 		if (!entry) {
@@ -284,16 +243,13 @@ export function createApi(configuration, initialization) {
 					return entry.value.type;
 				},
 				get parentSession() {
-					return entry.value.parentSessionId == null
-						? undefined
-						: (entry.parent ??= debugSessions.get(entry.value.parentSessionId)?.handle);
+					return entry.value.parentSessionId == null ? undefined : (entry.parent ??= debugSessions.get(entry.value.parentSessionId)?.handle);
 				},
 				get name() {
 					return entry.value.name;
 				},
 				set name(name) {
-					if (typeof name !== 'string' || name.length > 32768 || name.includes('\0'))
-						throw new TypeError('Invalid debug session name');
+					if (typeof name !== 'string' || name.length > 32768 || name.includes('\0')) throw new TypeError('Invalid debug session name');
 					serviceOwner();
 					entry.value = { ...entry.value, name };
 					void request({ operation: 'setDebugSessionName', sessionId: value.id, name }, 'done');
@@ -303,20 +259,16 @@ export function createApi(configuration, initialization) {
 				},
 				get workspaceFolder() {
 					const folder = entry.value.workspaceFolder;
-					return folder === null
-						? undefined
-						: { uri: Uri.parse(folder.uri), name: folder.name, index: folder.index };
+					return folder === null ? undefined : { uri: Uri.parse(folder.uri), name: folder.name, index: folder.index };
 				},
 				getDebugProtocolBreakpoint(breakpoint) {
 					if (!(breakpoint instanceof Breakpoint)) throw new TypeError('Invalid debug breakpoint');
-					return request(
-						{ operation: 'getDebugProtocolBreakpoint', sessionId: value.id, breakpointId: breakpoint.id },
-						'debugResponse',
-					).then(result => (result.hasBody ? result.value : undefined));
+					return request({ operation: 'getDebugProtocolBreakpoint', sessionId: value.id, breakpointId: breakpoint.id }, 'debugResponse').then(result =>
+						result.hasBody ? result.value : undefined,
+					);
 				},
 				customRequest(command, args) {
-					if (typeof command !== 'string' || !command || command.length > 256 || command.includes('\0'))
-						throw new TypeError('Invalid Debug Adapter command');
+					if (typeof command !== 'string' || !command || command.length > 256 || command.includes('\0')) throw new TypeError('Invalid Debug Adapter command');
 					return request(
 						{
 							operation: 'debugCustomRequest',
@@ -348,20 +300,12 @@ export function createApi(configuration, initialization) {
 		if (debugEventRegistration) return;
 		debugEventRegistration = ashDebug.registerDebugEvents('ash.debug.events', (_context, event) =>
 			invoke(async () => {
-				if (!Number.isSafeInteger(event?.sequence) || event.sequence < 0)
-					throw new TypeError('Invalid debug event sequence');
+				if (!Number.isSafeInteger(event?.sequence) || event.sequence < 0) throw new TypeError('Invalid debug event sequence');
 				if (event.sequence < debugSequence) return;
 				debugSequence = event.sequence;
 				if (event.type === 'snapshot') {
-					if (!Array.isArray(event.sessions) || !Array.isArray(event.breakpoints))
-						throw new TypeError('Invalid debug snapshot');
-					await applyBreakpointChanges(
-						event.breakpoints,
-						[...debugBreakpoints.values()]
-							.filter(point => !event.breakpoints.some(value => value.id === point.id))
-							.map(encodeBreakpoint),
-						[],
-					);
+					if (!Array.isArray(event.sessions) || !Array.isArray(event.breakpoints)) throw new TypeError('Invalid debug snapshot');
+					await applyBreakpointChanges(event.breakpoints, [...debugBreakpoints.values()].filter(point => !event.breakpoints.some(value => value.id === point.id)).map(encodeBreakpoint), []);
 					const retained = new Set(
 						event.sessions.map(value => {
 							debugSession(value);
@@ -369,8 +313,7 @@ export function createApi(configuration, initialization) {
 						}),
 					);
 					for (const id of debugSessions.keys()) if (!retained.has(id)) debugSessions.delete(id);
-					activeDebugSession =
-						event.activeSession === null ? undefined : debugSessions.get(event.activeSession)?.handle;
+					activeDebugSession = event.activeSession === null ? undefined : debugSessions.get(event.activeSession)?.handle;
 					await updateActiveStackItem(event.activeStackItem);
 					return;
 				}
@@ -389,14 +332,9 @@ export function createApi(configuration, initialization) {
 				if (!Object.hasOwn(debugListeners, event.type)) throw new TypeError('Invalid debug event');
 				const session = event.session === null ? undefined : debugSession(event.session);
 				if (event.type === 'active') activeDebugSession = session;
-				const value =
-					event.type === 'custom'
-						? { session, event: event.event, body: event.hasBody ? event.body : undefined }
-						: session;
+				const value = event.type === 'custom' ? { session, event: event.event, body: event.hasBody ? event.body : undefined } : session;
 				try {
-					await Promise.all(
-						[...debugListeners[event.type]].map(async entry => entry.listener.call(entry.thisArg, value)),
-					);
+					await Promise.all([...debugListeners[event.type]].map(async entry => entry.listener.call(entry.thisArg, value)));
 				} finally {
 					if (event.type === 'end') debugSessions.delete(event.session.id);
 				}
@@ -408,24 +346,16 @@ export function createApi(configuration, initialization) {
 	async function updateActiveStackItem(value) {
 		let item;
 		if (value !== undefined && value !== null) {
-			if (
-				!['thread', 'frame'].includes(value.kind) ||
-				!Number.isSafeInteger(value.threadId) ||
-				(value.kind === 'frame' && !Number.isSafeInteger(value.frameId))
-			)
+			if (!['thread', 'frame'].includes(value.kind) || !Number.isSafeInteger(value.threadId) || (value.kind === 'frame' && !Number.isSafeInteger(value.frameId)))
 				throw new TypeError('Invalid active debug stack item');
 			const session = debugSession(value.session);
 			if (
 				activeStackItem?.session === session &&
 				activeStackItem.threadId === value.threadId &&
-				(activeStackItem instanceof DebugStackFrame ? activeStackItem.frameId : undefined) ===
-					(value.kind === 'frame' ? value.frameId : undefined)
+				(activeStackItem instanceof DebugStackFrame ? activeStackItem.frameId : undefined) === (value.kind === 'frame' ? value.frameId : undefined)
 			)
 				return;
-			item =
-				value.kind === 'frame'
-					? new DebugStackFrame(session, value.threadId, value.frameId)
-					: new DebugThread(session, value.threadId);
+			item = value.kind === 'frame' ? new DebugStackFrame(session, value.threadId, value.frameId) : new DebugThread(session, value.threadId);
 		}
 		if (item === activeStackItem) return;
 		activeStackItem = item;
@@ -433,8 +363,7 @@ export function createApi(configuration, initialization) {
 	}
 
 	function encodeBreakpoint(point) {
-		if (!(point instanceof SourceBreakpoint) && !(point instanceof FunctionBreakpoint))
-			throw new TypeError('Unsupported breakpoint type');
+		if (!(point instanceof SourceBreakpoint) && !(point instanceof FunctionBreakpoint)) throw new TypeError('Unsupported breakpoint type');
 		const state = breakpointStates.get(point);
 		return {
 			id: point.id,
@@ -454,36 +383,16 @@ export function createApi(configuration, initialization) {
 	}
 
 	function decodeBreakpoint(value) {
-		if (
-			typeof value?.id !== 'string' ||
-			typeof value.enabled !== 'boolean' ||
-			!['source', 'function'].includes(value.kind)
-		)
-			throw new TypeError('Invalid breakpoint snapshot');
+		if (typeof value?.id !== 'string' || typeof value.enabled !== 'boolean' || !['source', 'function'].includes(value.kind)) throw new TypeError('Invalid breakpoint snapshot');
 		const previous = debugBreakpoints.get(value.id);
 		const point =
 			previous ??
 			(value.kind === 'source'
-				? new SourceBreakpoint(
-						new Location(Uri.parse(value.uri), new Position(value.line, value.column ?? 0)),
-						value.enabled,
-						value.condition,
-						value.hitCondition,
-						value.logMessage,
-					)
-				: new FunctionBreakpoint(
-						value.name,
-						value.enabled,
-						value.condition,
-						value.hitCondition,
-						value.logMessage,
-					));
+				? new SourceBreakpoint(new Location(Uri.parse(value.uri), new Position(value.line, value.column ?? 0)), value.enabled, value.condition, value.hitCondition, value.logMessage)
+				: new FunctionBreakpoint(value.name, value.enabled, value.condition, value.hitCondition, value.logMessage));
 		breakpointStates.set(point, {
 			...value,
-			location:
-				value.kind === 'source'
-					? new Location(Uri.parse(value.uri), new Position(value.line, value.column ?? 0))
-					: undefined,
+			location: value.kind === 'source' ? new Location(Uri.parse(value.uri), new Position(value.line, value.column ?? 0)) : undefined,
 		});
 		return point;
 	}
@@ -554,12 +463,7 @@ export function createApi(configuration, initialization) {
 					)
 				: Promise.resolve();
 		owned?.push(changes);
-		void request(
-			remove
-				? { operation: 'removeDebugBreakpoints', breakpointIds: values.map(value => value.id) }
-				: { operation: 'addDebugBreakpoints', breakpoints: values },
-			'done',
-		);
+		void request(remove ? { operation: 'removeDebugBreakpoints', breakpointIds: values.map(value => value.id) } : { operation: 'addDebugBreakpoints', breakpoints: values }, 'done');
 	}
 
 	class ProcessExecution {
@@ -576,8 +480,7 @@ export function createApi(configuration, initialization) {
 				this.args = argsOrOptions;
 				this.options = options;
 			} else {
-				if (typeof command !== 'string' || options !== undefined)
-					throw new TypeError('ShellExecution requires a command line or a command and arguments');
+				if (typeof command !== 'string' || options !== undefined) throw new TypeError('ShellExecution requires a command line or a command and arguments');
 				this.commandLine = command;
 				this.options = argsOrOptions;
 			}
@@ -608,14 +511,7 @@ export function createApi(configuration, initialization) {
 		}
 	}
 	class Task {
-		constructor(
-			definition,
-			scopeOrName,
-			nameOrSource,
-			sourceOrExecution,
-			executionOrMatchers,
-			problemMatchers = [],
-		) {
+		constructor(definition, scopeOrName, nameOrSource, sourceOrExecution, executionOrMatchers, problemMatchers = []) {
 			this.definition = definition;
 			if (typeof scopeOrName === 'string') {
 				this.name = scopeOrName;
@@ -629,8 +525,7 @@ export function createApi(configuration, initialization) {
 				this.execution = executionOrMatchers;
 				this.problemMatchers = problemMatchers;
 			}
-			this.problemMatchers =
-				typeof this.problemMatchers === 'string' ? [this.problemMatchers] : this.problemMatchers;
+			this.problemMatchers = typeof this.problemMatchers === 'string' ? [this.problemMatchers] : this.problemMatchers;
 			this.isBackground = false;
 			this.presentationOptions = {};
 			this.runOptions = {};
@@ -638,8 +533,7 @@ export function createApi(configuration, initialization) {
 	}
 	class TaskGroup {
 		constructor(id, label, isDefault) {
-			if (typeof id !== 'string' || typeof label !== 'string')
-				throw new TypeError('TaskGroup requires an ID and label');
+			if (typeof id !== 'string' || typeof label !== 'string') throw new TypeError('TaskGroup requires an ID and label');
 			Object.defineProperties(this, {
 				id: { value: id, enumerable: true },
 				isDefault: { value: isDefault, enumerable: true },
@@ -680,13 +574,7 @@ export function createApi(configuration, initialization) {
 	}
 	class DebugAdapterServer {
 		constructor(port, host) {
-			if (
-				!Number.isInteger(port) ||
-				port < 1 ||
-				port > 65535 ||
-				(host !== undefined &&
-					(typeof host !== 'string' || !host.trim() || host.length > 256 || host.includes('\0')))
-			) {
+			if (!Number.isInteger(port) || port < 1 || port > 65535 || (host !== undefined && (typeof host !== 'string' || !host.trim() || host.length > 256 || host.includes('\0')))) {
 				throw new TypeError('Invalid Debug Adapter server');
 			}
 			this.port = port;
@@ -707,20 +595,12 @@ export function createApi(configuration, initialization) {
 	const taskRevealNames = ['always', 'silent', 'never'];
 	function encodeTaskPresentationOptions(options) {
 		if (options === undefined) return undefined;
-		if (!options || typeof options !== 'object' || Array.isArray(options))
-			throw new TypeError('Invalid Task presentationOptions');
-		if (
-			Object.keys(options).some(
-				key => !['echo', 'showReuseMessage', 'panel', 'clear', 'reveal', 'focus', 'close'].includes(key),
-			)
-		)
-			return unsupported('Task presentation options');
+		if (!options || typeof options !== 'object' || Array.isArray(options)) throw new TypeError('Invalid Task presentationOptions');
+		if (Object.keys(options).some(key => !['echo', 'showReuseMessage', 'panel', 'clear', 'reveal', 'focus', 'close'].includes(key))) return unsupported('Task presentation options');
 		if (
 			(options.panel !== undefined && !Object.values(TaskPanelKind).includes(options.panel)) ||
 			(options.reveal !== undefined && !Object.values(TaskRevealKind).includes(options.reveal)) ||
-			['echo', 'showReuseMessage', 'clear', 'focus', 'close'].some(
-				key => options[key] !== undefined && typeof options[key] !== 'boolean',
-			)
+			['echo', 'showReuseMessage', 'clear', 'focus', 'close'].some(key => options[key] !== undefined && typeof options[key] !== 'boolean')
 		)
 			throw new TypeError('Invalid Task presentationOptions');
 		const presentation = {
@@ -735,8 +615,7 @@ export function createApi(configuration, initialization) {
 		return Object.keys(presentation).length ? presentation : undefined;
 	}
 	function encodeTask(task, id, customExecutions, fetchedCustomExecution) {
-		if (!(task instanceof Task) || typeof task.definition?.type !== 'string')
-			throw new TypeError('Task requires a TaskDefinition');
+		if (!(task instanceof Task) || typeof task.definition?.type !== 'string') throw new TypeError('Task requires a TaskDefinition');
 		let presentation = encodeTaskPresentationOptions(task.presentationOptions);
 		// revealProblems belongs to tasks.json, not the public TaskPresentationOptions.
 		// Editing a fetched Task must retain this configuration-only policy even
@@ -758,11 +637,9 @@ export function createApi(configuration, initialization) {
 		}
 		const execution = task.execution;
 		if (execution instanceof CustomExecution) {
-			if (execution === fetchedCustomExecution && typeof execution.callback !== 'function')
-				customExecutions.delete(id);
+			if (execution === fetchedCustomExecution && typeof execution.callback !== 'function') customExecutions.delete(id);
 			else {
-				if (typeof execution.callback !== 'function')
-					return unsupported('CustomExecution copied from another task owner');
+				if (typeof execution.callback !== 'function') return unsupported('CustomExecution copied from another task owner');
 				customExecutions.set(id, execution);
 			}
 		} else customExecutions.delete(id);
@@ -778,9 +655,7 @@ export function createApi(configuration, initialization) {
 			};
 			descriptor = {
 				type: 'shell',
-				...(execution.commandLine === undefined
-					? { command: execution.command, args: execution.args }
-					: { commandLine: execution.commandLine }),
+				...(execution.commandLine === undefined ? { command: execution.command, args: execution.args } : { commandLine: execution.commandLine }),
 				...(shellOptions && Object.keys(shellOptions).length ? { options: shellOptions } : {}),
 			};
 		} else if (execution instanceof CustomExecution) {
@@ -788,12 +663,7 @@ export function createApi(configuration, initialization) {
 		} else if (execution !== undefined) {
 			return unsupported('Task execution');
 		}
-		const scope =
-			typeof task.scope === 'number'
-				? task.scope
-				: task.scope?.uri
-					? { uri: task.scope.uri.toString() }
-					: undefined;
+		const scope = typeof task.scope === 'number' ? task.scope : task.scope?.uri ? { uri: task.scope.uri.toString() } : undefined;
 		const group = ['build', 'test', 'clean', 'rebuild'].includes(task.group?.id) ? task.group.id : 'other';
 		return {
 			id,
@@ -814,27 +684,15 @@ export function createApi(configuration, initialization) {
 		};
 	}
 	function decodeTask(value) {
-		if (
-			typeof value?.id !== 'string' ||
-			typeof value.name !== 'string' ||
-			typeof value.source !== 'string' ||
-			typeof value.definition?.type !== 'string'
-		)
+		if (typeof value?.id !== 'string' || typeof value.name !== 'string' || typeof value.source !== 'string' || typeof value.definition?.type !== 'string')
 			throw new TypeError('Invalid task snapshot');
-		const scope =
-			typeof value.scope === 'number'
-				? value.scope
-				: Object.freeze({ uri: Uri.parse(value.scope.uri), name: value.scope.name, index: value.scope.index });
+		const scope = typeof value.scope === 'number' ? value.scope : Object.freeze({ uri: Uri.parse(value.scope.uri), name: value.scope.name, index: value.scope.index });
 		const descriptor = value.execution;
 		let execution;
-		if (descriptor?.type === 'process')
-			execution = new ProcessExecution(descriptor.program, descriptor.args, value.options);
+		if (descriptor?.type === 'process') execution = new ProcessExecution(descriptor.program, descriptor.args, value.options);
 		else if (descriptor?.type === 'shell') {
 			const options = { ...value.options, ...descriptor.options };
-			execution =
-				descriptor.commandLine === undefined
-					? new ShellExecution(descriptor.command, descriptor.args, options)
-					: new ShellExecution(descriptor.commandLine, options);
+			execution = descriptor.commandLine === undefined ? new ShellExecution(descriptor.command, descriptor.args, options) : new ShellExecution(descriptor.commandLine, options);
 		} else if (descriptor?.type === 'custom') {
 			// The callback remains with the canonical task's extension owner. Fetched
 			// instances expose its public execution type and run through that task identity.
@@ -847,61 +705,32 @@ export function createApi(configuration, initialization) {
 				!presentation ||
 				typeof presentation !== 'object' ||
 				Array.isArray(presentation) ||
-				Object.keys(presentation).some(
-					key =>
-						![
-							'echo',
-							'showReuseMessage',
-							'panel',
-							'clear',
-							'reveal',
-							'revealProblems',
-							'focus',
-							'close',
-							'group',
-						].includes(key),
-				) ||
-				(presentation.group !== undefined &&
-					(typeof presentation.group !== 'string' ||
-						presentation.group.length > 256 ||
-						presentation.group.includes('\0'))) ||
+				Object.keys(presentation).some(key => !['echo', 'showReuseMessage', 'panel', 'clear', 'reveal', 'revealProblems', 'focus', 'close', 'group'].includes(key)) ||
+				(presentation.group !== undefined && (typeof presentation.group !== 'string' || presentation.group.length > 256 || presentation.group.includes('\0'))) ||
 				(presentation.panel !== undefined && !taskPanelNames.includes(presentation.panel)) ||
 				(presentation.reveal !== undefined && !taskRevealNames.includes(presentation.reveal)) ||
-				(presentation.revealProblems !== undefined &&
-					!['always', 'onProblem', 'never'].includes(presentation.revealProblems)) ||
-				['echo', 'showReuseMessage', 'clear', 'focus', 'close'].some(
-					key => presentation[key] !== undefined && typeof presentation[key] !== 'boolean',
-				)
+				(presentation.revealProblems !== undefined && !['always', 'onProblem', 'never'].includes(presentation.revealProblems)) ||
+				['echo', 'showReuseMessage', 'clear', 'focus', 'close'].some(key => presentation[key] !== undefined && typeof presentation[key] !== 'boolean')
 			)
 				throw new TypeError('Invalid Task presentation snapshot');
 			task.presentationOptions = {
 				...(presentation.echo === undefined ? {} : { echo: presentation.echo }),
-				...(presentation.showReuseMessage === undefined
-					? {}
-					: { showReuseMessage: presentation.showReuseMessage }),
+				...(presentation.showReuseMessage === undefined ? {} : { showReuseMessage: presentation.showReuseMessage }),
 				...(presentation.panel === undefined ? {} : { panel: taskPanelNames.indexOf(presentation.panel) + 1 }),
-				...(presentation.reveal === undefined
-					? {}
-					: { reveal: taskRevealNames.indexOf(presentation.reveal) + 1 }),
+				...(presentation.reveal === undefined ? {} : { reveal: taskRevealNames.indexOf(presentation.reveal) + 1 }),
 				...(presentation.focus === undefined ? {} : { focus: presentation.focus }),
 				...(presentation.clear === undefined ? {} : { clear: presentation.clear }),
 				...(presentation.close === undefined ? {} : { close: presentation.close }),
 			};
-			if (presentation.revealProblems !== undefined)
-				taskProblemRevealModes.set(task, presentation.revealProblems);
+			if (presentation.revealProblems !== undefined) taskProblemRevealModes.set(task, presentation.revealProblems);
 			if (presentation.group !== undefined) taskTerminalGroups.set(task, presentation.group);
 		}
 		task.runOptions = value.runOptions === undefined ? {} : { ...value.runOptions };
 		task.isBackground = value.isBackground;
 		if (value.detail !== null) task.detail = value.detail;
-		const group = [TaskGroup.Build, TaskGroup.Test, TaskGroup.Clean, TaskGroup.Rebuild].find(
-			group => group.id === value.group,
-		);
-		if (value.groupIsDefault !== undefined && typeof value.groupIsDefault !== 'boolean')
-			throw new TypeError('Invalid TaskGroup default flag');
-		if (group)
-			task.group =
-				value.groupIsDefault === undefined ? group : new TaskGroup(group.id, group.label, value.groupIsDefault);
+		const group = [TaskGroup.Build, TaskGroup.Test, TaskGroup.Clean, TaskGroup.Rebuild].find(group => group.id === value.group);
+		if (value.groupIsDefault !== undefined && typeof value.groupIsDefault !== 'boolean') throw new TypeError('Invalid TaskGroup default flag');
+		if (group) task.group = value.groupIsDefault === undefined ? group : new TaskGroup(group.id, group.label, value.groupIsDefault);
 		fetchedTaskIds.set(task, value.id);
 		fetchedTaskSnapshots.set(task, { signature: taskFingerprint(task), execution, callback: execution?.callback });
 		if (execution instanceof CustomExecution) fetchedCustomExecutions.set(execution, value.id);
@@ -925,15 +754,11 @@ export function createApi(configuration, initialization) {
 		});
 	}
 	function decodeTaskExecution(value, task, sequence = 0) {
-		if (typeof value?.id !== 'string' || typeof value.active !== 'boolean')
-			throw new TypeError('Invalid task execution snapshot');
+		if (typeof value?.id !== 'string' || typeof value.active !== 'boolean') throw new TypeError('Invalid task execution snapshot');
 		let execution = taskExecutionHandles.get(value.id);
 		if (!execution) {
 			execution = Object.freeze({
-				task:
-					task ??
-					pendingTaskExecutions.get(value.task.clientTaskId ?? value.task.id)?.task ??
-					decodeTask(value.task),
+				task: task ?? pendingTaskExecutions.get(value.task.clientTaskId ?? value.task.id)?.task ?? decodeTask(value.task),
 				terminate() {
 					void request({ operation: 'terminateTask', executionId: value.id }, 'done');
 				},
@@ -947,19 +772,14 @@ export function createApi(configuration, initialization) {
 		return execution;
 	}
 	function applyTaskSnapshot(executions, sequence) {
-		if (!Array.isArray(executions) || !Number.isSafeInteger(sequence) || sequence < 0)
-			throw new TypeError('Invalid task execution snapshot');
+		if (!Array.isArray(executions) || !Number.isSafeInteger(sequence) || sequence < 0) throw new TypeError('Invalid task execution snapshot');
 		if (sequence < taskEventSequence || sequence < taskSnapshotSequence) return;
 		taskSnapshotSequence = sequence;
 		activeTaskExecutions.clear();
 		taskStateSequences.clear();
 		for (const execution of executions) decodeTaskExecution(execution, undefined, sequence);
 		for (const [id, execution] of taskExecutionHandles)
-			if (
-				!activeTaskExecutions.has(id) &&
-				!pendingTaskExecutions.has(fetchedTaskIds.get(execution.task) ?? providedTaskIds.get(execution.task))
-			)
-				taskExecutionHandles.delete(id);
+			if (!activeTaskExecutions.has(id) && !pendingTaskExecutions.has(fetchedTaskIds.get(execution.task) ?? providedTaskIds.get(execution.task))) taskExecutionHandles.delete(id);
 	}
 	function listenTask(kind, listener, thisArg, disposables) {
 		if (typeof listener !== 'function') throw new TypeError('Task event requires a listener');
@@ -976,8 +796,7 @@ export function createApi(configuration, initialization) {
 			'ash.tasks.events',
 			(_context, event) =>
 				invoke(async () => {
-					if (!Number.isSafeInteger(event.sequence) || event.sequence < 0)
-						throw new TypeError('Invalid task event sequence');
+					if (!Number.isSafeInteger(event.sequence) || event.sequence < 0) throw new TypeError('Invalid task event sequence');
 					if (event.type === 'snapshot') {
 						applyTaskSnapshot(event.executions, event.sequence);
 						return;
@@ -986,30 +805,17 @@ export function createApi(configuration, initialization) {
 					taskEventSequence = Math.max(taskEventSequence, event.sequence);
 					const execution = decodeTaskExecution(event.execution, undefined, event.sequence);
 					const content =
-						event.type === 'processStart'
-							? { execution, processId: event.processId }
-							: event.type === 'processEnd'
-								? { execution, exitCode: event.exitCode ?? undefined }
-								: { execution };
+						event.type === 'processStart' ? { execution, processId: event.processId } : event.type === 'processEnd' ? { execution, exitCode: event.exitCode ?? undefined } : { execution };
 					if (event.type === 'end') {
 						activeTaskExecutions.delete(event.execution.id);
 						// Retain an end fence only while executeTask can still return an older start snapshot.
-						if (pendingTaskExecutions.has(event.execution.task.clientTaskId ?? event.execution.task.id))
-							taskStateSequences.set(event.execution.id, event.sequence);
+						if (pendingTaskExecutions.has(event.execution.task.clientTaskId ?? event.execution.task.id)) taskStateSequences.set(event.execution.id, event.sequence);
 						else taskStateSequences.delete(event.execution.id);
 					}
 					try {
-						await Promise.all(
-							[...taskListeners[event.type]].map(async entry =>
-								entry.listener.call(entry.thisArg, content),
-							),
-						);
+						await Promise.all([...taskListeners[event.type]].map(async entry => entry.listener.call(entry.thisArg, content)));
 					} finally {
-						if (
-							event.type === 'end' &&
-							!pendingTaskExecutions.has(event.execution.task.clientTaskId ?? event.execution.task.id)
-						)
-							taskExecutionHandles.delete(event.execution.id);
+						if (event.type === 'end' && !pendingTaskExecutions.has(event.execution.task.clientTaskId ?? event.execution.task.id)) taskExecutionHandles.delete(event.execution.id);
 					}
 				}),
 			(_context, executionId, definition) =>
@@ -1038,10 +844,7 @@ export function createApi(configuration, initialization) {
 		// Coalesce synchronous property changes and keep the flush inside its originating invocation.
 		const flush = Promise.resolve().then(async () => {
 			statusFlushes.delete(id);
-			await request(
-				{ operation: 'setStatusBarEntries', registrationId: statusRegistrationId, ...statusSnapshot() },
-				'done',
-			);
+			await request({ operation: 'setStatusBarEntries', registrationId: statusRegistrationId, ...statusSnapshot() }, 'done');
 		});
 		owned?.push(flush);
 		flush.catch(() => undefined);
@@ -1076,16 +879,14 @@ export function createApi(configuration, initialization) {
 			return this.#values.text;
 		}
 		set text(value) {
-			if (typeof value !== 'string' || value.length > 8192 || value.includes('\0'))
-				throw new TypeError('Invalid status bar text');
+			if (typeof value !== 'string' || value.length > 8192 || value.includes('\0')) throw new TypeError('Invalid status bar text');
 			this.set('text', value);
 		}
 		get name() {
 			return this.#values.name;
 		}
 		set name(value) {
-			if (value !== undefined && (typeof value !== 'string' || value.length > 8192 || value.includes('\0')))
-				throw new TypeError('Invalid status bar name');
+			if (value !== undefined && (typeof value !== 'string' || value.length > 8192 || value.includes('\0'))) throw new TypeError('Invalid status bar name');
 			this.set('name', value);
 		}
 		get color() {
@@ -1104,8 +905,7 @@ export function createApi(configuration, initialization) {
 			return this.#values.tooltip;
 		}
 		set tooltip(value) {
-			if (value !== undefined && typeof value !== 'string')
-				return unsupported('StatusBarItem.tooltip MarkdownString');
+			if (value !== undefined && typeof value !== 'string') return unsupported('StatusBarItem.tooltip MarkdownString');
 			if (value?.length > 8192 || value?.includes('\0')) throw new TypeError('Invalid status bar tooltip');
 			this.set('tooltip', value);
 		}
@@ -1126,13 +926,9 @@ export function createApi(configuration, initialization) {
 			return this.#values.accessibilityInformation;
 		}
 		set accessibilityInformation(value) {
-			if (
-				value !== undefined &&
-				(typeof value?.label !== 'string' || value.label.length > 8192 || value.label.includes('\0'))
-			)
+			if (value !== undefined && (typeof value?.label !== 'string' || value.label.length > 8192 || value.label.includes('\0')))
 				throw new TypeError('Invalid status bar accessibility information');
-			if (value?.role !== undefined && value.role !== 'button')
-				return unsupported('StatusBarItem.accessibilityInformation.role');
+			if (value?.role !== undefined && value.role !== 'button') return unsupported('StatusBarItem.accessibilityInformation.role');
 			this.set('accessibilityInformation', value);
 		}
 		set(key, value) {
@@ -1193,8 +989,7 @@ export function createApi(configuration, initialization) {
 		const id = explicitId ? idOrAlignment : configuration.extensionId;
 		const alignment = (explicitId ? alignmentOrPriority : idOrAlignment) ?? 1;
 		const order = explicitId ? priority : alignmentOrPriority;
-		if (!id || id.length > 256 || ![1, 2].includes(alignment) || (order !== undefined && !Number.isFinite(order)))
-			throw new TypeError('Invalid status bar identity, alignment or priority');
+		if (!id || id.length > 256 || ![1, 2].includes(alignment) || (order !== undefined && !Number.isFinite(order))) throw new TypeError('Invalid status bar identity, alignment or priority');
 		if (statusItems.size >= 128) throw new RangeError('Status bar item quota exceeded');
 		return new StatusBarItem(id, alignment, order);
 	}
@@ -1265,17 +1060,12 @@ export function createApi(configuration, initialization) {
 		const names = outbound
 			? { line: 'lineIndex', character: 'columnIndex', startLine: 'startLineIndex', endLine: 'endLineIndex' }
 			: { lineIndex: 'line', columnIndex: 'character', startLineIndex: 'startLine', endLineIndex: 'endLine' };
-		return Object.fromEntries(
-			Object.entries(value).map(([key, entry]) => [names[key] ?? key, coordinates(entry, outbound)]),
-		);
+		return Object.fromEntries(Object.entries(value).map(([key, entry]) => [names[key] ?? key, coordinates(entry, outbound)]));
 	}
 	function registerLanguageOperation(selector, operation, provider, method) {
 		ensureDocumentEvents();
-		const entries = (Array.isArray(selector) ? selector : [selector]).map(entry =>
-			typeof entry === 'string' ? entry : entry.language,
-		);
-		if (entries.some(entry => typeof entry !== 'string') || typeof provider?.[method] !== 'function')
-			throw new TypeError('Invalid language provider');
+		const entries = (Array.isArray(selector) ? selector : [selector]).map(entry => (typeof entry === 'string' ? entry : entry.language));
+		if (entries.some(entry => typeof entry !== 'string') || typeof provider?.[method] !== 'function') throw new TypeError('Invalid language provider');
 		const registration = ashRuntime.registerContribution(
 			{
 				kind: 'languageProvider',
@@ -1287,24 +1077,14 @@ export function createApi(configuration, initialization) {
 			(call, payload) =>
 				invoke(async () => {
 					const request = coordinates(payload, false);
-					const snapshot =
-						operation === 'workspaceSymbols' ? undefined : document({ uri: payload.resource, ...payload });
+					const snapshot = operation === 'workspaceSymbols' ? undefined : document({ uri: payload.resource, ...payload });
 					const point = request.position && new Position(request.position.line, request.position.character);
 					const token = call.cancellationToken;
 					let result;
 					if (operation === 'workspaceSymbols') result = await provider[method](request.query, token);
 					else if (operation === 'rename')
-						result =
-							request.kind === 'prepare'
-								? await provider.prepareRename?.(snapshot, point, token)
-								: await provider[method](snapshot, point, request.newName, token);
-					else if (operation === 'references')
-						result = await provider[method](
-							snapshot,
-							point,
-							{ includeDeclaration: request.includeDeclaration },
-							token,
-						);
+						result = request.kind === 'prepare' ? await provider.prepareRename?.(snapshot, point, token) : await provider[method](snapshot, point, request.newName, token);
+					else if (operation === 'references') result = await provider[method](snapshot, point, { includeDeclaration: request.includeDeclaration }, token);
 					else if (operation === 'codeAction')
 						result = await provider[method](
 							snapshot,
@@ -1326,15 +1106,10 @@ export function createApi(configuration, initialization) {
 					else if (operation === 'formatting') {
 						if (request.kind !== 'document') return { edits: [] };
 						result = await provider[method](snapshot, request.options, token);
-						return coordinates(
-							{ edits: (result ?? []).map(edit => ({ range: edit.range, text: edit.newText })) },
-							true,
-						);
-					} else if (operation === 'definition' || operation === 'documentHighlights')
-						result = await provider[method](snapshot, point, token);
+						return coordinates({ edits: (result ?? []).map(edit => ({ range: edit.range, text: edit.newText })) }, true);
+					} else if (operation === 'definition' || operation === 'documentHighlights') result = await provider[method](snapshot, point, token);
 					else result = await provider[method](snapshot, token);
-					if (operation === 'rename' && request.kind !== 'prepare')
-						return coordinates(await encodeWorkspaceEdit(result), true);
+					if (operation === 'rename' && request.kind !== 'prepare') return coordinates(await encodeWorkspaceEdit(result), true);
 					if (operation === 'definition' || operation === 'references')
 						result = (Array.isArray(result) ? result : result ? [result] : []).map(value => ({
 							resource: value.uri.toString(),
@@ -1387,11 +1162,8 @@ export function createApi(configuration, initialization) {
 		return registration;
 	}
 	function registerCustomEditorProvider(viewType, provider) {
-		const contribution = configuration.manifest?.contributes?.customEditors?.find(
-			entry => entry.viewType === viewType,
-		);
-		if (!contribution || typeof provider.resolveCustomTextEditor !== 'function')
-			throw new TypeError('Custom editor must be declared in package.json');
+		const contribution = configuration.manifest?.contributes?.customEditors?.find(entry => entry.viewType === viewType);
+		if (!contribution || typeof provider.resolveCustomTextEditor !== 'function') throw new TypeError('Custom editor must be declared in package.json');
 		const registration = ashRuntime.registerContribution(
 			{
 				kind: 'customTextEditor',
@@ -1450,22 +1222,17 @@ export function createApi(configuration, initialization) {
 					customPanels.set(payload.document.uri, panel);
 					await provider.resolveCustomTextEditor(value, panel, call.cancellationToken);
 					// Asset roles come from HTML, independent of the author's asWebviewUri call order.
-					for (const match of panel.webview.html.matchAll(
-						/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>|<link\b[^>]*\bhref=["']([^"']+)["'][^>]*>/gi,
-					)) {
+					for (const match of panel.webview.html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>|<link\b[^>]*\bhref=["']([^"']+)["'][^>]*>/gi)) {
 						const uri = match[1] ?? match[2];
 						if (!assetUris.has(uri)) continue;
 						const role = match[1] ? 'script' : 'style';
-						if (resources[role] && resources[role] !== uri)
-							return unsupported('multiple custom editor script/style assets');
+						if (resources[role] && resources[role] !== uri) return unsupported('multiple custom editor script/style assets');
 						resources[role] = uri;
 					}
 					return {
 						html: Object.keys(resources).length
-							? panel.webview.html.replace(
-									/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>\s*<\/script>|<link\b[^>]*\bhref=["']([^"']+)["'][^>]*>/gi,
-									(tag, script, style) =>
-										script === resources.script || style === resources.style ? '' : tag,
+							? panel.webview.html.replace(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>\s*<\/script>|<link\b[^>]*\bhref=["']([^"']+)["'][^>]*>/gi, (tag, script, style) =>
+									script === resources.script || style === resources.style ? '' : tag,
 								)
 							: panel.webview.html,
 						...(Object.keys(resources).length ? { resources } : {}),
@@ -1486,45 +1253,31 @@ export function createApi(configuration, initialization) {
 	function registerImageEditorProvider(viewType, provider) {
 		if (!imageEditorAdmitted) throw new Error('Image editors require the admitted imageEditor capability');
 		const declaration = configuration.manifest?.contributes?.imageEditors?.find(entry => entry.id === viewType);
-		if (!declaration || typeof provider?.resolveImageEditor !== 'function')
-			throw new TypeError('Image editor must be declared in package.json');
-		const registration = ashRuntime.registerContribution(
-			{ kind: 'dataChannel', registrationId: viewType, channelId: 'image.editor.v1' },
-			'receiveData',
-			(call, payload) =>
-				invoke(async () => {
-					const context = payload?.data;
-					if (
-						!context ||
-						!['screen', 'selection'].includes(context.source) ||
-						Object.keys(context).join(',') !== 'source'
-					)
-						throw new TypeError('Invalid image editor context');
-					const assets = new Set();
-					const view = {
-						html: '',
-						asWebviewUri(uri) {
-							if (uri.scheme !== 'blob')
-								throw new TypeError('Image view resources must belong to this browser extension');
-							const value = uri.toString();
-							assets.add(value);
-							if (!webviewAssets.has(value)) {
-								webviewAssets.add(value);
-								globalThis.__ashWebviewResource?.(value);
-							}
-							return uri;
-						},
-						setState(value) {
-							view.state = value;
-						},
-					};
-					await provider.resolveImageEditor(
-						Object.freeze({ source: context.source }),
-						view,
-						call.cancellationToken,
-					);
-					return { html: view.html, resources: [...assets], state: view.state ?? null };
-				}),
+		if (!declaration || typeof provider?.resolveImageEditor !== 'function') throw new TypeError('Image editor must be declared in package.json');
+		const registration = ashRuntime.registerContribution({ kind: 'dataChannel', registrationId: viewType, channelId: 'image.editor.v1' }, 'receiveData', (call, payload) =>
+			invoke(async () => {
+				const context = payload?.data;
+				if (!context || !['screen', 'selection'].includes(context.source) || Object.keys(context).join(',') !== 'source') throw new TypeError('Invalid image editor context');
+				const assets = new Set();
+				const view = {
+					html: '',
+					asWebviewUri(uri) {
+						if (uri.scheme !== 'blob') throw new TypeError('Image view resources must belong to this browser extension');
+						const value = uri.toString();
+						assets.add(value);
+						if (!webviewAssets.has(value)) {
+							webviewAssets.add(value);
+							globalThis.__ashWebviewResource?.(value);
+						}
+						return uri;
+					},
+					setState(value) {
+						view.state = value;
+					},
+				};
+				await provider.resolveImageEditor(Object.freeze({ source: context.source }), view, call.cancellationToken);
+				return { html: view.html, resources: [...assets], state: view.state ?? null };
+			}),
 		);
 		subscriptions.push(registration);
 		return registration;
@@ -1535,9 +1288,7 @@ export function createApi(configuration, initialization) {
 		if (
 			typeof id !== 'string' ||
 			!/^[A-Za-z0-9._-]{1,128}$/.test(id) ||
-			['resolveCanvas', 'closeCanvas', 'onDidChangeCanvases'].some(
-				key => provider?.[key] !== undefined && typeof provider[key] !== 'function',
-			)
+			['resolveCanvas', 'closeCanvas', 'onDidChangeCanvases'].some(key => provider?.[key] !== undefined && typeof provider[key] !== 'function')
 		)
 			throw new TypeError('Invalid Canvas provider');
 		const declaration = configuration.manifest?.contributes?.canvases?.find(entry => entry.id === id);
@@ -1546,85 +1297,65 @@ export function createApi(configuration, initialization) {
 			typeof declaration.displayName !== 'string' ||
 			!declaration.displayName.trim() ||
 			declaration.displayName.length > 256 ||
-			(declaration.description !== undefined &&
-				(typeof declaration.description !== 'string' || declaration.description.length > 4096)) ||
+			(declaration.description !== undefined && (typeof declaration.description !== 'string' || declaration.description.length > 4096)) ||
 			(declaration.requiresInput !== undefined && typeof declaration.requiresInput !== 'boolean') ||
 			typeof provider?.openCanvas !== 'function'
 		)
 			throw new TypeError('Canvas provider must be declared in package.json');
 		if (canvasRegistrations.has(id)) throw new Error('Canvas provider is already registered');
 		const registrationId = 'canvas.' + ++canvasRegistrationGeneration;
-		const handle = ashRuntime.registerContribution(
-			{ kind: 'dataChannel', registrationId, channelId: 'canvas.provider.v1' },
-			'receiveData',
-			(call, payload) =>
-				invoke(async () => {
-					const data = payload?.data;
-					if (data?.action === 'describe')
-						return {
-							state: 'definition',
-							canvasId: id,
-							displayName: declaration.displayName,
-							description: declaration.description ?? '',
-							requiresInput: declaration.requiresInput === true,
-						};
-					const context = data?.context;
-					if (
-						!context ||
-						Object.keys(context).sort().join(',') !== 'instanceId,sessionId,threadId' ||
-						Object.values(context).some(
-							value => typeof value !== 'string' || !value.trim() || value.length > 1024,
-						) ||
-						!/^[A-Za-z0-9._-]{1,128}$/.test(context.instanceId)
-					)
-						throw new TypeError('Invalid Canvas context');
-					const operation =
-						data.action === 'open'
-							? provider.openCanvas
-							: data.action === 'resolve'
-								? provider.resolveCanvas
-								: data.action === 'close'
-									? provider.closeCanvas
-									: undefined;
-					if (!['open', 'resolve', 'close'].includes(data.action))
-						throw new TypeError('Invalid Canvas operation');
-					if (!operation) return { state: 'unchanged' };
-					const canvas = await operation.call(
-						provider,
-						Object.freeze({
-							sessionId: context.sessionId,
-							threadId: context.threadId,
-							instanceId: context.instanceId,
-						}),
-						call.cancellationToken,
-					);
-					if (data.action === 'close') return { state: 'closed' };
-					if (canvas === null) return { state: 'closed' };
-					if (canvas === undefined) return { state: 'pending' };
-					if (
-						typeof canvas.url !== 'string' ||
-						canvas.url.length > 8192 ||
-						(canvas.title !== undefined &&
-							(typeof canvas.title !== 'string' || !canvas.title.trim() || canvas.title.length > 256)) ||
-						(canvas.status !== undefined &&
-							(typeof canvas.status !== 'string' || canvas.status.length > 4096))
-					)
-						throw new TypeError('Invalid Canvas source');
+		const handle = ashRuntime.registerContribution({ kind: 'dataChannel', registrationId, channelId: 'canvas.provider.v1' }, 'receiveData', (call, payload) =>
+			invoke(async () => {
+				const data = payload?.data;
+				if (data?.action === 'describe')
 					return {
-						state: 'ready',
-						url: canvas.url,
-						...(canvas.title === undefined ? {} : { title: canvas.title }),
-						...(canvas.status === undefined ? {} : { status: canvas.status }),
+						state: 'definition',
+						canvasId: id,
+						displayName: declaration.displayName,
+						description: declaration.description ?? '',
+						requiresInput: declaration.requiresInput === true,
 					};
-				}),
+				const context = data?.context;
+				if (
+					!context ||
+					Object.keys(context).sort().join(',') !== 'instanceId,sessionId,threadId' ||
+					Object.values(context).some(value => typeof value !== 'string' || !value.trim() || value.length > 1024) ||
+					!/^[A-Za-z0-9._-]{1,128}$/.test(context.instanceId)
+				)
+					throw new TypeError('Invalid Canvas context');
+				const operation = data.action === 'open' ? provider.openCanvas : data.action === 'resolve' ? provider.resolveCanvas : data.action === 'close' ? provider.closeCanvas : undefined;
+				if (!['open', 'resolve', 'close'].includes(data.action)) throw new TypeError('Invalid Canvas operation');
+				if (!operation) return { state: 'unchanged' };
+				const canvas = await operation.call(
+					provider,
+					Object.freeze({
+						sessionId: context.sessionId,
+						threadId: context.threadId,
+						instanceId: context.instanceId,
+					}),
+					call.cancellationToken,
+				);
+				if (data.action === 'close') return { state: 'closed' };
+				if (canvas === null) return { state: 'closed' };
+				if (canvas === undefined) return { state: 'pending' };
+				if (
+					typeof canvas.url !== 'string' ||
+					canvas.url.length > 8192 ||
+					(canvas.title !== undefined && (typeof canvas.title !== 'string' || !canvas.title.trim() || canvas.title.length > 256)) ||
+					(canvas.status !== undefined && (typeof canvas.status !== 'string' || canvas.status.length > 4096))
+				)
+					throw new TypeError('Invalid Canvas source');
+				return {
+					state: 'ready',
+					url: canvas.url,
+					...(canvas.title === undefined ? {} : { title: canvas.title }),
+					...(canvas.status === undefined ? {} : { status: canvas.status }),
+				};
+			}),
 		);
 		let active = true;
 		const changed = provider.onDidChangeCanvases?.(() => {
-			if (active)
-				void request(
-					{ operation: 'editorOperation', payload: { method: 'canvasChanged', canvasId: id } },
-					'value',
-				).catch(() => {});
+			if (active) void request({ operation: 'editorOperation', payload: { method: 'canvasChanged', canvasId: id } }, 'value').catch(() => {});
 		});
 		const registration = new Disposable(() => {
 			active = false;
@@ -1686,30 +1417,15 @@ export function createApi(configuration, initialization) {
 	}
 	function equalConfig(left, right) {
 		if (Object.is(left, right)) return true;
-		if (
-			!left ||
-			!right ||
-			typeof left !== 'object' ||
-			typeof right !== 'object' ||
-			Array.isArray(left) !== Array.isArray(right)
-		)
-			return false;
+		if (!left || !right || typeof left !== 'object' || typeof right !== 'object' || Array.isArray(left) !== Array.isArray(right)) return false;
 		const keys = Object.keys(left);
-		return (
-			keys.length === Object.keys(right).length &&
-			keys.every(key => Object.hasOwn(right, key) && equalConfig(left[key], right[key]))
-		);
+		return keys.length === Object.keys(right).length && keys.every(key => Object.hasOwn(right, key) && equalConfig(left[key], right[key]));
 	}
 	function ensureWorkspaceEvents() {
 		if (workspaceRegistration) return workspaceRegistration;
 		workspaceRegistration = ashWorkspace.registerWorkspaceEvents('ash.workspace.events', (_context, event) =>
 			invoke(async () => {
-				if (
-					!Object.hasOwn(workspaceRevisions, event.type) ||
-					!Number.isSafeInteger(event.revision) ||
-					event.revision < 1 ||
-					typeof event.emit !== 'boolean'
-				)
+				if (!Object.hasOwn(workspaceRevisions, event.type) || !Number.isSafeInteger(event.revision) || event.revision < 1 || typeof event.emit !== 'boolean')
 					throw new TypeError('Invalid workspace event');
 				if (event.revision <= workspaceRevisions[event.type]) return;
 				const before = windowFacts();
@@ -1726,12 +1442,7 @@ export function createApi(configuration, initialization) {
 						event.change.keys.some(key => typeof key !== 'string') ||
 						!Array.isArray(event.change.overrides) ||
 						event.change.overrides.some(
-							entry =>
-								!Array.isArray(entry) ||
-								entry.length !== 2 ||
-								typeof entry[0] !== 'string' ||
-								!Array.isArray(entry[1]) ||
-								entry[1].some(key => typeof key !== 'string'),
+							entry => !Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string' || !Array.isArray(entry[1]) || entry[1].some(key => typeof key !== 'string'),
 						)
 					)
 						throw new TypeError('Invalid configuration snapshot');
@@ -1744,37 +1455,16 @@ export function createApi(configuration, initialization) {
 					const keys = [...event.change.keys, ...event.change.overrides.flatMap(entry => entry[1])];
 					content = Object.freeze({
 						affectsConfiguration(section, scope) {
-							if (typeof section !== 'string')
-								throw new TypeError('Configuration section must be a string');
-							if (
-								!keys.some(
-									key =>
-										section === '' ||
-										key === section ||
-										key.startsWith(section + '.') ||
-										section.startsWith(key + '.'),
-								)
-							)
-								return false;
-							return (
-								scope == null ||
-								!equalConfig(
-									getConfiguration(undefined, scope, before).get(section),
-									getConfiguration(undefined, scope, after).get(section),
-								)
-							);
+							if (typeof section !== 'string') throw new TypeError('Configuration section must be a string');
+							if (!keys.some(key => section === '' || key === section || key.startsWith(section + '.') || section.startsWith(key + '.'))) return false;
+							return scope == null || !equalConfig(getConfiguration(undefined, scope, before).get(section), getConfiguration(undefined, scope, after).get(section));
 						},
 					});
 				} else if (event.type === 'workspace') {
 					if (
 						!Array.isArray(event.workspaceFolders) ||
 						event.workspaceFolders.length > 256 ||
-						event.workspaceFolders.some(
-							(folder, index) =>
-								typeof folder.uri !== 'string' ||
-								typeof folder.name !== 'string' ||
-								folder.index !== index,
-						) ||
+						event.workspaceFolders.some((folder, index) => typeof folder.uri !== 'string' || typeof folder.name !== 'string' || folder.index !== index) ||
 						(event.workspaceName !== null && typeof event.workspaceName !== 'string') ||
 						(event.workspaceFile !== null && typeof event.workspaceFile !== 'string')
 					)
@@ -1794,23 +1484,13 @@ export function createApi(configuration, initialization) {
 					});
 				}
 				workspaceRevisions[event.type] = event.revision;
-				if (event.emit)
-					await Promise.all(
-						[...workspaceListeners[event.type]].map(async entry =>
-							entry.listener.call(entry.thisArg, content),
-						),
-					);
+				if (event.emit) await Promise.all([...workspaceListeners[event.type]].map(async entry => entry.listener.call(entry.thisArg, content)));
 			}),
 		);
 		return workspaceRegistration;
 	}
 	function windowFacts() {
-		if (
-			!initialization ||
-			!Array.isArray(initialization.workspaceFolders) ||
-			!initialization.configurationValues ||
-			!initialization.configurationData
-		) {
+		if (!initialization || !Array.isArray(initialization.workspaceFolders) || !initialization.configurationValues || !initialization.configurationData) {
 			throw new Error('Window initialization is unavailable for this activation');
 		}
 		return initialization;
@@ -1821,17 +1501,12 @@ export function createApi(configuration, initialization) {
 	}
 	function workspaceFolder(resource, folders = getWorkspaceFolders()) {
 		if (!(resource instanceof Uri)) throw new TypeError('Workspace resource must be a URI');
-		const normalize = path =>
-			configuration.pathSeparator === '\\' && resource.scheme === 'file' ? path.toLowerCase() : path;
+		const normalize = path => (configuration.pathSeparator === '\\' && resource.scheme === 'file' ? path.toLowerCase() : path);
 		const path = normalize(resource.path);
 		return (folders ?? [])
 			.filter(folder => {
 				const root = normalize(folder.uri.path).replace(/\/+$/, '');
-				return (
-					resource.scheme === folder.uri.scheme &&
-					resource.authority.toLowerCase() === folder.uri.authority.toLowerCase() &&
-					(path === root || path.startsWith(root + '/'))
-				);
+				return resource.scheme === folder.uri.scheme && resource.authority.toLowerCase() === folder.uri.authority.toLowerCase() && (path === root || path.startsWith(root + '/'));
 			})
 			.sort((a, b) => b.uri.path.length - a.uri.path.length)[0];
 	}
@@ -1861,10 +1536,7 @@ export function createApi(configuration, initialization) {
 					typeof entry === 'string' ||
 					typeof entry === 'boolean' ||
 					(typeof entry === 'number' && Number.isFinite(entry)) ||
-					(typeof entry === 'object' &&
-						(Array.isArray(entry) ||
-							Object.getPrototypeOf(entry) === Object.prototype ||
-							Object.getPrototypeOf(entry) === null))
+					(typeof entry === 'object' && (Array.isArray(entry) || Object.getPrototypeOf(entry) === Object.prototype || Object.getPrototypeOf(entry) === null))
 				)
 					return entry;
 				throw new TypeError('Value must be JSON');
@@ -1872,44 +1544,21 @@ export function createApi(configuration, initialization) {
 		);
 	}
 	function mergeConfig(left, right) {
-		if (
-			!left ||
-			!right ||
-			typeof left !== 'object' ||
-			typeof right !== 'object' ||
-			Array.isArray(left) ||
-			Array.isArray(right)
-		)
-			return copyConfig(right);
+		if (!left || !right || typeof left !== 'object' || typeof right !== 'object' || Array.isArray(left) || Array.isArray(right)) return copyConfig(right);
 		const result = Object.assign(Object.create(null), copyConfig(left));
-		for (const [key, value] of Object.entries(right))
-			result[key] = Object.hasOwn(result, key) ? mergeConfig(result[key], value) : copyConfig(value);
+		for (const [key, value] of Object.entries(right)) result[key] = Object.hasOwn(result, key) ? mergeConfig(result[key], value) : copyConfig(value);
 		return result;
 	}
 	function getConfiguration(section, scope, facts = windowFacts()) {
-		if (section !== undefined && typeof section !== 'string')
-			throw new TypeError('Configuration section must be a string');
+		if (section !== undefined && typeof section !== 'string') throw new TypeError('Configuration section must be a string');
 		const data = facts.configurationData;
 		const resource = scope instanceof Uri ? scope : scope?.uri;
 		const language = scope instanceof Uri ? undefined : scope?.languageId;
 		const folders = facts.workspaceFolders.map(folder => ({ ...folder, uri: Uri.parse(folder.uri) }));
 		const folder = resource ? workspaceFolder(resource, folders) : undefined;
-		const folderModel = folder
-			? data.folders.find(([uri]) => folderKey(Uri.from(uri)) === folderKey(folder.uri))?.[1]
-			: undefined;
-		const models = [
-			data.defaults,
-			data.application,
-			data.userLocal,
-			data.userRemote,
-			data.workspace,
-			folderModel,
-			data.policy,
-		].filter(Boolean);
-		const languageContents = model =>
-			(model?.overrides ?? [])
-				.filter(override => override.identifiers.includes(language))
-				.reduce((result, override) => mergeConfig(result, override.contents), {});
+		const folderModel = folder ? data.folders.find(([uri]) => folderKey(Uri.from(uri)) === folderKey(folder.uri))?.[1] : undefined;
+		const models = [data.defaults, data.application, data.userLocal, data.userRemote, data.workspace, folderModel, data.policy].filter(Boolean);
+		const languageContents = model => (model?.overrides ?? []).filter(override => override.identifiers.includes(language)).reduce((result, override) => mergeConfig(result, override.contents), {});
 		let values = copyConfig(facts.configurationValues);
 		if (folderModel) values = mergeConfig(values, folderModel.contents);
 		if (language) for (const model of models) values = mergeConfig(values, languageContents(model));
@@ -1931,56 +1580,29 @@ export function createApi(configuration, initialization) {
 				return configValue(values, fullKey(key)) !== undefined;
 			},
 			async update(key, value, target) {
-				if (
-					typeof key !== 'string' ||
-					!fullKey(key) ||
-					fullKey(key).length > 1024 ||
-					fullKey(key).includes('\0')
-				)
-					throw new TypeError('Invalid configuration key');
-				if (target !== 'user' && target !== 'workspace')
-					throw new TypeError('Configuration target must be user or workspace');
+				if (typeof key !== 'string' || !fullKey(key) || fullKey(key).length > 1024 || fullKey(key).includes('\0')) throw new TypeError('Invalid configuration key');
+				if (target !== 'user' && target !== 'workspace') throw new TypeError('Configuration target must be user or workspace');
 				if (language !== undefined) return unsupported('Configuration language override writes');
 				if (value === undefined) {
 					await request({ operation: 'resetConfiguration', section: fullKey(key), target }, 'done');
 				} else {
-					await request(
-						{ operation: 'updateConfiguration', section: fullKey(key), value: jsonValue(value), target },
-						'done',
-					);
+					await request({ operation: 'updateConfiguration', section: fullKey(key), value: jsonValue(value), target }, 'done');
 				}
 			},
 			inspect(key) {
 				const name = fullKey(key);
-				if (!models.some(model => model.keys?.includes(name)) && configValue(values, name) === undefined)
-					return undefined;
+				if (!models.some(model => model.keys?.includes(name)) && configValue(values, name) === undefined) return undefined;
 				return {
 					key: name,
 					defaultValue: copyConfig(configValue(data.defaults?.contents, name)),
 					globalValue: combinedValue(data.userLocal, data.userRemote, name, false),
 					workspaceValue: copyConfig(configValue(data.workspace?.contents, name)),
 					workspaceFolderValue: copyConfig(configValue(folderModel?.contents, name)),
-					defaultLanguageValue: language
-						? copyConfig(configValue(languageContents(data.defaults), name))
-						: undefined,
-					globalLanguageValue: language
-						? combinedValue(data.userLocal, data.userRemote, name, true)
-						: undefined,
-					workspaceLanguageValue: language
-						? copyConfig(configValue(languageContents(data.workspace), name))
-						: undefined,
-					workspaceFolderLanguageValue: language
-						? copyConfig(configValue(languageContents(folderModel), name))
-						: undefined,
-					languageIds: [
-						...new Set(
-							models.flatMap(model =>
-								(model.overrides ?? [])
-									.filter(override => override.keys.includes(name))
-									.flatMap(override => override.identifiers),
-							),
-						),
-					],
+					defaultLanguageValue: language ? copyConfig(configValue(languageContents(data.defaults), name)) : undefined,
+					globalLanguageValue: language ? combinedValue(data.userLocal, data.userRemote, name, true) : undefined,
+					workspaceLanguageValue: language ? copyConfig(configValue(languageContents(data.workspace), name)) : undefined,
+					workspaceFolderLanguageValue: language ? copyConfig(configValue(languageContents(folderModel), name)) : undefined,
+					languageIds: [...new Set(models.flatMap(model => (model.overrides ?? []).filter(override => override.keys.includes(name)).flatMap(override => override.identifiers)))],
 				};
 			},
 		});
@@ -2010,9 +1632,7 @@ export function createApi(configuration, initialization) {
 		const owned = serviceOwner();
 		const promise = (async () => {
 			const encoded = JSON.stringify(operation);
-			const result = JSON.parse(
-				await (owned ? globalThis.__ashRequest(id, encoded) : globalThis.__ashBackgroundRequest(encoded)),
-			);
+			const result = JSON.parse(await (owned ? globalThis.__ashRequest(id, encoded) : globalThis.__ashBackgroundRequest(encoded)));
 			if (result.result !== resultKind) throw new Error(`Invalid result for ${operation.operation}`);
 			return result;
 		})();
@@ -2027,26 +1647,18 @@ export function createApi(configuration, initialization) {
 	}
 
 	function storageKey(key) {
-		if (typeof key !== 'string' || !key || key.length > 1024 || /[\u0000-\u001f\u007f-\u009f]/.test(key))
-			throw new TypeError('Invalid extension state key');
+		if (typeof key !== 'string' || !key || key.length > 1024 || /[\u0000-\u001f\u007f-\u009f]/.test(key)) throw new TypeError('Invalid extension state key');
 		return key;
 	}
 	const storage = Object.freeze({
 		async get(key) {
-			const { response } = await request(
-				{ operation: 'coreService', request: { service: 'storageGet', key: storageKey(key) } },
-				'coreService',
-			);
-			if (response?.service !== 'storageValue' || typeof response.found !== 'boolean')
-				throw new Error('Invalid extension state response');
+			const { response } = await request({ operation: 'coreService', request: { service: 'storageGet', key: storageKey(key) } }, 'coreService');
+			if (response?.service !== 'storageValue' || typeof response.found !== 'boolean') throw new Error('Invalid extension state response');
 			return response.found ? jsonValue(response.value) : undefined;
 		},
 		async update(key, value) {
 			storageKey(key);
-			const service =
-				value === undefined
-					? { service: 'storageDelete', key }
-					: { service: 'storageSet', key, value: jsonValue(value) };
+			const service = value === undefined ? { service: 'storageDelete', key } : { service: 'storageSet', key, value: jsonValue(value) };
 			const { response } = await request({ operation: 'coreService', request: service }, 'coreService');
 			if (response?.service !== 'storageUpdated') throw new Error('Invalid extension state response');
 		},
@@ -2055,22 +1667,13 @@ export function createApi(configuration, initialization) {
 	// Use ECMAScript primitives: the restricted V8 host does not supply browser text codecs.
 	function secretBytes(value) {
 		try {
-			return Array.from(encodeURIComponent(value).matchAll(/%([0-9a-f]{2})|(.)/gi), match =>
-				match[1] ? parseInt(match[1], 16) : match[2].charCodeAt(0),
-			);
+			return Array.from(encodeURIComponent(value).matchAll(/%([0-9a-f]{2})|(.)/gi), match => (match[1] ? parseInt(match[1], 16) : match[2].charCodeAt(0)));
 		} catch {
 			throw new TypeError('Invalid extension secret text');
 		}
 	}
 	function secretKey(key) {
-		if (
-			typeof key !== 'string' ||
-			!key ||
-			key.length > 256 ||
-			secretBytes(key).length > 256 ||
-			/[\u0000-\u001f\u007f-\u009f]/.test(key)
-		)
-			throw new TypeError('Invalid extension secret key');
+		if (typeof key !== 'string' || !key || key.length > 256 || secretBytes(key).length > 256 || /[\u0000-\u001f\u007f-\u009f]/.test(key)) throw new TypeError('Invalid extension secret key');
 		return key;
 	}
 	async function secretRequest(service, resultKind) {
@@ -2082,12 +1685,7 @@ export function createApi(configuration, initialization) {
 		async get(key) {
 			const { value } = await secretRequest({ service: 'secretLoad', key: secretKey(key) }, 'secretLoaded');
 			if (value === null) return undefined;
-			if (
-				!Array.isArray(value) ||
-				value.length > 65536 ||
-				value.some(byte => !Number.isInteger(byte) || byte < 0 || byte > 255)
-			)
-				throw new Error('Invalid extension secret response');
+			if (!Array.isArray(value) || value.length > 65536 || value.some(byte => !Number.isInteger(byte) || byte < 0 || byte > 255)) throw new Error('Invalid extension secret response');
 			try {
 				return decodeURIComponent(value.map(byte => '%' + byte.toString(16).padStart(2, '0')).join(''));
 			} catch {
@@ -2131,13 +1729,9 @@ export function createApi(configuration, initialization) {
 	}
 	function message(severity, text, ...items) {
 		if (typeof text !== 'string') throw new TypeError('Message must be a string');
-		if (items.length === 0)
-			return request({ operation: 'showMessage', message: text, severity }, 'done').then(() => undefined);
+		if (items.length === 0) return request({ operation: 'showMessage', message: text, severity }, 'done').then(() => undefined);
 		const labels = items.map(item => (typeof item === 'string' ? item : item?.title));
-		if (
-			labels.length > 16 ||
-			labels.some(label => typeof label !== 'string' || !label.trim() || label.length > 512)
-		) {
+		if (labels.length > 16 || labels.some(label => typeof label !== 'string' || !label.trim() || label.length > 512)) {
 			throw new TypeError('Message buttons require at most 16 non-empty titles; message options are unsupported');
 		}
 		const operation = { operation: 'showMessage', message: text, severity, items: labels };
@@ -2150,8 +1744,7 @@ export function createApi(configuration, initialization) {
 		})();
 		return selection.then(result => {
 			if (result.index === null) return undefined;
-			if (!Number.isInteger(result.index) || result.index < 0 || result.index >= items.length)
-				throw new TypeError('Invalid message button selection');
+			if (!Number.isInteger(result.index) || result.index < 0 || result.index >= items.length) throw new TypeError('Invalid message button selection');
 			return items[result.index];
 		});
 	}
@@ -2174,8 +1767,7 @@ export function createApi(configuration, initialization) {
 	}
 	class Position {
 		constructor(line, character) {
-			if (!Number.isSafeInteger(line) || line < 0 || !Number.isSafeInteger(character) || character < 0)
-				throw new RangeError('Invalid position');
+			if (!Number.isSafeInteger(line) || line < 0 || !Number.isSafeInteger(character) || character < 0) throw new RangeError('Invalid position');
 			this.line = line;
 			this.character = character;
 			Object.freeze(this);
@@ -2199,8 +1791,7 @@ export function createApi(configuration, initialization) {
 			return this.compareTo(other) >= 0;
 		}
 		translate(lineDelta = 0, characterDelta = 0) {
-			if (typeof lineDelta === 'object')
-				return this.translate(lineDelta.lineDelta ?? 0, lineDelta.characterDelta ?? 0);
+			if (typeof lineDelta === 'object') return this.translate(lineDelta.lineDelta ?? 0, lineDelta.characterDelta ?? 0);
 			return new Position(this.line + lineDelta, this.character + characterDelta);
 		}
 		with(line = this.line, character = this.character) {
@@ -2236,26 +1827,14 @@ export function createApi(configuration, initialization) {
 	}
 	class Location {
 		constructor(uri, rangeOrPosition) {
-			if (
-				!(uri instanceof Uri) ||
-				(!(rangeOrPosition instanceof Position) && !(rangeOrPosition instanceof Range))
-			)
-				throw new TypeError('Invalid location');
+			if (!(uri instanceof Uri) || (!(rangeOrPosition instanceof Position) && !(rangeOrPosition instanceof Range))) throw new TypeError('Invalid location');
 			this.uri = uri;
-			this.range =
-				rangeOrPosition instanceof Range ? rangeOrPosition : new Range(rangeOrPosition, rangeOrPosition);
+			this.range = rangeOrPosition instanceof Range ? rangeOrPosition : new Range(rangeOrPosition, rangeOrPosition);
 		}
 	}
 	class Breakpoint {
 		constructor(enabled = true, condition, hitCondition, logMessage) {
-			if (
-				typeof enabled !== 'boolean' ||
-				[condition, hitCondition, logMessage].some(
-					value =>
-						value !== undefined &&
-						(typeof value !== 'string' || value.length > 32768 || value.includes('\0')),
-				)
-			)
+			if (typeof enabled !== 'boolean' || [condition, hitCondition, logMessage].some(value => value !== undefined && (typeof value !== 'string' || value.length > 32768 || value.includes('\0'))))
 				throw new TypeError('Invalid breakpoint properties');
 			breakpointStates.set(this, {
 				id: `ash.breakpoint.${configuration.extensionId}.${++breakpointSequence}.${Math.random().toString(36).slice(2)}`,
@@ -2294,13 +1873,7 @@ export function createApi(configuration, initialization) {
 	class FunctionBreakpoint extends Breakpoint {
 		constructor(functionName, enabled, condition, hitCondition, logMessage) {
 			super(enabled, condition, hitCondition, logMessage);
-			if (
-				typeof functionName !== 'string' ||
-				!functionName ||
-				functionName.length > 32768 ||
-				functionName.includes('\0')
-			)
-				throw new TypeError('FunctionBreakpoint requires a function name');
+			if (typeof functionName !== 'string' || !functionName || functionName.length > 32768 || functionName.includes('\0')) throw new TypeError('FunctionBreakpoint requires a function name');
 			breakpointStates.get(this).name = functionName;
 		}
 		get functionName() {
@@ -2316,13 +1889,7 @@ export function createApi(configuration, initialization) {
 		static parse(value) {
 			const match = /^([a-zA-Z][\w+.-]*):(?:(\/\/)([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?$/.exec(value);
 			if (!match) throw new TypeError('Invalid URI');
-			const uri = new Uri(
-				match[1],
-				decodeURIComponent(match[3] ?? ''),
-				decodeURIComponent(match[4]),
-				match[5] ?? '',
-				match[6] ?? '',
-			);
+			const uri = new Uri(match[1], decodeURIComponent(match[3] ?? ''), decodeURIComponent(match[4]), match[5] ?? '', match[6] ?? '');
 			uriPaths.set(uri, match[4]);
 			return uri;
 		}
@@ -2331,21 +1898,15 @@ export function createApi(configuration, initialization) {
 			if (configuration.pathSeparator === '\\') path = path.replaceAll('\\', '/');
 			if (path.startsWith('//')) {
 				const boundary = path.indexOf('/', 2);
-				return new Uri(
-					'file',
-					boundary < 0 ? path.slice(2) : path.slice(2, boundary),
-					boundary < 0 ? '/' : path.slice(boundary),
-				);
+				return new Uri('file', boundary < 0 ? path.slice(2) : path.slice(2, boundary), boundary < 0 ? '/' : path.slice(boundary));
 			}
 			return new Uri('file', '', path.startsWith('/') ? path : '/' + path);
 		}
 		static joinPath(base, ...segments) {
-			if (!(base instanceof Uri) || !base.path || segments.some(value => typeof value !== 'string'))
-				throw new TypeError('URI path required');
+			if (!(base instanceof Uri) || !base.path || segments.some(value => typeof value !== 'string')) throw new TypeError('URI path required');
 			let path = [base.path, ...segments.filter(value => value.length > 0)].join('/');
 			if (base.scheme === 'file' && configuration.pathSeparator === '\\') path = path.replaceAll('\\', '/');
-			const driveRoot =
-				base.scheme === 'file' && configuration.pathSeparator === '\\' && /^\/[a-zA-Z]:\//.test(path);
+			const driveRoot = base.scheme === 'file' && configuration.pathSeparator === '\\' && /^\/[a-zA-Z]:\//.test(path);
 			const parts = [];
 			for (const part of path.split('/')) {
 				if (!part || part === '.') continue;
@@ -2354,20 +1915,11 @@ export function createApi(configuration, initialization) {
 				} else parts.push(part);
 			}
 			return base.with({
-				path:
-					(path.startsWith('/') ? '/' : '') +
-					parts.join('/') +
-					(path.endsWith('/') && parts.length ? '/' : ''),
+				path: (path.startsWith('/') ? '/' : '') + parts.join('/') + (path.endsWith('/') && parts.length ? '/' : ''),
 			});
 		}
 		static from(components) {
-			return new Uri(
-				components.scheme,
-				components.authority ?? '',
-				components.path ?? '',
-				components.query ?? '',
-				components.fragment ?? '',
-			);
+			return new Uri(components.scheme, components.authority ?? '', components.path ?? '', components.query ?? '', components.fragment ?? '');
 		}
 		with(change) {
 			const next = Uri.from({ ...this, ...change });
@@ -2418,8 +1970,7 @@ export function createApi(configuration, initialization) {
 		},
 	});
 	function observeDocument(snapshot) {
-		if (snapshot.uri !== undefined)
-			observedDocuments.get(globalThis.__ashInvocation(false))?.set(snapshot.uri, snapshot.version);
+		if (snapshot.uri !== undefined) observedDocuments.get(globalThis.__ashInvocation(false))?.set(snapshot.uri, snapshot.version);
 	}
 	function document(snapshot, live = false) {
 		const key = snapshot.uri;
@@ -2457,10 +2008,7 @@ export function createApi(configuration, initialization) {
 				const lines = state.snapshot.text.split('\n');
 				if (position.line < 0) return 0;
 				if (position.line >= lines.length) return state.snapshot.text.length;
-				return (
-					lines.slice(0, position.line).reduce((total, line) => total + line.length + 1, 0) +
-					Math.max(0, Math.min(position.character, lines[position.line].replace(/\r$/, '').length))
-				);
+				return lines.slice(0, position.line).reduce((total, line) => total + line.length + 1, 0) + Math.max(0, Math.min(position.character, lines[position.line].replace(/\r$/, '').length));
 			},
 			positionAt(offset) {
 				observeDocument(state.snapshot);
@@ -2473,17 +2021,13 @@ export function createApi(configuration, initialization) {
 				observeDocument(state.snapshot);
 				const index = typeof line === 'number' ? line : line.line;
 				const lines = state.snapshot.text.split('\n');
-				if (!Number.isSafeInteger(index) || index < 0 || index >= lines.length)
-					throw new RangeError('Line is outside the document');
+				if (!Number.isSafeInteger(index) || index < 0 || index >= lines.length) throw new RangeError('Line is outside the document');
 				const text = lines[index].replace(/\r$/, '');
 				return Object.freeze({
 					lineNumber: index,
 					text,
 					range: new Range(index, 0, index, text.length),
-					rangeIncludingLineBreak:
-						index + 1 < lines.length
-							? new Range(index, 0, index + 1, 0)
-							: new Range(index, 0, index, text.length),
+					rangeIncludingLineBreak: index + 1 < lines.length ? new Range(index, 0, index + 1, 0) : new Range(index, 0, index, text.length),
 					firstNonWhitespaceCharacterIndex: text.search(/\S/) < 0 ? text.length : text.search(/\S/),
 					isEmptyOrWhitespace: !text.trim(),
 				});
@@ -2515,8 +2059,7 @@ export function createApi(configuration, initialization) {
 		if (!documentRegistration) {
 			documentRegistration = ashWorkspace.registerTextDocumentEvents('ash.documents', (_call, event) =>
 				invoke(async () => {
-					if (!['open', 'change', 'close'].includes(event.type) || !event.document)
-						throw new TypeError('Invalid document event');
+					if (!['open', 'change', 'close'].includes(event.type) || !event.document) throw new TypeError('Invalid document event');
 					const value = document(event.document, true);
 					if (event.type === 'close') {
 						const state = documents.get(event.document.uri);
@@ -2534,9 +2077,7 @@ export function createApi(configuration, initialization) {
 									reason: event.reason === 'undo' ? 1 : event.reason === 'redo' ? 2 : undefined,
 								}
 							: value;
-					await Promise.all(
-						[...documentListeners[event.type]].map(entry => entry.listener.call(entry.thisArg, content)),
-					);
+					await Promise.all([...documentListeners[event.type]].map(entry => entry.listener.call(entry.thisArg, content)));
 				}),
 			);
 			subscriptions.push(documentRegistration);
@@ -2544,15 +2085,7 @@ export function createApi(configuration, initialization) {
 	}
 	class Diagnostic {
 		constructor(range, message, severity = 0) {
-			if (
-				!(range instanceof Range) ||
-				typeof message !== 'string' ||
-				!message ||
-				!Number.isInteger(severity) ||
-				severity < 0 ||
-				severity > 3
-			)
-				throw new TypeError('Invalid diagnostic');
+			if (!(range instanceof Range) || typeof message !== 'string' || !message || !Number.isInteger(severity) || severity < 0 || severity > 3) throw new TypeError('Invalid diagnostic');
 			Object.assign(this, { range, message, severity });
 		}
 	}
@@ -2569,19 +2102,9 @@ export function createApi(configuration, initialization) {
 				uri,
 				version: value.version,
 				diagnostics: value.diagnostics.map(diagnostic => {
-					if (
-						!diagnostic ||
-						![0, 1, 2, 3].includes(diagnostic.severity) ||
-						typeof diagnostic.message !== 'string' ||
-						!diagnostic.message ||
-						!(diagnostic.range instanceof Range)
-					)
+					if (!diagnostic || ![0, 1, 2, 3].includes(diagnostic.severity) || typeof diagnostic.message !== 'string' || !diagnostic.message || !(diagnostic.range instanceof Range))
 						throw new TypeError('Invalid diagnostic');
-					if (
-						diagnostic.relatedInformation !== undefined ||
-						diagnostic.tags !== undefined ||
-						typeof diagnostic.code === 'object'
-					)
+					if (diagnostic.relatedInformation !== undefined || diagnostic.tags !== undefined || typeof diagnostic.code === 'object')
 						return unsupported('Diagnostic related information/tags/code targets');
 					return {
 						start: diagnostic.range.start,
@@ -2614,8 +2137,7 @@ export function createApi(configuration, initialization) {
 						next.delete(key);
 						merged.delete(key);
 					} else {
-						if (!Array.isArray(items) || items.length > 10_000)
-							throw new TypeError('Invalid diagnostic list');
+						if (!Array.isArray(items) || items.length > 10_000) throw new TypeError('Invalid diagnostic list');
 						const combined = [...(merged.get(key) ?? []), ...items];
 						merged.set(key, combined);
 						next.set(key, {
@@ -2650,12 +2172,7 @@ export function createApi(configuration, initialization) {
 			dispose() {
 				if (disposed) return;
 				// Deactivation has no live client invocation; the Workbench retires its owners.
-				if (
-					!ashRuntime.isDisposed &&
-					(pending.has(globalThis.__ashInvocation(false)) ||
-						typeof globalThis.__ashBackgroundRequest === 'function')
-				)
-					publish(new Map());
+				if (!ashRuntime.isDisposed && (pending.has(globalThis.__ashInvocation(false)) || typeof globalThis.__ashBackgroundRequest === 'function')) publish(new Map());
 				disposed = true;
 				entries.clear();
 			},
@@ -2722,15 +2239,9 @@ export function createApi(configuration, initialization) {
 			isIncomplete: value?.isIncomplete === true,
 			items: items.map((item, index) => {
 				const label = typeof item.label === 'string' ? item.label : item.label?.label;
-				if (typeof label !== 'string' || !label || (item.kind !== undefined && !completionKinds[item.kind]))
-					throw new TypeError('Invalid completion item');
-				if (item.command !== undefined || item.range?.inserting !== undefined)
-					return unsupported('CompletionItem command/insert-replace ranges');
-				const range =
-					item.textEdit?.range ??
-					item.range ??
-					snapshot.getWordRangeAtPosition(position) ??
-					new Range(position, position);
+				if (typeof label !== 'string' || !label || (item.kind !== undefined && !completionKinds[item.kind])) throw new TypeError('Invalid completion item');
+				if (item.command !== undefined || item.range?.inserting !== undefined) return unsupported('CompletionItem command/insert-replace ranges');
+				const range = item.textEdit?.range ?? item.range ?? snapshot.getWordRangeAtPosition(position) ?? new Range(position, position);
 				const insertion = item.textEdit?.newText ?? item.insertText ?? label;
 				const result = {
 					id: String(index),
@@ -2740,11 +2251,8 @@ export function createApi(configuration, initialization) {
 					insertText: insertion instanceof SnippetString ? insertion.value : insertion,
 					insertTextFormat: insertion instanceof SnippetString ? 'snippet' : 'plainText',
 				};
-				for (const field of ['detail', 'filterText', 'sortText', 'preselect', 'commitCharacters'])
-					if (item[field] !== undefined) result[field] = item[field];
-				if (item.documentation !== undefined)
-					result.documentation =
-						typeof item.documentation === 'string' ? item.documentation : item.documentation.value;
+				for (const field of ['detail', 'filterText', 'sortText', 'preselect', 'commitCharacters']) if (item[field] !== undefined) result[field] = item[field];
+				if (item.documentation !== undefined) result.documentation = typeof item.documentation === 'string' ? item.documentation : item.documentation.value;
 				if (item.additionalTextEdits !== undefined)
 					result.additionalTextEdits = item.additionalTextEdits.map(edit => ({
 						range: edit.range,
@@ -2767,10 +2275,7 @@ export function createApi(configuration, initialization) {
 			typeof provider?.getTreeItem !== 'function'
 		)
 			throw new TypeError('Invalid tree provider or view options');
-		if (
-			options.containerId !== undefined &&
-			(typeof options.containerId !== 'string' || !/^[A-Za-z][A-Za-z0-9._-]{0,127}$/.test(options.containerId))
-		)
+		if (options.containerId !== undefined && (typeof options.containerId !== 'string' || !/^[A-Za-z][A-Za-z0-9._-]{0,127}$/.test(options.containerId)))
 			throw new TypeError('Invalid tree container ID');
 		const registrationId = `ash.tree.${++providerSequence}`;
 		const nodes = new Map();
@@ -2802,57 +2307,30 @@ export function createApi(configuration, initialization) {
 					const token = call.cancellationToken;
 					if (payload.method === 'children') {
 						const elements = (await provider.getChildren(node?.element, token)) ?? [];
-						if (!Array.isArray(elements) || elements.length > 10000)
-							throw new TypeError('Tree children must be a bounded array');
+						if (!Array.isArray(elements) || elements.length > 10000) throw new TypeError('Tree children must be a bounded array');
 						const result = [];
 						const handles = new Set();
 						const pendingNodes = new Map();
 						const pendingIdentities = new Map();
 						for (const element of elements) {
 							const item = await provider.getTreeItem(element, token);
-							if (disposed || token.isCancellationRequested)
-								throw new Error('Tree request was cancelled');
+							if (disposed || token.isCancellationRequested) throw new Error('Tree request was cancelled');
 							if (!item || typeof item !== 'object') throw new TypeError('Invalid tree item');
-							const label =
-								(typeof item.label === 'string' ? item.label : item.label?.label) ??
-								item.resourceUri?.path?.split('/').pop();
-							if (typeof label !== 'string' || label.length > 4096)
-								throw new TypeError('Tree item requires a bounded label');
-							const handle =
-								item.id ??
-								identities.get(element) ??
-								pendingIdentities.get(element) ??
-								`node.${++sequence}`;
-							if (
-								typeof handle !== 'string' ||
-								!handle ||
-								handle.length > 1024 ||
-								handles.has(handle) ||
-								handle === payload.handle
-							)
+							const label = (typeof item.label === 'string' ? item.label : item.label?.label) ?? item.resourceUri?.path?.split('/').pop();
+							if (typeof label !== 'string' || label.length > 4096) throw new TypeError('Tree item requires a bounded label');
+							const handle = item.id ?? identities.get(element) ?? pendingIdentities.get(element) ?? `node.${++sequence}`;
+							if (typeof handle !== 'string' || !handle || handle.length > 1024 || handles.has(handle) || handle === payload.handle)
 								throw new TypeError('Invalid or duplicate tree item ID');
 							const previous = nodes.get(handle);
-							if (previous && previous.parent !== payload.handle)
-								throw new TypeError('A tree item must have one parent');
+							if (previous && previous.parent !== payload.handle) throw new TypeError('A tree item must have one parent');
 							const collapsibleState = item.collapsibleState ?? 0;
-							if (![0, 1, 2].includes(collapsibleState))
-								throw new TypeError('Invalid tree collapse state');
-							const description =
-								item.description === true
-									? item.resourceUri?.path
-									: item.description === false
-										? undefined
-										: item.description;
+							if (![0, 1, 2].includes(collapsibleState)) throw new TypeError('Invalid tree collapse state');
+							const description = item.description === true ? item.resourceUri?.path : item.description === false ? undefined : item.description;
 							const tooltip = typeof item.tooltip === 'string' ? item.tooltip : undefined;
 							for (const text of [description, tooltip]) {
-								if (text !== undefined && (typeof text !== 'string' || text.length > 4096))
-									throw new TypeError('Invalid tree description or tooltip');
+								if (text !== undefined && (typeof text !== 'string' || text.length > 4096)) throw new TypeError('Invalid tree description or tooltip');
 							}
-							if (
-								item.checkboxState !== undefined &&
-								(![0, 1].includes(item.checkboxState) ||
-									typeof provider.setCheckboxState !== 'function')
-							)
+							if (item.checkboxState !== undefined && (![0, 1].includes(item.checkboxState) || typeof provider.setCheckboxState !== 'function'))
 								throw new TypeError('Tree checkboxes require a state and callback');
 							let command;
 							if (item.command) {
@@ -2860,9 +2338,7 @@ export function createApi(configuration, initialization) {
 									typeof item.command.command !== 'string' ||
 									!item.command.command ||
 									item.command.command.length > 256 ||
-									(item.command.arguments !== undefined &&
-										(!Array.isArray(item.command.arguments) ||
-											item.command.arguments.length > 1024))
+									(item.command.arguments !== undefined && (!Array.isArray(item.command.arguments) || item.command.arguments.length > 1024))
 								)
 									throw new TypeError('Invalid tree command');
 								command = { id: item.command.command, arguments: item.command.arguments ?? [] };
@@ -2887,15 +2363,9 @@ export function createApi(configuration, initialization) {
 							removed.add(handle);
 							for (const child of children.get(handle) ?? []) collectRemoved(child);
 						};
-						for (const handle of children.get(payload.handle) ?? [])
-							if (!handles.has(handle)) collectRemoved(handle);
-						if (
-							nodes.size - removed.size + [...handles].filter(handle => !nodes.has(handle)).length >
-							10000
-						)
-							throw new RangeError('Tree node quota exceeded');
-						for (const handle of children.get(payload.handle) ?? [])
-							if (!handles.has(handle)) retire(handle);
+						for (const handle of children.get(payload.handle) ?? []) if (!handles.has(handle)) collectRemoved(handle);
+						if (nodes.size - removed.size + [...handles].filter(handle => !nodes.has(handle)).length > 10000) throw new RangeError('Tree node quota exceeded');
+						for (const handle of children.get(payload.handle) ?? []) if (!handles.has(handle)) retire(handle);
 						for (const [handle, next] of pendingNodes) {
 							const previous = nodes.get(handle);
 							if (previous) identities.delete(previous.element);
@@ -2906,20 +2376,11 @@ export function createApi(configuration, initialization) {
 						return result;
 					}
 					if (!node) throw new Error('Tree operation requires an item');
-					if (
-						payload.method === 'checkbox' &&
-						typeof provider.setCheckboxState === 'function' &&
-						typeof payload.isChecked === 'boolean'
-					) {
+					if (payload.method === 'checkbox' && typeof provider.setCheckboxState === 'function' && typeof payload.isChecked === 'boolean') {
 						await provider.setCheckboxState(node.element, payload.isChecked ? 1 : 0, token);
 						return null;
 					}
-					if (
-						payload.method === 'rename' &&
-						typeof provider.rename === 'function' &&
-						typeof payload.value === 'string' &&
-						payload.value.length <= 32768
-					) {
+					if (payload.method === 'rename' && typeof provider.rename === 'function' && typeof payload.value === 'string' && payload.value.length <= 32768) {
 						await provider.rename(node.element, payload.value, token);
 						return null;
 					}
@@ -2936,11 +2397,7 @@ export function createApi(configuration, initialization) {
 			queued = true;
 			const update = Promise.resolve().then(() => {
 				queued = false;
-				if (!disposed)
-					return request(
-						{ operation: 'editorOperation', payload: { method: 'treeViewChanged', registrationId } },
-						'value',
-					);
+				if (!disposed) return request({ operation: 'editorOperation', payload: { method: 'treeViewChanged', registrationId } }, 'value');
 			});
 			update.catch(error => {
 				if (!disposed) console.error('Tree refresh failed', error);
@@ -2972,21 +2429,16 @@ export function createApi(configuration, initialization) {
 	function localizeMessage(messageOrOptions, ...parameters) {
 		const message = typeof messageOrOptions === 'string' ? messageOrOptions : messageOrOptions?.message;
 		if (typeof message !== 'string') throw new TypeError('Localization requires a message');
-		let values =
-			parameters.length === 1 && parameters[0] && typeof parameters[0] === 'object' ? parameters[0] : parameters;
+		let values = parameters.length === 1 && parameters[0] && typeof parameters[0] === 'object' ? parameters[0] : parameters;
 		let key = message;
 		if (typeof messageOrOptions !== 'string') {
 			values = messageOrOptions.args ?? {};
-			const comment = Array.isArray(messageOrOptions.comment)
-				? messageOrOptions.comment.join('')
-				: messageOrOptions.comment;
+			const comment = Array.isArray(messageOrOptions.comment) ? messageOrOptions.comment.join('') : messageOrOptions.comment;
 			if (comment) key += '/' + comment;
 		}
 		const bundle = localization?.bundle;
 		const translated = bundle && Object.hasOwn(bundle, key) ? bundle[key] : message;
-		return translated.replace(/\{([^}]+)\}/g, (placeholder, name) =>
-			Object.hasOwn(values, name) ? String(values[name]) : placeholder,
-		);
+		return translated.replace(/\{([^}]+)\}/g, (placeholder, name) => (Object.hasOwn(values, name) ? String(values[name]) : placeholder));
 	}
 	const scmBridge = createSCMApi(
 		ashRuntime,
@@ -3008,36 +2460,21 @@ export function createApi(configuration, initialization) {
 	const LogLevel = Object.freeze({ Trace: 1, Debug: 2, Info: 3, Warning: 4, Error: 5, Off: 0 });
 	function ensureOutputEvents() {
 		if (!outputEvents) {
-			outputEvents = ashRuntime.registerContribution(
-				{ kind: 'outputEvents', registrationId: 'ash.output.events' },
-				'outputEvent',
-				(_call, event) =>
-					invoke(() => {
-						if (
-							!event ||
-							typeof event.channelId !== 'string' ||
-							!Number.isInteger(event.level) ||
-							event.level < 0 ||
-							event.level > 5
-						)
-							throw new TypeError('Invalid output log level');
-						logChannels.get(event.channelId)?.(event.level);
-					}),
+			outputEvents = ashRuntime.registerContribution({ kind: 'outputEvents', registrationId: 'ash.output.events' }, 'outputEvent', (_call, event) =>
+				invoke(() => {
+					if (!event || typeof event.channelId !== 'string' || !Number.isInteger(event.level) || event.level < 0 || event.level > 5) throw new TypeError('Invalid output log level');
+					logChannels.get(event.channelId)?.(event.level);
+				}),
 			);
 			subscriptions.push(outputEvents);
 		}
 	}
 
 	function createOutputChannel(name, options) {
-		if (typeof name !== 'string' || !name.trim() || name.length > 512 || name.includes('\0'))
-			throw new TypeError('Invalid output channel label');
+		if (typeof name !== 'string' || !name.trim() || name.length > 512 || name.includes('\0')) throw new TypeError('Invalid output channel label');
 		name = name.trim();
 		const logging = typeof options === 'object' && options !== null && options.log === true;
-		if (
-			options !== undefined &&
-			!logging &&
-			(typeof options !== 'string' || !options.trim() || options.length > 256 || options.includes('\0'))
-		)
+		if (options !== undefined && !logging && (typeof options !== 'string' || !options.trim() || options.length > 256 || options.includes('\0')))
 			throw new TypeError('Invalid output channel options');
 		const channelId = `output.${++outputSequence}`;
 		let disposed = false;
@@ -3052,14 +2489,7 @@ export function createApi(configuration, initialization) {
 			});
 		let pending = Promise.resolve();
 		const send = operation => {
-			pending = pending
-				.catch(() => undefined)
-				.then(() =>
-					request(
-						{ operation: 'editorOperation', payload: { method: 'output', channelId, ...operation } },
-						'value',
-					),
-				);
+			pending = pending.catch(() => undefined).then(() => request({ operation: 'editorOperation', payload: { method: 'output', channelId, ...operation } }, 'value'));
 			// Retain the entire queue before a callback returns, including chained writes.
 			const settled = pending.then(
 				() => undefined,
@@ -3089,16 +2519,7 @@ export function createApi(configuration, initialization) {
 			send({
 				action: 'log',
 				severity,
-				text: [
-					formatted,
-					...args.map(value =>
-						typeof value === 'string'
-							? value
-							: value instanceof Error
-								? (value.stack ?? value.message)
-								: JSON.stringify(value),
-					),
-				].join(' '),
+				text: [formatted, ...args.map(value => (typeof value === 'string' ? value : value instanceof Error ? (value.stack ?? value.message) : JSON.stringify(value)))].join(' '),
 			});
 		};
 		const channel = {
@@ -3119,8 +2540,7 @@ export function createApi(configuration, initialization) {
 				if (!disposed)
 					send({
 						action: 'show',
-						preserveFocus:
-							typeof preserveFocus === 'number' ? arguments[1] === true : preserveFocus === true,
+						preserveFocus: typeof preserveFocus === 'number' ? arguments[1] === true : preserveFocus === true,
 					});
 			},
 			hide() {
@@ -3169,11 +2589,7 @@ export function createApi(configuration, initialization) {
 		speech: Object.freeze({
 			registerSpeechProvider(identifier, provider) {
 				if (!speechAdmitted) throw new Error('Speech providers require the admitted speechProvider capability');
-				const registration = ashSpeech.registerSpeechProvider(
-					`ash.speech.${++providerSequence}`,
-					identifier,
-					provider,
-				);
+				const registration = ashSpeech.registerSpeechProvider(`ash.speech.${++providerSequence}`, identifier, provider);
 				subscriptions.push(registration);
 				return registration;
 			},
@@ -3230,8 +2646,7 @@ export function createApi(configuration, initialization) {
 		scm: scmBridge.api,
 		files: Object.freeze({
 			readTextFile(path) {
-				if (typeof path !== 'string' || !path || path.length > 32768 || path.includes('\0'))
-					throw new TypeError('A workspace file requires a valid path');
+				if (typeof path !== 'string' || !path || path.length > 32768 || path.includes('\0')) throw new TypeError('A workspace file requires a valid path');
 				if (ashRuntime.isDisposed || statusDisposed) throw new Error('Ash extension is not active');
 				const id = globalThis.__ashInvocation();
 				if (!pending.has(id)) throw new Error('Ash file requests require an active callback');
@@ -3276,22 +2691,12 @@ export function createApi(configuration, initialization) {
 			},
 			onDidStartTask: (listener, thisArg, disposables) => listenTask('start', listener, thisArg, disposables),
 			onDidEndTask: (listener, thisArg, disposables) => listenTask('end', listener, thisArg, disposables),
-			onDidStartTaskProcess: (listener, thisArg, disposables) =>
-				listenTask('processStart', listener, thisArg, disposables),
-			onDidEndTaskProcess: (listener, thisArg, disposables) =>
-				listenTask('processEnd', listener, thisArg, disposables),
+			onDidStartTaskProcess: (listener, thisArg, disposables) => listenTask('processStart', listener, thisArg, disposables),
+			onDidEndTaskProcess: (listener, thisArg, disposables) => listenTask('processEnd', listener, thisArg, disposables),
 			async fetchTasks(filter = {}) {
-				if (
-					(filter.version !== undefined && typeof filter.version !== 'string') ||
-					(filter.type !== undefined && typeof filter.type !== 'string')
-				)
-					throw new TypeError('Invalid task filter');
-				const result = await request(
-					{ operation: 'fetchTasks', version: filter.version ?? null, taskType: filter.type ?? null },
-					'tasks',
-				);
-				if (!Array.isArray(result.tasks) || !Array.isArray(result.executions))
-					throw new TypeError('Invalid task catalog');
+				if ((filter.version !== undefined && typeof filter.version !== 'string') || (filter.type !== undefined && typeof filter.type !== 'string')) throw new TypeError('Invalid task filter');
+				const result = await request({ operation: 'fetchTasks', version: filter.version ?? null, taskType: filter.type ?? null }, 'tasks');
+				if (!Array.isArray(result.tasks) || !Array.isArray(result.executions)) throw new TypeError('Invalid task catalog');
 				applyTaskSnapshot(result.executions, result.sequence);
 				return result.tasks.map(decodeTask);
 			},
@@ -3302,8 +2707,7 @@ export function createApi(configuration, initialization) {
 				if (
 					fetchedId &&
 					(fetched.signature !== taskFingerprint(task) ||
-						(task.execution instanceof CustomExecution &&
-							(fetched.execution !== task.execution || fetched.callback !== task.execution.callback)))
+						(task.execution instanceof CustomExecution && (fetched.execution !== task.execution || fetched.callback !== task.execution.callback)))
 				) {
 					// Changed metadata becomes an explicit execution; the original custom
 					// callback stays with its provider and is selected separately below.
@@ -3311,26 +2715,17 @@ export function createApi(configuration, initialization) {
 					fetchedTaskSnapshots.delete(task);
 					fetchedId = undefined;
 				}
-				if (!fetchedId && !providedTaskIds.has(task))
-					providedTaskIds.set(task, `provided.${++providedTaskSequence}`);
+				if (!fetchedId && !providedTaskIds.has(task)) providedTaskIds.set(task, `provided.${++providedTaskSequence}`);
 				const taskId = fetchedId ?? providedTaskIds.get(task);
 				const customId = fetchedCustomExecutions.get(task.execution);
-				const originalCustom =
-					customId && typeof task.execution.callback !== 'function'
-						? { id: customId, execution: task.execution }
-						: undefined;
-				const provided = fetchedId
-					? null
-					: encodeTask(task, taskId, providedCustomExecutions, originalCustom?.execution);
+				const originalCustom = customId && typeof task.execution.callback !== 'function' ? { id: customId, execution: task.execution } : undefined;
+				const provided = fetchedId ? null : encodeTask(task, taskId, providedCustomExecutions, originalCustom?.execution);
 				const pending = pendingTaskExecutions.get(taskId) ?? { task, count: 0 };
 				pending.count++;
 				pendingTaskExecutions.set(taskId, pending);
 				let result;
 				try {
-					result = await request(
-						{ operation: 'executeTask', taskId: fetchedId ?? originalCustom?.id ?? null, task: provided },
-						'taskExecution',
-					);
+					result = await request({ operation: 'executeTask', taskId: fetchedId ?? originalCustom?.id ?? null, task: provided }, 'taskExecution');
 					return decodeTaskExecution(result.execution, task, result.sequence);
 				} finally {
 					if (--pending.count === 0) pendingTaskExecutions.delete(taskId);
@@ -3376,8 +2771,7 @@ export function createApi(configuration, initialization) {
 							const task = decodeTask(value);
 							const resolved = await provider.resolveTask(task, context.cancellationToken);
 							if (resolved === undefined) return undefined;
-							if (resolved.definition !== task.definition)
-								throw new Error('resolveTask must retain the exact TaskDefinition');
+							if (resolved.definition !== task.definition) throw new Error('resolveTask must retain the exact TaskDefinition');
 							return encodeTask(resolved, value.id, customExecutions);
 						}),
 					createTaskTerminal: (_context, executionId, definition) =>
@@ -3406,36 +2800,21 @@ export function createApi(configuration, initialization) {
 			get activeStackItem() {
 				return activeStackItem;
 			},
-			onDidChangeActiveStackItem: (listener, thisArg, disposables) =>
-				listenDebug('stackItem', listener, thisArg, disposables),
+			onDidChangeActiveStackItem: (listener, thisArg, disposables) => listenDebug('stackItem', listener, thisArg, disposables),
 			asDebugSourceUri(source, session = activeDebugSession) {
-				if (!source || typeof source !== 'object' || Array.isArray(source))
-					throw new TypeError('Invalid debug source');
+				if (!source || typeof source !== 'object' || Array.isArray(source)) throw new TypeError('Invalid debug source');
 				if (source.sourceReference !== undefined && source.sourceReference > 0) {
-					if (
-						!Number.isSafeInteger(source.sourceReference) ||
-						!/^[A-Za-z0-9._-]{1,256}$/.test(session?.id ?? '')
-					)
-						throw new TypeError('A debug source reference requires a session');
+					if (!Number.isSafeInteger(source.sourceReference) || !/^[A-Za-z0-9._-]{1,256}$/.test(session?.id ?? '')) throw new TypeError('A debug source reference requires a session');
 					const path = source.path || source.name || `source-${source.sourceReference}`;
-					if (typeof path !== 'string' || path.includes('\0') || path.length > 32768)
-						throw new TypeError('Invalid debug source path');
+					if (typeof path !== 'string' || path.includes('\0') || path.length > 32768) throw new TypeError('Invalid debug source path');
 					return Uri.from({
 						scheme: 'debug',
 						path: path.startsWith('/') ? path : '/' + path,
 						query: `session=${session.id}&ref=${source.sourceReference}`,
 					});
 				}
-				if (
-					typeof source.path !== 'string' ||
-					!source.path ||
-					source.path.includes('\0') ||
-					source.path.length > 32768
-				)
-					throw new TypeError('A debug source requires a path or reference');
-				const path = /^(?:[a-z]:[\\/]|\\\\)/i.test(source.path)
-					? source.path.replaceAll('\\', '/')
-					: source.path;
+				if (typeof source.path !== 'string' || !source.path || source.path.includes('\0') || source.path.length > 32768) throw new TypeError('A debug source requires a path or reference');
+				const path = /^(?:[a-z]:[\\/]|\\\\)/i.test(source.path) ? source.path.replaceAll('\\', '/') : source.path;
 				if (path.startsWith('//')) {
 					const slash = path.indexOf('/', 2);
 					return Uri.from({
@@ -3449,59 +2828,34 @@ export function createApi(configuration, initialization) {
 			get breakpoints() {
 				return Object.freeze([...debugBreakpoints.values()]);
 			},
-			onDidChangeBreakpoints: (listener, thisArg, disposables) =>
-				listenDebug('breakpoints', listener, thisArg, disposables),
+			onDidChangeBreakpoints: (listener, thisArg, disposables) => listenDebug('breakpoints', listener, thisArg, disposables),
 			addBreakpoints: points => changeBreakpoints(points, false),
 			removeBreakpoints: points => changeBreakpoints(points, true),
-			onDidStartDebugSession: (listener, thisArg, disposables) =>
-				listenDebug('start', listener, thisArg, disposables),
-			onDidTerminateDebugSession: (listener, thisArg, disposables) =>
-				listenDebug('end', listener, thisArg, disposables),
-			onDidChangeActiveDebugSession: (listener, thisArg, disposables) =>
-				listenDebug('active', listener, thisArg, disposables),
-			onDidReceiveDebugSessionCustomEvent: (listener, thisArg, disposables) =>
-				listenDebug('custom', listener, thisArg, disposables),
+			onDidStartDebugSession: (listener, thisArg, disposables) => listenDebug('start', listener, thisArg, disposables),
+			onDidTerminateDebugSession: (listener, thisArg, disposables) => listenDebug('end', listener, thisArg, disposables),
+			onDidChangeActiveDebugSession: (listener, thisArg, disposables) => listenDebug('active', listener, thisArg, disposables),
+			onDidReceiveDebugSessionCustomEvent: (listener, thisArg, disposables) => listenDebug('custom', listener, thisArg, disposables),
 			startDebugging(folder, nameOrConfiguration, options) {
-				if (options && typeof options.id === 'string' && debugSessions.get(options.id)?.handle === options)
-					options = { parentSession: options };
+				if (options && typeof options.id === 'string' && debugSessions.get(options.id)?.handle === options) options = { parentSession: options };
 				let encoded;
 				if (options !== undefined) {
 					if (
 						!options ||
 						typeof options !== 'object' ||
 						Array.isArray(options) ||
-						Object.keys(options).some(
-							key =>
-								![
-									'parentSession',
-									'lifecycleManagedByParent',
-									'consoleMode',
-									'noDebug',
-									'suppressSaveBeforeStart',
-								].includes(key),
-						) ||
-						[options.noDebug, options.lifecycleManagedByParent, options.suppressSaveBeforeStart].some(
-							value => value !== undefined && typeof value !== 'boolean',
-						) ||
+						Object.keys(options).some(key => !['parentSession', 'lifecycleManagedByParent', 'consoleMode', 'noDebug', 'suppressSaveBeforeStart'].includes(key)) ||
+						[options.noDebug, options.lifecycleManagedByParent, options.suppressSaveBeforeStart].some(value => value !== undefined && typeof value !== 'boolean') ||
 						(options.consoleMode !== undefined && ![0, 1].includes(options.consoleMode))
 					)
 						throw new TypeError('Invalid Debug session options');
-					if (
-						options.parentSession !== undefined &&
-						debugSessions.get(options.parentSession?.id)?.handle !== options.parentSession
-					)
-						throw new TypeError('Invalid parent Debug session');
+					if (options.parentSession !== undefined && debugSessions.get(options.parentSession?.id)?.handle !== options.parentSession) throw new TypeError('Invalid parent Debug session');
 					const { parentSession, ...values } = options;
 					encoded = {
 						...values,
 						...(parentSession === undefined ? {} : { parentSessionId: parentSession.id }),
 					};
 				}
-				if (
-					typeof nameOrConfiguration !== 'string' &&
-					(!nameOrConfiguration || typeof nameOrConfiguration !== 'object')
-				)
-					throw new TypeError('Debugging requires a name or configuration');
+				if (typeof nameOrConfiguration !== 'string' && (!nameOrConfiguration || typeof nameOrConfiguration !== 'object')) throw new TypeError('Debugging requires a name or configuration');
 				return request(
 					{
 						operation: 'startDebugging',
@@ -3513,59 +2867,28 @@ export function createApi(configuration, initialization) {
 				).then(result => result.started);
 			},
 			stopDebugging(session) {
-				if (session !== undefined && typeof session.id !== 'string')
-					throw new TypeError('Invalid debug session');
-				return request({ operation: 'stopDebugging', sessionId: session?.id ?? null }, 'done').then(
-					() => undefined,
-				);
+				if (session !== undefined && typeof session.id !== 'string') throw new TypeError('Invalid debug session');
+				return request({ operation: 'stopDebugging', sessionId: session?.id ?? null }, 'done').then(() => undefined);
 			},
 			registerDebugConfigurationProvider(type, provider, triggerKind = 1) {
-				const methods = [
-					'provideDebugConfigurations',
-					'resolveDebugConfiguration',
-					'resolveDebugConfigurationWithSubstitutedVariables',
-				];
-				if (
-					!provider ||
-					!methods.some(method => typeof provider[method] === 'function') ||
-					methods.some(method => provider[method] !== undefined && typeof provider[method] !== 'function')
-				)
+				const methods = ['provideDebugConfigurations', 'resolveDebugConfiguration', 'resolveDebugConfigurationWithSubstitutedVariables'];
+				if (!provider || !methods.some(method => typeof provider[method] === 'function') || methods.some(method => provider[method] !== undefined && typeof provider[method] !== 'function'))
 					throw new TypeError('Debug configuration provider requires callbacks');
 				const folder = value => {
 					if (value === undefined) return undefined;
-					if (
-						typeof value?.uri !== 'string' ||
-						typeof value.name !== 'string' ||
-						!Number.isSafeInteger(value.index) ||
-						value.index < 0
-					)
+					if (typeof value?.uri !== 'string' || typeof value.name !== 'string' || !Number.isSafeInteger(value.index) || value.index < 0)
 						throw new TypeError('Invalid Debug workspace folder');
 					return Object.freeze({ uri: Uri.parse(value.uri), name: value.name, index: value.index });
 				};
 				const callbacks = {};
 				if (provider.provideDebugConfigurations)
-					callbacks.provideDebugConfigurations = (context, value) =>
-						invoke(() => provider.provideDebugConfigurations(folder(value), context.cancellationToken));
+					callbacks.provideDebugConfigurations = (context, value) => invoke(() => provider.provideDebugConfigurations(folder(value), context.cancellationToken));
 				if (provider.resolveDebugConfiguration)
-					callbacks.resolveDebugConfiguration = (context, value, config) =>
-						invoke(() =>
-							provider.resolveDebugConfiguration(folder(value), config, context.cancellationToken),
-						);
+					callbacks.resolveDebugConfiguration = (context, value, config) => invoke(() => provider.resolveDebugConfiguration(folder(value), config, context.cancellationToken));
 				if (provider.resolveDebugConfigurationWithSubstitutedVariables)
 					callbacks.resolveDebugConfigurationWithSubstitutedVariables = (context, value, config) =>
-						invoke(() =>
-							provider.resolveDebugConfigurationWithSubstitutedVariables(
-								folder(value),
-								config,
-								context.cancellationToken,
-							),
-						);
-				return ashDebug.registerDebugConfigurationProvider(
-					`ash.debugConfiguration.${++providerSequence}`,
-					type,
-					callbacks,
-					triggerKind,
-				);
+						invoke(() => provider.resolveDebugConfigurationWithSubstitutedVariables(folder(value), config, context.cancellationToken));
+				return ashDebug.registerDebugConfigurationProvider(`ash.debugConfiguration.${++providerSequence}`, type, callbacks, triggerKind);
 			},
 			registerDebugAdapterTrackerFactory(type, factory) {
 				if (typeof type !== 'string' || !type || typeof factory?.createDebugAdapterTracker !== 'function') {
@@ -3579,30 +2902,21 @@ export function createApi(configuration, initialization) {
 								return undefined;
 							}
 							const callbacks = {};
-							for (const operation of [
-								'onWillStartSession',
-								'onWillReceiveMessage',
-								'onDidSendMessage',
-								'onWillStopSession',
-								'onError',
-								'onExit',
-							]) {
+							for (const operation of ['onWillStartSession', 'onWillReceiveMessage', 'onDidSendMessage', 'onWillStopSession', 'onError', 'onExit']) {
 								if (tracker[operation] === undefined) {
 									continue;
 								}
 								if (typeof tracker[operation] !== 'function') {
 									throw new TypeError('Invalid Debug Adapter tracker callback');
 								}
-								callbacks[operation] = (_context, ...args) =>
-									invoke(() => tracker[operation].apply(tracker, args));
+								callbacks[operation] = (_context, ...args) => invoke(() => tracker[operation].apply(tracker, args));
 							}
 							return callbacks;
 						}),
 				});
 			},
 			registerDebugAdapterDescriptorFactory(type, factory) {
-				if (!debuggerTypes.has(type) || registeredDebuggerTypes.has(type))
-					throw new Error(`Debug adapter type '${type}' is undeclared or already registered`);
+				if (!debuggerTypes.has(type) || registeredDebuggerTypes.has(type)) throw new Error(`Debug adapter type '${type}' is undeclared or already registered`);
 				const handle = ashDebug.registerDebugAdapterDescriptorFactory(`ash.debug.${++providerSequence}`, type, {
 					createDebugAdapterDescriptor: (_context, value, session, executable) =>
 						invoke(async () => {
@@ -3618,20 +2932,14 @@ export function createApi(configuration, initialization) {
 							if (descriptor === undefined || descriptor === null) return descriptor;
 							if (descriptor instanceof DebugAdapterInlineImplementation) {
 								const implementation = descriptor.implementation;
-								if (
-									typeof implementation?.handleMessage !== 'function' ||
-									typeof implementation.onDidSendMessage !== 'function' ||
-									typeof implementation.dispose !== 'function'
-								) {
+								if (typeof implementation?.handleMessage !== 'function' || typeof implementation.onDidSendMessage !== 'function' || typeof implementation.dispose !== 'function') {
 									throw new TypeError('Invalid inline Debug Adapter implementation');
 								}
 								return {
 									implementation: {
-										handleMessage: (_context, message) =>
-											invoke(() => implementation.handleMessage(message)),
+										handleMessage: (_context, message) => invoke(() => implementation.handleMessage(message)),
 										onDidSendMessage: listener => implementation.onDidSendMessage(listener),
-										dispose: context =>
-											context ? invoke(() => implementation.dispose()) : implementation.dispose(),
+										dispose: context => (context ? invoke(() => implementation.dispose()) : implementation.dispose()),
 									},
 								};
 							}
@@ -3647,8 +2955,7 @@ export function createApi(configuration, initialization) {
 							if (descriptor instanceof DebugAdapterNamedPipeServer) {
 								return { connection: { type: 'namedPipe', path: descriptor.path } };
 							}
-							if (!(descriptor instanceof DebugAdapterExecutable))
-								return unsupported('Debug adapter descriptor');
+							if (!(descriptor instanceof DebugAdapterExecutable)) return unsupported('Debug adapter descriptor');
 							return {
 								program: descriptor.command,
 								arguments: descriptor.args,
@@ -3719,11 +3026,7 @@ export function createApi(configuration, initialization) {
 		Diagnostic,
 		SnippetString,
 		DiagnosticSeverity: Object.freeze({ Error: 0, Warning: 1, Information: 2, Hint: 3 }),
-		CompletionItemKind: Object.freeze(
-			Object.fromEntries(
-				completionNames.flatMap((name, index) => (completionKinds[index] ? [[name, index]] : [])),
-			),
-		),
+		CompletionItemKind: Object.freeze(Object.fromEntries(completionNames.flatMap((name, index) => (completionKinds[index] ? [[name, index]] : [])))),
 		CompletionTriggerKind: Object.freeze({ Invoke: 0, TriggerCharacter: 1, TriggerForIncompleteCompletions: 2 }),
 		CompletionItem: class CompletionItem {
 			constructor(label, kind) {
@@ -3773,18 +3076,12 @@ export function createApi(configuration, initialization) {
 		},
 		commands: contract('commands', {
 			async execute(command, ...args) {
-				if (typeof command !== 'string' || !command || command.includes('\0'))
-					throw new TypeError('execute requires a command ID');
+				if (typeof command !== 'string' || !command || command.includes('\0')) throw new TypeError('execute requires a command ID');
 				if (command === 'ash.openWith') {
 					const [resource, viewType, options] = args;
 					const editor = editorContexts.get(globalThis.__ashInvocation(false));
 					command = '_workbench.openWith';
-					args = [
-						resource.toJSON(),
-						viewType,
-						[typeof options === 'number' ? options : (options?.viewColumn ?? -1)],
-						editor?.groupId,
-					];
+					args = [resource.toJSON(), viewType, [typeof options === 'number' ? options : (options?.viewColumn ?? -1)], editor?.groupId];
 				}
 				if (command === 'reopenActiveEditorWith' && args.length === 1) {
 					const editor = editorContexts.get(globalThis.__ashInvocation(false));
@@ -3794,16 +3091,10 @@ export function createApi(configuration, initialization) {
 				return result.hasValue === false ? undefined : result.value;
 			},
 			register(command, callback, thisArg) {
-				if (typeof callback !== 'function' || !titles.has(command))
-					throw new TypeError('Command must be declared in package.json');
-				const contribution =
-					configuration.manifest?.contributes?.commands?.find(entry => entry.command === command) ??
-					configuration.commands.find(entry => entry.command === command);
-				const menus = Object.entries(configuration.manifest?.contributes?.menus ?? {}).flatMap(
-					([menu, entries]) =>
-						entries
-							.filter(entry => entry.command === command)
-							.map(({ command: _command, ...entry }) => ({ menu, ...entry })),
+				if (typeof callback !== 'function' || !titles.has(command)) throw new TypeError('Command must be declared in package.json');
+				const contribution = configuration.manifest?.contributes?.commands?.find(entry => entry.command === command) ?? configuration.commands.find(entry => entry.command === command);
+				const menus = Object.entries(configuration.manifest?.contributes?.menus ?? {}).flatMap(([menu, entries]) =>
+					entries.filter(entry => entry.command === command).map(({ command: _command, ...entry }) => ({ menu, ...entry })),
 				);
 				return ashRuntime.registerContribution(
 					{
@@ -3821,9 +3112,7 @@ export function createApi(configuration, initialization) {
 						invoke(() => {
 							const editor = payload.activeEditor;
 							editorContexts.set(globalThis.__ashInvocation(false), editor);
-							activeEditor = editor
-								? { document: { uri: Uri.from(editor.resource) }, viewColumn: undefined }
-								: undefined;
+							activeEditor = editor ? { document: { uri: Uri.from(editor.resource) }, viewColumn: undefined } : undefined;
 							return callback.apply(thisArg, payload.arguments);
 						}),
 				);
@@ -3831,12 +3120,7 @@ export function createApi(configuration, initialization) {
 		}),
 		window: contract('window', {
 			async openComparison(input, options, sideBySide = false) {
-				if (
-					!input ||
-					typeof input !== 'object' ||
-					Array.isArray(input) ||
-					!['diff', 'binaryDiff', 'multiDiff'].includes(input.kind)
-				)
+				if (!input || typeof input !== 'object' || Array.isArray(input) || !['diff', 'binaryDiff', 'multiDiff'].includes(input.kind))
 					throw new TypeError('A comparison requires a diff, binaryDiff or multiDiff input');
 				if (typeof sideBySide !== 'boolean') throw new TypeError('Comparison sideBySide must be a boolean');
 				await request(
@@ -3848,45 +3132,36 @@ export function createApi(configuration, initialization) {
 				);
 			},
 			registerTerminalCompletionProvider(provider, ...triggerCharacters) {
-				if (!terminalCompletionsAdmitted)
-					throw new Error('Terminal completions require the admitted terminalCompletionProvider capability');
-				if (typeof provider?.provideTerminalCompletions !== 'function')
-					throw new TypeError('Invalid terminal completion provider');
+				if (!terminalCompletionsAdmitted) throw new Error('Terminal completions require the admitted terminalCompletionProvider capability');
+				if (typeof provider?.provideTerminalCompletions !== 'function') throw new TypeError('Invalid terminal completion provider');
 				const terminals = new Map();
-				const registration = ashTerminals.registerTerminalCompletionProvider(
-					`ash.terminalCompletions.${++providerSequence}`,
-					triggerCharacters,
-					(context, payload) =>
-						invoke(async () => {
-							let entry = terminals.get(payload.terminal.id);
-							if (!entry) {
-								entry = { snapshot: payload.terminal };
-								entry.terminal = contract('Terminal', {
-									get name() {
-										return entry.snapshot.name;
-									},
-									get processId() {
-										return Promise.resolve(entry.snapshot.processId ?? undefined);
-									},
-								});
-								terminals.set(payload.terminal.id, entry);
-								if (terminals.size > 256) terminals.delete(terminals.keys().next().value);
-							}
-							entry.snapshot = payload.terminal;
-							const result = await provider.provideTerminalCompletions(
-								entry.terminal,
-								{ commandLine: payload.commandLine, cursorIndex: payload.cursorIndex },
-								context.cancellationToken,
-							);
-							if (!result?.resourceOptions) return result;
-							return {
-								items: result.items,
-								resourceOptions: {
-									...result.resourceOptions,
-									cwd: result.resourceOptions.cwd.toString(),
+				const registration = ashTerminals.registerTerminalCompletionProvider(`ash.terminalCompletions.${++providerSequence}`, triggerCharacters, (context, payload) =>
+					invoke(async () => {
+						let entry = terminals.get(payload.terminal.id);
+						if (!entry) {
+							entry = { snapshot: payload.terminal };
+							entry.terminal = contract('Terminal', {
+								get name() {
+									return entry.snapshot.name;
 								},
-							};
-						}),
+								get processId() {
+									return Promise.resolve(entry.snapshot.processId ?? undefined);
+								},
+							});
+							terminals.set(payload.terminal.id, entry);
+							if (terminals.size > 256) terminals.delete(terminals.keys().next().value);
+						}
+						entry.snapshot = payload.terminal;
+						const result = await provider.provideTerminalCompletions(entry.terminal, { commandLine: payload.commandLine, cursorIndex: payload.cursorIndex }, context.cancellationToken);
+						if (!result?.resourceOptions) return result;
+						return {
+							items: result.items,
+							resourceOptions: {
+								...result.resourceOptions,
+								cwd: result.resourceOptions.cwd.toString(),
+							},
+						};
+					}),
 				);
 				return new Disposable(() => {
 					registration.dispose();
@@ -3894,31 +3169,20 @@ export function createApi(configuration, initialization) {
 				});
 			},
 			registerTerminalQuickFixProvider(id, provider) {
-				if (!terminalQuickFixesAdmitted)
-					throw new Error('Terminal quick fixes require the admitted terminalQuickFixProvider capability');
-				const selector = configuration.manifest?.contributes?.terminalQuickFixes?.find(
-					value => value.id === id,
-				);
-				if (!selector || typeof provider?.provideTerminalQuickFixes !== 'function')
-					throw new TypeError('Terminal quick fixes require a declared selector and provider');
+				if (!terminalQuickFixesAdmitted) throw new Error('Terminal quick fixes require the admitted terminalQuickFixProvider capability');
+				const selector = configuration.manifest?.contributes?.terminalQuickFixes?.find(value => value.id === id);
+				if (!selector || typeof provider?.provideTerminalQuickFixes !== 'function') throw new TypeError('Terminal quick fixes require a declared selector and provider');
 				return ashTerminals.registerTerminalQuickFixProvider(
 					`ash.terminalQuickFixes.${++providerSequence}`,
 					id,
 					selector,
-					(context, match) =>
-						invoke(() => provider.provideTerminalQuickFixes(match, context.cancellationToken)),
-					(_context, command) =>
-						invoke(() => api.commands.execute(command.command, ...(command.arguments ?? []))),
+					(context, match) => invoke(() => provider.provideTerminalQuickFixes(match, context.cancellationToken)),
+					(_context, command) => invoke(() => api.commands.execute(command.command, ...(command.arguments ?? []))),
 				);
 			},
 			registerTerminalLinkProvider(provider) {
-				if (!terminalLinksAdmitted)
-					throw new Error('Terminal link providers require the admitted terminalLinkProvider capability');
-				if (
-					typeof provider?.provideTerminalLinks !== 'function' ||
-					typeof provider?.handleTerminalLink !== 'function'
-				)
-					throw new TypeError('Invalid terminal link provider');
+				if (!terminalLinksAdmitted) throw new Error('Terminal link providers require the admitted terminalLinkProvider capability');
+				if (typeof provider?.provideTerminalLinks !== 'function' || typeof provider?.handleTerminalLink !== 'function') throw new TypeError('Invalid terminal link provider');
 				const terminals = new Map();
 				const handle = ashTerminals.registerTerminalLinkProvider(`ash.terminalLinks.${++providerSequence}`, {
 					provideTerminalLinks: (context, payload) =>
@@ -3942,13 +3206,9 @@ export function createApi(configuration, initialization) {
 								terminals.set(payload.terminal.id, entry);
 								if (terminals.size > 256) terminals.delete(terminals.keys().next().value);
 							}
-							if (entry.snapshot.processId !== payload.terminal.processId)
-								entry.processId = Promise.resolve(payload.terminal.processId ?? undefined);
+							if (entry.snapshot.processId !== payload.terminal.processId) entry.processId = Promise.resolve(payload.terminal.processId ?? undefined);
 							entry.snapshot = payload.terminal;
-							return provider.provideTerminalLinks(
-								{ line: payload.line, terminal: entry.terminal },
-								context.cancellationToken,
-							);
+							return provider.provideTerminalLinks({ line: payload.line, terminal: entry.terminal }, context.cancellationToken);
 						}),
 					handleTerminalLink: (_context, link) => invoke(() => provider.handleTerminalLink(link)),
 				});
@@ -3959,45 +3219,32 @@ export function createApi(configuration, initialization) {
 			},
 			registerTerminalProfileProvider(id, provider) {
 				const declaration = terminalProfiles.find(profile => profile.id === id);
-				if (!declaration || typeof provider?.provideTerminalProfile !== 'function')
-					throw new TypeError('Terminal profile requires a declared ID and provideTerminalProfile callback');
-				const handle = ashTerminals.registerTerminalProfileProvider(
-					`ash.terminalProfile.${++providerSequence}`,
-					id,
-					declaration.title,
-					{
-						createTerminalProfile: context =>
-							invoke(async () => {
-								const profile = await provider.provideTerminalProfile(context.cancellationToken);
-								if (profile === undefined || profile === null) return undefined;
-								const options = profile.options;
-								if (!options || typeof options !== 'object')
-									throw new TypeError('provideTerminalProfile must return a TerminalProfile');
-								const result = { name: options.name ?? declaration.title };
-								if (options.pty) result.pty = options.pty;
-								else {
-									if (options.shellPath !== undefined) {
-										if (typeof options.shellPath !== 'string' || !options.shellPath)
-											throw new TypeError('Terminal profile shellPath must be a nonempty string');
-										result.shellPath = options.shellPath;
-									}
-									if (
-										options.shellArgs !== undefined &&
-										typeof options.shellArgs !== 'string' &&
-										!Array.isArray(options.shellArgs)
-									)
-										throw new TypeError('Terminal profile shellArgs must be a string or array');
-									if (options.shellArgs !== undefined) result.shellArgs = options.shellArgs;
-									if (options.cwd !== undefined)
-										result.cwd = typeof options.cwd === 'string' ? options.cwd : options.cwd.fsPath;
-									if (options.env !== undefined) result.env = options.env;
+				if (!declaration || typeof provider?.provideTerminalProfile !== 'function') throw new TypeError('Terminal profile requires a declared ID and provideTerminalProfile callback');
+				const handle = ashTerminals.registerTerminalProfileProvider(`ash.terminalProfile.${++providerSequence}`, id, declaration.title, {
+					createTerminalProfile: context =>
+						invoke(async () => {
+							const profile = await provider.provideTerminalProfile(context.cancellationToken);
+							if (profile === undefined || profile === null) return undefined;
+							const options = profile.options;
+							if (!options || typeof options !== 'object') throw new TypeError('provideTerminalProfile must return a TerminalProfile');
+							const result = { name: options.name ?? declaration.title };
+							if (options.pty) result.pty = options.pty;
+							else {
+								if (options.shellPath !== undefined) {
+									if (typeof options.shellPath !== 'string' || !options.shellPath) throw new TypeError('Terminal profile shellPath must be a nonempty string');
+									result.shellPath = options.shellPath;
 								}
-								if (options.iconPath?.id) result.icon = options.iconPath.id;
-								if (options.color?.id) result.color = options.color.id;
-								return result;
-							}),
-					},
-				);
+								if (options.shellArgs !== undefined && typeof options.shellArgs !== 'string' && !Array.isArray(options.shellArgs))
+									throw new TypeError('Terminal profile shellArgs must be a string or array');
+								if (options.shellArgs !== undefined) result.shellArgs = options.shellArgs;
+								if (options.cwd !== undefined) result.cwd = typeof options.cwd === 'string' ? options.cwd : options.cwd.fsPath;
+								if (options.env !== undefined) result.env = options.env;
+							}
+							if (options.iconPath?.id) result.icon = options.iconPath.id;
+							if (options.color?.id) result.color = options.color.id;
+							return result;
+						}),
+				});
 				return new Disposable(() => handle.dispose());
 			},
 			createOutputChannel,
@@ -4009,8 +3256,7 @@ export function createApi(configuration, initialization) {
 			registerCanvasProvider,
 			async showImageEditor(viewType, options) {
 				if (!imageEditorAdmitted) throw new Error('Image editors require the admitted imageEditor capability');
-				if (typeof viewType !== 'string' || !['screen', 'selection'].includes(options?.source))
-					throw new TypeError('Invalid image editor request');
+				if (typeof viewType !== 'string' || !['screen', 'selection'].includes(options?.source)) throw new TypeError('Invalid image editor request');
 				await request(
 					{
 						operation: 'editorOperation',
@@ -4024,8 +3270,7 @@ export function createApi(configuration, initialization) {
 			showWarningMessage: (text, ...items) => message('warning', text, ...items),
 			showErrorMessage: (text, ...items) => message('error', text, ...items),
 			async showQuickPick(items, options = {}) {
-				if (!Array.isArray(items) || options.canPickMany)
-					return unsupported('window.showQuickPick input/multi-select');
+				if (!Array.isArray(items) || options.canPickMany) return unsupported('window.showQuickPick input/multi-select');
 				if (
 					(options.placeHolder !== undefined && typeof options.placeHolder !== 'string') ||
 					items.some(
@@ -4047,34 +3292,26 @@ export function createApi(configuration, initialization) {
 								...(item.detail === undefined ? {} : { detail: item.detail }),
 							},
 				);
-				const { index } = await request(
-					{ operation: 'showQuickPick', items: entries, placeholder: options.placeHolder ?? '' },
-					'selection',
-				);
+				const { index } = await request({ operation: 'showQuickPick', items: entries, placeholder: options.placeHolder ?? '' }, 'selection');
 				return index === null ? undefined : items[index];
 			},
 		}),
 		workspace: contract('workspace', {
 			fs: contract('workspace.fs', {
 				async readFile(uri) {
-					return Uint8Array.from(
-						(await request({ operation: 'readResourceFile', uri: uri.toString() }, 'resourceFile')).bytes,
-					);
+					return Uint8Array.from((await request({ operation: 'readResourceFile', uri: uri.toString() }, 'resourceFile')).bytes);
 				},
 				async stat(uri) {
 					const value = await request({ operation: 'statResource', uri: uri.toString() }, 'resourceStat');
 					return { type: value.fileType, size: value.size, mtime: value.mtime, ctime: 0 };
 				},
 				async readDirectory(uri) {
-					return (
-						await request({ operation: 'readResourceDirectory', uri: uri.toString() }, 'resourceDirectory')
-					).entries;
+					return (await request({ operation: 'readResourceDirectory', uri: uri.toString() }, 'resourceDirectory')).entries;
 				},
 			}),
 			async applyEdit(edit) {
 				const changes = await encodeWorkspaceEdit(edit);
-				if (changes.entries.some(entry => entry.kind !== 'textDocument'))
-					return unsupported('workspace.applyEdit file operations');
+				if (changes.entries.some(entry => entry.kind !== 'textDocument')) return unsupported('workspace.applyEdit file operations');
 				const values = changes.entries.map(entry => ({
 					uri: entry.resource,
 					version: documents.get(entry.resource)?.snapshot.version,
@@ -4082,12 +3319,9 @@ export function createApi(configuration, initialization) {
 				}));
 				return (await request({ operation: 'applyEdit', documents: values }, 'applied')).applied;
 			},
-			registerRemoteAuthorityResolver: (prefix, resolver) =>
-				ashWorkspace.registerRemoteAuthorityResolver(prefix, resolver, Uri),
-			onDidChangeConfiguration: (listener, thisArg, disposables) =>
-				listenWorkspace('configuration', listener, thisArg, disposables),
-			onDidChangeWorkspaceFolders: (listener, thisArg, disposables) =>
-				listenWorkspace('workspace', listener, thisArg, disposables),
+			registerRemoteAuthorityResolver: (prefix, resolver) => ashWorkspace.registerRemoteAuthorityResolver(prefix, resolver, Uri),
+			onDidChangeConfiguration: (listener, thisArg, disposables) => listenWorkspace('configuration', listener, thisArg, disposables),
+			onDidChangeWorkspaceFolders: (listener, thisArg, disposables) => listenWorkspace('workspace', listener, thisArg, disposables),
 			get workspaceFolders() {
 				return getWorkspaceFolders();
 			},
@@ -4109,12 +3343,9 @@ export function createApi(configuration, initialization) {
 					return state.value;
 				});
 			},
-			onDidOpenTextDocument: (listener, thisArg, disposables) =>
-				listenDocument('open', listener, thisArg, disposables),
-			onDidChangeTextDocument: (listener, thisArg, disposables) =>
-				listenDocument('change', listener, thisArg, disposables),
-			onDidCloseTextDocument: (listener, thisArg, disposables) =>
-				listenDocument('close', listener, thisArg, disposables),
+			onDidOpenTextDocument: (listener, thisArg, disposables) => listenDocument('open', listener, thisArg, disposables),
+			onDidChangeTextDocument: (listener, thisArg, disposables) => listenDocument('change', listener, thisArg, disposables),
+			onDidCloseTextDocument: (listener, thisArg, disposables) => listenDocument('close', listener, thisArg, disposables),
 			async openTextDocument(uri) {
 				if (typeof uri === 'string') uri = Uri.file(uri);
 				if (!(uri instanceof Uri)) return unsupported('workspace.openTextDocument overload');
@@ -4124,15 +3355,10 @@ export function createApi(configuration, initialization) {
 		}),
 		languages: contract('languages', {
 			createDiagnosticCollection: diagnosticCollection,
-			registerDocumentFormattingEditProvider: (selector, provider) =>
-				registerLanguageOperation(selector, 'formatting', provider, 'provideDocumentFormattingEdits'),
-			onDidChangeJsonSchemas: (listener, thisArg, disposables) =>
-				listenWorkspace('jsonSchemas', listener, thisArg, disposables),
+			registerDocumentFormattingEditProvider: (selector, provider) => registerLanguageOperation(selector, 'formatting', provider, 'provideDocumentFormattingEdits'),
+			onDidChangeJsonSchemas: (listener, thisArg, disposables) => listenWorkspace('jsonSchemas', listener, thisArg, disposables),
 			async getJsonSchemaContributions() {
-				const result = await request(
-					{ operation: 'editorOperation', payload: { method: 'jsonSchemaContributions' } },
-					'value',
-				);
+				const result = await request({ operation: 'editorOperation', payload: { method: 'jsonSchemaContributions' } }, 'value');
 				const values = jsonValue(result.value);
 				if (
 					!Array.isArray(values) ||
@@ -4151,35 +3377,21 @@ export function createApi(configuration, initialization) {
 					throw new TypeError('Invalid JSON schema contributions');
 				return values;
 			},
-			registerDefinitionProvider: (selector, provider) =>
-				registerLanguageOperation(selector, 'definition', provider, 'provideDefinition'),
-			registerReferenceProvider: (selector, provider) =>
-				registerLanguageOperation(selector, 'references', provider, 'provideReferences'),
-			registerRenameProvider: (selector, provider) =>
-				registerLanguageOperation(selector, 'rename', provider, 'provideRenameEdits'),
-			registerDocumentSymbolProvider: (selector, provider) =>
-				registerLanguageOperation(selector, 'documentSymbols', provider, 'provideDocumentSymbols'),
-			registerFoldingRangeProvider: (selector, provider) =>
-				registerLanguageOperation(selector, 'foldingRanges', provider, 'provideFoldingRanges'),
-			registerDocumentLinkProvider: (selector, provider) =>
-				registerLanguageOperation(selector, 'documentLinks', provider, 'provideDocumentLinks'),
-			registerCodeActionsProvider: (selector, provider) =>
-				registerLanguageOperation(selector, 'codeAction', provider, 'provideCodeActions'),
-			registerSelectionRangeProvider: (selector, provider) =>
-				registerLanguageOperation(selector, 'selectionRanges', provider, 'provideSelectionRanges'),
-			registerWorkspaceSymbolProvider: provider =>
-				registerLanguageOperation(['*'], 'workspaceSymbols', provider, 'provideWorkspaceSymbols'),
-			registerDocumentHighlightProvider: (selector, provider) =>
-				registerLanguageOperation(selector, 'documentHighlights', provider, 'provideDocumentHighlights'),
+			registerDefinitionProvider: (selector, provider) => registerLanguageOperation(selector, 'definition', provider, 'provideDefinition'),
+			registerReferenceProvider: (selector, provider) => registerLanguageOperation(selector, 'references', provider, 'provideReferences'),
+			registerRenameProvider: (selector, provider) => registerLanguageOperation(selector, 'rename', provider, 'provideRenameEdits'),
+			registerDocumentSymbolProvider: (selector, provider) => registerLanguageOperation(selector, 'documentSymbols', provider, 'provideDocumentSymbols'),
+			registerFoldingRangeProvider: (selector, provider) => registerLanguageOperation(selector, 'foldingRanges', provider, 'provideFoldingRanges'),
+			registerDocumentLinkProvider: (selector, provider) => registerLanguageOperation(selector, 'documentLinks', provider, 'provideDocumentLinks'),
+			registerCodeActionsProvider: (selector, provider) => registerLanguageOperation(selector, 'codeAction', provider, 'provideCodeActions'),
+			registerSelectionRangeProvider: (selector, provider) => registerLanguageOperation(selector, 'selectionRanges', provider, 'provideSelectionRanges'),
+			registerWorkspaceSymbolProvider: provider => registerLanguageOperation(['*'], 'workspaceSymbols', provider, 'provideWorkspaceSymbols'),
+			registerDocumentHighlightProvider: (selector, provider) => registerLanguageOperation(selector, 'documentHighlights', provider, 'provideDocumentHighlights'),
 			registerCompletionItemProvider(selector, provider, ...triggerCharacters) {
 				ensureDocumentEvents();
 				const entries = Array.isArray(selector) ? selector : [selector];
-				if (entries.some(entry => typeof entry !== 'string'))
-					return unsupported('languages.registerCompletionItemProvider selector filters');
-				if (
-					typeof provider?.provideCompletionItems !== 'function' ||
-					provider.resolveCompletionItem !== undefined
-				)
+				if (entries.some(entry => typeof entry !== 'string')) return unsupported('languages.registerCompletionItemProvider selector filters');
+				if (typeof provider?.provideCompletionItems !== 'function' || provider.resolveCompletionItem !== undefined)
 					return unsupported('CompletionItemProvider missing provideCompletionItems/resolveCompletionItem');
 				const registration = ashLanguages.registerCompletionProvider(
 					`ash.completion.${++providerSequence}`,
@@ -4189,20 +3401,10 @@ export function createApi(configuration, initialization) {
 							invoke(async () => {
 								const value = document(snapshot);
 								const position = new Position(coordinate.line, coordinate.character);
-								const result = await provider.provideCompletionItems(
-									value,
-									position,
-									call.cancellationToken,
-									{
-										triggerKind:
-											context.kind === 'triggerCharacter'
-												? 1
-												: context.kind === 'incompleteRefresh'
-													? 2
-													: 0,
-										triggerCharacter: context.triggerCharacter,
-									},
-								);
+								const result = await provider.provideCompletionItems(value, position, call.cancellationToken, {
+									triggerKind: context.kind === 'triggerCharacter' ? 1 : context.kind === 'incompleteRefresh' ? 2 : 0,
+									triggerCharacter: context.triggerCharacter,
+								});
 								return completionResult(result, value, position);
 							}),
 					},
@@ -4213,16 +3415,11 @@ export function createApi(configuration, initialization) {
 			},
 			registerHoverProvider(selector, provider) {
 				const entries = Array.isArray(selector) ? selector : [selector];
-				if (entries.some(entry => typeof entry !== 'string'))
-					return unsupported('languages.registerHoverProvider selector filters');
+				if (entries.some(entry => typeof entry !== 'string')) return unsupported('languages.registerHoverProvider selector filters');
 				const registration = ashLanguages.registerHoverProvider(`ash.hover.${++providerSequence}`, entries, {
 					provideHover: (call, snapshot, position) =>
 						invoke(async () => {
-							const hover = await provider.provideHover(
-								document(snapshot),
-								new Position(position.line, position.character),
-								call.cancellationToken,
-							);
+							const hover = await provider.provideHover(document(snapshot), new Position(position.line, position.character), call.cancellationToken);
 							return hover == null
 								? undefined
 								: {
@@ -4249,17 +3446,13 @@ export function createApi(configuration, initialization) {
 			imageEditorAdmitted = capabilities.includes('imageEditor');
 			canvasAdmitted = capabilities.includes('dataChannel');
 			treeAdmitted = capabilities.includes('treeView');
-			if (environmentAdmitted)
-				subscriptions.push(
-					ashTerminals.registerEnvironmentVariableCollection('ash.terminalEnvironment', snapshotEnvironment),
-				);
+			if (environmentAdmitted) subscriptions.push(ashTerminals.registerEnvironmentVariableCollection('ash.terminalEnvironment', snapshotEnvironment));
 			if (initialization) subscriptions.push(ensureWorkspaceEvents());
 			// The supervisor supplies the admitted ceiling. Optional API observers must
 			// not turn an unrelated command into a rejected registration handshake.
 			if (capabilities.includes('taskProvider')) ensureTaskEvents();
 			if (capabilities.includes('debugAdapter')) ensureDebugEvents();
-			if (capabilities.includes('statusBar'))
-				subscriptions.push(ashWindow.registerStatusBar(statusRegistrationId, statusSnapshot));
+			if (capabilities.includes('statusBar')) subscriptions.push(ashWindow.registerStatusBar(statusRegistrationId, statusSnapshot));
 			subscriptions.push(
 				new Disposable(() => {
 					environmentAdmitted = false;

@@ -44,9 +44,7 @@ suite('Changes window view state', () => {
 			first.setDetailsViewState(resource.with({ fragment: 'capture' }), ChangesViewMode.Tree, snapshot);
 			first.setSectionCollapsed(resource, 'checks', true);
 			first.setChangesetFilesReviewState([file], true);
-			assert.ok(
-				storage.keys(StorageScope.WORKSPACE, StorageTarget.MACHINE).includes('changesView.sessionViewState'),
-			);
+			assert.ok(storage.keys(StorageScope.WORKSPACE, StorageTarget.MACHINE).includes('changesView.sessionViewState'));
 			first.dispose();
 			const stored = storage.get('changesView.sessionViewState', StorageScope.WORKSPACE);
 			first.setChangesetId('stale', resource);
@@ -55,20 +53,14 @@ suite('Changes window view state', () => {
 			using restored = new ChangesViewService(storage, sessions, context);
 			assert.equal(restored.getChangesetId(resource), 'capture');
 			assert.equal(restored.getChangesetId(peer), 'peer-capture');
-			assert.deepEqual(
-				restored.getDetailsViewState(resource.with({ fragment: 'capture' }), ChangesViewMode.Tree),
-				snapshot,
-			);
+			assert.deepEqual(restored.getDetailsViewState(resource.with({ fragment: 'capture' }), ChangesViewMode.Tree), snapshot);
 			assert.deepEqual([...restored.reviewedFilesObs.get()], [file.toString()]);
 			assert.equal(restored.viewModeObs.get(), ChangesViewMode.Tree);
 			assert.deepEqual(restored.activeSessionSectionCollapseStateObs.get(), { checks: true });
 			await storage.switchWorkspace('other');
 			assert.equal(restored.getChangesetId(resource), undefined);
 			assert.deepEqual([...restored.reviewedFilesObs.get()], []);
-			assert.equal(
-				restored.getDetailsViewState(resource.with({ fragment: 'capture' }), ChangesViewMode.Tree),
-				undefined,
-			);
+			assert.equal(restored.getDetailsViewState(resource.with({ fragment: 'capture' }), ChangesViewMode.Tree), undefined);
 		} finally {
 			dom.window.close();
 		}
@@ -99,10 +91,7 @@ suite('Changes window view state', () => {
 				{ ...valid, changesets: [...valid.changesets, ...valid.changesets] },
 				{
 					...valid,
-					changesets: Array.from({ length: 65 }, (_, index) => [
-						`ash-session-changes:/session-${index}?thread=thread`,
-						'capture',
-					]),
+					changesets: Array.from({ length: 65 }, (_, index) => [`ash-session-changes:/session-${index}?thread=thread`, 'capture']),
 				},
 				{
 					...valid,
@@ -110,12 +99,7 @@ suite('Changes window view state', () => {
 				},
 				{ ...valid, reviewed: ['ash-turn-diff:/capture/main.ts?session=session&thread=thread&revision=wrong'] },
 			]) {
-				storage.store(
-					'changesView.sessionViewState',
-					typeof value === 'string' ? value : JSON.stringify(value),
-					StorageScope.WORKSPACE,
-					StorageTarget.MACHINE,
-				);
+				storage.store('changesView.sessionViewState', typeof value === 'string' ? value : JSON.stringify(value), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 				using restored = new ChangesViewService(storage, sessions, context);
 				assert.equal(restored.getChangesetId(resource), undefined);
 				assert.deepEqual([...restored.reviewedFilesObs.get()], []);
@@ -134,11 +118,7 @@ suite('Changes window view state', () => {
 				flushInterval: 0,
 			});
 			using context = new ContextKeyService();
-			using service = new ChangesViewService(
-				storage,
-				{ onDidChange: Event.None } as unknown as ISessionsService,
-				context,
-			);
+			using service = new ChangesViewService(storage, { onDidChange: Event.None } as unknown as ISessionsService, context);
 			const resource = URI.parse('ash-session-changes:/session?thread=thread');
 			const selections: (string | undefined)[] = [];
 			using listener = autorun(reader => {
@@ -202,10 +182,7 @@ suite('Changes window view state', () => {
 			service.setChangesetId('second');
 			service.setChangesetId('peer-capture', peer);
 			service.setChangesetId('other-capture', other);
-			assert.equal(
-				service.getChangesetId(resource.with({ scheme: 'ash-session', fragment: 'capture' })),
-				'second',
-			);
+			assert.equal(service.getChangesetId(resource.with({ scheme: 'ash-session', fragment: 'capture' })), 'second');
 			assert.equal(service.getChangesetId(peer), 'peer-capture');
 			assert.equal(service.getChangesetId(other), 'other-capture');
 			service.setChangesetId(undefined, peer);
@@ -228,24 +205,11 @@ suite('Changes window view state', () => {
 				flushInterval: 0,
 			});
 			using context = new ContextKeyService();
-			using service = new ChangesViewService(
-				storage,
-				{ onDidChange: Event.None } as unknown as ISessionsService,
-				context,
-			);
+			using service = new ChangesViewService(storage, { onDidChange: Event.None } as unknown as ISessionsService, context);
 			const resource = URI.parse('ash-turn-diff:/capture/main.ts?session=session&thread=thread&revision=1');
 			service.setChangesetFilesReviewState([resource], true);
-			assert.deepEqual(context.getContext().getValue('sessions.changesReviewedFiles'), [
-				resource.toString(),
-				`${resource.toString()}&side=before`,
-				`${resource.toString()}&side=after`,
-			]);
-			assert.equal(
-				service.reviewedFilesObs
-					.get()
-					.has(resource.with({ query: 'session=session&thread=thread&revision=2' }).toString()),
-				false,
-			);
+			assert.deepEqual(context.getContext().getValue('sessions.changesReviewedFiles'), [resource.toString(), `${resource.toString()}&side=before`, `${resource.toString()}&side=after`]);
+			assert.equal(service.reviewedFilesObs.get().has(resource.with({ query: 'session=session&thread=thread&revision=2' }).toString()), false);
 			service.dispose();
 			assert.deepEqual(context.getContext().getValue('sessions.changesReviewedFiles'), []);
 		} finally {

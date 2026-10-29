@@ -44,9 +44,7 @@ class ScrollPane extends EditorPane implements IEditorPaneWithScrolling {
 		this.writes++;
 		this.position = {
 			scrollTop: Math.max(0, Math.min(this.limit, position.scrollTop)),
-			...(this.position.scrollLeft === undefined
-				? {}
-				: { scrollLeft: Math.max(0, position.scrollLeft ?? this.position.scrollLeft) }),
+			...(this.position.scrollLeft === undefined ? {} : { scrollLeft: Math.max(0, position.scrollLeft ?? this.position.scrollLeft) }),
 		};
 		this.changed.fire();
 	}
@@ -165,9 +163,7 @@ test('locked scrolling expands side-by-side panes and deduplicates visible targe
 	const { services, commands, replace } = setup(resources, [a]);
 	const primary = services.createInstance(ScrollPane, { scrollTop: 200 }, 1000);
 	const secondary = services.createInstance(ScrollPane, { scrollTop: 400 }, 1000);
-	const pair = resources.add(
-		services.get(IInstantiationService).createInstance(SideBySideEditor, 'test.pair', secondary, primary),
-	);
+	const pair = resources.add(services.get(IInstantiationService).createInstance(SideBySideEditor, 'test.pair', secondary, primary));
 	replace([a, pair, primary]);
 	await commands.executeCommand('workbench.action.toggleLockedScrolling');
 	a.setScrollPosition({ scrollTop: 40 });

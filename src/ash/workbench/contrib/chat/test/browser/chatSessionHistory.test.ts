@@ -27,17 +27,11 @@ suite('chatSessionHistory browser component', () => {
 					name: locale === 'en' ? 'Retry loading chat' : '重新加载聊天',
 					exact: true,
 				});
-				await expect(recovery.getByRole('status')).toContainText(
-					locale === 'en' ? 'Could not load chat history' : '无法加载聊天历史',
-				);
+				await expect(recovery.getByRole('status')).toContainText(locale === 'en' ? 'Could not load chat history' : '无法加载聊天历史');
 				await retry.focus();
-				expect(await page.evaluate(() => window.ashChatTranscriptIntegration.openAccessibleView(true))).toBe(
-					true,
-				);
+				expect(await page.evaluate(() => window.ashChatTranscriptIntegration.openAccessibleView(true))).toBe(true);
 				const accessible = page.getByRole('dialog');
-				await expect(accessible.getByRole('textbox')).toHaveValue(
-					locale === 'en' ? /never sends a message/u : /不会发送消息/u,
-				);
+				await expect(accessible.getByRole('textbox')).toHaveValue(locale === 'en' ? /never sends a message/u : /不会发送消息/u);
 				await page.keyboard.press('Escape');
 				await expect(retry).toBeFocused();
 				const geometry = await recovery.evaluate(element => ({
@@ -54,9 +48,7 @@ suite('chatSessionHistory browser component', () => {
 				await expect(recovery).toBeHidden();
 				await expect(input).toBeFocused();
 				await expect(input).toHaveValue(originalDraft);
-				expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraftContextNames())).toEqual([
-					'private.txt',
-				]);
+				expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraftContextNames())).toEqual(['private.txt']);
 				expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages())).toEqual([]);
 			});
 		}

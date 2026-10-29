@@ -33,11 +33,7 @@ export interface IManagedHover extends IDisposable {
  */
 export interface IHoverDelegate {
 	setupHover(options: HoverDelegateSetupOptions): IManagedHover;
-	setupDelayedHover(
-		target: HTMLElement,
-		hoverOptions: (() => IDelayedHoverOptions) | IDelayedHoverOptions,
-		lifecycleOptions?: IHoverLifecycleOptions,
-	): IDisposable;
+	setupDelayedHover(target: HTMLElement, hoverOptions: (() => IDelayedHoverOptions) | IDelayedHoverOptions, lifecycleOptions?: IHoverLifecycleOptions): IDisposable;
 }
 
 const defaultHoverDelegate: IHoverDelegate = {

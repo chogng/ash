@@ -3,12 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { release, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { BrowserWindow } from 'electron';
-import type {
-	MessageBoxOptions,
-	MessageBoxReturnValue,
-	OpenDialogOptions,
-	SaveDialogOptions,
-} from '../../../../base/parts/sandbox/common/electronTypes.js';
+import type { MessageBoxOptions, MessageBoxReturnValue, OpenDialogOptions, SaveDialogOptions } from '../../../../base/parts/sandbox/common/electronTypes.js';
 import { test } from 'mocha';
 import { DialogMainService, type ISystemDialogApi } from '../../electron-main/dialogMainService.js';
 import { massageMessageBoxOptions } from '../../electron-main/dialogMainUtils.js';
@@ -27,7 +22,12 @@ function api(
 
 test('message box button order preserves caller response indices on Linux', () => {
 	const prepared = massageMessageBoxOptions(
-		{ message: 'Save changes?', buttons: ['Save', 'Discard', 'Cancel'], defaultId: 0, cancelId: 2 },
+		{
+			message: 'Save changes?',
+			buttons: ['Save', 'Discard', 'Cancel'],
+			defaultId: 0,
+			cancelId: 2,
+		},
 		'linux',
 	);
 	assert.deepEqual(
@@ -38,13 +38,24 @@ test('message box button order preserves caller response indices on Linux', () =
 			buttonIndices: prepared.buttonIndices,
 			noLink: prepared.options.noLink,
 		},
-		{ buttons: ['Discard', 'Cancel', 'Save'], defaultId: 2, cancelId: 1, buttonIndices: [1, 2, 0], noLink: true },
+		{
+			buttons: ['Discard', 'Cancel', 'Save'],
+			defaultId: 2,
+			cancelId: 1,
+			buttonIndices: [1, 2, 0],
+			noLink: true,
+		},
 	);
 });
 
 test('four-button prompt keeps its cancel and default positions on Linux', () => {
 	const prepared = massageMessageBoxOptions(
-		{ message: 'Choose', buttons: ['First', 'Second', 'Third', 'Cancel'], defaultId: 0, cancelId: 3 },
+		{
+			message: 'Choose',
+			buttons: ['First', 'Second', 'Third', 'Cancel'],
+			defaultId: 0,
+			cancelId: 3,
+		},
 		'linux',
 	);
 	assert.deepEqual(
@@ -54,7 +65,12 @@ test('four-button prompt keeps its cancel and default positions on Linux', () =>
 			cancelId: prepared.options.cancelId,
 			buttonIndices: prepared.buttonIndices,
 		},
-		{ buttons: ['Third', 'Second', 'Cancel', 'First'], defaultId: 3, cancelId: 2, buttonIndices: [2, 1, 3, 0] },
+		{
+			buttons: ['Third', 'Second', 'Cancel', 'First'],
+			defaultId: 3,
+			cancelId: 2,
+			buttonIndices: [2, 1, 3, 0],
+		},
 	);
 });
 
@@ -87,10 +103,7 @@ test('dialog main service cancels active and queued renderer requests', async ()
 	dialogs.cancelWindow(window);
 	assert.equal(activeOptions.signal?.aborted, true);
 	releaseActive({ response: 0, checkboxChecked: false });
-	assert.deepEqual(
-		[await first, await second, shows],
-		[{ response: 0, checkboxChecked: false }, { response: 1, checkboxChecked: false }, 1],
-	);
+	assert.deepEqual([await first, await second, shows], [{ response: 0, checkboxChecked: false }, { response: 1, checkboxChecked: false }, 1]);
 });
 
 test('dialog main service serializes system dialogs per window and rejects duplicate file dialogs', async () => {

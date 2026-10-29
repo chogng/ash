@@ -23,10 +23,7 @@ export const WorkbenchStateContext = new RawContextKey<WorkbenchStateValue>('wor
 
 /** Number of root folders in the current workspace. */
 export const WorkspaceFolderCountContext = new RawContextKey<number>('workspaceFolderCount', 0);
-export const EnterMultiRootWorkspaceSupportContext = new RawContextKey<boolean>(
-	'enterMultiRootWorkspaceSupport',
-	false,
-);
+export const EnterMultiRootWorkspaceSupportContext = new RawContextKey<boolean>('enterMultiRootWorkspaceSupport', false);
 
 /** Whether this window can open a folder as its workspace. */
 export const OpenFolderWorkspaceSupportContext = new RawContextKey<boolean>('openFolderWorkspaceSupport', false);
@@ -105,10 +102,7 @@ export const ActiveEditorAvailableEditorIdsContext = new RawContextKey<string>('
 export const EditorGroupEditorsCountContext = new RawContextKey<number>('groupEditorsCount', 0);
 
 /** Whether a tab context menu targets multiple selected editors. */
-export const MultipleEditorsSelectedInGroupContext = new RawContextKey<boolean>(
-	'multipleEditorsSelectedInGroup',
-	false,
-);
+export const MultipleEditorsSelectedInGroupContext = new RawContextKey<boolean>('multipleEditorsSelectedInGroup', false);
 
 /** Whether the active editor group contains no editors. */
 export const ActiveEditorGroupEmptyContext = new RawContextKey<boolean>('activeEditorGroupEmpty', false);
@@ -125,15 +119,9 @@ export const MultipleEditorGroupsContext = new RawContextKey<boolean>('multipleE
 /** Lock state of the group whose title menu is open. */
 export const ActiveEditorGroupLockedContext = new RawContextKey<boolean>('activeEditorGroupLocked', false);
 /** Part-local group count; auxiliary windows have their own editor layout. */
-export const EditorPartMultipleEditorGroupsContext = new RawContextKey<boolean>(
-	'editorPartMultipleEditorGroups',
-	false,
-);
+export const EditorPartMultipleEditorGroupsContext = new RawContextKey<boolean>('editorPartMultipleEditorGroups', false);
 /** Whether the containing EditorPart temporarily displays one maximized group. */
-export const EditorPartMaximizedEditorGroupContext = new RawContextKey<boolean>(
-	'editorPartMaximizedEditorGroup',
-	false,
-);
+export const EditorPartMaximizedEditorGroupContext = new RawContextKey<boolean>('editorPartMaximizedEditorGroup', false);
 
 /** Whether any Workbench editor is open. */
 export const EditorsVisibleContext = new RawContextKey<boolean>('editorIsOpen', false);

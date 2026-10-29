@@ -41,29 +41,15 @@ import {
 import { createAppServerFileApi } from '../../platform/files/browser/fileApi.js';
 import { createAppServerExtensionApi } from '../../platform/extensions/browser/extensionApi.js';
 import { createAppServerSyntaxApi } from '../../platform/syntax/browser/syntaxApi.js';
-import {
-	mergeRendererHostCapabilities,
-	type IRendererHost,
-	type RendererHostCapabilities,
-} from '../../platform/renderer/common/rendererHost.js';
-import {
-	createAppServerContentSearchApi,
-	createAppServerContentSearchConfigurationApi,
-} from '../../platform/search/browser/searchApi.js';
-import {
-	createAppServerAgentSessionService,
-	createAppServerAgentThreadService,
-	createAppServerAgentTurnService,
-} from '../../platform/agentHost/browser/appServerAgentService.js';
+import { mergeRendererHostCapabilities, type IRendererHost, type RendererHostCapabilities } from '../../platform/renderer/common/rendererHost.js';
+import { createAppServerContentSearchApi, createAppServerContentSearchConfigurationApi } from '../../platform/search/browser/searchApi.js';
+import { createAppServerAgentSessionService, createAppServerAgentThreadService, createAppServerAgentTurnService } from '../../platform/agentHost/browser/appServerAgentService.js';
 import { createAppServerAgentModelsService } from '../../platform/agentHost/browser/appServerAgentModels.js';
 import { AppServerTerminalProcessService } from '../../platform/terminal/browser/appServerTerminalProcessService.js';
 import { createAppServerDocumentCollaborationApi } from '../../platform/collab/browser/documentCollaborationApi.js';
 import { createAppServerCodebaseApi } from '../../platform/codebase/browser/codebaseApi.js';
 import { createAppServerCodebaseSymbolsApi } from '../../platform/codebaseSymbols/browser/codebaseSymbolsApi.js';
-import {
-	createAppServerConnectorApi,
-	type BrowserConnectorHostServices,
-} from '../../platform/connectors/browser/connectorApi.js';
+import { createAppServerConnectorApi, type BrowserConnectorHostServices } from '../../platform/connectors/browser/connectorApi.js';
 import { createAppServerToolSearchApi } from '../../platform/toolSearch/browser/toolSearchApi.js';
 import { createAppServerLanguageApi } from '../../platform/language/browser/languageApi.js';
 import { createAppServerPluginManagementApi } from '../../platform/extensionManagement/browser/pluginManagementApi.js';
@@ -80,10 +66,7 @@ import { createAppServerTurnChangesApi } from '../../platform/turnChanges/browse
 import { AppServerAutomationService } from '../../platform/agentHost/browser/appServerAutomationService.js';
 import { createAppServerTeamApi } from '../../platform/teams/browser/teamApi.js';
 
-export type RendererCapabilityContribution = (
-	connection: AppServerProtocolClient,
-	appServer: IRendererHost['appServer'],
-) => RendererHostCapabilities;
+export type RendererCapabilityContribution = (connection: AppServerProtocolClient, appServer: IRendererHost['appServer']) => RendererHostCapabilities;
 
 export interface ConnectedWebRendererApi {
 	readonly api: IRendererHost;
@@ -150,22 +133,10 @@ export async function connectWebRendererApi(
 					])
 				: undefined;
 		const memories = connection.capabilities?.memories ? new AppServerMemoriesService(connection) : undefined;
-		const channels =
-			connection.capabilities?.contracts.channels?.version === 1
-				? new AppServerChannelService(connection)
-				: undefined;
-		const calls =
-			connection.capabilities?.contracts.calls?.version === 1
-				? new AppServerCallService(connection, false)
-				: undefined;
-		const symphony =
-			connection.capabilities?.contracts.symphony?.version === 1
-				? new AppServerSymphonyService(connection)
-				: undefined;
-		const automation =
-			connection.capabilities?.contracts.automation?.version === 1
-				? new AppServerAutomationService(connection)
-				: undefined;
+		const channels = connection.capabilities?.contracts.channels?.version === 1 ? new AppServerChannelService(connection) : undefined;
+		const calls = connection.capabilities?.contracts.calls?.version === 1 ? new AppServerCallService(connection, false) : undefined;
+		const symphony = connection.capabilities?.contracts.symphony?.version === 1 ? new AppServerSymphonyService(connection) : undefined;
+		const automation = connection.capabilities?.contracts.automation?.version === 1 ? new AppServerAutomationService(connection) : undefined;
 		const api = {
 			...createRendererHost(connection, connectorHostServices, contributions, undefined, recovery),
 			channels,
@@ -209,8 +180,7 @@ export function createRendererHost(
 	sshHost?: string,
 	recovery?: IAppServerConnectionRecovery,
 ): IRendererHost {
-	const contextResourceHost =
-		connection.capabilities?.contracts.hostResources?.version === 1 ? new DisposableStore() : undefined;
+	const contextResourceHost = connection.capabilities?.contracts.hostResources?.version === 1 ? new DisposableStore() : undefined;
 	const snapshots = contextResourceHost?.add(new AgentHostResourceService());
 	try {
 		if (contextResourceHost && snapshots) {
@@ -218,20 +188,13 @@ export function createRendererHost(
 		}
 		const appServer = createAppServerAppServerApi(connection, recovery);
 		const resource = createAppServerResourceApi(connection);
-		const capabilities = mergeRendererHostCapabilities(
-			contributions.map(contribution => contribution(connection, appServer)),
-		);
+		const capabilities = mergeRendererHostCapabilities(contributions.map(contribution => contribution(connection, appServer)));
 		return {
 			appServer,
 			contextResourceHost,
 			hasAppServer: true,
-			messageHistory:
-				connection.capabilities?.contracts.messageHistory?.version === 1
-					? new AppServerMessageHistoryService(connection)
-					: undefined,
-			approvalEnvironment: connection.capabilities?.approvalEnvironment
-				? new AppServerApprovalEnvironmentService(connection)
-				: undefined,
+			messageHistory: connection.capabilities?.contracts.messageHistory?.version === 1 ? new AppServerMessageHistoryService(connection) : undefined,
+			approvalEnvironment: connection.capabilities?.approvalEnvironment ? new AppServerApprovalEnvironmentService(connection) : undefined,
 			accounts: createAppServerAccountApi(connection, connectorHostServices),
 			session: createAppServerAgentSessionService(connection, sshHost),
 			teams: createAppServerTeamApi(connection),

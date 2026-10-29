@@ -1,9 +1,6 @@
 import { observableValue, type IObservable } from '../../../../base/common/observable.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import {
-	createServiceIdentifier,
-	IInstantiationService,
-} from '../../../../platform/instantiation/common/instantiation.js';
+import { createServiceIdentifier, IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IWorkingCopyService } from '../../../../workbench/services/workingCopy/common/workingCopyService.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { DesignDocumentController } from './designDocumentController.js';
@@ -48,12 +45,7 @@ export class DesignEditorService extends Disposable implements IDesignEditorServ
 						}
 					},
 					'Creator automatic save',
-					() =>
-						[...this.documents.values()].every(
-							document =>
-								!document.automaticallySaves ||
-								(!document.isDirty && !document.needsSaveRetry && !document.isRestoring),
-						),
+					() => [...this.documents.values()].every(document => !document.automaticallySaves || (!document.isDirty && !document.needsSaveRetry && !document.isRestoring)),
 				),
 			),
 		);

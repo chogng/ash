@@ -23,14 +23,9 @@ export function webUpdatePlugin(): Plugin {
 				const version = hash.digest('hex');
 				for (const output of outputs) {
 					if (output.type !== 'asset' || !output.fileName.endsWith('.html')) continue;
-					const source =
-						typeof output.source === 'string' ? output.source : new TextDecoder().decode(output.source);
+					const source = typeof output.source === 'string' ? output.source : new TextDecoder().decode(output.source);
 					const manifest = posix.relative(posix.dirname(output.fileName), 'web-version.json');
-					output.source = source.replace(
-						/<head\b[^>]*>/iu,
-						head =>
-							`${head}\n\t\t<meta name="ash-web-build" content="${version}" data-version-url="${manifest}" />`,
-					);
+					output.source = source.replace(/<head\b[^>]*>/iu, head => `${head}\n\t\t<meta name="ash-web-build" content="${version}" data-version-url="${manifest}" />`);
 				}
 				this.emitFile({ type: 'asset', fileName: 'web-version.json', source: JSON.stringify({ version }) });
 			},

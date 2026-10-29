@@ -10,10 +10,9 @@ import { SpotlightPresentation } from '../../browser/spotlight/spotlightPresenta
 
 suite('SpotlightPresentation', () => {
 	test('guides the scoped target and restores focus after completion', async () => {
-		const dom = new JSDOM(
-			'<!doctype html><body><main><button id="before">Before</button><button id="first">First</button><button id="second">Second</button></main></body>',
-			{ url: 'https://ash.invalid/' },
-		);
+		const dom = new JSDOM('<!doctype html><body><main><button id="before">Before</button><button id="first">First</button><button id="second">Second</button></main></body>', {
+			url: 'https://ash.invalid/',
+		});
 		const previousWindow = globalThis.window;
 		const previousHTMLElement = globalThis.HTMLElement;
 		Object.assign(globalThis, { window: dom.window, HTMLElement: dom.window.HTMLElement });
@@ -24,15 +23,9 @@ suite('SpotlightPresentation', () => {
 			const first = dom.window.document.querySelector<HTMLButtonElement>('#first')!;
 			const second = dom.window.document.querySelector<HTMLButtonElement>('#second')!;
 			before.focus();
-			using target = registerOnboardingTargetProvider('test.scoped', scope =>
-				scope === 'second' ? second : first,
-			);
+			using target = registerOnboardingTargetProvider('test.scoped', scope => (scope === 'second' ? second : first));
 			const presentation = new SpotlightPresentation(container);
-			const result = presentation.show(
-				[{ target: 'test.scoped', title: 'Scoped title', description: 'Scoped description' }],
-				CancellationToken.None,
-				'second',
-			);
+			const result = presentation.show([{ target: 'test.scoped', title: 'Scoped title', description: 'Scoped description' }], CancellationToken.None, 'second');
 			const dialog = container.querySelector<HTMLElement>('[role="dialog"]');
 			assert.equal(dialog?.querySelector('h2')?.textContent, 'Scoped title');
 			assert.equal(container.querySelectorAll('.ash-onboarding-spotlight-frame').length, 1);
@@ -45,7 +38,11 @@ suite('SpotlightPresentation', () => {
 					focus: dom.window.document.activeElement?.id,
 					remaining: container.querySelectorAll('[role="dialog"]').length,
 				},
-				{ outcome: 'completed', focus: 'before', remaining: 0 },
+				{
+					outcome: 'completed',
+					focus: 'before',
+					remaining: 0,
+				},
 			);
 		} finally {
 			Object.assign(globalThis, { window: previousWindow, HTMLElement: previousHTMLElement });

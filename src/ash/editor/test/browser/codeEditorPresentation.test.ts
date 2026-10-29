@@ -41,21 +41,14 @@ suite('textModel browser component', () => {
 			);
 			const read = async () =>
 				page.evaluate(async () => {
-					await new Promise<void>(resolve =>
-						requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-					);
+					await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 					return window.ashTextModelIntegration.getControl().getContentWidth();
 				});
 			const measured = await read();
 			expect(measured).toBeGreaterThan(5000);
-			await page.evaluate(() =>
-				window.ashTextModelIntegration.getControl().updateOptions({ disableMonospaceOptimizations: false }),
-			);
+			await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ disableMonospaceOptimizations: false }));
 			const optimized = await read();
-			expect(
-				Math.abs(optimized - measured),
-				JSON.stringify({ fontFamily, fontWeight, scale, measured, optimized }),
-			).toBeLessThanOrEqual(1);
+			expect(Math.abs(optimized - measured), JSON.stringify({ fontFamily, fontWeight, scale, measured, optimized })).toBeLessThanOrEqual(1);
 		}
 	});
 
@@ -78,15 +71,9 @@ suite('textModel browser component', () => {
 				if (text.startsWith('resource-lifetime-')) shapedLines++;
 				return measureText.call(this, text);
 			};
-			const settle = () =>
-				new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+			const settle = () => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 			try {
-				editor.setValue(
-					Array.from(
-						{ length: 128 },
-						(_, index) => `resource-lifetime-${index} ` + 'ASCII measurement '.repeat(40),
-					).join('\n'),
-				);
+				editor.setValue(Array.from({ length: 128 }, (_, index) => `resource-lifetime-${index} ` + 'ASCII measurement '.repeat(40)).join('\n'));
 				await settle();
 				const optimized = {
 					width: editor.getContentWidth(),
@@ -133,9 +120,7 @@ suite('textModel browser component', () => {
 				occurrencesHighlightDelay: 0,
 				selectionHighlight: false,
 			});
-			editor.setValue(
-				'use crate::UserAllowlist;\n    user_allowlist: UserAllowlist,\n' + 'long line '.repeat(100),
-			);
+			editor.setValue('use crate::UserAllowlist;\n    user_allowlist: UserAllowlist,\n' + 'long line '.repeat(100));
 			editor.setPosition({ lineNumber: 2, column: 24 });
 			editor.focus();
 		});
@@ -162,36 +147,30 @@ suite('textModel browser component', () => {
 						.poll(
 							() =>
 								editor.evaluate(root => {
-									return [...root.querySelectorAll<HTMLElement>('.cdr.word-highlight-text')].map(
-										highlight => {
-											const lineIndex = highlight.parentElement!.dataset.lineIndex;
-											const text = root.querySelector(
-												`.view-lines > .view-line[data-line-index="${lineIndex}"] > .stanza-editor-line-text`,
-											)!;
-											const start = text.textContent!.indexOf('UserAllowlist');
-											const end = start + 'UserAllowlist'.length;
-											const range = document.createRange();
-											const walker = document.createTreeWalker(text, NodeFilter.SHOW_TEXT);
-											let offset = 0;
-											for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-												const length = node.textContent!.length;
-												if (start >= offset && start < offset + length)
-													range.setStart(node, start - offset);
-												if (end > offset && end <= offset + length)
-													range.setEnd(node, end - offset);
-												offset += length;
-											}
-											const symbol = range.getBoundingClientRect();
-											const background = highlight.getBoundingClientRect();
-											const leftDelta = background.left - symbol.left;
-											const rightDelta = background.right - symbol.right;
-											return {
-												lineIndex,
-												leftDelta: Math.abs(leftDelta) < 1 ? 0 : leftDelta,
-												rightDelta: Math.abs(rightDelta) < 1 ? 0 : rightDelta,
-											};
-										},
-									);
+									return [...root.querySelectorAll<HTMLElement>('.cdr.word-highlight-text')].map(highlight => {
+										const lineIndex = highlight.parentElement!.dataset.lineIndex;
+										const text = root.querySelector(`.view-lines > .view-line[data-line-index="${lineIndex}"] > .stanza-editor-line-text`)!;
+										const start = text.textContent!.indexOf('UserAllowlist');
+										const end = start + 'UserAllowlist'.length;
+										const range = document.createRange();
+										const walker = document.createTreeWalker(text, NodeFilter.SHOW_TEXT);
+										let offset = 0;
+										for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+											const length = node.textContent!.length;
+											if (start >= offset && start < offset + length) range.setStart(node, start - offset);
+											if (end > offset && end <= offset + length) range.setEnd(node, end - offset);
+											offset += length;
+										}
+										const symbol = range.getBoundingClientRect();
+										const background = highlight.getBoundingClientRect();
+										const leftDelta = background.left - symbol.left;
+										const rightDelta = background.right - symbol.right;
+										return {
+											lineIndex,
+											leftDelta: Math.abs(leftDelta) < 1 ? 0 : leftDelta,
+											rightDelta: Math.abs(rightDelta) < 1 ? 0 : rightDelta,
+										};
+									});
 								}),
 							{
 								message: `symbol geometry with minimap=${side}, gutter=${gutter}, scrollLeft=${scrollLeft}`,
@@ -218,9 +197,7 @@ suite('textModel browser component', () => {
 		});
 		const glyph = page.locator('.ash-delayed-glyph-probe');
 		await expect(page.locator('.view-lines')).toContainText('third');
-		await page.evaluate(
-			() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
-		);
+		await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 		await page.evaluate(() => {
 			const model = window.ashTextModelIntegration.getControl().getModel()!;
 			model.deltaDecorations(
@@ -263,9 +240,7 @@ suite('textModel browser component', () => {
 				smoothScrolling: false,
 				padding: { top: 0, bottom: 0 },
 			});
-			editor.setValue(
-				Array.from({ length: 160 }, (_, index) => `line-${index + 1} ${'text '.repeat(100)}`).join('\n'),
-			);
+			editor.setValue(Array.from({ length: 160 }, (_, index) => `line-${index + 1} ${'text '.repeat(100)}`).join('\n'));
 			editor.createDecorationsCollection([
 				{
 					range: { startLineNumber: 31, startColumn: 1, endLineNumber: 31, endColumn: 1 },
@@ -280,14 +255,10 @@ suite('textModel browser component', () => {
 			.poll(() =>
 				editor.evaluate(root => {
 					const textRows = [...root.querySelectorAll<HTMLElement>('.view-lines > .view-line')];
-					const numberRows = [
-						...root.querySelectorAll<HTMLElement>('.margin-view-overlays > .view-overlay-line'),
-					];
+					const numberRows = [...root.querySelectorAll<HTMLElement>('.margin-view-overlays > .view-overlay-line')];
 					return textRows
 						.map(row => {
-							const numberRow = numberRows.find(
-								number => number.dataset.lineIndex === row.dataset.lineIndex,
-							)!;
+							const numberRow = numberRows.find(number => number.dataset.lineIndex === row.dataset.lineIndex)!;
 							return {
 								number: numberRow.querySelector('.line-numbers')!.textContent,
 								expected: String(Number(row.dataset.lineIndex) + 1),
@@ -312,9 +283,7 @@ suite('textModel browser component', () => {
 			await editor.evaluate(root => ({
 				fixedRoot: root.scrollTop === 0 && root.scrollLeft === 0,
 				marginOutsideContent: root.querySelector('.margin')!.parentElement === root,
-				inputInScrollViewport:
-					root.querySelector('.stanza-editor-input')!.parentElement ===
-					root.querySelector(':scope > .ash-smooth-scrollable'),
+				inputInScrollViewport: root.querySelector('.stanza-editor-input')!.parentElement === root.querySelector(':scope > .ash-smooth-scrollable'),
 			})),
 		).toEqual({ fixedRoot: true, marginOutsideContent: true, inputInScrollViewport: true });
 	});
@@ -363,9 +332,7 @@ suite('textModel browser component', () => {
 			editor.setValue('root\none\ntwo');
 		});
 		await expect(numbers).toHaveCount(0);
-		await expect(
-			editor.locator('.stanza-editor-selection, .stanza-editor-whitespace, .stanza-editor-indent-guide'),
-		).toHaveCount(0);
+		await expect(editor.locator('.stanza-editor-selection, .stanza-editor-whitespace, .stanza-editor-indent-guide')).toHaveCount(0);
 	});
 
 	test('physical scroll offsets follow model clamping, resizing and browser scroll events', async function () {
@@ -394,9 +361,7 @@ suite('textModel browser component', () => {
 				)
 				.toEqual({ left, top, modelLeft: left, modelTop: top });
 		};
-		await page.evaluate(() =>
-			window.ashTextModelIntegration.getControl().setScrollPosition({ scrollLeft: 400, scrollTop: 500 }),
-		);
+		await page.evaluate(() => window.ashTextModelIntegration.getControl().setScrollPosition({ scrollLeft: 400, scrollTop: 500 }));
 		await expectPosition(400, 500);
 		await page.evaluate(() => window.ashTextModelIntegration.getControl().setValue('short'));
 		await expectPosition(0, 0);
@@ -454,10 +419,7 @@ suite('textModel browser component', () => {
 						const viewport = root.querySelector<HTMLElement>(':scope > .ash-smooth-scrollable')!;
 						const track = viewport.querySelector('.ash-scrollbar-track-horizontal')!;
 						return {
-							viewportLeft:
-								viewport.getBoundingClientRect().left -
-								root.getBoundingClientRect().left -
-								layout.contentLeft,
+							viewportLeft: viewport.getBoundingClientRect().left - root.getBoundingClientRect().left - layout.contentLeft,
 							viewportWidth: viewport.clientWidth - (layout.width - layout.contentLeft),
 							trackLeft: track.getBoundingClientRect().left - viewport.getBoundingClientRect().left,
 						};
@@ -485,18 +447,12 @@ suite('textModel browser component', () => {
 				)
 				.toEqual({ remaining: 0, delta: 0 });
 		}
-		await page.evaluate(() =>
-			window.ashTextModelIntegration.getControl().updateOptions({ lineNumbers: 'off', glyphMargin: false }),
-		);
+		await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ lineNumbers: 'off', glyphMargin: false }));
 		await expect
 			.poll(() =>
 				editor.evaluate(root => {
 					const viewport = root.querySelector<HTMLElement>(':scope > .ash-smooth-scrollable')!;
-					return (
-						viewport.getBoundingClientRect().left -
-						root.getBoundingClientRect().left -
-						window.ashTextModelIntegration.getControl().getLayoutInfo().contentLeft
-					);
+					return viewport.getBoundingClientRect().left - root.getBoundingClientRect().left - window.ashTextModelIntegration.getControl().getLayoutInfo().contentLeft;
 				}),
 			)
 			.toBe(0);
@@ -523,9 +479,7 @@ suite('textModel browser component', () => {
 			zone.className = 'ash-large-file-zone-probe';
 			const margin = document.createElement('div');
 			margin.className = 'ash-large-file-margin-zone-probe';
-			editor.changeViewZones(accessor =>
-				accessor.addZone({ afterLineNumber: 26_001, heightInPx: 40, domNode: zone, marginDomNode: margin }),
-			);
+			editor.changeViewZones(accessor => accessor.addZone({ afterLineNumber: 26_001, heightInPx: 40, domNode: zone, marginDomNode: margin }));
 			editor.setScrollTop(520_000);
 		});
 		const editor = page.locator('.stanza-editor');
@@ -567,26 +521,17 @@ suite('textModel browser component', () => {
 				editor.setValue('iiii\n\n \t \niiii');
 			}, theme);
 			// Discard the fixture's previous raster before capturing this document.
-			await page.evaluate(
-				() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
-			);
+			await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 			const canvas = page.locator('.minimap canvas');
 			const readPixels = () =>
 				canvas.evaluate(element => {
 					const canvas = element as HTMLCanvasElement;
 					return Array.from(canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data);
 				});
-			await expect
-				.poll(async () => (await readPixels()).some((value, index) => index % 4 === 3 && value > 0))
-				.toBe(true);
+			await expect.poll(async () => (await readPixels()).some((value, index) => index % 4 === 3 && value > 0)).toBe(true);
 			// Glyph coverage already blends the foreground with the editor background.
 			// A second alpha reduction would wash out the same syntax colors again.
-			expect(
-				(await readPixels()).reduce(
-					(alpha, value, index) => (index % 4 === 3 ? Math.max(alpha, value) : alpha),
-					0,
-				),
-			).toBe(255);
+			expect((await readPixels()).reduce((alpha, value, index) => (index % 4 === 3 ? Math.max(alpha, value) : alpha), 0)).toBe(255);
 			const original = await readPixels();
 			const whitespaceIsEmpty = await canvas.evaluate(element => {
 				const canvas = element as HTMLCanvasElement;
@@ -597,16 +542,12 @@ suite('textModel browser component', () => {
 			expect(whitespaceIsEmpty).toBe(true);
 			await page.evaluate(() => {
 				const editor = window.ashTextModelIntegration.getControl();
-				editor.executeEdits('minimap-test', [
-					{ range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 5 }, text: 'WWWW' },
-				]);
+				editor.executeEdits('minimap-test', [{ range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 5 }, text: 'WWWW' }]);
 			});
 			await expect.poll(readPixels).not.toEqual(original);
 			await page.locator('.stanza-editor-input').focus();
 			await page.keyboard.press('ControlOrMeta+z');
-			await expect
-				.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getValue()))
-				.toBe('iiii\n\n \t \niiii');
+			await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getValue())).toBe('iiii\n\n \t \niiii');
 			await expect.poll(readPixels).toEqual(original);
 			await expect(page.locator('.minimap')).toHaveAttribute('aria-hidden', 'true');
 		});
@@ -639,9 +580,7 @@ suite('textModel browser component', () => {
 				minimap: { enabled: true, size: 'proportional', scale: 2, renderCharacters: false },
 				padding: { top: 0, bottom: 0 },
 			});
-			editor.setValue(
-				Array.from({ length: 2_000 }, (_, index) => (index < 1_000 ? 'WWWWWWWW' : 'ii')).join('\n'),
-			);
+			editor.setValue(Array.from({ length: 2_000 }, (_, index) => (index < 1_000 ? 'WWWWWWWW' : 'ii')).join('\n'));
 		});
 		const canvas = page.locator('.minimap canvas');
 		const readPixels = () =>
@@ -654,11 +593,8 @@ suite('textModel browser component', () => {
 				canvas.evaluate(element => {
 					const canvas = element as HTMLCanvasElement;
 					const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, 6).data;
-					return Array.from({ length: 6 }, (_, row) =>
-						data
-							.slice(row * canvas.width * 4, (row + 1) * canvas.width * 4)
-							.some((value, index) => index % 4 === 3 && value > 0),
-					).filter(Boolean).length;
+					return Array.from({ length: 6 }, (_, row) => data.slice(row * canvas.width * 4, (row + 1) * canvas.width * 4).some((value, index) => index % 4 === 3 && value > 0)).filter(Boolean)
+						.length;
 				}),
 			)
 			.toBe(4);
@@ -696,23 +632,15 @@ suite('textModel browser component', () => {
 										scrollbar: { horizontal, horizontalScrollbarSize: 14 },
 										padding: { top: 0, bottom: 0 },
 									});
-									editor.setValue(
-										Array.from({ length: 1_200 }, () =>
-											longLines ? 'long text '.repeat(100) : 'short',
-										).join('\n'),
-									);
+									editor.setValue(Array.from({ length: 1_200 }, () => (longLines ? 'long text '.repeat(100) : 'short')).join('\n'));
 									editor.setScrollTop(0);
 								},
 								{ size, horizontal, longLines },
 							);
 							const slider = page.locator('.stanza-editor-minimap-slider');
 							const thumb = page.locator('.ash-scrollbar-track-vertical .ash-scrollbar-thumb');
-							await expect
-								.poll(async () => (await slider.boundingBox())!.y - (await thumb.boundingBox())!.y)
-								.toBeCloseTo(0, 1);
-							await page.evaluate(() =>
-								window.ashTextModelIntegration.getControl().setScrollTop(1_000_000),
-							);
+							await expect.poll(async () => (await slider.boundingBox())!.y - (await thumb.boundingBox())!.y).toBeCloseTo(0, 1);
+							await page.evaluate(() => window.ashTextModelIntegration.getControl().setScrollTop(1_000_000));
 							await expect
 								.poll(async () => {
 									const bar = (await thumb.boundingBox())!;
@@ -734,11 +662,7 @@ suite('textModel browser component', () => {
 							await page.mouse.down();
 							await page.mouse.move(box.x + box.width / 2, root.y - box.height);
 							await page.mouse.up();
-							await expect
-								.poll(() =>
-									page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop()),
-								)
-								.toBe(0);
+							await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(0);
 						}
 					}
 				} finally {
@@ -785,9 +709,7 @@ suite('textModel browser component', () => {
 				Reflect.apply(put, this, [data, x, y]);
 			};
 			try {
-				editor.setValue(
-					Array.from({ length: 20_000 }, (_, index) => `${index} ${'long text '.repeat(50)}`).join('\n'),
-				);
+				editor.setValue(Array.from({ length: 20_000 }, (_, index) => `${index} ${'long text '.repeat(50)}`).join('\n'));
 				await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 				return {
 					readsPerPaint,
@@ -831,22 +753,10 @@ suite('textModel browser component', () => {
 						const layout = window.ashTextModelIntegration.getControl().getLayoutInfo().minimap;
 						const rows = [];
 						for (let row = 0; row < 5; row++) {
-							const data = canvas
-								.getContext('2d')!
-								.getImageData(
-									0,
-									row * layout.minimapLineHeight,
-									canvas.width,
-									layout.minimapLineHeight,
-								).data;
+							const data = canvas.getContext('2d')!.getImageData(0, row * layout.minimapLineHeight, canvas.width, layout.minimapLineHeight).data;
 							const columns = [];
 							for (let x = 0; x < canvas.width; x += layout.minimapScale) {
-								if (
-									Array.from(
-										{ length: layout.minimapLineHeight },
-										(_, y) => data[(y * canvas.width + x) * 4 + 3],
-									).some(alpha => alpha > 0)
-								) {
+								if (Array.from({ length: layout.minimapLineHeight }, (_, y) => data[(y * canvas.width + x) * 4 + 3]).some(alpha => alpha > 0)) {
 									columns.push(x / layout.minimapScale);
 								}
 							}
@@ -891,17 +801,15 @@ suite('textModel browser component', () => {
 				const style = document.createElement('style');
 				style.textContent = '.selection-test-decoration { background-color: var(--ash-badge-background); }';
 				document.head.append(style);
-				editor
-					.getModel()!
-					.deltaDecorations(
-						[],
-						[
-							{
-								range: { startLineNumber: 1, startColumn: 18, endLineNumber: 1, endColumn: 34 },
-								options: { description: 'selection-test', className: 'selection-test-decoration' },
-							},
-						],
-					);
+				editor.getModel()!.deltaDecorations(
+					[],
+					[
+						{
+							range: { startLineNumber: 1, startColumn: 18, endLineNumber: 1, endColumn: 34 },
+							options: { description: 'selection-test', className: 'selection-test-decoration' },
+						},
+					],
+				);
 			}, theme);
 			const line = page.locator('.view-lines .stanza-editor-line-text').first();
 			await expect(line).toHaveText('session rename > selected content');
@@ -948,32 +856,22 @@ suite('textModel browser component', () => {
 						selection.evaluate((element, focused) => {
 							const rect = element.getBoundingClientRect();
 							const pointerEvents = (element as HTMLElement).style.pointerEvents;
-							const decoration = element
-								.closest('.stanza-editor')!
-								.querySelector<HTMLElement>('.selection-test-decoration')!;
+							const decoration = element.closest('.stanza-editor')!.querySelector<HTMLElement>('.selection-test-decoration')!;
 							const decorationPointerEvents = decoration.style.pointerEvents;
 							decoration.style.pointerEvents = 'auto';
 							// Include the non-interactive background in the browser's paint-order hit test.
 							(element as HTMLElement).style.pointerEvents = 'auto';
 							try {
-								const stack = document.elementsFromPoint(
-									rect.left + rect.width / 2,
-									rect.top + rect.height / 2,
-								);
+								const stack = document.elementsFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
 								const textIndex = stack.findIndex(node => node.closest('.view-lines'));
 								const backgroundIndex = stack.indexOf(element);
 								const root = element.closest('.stanza-editor')!;
-								const backgroundToken = focused
-									? '--ash-editor-selectionBackground'
-									: '--ash-editor-inactiveSelectionBackground';
+								const backgroundToken = focused ? '--ash-editor-selectionBackground' : '--ash-editor-inactiveSelectionBackground';
 								return {
 									textAboveBackground: textIndex >= 0 && backgroundIndex > textIndex,
-									decorationAboveSelection:
-										stack.indexOf(decoration) > textIndex &&
-										stack.indexOf(decoration) < backgroundIndex,
+									decorationAboveSelection: stack.indexOf(decoration) > textIndex && stack.indexOf(decoration) < backgroundIndex,
 									hasBackground: getComputedStyle(element).backgroundColor !== 'rgba(0, 0, 0, 0)',
-									hasThemeColor:
-										getComputedStyle(root).getPropertyValue(backgroundToken).trim().length > 0,
+									hasThemeColor: getComputedStyle(root).getPropertyValue(backgroundToken).trim().length > 0,
 								};
 							} finally {
 								(element as HTMLElement).style.pointerEvents = pointerEvents;
@@ -1016,12 +914,7 @@ suite('textModel browser component', () => {
 			selections.evaluateAll(elements =>
 				elements.map(element => {
 					const style = getComputedStyle(element);
-					return [
-						style.borderTopLeftRadius,
-						style.borderTopRightRadius,
-						style.borderBottomRightRadius,
-						style.borderBottomLeftRadius,
-					].map(parseFloat);
+					return [style.borderTopLeftRadius, style.borderTopRightRadius, style.borderBottomRightRadius, style.borderBottomLeftRadius].map(parseFloat);
 				}),
 			);
 		await expect.poll(radii).toEqual([
@@ -1044,9 +937,7 @@ suite('textModel browser component', () => {
 			await page.screenshot({ path: browserTests.info.outputPath(`selection-steps-${theme}.png`) });
 		}
 		await page.evaluate(() => window.ashTextModelIntegration.setTheme('light'));
-		await page.evaluate(() =>
-			window.ashTextModelIntegration.getControl().updateOptions({ roundedSelection: false }),
-		);
+		await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ roundedSelection: false }));
 		await expect.poll(radii).toEqual(Array.from({ length: 3 }, () => [0, 0, 0, 0]));
 		await expect(corners).toHaveCount(0);
 		await page.evaluate(() => {
@@ -1091,15 +982,7 @@ suite('textModel browser component', () => {
 				editor.setSelection({ startLineNumber: 1, startColumn: 1, endLineNumber: 100, endColumn: 21 });
 				editor.setScrollTop(800);
 			}, fontSize);
-			await expect
-				.poll(() =>
-					selections
-						.first()
-						.evaluate(element =>
-							Number((element.parentElement as HTMLElement | null)?.dataset.lineIndex ?? -1),
-						),
-				)
-				.toBeGreaterThan(0);
+			await expect.poll(() => selections.first().evaluate(element => Number((element.parentElement as HTMLElement | null)?.dataset.lineIndex ?? -1))).toBeGreaterThan(0);
 			await expect.poll(async () => (await radii())[0]!.slice(0, 2)).toEqual([0, 0]);
 			await expect.poll(async () => (await radii()).at(-1)!.slice(2)).toEqual([0, 0]);
 			await page.screenshot({ path: browserTests.info.outputPath(`rounded-selection-scrolled-${fontSize}.png`) });
@@ -1127,43 +1010,29 @@ suite('textModel browser component', () => {
 					'editor.inactiveSelectionBackground': '#654321',
 					'editor.selectionForeground': '#fedcba',
 				});
-				harness
-					.getControl()
-					.setSelections([
-						{
-							selectionStartLineNumber: 1,
-							selectionStartColumn: 8,
-							positionLineNumber: 2,
-							positionColumn: 7,
-						},
-					]);
+				harness.getControl().setSelections([
+					{
+						selectionStartLineNumber: 1,
+						selectionStartColumn: 8,
+						positionLineNumber: 2,
+						positionColumn: 7,
+					},
+				]);
 				harness.getControl().focus();
 			}, theme);
 			const selectedText = page.locator('.view-lines .stanza-editor-selected-text');
-			await expect
-				.poll(async () => (await selectedText.allTextContents()).join(''))
-				.toBe('selected suffixsecond');
+			await expect.poll(async () => (await selectedText.allTextContents()).join('')).toBe('selected suffixsecond');
 			for (const span of await selectedText.all()) await expect(span).toHaveCSS('color', 'rgb(254, 220, 186)');
-			await expect(page.locator('.stanza-editor-selection').first()).toHaveCSS(
-				'background-color',
-				'rgb(18, 52, 86)',
-			);
+			await expect(page.locator('.stanza-editor-selection').first()).toHaveCSS('background-color', 'rgb(18, 52, 86)');
 			await page.locator('.stanza-editor-input').blur();
-			await expect(page.locator('.stanza-editor-selection').first()).toHaveCSS(
-				'background-color',
-				'rgb(101, 67, 33)',
-			);
+			await expect(page.locator('.stanza-editor-selection').first()).toHaveCSS('background-color', 'rgb(101, 67, 33)');
 			await expect(selectedText.first()).toHaveCSS('color', 'rgb(254, 220, 186)');
-			await page.evaluate(() =>
-				window.ashTextModelIntegration.getControl().setPosition({ lineNumber: 1, column: 1 }),
-			);
+			await page.evaluate(() => window.ashTextModelIntegration.getControl().setPosition({ lineNumber: 1, column: 1 }));
 			await expect(selectedText).toHaveCount(0);
 		}
 		await page.evaluate(() => {
 			window.ashTextModelIntegration.setTheme('light');
-			window.ashTextModelIntegration
-				.getControl()
-				.setSelection({ startLineNumber: 1, startColumn: 8, endLineNumber: 1, endColumn: 16 });
+			window.ashTextModelIntegration.getControl().setSelection({ startLineNumber: 1, startColumn: 8, endLineNumber: 1, endColumn: 16 });
 		});
 		await expect(page.locator('.stanza-editor-selection').first()).toBeVisible();
 		await expect(page.locator('.view-lines .stanza-editor-selected-text')).toHaveCount(0);
@@ -1207,18 +1076,14 @@ suite('textModel browser component', () => {
 						// Pointer capture changes the event target; tiny vertical motion must not change the column.
 						await page.mouse.move(point.x + distance, point.y + 0.05);
 						const expected = { lineNumber: 1, column: anchor!.column + (distance === 0 ? 0 : 1) };
-						expect(
-							await page.evaluate(() => window.ashTextModelIntegration.getControl().getPosition()),
-						).toEqual(expected);
+						expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getPosition())).toEqual(expected);
 						await expect(page.locator('.stanza-editor-selection')).toHaveCount(distance === 0 ? 0 : 1);
 						await expect(page.locator('.stanza-editor-input')).toBeFocused();
 					}
 				} finally {
 					await page.mouse.up();
 				}
-				expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getPosition())).toEqual(
-					anchor,
-				);
+				expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getPosition())).toEqual(anchor);
 				await expect(page.locator('.stanza-editor-selection')).toHaveCount(0);
 			}
 		});
@@ -1273,9 +1138,7 @@ suite('textModel browser component', () => {
 					throw new Error(`Missing rendered offset ${offset}`);
 				}, offset);
 				await page.mouse.click(point.x, point.y);
-				await expect
-					.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getPosition()))
-					.toEqual({ lineNumber: 2, column: offset + 1 });
+				await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getPosition())).toEqual({ lineNumber: 2, column: offset + 1 });
 				await expect
 					.poll(async () => {
 						const caret = await page.locator('.stanza-editor-caret.primary').boundingBox();
@@ -1284,11 +1147,7 @@ suite('textModel browser component', () => {
 					.toBeLessThan(3);
 				await expect(page.locator('.stanza-editor-input')).toBeFocused();
 				await page.keyboard.insertText('!');
-				await expect
-					.poll(() =>
-						page.evaluate(() => window.ashTextModelIntegration.getControl().getModel()!.getLineContent(2)),
-					)
-					.toBe(`${text.slice(0, offset)}!${text.slice(offset)}`);
+				await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getModel()!.getLineContent(2))).toBe(`${text.slice(0, offset)}!${text.slice(offset)}`);
 				await page.keyboard.press('Backspace');
 				await expect(line).toHaveText(text);
 			}
@@ -1394,11 +1253,7 @@ suite('textModel browser component', () => {
 					})
 					.toBeLessThan(2);
 				await page.keyboard.insertText('!');
-				await expect
-					.poll(() =>
-						page.evaluate(() => window.ashTextModelIntegration.getControl().getModel()!.getLineContent(1)),
-					)
-					.toBe(`${text.slice(0, 18)}!${text.slice(24)}`);
+				await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getModel()!.getLineContent(1))).toBe(`${text.slice(0, 18)}!${text.slice(24)}`);
 				await page.keyboard.press('ControlOrMeta+z');
 				await expect(line).toHaveText(text);
 			}
@@ -1486,12 +1341,7 @@ suite('textModel browser component', () => {
 								...elements.flatMap((element, index) => {
 									const bounds = element.getBoundingClientRect();
 									const expected = rows[index]!;
-									return [
-										Math.abs(bounds.x - expected.x),
-										Math.abs(bounds.y - expected.y),
-										Math.abs(bounds.width - expected.width),
-										Math.abs(bounds.height - expected.height),
-									];
+									return [Math.abs(bounds.x - expected.x), Math.abs(bounds.y - expected.y), Math.abs(bounds.width - expected.width), Math.abs(bounds.height - expected.height)];
 								}),
 							),
 						rows,
@@ -1501,18 +1351,11 @@ suite('textModel browser component', () => {
 			await expect
 				.poll(async () => {
 					const caret = await page.locator('.stanza-editor-caret.primary').boundingBox();
-					return caret
-						? Math.max(
-								Math.abs(caret.x - points[active]!.x),
-								Math.abs(caret.y - (backward ? rows[0]!.y : rows[2]!.y)),
-							)
-						: Number.POSITIVE_INFINITY;
+					return caret ? Math.max(Math.abs(caret.x - points[active]!.x), Math.abs(caret.y - (backward ? rows[0]!.y : rows[2]!.y))) : Number.POSITIVE_INFINITY;
 				})
 				.toBeLessThan(2);
 			await page.keyboard.insertText('!');
-			await expect
-				.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue()))
-				.toBe(`${text.slice(0, 3)}!${text.slice(endOffset)}`);
+			await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe(`${text.slice(0, 3)}!${text.slice(endOffset)}`);
 			await page.keyboard.press('ControlOrMeta+z');
 			await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe(text);
 		}
@@ -1524,18 +1367,13 @@ suite('textModel browser component', () => {
 		});
 		await page.locator('.stanza-editor-input').focus();
 		await page.keyboard.press('ControlOrMeta+End');
-		await expect
-			.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getPosition()))
-			.toEqual({ lineNumber: 1, column: 1001 });
+		await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getPosition())).toEqual({ lineNumber: 1, column: 1001 });
 		await expect
 			.poll(() =>
 				page.evaluate(() => {
 					const editor = window.ashTextModelIntegration.getControl();
 					const bounds = editor.getDomNode().getBoundingClientRect();
-					const caret = editor
-						.getDomNode()
-						.querySelector('.stanza-editor-caret.primary')!
-						.getBoundingClientRect();
+					const caret = editor.getDomNode().querySelector('.stanza-editor-caret.primary')!.getBoundingClientRect();
 					return editor.getScrollTop() > 0 && caret.top >= bounds.top && caret.bottom <= bounds.bottom;
 				}),
 			)
@@ -1549,30 +1387,18 @@ suite('textModel browser component', () => {
 		const result = await page.evaluate((scrollType: ScrollType) => {
 			const widget = window.ashTextModelIntegration.getControl();
 			const editor: IEditor = widget;
-			widget.setValue(
-				['long '.repeat(100), ...Array.from({ length: 79 }, (_, index) => `row ${index + 2}`)].join('\n'),
-			);
+			widget.setValue(['long '.repeat(100), ...Array.from({ length: 79 }, (_, index) => `row ${index + 2}`)].join('\n'));
 			editor.updateOptions({ wordWrap: 'wordWrapColumn', wordWrapColumn: 20, smoothScrolling: false });
-			widget.setHiddenAreas([
-				widget
-					.getModel()!
-					.validateRange({ startLineNumber: 2, startColumn: 1, endLineNumber: 10, endColumn: 1 }),
-			]);
+			widget.setHiddenAreas([widget.getModel()!.validateRange({ startLineNumber: 2, startColumn: 1, endLineNumber: 10, endColumn: 1 })]);
 			editor.setPosition({ lineNumber: 3, column: 2 });
 			editor.revealPositionInCenter({ lineNumber: 40, column: 2 }, scrollType);
 			widget.view.render(true, false);
 			const top = widget.getScrollTop();
 			const caretTop = widget.getTopForLineNumber(40) - top;
 			const height = widget.getLayoutInfo().height;
-			editor.revealRangeInCenterIfOutsideViewport(
-				{ startLineNumber: 40, startColumn: 1, endLineNumber: 40, endColumn: 3 },
-				scrollType,
-			);
+			editor.revealRangeInCenterIfOutsideViewport({ startLineNumber: 40, startColumn: 1, endLineNumber: 40, endColumn: 3 }, scrollType);
 			const unchangedTop = widget.getScrollTop();
-			editor.revealRangeAtTop(
-				{ startLineNumber: 40, startColumn: 1, endLineNumber: 40, endColumn: 3 },
-				scrollType,
-			);
+			editor.revealRangeAtTop({ startLineNumber: 40, startColumn: 1, endLineNumber: 40, endColumn: 3 }, scrollType);
 			return {
 				top,
 				caretTop,
@@ -1597,9 +1423,7 @@ suite('textModel browser component', () => {
 		}, ScrollType.Immediate);
 		await expect(page.locator('.stanza-editor-input')).toBeFocused();
 		await page.keyboard.type('!');
-		await expect
-			.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getModel()?.getLineContent(40)))
-			.toBe('r!ow 40');
+		await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getModel()?.getLineContent(40))).toBe('r!ow 40');
 	});
 
 	test('cursor layer retains nodes, animates stable moves, and resolves multi-cursor colors', async function () {
@@ -1641,9 +1465,7 @@ suite('textModel browser component', () => {
 				],
 				1,
 			);
-			return [...document.querySelectorAll<HTMLElement>('.stanza-editor-caret')].map(
-				caret => caret.style.transitionProperty,
-			);
+			return [...document.querySelectorAll<HTMLElement>('.stanza-editor-caret')].map(caret => caret.style.transitionProperty);
 		});
 		expect(countChangeTransitions).toEqual(['none', 'none']);
 		const primary = layer.locator('.stanza-editor-caret.cursor-primary');
@@ -1663,9 +1485,7 @@ suite('textModel browser component', () => {
 		await page.keyboard.press('Insert');
 
 		await page.evaluate(() => {
-			window.ashTextModelIntegration.setValue(
-				Array.from({ length: 60 }, (_, index) => `fn main() { answer(); } // ${index}`).join('\n'),
-			);
+			window.ashTextModelIntegration.setValue(Array.from({ length: 60 }, (_, index) => `fn main() { answer(); } // ${index}`).join('\n'));
 			window.ashTextModelIntegration.setCursors([{ lineIndex: 59, columnIndex: 0 }]);
 		});
 		await expect(retainedCaret).toHaveAttribute('data-retained-identity', 'true');
@@ -1712,15 +1532,9 @@ suite('textModel browser component', () => {
 		await expect(slider).toHaveCSS('opacity', '1');
 		await expect(slider).toHaveCSS('background-color', 'rgb(4, 5, 6)');
 
-		await page.evaluate(() =>
-			window.ashTextModelIntegration.setValue(
-				`fn main() {\n  answer();\n}\n${Array.from({ length: 100 }, (_, index) => `line ${index}`).join('\n')}`,
-			),
-		);
+		await page.evaluate(() => window.ashTextModelIntegration.setValue(`fn main() {\n  answer();\n}\n${Array.from({ length: 100 }, (_, index) => `line ${index}`).join('\n')}`));
 		const editor = page.locator('.stanza-editor');
-		await expect
-			.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollHeight))
-			.toBeGreaterThan(geometry.clientHeight);
+		await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollHeight)).toBeGreaterThan(geometry.clientHeight);
 		const sliderBox = await slider.boundingBox();
 		const minimapBox = await minimap.boundingBox();
 		assertBox(sliderBox, 'minimap slider');
@@ -1730,20 +1544,10 @@ suite('textModel browser component', () => {
 		await expect(minimap).toHaveClass(/stanza-editor-minimap-dragging/u);
 		await expect(slider).toHaveCSS('background-color', 'rgb(7, 8, 9)');
 		await page.mouse.move(sliderBox.x + sliderBox.width / 2, minimapBox.y + minimapBox.height / 2, { steps: 5 });
-		await expect
-			.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop))
-			.toBeGreaterThan(0);
-		await expect
-			.poll(() => slider.evaluate(element => Number.parseFloat(getComputedStyle(element).top)))
-			.toBeGreaterThan(0);
+		await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+		await expect.poll(() => slider.evaluate(element => Number.parseFloat(getComputedStyle(element).top))).toBeGreaterThan(0);
 		await page.mouse.move(sliderBox.x + sliderBox.width / 2, minimapBox.y + minimapBox.height - 1, { steps: 5 });
-		await expect
-			.poll(() =>
-				editor
-					.locator(':scope > .ash-smooth-scrollable')
-					.evaluate(element => element.scrollTop === element.scrollHeight - element.clientHeight),
-			)
-			.toBe(true);
+		await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop === element.scrollHeight - element.clientHeight)).toBe(true);
 		await page.mouse.up();
 		await expect(minimap).not.toHaveClass(/stanza-editor-minimap-dragging/u);
 	});
@@ -1752,9 +1556,7 @@ suite('textModel browser component', () => {
 		const { page } = browserTests;
 
 		await openEditor(page);
-		await page.evaluate(() =>
-			window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'x'.repeat(200)).join('\n')),
-		);
+		await page.evaluate(() => window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'x'.repeat(200)).join('\n')));
 		const editor = page.locator('.stanza-editor');
 		const horizontal = editor.getByRole('scrollbar', { name: 'Horizontal scrollbar' });
 		const vertical = editor.getByRole('scrollbar', { name: 'Vertical scrollbar' });
@@ -1770,9 +1572,7 @@ suite('textModel browser component', () => {
 		await vertical.focus();
 		await expect(vertical).toHaveCSS('opacity', '1');
 		await vertical.press('ArrowDown');
-		await expect
-			.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop))
-			.toBe(40);
+		await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(40);
 		await expect(vertical).toHaveAttribute('aria-valuenow', '40');
 		await vertical.evaluate(element => element.blur());
 		await expect(vertical).toHaveCSS('opacity', '0');
@@ -1786,12 +1586,8 @@ suite('textModel browser component', () => {
 		await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 		await page.mouse.down();
 		await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 80, { steps: 5 });
-		await expect
-			.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop))
-			.toBeGreaterThan(40);
-		await expect
-			.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollLeft))
-			.toBe(160);
+		await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(40);
+		await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollLeft)).toBe(160);
 		await page.mouse.up();
 		const remainingTracks = await editor.evaluate(element => {
 			window.ashTextModelIntegration.setScrollLeft(200);
@@ -1816,49 +1612,36 @@ suite('textModel browser component', () => {
 			for (const side of ['disabled', 'left', 'right'] as const) {
 				await page.evaluate(
 					side =>
-						window.ashTextModelIntegration
-							.getControl()
-							.updateOptions({
-								minimap: { enabled: side !== 'disabled', side: side === 'left' ? 'left' : 'right' },
-							}),
+						window.ashTextModelIntegration.getControl().updateOptions({
+							minimap: { enabled: side !== 'disabled', side: side === 'left' ? 'left' : 'right' },
+						}),
 					side,
 				);
 				await expect
 					.poll(
 						() =>
 							overview.evaluate((canvas: HTMLCanvasElement) => {
-								const pixels = canvas
-									.getContext('2d')!
-									.getImageData(0, 0, canvas.width, canvas.height).data;
+								const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
 								const probe = document.createElement('canvas').getContext('2d')!;
 								probe.fillStyle = getComputedStyle(canvas.closest('.stanza-editor')!).backgroundColor;
 								probe.fillRect(0, 0, 1, 1);
 								const background = probe.getImageData(0, 0, 1, 1).data;
-								const sample = canvas
-									.getContext('2d')!
-									.getImageData(2, Math.floor(canvas.height / 2), 1, 1).data;
+								const sample = canvas.getContext('2d')!.getImageData(2, Math.floor(canvas.height / 2), 1, 1).data;
 								return {
 									matchesEditor: sample.every((value, index) => value === background[index]),
-									opaque:
-										pixels.length > 0 &&
-										pixels.every((value, index) => index % 4 !== 3 || value === 255),
+									opaque: pixels.length > 0 && pixels.every((value, index) => index % 4 !== 3 || value === 255),
 								};
 							}),
 						{ message: `opaque scrollbar background for ${theme}, minimap=${side}` },
 					)
-					.toEqual({ matchesEditor: true, opaque: true });
+					.toEqual({
+						matchesEditor: true,
+						opaque: true,
+					});
 			}
 		}
-		await page.evaluate(() =>
-			window.ashTextModelIntegration.setSelectionColors({ 'editorOverviewRuler.background': '#123456' }),
-		);
-		await expect
-			.poll(() =>
-				overview.evaluate((canvas: HTMLCanvasElement) =>
-					Array.from(canvas.getContext('2d')!.getImageData(2, 2, 1, 1).data),
-				),
-			)
-			.toEqual([18, 52, 86, 255]);
+		await page.evaluate(() => window.ashTextModelIntegration.setSelectionColors({ 'editorOverviewRuler.background': '#123456' }));
+		await expect.poll(() => overview.evaluate((canvas: HTMLCanvasElement) => Array.from(canvas.getContext('2d')!.getImageData(2, 2, 1, 1).data))).toEqual([18, 52, 86, 255]);
 	});
 
 	test('editor scrollbar track colors follow theme overrides in all color schemes', async function () {
@@ -1866,9 +1649,7 @@ suite('textModel browser component', () => {
 
 		await openEditor(page);
 		await page.evaluate(() => {
-			window.ashTextModelIntegration.setValue(
-				Array.from({ length: 100 }, () => 'long text '.repeat(100)).join('\n'),
-			);
+			window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'long text '.repeat(100)).join('\n'));
 			window.ashTextModelIntegration.setScrollbar({ horizontal: 'visible', vertical: 'visible' });
 		});
 		const tracks = page.locator('.stanza-editor .ash-scrollbar-track');
@@ -1878,9 +1659,7 @@ suite('textModel browser component', () => {
 			for (const track of await tracks.all()) {
 				await expect(track).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 			}
-			await page.evaluate(() =>
-				window.ashTextModelIntegration.setSelectionColors({ 'scrollbar.background': '#123456' }),
-			);
+			await page.evaluate(() => window.ashTextModelIntegration.setSelectionColors({ 'scrollbar.background': '#123456' }));
 			for (const track of await tracks.all()) {
 				await expect(track).toHaveCSS('background-color', 'rgb(18, 52, 86)');
 				await expect(track).toHaveCSS('border-radius', '0px');
@@ -1914,16 +1693,10 @@ suite('textModel browser component', () => {
 			[-0.2, 12],
 		]) {
 			await editor.dispatchEvent('wheel', { deltaY, deltaMode: 0 });
-			expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(
-				expected,
-			);
+			expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(expected);
 		}
 		await editor.dispatchEvent('wheel', { deltaX: 0.2, deltaY: 0.2, deltaMode: 0 });
-		expect(
-			await editor
-				.locator(':scope > .ash-smooth-scrollable')
-				.evaluate(element => ({ left: element.scrollLeft, top: element.scrollTop })),
-		).toEqual({ left: 1, top: 13 });
+		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => ({ left: element.scrollLeft, top: element.scrollTop }))).toEqual({ left: 1, top: 13 });
 		await page.evaluate(() => window.ashTextModelIntegration.updateOptions({ mouseWheelScrollSensitivity: 0.1 }));
 		await editor.dispatchEvent('wheel', { deltaY: 1, deltaMode: 0 });
 		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(14);
@@ -1951,59 +1724,41 @@ suite('textModel browser component', () => {
 		expect(forward).toBeGreaterThan(12);
 		await editor.dispatchEvent('wheel', { deltaY: -8, deltaMode: 0 });
 		await page.clock.runFor(80);
-		expect(
-			await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop),
-		).toBeLessThan(forward - 8);
+		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeLessThan(forward - 8);
 		await editor.dispatchEvent('keydown', { key: 'Escape' });
-		const interrupted = await editor
-			.locator(':scope > .ash-smooth-scrollable')
-			.evaluate(element => element.scrollTop);
+		const interrupted = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
 		await page.clock.runFor(200);
-		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(
-			interrupted,
-		);
+		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(interrupted);
 		await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
 		await page.evaluate(() => window.ashTextModelIntegration.updateOptions({ inertialScroll: false }));
 		const disabled = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
 		await page.clock.runFor(500);
-		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(
-			disabled,
-		);
+		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(disabled);
 		await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
 		await page.clock.runFor(500);
-		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(
-			disabled + 12,
-		);
+		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(disabled + 12);
 		await page.evaluate(() => window.ashTextModelIntegration.updateOptions({ inertialScroll: true }));
 		await editor.dispatchEvent('wheel', { deltaY: 3, deltaMode: 1 });
 		const discrete = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
 		await page.clock.runFor(500);
-		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(
-			discrete,
-		);
+		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(discrete);
 		await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
 		await page.clock.runFor(1500);
 		const settled = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
 		await page.clock.runFor(500);
-		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(
-			settled,
-		);
+		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(settled);
 		await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
 		await page.evaluate(() => window.ashTextModelIntegration.setValue('short\nshort\nshort'));
 		await page.clock.runFor(500);
 		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(0);
-		await page.evaluate(() =>
-			window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'line').join('\n')),
-		);
+		await page.evaluate(() => window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'line').join('\n')));
 		await page.clock.runFor(32);
 		await editor.getByRole('scrollbar', { name: 'Vertical scrollbar' }).dispatchEvent('keydown', { key: 'End' });
 		await page.clock.runFor(32);
 		const bottom = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
 		await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
 		await page.clock.runFor(1500);
-		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(
-			bottom,
-		);
+		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(bottom);
 		await editor.dispatchEvent('wheel', { deltaY: -12, deltaMode: 0 });
 		await page.evaluate(() => window.ashTextModelIntegration.dispose());
 		await page.clock.runFor(1500);
@@ -2028,55 +1783,37 @@ suite('textModel browser component', () => {
 		// At the top edge the same unconsumed event reaches both wheel listeners.
 		await editor.dispatchEvent('wheel', { deltaY: -60, deltaMode: 0 });
 		await editor.dispatchEvent('wheel', { deltaY: 120, deltaMode: 0 });
-		const edgeInput = await editor
-			.locator(':scope > .ash-smooth-scrollable')
-			.evaluate(element => element.scrollTop);
+		const edgeInput = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
 		await page.clock.runFor(32);
-		expect(
-			await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop),
-		).toBeGreaterThan(edgeInput);
+		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(edgeInput);
 		// Large integer pixel deltas remain continuous when their step varies.
 		for (const deltaY of [134, 83, 62, 72, 101]) {
 			await editor.dispatchEvent('wheel', { deltaY, deltaMode: 0 });
-			const immediate = await editor
-				.locator(':scope > .ash-smooth-scrollable')
-				.evaluate(element => element.scrollTop);
+			const immediate = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
 			await page.clock.runFor(32);
-			expect(
-				await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop),
-			).toBeGreaterThan(immediate);
+			expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(immediate);
 		}
 		await editor.dispatchEvent('keydown', { key: 'Escape' });
 		await page.clock.runFor(150);
 		for (const deltaY of [40, 80, 160, 40]) {
 			await editor.dispatchEvent('wheel', { deltaY, deltaMode: 0 });
-			const immediate = await editor
-				.locator(':scope > .ash-smooth-scrollable')
-				.evaluate(element => element.scrollTop);
+			const immediate = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
 			await page.clock.runFor(80);
-			expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(
-				immediate,
-			);
+			expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(immediate);
 		}
 		// Fractional notch sizes become discrete after the repeated step is observed.
 		for (const [index, deltaY] of [60, 60, 120, 120, 60].entries()) {
 			await editor.dispatchEvent('wheel', { deltaY, deltaMode: 0 });
-			const immediate = await editor
-				.locator(':scope > .ash-smooth-scrollable')
-				.evaluate(element => element.scrollTop);
+			const immediate = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
 			await page.clock.runFor(32);
 			if (index > 0) {
-				expect(
-					await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop),
-				).toBe(immediate);
+				expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(immediate);
 			}
 		}
 		await editor.dispatchEvent('wheel', { deltaY: 47, deltaX: 9, deltaMode: 0 });
 		const switched = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
 		await page.clock.runFor(32);
-		expect(
-			await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop),
-		).toBeGreaterThan(switched);
+		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(switched);
 	});
 
 	test('editor surface and diagnostic colors follow the current Ash theme', async function () {
@@ -2187,16 +1924,10 @@ suite('textModel browser component', () => {
 			for (const focused of [true, false]) {
 				if (focused) await input.focus();
 				else await input.blur();
-				await expect(editor.locator('.view-overlays').first()).toHaveClass(
-					focused ? /\bfocused\b/u : /^(?!.*\bfocused\b)/u,
-				);
+				await expect(editor.locator('.view-overlays').first()).toHaveClass(focused ? /\bfocused\b/u : /^(?!.*\bfocused\b)/u);
 				const colors = await editor.evaluate((element, focused) => {
 					const entries = [
-						[
-							'.stanza-editor-selection',
-							'background-color',
-							focused ? '--ash-editor-selectionBackground' : '--ash-editor-inactiveSelectionBackground',
-						],
+						['.stanza-editor-selection', 'background-color', focused ? '--ash-editor-selectionBackground' : '--ash-editor-inactiveSelectionBackground'],
 						['.margin', 'background-color', '--ash-editorGutter-background'],
 						['.stanza-editor-whitespace', 'color', '--ash-editorWhitespace-foreground'],
 						['.line-numbers.active-line-number', 'color', '--ash-editorLineNumber-activeForeground'],
@@ -2236,9 +1967,7 @@ suite('textModel browser component', () => {
 		await expect(foldingControl).toBeVisible();
 		const firstLine = page.locator(".view-line[data-logical-line-index='0']");
 		await expect(page.locator('.view-lines')).toHaveCSS('cursor', 'text');
-		const firstLineNumber = page.locator(
-			".margin-view-overlays .view-overlay-line[data-line-index='0'] .line-numbers",
-		);
+		const firstLineNumber = page.locator(".margin-view-overlays .view-overlay-line[data-line-index='0'] .line-numbers");
 		await expect(firstLineNumber).toHaveText('1');
 		const foldingBox = await foldingControl.boundingBox();
 		const glyphMarginBox = await glyphMargin.boundingBox();
@@ -2258,13 +1987,7 @@ suite('textModel browser component', () => {
 		await input.focus();
 		await page.keyboard.press('Control+Home');
 		await page.keyboard.type('x'.repeat(200));
-		await expect
-			.poll(() =>
-				editor
-					.locator(':scope > .ash-smooth-scrollable')
-					.evaluate(element => element.scrollWidth - element.clientWidth),
-			)
-			.toBeGreaterThan(0);
+		await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollWidth - element.clientWidth)).toBeGreaterThan(0);
 		await page.evaluate(() => window.ashTextModelIntegration.setScrollLeft(160));
 		// Folding can replace a visible control after a text edit. Retry the complete
 		// geometry check so visibility and the measured gutter belong to a settled layout.
@@ -2324,11 +2047,7 @@ suite('textModel browser component', () => {
 		await expect(zone).toHaveCSS('top', `${baseGeometry.lineHeight}px`);
 		await expect(zone).toHaveCSS('height', '500px');
 		await expect
-			.poll(() =>
-				editor
-					.locator(':scope > .ash-smooth-scrollable')
-					.evaluate(element => ({ scrollWidth: element.scrollWidth, scrollHeight: element.scrollHeight })),
-			)
+			.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => ({ scrollWidth: element.scrollWidth, scrollHeight: element.scrollHeight })))
 			.toEqual({
 				scrollWidth: 1_200 - baseGeometry.contentLeft,
 				scrollHeight: baseGeometry.lineHeight * baseGeometry.lineCount + 500,
@@ -2336,11 +2055,7 @@ suite('textModel browser component', () => {
 		await page.evaluate(() => window.ashTextModelIntegration.removeViewZone());
 		await expect(zone).toHaveCount(0);
 		await expect
-			.poll(() =>
-				editor
-					.locator(':scope > .ash-smooth-scrollable')
-					.evaluate(element => ({ scrollWidth: element.scrollWidth, scrollHeight: element.scrollHeight })),
-			)
+			.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => ({ scrollWidth: element.scrollWidth, scrollHeight: element.scrollHeight })))
 			.toEqual({
 				scrollWidth: baseGeometry.clientWidth - baseGeometry.contentLeft,
 				scrollHeight: baseGeometry.clientHeight,
@@ -2359,18 +2074,12 @@ suite('textModel browser component', () => {
 		await action.focus();
 		await expect(action).toBeFocused();
 		for (const side of ['left', 'right'] as const) {
-			await page.evaluate(
-				side => window.ashTextModelIntegration.updateOptions({ minimap: { enabled: true, side } }),
-				side,
-			);
+			await page.evaluate(side => window.ashTextModelIntegration.updateOptions({ minimap: { enabled: true, side } }), side);
 			await expect
 				.poll(() =>
 					zone.evaluate((element, side) => {
 						const bounds = element.getBoundingClientRect();
-						const minimap = element
-							.closest('.stanza-editor')!
-							.querySelector('.minimap')!
-							.getBoundingClientRect();
+						const minimap = element.closest('.stanza-editor')!.querySelector('.minimap')!.getBoundingClientRect();
 						return side === 'left' ? bounds.left >= minimap.right : bounds.right <= minimap.left;
 					}, side),
 				)
@@ -2409,9 +2118,7 @@ suite('textModel browser component', () => {
 		expect(initial.contentWidth).toBeGreaterThan(0);
 		expect(initial.contentHeight).toBeGreaterThan(0);
 		await page.evaluate(() => window.ashTextModelIntegration.moveGlyphWidget(2));
-		await expect
-			.poll(() => glyphWidget.evaluate(element => element.getBoundingClientRect().top))
-			.toBe(initial.lineTop + initial.lineHeight * 2);
+		await expect.poll(() => glyphWidget.evaluate(element => element.getBoundingClientRect().top)).toBe(initial.lineTop + initial.lineHeight * 2);
 		await page.evaluate(() => window.ashTextModelIntegration.removeWidgets());
 		await expect(contentWidget).toHaveCount(0);
 		await expect(glyphWidget).toHaveCount(0);
@@ -2436,20 +2143,17 @@ suite('textModel browser component', () => {
 		await expect(firstLineDecoration).toHaveCount(1);
 		await expect(lineDecoration.first()).toHaveAttribute('title', 'Model line decoration');
 		expect(
-			await lineDecoration
-				.first()
-				.evaluate(element => ({
-					left: getComputedStyle(element).left === (element as HTMLElement).style.left,
-					width: getComputedStyle(element).width === (element as HTMLElement).style.width,
-				})),
+			await lineDecoration.first().evaluate(element => ({
+				left: getComputedStyle(element).left === (element as HTMLElement).style.left,
+				width: getComputedStyle(element).width === (element as HTMLElement).style.width,
+			})),
 		).toEqual({ left: true, width: true });
 		await expect(blockDecoration).toHaveCount(1);
 		const geometry = await page.locator('.stanza-editor').evaluate(element => {
 			const inlineDecoration = element.querySelector<HTMLElement>('.ash-model-decoration-inline');
 			const wholeLineDecoration = element.querySelector<HTMLElement>('.ash-model-decoration-whole');
 			const collapsedDecoration = element.querySelector<HTMLElement>('.ash-model-decoration-collapsed');
-			if (!inlineDecoration || !wholeLineDecoration || !collapsedDecoration)
-				throw new Error('Model decoration geometry is incomplete');
+			if (!inlineDecoration || !wholeLineDecoration || !collapsedDecoration) throw new Error('Model decoration geometry is incomplete');
 			return {
 				inlineWidth: inlineDecoration.getBoundingClientRect().width,
 				wholeLineWidth: wholeLineDecoration.getBoundingClientRect().width,
@@ -2480,9 +2184,7 @@ suite('textModel browser component', () => {
 		await expect(editor).toHaveAttribute('aria-label', /.+/);
 		await expect(input).toHaveAttribute('aria-multiline', 'true');
 		await expect(input).toHaveAttribute('aria-roledescription', 'code editor');
-		await expect(
-			editor.locator('.stanza-editor-token.token-keyword').filter({ hasText: 'fn' }).first(),
-		).toBeVisible();
+		await expect(editor.locator('.stanza-editor-token.token-keyword').filter({ hasText: 'fn' }).first()).toBeVisible();
 		await input.focus();
 		await page.clock.runFor(32);
 		const screenReaderContent = input.locator('.stanza-native-screen-reader-content');
@@ -2498,7 +2200,12 @@ suite('textModel browser component', () => {
 		});
 		await expect
 			.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSelection()))
-			.toEqual({ startLineIndex: 0, startColumnIndex: 1, endLineIndex: 0, endColumnIndex: 3 });
+			.toEqual({
+				startLineIndex: 0,
+				startColumnIndex: 1,
+				endLineIndex: 0,
+				endColumnIndex: 3,
+			});
 		await screenReaderContent.evaluate(element => {
 			element.dataset.contentKind = 'simple';
 		});
@@ -2509,13 +2216,8 @@ suite('textModel browser component', () => {
 		await expect(screenReaderContent.locator('span[data-line-index]')).not.toHaveCount(0);
 		const viewportBracket = page.locator('.view-line .stanza-editor-bracket-level-1').first();
 		const richBracket = screenReaderContent.locator('.stanza-editor-bracket-level-1').first();
-		await expect(richBracket).toHaveCSS(
-			'color',
-			await viewportBracket.evaluate(element => getComputedStyle(element).color),
-		);
-		expect(await richBracket.evaluate(element => getComputedStyle(element).color)).not.toBe(
-			await editor.evaluate(element => getComputedStyle(element).color),
-		);
+		await expect(richBracket).toHaveCSS('color', await viewportBracket.evaluate(element => getComputedStyle(element).color));
+		expect(await richBracket.evaluate(element => getComputedStyle(element).color)).not.toBe(await editor.evaluate(element => getComputedStyle(element).color));
 		await page.clock.runFor(110);
 		await screenReaderContent.evaluate(element => {
 			const walker = element.ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT);
@@ -2528,7 +2230,12 @@ suite('textModel browser component', () => {
 		});
 		await expect
 			.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSelection()))
-			.toEqual({ startLineIndex: 0, startColumnIndex: 0, endLineIndex: 0, endColumnIndex: 2 });
+			.toEqual({
+				startLineIndex: 0,
+				startColumnIndex: 0,
+				endLineIndex: 0,
+				endColumnIndex: 2,
+			});
 		await screenReaderContent.evaluate(element => {
 			element.dataset.contentKind = 'rich';
 		});
@@ -2581,18 +2288,14 @@ suite('textModel browser component', () => {
 		await page.mouse.move(0, 0);
 		await expect(minimap).toHaveCSS('opacity', '0');
 		expect((await minimap.boundingBox())!.width).toBe(width);
-		await page.evaluate(() =>
-			window.ashTextModelIntegration.getControl().updateOptions({ minimap: { autohide: 'scroll' } }),
-		);
+		await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ minimap: { autohide: 'scroll' } }));
 		await expect(minimap).toHaveCSS('opacity', '0');
 		await page.evaluate(() => window.ashTextModelIntegration.getControl().setScrollTop(100));
 		await expect(minimap).toHaveCSS('opacity', '1');
 		await expect(minimap).toHaveCSS('opacity', '0');
 		await page.emulateMedia({ reducedMotion: 'reduce' });
 		await expect(minimap).toHaveCSS('transition-duration', '0s');
-		await page.evaluate(() =>
-			window.ashTextModelIntegration.getControl().updateOptions({ minimap: { autohide: 'none' } }),
-		);
+		await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ minimap: { autohide: 'none' } }));
 		await expect(minimap).toHaveCSS('opacity', '1');
 	});
 });

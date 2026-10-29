@@ -6,31 +6,23 @@ export const rendererOutput: Rolldown.OutputOptions = {
 	codeSplitting: {
 		groups: [
 			{
-				name: id =>
-					`localization-messages-${id.replaceAll('\\', '/').split('/').at(-1)!.slice('localizationMessages.'.length, -3)}`,
-				test: id =>
-					/\/\.build\/desktop\/localization\/localizationMessages\.[^/]+\.ts$/u.test(
-						id.replaceAll('\\', '/'),
-					),
+				name: id => `localization-messages-${id.replaceAll('\\', '/').split('/').at(-1)!.slice('localizationMessages.'.length, -3)}`,
+				test: id => /\/\.build\/desktop\/localization\/localizationMessages\.[^/]+\.ts$/u.test(id.replaceAll('\\', '/')),
 			},
 			{
-				name: id =>
-					`localization-${id.replaceAll('\\', '/').split('/').at(-1)!.slice('localizationCatalog.'.length, -3)}`,
+				name: id => `localization-${id.replaceAll('\\', '/').split('/').at(-1)!.slice('localizationCatalog.'.length, -3)}`,
 				// Languages grow independently; keep each catalog separate from Workbench code and other languages.
-				test: id =>
-					/\/\.build\/desktop\/localization\/localizationCatalog\.[^/]+\.ts$/u.test(id.replaceAll('\\', '/')),
+				test: id => /\/\.build\/desktop\/localization\/localizationCatalog\.[^/]+\.ts$/u.test(id.replaceAll('\\', '/')),
 			},
 			{
 				name: id => id.replaceAll('\\', '/').split('/').at(-1)!.slice(0, -3),
 				// Generated schema modules have their own byte budget; keep their data independently splittable.
-				test: id =>
-					/\/\.build\/protocol\/typescript\/AppServerProtocolSchema\d+\.ts$/u.test(id.replaceAll('\\', '/')),
+				test: id => /\/\.build\/protocol\/typescript\/AppServerProtocolSchema\d+\.ts$/u.test(id.replaceAll('\\', '/')),
 			},
 			{
 				name: 'app-server-protocol',
 				// Keep the shared decoder separate from Workbench contributions and validation data.
-				test: id =>
-					id.replaceAll('\\', '/').endsWith('/.build/protocol/typescript/AppServerProtocolDecoder.ts'),
+				test: id => id.replaceAll('\\', '/').endsWith('/.build/protocol/typescript/AppServerProtocolDecoder.ts'),
 			},
 			{
 				name: 'shared',

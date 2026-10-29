@@ -14,7 +14,10 @@ for (const [name, value] of Object.entries({
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
 	PointerEvent: browserEnvironment.window.MouseEvent,
 })) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
+	Object.defineProperty(globalThis, name, {
+		configurable: true,
+		value,
+	});
 }
 
 const { Sash, SashSettingsBinding, SashState } = await import('../../browser/ui/sash/sash.js');
@@ -29,7 +32,11 @@ test('Sash settings are scoped to a subtree and clean up their projection', () =
 
 	{
 		using binding = new SashSettingsBinding(root);
-		binding.update({ dragAreaSize: 12, hoverFeedbackSize: 6, hoverDelay: 150 });
+		binding.update({
+			dragAreaSize: 12,
+			hoverFeedbackSize: 6,
+			hoverDelay: 150,
+		});
 		assert.equal(dom.window.getComputedStyle(sash).getPropertyValue('--ash-sash-dragAreaSize'), '12px');
 		assert.equal(dom.window.getComputedStyle(sash).getPropertyValue('--ash-sash-hoverFeedbackSize'), '6px');
 		assert.equal(dom.window.getComputedStyle(sash).getPropertyValue('--ash-sash-hover-delay'), '150ms');
@@ -46,8 +53,24 @@ test('Sash settings reject invalid dimensions and delays', () => {
 	assert.ok(root);
 	using binding = new SashSettingsBinding(root);
 
-	assert.throws(() => binding.update({ dragAreaSize: 0, hoverFeedbackSize: 1, hoverDelay: 0 }), /drag area size/);
-	assert.throws(() => binding.update({ dragAreaSize: 4, hoverFeedbackSize: 1, hoverDelay: -1 }), /hover delay/);
+	assert.throws(
+		() =>
+			binding.update({
+				dragAreaSize: 0,
+				hoverFeedbackSize: 1,
+				hoverDelay: 0,
+			}),
+		/drag area size/,
+	);
+	assert.throws(
+		() =>
+			binding.update({
+				dragAreaSize: 4,
+				hoverFeedbackSize: 1,
+				hoverDelay: -1,
+			}),
+		/hover delay/,
+	);
 	dom.window.close();
 });
 
@@ -111,9 +134,7 @@ test('Sash corner handles drag both orthogonal separators', () => {
 	const handle = horizontal.element.querySelector<HTMLElement>('.ash-sash-orthogonal-handle-start');
 	assert.ok(handle);
 
-	handle.dispatchEvent(
-		new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 10, clientY: 20 }),
-	);
+	handle.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 10, clientY: 20 }));
 	dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { bubbles: true, clientX: 40, clientY: 60 }));
 	dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true, clientX: 40, clientY: 60 }));
 	assert.deepEqual(horizontalDeltas, [40]);

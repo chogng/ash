@@ -25,18 +25,13 @@ test('one package declaration generates both runtimes and detects stale registra
 		{ cwd: root, encoding: 'utf8' },
 	);
 	assert.equal(formatting.status, 0, formatting.stdout + formatting.stderr);
-	const metadata = await import(
-		pathToFileURL(resolve(root, 'src/ash/platform/syntax/common/syntaxLanguages.generated.ts')).href
-	);
+	const metadata = await import(pathToFileURL(resolve(root, 'src/ash/platform/syntax/common/syntaxLanguages.generated.ts')).href);
 	assert.deepEqual(
 		metadata.syntaxLanguageDefinitions.map((language: { id: string }) => language.id),
 		['demo', 'demoreact'],
 	);
 	const rust = await readFile(resolve(root, 'crates/syntax/src/languages.generated.rs'), 'utf8');
-	const web = await readFile(
-		resolve(root, 'src/ash/workbench/services/treeSitter/browser/treeSitterGrammars.generated.ts'),
-		'utf8',
-	);
+	const web = await readFile(resolve(root, 'src/ash/workbench/services/treeSitter/browser/treeSitterGrammars.generated.ts'), 'utf8');
 	assert.match(rust, /ash_grammars::language\("demo"\)/);
 	assert.match(rust, /shared\/queries\/base.scm/);
 	assert.match(web, /shared\/queries\/base.scm\?raw/);
@@ -57,10 +52,7 @@ test('conflicting aliases and uncovered extension languages fail before generati
 	await assert.rejects(readGrammarPackages(root), /Duplicate or invalid syntax language alias: demo/);
 	grammar.languages[1]!.aliases.pop();
 	await writeFile(packages[0]!.manifest, JSON.stringify([grammar]));
-	await writeFile(
-		resolve(root, 'extensions/demo/package.json'),
-		JSON.stringify({ contributes: { languages: [{ id: 'missing' }] } }),
-	);
+	await writeFile(resolve(root, 'extensions/demo/package.json'), JSON.stringify({ contributes: { languages: [{ id: 'missing' }] } }));
 	await assert.rejects(readGrammarPackages(root), /Missing Tree-sitter registration for demo:missing/);
 });
 
@@ -97,17 +89,11 @@ async function fixture(t: { after(callback: () => Promise<void>): void }): Promi
 	t.after(() => rm(root, { recursive: true, force: true }));
 	await writeFile(resolve(root, 'package.json'), '{"type":"module"}');
 	await mkdir(resolve(root, 'third_party/ash-grammars'), { recursive: true });
-	await writeFile(
-		resolve(root, 'third_party/ash-grammars/runtime-lock.json'),
-		JSON.stringify({ version: '0.1.0', wasm: { sha256: 'a'.repeat(64) } }),
-	);
+	await writeFile(resolve(root, 'third_party/ash-grammars/runtime-lock.json'), JSON.stringify({ version: '0.1.0', wasm: { sha256: 'a'.repeat(64) } }));
 	await mkdir(resolve(root, 'extensions/demo/tree-sitter'), { recursive: true });
 	await mkdir(resolve(root, 'extensions/shared/queries'), { recursive: true });
 	await writeFile(resolve(root, 'extensions/shared/queries/base.scm'), '(identifier) @variable');
-	await writeFile(
-		resolve(root, 'extensions/demo/package.json'),
-		JSON.stringify({ contributes: { languages: [{ id: 'demo' }, { id: 'demoreact' }] } }),
-	);
+	await writeFile(resolve(root, 'extensions/demo/package.json'), JSON.stringify({ contributes: { languages: [{ id: 'demo' }, { id: 'demoreact' }] } }));
 	await writeFile(
 		resolve(root, 'extensions/demo/tree-sitter/grammars.json'),
 		JSON.stringify([

@@ -118,21 +118,9 @@ export class Dialog extends Disposable {
 				className: 'ash-dialog-icon',
 				attributes: { 'aria-hidden': 'true' },
 			});
-			appendIcon(
-				options.icon ??
-					(options.type === 'error'
-						? Lxicon.dialogError
-						: options.type === 'warning'
-							? Lxicon.dialogWarning
-							: Lxicon.dialogInfo),
-				icon,
-			);
+			appendIcon(options.icon ?? (options.type === 'error' ? Lxicon.dialogError : options.type === 'warning' ? Lxicon.dialogWarning : Lxicon.dialogInfo), icon);
 			const color =
-				options.type === 'error'
-					? options.dialogStyles.errorIconForeground
-					: options.type === 'warning'
-						? options.dialogStyles.warningIconForeground
-						: options.dialogStyles.infoIconForeground;
+				options.type === 'error' ? options.dialogStyles.errorIconForeground : options.type === 'warning' ? options.dialogStyles.warningIconForeground : options.dialogStyles.infoIconForeground;
 			if (color) icon.style.color = color;
 			header.append(icon);
 		}
@@ -157,7 +145,11 @@ export class Dialog extends Disposable {
 						},
 					],
 					actionViewItemProvider: (action, actionOptions) =>
-						new LabelActionViewItem(action, { ...actionOptions, label: '', ariaLabel: action.label }),
+						new LabelActionViewItem(action, {
+							...actionOptions,
+							label: '',
+							ariaLabel: action.label,
+						}),
 				}),
 			);
 			close.element.classList.add('ash-dialog-close');
@@ -191,9 +183,7 @@ export class Dialog extends Disposable {
 						type: inputOptions.type,
 						placeholder: inputOptions.placeholder,
 						presentation: 'field',
-						ariaLabel:
-							inputOptions.placeholder ??
-							localize('dialog.inputNumber', '{0}, field {1}', message, index + 1),
+						ariaLabel: inputOptions.placeholder ?? localize('dialog.inputNumber', '{0}, field {1}', message, index + 1),
 					}),
 				);
 				input.value = inputOptions.value ?? '';
@@ -251,27 +241,14 @@ export class Dialog extends Disposable {
 					if (!options.disableCloseAction) this.finish(options.cancelId ?? 0);
 					return;
 				}
-				if (
-					isMacintosh &&
-					event.metaKey &&
-					!event.altKey &&
-					!event.ctrlKey &&
-					!event.shiftKey &&
-					event.key.toLowerCase() === 'd'
-				) {
+				if (isMacintosh && event.metaKey && !event.altKey && !event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === 'd') {
 					event.preventDefault();
 					event.stopPropagation();
 					const secondary = this.buttons[1];
 					if (options.cancelId !== 1 && secondary && isTabbable(secondary.domNode)) this.finish(1);
 					return;
 				}
-				if (
-					(event.key === 'ArrowLeft' || event.key === 'ArrowRight') &&
-					!event.altKey &&
-					!event.ctrlKey &&
-					!event.metaKey &&
-					!event.shiftKey
-				) {
+				if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
 					const focused = getActiveElement(ownerDocument);
 					if (!this.buttons.some(button => button.domNode.contains(focused))) return;
 					// CSS and RTL can change the visual order without changing result indices.
@@ -281,28 +258,15 @@ export class Dialog extends Disposable {
 						.sort((left, right) => left.left - right.left);
 					const index = available.findIndex(({ button }) => button.domNode.contains(focused));
 					if (index >= 0) {
-						const next =
-							(index + (event.key === 'ArrowRight' ? 1 : -1) + available.length) % available.length;
+						const next = (index + (event.key === 'ArrowRight' ? 1 : -1) + available.length) % available.length;
 						event.preventDefault();
 						available[next].button.focus();
 					}
 					return;
 				}
-				if (
-					event.key !== 'Enter' ||
-					event.altKey ||
-					event.ctrlKey ||
-					event.metaKey ||
-					event.shiftKey ||
-					options.disableDefaultAction
-				)
-					return;
+				if (event.key !== 'Enter' || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || options.disableDefaultAction) return;
 				const target = event.target;
-				if (
-					isHTMLElement(target) &&
-					target.closest('button, textarea, select, [contenteditable], [role=combobox]')
-				)
-					return;
+				if (isHTMLElement(target) && target.closest('button, textarea, select, [contenteditable], [role=combobox]')) return;
 				const primary = this.buttons[0];
 				if (primary?.enabled) {
 					event.preventDefault();
@@ -349,9 +313,7 @@ export class Dialog extends Disposable {
 				input.focus();
 				input.select();
 			} else {
-				const custom = this.customBodyRoots
-					.map(root => (isTabbable(root) ? root : getTabbableElements(root)[0]))
-					.find(target => target !== undefined);
+				const custom = this.customBodyRoots.map(root => (isTabbable(root) ? root : getTabbableElements(root)[0])).find(target => target !== undefined);
 				const action = this.buttons.find(button => isTabbable(button.domNode));
 				if (custom) custom.focus();
 				else if (action) action.focus();

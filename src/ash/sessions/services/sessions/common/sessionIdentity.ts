@@ -4,26 +4,16 @@ const prefix = 'ash-session:';
 
 /** Window identities isolate identical backend identifiers without changing protocol identities. */
 export function sessionIdentity(providerId: string, backendSessionId: string, defaultProviderId: string): string {
-	return providerId === defaultProviderId
-		? backendSessionId
-		: `${prefix}${encodeURIComponent(providerId)}/${encodeURIComponent(backendSessionId)}`;
+	return providerId === defaultProviderId ? backendSessionId : `${prefix}${encodeURIComponent(providerId)}/${encodeURIComponent(backendSessionId)}`;
 }
 
-export function parseSessionIdentity(
-	sessionId: string,
-	defaultProviderId: string,
-): { readonly providerId: string; readonly backendSessionId: string } {
+export function parseSessionIdentity(sessionId: string, defaultProviderId: string): { readonly providerId: string; readonly backendSessionId: string } {
 	if (!sessionId.startsWith(prefix)) return { providerId: defaultProviderId, backendSessionId: sessionId };
 	const separator = sessionId.indexOf('/', prefix.length);
 	if (separator < 0) throw new Error('Invalid qualified Session identity');
 	const providerId = decodeURIComponent(sessionId.slice(prefix.length, separator));
 	const backendSessionId = decodeURIComponent(sessionId.slice(separator + 1));
-	if (
-		!providerId ||
-		!backendSessionId ||
-		sessionIdentity(providerId, backendSessionId, defaultProviderId) !== sessionId
-	)
-		throw new Error('Invalid qualified Session identity');
+	if (!providerId || !backendSessionId || sessionIdentity(providerId, backendSessionId, defaultProviderId) !== sessionId) throw new Error('Invalid qualified Session identity');
 	return { providerId, backendSessionId };
 }
 
@@ -52,12 +42,7 @@ function mapSessionThreads(session: ISession, map: (value: string) => string): P
 	};
 }
 
-export function projectSession(
-	session: ISession,
-	providerId: string,
-	providerLabel: string,
-	defaultProviderId: string,
-): ISession {
+export function projectSession(session: ISession, providerId: string, providerLabel: string, defaultProviderId: string): ISession {
 	// Existing ambient records retain object identity and persisted raw IDs.
 	if (providerId === defaultProviderId) return session;
 	return {
@@ -89,8 +74,7 @@ export function parseSessionProviderAuthority(authority: string, defaultProvider
 	if (authority === 'local') return defaultProviderId;
 	if (!authority.startsWith('sessions+')) throw new Error('Unknown Session host authority');
 	const providerId = decodeURIComponent(authority.slice('sessions+'.length));
-	if (!providerId || sessionProviderAuthority(providerId, defaultProviderId) !== authority)
-		throw new Error('Invalid Session host authority');
+	if (!providerId || sessionProviderAuthority(providerId, defaultProviderId) !== authority) throw new Error('Invalid Session host authority');
 	return providerId;
 }
 
@@ -124,10 +108,7 @@ export function mapAgentExecutionNode(
 	};
 }
 
-export function mapAgentThreadRead<T extends import('../../../../platform/agentHost/common/agent.js').ThreadRead>(
-	value: T,
-	identity: (value: string) => string,
-): T {
+export function mapAgentThreadRead<T extends import('../../../../platform/agentHost/common/agent.js').ThreadRead>(value: T, identity: (value: string) => string): T {
 	const pair = <P extends { readonly sessionId: string; readonly threadId: string }>(record: P): P => ({
 		...record,
 		sessionId: identity(record.sessionId),

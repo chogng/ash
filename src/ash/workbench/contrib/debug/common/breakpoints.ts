@@ -1,8 +1,4 @@
-import {
-	ContextKeyExpr,
-	IContextKeyService,
-	type ContextKeyExpression,
-} from '../../../../platform/contextkey/common/contextkey.js';
+import { ContextKeyExpr, IContextKeyService, type ContextKeyExpression } from '../../../../platform/contextkey/common/contextkey.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 
@@ -24,19 +20,12 @@ class Breakpoints {
 	}
 }
 
-export function canSetBreakpointsIn(
-	language: string,
-	extensions: IExtensionService,
-	configuration: IConfigurationService,
-	context: IContextKeyService,
-): boolean {
+export function canSetBreakpointsIn(language: string, extensions: IExtensionService, configuration: IConfigurationService, context: IContextKeyService): boolean {
 	if (configuration.getValue<boolean>('debug.allowBreakpointsEverywhere') !== false) return true;
-	return extensions
-		.getExtensionPointContributions<readonly { language: string; when?: string }[]>('breakpoints')
-		.some(entry =>
-			entry.value.some(contribution => {
-				const policy = new Breakpoints(contribution, context);
-				return policy.language === language && policy.enabled;
-			}),
-		);
+	return extensions.getExtensionPointContributions<readonly { language: string; when?: string }[]>('breakpoints').some(entry =>
+		entry.value.some(contribution => {
+			const policy = new Breakpoints(contribution, context);
+			return policy.language === language && policy.enabled;
+		}),
+	);
 }

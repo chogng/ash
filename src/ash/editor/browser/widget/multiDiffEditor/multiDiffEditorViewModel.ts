@@ -105,9 +105,7 @@ export class MultiDiffEditorViewModel extends Disposable {
 			scrollTop,
 			...(this.activeItemId ? { activeItemId: this.activeItemId } : {}),
 			collapsedItemIds: [...this.collapsedItemIds],
-			itemViewStates: [...this.itemViewStates].flatMap(([id, state]) =>
-				state.original || state.modified ? [{ id, ...state }] : [],
-			),
+			itemViewStates: [...this.itemViewStates].flatMap(([id, state]) => (state.original || state.modified ? [{ id, ...state }] : [])),
 		};
 	}
 
@@ -139,11 +137,7 @@ function isMultiDiffEditorViewState(value: unknown): value is MultiDiffEditorVie
 		state.itemViewStates.every((item: unknown) => {
 			if (!item || typeof item !== 'object') return false;
 			const entry = item as MultiDiffEditorViewState['itemViewStates'][number];
-			return (
-				typeof entry.id === 'string' &&
-				(entry.original === null || isCodeEditorViewState(entry.original)) &&
-				(entry.modified === null || isCodeEditorViewState(entry.modified))
-			);
+			return typeof entry.id === 'string' && (entry.original === null || isCodeEditorViewState(entry.original)) && (entry.modified === null || isCodeEditorViewState(entry.modified));
 		})
 	);
 }

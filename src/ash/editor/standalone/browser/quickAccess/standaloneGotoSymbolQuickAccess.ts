@@ -5,11 +5,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
-import {
-	EditorAction,
-	registerEditorAction,
-	type ServicesAccessor,
-} from '../../../browser/editorFeatureRegistration.js';
+import { EditorAction, registerEditorAction, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import type { LanguageDocumentSymbol } from '../../../common/languages.js';
@@ -79,16 +75,12 @@ export class StandaloneGotoSymbolQuickAccessProvider extends Disposable {
 		this._register(model.onDidChangeLanguage(close));
 		this._register(this.languageFeatures.documentSymbolProvider.onDidChange(close));
 		picker.show();
-		void OutlineModel.create(this.languageFeatures.documentSymbolProvider, model, request.signal, error =>
-			this.notifications.error(String(error)),
-		)
+		void OutlineModel.create(this.languageFeatures.documentSymbolProvider, model, request.signal, error => this.notifications.error(String(error)))
 			.then(outline => {
 				if (request.signal.aborted || !outline) {
 					return;
 				}
-				picker.items = outline
-					.asListOfDocumentSymbols()
-					.map(symbol => ({ symbol, label: symbol.name, description: symbol.detail }));
+				picker.items = outline.asListOfDocumentSymbols().map(symbol => ({ symbol, label: symbol.name, description: symbol.detail }));
 			})
 			.catch(error => {
 				if (!request.signal.aborted) {

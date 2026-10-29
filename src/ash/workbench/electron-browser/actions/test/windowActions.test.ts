@@ -7,11 +7,7 @@ import { ILayoutService } from '../../../../platform/layout/browser/layoutServic
 import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import {
-	NATIVE_HOST_OPEN_WINDOW_CHANNEL,
-	NATIVE_HOST_DIALOG_CHANNEL,
-	NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL,
-} from '../../../../platform/native/common/nativeHost.js';
+import { NATIVE_HOST_OPEN_WINDOW_CHANNEL, NATIVE_HOST_DIALOG_CHANNEL, NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL } from '../../../../platform/native/common/nativeHost.js';
 import type { INativeHostApi } from '../../../../platform/native/common/nativeHost.js';
 import { nativeHostIpcRoutes } from '../../../../platform/native/electron-main/nativeHostIpc.js';
 import { INativeHostService } from '../../../common/services.js';
@@ -77,14 +73,8 @@ test('desktop dialog and window routes reject malformed requests', async () => {
 	});
 	const dialog = routes.find(route => route.channel === NATIVE_HOST_DIALOG_CHANNEL);
 	assert.ok(dialog);
-	assert.throws(
-		() => dialog.validate({ kind: 'show', id: 0, options: { type: 'info', message: 'Hello' } }),
-		/Invalid dialog ID/,
-	);
-	assert.throws(
-		() => dialog.validate({ kind: 'show', id: 1, options: { type: 'info', message: 'Hello', execute: 'bad' } }),
-		/Invalid message box options/,
-	);
+	assert.throws(() => dialog.validate({ kind: 'show', id: 0, options: { type: 'info', message: 'Hello' } }), /Invalid dialog ID/);
+	assert.throws(() => dialog.validate({ kind: 'show', id: 1, options: { type: 'info', message: 'Hello', execute: 'bad' } }), /Invalid message box options/);
 	assert.deepEqual(
 		dialog.validate({
 			kind: 'show',
@@ -97,10 +87,7 @@ test('desktop dialog and window routes reject malformed requests', async () => {
 			options: { type: 'warning', message: 'Choose', buttons: ['First', 'Second', 'Cancel'], cancelId: 2 },
 		},
 	);
-	assert.throws(
-		() => dialog.validate({ kind: 'show', id: 3, options: { message: 'Choose', buttons: [0] } }),
-		/Invalid message box buttons/,
-	);
+	assert.throws(() => dialog.validate({ kind: 'show', id: 3, options: { message: 'Choose', buttons: [0] } }), /Invalid message box buttons/);
 	assert.throws(
 		() =>
 			dialog.validate({
@@ -116,14 +103,8 @@ test('desktop dialog and window routes reject malformed requests', async () => {
 	assert.ok(openAgents);
 	assert.throws(() => openAgents.validate({ windowId: 1 }), /Invalid Agents Window options/);
 	assert.throws(() => openAgents.validate({}), /requires a conversation or draft/);
-	assert.throws(
-		() => openAgents.validate({ conversation: { sessionId: '', threadId: 'thread' } }),
-		/Invalid Agents Window conversation/,
-	);
-	assert.throws(
-		() => openAgents.validate({ draft: { mode: 'debug', text: 'Review this', contexts: [{ id: 'file' }] } }),
-		/Invalid Agents Window context/,
-	);
+	assert.throws(() => openAgents.validate({ conversation: { sessionId: '', threadId: 'thread' } }), /Invalid Agents Window conversation/);
+	assert.throws(() => openAgents.validate({ draft: { mode: 'debug', text: 'Review this', contexts: [{ id: 'file' }] } }), /Invalid Agents Window context/);
 	const handoff = {
 		conversation: { sessionId: 'session', threadId: 'thread' },
 		draft: {
@@ -291,17 +272,7 @@ test('desktop window commands reach the window host', async () => {
 	await commands.executeCommand('workbench.action.showNextWindowTab');
 	await commands.executeCommand('workbench.action.closeOtherWindows');
 	await commands.executeCommand('workbench.action.closeWindow');
-	assert.deepEqual(calls, [
-		'zoom:1',
-		'zoom:0',
-		'zoom:0',
-		'top:true',
-		'focusSelf',
-		'newTab',
-		'tab:next',
-		'closeOthers',
-		'close',
-	]);
+	assert.deepEqual(calls, ['zoom:1', 'zoom:0', 'zoom:0', 'top:true', 'focusSelf', 'newTab', 'tab:next', 'closeOthers', 'close']);
 });
 
 test('quick window switching advances from the caller even when another window owns OS focus', async () => {

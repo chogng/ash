@@ -13,12 +13,7 @@ import './media/chatDebug.css';
 import { addDisposableListener, h, type IDimension } from '../../../../../base/browser/dom.js';
 import { triggerDownload } from '../../../../../base/browser/fileAccess.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
-import {
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-	type IDisposable,
-} from '../../../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { onUnexpectedError } from '../../../../../base/common/errors.js';
 import { isRecord } from '../../../../../base/common/types.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
@@ -27,11 +22,7 @@ import { localize } from '../../../../../nls.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
-import {
-	IAccessibleViewService,
-	AccessibilityVerbositySettingId,
-	AccessibleViewType,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibilityVerbositySettingId, AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { EditorPane } from '../../../../browser/parts/editor/editorPane.js';
 import type { IResourceEditorInput, IEditorPane, IEditorControl } from '../../../../common/editor.js';
@@ -67,16 +58,7 @@ import type { ITextModel } from '../../../../../editor/common/model.js';
 import { CodeEditorWidget } from '../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { ChatDebugFilterState, type ChatDebugEventKind } from './chatDebugFilters.js';
 import { ChatDebugOverviewView } from './chatDebugOverviewView.js';
-import {
-	AgentTraceViewModel,
-	eventLabel,
-	invocationTimingLabel,
-	recordingLabel,
-	evidenceLabel,
-	hookStatusLabel,
-	relationLabel,
-	type TraceEntry,
-} from './agentTraceModel.js';
+import { AgentTraceViewModel, eventLabel, invocationTimingLabel, recordingLabel, evidenceLabel, hookStatusLabel, relationLabel, type TraceEntry } from './agentTraceModel.js';
 
 type DetailTab = 'overview' | 'input' | 'output' | 'relations' | 'raw';
 interface TraceRelation {
@@ -302,7 +284,10 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		this.count = this._register(
 			new CountBadge(
 				structure,
-				{ size: 'small', titleFormat: localize('agentTrace.count', '{0} matching events') },
+				{
+					size: 'small',
+					titleFormat: localize('agentTrace.count', '{0} matching events'),
+				},
 				defaultCountBadgeStyles,
 			),
 		);
@@ -381,8 +366,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 				modelOptions: {
 					identityProvider: { getId: entry => entry.id },
 					filter: {
-						filter: entry =>
-							entry.kind === 'event' ? this.viewModel.matched.has(entry.id) : TreeVisibility.Recurse,
+						filter: entry => (entry.kind === 'event' ? this.viewModel.matched.has(entry.id) : TreeVisibility.Recurse),
 					},
 				},
 				keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: entry => entry.label },
@@ -410,18 +394,10 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 								? Lxicon.chat1
 								: type?.startsWith('model')
 									? Lxicon.sparkle
-									: isRecord(entry.record?.event.item) &&
-										  String(entry.record.event.item.type).startsWith('tool')
+									: isRecord(entry.record?.event.item) && String(entry.record.event.item.type).startsWith('tool')
 										? Lxicon.terminal
 										: Lxicon.history,
-						title: [
-							entry.threadId,
-							entry.turnId,
-							entry.record?.eventId,
-							entry.record && eventLabel(entry.record, entry.performance),
-						]
-							.filter(Boolean)
-							.join(' · '),
+						title: [entry.threadId, entry.turnId, entry.record?.eventId, entry.record && eventLabel(entry.record, entry.performance)].filter(Boolean).join(' · '),
 					});
 					this.rowLabels.set(root, label);
 					if (entry.failed) {
@@ -474,9 +450,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		this.panelDomNode = h(document, 'div', { className: 'ash-agent-trace-panel' });
 		this.panelDomNode.id = this.panelId;
 		this.panelDomNode.setAttribute('role', 'tabpanel');
-		this.detailScroll = this._register(
-			new ScrollableElement(this.panelDomNode, { direction: 'vertical', tabIndex: -1 }),
-		);
+		this.detailScroll = this._register(new ScrollableElement(this.panelDomNode, { direction: 'vertical', tabIndex: -1 }));
 		// The scrollbar root owns the pane's flex allocation; an extra block wrapper
 		// would leave its absolute viewport without a height.
 		this.detailScroll.element.classList.add('ash-agent-trace-detail-host');
@@ -692,18 +666,10 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 					}
 					this.subscriptions.add(thread.threadId);
 					try {
-						const subscribed = await this.chat.subscribeThread(
-							sessionId,
-							thread.threadId,
-							this.cursors[thread.threadId] ?? 0,
-							owner,
-						);
+						const subscribed = await this.chat.subscribeThread(sessionId, thread.threadId, this.cursors[thread.threadId] ?? 0, owner);
 						// The subscription snapshot closes the read/subscribe gap, including a Turn that
 						// finishes before notifications become attached to this editor.
-						if (
-							revision === this.revision &&
-							subscribed.thread.sequence > (this.cursors[thread.threadId] ?? 0)
-						) {
+						if (revision === this.revision && subscribed.thread.sequence > (this.cursors[thread.threadId] ?? 0)) {
 							this.dirty = true;
 						}
 					} catch (error) {
@@ -739,11 +705,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 			this.statusDomNode.textContent = localize('agentTrace.live', 'Live · durable execution history');
 		} catch (error) {
 			if (revision === this.revision && !this.isDisposed) {
-				this.statusDomNode.textContent = localize(
-					'agentTrace.failed',
-					'Could not load trace: {0}',
-					String(error),
-				);
+				this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error));
 			}
 		} finally {
 			if (revision === this.revision && !this.isDisposed) {
@@ -752,11 +714,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 				if (this.dirty) {
 					this.refreshScheduler.schedule();
 				}
-				if (
-					this.isShown &&
-					this.sessionId &&
-					['recording', 'incomplete'].includes(this.trace?.diagnostics?.recordingStatus ?? '')
-				) {
+				if (this.isShown && this.sessionId && ['recording', 'incomplete'].includes(this.trace?.diagnostics?.recordingStatus ?? '')) {
 					this.diagnosticPoll.schedule();
 				}
 			}
@@ -782,11 +740,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 			this.render();
 		} catch (error) {
 			if (revision === this.revision && selection === this.importSelection && !this.isDisposed) {
-				this.statusDomNode.textContent = localize(
-					'agentTrace.failed',
-					'Could not load trace: {0}',
-					String(error),
-				);
+				this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error));
 			}
 		}
 	}
@@ -807,18 +761,10 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		} else {
 			this.tree.model.refilter();
 		}
-		const filterKey = JSON.stringify([
-			query,
-			this.filters.errorsOnly,
-			[...this.kindButtons.keys()].map(kind => this.filters.isKindVisible(kind)),
-		]);
+		const filterKey = JSON.stringify([query, this.filters.errorsOnly, [...this.kindButtons.keys()].map(kind => this.filters.isKindVisible(kind))]);
 		const filtering = this.filters.active;
 		if (filtering) {
-			this.filteredCollapse ??= new Map(
-				[...this.viewModel.entries.values()]
-					.filter(entry => entry.kind !== 'event')
-					.map(entry => [entry.id, this.tree.isCollapsed(entry.id) ?? false]),
-			);
+			this.filteredCollapse ??= new Map([...this.viewModel.entries.values()].filter(entry => entry.kind !== 'event').map(entry => [entry.id, this.tree.isCollapsed(entry.id) ?? false]));
 			if (this.filterKey !== filterKey || changed) {
 				for (const id of this.viewModel.matched) {
 					this.tree.expandTo(id);
@@ -843,13 +789,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 			? localize('agentTrace.noMatches', 'No matching execution events.')
 			: localize('agentTrace.empty', 'Open a saved conversation or import an evaluation trace.');
 		this.summaryDomNode.textContent = this.trace
-			? localize(
-					'agentTrace.summary',
-					'{0} Threads · {1} shown / {2} events.',
-					this.trace.threads.length,
-					this.viewModel.shownCount,
-					this.viewModel.eventCount,
-				)
+			? localize('agentTrace.summary', '{0} Threads · {1} shown / {2} events.', this.trace.threads.length, this.viewModel.shownCount, this.viewModel.eventCount)
 			: '';
 		this.overview.render(this.trace);
 		if (!this.trace) {
@@ -857,11 +797,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		}
 		let located = false;
 		if (this.location?.threadId && !this.locationKey) {
-			this.locationKey = this.viewModel.findEvent(
-				this.location.threadId,
-				this.location.turnId,
-				this.location.eventId,
-			)?.id;
+			this.locationKey = this.viewModel.findEvent(this.location.threadId, this.location.turnId, this.location.eventId)?.id;
 			if (this.locationKey) {
 				this.selected = this.locationKey;
 				located = true;
@@ -872,9 +808,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 			located = !!this.selected;
 		}
 		if (this.location?.threadId) {
-			const identity = [this.location.threadId, this.location.turnId, this.location.eventId]
-				.filter(value => value !== undefined)
-				.join(' / ');
+			const identity = [this.location.threadId, this.location.turnId, this.location.eventId].filter(value => value !== undefined).join(' / ');
 			const message = this.locationKey
 				? this.viewModel.matched.has(this.locationKey)
 					? localize('agentTrace.locationFound', 'Located {0}.', identity)
@@ -935,12 +869,8 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 			this.tab,
 		);
 		this.panelDomNode.setAttribute('aria-labelledby', `${this.panelId}-${this.tab}`);
-		this.inspectorTitle.textContent = entry
-			? entry.label
-			: localize('agentTrace.details', 'Execution event details');
-		this.inspectorIdentity.textContent = entry
-			? [entry.kind, entry.threadId, entry.turnId].filter(Boolean).join(' · ')
-			: '';
+		this.inspectorTitle.textContent = entry ? entry.label : localize('agentTrace.details', 'Execution event details');
+		this.inspectorIdentity.textContent = entry ? [entry.kind, entry.threadId, entry.turnId].filter(Boolean).join(' · ') : '';
 		this.detailScroll.element.hidden = this.tab === 'relations' || this.tab === 'raw';
 		this.relationsDomNode.hidden = this.tab !== 'relations';
 		this.relationWarning.hidden = this.tab !== 'relations';
@@ -950,19 +880,14 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 			return;
 		}
 		if (!entry) {
-			this.detailsDomNode.textContent = this.location?.threadId
-				? this.locationDomNode.textContent
-				: this.emptyTree.textContent;
+			this.detailsDomNode.textContent = this.location?.threadId ? this.locationDomNode.textContent : this.emptyTree.textContent;
 			this.detailText = this.detailsDomNode.textContent ?? '';
 			return;
 		}
 		const payload = this.viewModel.payload(entry, this.tab === 'output').ref;
 		const body = payload && this.trace?.diagnostics?.payloads?.[payload.payloadId];
 		const identity = `${entry.id}:${this.tab}`;
-		const value =
-			this.tab === 'input' || this.tab === 'output'
-				? (body ?? payload ?? entry.record)
-				: (entry.record ?? this.trace);
+		const value = this.tab === 'input' || this.tab === 'output' ? (body ?? payload ?? entry.record) : (entry.record ?? this.trace);
 		if (identity === this.detailIdentity && value === this.detailValue) {
 			return;
 		}
@@ -1008,10 +933,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 			if (entry.record) {
 				field(localize('agentTrace.eventIdField', 'Event ID'), entry.record.eventId);
 				field(localize('agentTrace.sequenceField', 'Sequence'), entry.record.sequence);
-				field(
-					localize('agentTrace.recordedField', 'Recorded at'),
-					new Date(entry.record.recordedAt).toISOString(),
-				);
+				field(localize('agentTrace.recordedField', 'Recorded at'), new Date(entry.record.recordedAt).toISOString());
 				const event = entry.record.event;
 				const invocation = isRecord(event.record) ? event.record : undefined;
 				if (event.type === 'hookRunUpdated' && isRecord(event.run)) {
@@ -1027,31 +949,19 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 					field(localize('agentTrace.errorField', 'Error'), result?.reason ?? result?.message);
 				}
 				const error = event.error ?? (isRecord(event.item) && event.item.isError ? event.item.text : undefined);
-				field(
-					localize('agentTrace.errorField', 'Error'),
-					isRecord(error) ? (error.message ?? error.type) : error,
-				);
+				field(localize('agentTrace.errorField', 'Error'), isRecord(error) ? (error.message ?? error.type) : error);
 				if (isRecord(event.decision)) {
-					field(
-						localize('agentTrace.decisionField', 'Decision'),
-						eventLabel(entry.record, entry.performance),
-					);
+					field(localize('agentTrace.decisionField', 'Decision'), eventLabel(entry.record, entry.performance));
 				}
 				if (entry.diagnostic?.event.type === 'hookRunRecorded') {
 					field(localize('agentTrace.hookRunId', 'Hook run ID'), entry.diagnostic.event.runId);
 				} else if (entry.diagnostic) {
 					field(localize('agentTrace.attemptIdField', 'Model attempt ID'), entry.diagnostic.event.attemptId);
-					field(
-						localize('agentTrace.prefixField', 'Saved Thread prefix'),
-						entry.diagnostic.event.sourceThreadSequence,
-					);
+					field(localize('agentTrace.prefixField', 'Saved Thread prefix'), entry.diagnostic.event.sourceThreadSequence);
 					field(localize('agentTrace.purposeField', 'Purpose'), entry.diagnostic.event.purpose);
 					field(
 						localize('agentTrace.evidenceField', 'Evidence boundary'),
-						localize(
-							'agentTrace.accountingUnknown',
-							'The saved accounting and loop decision do not identify this attempt. Repeated calls alone do not prove a retry.',
-						),
+						localize('agentTrace.accountingUnknown', 'The saved accounting and loop decision do not identify this attempt. Repeated calls alone do not prove a retry.'),
 					);
 				}
 				if (isRecord(event.result)) {
@@ -1062,10 +972,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 				field(localize('agentTrace.modelField', 'Model'), invocation?.resolvedModel);
 				field(localize('agentTrace.outcomeField', 'Outcome'), invocation?.outcome);
 				if (event.type === 'modelInvocationRecorded') {
-					field(
-						localize('agentTrace.performanceField', 'Performance'),
-						invocationTimingLabel(entry.performance),
-					);
+					field(localize('agentTrace.performanceField', 'Performance'), invocationTimingLabel(entry.performance));
 				}
 				if (isRecord(invocation?.usage)) {
 					for (const [key, value] of Object.entries(invocation.usage)) {
@@ -1077,12 +984,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 			} else {
 				field(
 					localize('agentTrace.eventsField', 'Saved events'),
-					[...this.viewModel.entries.values()].filter(
-						candidate =>
-							candidate.record &&
-							candidate.threadId === entry.threadId &&
-							(!entry.turnId || candidate.turnId === entry.turnId),
-					).length,
+					[...this.viewModel.entries.values()].filter(candidate => candidate.record && candidate.threadId === entry.threadId && (!entry.turnId || candidate.turnId === entry.turnId)).length,
 				);
 			}
 			this.detailsDomNode.append(fields);
@@ -1096,11 +998,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		this.detailScroll.layout();
 	}
 
-	private async renderBody(
-		entry: TraceEntry,
-		payload: ReturnType<AgentTraceViewModel['payload']>['ref'],
-		body: unknown,
-	): Promise<void> {
+	private async renderBody(entry: TraceEntry, payload: ReturnType<AgentTraceViewModel['payload']>['ref'], body: unknown): Promise<void> {
 		const document = this.domNode.ownerDocument;
 		const identity = this.detailIdentity;
 		if (payload) {
@@ -1108,9 +1006,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 			label.textContent = evidenceLabel(payload.kind);
 			this.detailsDomNode.append(label);
 			if (payload.status === 'omitted') {
-				this.detailsDomNode.append(
-					h(document, 'p', localize('agentTrace.payloadOmitted', 'Payload omitted by the recording limit.')),
-				);
+				this.detailsDomNode.append(h(document, 'p', localize('agentTrace.payloadOmitted', 'Payload omitted by the recording limit.')));
 			} else if (body !== undefined) {
 				if (payload.kind === 'hookExecution' && isRecord(body)) {
 					this.renderBodySections(
@@ -1133,13 +1029,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 					this.renderBodySections(body);
 				}
 			} else if (!this.sessionId || !this.trace?.diagnostics?.captureId) {
-				this.detailsDomNode.append(
-					h(
-						document,
-						'p',
-						localize('agentTrace.missingEvidence', 'This capture does not include the selected payload.'),
-					),
-				);
+				this.detailsDomNode.append(h(document, 'p', localize('agentTrace.missingEvidence', 'This capture does not include the selected payload.')));
 			} else {
 				await this.loadEvidence(entry, payload);
 			}
@@ -1180,10 +1070,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		const sections = messages ?? [body];
 		for (let index = 0; index < sections.length; index++) {
 			const section = sections[index];
-			const role =
-				isRecord(section) && typeof section.role === 'string'
-					? section.role
-					: localize('agentTrace.bodySection', 'Saved body');
+			const role = isRecord(section) && typeof section.role === 'string' ? section.role : localize('agentTrace.bodySection', 'Saved body');
 			this.inspectorResources.add(
 				new Button(this.detailsDomNode, {
 					...defaultButtonStyles,
@@ -1229,20 +1116,13 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		});
 	}
 
-	private async loadEvidence(
-		entry: TraceEntry,
-		payload: NonNullable<ReturnType<AgentTraceViewModel['payload']>['ref']>,
-	): Promise<void> {
+	private async loadEvidence(entry: TraceEntry, payload: NonNullable<ReturnType<AgentTraceViewModel['payload']>['ref']>): Promise<void> {
 		const revision = this.revision;
 		const identity = this.detailIdentity;
 		const request = { identity };
 		this.pendingEvidence = request;
 		try {
-			const evidence = await this.traces.readTracePayload(
-				this.sessionId!,
-				this.trace!.diagnostics!.captureId!,
-				payload.payloadId,
-			);
+			const evidence = await this.traces.readTracePayload(this.sessionId!, this.trace!.diagnostics!.captureId!, payload.payloadId);
 			if (revision !== this.revision || this.isDisposed || !this.trace?.diagnostics) {
 				return;
 			}
@@ -1259,11 +1139,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 			}
 		} catch (error) {
 			if (revision === this.revision && identity === this.detailIdentity && !this.isDisposed) {
-				this.statusDomNode.textContent = localize(
-					'agentTrace.failed',
-					'Could not load trace: {0}',
-					String(error),
-				);
+				this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error));
 			}
 		} finally {
 			if (this.pendingEvidence === request) {
@@ -1279,9 +1155,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		}
 		const revision = this.revision;
 		try {
-			const graph =
-				this.trace.graph ??
-				(this.sessionId ? await (this.graphRequest ??= this.traces.readTraceGraph(this.sessionId)) : undefined);
+			const graph = this.trace.graph ?? (this.sessionId ? await (this.graphRequest ??= this.traces.readTraceGraph(this.sessionId)) : undefined);
 			if (revision === this.revision) {
 				this.graphRequest = undefined;
 			}
@@ -1297,11 +1171,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		} catch (error) {
 			if (revision === this.revision && !this.isDisposed) {
 				this.graphRequest = undefined;
-				this.statusDomNode.textContent = localize(
-					'agentTrace.failed',
-					'Could not load trace: {0}',
-					String(error),
-				);
+				this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error));
 			}
 		}
 	}
@@ -1329,19 +1199,9 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		if (entry) {
 			for (const relation of this.viewModel.relations(entry)) {
 				const item = relation.target.record?.event.item;
-				const targetLabel =
-					isRecord(item) && typeof item.toolCallId === 'string'
-						? `${relation.target.label} · ${item.toolCallId}`
-						: relation.target.label;
+				const targetLabel = isRecord(item) && typeof item.toolCallId === 'string' ? `${relation.target.label} · ${item.toolCallId}` : relation.target.label;
 				const label = `${relation.outgoing ? localize('agentTrace.outgoing', 'Outgoing') : localize('agentTrace.incoming', 'Incoming')} · ${relationLabel(relation.kind)} · ${targetLabel}`;
-				if (
-					!relations.some(
-						value =>
-							value.target?.id === relation.target.id &&
-							value.kind === relation.kind &&
-							value.outgoing === relation.outgoing,
-					)
-				) {
+				if (!relations.some(value => value.target?.id === relation.target.id && value.kind === relation.kind && value.outgoing === relation.outgoing)) {
 					relations.push({
 						id: `saved:${relation.kind}:${relation.outgoing}:${relation.target.id}`,
 						label,
@@ -1354,10 +1214,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		}
 		this.relationList.items = relations;
 		const warnings = [...graph.warnings];
-		if (
-			entry?.diagnostic ||
-			(isRecord(entry?.record?.event.item) && entry.record.event.item.type === 'toolResult')
-		) {
+		if (entry?.diagnostic || (isRecord(entry?.record?.event.item) && entry.record.event.item.type === 'toolResult')) {
 			warnings.push(
 				localize(
 					'agentTrace.consumptionUnknown',
@@ -1365,11 +1222,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 				),
 			);
 		}
-		this.relationWarning.textContent = warnings.length
-			? warnings.join('\n')
-			: relations.length
-				? ''
-				: localize('agentTrace.noRelationships', 'No saved relationships for this capture.');
+		this.relationWarning.textContent = warnings.length ? warnings.join('\n') : relations.length ? '' : localize('agentTrace.noRelationships', 'No saved relationships for this capture.');
 	}
 
 	private async exportTrace(): Promise<void> {
@@ -1401,11 +1254,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 					continue;
 				}
 				try {
-					payloads[payload.payloadId] = await this.traces.readTracePayload(
-						sessionId,
-						capture.diagnostics.captureId,
-						payload.payloadId,
-					);
+					payloads[payload.payloadId] = await this.traces.readTracePayload(sessionId, capture.diagnostics.captureId, payload.payloadId);
 				} catch {
 					incomplete = true;
 				}
@@ -1438,11 +1287,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 			triggerDownload(blob, 'session.agent-trace.json', this.domNode.ownerDocument);
 		} catch (error) {
 			if (revision === this.revision && !this.isDisposed) {
-				this.statusDomNode.textContent = localize(
-					'agentTrace.failed',
-					'Could not load trace: {0}',
-					String(error),
-				);
+				this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error));
 			}
 		} finally {
 			// An older export must not unlock a replacement input's operation.
@@ -1454,18 +1299,12 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 
 	public getAccessibleContent(): string {
 		const lines: string[] = [];
-		const visit = (
-			nodes: readonly import('../../../../../base/browser/ui/tree/objectTreeModel.js').ObjectTreeNode<TraceEntry>[],
-		): void => {
+		const visit = (nodes: readonly import('../../../../../base/browser/ui/tree/objectTreeModel.js').ObjectTreeNode<TraceEntry>[]): void => {
 			for (const node of nodes) {
 				if (!node.visible) {
 					continue;
 				}
-				lines.push(
-					node.element.record
-						? eventLabel(node.element.record, node.element.performance)
-						: node.element.label,
-				);
+				lines.push(node.element.record ? eventLabel(node.element.record, node.element.performance) : node.element.label);
 				visit(node.children);
 			}
 		};
@@ -1495,10 +1334,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 			this.progress.element.hidden = true;
 			this.dirty = false;
 			if (this.trace && this.sessionId) {
-				this.statusDomNode.textContent = localize(
-					'agentTrace.paused',
-					'Paused · show the editor to follow new events',
-				);
+				this.statusDomNode.textContent = localize('agentTrace.paused', 'Paused · show the editor to follow new events');
 			}
 		}
 	}
@@ -1512,10 +1348,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		// Choosing an event closes the overview and restores the cached detail-pane size.
 		this.split.value!.setViewVisible(1, dimension.width >= 640 || !this.overview.container.open);
 		const height = this.bodyDomNode.clientHeight;
-		this.split.value!.layout(
-			dimension.width < 640 ? height : dimension.width,
-			dimension.width < 640 ? dimension.width : height,
-		);
+		this.split.value!.layout(dimension.width < 640 ? height : dimension.width, dimension.width < 640 ? dimension.width : height);
 	}
 	public override focus(): void {
 		if (this.selected) {
@@ -1534,23 +1367,11 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 function graphForCapture(capture: AgentTrace, graph: AgentTraceGraph): AgentTraceGraph {
 	const threads = new Map(capture.threads.map(thread => [thread.threadId, thread]));
 	const events = new Map<string, { readonly threadId: string; readonly turnId: unknown }>(
-		capture.threads.flatMap(thread =>
-			thread.events.map(
-				record =>
-					[
-						`${thread.threadId}:${record.sequence}`,
-						{ threadId: thread.threadId, turnId: record.event.turnId },
-					] as const,
-			),
-		),
+		capture.threads.flatMap(thread => thread.events.map(record => [`${thread.threadId}:${record.sequence}`, { threadId: thread.threadId, turnId: record.event.turnId }] as const)),
 	);
-	const diagnostics = new Map(
-		(capture.diagnostics?.events ?? []).map(record => [`diagnostic:${record.sequence}`, record]),
-	);
+	const diagnostics = new Map((capture.diagnostics?.events ?? []).map(record => [`diagnostic:${record.sequence}`, record]));
 	const completed = new Set(
-		[...diagnostics.values()]
-			.filter(record => record.event.type === 'modelAttemptCompleted')
-			.map(record => JSON.stringify([record.threadId, record.turnId, record.event.attemptId])),
+		[...diagnostics.values()].filter(record => record.event.type === 'modelAttemptCompleted').map(record => JSON.stringify([record.threadId, record.turnId, record.event.attemptId])),
 	);
 	const nodes = Object.fromEntries(
 		Object.entries(graph.nodes).filter(([, node]) => {
@@ -1560,15 +1381,11 @@ function graphForCapture(capture: AgentTrace, graph: AgentTraceGraph): AgentTrac
 			// Model attempts use diagnostic records; other graph nodes use durable events.
 			// The external key alone can collide with a Thread literally named diagnostic.
 			const record = node.kind === 'modelAttempt' ? diagnostics.get(node.eventKey) : events.get(node.eventKey);
-			return (
-				!!record && record.threadId === node.threadId && (node.turnId === null || record.turnId === node.turnId)
-			);
+			return !!record && record.threadId === node.threadId && (node.turnId === null || record.turnId === node.turnId);
 		}),
 	);
 	// A Code Mode cell points at its parent call; its nested call supplies the cell's evidence.
-	const cells = new Set(
-		graph.edges.filter(edge => edge.kind === 'nestedTool' && nodes[edge.to]).map(edge => edge.from),
-	);
+	const cells = new Set(graph.edges.filter(edge => edge.kind === 'nestedTool' && nodes[edge.to]).map(edge => edge.from));
 	for (const node of Object.values(nodes)) {
 		if (node.kind === 'codeCell' && !cells.has(node.id)) {
 			delete nodes[node.id];
@@ -1582,15 +1399,11 @@ function graphForCapture(capture: AgentTrace, graph: AgentTraceGraph): AgentTrac
 		}
 		if (edge.kind === 'requestsTool') {
 			const attempt = diagnostics.get(from.eventKey ?? '');
-			return (
-				!!attempt && completed.has(JSON.stringify([attempt.threadId, attempt.turnId, attempt.event.attemptId]))
-			);
+			return !!attempt && completed.has(JSON.stringify([attempt.threadId, attempt.turnId, attempt.event.attemptId]));
 		}
 		if (edge.kind === 'accountsFor') {
 			const attempt = diagnostics.get(from.eventKey ?? '');
-			const invocation = threads
-				.get(to.threadId)
-				?.events.find(record => `${to.threadId}:${record.sequence}` === to.eventKey);
+			const invocation = threads.get(to.threadId)?.events.find(record => `${to.threadId}:${record.sequence}` === to.eventKey);
 			return (
 				!!attempt &&
 				invocation?.event.type === 'modelInvocationRecorded' &&
@@ -1601,31 +1414,19 @@ function graphForCapture(capture: AgentTrace, graph: AgentTraceGraph): AgentTrac
 						record.turnId === to.turnId &&
 						record.event.type === 'modelAttemptAccounted' &&
 						record.event.attemptId === attempt.event.attemptId &&
-						record.event.invocationId ===
-							(invocation.event.record as Record<string, unknown>).invocationId &&
+						record.event.invocationId === (invocation.event.record as Record<string, unknown>).invocationId &&
 						record.event.sourceThreadSequence === invocation.sequence,
 				)
 			);
 		}
 		if (edge.kind === 'delegates') {
-			return !!threads
-				.get(from.threadId)
-				?.events.some(
-					record => record.event.type === 'delegationStarted' && record.event.childThreadId === to.threadId,
-				);
+			return !!threads.get(from.threadId)?.events.some(record => record.event.type === 'delegationStarted' && record.event.childThreadId === to.threadId);
 		}
 		return true;
 	});
 	const omitted = Object.keys(graph.nodes).length - Object.keys(nodes).length + graph.edges.length - edges.length;
 	const warnings = omitted
-		? [
-				...graph.warnings,
-				localize(
-					'agentTrace.graphScope',
-					'{0} relationship entries excluded: their saved events or causal evidence are outside this capture.',
-					omitted,
-				),
-			]
+		? [...graph.warnings, localize('agentTrace.graphScope', '{0} relationship entries excluded: their saved events or causal evidence are outside this capture.', omitted)]
 		: graph.warnings;
 	return { ...graph, nodes, edges, warnings };
 }

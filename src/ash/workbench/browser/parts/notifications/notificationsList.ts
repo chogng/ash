@@ -38,20 +38,14 @@ export class NotificationsList extends Disposable {
 				const target = event.target as HTMLElement;
 				const row = target.closest<HTMLElement>('[data-notification-id]');
 				if (!row || row.parentElement !== this.domNode) return;
-				if (
-					(!event.ctrlKey && !event.metaKey && event.key === 'Delete') ||
-					(isMacintosh && event.metaKey && !event.ctrlKey && event.key === 'Backspace')
-				) {
+				if ((!event.ctrlKey && !event.metaKey && event.key === 'Delete') || (isMacintosh && event.metaKey && !event.ctrlKey && event.key === 'Backspace')) {
 					event.preventDefault();
 					event.stopPropagation();
 					this.removeEmitter.fire(Number(row.dataset.notificationId));
 					return;
 				}
 				if (target !== row) return;
-				if (
-					(isMacintosh ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey) &&
-					event.key === 'Enter'
-				) {
+				if ((isMacintosh ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey) && event.key === 'Enter') {
 					const primary = row.querySelector<HTMLButtonElement>('.ash-notification-action');
 					if (primary && !primary.disabled) {
 						event.preventDefault();
@@ -61,12 +55,7 @@ export class NotificationsList extends Disposable {
 				}
 				if (event.ctrlKey || event.metaKey) return;
 				const item = this.itemsById.get(Number(row.dataset.notificationId));
-				if (
-					event.key === 'ArrowRight' ||
-					event.key === 'ArrowLeft' ||
-					event.key === 'Enter' ||
-					event.key === ' '
-				) {
+				if (event.key === 'ArrowRight' || event.key === 'ArrowLeft' || event.key === 'Enter' || event.key === ' ') {
 					event.preventDefault();
 					if (event.key === 'ArrowRight') item?.expand();
 					else if (event.key === 'ArrowLeft') item?.collapse();
@@ -119,14 +108,7 @@ export class NotificationsList extends Disposable {
 			if (!renderer) {
 				renderer = this.renderers.set(
 					item.id,
-					this.instantiationService.createInstance(
-						NotificationTemplateRenderer,
-						this.domNode,
-						item,
-						this.presentation,
-						this.actionRunner,
-						(id: number) => this.removeEmitter.fire(id),
-					),
+					this.instantiationService.createInstance(NotificationTemplateRenderer, this.domNode, item, this.presentation, this.actionRunner, (id: number) => this.removeEmitter.fire(id)),
 				);
 			}
 			const position = this.domNode.children[index];
@@ -134,9 +116,7 @@ export class NotificationsList extends Disposable {
 				this.domNode.insertBefore(renderer.domNode, position ?? null);
 			}
 			this.itemsById.set(item.id, item);
-			const visible =
-				renderer.domNode.isConnected &&
-				renderer.domNode.checkVisibility?.({ checkVisibilityCSS: true }) === true;
+			const visible = renderer.domNode.isConnected && renderer.domNode.checkVisibility?.({ checkVisibilityCSS: true }) === true;
 			if (visible !== this.visible.has(item.id)) {
 				if (visible) this.visible.add(item.id);
 				else this.visible.delete(item.id);

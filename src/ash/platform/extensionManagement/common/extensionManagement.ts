@@ -13,6 +13,4 @@ export interface IGlobalExtensionEnablementService {
 	disableExtension(extension: IExtensionIdentifier): Promise<boolean>;
 }
 
-export const IGlobalExtensionEnablementService = createServiceIdentifier<IGlobalExtensionEnablementService>(
-	'globalExtensionEnablementService',
-);
+export const IGlobalExtensionEnablementService = createServiceIdentifier<IGlobalExtensionEnablementService>('globalExtensionEnablementService');

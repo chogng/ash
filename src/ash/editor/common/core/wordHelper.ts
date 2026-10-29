@@ -77,20 +77,18 @@ export interface IGetWordAtTextConfig {
 }
 
 const _defaultConfig = new LinkedList<IGetWordAtTextConfig>();
-_defaultConfig.unshift({ maxLen: 1000, windowSize: 15, timeBudget: 150 });
+_defaultConfig.unshift({
+	maxLen: 1000,
+	windowSize: 15,
+	timeBudget: 150,
+});
 
 export function setDefaultGetWordAtTextConfig(value: IGetWordAtTextConfig) {
 	const rm = _defaultConfig.unshift(value);
 	return toDisposable(rm);
 }
 
-export function getWordAtText(
-	column: number,
-	wordDefinition: RegExp,
-	text: string,
-	textOffset: number,
-	config?: IGetWordAtTextConfig,
-): IWordAtPosition | null {
+export function getWordAtText(column: number, wordDefinition: RegExp, text: string, textOffset: number, config?: IGetWordAtTextConfig): IWordAtPosition | null {
 	// Ensure the regex has the 'g' flag, otherwise this will loop forever
 	wordDefinition = ensureValidWordDefinition(wordDefinition);
 
@@ -156,19 +154,11 @@ export function getWordAtText(
 	return null;
 }
 
-function _findRegexMatchEnclosingPosition(
-	wordDefinition: RegExp,
-	text: string,
-	pos: number,
-	stopPos: number,
-): RegExpExecArray | null {
+function _findRegexMatchEnclosingPosition(wordDefinition: RegExp, text: string, pos: number, stopPos: number): RegExpExecArray | null {
 	let match: RegExpExecArray | null;
 	while ((match = wordDefinition.exec(text))) {
 		if (match[0].length === 0) {
-			const codePoint =
-				wordDefinition.unicode || wordDefinition.flags.includes('v')
-					? text.codePointAt(match.index)
-					: undefined;
+			const codePoint = wordDefinition.unicode || wordDefinition.flags.includes('v') ? text.codePointAt(match.index) : undefined;
 			wordDefinition.lastIndex = match.index + (codePoint !== undefined && codePoint > 0xffff ? 2 : 1);
 			continue;
 		}

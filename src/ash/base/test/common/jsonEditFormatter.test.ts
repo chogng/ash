@@ -47,7 +47,6 @@ for (const [source, path, expected] of [
 	test(`JSONC removal preserves surrounding comments and a valid container: ${source}`, () => {
 		const result = applyEdits(source, removeProperty(source, [...path], { insertSpaces: true, tabSize: 2 }));
 		assert.deepEqual(parseJsonc(result), expected);
-		for (const comment of source.match(/\/\*.*?\*\/|\/\/[^\r\n]*/g) ?? [])
-			assert.ok(result.includes(comment), comment);
+		for (const comment of source.match(/\/\*.*?\*\/|\/\/[^\r\n]*/g) ?? []) assert.ok(result.includes(comment), comment);
 	});
 }

@@ -271,10 +271,7 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 
 	public override updateStyles(): void {
 		// Package styles cannot select Workbench ancestors outside their isolated scope.
-		this.container?.classList.toggle(
-			'high-contrast',
-			this.theme.colorScheme === 'hcDark' || this.theme.colorScheme === 'hcLight',
-		);
+		this.container?.classList.toggle('high-contrast', this.theme.colorScheme === 'hcDark' || this.theme.colorScheme === 'hcLight');
 	}
 
 	/** Retirement freezes an existing view and its draft; a replacement provider opens a new pane. */
@@ -314,9 +311,7 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 		try {
 			const [bytes, snapshot] = await Promise.all([
 				this.documentLoader.load(input, signal),
-				input.readOnly
-					? Promise.resolve({ document: { version: 1 as const, annotations: [] }, revision: undefined })
-					: this.annotationStore.load(input.resource, signal),
+				input.readOnly ? Promise.resolve({ document: { version: 1 as const, annotations: [] }, revision: undefined }) : this.annotationStore.load(input.resource, signal),
 			]);
 			throwIfCancelled(signal, 'PDF document loading was cancelled');
 			const renderResult = await this.renderer.render({ bytes, container: pages, scale: this.zoomLevel, signal });
@@ -384,17 +379,9 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 
 	private async persistAnnotations(input: IResourceEditorInput): Promise<void> {
 		try {
-			const signal = AbortSignal.any([
-				this.inputController!.signal,
-				...(this.providerSignal ? [this.providerSignal] : []),
-			]);
+			const signal = AbortSignal.any([this.inputController!.signal, ...(this.providerSignal ? [this.providerSignal] : [])]);
 			throwIfCancelled(signal, 'PDF document loading was cancelled');
-			const snapshot = await this.annotationStore.save(
-				input.resource,
-				this.annotationModel.snapshot,
-				this.annotationModel.revision,
-				signal,
-			);
+			const snapshot = await this.annotationStore.save(input.resource, this.annotationModel.snapshot, this.annotationModel.revision, signal);
 			throwIfCancelled(signal, 'PDF document loading was cancelled');
 			if (this.input !== input) return;
 			this.annotationModel.markSaved(snapshot);
@@ -402,9 +389,7 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 		} catch (error) {
 			if (this.input !== input || this.providerSignal?.aborted) throw error;
 			this.statusMessage =
-				error instanceof Error
-					? localize('pdf.viewer.saveError', 'Could not save annotations: {0}', error.message)
-					: localize('pdf.viewer.saveFailed', 'Could not save annotations');
+				error instanceof Error ? localize('pdf.viewer.saveError', 'Could not save annotations: {0}', error.message) : localize('pdf.viewer.saveFailed', 'Could not save annotations');
 			throw error;
 		}
 	}
@@ -437,23 +422,11 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 				this.mode === 'highlight',
 				() => this.setMode('highlight'),
 			),
-			action(
-				'ash.pdf.annotations.ink',
-				localize('pdf.viewer.draw', 'Draw'),
-				localize('pdf.viewer.drawHint', 'Draw freehand ink'),
-				Lxicon.italics,
-				available,
-				this.mode === 'ink',
-				() => this.setMode('ink'),
+			action('ash.pdf.annotations.ink', localize('pdf.viewer.draw', 'Draw'), localize('pdf.viewer.drawHint', 'Draw freehand ink'), Lxicon.italics, available, this.mode === 'ink', () =>
+				this.setMode('ink'),
 			),
-			action(
-				'ash.pdf.annotations.note',
-				localize('pdf.viewer.note', 'Note'),
-				localize('pdf.viewer.noteHint', 'Place a note'),
-				Lxicon.chat4,
-				available,
-				this.mode === 'note',
-				() => this.setMode('note'),
+			action('ash.pdf.annotations.note', localize('pdf.viewer.note', 'Note'), localize('pdf.viewer.noteHint', 'Place a note'), Lxicon.chat4, available, this.mode === 'note', () =>
+				this.setMode('note'),
 			),
 			new Separator(),
 			action(
@@ -507,9 +480,7 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 		const status = this.statusElement;
 		if (!annotationList || !annotationText || !annotationTextLabel || !status) return;
 		const selectedNote = this.selectedAnnotation();
-		annotationTextLabel.firstChild!.textContent = selectedNote
-			? localize('pdf.viewer.selectedNote', 'Selected note')
-			: localize('pdf.viewer.newNote', 'New note');
+		annotationTextLabel.firstChild!.textContent = selectedNote ? localize('pdf.viewer.selectedNote', 'Selected note') : localize('pdf.viewer.newNote', 'New note');
 		annotationText.disabled = !this.canAnnotate();
 		if (this.colorInput) this.colorInput.disabled = !this.canAnnotate();
 		if (annotationText.ownerDocument.activeElement !== annotationText) {
@@ -526,24 +497,15 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 				item.setAttribute('aria-selected', String(annotation.id === this.selectedAnnotationId));
 				item.textContent =
 					annotation.kind === 'note'
-						? localize(
-								'pdf.viewer.noteItem',
-								'Note {0}: {1}',
-								index + 1,
-								annotation.text || localize('pdf.viewer.empty', '(empty)'),
-							)
+						? localize('pdf.viewer.noteItem', 'Note {0}: {1}', index + 1, annotation.text || localize('pdf.viewer.empty', '(empty)'))
 						: localize(
 								'pdf.viewer.markItem',
 								'{0} {1} · page {2}',
-								annotation.kind === 'highlight'
-									? localize('pdf.viewer.highlight', 'Highlight')
-									: localize('pdf.viewer.ink', 'Ink'),
+								annotation.kind === 'highlight' ? localize('pdf.viewer.highlight', 'Highlight') : localize('pdf.viewer.ink', 'Ink'),
 								index + 1,
 								annotation.page,
 							);
-				this.sidebarInteractions.add(
-					addDisposableListener(item, 'click', () => this.selectAnnotation(annotation.id)),
-				);
+				this.sidebarInteractions.add(addDisposableListener(item, 'click', () => this.selectAnnotation(annotation.id)));
 				this.sidebarInteractions.add(
 					addDisposableListener(item, 'keydown', event => {
 						const target =
@@ -599,23 +561,14 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 					if (event.target !== layer || !this.canAnnotate()) return;
 					if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
 						cursor = {
-							x: clamp(
-								cursor.x + (event.key === 'ArrowRight' ? 0.02 : event.key === 'ArrowLeft' ? -0.02 : 0),
-								0,
-								1,
-							),
-							y: clamp(
-								cursor.y + (event.key === 'ArrowDown' ? 0.02 : event.key === 'ArrowUp' ? -0.02 : 0),
-								0,
-								1,
-							),
+							x: clamp(cursor.x + (event.key === 'ArrowRight' ? 0.02 : event.key === 'ArrowLeft' ? -0.02 : 0), 0, 1),
+							y: clamp(cursor.y + (event.key === 'ArrowDown' ? 0.02 : event.key === 'ArrowUp' ? -0.02 : 0), 0, 1),
 						};
 						cursorElement.style.left = `${cursor.x * 100}%`;
 						cursorElement.style.top = `${cursor.y * 100}%`;
 						this.updateAnnotation(pointer());
 					} else if (event.key === 'Enter' || event.key === 'Escape') {
-						if (this.activeAnnotation?.pointerId === -1)
-							this.finishAnnotation(pointer(), event.key === 'Enter');
+						if (this.activeAnnotation?.pointerId === -1) this.finishAnnotation(pointer(), event.key === 'Enter');
 						else if (event.key === 'Enter') this.beginAnnotation(page, layer, pointer());
 						page.element.querySelector<HTMLElement>('.ash-pdf-annotation-layer')?.focus();
 					} else return;
@@ -632,26 +585,14 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 					element.style.backgroundColor = withAlpha(annotation.color, 0.38);
 					layer.append(element);
 				} else if (annotation.kind === 'ink') {
-					const element = createInk(
-						page.element.ownerDocument,
-						annotation.points,
-						annotation.color,
-						annotation.id === this.selectedAnnotationId,
-					);
+					const element = createInk(page.element.ownerDocument, annotation.points, annotation.color, annotation.id === this.selectedAnnotationId);
 					layer.append(element);
 				} else {
 					const marker = h(page.element.ownerDocument, 'button');
 					marker.className = 'ash-pdf-annotation-note';
 					marker.type = 'button';
 					marker.title = annotation.text || localize('pdf.viewer.note', 'Note');
-					marker.setAttribute(
-						'aria-label',
-						localize(
-							'pdf.viewer.noteAccessible',
-							'Note: {0}',
-							annotation.text || localize('pdf.viewer.empty', '(empty)'),
-						),
-					);
+					marker.setAttribute('aria-label', localize('pdf.viewer.noteAccessible', 'Note: {0}', annotation.text || localize('pdf.viewer.empty', '(empty)')));
 					marker.classList.toggle('selected', annotation.id === this.selectedAnnotationId);
 					marker.style.left = `${annotation.point.x * 100}%`;
 					marker.style.top = `${annotation.point.y * 100}%`;
@@ -665,22 +606,10 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 					layer.append(marker);
 				}
 			}
-			this.annotationInteractions.add(
-				addDisposableListener(layer, 'pointerdown', (event: PointerEvent) =>
-					this.beginAnnotation(page, layer, event),
-				),
-			);
-			this.annotationInteractions.add(
-				addDisposableListener(layer, 'pointermove', (event: PointerEvent) => this.updateAnnotation(event)),
-			);
-			this.annotationInteractions.add(
-				addDisposableListener(layer, 'pointerup', (event: PointerEvent) => this.finishAnnotation(event, true)),
-			);
-			this.annotationInteractions.add(
-				addDisposableListener(layer, 'pointercancel', (event: PointerEvent) =>
-					this.finishAnnotation(event, false),
-				),
-			);
+			this.annotationInteractions.add(addDisposableListener(layer, 'pointerdown', (event: PointerEvent) => this.beginAnnotation(page, layer, event)));
+			this.annotationInteractions.add(addDisposableListener(layer, 'pointermove', (event: PointerEvent) => this.updateAnnotation(event)));
+			this.annotationInteractions.add(addDisposableListener(layer, 'pointerup', (event: PointerEvent) => this.finishAnnotation(event, true)));
+			this.annotationInteractions.add(addDisposableListener(layer, 'pointercancel', (event: PointerEvent) => this.finishAnnotation(event, false)));
 			page.element.append(layer);
 		}
 	}
@@ -689,12 +618,7 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 		if (!this.canAnnotate() || event.button !== 0 || this.activeAnnotation || this.mode === 'select') return;
 		const point = annotationPoint(layer, event);
 		if (this.mode === 'note') {
-			const note = this.annotationModel.addNote(
-				page.pageNumber,
-				point,
-				this.noteDraft || defaultNoteText(),
-				this.color,
-			);
+			const note = this.annotationModel.addNote(page.pageNumber, point, this.noteDraft || defaultNoteText(), this.color);
 			this.selectedAnnotationId = note.id;
 			this.renderAnnotations();
 			this.renderToolbar();
@@ -793,18 +717,13 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	private selectedAnnotation(): PdfNoteAnnotation | undefined {
-		const annotation = this.annotationModel.annotations.find(
-			candidate => candidate.id === this.selectedAnnotationId,
-		);
+		const annotation = this.annotationModel.annotations.find(candidate => candidate.id === this.selectedAnnotationId);
 		return annotation?.kind === 'note' ? annotation : undefined;
 	}
 
 	private annotationStatus(): string {
 		if (this.providerSignal?.aborted)
-			return localize(
-				'pdf.viewer.retired',
-				'PDF Viewer is unavailable. This view and its unsaved annotations are preserved. Re-enable the extension and reopen the file.',
-			);
+			return localize('pdf.viewer.retired', 'PDF Viewer is unavailable. This view and its unsaved annotations are preserved. Re-enable the extension and reopen the file.');
 		if (!this.input) return localize('pdf.viewer.none', 'No PDF selected');
 		if (this.annotationModel.isDirty) return localize('pdf.viewer.unsaved', 'Unsaved annotations');
 		const count = this.annotationModel.annotations.length;
@@ -812,11 +731,7 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	getAccessibleContent(): string {
-		return [
-			this.renderResult?.text || localize('pdf.viewer.noText', 'This PDF has no extractable text.'),
-			this.annotationList?.textContent ?? '',
-			this.annotationStatus(),
-		].join('\n\n');
+		return [this.renderResult?.text || localize('pdf.viewer.noText', 'This PDF has no extractable text.'), this.annotationList?.textContent ?? '', this.annotationStatus()].join('\n\n');
 	}
 
 	getAccessibilityHelp(): string {
@@ -858,8 +773,7 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 		const pages = this.pages;
 		if (!result?.pages.length || !pages) return;
 		const style = pages.ownerDocument.defaultView!.getComputedStyle(pages);
-		const available =
-			pages.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight);
+		const available = pages.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight);
 		const widest = Math.max(...result.pages.map(page => page.width / result.scale));
 		this.setZoom(Math.floor((available / widest) * 100) / 100);
 	}
@@ -880,8 +794,7 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 			if (signal.aborted || this.renderResult !== result) return;
 			const viewport = pages.getBoundingClientRect();
 			const centerY = viewport.top + pages.clientHeight / 2;
-			const anchor =
-				result.pages.find(page => page.element.getBoundingClientRect().bottom > centerY) ?? result.pages.at(-1);
+			const anchor = result.pages.find(page => page.element.getBoundingClientRect().bottom > centerY) ?? result.pages.at(-1);
 			const before = anchor?.element.getBoundingClientRect();
 			const point = before
 				? {
@@ -904,11 +817,7 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 				this.findWidget?.layout();
 			} catch (error) {
 				if (!signal.aborted) {
-					this.statusMessage = localize(
-						'pdf.viewer.zoomFailed',
-						'Could not redraw PDF: {0}',
-						error instanceof Error ? error.message : String(error),
-					);
+					this.statusMessage = localize('pdf.viewer.zoomFailed', 'Could not redraw PDF: {0}', error instanceof Error ? error.message : String(error));
 					this.renderSidebar();
 				}
 			} finally {
@@ -918,14 +827,7 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	private onReadingKeyDown(event: KeyboardEvent): void {
-		if (
-			event.isComposing ||
-			!this.renderResult ||
-			this.providerSignal?.aborted ||
-			!(event.ctrlKey || event.metaKey) ||
-			event.altKey
-		)
-			return;
+		if (event.isComposing || !this.renderResult || this.providerSignal?.aborted || !(event.ctrlKey || event.metaKey) || event.altKey) return;
 		const key = event.key.toLowerCase();
 		const target = event.target as HTMLElement;
 		if (key === 'f') this.findWidget?.open();
@@ -964,15 +866,7 @@ const noSecondaryContextMenuProvider: IContextMenuProvider = {
 	},
 };
 
-function action(
-	id: string,
-	label: string,
-	tooltip: string,
-	icon: IAction['icon'],
-	enabled: boolean,
-	checked: boolean,
-	run: () => unknown,
-): IAction {
+function action(id: string, label: string, tooltip: string, icon: IAction['icon'], enabled: boolean, checked: boolean, run: () => unknown): IAction {
 	return { id, label, tooltip, icon, enabled, checked, run };
 }
 
@@ -1000,12 +894,7 @@ function positionRect(element: HTMLElement, rect: PdfAnnotationRect): void {
 	element.style.height = `${rect.height * 100}%`;
 }
 
-function createInk(
-	ownerDocument: Document,
-	points: readonly PdfAnnotationPoint[],
-	color: string,
-	selected: boolean,
-): SVGSVGElement {
+function createInk(ownerDocument: Document, points: readonly PdfAnnotationPoint[], color: string, selected: boolean): SVGSVGElement {
 	const ink = createSvgElement(ownerDocument, 'svg');
 	ink.classList.add('ash-pdf-annotation-ink');
 	ink.classList.toggle('selected', selected);

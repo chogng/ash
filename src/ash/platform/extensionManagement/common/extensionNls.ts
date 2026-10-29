@@ -5,9 +5,7 @@ import { ExtensionUiTarget } from './extensionManagementService.js';
 export function localizeManifest<T>(manifest: T, translations: Readonly<Record<string, unknown>>): T {
 	const visit = (value: unknown): unknown => {
 		if (typeof value === 'string') {
-			return value.replace(/%([^%]+)%/g, (match, key) =>
-				typeof translations[key] === 'string' ? (translations[key] as string) : match,
-			);
+			return value.replace(/%([^%]+)%/g, (match, key) => (typeof translations[key] === 'string' ? (translations[key] as string) : match));
 		}
 		if (Array.isArray(value)) {
 			return value.map(visit);

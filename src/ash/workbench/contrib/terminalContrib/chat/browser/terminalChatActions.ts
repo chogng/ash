@@ -46,17 +46,10 @@ registerAction2(
 				}),
 			);
 			lifetime.add(instance.onDidChangeState(retire));
-			const current = (): boolean =>
-				!controller.signal.aborted &&
-				terminals.activeInstance === instance &&
-				terminals.instances.includes(instance);
+			const current = (): boolean => !controller.signal.aborted && terminals.activeInstance === instance && terminals.instances.includes(instance);
 			try {
 				// Freeze context before awaiting either user input or opening the Chat view.
-				const attachment = await captureTerminalAttachment(
-					instance,
-					views.getViewWithId<ITerminalView>(TERMINAL_VIEW_ID),
-					controller.signal,
-				);
+				const attachment = await captureTerminalAttachment(instance, views.getViewWithId<ITerminalView>(TERMINAL_VIEW_ID), controller.signal);
 				if (!attachment || !current()) return;
 				// Opening Chat may create its first untitled conversation. Capture the
 				// visible draft's revision only after the original owner has initialized it.
@@ -66,10 +59,7 @@ registerAction2(
 				const question = await input.input(
 					{
 						title: localize('terminal.chat.question', 'Ask about this terminal'),
-						placeHolder: localize(
-							'terminal.chat.placeholder',
-							'Describe the command or output you want help with',
-						),
+						placeHolder: localize('terminal.chat.placeholder', 'Describe the command or output you want help with'),
 					},
 					token.token,
 				);

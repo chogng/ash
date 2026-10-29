@@ -7,14 +7,12 @@ export function createAppServerInstructionService(connection: AppServerProtocolC
 	return {
 		isAvailable: true,
 		list: async sessionId =>
-			(await appServerRequest(connection, 'instructions/list', sessionId ? { sessionId } : {})).instructions.map(
-				instruction => ({
-					path: instruction.path,
-					name: instruction.name,
-					description: instruction.description ?? undefined,
-					scope: instruction.scope,
-				}),
-			),
+			(await appServerRequest(connection, 'instructions/list', sessionId ? { sessionId } : {})).instructions.map(instruction => ({
+				path: instruction.path,
+				name: instruction.name,
+				description: instruction.description ?? undefined,
+				scope: instruction.scope,
+			})),
 	};
 }
 

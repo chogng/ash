@@ -1,9 +1,6 @@
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
-import {
-	IChatContextPickService,
-	picksWithPromiseFn,
-} from '../../../chat/browser/attachments/chatContextPickService.js';
+import { IChatContextPickService, picksWithPromiseFn } from '../../../chat/browser/attachments/chatContextPickService.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { encodeBase64 } from '../../../../../base/common/buffer.js';
@@ -13,12 +10,7 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 
 import type { IBrowserViewModel } from '../../common/browserView.js';
 import { BrowserEditor, BrowserEditorContribution } from '../browserEditor.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import type { IElementData } from '../../../../../platform/browserView/common/browserView.js';
 
@@ -119,9 +111,7 @@ class BrowserPageSelections extends Disposable {
 					placeholder: localize('chat.context.select', 'Select {0}', label),
 					picks: picksWithPromiseFn(async query =>
 						[...this.snapshots.values()]
-							.filter(item =>
-								(item.label + ' ' + item.description).toLowerCase().includes(query.toLowerCase()),
-							)
+							.filter(item => (item.label + ' ' + item.description).toLowerCase().includes(query.toLowerCase()))
 							.map(item => ({
 								label: item.label,
 								description: item.description,
@@ -138,10 +128,7 @@ class BrowserPageSelections extends Disposable {
 				if (event.type === 'elementPicked') {
 					this.acceptElement(event.data);
 					this.status.fire(
-						localize(
-							{ bundle: 'ash.workbench', key: 'browser.selectionCaptured' },
-							'Selection captured. Choose Browser selections from Chat’s Add Context menu to attach it.',
-						),
+						localize({ bundle: 'ash.workbench', key: 'browser.selectionCaptured' }, 'Selection captured. Choose Browser selections from Chat’s Add Context menu to attach it.'),
 					);
 				} else if (event.type === 'elementCommentRemoved') {
 					this.comments.delete(event.elementId);
@@ -156,11 +143,7 @@ class BrowserPageSelections extends Disposable {
 								return;
 							}
 							const id = 'area:' + ++this.areaSequence;
-							const name = localize(
-								{ bundle: 'ash.workbench', key: 'browser.areaScreenshot' },
-								'Browser area {0}',
-								this.areaSequence,
-							);
+							const name = localize({ bundle: 'ash.workbench', key: 'browser.areaScreenshot' }, 'Browser area {0}', this.areaSequence);
 							const content = 'data:image/png;base64,' + encodeBase64(image);
 							this.addSnapshot(id, {
 								label: name,
@@ -174,10 +157,7 @@ class BrowserPageSelections extends Disposable {
 								},
 							});
 							this.status.fire(
-								localize(
-									{ bundle: 'ash.workbench', key: 'browser.areaCaptured' },
-									'Area captured. Choose Other context sources in Chat’s Add context menu to attach the screenshot.',
-								),
+								localize({ bundle: 'ash.workbench', key: 'browser.areaCaptured' }, 'Area captured. Choose Other context sources in Chat’s Add context menu to attach the screenshot.'),
 							);
 						})
 						.catch(error => {
@@ -214,14 +194,9 @@ class BrowserPageSelections extends Disposable {
 		if (!element.elementId) {
 			return;
 		}
-		const name =
-			element.comment ||
-			element.innerText?.slice(0, 80) ||
-			localize({ bundle: 'ash.workbench', key: 'browser.selectedElement' }, 'Selected browser element');
+		const name = element.comment || element.innerText?.slice(0, 80) || localize({ bundle: 'ash.workbench', key: 'browser.selectedElement' }, 'Selected browser element');
 		const url = element.url ?? this.model.state.url;
-		const content = [url, element.comment ?? '', element.outerHTML, element.computedStyle]
-			.filter(Boolean)
-			.join('\n\n');
+		const content = [url, element.comment ?? '', element.outerHTML, element.computedStyle].filter(Boolean).join('\n\n');
 		this.addSnapshot(element.elementId, {
 			label: name,
 			description: url,
@@ -258,12 +233,7 @@ class BrowserPageSelections extends Disposable {
 				resolve: async () => ({ name, content }),
 			},
 		});
-		this.status.fire(
-			localize(
-				{ bundle: 'ash.workbench', key: 'browser.consoleCaptured' },
-				'Console logs captured. Choose Browser selections in Chat to attach them.',
-			),
-		);
+		this.status.fire(localize({ bundle: 'ash.workbench', key: 'browser.consoleCaptured' }, 'Console logs captured. Choose Browser selections in Chat to attach them.'));
 	}
 	public async capturePage(fullPage: boolean): Promise<void> {
 		const epoch = this.epoch;
@@ -287,12 +257,7 @@ class BrowserPageSelections extends Disposable {
 				resolve: async () => ({ name, kind: 'image', content }),
 			},
 		});
-		this.status.fire(
-			localize(
-				{ bundle: 'ash.workbench', key: 'browser.pageCaptured' },
-				'Screenshot captured. Choose Browser selections in Chat to attach it.',
-			),
-		);
+		this.status.fire(localize({ bundle: 'ash.workbench', key: 'browser.pageCaptured' }, 'Screenshot captured. Choose Browser selections in Chat to attach it.'));
 	}
 	private addSnapshot(id: string, pick: CapturedBrowserContext): void {
 		if (!this.snapshots.has(id) && this.snapshots.size >= 50) {
@@ -331,26 +296,17 @@ import { localize2 } from '../../../../../nls.js';
 for (const command of [
 	{
 		id: BrowserViewCommandId.AddConsoleLogsToChat,
-		title: localize2(
-			{ bundle: 'ash.workbench', key: 'browser.consoleCommand' },
-			'Browser: Capture Console Logs for Chat',
-		),
+		title: localize2({ bundle: 'ash.workbench', key: 'browser.consoleCommand' }, 'Browser: Capture Console Logs for Chat'),
 		run: (pane: BrowserEditor) => pane.getContribution(BrowserEditorChatIntegration)?.addConsoleLogsToChat(),
 	},
 	{
 		id: BrowserViewCommandId.AddScreenshotToChat,
-		title: localize2(
-			{ bundle: 'ash.workbench', key: 'browser.pageCommand' },
-			'Browser: Capture Screenshot for Chat',
-		),
+		title: localize2({ bundle: 'ash.workbench', key: 'browser.pageCommand' }, 'Browser: Capture Screenshot for Chat'),
 		run: (pane: BrowserEditor) => pane.getContribution(BrowserEditorChatIntegration)?.addScreenshotToChat(false),
 	},
 	{
 		id: BrowserViewCommandId.AddFullPageScreenshotToChat,
-		title: localize2(
-			{ bundle: 'ash.workbench', key: 'browser.fullPageCommand' },
-			'Browser: Capture Full Page Screenshot for Chat',
-		),
+		title: localize2({ bundle: 'ash.workbench', key: 'browser.fullPageCommand' }, 'Browser: Capture Full Page Screenshot for Chat'),
 		run: (pane: BrowserEditor) => pane.getContribution(BrowserEditorChatIntegration)?.addScreenshotToChat(true),
 	},
 ]) {
@@ -364,9 +320,7 @@ for (const command of [
 					precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId),
 				});
 			}
-			override async run(
-				accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor,
-			): Promise<void> {
+			override async run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): Promise<void> {
 				const pane = accessor.get(IEditorPart).activePane;
 				if (pane?.id === BrowserViewEditorId) {
 					await command.run(pane as BrowserEditor);

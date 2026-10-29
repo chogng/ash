@@ -52,9 +52,7 @@ test('Memento separates scopes and records the selected storage targets', () => 
 		{ scope: StorageScope.WORKSPACE, target: StorageTarget.MACHINE },
 	]);
 	assert.deepEqual(
-		[StorageScope.APPLICATION, StorageScope.PROFILE, StorageScope.WORKSPACE].map(scope =>
-			JSON.parse(storage.get('memento/test.view', scope)!),
-		),
+		[StorageScope.APPLICATION, StorageScope.PROFILE, StorageScope.WORKSPACE].map(scope => JSON.parse(storage.get('memento/test.view', scope)!)),
 		[{ selected: 'application' }, { selected: 'profile' }, { selected: 'workspace' }],
 	);
 });
@@ -64,12 +62,7 @@ test('Memento reload retains the state object and removes stale properties', () 
 	const memento = new Memento<TestMementoState>('test.view', storage);
 	const state = memento.getMemento(StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	Object.assign(state, { expanded: true, selected: 'local' });
-	storage.storeExternal(
-		'memento/test.view',
-		'{"selected":"external"}',
-		StorageScope.WORKSPACE,
-		StorageTarget.MACHINE,
-	);
+	storage.storeExternal('memento/test.view', '{"selected":"external"}', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	assert.equal(state.selected, 'local');
 
 	memento.reloadMemento(StorageScope.WORKSPACE);
@@ -160,12 +153,22 @@ class TestStorageService extends Disposable implements IStorageService {
 			return;
 		}
 		this.values.set(storageMapKey(key, scope), String(value));
-		this._onDidChangeValue.fire({ key, scope, target, external: false });
+		this._onDidChangeValue.fire({
+			key,
+			scope,
+			target,
+			external: false,
+		});
 	}
 
 	remove(key: string, scope: StorageScope): void {
 		this.values.delete(storageMapKey(key, scope));
-		this._onDidChangeValue.fire({ key, scope, target: undefined, external: false });
+		this._onDidChangeValue.fire({
+			key,
+			scope,
+			target: undefined,
+			external: false,
+		});
 	}
 
 	keys(scope: StorageScope, _target: StorageTarget): readonly string[] {
@@ -183,7 +186,12 @@ class TestStorageService extends Disposable implements IStorageService {
 
 	storeExternal(key: string, value: string, scope: StorageScope, target: StorageTarget): void {
 		this.values.set(storageMapKey(key, scope), value);
-		this._onDidChangeValue.fire({ key, scope, target, external: true });
+		this._onDidChangeValue.fire({
+			key,
+			scope,
+			target,
+			external: true,
+		});
 	}
 }
 

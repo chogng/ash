@@ -6,13 +6,7 @@ import { Emitter } from '../../../base/common/event.js';
 import { getNLSLanguage, localize } from '../../../nls.js';
 import type { VoiceStatus } from '../../../../../.build/protocol/typescript/index.js';
 import type { IAgentVoiceService } from '../common/agentService.js';
-import type {
-	AgentVoiceSource,
-	AgentVoiceSelection,
-	AgentVoiceSessionState,
-	AgentVoiceTaskRequest,
-	AgentVoiceConnectionChoice,
-} from '../common/agent.js';
+import type { AgentVoiceSource, AgentVoiceSelection, AgentVoiceSessionState, AgentVoiceTaskRequest, AgentVoiceConnectionChoice } from '../common/agent.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { createUuid } from '../../../base/common/uuid.js';
 import { canceled } from '../../../base/common/errors.js';
@@ -128,10 +122,7 @@ export function createDisconnectedAgentTurnService(unavailable: UnavailableOpera
 	};
 }
 
-export function createAppServerAgentSessionService(
-	connection: AppServerProtocolClient,
-	sshHost?: string,
-): IAgentSessionService {
+export function createAppServerAgentSessionService(connection: AppServerProtocolClient, sshHost?: string): IAgentSessionService {
 	return {
 		async collectDebugLogs(params, signal) {
 			if (signal?.aborted) throw canceled();
@@ -143,23 +134,12 @@ export function createAppServerAgentSessionService(
 			let failed = false;
 			try {
 				if (result.files.reduce((bytes, file) => bytes + file.resource.size, 0) > 64 * 1024 * 1024) {
-					throw new Error(
-						localize(
-							'debugLogs.collectionByteLimit',
-							'Debug log resources exceed the collection byte limit.',
-						),
-					);
+					throw new Error(localize('debugLogs.collectionByteLimit', 'Debug log resources exceed the collection byte limit.'));
 				}
 				for (const file of result.files) {
 					// The resource reader owns release even when verification or cancellation fails.
 					pending.delete(file.resource.resourceId);
-					const bytes = await readAppServerResource(
-						resources,
-						file.resource,
-						16 * 1024 * 1024,
-						signal,
-						generation,
-					);
+					const bytes = await readAppServerResource(resources, file.resource, 16 * 1024 * 1024, signal, generation);
 					files.push({ name: file.name, bytes, truncated: file.truncated });
 				}
 				return { files, omittedFiles: result.omittedFiles };
@@ -168,9 +148,7 @@ export function createAppServerAgentSessionService(
 				throw error;
 			} finally {
 				if (generation === connection.generation) {
-					const cleanup = await Promise.allSettled(
-						[...pending].map(resourceId => resources.release({ resourceId })),
-					);
+					const cleanup = await Promise.allSettled([...pending].map(resourceId => resources.release({ resourceId })));
 					const rejected = cleanup.find(result => result.status === 'rejected');
 					if (!failed && rejected?.status === 'rejected') throw rejected.reason;
 				}
@@ -182,12 +160,7 @@ export function createAppServerAgentSessionService(
 				if (request.operation === 'probe') {
 					return { type: 'availability', available: false };
 				}
-				throw new Error(
-					localize(
-						{ bundle: 'ash.sessions', key: 'sessions.runtime.unavailable' },
-						'Session runtime Providers are unavailable on this connection.',
-					),
-				);
+				throw new Error(localize({ bundle: 'ash.sessions', key: 'sessions.runtime.unavailable' }, 'Session runtime Providers are unavailable on this connection.'));
 			}
 			const operationId = createUuid();
 			const generation = connection.generation;
@@ -195,8 +168,7 @@ export function createAppServerAgentSessionService(
 			using state = connection.onStateChange(value => {
 				if (value !== 'ready') retired = true;
 			});
-			const isCurrent = (): boolean =>
-				!retired && connection.state === 'ready' && connection.generation === generation;
+			const isCurrent = (): boolean => !retired && connection.state === 'ready' && connection.generation === generation;
 			const assertCurrent = (): void => {
 				throwIfCancelled(signal);
 				if (!isCurrent()) throw canceled();
@@ -210,11 +182,7 @@ export function createAppServerAgentSessionService(
 			};
 			signal.addEventListener('abort', cancel, { once: true });
 			try {
-				const value = await connection.request(
-					APP_SERVER_METHODS['session/runtime/invoke'],
-					{ operationId, providerId, request },
-					{ timeoutMs: 600_000 },
-				);
+				const value = await connection.request(APP_SERVER_METHODS['session/runtime/invoke'], { operationId, providerId, request }, { timeoutMs: 600_000 });
 				assertCurrent();
 				// Transport decoding has validated this closed result; copy only the domain fields.
 				switch (value.type) {
@@ -239,13 +207,10 @@ export function createAppServerAgentSessionService(
 			appServerRequest(connection, 'session/create', {
 				...params,
 				executionTarget:
-					sshHost && params.executionTarget?.type === 'ssh' && params.executionTarget.host === sshHost
-						? { type: 'local', root: params.executionTarget.root }
-						: params.executionTarget,
+					sshHost && params.executionTarget?.type === 'ssh' && params.executionTarget.host === sshHost ? { type: 'local', root: params.executionTarget.root } : params.executionTarget,
 			}).then(result => toSessionResult(result, sshHost)),
 		listAgents: () => appServerRequest(connection, 'agent/roles/list', {}),
-		read: params =>
-			appServerRequest(connection, 'session/read', params).then(result => toSessionResult(result, sshHost)),
+		read: params => appServerRequest(connection, 'session/read', params).then(result => toSessionResult(result, sshHost)),
 		readCatalog: async params => {
 			const result = await appServerRequest(connection, 'session/catalog/read', params);
 			return { session: result.session ? toAgentSession(result.session, sshHost) : result.session };
@@ -276,52 +241,23 @@ export function createAppServerAgentSessionService(
 		},
 		unsubscribe: params => voidResult(appServerRequest(connection, 'session/unsubscribe', params)),
 		createThread: params =>
-			appServerRequest(
-				connection,
-				'session/request',
-				sessionRequest(params, { type: 'createThread', title: params.title }),
-			)
+			appServerRequest(connection, 'session/request', sessionRequest(params, { type: 'createThread', title: params.title }))
 				.then(sessionThreadResult)
 				.then(result => {
 					if (result.session.sessionId !== params.sessionId)
-						throw new Error(
-							localize(
-								'chat.operation.wrongIdentity',
-								'The server returned a different conversation. Refresh before trying again.',
-							),
-						);
+						throw new Error(localize('chat.operation.wrongIdentity', 'The server returned a different conversation. Refresh before trying again.'));
 					return { session: toAgentSession(result.session, sshHost), threadId: result.threadId };
 				}),
 		rename: async params => {
-			const result = sessionResult(
-				await appServerRequest(
-					connection,
-					'session/request',
-					sessionRequest(params, { type: 'renameSession', title: params.title }),
-				),
-			);
+			const result = sessionResult(await appServerRequest(connection, 'session/request', sessionRequest(params, { type: 'renameSession', title: params.title })));
 			if (result.session.sessionId !== params.sessionId)
-				throw new Error(
-					localize(
-						'chat.rename.wrongIdentity',
-						'The server returned a different conversation while renaming. Refresh and try again.',
-					),
-				);
+				throw new Error(localize('chat.rename.wrongIdentity', 'The server returned a different conversation while renaming. Refresh and try again.'));
 			return toSessionResult(result, sshHost);
 		},
 		delete: async params => {
-			const result = await appServerRequest(
-				connection,
-				'session/request',
-				sessionRequest(params, { type: 'delete' }),
-			);
+			const result = await appServerRequest(connection, 'session/request', sessionRequest(params, { type: 'delete' }));
 			if (result.type !== 'deleted' || result.value !== params.sessionId)
-				throw new Error(
-					localize(
-						'chatSession.delete.wrongIdentity',
-						'The server returned a different session while deleting. Refresh before trying again.',
-					),
-				);
+				throw new Error(localize('chatSession.delete.wrongIdentity', 'The server returned a different session while deleting. Refresh before trying again.'));
 		},
 		archive: params =>
 			appServerRequest(connection, 'session/request', sessionRequest(params, { type: 'archive' }))
@@ -367,13 +303,7 @@ async function readToolResource(
 	if (signal?.aborted) cancel();
 	try {
 		const { appCsp, encoding, resourceMetadata, ...resource } = await request;
-		const bytes = await readAppServerResource(
-			createAppServerResourceApi(connection),
-			resource,
-			262_144,
-			signal,
-			generation,
-		);
+		const bytes = await readAppServerResource(createAppServerResourceApi(connection), resource, 262_144, signal, generation);
 		return {
 			bytes,
 			mimeType: resource.mimeType,
@@ -395,11 +325,7 @@ async function readToolResource(
 	}
 }
 
-export function createAppServerAgentThreadService(
-	connection: AppServerProtocolClient,
-	sshHost?: string,
-	snapshots?: IAgentHostResourceService,
-): IAgentThreadService {
+export function createAppServerAgentThreadService(connection: AppServerProtocolClient, sshHost?: string, snapshots?: IAgentHostResourceService): IAgentThreadService {
 	return {
 		fork: async params => {
 			const result = sessionThreadResult(
@@ -414,12 +340,7 @@ export function createAppServerAgentThreadService(
 				),
 			);
 			if (params.target === 'thread' && result.session.sessionId !== params.sessionId)
-				throw new Error(
-					localize(
-						'chat.operation.wrongIdentity',
-						'The server returned a different conversation. Refresh before trying again.',
-					),
-				);
+				throw new Error(localize('chat.operation.wrongIdentity', 'The server returned a different conversation. Refresh before trying again.'));
 			return { sessionId: result.session.sessionId, threadId: result.threadId };
 		},
 		rewrite: async (params, signal) => {
@@ -442,12 +363,7 @@ export function createAppServerAgentThreadService(
 				signal,
 			);
 			if (result.type !== 'rewrite' || result.value.session.sessionId !== params.sessionId)
-				throw new Error(
-					localize(
-						'chat.operation.wrongIdentity',
-						'The server returned a different conversation. Refresh before trying again.',
-					),
-				);
+				throw new Error(localize('chat.operation.wrongIdentity', 'The server returned a different conversation. Refresh before trying again.'));
 			return { sessionId: result.value.session.sessionId, threadId: result.value.threadId };
 		},
 		rename: async params => {
@@ -464,12 +380,7 @@ export function createAppServerAgentThreadService(
 				),
 			);
 			if (result.session.sessionId !== params.sessionId)
-				throw new Error(
-					localize(
-						'chat.rename.wrongIdentity',
-						'The server returned a different conversation while renaming. Refresh and try again.',
-					),
-				);
+				throw new Error(localize('chat.rename.wrongIdentity', 'The server returned a different conversation while renaming. Refresh and try again.'));
 		},
 		onDidOfferInteraction: Event.any<AgentInteractionOffer>((listener, thisArgs) =>
 			connection.onNotification(event => {
@@ -483,9 +394,7 @@ export function createAppServerAgentThreadService(
 					});
 			}),
 		),
-		onDidChangeConnection: Event.any<void>((listener, thisArgs) =>
-			connection.onStateChange(() => listener.call(thisArgs)),
-		),
+		onDidChangeConnection: Event.any<void>((listener, thisArgs) => connection.onStateChange(() => listener.call(thisArgs))),
 		onDidUpdateThread: Event.any<ThreadUpdateEnvelope>((listener, thisArgs) =>
 			connection.onNotification(event => {
 				if (event.method === 'session/thread/update') listener.call(thisArgs, toThreadUpdate(event.params));
@@ -493,21 +402,14 @@ export function createAppServerAgentThreadService(
 		),
 		onDidUpdateThreadTranscript: Event.any<ThreadTranscriptUpdateEnvelope>((listener, thisArgs) =>
 			connection.onNotification(event => {
-				if (event.method === 'session/thread/transcript/update')
-					listener.call(thisArgs, toThreadTranscriptUpdate(event.params));
+				if (event.method === 'session/thread/transcript/update') listener.call(thisArgs, toThreadTranscriptUpdate(event.params));
 			}),
 		),
 		readAttachment: async (source, signal) => {
 			if (signal?.aborted) throw canceled();
 			const generation = connection.generation;
 			const resource = await appServerRequest(connection, 'attachment/resource/open', { ...source });
-			const bytes = await readAppServerResource(
-				createAppServerResourceApi(connection),
-				resource,
-				16 * 1024 * 1024,
-				signal,
-				generation,
-			);
+			const bytes = await readAppServerResource(createAppServerResourceApi(connection), resource, 16 * 1024 * 1024, signal, generation);
 			return { bytes, mimeType: resource.mimeType };
 		},
 		listAppTools: async (source, signal) => {
@@ -535,11 +437,7 @@ export function createAppServerAgentThreadService(
 			if (signal?.aborted) throw canceled();
 			const generation = connection.generation;
 			const operationId = createUuid();
-			const request = connection.request(
-				APP_SERVER_METHODS['tool/app/call'],
-				{ ...source, remoteName: name, argumentsJson, operationId },
-				{ timeoutMs: 240_000 },
-			);
+			const request = connection.request(APP_SERVER_METHODS['tool/app/call'], { ...source, remoteName: name, argumentsJson, operationId }, { timeoutMs: 240_000 });
 			let cancellation: Promise<unknown> | undefined;
 			const cancel = (): void => {
 				if (connection.generation === generation) {
@@ -618,9 +516,7 @@ export function createAppServerAgentThreadService(
 							}
 						: context.allocation,
 					model: context.model ? { ...context.model } : context.model,
-					latestRequest: context.latestRequest
-						? { usedTokens: context.latestRequest.usedTokens }
-						: context.latestRequest,
+					latestRequest: context.latestRequest ? { usedTokens: context.latestRequest.usedTokens } : context.latestRequest,
 					categories: context.categories.map(category => ({
 						category: category.category,
 						tokens: category.tokens,
@@ -635,9 +531,7 @@ export function createAppServerAgentThreadService(
 				turnId: checkpoint.turnId,
 				sourceThreadId: checkpoint.sourceThreadId,
 				files: checkpoint.workspace.type,
-				...(checkpoint.workspace.type === 'unavailable'
-					? { unavailableReason: checkpoint.workspace.reason }
-					: {}),
+				...(checkpoint.workspace.type === 'unavailable' ? { unavailableReason: checkpoint.workspace.reason } : {}),
 			}));
 		},
 		restoreMessage: async params => {
@@ -684,8 +578,7 @@ export function createAppServerAgentThreadService(
 					selection: params.selection,
 				}),
 			);
-			if (result.type !== 'advisorConfigured')
-				throw new Error(`Expected advisor configuration result, received ${result.type}.`);
+			if (result.type !== 'advisorConfigured') throw new Error(`Expected advisor configuration result, received ${result.type}.`);
 			return result.value;
 		},
 		subscribe: async params => {
@@ -703,19 +596,12 @@ export function createAppServerAgentThreadService(
 	};
 }
 
-export function createAppServerAgentTurnService(
-	connection: AppServerProtocolClient,
-	snapshots?: IAgentHostResourceService,
-): IAgentTurnService {
+export function createAppServerAgentTurnService(connection: AppServerProtocolClient, snapshots?: IAgentHostResourceService): IAgentTurnService {
 	return {
 		enqueue: (params, signal) =>
-			withHostResourceInput(
-				connection,
-				snapshots,
-				params.input,
-				input => appServerRequest(connection, 'queue/enqueue', { ...params, input }),
-				signal,
-			).then(result => ({ status: result.status })),
+			withHostResourceInput(connection, snapshots, params.input, input => appServerRequest(connection, 'queue/enqueue', { ...params, input }), signal).then(result => ({
+				status: result.status,
+			})),
 		listQueued: params =>
 			appServerRequest(connection, 'queue/list', params).then(result => ({
 				messages: result.messages.map(message => ({ status: message.status })),
@@ -882,7 +768,10 @@ function toThread(thread: ThreadDto): Thread {
 			model: turn.model ? { ...turn.model } : turn.model,
 			reasoningEffort: turn.reasoningEffort,
 			plan: turn.plan
-				? { explanation: turn.plan.explanation, steps: turn.plan.steps.map(step => ({ ...step })) }
+				? {
+						explanation: turn.plan.explanation,
+						steps: turn.plan.steps.map(step => ({ ...step })),
+					}
 				: turn.plan,
 			usage: {
 				modelInvocations: turn.usage.modelInvocations,
@@ -899,9 +788,7 @@ function toThread(thread: ThreadDto): Thread {
 }
 
 /** Strip transport-only approval fields and detach nested request payloads from the wire frame. */
-function toTurnInteraction(
-	interaction: import('../../../../../.build/protocol/typescript/index.js').TurnInteraction,
-): TurnInteraction {
+function toTurnInteraction(interaction: import('../../../../../.build/protocol/typescript/index.js').TurnInteraction): TurnInteraction {
 	const request = interaction.request;
 	return {
 		requestId: interaction.requestId,
@@ -913,12 +800,8 @@ function toTurnInteraction(
 						type: 'approval',
 						request: {
 							reason: request.request.reason,
-							allowedDecisions: request.request.allowedDecisions
-								? [...request.request.allowedDecisions]
-								: undefined,
-							command: request.request.command
-								? { ...request.request.command, arguments: [...request.request.command.arguments] }
-								: request.request.command,
+							allowedDecisions: request.request.allowedDecisions ? [...request.request.allowedDecisions] : undefined,
+							command: request.request.command ? { ...request.request.command, arguments: [...request.request.command.arguments] } : request.request.command,
 							capabilities: request.request.capabilities.map(capability => ({ ...capability })),
 						},
 					}
@@ -970,8 +853,7 @@ function toThreadUpdateValue(update: ThreadUpdateEnvelopeDto['update']): ThreadU
 					type: 'committed',
 					event: { type: event.type, turnId: event.turnId, requestId: event.requestId },
 				};
-			if (event.type === 'turnCompleted' || event.type === 'turnFailed' || event.type === 'turnInterrupted')
-				return { type: 'committed', event: { type: event.type, turnId: event.turnId } };
+			if (event.type === 'turnCompleted' || event.type === 'turnFailed' || event.type === 'turnInterrupted') return { type: 'committed', event: { type: event.type, turnId: event.turnId } };
 			return { type: 'committed', event: { type: event.type } };
 		}
 		case 'itemStarted':
@@ -994,9 +876,7 @@ function toThreadTranscriptSnapshot(snapshot: ThreadTranscriptSnapshotDto, threa
 	// durable snapshot. Share immutable text, never mutable Item shells or transport
 	// objects. A later streaming revision still owns its independently converted text.
 	const turns =
-		snapshot.sessionId === thread.sessionId &&
-		snapshot.threadId === thread.threadId &&
-		snapshot.durableSequence === thread.sequence
+		snapshot.sessionId === thread.sessionId && snapshot.threadId === thread.threadId && snapshot.durableSequence === thread.sequence
 			? new Map(thread.turns.map(turn => [turn.turnId, new Map(turn.items.map(item => [item.itemId, item]))]))
 			: undefined;
 	return {
@@ -1008,12 +888,7 @@ function toThreadTranscriptSnapshot(snapshot: ThreadTranscriptSnapshotDto, threa
 			const converted = toThreadTranscriptEntry(entry);
 			if (converted.type !== 'item' || converted.transient) return converted;
 			const canonical = turns?.get(converted.turnId)?.get(converted.item.itemId);
-			if (
-				canonical?.type !== converted.item.type ||
-				canonical.turnId !== converted.turnId ||
-				converted.item.turnId !== converted.turnId
-			)
-				return converted;
+			if (canonical?.type !== converted.item.type || canonical.turnId !== converted.turnId || converted.item.turnId !== converted.turnId) return converted;
 			if ('text' in canonical && 'text' in converted.item && canonical.text === converted.item.text) {
 				return { ...converted, item: { ...converted.item, text: canonical.text } };
 			}
@@ -1134,9 +1009,7 @@ function toThreadItem(item: ThreadItemDto): ThreadItem {
 												mimeType: artifact.mimeType,
 												contentDigest: artifact.contentDigest,
 												truncated: artifact.truncated,
-												...(artifact.resourceMetadata === undefined
-													? {}
-													: { resourceMetadata: artifact.resourceMetadata }),
+												...(artifact.resourceMetadata === undefined ? {} : { resourceMetadata: artifact.resourceMetadata }),
 												source: { ...artifact.source },
 												data:
 													data.type === 'binary'
@@ -1189,11 +1062,7 @@ function toAgentResponse(response: AgentResponse): AgentResponseDto {
 
 /** Backend-local paths belong to the selected SSH host in the Desktop domain. */
 function toExecutionTarget(target: AgentSession['executionTarget'], sshHost?: string): AgentSession['executionTarget'] {
-	return sshHost && target?.type === 'local'
-		? { type: 'ssh', host: sshHost, root: target.root }
-		: target
-			? { ...target }
-			: target;
+	return sshHost && target?.type === 'local' ? { type: 'ssh', host: sshHost, root: target.root } : target ? { ...target } : target;
 }
 
 function toSessionResult(result: SessionResultDto, sshHost?: string): SessionResult {
@@ -1285,11 +1154,7 @@ export class AppServerAgentVoiceService extends Disposable implements IAgentVoic
 		  }
 		| undefined;
 	public get isAvailable(): boolean {
-		return (
-			!this.isDisposed &&
-			this.client.state === 'ready' &&
-			this.client.capabilities?.contracts.voiceConversation?.version === 2
-		);
+		return !this.isDisposed && this.client.state === 'ready' && this.client.capabilities?.contracts.voiceConversation?.version === 2;
 	}
 
 	constructor(private readonly client: AppServerProtocolClient) {
@@ -1348,15 +1213,10 @@ export class AppServerAgentVoiceService extends Disposable implements IAgentVoic
 		}));
 	}
 
-	public async start(
-		source: AgentVoiceSource,
-		selection: AgentVoiceSelection,
-		signal?: AbortSignal,
-	): Promise<AgentVoiceSessionState> {
+	public async start(source: AgentVoiceSource, selection: AgentVoiceSelection, signal?: AbortSignal): Promise<AgentVoiceSessionState> {
 		this.assertAvailable();
 		if (signal?.aborted) throw canceled();
-		if (this.starting || (this.current && !['ended', 'failed'].includes(this.current.state)))
-			throw new Error(localize('chat.voice.alreadyActive', 'Stop the current voice conversation first.'));
+		if (this.starting || (this.current && !['ended', 'failed'].includes(this.current.state))) throw new Error(localize('chat.voice.alreadyActive', 'Stop the current voice conversation first.'));
 		const generation = this.client.generation;
 		const resourceId = createUuid();
 		const operationId = createUuid();
@@ -1366,12 +1226,10 @@ export class AppServerAgentVoiceService extends Disposable implements IAgentVoic
 		let cancellation: Promise<void> | undefined;
 		const cancel = (): Promise<void> => {
 			if (this.client.generation !== generation) return Promise.resolve();
-			return (cancellation ??= this.client
-				.request(APP_SERVER_METHODS['voice/start/cancel'], { operationId })
-				.then(
-					() => undefined,
-					() => undefined,
-				));
+			return (cancellation ??= this.client.request(APP_SERVER_METHODS['voice/start/cancel'], { operationId }).then(
+				() => undefined,
+				() => undefined,
+			));
 		};
 		const onAbort = () => {
 			void cancel();
@@ -1404,22 +1262,14 @@ export class AppServerAgentVoiceService extends Disposable implements IAgentVoic
 		if (signal?.aborted) cancel();
 		try {
 			const status = await promise;
-			if (this.isDisposed || generation !== this.client.generation || this.resource !== resourceId)
-				throw canceled();
+			if (this.isDisposed || generation !== this.client.generation || this.resource !== resourceId) throw canceled();
 			this.accept(status);
 			if (signal?.aborted) {
 				await this.stop();
 				throw canceled();
 			}
 			const current = this.state;
-			if (current?.state !== 'connected')
-				throw new Error(
-					localize(
-						'chat.voice.startFailed',
-						'Could not start the voice conversation: {0}',
-						current?.error ?? current?.state ?? status.state,
-					),
-				);
+			if (current?.state !== 'connected') throw new Error(localize('chat.voice.startFailed', 'Could not start the voice conversation: {0}', current?.error ?? current?.state ?? status.state));
 			return current;
 		} catch (error) {
 			if (signal?.aborted || this.isDisposed || generation !== this.client.generation) throw canceled();
@@ -1443,8 +1293,7 @@ export class AppServerAgentVoiceService extends Disposable implements IAgentVoic
 			}
 		}
 		const current = this.current;
-		if (!current || current.state === 'ended' || current.state === 'failed' || this.client.state !== 'ready')
-			return;
+		if (!current || current.state === 'ended' || current.state === 'failed' || this.client.state !== 'ready') return;
 		const status = await this.client.request(APP_SERVER_METHODS['voice/stop'], {
 			resourceId: current.resourceId,
 			mediaEpoch: current.mediaEpoch,
@@ -1467,12 +1316,7 @@ export class AppServerAgentVoiceService extends Disposable implements IAgentVoic
 	}
 
 	public async rejectTask(request: AgentVoiceTaskRequest): Promise<void> {
-		if (
-			this.current?.resourceId !== request.resourceId ||
-			this.current.mediaEpoch !== request.mediaEpoch ||
-			this.current.state !== 'connected'
-		)
-			return;
+		if (this.current?.resourceId !== request.resourceId || this.current.mediaEpoch !== request.mediaEpoch || this.current.state !== 'connected') return;
 		await this.client.request(APP_SERVER_METHODS['voice/delegation/reject'], {
 			resourceId: request.resourceId,
 			mediaEpoch: request.mediaEpoch,
@@ -1549,13 +1393,7 @@ export class AppServerAgentVoiceService extends Disposable implements IAgentVoic
 			.catch(() => undefined)
 			.then(async () => {
 				const current = this.current;
-				if (
-					this.isDisposed ||
-					this.client.generation !== generation ||
-					current?.resourceId !== source.resourceId ||
-					current.mediaEpoch !== source.mediaEpoch ||
-					current.state !== 'connected'
-				)
+				if (this.isDisposed || this.client.generation !== generation || current?.resourceId !== source.resourceId || current.mediaEpoch !== source.mediaEpoch || current.state !== 'connected')
 					throw canceled();
 				const inputSequence = (this.inputCounter = Math.max(this.inputCounter, current.inputSequence) + 1);
 				const status = await this.client.request(APP_SERVER_METHODS['voice/input'], {
@@ -1575,31 +1413,12 @@ export class AppServerAgentVoiceService extends Disposable implements IAgentVoic
 		super.disposeCore();
 	}
 	private assertAvailable(): void {
-		if (!this.isAvailable)
-			throw new Error(localize('chat.voice.unavailable', 'Voice conversation is unavailable in this host.'));
+		if (!this.isAvailable) throw new Error(localize('chat.voice.unavailable', 'Voice conversation is unavailable in this host.'));
 	}
 	private accept(status: VoiceStatus): void {
-		if (
-			this.isDisposed ||
-			status.resourceId !== this.resource ||
-			status.sessionId !== this.source?.sessionId ||
-			status.threadId !== this.source.threadId
-		)
-			return;
-		if (
-			this.current &&
-			(status.mediaEpoch < this.current.mediaEpoch ||
-				(status.mediaEpoch === this.current.mediaEpoch && status.sequence <= this.current.sequence))
-		)
-			return;
-		if (
-			this.hold &&
-			(status.mediaEpoch !== this.hold.epoch ||
-				status.state !== 'connected' ||
-				status.muted ||
-				status.inputMode !== 'pushToTalk')
-		)
-			this.clearHold();
+		if (this.isDisposed || status.resourceId !== this.resource || status.sessionId !== this.source?.sessionId || status.threadId !== this.source.threadId) return;
+		if (this.current && (status.mediaEpoch < this.current.mediaEpoch || (status.mediaEpoch === this.current.mediaEpoch && status.sequence <= this.current.sequence))) return;
+		if (this.hold && (status.mediaEpoch !== this.hold.epoch || status.state !== 'connected' || status.muted || status.inputMode !== 'pushToTalk')) this.clearHold();
 		this.current = {
 			resourceId: status.resourceId,
 			sessionId: status.sessionId,

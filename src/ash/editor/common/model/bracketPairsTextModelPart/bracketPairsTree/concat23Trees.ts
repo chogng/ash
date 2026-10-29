@@ -73,12 +73,7 @@ export function concat23TreesOfSameHeight(items: AstNode[], createImmutableLists
 		const newLength = length >> 1;
 		for (let i = 0; i < newLength; i++) {
 			const j = i << 1;
-			items[i] = ListAstNode.create23(
-				items[j],
-				items[j + 1],
-				j + 3 === length ? items[j + 2] : null,
-				createImmutableLists,
-			);
+			items[i] = ListAstNode.create23(items[j], items[j + 1], j + 3 === length ? items[j + 2] : null, createImmutableLists);
 		}
 		length = newLength;
 	}
@@ -133,12 +128,7 @@ function append(list: ListAstNode, nodeToAppend: AstNode): AstNode {
 
 				// we need to split to maintain (2,3)-tree property.
 				// Send the third element + the new element to the parent.
-				nodeToAppendOfCorrectHeight = ListAstNode.create23(
-					parent.unappendChild()!,
-					nodeToAppendOfCorrectHeight,
-					null,
-					false,
-				);
+				nodeToAppendOfCorrectHeight = ListAstNode.create23(parent.unappendChild()!, nodeToAppendOfCorrectHeight, null, false);
 			} else {
 				parent.appendChildOfSameHeight(nodeToAppendOfCorrectHeight);
 				nodeToAppendOfCorrectHeight = undefined;
@@ -183,12 +173,7 @@ function prepend(list: ListAstNode, nodeToAppend: AstNode): AstNode {
 
 				// we need to split to maintain (2,3)-tree property.
 				// Send the third element + the new element to the parent.
-				nodeToPrependOfCorrectHeight = ListAstNode.create23(
-					nodeToPrependOfCorrectHeight,
-					parent.unprependChild()!,
-					null,
-					false,
-				);
+				nodeToPrependOfCorrectHeight = ListAstNode.create23(nodeToPrependOfCorrectHeight, parent.unprependChild()!, null, false);
 			} else {
 				parent.prependChildOfSameHeight(nodeToPrependOfCorrectHeight);
 				nodeToPrependOfCorrectHeight = undefined;

@@ -43,20 +43,9 @@ suite('Welcome page', () => {
 		using contextKeys = new ContextKeyService();
 		contextKeys.setContext('openFolderWorkspaceSupport', true);
 		using services = createTestComponentServices(undefined, undefined, dom.window.document);
-		using page = new GettingStartedPage(
-			history,
-			host,
-			{} as IFileDialogService,
-			commands,
-			contextKeys,
-			{} as IGitHubConnectionService,
-			services.get(IThemeService),
-			services.get(IStorageService),
-		);
+		using page = new GettingStartedPage(history, host, {} as IFileDialogService, commands, contextKeys, {} as IGitHubConnectionService, services.get(IThemeService), services.get(IStorageService));
 		page.create(dom.window.document.body);
-		const clone = [...dom.window.document.querySelectorAll<HTMLButtonElement>('button')].find(
-			button => button.textContent === 'Clone repo',
-		);
+		const clone = [...dom.window.document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Clone repo');
 		assert.equal(clone?.disabled, false);
 		clone?.click();
 		await dispatched;
@@ -95,25 +84,16 @@ suite('Welcome page', () => {
 
 		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		try {
-			setNlsResolver((bundle, key, fallback, parameters) =>
-				formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-			);
+			setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 			using translated = new GettingStarted(dom.window.document.body, {
 				recentProjects: [{ name: 'ash', path: '~/Desktop', onRemove: () => {} }],
 			});
 			assert.deepEqual(
-				[...translated.domNode.querySelectorAll('.ash-getting-started-card')].map(
-					card => card.querySelector('.ash-getting-started-card-label')?.textContent,
-				),
+				[...translated.domNode.querySelectorAll('.ash-getting-started-card')].map(card => card.querySelector('.ash-getting-started-card-label')?.textContent),
 				['打开文件夹', '克隆仓库', '通过 SSH 连接', '连接 GitHub'],
 			);
 			assert.equal(translated.domNode.querySelector('h2')?.textContent, '最近打开');
-			assert.equal(
-				translated.domNode
-					.querySelector('.ash-getting-started-recent-actions button')
-					?.getAttribute('aria-label'),
-				'从最近打开中移除 ash',
-			);
+			assert.equal(translated.domNode.querySelector('.ash-getting-started-recent-actions button')?.getAttribute('aria-label'), '从最近打开中移除 ash');
 		} finally {
 			resetNlsResolver();
 		}
@@ -142,10 +122,7 @@ suite('Welcome page', () => {
 		const removeButtons = section.querySelectorAll<HTMLButtonElement>('.ash-getting-started-recent-actions button');
 		assert.equal(section.hidden, false);
 		assert.deepEqual(
-			[...items].map(item => [
-				item.querySelector('.ash-getting-started-recent-name')?.textContent,
-				item.querySelector('.ash-getting-started-recent-path')?.textContent,
-			]),
+			[...items].map(item => [item.querySelector('.ash-getting-started-recent-name')?.textContent, item.querySelector('.ash-getting-started-recent-path')?.textContent]),
 			Array.from({ length: 6 }, (_, index) => [`project-${index + 1}`, `/workspaces/project-${index + 1}`]),
 		);
 		assert.equal(section.querySelector('.ash-getting-started-view-all'), null);
@@ -182,18 +159,10 @@ suite('gettingStarted browser component', () => {
 		await expectIconFontLoaded(mark.locator('.ash-icon'));
 		await expect(mark.locator('svg')).toHaveCount(0);
 		await expect(mark).toHaveCSS('background-image', 'none');
-		await expect(mark.locator('.ash-icon')).toHaveCSS(
-			'color',
-			await mark.evaluate(element => getComputedStyle(element).color),
-		);
+		await expect(mark.locator('.ash-icon')).toHaveCSS('color', await mark.evaluate(element => getComputedStyle(element).color));
 		const cards = welcome.locator('.ash-getting-started-card');
 		await expect(cards).toHaveCount(4);
-		await expect(cards.locator('.ash-getting-started-card-label')).toHaveText([
-			'Open folder',
-			'Clone repo',
-			'Connect via SSH',
-			'Connect GitHub',
-		]);
+		await expect(cards.locator('.ash-getting-started-card-label')).toHaveText(['Open folder', 'Clone repo', 'Connect via SSH', 'Connect GitHub']);
 		for (const index of [0, 1, 2]) {
 			const card = cards.nth(index);
 			await expect(card).toHaveCSS('background-color', 'rgb(243, 243, 243)');
@@ -212,9 +181,7 @@ suite('gettingStarted browser component', () => {
 		const githubIcon = github.locator('.ash-icon');
 		await expectIconFontLoaded(githubIcon);
 		await expect(githubIcon.locator('svg')).toHaveCount(0);
-		expect(await githubIcon.evaluate(element => getComputedStyle(element, '::before').color)).toBe(
-			'rgb(255, 255, 255)',
-		);
+		expect(await githubIcon.evaluate(element => getComputedStyle(element, '::before').color)).toBe('rgb(255, 255, 255)');
 		await github.hover();
 		await expect(github).toHaveCSS('background-color', 'rgb(38, 38, 38)');
 	});
@@ -226,9 +193,7 @@ suite('gettingStarted browser component', () => {
 		const welcome = page.getByRole('region', { name: 'Welcome', exact: true });
 		const cards = welcome.locator('.ash-getting-started-card');
 		await expect(cards).toHaveCount(4);
-		const [topLeft, topRight, bottomLeft, bottomRight] = await Promise.all(
-			[0, 1, 2, 3].map(index => cards.nth(index).boundingBox()),
-		);
+		const [topLeft, topRight, bottomLeft, bottomRight] = await Promise.all([0, 1, 2, 3].map(index => cards.nth(index).boundingBox()));
 		expect(
 			topLeft && topRight && bottomLeft && bottomRight
 				? {
@@ -332,17 +297,13 @@ suite('gettingStarted browser component', () => {
 		const alpha = page.locator('.ash-getting-started-recent-item').filter({ hasText: 'alpha' });
 		await alpha.locator('.ash-getting-started-recent-content').click();
 		expect(await page.evaluate(() => window.ashWelcomeIntegration.opened)).toEqual([
-			process.platform === 'win32'
-				? '\\synthetic\\projects\\with-a-long-parent-path\\alpha'
-				: '/synthetic/projects/with-a-long-parent-path/alpha',
+			process.platform === 'win32' ? '\\synthetic\\projects\\with-a-long-parent-path\\alpha' : '/synthetic/projects/with-a-long-parent-path/alpha',
 		]);
 		await alpha.getByRole('button', { name: 'Remove alpha from Recents', exact: true }).click();
 		await expect(alpha).toHaveCount(0);
 		await expect(page.locator('.ash-getting-started-recent-item')).toHaveCount(1);
 		expect(await page.evaluate(() => window.ashWelcomeIntegration.opened)).toEqual([
-			process.platform === 'win32'
-				? '\\synthetic\\projects\\with-a-long-parent-path\\alpha'
-				: '/synthetic/projects/with-a-long-parent-path/alpha',
+			process.platform === 'win32' ? '\\synthetic\\projects\\with-a-long-parent-path\\alpha' : '/synthetic/projects/with-a-long-parent-path/alpha',
 		]);
 	});
 
@@ -357,12 +318,7 @@ suite('gettingStarted browser component', () => {
 		await expect(remove).toBeFocused();
 		await page.keyboard.press('Enter');
 		await expect(remove).toHaveCount(0);
-		await expect(
-			page
-				.locator('.ash-getting-started-recent-item')
-				.filter({ hasText: 'beta' })
-				.locator('.ash-getting-started-recent-content'),
-		).toBeFocused();
+		await expect(page.locator('.ash-getting-started-recent-item').filter({ hasText: 'beta' }).locator('.ash-getting-started-recent-content')).toBeFocused();
 	});
 
 	test('Recents removes a workspace file with spaces and URL characters durably', async function () {

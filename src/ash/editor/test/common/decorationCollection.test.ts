@@ -7,8 +7,7 @@ import { TextModel } from '../../common/model/textModel.js';
 import { TrackedRangeStickiness } from '../../common/model.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
-const range = (startColumn: number, endColumn: number): Range =>
-	Range.fromPositions(position(0, startColumn), position(0, endColumn));
+const range = (startColumn: number, endColumn: number): Range => Range.fromPositions(position(0, startColumn), position(0, endColumn));
 
 test('TextDecorationCollection owns stable IDs and opaque metadata', () => {
 	using model = new TextModel('abcdef');
@@ -44,17 +43,23 @@ test('TextDecorationCollection owns stable IDs and opaque metadata', () => {
 		},
 		{
 			id,
-			updated: { id, range: range(2, 5), metadata: { kind: 'diagnostic' } },
-			snapshot: [{ id, range: range(2, 5), metadata: { kind: 'diagnostic' } }],
+			updated: {
+				id,
+				range: range(2, 5),
+				metadata: { kind: 'diagnostic' },
+			},
+			snapshot: [
+				{
+					id,
+					range: range(2, 5),
+					metadata: { kind: 'diagnostic' },
+				},
+			],
 			snapshotFrozen: true,
 			entryFrozen: true,
 			deleted: true,
 			missing: undefined,
-			reasons: [
-				TextDecorationChangeReason.Content,
-				TextDecorationChangeReason.Content,
-				TextDecorationChangeReason.Content,
-			],
+			reasons: [TextDecorationChangeReason.Content, TextDecorationChangeReason.Content, TextDecorationChangeReason.Content],
 		},
 	);
 });
@@ -77,12 +82,24 @@ test('TextDecorationCollection reports tracked range movement', () => {
 		{
 			reason: TextDecorationChangeReason.Range,
 			modelVersion: 2,
-			decorations: [{ id, range: range(2, 3), metadata: 'match' }],
+			decorations: [
+				{
+					id,
+					range: range(2, 3),
+					metadata: 'match',
+				},
+			],
 		},
 		{
 			reason: TextDecorationChangeReason.Range,
 			modelVersion: 3,
-			decorations: [{ id, range: range(1, 2), metadata: 'match' }],
+			decorations: [
+				{
+					id,
+					range: range(1, 2),
+					metadata: 'match',
+				},
+			],
 		},
 	]);
 });
@@ -134,12 +151,22 @@ test('TextDecorationCollection validates replaceAll atomically', () => {
 			]),
 		/lineNumber/,
 	);
-	assert.deepEqual(decorations.decorations, [{ id: originalId, range: range(0, 1), metadata: 'original' }]);
+	assert.deepEqual(decorations.decorations, [
+		{
+			id: originalId,
+			range: range(0, 1),
+			metadata: 'original',
+		},
+	]);
 	assert.equal(eventCount, 0);
 
 	const ids = decorations.replaceAll([
 		{ range: range(0, 1), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: 'first' },
-		{ range: range(2, 3), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: 'second' },
+		{
+			range: range(2, 3),
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+			metadata: 'second',
+		},
 	]);
 	assert.deepEqual(
 		{
@@ -149,7 +176,13 @@ test('TextDecorationCollection validates replaceAll atomically', () => {
 			size: decorations.size,
 			eventCount,
 		},
-		{ idCount: 2, uniqueIds: 2, replacedOriginal: true, size: 2, eventCount: 1 },
+		{
+			idCount: 2,
+			uniqueIds: 2,
+			replacedOriginal: true,
+			size: 2,
+			eventCount: 1,
+		},
 	);
 });
 
@@ -171,7 +204,13 @@ test('TextDecorationCollection applies a delta in one event and retains reusable
 
 	const ids = decorations.deltaDecorations(
 		[first, second],
-		[{ range: range(2, 3), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: 'updated' }],
+		[
+			{
+				range: range(2, 3),
+				stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+				metadata: 'updated',
+			},
+		],
 	);
 
 	assert.deepEqual(ids, [first]);
@@ -197,8 +236,20 @@ test('Decoration owners remain independent over a shared model', () => {
 	diagnostics.delete(diagnosticId);
 
 	assert.deepEqual(
-		{ diagnostics: diagnostics.decorations, search: search.decorations },
-		{ diagnostics: [], search: [{ id: searchId, range: range(2, 3), metadata: 'result' }] },
+		{
+			diagnostics: diagnostics.decorations,
+			search: search.decorations,
+		},
+		{
+			diagnostics: [],
+			search: [
+				{
+					id: searchId,
+					range: range(2, 3),
+					metadata: 'result',
+				},
+			],
+		},
 	);
 });
 

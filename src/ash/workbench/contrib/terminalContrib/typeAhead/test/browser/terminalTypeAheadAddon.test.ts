@@ -6,15 +6,9 @@ import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import { TerminalCapability } from '../../../../../../platform/terminal/common/capabilities/capabilities.js';
-import {
-	PromptInputState,
-	type IPromptInputModelState,
-} from '../../../../../../platform/terminal/common/capabilities/commandDetection/promptInputModel.js';
+import { PromptInputState, type IPromptInputModelState } from '../../../../../../platform/terminal/common/capabilities/commandDetection/promptInputModel.js';
 import type { IProcessDataEvent } from '../../../../../../platform/terminal/common/terminal.js';
-import {
-	TestConfigurationService,
-	TestWorkspaceService,
-} from '../../../../../services/configuration/test/common/testServices.js';
+import { TestConfigurationService, TestWorkspaceService } from '../../../../../services/configuration/test/common/testServices.js';
 import type { ITerminalInstance, IXtermTerminal } from '../../../../terminal/browser/terminal.js';
 import '../../../../terminal/common/terminalConfiguration.js';
 import { TerminalTypeAheadAddon } from '../../browser/terminalTypeAheadAddon.js';
@@ -25,8 +19,7 @@ function fixture(resources: DisposableStore) {
 	const dom = new JSDOM('<div id="terminal"><div class="xterm-screen"></div></div>');
 	resources.add(toDisposable(() => dom.window.close()));
 	const element = dom.window.document.querySelector<HTMLDivElement>('#terminal')!;
-	element.querySelector('.xterm-screen')!.getBoundingClientRect = () =>
-		({ left: 0, top: 0, width: 800, height: 480 }) as DOMRect;
+	element.querySelector('.xterm-screen')!.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 480 }) as DOMRect;
 	const key = resources.add(new Emitter<{ key: string }>());
 	const write = resources.add(new Emitter<IProcessDataEvent>());
 	const started = resources.add(new Emitter<IPromptInputModelState>());
@@ -65,8 +58,7 @@ function fixture(resources: DisposableStore) {
 	const workspace = resources.add(new TestWorkspaceService({ id: 'typeahead', folders: [] }));
 	const instance = {
 		capabilities: {
-			get: (capability: TerminalCapability) =>
-				capability === TerminalCapability.CommandDetection ? { promptInputModel: model } : undefined,
+			get: (capability: TerminalCapability) => (capability === TerminalCapability.CommandDetection ? { promptInputModel: model } : undefined),
 			onDidChangeCapabilities: Event.None,
 		},
 		onDidWriteData: write.event,

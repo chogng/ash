@@ -1,9 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import {
-	validateNativeContextMenuClose,
-	validateNativeContextMenuRequest,
-} from '../../parts/contextmenu/common/contextmenu.js';
+import { validateNativeContextMenuClose, validateNativeContextMenuRequest } from '../../parts/contextmenu/common/contextmenu.js';
 
 test('native context menu validation accepts bounded nested menus', () => {
 	assert.deepEqual(
@@ -13,7 +10,12 @@ test('native context menu validation accepts bounded nested menus', () => {
 			elementAnchor: true,
 			positioningItem: 0,
 			items: [
-				{ type: 'action', id: 'action-1', label: 'Open', enabled: true },
+				{
+					type: 'action',
+					id: 'action-1',
+					label: 'Open',
+					enabled: true,
+				},
 				{ type: 'separator' },
 				{
 					type: 'submenu',
@@ -38,7 +40,12 @@ test('native context menu validation accepts bounded nested menus', () => {
 			elementAnchor: true,
 			positioningItem: 0,
 			items: [
-				{ type: 'action', id: 'action-1', label: 'Open', enabled: true },
+				{
+					type: 'action',
+					id: 'action-1',
+					label: 'Open',
+					enabled: true,
+				},
 				{ type: 'separator' },
 				{
 					type: 'submenu',
@@ -62,19 +69,48 @@ test('native context menu validation accepts bounded nested menus', () => {
 });
 
 test('native context menu validation rejects unsafe payloads', () => {
-	const action = { type: 'action', id: 'duplicate', label: 'Action', enabled: true };
+	const action = {
+		type: 'action',
+		id: 'duplicate',
+		label: 'Action',
+		enabled: true,
+	};
 
-	assert.throws(() => validateNativeContextMenuRequest({ x: 0, y: 0, items: [action, action] }), /duplicate/);
 	assert.throws(
-		() => validateNativeContextMenuRequest({ x: 0, y: 0, items: [{ ...action, unexpected: true }] }),
+		() =>
+			validateNativeContextMenuRequest({
+				x: 0,
+				y: 0,
+				items: [action, action],
+			}),
+		/duplicate/,
+	);
+	assert.throws(
+		() =>
+			validateNativeContextMenuRequest({
+				x: 0,
+				y: 0,
+				items: [{ ...action, unexpected: true }],
+			}),
 		/exactly/,
 	);
 	assert.throws(
-		() => validateNativeContextMenuRequest({ x: Number.POSITIVE_INFINITY, y: 0, items: [action] }),
+		() =>
+			validateNativeContextMenuRequest({
+				x: Number.POSITIVE_INFINITY,
+				y: 0,
+				items: [action],
+			}),
 		/bounded finite number/,
 	);
 	assert.throws(
-		() => validateNativeContextMenuRequest({ x: 0, y: 0, positioningItem: 1, items: [action] }),
+		() =>
+			validateNativeContextMenuRequest({
+				x: 0,
+				y: 0,
+				positioningItem: 1,
+				items: [action],
+			}),
 		/top-level menu item/,
 	);
 });

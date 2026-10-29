@@ -1,22 +1,10 @@
-import {
-	assertEncoding,
-	GUESSABLE_ENCODINGS,
-	getEncodingLabel,
-	SUPPORTED_ENCODINGS,
-} from '../../../services/textfile/common/encoding.js';
+import { assertEncoding, GUESSABLE_ENCODINGS, getEncodingLabel, SUPPORTED_ENCODINGS } from '../../../services/textfile/common/encoding.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { OpenEditorsFocusedContext, SortOrder, LexicographicOptions } from '../common/files.js';
@@ -51,10 +39,7 @@ configuration.registerConfiguration<string>({
 	setting: {
 		valueType: 'select',
 		title: localize('files.encodingTitle', 'Default File Encoding'),
-		description: localize(
-			'files.encodingDescription',
-			'Choose the default encoding for reading and writing text files. Can be overridden per language.',
-		),
+		description: localize('files.encodingDescription', 'Choose the default encoding for reading and writing text files. Can be overridden per language.'),
 		options: Object.keys(SUPPORTED_ENCODINGS)
 			.filter(id => !SUPPORTED_ENCODINGS[id].hidden)
 			.map(value => ({ value, label: getEncodingLabel(value) })),
@@ -66,10 +51,7 @@ configuration.registerConfiguration<boolean>({
 	scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
 	schema: { type: 'boolean' },
 	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean')
-			throw new TypeError(
-				localize('files.invalidAutoGuessEncoding', 'Automatic encoding detection must be true or false.'),
-			);
+		if (typeof value !== 'boolean') throw new TypeError(localize('files.invalidAutoGuessEncoding', 'Automatic encoding detection must be true or false.'));
 		return value;
 	},
 	setting: {
@@ -95,18 +77,8 @@ configuration.registerConfiguration<readonly string[]>({
 		),
 	},
 	parse(value: unknown): readonly string[] {
-		if (
-			!Array.isArray(value) ||
-			value.length > Object.keys(GUESSABLE_ENCODINGS).length ||
-			value.some(id => !Object.hasOwn(GUESSABLE_ENCODINGS, id)) ||
-			new Set(value).size !== value.length
-		)
-			throw new TypeError(
-				localize(
-					'files.invalidCandidateGuessEncodings',
-					'Enter a list of unique detectable encoding identifiers.',
-				),
-			);
+		if (!Array.isArray(value) || value.length > Object.keys(GUESSABLE_ENCODINGS).length || value.some(id => !Object.hasOwn(GUESSABLE_ENCODINGS, id)) || new Set(value).size !== value.length)
+			throw new TypeError(localize('files.invalidCandidateGuessEncodings', 'Enter a list of unique detectable encoding identifiers.'));
 		return Object.freeze(value.slice());
 	},
 });
@@ -116,8 +88,7 @@ configuration.registerConfiguration({
 	scope: ConfigurationScope.WINDOW,
 	schema: { type: 'string', enum: Object.values(SortOrder) },
 	parse(value: unknown): SortOrder {
-		if (!Object.values(SortOrder).includes(value as SortOrder))
-			throw new TypeError(localize('files.invalidSortOrder', 'Invalid Explorer sort order.'));
+		if (!Object.values(SortOrder).includes(value as SortOrder)) throw new TypeError(localize('files.invalidSortOrder', 'Invalid Explorer sort order.'));
 		return value as SortOrder;
 	},
 	setting: {
@@ -143,17 +114,13 @@ configuration.registerConfiguration({
 	scope: ConfigurationScope.WINDOW,
 	schema: { type: 'string', enum: Object.values(LexicographicOptions) },
 	parse(value: unknown): LexicographicOptions {
-		if (!Object.values(LexicographicOptions).includes(value as LexicographicOptions))
-			throw new TypeError(localize('files.invalidLexicographicOrder', 'Invalid Explorer name order.'));
+		if (!Object.values(LexicographicOptions).includes(value as LexicographicOptions)) throw new TypeError(localize('files.invalidLexicographicOrder', 'Invalid Explorer name order.'));
 		return value as LexicographicOptions;
 	},
 	setting: {
 		valueType: 'select',
 		title: localize('files.lexicographicTitle', 'Explorer name order'),
-		description: localize(
-			'files.lexicographicDescription',
-			'Choose how letter case is handled when sorting file names.',
-		),
+		description: localize('files.lexicographicDescription', 'Choose how letter case is handled when sorting file names.'),
 		options: [
 			{ value: LexicographicOptions.Default, label: localize('files.lexicographicDefault', 'Natural order') },
 			{ value: LexicographicOptions.Upper, label: localize('files.lexicographicUpper', 'Uppercase first') },
@@ -175,30 +142,15 @@ for (const [key, defaultValue, title, description] of [
 		localize('files.dragConfirmTitle', 'Confirm file moves by dragging'),
 		localize('files.dragConfirmDescription', 'Ask before moving files with drag and drop.'),
 	],
-	[
-		'explorer.compactFolders',
-		true,
-		localize('files.compactFoldersTitle', 'Compact folders'),
-		localize('files.compactFoldersDescription', 'Show folders with a single child folder in one row.'),
-	],
+	['explorer.compactFolders', true, localize('files.compactFoldersTitle', 'Compact folders'), localize('files.compactFoldersDescription', 'Show folders with a single child folder in one row.')],
 	[
 		'explorer.sortOrderReverse',
 		false,
 		localize('files.sortReverseTitle', 'Reverse Explorer sort order'),
 		localize('files.sortReverseDescription', 'Reverse the order within each group of files and folders.'),
 	],
-	[
-		'explorer.decorations.colors',
-		true,
-		localize('files.decorationColorsTitle', 'Explorer decoration colors'),
-		localize('files.decorationColorsDescription', 'Show file status colors in Explorer.'),
-	],
-	[
-		'explorer.decorations.badges',
-		true,
-		localize('files.decorationBadgesTitle', 'Explorer decoration badges'),
-		localize('files.decorationBadgesDescription', 'Show file status badges in Explorer.'),
-	],
+	['explorer.decorations.colors', true, localize('files.decorationColorsTitle', 'Explorer decoration colors'), localize('files.decorationColorsDescription', 'Show file status colors in Explorer.')],
+	['explorer.decorations.badges', true, localize('files.decorationBadgesTitle', 'Explorer decoration badges'), localize('files.decorationBadgesDescription', 'Show file status badges in Explorer.')],
 ] as const) {
 	configuration.registerConfiguration({
 		key,
@@ -206,8 +158,7 @@ for (const [key, defaultValue, title, description] of [
 		scope: ConfigurationScope.WINDOW,
 		schema: { type: 'boolean' },
 		parse(value: unknown): boolean {
-			if (typeof value !== 'boolean')
-				throw new TypeError(localize('files.invalidBooleanSetting', '{0} must be a boolean.', key));
+			if (typeof value !== 'boolean') throw new TypeError(localize('files.invalidBooleanSetting', '{0} must be a boolean.', key));
 			return value;
 		},
 		setting: { valueType: 'boolean', title, description },
@@ -225,10 +176,7 @@ configuration.registerConfiguration({
 	setting: {
 		valueType: 'boolean',
 		title: localize('files.nesting.enabledTitle', 'File nesting'),
-		description: localize(
-			'files.nesting.enabledDescription',
-			'Group related files under a parent file in Explorer.',
-		),
+		description: localize('files.nesting.enabledDescription', 'Group related files under a parent file in Explorer.'),
 	},
 });
 configuration.registerConfiguration({
@@ -261,10 +209,7 @@ configuration.registerConfiguration({
 	setting: {
 		valueType: 'stringMap',
 		title: localize('files.nesting.patternsTitle', 'File nesting patterns'),
-		description: localize(
-			'files.nesting.patternsDescription',
-			'Match child files under a parent file. Use * and ${capture}; separate multiple child patterns with commas.',
-		),
+		description: localize('files.nesting.patternsDescription', 'Match child files under a parent file. Use * and ${capture}; separate multiple child patterns with commas.'),
 		keyLabel: localize('files.nesting.parentPattern', 'Parent file pattern'),
 		valueLabel: localize('files.nesting.childPatterns', 'Child file patterns'),
 		addLabel: localize('files.nesting.addPattern', 'Add pattern'),
@@ -275,14 +220,8 @@ configuration.registerConfiguration({
 });
 
 registerSingleton(IExplorerService, ExplorerService, InstantiationType.Delayed);
-registerWorkbenchContribution(
-	DirtyFilesIndicator.ID,
-	WorkbenchPhase.AfterRestored,
-	accessor => new DirtyFilesIndicator(accessor.get(IActivityService), accessor.get(IWorkingCopyService)),
-);
-registerWorkbenchContribution('workbench.contrib.textFileEditorTracker', WorkbenchPhase.AfterRestored, accessor =>
-	accessor.get(IInstantiationService).createInstance(TextFileEditorTracker, window),
-);
+registerWorkbenchContribution(DirtyFilesIndicator.ID, WorkbenchPhase.AfterRestored, accessor => new DirtyFilesIndicator(accessor.get(IActivityService), accessor.get(IWorkingCopyService)));
+registerWorkbenchContribution('workbench.contrib.textFileEditorTracker', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(TextFileEditorTracker, window));
 
 AccessibleViewRegistry.register({
 	type: AccessibleViewType.Help,

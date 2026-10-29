@@ -1,9 +1,5 @@
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import {
-	ConfigurationScope,
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { localize } from '../../../../nls.js';
 import { BROWSER_SEARCH_NONE, BrowserSearchEngineId, BrowserSearchEngineSettingId } from '../common/browserSearch.js';
 import { BrowserCDPSettingId, BrowserChatToolsSettingId } from '../../../../platform/browserView/common/browserView.js';
@@ -12,11 +8,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	key: BrowserSearchEngineSettingId,
 	defaultValue: BROWSER_SEARCH_NONE,
 	parse: value => {
-		if (
-			typeof value !== 'string' ||
-			(value !== BROWSER_SEARCH_NONE &&
-				!Object.values(BrowserSearchEngineId).includes(value as BrowserSearchEngineId))
-		) {
+		if (typeof value !== 'string' || (value !== BROWSER_SEARCH_NONE && !Object.values(BrowserSearchEngineId).includes(value as BrowserSearchEngineId))) {
 			throw new TypeError('Invalid browser search engine');
 		}
 		return value;
@@ -36,10 +28,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize({ bundle: 'ash.workbench', key: 'browser.searchEngine' }, 'Browser search engine');
 		},
 		get description() {
-			return localize(
-				{ bundle: 'ash.workbench', key: 'browser.searchEngineDescription' },
-				'Use none to disable address bar search, or choose bing, google, yahoo or duckduckgo.',
-			);
+			return localize({ bundle: 'ash.workbench', key: 'browser.searchEngineDescription' }, 'Use none to disable address bar search, or choose bing, google, yahoo or duckduckgo.');
 		},
 	},
 });
@@ -80,10 +69,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	setting: {
 		valueType: 'boolean',
 		get title() {
-			return localize(
-				{ bundle: 'ash.workbench', key: 'browser.cdpSetting' },
-				'Allow advanced browser control (CDP)',
-			);
+			return localize({ bundle: 'ash.workbench', key: 'browser.cdpSetting' }, 'Allow advanced browser control (CDP)');
 		},
 		get description() {
 			return localize(
@@ -106,10 +92,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	setting: {
 		valueType: 'boolean',
 		get title() {
-			return localize(
-				{ bundle: 'ash.workbench', key: 'browser.localLinksSetting' },
-				'Open localhost links in Browser',
-			);
+			return localize({ bundle: 'ash.workbench', key: 'browser.localLinksSetting' }, 'Open localhost links in Browser');
 		},
 		get description() {
 			return localize(

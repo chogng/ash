@@ -20,13 +20,7 @@ class ProcessService implements IProcessService {
 			throw new TypeError('Invalid process diagnostics');
 		}
 		for (const entry of value.pidToNames) {
-			if (
-				!Array.isArray(entry) ||
-				entry.length !== 2 ||
-				!Number.isSafeInteger(entry[0]) ||
-				entry[0] <= 0 ||
-				typeof entry[1] !== 'string'
-			) {
+			if (!Array.isArray(entry) || entry.length !== 2 || !Number.isSafeInteger(entry[0]) || entry[0] <= 0 || typeof entry[1] !== 'string') {
 				throw new TypeError('Invalid process name');
 			}
 		}
@@ -34,11 +28,7 @@ class ProcessService implements IProcessService {
 			if (!isRecord(group) || typeof group.name !== 'string') {
 				throw new TypeError('Invalid process group');
 			}
-			if (
-				isRecord(group.rootProcess) &&
-				typeof group.rootProcess.hostName === 'string' &&
-				typeof group.rootProcess.errorMessage === 'string'
-			) {
+			if (isRecord(group.rootProcess) && typeof group.rootProcess.hostName === 'string' && typeof group.rootProcess.errorMessage === 'string') {
 				continue;
 			}
 			validateProcess(group.rootProcess);
@@ -59,35 +49,19 @@ class ProcessService implements IProcessService {
 		if (!isRecord(value)) {
 			throw new TypeError('Invalid Desktop system diagnostics');
 		}
-		const hasStrings = ['os', 'memory', 'vmHint', 'processArgs', 'screenReader'].every(
-			key => typeof value[key] === 'string',
-		);
-		const hasOptionalStrings = ['cpus', 'load'].every(
-			key => value[key] === undefined || typeof value[key] === 'string',
-		);
-		const hasGpuStatus =
-			isRecord(value.gpuStatus) && Object.values(value.gpuStatus).every(status => typeof status === 'string');
+		const hasStrings = ['os', 'memory', 'vmHint', 'processArgs', 'screenReader'].every(key => typeof value[key] === 'string');
+		const hasOptionalStrings = ['cpus', 'load'].every(key => value[key] === undefined || typeof value[key] === 'string');
+		const hasGpuStatus = isRecord(value.gpuStatus) && Object.values(value.gpuStatus).every(status => typeof status === 'string');
 		// This channel represents only the local host; App Server facts have their own owner.
-		if (
-			!hasStrings ||
-			!hasOptionalStrings ||
-			!hasGpuStatus ||
-			!Array.isArray(value.remoteData) ||
-			value.remoteData.length !== 0
-		) {
+		if (!hasStrings || !hasOptionalStrings || !hasGpuStatus || !Array.isArray(value.remoteData) || value.remoteData.length !== 0) {
 			throw new TypeError('Invalid Desktop system diagnostics');
 		}
 		return value as unknown as SystemInfo;
 	}
 
 	public async getPerformanceInfo(options?: { skipCache?: boolean; unbounded?: boolean }): Promise<PerformanceInfo> {
-		const value: unknown = await (options === undefined
-			? this.host.getPerformanceInfo()
-			: this.host.getPerformanceInfo(options));
-		if (
-			!isRecord(value) ||
-			['processInfo', 'workspaceInfo'].some(key => value[key] !== undefined && typeof value[key] !== 'string')
-		) {
+		const value: unknown = await (options === undefined ? this.host.getPerformanceInfo() : this.host.getPerformanceInfo(options));
+		if (!isRecord(value) || ['processInfo', 'workspaceInfo'].some(key => value[key] !== undefined && typeof value[key] !== 'string')) {
 			throw new TypeError('Invalid performance diagnostics');
 		}
 		return value as PerformanceInfo;
@@ -100,17 +74,8 @@ function validateProcess(value: unknown): asserts value is ProcessItem {
 		if (!isRecord(item) || typeof item.name !== 'string' || typeof item.cmd !== 'string') {
 			throw new TypeError('Invalid process snapshot');
 		}
-		const hasIds =
-			Number.isSafeInteger(item.pid) &&
-			(item.pid as number) > 0 &&
-			Number.isSafeInteger(item.ppid) &&
-			(item.ppid as number) >= 0;
-		const hasMetrics =
-			typeof item.load === 'number' &&
-			Number.isFinite(item.load) &&
-			item.load >= 0 &&
-			Number.isSafeInteger(item.mem) &&
-			(item.mem as number) >= 0;
+		const hasIds = Number.isSafeInteger(item.pid) && (item.pid as number) > 0 && Number.isSafeInteger(item.ppid) && (item.ppid as number) >= 0;
+		const hasMetrics = typeof item.load === 'number' && Number.isFinite(item.load) && item.load >= 0 && Number.isSafeInteger(item.mem) && (item.mem as number) >= 0;
 		if (!hasIds || !hasMetrics || (item.children !== undefined && !Array.isArray(item.children))) {
 			throw new TypeError('Invalid process snapshot');
 		}

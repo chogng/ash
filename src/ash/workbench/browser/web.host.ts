@@ -3,10 +3,7 @@ import { createAppServerFrameDecoder } from '../../platform/agentHost/browser/ap
 import { addDisposableListener, windowOpenNoOpener } from '../../base/browser/dom.js';
 import { toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { URI } from '../../base/common/uri.js';
-import {
-	authenticateWebAppServer,
-	type AppServerWebSocketTransport,
-} from '../../platform/agentHost/browser/appServerWebSocketTransport.js';
+import { authenticateWebAppServer, type AppServerWebSocketTransport } from '../../platform/agentHost/browser/appServerWebSocketTransport.js';
 import { connectWebRendererApi, type RendererCapabilityContribution } from './webRendererApi.js';
 import { BrowserClipboardService } from '../../platform/clipboard/browser/clipboardService.js';
 import { normalizeExternalUrl } from '../../platform/opener/common/opener.js';
@@ -16,31 +13,18 @@ import { createWebUpdateProvider } from '../services/update/browser/updateServic
 declare const __ASH_WEB_APP_SERVER__: boolean;
 
 /** Connects a browser page to its App Server workspace before building either Workbench. */
-export async function connectBrowserWorkbenchHost(
-	rendererCapabilities: readonly RendererCapabilityContribution[] = [],
-	textDocuments = false,
-	appTools = false,
-): Promise<IDisposable | undefined> {
+export async function connectBrowserWorkbenchHost(rendererCapabilities: readonly RendererCapabilityContribution[] = [], textDocuments = false, appTools = false): Promise<IDisposable | undefined> {
 	if (globalThis.ashWebWorkbenchHost !== undefined || !__ASH_WEB_APP_SERVER__) return undefined;
 	let transport: AppServerWebSocketTransport | undefined;
 	try {
 		const parameters = new URLSearchParams(window.location.hash.slice(1));
-		const endpoint = new URL(
-			parameters.get('ash-endpoint') ??
-				sessionStorage.getItem('ash.appServer.endpoint') ??
-				window.location.origin,
-		);
+		const endpoint = new URL(parameters.get('ash-endpoint') ?? sessionStorage.getItem('ash.appServer.endpoint') ?? window.location.origin);
 		const ticket = parameters.get('ash-ticket');
 		if (ticket) {
 			history.replaceState(history.state, '', window.location.pathname + window.location.search);
 		}
 		transport = await authenticateWebAppServer(endpoint, sessionStorage, ticket);
-		const workspaceClient = new AppServerWebWorkspaceClient(
-			endpoint,
-			transport.sessionToken,
-			window,
-			transport.sessionWorkspace,
-		);
+		const workspaceClient = new AppServerWebWorkspaceClient(endpoint, transport.sessionToken, window, transport.sessionWorkspace);
 		await workspaceClient.recoverPending();
 		const connected = await connectWebRendererApi(
 			transport,

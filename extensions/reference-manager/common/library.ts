@@ -17,19 +17,7 @@ export interface ReferenceLibrary {
 export function emptyLibrary(): ReferenceLibrary {
 	return Object.freeze({ version: 1, id: createUuid(), entries: Object.freeze([]) });
 }
-const scalarFields = [
-	'type',
-	'title',
-	'year',
-	'doi',
-	'journal',
-	'volume',
-	'issue',
-	'startPage',
-	'endPage',
-	'url',
-	'abstract',
-] as const;
+const scalarFields = ['type', 'title', 'year', 'doi', 'journal', 'volume', 'issue', 'startPage', 'endPage', 'url', 'abstract'] as const;
 const arrayFields = ['authors', 'keywords', 'pdfLinks', 'attachments'] as const;
 const maxBytes = 8 * 1024 * 1024;
 
@@ -37,27 +25,16 @@ const maxBytes = 8 * 1024 * 1024;
 export function parseLibrary(text: string): ReferenceLibrary {
 	if (new TextEncoder().encode(text).length > maxBytes) throw libraryError('library.size');
 	const value: unknown = JSON.parse(text);
-	if (
-		!record(value) ||
-		value.version !== 1 ||
-		!Array.isArray(value.entries) ||
-		value.entries.length > 10000 ||
-		Object.keys(value).some(key => !['version', 'id', 'entries'].includes(key))
-	)
+	if (!record(value) || value.version !== 1 || !Array.isArray(value.entries) || value.entries.length > 10000 || Object.keys(value).some(key => !['version', 'id', 'entries'].includes(key)))
 		throw libraryError('library.format');
 	if (!bounded(value.id, 128).trim()) throw libraryError('library.id');
 	const ids = new Set<string>();
 	const keys = new Set<string>();
 	const entries = value.entries.map((raw: unknown): LibraryEntry => {
-		if (
-			!record(raw) ||
-			Object.keys(raw).some(key => ![...scalarFields, ...arrayFields, 'id', 'key', 'fields'].includes(key))
-		)
-			throw libraryError('library.entry');
+		if (!record(raw) || Object.keys(raw).some(key => ![...scalarFields, ...arrayFields, 'id', 'key', 'fields'].includes(key))) throw libraryError('library.entry');
 		const id = bounded(raw.id, 128);
 		const key = bounded(raw.key, 128).trim();
-		if (!id || !key || /[\u0000-\u001f\u007f]/u.test(key) || ids.has(id) || keys.has(key))
-			throw libraryError('library.duplicate');
+		if (!id || !key || /[\u0000-\u001f\u007f]/u.test(key) || ids.has(id) || keys.has(key)) throw libraryError('library.duplicate');
 		ids.add(id);
 		keys.add(key);
 		const result: Record<string, unknown> = { id, key };
@@ -70,12 +47,7 @@ export function parseLibrary(text: string): ReferenceLibrary {
 		if (!Array.isArray(raw.fields) || raw.fields.length > 300) throw libraryError('library.fields');
 		result.fields = Object.freeze(
 			raw.fields.map((field: unknown): RisField => {
-				if (
-					!record(field) ||
-					Object.keys(field).some(key => !['tag', 'value'].includes(key)) ||
-					typeof field.tag !== 'string' ||
-					!/^[A-Z0-9]{2}$/u.test(field.tag)
-				)
+				if (!record(field) || Object.keys(field).some(key => !['tag', 'value'].includes(key)) || typeof field.tag !== 'string' || !/^[A-Z0-9]{2}$/u.test(field.tag))
 					throw libraryError('library.field');
 				return Object.freeze({ tag: field.tag, value: bounded(field.value, 131072) });
 			}),
@@ -103,10 +75,7 @@ function identity(entry: RisRecord): string {
 				.toLowerCase()
 				.replace(/\s+/gu, ' ');
 }
-export function importRecords(
-	library: ReferenceLibrary,
-	records: readonly RisRecord[],
-): { library: ReferenceLibrary; added: number; duplicates: number } {
+export function importRecords(library: ReferenceLibrary, records: readonly RisRecord[]): { library: ReferenceLibrary; added: number; duplicates: number } {
 	const known = new Set(library.entries.map(identity));
 	const keys = new Set(library.entries.map(entry => entry.key));
 	const entries = [...library.entries];
@@ -134,9 +103,7 @@ export function importRecords(
 	return { library: next, added: entries.length - library.entries.length, duplicates };
 }
 export function replaceEntry(library: ReferenceLibrary, entry: LibraryEntry): ReferenceLibrary {
-	const entries = library.entries.some(value => value.id === entry.id)
-		? library.entries.map(value => (value.id === entry.id ? entry : value))
-		: [...library.entries, entry];
+	const entries = library.entries.some(value => value.id === entry.id) ? library.entries.map(value => (value.id === entry.id ? entry : value)) : [...library.entries, entry];
 	return parseLibrary(serializeLibrary({ ...library, entries }));
 }
 export function formatReference(entry: LibraryEntry): string {
@@ -144,14 +111,7 @@ export function formatReference(entry: LibraryEntry): string {
 		entry.authors.join('; '),
 		entry.year ? `(${entry.year})` : '',
 		entry.title,
-		[
-			entry.journal,
-			entry.volume,
-			entry.issue ? `(${entry.issue})` : '',
-			[entry.startPage, entry.endPage].filter(Boolean).join('–'),
-		]
-			.filter(Boolean)
-			.join(', '),
+		[entry.journal, entry.volume, entry.issue ? `(${entry.issue})` : '', [entry.startPage, entry.endPage].filter(Boolean).join('–')].filter(Boolean).join(', '),
 		entry.doi ? `https://doi.org/${canonicalDoi(entry.doi)}` : entry.url,
 	]
 		.filter(Boolean)
@@ -195,9 +155,6 @@ function libraryError(code: string): TypeError {
 			? localize('references.duplicateKey', 'Reference keys and identities must be non-empty and unique.')
 			: code === 'library.size'
 				? localize('references.libraryLimit', 'Reference library files cannot exceed {0} MiB.', 8)
-				: localize(
-						'references.invalidLibrary',
-						'The reference library is invalid or uses an unsupported format.',
-					),
+				: localize('references.invalidLibrary', 'The reference library is invalid or uses an unsupported format.'),
 	);
 }

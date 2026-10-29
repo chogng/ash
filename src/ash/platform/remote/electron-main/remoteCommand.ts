@@ -17,17 +17,11 @@ export interface RemoteCommandObserver {
 	readonly signal?: AbortSignal;
 }
 
-export type RunRemoteCommand = (
-	executable: string,
-	args: readonly string[],
-	environment: NodeJS.ProcessEnv,
-	observer?: RemoteCommandObserver,
-) => Promise<RemoteCommandResult>;
+export type RunRemoteCommand = (executable: string, args: readonly string[], environment: NodeJS.ProcessEnv, observer?: RemoteCommandObserver) => Promise<RemoteCommandResult>;
 
 export function normalizeCredentialFreeSshHost(host: string): string {
 	const normalized = host.trim().toLowerCase();
-	if (!SSH_HOST_PATTERN.test(normalized))
-		throw new Error('Remote command requires a credential-free OpenSSH config host');
+	if (!SSH_HOST_PATTERN.test(normalized)) throw new Error('Remote command requires a credential-free OpenSSH config host');
 	return normalized;
 }
 
@@ -37,22 +31,13 @@ export function validLocalCommand(value: string): boolean {
 
 export function isCanonicalAbsoluteRemotePath(value: string): boolean {
 	try {
-		return (
-			normalizeRemoteWorkspacePath(value) === value &&
-			!value.endsWith('/') &&
-			!(value.startsWith('//') && value.slice(2).split('/').length < 3)
-		);
+		return normalizeRemoteWorkspacePath(value) === value && !value.endsWith('/') && !(value.startsWith('//') && value.slice(2).split('/').length < 3);
 	} catch {
 		return false;
 	}
 }
 
-export function runRemoteCommand(
-	executable: string,
-	args: readonly string[],
-	environment: NodeJS.ProcessEnv,
-	observer?: RemoteCommandObserver,
-): Promise<RemoteCommandResult> {
+export function runRemoteCommand(executable: string, args: readonly string[], environment: NodeJS.ProcessEnv, observer?: RemoteCommandObserver): Promise<RemoteCommandResult> {
 	if (observer?.signal) throwIfCancelled(observer.signal, 'Remote command cancelled');
 	const child = spawn(executable, [...args], { env: { ...environment }, shell: false, stdio: 'pipe' });
 	child.stdin.end();

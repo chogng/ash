@@ -37,15 +37,7 @@ test('Debug view switches sessions and renders threads, recursive variables, wat
 		using debug = new MockDebugService();
 		debug.activate(debug.sessions[0]!);
 		using support = new DebugViewTestServices();
-		using services = new InstantiationService(
-			support.register(
-				new ServiceCollection(
-					[IDebugService, debug],
-					[IEditorService, editor],
-					[IContextMenuService, contextMenus],
-				),
-			),
-		);
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
 		const { container: view } = support.createContainer(services, browser.window.document.body);
 
 		await waitFor(() => view.element.querySelectorAll('.ash-debug-frame').length === 1);
@@ -56,20 +48,13 @@ test('Debug view switches sessions and renders threads, recursive variables, wat
 		assert.match(view.element.querySelectorAll('.ash-debug-variable')[1]?.textContent ?? '', /parent/);
 
 		view.element.querySelectorAll<HTMLButtonElement>('.ash-debug-variable')[1]!.click();
-		await waitFor(() =>
-			[...view.element.querySelectorAll('.ash-debug-variable')].some(element =>
-				/child = value/.test(element.textContent ?? ''),
-			),
-		);
+		await waitFor(() => [...view.element.querySelectorAll('.ash-debug-variable')].some(element => /child = value/.test(element.textContent ?? '')));
 
 		view.element.querySelector<HTMLButtonElement>('.ash-debug-frame')!.click();
 		await waitFor(() => opened.length === 2);
 		const openedInput = opened[0] as IResourceEditorInput;
 		assert.equal(openedInput.resource.scheme, 'debug');
-		assert.deepEqual(
-			{ ...openedInput, resource: undefined },
-			{ resource: undefined, label: 'generated.ts', readOnly: true },
-		);
+		assert.deepEqual({ ...openedInput, resource: undefined }, { resource: undefined, label: 'generated.ts', readOnly: true });
 
 		const caught = view.element.querySelector<HTMLInputElement>("input[data-exception-filter='caught']")!;
 		caught.checked = true;
@@ -99,22 +84,10 @@ test('Variables restores expanded paths using fresh references after a pause and
 			return [{ name: 'child', value: String(revision), variablesReference: 0 }];
 		};
 		using support = new DebugViewTestServices();
-		using services = new InstantiationService(
-			support.register(
-				new ServiceCollection(
-					[IDebugService, debug],
-					[IEditorService, editor],
-					[IContextMenuService, contextMenus],
-				),
-			),
-		);
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
 		const { container: view } = support.createContainer(services, browser.window.document.body);
-		const parent = () =>
-			[...view.element.querySelectorAll<HTMLButtonElement>('.ash-debug-variable')].find(row =>
-				row.textContent?.includes('parent ='),
-			);
-		const child = () =>
-			[...view.element.querySelectorAll('.ash-debug-variable')].find(row => row.textContent?.includes('child ='));
+		const parent = () => [...view.element.querySelectorAll<HTMLButtonElement>('.ash-debug-variable')].find(row => row.textContent?.includes('parent ='));
+		const child = () => [...view.element.querySelectorAll('.ash-debug-variable')].find(row => row.textContent?.includes('child ='));
 		debug.activate(session);
 		await waitFor(() => parent() !== undefined);
 		parent()!.click();
@@ -176,22 +149,12 @@ test('Variables shows locals before loading other scopes on expansion', async ()
 			return [{ name: reference === 10 ? 'localAnswer' : 'globalAnswer', value: '42', variablesReference: 0 }];
 		};
 		using support = new DebugViewTestServices();
-		using services = new InstantiationService(
-			support.register(
-				new ServiceCollection(
-					[IDebugService, debug],
-					[IEditorService, editor],
-					[IContextMenuService, contextMenus],
-				),
-			),
-		);
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
 		const { container: view } = support.createContainer(services, browser.window.document.body);
 		debug.activate(session);
 		await waitFor(() => view.element.textContent?.includes('localAnswer = 42') === true);
 		assert.equal(requests.includes(20), false);
-		const global = [...view.element.querySelectorAll<HTMLButtonElement>('.ash-debug-variable')].find(row =>
-			row.textContent?.includes('Global'),
-		)!;
+		const global = [...view.element.querySelectorAll<HTMLButtonElement>('.ash-debug-variable')].find(row => row.textContent?.includes('Global'))!;
 		assert.equal(global.getAttribute('aria-expanded'), 'false');
 		global.click();
 		await waitFor(() => view.element.textContent?.includes('globalAnswer = 42') === true);
@@ -218,15 +181,7 @@ test('Debug view opens an authority-qualified Remote stack source', async () => 
 	try {
 		using debug = new MockDebugService({ name: 'main.ts', path: '/srv/project/src/main.ts', resource });
 		using support = new DebugViewTestServices();
-		using services = new InstantiationService(
-			support.register(
-				new ServiceCollection(
-					[IDebugService, debug],
-					[IEditorService, editor],
-					[IContextMenuService, contextMenus],
-				),
-			),
-		);
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
 		const { container: view } = support.createContainer(services, browser.window.document.body);
 
 		debug.activate(debug.sessions[0]!);
@@ -272,32 +227,22 @@ test('Debug controls follow session state, dispatch actions, and retain collapse
 			),
 		);
 		const { container: view } = support.createContainer(services, browser.window.document.body);
-		const action = (label: string) =>
-			view.element.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+		const action = (label: string) => view.element.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
 		const toolbar = view.element.querySelector<HTMLElement>('.ash-toolbar')!;
 		assert.equal(toolbar.hidden, true);
 
 		const session = debug.sessions[0] as MockDebugSession;
 		debug.activate(session);
 		await waitFor(() => view.element.querySelectorAll('.ash-debug-frame').length === 1);
-		assert.deepEqual(
-			[toolbar.hidden, action('Continue').disabled, action('Step Over').disabled],
-			[false, false, false],
-		);
+		assert.deepEqual([toolbar.hidden, action('Continue').disabled, action('Step Over').disabled], [false, false, false]);
 		action('Step Over').click();
 		assert.deepEqual(session.operations, ['stepOver']);
 
-		const variables = view.element
-			.querySelector('.ash-debug-variables')!
-			.closest('.ash-debug-section')!
-			.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')!;
+		const variables = view.element.querySelector('.ash-debug-variables')!.closest('.ash-debug-section')!.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')!;
 		variables.click();
 		session.state = 'running';
 		debug.activate(session);
-		assert.deepEqual(
-			[action('Pause').disabled, action('Step Over').disabled, variables.getAttribute('aria-expanded')],
-			[false, true, 'false'],
-		);
+		assert.deepEqual([action('Pause').disabled, action('Step Over').disabled, variables.getAttribute('aria-expanded')], [false, true, 'false']);
 		action('Pause').click();
 		assert.deepEqual(session.operations, ['stepOver', 'pause']);
 		action('More Stop Actions').click();
@@ -329,48 +274,25 @@ test('Debug view initializes Chinese labels and retains its draft and collapsed 
 	try {
 		using debug = new MockDebugService();
 		const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-		setNlsResolver((bundle, key, fallback, parameters) =>
-			formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters),
-		);
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
 		using support = new DebugViewTestServices();
-		using services = new InstantiationService(
-			support.register(
-				new ServiceCollection(
-					[IDebugService, debug],
-					[IEditorService, editor],
-					[IContextMenuService, contextMenus],
-				),
-			),
-		);
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
 		const { container: view } = support.createContainer(services, browser.window.document.body);
-		const watch = view.element
-			.querySelector('.ash-debug-watch')!
-			.closest('.ash-debug-section')!
-			.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')!;
+		const watch = view.element.querySelector('.ash-debug-watch')!.closest('.ash-debug-section')!.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')!;
 		const input = view.element.querySelector<HTMLInputElement>('.ash-debug-input-form input')!;
 		input.value = 'myValue';
 		watch.click();
 		await debug.refresh();
 		assert.deepEqual(
-			[...view.element.querySelectorAll('.ash-debug-section .ash-pane-view-header-title')].map(
-				title => title.textContent,
-			),
+			[...view.element.querySelectorAll('.ash-debug-section .ash-pane-view-header-title')].map(title => title.textContent),
 			['变量', '监视', '调用堆栈', '断点'],
 		);
-		assert.deepEqual(
-			[input.value, watch.getAttribute('aria-expanded'), input.getAttribute('aria-label')],
-			['myValue', 'false', '添加监视表达式'],
-		);
+		assert.deepEqual([input.value, watch.getAttribute('aria-expanded'), input.getAttribute('aria-label')], ['myValue', 'false', '添加监视表达式']);
 		debug.activate(debug.sessions[0]);
 		await waitFor(() => view.element.querySelectorAll('.ash-debug-variable').length === 2);
-		view.element
-			.querySelectorAll<HTMLButtonElement>('.ash-debug-variable')[1]!
-			.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'F2', bubbles: true }));
+		view.element.querySelectorAll<HTMLButtonElement>('.ash-debug-variable')[1]!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'F2', bubbles: true }));
 		const valueInput = view.element.querySelector<HTMLInputElement>('.ash-debug-variable-edit input')!;
-		assert.deepEqual(
-			[valueInput.getAttribute('aria-label'), valueInput.getAttribute('aria-description')],
-			['parent 的值', '按 Enter 应用新值，按 Escape 取消。'],
-		);
+		assert.deepEqual([valueInput.getAttribute('aria-label'), valueInput.getAttribute('aria-description')], ['parent 的值', '按 Enter 应用新值，按 Escape 取消。']);
 	} finally {
 		resetNlsResolver();
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
@@ -405,15 +327,7 @@ test('Debug configuration selection survives refresh and opens the selected work
 				{ id: 'second', uri: URI.file('/second'), name: 'Second', index: 1 },
 			],
 		});
-		using services = new InstantiationService(
-			support.register(
-				new ServiceCollection(
-					[IDebugService, debug],
-					[IEditorService, editor],
-					[IContextMenuService, contextMenus],
-				),
-			),
-		);
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
 		const { part, container: view } = support.createContainer(services, browser.window.document.body);
 		// Wait for initial discovery before opening the menu; discovery retires stale choices.
 		await debug.refresh();
@@ -445,22 +359,13 @@ test('Debug configuration selection survives refresh and opens the selected work
 		part.dispose();
 		using replacementSupport = new DebugViewTestServices();
 		replacementSupport.workspace.updateWorkspace(support.workspace.getWorkspace());
-		using replacementServices = new InstantiationService(
-			replacementSupport.register(
-				new ServiceCollection(
-					[IDebugService, debug],
-					[IEditorService, editor],
-					[IContextMenuService, contextMenus],
-				),
-			),
-		);
+		using replacementServices = new InstantiationService(replacementSupport.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
 		const replacement = replacementSupport.createContainer(replacementServices, browser.window.document.body);
 		assert.equal(replacement.part.domNode.querySelector('.ash-debug-configuration')!.textContent, 'Run — Second');
 		assert.equal(debug.getConfigurationManager().selectedConfiguration?.id, 'second');
 		debug.configurations = [debug.configurations[0]!];
 		await debug.refresh();
-		const replacementDropdown =
-			replacement.part.domNode.querySelector<HTMLButtonElement>('.ash-debug-configuration')!;
+		const replacementDropdown = replacement.part.domNode.querySelector<HTMLButtonElement>('.ash-debug-configuration')!;
 		assert.equal(replacementDropdown.textContent, 'Run');
 		assert.equal(replacementDropdown.title, 'Run');
 		assert.equal(replacementDropdown.getAttribute('aria-label'), 'Debug configuration: Run');
@@ -473,9 +378,7 @@ test('Debug configuration selection survives refresh and opens the selected work
 		replacementDropdown.click();
 		await waitFor(() => browser.window.document.querySelectorAll('[role="menuitemradio"]').length === 2);
 		assert.deepEqual(
-			[...browser.window.document.querySelectorAll('[role="menuitemradio"]')].map(choice =>
-				choice.getAttribute('aria-label'),
-			),
+			[...browser.window.document.querySelectorAll('[role="menuitemradio"]')].map(choice => choice.getAttribute('aria-label')),
 			['Ash', 'Ash Agents'],
 		);
 	} finally {
@@ -506,15 +409,7 @@ test('Debug title disposal cancels pending configuration creation', async () => 
 	try {
 		using debug = new MockDebugService();
 		using support = new DebugViewTestServices();
-		using services = new InstantiationService(
-			support.register(
-				new ServiceCollection(
-					[IDebugService, debug],
-					[IEditorService, editor],
-					[IContextMenuService, contextMenus],
-				),
-			),
-		);
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
 		const { part } = support.createContainer(services, browser.window.document.body);
 		let signal: AbortSignal | undefined;
 		const templates = new DeferredPromise<readonly import('../../common/debug.js').DebugConfiguration[]>();
@@ -542,15 +437,7 @@ test('Debug variable editing uses its parent reference, refreshes watches, cance
 	try {
 		using debug = new MockDebugService();
 		using support = new DebugViewTestServices();
-		using services = new InstantiationService(
-			support.register(
-				new ServiceCollection(
-					[IDebugService, debug],
-					[IEditorService, editor],
-					[IContextMenuService, contextMenus],
-				),
-			),
-		);
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
 		const { container: view } = support.createContainer(services, browser.window.document.body);
 
 		const session = debug.sessions[0] as MockDebugSession;
@@ -607,22 +494,10 @@ test('Debug source failures preserve variable and Watch inspection', async () =>
 	try {
 		using debug = new MockDebugService({ name: 'main.ts', resource: URI.file('/workspace/main.ts') });
 		using support = new DebugViewTestServices();
-		using services = new InstantiationService(
-			support.register(
-				new ServiceCollection(
-					[IDebugService, debug],
-					[IEditorService, editor],
-					[IContextMenuService, contextMenus],
-				),
-			),
-		);
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
 		const { container: view } = support.createContainer(services, browser.window.document.body);
 		debug.activate(debug.sessions[0]);
-		await waitFor(() =>
-			support.notifications.model
-				.getNotifications()
-				.some(notification => notification.message === 'Source unavailable'),
-		);
+		await waitFor(() => support.notifications.model.getNotifications().some(notification => notification.message === 'Source unavailable'));
 		assert.equal(view.element.querySelectorAll('.ash-debug-variable').length, 2);
 		assert.match(view.element.querySelector('.ash-debug-watch-value')!.textContent!, /answer = 42/);
 	} finally {
@@ -652,15 +527,7 @@ test('Debug inspection retires pending variable and virtual source replies when 
 			return source.p;
 		};
 		using support = new DebugViewTestServices();
-		using services = new InstantiationService(
-			support.register(
-				new ServiceCollection(
-					[IDebugService, debug],
-					[IEditorService, editor],
-					[IContextMenuService, contextMenus],
-				),
-			),
-		);
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
 		const { container: view } = support.createContainer(services, browser.window.document.body);
 		debug.activate(session);
 		await waitFor(() => sourceRequested);
@@ -704,37 +571,22 @@ test('Debug variable editing respects read-only hints, retains adapter errors, a
 			{ name: 'editable', value: '2', variablesReference: 0 },
 		];
 		using support = new DebugViewTestServices();
-		using services = new InstantiationService(
-			support.register(
-				new ServiceCollection(
-					[IDebugService, debug],
-					[IEditorService, editor],
-					[IContextMenuService, contextMenus],
-				),
-			),
-		);
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
 		const { container: view } = support.createContainer(services, browser.window.document.body);
 
 		debug.activate(session);
 		await waitFor(() => view.element.querySelectorAll('.ash-debug-variable').length === 3);
-		view.element
-			.querySelectorAll<HTMLButtonElement>('.ash-debug-variable')[1]!
-			.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'F2', bubbles: true }));
+		view.element.querySelectorAll<HTMLButtonElement>('.ash-debug-variable')[1]!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'F2', bubbles: true }));
 		assert.equal(view.element.querySelector('.ash-debug-variable-edit'), null);
 		session.setVariable = async () => {
 			throw new Error('Value must be numeric.');
 		};
-		view.element
-			.querySelectorAll<HTMLButtonElement>('.ash-debug-variable')[2]!
-			.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'F2', bubbles: true }));
+		view.element.querySelectorAll<HTMLButtonElement>('.ash-debug-variable')[2]!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'F2', bubbles: true }));
 		const input = view.element.querySelector<HTMLInputElement>('.ash-debug-variable-edit input')!;
 		input.value = 'invalid';
 		input.closest('form')!.dispatchEvent(new browser.window.Event('submit', { bubbles: true, cancelable: true }));
 		await waitFor(() => input.getAttribute('aria-invalid') === 'true');
-		assert.deepEqual(
-			[input.value, input.readOnly, browser.window.document.activeElement === input],
-			['invalid', false, true],
-		);
+		assert.deepEqual([input.value, input.readOnly, browser.window.document.activeElement === input], ['invalid', false, true]);
 		assert.equal(view.element.querySelector('.ash-input-box-message')?.textContent, 'Value must be numeric.');
 		const assignment = new DeferredPromise<IDebugVariable>();
 		session.setVariable = async () => assignment.p;
@@ -766,24 +618,12 @@ test('Debug welcome creates extension launch templates and reopens existing conf
 	try {
 		using debug = new MockDebugService();
 		debug.configurations = [];
-		debug.initialConfigurations = [
-			{ name: 'Extension launch', type: 'example', request: 'launch', program: '${workspaceFolder}/app' },
-		];
+		debug.initialConfigurations = [{ name: 'Extension launch', type: 'example', request: 'launch', program: '${workspaceFolder}/app' }];
 		using support = new DebugViewTestServices();
-		using services = new InstantiationService(
-			support.register(
-				new ServiceCollection(
-					[IDebugService, debug],
-					[IEditorService, editor],
-					[IContextMenuService, contextMenus],
-				),
-			),
-		);
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
 		const { container: view } = support.createContainer(services, browser.window.document.body);
 		assert.deepEqual(
-			[...view.element.querySelectorAll('.ash-debug-section .ash-pane-view-header-title')].map(
-				title => title.textContent,
-			),
+			[...view.element.querySelectorAll('.ash-debug-section .ash-pane-view-header-title')].map(title => title.textContent),
 			['Run'],
 		);
 		const create = view.element.querySelector<HTMLButtonElement>('.ash-debug-welcome-content button')!;
@@ -797,10 +637,7 @@ test('Debug welcome creates extension launch templates and reopens existing conf
 		support.documents.set(resource, 'user configuration');
 		create.click();
 		await waitFor(() => opened.length === 2);
-		assert.deepEqual(
-			[support.writes, support.documents.get(resource), opened.map(input => input.resource.toString())],
-			[1, 'user configuration', [resource, resource]],
-		);
+		assert.deepEqual([support.writes, support.documents.get(resource), opened.map(input => input.resource.toString())], [1, 'user configuration', [resource, resource]]);
 	} finally {
 		for (const name of globals) Reflect.deleteProperty(globalThis, name);
 		browser.window.close();
@@ -825,8 +662,7 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
 		MouseEvent: browser.window.MouseEvent,
 		navigator: browser.window.navigator,
 	};
-	for (const [name, value] of Object.entries(globals))
-		Object.defineProperty(globalThis, name, { configurable: true, value });
+	for (const [name, value] of Object.entries(globals)) Object.defineProperty(globalThis, name, { configurable: true, value });
 	return Object.keys(globals);
 }
 
@@ -846,15 +682,7 @@ for (const change of ['document created', 'workspace replaced', 'view disposed',
 			using debug = new MockDebugService();
 			debug.configurations = [];
 			using support = new DebugViewTestServices();
-			using services = new InstantiationService(
-				support.register(
-					new ServiceCollection(
-						[IDebugService, debug],
-						[IEditorService, editor],
-						[IContextMenuService, contextMenus],
-					),
-				),
-			);
+			using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
 			const { container: view } = support.createContainer(services, browser.window.document.body);
 			let signal: AbortSignal | undefined;
 			const templates = new DeferredPromise<readonly import('../../common/debug.js').DebugConfiguration[]>();
@@ -866,8 +694,7 @@ for (const change of ['document created', 'workspace replaced', 'view disposed',
 			await waitFor(() => signal !== undefined);
 			const resource = URI.file('/workspace/.vscode/launch.json').toString();
 			if (change === 'document created') support.documents.set(resource, 'user configuration');
-			else if (change === 'workspace replaced')
-				support.workspace.updateWorkspace({ id: 'other', uri: URI.file('/other') });
+			else if (change === 'workspace replaced') support.workspace.updateWorkspace({ id: 'other', uri: URI.file('/other') });
 			else if (change === 'view hidden') view.setVisible(false);
 			else view.dispose();
 			if (change !== 'document created') assert.equal(signal!.aborted, true);
@@ -875,10 +702,7 @@ for (const change of ['document created', 'workspace replaced', 'view disposed',
 			await new Promise<void>(resolve => setImmediate(resolve));
 			assert.equal(support.writes, 0);
 			assert.equal(opened.length, change === 'document created' ? 1 : 0);
-			assert.equal(
-				support.documents.get(resource),
-				change === 'document created' ? 'user configuration' : undefined,
-			);
+			assert.equal(support.documents.get(resource), change === 'document created' ? 'user configuration' : undefined);
 		} finally {
 			for (const name of globals) Reflect.deleteProperty(globalThis, name);
 			browser.window.close();
@@ -893,15 +717,7 @@ test('Debug inspection panes follow a focused frame independently and retire del
 	try {
 		using debug = new MockDebugService();
 		using support = new DebugViewTestServices();
-		using services = new InstantiationService(
-			support.register(
-				new ServiceCollection(
-					[IDebugService, debug],
-					[IEditorService, editor],
-					[IContextMenuService, contextMenus],
-				),
-			),
-		);
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
 		const { container: view } = support.createContainer(services, browser.window.document.body);
 		const session = debug.sessions[0] as MockDebugSession;
 		const initialEvaluations: (number | undefined)[] = [];
@@ -914,15 +730,8 @@ test('Debug inspection panes follow a focused frame independently and retire del
 		await waitFor(() => view.element.querySelectorAll('.ash-debug-variable').length === 2);
 		assert.deepEqual(initialEvaluations, [10]);
 		assert.deepEqual(
-			[...view.element.querySelectorAll('.ash-debug-section.ash-view-pane')].map(
-				pane => (pane as HTMLElement).dataset.viewId,
-			),
-			[
-				'workbench.debug.variablesView',
-				'workbench.debug.watchExpressionsView',
-				'workbench.debug.callStackView',
-				'workbench.debug.breakPointsView',
-			],
+			[...view.element.querySelectorAll('.ash-debug-section.ash-view-pane')].map(pane => (pane as HTMLElement).dataset.viewId),
+			['workbench.debug.variablesView', 'workbench.debug.watchExpressionsView', 'workbench.debug.callStackView', 'workbench.debug.breakPointsView'],
 		);
 		const pending = new DeferredPromise<Awaited<ReturnType<MockDebugSession['evaluateWatchExpressions']>>>();
 		let oldWatchStarted = false;
@@ -965,15 +774,7 @@ test('Debug breakpoint reveal retires a command after frame selection changes an
 	try {
 		using debug = new MockDebugService();
 		using support = new DebugViewTestServices();
-		using services = new InstantiationService(
-			support.register(
-				new ServiceCollection(
-					[IDebugService, debug],
-					[IEditorService, editor],
-					[IContextMenuService, contextMenus],
-				),
-			),
-		);
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
 		const { container } = support.createContainer(services, browser.window.document.body);
 		debug.activate(debug.sessions[0]);
 		await waitFor(() => debug.getViewModel().focusedStackFrame !== undefined);
@@ -993,13 +794,11 @@ test('Debug breakpoint reveal retires a command after frame selection changes an
 		await command;
 		assert.equal(container.element.querySelector('.ash-debug-breakpoint-edit'), null);
 		await assert.rejects(
-			services
-				.get(ICommandService)
-				.executeCommand('debug.addDataBreakpoint', {
-					dataId: 'x',
-					sessionId: debug.session!.id,
-					accessTypes: ['invalid'],
-				}),
+			services.get(ICommandService).executeCommand('debug.addDataBreakpoint', {
+				dataId: 'x',
+				sessionId: debug.session!.id,
+				accessTypes: ['invalid'],
+			}),
 			isCancellationError,
 		);
 		assert.deepEqual(debug.dataBreakpoints, []);
@@ -1037,33 +836,25 @@ suite('debug browser component', () => {
 			const point = await glyphPoint(page, 1);
 			await page.mouse.move(point.x, point.y);
 			await expect(page.locator('.ash-debug-breakpoint-gutter.hint')).toBeVisible();
-			await expect(page.getByRole('tooltip')).toContainText(
-				locale === 'en' ? 'Click to add a breakpoint' : '单击以添加断点',
-			);
+			await expect(page.getByRole('tooltip')).toContainText(locale === 'en' ? 'Click to add a breakpoint' : '单击以添加断点');
 			for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
 				await page.evaluate(theme => window.ashDebugIntegration.theme(theme), theme);
 				const hint = page.locator('.ash-debug-breakpoint-gutter.hint');
 				await expect(hint).toBeVisible();
-				expect(await hint.evaluate(node => getComputedStyle(node, '::before').backgroundColor)).not.toBe(
-					'rgba(0, 0, 0, 0)',
-				);
+				expect(await hint.evaluate(node => getComputedStyle(node, '::before').backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
 				await expect(hint).toHaveCSS('opacity', theme.startsWith('hc') ? '1' : '0.4');
 			}
 			await page.screenshot({ path: testInfo.outputPath(`glyph-margin-${locale}.png`), fullPage: true });
 			await page.mouse.click(point.x, point.y);
 			await expect(page.locator('.ash-debug-breakpoint-gutter:not(.hint)')).toHaveCount(1);
-			expect(await page.evaluate(() => window.ashDebugIntegration.getControl().getSelection())).toEqual(
-				selection,
-			);
+			expect(await page.evaluate(() => window.ashDebugIntegration.getControl().getSelection())).toEqual(selection);
 			await page.keyboard.down('Shift');
 			await page.mouse.click(point.x, point.y);
 			await page.keyboard.up('Shift');
 			await expect(page.locator('.ash-debug-breakpoint-gutter.disabled')).toHaveCount(1);
 			await page.mouse.click(point.x, point.y);
 			await expect(page.locator('.ash-debug-breakpoint-gutter.disabled')).toHaveCount(0);
-			expect(await page.evaluate(() => window.ashDebugIntegration.breakpoints())).toMatchObject([
-				{ lineNumber: 1, enabled: true },
-			]);
+			expect(await page.evaluate(() => window.ashDebugIntegration.breakpoints())).toMatchObject([{ lineNumber: 1, enabled: true }]);
 			await page.mouse.click(point.x, point.y, { button: 'right' });
 			await page.keyboard.press('Escape');
 			await page.mouse.click(point.x, point.y, { button: 'middle' });
@@ -1107,23 +898,14 @@ suite('debug browser component', () => {
 		await page.waitForFunction(() => !!window.ashDebugIntegration);
 		await page.evaluate(() => {
 			const editor = window.ashDebugIntegration.getControl();
-			editor
-				.getModel()!
-				.setValue(
-					Array.from(
-						{ length: 60 },
-						(_, index) => `const value${index} = "${'wrapped content '.repeat(9)}";`,
-					).join('\n'),
-				);
+			editor.getModel()!.setValue(Array.from({ length: 60 }, (_, index) => `const value${index} = "${'wrapped content '.repeat(9)}";`).join('\n'));
 			editor.updateOptions({ wordWrap: 'wordWrapColumn', wordWrapColumn: 35, smoothScrolling: false });
 			editor.revealLineInCenter(25);
 		});
 		await expect(page.locator('#editor .line-numbers').filter({ hasText: /^25$/ })).toBeVisible();
 		const point = await glyphPoint(page, 25);
 		await page.mouse.click(point.x, point.y);
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpoints()))
-			.toMatchObject([{ lineNumber: 25 }]);
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpoints())).toMatchObject([{ lineNumber: 25 }]);
 		await page.mouse.click(point.x, point.y);
 		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpoints())).toEqual([]);
 	});
@@ -1161,9 +943,7 @@ suite('debug browser component', () => {
 			for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
 				await page.evaluate(theme => window.ashDebugIntegration.theme(theme), theme);
 				await expect(field).toBeFocused();
-				const focusColor = await field.evaluate(element =>
-					getComputedStyle(element).getPropertyValue('--ash-focusBorder').trim(),
-				);
+				const focusColor = await field.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-focusBorder').trim());
 				const color = await field.evaluate((element, color) => {
 					const probe = document.createElement('span');
 					probe.style.color = color;
@@ -1185,9 +965,7 @@ suite('debug browser component', () => {
 			await expect(form).toHaveCount(0);
 			await expect
 				.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpoints()))
-				.toMatchObject([
-					{ lineNumber: 1, condition: 'answer > 0', hitCondition: '>= 3', logMessage: 'answer={answer}' },
-				]);
+				.toMatchObject([{ lineNumber: 1, condition: 'answer > 0', hitCondition: '>= 3', logMessage: 'answer={answer}' }]);
 			await expect(page.locator('#editor .stanza-editor-input')).toBeFocused();
 			await page.keyboard.down('Alt');
 			await page.mouse.click(point.x, point.y);
@@ -1196,9 +974,7 @@ suite('debug browser component', () => {
 			await field.fill('discarded');
 			await field.press('Escape');
 			await expect(form).toHaveCount(0);
-			expect(await page.evaluate(() => window.ashDebugIntegration.breakpoints())).toMatchObject([
-				{ logMessage: 'answer={answer}' },
-			]);
+			expect(await page.evaluate(() => window.ashDebugIntegration.breakpoints())).toMatchObject([{ logMessage: 'answer={answer}' }]);
 		});
 
 	for (const locale of ['en', 'zh-cn'])
@@ -1258,9 +1034,7 @@ suite('debug browser component', () => {
 		await page.mouse.down();
 		await page.mouse.move(end.x, end.y, { steps: 8 });
 		await page.mouse.up();
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions()))
-			.toMatchObject([{ id: before[0].id, lineNumber: 3, condition: 'answer > 0' }]);
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions())).toMatchObject([{ id: before[0].id, lineNumber: 3, condition: 'answer > 0' }]);
 		await page.mouse.click(start.x, start.y);
 		const definitions = await page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions());
 		await page.mouse.move(end.x, end.y);
@@ -1287,14 +1061,7 @@ suite('debug browser component', () => {
 		await expect(page.getByText('Enter a valid line number in this file.', { exact: true })).toBeVisible();
 		await line.fill('1');
 		await line.press('Enter');
-		await expect
-			.poll(() =>
-				page.evaluate(
-					id => window.ashDebugIntegration.breakpointDefinitions().find(point => point.id === id)?.lineNumber,
-					before[0].id,
-				),
-			)
-			.toBe(1);
+		await expect.poll(() => page.evaluate(id => window.ashDebugIntegration.breakpointDefinitions().find(point => point.id === id)?.lineNumber, before[0].id)).toBe(1);
 	});
 
 	test('tracked breakpoint positions update once across split editors and survive undo and redo', async function () {
@@ -1306,36 +1073,20 @@ suite('debug browser component', () => {
 		const before = await page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions());
 		await page.evaluate(() => {
 			window.ashDebugIntegration.createSplitEditor();
-			window.ashDebugIntegration
-				.getControl()
-				.executeEdits('breakpoint-test', [
-					{
-						range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 },
-						text: 'const prepended = 1;\n',
-					},
-				]);
+			window.ashDebugIntegration.getControl().executeEdits('breakpoint-test', [
+				{
+					range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 },
+					text: 'const prepended = 1;\n',
+				},
+			]);
 		});
 		await expect
-			.poll(() =>
-				page.evaluate(() =>
-					window.ashDebugIntegration
-						.breakpointDefinitions()
-						.map(point => ({ id: point.id, line: point.lineNumber })),
-				),
-			)
+			.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions().map(point => ({ id: point.id, line: point.lineNumber }))))
 			.toEqual(before.map(point => ({ id: point.id, line: point.lineNumber + 1 })));
 		await page.evaluate(() => window.ashDebugIntegration.getControl().getModel()!.undo());
-		await expect
-			.poll(() =>
-				page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions().map(point => point.lineNumber)),
-			)
-			.toEqual([2, 3]);
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions().map(point => point.lineNumber))).toEqual([2, 3]);
 		await page.evaluate(() => window.ashDebugIntegration.getControl().getModel()!.redo());
-		await expect
-			.poll(() =>
-				page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions().map(point => point.lineNumber)),
-			)
-			.toEqual([3, 4]);
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions().map(point => point.lineNumber))).toEqual([3, 4]);
 		await expect(page.locator('#editor-copy .ash-debug-breakpoint-gutter:not(.hint)')).toHaveCount(2);
 	});
 
@@ -1346,19 +1097,16 @@ suite('debug browser component', () => {
 		await page.waitForFunction(() => !!window.ashDebugIntegration);
 		await page.evaluate(() => {
 			window.ashDebugIntegration.createSplitEditor();
-			window.ashDebugIntegration
-				.getControl()
-				.executeEdits('inline-breakpoint-test', [
-					{ range: { startLineNumber: 2, startColumn: 1, endLineNumber: 2, endColumn: 1 }, text: '/* */' },
-				]);
+			window.ashDebugIntegration.getControl().executeEdits('inline-breakpoint-test', [
+				{
+					range: { startLineNumber: 2, startColumn: 1, endLineNumber: 2, endColumn: 1 },
+					text: '/* */',
+				},
+			]);
 		});
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions()))
-			.toMatchObject([{ id: 'inline', lineNumber: 2, columnNumber: 12, condition: 'answer > 0' }]);
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions())).toMatchObject([{ id: 'inline', lineNumber: 2, columnNumber: 12, condition: 'answer > 0' }]);
 		await page.evaluate(() => window.ashDebugIntegration.getControl().getModel()!.undo());
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions()))
-			.toMatchObject([{ id: 'inline', lineNumber: 2, columnNumber: 7, condition: 'answer > 0' }]);
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions())).toMatchObject([{ id: 'inline', lineNumber: 2, columnNumber: 7, condition: 'answer > 0' }]);
 		await page.evaluate(() => {
 			const editor = window.ashDebugIntegration.getControl();
 			editor.setPosition({ lineNumber: 2, column: 7 });
@@ -1369,9 +1117,7 @@ suite('debug browser component', () => {
 		await expect(field).toHaveValue('answer > 0');
 		await field.fill('answer > 1');
 		await field.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions()))
-			.toMatchObject([{ id: 'inline', lineNumber: 2, columnNumber: 7, condition: 'answer > 1' }]);
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions())).toMatchObject([{ id: 'inline', lineNumber: 2, columnNumber: 7, condition: 'answer > 1' }]);
 		expect(await page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions().length)).toBe(1);
 	});
 
@@ -1387,9 +1133,7 @@ suite('debug browser component', () => {
 		expect(await page.evaluate(() => window.ashDebugIntegration.openedLinks())).toEqual([]);
 		await link.focus();
 		await link.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.openedLinks()))
-			.toEqual(['https://example.test/path?q=one#two']);
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.openedLinks())).toEqual(['https://example.test/path?q=one#two']);
 		await link.click({ modifiers: ['ControlOrMeta'] });
 		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.openedLinks().length)).toBe(2);
 		await link.focus();
@@ -1407,10 +1151,7 @@ suite('debug browser component', () => {
 			const link = page.getByRole('link', { name: '/workspace/main.ts:2:1', exact: true });
 			await expect(link).toBeVisible();
 			await expect(page.getByRole('link', { name: '/workspace/missing.ts:9', exact: true })).toHaveCount(0);
-			await expect(link).toHaveAttribute(
-				'aria-description',
-				locale === 'en' ? 'Ctrl/Cmd+click or Enter to follow link' : '按 Ctrl/Cmd 并单击，或按 Enter 跟随链接',
-			);
+			await expect(link).toHaveAttribute('aria-description', locale === 'en' ? 'Ctrl/Cmd+click or Enter to follow link' : '按 Ctrl/Cmd 并单击，或按 Enter 跟随链接');
 			for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
 				await page.evaluate(theme => window.ashDebugIntegration.theme(theme), theme);
 				await link.focus();
@@ -1477,9 +1218,7 @@ suite('debug browser component', () => {
 		}
 		await link.focus();
 		await link.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.openedLinks()))
-			.toEqual(['https://example.test/path']);
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.openedLinks())).toEqual(['https://example.test/path']);
 		const content = await page.evaluate(() => window.ashDebugIntegration.consoleAccessibility());
 		expect(content.view).toContain('error https://example.test/path');
 		expect(content.view).not.toContain('\x1b');
@@ -1520,9 +1259,7 @@ suite('debug browser component', () => {
 	});
 
 	async function clickDebugHeaderAction(page: Page, section: 'stack' | 'breakpoints', name: string): Promise<void> {
-		const header = page.locator(
-			`[data-pane-view-id="${section === 'stack' ? 'workbench.debug.callStackView' : 'workbench.debug.breakPointsView'}"] > .ash-pane-view-header`,
-		);
+		const header = page.locator(`[data-pane-view-id="${section === 'stack' ? 'workbench.debug.callStackView' : 'workbench.debug.breakPointsView'}"] > .ash-pane-view-header`);
 		await header.hover();
 		await header.getByRole('button', { name, exact: true }).click();
 	}
@@ -1557,12 +1294,7 @@ suite('debug browser component', () => {
 		const section = page.locator('[data-pane-view-id="workbench.debug.breakPointsView"]');
 		const body = section.locator(':scope > .ash-pane-view-content');
 		const header = section.getByRole('button', { name: 'Breakpoints', exact: true });
-		const contentHeight = () =>
-			body.evaluate(element =>
-				Math.ceil(
-					[...element.children].reduce((height, child) => height + child.getBoundingClientRect().height, 0),
-				),
-			);
+		const contentHeight = () => body.evaluate(element => Math.ceil([...element.children].reduce((height, child) => height + child.getBoundingClientRect().height, 0)));
 		const bodyHeight = () => body.evaluate(element => element.getBoundingClientRect().height);
 		await expect(page.locator('.ash-debug-exceptions > li')).toHaveCount(2);
 		await expect.poll(bodyHeight).toBe(await contentHeight());
@@ -1584,25 +1316,14 @@ suite('debug browser component', () => {
 		await page.evaluate(() => window.ashDebugIntegration.setBreakpointCount(0));
 		await expect(body).toHaveCSS('height', '0px');
 
-		const peerHeaders = ['Variables', 'Watch', 'Call Stack'].map(name =>
-			page.getByRole('button', { name, exact: true }),
-		);
+		const peerHeaders = ['Variables', 'Watch', 'Call Stack'].map(name => page.getByRole('button', { name, exact: true }));
 		for (const peer of peerHeaders) {
 			await peer.focus();
 			await peer.press('ArrowLeft');
 		}
 		await expect.poll(bodyHeight).toBeGreaterThan(300);
 		await expect(page.locator('.ash-debug-section.closing')).toHaveCount(0);
-		await expect
-			.poll(() =>
-				section.evaluate(element =>
-					Math.round(
-						element.getBoundingClientRect().bottom -
-							element.closest('.ash-pane-view-container')!.getBoundingClientRect().bottom,
-					),
-				),
-			)
-			.toBe(0);
+		await expect.poll(() => section.evaluate(element => Math.round(element.getBoundingClientRect().bottom - element.closest('.ash-pane-view-container')!.getBoundingClientRect().bottom))).toBe(0);
 		await page.screenshot({
 			path: testInfo.outputPath('debug-breakpoints-fill.png'),
 			clip: { x: 0, y: 0, width: 280, height: 640 },
@@ -1656,17 +1377,12 @@ suite('debug browser component', () => {
 		await expect(page.locator('.ash-debug .ash-debug-launch-start')).toHaveCount(0);
 		await expect(page.locator('.ash-workbench-part-title .ash-debug-launch-start')).toHaveCount(1);
 		await expect(dropdown).toHaveText('Run — First');
-		await expect(
-			page.getByRole('button', { name: 'Open launch.json', exact: true }).locator('.ash-icon'),
-		).toHaveAttribute('data-ash-icon-id', 'debug-configure');
+		await expect(page.getByRole('button', { name: 'Open launch.json', exact: true }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'debug-configure');
 		await dropdown.focus();
 		await dropdown.press('ArrowDown');
 		const search = page.getByRole('searchbox', { name: 'Debug configuration', exact: true });
 		await expect(search).toBeFocused();
-		await expect(page.getByRole('menuitemradio', { name: 'Run — First', exact: true })).toHaveAttribute(
-			'aria-checked',
-			'true',
-		);
+		await expect(page.getByRole('menuitemradio', { name: 'Run — First', exact: true })).toHaveAttribute('aria-checked', 'true');
 		await search.fill('Run — Second');
 		await expect(page.getByRole('menuitemradio')).toHaveCount(1);
 		await search.press('ArrowDown');
@@ -1683,19 +1399,13 @@ suite('debug browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.launches())).toEqual(['second']);
 		await page.evaluate(() => window.ashDebugIntegration.stop());
 		await page.evaluate(() => window.ashDebugIntegration.startCommand());
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.launches()))
-			.toEqual(['second', 'second']);
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.launches())).toEqual(['second', 'second']);
 		await page.getByRole('button', { name: 'Open launch.json', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.openedSources().at(-1)))
-			.toMatchObject({ resource: 'file:///second/.vscode/launch.json' });
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.openedSources().at(-1))).toMatchObject({ resource: 'file:///second/.vscode/launch.json' });
 		await dropdown.click();
 		await page.getByRole('menuitemradio', { name: 'All (compound)', exact: true }).click();
 		await page.getByRole('button', { name: 'Start Debugging', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.launches()))
-			.toEqual(['second', 'second', 'all']);
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.launches())).toEqual(['second', 'second', 'all']);
 		await dropdown.click();
 		await search.press('Escape');
 		await expect(dropdown).toBeFocused();
@@ -1751,29 +1461,21 @@ suite('debug browser component', () => {
 		await page.evaluate(() => window.ashDebugIntegration.resize(180));
 		for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
 			await page.evaluate(theme => window.ashDebugIntegration.theme(theme), theme);
-			const geometry = await page
-				.locator('.ash-workbench-part-title .ash-pane-composite-title-menu-actions')
-				.evaluate(element => {
-					const controls = element.getBoundingClientRect();
-					const dropdown = element.querySelector('.ash-debug-configuration')!.getBoundingClientRect();
-					const gear = element
-						.querySelector('[data-action-id="workbench.action.debug.configure"] button')!
-						.getBoundingClientRect();
-					const label = element.querySelector('.ash-debug-configuration-label')!;
-					return {
-						fits: gear.right <= controls.right && dropdown.right <= gear.left,
-						overflow: element.scrollWidth > element.clientWidth,
-						ellipsis: getComputedStyle(label).textOverflow,
-					};
-				});
+			const geometry = await page.locator('.ash-workbench-part-title .ash-pane-composite-title-menu-actions').evaluate(element => {
+				const controls = element.getBoundingClientRect();
+				const dropdown = element.querySelector('.ash-debug-configuration')!.getBoundingClientRect();
+				const gear = element.querySelector('[data-action-id="workbench.action.debug.configure"] button')!.getBoundingClientRect();
+				const label = element.querySelector('.ash-debug-configuration-label')!;
+				return {
+					fits: gear.right <= controls.right && dropdown.right <= gear.left,
+					overflow: element.scrollWidth > element.clientWidth,
+					ellipsis: getComputedStyle(label).textOverflow,
+				};
+			});
 			expect(geometry).toEqual({ fits: true, overflow: false, ellipsis: 'ellipsis' });
 			await dropdown.click();
 			await expect(page.getByPlaceholder('搜索配置', { exact: true })).toBeFocused();
-			expect(
-				await page
-					.getByRole('menuitemradio')
-					.evaluateAll(rows => rows.map(row => row.getBoundingClientRect().height)),
-			).toEqual([22, 22, 22]);
+			expect(await page.getByRole('menuitemradio').evaluateAll(rows => rows.map(row => row.getBoundingClientRect().height))).toEqual([22, 22, 22]);
 			await expect(page.getByRole('menuitemradio', { name: 'All（复合配置）', exact: true })).toBeVisible();
 			await page.getByPlaceholder('搜索配置', { exact: true }).press('Escape');
 			await expect(dropdown).toBeFocused();
@@ -1803,22 +1505,13 @@ suite('debug browser component', () => {
 						const bounds = element.getBoundingClientRect();
 						const buttons = [...element.querySelectorAll('button')];
 						const label = element.querySelector<HTMLElement>('.ash-debug-configuration-label')!;
-						const actionSize = parseFloat(
-							getComputedStyle(element).getPropertyValue('--ash-toolbar-actionSize'),
-						);
+						const actionSize = parseFloat(getComputedStyle(element).getPropertyValue('--ash-toolbar-actionSize'));
 						return {
 							contained: buttons.every(button => {
 								const box = button.getBoundingClientRect();
-								return (
-									box.left >= bounds.left &&
-									box.right <= bounds.right &&
-									box.top >= bounds.top &&
-									box.bottom <= bounds.bottom
-								);
+								return box.left >= bounds.left && box.right <= bounds.right && box.top >= bounds.top && box.bottom <= bounds.bottom;
 							}),
-							iconHitAreas: buttons
-								.filter(button => !button.classList.contains('ash-debug-configuration'))
-								.every(button => button.getBoundingClientRect().width === actionSize),
+							iconHitAreas: buttons.filter(button => !button.classList.contains('ash-debug-configuration')).every(button => button.getBoundingClientRect().width === actionSize),
 							overflow: element.scrollWidth > element.clientWidth,
 							ellipsis: getComputedStyle(label).textOverflow,
 							truncated: label.scrollWidth > label.clientWidth,
@@ -1836,9 +1529,7 @@ suite('debug browser component', () => {
 			await page.evaluate(() => window.ashDebugIntegration.resize(225));
 			await dropdown.focus();
 			await dropdown.press('ArrowDown');
-			await expect(
-				page.getByRole('menuitemradio', { name: 'Run configuration with a very long name', exact: true }),
-			).toBeVisible();
+			await expect(page.getByRole('menuitemradio', { name: 'Run configuration with a very long name', exact: true })).toBeVisible();
 			await page.getByRole('searchbox').press('Escape');
 			await expect(dropdown).toBeFocused();
 			await title.screenshot({ path: testInfo.outputPath(`debug-launch-long-${locale}.png`) });
@@ -1870,10 +1561,7 @@ suite('debug browser component', () => {
 					const arrowBox = arrow.getBoundingClientRect();
 					const dropdownBox = dropdown.getBoundingClientRect();
 					return {
-						divider:
-							dropdownStyle.borderLeftStyle === 'solid' &&
-							dropdownStyle.borderLeftWidth === outer.borderLeftWidth &&
-							dropdownStyle.borderLeftColor === outer.borderLeftColor,
+						divider: dropdownStyle.borderLeftStyle === 'solid' && dropdownStyle.borderLeftWidth === outer.borderLeftWidth && dropdownStyle.borderLeftColor === outer.borderLeftColor,
 						arrowWidth: arrowBox.width,
 						arrowContained: arrowBox.left >= dropdownBox.left && arrowBox.right <= dropdownBox.right,
 						startSize: start.getBoundingClientRect().width,
@@ -1881,12 +1569,7 @@ suite('debug browser component', () => {
 						captionWidth: label.clientWidth,
 						captionVisibility: getComputedStyle(label).visibility,
 						startColor: startStyle.color,
-						innerCorners: [
-							startStyle.borderTopRightRadius,
-							startStyle.borderBottomRightRadius,
-							dropdownStyle.borderTopLeftRadius,
-							dropdownStyle.borderBottomLeftRadius,
-						],
+						innerCorners: [startStyle.borderTopRightRadius, startStyle.borderBottomRightRadius, dropdownStyle.borderTopLeftRadius, dropdownStyle.borderBottomLeftRadius],
 					};
 				});
 				expect(geometry).toMatchObject({
@@ -1898,9 +1581,7 @@ suite('debug browser component', () => {
 					innerCorners: ['0px', '0px', '0px', '0px'],
 				});
 				expect(geometry.dropdownSize).toBeGreaterThanOrEqual(22);
-				expect(geometry.startColor).toBe(
-					theme === 'dark' || theme === 'hcDark' ? 'rgb(137, 209, 133)' : 'rgb(56, 138, 52)',
-				);
+				expect(geometry.startColor).toBe(theme === 'dark' || theme === 'hcDark' ? 'rgb(137, 209, 133)' : 'rgb(56, 138, 52)');
 				await launcher.screenshot({ path: testInfo.outputPath(`debug-split-${locale}-${theme}.png`) });
 			}
 			await page.evaluate(() => window.ashDebugIntegration.resize(400));
@@ -1909,9 +1590,7 @@ suite('debug browser component', () => {
 			await expect(launcher.locator('.ash-debug-configuration-label')).toHaveCSS('visibility', 'hidden');
 			await dropdown.focus();
 			await dropdown.press('Enter');
-			await expect(
-				page.getByRole('menuitemradio', { name: 'Run configuration with a very long name', exact: true }),
-			).toHaveAttribute('aria-checked', 'true');
+			await expect(page.getByRole('menuitemradio', { name: 'Run configuration with a very long name', exact: true })).toHaveAttribute('aria-checked', 'true');
 			await page.getByRole('searchbox').press('Escape');
 			await expect(dropdown).toBeFocused();
 			await dropdown.press('ArrowLeft');
@@ -1963,14 +1642,10 @@ suite('debug browser component', () => {
 			expect(measurement.output).toBe(Array.from({ length: 2000 }, (_, index) => `burst-${index}\n`).join(''));
 			expect(measurement.updates).toBeLessThan(5);
 			await expect(input).toBeFocused();
-			await expect
-				.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value))
-				.toBe('answer');
+			await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('answer');
 			await input.press('Enter');
 			await expect(output).toContainText('42');
-			const clear = page.locator(
-				'[data-view-id="debug.console.integration"] [data-action-id="workbench.debug.panel.action.clearReplAction"] button',
-			);
+			const clear = page.locator('[data-view-id="debug.console.integration"] [data-action-id="workbench.debug.panel.action.clearReplAction"] button');
 			await clear.focus();
 			await clear.press('Enter');
 			await expect(output).toHaveText('');
@@ -1987,25 +1662,17 @@ suite('debug browser component', () => {
 		const view = page.locator('.ash-disassembly');
 		const grid = view.getByRole('grid', { name: 'Disassembly', exact: true });
 		await expect(view.locator('[data-instruction-address="0x1000"]')).toHaveAttribute('aria-current', 'step');
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.disassemblyRequests().at(-1)))
-			.toEqual({ reference: '0x1000', offset: 0, instructionOffset: 0, instructionCount: 50 });
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.disassemblyRequests().at(-1))).toEqual({ reference: '0x1000', offset: 0, instructionOffset: 0, instructionCount: 50 });
 		await grid.focus();
 		await grid.press('F9');
-		await expect(
-			view.getByRole('button', { name: 'Toggle instruction breakpoint at 0x1000', exact: true }),
-		).toHaveAttribute('aria-pressed', 'true');
+		await expect(view.getByRole('button', { name: 'Toggle instruction breakpoint at 0x1000', exact: true })).toHaveAttribute('aria-pressed', 'true');
 		await grid.press('F9');
-		await expect(
-			view.getByRole('button', { name: 'Toggle instruction breakpoint at 0x1000', exact: true }),
-		).toHaveAttribute('aria-pressed', 'false');
+		await expect(view.getByRole('button', { name: 'Toggle instruction breakpoint at 0x1000', exact: true })).toHaveAttribute('aria-pressed', 'false');
 		await clickDebugHeaderAction(page, 'stack', 'Add Instruction Breakpoint');
 		const byteOffset = page.getByRole('textbox', { name: 'Instruction byte offset', exact: true });
 		await byteOffset.fill('4');
 		await byteOffset.press('Enter');
-		await expect(
-			view.getByRole('button', { name: 'Toggle instruction breakpoint at 0x1004', exact: true }),
-		).toHaveAttribute('aria-pressed', 'true');
+		await expect(view.getByRole('button', { name: 'Toggle instruction breakpoint at 0x1004', exact: true })).toHaveAttribute('aria-pressed', 'true');
 		await view.getByRole('button', { name: 'Toggle instruction breakpoint at 0x1004', exact: true }).click();
 		expect(await page.evaluate(() => window.ashDebugIntegration.additionalBreakpoints())).toEqual([]);
 		await grid.focus();
@@ -2025,12 +1692,10 @@ suite('debug browser component', () => {
 		expect(await page.evaluate(() => window.ashDebugIntegration.stepRequests())).toContain('stepOver:instruction');
 		for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
 			await page.evaluate(name => window.ashDebugIntegration.theme(name), theme);
-			const colors = await view
-				.locator('[aria-current="step"]')
-				.evaluate(node => ({
-					color: getComputedStyle(node).color,
-					background: getComputedStyle(node).backgroundColor,
-				}));
+			const colors = await view.locator('[aria-current="step"]').evaluate(node => ({
+				color: getComputedStyle(node).color,
+				background: getComputedStyle(node).backgroundColor,
+			}));
 			expect(colors.color).not.toBe(colors.background);
 			expect(colors.background).not.toBe('rgba(0, 0, 0, 0)');
 		}
@@ -2085,9 +1750,7 @@ suite('debug browser component', () => {
 		await page.goto('/debug.html?no-address');
 		await clickDebugHeaderAction(page, 'stack', 'Open Disassembly View');
 		const view = page.locator('.ash-disassembly');
-		await expect(view.getByRole('status')).toHaveText(
-			'This stack frame has no instruction address. Enter an address to inspect.',
-		);
+		await expect(view.getByRole('status')).toHaveText('This stack frame has no instruction address. Enter an address to inspect.');
 		const address = view.getByRole('textbox', { name: 'Instruction address', exact: true });
 		await address.fill('');
 		await address.press('Enter');
@@ -2190,18 +1853,14 @@ suite('debug browser component', () => {
 		await condition.press('Enter');
 		const row = page.locator('[data-breakpoint-kind="data"]');
 		await expect(row).toContainText('Data: parent (Read and write)');
-		expect(await page.evaluate(() => window.ashDebugIntegration.dataInfoRequests())).toEqual([
-			{ name: 'parent', variablesReference: 20, frameId: 10 },
-		]);
+		expect(await page.evaluate(() => window.ashDebugIntegration.dataInfoRequests())).toEqual([{ name: 'parent', variablesReference: 20, frameId: 10 }]);
 		await row.getByRole('button', { name: 'Edit breakpoint', exact: true }).click();
 		await access.selectOption('read');
 		await page.getByRole('button', { name: 'Save breakpoint', exact: true }).click();
 		await expect(row).toContainText('Data: parent (Read)');
 		await page.evaluate(() => window.ashDebugIntegration.denyDataBreakpoint());
 		await page.getByRole('button', { name: 'Break on data access for parent', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.notifications()))
-			.toContain('The variable has no stable memory location.');
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.notifications())).toContain('The variable has no stable memory location.');
 		await expect(page.getByRole('form', { name: 'Edit breakpoint', exact: true })).toHaveCount(0);
 	});
 
@@ -2229,9 +1888,7 @@ suite('debug browser component', () => {
 		await offset.fill('1.5');
 		await offset.press('Enter');
 		await expect(offset).toHaveAttribute('aria-invalid', 'true');
-		await expect(
-			page.getByRole('alert').filter({ hasText: 'Instruction byte offset must be an integer.' }),
-		).toHaveText('Instruction byte offset must be an integer.');
+		await expect(page.getByRole('alert').filter({ hasText: 'Instruction byte offset must be an integer.' })).toHaveText('Instruction byte offset must be an integer.');
 		await offset.fill('-4');
 		await offset.press('Enter');
 		const row = page.locator('[data-breakpoint-kind="instruction"]');
@@ -2358,19 +2015,9 @@ suite('debug browser component', () => {
 		await page.getByRole('button', { name: '打开文件夹', exact: true }).click();
 		expect(await page.evaluate(() => window.ashDebugIntegration.folderOpens())).toBe(1);
 		await page.evaluate(() => window.ashDebugIntegration.start());
-		await expect(page.locator('.ash-debug-section .ash-pane-view-header-title')).toHaveText([
-			'变量',
-			'监视',
-			'调用堆栈',
-			'断点',
-		]);
+		await expect(page.locator('.ash-debug-section .ash-pane-view-header-title')).toHaveText(['变量', '监视', '调用堆栈', '断点']);
 		await page.evaluate(() => window.ashDebugIntegration.stop());
-		await expect(page.locator('.ash-debug-section .ash-pane-view-header-title')).toHaveText([
-			'变量',
-			'监视',
-			'调用堆栈',
-			'断点',
-		]);
+		await expect(page.locator('.ash-debug-section .ash-pane-view-header-title')).toHaveText(['变量', '监视', '调用堆栈', '断点']);
 		await expect(page.locator('.ash-debug-empty')).toHaveCount(0);
 	});
 
@@ -2411,18 +2058,10 @@ suite('debug browser component', () => {
 		await expect(page.locator('.ash-debug-watch-value')).toHaveCount(0);
 		await expect(page.getByRole('list', { name: 'Exception Breakpoints' })).toBeVisible();
 		expect(
-			await page
-				.getByRole('list', { name: 'Exception Breakpoints' })
-				.evaluate(
-					element =>
-						element.closest('.ash-debug-section')!.querySelector('.ash-pane-view-header-title')!
-							.textContent,
-				),
+			await page.getByRole('list', { name: 'Exception Breakpoints' }).evaluate(element => element.closest('.ash-debug-section')!.querySelector('.ash-pane-view-header-title')!.textContent),
 		).toBe('Breakpoints');
 		await page.evaluate(() => window.ashDebugIntegration.resize(180));
-		expect(await page.locator('.ash-debug').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(
-			true,
-		);
+		expect(await page.locator('.ash-debug').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 	});
 
 	test('stopped debugging locates source and edits a nested variable with keyboard focus and theme support', async function () {
@@ -2481,9 +2120,7 @@ suite('debug browser component', () => {
 		const updated = page.locator('.ash-debug-variable').filter({ hasText: 'child = 43' });
 		await expect(updated).toBeFocused();
 		await expect(page.locator('.ash-debug-watch-value')).toHaveText('answer = 43');
-		expect(await page.evaluate(() => window.ashDebugIntegration.assignments())).toEqual([
-			{ reference: 21, name: 'child', value: '43' },
-		]);
+		expect(await page.evaluate(() => window.ashDebugIntegration.assignments())).toEqual([{ reference: 21, name: 'child', value: '43' }]);
 		expect(errors).toEqual([]);
 	});
 
@@ -2544,9 +2181,7 @@ suite('debug browser component', () => {
 		const source = output.getByRole('button', { name: 'main.ts:2', exact: true });
 		await source.focus();
 		await source.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.openedSources()))
-			.toContainEqual({ resource: 'file:///workspace/main.ts', readOnly: false, line: 2 });
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.openedSources())).toContainEqual({ resource: 'file:///workspace/main.ts', readOnly: false, line: 2 });
 		await page.evaluate(() => window.ashDebugIntegration.theme('hcDark'));
 		await source.focus();
 		await expect(source).toHaveCSS('outline-style', 'solid');
@@ -2597,9 +2232,7 @@ suite('debug browser component', () => {
 		await expect(group).toHaveAttribute('aria-expanded', 'true');
 		await expect(page.locator('.ash-view-filter-badge')).toHaveText('3 of 4');
 		expect(await page.evaluate(() => window.ashDebugIntegration.consoleStats())).toEqual({ total: 4, filtered: 3 });
-		expect((await page.evaluate(() => window.ashDebugIntegration.consoleAccessibility())).view).toBe(
-			'Build group\nAlpha success\nGamma outside\n',
-		);
+		expect((await page.evaluate(() => window.ashDebugIntegration.consoleAccessibility())).view).toBe('Build group\nAlpha success\nGamma outside\n');
 		await filter.fill('alpha, !Build');
 		await expect(group).toBeHidden();
 		await expect(alpha).toBeHidden();
@@ -2612,9 +2245,7 @@ suite('debug browser component', () => {
 		await expect(group).toHaveAttribute('aria-expanded', 'false');
 		await expect(alpha).toBeHidden();
 		await expect(gamma).toBeVisible();
-		expect((await page.evaluate(() => window.ashDebugIntegration.consoleAccessibility())).view).toBe(
-			'Build group\nGamma outside\n',
-		);
+		expect((await page.evaluate(() => window.ashDebugIntegration.consoleAccessibility())).view).toBe('Build group\nGamma outside\n');
 		await filter.press('Escape');
 		await expect(output.getByRole('tree')).toBeFocused();
 	});
@@ -2637,9 +2268,7 @@ suite('debug browser component', () => {
 		await input.press('ArrowDown');
 		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('second');
 		await input.press('ArrowDown');
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value))
-			.toBe('unsent draft');
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('unsent draft');
 		await filter.fill('Alpha');
 		await filter.press('Enter');
 		await page.evaluate(() => window.ashDebugIntegration.recreateConsole());
@@ -2718,9 +2347,7 @@ suite('debug browser component', () => {
 		await input.press('ArrowDown');
 		await input.press('ArrowDown');
 		await input.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value))
-			.toBe('pre obj.pair(value) tail');
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('pre obj.pair(value) tail');
 		expect(
 			await page.evaluate(() => {
 				const { start, end, selection } = window.ashDebugIntegration.consoleInput();
@@ -2749,18 +2376,13 @@ suite('debug browser component', () => {
 			await fillRepl(page, input, `held-${change}`);
 			await page.evaluate(() => window.ashDebugIntegration.holdCompletion());
 			await input.press('Control+Space');
-			await expect
-				.poll(() => page.evaluate(() => window.ashDebugIntegration.completionRequests().at(-1)?.held))
-				.toBe(true);
+			await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.completionRequests().at(-1)?.held)).toBe(true);
 			if (change === 'input') await fillRepl(page, input, 'changed!');
 			else if (change === 'caret') await input.press('ArrowLeft');
 			else if (change === 'frame') await page.evaluate(() => window.ashDebugIntegration.focusConsoleFrame(99));
-			else if (change === 'session')
-				await page.evaluate(() => window.ashDebugIntegration.selectConsoleSession('session-two'));
+			else if (change === 'session') await page.evaluate(() => window.ashDebugIntegration.selectConsoleSession('session-two'));
 			else await page.getByRole('log', { name: 'Debug Console output', exact: true }).getByRole('tree').focus();
-			await expect
-				.poll(() => page.evaluate(() => window.ashDebugIntegration.completionRequests().at(-1)?.cancelled))
-				.toBe(true);
+			await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.completionRequests().at(-1)?.cancelled)).toBe(true);
 			await page.evaluate(() => window.ashDebugIntegration.releaseCompletion());
 			await expect(suggestions.getByRole('option', { name: 'obsolete-result', exact: true })).toHaveCount(0);
 			await expect(suggestions).toBeHidden();
@@ -2890,12 +2512,8 @@ suite('debug browser component', () => {
 		const initial = await page.evaluate(() => window.ashDebugIntegration.consoleInput());
 		await input.press('Shift+Enter');
 		await page.keyboard.insertText('😀obj.');
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value))
-			.toBe('first\n😀obj.');
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().height))
-			.toBeGreaterThan(initial.height);
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('first\n😀obj.');
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().height)).toBeGreaterThan(initial.height);
 		await input.press('Control+Space');
 		await expect(page.getByRole('listbox', { name: 'Debug Console suggestions', exact: true })).toBeVisible();
 		const requests = await page.evaluate(() => window.ashDebugIntegration.completionRequests());
@@ -2907,22 +2525,16 @@ suite('debug browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().lineCount)).toBe(20);
 		expect((await page.evaluate(() => window.ashDebugIntegration.consoleInput())).height).toBeLessThanOrEqual(208);
 		await page.evaluate(() => window.ashDebugIntegration.resizeConsole(240, 180));
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().height))
-			.toBeLessThanOrEqual(44);
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().height)).toBeLessThanOrEqual(44);
 		await page.evaluate(() => window.ashDebugIntegration.resizeConsole(240, 360));
 		await fillRepl(page, input, 'wrappedExpression'.repeat(20));
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().height))
-			.toBeGreaterThan(initial.height);
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().height)).toBeGreaterThan(initial.height);
 		expect(await page.locator('.ash-repl-input').evaluate(host => host.scrollWidth <= host.clientWidth)).toBe(true);
 		await input.press('Escape');
 		await expect(page.getByRole('listbox', { name: 'Debug Console suggestions', exact: true })).toBeHidden();
 		await input.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('');
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().height))
-			.toBe(initial.height);
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().height)).toBe(initial.height);
 	});
 
 	test('independent Debug views retain a Watch draft, restore focus commands and persist collapse', async function () {
@@ -2935,17 +2547,12 @@ suite('debug browser component', () => {
 		await watch.getByRole('button', { name: 'Add watch expression', exact: true }).click();
 		const input = watch.getByRole('textbox', { name: 'Add watch expression', exact: true });
 		await input.fill('pending draft');
-		await page.evaluate(() =>
-			window.ashDebugIntegration.command('workbench.debug.watchExpressionsView.toggleVisibility'),
-		);
+		await page.evaluate(() => window.ashDebugIntegration.command('workbench.debug.watchExpressionsView.toggleVisibility'));
 		await expect(watch).toHaveCount(0);
 		await page.evaluate(() => window.ashDebugIntegration.command('workbench.debug.action.focusWatchView'));
 		await expect(input).toHaveValue('pending draft');
 		await expect(watch).toBeFocused();
-		await expect(watch.getByRole('button', { name: 'Watch', exact: true })).toHaveAttribute(
-			'aria-expanded',
-			'true',
-		);
+		await expect(watch.getByRole('button', { name: 'Watch', exact: true })).toHaveAttribute('aria-expanded', 'true');
 
 		const variables = page.getByRole('button', { name: 'Variables', exact: true });
 		await variables.focus();
@@ -2967,9 +2574,7 @@ suite('debug browser component', () => {
 
 		await page.goto('/debug.html');
 		const breakpoints = page.locator('[data-view-id="workbench.debug.breakPointsView"]');
-		await page.evaluate(() =>
-			window.ashDebugIntegration.command('workbench.debug.breakPointsView.toggleVisibility'),
-		);
+		await page.evaluate(() => window.ashDebugIntegration.command('workbench.debug.breakPointsView.toggleVisibility'));
 		await expect(breakpoints).toHaveCount(0);
 		await page.getByRole('button', { name: 'Break on data access for parent', exact: true }).click();
 		await expect(breakpoints).toBeVisible();
@@ -2977,14 +2582,10 @@ suite('debug browser component', () => {
 		await expect(access).toBeFocused();
 		await access.press('Escape');
 		await expect(breakpoints.getByRole('form', { name: 'Edit breakpoint', exact: true })).toHaveCount(0);
-		await page.evaluate(() =>
-			window.ashDebugIntegration.command('workbench.debug.breakPointsView.toggleVisibility'),
-		);
+		await page.evaluate(() => window.ashDebugIntegration.command('workbench.debug.breakPointsView.toggleVisibility'));
 		await clickDebugHeaderAction(page, 'stack', 'Add Instruction Breakpoint');
 		await expect(breakpoints.getByRole('textbox', { name: 'Instruction address', exact: true })).toBeFocused();
-		await expect(breakpoints.getByRole('textbox', { name: 'Instruction address', exact: true })).toHaveValue(
-			'0x1000',
-		);
+		await expect(breakpoints.getByRole('textbox', { name: 'Instruction address', exact: true })).toHaveValue('0x1000');
 		await page.evaluate(() => window.ashDebugIntegration.resume());
 		await expect(breakpoints.getByRole('form', { name: 'Edit breakpoint', exact: true })).toHaveCount(0);
 	});
@@ -3030,15 +2631,7 @@ suite('debug browser component', () => {
 			void window.ashDebugIntegration.command('workbench.action.debug.showLoadedScripts');
 		});
 		await page.getByRole('option').filter({ hasText: 'generated.ts' }).click();
-		await expect
-			.poll(() =>
-				page.evaluate(
-					() =>
-						(window.ashDebugIntegration.openedSources().at(-1) as { resource?: string } | undefined)
-							?.resource,
-				),
-			)
-			.toContain('ref=25');
+		await expect.poll(() => page.evaluate(() => (window.ashDebugIntegration.openedSources().at(-1) as { resource?: string } | undefined)?.resource)).toContain('ref=25');
 	});
 
 	test('Debug visualization command selects an inspected variable and opens a read-only tree snapshot', async function () {
@@ -3050,9 +2643,7 @@ suite('debug browser component', () => {
 		});
 		await page.getByRole('option').filter({ hasText: 'parent' }).click();
 		await page.getByRole('option').filter({ hasText: 'Variable tree' }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashDebugIntegration.openedSources().at(-1)))
-			.toMatchObject({ readOnly: true, initialText: expect.stringContaining('child') });
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.openedSources().at(-1))).toMatchObject({ readOnly: true, initialText: expect.stringContaining('child') });
 		const chat = await page.evaluate(() => window.ashDebugIntegration.chatContext());
 		expect(chat?.content).toContain('parent = Object');
 	});
@@ -3091,15 +2682,7 @@ suite('debug browser component', () => {
 		const source = pane.getByRole('button', { name: /generated.ts/ });
 		await source.focus();
 		await source.press('Enter');
-		await expect
-			.poll(() =>
-				page.evaluate(
-					() =>
-						(window.ashDebugIntegration.openedSources().at(-1) as { resource?: string } | undefined)
-							?.resource,
-				),
-			)
-			.toContain('ref=25');
+		await expect.poll(() => page.evaluate(() => (window.ashDebugIntegration.openedSources().at(-1) as { resource?: string } | undefined)?.resource)).toContain('ref=25');
 	});
 
 	test('Debug exception accessibility help is localized and restores widget focus', async function () {

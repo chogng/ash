@@ -21,11 +21,7 @@ import { IMarkerService, MarkerSeverity } from '../../../../../platform/markers/
 import { MarkerService } from '../../../../../platform/markers/common/markerService.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
-import {
-	ITerminalService,
-	type ITerminalInstance,
-	type ITerminalCommandStatusEvent,
-} from '../../../terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalInstance, type ITerminalCommandStatusEvent } from '../../../terminal/browser/terminal.js';
 import { ITaskService } from '../../../tasks/common/taskService.js';
 import { type ITaskRun } from '../../../tasks/common/tasks.js';
 
@@ -76,10 +72,7 @@ suite('Accessibility signal production contributions', () => {
 		changed.fire({ commandId: 'task', status: 'succeeded', exitCode: 0 });
 		removed.fire(instance);
 		changed.fire({ commandId: 'removed', status: 'failed', exitCode: 7 });
-		assert.deepEqual(fixture.cues, [
-			'accessibility.signals.terminalCommandSucceeded',
-			'accessibility.signals.terminalCommandFailed',
-		]);
+		assert.deepEqual(fixture.cues, ['accessibility.signals.terminalCommandSucceeded', 'accessibility.signals.terminalCommandFailed']);
 	});
 
 	test('Chat signals use committed transitions, ignore duplicate notifications, and release the window listener', () => {
@@ -98,8 +91,7 @@ suite('Accessibility signal production contributions', () => {
 			['workbench.contrib.chatAccessibilitySignals'],
 		);
 		host.advance(WorkbenchPhase.AfterRestored);
-		const send = (sequence: number, event: ThreadUpdateEnvelope['update']): void =>
-			updates.fire({ sessionId: 'session', threadId: 'thread', durableSequence: sequence, update: event });
+		const send = (sequence: number, event: ThreadUpdateEnvelope['update']): void => updates.fire({ sessionId: 'session', threadId: 'thread', durableSequence: sequence, update: event });
 		send(1, { type: 'committed', event: { type: 'turnAccepted' } });
 		send(1, { type: 'committed', event: { type: 'turnAccepted' } });
 		send(2, { type: 'itemDelta', itemId: 'message', delta: { type: 'agentMessage', text: 'streaming response' } });
@@ -112,11 +104,7 @@ suite('Accessibility signal production contributions', () => {
 		});
 		send(4, { type: 'committed', event: { type: 'turnCompleted', turnId: 'turn' } });
 		send(5, { type: 'committed', event: { type: 'turnInterrupted', turnId: 'turn' } });
-		assert.deepEqual(fixture.cues, [
-			'accessibility.signals.chatRequestSent',
-			'accessibility.signals.chatUserActionRequired',
-			'accessibility.signals.chatResponseReceived',
-		]);
+		assert.deepEqual(fixture.cues, ['accessibility.signals.chatRequestSent', 'accessibility.signals.chatUserActionRequired', 'accessibility.signals.chatResponseReceived']);
 		host.dispose();
 		send(6, { type: 'committed', event: { type: 'turnFailed', turnId: 'turn' } });
 		assert.equal(fixture.cues.length, 3);
@@ -151,10 +139,7 @@ suite('Accessibility signal production contributions', () => {
 		started.fire();
 		ended.fire();
 		ended.fire();
-		assert.deepEqual(fixture.cues, [
-			'accessibility.signals.voiceRecordingStarted',
-			'accessibility.signals.voiceRecordingStopped',
-		]);
+		assert.deepEqual(fixture.cues, ['accessibility.signals.voiceRecordingStarted', 'accessibility.signals.voiceRecordingStopped']);
 	});
 
 	test('saving and debugger pauses follow their owners and release replaced session listeners', () => {
@@ -186,11 +171,7 @@ suite('Accessibility signal production contributions', () => {
 		first.fire('stopped');
 		second.fire('running');
 		second.fire('stopped');
-		assert.deepEqual(fixture.cues, [
-			'accessibility.signals.save',
-			'accessibility.signals.onDebugBreak',
-			'accessibility.signals.onDebugBreak',
-		]);
+		assert.deepEqual(fixture.cues, ['accessibility.signals.save', 'accessibility.signals.onDebugBreak', 'accessibility.signals.onDebugBreak']);
 		host.dispose();
 		saves.fire({ resource: URI.file('/document'), content: 'saved', revision: 'revision' });
 		second.fire('stopped');
@@ -251,10 +232,7 @@ suite('Accessibility signal production contributions', () => {
 			position = { lineNumber: 1, column: 4 };
 			positionChanged.fire();
 			mock.timers.tick(250);
-			assert.deepEqual(fixture.cues, [
-				'accessibility.signals.errorOnLine',
-				'accessibility.signals.errorAtPosition',
-			]);
+			assert.deepEqual(fixture.cues, ['accessibility.signals.errorOnLine', 'accessibility.signals.errorAtPosition']);
 			markers.remove('diagnostics', [resource]);
 			mock.timers.tick(250);
 			markers.changeOne('diagnostics', resource, [

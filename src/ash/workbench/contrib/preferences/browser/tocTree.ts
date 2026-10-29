@@ -1,21 +1,12 @@
 import { defaultFindWidgetStyles, defaultListStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { h } from '../../../../base/browser/dom.js';
-import {
-	ObjectTree,
-	type ObjectTreeCollapseStateChangeEvent,
-	type ObjectTreeFindResult,
-} from '../../../../base/browser/ui/tree/objectTree.js';
+import { ObjectTree, type ObjectTreeCollapseStateChangeEvent, type ObjectTreeFindResult } from '../../../../base/browser/ui/tree/objectTree.js';
 import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
 import { TreeFindMatchType, TreeFindMode } from '../../../../base/browser/ui/tree/tree.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { ISetting } from '../../../services/preferences/common/preferences.js';
-import {
-	SettingsNavigation,
-	type SettingsCategoryDescriptor,
-	type SettingsCategoryGroupDescriptor,
-	type SettingsNavigationDescriptor,
-} from './settingsLayout.js';
+import { SettingsNavigation, type SettingsCategoryDescriptor, type SettingsCategoryGroupDescriptor, type SettingsNavigationDescriptor } from './settingsLayout.js';
 import type { SettingsSectionReference, SettingsTreeModel } from './settingsTreeModels.js';
 
 export type SettingsTOCEntry =
@@ -77,12 +68,7 @@ export class TOCTreeModel {
 		const visit = (id: string): void => {
 			const node = this.content.getNode(id);
 			if (!node) return;
-			keywords.push(
-				node.element.id,
-				node.element.title,
-				node.element.description,
-				...(node.element.keywords ?? []),
-			);
+			keywords.push(node.element.id, node.element.title, node.element.description, ...(node.element.keywords ?? []));
 			for (const child of node.children) visit(child.element.id);
 		};
 		visit(categoryId);
@@ -132,8 +118,13 @@ export class TOCTree extends Disposable {
 				findMode: TreeFindMode.Filter,
 				getHeight: () => 26,
 				indent: 12,
-				keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: entry => this.keyboardLabel(entry) },
-				modelOptions: { defaultCollapseState: 'collapsed', identityProvider: { getId: entry => entry.id } },
+				keyboardNavigationLabelProvider: {
+					getKeyboardNavigationLabel: entry => this.keyboardLabel(entry),
+				},
+				modelOptions: {
+					defaultCollapseState: 'collapsed',
+					identityProvider: { getId: entry => entry.id },
+				},
 				selectionPresentation: 'subtle',
 				renderElement: entry => this.renderEntry(document, entry),
 			}),
@@ -193,14 +184,8 @@ export class TOCTree extends Disposable {
 	}
 
 	private keyboardLabel(entry: SettingsTOCEntry): string {
-		if (entry.kind === 'group')
-			return `${this.options.groupLabel(entry.group)} ${this.options.groupDescription(entry.group)}`;
-		return [
-			this.options.categoryLabel(entry.category),
-			this.options.categoryDescription(entry.category),
-			...(entry.category.keywords ?? []),
-			...entry.searchKeywords,
-		].join(' ');
+		if (entry.kind === 'group') return `${this.options.groupLabel(entry.group)} ${this.options.groupDescription(entry.group)}`;
+		return [this.options.categoryLabel(entry.category), this.options.categoryDescription(entry.category), ...(entry.category.keywords ?? []), ...entry.searchKeywords].join(' ');
 	}
 
 	private renderEntry(document: Document, entry: SettingsTOCEntry): HTMLElement {
@@ -208,8 +193,7 @@ export class TOCTree extends Disposable {
 		label.className = 'ash-settings-navigation-label';
 		if (entry.kind === 'group') label.dataset.settingsGroupId = entry.group.id;
 		else label.dataset.settingsCategoryId = entry.category.id;
-		label.textContent =
-			entry.kind === 'group' ? this.options.groupLabel(entry.group) : this.options.categoryLabel(entry.category);
+		label.textContent = entry.kind === 'group' ? this.options.groupLabel(entry.group) : this.options.categoryLabel(entry.category);
 		return label;
 	}
 }

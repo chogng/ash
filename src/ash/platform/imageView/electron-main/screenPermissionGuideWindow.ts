@@ -2,12 +2,7 @@ import koffi from 'koffi';
 import type { Point, Rectangle, Size } from 'electron';
 
 /** Use the recording-list controls when readable; otherwise keep the card near Settings. */
-export function getPermissionGuidePosition(
-	settings: Rectangle,
-	size: Size,
-	area: Rectangle,
-	recordingList?: Rectangle,
-): Point {
+export function getPermissionGuidePosition(settings: Rectangle, size: Size, area: Rectangle, recordingList?: Rectangle): Point {
 	const gap = 8;
 	const clampX = (x: number): number => Math.round(Math.max(area.x, Math.min(x, area.x + area.width - size.width)));
 	const clampY = (y: number): number => Math.round(Math.max(area.y, Math.min(y, area.y + area.height - size.height)));
@@ -104,15 +99,7 @@ function createWindowReader(): () => SettingsWindow | undefined {
 				if (!processes.has(pid)) {
 					const path = Buffer.alloc(4096);
 					const size = pidPath(pid, path, path.length);
-					processes.set(
-						pid,
-						size > 0 &&
-							size <= path.length &&
-							path
-								.toString('utf8', 0, size)
-								.replace(/\0.*$/s, '')
-								.endsWith('/System Settings.app/Contents/MacOS/System Settings'),
-					);
+					processes.set(pid, size > 0 && size <= path.length && path.toString('utf8', 0, size).replace(/\0.*$/s, '').endsWith('/System Settings.app/Contents/MacOS/System Settings'));
 				}
 				if (!processes.get(pid)) {
 					continue;
@@ -177,12 +164,7 @@ function createControlReader(): (window: SettingsWindow) => Rectangle | undefine
 		if (!trusted()) {
 			return undefined;
 		}
-		const keys = new Map(
-			['AXWindows', 'AXChildren', 'AXRole', 'AXPosition', 'AXSize'].map(name => [
-				name,
-				createKey(null, name, 0x08000100),
-			]),
-		);
+		const keys = new Map(['AXWindows', 'AXChildren', 'AXRole', 'AXPosition', 'AXSize'].map(name => [name, createKey(null, name, 0x08000100)]));
 		const app = application(window.pid);
 		const deadline = Date.now() + 100;
 		let visited = 0;
@@ -200,9 +182,7 @@ function createControlReader(): (window: SettingsWindow) => Rectangle | undefine
 			}
 			try {
 				const buffer = Buffer.alloc(128);
-				return text(ref, buffer, buffer.length, 0x08000100)
-					? buffer.toString('utf8').replace(/\0.*$/s, '')
-					: '';
+				return text(ref, buffer, buffer.length, 0x08000100) ? buffer.toString('utf8').replace(/\0.*$/s, '') : '';
 			} finally {
 				release(ref);
 			}
@@ -214,9 +194,7 @@ function createControlReader(): (window: SettingsWindow) => Rectangle | undefine
 			}
 			try {
 				const output = { first: 0, second: 0 };
-				return decode(ref, type, output) && Number.isFinite(output.first) && Number.isFinite(output.second)
-					? [output.first, output.second]
-					: undefined;
+				return decode(ref, type, output) && Number.isFinite(output.first) && Number.isFinite(output.second) ? [output.first, output.second] : undefined;
 			} finally {
 				release(ref);
 			}
@@ -224,16 +202,7 @@ function createControlReader(): (window: SettingsWindow) => Rectangle | undefine
 		const bounds = (element: unknown): Rectangle | undefined => {
 			const position = point(element, 'AXPosition', 1),
 				size = point(element, 'AXSize', 2);
-			if (
-				!position ||
-				!size ||
-				Math.abs(position[0]!) > 1_000_000 ||
-				Math.abs(position[1]!) > 1_000_000 ||
-				size[0]! <= 0 ||
-				size[1]! <= 0 ||
-				size[0]! > 1_000_000 ||
-				size[1]! > 1_000_000
-			) {
+			if (!position || !size || Math.abs(position[0]!) > 1_000_000 || Math.abs(position[1]!) > 1_000_000 || size[0]! <= 0 || size[1]! <= 0 || size[0]! > 1_000_000 || size[1]! > 1_000_000) {
 				return undefined;
 			}
 			return { x: position[0]!, y: position[1]!, width: size[0]!, height: size[1]! };
@@ -268,14 +237,7 @@ function createControlReader(): (window: SettingsWindow) => Rectangle | undefine
 						const rect = bounds(element),
 							add = bounds(elements[1]),
 							remove = bounds(elements[2]);
-						if (
-							rect &&
-							add &&
-							remove &&
-							rect.width >= 200 &&
-							add.y >= rect.y + rect.height / 2 &&
-							remove.y >= add.y - 8
-						) {
+						if (rect && add && remove && rect.width >= 200 && add.y >= rect.y + rect.height / 2 && remove.y >= add.y - 8) {
 							lists.push(rect);
 						}
 						return;
@@ -320,9 +282,7 @@ function createControlReader(): (window: SettingsWindow) => Rectangle | undefine
 			lists.sort((left, right) => left.y - right.y);
 			const first = lists[0],
 				second = lists[1];
-			return first && second && Math.abs(first.x - second.x) <= 2 && Math.abs(first.width - second.width) <= 2
-				? first
-				: undefined;
+			return first && second && Math.abs(first.x - second.x) <= 2 && Math.abs(first.width - second.width) <= 2 ? first : undefined;
 		} finally {
 			if (app) {
 				release(app);

@@ -72,12 +72,7 @@ export class Pane extends Disposable implements ISplitViewView {
 		this.configuredHeaderSize = options.headerSize ?? 28;
 		this._minimumBodySize = options.minimumBodySize ?? 120;
 		this._maximumBodySize = options.maximumBodySize ?? Number.POSITIVE_INFINITY;
-		if (
-			!Number.isFinite(this.minimumBodySize) ||
-			this.minimumBodySize < 0 ||
-			this.maximumBodySize < this.minimumBodySize ||
-			Number.isNaN(this.maximumBodySize)
-		) {
+		if (!Number.isFinite(this.minimumBodySize) || this.minimumBodySize < 0 || this.maximumBodySize < this.minimumBodySize || Number.isNaN(this.maximumBodySize)) {
 			throw new RangeError('Invalid pane body size constraints');
 		}
 		const { id, title } = options;
@@ -171,11 +166,7 @@ export class Pane extends Disposable implements ISplitViewView {
 	setHeaderVisible(visible: boolean): void {
 		if (visible === this.isHeaderVisible()) return;
 		// A title host can move these actions during the same visibility update; their focus follows the node.
-		if (
-			!visible &&
-			this.headerElement.contains(this.element.ownerDocument.activeElement) &&
-			!this.headerActionsElement.contains(this.element.ownerDocument.activeElement)
-		) {
+		if (!visible && this.headerElement.contains(this.element.ownerDocument.activeElement) && !this.headerActionsElement.contains(this.element.ownerDocument.activeElement)) {
 			this.focus();
 		}
 		this.headerElement.hidden = !visible;
@@ -323,18 +314,11 @@ export class PaneView extends Disposable {
 		this._register(this.onDidSashReset(index => this.splitView.resetSash(index)));
 		this._register(
 			addDisposableListener(this.element, 'keydown', event => {
-				const index = this.panes.findIndex(
-					pane => pane.element.querySelector('.ash-pane-view-header-button') === event.target,
-				);
+				const index = this.panes.findIndex(pane => pane.element.querySelector('.ash-pane-view-header-button') === event.target);
 				if (index < 0 || !['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
 				const headers = this.panes.filter(pane => pane.isHeaderVisible());
 				const current = headers.indexOf(this.panes[index]!);
-				const target =
-					event.key === 'Home'
-						? 0
-						: event.key === 'End'
-							? headers.length - 1
-							: Math.max(0, Math.min(headers.length - 1, current + (event.key === 'ArrowUp' ? -1 : 1)));
+				const target = event.key === 'Home' ? 0 : event.key === 'End' ? headers.length - 1 : Math.max(0, Math.min(headers.length - 1, current + (event.key === 'ArrowUp' ? -1 : 1)));
 				event.preventDefault();
 				headers[target]?.element.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')?.focus();
 			}),
@@ -450,19 +434,8 @@ export class PaneView extends Disposable {
 			const sash = this.splitView.getSash(index);
 			if (!sash) continue;
 			sash.element.setAttribute('aria-label', localize('paneView.resize', 'Resize panes'));
-			sash.element.setAttribute(
-				'aria-description',
-				localize(
-					'paneView.resizeHelp',
-					'Use the arrow keys to resize panes. Double-click to reset their sizes.',
-				),
-			);
-			sash.element.setAttribute(
-				'aria-controls',
-				[this.panes[index]!, this.panes[index + 1]!]
-					.map(pane => `ash-pane-view-content-${encodeURIComponent(pane.id)}`)
-					.join(' '),
-			);
+			sash.element.setAttribute('aria-description', localize('paneView.resizeHelp', 'Use the arrow keys to resize panes. Double-click to reset their sizes.'));
+			sash.element.setAttribute('aria-controls', [this.panes[index]!, this.panes[index + 1]!].map(pane => `ash-pane-view-content-${encodeURIComponent(pane.id)}`).join(' '));
 		}
 	}
 }

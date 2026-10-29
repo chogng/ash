@@ -108,20 +108,9 @@ export class ChatDragAndDrop extends Disposable {
 								if (signal.aborted) throw new CancellationError();
 								const uri = extractSelection(resource).uri;
 								const hasProvider = this.files.hasProvider(uri);
-								const directory =
-									hasProvider && (await this.files.stat(uri)).kind === FileKind.Directory;
-								if (
-									hasProvider &&
-									!directory &&
-									/^image\/(png|jpeg|gif|webp)$/u.test(getMediaMime(uri.path) ?? '') &&
-									!this.supportsImages()
-								) {
-									throw new Error(
-										localize(
-											'chat.image.unsupported',
-											'The selected model does not support images',
-										),
-									);
+								const directory = hasProvider && (await this.files.stat(uri)).kind === FileKind.Directory;
+								if (hasProvider && !directory && /^image\/(png|jpeg|gif|webp)$/u.test(getMediaMime(uri.path) ?? '') && !this.supportsImages()) {
+									throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
 								}
 								if (signal.aborted) throw new CancellationError();
 								return this.resolver.resolveResourceAttachContext(resource, directory, signal);
@@ -132,9 +121,7 @@ export class ChatDragAndDrop extends Disposable {
 					if (signal.aborted) throw new CancellationError();
 					const attachments = [...resources, ...native];
 					if (attachments.some(attachment => attachment.kind === 'image') && !this.supportsImages()) {
-						throw new Error(
-							localize('chat.image.unsupported', 'The selected model does not support images'),
-						);
+						throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
 					}
 					return attachments;
 				} catch (error) {
@@ -198,9 +185,7 @@ function readResourceDrop(transfer: DataTransfer): ResourceDrop {
 		}
 		resources.set(extUri.getComparisonKey(resource), resource);
 	}
-	const aliases = new Set(
-		[...resources.values()].map(resource => extUri.getComparisonKey(extractSelection(resource).uri)),
-	);
+	const aliases = new Set([...resources.values()].map(resource => extUri.getComparisonKey(extractSelection(resource).uri)));
 	const files = native.filter(file => {
 		const path = getPathForFile(file);
 		return !path || !aliases.has(extUri.getComparisonKey(URI.file(path)));

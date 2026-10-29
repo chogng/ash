@@ -1,18 +1,10 @@
 import { getActiveElement } from '../../../../base/browser/dom.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize, localize2 } from '../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
@@ -43,10 +35,7 @@ configuration.registerConfiguration({
 	setting: {
 		valueType: 'boolean',
 		title: localize('symphony.verbosityTitle', 'Symphony accessibility help'),
-		description: localize(
-			'symphony.verbosityDescription',
-			'Announce keyboard help when Symphony controls receive focus.',
-		),
+		description: localize('symphony.verbosityDescription', 'Announce keyboard help when Symphony controls receive focus.'),
 	},
 });
 
@@ -74,27 +63,25 @@ registerEditorPane({
 async function openSymphony(accessor: ServicesAccessor, source?: 'restore'): Promise<void> {
 	const symphony = accessor.get(ISymphonyService);
 	await symphony.refresh();
-	await accessor
-		.get(ISessionsLayoutService)
-		.openEntry(
-			{
-				id: 'symphony',
-				workspaceMode: 'code',
-				activityContext: 'sessions.activity.symphonySelected',
-				content: 'editor',
-				sidebarContainerId: SymphonyNavigationId,
-				restoreCommand: 'sessions.open.symphony',
-				focus: 'editor',
-				editorInput: {
-					resource: SymphonyMonitorResource,
-					label: 'Symphony',
-					readOnly: true,
-					showBreadcrumbs: false,
-				},
+	await accessor.get(ISessionsLayoutService).openEntry(
+		{
+			id: 'symphony',
+			workspaceMode: 'code',
+			activityContext: 'sessions.activity.symphonySelected',
+			content: 'editor',
+			sidebarContainerId: SymphonyNavigationId,
+			restoreCommand: 'sessions.open.symphony',
+			focus: 'editor',
+			editorInput: {
+				resource: SymphonyMonitorResource,
+				label: 'Symphony',
+				readOnly: true,
+				showBreadcrumbs: false,
 			},
-			undefined,
-			source ? { source } : undefined,
-		);
+		},
+		undefined,
+		source ? { source } : undefined,
+	);
 }
 
 registerAction2(

@@ -23,19 +23,13 @@ registerAction2(
 					id: MenuId.TerminalTitle,
 					group: 'navigation',
 					order: 15,
-					when: ContextKeyExpr.or(
-						TerminalDictationStateContext.isEqualTo('idle'),
-						TerminalDictationStateContext.isEqualTo('busy'),
-					),
+					when: ContextKeyExpr.or(TerminalDictationStateContext.isEqualTo('idle'), TerminalDictationStateContext.isEqualTo('busy')),
 				},
 			});
 		}
 		public override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
 			const terminals = accessor.get(ITerminalService);
-			const instance =
-				context instanceof InstanceContext
-					? terminals.instances.find(instance => instance.instanceId === context.instanceId)
-					: terminals.activeInstance;
+			const instance = context instanceof InstanceContext ? terminals.instances.find(instance => instance.instanceId === context.instanceId) : terminals.activeInstance;
 			await instance?.getContribution<TerminalVoiceContribution>(TerminalVoiceContribution.ID)?.start();
 		}
 	},
@@ -59,10 +53,7 @@ registerAction2(
 		}
 		public override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
 			const terminals = accessor.get(ITerminalService);
-			const instance =
-				context instanceof InstanceContext
-					? terminals.instances.find(instance => instance.instanceId === context.instanceId)
-					: terminals.activeInstance;
+			const instance = context instanceof InstanceContext ? terminals.instances.find(instance => instance.instanceId === context.instanceId) : terminals.activeInstance;
 			await instance?.getContribution<TerminalVoiceContribution>(TerminalVoiceContribution.ID)?.stop();
 		}
 	},

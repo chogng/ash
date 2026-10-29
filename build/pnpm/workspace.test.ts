@@ -54,22 +54,14 @@ test('pnpm owns every repository Node project with one lockfile', () => {
 			pnpm?: unknown;
 			scripts?: Record<string, string>;
 		};
-		assert.equal(
-			manifest.packageManager,
-			undefined,
-			`${directory}/package.json must inherit the root package manager`,
-		);
+		assert.equal(manifest.packageManager, undefined, `${directory}/package.json must inherit the root package manager`);
 		assert.equal(manifest.pnpm, undefined, `${directory}/package.json must not duplicate workspace pnpm policy`);
 		assert.equal(existsSync(join(repositoryRoot, directory, 'package-lock.json')), false, directory);
 		assert.equal(existsSync(join(repositoryRoot, directory, 'pnpm-lock.yaml')), false, directory);
 		assert.match(lockfile, new RegExp(`^  ${directory}:(?: \\{\\})?$`, 'm'));
 		for (const script of Object.values(manifest.scripts ?? {})) {
 			assert.doesNotMatch(script, /(^|[;&|]\s*)npm(?:\s|$)/, `${directory} scripts must use pnpm`);
-			assert.doesNotMatch(
-				script,
-				/node\s+(?:-e|--eval)\b/,
-				`${directory} scripts must use owned TypeScript files`,
-			);
+			assert.doesNotMatch(script, /node\s+(?:-e|--eval)\b/, `${directory} scripts must use owned TypeScript files`);
 		}
 	}
 });

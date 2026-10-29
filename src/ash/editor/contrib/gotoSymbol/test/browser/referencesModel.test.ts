@@ -12,10 +12,7 @@ suite('Reference results', () => {
 			range: new Range(3, 1, 3, 10),
 			targetSelectionRange: new Range(3, 4, 3, 8),
 		};
-		using model = new ReferencesModel(
-			[first, { uri: URI.file('/a.ts'), range: new Range(1, 1, 1, 4) }, { ...first }],
-			'Definitions',
-		);
+		using model = new ReferencesModel([first, { uri: URI.file('/a.ts'), range: new Range(1, 1, 1, 4) }, { ...first }], 'Definitions');
 		assert.deepEqual(
 			{
 				groups: model.groups.map(group => [group.uri.path, group.children.length]),
@@ -41,10 +38,7 @@ suite('Reference results', () => {
 		);
 		const first = model.references[0]!;
 		const last = model.references[2]!;
-		assert.deepEqual(
-			[model.nextOrPreviousReference(last, true), model.nextOrPreviousReference(first, false)],
-			[first, last],
-		);
+		assert.deepEqual([model.nextOrPreviousReference(last, true), model.nextOrPreviousReference(first, false)], [first, last]);
 	});
 	test('range changes notify once and change position lookup', () => {
 		const uri = URI.file('/a.ts');

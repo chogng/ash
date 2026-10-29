@@ -26,16 +26,8 @@ test('Desktop packages the shared backend host instead of the Ash Code CLI', () 
 		['backend builder', backendBuilder],
 		['Electron Main', electronMain],
 	] as const) {
-		assert.equal(
-			contents.includes(forbiddenProductCrate),
-			false,
-			`${name} must not reference the Ash Code CLI crate`,
-		);
-		assert.equal(
-			contents.includes(forbiddenProductPath),
-			false,
-			`${name} must not reference the Ash Code CLI source path`,
-		);
+		assert.equal(contents.includes(forbiddenProductCrate), false, `${name} must not reference the Ash Code CLI crate`);
+		assert.equal(contents.includes(forbiddenProductPath), false, `${name} must not reference the Ash Code CLI source path`);
 	}
 	assert.match(packageScript, /"ash-app-server"/u);
 	assert.match(packageScript, /"ash-app-server-daemon"/u);

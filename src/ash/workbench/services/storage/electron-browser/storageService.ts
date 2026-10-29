@@ -14,13 +14,7 @@ import {
 	type IWillSaveStateEvent,
 	type StorageValue,
 } from '../../../../platform/storage/common/storage.js';
-import {
-	validateStorageEntries,
-	validateStorageSnapshot,
-	type IStorageIdentity,
-	type IStorageEntry,
-	type IStorageSnapshot,
-} from '../../../../platform/storage/common/storageIpc.js';
+import { validateStorageEntries, validateStorageSnapshot, type IStorageIdentity, type IStorageEntry, type IStorageSnapshot } from '../../../../platform/storage/common/storageIpc.js';
 import { migrateBrowserStorage } from '../browser/storageService.js';
 
 interface StorageOptions {
@@ -73,12 +67,7 @@ export class NativeWorkbenchStorageService extends Disposable implements IStorag
 		this.subscriptions.value = resources;
 		for (const scope of [StorageScope.APPLICATION, StorageScope.PROFILE, StorageScope.WORKSPACE]) {
 			const identity = this.identity(scope);
-			resources.add(
-				this.channel.listen<unknown>(
-					'onDidChangeStorage',
-					identity,
-				)(value => this.accept(validateStorageSnapshot(value))),
-			);
+			resources.add(this.channel.listen<unknown>('onDidChangeStorage', identity)(value => this.accept(validateStorageSnapshot(value))));
 			const key = `ash.storage.${scope}${scope === StorageScope.APPLICATION ? '' : `.${encodeURIComponent(identity.id)}`}`;
 			const legacy = this.options.ownerWindow.localStorage.getItem(key);
 			let entries: Record<string, IStorageEntry> | undefined;
@@ -89,9 +78,7 @@ export class NativeWorkbenchStorageService extends Disposable implements IStorag
 				}
 				entries = validateStorageEntries(document.entries);
 			}
-			const snapshot = validateStorageSnapshot(
-				await this.channel.call('getItems', { identity, legacy: entries }),
-			);
+			const snapshot = validateStorageSnapshot(await this.channel.call('getItems', { identity, legacy: entries }));
 			this.assertNotDisposed();
 			this.accept(snapshot);
 			if (legacy !== null) {
@@ -244,10 +231,7 @@ export class NativeWorkbenchStorageService extends Disposable implements IStorag
 			return;
 		}
 		for (const key of new Set([...Object.keys(previous.entries), ...Object.keys(entries)])) {
-			if (
-				previous.entries[key]?.value !== entries[key]?.value ||
-				previous.entries[key]?.target !== entries[key]?.target
-			) {
+			if (previous.entries[key]?.value !== entries[key]?.value || previous.entries[key]?.target !== entries[key]?.target) {
 				this.changes.fire({ key, scope, target: entries[key]?.target, external: true });
 			}
 		}

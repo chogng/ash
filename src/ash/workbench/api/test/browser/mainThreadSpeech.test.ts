@@ -12,12 +12,7 @@ import { Emitter, Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { normalizeExtensionHostSnapshot } from '../../../../platform/agentHost/browser/extensionHostProtocol.js';
-import type {
-	IExtensionHostApi,
-	ExtensionHostFleetSnapshot,
-	ExtensionHostInvocationRequest,
-	JsonValue,
-} from '../../../../platform/agentHost/common/extensionHostApi.js';
+import type { IExtensionHostApi, ExtensionHostFleetSnapshot, ExtensionHostInvocationRequest, JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { SpeechService } from '../../../contrib/speech/browser/speechService.js';
 import {
 	KeywordRecognitionStatus,
@@ -70,8 +65,7 @@ class Host extends Disposable implements IExtensionHostApi {
 		return this.reads.shift()!;
 	}
 	public async closed(): Promise<void> {
-		if (!this.requests.some(value => value.operation === 'closeSpeechSession'))
-			await waitFor(this.waiters, this.closeEvent.event);
+		if (!this.requests.some(value => value.operation === 'closeSpeechSession')) await waitFor(this.waiters, this.closeEvent.event);
 	}
 }
 function snapshot(incarnation: number, admitted = true): ExtensionHostFleetSnapshot {
@@ -120,10 +114,7 @@ suite('MainThreadSpeech admitted provider lifecycle', () => {
 		const recognized = waitFor(owner, session.onDidChange, event => event.status === SpeechToTextStatus.Recognized);
 		await read.result.complete({ events: [{ status: 1 }, { status: 3, text: 'first' }], closed: false });
 		await recognized;
-		assert.deepEqual(events, [
-			{ status: SpeechToTextStatus.Started },
-			{ status: SpeechToTextStatus.Recognized, text: 'first' },
-		]);
+		assert.deepEqual(events, [{ status: SpeechToTextStatus.Started }, { status: SpeechToTextStatus.Recognized, text: 'first' }]);
 		await cancelRecognition(owner, session, token);
 		await host.closed();
 		assert.deepEqual(events.at(-1), { status: SpeechToTextStatus.Stopped });
@@ -146,12 +137,7 @@ suite('MainThreadSpeech admitted provider lifecycle', () => {
 		assert.equal(await keyword, KeywordRecognitionStatus.Recognized);
 		assert.equal(speech.hasActiveKeywordRecognition, false);
 		assert.equal(
-			host.requests.every(
-				request =>
-					request.incarnation === 1 &&
-					request.activationGeneration === 1 &&
-					request.registrationId === 'speech',
-			),
+			host.requests.every(request => request.incarnation === 1 && request.activationGeneration === 1 && request.registrationId === 'speech'),
 			true,
 		);
 		assert.deepEqual(host.requests.find(request => request.operation === 'synthesizeSpeech')!.payload, {
@@ -224,10 +210,7 @@ suite('MainThreadSpeech admitted provider lifecycle', () => {
 			const read = await host.nextRead();
 			assert.equal(read.request.registrationId, replacementId);
 			assert.equal(read.request.registrationGeneration, 2);
-			assert.equal(
-				host.requests.find(request => request.operation === 'closeSpeechSession')?.registrationGeneration,
-				1,
-			);
+			assert.equal(host.requests.find(request => request.operation === 'closeSpeechSession')?.registrationGeneration, 1);
 			old.cancel();
 			assert.equal(read.signal.aborted, false);
 			await cancelRecognition(owner, session, current);
@@ -363,9 +346,7 @@ suite('MainThreadSpeech admitted provider lifecycle', () => {
 						},
 					],
 				}),
-				resources: new ExtensionResourceLoaderService(async () =>
-					assert.fail('Metadata must not read extension resources'),
-				),
+				resources: new ExtensionResourceLoaderService(async () => assert.fail('Metadata must not read extension resources')),
 			}),
 		);
 		await extensions.start();
@@ -429,9 +410,7 @@ suite('MainThreadSpeech admitted provider lifecycle', () => {
 		await failed;
 		assert.equal(host.requests.filter(request => request.operation === 'createSpeechSession').length, 1);
 		assert.deepEqual(
-			host.requests
-				.filter(request => request.operation === 'synthesizeSpeech')
-				.map(request => (request.payload as { text: string }).text),
+			host.requests.filter(request => request.operation === 'synthesizeSpeech').map(request => (request.payload as { text: string }).text),
 			['first', 'second'],
 		);
 		token.cancel();
@@ -460,10 +439,7 @@ suite('MainThreadSpeech admitted provider lifecycle', () => {
 	});
 
 	test('synthesis failure without provider text uses the installed Chinese translation', async () => {
-		setNlsMessages(
-			'zh-CN',
-			JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')),
-		);
+		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
 		try {
 			using owner = new DisposableStore();
 			const host = owner.add(new Host());
@@ -533,11 +509,7 @@ function waitFor<T>(owner: DisposableStore, event: Event<T>, accept: (value: T) 
 	});
 }
 
-async function cancelRecognition(
-	owner: DisposableStore,
-	session: ISpeechToTextSession,
-	source: CancellationTokenSource,
-): Promise<void> {
+async function cancelRecognition(owner: DisposableStore, session: ISpeechToTextSession, source: CancellationTokenSource): Promise<void> {
 	const stopped = new Promise<void>(resolve => {
 		owner.add(
 			session.onDidChange(event => {

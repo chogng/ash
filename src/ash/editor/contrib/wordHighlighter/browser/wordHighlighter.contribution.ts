@@ -12,12 +12,7 @@ import { Range } from '../../../common/core/range.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { type ICursorSelectionChangedEvent } from '../../../common/cursorEvents.js';
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
-import {
-	DocumentHighlightKind,
-	type DocumentHighlight,
-	type DocumentHighlightProvider,
-	type MultiDocumentHighlightProvider,
-} from '../../../common/languages.js';
+import { DocumentHighlightKind, type DocumentHighlight, type DocumentHighlightProvider, type MultiDocumentHighlightProvider } from '../../../common/languages.js';
 import { type LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry.js';
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 import { type TextModel } from '../../../common/model/textModel.js';
@@ -70,9 +65,7 @@ class WordHighlighter extends Disposable {
 		this.providers = options.languageFeaturesService.documentHighlightProvider;
 		this.multiDocumentProviders = options.languageFeaturesService.multiDocumentHighlightProvider;
 		this.coordinator = acquireCoordinator(options.languageFeaturesService, this);
-		this.scheduler = this._register(
-			new RunOnceScheduler(() => void this.run(), this.editor.getOption(EditorOption.occurrencesHighlightDelay)),
-		);
+		this.scheduler = this._register(new RunOnceScheduler(() => void this.run(), this.editor.getOption(EditorOption.occurrencesHighlightDelay)));
 		this._register(
 			toDisposable(() => {
 				this.cancelRequest();
@@ -81,10 +74,7 @@ class WordHighlighter extends Disposable {
 		);
 		this._register(
 			editor.onDidChangeConfiguration(event => {
-				if (
-					event.hasChanged(EditorOption.occurrencesHighlight) ||
-					event.hasChanged(EditorOption.occurrencesHighlightDelay)
-				) {
+				if (event.hasChanged(EditorOption.occurrencesHighlight) || event.hasChanged(EditorOption.occurrencesHighlightDelay)) {
 					this.handleModelChange();
 					this.schedule();
 				}
@@ -185,15 +175,7 @@ class WordHighlighter extends Disposable {
 	}
 
 	private handleKeydown(event: KeyboardEvent): void {
-		if (
-			event.defaultPrevented ||
-			event.isComposing ||
-			event.key !== 'F7' ||
-			event.altKey ||
-			event.ctrlKey ||
-			event.metaKey
-		)
-			return;
+		if (event.defaultPrevented || event.isComposing || event.key !== 'F7' || event.altKey || event.ctrlKey || event.metaKey) return;
 		const moved = event.shiftKey ? this.movePrevious() : this.moveNext();
 		if (!moved) return;
 		event.preventDefault();
@@ -202,8 +184,7 @@ class WordHighlighter extends Disposable {
 
 	private schedule(delay = this.editor.getOption(EditorOption.occurrencesHighlightDelay)): void {
 		this.cancelRequest();
-		if (this.editor.getOption(EditorOption.occurrencesHighlight) === 'off' || (!this.focused && delay !== 0))
-			return;
+		if (this.editor.getOption(EditorOption.occurrencesHighlight) === 'off' || (!this.focused && delay !== 0)) return;
 		this.scheduler.schedule(delay);
 	}
 
@@ -231,29 +212,18 @@ class WordHighlighter extends Disposable {
 	private highlightPosition(): Position | undefined {
 		if (this.editor.getSelections()!.length !== 1) return undefined;
 		const selection = this.editor.getSelections()![0]!;
-		if (
-			!selectionFitsModel(this.textModel, selection) ||
-			selection.getStartPosition().lineNumber !== selection.getEndPosition().lineNumber
-		)
-			return undefined;
+		if (!selectionFitsModel(this.textModel, selection) || selection.getStartPosition().lineNumber !== selection.getEndPosition().lineNumber) return undefined;
 		const word = this.textModel.getWordAtPosition(selection.getStartPosition());
 		if (!word) return undefined;
 		const range = new Range(selection.startLineNumber, word.startColumn, selection.startLineNumber, word.endColumn);
-		if (
-			Position.compare(range.getStartPosition(), selection.getStartPosition()) > 0 ||
-			Position.compare(range.getEndPosition(), selection.getEndPosition()) < 0
-		)
-			return undefined;
+		if (Position.compare(range.getStartPosition(), selection.getStartPosition()) > 0 || Position.compare(range.getEndPosition(), selection.getEndPosition()) < 0) return undefined;
 		return selection.getStartPosition();
 	}
 
 	private replaceHighlights(highlights: readonly DocumentHighlight[]): void {
 		const normalized = highlights.map(highlight => ({ ...highlight, range: Range.lift(highlight.range)! }));
 		const key = normalized
-			.map(
-				highlight =>
-					`${this.textModel.offsetAt(highlight.range.getStartPosition())}-${this.textModel.offsetAt(highlight.range.getEndPosition())}:${highlight.kind ?? ''}`,
-			)
+			.map(highlight => `${this.textModel.offsetAt(highlight.range.getStartPosition())}-${this.textModel.offsetAt(highlight.range.getEndPosition())}:${highlight.kind ?? ''}`)
 			.join(',');
 		if (key === this.lastDecorationKey) return;
 		this.lastDecorationKey = key;
@@ -271,18 +241,11 @@ class WordHighlighter extends Disposable {
 	}
 
 	private move(direction: 1 | -1): boolean {
-		const ranges = [...this.decorations.decorations]
-			.map(decoration => decoration.range)
-			.sort((left, right) => Position.compare(left.getStartPosition(), right.getStartPosition()));
+		const ranges = [...this.decorations.decorations].map(decoration => decoration.range).sort((left, right) => Position.compare(left.getStartPosition(), right.getStartPosition()));
 		if (ranges.length === 0) return false;
 		const activeOffset = this.textModel.offsetAt(this.editor.getSelections()![0]!.getPosition());
-		const currentIndex = ranges.findIndex(
-			range =>
-				this.textModel.offsetAt(range.getStartPosition()) <= activeOffset &&
-				this.textModel.offsetAt(range.getEndPosition()) >= activeOffset,
-		);
-		const nextIndex =
-			direction === 1 ? (currentIndex + 1) % ranges.length : (currentIndex - 1 + ranges.length) % ranges.length;
+		const currentIndex = ranges.findIndex(range => this.textModel.offsetAt(range.getStartPosition()) <= activeOffset && this.textModel.offsetAt(range.getEndPosition()) >= activeOffset);
+		const nextIndex = direction === 1 ? (currentIndex + 1) % ranges.length : (currentIndex - 1 + ranges.length) % ranges.length;
 		const destination = ranges[nextIndex]!;
 		this.changingSelection = true;
 		try {
@@ -355,11 +318,7 @@ export async function getOccurrencesAcrossMultipleModels(
 	return new ResourceMap();
 }
 
-function isDocumentHighlightRequestCurrent(
-	request: DocumentHighlightTarget,
-	token: CancellationToken,
-	targets: readonly DocumentHighlightTarget[] = [],
-): boolean {
+function isDocumentHighlightRequestCurrent(request: DocumentHighlightTarget, token: CancellationToken, targets: readonly DocumentHighlightTarget[] = []): boolean {
 	return (
 		!token.isCancellationRequested &&
 		!request.model.isDisposed() &&
@@ -368,12 +327,8 @@ function isDocumentHighlightRequestCurrent(
 	);
 }
 
-function normalizeHighlightMap(
-	result: ReadonlyMap<URI, readonly DocumentHighlight[]>,
-	targets: readonly DocumentHighlightTarget[],
-): ResourceMap<readonly DocumentHighlight[]> {
-	if (!result || typeof result[Symbol.iterator] !== 'function')
-		throw new TypeError('Multi-document highlights must be a resource map');
+function normalizeHighlightMap(result: ReadonlyMap<URI, readonly DocumentHighlight[]>, targets: readonly DocumentHighlightTarget[]): ResourceMap<readonly DocumentHighlight[]> {
+	if (!result || typeof result[Symbol.iterator] !== 'function') throw new TypeError('Multi-document highlights must be a resource map');
 	const models = new ResourceMap<TextModel>();
 	for (const target of targets) models.set(target.resource, target.model);
 	const normalized = new ResourceMap<readonly DocumentHighlight[]>();
@@ -389,18 +344,11 @@ function normalizeHighlights(model: TextModel, highlights: readonly DocumentHigh
 	if (!Array.isArray(highlights)) throw new TypeError('Document highlights must be an array');
 	return Object.freeze(
 		highlights.map(highlight => {
-			if (!highlight || typeof highlight !== 'object' || !highlight.range)
-				throw new TypeError('Document highlight must contain a range');
-			const range = new Range(
-				highlight.range.startLineNumber,
-				highlight.range.startColumn,
-				highlight.range.endLineNumber,
-				highlight.range.endColumn,
-			);
+			if (!highlight || typeof highlight !== 'object' || !highlight.range) throw new TypeError('Document highlight must contain a range');
+			const range = new Range(highlight.range.startLineNumber, highlight.range.startColumn, highlight.range.endLineNumber, highlight.range.endColumn);
 			model.offsetAt(range.getStartPosition());
 			model.offsetAt(range.getEndPosition());
-			if (highlight.kind !== undefined && !Object.values(DocumentHighlightKind).includes(highlight.kind))
-				throw new TypeError('Document highlight kind is invalid');
+			if (highlight.kind !== undefined && !Object.values(DocumentHighlightKind).includes(highlight.kind)) throw new TypeError('Document highlight kind is invalid');
 			return Object.freeze({ range, ...(highlight.kind !== undefined ? { kind: highlight.kind } : {}) });
 		}),
 	);
@@ -434,17 +382,10 @@ class WordHighlightCoordinator {
 		}, 0);
 	}
 
-	async provide(
-		source: WordHighlighter,
-		position: Position,
-		token: CancellationToken,
-		onError: (error: unknown) => void,
-	): Promise<ResourceMap<readonly DocumentHighlight[]>> {
+	async provide(source: WordHighlighter, position: Position, token: CancellationToken, onError: (error: unknown) => void): Promise<ResourceMap<readonly DocumentHighlight[]>> {
 		const targets =
 			source.highlightMode === 'multiFile'
-				? [...this.controllers]
-						.filter(controller => controller.highlightMode === 'multiFile')
-						.map(controller => controller.createTarget())
+				? [...this.controllers].filter(controller => controller.highlightMode === 'multiFile').map(controller => controller.createTarget())
 				: [source.createTarget()];
 		const primary = source.createTarget();
 		if (targets.length > 1 && source.multiDocumentHighlightProvider.has(source.textModel)) {
@@ -481,48 +422,25 @@ function acquireCoordinator(service: ILanguageFeaturesService, controller: WordH
 	return coordinator;
 }
 
-function validateControllerDependencies(
-	view: ViewController,
-	editor: ICodeEditor,
-	decorations: TextDecorationCollection<DocumentHighlightKind | undefined>,
-	options: WordHighlighterOptions,
-): void {
-	if (view.viewport.textModel !== editor.getModel() || editor.getModel() !== decorations.textModel)
-		throw new TypeError('Word highlighter dependencies must share one text model');
-	if (!options || typeof options !== 'object' || !options.resource || !options.languageFeaturesService)
-		throw new TypeError('Word highlighter requires resource and language services');
-	if (options.onError !== undefined && typeof options.onError !== 'function')
-		throw new TypeError('Word highlighter error handler must be a function');
+function validateControllerDependencies(view: ViewController, editor: ICodeEditor, decorations: TextDecorationCollection<DocumentHighlightKind | undefined>, options: WordHighlighterOptions): void {
+	if (view.viewport.textModel !== editor.getModel() || editor.getModel() !== decorations.textModel) throw new TypeError('Word highlighter dependencies must share one text model');
+	if (!options || typeof options !== 'object' || !options.resource || !options.languageFeaturesService) throw new TypeError('Word highlighter requires resource and language services');
+	if (options.onError !== undefined && typeof options.onError !== 'function') throw new TypeError('Word highlighter error handler must be a function');
 }
 
 function selectionFitsModel(model: WordHighlighter['textModel'], range: Range): boolean {
-	return (
-		positionFitsModel(model, range.getStartPosition().lineNumber, range.getStartPosition().column) &&
-		positionFitsModel(model, range.getEndPosition().lineNumber, range.getEndPosition().column)
-	);
+	return positionFitsModel(model, range.getStartPosition().lineNumber, range.getStartPosition().column) && positionFitsModel(model, range.getEndPosition().lineNumber, range.getEndPosition().column);
 }
 
 function positionFitsModel(model: WordHighlighter['textModel'], lineNumber: number, column: number): boolean {
-	return (
-		Number.isSafeInteger(lineNumber) &&
-		Number.isSafeInteger(column) &&
-		lineNumber >= 1 &&
-		column >= 1 &&
-		lineNumber <= model.lineCount &&
-		column <= model.getLineLength(lineNumber) + 1
-	);
+	return Number.isSafeInteger(lineNumber) && Number.isSafeInteger(column) && lineNumber >= 1 && column >= 1 && lineNumber <= model.lineCount && column <= model.getLineLength(lineNumber) + 1;
 }
 
 export class WordHighlighterContribution extends Disposable {
 	static readonly ID = 'editor.contrib.wordHighlighter';
 	private readonly wordHighlighter: WordHighlighter;
 
-	constructor(
-		view: ViewController,
-		editor: ICodeEditor,
-		decorations: TextDecorationCollection<DocumentHighlightKind | undefined>,
-		options: WordHighlighterOptions,
-	) {
+	constructor(view: ViewController, editor: ICodeEditor, decorations: TextDecorationCollection<DocumentHighlightKind | undefined>, options: WordHighlighterOptions) {
 		super();
 		this.wordHighlighter = this._register(new WordHighlighter(view, editor, decorations, options));
 	}
@@ -556,9 +474,7 @@ registerEditorContribution({
 	id: WordHighlighterContribution.ID,
 	install: context => {
 		if (context.kind !== 'text' || context.model.largeFile.tooLargeForTokenization) return;
-		const decorations = context.register(
-			new TextDecorationCollection<DocumentHighlightKind | undefined>(context.model),
-		);
+		const decorations = context.register(new TextDecorationCollection<DocumentHighlightKind | undefined>(context.model));
 		context.register(new TextualMultiDocumentHighlightFeature(context.languageFeaturesService));
 		return new WordHighlighterContribution(context.controller, context.editor, decorations, {
 			resource: context.model.uri,

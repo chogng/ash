@@ -3,13 +3,7 @@ import type { Event } from '../../../../base/common/event.js';
 import { EditorPane } from './editorPane.js';
 import type { Selection } from '../../../../editor/common/core/selection.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
-import {
-	EditorPaneSelectionChangeReason,
-	type EditorPaneStatus,
-	type IEditorControl,
-	type IEditorPaneScrollPosition,
-	type IEditorPaneWithScrolling,
-} from '../../../common/editor.js';
+import { EditorPaneSelectionChangeReason, type EditorPaneStatus, type IEditorControl, type IEditorPaneScrollPosition, type IEditorPaneWithScrolling } from '../../../common/editor.js';
 
 export function toEditorPaneSelectionChangeReason(source: string): EditorPaneSelectionChangeReason {
 	switch (source) {
@@ -36,10 +30,7 @@ export interface ITextEditorControl extends IEditorControl {
 }
 
 /** Owns the status reported by a text editor to the Workbench. */
-export abstract class AbstractTextEditor<T extends ITextEditorControl>
-	extends EditorPane
-	implements IEditorPaneWithScrolling
-{
+export abstract class AbstractTextEditor<T extends ITextEditorControl> extends EditorPane implements IEditorPaneWithScrolling {
 	protected readonly scrollChangeEmitter = this._register(new Emitter<void>());
 	readonly onDidChangeScroll = this.scrollChangeEmitter.event;
 	protected readonly statusChangeEmitter = this._register(new Emitter<void>());

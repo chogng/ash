@@ -2,17 +2,8 @@ import { URI } from '../../base/common/uri.js';
 import { localize } from '../../nls.js';
 import { throwIfCancelled } from '../../base/common/cancellation.js';
 import { raceCancellationError } from '../../base/common/async.js';
-import type {
-	IChatService,
-	TurnChangeFile,
-	TurnChangeSetSummary,
-	TurnCommitPreview,
-} from '../../workbench/services/chat/common/chatService.js';
-import {
-	createMultiDiffEditorInput,
-	type MultiDiffEditorInput,
-	type MultiDiffEditorInputItem,
-} from '../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
+import type { IChatService, TurnChangeFile, TurnChangeSetSummary, TurnCommitPreview } from '../../workbench/services/chat/common/chatService.js';
+import { createMultiDiffEditorInput, type MultiDiffEditorInput, type MultiDiffEditorInputItem } from '../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import type { IActiveSessionThread } from '../services/sessions/common/session.js';
 import { createSessionFileChange } from '../services/sessions/common/session.js';
 
@@ -21,44 +12,20 @@ export type TurnMultiDiffScope = 'currentTurn' | 'throughCurrentTurn' | 'previou
 /** The composer can lag behind the current checkpoint before review starts. */
 export class ThreadChangesNotCurrentError extends Error {
 	constructor() {
-		super(
-			localize(
-				'chat.changes.checkpointChanged',
-				'The conversation changed while loading. Open Changes again to review its current checkpoint.',
-			),
-		);
+		super(localize('chat.changes.checkpointChanged', 'The conversation changed while loading. Open Changes again to review its current checkpoint.'));
 	}
 }
 
 /** Opens precisely the checkpoint revision advertised by the composer, across all repositories. */
-export async function createThreadMultiDiffEditorInput(
-	chat: IChatService,
-	sessionId: string,
-	threadId: string,
-	expectedRevision?: string,
-): Promise<MultiDiffEditorInput> {
+export async function createThreadMultiDiffEditorInput(chat: IChatService, sessionId: string, threadId: string, expectedRevision?: string): Promise<MultiDiffEditorInput> {
 	const summary = await chat.readThreadChanges(sessionId, threadId);
-	const changed = () =>
-		new Error(
-			localize(
-				'chat.changes.checkpointChanged',
-				'The conversation changed while loading. Open Changes again to review its current checkpoint.',
-			),
-		);
-	if (expectedRevision !== undefined && summary.revision !== expectedRevision)
-		throw new ThreadChangesNotCurrentError();
+	const changed = () => new Error(localize('chat.changes.checkpointChanged', 'The conversation changed while loading. Open Changes again to review its current checkpoint.'));
+	if (expectedRevision !== undefined && summary.revision !== expectedRevision) throw new ThreadChangesNotCurrentError();
 	const items: MultiDiffEditorInputItem[] = [];
 	for (const repository of summary.repositories) {
 		for (const file of repository.files) {
-			const contents = await chat.readThreadChangeFile(
-				sessionId,
-				threadId,
-				summary.revision,
-				repository.repositoryId,
-				file.path,
-			);
-			if (contents.truncated && !contents.binary)
-				throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.'));
+			const contents = await chat.readThreadChangeFile(sessionId, threadId, summary.revision, repository.repositoryId, file.path);
+			if (contents.truncated && !contents.binary) throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.'));
 			const resource = URI.from({
 				scheme: 'ash-thread-change',
 				path: `/${threadId}/${repository.repositoryId}/${file.path}`,
@@ -67,13 +34,7 @@ export async function createThreadMultiDiffEditorInput(
 			let label = file.previousPath ? `${file.previousPath} → ${file.path}` : file.path;
 			if (summary.repositories.length > 1) label = `${repository.repositoryId}: ${label}`;
 			if (file.beforeMode && file.afterMode && file.beforeMode !== file.afterMode) {
-				label = localize(
-					'sessions.changes.modeLabel',
-					'{0} (mode {1} → {2})',
-					label,
-					file.beforeMode,
-					file.afterMode,
-				);
+				label = localize('sessions.changes.modeLabel', '{0} (mode {1} → {2})', label, file.beforeMode, file.afterMode);
 			}
 			items.push({
 				label,
@@ -97,9 +58,7 @@ export async function createThreadMultiDiffEditorInput(
 	return createMultiDiffEditorInput(
 		URI.from({ scheme: 'ash-multi-diff', path: `/conversation/${sessionId}/${threadId}`, query: summary.revision }),
 		items,
-		summary.warnings.length
-			? localize('sessions.changes.previewWarnings', '{0} — Review: {1}', label, summary.warnings.join('; '))
-			: label,
+		summary.warnings.length ? localize('sessions.changes.previewWarnings', '{0} — Review: {1}', label, summary.warnings.join('; ')) : label,
 		{ kind: 'snapshot', label },
 	);
 }
@@ -135,22 +94,12 @@ export async function createTurnMultiDiffEditorInput(
 	const composed = new Map<string, ComposedTurnFile>();
 	for (const changeSet of repositoryChangeSets) {
 		checkCancelled();
-		const details = await read(
-			chatService.readTurnChange(active.session.sessionId, active.threadId, changeSet.changeSetId),
-		);
+		const details = await read(chatService.readTurnChange(active.session.sessionId, active.threadId, changeSet.changeSetId));
 		checkCancelled();
 		for (const file of details.files) {
-			const contents = await read(
-				chatService.readTurnChangeFile(
-					active.session.sessionId,
-					active.threadId,
-					changeSet.changeSetId,
-					file.path,
-				),
-			);
+			const contents = await read(chatService.readTurnChangeFile(active.session.sessionId, active.threadId, changeSet.changeSetId, file.path));
 			checkCancelled();
-			if (contents.truncated && !contents.binary)
-				throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.'));
+			if (contents.truncated && !contents.binary) throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.'));
 			const existing = composed.get(file.path);
 			if (existing) {
 				existing.after = contents.after ?? '';
@@ -167,17 +116,10 @@ export async function createTurnMultiDiffEditorInput(
 				latestSummary: details.summary,
 			});
 		}
-		const current = await read(
-			chatService.readTurnChange(active.session.sessionId, active.threadId, changeSet.changeSetId),
-		);
+		const current = await read(chatService.readTurnChange(active.session.sessionId, active.threadId, changeSet.changeSetId));
 		checkCancelled();
 		if (current.summary.revision !== details.summary.revision || current.summary.captureState === 'discarded') {
-			throw new Error(
-				localize(
-					'sessions.changes.captureChanged',
-					'This Turn capture changed while loading. Reopen its changes to review the latest revision.',
-				),
-			);
+			throw new Error(localize('sessions.changes.captureChanged', 'This Turn capture changed while loading. Reopen its changes to review the latest revision.'));
 		}
 	}
 	const items = [...composed.values()].map(turnFileInput);
@@ -203,13 +145,8 @@ interface ComposedTurnFile {
 	latestSummary: TurnChangeSetSummary;
 }
 
-function selectChangeSets(
-	changeSets: readonly TurnChangeSetSummary[],
-	scope: TurnMultiDiffScope,
-): readonly TurnChangeSetSummary[] {
-	const visible = changeSets.filter(
-		changeSet => changeSet.captureState !== 'discarded' && changeSet.statistics.files > 0,
-	);
+function selectChangeSets(changeSets: readonly TurnChangeSetSummary[], scope: TurnMultiDiffScope): readonly TurnChangeSetSummary[] {
+	const visible = changeSets.filter(changeSet => changeSet.captureState !== 'discarded' && changeSet.statistics.files > 0);
 	if (scope === 'currentTurn') return visible.slice(-1);
 	if (scope === 'previousTurn') return visible.slice(-2, -1);
 	return visible;
@@ -259,12 +196,7 @@ function basename(path: string): string {
 }
 
 /** Reviews the exact tree prepared by the backend, including binary and mode-only changes. */
-export async function createTurnCommitPreviewInput(
-	chat: IChatService,
-	sessionId: string,
-	threadId: string,
-	preview: TurnCommitPreview,
-): Promise<MultiDiffEditorInput> {
+export async function createTurnCommitPreviewInput(chat: IChatService, sessionId: string, threadId: string, preview: TurnCommitPreview): Promise<MultiDiffEditorInput> {
 	const items = await Promise.all(
 		preview.files.map(async file => {
 			const contents = await chat.readTurnCommitFile(sessionId, threadId, preview.commitId, file.path);
@@ -288,30 +220,14 @@ export async function createTurnCommitPreviewInput(
 				label = localize('sessions.changes.binaryLabel', '{0} (binary)', label);
 			}
 			if (file.beforeMode && file.afterMode && file.beforeMode !== file.afterMode) {
-				label = localize(
-					'sessions.changes.modeLabel',
-					'{0} (mode {1} → {2})',
-					label,
-					file.beforeMode,
-					file.afterMode,
-				);
+				label = localize('sessions.changes.modeLabel', '{0} (mode {1} → {2})', label, file.beforeMode, file.afterMode);
 			}
 			return { label, original, modified, binary: contents.binary, goToFile: modified };
 		}),
 	);
-	const resource = URI.parse(
-		`ash-multi-diff:/turn-commit/${encodeURIComponent(preview.commitId)}?session=${encodeURIComponent(sessionId)}&thread=${encodeURIComponent(threadId)}`,
-	);
-	const title = localize(
-		'sessions.changes.commitPreview',
-		'{0} files to commit to {1}: {2}',
-		preview.files.length,
-		preview.targetBranch,
-		preview.message,
-	);
-	const label = preview.warnings.length
-		? localize('sessions.changes.previewWarnings', '{0} — Review: {1}', title, preview.warnings.join('; '))
-		: title;
+	const resource = URI.parse(`ash-multi-diff:/turn-commit/${encodeURIComponent(preview.commitId)}?session=${encodeURIComponent(sessionId)}&thread=${encodeURIComponent(threadId)}`);
+	const title = localize('sessions.changes.commitPreview', '{0} files to commit to {1}: {2}', preview.files.length, preview.targetBranch, preview.message);
+	const label = preview.warnings.length ? localize('sessions.changes.previewWarnings', '{0} — Review: {1}', title, preview.warnings.join('; ')) : title;
 	return createMultiDiffEditorInput(resource, items, label, {
 		kind: 'external',
 		providerId: 'sessions.turnCommit',

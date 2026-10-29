@@ -1,10 +1,7 @@
 import type { Event } from '../../../../base/common/event.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import type {
-	IEnvironmentVariableCollection,
-	IMergedEnvironmentVariableCollection,
-} from '../../../../platform/terminal/common/environmentVariable.js';
+import type { IEnvironmentVariableCollection, IMergedEnvironmentVariableCollection } from '../../../../platform/terminal/common/environmentVariable.js';
 import type { ITerminalStatus } from './terminal.js';
 
 export interface IEnvironmentVariableInfo {
@@ -23,12 +20,8 @@ export interface IEnvironmentVariableService {
 	set(extensionIdentifier: string, collection: IEnvironmentVariableCollectionWithPersistence): void;
 	delete(extensionIdentifier: string): void;
 	/** Refreshes admitted extension snapshots at the launch boundary, under their original lifetime. */
-	registerCollectionProvider(
-		extensionIdentifier: string,
-		read: () => Promise<IEnvironmentVariableCollectionWithPersistence>,
-	): IDisposable;
+	registerCollectionProvider(extensionIdentifier: string, read: () => Promise<IEnvironmentVariableCollectionWithPersistence>): IDisposable;
 	refreshCollections(): Promise<void>;
 }
 
-export const IEnvironmentVariableService =
-	createServiceIdentifier<IEnvironmentVariableService>('environmentVariableService');
+export const IEnvironmentVariableService = createServiceIdentifier<IEnvironmentVariableService>('environmentVariableService');

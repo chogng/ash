@@ -40,11 +40,7 @@ export async function writeApplicationChecksums(applicationRoot: string): Promis
 	}
 	await collect('dist');
 	await collect('resources');
-	for (const path of [
-		'dist/main/src/main.js',
-		'dist/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs',
-		'dist/renderer/ash/electron-browser/workbench/workbench.html',
-	]) {
+	for (const path of ['dist/main/src/main.js', 'dist/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs', 'dist/renderer/ash/electron-browser/workbench/workbench.html']) {
 		if (!Object.hasOwn(checksums, path)) {
 			throw new Error(`Application checksum assets omit an entrypoint: ${path}`);
 		}
@@ -99,9 +95,7 @@ export async function buildHost(): Promise<void> {
 }
 
 /** Successful readiness includes the output content digest used to decide whether Electron needs restarting. */
-export async function watchHost(
-	onReady: (ready: boolean, output?: string) => void,
-): Promise<{ close: () => Promise<void>; done: Promise<void> }> {
+export async function watchHost(onReady: (ready: boolean, output?: string) => void): Promise<{ close: () => Promise<void>; done: Promise<void> }> {
 	await prepareHostBuild();
 	const completion = Promise.withResolvers<void>();
 	let compilerRun: ProcessRun | undefined;
@@ -113,9 +107,7 @@ export async function watchHost(
 	let pending = true;
 	// Keep TS7's dependency-tree FSEvents watcher away from build caches and
 	// runtime files. Watch source inputs here and invoke its incremental build once.
-	const roots = ['src', '.build/protocol/typescript', '.build/desktop/localization'].map(path =>
-		resolve(sourceRoot, path),
-	);
+	const roots = ['src', '.build/protocol/typescript', '.build/desktop/localization'].map(path => resolve(sourceRoot, path));
 	const directories = new Map<string, ts.FileWatcher>();
 	const nativeDirectories: FSWatcher[] = [];
 	const files = new Map<string, ts.FileWatcher>();
@@ -128,8 +120,7 @@ export async function watchHost(
 			// Windows timestamp polling cannot see equal-size saves with a restored
 			// mtime; native change events also let us compare their content digest.
 			const watcher = watch(root, { recursive: true }, (event, file) => {
-				if (file === null || event === 'rename' || /\.(?:[cm]?ts|json)$/u.test(file))
-					requestBuild(file === null ? root : resolve(root, file), event);
+				if (file === null || event === 'rename' || /\.(?:[cm]?ts|json)$/u.test(file)) requestBuild(file === null ? root : resolve(root, file), event);
 			});
 			watcher.on('error', error => {
 				if (!closing) fail(error);
@@ -152,8 +143,7 @@ export async function watchHost(
 			try {
 				for (const entry of readdirSync(path, { withFileTypes: true })) {
 					if (entry.isDirectory()) visit(join(path, entry.name));
-					else if (entry.isFile() && /\.(?:[cm]?ts|json)$/u.test(entry.name))
-						inputs.add(join(path, entry.name));
+					else if (entry.isFile() && /\.(?:[cm]?ts|json)$/u.test(entry.name)) inputs.add(join(path, entry.name));
 				}
 			} catch (error) {
 				if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
@@ -198,8 +188,7 @@ export async function watchHost(
 		// Subscribe before compilation, including imports not listed as tsconfig
 		// roots, so a save during the first build cannot escape the pending batch.
 		const paths = updateDirectoryWatches();
-		for (const path of ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'])
-			paths.add(resolve(sourceRoot, path));
+		for (const path of ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']) paths.add(resolve(sourceRoot, path));
 		const readConfig = (path: string): string | undefined => {
 			paths.add(resolve(path));
 			return ts.sys.readFile(path);
@@ -207,13 +196,7 @@ export async function watchHost(
 		for (const project of projects) {
 			const path = resolve(sourceRoot, project);
 			const config = ts.readJsonConfigFile(path, readConfig);
-			const parsed = ts.parseJsonSourceFileConfigFileContent(
-				config,
-				{ ...ts.sys, readFile: readConfig },
-				sourceRoot,
-				undefined,
-				path,
-			);
+			const parsed = ts.parseJsonSourceFileConfigFileContent(config, { ...ts.sys, readFile: readConfig }, sourceRoot, undefined, path);
 			for (const file of parsed.fileNames) paths.add(resolve(file));
 		}
 		const changed = paths.size !== files.size || [...paths].some(path => !files.has(path));
@@ -247,11 +230,7 @@ export async function watchHost(
 				const stamp = `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
 				const previous = observedFiles.get(path);
 				observedFiles.set(path, stamp);
-				if (
-					stamp === previous ||
-					(previous === undefined && stat.mtimeMs < watchStarted && stat.ctimeMs < watchStarted)
-				)
-					return;
+				if (stamp === previous || (previous === undefined && stat.mtimeMs < watchStarted && stat.ctimeMs < watchStarted)) return;
 			} catch {
 				observedFiles.delete(path);
 			}
@@ -300,16 +279,12 @@ export async function watchHost(
 		console.log('[host] Starting incremental compilation...');
 		const run = new ProcessRun(sourceRoot, undefined, 5_000);
 		compilerRun = run;
-		const child = spawn(
-			process.execPath,
-			[compiler, '--build', ...projects, '--pretty', 'false', ...(force ? ['--force'] : [])],
-			{
-				cwd: sourceRoot,
-				stdio: ['ignore', 'pipe', 'pipe'],
-				windowsHide: true,
-				detached: process.platform !== 'win32',
-			},
-		);
+		const child = spawn(process.execPath, [compiler, '--build', ...projects, '--pretty', 'false', ...(force ? ['--force'] : [])], {
+			cwd: sourceRoot,
+			stdio: ['ignore', 'pipe', 'pipe'],
+			windowsHide: true,
+			detached: process.platform !== 'win32',
+		});
 		const stdout = createInterface({ input: child.stdout });
 		const stderr = createInterface({ input: child.stderr });
 		stdout.on('line', line => console.log(`[host] ${line}`));
@@ -406,25 +381,17 @@ async function prepareHostBuild(): Promise<void> {
 }
 
 async function verifyPreload(): Promise<void> {
-	for (const path of [
-		preload,
-		join(outputRoot, 'preload/src/ash/platform/browserView/electron-browser/preload-browserView.js'),
-	]) {
+	for (const path of [preload, join(outputRoot, 'preload/src/ash/platform/browserView/electron-browser/preload-browserView.js')]) {
 		const source = await readFile(path, 'utf8');
 		if (path.endsWith('preload-browserView.js') && /(^|\n)\s*(export|import)\s/.test(source)) {
 			throw new Error('Browser preload must be a standalone script');
 		}
-		const imports = [...source.matchAll(/\brequire\(\s*(["'])(?<module>[^"']+)\1\s*\)/g)].map(
-			match => match.groups?.module,
-		);
+		const imports = [...source.matchAll(/\brequire\(\s*(["'])(?<module>[^"']+)\1\s*\)/g)].map(match => match.groups?.module);
 		if ([...source.matchAll(/\brequire\s*\(/g)].length !== imports.length) {
 			throw new Error('Sandbox preload contains a non-literal runtime import');
 		}
 		const unsupported = imports.filter(module => module !== 'electron');
-		if (unsupported.length)
-			throw new Error(
-				`Sandbox preload contains unsupported runtime imports: ${[...new Set(unsupported)].join(', ')}`,
-			);
+		if (unsupported.length) throw new Error(`Sandbox preload contains unsupported runtime imports: ${[...new Set(unsupported)].join(', ')}`);
 		if (!imports.includes('electron')) throw new Error('Sandbox preload does not import Electron');
 		if (/\bimport\s*\(/.test(source)) throw new Error('Sandbox preload contains a dynamic runtime import');
 	}

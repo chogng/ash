@@ -13,9 +13,7 @@ const addons = [
 		binary: 'keymapping.node',
 		exports: ['getKeyMap', 'getCurrentKeyboardLayout', 'onDidChangeKeyboardLayout'],
 	},
-	...(process.platform === 'win32'
-		? [{ name: 'native-is-elevated', binary: 'iselevated.node', exports: ['isElevated'] }]
-		: []),
+	...(process.platform === 'win32' ? [{ name: 'native-is-elevated', binary: 'iselevated.node', exports: ['isElevated'] }] : []),
 ];
 
 // Load the binding directly: both upstream JS wrappers hide load errors. Do not
@@ -33,20 +31,13 @@ for (const name of exports) {
 export async function prepareElectronAddons(applicationRoot: string, options: { force?: boolean } = {}): Promise<void> {
 	const electron: string = require('electron');
 	const { version } = require('electron/package.json');
-	if (typeof version !== 'string' || !/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/u.test(version))
-		throw new Error('Invalid Electron package version');
+	if (typeof version !== 'string' || !/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/u.test(version)) throw new Error('Invalid Electron package version');
 	const applicationRequire = createRequire(join(applicationRoot, 'package.json'));
 	for (const addon of addons) {
 		const packageRoot = dirname(applicationRequire.resolve(`${addon.name}/package.json`));
 		const binary = join(packageRoot, 'build/Release', addon.binary);
 		const fingerprint = await sourceFingerprint(packageRoot);
-		const cache = join(
-			repositoryRoot,
-			'.build/desktop-addons/v1',
-			`${process.platform}-${process.arch}`,
-			version,
-			`${addon.name}-${fingerprint}.json`,
-		);
+		const cache = join(repositoryRoot, '.build/desktop-addons/v1', `${process.platform}-${process.arch}`, version, `${addon.name}-${fingerprint}.json`);
 		const validate = async (): Promise<void> => {
 			await new Promise<void>((done, fail) => {
 				childProcess.execFile(
@@ -81,9 +72,7 @@ export async function prepareElectronAddons(applicationRoot: string, options: { 
 			}
 		}
 		if (!available) {
-			console.log(
-				`[desktop-addons] Building ${addon.name} for Electron ${version} (${process.platform}-${process.arch})`,
-			);
+			console.log(`[desktop-addons] Building ${addon.name} for Electron ${version} (${process.platform}-${process.arch})`);
 			// A successful .forge-meta check cannot repair a corrupt/missing binding.
 			// Force applies only after our runtime probe fails, or on explicit request.
 			const { rebuild } = await import('@electron/rebuild');
@@ -121,8 +110,7 @@ async function sourceFingerprint(packageRoot: string): Promise<string> {
 			if (entry.name === 'node_modules' || (!directory && ['build', 'bin'].includes(entry.name))) continue;
 			const path = directory ? `${directory}/${entry.name}` : entry.name;
 			if (entry.isDirectory()) await collect(path);
-			else if (entry.isFile())
-				hash.update(JSON.stringify([path, digest(await readFile(join(packageRoot, path)))]));
+			else if (entry.isFile()) hash.update(JSON.stringify([path, digest(await readFile(join(packageRoot, path)))]));
 			else throw new Error(`Addon source must be a regular file or directory: ${path}`);
 		}
 	}
@@ -142,15 +130,7 @@ async function restoreBinding(cache: string, binary: string): Promise<boolean> {
 		if (error.code === 'ENOENT' || error instanceof SyntaxError) return false;
 		throw error;
 	}
-	if (
-		!record ||
-		typeof record !== 'object' ||
-		!('data' in record) ||
-		typeof record.data !== 'string' ||
-		!('sha256' in record) ||
-		typeof record.sha256 !== 'string'
-	)
-		return false;
+	if (!record || typeof record !== 'object' || !('data' in record) || typeof record.data !== 'string' || !('sha256' in record) || typeof record.sha256 !== 'string') return false;
 	const bytes = Buffer.from(record.data, 'base64');
 	if (!bytes.length || digest(bytes) !== record.sha256) return false;
 	await publish(binary, bytes);

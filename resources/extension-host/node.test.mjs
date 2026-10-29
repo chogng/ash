@@ -117,10 +117,7 @@ async function host(t, source, entry = 'extension.cjs', capabilities = ['command
 		}
 		if (frame.callId) {
 			clientCalls.push(frame);
-			if (onClient)
-				Promise.resolve(onClient(frame)).then(value =>
-					send({ context: frame.context, callId: frame.callId, outcome: { Ok: value } }),
-				);
+			if (onClient) Promise.resolve(onClient(frame)).then(value => send({ context: frame.context, callId: frame.callId, outcome: { Ok: value } }));
 			return;
 		}
 		const waiter = waiters.get(frame.requestId);
@@ -150,8 +147,7 @@ async function host(t, source, entry = 'extension.cjs', capabilities = ['command
 		return { requestId, result };
 	}
 	for (const environment of fixture.rejectedEnvironments ?? []) {
-		const rejected = await request('initialize', { extensionId: 'test.node', runtimeApiVersion: 1, environment })
-			.result;
+		const rejected = await request('initialize', { extensionId: 'test.node', runtimeApiVersion: 1, environment }).result;
 		assert.equal(rejected.status, 'failure');
 	}
 	const initial = await request('initialize', {
@@ -180,10 +176,7 @@ async function host(t, source, entry = 'extension.cjs', capabilities = ['command
 	assert.equal(activated.body.result, 'activated', stderr);
 	return {
 		registrationEvent(revision) {
-			return (
-				registrationEvents.find(event => event.revision === revision) ??
-				new Promise(resolve => registrationWaiters.set(revision, resolve))
-			);
+			return registrationEvents.find(event => event.revision === revision) ?? new Promise(resolve => registrationWaiters.set(revision, resolve));
 		},
 		child,
 		control,
@@ -223,9 +216,7 @@ test('Ash ESM and CommonJS commands use the same host-bound SDK', { timeout: 100
 			{ api: 'ash' },
 		);
 		assert.deepEqual(
-			h.registrations
-				.filter(registration => registration.kind === 'command')
-				.map(registration => registration.command),
+			h.registrations.filter(registration => registration.kind === 'command').map(registration => registration.command),
 			['test.node'],
 		);
 		const result = await h.invoke('test.node', ['/workspace/你好.txt']).result;
@@ -271,96 +262,84 @@ test('Ash rejects legacy API imports and undeclared command registrations', { ti
 		api: 'ash',
 		expectActivationFailure: true,
 	});
-	await host(
-		t,
-		`import * as ash from '@ash/sdk'; export function activate() { ash.commands.register('undeclared', () => null); }`,
-		'extension.mjs',
-		['command'],
-		undefined,
-		{ api: 'ash', expectActivationFailure: true },
-	);
+	await host(t, `import * as ash from '@ash/sdk'; export function activate() { ash.commands.register('undeclared', () => null); }`, 'extension.mjs', ['command'], undefined, {
+		api: 'ash',
+		expectActivationFailure: true,
+	});
 });
 
-test(
-	'the public Ash SDK exposes every implemented domain and excludes retired and raw interfaces',
-	{ timeout: 10000 },
-	async t => {
-		const published = await import('../../sdk/typescript/index.js');
-		const h = await host(
-			t,
-			`const ash = require('@ash/sdk');
+test('the public Ash SDK exposes every implemented domain and excludes retired and raw interfaces', { timeout: 10000 }, async t => {
+	const published = await import('../../sdk/typescript/index.js');
+	const h = await host(
+		t,
+		`const ash = require('@ash/sdk');
 exports.activate = context => context.subscriptions.push(ash.commands.register('test.node', async () => {
  const unavailable = [];
  for (const key of ['ash', 'backend', 'editors']) { try { ash[key]; } catch { unavailable.push(key); } }
  for (const key of ['registerCommand', 'executeCommand']) { try { ash.commands[key]; } catch { unavailable.push(key); } }
  return { keys: Object.keys(ash).sort(), unavailable, result: await ash.commands.execute('test.target', 42) };
 }));`,
-			'extension.cjs',
-			['command'],
-			frame => {
-				assert.deepEqual(frame.operation, {
-					operation: 'executeCommand',
-					command: 'test.target',
-					arguments: [42],
-				});
-				return { result: 'command', value: 'called' };
-			},
-		);
-		assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, {
-			keys: Object.keys(published).sort(),
-			unavailable: ['ash', 'backend', 'editors', 'registerCommand', 'executeCommand'],
-			result: 'called',
-		});
-	},
-);
+		'extension.cjs',
+		['command'],
+		frame => {
+			assert.deepEqual(frame.operation, {
+				operation: 'executeCommand',
+				command: 'test.target',
+				arguments: [42],
+			});
+			return { result: 'command', value: 'called' };
+		},
+	);
+	assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, {
+		keys: Object.keys(published).sort(),
+		unavailable: ['ash', 'backend', 'editors', 'registerCommand', 'executeCommand'],
+		result: 'called',
+	});
+});
 
-test(
-	'Ash comparison opening accepts existing comparison inputs through a bounded editor operation',
-	{ timeout: 10000 },
-	async t => {
-		const calls = [];
-		const h = await host(
-			t,
-			`const ash = require('@ash/sdk');
+test('Ash comparison opening accepts existing comparison inputs through a bounded editor operation', { timeout: 10000 }, async t => {
+	const calls = [];
+	const h = await host(
+		t,
+		`const ash = require('@ash/sdk');
 exports.activate = context => context.subscriptions.push(ash.commands.register('test.node', async input => {
  await ash.window.openComparison(input, { pinned: true }, true); return 'opened';
 }));`,
-			'extension.cjs',
-			['command'],
-			frame => {
-				calls.push(frame.operation);
-				return { result: 'value', value: null };
-			},
-		);
-		const original = {
-			resource: 'snapshot:/before',
-			initialBytes: [0, 255],
-			contentType: 'application/octet-stream',
-		};
-		const modified = {
-			resource: 'snapshot:/after',
-			initialBytes: [0, 254],
-			contentType: 'application/octet-stream',
-		};
-		for (const input of [
-			{
-				kind: 'diff',
-				original: { resource: 'snapshot:/text', initialText: 'before' },
-				modified: { resource: 'file:/after' },
-			},
-			{ kind: 'binaryDiff', original, modified },
-			{ kind: 'multiDiff', resource: 'comparison:/changes', items: [{ binary: true, original, modified }] },
-		]) {
-			assert.equal((await h.invoke('test.node', [input]).result).body.body.payload, 'opened');
-			assert.deepEqual(calls.at(-1), {
-				operation: 'editorOperation',
-				payload: { method: 'open', input, options: { pinned: true }, sideBySide: true },
-			});
-		}
-		assert.equal((await h.invoke('test.node', [{ kind: 'raw', method: 'dispose' }]).result).status, 'failure');
-		assert.equal(calls.length, 3);
-	},
-);
+		'extension.cjs',
+		['command'],
+		frame => {
+			calls.push(frame.operation);
+			return { result: 'value', value: null };
+		},
+	);
+	const original = {
+		resource: 'snapshot:/before',
+		initialBytes: [0, 255],
+		contentType: 'application/octet-stream',
+	};
+	const modified = {
+		resource: 'snapshot:/after',
+		initialBytes: [0, 254],
+		contentType: 'application/octet-stream',
+	};
+	for (const input of [
+		{
+			kind: 'diff',
+			original: { resource: 'snapshot:/text', initialText: 'before' },
+			modified: { resource: 'file:/after' },
+		},
+		{ kind: 'binaryDiff', original, modified },
+		{ kind: 'multiDiff', resource: 'comparison:/changes', items: [{ binary: true, original, modified }] },
+	]) {
+		assert.equal((await h.invoke('test.node', [input]).result).body.body.payload, 'opened');
+		assert.deepEqual(calls.at(-1), {
+			operation: 'editorOperation',
+			payload: { method: 'open', input, options: { pinned: true }, sideBySide: true },
+		});
+	}
+	assert.equal((await h.invoke('test.node', [{ kind: 'raw', method: 'dispose' }]).result).status, 'failure');
+	assert.equal(calls.length, 3);
+});
 
 test('Ash manifest command titles follow the initiating client language', { timeout: 10000 }, async t => {
 	const h = await host(
@@ -399,9 +378,7 @@ exports.activate = context => context.subscriptions.push(v.window.registerCustom
 		{
 			manifest: {
 				contributes: {
-					customEditors: [
-						{ viewType: 'test.editor', displayName: 'Editor', selector: [{ filenamePattern: '*.md' }] },
-					],
+					customEditors: [{ viewType: 'test.editor', displayName: 'Editor', selector: [{ filenamePattern: '*.md' }] }],
 				},
 			},
 		},
@@ -420,59 +397,50 @@ exports.activate = context => context.subscriptions.push(v.window.registerCustom
 	});
 });
 
-test(
-	'window environment is applied before module evaluation and inherited by Debug children',
-	{ timeout: 15000 },
-	async t => {
-		const source = `const v = require('@ash/sdk'); const cp = require('node:child_process');
+test('window environment is applied before module evaluation and inherited by Debug children', { timeout: 15000 }, async t => {
+	const source = `const v = require('@ash/sdk'); const cp = require('node:child_process');
 const keys = ['ASH_NODE_ENV_VALUE', 'ASH_NODE_ENV_REMOVE', 'ASH_NODE_ENV_EMPTY', 'ASH_NODE_ENV_INHERITED', 'OPENAI_API_KEY'];
 const snapshot = () => Object.fromEntries(keys.map(key => [key, process.env[key] ?? null]));
 const evaluation = snapshot();
 exports.activate = context => context.subscriptions.push(v.commands.register('test.node', () => ({
     evaluation, current: snapshot(), child: JSON.parse(cp.execFileSync(process.execPath, ['-e', 'process.stdout.write(JSON.stringify(Object.fromEntries(' + JSON.stringify(keys) + '.map(key => [key, process.env[key] ?? null]))))'], { encoding: 'utf8' }))
 })));`;
-		const inheritedEnvironment = {
-			ASH_NODE_ENV_VALUE: 'inherited',
-			ASH_NODE_ENV_REMOVE: 'remove',
-			ASH_NODE_ENV_EMPTY: 'nonempty',
+	const inheritedEnvironment = {
+		ASH_NODE_ENV_VALUE: 'inherited',
+		ASH_NODE_ENV_REMOVE: 'remove',
+		ASH_NODE_ENV_EMPTY: 'nonempty',
+		ASH_NODE_ENV_INHERITED: 'keep',
+		OPENAI_API_KEY: 'synthetic-developer-key',
+	};
+	const first = await host(t, source, 'extension.cjs', ['command'], undefined, {
+		inheritedEnvironment,
+		environment: { ASH_NODE_ENV_VALUE: 'first', ASH_NODE_ENV_REMOVE: null, ASH_NODE_ENV_EMPTY: '' },
+		// Invalid batches must leave even preceding valid entries untouched.
+		rejectedEnvironments: [{ ASH_NODE_ENV_INHERITED: 'changed', 'invalid-name': 'reject' }, [], { VALUE: 'value\0' }, { VALUE: 42 }],
+	});
+	const second = await host(t, source, 'extension.cjs', ['command'], undefined, {
+		inheritedEnvironment,
+		environment: { ASH_NODE_ENV_VALUE: 'second' },
+	});
+	assert.notEqual(first.child.pid, second.child.pid);
+	for (const [h, value, remove, empty] of [
+		[first, 'first', null, ''],
+		[second, 'second', 'remove', 'nonempty'],
+	]) {
+		const expected = {
+			ASH_NODE_ENV_VALUE: value,
+			ASH_NODE_ENV_REMOVE: remove,
+			ASH_NODE_ENV_EMPTY: empty,
 			ASH_NODE_ENV_INHERITED: 'keep',
 			OPENAI_API_KEY: 'synthetic-developer-key',
 		};
-		const first = await host(t, source, 'extension.cjs', ['command'], undefined, {
-			inheritedEnvironment,
-			environment: { ASH_NODE_ENV_VALUE: 'first', ASH_NODE_ENV_REMOVE: null, ASH_NODE_ENV_EMPTY: '' },
-			// Invalid batches must leave even preceding valid entries untouched.
-			rejectedEnvironments: [
-				{ ASH_NODE_ENV_INHERITED: 'changed', 'invalid-name': 'reject' },
-				[],
-				{ VALUE: 'value\0' },
-				{ VALUE: 42 },
-			],
+		assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, {
+			evaluation: expected,
+			current: expected,
+			child: expected,
 		});
-		const second = await host(t, source, 'extension.cjs', ['command'], undefined, {
-			inheritedEnvironment,
-			environment: { ASH_NODE_ENV_VALUE: 'second' },
-		});
-		assert.notEqual(first.child.pid, second.child.pid);
-		for (const [h, value, remove, empty] of [
-			[first, 'first', null, ''],
-			[second, 'second', 'remove', 'nonempty'],
-		]) {
-			const expected = {
-				ASH_NODE_ENV_VALUE: value,
-				ASH_NODE_ENV_REMOVE: remove,
-				ASH_NODE_ENV_EMPTY: empty,
-				ASH_NODE_ENV_INHERITED: 'keep',
-				OPENAI_API_KEY: 'synthetic-developer-key',
-			};
-			assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, {
-				evaluation: expected,
-				current: expected,
-				child: expected,
-			});
-		}
-	},
-);
+	}
+});
 
 test('CJS extension uses real Node filesystem, TCP, child processes and module cache', { timeout: 15000 }, async t => {
 	const h = await host(
@@ -531,13 +499,10 @@ export function activate(context) { if (commands !== v.commands) throw Error('AP
 	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 'real-node.js');
 });
 
-test(
-	'transpiled CommonJS imports can inspect module metadata without changing API identity',
-	{ timeout: 10000 },
-	async t => {
-		const h = await host(
-			t,
-			`const raw = require('@ash/sdk');
+test('transpiled CommonJS imports can inspect module metadata without changing API identity', { timeout: 10000 }, async t => {
+	const h = await host(
+		t,
+		`const raw = require('@ash/sdk');
 const imported = raw && raw.__esModule ? raw : { ...raw, default: raw };
 if (imported.default !== raw || imported.commands !== raw.commands) throw Error('Module identity differs');
 if (raw.commands.__esModule !== undefined) throw Error('Namespace metadata differs');
@@ -545,13 +510,9 @@ exports.activate = context => context.subscriptions.push(imported.commands.regis
     try { raw.missingPublicApi(); } catch (error) { return error.message; }
     throw Error('Unsupported API was silently accepted');
 }));`,
-		);
-		assert.equal(
-			(await h.invoke('test.node', []).result).body.body.payload,
-			'Unsupported Ash API: ash.missingPublicApi',
-		);
-	},
-);
+	);
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 'Unsupported Ash API: ash.missingPublicApi');
+});
 
 test('debug extension tree item subclasses retain public label and resource values', { timeout: 10000 }, async t => {
 	const h = await host(
@@ -580,13 +541,10 @@ exports.activate = context => context.subscriptions.push(v.commands.register('te
 	});
 });
 
-test(
-	'window language selects the package translation bundle before CommonJS evaluation',
-	{ timeout: 10000 },
-	async t => {
-		const h = await host(
-			t,
-			`const v = require('@ash/sdk');
+test('window language selects the package translation bundle before CommonJS evaluation', { timeout: 10000 }, async t => {
+	const h = await host(
+		t,
+		`const v = require('@ash/sdk');
 const evaluation = v.l10n.t('Target {0}', 'worker');
 exports.activate = context => context.subscriptions.push(v.commands.register('test.node', () => ({
     language: v.env.language, evaluation, uri: v.l10n.uri.path.endsWith('/l10n/bundle.l10n.zh-cn.json'),
@@ -594,128 +552,119 @@ exports.activate = context => context.subscriptions.push(v.commands.register('te
     comment: v.l10n.t({ message: 'Paused {0}', args: [false], comment: ['debug', ' state'] }),
     fallback: v.l10n.t('Missing {0} {1}', 'first'), inherited: v.l10n.t('toString'),
 })));`,
+		'extension.cjs',
+		['command'],
+		undefined,
+		{
+			language: 'zh-cn',
+			manifest: { l10n: './l10n' },
+			files: {
+				'l10n/bundle.l10n.zh-cn.json': JSON.stringify({
+					'Target {0}': '目标 {0}',
+					'Ready {name}: {count}': '就绪 {name}：{count}',
+					'Paused {0}/debug state': '已暂停 {0}',
+				}),
+			},
+		},
+	);
+	assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, {
+		language: 'zh-cn',
+		evaluation: '目标 worker',
+		uri: true,
+		contents: '目标 {0}',
+		named: '就绪 worker：0',
+		comment: '已暂停 false',
+		fallback: 'Missing first {1}',
+		inherited: 'toString',
+	});
+});
+
+test('missing or invalid translation resources fall back to the source without inventing a bundle', { timeout: 10000 }, async t => {
+	for (const fixture of [
+		{
+			language: 'en',
+			manifest: { l10n: './l10n' },
+			files: { 'l10n/bundle.l10n.en.json': '{"Target":"unwanted"}' },
+		},
+		{ language: 'zh-cn', manifest: { l10n: './missing' } },
+		{
+			language: 'zh-cn',
+			manifest: { l10n: './l10n' },
+			files: { 'l10n/bundle.l10n.zh-cn.json': 'invalid json' },
+		},
+		{
+			language: 'zh-cn',
+			manifest: { l10n: '../outside' },
+			files: { '../outside/bundle.l10n.zh-cn.json': '{"Target":"outside"}' },
+		},
+	]) {
+		const h = await host(
+			t,
+			`const v = require('@ash/sdk'); exports.activate = context => context.subscriptions.push(v.commands.register('test.node', () => ({ message: v.l10n.t('Target {0}', 0), bundle: v.l10n.bundle === undefined, uri: v.l10n.uri === undefined })));`,
 			'extension.cjs',
 			['command'],
 			undefined,
-			{
-				language: 'zh-cn',
-				manifest: { l10n: './l10n' },
-				files: {
-					'l10n/bundle.l10n.zh-cn.json': JSON.stringify({
-						'Target {0}': '目标 {0}',
-						'Ready {name}: {count}': '就绪 {name}：{count}',
-						'Paused {0}/debug state': '已暂停 {0}',
-					}),
-				},
-			},
+			fixture,
 		);
 		assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, {
-			language: 'zh-cn',
-			evaluation: '目标 worker',
+			message: 'Target 0',
+			bundle: true,
 			uri: true,
-			contents: '目标 {0}',
-			named: '就绪 worker：0',
-			comment: '已暂停 false',
-			fallback: 'Missing first {1}',
-			inherited: 'toString',
 		});
-	},
-);
+	}
+});
 
-test(
-	'missing or invalid translation resources fall back to the source without inventing a bundle',
-	{ timeout: 10000 },
-	async t => {
-		for (const fixture of [
-			{
-				language: 'en',
-				manifest: { l10n: './l10n' },
-				files: { 'l10n/bundle.l10n.en.json': '{"Target":"unwanted"}' },
-			},
-			{ language: 'zh-cn', manifest: { l10n: './missing' } },
-			{
-				language: 'zh-cn',
-				manifest: { l10n: './l10n' },
-				files: { 'l10n/bundle.l10n.zh-cn.json': 'invalid json' },
-			},
-			{
-				language: 'zh-cn',
-				manifest: { l10n: '../outside' },
-				files: { '../outside/bundle.l10n.zh-cn.json': '{"Target":"outside"}' },
-			},
-		]) {
-			const h = await host(
-				t,
-				`const v = require('@ash/sdk'); exports.activate = context => context.subscriptions.push(v.commands.register('test.node', () => ({ message: v.l10n.t('Target {0}', 0), bundle: v.l10n.bundle === undefined, uri: v.l10n.uri === undefined })));`,
-				'extension.cjs',
-				['command'],
-				undefined,
-				fixture,
-			);
-			assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, {
-				message: 'Target 0',
-				bundle: true,
-				uri: true,
-			});
-		}
-	},
-);
-
-test(
-	'concurrent callbacks retain identity and detached Node work uses the activation fence',
-	{ timeout: 10000 },
-	async t => {
-		const h = await host(
-			t,
-			`const v = require('@ash/sdk'); exports.activate = context => {
+test('concurrent callbacks retain identity and detached Node work uses the activation fence', { timeout: 10000 }, async t => {
+	const h = await host(
+		t,
+		`const v = require('@ash/sdk'); exports.activate = context => {
 context.subscriptions.push(v.commands.register('test.node', async key => { await new Promise(resolve => setTimeout(resolve, key === 'first' ? 15 : 1)); return v.commands.execute('read.identity', key); }));
 context.subscriptions.push(v.commands.register('test.second', async () => { setTimeout(async () => { const result = await v.commands.execute('background'); require('node:fs').writeFileSync(__dirname + '/background.txt', result); }, 25); return 'finished'; }));
 };`,
-		);
-		const first = h.invoke('test.node', ['first']);
-		const second = h.invoke('test.node', ['second']);
-		while (h.clientCalls.length < 2) {
-			if (t.signal.aborted) throw new Error('Test aborted');
-			await new Promise(resolve => setTimeout(resolve, 2));
-		}
-		assert.deepEqual(
-			h.clientCalls.map(call => call.context.requestId).sort((a, b) => a - b),
-			[first.requestId, second.requestId],
-		);
-		for (const call of h.clientCalls) {
-			h.send({
-				context: call.context,
-				callId: call.callId,
-				outcome: { Ok: { result: 'command', value: call.operation.arguments[0], hasValue: true } },
-			});
-		}
-		assert.equal((await first.result).body.body.payload, 'first');
-		assert.equal((await second.result).body.body.payload, 'second');
-		assert.equal((await h.invoke('test.second', []).result).body.body.payload, 'finished');
-		while (h.clientCalls.length < 3) {
-			if (t.signal.aborted) throw new Error('Test aborted');
-			await new Promise(resolve => setTimeout(resolve, 2));
-		}
-		const background = h.clientCalls[2];
-		assert.deepEqual(background.context, { protocolVersion: 1, incarnation: 2, activationGeneration: 3 });
-		assert.equal(background.operation.command, 'background');
+	);
+	const first = h.invoke('test.node', ['first']);
+	const second = h.invoke('test.node', ['second']);
+	while (h.clientCalls.length < 2) {
+		if (t.signal.aborted) throw new Error('Test aborted');
+		await new Promise(resolve => setTimeout(resolve, 2));
+	}
+	assert.deepEqual(
+		h.clientCalls.map(call => call.context.requestId).sort((a, b) => a - b),
+		[first.requestId, second.requestId],
+	);
+	for (const call of h.clientCalls) {
 		h.send({
-			context: background.context,
-			callId: background.callId,
-			outcome: { Ok: { result: 'command', value: 'lifecycle result' } },
+			context: call.context,
+			callId: call.callId,
+			outcome: { Ok: { result: 'command', value: call.operation.arguments[0], hasValue: true } },
 		});
-		while (true) {
-			if (t.signal.aborted) throw new Error('Test aborted');
-			try {
-				assert.equal(await readFile(join(h.extension, 'background.txt'), 'utf8'), 'lifecycle result');
-				break;
-			} catch (error) {
-				if (error.code !== 'ENOENT') throw error;
-				await new Promise(resolve => setTimeout(resolve, 2));
-			}
+	}
+	assert.equal((await first.result).body.body.payload, 'first');
+	assert.equal((await second.result).body.body.payload, 'second');
+	assert.equal((await h.invoke('test.second', []).result).body.body.payload, 'finished');
+	while (h.clientCalls.length < 3) {
+		if (t.signal.aborted) throw new Error('Test aborted');
+		await new Promise(resolve => setTimeout(resolve, 2));
+	}
+	const background = h.clientCalls[2];
+	assert.deepEqual(background.context, { protocolVersion: 1, incarnation: 2, activationGeneration: 3 });
+	assert.equal(background.operation.command, 'background');
+	h.send({
+		context: background.context,
+		callId: background.callId,
+		outcome: { Ok: { result: 'command', value: 'lifecycle result' } },
+	});
+	while (true) {
+		if (t.signal.aborted) throw new Error('Test aborted');
+		try {
+			assert.equal(await readFile(join(h.extension, 'background.txt'), 'utf8'), 'lifecycle result');
+			break;
+		} catch (error) {
+			if (error.code !== 'ENOENT') throw error;
+			await new Promise(resolve => setTimeout(resolve, 2));
 		}
-	},
-);
+	}
+});
 
 test('cancellation reaches the Debug provider token without retiring other callbacks', { timeout: 10000 }, async t => {
 	const h = await host(
@@ -732,9 +681,7 @@ context.subscriptions.push(v.commands.register('test.second', () => 'other'));
 		'extension.cjs',
 		['command', 'debugAdapter'],
 	);
-	const registrationId = h.registrations.find(
-		registration => registration.kind === 'debugConfigurationProvider',
-	).registrationId;
+	const registrationId = h.registrations.find(registration => registration.kind === 'debugConfigurationProvider').registrationId;
 	const pending = h.request('invoke', {
 		extensionId: 'test.node',
 		registrationId,
@@ -752,45 +699,35 @@ context.subscriptions.push(v.commands.register('test.second', () => 'other'));
 			await new Promise(resolve => setTimeout(resolve, 2));
 		}
 	}
-	assert.equal(
-		(await h.request('cancel', { requestId: pending.requestId, reason: 'caller' }).result).status,
-		'failure',
-	);
-	assert.equal(
-		(await h.request('cancel', { targetRequestId: pending.requestId, reason: 'caller' }).result).body.result,
-		'cancelled',
-	);
+	assert.equal((await h.request('cancel', { requestId: pending.requestId, reason: 'caller' }).result).status, 'failure');
+	assert.equal((await h.request('cancel', { targetRequestId: pending.requestId, reason: 'caller' }).result).body.result, 'cancelled');
 	assert.equal((await h.invoke('test.second', []).result).body.body.payload, 'other');
 	assert.deepEqual((await pending.result).body.body.payload, { cancelled: true });
 });
 
-test(
-	'late service replies after cancellation cannot revive authority or break other callbacks',
-	{ timeout: 10000 },
-	async t => {
-		const h = await host(
-			t,
-			`const v = require('@ash/sdk'); exports.activate = context => {
+test('late service replies after cancellation cannot revive authority or break other callbacks', { timeout: 10000 }, async t => {
+	const h = await host(
+		t,
+		`const v = require('@ash/sdk'); exports.activate = context => {
 context.subscriptions.push(v.commands.register('test.node', async () => { try { return await v.commands.execute('waiting'); } catch (error) { return error.code; } }));
 context.subscriptions.push(v.commands.register('test.second', () => 'other'));
 };`,
-		);
-		const pending = h.invoke('test.node', []);
-		while (h.clientCalls.length < 1) {
-			if (t.signal.aborted) throw new Error('Test aborted');
-			await new Promise(resolve => setTimeout(resolve, 2));
-		}
-		const call = h.clientCalls[0];
-		await h.request('cancel', { targetRequestId: pending.requestId, reason: 'caller' }).result;
-		assert.equal((await pending.result).body.body.payload, 'cancelled');
-		h.send({
-			context: call.context,
-			callId: call.callId,
-			outcome: { Ok: { result: 'command', value: 'late', hasValue: true } },
-		});
-		assert.equal((await h.invoke('test.second', []).result).body.body.payload, 'other');
-	},
-);
+	);
+	const pending = h.invoke('test.node', []);
+	while (h.clientCalls.length < 1) {
+		if (t.signal.aborted) throw new Error('Test aborted');
+		await new Promise(resolve => setTimeout(resolve, 2));
+	}
+	const call = h.clientCalls[0];
+	await h.request('cancel', { targetRequestId: pending.requestId, reason: 'caller' }).result;
+	assert.equal((await pending.result).body.body.payload, 'cancelled');
+	h.send({
+		context: call.context,
+		callId: call.callId,
+		outcome: { Ok: { result: 'command', value: 'late', hasValue: true } },
+	});
+	assert.equal((await h.invoke('test.second', []).result).body.body.payload, 'other');
+});
 
 test('activation can await editor services before publishing its registrations', { timeout: 10000 }, async t => {
 	const calls = [];
@@ -805,9 +742,7 @@ test('activation can await editor services before publishing its registrations',
 		['command'],
 		frame => {
 			calls.push(frame);
-			return frame.operation.operation === 'showMessage'
-				? { result: 'done' }
-				: { result: 'command', value: 'activated with editor IO' };
+			return frame.operation.operation === 'showMessage' ? { result: 'done' } : { result: 'command', value: 'activated with editor IO' };
 		},
 	);
 	assert.deepEqual(
@@ -876,30 +811,26 @@ test('Quick Pick preserves item metadata and returns the original item', { timeo
 	assert.equal((await h.invoke('test.node', []).result).body.body.payload, true);
 });
 
-test(
-	'shutdown cancels detached service requests without unhandled rejection terminating the protocol',
-	{ timeout: 10000 },
-	async t => {
-		const h = await host(
-			t,
-			`const v = require('@ash/sdk'); exports.activate = context => {
+test('shutdown cancels detached service requests without unhandled rejection terminating the protocol', { timeout: 10000 }, async t => {
+	const h = await host(
+		t,
+		`const v = require('@ash/sdk'); exports.activate = context => {
         context.subscriptions.push(v.commands.register('test.node', () => {
             setTimeout(() => { void v.commands.execute('background.wait'); }, 5);
             return 'queued';
         }));
     };`,
-		);
-		assert.equal((await h.invoke('test.node', []).result).body.body.payload, 'queued');
-		while (!h.clientCalls.length) {
-			if (t.signal.aborted) throw new Error('Test aborted');
-			await new Promise(resolve => setTimeout(resolve, 2));
-		}
-		const exit = once(h.child, 'exit');
-		assert.equal((await h.request('deactivate').result).body.result, 'deactivated');
-		assert.equal((await h.request('shutdown').result).body.result, 'shutdown');
-		assert.equal((await exit)[0], 0);
-	},
-);
+	);
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 'queued');
+	while (!h.clientCalls.length) {
+		if (t.signal.aborted) throw new Error('Test aborted');
+		await new Promise(resolve => setTimeout(resolve, 2));
+	}
+	const exit = once(h.child, 'exit');
+	assert.equal((await h.request('deactivate').result).body.result, 'deactivated');
+	assert.equal((await h.request('shutdown').result).body.result, 'shutdown');
+	assert.equal((await exit)[0], 0);
+});
 
 test('parallel activation IO applies bounded backpressure and completes every request', { timeout: 10000 }, async t => {
 	let activeCalls = 0;
@@ -927,102 +858,90 @@ test('parallel activation IO applies bounded backpressure and completes every re
 	);
 });
 
-test(
-	'private secrets provide only fresh UTF-8 get/store/delete, including empty values',
-	{ timeout: 10000 },
-	async t => {
-		let value = null;
-		const h = await host(
-			t,
-			`const ash = require('@ash/sdk'); exports.activate = context => context.subscriptions.push(ash.commands.register('test.node', async (action,input) => {
+test('private secrets provide only fresh UTF-8 get/store/delete, including empty values', { timeout: 10000 }, async t => {
+	let value = null;
+	const h = await host(
+		t,
+		`const ash = require('@ash/sdk'); exports.activate = context => context.subscriptions.push(ash.commands.register('test.node', async (action,input) => {
  if (action === 'store') { await context.secrets.store('token',input); return null; }
  if (action === 'delete') return context.secrets.delete('token');
  if (action === 'methods') return Object.keys(context.secrets).sort();
  return {value:await context.secrets.get('token')};
 }));`,
-			'extension.cjs',
-			['command'],
-			frame => {
-				const request = frame.operation.request;
-				let response;
-				if (request.service === 'secretLoad') response = { service: 'secretLoaded', value };
-				if (request.service === 'secretStore') {
-					assert.equal(request.key, 'token');
-					value = request.value;
-					response = { service: 'secretStored' };
-				}
-				if (request.service === 'secretDelete') {
-					const deleted = value !== null;
-					value = null;
-					response = { service: 'secretDeleted', deleted };
-				}
-				assert.ok(response);
-				return { result: 'coreService', response };
-			},
-		);
-		assert.deepEqual((await h.invoke('test.node', ['get']).result).body.body.payload, {});
-		await h.invoke('test.node', ['store', '你好']).result;
-		assert.deepEqual(value, [...new TextEncoder().encode('你好')]);
-		assert.deepEqual((await h.invoke('test.node', ['get']).result).body.body.payload, { value: '你好' });
-		value = [...new TextEncoder().encode('changed elsewhere')];
-		assert.deepEqual((await h.invoke('test.node', ['get']).result).body.body.payload, {
-			value: 'changed elsewhere',
-		});
-		await h.invoke('test.node', ['store', '']).result;
-		assert.deepEqual((await h.invoke('test.node', ['get']).result).body.body.payload, { value: '' });
-		assert.equal((await h.invoke('test.node', ['delete']).result).body.body.payload, true);
-		assert.equal((await h.invoke('test.node', ['delete']).result).body.body.payload, false);
-		assert.deepEqual((await h.invoke('test.node', ['methods']).result).body.body.payload, [
-			'delete',
-			'get',
-			'store',
-		]);
-	},
-);
+		'extension.cjs',
+		['command'],
+		frame => {
+			const request = frame.operation.request;
+			let response;
+			if (request.service === 'secretLoad') response = { service: 'secretLoaded', value };
+			if (request.service === 'secretStore') {
+				assert.equal(request.key, 'token');
+				value = request.value;
+				response = { service: 'secretStored' };
+			}
+			if (request.service === 'secretDelete') {
+				const deleted = value !== null;
+				value = null;
+				response = { service: 'secretDeleted', deleted };
+			}
+			assert.ok(response);
+			return { result: 'coreService', response };
+		},
+	);
+	assert.deepEqual((await h.invoke('test.node', ['get']).result).body.body.payload, {});
+	await h.invoke('test.node', ['store', '你好']).result;
+	assert.deepEqual(value, [...new TextEncoder().encode('你好')]);
+	assert.deepEqual((await h.invoke('test.node', ['get']).result).body.body.payload, { value: '你好' });
+	value = [...new TextEncoder().encode('changed elsewhere')];
+	assert.deepEqual((await h.invoke('test.node', ['get']).result).body.body.payload, {
+		value: 'changed elsewhere',
+	});
+	await h.invoke('test.node', ['store', '']).result;
+	assert.deepEqual((await h.invoke('test.node', ['get']).result).body.body.payload, { value: '' });
+	assert.equal((await h.invoke('test.node', ['delete']).result).body.body.payload, true);
+	assert.equal((await h.invoke('test.node', ['delete']).result).body.body.payload, false);
+	assert.deepEqual((await h.invoke('test.node', ['methods']).result).body.body.payload, ['delete', 'get', 'store']);
+});
 
-test(
-	'ordinary state provides only key get/update and distinguishes null from deletion',
-	{ timeout: 10000 },
-	async t => {
-		const values = new Map();
-		const h = await host(
-			t,
-			`const ash=require('@ash/sdk'); exports.activate=context=>context.subscriptions.push(ash.commands.register('test.node',async(action,key,value)=>{
+test('ordinary state provides only key get/update and distinguishes null from deletion', { timeout: 10000 }, async t => {
+	const values = new Map();
+	const h = await host(
+		t,
+		`const ash=require('@ash/sdk'); exports.activate=context=>context.subscriptions.push(ash.commands.register('test.node',async(action,key,value)=>{
  if(action==='methods') return Object.keys(context.storage).sort();
  if(action==='get') return {value:await context.storage.get(key)};
  await context.storage.update(key,action==='delete'?undefined:value); return null;
 }));`,
-			'extension.cjs',
-			['command'],
-			frame => {
-				const r = frame.operation.request;
-				if (r.service === 'storageGet')
-					return {
-						result: 'coreService',
-						response: {
-							service: 'storageValue',
-							found: values.has(r.key),
-							value: values.get(r.key) ?? null,
-						},
-					};
-				if (r.service === 'storageSet') values.set(r.key, r.value);
-				else if (r.service === 'storageDelete') values.delete(r.key);
-				else assert.fail('Unexpected private operation');
-				return { result: 'coreService', response: { service: 'storageUpdated' } };
-			},
-		);
-		assert.deepEqual((await h.invoke('test.node', ['get', 'nothing']).result).body.body.payload, {});
-		await h.invoke('test.node', ['set', 'nothing', null]).result;
-		assert.deepEqual((await h.invoke('test.node', ['get', 'nothing']).result).body.body.payload, { value: null });
-		values.set('nothing', 'changed elsewhere');
-		assert.deepEqual((await h.invoke('test.node', ['get', 'nothing']).result).body.body.payload, {
-			value: 'changed elsewhere',
-		});
-		await h.invoke('test.node', ['delete', 'nothing']).result;
-		assert.deepEqual((await h.invoke('test.node', ['get', 'nothing']).result).body.body.payload, {});
-		assert.deepEqual((await h.invoke('test.node', ['methods']).result).body.body.payload, ['get', 'update']);
-	},
-);
+		'extension.cjs',
+		['command'],
+		frame => {
+			const r = frame.operation.request;
+			if (r.service === 'storageGet')
+				return {
+					result: 'coreService',
+					response: {
+						service: 'storageValue',
+						found: values.has(r.key),
+						value: values.get(r.key) ?? null,
+					},
+				};
+			if (r.service === 'storageSet') values.set(r.key, r.value);
+			else if (r.service === 'storageDelete') values.delete(r.key);
+			else assert.fail('Unexpected private operation');
+			return { result: 'coreService', response: { service: 'storageUpdated' } };
+		},
+	);
+	assert.deepEqual((await h.invoke('test.node', ['get', 'nothing']).result).body.body.payload, {});
+	await h.invoke('test.node', ['set', 'nothing', null]).result;
+	assert.deepEqual((await h.invoke('test.node', ['get', 'nothing']).result).body.body.payload, { value: null });
+	values.set('nothing', 'changed elsewhere');
+	assert.deepEqual((await h.invoke('test.node', ['get', 'nothing']).result).body.body.payload, {
+		value: 'changed elsewhere',
+	});
+	await h.invoke('test.node', ['delete', 'nothing']).result;
+	assert.deepEqual((await h.invoke('test.node', ['get', 'nothing']).result).body.body.payload, {});
+	assert.deepEqual((await h.invoke('test.node', ['methods']).result).body.body.payload, ['get', 'update']);
+});
 
 test('state and secrets reject invalid values without sending private requests', { timeout: 10000 }, async t => {
 	const h = await host(
@@ -1039,8 +958,7 @@ test('state and secrets reject invalid values without sending private requests',
 
 test('state and secrets cancellation suppress late replies and never replay writes', { timeout: 10000 }, async t => {
 	for (const kind of ['storage', 'secrets']) {
-		const call =
-			kind === 'storage' ? "context.storage.update('key',true)" : "context.secrets.store('key','synthetic')";
+		const call = kind === 'storage' ? "context.storage.update('key',true)" : "context.secrets.store('key','synthetic')";
 		const h = await host(
 			t,
 			`const ash=require('@ash/sdk'); exports.activate=context=>{
@@ -1083,13 +1001,10 @@ test('state and secrets cancellation suppress late replies and never replay writ
 	}
 });
 
-test(
-	'configuration writes use explicit owner targets, resets and authoritative change events',
-	{ timeout: 10000 },
-	async t => {
-		const h = await host(
-			t,
-			`import * as ash from '@ash/sdk';
+test('configuration writes use explicit owner targets, resets and authoritative change events', { timeout: 10000 }, async t => {
+	const h = await host(
+		t,
+		`import * as ash from '@ash/sdk';
 const captured = ash.workspace.getConfiguration('sample');
 const changes = [];
 export function activate(context) {
@@ -1100,81 +1015,77 @@ export function activate(context) {
  }));
  context.subscriptions.push(ash.commands.register('test.second', () => ({ captured: captured.get('enabled', 'missing'), current: ash.workspace.getConfiguration('sample').get('enabled', 'missing'), changes: [...changes] })));
 }`,
-			'extension.mjs',
-			['command'],
-			() => ({ result: 'done' }),
-		);
-		assert.deepEqual((await h.invoke('test.node', ['workspace', false, false]).result).body.body.payload, {
-			captured: 'missing',
-			current: 'missing',
-			changes: [],
-		});
-		assert.deepEqual(h.clientCalls[0].operation, {
-			operation: 'updateConfiguration',
-			section: 'sample.enabled',
-			value: false,
-			target: 'workspace',
-		});
-		// A successful write does not create a second configuration owner in the SDK.
-		const data = {
-			defaults: { contents: {}, keys: [], overrides: [] },
-			workspace: { contents: { sample: { enabled: false } }, keys: ['sample.enabled'], overrides: [] },
-			folders: [],
-		};
-		assert.equal(
-			(
-				await h.request('invoke', {
-					extensionId: 'test.node',
-					registrationId: 'ash.workspace.events',
-					operation: 'workspaceEvent',
-					payload: {
-						type: 'configuration',
-						revision: 1,
-						emit: true,
-						configurationValues: { sample: { enabled: false } },
-						configurationData: data,
-						change: { keys: ['sample.enabled'], overrides: [] },
-					},
-					deadlineUnixMillis: Date.now() + 30000,
-				}).result
-			).status,
-			'success',
-		);
-		assert.deepEqual((await h.invoke('test.second', []).result).body.body.payload, {
-			captured: 'missing',
-			current: false,
-			changes: [true],
-		});
-		await h.invoke('test.node', ['user', { label: '你好', values: [0, '', null] }, false]).result;
-		assert.deepEqual(h.clientCalls[1].operation, {
-			operation: 'updateConfiguration',
-			section: 'sample.enabled',
-			value: { label: '你好', values: [0, '', null] },
-			target: 'user',
-		});
-		await h.invoke('test.node', ['workspace', null, true]).result;
-		assert.deepEqual(h.clientCalls[2].operation, {
-			operation: 'resetConfiguration',
-			section: 'sample.enabled',
-			target: 'workspace',
-		});
-		await h.invoke('test.node', ['user', null, false]).result;
-		assert.deepEqual(h.clientCalls[3].operation, {
-			operation: 'updateConfiguration',
-			section: 'sample.enabled',
-			value: null,
-			target: 'user',
-		});
-	},
-);
+		'extension.mjs',
+		['command'],
+		() => ({ result: 'done' }),
+	);
+	assert.deepEqual((await h.invoke('test.node', ['workspace', false, false]).result).body.body.payload, {
+		captured: 'missing',
+		current: 'missing',
+		changes: [],
+	});
+	assert.deepEqual(h.clientCalls[0].operation, {
+		operation: 'updateConfiguration',
+		section: 'sample.enabled',
+		value: false,
+		target: 'workspace',
+	});
+	// A successful write does not create a second configuration owner in the SDK.
+	const data = {
+		defaults: { contents: {}, keys: [], overrides: [] },
+		workspace: { contents: { sample: { enabled: false } }, keys: ['sample.enabled'], overrides: [] },
+		folders: [],
+	};
+	assert.equal(
+		(
+			await h.request('invoke', {
+				extensionId: 'test.node',
+				registrationId: 'ash.workspace.events',
+				operation: 'workspaceEvent',
+				payload: {
+					type: 'configuration',
+					revision: 1,
+					emit: true,
+					configurationValues: { sample: { enabled: false } },
+					configurationData: data,
+					change: { keys: ['sample.enabled'], overrides: [] },
+				},
+				deadlineUnixMillis: Date.now() + 30000,
+			}).result
+		).status,
+		'success',
+	);
+	assert.deepEqual((await h.invoke('test.second', []).result).body.body.payload, {
+		captured: 'missing',
+		current: false,
+		changes: [true],
+	});
+	await h.invoke('test.node', ['user', { label: '你好', values: [0, '', null] }, false]).result;
+	assert.deepEqual(h.clientCalls[1].operation, {
+		operation: 'updateConfiguration',
+		section: 'sample.enabled',
+		value: { label: '你好', values: [0, '', null] },
+		target: 'user',
+	});
+	await h.invoke('test.node', ['workspace', null, true]).result;
+	assert.deepEqual(h.clientCalls[2].operation, {
+		operation: 'resetConfiguration',
+		section: 'sample.enabled',
+		target: 'workspace',
+	});
+	await h.invoke('test.node', ['user', null, false]).result;
+	assert.deepEqual(h.clientCalls[3].operation, {
+		operation: 'updateConfiguration',
+		section: 'sample.enabled',
+		value: null,
+		target: 'user',
+	});
+});
 
-test(
-	'configuration writes reject unsupported scopes and lossy JSON without sending requests',
-	{ timeout: 10000 },
-	async t => {
-		const h = await host(
-			t,
-			`const ash = require('@ash/sdk'); exports.activate = context => context.subscriptions.push(ash.commands.register('test.node', async () => {
+test('configuration writes reject unsupported scopes and lossy JSON without sending requests', { timeout: 10000 }, async t => {
+	const h = await host(
+		t,
+		`const ash = require('@ash/sdk'); exports.activate = context => context.subscriptions.push(ash.commands.register('test.node', async () => {
  const config = ash.workspace.getConfiguration('sample');
  const circular = {}; circular.self = circular;
  const invalid = [
@@ -1191,61 +1102,53 @@ test(
  for (const update of invalid) { try { await update(); } catch { rejected++; } }
  return { rejected, total: invalid.length };
 }));`,
-		);
-		const { rejected, total } = (await h.invoke('test.node', []).result).body.body.payload;
-		assert.equal(rejected, total);
-		assert.equal(total, 16);
-		assert.deepEqual(h.clientCalls, []);
-	},
-);
+	);
+	const { rejected, total } = (await h.invoke('test.node', []).result).body.body.payload;
+	assert.equal(rejected, total);
+	assert.equal(total, 16);
+	assert.deepEqual(h.clientCalls, []);
+});
 
-test(
-	'configuration owner failures and cancellation propagate without replaying writes',
-	{ timeout: 10000 },
-	async t => {
-		const h = await host(
-			t,
-			`const ash = require('@ash/sdk'); exports.activate = context => {
+test('configuration owner failures and cancellation propagate without replaying writes', { timeout: 10000 }, async t => {
+	const h = await host(
+		t,
+		`const ash = require('@ash/sdk'); exports.activate = context => {
  context.subscriptions.push(ash.commands.register('test.node', async () => { try { await ash.workspace.getConfiguration('sample').update('enabled', true, 'workspace'); } catch(error) { return {code:error.code, message:error.message}; } }));
  context.subscriptions.push(ash.commands.register('test.second', () => 'alive'));
 };`,
-		);
-		const first = h.invoke('test.node', []);
-		while (h.clientCalls.length < 1) {
-			if (t.signal.aborted) throw new Error('Test aborted');
-			await new Promise(resolve => setTimeout(resolve, 2));
-		}
-		const rejected = h.clientCalls[0];
-		h.send({
-			context: rejected.context,
-			callId: rejected.callId,
-			outcome: { Err: { code: 'denied', message: 'Configuration is managed by policy' } },
-		});
-		assert.deepEqual((await first.result).body.body.payload, {
-			code: 'denied',
-			message: 'Configuration is managed by policy',
-		});
-		const pending = h.invoke('test.node', []);
-		while (h.clientCalls.length < 2) {
-			if (t.signal.aborted) throw new Error('Test aborted');
-			await new Promise(resolve => setTimeout(resolve, 2));
-		}
-		const cancelled = h.clientCalls[1];
-		await h.request('cancel', { targetRequestId: pending.requestId, reason: 'caller' }).result;
-		assert.equal((await pending.result).body.body.payload.code, 'cancelled');
-		h.send({ context: cancelled.context, callId: cancelled.callId, outcome: { Ok: { result: 'done' } } });
-		assert.equal((await h.invoke('test.second', []).result).body.body.payload, 'alive');
-		assert.equal(h.clientCalls.length, 2);
-	},
-);
+	);
+	const first = h.invoke('test.node', []);
+	while (h.clientCalls.length < 1) {
+		if (t.signal.aborted) throw new Error('Test aborted');
+		await new Promise(resolve => setTimeout(resolve, 2));
+	}
+	const rejected = h.clientCalls[0];
+	h.send({
+		context: rejected.context,
+		callId: rejected.callId,
+		outcome: { Err: { code: 'denied', message: 'Configuration is managed by policy' } },
+	});
+	assert.deepEqual((await first.result).body.body.payload, {
+		code: 'denied',
+		message: 'Configuration is managed by policy',
+	});
+	const pending = h.invoke('test.node', []);
+	while (h.clientCalls.length < 2) {
+		if (t.signal.aborted) throw new Error('Test aborted');
+		await new Promise(resolve => setTimeout(resolve, 2));
+	}
+	const cancelled = h.clientCalls[1];
+	await h.request('cancel', { targetRequestId: pending.requestId, reason: 'caller' }).result;
+	assert.equal((await pending.result).body.body.payload.code, 'cancelled');
+	h.send({ context: cancelled.context, callId: cancelled.callId, outcome: { Ok: { result: 'done' } } });
+	assert.equal((await h.invoke('test.second', []).result).body.body.payload, 'alive');
+	assert.equal(h.clientCalls.length, 2);
+});
 
-test(
-	'live window events update synchronous snapshots, preserve folder handles and respect configuration scopes',
-	{ timeout: 10000 },
-	async t => {
-		const h = await host(
-			t,
-			`const v = require('@ash/sdk');
+test('live window events update synchronous snapshots, preserve folder handles and respect configuration scopes', { timeout: 10000 }, async t => {
+	const h = await host(
+		t,
+		`const v = require('@ash/sdk');
 const original = v.workspace.workspaceFolders[0];
 const captured = v.workspace.getConfiguration('sample');
 const receiver = {}; const listeners = []; const changes = []; const folders = [];
@@ -1258,98 +1161,93 @@ exports.activate = context => {
  context.subscriptions.push(...listeners);
  context.subscriptions.push(v.commands.register('test.second', () => { for (const listener of listeners) listener.dispose(); }));
  context.subscriptions.push(v.commands.register('test.node', () => ({changes,folders,current:v.workspace.getConfiguration('sample').get('enabled','missing'),count:v.workspace.getConfiguration('sample').get('count','missing'),captured:captured.get('enabled','missing'),name:original.name,index:original.index,retained:v.workspace.getWorkspaceFolder(v.Uri.joinPath(original.uri,'source.ts'))===original,empty:v.workspace.workspaceFolders===undefined,workspaceName:v.workspace.name??null}))); };`,
-		);
-		const folderURI = pathToFileURL(h.extension).href;
-		const empty = () => ({ contents: {}, keys: [], overrides: [] });
-		const data = {
-			defaults: {
-				contents: { sample: { enabled: true, count: 1 } },
-				keys: ['sample.enabled', 'sample.count'],
-				overrides: [
-					{ identifiers: ['typescript'], keys: ['sample.enabled'], contents: { sample: { enabled: false } } },
-				],
-			},
-			policy: { contents: { sample: { count: 17 } }, keys: ['sample.count'], overrides: [] },
-			application: empty(),
-			userLocal: empty(),
-			userRemote: empty(),
-			workspace: empty(),
-			folders: [
-				[
-					{ scheme: 'file', path: decodeURIComponent(new URL(folderURI).pathname) },
-					{ contents: { sample: { enabled: true } }, keys: ['sample.enabled'], overrides: [] },
-				],
+	);
+	const folderURI = pathToFileURL(h.extension).href;
+	const empty = () => ({ contents: {}, keys: [], overrides: [] });
+	const data = {
+		defaults: {
+			contents: { sample: { enabled: true, count: 1 } },
+			keys: ['sample.enabled', 'sample.count'],
+			overrides: [{ identifiers: ['typescript'], keys: ['sample.enabled'], contents: { sample: { enabled: false } } }],
+		},
+		policy: { contents: { sample: { count: 17 } }, keys: ['sample.count'], overrides: [] },
+		application: empty(),
+		userLocal: empty(),
+		userRemote: empty(),
+		workspace: empty(),
+		folders: [
+			[
+				{ scheme: 'file', path: decodeURIComponent(new URL(folderURI).pathname) },
+				{ contents: { sample: { enabled: true } }, keys: ['sample.enabled'], overrides: [] },
 			],
-		};
-		async function event(payload) {
-			const reply = await h.request('invoke', {
-				extensionId: 'test.node',
-				registrationId: 'ash.workspace.events',
-				operation: 'workspaceEvent',
-				payload,
-				deadlineUnixMillis: Date.now() + 30000,
-			}).result;
-			assert.equal(reply.status, 'success', h.stderr());
-		}
-		const config = (revision, emit, enabled, count) => ({
-			type: 'configuration',
-			revision,
-			emit,
-			configurationValues: { sample: { enabled, count } },
-			configurationData: data,
-			change: { keys: ['sample.enabled', 'sample.count'], overrides: [] },
-		});
-		// Equivalent URI encodings must resolve the same folder configuration model.
-		await event({
-			type: 'workspace',
-			revision: 1,
-			emit: false,
-			workspaceFolders: [{ uri: folderURI.replace(/extension$/, '%65xtension'), name: 'extension', index: 0 }],
-			workspaceName: 'extension',
-			workspaceFile: null,
-		});
-		await event(config(1, false, true, 1));
-		await event(config(2, true, false, 0));
-		await event(config(1, true, true, 99));
-		let state = (await h.invoke('test.node', []).result).body.body.payload;
-		assert.deepEqual(state.changes, [
-			{ parent: true, other: false, enabled: true, scoped: false, language: false, policy: false },
-		]);
-		assert.equal(state.current, false);
-		assert.equal(state.count, 17);
-		assert.equal(state.captured, 'missing', 'configuration objects retain their creation snapshot');
-		const workspace = (revision, folders) => ({
-			type: 'workspace',
-			revision,
-			emit: true,
-			workspaceFolders: folders,
-			workspaceName: folders.length ? 'Changed workspace' : null,
-			workspaceFile: null,
-		});
-		await event(
-			workspace(2, [
-				{ uri: `${folderURI}/two`, name: 'Two', index: 0 },
-				{ uri: folderURI, name: 'Renamed', index: 1 },
-			]),
-		);
-		state = (await h.invoke('test.node', []).result).body.body.payload;
-		assert.equal(state.retained, true);
-		assert.equal(state.index, 1);
-		assert.equal(state.name, 'Renamed');
-		assert.deepEqual(state.folders[0], { added: [`${folderURI}/two`], removed: [] });
-		await event(workspace(3, [{ uri: `${folderURI}/two`, name: 'Two', index: 0 }]));
-		state = (await h.invoke('test.node', []).result).body.body.payload;
-		assert.deepEqual(state.folders[1].removed, [{ uri: folderURI, name: 'Renamed', index: 1 }]);
-		await event(workspace(4, []));
-		state = (await h.invoke('test.node', []).result).body.body.payload;
-		assert.equal(state.empty, true);
-		assert.equal(state.workspaceName, null);
-		await h.invoke('test.second', []).result;
-		await event(config(3, true, true, 1));
-		state = (await h.invoke('test.node', []).result).body.body.payload;
-		assert.equal(state.changes.length, 1, 'disposed listeners do not receive later commits');
-	},
-);
+		],
+	};
+	async function event(payload) {
+		const reply = await h.request('invoke', {
+			extensionId: 'test.node',
+			registrationId: 'ash.workspace.events',
+			operation: 'workspaceEvent',
+			payload,
+			deadlineUnixMillis: Date.now() + 30000,
+		}).result;
+		assert.equal(reply.status, 'success', h.stderr());
+	}
+	const config = (revision, emit, enabled, count) => ({
+		type: 'configuration',
+		revision,
+		emit,
+		configurationValues: { sample: { enabled, count } },
+		configurationData: data,
+		change: { keys: ['sample.enabled', 'sample.count'], overrides: [] },
+	});
+	// Equivalent URI encodings must resolve the same folder configuration model.
+	await event({
+		type: 'workspace',
+		revision: 1,
+		emit: false,
+		workspaceFolders: [{ uri: folderURI.replace(/extension$/, '%65xtension'), name: 'extension', index: 0 }],
+		workspaceName: 'extension',
+		workspaceFile: null,
+	});
+	await event(config(1, false, true, 1));
+	await event(config(2, true, false, 0));
+	await event(config(1, true, true, 99));
+	let state = (await h.invoke('test.node', []).result).body.body.payload;
+	assert.deepEqual(state.changes, [{ parent: true, other: false, enabled: true, scoped: false, language: false, policy: false }]);
+	assert.equal(state.current, false);
+	assert.equal(state.count, 17);
+	assert.equal(state.captured, 'missing', 'configuration objects retain their creation snapshot');
+	const workspace = (revision, folders) => ({
+		type: 'workspace',
+		revision,
+		emit: true,
+		workspaceFolders: folders,
+		workspaceName: folders.length ? 'Changed workspace' : null,
+		workspaceFile: null,
+	});
+	await event(
+		workspace(2, [
+			{ uri: `${folderURI}/two`, name: 'Two', index: 0 },
+			{ uri: folderURI, name: 'Renamed', index: 1 },
+		]),
+	);
+	state = (await h.invoke('test.node', []).result).body.body.payload;
+	assert.equal(state.retained, true);
+	assert.equal(state.index, 1);
+	assert.equal(state.name, 'Renamed');
+	assert.deepEqual(state.folders[0], { added: [`${folderURI}/two`], removed: [] });
+	await event(workspace(3, [{ uri: `${folderURI}/two`, name: 'Two', index: 0 }]));
+	state = (await h.invoke('test.node', []).result).body.body.payload;
+	assert.deepEqual(state.folders[1].removed, [{ uri: folderURI, name: 'Renamed', index: 1 }]);
+	await event(workspace(4, []));
+	state = (await h.invoke('test.node', []).result).body.body.payload;
+	assert.equal(state.empty, true);
+	assert.equal(state.workspaceName, null);
+	await h.invoke('test.second', []).result;
+	await event(config(3, true, true, 1));
+	state = (await h.invoke('test.node', []).result).body.body.payload;
+	assert.equal(state.changes.length, 1, 'disposed listeners do not receive later commits');
+});
 
 test('command categories and enablement stay separate from menu titles', async t => {
 	const h = await host(
@@ -1492,219 +1390,207 @@ test('terminal link provider rejects ranges outside the requested line', { timeo
 	assert.equal(result.status, 'failure');
 });
 
-test(
-	'terminal profile provider returns literal shell options through the real Node host',
-	{ timeout: 15000 },
-	async t => {
-		const h = await host(
-			t,
-			`const v = require('@ash/sdk'); exports.activate = context => {
+test('terminal profile provider returns literal shell options through the real Node host', { timeout: 15000 }, async t => {
+	const h = await host(
+		t,
+		`const v = require('@ash/sdk'); exports.activate = context => {
  context.subscriptions.push(v.window.registerTerminalProfileProvider('shell', { provideTerminalProfile: token => new v.TerminalProfile({ name: 'Profile shell', shellPath: '/bin/sh', shellArgs: ['-c', 'literal;$HOME'], env: { PROFILE: 'with spaces', REMOVED: null }, cwd: '/workspace' }) }));
 };`,
-			'extension.cjs',
-			['terminalProfileProvider'],
-			undefined,
-			{ manifest: { contributes: { terminal: { profiles: [{ id: 'shell', title: 'Profile shell' }] } } } },
-		);
-		const registration = h.registrations.find(entry => entry.kind === 'terminalProfileProvider');
-		assert.equal(registration.profileId, 'shell');
-		assert.equal(registration.title, 'Profile shell');
-		const result = await h.request('invoke', {
-			extensionId: 'test.node',
-			registrationId: registration.registrationId,
-			operation: 'createTerminalProfile',
-			payload: {},
-			deadlineUnixMillis: Date.now() + 5000,
-		}).result;
-		assert.equal(result.status, 'success', JSON.stringify(result));
-		assert.deepEqual(result.body.body.payload, {
-			options: {
-				name: 'Profile shell',
-				shellPath: '/bin/sh',
-				shellArgs: ['-c', 'literal;$HOME'],
-				env: { PROFILE: 'with spaces', REMOVED: null },
-				cwd: '/workspace',
-			},
-		});
-	},
-);
+		'extension.cjs',
+		['terminalProfileProvider'],
+		undefined,
+		{ manifest: { contributes: { terminal: { profiles: [{ id: 'shell', title: 'Profile shell' }] } } } },
+	);
+	const registration = h.registrations.find(entry => entry.kind === 'terminalProfileProvider');
+	assert.equal(registration.profileId, 'shell');
+	assert.equal(registration.title, 'Profile shell');
+	const result = await h.request('invoke', {
+		extensionId: 'test.node',
+		registrationId: registration.registrationId,
+		operation: 'createTerminalProfile',
+		payload: {},
+		deadlineUnixMillis: Date.now() + 5000,
+	}).result;
+	assert.equal(result.status, 'success', JSON.stringify(result));
+	assert.deepEqual(result.body.body.payload, {
+		options: {
+			name: 'Profile shell',
+			shellPath: '/bin/sh',
+			shellArgs: ['-c', 'literal;$HOME'],
+			env: { PROFILE: 'with spaces', REMOVED: null },
+			cwd: '/workspace',
+		},
+	});
+});
 
-test(
-	'terminal profile provider preserves Windows raw shell options through the real Node host',
-	{ timeout: 15000 },
-	async t => {
-		const h = await host(
-			t,
-			`const v = require('@ash/sdk'); exports.activate = context => {
+test('terminal profile provider preserves Windows raw shell options through the real Node host', { timeout: 15000 }, async t => {
+	const h = await host(
+		t,
+		`const v = require('@ash/sdk'); exports.activate = context => {
  context.subscriptions.push(v.window.registerTerminalProfileProvider('shell', { provideTerminalProfile: token => new v.TerminalProfile({ name: 'Profile shell', shellPath: 'cmd.exe', shellArgs: '/d /s /c \"echo two words & literal;$HOME\"', env: { PROFILE: 'with spaces', REMOVED: null }, cwd: '/workspace' }) }));
 };`,
-			'extension.cjs',
-			['terminalProfileProvider'],
-			undefined,
-			{ manifest: { contributes: { terminal: { profiles: [{ id: 'shell', title: 'Profile shell' }] } } } },
-		);
-		const registration = h.registrations.find(entry => entry.kind === 'terminalProfileProvider');
-		assert.equal(registration.profileId, 'shell');
-		assert.equal(registration.title, 'Profile shell');
-		const result = await h.request('invoke', {
-			extensionId: 'test.node',
-			registrationId: registration.registrationId,
-			operation: 'createTerminalProfile',
-			payload: {},
-			deadlineUnixMillis: Date.now() + 5000,
-		}).result;
-		assert.equal(result.status, 'success', JSON.stringify(result));
-		assert.deepEqual(result.body.body.payload, {
-			options: {
-				name: 'Profile shell',
-				shellPath: 'cmd.exe',
-				shellArgs: '/d /s /c \"echo two words & literal;$HOME\"',
-				env: { PROFILE: 'with spaces', REMOVED: null },
-				cwd: '/workspace',
-			},
-		});
-	},
-);
+		'extension.cjs',
+		['terminalProfileProvider'],
+		undefined,
+		{ manifest: { contributes: { terminal: { profiles: [{ id: 'shell', title: 'Profile shell' }] } } } },
+	);
+	const registration = h.registrations.find(entry => entry.kind === 'terminalProfileProvider');
+	assert.equal(registration.profileId, 'shell');
+	assert.equal(registration.title, 'Profile shell');
+	const result = await h.request('invoke', {
+		extensionId: 'test.node',
+		registrationId: registration.registrationId,
+		operation: 'createTerminalProfile',
+		payload: {},
+		deadlineUnixMillis: Date.now() + 5000,
+	}).result;
+	assert.equal(result.status, 'success', JSON.stringify(result));
+	assert.deepEqual(result.body.body.payload, {
+		options: {
+			name: 'Profile shell',
+			shellPath: 'cmd.exe',
+			shellArgs: '/d /s /c \"echo two words & literal;$HOME\"',
+			env: { PROFILE: 'with spaces', REMOVED: null },
+			cwd: '/workspace',
+		},
+	});
+});
 
-test(
-	'terminal profile Pseudoterminal preserves open and input output and releases once',
-	{ timeout: 15000 },
-	async t => {
-		const h = await host(
-			t,
-			`const v = require('@ash/sdk'); exports.activate = context => {
+test('terminal profile Pseudoterminal preserves open and input output and releases once', { timeout: 15000 }, async t => {
+	const h = await host(
+		t,
+		`const v = require('@ash/sdk'); exports.activate = context => {
  const write = new v.EventEmitter(); let closes = 0; let factory;
  context.subscriptions.push(v.commands.register('test.node', action => { if (action === 'dispose') factory.dispose(); return closes; }));
  context.subscriptions.push(factory = v.window.registerTerminalProfileProvider('pty', { provideTerminalProfile: () => new v.TerminalProfile({ name: 'Profile PTY', pty: { onDidWrite: write.event, open: dimensions => write.fire('open:' + dimensions.columns), handleInput: data => write.fire('input:' + data), close: () => { closes++; } } }) }));
 };`,
-			'extension.cjs',
-			['terminalProfileProvider', 'command'],
-			undefined,
-			{
-				manifest: {
-					contributes: {
-						terminal: { profiles: [{ id: 'pty', title: 'Profile PTY' }] },
-						commands: [{ command: 'test.node', title: 'Close count' }],
-					},
+		'extension.cjs',
+		['terminalProfileProvider', 'command'],
+		undefined,
+		{
+			manifest: {
+				contributes: {
+					terminal: { profiles: [{ id: 'pty', title: 'Profile PTY' }] },
+					commands: [{ command: 'test.node', title: 'Close count' }],
 				},
 			},
-		);
-		const registration = h.registrations.find(entry => entry.kind === 'terminalProfileProvider');
-		const created = await h.request('invoke', {
-			extensionId: 'test.node',
-			registrationId: registration.registrationId,
-			operation: 'createTerminalProfile',
-			payload: {},
-			deadlineUnixMillis: Date.now() + 5000,
-		}).result;
-		assert.equal(created.status, 'success', JSON.stringify(created));
-		const pty = created.body.body.payload.pty;
-		assert.equal(pty.acceptsInput, true);
-		assert.equal(typeof pty.registrationId, 'string');
-		for (const [registrationId, operation, payload] of [
-			[registration.registrationId, 'openTaskTerminal', { ptyId: pty.ptyId }],
-			[pty.registrationId, 'createTerminalProfile', {}],
-			[pty.registrationId, 'readTaskTerminal', { ptyId: 'another-resource' }],
-		]) {
-			assert.equal(
-				(
-					await h.request('invoke', {
-						extensionId: 'test.node',
-						registrationId,
-						operation,
-						payload,
-						deadlineUnixMillis: Date.now() + 5000,
-					}).result
-				).status,
-				'failure',
-			);
-		}
-
-		const opened = await h.request('invoke', {
-			extensionId: 'test.node',
-			registrationId: pty.registrationId,
-			operation: 'openTaskTerminal',
-			payload: { ptyId: pty.ptyId, dimensions: { columns: 80, rows: 24 } },
-			deadlineUnixMillis: Date.now() + 5000,
-		}).result;
-		assert.deepEqual(opened.body.body.payload, { events: [{ type: 'data', data: 'open:80' }] });
-		const input = await h.request('invoke', {
-			extensionId: 'test.node',
-			registrationId: pty.registrationId,
-			operation: 'inputTaskTerminal',
-			payload: { ptyId: pty.ptyId, data: 'text' },
-			deadlineUnixMillis: Date.now() + 5000,
-		}).result;
-		assert.deepEqual(input.body.body.payload, { events: [{ type: 'data', data: 'input:text' }] });
-		await h.request('invoke', {
-			extensionId: 'test.node',
-			registrationId: pty.registrationId,
-			operation: 'closeTaskTerminal',
-			payload: { ptyId: pty.ptyId },
-			deadlineUnixMillis: Date.now() + 5000,
-		}).result;
-		const retired = await h.request('invoke', {
-			extensionId: 'test.node',
-			registrationId: pty.registrationId,
-			operation: 'readTaskTerminal',
-			payload: { ptyId: pty.ptyId },
-			deadlineUnixMillis: Date.now() + 5000,
-		}).result;
-		assert.equal(retired.status, 'failure');
-		await h.request('invoke', {
-			extensionId: 'test.node',
-			registrationId: pty.registrationId,
-			operation: 'closeTaskTerminal',
-			payload: { ptyId: pty.ptyId },
-			deadlineUnixMillis: Date.now() + 5000,
-		}).result;
-		assert.equal((await h.invoke('test.node', []).result).body.body.payload, 1);
-		const replacement = await h.request('invoke', {
-			extensionId: 'test.node',
-			registrationId: registration.registrationId,
-			operation: 'createTerminalProfile',
-			payload: {},
-			deadlineUnixMillis: Date.now() + 5000,
-		}).result;
-		const nextPty = replacement.body.body.payload.pty;
-		assert.notEqual(nextPty.registrationId, pty.registrationId);
-		assert.equal((await h.invoke('test.node', ['dispose']).result).body.body.payload, 1);
-		const withdrawn = await h.registrationEvent(4);
-		assert.deepEqual(
-			withdrawn.terminalProviders.map(value => value.kind),
-			['terminalPty'],
-		);
+		},
+	);
+	const registration = h.registrations.find(entry => entry.kind === 'terminalProfileProvider');
+	const created = await h.request('invoke', {
+		extensionId: 'test.node',
+		registrationId: registration.registrationId,
+		operation: 'createTerminalProfile',
+		payload: {},
+		deadlineUnixMillis: Date.now() + 5000,
+	}).result;
+	assert.equal(created.status, 'success', JSON.stringify(created));
+	const pty = created.body.body.payload.pty;
+	assert.equal(pty.acceptsInput, true);
+	assert.equal(typeof pty.registrationId, 'string');
+	for (const [registrationId, operation, payload] of [
+		[registration.registrationId, 'openTaskTerminal', { ptyId: pty.ptyId }],
+		[pty.registrationId, 'createTerminalProfile', {}],
+		[pty.registrationId, 'readTaskTerminal', { ptyId: 'another-resource' }],
+	]) {
 		assert.equal(
 			(
 				await h.request('invoke', {
 					extensionId: 'test.node',
-					registrationId: registration.registrationId,
-					operation: 'createTerminalProfile',
-					payload: {},
+					registrationId,
+					operation,
+					payload,
 					deadlineUnixMillis: Date.now() + 5000,
 				}).result
 			).status,
 			'failure',
 		);
-		assert.notEqual(nextPty.ptyId, pty.ptyId);
-		const reopened = await h.request('invoke', {
-			extensionId: 'test.node',
-			registrationId: nextPty.registrationId,
-			operation: 'openTaskTerminal',
-			payload: { ptyId: nextPty.ptyId, dimensions: { columns: 100, rows: 30 } },
-			deadlineUnixMillis: Date.now() + 5000,
-		}).result;
-		assert.deepEqual(reopened.body.body.payload, { events: [{ type: 'data', data: 'open:100' }] });
-		await h.request('invoke', {
-			extensionId: 'test.node',
-			registrationId: nextPty.registrationId,
-			operation: 'closeTaskTerminal',
-			payload: { ptyId: nextPty.ptyId },
-			deadlineUnixMillis: Date.now() + 5000,
-		}).result;
-		assert.equal((await h.invoke('test.node', []).result).body.body.payload, 2);
-	},
-);
+	}
+
+	const opened = await h.request('invoke', {
+		extensionId: 'test.node',
+		registrationId: pty.registrationId,
+		operation: 'openTaskTerminal',
+		payload: { ptyId: pty.ptyId, dimensions: { columns: 80, rows: 24 } },
+		deadlineUnixMillis: Date.now() + 5000,
+	}).result;
+	assert.deepEqual(opened.body.body.payload, { events: [{ type: 'data', data: 'open:80' }] });
+	const input = await h.request('invoke', {
+		extensionId: 'test.node',
+		registrationId: pty.registrationId,
+		operation: 'inputTaskTerminal',
+		payload: { ptyId: pty.ptyId, data: 'text' },
+		deadlineUnixMillis: Date.now() + 5000,
+	}).result;
+	assert.deepEqual(input.body.body.payload, { events: [{ type: 'data', data: 'input:text' }] });
+	await h.request('invoke', {
+		extensionId: 'test.node',
+		registrationId: pty.registrationId,
+		operation: 'closeTaskTerminal',
+		payload: { ptyId: pty.ptyId },
+		deadlineUnixMillis: Date.now() + 5000,
+	}).result;
+	const retired = await h.request('invoke', {
+		extensionId: 'test.node',
+		registrationId: pty.registrationId,
+		operation: 'readTaskTerminal',
+		payload: { ptyId: pty.ptyId },
+		deadlineUnixMillis: Date.now() + 5000,
+	}).result;
+	assert.equal(retired.status, 'failure');
+	await h.request('invoke', {
+		extensionId: 'test.node',
+		registrationId: pty.registrationId,
+		operation: 'closeTaskTerminal',
+		payload: { ptyId: pty.ptyId },
+		deadlineUnixMillis: Date.now() + 5000,
+	}).result;
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 1);
+	const replacement = await h.request('invoke', {
+		extensionId: 'test.node',
+		registrationId: registration.registrationId,
+		operation: 'createTerminalProfile',
+		payload: {},
+		deadlineUnixMillis: Date.now() + 5000,
+	}).result;
+	const nextPty = replacement.body.body.payload.pty;
+	assert.notEqual(nextPty.registrationId, pty.registrationId);
+	assert.equal((await h.invoke('test.node', ['dispose']).result).body.body.payload, 1);
+	const withdrawn = await h.registrationEvent(4);
+	assert.deepEqual(
+		withdrawn.terminalProviders.map(value => value.kind),
+		['terminalPty'],
+	);
+	assert.equal(
+		(
+			await h.request('invoke', {
+				extensionId: 'test.node',
+				registrationId: registration.registrationId,
+				operation: 'createTerminalProfile',
+				payload: {},
+				deadlineUnixMillis: Date.now() + 5000,
+			}).result
+		).status,
+		'failure',
+	);
+	assert.notEqual(nextPty.ptyId, pty.ptyId);
+	const reopened = await h.request('invoke', {
+		extensionId: 'test.node',
+		registrationId: nextPty.registrationId,
+		operation: 'openTaskTerminal',
+		payload: { ptyId: nextPty.ptyId, dimensions: { columns: 100, rows: 30 } },
+		deadlineUnixMillis: Date.now() + 5000,
+	}).result;
+	assert.deepEqual(reopened.body.body.payload, { events: [{ type: 'data', data: 'open:100' }] });
+	await h.request('invoke', {
+		extensionId: 'test.node',
+		registrationId: nextPty.registrationId,
+		operation: 'closeTaskTerminal',
+		payload: { ptyId: nextPty.ptyId },
+		deadlineUnixMillis: Date.now() + 5000,
+	}).result;
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 2);
+});
 
 test('withdrawn pending profile closes its late PTY without creating a resource lease', { timeout: 15000 }, async t => {
 	const h = await host(
@@ -1737,8 +1623,7 @@ test('withdrawn pending profile closes its late PTY without creating a resource 
 		payload: {},
 		deadlineUnixMillis: Date.now() + 5000,
 	}).result;
-	while (!(await h.invoke('test.node', []).result).body.body.payload.pending)
-		await new Promise(resolve => setImmediate(resolve));
+	while (!(await h.invoke('test.node', []).result).body.body.payload.pending) await new Promise(resolve => setImmediate(resolve));
 	assert.equal((await h.invoke('test.node', ['dispose']).result).body.body.payload.cancelled, 1);
 	assert.deepEqual((await h.registrationEvent(1)).terminalProviders, []);
 	await h.invoke('test.node', ['release']).result;
@@ -1804,13 +1689,10 @@ test('terminal profile can inherit the execution host default shell without inve
 	assert.deepEqual(result.body.body.payload, { options: { name: 'Default shell', env: { MODE: 'profile value' } } });
 });
 
-test(
-	'terminal profile and link providers can register after activation and withdraw their original handles',
-	{ timeout: 15000 },
-	async t => {
-		const h = await host(
-			t,
-			`const v = require('@ash/sdk'); let handles = []; let accepted;
+test('terminal profile and link providers can register after activation and withdraw their original handles', { timeout: 15000 }, async t => {
+	const h = await host(
+		t,
+		`const v = require('@ash/sdk'); let handles = []; let accepted;
 exports.activate = context => context.subscriptions.push(v.commands.register('test.node', action => {
  if (action === 'register') {
   handles = [v.window.registerTerminalProfileProvider('shell', { provideTerminalProfile: () => new v.TerminalProfile({ name: 'Live shell', env: { LIVE_PROFILE: 'yes' } }) }),
@@ -1820,59 +1702,58 @@ exports.activate = context => context.subscriptions.push(v.commands.register('te
  if (action === 'dispose') for (const handle of handles) handle.dispose();
  return { accepted: accepted ?? null };
 }));`,
-			'extension.cjs',
-			['terminalProfileProvider', 'terminalLinkProvider', 'command'],
-			undefined,
-			{
-				manifest: {
-					contributes: {
-						commands: [{ command: 'test.node', title: 'Node' }],
-						terminal: { profiles: [{ id: 'shell', title: 'Live shell' }] },
-					},
+		'extension.cjs',
+		['terminalProfileProvider', 'terminalLinkProvider', 'command'],
+		undefined,
+		{
+			manifest: {
+				contributes: {
+					commands: [{ command: 'test.node', title: 'Node' }],
+					terminal: { profiles: [{ id: 'shell', title: 'Live shell' }] },
 				},
 			},
-		);
-		assert.equal((await h.invoke('test.node', ['register']).result).status, 'success');
-		const first = await h.registrationEvent(2);
-		assert.deepEqual(
-			first.terminalProviders.map(value => value.kind),
-			['terminalProfileProvider', 'terminalLinkProvider'],
-		);
-		const invoke = (registration, operation, payload) =>
-			h.request('invoke', {
-				extensionId: 'test.node',
-				registrationId: registration.registrationId,
-				operation,
-				payload,
-				deadlineUnixMillis: Date.now() + 5000,
-			}).result;
-		assert.deepEqual((await invoke(first.terminalProviders[0], 'createTerminalProfile', {})).body.body.payload, {
-			options: { name: 'Live shell', env: { LIVE_PROFILE: 'yes' } },
-		});
-		const provided = await invoke(first.terminalProviders[1], 'provideTerminalLinks', {
-			line: 'LINK',
-			terminal: { id: 'one', name: 'Shell', processId: 123 },
-		});
-		await invoke(first.terminalProviders[1], 'handleTerminalLink', { id: provided.body.body.payload.links[0].id });
-		assert.equal((await h.invoke('test.node', []).result).body.body.payload.accepted, 'original');
-		await h.invoke('test.node', ['dispose']).result;
-		assert.deepEqual((await h.registrationEvent(4)).terminalProviders, []);
-		assert.equal((await invoke(first.terminalProviders[0], 'createTerminalProfile', {})).status, 'failure');
-		assert.equal(
-			(
-				await invoke(first.terminalProviders[1], 'provideTerminalLinks', {
-					line: 'LINK',
-					terminal: { id: 'one', name: 'Shell', processId: 123 },
-				})
-			).status,
-			'failure',
-		);
-		await h.invoke('test.node', ['register']).result;
-		const second = await h.registrationEvent(6);
-		assert.notEqual(second.terminalProviders[0].registrationId, first.terminalProviders[0].registrationId);
-		assert.notEqual(second.terminalProviders[1].registrationId, first.terminalProviders[1].registrationId);
-	},
-);
+		},
+	);
+	assert.equal((await h.invoke('test.node', ['register']).result).status, 'success');
+	const first = await h.registrationEvent(2);
+	assert.deepEqual(
+		first.terminalProviders.map(value => value.kind),
+		['terminalProfileProvider', 'terminalLinkProvider'],
+	);
+	const invoke = (registration, operation, payload) =>
+		h.request('invoke', {
+			extensionId: 'test.node',
+			registrationId: registration.registrationId,
+			operation,
+			payload,
+			deadlineUnixMillis: Date.now() + 5000,
+		}).result;
+	assert.deepEqual((await invoke(first.terminalProviders[0], 'createTerminalProfile', {})).body.body.payload, {
+		options: { name: 'Live shell', env: { LIVE_PROFILE: 'yes' } },
+	});
+	const provided = await invoke(first.terminalProviders[1], 'provideTerminalLinks', {
+		line: 'LINK',
+		terminal: { id: 'one', name: 'Shell', processId: 123 },
+	});
+	await invoke(first.terminalProviders[1], 'handleTerminalLink', { id: provided.body.body.payload.links[0].id });
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload.accepted, 'original');
+	await h.invoke('test.node', ['dispose']).result;
+	assert.deepEqual((await h.registrationEvent(4)).terminalProviders, []);
+	assert.equal((await invoke(first.terminalProviders[0], 'createTerminalProfile', {})).status, 'failure');
+	assert.equal(
+		(
+			await invoke(first.terminalProviders[1], 'provideTerminalLinks', {
+				line: 'LINK',
+				terminal: { id: 'one', name: 'Shell', processId: 123 },
+			})
+		).status,
+		'failure',
+	);
+	await h.invoke('test.node', ['register']).result;
+	const second = await h.registrationEvent(6);
+	assert.notEqual(second.terminalProviders[0].registrationId, first.terminalProviders[0].registrationId);
+	assert.notEqual(second.terminalProviders[1].registrationId, first.terminalProviders[1].registrationId);
+});
 
 test('terminal environment collections expose immutable mutators through an independent admitted callback', async t => {
 	const h = await host(
@@ -1997,10 +1878,7 @@ exports.activate = context => {
 	}).result;
 	assert.equal(result.status, 'success', JSON.stringify(result));
 	const snapshot = result.body.body.payload;
-	assert.deepEqual(snapshot.map[0], [
-		'PATH',
-		{ variable: 'PATH', value: ':global', type: 2, options: { applyAtProcessCreation: true } },
-	]);
+	assert.deepEqual(snapshot.map[0], ['PATH', { variable: 'PATH', value: ':global', type: 2, options: { applyAtProcessCreation: true } }]);
 	assert.equal(snapshot.map[1][1].value, 'folder:');
 	assert.deepEqual(snapshot.map[1][1].scope.workspaceFolder, {
 		uri: { scheme: 'file', authority: '', path: '/workspace/a', query: '', fragment: '' },
@@ -2013,13 +1891,10 @@ exports.activate = context => {
 	);
 });
 
-test(
-	'standard Speech sessions preserve events, tokens, cancellation and registration disposal in Node',
-	{ timeout: 10000 },
-	async t => {
-		const h = await host(
-			t,
-			`const v = require('@ash/sdk');
+test('standard Speech sessions preserve events, tokens, cancellation and registration disposal in Node', { timeout: 10000 }, async t => {
+	const h = await host(
+		t,
+		`const v = require('@ash/sdk');
 let registration; let cancelled = 0; let detached = 0; const sessions = new Map();
 function provide(kind, token, options) {
  const key = options?.language ?? kind; const emitter = new v.EventEmitter();
@@ -2042,92 +1917,73 @@ exports.activate = context => {
   return { cancelled, detached, sessions: [...sessions.keys()] };
  }));
 };`,
-			'extension.cjs',
-			['speechProvider', 'command'],
-		);
-		const registration = h.registrations.find(value => value.kind === 'speechProvider');
-		assert.deepEqual(registration, {
-			registrationId: 'ash.speech.1',
-			kind: 'speechProvider',
-			registrationGeneration: 1,
-			identifier: 'test.recognition',
+		'extension.cjs',
+		['speechProvider', 'command'],
+	);
+	const registration = h.registrations.find(value => value.kind === 'speechProvider');
+	assert.deepEqual(registration, {
+		registrationId: 'ash.speech.1',
+		kind: 'speechProvider',
+		registrationGeneration: 1,
+		identifier: 'test.recognition',
+	});
+	const invoke = (operation, payload) =>
+		h.request('invoke', {
+			extensionId: 'test.node',
+			registrationId: registration.registrationId,
+			registrationGeneration: registration.registrationGeneration,
+			operation,
+			payload,
+			deadlineUnixMillis: Date.now() + 30000,
 		});
-		const invoke = (operation, payload) =>
-			h.request('invoke', {
-				extensionId: 'test.node',
-				registrationId: registration.registrationId,
-				registrationGeneration: registration.registrationGeneration,
-				operation,
-				payload,
-				deadlineUnixMillis: Date.now() + 30000,
-			});
-		const ids = [
-			'a1234567-1234-1234-1234-123456789abc',
-			'b1234567-1234-1234-1234-123456789abc',
-			'c1234567-1234-1234-1234-123456789abc',
-		];
-		for (const [index, kind] of ['speechToText', 'textToSpeech', 'keywordRecognition'].entries())
-			assert.equal(
-				(await invoke('createSpeechSession', { sessionId: ids[index], kind }).result).status,
-				'success',
-			);
-		assert.deepEqual((await h.invoke('test.node', ['emit', 'stt']).result).body.body.payload, {
-			cancelled: 0,
-			detached: 0,
-			sessions: ['stt', 'tts', 'keyword'],
-		});
-		assert.deepEqual((await invoke('readSpeechSession', { sessionId: ids[0] }).result).body.body.payload, {
-			events: [{ status: 3, text: '你好' }],
-			closed: false,
-		});
-		assert.equal((await invoke('synthesizeSpeech', { sessionId: ids[1], text: 'hello' }).result).status, 'success');
-		assert.deepEqual((await invoke('readSpeechSession', { sessionId: ids[1] }).result).body.body.payload, {
-			events: [{ status: 1, text: 'hello' }, { status: 2 }],
-			closed: false,
-		});
-		await h.invoke('test.node', ['emit', 'keyword']).result;
-		assert.deepEqual((await invoke('readSpeechSession', { sessionId: ids[2] }).result).body.body.payload, {
-			events: [{ status: 1, text: '你好' }],
-			closed: false,
-		});
-		const pending = invoke('createSpeechSession', {
-			sessionId: 'd1234567-1234-1234-1234-123456789abc',
-			kind: 'speechToText',
-			language: 'pending',
-		});
-		assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload.sessions, [
-			'stt',
-			'tts',
-			'keyword',
-			'pending',
-		]);
-		assert.equal(
-			(await h.request('cancel', { targetRequestId: pending.requestId, reason: 'caller' }).result).body.result,
-			'cancelled',
-		);
-		assert.equal((await pending.result).status, 'failure');
-		assert.deepEqual((await h.invoke('test.node', ['overflow', 'stt']).result).body.body.payload, {
-			cancelled: 2,
-			detached: 1,
-			sessions: ['tts', 'keyword'],
-		});
-		assert.equal((await invoke('readSpeechSession', { sessionId: ids[0] }).result).status, 'failure');
-		assert.deepEqual((await h.invoke('test.node', ['dispose']).result).body.body.payload, {
-			cancelled: 4,
-			detached: 3,
-			sessions: [],
-		});
-		assert.equal((await invoke('readSpeechSession', { sessionId: ids[1] }).result).status, 'failure');
-	},
-);
+	const ids = ['a1234567-1234-1234-1234-123456789abc', 'b1234567-1234-1234-1234-123456789abc', 'c1234567-1234-1234-1234-123456789abc'];
+	for (const [index, kind] of ['speechToText', 'textToSpeech', 'keywordRecognition'].entries())
+		assert.equal((await invoke('createSpeechSession', { sessionId: ids[index], kind }).result).status, 'success');
+	assert.deepEqual((await h.invoke('test.node', ['emit', 'stt']).result).body.body.payload, {
+		cancelled: 0,
+		detached: 0,
+		sessions: ['stt', 'tts', 'keyword'],
+	});
+	assert.deepEqual((await invoke('readSpeechSession', { sessionId: ids[0] }).result).body.body.payload, {
+		events: [{ status: 3, text: '你好' }],
+		closed: false,
+	});
+	assert.equal((await invoke('synthesizeSpeech', { sessionId: ids[1], text: 'hello' }).result).status, 'success');
+	assert.deepEqual((await invoke('readSpeechSession', { sessionId: ids[1] }).result).body.body.payload, {
+		events: [{ status: 1, text: 'hello' }, { status: 2 }],
+		closed: false,
+	});
+	await h.invoke('test.node', ['emit', 'keyword']).result;
+	assert.deepEqual((await invoke('readSpeechSession', { sessionId: ids[2] }).result).body.body.payload, {
+		events: [{ status: 1, text: '你好' }],
+		closed: false,
+	});
+	const pending = invoke('createSpeechSession', {
+		sessionId: 'd1234567-1234-1234-1234-123456789abc',
+		kind: 'speechToText',
+		language: 'pending',
+	});
+	assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload.sessions, ['stt', 'tts', 'keyword', 'pending']);
+	assert.equal((await h.request('cancel', { targetRequestId: pending.requestId, reason: 'caller' }).result).body.result, 'cancelled');
+	assert.equal((await pending.result).status, 'failure');
+	assert.deepEqual((await h.invoke('test.node', ['overflow', 'stt']).result).body.body.payload, {
+		cancelled: 2,
+		detached: 1,
+		sessions: ['tts', 'keyword'],
+	});
+	assert.equal((await invoke('readSpeechSession', { sessionId: ids[0] }).result).status, 'failure');
+	assert.deepEqual((await h.invoke('test.node', ['dispose']).result).body.body.payload, {
+		cancelled: 4,
+		detached: 3,
+		sessions: [],
+	});
+	assert.equal((await invoke('readSpeechSession', { sessionId: ids[1] }).result).status, 'failure');
+});
 
-test(
-	'completed Speech creation keeps a persistent token until its exact session is closed',
-	{ timeout: 10000 },
-	async t => {
-		const h = await host(
-			t,
-			`const v = require('@ash/sdk');
+test('completed Speech creation keeps a persistent token until its exact session is closed', { timeout: 10000 }, async t => {
+	const h = await host(
+		t,
+		`const v = require('@ash/sdk');
 let cancelled = 0;
 function provide(token) {
  const events = new v.EventEmitter();
@@ -2142,44 +1998,40 @@ exports.activate = context => context.subscriptions.push(
  }),
  v.commands.register('test.node', () => cancelled)
 );`,
-			'extension.cjs',
-			['speechProvider', 'command'],
-		);
-		const registrationId = h.registrations.find(value => value.kind === 'speechProvider').registrationId;
-		const invoke = (operation, sessionId) =>
-			h.request('invoke', {
-				extensionId: 'test.node',
-				registrationId,
-				registrationGeneration: 1,
-				operation,
-				payload: { sessionId, ...(operation === 'createSpeechSession' ? { kind: 'speechToText' } : {}) },
-				deadlineUnixMillis: Date.now() + 30000,
-			});
-		const first = 'a1234567-1234-1234-1234-123456789abc';
-		const second = 'b1234567-1234-1234-1234-123456789abc';
-		const created = invoke('createSpeechSession', first);
-		assert.equal((await created.result).status, 'success');
-		assert.equal((await invoke('createSpeechSession', second).result).status, 'success');
-		await h.request('cancel', { targetRequestId: created.requestId, reason: 'caller' }).result;
-		assert.equal((await h.invoke('test.node', []).result).body.body.payload, 0);
-		assert.equal((await invoke('closeSpeechSession', first).result).status, 'success');
-		assert.equal((await invoke('closeSpeechSession', first).result).status, 'success');
-		assert.equal((await h.invoke('test.node', []).result).body.body.payload, 1);
-		assert.equal((await invoke('readSpeechSession', first).result).status, 'failure');
-		assert.equal((await invoke('readSpeechSession', second).result).status, 'success');
-		assert.equal((await invoke('closeSpeechSession', second).result).status, 'success');
-		assert.equal((await h.invoke('test.node', []).result).body.body.payload, 2);
-	},
-);
+		'extension.cjs',
+		['speechProvider', 'command'],
+	);
+	const registrationId = h.registrations.find(value => value.kind === 'speechProvider').registrationId;
+	const invoke = (operation, sessionId) =>
+		h.request('invoke', {
+			extensionId: 'test.node',
+			registrationId,
+			registrationGeneration: 1,
+			operation,
+			payload: { sessionId, ...(operation === 'createSpeechSession' ? { kind: 'speechToText' } : {}) },
+			deadlineUnixMillis: Date.now() + 30000,
+		});
+	const first = 'a1234567-1234-1234-1234-123456789abc';
+	const second = 'b1234567-1234-1234-1234-123456789abc';
+	const created = invoke('createSpeechSession', first);
+	assert.equal((await created.result).status, 'success');
+	assert.equal((await invoke('createSpeechSession', second).result).status, 'success');
+	await h.request('cancel', { targetRequestId: created.requestId, reason: 'caller' }).result;
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 0);
+	assert.equal((await invoke('closeSpeechSession', first).result).status, 'success');
+	assert.equal((await invoke('closeSpeechSession', first).result).status, 'success');
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 1);
+	assert.equal((await invoke('readSpeechSession', first).result).status, 'failure');
+	assert.equal((await invoke('readSpeechSession', second).result).status, 'success');
+	assert.equal((await invoke('closeSpeechSession', second).result).status, 'success');
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 2);
+});
 
-test(
-	'Output channels preserve ordered writes, language, log levels and disposal through the real runtime',
-	{ timeout: 15000 },
-	async t => {
-		const calls = [];
-		const h = await host(
-			t,
-			`const v = require('@ash/sdk');
+test('Output channels preserve ordered writes, language, log levels and disposal through the real runtime', { timeout: 15000 }, async t => {
+	const calls = [];
+	const h = await host(
+		t,
+		`const v = require('@ash/sdk');
 exports.activate = context => {
  const text = v.window.createOutputChannel('  Source  ', 'typescript');
  const logs = v.window.createOutputChannel('Logs', { log: true });
@@ -2190,105 +2042,96 @@ exports.activate = context => {
  context.subscriptions.push(v.commands.register('test.node', () => ({ level: logs.logLevel, levels, off: v.LogLevel.Off })));
  context.subscriptions.push(v.commands.register('test.second', () => { text.dispose(); logs.dispose(); logs.info('ignored'); }));
 };`,
-			'extension.cjs',
-			['command'],
-			frame => {
-				calls.push(frame.operation.payload);
-				return { result: 'value', value: null };
-			},
-		);
-		assert.deepEqual(
-			calls.filter(call => call.channelId === 'output.1').map(call => call.action),
-			['create', 'append', 'append', 'replace', 'show', 'hide'],
-		);
-		assert.deepEqual(calls[0], {
-			method: 'output',
-			channelId: 'output.1',
-			action: 'create',
-			label: 'Source',
-			kind: 'output',
-			languageId: 'typescript',
-		});
-		assert.equal(calls.find(call => call.action === 'log').text, 'ready agent 2');
-		assert.match(calls.filter(call => call.action === 'log')[1].text, /failure/);
-		const reply = await h.request('invoke', {
-			extensionId: 'test.node',
-			registrationId: 'ash.output.events',
-			operation: 'outputEvent',
-			payload: { channelId: 'output.2', level: 1 },
-			deadlineUnixMillis: Date.now() + 30000,
-		}).result;
-		assert.equal(reply.status, 'success', h.stderr());
-		assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, { level: 1, levels: [1], off: 0 });
-		await h.invoke('test.second', []).result;
-		assert.equal(calls.filter(call => call.action === 'dispose').length, 2);
-		assert.equal(
-			calls.some(call => call.text === 'ignored'),
-			false,
-		);
-	},
-);
+		'extension.cjs',
+		['command'],
+		frame => {
+			calls.push(frame.operation.payload);
+			return { result: 'value', value: null };
+		},
+	);
+	assert.deepEqual(
+		calls.filter(call => call.channelId === 'output.1').map(call => call.action),
+		['create', 'append', 'append', 'replace', 'show', 'hide'],
+	);
+	assert.deepEqual(calls[0], {
+		method: 'output',
+		channelId: 'output.1',
+		action: 'create',
+		label: 'Source',
+		kind: 'output',
+		languageId: 'typescript',
+	});
+	assert.equal(calls.find(call => call.action === 'log').text, 'ready agent 2');
+	assert.match(calls.filter(call => call.action === 'log')[1].text, /failure/);
+	const reply = await h.request('invoke', {
+		extensionId: 'test.node',
+		registrationId: 'ash.output.events',
+		operation: 'outputEvent',
+		payload: { channelId: 'output.2', level: 1 },
+		deadlineUnixMillis: Date.now() + 30000,
+	}).result;
+	assert.equal(reply.status, 'success', h.stderr());
+	assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, { level: 1, levels: [1], off: 0 });
+	await h.invoke('test.second', []).result;
+	assert.equal(calls.filter(call => call.action === 'dispose').length, 2);
+	assert.equal(
+		calls.some(call => call.text === 'ignored'),
+		false,
+	);
+});
 
-test(
-	'fetched task terminal groups survive public edits without entering the public presentation API',
-	{ timeout: 15000 },
-	async t => {
-		const snapshot = {
-			id: 'configured',
-			name: 'Configured',
-			source: 'Workspace',
-			scope: 2,
-			definition: { type: 'process' },
-			execution: { type: 'process', program: 'compiler', args: [] },
-			presentation: { group: 'build', reveal: 'never' },
-			options: {},
-			group: 'build',
-			isBackground: false,
-			problemMatchers: [],
-			detail: null,
-		};
-		const executions = [];
-		const h = await host(
-			t,
-			`const v = require('@ash/sdk'); exports.activate = context => context.subscriptions.push(v.commands.register('test.node', async () => {
+test('fetched task terminal groups survive public edits without entering the public presentation API', { timeout: 15000 }, async t => {
+	const snapshot = {
+		id: 'configured',
+		name: 'Configured',
+		source: 'Workspace',
+		scope: 2,
+		definition: { type: 'process' },
+		execution: { type: 'process', program: 'compiler', args: [] },
+		presentation: { group: 'build', reveal: 'never' },
+		options: {},
+		group: 'build',
+		isBackground: false,
+		problemMatchers: [],
+		detail: null,
+	};
+	const executions = [];
+	const h = await host(
+		t,
+		`const v = require('@ash/sdk'); exports.activate = context => context.subscriptions.push(v.commands.register('test.node', async () => {
  const [task] = await v.tasks.fetchTasks();
  if ('group' in task.presentationOptions) throw Error('Configuration-only group leaked');
  for (let i = 0; i < 2; i++) { task.name = 'Edited ' + i; task.presentationOptions = { panel: v.TaskPanelKind.New }; await v.tasks.executeTask(task); }
  return 'retained';
 }));`,
-			'extension.cjs',
-			['command'],
-			frame => {
-				if (frame.operation.operation === 'fetchTasks')
-					return { result: 'tasks', sequence: 0, executions: [], tasks: [snapshot] };
-				assert.equal(frame.operation.operation, 'executeTask');
-				executions.push(frame.operation.task);
-				return {
-					result: 'taskExecution',
-					sequence: executions.length,
-					execution: { id: `run-${executions.length}`, active: false, task: snapshot },
-				};
-			},
-		);
-		const result = await h.invoke('test.node', []).result;
-		assert.equal(result.status, 'success', JSON.stringify(result));
-		assert.deepEqual(
-			executions.map(task => task.presentation),
-			[
-				{ panel: 'new', group: 'build' },
-				{ panel: 'new', group: 'build' },
-			],
-		);
-	},
-);
+		'extension.cjs',
+		['command'],
+		frame => {
+			if (frame.operation.operation === 'fetchTasks') return { result: 'tasks', sequence: 0, executions: [], tasks: [snapshot] };
+			assert.equal(frame.operation.operation, 'executeTask');
+			executions.push(frame.operation.task);
+			return {
+				result: 'taskExecution',
+				sequence: executions.length,
+				execution: { id: `run-${executions.length}`, active: false, task: snapshot },
+			};
+		},
+	);
+	const result = await h.invoke('test.node', []).result;
+	assert.equal(result.status, 'success', JSON.stringify(result));
+	assert.deepEqual(
+		executions.map(task => task.presentation),
+		[
+			{ panel: 'new', group: 'build' },
+			{ panel: 'new', group: 'build' },
+		],
+	);
+});
 
-test(
-	'Speech registrations created after activation update the original registry and retire only their own sessions',
-	{ timeout: 15000 },
-	async t => {
-		const h = await host(
-			t,
-			`const v = require('@ash/sdk');
+test('Speech registrations created after activation update the original registry and retire only their own sessions', { timeout: 15000 }, async t => {
+	const h = await host(
+		t,
+		`const v = require('@ash/sdk');
 let registration, retired, emitter, oldEmitter, cancelled = 0, created = 0;
 function install() {
  registration = v.speech.registerSpeechProvider('test.dynamic', {
@@ -2306,86 +2149,68 @@ exports.activate = context => {
  }));
  setTimeout(install, 10);
 };`,
-			'extension.cjs',
-			['speechProvider', 'command'],
-		);
-		assert.equal(
-			h.registrations.some(value => value.kind === 'speechProvider'),
-			false,
-		);
-		const first = await h.registrationEvent(1);
-		assert.deepEqual(first.context, { protocolVersion: 1, incarnation: 2, activationGeneration: 3 });
-		assert.deepEqual(first.speechProviders, [
-			{
-				registrationId: 'ash.speech.1',
-				kind: 'speechProvider',
-				registrationGeneration: 1,
-				identifier: 'test.dynamic',
-			},
-		]);
-		const sessionId = 'a1234567-1234-1234-1234-123456789abc';
-		const speech = (
+		'extension.cjs',
+		['speechProvider', 'command'],
+	);
+	assert.equal(
+		h.registrations.some(value => value.kind === 'speechProvider'),
+		false,
+	);
+	const first = await h.registrationEvent(1);
+	assert.deepEqual(first.context, { protocolVersion: 1, incarnation: 2, activationGeneration: 3 });
+	assert.deepEqual(first.speechProviders, [
+		{
+			registrationId: 'ash.speech.1',
+			kind: 'speechProvider',
+			registrationGeneration: 1,
+			identifier: 'test.dynamic',
+		},
+	]);
+	const sessionId = 'a1234567-1234-1234-1234-123456789abc';
+	const speech = (registrationId, operation, payload, registrationGeneration = Number(registrationId.split('.').at(-1))) =>
+		h.request('invoke', {
+			extensionId: 'test.node',
 			registrationId,
+			registrationGeneration,
 			operation,
 			payload,
-			registrationGeneration = Number(registrationId.split('.').at(-1)),
-		) =>
-			h.request('invoke', {
+			deadlineUnixMillis: Date.now() + 5000,
+		}).result;
+	assert.equal((await speech('ash.speech.1', 'createSpeechSession', { sessionId, kind: 'speechToText' })).status, 'success');
+	assert.equal((await h.invoke('test.node', ['retire']).result).body.body.payload, 1);
+	assert.deepEqual((await h.registrationEvent(2)).speechProviders, []);
+	await h.invoke('test.node', ['install']).result;
+	assert.equal((await h.registrationEvent(3)).speechProviders[0].registrationId, 'ash.speech.2');
+	await h.invoke('test.node', ['oldDispose']).result;
+	// A queued request carries its selected generation even if delivered after replacement.
+	assert.equal((await speech('ash.speech.2', 'createSpeechSession', { sessionId, kind: 'speechToText' }, 1)).status, 'failure');
+	assert.equal(
+		(
+			await h.request('invoke', {
 				extensionId: 'test.node',
-				registrationId,
-				registrationGeneration,
-				operation,
-				payload,
+				registrationId: 'ash.speech.2',
+				operation: 'createSpeechSession',
+				payload: { sessionId, kind: 'speechToText' },
 				deadlineUnixMillis: Date.now() + 5000,
-			}).result;
-		assert.equal(
-			(await speech('ash.speech.1', 'createSpeechSession', { sessionId, kind: 'speechToText' })).status,
-			'success',
-		);
-		assert.equal((await h.invoke('test.node', ['retire']).result).body.body.payload, 1);
-		assert.deepEqual((await h.registrationEvent(2)).speechProviders, []);
-		await h.invoke('test.node', ['install']).result;
-		assert.equal((await h.registrationEvent(3)).speechProviders[0].registrationId, 'ash.speech.2');
-		await h.invoke('test.node', ['oldDispose']).result;
-		// A queued request carries its selected generation even if delivered after replacement.
-		assert.equal(
-			(await speech('ash.speech.2', 'createSpeechSession', { sessionId, kind: 'speechToText' }, 1)).status,
-			'failure',
-		);
-		assert.equal(
-			(
-				await h.request('invoke', {
-					extensionId: 'test.node',
-					registrationId: 'ash.speech.2',
-					operation: 'createSpeechSession',
-					payload: { sessionId, kind: 'speechToText' },
-					deadlineUnixMillis: Date.now() + 5000,
-				}).result
-			).status,
-			'failure',
-		);
-		assert.equal((await h.invoke('test.node', ['created']).result).body.body.payload, 1);
-		assert.equal((await speech('ash.speech.1', 'readSpeechSession', { sessionId })).status, 'failure');
-		assert.equal(
-			(await speech('ash.speech.2', 'createSpeechSession', { sessionId, kind: 'speechToText' })).status,
-			'success',
-		);
-		assert.deepEqual((await speech('ash.speech.2', 'readSpeechSession', { sessionId })).body.body.payload, {
-			events: [],
-			closed: false,
-		});
-		assert.equal((await h.invoke('test.node', []).result).status, 'success');
-		await h.request('shutdown').result;
-	},
-);
+			}).result
+		).status,
+		'failure',
+	);
+	assert.equal((await h.invoke('test.node', ['created']).result).body.body.payload, 1);
+	assert.equal((await speech('ash.speech.1', 'readSpeechSession', { sessionId })).status, 'failure');
+	assert.equal((await speech('ash.speech.2', 'createSpeechSession', { sessionId, kind: 'speechToText' })).status, 'success');
+	assert.deepEqual((await speech('ash.speech.2', 'readSpeechSession', { sessionId })).body.body.payload, {
+		events: [],
+		closed: false,
+	});
+	assert.equal((await h.invoke('test.node', []).result).status, 'success');
+	await h.request('shutdown').result;
+});
 
-test(
-	'terminal completion public API preserves context, validates ranges and withdraws live providers',
-	{ timeout: 15000 },
-	async t => {
-		const h = await host(
-			t,
-			`const v = require('@ash/sdk'); let registration; let terminal;
+test('terminal completion public API preserves context, validates ranges and withdraws live providers', { timeout: 15000 }, async t => {
+	const h = await host(
+		t,
+		`const v = require('@ash/sdk'); let registration; let terminal;
 exports.activate = context => {
  registration = v.window.registerTerminalCompletionProvider({
   async provideTerminalCompletions(current, request, token) {
@@ -2397,39 +2222,38 @@ exports.activate = context => {
  }, '-');
  context.subscriptions.push(registration, v.commands.register('test.node', () => registration.dispose()));
 };`,
-			'extension.cjs',
-			['terminalCompletionProvider', 'command'],
-		);
-		const registration = h.registrations.find(entry => entry.kind === 'terminalCompletionProvider');
-		assert.deepEqual(registration, {
-			registrationId: 'ash.terminalCompletions.1',
-			kind: 'terminalCompletionProvider',
-			triggerCharacters: ['-'],
-		});
-		const invoke = (commandLine, name = 'Shell') =>
-			h.request('invoke', {
-				extensionId: 'test.node',
-				registrationId: registration.registrationId,
-				operation: 'provideTerminalCompletions',
-				payload: {
-					commandLine,
-					cursorIndex: commandLine.length,
-					terminal: { id: 'terminal-1', name, processId: 42 },
-				},
-				deadlineUnixMillis: Date.now() + 5000,
-			}).result;
-		const first = await invoke('git -');
-		assert.equal(first.status, 'success', JSON.stringify(first));
-		assert.deepEqual(first.body.body.payload, {
-			items: [{ label: '42:Shell:git -', replacementRange: [0, 5], kind: 4 }],
-		});
-		assert.equal((await invoke('git --', 'Renamed')).body.body.payload.items[0].label, '42:Renamed:git --');
-		assert.equal((await invoke('invalid')).status, 'failure');
-		await h.invoke('test.node', []).result;
-		assert.deepEqual((await h.registrationEvent(1)).terminalProviders, []);
-		assert.equal((await invoke('git -')).status, 'failure');
-	},
-);
+		'extension.cjs',
+		['terminalCompletionProvider', 'command'],
+	);
+	const registration = h.registrations.find(entry => entry.kind === 'terminalCompletionProvider');
+	assert.deepEqual(registration, {
+		registrationId: 'ash.terminalCompletions.1',
+		kind: 'terminalCompletionProvider',
+		triggerCharacters: ['-'],
+	});
+	const invoke = (commandLine, name = 'Shell') =>
+		h.request('invoke', {
+			extensionId: 'test.node',
+			registrationId: registration.registrationId,
+			operation: 'provideTerminalCompletions',
+			payload: {
+				commandLine,
+				cursorIndex: commandLine.length,
+				terminal: { id: 'terminal-1', name, processId: 42 },
+			},
+			deadlineUnixMillis: Date.now() + 5000,
+		}).result;
+	const first = await invoke('git -');
+	assert.equal(first.status, 'success', JSON.stringify(first));
+	assert.deepEqual(first.body.body.payload, {
+		items: [{ label: '42:Shell:git -', replacementRange: [0, 5], kind: 4 }],
+	});
+	assert.equal((await invoke('git --', 'Renamed')).body.body.payload.items[0].label, '42:Renamed:git --');
+	assert.equal((await invoke('invalid')).status, 'failure');
+	await h.invoke('test.node', []).result;
+	assert.deepEqual((await h.registrationEvent(1)).terminalProviders, []);
+	assert.equal((await invoke('git -')).status, 'failure');
+});
 
 test('terminal completion cancellation reaches its public cancellation token', { timeout: 15000 }, async t => {
 	const h = await host(
@@ -2455,13 +2279,10 @@ exports.activate = context => {
 	assert.equal((await h.invoke('test.node', []).result).body.body.payload, true);
 });
 
-test(
-	'document formatting SDK preserves snapshots, options, cancellation and registration retirement',
-	{ timeout: 10000 },
-	async t => {
-		const h = await host(
-			t,
-			`import * as ash from '@ash/sdk';
+test('document formatting SDK preserves snapshots, options, cancellation and registration retirement', { timeout: 10000 }, async t => {
+	const h = await host(
+		t,
+		`import * as ash from '@ash/sdk';
 let registration; let cancelled = false;
 export function activate(context) {
  registration = ash.languages.registerDocumentFormattingEditProvider(['json', 'jsonc'], {
@@ -2472,56 +2293,52 @@ export function activate(context) {
  });
  context.subscriptions.push(registration, ash.commands.register('test.node', () => { registration.dispose(); return cancelled; }));
 }`,
-			'extension.mjs',
-			['command', 'languageProvider'],
-		);
-		const registration = h.registrations.find(entry => entry.kind === 'languageProvider');
-		assert.deepEqual(registration.languageIds, ['json', 'jsonc']);
-		const invoke = (text, kind = 'document') =>
-			h.request('invoke', {
-				extensionId: 'test.node',
-				registrationId: registration.registrationId,
-				operation: 'formatting',
-				payload: {
-					resource: 'file:///format.jsonc',
-					languageId: 'jsonc',
-					version: 4,
-					text,
-					kind,
-					options: { tabSize: 2, insertSpaces: true },
-				},
-				deadlineUnixMillis: Date.now() + 5000,
-			});
-		const response = (await invoke('{}').result).body.body.payload;
-		assert.deepEqual(response, {
-			edits: [
-				{
-					range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 2 } },
-					text: JSON.stringify({
-						language: 'jsonc',
-						version: 4,
-						options: { tabSize: 2, insertSpaces: true },
-					}),
-				},
-			],
+		'extension.mjs',
+		['command', 'languageProvider'],
+	);
+	const registration = h.registrations.find(entry => entry.kind === 'languageProvider');
+	assert.deepEqual(registration.languageIds, ['json', 'jsonc']);
+	const invoke = (text, kind = 'document') =>
+		h.request('invoke', {
+			extensionId: 'test.node',
+			registrationId: registration.registrationId,
+			operation: 'formatting',
+			payload: {
+				resource: 'file:///format.jsonc',
+				languageId: 'jsonc',
+				version: 4,
+				text,
+				kind,
+				options: { tabSize: 2, insertSpaces: true },
+			},
+			deadlineUnixMillis: Date.now() + 5000,
 		});
-		assert.deepEqual((await invoke('{}', 'range').result).body.body.payload, { edits: [] });
-		const pending = invoke('wait');
-		await h.request('cancel', { targetRequestId: pending.requestId, reason: 'caller' }).result;
-		assert.deepEqual((await pending.result).body.body.payload, { edits: [] });
-		assert.equal((await h.invoke('test.node', []).result).body.body.payload, true);
-		assert.equal((await invoke('{}').result).status, 'failure');
-	},
-);
+	const response = (await invoke('{}').result).body.body.payload;
+	assert.deepEqual(response, {
+		edits: [
+			{
+				range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 2 } },
+				text: JSON.stringify({
+					language: 'jsonc',
+					version: 4,
+					options: { tabSize: 2, insertSpaces: true },
+				}),
+			},
+		],
+	});
+	assert.deepEqual((await invoke('{}', 'range').result).body.body.payload, { edits: [] });
+	const pending = invoke('wait');
+	await h.request('cancel', { targetRequestId: pending.requestId, reason: 'caller' }).result;
+	assert.deepEqual((await pending.result).body.body.payload, { edits: [] });
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, true);
+	assert.equal((await invoke('{}').result).status, 'failure');
+});
 
-test(
-	'JSON schema SDK reads owner snapshots, rejects invalid data and fences disposed change listeners',
-	{ timeout: 10000 },
-	async t => {
-		let value = [{ uri: 'ash://schema/settings', fileMatch: ['**/settings.json'], schema: { type: 'object' } }];
-		const h = await host(
-			t,
-			`import * as ash from '@ash/sdk';
+test('JSON schema SDK reads owner snapshots, rejects invalid data and fences disposed change listeners', { timeout: 10000 }, async t => {
+	let value = [{ uri: 'ash://schema/settings', fileMatch: ['**/settings.json'], schema: { type: 'object' } }];
+	const h = await host(
+		t,
+		`import * as ash from '@ash/sdk';
 let changes = 0; let listener;
 export function activate(context) {
  listener = ash.languages.onDidChangeJsonSchemas(() => { changes++; });
@@ -2529,46 +2346,42 @@ export function activate(context) {
   try { return { schemas: await ash.languages.getJsonSchemaContributions(), changes }; } catch (error) { return { error: error.message, changes }; }
  }), ash.commands.register('test.second', () => listener.dispose()));
 }`,
-			'extension.mjs',
-			['command'],
-			frame => {
-				assert.deepEqual(frame.operation, {
-					operation: 'editorOperation',
-					payload: { method: 'jsonSchemaContributions' },
-				});
-				return { result: 'value', value };
-			},
-		);
-		assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, { schemas: value, changes: 0 });
-		const event = revision =>
-			h.request('invoke', {
-				extensionId: 'test.node',
-				registrationId: 'ash.workspace.events',
-				operation: 'workspaceEvent',
-				payload: { type: 'jsonSchemas', revision, emit: true },
-				deadlineUnixMillis: Date.now() + 5000,
-			}).result;
-		await event(2);
-		await event(1);
-		value = [{ ...value[0], schema: { type: 'array' } }];
-		assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, { schemas: value, changes: 1 });
-		await h.invoke('test.second', []).result;
-		await event(3);
-		value = [{ uri: 'ash://bad', fileMatch: [false], schema: {} }];
-		assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, {
-			error: 'Invalid JSON schema contributions',
-			changes: 1,
-		});
-	},
-);
+		'extension.mjs',
+		['command'],
+		frame => {
+			assert.deepEqual(frame.operation, {
+				operation: 'editorOperation',
+				payload: { method: 'jsonSchemaContributions' },
+			});
+			return { result: 'value', value };
+		},
+	);
+	assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, { schemas: value, changes: 0 });
+	const event = revision =>
+		h.request('invoke', {
+			extensionId: 'test.node',
+			registrationId: 'ash.workspace.events',
+			operation: 'workspaceEvent',
+			payload: { type: 'jsonSchemas', revision, emit: true },
+			deadlineUnixMillis: Date.now() + 5000,
+		}).result;
+	await event(2);
+	await event(1);
+	value = [{ ...value[0], schema: { type: 'array' } }];
+	assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, { schemas: value, changes: 1 });
+	await h.invoke('test.second', []).result;
+	await event(3);
+	value = [{ uri: 'ash://bad', fileMatch: [false], schema: {} }];
+	assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, {
+		error: 'Invalid JSON schema contributions',
+		changes: 1,
+	});
+});
 
-test(
-	'terminal quick fix selectors run before callbacks and retain opaque command actions',
-	{ timeout: 15000 },
-	async t => {
-		const h = await host(
-			t,
-			`const v = require('@ash/sdk'); let calls = 0; let accepted; let fix;
+test('terminal quick fix selectors run before callbacks and retain opaque command actions', { timeout: 15000 }, async t => {
+	const h = await host(
+		t,
+		`const v = require('@ash/sdk'); let calls = 0; let accepted; let fix;
 exports.activate = context => {
  fix = v.window.registerTerminalQuickFixProvider('test.fix', { provideTerminalQuickFixes(match, token) {
   calls++;
@@ -2577,92 +2390,88 @@ exports.activate = context => {
  } });
  context.subscriptions.push(fix, v.commands.register('test.second', value => { accepted = value; }), v.commands.register('test.node', action => action === 'dispose' ? fix.dispose() : { calls, accepted }));
 };`,
-			'extension.cjs',
-			['terminalQuickFixProvider', 'command'],
-			frame => {
-				assert.equal(frame.operation.operation, 'executeCommand');
-				assert.equal(frame.operation.command, 'test.second');
-				assert.deepEqual(frame.operation.arguments, ['matched']);
-				return { result: 'command', hasValue: false };
-			},
-			{
-				manifest: {
-					contributes: {
-						commands: [
-							{ command: 'test.node', title: 'Node' },
-							{ command: 'test.second', title: 'Second' },
-						],
-						terminalQuickFixes: [
-							{
-								id: 'test.fix',
-								commandLineMatcher: '^tool (bad)$',
-								commandExitResult: 'error',
-								outputMatcher: {
-									lineMatcher: 'try (?<option>good)',
-									anchor: 'bottom',
-									offset: 0,
-									length: 2,
-								},
+		'extension.cjs',
+		['terminalQuickFixProvider', 'command'],
+		frame => {
+			assert.equal(frame.operation.operation, 'executeCommand');
+			assert.equal(frame.operation.command, 'test.second');
+			assert.deepEqual(frame.operation.arguments, ['matched']);
+			return { result: 'command', hasValue: false };
+		},
+		{
+			manifest: {
+				contributes: {
+					commands: [
+						{ command: 'test.node', title: 'Node' },
+						{ command: 'test.second', title: 'Second' },
+					],
+					terminalQuickFixes: [
+						{
+							id: 'test.fix',
+							commandLineMatcher: '^tool (bad)$',
+							commandExitResult: 'error',
+							outputMatcher: {
+								lineMatcher: 'try (?<option>good)',
+								anchor: 'bottom',
+								offset: 0,
+								length: 2,
 							},
-						],
-					},
+						},
+					],
 				},
 			},
-		);
-		const registration = h.registrations.find(entry => entry.kind === 'terminalQuickFixProvider');
-		assert.equal(registration.providerId, 'test.fix');
-		const invoke = (operation, payload) =>
-			h.request('invoke', {
-				extensionId: 'test.node',
-				registrationId: registration.registrationId,
-				operation,
-				payload,
-				deadlineUnixMillis: Date.now() + 5000,
-			}).result;
-		const payload = {
-			phase: 'provide',
-			commandLine: 'tool bad',
-			exitCode: 1,
-			outputLines: ['failed', 'try good'],
-			terminalId: 'terminal-1',
-		};
-		assert.deepEqual(
-			(await invoke('provideTerminalQuickFixes', { ...payload, phase: 'matcher' })).body.body.payload,
-			{ matches: true, outputMatcher: { anchor: 'bottom', offset: 0, length: 2 } },
-		);
-		assert.deepEqual((await invoke('provideTerminalQuickFixes', { ...payload, exitCode: 0 })).body.body.payload, {
-			fixes: [],
-		});
-		const fixes = (await invoke('provideTerminalQuickFixes', payload)).body.body.payload.fixes;
-		assert.deepEqual(fixes.slice(0, 2), [
-			{ kind: 'terminalCommand', label: 'tool good', shouldExecute: true },
-			{ kind: 'opener', label: 'https://example.com/help' },
-		]);
-		assert.equal(
-			(
-				await invoke('handleTerminalQuickFix', {
-					id: fixes[2].id,
-					terminalId: 'other',
-					commandLine: payload.commandLine,
-				})
-			).status,
-			'failure',
-		);
-		assert.equal(
-			(
-				await invoke('handleTerminalQuickFix', {
-					id: fixes[2].id,
-					terminalId: 'terminal-1',
-					commandLine: payload.commandLine,
-				})
-			).status,
-			'success',
-		);
-		assert.equal(h.clientCalls.length, 1);
-		await h.invoke('test.node', ['dispose']).result;
-		assert.deepEqual((await h.registrationEvent(1)).terminalProviders, []);
-	},
-);
+		},
+	);
+	const registration = h.registrations.find(entry => entry.kind === 'terminalQuickFixProvider');
+	assert.equal(registration.providerId, 'test.fix');
+	const invoke = (operation, payload) =>
+		h.request('invoke', {
+			extensionId: 'test.node',
+			registrationId: registration.registrationId,
+			operation,
+			payload,
+			deadlineUnixMillis: Date.now() + 5000,
+		}).result;
+	const payload = {
+		phase: 'provide',
+		commandLine: 'tool bad',
+		exitCode: 1,
+		outputLines: ['failed', 'try good'],
+		terminalId: 'terminal-1',
+	};
+	assert.deepEqual((await invoke('provideTerminalQuickFixes', { ...payload, phase: 'matcher' })).body.body.payload, { matches: true, outputMatcher: { anchor: 'bottom', offset: 0, length: 2 } });
+	assert.deepEqual((await invoke('provideTerminalQuickFixes', { ...payload, exitCode: 0 })).body.body.payload, {
+		fixes: [],
+	});
+	const fixes = (await invoke('provideTerminalQuickFixes', payload)).body.body.payload.fixes;
+	assert.deepEqual(fixes.slice(0, 2), [
+		{ kind: 'terminalCommand', label: 'tool good', shouldExecute: true },
+		{ kind: 'opener', label: 'https://example.com/help' },
+	]);
+	assert.equal(
+		(
+			await invoke('handleTerminalQuickFix', {
+				id: fixes[2].id,
+				terminalId: 'other',
+				commandLine: payload.commandLine,
+			})
+		).status,
+		'failure',
+	);
+	assert.equal(
+		(
+			await invoke('handleTerminalQuickFix', {
+				id: fixes[2].id,
+				terminalId: 'terminal-1',
+				commandLine: payload.commandLine,
+			})
+		).status,
+		'success',
+	);
+	assert.equal(h.clientCalls.length, 1);
+	await h.invoke('test.node', ['dispose']).result;
+	assert.deepEqual((await h.registrationEvent(1)).terminalProviders, []);
+});
 
 for (const legacy of [false, true])
 	test(`terminal profile declarations normalize ${legacy ? 'legacy' : 'standard'} package shape at the Node boundary`, async t => {
@@ -2688,67 +2497,59 @@ test('terminal profile package cannot declare competing standard and legacy owne
 	assert.equal(result.body.code, 'activationFailed');
 });
 
-test(
-	'serialized profile replies retain late cancellation only until first resource IO',
-	{ timeout: 10000 },
-	async t => {
-		const h = await host(
-			t,
-			`const v=require('@ash/sdk');exports.activate=context=>{let closes=0;context.subscriptions.push(v.commands.register('test.node',()=>closes),v.window.registerTerminalProfileProvider('pty',{provideTerminalProfile:()=>new v.TerminalProfile({pty:{onDidWrite:new v.EventEmitter().event,open(){},close(){closes++}}})}));};`,
-			'extension.cjs',
-			['terminalProfileProvider', 'command'],
-			undefined,
-			{
-				manifest: {
-					contributes: {
-						terminal: { profiles: [{ id: 'pty', title: 'PTY' }] },
-						commands: [{ command: 'test.node', title: 'Closes' }],
-					},
+test('serialized profile replies retain late cancellation only until first resource IO', { timeout: 10000 }, async t => {
+	const h = await host(
+		t,
+		`const v=require('@ash/sdk');exports.activate=context=>{let closes=0;context.subscriptions.push(v.commands.register('test.node',()=>closes),v.window.registerTerminalProfileProvider('pty',{provideTerminalProfile:()=>new v.TerminalProfile({pty:{onDidWrite:new v.EventEmitter().event,open(){},close(){closes++}}})}));};`,
+		'extension.cjs',
+		['terminalProfileProvider', 'command'],
+		undefined,
+		{
+			manifest: {
+				contributes: {
+					terminal: { profiles: [{ id: 'pty', title: 'PTY' }] },
+					commands: [{ command: 'test.node', title: 'Closes' }],
 				},
 			},
-		);
-		const factory = h.registrations.find(value => value.kind === 'terminalProfileProvider');
-		const create = deadline =>
-			h.request('invoke', {
-				extensionId: 'test.node',
-				registrationId: factory.registrationId,
-				operation: 'createTerminalProfile',
-				payload: {},
-				deadlineUnixMillis: deadline ?? Date.now() + 5000,
-			});
-		const invoke = (pty, operation) =>
-			h.request('invoke', {
-				extensionId: 'test.node',
-				registrationId: pty.registrationId,
-				operation,
-				payload: { ptyId: pty.ptyId, dimensions: { columns: 80, rows: 24 } },
-				deadlineUnixMillis: Date.now() + 5000,
-			}).result;
-		const abandoned = create();
-		assert.equal((await abandoned.result).status, 'success');
-		await h.request('cancel', { targetRequestId: abandoned.requestId, reason: 'caller' }).result;
-		assert.equal((await h.invoke('test.node', []).result).body.body.payload, 1);
-		const adopted = create();
-		const pty = (await adopted.result).body.body.payload.pty;
-		assert.equal((await invoke(pty, 'openTaskTerminal')).status, 'success');
-		await h.request('cancel', { targetRequestId: adopted.requestId, reason: 'caller' }).result;
-		assert.equal(
-			(await h.invoke('test.node', []).result).body.body.payload,
-			1,
-			'old create cancellation cannot kill an adopted PTY',
-		);
-		assert.equal((await invoke(pty, 'readTaskTerminal')).status, 'success');
-		await invoke(pty, 'closeTaskTerminal');
-		assert.equal((await h.invoke('test.node', []).result).body.body.payload, 2);
-		const expiring = create(Date.now() + 500);
-		assert.equal((await expiring.result).status, 'success');
-		const deadline = Date.now() + 5000;
-		while ((await h.invoke('test.node', []).result).body.body.payload !== 3) {
-			assert.ok(Date.now() < deadline, 'unused issued resource did not expire');
-			await new Promise(resolve => setTimeout(resolve, 10));
-		}
-	},
-);
+		},
+	);
+	const factory = h.registrations.find(value => value.kind === 'terminalProfileProvider');
+	const create = deadline =>
+		h.request('invoke', {
+			extensionId: 'test.node',
+			registrationId: factory.registrationId,
+			operation: 'createTerminalProfile',
+			payload: {},
+			deadlineUnixMillis: deadline ?? Date.now() + 5000,
+		});
+	const invoke = (pty, operation) =>
+		h.request('invoke', {
+			extensionId: 'test.node',
+			registrationId: pty.registrationId,
+			operation,
+			payload: { ptyId: pty.ptyId, dimensions: { columns: 80, rows: 24 } },
+			deadlineUnixMillis: Date.now() + 5000,
+		}).result;
+	const abandoned = create();
+	assert.equal((await abandoned.result).status, 'success');
+	await h.request('cancel', { targetRequestId: abandoned.requestId, reason: 'caller' }).result;
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 1);
+	const adopted = create();
+	const pty = (await adopted.result).body.body.payload.pty;
+	assert.equal((await invoke(pty, 'openTaskTerminal')).status, 'success');
+	await h.request('cancel', { targetRequestId: adopted.requestId, reason: 'caller' }).result;
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 1, 'old create cancellation cannot kill an adopted PTY');
+	assert.equal((await invoke(pty, 'readTaskTerminal')).status, 'success');
+	await invoke(pty, 'closeTaskTerminal');
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 2);
+	const expiring = create(Date.now() + 500);
+	assert.equal((await expiring.result).status, 'success');
+	const deadline = Date.now() + 5000;
+	while ((await h.invoke('test.node', []).result).body.body.payload !== 3) {
+		assert.ok(Date.now() < deadline, 'unused issued resource did not expire');
+		await new Promise(resolve => setTimeout(resolve, 10));
+	}
+});
 
 test('tree providers publish dynamic registrations and reject retired handles', { timeout: 15000 }, async t => {
 	const h = await host(
@@ -2780,9 +2581,7 @@ exports.activate = context => context.subscriptions.push(ash.commands.register('
 			payload: { method: 'children' },
 			deadlineUnixMillis: Date.now() + 5000,
 		}).result;
-	assert.deepEqual((await read()).body.body.payload, [
-		{ handle: 'one', label: 'one', collapsibleState: 0, editable: false },
-	]);
+	assert.deepEqual((await read()).body.body.payload, [{ handle: 'one', label: 'one', collapsibleState: 0, editable: false }]);
 	await h.invoke('test.node', ['retire']).result;
 	assert.deepEqual((await h.registrationEvent(2)).treeProviders, []);
 	assert.equal((await read()).status, 'failure');
@@ -2854,10 +2653,7 @@ exports.activate = context => {
 		title: 'board-a',
 	});
 	assert.deepEqual((await invoke('resolve')).body.body.payload, { state: 'pending' });
-	assert.equal(
-		(await invoke('open', { sessionId: 's', threadId: 't', instanceId: 'i', extensionId: 'forged' })).status,
-		'failure',
-	);
+	assert.equal((await invoke('open', { sessionId: 's', threadId: 't', instanceId: 'i', extensionId: 'forged' })).status, 'failure');
 	assert.deepEqual((await invoke('close')).body.body.payload, { state: 'closed' });
 	await h.invoke('test.node', []).result;
 	assert.deepEqual((await h.registrationEvent(1)).canvasProviders, []);

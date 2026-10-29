@@ -1,12 +1,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { chatGPTModelCatalog } from '../../../../../../../test/fixtures/chatGPTModels.js';
-import {
-	ChatGPTClient,
-	ChatGPTRequestError,
-	decodeChatGPTStream,
-	readChatGPTVoiceUpdate,
-} from '../../browser/chatGPTClient.js';
+import { ChatGPTClient, ChatGPTRequestError, decodeChatGPTStream, readChatGPTVoiceUpdate } from '../../browser/chatGPTClient.js';
 
 const signal = (): AbortSignal => new AbortController().signal;
 const json = (value: unknown): Response => Response.json(value);
@@ -66,9 +61,7 @@ suite('Bundled ChatGPT client', () => {
 				{ headers: { 'Content-Type': 'text/event-stream' } },
 			);
 		}) as typeof fetch);
-		const updates = await collect(
-			client.send({ text: 'Question', model: 'pro', parentId: 'parent', messageId: 'user' }, signal()),
-		);
+		const updates = await collect(client.send({ text: 'Question', model: 'pro', parentId: 'parent', messageId: 'user' }, signal()));
 		assert.equal(updates.at(-1)?.message?.text, 'Completed Pro reply');
 		assert.ok(updates.every(update => !('resumeToken' in update)));
 		assert.equal(paths.filter(path => path === '/service/backend-api/f/conversation').length, 1);
@@ -104,10 +97,7 @@ suite('Bundled ChatGPT client', () => {
 			}
 		});
 		assert.equal(resumes, 0);
-		await assert.rejects(
-			collect(client.send(input, signal())),
-			error => error instanceof Error && !(error instanceof ChatGPTRequestError) && /401/u.test(error.message),
-		);
+		await assert.rejects(collect(client.send(input, signal())), error => error instanceof Error && !(error instanceof ChatGPTRequestError) && /401/u.test(error.message));
 		assert.equal(resumes, 1);
 	});
 
@@ -498,10 +488,9 @@ suite('Bundled ChatGPT client', () => {
 					},
 				});
 			}
-			return new Response(
-				'data: {"conversation_id":"chat-one","message":{"id":"reply-three","author":{"role":"assistant"},"content":{"parts":["Next answer"]}}}\n\ndata: [DONE]\n\n',
-				{ headers: { 'Content-Type': 'text/event-stream' } },
-			);
+			return new Response('data: {"conversation_id":"chat-one","message":{"id":"reply-three","author":{"role":"assistant"},"content":{"parts":["Next answer"]}}}\n\ndata: [DONE]\n\n', {
+				headers: { 'Content-Type': 'text/event-stream' },
+			});
 		}) as typeof fetch);
 		const history = await client.history('chat-one', signal());
 		assert.deepEqual(
@@ -526,10 +515,7 @@ suite('Bundled ChatGPT client', () => {
 		assert.equal(new Headers(sent.init.headers).get('Authorization'), null);
 		assert.equal(new Headers(sent.init.headers).get('X-Ash-ChatGPT-Account'), null);
 		assert.ok(calls.every(call => !call.path.endsWith('/me')));
-		assert.equal(
-			new Headers(sent.init.headers).get('OpenAI-Sentinel-Chat-Requirements-Token'),
-			'fixture-requirements',
-		);
+		assert.equal(new Headers(sent.init.headers).get('OpenAI-Sentinel-Chat-Requirements-Token'), 'fixture-requirements');
 		assert.equal(new Headers(sent.init.headers).get('OpenAI-Sentinel-Proof-Token'), 'fixture-proof');
 		assert.equal(new Headers(sent.init.headers).get('OpenAI-Sentinel-Turnstile-Token'), 'fixture-vm');
 		const body = JSON.parse(String(sent.init.body));
@@ -573,9 +559,7 @@ suite('Bundled ChatGPT client', () => {
 		const client = new ChatGPTClient((async () =>
 			json({
 				current_node: 'answer',
-				mapping: Object.fromEntries(
-					messages.map((message, index) => [message.id, { parent: messages[index - 1]?.id, message }]),
-				),
+				mapping: Object.fromEntries(messages.map((message, index) => [message.id, { parent: messages[index - 1]?.id, message }])),
 			})) as typeof fetch);
 		const history = await client.history('fixture', signal());
 		assert.equal(history.parentId, 'answer');
@@ -594,13 +578,7 @@ suite('Bundled ChatGPT client', () => {
 		assert.equal(history.messages[4]!.text, '```\n' + input + '\n```');
 		const stream = new ReadableStream<Uint8Array>({
 			start(controller) {
-				controller.enqueue(
-					new TextEncoder().encode(
-						messages
-							.map(message => `data: ${JSON.stringify({ conversation_id: 'fixture', message })}\n\n`)
-							.join('') + 'data: [DONE]\n\n',
-					),
-				);
+				controller.enqueue(new TextEncoder().encode(messages.map(message => `data: ${JSON.stringify({ conversation_id: 'fixture', message })}\n\n`).join('') + 'data: [DONE]\n\n'));
 				controller.close();
 			},
 		});
@@ -668,12 +646,7 @@ suite('Bundled ChatGPT client', () => {
 						parent: null,
 						message: payload('mixed', {
 							content_type: 'multimodal_text',
-							parts: [
-								'Before',
-								{ content_type: 'image_asset_pointer', alt: 'Diagram' },
-								'After',
-								{ content_type: 'text', text: '**Structured text**' },
-							],
+							parts: ['Before', { content_type: 'image_asset_pointer', alt: 'Diagram' }, 'After', { content_type: 'text', text: '**Structured text**' }],
 						}),
 					},
 					code: {
@@ -684,26 +657,16 @@ suite('Bundled ChatGPT client', () => {
 					unknown: { parent: 'audio', message: payload('unknown', { content_type: 'future-rich-content' }) },
 					file: {
 						parent: 'unknown',
-						message: payload(
-							'file',
-							{ content_type: 'text', parts: ['File caption'] },
-							{ attachments: [{ name: '<report>[1].pdf' }] },
-						),
+						message: payload('file', { content_type: 'text', parts: ['File caption'] }, { attachments: [{ name: '<report>[1].pdf' }] }),
 					},
 				},
 			})) as typeof fetch);
 		const { messages } = await client.history('fixture', signal());
-		assert.match(
-			messages[0]!.text,
-			/Before\nDiagram\n\n\[View this content in ChatGPT\]\(https:\/\/chatgpt\.com\/c\/fixture\)\nAfter\n\*\*Structured text\*\*/u,
-		);
+		assert.match(messages[0]!.text, /Before\nDiagram\n\n\[View this content in ChatGPT\]\(https:\/\/chatgpt\.com\/c\/fixture\)\nAfter\n\*\*Structured text\*\*/u);
 		assert.equal(messages[1]!.text, '````\n<chart/>\n```\nend\n````');
 		assert.equal(messages[2]!.text, 'Transcript\n\n[View this content in ChatGPT](https://chatgpt.com/c/fixture)');
 		assert.match(messages[3]!.text, /View this content in ChatGPT/u);
-		assert.match(
-			messages[4]!.text,
-			/File caption\n\nAttachment: &lt;report&gt;\\\[1\\\]\.pdf\n\n\[View this content/u,
-		);
+		assert.match(messages[4]!.text, /File caption\n\nAttachment: &lt;report&gt;\\\[1\\\]\.pdf\n\n\[View this content/u);
 	});
 
 	test('retains a structured part arriving in a streaming reply', async () => {
@@ -726,10 +689,7 @@ suite('Bundled ChatGPT client', () => {
 			},
 		});
 		const updates = await collect(decodeChatGPTStream(stream, signal()));
-		assert.equal(
-			updates[0]!.message!.text,
-			'Caption\n[View this content in ChatGPT](https://chatgpt.com/c/stream-chat)',
-		);
+		assert.equal(updates[0]!.message!.text, 'Caption\n[View this content in ChatGPT](https://chatgpt.com/c/stream-chat)');
 	});
 
 	test('does not turn a web reasoning status into an empty streamed answer', async () => {

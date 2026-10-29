@@ -12,7 +12,10 @@ for (const [name, value] of Object.entries({
 	PointerEvent: browserEnvironment.window.MouseEvent,
 	WheelEvent: browserEnvironment.window.WheelEvent,
 })) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
+	Object.defineProperty(globalThis, name, {
+		configurable: true,
+		value,
+	});
 }
 
 const { StandardMouseEvent, StandardPointerEvent, StandardWheelEvent } = await import('../../browser/mouseEvent.js');
@@ -43,7 +46,11 @@ test('StandardMouseEvent exposes stable coordinates and event controls', () => {
 });
 
 test('StandardPointerEvent supplies mouse-compatible pointer defaults', () => {
-	const event = new browserEnvironment.window.MouseEvent('pointermove', { button: 0, buttons: 1, clientX: 8 });
+	const event = new browserEnvironment.window.MouseEvent('pointermove', {
+		button: 0,
+		buttons: 1,
+		clientX: 8,
+	});
 	const standard = new StandardPointerEvent(event as unknown as PointerEvent);
 
 	assert.equal(standard.pointerId, 0);
@@ -55,12 +62,34 @@ test('StandardPointerEvent supplies mouse-compatible pointer defaults', () => {
 });
 
 test('StandardWheelEvent normalizes pixel, line, and page deltas', () => {
-	const pixel = new StandardWheelEvent(wheelEvent({ deltaX: 3, deltaY: 7, deltaMode: 0 }));
-	const line = new StandardWheelEvent(wheelEvent({ deltaX: 2, deltaY: -3, deltaMode: 1 }), { lineHeight: 20 });
-	const page = new StandardWheelEvent(wheelEvent({ deltaX: 1, deltaY: 2, deltaMode: 2 }), {
-		pageWidth: 300,
-		pageHeight: 200,
-	});
+	const pixel = new StandardWheelEvent(
+		wheelEvent({
+			deltaX: 3,
+			deltaY: 7,
+			deltaMode: 0,
+		}),
+	);
+	const line = new StandardWheelEvent(
+		wheelEvent({
+			deltaX: 2,
+			deltaY: -3,
+			deltaMode: 1,
+		}),
+		{
+			lineHeight: 20,
+		},
+	);
+	const page = new StandardWheelEvent(
+		wheelEvent({
+			deltaX: 1,
+			deltaY: 2,
+			deltaMode: 2,
+		}),
+		{
+			pageWidth: 300,
+			pageHeight: 200,
+		},
+	);
 
 	assert.deepEqual([pixel.deltaX, pixel.deltaY], [3, 7]);
 	assert.deepEqual([line.deltaX, line.deltaY], [40, -60]);

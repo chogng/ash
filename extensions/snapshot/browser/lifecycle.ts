@@ -44,12 +44,7 @@ export class Disposable {
 	}
 }
 type Events = GlobalEventHandlersEventMap & WindowEventMap & { abort: Event; close: Event };
-export function addDisposableListener<K extends keyof Events>(
-	target: EventTarget,
-	type: K,
-	listener: (event: Events[K]) => void,
-	options?: boolean | AddEventListenerOptions,
-): IDisposable {
+export function addDisposableListener<K extends keyof Events>(target: EventTarget, type: K, listener: (event: Events[K]) => void, options?: boolean | AddEventListenerOptions): IDisposable {
 	target.addEventListener(type, listener as EventListener, options);
 	return toDisposable(() => target.removeEventListener(type, listener as EventListener, options));
 }

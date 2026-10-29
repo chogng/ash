@@ -72,10 +72,7 @@ export class CodeLensContribution extends Disposable {
 			}),
 		);
 		this._register(viewport.onDidChangeLayout(() => this.layoutAndResolve()));
-		const cachedModel =
-			resource && editor.getOption(EditorOption.codeLens)
-				? this.cache.get(resource, viewport.textModel.lineCount)
-				: undefined;
+		const cachedModel = resource && editor.getOption(EditorOption.codeLens) ? this.cache.get(resource, viewport.textModel.lineCount) : undefined;
 		if (cachedModel) {
 			this.cachedModel = cachedModel;
 			this.setModel(cachedModel);
@@ -159,9 +156,7 @@ export class CodeLensContribution extends Disposable {
 	}
 
 	private showCachedModelUntilExpiry(): void {
-		const cachedModel = this.resource
-			? this.cache.get(this.resource, this.viewport.textModel.lineCount)
-			: undefined;
+		const cachedModel = this.resource ? this.cache.get(this.resource, this.viewport.textModel.lineCount) : undefined;
 		if (!cachedModel) {
 			this.cachedModel = undefined;
 			this.setModel(CodeLensModel.Empty);
@@ -194,14 +189,7 @@ export class CodeLensContribution extends Disposable {
 					current.updateCodeLensItems(lineItems);
 					continue;
 				}
-				this.widgets.set(
-					lineNumber,
-					new CodeLensWidget(
-						this.viewport,
-						lineItems,
-						this.onExecuteCommand ? command => this.executeCommand(command) : undefined,
-					),
-				);
+				this.widgets.set(lineNumber, new CodeLensWidget(this.viewport, lineItems, this.onExecuteCommand ? command => this.executeCommand(command) : undefined));
 			}
 		} finally {
 			scrollState.restore(this.editor);
@@ -221,9 +209,7 @@ export class CodeLensContribution extends Disposable {
 		for (const [, widget] of this.widgets) widget.layout();
 		const request = this.request;
 		if (!request || request.token.isCancellationRequested) return;
-		const visible = [...this.widgets]
-			.map(([, widget]) => widget)
-			.filter(widget => widget.isVisible() && widget.needsResolve && !this.resolvingWidgets.has(widget));
+		const visible = [...this.widgets].map(([, widget]) => widget).filter(widget => widget.isVisible() && widget.needsResolve && !this.resolvingWidgets.has(widget));
 		if (visible.length === 0) return;
 		const batchPromise = Promise.all(visible.map(widget => this.resolveWidget(widget, request))).then(
 			() => undefined,
@@ -232,9 +218,7 @@ export class CodeLensContribution extends Disposable {
 			},
 		);
 		const previousPromise = this.resolvePromise;
-		const resolvePromise = previousPromise
-			? Promise.all([previousPromise, batchPromise]).then(() => undefined)
-			: batchPromise;
+		const resolvePromise = previousPromise ? Promise.all([previousPromise, batchPromise]).then(() => undefined) : batchPromise;
 		this.resolvePromise = resolvePromise;
 		void resolvePromise.finally(() => {
 			if (this.resolvePromise === resolvePromise) this.resolvePromise = undefined;
@@ -246,13 +230,7 @@ export class CodeLensContribution extends Disposable {
 		const items = widget.getItems();
 		try {
 			const symbols = await Promise.all(items.map(item => this.resolveItem(item, request)));
-			if (
-				request.token.isCancellationRequested ||
-				request !== this.request ||
-				widget.getItems() !== items ||
-				widget.isDisposed
-			)
-				return;
+			if (request.token.isCancellationRequested || request !== this.request || widget.getItems() !== items || widget.isDisposed) return;
 			widget.updateCommands(symbols);
 			this.replaceResolvedItems(items, widget.getItems());
 			this.updateCache();
@@ -269,11 +247,7 @@ export class CodeLensContribution extends Disposable {
 	private async resolveItem(item: CodeLensItem, request: CancellationTokenSource): Promise<CodeLens | undefined> {
 		if (item.symbol.command || !item.provider.resolveCodeLens) return item.symbol;
 		try {
-			return (
-				(await Promise.resolve(
-					item.provider.resolveCodeLens(this.viewport.textModel, item.symbol, request.token),
-				)) ?? undefined
-			);
+			return (await Promise.resolve(item.provider.resolveCodeLens(this.viewport.textModel, item.symbol, request.token))) ?? undefined;
 		} catch (error) {
 			if (!request.token.isCancellationRequested) this.onError(error);
 			return undefined;

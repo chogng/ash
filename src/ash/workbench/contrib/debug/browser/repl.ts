@@ -16,22 +16,10 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import type { IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
-import {
-	registerAndCreateHistoryNavigationContext,
-	historyNavigationVisible,
-} from '../../../../platform/history/browser/contextScopedHistoryWidget.js';
-import {
-	IAccessibleViewService,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { registerAndCreateHistoryNavigationContext, historyNavigationVisible } from '../../../../platform/history/browser/contextScopedHistoryWidget.js';
+import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import './media/repl.css';
-import {
-	DisposableMap,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-	type IDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { DebugConsoleEntry } from '../../../../platform/debug/common/debugAdapterProcessService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
@@ -47,18 +35,8 @@ import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import {
-	FilterViewPane,
-	type IViewPaneOptions,
-	type PartTitleProjection,
-} from '../../../browser/parts/views/viewPane.js';
-import {
-	IDebugService,
-	type IDebugSession,
-	type IReplModel,
-	type IDebugCompletionItem,
-	CLEAR_DEBUG_CONSOLE_COMMAND_ID,
-} from '../common/debug.js';
+import { FilterViewPane, type IViewPaneOptions, type PartTitleProjection } from '../../../browser/parts/views/viewPane.js';
+import { IDebugService, type IDebugSession, type IReplModel, type IDebugCompletionItem, CLEAR_DEBUG_CONSOLE_COMMAND_ID } from '../common/debug.js';
 
 const INPUT_HISTORY_KEY = 'debug.repl.history';
 const FILTER_HISTORY_KEY = 'debug.repl.filterHistory';
@@ -154,8 +132,7 @@ export class Repl extends FilterViewPane {
 		this.renderer = this._register(
 			instantiation.createInstance(
 				ReplOutputElementRenderer,
-				(entry: DebugConsoleEntry) =>
-					this.openSource(entry, entry.source as IDebugSource).catch(error => this.setStatus(message(error))),
+				(entry: DebugConsoleEntry) => this.openSource(entry, entry.source as IDebugSource).catch(error => this.setStatus(message(error))),
 				(entry: DebugConsoleEntry) => this.consoleFolder(entry),
 			),
 		);
@@ -191,8 +168,7 @@ export class Repl extends FilterViewPane {
 					getKeyboardNavigationLabel: element => this.accessibility.getAriaLabel(element),
 				},
 				findWidgetStyles: defaultFindWidgetStyles,
-				collapseByDefault: element =>
-					element.kind !== 'entry' || element.entry.kind !== 'group' || element.entry.collapsed,
+				collapseByDefault: element => element.kind !== 'entry' || element.entry.kind !== 'group' || element.entry.collapsed,
 				renderElement: element => {
 					const template = this.renderer.renderTemplate(h(this.output.ownerDocument, 'div'));
 					this.renderer.renderElement(element, 0, template);
@@ -398,19 +374,12 @@ export class Repl extends FilterViewPane {
 	sendReplInput(input: string): void {
 		if (!input.trim() || this.isReadonly) return;
 		if (input.length > 32_768 || input.includes('\0')) {
-			this.setStatus(
-				localize('debug.repl.invalidExpression', 'Debug Console expression must contain 1 to 32768 characters'),
-			);
+			this.setStatus(localize('debug.repl.invalidExpression', 'Debug Console expression must contain 1 to 32768 characters'));
 			return;
 		}
 		this.hideSuggestions();
 		this.history.add(input);
-		this.storage.store(
-			INPUT_HISTORY_KEY,
-			JSON.stringify(this.history.getHistory()),
-			StorageScope.WORKSPACE,
-			StorageTarget.MACHINE,
-		);
+		this.storage.store(INPUT_HISTORY_KEY, JSON.stringify(this.history.getHistory()), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		void this.consoleService.evaluate(input).then(
 			() => this.setStatus(''),
 			error => this.setStatus(message(error)),
@@ -444,10 +413,7 @@ export class Repl extends FilterViewPane {
 		try {
 			this.replInput.setValue(value ?? this.historyDraft.value);
 			if (value === null) this.replInput.setSelection(this.historyDraft.selection);
-			else
-				this.replInput.setPosition(
-					direction === 'previous' ? new Position(1, 1) : this.inputModel.getPositionAt(value.length),
-				);
+			else this.replInput.setPosition(direction === 'previous' ? new Position(1, 1) : this.inputModel.getPositionAt(value.length));
 		} finally {
 			this.navigatingHistory = false;
 		}
@@ -459,8 +425,7 @@ export class Repl extends FilterViewPane {
 		if (!selection?.isEmpty() || !position) return false;
 		// Compare rendered lines so wrapped input still permits ordinary caret navigation.
 		const line = this.replInput.getTopForPosition(position.lineNumber, position.column);
-		const boundary =
-			direction === 'previous' ? new Position(1, 1) : this.inputModel.getPositionAt(this.inputModel.length);
+		const boundary = direction === 'previous' ? new Position(1, 1) : this.inputModel.getPositionAt(this.inputModel.length);
 		return line === this.replInput.getTopForPosition(boundary.lineNumber, boundary.column);
 	}
 
@@ -477,22 +442,12 @@ export class Repl extends FilterViewPane {
 		const padding = this.replInput.getOption(EditorOption.padding);
 		const minimum = lineHeight + padding.top + padding.bottom;
 		const selectStyle = this.inputHost.ownerDocument.defaultView!.getComputedStyle(this.sessionSelect);
-		const sessionHeight = this.sessionSelect.hidden
-			? 0
-			: this.sessionSelect.offsetHeight +
-				parseFloat(selectStyle.marginTop) +
-				parseFloat(selectStyle.marginBottom);
+		const sessionHeight = this.sessionSelect.hidden ? 0 : this.sessionSelect.offsetHeight + parseFloat(selectStyle.marginTop) + parseFloat(selectStyle.marginBottom);
 		// The host sizes around the editor; include its border in the available-height budget.
 		const formChrome = this.form.offsetHeight - this.replInput.getDomNode()!.offsetHeight;
-		const available =
-			this.inputBodyHeight === undefined
-				? Infinity
-				: this.inputBodyHeight - 60 - sessionHeight - formChrome - this.status.offsetHeight;
+		const available = this.inputBodyHeight === undefined ? Infinity : this.inputBodyHeight - 60 - sessionHeight - formChrome - this.status.offsetHeight;
 		const maximum = Math.max(minimum, Math.min(lineHeight * 10 + padding.top + padding.bottom, available));
-		const height = Math.min(
-			maximum,
-			Math.max(minimum, this.replInput.getBottomForLineNumber(this.inputModel.lineCount) + padding.bottom),
-		);
+		const height = Math.min(maximum, Math.max(minimum, this.replInput.getBottomForLineNumber(this.inputModel.lineCount) + padding.bottom));
 		if (height !== this.inputHeight) {
 			this.inputHeight = height;
 			this.replInput.layout({ width, height });
@@ -536,12 +491,7 @@ export class Repl extends FilterViewPane {
 		);
 		this._register(
 			widget.onDidAcceptFilterText(() => {
-				this.storage.store(
-					FILTER_HISTORY_KEY,
-					JSON.stringify(widget.getHistory()),
-					StorageScope.WORKSPACE,
-					StorageTarget.MACHINE,
-				);
+				this.storage.store(FILTER_HISTORY_KEY, JSON.stringify(widget.getHistory()), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 			}),
 		);
 		this._register(
@@ -570,9 +520,7 @@ export class Repl extends FilterViewPane {
 			if (event.key === 'Escape') this.hideSuggestions();
 			else if (event.key === 'Enter' || event.key === 'Tab') this.acceptCompletion();
 			else {
-				this.selectedCompletion =
-					(this.selectedCompletion + (event.key === 'ArrowDown' ? 1 : -1) + this.completionItems.length) %
-					this.completionItems.length;
+				this.selectedCompletion = (this.selectedCompletion + (event.key === 'ArrowDown' ? 1 : -1) + this.completionItems.length) % this.completionItems.length;
 				this.updateSuggestionSelection();
 			}
 			return;
@@ -606,12 +554,7 @@ export class Repl extends FilterViewPane {
 		if (this.navigatingHistory || !session?.capabilities.supportsCompletionsRequest) return;
 		const prefix = this.replInput.getValue().slice(0, this.completionCursor);
 		const last = prefix.at(-1);
-		if (
-			last &&
-			(/\w/.test(last) ||
-				session.capabilities.completionTriggerCharacters.some(trigger => prefix.endsWith(trigger)))
-		)
-			this.completionScheduler.schedule();
+		if (last && (/\w/.test(last) || session.capabilities.completionTriggerCharacters.some(trigger => prefix.endsWith(trigger)))) this.completionScheduler.schedule();
 	}
 
 	private async suggest(): Promise<void> {
@@ -626,21 +569,14 @@ export class Repl extends FilterViewPane {
 		this.completionSelection = selection;
 		this.completionInput = text;
 		this.completionCursor = cursor;
-		const frame =
-			this.debugService.session === session ? this.debugService.getViewModel().focusedStackFrame : undefined;
+		const frame = this.debugService.session === session ? this.debugService.getViewModel().focusedStackFrame : undefined;
 		const request = new CancellationTokenSource();
 		const lifetime = new DisposableStore();
 		lifetime.add(toDisposable(() => request.dispose(true)));
 		this.completionLifetime.value = lifetime;
 		this.completionRequest = request;
 		try {
-			const response = await session.completions(
-				frame?.id,
-				frame?.threadId ?? session.threadId ?? 0,
-				text,
-				position,
-				request.token,
-			);
+			const response = await session.completions(frame?.id, frame?.threadId ?? session.threadId ?? 0, text, position, request.token);
 			if (
 				this.isDisposed ||
 				request.token.isCancellationRequested ||
@@ -663,9 +599,7 @@ export class Repl extends FilterViewPane {
 			const items = [...(response?.body.targets ?? []), ...history];
 			const unique = new Map<string, IDebugCompletionItem>();
 			for (const item of items) if (!unique.has(item.label)) unique.set(item.label, item);
-			this.completionItems = [...unique.values()]
-				.sort((a, b) => (a.sortText || a.label).localeCompare(b.sortText || b.label))
-				.slice(0, 100);
+			this.completionItems = [...unique.values()].sort((a, b) => (a.sortText || a.label).localeCompare(b.sortText || b.label)).slice(0, 100);
 			if (!this.completionItems.length) return;
 			this.completionInput = text;
 			this.completionCursor = cursor;
@@ -720,17 +654,9 @@ export class Repl extends FilterViewPane {
 
 	private acceptCompletion(): void {
 		const item = this.completionItems[this.selectedCompletion];
-		if (
-			!item ||
-			this.replInput.getValue() !== this.completionInput ||
-			!this.replInput.getSelection()?.equalsSelection(this.completionSelection)
-		)
-			return;
+		if (!item || this.replInput.getValue() !== this.completionInput || !this.replInput.getSelection()?.equalsSelection(this.completionSelection)) return;
 		const position = this.inputModel.getPositionAt(this.completionCursor);
-		const start =
-			item.start === undefined
-				? this.completionCursor
-				: this.inputModel.getOffsetAt(new Position(position.lineNumber, item.start));
+		const start = item.start === undefined ? this.completionCursor : this.inputModel.getOffsetAt(new Position(position.lineNumber, item.start));
 		const length = item.length ?? 0;
 		const text = item.text || item.label;
 		this.hideSuggestions();
@@ -739,21 +665,13 @@ export class Repl extends FilterViewPane {
 		this.replInput.pushUndoStop();
 		this.replInput.executeEdits('debug.completion', [
 			{
-				range: Range.fromPositions(
-					this.inputModel.getPositionAt(start),
-					this.inputModel.getPositionAt(start + length),
-				),
+				range: Range.fromPositions(this.inputModel.getPositionAt(start), this.inputModel.getPositionAt(start + length)),
 				text,
 			},
 		]);
 		// Resolve offsets after applying the edit, including inserted newlines and UTF-16 pairs.
 		if (this.replInput.getValue() === after)
-			this.replInput.setSelection(
-				Selection.fromPositions(
-					this.inputModel.getPositionAt(selection),
-					this.inputModel.getPositionAt(selection + (item.selectionLength ?? 0)),
-				),
-			);
+			this.replInput.setSelection(Selection.fromPositions(this.inputModel.getPositionAt(selection), this.inputModel.getPositionAt(selection + (item.selectionLength ?? 0))));
 		this.replInput.pushUndoStop();
 	}
 
@@ -772,40 +690,26 @@ export class Repl extends FilterViewPane {
 
 	private render(): void {
 		const focused = this.output.ownerDocument.activeElement;
-		if (focused instanceof this.output.ownerDocument.defaultView!.HTMLElement && this.output.contains(focused))
-			this.outputFocusToRestore = focused;
+		if (focused instanceof this.output.ownerDocument.defaultView!.HTMLElement && this.output.contains(focused)) this.outputFocusToRestore = focused;
 		const active = this.consoleService.activeSession;
 		const atEnd = this.output.scrollHeight - this.output.scrollTop - this.output.clientHeight < 8;
 		this.sessionSelect.replaceChildren(
-			...this.consoleService.sessions.map(session =>
-				option(
-					this.element.ownerDocument,
-					session.id,
-					localize('debug.repl.sessionLabel', '{0} — {1}', session.label, session.state),
-				),
-			),
+			...this.consoleService.sessions.map(session => option(this.element.ownerDocument, session.id, localize('debug.repl.sessionLabel', '{0} — {1}', session.label, session.state))),
 		);
 		if (active) this.sessionSelect.value = active.id;
 		this.sessionSelect.hidden = this.consoleService.sessions.length < 2;
 		const entries = active?.elements ?? [];
 		const retained = new Set(entries.map(entry => entry.id));
-		for (const id of this.groupOpenBeforeFilter.keys())
-			if (!retained.has(id)) this.groupOpenBeforeFilter.delete(id);
+		for (const id of this.groupOpenBeforeFilter.keys()) if (!retained.has(id)) this.groupOpenBeforeFilter.delete(id);
 		this.visibleEntries = this.filterEntries(entries);
 		this.visibleEntryIds = new Set(this.visibleEntries.map(entry => entry.id));
 		this.filterStats = { total: entries.length, filtered: this.visibleEntries.length };
 		const stats = this.getFilterStats();
-		this.filterWidget.updateBadge(
-			this.filterWidget.getFilterText()
-				? localize('debug.repl.filterStats', '{0} of {1}', stats.filtered, stats.total)
-				: undefined,
-		);
+		this.filterWidget.updateBadge(this.filterWidget.getFilterText() ? localize('debug.repl.filterStats', '{0} of {1}', stats.filtered, stats.total) : undefined);
 		void this.renderOutput();
 		this.replInput.updateOptions({
 			readOnly: !active?.canEvaluate,
-			placeholder: active?.canEvaluate
-				? localize('debug.repl.evaluate', 'Evaluate expression')
-				: localize('debug.repl.startToEvaluate', 'Start a debug session to evaluate expressions'),
+			placeholder: active?.canEvaluate ? localize('debug.repl.evaluate', 'Evaluate expression') : localize('debug.repl.startToEvaluate', 'Start a debug session to evaluate expressions'),
 		});
 		if (!active?.canEvaluate) this.hideSuggestions();
 		const clearAction: IAction = {
@@ -845,17 +749,9 @@ export class Repl extends FilterViewPane {
 		const byId = new Map(entries.map(entry => [entry.id, entry]));
 		const visible = new Set<number>();
 		for (const entry of entries) {
-			const parent =
-				entry.parentId === null
-					? TreeVisibility.Visible
-					: (visibility.get(entry.parentId) ?? TreeVisibility.Visible);
+			const parent = entry.parentId === null ? TreeVisibility.Visible : (visibility.get(entry.parentId) ?? TreeVisibility.Visible);
 			const result = parent === TreeVisibility.Hidden ? TreeVisibility.Hidden : this.filter.filter(entry, parent);
-			const value =
-				result === true || result === TreeVisibility.Visible
-					? TreeVisibility.Visible
-					: result === TreeVisibility.Recurse
-						? TreeVisibility.Recurse
-						: TreeVisibility.Hidden;
+			const value = result === true || result === TreeVisibility.Visible ? TreeVisibility.Visible : result === TreeVisibility.Recurse ? TreeVisibility.Recurse : TreeVisibility.Hidden;
 			visibility.set(entry.id, value);
 			if (value !== TreeVisibility.Visible) continue;
 			visible.add(entry.id);
@@ -891,13 +787,8 @@ export class Repl extends FilterViewPane {
 						const element = node.element as Awaited<ReturnType<ReplDataSource['getChildren']>>[number];
 						if (element.kind !== 'entry' || element.entry.kind !== 'group') continue;
 						if (filtering) {
-							if (!this.groupOpenBeforeFilter.has(element.entry.id))
-								this.groupOpenBeforeFilter.set(
-									element.entry.id,
-									this.tree.isCollapsed(element) === false,
-								);
-							if (this.visibleEntries.some(entry => entry.id === element.entry.id))
-								await this.tree.expand(element);
+							if (!this.groupOpenBeforeFilter.has(element.entry.id)) this.groupOpenBeforeFilter.set(element.entry.id, this.tree.isCollapsed(element) === false);
+							if (this.visibleEntries.some(entry => entry.id === element.entry.id)) await this.tree.expand(element);
 						} else if (this.groupOpenBeforeFilter.has(element.entry.id)) {
 							if (this.groupOpenBeforeFilter.get(element.entry.id)) await this.tree.expand(element);
 							else this.tree.collapse(element);
@@ -924,13 +815,7 @@ export class Repl extends FilterViewPane {
 			this.outputFocusToRestore = undefined;
 			// Removed source controls return focus to their tree, while a user who
 			// moved to the editor or filter during the async refresh keeps that focus.
-			if (
-				!this.isDisposed &&
-				focused &&
-				!focused.isConnected &&
-				this.output.ownerDocument.activeElement === this.output.ownerDocument.body
-			)
-				this.tree.domFocus();
+			if (!this.isDisposed && focused && !focused.isConnected && this.output.ownerDocument.activeElement === this.output.ownerDocument.body) this.tree.domFocus();
 			this.treeRendering = false;
 		}
 	}
@@ -939,7 +824,9 @@ export class Repl extends FilterViewPane {
 		const resource = getUriFromSource(source, source.path, entry.sessionId, this.uriIdentity, this.logService);
 		await this.editors.openEditor(
 			{ resource, label: source.name, readOnly: Boolean(source.sourceReference) },
-			{ selection: new Range(entry.line ?? 1, entry.column ?? 1, entry.line ?? 1, entry.column ?? 1) },
+			{
+				selection: new Range(entry.line ?? 1, entry.column ?? 1, entry.line ?? 1, entry.column ?? 1),
+			},
 		);
 	}
 
@@ -947,11 +834,7 @@ export class Repl extends FilterViewPane {
 		const session = this.debugService.getSession(entry.sessionId);
 		if (!session || session.configuration.dirId === null) return undefined;
 		const folders = this.workspace.getWorkspace().folders;
-		return session.configuration.dirId === undefined
-			? folders.length === 1
-				? folders[0]
-				: undefined
-			: folders.find(folder => folder.id === session.configuration.dirId);
+		return session.configuration.dirId === undefined ? (folders.length === 1 ? folders[0] : undefined) : folders.find(folder => folder.id === session.configuration.dirId);
 	}
 
 	private setStatus(value: string): void {
@@ -978,11 +861,7 @@ export function getReplView(viewsService: IViewsService): Repl | undefined {
 function readHistory(storage: IStorageService, log: ILogService, key: string): string[] {
 	try {
 		const value: unknown = JSON.parse(storage.get(key, StorageScope.WORKSPACE, '[]'));
-		if (
-			!Array.isArray(value) ||
-			value.some(item => typeof item !== 'string' || item.length > 32_768 || item.includes('\0'))
-		)
-			throw new TypeError('Invalid Debug Console history');
+		if (!Array.isArray(value) || value.some(item => typeof item !== 'string' || item.length > 32_768 || item.includes('\0'))) throw new TypeError('Invalid Debug Console history');
 		return value.slice(-100);
 	} catch (error) {
 		log.warn('Could not restore Debug Console history', error);

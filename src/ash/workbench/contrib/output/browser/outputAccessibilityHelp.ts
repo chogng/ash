@@ -1,11 +1,6 @@
 import { OutputViewPane } from './outputView.js';
 import { localize } from '../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewType,
-	AccessibleViewProviderId,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewType, AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import type { IAccessibleViewImplementation } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { CONTEXT_IN_OUTPUT, IOutputService, OUTPUT_VIEW_ID } from '../../../services/output/common/output.js';
@@ -29,14 +24,8 @@ export class OutputAccessibilityHelp implements IAccessibleViewImplementation {
 			{ type: AccessibleViewType.Help },
 			() => {
 				const content = [
-					localize(
-						'output.help.overview',
-						'Output is a read-only editor. New output updates this view and any editor opened for the same channel.',
-					),
-					localize(
-						'output.help.navigation',
-						'Use arrow keys to read output, Shift with arrow keys to select text, and Ctrl+C or Command+C to copy. Ctrl+F or Command+F opens Find.',
-					),
+					localize('output.help.overview', 'Output is a read-only editor. New output updates this view and any editor opened for the same channel.'),
+					localize('output.help.navigation', 'Use arrow keys to read output, Shift with arrow keys to select text, and Ctrl+C or Command+C to copy. Ctrl+F or Command+F opens Find.'),
 					localize(
 						'output.help.controls',
 						'Use Tab and Shift+Tab to reach the channel selector, filters, Clear Output, Auto Scroll, and More Output Actions. Separate alternative text filters with commas and prefix exclusions with !. Spaces and - are literal. Severity and category filters only affect this view.',
@@ -55,29 +44,16 @@ export class OutputAccessibilityHelp implements IAccessibleViewImplementation {
 					),
 				];
 				if (filters.textFilterNotice === 'restored') {
-					content.push(
-						localize(
-							'output.filterRestored',
-							'Saved filter restored. Edit or clear to use comma-separated filters.',
-						),
-					);
+					content.push(localize('output.filterRestored', 'Saved filter restored. Edit or clear to use comma-separated filters.'));
 				} else if (filters.textFilterNotice === 'unsupported') {
-					content.push(
-						localize(
-							'output.filterUnsupported',
-							'A newer saved filter is preserved. Changes in this window are not saved.',
-						),
-					);
+					content.push(localize('output.filterUnsupported', 'A newer saved filter is preserved. Changes in this window are not saved.'));
 				}
 				content.push(
 					localize(
 						'output.help.defaultLevel',
 						'In Set Recording Level, Set As Default saves the current level for future windows. For extension logs it applies only to that extension. Loggers with a manually selected level keep that selection.',
 					),
-					localize(
-						'output.help.windowLog',
-						'Run Show Window Log from the Command Palette to select and focus the current Window log.',
-					),
+					localize('output.help.windowLog', 'Run Show Window Log from the Command Palette to select and focus the current Window log.'),
 					localize(
 						'output.help.savedLogs',
 						'In desktop windows, Open Saved Logs opens current or retained log files. Live logs continue updating after reload. Clear Output clears this view from the current reading point and does not delete saved log files. The Set Recording Level menu is available only for producers that support it; it changes newly recorded messages, while display filters only hide existing messages.',

@@ -8,12 +8,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js';
 import { localize } from '../../../../nls.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
-import {
-	ContentWidgetPositionPreference,
-	type IContentWidget,
-	type IContentWidgetPosition,
-	type ICodeEditor,
-} from '../../../browser/editorBrowser.js';
+import { ContentWidgetPositionPreference, type IContentWidget, type IContentWidgetPosition, type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorOption, ShowLightbulbIconMode } from '../../../common/config/editorOptions.js';
 import { Position } from '../../../common/core/position.js';
 import { type CodeActionSet, type CodeActionTrigger } from '../common/types.js';
@@ -91,8 +86,6 @@ export class LightBulbWidget extends Disposable implements IContentWidget {
 	private updateLabel(): void {
 		const binding = this.keybindings.lookupKeybinding('editor.action.quickFix');
 		const shortcut = binding ? getKeybindingLabel(binding) : undefined;
-		this.button.domNode.title = shortcut
-			? localize('codeAction.lightbulbShortcut', 'Show code actions ({0})', shortcut)
-			: localize('codeAction.lightbulb', 'Show code actions');
+		this.button.domNode.title = shortcut ? localize('codeAction.lightbulbShortcut', 'Show code actions ({0})', shortcut) : localize('codeAction.lightbulb', 'Show code actions');
 	}
 }

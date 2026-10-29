@@ -11,10 +11,7 @@ import { IStorageService } from '../../../../../platform/storage/common/storage.
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TerminalContextKeys, TerminalHasActiveInstanceContext } from '../../../terminal/common/terminalContextKey.js';
 import { ITerminalService, type ITerminalContribution } from '../../../terminal/browser/terminal.js';
-import {
-	registerTerminalContribution,
-	type ITerminalContributionContext,
-} from '../../../terminal/browser/terminalExtensions.js';
+import { registerTerminalContribution, type ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
 import { TerminalCommandHistory, TerminalDirectoryHistory } from '../common/history.js';
 import { TerminalHistoryCommandId } from '../common/terminal.history.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
@@ -40,44 +37,22 @@ class TerminalHistoryContribution extends Disposable implements ITerminalContrib
 		const cwdListener = this._register(new MutableDisposable());
 		const recordDirectory = (): void => {
 			const cwd = instance.capabilities?.get(TerminalCapability.CwdDetection);
-			if (scope && cwd)
-				directories.record(
-					scope,
-					cwd.getCwd(),
-					cwd.isTrusted,
-					instance.shellIntegration?.commandStorageDisabled === true,
-				);
+			if (scope && cwd) directories.record(scope, cwd.getCwd(), cwd.isTrusted, instance.shellIntegration?.commandStorageDisabled === true);
 		};
 		const bindDirectory = (): void => {
-			cwdListener.value = instance.capabilities
-				?.get(TerminalCapability.CwdDetection)
-				?.onDidChangeCwd(recordDirectory);
+			cwdListener.value = instance.capabilities?.get(TerminalCapability.CwdDetection)?.onDidChangeCwd(recordDirectory);
 			recordDirectory();
 		};
 		bindDirectory();
 		if (instance.capabilities) {
-			this._register(
-				instance.capabilities.createOnDidAddCapabilityOfTypeEvent(TerminalCapability.CwdDetection)(
-					bindDirectory,
-				),
-			);
-			this._register(
-				instance.capabilities.createOnDidRemoveCapabilityOfTypeEvent(TerminalCapability.CwdDetection)(() =>
-					cwdListener.clear(),
-				),
-			);
+			this._register(instance.capabilities.createOnDidAddCapabilityOfTypeEvent(TerminalCapability.CwdDetection)(bindDirectory));
+			this._register(instance.capabilities.createOnDidRemoveCapabilityOfTypeEvent(TerminalCapability.CwdDetection)(() => cwdListener.clear()));
 		}
 		this._register(
 			instance.onDidChangeCommandStatus(event => {
 				if (event.status === 'running') return;
 				recordDirectory();
-				history.record(
-					instance.profile.profileId,
-					event.status,
-					event.command,
-					event.isTrusted,
-					instance.shellIntegration?.commandStorageDisabled === true,
-				);
+				history.record(instance.profile.profileId, event.status, event.command, event.isTrusted, instance.shellIntegration?.commandStorageDisabled === true);
 			}),
 		);
 	}
@@ -88,9 +63,7 @@ registerTerminalContribution(HISTORY_CONTRIBUTION_ID, TerminalHistoryContributio
 function directoryScope(workspace: IWorkspaceContextService, instance: ITerminalInstance): string | undefined {
 	const current = workspace.getWorkspace();
 	const root = current.folders.find(folder => folder.id === instance.dirId);
-	return root
-		? JSON.stringify([current.id, current.remoteAuthority ?? '', root.uri.scheme, root.uri.authority])
-		: undefined;
+	return root ? JSON.stringify([current.id, current.remoteAuthority ?? '', root.uri.scheme, root.uri.authority]) : undefined;
 }
 
 registerAction2(
@@ -111,26 +84,12 @@ registerAction2(
 			const workspace = accessor.get(IWorkspaceContextService);
 			const scope = directoryScope(workspace, instance);
 			const shell = instance.shellType;
-			if (
-				!scope ||
-				(shell !== GeneralShellType.PowerShell && shell !== PosixShellType.Bash && shell !== PosixShellType.Zsh)
-			)
-				throw new Error(
-					localize(
-						'terminal.path.unsupportedShell',
-						'This terminal does not have a supported, confirmed shell for sending paths.',
-					),
-				);
-			const history = new TerminalDirectoryHistory(
-				accessor.get(IConfigurationService),
-				accessor.get(IStorageService),
-			);
+			if (!scope || (shell !== GeneralShellType.PowerShell && shell !== PosixShellType.Bash && shell !== PosixShellType.Zsh))
+				throw new Error(localize('terminal.path.unsupportedShell', 'This terminal does not have a supported, confirmed shell for sending paths.'));
+			const history = new TerminalDirectoryHistory(accessor.get(IConfigurationService), accessor.get(IStorageService));
 			using lifetime = new DisposableStore();
 			const picker = lifetime.add(accessor.get(IQuickInputService).createQuickPick<IQuickPickItem>());
-			picker.ariaLabel = localize(
-				'terminal.history.directoryAria',
-				'Recent directories on this terminal execution host',
-			);
+			picker.ariaLabel = localize('terminal.history.directoryAria', 'Recent directories on this terminal execution host');
 			const refresh = (): void => {
 				const items = history
 					.getDirectories(scope)
@@ -138,10 +97,7 @@ registerAction2(
 					.map(path => ({ label: path }));
 				picker.placeholder = items.length
 					? localize('terminal.history.directoryPlaceholder', 'Select a directory to open in this terminal')
-					: localize(
-							'terminal.history.directoryEmpty',
-							'No verified directories for this terminal execution host',
-						);
+					: localize('terminal.history.directoryEmpty', 'No verified directories for this terminal execution host');
 				picker.items = items;
 			};
 			refresh();
@@ -205,19 +161,13 @@ registerAction2(
 				keybinding: [
 					{
 						primary: KeyMod.CtrlCmd | KeyCode.KeyR,
-						when: ContextKeyExpr.and(
-							TerminalContextKeys.focus.isEqualTo(true),
-							CONTEXT_ACCESSIBILITY_MODE_ENABLED.isEqualTo(true),
-						),
+						when: ContextKeyExpr.and(TerminalContextKeys.focus.isEqualTo(true), CONTEXT_ACCESSIBILITY_MODE_ENABLED.isEqualTo(true)),
 						weight: KeybindingWeight.WorkbenchContrib,
 					},
 					{
 						primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyR,
 						mac: { primary: KeyMod.WinCtrl | KeyMod.Alt | KeyCode.KeyR },
-						when: ContextKeyExpr.and(
-							TerminalContextKeys.focus.isEqualTo(true),
-							CONTEXT_ACCESSIBILITY_MODE_ENABLED.isEqualTo(false),
-						),
+						when: ContextKeyExpr.and(TerminalContextKeys.focus.isEqualTo(true), CONTEXT_ACCESSIBILITY_MODE_ENABLED.isEqualTo(false)),
 						weight: KeybindingWeight.WorkbenchContrib,
 					},
 				],
@@ -232,28 +182,19 @@ registerAction2(
 			const shellId = instance.profile.profileId;
 			const processId = instance.processId;
 			const workspace = accessor.get(IWorkspaceContextService);
-			const history = new TerminalCommandHistory(
-				accessor.get(IConfigurationService),
-				accessor.get(IStorageService),
-			);
-			const items = history
-				.getCommands(shellId)
-				.map(({ command }) => ({ label: command.replace(/\s+/g, ' ').slice(0, 160), command, shellId }));
+			const history = new TerminalCommandHistory(accessor.get(IConfigurationService), accessor.get(IStorageService));
+			const items = history.getCommands(shellId).map(({ command }) => ({
+				label: command.replace(/\s+/g, ' ').slice(0, 160),
+				command,
+				shellId,
+			}));
 			const pickerLifetime = new DisposableStore();
 			try {
-				const picker = pickerLifetime.add(
-					accessor.get(IQuickInputService).createQuickPick<CommandHistoryPick>(),
-				);
-				picker.ariaLabel = localize(
-					'terminal.history.pickAriaLabel',
-					'Recent commands for this terminal profile',
-				);
+				const picker = pickerLifetime.add(accessor.get(IQuickInputService).createQuickPick<CommandHistoryPick>());
+				picker.ariaLabel = localize('terminal.history.pickAriaLabel', 'Recent commands for this terminal profile');
 				picker.placeholder =
 					items.length > 0
-						? localize(
-								'terminal.history.pickPlaceholder',
-								'Select a recent command to run in this terminal',
-							)
+						? localize('terminal.history.pickPlaceholder', 'Select a recent command to run in this terminal')
 						: localize('terminal.history.empty', 'No saved commands for this terminal profile');
 				picker.items = items;
 				// Returning to the same terminal or shell state cannot revive an old choice.
@@ -310,10 +251,7 @@ registerAction2(
 		constructor() {
 			super({
 				id: TerminalHistoryCommandId.ClearPreviousSessionHistory,
-				title: localize2(
-					'workbench.action.terminal.clearPreviousSessionHistory',
-					'Terminal: Clear Previous Session History',
-				),
+				title: localize2('workbench.action.terminal.clearPreviousSessionHistory', 'Terminal: Clear Previous Session History'),
 				f1: true,
 			});
 		}

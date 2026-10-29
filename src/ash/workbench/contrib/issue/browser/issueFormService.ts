@@ -1,11 +1,7 @@
 import { CancellationError } from '../../../../base/common/errors.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import {
-	IIssueReporterService,
-	IssueReporterError,
-	type IssueReporterContext,
-} from '../../../../platform/issue/common/issue.js';
+import { IIssueReporterService, IssueReporterError, type IssueReporterContext } from '../../../../platform/issue/common/issue.js';
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import { IssueType, type IIssueFormService, type IssueReporterData, type IssueReporterState } from '../common/issue.js';
 import { IssueReporterModel } from './issueReporterModel.js';
@@ -42,10 +38,9 @@ export class IssueFormService extends Disposable implements IIssueFormService {
 				// Read the Workbench's catalog without restarting extension activation to collect diagnostics.
 				const catalog = this.extensions.currentCatalog;
 				const extensionInfo =
-					[
-						...catalog.extensions.map(extension => `${extension.id} ${extension.version}`),
-						...catalog.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`),
-					].join('\n') || localize('issue.noExtensions', 'No extensions installed.');
+					[...catalog.extensions.map(extension => `${extension.id} ${extension.version}`), ...catalog.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`)].join(
+						'\n',
+					) || localize('issue.noExtensions', 'No extensions installed.');
 				const systemInfo = await this.readSystemInfo(context);
 				if (this.isDisposed) {
 					return;
@@ -66,30 +61,17 @@ export class IssueFormService extends Disposable implements IIssueFormService {
 	}
 
 	protected async readSystemInfo(context: IssueReporterContext): Promise<string> {
-		return localize(
-			'issue.serverSystem',
-			'App Server\nAsh: {0}\nOS: {1} ({2})\n\nBrowser: {3}',
-			context.version,
-			context.os,
-			context.arch,
-			navigator.userAgent,
-		);
+		return localize('issue.serverSystem', 'App Server\nAsh: {0}\nOS: {1} ({2})\n\nBrowser: {3}', context.version, context.os, context.arch, navigator.userAgent);
 	}
 
 	update(data: Parameters<IIssueFormService['update']>[0]): void {
 		if (this.state.submitting || this.state.createdIssue) {
 			return;
 		}
-		if (
-			data.issueType !== undefined &&
-			![IssueType.Bug, IssueType.PerformanceIssue, IssueType.FeatureRequest].includes(data.issueType)
-		) {
+		if (data.issueType !== undefined && ![IssueType.Bug, IssueType.PerformanceIssue, IssueType.FeatureRequest].includes(data.issueType)) {
 			throw new TypeError('Unknown issue type');
 		}
-		if (
-			(data.issueTitle !== undefined && typeof data.issueTitle !== 'string') ||
-			(data.issueBody !== undefined && typeof data.issueBody !== 'string')
-		) {
+		if ((data.issueTitle !== undefined && typeof data.issueTitle !== 'string') || (data.issueBody !== undefined && typeof data.issueBody !== 'string')) {
 			throw new TypeError('Issue title and description must be text');
 		}
 		if (data.issueTitle !== undefined && data.issueTitle !== this.state.issueTitle) {
@@ -181,30 +163,18 @@ function errorMessage(error: unknown): string {
 			case 'authenticationRequired':
 				return localize('issue.authenticationRequired', 'Sign in to GitHub before submitting this report.');
 			case 'permissionDenied':
-				return localize(
-					'issue.permissionDenied',
-					'Your GitHub authorization needs permission to create issues in this repository.',
-				);
+				return localize('issue.permissionDenied', 'Your GitHub authorization needs permission to create issues in this repository.');
 			case 'rateLimited':
 				return localize('issue.rateLimited', 'GitHub rate limit reached. Try again later.');
 			case 'unavailable':
 				return localize('issue.unavailable', 'The product issue reporter is not configured.');
 			case 'invalidInput':
-				return localize(
-					'issue.invalidInput',
-					'The title must be at most 256 characters and the full report at most 65,536 characters.',
-				);
+				return localize('issue.invalidInput', 'The title must be at most 256 characters and the full report at most 65,536 characters.');
 			case 'submissionUncertain':
-				return localize(
-					'issue.submissionUncertain',
-					'GitHub may have created your issue. Check the repository before submitting again.',
-				);
+				return localize('issue.submissionUncertain', 'GitHub may have created your issue. Check the repository before submitting again.');
 			case 'operationFailed':
 				return localize('issue.operationFailed', 'The GitHub request failed. Your report remains here.');
 		}
 	}
-	return localize(
-		'issue.connectionFailed',
-		'Could not load the issue reporter. Check the App Server connection and try opening it again.',
-	);
+	return localize('issue.connectionFailed', 'Could not load the issue reporter. Check the App Server connection and try opening it again.');
 }

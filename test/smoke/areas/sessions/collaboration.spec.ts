@@ -1,51 +1,30 @@
 import { expect, test } from '../../../automation/test.js';
 
-test(
-	'Collab separates human channels from Agent Teams',
-	{ tag: ['@electron-ui', '@browser-ui'] },
-	async ({ application, workbench, target }, testInfo) => {
-		await workbench.quickaccess.runCommand('ash.collaboration.open');
-		const channels = workbench.page.locator('.ash-collaboration');
-		await expect(channels.getByRole('button', { name: 'Connect Channels', exact: true })).toBeVisible();
+test('Collab separates human channels from Agent Teams', { tag: ['@electron-ui', '@browser-ui'] }, async ({ application, workbench, target }, testInfo) => {
+	await workbench.quickaccess.runCommand('ash.collaboration.open');
+	const channels = workbench.page.locator('.ash-collaboration');
+	await expect(channels.getByRole('button', { name: 'Connect Channels', exact: true })).toBeVisible();
 
-		let page = await workbench.openAgentsWindow(target.kind);
-		let navigation = page.locator('.ash-sessions-activity-content');
-		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-		await navigation.getByRole('button', { name: 'Collab', exact: true }).click();
-		const collaboration = page.locator('[data-view-container-id="ash.collaboration"]');
-		await expect(collaboration.getByRole('button', { name: 'Connect Channels', exact: true })).toBeVisible();
-		await navigation.getByRole('button', { name: 'Agent Teams', exact: true }).click();
-		await expect(page.locator('.ash-teams-panel')).toBeVisible();
-		await expect(collaboration).toBeHidden();
-		await expect(
-			page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }),
-		).toHaveAttribute('aria-pressed', 'true');
-		page = await workbench.reopenAgentsWindow(application, page);
-		navigation = page.locator('.ash-sessions-activity-content');
-		await expect(navigation.getByRole('button', { name: 'Agent Teams', exact: true })).toHaveAttribute(
-			'aria-current',
-			'page',
-		);
-		await expect(page.locator('.ash-teams-panel')).toBeVisible();
-		await expect(
-			page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }),
-		).toHaveAttribute('aria-pressed', 'true');
-		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-		await navigation.getByRole('button', { name: 'Collab', exact: true }).click();
-		await expect(
-			page
-				.locator('[data-view-container-id="ash.collaboration"]')
-				.getByRole('button', { name: 'Connect Channels', exact: true }),
-		).toBeVisible();
-		await page.screenshot({ path: testInfo.outputPath('collaboration-window.png') });
-		page = await workbench.reopenAgentsWindow(application, page);
-		await expect(
-			page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Collab', exact: true }),
-		).toHaveAttribute('aria-current', 'page');
-		await expect(
-			page
-				.locator('[data-view-container-id="ash.collaboration"]')
-				.getByRole('button', { name: 'Connect Channels', exact: true }),
-		).toBeVisible();
-	},
-);
+	let page = await workbench.openAgentsWindow(target.kind);
+	let navigation = page.locator('.ash-sessions-activity-content');
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await navigation.getByRole('button', { name: 'Collab', exact: true }).click();
+	const collaboration = page.locator('[data-view-container-id="ash.collaboration"]');
+	await expect(collaboration.getByRole('button', { name: 'Connect Channels', exact: true })).toBeVisible();
+	await navigation.getByRole('button', { name: 'Agent Teams', exact: true }).click();
+	await expect(page.locator('.ash-teams-panel')).toBeVisible();
+	await expect(collaboration).toBeHidden();
+	await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true })).toHaveAttribute('aria-pressed', 'true');
+	page = await workbench.reopenAgentsWindow(application, page);
+	navigation = page.locator('.ash-sessions-activity-content');
+	await expect(navigation.getByRole('button', { name: 'Agent Teams', exact: true })).toHaveAttribute('aria-current', 'page');
+	await expect(page.locator('.ash-teams-panel')).toBeVisible();
+	await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true })).toHaveAttribute('aria-pressed', 'true');
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await navigation.getByRole('button', { name: 'Collab', exact: true }).click();
+	await expect(page.locator('[data-view-container-id="ash.collaboration"]').getByRole('button', { name: 'Connect Channels', exact: true })).toBeVisible();
+	await page.screenshot({ path: testInfo.outputPath('collaboration-window.png') });
+	page = await workbench.reopenAgentsWindow(application, page);
+	await expect(page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Collab', exact: true })).toHaveAttribute('aria-current', 'page');
+	await expect(page.locator('[data-view-container-id="ash.collaboration"]').getByRole('button', { name: 'Connect Channels', exact: true })).toBeVisible();
+});

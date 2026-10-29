@@ -10,17 +10,9 @@ import { IQuickInputService } from '../../../../platform/quickinput/common/quick
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
 import { IDecorationsService } from '../../../../workbench/services/decorations/common/decorations.js';
 import { IEditorService, type EditorOpenTarget } from '../../../../workbench/services/editor/common/editorService.js';
-import {
-	IEditorGroupsService,
-	type IEditorGroup,
-} from '../../../../workbench/services/editor/common/editorGroupsService.js';
+import { IEditorGroupsService, type IEditorGroup } from '../../../../workbench/services/editor/common/editorGroupsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import {
-	createSessionFileChange,
-	SessionChangesetOperationScope,
-	SessionChangesetOperationStatus,
-	type ISessionChangeset,
-} from '../../../services/sessions/common/session.js';
+import { createSessionFileChange, SessionChangesetOperationScope, SessionChangesetOperationStatus, type ISessionChangeset } from '../../../services/sessions/common/session.js';
 import { createTurnCommitPreviewInput } from '../../../browser/turnMultiDiffSource.js';
 import type { ISessionChangesEditorOptions, ISessionChangesService } from '../common/sessionChangesService.js';
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
@@ -61,31 +53,20 @@ export class SessionChangesService extends Disposable implements ISessionChanges
 	}
 
 	public getSessionResource(editorResource: URI): URI | undefined {
-		if (
-			editorResource.scheme !== 'ash-session-changes' ||
-			!editorResource.path.startsWith('/') ||
-			editorResource.path.length < 2
-		) {
+		if (editorResource.scheme !== 'ash-session-changes' || !editorResource.path.startsWith('/') || editorResource.path.length < 2) {
 			return undefined;
 		}
 		return editorResource.with({ scheme: 'ash-session', fragment: '' });
 	}
 
-	public async openChangesEditor(
-		sessionResource: URI,
-		options?: ISessionChangesEditorOptions,
-		group?: EditorOpenTarget,
-	): Promise<IEditorGroup | undefined> {
+	public async openChangesEditor(sessionResource: URI, options?: ISessionChangesEditorOptions, group?: EditorOpenTarget): Promise<IEditorGroup | undefined> {
 		if (sessionResource.scheme !== 'ash-session') {
 			throw new Error(localize('sessions.changes.invalidSelection', 'This review has no Turn selection.'));
 		}
 		if (!sessionResource.path.startsWith('/draft/')) {
 			this.getConversation(sessionResource);
 		}
-		const input = new SessionChangesEditorInput(
-			this.getChangesEditorResource(sessionResource),
-			options?.changesetSelection,
-		);
+		const input = new SessionChangesEditorInput(this.getChangesEditorResource(sessionResource), options?.changesetSelection);
 		const selection = options?.selection;
 		const selectionSource = options?.selectionSource;
 		await this.editors.openEditor(
@@ -99,16 +80,10 @@ export class SessionChangesService extends Disposable implements ISessionChanges
 				source: options?.source,
 				viewState: options?.viewState,
 				selection: selection
-					? new Range(
-							selection.startLineNumber,
-							selection.startColumn,
-							selection.endLineNumber ?? selection.startLineNumber,
-							selection.endColumn ?? selection.startColumn,
-						)
+					? new Range(selection.startLineNumber, selection.startColumn, selection.endLineNumber ?? selection.startLineNumber, selection.endColumn ?? selection.startColumn)
 					: undefined,
 				selectionSource:
-					selectionSource === TextEditorSelectionSource.PROGRAMMATIC ||
-					selectionSource === TextEditorSelectionSource.JUMP
+					selectionSource === TextEditorSelectionSource.PROGRAMMATIC || selectionSource === TextEditorSelectionSource.JUMP
 						? selectionSource
 						: selection
 							? TextEditorSelectionSource.NAVIGATION
@@ -154,34 +129,14 @@ export class SessionChangesService extends Disposable implements ISessionChanges
 				},
 			]),
 			invokeOperation: async (operationId, target) => {
-				const files = remaining.filter(
-					change =>
-						!target ||
-						[change.uri, change.originalUri, change.modifiedUri].some(resource =>
-							extUri.isEqual(resource, target.resource),
-						),
-				);
-				if (
-					this.isDisposed ||
-					operationId !== 'preview' ||
-					status === SessionChangesetOperationStatus.Disabled ||
-					status === SessionChangesetOperationStatus.Running ||
-					!files.length
-				) {
-					throw new Error(
-						localize(
-							'sessions.changes.noSelection',
-							'Select sealed file changes that have not been committed.',
-						),
-					);
+				const files = remaining.filter(change => !target || [change.uri, change.originalUri, change.modifiedUri].some(resource => extUri.isEqual(resource, target.resource)));
+				if (this.isDisposed || operationId !== 'preview' || status === SessionChangesetOperationStatus.Disabled || status === SessionChangesetOperationStatus.Running || !files.length) {
+					throw new Error(localize('sessions.changes.noSelection', 'Select sealed file changes that have not been committed.'));
 				}
 				const message = await this.quickInput.input({
 					title: localize('sessions.changes.commitMessage', 'Commit message'),
 					value: details.draftMessage ?? '',
-					validateInput: async value =>
-						value.trim()
-							? undefined
-							: localize('sessions.changes.messageRequired', 'Enter a commit message.'),
+					validateInput: async value => (value.trim() ? undefined : localize('sessions.changes.messageRequired', 'Enter a commit message.')),
 				});
 				if (message === undefined || this.isDisposed) {
 					return;
@@ -225,9 +180,7 @@ export class SessionChangesService extends Disposable implements ISessionChanges
 		const threadId = new URLSearchParams(resource.query).get('thread');
 		const session = this.sessions.sessions.find(candidate => candidate.sessionId === sessionId);
 		if (!threadId || !session?.chats.some(chat => chat.threadId === threadId)) {
-			throw new Error(
-				localize('sessions.changes.sourceUnavailable', 'The Turn source Session is no longer available.'),
-			);
+			throw new Error(localize('sessions.changes.sourceUnavailable', 'The Turn source Session is no longer available.'));
 		}
 		return { sessionId, threadId };
 	}

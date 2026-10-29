@@ -4,40 +4,26 @@ import { localize } from '../../../../nls.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import {
-	IExtensionManagementService,
-	OPEN_EXTENSIONS_COMMAND_ID,
-	type ExtensionsPackageSummary,
-} from '../../../../platform/extensionManagement/common/extensionManagementService.js';
+import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID, type ExtensionsPackageSummary } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import {
 	IExtensionRecommendationNotificationService,
 	RecommendationSource,
 	RecommendationsNotificationResult,
 	type IExtensionRecommendations,
 } from '../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
-import {
-	INotificationService,
-	NotificationPriority,
-	Severity,
-} from '../../../../platform/notification/common/notification.js';
+import { INotificationService, NotificationPriority, Severity } from '../../../../platform/notification/common/notification.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import { IWorkspaceExtensionsConfigService } from '../../../services/extensionRecommendations/common/workspaceExtensionsConfig.js';
-import {
-	IExtensionIgnoredRecommendationsService,
-	extensionRecommendationKey as identity,
-} from '../../../services/extensionRecommendations/common/extensionRecommendations.js';
+import { IExtensionIgnoredRecommendationsService, extensionRecommendationKey as identity } from '../../../services/extensionRecommendations/common/extensionRecommendations.js';
 import { changeExtensionPackage } from './extensionEditor.js';
 
 const ignoredKey = 'extensionsAssistant/importantRecommendationsIgnore';
 const ignoredWorkspaceKey = 'extensionsAssistant/workspaceRecommendationsIgnore';
 
 /** Owns notification suppression and lifetime, while catalogs retain package and installation state. */
-export class ExtensionRecommendationNotificationService
-	extends Disposable
-	implements IExtensionRecommendationNotificationService
-{
+export class ExtensionRecommendationNotificationService extends Disposable implements IExtensionRecommendationNotificationService {
 	private readonly attempted = new Set<string>();
 	private readonly prompted = new Set<string>();
 	private readonly notifications = this._register(new DisposableStore());
@@ -69,8 +55,7 @@ export class ExtensionRecommendationNotificationService
 		this._register(
 			configuration.onDidChangeConfiguration(event => {
 				if (
-					(event.affectsConfiguration('extensions.ignoreRecommendations') ||
-						event.affectsConfiguration('extensions.showRecommendationsOnlyOnDemand')) &&
+					(event.affectsConfiguration('extensions.ignoreRecommendations') || event.affectsConfiguration('extensions.showRecommendationsOnlyOnDemand')) &&
 					this.hasToIgnoreRecommendationNotifications()
 				) {
 					this.notifications.clear();
@@ -123,16 +108,10 @@ export class ExtensionRecommendationNotificationService
 	}
 
 	public hasToIgnoreRecommendationNotifications(): boolean {
-		return (
-			this.configuration.getValue<boolean>('extensions.ignoreRecommendations') === true ||
-			this.configuration.getValue<boolean>('extensions.showRecommendationsOnlyOnDemand') === true
-		);
+		return this.configuration.getValue<boolean>('extensions.ignoreRecommendations') === true || this.configuration.getValue<boolean>('extensions.showRecommendationsOnlyOnDemand') === true;
 	}
 
-	public async promptWorkspaceRecommendations(
-		recommendations: readonly string[],
-		signal?: AbortSignal,
-	): Promise<void> {
+	public async promptWorkspaceRecommendations(recommendations: readonly string[], signal?: AbortSignal): Promise<void> {
 		if (this.storage.getBoolean(ignoredWorkspaceKey, StorageScope.WORKSPACE, false)) {
 			return;
 		}
@@ -144,9 +123,7 @@ export class ExtensionRecommendationNotificationService
 		});
 	}
 
-	public async promptImportantExtensionsInstallNotification(
-		request: IExtensionRecommendations,
-	): Promise<RecommendationsNotificationResult> {
+	public async promptImportantExtensionsInstallNotification(request: IExtensionRecommendations): Promise<RecommendationsNotificationResult> {
 		if (this.isDisposed || request.signal?.aborted || this.hasToIgnoreRecommendationNotifications()) {
 			return RecommendationsNotificationResult.Ignored;
 		}
@@ -156,10 +133,7 @@ export class ExtensionRecommendationNotificationService
 		}
 		this.attempted.add(key);
 		const generation = this.generation;
-		const [installed, configs] = await Promise.allSettled([
-			this.packages.listInstalled(),
-			this.workspaceConfigs.getExtensionsConfigs(),
-		]);
+		const [installed, configs] = await Promise.allSettled([this.packages.listInstalled(), this.workspaceConfigs.getExtensionsConfigs()]);
 		if (installed.status === 'rejected' || configs.status === 'rejected') {
 			this.attempted.delete(key);
 			return RecommendationsNotificationResult.Ignored;
@@ -168,12 +142,8 @@ export class ExtensionRecommendationNotificationService
 			...this.ignoredRecommendations,
 			...this.ignored.ignoredRecommendations,
 			...this.extensions.currentCatalog.extensions.map(extension => identity(extension.id)),
-			...(installed.status === 'fulfilled'
-				? installed.value.map(extension => identity(extension.package.id))
-				: []),
-			...(configs.status === 'fulfilled'
-				? configs.value.flatMap(config => config.unwantedRecommendations).map(identity)
-				: []),
+			...(installed.status === 'fulfilled' ? installed.value.map(extension => identity(extension.package.id)) : []),
+			...(configs.status === 'fulfilled' ? configs.value.flatMap(config => config.unwantedRecommendations).map(identity) : []),
 		]);
 		const candidates: ExtensionsPackageSummary[] = [];
 		for (const id of new Set(request.extensions)) {
@@ -199,13 +169,7 @@ export class ExtensionRecommendationNotificationService
 				this.prompted.delete(identity(id)); /* A missing or offline registry must not interrupt editing. */
 			}
 		}
-		if (
-			this.isDisposed ||
-			request.signal?.aborted ||
-			generation !== this.generation ||
-			this.hasToIgnoreRecommendationNotifications() ||
-			!candidates.length
-		) {
+		if (this.isDisposed || request.signal?.aborted || generation !== this.generation || this.hasToIgnoreRecommendationNotifications() || !candidates.length) {
 			for (const candidate of candidates) {
 				this.prompted.delete(identity(candidate.id));
 			}
@@ -214,11 +178,7 @@ export class ExtensionRecommendationNotificationService
 		}
 		// Keep automatic discovery quiet during a busy window. Explicit workspace recommendations
 		// retain their own suppression scope, and all candidates remain available in Recommended.
-		if (
-			request.source !== RecommendationSource.WORKSPACE &&
-			(this.shown >= 3 ||
-				(request.source === RecommendationSource.EXE && (this.executableShown || this.shown >= 2)))
-		) {
+		if (request.source !== RecommendationSource.WORKSPACE && (this.shown >= 3 || (request.source === RecommendationSource.EXE && (this.executableShown || this.shown >= 2)))) {
 			for (const candidate of candidates) {
 				this.prompted.delete(identity(candidate.id));
 			}
@@ -250,74 +210,43 @@ export class ExtensionRecommendationNotificationService
 					}
 				},
 			});
-			const show = action(
-				'extensions.recommendations.show',
-				localize({ bundle: 'ash.extensions', key: 'showRecommendations' }, 'Show recommendations'),
-				async () => {
-					await this.commands.executeCommand(
-						OPEN_EXTENSIONS_COMMAND_ID,
-						candidates.length > 1
-							? { query: '@recommended' }
-							: {
-									mode: 'browse',
-									query: request.searchValue ?? candidates[0].displayName,
-									...(request.languageId ? { languageId: request.languageId } : {}),
-								},
+			const show = action('extensions.recommendations.show', localize({ bundle: 'ash.extensions', key: 'showRecommendations' }, 'Show recommendations'), async () => {
+				await this.commands.executeCommand(
+					OPEN_EXTENSIONS_COMMAND_ID,
+					candidates.length > 1
+						? { query: '@recommended' }
+						: {
+								mode: 'browse',
+								query: request.searchValue ?? candidates[0].displayName,
+								...(request.languageId ? { languageId: request.languageId } : {}),
+							},
+				);
+			});
+			const install = action('extensions.recommendations.install', localize({ bundle: 'ash.extensions', key: 'installRecommended' }, 'Install'), async () => {
+				for (const candidate of candidates) {
+					await changeExtensionPackage(this.packages, this.dialogs, this.notificationService, 'install', await this.packages.get(candidate.id, candidate.version));
+				}
+			});
+			const never = action('extensions.recommendations.never', localize({ bundle: 'ash.extensions', key: 'neverRecommend' }, "Don't show again"), () => {
+				if (request.source === RecommendationSource.WORKSPACE) {
+					this.storage.store(ignoredWorkspaceKey, true, StorageScope.WORKSPACE, StorageTarget.USER);
+				} else {
+					this.storage.store(
+						ignoredKey,
+						JSON.stringify([...new Set([...this.ignoredRecommendations, ...candidates.map(candidate => identity(candidate.id))])]),
+						StorageScope.PROFILE,
+						StorageTarget.USER,
 					);
-				},
-			);
-			const install = action(
-				'extensions.recommendations.install',
-				localize({ bundle: 'ash.extensions', key: 'installRecommended' }, 'Install'),
-				async () => {
-					for (const candidate of candidates) {
-						await changeExtensionPackage(
-							this.packages,
-							this.dialogs,
-							this.notificationService,
-							'install',
-							await this.packages.get(candidate.id, candidate.version),
-						);
-					}
-				},
-			);
-			const never = action(
-				'extensions.recommendations.never',
-				localize({ bundle: 'ash.extensions', key: 'neverRecommend' }, "Don't show again"),
-				() => {
-					if (request.source === RecommendationSource.WORKSPACE) {
-						this.storage.store(ignoredWorkspaceKey, true, StorageScope.WORKSPACE, StorageTarget.USER);
-					} else {
-						this.storage.store(
-							ignoredKey,
-							JSON.stringify([
-								...new Set([
-									...this.ignoredRecommendations,
-									...candidates.map(candidate => identity(candidate.id)),
-								]),
-							]),
-							StorageScope.PROFILE,
-							StorageTarget.USER,
-						);
-					}
-				},
-			);
+				}
+			});
 			const handle = this.notificationService.notify({
 				severity: Severity.Info,
 				priority: NotificationPriority.OPTIONAL,
 				source: {
 					id: 'extensions.recommendations',
-					label: localize(
-						{ bundle: 'ash.extensions', key: 'recommendationSource' },
-						'Extension recommendations',
-					),
+					label: localize({ bundle: 'ash.extensions', key: 'recommendationSource' }, 'Extension recommendations'),
 				},
-				message: localize(
-					{ bundle: 'ash.extensions', key: 'contextRecommendation' },
-					'Recommended for {0}: {1}.',
-					request.name,
-					candidates.map(candidate => candidate.displayName).join(', '),
-				),
+				message: localize({ bundle: 'ash.extensions', key: 'contextRecommendation' }, 'Recommended for {0}: {1}.', request.name, candidates.map(candidate => candidate.displayName).join(', ')),
 				actions: { primary: [install, show], secondary: [never] },
 			});
 			lifetime.add(

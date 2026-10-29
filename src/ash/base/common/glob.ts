@@ -10,11 +10,7 @@ export interface IExpression {
 }
 
 export type ParsedPattern = (path: string, basename?: string) => boolean;
-export type ParsedExpression = (
-	path: string,
-	basename?: string,
-	hasSibling?: (name: string) => boolean,
-) => string | null;
+export type ParsedExpression = (path: string, basename?: string, hasSibling?: (name: string) => boolean) => string | null;
 
 export function parse(pattern: string | IRelativePattern): ParsedPattern;
 export function parse(expression: IExpression): ParsedExpression;
@@ -24,8 +20,7 @@ export function parse(input: string | IRelativePattern | IExpression): ParsedPat
 		const regexp = globRegExp((typeof pattern === 'string' ? pattern : pattern.pattern).replaceAll('\\', '/'));
 		return (path: string): boolean => {
 			const normalized = path.replaceAll('\\', '/');
-			const candidate =
-				typeof pattern === 'string' ? normalized : relativePath(pattern.base.replaceAll('\\', '/'), normalized);
+			const candidate = typeof pattern === 'string' ? normalized : relativePath(pattern.base.replaceAll('\\', '/'), normalized);
 			return candidate !== undefined && regexp.test(candidate);
 		};
 	}
@@ -59,11 +54,7 @@ export function match(pattern: string | IRelativePattern, path: string): boolean
 function relativePath(base: string, candidate: string): string | undefined {
 	const normalizedBase = base.endsWith('/') ? base.slice(0, -1) : base;
 	// A broad relative pattern must still stay inside its base directory.
-	return candidate === normalizedBase
-		? ''
-		: candidate.startsWith(`${normalizedBase}/`)
-			? candidate.slice(normalizedBase.length + 1)
-			: undefined;
+	return candidate === normalizedBase ? '' : candidate.startsWith(`${normalizedBase}/`) ? candidate.slice(normalizedBase.length + 1) : undefined;
 }
 
 function globRegExp(pattern: string): RegExp {
@@ -116,9 +107,7 @@ function globSource(pattern: string): string {
 			if (end > index + 1) {
 				const content = pattern.slice(index + 1, end);
 				const negate = content[0] === '!' || content[0] === '^';
-				const characters = (negate ? content.slice(1) : content)
-					.replaceAll('\\', '\\\\')
-					.replaceAll('[', '\\[');
+				const characters = (negate ? content.slice(1) : content).replaceAll('\\', '\\\\').replaceAll('[', '\\[');
 				expression += `(?!/)[${negate ? '^' : ''}${characters}]`;
 				index = end;
 			} else {

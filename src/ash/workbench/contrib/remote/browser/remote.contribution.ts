@@ -13,12 +13,7 @@ import { IAppServerRemoteAgentService } from '../../../services/remote/common/ap
 import { IRemoteConnectionService } from '../../../../platform/remote/common/remoteConnectionService.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { IStatusbarService } from '../../../services/statusbar/browser/statusbar.js';
-import {
-	ViewContainerLocation,
-	type WorkbenchViewRegistry,
-	WorkbenchViewContainerId,
-	ViewsRegistry,
-} from '../../../common/views.js';
+import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from '../../../common/views.js';
 import './remoteActions.js';
 import { RemoteContextKeys } from './remoteContextKeys.js';
 import { RemoteExtensionRecoveryContribution } from './remoteExtensionRecovery.js';
@@ -82,11 +77,7 @@ registerWorkbenchContribution(
 
 /** Projects this window's connection-owned recovery into one persistent notice. */
 class AppServerRecoveryContribution extends Disposable {
-	constructor(
-		@IAppServerApi api: IAppServerApi,
-		@IBannerService banners: IBannerService,
-		@IContextKeyService contextKeys: IContextKeyService,
-	) {
+	constructor(@IAppServerApi api: IAppServerApi, @IBannerService banners: IBannerService, @IContextKeyService contextKeys: IContextKeyService) {
 		super();
 		const id = 'workbench.banner.appServerRecovery';
 		const available = AppServerRecoveryAvailableContext.bindTo(contextKeys);
@@ -105,10 +96,7 @@ class AppServerRecoveryContribution extends Disposable {
 					id,
 					icon: Lxicon.warning,
 					priority: 100,
-					message: localize(
-						'appServer.recoveryFailed',
-						'Could not restore the Agent Host connection or workspace. Try again.',
-					),
+					message: localize('appServer.recoveryFailed', 'Could not restore the Agent Host connection or workspace. Try again.'),
 					actions: [
 						{
 							label: localize('appServer.reconnect', 'Reconnect'),
@@ -128,11 +116,7 @@ class AppServerRecoveryContribution extends Disposable {
 					id,
 					icon: Lxicon.warning,
 					priority: 100,
-					message: localize(
-						'appServer.recoveryUnavailable',
-						'The Agent Host connection cannot be restored. {0}',
-						recovery.error ?? '',
-					),
+					message: localize('appServer.recoveryUnavailable', 'The Agent Host connection cannot be restored. {0}', recovery.error ?? ''),
 				});
 			} else {
 				// Intentional suspension and a healthy connection both clear this producer only.
@@ -144,6 +128,4 @@ class AppServerRecoveryContribution extends Disposable {
 	}
 }
 
-registerWorkbenchContribution('workbench.contrib.appServerRecovery', WorkbenchPhase.BlockRestore, accessor =>
-	accessor.get(IInstantiationService).createInstance(AppServerRecoveryContribution),
-);
+registerWorkbenchContribution('workbench.contrib.appServerRecovery', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(AppServerRecoveryContribution));

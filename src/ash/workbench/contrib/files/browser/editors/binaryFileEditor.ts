@@ -11,11 +11,7 @@ import { localize } from '../../../../../nls.js';
 import { DialogSeverity, IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import {
-	BINARY_EDITOR_ID,
-	BaseBinaryResourceEditor,
-	binaryEditorDescriptor,
-} from '../../../../browser/parts/editor/binaryEditor.js';
+import { BINARY_EDITOR_ID, BaseBinaryResourceEditor, binaryEditorDescriptor } from '../../../../browser/parts/editor/binaryEditor.js';
 import { CODE_EDITOR_ID } from '../../../../common/editor/codeEditorId.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 
@@ -68,10 +64,7 @@ export class BinaryFileEditor extends BaseBinaryResourceEditor {
 		);
 	}
 
-	override async setInput(
-		input: { readonly resource: URI; readonly initialBytes?: Uint8Array },
-		signal: AbortSignal,
-	): Promise<void> {
+	override async setInput(input: { readonly resource: URI; readonly initialBytes?: Uint8Array }, signal: AbortSignal): Promise<void> {
 		await super.setInput(input, signal);
 		this.resource = input.resource;
 		this.initialBytes = input.initialBytes;
@@ -120,11 +113,7 @@ export class BinaryFileEditor extends BaseBinaryResourceEditor {
 			await this.dialogs.showMessage({
 				severity: DialogSeverity.Error,
 				title: localize('files.openWithEncoding', 'Open with Encoding'),
-				message: localize(
-					'files.openWithEncodingFailed',
-					'Could not open this file with the selected encoding: {0}',
-					error instanceof Error ? error.message : String(error),
-				),
+				message: localize('files.openWithEncodingFailed', 'Could not open this file with the selected encoding: {0}', error instanceof Error ? error.message : String(error)),
 			});
 		} finally {
 			if (this.encodingPicker.value === resources) this.encodingPicker.clear();
@@ -137,19 +126,12 @@ export class BinaryFileEditor extends BaseBinaryResourceEditor {
 		try {
 			const content = this.initialBytes ? { bytes: this.initialBytes } : await this.files.readFileBytes(resource);
 			const text = new TextDecoder('utf-8').decode(content.bytes.subarray(0, MAX_TEXT_PREVIEW_BYTES));
-			await this.editors.openEditor(
-				{ resource, languageId: 'plaintext', contentType: 'text/plain', initialText: text, readOnly: true },
-				{ preferredEditorId: CODE_EDITOR_ID },
-			);
+			await this.editors.openEditor({ resource, languageId: 'plaintext', contentType: 'text/plain', initialText: text, readOnly: true }, { preferredEditorId: CODE_EDITOR_ID });
 		} catch (error) {
 			await this.dialogs.showMessage({
 				severity: DialogSeverity.Error,
 				title: localize('files.binaryTextPreviewFailedTitle', 'Could not open text preview'),
-				message: localize(
-					'files.binaryTextPreviewFailed',
-					'Could not open a text preview of this file: {0}',
-					error instanceof Error ? error.message : String(error),
-				),
+				message: localize('files.binaryTextPreviewFailed', 'Could not open a text preview of this file: {0}', error instanceof Error ? error.message : String(error)),
 			});
 		}
 	}
@@ -161,8 +143,7 @@ export function binaryFileEditorDescriptor(): IEditorPaneDescriptor {
 		...base,
 		id: BINARY_EDITOR_ID,
 		create: options => {
-			if (!options.instantiationService)
-				throw new Error('Binary file editor requires Workbench instantiation services');
+			if (!options.instantiationService) throw new Error('Binary file editor requires Workbench instantiation services');
 			return options.instantiationService.createInstance(BinaryFileEditor);
 		},
 	};

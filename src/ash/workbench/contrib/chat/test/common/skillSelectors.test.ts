@@ -25,10 +25,7 @@ test('Skill selector matches `$` names and returns exact references in prompt or
 		catalog.matching('com').map(skill => skill.name),
 		['commit'],
 	);
-	assert.deepEqual(catalog.referencesIn('$review this, then $commit changes and reuse $review'), [
-		review.skill,
-		commit.skill,
-	]);
+	assert.deepEqual(catalog.referencesIn('$review this, then $commit changes and reuse $review'), [review.skill, commit.skill]);
 });
 
 test('Skill selector ignores unknown names and embedded dollar text', () => {

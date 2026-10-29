@@ -1,19 +1,5 @@
-import {
-	defaultButtonStyles,
-	defaultDialogStyles,
-	defaultInputBoxStyles,
-	defaultMenuStyles,
-	defaultKeybindingLabelStyles,
-	defaultCheckboxStyles,
-} from '../../theme/browser/defaultStyles.js';
-import {
-	addDisposableListener,
-	getActiveElement,
-	getWindow,
-	h,
-	isHTMLElement,
-	stopEvent,
-} from '../../../base/browser/dom.js';
+import { defaultButtonStyles, defaultDialogStyles, defaultInputBoxStyles, defaultMenuStyles, defaultKeybindingLabelStyles, defaultCheckboxStyles } from '../../theme/browser/defaultStyles.js';
+import { addDisposableListener, getActiveElement, getWindow, h, isHTMLElement, stopEvent } from '../../../base/browser/dom.js';
 import { ActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../base/browser/ui/inputbox/inputbox.js';
@@ -28,12 +14,7 @@ import type { Icon } from '../../../base/common/icon.js';
 import type { ResolvedKeybinding } from '../../../base/common/keybindings.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../accessibility/browser/accessibleViewRegistry.js';
 import { IContextViewService } from '../../contextview/browser/contextView.js';
 import './actionWidget.css';
@@ -250,19 +231,14 @@ export class ActionList<T> extends Disposable {
 						const lifetime = new DisposableStore();
 						const provider = lifetime.add(createHelpProvider(getActiveElement(this.domNode.ownerDocument)));
 						const dialog = lifetime.add(
-							new Dialog(
-								container,
-								localize('actionWidget.helpTitle', 'Action menu accessibility help'),
-								[],
-								{
-									buttonStyles: defaultButtonStyles,
-									dialogStyles: defaultDialogStyles,
-									checkboxStyles: defaultCheckboxStyles,
-									inputBoxStyles: defaultInputBoxStyles,
-									disableDefaultAction: true,
-									detail: provider.provideContent(),
-								},
-							),
+							new Dialog(container, localize('actionWidget.helpTitle', 'Action menu accessibility help'), [], {
+								buttonStyles: defaultButtonStyles,
+								dialogStyles: defaultDialogStyles,
+								checkboxStyles: defaultCheckboxStyles,
+								inputBoxStyles: defaultInputBoxStyles,
+								disableDefaultAction: true,
+								detail: provider.provideContent(),
+							}),
 						);
 						this.help.value = lifetime;
 						void dialog.show().finally(() => {
@@ -289,8 +265,7 @@ export class ActionList<T> extends Disposable {
 				header = entry;
 				continue;
 			}
-			const text =
-				`${entry.label} ${entry.detail ?? ''} ${entry.badge ?? ''} ${entry.group?.title ?? ''}`.toLocaleLowerCase();
+			const text = `${entry.label} ${entry.detail ?? ''} ${entry.badge ?? ''} ${entry.group?.title ?? ''}`.toLocaleLowerCase();
 			if (!terms.every(term => text.includes(term))) {
 				continue;
 			}
@@ -330,12 +305,8 @@ export class ActionList<T> extends Disposable {
 					className: 'ash-action-widget-menu',
 					getCheckedActionsRepresentation: () => 'radio',
 					getKeybinding: action => entries.get(action.id)?.keybinding,
-					getAriaDescription: action =>
-						[entries.get(action.id)?.detail, entries.get(action.id)?.badge].filter(Boolean).join(' · '),
-					actionViewItemProvider: action =>
-						entries.get(action.id)?.kind === ActionListItemKind.Header
-							? new ActionListHeader(action)
-							: undefined,
+					getAriaDescription: action => [entries.get(action.id)?.detail, entries.get(action.id)?.badge].filter(Boolean).join(' · '),
+					actionViewItemProvider: action => (entries.get(action.id)?.kind === ActionListItemKind.Header ? new ActionListHeader(action) : undefined),
 				},
 				defaultMenuStyles,
 			),
@@ -364,15 +335,12 @@ export class ActionList<T> extends Disposable {
 				}
 			}),
 		);
-		const retained =
-			previous &&
-			visible.find(entry => entry === previous || (entry.id !== undefined && entry.id === previous.id));
+		const retained = previous && visible.find(entry => entry === previous || (entry.id !== undefined && entry.id === previous.id));
 		this.focusedEntry =
 			retained && !retained.disabled
 				? retained
-				: (visible.find(
-						entry => entry.kind === ActionListItemKind.Action && !entry.disabled && entry.checked,
-					) ?? visible.find(entry => entry.kind === ActionListItemKind.Action && !entry.disabled));
+				: (visible.find(entry => entry.kind === ActionListItemKind.Action && !entry.disabled && entry.checked) ??
+					visible.find(entry => entry.kind === ActionListItemKind.Action && !entry.disabled));
 		this.updatePreview();
 		if (this.focusedEntry && previous) {
 			const row = menu.element.children[visible.indexOf(this.focusedEntry)] as HTMLElement;
@@ -425,20 +393,12 @@ export class ActionList<T> extends Disposable {
 			this.domNode.style.width = previousWidth;
 		}
 		const minimum = Math.max(100, minWidth, this.options.minWidth ?? 0);
-		const maximum = Math.min(
-			getWindow(this.domNode).innerWidth * 0.8,
-			Math.max(minimum, this.options.maxWidth ?? Infinity),
-		);
+		const maximum = Math.min(getWindow(this.domNode).innerWidth * 0.8, Math.max(minimum, this.options.maxWidth ?? Infinity));
 		return Math.min(maximum, Math.max(minimum, this.contentWidth));
 	}
 
 	private async select(entry: IActionListItem<T>, preview = false): Promise<void> {
-		if (
-			this.busy ||
-			entry.kind !== ActionListItemKind.Action ||
-			entry.disabled ||
-			(preview && (!this.supportsPreview || !entry.canPreview))
-		) {
+		if (this.busy || entry.kind !== ActionListItemKind.Action || entry.disabled || (preview && (!this.supportsPreview || !entry.canPreview))) {
 			return;
 		}
 		this.busy = true;

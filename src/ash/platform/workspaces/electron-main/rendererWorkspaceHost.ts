@@ -4,11 +4,7 @@ import type { WebContents } from 'electron/main';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
 
-import type {
-	WorkspaceTrustChoice,
-	WorkspaceTrustGrant,
-	WorkspaceTrustPermission,
-} from '../../workspace/common/workspaceTrust.js';
+import type { WorkspaceTrustChoice, WorkspaceTrustGrant, WorkspaceTrustPermission } from '../../workspace/common/workspaceTrust.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 
 /** Routes window-owned workspace operations to the renderer that owns the backend connection. */
@@ -31,14 +27,10 @@ export class RendererWorkspaceHost extends Disposable {
 	public async persistDirectoryGrant(path: string, grant: WorkspaceTrustGrant): Promise<void> {
 		await this.call('persistDirectoryGrant', { path, grant });
 	}
-	public async setFolders(
-		folders: readonly { id: string; path: string; grant: WorkspaceTrustGrant }[],
-	): Promise<void> {
+	public async setFolders(folders: readonly { id: string; path: string; grant: WorkspaceTrustGrant }[]): Promise<void> {
 		await this.call('setFolders', { folders });
 	}
-	public async validateFolders(
-		folders: readonly { id: string; path: string; grant: WorkspaceTrustGrant }[],
-	): Promise<void> {
+	public async validateFolders(folders: readonly { id: string; path: string; grant: WorkspaceTrustGrant }[]): Promise<void> {
 		await this.call('validateFolders', { folders });
 	}
 
@@ -47,11 +39,7 @@ export class RendererWorkspaceHost extends Disposable {
 			{
 				channel: 'ash:workspace:completed',
 				validate: value => {
-					if (
-						!isRecord(value) ||
-						typeof value.nonce !== 'string' ||
-						(value.error !== undefined && typeof value.error !== 'string')
-					) {
+					if (!isRecord(value) || typeof value.nonce !== 'string' || (value.error !== undefined && typeof value.error !== 'string')) {
 						throw new Error('Invalid workspace completion');
 					}
 					return value;
@@ -63,14 +51,8 @@ export class RendererWorkspaceHost extends Disposable {
 					}
 					const pending = this.pending;
 					this.pending = undefined;
-					if (
-						reply.failure === 'EnvironmentBusy' ||
-						reply.failure === 'EnvironmentUnavailable' ||
-						reply.failure === 'MethodNotFound'
-					) {
-						pending.reject(
-							new AppServerRemoteError(-32000, reply.error ?? reply.failure, { kind: reply.failure }),
-						);
+					if (reply.failure === 'EnvironmentBusy' || reply.failure === 'EnvironmentUnavailable' || reply.failure === 'MethodNotFound') {
+						pending.reject(new AppServerRemoteError(-32000, reply.error ?? reply.failure, { kind: reply.failure }));
 					} else if (reply.error) {
 						pending.reject(new Error(reply.error));
 					} else {

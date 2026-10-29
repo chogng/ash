@@ -16,20 +16,14 @@ import { LanguageService } from '../../../../../editor/common/services/languageS
 import { IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { AppServerRemoteError } from '../../../../../platform/agentHost/common/appServerError.js';
 import { type ILanguageApi } from '../../../../../platform/language/common/languageApi.js';
-import {
-	IWorkspaceTrustManagementService,
-	type WorkspaceTrustPermission,
-} from '../../../../../platform/workspace/common/workspaceTrust.js';
+import { IWorkspaceTrustManagementService, type WorkspaceTrustPermission } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { type ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
 import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
-import {
-	type CodeIntelligenceDocumentSnapshot,
-	type ICodeIntelligenceDocumentService,
-} from '../../../codeIntelligence/common/codeIntelligenceDocumentService.js';
+import { type CodeIntelligenceDocumentSnapshot, type ICodeIntelligenceDocumentService } from '../../../codeIntelligence/common/codeIntelligenceDocumentService.js';
 import { AppServerLanguageDiagnosticsService } from '../../browser/appServerLanguageDiagnosticsService.js';
 
 function createDiagnosticsService(
@@ -196,10 +190,7 @@ suite('App Server diagnostics shutdown', () => {
 				if (disposed) service.dispose();
 				rejectSynchronization(error);
 				await tick();
-				assert.deepEqual(
-					reported,
-					disposed ? [] : [['App Server language document synchronization failed', error]],
-				);
+				assert.deepEqual(reported, disposed ? [] : [['App Server language document synchronization failed', error]]);
 			} finally {
 				console.error = original;
 			}
@@ -229,10 +220,7 @@ suite('App Server diagnostics shutdown', () => {
 				if (disposed) service.dispose();
 				rejectReport(error);
 				await tick();
-				assert.deepEqual(
-					reported,
-					disposed ? [] : [['App Server language document synchronization failed', error]],
-				);
+				assert.deepEqual(reported, disposed ? [] : [['App Server language document synchronization failed', error]]);
 			} finally {
 				console.error = original;
 			}
@@ -252,10 +240,7 @@ suite('App Server diagnostics shutdown', () => {
 		acquisition.dispose();
 		service.dispose();
 		await tick();
-		assert.deepEqual(
-			{ language: api.closed, codeIntelligence: documents.closed, diagnostics: service.getAllDiagnostics() },
-			{ language: [], codeIntelligence: [], diagnostics: [] },
-		);
+		assert.deepEqual({ language: api.closed, codeIntelligence: documents.closed, diagnostics: service.getAllDiagnostics() }, { language: [], codeIntelligence: [], diagnostics: [] });
 	});
 });
 
@@ -281,12 +266,10 @@ test('App Server diagnostics retain pushes received before the editor acquires i
 	using acquisition = service.acquire(resource, 'rust', model);
 	await tick();
 	assert.deepEqual(
-		service
-			.getAllDiagnostics()
-			.map(snapshot => ({
-				revision: snapshot.revision,
-				messages: snapshot.diagnostics.map(diagnostic => diagnostic.message),
-			})),
+		service.getAllDiagnostics().map(snapshot => ({
+			revision: snapshot.revision,
+			messages: snapshot.diagnostics.map(diagnostic => diagnostic.message),
+		})),
 		[{ revision: 1, messages: ['server diagnostic'] }],
 	);
 	acquisition.dispose();
@@ -342,11 +325,7 @@ test('App Server diagnostics keep equal relative paths isolated by Workspace fol
 	await tick();
 
 	assert.equal(api.synchronized[0]!.document.dirId, 'two');
-	assert.deepEqual(
-		documents.synchronized,
-		[],
-		'path-only code-intelligence overlays cannot identify a multi-root document',
-	);
+	assert.deepEqual(documents.synchronized, [], 'path-only code-intelligence overlays cannot identify a multi-root document');
 	events.fire({
 		method: 'language/diagnostics',
 		params: {
@@ -624,10 +603,7 @@ for (const pushed of [false, true])
 				params: { path: 'main.rs', revision: 1, diagnostics: [pullDiagnostic] },
 			});
 		notifyPull(events, false);
-		assert.equal(
-			service.getDiagnostics(resource)?.diagnostics[0]?.message,
-			pushed ? pullDiagnostic.message : undefined,
-		);
+		assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, pushed ? pullDiagnostic.message : undefined);
 		notifyPull(events, true);
 		await tick();
 		assert.equal(signal?.aborted, false);
@@ -635,10 +611,7 @@ for (const pushed of [false, true])
 		assert.equal(signal?.aborted, true);
 		complete({ revision: 1, kind: 'full', diagnostics: [{ ...pullDiagnostic, message: 'late response' }] });
 		await tick();
-		assert.equal(
-			service.getDiagnostics(resource)?.diagnostics[0]?.message,
-			pushed ? pullDiagnostic.message : undefined,
-		);
+		assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, pushed ? pullDiagnostic.message : undefined);
 	});
 
 test('pull capability is scoped to each directory for the same language', async () => {
@@ -724,9 +697,7 @@ test('App Server diagnostics reports real pull failures while retaining typed av
 
 		assert.equal(api.diagnosticPulls.length, 1);
 		assert.ok(api.workspaceDiagnosticPulls > 0);
-		assert.deepEqual(reported, [
-			['App Server language document synchronization failed', api.documentDiagnosticsError],
-		]);
+		assert.deepEqual(reported, [['App Server language document synchronization failed', api.documentDiagnosticsError]]);
 	} finally {
 		console.error = originalConsoleError;
 	}
@@ -981,16 +952,10 @@ suite('Language diagnostic request scheduling', () => {
 			});
 			await tick();
 			assert.equal(pending.length, 2, 'one follow-up observes all changes made during the first sweep');
-			assert.equal(
-				service.getDiagnostics(resource),
-				undefined,
-				'the superseded sweep cannot publish stale diagnostics',
-			);
+			assert.equal(service.getDiagnostics(resource), undefined, 'the superseded sweep cannot publish stale diagnostics');
 			await pending[1]!.complete({
 				supported: true,
-				snapshots: [
-					{ path: 'unopened.rs', diagnostics: [{ ...pullDiagnostic, message: 'fresh workspace report' }] },
-				],
+				snapshots: [{ path: 'unopened.rs', diagnostics: [{ ...pullDiagnostic, message: 'fresh workspace report' }] }],
 			});
 			await tick();
 			assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, 'fresh workspace report');
@@ -999,8 +964,7 @@ suite('Language diagnostic request scheduling', () => {
 			service.dispose();
 			for (const acquisition of acquisitions) acquisition.dispose();
 			for (const model of models) model.dispose();
-			for (const report of pending)
-				if (!report.isSettled) await report.complete({ supported: false, snapshots: [] });
+			for (const report of pending) if (!report.isSettled) await report.complete({ supported: false, snapshots: [] });
 			await tick();
 		}
 	});
@@ -1016,10 +980,7 @@ suite('Language diagnostic request scheduling', () => {
 				api.diagnosticPulls.push(params);
 				if (api.diagnosticPulls.length === 1) {
 					void first.complete(options!.signal!);
-					return raceCancellationError(
-						new DeferredPromise<Awaited<ReturnType<ILanguageApi['documentDiagnostics']>>>().p,
-						options!.signal!,
-					);
+					return raceCancellationError(new DeferredPromise<Awaited<ReturnType<ILanguageApi['documentDiagnostics']>>>().p, options!.signal!);
 				}
 				void latest.complete();
 				return Promise.resolve({ revision: params.document.revision, kind: 'unchanged', diagnostics: [] });
@@ -1066,11 +1027,7 @@ suite('Language diagnostic request scheduling', () => {
 					snapshots: [{ path: 'unopened.rs', diagnostics: [pullDiagnostic] }],
 				});
 				await tick();
-				assert.deepEqual(
-					service.getAllDiagnostics(),
-					[],
-					'a backend reply after cancellation cannot restore retired diagnostics',
-				);
+				assert.deepEqual(service.getAllDiagnostics(), [], 'a backend reply after cancellation cannot restore retired diagnostics');
 			} finally {
 				service.dispose();
 				if (!report.isSettled) await report.complete({ supported: false, snapshots: [] });
@@ -1115,8 +1072,7 @@ test('diagnostic refresh coalesces bursts and only pulls from the matching works
 	assert.equal(api.diagnosticPulls.length, pulls);
 	assert.deepEqual(service.getDiagnostics(URI.file('/project/main.rs'))?.diagnostics, []);
 	ready = true;
-	for (let index = 0; index < 3; index++)
-		events.fire({ method: 'language/diagnosticsRefresh', params: { server: 'rust-analyzer' } });
+	for (let index = 0; index < 3; index++) events.fire({ method: 'language/diagnosticsRefresh', params: { server: 'rust-analyzer' } });
 	await tick();
 	assert.equal(api.diagnosticPulls.length, pulls + 1);
 	assert.equal(service.getDiagnostics(URI.file('/project/main.rs'))?.diagnostics[0]?.message, 'Workspace loaded');
@@ -1300,9 +1256,7 @@ test('successful saves synchronize the current dirty snapshot before reporting e
 test('language startup receives effective Rust settings and resynchronizes open models after external changes', async () => {
 	const api = new FakeLanguageApi();
 	using workspace = new TestWorkspaceService({ id: 'rust-settings', uri: URI.file('/project') });
-	await workspace.write(
-		'{ "rust-analyzer.cargo.buildScripts.enable": false, "rust-analyzer.cargo.targetDir": ".build/analysis" }',
-	);
+	await workspace.write('{ "rust-analyzer.cargo.buildScripts.enable": false, "rust-analyzer.cargo.targetDir": ".build/analysis" }');
 	using service = createDiagnosticsService(api, new FakeServerEvents(), workspace);
 	using model = new TextModel('fn main() {}\n');
 	using document = service.acquire(URI.file('/project/main.rs'), 'rust', model);

@@ -76,20 +76,14 @@ import {
 	type IFileStat,
 	FileSystemProviderCapabilities,
 } from '../../../../../platform/files/common/files.js';
-import {
-	IWorkspaceContextService,
-	type IAnyWorkspaceIdentifier,
-} from '../../../../../platform/workspace/common/workspace.js';
+import { IWorkspaceContextService, type IAnyWorkspaceIdentifier } from '../../../../../platform/workspace/common/workspace.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
-import {
-	ActionWidgetService,
-	IActionWidgetService,
-} from '../../../../../platform/actionWidget/browser/actionWidget.js';
+import { ActionWidgetService, IActionWidgetService } from '../../../../../platform/actionWidget/browser/actionWidget.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
@@ -98,12 +92,7 @@ import { TestThemeService } from '../../../../../platform/theme/test/common/test
 import { lightColorTheme } from '../../../../../platform/theme/common/colorTheme.js';
 import { IMenuService } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
-import {
-	ViewsRegistry,
-	IViewDescriptorService,
-	ViewContainerLocation,
-	WorkbenchViewContainerId,
-} from '../../../../common/views.js';
+import { ViewsRegistry, IViewDescriptorService, ViewContainerLocation, WorkbenchViewContainerId } from '../../../../common/views.js';
 import { ViewDescriptorService } from '../../../../services/views/browser/viewDescriptorService.js';
 import '../../browser/debug.contribution.js';
 import { DebugViewPaneContainer } from '../../browser/debugViewlet.js';
@@ -134,32 +123,15 @@ export class MockDebugService extends Disposable implements IDebugService {
 	}
 	private focusGeneration = 0;
 	public onNavigationError: (error: unknown) => void = () => {};
-	public navigateFrame:
-		| ((
-				frame: IDebugStackFrame,
-				session: IDebugSession,
-				isCurrent: () => boolean,
-				explicit: boolean,
-				preserveFocus?: boolean,
-		  ) => Promise<void>)
-		| undefined;
-	public async focusStackFrame(
-		frame: IDebugStackFrame | undefined,
-		thread?: IDebugThread,
-		session = this.session,
-		options?: { explicit?: boolean; preserveFocus?: boolean },
-	): Promise<void> {
+	public navigateFrame: ((frame: IDebugStackFrame, session: IDebugSession, isCurrent: () => boolean, explicit: boolean, preserveFocus?: boolean) => Promise<void>) | undefined;
+	public async focusStackFrame(frame: IDebugStackFrame | undefined, thread?: IDebugThread, session = this.session, options?: { explicit?: boolean; preserveFocus?: boolean }): Promise<void> {
 		const generation = ++this.focusGeneration;
 		this.viewModel.setFocus(frame, thread, session, options?.explicit ?? true);
 		if (frame && session)
 			await this.navigateFrame?.(
 				frame,
 				session,
-				() =>
-					!this.isDisposed &&
-					generation === this.focusGeneration &&
-					this.session === session &&
-					session.state === 'stopped',
+				() => !this.isDisposed && generation === this.focusGeneration && this.session === session && session.state === 'stopped',
 				options?.explicit ?? true,
 				options?.preserveFocus,
 			);
@@ -201,10 +173,7 @@ export class MockDebugService extends Disposable implements IDebugService {
 	constructor(source: IDebugSource = { name: 'generated.ts', sourceReference: 33 }) {
 		super();
 		this.configurations = [configuration('One')];
-		this.sessions = Object.freeze([
-			this._register(new MockDebugSession('session-one', 'One', source)),
-			this._register(new MockDebugSession('session-two', 'Two', source)),
-		]);
+		this.sessions = Object.freeze([this._register(new MockDebugSession('session-one', 'One', source)), this._register(new MockDebugSession('session-two', 'Two', source))]);
 		this.replModel = this._register(new ReplModel(this));
 		for (const session of this.sessions)
 			this._register(
@@ -214,22 +183,15 @@ export class MockDebugService extends Disposable implements IDebugService {
 			);
 	}
 	public initialConfigurations: readonly DebugConfiguration[] = [];
-	public async provideDebugConfigurations(
-		_folder: URI,
-		_signal?: AbortSignal,
-	): Promise<readonly DebugConfiguration[]> {
+	public async provideDebugConfigurations(_folder: URI, _signal?: AbortSignal): Promise<readonly DebugConfiguration[]> {
 		return this.initialConfigurations;
 	}
-	public registerDebugAdapterTrackerFactories(
-		_factories: readonly IDebugAdapterTrackerFactory[],
-	): DebugAdapterTrackerFactoryRegistration {
+	public registerDebugAdapterTrackerFactories(_factories: readonly IDebugAdapterTrackerFactory[]): DebugAdapterTrackerFactoryRegistration {
 		const registration = toDisposable(() => {}) as DebugAdapterTrackerFactoryRegistration;
 		registration.replace = () => {};
 		return registration;
 	}
-	public registerDebugConfigurationProviders(
-		_providers: readonly IDebugConfigurationProvider[],
-	): DebugConfigurationProviderRegistration {
+	public registerDebugConfigurationProviders(_providers: readonly IDebugConfigurationProvider[]): DebugConfigurationProviderRegistration {
 		const registration = toDisposable(() => {}) as DebugConfigurationProviderRegistration;
 		registration.replace = () => {};
 		return registration;
@@ -265,11 +227,7 @@ export class MockDebugService extends Disposable implements IDebugService {
 		this.breakpoints = Object.freeze([...this.breakpoints, ...points.map(point => ({ ...point }))]);
 		this.breakpointEmitter.fire(this.breakpoints);
 	}
-	public async updateBreakpoints(
-		resource: URI,
-		data: Map<string, IBreakpointUpdateData>,
-		_sendOnResourceSaved: boolean,
-	): Promise<void> {
+	public async updateBreakpoints(resource: URI, data: Map<string, IBreakpointUpdateData>, _sendOnResourceSaved: boolean): Promise<void> {
 		this.breakpoints = Object.freeze(
 			this.breakpoints.map(point => {
 				const update = data.get(point.id);
@@ -278,11 +236,7 @@ export class MockDebugService extends Disposable implements IDebugService {
 					...point,
 					...('lineNumber' in update ? { lineNumber: update.lineNumber! } : {}),
 					...('column' in update ? { columnNumber: update.column } : {}),
-					...Object.fromEntries(
-						(['condition', 'hitCondition', 'logMessage'] as const)
-							.filter(key => update[key] !== undefined)
-							.map(key => [key, update[key] || undefined]),
-					),
+					...Object.fromEntries((['condition', 'hitCondition', 'logMessage'] as const).filter(key => update[key] !== undefined).map(key => [key, update[key] || undefined])),
 				};
 			}),
 		);
@@ -294,15 +248,10 @@ export class MockDebugService extends Disposable implements IDebugService {
 		}
 	}
 	public toggleBreakpoint(resource: URI, lineNumber: number): void {
-		const existing = this.breakpoints.find(
-			point => point.resource.toString() === resource.toString() && point.lineNumber === lineNumber,
-		);
+		const existing = this.breakpoints.find(point => point.resource.toString() === resource.toString() && point.lineNumber === lineNumber);
 		if (existing) this.removeBreakpoint(existing.id);
 		else {
-			this.breakpoints = Object.freeze([
-				...this.breakpoints,
-				{ id: generateUuid(), resource, lineNumber, enabled: true, verified: false },
-			]);
+			this.breakpoints = Object.freeze([...this.breakpoints, { id: generateUuid(), resource, lineNumber, enabled: true, verified: false }]);
 			this.breakpointEmitter.fire(this.breakpoints);
 		}
 	}
@@ -314,8 +263,7 @@ export class MockDebugService extends Disposable implements IDebugService {
 		this.breakpointEmitter.fire(this.breakpoints);
 	}
 	public updateBreakpoint(id: string, update: IDebugBreakpointUpdate): void {
-		const change = <T extends IBaseBreakpoint>(points: readonly T[]): readonly T[] =>
-			Object.freeze(points.map(point => (point.id === id ? { ...point, ...update } : point)));
+		const change = <T extends IBaseBreakpoint>(points: readonly T[]): readonly T[] => Object.freeze(points.map(point => (point.id === id ? { ...point, ...update } : point)));
 		this.breakpoints = change(this.breakpoints);
 		this.functionBreakpoints = change(this.functionBreakpoints);
 		this.dataBreakpoints = change(this.dataBreakpoints);
@@ -337,10 +285,7 @@ export class MockDebugService extends Disposable implements IDebugService {
 		this.breakpointEmitter.fire([]);
 	}
 	public addFunctionBreakpoint(options: IFunctionBreakpointOptions): void {
-		this.functionBreakpoints = Object.freeze([
-			...this.functionBreakpoints,
-			{ ...options, kind: 'function', id: `function-${++this.nextBreakpointId}`, enabled: true, verified: false },
-		]);
+		this.functionBreakpoints = Object.freeze([...this.functionBreakpoints, { ...options, kind: 'function', id: `function-${++this.nextBreakpointId}`, enabled: true, verified: false }]);
 		this.breakpointEmitter.fire(this.functionBreakpoints);
 	}
 	public addDataBreakpoint(options: IDataBreakpointOptions): void {
@@ -393,13 +338,7 @@ export class MockDebugService extends Disposable implements IDebugService {
 			void session
 				.inspectStack(session.threadId)
 				.then(inspection => {
-					if (
-						this.isDisposed ||
-						generation !== this.focusGeneration ||
-						this.session !== session ||
-						session.state !== 'stopped'
-					)
-						return;
+					if (this.isDisposed || generation !== this.focusGeneration || this.session !== session || session.state !== 'stopped') return;
 					session.selectThread(inspection.threadId!);
 					this.viewModel.setFocus(
 						inspection.frames[0],
@@ -411,11 +350,7 @@ export class MockDebugService extends Disposable implements IDebugService {
 						return this.navigateFrame?.(
 							inspection.frames[0],
 							session,
-							() =>
-								!this.isDisposed &&
-								generation === this.focusGeneration &&
-								this.session === session &&
-								session.state === 'stopped',
+							() => !this.isDisposed && generation === this.focusGeneration && this.session === session && session.state === 'stopped',
 							false,
 						);
 				})
@@ -615,9 +550,7 @@ export class MockDebugSession extends Disposable implements IDebugSession {
 		return Object.freeze([{ name: 'Locals', variablesReference: 20, expensive: false }]);
 	}
 	public async variables(reference: number): Promise<readonly IDebugVariable[]> {
-		return reference === 20
-			? Object.freeze([{ name: 'parent', value: 'Object', variablesReference: 21 }])
-			: Object.freeze([{ name: 'child', value: 'value', variablesReference: 0 }]);
+		return reference === 20 ? Object.freeze([{ name: 'parent', value: 'Object', variablesReference: 21 }]) : Object.freeze([{ name: 'child', value: 'value', variablesReference: 0 }]);
 	}
 	public async setVariable(reference: number, name: string, value: string): Promise<IDebugVariable> {
 		this.assignments.push({ reference, name, value });
@@ -628,11 +561,7 @@ export class MockDebugSession extends Disposable implements IDebugSession {
 		return undefined;
 	}
 
-	public async evaluate(
-		_expression: string,
-		_frameId: number | undefined,
-		_context: DebugEvaluateContext,
-	): Promise<IDebugEvaluateResult> {
+	public async evaluate(_expression: string, _frameId: number | undefined, _context: DebugEvaluateContext): Promise<IDebugEvaluateResult> {
 		if (_context === 'repl') this.emitOutput(`> ${_expression}\n${this.watchValue} : number\n`);
 		return { result: this.watchValue, type: 'number', variablesReference: 0 };
 	}
@@ -640,11 +569,7 @@ export class MockDebugSession extends Disposable implements IDebugSession {
 		return { content: 'const generated = true;', mimeType: 'text/typescript' };
 	}
 	public readonly dataInfoRequests: unknown[] = [];
-	public async dataBreakpointInfo(
-		name: string,
-		variablesReference?: number,
-		frameId?: number,
-	): Promise<IDataBreakpointInfoResponse> {
+	public async dataBreakpointInfo(name: string, variablesReference?: number, frameId?: number): Promise<IDataBreakpointInfoResponse> {
 		this.dataInfoRequests.push({ name, variablesReference, frameId });
 		return {
 			dataId: `variable:${variablesReference}:${name}`,
@@ -654,12 +579,7 @@ export class MockDebugSession extends Disposable implements IDebugSession {
 		};
 	}
 	public async setExceptionBreakpoints(): Promise<void> {}
-	public async disassemble(
-		_reference: string,
-		_offset: number,
-		_instructionOffset: number,
-		_instructionCount: number,
-	): Promise<readonly IDisassembledInstruction[]> {
+	public async disassemble(_reference: string, _offset: number, _instructionOffset: number, _instructionCount: number): Promise<readonly IDisassembledInstruction[]> {
 		return [];
 	}
 	public async disconnect(): Promise<void> {}
@@ -690,13 +610,9 @@ export class DebugViewTestServices extends Disposable {
 	}
 
 	/** Mounts the registered Debug constructor through the real Part title renderer. */
-	public createContainer(
-		services: InstantiationService,
-		parent: HTMLElement,
-	): { part: PaneCompositePart; container: DebugViewPaneContainer } {
+	public createContainer(services: InstantiationService, parent: HTMLElement): { part: PaneCompositePart; container: DebugViewPaneContainer } {
 		setIconResolver(parent.ownerDocument, icon => getIconDefinition(icon));
-		if (!services.has(IContextKeyService))
-			services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
+		if (!services.has(IContextKeyService)) services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
 		if (!services.has(IStorageService))
 			services.registerInstance(
 				IStorageService,
@@ -709,12 +625,10 @@ export class DebugViewTestServices extends Disposable {
 					}),
 				),
 			);
-		if (!services.has(IThemeService))
-			services.registerInstance(IThemeService, this._register(new TestThemeService(lightColorTheme)));
+		if (!services.has(IThemeService)) services.registerInstance(IThemeService, this._register(new TestThemeService(lightColorTheme)));
 		const descriptors = this._register(services.createInstance(ViewDescriptorService, { registry: ViewsRegistry }));
 		services.registerInstance(IViewDescriptorService, descriptors);
-		if (!services.has(IActivityService))
-			services.registerInstance(IActivityService, this._register(services.createInstance(ActivityService)));
+		if (!services.has(IActivityService)) services.registerInstance(IActivityService, this._register(services.createInstance(ActivityService)));
 		if (!services.has(IMenuService)) services.registerInstance(IMenuService, services.createInstance(MenuService));
 		if (!services.has(INotificationService)) services.registerInstance(INotificationService, this.notifications);
 		if (!services.has(IAccessibilityService))
@@ -744,9 +658,7 @@ export class DebugViewTestServices extends Disposable {
 				},
 			}),
 		);
-		const descriptor = descriptors
-			.getViewContainers(ViewContainerLocation.Sidebar)
-			.find(candidate => candidate.id === WorkbenchViewContainerId.Debug)!;
+		const descriptor = descriptors.getViewContainers(ViewContainerLocation.Sidebar).find(candidate => candidate.id === WorkbenchViewContainerId.Debug)!;
 		services.registerInstance(
 			IViewsService,
 			this._register(
@@ -782,19 +694,14 @@ export class DebugViewTestServices extends Disposable {
 			contextKeyService: contextKeys,
 			localizationService: {
 				whenReady: Promise.resolve(),
-				translate: (
-					bundle: string,
-					key: string,
-					fallback: string,
-					parameters?: Readonly<Record<string, string | number>>,
-				) => localize({ bundle, key }, fallback, ...Object.values(parameters ?? {})),
+				translate: (bundle: string, key: string, fallback: string, parameters?: Readonly<Record<string, string | number>>) =>
+					localize({ bundle, key }, fallback, ...Object.values(parameters ?? {})),
 			},
 			onDidFailCreateView: (error: unknown) => {
 				throw error;
 			},
 		});
-		if (!(container instanceof DebugViewPaneContainer))
-			throw new Error('Debug container registration uses the wrong owner');
+		if (!(container instanceof DebugViewPaneContainer)) throw new Error('Debug container registration uses the wrong owner');
 		part.addComposite(container);
 
 		part.showComposite(container.id);
@@ -811,15 +718,12 @@ export class DebugViewTestServices extends Disposable {
 				dispose() {},
 				[Symbol.dispose]() {},
 			});
-		if (!services.get(IContextKeyService))
-			services.set(IContextKeyService, this._register(new ContextKeyService()));
+		if (!services.get(IContextKeyService)) services.set(IContextKeyService, this._register(new ContextKeyService()));
 		if (!services.get(INotificationService)) services.set(INotificationService, this.notifications);
 		// This fixture also runs in a real browser; model resolution must not load jsdom or editor widgets.
 		const configuration = this._register(new WorkbenchConfigurationService());
 		const languages = this._register(new LanguageService());
-		const models = this._register(
-			new ModelService(configuration, { _serviceBrand: undefined, getEOL: () => '\n' }, languages),
-		);
+		const models = this._register(new ModelService(configuration, { _serviceBrand: undefined, getEOL: () => '\n' }, languages));
 		const identity = this._register(new TestUriIdentityServices());
 		const fileModels = this._register(
 			identity.createInstance(
@@ -847,36 +751,14 @@ export class DebugViewTestServices extends Disposable {
 		if (debug instanceof MockDebugService && editor) {
 			// The UI fixture supplies the service's navigation effect. Production
 			// sequencing and cancellation are exercised by DebugService and Desktop tests.
-			debug.onNavigationError = error =>
-				this.notifications.error(error instanceof Error ? error.message : String(error));
+			debug.onNavigationError = error => this.notifications.error(error instanceof Error ? error.message : String(error));
 			debug.navigateFrame = async (frame, session, isCurrent, explicit, preserveFocus) => {
-				if (
-					!frame.source ||
-					!isCurrent() ||
-					(!explicit &&
-						(frame.lineNumber <= 0 ||
-							frame.columnNumber <= 0 ||
-							editor.activeEditor?.editorId === DISASSEMBLY_VIEW_ID))
-				)
-					return;
-				const resource = getUriFromSource(
-					frame.source,
-					frame.source.path,
-					session.id,
-					identity.get(IUriIdentityService),
-					services.get(ILogService)! as ILogService,
-				);
-				const selection =
-					frame.lineNumber > 0 && frame.columnNumber > 0
-						? Range.fromPositions(new Position(frame.lineNumber, frame.columnNumber))
-						: undefined;
+				if (!frame.source || !isCurrent() || (!explicit && (frame.lineNumber <= 0 || frame.columnNumber <= 0 || editor.activeEditor?.editorId === DISASSEMBLY_VIEW_ID))) return;
+				const resource = getUriFromSource(frame.source, frame.source.path, session.id, identity.get(IUriIdentityService), services.get(ILogService)! as ILogService);
+				const selection = frame.lineNumber > 0 && frame.columnNumber > 0 ? Range.fromPositions(new Position(frame.lineNumber, frame.columnNumber)) : undefined;
 				if (resource.scheme === 'debug') {
 					using reference = await textModels.createModelReference(resource);
-					if (isCurrent())
-						await editor.openEditor(
-							{ resource, label: frame.source.name, readOnly: true },
-							{ selection, preserveFocus },
-						);
+					if (isCurrent()) await editor.openEditor({ resource, label: frame.source.name, readOnly: true }, { selection, preserveFocus });
 				} else await editor.openEditor({ resource, label: frame.source.name }, { selection, preserveFocus });
 			};
 			this._register(
@@ -902,8 +784,7 @@ export class DebugViewTestServices extends Disposable {
 		const unexpected = async (): Promise<never> => {
 			throw new Error('Unexpected file operation');
 		};
-		if (!services.get(IExtensionService))
-			services.set(IExtensionService, this._register(new TestExtensionService()));
+		if (!services.get(IExtensionService)) services.set(IExtensionService, this._register(new TestExtensionService()));
 		services.set(IWorkspaceContextService, this.workspace);
 		services.set(IFileDialogService, {
 			pickFolderAndOpen: async () => {
@@ -919,8 +800,7 @@ export class DebugViewTestServices extends Disposable {
 			IFileService,
 			this._register(
 				createTestFileService({
-					capabilities:
-						FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
+					capabilities: FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
 					onDidChangeCapabilities: Event.None,
 					watch: (): IDisposable => Disposable.None,
 
@@ -935,18 +815,12 @@ export class DebugViewTestServices extends Disposable {
 					writeFile: async (resource, bytes, options) => {
 						const key = resource.toString();
 						if (this.documents.has(key) && !options.overwrite) {
-							throw createFileSystemProviderError(
-								'File already exists',
-								FileSystemProviderErrorCode.FileExists,
-							);
+							throw createFileSystemProviderError('File already exists', FileSystemProviderErrorCode.FileExists);
 						}
 						if (!this.documents.has(key) && !options.create) {
 							throw new FileNotFoundError(resource);
 						}
-						this.documents.set(
-							key,
-							new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes),
-						);
+						this.documents.set(key, new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes));
 						this.writes++;
 						return {
 							stat: { ...stat(resource), sizeBytes: bytes.byteLength },

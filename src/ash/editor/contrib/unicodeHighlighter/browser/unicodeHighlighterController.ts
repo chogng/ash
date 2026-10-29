@@ -22,8 +22,7 @@ export class UnicodeHighlighterController extends Disposable {
 		private readonly onError: (error: unknown) => void,
 	) {
 		super();
-		if (decorations.textModel !== model)
-			throw new TypeError('Stanza Unicode highlighter dependencies must share a text model');
+		if (decorations.textModel !== model) throw new TypeError('Stanza Unicode highlighter dependencies must share a text model');
 		this._register(model.onDidChangeContent(() => this.updateScheduler.schedule()));
 		this.updateScheduler.schedule();
 	}

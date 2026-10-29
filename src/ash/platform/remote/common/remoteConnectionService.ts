@@ -16,9 +16,7 @@ export interface RemoteConnectionDefinition {
 }
 
 /** Canonicalizes a credential-free saved connection at the frontend trust boundary. */
-export function canonicalRemoteConnectionDefinition(
-	connection: RemoteConnectionDefinition,
-): RemoteConnectionDefinition {
+export function canonicalRemoteConnectionDefinition(connection: RemoteConnectionDefinition): RemoteConnectionDefinition {
 	const name = canonicalRemoteConnectionName(connection.name);
 	const authority = createSshRemoteAuthority(connection.host);
 	const workspace = getRemoteWorkspacePath(createSshRemoteWorkspaceUri(authority.host, connection.workspace));
@@ -29,9 +27,7 @@ export function canonicalRemoteConnectionDefinition(
 export function canonicalRemoteConnectionName(value: string): string {
 	const normalized = value.trim().toLowerCase();
 	if (!CONNECTION_NAME_PATTERN.test(normalized))
-		throw new Error(
-			'Remote connection name must contain 1-64 ASCII letters, digits, dots, underscores, or hyphens and must start and end with a letter or digit',
-		);
+		throw new Error('Remote connection name must contain 1-64 ASCII letters, digits, dots, underscores, or hyphens and must start and end with a letter or digit');
 	return normalized;
 }
 
@@ -121,11 +117,7 @@ export class RemoteConnectionService extends Disposable implements IRemoteConnec
 			if (disposed) {
 				throw new ReferenceError('Remote resolver registration is disposed');
 			}
-			const prefixes = new Set(
-				[...this.batches]
-					.filter(candidate => candidate !== batch)
-					.flatMap(candidate => candidate.map(resolver => resolver.authorityPrefix)),
-			);
+			const prefixes = new Set([...this.batches].filter(candidate => candidate !== batch).flatMap(candidate => candidate.map(resolver => resolver.authorityPrefix)));
 			for (const resolver of next) {
 				const prefix = validateRemoteConnectionResolverPrefix(resolver.authorityPrefix);
 				if (prefixes.has(prefix)) {
@@ -173,20 +165,14 @@ export class RemoteConnectionService extends Disposable implements IRemoteConnec
 		try {
 			const result = await resolver.resolve(authority, combined);
 			throwIfCancelled(combined);
-			if (
-				!result ||
-				typeof result.connectionName !== 'string' ||
-				Object.keys(result).join(',') !== 'connectionName'
-			) {
+			if (!result || typeof result.connectionName !== 'string' || Object.keys(result).join(',') !== 'connectionName') {
 				throw new TypeError('Remote resolver must return one saved connection name');
 			}
 			const name = canonicalRemoteConnectionName(result.connectionName);
 			const connection = (await this.list()).find(candidate => candidate.name === name);
 			throwIfCancelled(combined);
 			if (!connection) {
-				throw new Error(
-					localize('remote.resolver.targetMissing', "Remote connection '{0}' no longer exists", name),
-				);
+				throw new Error(localize('remote.resolver.targetMissing', "Remote connection '{0}' no longer exists", name));
 			}
 			return connection;
 		} finally {
@@ -206,12 +192,7 @@ export function validateRemoteConnectionResolverPrefix(value: string): string {
 
 function getRemoteConnectionAuthorityPrefix(authority: string): string {
 	const separator = authority.indexOf('+');
-	if (
-		separator < 1 ||
-		separator === authority.length - 1 ||
-		authority.length > 2048 ||
-		/[\u0000-\u0020\u007f]/.test(authority)
-	) {
+	if (separator < 1 || separator === authority.length - 1 || authority.length > 2048 || /[\u0000-\u0020\u007f]/.test(authority)) {
 		throw new TypeError('Invalid Remote connection authority');
 	}
 	return validateRemoteConnectionResolverPrefix(authority.slice(0, separator));

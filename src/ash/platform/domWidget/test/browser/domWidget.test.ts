@@ -54,11 +54,7 @@ test('DomWidget scopes retain the latest constructor, replace twice, and release
 		const roots: HTMLElement[] = [];
 		const mount = (value: DomWidget): void => {
 			if (roots.length > 0) {
-				assert.equal(
-					roots.at(-1)!.isConnected,
-					true,
-					'The host must be able to replace the previous root before disposal',
-				);
+				assert.equal(roots.at(-1)!.isConnected, true, 'The host must be able to replace the previous root before disposal');
 				roots.at(-1)!.replaceWith(value.element);
 			} else {
 				dom.window.document.querySelector('main')!.append(value.element);
@@ -80,19 +76,9 @@ test('DomWidget scopes retain the latest constructor, replace twice, and release
 		);
 		scope.dispose();
 		widget('after-disposal').registerWidgetHotReplacement('domWidget.test#scoped');
-		assert.deepEqual(events, [
-			'create:initial',
-			'create:second',
-			'dispose:initial',
-			'create:third',
-			'dispose:second',
-			'dispose:third',
-		]);
+		assert.deepEqual(events, ['create:initial', 'create:second', 'dispose:initial', 'create:third', 'dispose:second', 'dispose:third']);
 		using reopened = new DisposableStore();
-		assert.equal(
-			Initial.createObservable(reopened, 'reopened').get().element.textContent,
-			'reopened:after-disposal',
-		);
+		assert.equal(Initial.createObservable(reopened, 'reopened').get().element.textContent, 'reopened:after-disposal');
 	} finally {
 		dom.window.close();
 	}
@@ -117,10 +103,7 @@ test('DomWidget identities distinguish classes with the same name in different m
 			public readonly element = dom.window.document.createElement('section');
 		};
 		Replacement.registerWidgetHotReplacement('second.ts#SameName');
-		assert.deepEqual(
-			{ firstDisposed: first.isDisposed, secondDisposed: second.isDisposed },
-			{ firstDisposed: false, secondDisposed: true },
-		);
+		assert.deepEqual({ firstDisposed: first.isDisposed, secondDisposed: second.isDisposed }, { firstDisposed: false, secondDisposed: true });
 	} finally {
 		dom.window.close();
 	}

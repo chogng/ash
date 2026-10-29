@@ -25,8 +25,7 @@ const { ChatInputEditor } = await import('../../browser/widget/input/chatInputEd
 await import('../../browser/chat.shared.contribution.js');
 const { ChatInputConfiguration } = await import('../../common/constants.js');
 const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
-const { createChatCommandCompletionProvider, createChatSkillCompletionProvider } =
-	await import('../../browser/widget/input/editor/chatInputCompletions.js');
+const { createChatCommandCompletionProvider, createChatSkillCompletionProvider } = await import('../../browser/widget/input/editor/chatInputCompletions.js');
 const { DesktopSlashCommands, SlashCommandCatalog } = await import('../../common/slashCommands.js');
 const { SkillSelectorCatalog } = await import('../../common/skillSelectors.js');
 const { Position } = await import('../../../../../editor/common/core/position.js');
@@ -40,25 +39,20 @@ const { TextModel } = await import('../../../../../editor/common/model/textModel
 const { ICodeEditorService } = await import('../../../../../editor/browser/services/codeEditorService.js');
 const { ICommandService } = await import('../../../../../platform/commands/common/commands.js');
 const { Selection } = await import('../../../../../editor/common/core/selection.js');
-const { ChatDynamicVariableModel, dynamicVariableDecorationType } =
-	await import('../../browser/attachments/chatDynamicVariables.js');
+const { ChatDynamicVariableModel, dynamicVariableDecorationType } = await import('../../browser/attachments/chatDynamicVariables.js');
 const { ChatWidgetPasteTarget } = await import('../../browser/attachments/chatWidgetPasteTarget.js');
-const { ChatPasteProvidersFeature, CHAT_ATTACHMENT_MIME_TYPE, CopyTextProvider } =
-	await import('../../browser/widget/input/editor/chatPasteProviders.js');
+const { ChatPasteProvidersFeature, CHAT_ATTACHMENT_MIME_TYPE, CopyTextProvider } = await import('../../browser/widget/input/editor/chatPasteProviders.js');
 const { CodeEditorWidget } = await import('../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js');
 const { ILanguageFeaturesService } = await import('../../../../../editor/common/services/languageFeatures.js');
-const { CopyPasteController } =
-	await import('../../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js');
+const { CopyPasteController } = await import('../../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js');
 const { SelectAllCommand } = await import('../../../../../editor/browser/editorExtensions.js');
 const { URI } = await import('../../../../../base/common/uri.js');
 const { IEditorService } = await import('../../../../services/editor/common/editorService.js');
 const { emptyEditorServiceState } = await import('../../../../test/common/testEditorService.js');
 const { IResourceIconRenderer } = await import('../../../../browser/labels.js');
-const { IChatSessionNavigationService } =
-	await import('../../../../services/chat/common/chatSessionNavigationService.js');
+const { IChatSessionNavigationService } = await import('../../../../services/chat/common/chatSessionNavigationService.js');
 const { Schemas } = await import('../../../../../base/common/network.js');
-const { ChatReferenceAttachmentWidgetContribution } =
-	await import('../../browser/attachments/chatReferenceAttachmentWidget.contribution.js');
+const { ChatReferenceAttachmentWidgetContribution } = await import('../../browser/attachments/chatReferenceAttachmentWidget.contribution.js');
 const { noFileIconTheme } = await import('../../../../../platform/theme/common/themeService.js');
 const { Emitter, Event: AshEvent } = await import('../../../../../base/common/event.js');
 const { ModifierKeyEmitter } = await import('../../../../../base/browser/dom.js');
@@ -104,9 +98,7 @@ for (const method of ['copy', 'cut'] as const) {
 		assert.equal(target.references.variables.length, 0);
 		const document = target.editor.element.ownerDocument;
 		document.querySelector<HTMLButtonElement>('.stanza-editor-post-edit-selector button')!.click();
-		const option = [...document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(
-			option => option.textContent === 'Pasted Code Attachment',
-		);
+		const option = [...document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(option => option.textContent === 'Pasted Code Attachment');
 		assert.ok(option);
 		option.click();
 		await waitFor(() => target.references.variables.length === 1);
@@ -401,16 +393,12 @@ test('Chat paste options retain their snapshot session until switching and dismi
 	const document = target.editor.element.ownerDocument;
 	const choose = async (label: string): Promise<void> => {
 		document.querySelector<HTMLButtonElement>('.stanza-editor-post-edit-selector button')!.click();
-		const option = [...document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(
-			option => option.textContent === label,
-		);
+		const option = [...document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(option => option.textContent === label);
 		assert.ok(option);
 		option.click();
 	};
 	await choose('Insert Plain Text');
-	await waitFor(
-		() => target.references.variables.length === 0 && !!document.querySelector('.stanza-editor-post-edit-selector'),
-	);
+	await waitFor(() => target.references.variables.length === 0 && !!document.querySelector('.stanza-editor-post-edit-selector'));
 	assert.equal(target.editor.value, 'file.ts');
 	await choose('Insert Prompt & Attachments');
 	await waitFor(() => target.references.variables.length === 1);
@@ -479,11 +467,7 @@ class SnapshotClipboard {
 	}
 }
 
-function dispatchSnapshotClipboard(
-	editor: Pick<InstanceType<typeof ChatInputEditor>, 'codeEditor' | 'focus'>,
-	type: 'copy' | 'cut' | 'paste',
-	clipboard: SnapshotClipboard,
-): void {
+function dispatchSnapshotClipboard(editor: Pick<InstanceType<typeof ChatInputEditor>, 'codeEditor' | 'focus'>, type: 'copy' | 'cut' | 'paste', clipboard: SnapshotClipboard): void {
 	editor.focus();
 	const node = editor.codeEditor.controller.editContext.domNode.domNode;
 	const targetWindow = node.ownerDocument.defaultView!;
@@ -539,24 +523,20 @@ test('Registered session references keep their snapshot through source activatio
 		}),
 	);
 	editor.setSelection({ anchor: reference.reference!.start, active: reference.reference!.start });
-	editor.element
-		.querySelector('.stanza-editor-input')!
-		.dispatchEvent(
-			new browserEnvironment.window.KeyboardEvent('keydown', {
-				key: 'Enter',
-				altKey: true,
-				bubbles: true,
-				cancelable: true,
-			}),
-		);
+	editor.element.querySelector('.stanza-editor-input')!.dispatchEvent(
+		new browserEnvironment.window.KeyboardEvent('keydown', {
+			key: 'Enter',
+			altKey: true,
+			bubbles: true,
+			cancelable: true,
+		}),
+	);
 	await Promise.resolve();
 	assert.deepEqual(opened, [['previous', 'thread']]);
 	assert.equal(reads, 0);
 	assert.equal(submits, 0);
 	const source = editor.element.querySelector<HTMLButtonElement>('.ash-chat-reference-attachment-source')!;
-	source.dispatchEvent(
-		new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }),
-	);
+	source.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
 	assert.equal(references.variables.length, 0);
 	assert.equal(editor.element.querySelector('.ash-chat-reference-attachment'), null);
 	editor.getModel().undo();
@@ -624,10 +604,7 @@ suite('Native attachment controls', () => {
 	suiteTeardown(() => FontMeasurements.clearAllFontInfos());
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	function createControlComposer(
-		resources: DisposableStore,
-		openEditor?: import('../../../../services/editor/common/editorService.js').IEditorService['openEditor'],
-	) {
+	function createControlComposer(resources: DisposableStore, openEditor?: import('../../../../services/editor/common/editorService.js').IEditorService['openEditor']) {
 		const container = browserEnvironment.window.document.createElement('main');
 		browserEnvironment.window.document.body.append(container);
 		resources.add(toDisposable(() => container.remove()));
@@ -665,9 +642,7 @@ suite('Native attachment controls', () => {
 		assert.equal(buttons[0]!.disabled, true);
 		input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
 		assert.equal(input.ownerDocument.activeElement, buttons[1]);
-		buttons[1]!.dispatchEvent(
-			new window.KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }),
-		);
+		buttons[1]!.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
 		assert.equal(references.variables.length, 0);
 		editor.getModel().undo();
 		assert.equal(references.variables[0]!.resolve, image.resolve);
@@ -676,10 +651,7 @@ suite('Native attachment controls', () => {
 		await waitFor(() => restored.hasAttribute('src'));
 		Object.defineProperty(restored, 'naturalWidth', { value: 1 });
 		restored.dispatchEvent(new window.Event('load'));
-		assert.equal(
-			editor.element.querySelector<HTMLButtonElement>('.ash-chat-image-reference-control button')!.disabled,
-			false,
-		);
+		assert.equal(editor.element.querySelector<HTMLButtonElement>('.ash-chat-image-reference-control button')!.disabled, false);
 		assert.equal(buttons[0]!.isConnected, false);
 		assert.equal(buttons[0]!.querySelector('img')!.getAttribute('src'), null);
 		assert.equal((await references.variables[0]!.resolve()).content, 'data:image/png;base64,Y2FwdHVyZWQ=');
@@ -701,8 +673,7 @@ suite('Native attachment controls', () => {
 				id: 'second',
 				kind,
 				name: 'Saved source',
-				resource:
-					kind === 'file' ? URI.file('/workspace/second.ts') : URI.parse('private://terminal?id=original'),
+				resource: kind === 'file' ? URI.file('/workspace/second.ts') : URI.parse('private://terminal?id=original'),
 				resolve: async () => ({ name: 'Saved source', content: 'Second snapshot' }),
 			});
 			editor.setSelection({ anchor: first.reference!.start, active: first.reference!.start });
@@ -821,8 +792,7 @@ suite('Native attachment controls', () => {
 				editor
 					.getModel()
 					.getAllDecorations()
-					.find(decoration => decoration.options.description === 'chat-context-reference')?.options
-					.hoverMessage as { value: string } | undefined;
+					.find(decoration => decoration.options.description === 'chat-context-reference')?.options.hoverMessage as { value: string } | undefined;
 			await waitFor(() => message()?.value.includes('Captured line 12') === true);
 			assert.doesNotMatch(message()!.value, /Captured line 13|repo:opaque|revision:opaque/u);
 			const source = editor.element.querySelector<HTMLButtonElement>('.ash-chat-attachment-source')!;
@@ -962,9 +932,7 @@ test('Deleting a focused session control leaves the reference at the text caret 
 	editor.setSelection({ anchor: file.reference!.start, active: file.reference!.start });
 	const source = editor.element.querySelector<HTMLButtonElement>('.ash-chat-reference-attachment-source')!;
 	source.focus();
-	source.dispatchEvent(
-		new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }),
-	);
+	source.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
 	assert.deepEqual(
 		references.variables.map(reference => reference.name),
 		['first.ts'],
@@ -1010,11 +978,7 @@ test('References constrain mouse, keyboard and API selections to whole model and
 	assert.deepEqual(editor.getSelection(), { anchor: end, active: end });
 	const view = native._getViewModel()!;
 	assert.ok(view.getPrimaryCursorState().viewState.selection.isEmpty());
-	assert.equal(
-		view.getPrimaryCursorState().viewState.position.column,
-		view.coordinatesConverter.convertModelPositionToViewPosition(model.getPositionAt(end), PositionAffinity.Right)
-			.column,
-	);
+	assert.equal(view.getPrimaryCursorState().viewState.position.column, view.coordinatesConverter.convertModelPositionToViewPosition(model.getPositionAt(end), PositionAffinity.Right).column);
 	move(start, 'api');
 	move(start + 1, 'keyboard');
 	assert.deepEqual(editor.getSelection(), { anchor: end, active: end });
@@ -1075,16 +1039,10 @@ test('Reference icons borrow the file theme, refresh with it and leave non-file 
 	assert.equal(icons().length, 4);
 	assert.equal(icons().filter(icon => icon.classList.contains('placeholder')).length, 3);
 	assert.ok(icons().every(icon => icon.getAttribute('aria-hidden') === 'true' && !icon.querySelector('button')));
-	assert.equal(
-		editor.element.querySelector<HTMLElement>('[data-file-icon]')?.dataset.fileIcon,
-		'/workspace/settings.json:first',
-	);
+	assert.equal(editor.element.querySelector<HTMLElement>('[data-file-icon]')?.dataset.fileIcon, '/workspace/settings.json:first');
 	version = 'second';
 	changed.fire();
-	assert.equal(
-		editor.element.querySelector<HTMLElement>('[data-file-icon]')?.dataset.fileIcon,
-		'/workspace/settings.json:second',
-	);
+	assert.equal(editor.element.querySelector<HTMLElement>('[data-file-icon]')?.dataset.fileIcon, '/workspace/settings.json:second');
 	assert.equal(editor.value, 'file output debug anonymous ');
 	references.removeReference('file');
 	assert.equal(icons().length, 3);
@@ -1129,8 +1087,7 @@ test('Reference previews shorten the shared snapshot without exposing output ide
 		editor
 			.getModel()
 			.getAllDecorations()
-			.find(decoration => decoration.options.description === 'chat-context-reference')?.options.hoverMessage as
-			{ value: string } | undefined;
+			.find(decoration => decoration.options.description === 'chat-context-reference')?.options.hoverMessage as { value: string } | undefined;
 	await waitFor(() => hover()?.value.includes('Captured line 12') === true);
 	assert.doesNotMatch(hover()!.value, /internal-id|output:\/|Captured line 13/u);
 	assert.match(hover()!.value.replaceAll('&nbsp;', ' '), /Preview shortened/u);
@@ -1165,11 +1122,7 @@ test('Late reference previews cannot restore removed references or decorate anot
 	});
 	references.addReference({ id: 'old', kind: 'codeSelection', name: 'old.ts (1)', resolve: () => pending });
 	editor.setSelection({ anchor: 0, active: 0 });
-	editor.element
-		.querySelector('.stanza-editor-input')!
-		.dispatchEvent(
-			new dom.window.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true, cancelable: true }),
-		);
+	editor.element.querySelector('.stanza-editor-input')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true, cancelable: true }));
 	references.removeReference('old');
 	references.addReference({
 		id: 'new',
@@ -1233,16 +1186,14 @@ test('Opening saved references isolates same-name snapshots and reuses the same 
 	const open = async (index: number, count: number): Promise<void> => {
 		const offset = references.variables[index]!.reference!.start;
 		editor.setSelection({ anchor: offset, active: offset });
-		editor.element
-			.querySelector('.stanza-editor-input')!
-			.dispatchEvent(
-				new dom.window.KeyboardEvent('keydown', {
-					key: 'Enter',
-					altKey: true,
-					bubbles: true,
-					cancelable: true,
-				}),
-			);
+		editor.element.querySelector('.stanza-editor-input')!.dispatchEvent(
+			new dom.window.KeyboardEvent('keydown', {
+				key: 'Enter',
+				altKey: true,
+				bubbles: true,
+				cancelable: true,
+			}),
+		);
 		await waitFor(() => opened.length === count);
 	};
 	await open(0, 1);
@@ -1254,15 +1205,7 @@ test('Opening saved references isolates same-name snapshots and reuses the same 
 	);
 	assert.notEqual(opened[0]!.resource.toString(), opened[1]!.resource.toString());
 	assert.equal(opened[0]!.resource.toString(), opened[2]!.resource.toString());
-	assert.ok(
-		opened.every(
-			input =>
-				input.readOnly &&
-				input.resource.scheme === 'chat-context-snapshot' &&
-				input.contentType === 'text/plain' &&
-				!input.showBreadcrumbs,
-		),
-	);
+	assert.ok(opened.every(input => input.readOnly && input.resource.scheme === 'chat-context-snapshot' && input.contentType === 'text/plain' && !input.showBreadcrumbs));
 	assert.equal(references.variables.length, 2);
 });
 
@@ -1302,9 +1245,7 @@ test('Inline code references track edits, atomic deletion, undo and redo in the 
 	editor.insertText('First: ');
 	assert.deepEqual(references.variables[0]?.reference, { start: 15, end: 28 });
 	editor.setSelection({ anchor: 28, active: 28 });
-	editor.element.dispatchEvent(
-		new dom.window.KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }),
-	);
+	editor.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }));
 	assert.equal(editor.value, 'First: Explain  please');
 	assert.equal(references.variables.length, 0);
 	assert.equal(attachmentModel.size, 0);
@@ -1536,8 +1477,7 @@ test('Chat input completes slash commands before submitting', async () => {
 	input.dispatchEvent(beforeInputEvent(dom.window, '/'));
 	assert.equal(editor.value, '/');
 	await waitFor(() => completionLabels(editor.element).includes('/config'));
-	for (const command of ['/new', '/history', '/config'])
-		assert.ok(completionLabels(editor.element).includes(command));
+	for (const command of ['/new', '/history', '/config']) assert.ok(completionLabels(editor.element).includes(command));
 	assert.equal(editor.element.querySelector('.stanza-editor-line-number'), null);
 
 	input.dispatchEvent(beforeInputEvent(dom.window, 'n'));
@@ -1583,9 +1523,7 @@ test('Chat input shows a missing-character match without choosing it', async () 
 	assert.deepEqual(completionLabels(editor.element), ['/config']);
 	assert.equal(editor.element.querySelector('.stanza-editor-completion-option.focused'), null);
 	assert.deepEqual(
-		[...editor.element.querySelectorAll('.stanza-editor-completion-label strong')].map(
-			element => element.textContent,
-		),
+		[...editor.element.querySelectorAll('.stanza-editor-completion-label strong')].map(element => element.textContent),
 		['c', 'o', 'f', 'i', 'g'],
 	);
 	assert.equal(submissions, 0);
@@ -1593,11 +1531,7 @@ test('Chat input shows a missing-character match without choosing it', async () 
 	const navigate = keyboardEvent(dom.window, 'ArrowDown');
 	input.dispatchEvent(navigate);
 	assert.equal(navigate.defaultPrevented, true);
-	assert.equal(
-		editor.element.querySelector('.stanza-editor-completion-option.focused .stanza-editor-completion-label')
-			?.textContent,
-		'/config',
-	);
+	assert.equal(editor.element.querySelector('.stanza-editor-completion-option.focused .stanza-editor-completion-label')?.textContent, '/config');
 	const accept = keyboardEvent(dom.window, 'Enter');
 	input.dispatchEvent(accept);
 	assert.equal(accept.defaultPrevented, true);
@@ -1626,9 +1560,7 @@ test('Chat input emphasizes a description-only command match', async () => {
 	assert.deepEqual(completionLabels(editor.element), ['/config']);
 	assert.equal(editor.element.querySelector('.stanza-editor-completion-option.focused'), null);
 	assert.deepEqual(
-		[...editor.element.querySelectorAll('.stanza-editor-completion-detail strong')].map(
-			element => element.textContent,
-		),
+		[...editor.element.querySelectorAll('.stanza-editor-completion-detail strong')].map(element => element.textContent),
 		[...'settings'],
 	);
 	dom.window.close();
@@ -1696,11 +1628,7 @@ test('Chat command completion replaces the whole command and preserves arguments
 	}
 	await services.get(ICommandService).executeCommand('editor.action.triggerSuggest');
 	await waitFor(() => completionLabels(editor.element)[0] === '/history');
-	assert.equal(
-		editor.element.querySelector('.stanza-editor-completion-option.focused .stanza-editor-completion-label')
-			?.textContent,
-		'/history',
-	);
+	assert.equal(editor.element.querySelector('.stanza-editor-completion-option.focused .stanza-editor-completion-label')?.textContent, '/history');
 	input.dispatchEvent(keyboardEvent(dom.window, 'Enter'));
 	assert.equal(editor.value, '/history argument');
 });
@@ -1735,16 +1663,10 @@ test('Chat input starts with two lines and grows and shrinks with content', asyn
 });
 
 function completionLabels(root: ParentNode): string[] {
-	return [...root.querySelectorAll<HTMLElement>('.stanza-editor-completion-label')].map(
-		element => element.textContent ?? '',
-	);
+	return [...root.querySelectorAll<HTMLElement>('.stanza-editor-completion-label')].map(element => element.textContent ?? '');
 }
 
-function beforeInputEvent(
-	targetWindow: typeof browserEnvironment.window,
-	data: string | null,
-	inputType = 'insertText',
-): InputEvent {
+function beforeInputEvent(targetWindow: typeof browserEnvironment.window, data: string | null, inputType = 'insertText'): InputEvent {
 	return new targetWindow.InputEvent('beforeinput', {
 		bubbles: true,
 		cancelable: true,

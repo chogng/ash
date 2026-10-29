@@ -47,10 +47,7 @@ export function hitTestDesignShapes(
 				continue;
 			}
 		}
-		const inside =
-			shape.kind === 'ellipse'
-				? (x / (shape.width / 2)) ** 2 + (y / (shape.height / 2)) ** 2 <= 1
-				: Math.abs(x) <= shape.width / 2 && Math.abs(y) <= shape.height / 2;
+		const inside = shape.kind === 'ellipse' ? (x / (shape.width / 2)) ** 2 + (y / (shape.height / 2)) ** 2 <= 1 : Math.abs(x) <= shape.width / 2 && Math.abs(y) <= shape.height / 2;
 		if (shape.kind === 'frame') {
 			if (inside && !deep && (shape.instance || shape.component?.kind === 'main')) {
 				return shape;
@@ -64,12 +61,7 @@ export function hitTestDesignShapes(
 		}
 		if (shape.kind === 'group' && deep) {
 			const scale = shape.width / shape.contentWidth;
-			const child = hitTestDesignShapes(
-				shape.children,
-				{ x: local.x / scale, y: local.y / scale },
-				true,
-				vectorContours,
-			);
+			const child = hitTestDesignShapes(shape.children, { x: local.x / scale, y: local.y / scale }, true, vectorContours);
 			if (child) {
 				return child;
 			}
@@ -92,13 +84,7 @@ interface ShapeEntry {
 }
 
 export function getDesignShapeEntries(shapes: readonly DesignShape[]): readonly ShapeEntry[] {
-	const visit = (
-		shapes: readonly DesignShape[],
-		parent?: Container,
-		placedParent?: Container,
-		ancestors: readonly string[] = [],
-		scale = 1,
-	): ShapeEntry[] =>
+	const visit = (shapes: readonly DesignShape[], parent?: Container, placedParent?: Container, ancestors: readonly string[] = [], scale = 1): ShapeEntry[] =>
 		shapes.flatMap(shape => {
 			let world = shape;
 			if (placedParent) {
@@ -107,18 +93,8 @@ export function getDesignShapeEntries(shapes: readonly DesignShape[]): readonly 
 					const dx = (x + shape.width / 2) * scale - placedParent.width / 2;
 					const dy = (y + shape.height / 2) * scale - placedParent.height / 2;
 					return {
-						x:
-							placedParent.x +
-							placedParent.width / 2 +
-							dx * Math.cos(angle) -
-							dy * Math.sin(angle) -
-							(shape.width * scale) / 2,
-						y:
-							placedParent.y +
-							placedParent.height / 2 +
-							dx * Math.sin(angle) +
-							dy * Math.cos(angle) -
-							(shape.height * scale) / 2,
+						x: placedParent.x + placedParent.width / 2 + dx * Math.cos(angle) - dy * Math.sin(angle) - (shape.width * scale) / 2,
+						y: placedParent.y + placedParent.height / 2 + dx * Math.sin(angle) + dy * Math.cos(angle) - (shape.height * scale) / 2,
 					};
 				};
 				world = {
@@ -146,13 +122,7 @@ export function getDesignShapeEntries(shapes: readonly DesignShape[]): readonly 
 			return [
 				entry,
 				...(shape.kind === 'frame' || shape.kind === 'group'
-					? visit(
-							shape.children,
-							shape,
-							world as Container,
-							[...ancestors, shape.id],
-							shape.kind === 'group' ? world.width / shape.contentWidth : scale,
-						)
+					? visit(shape.children, shape, world as Container, [...ancestors, shape.id], shape.kind === 'group' ? world.width / shape.contentWidth : scale)
 					: []),
 			];
 		});
@@ -224,12 +194,8 @@ function hitTestPath(shape: Extract<DesignShape, { kind: 'path' }>, point: Desig
 					dx = b.x - a.x,
 					dy = b.y - a.y,
 					length = dx * dx + dy * dy;
-				const t =
-					length === 0 ? 0 : Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / length));
-				if (
-					Math.hypot(point.x - a.x - t * dx, point.y - a.y - t * dy) <=
-					(shape.widthPoints?.length ? 0 : layer.width / 2) + 3
-				) {
+				const t = length === 0 ? 0 : Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / length));
+				if (Math.hypot(point.x - a.x - t * dx, point.y - a.y - t * dy) <= (shape.widthPoints?.length ? 0 : layer.width / 2) + 3) {
 					return true;
 				}
 			}

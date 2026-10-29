@@ -6,9 +6,7 @@ import { TokenizationRegistry } from '../../common/tokenizationRegistry.js';
 test('TokenizationRegistry owns support replacement, delayed creation, and colors', async () => {
 	const registry = new TokenizationRegistry<object>();
 	const changes: Array<{ languages: string[]; colors: boolean }> = [];
-	using listener = registry.onDidChange(event =>
-		changes.push({ languages: event.changedLanguages, colors: event.changedColorMap }),
-	);
+	using listener = registry.onDidChange(event => changes.push({ languages: event.changedLanguages, colors: event.changedColorMap }));
 	const first = {};
 	const second = {};
 	using firstRegistration = registry.register('stanza', first);

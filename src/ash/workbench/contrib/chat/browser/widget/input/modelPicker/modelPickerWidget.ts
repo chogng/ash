@@ -1,21 +1,11 @@
-import {
-	defaultButtonStyles,
-	defaultMenuStyles,
-	defaultToggleStyles,
-	defaultKeybindingLabelStyles,
-} from '../../../../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultMenuStyles, defaultToggleStyles, defaultKeybindingLabelStyles } from '../../../../../../../platform/theme/browser/defaultStyles.js';
 import './media/modelPicker.css';
 import { Button } from '../../../../../../../base/browser/ui/button/button.js';
 import { Menu } from '../../../../../../../base/browser/ui/menu/menu.js';
 import { Switch } from '../../../../../../../base/browser/ui/toggle/toggle.js';
 import { addDisposableListener, h, stopEvent } from '../../../../../../../base/browser/dom.js';
 import { EventType, Gesture } from '../../../../../../../base/browser/touch.js';
-import {
-	Disposable,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-} from '../../../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../../nls.js';
 import {
 	AccessibleContentProvider,
@@ -74,9 +64,7 @@ export class ModelPickerWidget extends Disposable {
 		options.classList.add('ash-chat-input-configuration-action');
 		name.setAttribute('aria-haspopup', 'dialog');
 		options.setAttribute('aria-haspopup', 'menu');
-		this.configuration = this._register(
-			this.instantiationService.createInstance(ModelPickerConfiguration, this.delegate, options),
-		);
+		this.configuration = this._register(this.instantiationService.createInstance(ModelPickerConfiguration, this.delegate, options));
 		this.bindTrigger(name, () => {
 			name.focus();
 			if (this.visible) {
@@ -127,11 +115,7 @@ export class ModelPickerWidget extends Disposable {
 		);
 		this._register(
 			addDisposableListener(trigger, 'keydown', event => {
-				if (
-					event.isComposing ||
-					(event.key !== 'Enter' && event.key !== ' ') ||
-					trigger.getAttribute('aria-disabled') === 'true'
-				) {
+				if (event.isComposing || (event.key !== 'Enter' && event.key !== ' ') || trigger.getAttribute('aria-disabled') === 'true') {
 					return;
 				}
 				stopEvent(event);
@@ -167,15 +151,10 @@ export class ModelPickerWidget extends Disposable {
 
 	private updateButtons(): void {
 		const selected = this.delegate.getSelectedModel();
-		const model = this.delegate
-			.getModels()
-			.find(entry => entry.model.provider === selected?.provider && entry.model.model === selected.model);
+		const model = this.delegate.getModels().find(entry => entry.model.provider === selected?.provider && entry.model.model === selected.model);
 		const label = this.delegate.isAutomaticModel()
 			? localize('chat.modelPicker.auto', 'Auto')
-			: (model?.displayName ??
-				(selected
-					? `${selected.provider}/${selected.model}`
-					: localize('chat.modelPicker.selectModel', 'Select model')));
+			: (model?.displayName ?? (selected ? `${selected.provider}/${selected.model}` : localize('chat.modelPicker.selectModel', 'Select model')));
 		this.nameButton!.querySelector('.ash-chat-input-picker-label')!.textContent = label;
 		this.nameButton!.setAttribute('aria-label', label);
 		this.nameHover.clear();
@@ -185,10 +164,7 @@ export class ModelPickerWidget extends Disposable {
 			groupId: 'actions',
 		});
 		this.configuration!.renderButton();
-		if (
-			this.configurationButton!.hidden &&
-			this.configurationButton!.ownerDocument.activeElement === this.configurationButton
-		) {
+		if (this.configurationButton!.hidden && this.configurationButton!.ownerDocument.activeElement === this.configurationButton) {
 			this.focus();
 		}
 		this.setEnabled(this.enabled);
@@ -223,9 +199,7 @@ export class ModelPickerWidget extends Disposable {
 			const message = h(ownerDocument, 'div');
 			message.className = 'ash-chat-model-picker-empty-message';
 			message.setAttribute('role', 'status');
-			message.textContent = this.delegate.getModelsError()
-				? localize('chat.modelPicker.loadFailed', 'Could not load models')
-				: localize('chat.modelPicker.noModels', 'No models available');
+			message.textContent = this.delegate.getModelsError() ? localize('chat.modelPicker.loadFailed', 'Could not load models') : localize('chat.modelPicker.noModels', 'No models available');
 			const guidance = h(ownerDocument, 'div');
 			guidance.className = 'ash-chat-model-picker-empty-guidance';
 			guidance.textContent = localize('chat.modelPicker.noModelsPlaceholder', 'Set up models in Settings');
@@ -311,10 +285,7 @@ export class ModelPickerWidget extends Disposable {
 								if (event.isComposing) return;
 								if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
 									hasNavigated = true;
-								} else if (
-									event.key === 'ArrowRight' &&
-									!detailsMenu.domNode.contains(event.target as Node)
-								) {
+								} else if (event.key === 'ArrowRight' && !detailsMenu.domNode.contains(event.target as Node)) {
 									stopEvent(event);
 									hasNavigated = true;
 									this.actionWidgetService.focus();
@@ -397,11 +368,8 @@ export class ModelPickerWidget extends Disposable {
 			const automatic = this.delegate.isAutomaticModel();
 			const selected = this.delegate.getSelectedModel();
 			const modeChanged = automatic !== renderedAutomatic;
-			const modelsChanged =
-				renderedModels.length !== models.length ||
-				models.some((entry, index) => renderedModels[index] !== entry);
-			const selectionChanged =
-				renderedSelected?.provider !== selected?.provider || renderedSelected?.model !== selected?.model;
+			const modelsChanged = renderedModels.length !== models.length || models.some((entry, index) => renderedModels[index] !== entry);
+			const selectionChanged = renderedSelected?.provider !== selected?.provider || renderedSelected?.model !== selected?.model;
 			modeSwitch.checked = automatic;
 			footer.hidden = automatic;
 			if (modeChanged) {
@@ -409,14 +377,7 @@ export class ModelPickerWidget extends Disposable {
 				active = undefined;
 				detailsMenu.hide();
 			}
-			if (
-				active &&
-				!models.some(
-					entry =>
-						entry.model.provider === active!.entry.model.provider &&
-						entry.model.model === active!.entry.model.model,
-				)
-			) {
+			if (active && !models.some(entry => entry.model.provider === active!.entry.model.provider && entry.model.model === active!.entry.model.model)) {
 				const hadDetailsFocus = detailsMenu.domNode.contains(ownerDocument.activeElement);
 				active = undefined;
 				detailsMenu.hide();
@@ -510,9 +471,7 @@ export class ModelPickerWidget extends Disposable {
 		const descriptions = new WeakMap<HTMLElement, string>();
 		session.add(
 			addDisposableListener(content, 'focusin', event => {
-				const hint = this.accessibleViewService.getOpenAriaHint(
-					AccessibilityVerbositySettingId.ChatModelConfiguration,
-				);
+				const hint = this.accessibleViewService.getOpenAriaHint(AccessibilityVerbositySettingId.ChatModelConfiguration);
 				if (event.target instanceof HTMLElement) {
 					if (!descriptions.has(event.target)) {
 						descriptions.set(event.target, event.target.getAttribute('aria-description') ?? '');

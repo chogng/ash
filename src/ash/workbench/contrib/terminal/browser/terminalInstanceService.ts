@@ -28,26 +28,20 @@ export class TerminalInstanceService extends Disposable {
 		super();
 		this.backend = this._register(instantiationService.createInstance(AgentHostTerminalService));
 	}
-	async createInstance(
-		options: ITerminalCreateOptions,
-		callbacks: InstanceCreationCallbacks,
-	): Promise<TerminalInstance> {
+	async createInstance(options: ITerminalCreateOptions, callbacks: InstanceCreationCallbacks): Promise<TerminalInstance> {
 		if (this.isDisposed) {
 			throw new CancellationError();
 		}
 		if (options.config) {
 			const instanceNumber = this.nextInstanceId++;
-			const workspaceFolder =
-				options.dirId === undefined ? undefined : this.resolveWorkspaceFolder(options.dirId);
+			const workspaceFolder = options.dirId === undefined ? undefined : this.resolveWorkspaceFolder(options.dirId);
 			const name = options.title ?? options.config.name ?? '';
 			const instance = this.instantiationService.createInstance(
 				TerminalInstance,
 				`terminal-instance-${instanceNumber}`,
 				instanceNumber,
 				workspaceFolder?.id ?? '',
-				workspaceFolder && this.workspaceContext.getWorkspace().folders.length > 1
-					? workspaceFolder.id
-					: undefined,
+				workspaceFolder && this.workspaceContext.getWorkspace().folders.length > 1 ? workspaceFolder.id : undefined,
 				undefined,
 				{ pid: -1, cwd: '' },
 				name,
@@ -98,10 +92,7 @@ export class TerminalInstanceService extends Disposable {
 						options.execution.type === 'process'
 							? {
 									...options.execution,
-									args:
-										typeof options.execution.args === 'string'
-											? options.execution.args
-											: Object.freeze([...options.execution.args]),
+									args: typeof options.execution.args === 'string' ? options.execution.args : Object.freeze([...options.execution.args]),
 								}
 							: { ...options.execution },
 					);
@@ -110,26 +101,15 @@ export class TerminalInstanceService extends Disposable {
 				? Object.freeze({
 						...options.profile,
 						path: Object.freeze([...options.profile.path]),
-						args:
-							typeof options.profile.args === 'string'
-								? options.profile.args
-								: Object.freeze([...options.profile.args]),
+						args: typeof options.profile.args === 'string' ? options.profile.args : Object.freeze([...options.profile.args]),
 					})
 				: Object.freeze({ ...options.profile });
 		const launch = Object.freeze({
 			type: options.type,
-			executable: Array.isArray(options.resolvedShellLaunchConfig?.executable)
-				? Object.freeze([...options.resolvedShellLaunchConfig.executable])
-				: options.resolvedShellLaunchConfig?.executable,
-			args: Array.isArray(options.resolvedShellLaunchConfig?.args)
-				? Object.freeze([...options.resolvedShellLaunchConfig.args])
-				: options.resolvedShellLaunchConfig?.args,
-			environmentVariableCollections:
-				options.environmentVariableCollections ??
-				options.attachPersistentProcess?.state.environmentVariableCollections,
-			environmentVariableCollectionsPersistable:
-				options.environmentVariableCollectionsPersistable ??
-				options.attachPersistentProcess?.state.environmentVariableCollections !== undefined,
+			executable: Array.isArray(options.resolvedShellLaunchConfig?.executable) ? Object.freeze([...options.resolvedShellLaunchConfig.executable]) : options.resolvedShellLaunchConfig?.executable,
+			args: Array.isArray(options.resolvedShellLaunchConfig?.args) ? Object.freeze([...options.resolvedShellLaunchConfig.args]) : options.resolvedShellLaunchConfig?.args,
+			environmentVariableCollections: options.environmentVariableCollections ?? options.attachPersistentProcess?.state.environmentVariableCollections,
+			environmentVariableCollectionsPersistable: options.environmentVariableCollectionsPersistable ?? options.attachPersistentProcess?.state.environmentVariableCollections !== undefined,
 			...(environment === undefined ? {} : { env: environment }),
 			...(options.strictEnv === undefined ? {} : { strictEnv: options.strictEnv }),
 			...(options.cwd === undefined ? {} : { cwd: options.cwd }),
@@ -145,10 +125,7 @@ export class TerminalInstanceService extends Disposable {
 								? Object.freeze({
 										...intent.profile,
 										path: Object.freeze([...intent.profile.path]),
-										args:
-											typeof intent.profile.args === 'string'
-												? intent.profile.args
-												: Object.freeze([...intent.profile.args]),
+										args: typeof intent.profile.args === 'string' ? intent.profile.args : Object.freeze([...intent.profile.args]),
 									})
 								: Object.freeze({ ...intent.profile }),
 						env: intent.env === undefined ? undefined : Object.freeze({ ...intent.env }),
@@ -199,10 +176,7 @@ export class TerminalInstanceService extends Disposable {
 				undefined,
 				Object.freeze({
 					...launch,
-					profile:
-						profile.type === 'custom'
-							? profile
-							: { type: 'profile' as const, profileId: created.profile.profileId },
+					profile: profile.type === 'custom' ? profile : { type: 'profile' as const, profileId: created.profile.profileId },
 				}),
 				options.initialText,
 				options.waitOnExit,
@@ -222,8 +196,7 @@ export class TerminalInstanceService extends Disposable {
 	private resolveWorkspaceFolder(dirId?: string) {
 		const folders = this.workspaceContext.getWorkspace().folders;
 		if (!dirId && folders.length === 0) return undefined;
-		if (!dirId && folders.length > 1)
-			throw new Error(localize('terminal.selectFolder', 'Select a workspace folder for the terminal.'));
+		if (!dirId && folders.length > 1) throw new Error(localize('terminal.selectFolder', 'Select a workspace folder for the terminal.'));
 		const folder = dirId ? folders.find(folder => folder.id === dirId) : folders[0];
 		if (!folder) throw new Error('TerminalUnavailable: Terminal requires an open workspace folder');
 		return folder;

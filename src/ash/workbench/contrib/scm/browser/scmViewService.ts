@@ -30,8 +30,7 @@ export class SCMViewService extends Disposable implements ISCMViewService {
 	}
 
 	public selectRepository(id: string | undefined): void {
-		if (id !== undefined && !this.scmService.getRepository(id))
-			throw new Error(`SCM repository '${id}' is not registered`);
+		if (id !== undefined && !this.scmService.getRepository(id)) throw new Error(`SCM repository '${id}' is not registered`);
 		if (id === this.selectedId) return;
 		this.selectedId = id;
 		this.changeEmitter.fire(this.activeRepository);

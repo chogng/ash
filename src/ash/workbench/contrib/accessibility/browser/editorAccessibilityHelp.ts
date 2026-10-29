@@ -52,14 +52,8 @@ export class EditorAccessibilityHelpContribution extends Disposable implements I
 									? localize('accessibility.editorReadOnly', 'You are in a read-only text editor.')
 									: localize('accessibility.editorEditable', 'You are in an editable text editor.'),
 								this.accessibility.isScreenReaderOptimized()
-									? localize(
-											'accessibility.editorScreenReaderOn',
-											'Screen reader optimization is enabled.',
-										)
-									: localize(
-											'accessibility.editorScreenReaderOff',
-											'Screen reader optimization is disabled.',
-										),
+									? localize('accessibility.editorScreenReaderOn', 'Screen reader optimization is enabled.')
+									: localize('accessibility.editorScreenReaderOff', 'Screen reader optimization is disabled.'),
 								localize(
 									'accessibility.editorWindows',
 									'The Command Palette offers New Empty Editor Window, Move or Copy Editor Group into New Window, and Close Window. Zoom commands apply to the current window when Zoom per window is enabled. Closing an editor window returns unsaved editors to the main window. The title bar pin toggles whether the window stays on top.',
@@ -157,22 +151,13 @@ export class EditorAccessibilityHelpContribution extends Disposable implements I
 									'Auto Hide Activity Bar in Settings hides each side bar view switcher at the top or bottom when at most one container at that location has active views. View commands remain available in the Command Palette. If the switcher has focus when it hides, focus moves to the current view.',
 								),
 								editor.getOption(EditorOption.tabFocusMode)
-									? localize(
-											'accessibility.editorTabFocus',
-											'Tab moves focus to the next control. <keybinding:editor.action.toggleTabFocusMode> changes this behavior.',
-										)
-									: localize(
-											'accessibility.editorTabIndent',
-											'Tab inserts indentation. <keybinding:editor.action.toggleTabFocusMode> lets Tab move focus to the next control.',
-										),
+									? localize('accessibility.editorTabFocus', 'Tab moves focus to the next control. <keybinding:editor.action.toggleTabFocusMode> changes this behavior.')
+									: localize('accessibility.editorTabIndent', 'Tab inserts indentation. <keybinding:editor.action.toggleTabFocusMode> lets Tab move focus to the next control.'),
 								localize(
 									'dropOrPaste.accessibilityHelp',
 									'<keybinding:editor.action.pasteAs> lets you choose a paste action. <keybinding:editor.action.pasteAsText> pastes plain text. After pasting or dropping content, <keybinding:editor.changePasteType> or <keybinding:editor.changeDropType> opens the available actions and preferred-action settings. Escape returns to the editor.',
 								),
-								localize(
-									'accessibility.editorMode',
-									'<keybinding:editor.action.toggleScreenReaderAccessibilityMode> toggles screen reader optimization.',
-								),
+								localize('accessibility.editorMode', '<keybinding:editor.action.toggleScreenReaderAccessibilityMode> toggles screen reader optimization.'),
 								localize(
 									'scrollLocking.help',
 									'<keybinding:workbench.action.toggleLockedScrolling> toggles locked scrolling across visible editors, preserving their relative positions. Bind Hold Locked Scrolling Across Editors to temporarily toggle it while a shortcut is held. The Scrolling Locked status bar entry disables it. Releasing the shortcut or leaving the window restores the previous state.',

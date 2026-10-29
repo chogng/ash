@@ -6,10 +6,7 @@ import { promisify } from 'node:util';
 import { ProcessRun } from '../processes.ts';
 import { developmentAshPackagePath } from './runtimeStore.ts';
 import { prepareAppServer } from './appServer.ts';
-import {
-	buildAppServerEnvironment,
-	type AppServerHostPlatform,
-} from '../../src/ash/platform/agentHost/common/appServerEnvironment.ts';
+import { buildAppServerEnvironment, type AppServerHostPlatform } from '../../src/ash/platform/agentHost/common/appServerEnvironment.ts';
 import { decodeWebListenInfo } from '../../.build/protocol/typescript/WebProtocolDecoder.ts';
 import type { WebListenInfo } from '../../.build/protocol/typescript/WebListenInfo.ts';
 import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH } from '../../.build/protocol/typescript/protocol.ts';
@@ -22,13 +19,7 @@ interface WebLaunch {
 	reloadBackend(): Promise<void>;
 }
 
-export async function startWeb(options: {
-	port: number;
-	assets?: string;
-	origin?: string;
-	environment: Readonly<NodeJS.ProcessEnv>;
-	preparedBackend?: boolean;
-}): Promise<WebLaunch> {
+export async function startWeb(options: { port: number; assets?: string; origin?: string; environment: Readonly<NodeJS.ProcessEnv>; preparedBackend?: boolean }): Promise<WebLaunch> {
 	const root = resolve(import.meta.dirname, '../..');
 	// Smoke orchestration prepares once before launching isolated test profiles.
 	// Direct callers retain preparation before selecting their runtime.
@@ -40,15 +31,8 @@ export async function startWeb(options: {
 	// Package metadata describes the bundled binary, not a caller's explicit executable override.
 	if (!source.ASH_APP_SERVER_PATH) {
 		const metadata: unknown = JSON.parse(readFileSync(join(packageRoot, 'ash-package.json'), 'utf8'));
-		if (
-			!isRecord(metadata) ||
-			!isRecord(metadata.protocol) ||
-			metadata.protocol.major !== APP_SERVER_PROTOCOL_MAJOR ||
-			metadata.protocol.schemaHash !== APP_SERVER_SCHEMA_HASH
-		) {
-			throw new Error(
-				`Prepared Web backend protocol does not match this renderer: ${packageRoot}. Run pnpm prepare:backend:web before reusing the backend.`,
-			);
+		if (!isRecord(metadata) || !isRecord(metadata.protocol) || metadata.protocol.major !== APP_SERVER_PROTOCOL_MAJOR || metadata.protocol.schemaHash !== APP_SERVER_SCHEMA_HASH) {
+			throw new Error(`Prepared Web backend protocol does not match this renderer: ${packageRoot}. Run pnpm prepare:backend:web before reusing the backend.`);
 		}
 	}
 	console.info(`[app-server] Launching Web backend ${executable}`);
@@ -73,9 +57,7 @@ export async function startWeb(options: {
 			ASH_HOME: resolve(source.ASH_WEB_APP_SERVER_PROFILE ?? join(root, '.build/desktop/dev/web-profile')),
 			ASH_WORKSPACE_ROOT: resolve(source.ASH_WORKSPACE_ROOT ?? root),
 			ASH_RG_PATH: resolve(source.ASH_RG_PATH ?? join(packageRoot, 'ash-path', `rg${suffix}`)),
-			...(source.ASH_PRODUCT_SERVICES_PATH
-				? { ASH_PRODUCT_SERVICES_PATH: source.ASH_PRODUCT_SERVICES_PATH }
-				: {}),
+			...(source.ASH_PRODUCT_SERVICES_PATH ? { ASH_PRODUCT_SERVICES_PATH: source.ASH_PRODUCT_SERVICES_PATH } : {}),
 		},
 		'web',
 	);
@@ -166,19 +148,15 @@ export async function startWeb(options: {
 				const backend = source.ASH_APP_SERVER_PATH ?? join(selected, 'bin', `ash-app-server${suffix}`);
 				// Keep the Web lease alive: it restores the same listener and browser tokens
 				// when the managed backend adopts the newly published package.
-				await promisify(execFile)(
-					join(selected, 'bin', `ash-app-server-daemon${suffix}`),
-					['ensure-selected'],
-					{
-						env: {
-							...environment,
-							ASH_APP_SERVER_PATH: backend,
-							ASH_RG_PATH: resolve(source.ASH_RG_PATH ?? join(selected, 'ash-path', `rg${suffix}`)),
-						},
-						windowsHide: true,
-						timeout: 30_000,
+				await promisify(execFile)(join(selected, 'bin', `ash-app-server-daemon${suffix}`), ['ensure-selected'], {
+					env: {
+						...environment,
+						ASH_APP_SERVER_PATH: backend,
+						ASH_RG_PATH: resolve(source.ASH_RG_PATH ?? join(selected, 'ash-path', `rg${suffix}`)),
 					},
-				);
+					windowsHide: true,
+					timeout: 30_000,
+				});
 				console.info('[app-server] Web backend selected');
 			},
 		};
@@ -188,11 +166,7 @@ export async function startWeb(options: {
 	}
 }
 
-export function authenticatedWebUrl(
-	info: WebListenInfo,
-	origin = info.endpoint,
-	entryPath = '/browser/workbench/workbench.html',
-): string {
+export function authenticatedWebUrl(info: WebListenInfo, origin = info.endpoint, entryPath = '/browser/workbench/workbench.html'): string {
 	const url = new URL(entryPath, origin);
 	url.hash = new URLSearchParams({ 'ash-endpoint': info.endpoint, 'ash-ticket': info.ticket }).toString();
 	return url.href;

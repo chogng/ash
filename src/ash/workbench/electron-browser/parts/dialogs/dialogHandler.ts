@@ -1,9 +1,4 @@
-import {
-	DialogResult,
-	type DialogRequest,
-	type IDialogHandler,
-	type IDialogOutcome,
-} from '../../../../platform/dialogs/common/dialogs.js';
+import { DialogResult, type DialogRequest, type IDialogHandler, type IDialogOutcome } from '../../../../platform/dialogs/common/dialogs.js';
 import type { INativeHostApi } from '../../../../platform/native/common/nativeHost.js';
 import { BrowserDialogHandler } from '../../../browser/parts/dialogs/dialog.js';
 import { localize } from '../../../../nls.js';
@@ -31,22 +26,14 @@ export class NativeDialogHandler implements IDialogHandler {
 				buttons = [request.primaryButton ?? localize('dialog.ok', 'OK')];
 				break;
 			case 'confirmation':
-				buttons = [
-					request.primaryButton ?? localize('dialog.confirm', 'Confirm'),
-					request.cancelButton ?? localize('dialog.cancel', 'Cancel'),
-				];
+				buttons = [request.primaryButton ?? localize('dialog.confirm', 'Confirm'), request.cancelButton ?? localize('dialog.cancel', 'Cancel')];
 				break;
 			case 'prompt':
-				buttons = [
-					request.primaryButton,
-					request.secondaryButton,
-					request.cancelButton ?? localize('dialog.cancel', 'Cancel'),
-				];
+				buttons = [request.primaryButton, request.secondaryButton, request.cancelButton ?? localize('dialog.cancel', 'Cancel')];
 				break;
 		}
 		const result = await this.host.showMessageBox({
-			type:
-				request.kind === 'message' || request.kind === 'choice' ? (request.severity ?? 'question') : 'question',
+			type: request.kind === 'message' || request.kind === 'choice' ? (request.severity ?? 'question') : 'question',
 			title: request.title,
 			message: request.message,
 			detail: request.detail,
@@ -67,8 +54,7 @@ export class NativeDialogHandler implements IDialogHandler {
 						checkboxChecked: result.checkboxChecked,
 					};
 		}
-		if (request.kind !== 'message' && result.response === buttons.length - 1)
-			return { button: DialogResult.Cancel, checkboxChecked: result.checkboxChecked };
+		if (request.kind !== 'message' && result.response === buttons.length - 1) return { button: DialogResult.Cancel, checkboxChecked: result.checkboxChecked };
 		return {
 			button: result.response === 0 ? DialogResult.Primary : DialogResult.Secondary,
 			checkboxChecked: result.checkboxChecked,

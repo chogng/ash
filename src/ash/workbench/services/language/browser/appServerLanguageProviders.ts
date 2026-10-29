@@ -97,11 +97,7 @@ export class AppServerLanguageProviders extends Disposable {
 					}
 				if (changed) this.queueRefresh();
 			}
-			if (
-				event.method === 'language/serverState' &&
-				event.params.state.type !== 'ready' &&
-				event.params.state.type !== 'idle'
-			) {
+			if (event.method === 'language/serverState' && event.params.state.type !== 'ready' && event.params.state.type !== 'idle') {
 				const folderId = event.params.dirId ?? this.workspace.getWorkspace().folders[0]?.id;
 				let removed = false;
 				for (const [key, value] of this.capabilities) {
@@ -176,30 +172,16 @@ export class AppServerLanguageProviders extends Disposable {
 		const folders = this.workspace.getWorkspace().folders;
 		const languageIds = support.languageIds;
 		const completionLanguages = languageIds.filter(language =>
-			folders.some(
-				folder =>
-					support.supports(folder.id, language) &&
-					this.capabilities.get(`${folder.id}:${language}`)?.features.has('completion'),
-			),
+			folders.some(folder => support.supports(folder.id, language) && this.capabilities.get(`${folder.id}:${language}`)?.features.has('completion')),
 		);
-		const adapter = new AppServerLanguageProvider(
-			this.api,
-			this.workspace,
-			completionLanguages,
-			this.capabilities,
-			this.lifecycle,
-		);
+		const adapter = new AppServerLanguageProvider(this.api, this.workspace, completionLanguages, this.capabilities, this.lifecycle);
 		const registrations = new DisposableStore();
 		// Negotiated features control availability; exact resource guards also protect
 		// retained adapters and completion's language-only provider catalog.
 		const register = <T>(feature: LanguageServerFeatureDto, registry: LanguageFeatureRegistry<T>, provider: T) => {
 			const selector = folders.flatMap(folder =>
 				languageIds
-					.filter(
-						language =>
-							support.supports(folder.id, language) &&
-							this.capabilities.get(`${folder.id}:${language}`)?.features.has(feature),
-					)
+					.filter(language => support.supports(folder.id, language) && this.capabilities.get(`${folder.id}:${language}`)?.features.has(feature))
 					.map(language => ({
 						language,
 						scheme: folder.uri.scheme,
@@ -223,19 +205,13 @@ export class AppServerLanguageProviders extends Disposable {
 		for (const folder of folders) {
 			for (const language of languageIds) {
 				const capabilities = this.capabilities.get(`${folder.id}:${language}`);
-				if (
-					!support.supports(folder.id, language) ||
-					!capabilities?.features.has('onTypeFormatting') ||
-					!capabilities.onType.length
-				)
-					continue;
+				if (!support.supports(folder.id, language) || !capabilities?.features.has('onTypeFormatting') || !capabilities.onType.length) continue;
 				registrations.add(
 					this.languageFeatures.onTypeFormattingEditProvider.register(
 						{ language, scheme: folder.uri.scheme, pattern: { base: folder.uri.fsPath, pattern: '**' } },
 						{
 							autoFormatTriggerCharacters: [...capabilities.onType],
-							provideOnTypeFormattingEdits: (model, position, character, options, token) =>
-								adapter.provideOnTypeFormattingEdits(model, position, character, options, token),
+							provideOnTypeFormattingEdits: (model, position, character, options, token) => adapter.provideOnTypeFormattingEdits(model, position, character, options, token),
 						},
 					),
 				);
@@ -252,18 +228,7 @@ export class AppServerLanguageProviders extends Disposable {
 		register('foldingRanges', this.languageFeatures.foldingRangeProvider, adapter);
 		if (completionLanguages.length) registrations.add(this.languageFeatures.completionProvider.register(adapter));
 		if ([...this.capabilities.values()].some(value => value.features.has('workspaceSymbols'))) {
-			registrations.add(
-				this.languageFeatures.workspaceSymbolProvider.register(
-					'*',
-					new AppServerWorkspaceSymbolProvider(
-						this.api,
-						this.workspace,
-						support,
-						this.capabilities,
-						this.lifecycle,
-					),
-				),
-			);
+			registrations.add(this.languageFeatures.workspaceSymbolProvider.register('*', new AppServerWorkspaceSymbolProvider(this.api, this.workspace, support, this.capabilities, this.lifecycle)));
 		}
 		return registrations;
 	}
@@ -287,27 +252,14 @@ export class AppServerLanguageProviders extends Disposable {
 	}
 
 	private async refresh(generation: number): Promise<void> {
-		const access = await resolveAppServerLanguageDirAccess(
-			this.workspace,
-			this.workspaceTrust,
-			this.options.checkWorkspaceTrust,
-		);
-		if (
-			!this.alive ||
-			generation !== this.refreshGeneration ||
-			this.workspace.getWorkspace().id !== access.workspaceId
-		)
-			return;
+		const access = await resolveAppServerLanguageDirAccess(this.workspace, this.workspaceTrust, this.options.checkWorkspaceTrust);
+		if (!this.alive || generation !== this.refreshGeneration || this.workspace.getWorkspace().id !== access.workspaceId) return;
 		if (access.allowed) {
 			const support = await AppServerLanguageSupport.read(this.api, this.workspace, this.configuration);
 			if (!this.alive || generation !== this.refreshGeneration) return;
 			// Registry changes restart editor feature work, including semantic tokens and hints.
 			// Discovery can reflect an unrelated profile edit; keep the negotiated providers then.
-			if (
-				this.installed?.capabilityGeneration === this.nextCapabilityGeneration &&
-				support.equals(this.installed.support)
-			)
-				return;
+			if (this.installed?.capabilityGeneration === this.nextCapabilityGeneration && support.equals(this.installed.support)) return;
 			this.clearRegistrations();
 			if (support.languageIds.length > 0) this.registrations.value = this.install(support);
 			this.installed = { support, capabilityGeneration: this.nextCapabilityGeneration };
@@ -369,9 +321,7 @@ class AppServerLanguageProvider
 		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageSnapshotDocument(root, request);
 		if (!document) return undefined;
-		const result = await this.requestFeature('hover', document, signal, signal =>
-			this.api.hover({ document, position: dtoPosition(request.position) }, { signal }),
-		);
+		const result = await this.requestFeature('hover', document, signal, signal => this.api.hover({ document, position: dtoPosition(request.position) }, { signal }));
 		if (!result || result.revision !== request.snapshot.version || !result.contents) return undefined;
 		return Object.freeze({
 			...(result.range ? { range: range(result.range) } : {}),
@@ -383,9 +333,7 @@ class AppServerLanguageProvider
 		const root = workspaceRootForResource(this.workspace, request.resource);
 		if (
 			request.context.kind === languages.LanguageCompletionTriggerKind.TriggerCharacter &&
-			!this.capabilities
-				.get(`${root.id}:${request.languageId}`)
-				?.completion.includes(request.context.triggerCharacter)
+			!this.capabilities.get(`${root.id}:${request.languageId}`)?.completion.includes(request.context.triggerCharacter)
 		)
 			return undefined;
 		const document = languageCompletionDocument(root, request);
@@ -401,10 +349,7 @@ class AppServerLanguageProvider
 							: request.context.kind === languages.LanguageCompletionTriggerKind.TriggerCharacter
 								? 'triggerCharacter'
 								: 'incompleteRefresh',
-					triggerCharacter:
-						request.context.kind === languages.LanguageCompletionTriggerKind.TriggerCharacter
-							? request.context.triggerCharacter
-							: null,
+					triggerCharacter: request.context.kind === languages.LanguageCompletionTriggerKind.TriggerCharacter ? request.context.triggerCharacter : null,
 				},
 				{ signal },
 			),
@@ -420,25 +365,17 @@ class AppServerLanguageProvider
 						kind: completionKind(item.kind),
 						range: range(item.range),
 						insertText: item.insertText,
-						...(item.insertTextFormat === 'snippet'
-							? { insertTextFormat: languages.LanguageCompletionInsertTextFormat.Snippet }
-							: {}),
+						...(item.insertTextFormat === 'snippet' ? { insertTextFormat: languages.LanguageCompletionInsertTextFormat.Snippet } : {}),
 						...(item.detail ? { detail: item.detail } : {}),
 						...(item.documentation ? { documentation: item.documentation } : {}),
 						...(item.filterText ? { filterText: item.filterText } : {}),
 						...(item.sortText ? { sortText: item.sortText } : {}),
 						...(item.preselect === null ? {} : { preselect: item.preselect }),
-						...(item.commitCharacters.length === 0
-							? {}
-							: { commitCharacters: Object.freeze(item.commitCharacters) }),
+						...(item.commitCharacters.length === 0 ? {} : { commitCharacters: Object.freeze(item.commitCharacters) }),
 						...(item.additionalTextEdits.length === 0
 							? {}
 							: {
-									additionalTextEdits: Object.freeze(
-										item.additionalTextEdits.map(edit =>
-											Object.freeze({ range: range(edit.range), text: edit.newText }),
-										),
-									),
+									additionalTextEdits: Object.freeze(item.additionalTextEdits.map(edit => Object.freeze({ range: range(edit.range), text: edit.newText }))),
 								}),
 						...(item.command === null
 							? {}
@@ -454,8 +391,7 @@ class AppServerLanguageProvider
 									resolveData: Object.freeze({
 										document,
 										providerData: item.providerData,
-										generation: this.capabilities.get(`${root.id}:${request.languageId}`)
-											?.generation,
+										generation: this.capabilities.get(`${root.id}:${request.languageId}`)?.generation,
 									}),
 								}
 							: {}),
@@ -467,13 +403,7 @@ class AppServerLanguageProvider
 
 	async resolveCompletionItem(request: languages.LanguageCompletionProviderResolveRequest, signal: AbortSignal) {
 		const data = appServerCompletionResolveData(request.item.resolveData);
-		if (
-			data.generation !==
-			this.capabilities.get(
-				`${data.document.dirId ?? this.workspace.getWorkspace().folders[0]?.id}:${data.document.languageId}`,
-			)?.generation
-		)
-			return undefined;
+		if (data.generation !== this.capabilities.get(`${data.document.dirId ?? this.workspace.getWorkspace().folders[0]?.id}:${data.document.languageId}`)?.generation) return undefined;
 		const result = await this.requestFeature('completionResolve', data.document, signal, signal =>
 			this.api.resolveCompletion({ document: data.document, providerData: data.providerData }, { signal }),
 		);
@@ -498,76 +428,40 @@ class AppServerLanguageProvider
 		);
 	}
 
-	provideDeclaration(
-		request: languages.LanguageLocationRequest,
-		signal: AbortSignal,
-	): Promise<readonly languages.LanguageLocation[]> {
+	provideDeclaration(request: languages.LanguageLocationRequest, signal: AbortSignal): Promise<readonly languages.LanguageLocation[]> {
 		return this.request('declaration', request, true, signal);
 	}
-	provideDefinition(
-		request: languages.LanguageLocationRequest,
-		signal: AbortSignal,
-	): Promise<readonly languages.LanguageLocation[]> {
+	provideDefinition(request: languages.LanguageLocationRequest, signal: AbortSignal): Promise<readonly languages.LanguageLocation[]> {
 		return this.request('definition', request, true, signal);
 	}
-	provideImplementation(
-		request: languages.LanguageLocationRequest,
-		signal: AbortSignal,
-	): Promise<readonly languages.LanguageLocation[]> {
+	provideImplementation(request: languages.LanguageLocationRequest, signal: AbortSignal): Promise<readonly languages.LanguageLocation[]> {
 		return this.request('implementation', request, true, signal);
 	}
-	provideTypeDefinition(
-		request: languages.LanguageLocationRequest,
-		signal: AbortSignal,
-	): Promise<readonly languages.LanguageLocation[]> {
+	provideTypeDefinition(request: languages.LanguageLocationRequest, signal: AbortSignal): Promise<readonly languages.LanguageLocation[]> {
 		return this.request('typeDefinition', request, true, signal);
 	}
-	provideReferences(
-		request: languages.LanguageReferenceRequest,
-		signal: AbortSignal,
-	): Promise<readonly languages.LanguageLocation[]> {
+	provideReferences(request: languages.LanguageReferenceRequest, signal: AbortSignal): Promise<readonly languages.LanguageLocation[]> {
 		return this.request('references', request, request.includeDeclaration, signal);
 	}
-	prepareCallHierarchy(
-		request: languages.LanguageHierarchyRequest,
-		signal: AbortSignal,
-	): Promise<readonly languages.LanguageHierarchyItem[]> {
+	prepareCallHierarchy(request: languages.LanguageHierarchyRequest, signal: AbortSignal): Promise<readonly languages.LanguageHierarchyItem[]> {
 		return this.prepareHierarchy('prepareCall', request, signal);
 	}
-	prepareTypeHierarchy(
-		request: languages.LanguageHierarchyRequest,
-		signal: AbortSignal,
-	): Promise<readonly languages.LanguageHierarchyItem[]> {
+	prepareTypeHierarchy(request: languages.LanguageHierarchyRequest, signal: AbortSignal): Promise<readonly languages.LanguageHierarchyItem[]> {
 		return this.prepareHierarchy('prepareType', request, signal);
 	}
-	provideIncomingCalls(
-		request: languages.LanguageHierarchyFollowupRequest,
-		signal: AbortSignal,
-	): Promise<readonly languages.LanguageCallHierarchyEntry[]> {
+	provideIncomingCalls(request: languages.LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly languages.LanguageCallHierarchyEntry[]> {
 		return this.followCallHierarchy('incomingCalls', request, signal);
 	}
-	provideOutgoingCalls(
-		request: languages.LanguageHierarchyFollowupRequest,
-		signal: AbortSignal,
-	): Promise<readonly languages.LanguageCallHierarchyEntry[]> {
+	provideOutgoingCalls(request: languages.LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly languages.LanguageCallHierarchyEntry[]> {
 		return this.followCallHierarchy('outgoingCalls', request, signal);
 	}
-	provideSupertypes(
-		request: languages.LanguageHierarchyFollowupRequest,
-		signal: AbortSignal,
-	): Promise<readonly languages.LanguageHierarchyItem[]> {
+	provideSupertypes(request: languages.LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly languages.LanguageHierarchyItem[]> {
 		return this.followTypeHierarchy('supertypes', request, signal);
 	}
-	provideSubtypes(
-		request: languages.LanguageHierarchyFollowupRequest,
-		signal: AbortSignal,
-	): Promise<readonly languages.LanguageHierarchyItem[]> {
+	provideSubtypes(request: languages.LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly languages.LanguageHierarchyItem[]> {
 		return this.followTypeHierarchy('subtypes', request, signal);
 	}
-	async prepareRename(
-		request: languages.LanguageRenameRequest,
-		signal: AbortSignal,
-	): Promise<{ readonly range: Range; readonly placeholder: string } | undefined> {
+	async prepareRename(request: languages.LanguageRenameRequest, signal: AbortSignal): Promise<{ readonly range: Range; readonly placeholder: string } | undefined> {
 		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageDocument(root, request);
 		if (!document) return undefined;
@@ -576,43 +470,23 @@ class AppServerLanguageProvider
 			const word = request.model.getWordAtPosition(request.position);
 			return word
 				? {
-						range: new Range(
-							request.position.lineNumber,
-							word.startColumn,
-							request.position.lineNumber,
-							word.endColumn,
-						),
+						range: new Range(request.position.lineNumber, word.startColumn, request.position.lineNumber, word.endColumn),
 						placeholder: word.word,
 					}
 				: undefined;
 		}
-		const result = await this.requestFeature('renamePrepare', document, signal, signal =>
-			this.api.prepareRename({ document, position: dtoPosition(request.position) }, { signal }),
-		);
-		return result?.preparation
-			? Object.freeze({ range: range(result.preparation.range), placeholder: result.preparation.placeholder })
-			: undefined;
+		const result = await this.requestFeature('renamePrepare', document, signal, signal => this.api.prepareRename({ document, position: dtoPosition(request.position) }, { signal }));
+		return result?.preparation ? Object.freeze({ range: range(result.preparation.range), placeholder: result.preparation.placeholder }) : undefined;
 	}
 	async provideRenameEdits(request: languages.LanguageRenameRequest, signal: AbortSignal) {
 		if (!request.newName) throw new Error('Rename request requires a new name');
 		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageDocument(root, request);
-		if (!document)
-			throw new Error(
-				'Rename is unavailable because this file is too large for App Server language synchronization',
-			);
-		const result = await this.requestFeature('rename', document, signal, signal =>
-			this.api.rename(
-				{ document, position: dtoPosition(request.position), newName: request.newName! },
-				{ signal },
-			),
-		);
+		if (!document) throw new Error('Rename is unavailable because this file is too large for App Server language synchronization');
+		const result = await this.requestFeature('rename', document, signal, signal => this.api.rename({ document, position: dtoPosition(request.position), newName: request.newName! }, { signal }));
 		return result ? workspaceEdit(root, result) : Object.freeze({ entries: Object.freeze([]) });
 	}
-	async provideCodeActions(
-		request: languages.LanguageCodeActionRequest,
-		signal: AbortSignal,
-	): Promise<readonly languages.LanguageCodeAction[]> {
+	async provideCodeActions(request: languages.LanguageCodeActionRequest, signal: AbortSignal): Promise<readonly languages.LanguageCodeAction[]> {
 		const root = workspaceRootForResource(this.workspace, request.resource);
 		const key = `${root.id}:${request.languageId}`;
 		const capabilities = this.capabilities.get(key);
@@ -639,29 +513,16 @@ class AppServerLanguageProvider
 		if (!result || signal.aborted || this.capabilities.get(key) !== capabilities) return Object.freeze([]);
 		return Object.freeze(result.actions.map(action => codeAction(root, action)));
 	}
-	async resolveCodeAction(
-		action: languages.LanguageCodeAction,
-		request: languages.LanguageCodeActionRequest,
-		signal: AbortSignal,
-	): Promise<languages.LanguageCodeAction> {
+	async resolveCodeAction(action: languages.LanguageCodeAction, request: languages.LanguageCodeActionRequest, signal: AbortSignal): Promise<languages.LanguageCodeAction> {
 		const root = workspaceRootForResource(this.workspace, request.resource);
 		const capabilities = this.capabilities.get(`${root.id}:${request.languageId}`);
-		if (!capabilities?.features.has('codeActions') || !capabilities.features.has('codeActionResolve'))
-			return action;
+		if (!capabilities?.features.has('codeActions') || !capabilities.features.has('codeActionResolve')) return action;
 		const document = languageDocument(root, request);
 		if (!document) return action;
-		const result = await this.requestFeature('codeActionResolve', document, signal, signal =>
-			this.api.resolveCodeAction({ document, providerData: action.data }, { signal }),
-		);
-		return result && !signal.aborted && this.capabilities.get(`${root.id}:${request.languageId}`) === capabilities
-			? codeAction(root, result)
-			: action;
+		const result = await this.requestFeature('codeActionResolve', document, signal, signal => this.api.resolveCodeAction({ document, providerData: action.data }, { signal }));
+		return result && !signal.aborted && this.capabilities.get(`${root.id}:${request.languageId}`) === capabilities ? codeAction(root, result) : action;
 	}
-	async provideDocumentFormattingEdits(
-		model: ITextModel,
-		options: languages.LanguageFormattingOptions,
-		token: CancellationToken,
-	): Promise<languages.TextEdit[]> {
+	async provideDocumentFormattingEdits(model: ITextModel, options: languages.LanguageFormattingOptions, token: CancellationToken): Promise<languages.TextEdit[]> {
 		const document = this.documentForModel(model);
 		if (!document) return [];
 		const result = await withAbortSignal(token, signal =>
@@ -679,18 +540,9 @@ class AppServerLanguageProvider
 				),
 			),
 		);
-		return !model.isDisposed() &&
-			result?.revision === document.revision &&
-			model.getVersionId() === document.revision
-			? [...formattingEdits(result.edits)]
-			: [];
+		return !model.isDisposed() && result?.revision === document.revision && model.getVersionId() === document.revision ? [...formattingEdits(result.edits)] : [];
 	}
-	async provideDocumentRangeFormattingEdits(
-		model: ITextModel,
-		range: Range,
-		options: languages.LanguageFormattingOptions,
-		token: CancellationToken,
-	): Promise<languages.TextEdit[]> {
+	async provideDocumentRangeFormattingEdits(model: ITextModel, range: Range, options: languages.LanguageFormattingOptions, token: CancellationToken): Promise<languages.TextEdit[]> {
 		const document = this.documentForModel(model);
 		if (!document) return [];
 		const result = await withAbortSignal(token, signal =>
@@ -709,11 +561,7 @@ class AppServerLanguageProvider
 				),
 			),
 		);
-		return !model.isDisposed() &&
-			result?.revision === document.revision &&
-			model.getVersionId() === document.revision
-			? [...formattingEdits(result.edits)]
-			: [];
+		return !model.isDisposed() && result?.revision === document.revision && model.getVersionId() === document.revision ? [...formattingEdits(result.edits)] : [];
 	}
 	async provideOnTypeFormattingEdits(
 		model: ITextModel,
@@ -723,13 +571,7 @@ class AppServerLanguageProvider
 		token: CancellationToken,
 	): Promise<languages.TextEdit[]> {
 		const document = this.documentForModel(model);
-		if (
-			!document ||
-			!this.capabilities
-				.get(`${document.dirId ?? this.workspace.getWorkspace().folders[0]?.id}:${document.languageId}`)
-				?.onType.includes(character)
-		)
-			return [];
+		if (!document || !this.capabilities.get(`${document.dirId ?? this.workspace.getWorkspace().folders[0]?.id}:${document.languageId}`)?.onType.includes(character)) return [];
 		const result = await withAbortSignal(token, signal =>
 			this.requestFeature('onTypeFormatting', document, signal, signal =>
 				this.api.formatOnType(
@@ -747,11 +589,7 @@ class AppServerLanguageProvider
 				),
 			),
 		);
-		return !model.isDisposed() &&
-			result?.revision === document.revision &&
-			model.getVersionId() === document.revision
-			? [...formattingEdits(result.edits)]
-			: [];
+		return !model.isDisposed() && result?.revision === document.revision && model.getVersionId() === document.revision ? [...formattingEdits(result.edits)] : [];
 	}
 	async provideParameterHints(request: languages.LanguageParameterHintsRequest, signal: AbortSignal) {
 		const root = workspaceRootForResource(this.workspace, request.resource);
@@ -771,8 +609,7 @@ class AppServerLanguageProvider
 					position: dtoPosition(request.position),
 					triggerKind: request.context.kind,
 					isRetrigger: request.context.isRetrigger ?? false,
-					triggerCharacter:
-						request.context.kind === 'triggerCharacter' ? request.context.triggerCharacter : null,
+					triggerCharacter: request.context.kind === 'triggerCharacter' ? request.context.triggerCharacter : null,
 				},
 				{ signal },
 			),
@@ -803,9 +640,7 @@ class AppServerLanguageProvider
 		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageInlayHintsDocument(root, request);
 		if (!document) return Object.freeze([]);
-		const result = await this.requestFeature('inlayHints', document, signal, signal =>
-			this.api.inlayHints({ document, range: dtoRange(request.range) }, { signal }),
-		);
+		const result = await this.requestFeature('inlayHints', document, signal, signal => this.api.inlayHints({ document, range: dtoRange(request.range) }, { signal }));
 		if (!result || result.revision !== request.snapshot.version) return Object.freeze([]);
 		return Object.freeze(
 			result.hints.map(hint =>
@@ -820,17 +655,11 @@ class AppServerLanguageProvider
 			),
 		);
 	}
-	async provideLinkedEditingRanges(
-		model: ITextModel,
-		position: Position,
-		token: CancellationToken,
-	): Promise<languages.LinkedEditingRanges | undefined> {
+	async provideLinkedEditingRanges(model: ITextModel, position: Position, token: CancellationToken): Promise<languages.LinkedEditingRanges | undefined> {
 		const document = this.documentForModel(model);
 		if (!document) return undefined;
 		const result = await withAbortSignal(token, signal =>
-			this.requestFeature('linkedEditingRanges', document, signal, signal =>
-				this.api.linkedEditingRanges({ document, position: dtoPosition(position) }, { signal }),
-			),
+			this.requestFeature('linkedEditingRanges', document, signal, signal => this.api.linkedEditingRanges({ document, position: dtoPosition(position) }, { signal })),
 		);
 		if (!result || result.revision !== model.getVersionId() || result.ranges.length < 2) return undefined;
 		let wordPattern: RegExp | undefined;
@@ -852,9 +681,7 @@ class AppServerLanguageProvider
 		const document = languageSemanticTokensDocument(root, request);
 		if (!document) return undefined;
 		signal.throwIfAborted();
-		const result = await this.requestFeature('semanticTokens', document, signal, signal =>
-			this.api.semanticTokens({ document }, { signal }),
-		);
+		const result = await this.requestFeature('semanticTokens', document, signal, signal => this.api.semanticTokens({ document }, { signal }));
 		signal.throwIfAborted();
 		if (!result || result.revision !== request.snapshot.version) return undefined;
 		return Object.freeze({
@@ -870,70 +697,43 @@ class AppServerLanguageProvider
 		});
 	}
 
-	async provideDocumentSymbols(
-		request: languages.LanguageDocumentSymbolRequest,
-		signal: AbortSignal,
-	): Promise<readonly languages.LanguageDocumentSymbol[]> {
+	async provideDocumentSymbols(request: languages.LanguageDocumentSymbolRequest, signal: AbortSignal): Promise<readonly languages.LanguageDocumentSymbol[]> {
 		const document = this.documentForRequest(request);
 		if (!document) return Object.freeze([]);
 		signal.throwIfAborted();
-		const result = await this.requestFeature('documentSymbols', document, signal, signal =>
-			this.api.documentSymbols({ document }, { signal }),
-		);
+		const result = await this.requestFeature('documentSymbols', document, signal, signal => this.api.documentSymbols({ document }, { signal }));
 		signal.throwIfAborted();
-		return result && result.revision === request.snapshot.version
-			? Object.freeze(result.symbols.map(documentSymbol))
-			: Object.freeze([]);
+		return result && result.revision === request.snapshot.version ? Object.freeze(result.symbols.map(documentSymbol)) : Object.freeze([]);
 	}
 
 	async provideCodeLenses(model: ITextModel, token: CancellationToken): Promise<languages.CodeLensList> {
 		const document = this.documentForModel(model);
 		if (!document) return Object.freeze({ lenses: Object.freeze([]) });
-		const result = await withAbortSignal(token, signal =>
-			this.requestFeature('codeLens', document, signal, signal => this.api.codeLenses({ document }, { signal })),
-		);
+		const result = await withAbortSignal(token, signal => this.requestFeature('codeLens', document, signal, signal => this.api.codeLenses({ document }, { signal })));
 		return Object.freeze({
-			lenses:
-				result && result.revision === model.getVersionId()
-					? Object.freeze(result.lenses.map(codeLens))
-					: Object.freeze([]),
+			lenses: result && result.revision === model.getVersionId() ? Object.freeze(result.lenses.map(codeLens)) : Object.freeze([]),
 		});
 	}
 
-	async resolveCodeLens(
-		model: ITextModel,
-		lens: languages.CodeLens,
-		token: CancellationToken,
-	): Promise<languages.CodeLens> {
+	async resolveCodeLens(model: ITextModel, lens: languages.CodeLens, token: CancellationToken): Promise<languages.CodeLens> {
 		const document = this.documentForModel(model);
 		if (!document) return lens;
 		const result = await withAbortSignal(token, signal =>
-			this.requestFeature('codeLensResolve', document, signal, signal =>
-				this.api.resolveCodeLens({ document, lens: codeLensDto(lens) }, { signal }),
-			),
+			this.requestFeature('codeLensResolve', document, signal, signal => this.api.resolveCodeLens({ document, lens: codeLensDto(lens) }, { signal })),
 		);
-		return result && result.revision === model.getVersionId() && result.lenses[0]
-			? codeLens(result.lenses[0])
-			: lens;
+		return result && result.revision === model.getVersionId() && result.lenses[0] ? codeLens(result.lenses[0]) : lens;
 	}
 
-	async provideLinks(
-		request: languages.LanguageLinkRequest,
-		signal: AbortSignal,
-	): Promise<readonly languages.LanguageLink[]> {
+	async provideLinks(request: languages.LanguageLinkRequest, signal: AbortSignal): Promise<readonly languages.LanguageLink[]> {
 		const document = this.documentForRequest(request);
 		if (!document) return Object.freeze([]);
 		const key = `${workspaceRootForResource(this.workspace, request.resource).id}:${request.languageId}`;
 		const capabilities = this.capabilities.get(key);
 		signal.throwIfAborted();
-		const result = await this.requestFeature('documentLinks', document, signal, signal =>
-			this.api.documentLinks({ document }, { signal }),
-		);
+		const result = await this.requestFeature('documentLinks', document, signal, signal => this.api.documentLinks({ document }, { signal }));
 		signal.throwIfAborted();
 		if (!result || result.revision !== request.snapshot.version) return Object.freeze([]);
-		const resolved = await Promise.all(
-			result.links.map(async link => (link.target ? link : this.resolveDocumentLink(document, link, signal))),
-		);
+		const resolved = await Promise.all(result.links.map(async link => (link.target ? link : this.resolveDocumentLink(document, link, signal))));
 		signal.throwIfAborted();
 		if (this.capabilities.get(key) !== capabilities) return Object.freeze([]);
 		return Object.freeze(
@@ -953,17 +753,9 @@ class AppServerLanguageProvider
 
 	async provideDocumentColors(request: languages.LanguageColorRequest, signal: AbortSignal) {
 		const document = this.documentForRequest(request);
-		if (
-			!document ||
-			!this.capabilities
-				.get(`${workspaceRootForResource(this.workspace, request.resource).id}:${request.languageId}`)
-				?.features.has('documentColors')
-		)
-			return Object.freeze([]);
+		if (!document || !this.capabilities.get(`${workspaceRootForResource(this.workspace, request.resource).id}:${request.languageId}`)?.features.has('documentColors')) return Object.freeze([]);
 		signal.throwIfAborted();
-		const result = await this.requestFeature('documentColors', document, signal, signal =>
-			this.api.documentColors({ document }, { signal }),
-		);
+		const result = await this.requestFeature('documentColors', document, signal, signal => this.api.documentColors({ document }, { signal }));
 		signal.throwIfAborted();
 		return result && result.revision === request.snapshot.version
 			? Object.freeze(
@@ -984,13 +776,7 @@ class AppServerLanguageProvider
 
 	async provideColorPresentations(request: languages.LanguageColorPresentationRequest, signal: AbortSignal) {
 		const document = this.documentForRequest(request);
-		if (
-			!document ||
-			!this.capabilities
-				.get(`${workspaceRootForResource(this.workspace, request.resource).id}:${request.languageId}`)
-				?.features.has('documentColors')
-		)
-			return Object.freeze([]);
+		if (!document || !this.capabilities.get(`${workspaceRootForResource(this.workspace, request.resource).id}:${request.languageId}`)?.features.has('documentColors')) return Object.freeze([]);
 		signal.throwIfAborted();
 		const result = await this.requestFeature('documentColors', document, signal, signal =>
 			this.api.colorPresentations(
@@ -1012,9 +798,7 @@ class AppServerLanguageProvider
 		return Object.freeze(
 			result.presentations.map(item => ({
 				label: item.label,
-				...(item.textEdit
-					? { textEdit: { range: range(item.textEdit.range), text: item.textEdit.newText } }
-					: {}),
+				...(item.textEdit ? { textEdit: { range: range(item.textEdit.range), text: item.textEdit.newText } } : {}),
 				...(item.additionalTextEdits.length > 0
 					? {
 							additionalTextEdits: item.additionalTextEdits.map(edit => ({
@@ -1031,9 +815,7 @@ class AppServerLanguageProvider
 		const document = this.documentForRequest(request);
 		if (!document) return Object.freeze([]);
 		signal.throwIfAborted();
-		const result = await this.requestFeature('foldingRanges', document, signal, signal =>
-			this.api.foldingRanges({ document }, { signal }),
-		);
+		const result = await this.requestFeature('foldingRanges', document, signal, signal => this.api.foldingRanges({ document }, { signal }));
 		signal.throwIfAborted();
 		if (!result || result.revision !== request.snapshot.version) return Object.freeze([]);
 		return Object.freeze(
@@ -1054,9 +836,7 @@ class AppServerLanguageProvider
 		signal: AbortSignal | undefined,
 		invoke: (signal: AbortSignal) => Promise<T>,
 	): Promise<T | undefined> {
-		return this.lifecycle.withActivity(document, signal, () =>
-			requestWithCapability(this.capabilities, this.workspace, feature, document, signal, invoke),
-		);
+		return this.lifecycle.withActivity(document, signal, () => requestWithCapability(this.capabilities, this.workspace, feature, document, signal, invoke));
 	}
 
 	private documentForRequest(request: {
@@ -1084,25 +864,23 @@ class AppServerLanguageProvider
 		signal: AbortSignal,
 	): Promise<LanguageDocumentLinkDto> {
 		signal.throwIfAborted();
-		const result = await this.requestFeature('documentLinkResolve', document, signal, signal =>
-			this.api.resolveDocumentLink({ document, link }, { signal }),
-		);
+		const result = await this.requestFeature('documentLinkResolve', document, signal, signal => this.api.resolveDocumentLink({ document, link }, { signal }));
 		signal.throwIfAborted();
 		return result && result.revision === document.revision && result.links[0] ? result.links[0] : link;
 	}
 
-	private async request(
-		kind: LocationKind,
-		request: languages.LanguageLocationRequest,
-		includeDeclaration: boolean,
-		signal: AbortSignal,
-	): Promise<readonly languages.LanguageLocation[]> {
+	private async request(kind: LocationKind, request: languages.LanguageLocationRequest, includeDeclaration: boolean, signal: AbortSignal): Promise<readonly languages.LanguageLocation[]> {
 		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageDocument(root, request);
 		if (!document) return Object.freeze([]);
 		const result = await this.requestFeature(kind, document, signal, signal =>
 			this.api.locations(
-				{ document, position: dtoPosition(request.position), kind, includeDeclaration },
+				{
+					document,
+					position: dtoPosition(request.position),
+					kind,
+					includeDeclaration,
+				},
 				{ signal },
 			),
 		);
@@ -1119,20 +897,12 @@ class AppServerLanguageProvider
 		);
 	}
 
-	private async prepareHierarchy(
-		kind: 'prepareCall' | 'prepareType',
-		request: languages.LanguageHierarchyRequest,
-		signal: AbortSignal,
-	): Promise<readonly languages.LanguageHierarchyItem[]> {
+	private async prepareHierarchy(kind: 'prepareCall' | 'prepareType', request: languages.LanguageHierarchyRequest, signal: AbortSignal): Promise<readonly languages.LanguageHierarchyItem[]> {
 		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageDocument(root, request);
 		if (!document) return Object.freeze([]);
-		const result = await this.requestFeature(
-			kind === 'prepareCall' ? 'callHierarchy' : 'typeHierarchy',
-			document,
-			signal,
-			signal =>
-				this.api.hierarchy({ document, kind, position: dtoPosition(request.position), item: null }, { signal }),
+		const result = await this.requestFeature(kind === 'prepareCall' ? 'callHierarchy' : 'typeHierarchy', document, signal, signal =>
+			this.api.hierarchy({ document, kind, position: dtoPosition(request.position), item: null }, { signal }),
 		);
 		if (!result || result.revision !== request.snapshot.version) return Object.freeze([]);
 		return Object.freeze(result.entries.map(entry => hierarchyItem(root, entry.item)));
@@ -1147,10 +917,7 @@ class AppServerLanguageProvider
 		const document = languageDocument(root, request);
 		if (!document) return Object.freeze([]);
 		const result = await this.requestFeature('callHierarchy', document, signal, signal =>
-			this.api.hierarchy(
-				{ document, kind, position: null, item: hierarchyItemDto(root, request.item) },
-				{ signal },
-			),
+			this.api.hierarchy({ document, kind, position: null, item: hierarchyItemDto(root, request.item) }, { signal }),
 		);
 		if (!result || result.revision !== request.snapshot.version) return Object.freeze([]);
 		return Object.freeze(
@@ -1164,19 +931,12 @@ class AppServerLanguageProvider
 		);
 	}
 
-	private async followTypeHierarchy(
-		kind: 'supertypes' | 'subtypes',
-		request: languages.LanguageHierarchyFollowupRequest,
-		signal: AbortSignal,
-	): Promise<readonly languages.LanguageHierarchyItem[]> {
+	private async followTypeHierarchy(kind: 'supertypes' | 'subtypes', request: languages.LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly languages.LanguageHierarchyItem[]> {
 		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageDocument(root, request);
 		if (!document) return Object.freeze([]);
 		const result = await this.requestFeature('typeHierarchy', document, signal, signal =>
-			this.api.hierarchy(
-				{ document, kind, position: null, item: hierarchyItemDto(root, request.item) },
-				{ signal },
-			),
+			this.api.hierarchy({ document, kind, position: null, item: hierarchyItemDto(root, request.item) }, { signal }),
 		);
 		if (!result || result.revision !== request.snapshot.version) return Object.freeze([]);
 		return Object.freeze(result.entries.map(entry => hierarchyItem(root, entry.item)));
@@ -1192,10 +952,7 @@ class AppServerWorkspaceSymbolProvider implements languages.LanguageWorkspaceSym
 		private readonly lifecycle: ILanguageServerLifecycleService,
 	) {}
 
-	async provideWorkspaceSymbols(
-		query: string,
-		signal: AbortSignal,
-	): Promise<readonly languages.LanguageWorkspaceSymbol[]> {
+	async provideWorkspaceSymbols(query: string, signal: AbortSignal): Promise<readonly languages.LanguageWorkspaceSymbol[]> {
 		const folders = this.workspace.getWorkspace().folders;
 		const roots = folders.map(folder => ({
 			id: folder.id,
@@ -1207,14 +964,7 @@ class AppServerWorkspaceSymbolProvider implements languages.LanguageWorkspaceSym
 				this.support.workspaceLanguageIds(root.id).map(async languageId => {
 					const document = { ...(root.wireId ? { dirId: root.wireId } : {}), languageId };
 					const result = await this.lifecycle.withActivity(document, signal, () =>
-						requestWithCapability(
-							this.capabilities,
-							this.workspace,
-							'workspaceSymbols',
-							document,
-							signal,
-							signal => this.api.directorySymbols({ ...document, query }, { signal }),
-						),
+						requestWithCapability(this.capabilities, this.workspace, 'workspaceSymbols', document, signal, signal => this.api.directorySymbols({ ...document, query }, { signal })),
 					);
 					return result?.symbols.map(symbol => ({ root, symbol })) ?? [];
 				}),
@@ -1244,8 +994,7 @@ class AppServerWorkspaceSymbolProvider implements languages.LanguageWorkspaceSym
 }
 
 function sameCapabilities(left: ServerCapabilities, right: ServerCapabilities): boolean {
-	const same = (a: readonly string[], b: readonly string[]) =>
-		a.length === b.length && a.every((value, index) => value === b[index]);
+	const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((value, index) => value === b[index]);
 	return (
 		left.server === right.server &&
 		left.features.size === right.features.size &&
@@ -1282,11 +1031,7 @@ async function requestWithCapability<T>(
 function languageDocument(
 	root: LanguageWorkspaceRoot,
 	request:
-		| languages.LanguageLocationRequest
-		| languages.LanguageHierarchyRequest
-		| languages.LanguageHierarchyFollowupRequest
-		| languages.LanguageRenameRequest
-		| languages.LanguageCodeActionRequest,
+		languages.LanguageLocationRequest | languages.LanguageHierarchyRequest | languages.LanguageHierarchyFollowupRequest | languages.LanguageRenameRequest | languages.LanguageCodeActionRequest,
 ) {
 	if (request.model.largeFile.tooLargeForSynchronization) return undefined;
 	const text = request.snapshot.getText();
@@ -1344,11 +1089,9 @@ function appServerCompletionResolveData(value: unknown): {
 	readonly providerData: unknown;
 	readonly generation?: number;
 } {
-	if (typeof value !== 'object' || value === null || Array.isArray(value))
-		throw new TypeError('App Server completion resolve data must be an object');
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError('App Server completion resolve data must be an object');
 	const data = value as { readonly document?: unknown; readonly providerData?: unknown };
-	if (typeof data.document !== 'object' || data.document === null)
-		throw new TypeError('App Server completion resolve data must include its document snapshot');
+	if (typeof data.document !== 'object' || data.document === null) throw new TypeError('App Server completion resolve data must include its document snapshot');
 	return data as {
 		readonly document: NonNullable<ReturnType<typeof languageCompletionDocument>>;
 		readonly providerData: unknown;
@@ -1357,12 +1100,7 @@ function appServerCompletionResolveData(value: unknown): {
 }
 
 function languageSemanticTokensDocument(root: LanguageWorkspaceRoot, request: languages.LanguageSemanticTokensRequest) {
-	if (
-		!request.resource ||
-		request.model.largeFile.tooLargeForTokenization ||
-		request.model.largeFile.tooLargeForSynchronization
-	)
-		return undefined;
+	if (!request.resource || request.model.largeFile.tooLargeForTokenization || request.model.largeFile.tooLargeForSynchronization) return undefined;
 	return languageSnapshotDocument(root, request);
 }
 
@@ -1437,10 +1175,7 @@ function hierarchyItem(root: LanguageWorkspaceRoot, item: LanguageHierarchyItemD
 	});
 }
 
-function hierarchyItemDto(
-	root: LanguageWorkspaceRoot,
-	item: languages.LanguageHierarchyItem,
-): LanguageHierarchyItemDto {
+function hierarchyItemDto(root: LanguageWorkspaceRoot, item: languages.LanguageHierarchyItem): LanguageHierarchyItemDto {
 	return {
 		name: item.name,
 		symbolKind: item.symbolKind,
@@ -1467,11 +1202,7 @@ function workspaceEdit(root: LanguageWorkspaceRoot, edit: LanguageDirectoryEditD
 							kind: entry.kind,
 							resource: workspaceResource(root, entry.document.path),
 							expectedText: entry.document.expectedText,
-							edits: Object.freeze(
-								entry.document.edits.map(edit =>
-									Object.freeze({ range: range(edit.range), text: edit.newText }),
-								),
-							),
+							edits: Object.freeze(entry.document.edits.map(edit => Object.freeze({ range: range(edit.range), text: edit.newText }))),
 						});
 					case 'create':
 						return Object.freeze({
@@ -1542,9 +1273,7 @@ function codeLens(value: LanguageCodeLensDto): languages.CodeLens {
 function codeLensDto(value: languages.CodeLens): LanguageCodeLensDto {
 	return {
 		range: dtoRange(value.range),
-		command: value.command
-			? { id: value.command.id, title: value.command.title, arguments: [...(value.command.arguments ?? [])] }
-			: null,
+		command: value.command ? { id: value.command.id, title: value.command.title, arguments: [...(value.command.arguments ?? [])] } : null,
 		providerData: (value as AppServerCodeLens).providerData,
 	};
 }
@@ -1560,16 +1289,11 @@ async function withAbortSignal<T>(token: CancellationToken, run: (signal: AbortS
 	}
 }
 
-function diagnosticSeverity(
-	severity: languages.LanguageDiagnosticSeverity,
-): 'error' | 'warning' | 'information' | 'hint' {
+function diagnosticSeverity(severity: languages.LanguageDiagnosticSeverity): 'error' | 'warning' | 'information' | 'hint' {
 	return severity;
 }
 
-function workspaceRootForResource(
-	workspace: IWorkspaceContextService,
-	resource: URI | undefined,
-): LanguageWorkspaceRoot {
+function workspaceRootForResource(workspace: IWorkspaceContextService, resource: URI | undefined): LanguageWorkspaceRoot {
 	const folders = workspace.getWorkspace().folders;
 	if (!resource && folders.length === 1) return { id: folders[0]!.id, uri: folders[0]!.uri };
 	let match: LanguageWorkspaceRoot | undefined;
@@ -1593,12 +1317,6 @@ function workspaceResource(root: LanguageWorkspaceRoot, relativePath: string): U
 	return resource;
 }
 
-function range(value: {
-	readonly start: { readonly lineIndex: number; readonly columnIndex: number };
-	readonly end: { readonly lineIndex: number; readonly columnIndex: number };
-}): Range {
-	return Range.fromPositions(
-		new Position(value.start.lineIndex + 1, value.start.columnIndex + 1),
-		new Position(value.end.lineIndex + 1, value.end.columnIndex + 1),
-	);
+function range(value: { readonly start: { readonly lineIndex: number; readonly columnIndex: number }; readonly end: { readonly lineIndex: number; readonly columnIndex: number } }): Range {
+	return Range.fromPositions(new Position(value.start.lineIndex + 1, value.start.columnIndex + 1), new Position(value.end.lineIndex + 1, value.end.columnIndex + 1));
 }

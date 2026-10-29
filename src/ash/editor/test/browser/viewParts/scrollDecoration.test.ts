@@ -1,12 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import {
-	EditorOption,
-	RenderMinimap,
-	type EditorLayoutInfo,
-	type InternalEditorScrollbarOptions,
-} from '../../../common/config/editorOptions.js';
+import { EditorOption, RenderMinimap, type EditorLayoutInfo, type InternalEditorScrollbarOptions } from '../../../common/config/editorOptions.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type ViewConfigurationChangedEvent, type ViewScrollChangedEvent } from '../../../common/viewEvents.js';
 import { type RestrictedRenderingContext } from '../../../browser/view/renderingContext.js';
@@ -15,10 +10,7 @@ import { ScrollDecorationViewPart } from '../../../browser/viewParts/scrollDecor
 test('ScrollDecorationViewPart follows layout and scrollbar configuration', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const state = configurationState();
-	const scrollDecoration = new ScrollDecorationViewPart(
-		testViewContext(state),
-		dom.window.document.querySelector('main')!,
-	);
+	const scrollDecoration = new ScrollDecorationViewPart(testViewContext(state), dom.window.document.querySelector('main')!);
 	const domNode = scrollDecoration.getDomNode().domNode;
 	dom.window.document.querySelector('main')!.append(domNode);
 
@@ -38,10 +30,7 @@ test('ScrollDecorationViewPart follows layout and scrollbar configuration', () =
 		minimap: { renderMinimap: RenderMinimap.Blocks, minimapLeft: 400, minimapWidth: 80 },
 	});
 	state.scrollbar = { useShadows: false } as InternalEditorScrollbarOptions;
-	assert.equal(
-		scrollDecoration.onConfigurationChanged(configurationChange(EditorOption.layoutInfo, EditorOption.scrollbar)),
-		true,
-	);
+	assert.equal(scrollDecoration.onConfigurationChanged(configurationChange(EditorOption.layoutInfo, EditorOption.scrollbar)), true);
 	scrollDecoration.render(renderingContext({ scrollTop: 50, scrollHeight: 300, viewportHeight: 100 }));
 	assert.equal(domNode.style.width, '486px');
 	assert.equal(shadow(scrollDecoration, 'top').classList.contains('visible'), false);
@@ -93,16 +82,16 @@ function layoutInfo(options: {
 	return {
 		width: options.width,
 		verticalScrollbarWidth: options.verticalScrollbarWidth ?? 14,
-		minimap: { renderMinimap: RenderMinimap.None, minimapLeft: 0, minimapWidth: 0, ...options.minimap },
+		minimap: {
+			renderMinimap: RenderMinimap.None,
+			minimapLeft: 0,
+			minimapWidth: 0,
+			...options.minimap,
+		},
 	} as EditorLayoutInfo;
 }
 
-function renderingContext(options: {
-	readonly scrollLeft?: number;
-	readonly scrollTop: number;
-	readonly scrollHeight: number;
-	readonly viewportHeight: number;
-}): RestrictedRenderingContext {
+function renderingContext(options: { readonly scrollLeft?: number; readonly scrollTop: number; readonly scrollHeight: number; readonly viewportHeight: number }): RestrictedRenderingContext {
 	return {
 		scrollLeft: options.scrollLeft ?? 0,
 		scrollTop: options.scrollTop,
@@ -126,7 +115,5 @@ function scrollChange(changed: Partial<ViewScrollChangedEvent>): ViewScrollChang
 }
 
 function shadow(scrollDecoration: ScrollDecorationViewPart, edge: 'top' | 'bottom'): HTMLElement {
-	return scrollDecoration
-		.getDomNode()
-		.domNode.querySelector<HTMLElement>(`.stanza-editor-scroll-decoration-shadow.${edge}`)!;
+	return scrollDecoration.getDomNode().domNode.querySelector<HTMLElement>(`.stanza-editor-scroll-decoration-shadow.${edge}`)!;
 }

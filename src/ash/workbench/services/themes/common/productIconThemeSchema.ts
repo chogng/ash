@@ -7,7 +7,10 @@ const definition: JsonSchema = {
 	type: 'object',
 	additionalProperties: false,
 	required: ['fontCharacter'],
-	properties: { fontCharacter: { type: 'string', minLength: 1, maxLength: 16 }, fontId: { type: 'string' } },
+	properties: {
+		fontCharacter: { type: 'string', minLength: 1, maxLength: 16 },
+		fontId: { type: 'string' },
+	},
 };
 
 export const productIconThemeSchema: JsonSchema = {

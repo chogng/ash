@@ -63,13 +63,9 @@ export function parseDesignVectorNetwork(value: unknown): DesignVectorNetwork {
 			if (
 				!isRecord(vertex) ||
 				(vertex.endpoint !== undefined && !designEndpointStyles.includes(vertex.endpoint as DesignEndpoint)) ||
-				(vertex.cornerRadius !== undefined &&
-					(typeof vertex.cornerRadius !== 'number' ||
-						!Number.isFinite(vertex.cornerRadius) ||
-						vertex.cornerRadius < 0)) ||
+				(vertex.cornerRadius !== undefined && (typeof vertex.cornerRadius !== 'number' || !Number.isFinite(vertex.cornerRadius) || vertex.cornerRadius < 0)) ||
 				Object.keys(vertex).some(key => !['x', 'y', 'mirroring', 'cornerRadius', 'endpoint'].includes(key)) ||
-				(vertex.mirroring !== undefined &&
-					!['none', 'angle', 'angle-length'].includes(String(vertex.mirroring)))
+				(vertex.mirroring !== undefined && !['none', 'angle', 'angle-length'].includes(String(vertex.mirroring)))
 			) {
 				return fail();
 			}
@@ -110,9 +106,7 @@ export function parseDesignVectorNetwork(value: unknown): DesignVectorNetwork {
 		value.unfilledRegions !== undefined &&
 		(!Array.isArray(value.unfilledRegions) ||
 			value.unfilledRegions.length > 10000 ||
-			value.unfilledRegions.some(
-				key => typeof key !== 'string' || key.length > 380000 || key.split(',').some(id => !ids.has(id)),
-			))
+			value.unfilledRegions.some(key => typeof key !== 'string' || key.length > 380000 || key.split(',').some(id => !ids.has(id))))
 	) {
 		return fail();
 	}
@@ -120,22 +114,11 @@ export function parseDesignVectorNetwork(value: unknown): DesignVectorNetwork {
 	if (
 		regionFills !== undefined &&
 		(!isRecord(regionFills) ||
-			Object.entries(regionFills).some(
-				([key, fill]) =>
-					key.split(',').some(id => !ids.has(id)) ||
-					typeof fill !== 'string' ||
-					!/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(fill),
-			))
+			Object.entries(regionFills).some(([key, fill]) => key.split(',').some(id => !ids.has(id)) || typeof fill !== 'string' || !/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(fill)))
 	) {
 		return fail();
 	}
-	if (
-		[...((value.unfilledRegions as string[]) ?? []), ...Object.keys(regionFills ?? {})].reduce(
-			(sum, key) => sum + key.length,
-			0,
-		) >
-		edges.length * 150
-	) {
+	if ([...((value.unfilledRegions as string[]) ?? []), ...Object.keys(regionFills ?? {})].reduce((sum, key) => sum + key.length, 0) > edges.length * 150) {
 		return fail();
 	}
 	return {
@@ -205,9 +188,7 @@ export function toDesignVectorNetwork(path: DesignPath): DesignVectorNetwork {
 }
 /** Re-evaluate the source fill rule on split faces; inserting intersections must not fill compound-path holes. */
 export function paintDesignNetworkFromPath(path: DesignPath, network: DesignVectorNetwork): DesignVectorNetwork {
-	const source = [{ nodes: path.nodes, closed: path.closed }, ...(path.subpaths ?? [])].filter(
-		contour => contour.closed,
-	);
+	const source = [{ nodes: path.nodes, closed: path.closed }, ...(path.subpaths ?? [])].filter(contour => contour.closed);
 	const unfilledRegions = designNetworkRegions(network)
 		.filter(region => {
 			const points = sampleContour(region.contour),
@@ -225,10 +206,7 @@ export function paintDesignNetworkFromPath(path: DesignPath, network: DesignVect
 				for (let i = 0; i < polygon.length; i++) {
 					const a = polygon[i],
 						b = polygon[(i + 1) % polygon.length];
-					if (
-						a.y > point.y !== b.y > point.y &&
-						point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x
-					) {
+					if (a.y > point.y !== b.y > point.y && point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x) {
 						crossings++;
 						winding += b.y > a.y ? 1 : -1;
 					}
@@ -267,12 +245,7 @@ export function withDesignVectorNetwork(path: DesignPath, network: DesignVectorN
 	const { subpaths: _subpaths, ...rest } = path;
 	return { ...rest, nodes: [], closed: false, network };
 }
-export function moveDesignNetworkVertices(
-	network: DesignVectorNetwork,
-	indices: ReadonlySet<number>,
-	dx: number,
-	dy: number,
-): DesignVectorNetwork {
+export function moveDesignNetworkVertices(network: DesignVectorNetwork, indices: ReadonlySet<number>, dx: number, dy: number): DesignVectorNetwork {
 	const move = (point: DesignPoint) => ({ ...point, x: point.x + dx, y: point.y + dy });
 	return {
 		...network,
@@ -296,29 +269,17 @@ export function moveDesignNetworkHandle(
 	const edge = network.edges[index],
 		vertexIndex = point === 'outgoing' ? edge.start : edge.end,
 		vertex = network.vertices[vertexIndex];
-	const others = network.edges
-		.map((edge, i) => ({ edge, i }))
-		.filter(item => item.i !== index && (item.edge.start === vertexIndex || item.edge.end === vertexIndex));
+	const others = network.edges.map((edge, i) => ({ edge, i })).filter(item => item.i !== index && (item.edge.start === vertexIndex || item.edge.end === vertexIndex));
 	const mode = independent ? 'none' : (vertex.mirroring ?? 'none');
 	const other = others.length === 1 ? others[0] : undefined;
 	const opposite = other?.edge.start === vertexIndex ? 'outgoing' : 'incoming';
 	const dx = (target.x - vertex.x) * width,
 		dy = (target.y - vertex.y) * height,
 		length = Math.hypot(dx, dy);
-	const ratio =
-		mode === 'angle-length'
-			? 1
-			: other && length
-				? Math.hypot(
-						(other.edge[opposite].x - vertex.x) * width,
-						(other.edge[opposite].y - vertex.y) * height,
-					) / length
-				: 0;
+	const ratio = mode === 'angle-length' ? 1 : other && length ? Math.hypot((other.edge[opposite].x - vertex.x) * width, (other.edge[opposite].y - vertex.y) * height) / length : 0;
 	return {
 		...network,
-		vertices: independent
-			? network.vertices.map((value, i) => (i === vertexIndex ? { ...value, mirroring: 'none' } : value))
-			: network.vertices,
+		vertices: independent ? network.vertices.map((value, i) => (i === vertexIndex ? { ...value, mirroring: 'none' } : value)) : network.vertices,
 		edges: network.edges.map((value, i) =>
 			i === index
 				? { ...value, [point]: target }
@@ -331,23 +292,14 @@ export function moveDesignNetworkHandle(
 		),
 	};
 }
-export function connectDesignNetwork(
-	network: DesignVectorNetwork,
-	start: number,
-	end: number | DesignPoint,
-): DesignVectorNetwork {
+export function connectDesignNetwork(network: DesignVectorNetwork, start: number, end: number | DesignPoint): DesignVectorNetwork {
 	const vertices = typeof end === 'number' ? network.vertices : [...network.vertices, end];
 	const target = typeof end === 'number' ? end : vertices.length - 1;
 	if (start === target) {
 		return network;
 	}
 	const incident = network.edges.filter(edge => edge.start === start || edge.end === start);
-	const handle =
-		incident.length === 1
-			? incident[0].start === start
-				? incident[0].outgoing
-				: incident[0].incoming
-			: vertices[start];
+	const handle = incident.length === 1 ? (incident[0].start === start ? incident[0].outgoing : incident[0].incoming) : vertices[start];
 	const outgoing = { x: 2 * vertices[start].x - handle.x, y: 2 * vertices[start].y - handle.y };
 	const next = {
 		...network,
@@ -408,31 +360,20 @@ export function splitDesignNetworkEdge(network: DesignVectorNetwork, index: numb
 		u = lerp(q, r),
 		anchor = lerp(s, u);
 	const next = { id: generateUuid(), start: network.vertices.length, end: edge.end, outgoing: u, incoming: r };
-	const splitKey = (key: string) =>
-		key.split(',').includes(edge.id) ? [...key.split(','), next.id].sort().join(',') : key;
+	const splitKey = (key: string) => (key.split(',').includes(edge.id) ? [...key.split(','), next.id].sort().join(',') : key);
 	return {
 		...network,
 		vertices: [...network.vertices, anchor],
-		edges: [
-			...network.edges.map((value, i) =>
-				i === index ? { ...value, end: next.start, outgoing: p, incoming: s } : value,
-			),
-			next,
-		],
+		edges: [...network.edges.map((value, i) => (i === index ? { ...value, end: next.start, outgoing: p, incoming: s } : value)), next],
 		unfilledRegions: network.unfilledRegions?.map(splitKey),
 		...(network.regionFills
 			? {
-					regionFills: Object.fromEntries(
-						Object.entries(network.regionFills).map(([key, fill]) => [splitKey(key), fill]),
-					),
+					regionFills: Object.fromEntries(Object.entries(network.regionFills).map(([key, fill]) => [splitKey(key), fill])),
 				}
 			: {}),
 	};
 }
-export function removeDesignNetworkVertices(
-	network: DesignVectorNetwork,
-	indices: ReadonlySet<number>,
-): DesignVectorNetwork {
+export function removeDesignNetworkVertices(network: DesignVectorNetwork, indices: ReadonlySet<number>): DesignVectorNetwork {
 	const remap = new Map<number, number>();
 	const vertices = network.vertices.filter((_, i) => {
 		if (indices.has(i)) {
@@ -441,9 +382,7 @@ export function removeDesignNetworkVertices(
 		remap.set(i, remap.size);
 		return true;
 	});
-	const edges = network.edges
-		.filter(edge => remap.has(edge.start) && remap.has(edge.end))
-		.map(edge => ({ ...edge, start: remap.get(edge.start)!, end: remap.get(edge.end)! }));
+	const edges = network.edges.filter(edge => remap.has(edge.start) && remap.has(edge.end)).map(edge => ({ ...edge, start: remap.get(edge.start)!, end: remap.get(edge.end)! }));
 	const ids = new Set(edges.map(edge => edge.id));
 	return {
 		vertices,
@@ -451,9 +390,7 @@ export function removeDesignNetworkVertices(
 		unfilledRegions: network.unfilledRegions?.filter(key => key.split(',').every(id => ids.has(id))),
 		...(network.regionFills
 			? {
-					regionFills: Object.fromEntries(
-						Object.entries(network.regionFills).filter(([key]) => key.split(',').every(id => ids.has(id))),
-					),
+					regionFills: Object.fromEntries(Object.entries(network.regionFills).filter(([key]) => key.split(',').every(id => ids.has(id)))),
 				}
 			: {}),
 	};
@@ -480,10 +417,7 @@ export function designNetworkRegions(network: DesignVectorNetwork): readonly Des
 			a = network.vertices[start(half)],
 			b = network.vertices[end(half)];
 		const handle = half % 2 ? edge.incoming : edge.outgoing;
-		return Math.atan2(
-			(handle.y === a.y && handle.x === a.x ? b.y : handle.y) - a.y,
-			(handle.y === a.y && handle.x === a.x ? b.x : handle.x) - a.x,
-		);
+		return Math.atan2((handle.y === a.y && handle.x === a.x ? b.y : handle.y) - a.y, (handle.y === a.y && handle.x === a.x ? b.x : handle.x) - a.x);
 	};
 	for (let half = 0; half < network.edges.length * 2; half++) {
 		outgoing[start(half)].push(half);
@@ -563,13 +497,8 @@ function contourContains(contour: DesignPathContour, point: DesignPoint): boolea
 	}
 	return inside;
 }
-export function designNetworkRegionAt(
-	network: DesignVectorNetwork,
-	point: DesignPoint,
-): DesignVectorRegion | undefined {
-	return [...designNetworkRegions(network)]
-		.sort((a, b) => a.area - b.area)
-		.find(region => contourContains(region.contour, point));
+export function designNetworkRegionAt(network: DesignVectorNetwork, point: DesignPoint): DesignVectorRegion | undefined {
+	return [...designNetworkRegions(network)].sort((a, b) => a.area - b.area).find(region => contourContains(region.contour, point));
 }
 /** Nested disconnected loops bound holes. Adjacent faces have equal shared boundaries, never holes. */
 export function designNetworkFillContours(network: DesignVectorNetwork): readonly DesignPathContour[] {
@@ -577,12 +506,7 @@ export function designNetworkFillContours(network: DesignVectorNetwork): readonl
 	const parent = regions.map(
 		region =>
 			regions
-				.filter(
-					other =>
-						other.area > region.area &&
-						!region.key.split(',').some(id => other.key.split(',').includes(id)) &&
-						contourContains(other.contour, region.contour.nodes[0]),
-				)
+				.filter(other => other.area > region.area && !region.key.split(',').some(id => other.key.split(',').includes(id)) && contourContains(other.contour, region.contour.nodes[0]))
 				.sort((a, b) => a.area - b.area)[0],
 	);
 	return regions.flatMap(region =>

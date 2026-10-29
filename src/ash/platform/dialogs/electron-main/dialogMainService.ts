@@ -1,12 +1,5 @@
 import type { BrowserWindow } from 'electron';
-import type {
-	MessageBoxOptions,
-	MessageBoxReturnValue,
-	OpenDialogOptions,
-	OpenDialogReturnValue,
-	SaveDialogOptions,
-	SaveDialogReturnValue,
-} from '../../../base/parts/sandbox/common/electronTypes.js';
+import type { MessageBoxOptions, MessageBoxReturnValue, OpenDialogOptions, OpenDialogReturnValue, SaveDialogOptions, SaveDialogReturnValue } from '../../../base/parts/sandbox/common/electronTypes.js';
 import { access } from 'node:fs/promises';
 import { hash } from '../../../base/common/hash.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
@@ -147,10 +140,7 @@ export class DialogMainService extends Disposable implements IDialogMainService 
 		return result;
 	}
 
-	private lockFileDialog(
-		options: OpenDialogOptions | SaveDialogOptions,
-		window: BrowserWindow | undefined,
-	): (() => void) | undefined {
+	private lockFileDialog(options: OpenDialogOptions | SaveDialogOptions, window: BrowserWindow | undefined): (() => void) | undefined {
 		if (!window) return () => {};
 		const windowId = window.id;
 		const key = hash(options);

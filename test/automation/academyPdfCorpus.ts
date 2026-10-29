@@ -36,8 +36,7 @@ export const academyPdfCorpus: readonly AcademyPdfCorpusDocument[] = Object.free
 		fileName: 'auditory-cortex-20-pages.pdf',
 		pageCount: 20,
 		sha256: 'f26414cac435d8941557702d929f88da16b7dc9e8446d083f711231452c82c2d',
-		sourceUrl:
-			'https://journals.plos.org/plosbiology/article/file?id=10.1371%2Fjournal.pbio.3000207&type=printable',
+		sourceUrl: 'https://journals.plos.org/plosbiology/article/file?id=10.1371%2Fjournal.pbio.3000207&type=printable',
 		title: 'Asymmetric sampling in human auditory cortex reveals spectral processing hierarchy',
 	},
 	{
@@ -63,30 +62,18 @@ export async function downloadAcademyPdfCorpus(directory: string): Promise<void>
 		if (!response.ok) throw new Error(`Could not download '${document.title}': HTTP ${response.status}`);
 		const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
 		if (!contentType.includes('application/pdf')) {
-			throw new Error(
-				`Could not download '${document.title}': expected application/pdf but received '${contentType || 'unknown'}'`,
-			);
+			throw new Error(`Could not download '${document.title}': expected application/pdf but received '${contentType || 'unknown'}'`);
 		}
 		const bytes = new Uint8Array(await response.arrayBuffer());
-		if (!hasPdfSignature(bytes))
-			throw new Error(`Could not download '${document.title}': response does not have a PDF signature`);
+		if (!hasPdfSignature(bytes)) throw new Error(`Could not download '${document.title}': response does not have a PDF signature`);
 		const sha256 = createHash('sha256').update(bytes).digest('hex');
 		if (sha256 !== document.sha256) {
-			throw new Error(
-				`The source PDF for '${document.title}' changed: expected SHA-256 ${document.sha256}, received ${sha256}`,
-			);
+			throw new Error(`The source PDF for '${document.title}' changed: expected SHA-256 ${document.sha256}, received ${sha256}`);
 		}
 		await writeFile(join(directory, document.fileName), bytes);
 	}
 }
 
 function hasPdfSignature(bytes: Uint8Array): boolean {
-	return (
-		bytes.length >= 5 &&
-		bytes[0] === 0x25 &&
-		bytes[1] === 0x50 &&
-		bytes[2] === 0x44 &&
-		bytes[3] === 0x46 &&
-		bytes[4] === 0x2d
-	);
+	return bytes.length >= 5 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46 && bytes[4] === 0x2d;
 }

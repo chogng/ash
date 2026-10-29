@@ -5,23 +5,10 @@ import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import {
-	IExtensionHostApi,
-	type ExtensionHostFleetSnapshot,
-	type ExtensionHostInvocationRequest,
-	type JsonValue,
-} from '../../../../../platform/agentHost/common/extensionHostApi.js';
-import {
-	IRemoteAuthorityResolverService,
-	RemoteConnectionType,
-	WebSocketRemoteConnection,
-	RemoteAuthorityResolverErrorCode,
-} from '../../../../../platform/remote/common/remoteAuthorityResolver.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
+import { IRemoteAuthorityResolverService, RemoteConnectionType, WebSocketRemoteConnection, RemoteAuthorityResolverErrorCode } from '../../../../../platform/remote/common/remoteAuthorityResolver.js';
 import { RemoteAuthorityResolverService } from '../../../../../platform/remote/electron-browser/remoteAuthorityResolverService.js';
-import {
-	IRemoteSocketFactoryService,
-	RemoteSocketFactoryService,
-} from '../../../../../platform/remote/common/remoteSocketFactoryService.js';
+import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../../../../platform/remote/common/remoteSocketFactoryService.js';
 import { NativeExtensionService } from '../../electron-browser/nativeExtensionService.js';
 import { URI } from '../../../../../base/common/uri.js';
 
@@ -40,18 +27,13 @@ function fleet(incarnation = 3): ExtensionHostFleetSnapshot {
 				failure: undefined,
 				stderr: '',
 				outputEvents: [],
-				registrations: [
-					{ kind: 'remoteAuthorityResolver', registrationId: 'resolve', authorityPrefix: 'team' },
-				],
+				registrations: [{ kind: 'remoteAuthorityResolver', registrationId: 'resolve', authorityPrefix: 'team' }],
 			},
 		],
 	};
 }
 
-function setup(
-	invoke: IExtensionHostApi['invoke'],
-	snapshot: () => ExtensionHostFleetSnapshot = () => fleet(),
-): { services: InstantiationService; changed: Emitter<number> } {
+function setup(invoke: IExtensionHostApi['invoke'], snapshot: () => ExtensionHostFleetSnapshot = () => fleet()): { services: InstantiationService; changed: Emitter<number> } {
 	const services = new InstantiationService();
 	const changed = new Emitter<number>();
 	services.registerInstance(IExtensionHostApi, {
@@ -68,9 +50,7 @@ function setup(
 		onDidChange: changed.event,
 		onConnectionState: () => Disposable.None,
 	});
-	services.registerSingleton(IRemoteAuthorityResolverService, () =>
-		services.createInstance(RemoteAuthorityResolverService),
-	);
+	services.registerSingleton(IRemoteAuthorityResolverService, () => services.createInstance(RemoteAuthorityResolverService));
 	services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
 	return { services, changed };
 }
@@ -112,10 +92,7 @@ test('local extension authority resolution publishes a real endpoint before sock
 			},
 		],
 	);
-	await assert.rejects(
-		extensions.resolveAuthority('other+build', 1),
-		error => (error as { _code: string })._code === RemoteAuthorityResolverErrorCode.NoResolverFound,
-	);
+	await assert.rejects(extensions.resolveAuthority('other+build', 1), error => (error as { _code: string })._code === RemoteAuthorityResolverErrorCode.NoResolverFound);
 });
 
 test('a new resolver incarnation retires cached options and pending canonical queries', async () => {
@@ -238,10 +215,7 @@ test('the extension wire boundary rejects token-bearing authentication metadata 
 	using extensions = services.createInstance(NativeExtensionService);
 	await assert.rejects(extensions.resolveAuthority('team+build', 1), /Invalid resolver authentication/);
 	canonical = true;
-	await assert.rejects(
-		services.get(IRemoteAuthorityResolverService).getCanonicalURI(URI.parse('ash-remote://team+build/alias')),
-		/Inconsistent canonical/,
-	);
+	await assert.rejects(services.get(IRemoteAuthorityResolverService).getCanonicalURI(URI.parse('ash-remote://team+build/alias')), /Inconsistent canonical/);
 });
 
 test('managed sockets use the local incarnation, drain accepted writes and retire on re-resolution', async () => {

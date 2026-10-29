@@ -88,11 +88,9 @@ export async function generateIcons(options: GenerateIconsOptions = {}): Promise
 				throw new Error(`Icon font is stale for '${icon.id}'. Run 'pnpm icons:build'.`);
 			}
 			const point = font.codepoints[icon.id];
-			if (!point || !/^[E-F][0-9A-F]{3}$/u.test(point))
-				throw new TypeError(`Missing icon font codepoint: ${icon.id}`);
+			if (!point || !/^[E-F][0-9A-F]{3}$/u.test(point)) throw new TypeError(`Missing icon font codepoint: ${icon.id}`);
 			const preparedLayers = Object.hasOwn(font.layers ?? {}, icon.id) ? font.layers![icon.id] : undefined;
-			if (preparedLayers && !Array.isArray(preparedLayers))
-				throw new TypeError(`Invalid prepared font layers: ${icon.id}`);
+			if (preparedLayers && !Array.isArray(preparedLayers)) throw new TypeError(`Invalid prepared font layers: ${icon.id}`);
 			const layers = preparedLayers?.map(layer => {
 				const point = font.codepoints[layer.glyph];
 				if (
@@ -122,10 +120,7 @@ export async function generateIcons(options: GenerateIconsOptions = {}): Promise
 	const staleOutputs = await findStaleOutputs(generatedOutputs);
 
 	if (sourceHandling === 'check') {
-		const failures = [
-			...compilation.sourceUpdates.map(update => `source:${update.fileName}`),
-			...staleOutputs.map(output => output.label),
-		];
+		const failures = [...compilation.sourceUpdates.map(update => `source:${update.fileName}`), ...staleOutputs.map(output => output.label)];
 		if (failures.length > 0) {
 			throw new Error(`Product icons require generation: ${failures.join(', ')}. Run 'pnpm icons:generate'.`);
 		}
@@ -143,9 +138,7 @@ export async function generateIcons(options: GenerateIconsOptions = {}): Promise
 	};
 }
 
-export async function checkIcons(
-	options: Omit<GenerateIconsOptions, 'sourceHandling'> = {},
-): Promise<GenerateIconsReport> {
+export async function checkIcons(options: Omit<GenerateIconsOptions, 'sourceHandling'> = {}): Promise<GenerateIconsReport> {
 	return generateIcons({ ...options, sourceHandling: 'check' });
 }
 
@@ -216,7 +209,10 @@ function compileOutputs(icons: readonly GeneratedIcon[], outputs: IconOutputs): 
 
 function generateManifest(icons: readonly GeneratedIcon[]): string {
 	return `${JSON.stringify(
-		{ version: 1, icons: icons.map(({ fileName, id, rendering }) => ({ id, file: fileName, rendering })) },
+		{
+			version: 1,
+			icons: icons.map(({ fileName, id, rendering }) => ({ id, file: fileName, rendering })),
+		},
 		null,
 		2,
 	)}\n`;
@@ -250,12 +246,18 @@ function optimizeSvg(fileName: string, svg: string): string {
 		multipass: true,
 		plugins: [
 			// Layer IDs are build inputs for the animated brand glyphs.
-			iconName === 'ash-mark'
-				? { name: 'preset-default' as const, params: { overrides: { cleanupIds: false } } }
-				: 'preset-default',
+			iconName === 'ash-mark' ? { name: 'preset-default' as const, params: { overrides: { cleanupIds: false } } } : 'preset-default',
 			...(iconName === 'ash-mark'
 				? []
-				: [{ name: 'prefixIds' as const, params: { delim: '-', prefix: `ash-${iconName}` } }]),
+				: [
+						{
+							name: 'prefixIds' as const,
+							params: {
+								delim: '-',
+								prefix: `ash-${iconName}`,
+							},
+						},
+					]),
 			'removeDimensions',
 		],
 	}).data.trim();
@@ -312,9 +314,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 		sourceDirectory,
 		outputs: {
 			manifestFile: resolve(sourceDirectory, 'manifest.json'),
-			...(values['catalog-only']
-				? {}
-				: { typescriptFile: resolve(values['typescript-file'] ?? defaultOutputs.typescriptFile!) }),
+			...(values['catalog-only'] ? {} : { typescriptFile: resolve(values['typescript-file'] ?? defaultOutputs.typescriptFile!) }),
 		},
 	};
 	if (values.check) {

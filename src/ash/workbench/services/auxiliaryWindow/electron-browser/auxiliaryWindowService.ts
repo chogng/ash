@@ -1,10 +1,4 @@
-import {
-	AuxiliaryWindow,
-	BrowserAuxiliaryWindowService,
-	type AuxiliaryWindowOpenOptions,
-	type AuxiliaryWindowState,
-	type IAuxiliaryWindow,
-} from '../browser/auxiliaryWindowService.js';
+import { AuxiliaryWindow, BrowserAuxiliaryWindowService, type AuxiliaryWindowOpenOptions, type AuxiliaryWindowState, type IAuxiliaryWindow } from '../browser/auxiliaryWindowService.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { INativeHostService } from '../../../common/services.js';
@@ -26,14 +20,7 @@ export class ElectronAuxiliaryWindowService extends BrowserAuxiliaryWindowServic
 	}
 
 	protected override createAuxiliaryWindow(target: Window, title: string): AuxiliaryWindow {
-		return new ElectronAuxiliaryWindow(
-			this.opener,
-			target,
-			this.workbenchRoot,
-			this.themeService,
-			title,
-			this.host,
-		);
+		return new ElectronAuxiliaryWindow(this.opener, target, this.workbenchRoot, this.themeService, title, this.host);
 	}
 
 	override async open(options?: AuxiliaryWindowOpenOptions): Promise<IAuxiliaryWindow> {

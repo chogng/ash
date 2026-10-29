@@ -17,10 +17,7 @@ test('DataUri reads encoded metadata without consuming the payload', () => {
 			['description', 'Part;One'],
 		],
 	);
-	assert.deepEqual(
-		[...DataUri.parseMetaData(URI.parse('data:text/plain,content'))],
-		[[DataUri.META_DATA_MIME, 'text/plain']],
-	);
+	assert.deepEqual([...DataUri.parseMetaData(URI.parse('data:text/plain,content'))], [[DataUri.META_DATA_MIME, 'text/plain']]);
 });
 
 test('ExtUri preserves fragments unless explicitly ignored', () => {
@@ -66,22 +63,10 @@ test('ExtUri applies URI identity and casing rules to parent paths', () => {
 	assert.equal(extUri.isEqualOrParent(child.with({ fragment: 'other' }), root), false);
 	assert.equal(extUri.isEqualOrParent(child.with({ fragment: 'other' }), root, true), true);
 	assert.equal(extUri.isEqualOrParent(child.with({ query: 'revision=2' }), root), false);
-	assert.equal(
-		extUri.isEqualOrParent(URI.parse('ash://workspace/project/src/file.ts?revision=1#anchor'), root),
-		false,
-	);
-	assert.equal(
-		caseInsensitiveExtUri.isEqualOrParent(URI.parse('ash://workspace/project/src/file.ts?revision=1#anchor'), root),
-		true,
-	);
-	assert.equal(
-		extUri.isEqualOrParent(URI.parse('ash://workspace/Project%2Fsrc/file.ts?revision=1#anchor'), root),
-		false,
-	);
-	assert.equal(
-		caseInsensitiveExtUri.isEqual(URI.parse('ash://workspace/a%2Fb'), URI.parse('ash://workspace/a/b')),
-		false,
-	);
+	assert.equal(extUri.isEqualOrParent(URI.parse('ash://workspace/project/src/file.ts?revision=1#anchor'), root), false);
+	assert.equal(caseInsensitiveExtUri.isEqualOrParent(URI.parse('ash://workspace/project/src/file.ts?revision=1#anchor'), root), true);
+	assert.equal(extUri.isEqualOrParent(URI.parse('ash://workspace/Project%2Fsrc/file.ts?revision=1#anchor'), root), false);
+	assert.equal(caseInsensitiveExtUri.isEqual(URI.parse('ash://workspace/a%2Fb'), URI.parse('ash://workspace/a/b')), false);
 });
 
 test('dirname keeps an escaped slash inside its filename', () => {

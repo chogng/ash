@@ -20,10 +20,7 @@ interface SignedState {
 export default {
 	async fetch(request: Request, environment: Environment): Promise<Response> {
 		const url = new URL(request.url);
-		if (
-			environment.GITHUB_HOST !== undefined &&
-			(!/^[a-zA-Z0-9][a-zA-Z0-9.-]*$/.test(environment.GITHUB_HOST) || environment.GITHUB_HOST.length > 255)
-		)
+		if (environment.GITHUB_HOST !== undefined && (!/^[a-zA-Z0-9][a-zA-Z0-9.-]*$/.test(environment.GITHUB_HOST) || environment.GITHUB_HOST.length > 255))
 			return response(503, 'Invalid GitHub host configuration');
 		if (!environment.GITHUB_CLIENT_ID || !environment.GITHUB_CLIENT_SECRET || !environment.STATE_SIGNING_SECRET) {
 			return response(503, 'GitHub authorization is not configured');
@@ -71,12 +68,7 @@ async function authorize(url: URL, environment: Environment): Promise<Response> 
 
 async function callback(url: URL, environment: Environment): Promise<Response> {
 	const state = await verify(single(url.searchParams, 'state'), environment.STATE_SIGNING_SECRET);
-	if (
-		!state ||
-		state.host !== (environment.GITHUB_HOST ?? 'github.com') ||
-		!validLoopback(state.redirectUri) ||
-		!base64url43(state.clientState)
-	)
+	if (!state || state.host !== (environment.GITHUB_HOST ?? 'github.com') || !validLoopback(state.redirectUri) || !base64url43(state.clientState))
 		return response(400, 'Invalid authorization response');
 	const code = single(url.searchParams, 'code');
 	const error = single(url.searchParams, 'error');
@@ -89,8 +81,7 @@ async function callback(url: URL, environment: Environment): Promise<Response> {
 }
 
 async function exchange(request: Request, url: URL, environment: Environment): Promise<Response> {
-	if (request.headers.get('content-type')?.split(';', 1)[0] !== 'application/x-www-form-urlencoded')
-		return response(415, 'Expected form data');
+	if (request.headers.get('content-type')?.split(';', 1)[0] !== 'application/x-www-form-urlencoded') return response(415, 'Expected form data');
 	const reader = request.body?.getReader();
 	const chunks: Uint8Array[] = [];
 	let length = 0;
@@ -126,8 +117,7 @@ async function exchange(request: Request, url: URL, environment: Environment): P
 	const refreshToken = single(form, 'refresh_token');
 	if (
 		clientId !== environment.GITHUB_CLIENT_ID ||
-		(grantType === 'authorization_code' &&
-			(!code || !base64url43(verifier) || !redirectUri || !validLoopback(redirectUri))) ||
+		(grantType === 'authorization_code' && (!code || !base64url43(verifier) || !redirectUri || !validLoopback(redirectUri))) ||
 		(grantType === 'refresh_token' && !refreshToken) ||
 		!['authorization_code', 'refresh_token'].includes(grantType ?? '')
 	) {
@@ -157,12 +147,7 @@ async function exchange(request: Request, url: URL, environment: Environment): P
 			headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
 		});
 	}
-	if (
-		typeof token.access_token !== 'string' ||
-		!token.access_token ||
-		typeof token.token_type !== 'string' ||
-		token.token_type.toLowerCase() !== 'bearer'
-	)
+	if (typeof token.access_token !== 'string' || !token.access_token || typeof token.token_type !== 'string' || token.token_type.toLowerCase() !== 'bearer')
 		return response(502, 'GitHub token exchange failed');
 	return new Response(
 		JSON.stringify({
@@ -204,10 +189,7 @@ function validLoopback(value: string): boolean {
 }
 
 async function key(secret: string): Promise<CryptoKey> {
-	return crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [
-		'sign',
-		'verify',
-	]);
+	return crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
 }
 
 async function sign(state: SignedState, secret: string): Promise<string> {
@@ -221,12 +203,7 @@ async function verify(value: string | undefined, secret: string): Promise<Signed
 	const [data, signature, extra] = value.split('.');
 	if (!data || !signature || extra || data.length > 2048) return undefined;
 	try {
-		const valid = await crypto.subtle.verify(
-			'HMAC',
-			await key(secret),
-			fromBase64url(signature),
-			new TextEncoder().encode(data),
-		);
+		const valid = await crypto.subtle.verify('HMAC', await key(secret), fromBase64url(signature), new TextEncoder().encode(data));
 		if (!valid) return undefined;
 		const state = JSON.parse(new TextDecoder().decode(fromBase64url(data))) as SignedState;
 		const age = Math.floor(Date.now() / 1000) - state.issuedAt;

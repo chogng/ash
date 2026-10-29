@@ -82,7 +82,10 @@ export class Button extends Disposable {
 		this.usesLabelAsAriaLabel = options.iconOnly === true && options.ariaLabel === undefined;
 		this.currentIcon = options.icon;
 		const domNode = h(ownerDocument, 'button', {
-			properties: { type: options.type ?? 'button', disabled: options.enabled === false },
+			properties: {
+				type: options.type ?? 'button',
+				disabled: options.enabled === false,
+			},
 		});
 		this._register(toDisposable(() => domNode.remove()));
 		const root = new FastDomNode(domNode);
@@ -265,18 +268,10 @@ export class ButtonWithDropdown extends Disposable {
 				if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && this.dropdownButton.enabled) {
 					stopEvent(event);
 					this.showDropdown();
-				} else if (
-					event.key === 'ArrowRight' &&
-					event.target === this.primaryButton.domNode &&
-					this.dropdownButton.enabled
-				) {
+				} else if (event.key === 'ArrowRight' && event.target === this.primaryButton.domNode && this.dropdownButton.enabled) {
 					stopEvent(event);
 					this.dropdownButton.focus();
-				} else if (
-					event.key === 'ArrowLeft' &&
-					event.target === this.dropdownButton.domNode &&
-					this.primaryButton.enabled
-				) {
+				} else if (event.key === 'ArrowLeft' && event.target === this.dropdownButton.domNode && this.primaryButton.enabled) {
 					stopEvent(event);
 					this.primaryButton.focus();
 				}
@@ -320,8 +315,7 @@ export class ButtonWithDropdown extends Disposable {
 			enabled: this.primaryButton.enabled,
 			run: () => this.primaryButton.domNode.click(),
 		};
-		const menuActions =
-			this.options.addPrimaryActionToDropdown === false ? actions : [primary, new Separator(), ...actions];
+		const menuActions = this.options.addPrimaryActionToDropdown === false ? actions : [primary, new Separator(), ...actions];
 		const menu = new CancellationTokenSource();
 		this.menu.value = menu;
 		this.dropdownButton.focus();

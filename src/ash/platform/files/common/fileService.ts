@@ -5,13 +5,7 @@ import { raceCancellationError } from '../../../base/common/async.js';
 import { CancellationToken, CancellationTokenSource, throwIfCancelled } from '../../../base/common/cancellation.js';
 import { canceled } from '../../../base/common/errors.js';
 import { transform } from '../../../base/common/stream.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	toDisposable,
-	type IDisposable,
-} from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { dirname, extUri } from '../../../base/common/resources.js';
 import { generateUuid } from '../../../base/common/uuid.js';
@@ -162,9 +156,7 @@ export class FileService extends Disposable implements IFileService {
 	public retainPathIdentity(resource: URI): IDisposable {
 		this.assertNotDisposed();
 		const provider = this.providers.get(resource.scheme)?.provider;
-		return provider && hasPathIdentityCapability(provider)
-			? provider.retainPathIdentity(resource)
-			: Disposable.None;
+		return provider && hasPathIdentityCapability(provider) ? provider.retainPathIdentity(resource) : Disposable.None;
 	}
 
 	public getPathIdentity(resource: URI): IFilePathIdentity | undefined {
@@ -202,12 +194,10 @@ export class FileService extends Disposable implements IFileService {
 
 	public stat(resource: URI): Promise<IFileStat> {
 		const provider = this.provider(resource);
-		return provider
-			.stat(resource)
-			.then(stat => ({
-				...stat,
-				readonly: stat.readonly || !!(provider.capabilities & FileSystemProviderCapabilities.Readonly),
-			}));
+		return provider.stat(resource).then(stat => ({
+			...stat,
+			readonly: stat.readonly || !!(provider.capabilities & FileSystemProviderCapabilities.Readonly),
+		}));
 	}
 
 	public readDirectory(resource: URI): Promise<readonly IFileEntry[]> {
@@ -216,18 +206,14 @@ export class FileService extends Disposable implements IFileService {
 
 	public readFile(resource: URI, encoding?: string, options?: IFileReadOptions): Promise<IFileContent> {
 		const provider = this.provider(resource);
-		if (!this.hasCapability(resource, FileSystemProviderCapabilities.FileReadWrite))
-			throw new FileOperationNotSupportedError(resource, 'readFile');
+		if (!this.hasCapability(resource, FileSystemProviderCapabilities.FileReadWrite)) throw new FileOperationNotSupportedError(resource, 'readFile');
 		if (encoding !== undefined && provider.readTextFile) return provider.readTextFile(resource, encoding, options);
-		if (encoding !== undefined && !['auto', 'utf8', 'utf8bom'].includes(encoding))
-			throw new FileOperationNotSupportedError(resource, 'readTextFile');
+		if (encoding !== undefined && !['auto', 'utf8', 'utf8bom'].includes(encoding)) throw new FileOperationNotSupportedError(resource, 'readTextFile');
 		return this.readFileBytes(resource).then(content => {
 			const bom = content.bytes[0] === 0xef && content.bytes[1] === 0xbb && content.bytes[2] === 0xbf;
 			return {
 				resource,
-				content: new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(
-					encoding !== undefined && bom ? content.bytes.subarray(3) : content.bytes,
-				),
+				content: new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(encoding !== undefined && bom ? content.bytes.subarray(3) : content.bytes),
 				revision: content.revision,
 				...(encoding === undefined ? {} : { encoding: bom ? 'utf8bom' : 'utf8' }),
 			};
@@ -236,16 +222,11 @@ export class FileService extends Disposable implements IFileService {
 
 	public readFileBytes(resource: URI): Promise<IFileBytes> {
 		const provider = this.provider(resource);
-		if (!this.hasCapability(resource, FileSystemProviderCapabilities.FileReadWrite))
-			throw new FileOperationNotSupportedError(resource, 'readFile');
+		if (!this.hasCapability(resource, FileSystemProviderCapabilities.FileReadWrite)) throw new FileOperationNotSupportedError(resource, 'readFile');
 		return provider.readFile(resource);
 	}
 
-	public async readFileStream(
-		resource: URI,
-		options: IReadFileStreamOptions = {},
-		token: CancellationToken = CancellationToken.None,
-	): Promise<IFileStreamContent> {
+	public async readFileStream(resource: URI, options: IReadFileStreamOptions = {}, token: CancellationToken = CancellationToken.None): Promise<IFileStreamContent> {
 		const provider = this.provider(resource);
 		for (const value of [options.position, options.length, options.limits?.size]) {
 			if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
@@ -262,36 +243,21 @@ export class FileService extends Disposable implements IFileService {
 		try {
 			const stat = await raceCancellationError(this.stat(resource), cancellation.token);
 			if (stat.kind !== FileKind.File) {
-				throw createFileSystemProviderError(
-					'Expected a file',
-					stat.kind === FileKind.Directory
-						? FileSystemProviderErrorCode.FileIsADirectory
-						: FileSystemProviderErrorCode.Unavailable,
-				);
+				throw createFileSystemProviderError('Expected a file', stat.kind === FileKind.Directory ? FileSystemProviderErrorCode.FileIsADirectory : FileSystemProviderErrorCode.Unavailable);
 			}
 			if (options.limits?.size !== undefined && stat.sizeBytes > options.limits.size) {
-				throw createFileSystemProviderError(
-					'File exceeds the read size limit',
-					FileSystemProviderErrorCode.FileTooLarge,
-				);
+				throw createFileSystemProviderError('File exceeds the read size limit', FileSystemProviderErrorCode.FileTooLarge);
 			}
 			let value: VSBufferReadableStream;
 			if (hasFileReadStreamCapability(provider)) {
-				value = transform(
-					provider.readFileStream(resource, options, cancellation.token),
-					{ data: bytes => VSBuffer.wrap(Uint8Array.from(bytes)) },
-					chunks => VSBuffer.concat(chunks),
-				);
+				value = transform(provider.readFileStream(resource, options, cancellation.token), { data: bytes => VSBuffer.wrap(Uint8Array.from(bytes)) }, chunks => VSBuffer.concat(chunks));
 			} else {
 				if (!(provider.capabilities & FileSystemProviderCapabilities.FileReadWrite)) {
 					throw new FileOperationNotSupportedError(resource, 'readFileStream');
 				}
 				const content = await raceCancellationError(provider.readFile(resource), cancellation.token);
 				const start = options.position ?? 0;
-				const bytes = content.bytes.subarray(
-					start,
-					options.length === undefined ? undefined : start + options.length,
-				);
+				const bytes = content.bytes.subarray(start, options.length === undefined ? undefined : start + options.length);
 				value = bufferToStream(VSBuffer.wrap(Uint8Array.from(bytes)));
 			}
 			const destroy = value.destroy;
@@ -313,35 +279,17 @@ export class FileService extends Disposable implements IFileService {
 		}
 	}
 
-	public writeFile(
-		request: IFileWriteRequest,
-		options: IFileWriteOptions = { create: true, overwrite: true },
-		signal?: AbortSignal,
-	): Promise<IFileWriteResult> {
+	public writeFile(request: IFileWriteRequest, options: IFileWriteOptions = { create: true, overwrite: true }, signal?: AbortSignal): Promise<IFileWriteResult> {
 		const provider = this.writableProvider(request.resource, 'writeFile');
 		const writeOptions = { ...options, expectedRevision: request.expectedRevision ?? options.expectedRevision };
-		if (options.writeElevated && !(provider.capabilities & FileSystemProviderCapabilities.FileWriteElevated))
-			throw new FileOperationNotSupportedError(request.resource, 'writeFileElevated');
-		if (options.unlock && !(provider.capabilities & FileSystemProviderCapabilities.FileWriteUnlock))
-			throw new FileOperationNotSupportedError(request.resource, 'unlock');
-		if (request.encoding !== undefined && provider.writeTextFile)
-			return provider.writeTextFile(request.resource, request.content, request.encoding, writeOptions, signal);
-		if (request.encoding !== undefined && !['utf8', 'utf8bom'].includes(request.encoding))
-			throw new FileOperationNotSupportedError(request.resource, 'writeTextFile');
-		return provider.writeFile(
-			request.resource,
-			new TextEncoder().encode(request.encoding === 'utf8bom' ? '\uFEFF' + request.content : request.content),
-			writeOptions,
-			signal,
-		);
+		if (options.writeElevated && !(provider.capabilities & FileSystemProviderCapabilities.FileWriteElevated)) throw new FileOperationNotSupportedError(request.resource, 'writeFileElevated');
+		if (options.unlock && !(provider.capabilities & FileSystemProviderCapabilities.FileWriteUnlock)) throw new FileOperationNotSupportedError(request.resource, 'unlock');
+		if (request.encoding !== undefined && provider.writeTextFile) return provider.writeTextFile(request.resource, request.content, request.encoding, writeOptions, signal);
+		if (request.encoding !== undefined && !['utf8', 'utf8bom'].includes(request.encoding)) throw new FileOperationNotSupportedError(request.resource, 'writeTextFile');
+		return provider.writeFile(request.resource, new TextEncoder().encode(request.encoding === 'utf8bom' ? '\uFEFF' + request.content : request.content), writeOptions, signal);
 	}
 
-	public writeFileBytes(
-		resource: URI,
-		bytes: Uint8Array,
-		options: IFileWriteOptions = { create: true, overwrite: false },
-		signal?: AbortSignal,
-	): Promise<IFileWriteResult> {
+	public writeFileBytes(resource: URI, bytes: Uint8Array, options: IFileWriteOptions = { create: true, overwrite: false }, signal?: AbortSignal): Promise<IFileWriteResult> {
 		const provider = this.writableProvider(resource, 'writeFile');
 		if (options.writeElevated && !(provider.capabilities & FileSystemProviderCapabilities.FileWriteElevated)) {
 			throw new FileOperationNotSupportedError(resource, 'writeFileElevated');
@@ -363,24 +311,14 @@ export class FileService extends Disposable implements IFileService {
 	public async copy(source: URI, target: URI): Promise<void> {
 		const sourceProvider = this.provider(source);
 		const targetProvider = this.writableProvider(target, 'copy');
-		if (
-			sourceProvider === targetProvider &&
-			this.hasCapability(source, FileSystemProviderCapabilities.FileFolderCopy)
-		) {
+		if (sourceProvider === targetProvider && this.hasCapability(source, FileSystemProviderCapabilities.FileFolderCopy)) {
 			return sourceProvider.copy(source, target);
 		}
 		using sourceScope = acquireCopyScope(sourceProvider, source);
 		using targetScope = acquireCopyScope(targetProvider, target);
 		using cancellation = new CancellationTokenSource(sourceScope.token);
 		using targetRetired = targetScope.token.onCancellationRequested(() => cancellation.cancel());
-		await this.copyBetweenProviders(
-			sourceScope,
-			targetScope,
-			source,
-			target,
-			sourceProvider === targetProvider,
-			cancellation.token,
-		);
+		await this.copyBetweenProviders(sourceScope, targetScope, source, target, sourceProvider === targetProvider, cancellation.token);
 	}
 
 	public rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
@@ -397,10 +335,7 @@ export class FileService extends Disposable implements IFileService {
 
 	private writableProvider(resource: URI, operation: string): IFileSystemProvider {
 		const provider = this.provider(resource);
-		if (
-			!(provider.capabilities & FileSystemProviderCapabilities.FileReadWrite) ||
-			provider.capabilities & FileSystemProviderCapabilities.Readonly
-		) {
+		if (!(provider.capabilities & FileSystemProviderCapabilities.FileReadWrite) || provider.capabilities & FileSystemProviderCapabilities.Readonly) {
 			throw new FileOperationNotSupportedError(resource, operation);
 		}
 		return provider;
@@ -455,15 +390,7 @@ export class FileService extends Disposable implements IFileService {
 			// recursively delete the published destination of a concurrent writer.
 			const temporary = URI.joinPath(dirname(target), `.ash-copy-${generateUuid()}`);
 			try {
-				await this.copyBetweenProviders(
-					sourceProvider,
-					targetProvider,
-					source,
-					temporary,
-					sameProvider,
-					token,
-					true,
-				);
+				await this.copyBetweenProviders(sourceProvider, targetProvider, source, temporary, sameProvider, token, true);
 				await run(() => targetProvider.rename(temporary, target, 'error', token));
 			} catch (error) {
 				// Cleanup stays on the original connection and cannot mask the copy failure.
@@ -476,15 +403,7 @@ export class FileService extends Disposable implements IFileService {
 		}
 		await run(() => targetProvider.createDirectory(target, token));
 		for (const entry of await run(() => sourceProvider.readDirectory(source, token))) {
-			await this.copyBetweenProviders(
-				sourceProvider,
-				targetProvider,
-				entry.resource,
-				URI.joinPath(target, entry.name),
-				sameProvider,
-				token,
-				true,
-			);
+			await this.copyBetweenProviders(sourceProvider, targetProvider, entry.resource, URI.joinPath(target, entry.name), sameProvider, token, true);
 		}
 	}
 
@@ -493,9 +412,7 @@ export class FileService extends Disposable implements IFileService {
 			this.changeEmitter.fire(event);
 			return;
 		}
-		const resources = event.resources.filter(
-			resource => this.providers.get(resource.scheme)?.provider === provider,
-		);
+		const resources = event.resources.filter(resource => this.providers.get(resource.scheme)?.provider === provider);
 		if (resources.length > 0) {
 			this.changeEmitter.fire({ resources });
 		}
@@ -513,8 +430,7 @@ function acquireCopyScope(provider: IFileSystemProvider, resource: URI): IFileSy
 			stat: provider.stat.bind(provider),
 			readDirectory: provider.readDirectory.bind(provider),
 			readFile: provider.readFile.bind(provider),
-			writeFile: (uri: URI, bytes: Uint8Array, options: IFileWriteOptions) =>
-				provider.writeFile(uri, bytes, options),
+			writeFile: (uri: URI, bytes: Uint8Array, options: IFileWriteOptions) => provider.writeFile(uri, bytes, options),
 			createDirectory: provider.createDirectory.bind(provider),
 			rename: provider.rename.bind(provider),
 			delete: provider.delete.bind(provider),

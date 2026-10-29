@@ -11,10 +11,6 @@ export interface ILocalizationService {
 
 export const ILocalizationService = createServiceIdentifier<ILocalizationService>('localizationService');
 
-export function localize(
-	localization: ILocalizationService | undefined,
-	key: LocalizationKey | undefined,
-	fallback: string,
-): string {
+export function localize(localization: ILocalizationService | undefined, key: LocalizationKey | undefined, fallback: string): string {
 	return localization && key ? localization.translate(key.bundle, key.key, fallback) : fallback;
 }

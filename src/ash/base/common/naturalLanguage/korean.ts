@@ -24,59 +24,9 @@ export function getKoreanAltChars(code: number): ArrayLike<number> | undefined {
 
 const initialKeys = ['r', 'R', 's', 'e', 'E', 'f', 'a', 'q', 'Q', 't', 'T', 'd', 'w', 'W', 'c', 'z', 'x', 'v', 'g'];
 
-const vowelKeys = [
-	'k',
-	'o',
-	'i',
-	'O',
-	'j',
-	'p',
-	'u',
-	'P',
-	'h',
-	'hk',
-	'ho',
-	'hl',
-	'y',
-	'n',
-	'nj',
-	'np',
-	'nl',
-	'b',
-	'm',
-	'ml',
-	'l',
-];
+const vowelKeys = ['k', 'o', 'i', 'O', 'j', 'p', 'u', 'P', 'h', 'hk', 'ho', 'hl', 'y', 'n', 'nj', 'np', 'nl', 'b', 'm', 'ml', 'l'];
 
-const finalKeys = [
-	'r',
-	'R',
-	'rt',
-	's',
-	'sw',
-	'sg',
-	'e',
-	'f',
-	'fr',
-	'fa',
-	'fq',
-	'ft',
-	'fx',
-	'fv',
-	'fg',
-	'a',
-	'q',
-	'qt',
-	't',
-	'T',
-	'd',
-	'w',
-	'c',
-	'z',
-	'x',
-	'v',
-	'g',
-];
+const finalKeys = ['r', 'R', 'rt', 's', 'sw', 'sg', 'e', 'f', 'fr', 'fa', 'fq', 'ft', 'fx', 'fv', 'fg', 'a', 'q', 'qt', 't', 'T', 'd', 'w', 'c', 'z', 'x', 'v', 'g'];
 
 // U+3131..U+3163 mixes consonants and vowels; U+3164 onward is a filler or archaic.
 const compatibilityKeys = [

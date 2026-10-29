@@ -3,8 +3,7 @@ import { createServiceIdentifier } from '../../../../../platform/instantiation/c
 import type { IObservable, IReader } from '../../../../../base/common/observable.js';
 import type { Event } from '../../../../../base/common/event.js';
 
-export type ToolAuthority =
-	'directoryRead' | 'directoryWrite' | 'processExecution' | 'productService' | 'providerDefined';
+export type ToolAuthority = 'directoryRead' | 'directoryWrite' | 'processExecution' | 'productService' | 'providerDefined';
 export type ToolSource = 'environment' | 'dynamic' | 'extension' | 'host' | 'local' | 'mcp';
 export type ToolExposure = 'direct' | 'deferred' | 'modelOnly' | 'hidden';
 
@@ -52,8 +51,7 @@ export interface ILanguageModelToolsService {
 	getToolByFullReferenceName(fullReferenceName: string): IToolData | IToolSet | undefined;
 }
 
-export const ILanguageModelToolsService =
-	createServiceIdentifier<ILanguageModelToolsService>('ILanguageModelToolsService');
+export const ILanguageModelToolsService = createServiceIdentifier<ILanguageModelToolsService>('ILanguageModelToolsService');
 
 export function isToolSet(tool: IToolData | IToolSet | undefined): tool is IToolSet {
 	return tool !== undefined && 'getTools' in tool;

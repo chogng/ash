@@ -6,11 +6,7 @@ import { InstantiationService } from '../../../instantiation/common/instantiatio
 import { ServiceCollection } from '../../../instantiation/common/serviceCollection.js';
 import { INACTIVE_TUNNEL_MODE, TunnelStates, type TunnelMode, type TunnelStatus } from '../../common/remoteTunnel.js';
 import { RemoteTunnelService } from '../../node/remoteTunnelService.js';
-import {
-	ITunnelProcessCoordinator,
-	type ITunnelProcessMachineStatus,
-	type ITunnelProcessStatus,
-} from '../../node/tunnelProcessCoordinator.js';
+import { ITunnelProcessCoordinator, type ITunnelProcessMachineStatus, type ITunnelProcessStatus } from '../../node/tunnelProcessCoordinator.js';
 
 class Coordinator extends Disposable implements ITunnelProcessCoordinator {
 	declare public readonly _serviceBrand: undefined;
@@ -67,10 +63,7 @@ suite('Application remote tunnel service', () => {
 		});
 		assert.equal((await channel.call<TunnelStatus>('window:1', 'startTunnel', mode)).type, 'connected');
 		assert.deepEqual(coordinator.calls, [{ mode, root: '/selected' }]);
-		assert.equal(
-			(await channel.call<TunnelStatus>('window:2', 'initialize', INACTIVE_TUNNEL_MODE)).type,
-			'connected',
-		);
+		assert.equal((await channel.call<TunnelStatus>('window:2', 'initialize', INACTIVE_TUNNEL_MODE)).type, 'connected');
 		assert.equal(coordinator.calls.length, 1);
 		await channel.call('window:2', 'stopTunnel');
 		assert.deepEqual(await owner.getMode(), INACTIVE_TUNNEL_MODE);

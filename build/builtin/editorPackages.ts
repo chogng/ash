@@ -11,12 +11,7 @@ export interface EditorPackageBinary {
 }
 
 /** Stage one immutable market submission. Signing and publication remain with the registry. */
-export async function buildEditorPackage(
-	packageRoot: string,
-	binaries: readonly EditorPackageBinary[],
-	output: string,
-	sdk?: { api: EditorClientApi; licenseFile: string },
-): Promise<void> {
+export async function buildEditorPackage(packageRoot: string, binaries: readonly EditorPackageBinary[], output: string, sdk?: { api: EditorClientApi; licenseFile: string }): Promise<void> {
 	if (!binaries.length) throw new Error('An editor package needs at least one platform executable');
 	const manifest = JSON.parse(await readFile(resolve(packageRoot, 'package.json'), 'utf8'));
 	if (
@@ -30,12 +25,7 @@ export async function buildEditorPackage(
 	const messages = JSON.parse(await readFile(resolve(packageRoot, 'package.nls.json'), 'utf8'));
 	const platforms = new Set<string>();
 	for (const binary of binaries) {
-		if (
-			!/^(?:darwin-(?:arm64|x64)|linux-(?:arm64|armhf|x64)|win32-(?:arm64|ia32|x64))$/u.test(
-				binary.targetPlatform,
-			) ||
-			platforms.has(binary.targetPlatform)
-		)
+		if (!/^(?:darwin-(?:arm64|x64)|linux-(?:arm64|armhf|x64)|win32-(?:arm64|ia32|x64))$/u.test(binary.targetPlatform) || platforms.has(binary.targetPlatform))
 			throw new Error('Invalid or duplicate editor executable platform');
 		platforms.add(binary.targetPlatform);
 		if (!(await stat(binary.path)).isFile()) throw new Error('Editor executable must be a regular file');
@@ -54,12 +44,8 @@ export async function buildEditorPackage(
 	try {
 		manifest.ashRuntime.client = compiled.client;
 		const declarations = [];
-		const capabilities: { kind: string; id: string; path: string; runtime?: string }[] = [
-			{ kind: 'asset', id: 'editor-resources', path: 'editor' },
-		];
-		for (const binary of [...binaries].sort((left, right) =>
-			left.targetPlatform.localeCompare(right.targetPlatform),
-		)) {
+		const capabilities: { kind: string; id: string; path: string; runtime?: string }[] = [{ kind: 'asset', id: 'editor-resources', path: 'editor' }];
+		for (const binary of [...binaries].sort((left, right) => left.targetPlatform.localeCompare(right.targetPlatform))) {
 			const executable = `bin/${binary.targetPlatform}/${manifest.ashRuntime.entrypoint}${binary.targetPlatform.startsWith('win32-') ? '.exe' : ''}`;
 			const id = `editor-runtime-${binary.targetPlatform}`;
 			await mkdir(dirname(resolve(payload, executable)), { recursive: true });
@@ -76,8 +62,7 @@ export async function buildEditorPackage(
 			});
 		}
 		await copyFile(resolve(packageRoot, 'README.md'), resolve(payload, 'README.md'));
-		for (const name of ['README.md', 'package.nls.json', 'package.nls.zh-CN.json'])
-			await copyFile(resolve(packageRoot, name), resolve(assets, name));
+		for (const name of ['README.md', 'package.nls.json', 'package.nls.zh-CN.json']) await copyFile(resolve(packageRoot, name), resolve(assets, name));
 		await copyFile(sdk?.licenseFile ?? resolve(import.meta.dirname, '../../LICENSE'), resolve(payload, 'LICENSE'));
 		await writeFile(resolve(assets, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');
 		for (const [path, content] of Object.entries(compiled.resources)) {
@@ -85,10 +70,7 @@ export async function buildEditorPackage(
 			await writeFile(resolve(assets, path), content);
 		}
 		await mkdir(resolve(assets, 'ash'));
-		await writeFile(
-			resolve(assets, 'ash/editor-extensions.json'),
-			JSON.stringify({ schemaVersion: 1, editorExtensions: declarations }, null, 2) + '\n',
-		);
+		await writeFile(resolve(assets, 'ash/editor-extensions.json'), JSON.stringify({ schemaVersion: 1, editorExtensions: declarations }, null, 2) + '\n');
 		const catalog = {
 			schemaVersion: 2,
 			packageType: 'editor',
@@ -109,11 +91,7 @@ export async function buildEditorPackage(
 	}
 }
 
-if (
-	import.meta.url.endsWith('/editorPackages.ts') &&
-	process.argv[1] &&
-	import.meta.url === pathToFileURL(await realpath(process.argv[1]).catch(() => '')).href
-) {
+if (import.meta.url.endsWith('/editorPackages.ts') && process.argv[1] && import.meta.url === pathToFileURL(await realpath(process.argv[1]).catch(() => '')).href) {
 	const [source, output, ...arguments_] = process.argv.slice(2);
 	if (!source || !output || !arguments_.length || arguments_.some(value => !/^[a-z0-9-]+=.+$/u.test(value)))
 		throw new Error('Usage: package:editor <source> <output> <target-platform>=<executable> ...');

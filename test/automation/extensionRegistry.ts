@@ -46,8 +46,7 @@ export class SignedExtensionRegistry implements BackendFixture {
 			contents.set('package.json', Buffer.from(JSON.stringify(extension)));
 			const catalog = JSON.parse(contents.get('localization/package.json')!.toString());
 			catalog.bundles['ash.regions'].searchCommands = index === 0 ? '安装版搜索命令' : '更新版搜索命令';
-			catalog.extensionTranslations['ash.git'].package['git.menu.createBranch'] =
-				index === 0 ? '安装版创建分支…' : '更新版创建分支…';
+			catalog.extensionTranslations['ash.git'].package['git.menu.createBranch'] = index === 0 ? '安装版创建分支…' : '更新版创建分支…';
 			// A partial installed catalog must retain the caller's English fallback.
 			delete catalog.bundles['ash.regions'].primarySidebar;
 			contents.set('localization/package.json', Buffer.from(JSON.stringify(catalog)));
@@ -169,13 +168,7 @@ export class SignedExtensionRegistry implements BackendFixture {
 	}
 
 	/** Serves a separately built signed editor submission; installation and exact consent stay product actions. */
-	public static async createEditor(
-		root: string,
-		distribution: string,
-		trustedRoot: string,
-		packageId: string,
-		allowedPublishers: readonly string[] = ['ash'],
-	): Promise<SignedExtensionRegistry> {
+	public static async createEditor(root: string, distribution: string, trustedRoot: string, packageId: string, allowedPublishers: readonly string[] = ['ash']): Promise<SignedExtensionRegistry> {
 		await mkdir(root, { recursive: true });
 		await cp(distribution, join(root, 'release-1'), { recursive: true, errorOnExist: true, force: false });
 		await writeFile(join(root, 'root.json'), await readFile(trustedRoot));
@@ -205,36 +198,18 @@ export class SignedExtensionRegistry implements BackendFixture {
 			capabilities: readonly { descriptor: { kind: string } }[];
 		}[]
 	> {
-		const state = JSON.parse(
-			await readFile(join(this.profileDirectory!, 'extensions-manager', 'manager-state.json'), 'utf8'),
-		);
+		const state = JSON.parse(await readFile(join(this.profileDirectory!, 'extensions-manager', 'manager-state.json'), 'utf8'));
 		return Object.values(state.installations);
 	}
 
 	public async installedCatalog(version: string): Promise<unknown> {
 		const release = this.releases.find(release => release.version === version)!;
-		return JSON.parse(
-			await readFile(
-				join(
-					this.profileDirectory!,
-					'extensions-manager',
-					'artifacts',
-					release.digest.slice('sha256:'.length),
-					'localization',
-					'package.json',
-				),
-				'utf8',
-			),
-		);
+		return JSON.parse(await readFile(join(this.profileDirectory!, 'extensions-manager', 'artifacts', release.digest.slice('sha256:'.length), 'localization', 'package.json'), 'utf8'));
 	}
 
 	private async start(): Promise<void> {
 		const fixtureRoot = resolve('crates/http-test-support/fixtures');
-		const [ca, certificate, privateKey] = await Promise.all([
-			readFile(join(fixtureRoot, 'ca.der')),
-			readFile(join(fixtureRoot, 'server.der')),
-			readFile(join(fixtureRoot, 'server-key.der')),
-		]);
+		const [ca, certificate, privateKey] = await Promise.all([readFile(join(fixtureRoot, 'ca.der')), readFile(join(fixtureRoot, 'server.der')), readFile(join(fixtureRoot, 'server-key.der'))]);
 		await writeFile(join(this.root, 'tls-ca.der'), ca);
 		const cert =
 			'-----BEGIN CERTIFICATE-----\n' +
@@ -244,36 +219,29 @@ export class SignedExtensionRegistry implements BackendFixture {
 				.join('\n') +
 			'\n-----END CERTIFICATE-----\n';
 		const key = createPrivateKey({ key: privateKey, type: 'pkcs8', format: 'der' });
-		this.server = createServer(
-			{ cert, key: key.export({ type: 'pkcs8', format: 'pem' }) },
-			async (request, response) => {
-				const path = request.url ?? '';
-				const release = this.publishedRelease;
-				// Serve only generated repository entries; TUF role URLs retain encoded slashes.
-				if (
-					request.method !== 'GET' ||
-					!/^\/(metadata|targets)\/[a-zA-Z0-9%._/-]+$/u.test(path) ||
-					path.split('/').includes('..')
-				) {
-					response.writeHead(400).end();
-					return;
-				}
-				try {
-					const bytes = await readFile(join(this.root, `release-${release}`, path.slice(1)));
-					this.requests.push({ path, release, status: 200, bytes: bytes.length });
-					response
-						.writeHead(200, {
-							'Content-Length': bytes.length,
-							'Content-Type': path.endsWith('.zip') ? 'application/zip' : 'application/json',
-						})
-						.end(bytes);
-				} catch (error) {
-					const status = (error as NodeJS.ErrnoException).code === 'ENOENT' ? 404 : 500;
-					this.requests.push({ path, release, status, bytes: 0 });
-					response.writeHead(status).end();
-				}
-			},
-		);
+		this.server = createServer({ cert, key: key.export({ type: 'pkcs8', format: 'pem' }) }, async (request, response) => {
+			const path = request.url ?? '';
+			const release = this.publishedRelease;
+			// Serve only generated repository entries; TUF role URLs retain encoded slashes.
+			if (request.method !== 'GET' || !/^\/(metadata|targets)\/[a-zA-Z0-9%._/-]+$/u.test(path) || path.split('/').includes('..')) {
+				response.writeHead(400).end();
+				return;
+			}
+			try {
+				const bytes = await readFile(join(this.root, `release-${release}`, path.slice(1)));
+				this.requests.push({ path, release, status: 200, bytes: bytes.length });
+				response
+					.writeHead(200, {
+						'Content-Length': bytes.length,
+						'Content-Type': path.endsWith('.zip') ? 'application/zip' : 'application/json',
+					})
+					.end(bytes);
+			} catch (error) {
+				const status = (error as NodeJS.ErrnoException).code === 'ENOENT' ? 404 : 500;
+				this.requests.push({ path, release, status, bytes: 0 });
+				response.writeHead(status).end();
+			}
+		});
 		await new Promise<void>((resolve, reject) => {
 			this.server!.once('error', reject);
 			this.server!.listen(0, '127.0.0.1', resolve);
@@ -295,9 +263,7 @@ export class SignedExtensionRegistry implements BackendFixture {
 						trustedRoot: 'root.json',
 						tlsRootCertificates: ['tls-ca.der'],
 						allowedPublishers: this.allowedPublishers,
-						...(this.productRuntimePublishers.length
-							? { productRuntimePublishers: this.productRuntimePublishers }
-							: {}),
+						...(this.productRuntimePublishers.length ? { productRuntimePublishers: this.productRuntimePublishers } : {}),
 					},
 				],
 			}),

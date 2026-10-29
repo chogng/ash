@@ -10,10 +10,7 @@ export const terminalResizeDimensionsOverlayConfiguration: Readonly<Record<strin
 		type: 'boolean',
 		default: true,
 		get description() {
-			return localize(
-				'terminal.resizeDimensionsOverlay.enabled',
-				'Show the terminal column and row counts briefly when its size changes.',
-			);
+			return localize('terminal.resizeDimensionsOverlay.enabled', 'Show the terminal column and row counts briefly when its size changes.');
 		},
 	},
 };

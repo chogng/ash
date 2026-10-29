@@ -1,11 +1,7 @@
 import assert from 'node:assert/strict';
 import { setup, suite, suiteSetup, suiteTeardown, test } from 'mocha';
 import type { ISandboxGlobals } from '../../../sandbox/electron-browser/sandboxTypes.js';
-import {
-	NATIVE_CONTEXT_MENU_CLOSE_CHANNEL,
-	NATIVE_CONTEXT_MENU_POPUP_CHANNEL,
-	type INativeContextMenuRequest,
-} from '../../common/contextmenu.js';
+import { NATIVE_CONTEXT_MENU_CLOSE_CHANNEL, NATIVE_CONTEXT_MENU_POPUP_CHANNEL, type INativeContextMenuRequest } from '../../common/contextmenu.js';
 
 suite('Electron context menu transport', () => {
 	const originalGlobals = Object.getOwnPropertyDescriptor(globalThis, 'ash');

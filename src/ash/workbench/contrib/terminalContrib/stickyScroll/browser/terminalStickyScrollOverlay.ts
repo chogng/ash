@@ -4,18 +4,11 @@ import { observeResize } from '../../../../../base/browser/observer.js';
 import { Color } from '../../../../../base/common/color.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
-import {
-	AccessibilityVerbositySettingId,
-	IAccessibleViewService,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IHoverService, type IManagedHover } from '../../../../../platform/hover/browser/hoverService.js';
-import {
-	TerminalCapability,
-	type ICommandDetectionCapability,
-	type IMarkProperties,
-} from '../../../../../platform/terminal/common/capabilities/capabilities.js';
+import { TerminalCapability, type ICommandDetectionCapability, type IMarkProperties } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { isFullTerminalCommand } from '../../../../../platform/terminal/common/capabilities/commandDetection/terminalCommand.js';
 import type { ITerminalInstance, IXtermTerminal } from '../../../terminal/browser/terminal.js';
 import { TerminalContextKeys } from '../../../terminal/common/terminalContextKey.js';
@@ -141,8 +134,7 @@ export class TerminalStickyScrollOverlay extends Disposable {
 				if (event.affectsConfiguration(AccessibilityVerbositySettingId.Terminal)) updateHint();
 			}),
 		);
-		if (instance.capabilities)
-			this._register(instance.capabilities.onDidChangeCapabilities(() => this.bindCapability()));
+		if (instance.capabilities) this._register(instance.capabilities.onDidChangeCapabilities(() => this.bindCapability()));
 		this.bindCapability();
 	}
 
@@ -172,10 +164,7 @@ export class TerminalStickyScrollOverlay extends Disposable {
 	}
 
 	private rowHeight(): number {
-		return (
-			(this.xterm.element.querySelector('.xterm-screen')?.getBoundingClientRect().height ?? 0) /
-				this.xterm.raw.rows || 1
-		);
+		return (this.xterm.element.querySelector('.xterm-screen')?.getBoundingClientRect().height ?? 0) / this.xterm.raw.rows || 1;
 	}
 
 	private render(): void {
@@ -190,31 +179,17 @@ export class TerminalStickyScrollOverlay extends Disposable {
 		const raw = this.xterm.raw;
 		const capability = this.capability;
 		const buffer = raw.buffer.active;
-		if (
-			!this.configuration.getValue<boolean>(TerminalStickyScrollSettingId.Enabled) ||
-			!capability?.hasRichCommandDetection ||
-			buffer.type !== 'normal'
-		)
-			return false;
+		if (!this.configuration.getValue<boolean>(TerminalStickyScrollSettingId.Enabled) || !capability?.hasRichCommandDetection || buffer.type !== 'normal') return false;
 		const command = capability.getCommandForLine(buffer.viewportY);
 		if (!command) return false;
 		const full = isFullTerminalCommand(command);
 		const start = command.promptStartMarker ?? (full ? command.marker : command.commandStartMarker);
 		const executed = full ? command.executedMarker : command.commandExecutedMarker;
-		if (!start || start.isDisposed || !executed || executed.isDisposed || buffer.viewportY <= start.line)
-			return false;
+		if (!start || start.isDisposed || !executed || executed.isDisposed || buffer.viewportY <= start.line) return false;
 		const name = command.command?.trim().split(/\s+/, 1)[0]?.toLowerCase();
-		if (
-			this.configuration
-				.getValue<string[]>(TerminalStickyScrollSettingId.IgnoredCommands)
-				.some(ignored => ignored.toLowerCase() === name)
-		)
-			return false;
+		if (this.configuration.getValue<string[]>(TerminalStickyScrollSettingId.IgnoredCommands).some(ignored => ignored.toLowerCase() === name)) return false;
 		const end = executed.line - ((full ? command.executedX : command.commandExecutedX) === 0 ? 1 : 0);
-		const limit = Math.min(
-			this.configuration.getValue<number>(TerminalStickyScrollSettingId.MaxLineCount),
-			Math.floor(raw.rows * 0.4),
-		);
+		const limit = Math.min(this.configuration.getValue<number>(TerminalStickyScrollSettingId.MaxLineCount), Math.floor(raw.rows * 0.4));
 		const count = Math.min(end - start.line + 1, limit);
 		const screen = this.xterm.element.querySelector('.xterm-screen');
 		if (count <= 0 || !screen) return false;
@@ -223,9 +198,7 @@ export class TerminalStickyScrollOverlay extends Disposable {
 		let visibleRows = count;
 		for (const candidate of [...capability.commands, capability.currentCommand]) {
 			if (!candidate) continue;
-			const marker =
-				candidate.promptStartMarker ??
-				(isFullTerminalCommand(candidate) ? candidate.marker : candidate.commandStartMarker);
+			const marker = candidate.promptStartMarker ?? (isFullTerminalCommand(candidate) ? candidate.marker : candidate.commandStartMarker);
 			if (marker && !marker.isDisposed && marker.line > start.line) {
 				visibleRows = Math.min(visibleRows, marker.line - buffer.viewportY);
 			}
@@ -249,10 +222,7 @@ export class TerminalStickyScrollOverlay extends Disposable {
 		this.button.style.lineHeight = `${rowHeight}px`;
 		this.button.classList.toggle('truncated', firstLine > start.line);
 		const content = Array.from(this.button.children, row => row.textContent?.trimEnd()).join('\n');
-		this.button.setAttribute(
-			'aria-label',
-			localize('terminal.stickyScroll.scrollToCommand', 'Scroll to command: {0}', command.command || content),
-		);
+		this.button.setAttribute('aria-label', localize('terminal.stickyScroll.scrollToCommand', 'Scroll to command: {0}', command.command || content));
 		this.target = start;
 		this.button.hidden = false;
 		return true;
@@ -337,25 +307,14 @@ export class TerminalStickyScrollOverlay extends Disposable {
 		let foreground = this.cellColor(cell, 'foreground');
 		const background = this.cellColor(cell, 'background');
 		// Match the original DOM renderer's contrast input for default inverted text.
-		const contrastForeground =
-			cell.isInverse() && cell.isBgDefault()
-				? (this.xterm.raw.options.theme?.foreground ?? foreground)
-				: foreground;
+		const contrastForeground = cell.isInverse() && cell.isBgDefault() ? (this.xterm.raw.options.theme?.foreground ?? foreground) : foreground;
 		const foregroundColor = Color.Format.CSS.parse(contrastForeground);
 		const backgroundColor = Color.Format.CSS.parse(background);
 		if (options.adjustContrast && foregroundColor && backgroundColor) {
 			const ratio = (this.xterm.raw.options.minimumContrastRatio ?? 1) / (cell.isDim() ? 2 : 1);
-			if (backgroundColor.getContrastRatio(foregroundColor) < ratio)
-				foreground = backgroundColor.ensureConstrast(foregroundColor, ratio).toString();
+			if (backgroundColor.getContrastRatio(foregroundColor) < ratio) foreground = backgroundColor.ensureConstrast(foregroundColor, ratio).toString();
 		}
-		const decorations =
-			[
-				cell.isUnderline() ? 'underline' : '',
-				cell.isStrikethrough() ? 'line-through' : '',
-				cell.isOverline() ? 'overline' : '',
-			]
-				.filter(Boolean)
-				.join(' ') || 'none';
+		const decorations = [cell.isUnderline() ? 'underline' : '', cell.isStrikethrough() ? 'line-through' : '', cell.isOverline() ? 'overline' : ''].filter(Boolean).join(' ') || 'none';
 		return [
 			`color: ${foreground}`,
 			`background-color: ${background}`,
@@ -379,11 +338,7 @@ export class TerminalStickyScrollOverlay extends Disposable {
 		}
 		if (foreground && color < 8 && cell.isBold() && this.xterm.raw.options.drawBoldTextInBrightColors) color += 8;
 		const name = ansiColors[color];
-		if (name)
-			return (
-				this.xterm.raw.options.theme?.[name] ??
-				`var(--ash-terminal-ansi${name[0]!.toUpperCase()}${name.slice(1)})`
-			);
+		if (name) return this.xterm.raw.options.theme?.[name] ?? `var(--ash-terminal-ansi${name[0]!.toUpperCase()}${name.slice(1)})`;
 		// Extended ANSI colors are terminal content, independent of workbench chrome colors.
 		if (color >= 232) {
 			const gray = 8 + (color - 232) * 10;

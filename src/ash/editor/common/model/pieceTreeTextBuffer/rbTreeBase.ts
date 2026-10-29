@@ -30,11 +30,7 @@ export function previousNode(node: PieceNode): PieceNode | undefined {
 }
 
 /** Inserts a node immediately before a document-order reference; undefined means the end. */
-export function insertBefore(
-	root: PieceNode | undefined,
-	reference: PieceNode | undefined,
-	node: PieceNode,
-): PieceNode {
+export function insertBefore(root: PieceNode | undefined, reference: PieceNode | undefined, node: PieceNode): PieceNode {
 	if (!root) {
 		node.color = NodeColor.Black;
 		return node;
@@ -168,12 +164,7 @@ function fixInsert(state: TreeState, inserted: PieceNode): void {
 	state.root!.color = NodeColor.Black;
 }
 
-function fixDelete(
-	state: TreeState,
-	replacement: PieceNode | undefined,
-	initialParent: PieceNode | undefined,
-	initialIsLeft: boolean,
-): void {
+function fixDelete(state: TreeState, replacement: PieceNode | undefined, initialParent: PieceNode | undefined, initialIsLeft: boolean): void {
 	let node = replacement;
 	let parent = node?.parent ?? initialParent;
 	let isLeft = node ? !!parent && node === parent.left : initialIsLeft;

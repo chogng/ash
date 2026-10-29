@@ -10,29 +10,16 @@ import { FileService } from '../../../../../platform/files/common/fileService.js
 import { FileNotFoundError, type IFileChangeEvent } from '../../../../../platform/files/common/files.js';
 import { UriIdentityService } from '../../../../../platform/uriIdentity/common/uriIdentityService.js';
 import { IUriIdentityService } from '../../../../../platform/uriIdentity/common/uriIdentity.js';
-import {
-	MemoryFileService,
-	MemoryResourceStore,
-	TestEditorService,
-} from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
+import { MemoryFileService, MemoryResourceStore, TestEditorService } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { TestConfigurationService, TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { IModelService } from '../../../../../editor/common/services/model.js';
 import { ModelService } from '../../../../../editor/common/services/modelService.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
-import {
-	ILanguageServerService,
-	type LanguageServerSnapshot,
-} from '../../../../../platform/language/common/languageServerService.js';
-import {
-	IWorkspaceExtensionsConfigService,
-	WorkspaceExtensionsConfigService,
-} from '../../common/workspaceExtensionsConfig.js';
+import { ILanguageServerService, type LanguageServerSnapshot } from '../../../../../platform/language/common/languageServerService.js';
+import { IWorkspaceExtensionsConfigService, WorkspaceExtensionsConfigService } from '../../common/workspaceExtensionsConfig.js';
 import { ExtensionRecommendationsService } from '../../../../contrib/extensions/browser/extensionRecommendationsService.js';
-import {
-	ExtensionRecommendationReason,
-	IExtensionIgnoredRecommendationsService,
-} from '../../common/extensionRecommendations.js';
+import { ExtensionRecommendationReason, IExtensionIgnoredRecommendationsService } from '../../common/extensionRecommendations.js';
 import { ExtensionIgnoredRecommendationsService } from '../../common/extensionIgnoredRecommendationsService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../storage/browser/storageService.js';
@@ -129,16 +116,8 @@ function fixture(resources: readonly (readonly [URI, string])[] = [], target = E
 	lifetime.add(languages.registerLanguage({ id: 'rust', extensions: ['.rs'], aliases: ['Rust'] }));
 	const store = lifetime.add(new MemoryResourceStore(resources));
 	services.registerInstance(IUriIdentityService, identity);
-	const models = lifetime.add(
-		services.createInstance(BrowserTextModelService, store, { languageService: languages }),
-	);
-	const editorModels = lifetime.add(
-		new ModelService(
-			lifetime.add(new TestConfigurationService()),
-			{ _serviceBrand: undefined, getEOL: () => '\n' },
-			languages,
-		),
-	);
+	const models = lifetime.add(services.createInstance(BrowserTextModelService, store, { languageService: languages }));
+	const editorModels = lifetime.add(new ModelService(lifetime.add(new TestConfigurationService()), { _serviceBrand: undefined, getEOL: () => '\n' }, languages));
 	const installedChanged = lifetime.add(new Emitter<void>());
 	let installed: string[] = [];
 	let environment: Awaited<ReturnType<IExtensionManagementService['recommendationEnvironment']>> = {
@@ -172,10 +151,7 @@ function fixture(resources: readonly (readonly [URI, string])[] = [], target = E
 			return connection;
 		},
 	} as unknown as IAppServerRemoteAgentService);
-	let search: (
-		query: string,
-		options?: ExtensionsSearchOptions,
-	) => Promise<readonly ExtensionsPackageSummary[]> = async (_query, options) =>
+	let search: (query: string, options?: ExtensionsSearchOptions) => Promise<readonly ExtensionsPackageSummary[]> = async (_query, options) =>
 		options?.languageId || _query === '.yaml'
 			? [
 					{
@@ -252,11 +228,7 @@ function fixture(resources: readonly (readonly [URI, string])[] = [], target = E
 			visibleResources = resources;
 			visibleEditorsChanged.fire();
 		},
-		setPackage: (
-			id: string,
-			kinds: readonly ExtensionsCapabilityKind[],
-			uiTargets?: readonly ExtensionUiTarget[],
-		) => {
+		setPackage: (id: string, kinds: readonly ExtensionsCapabilityKind[], uiTargets?: readonly ExtensionUiTarget[]) => {
 			packageDetails.set(id, {
 				package: { id, version: '1', digest: '' },
 				packageType: 'plugin',
@@ -319,18 +291,12 @@ suite('Workspace extension recommendations', () => {
 		f.setPackage('mixed/tool', ['language', 'mcp'], [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents]);
 		f.setPackage('theme/tool', ['theme'], [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents]);
 		f.setPackage('unknown/tool', ['theme', 'skill']);
-		const agents = lifetime.add(
-			f.services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.Agents),
-		);
-		const ids = async (service: ExtensionRecommendationsService) =>
-			(await service.getRecommendations()).recommendations.map(item => item.extensionId);
+		const agents = lifetime.add(f.services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.Agents));
+		const ids = async (service: ExtensionRecommendationsService) => (await service.getRecommendations()).recommendations.map(item => item.extensionId);
 		assert.deepEqual(await ids(f.recommendations), ['editor/tool', 'mixed/tool', 'theme/tool', 'unknown/tool']);
 		assert.deepEqual(await ids(agents), ['agent/tool', 'mixed/tool', 'theme/tool', 'unknown/tool']);
 		const snapshot = await agents.getRecommendations();
-		assert.deepEqual(snapshot.recommendations.find(item => item.extensionId === 'mixed/tool')!.uiTargets, [
-			ExtensionUiTarget.IDE,
-			ExtensionUiTarget.Agents,
-		]);
+		assert.deepEqual(snapshot.recommendations.find(item => item.extensionId === 'mixed/tool')!.uiTargets, [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents]);
 		assert.equal(snapshot.recommendations.find(item => item.extensionId === 'unknown/tool')!.context, undefined);
 		assert.equal(snapshot.recommendations.find(item => item.extensionId === 'unknown/tool')!.uiTargets, undefined);
 		f.ignored.toggleGlobalIgnoredRecommendation('mixed/tool', true);
@@ -344,25 +310,15 @@ suite('Workspace extension recommendations', () => {
 		using lifetime = f.lifetime;
 		f.setProductIds(['marketplace.python@ash', 'marketplace.keymap-sublime@ash']);
 		f.setEnvironment({ platform: 'linux', executables: ['python3'] });
-		f.storage.store(
-			'extensionsAssistant/recentRecommendations',
-			JSON.stringify({ 'marketplace.python@ash': Date.now() }),
-			StorageScope.PROFILE,
-			StorageTarget.MACHINE,
-		);
-		lifetime.add(
-			f.editorModels.createModel('', f.languages.createById('python'), URI.file('/project/background.py')),
-		);
+		f.storage.store('extensionsAssistant/recentRecommendations', JSON.stringify({ 'marketplace.python@ash': Date.now() }), StorageScope.PROFILE, StorageTarget.MACHINE);
+		lifetime.add(f.editorModels.createModel('', f.languages.createById('python'), URI.file('/project/background.py')));
 		assert.deepEqual((await f.recommendations.getRecommendations()).recommendations, []);
 		assert.deepEqual(f.queries, []);
 		assert.equal(f.environmentReads, 0);
 	});
 
 	test('manifest audiences take precedence over technical capabilities and recommendation identities', async () => {
-		const f = fixture(
-			[[URI.file('/project/.ash/extensions.json'), '{"recommendations":["marketplace.python@ash"]}']],
-			ExtensionUiTarget.Agents,
-		);
+		const f = fixture([[URI.file('/project/.ash/extensions.json'), '{"recommendations":["marketplace.python@ash"]}']], ExtensionUiTarget.Agents);
 		using lifetime = f.lifetime;
 		f.setPackage('marketplace.python@ash', ['language', 'skill'], [ExtensionUiTarget.IDE]);
 		assert.deepEqual((await f.recommendations.getRecommendations()).recommendations, []);
@@ -406,9 +362,7 @@ suite('Workspace extension recommendations', () => {
 		const recommendation = (await f.recommendations.getRecommendations()).recommendations[0]!;
 		assert.equal(recommendation.extensionId, 'ash.academy@ash');
 		assert.deepEqual(recommendation.uiTargets, [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents]);
-		const reopened = lifetime.add(
-			f.services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.Agents),
-		);
+		const reopened = lifetime.add(f.services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.Agents));
 		assert.equal((await reopened.getRecommendations()).recommendations[0]!.extensionId, 'ash.academy@ash');
 		const ide = lifetime.add(f.services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.IDE));
 		assert.deepEqual((await ide.getRecommendations()).recommendations, []);
@@ -439,20 +393,9 @@ suite('Workspace extension recommendations', () => {
 		f.setProductIds(['marketplace.keymap-sublime@ash', 'marketplace.python@ash']);
 		f.setEnvironment({ platform: 'linux', executables: ['python3'] });
 		let snapshot = await f.recommendations.getRecommendations();
-		assert.deepEqual(snapshot.recommendations.map(item => item.extensionId).sort(), [
-			'marketplace.keymap-sublime@ash',
-			'marketplace.python@ash',
-		]);
-		assert.equal(
-			snapshot.recommendations.find(item => item.extensionId.includes('python'))?.context,
-			undefined,
-			'host tools alone do not establish an editing context',
-		);
-		assert.equal(
-			snapshot.recommendations.find(item => item.extensionId.includes('keymap'))?.context,
-			undefined,
-			'keymaps are offered on demand',
-		);
+		assert.deepEqual(snapshot.recommendations.map(item => item.extensionId).sort(), ['marketplace.keymap-sublime@ash', 'marketplace.python@ash']);
+		assert.equal(snapshot.recommendations.find(item => item.extensionId.includes('python'))?.context, undefined, 'host tools alone do not establish an editing context');
+		assert.equal(snapshot.recommendations.find(item => item.extensionId.includes('keymap'))?.context, undefined, 'keymaps are offered on demand');
 		f.ignored.toggleGlobalIgnoredRecommendation('MARKETPLACE.PYTHON', true);
 		f.setInstalled(['marketplace.keymap-sublime@ash']);
 		assert.deepEqual((await f.recommendations.getRecommendations()).recommendations, []);
@@ -471,11 +414,7 @@ suite('Workspace extension recommendations', () => {
 				'Node availability must not recommend the bundled TypeScript assets',
 			);
 			assert.ok(snapshot.recommendations.every(item => !item.context));
-			assert.ok(
-				snapshot.recommendations.every(
-					item => item.reason.reasonId === ExtensionRecommendationReason.Executable,
-				),
-			);
+			assert.ok(snapshot.recommendations.every(item => item.reason.reasonId === ExtensionRecommendationReason.Executable));
 		};
 		await assertOnDemand(f.recommendations);
 		f.workspace.updateWorkspace({
@@ -483,9 +422,7 @@ suite('Workspace extension recommendations', () => {
 			folders: [{ id: 'other', name: 'Other', uri: URI.file('/other'), index: 0 }],
 		});
 		await assertOnDemand(f.recommendations);
-		await assertOnDemand(
-			lifetime.add(f.services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.IDE)),
-		);
+		await assertOnDemand(lifetime.add(f.services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.IDE)));
 		f.setSearch(async () => [
 			{
 				id: 'marketplace.python@ash',
@@ -496,12 +433,8 @@ suite('Workspace extension recommendations', () => {
 				uiTargets: [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents],
 			},
 		]);
-		const model = lifetime.add(
-			f.editorModels.createModel('', f.languages.createById('python'), URI.file('/other/main.py')),
-		);
-		const python = (await f.recommendations.getRecommendations()).recommendations.find(
-			item => item.extensionId === 'marketplace.python@ash',
-		)!;
+		const model = lifetime.add(f.editorModels.createModel('', f.languages.createById('python'), URI.file('/other/main.py')));
+		const python = (await f.recommendations.getRecommendations()).recommendations.find(item => item.extensionId === 'marketplace.python@ash')!;
 		assert.equal(python.context?.source, RecommendationSource.FILE);
 		assert.equal(python.context?.name, 'Python');
 		model.dispose();
@@ -521,11 +454,7 @@ suite('Workspace extension recommendations', () => {
 		assert.equal(python.reason.reasonId, ExtensionRecommendationReason.Executable);
 		assert.equal(python.context, undefined, 'remote tool discovery cannot create a local installation prompt');
 		f.setConnection(undefined);
-		assert.ok(
-			!(await f.recommendations.getRecommendations()).recommendations.some(
-				item => item.extensionId === 'marketplace.remote-workspace@ash',
-			),
-		);
+		assert.ok(!(await f.recommendations.getRecommendations()).recommendations.some(item => item.extensionId === 'marketplace.remote-workspace@ash'));
 	});
 
 	test('merges Ash JSONC and multi-root workspace declarations, normalizes IDs and applies exclusions', async () => {
@@ -533,18 +462,9 @@ suite('Workspace extension recommendations', () => {
 		const workspaceFile = URI.file('/project.ash-workspace');
 		const other = URI.file('/other/.ash/extensions.json');
 		const f = fixture([
-			[
-				resource,
-				'{ // folder recommendations\n "recommendations": ["Publisher.Sample", "example/web", "example/web",], "unwantedRecommendations": ["excluded.tool"] }',
-			],
-			[
-				workspaceFile,
-				'{ "folders": [], "extensions": { "recommendations": ["excluded.tool", "workspace.tool"] } }',
-			],
-			[
-				other,
-				'{ "recommendations": ["publisher.sample", "other/tool"], "unwantedRecommendations": ["workspace.tool"] }',
-			],
+			[resource, '{ // folder recommendations\n "recommendations": ["Publisher.Sample", "example/web", "example/web",], "unwantedRecommendations": ["excluded.tool"] }'],
+			[workspaceFile, '{ "folders": [], "extensions": { "recommendations": ["excluded.tool", "workspace.tool"] } }'],
+			[other, '{ "recommendations": ["publisher.sample", "other/tool"], "unwantedRecommendations": ["workspace.tool"] }'],
 			[URI.file('/project/.vscode/extensions.json'), '{ "recommendations": ["vscode.only"] }'],
 		]);
 		using lifetime = f.lifetime;
@@ -576,12 +496,7 @@ suite('Workspace extension recommendations', () => {
 		const f = fixture([[resource, '{"recommendations":["example/web"]}']]);
 		using lifetime = f.lifetime;
 		assert.equal((await f.recommendations.getWorkspaceRecommendations()).recommendations.length, 1);
-		for (const content of [
-			'{',
-			'{"recommendations":"example/web"}',
-			'{"recommendations":[12]}',
-			'{"unwantedRecommendations":["https://unsafe"]}',
-		]) {
+		for (const content of ['{', '{"recommendations":"example/web"}', '{"recommendations":[12]}', '{"unwantedRecommendations":["https://unsafe"]}']) {
 			await f.files.writeFile({ resource, content });
 			f.provider.invalidate(resource);
 			const snapshot = await f.recommendations.getWorkspaceRecommendations();
@@ -640,44 +555,19 @@ suite('Workspace extension recommendations', () => {
 		const f = fixture();
 		using lifetime = f.lifetime;
 		const signal = new AbortController().signal;
-		const reference = lifetime.add(
-			await f.models.acquire(
-				{ resource: URI.parse('untitled:/draft'), initialText: '', languageId: 'python' },
-				signal,
-			),
-		);
+		const reference = lifetime.add(await f.models.acquire({ resource: URI.parse('untitled:/draft'), initialText: '', languageId: 'python' }, signal));
 		f.recommendations.recommendForResource(URI.parse('untitled:/document.ash-doc'));
 		f.recommendations.recommendForResource(URI.file('/project/settings.yaml'));
 		let snapshot = await f.recommendations.getRecommendations();
-		assert.deepEqual(snapshot.recommendations.map(item => item.extensionId).sort(), [
-			'ash.academy@ash',
-			'support.python@ash',
-			'support.yaml@ash',
-		]);
-		assert.equal(
-			snapshot.recommendations.find(item => item.extensionId === 'ash.academy@ash')!.context!.name,
-			'Docs',
-		);
+		assert.deepEqual(snapshot.recommendations.map(item => item.extensionId).sort(), ['ash.academy@ash', 'support.python@ash', 'support.yaml@ash']);
+		assert.equal(snapshot.recommendations.find(item => item.extensionId === 'ash.academy@ash')!.context!.name, 'Docs');
 		assert.ok(f.queries.some(({ query, options }) => query === '.yaml' && options?.packageType === 'language'));
 		reference.model.setLanguage('rust');
 		snapshot = await f.recommendations.getRecommendations();
 		assert.ok(snapshot.recommendations.some(item => item.extensionId === 'support.rust@ash'));
-		assert.ok(
-			snapshot.recommendations
-				.filter(item => item.context)
-				.every(item => item.extensionId !== 'support.python@ash'),
-		);
-		lifetime.add(
-			await f.models.acquire(
-				{ resource: URI.parse('git:/project/old.py'), initialText: '', languageId: 'python' },
-				signal,
-			),
-		);
-		assert.ok(
-			(await f.recommendations.getRecommendations()).recommendations
-				.filter(item => item.context)
-				.every(item => item.extensionId !== 'support.python@ash'),
-		);
+		assert.ok(snapshot.recommendations.filter(item => item.context).every(item => item.extensionId !== 'support.python@ash'));
+		lifetime.add(await f.models.acquire({ resource: URI.parse('git:/project/old.py'), initialText: '', languageId: 'python' }, signal));
+		assert.ok((await f.recommendations.getRecommendations()).recommendations.filter(item => item.context).every(item => item.extensionId !== 'support.python@ash'));
 	});
 
 	test('project configuration discovery follows file changes and workspace replacement', async () => {
@@ -715,9 +605,7 @@ suite('Workspace extension recommendations', () => {
 			['support.python@ash'],
 		);
 		model.dispose();
-		lifetime.add(
-			f.editorModels.createModel('', f.languages.createById('python'), URI.parse('untitled:/widget'), true),
-		);
+		lifetime.add(f.editorModels.createModel('', f.languages.createById('python'), URI.parse('untitled:/widget'), true));
 		assert.ok((await f.recommendations.getRecommendations()).recommendations.every(item => !item.context));
 	});
 
@@ -737,28 +625,16 @@ suite('Workspace extension recommendations', () => {
 					]
 				: [],
 		);
-		lifetime.add(
-			await f.models.acquire(
-				{ resource: URI.parse('untitled:/Untitled-1'), initialText: '', languageId: 'python' },
-				new AbortController().signal,
-			),
-		);
+		lifetime.add(await f.models.acquire({ resource: URI.parse('untitled:/Untitled-1'), initialText: '', languageId: 'python' }, new AbortController().signal));
 		const snapshot = await f.recommendations.getRecommendations();
 		assert.deepEqual(snapshot.recommendations, []);
-		assert.deepEqual(f.queries, [
-			{ query: '', options: { languageId: 'python', capabilityKind: 'executable', limit: 5 } },
-		]);
+		assert.deepEqual(f.queries, [{ query: '', options: { languageId: 'python', capabilityKind: 'executable', limit: 5 } }]);
 	});
 
 	test('language intelligence suppresses automatic file and project suggestions and refreshes when withdrawn', async () => {
 		const f = fixture([[URI.file('/project/pyproject.toml'), '[project]']]);
 		using lifetime = f.lifetime;
-		lifetime.add(
-			await f.models.acquire(
-				{ resource: URI.file('/project/main.py'), initialText: '', languageId: 'python' },
-				new AbortController().signal,
-			),
-		);
+		lifetime.add(await f.models.acquire({ resource: URI.file('/project/main.py'), initialText: '', languageId: 'python' }, new AbortController().signal));
 		const provider = f.languageFeatures.hoverProvider.register('python', { provideHover: async () => undefined });
 		assert.deepEqual((await f.recommendations.getRecommendations()).recommendations, []);
 		assert.deepEqual(f.queries, []);
@@ -794,19 +670,9 @@ suite('Workspace extension recommendations', () => {
 	});
 
 	test('merges all sources by package identity, honors workspace exclusions and refreshes installed state', async () => {
-		const f = fixture([
-			[
-				URI.file('/project/.ash/extensions.json'),
-				'{"recommendations":["SUPPORT.PYTHON@ash"],"unwantedRecommendations":["ASH.ACADEMY"]}',
-			],
-		]);
+		const f = fixture([[URI.file('/project/.ash/extensions.json'), '{"recommendations":["SUPPORT.PYTHON@ash"],"unwantedRecommendations":["ASH.ACADEMY"]}']]);
 		using lifetime = f.lifetime;
-		lifetime.add(
-			await f.models.acquire(
-				{ resource: URI.file('/project/main.py'), initialText: '', languageId: 'python' },
-				new AbortController().signal,
-			),
-		);
+		lifetime.add(await f.models.acquire({ resource: URI.file('/project/main.py'), initialText: '', languageId: 'python' }, new AbortController().signal));
 		f.recommendations.recommendForResource(URI.parse('untitled:/document.ash-doc'));
 		let snapshot = await f.recommendations.getRecommendations();
 		assert.deepEqual(
@@ -829,12 +695,7 @@ suite('Workspace extension recommendations', () => {
 			started.complete();
 			return held.p;
 		});
-		const model = lifetime.add(
-			await f.models.acquire(
-				{ resource: URI.parse('untitled:/draft'), initialText: '', languageId: 'python' },
-				new AbortController().signal,
-			),
-		);
+		const model = lifetime.add(await f.models.acquire({ resource: URI.parse('untitled:/draft'), initialText: '', languageId: 'python' }, new AbortController().signal));
 		const pending = f.recommendations.getRecommendations();
 		const rejected = assert.rejects(pending, CancellationError);
 		await started.p;
@@ -845,9 +706,7 @@ suite('Workspace extension recommendations', () => {
 			throw new Error('offline');
 		});
 		assert.deepEqual((await f.recommendations.getRecommendations()).recommendations, []);
-		f.setSearch(async () => [
-			{ id: 'recovered@ash', version: '1', packageType: 'language', displayName: 'Recovered', description: '' },
-		]);
+		f.setSearch(async () => [{ id: 'recovered@ash', version: '1', packageType: 'language', displayName: 'Recovered', description: '' }]);
 		f.recommendations.refresh();
 		assert.deepEqual(
 			(await f.recommendations.getRecommendations()).recommendations.map(item => item.extensionId),
@@ -857,10 +716,7 @@ suite('Workspace extension recommendations', () => {
 
 	test('requires production dependencies instead of constructing fallback services', () => {
 		using services = new InstantiationService();
-		assert.throws(
-			() => services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.IDE),
-			/workspaceExtensionsConfigService/u,
-		);
+		assert.throws(() => services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.IDE), /workspaceExtensionsConfigService/u);
 	});
 
 	test('remembers recent file recommendations across service instances without replaying automatic contexts', async () => {
@@ -868,9 +724,7 @@ suite('Workspace extension recommendations', () => {
 		using lifetime = f.lifetime;
 		f.recommendations.recommendForResource(URI.parse('untitled:/document.ash-doc'));
 		await f.recommendations.getRecommendations();
-		const reopened = lifetime.add(
-			f.services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.IDE),
-		);
+		const reopened = lifetime.add(f.services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.IDE));
 		const snapshot = await reopened.getRecommendations();
 		assert.deepEqual(
 			snapshot.recommendations.map(item => item.extensionId),
@@ -900,23 +754,13 @@ suite('Workspace extension recommendations', () => {
 			(await f.recommendations.getRecommendations()).recommendations.map(item => item.extensionId),
 			['recent@ash'],
 		);
-		f.storage.store(
-			'extensionsAssistant/recentRecommendations',
-			'{broken',
-			StorageScope.PROFILE,
-			StorageTarget.MACHINE,
-		);
+		f.storage.store('extensionsAssistant/recentRecommendations', '{broken', StorageScope.PROFILE, StorageTarget.MACHINE);
 		f.recommendations.refresh();
 		assert.deepEqual((await f.recommendations.getRecommendations()).recommendations, []);
 	});
 
 	test('global ignore and undo share persistent state while workspace exclusions remain authoritative', async () => {
-		const f = fixture([
-			[
-				URI.file('/project/.ash/extensions.json'),
-				'{"recommendations":["ash.academy@ash"],"unwantedRecommendations":["workspace.hidden"]}',
-			],
-		]);
+		const f = fixture([[URI.file('/project/.ash/extensions.json'), '{"recommendations":["ash.academy@ash"],"unwantedRecommendations":["workspace.hidden"]}']]);
 		using lifetime = f.lifetime;
 		await f.recommendations.getRecommendations();
 		f.ignored.toggleGlobalIgnoredRecommendation('ASH.ACADEMY@ash', true);
@@ -929,12 +773,7 @@ suite('Workspace extension recommendations', () => {
 			['ash.academy@ash'],
 		);
 		assert.ok(f.ignored.ignoredRecommendations.includes('workspace.hidden'));
-		f.storage.store(
-			'extensionsAssistant/ignored_recommendations',
-			'{broken',
-			StorageScope.PROFILE,
-			StorageTarget.USER,
-		);
+		f.storage.store('extensionsAssistant/ignored_recommendations', '{broken', StorageScope.PROFILE, StorageTarget.USER);
 		assert.deepEqual(f.ignored.globalIgnoredRecommendations, []);
 	});
 
@@ -945,14 +784,7 @@ suite('Workspace extension recommendations', () => {
 		]);
 		using lifetime = f.lifetime;
 		const snapshot = await f.recommendations.getRecommendations();
-		assert.deepEqual(snapshot.recommendations.map(item => item.extensionId).sort(), [
-			'support.dockerfile@ash',
-			'support.typescript@ash',
-		]);
-		assert.ok(
-			snapshot.recommendations.every(
-				item => item.reason.reasonId === ExtensionRecommendationReason.WorkspaceConfig,
-			),
-		);
+		assert.deepEqual(snapshot.recommendations.map(item => item.extensionId).sort(), ['support.dockerfile@ash', 'support.typescript@ash']);
+		assert.ok(snapshot.recommendations.every(item => item.reason.reasonId === ExtensionRecommendationReason.WorkspaceConfig));
 	});
 });

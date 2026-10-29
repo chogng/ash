@@ -12,11 +12,7 @@ suite('Webview host environment', () => {
 					return null;
 				},
 			};
-			assert.equal(
-				new BrowserWorkbenchEnvironmentService(dom.window.location, undefined, { updateProvider: provider })
-					.options.updateProvider,
-				provider,
-			);
+			assert.equal(new BrowserWorkbenchEnvironmentService(dom.window.location, undefined, { updateProvider: provider }).options.updateProvider, provider);
 			for (const invalid of [null, {}, { checkForUpdate: true }]) {
 				assert.throws(
 					() =>
@@ -43,23 +39,11 @@ suite('Webview host environment', () => {
 	test('requires a secure origin per instance and an explicit endpoint for a deployed Web host', () => {
 		const dom = new JSDOM('', { url: 'https://workbench.example.test/' });
 		try {
-			assert.throws(
-				() => new BrowserWorkbenchEnvironmentService(dom.window.location),
-				/configure an isolated webviewEndpoint/,
-			);
-			for (const endpoint of [
-				'https://resources.example.test/{{uuid}}',
-				'http://{{uuid}}.example.test',
-				'https://resources.example.test',
-				'https://user:secret@{{uuid}}.example.test',
-			]) {
+			assert.throws(() => new BrowserWorkbenchEnvironmentService(dom.window.location), /configure an isolated webviewEndpoint/);
+			for (const endpoint of ['https://resources.example.test/{{uuid}}', 'http://{{uuid}}.example.test', 'https://resources.example.test', 'https://user:secret@{{uuid}}.example.test']) {
 				assert.throws(() => new BrowserWorkbenchEnvironmentService(dom.window.location, endpoint), TypeError);
 			}
-			assert.equal(
-				new BrowserWorkbenchEnvironmentService(dom.window.location, 'https://{{uuid}}.resources.example.test')
-					.webviewExternalEndpoint,
-				'https://{{uuid}}.resources.example.test',
-			);
+			assert.equal(new BrowserWorkbenchEnvironmentService(dom.window.location, 'https://{{uuid}}.resources.example.test').webviewExternalEndpoint, 'https://{{uuid}}.resources.example.test');
 		} finally {
 			dom.window.close();
 		}
@@ -68,14 +52,7 @@ suite('Webview host environment', () => {
 	test('rejects an insecure Workbench ancestor even with an HTTPS resource endpoint', () => {
 		const dom = new JSDOM('', { url: 'http://workbench.example.test/' });
 		try {
-			assert.throws(
-				() =>
-					new BrowserWorkbenchEnvironmentService(
-						dom.window.location,
-						'https://{{uuid}}.resources.example.test',
-					),
-				/Web host requires HTTPS/,
-			);
+			assert.throws(() => new BrowserWorkbenchEnvironmentService(dom.window.location, 'https://{{uuid}}.resources.example.test'), /Web host requires HTTPS/);
 		} finally {
 			dom.window.close();
 		}

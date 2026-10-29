@@ -11,51 +11,26 @@ export class LineDecoration {
 		public readonly className: string,
 		public readonly type: InlineDecorationType,
 	) {
-		if (
-			!Number.isSafeInteger(startColumn) ||
-			!Number.isSafeInteger(endColumn) ||
-			startColumn < 0 ||
-			endColumn < startColumn
-		) {
+		if (!Number.isSafeInteger(startColumn) || !Number.isSafeInteger(endColumn) || startColumn < 0 || endColumn < startColumn) {
 			throw new RangeError('Line decoration columns must be ordered non-negative safe integers');
 		}
-		if (typeof className !== 'string' || className.trim().length === 0)
-			throw new TypeError('Line decoration class name must be non-empty');
+		if (typeof className !== 'string' || className.trim().length === 0) throw new TypeError('Line decoration class name must be non-empty');
 	}
 
 	public static equalsArr(left: readonly LineDecoration[], right: readonly LineDecoration[]): boolean {
 		if (left.length !== right.length) return false;
 		return left.every((decoration, index) => {
 			const other = right[index]!;
-			return (
-				decoration.startColumn === other.startColumn &&
-				decoration.endColumn === other.endColumn &&
-				decoration.className === other.className &&
-				decoration.type === other.type
-			);
+			return decoration.startColumn === other.startColumn && decoration.endColumn === other.endColumn && decoration.className === other.className && decoration.type === other.type;
 		});
 	}
 
 	private static _equals(left: LineDecoration, right: LineDecoration): boolean {
-		return (
-			left.startColumn === right.startColumn &&
-			left.endColumn === right.endColumn &&
-			left.className === right.className &&
-			left.type === right.type
-		);
+		return left.startColumn === right.startColumn && left.endColumn === right.endColumn && left.className === right.className && left.type === right.type;
 	}
 
-	public static extractWrapped(
-		decorations: LineDecoration[],
-		startOffset: number,
-		endOffset: number,
-	): LineDecoration[] {
-		if (
-			!Number.isSafeInteger(startOffset) ||
-			!Number.isSafeInteger(endOffset) ||
-			startOffset < 0 ||
-			endOffset < startOffset
-		) {
+	public static extractWrapped(decorations: LineDecoration[], startOffset: number, endOffset: number): LineDecoration[] {
+		if (!Number.isSafeInteger(startOffset) || !Number.isSafeInteger(endOffset) || startOffset < 0 || endOffset < startOffset) {
 			throw new RangeError('Wrapped line offsets must be ordered non-negative safe integers');
 		}
 		const wrappedStartColumn = startOffset + 1;
@@ -64,61 +39,31 @@ export class LineDecoration {
 			if (decoration.endColumn <= wrappedStartColumn || decoration.startColumn >= wrappedEndColumn) return [];
 			const startColumn = Math.max(1, decoration.startColumn - wrappedStartColumn + 1);
 			const endColumn = Math.min(endOffset - startOffset + 1, decoration.endColumn - wrappedStartColumn + 1);
-			return endColumn >= startColumn
-				? [new LineDecoration(startColumn, endColumn, decoration.className, decoration.type)]
-				: [];
+			return endColumn >= startColumn ? [new LineDecoration(startColumn, endColumn, decoration.className, decoration.type)] : [];
 		});
 	}
 
-	public static filter(
-		decorations: InlineDecoration[],
-		lineNumber: number,
-		minColumn: number,
-		maxColumn: number,
-	): LineDecoration[] {
-		if (
-			!Number.isSafeInteger(lineNumber) ||
-			lineNumber < 1 ||
-			!Number.isSafeInteger(minColumn) ||
-			!Number.isSafeInteger(maxColumn) ||
-			minColumn < 0 ||
-			maxColumn < minColumn
-		) {
+	public static filter(decorations: InlineDecoration[], lineNumber: number, minColumn: number, maxColumn: number): LineDecoration[] {
+		if (!Number.isSafeInteger(lineNumber) || lineNumber < 1 || !Number.isSafeInteger(minColumn) || !Number.isSafeInteger(maxColumn) || minColumn < 0 || maxColumn < minColumn) {
 			throw new RangeError('Line decoration filter coordinates are invalid');
 		}
 		return decorations.flatMap(decoration => {
 			if (decoration.range.endLineNumber < lineNumber || decoration.range.startLineNumber > lineNumber) return [];
-			if (
-				decoration.range.isEmpty() &&
-				(decoration.type === InlineDecorationType.Regular ||
-					decoration.type === InlineDecorationType.RegularAffectingLetterSpacing)
-			)
-				return [];
-			const startColumn =
-				decoration.range.startLineNumber === lineNumber ? decoration.range.startColumn : minColumn;
+			if (decoration.range.isEmpty() && (decoration.type === InlineDecorationType.Regular || decoration.type === InlineDecorationType.RegularAffectingLetterSpacing)) return [];
+			const startColumn = decoration.range.startLineNumber === lineNumber ? decoration.range.startColumn : minColumn;
 			const endColumn = decoration.range.endLineNumber === lineNumber ? decoration.range.endColumn : maxColumn;
 			const clippedStartColumn = Math.max(minColumn, startColumn);
 			const clippedEndColumn = Math.min(maxColumn, endColumn);
 			if (clippedEndColumn < clippedStartColumn) return [];
-			if (
-				clippedEndColumn === clippedStartColumn &&
-				(decoration.type === InlineDecorationType.Regular ||
-					decoration.type === InlineDecorationType.RegularAffectingLetterSpacing)
-			)
-				return [];
-			return [
-				new LineDecoration(clippedStartColumn, clippedEndColumn, decoration.inlineClassName, decoration.type),
-			];
+			if (clippedEndColumn === clippedStartColumn && (decoration.type === InlineDecorationType.Regular || decoration.type === InlineDecorationType.RegularAffectingLetterSpacing)) return [];
+			return [new LineDecoration(clippedStartColumn, clippedEndColumn, decoration.inlineClassName, decoration.type)];
 		});
 	}
 
 	public static compare(left: LineDecoration, right: LineDecoration): number {
 		if (left.startColumn !== right.startColumn) return left.startColumn - right.startColumn;
 		if (left.endColumn !== right.endColumn) return left.endColumn - right.endColumn;
-		return (
-			LineDecoration._typeCompare(left.type, right.type) ||
-			(left.className < right.className ? -1 : left.className > right.className ? 1 : 0)
-		);
+		return LineDecoration._typeCompare(left.type, right.type) || (left.className < right.className ? -1 : left.className > right.className ? 1 : 0);
 	}
 
 	private static _typeCompare(left: InlineDecorationType, right: InlineDecorationType): number {
@@ -163,9 +108,7 @@ export class LineDecorationsNormalizer {
 			const startOffset = sortedBoundaries[index]!;
 			const endOffset = sortedBoundaries[index + 1]!;
 			if (endOffset <= startOffset) continue;
-			const active = normalizedDecorations.filter(
-				({ startColumn, endColumn }) => startColumn <= startOffset && endColumn >= endOffset,
-			);
+			const active = normalizedDecorations.filter(({ startColumn, endColumn }) => startColumn <= startOffset && endColumn >= endOffset);
 			if (active.length === 0) continue;
 			result.push(
 				new DecorationSegment(
@@ -187,15 +130,9 @@ export class LineDecorationsNormalizer {
 }
 
 function metadataFor(type: InlineDecorationType): number {
-	return type === InlineDecorationType.Before
-		? LinePartMetadata.PSEUDO_BEFORE
-		: type === InlineDecorationType.After
-			? LinePartMetadata.PSEUDO_AFTER
-			: 0;
+	return type === InlineDecorationType.Before ? LinePartMetadata.PSEUDO_BEFORE : type === InlineDecorationType.After ? LinePartMetadata.PSEUDO_AFTER : 0;
 }
 
 function moveSurrogateBoundary(lineContent: string, column: number): number {
-	return column > 0 && column < lineContent.length && isHighSurrogate(lineContent.charCodeAt(column - 1))
-		? column - 1
-		: column;
+	return column > 0 && column < lineContent.length && isHighSurrogate(lineContent.charCodeAt(column - 1)) ? column - 1 : column;
 }

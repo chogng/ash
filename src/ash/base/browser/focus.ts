@@ -1,14 +1,6 @@
 import { Emitter, type Event } from '../common/event.js';
 import { Disposable, MutableDisposable, type IDisposable } from '../common/lifecycle.js';
-import {
-	addDisposableListener,
-	getActiveDocument,
-	getActiveElement,
-	getWindow,
-	isAncestor,
-	isHTMLElement,
-	isNode,
-} from './dom.js';
+import { addDisposableListener, getActiveDocument, getActiveElement, getWindow, isAncestor, isHTMLElement, isNode } from './dom.js';
 import { disposableWindowTimeout } from './scheduler.js';
 import { type BrowserWindow, isWindow } from './window.js';
 
@@ -146,22 +138,13 @@ export function focusLast(container: ParentNode): HTMLElement | undefined {
  * `boundary` makes wrapping explicit at call sites instead of encoding it as
  * an ambiguous boolean argument.
  */
-export function moveFocus(
-	container: ParentNode,
-	direction: FocusNavigationDirection,
-	boundary: FocusNavigationBoundary = FocusNavigationBoundary.Stop,
-): HTMLElement | undefined {
+export function moveFocus(container: ParentNode, direction: FocusNavigationDirection, boundary: FocusNavigationBoundary = FocusNavigationBoundary.Stop): HTMLElement | undefined {
 	const elements = getTabbableElements(container);
 	if (elements.length === 0) return undefined;
 	const ownerDocument = getOwnerDocument(container);
 	const activeElement = getActiveElement(ownerDocument);
 	const currentIndex = elements.findIndex(element => element === activeElement);
-	let nextIndex =
-		direction === FocusNavigationDirection.Forward
-			? currentIndex + 1
-			: currentIndex < 0
-				? elements.length - 1
-				: currentIndex - 1;
+	let nextIndex = direction === FocusNavigationDirection.Forward ? currentIndex + 1 : currentIndex < 0 ? elements.length - 1 : currentIndex - 1;
 
 	if (nextIndex < 0 || nextIndex >= elements.length) {
 		if (boundary === FocusNavigationBoundary.Stop) return undefined;
@@ -201,7 +184,11 @@ export interface ScrollPosition {
 export function saveAncestorScrollPositions(node: Element): readonly ScrollPosition[] {
 	const positions: ScrollPosition[] = [];
 	for (let current = composedParent(node); current; current = composedParent(current)) {
-		positions.push({ element: current, left: current.scrollLeft, top: current.scrollTop });
+		positions.push({
+			element: current,
+			left: current.scrollLeft,
+			top: current.scrollTop,
+		});
 	}
 	return positions;
 }
@@ -248,9 +235,7 @@ class FocusTracker extends Disposable implements IFocusTracker {
 
 	refreshState(): void {
 		this.pendingRefresh.clear();
-		this.setFocused(
-			isWindow(this.target) ? this.target.document.hasFocus() : isAncestorOfActiveElement(this.target),
-		);
+		this.setFocused(isWindow(this.target) ? this.target.document.hasFocus() : isAncestorOfActiveElement(this.target));
 	}
 
 	private scheduleRefresh(): void {
@@ -279,12 +264,7 @@ function isUnavailableForFocus(element: HTMLElement): boolean {
 		return true;
 	}
 	const style = getWindow(element).getComputedStyle(element);
-	return (
-		style.display === 'none' ||
-		style.visibility === 'hidden' ||
-		style.visibility === 'collapse' ||
-		element.getClientRects().length === 0
-	);
+	return style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse' || element.getClientRects().length === 0;
 }
 
 function getOwnerDocument(node: ParentNode): Document {

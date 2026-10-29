@@ -74,9 +74,7 @@ export class ViewLayer<TLine> extends Disposable {
 			startLineIndex: viewportData.startLineNumber - 1,
 			endLineIndexExclusive: viewportData.endLineNumber,
 		};
-		const structureChanged =
-			this.renderedModelVersion !== visualProjection.modelVersion ||
-			this.renderedProjectionRevision !== projectionRevision;
+		const structureChanged = this.renderedModelVersion !== visualProjection.modelVersion || this.renderedProjectionRevision !== projectionRevision;
 		const contentChanged = this.renderedContentRevision !== contentRevision;
 		if (
 			!structureChanged &&
@@ -99,20 +97,14 @@ export class ViewLayer<TLine> extends Disposable {
 
 		const ordered: HTMLElement[] = [];
 		const next = new Map<number, TLine>();
-		for (
-			let visualLineIndex = renderRange.startLineIndex;
-			visualLineIndex < renderRange.endLineIndexExclusive;
-			visualLineIndex += 1
-		) {
+		for (let visualLineIndex = renderRange.startLineIndex; visualLineIndex < renderRange.endLineIndexExclusive; visualLineIndex += 1) {
 			const visualLine = visualProjection.lineAt(visualLineIndex);
 			if (!visualLine) throw new Error('Viewport render range exceeds the visual line projection');
 			const existing = this.lines.get(visualLineIndex);
 			const line = existing ?? this.lineRenderer.createLine(visualLineIndex);
-			const needsLineRender =
-				!existing || structureChanged || (contentChanged && this.lineRenderer.isDirty(line));
+			const needsLineRender = !existing || structureChanged || (contentChanged && this.lineRenderer.isDirty(line));
 			if (needsLineRender) this.lineRenderer.renderLine(line, visualLine);
-			if (!existing || this.renderedLineHeight !== viewportData.lineHeight)
-				this.lineRenderer.layoutLine(line, viewportData.lineHeight);
+			if (!existing || this.renderedLineHeight !== viewportData.lineHeight) this.lineRenderer.layoutLine(line, viewportData.lineHeight);
 			const domNode = this.lineRenderer.getDomNode(line);
 			domNode.style.top = `${viewportData.relativeVerticalOffset[visualLineIndex - renderRange.startLineIndex]}px`;
 			next.set(visualLineIndex, line);
@@ -166,11 +158,7 @@ export class ViewPartRows extends Disposable {
 		const next = new Map<number, FastDomNode<HTMLDivElement>>();
 		const projected = new Map<number, HTMLElement>();
 		this.domNode.setTop(context.bigNumbersDelta);
-		for (
-			let lineNumber = context.viewportData.startLineNumber;
-			lineNumber <= context.viewportData.endLineNumber;
-			lineNumber += 1
-		) {
+		for (let lineNumber = context.viewportData.startLineNumber; lineNumber <= context.viewportData.endLineNumber; lineNumber += 1) {
 			const lineIndex = lineNumber - 1;
 			let row = this.rows.get(lineIndex);
 			if (!row) {
@@ -208,17 +196,9 @@ function reconcileChildren(parent: HTMLElement, ordered: readonly HTMLElement[])
 	}
 }
 
-export function renderViewPartRows(
-	context: RestrictedRenderingContext,
-	ownerDocument: Document,
-	project: (rows: ReadonlyMap<number, HTMLElement>) => void,
-): string[] {
+export function renderViewPartRows(context: RestrictedRenderingContext, ownerDocument: Document, project: (rows: ReadonlyMap<number, HTMLElement>) => void): string[] {
 	const rows = new Map<number, HTMLElement>();
-	for (
-		let lineNumber = context.viewportData.startLineNumber;
-		lineNumber <= context.viewportData.endLineNumber;
-		lineNumber += 1
-	) {
+	for (let lineNumber = context.viewportData.startLineNumber; lineNumber <= context.viewportData.endLineNumber; lineNumber += 1) {
 		rows.set(lineNumber - 1, h(ownerDocument, 'div'));
 	}
 	project(rows);

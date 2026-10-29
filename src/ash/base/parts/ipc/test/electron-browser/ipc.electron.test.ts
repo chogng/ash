@@ -3,12 +3,7 @@ import { setImmediate } from 'node:timers/promises';
 import { setup, suite, suiteSetup, suiteTeardown, teardown, test } from 'mocha';
 import { VSBuffer } from '../../../../common/buffer.js';
 import { Emitter, Event } from '../../../../common/event.js';
-import {
-	DisposableStore,
-	DisposableTracker,
-	installDisposableTracker,
-	toDisposable,
-} from '../../../../common/lifecycle.js';
+import { DisposableStore, DisposableTracker, installDisposableTracker, toDisposable } from '../../../../common/lifecycle.js';
 import { IPCClient } from '../../common/ipc.js';
 import type { ISandboxGlobals } from '../../../sandbox/electron-browser/sandboxTypes.js';
 
@@ -113,7 +108,10 @@ suite('Electron IPC channels', () => {
 		const result = await client.getChannel('echo').call('read', { value: '你好' });
 		assert.deepEqual(
 			{ result, sent },
-			{ result: { context: 'window:7', arg: { value: '你好' } }, sent: ['ash:hello', 'ash:message'] },
+			{
+				result: { context: 'window:7', arg: { value: '你好' } },
+				sent: ['ash:hello', 'ash:message'],
+			},
 		);
 		await assert.rejects(client.getChannel('echo').call('fail'), {
 			name: 'TypeError',
@@ -145,9 +143,6 @@ suite('Electron IPC channels', () => {
 		assert.equal(active, 1);
 		client.dispose();
 		await setImmediate();
-		assert.deepEqual(
-			{ active, listeners: listeners.size, last: sent.at(-1) },
-			{ active: 0, listeners: 0, last: 'ash:disconnect' },
-		);
+		assert.deepEqual({ active, listeners: listeners.size, last: sent.at(-1) }, { active: 0, listeners: 0, last: 'ash:disconnect' });
 	});
 });

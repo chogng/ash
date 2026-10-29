@@ -8,10 +8,7 @@ export interface IBrowserWorkbenchEnvironmentService extends IWorkbenchEnvironme
 	readonly options: Pick<IWebWorkbenchConstructionOptions, 'updateProvider'>;
 }
 
-export const IBrowserWorkbenchEnvironmentService = refineServiceDecorator<
-	IWorkbenchEnvironmentService,
-	IBrowserWorkbenchEnvironmentService
->(IWorkbenchEnvironmentService);
+export const IBrowserWorkbenchEnvironmentService = refineServiceDecorator<IWorkbenchEnvironmentService, IBrowserWorkbenchEnvironmentService>(IWorkbenchEnvironmentService);
 
 export class BrowserWorkbenchEnvironmentService implements IBrowserWorkbenchEnvironmentService {
 	readonly argvResource = URI.from({ scheme: Schemas.vscodeUserData, path: '/user/argv.json' });
@@ -22,12 +19,7 @@ export class BrowserWorkbenchEnvironmentService implements IBrowserWorkbenchEnvi
 		webviewEndpoint?: string,
 		public readonly options: Pick<IWebWorkbenchConstructionOptions, 'updateProvider'> = {},
 	) {
-		if (
-			options.updateProvider !== undefined &&
-			(options.updateProvider === null ||
-				typeof options.updateProvider !== 'object' ||
-				typeof options.updateProvider.checkForUpdate !== 'function')
-		) {
+		if (options.updateProvider !== undefined && (options.updateProvider === null || typeof options.updateProvider !== 'object' || typeof options.updateProvider.checkForUpdate !== 'function')) {
 			throw new TypeError('Web updateProvider must provide checkForUpdate()');
 		}
 		const isLoopback = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
@@ -41,14 +33,7 @@ export class BrowserWorkbenchEnvironmentService implements IBrowserWorkbenchEnvi
 			}
 			const url = new URL(webviewEndpoint.replace('{{uuid}}', 'webview'));
 			const otherOrigin = new URL(webviewEndpoint.replace('{{uuid}}', 'another-webview')).origin;
-			if (
-				!['http:', 'https:'].includes(url.protocol) ||
-				url.username ||
-				url.password ||
-				url.search ||
-				url.hash ||
-				url.origin === otherOrigin
-			) {
+			if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.origin === otherOrigin) {
 				throw new TypeError('Webview endpoint must provide an HTTP origin for each {{uuid}}');
 			}
 			if (url.protocol === 'http:' && !url.hostname.endsWith('.localhost')) {

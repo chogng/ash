@@ -5,11 +5,7 @@ import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import type { IAgentVoiceService } from '../../../../../platform/agentHost/common/agentService.js';
-import type {
-	AgentVoiceSessionState,
-	AgentVoiceSource,
-	AgentVoiceTaskRequest,
-} from '../../../../../platform/agentHost/common/agent.js';
+import type { AgentVoiceSessionState, AgentVoiceSource, AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agent.js';
 import { VoiceSessionController } from '../../browser/voiceClient/voiceSessionController.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { JSDOM } from 'jsdom';
@@ -61,8 +57,9 @@ class Voice extends Disposable implements IAgentVoiceService {
 	stops = 0;
 	starts = 0;
 	rejected = 0;
-	options: Promise<readonly { connectionId: string; name: string; defaultModel: string; models: readonly [] }[]> =
-		Promise.resolve([{ connectionId: 'voice', name: 'Voice', defaultModel: 'speech', models: [] }]);
+	options: Promise<readonly { connectionId: string; name: string; defaultModel: string; models: readonly [] }[]> = Promise.resolve([
+		{ connectionId: 'voice', name: 'Voice', defaultModel: 'speech', models: [] },
+	]);
 	getOptions() {
 		return this.options;
 	}
@@ -100,8 +97,7 @@ class Voice extends Disposable implements IAgentVoiceService {
 	}
 	async setInputMode(inputMode: AgentVoiceSessionState['inputMode']): Promise<void> {
 		this.hold = undefined;
-		if (this.state)
-			this.state = { ...this.state, inputMode, listening: !this.state.muted && inputMode === 'openMic' };
+		if (this.state) this.state = { ...this.state, inputMode, listening: !this.state.muted && inputMode === 'openMic' };
 		this.changes.fire();
 	}
 	async pttDown(id: string): Promise<void> {

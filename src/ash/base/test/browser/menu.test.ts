@@ -5,13 +5,18 @@ import { JSDOM } from 'jsdom';
 
 test('Menu renders submenu actions with the shared SVG indicator', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
-	Object.defineProperty(globalThis, 'Node', { configurable: true, value: dom.window.Node });
-	const [{ SubmenuAction }, { Menu }] = await Promise.all([
-		import('../../common/actions.js'),
-		import('../../browser/ui/menu/menu.js'),
-	]);
-	const menu = new Menu(dom.window.document.body, { actions: [new SubmenuAction('test.submenu', 'More', [])] });
+	Object.defineProperty(globalThis, 'window', {
+		configurable: true,
+		value: dom.window,
+	});
+	Object.defineProperty(globalThis, 'Node', {
+		configurable: true,
+		value: dom.window.Node,
+	});
+	const [{ SubmenuAction }, { Menu }] = await Promise.all([import('../../common/actions.js'), import('../../browser/ui/menu/menu.js')]);
+	const menu = new Menu(dom.window.document.body, {
+		actions: [new SubmenuAction('test.submenu', 'More', [])],
+	});
 	dom.window.document.body.append(menu.element);
 
 	const menuItem = menu.element.querySelector('[role="menuitem"]');
@@ -33,8 +38,14 @@ test('Menu renders submenu actions with the shared SVG indicator', async () => {
 
 test('Menu renders action badges as trailing metadata', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
-	Object.defineProperty(globalThis, 'Node', { configurable: true, value: dom.window.Node });
+	Object.defineProperty(globalThis, 'window', {
+		configurable: true,
+		value: dom.window,
+	});
+	Object.defineProperty(globalThis, 'Node', {
+		configurable: true,
+		value: dom.window.Node,
+	});
 	const { Menu } = await import('../../browser/ui/menu/menu.js');
 	const menu = new Menu(dom.window.document.body, {
 		actions: [
@@ -59,10 +70,7 @@ test('Menu renders action badges as trailing metadata', async () => {
 
 test('Menu items keep accessible names without installing action tooltips', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const [{ Menu }, { setHoverDelegate }] = await Promise.all([
-		import('../../browser/ui/menu/menu.js'),
-		import('../../browser/ui/hover/hoverDelegate.js'),
-	]);
+	const [{ Menu }, { setHoverDelegate }] = await Promise.all([import('../../browser/ui/menu/menu.js'), import('../../browser/ui/hover/hoverDelegate.js')]);
 	using hoverDelegate = setHoverDelegate({
 		setupDelayedHover() {
 			throw new Error('Unexpected delayed hover registration');
@@ -72,7 +80,15 @@ test('Menu items keep accessible names without installing action tooltips', asyn
 		},
 	});
 	const menu = new Menu(dom.window.document.body, {
-		actions: [{ id: 'plan', label: 'Plan', tooltip: 'Use Plan mode', enabled: true, run(): void {} }],
+		actions: [
+			{
+				id: 'plan',
+				label: 'Plan',
+				tooltip: 'Use Plan mode',
+				enabled: true,
+				run(): void {},
+			},
+		],
 	});
 	const item = menu.element.querySelector<HTMLButtonElement>("[role='menuitem']");
 	assert.equal(item?.getAttribute('aria-label'), 'Plan');
@@ -83,8 +99,14 @@ test('Menu items keep accessible names without installing action tooltips', asyn
 
 test('Menu projects one focused item for keyboard and pointer navigation', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
-	Object.defineProperty(globalThis, 'Node', { configurable: true, value: dom.window.Node });
+	Object.defineProperty(globalThis, 'window', {
+		configurable: true,
+		value: dom.window,
+	});
+	Object.defineProperty(globalThis, 'Node', {
+		configurable: true,
+		value: dom.window.Node,
+	});
 	const { Menu } = await import('../../browser/ui/menu/menu.js');
 	const menu = new Menu(dom.window.document.body, {
 		actions: ['first', 'second', 'third'].map(id => ({
@@ -101,7 +123,10 @@ test('Menu projects one focused item for keyboard and pointer navigation', async
 	for (const button of buttons) {
 		button.getClientRects = () => [{}] as unknown as DOMRectList;
 	}
-	Object.defineProperty(dom.window.Element.prototype, 'scrollTo', { configurable: true, value(): void {} });
+	Object.defineProperty(dom.window.Element.prototype, 'scrollTo', {
+		configurable: true,
+		value(): void {},
+	});
 
 	menu.focus(false);
 	assert.equal(dom.window.document.activeElement, menu.element);
@@ -109,7 +134,12 @@ test('Menu projects one focused item for keyboard and pointer navigation', async
 		items.some(item => item.classList.contains('focused')),
 		false,
 	);
-	menu.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'ArrowUp' }));
+	menu.element.dispatchEvent(
+		new dom.window.KeyboardEvent('keydown', {
+			bubbles: true,
+			key: 'ArrowUp',
+		}),
+	);
 	assert.equal(dom.window.document.activeElement, buttons[2]);
 
 	menu.focus(true);
@@ -119,7 +149,12 @@ test('Menu projects one focused item for keyboard and pointer navigation', async
 		[true, false, false],
 	);
 
-	buttons[1]!.dispatchEvent(new dom.window.MouseEvent('mouseover', { bubbles: true, relatedTarget: buttons[0] }));
+	buttons[1]!.dispatchEvent(
+		new dom.window.MouseEvent('mouseover', {
+			bubbles: true,
+			relatedTarget: buttons[0],
+		}),
+	);
 	buttons[1]!.dispatchEvent(new dom.window.MouseEvent('mousemove', { bubbles: true }));
 	assert.equal(dom.window.document.activeElement, buttons[0]);
 	const movement = new dom.window.MouseEvent('mousemove', { bubbles: true });
@@ -131,7 +166,12 @@ test('Menu projects one focused item for keyboard and pointer navigation', async
 		[false, true, false],
 	);
 
-	buttons[1]!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
+	buttons[1]!.dispatchEvent(
+		new dom.window.KeyboardEvent('keydown', {
+			bubbles: true,
+			key: 'ArrowDown',
+		}),
+	);
 	assert.equal(dom.window.document.activeElement, buttons[2]);
 	assert.deepEqual(
 		items.map(item => item.classList.contains('focused')),
@@ -139,7 +179,10 @@ test('Menu projects one focused item for keyboard and pointer navigation', async
 	);
 
 	menu.element.dispatchEvent(
-		new dom.window.MouseEvent('mouseout', { bubbles: true, relatedTarget: dom.window.document.body }),
+		new dom.window.MouseEvent('mouseout', {
+			bubbles: true,
+			relatedTarget: dom.window.document.body,
+		}),
 	);
 	assert.equal(
 		items.some(item => item.classList.contains('focused')),
@@ -155,20 +198,38 @@ test('Menu projects one focused item for keyboard and pointer navigation', async
 test('Menu delays pointer expansion and switches the expanded submenu', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	mock.timers.enable({ apis: ['setTimeout'] });
-	Object.defineProperty(dom.window.Element.prototype, 'scrollTo', { configurable: true, value(): void {} });
-	Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
-	Object.defineProperty(globalThis, 'Node', { configurable: true, value: dom.window.Node });
-	const [{ SubmenuAction }, { Menu }] = await Promise.all([
-		import('../../common/actions.js'),
-		import('../../browser/ui/menu/menu.js'),
-	]);
+	Object.defineProperty(dom.window.Element.prototype, 'scrollTo', {
+		configurable: true,
+		value(): void {},
+	});
+	Object.defineProperty(globalThis, 'window', {
+		configurable: true,
+		value: dom.window,
+	});
+	Object.defineProperty(globalThis, 'Node', {
+		configurable: true,
+		value: dom.window.Node,
+	});
+	const [{ SubmenuAction }, { Menu }] = await Promise.all([import('../../common/actions.js'), import('../../browser/ui/menu/menu.js')]);
 	const menu = new Menu(dom.window.document.body, {
 		actions: [
 			new SubmenuAction('first', 'First', [
-				{ id: 'first.child', label: 'First child', tooltip: 'First child', enabled: true, run(): void {} },
+				{
+					id: 'first.child',
+					label: 'First child',
+					tooltip: 'First child',
+					enabled: true,
+					run(): void {},
+				},
 			]),
 			new SubmenuAction('second', 'Second', [
-				{ id: 'second.child', label: 'Second child', tooltip: 'Second child', enabled: true, run(): void {} },
+				{
+					id: 'second.child',
+					label: 'Second child',
+					tooltip: 'Second child',
+					enabled: true,
+					run(): void {},
+				},
 			]),
 		],
 	});
@@ -176,7 +237,12 @@ test('Menu delays pointer expansion and switches the expanded submenu', async ()
 	const second = menu.element.querySelector<HTMLButtonElement>('[data-action-id="second"] button')!;
 	const firstContainer = first.parentElement!;
 	const movePointer = (button: HTMLButtonElement, previous: Element): void => {
-		button.dispatchEvent(new dom.window.MouseEvent('mouseover', { bubbles: true, relatedTarget: previous }));
+		button.dispatchEvent(
+			new dom.window.MouseEvent('mouseover', {
+				bubbles: true,
+				relatedTarget: previous,
+			}),
+		);
 		const movement = new dom.window.MouseEvent('mousemove', { bubbles: true });
 		Object.defineProperty(movement, 'movementX', { value: 1 });
 		button.dispatchEvent(movement);
@@ -219,18 +285,30 @@ test('Menu delays pointer expansion and switches the expanded submenu', async ()
 test('Menu opens immediate root submenus only on movement without changing nested hover delay', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	mock.timers.enable({ apis: ['setTimeout'] });
-	Object.defineProperty(dom.window.Element.prototype, 'scrollTo', { configurable: true, value(): void {} });
-	Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
-	Object.defineProperty(globalThis, 'Node', { configurable: true, value: dom.window.Node });
-	const [{ SubmenuAction }, { Menu }] = await Promise.all([
-		import('../../common/actions.js'),
-		import('../../browser/ui/menu/menu.js'),
-	]);
+	Object.defineProperty(dom.window.Element.prototype, 'scrollTo', {
+		configurable: true,
+		value(): void {},
+	});
+	Object.defineProperty(globalThis, 'window', {
+		configurable: true,
+		value: dom.window,
+	});
+	Object.defineProperty(globalThis, 'Node', {
+		configurable: true,
+		value: dom.window.Node,
+	});
+	const [{ SubmenuAction }, { Menu }] = await Promise.all([import('../../common/actions.js'), import('../../browser/ui/menu/menu.js')]);
 	const menu = new Menu(dom.window.document.body, {
 		actions: [
 			new SubmenuAction('first', 'First', [
 				new SubmenuAction('nested', 'Nested', [
-					{ id: 'nested.child', label: 'Child', tooltip: 'Child', enabled: true, run(): void {} },
+					{
+						id: 'nested.child',
+						label: 'Child',
+						tooltip: 'Child',
+						enabled: true,
+						run(): void {},
+					},
 				]),
 			]),
 			new SubmenuAction('second', 'Second', []),
@@ -267,9 +345,7 @@ test('Menu opens immediate root submenus only on movement without changing neste
 		leave(second);
 		enter(first);
 		move(first);
-		const nested = dom.window.document.querySelector<HTMLButtonElement>(
-			'.ash-context-view-menu:not([hidden]) [data-action-id="nested"] button',
-		)!;
+		const nested = dom.window.document.querySelector<HTMLButtonElement>('.ash-context-view-menu:not([hidden]) [data-action-id="nested"] button')!;
 		enter(nested);
 		assert.equal(nested.getAttribute('aria-expanded'), 'false');
 		const movement = new dom.window.MouseEvent('mousemove', { bubbles: true });
@@ -291,19 +367,37 @@ test('Menu opens immediate root submenus only on movement without changing neste
 test('Menu preserves submenu focus and closes after focus leaves or the parent scrolls', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	mock.timers.enable({ apis: ['setTimeout'] });
-	Object.defineProperty(dom.window.Element.prototype, 'scrollTo', { configurable: true, value(): void {} });
-	Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
-	Object.defineProperty(globalThis, 'Node', { configurable: true, value: dom.window.Node });
-	const [{ SubmenuAction }, { Menu }] = await Promise.all([
-		import('../../common/actions.js'),
-		import('../../browser/ui/menu/menu.js'),
-	]);
+	Object.defineProperty(dom.window.Element.prototype, 'scrollTo', {
+		configurable: true,
+		value(): void {},
+	});
+	Object.defineProperty(globalThis, 'window', {
+		configurable: true,
+		value: dom.window,
+	});
+	Object.defineProperty(globalThis, 'Node', {
+		configurable: true,
+		value: dom.window.Node,
+	});
+	const [{ SubmenuAction }, { Menu }] = await Promise.all([import('../../common/actions.js'), import('../../browser/ui/menu/menu.js')]);
 	const menu = new Menu(dom.window.document.body, {
 		actions: [
 			new SubmenuAction('submenu', 'Submenu', [
-				{ id: 'child', label: 'Child', tooltip: 'Child', enabled: true, run(): void {} },
+				{
+					id: 'child',
+					label: 'Child',
+					tooltip: 'Child',
+					enabled: true,
+					run(): void {},
+				},
 			]),
-			{ id: 'leaf', label: 'Leaf', tooltip: 'Leaf', enabled: true, run(): void {} },
+			{
+				id: 'leaf',
+				label: 'Leaf',
+				tooltip: 'Leaf',
+				enabled: true,
+				run(): void {},
+			},
 		],
 	});
 	const trigger = menu.element.querySelector<HTMLButtonElement>('[data-action-id="submenu"] button')!;
@@ -317,9 +411,7 @@ test('Menu preserves submenu focus and closes after focus leaves or the parent s
 		mock.timers.tick(250);
 		assert.equal(trigger.getAttribute('aria-expanded'), 'true');
 
-		const child = dom.window.document.querySelector<HTMLButtonElement>(
-			'.ash-context-view-menu:not([hidden]) [role="menuitem"]',
-		)!;
+		const child = dom.window.document.querySelector<HTMLButtonElement>('.ash-context-view-menu:not([hidden]) [role="menuitem"]')!;
 		child.focus();
 		mock.timers.tick(750);
 		assert.equal(trigger.getAttribute('aria-expanded'), 'true');

@@ -11,12 +11,7 @@ export function createAppServerMcpServerStatusApi(connection: AppServerProtocolC
 		},
 		read: async () => {
 			if (!connection.capabilities?.mcp) {
-				throw new Error(
-					localize(
-						{ bundle: 'ash.extensions', key: 'mcpStatusUnavailable' },
-						'MCP server status is unavailable.',
-					),
-				);
+				throw new Error(localize({ bundle: 'ash.extensions', key: 'mcpStatusUnavailable' }, 'MCP server status is unavailable.'));
 			}
 			const result = await appServerRequest(connection, 'mcp/server/status', {});
 			return {

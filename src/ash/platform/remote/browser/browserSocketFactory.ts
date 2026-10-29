@@ -1,12 +1,7 @@
 import { VSBuffer } from '../../../base/common/buffer.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import {
-	SocketCloseEventType,
-	type ISocket,
-	type SocketCloseEvent,
-	type SocketDiagnosticsEventType,
-} from '../../../base/parts/ipc/common/ipc.net.js';
+import { SocketCloseEventType, type ISocket, type SocketCloseEvent, type SocketDiagnosticsEventType } from '../../../base/parts/ipc/common/ipc.net.js';
 import { RemoteConnectionType, type WebSocketRemoteConnection } from '../common/remoteAuthorityResolver.js';
 import type { ISocketFactory } from '../common/remoteSocketFactoryService.js';
 
@@ -151,18 +146,10 @@ export class BrowserSocketFactory implements ISocketFactory<RemoteConnectionType
 		return true;
 	}
 
-	public async connect(
-		connection: WebSocketRemoteConnection,
-		path: string,
-		query: string,
-		debugLabel: string,
-	): Promise<ISocket> {
+	public async connect(connection: WebSocketRemoteConnection, path: string, query: string, debugLabel: string): Promise<ISocket> {
 		const host = connection.host.includes(':') ? `[${connection.host}]` : connection.host;
 		const scheme = globalThis.location?.protocol === 'https:' ? 'wss' : 'ws';
-		const peer = this.factory.create(
-			`${scheme}://${host}:${connection.port}/${path.replace(/^\//, '')}${query ? `?${query}` : ''}`,
-			debugLabel,
-		);
+		const peer = this.factory.create(`${scheme}://${host}:${connection.port}/${path.replace(/^\//, '')}${query ? `?${query}` : ''}`, debugLabel);
 		const socket = new BrowserSocket(peer, debugLabel);
 		using waiting = new DisposableStore();
 		try {

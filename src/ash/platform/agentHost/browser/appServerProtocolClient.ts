@@ -22,11 +22,7 @@ import { VSBuffer } from '../../../base/common/buffer.js';
 import { canceled, isCancellationError, toError } from '../../../base/common/errors.js';
 import { isRecord } from '../../../base/common/types.js';
 import type { AppServerConnectionState, IAppServerConnectionRecovery } from '../common/appServerApi.js';
-import {
-	computeReconnectDelay,
-	hasExhaustedReconnectAttempts,
-	type IRemoteAgentHostReconnectPolicy,
-} from '../common/reconnectPolicy.js';
+import { computeReconnectDelay, hasExhaustedReconnectAttempts, type IRemoteAgentHostReconnectPolicy } from '../common/reconnectPolicy.js';
 import { AppServerConnectionStoppedError, AppServerRemoteError } from '../common/appServerError.js';
 import type { DisposableHandle } from '../../ipc/common/ipc.js';
 import { checkAppServerInitializeCompatibility } from '../common/appServerProtocolCompatibility.js';
@@ -43,11 +39,7 @@ import { Emitter } from '../../../base/common/event.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { OperatingSystem } from '../../../base/common/platform.js';
 import { AppServerFrameDecoder } from './appServerFrameDecoder.js';
-import type {
-	AppServerDecodeContext,
-	DecodedAppServerCall,
-	DecodedAppServerFrame,
-} from './appServerProtocolDecoding.js';
+import type { AppServerDecodeContext, DecodedAppServerCall, DecodedAppServerFrame } from './appServerProtocolDecoding.js';
 
 const DEFAULT_CONNECT_TIMEOUT = 10_000;
 const DEFAULT_REQUEST_TIMEOUT = 30_000;
@@ -104,10 +96,7 @@ export class AppServerProtocolClient {
 	private readonly readyWaiters = new Set<(error?: Error) => void>();
 	private readonly notificationListeners = new Set<(notification: ServerNotification) => void>();
 	private readonly pending = new Map<number, PendingRequest>();
-	private readonly handlers = new Map<
-		AppServerServerRequestMethod,
-		(params: never, context: AppServerRequestContext) => unknown | Promise<unknown>
-	>();
+	private readonly handlers = new Map<AppServerServerRequestMethod, (params: never, context: AppServerRequestContext) => unknown | Promise<unknown>>();
 	private readonly inbound = new Map<JsonRpcId, AbortController>();
 	private readonly bufferedCalls: DecodedAppServerCall[] = [];
 	private receiving: FrameQueue | undefined;
@@ -126,21 +115,13 @@ export class AppServerProtocolClient {
 	private isClosing = false;
 	private firstRequestId = 1;
 
-	constructor(
-		transport: AppServerTransport,
-		options: AppServerProtocolClientOptions = {},
-		decoder?: AppServerFrameDecoder,
-	) {
+	constructor(transport: AppServerTransport, options: AppServerProtocolClientOptions = {}, decoder?: AppServerFrameDecoder) {
 		this.transport = transport;
 		this.options = {
 			clientName: options.clientName ?? 'ash-web',
 			clientVersion: options.clientVersion ?? '0.1.0',
 			connectTimeoutMs: positiveInteger(options.connectTimeoutMs, DEFAULT_CONNECT_TIMEOUT, 'connectTimeoutMs'),
-			initializeTimeoutMs: positiveInteger(
-				options.initializeTimeoutMs,
-				DEFAULT_CONNECT_TIMEOUT,
-				'initializeTimeoutMs',
-			),
+			initializeTimeoutMs: positiveInteger(options.initializeTimeoutMs, DEFAULT_CONNECT_TIMEOUT, 'initializeTimeoutMs'),
 			requestTimeoutMs: positiveInteger(options.requestTimeoutMs, DEFAULT_REQUEST_TIMEOUT, 'requestTimeoutMs'),
 			capabilities: { ...options.capabilities, notifications: true },
 		};
@@ -191,27 +172,20 @@ export class AppServerProtocolClient {
 				if (error) reject(error);
 				else resolve();
 			};
-			const timeout = setTimeout(
-				() => complete(new Error('App Server readiness timed out')),
-				this.options.requestTimeoutMs,
-			);
+			const timeout = setTimeout(() => complete(new Error('App Server readiness timed out')), this.options.requestTimeoutMs);
 			this.readyWaiters.add(complete);
 		});
 	}
 
 	async connect(): Promise<AppServerConnectionMetadata> {
 		if (this.disposed || this.isClosing) throw new Error('Cannot connect a disposed or closing App Server client');
-		if (this._state !== 'stopped' && this._state !== 'crashed')
-			throw new Error(`Cannot connect App Server client from ${this._state}`);
+		if (this._state !== 'stopped' && this._state !== 'crashed') throw new Error(`Cannot connect App Server client from ${this._state}`);
 		const generation = ++this._generation;
 		this.firstRequestId = this.nextRequestId;
 		const connected = new Promise<AppServerConnectionMetadata>((resolve, reject) => {
 			this.connectResolve = resolve;
 			this.connectReject = reject;
-			this.connectTimeout = setTimeout(
-				() => this.fail(new Error('Timed out connecting to the App Server bridge')),
-				this.options.connectTimeoutMs,
-			);
+			this.connectTimeout = setTimeout(() => this.fail(new Error('Timed out connecting to the App Server bridge')), this.options.connectTimeoutMs);
 		});
 		// Observers can close or replace the connection synchronously when its state changes.
 		this.setState('starting');
@@ -283,19 +257,8 @@ export class AppServerProtocolClient {
 		// Abort listeners can reenter before the final state event is published.
 		if (options?.signal?.aborted) return Promise.reject(canceled());
 		if (this.disposed || this.isClosing || this.receiving?.closed || this._state !== 'ready')
-			return Promise.reject(
-				new Error(
-					`App Server is not ready: ${this.isClosing || this.receiving?.closed ? 'closing' : this._state}`,
-				),
-			);
-		return this.requestRaw(
-			definition,
-			params,
-			options
-				? positiveInteger(options.timeoutMs, this.options.requestTimeoutMs, 'timeoutMs')
-				: this.options.requestTimeoutMs,
-			options?.signal,
-		);
+			return Promise.reject(new Error(`App Server is not ready: ${this.isClosing || this.receiving?.closed ? 'closing' : this._state}`));
+		return this.requestRaw(definition, params, options ? positiveInteger(options.timeoutMs, this.options.requestTimeoutMs, 'timeoutMs') : this.options.requestTimeoutMs, options?.signal);
 	}
 
 	onStateChange(listener: (state: AppServerConnectionState, error?: Error) => void): IDisposable {
@@ -310,10 +273,7 @@ export class AppServerProtocolClient {
 
 	public registerRequestHandler<M extends AppServerServerRequestMethod>(
 		definition: AppServerServerRequestDefinition<M>,
-		handler: (
-			params: ServerRequestParams<M>,
-			context: AppServerRequestContext,
-		) => ServerRequestResult<M> | Promise<ServerRequestResult<M>>,
+		handler: (params: ServerRequestParams<M>, context: AppServerRequestContext) => ServerRequestResult<M> | Promise<ServerRequestResult<M>>,
 	): IDisposable {
 		if (this.disposed || this.handlers.has(definition.method)) {
 			throw new Error(`Cannot register App Server handler: ${definition.method}`);
@@ -339,12 +299,7 @@ export class AppServerProtocolClient {
 		}
 	}
 
-	private requestRaw<M extends AppServerMethod>(
-		definition: AppServerMethodDefinition<M>,
-		params: MethodParams<M>,
-		timeoutMs: number,
-		signal?: AbortSignal,
-	): Promise<MethodResult<M>> {
+	private requestRaw<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, timeoutMs: number, signal?: AbortSignal): Promise<MethodResult<M>> {
 		if (this.pending.size >= 128) {
 			return Promise.reject(new Error('App Server request limit reached'));
 		}
@@ -400,14 +355,7 @@ export class AppServerProtocolClient {
 	};
 
 	private readonly handleFrame = (payload: unknown): void => {
-		if (
-			this.disposed ||
-			this.isClosing ||
-			this.receiving?.closed ||
-			this._state === 'stopped' ||
-			this._state === 'crashed'
-		)
-			return;
+		if (this.disposed || this.isClosing || this.receiving?.closed || this._state === 'stopped' || this._state === 'crashed') return;
 		try {
 			const { frame, byteLength } = validateFramePayload(payload);
 			// Freeze only routing at receipt: queued replies cannot match a request
@@ -419,8 +367,7 @@ export class AppServerProtocolClient {
 				if (!request.resolve) canceledRequests.push(id);
 			}
 			const context: AppServerDecodeContext = { firstRequestId: this.firstRequestId, methods, canceledRequests };
-			if (this.receiving && (this.receiving.count >= 4096 || this.receiving.bytes + byteLength > MAX_FRAME_BYTES))
-				throw new Error('App Server decode queue capacity exceeded');
+			if (this.receiving && (this.receiving.count >= 4096 || this.receiving.bytes + byteLength > MAX_FRAME_BYTES)) throw new Error('App Server decode queue capacity exceeded');
 			const decoded = this.receiving ? undefined : this.decoder.decode(frame, byteLength, context);
 			if (decoded && !(decoded instanceof Promise)) {
 				this.dispatchFrame(decoded, byteLength);
@@ -452,10 +399,7 @@ export class AppServerProtocolClient {
 		}
 	};
 
-	private async drainFrames(
-		queue: FrameQueue,
-		first: DecodedAppServerFrame | Promise<DecodedAppServerFrame>,
-	): Promise<void> {
+	private async drainFrames(queue: FrameQueue, first: DecodedAppServerFrame | Promise<DecodedAppServerFrame>): Promise<void> {
 		let decoded = first;
 		let started = performance.now();
 		try {
@@ -517,8 +461,7 @@ export class AppServerProtocolClient {
 		}
 		if (this._state !== 'ready') {
 			// Compatibility must be checked before any buffered host effects run.
-			if (this.bufferedCalls.length >= 128 || this.bufferedCallBytes + byteLength > MAX_FRAME_BYTES)
-				throw new Error('App Server initialization call limit reached');
+			if (this.bufferedCalls.length >= 128 || this.bufferedCallBytes + byteLength > MAX_FRAME_BYTES) throw new Error('App Server initialization call limit reached');
 			this.bufferedCalls.push(decoded);
 			this.bufferedCallBytes += byteLength;
 		} else {
@@ -538,10 +481,7 @@ export class AppServerProtocolClient {
 		}
 		const intentional = isRecord(payload) && payload.intentional === true;
 		const fallback = intentional ? 'App Server connection stopped' : 'App Server bridge closed';
-		const message =
-			isRecord(payload) && typeof payload.message === 'string' && payload.message.trim()
-				? payload.message
-				: fallback;
+		const message = isRecord(payload) && typeof payload.message === 'string' && payload.message.trim() ? payload.message : fallback;
 		if (intentional) {
 			this.shutdown(new AppServerConnectionStoppedError(message), 'stopped');
 			return;
@@ -601,8 +541,7 @@ export class AppServerProtocolClient {
 			const generation = this._generation;
 			const controller = new AbortController();
 			this.inbound.set(request.id, controller);
-			const ownsRequest = (): boolean =>
-				this._generation === generation && this.inbound.get(request.id) === controller;
+			const ownsRequest = (): boolean => this._generation === generation && this.inbound.get(request.id) === controller;
 			// Check ownership before decoding or serializing a host result. Both can throw,
 			// and retired work must have no effect on a replacement connection.
 			const reply = (response: () => object, options?: { readonly abort: boolean }): void => {
@@ -611,9 +550,7 @@ export class AppServerProtocolClient {
 				}
 				// EOF can wait for Worker decoding, but the request deadline must still
 				// retire and cancel host work without serializing a reply to the closed peer.
-				const frame = this.receiving?.closed
-					? undefined
-					: JSON.stringify({ jsonrpc: '2.0', id: request.id, ...response() });
+				const frame = this.receiving?.closed ? undefined : JSON.stringify({ jsonrpc: '2.0', id: request.id, ...response() });
 				this.inbound.delete(request.id);
 				clearTimeout(timeout);
 				if (options?.abort) {
@@ -636,11 +573,7 @@ export class AppServerProtocolClient {
 			);
 			controller.signal.addEventListener('abort', () => clearTimeout(timeout), { once: true });
 			void Promise.resolve()
-				.then(() =>
-					ownsRequest() && !this.receiving?.closed
-						? handler(request.params as never, { signal: controller.signal })
-						: undefined,
-				)
+				.then(() => (ownsRequest() && !this.receiving?.closed ? handler(request.params as never, { signal: controller.signal }) : undefined))
 				.then(
 					value => reply(() => ({ result: decodeAppServerServerRequestResult(request.method, value) })),
 					error =>
@@ -707,11 +640,7 @@ export class AppServerProtocolClient {
 		this.shutdown(error, this._state === 'stopped' ? 'stopped' : 'crashed', { releaseTransport: true });
 	}
 
-	private shutdown(
-		error: Error,
-		state: AppServerConnectionState,
-		options?: { readonly releaseTransport: boolean },
-	): void {
+	private shutdown(error: Error, state: AppServerConnectionState, options?: { readonly releaseTransport: boolean }): void {
 		if (this.isClosing) {
 			return;
 		}
@@ -761,10 +690,7 @@ export class AppServerProtocolClient {
 			this.isClosing = false;
 			// Recovery observers may immediately connect again. Publish only after
 			// the old transport has closed so cleanup cannot tear down their new lease.
-			this.setState(
-				this.disposed ? 'stopped' : state,
-				state === 'crashed' || error instanceof AppServerConnectionStoppedError ? error : undefined,
-			);
+			this.setState(this.disposed ? 'stopped' : state, state === 'crashed' || error instanceof AppServerConnectionStoppedError ? error : undefined);
 		}
 	}
 
@@ -942,8 +868,7 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 	}
 
 	private schedule(): void {
-		if (this.isDisposed || !this.isActive || this.task || this.timer !== undefined || this.status === 'unavailable')
-			return;
+		if (this.isDisposed || !this.isActive || this.task || this.timer !== undefined || this.status === 'unavailable') return;
 		if (this.suspended) {
 			this.publish('suspended');
 			return;
@@ -952,15 +877,12 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 			this.policy &&
 			(!this.policy.autoRestore ||
 				hasExhaustedReconnectAttempts(this.policy, this.attempts) ||
-				(this.policy.maxElapsedTimeMs !== undefined &&
-					Date.now() - this.startedAt >= this.policy.maxElapsedTimeMs))
+				(this.policy.maxElapsedTimeMs !== undefined && Date.now() - this.startedAt >= this.policy.maxElapsedTimeMs))
 		) {
 			this.publish('failed');
 			return;
 		}
-		const delay = this.policy
-			? computeReconnectDelay(this.policy, this.attempts + 1)
-			: [100, 500, 2000][this.attempts];
+		const delay = this.policy ? computeReconnectDelay(this.policy, this.attempts + 1) : [100, 500, 2000][this.attempts];
 		if (delay === undefined) {
 			this.publish('failed');
 			return;
@@ -991,10 +913,8 @@ function validateConnectedPayload(payload: unknown): AppServerConnectionMetadata
 	if (!isRecord(payload) || payload.protocolVersion !== WEB_APP_SERVER_PROTOCOL_VERSION) {
 		throw new Error('App Server bridge protocol version mismatch');
 	}
-	if (typeof payload.workspaceId !== 'string' || payload.workspaceId.trim().length === 0)
-		throw new Error('App Server bridge workspace ID is invalid');
-	if (typeof payload.workspaceRoot !== 'string' || payload.workspaceRoot.trim().length === 0)
-		throw new Error('App Server bridge workspace root is invalid');
+	if (typeof payload.workspaceId !== 'string' || payload.workspaceId.trim().length === 0) throw new Error('App Server bridge workspace ID is invalid');
+	if (typeof payload.workspaceRoot !== 'string' || payload.workspaceRoot.trim().length === 0) throw new Error('App Server bridge workspace root is invalid');
 	return { workspaceId: payload.workspaceId, workspaceRoot: payload.workspaceRoot };
 }
 
@@ -1006,9 +926,7 @@ function validateFramePayload(payload: unknown): { frame: string; byteLength: nu
 	return { frame: payload.frame, byteLength };
 }
 
-function validateInitializeResult(
-	value: InitializeResult,
-): Pick<InitializeResult, 'capabilities' | 'slashCommands'> & {
+function validateInitializeResult(value: InitializeResult): Pick<InitializeResult, 'capabilities' | 'slashCommands'> & {
 	operatingSystem: OperatingSystem | undefined;
 	userHome: string | undefined;
 } {
@@ -1028,10 +946,7 @@ function validateInitializeResult(
 	const userHome = initialized.serverInfo.userHome;
 	if (
 		userHome !== undefined &&
-		(userHome.includes('\0') ||
-			!(operatingSystem === OperatingSystem.Windows
-				? /^(?:[a-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+)/i.test(userHome)
-				: userHome.startsWith('/')))
+		(userHome.includes('\0') || !(operatingSystem === OperatingSystem.Windows ? /^(?:[a-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+)/i.test(userHome) : userHome.startsWith('/')))
 	) {
 		throw new TypeError('App Server user home must be an absolute directory');
 	}
@@ -1049,8 +964,7 @@ function disposable(dispose: () => void): IDisposable {
 
 function positiveInteger(value: number | undefined, fallback: number, name: string): number {
 	const resolved = value ?? fallback;
-	if (!Number.isSafeInteger(resolved) || resolved <= 0)
-		throw new RangeError(`${name} must be a positive safe integer`);
+	if (!Number.isSafeInteger(resolved) || resolved <= 0) throw new RangeError(`${name} must be a positive safe integer`);
 	return resolved;
 }
 

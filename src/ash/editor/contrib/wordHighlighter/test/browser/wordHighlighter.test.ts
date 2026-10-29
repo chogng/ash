@@ -17,8 +17,7 @@ import { TestLanguageFeaturesService } from '../../../../test/common/testLanguag
 
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { TextualMultiDocumentHighlightFeature } = await import('../../browser/textualHighlightProvider.js');
-const { WordHighlighterContribution, getOccurrencesAtPosition, getOccurrencesAcrossMultipleModels } =
-	await import('../../browser/wordHighlighter.contribution.js');
+const { WordHighlighterContribution, getOccurrencesAtPosition, getOccurrencesAcrossMultipleModels } = await import('../../browser/wordHighlighter.contribution.js');
 
 test('Word highlighter uses the textual provider for complete Unicode words', async () => {
 	using languages = new TestLanguageFeaturesService();
@@ -77,18 +76,11 @@ test('Multi-file word highlighting updates every open editor sharing the languag
 });
 
 for (const mode of ['singleFile', 'multiFile'] as const) {
-	for (const failure of [
-		'synchronous failure',
-		'asynchronous failure',
-		'invalid result',
-		'provider cancellation',
-	] as const) {
+	for (const failure of ['synchronous failure', 'asynchronous failure', 'invalid result', 'provider cancellation'] as const) {
 		test(`Word highlighter recovers from ${failure} in ${mode} mode`, async () => {
 			using languages = new TestLanguageFeaturesService();
 			const errors: unknown[] = [];
-			using first = createHarness('item item', languages, URI.parse('file:///one.ts'), mode, error =>
-				errors.push(error),
-			);
+			using first = createHarness('item item', languages, URI.parse('file:///one.ts'), mode, error => errors.push(error));
 			using second = createHarness('item item', languages, URI.parse('file:///two.ts'), mode);
 			let successfulCalls = 0;
 			let failedCalls = 0;
@@ -128,10 +120,7 @@ for (const mode of ['singleFile', 'multiFile'] as const) {
 							},
 						});
 
-			const highlighted =
-				mode === 'singleFile'
-					? waitForDecorations(first.decorations)
-					: Promise.all([waitForDecorations(first.decorations), waitForDecorations(second.decorations)]);
+			const highlighted = mode === 'singleFile' ? waitForDecorations(first.decorations) : Promise.all([waitForDecorations(first.decorations), waitForDecorations(second.decorations)]);
 			first.controller.restoreViewState(true);
 			await highlighted;
 
@@ -146,10 +135,7 @@ for (const mode of ['singleFile', 'multiFile'] as const) {
 				{
 					failedCalls: 1,
 					successfulCalls: 1,
-					errors:
-						failure === 'provider cancellation'
-							? []
-							: [failure === 'invalid result' ? 'Document highlight kind is invalid' : failure],
+					errors: failure === 'provider cancellation' ? [] : [failure === 'invalid result' ? 'Document highlight kind is invalid' : failure],
 					first: [DocumentHighlightKind.Write],
 					second: mode === 'singleFile' ? [] : [DocumentHighlightKind.Write],
 				},
@@ -203,31 +189,15 @@ for (const mode of ['singleFile', 'multiFile'] as const) {
 			};
 			const pending =
 				mode === 'singleFile'
-					? getOccurrencesAtPosition(
-							languages.documentHighlightProvider,
-							target,
-							new Position(1, 2),
-							request.token,
-							error => errors.push(error),
-						)
-					: getOccurrencesAcrossMultipleModels(
-							languages.multiDocumentHighlightProvider,
-							target,
-							new Position(1, 2),
-							request.token,
-							[],
-							error => errors.push(error),
-						);
+					? getOccurrencesAtPosition(languages.documentHighlightProvider, target, new Position(1, 2), request.token, error => errors.push(error))
+					: getOccurrencesAcrossMultipleModels(languages.multiDocumentHighlightProvider, target, new Position(1, 2), request.token, [], error => errors.push(error));
 
 			if (invalidation === 'cancellation') request.cancel();
 			else model.applyEdits([{ range: new Range(1, 1, 1, 1), text: 'x' }]);
 			reject(new Error('Late provider failure'));
 			const result = await pending;
 
-			assert.deepEqual(
-				{ fallbackCalls, errors, resources: result.size },
-				{ fallbackCalls: 0, errors: [], resources: 0 },
-			);
+			assert.deepEqual({ fallbackCalls, errors, resources: result.size }, { fallbackCalls: 0, errors: [], resources: 0 });
 		});
 	}
 
@@ -267,19 +237,8 @@ for (const mode of ['singleFile', 'multiFile'] as const) {
 
 		const result =
 			mode === 'singleFile'
-				? await getOccurrencesAtPosition(
-						languages.documentHighlightProvider,
-						target,
-						new Position(1, 2),
-						request.token,
-					)
-				: await getOccurrencesAcrossMultipleModels(
-						languages.multiDocumentHighlightProvider,
-						target,
-						new Position(1, 2),
-						request.token,
-						[],
-					);
+				? await getOccurrencesAtPosition(languages.documentHighlightProvider, target, new Position(1, 2), request.token)
+				: await getOccurrencesAcrossMultipleModels(languages.multiDocumentHighlightProvider, target, new Position(1, 2), request.token, []);
 
 		assert.deepEqual({ fallbackCalls, highlights: result.get(model.uri) }, { fallbackCalls: 0, highlights: [] });
 	});
@@ -328,13 +287,7 @@ test('Word highlighter obeys the off mode and navigates existing highlights', as
 	assert.deepEqual(enabled.editor.getSelections()![0]!, Selection.fromPositions(new Position(0 + 1, 0 + 1)));
 });
 
-function createHarness(
-	text: string,
-	languages: TestLanguageFeaturesService,
-	resource: URI,
-	mode: 'off' | 'singleFile' | 'multiFile',
-	onError?: (error: unknown) => void,
-) {
+function createHarness(text: string, languages: TestLanguageFeaturesService, resource: URI, mode: 'off' | 'singleFile' | 'multiFile', onError?: (error: unknown) => void) {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;

@@ -45,24 +45,17 @@ export class ExtensionDebugAdapterRegistry extends Disposable implements Extensi
 }
 
 /** Validates one complete extension generation without mutating the live registry. */
-export function validateExtensionDebugAdapterDefinitions(
-	definitions: readonly ExtensionDebugAdapterDefinition[],
-): readonly ExtensionDebugAdapterDefinition[] {
+export function validateExtensionDebugAdapterDefinitions(definitions: readonly ExtensionDebugAdapterDefinition[]): readonly ExtensionDebugAdapterDefinition[] {
 	const byType = new Map<string, ExtensionDebugAdapterDefinition>();
 	for (const definition of definitions) {
 		const previous = byType.get(definition.type);
-		if (previous)
-			throw new Error(
-				`Debug adapter type '${definition.type}' is contributed by both '${previous.extensionId}' and '${definition.extensionId}'`,
-			);
+		if (previous) throw new Error(`Debug adapter type '${definition.type}' is contributed by both '${previous.extensionId}' and '${definition.extensionId}'`);
 		byType.set(
 			definition.type,
 			Object.freeze({
 				...definition,
 				arguments: Object.freeze([...definition.arguments]),
-				...(definition.variables === undefined
-					? {}
-					: { variables: Object.freeze({ ...definition.variables }) }),
+				...(definition.variables === undefined ? {} : { variables: Object.freeze({ ...definition.variables }) }),
 			}),
 		);
 	}

@@ -17,25 +17,17 @@ export const terminalSuggestConfiguration: Readonly<Record<string, IConfiguratio
 		default: true,
 		restricted: true,
 		get description() {
-			return localize(
-				'terminal.suggest.enabled',
-				'Enable terminal suggestions when shell integration is working.',
-			);
+			return localize('terminal.suggest.enabled', 'Enable terminal suggestions when shell integration is working.');
 		},
 	},
 	[TerminalSuggestSettingId.QuickSuggestions]: {
 		type: ['boolean', 'object'],
 		default: { commands: 'on', arguments: 'on', unknown: 'off' },
 		restricted: true,
-		properties: Object.fromEntries(
-			['commands', 'arguments', 'unknown'].map(key => [key, { type: 'string', enum: ['on', 'off'] }]),
-		),
+		properties: Object.fromEntries(['commands', 'arguments', 'unknown'].map(key => [key, { type: 'string', enum: ['on', 'off'] }])),
 		additionalProperties: false,
 		get description() {
-			return localize(
-				'terminal.suggest.quickSuggestions',
-				'Automatically show terminal suggestions while typing commands, arguments, or unknown input.',
-			);
+			return localize('terminal.suggest.quickSuggestions', 'Automatically show terminal suggestions while typing commands, arguments, or unknown input.');
 		},
 	},
 	[TerminalSuggestSettingId.SuggestOnTriggerCharacters]: {
@@ -43,10 +35,7 @@ export const terminalSuggestConfiguration: Readonly<Record<string, IConfiguratio
 		default: false,
 		restricted: true,
 		get description() {
-			return localize(
-				'terminal.suggest.triggerCharacters',
-				'Automatically show terminal suggestions when typing a provider trigger character.',
-			);
+			return localize('terminal.suggest.triggerCharacters', 'Automatically show terminal suggestions when typing a provider trigger character.');
 		},
 	},
 };

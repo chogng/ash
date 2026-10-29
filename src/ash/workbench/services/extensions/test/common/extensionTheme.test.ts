@@ -8,11 +8,7 @@ import type { IServerEventApi } from '../../../../../platform/agentHost/common/a
 import { WorkbenchThemesRegistry } from '../../../../common/theme.js';
 import { editorBackground } from '../../../../../platform/theme/common/colors/editorColors.js';
 import { ColorScheme } from '../../../../../platform/theme/common/theme.js';
-import {
-	createExtensionWorkbenchColorTheme,
-	extensionWorkbenchThemeId,
-	parseExtensionTheme,
-} from '../../common/extensionTheme.js';
+import { createExtensionWorkbenchColorTheme, extensionWorkbenchThemeId, parseExtensionTheme } from '../../common/extensionTheme.js';
 import { ExtensionColorThemeService } from '../../browser/extensionColorThemeService.js';
 
 test('compiles a stable selectable Workbench theme from supported extension colors', () => {
@@ -39,14 +35,7 @@ test('compiles a stable selectable Workbench theme from supported extension colo
 });
 
 test('rejects selectable extension themes without a supported UI scheme', () => {
-	const definition = parseExtensionTheme(
-		{ colors: {}, semanticTokenColors: {} },
-		'extension-ash-demo-one',
-		'ash.demo',
-		'Demo',
-		undefined,
-		'theme test',
-	);
+	const definition = parseExtensionTheme({ colors: {}, semanticTokenColors: {} }, 'extension-ash-demo-one', 'ash.demo', 'Demo', undefined, 'theme test');
 	assert.throws(() => createExtensionWorkbenchColorTheme(definition), /uiTheme/);
 });
 
@@ -80,27 +69,11 @@ test('loads extension publisher metadata and direct token styles through package
 
 test('rejects invalid token colors and font styles before a theme becomes active', () => {
 	assert.throws(
-		() =>
-			parseExtensionTheme(
-				{ semanticTokenColors: { comment: { foreground: 'green' } } },
-				'extension-ash-demo-one',
-				'ash.demo',
-				'Demo',
-				'vs-dark',
-				'theme test',
-			),
+		() => parseExtensionTheme({ semanticTokenColors: { comment: { foreground: 'green' } } }, 'extension-ash-demo-one', 'ash.demo', 'Demo', 'vs-dark', 'theme test'),
 		/Invalid color theme/,
 	);
 	assert.throws(
-		() =>
-			parseExtensionTheme(
-				{ semanticTokenColors: { comment: { fontStyle: 'italic blink' } } },
-				'extension-ash-demo-one',
-				'ash.demo',
-				'Demo',
-				'vs-dark',
-				'theme test',
-			),
+		() => parseExtensionTheme({ semanticTokenColors: { comment: { fontStyle: 'italic blink' } } }, 'extension-ash-demo-one', 'ash.demo', 'Demo', 'vs-dark', 'theme test'),
 		/Invalid color theme/,
 	);
 });
@@ -300,13 +273,7 @@ test('independent themes load concurrently with includes and publish once in man
 			if (active === 8) void firstBatch.complete();
 			try {
 				await release.p;
-				return new TextEncoder().encode(
-					JSON.stringify(
-						path === 'themes/base.json'
-							? { colors: { 'editor.background': '#123456' } }
-							: { include: './base.json' },
-					),
-				);
+				return new TextEncoder().encode(JSON.stringify(path === 'themes/base.json' ? { colors: { 'editor.background': '#123456' } } : { include: './base.json' }));
 			} finally {
 				active--;
 			}
@@ -387,22 +354,14 @@ test('disposing during theme reads drains admitted tasks without reading their i
 
 test('theme includes retain the aggregate document budget after individual resource validation', async () => {
 	const { loadExtensionTheme } = await import('../../common/extensionTheme.js');
-	const colors = (prefix: string) =>
-		Object.fromEntries(
-			Array.from({ length: 3000 }, (_, index) => [`${prefix}${'x'.repeat(170)}${index}`, '#112233']),
-		);
+	const colors = (prefix: string) => Object.fromEntries(Array.from({ length: 3000 }, (_, index) => [`${prefix}${'x'.repeat(170)}${index}`, '#112233']));
 	const files: Record<string, string> = {
 		'themes/child.json': JSON.stringify({ include: './base.json', colors: colors('child') }),
 		'themes/base.json': JSON.stringify({ colors: colors('base') }),
 	};
 	assert.ok(Object.values(files).every(source => source.length < 1_048_576));
 	await assert.rejects(
-		loadExtensionTheme(
-			async path => new TextEncoder().encode(files[path]),
-			'ash.bounded-theme',
-			{ id: 'bounded', label: 'Bounded', uiTheme: 'vs-dark', path: 'themes/child.json' },
-			0,
-		),
+		loadExtensionTheme(async path => new TextEncoder().encode(files[path]), 'ash.bounded-theme', { id: 'bounded', label: 'Bounded', uiTheme: 'vs-dark', path: 'themes/child.json' }, 0),
 		/1 MiB/,
 	);
 });

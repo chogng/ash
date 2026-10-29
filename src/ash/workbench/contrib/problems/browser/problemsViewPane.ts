@@ -24,12 +24,7 @@ interface ProblemEntry {
 	readonly marker: IMarker;
 }
 
-const severities = Object.freeze([
-	MarkerSeverity.Error,
-	MarkerSeverity.Warning,
-	MarkerSeverity.Info,
-	MarkerSeverity.Hint,
-]);
+const severities = Object.freeze([MarkerSeverity.Error, MarkerSeverity.Warning, MarkerSeverity.Info, MarkerSeverity.Hint]);
 
 // Severity is a bit mask in the domain contract; CSS keeps its existing semantic state names.
 const severityClasses: Readonly<Record<MarkerSeverity, string>> = Object.freeze({
@@ -92,8 +87,7 @@ export class ProblemsViewPane extends ViewPane {
 						run: () => undefined,
 					},
 				],
-				actionViewItemProvider: (action, options) =>
-					new DropdownMenuActionViewItem(action, () => this.severityActions(), contextMenuService, options),
+				actionViewItemProvider: (action, options) => new DropdownMenuActionViewItem(action, () => this.severityActions(), contextMenuService, options),
 			}),
 		);
 		filterActions.element.classList.add('ash-toolbar');
@@ -129,8 +123,7 @@ export class ProblemsViewPane extends ViewPane {
 		this._register(workspaceService.onDidChangeWorkspace(() => this.render()));
 		this._register(
 			addDisposableListener(this.resultsElement, 'click', event => {
-				const target =
-					event.target instanceof container.ownerDocument.defaultView!.Element ? event.target : undefined;
+				const target = event.target instanceof container.ownerDocument.defaultView!.Element ? event.target : undefined;
 				const heading = target?.closest<HTMLButtonElement>('.ash-problems-file-heading');
 				if (heading) {
 					const resource = heading.dataset.resource!;
@@ -220,9 +213,7 @@ export class ProblemsViewPane extends ViewPane {
 	private render(): void {
 		const all = markerEntries(this.markerService.read());
 		const filter = this.filterInput.value.trim().toLocaleLowerCase();
-		const visible = all.filter(
-			entry => this.enabledSeverities.has(entry.marker.severity) && matchesFilter(entry, filter),
-		);
+		const visible = all.filter(entry => this.enabledSeverities.has(entry.marker.severity) && matchesFilter(entry, filter));
 		this.renderedProblems = visible;
 		const resources = new Set(all.map(entry => entry.marker.resource.toString()));
 		for (const resource of this.collapsedResources) {
@@ -253,21 +244,13 @@ export class ProblemsViewPane extends ViewPane {
 			]);
 		}
 		const indexes = new Map(visible.map((problem, index) => [problem, index]));
-		this.resultsElement.replaceChildren(
-			...groupProblems(visible).map(group => this.renderGroup(group.resource, group.problems, indexes)),
-		);
+		this.resultsElement.replaceChildren(...groupProblems(visible).map(group => this.renderGroup(group.resource, group.problems, indexes)));
 		const hasFilters = Boolean(filter) || this.enabledSeverities.size < severities.length;
 		this.clearFiltersButton.domNode.hidden = !hasFilters;
-		this.statusElement.textContent =
-			this.interactionError ??
-			statusMessage(all.length, visible.length, hasFilters, this.workspaceService.getWorkbenchState());
+		this.statusElement.textContent = this.interactionError ?? statusMessage(all.length, visible.length, hasFilters, this.workspaceService.getWorkbenchState());
 	}
 
-	private renderGroup(
-		resource: URI,
-		problems: readonly ProblemEntry[],
-		indexes: ReadonlyMap<ProblemEntry, number>,
-	): HTMLLIElement {
+	private renderGroup(resource: URI, problems: readonly ProblemEntry[], indexes: ReadonlyMap<ProblemEntry, number>): HTMLLIElement {
 		const document = this.element.ownerDocument;
 		const group = h(document, 'li');
 		group.className = 'ash-problems-file';
@@ -316,12 +299,7 @@ export class ProblemsViewPane extends ViewPane {
 		source.textContent = diagnosticSource(entry.marker);
 		const location = h(document, 'span');
 		location.className = 'ash-problems-location';
-		location.textContent = localize(
-			'problems.location',
-			'[Ln {0}, Col {1}]',
-			entry.marker.startLineNumber,
-			entry.marker.startColumn,
-		);
+		location.textContent = localize('problems.location', '[Ln {0}, Col {1}]', entry.marker.startLineNumber, entry.marker.startColumn);
 		button.append(marker, message, source, location);
 		item.append(button);
 		return item;
@@ -333,20 +311,12 @@ export class ProblemsViewPane extends ViewPane {
 			await this.editorService.openEditor(
 				{ resource: entry.marker.resource, label: resourceName(entry.marker.resource) },
 				{
-					selection: new Range(
-						entry.marker.startLineNumber,
-						entry.marker.startColumn,
-						entry.marker.endLineNumber,
-						entry.marker.endColumn,
-					),
+					selection: new Range(entry.marker.startLineNumber, entry.marker.startColumn, entry.marker.endLineNumber, entry.marker.endColumn),
 				},
 			);
 		} catch (error) {
 			if (this.isDisposed) return;
-			this.interactionError =
-				error instanceof Error
-					? error.message
-					: localize('problems.openFailed', 'Could not open problem location.');
+			this.interactionError = error instanceof Error ? error.message : localize('problems.openFailed', 'Could not open problem location.');
 			this.render();
 		}
 	}
@@ -366,9 +336,7 @@ function compareProblems(left: ProblemEntry, right: ProblemEntry): number {
 	);
 }
 
-function groupProblems(
-	problems: readonly ProblemEntry[],
-): readonly { readonly resource: URI; readonly problems: readonly ProblemEntry[] }[] {
+function groupProblems(problems: readonly ProblemEntry[]): readonly { readonly resource: URI; readonly problems: readonly ProblemEntry[] }[] {
 	const groups = new Map<string, { readonly resource: URI; readonly problems: ProblemEntry[] }>();
 	for (const problem of problems) {
 		const key = problem.marker.resource.toString();
@@ -382,9 +350,7 @@ function matchesFilter(entry: ProblemEntry, filter: string): boolean {
 	if (!filter) return true;
 	const marker = entry.marker;
 	const code = typeof marker.code === 'object' ? marker.code.value : marker.code;
-	return `${marker.message} ${marker.source ?? ''} ${code ?? ''} ${resourceName(marker.resource)} ${resourceParent(marker.resource)}`
-		.toLocaleLowerCase()
-		.includes(filter);
+	return `${marker.message} ${marker.source ?? ''} ${code ?? ''} ${resourceName(marker.resource)} ${resourceParent(marker.resource)}`.toLocaleLowerCase().includes(filter);
 }
 
 function severityLabel(severity: MarkerSeverity): string {
@@ -402,16 +368,10 @@ function severityLabel(severity: MarkerSeverity): string {
 
 function statusMessage(total: number, visible: number, hasFilters: boolean, state: WorkbenchState): string {
 	// Loose files can still publish diagnostics in an empty window, so actual markers take precedence.
-	if (total === 0)
-		return state === WorkbenchState.EMPTY
-			? localize('problems.noProject', 'Open a folder to view project diagnostics.')
-			: localize('problems.empty', 'No problems detected.');
-	if (visible === 0 && hasFilters)
-		return localize('problems.noMatches', 'No problems match the current filters ({0} total).', total);
+	if (total === 0) return state === WorkbenchState.EMPTY ? localize('problems.noProject', 'Open a folder to view project diagnostics.') : localize('problems.empty', 'No problems detected.');
+	if (visible === 0 && hasFilters) return localize('problems.noMatches', 'No problems match the current filters ({0} total).', total);
 	if (visible !== total) return localize('problems.filteredCount', '{0} of {1} problems shown.', visible, total);
-	return total === 1
-		? localize('problems.oneProblem', '1 problem in the workspace.')
-		: localize('problems.count', '{0} problems in the workspace.', total);
+	return total === 1 ? localize('problems.oneProblem', '1 problem in the workspace.') : localize('problems.count', '{0} problems in the workspace.', total);
 }
 
 function diagnosticSource(marker: IMarker): string {

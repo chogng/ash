@@ -57,8 +57,7 @@ export class ColorPickerController extends Disposable {
 		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
 		super();
-		if (viewport.textModel !== editor.getModel())
-			throw new TypeError('Stanza color picker dependencies must share a text model');
+		if (viewport.textModel !== editor.getModel()) throw new TypeError('Stanza color picker dependencies must share a text model');
 		this.widget = this._register(
 			instantiationService.createInstance(
 				ColorPickerWidget,
@@ -85,9 +84,7 @@ export class ColorPickerController extends Disposable {
 			focusTracker.onDidFocus(() => {
 				this.standaloneFocused.set(this.mode === 'standalone');
 				if (this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.ColorPicker)) {
-					this.viewport.announceAccessibilityStatus(
-						localize('colorPicker.helpHint', 'Press Alt+F1 for color picker help.'),
-					);
+					this.viewport.announceAccessibilityStatus(localize('colorPicker.helpHint', 'Press Alt+F1 for color picker help.'));
 				}
 			}),
 		);
@@ -100,8 +97,7 @@ export class ColorPickerController extends Disposable {
 				'pointerdown',
 				event => {
 					const target = event.target;
-					const targetNode =
-						target && typeof (target as Node).nodeType === 'number' ? (target as Node) : undefined;
+					const targetNode = target && typeof (target as Node).nodeType === 'number' ? (target as Node) : undefined;
 					if (!this.widget.visible) return;
 					if (targetNode && this.widget.domNode.contains(targetNode)) {
 						return;
@@ -196,11 +192,7 @@ export class ColorPickerController extends Disposable {
 			let insertionRanges: readonly Range[] | undefined;
 			let data = this.detector.getColorData(position) ?? undefined;
 			if (!data) {
-				const colors = await this.service.provideDocumentColors(
-					this.viewport.textModel.getLanguageId(),
-					'auto',
-					request.signal,
-				);
+				const colors = await this.service.provideDocumentColors(this.viewport.textModel.getLanguageId(), 'auto', request.signal);
 				if (request.signal.aborted) return;
 				data = colors.find(candidate => candidate.information.range.containsPosition(position));
 			}
@@ -247,8 +239,7 @@ export class ColorPickerController extends Disposable {
 			this.close(true);
 			return;
 		}
-		if (!event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== 'c')
-			return;
+		if (!event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== 'c') return;
 		stopEvent(event);
 		this.editor.trigger('keyboard', 'editor.action.showOrFocusStandaloneColorPicker', {});
 	}
@@ -256,21 +247,12 @@ export class ColorPickerController extends Disposable {
 	private handleEditorMouseDown(event: IEditorMouseEvent): void {
 		if (this.editor.getOption(EditorOption.colorDecoratorsActivatedOn) === 'hover') return;
 		const target = event.target;
-		if (
-			target?.type !== MouseTargetType.CONTENT_TEXT ||
-			target.detail.injectedText?.options.attachedData !== ColorDecorationInjectedTextMarker ||
-			!target.position
-		)
-			return;
-		const data = this.detector.getColorData(
-			this.viewport.coordinatesConverter.convertViewPositionToModelPosition(target.position),
-		);
+		if (target?.type !== MouseTargetType.CONTENT_TEXT || target.detail.injectedText?.options.attachedData !== ColorDecorationInjectedTextMarker || !target.position) return;
+		const data = this.detector.getColorData(this.viewport.coordinatesConverter.convertViewPositionToModelPosition(target.position));
 		if (!data) return;
 		event.event.preventDefault();
 		event.event.stopPropagation();
-		this.editor
-			.getContribution<ContentHoverController>('editor.contrib.hover')!
-			.showContentHover(data.information.range.getStartPosition(), event.event.target as HTMLElement);
+		this.editor.getContribution<ContentHoverController>('editor.contrib.hover')!.showContentHover(data.information.range.getStartPosition(), event.event.target as HTMLElement);
 	}
 
 	private async show(data: ColorData, focus: boolean, insertionRanges?: readonly Range[]): Promise<void> {
@@ -314,12 +296,7 @@ export class ColorPickerController extends Disposable {
 		// Formats contain concrete edits for one color. Invalidate them before requesting another.
 		model.colorPresentations = [];
 		try {
-			const presentations = await this.service.provideColorPresentations(
-				this.viewport.textModel.getLanguageId(),
-				data,
-				toLanguageColor(color),
-				request.signal,
-			);
+			const presentations = await this.service.provideColorPresentations(this.viewport.textModel.getLanguageId(), data, toLanguageColor(color), request.signal);
 			if (request.signal.aborted || this.model.value !== model) return;
 			model.colorPresentations = [...presentations];
 			if (this.shouldGuessPresentation && presentations.length > 0) {
@@ -335,12 +312,7 @@ export class ColorPickerController extends Disposable {
 	private async commitHover(model: ColorPickerModel, color: Color): Promise<void> {
 		const sequence = ++this.commitSequence;
 		await this.pendingPresentations;
-		if (
-			sequence !== this.commitSequence ||
-			this.mode !== 'hover' ||
-			this.model.value !== model ||
-			!model.color.equals(color)
-		) {
+		if (sequence !== this.commitSequence || this.mode !== 'hover' || this.model.value !== model || !model.color.equals(color)) {
 			return;
 		}
 		this.apply();
@@ -360,10 +332,7 @@ export class ColorPickerController extends Disposable {
 			: [presentation.textEdit ?? { range: data.information.range, text: presentation.label }];
 		const edits = [...colorEdits, ...(presentation.additionalTextEdits ?? [])].sort(
 			(left, right) =>
-				Position.compare(
-					Range.lift(left.range).getStartPosition(),
-					Range.lift(right.range).getStartPosition(),
-				) ||
+				Position.compare(Range.lift(left.range).getStartPosition(), Range.lift(right.range).getStartPosition()) ||
 				Position.compare(Range.lift(left.range).getEndPosition(), Range.lift(right.range).getEndPosition()),
 		);
 		try {
@@ -434,7 +403,5 @@ function toLanguageColor(color: Color): IColor {
 }
 
 function colorSwatch(target: EventTarget | null): HTMLElement | undefined {
-	return target && typeof (target as Element).closest === 'function'
-		? ((target as Element).closest<HTMLElement>('.colorpicker-color-decoration') ?? undefined)
-		: undefined;
+	return target && typeof (target as Element).closest === 'function' ? ((target as Element).closest<HTMLElement>('.colorpicker-color-decoration') ?? undefined) : undefined;
 }

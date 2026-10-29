@@ -70,14 +70,10 @@ export class ViewGpuContext extends Disposable {
 	constructor(
 		context: ViewContext,
 		private readonly semanticTokensForLine: (lineNumber: number) => readonly ResolvedSemanticToken[] = () => [],
-		private readonly semanticHighlightingEnabled: (theme: IColorTheme) => boolean = theme =>
-			theme.semanticHighlighting === true,
+		private readonly semanticHighlightingEnabled: (theme: IColorTheme) => boolean = theme => theme.semanticHighlighting === true,
 	) {
 		super();
-		this.semanticStyleResolver = new SemanticTokenStyleResolver(
-			context.theme.value,
-			semanticHighlightingEnabled(context.theme.value),
-		);
+		this.semanticStyleResolver = new SemanticTokenStyleResolver(context.theme.value, semanticHighlightingEnabled(context.theme.value));
 		const ownerWindow = getActiveWindow();
 		this.canvas = createFastDomNode(h(ownerWindow.document, 'canvas'));
 		// Acquire the surface before registering view resources: unsupported contexts
@@ -111,12 +107,7 @@ export class ViewGpuContext extends Disposable {
 						throw new CancellationError();
 					}
 					sharedDeviceReference = reference;
-					ViewGpuContext._atlas = new TextureAtlas(
-						reference.object.limits.maxTextureDimension2D,
-						undefined,
-						ViewGpuContext.decorationStyleCache,
-						ViewGpuContext._colorMap,
-					);
+					ViewGpuContext._atlas = new TextureAtlas(reference.object.limits.maxTextureDimension2D, undefined, ViewGpuContext.decorationStyleCache, ViewGpuContext._colorMap);
 					ViewGpuContext.deviceSync = reference.object;
 					void reference.object.lost.then(() => {
 						if (sharedDeviceReference === reference) ViewGpuContext.disposeSharedResources();
@@ -126,12 +117,7 @@ export class ViewGpuContext extends Disposable {
 				void ViewGpuContext.device.catch(() => {
 					if (generation === ViewGpuContext.deviceGeneration) ViewGpuContext.disposeSharedResources();
 				});
-				sharedDevicePagehideListener = addDisposableListener(
-					ownerWindow,
-					'pagehide',
-					() => ViewGpuContext.disposeSharedResources(),
-					{ once: true },
-				);
+				sharedDevicePagehideListener = addDisposableListener(ownerWindow, 'pagehide', () => ViewGpuContext.disposeSharedResources(), { once: true });
 			}
 			const view = new WeakRef(this);
 			// A view joining an already-ready shared device can render synchronously.
@@ -163,28 +149,15 @@ export class ViewGpuContext extends Disposable {
 			);
 			this.canvasDevicePixelDimensions = canvasDevicePixelDimensions;
 
-			const contentLeft = observableValue(
-				this,
-				context.configuration.options.get(EditorOption.layoutInfo).contentLeft,
-			);
+			const contentLeft = observableValue(this, context.configuration.options.get(EditorOption.layoutInfo).contentLeft);
 			this._register(
 				context.configuration.onDidChange(event => {
-					if (event.hasChanged(EditorOption.layoutInfo))
-						contentLeft.set(context.configuration.options.get(EditorOption.layoutInfo).contentLeft);
+					if (event.hasChanged(EditorOption.layoutInfo)) contentLeft.set(context.configuration.options.get(EditorOption.layoutInfo).contentLeft);
 				}),
 			);
 			this.contentLeft = contentLeft;
 
-			this.rectangleRenderer = this._register(
-				new RectangleRenderer(
-					context,
-					this.contentLeft,
-					this.devicePixelRatio,
-					this.canvas.domNode,
-					this.ctx,
-					ViewGpuContext.device,
-				),
-			);
+			this.rectangleRenderer = this._register(new RectangleRenderer(context, this.contentLeft, this.devicePixelRatio, this.canvas.domNode, this.ctx, ViewGpuContext.device));
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -202,10 +175,7 @@ export class ViewGpuContext extends Disposable {
 		super.dispose();
 	}
 
-	public resolveSemanticStyle(
-		token: ResolvedSemanticToken | undefined,
-		tokenMetadata: number,
-	): ReturnType<SemanticTokenStyleResolver['resolve']> {
+	public resolveSemanticStyle(token: ResolvedSemanticToken | undefined, tokenMetadata: number): ReturnType<SemanticTokenStyleResolver['resolve']> {
 		return this.semanticStyleResolver.resolve(token, tokenMetadata);
 	}
 
@@ -214,11 +184,7 @@ export class ViewGpuContext extends Disposable {
 	}
 
 	public canRender(options: ViewLineOptions, viewportData: ViewportData, lineNumber: number): boolean {
-		return (
-			this.activeDevice !== undefined &&
-			this.activeDevice === ViewGpuContext.deviceSync &&
-			this.canRenderDetailed(options, viewportData, lineNumber).length === 0
-		);
+		return this.activeDevice !== undefined && this.activeDevice === ViewGpuContext.deviceSync && this.canRenderDetailed(options, viewportData, lineNumber).length === 0;
 	}
 
 	public canRenderDetailed(options: ViewLineOptions, viewportData: ViewportData, lineNumber: number): string[] {
@@ -231,17 +197,13 @@ export class ViewGpuContext extends Disposable {
 				reasons.push(`unsupported inline decoration type: ${decoration.type}`);
 				continue;
 			}
-			for (const rule of ViewGpuContext.decorationCssRuleExtractor.getStyleRules(
-				this.canvas.domNode,
-				decoration.inlineClassName,
-			)) {
+			for (const rule of ViewGpuContext.decorationCssRuleExtractor.getStyleRules(this.canvas.domNode, decoration.inlineClassName)) {
 				if (rule.selectorText.includes(':')) {
 					reasons.push(`unsupported inline decoration selector: ${rule.selectorText}`);
 					continue;
 				}
 				for (const property of rule.style) {
-					if (!supportsDecorationCssRule(property, rule.style))
-						reasons.push(`unsupported inline decoration CSS: ${property}`);
+					if (!supportsDecorationCssRule(property, rule.style)) reasons.push(`unsupported inline decoration CSS: ${property}`);
 				}
 			}
 		}
@@ -257,8 +219,7 @@ export class ViewGpuContext extends Disposable {
 	private static updateTheme(theme: IColorTheme): void {
 		const foreground = theme.getColor(editorForeground);
 		const background = theme.getColor(editorBackground);
-		if (!foreground || !background)
-			throw new Error('The editor theme must define GPU foreground and background colors');
+		if (!foreground || !background) throw new Error('The editor theme must define GPU foreground and background colors');
 		const nextForeground = foreground.toString();
 		const nextBackground = background.toString();
 		ViewGpuContext._colorMap[ColorId.DefaultForeground] = nextForeground;

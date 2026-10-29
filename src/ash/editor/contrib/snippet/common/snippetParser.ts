@@ -85,14 +85,7 @@ export function parseSnippet(source: string, options: SnippetOptions = {}): Snip
 	if (options.allowUnresolvedVariables !== undefined && typeof options.allowUnresolvedVariables !== 'boolean') {
 		throw new TypeError('Language completion snippet unresolved-variable policy must be boolean');
 	}
-	const result = parseSegment(
-		source,
-		0,
-		false,
-		new Map(),
-		options.variables,
-		options.allowUnresolvedVariables ?? false,
-	);
+	const result = parseSegment(source, 0, false, new Map(), options.variables, options.allowUnresolvedVariables ?? false);
 	if (result.nextOffset !== source.length) throw new Error('Language completion snippet ended unexpectedly');
 	const placeholderGroups = [...result.placeholders.entries()]
 		.sort(([left], [right]) => placeholderOrder(left, right))
@@ -115,9 +108,7 @@ export function parseSnippet(source: string, options: SnippetOptions = {}): Snip
 	return Object.freeze({
 		text: result.text,
 		placeholderGroups: Object.freeze(placeholderGroups),
-		...(result.transforms.length > 0
-			? { transforms: Object.freeze(result.transforms.map(transform => Object.freeze({ ...transform }))) }
-			: {}),
+		...(result.transforms.length > 0 ? { transforms: Object.freeze(result.transforms.map(transform => Object.freeze({ ...transform }))) } : {}),
 	});
 }
 
@@ -203,13 +194,10 @@ function parseSegment(
 			continue;
 		}
 		if (character === '\\') {
-			if (offset + 1 >= source.length)
-				throw new SyntaxError('Language completion snippet must not end with an escape');
+			if (offset + 1 >= source.length) throw new SyntaxError('Language completion snippet must not end with an escape');
 			const escaped = source[offset + 1]!;
 			if (escaped !== '$' && escaped !== '}' && escaped !== '\\') {
-				throw new SyntaxError(
-					'Language completion snippets may escape only dollar sign, closing brace, and backslash',
-				);
+				throw new SyntaxError('Language completion snippets may escape only dollar sign, closing brace, and backslash');
 			}
 			text.append(escaped);
 			offset += 2;
@@ -285,7 +273,11 @@ function parseSegment(
 			if (!tabstopValues.has(token.index)) tabstopValues.set(token.index, value);
 		} else if (token.choices) {
 			value =
-				tabstopValues.get(token.index) ?? Object.freeze({ text: token.choices[0]!, choices: token.choices });
+				tabstopValues.get(token.index) ??
+				Object.freeze({
+					text: token.choices[0]!,
+					choices: token.choices,
+				});
 			if (!tabstopValues.has(token.index)) tabstopValues.set(token.index, value);
 			text.append(() => value.text);
 		} else {
@@ -331,11 +323,9 @@ function readSnippetToken(
 		const endOffset = readDigitsEnd(source, offset + 1);
 		return { kind: 'tabstop', index: Number(source.slice(offset + 1, endOffset)), nextOffset: endOffset };
 	}
-	if (next !== '{')
-		return readVariable(source, offset + 1, false, tabstopValues, variables, allowUnresolvedVariables);
+	if (next !== '{') return readVariable(source, offset + 1, false, tabstopValues, variables, allowUnresolvedVariables);
 	const indexStart = offset + 2;
-	if (!isDigit(source[indexStart]))
-		return readVariable(source, indexStart, true, tabstopValues, variables, allowUnresolvedVariables);
+	if (!isDigit(source[indexStart])) return readVariable(source, indexStart, true, tabstopValues, variables, allowUnresolvedVariables);
 	const indexEnd = readDigitsEnd(source, indexStart);
 	const index = Number(source.slice(indexStart, indexEnd));
 	const delimiter = source[indexEnd];
@@ -348,8 +338,7 @@ function readSnippetToken(
 		const choice = readChoice(source, indexEnd + 1);
 		return { kind: 'tabstop', index, choices: choice.values, nextOffset: choice.nextOffset };
 	}
-	if (delimiter !== ':')
-		throw new SyntaxError('Language completion snippets support only tabstop defaults or choices');
+	if (delimiter !== ':') throw new SyntaxError('Language completion snippets support only tabstop defaults or choices');
 	const defaultText = parseSegment(source, indexEnd + 1, true, tabstopValues, variables, allowUnresolvedVariables);
 	return { kind: 'tabstop', index, defaultText, nextOffset: defaultText.nextOffset };
 }
@@ -363,8 +352,7 @@ function readVariable(
 	allowUnresolvedVariables: boolean,
 ): SnippetVariableToken {
 	const nameEndOffset = readVariableNameEnd(source, nameStartOffset);
-	if (nameEndOffset === nameStartOffset)
-		throw new SyntaxError('Language completion snippet variable must have a name');
+	if (nameEndOffset === nameStartOffset) throw new SyntaxError('Language completion snippet variable must have a name');
 	const name = source.slice(nameStartOffset, nameEndOffset);
 	if (!braced) return { kind: 'variable', name, nextOffset: nameEndOffset };
 	const delimiter = source[nameEndOffset];
@@ -374,14 +362,7 @@ function readVariable(
 		return { kind: 'variable', name, transform: transform.transform, nextOffset: transform.nextOffset };
 	}
 	if (delimiter !== ':') throw new SyntaxError('Language completion snippet variable must end or provide a default');
-	const defaultText = parseSegment(
-		source,
-		nameEndOffset + 1,
-		true,
-		tabstopValues,
-		variables,
-		allowUnresolvedVariables,
-	);
+	const defaultText = parseSegment(source, nameEndOffset + 1, true, tabstopValues, variables, allowUnresolvedVariables);
 	return { kind: 'variable', name, defaultText, nextOffset: defaultText.nextOffset };
 }
 
@@ -404,18 +385,14 @@ interface SnippetVariableToken {
 
 type SnippetToken = SnippetTabstopToken | SnippetVariableToken;
 
-function readTransform(
-	source: string,
-	slashOffset: number,
-): { readonly transform: SnippetTransform; readonly nextOffset: number } {
+function readTransform(source: string, slashOffset: number): { readonly transform: SnippetTransform; readonly nextOffset: number } {
 	const pattern = readTransformPart(source, slashOffset + 1, false);
 	const format = readTransformPart(source, pattern.nextOffset, true);
 	let options = '';
 	let offset = format.nextOffset;
 	while (offset < source.length && source[offset] !== '}') {
 		const option = source[offset]!;
-		if (option === '\\' || option === '/')
-			throw new SyntaxError('Language completion snippet transform options must end before a closing brace');
+		if (option === '\\' || option === '/') throw new SyntaxError('Language completion snippet transform options must end before a closing brace');
 		options += option;
 		offset += 1;
 	}
@@ -426,11 +403,7 @@ function readTransform(
 	});
 }
 
-function readTransformPart(
-	source: string,
-	startOffset: number,
-	supportsBracedFormatExpressions: boolean,
-): { readonly text: string; readonly nextOffset: number } {
+function readTransformPart(source: string, startOffset: number, supportsBracedFormatExpressions: boolean): { readonly text: string; readonly nextOffset: number } {
 	let text = '';
 	let braceDepth = 0;
 	let offset = startOffset;
@@ -438,8 +411,7 @@ function readTransformPart(
 		const character = source[offset]!;
 		if (character === '\\') {
 			const escaped = source[offset + 1];
-			if (escaped === undefined)
-				throw new SyntaxError('Language completion snippet transform must not end with an escape');
+			if (escaped === undefined) throw new SyntaxError('Language completion snippet transform must not end with an escape');
 			text += character + escaped;
 			offset += 2;
 			continue;
@@ -457,26 +429,21 @@ function readTransformPart(
 			continue;
 		}
 		if (character === '/' && braceDepth === 0) return Object.freeze({ text, nextOffset: offset + 1 });
-		if (character === '}')
-			throw new SyntaxError('Language completion snippet transform is missing a slash delimiter');
+		if (character === '}') throw new SyntaxError('Language completion snippet transform is missing a slash delimiter');
 		text += character;
 		offset += 1;
 	}
 	throw new SyntaxError('Unclosed language completion snippet transform');
 }
 
-function readChoice(
-	source: string,
-	startOffset: number,
-): { readonly values: readonly string[]; readonly nextOffset: number } {
+function readChoice(source: string, startOffset: number): { readonly values: readonly string[]; readonly nextOffset: number } {
 	const values: string[] = [];
 	let value = '';
 	let offset = startOffset;
 	while (offset < source.length) {
 		const character = source[offset]!;
 		if (character === '|') {
-			if (source[offset + 1] !== '}')
-				throw new SyntaxError('Language completion snippet choice must end with |}');
+			if (source[offset + 1] !== '}') throw new SyntaxError('Language completion snippet choice must end with |}');
 			values.push(value);
 			return Object.freeze({ values: Object.freeze(values), nextOffset: offset + 2 });
 		}
@@ -502,11 +469,7 @@ function readChoice(
 	throw new SyntaxError('Unclosed choice in language completion snippet');
 }
 
-function mergePlaceholders(
-	target: Map<number, SnippetPlaceholder[]>,
-	source: Map<number, SnippetPlaceholder[]>,
-	offset: () => number,
-): void {
+function mergePlaceholders(target: Map<number, SnippetPlaceholder[]>, source: Map<number, SnippetPlaceholder[]>, offset: () => number): void {
 	for (const [index, placeholders] of source) {
 		const targetPlaceholders = target.get(index) ?? [];
 		targetPlaceholders.push(
@@ -526,11 +489,7 @@ function mergePlaceholders(
 	}
 }
 
-function mergeTransforms(
-	target: SnippetTransformOccurrence[],
-	source: readonly SnippetTransformOccurrence[],
-	offset: () => number,
-): void {
+function mergeTransforms(target: SnippetTransformOccurrence[], source: readonly SnippetTransformOccurrence[], offset: () => number): void {
 	target.push(
 		...source.map(transform =>
 			Object.freeze({

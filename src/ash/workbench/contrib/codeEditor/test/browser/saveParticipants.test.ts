@@ -17,12 +17,7 @@ import { Range } from '../../../../../editor/common/core/range.js';
 import { Selection } from '../../../../../editor/common/core/selection.js';
 import { EndOfLineSequence } from '../../../../../editor/common/model.js';
 import type { TextModel } from '../../../../../editor/common/model/textModel.js';
-import {
-	LanguageDiagnosticSeverity,
-	type LanguageCodeAction,
-	type LanguageCodeActionList,
-	type LanguageCodeActionRequest,
-} from '../../../../../editor/common/languages.js';
+import { LanguageDiagnosticSeverity, type LanguageCodeAction, type LanguageCodeActionList, type LanguageCodeActionRequest } from '../../../../../editor/common/languages.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
 import { SnippetController2 } from '../../../../../editor/contrib/snippet/browser/snippetController2.js';
@@ -36,10 +31,7 @@ import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../comm
 import { SaveReason } from '../../../../common/editor.js';
 import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
 import { CodeEditorService } from '../../../../services/editor/browser/codeEditorService.js';
-import {
-	IFileTextModelService,
-	TextModelConflictError,
-} from '../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { IFileTextModelService, TextModelConflictError } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { TextResourceConflictError } from '../../../../services/textmodelResolver/common/textResourceStore.js';
 import { BulkEditTestServices } from '../../../bulkEdit/test/browser/bulkEditTestServices.js';
 import { SaveParticipantsContribution } from '../../browser/saveParticipants.js';
@@ -169,10 +161,7 @@ test('save cleanup runs on the shared model without a pane and groups both edits
 	reference.model.setValue('alpha  \n beta\t');
 	reference.model.pushStackElement();
 	await reference.save(signal());
-	assert.deepEqual(
-		[reference.model.getText(), fixture.bulk.store.text(resource), reference.isDirty],
-		['alpha\n beta\n', 'alpha\n beta\n', false],
-	);
+	assert.deepEqual([reference.model.getText(), fixture.bulk.store.text(resource), reference.isDirty], ['alpha\n beta\n', 'alpha\n beta\n', false]);
 	reference.model.undo();
 	assert.deepEqual([reference.model.getText(), reference.isDirty], ['alpha  \n beta\t', true]);
 });
@@ -238,10 +227,7 @@ test('AUTO cleanup protects all matching editor cursors without borrowing anothe
 	unrelated.setSelection(new Selection(1, 6, 1, 6));
 	const selections = [first.getSelections(), second.getSelections(), unrelated.getSelections()];
 	await reference.save(signal(), { reason: SaveReason.AUTO });
-	assert.deepEqual(
-		[fixture.bulk.store.text(resource), first.getSelections(), second.getSelections(), unrelated.getSelections()],
-		['first  \n \nthird\nlast', ...selections],
-	);
+	assert.deepEqual([fixture.bulk.store.text(resource), first.getSelections(), second.getSelections(), unrelated.getSelections()], ['first  \n \nthird\nlast', ...selections]);
 });
 
 test('AUTO cleanup preserves the whole active snippet and still trims a literal line after its explicit final stop', async () => {
@@ -255,10 +241,7 @@ test('AUTO cleanup preserves the whole active snippet and still trims a literal 
 	controller.startSession(reference.model, [0], snippet);
 	const before = editor.getSelections();
 	await reference.save(signal(), { reason: SaveReason.AUTO });
-	assert.deepEqual(
-		[fixture.bulk.store.text(resource), controller.isInSnippet(), editor.getSelections()],
-		['    \n  \n\noutside', true, before],
-	);
+	assert.deepEqual([fixture.bulk.store.text(resource), controller.isInSnippet(), editor.getSelections()], ['    \n  \n\noutside', true, before]);
 	controller.next();
 	assert.deepEqual(editor.getSelections(), [new Selection(2, 1, 2, 3)]);
 	await reference.save(signal(), { reason: SaveReason.EXPLICIT });
@@ -290,10 +273,7 @@ for (const reason of [SaveReason.EXPLICIT, SaveReason.AUTO, SaveReason.FOCUS_CHA
 		using editor = new SaveTestEditor(reference.model, fixture.services);
 		editor.setSelection(new Selection(1, 8, 1, 8));
 		await reference.save(signal(), { reason });
-		assert.deepEqual(
-			[fixture.bulk.store.text(resource), reference.isDirty],
-			[reason === SaveReason.AUTO ? 'first  \nlast\n' : 'first\nlast\n', false],
-		);
+		assert.deepEqual([fixture.bulk.store.text(resource), reference.isDirty], [reason === SaveReason.AUTO ? 'first  \nlast\n' : 'first\nlast\n', false]);
 		reference.model.undo();
 		assert.deepEqual([reference.model.getText(), reference.isDirty], ['first  \nlast  ', true]);
 	});
@@ -309,20 +289,13 @@ test('snippet save protection follows mirrors, transforms and multiple insertion
 	const header = 'header\n';
 	reference.model.setValue(header + snippet.text + separator + snippet.text);
 	using editor = new SaveTestEditor(reference.model, fixture.services);
-	editor.snippets.startSession(
-		reference.model,
-		[header.length, header.length + snippet.text.length + separator.length],
-		snippet,
-	);
+	editor.snippets.startSession(reference.model, [header.length, header.length + snippet.text.length + separator.length], snippet);
 	assert.deepEqual(editor.snippets.getSessionEnclosingRange(), new Range(2, 1, 13, 1));
 	// Insert outside the active placeholder; typing at its own edge belongs to it.
 	reference.model.pushEditOperations(null, [{ range: new Range(1, 1, 1, 1), text: 'prefix\n' }], null);
 	assert.deepEqual(editor.snippets.getSessionEnclosingRange(), new Range(3, 1, 14, 1));
 	await reference.save(signal(), { reason: SaveReason.AUTO });
-	assert.equal(
-		fixture.bulk.store.text(resource),
-		'prefix\n' + header + snippet.text + separator + snippet.text.trimEnd(),
-	);
+	assert.equal(fixture.bulk.store.text(resource), 'prefix\n' + header + snippet.text + separator + snippet.text.trimEnd());
 	editor.snippets.next();
 	assert.deepEqual(editor.getSelections(), [new Selection(6, 1, 6, 2), new Selection(13, 1, 13, 2)]);
 	editor.editor.setModel(other.model);
@@ -367,20 +340,14 @@ test('cancelled cleanup retains undo and the save queue can retry with current c
 	await started.p;
 	controller.abort();
 	await assert.rejects(saving, isCancellationError);
-	assert.deepEqual(
-		[reference.model.getText(), fixture.bulk.store.text(resource), reference.isDirty],
-		['edited', 'original', true],
-	);
+	assert.deepEqual([reference.model.getText(), fixture.bulk.store.text(resource), reference.isDirty], ['edited', 'original', true]);
 	reference.model.undo();
 	assert.equal(reference.model.getText(), 'edited  ');
 	await fixture.configuration.updateValue('files.trimTrailingWhitespace', false);
 	provider.dispose();
 	await ready.complete([]);
 	await reference.save(signal());
-	assert.deepEqual(
-		[reference.model.getText(), fixture.bulk.store.text(resource), reference.isDirty],
-		['edited  \n', 'edited  \n', false],
-	);
+	assert.deepEqual([reference.model.getText(), fixture.bulk.store.text(resource), reference.isDirty], ['edited  \n', 'edited  \n', false]);
 });
 
 test('conflicting cleanup keeps the cleaned draft undoable and never advances the persisted baseline', async () => {
@@ -392,17 +359,11 @@ test('conflicting cleanup keeps the cleaned draft undoable and never advances th
 	reference.model.pushStackElement();
 	fixture.bulk.store.failNextSave = new TextResourceConflictError(resource);
 	await assert.rejects(reference.save(signal()), TextModelConflictError);
-	assert.deepEqual(
-		[reference.model.getText(), fixture.bulk.store.text(resource), reference.isDirty, reference.hasExternalChange],
-		['edited\n', 'original', true, true],
-	);
+	assert.deepEqual([reference.model.getText(), fixture.bulk.store.text(resource), reference.isDirty, reference.hasExternalChange], ['edited\n', 'original', true, true]);
 	reference.model.undo();
 	assert.equal(reference.model.getText(), 'edited  ');
 	await reference.save(signal());
-	assert.deepEqual(
-		[fixture.bulk.store.text(resource), reference.isDirty, reference.hasExternalChange],
-		['edited\n', false, false],
-	);
+	assert.deepEqual([fixture.bulk.store.text(resource), reference.isDirty, reference.hasExternalChange], ['edited\n', false, false]);
 });
 
 test('Save As cleans the destination and leaves the source draft intact', async () => {
@@ -413,15 +374,7 @@ test('Save As cleans the destination and leaves the source draft intact', async 
 	reference.model.setValue('copy  ');
 	const target = URI.file('/workspace/clean-copy.txt');
 	await reference.saveAs(target, signal());
-	assert.deepEqual(
-		[
-			fixture.bulk.store.text(target),
-			fixture.bulk.store.text(resource),
-			reference.model.getText(),
-			reference.isDirty,
-		],
-		['copy\n', 'original', 'copy  ', true],
-	);
+	assert.deepEqual([fixture.bulk.store.text(target), fixture.bulk.store.text(resource), reference.model.getText(), reference.isDirty], ['copy\n', 'original', 'copy  ', true]);
 });
 
 function action(request: LanguageCodeActionRequest, text: string, kind = request.only![0]): LanguageCodeAction {
@@ -467,12 +420,7 @@ test('save contribution runs fixes before imports on the shared model, persists 
 	using provider = fixture.features.codeActionProvider.register('*', {
 		provideCodeActions: request => {
 			requests.push(request);
-			return [
-				action(
-					request,
-					request.snapshot.getText() + (request.only![0] === 'source.fixAll' ? '-fixed' : '-sorted'),
-				),
-			];
+			return [action(request, request.snapshot.getText() + (request.only![0] === 'source.fixAll' ? '-fixed' : '-sorted'))];
 		},
 	});
 	await reference.save(signal());
@@ -515,20 +463,9 @@ for (const reason of [SaveReason.EXPLICIT, SaveReason.AUTO, SaveReason.FOCUS_CHA
 		await reference.save(signal(), { reason });
 		assert.deepEqual(
 			kinds,
-			reason === SaveReason.AUTO
-				? []
-				: reason === SaveReason.EXPLICIT
-					? ['source.fixAll', 'source.global', 'source.organizeImports']
-					: ['source.global', 'source.organizeImports'],
+			reason === SaveReason.AUTO ? [] : reason === SaveReason.EXPLICIT ? ['source.fixAll', 'source.global', 'source.organizeImports'] : ['source.global', 'source.organizeImports'],
 		);
-		assert.equal(
-			fixture.bulk.store.text(resource),
-			reason === SaveReason.AUTO
-				? 'edited'
-				: reason === SaveReason.EXPLICIT
-					? 'edited-action-action-action'
-					: 'edited-action-action',
-		);
+		assert.equal(fixture.bulk.store.text(resource), reason === SaveReason.AUTO ? 'edited' : reason === SaveReason.EXPLICIT ? 'edited-action-action-action' : 'edited-action-action');
 	});
 }
 

@@ -63,11 +63,7 @@ suite('CursorColumns', () => {
 
 	test('toStatusbarColumn', () => {
 		function t(text: string, tabSize: number, column: number, expected: number): void {
-			assert.strictEqual(
-				CursorColumns.toStatusbarColumn(text, column, tabSize),
-				expected,
-				`<<t('${text}', ${tabSize}, ${column}, ${expected})>>`,
-			);
+			assert.strictEqual(CursorColumns.toStatusbarColumn(text, column, tabSize), expected, `<<t('${text}', ${tabSize}, ${column}, ${expected})>>`);
 		}
 
 		t('    spaces', 4, 1, 1);
@@ -121,12 +117,7 @@ suite('CursorColumns', () => {
 	});
 
 	test('columnFromVisibleColumn', () => {
-		function testColumnFromVisibleColumn(
-			text: string,
-			tabSize: number,
-			visibleColumn: number,
-			expected: number,
-		): void {
+		function testColumnFromVisibleColumn(text: string, tabSize: number, visibleColumn: number, expected: number): void {
 			assert.strictEqual(CursorColumns.columnFromVisibleColumn(text, visibleColumn, tabSize), expected);
 		}
 

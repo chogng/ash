@@ -18,18 +18,11 @@ export class MoveCaretCommand implements ICommand {
 		if (startLineNumber !== endLineNumber || this.selection.isEmpty()) return;
 		if (this.isMovingLeft ? startColumn === 1 : endColumn === model.getLineMaxColumn(endLineNumber)) return;
 
-		const neighbor = this.isMovingLeft
-			? new Range(startLineNumber, startColumn - 1, startLineNumber, startColumn)
-			: new Range(endLineNumber, endColumn, endLineNumber, endColumn + 1);
-		const affected = this.isMovingLeft
-			? new Range(startLineNumber, startColumn - 1, endLineNumber, endColumn)
-			: new Range(startLineNumber, startColumn, endLineNumber, endColumn + 1);
+		const neighbor = this.isMovingLeft ? new Range(startLineNumber, startColumn - 1, startLineNumber, startColumn) : new Range(endLineNumber, endColumn, endLineNumber, endColumn + 1);
+		const affected = this.isMovingLeft ? new Range(startLineNumber, startColumn - 1, endLineNumber, endColumn) : new Range(startLineNumber, startColumn, endLineNumber, endColumn + 1);
 		const selectedText = model.getValueInRange(this.selection);
 		const neighborText = model.getValueInRange(neighbor);
-		builder.addEditOperation(
-			affected,
-			this.isMovingLeft ? selectedText + neighborText : neighborText + selectedText,
-		);
+		builder.addEditOperation(affected, this.isMovingLeft ? selectedText + neighborText : neighborText + selectedText);
 
 		const offset = this.isMovingLeft ? -1 : 1;
 		this.nextSelection = new Selection(

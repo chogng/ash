@@ -46,15 +46,11 @@ export class ActivityService extends Disposable implements IActivityService {
 	}
 
 	getViewContainerActivities(viewContainerId: string): IActivity[] {
-		return [...this.activities.values()]
-			.filter(entry => this.container(entry.target)?.id === viewContainerId)
-			.map(entry => entry.activity);
+		return [...this.activities.values()].filter(entry => this.container(entry.target)?.id === viewContainerId).map(entry => entry.activity);
 	}
 
 	private container(target: ActivityTarget): IViewContainerDescriptor | undefined {
-		return 'viewId' in target
-			? this.viewDescriptorService.getViewContainerForView(target.viewId)
-			: (this.viewDescriptorService.getViewContainerById(target.containerId) ?? undefined);
+		return 'viewId' in target ? this.viewDescriptorService.getViewContainerForView(target.viewId) : (this.viewDescriptorService.getViewContainerById(target.containerId) ?? undefined);
 	}
 
 	private add(target: ActivityTarget, activity: IActivity): IDisposable {

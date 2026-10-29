@@ -13,11 +13,7 @@ import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import { DecorationAddon } from '../../../browser/xterm/decorationAddon.js';
-import {
-	TerminalCapability,
-	type ICommandDetectionCapability,
-	type ITerminalCommand,
-} from '../../../../../../platform/terminal/common/capabilities/capabilities.js';
+import { TerminalCapability, type ICommandDetectionCapability, type ITerminalCommand } from '../../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { BufferMarkCapability } from '../../../../../../platform/terminal/common/capabilities/bufferMarkCapability.js';
 import { TestConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';
 import '../../../common/terminalConfiguration.js';
@@ -97,10 +93,7 @@ suite('Terminal command decoration lifecycle', () => {
 			setIconResolver(dom.window.document, icon => getIconDefinition(icon));
 			const boundary = rendererBoundary(lifetime);
 			const capabilities = lifetime.add(new TerminalCapabilityStore());
-			capabilities.add(
-				TerminalCapability.BufferMarkDetection,
-				lifetime.add(new BufferMarkCapability(boundary.terminal)),
-			);
+			capabilities.add(TerminalCapability.BufferMarkDetection, lifetime.add(new BufferMarkCapability(boundary.terminal)));
 			const marker = boundary.terminal.registerMarker(0)!;
 			lifetime.add(toDisposable(() => marker.dispose()));
 			const command = { marker, id: 'one', command: 'echo test', getOutput: () => undefined } as ITerminalCommand;
@@ -158,20 +151,9 @@ suite('Terminal command decoration lifecycle', () => {
 		using lifetime = new DisposableStore();
 		const boundary = rendererBoundary(lifetime);
 		const capabilities = lifetime.add(new TerminalCapabilityStore());
-		capabilities.add(
-			TerminalCapability.BufferMarkDetection,
-			lifetime.add(new BufferMarkCapability(boundary.terminal)),
-		);
+		capabilities.add(TerminalCapability.BufferMarkDetection, lifetime.add(new BufferMarkCapability(boundary.terminal)));
 		const themes = lifetime.add(new TestThemeService(lightColorTheme));
-		const addon = lifetime.add(
-			new DecorationAddon(
-				capabilities,
-				lifetime.add(new TestConfigurationService()),
-				themes,
-				lifetime.add(new BrowserClipboardService(undefined)),
-				menus,
-			),
-		);
+		const addon = lifetime.add(new DecorationAddon(capabilities, lifetime.add(new TestConfigurationService()), themes, lifetime.add(new BrowserClipboardService(undefined)), menus));
 		addon.activate(boundary.terminal);
 		const marker = boundary.terminal.registerMarker(0)!;
 		lifetime.add(toDisposable(() => marker.dispose()));
@@ -200,19 +182,10 @@ suite('Terminal command decoration lifecycle', () => {
 			setIconResolver(dom.window.document, icon => getIconDefinition(icon));
 			const boundary = rendererBoundary(lifetime);
 			const capabilities = lifetime.add(new TerminalCapabilityStore());
-			capabilities.add(
-				TerminalCapability.BufferMarkDetection,
-				lifetime.add(new BufferMarkCapability(boundary.terminal)),
-			);
+			capabilities.add(TerminalCapability.BufferMarkDetection, lifetime.add(new BufferMarkCapability(boundary.terminal)));
 			const configuration = lifetime.add(new TestConfigurationService());
 			const addon = lifetime.add(
-				new DecorationAddon(
-					capabilities,
-					configuration,
-					lifetime.add(new TestThemeService(lightColorTheme)),
-					lifetime.add(new BrowserClipboardService(undefined)),
-					menus,
-				),
+				new DecorationAddon(capabilities, configuration, lifetime.add(new TestThemeService(lightColorTheme)), lifetime.add(new BrowserClipboardService(undefined)), menus),
 			);
 			addon.activate(boundary.terminal);
 			const marker = boundary.terminal.registerMarker(0)!;
@@ -291,10 +264,7 @@ suite('Terminal command decoration lifecycle', () => {
 		using lifetime = new DisposableStore();
 		const boundary = rendererBoundary(lifetime);
 		const capabilities = lifetime.add(new TerminalCapabilityStore());
-		capabilities.add(
-			TerminalCapability.BufferMarkDetection,
-			lifetime.add(new BufferMarkCapability(boundary.terminal)),
-		);
+		capabilities.add(TerminalCapability.BufferMarkDetection, lifetime.add(new BufferMarkCapability(boundary.terminal)));
 		const addon = lifetime.add(
 			new DecorationAddon(
 				capabilities,
@@ -322,10 +292,7 @@ suite('Terminal command decoration lifecycle', () => {
 		using lifetime = new DisposableStore();
 		const boundary = rendererBoundary(lifetime);
 		const capabilities = lifetime.add(new TerminalCapabilityStore());
-		capabilities.add(
-			TerminalCapability.BufferMarkDetection,
-			lifetime.add(new BufferMarkCapability(boundary.terminal)),
-		);
+		capabilities.add(TerminalCapability.BufferMarkDetection, lifetime.add(new BufferMarkCapability(boundary.terminal)));
 		const addon = lifetime.add(
 			new DecorationAddon(
 				capabilities,

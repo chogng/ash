@@ -2,12 +2,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { EditorPanes, registerEditorPane } from '../../../browser/editor.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
@@ -21,18 +16,12 @@ import { serializeSearchResultForEditor } from './searchEditorSerialization.js';
 registerEditorPane({
 	id: SearchEditorID,
 	name: localize('searchEditor.title', 'Search Editor'),
-	canOpen: input =>
-		input.editorId === SearchEditorID || input.resource.path.endsWith('.code-search')
-			? EditorPaneMatch.Default
-			: EditorPaneMatch.None,
+	canOpen: input => (input.editorId === SearchEditorID || input.resource.path.endsWith('.code-search') ? EditorPaneMatch.Default : EditorPaneMatch.None),
 	create: options => {
 		if (!options.instantiationService) {
 			throw new Error('Search editor requires the Workbench instantiation service');
 		}
-		const descriptor = EditorPanes.getEditorPane(
-			{ resource: URI.from({ scheme: 'untitled', path: '/search.txt' }) },
-			{ preferredEditorId: CODE_EDITOR_ID },
-		)!;
+		const descriptor = EditorPanes.getEditorPane({ resource: URI.from({ scheme: 'untitled', path: '/search.txt' }) }, { preferredEditorId: CODE_EDITOR_ID })!;
 		const editor = descriptor.create({
 			...options,
 			input: { ...options.input!, editorId: CODE_EDITOR_ID },
@@ -51,24 +40,22 @@ registerAction2(
 			});
 		}
 		run(accessor: ServicesAccessor): Promise<void> {
-			return accessor
-				.get(IEditorService)
-				.openEditor(
-					{
-						resource: URI.from({ scheme: 'untitled', path: `/Search-${crypto.randomUUID()}.code-search` }),
-						editorId: SearchEditorID,
-						label: localize('searchEditor.title', 'Search Editor'),
-						showBreadcrumbs: false,
-						initialText: serializeSearchResultForEditor({
-							text: '',
-							patternKind: 'literal',
-							caseSensitivity: 'insensitive',
-							includePatterns: [],
-							excludePatterns: [],
-						}),
-					},
-					{ pinned: true },
-				);
+			return accessor.get(IEditorService).openEditor(
+				{
+					resource: URI.from({ scheme: 'untitled', path: `/Search-${crypto.randomUUID()}.code-search` }),
+					editorId: SearchEditorID,
+					label: localize('searchEditor.title', 'Search Editor'),
+					showBreadcrumbs: false,
+					initialText: serializeSearchResultForEditor({
+						text: '',
+						patternKind: 'literal',
+						caseSensitivity: 'insensitive',
+						includePatterns: [],
+						excludePatterns: [],
+					}),
+				},
+				{ pinned: true },
+			);
 		}
 	},
 );

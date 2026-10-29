@@ -44,11 +44,7 @@ test('Remote window context owns routes, projections, and Workspace tunnel clean
 	};
 	let tunnelCloseAllCalls = 0;
 	let tunnelsDisposed = false;
-	const tunnels: Pick<
-		import('../../electron-main/sshPortForwardingService.js').SshPortForwardingService,
-		'closeAll'
-	> &
-		IDisposable = {
+	const tunnels: Pick<import('../../electron-main/sshPortForwardingService.js').SshPortForwardingService, 'closeAll'> & IDisposable = {
 		closeAll: async () => {
 			tunnelCloseAllCalls += 1;
 		},
@@ -143,11 +139,11 @@ test('Remote window context scopes verified rollback to its own supervisor', asy
 		},
 	} as unknown as AppServerConnectionRelay;
 	const workspaceContext = new WorkspaceContextMainService({ id: 'remote-one', uri: workspace });
-	const tunnels: Pick<
-		import('../../electron-main/sshPortForwardingService.js').SshPortForwardingService,
-		'closeAll'
-	> &
-		IDisposable = { closeAll: async () => {}, dispose: () => {}, [Symbol.dispose]: () => {} };
+	const tunnels: Pick<import('../../electron-main/sshPortForwardingService.js').SshPortForwardingService, 'closeAll'> & IDisposable = {
+		closeAll: async () => {},
+		dispose: () => {},
+		[Symbol.dispose]: () => {},
+	};
 	const context = new RemoteWindowMainContext({
 		supervisor,
 		workspaceContext,
@@ -197,13 +193,7 @@ test('Remote window context scopes verified rollback to its own supervisor', asy
 		assert.ok(route);
 		const result = await route.invoke(route.validate(undefined));
 		assert.deepEqual(result, { kind: 'rolledBack' });
-		assert.deepEqual(calls, [
-			'confirm',
-			'rollback:build-next:/workspace/two:custom-ssh',
-			'prepare-terminals',
-			'stop',
-			'start',
-		]);
+		assert.deepEqual(calls, ['confirm', 'rollback:build-next:/workspace/two:custom-ssh', 'prepare-terminals', 'stop', 'start']);
 	} finally {
 		context.dispose();
 		workspaceContext.dispose();

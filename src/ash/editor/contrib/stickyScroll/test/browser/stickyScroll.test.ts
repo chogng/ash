@@ -132,12 +132,11 @@ suite('Sticky scroll scope sources', () => {
 				throw failure;
 			},
 		});
-		using empty = fixture.features.documentSymbolProvider.register('*', { provideDocumentSymbols: () => [] });
+		using empty = fixture.features.documentSymbolProvider.register('*', {
+			provideDocumentSymbols: () => [],
+		});
 		const model = await fixture.provider.update(CancellationToken.None);
-		assert.deepEqual(
-			{ starts: model!.element!.children.map(child => child.range!.startLineNumber), errors: fixture.errors },
-			{ starts: [2], errors: [failure] },
-		);
+		assert.deepEqual({ starts: model!.element!.children.map(child => child.range!.startLineNumber), errors: fixture.errors }, { starts: [2], errors: [failure] });
 	});
 
 	for (const source of ['outlineModel', 'foldingProviderModel'] as const) {
@@ -272,11 +271,7 @@ class Fixture extends Disposable {
 				return folding;
 			},
 		} as unknown as ICodeEditor;
-		this.provider = this._register(
-			this.services.createInstance(StickyModelProvider, editor, this.folding, (error: unknown) =>
-				this.errors.push(error),
-			),
-		);
+		this.provider = this._register(this.services.createInstance(StickyModelProvider, editor, this.folding, (error: unknown) => this.errors.push(error)));
 	}
 }
 

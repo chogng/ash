@@ -1,11 +1,7 @@
 import { CancellationError } from '../../../../../../../base/common/errors.js';
 import { addDisposableListener } from '../../../../../../../base/browser/dom.js';
 import { Disposable, DisposableStore } from '../../../../../../../base/common/lifecycle.js';
-import {
-	createStringDataTransferItem,
-	VSDataTransfer,
-	type IReadonlyVSDataTransfer,
-} from '../../../../../../../base/common/dataTransfer.js';
+import { createStringDataTransferItem, VSDataTransfer, type IReadonlyVSDataTransfer } from '../../../../../../../base/common/dataTransfer.js';
 import { HierarchicalKind } from '../../../../../../../base/common/hierarchicalKind.js';
 import type { CancellationToken } from '../../../../../../../base/common/cancellation.js';
 import { isRecord } from '../../../../../../../base/common/types.js';
@@ -21,19 +17,11 @@ import type { IChatAttachmentResolveService } from '../../../attachments/chatAtt
 import { IChatPasteTargetService, type IChatPasteTarget } from '../../../chat.js';
 import type { IChatInputEditor } from '../chatInputEditorRegistry.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
-import {
-	validateOpenAgentsWindow,
-	type IOpenAgentsWindowOptions,
-} from '../../../../../../../platform/native/common/nativeHost.js';
+import { validateOpenAgentsWindow, type IOpenAgentsWindowOptions } from '../../../../../../../platform/native/common/nativeHost.js';
 import { ILanguageFeaturesService } from '../../../../../../../editor/common/services/languageFeatures.js';
 import { EndOfLinePreference, type ITextModel } from '../../../../../../../editor/common/model.js';
 import { Range, type IRange } from '../../../../../../../editor/common/core/range.js';
-import type {
-	DocumentPasteContext,
-	DocumentPasteEdit,
-	DocumentPasteEditProvider,
-	DocumentPasteEditsSession,
-} from '../../../../../../../editor/common/languages.js';
+import type { DocumentPasteContext, DocumentPasteEdit, DocumentPasteEditProvider, DocumentPasteEditsSession } from '../../../../../../../editor/common/languages.js';
 import { CopyPasteController } from '../../../../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
 import { getPathForFile } from '../../../../../../../platform/dnd/browser/dnd.js';
 
@@ -75,13 +63,19 @@ export class ChatPasteProvidersFeature extends Disposable {
 		const provider = instantiation.createInstance(CopyAttachmentsProvider, input, currentLifecycle, supportsImages);
 		this._register(
 			features.documentPasteEditProvider.register(
-				{ scheme: model.uri.scheme, hasAccessToAllModels: true },
+				{
+					scheme: model.uri.scheme,
+					hasAccessToAllModels: true,
+				},
 				provider,
 			),
 		);
 		this._register(
 			features.documentPasteEditProvider.register(
-				{ scheme: model.uri.scheme, hasAccessToAllModels: true },
+				{
+					scheme: model.uri.scheme,
+					hasAccessToAllModels: true,
+				},
 				instantiation.createInstance(PasteTextProvider, input, currentLifecycle),
 			),
 		);
@@ -101,12 +95,7 @@ class CopyAttachmentsProvider implements DocumentPasteEditProvider {
 		@IChatPasteTargetService private readonly targets: IChatPasteTargetService,
 	) {}
 
-	async prepareDocumentPaste(
-		model: ITextModel,
-		ranges: readonly IRange[],
-		transfer: IReadonlyVSDataTransfer,
-		token: CancellationToken,
-	): Promise<IReadonlyVSDataTransfer | undefined> {
+	async prepareDocumentPaste(model: ITextModel, ranges: readonly IRange[], transfer: IReadonlyVSDataTransfer, token: CancellationToken): Promise<IReadonlyVSDataTransfer | undefined> {
 		const target = model === this.input.getModel?.() ? this.targets.getTarget(model.uri) : undefined;
 		const textValue = transfer.get(Mimes.text)?.value;
 		if (!target || token.isCancellationRequested || typeof textValue !== 'string') return undefined;
@@ -183,10 +172,7 @@ class CopyAttachmentsProvider implements DocumentPasteEditProvider {
 			title: localize('pastedChatAttachments', 'Insert Prompt & Attachments'),
 			mime: CHAT_ATTACHMENT_MIME_TYPE,
 			readSnapshot: async () => {
-				const [raw, text] = await Promise.all([
-					transfer.get(CHAT_ATTACHMENT_MIME_TYPE)?.asString(),
-					transfer.get(Mimes.text)?.asString(),
-				]);
+				const [raw, text] = await Promise.all([transfer.get(CHAT_ATTACHMENT_MIME_TYPE)?.asString(), transfer.get(Mimes.text)?.asString()]);
 				return parseCopiedPrompt(raw, text);
 			},
 		});
@@ -205,19 +191,8 @@ export class CopyTextProvider implements DocumentPasteEditProvider {
 
 	constructor(@IOutputService private readonly output: IOutputService) {}
 
-	async prepareDocumentPaste(
-		model: ITextModel,
-		ranges: readonly IRange[],
-		transfer: IReadonlyVSDataTransfer,
-		token: CancellationToken,
-	): Promise<IReadonlyVSDataTransfer | undefined> {
-		if (
-			token.isCancellationRequested ||
-			model.getLanguageId() === 'ash-chat-input' ||
-			model.uri.scheme === 'inmemory' ||
-			ranges.length !== 1
-		)
-			return undefined;
+	async prepareDocumentPaste(model: ITextModel, ranges: readonly IRange[], transfer: IReadonlyVSDataTransfer, token: CancellationToken): Promise<IReadonlyVSDataTransfer | undefined> {
+		if (token.isCancellationRequested || model.getLanguageId() === 'ash-chat-input' || model.uri.scheme === 'inmemory' || ranges.length !== 1) return undefined;
 		const text = transfer.get(Mimes.text)?.value;
 		if (typeof text !== 'string' || !text.trim() || text.length > maxClipboardLength) return undefined;
 		const range = Range.lift(ranges[0]!);
@@ -236,7 +211,11 @@ export class CopyTextProvider implements DocumentPasteEditProvider {
 		data.append(
 			copiedEditorMime,
 			createStringDataTransferItem(
-				JSON.stringify({ uri: model.uri.toJSON(), range, sourceName: label.replace(/\s/gu, ' ') }),
+				JSON.stringify({
+					uri: model.uri.toJSON(),
+					range,
+					sourceName: label.replace(/\s/gu, ' '),
+				}),
 			),
 		);
 		return data;
@@ -276,10 +255,7 @@ export class PasteTextProvider implements DocumentPasteEditProvider {
 			mime: copiedEditorMime,
 			yieldTo: [{ kind: new HierarchicalKind('text.plain') }],
 			readSnapshot: async () => {
-				const [raw, text] = await Promise.all([
-					transfer.get(copiedEditorMime)?.asString(),
-					transfer.get(Mimes.text)?.asString(),
-				]);
+				const [raw, text] = await Promise.all([transfer.get(copiedEditorMime)?.asString(), transfer.get(Mimes.text)?.asString()]);
 				return parseCopiedCode(raw, text);
 			},
 		});
@@ -305,16 +281,12 @@ interface ReferencePasteRequest {
 	readSnapshot(): Promise<PromptSnapshot | undefined>;
 }
 
-async function createReferencePasteSession(
-	request: ReferencePasteRequest,
-): Promise<DocumentPasteEditsSession | undefined> {
+async function createReferencePasteSession(request: ReferencePasteRequest): Promise<DocumentPasteEditsSession | undefined> {
 	const { input, model, ranges, token, lifecycle, supportsImages, targets } = request;
 	const target = model === input.getModel?.() ? targets.getTarget(model.uri) : undefined;
 	if (!target || token.isCancellationRequested || lifecycle.aborted) return undefined;
 	const resources = new DisposableStore();
-	resources.add(
-		addDisposableListener(lifecycle, 'abort', () => CopyPasteController.get(input.codeEditor!)?.clearWidgets()),
-	);
+	resources.add(addDisposableListener(lifecycle, 'abort', () => CopyPasteController.get(input.codeEditor!)?.clearWidgets()));
 	try {
 		const snapshot = await request.readSnapshot();
 		if (
@@ -352,12 +324,7 @@ async function createReferencePasteSession(
 	}
 }
 
-async function resolveReferencePasteEdit(
-	edit: DocumentPasteEdit,
-	token: CancellationToken,
-	targets: IChatPasteTargetService,
-	supportsImages: () => boolean,
-): Promise<DocumentPasteEdit> {
+async function resolveReferencePasteEdit(edit: DocumentPasteEdit, token: CancellationToken, targets: IChatPasteTargetService, supportsImages: () => boolean): Promise<DocumentPasteEdit> {
 	const plan = (edit as Partial<ReferencePasteEdit>)[pastePlan];
 	if (!plan) return edit;
 	const { model, target, resources } = plan;
@@ -390,25 +357,13 @@ async function resolveReferencePasteEdit(
 	// reference model records these entries on the inserted text's alternative version.
 	const binding = model.onDidChangeContent(() => {
 		binding.dispose();
-		if (
-			resources.isDisposed ||
-			plan.lifecycle.aborted ||
-			model.getVersionId() !== version + 1 ||
-			model.getValue() !== expected ||
-			targets.getTarget(model.uri) !== target
-		)
-			return;
+		if (resources.isDisposed || plan.lifecycle.aborted || model.getVersionId() !== version + 1 || model.getValue() !== expected || targets.getTarget(model.uri) !== target) return;
 		let precedingDelta = 0;
 		for (const operation of operations) {
 			const insertionStart = operation.start + precedingDelta;
 			for (const reference of plan.references) {
-				const start =
-					insertionStart +
-					plan.text.slice(0, reference.reference.start).replace(/\n/g, model.getEOL()).length;
-				const kind =
-					reference.kind === 'image' || reference.kind === 'instruction' || reference.kind === 'toolSelection'
-						? reference.kind
-						: undefined;
+				const start = insertionStart + plan.text.slice(0, reference.reference.start).replace(/\n/g, model.getEOL()).length;
+				const kind = reference.kind === 'image' || reference.kind === 'instruction' || reference.kind === 'toolSelection' ? reference.kind : undefined;
 				target.addInlineReference({
 					id: createUuid(),
 					kind: reference.kind,
@@ -431,27 +386,21 @@ async function resolveReferencePasteEdit(
 }
 
 function parseCopiedCode(raw: string | undefined, clipboardText: string | undefined): PromptSnapshot | undefined {
-	if (!raw || raw.length > 64 * 1024 || !clipboardText?.trim() || clipboardText.length > maxClipboardLength)
-		return undefined;
+	if (!raw || raw.length > 64 * 1024 || !clipboardText?.trim() || clipboardText.length > maxClipboardLength) return undefined;
 	try {
 		const data: unknown = JSON.parse(raw);
 		if (!isRecord(data) || !isUriComponents(data.uri) || !isRecord(data.range)) return undefined;
 		const range = data.range;
 		const coordinates = [range.startLineNumber, range.startColumn, range.endLineNumber, range.endColumn];
-		if (!coordinates.every(value => typeof value === 'number' && Number.isSafeInteger(value) && value > 0))
-			return undefined;
+		if (!coordinates.every(value => typeof value === 'number' && Number.isSafeInteger(value) && value > 0)) return undefined;
 		if (!Range.isIRange(range)) return undefined;
 		const selection = Range.lift(range);
 		if (selection.isEmpty() || !Range.equalsRange(selection, range)) return undefined;
 		const source = URI.from(data.uri);
 		if (source.scheme === 'inmemory') return undefined;
 		const label = data.sourceName === undefined ? basename(source) : data.sourceName;
-		if (typeof label !== 'string' || !label.trim() || label.length > 1024 || /[\r\n\0]/u.test(label))
-			return undefined;
-		const lastLine =
-			selection.endColumn === 1 && selection.endLineNumber > selection.startLineNumber
-				? selection.endLineNumber - 1
-				: selection.endLineNumber;
+		if (typeof label !== 'string' || !label.trim() || label.length > 1024 || /[\r\n\0]/u.test(label)) return undefined;
+		const lastLine = selection.endColumn === 1 && selection.endLineNumber > selection.startLineNumber ? selection.endLineNumber - 1 : selection.endLineNumber;
 		const name =
 			selection.startLineNumber === lastLine
 				? localize('chat.context.selectionLine', '{0} ({1})', label, selection.startLineNumber)
@@ -480,29 +429,16 @@ function parseCopiedPrompt(raw: string | undefined, clipboardText: string | unde
 	if (!raw || raw.length > maxClipboardLength || clipboardText === undefined) return undefined;
 	try {
 		const value: unknown = JSON.parse(raw);
-		if (!isRecord(value) || value.version !== 1 || Object.keys(value).sort().join(',') !== 'draft,version')
-			return undefined;
+		if (!isRecord(value) || value.version !== 1 || Object.keys(value).sort().join(',') !== 'draft,version') return undefined;
 		const draft = validateOpenAgentsWindow({ draft: value.draft })?.draft;
-		if (
-			!draft ||
-			draft.text !== clipboardText.replace(/\r\n|\r/g, '\n') ||
-			draft.contexts.length === 0 ||
-			draft.contexts.length > 1000
-		)
-			return undefined;
+		if (!draft || draft.text !== clipboardText.replace(/\r\n|\r/g, '\n') || draft.contexts.length === 0 || draft.contexts.length > 1000) return undefined;
 		let end = 0;
-		for (const context of [...draft.contexts].sort(
-			(a, b) => (a.reference?.start ?? -1) - (b.reference?.start ?? -1),
-		)) {
+		for (const context of [...draft.contexts].sort((a, b) => (a.reference?.start ?? -1) - (b.reference?.start ?? -1))) {
 			if (context.kind === 'toolSelection') return undefined;
 			if (!context.reference || context.reference.start < end) return undefined;
 			end = context.reference.end;
 			if (context.resource) URI.parse(context.resource);
-			if (
-				context.kind === 'image' &&
-				!/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/]*={0,2}$/u.test(context.content)
-			)
-				return undefined;
+			if (context.kind === 'image' && !/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/]*={0,2}$/u.test(context.content)) return undefined;
 		}
 		return draft;
 	} catch {
@@ -528,41 +464,24 @@ export async function createChatFileAttachments(
 				// Native file transfers can omit MIME or supply only a generic binary type.
 				const mimeType = !file.type || file.type === Mimes.binary ? getMediaMime(file.name) : file.type;
 				const image = /^image\/(png|jpeg|gif|webp)$/u.test(mimeType ?? '');
-				if (image && !supportsImages())
-					throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
+				if (image && !supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
 				// Bound image allocation before reading; image processing also bounds the encoded result.
-				if (image && file.size > 20 * 1024 * 1024)
-					throw new Error(localize('chat.image.tooLarge', '{0} exceeds the 20 MB image limit', file.name));
+				if (image && file.size > 20 * 1024 * 1024) throw new Error(localize('chat.image.tooLarge', '{0} exceeds the 20 MB image limit', file.name));
 				const bytes = await readFile(file, signal);
 				if (!bytes.length) throw new Error(localize('chat.attach.empty', '{0} is empty', file.name));
 				if (image) {
-					const [attachment] = await attachments.resolveImageAttachContext(
-						[{ name: file.name, data: bytes, mimeType, ...source }],
-						signal,
-					);
+					const [attachment] = await attachments.resolveImageAttachContext([{ name: file.name, data: bytes, mimeType, ...source }], signal);
 					if (signal.aborted) throw new CancellationError();
-					if (!supportsImages())
-						throw new Error(
-							localize('chat.image.unsupported', 'The selected model does not support images'),
-						);
+					if (!supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
 					return attachment!;
 				}
 				let content: string;
 				try {
 					content = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
 				} catch {
-					throw new Error(
-						localize(
-							'chat.attach.binary',
-							'{0} must be a UTF-8 text file or a PNG, JPEG, GIF, or WebP image',
-							file.name,
-						),
-					);
+					throw new Error(localize('chat.attach.binary', '{0} must be a UTF-8 text file or a PNG, JPEG, GIF, or WebP image', file.name));
 				}
-				if (content.includes('\0') || !content.trim())
-					throw new Error(
-						localize('chat.context.invalidText', '{0} must contain nonempty UTF-8 text', file.name),
-					);
+				if (content.includes('\0') || !content.trim()) throw new Error(localize('chat.context.invalidText', '{0} must contain nonempty UTF-8 text', file.name));
 				return {
 					id: createUuid(),
 					kind: 'file',
@@ -597,9 +516,7 @@ function readFile(file: File, signal: AbortSignal): Promise<Uint8Array> {
 			if (bytes) resolve(bytes);
 			else reject(error);
 		};
-		resources.add(
-			addDisposableListener(reader, 'load', () => finish(new Uint8Array(reader.result as ArrayBuffer))),
-		);
+		resources.add(addDisposableListener(reader, 'load', () => finish(new Uint8Array(reader.result as ArrayBuffer))));
 		resources.add(addDisposableListener(reader, 'error', () => finish(undefined, reader.error)));
 		resources.add(addDisposableListener(reader, 'abort', () => finish(undefined, new CancellationError())));
 		resources.add(addDisposableListener(signal, 'abort', () => reader.abort()));

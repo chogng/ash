@@ -8,10 +8,7 @@ test.beforeEach(async ({ page }) => {
 	await page.waitForFunction(() => !!window.ashWebWorkbenchIntegration);
 });
 
-test('the built-in provider checks real HTTP deployments under a prefix and reloads into the new build', async ({
-	page,
-	baseURL,
-}) => {
+test('the built-in provider checks real HTTP deployments under a prefix and reloads into the new build', async ({ page, baseURL }) => {
 	const source = new URL(baseURL!);
 	const html = await (await fetch(new URL('/webWorkbench.html', source))).text();
 	const original: { version: string } = await (await fetch(new URL('/web-version.json', source))).json();
@@ -72,9 +69,7 @@ test('the built-in provider checks real HTTP deployments under a prefix and relo
 		await page.evaluate(() => window.ashWebWorkbenchIntegration.check());
 		await expect(page.getByText('Ash is up to date.', { exact: true })).toBeVisible();
 	} finally {
-		const stopped = new Promise<void>((resolve, reject) =>
-			server.close(error => (error ? reject(error) : resolve())),
-		);
+		const stopped = new Promise<void>((resolve, reject) => server.close(error => (error ? reject(error) : resolve())));
 		server.closeAllConnections();
 		await stopped;
 	}

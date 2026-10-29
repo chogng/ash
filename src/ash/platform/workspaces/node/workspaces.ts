@@ -1,11 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { URI } from '../../../base/common/uri.js';
-import type {
-	IEmptyWorkspaceIdentifier,
-	ISingleFolderWorkspaceIdentifier,
-	IWorkspaceIdentifier,
-} from '../../workspace/common/workspace.js';
+import type { IEmptyWorkspaceIdentifier, ISingleFolderWorkspaceIdentifier, IWorkspaceIdentifier } from '../../workspace/common/workspace.js';
 
 /** Gives each new empty window its own workspace-scoped state. */
 export function createEmptyWorkspaceIdentifier(): IEmptyWorkspaceIdentifier {
@@ -27,8 +23,7 @@ export function getSingleFolderWorkspaceIdentifier(uri: URI): ISingleFolderWorks
 }
 
 export function stableWorkspaceId(uri: URI): string {
-	const identity =
-		uri.scheme !== 'file' || process.platform === 'linux' ? uri.toString() : uri.toString().toLowerCase();
+	const identity = uri.scheme !== 'file' || process.platform === 'linux' ? uri.toString() : uri.toString().toLowerCase();
 	return createHash('sha256').update(identity).digest('hex');
 }
 
@@ -53,11 +48,7 @@ export const nodeWorkspacePathService: IWorkspacePathService = {
 	async resolvePath(path): Promise<IResolvedWorkspacePath> {
 		const canonicalPath = await realpath(path);
 		const metadata = await stat(canonicalPath);
-		const kind = metadata.isDirectory()
-			? WorkspacePathKind.Directory
-			: metadata.isFile()
-				? WorkspacePathKind.File
-				: WorkspacePathKind.Other;
+		const kind = metadata.isDirectory() ? WorkspacePathKind.Directory : metadata.isFile() ? WorkspacePathKind.File : WorkspacePathKind.Other;
 		return { kind, path: canonicalPath };
 	},
 	readFile: path => readFile(path, 'utf8'),

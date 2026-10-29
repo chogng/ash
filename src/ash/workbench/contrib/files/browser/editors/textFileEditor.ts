@@ -33,16 +33,7 @@ export class TextFileEditor extends TextResourceEditor {
 		@IFilesConfigurationService private readonly filesConfiguration: IFilesConfigurationService,
 		@IFileDialogService private readonly fileDialogs: IFileDialogService,
 	) {
-		super(
-			resourceStore,
-			options,
-			modelService,
-			instantiationService,
-			configurationService,
-			textModelService,
-			themeService,
-			storageService,
-		);
+		super(resourceStore, options, modelService, instantiationService, configurationService, textModelService, themeService, storageService);
 		this.saveErrorHandler = instantiationService.createInstance(TextFileSaveErrorHandler);
 		this._register(
 			filesConfiguration.onDidChangeReadonly(() => {
@@ -68,12 +59,7 @@ export class TextFileEditor extends TextResourceEditor {
 
 	public override async save(options?: ISaveOptions): Promise<void> {
 		if (this.fileInput && this.filesConfiguration.isReadonly(this.fileInput.resource)) {
-			const error = new Error(
-				localize(
-					'files.configuredReadonly',
-					'This file is read-only because it matches the configured read-only patterns.',
-				),
-			);
+			const error = new Error(localize('files.configuredReadonly', 'This file is read-only because it matches the configured read-only patterns.'));
 			if (await this.handleSaveError(error)) {
 				return;
 			}
@@ -96,9 +82,7 @@ export class TextFileEditor extends TextResourceEditor {
 			workingCopy
 				? async options => {
 						if (this.workingCopy !== workingCopy) {
-							throw new Error(
-								localize('files.saveEditorClosed', 'The editor was closed before the save retry.'),
-							);
+							throw new Error(localize('files.saveEditorClosed', 'The editor was closed before the save retry.'));
 						}
 						const controller = new AbortController();
 						const cancellation = toDisposable(() => controller.abort());

@@ -20,11 +20,7 @@ export class BrowserImageEditorService extends ImageEditorService {
 		const lifetime = toDisposable(() => controller.abort());
 		this.interactionLifetime.value = lifetime;
 		try {
-			const resolved = await this.resolve(
-				options?.code ? 'selection' : 'screen',
-				AbortSignal.any([signal, controller.signal]),
-				options?.editorId,
-			);
+			const resolved = await this.resolve(options?.code ? 'selection' : 'screen', AbortSignal.any([signal, controller.signal]), options?.editorId);
 			return await new Promise<VSBuffer | undefined>((resolve, reject) => {
 				let frame: ReturnType<typeof createImageViewFrame> | undefined;
 				let finished = false;
@@ -56,10 +52,7 @@ export class BrowserImageEditorService extends ImageEditorService {
 								code: options?.code,
 								state: resolved.view.state,
 								theme: readImageEditorTheme(document),
-								colorScheme:
-									(document.querySelector('.ash-workbench') ?? document.body)?.getAttribute(
-										'data-color-scheme',
-									) ?? 'dark',
+								colorScheme: (document.querySelector('.ash-workbench') ?? document.body)?.getAttribute('data-color-scheme') ?? 'dark',
 							},
 							async result => {
 								if (result.kind === 'error') {
@@ -69,9 +62,7 @@ export class BrowserImageEditorService extends ImageEditorService {
 								if (result.kind === 'retake') {
 									frame?.dispose();
 									frame = undefined;
-									await new Promise<void>(paint =>
-										requestAnimationFrame(() => requestAnimationFrame(() => paint())),
-									);
+									await new Promise<void>(paint => requestAnimationFrame(() => requestAnimationFrame(() => paint())));
 									if (!finished) void open();
 									return true;
 								}
@@ -84,9 +75,7 @@ export class BrowserImageEditorService extends ImageEditorService {
 										}),
 									]);
 								if (result.kind === 'save') {
-									const url = URL.createObjectURL(
-										new Blob([new Uint8Array(result.image)], { type: 'image/png' }),
-									);
+									const url = URL.createObjectURL(new Blob([new Uint8Array(result.image)], { type: 'image/png' }));
 									const link = document.createElement('a');
 									link.href = url;
 									link.download = 'Image.png';

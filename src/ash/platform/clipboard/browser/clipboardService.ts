@@ -55,8 +55,7 @@ export class BrowserClipboardService extends Disposable implements IClipboardSer
 	async readImage(): Promise<Uint8Array> {
 		if (!this.clipboard) throw new Error('The browser clipboard is unavailable');
 		for (const item of await this.clipboard.read()) {
-			if (item.types.includes('image/png'))
-				return new Uint8Array(await (await item.getType('image/png')).arrayBuffer());
+			if (item.types.includes('image/png')) return new Uint8Array(await (await item.getType('image/png')).arrayBuffer());
 		}
 		return new Uint8Array();
 	}
@@ -105,10 +104,7 @@ export class BrowserClipboardService extends Disposable implements IClipboardSer
 		}
 		await this.clipboard.write([
 			new ClipboardItem({
-				[BrowserClipboardService.fileFormat]: new Blob(
-					[JSON.stringify({ resources: resources.map(resource => resource.toString()), operation })],
-					{ type: 'application/x-ash-resources' },
-				),
+				[BrowserClipboardService.fileFormat]: new Blob([JSON.stringify({ resources: resources.map(resource => resource.toString()), operation })], { type: 'application/x-ash-resources' }),
 			}),
 		]);
 	}

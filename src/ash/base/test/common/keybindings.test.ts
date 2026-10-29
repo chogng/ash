@@ -2,15 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { getKeybindingLabel, getKeybindingLabelParts, KeybindingLabelStyle } from '../../common/keybindingLabels.js';
 import { parseKeybinding, serializeKeybinding } from '../../common/keybindingParser.js';
-import {
-	decodeKeybinding,
-	Keybinding,
-	KeybindingChordKind,
-	logicalKey,
-	matchesResolvedChord,
-	physicalKey,
-	resolveKeybinding,
-} from '../../common/keybindings.js';
+import { decodeKeybinding, Keybinding, KeybindingChordKind, logicalKey, matchesResolvedChord, physicalKey, resolveKeybinding } from '../../common/keybindings.js';
 import { OperatingSystem } from '../../common/platform.js';
 import { loadKeybindingConformanceFixtures } from './keybindingConformanceFixtures.js';
 import {
@@ -54,14 +46,7 @@ test('function keys retain their physical identities without replacing editing k
 	for (let number = 1; number <= 24; number++) {
 		const scanCode = ScanCodeUtils.toEnum(`F${number}`);
 		const keyCode = KeyCodeUtils.fromString(`F${number}`);
-		assert.deepEqual(
-			[
-				IMMUTABLE_CODE_TO_KEY_CODE[scanCode],
-				IMMUTABLE_KEY_CODE_TO_CODE[keyCode],
-				EVENT_KEY_CODE_MAP[111 + number],
-			],
-			[keyCode, scanCode, keyCode],
-		);
+		assert.deepEqual([IMMUTABLE_CODE_TO_KEY_CODE[scanCode], IMMUTABLE_KEY_CODE_TO_CODE[keyCode], EVENT_KEY_CODE_MAP[111 + number]], [keyCode, scanCode, keyCode]);
 	}
 	for (const [scanCode, keyCode] of [
 		[ScanCode.Insert, KeyCode.Insert],
@@ -75,10 +60,7 @@ test('function keys retain their physical identities without replacing editing k
 		[ScanCode.ScrollLock, KeyCode.ScrollLock],
 		[ScanCode.Pause, KeyCode.PauseBreak],
 	] as const) {
-		assert.deepEqual(
-			[IMMUTABLE_CODE_TO_KEY_CODE[scanCode], IMMUTABLE_KEY_CODE_TO_CODE[keyCode]],
-			[keyCode, scanCode],
-		);
+		assert.deepEqual([IMMUTABLE_CODE_TO_KEY_CODE[scanCode], IMMUTABLE_KEY_CODE_TO_CODE[keyCode]], [keyCode, scanCode]);
 	}
 });
 
@@ -98,7 +80,11 @@ test('keybinding parser distinguishes logical and physical chords', () => {
 });
 
 test('portable primary modifiers resolve and format for each OS', () => {
-	const keybinding = Keybinding.single(logicalKey('n', { primaryKey: true }));
+	const keybinding = Keybinding.single(
+		logicalKey('n', {
+			primaryKey: true,
+		}),
+	);
 	const windows = resolveKeybinding(keybinding, OperatingSystem.Windows);
 	const mac = resolveKeybinding(keybinding, OperatingSystem.Macintosh);
 
@@ -143,10 +129,7 @@ test('VS Code numeric keybindings decode into the canonical keybinding model', (
 });
 
 test('resolved chords match their declared logical or physical identity', () => {
-	const resolved = resolveKeybinding(
-		Keybinding.chord(logicalKey('z', { ctrlKey: true }), physicalKey('KeyY', { ctrlKey: true })),
-		OperatingSystem.Windows,
-	);
+	const resolved = resolveKeybinding(Keybinding.chord(logicalKey('z', { ctrlKey: true }), physicalKey('KeyY', { ctrlKey: true })), OperatingSystem.Windows);
 
 	assert.equal(
 		matchesResolvedChord(resolved.chords[0], {

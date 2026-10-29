@@ -8,10 +8,7 @@ import { Separator, type IAction, type IActionRunner } from '../../../../base/co
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import {
-	createServiceIdentifier,
-	IInstantiationService,
-} from '../../../../platform/instantiation/common/instantiation.js';
+import { createServiceIdentifier, IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextKeyService, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -20,12 +17,7 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
 import { localize } from '../../../../nls.js';
 import { INotificationService, NotificationsFilter } from '../../../../platform/notification/common/notification.js';
-import {
-	getNotificationsPosition,
-	NotificationsPosition,
-	NotificationsSettings,
-	type NotificationsModel,
-} from '../../../common/notifications.js';
+import { getNotificationsPosition, NotificationsPosition, NotificationsSettings, type NotificationsModel } from '../../../common/notifications.js';
 import type { IStatusbarService } from '../../../services/statusbar/browser/statusbar.js';
 import { NotificationsToasts } from './notificationsToasts.js';
 import { StatusbarHeight } from '../workbenchPartDimensions.js';
@@ -77,15 +69,9 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		@IMenuService menuService: IMenuService,
 	) {
 		super();
-		this.copyAction = instantiationService.createInstance(
-			CopyNotificationMessageAction,
-			CopyNotificationMessageAction.ID,
-			CopyNotificationMessageAction.LABEL,
-		);
+		this.copyAction = instantiationService.createInstance(CopyNotificationMessageAction, CopyNotificationMessageAction.ID, CopyNotificationMessageAction.LABEL);
 		const document = root.ownerDocument;
-		const toasts = this._register(
-			instantiationService.createInstance(NotificationsToasts, toastContainer, this.model, actionRunner),
-		);
+		const toasts = this._register(instantiationService.createInstance(NotificationsToasts, toastContainer, this.model, actionRunner));
 		this._register(instantiationService.createInstance(NotificationsAlerts, this.model));
 		this.panel = h(document, 'section');
 		this.panel.className = 'ash-notifications-center';
@@ -97,24 +83,14 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		const updatePosition = (): void => {
 			const position = getNotificationsPosition(configurationService);
 			contextKeys.setContext(`config.${NotificationsSettings.NOTIFICATIONS_POSITION}`, position);
-			contextKeys.setContext(
-				`config.${NotificationsSettings.NOTIFICATIONS_BUTTON}`,
-				configurationService.getValue<boolean>(NotificationsSettings.NOTIFICATIONS_BUTTON) !== false,
-			);
+			contextKeys.setContext(`config.${NotificationsSettings.NOTIFICATIONS_BUTTON}`, configurationService.getValue<boolean>(NotificationsSettings.NOTIFICATIONS_BUTTON) !== false);
 			this.panel.dataset.position = position;
 			this.hideButton.icon = position === NotificationsPosition.TOP_RIGHT ? Lxicon.chevronUp : Lxicon.chevronDown;
 			toasts.setPosition(position, layoutService.mainContainerOffset.top);
 			this.panel.style.setProperty('--ash-notifications-top', `${layoutService.mainContainerOffset.top + 8}px`);
-			const statusbarVisible =
-				statusbar && configurationService.getValue<boolean>('workbench.statusBar.visible') !== false;
-			this.panel.style.setProperty(
-				'--ash-feedback-statusbar-height',
-				`${statusbarVisible ? StatusbarHeight : 0}px`,
-			);
-			toastContainer.style.setProperty(
-				'--ash-feedback-statusbar-height',
-				`${statusbarVisible ? StatusbarHeight : 0}px`,
-			);
+			const statusbarVisible = statusbar && configurationService.getValue<boolean>('workbench.statusBar.visible') !== false;
+			this.panel.style.setProperty('--ash-feedback-statusbar-height', `${statusbarVisible ? StatusbarHeight : 0}px`);
+			toastContainer.style.setProperty('--ash-feedback-statusbar-height', `${statusbarVisible ? StatusbarHeight : 0}px`);
 		};
 		this._register(
 			configurationService.onDidChangeConfiguration(event => {
@@ -156,9 +132,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 			checked: notificationService.getFilter() === NotificationsFilter.ERROR,
 			run: () => undefined,
 		};
-		const positionMenu = this._register(
-			menuService.createMenu(MenuId.NotificationsCenterPositionMenu, contextKeys),
-		);
+		const positionMenu = this._register(menuService.createMenu(MenuId.NotificationsCenterPositionMenu, contextKeys));
 		const configurePosition: IAction = {
 			id: 'notifications.configurePosition',
 			label: localize('notifications.configurePosition', 'Configure Notifications Position...'),
@@ -176,9 +150,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 			run: () => this.hide(),
 		};
 		this.clearButton = new NotificationCenterActionViewItem(clear, 'ash-notifications-clear');
-		const doNotDisturb = new NotificationCenterActionViewItem(configureDoNotDisturb, undefined, button =>
-			this.showHeaderMenu(button, this.getDoNotDisturbActions()),
-		);
+		const doNotDisturb = new NotificationCenterActionViewItem(configureDoNotDisturb, undefined, button => this.showHeaderMenu(button, this.getDoNotDisturbActions()));
 		const position = new NotificationCenterActionViewItem(configurePosition, undefined, button =>
 			this.showHeaderMenu(
 				button,
@@ -206,9 +178,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		this._register(notificationService.onDidChangeFilter(updateDoNotDisturb));
 		updateDoNotDisturb();
 		this.panel.append(header);
-		this.notificationList = this._register(
-			instantiationService.createInstance(NotificationsList, this.panel, 'center', actionRunner),
-		);
+		this.notificationList = this._register(instantiationService.createInstance(NotificationsList, this.panel, 'center', actionRunner));
 		this.list = this.notificationList.domNode;
 		root.append(this.panel);
 		this._register(toDisposable(() => this.panel.remove()));
@@ -272,34 +242,17 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 			}),
 		);
 		const onEscape = (event: KeyboardEvent): void => {
-			if (
-				event.defaultPrevented ||
-				event.isComposing ||
-				event.altKey ||
-				event.ctrlKey ||
-				event.metaKey ||
-				event.shiftKey
-			)
-				return;
+			if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
 			const dialogHasFocus = Boolean(document.activeElement?.closest('[role="dialog"]'));
 			const accessibleDialogOpen = Boolean(document.querySelector('.ash-accessible-view-dialog'));
-			if (
-				this.open &&
-				event.key === 'Escape' &&
-				!this.contextMenuVisible &&
-				!this.copyMenu &&
-				!dialogHasFocus &&
-				!accessibleDialogOpen
-			) {
+			if (this.open && event.key === 'Escape' && !this.contextMenuVisible && !this.copyMenu && !dialogHasFocus && !accessibleDialogOpen) {
 				event.preventDefault();
 				event.stopPropagation();
 				this.hide();
 			}
 		};
 		this._register(addDisposableListener(document, 'keydown', onEscape, true));
-		this.status = this._register(
-			instantiationService.createInstance(NotificationsStatus, model, statusbar, () => this.toggle()),
-		);
+		this.status = this._register(instantiationService.createInstance(NotificationsStatus, model, statusbar, () => this.toggle()));
 		this._register(toasts.onDidChangeVisibility(visible => this.status.update(this.open, visible)));
 		this.status.update(false, toasts.isVisible);
 		this.toasts = toasts;
@@ -383,15 +336,12 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		const focusedId = this.list.contains(focusedRow ?? null) ? focusedRow?.dataset.notificationId : undefined;
 		const focusedIndex = focusedRow ? [...this.list.children].indexOf(focusedRow) : -1;
 		const items = this.model.getNotifications().slice().reverse();
-		this.title.textContent = items.length
-			? localize('notifications.title', 'Notifications')
-			: localize('notifications.noNew', 'No New Notifications');
+		this.title.textContent = items.length ? localize('notifications.title', 'Notifications') : localize('notifications.noNew', 'No New Notifications');
 		this.clearButton.enabled = items.some(item => !item.hasActiveProgress);
 		this.notificationList.updateNotificationsList(0, this.list.children.length, items);
 		if (focusedId && this.open) {
 			const retained = this.list.querySelector<HTMLElement>(`[data-notification-id="${focusedId}"]`);
-			const adjacent = this.list.children[Math.min(focusedIndex, this.list.children.length - 1)] as
-				HTMLElement | undefined;
+			const adjacent = this.list.children[Math.min(focusedIndex, this.list.children.length - 1)] as HTMLElement | undefined;
 			(retained ?? adjacent ?? this.panel).focus();
 		}
 	}
@@ -445,9 +395,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 	private getDoNotDisturbActions(): IAction[] {
 		const service = this.notificationService;
 		const muted = service.getFilter() === NotificationsFilter.ERROR;
-		const label = muted
-			? localize('notifications.disableDoNotDisturb', 'Disable Do Not Disturb Mode')
-			: localize('notifications.enableDoNotDisturb', 'Enable Do Not Disturb Mode');
+		const label = muted ? localize('notifications.disableDoNotDisturb', 'Disable Do Not Disturb Mode') : localize('notifications.enableDoNotDisturb', 'Enable Do Not Disturb Mode');
 		const actions: IAction[] = [
 			{
 				id: 'notifications.toggleDoNotDisturbMode',
@@ -469,10 +417,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 				run: () =>
 					service.setFilter({
 						...source,
-						filter:
-							service.getFilter(source) === NotificationsFilter.OFF
-								? NotificationsFilter.ERROR
-								: NotificationsFilter.OFF,
+						filter: service.getFilter(source) === NotificationsFilter.OFF ? NotificationsFilter.ERROR : NotificationsFilter.OFF,
 					}),
 			});
 		}

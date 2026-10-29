@@ -321,10 +321,7 @@ export type ChatContentPart =
 					| { readonly type: 'structuredResult' }
 					| { readonly type: 'viewMetadata' };
 				readonly mimeType: string;
-				readonly data:
-					| { readonly type: 'text'; readonly text: string }
-					| { readonly type: 'bytes'; readonly bytes: Uint8Array }
-					| { readonly type: 'json'; readonly json: string };
+				readonly data: { readonly type: 'text'; readonly text: string } | { readonly type: 'bytes'; readonly bytes: Uint8Array } | { readonly type: 'json'; readonly json: string };
 				readonly contentDigest: string;
 				readonly truncated: boolean;
 				readonly resourceMetadata?: string | null;
@@ -414,16 +411,7 @@ export type ThreadItem =
 			readonly isError: boolean;
 	  };
 
-export type TurnStatus =
-	| 'created'
-	| 'running'
-	| 'waitingForApproval'
-	| 'waitingForUserInput'
-	| 'waitingForCapability'
-	| 'cancelling'
-	| 'completed'
-	| 'failed'
-	| 'interrupted';
+export type TurnStatus = 'created' | 'running' | 'waitingForApproval' | 'waitingForUserInput' | 'waitingForCapability' | 'cancelling' | 'completed' | 'failed' | 'interrupted';
 
 export interface TurnError {
 	readonly code:
@@ -556,15 +544,7 @@ export interface RequestUserInput {
 }
 
 export interface ActionApprovalCapability {
-	readonly kind:
-		| 'fileRead'
-		| 'fileWrite'
-		| 'processSpawn'
-		| 'network'
-		| 'credentialUse'
-		| 'externalMutation'
-		| 'systemConfiguration'
-		| 'userInterface';
+	readonly kind: 'fileRead' | 'fileWrite' | 'processSpawn' | 'network' | 'credentialUse' | 'externalMutation' | 'systemConfiguration' | 'userInterface';
 	readonly scope: string;
 }
 
@@ -617,10 +597,7 @@ export type AgentResponse =
 			readonly type: 'dynamicTool';
 			readonly response: {
 				readonly callId: string;
-				readonly content: readonly (
-					| { readonly type: 'text'; readonly text: string }
-					| { readonly type: 'image'; readonly dataUrl: string }
-				)[];
+				readonly content: readonly ({ readonly type: 'text'; readonly text: string } | { readonly type: 'image'; readonly dataUrl: string })[];
 				readonly success: boolean;
 			};
 	  };
@@ -712,9 +689,7 @@ export type ThreadUpdate =
 	| {
 			readonly type: 'itemDelta';
 			readonly itemId: string;
-			readonly delta:
-				| { readonly type: 'agentMessage' | 'reasoning' | 'plan'; readonly text: string }
-				| { readonly type: 'agentMessagePhase'; readonly phase: MessagePhase | null };
+			readonly delta: { readonly type: 'agentMessage' | 'reasoning' | 'plan'; readonly text: string } | { readonly type: 'agentMessagePhase'; readonly phase: MessagePhase | null };
 	  }
 	| {
 			readonly type: 'toolOutputDelta';
@@ -774,10 +749,7 @@ export interface ChatHookRun {
 	readonly runId: string;
 	readonly hookId: string;
 	readonly event: string;
-	readonly status:
-		| { readonly type: 'running' | 'continued' }
-		| { readonly type: 'denied' | 'cancelled'; readonly reason: string }
-		| { readonly type: 'failed'; readonly message: string };
+	readonly status: { readonly type: 'running' | 'continued' } | { readonly type: 'denied' | 'cancelled'; readonly reason: string } | { readonly type: 'failed'; readonly message: string };
 	readonly startedAtUnixMs: number;
 	readonly durationMs: number;
 	readonly turnId: string | null;
@@ -794,9 +766,7 @@ export interface ThreadTranscriptSnapshot {
 }
 
 export type ThreadTranscriptChange =
-	| { readonly type: 'upsert'; readonly entry: ThreadTranscriptEntry }
-	| { readonly type: 'remove'; readonly entryIds: readonly string[] }
-	| { readonly type: 'clearTransient' };
+	{ readonly type: 'upsert'; readonly entry: ThreadTranscriptEntry } | { readonly type: 'remove'; readonly entryIds: readonly string[] } | { readonly type: 'clearTransient' };
 
 export interface ThreadTranscriptUpdateEnvelope {
 	readonly sessionId: SessionId;
@@ -807,9 +777,7 @@ export interface ThreadTranscriptUpdateEnvelope {
 }
 
 /** A bounded, chronological Turn window. Omission preserves full-history callers. */
-export type ThreadSnapshotHistory =
-	| { readonly type: 'latest'; readonly turnLimit: number }
-	| { readonly type: 'before'; readonly turnId: string; readonly turnLimit: number };
+export type ThreadSnapshotHistory = { readonly type: 'latest'; readonly turnLimit: number } | { readonly type: 'before'; readonly turnId: string; readonly turnLimit: number };
 
 export interface ThreadHistoryBoundary {
 	readonly hasOlderTurns: boolean;
@@ -827,9 +795,7 @@ export interface ThreadSubscription extends ThreadRead {
 	readonly updates: readonly ThreadUpdateEnvelope[];
 }
 
-export type SessionRuntimeRequest =
-	| { readonly operation: 'list' }
-	| { readonly operation: 'probe' | 'prepare' | 'stop' | 'remove'; readonly workspace: string };
+export type SessionRuntimeRequest = { readonly operation: 'list' } | { readonly operation: 'probe' | 'prepare' | 'stop' | 'remove'; readonly workspace: string };
 
 export type SessionRuntimeResult =
 	| { readonly type: 'targets'; readonly targets: readonly NonNullable<SessionCreateParams['executionTarget']>[] }

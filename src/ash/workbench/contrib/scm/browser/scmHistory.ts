@@ -5,20 +5,13 @@ import { renderMarkdown } from '../../../../base/browser/markdownRenderer.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
 import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
-import {
-	AnchorAlignment,
-	AnchorAxisAlignment,
-	AnchorPosition,
-} from '../../../../base/browser/ui/contextview/contextview.js';
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from '../../../../base/browser/ui/contextview/contextview.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import {
-	IAccessibleViewService,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import type { IScopedContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -42,17 +35,32 @@ import '../../../common/theme.js';
 
 registerColor(
 	'scmGraph.historyItemRefColor',
-	{ dark: chartsBlue, light: chartsBlue, hcDark: chartsBlue, hcLight: chartsBlue },
+	{
+		dark: chartsBlue,
+		light: chartsBlue,
+		hcDark: chartsBlue,
+		hcLight: chartsBlue,
+	},
 	{ description: 'History item reference color.', owner: 'workbench.scm' },
 );
 registerColor(
 	'scmGraph.historyItemRemoteRefColor',
-	{ dark: chartsPurple, light: chartsPurple, hcDark: chartsPurple, hcLight: chartsPurple },
+	{
+		dark: chartsPurple,
+		light: chartsPurple,
+		hcDark: chartsPurple,
+		hcLight: chartsPurple,
+	},
 	{ description: 'History item remote reference color.', owner: 'workbench.scm' },
 );
 registerColor(
 	'scmGraph.historyItemHoverLabelForeground',
-	{ dark: 'panel.background', light: 'panel.background', hcDark: 'panel.background', hcLight: 'panel.background' },
+	{
+		dark: 'panel.background',
+		light: 'panel.background',
+		hcDark: 'panel.background',
+		hcLight: 'panel.background',
+	},
 	{ description: 'History item hover label foreground color.', owner: 'workbench.scm' },
 );
 
@@ -178,16 +186,10 @@ function createRows(
 			const color = colorMap.get(reference.id) ?? reference.color;
 			if (color !== undefined) return color;
 		}
-		if (
-			item.id === currentHistoryItemRef?.revision ||
-			item.references?.some(reference => reference.id === currentHistoryItemRef?.id)
-		) {
+		if (item.id === currentHistoryItemRef?.revision || item.references?.some(reference => reference.id === currentHistoryItemRef?.id)) {
 			return HistoryItemRefColor;
 		}
-		if (
-			item.id === currentHistoryItemRemoteRef?.revision ||
-			item.references?.some(reference => reference.category === 'remoteBranch')
-		) {
+		if (item.id === currentHistoryItemRemoteRef?.revision || item.references?.some(reference => reference.category === 'remoteBranch')) {
 			return HistoryItemRemoteRefColor;
 		}
 		return undefined;
@@ -230,52 +232,30 @@ function createRows(
 }
 
 /** Renders one SCM history swimlane row with a stable color for each branch lane. */
-export function renderSCMHistoryItemGraph(
-	historyItemViewModel: ISCMHistoryItemViewModel,
-	expandedHeight = LaneHeight,
-	document: Document = globalThis.document,
-): SVGSVGElement {
+export function renderSCMHistoryItemGraph(historyItemViewModel: ISCMHistoryItemViewModel, expandedHeight = LaneHeight, document: Document = globalThis.document): SVGSVGElement {
 	const row = historyItemViewModel;
 	const kind: GraphNodeKind =
-		row.kind === 'incoming-changes' || row.kind === 'outgoing-changes'
-			? row.kind
-			: row.kind === 'HEAD'
-				? 'head'
-				: row.historyItem.parentIds.length > 1
-					? 'merge'
-					: 'commit';
+		row.kind === 'incoming-changes' || row.kind === 'outgoing-changes' ? row.kind : row.kind === 'HEAD' ? 'head' : row.historyItem.parentIds.length > 1 ? 'merge' : 'commit';
 	const svg = createSvgElement(document, 'svg');
 	svg.classList.add('ash-scm-graph-graph', kind);
 	svg.setAttribute('aria-hidden', 'true');
 	const inputIndex = row.inputSwimlanes.findIndex(lane => lane.id === row.historyItem.id);
 	const circleIndex = inputIndex === -1 ? row.inputSwimlanes.length : inputIndex;
-	const circleColorIndex =
-		row.color ??
-		(row.historyItem.parentIds.length > 0
-			? (row.outputSwimlanes[circleIndex]?.color ?? 0)
-			: (row.inputSwimlanes[circleIndex]?.color ?? 0));
+	const circleColorIndex = row.color ?? (row.historyItem.parentIds.length > 0 ? (row.outputSwimlanes[circleIndex]?.color ?? 0) : (row.inputSwimlanes[circleIndex]?.color ?? 0));
 	let outputSwimlaneIndex = 0;
 
 	for (let index = 0; index < row.inputSwimlanes.length; index += 1) {
 		const inputLane = row.inputSwimlanes[index];
 		if (inputLane.id === row.historyItem.id) {
 			if (index !== circleIndex) {
-				appendPath(
-					svg,
-					`M ${LaneWidth * (index + 1)} 0 A ${LaneWidth} ${LaneWidth} 0 0 1 ${LaneWidth * index} ${LaneWidth} H ${LaneWidth * (circleIndex + 1)}`,
-					inputLane.color,
-				);
+				appendPath(svg, `M ${LaneWidth * (index + 1)} 0 A ${LaneWidth} ${LaneWidth} 0 0 1 ${LaneWidth * index} ${LaneWidth} H ${LaneWidth * (circleIndex + 1)}`, inputLane.color);
 			} else if (row.historyItem.parentIds.length > 0) {
 				outputSwimlaneIndex += 1;
 			}
 			continue;
 		}
 
-		if (
-			outputSwimlaneIndex >= row.outputSwimlanes.length ||
-			inputLane.id !== row.outputSwimlanes[outputSwimlaneIndex].id
-		)
-			continue;
+		if (outputSwimlaneIndex >= row.outputSwimlanes.length || inputLane.id !== row.outputSwimlanes[outputSwimlaneIndex].id) continue;
 		if (index === outputSwimlaneIndex) {
 			appendPath(svg, `M ${LaneWidth * (index + 1)} 0 V ${LaneHeight}`, inputLane.color);
 		} else {
@@ -294,33 +274,15 @@ export function renderSCMHistoryItemGraph(
 		// lane still targets the original parent commit.
 		const parentOutputIndex = row.outputSwimlanes.length - row.historyItem.parentIds.length + index;
 		const parentColorIndex = row.outputSwimlanes[parentOutputIndex].color;
-		appendPath(
-			svg,
-			`M ${LaneWidth * parentOutputIndex} ${LaneHeight / 2} A ${LaneWidth} ${LaneWidth} 0 0 1 ${LaneWidth * (parentOutputIndex + 1)} ${LaneHeight}`,
-			parentColorIndex,
-		);
-		appendPath(
-			svg,
-			`M ${LaneWidth * parentOutputIndex} ${LaneHeight / 2} H ${LaneWidth * (circleIndex + 1)}`,
-			parentColorIndex,
-		);
+		appendPath(svg, `M ${LaneWidth * parentOutputIndex} ${LaneHeight / 2} A ${LaneWidth} ${LaneWidth} 0 0 1 ${LaneWidth * (parentOutputIndex + 1)} ${LaneHeight}`, parentColorIndex);
+		appendPath(svg, `M ${LaneWidth * parentOutputIndex} ${LaneHeight / 2} H ${LaneWidth * (circleIndex + 1)}`, parentColorIndex);
 	}
 
-	if (inputIndex !== -1)
-		appendPath(
-			svg,
-			`M ${LaneWidth * (circleIndex + 1)} 0 V ${LaneHeight / 2}`,
-			row.inputSwimlanes[inputIndex].color,
-		);
-	if (row.historyItem.parentIds.length > 0)
-		appendPath(svg, `M ${LaneWidth * (circleIndex + 1)} ${LaneHeight / 2} V ${LaneHeight}`, circleColorIndex);
+	if (inputIndex !== -1) appendPath(svg, `M ${LaneWidth * (circleIndex + 1)} 0 V ${LaneHeight / 2}`, row.inputSwimlanes[inputIndex].color);
+	if (row.historyItem.parentIds.length > 0) appendPath(svg, `M ${LaneWidth * (circleIndex + 1)} ${LaneHeight / 2} V ${LaneHeight}`, circleColorIndex);
 	if (expandedHeight > LaneHeight) {
 		for (let index = 0; index < row.outputSwimlanes.length; index += 1) {
-			appendPath(
-				svg,
-				`M ${LaneWidth * (index + 1)} ${LaneHeight} V ${expandedHeight}`,
-				row.outputSwimlanes[index].color,
-			);
+			appendPath(svg, `M ${LaneWidth * (index + 1)} ${LaneHeight} V ${expandedHeight}`, row.outputSwimlanes[index].color);
 		}
 	}
 	appendNode(svg, circleIndex, kind, circleColorIndex);
@@ -332,10 +294,7 @@ export function renderSCMHistoryItemGraph(
 }
 
 /** Continues a commit's outgoing lanes through an independently selectable child row. */
-export function renderSCMHistoryGraphPlaceholder(
-	columns: readonly ISCMHistoryItemGraphNode[],
-	document: Document = globalThis.document,
-): SVGSVGElement {
+export function renderSCMHistoryGraphPlaceholder(columns: readonly ISCMHistoryItemGraphNode[], document: Document = globalThis.document): SVGSVGElement {
 	const svg = createSvgElement(document, 'svg');
 	svg.classList.add('ash-scm-graph-graph');
 	svg.setAttribute('aria-hidden', 'true');
@@ -376,13 +335,7 @@ function appendNode(svg: SVGSVGElement, index: number, kind: GraphNodeKind, colo
 	appendCircle(svg, index, 5, 'single', colorIndex);
 }
 
-function appendCircle(
-	svg: SVGSVGElement,
-	index: number,
-	radius: number,
-	part: 'inner' | 'outer' | 'single' | 'dashed',
-	colorIndex: number,
-): void {
+function appendCircle(svg: SVGSVGElement, index: number, radius: number, part: 'inner' | 'outer' | 'single' | 'dashed', colorIndex: number): void {
 	const circle = createSvgElement(svg.ownerDocument, 'circle');
 	circle.classList.add('ash-scm-graph-node', part);
 	circle.dataset.laneColor = String(colorIndex);
@@ -436,8 +389,7 @@ export function setupHistoryItemHover(
 				const target = returnFocus;
 				returnFocus = undefined;
 				// A row anchors the card, while an active-descendant tree owns keyboard focus.
-				if (target?.isConnected && target.ownerDocument.activeElement === target.ownerDocument.body)
-					target.focus();
+				if (target?.isConnected && target.ownerDocument.activeElement === target.ownerDocument.body) target.focus();
 			},
 		}),
 	);
@@ -482,14 +434,7 @@ export function toHistoryItemHoverContent(
 	details.className = 'ash-scm-graph-hover-details';
 	details.setAttribute('aria-busy', 'false');
 	if (historyItem.tooltip) {
-		renderCommitDetails(
-			details,
-			historyItem.subject,
-			historyItem.tooltip,
-			resources,
-			options.layout,
-			openerService,
-		);
+		renderCommitDetails(details, historyItem.subject, historyItem.tooltip, resources, options.layout, openerService);
 	} else {
 		// Providers without rich tooltip content still expose their complete message synchronously.
 		details.textContent = historyItem.message || historyItem.subject;
@@ -503,8 +448,7 @@ export function toHistoryItemHoverContent(
 	const hashToolbar = resources.add(
 		new WorkbenchToolBar(hash, contextMenuService, {
 			ariaLabel: openLabel,
-			actionViewItemProvider: (action, options) =>
-				new LabelActionViewItem(action, { ...options, ariaLabel: openLabel, tooltip: '' }),
+			actionViewItemProvider: (action, options) => new LabelActionViewItem(action, { ...options, ariaLabel: openLabel, tooltip: '' }),
 		}),
 	);
 	hashToolbar.setActions([
@@ -522,8 +466,7 @@ export function toHistoryItemHoverContent(
 		new WorkbenchToolBar(actions, contextMenuService, {
 			ariaLabel: localize('scm.history.commitActions', 'Commit actions'),
 			// Action tooltips share the ContextView and would replace their own details card.
-			actionViewItemProvider: (action, options) =>
-				new LabelActionViewItem(action, { ...options, ariaLabel: action.tooltip, tooltip: '' }),
+			actionViewItemProvider: (action, options) => new LabelActionViewItem(action, { ...options, ariaLabel: action.tooltip, tooltip: '' }),
 		}),
 	);
 	const copyLabel = localize('scm.history.copyHash', 'Copy Commit Hash');
@@ -571,14 +514,7 @@ export function toHistoryItemHoverContent(
 		for (const reference of references) {
 			const label = h(document, 'span');
 			label.className = 'ash-scm-graph-label';
-			appendIcon(
-				reference.category === 'tag'
-					? Lxicon.tag
-					: reference.category === 'remoteBranch'
-						? Lxicon.cloud
-						: Lxicon.gitBranch,
-				label,
-			);
+			appendIcon(reference.category === 'tag' ? Lxicon.tag : reference.category === 'remoteBranch' ? Lxicon.cloud : Lxicon.gitBranch, label);
 			label.append(document.createTextNode(reference.name));
 			labels.append(label);
 		}
@@ -588,14 +524,7 @@ export function toHistoryItemHoverContent(
 	return { domNode: hover, toolbar };
 }
 
-function renderCommitDetails(
-	container: HTMLElement,
-	subjectText: string,
-	details: ISCMHistoryItemDetails,
-	resources: DisposableStore,
-	layout: () => void,
-	openerService: IOpenerService,
-): void {
+function renderCommitDetails(container: HTMLElement, subjectText: string, details: ISCMHistoryItemDetails, resources: DisposableStore, layout: () => void, openerService: IOpenerService): void {
 	const document = container.ownerDocument;
 	const author = h(document, 'div');
 	author.className = 'ash-scm-graph-hover-author';
@@ -617,10 +546,7 @@ function renderCommitDetails(
 		{ unit: 'second', seconds: 1 },
 	] as const;
 	const unit = units.find(candidate => Math.abs(seconds) >= candidate.seconds) ?? units.at(-1)!;
-	const relative = new Intl.RelativeTimeFormat(getNLSLanguage(), { numeric: 'auto' }).format(
-		Math.round(seconds / unit.seconds),
-		unit.unit,
-	);
+	const relative = new Intl.RelativeTimeFormat(getNLSLanguage(), { numeric: 'auto' }).format(Math.round(seconds / unit.seconds), unit.unit);
 	time.textContent = localize('scm.history.commitTime', '{0} ({1})', relative, date.toLocaleString(getNLSLanguage()));
 	author.append(name, time);
 	const subject = h(document, 'div');
@@ -628,9 +554,7 @@ function renderCommitDetails(
 	subject.textContent = subjectText;
 	const message = h(document, 'div');
 	message.className = 'ash-scm-graph-hover-message';
-	const body = details.message.startsWith(subjectText)
-		? details.message.slice(subjectText.length).replace(/^\n+/, '')
-		: details.message;
+	const body = details.message.startsWith(subjectText) ? details.message.slice(subjectText.length).replace(/^\n+/, '') : details.message;
 	// Commit text uses Markdown without granting HTML or command-link trust.
 	resources.add(
 		renderMarkdown(

@@ -2,17 +2,9 @@ import './media/imagePreview.css';
 import './media/mediaPreview.css';
 import { getActiveElement } from '../../../../base/browser/dom.js';
 import { localize } from '../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -28,16 +20,12 @@ registerBuiltinEditorPane('ash.media-preview', IMAGE_PREVIEW_ID, options => {
 });
 
 for (const kind of ['audio', 'video'] as const) {
-	registerBuiltinEditorPane(
-		'ash.media-preview',
-		kind === 'audio' ? AUDIO_PREVIEW_ID : VIDEO_PREVIEW_ID,
-		(options, name) => {
-			if (!options.instantiationService) {
-				throw new Error('Media preview requires Workbench instantiation services');
-			}
-			return options.instantiationService.createInstance(MediaPreview, kind, name);
-		},
-	);
+	registerBuiltinEditorPane('ash.media-preview', kind === 'audio' ? AUDIO_PREVIEW_ID : VIDEO_PREVIEW_ID, (options, name) => {
+		if (!options.instantiationService) {
+			throw new Error('Media preview requires Workbench instantiation services');
+		}
+		return options.instantiationService.createInstance(MediaPreview, kind, name);
+	});
 }
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
@@ -49,10 +37,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize('media.playback.verbosityTitle', 'Media preview accessibility help');
 		},
 		get description(): string {
-			return localize(
-				'media.playback.verbosityDescription',
-				'Announce how to open accessibility help when an audio or video preview receives focus.',
-			);
+			return localize('media.playback.verbosityDescription', 'Announce how to open accessibility help when an audio or video preview receives focus.');
 		},
 	},
 	parse: value => {
@@ -101,10 +86,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize('media.image.verbosityTitle', 'Image preview accessibility help');
 		},
 		get description(): string {
-			return localize(
-				'media.image.verbosityDescription',
-				'Announce how to open accessibility help when the image preview receives focus.',
-			);
+			return localize('media.image.verbosityDescription', 'Announce how to open accessibility help when the image preview receives focus.');
 		},
 	},
 	parse: value => {

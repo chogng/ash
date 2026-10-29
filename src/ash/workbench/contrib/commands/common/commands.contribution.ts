@@ -69,21 +69,11 @@ registerAction2(
 		public override async run(accessor: ServicesAccessor, args: unknown): Promise<void> {
 			const notifications = accessor.get(INotificationService);
 			if (!isCommandArgs(args)) {
-				notifications.error(
-					localize(
-						'runCommands.invalidArgs',
-						"'runCommands' has received an argument with incorrect type. Please, review the argument passed to the command.",
-					),
-				);
+				notifications.error(localize('runCommands.invalidArgs', "'runCommands' has received an argument with incorrect type. Please, review the argument passed to the command."));
 				return;
 			}
 			if (args.commands.length === 0) {
-				notifications.warn(
-					localize(
-						'runCommands.noCommandsToRun',
-						"'runCommands' has not received commands to run. Did you forget to pass commands in the 'runCommands' argument?",
-					),
-				);
+				notifications.warn(localize('runCommands.noCommandsToRun', "'runCommands' has not received commands to run. Did you forget to pass commands in the 'runCommands' argument?"));
 				return;
 			}
 
@@ -114,9 +104,5 @@ function isCommandArgs(value: unknown): value is CommandArgs {
 	if (typeof value !== 'object' || value === null || !('commands' in value) || !Array.isArray(value.commands)) {
 		return false;
 	}
-	return value.commands.every(
-		entry =>
-			typeof entry === 'string' ||
-			(typeof entry === 'object' && entry !== null && typeof entry.command === 'string'),
-	);
+	return value.commands.every(entry => typeof entry === 'string' || (typeof entry === 'object' && entry !== null && typeof entry.command === 'string'));
 }

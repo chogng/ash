@@ -40,17 +40,9 @@ export function openContextMenu(
 ): void {
 	event.preventDefault();
 	event.stopPropagation();
-	const instances =
-		contextInstances === undefined
-			? []
-			: Array.isArray(contextInstances)
-				? contextInstances
-				: [contextInstances as ITerminalInstance];
+	const instances = contextInstances === undefined ? [] : Array.isArray(contextInstances) ? contextInstances : [contextInstances as ITerminalInstance];
 	const contexts = instances.map(instance => new InstanceContext(instance));
-	const actions = [
-		...getFlatContextMenuActions(menu.getActions({ shouldForwardArgs: true }), undefined, targetWindow),
-		...extraActions,
-	];
+	const actions = [...getFlatContextMenuActions(menu.getActions({ shouldForwardArgs: true }), undefined, targetWindow), ...extraActions];
 	const lifetime = new DisposableStore();
 	const runner = lifetime.add(new TerminalContextActionRunner());
 	let executing = false;

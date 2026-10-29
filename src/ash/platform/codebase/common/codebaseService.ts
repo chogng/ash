@@ -59,11 +59,7 @@ export interface CodebaseStatus {
  */
 export interface ICodebaseService {
 	readConfig(): Promise<CodebaseConfigurationSnapshot>;
-	configure(
-		models: CodebaseModels | undefined,
-		automaticContext: CodebaseAutomaticContext,
-		expectedRevision: number,
-	): Promise<CodebaseConfigurationCommandResult>;
+	configure(models: CodebaseModels | undefined, automaticContext: CodebaseAutomaticContext, expectedRevision: number): Promise<CodebaseConfigurationCommandResult>;
 	status(): Promise<CodebaseStatus>;
 }
 

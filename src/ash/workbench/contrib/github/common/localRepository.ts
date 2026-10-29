@@ -80,43 +80,30 @@ export async function readLocalRepositories(commands: ICommandService): Promise<
 					: {}),
 			},
 			...(value.uncommittedChanges === undefined ? {} : { uncommittedChanges: count(value.uncommittedChanges) }),
-			remotes: value.remotes.map(
-				(remote: {
-					name: unknown;
-					identity?: { provider: unknown; host: unknown; owner: unknown; repository: unknown };
-				}) => ({
-					name: text(remote.name),
-					...(remote.identity
-						? {
-								identity: {
-									provider: text(remote.identity.provider),
-									host: text(remote.identity.host),
-									owner: text(remote.identity.owner),
-									repository: text(remote.identity.repository),
-								},
-							}
-						: {}),
-				}),
-			),
+			remotes: value.remotes.map((remote: { name: unknown; identity?: { provider: unknown; host: unknown; owner: unknown; repository: unknown } }) => ({
+				name: text(remote.name),
+				...(remote.identity
+					? {
+							identity: {
+								provider: text(remote.identity.provider),
+								host: text(remote.identity.host),
+								owner: text(remote.identity.owner),
+								repository: text(remote.identity.repository),
+							},
+						}
+					: {}),
+			})),
 		};
 	});
 }
 
 /** Rules in different rulesets are additive; exclusions apply only to their own rule. */
 export function isGitHubBranchProtected(branch: string, protection: GitHubBranchProtection): boolean {
-	return protection.rules.some(
-		rule =>
-			rule.include.some(pattern => match(pattern, branch)) &&
-			!rule.exclude.some(pattern => match(pattern, branch)),
-	);
+	return protection.rules.some(rule => rule.include.some(pattern => match(pattern, branch)) && !rule.exclude.some(pattern => match(pattern, branch)));
 }
 /** Prefer the tracked remote to avoid sharing a fork's commit through the upstream repository. */
 export function githubRemotes(repository: LocalRepository): LocalRepository['remotes'] {
 	return repository.remotes
 		.filter(remote => remote.identity?.provider === 'github')
-		.sort(
-			(a, b) =>
-				Number(repository.head.upstream?.name.startsWith(`${b.name}/`) ?? false) -
-				Number(repository.head.upstream?.name.startsWith(`${a.name}/`) ?? false),
-		);
+		.sort((a, b) => Number(repository.head.upstream?.name.startsWith(`${b.name}/`) ?? false) - Number(repository.head.upstream?.name.startsWith(`${a.name}/`) ?? false));
 }

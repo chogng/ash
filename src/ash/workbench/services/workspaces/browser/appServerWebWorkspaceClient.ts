@@ -2,17 +2,8 @@ import { localize } from '../../../../nls.js';
 import { URI } from '../../../../base/common/uri.js';
 import { basename } from '../../../../base/common/resources.js';
 import type { IWorkspace } from '../../../../platform/workspace/common/workspace.js';
-import {
-	decodeWebListenInfo,
-	decodeWebWorkspaceListResult,
-	decodeWebWorkspaceState,
-} from '../../../../../../.build/protocol/typescript/WebProtocolDecoder.js';
-import type {
-	WebWorkspaceListRequest,
-	WebWorkspaceOpenRequest,
-	WebWorkspaceState,
-	WebWorkspaceUpdateRequest,
-} from '../../../../../../.build/protocol/typescript/index.js';
+import { decodeWebListenInfo, decodeWebWorkspaceListResult, decodeWebWorkspaceState } from '../../../../../../.build/protocol/typescript/WebProtocolDecoder.js';
+import type { WebWorkspaceListRequest, WebWorkspaceOpenRequest, WebWorkspaceState, WebWorkspaceUpdateRequest } from '../../../../../../.build/protocol/typescript/index.js';
 
 /** Host-neutral directory selection; generated transport types stay in this adapter. */
 export interface IWebWorkspaceDirectoryList {
@@ -29,10 +20,7 @@ export interface IWebWorkspaceTransition {
 export interface IWebWorkspaceClient {
 	getInitialWorkspace?(): IWorkspace | undefined;
 	/** The authenticated server host publishes directory proofs before the UI accepts them. */
-	updateWorkspace?(
-		configuration: URI,
-		folders: readonly { readonly path: string; readonly name: string }[],
-	): Promise<IWebWorkspaceTransition>;
+	updateWorkspace?(configuration: URI, folders: readonly { readonly path: string; readonly name: string }[]): Promise<IWebWorkspaceTransition>;
 	list(path: string): Promise<IWebWorkspaceDirectoryList>;
 	authorize(path: string): Promise<() => void>;
 }
@@ -59,17 +47,8 @@ export class AppServerWebWorkspaceClient implements IWebWorkspaceClient {
 		const value = this.targetWindow.sessionStorage.getItem(this.transactionKey);
 		if (!value) return;
 		const pending: unknown = JSON.parse(value);
-		if (
-			!pending ||
-			typeof pending !== 'object' ||
-			!('transaction' in pending) ||
-			typeof pending.transaction !== 'string' ||
-			!('accepted' in pending) ||
-			typeof pending.accepted !== 'boolean'
-		)
-			throw new Error(
-				localize('workspace.invalidTransaction', 'The saved workspace transition could not be recovered.'),
-			);
+		if (!pending || typeof pending !== 'object' || !('transaction' in pending) || typeof pending.transaction !== 'string' || !('accepted' in pending) || typeof pending.accepted !== 'boolean')
+			throw new Error(localize('workspace.invalidTransaction', 'The saved workspace transition could not be recovered.'));
 		try {
 			const request: WebWorkspaceUpdateRequest = {
 				operation: 'finish',
@@ -85,10 +64,7 @@ export class AppServerWebWorkspaceClient implements IWebWorkspaceClient {
 		this.targetWindow.sessionStorage.removeItem(this.transactionKey);
 	}
 
-	async updateWorkspace(
-		configuration: URI,
-		folders: readonly { readonly path: string; readonly name: string }[],
-	): Promise<IWebWorkspaceTransition> {
+	async updateWorkspace(configuration: URI, folders: readonly { readonly path: string; readonly name: string }[]): Promise<IWebWorkspaceTransition> {
 		await this.recoverPending();
 		const transaction = crypto.randomUUID();
 		this.targetWindow.sessionStorage.setItem(this.transactionKey, JSON.stringify({ transaction, accepted: false }));
@@ -111,10 +87,7 @@ export class AppServerWebWorkspaceClient implements IWebWorkspaceClient {
 		return {
 			workspace,
 			complete: async accepted => {
-				this.targetWindow.sessionStorage.setItem(
-					this.transactionKey,
-					JSON.stringify({ transaction, accepted }),
-				);
+				this.targetWindow.sessionStorage.setItem(this.transactionKey, JSON.stringify({ transaction, accepted }));
 				const finish: WebWorkspaceUpdateRequest = { operation: 'finish', transaction, accepted };
 				try {
 					decodeWebWorkspaceState(await this.request('update', finish));
@@ -156,24 +129,12 @@ export class AppServerWebWorkspaceClient implements IWebWorkspaceClient {
 			const detail = await response.text();
 			const message =
 				response.status === 403
-					? localize(
-							'workspace.serverPermissionDenied',
-							'The server did not authorize this workspace change.',
-						)
+					? localize('workspace.serverPermissionDenied', 'The server did not authorize this workspace change.')
 					: response.status === 409
-						? localize(
-								'workspace.serverTransitionBusy',
-								'Another workspace change is still awaiting completion.',
-							)
+						? localize('workspace.serverTransitionBusy', 'Another workspace change is still awaiting completion.')
 						: response.status === 401 || response.status === 410
-							? localize(
-									'workspace.serverSessionClosed',
-									'The workspace session closed. Reopen the authenticated server link.',
-								)
-							: localize(
-									'workspace.serverRequestFailed',
-									'The server could not complete the workspace request.',
-								);
+							? localize('workspace.serverSessionClosed', 'The workspace session closed. Reopen the authenticated server link.')
+							: localize('workspace.serverRequestFailed', 'The server could not complete the workspace request.');
 			throw new WebWorkspaceHttpError(response.status, message, detail);
 		}
 		return response.json();
@@ -184,9 +145,7 @@ function workspaceFromState(state: WebWorkspaceState): IWorkspace {
 	const configuration = state.configuration ? URI.parse(state.configuration) : undefined;
 	return {
 		id: state.id,
-		...(configuration
-			? { configuration, name: basename(configuration).replace(/\.(ash|code)-workspace$/i, '') }
-			: {}),
+		...(configuration ? { configuration, name: basename(configuration).replace(/\.(ash|code)-workspace$/i, '') } : {}),
 		folders: state.folders.map((folder, index) => ({
 			id: folder.id,
 			uri: URI.file(folder.path),

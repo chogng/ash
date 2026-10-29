@@ -45,8 +45,7 @@ export function createColorTheme(options: IColorThemeOptions): IColorTheme {
 	Sizes.seal();
 	const colorScheme = options.colorScheme;
 	const baseOverrides = options.baseTheme ? themeColorOverrides.get(options.baseTheme) : undefined;
-	if (options.baseTheme && !baseOverrides)
-		throw new TypeError('Base themes must be created by the color theme factory');
+	if (options.baseTheme && !baseOverrides) throw new TypeError('Base themes must be created by the color theme factory');
 	const authored = { ...baseOverrides };
 	for (const id of options.resetColorOverrides ?? []) {
 		delete authored[id];
@@ -61,9 +60,7 @@ export function createColorTheme(options: IColorThemeOptions): IColorTheme {
 		}
 		return resolved;
 	};
-	const sizeEntries = Object.freeze(
-		Sizes.getSizes().map(entry => Object.freeze({ ...entry, value: Object.freeze({ ...entry.value }) })),
-	);
+	const sizeEntries = Object.freeze(Sizes.getSizes().map(entry => Object.freeze({ ...entry, value: Object.freeze({ ...entry.value }) })));
 	const sizeMap = new Map(sizeEntries.map(({ id, value }) => [id, value] as const));
 	const classifications = getTokenClassificationRegistry();
 	const colorMap = [''];
@@ -150,16 +147,14 @@ export function createColorTheme(options: IColorThemeOptions): IColorTheme {
 		tokenColorMap: colorMap,
 		getTokenStyleMetadata: resolveStyle,
 		defines: (id: ColorIdentifier) => Object.hasOwn(overrides, id),
-		getColor: (id: ColorIdentifier, useDefault = true) =>
-			useDefault || Object.hasOwn(overrides, id) ? (currentColors().map.get(id) ?? undefined) : undefined,
+		getColor: (id: ColorIdentifier, useDefault = true) => (useDefault || Object.hasOwn(overrides, id) ? (currentColors().map.get(id) ?? undefined) : undefined),
 		getColorCss: (id: ColorIdentifier) => {
 			const color = currentColors().map.get(id);
 			return color ? Color.Format.CSS.formatHexA(color, true) : undefined;
 		},
 		getSize: (id: string) => sizeMap.get(id),
 	};
-	if (options.semanticHighlighting !== undefined)
-		Object.assign(theme, { semanticHighlighting: options.semanticHighlighting });
+	if (options.semanticHighlighting !== undefined) Object.assign(theme, { semanticHighlighting: options.semanticHighlighting });
 	if (options.semanticTokenRules) Object.assign(theme, { semanticTokenRules: options.semanticTokenRules });
 	themeColorOverrides.set(theme, overrides);
 	return Object.freeze(theme);
@@ -174,19 +169,11 @@ function resolveThemeColors(
 	readonly map: ReadonlyMap<ColorIdentifier, Color | null>;
 	readonly colors: ThemeColors;
 } {
-	const registeredIds = allowUnregisteredColorOverrides
-		? new Set(Colors.getColors().map(color => color.id))
-		: undefined;
-	const registeredOverrides = registeredIds
-		? Object.fromEntries(Object.entries(overrides).filter(([id]) => registeredIds.has(id)))
-		: overrides;
+	const registeredIds = allowUnregisteredColorOverrides ? new Set(Colors.getColors().map(color => color.id)) : undefined;
+	const registeredOverrides = registeredIds ? Object.fromEntries(Object.entries(overrides).filter(([id]) => registeredIds.has(id))) : overrides;
 	const entries = Colors.resolve(scheme, registeredOverrides);
 	const map = new Map(entries.map(({ id, value }) => [id, value] as const));
-	const colors = Object.freeze(
-		Object.fromEntries(
-			entries.flatMap(({ id, value }) => (value ? [[id, Color.Format.CSS.formatHexA(value, true)]] : [])),
-		),
-	);
+	const colors = Object.freeze(Object.fromEntries(entries.flatMap(({ id, value }) => (value ? [[id, Color.Format.CSS.formatHexA(value, true)]] : []))));
 	return { entries, map, colors };
 }
 

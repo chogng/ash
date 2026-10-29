@@ -33,12 +33,7 @@ export class MainThreadEditorChanges {
 				}
 				const target = URI.parse(text(request.uri));
 				if (this.workingCopies.get(target).some(copy => copy.isDirty)) {
-					throw new Error(
-						localize(
-							{ bundle: 'ash.workbench', key: 'extension.editor.unsavedChanges' },
-							'The open file has unsaved changes.',
-						),
-					);
+					throw new Error(localize({ bundle: 'ash.workbench', key: 'extension.editor.unsavedChanges' }, 'The open file has unsaved changes.'));
 				}
 				const result = await this.files.save(
 					{
@@ -64,36 +59,20 @@ export class MainThreadEditorChanges {
 			.listDiffEditors()
 			.find(
 				(candidate): candidate is DiffEditorWidget =>
-					'originalEditor' in candidate &&
-					'diff' in candidate &&
-					extUriBiasedIgnorePathCase.isEqual(candidate.getModifiedEditor().getModel()?.uri, modifiedUri),
+					'originalEditor' in candidate && 'diff' in candidate && extUriBiasedIgnorePathCase.isEqual(candidate.getModifiedEditor().getModel()?.uri, modifiedUri),
 			);
-		if (
-			!editor ||
-			editor.isDisposed ||
-			!extUriBiasedIgnorePathCase.isEqual(editor.originalEditor.getModel()?.uri, originalUri)
-		) {
+		if (!editor || editor.isDisposed || !extUriBiasedIgnorePathCase.isEqual(editor.originalEditor.getModel()?.uri, originalUri)) {
 			return null;
 		}
 		const changes = editor.diff?.changes;
 		const mapping = record(context.mapping);
 		const signature = (value: unknown) =>
 			JSON.stringify(JSON.parse(JSON.stringify(value)), (_, item) =>
-				item && typeof item === 'object' && !Array.isArray(item)
-					? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b)))
-					: item,
+				item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b))) : item,
 			);
 		const whole = changes?.find(change => signature(change) === signature(mapping));
 		const selected = Array.isArray(mapping.innerChanges) ? mapping.innerChanges : [];
-		if (
-			!whole &&
-			(!selected.length ||
-				!selected.every(range =>
-					changes?.some(change =>
-						change.innerChanges?.some(candidate => signature(candidate) === signature(range)),
-					),
-				))
-		) {
+		if (!whole && (!selected.length || !selected.every(range => changes?.some(change => change.innerChanges?.some(candidate => signature(candidate) === signature(range)))))) {
 			return null;
 		}
 		const original = editor.originalEditor.getModel()!;
@@ -116,9 +95,7 @@ export class MainThreadEditorChanges {
 			const precedingBreak = atEnd && whole.modified.startLineNumber > 1;
 			const startLine = precedingBreak ? whole.modified.startLineNumber - 1 : whole.modified.startLineNumber;
 			const endLine = atEnd ? modified.getLineCount() : whole.modified.endLineNumberExclusive;
-			const replacement = original
-				.getLinesContent()
-				.slice(whole.original.startLineNumber - 1, whole.original.endLineNumberExclusive - 1);
+			const replacement = original.getLinesContent().slice(whole.original.startLineNumber - 1, whole.original.endLineNumberExclusive - 1);
 			const eol = modified.getEOL();
 			let text = replacement.join(eol);
 			if (replacement.length) {
@@ -143,30 +120,17 @@ export class MainThreadEditorChanges {
 			const range = parseRange(record(value).modifiedRange);
 			return {
 				start: Math.min(lastLine, range.startLineNumber),
-				end: Math.min(
-					lastLine,
-					range.endColumn === 1 && range.endLineNumber > range.startLineNumber
-						? range.endLineNumber - 1
-						: range.endLineNumber,
-				),
+				end: Math.min(lastLine, range.endColumn === 1 && range.endLineNumber > range.startLineNumber ? range.endLineNumber - 1 : range.endLineNumber),
 			};
 		});
-		const start = whole
-			? Math.min(lastLine, positiveInteger(lines.startLineNumber))
-			: Math.min(...selectedLines.map(range => range.start));
-		const end = whole
-			? Math.min(lastLine, Math.max(start, positiveInteger(lines.endLineNumberExclusive) - 1))
-			: Math.max(...selectedLines.map(range => range.end));
+		const start = whole ? Math.min(lastLine, positiveInteger(lines.startLineNumber)) : Math.min(...selectedLines.map(range => range.start));
+		const end = whole ? Math.min(lastLine, Math.max(start, positiveInteger(lines.endLineNumberExclusive) - 1)) : Math.max(...selectedLines.map(range => range.end));
 		const contiguous =
 			Boolean(whole) ||
 			!changes?.some(change =>
 				change.innerChanges?.some(range => {
 					const line = Math.min(lastLine, range.modifiedRange.startLineNumber);
-					return (
-						line >= start &&
-						line <= end &&
-						!selectedLines.some(selected => line >= selected.start && line <= selected.end)
-					);
+					return line >= start && line <= end && !selectedLines.some(selected => line >= selected.start && line <= selected.end);
 				}),
 			);
 		return {
@@ -203,10 +167,5 @@ function positiveInteger(value: JsonValue): number {
 }
 function parseRange(value: JsonValue): Range {
 	const range = record(value);
-	return new Range(
-		positiveInteger(range.startLineNumber),
-		positiveInteger(range.startColumn),
-		positiveInteger(range.endLineNumber),
-		positiveInteger(range.endColumn),
-	);
+	return new Range(positiveInteger(range.startLineNumber), positiveInteger(range.startColumn), positiveInteger(range.endLineNumber), positiveInteger(range.endColumn));
 }

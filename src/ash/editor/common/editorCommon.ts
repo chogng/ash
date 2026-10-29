@@ -9,15 +9,7 @@ import type { IDimension } from './core/2d/dimension.js';
 import type { IRange, Range } from './core/range.js';
 import type { IPosition, Position } from './core/position.js';
 import type { ISelection, Selection } from './core/selection.js';
-import type {
-	IModelDecoration,
-	IModelDecorationsChangeAccessor,
-	IModelDeltaDecoration,
-	ITextModel,
-	IValidEditOperation,
-	OverviewRulerLane,
-	TrackedRangeStickiness,
-} from './model.js';
+import type { IModelDecoration, IModelDecorationsChangeAccessor, IModelDeltaDecoration, ITextModel, IValidEditOperation, OverviewRulerLane, TrackedRangeStickiness } from './model.js';
 import type { IModelDecorationsChangedEvent } from './textModelEvents.js';
 
 export interface INewScrollPosition {
@@ -289,7 +281,10 @@ export interface IDecorationOptions {
 	renderOptions?: IDecorationInstanceRenderOptions;
 }
 
-export const EditorType = { ICodeEditor: 'vs.editor.ICodeEditor', IDiffEditor: 'vs.editor.IDiffEditor' };
+export const EditorType = {
+	ICodeEditor: 'vs.editor.ICodeEditor',
+	IDiffEditor: 'vs.editor.IDiffEditor',
+};
 
 export const enum Handler {
 	CompositionStart = 'compositionStart',

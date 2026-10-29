@@ -46,18 +46,11 @@ export class CursorCollection {
 	}
 
 	public getTopMostViewPosition(): Position {
-		return this.cursors.reduce(
-			(top, cursor) => (Position.compare(cursor.viewState.position, top) < 0 ? cursor.viewState.position : top),
-			this.cursors[0]!.viewState.position,
-		);
+		return this.cursors.reduce((top, cursor) => (Position.compare(cursor.viewState.position, top) < 0 ? cursor.viewState.position : top), this.cursors[0]!.viewState.position);
 	}
 
 	public getBottomMostViewPosition(): Position {
-		return this.cursors.reduce(
-			(bottom, cursor) =>
-				Position.compare(cursor.viewState.position, bottom) >= 0 ? cursor.viewState.position : bottom,
-			this.cursors[0]!.viewState.position,
-		);
+		return this.cursors.reduce((bottom, cursor) => (Position.compare(cursor.viewState.position, bottom) >= 0 ? cursor.viewState.position : bottom), this.cursors[0]!.viewState.position);
 	}
 
 	public getSelections(): Selection[] {
@@ -94,9 +87,7 @@ export class CursorCollection {
 	public normalize(): void {
 		if (this.cursors.length === 1 || !this.context.cursorConfig.multiCursorMergeOverlapping) return;
 		const cursors = [...this.cursors];
-		const sorted = cursors
-			.map((cursor, index) => ({ index, selection: cursor.modelState.selection }))
-			.sort((left, right) => Range.compareRangesUsingStarts(left.selection, right.selection));
+		const sorted = cursors.map((cursor, index) => ({ index, selection: cursor.modelState.selection })).sort((left, right) => Range.compareRangesUsingStarts(left.selection, right.selection));
 
 		for (let sortedIndex = 0; sortedIndex < sorted.length - 1; sortedIndex += 1) {
 			const current = sorted[sortedIndex]!;
@@ -113,10 +104,7 @@ export class CursorCollection {
 			const loser = sorted[loserSortedIndex]!;
 			if (!winner.selection.equalsSelection(loser.selection)) {
 				const range = winner.selection.plusRange(loser.selection);
-				const direction =
-					loser.index === this.lastAddedCursorIndex
-						? loser.selection.getDirection()
-						: winner.selection.getDirection();
+				const direction = loser.index === this.lastAddedCursorIndex ? loser.selection.getDirection() : winner.selection.getDirection();
 				winner.selection = Selection.fromRange(range, direction);
 				const state = CursorState.fromModelSelection(winner.selection);
 				cursors[winner.index]!.setState(this.context, state.modelState, state.viewState);

@@ -9,12 +9,7 @@ import { ICodeEditorService } from '../../../../editor/browser/services/codeEdit
 import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { localize, localize2 } from '../../../../nls.js';
-import {
-	IDebugService,
-	OPEN_DISASSEMBLY_VIEW_COMMAND_ID,
-	BREAKPOINT_EDITOR_CONTRIBUTION_ID,
-	BreakpointWidgetContext,
-} from '../common/debug.js';
+import { IDebugService, OPEN_DISASSEMBLY_VIEW_COMMAND_ID, BREAKPOINT_EDITOR_CONTRIBUTION_ID, BreakpointWidgetContext } from '../common/debug.js';
 import type { BreakpointEditorContribution } from './breakpointEditorContribution.js';
 import { DisassemblyViewInput } from '../common/disassemblyViewInput.js';
 import { SubmenuAction } from '../../../../base/common/actions.js';
@@ -31,9 +26,7 @@ registerAction2(
 		public override async run(accessor: ServicesAccessor): Promise<void> {
 			const session = accessor.get(IDebugService).session;
 			if (!session?.capabilities.supportsDisassembleRequest) {
-				throw new Error(
-					localize('debug.disassemblyUnsupported', 'The debug adapter does not support disassembly.'),
-				);
+				throw new Error(localize('debug.disassemblyUnsupported', 'The debug adapter does not support disassembly.'));
 			}
 			if (session.state !== 'stopped') {
 				throw new Error(localize('debug.disassemblyRequiresPause', 'Pause debugging to view disassembly.'));
@@ -61,16 +54,7 @@ registerAction2(
 			const editor = editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor();
 			const model = editor?.getModel();
 			const position = editor?.getPosition();
-			if (
-				model &&
-				position &&
-				canSetBreakpointsIn(
-					model.getLanguageId(),
-					accessor.get(IExtensionService),
-					accessor.get(IConfigurationService),
-					accessor.get(IContextKeyService),
-				)
-			) {
+			if (model && position && canSetBreakpointsIn(model.getLanguageId(), accessor.get(IExtensionService), accessor.get(IConfigurationService), accessor.get(IContextKeyService))) {
 				accessor.get(IDebugService).toggleBreakpoint(model.uri, position.lineNumber);
 			}
 		}
@@ -109,27 +93,14 @@ for (const action of [
 				const editor = editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor();
 				const model = editor?.getModel();
 				const position = editor?.getPosition();
-				const contribution = editor?.getContribution<BreakpointEditorContribution>(
-					BREAKPOINT_EDITOR_CONTRIBUTION_ID,
-				);
+				const contribution = editor?.getContribution<BreakpointEditorContribution>(BREAKPOINT_EDITOR_CONTRIBUTION_ID);
 				if (!model || !position || !contribution) return;
-				const points = accessor
-					.get(IDebugService)
-					.breakpoints.filter(
-						point =>
-							point.resource.toString() === model.uri.toString() &&
-							point.lineNumber === position.lineNumber,
-					);
-				const point =
-					points.find(point => point.columnNumber === position.column) ??
-					points.find(point => point.columnNumber === undefined) ??
-					points[0];
+				const points = accessor.get(IDebugService).breakpoints.filter(point => point.resource.toString() === model.uri.toString() && point.lineNumber === position.lineNumber);
+				const point = points.find(point => point.columnNumber === position.column) ?? points.find(point => point.columnNumber === undefined) ?? points[0];
 				if (action.id === 'editor.debug.action.moveBreakpoint') {
 					const actions = contribution.getContextMenuActionsAtPosition(position.lineNumber, model);
 					const submenu = actions.find(action => action.id === point?.id);
-					await (submenu instanceof SubmenuAction ? submenu.actions : actions)
-						.find(action => action.id === 'debug.moveBreakpoint')
-						?.run();
+					await (submenu instanceof SubmenuAction ? submenu.actions : actions).find(action => action.id === 'debug.moveBreakpoint')?.run();
 				} else if (point || action.id !== 'editor.debug.action.editBreakpoint') {
 					contribution.showBreakpointWidget(position.lineNumber, point?.columnNumber, action.context);
 				}

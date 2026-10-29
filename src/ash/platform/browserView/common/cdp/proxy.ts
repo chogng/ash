@@ -2,16 +2,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
-import {
-	CDPError,
-	CDPInvalidParamsError,
-	CDPMethodNotFoundError,
-	type CDPEvent,
-	type CDPRequest,
-	type CDPResponse,
-	type CDPTargetInfo,
-	type ICDPBrowserHost,
-} from './types.js';
+import { CDPError, CDPInvalidParamsError, CDPMethodNotFoundError, type CDPEvent, type CDPRequest, type CDPResponse, type CDPTargetInfo, type ICDPBrowserHost } from './types.js';
 
 type Session =
 	| { type: 'browser'; parent?: string }
@@ -42,11 +33,7 @@ export class CDPBrowserProxy extends Disposable {
 					case 'created':
 					case 'changed':
 						for (const parent of this.discover) {
-							this.event(
-								event.type === 'created' ? 'Target.targetCreated' : 'Target.targetInfoChanged',
-								{ targetInfo: this.info(event.targetInfo) },
-								parent,
-							);
+							this.event(event.type === 'created' ? 'Target.targetCreated' : 'Target.targetInfoChanged', { targetInfo: this.info(event.targetInfo) }, parent);
 						}
 						if (event.type === 'created') {
 							for (const parent of this.autoAttach) {
@@ -56,11 +43,7 @@ export class CDPBrowserProxy extends Disposable {
 						break;
 					case 'destroyed':
 						for (const [id, session] of [...this.sessions]) {
-							if (
-								session.type === 'page' &&
-								session.targetId === event.targetId &&
-								this.sessions.has(id)
-							) {
+							if (session.type === 'page' && session.targetId === event.targetId && this.sessions.has(id)) {
 								this.detach(id);
 							}
 						}
@@ -77,32 +60,16 @@ export class CDPBrowserProxy extends Disposable {
 	}
 
 	private info(target: CDPTargetInfo): CDPTargetInfo {
-		const attached = [...this.sessions.values()].some(
-			session =>
-				session.type === 'page' &&
-				(session.targetId === target.targetId || session.childTargetId === target.targetId),
-		);
+		const attached = [...this.sessions.values()].some(session => session.type === 'page' && (session.targetId === target.targetId || session.childTargetId === target.targetId));
 		return { ...target, attached };
 	}
 
 	private attach(targetId: string, parent?: string, automatic = false): string {
-		const child = [...this.sessions.values()].find(
-			session => session.type === 'page' && session.childTargetId === targetId,
-		);
-		const target =
-			child?.type === 'page' && child.childTargetInfo ? child.childTargetInfo : this.host.getTargetInfo(targetId);
+		const child = [...this.sessions.values()].find(session => session.type === 'page' && session.childTargetId === targetId);
+		const target = child?.type === 'page' && child.childTargetInfo ? child.childTargetInfo : this.host.getTargetInfo(targetId);
 		const sessionId = generateUuid();
-		this.sessions.set(
-			sessionId,
-			child?.type === 'page'
-				? { ...child, parent, autoAttach: false, automatic }
-				: { type: 'page', targetId: target.targetId, parent, autoAttach: false, automatic },
-		);
-		this.event(
-			'Target.attachedToTarget',
-			{ sessionId, targetInfo: this.info(target), waitingForDebugger: false },
-			parent,
-		);
+		this.sessions.set(sessionId, child?.type === 'page' ? { ...child, parent, autoAttach: false, automatic } : { type: 'page', targetId: target.targetId, parent, autoAttach: false, automatic });
+		this.event('Target.attachedToTarget', { sessionId, targetInfo: this.info(target), waitingForDebugger: false }, parent);
 		return sessionId;
 	}
 
@@ -121,11 +88,7 @@ export class CDPBrowserProxy extends Disposable {
 			}
 		}
 		if (session.type === 'page') {
-			this.event(
-				'Target.detachedFromTarget',
-				{ sessionId: id, targetId: session.childTargetId ?? session.targetId },
-				session.parent,
-			);
+			this.event('Target.detachedFromTarget', { sessionId: id, targetId: session.childTargetId ?? session.targetId }, session.parent);
 		}
 	}
 
@@ -141,12 +104,7 @@ export class CDPBrowserProxy extends Disposable {
 				continue;
 			}
 			if (event.method === 'Target.attachedToTarget' && isRecord(event.params)) {
-				if (
-					!session.autoAttach ||
-					typeof event.params.sessionId !== 'string' ||
-					!isRecord(event.params.targetInfo) ||
-					typeof event.params.targetInfo.targetId !== 'string'
-				) {
+				if (!session.autoAttach || typeof event.params.sessionId !== 'string' || !isRecord(event.params.targetInfo) || typeof event.params.targetInfo.targetId !== 'string') {
 					continue;
 				}
 				// Route commands through the owning page, but retire the actual child target.
@@ -164,11 +122,7 @@ export class CDPBrowserProxy extends Disposable {
 				this.event(event.method, { ...event.params, sessionId: childId }, id);
 			} else if (event.method === 'Target.detachedFromTarget' && isRecord(event.params)) {
 				for (const [childId, child] of [...this.sessions]) {
-					if (
-						child.type === 'page' &&
-						child.targetId === targetId &&
-						child.actual === event.params.sessionId
-					) {
+					if (child.type === 'page' && child.targetId === targetId && child.actual === event.params.sessionId) {
 						this.detach(childId);
 					}
 				}
@@ -217,25 +171,16 @@ export class CDPBrowserProxy extends Disposable {
 			return this.host.getVersion();
 		}
 		if (method === 'Target.getTargetInfo') {
-			const targetId =
-				params.targetId ?? (session?.type === 'page' ? (session.childTargetId ?? session.targetId) : undefined);
-			const child = [...this.sessions.values()].find(
-				value => value.type === 'page' && value.childTargetId === targetId,
-			);
+			const targetId = params.targetId ?? (session?.type === 'page' ? (session.childTargetId ?? session.targetId) : undefined);
+			const child = [...this.sessions.values()].find(value => value.type === 'page' && value.childTargetId === targetId);
 			const targetInfo =
 				targetId === undefined
 					? this.host.targetInfo
-					: this.info(
-							child?.type === 'page' && child.childTargetInfo
-								? child.childTargetInfo
-								: this.host.getTargetInfo(stringParam(targetId, 'targetId')),
-						);
+					: this.info(child?.type === 'page' && child.childTargetInfo ? child.childTargetInfo : this.host.getTargetInfo(stringParam(targetId, 'targetId')));
 			return { targetInfo };
 		}
 		if (method === 'Browser.getWindowForTarget') {
-			return this.host.getWindowForTarget(
-				stringParam(params.targetId ?? (session?.type === 'page' ? session.targetId : undefined), 'targetId'),
-			);
+			return this.host.getWindowForTarget(stringParam(params.targetId ?? (session?.type === 'page' ? session.targetId : undefined), 'targetId'));
 		}
 		if (browser || (method.startsWith('Target.') && method !== 'Target.setAutoAttach')) {
 			switch (method) {
@@ -265,13 +210,7 @@ export class CDPBrowserProxy extends Disposable {
 					if (booleanParam(params.autoAttach, 'autoAttach')) {
 						this.autoAttach.add(parent);
 						for (const target of this.host.getTargets()) {
-							const attached = [...this.sessions.values()].some(
-								value =>
-									value.type === 'page' &&
-									value.targetId === target.targetId &&
-									value.parent === parent &&
-									value.automatic,
-							);
+							const attached = [...this.sessions.values()].some(value => value.type === 'page' && value.targetId === target.targetId && value.parent === parent && value.automatic);
 							if (!attached) {
 								this.attach(target.targetId, parent, true);
 							}
@@ -279,12 +218,7 @@ export class CDPBrowserProxy extends Disposable {
 					} else {
 						this.autoAttach.delete(parent);
 						for (const [id, value] of [...this.sessions]) {
-							if (
-								value.type === 'page' &&
-								value.parent === parent &&
-								value.automatic &&
-								this.sessions.has(id)
-							) {
+							if (value.type === 'page' && value.parent === parent && value.automatic && this.sessions.has(id)) {
 								this.detach(id);
 							}
 						}
@@ -310,10 +244,7 @@ export class CDPBrowserProxy extends Disposable {
 					this.host.activateTarget(stringParam(params.targetId, 'targetId'));
 					return {};
 				case 'Target.createTarget': {
-					const contextId =
-						params.browserContextId === undefined
-							? undefined
-							: stringParam(params.browserContextId, 'browserContextId');
+					const contextId = params.browserContextId === undefined ? undefined : stringParam(params.browserContextId, 'browserContextId');
 					const target = await this.host.createTarget(stringParam(params.url, 'url'), contextId);
 					return {
 						targetId: target.targetId,

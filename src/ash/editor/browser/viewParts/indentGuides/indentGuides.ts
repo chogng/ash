@@ -4,10 +4,7 @@ import { EditorOption, type InternalGuidesOptions } from '../../../common/config
 import { Position } from '../../../common/core/position.js';
 import { HorizontalGuidesState, type IndentGuide } from '../../../common/textModelGuides.js';
 import { type IViewModel, type TextMeasurer } from '../../../common/viewModel.js';
-import {
-	type EditorVisualLine,
-	type EditorVisualLineProjection,
-} from '../../../common/viewModel/modelLineProjection.js';
+import { type EditorVisualLine, type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
 import { type RenderingContext } from '../../view/renderingContext.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
@@ -96,20 +93,14 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 	public prepareRender(context: RenderingContext): void {
 		const bracketGuides = this.resolveBracketGuides(context);
 		const { startLineNumber, endLineNumber } = context.viewportData;
-		const indentation = this.guides.indentation
-			? this.viewModel.getLinesIndentGuides(startLineNumber, endLineNumber)
-			: [];
+		const indentation = this.guides.indentation ? this.viewModel.getLinesIndentGuides(startLineNumber, endLineNumber) : [];
 		if (!indentation.some(depth => depth > 0) && !bracketGuides.some(guides => guides.length > 0)) {
 			this._renderResult = [];
 			return;
 		}
 		const activeIndentation =
 			this.guides.indentation && this.guides.highlightActiveIndentation !== false
-				? this.viewModel.getActiveIndentGuide(
-						this.viewModel.getPrimaryCursorState().viewState.position.lineNumber,
-						startLineNumber,
-						endLineNumber,
-					)
+				? this.viewModel.getActiveIndentGuide(this.viewModel.getPrimaryCursorState().viewState.position.lineNumber, startLineNumber, endLineNumber)
 				: undefined;
 		const { indentSize } = this.viewModel.model.getOptions();
 		const projection = this.readVisualProjection();
@@ -121,16 +112,7 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 				if (!visualLine) continue;
 				const bracketColumns = new Set<number>();
 				for (const guide of bracketGuides[visualLineIndex + 1 - startLineNumber] ?? []) {
-					if (
-						this.appendBracketGuide(
-							row,
-							visualLine,
-							context.viewportData.lineHeight,
-							guide,
-							textLeft,
-							measureLineWidth,
-						)
-					) {
+					if (this.appendBracketGuide(row, visualLine, context.viewportData.lineHeight, guide, textLeft, measureLineWidth)) {
 						bracketColumns.add(guide.visibleColumn);
 					}
 				}
@@ -150,12 +132,7 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 						element.className = 'core-guide stanza-editor-indent-guide';
 						element.dataset.indentLevel = String(level);
 						element.style.left = `${textLeft + offset}px`;
-						if (
-							highlight &&
-							activeIndentation?.indent === level &&
-							activeIndentation.startLineNumber <= lineNumber &&
-							lineNumber <= activeIndentation.endLineNumber
-						) {
+						if (highlight && activeIndentation?.indent === level && activeIndentation.startLineNumber <= lineNumber && lineNumber <= activeIndentation.endLineNumber) {
 							element.classList.add('active');
 						}
 						row.append(element);
@@ -191,14 +168,7 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 		);
 	}
 
-	private appendBracketGuide(
-		row: HTMLElement,
-		visualLine: EditorVisualLine,
-		lineHeight: number,
-		guide: IndentGuide,
-		textLeft: number,
-		measureLineWidth: (text: string) => number,
-	): boolean {
+	private appendBracketGuide(row: HTMLElement, visualLine: EditorVisualLine, lineHeight: number, guide: IndentGuide, textLeft: number, measureLineWidth: (text: string) => number): boolean {
 		if (guide.visibleColumn < 1) {
 			return false;
 		}
@@ -208,10 +178,7 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 		}
 		const left = textLeft + offset;
 		const text = this.viewModel.model.getLineContent(visualLine.logicalLineIndex + 1);
-		const bracketLeft = (column: number): number =>
-			textLeft +
-			(visualLine.wrappedTextIndentWidth ?? 0) +
-			measureLineWidth(text.slice(visualLine.startColumn, column));
+		const bracketLeft = (column: number): number => textLeft + (visualLine.wrappedTextIndentWidth ?? 0) + measureLineWidth(text.slice(visualLine.startColumn, column));
 		if (guide.horizontalLine) {
 			const endColumn = guide.horizontalLine.endColumn - 1;
 			if (endColumn < visualLine.startColumn || endColumn >= visualLine.endColumn) {
@@ -240,10 +207,8 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 		if (closingColumnIndex >= 0 && visualLine.startColumn > closingColumnIndex) {
 			return false;
 		}
-		const openingVisualLine =
-			openingColumnIndex >= visualLine.startColumn && openingColumnIndex < visualLine.endColumn;
-		const closingVisualLine =
-			closingColumnIndex >= visualLine.startColumn && closingColumnIndex < visualLine.endColumn;
+		const openingVisualLine = openingColumnIndex >= visualLine.startColumn && openingColumnIndex < visualLine.endColumn;
+		const closingVisualLine = closingColumnIndex >= visualLine.startColumn && closingColumnIndex < visualLine.endColumn;
 		const openingLeft = openingVisualLine ? bracketLeft(openingColumnIndex) : left;
 		const top = openingVisualLine ? (openingLeft > left ? lineHeight - 1 : lineHeight / 2) : 0;
 		let bottom = 0;

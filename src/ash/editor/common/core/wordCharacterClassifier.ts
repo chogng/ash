@@ -95,10 +95,7 @@ export interface IntlWordSegmentData extends Intl.SegmentData {
 
 const wordClassifierCache = new LRUCache<string, WordCharacterClassifier>(10);
 
-export function getMapForWordSeparators(
-	wordSeparators: string,
-	intlSegmenterLocales: Intl.UnicodeBCP47LocaleIdentifier[],
-): WordCharacterClassifier {
+export function getMapForWordSeparators(wordSeparators: string, intlSegmenterLocales: Intl.UnicodeBCP47LocaleIdentifier[]): WordCharacterClassifier {
 	const key = `${wordSeparators}/${intlSegmenterLocales.join(',')}`;
 	let result = wordClassifierCache.get(key)!;
 	if (!result) {

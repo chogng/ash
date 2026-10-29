@@ -9,7 +9,9 @@ import { EditorOption } from '../common/config/editorOptions.js';
 import { ICodeEditorService } from './services/codeEditorService.js';
 import { type View } from './view.js';
 
-export const EditorCoreCommandId = Object.freeze({ selectAll: 'editor.action.selectAll' });
+export const EditorCoreCommandId = Object.freeze({
+	selectAll: 'editor.action.selectAll',
+});
 
 SelectAllCommand.addImplementation(100, 'code-editor', accessor => {
 	const editors = accessor.get(ICodeEditorService);
@@ -76,9 +78,7 @@ export function selectAll(context: CoreTextEditorCommandContext): void {
 	if (context.model !== context.viewport.textModel || context.model !== context.viewModel.model) {
 		throw new TypeError('Editor core command dependencies must share one text model');
 	}
-	context.viewModel.setCursorStates('keyboard', CursorChangeReason.Explicit, [
-		CursorMoveCommands.selectAll(context.viewModel, context.viewModel.getPrimaryCursorState()),
-	]);
+	context.viewModel.setCursorStates('keyboard', CursorChangeReason.Explicit, [CursorMoveCommands.selectAll(context.viewModel, context.viewModel.getPrimaryCursorState())]);
 	context.viewport.revealPosition(context.viewModel.getPrimaryCursorState().modelState.position);
 }
 

@@ -42,7 +42,11 @@ test('ViewModel selects the configured wrapping strategy and recomputes when it 
 		EditorConfiguration,
 		false,
 		MenuId.EditorContext,
-		{ wordWrap: 'wordWrapColumn', wordWrapColumn: 4, wrappingStrategy: 'simple' },
+		{
+			wordWrap: 'wordWrapColumn',
+			wordWrapColumn: 4,
+			wrappingStrategy: 'simple',
+		},
 		container,
 	);
 	using languages = createTestLanguageConfigurationService();
@@ -91,7 +95,12 @@ test('viewport wrapping waits for available text width and preserves coordinates
 		EditorConfiguration,
 		false,
 		MenuId.EditorContext,
-		{ dimension: { width: 0, height: 120 }, wordWrap: 'on', minimap: { enabled: false }, lineNumbers: 'off' },
+		{
+			dimension: { width: 0, height: 120 },
+			wordWrap: 'on',
+			minimap: { enabled: false },
+			lineNumbers: 'off',
+		},
 		container,
 	);
 	using languages = createTestLanguageConfigurationService();
@@ -99,18 +108,7 @@ test('viewport wrapping waits for available text width and preserves coordinates
 	using model = new TextModel(text, { languageConfigurationService: languages });
 	using theme = new TestThemeService(darkColorTheme);
 	const factory = MonospaceLineBreaksComputerFactory.create(configuration.options);
-	using viewModel = new ViewModel(
-		1,
-		configuration,
-		model,
-		factory,
-		factory,
-		() => Disposable.None,
-		languages,
-		theme,
-		{ setVisibleLines: () => {} },
-		{ batchChanges: callback => callback() },
-	);
+	using viewModel = new ViewModel(1, configuration, model, factory, factory, () => Disposable.None, languages, theme, { setVisibleLines: () => {} }, { batchChanges: callback => callback() });
 	const selection = new Selection(2, 10, 2, 10);
 	viewModel.setSelections('test', [selection], CursorChangeReason.Explicit);
 	const assertCoordinates = (): void => {
@@ -127,11 +125,7 @@ test('viewport wrapping waits for available text width and preserves coordinates
 	configuration.observeContainer({ width: 0, height: 120 });
 	assert.equal(viewModel.getLineCount(), model.getLineCount());
 	model.pushStackElement();
-	model.pushEditOperations(
-		viewModel.getSelections(),
-		[{ range: new Range(3, 1, 3, 1), text: 'edit 😀\n' }],
-		() => null,
-	);
+	model.pushEditOperations(viewModel.getSelections(), [{ range: new Range(3, 1, 3, 1), text: 'edit 😀\n' }], () => null);
 	model.pushStackElement();
 	assert.equal(viewModel.getLineCount(), model.getLineCount());
 	assertCoordinates();
@@ -212,18 +206,7 @@ test('minimap configuration follows visible lines through folding, wrapping, tab
 	});
 	using theme = new TestThemeService(darkColorTheme);
 	const factory = MonospaceLineBreaksComputerFactory.create(configuration.options);
-	using viewModel = new ViewModel(
-		1,
-		configuration,
-		model,
-		factory,
-		factory,
-		() => Disposable.None,
-		languages,
-		theme,
-		{ setVisibleLines: () => {} },
-		{ batchChanges: callback => callback() },
-	);
+	using viewModel = new ViewModel(1, configuration, model, factory, factory, () => Disposable.None, languages, theme, { setVisibleLines: () => {} }, { batchChanges: callback => callback() });
 	const states: Array<{ lines: number; height: number; sampling: boolean }> = [];
 	const read = (): void => {
 		const minimap = configuration.options.get(EditorOption.layoutInfo).minimap;
@@ -269,7 +252,10 @@ test('ViewModel owns line projection, cursor, layout, and visible-line publicati
 		EditorConfiguration,
 		false,
 		MenuId.EditorContext,
-		{ dimension: { width: 200, height: 40 }, lineHeight: 20 },
+		{
+			dimension: { width: 200, height: 40 },
+			lineHeight: 20,
+		},
 		container,
 	);
 	using languages = createTestLanguageConfigurationService();
@@ -306,9 +292,7 @@ test('ViewModel owns line projection, cursor, layout, and visible-line publicati
 	assert.equal(viewModel.viewLayout.getScrollHeight(), 60);
 	assert.deepEqual(viewModel.getPrimaryCursorState().modelState.position, new Position(1, 1));
 
-	viewModel.setCursorStates('test', CursorChangeReason.Explicit, [
-		CursorState.fromModelSelection(new Selection(3, 2, 3, 2)),
-	]);
+	viewModel.setCursorStates('test', CursorChangeReason.Explicit, [CursorState.fromModelSelection(new Selection(3, 2, 3, 2))]);
 	assert.deepEqual(viewModel.getPrimaryCursorState().modelState.position, new Position(3, 2));
 	assert.deepEqual(outgoingCursorSources, ['test']);
 	assert.equal(captured.cursorEvents.length, 1);
@@ -353,7 +337,12 @@ test('ViewModel owns line projection, cursor, layout, and visible-line publicati
 	assert.equal(viewModel.getLineCount(), 2);
 	assert.equal(viewModel.getLineContent(2), 'three');
 	assert.deepEqual(viewModel.getVisibleRanges(), [new Range(1, 1, 1, 4), new Range(3, 1, 3, 6)]);
-	model.applyEdits([{ range: Range.fromPositions(new Position(1, 4)), text: '!' }]);
+	model.applyEdits([
+		{
+			range: Range.fromPositions(new Position(1, 4)),
+			text: '!',
+		},
+	]);
 	assert.equal(viewModel.getLineContent(1), 'one!');
 	viewModel.visibleLinesStabilized();
 	assert.deepEqual(
@@ -371,29 +360,12 @@ test('ViewModel preserves cursor markers across structural edits and resets them
 	using cleanup = toDisposable(() => dom.window.close());
 	using resources = new DisposableStore();
 	const services = createConfigurationServices(resources, container);
-	using configuration = services.createInstance(
-		EditorConfiguration,
-		false,
-		MenuId.EditorContext,
-		{ dimension: { width: 200, height: 40 } },
-		container,
-	);
+	using configuration = services.createInstance(EditorConfiguration, false, MenuId.EditorContext, { dimension: { width: 200, height: 40 } }, container);
 	using languages = createTestLanguageConfigurationService();
 	using model = new TextModel('one\ntwo', { languageConfigurationService: languages });
 	using theme = new TestThemeService(darkColorTheme);
 	const factory = MonospaceLineBreaksComputerFactory.create(configuration.options);
-	using viewModel = new ViewModel(
-		1,
-		configuration,
-		model,
-		factory,
-		factory,
-		() => Disposable.None,
-		languages,
-		theme,
-		{ setVisibleLines: () => {} },
-		{ batchChanges: callback => callback() },
-	);
+	using viewModel = new ViewModel(1, configuration, model, factory, factory, () => Disposable.None, languages, theme, { setVisibleLines: () => {} }, { batchChanges: callback => callback() });
 	using captured = new CapturedViewEvents();
 	viewModel.addViewEventHandler(captured);
 	using detachCaptured = toDisposable(() => viewModel.removeViewEventHandler(captured));
@@ -401,11 +373,7 @@ test('ViewModel preserves cursor markers across structural edits and resets them
 	using listener = viewModel.onEvent(event => {
 		if (event instanceof CursorStateChangedEvent) outgoing.push(event);
 	});
-	viewModel.setSelections(
-		'test',
-		[new Selection(1, 2, 1, 2), new Selection(2, 2, 2, 2)],
-		CursorChangeReason.Explicit,
-	);
+	viewModel.setSelections('test', [new Selection(1, 2, 1, 2), new Selection(2, 2, 2, 2)], CursorChangeReason.Explicit);
 	outgoing.length = 0;
 	captured.cursorEvents.length = 0;
 
@@ -432,9 +400,7 @@ test('ViewModel preserves cursor markers across structural edits and resets them
 	assert.deepEqual(
 		{
 			selections: viewModel.getSelections(),
-			flushViewReasons: captured.cursorEvents
-				.map(event => event.reason)
-				.filter(reason => reason === CursorChangeReason.ContentFlush),
+			flushViewReasons: captured.cursorEvents.map(event => event.reason).filter(reason => reason === CursorChangeReason.ContentFlush),
 			outgoingReasons: outgoing.map(event => event.reason),
 		},
 		{

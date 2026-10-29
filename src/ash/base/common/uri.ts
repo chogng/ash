@@ -203,10 +203,7 @@ export class URI {
 		}
 		if (strict && !components.scheme) throw new TypeError('URI scheme is missing');
 		const scheme = components.scheme || 'file';
-		const path =
-			scheme === 'file' && !components.path?.startsWith('/')
-				? `/${components.path ?? ''}`
-				: (components.path ?? '');
+		const path = scheme === 'file' && !components.path?.startsWith('/') ? `/${components.path ?? ''}` : (components.path ?? '');
 		let value = `${scheme}:`;
 		if (components.authority || scheme === 'file') {
 			value += `//${components.authority ?? ''}`;
@@ -237,28 +234,14 @@ export class URI {
 	}
 
 	/** Returns a URI with the specified decoded components changed. */
-	with(change: {
-		scheme?: string;
-		authority?: string | null;
-		path?: string | null;
-		query?: string | null;
-		fragment?: string | null;
-	}): URI {
+	with(change: { scheme?: string; authority?: string | null; path?: string | null; query?: string | null; fragment?: string | null }): URI {
 		const scheme = change.scheme === undefined ? this.scheme : change.scheme;
 		const authority = change.authority === undefined ? this.authority : (change.authority ?? '');
 		const path = change.path === undefined ? this.path : (change.path ?? '');
 		const query = change.query === undefined ? this.query : (change.query ?? '');
 		const fragment = change.fragment === undefined ? this.fragment : (change.fragment ?? '');
-		if (
-			scheme === this.scheme &&
-			authority === this.authority &&
-			path === this.path &&
-			query === this.query &&
-			fragment === this.fragment
-		)
-			return this;
-		if (authority && path && !path.startsWith('/'))
-			throw new TypeError('URI paths with an authority must start with /');
+		if (scheme === this.scheme && authority === this.authority && path === this.path && query === this.query && fragment === this.fragment) return this;
+		if (authority && path && !path.startsWith('/')) throw new TypeError('URI paths with an authority must start with /');
 
 		const encoded = this.toEncodedComponents();
 		let value = `${scheme}:`;
@@ -285,10 +268,7 @@ export class URI {
 
 		// A drive or UNC share is the filesystem root; '..' must not remove that URI segment.
 		const firstSegment = uri.url.pathname.split('/')[1] ?? '';
-		const root =
-			firstSegment && (uri.authority || /^[A-Za-z]:$/.test(decodeURIComponent(firstSegment)))
-				? `/${firstSegment}`
-				: '';
+		const root = firstSegment && (uri.authority || /^[A-Za-z]:$/.test(decodeURIComponent(firstSegment))) ? `/${firstSegment}` : '';
 		const path = paths.joinPath(uri.url.pathname.slice(root.length) || '/', ...encodedFragments);
 		const lastFragment = encodedFragments.filter(fragment => fragment.length > 0).at(-1) ?? uri.url.pathname;
 		const joinedPath = path === '/' || lastFragment.endsWith('/') ? path : path.replace(/\/$/u, '');
@@ -308,9 +288,7 @@ export class URI {
 		if (isWindows && this.scheme === 'file' && (name === '.' || name === '..')) {
 			return URI.joinPath(this, name);
 		}
-		return this.withEncodedPath(
-			paths.joinPath(this.url.pathname, name === '.' || name === '..' ? name : encodeURIComponent(name)),
-		);
+		return this.withEncodedPath(paths.joinPath(this.url.pathname, name === '.' || name === '..' ? name : encodeURIComponent(name)));
 	}
 
 	toString(skipEncoding = false): string {
@@ -346,8 +324,7 @@ function uriToFsPath(uri: URI): string {
 	const hasDriveLetter =
 		path.length >= 3 &&
 		path.charCodeAt(0) === CharCode.Slash &&
-		((path.charCodeAt(1) >= CharCode.A && path.charCodeAt(1) <= CharCode.Z) ||
-			(path.charCodeAt(1) >= CharCode.a && path.charCodeAt(1) <= CharCode.z)) &&
+		((path.charCodeAt(1) >= CharCode.A && path.charCodeAt(1) <= CharCode.Z) || (path.charCodeAt(1) >= CharCode.a && path.charCodeAt(1) <= CharCode.z)) &&
 		path.charCodeAt(2) === CharCode.Colon;
 	if (!hasDriveLetter) {
 		return isWindows ? path.replaceAll('/', '\\') : path;

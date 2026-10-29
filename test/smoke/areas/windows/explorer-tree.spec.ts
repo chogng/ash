@@ -6,39 +6,35 @@ import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
-test(
-	'Explorer resumes Rust filesystem updates after a watched directory is recreated',
-	{ tag: ['@electron-app-server'] },
-	async ({ testWorkspace, workbench }) => {
-		const page = workbench.page;
-		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
-		if (await showSidebar.isVisible()) await showSidebar.click();
-		const explorerTab = page.getByRole('tab', { name: 'Explorer', exact: true }).first();
-		if ((await explorerTab.getAttribute('aria-selected')) !== 'true') await explorerTab.click();
-		const explorer = page.locator('.ash-explorer');
-		await expect(explorer).toBeVisible();
-		const entry = (name: string) => explorer.getByText(name, { exact: true });
-		const root = join(testWorkspace.directory, 'watch-rebuild');
-		const folder = explorer.getByRole('treeitem').filter({ has: page.getByText('watch-rebuild', { exact: true }) });
-		await mkdir(root);
-		await writeFile(join(root, 'before-recreation.txt'), 'before');
-		await expect(folder).toBeVisible();
-		await folder.locator('.ash-tree-twistie').click();
-		await expect(entry('before-recreation.txt')).toBeVisible();
-		await rm(root, { recursive: true });
-		await expect(folder).toHaveCount(0);
-		await mkdir(root);
-		await writeFile(join(root, 'after-recreation.txt'), 'restored');
-		await expect(folder).toBeVisible();
-		if ((await folder.getAttribute('aria-expanded')) !== 'true') await folder.locator('.ash-tree-twistie').click();
-		await expect(entry('after-recreation.txt')).toBeVisible();
-		await expect(entry('before-recreation.txt')).toHaveCount(0);
-		await writeFile(join(root, 'later-update.txt'), 'later');
-		await expect(entry('later-update.txt')).toBeVisible();
-		await entry('later-update.txt').dblclick();
-		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'later-update.txt' })).toBeVisible();
-	},
-);
+test('Explorer resumes Rust filesystem updates after a watched directory is recreated', { tag: ['@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
+	const page = workbench.page;
+	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+	if (await showSidebar.isVisible()) await showSidebar.click();
+	const explorerTab = page.getByRole('tab', { name: 'Explorer', exact: true }).first();
+	if ((await explorerTab.getAttribute('aria-selected')) !== 'true') await explorerTab.click();
+	const explorer = page.locator('.ash-explorer');
+	await expect(explorer).toBeVisible();
+	const entry = (name: string) => explorer.getByText(name, { exact: true });
+	const root = join(testWorkspace.directory, 'watch-rebuild');
+	const folder = explorer.getByRole('treeitem').filter({ has: page.getByText('watch-rebuild', { exact: true }) });
+	await mkdir(root);
+	await writeFile(join(root, 'before-recreation.txt'), 'before');
+	await expect(folder).toBeVisible();
+	await folder.locator('.ash-tree-twistie').click();
+	await expect(entry('before-recreation.txt')).toBeVisible();
+	await rm(root, { recursive: true });
+	await expect(folder).toHaveCount(0);
+	await mkdir(root);
+	await writeFile(join(root, 'after-recreation.txt'), 'restored');
+	await expect(folder).toBeVisible();
+	if ((await folder.getAttribute('aria-expanded')) !== 'true') await folder.locator('.ash-tree-twistie').click();
+	await expect(entry('after-recreation.txt')).toBeVisible();
+	await expect(entry('before-recreation.txt')).toHaveCount(0);
+	await writeFile(join(root, 'later-update.txt'), 'later');
+	await expect(entry('later-update.txt')).toBeVisible();
+	await entry('later-update.txt').dblclick();
+	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'later-update.txt' })).toBeVisible();
+});
 
 test.describe('Git ignore decorations', () => {
 	test.use({ gitRepository: true });
@@ -60,12 +56,8 @@ test.describe('Git ignore decorations', () => {
 			const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
 			if (await showSidebar.isVisible()) await showSidebar.click();
 			const explorer = page.locator('.ash-explorer');
-			const ignored = explorer
-				.locator('.ash-icon-label')
-				.filter({ has: page.getByText('ignored.log', { exact: true }) });
-			const folder = explorer
-				.getByRole('treeitem')
-				.filter({ has: page.getByText('ignored-dir', { exact: true }) });
+			const ignored = explorer.locator('.ash-icon-label').filter({ has: page.getByText('ignored.log', { exact: true }) });
+			const folder = explorer.getByRole('treeitem').filter({ has: page.getByText('ignored-dir', { exact: true }) });
 			await expect(ignored).toHaveAttribute('aria-label', 'ignored.log, Ignored by Git');
 			const ignoredColor = await ignored.evaluate(element => {
 				const reference = document.createElement('span');
@@ -76,20 +68,13 @@ test.describe('Git ignore decorations', () => {
 				return color;
 			});
 			await expect(ignored.locator('.ash-icon-label-text')).toHaveCSS('color', ignoredColor);
-			await expect(folder.locator('.ash-icon-label')).toHaveAttribute(
-				'aria-label',
-				'ignored-dir, Ignored by Git',
-			);
+			await expect(folder.locator('.ash-icon-label')).toHaveAttribute('aria-label', 'ignored-dir, Ignored by Git');
 			await folder.locator('.ash-tree-twistie').click();
-			const child = explorer
-				.locator('.ash-icon-label')
-				.filter({ has: page.getByText('child.txt', { exact: true }) });
+			const child = explorer.locator('.ash-icon-label').filter({ has: page.getByText('child.txt', { exact: true }) });
 			await expect(child).toHaveAttribute('aria-label', 'child.txt, Ignored by Git');
 			await expect(child.locator('.ash-icon-label-text')).toHaveCSS('color', ignoredColor);
 			for (const name of ['main.ts', 'keep.tmp']) {
-				await expect(
-					explorer.locator('.ash-icon-label').filter({ has: page.getByText(name, { exact: true }) }),
-				).not.toHaveAttribute('aria-label', /Ignored by Git/u);
+				await expect(explorer.locator('.ash-icon-label').filter({ has: page.getByText(name, { exact: true }) })).not.toHaveAttribute('aria-label', /Ignored by Git/u);
 			}
 			await page.evaluate(ignoredColor => {
 				const explorer = document.querySelector('.ash-explorer')!;
@@ -115,9 +100,7 @@ test.describe('Git ignore decorations', () => {
 					frame = requestAnimationFrame(tick);
 				};
 				frame = requestAnimationFrame(tick);
-				(
-					window as typeof window & { stopIgnoreColorMonitor: () => { samples: number; failures: string[] } }
-				).stopIgnoreColorMonitor = () => {
+				(window as typeof window & { stopIgnoreColorMonitor: () => { samples: number; failures: string[] } }).stopIgnoreColorMonitor = () => {
 					observer.disconnect();
 					cancelAnimationFrame(frame);
 					return { samples, failures: [...failures] };
@@ -127,15 +110,9 @@ test.describe('Git ignore decorations', () => {
 				await writeFile(join(testWorkspace.directory, 'ignored-dir', 'child.txt'), `build output ${index}`);
 				const name = `refresh-${index}.txt`;
 				await writeFile(join(testWorkspace.directory, name), `change ${index}`);
-				await expect(
-					explorer.locator('.ash-icon-label').filter({ has: page.getByText(name, { exact: true }) }),
-				).toHaveAttribute('aria-label', `${name}, Untracked`);
+				await expect(explorer.locator('.ash-icon-label').filter({ has: page.getByText(name, { exact: true }) })).toHaveAttribute('aria-label', `${name}, Untracked`);
 			}
-			const observation = await page.evaluate(() =>
-				(
-					window as typeof window & { stopIgnoreColorMonitor: () => { samples: number; failures: string[] } }
-				).stopIgnoreColorMonitor(),
-			);
+			const observation = await page.evaluate(() => (window as typeof window & { stopIgnoreColorMonitor: () => { samples: number; failures: string[] } }).stopIgnoreColorMonitor());
 			expect(observation.samples).toBeGreaterThan(0);
 			expect(observation.failures).toEqual([]);
 			await writeFile(join(testWorkspace.directory, '.gitignore'), '*.tmp\n!keep.tmp\nmain.ts\n');
@@ -179,158 +156,143 @@ test.beforeEach(async ({ target, testWorkspace }) => {
 	await writeFile(join(testWorkspace.directory, 'tree-other', 'other.txt'), 'other');
 });
 
-test(
-	'Explorer scrollbar stays at the pane edge while rows remain inset',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ target, testWorkspace, workbench }) => {
-		const names = Array.from({ length: 100 }, (_, index) => `scroll-${String(index).padStart(3, '0')}.txt`);
-		if (target.appServerMode === 'required') {
-			await Promise.all(names.map(name => writeFile(join(testWorkspace.directory, name), name)));
-		}
-		const page = workbench.page;
-		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
-		if (await showSidebar.isVisible()) await showSidebar.click();
-		if (target.kind === 'browser' && target.appServerMode === 'disabled') {
-			await page.evaluate(async names => {
-				const root = await navigator.storage.getDirectory();
-				const workspace = await root.getDirectoryHandle(`scroll-edge-${crypto.randomUUID()}`, { create: true });
-				for (const name of names) await workspace.getFileHandle(name, { create: true });
-				Object.defineProperty(window, 'showDirectoryPicker', {
-					configurable: true,
-					value: async () => workspace,
-				});
-			}, names);
-			await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
-		}
-		const explorer = page.locator('.ash-explorer');
-		const tree = explorer.getByRole('tree');
-		const first = tree.getByRole('treeitem', { name: names[0], exact: true });
-		await expect(first).toBeVisible();
-		const pane = page.locator('.ash-explorer-view-pane');
-		const header = pane.locator('.ash-pane-view-header-button');
-		const actions = pane.getByRole('toolbar', { name: 'Explorer Actions', exact: true });
-		await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
-		const editor = workbench.editors.groupAt(0).editor.input;
-		await editor.focus();
-		await workbench.editors.groupAt(0).editor.element.hover();
-		await expect(actions).toBeHidden();
-		await page.locator('.ash-workbench-sidebar .ash-pane-composite-title').hover();
-		await expect(actions).toBeHidden();
-		await first.hover();
-		await expect(actions).toBeVisible();
-		await workbench.editors.groupAt(0).editor.element.hover();
-		await expect(actions).toBeHidden();
-		await tree.focus();
-		await expect(actions).toBeVisible();
-		await header.focus();
-		await page.keyboard.press('Tab');
-		await expect(actions.getByRole('button').first()).toBeFocused();
-		await expect(actions).toBeVisible();
-		await header.press('ArrowLeft');
-		await header.hover();
-		await expect(actions).toBeHidden();
-		await header.press('ArrowRight');
-		await expect(actions).toBeVisible();
-		const track = explorer.locator('.ash-scrollbar-track-vertical');
-		const viewport = explorer.locator('.ash-scrollbar-viewport');
-		const sidebar = page.locator('.ash-workbench-sidebar');
-		const geometry = () =>
-			sidebar.evaluate(sidebar => {
-				const bounds = sidebar.getBoundingClientRect();
-				const content = sidebar.querySelector(':scope > .ash-workbench-part-content')!.getBoundingClientRect();
-				// Fractional borders and SplitView sizing can quantize differently; compare rendered device-pixel edges.
-				const edge = Math.round(content.right * devicePixelRatio);
-				const track = sidebar
-					.querySelector('.ash-explorer .ash-scrollbar-track-vertical')!
-					.getBoundingClientRect();
-				const tree = sidebar.querySelector('.ash-explorer [role="tree"]')!.getBoundingClientRect();
-				const row = sidebar.querySelector('.ash-explorer [role="treeitem"]')!.getBoundingClientRect();
-				const header = sidebar
-					.querySelector('.ash-explorer-view-pane > .ash-pane-view-header')!
-					.getBoundingClientRect();
-				return {
-					trackGap: edge - Math.round(track.right * devicePixelRatio),
-					treeGap: edge - Math.round(tree.right * devicePixelRatio),
-					rowInset: row.left - tree.left,
-					rowRightInset: tree.right - row.right,
-					headerInset: header.left - bounds.left,
-					outerScroll: sidebar.querySelector('.ash-composite-content')!.scrollTop,
-				};
+test('Explorer scrollbar stays at the pane edge while rows remain inset', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
+	const names = Array.from({ length: 100 }, (_, index) => `scroll-${String(index).padStart(3, '0')}.txt`);
+	if (target.appServerMode === 'required') {
+		await Promise.all(names.map(name => writeFile(join(testWorkspace.directory, name), name)));
+	}
+	const page = workbench.page;
+	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+	if (await showSidebar.isVisible()) await showSidebar.click();
+	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
+		await page.evaluate(async names => {
+			const root = await navigator.storage.getDirectory();
+			const workspace = await root.getDirectoryHandle(`scroll-edge-${crypto.randomUUID()}`, { create: true });
+			for (const name of names) await workspace.getFileHandle(name, { create: true });
+			Object.defineProperty(window, 'showDirectoryPicker', {
+				configurable: true,
+				value: async () => workspace,
 			});
-		await expect
-			.poll(geometry)
-			.toEqual({ trackGap: 0, treeGap: 0, rowInset: 4, rowRightInset: 4, headerInset: 0, outerScroll: 0 });
-		const originalTransform = await track.evaluate(element => {
-			const transform = element.style.transform;
-			element.style.transform = `translateX(-${1 / devicePixelRatio}px)`;
-			return transform;
+		}, names);
+		await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
+	}
+	const explorer = page.locator('.ash-explorer');
+	const tree = explorer.getByRole('tree');
+	const first = tree.getByRole('treeitem', { name: names[0], exact: true });
+	await expect(first).toBeVisible();
+	const pane = page.locator('.ash-explorer-view-pane');
+	const header = pane.locator('.ash-pane-view-header-button');
+	const actions = pane.getByRole('toolbar', { name: 'Explorer Actions', exact: true });
+	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+	const editor = workbench.editors.groupAt(0).editor.input;
+	await editor.focus();
+	await workbench.editors.groupAt(0).editor.element.hover();
+	await expect(actions).toBeHidden();
+	await page.locator('.ash-workbench-sidebar .ash-pane-composite-title').hover();
+	await expect(actions).toBeHidden();
+	await first.hover();
+	await expect(actions).toBeVisible();
+	await workbench.editors.groupAt(0).editor.element.hover();
+	await expect(actions).toBeHidden();
+	await tree.focus();
+	await expect(actions).toBeVisible();
+	await header.focus();
+	await page.keyboard.press('Tab');
+	await expect(actions.getByRole('button').first()).toBeFocused();
+	await expect(actions).toBeVisible();
+	await header.press('ArrowLeft');
+	await header.hover();
+	await expect(actions).toBeHidden();
+	await header.press('ArrowRight');
+	await expect(actions).toBeVisible();
+	const track = explorer.locator('.ash-scrollbar-track-vertical');
+	const viewport = explorer.locator('.ash-scrollbar-viewport');
+	const sidebar = page.locator('.ash-workbench-sidebar');
+	const geometry = () =>
+		sidebar.evaluate(sidebar => {
+			const bounds = sidebar.getBoundingClientRect();
+			const content = sidebar.querySelector(':scope > .ash-workbench-part-content')!.getBoundingClientRect();
+			// Fractional borders and SplitView sizing can quantize differently; compare rendered device-pixel edges.
+			const edge = Math.round(content.right * devicePixelRatio);
+			const track = sidebar.querySelector('.ash-explorer .ash-scrollbar-track-vertical')!.getBoundingClientRect();
+			const tree = sidebar.querySelector('.ash-explorer [role="tree"]')!.getBoundingClientRect();
+			const row = sidebar.querySelector('.ash-explorer [role="treeitem"]')!.getBoundingClientRect();
+			const header = sidebar.querySelector('.ash-explorer-view-pane > .ash-pane-view-header')!.getBoundingClientRect();
+			return {
+				trackGap: edge - Math.round(track.right * devicePixelRatio),
+				treeGap: edge - Math.round(tree.right * devicePixelRatio),
+				rowInset: row.left - tree.left,
+				rowRightInset: tree.right - row.right,
+				headerInset: header.left - bounds.left,
+				outerScroll: sidebar.querySelector('.ash-composite-content')!.scrollTop,
+			};
 		});
-		try {
-			await expect.poll(async () => (await geometry()).trackGap).toBe(1);
-		} finally {
-			await track.evaluate((element, transform) => {
-				element.style.transform = transform;
-			}, originalTransform);
+	await expect.poll(geometry).toEqual({ trackGap: 0, treeGap: 0, rowInset: 4, rowRightInset: 4, headerInset: 0, outerScroll: 0 });
+	const originalTransform = await track.evaluate(element => {
+		const transform = element.style.transform;
+		element.style.transform = `translateX(-${1 / devicePixelRatio}px)`;
+		return transform;
+	});
+	try {
+		await expect.poll(async () => (await geometry()).trackGap).toBe(1);
+	} finally {
+		await track.evaluate((element, transform) => {
+			element.style.transform = transform;
+		}, originalTransform);
+	}
+	await expect(track).toHaveAttribute('aria-valuemax', /[1-9]\d*/u);
+	await first.hover();
+	await page.mouse.wheel(0, 400);
+	await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+	await tree.focus();
+	await tree.press('End');
+	await expect(tree.getByRole('treeitem', { name: names.at(-1), exact: true })).toBeVisible();
+	await tree.press('Home');
+	await expect(first).toBeVisible();
+	await page.keyboard.type('scroll-075');
+	const typedMatch = tree.getByRole('treeitem', { name: names[75], exact: true });
+	await expect(tree).toHaveAttribute('aria-activedescendant', (await typedMatch.getAttribute('id'))!);
+	await expect(typedMatch).toBeInViewport();
+	await expect(tree).toBeFocused();
+	for (const theme of ['Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+		if (target.appServerMode === 'required') {
+			await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+			await workbench.quickaccess.select(theme);
+		} else {
+			await page.emulateMedia({
+				colorScheme: theme.endsWith('Dark') ? 'dark' : 'light',
+				forcedColors: theme.includes('High Contrast') ? 'active' : 'none',
+			});
 		}
-		await expect(track).toHaveAttribute('aria-valuemax', /[1-9]\d*/u);
-		await first.hover();
-		await page.mouse.wheel(0, 400);
-		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
-		await tree.focus();
-		await tree.press('End');
-		await expect(tree.getByRole('treeitem', { name: names.at(-1), exact: true })).toBeVisible();
-		await tree.press('Home');
-		await expect(first).toBeVisible();
-		await page.keyboard.type('scroll-075');
-		const typedMatch = tree.getByRole('treeitem', { name: names[75], exact: true });
-		await expect(tree).toHaveAttribute('aria-activedescendant', (await typedMatch.getAttribute('id'))!);
-		await expect(typedMatch).toBeInViewport();
-		await expect(tree).toBeFocused();
-		for (const theme of ['Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
-			if (target.appServerMode === 'required') {
-				await workbench.quickaccess.runCommand('workbench.action.selectTheme');
-				await workbench.quickaccess.select(theme);
-			} else {
-				await page.emulateMedia({
-					colorScheme: theme.endsWith('Dark') ? 'dark' : 'light',
-					forcedColors: theme.includes('High Contrast') ? 'active' : 'none',
-				});
-			}
-			await expect
-				.poll(geometry)
-				.toEqual({ trackGap: 0, treeGap: 0, rowInset: 4, rowRightInset: 4, headerInset: 0, outerScroll: 0 });
-		}
-		await workbench.quickaccess.runCommand('workbench.action.openSettings');
-		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-		await settings.locator('[data-settings-group-id="workbench"]').click();
-		await settings.locator('[data-settings-category-id="layout"]').click();
-		const style = settings.locator('[data-configuration-key="workbench.layoutStyle"]').getByRole('combobox');
-		for (const label of ['Flat', 'Modern']) {
-			await style.click();
-			await page.getByRole('option', { name: label, exact: true }).click();
-			const inset = label === 'Modern' ? 4 : 0;
-			await expect
-				.poll(geometry)
-				.toEqual({
-					trackGap: 0,
-					treeGap: 0,
-					rowInset: inset,
-					rowRightInset: inset,
-					headerInset: 0,
-					outerScroll: 0,
-				});
-		}
-		await settings.locator('.ash-modal-editor-close').click();
-	},
-);
+		await expect.poll(geometry).toEqual({ trackGap: 0, treeGap: 0, rowInset: 4, rowRightInset: 4, headerInset: 0, outerScroll: 0 });
+	}
+	await workbench.quickaccess.runCommand('workbench.action.openSettings');
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	await settings.locator('[data-settings-group-id="workbench"]').click();
+	await settings.locator('[data-settings-category-id="layout"]').click();
+	const style = settings.locator('[data-configuration-key="workbench.layoutStyle"]').getByRole('combobox');
+	for (const label of ['Flat', 'Modern']) {
+		await style.click();
+		await page.getByRole('option', { name: label, exact: true }).click();
+		const inset = label === 'Modern' ? 4 : 0;
+		await expect.poll(geometry).toEqual({
+			trackGap: 0,
+			treeGap: 0,
+			rowInset: inset,
+			rowRightInset: inset,
+			headerInset: 0,
+			outerScroll: 0,
+		});
+	}
+	await settings.locator('.ash-modal-editor-close').click();
+});
 
 test(
 	'Explorer smooth scrolling accumulates wheel input, keeps touchpad input immediate and honors reduced motion',
 	{ tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] },
 	async ({ target, testWorkspace, workbench }) => {
 		const names = Array.from({ length: 100 }, (_, index) => `smooth-${String(index).padStart(3, '0')}.txt`);
-		if (target.appServerMode === 'required')
-			await Promise.all(names.map(name => writeFile(join(testWorkspace.directory, name), name)));
+		if (target.appServerMode === 'required') await Promise.all(names.map(name => writeFile(join(testWorkspace.directory, name), name)));
 		const page = workbench.page;
 		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
 		if (await showSidebar.isVisible()) await showSidebar.click();
@@ -389,9 +351,7 @@ test(
 		});
 		await page.mouse.wheel(0, 120);
 		await page.mouse.wheel(0, 120);
-		const samples = await page.evaluate(
-			() => (window as typeof window & { scrollSamples: Promise<number[]> }).scrollSamples,
-		);
+		const samples = await page.evaluate(() => (window as typeof window & { scrollSamples: Promise<number[]> }).scrollSamples);
 		expect(samples[0]).toBe(0);
 		expect(samples.at(-1)).toBe(240);
 		expect(new Set(samples.filter(value => value > 0 && value < 240)).size).toBeGreaterThan(1);
@@ -400,18 +360,13 @@ test(
 			element.addEventListener(
 				'wheel',
 				() => {
-					(window as typeof window & { immediateWheelPosition: number }).immediateWheelPosition =
-						element.scrollTop;
+					(window as typeof window & { immediateWheelPosition: number }).immediateWheelPosition = element.scrollTop;
 				},
 				{ once: true },
 			);
 		});
 		await page.mouse.wheel(0, 8);
-		expect(
-			await page.evaluate(
-				() => (window as typeof window & { immediateWheelPosition: number }).immediateWheelPosition,
-			),
-		).toBe(8);
+		expect(await page.evaluate(() => (window as typeof window & { immediateWheelPosition: number }).immediateWheelPosition)).toBe(8);
 		await page.emulateMedia({ reducedMotion: 'reduce' });
 		await expect(page.locator('.ash-workbench')).toHaveClass(/ash-reduce-motion/u);
 		for (let index = 0; index < 2; index += 1) {
@@ -420,18 +375,13 @@ test(
 				element.addEventListener(
 					'wheel',
 					() => {
-						(window as typeof window & { immediateWheelPosition: number }).immediateWheelPosition =
-							element.scrollTop;
+						(window as typeof window & { immediateWheelPosition: number }).immediateWheelPosition = element.scrollTop;
 					},
 					{ once: true },
 				);
 			});
 			await page.mouse.wheel(0, 120);
-			expect(
-				await page.evaluate(
-					() => (window as typeof window & { immediateWheelPosition: number }).immediateWheelPosition,
-				),
-			).toBe(120);
+			expect(await page.evaluate(() => (window as typeof window & { immediateWheelPosition: number }).immediateWheelPosition)).toBe(120);
 		}
 		await page.emulateMedia({ reducedMotion: 'no-preference' });
 		await tree.press('Home');
@@ -443,8 +393,7 @@ test(
 			() =>
 				new Promise<void>(resolve => {
 					const started = performance.now();
-					const sample = () =>
-						performance.now() - started > 200 ? resolve() : requestAnimationFrame(sample);
+					const sample = () => (performance.now() - started > 200 ? resolve() : requestAnimationFrame(sample));
 					requestAnimationFrame(sample);
 				}),
 		);
@@ -454,66 +403,62 @@ test(
 	},
 );
 
-test(
-	'Explorer keeps logical row focus when scrolling removes the focused row from the DOM',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ target, testWorkspace, workbench }) => {
-		const names = Array.from({ length: 100 }, (_, index) => `focus-${String(index).padStart(3, '0')}.txt`);
-		if (target.appServerMode === 'required') {
-			await Promise.all(names.map(name => writeFile(join(testWorkspace.directory, name), name)));
-		}
-		const page = workbench.page;
-		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
-		if (await showSidebar.isVisible()) await showSidebar.click();
-		if (target.kind === 'browser' && target.appServerMode === 'disabled') {
-			await page.evaluate(async names => {
-				const root = await navigator.storage.getDirectory();
-				const workspace = await root.getDirectoryHandle(`focus-scroll-${crypto.randomUUID()}`, {
-					create: true,
-				});
-				for (const name of names) await workspace.getFileHandle(name, { create: true });
-				Object.defineProperty(window, 'showDirectoryPicker', {
-					configurable: true,
-					value: async () => workspace,
-				});
-			}, names);
-			await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
-		}
-		const explorer = page.locator('.ash-explorer');
-		const tree = explorer.getByRole('tree');
-		const viewport = explorer.locator('.ash-scrollbar-viewport');
-		await expect(tree.getByRole('treeitem', { name: names[0], exact: true })).toBeVisible();
-		for (const theme of ['Ash Dark', 'Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
-			await workbench.quickaccess.runCommand('workbench.action.selectTheme');
-			await workbench.quickaccess.select(theme);
-			await page.keyboard.press('Tab');
-			await tree.focus();
-			await tree.press('Home');
-			const focused = tree.locator('.ash-tree-row.focused');
-			const focusedRowId = await focused.getAttribute('id');
-			await expect(focused).toHaveCSS('outline-style', 'solid');
-			await expect(tree).toHaveCSS('outline-style', 'none');
-			await viewport.evaluate(element => {
-				element.scrollTop = element.scrollHeight;
+test('Explorer keeps logical row focus when scrolling removes the focused row from the DOM', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
+	const names = Array.from({ length: 100 }, (_, index) => `focus-${String(index).padStart(3, '0')}.txt`);
+	if (target.appServerMode === 'required') {
+		await Promise.all(names.map(name => writeFile(join(testWorkspace.directory, name), name)));
+	}
+	const page = workbench.page;
+	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+	if (await showSidebar.isVisible()) await showSidebar.click();
+	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
+		await page.evaluate(async names => {
+			const root = await navigator.storage.getDirectory();
+			const workspace = await root.getDirectoryHandle(`focus-scroll-${crypto.randomUUID()}`, {
+				create: true,
 			});
-			await expect(focused).toHaveCount(0);
-			await expect(tree).toBeFocused();
-			expect(await tree.evaluate(element => element.matches(':focus-visible'))).toBe(true);
-			await expect(tree).toHaveCSS('outline-style', 'none');
-			await viewport.evaluate(element => {
-				element.scrollTop = 0;
+			for (const name of names) await workspace.getFileHandle(name, { create: true });
+			Object.defineProperty(window, 'showDirectoryPicker', {
+				configurable: true,
+				value: async () => workspace,
 			});
-			await expect(focused).toHaveAttribute('id', focusedRowId!);
-			await expect(focused).toHaveCSS('outline-style', 'solid');
-			await tree.press('End');
-			await expect(focused).toBeVisible();
-			expect(await focused.getAttribute('id')).not.toBe(focusedRowId);
-			await expect(focused).toHaveCSS('outline-style', 'solid');
-			await tree.press('Home');
-			await expect(focused).toHaveAttribute('id', focusedRowId!);
-		}
-	},
-);
+		}, names);
+		await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
+	}
+	const explorer = page.locator('.ash-explorer');
+	const tree = explorer.getByRole('tree');
+	const viewport = explorer.locator('.ash-scrollbar-viewport');
+	await expect(tree.getByRole('treeitem', { name: names[0], exact: true })).toBeVisible();
+	for (const theme of ['Ash Dark', 'Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		await workbench.quickaccess.select(theme);
+		await page.keyboard.press('Tab');
+		await tree.focus();
+		await tree.press('Home');
+		const focused = tree.locator('.ash-tree-row.focused');
+		const focusedRowId = await focused.getAttribute('id');
+		await expect(focused).toHaveCSS('outline-style', 'solid');
+		await expect(tree).toHaveCSS('outline-style', 'none');
+		await viewport.evaluate(element => {
+			element.scrollTop = element.scrollHeight;
+		});
+		await expect(focused).toHaveCount(0);
+		await expect(tree).toBeFocused();
+		expect(await tree.evaluate(element => element.matches(':focus-visible'))).toBe(true);
+		await expect(tree).toHaveCSS('outline-style', 'none');
+		await viewport.evaluate(element => {
+			element.scrollTop = 0;
+		});
+		await expect(focused).toHaveAttribute('id', focusedRowId!);
+		await expect(focused).toHaveCSS('outline-style', 'solid');
+		await tree.press('End');
+		await expect(focused).toBeVisible();
+		expect(await focused.getAttribute('id')).not.toBe(focusedRowId);
+		await expect(focused).toHaveCSS('outline-style', 'solid');
+		await tree.press('Home');
+		await expect(focused).toHaveAttribute('id', focusedRowId!);
+	}
+});
 
 test(
 	'Explorer tree guides align with ancestor arrows and settings update without replacing rows',
@@ -594,10 +539,7 @@ test(
 				const context = document.createElement('canvas').getContext('2d')!;
 				context.font = `${style.fontSize} ${style.fontFamily}`;
 				const text = context.measureText(icon.textContent!);
-				const guide = icon
-					.closest('.ash-tree-row')!
-					.querySelector('.ash-tree-indent-guide:last-child')!
-					.getBoundingClientRect();
+				const guide = icon.closest('.ash-tree-row')!.querySelector('.ash-tree-indent-guide:last-child')!.getBoundingClientRect();
 				return {
 					content: icon.textContent,
 					family: style.fontFamily,
@@ -622,18 +564,13 @@ test(
 		});
 		await expect(explorer.locator('.ash-icon-label-description:visible')).toHaveCount(0);
 		await leaf.locator('.ash-icon-label').hover();
-		await expect(
-			page.locator('.ash-hover').filter({ hasText: /tree-parent\/tree-child\/leaf\.ts/u }),
-		).toBeVisible();
+		await expect(page.locator('.ash-hover').filter({ hasText: /tree-parent\/tree-child\/leaf\.ts/u })).toBeVisible();
 		await page.mouse.move(0, 0);
 		const leafRow = await leaf.elementHandle();
 		await leaf.locator('.ash-tree-contents').click();
 		await expect(leaf.locator('.ash-tree-indent-guide.active')).toHaveCount(1);
 		await page.mouse.move(0, 0);
-		await expect(leaf.locator('.ash-tree-indent-guide.active')).not.toHaveCSS(
-			'border-left-color',
-			'rgba(0, 0, 0, 0)',
-		);
+		await expect(leaf.locator('.ash-tree-indent-guide.active')).not.toHaveCSS('border-left-color', 'rgba(0, 0, 0, 0)');
 
 		await workbench.quickaccess.runCommand('workbench.action.openSettings');
 		await page.locator('[data-settings-group-id="workbench"]').click();
@@ -649,37 +586,31 @@ test(
 			await indent.fill(String(value));
 			await indent.press('Tab');
 			await expect(indent).toHaveValue(String(value));
-			await expect
-				.poll(geometry)
-				.toEqual({
-					alignment: 0,
-					indent: value,
-					rootContent: reservedTwistieWidth,
-					leafContent: value + reservedTwistieWidth,
-					rootText: 0,
-					leafText: value,
-				});
+			await expect.poll(geometry).toEqual({
+				alignment: 0,
+				indent: value,
+				rootContent: reservedTwistieWidth,
+				leafContent: value + reservedTwistieWidth,
+				rootText: 0,
+				leafText: value,
+			});
 		}
 		await indent.fill('6');
 		for (const value of [5, 4]) {
 			await indent.press('ArrowDown');
 			await indent.press('Tab');
 			await expect(indent).toHaveValue(String(value));
-			await expect
-				.poll(geometry)
-				.toEqual({
-					alignment: 0,
-					indent: value,
-					rootContent: reservedTwistieWidth,
-					leafContent: value + reservedTwistieWidth,
-					rootText: 0,
-					leafText: value,
-				});
+			await expect.poll(geometry).toEqual({
+				alignment: 0,
+				indent: value,
+				rootContent: reservedTwistieWidth,
+				leafContent: value + reservedTwistieWidth,
+				rootText: 0,
+				leafText: value,
+			});
 		}
 		await search.fill('@id:workbench.tree.renderIndentGuides');
-		const mode = settings
-			.locator('[data-configuration-key="workbench.tree.renderIndentGuides"]')
-			.getByRole('combobox');
+		const mode = settings.locator('[data-configuration-key="workbench.tree.renderIndentGuides"]').getByRole('combobox');
 		await mode.click();
 		await page.getByRole('option', { name: 'None', exact: true }).click();
 		await expect(explorer.getByRole('tree')).toHaveClass(/ash-tree-indent-guides-none/u);
@@ -718,222 +649,200 @@ test(
 	},
 );
 
-test(
-	'Tree settings controls persist their values across a window reload',
-	{ tag: ['@browser-ui', '@electron-ui'] },
-	async ({ target, workbench }) => {
-		const page = workbench.page;
+test('Tree settings controls persist their values across a window reload', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.openSettings');
+	await page.locator('[data-settings-group-id="workbench"]').click();
+	await page.locator('[data-settings-category-id="layout"]').click();
+	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+	const search = settings.getByRole('searchbox', { name: 'Search settings' });
+	await search.fill('@id:workbench.tree.indent');
+	const indent = settings.getByRole('spinbutton', { name: 'Tree indentation', exact: true });
+	await expect(indent).toHaveValue('8');
+	await indent.fill('16');
+	await indent.press('Tab');
+	await search.fill('@id:workbench.tree.renderIndentGuides');
+	const mode = settings.locator('[data-configuration-key="workbench.tree.renderIndentGuides"]').getByRole('combobox');
+	await mode.click();
+	await page.getByRole('option', { name: 'Always', exact: true }).click();
+	await settings.locator('.ash-modal-editor-close').click();
+	await page.reload();
+	await workbench.waitForReady();
+
+	await workbench.quickaccess.runCommand('workbench.action.openSettings');
+	await page.locator('[data-settings-group-id="workbench"]').click();
+	await page.locator('[data-settings-category-id="layout"]').click();
+	await search.fill('@id:workbench.tree.indent');
+	await expect(indent).toHaveValue('16');
+	await search.fill('@id:workbench.tree.renderIndentGuides');
+	await expect(mode).toHaveText('Always');
+});
+
+test('List smooth scrolling settings persist and display their Chinese translation', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench, restartWorkbench }) => {
+	let page = workbench.page;
+	const openSetting = async (dialogName: string, title: string) => {
 		await workbench.quickaccess.runCommand('workbench.action.openSettings');
-		await page.locator('[data-settings-group-id="workbench"]').click();
-		await page.locator('[data-settings-category-id="layout"]').click();
-		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-		const search = settings.getByRole('searchbox', { name: 'Search settings' });
-		await search.fill('@id:workbench.tree.indent');
-		const indent = settings.getByRole('spinbutton', { name: 'Tree indentation', exact: true });
-		await expect(indent).toHaveValue('8');
-		await indent.fill('16');
-		await indent.press('Tab');
-		await search.fill('@id:workbench.tree.renderIndentGuides');
-		const mode = settings
-			.locator('[data-configuration-key="workbench.tree.renderIndentGuides"]')
-			.getByRole('combobox');
-		await mode.click();
-		await page.getByRole('option', { name: 'Always', exact: true }).click();
-		await settings.locator('.ash-modal-editor-close').click();
-		await page.reload();
-		await workbench.waitForReady();
+		const settings = page.getByRole('dialog', { name: dialogName });
+		await settings.locator('[data-settings-group-id="workbench"]').click();
+		await settings.locator('[data-settings-category-id="layout"]').click();
+		return { settings, control: settings.getByRole('switch', { name: title, exact: true }) };
+	};
+	let setting = await openSetting('Ash Settings', 'Smooth scrolling in lists');
+	await expect(setting.control).not.toBeChecked();
+	await setting.control.focus();
+	await setting.control.press('Space');
+	await expect(setting.control).toBeChecked();
+	await expect(setting.control).not.toHaveAttribute('aria-busy', 'true');
+	await setting.settings.locator('.ash-modal-editor-close').click();
+	await page.reload();
+	await workbench.waitForReady();
+	setting = await openSetting('Ash Settings', 'Smooth scrolling in lists');
+	await expect(setting.control).toBeChecked();
+	await setting.settings.locator('.ash-modal-editor-close').click();
+	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+	const picker = page.getByRole('dialog', { name: 'Select Display Language' });
+	await picker.getByRole('combobox').fill('简体中文');
+	await picker.getByRole('combobox').press('Enter');
+	({ workbench } = await restartWorkbench());
+	page = workbench.page;
+	setting = await openSetting('Ash 设置', '列表平滑滚动');
+	await expect(setting.control).toBeChecked();
+	await expect(setting.settings.locator('[data-settings-item-id="workbench.list.smoothScrolling"]')).toContainText('控制列表和树形列表是否使用短动画滚动。');
+});
 
-		await workbench.quickaccess.runCommand('workbench.action.openSettings');
-		await page.locator('[data-settings-group-id="workbench"]').click();
-		await page.locator('[data-settings-category-id="layout"]').click();
-		await search.fill('@id:workbench.tree.indent');
-		await expect(indent).toHaveValue('16');
-		await search.fill('@id:workbench.tree.renderIndentGuides');
-		await expect(mode).toHaveText('Always');
-	},
-);
-
-test(
-	'List smooth scrolling settings persist and display their Chinese translation',
-	{ tag: ['@browser-ui', '@electron-ui'] },
-	async ({ target, workbench, restartWorkbench }) => {
-		let page = workbench.page;
-		const openSetting = async (dialogName: string, title: string) => {
-			await workbench.quickaccess.runCommand('workbench.action.openSettings');
-			const settings = page.getByRole('dialog', { name: dialogName });
-			await settings.locator('[data-settings-group-id="workbench"]').click();
-			await settings.locator('[data-settings-category-id="layout"]').click();
-			return { settings, control: settings.getByRole('switch', { name: title, exact: true }) };
-		};
-		let setting = await openSetting('Ash Settings', 'Smooth scrolling in lists');
-		await expect(setting.control).not.toBeChecked();
-		await setting.control.focus();
-		await setting.control.press('Space');
-		await expect(setting.control).toBeChecked();
-		await expect(setting.control).not.toHaveAttribute('aria-busy', 'true');
-		await setting.settings.locator('.ash-modal-editor-close').click();
-		await page.reload();
-		await workbench.waitForReady();
-		setting = await openSetting('Ash Settings', 'Smooth scrolling in lists');
-		await expect(setting.control).toBeChecked();
-		await setting.settings.locator('.ash-modal-editor-close').click();
-		await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-		const picker = page.getByRole('dialog', { name: 'Select Display Language' });
-		await picker.getByRole('combobox').fill('简体中文');
-		await picker.getByRole('combobox').press('Enter');
-		({ workbench } = await restartWorkbench());
-		page = workbench.page;
-		setting = await openSetting('Ash 设置', '列表平滑滚动');
-		await expect(setting.control).toBeChecked();
-		await expect(
-			setting.settings.locator('[data-settings-item-id="workbench.list.smoothScrolling"]'),
-		).toContainText('控制列表和树形列表是否使用短动画滚动。');
-	},
-);
-
-test(
-	'Explorer compact folders, unloaded search, drag moves and reload state use the real workbench',
-	{ tag: ['@browser-ui'] },
-	async ({ target, workbench }) => {
-		const page = workbench.page;
-		await setExplorerSettings(workbench, {
-			'explorer.autoReveal': false,
-			'explorer.compactFolders': true,
-			'explorer.confirmDragAndDrop': false,
-			'files.exclude': { '**/.git': true, '**/hidden.txt': true },
-		});
-		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
-		if (await showSidebar.isVisible()) await showSidebar.click();
-		const directoryName = await page.evaluate(async () => {
-			const root = await navigator.storage.getDirectory();
-			const name = `explorer-alignment-${crypto.randomUUID()}`;
-			const workspace = await root.getDirectoryHandle(name, { create: true });
-			for (const name of ['file10.txt', 'file2.txt', 'hidden.txt']) {
-				const file = await workspace.getFileHandle(name, { create: true });
-				const writer = await file.createWritable();
-				await writer.write(name);
-				await writer.close();
-			}
-			await workspace.getDirectoryHandle('.git', { create: true });
-			const src = await workspace.getDirectoryHandle('src', { create: true });
-			const deep = await src.getDirectoryHandle('deep', { create: true });
-			const leaf = await deep.getFileHandle('leaf.ts', { create: true });
-			const writer = await leaf.createWritable();
-			await writer.write('export const leaf = true;');
+test('Explorer compact folders, unloaded search, drag moves and reload state use the real workbench', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
+	const page = workbench.page;
+	await setExplorerSettings(workbench, {
+		'explorer.autoReveal': false,
+		'explorer.compactFolders': true,
+		'explorer.confirmDragAndDrop': false,
+		'files.exclude': { '**/.git': true, '**/hidden.txt': true },
+	});
+	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+	if (await showSidebar.isVisible()) await showSidebar.click();
+	const directoryName = await page.evaluate(async () => {
+		const root = await navigator.storage.getDirectory();
+		const name = `explorer-alignment-${crypto.randomUUID()}`;
+		const workspace = await root.getDirectoryHandle(name, { create: true });
+		for (const name of ['file10.txt', 'file2.txt', 'hidden.txt']) {
+			const file = await workspace.getFileHandle(name, { create: true });
+			const writer = await file.createWritable();
+			await writer.write(name);
 			await writer.close();
-			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => workspace });
-			return name;
-		});
-		await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
-		const tree = page.locator('.ash-explorer').getByRole('tree');
-		const compact = tree.locator('.ash-tree-row').filter({ hasText: 'src/deep' });
-		await expect(compact).toHaveCount(1);
-		await expect(tree.locator('.ash-icon-label-text')).toHaveText(['src/deep', 'file2.txt', 'file10.txt']);
-		await tree.focus();
-		await tree.press('ControlOrMeta+f');
-		const find = page.getByRole('searchbox', { name: 'Find files in Explorer' });
-		await find.fill('leaf');
-		await expect(tree.locator('.ash-tree-row').filter({ hasText: 'leaf.ts' })).toBeVisible();
-		await find.press('Escape');
-		await expect(tree.locator('.ash-tree-row').filter({ hasText: 'leaf.ts' })).toHaveCount(0);
-		await compact.locator('[data-explorer-segment]').last().click();
-		await expect(compact).toHaveAccessibleName('deep, folder 2 of 2');
-		await tree.press('ArrowLeft');
-		await expect(compact).toHaveAccessibleName('src, folder 1 of 2');
-		await tree.press('ArrowRight');
-		await expect(compact).toHaveAccessibleName('deep, folder 2 of 2');
-		const file10 = tree.locator('.ash-tree-row').filter({ hasText: 'file10.txt' });
-		await file10.click({ modifiers: ['ControlOrMeta'] });
-		await expect(tree.locator('.ash-tree-row.selected')).toHaveCount(2);
-		await compact.locator('[data-explorer-segment]').first().click({ button: 'right' });
-		await expect(tree.locator('.ash-tree-row.selected')).toHaveCount(2);
-		await expect(file10).toHaveAttribute('aria-selected', 'true');
-		await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
-		await page.getByRole('menuitem', { name: 'Copy Relative Path', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(async () => (await navigator.clipboard.readText()).replace(/\r\n/gu, '\n')))
-			.toBe('src\nfile10.txt');
-		const file2 = tree.locator('.ash-tree-row').filter({ hasText: 'file2.txt' });
-		await file2.dragTo(compact.locator('[data-explorer-segment]').last());
-		await expect
-			.poll(() =>
-				page.evaluate(async name => {
-					const root = await navigator.storage.getDirectory();
-					const workspace = await root.getDirectoryHandle(name);
-					try {
-						await workspace.getFileHandle('file2.txt');
-						return false;
-					} catch {}
-					const src = await workspace.getDirectoryHandle('src');
-					const deep = await src.getDirectoryHandle('deep');
-					return (await (await deep.getFileHandle('file2.txt')).getFile()).text();
-				}, directoryName),
-			)
-			.toBe('file2.txt');
-		const leafRow = tree.locator('.ash-tree-row').filter({ hasText: 'leaf.ts' });
-		await expect(leafRow).toBeVisible();
-		await leafRow.click();
-		await expect(leafRow).toHaveClass(/selected/u);
-		await page.reload();
-		await workbench.waitForReady();
-		await expect(tree.locator('.ash-tree-row').filter({ hasText: 'src/deep' })).toBeVisible();
-		await expect(tree.locator('.ash-tree-row').filter({ hasText: 'leaf.ts' })).toHaveClass(/selected/u);
-	},
-);
+		}
+		await workspace.getDirectoryHandle('.git', { create: true });
+		const src = await workspace.getDirectoryHandle('src', { create: true });
+		const deep = await src.getDirectoryHandle('deep', { create: true });
+		const leaf = await deep.getFileHandle('leaf.ts', { create: true });
+		const writer = await leaf.createWritable();
+		await writer.write('export const leaf = true;');
+		await writer.close();
+		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => workspace });
+		return name;
+	});
+	await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
+	const tree = page.locator('.ash-explorer').getByRole('tree');
+	const compact = tree.locator('.ash-tree-row').filter({ hasText: 'src/deep' });
+	await expect(compact).toHaveCount(1);
+	await expect(tree.locator('.ash-icon-label-text')).toHaveText(['src/deep', 'file2.txt', 'file10.txt']);
+	await tree.focus();
+	await tree.press('ControlOrMeta+f');
+	const find = page.getByRole('searchbox', { name: 'Find files in Explorer' });
+	await find.fill('leaf');
+	await expect(tree.locator('.ash-tree-row').filter({ hasText: 'leaf.ts' })).toBeVisible();
+	await find.press('Escape');
+	await expect(tree.locator('.ash-tree-row').filter({ hasText: 'leaf.ts' })).toHaveCount(0);
+	await compact.locator('[data-explorer-segment]').last().click();
+	await expect(compact).toHaveAccessibleName('deep, folder 2 of 2');
+	await tree.press('ArrowLeft');
+	await expect(compact).toHaveAccessibleName('src, folder 1 of 2');
+	await tree.press('ArrowRight');
+	await expect(compact).toHaveAccessibleName('deep, folder 2 of 2');
+	const file10 = tree.locator('.ash-tree-row').filter({ hasText: 'file10.txt' });
+	await file10.click({ modifiers: ['ControlOrMeta'] });
+	await expect(tree.locator('.ash-tree-row.selected')).toHaveCount(2);
+	await compact.locator('[data-explorer-segment]').first().click({ button: 'right' });
+	await expect(tree.locator('.ash-tree-row.selected')).toHaveCount(2);
+	await expect(file10).toHaveAttribute('aria-selected', 'true');
+	await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+	await page.getByRole('menuitem', { name: 'Copy Relative Path', exact: true }).click();
+	await expect.poll(() => page.evaluate(async () => (await navigator.clipboard.readText()).replace(/\r\n/gu, '\n'))).toBe('src\nfile10.txt');
+	const file2 = tree.locator('.ash-tree-row').filter({ hasText: 'file2.txt' });
+	await file2.dragTo(compact.locator('[data-explorer-segment]').last());
+	await expect
+		.poll(() =>
+			page.evaluate(async name => {
+				const root = await navigator.storage.getDirectory();
+				const workspace = await root.getDirectoryHandle(name);
+				try {
+					await workspace.getFileHandle('file2.txt');
+					return false;
+				} catch {}
+				const src = await workspace.getDirectoryHandle('src');
+				const deep = await src.getDirectoryHandle('deep');
+				return (await (await deep.getFileHandle('file2.txt')).getFile()).text();
+			}, directoryName),
+		)
+		.toBe('file2.txt');
+	const leafRow = tree.locator('.ash-tree-row').filter({ hasText: 'leaf.ts' });
+	await expect(leafRow).toBeVisible();
+	await leafRow.click();
+	await expect(leafRow).toHaveClass(/selected/u);
+	await page.reload();
+	await workbench.waitForReady();
+	await expect(tree.locator('.ash-tree-row').filter({ hasText: 'src/deep' })).toBeVisible();
+	await expect(tree.locator('.ash-tree-row').filter({ hasText: 'leaf.ts' })).toHaveClass(/selected/u);
+});
 
-test(
-	'Explorer focusNoScroll preserves the viewport while explicit reveal and reload restore selection',
-	{ tag: ['@browser-ui'] },
-	async ({ target, workbench }) => {
-		const page = workbench.page;
-		await setExplorerSettings(workbench, {
-			'explorer.autoReveal': 'focusNoScroll',
-			'explorer.compactFolders': false,
-		});
-		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
-		if (await showSidebar.isVisible()) await showSidebar.click();
-		await page.evaluate(async () => {
-			const root = await navigator.storage.getDirectory();
-			const workspace = await root.getDirectoryHandle(`explorer-focus-${crypto.randomUUID()}`, { create: true });
-			for (let index = 0; index < 100; index++) {
-				const name = `focus-${String(index).padStart(3, '0')}.txt`;
-				const file = await workspace.getFileHandle(name, { create: true });
-				const writer = await file.createWritable();
-				await writer.write(name);
-				await writer.close();
-			}
-			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => workspace });
-		});
-		await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
-		const explorer = page.locator('.ash-explorer');
-		const tree = explorer.getByRole('tree');
-		const viewport = explorer.locator('.ash-scrollbar-viewport');
-		await expect(tree.getByRole('treeitem', { name: 'focus-000.txt', exact: true })).toBeVisible();
-		await workbench.quickaccess.open('focus-090.txt');
-		await workbench.quickaccess.select('focus-090.txt');
-		await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'focus-090.txt');
-		await expect(tree).toHaveClass(/has-focused-item/u);
-		expect(await viewport.evaluate(element => element.scrollTop)).toBe(0);
-		await viewport.evaluate(element => {
-			element.scrollTop = 1600;
-		});
-		const selected = tree.locator('.ash-tree-row.selected');
-		await expect(selected).toContainText('focus-090.txt');
-		const scrollTop = await viewport.evaluate(element => element.scrollTop);
-		await page.reload();
-		await workbench.waitForReady();
-		await expect(selected).toContainText('focus-090.txt');
-		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(scrollTop);
-		await viewport.evaluate(element => {
-			element.scrollTop = 0;
-		});
-		await workbench.editors.groupAt(0).tabs.filter({ hasText: 'focus-090.txt' }).click({ button: 'right' });
-		await page.getByRole('menuitem', { name: 'Reveal in Explorer View', exact: true }).click();
-		await expect(selected).toContainText('focus-090.txt');
-		await expect(selected).toBeInViewport();
-		expect(await viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(1000);
-	},
-);
+test('Explorer focusNoScroll preserves the viewport while explicit reveal and reload restore selection', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
+	const page = workbench.page;
+	await setExplorerSettings(workbench, {
+		'explorer.autoReveal': 'focusNoScroll',
+		'explorer.compactFolders': false,
+	});
+	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+	if (await showSidebar.isVisible()) await showSidebar.click();
+	await page.evaluate(async () => {
+		const root = await navigator.storage.getDirectory();
+		const workspace = await root.getDirectoryHandle(`explorer-focus-${crypto.randomUUID()}`, { create: true });
+		for (let index = 0; index < 100; index++) {
+			const name = `focus-${String(index).padStart(3, '0')}.txt`;
+			const file = await workspace.getFileHandle(name, { create: true });
+			const writer = await file.createWritable();
+			await writer.write(name);
+			await writer.close();
+		}
+		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => workspace });
+	});
+	await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
+	const explorer = page.locator('.ash-explorer');
+	const tree = explorer.getByRole('tree');
+	const viewport = explorer.locator('.ash-scrollbar-viewport');
+	await expect(tree.getByRole('treeitem', { name: 'focus-000.txt', exact: true })).toBeVisible();
+	await workbench.quickaccess.open('focus-090.txt');
+	await workbench.quickaccess.select('focus-090.txt');
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'focus-090.txt');
+	await expect(tree).toHaveClass(/has-focused-item/u);
+	expect(await viewport.evaluate(element => element.scrollTop)).toBe(0);
+	await viewport.evaluate(element => {
+		element.scrollTop = 1600;
+	});
+	const selected = tree.locator('.ash-tree-row.selected');
+	await expect(selected).toContainText('focus-090.txt');
+	const scrollTop = await viewport.evaluate(element => element.scrollTop);
+	await page.reload();
+	await workbench.waitForReady();
+	await expect(selected).toContainText('focus-090.txt');
+	await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(scrollTop);
+	await viewport.evaluate(element => {
+		element.scrollTop = 0;
+	});
+	await workbench.editors.groupAt(0).tabs.filter({ hasText: 'focus-090.txt' }).click({ button: 'right' });
+	await page.getByRole('menuitem', { name: 'Reveal in Explorer View', exact: true }).click();
+	await expect(selected).toContainText('focus-090.txt');
+	await expect(selected).toBeInViewport();
+	expect(await viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(1000);
+});
 
 async function setExplorerSettings(workbench: Workbench, values: Record<string, unknown>): Promise<void> {
 	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
@@ -945,9 +854,6 @@ async function setExplorerSettings(workbench: Workbench, values: Record<string, 
 		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
 	}, values);
 	await workbench.quickaccess.runCommand('workbench.action.files.save');
-	await expect(group.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute(
-		'data-state',
-		/dirty|conflict/u,
-	);
+	await expect(group.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
 }

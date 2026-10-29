@@ -2,11 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import {
-	type IDocumentDiff,
-	type IDocumentDiffProvider,
-	type IDocumentDiffProviderOptions,
-} from '../../../../common/diff/documentDiffProvider.js';
+import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from '../../../../common/diff/documentDiffProvider.js';
 import { DiffModel, type DiffModelReadyState } from '../../../../common/diff/diffModel.js';
 import { DefaultLinesDiffComputer } from '../../../../common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
 import { DetailedLineRangeMapping } from '../../../../common/diff/rangeMapping.js';
@@ -31,7 +27,10 @@ test('DiffModel publishes only version-pinned computation results', async () => 
 	assert.equal(model.state.kind, 'loading');
 	const first = computationService.takeRequest();
 	original.applyEdits([
-		{ range: Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 6 + 1)), text: 'current' },
+		{
+			range: Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 6 + 1)),
+			text: 'current',
+		},
 	]);
 	const second = computationService.takeRequest();
 	assert.equal(first.token.isCancellationRequested, true);
@@ -134,12 +133,7 @@ class ControlledDiffComputationService implements IDocumentDiffProvider {
 	private readonly changed = new Emitter<void>();
 	readonly onDidChange = this.changed.event;
 
-	computeDiff(
-		original: ITextModel,
-		modified: ITextModel,
-		options: IDocumentDiffProviderOptions,
-		token: CancellationToken,
-	): Promise<IDocumentDiff> {
+	computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, token: CancellationToken): Promise<IDocumentDiff> {
 		return new Promise(resolve => this.requests.push({ original, modified, options, token, resolve }));
 	}
 
@@ -165,18 +159,9 @@ class ControlledDiffComputationService implements IDocumentDiffProvider {
 class ResolvedDiffComputationService implements IDocumentDiffProvider {
 	readonly onDidChange = Event.None;
 
-	computeDiff(
-		original: ITextModel,
-		modified: ITextModel,
-		options: IDocumentDiffProviderOptions,
-		token: CancellationToken,
-	): Promise<IDocumentDiff> {
+	computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, token: CancellationToken): Promise<IDocumentDiff> {
 		assert.equal(token.isCancellationRequested, false);
-		const result = new DefaultLinesDiffComputer().computeDiff(
-			original.getLinesContent(),
-			modified.getLinesContent(),
-			options,
-		);
+		const result = new DefaultLinesDiffComputer().computeDiff(original.getLinesContent(), modified.getLinesContent(), options);
 		return Promise.resolve({
 			identical: original.getValue() === modified.getValue(),
 			quitEarly: result.hitTimeout,

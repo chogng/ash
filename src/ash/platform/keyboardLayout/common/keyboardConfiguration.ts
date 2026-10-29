@@ -1,7 +1,4 @@
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../configuration/common/configurationRegistry.js';
 import { Registry } from '../../registry/common/platform.js';
 import { KeyboardDispatchMode } from './keyboardLayout.js';
 

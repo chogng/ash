@@ -13,10 +13,7 @@ import { JSDOM } from 'jsdom';
 import { setHoverDelegate, type IManagedHover } from '../../../../../base/browser/ui/hover/hoverDelegate.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { StatusbarPart, StatusbarService } from '../../../../../workbench/browser/parts/statusbar/statusbarPart.js';
-import {
-	IStatusbarService,
-	StatusbarAlignment,
-} from '../../../../../workbench/services/statusbar/browser/statusbar.js';
+import { IStatusbarService, StatusbarAlignment } from '../../../../../workbench/services/statusbar/browser/statusbar.js';
 import { Event } from '../../../../../base/common/event.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -24,10 +21,7 @@ import { ContextKeyService, IContextKeyService } from '../../../../../platform/c
 test('status bar entries render an icon before their text', () => {
 	const document = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' }).window.document;
 	using service = new StatusbarService();
-	using entry = service.addEntry(
-		{ icon: Lxicon.gitBranch, text: 'main', ariaLabel: 'Git branch main' },
-		{ id: 'test.branch', alignment: StatusbarAlignment.Left },
-	);
+	using entry = service.addEntry({ icon: Lxicon.gitBranch, text: 'main', ariaLabel: 'Git branch main' }, { id: 'test.branch', alignment: StatusbarAlignment.Left });
 	using services = createStatusbarServices(document.body.ownerDocument, service);
 	using part = services.createInstance(StatusbarPart, document.body);
 	const element = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.branch"]');
@@ -59,10 +53,7 @@ test('status bar entries render an icon before their text', () => {
 test('status bar entries support accessible icon-only presentation', () => {
 	const document = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' }).window.document;
 	using service = new StatusbarService();
-	using entry = service.addEntry(
-		{ icon: Lxicon.remote, text: '', ariaLabel: 'App Server ready', tooltip: 'Connected' },
-		{ id: 'test.remote', alignment: StatusbarAlignment.Left },
-	);
+	using entry = service.addEntry({ icon: Lxicon.remote, text: '', ariaLabel: 'App Server ready', tooltip: 'Connected' }, { id: 'test.remote', alignment: StatusbarAlignment.Left });
 	using services = createStatusbarServices(document.body.ownerDocument, service);
 	using part = services.createInstance(StatusbarPart, document.body);
 	const element = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.remote"]');
@@ -121,22 +112,10 @@ test('status bar entries compact adjacent members of the same group', () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	const { document } = dom.window;
 	using service = new StatusbarService();
-	using remote = service.addEntry(
-		{ kind: 'remote', text: '', run() {} },
-		{ id: 'test.remote', alignment: StatusbarAlignment.Left, priority: 3 },
-	);
-	using branch = service.addEntry(
-		{ text: 'main', run() {} },
-		{ id: 'test.branch', alignment: StatusbarAlignment.Left, priority: 2, compactGroup: 'git' },
-	);
-	using sync = service.addEntry(
-		{ icon: Lxicon.sync, text: '2↓ 1↑', run() {} },
-		{ id: 'test.sync', alignment: StatusbarAlignment.Left, priority: 1, compactGroup: 'git' },
-	);
-	using problems = service.addEntry(
-		{ text: '0' },
-		{ id: 'test.problems', alignment: StatusbarAlignment.Left, priority: 0 },
-	);
+	using remote = service.addEntry({ kind: 'remote', text: '', run() {} }, { id: 'test.remote', alignment: StatusbarAlignment.Left, priority: 3 });
+	using branch = service.addEntry({ text: 'main', run() {} }, { id: 'test.branch', alignment: StatusbarAlignment.Left, priority: 2, compactGroup: 'git' });
+	using sync = service.addEntry({ icon: Lxicon.sync, text: '2↓ 1↑', run() {} }, { id: 'test.sync', alignment: StatusbarAlignment.Left, priority: 1, compactGroup: 'git' });
+	using problems = service.addEntry({ text: '0' }, { id: 'test.problems', alignment: StatusbarAlignment.Left, priority: 0 });
 	using services = createStatusbarServices(document.body.ownerDocument, service);
 	using part = services.createInstance(StatusbarPart, document.body);
 	const branchElement = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.branch"]');
@@ -149,32 +128,23 @@ test('status bar entries compact adjacent members of the same group', () => {
 	const compactGroup = part.domNode.querySelector<HTMLElement>('[data-compact-group="git"]');
 	assert.ok(compactGroup);
 	assert.deepEqual([...compactGroup.children], [branchElement, syncElement]);
-	assert.deepEqual(
-		[...(compactGroup.parentElement?.children ?? [])],
-		[part.domNode.querySelector('[data-statusbar-item-id="test.remote"]'), compactGroup, problemsElement],
-	);
+	assert.deepEqual([...(compactGroup.parentElement?.children ?? [])], [part.domNode.querySelector('[data-statusbar-item-id="test.remote"]'), compactGroup, problemsElement]);
 	assert.equal(branchElement.classList.contains('compact-left'), false);
 	assert.equal(branchElement.classList.contains('compact-right'), true);
 	assert.equal(syncElement.classList.contains('compact-left'), true);
 	assert.equal(syncElement.classList.contains('compact-right'), false);
 
-	branchElement
-		.querySelector('.ash-statusbar-item-label')
-		?.dispatchEvent(new dom.window.MouseEvent('mouseover', { bubbles: true }));
+	branchElement.querySelector('.ash-statusbar-item-label')?.dispatchEvent(new dom.window.MouseEvent('mouseover', { bubbles: true }));
 	assert.equal(branchElement.classList.contains('compact-entry-hover'), true);
 	assert.equal(syncElement.classList.contains('compact-group-hover'), true);
 	assert.equal(syncElement.classList.contains('compact-entry-hover'), false);
 
-	syncElement
-		.querySelector('.ash-statusbar-item-label')
-		?.dispatchEvent(new dom.window.MouseEvent('mouseover', { bubbles: true }));
+	syncElement.querySelector('.ash-statusbar-item-label')?.dispatchEvent(new dom.window.MouseEvent('mouseover', { bubbles: true }));
 	assert.equal(branchElement.classList.contains('compact-group-hover'), true);
 	assert.equal(branchElement.classList.contains('compact-entry-hover'), false);
 	assert.equal(syncElement.classList.contains('compact-entry-hover'), true);
 
-	syncElement
-		.querySelector('.ash-statusbar-item-label')
-		?.dispatchEvent(new dom.window.MouseEvent('mouseout', { bubbles: true }));
+	syncElement.querySelector('.ash-statusbar-item-label')?.dispatchEvent(new dom.window.MouseEvent('mouseout', { bubbles: true }));
 	assert.equal(branchElement.classList.contains('compact-group-hover'), false);
 	assert.equal(syncElement.classList.contains('compact-group-hover'), false);
 	dom.window.close();
@@ -185,10 +155,7 @@ test('status bar entry updates retain the item shell and activate commands', () 
 	const { document } = dom.window;
 	let activations = 0;
 	using service = new StatusbarService();
-	using entry = service.addEntry(
-		{ text: 'main', run: () => (activations += 1) },
-		{ id: 'test.branch', alignment: StatusbarAlignment.Left },
-	);
+	using entry = service.addEntry({ text: 'main', run: () => (activations += 1) }, { id: 'test.branch', alignment: StatusbarAlignment.Left });
 	using services = createStatusbarServices(document.body.ownerDocument, service);
 	using part = services.createInstance(StatusbarPart, document.body);
 	const element = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.branch"]');
@@ -214,14 +181,8 @@ test('status bar items are focused through the part and activate from the keyboa
 	const { document } = dom.window;
 	let activations = 0;
 	using service = new StatusbarService();
-	using first = service.addEntry(
-		{ text: 'first', run: () => (activations += 1) },
-		{ id: 'test.first', alignment: StatusbarAlignment.Left, priority: 2 },
-	);
-	using second = service.addEntry(
-		{ text: 'second', run: () => (activations += 1) },
-		{ id: 'test.second', alignment: StatusbarAlignment.Left, priority: 1 },
-	);
+	using first = service.addEntry({ text: 'first', run: () => (activations += 1) }, { id: 'test.first', alignment: StatusbarAlignment.Left, priority: 2 });
+	using second = service.addEntry({ text: 'second', run: () => (activations += 1) }, { id: 'test.second', alignment: StatusbarAlignment.Left, priority: 1 });
 	using services = createStatusbarServices(document.body.ownerDocument, service);
 	using part = services.createInstance(StatusbarPart, document.body);
 	document.body.append(part.domNode);
@@ -245,9 +206,7 @@ test('status bar items are focused through the part and activate from the keyboa
 	assert.equal(activations, 1);
 
 	first.update({ text: 'read-only' });
-	const disabledLabel = part.domNode.querySelector<HTMLElement>(
-		'[data-statusbar-item-id="test.first"] .ash-statusbar-item-label',
-	);
+	const disabledLabel = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.first"] .ash-statusbar-item-label');
 	assert.ok(disabledLabel);
 	assert.equal(disabledLabel.tabIndex, -1);
 	assert.equal(disabledLabel.getAttribute('aria-disabled'), 'true');
@@ -264,27 +223,16 @@ for (const alignment of [StatusbarAlignment.Left, StatusbarAlignment.Right]) {
 		try {
 			const { document } = browser.window;
 			using service = new StatusbarService();
-			using entry = service.addEntry(
-				{ text: 'origin', run() {} },
-				{ id: 'test.origin', alignment, priority: 2, compactGroup: 'test.group' },
-			);
-			using peer = service.addEntry(
-				{ text: 'peer', run() {} },
-				{ id: 'test.peer', alignment, priority: 0, compactGroup: 'test.group' },
-			);
+			using entry = service.addEntry({ text: 'origin', run() {} }, { id: 'test.origin', alignment, priority: 2, compactGroup: 'test.group' });
+			using peer = service.addEntry({ text: 'peer', run() {} }, { id: 'test.peer', alignment, priority: 0, compactGroup: 'test.group' });
 			using services = createStatusbarServices(document, service);
 			using part = services.createInstance(StatusbarPart, document.body);
 			document.body.append(part.domNode);
-			const origin = part.domNode.querySelector<HTMLElement>(
-				'[data-statusbar-item-id="test.origin"] .ash-statusbar-item-label',
-			)!;
+			const origin = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.origin"] .ash-statusbar-item-label')!;
 			origin.focus();
 			entry.update({ text: 'updated', run() {} });
 			assert.equal(document.activeElement, origin);
-			using inserted = service.addEntry(
-				{ text: 'between', run() {} },
-				{ id: 'test.between', alignment, priority: 1 },
-			);
+			using inserted = service.addEntry({ text: 'between', run() {} }, { id: 'test.between', alignment, priority: 1 });
 			assert.equal(document.activeElement, origin);
 			assert.equal(part.domNode.querySelector('[data-compact-group="test.group"]'), null);
 			inserted.dispose();
@@ -292,10 +240,7 @@ for (const alignment of [StatusbarAlignment.Left, StatusbarAlignment.Right]) {
 			assert.ok(part.domNode.querySelector('[data-compact-group="test.group"]')?.contains(origin));
 			peer.dispose();
 			assert.equal(document.activeElement, origin);
-			assert.equal(
-				part.domNode.querySelector('[data-statusbar-item-id="test.origin"] .ash-statusbar-item-label'),
-				origin,
-			);
+			assert.equal(part.domNode.querySelector('[data-statusbar-item-id="test.origin"] .ash-statusbar-item-label'), origin);
 		} finally {
 			browser.window.close();
 		}
@@ -307,10 +252,7 @@ test('status bar rendering does not restore a removed focused entry or take outs
 	try {
 		const { document } = browser.window;
 		using service = new StatusbarService();
-		using entry = service.addEntry(
-			{ text: 'origin', run() {} },
-			{ id: 'test.origin', alignment: StatusbarAlignment.Left },
-		);
+		using entry = service.addEntry({ text: 'origin', run() {} }, { id: 'test.origin', alignment: StatusbarAlignment.Left });
 		using services = createStatusbarServices(document, service);
 		using part = services.createInstance(StatusbarPart, document.body);
 		document.body.append(part.domNode);
@@ -323,10 +265,7 @@ test('status bar rendering does not restore a removed focused entry or take outs
 		entry.dispose();
 		assert.equal(origin.isConnected, false);
 		assert.equal(document.activeElement, document.body);
-		using replacement = service.addEntry(
-			{ text: 'replacement', run() {} },
-			{ id: 'test.origin', alignment: StatusbarAlignment.Left },
-		);
+		using replacement = service.addEntry({ text: 'replacement', run() {} }, { id: 'test.origin', alignment: StatusbarAlignment.Left });
 		assert.equal(document.activeElement, document.body);
 		assert.notEqual(part.domNode.querySelector('.ash-statusbar-item-label'), origin);
 	} finally {
@@ -350,10 +289,7 @@ test('status bar rendering preserves focus explicitly moved outside during an en
 			},
 		});
 		using service = new StatusbarService();
-		using entry = service.addEntry(
-			{ text: 'origin', tooltip: 'before', run() {} },
-			{ id: 'test.origin', alignment: StatusbarAlignment.Left },
-		);
+		using entry = service.addEntry({ text: 'origin', tooltip: 'before', run() {} }, { id: 'test.origin', alignment: StatusbarAlignment.Left });
 		using services = createStatusbarServices(document, service);
 		using part = services.createInstance(StatusbarPart, document.body);
 		document.body.append(part.domNode);
@@ -381,10 +317,7 @@ test('status bar item tooltips use the managed statusbar hover group', () => {
 		},
 	});
 	using service = new StatusbarService();
-	using entry = service.addEntry(
-		{ text: 'main', tooltip: 'Git branch main' },
-		{ id: 'test.branch', alignment: StatusbarAlignment.Left },
-	);
+	using entry = service.addEntry({ text: 'main', tooltip: 'Git branch main' }, { id: 'test.branch', alignment: StatusbarAlignment.Left });
 	using services = createStatusbarServices(dom.window.document.body.ownerDocument, service);
 	using part = services.createInstance(StatusbarPart, dom.window.document.body);
 	const label = part.domNode.querySelector<HTMLElement>('.ash-statusbar-item-label');
@@ -404,7 +337,14 @@ test('status bar item tooltips use the managed statusbar hover group', () => {
 });
 
 function managedHover(): IManagedHover {
-	return { visible: false, show() {}, hide() {}, update() {}, dispose() {}, [Symbol.dispose]() {} };
+	return {
+		visible: false,
+		show() {},
+		hide() {},
+		update() {},
+		dispose() {},
+		[Symbol.dispose]() {},
+	};
 }
 
 test('hidden status bar entries retain service ownership, current content and persistence across Parts', () => {
@@ -412,10 +352,7 @@ test('hidden status bar entries retain service ownership, current content and pe
 	try {
 		const { document } = browser.window;
 		using service = new StatusbarService();
-		using entry = service.addEntry(
-			{ text: 'before', run() {} },
-			{ id: 'test.hidden', alignment: StatusbarAlignment.Left },
-		);
+		using entry = service.addEntry({ text: 'before', run() {} }, { id: 'test.hidden', alignment: StatusbarAlignment.Left });
 		using services = createStatusbarServices(document, service);
 		using part = services.createInstance(StatusbarPart, document.body);
 		part.focusNextEntry();
@@ -506,14 +443,8 @@ class StatefulStatusbar extends StatusbarPart {
 test('right status entries navigate in their visual left-to-right order', () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	using service = new StatusbarService();
-	using outer = service.addEntry(
-		{ text: 'language', run() {} },
-		{ id: 'test.language', alignment: StatusbarAlignment.Right, priority: 80 },
-	);
-	using inner = service.addEntry(
-		{ text: 'cursor', run() {} },
-		{ id: 'test.cursor', alignment: StatusbarAlignment.Right, priority: 40 },
-	);
+	using outer = service.addEntry({ text: 'language', run() {} }, { id: 'test.language', alignment: StatusbarAlignment.Right, priority: 80 });
+	using inner = service.addEntry({ text: 'cursor', run() {} }, { id: 'test.cursor', alignment: StatusbarAlignment.Right, priority: 40 });
 	using services = createStatusbarServices(dom.window.document, service);
 	using part = services.createInstance(StatusbarPart, dom.window.document.body);
 	part.focusNextEntry();
@@ -565,9 +496,7 @@ suite('statusbar browser component', () => {
 		await page.evaluate(() => window.ashStatusbarIntegration.setVisibility('fixture.branch', false));
 		await expect(branch).toHaveCount(0);
 		await page.evaluate(() => window.ashStatusbarIntegration.updateBranch('updated while hidden'));
-		expect(await page.evaluate(() => window.ashStatusbarIntegration.entries())).toEqual([
-			{ id: 'fixture.branch', text: 'updated while hidden' },
-		]);
+		expect(await page.evaluate(() => window.ashStatusbarIntegration.entries())).toEqual([{ id: 'fixture.branch', text: 'updated while hidden' }]);
 		await page.reload();
 		await expect(page.locator('[data-part="statusbar"]')).toBeVisible();
 		await expect(branch).toHaveCount(0);
@@ -599,10 +528,7 @@ suite('statusbar browser component', () => {
 		await expect(bar).toBeFocused();
 		await branch.focus();
 		await page.keyboard.press('Shift+F10');
-		await expect(page.getByRole('menuitemcheckbox', { name: 'Branch main', exact: true })).toHaveAttribute(
-			'aria-checked',
-			'true',
-		);
+		await expect(page.getByRole('menuitemcheckbox', { name: 'Branch main', exact: true })).toHaveAttribute('aria-checked', 'true');
 		await page.keyboard.press('Escape');
 		await expect(branch).toBeFocused();
 		await page.reload();

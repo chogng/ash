@@ -2,10 +2,7 @@ import { localize2 } from '../../../../nls.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
-import {
-	IInstantiationService,
-	type ServicesAccessor,
-} from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import {
 	ActiveEditorGroupEmptyContext,
 	ActiveEditorLastInGroupContext,
@@ -70,10 +67,7 @@ registerAction2(
 				id: CLOSE_EDITOR_GROUP_COMMAND_ID,
 				title: localize2({ bundle: 'ash', key: 'workbench.closeEditorGroup' }, 'Close Editor Group'),
 				f1: true,
-				precondition: ContextKeyExpr.and(
-					MultipleEditorGroupsContext.isEqualTo(true),
-					EditorPartModalVisibleContext.isEqualTo(false),
-				),
+				precondition: ContextKeyExpr.and(MultipleEditorGroupsContext.isEqualTo(true), EditorPartModalVisibleContext.isEqualTo(false)),
 				keybinding: {
 					primary: Keybinding.single(logicalKey('w', { primaryKey: true })),
 					when: ActiveEditorGroupEmptyContext.isEqualTo(true),
@@ -110,20 +104,8 @@ registerAction2(
 		}
 
 		override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
-			const groupId =
-				typeof context === 'object' &&
-				context !== null &&
-				'groupId' in context &&
-				typeof context.groupId === 'number'
-					? context.groupId
-					: undefined;
-			const editorIndex =
-				typeof context === 'object' &&
-				context !== null &&
-				'editorIndex' in context &&
-				typeof context.editorIndex === 'number'
-					? context.editorIndex
-					: undefined;
+			const groupId = typeof context === 'object' && context !== null && 'groupId' in context && typeof context.groupId === 'number' ? context.groupId : undefined;
+			const editorIndex = typeof context === 'object' && context !== null && 'editorIndex' in context && typeof context.editorIndex === 'number' ? context.editorIndex : undefined;
 			const part = accessor.get(IEditorPart);
 			const group = groupId !== undefined ? part.groups.find(group => group.id === groupId) : part.activeGroup;
 			const input = editorIndex === undefined ? group?.activeInput : group?.inputs[editorIndex];
@@ -158,34 +140,27 @@ CommandsRegistry.register(REOPEN_ACTIVE_EDITOR_WITH_COMMAND_ID, async (accessor,
 	}
 });
 
-CommandsRegistry.register(
-	API_OPEN_WITH_EDITOR_COMMAND_ID,
-	async (accessor, resource, id, columnAndOptions, sourceGroupId) => {
-		if (typeof id !== 'string' || typeof resource !== 'object' || resource === null)
-			throw new TypeError('Open With requires a URI and editor ID');
-		const uri = URI.from(resource as UriComponents);
-		const part = accessor.get(IEditorPart);
-		const source =
-			typeof sourceGroupId === 'number'
-				? part.groups.find(group => group.id === sourceGroupId)
-				: part.activeGroup;
-		if (!source) return;
-		const matching = source.inputs.filter(input => input.resource.toString() === uri.toString());
-		const input = matching.find(input => !input.editorId) ?? matching[0]?.toUntyped?.() ?? { resource: uri };
-		const column = Array.isArray(columnAndOptions) ? columnAndOptions[0] : undefined;
-		const preferredEditorId = id === 'default' ? CODE_EDITOR_ID : id;
-		const descriptor = part.getEditorPaneChoices(input).find(choice => choice.id === preferredEditorId);
-		if (!descriptor) throw new RangeError(`No matching editor '${preferredEditorId}'`);
-		const opened = descriptor.createInput ? descriptor.createInput(input) : input;
-		if (column === -2) {
-			source.focus();
-			await part.openEditor(opened, { preferredEditorId, pinned: true }, 'sideGroup');
-		} else {
-			const target = typeof column === 'number' && column > 0 ? part.groups[column - 1] : source;
-			await target?.openEditor(opened, { preferredEditorId, pinned: true });
-		}
-	},
-);
+CommandsRegistry.register(API_OPEN_WITH_EDITOR_COMMAND_ID, async (accessor, resource, id, columnAndOptions, sourceGroupId) => {
+	if (typeof id !== 'string' || typeof resource !== 'object' || resource === null) throw new TypeError('Open With requires a URI and editor ID');
+	const uri = URI.from(resource as UriComponents);
+	const part = accessor.get(IEditorPart);
+	const source = typeof sourceGroupId === 'number' ? part.groups.find(group => group.id === sourceGroupId) : part.activeGroup;
+	if (!source) return;
+	const matching = source.inputs.filter(input => input.resource.toString() === uri.toString());
+	const input = matching.find(input => !input.editorId) ?? matching[0]?.toUntyped?.() ?? { resource: uri };
+	const column = Array.isArray(columnAndOptions) ? columnAndOptions[0] : undefined;
+	const preferredEditorId = id === 'default' ? CODE_EDITOR_ID : id;
+	const descriptor = part.getEditorPaneChoices(input).find(choice => choice.id === preferredEditorId);
+	if (!descriptor) throw new RangeError(`No matching editor '${preferredEditorId}'`);
+	const opened = descriptor.createInput ? descriptor.createInput(input) : input;
+	if (column === -2) {
+		source.focus();
+		await part.openEditor(opened, { preferredEditorId, pinned: true }, 'sideGroup');
+	} else {
+		const target = typeof column === 'number' && column > 0 ? part.groups[column - 1] : source;
+		await target?.openEditor(opened, { preferredEditorId, pinned: true });
+	}
+});
 
 export const KEEP_EDITOR_COMMAND_ID = 'workbench.action.keepEditor';
 export const PIN_EDITOR_COMMAND_ID = 'workbench.action.pinEditor';
@@ -199,11 +174,7 @@ registerAction2(
 				id: KEEP_EDITOR_COMMAND_ID,
 				title: localize2({ bundle: 'ash', key: 'workbench.keepEditor' }, 'Keep Open'),
 				f1: true,
-				precondition: ContextKeyExpr.and(
-					EditorsVisibleContext.isEqualTo(true),
-					EditorPartModalVisibleContext.isEqualTo(false),
-					ActiveEditorPinnedContext.isEqualTo(false),
-				),
+				precondition: ContextKeyExpr.and(EditorsVisibleContext.isEqualTo(true), EditorPartModalVisibleContext.isEqualTo(false), ActiveEditorPinnedContext.isEqualTo(false)),
 				menu: {
 					id: MenuId.EditorTitleContext,
 					when: ActiveEditorPinnedContext.isEqualTo(false),
@@ -215,8 +186,7 @@ registerAction2(
 		}
 
 		override run(accessor: ServicesAccessor, ...args: readonly unknown[]): void {
-			for (const { group, editors } of resolveCommandsContext(args, accessor.get(IEditorGroupsService))
-				.groupedEditors) {
+			for (const { group, editors } of resolveCommandsContext(args, accessor.get(IEditorGroupsService)).groupedEditors) {
 				for (const input of editors) {
 					group.pinEditor(input);
 				}
@@ -232,11 +202,7 @@ registerAction2(
 				id: PIN_EDITOR_COMMAND_ID,
 				title: localize2({ bundle: 'ash', key: 'workbench.pinEditor' }, 'Pin'),
 				f1: true,
-				precondition: ContextKeyExpr.and(
-					EditorsVisibleContext.isEqualTo(true),
-					EditorPartModalVisibleContext.isEqualTo(false),
-					ActiveEditorStickyContext.isEqualTo(false),
-				),
+				precondition: ContextKeyExpr.and(EditorsVisibleContext.isEqualTo(true), EditorPartModalVisibleContext.isEqualTo(false), ActiveEditorStickyContext.isEqualTo(false)),
 				menu: {
 					id: MenuId.EditorTitleContext,
 					when: ActiveEditorStickyContext.isEqualTo(false),
@@ -245,10 +211,7 @@ registerAction2(
 				},
 				keybinding: [
 					{
-						primary: Keybinding.chord(
-							logicalKey('k', { primaryKey: true }),
-							logicalKey('Enter', { shiftKey: true }),
-						),
+						primary: Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('Enter', { shiftKey: true })),
 					},
 					{
 						primary: Keybinding.single(logicalKey('Enter', { altKey: true })),
@@ -259,8 +222,7 @@ registerAction2(
 		}
 
 		override run(accessor: ServicesAccessor, ...args: readonly unknown[]): void {
-			for (const { group, editors } of resolveCommandsContext(args, accessor.get(IEditorGroupsService))
-				.groupedEditors) {
+			for (const { group, editors } of resolveCommandsContext(args, accessor.get(IEditorGroupsService)).groupedEditors) {
 				for (const input of editors) {
 					group.stickEditor(input);
 				}
@@ -276,11 +238,7 @@ registerAction2(
 				id: UNPIN_EDITOR_COMMAND_ID,
 				title: localize2({ bundle: 'ash', key: 'workbench.unpinEditor' }, 'Unpin'),
 				f1: true,
-				precondition: ContextKeyExpr.and(
-					EditorsVisibleContext.isEqualTo(true),
-					EditorPartModalVisibleContext.isEqualTo(false),
-					ActiveEditorStickyContext.isEqualTo(true),
-				),
+				precondition: ContextKeyExpr.and(EditorsVisibleContext.isEqualTo(true), EditorPartModalVisibleContext.isEqualTo(false), ActiveEditorStickyContext.isEqualTo(true)),
 				menu: {
 					id: MenuId.EditorTitleContext,
 					when: ActiveEditorStickyContext.isEqualTo(true),
@@ -289,10 +247,7 @@ registerAction2(
 				},
 				keybinding: [
 					{
-						primary: Keybinding.chord(
-							logicalKey('k', { primaryKey: true }),
-							logicalKey('Enter', { shiftKey: true }),
-						),
+						primary: Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('Enter', { shiftKey: true })),
 					},
 					{
 						primary: Keybinding.single(logicalKey('Enter', { altKey: true })),
@@ -303,8 +258,7 @@ registerAction2(
 		}
 
 		override run(accessor: ServicesAccessor, ...args: readonly unknown[]): void {
-			for (const { group, editors } of resolveCommandsContext(args, accessor.get(IEditorGroupsService))
-				.groupedEditors) {
+			for (const { group, editors } of resolveCommandsContext(args, accessor.get(IEditorGroupsService)).groupedEditors) {
 				for (const input of editors) {
 					group.unstickEditor(input);
 				}
@@ -320,17 +274,13 @@ registerAction2(
 				id: CLOSE_OTHER_EDITORS_IN_GROUP_COMMAND_ID,
 				title: localize2({ bundle: 'ash', key: 'workbench.closeOtherEditors' }, 'Close Others'),
 				f1: true,
-				precondition: ContextKeyExpr.and(
-					EditorsVisibleContext.isEqualTo(true),
-					ContextKeyExpr.notEquals(EditorGroupEditorsCountContext.key, 1),
-				),
+				precondition: ContextKeyExpr.and(EditorsVisibleContext.isEqualTo(true), ContextKeyExpr.notEquals(EditorGroupEditorsCountContext.key, 1)),
 				menu: { id: MenuId.EditorTitleContext, group: '1_close', order: 20 },
 			});
 		}
 
 		override async run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {
-			for (const { group, editors } of resolveCommandsContext(args, accessor.get(IEditorGroupsService))
-				.groupedEditors) {
+			for (const { group, editors } of resolveCommandsContext(args, accessor.get(IEditorGroupsService)).groupedEditors) {
 				for (const input of [...group.inputs]) {
 					if (!editors.includes(input) && !group.isSticky(input) && !(await group.closeEditor(input))) {
 						return;
@@ -351,11 +301,7 @@ for (const definition of [
 		key: 'workbench.closeEditorsToTheRight',
 		title: localize2({ bundle: 'ash', key: 'workbench.closeEditorsToTheRight' }, 'Close to the Right').original,
 		order: 30,
-		precondition: ContextKeyExpr.and(
-			EditorsVisibleContext.isEqualTo(true),
-			ActiveEditorLastInGroupContext.isEqualTo(false),
-			ContextKeyExpr.not(MultipleEditorsSelectedInGroupContext.key),
-		),
+		precondition: ContextKeyExpr.and(EditorsVisibleContext.isEqualTo(true), ActiveEditorLastInGroupContext.isEqualTo(false), ContextKeyExpr.not(MultipleEditorsSelectedInGroupContext.key)),
 	},
 	{
 		id: CLOSE_SAVED_EDITORS_COMMAND_ID,
@@ -391,8 +337,7 @@ for (const definition of [
 			}
 
 			override async run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {
-				for (const { group, editors } of resolveCommandsContext(args, accessor.get(IEditorGroupsService))
-					.groupedEditors) {
+				for (const { group, editors } of resolveCommandsContext(args, accessor.get(IEditorGroupsService)).groupedEditors) {
 					if (definition.id === CLOSE_EDITORS_TO_THE_RIGHT_COMMAND_ID && editors.length !== 1) {
 						continue;
 					}

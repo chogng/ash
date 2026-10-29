@@ -5,18 +5,10 @@ import type { DocumentCommand } from '../commands/documentCommands.js';
 
 /** Sections own page intent; their descendants keep the existing text identities. */
 export function getDocumentPageOwner(document: DocumentNode, blockId: string | undefined): DocumentNode {
-	return (
-		document.content.find(
-			node => node.type === 'documentSection' && blockId && containsDocumentNode(node, blockId),
-		) ?? document
-	);
+	return document.content.find(node => node.type === 'documentSection' && blockId && containsDocumentNode(node, blockId)) ?? document;
 }
 
-export function createDocumentSectionCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: string,
-): DocumentCommand | undefined {
+export function createDocumentSectionCommand(schema: DocumentSchema, document: DocumentNode, blockId: string): DocumentCommand | undefined {
 	const owner = getDocumentPageOwner(document, blockId);
 	const child = owner.content.find(node => containsDocumentNode(node, blockId));
 	if (!child || child.type === 'reviewComment') return undefined;
@@ -33,12 +25,10 @@ export function createDocumentSectionCommand(
 	let at = 0;
 	for (const node of owner.content.slice(start)) {
 		if (node.type === 'documentSection') break;
-		if (node.type !== 'reviewComment' && node.type !== 'reviewChange')
-			transaction = transaction.moveNode(node.id, section.id, at++);
+		if (node.type !== 'reviewComment' && node.type !== 'reviewChange') transaction = transaction.moveNode(node.id, section.id, at++);
 	}
 	if (!at) return undefined;
-	if (document.attrs.pageSize !== 'a4' && document.attrs.pageSize !== 'letter')
-		transaction = transaction.setNodeAttributes(document.id, { ...document.attrs, pageSize: 'a4' });
+	if (document.attrs.pageSize !== 'a4' && document.attrs.pageSize !== 'letter') transaction = transaction.setNodeAttributes(document.id, { ...document.attrs, pageSize: 'a4' });
 	return { transaction, focus: { blockId } };
 }
 
@@ -49,12 +39,7 @@ export function createRemoveSectionCommand(document: DocumentNode, blockId: stri
 	const previous = document.content[index - 1];
 	const target = previous?.type === 'documentSection' ? previous : document;
 	let transaction = new DocumentTransaction();
-	for (const [offset, node] of section.content.entries())
-		transaction = transaction.moveNode(
-			node.id,
-			target.id,
-			target === document ? index + offset : target.content.length + offset,
-		);
+	for (const [offset, node] of section.content.entries()) transaction = transaction.moveNode(node.id, target.id, target === document ? index + offset : target.content.length + offset);
 	transaction = transaction.deleteNode(section.id);
 	return { transaction, focus: { blockId } };
 }

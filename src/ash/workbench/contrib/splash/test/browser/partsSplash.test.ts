@@ -3,27 +3,14 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Emitter } from '../../../../../base/common/event.js';
 import { ColorScheme } from '../../../../../platform/theme/common/theme.js';
-import {
-	validatePartsSplash,
-	IThemeService,
-	type IPartsSplash,
-} from '../../../../../platform/theme/common/themeService.js';
+import { validatePartsSplash, IThemeService, type IPartsSplash } from '../../../../../platform/theme/common/themeService.js';
 import { createColorTheme } from '../../../../../platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../../../platform/theme/test/common/testThemeService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
-import {
-	ILifecycleService,
-	LifecyclePhase,
-	type IWillShutdownEvent,
-} from '../../../../services/lifecycle/common/lifecycle.js';
+import { ILifecycleService, LifecyclePhase, type IWillShutdownEvent } from '../../../../services/lifecycle/common/lifecycle.js';
 import { PartsSplash } from '../../browser/partsSplash.js';
-import {
-	ISplashStorageService,
-	browserSplashStorageKey,
-	readBrowserPartsSplash,
-	showPartsSplash,
-} from '../../browser/splash.js';
+import { ISplashStorageService, browserSplashStorageKey, readBrowserPartsSplash, showPartsSplash } from '../../browser/splash.js';
 import { showStartupError } from '../../../../browser/startupError.js';
 import '../../../../common/theme.js';
 
@@ -72,10 +59,7 @@ test('startup cache validates CSS and falls back when storage is corrupt or inac
 		assert.deepEqual(readBrowserPartsSplash(ownerWindow), cached);
 		ownerWindow.localStorage.setItem(key, '{broken');
 		assert.equal(readBrowserPartsSplash(ownerWindow).colorInfo.background, '#1e1e1e');
-		assert.throws(
-			() => validatePartsSplash({ ...cached, colorInfo: { ...cached.colorInfo, background: 'url(secret)' } }),
-			/colors/,
-		);
+		assert.throws(() => validatePartsSplash({ ...cached, colorInfo: { ...cached.colorInfo, background: 'url(secret)' } }), /colors/);
 		assert.throws(() => validatePartsSplash({ ...cached, baseTheme: 'unknown' }), /splash/);
 		Object.defineProperty(dom.window, 'localStorage', {
 			get: () => {
@@ -137,12 +121,8 @@ test('the production capture receives layout and theme events and releases all l
 		phase = LifecyclePhase.Restored;
 		restored();
 		await restoration;
-		assert.deepEqual(saved, [
-			{ baseTheme: ColorScheme.Light, colorInfo: { background: '#abcdef', foreground: '#3b3b3b' } },
-		]);
-		themes.setColorTheme(
-			createColorTheme({ id: 'splash-before-shutdown', label: 'Shutdown', colorScheme: ColorScheme.Dark }),
-		);
+		assert.deepEqual(saved, [{ baseTheme: ColorScheme.Light, colorInfo: { background: '#abcdef', foreground: '#3b3b3b' } }]);
+		themes.setColorTheme(createColorTheme({ id: 'splash-before-shutdown', label: 'Shutdown', colorScheme: ColorScheme.Dark }));
 		const joins: Promise<unknown>[] = [];
 		shutdown.fire({
 			reason: 'quit',
@@ -154,9 +134,7 @@ test('the production capture receives layout and theme events and releases all l
 		assert.equal(joins.length, 1);
 		assert.equal((saved as readonly IPartsSplash[]).at(-1)!.baseTheme, ColorScheme.Dark);
 		capture.dispose();
-		themes.setColorTheme(
-			createColorTheme({ id: 'splash-after-dispose', label: 'Disposed', colorScheme: ColorScheme.Dark }),
-		);
+		themes.setColorTheme(createColorTheme({ id: 'splash-after-dispose', label: 'Disposed', colorScheme: ColorScheme.Dark }));
 		assert.equal(saved.length, 2);
 	} finally {
 		dom.window.close();
@@ -212,14 +190,10 @@ test('layout cache rejects unbounded geometry and retains only the normalized dr
 		},
 		{ ...layoutInfo, partBounds: [{ ...drawing, borderRadii: drawing.borderRadii.slice(1) }] },
 		{ ...layoutInfo, partBounds: [{ ...drawing, borders: drawing.borders.slice(1) }] },
-		...[{ width: -1 }, { width: 5 }, { color: 'url(secret)' }, { style: 'solid; background: url(secret)' }].map(
-			border => ({
-				...layoutInfo,
-				partBounds: [
-					{ ...drawing, borders: [{ ...drawing.borders[0], ...border }, ...drawing.borders.slice(1)] },
-				],
-			}),
-		),
+		...[{ width: -1 }, { width: 5 }, { color: 'url(secret)' }, { style: 'solid; background: url(secret)' }].map(border => ({
+			...layoutInfo,
+			partBounds: [{ ...drawing, borders: [{ ...drawing.borders[0], ...border }, ...drawing.borders.slice(1)] }],
+		})),
 	])
 		assert.throws(() => validatePartsSplash({ ...cached, layoutInfo: mutation }), /splash/);
 });
@@ -307,14 +281,11 @@ test('startup capture restores the titlebar surface split and its separator, inc
 		const part = ownerDocument.createElement('section');
 		part.className = 'ash-workbench-part';
 		part.style.backgroundColor = '#ffffff';
-		part.getBoundingClientRect = () =>
-			({ left: 0, top: 0, right: 1024, bottom: 36, width: 1024, height: 36 }) as DOMRect;
+		part.getBoundingClientRect = () => ({ left: 0, top: 0, right: 1024, bottom: 36, width: 1024, height: 36 }) as DOMRect;
 		root.append(part);
 		using layoutChanged = new Emitter<{ width: number; height: number }>();
 		using shutdown = new Emitter<IWillShutdownEvent>();
-		using themes = new TestThemeService(
-			createColorTheme({ id: 'splash-gradient', label: 'Test', colorScheme: ColorScheme.Light }),
-		);
+		using themes = new TestThemeService(createColorTheme({ id: 'splash-gradient', label: 'Test', colorScheme: ColorScheme.Light }));
 		using services = new InstantiationService();
 		const saved: IPartsSplash[] = [];
 		services.registerInstance(IThemeService, themes);
@@ -369,14 +340,11 @@ test('capture and startup drawing preserve one-sided borders and independent ell
 		part.className = 'ash-workbench-part';
 		part.style.cssText =
 			'background: #abcdef; border: 0 none #abcdef; border-right: 1px dashed #ffffff; border-top-left-radius: 6px 8px; border-top-right-radius: 0; border-bottom-right-radius: 0; border-bottom-left-radius: 4% 10px;';
-		part.getBoundingClientRect = () =>
-			({ left: 0, top: 0, right: 300, bottom: 700, width: 300, height: 700 }) as DOMRect;
+		part.getBoundingClientRect = () => ({ left: 0, top: 0, right: 300, bottom: 700, width: 300, height: 700 }) as DOMRect;
 		root.append(part);
 		using layoutChanged = new Emitter<{ width: number; height: number }>();
 		using shutdown = new Emitter<IWillShutdownEvent>();
-		using themes = new TestThemeService(
-			createColorTheme({ id: 'splash-geometry', label: 'Test', colorScheme: ColorScheme.Light }),
-		);
+		using themes = new TestThemeService(createColorTheme({ id: 'splash-geometry', label: 'Test', colorScheme: ColorScheme.Light }));
 		using services = new InstantiationService();
 		const saved: IPartsSplash[] = [];
 		services.registerInstance(IThemeService, themes);
@@ -400,9 +368,7 @@ test('capture and startup drawing preserve one-sided borders and independent ell
 		assert.deepEqual(saved[0].layoutInfo!.partBounds, [
 			{
 				...drawing,
-				borders: drawing.borders.map((border, index) =>
-					index === 1 ? { ...border, style: 'dashed' } : border,
-				),
+				borders: drawing.borders.map((border, index) => (index === 1 ? { ...border, style: 'dashed' } : border)),
 			},
 		]);
 		showPartsSplash(ownerDocument, saved[0]);

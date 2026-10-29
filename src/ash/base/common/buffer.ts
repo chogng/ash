@@ -121,9 +121,7 @@ export function bufferToStream(buffer: VSBuffer): VSBufferReadableStream {
 }
 
 export function encodeBase64({ buffer }: VSBuffer, padded = true, urlSafe = false): string {
-	const alphabet = urlSafe
-		? 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
-		: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+	const alphabet = urlSafe ? 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_' : 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 	const parts: string[] = [];
 	let chunk = '';
 	for (let offset = 0; offset < buffer.byteLength; offset += 3) {

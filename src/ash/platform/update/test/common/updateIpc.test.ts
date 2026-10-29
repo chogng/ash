@@ -27,10 +27,7 @@ test('update channel rejects invalid policies and install arguments before invok
 		},
 	});
 	await assert.rejects(channel.call('window:1', 'downloadUpdate', 'never'), /invalid/);
-	await assert.rejects(
-		channel.call('window:1', 'installUpdate', { path: '/unverified' }),
-		/takes no renderer arguments/,
-	);
+	await assert.rejects(channel.call('window:1', 'installUpdate', { path: '/unverified' }), /takes no renderer arguments/);
 	await assert.rejects(channel.call('window:1', 'unknown'), /Unknown update command/);
 	assert.deepEqual(calls, []);
 	assert.equal(await channel.call('window:2', 'state'), 'ready');

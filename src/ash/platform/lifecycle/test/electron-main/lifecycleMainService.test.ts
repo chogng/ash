@@ -6,13 +6,7 @@ import { DeferredPromise } from '../../../../base/common/async.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import {
-	WINDOW_CLOSE_RESPONSE_CHANNEL,
-	WINDOW_PREPARE_CLOSE_CHANNEL,
-	WINDOW_PREPARE_QUIT_CHANNEL,
-	WINDOW_PREPARE_LOAD_CHANNEL,
-	WINDOW_PREPARE_RELOAD_CHANNEL,
-} from '../../../window/common/window.js';
+import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_PREPARE_QUIT_CHANNEL, WINDOW_PREPARE_LOAD_CHANNEL, WINDOW_PREPARE_RELOAD_CHANNEL } from '../../../window/common/window.js';
 import type { IStateService } from '../../../state/node/state.js';
 import { LifecycleMainService, windowCloseResponseIpcRoute } from '../../electron-main/lifecycleMainService.js';
 
@@ -117,7 +111,12 @@ suite('LifecycleMainService', () => {
 						destroyed: window.destroyed,
 						requests: window.messages.length,
 					},
-					{ prompts: 1, completed: false, destroyed: false, requests: 1 },
+					{
+						prompts: 1,
+						completed: false,
+						destroyed: false,
+						requests: 1,
+					},
 				);
 				mock.timers.tick(30_000);
 				await new Promise(resolve => setImmediate(resolve));
@@ -336,10 +335,7 @@ suite('LifecycleMainService', () => {
 			}
 			const reloading = service.unload(window, 'reload');
 			window.close();
-			assert.deepEqual(
-				{ destroyed: window.destroyed, messages: window.messages },
-				{ destroyed: true, messages: [] },
-			);
+			assert.deepEqual({ destroyed: window.destroyed, messages: window.messages }, { destroyed: true, messages: [] });
 			assert.equal(await reloading, true);
 		});
 	}
@@ -380,10 +376,7 @@ suite('LifecycleMainService', () => {
 		assert.throws(() => route.validate({ kind: 'vetoed', token: -1 }), /Invalid window close response/);
 		window.close();
 		route.invoke(route.validate({ kind: 'vetoed', token: 1 }));
-		assert.deepEqual(
-			{ destroyed: window.destroyed, failures, vetoes },
-			{ destroyed: false, failures: [], vetoes: 1 },
-		);
+		assert.deepEqual({ destroyed: window.destroyed, failures, vetoes }, { destroyed: false, failures: [], vetoes: 1 });
 		window.close();
 		assert.deepEqual(window.messages, [
 			{ channel: WINDOW_PREPARE_CLOSE_CHANNEL, token: 1 },

@@ -1,10 +1,5 @@
 import type { IContentSearchApi } from '../common/searchApi.js';
-import type {
-	IContentSearchOptions,
-	IContentSearchQuery,
-	IContentSearchComplete,
-	IContentSearchService,
-} from '../common/search.js';
+import type { IContentSearchOptions, IContentSearchQuery, IContentSearchComplete, IContentSearchService } from '../common/search.js';
 import type { IWorkspaceFolder } from '../../workspace/common/workspace.js';
 import { raceCancellationError } from '../../../base/common/async.js';
 import { FileKind, type IFileService } from '../../files/common/files.js';
@@ -20,27 +15,18 @@ const IDLE_POLL_MILLIS = 20;
 export class FileContentSearchService implements IContentSearchService {
 	constructor(private readonly files: Pick<IFileService, 'readDirectory' | 'readFileBytes'>) {}
 
-	async search(
-		folder: IWorkspaceFolder,
-		query: IContentSearchQuery,
-		options: IContentSearchOptions = {},
-	): Promise<IContentSearchComplete> {
+	async search(folder: IWorkspaceFolder, query: IContentSearchQuery, options: IContentSearchOptions = {}): Promise<IContentSearchComplete> {
 		throwIfAborted(options.signal);
 		if (!query.text) {
 			return { resultCount: 0, limitHit: false, error: undefined };
 		}
-		const sensitive =
-			query.caseSensitivity === 'sensitive' || (query.caseSensitivity === 'smart' && /\p{Lu}/u.test(query.text));
+		const sensitive = query.caseSensitivity === 'sensitive' || (query.caseSensitivity === 'smart' && /\p{Lu}/u.test(query.text));
 		const pattern = query.text.replace(/\r\n|\r/g, '\n');
-		const expression = new RegExp(
-			query.patternKind === 'regex' ? pattern : escapeRegExpCharacters(pattern),
-			sensitive ? 'gmu' : 'gmiu',
-		);
+		const expression = new RegExp(query.patternKind === 'regex' ? pattern : escapeRegExpCharacters(pattern), sensitive ? 'gmu' : 'gmiu');
 		const limit = query.maxResults ?? DEFAULT_MAX_RESULTS;
 		let resultCount = 0;
 		let limitHit = false;
-		const matchesPattern = (pattern: string, path: string): boolean =>
-			match(pattern, path) || (pattern.startsWith('**/') && match(pattern.slice(3), path));
+		const matchesPattern = (pattern: string, path: string): boolean => match(pattern, path) || (pattern.startsWith('**/') && match(pattern.slice(3), path));
 		const visit = async (directory: URI, prefix: string): Promise<void> => {
 			throwIfAborted(options.signal);
 			for (const entry of await this.files.readDirectory(directory)) {
@@ -49,22 +35,14 @@ export class FileContentSearchService implements IContentSearchService {
 					return;
 				}
 				const path = prefix + entry.name;
-				if (
-					query.excludePatterns.some(
-						pattern => matchesPattern(pattern, path) || matchesPattern(pattern, path + '/'),
-					)
-				) {
+				if (query.excludePatterns.some(pattern => matchesPattern(pattern, path) || matchesPattern(pattern, path + '/'))) {
 					continue;
 				}
 				if (entry.kind === FileKind.Directory) {
 					await visit(entry.resource, path + '/');
 					continue;
 				}
-				if (
-					entry.kind !== FileKind.File ||
-					(query.includePatterns.length &&
-						!query.includePatterns.some(pattern => matchesPattern(pattern, path)))
-				) {
+				if (entry.kind !== FileKind.File || (query.includePatterns.length && !query.includePatterns.some(pattern => matchesPattern(pattern, path)))) {
 					continue;
 				}
 				const { bytes } = await this.files.readFileBytes(entry.resource);
@@ -84,10 +62,7 @@ export class FileContentSearchService implements IContentSearchService {
 					lineStarts.push(offset + 1);
 				}
 				let lineIndex = 0;
-				const blocks = new Map<
-					string,
-					{ lineNumber: number; preview: string; ranges: { start: number; end: number }[] }
-				>();
+				const blocks = new Map<string, { lineNumber: number; preview: string; ranges: { start: number; end: number }[] }>();
 				for (const found of content.matchAll(expression)) {
 					throwIfAborted(options.signal);
 					if (!found[0].length) {
@@ -95,11 +70,7 @@ export class FileContentSearchService implements IContentSearchService {
 					}
 					const start = found.index;
 					const end = start + found[0].length;
-					if (
-						query.wholeWord &&
-						(/[\p{L}\p{N}_]$/u.test(content.slice(Math.max(0, start - 2), start)) ||
-							/^[\p{L}\p{N}_]/u.test(content.slice(end, end + 2)))
-					) {
+					if (query.wholeWord && (/[\p{L}\p{N}_]$/u.test(content.slice(Math.max(0, start - 2), start)) || /^[\p{L}\p{N}_]/u.test(content.slice(end, end + 2)))) {
 						continue;
 					}
 					while (lineIndex + 1 < lineStarts.length && lineStarts[lineIndex + 1]! <= start) {
@@ -146,17 +117,11 @@ export class BrowserContentSearchService implements IContentSearchService {
 		this.api = api;
 	}
 
-	public async search(
-		folder: IWorkspaceFolder,
-		query: IContentSearchQuery,
-		options: IContentSearchOptions = {},
-	): Promise<IContentSearchComplete> {
+	public async search(folder: IWorkspaceFolder, query: IContentSearchQuery, options: IContentSearchOptions = {}): Promise<IContentSearchComplete> {
 		throwIfAborted(options.signal);
 		const start = this.api.start({
 			dirId: folder.id,
-			query: query.wholeWord
-				? `\\b(?:${query.patternKind === 'regex' ? query.text : escapeRegExpCharacters(query.text.replace(/\r\n|\r/g, '\n')).replaceAll('\n', '\\r?\\n')})\\b`
-				: query.text,
+			query: query.wholeWord ? `\\b(?:${query.patternKind === 'regex' ? query.text : escapeRegExpCharacters(query.text.replace(/\r\n|\r/g, '\n')).replaceAll('\n', '\\r?\\n')})\\b` : query.text,
 			patternKind: query.wholeWord ? 'regex' : query.patternKind,
 			freshness: query.freshness ?? 'current',
 			caseSensitivity: query.caseSensitivity,
@@ -203,7 +168,11 @@ export class BrowserContentSearchService implements IContentSearchService {
 					);
 				}
 				if (snapshot.completed) {
-					return { resultCount: cursor, limitHit: snapshot.limitHit, error: snapshot.error ?? undefined };
+					return {
+						resultCount: cursor,
+						limitHit: snapshot.limitHit,
+						error: snapshot.error ?? undefined,
+					};
 				}
 				await waitForNextPoll(options.signal);
 			}
@@ -211,9 +180,14 @@ export class BrowserContentSearchService implements IContentSearchService {
 			throwIfAborted(options.signal);
 			throw error;
 		} finally {
-			await this.api.cancel({ dirId: folder.id, searchId: started.searchId }).catch(() => {
-				// Cancellation is cleanup after completion or connection loss.
-			});
+			await this.api
+				.cancel({
+					dirId: folder.id,
+					searchId: started.searchId,
+				})
+				.catch(() => {
+					// Cancellation is cleanup after completion or connection loss.
+				});
 		}
 	}
 }

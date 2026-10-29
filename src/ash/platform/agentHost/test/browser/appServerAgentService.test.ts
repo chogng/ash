@@ -1,10 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Emitter } from '../../../../base/common/event.js';
-import type {
-	ServerNotification,
-	SessionThreadReadResult,
-	ToolOutputArtifact,
-} from '../../../../../../.build/protocol/typescript/index.js';
+import type { ServerNotification, SessionThreadReadResult, ToolOutputArtifact } from '../../../../../../.build/protocol/typescript/index.js';
 import type { ThreadTranscriptUpdateEnvelope } from '../../common/agent.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -15,11 +11,7 @@ import type { AppServerConnectionState } from '../../common/appServerApi.js';
 import { AppServerRemoteError } from '../../common/appServerError.js';
 import { AgentThreadHistoryConflictError } from '../../common/agentService.js';
 import type { AppServerProtocolClient } from '../../browser/appServerProtocolClient.js';
-import {
-	createAppServerAgentThreadService,
-	createAppServerAgentSessionService,
-	createAppServerAgentTurnService,
-} from '../../browser/appServerAgentService.js';
+import { createAppServerAgentThreadService, createAppServerAgentSessionService, createAppServerAgentTurnService } from '../../browser/appServerAgentService.js';
 
 suite('Session runtime connection ownership', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -95,10 +87,7 @@ test('Session debug logs verify routed resources and release every handle on com
 		const bytes = Buffer.from('remote process log\n');
 		let generation = 1;
 		const calls: { method: string; params: { sessionId?: string; resourceId?: string } }[] = [];
-		const files = Array.from(
-			{ length: mode === 'overBudget' ? 5 : 2 },
-			(_, index) => `gateway-resource:7:log-${index}`,
-		).map(resourceId => ({
+		const files = Array.from({ length: mode === 'overBudget' ? 5 : 2 }, (_, index) => `gateway-resource:7:log-${index}`).map(resourceId => ({
 			name: 'app-server.log',
 			truncated: false,
 			resource: {
@@ -144,10 +133,7 @@ test('Session debug logs verify routed resources and release every handle on com
 		else await assert.rejects(operation);
 		assert.deepEqual(calls[0], { method: 'session/debugLogs/collect', params: { sessionId: 'remote-session' } });
 		for (const call of calls.slice(1)) assert.equal(Object.hasOwn(call.params, 'sessionId'), false);
-		assert.equal(
-			calls.filter(call => call.method === 'resource/read').length,
-			mode === 'read' ? 2 : mode === 'corrupt' ? 1 : 0,
-		);
+		assert.equal(calls.filter(call => call.method === 'resource/read').length, mode === 'read' ? 2 : mode === 'corrupt' ? 1 : 0);
 		assert.deepEqual(
 			calls
 				.filter(call => call.method === 'resource/release')
@@ -325,20 +311,14 @@ for (const operation of ['read', 'subscribe', 'sessionSubscribe'] as const)
 				? await api.read(params)
 				: operation === 'subscribe'
 					? await api.subscribe({ ...params, afterSequence: 0 })
-					: (await createAppServerAgentSessionService(connection).subscribe({ sessionId: 'session' }))
-							.threadSnapshots[0];
+					: (await createAppServerAgentSessionService(connection).subscribe({ sessionId: 'session' })).threadSnapshots[0];
 		const canonical = result.thread.turns[0].items[0];
 		const entry = result.transcript.entries[0];
 		const expectedItem = expected.thread.turns[0].items[0];
 		const wireItem = wire.thread.turns[0].items[0];
 		const wireEntry = wire.transcript.entries[0];
 		assert.ok(canonical.type === 'agentMessage' && entry.type === 'item' && entry.item.type === 'agentMessage');
-		assert.ok(
-			expectedItem.type === 'agentMessage' &&
-				wireItem.type === 'agentMessage' &&
-				wireEntry.type === 'item' &&
-				wireEntry.item.type === 'agentMessage',
-		);
+		assert.ok(expectedItem.type === 'agentMessage' && wireItem.type === 'agentMessage' && wireEntry.type === 'item' && wireEntry.item.type === 'agentMessage');
 		assert.equal(canonical.text, expectedItem.text);
 		assert.deepEqual(entry, expected.transcript.entries[0]);
 		assert.notEqual(entry.item, canonical);
@@ -364,8 +344,7 @@ test('Thread snapshot conversion preserves independently versioned, transient an
 			entry.item.turnId = 'another-turn';
 		}
 		if (mismatch === 'item') entry.item.itemId = 'another-answer';
-		if (mismatch === 'type')
-			entry.item = { type: 'plan', itemId: 'answer', turnId: 'turn', text: 'Independent plan' };
+		if (mismatch === 'type') entry.item = { type: 'plan', itemId: 'answer', turnId: 'turn', text: 'Independent plan' };
 		if (mismatch === 'transient') {
 			entry.transient = true;
 			entry.item.text = 'Streaming body';
@@ -418,12 +397,7 @@ test('Thread reads and streaming notifications retain their own revisions withou
 	assert.equal(live.entry.item.text, 'Version two with live suffix');
 	const firstEntry = first.transcript.entries[0],
 		secondEntry = second.transcript.entries[0];
-	assert.ok(
-		firstEntry.type === 'item' &&
-			firstEntry.item.type === 'agentMessage' &&
-			secondEntry.type === 'item' &&
-			secondEntry.item.type === 'agentMessage',
-	);
+	assert.ok(firstEntry.type === 'item' && firstEntry.item.type === 'agentMessage' && secondEntry.type === 'item' && secondEntry.item.type === 'agentMessage');
 	assert.equal(firstEntry.item.text, 'Version one');
 	assert.equal(secondEntry.item.text, 'Version two');
 	assert.equal(first.transcript.revision, 1);
@@ -526,8 +500,7 @@ test('Session catalog and subscriptions share the Agent domain snapshot boundary
 	const service = createAppServerAgentSessionService({
 		async request(definition: { method: string }): Promise<unknown> {
 			requests.push(definition.method);
-			if (definition.method === 'session/list' || definition.method === 'session/catalog/subscribe')
-				return { sessions: [session] };
+			if (definition.method === 'session/list' || definition.method === 'session/catalog/subscribe') return { sessions: [session] };
 			return { session, agentTree: { roots: [] }, threadProjections: [] };
 		},
 	} as unknown as AppServerProtocolClient);
@@ -558,8 +531,7 @@ test('SSH-bound Session requests use server-local paths and retain host identity
 	const connection = {
 		async request(definition: { method: string }, params: unknown): Promise<unknown> {
 			requests.push({ method: definition.method, params });
-			if (definition.method === 'session/list' || definition.method === 'session/catalog/subscribe')
-				return { sessions: [session] };
+			if (definition.method === 'session/list' || definition.method === 'session/catalog/subscribe') return { sessions: [session] };
 			const value = { session, agentTree: { roots: [] }, threadProjections: [] };
 			if (definition.method === 'session/request') return { type: 'session', value };
 			return value;
@@ -582,20 +554,14 @@ test('SSH-bound Session requests use server-local paths and retain host identity
 	assert.deepEqual((await service.subscribeCatalog()).sessions[0]?.executionTarget, remote);
 	assert.deepEqual((await service.subscribe({ sessionId: 'session' })).session.executionTarget, remote);
 	for (const operation of ['archive', 'restore', 'stop'] as const) {
-		assert.deepEqual(
-			(await service[operation]({ sessionId: 'session', commandId: operation })).session.executionTarget,
-			remote,
-		);
+		assert.deepEqual((await service[operation]({ sessionId: 'session', commandId: operation })).session.executionTarget, remote);
 	}
 	// Another authority must remain explicit so the server can reject or route it.
 	await service.create({ ...params, executionTarget: { ...remote, host: 'other-host' } });
 	assert.deepEqual(requests.at(-1)?.params, { ...params, executionTarget: { ...remote, host: 'other-host' } });
 	await service.create({ ...params, executionTarget: null });
 	assert.deepEqual(requests.at(-1)?.params, { ...params, executionTarget: null });
-	assert.deepEqual(
-		(await createAppServerAgentSessionService(connection).read({ sessionId: 'session' })).session.executionTarget,
-		local,
-	);
+	assert.deepEqual((await createAppServerAgentSessionService(connection).read({ sessionId: 'session' })).session.executionTarget, local);
 });
 
 test('SSH-bound Thread reads and subscriptions qualify remote directory paths', async () => {
@@ -605,9 +571,7 @@ test('SSH-bound Thread reads and subscriptions qualify remote directory paths', 
 	const session = { sessionId: 'session', title: 'Remote', status: 'active', manager: {}, threads: [] };
 	const connection = {
 		async request(definition: { method: string }): Promise<unknown> {
-			return definition.method === 'session/subscribe'
-				? { session, agentTree: { roots: [] }, threadProjections: [snapshot] }
-				: snapshot;
+			return definition.method === 'session/subscribe' ? { session, agentTree: { roots: [] }, threadProjections: [snapshot] } : snapshot;
 		},
 	} as unknown as AppServerProtocolClient;
 	const expected = { type: 'ssh', host: 'windows-dev', root: directory.root };
@@ -615,11 +579,7 @@ test('SSH-bound Thread reads and subscriptions qualify remote directory paths', 
 	const params = { sessionId: 'session', threadId: 'thread' };
 	assert.deepEqual((await service.read(params)).directory, expected);
 	assert.deepEqual((await service.subscribe({ ...params, afterSequence: 0 })).directory, expected);
-	assert.deepEqual(
-		(await createAppServerAgentSessionService(connection, 'windows-dev').subscribe({ sessionId: 'session' }))
-			.threadSnapshots[0]?.directory,
-		expected,
-	);
+	assert.deepEqual((await createAppServerAgentSessionService(connection, 'windows-dev').subscribe({ sessionId: 'session' })).threadSnapshots[0]?.directory, expected);
 	assert.deepEqual((await createAppServerAgentThreadService(connection).read(params)).directory, directory);
 	assert.deepEqual(directory, { type: 'local', root: 'C:/workspace' });
 });
@@ -767,14 +727,8 @@ test('history actions use the same Thread and exact sequence and map structured 
 		},
 	});
 	conflict = true;
-	await assert.rejects(
-		service.moveHistory({ ...options, commandId: 'redo', direction: 'redo' }),
-		AgentThreadHistoryConflictError,
-	);
-	await assert.rejects(
-		service.readHistoryState({ sessionId: 'session', threadId: 'thread' }),
-		AgentThreadHistoryConflictError,
-	);
+	await assert.rejects(service.moveHistory({ ...options, commandId: 'redo', direction: 'redo' }), AgentThreadHistoryConflictError);
+	await assert.rejects(service.readHistoryState({ sessionId: 'session', threadId: 'thread' }), AgentThreadHistoryConflictError);
 });
 
 test('Agent Thread notifications detach tool provenance and rich results from transport values', () => {
@@ -1055,13 +1009,8 @@ test('Agent attachment reads use the exact Item scope, verified resources and ca
 		if (mode === 'read') assert.deepEqual(await read, { bytes: new Uint8Array(bytes), mimeType: 'image/png' });
 		else await assert.rejects(read);
 		assert.deepEqual(requests[0], { method: 'attachment/resource/open', params: source });
-		assert.equal(
-			requests.filter(request => request.method === 'resource/release').length,
-			mode === 'replace' ? 0 : 1,
-		);
-		for (const request of requests.filter(
-			request => request.method === 'resource/read' || request.method === 'resource/release',
-		))
+		assert.equal(requests.filter(request => request.method === 'resource/release').length, mode === 'replace' ? 0 : 1);
+		for (const request of requests.filter(request => request.method === 'resource/read' || request.method === 'resource/release'))
 			assert.equal(Object.hasOwn(request.params as object, 'sessionId'), false);
 		assert.equal(requests.filter(request => request.method === 'resource/read').length, mode === 'abort' ? 0 : 1);
 	}
@@ -1189,31 +1138,14 @@ test('Agent linked and App resource reads keep their provider scope and release 
 				},
 			} as AppServerProtocolClient);
 			const source = { sessionId: 'session', threadId: 'thread', itemId: 'result', contentIndex: 2 };
-			const result =
-				selection === 'linked'
-					? service.readToolResource(source, controller.signal)
-					: service.readAppResource(source, 'file:///server/report.md', controller.signal);
-			if (mode === 'read')
-				assert.deepEqual(await result, { bytes: new Uint8Array(bytes), mimeType: 'text/markdown' });
+			const result = selection === 'linked' ? service.readToolResource(source, controller.signal) : service.readAppResource(source, 'file:///server/report.md', controller.signal);
+			if (mode === 'read') assert.deepEqual(await result, { bytes: new Uint8Array(bytes), mimeType: 'text/markdown' });
 			else await assert.rejects(result);
 			assert.equal(requests[0].method, selection === 'linked' ? 'tool/resource/open' : 'tool/app/resource/open');
-			assert.deepEqual(Object.keys(requests[0].params as object).sort(), [
-				'contentIndex',
-				'itemId',
-				'operationId',
-				'sessionId',
-				'threadId',
-				...(selection === 'app' ? ['uri'] : []),
-			]);
-			if (selection === 'app')
-				assert.equal((requests[0].params as { uri: string }).uri, 'file:///server/report.md');
-			assert.equal(
-				requests.filter(request => request.method === 'resource/release').length,
-				mode === 'replace' ? 0 : 1,
-			);
-			for (const request of requests.filter(
-				request => request.method === 'resource/read' || request.method === 'resource/release',
-			))
+			assert.deepEqual(Object.keys(requests[0].params as object).sort(), ['contentIndex', 'itemId', 'operationId', 'sessionId', 'threadId', ...(selection === 'app' ? ['uri'] : [])]);
+			if (selection === 'app') assert.equal((requests[0].params as { uri: string }).uri, 'file:///server/report.md');
+			assert.equal(requests.filter(request => request.method === 'resource/release').length, mode === 'replace' ? 0 : 1);
+			for (const request of requests.filter(request => request.method === 'resource/read' || request.method === 'resource/release'))
 				assert.equal(Object.hasOwn(request.params as object, 'sessionId'), false);
 			const cancellations = requests.filter(request => request.method === 'tool/resource/cancel');
 			assert.equal(cancellations.length, mode === 'abort' ? 1 : 0);
@@ -1408,11 +1340,7 @@ test('Fork and edit dispatch existing typed session operations and keep their re
 				type: params.request.type === 'rewriteThread' ? 'rewrite' : 'thread',
 				value: {
 					session: {
-						sessionId: wrongSession
-							? 'wrong'
-							: params.request.type === 'forkSession'
-								? 'new-session'
-								: 'source',
+						sessionId: wrongSession ? 'wrong' : params.request.type === 'forkSession' ? 'new-session' : 'source',
 					},
 					threadId: 'new-thread',
 					turn: { turnId: 'edited-turn', sequence: 1 },
@@ -1429,10 +1357,7 @@ test('Fork and edit dispatch existing typed session operations and keep their re
 		sessionId: 'source',
 		threadId: 'new-thread',
 	});
-	assert.deepEqual(
-		await service.rewrite({ ...base, beforeTurnId: 'old-turn', input: [{ type: 'text', text: 'Edited' }] }),
-		{ sessionId: 'source', threadId: 'new-thread' },
-	);
+	assert.deepEqual(await service.rewrite({ ...base, beforeTurnId: 'old-turn', input: [{ type: 'text', text: 'Edited' }] }), { sessionId: 'source', threadId: 'new-thread' });
 	assert.deepEqual(requests, [
 		{
 			method: 'session/request',
@@ -1467,8 +1392,5 @@ test('Fork and edit dispatch existing typed session operations and keep their re
 	]);
 	wrongSession = true;
 	await assert.rejects(service.fork({ ...base, target: 'thread' }), /different conversation/);
-	await assert.rejects(
-		service.rewrite({ ...base, beforeTurnId: 'turn', input: [{ type: 'text', text: 'Edited' }] }),
-		/different conversation/,
-	);
+	await assert.rejects(service.rewrite({ ...base, beforeTurnId: 'turn', input: [{ type: 'text', text: 'Edited' }] }), /different conversation/);
 });

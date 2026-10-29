@@ -47,9 +47,7 @@ suite('App Server Chat Debug service', () => {
 		} as unknown as IAgentThreadService;
 		const registrations = getSingletonServiceDescriptors().filter(([id]) => id === IChatDebugService);
 		assert.equal(registrations.length, 1);
-		using services = new InstantiationService(
-			new ServiceCollection([IAgentThreadService, threads], registrations[0]!),
-		);
+		using services = new InstantiationService(new ServiceCollection([IAgentThreadService, threads], registrations[0]!));
 		const trace = services.get(IChatDebugService);
 		assert.deepEqual(calls, []);
 		assert.equal((await trace.readTrace('session', {})).trace.sessionId, 'session');

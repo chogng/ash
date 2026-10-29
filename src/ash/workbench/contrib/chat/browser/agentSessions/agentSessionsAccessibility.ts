@@ -1,19 +1,11 @@
 import { isHTMLElement } from '../../../../../base/browser/dom.js';
 import { DisposableStore, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import type { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
@@ -25,10 +17,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	},
 });
 
-export function registerAgentSessionsAccessibility(
-	sidebar: HTMLElement,
-	contextKeyService: IContextKeyService,
-): IDisposable {
+export function registerAgentSessionsAccessibility(sidebar: HTMLElement, contextKeyService: IContextKeyService): IDisposable {
 	const disposables = new DisposableStore();
 	const scopedContext = disposables.add(contextKeyService.createScoped(sidebar));
 	scopedContext.createKey('agentSessionsSidebarFocused', true);

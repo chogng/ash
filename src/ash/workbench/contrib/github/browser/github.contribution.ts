@@ -10,46 +10,24 @@ import { IClipboardService } from '../../../../platform/clipboard/common/clipboa
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
-import type {
-	GitHubAccount,
-	GitHubRemoteRepository,
-	GitHubRepositoryVisibility,
-} from '../../../../platform/github/common/githubService.js';
+import type { GitHubAccount, GitHubRemoteRepository, GitHubRepositoryVisibility } from '../../../../platform/github/common/githubService.js';
 import { URI } from '../../../../base/common/uri.js';
 import { getErrorMessage } from '../../../../base/common/errors.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { IAccountService } from '../../../../platform/accounts/common/accountService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import {
-	GitHubError,
-	GitHubErrorCode,
-	GitHubIssueState,
-	IGitHubService,
-	type GitHubRepository,
-} from '../../../../platform/github/common/githubService.js';
+import { GitHubError, GitHubErrorCode, GitHubIssueState, IGitHubService, type GitHubRepository } from '../../../../platform/github/common/githubService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { filterQuickPickItems } from '../../../../platform/quickinput/browser/quickInputList.js';
 import { QuickAccessRegistry } from '../../../../platform/quickinput/common/quickAccess.js';
-import {
-	PickerQuickAccessProvider,
-	type IPickerQuickAccessItem,
-	type Picks,
-} from '../../../../platform/quickinput/browser/pickerQuickAccess.js';
+import { PickerQuickAccessProvider, type IPickerQuickAccessItem, type Picks } from '../../../../platform/quickinput/browser/pickerQuickAccess.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { localize, localize2 } from '../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -60,12 +38,7 @@ import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { GitHubEditor, githubEditorId } from './githubEditor.js';
 import { GitHubReviewModel, IGitHubReviewModel } from './githubReviewModel.js';
-import {
-	githubRemotes,
-	isGitHubBranchProtected,
-	type LocalRepository,
-	readLocalRepositories,
-} from '../common/localRepository.js';
+import { githubRemotes, isGitHubBranchProtected, type LocalRepository, readLocalRepositories } from '../common/localRepository.js';
 
 /** Workspace repository search is transient; the GitHub editor keeps account and review state. */
 class GitHubQuickAccessProvider extends PickerQuickAccessProvider<IPickerQuickAccessItem> {
@@ -99,11 +72,7 @@ class GitHubQuickAccessProvider extends PickerQuickAccessProvider<IPickerQuickAc
 		  }
 		| undefined;
 
-	protected override async _getPicks(
-		query: string,
-		_resources: DisposableStore,
-		token: CancellationToken,
-	): Promise<Picks<IPickerQuickAccessItem>> {
+	protected override async _getPicks(query: string, _resources: DisposableStore, token: CancellationToken): Promise<Picks<IPickerQuickAccessItem>> {
 		const issues = this.issues;
 		const more = this.loadMoreRequested && this.pageState?.query === query;
 		this.loadMoreRequested = false;
@@ -113,15 +82,7 @@ class GitHubQuickAccessProvider extends PickerQuickAccessProvider<IPickerQuickAc
 		const accept =
 			(run: () => Promise<unknown>): (() => void) =>
 			() => {
-				void run().catch(error =>
-					this.notifications.error(
-						localize(
-							'github.quickAccess.openFailed',
-							'Could not open the GitHub result: {0}',
-							getErrorMessage(error),
-						),
-					),
-				);
+				void run().catch(error => this.notifications.error(localize('github.quickAccess.openFailed', 'Could not open the GitHub result: {0}', getErrorMessage(error))));
 			};
 		const openOverview = accept(() =>
 			this.editors.openEditor({
@@ -133,10 +94,7 @@ class GitHubQuickAccessProvider extends PickerQuickAccessProvider<IPickerQuickAc
 		);
 		try {
 			if (!more) {
-				const [accounts, checkouts] = await Promise.all([
-					this.github.listAccounts(token),
-					readLocalRepositories(this.commands),
-				]);
+				const [accounts, checkouts] = await Promise.all([this.github.listAccounts(token), readLocalRepositories(this.commands)]);
 				if (token.isCancellationRequested) return [];
 				const repositories = new Map<string, GitHubRepository>();
 				for (const checkout of checkouts) {
@@ -144,12 +102,8 @@ class GitHubQuickAccessProvider extends PickerQuickAccessProvider<IPickerQuickAc
 						const identity = remote.identity;
 						if (identity?.provider !== 'github') continue;
 						const account =
-							accounts.find(
-								account =>
-									account.id === this.review.selectedAccount?.id &&
-									account.host === identity.host &&
-									account.status === 'ready',
-							) ?? accounts.find(account => account.host === identity.host && account.status === 'ready');
+							accounts.find(account => account.id === this.review.selectedAccount?.id && account.host === identity.host && account.status === 'ready') ??
+							accounts.find(account => account.host === identity.host && account.status === 'ready');
 						if (!account) continue;
 						const repository = {
 							host: identity.host,
@@ -157,33 +111,20 @@ class GitHubQuickAccessProvider extends PickerQuickAccessProvider<IPickerQuickAc
 							owner: identity.owner,
 							name: identity.repository,
 						};
-						repositories.set(
-							`${repository.host}/${repository.owner}/${repository.name}`.toLowerCase(),
-							repository,
-						);
+						repositories.set(`${repository.host}/${repository.owner}/${repository.name}`.toLowerCase(), repository);
 					}
 				}
 				// An explicitly selected review repository also works when no Git provider is installed.
 				if (!repositories.size && this.review.repository) {
 					const repository = this.review.repository;
-					if (
-						accounts.some(
-							account =>
-								account.host === repository.host &&
-								account.status === 'ready' &&
-								(!repository.accountId || account.id === repository.accountId),
-						)
-					) {
+					if (accounts.some(account => account.host === repository.host && account.status === 'ready' && (!repository.accountId || account.id === repository.accountId))) {
 						repositories.set(this.review.repositoryKey!, repository);
 					}
 				}
 				if (!repositories.size) {
 					return [
 						{
-							label: localize(
-								'github.quickAccess.chooseRepository',
-								'Open GitHub to sign in or choose a repository',
-							),
+							label: localize('github.quickAccess.chooseRepository', 'Open GitHub to sign in or choose a repository'),
 							alwaysShow: true,
 							accept: openOverview,
 						},
@@ -211,9 +152,7 @@ class GitHubQuickAccessProvider extends PickerQuickAccessProvider<IPickerQuickAc
 								scheme: 'ash-github',
 								authority: repository.host,
 								path: `/${repository.owner}/${repository.name}/${issues ? 'issues' : 'pull'}/${item.number}`,
-								query: new URLSearchParams(
-									repository.accountId ? { account: repository.accountId } : {},
-								).toString(),
+								query: new URLSearchParams(repository.accountId ? { account: repository.accountId } : {}).toString(),
 							}),
 							label: `#${item.number} ${item.title}`,
 							readOnly: true,
@@ -246,14 +185,8 @@ class GitHubQuickAccessProvider extends PickerQuickAccessProvider<IPickerQuickAc
 				{
 					label:
 						error instanceof GitHubError && error.code === GitHubErrorCode.AuthenticationRequired
-							? localize(
-									'github.quickAccess.signIn',
-									'Sign in to GitHub to search issues and pull requests',
-								)
-							: localize(
-									'github.quickAccess.failed',
-									'GitHub search failed. Open GitHub to reconnect or retry.',
-								),
+							? localize('github.quickAccess.signIn', 'Sign in to GitHub to search issues and pull requests')
+							: localize('github.quickAccess.failed', 'GitHub search failed. Open GitHub to reconnect or retry.'),
 					alwaysShow: true,
 					accept: openOverview,
 				},
@@ -274,9 +207,7 @@ for (const mode of [
 				: localize('github.quickAccess.prPlaceholder', 'Search open GitHub pull requests by title or number');
 		},
 		get helpLabel() {
-			return mode.issues
-				? localize('github.quickAccess.issuesTab', 'Issues')
-				: localize('github.quickAccess.prTab', 'PR');
+			return mode.issues ? localize('github.quickAccess.issuesTab', 'Issues') : localize('github.quickAccess.prTab', 'PR');
 		},
 		get tabLabel() {
 			return this.helpLabel;
@@ -309,14 +240,12 @@ registerAction2(
 			});
 		}
 		public override run(accessor: ServicesAccessor): Promise<unknown> {
-			return accessor
-				.get(IEditorService)
-				.openEditor({
-					resource: URI.parse('ash-github:/'),
-					label: localize('github.editor.title', 'GitHub Pull Requests and Issues'),
-					readOnly: true,
-					showBreadcrumbs: false,
-				});
+			return accessor.get(IEditorService).openEditor({
+				resource: URI.parse('ash-github:/'),
+				label: localize('github.editor.title', 'GitHub Pull Requests and Issues'),
+				readOnly: true,
+				showBreadcrumbs: false,
+			});
 		}
 	},
 );
@@ -333,10 +262,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	setting: {
 		valueType: 'boolean',
 		title: localize('github.editor.verbosity', 'GitHub editor accessibility help'),
-		description: localize(
-			'github.editor.verbosityDescription',
-			'Announce how to open keyboard help in the GitHub editor.',
-		),
+		description: localize('github.editor.verbosityDescription', 'Announce how to open keyboard help in the GitHub editor.'),
 	},
 });
 
@@ -395,20 +321,13 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize('github.settings.verbosity', 'GitHub settings accessibility help');
 		},
 		get description() {
-			return localize(
-				'github.settings.verbosityDescription',
-				'Announce how to open accessibility help in GitHub settings.',
-			);
+			return localize('github.settings.verbosityDescription', 'Announce how to open accessibility help in GitHub settings.');
 		},
 	},
 });
 
 // These are window interactions. Repository API policy remains in the profile-scoped Rust provider.
-async function githubPick<T>(
-	quick: IQuickInputService,
-	title: string,
-	values: readonly { label: string; description?: string; detail?: string; value: T }[],
-): Promise<T | undefined> {
+async function githubPick<T>(quick: IQuickInputService, title: string, values: readonly { label: string; description?: string; detail?: string; value: T }[]): Promise<T | undefined> {
 	const resources = new DisposableStore();
 	const picker = resources.add(quick.createQuickPick<IQuickPickItem & { value: T }>());
 	picker.placeholder = title;
@@ -434,17 +353,11 @@ async function githubPick<T>(
 	});
 }
 
-async function githubAccount(
-	github: IGitHubService,
-	quick: IQuickInputService,
-	commands: ICommandService,
-): Promise<GitHubAccount | undefined> {
+async function githubAccount(github: IGitHubService, quick: IQuickInputService, commands: ICommandService): Promise<GitHubAccount | undefined> {
 	const accounts = (await github.listAccounts()).filter(account => account.status === 'ready');
 	if (!accounts.length) {
 		await commands.executeCommand('workbench.action.github.open');
-		throw new Error(
-			localize('github.repository.signIn', 'Sign in to GitHub before searching or publishing repositories.'),
-		);
+		throw new Error(localize('github.repository.signIn', 'Sign in to GitHub before searching or publishing repositories.'));
 	}
 	if (accounts.length === 1) return accounts[0];
 	return githubPick(
@@ -455,12 +368,7 @@ async function githubAccount(
 }
 
 /** Each query owns its cancellation source; obsolete replies never replace visible results. */
-async function githubRemote(
-	github: IGitHubService,
-	quick: IQuickInputService,
-	accounts: IAccountService,
-	account: GitHubAccount,
-): Promise<GitHubRemoteRepository | undefined> {
+async function githubRemote(github: IGitHubService, quick: IQuickInputService, accounts: IAccountService, account: GitHubAccount): Promise<GitHubRemoteRepository | undefined> {
 	const resources = new DisposableStore();
 	type RemotePick = IQuickPickItem & ({ repository: GitHubRemoteRepository } | { page: number });
 	const picker = resources.add(quick.createQuickPick<RemotePick>());
@@ -488,9 +396,7 @@ async function githubRemote(
 					.filter(row => !seen.has(row.htmlUrl))
 					.map(row => ({
 						label: `${row.repository.owner}/${row.repository.name}`,
-						description: row.private
-							? localize('github.repository.private', 'Private')
-							: localize('github.repository.stars', '{0} stars', row.stars),
+						description: row.private ? localize('github.repository.private', 'Private') : localize('github.repository.stars', '{0} stars', row.stars),
 						detail: row.description ?? undefined,
 						repository: row,
 					})),
@@ -559,12 +465,7 @@ async function githubRemote(
 }
 
 /** Branch pages load only on request, and closing the picker cancels its in-flight read. */
-async function githubBranch(
-	github: IGitHubService,
-	quick: IQuickInputService,
-	accounts: IAccountService,
-	remote: GitHubRemoteRepository,
-): Promise<{ readonly name?: string } | undefined> {
+async function githubBranch(github: IGitHubService, quick: IQuickInputService, accounts: IAccountService, remote: GitHubRemoteRepository): Promise<{ readonly name?: string } | undefined> {
 	const resources = new DisposableStore();
 	const source = new CancellationTokenSource();
 	type BranchPick = IQuickPickItem & ({ name: string } | { page: number });
@@ -588,11 +489,7 @@ async function githubBranch(
 				picker.hide();
 				return;
 			}
-			const picks = [...branches.values()].sort(
-				(a, b) =>
-					Number('name' in b && b.name === remote.defaultBranch) -
-					Number('name' in a && a.name === remote.defaultBranch),
-			);
+			const picks = [...branches.values()].sort((a, b) => Number('name' in b && b.name === remote.defaultBranch) - Number('name' in a && a.name === remote.defaultBranch));
 			picker.items = [
 				...picks,
 				...(result.nextPage === null
@@ -609,10 +506,7 @@ async function githubBranch(
 			if (!disposed)
 				picker.items = [
 					{
-						label: localize(
-							'github.repository.retryBranches',
-							'Could not load branches. Press Enter to retry.',
-						),
+						label: localize('github.repository.retryBranches', 'Could not load branches. Press Enter to retry.'),
 						detail: getErrorMessage(error),
 						page,
 						alwaysShow: true,
@@ -676,30 +570,18 @@ registerAction2(
 			const branch = await githubBranch(github, quick, accounts, remote);
 			if (!branch) return;
 			const ssh = configuration.getValue<string>('github.gitProtocol') === 'ssh';
-			await commands.executeCommand(
-				'git.clone',
-				ssh ? remote.sshUrl : remote.cloneUrl,
-				branch.name ?? null,
-				account.id,
-			);
+			await commands.executeCommand('git.clone', ssh ? remote.sshUrl : remote.cloneUrl, branch.name ?? null, account.id);
 		}
 	},
 );
 
-async function githubCheckout(
-	commands: ICommandService,
-	dialogs: IDialogService,
-	quick: IQuickInputService,
-): Promise<LocalRepository | undefined> {
+async function githubCheckout(commands: ICommandService, dialogs: IDialogService, quick: IQuickInputService): Promise<LocalRepository | undefined> {
 	let repositories = await readLocalRepositories(commands);
 	if (!repositories.length) {
 		if (
 			!(
 				await dialogs.confirm({
-					message: localize(
-						'github.publish.initialize',
-						'Initialize a Git repository in a workspace folder before publishing?',
-					),
+					message: localize('github.publish.initialize', 'Initialize a Git repository in a workspace folder before publishing?'),
 				})
 			).confirmed
 		)
@@ -747,14 +629,8 @@ registerAction2(
 				if (
 					!(
 						await dialogs.confirm({
-							message: localize(
-								'github.publish.firstCommit',
-								'Create the first commit before publishing?',
-							),
-							detail: localize(
-								'github.publish.reviewFiles',
-								'Review ignored files and choose which files to include in the Git commit dialog.',
-							),
+							message: localize('github.publish.firstCommit', 'Create the first commit before publishing?'),
+							detail: localize('github.publish.reviewFiles', 'Review ignored files and choose which files to include in the Git commit dialog.'),
 						})
 					).confirmed
 				)
@@ -763,30 +639,20 @@ registerAction2(
 				checkout = (await readLocalRepositories(commands)).find(repository => repository.id === checkout!.id);
 				if (!checkout?.head.objectId) return;
 			}
-			if (checkout.head.type !== 'branch' || !checkout.head.name)
-				throw new Error(
-					localize('github.publish.branchRequired', 'Check out a local branch before publishing.'),
-				);
+			if (checkout.head.type !== 'branch' || !checkout.head.name) throw new Error(localize('github.publish.branchRequired', 'Check out a local branch before publishing.'));
 			const name = await quick.input({
 				title: localize('github.publish.name', 'GitHub repository name'),
 				value: checkout.label.replace(/[^a-zA-Z0-9_.-]/g, '-'),
 				validateInput: async value =>
 					/^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,99}$/.test(value)
 						? undefined
-						: localize(
-								'github.publish.invalidName',
-								'Use 1–100 letters, digits, underscores, periods or hyphens. Start with a letter, digit or underscore.',
-							),
+						: localize('github.publish.invalidName', 'Use 1–100 letters, digits, underscores, periods or hyphens. Start with a letter, digit or underscore.'),
 			});
 			if (!name) return;
-			const visibility = await githubPick<GitHubRepositoryVisibility>(
-				quick,
-				localize('github.publish.visibility', 'Choose repository visibility'),
-				[
-					{ label: localize('github.publish.private', 'Publish private repository'), value: 'private' },
-					{ label: localize('github.publish.public', 'Publish public repository'), value: 'public' },
-				],
-			);
+			const visibility = await githubPick<GitHubRepositoryVisibility>(quick, localize('github.publish.visibility', 'Choose repository visibility'), [
+				{ label: localize('github.publish.private', 'Publish private repository'), value: 'private' },
+				{ label: localize('github.publish.public', 'Publish public repository'), value: 'public' },
+			]);
 			if (!visibility) return;
 			let remoteName = 'origin';
 			if (checkout.remotes.some(remote => remote.name === remoteName)) {
@@ -796,10 +662,7 @@ registerAction2(
 					validateInput: async value =>
 						/^[a-zA-Z0-9_-]+$/.test(value) && !checkout!.remotes.some(remote => remote.name === value)
 							? undefined
-							: localize(
-									'github.publish.remoteInvalid',
-									'Choose a new remote name using letters, digits, underscores or hyphens.',
-								),
+							: localize('github.publish.remoteInvalid', 'Choose a new remote name using letters, digits, underscores or hyphens.'),
 				});
 				if (!chosen) return;
 				remoteName = chosen;
@@ -810,20 +673,8 @@ registerAction2(
 					await dialogs.confirm({
 						message:
 							visibility === 'private'
-								? localize(
-										'github.publish.confirmPrivate',
-										'Publish {0}/{1} as a private repository on {2}?',
-										account.login,
-										name,
-										account.host,
-									)
-								: localize(
-										'github.publish.confirmPublic',
-										'Publish {0}/{1} as a public repository on {2}?',
-										account.login,
-										name,
-										account.host,
-									),
+								? localize('github.publish.confirmPrivate', 'Publish {0}/{1} as a private repository on {2}?', account.login, name, account.host)
+								: localize('github.publish.confirmPublic', 'Publish {0}/{1} as a public repository on {2}?', account.login, name, account.host),
 						detail: localize(
 							'github.publish.confirmDetail',
 							'Only committed history on branch {0} will be pushed from {1}. Uncommitted files: {2}. Review the history for secrets before publishing.',
@@ -841,26 +692,13 @@ registerAction2(
 				created = await github.createRepository(account.id, name, '', visibility);
 			} catch (error) {
 				if (error instanceof GitHubError && error.code === GitHubErrorCode.SubmissionUncertain)
-					throw new Error(
-						localize(
-							'github.publish.uncertain',
-							'Repository creation may have succeeded. Check https://{0}/{1}/{2} before retrying.',
-							account.host,
-							account.login,
-							name,
-						),
-					);
+					throw new Error(localize('github.publish.uncertain', 'Repository creation may have succeeded. Check https://{0}/{1}/{2} before retrying.', account.host, account.login, name));
 				throw error;
 			}
 			// The remote write is complete. Failure below must never cause repository creation to replay.
 			try {
 				const ssh = configuration.getValue<string>('github.gitProtocol') === 'ssh';
-				await commands.executeCommand(
-					'git.executeRepositoryCommand',
-					checkout.id,
-					{ kind: 'addRemote', name: remoteName, url: ssh ? created.sshUrl : created.cloneUrl },
-					account.id,
-				);
+				await commands.executeCommand('git.executeRepositoryCommand', checkout.id, { kind: 'addRemote', name: remoteName, url: ssh ? created.sshUrl : created.cloneUrl }, account.id);
 				await commands.executeCommand(
 					'git.executeRepositoryCommand',
 					checkout.id,
@@ -932,12 +770,7 @@ for (const action of [
 			? [{ id: MenuId.ExplorerContextShare, group: 'github' }]
 			: action.id === 'github.copyVscodeDevLinkWithoutRange'
 				? [{ id: MenuId.EditorTitleContext, group: 'github' }]
-				: [
-						{ id: MenuId.EditorContextShare, group: 'github' },
-						...(action.id === 'github.copyVscodeDevLink'
-							? []
-							: [{ id: MenuId.ExplorerContextShare, group: 'github' }]),
-					];
+				: [{ id: MenuId.EditorContextShare, group: 'github' }, ...(action.id === 'github.copyVscodeDevLink' ? [] : [{ id: MenuId.ExplorerContextShare, group: 'github' }])];
 	registerAction2(
 		class GitHubShareAction extends Action2 {
 			constructor() {
@@ -955,18 +788,13 @@ for (const action of [
 				const clipboard = accessor.get(IClipboardService);
 				const opener = accessor.get(IOpenerService);
 				const notifications = accessor.get(INotificationService);
-				const editor =
-					accessor.get(ICodeEditorService).getFocusedCodeEditor() ??
-					accessor.get(ICodeEditorService).getActiveCodeEditor();
-				const resource =
-					argument instanceof URI ? argument : accessor.get(IEditorService).activeEditor?.resource;
+				const editor = accessor.get(ICodeEditorService).getFocusedCodeEditor() ?? accessor.get(ICodeEditorService).getActiveCodeEditor();
+				const resource = argument instanceof URI ? argument : accessor.get(IEditorService).activeEditor?.resource;
 				await gitHost.start();
 				await extensions.activateByEvent('onCommand:git.getRepositoryContexts');
 				const repositories = await readLocalRepositories(commands);
 				let checkout = resource
-					? repositories
-							.filter(repository => extUri.isEqualOrParent(resource, repository.root))
-							.sort((a, b) => b.root.path.length - a.root.path.length)[0]
+					? repositories.filter(repository => extUri.isEqualOrParent(resource, repository.root)).sort((a, b) => b.root.path.length - a.root.path.length)[0]
 					: await githubPick(
 							quick,
 							localize('github.share.checkout', 'Choose a repository to share'),
@@ -976,19 +804,13 @@ for (const action of [
 								value: repository,
 							})),
 						);
-				if (!checkout)
-					throw new Error(
-						localize('github.share.noCheckout', 'Open a file in a Git repository to share a link.'),
-					);
+				if (!checkout) throw new Error(localize('github.share.noCheckout', 'Open a file in a Git repository to share a link.'));
 				const remotes = githubRemotes(checkout);
 				if (!remotes.length) {
 					if (
 						(
 							await dialogs.confirm({
-								message: localize(
-									'github.share.publish',
-									'Publish this repository on GitHub before sharing?',
-								),
+								message: localize('github.share.publish', 'Publish this repository on GitHub before sharing?'),
 							})
 						).confirmed
 					)
@@ -1012,10 +834,7 @@ for (const action of [
 					if (
 						!(
 							await dialogs.confirm({
-								message: localize(
-									'github.share.publishBranch',
-									'Publish the current branch before sharing?',
-								),
+								message: localize('github.share.publishBranch', 'Publish the current branch before sharing?'),
 							})
 						).confirmed
 					)
@@ -1043,81 +862,42 @@ for (const action of [
 					if (
 						!(
 							await dialogs.confirm({
-								message: localize(
-									'github.share.pull',
-									'Pull remote commits before sharing a link to the branch?',
-								),
+								message: localize('github.share.pull', 'Pull remote commits before sharing a link to the branch?'),
 							})
 						).confirmed
 					)
 						return;
 					await commands.executeCommand('git.pull', checkout.id);
-					checkout = (await readLocalRepositories(commands)).find(
-						repository => repository.id === checkout!.id,
-					);
+					checkout = (await readLocalRepositories(commands)).find(repository => repository.id === checkout!.id);
 					if (checkout?.head.upstream && checkout.head.upstream.behind > 0)
-						throw new Error(
-							localize(
-								'github.share.behind',
-								'The local branch is still behind the remote. Pull the latest changes before sharing.',
-							),
-						);
+						throw new Error(localize('github.share.behind', 'The local branch is still behind the remote. Pull the latest changes before sharing.'));
 				}
 				if (!checkout) return;
-				if (!checkout.head.objectId)
-					throw new Error(
-						localize('github.share.commitRequired', 'Create and publish a commit before sharing a link.'),
-					);
-				if (
-					checkout.head.type === 'branch' &&
-					(!checkout.head.upstream?.name.startsWith(`${remote.name}/`) || checkout.head.upstream.ahead > 0)
-				)
-					throw new Error(
-						localize(
-							'github.share.unpublished',
-							'The branch still has unpublished commits. Publish or push it before sharing.',
-						),
-					);
-				if (
-					(checkout.uncommittedChanges ?? 0) > 0 ||
-					(resource && workingCopies.get(resource).some(copy => copy.isDirty))
-				) {
+				if (!checkout.head.objectId) throw new Error(localize('github.share.commitRequired', 'Create and publish a commit before sharing a link.'));
+				if (checkout.head.type === 'branch' && (!checkout.head.upstream?.name.startsWith(`${remote.name}/`) || checkout.head.upstream.ahead > 0))
+					throw new Error(localize('github.share.unpublished', 'The branch still has unpublished commits. Publish or push it before sharing.'));
+				if ((checkout.uncommittedChanges ?? 0) > 0 || (resource && workingCopies.get(resource).some(copy => copy.isDirty))) {
 					if (
 						!(
 							await dialogs.confirm({
 								message: localize('github.share.dirty', 'Copy a link to the committed version?'),
-								detail: localize(
-									'github.share.dirtyDetail',
-									'Local changes are not included. Line numbers may differ from the published file.',
-								),
+								detail: localize('github.share.dirtyDetail', 'Local changes are not included. Line numbers may differ from the published file.'),
 								primaryButton: localize('github.share.copyAnyway', 'Continue'),
 							})
 						).confirmed
 					)
 						return;
 				}
-				const file =
-					resource && resource.path !== checkout.root.path
-						? resource.path.slice(checkout.root.path.replace(/\/$/, '').length + 1)
-						: undefined;
+				const file = resource && resource.path !== checkout.root.path ? resource.path.slice(checkout.root.path.replace(/\/$/, '').length + 1) : undefined;
 				const directory = resource ? (await files.stat(resource)).kind === FileKind.Directory : false;
-				const selection =
-					!withoutRange &&
-					!directory &&
-					resource &&
-					editor?.getModel()?.uri.toString() === resource.toString()
-						? editor.getSelection()
-						: undefined;
+				const selection = !withoutRange && !directory && resource && editor?.getModel()?.uri.toString() === resource.toString() ? editor.getSelection() : undefined;
 				const url = await github.shareLink({
 					repository: {
 						host: remote.identity.host,
 						owner: remote.identity.owner,
 						name: remote.identity.repository,
 					},
-					reference:
-						action.permalink || checkout.head.type !== 'branch'
-							? checkout.head.objectId
-							: checkout.head.upstream!.name.slice(remote.name.length + 1),
+					reference: action.permalink || checkout.head.type !== 'branch' ? checkout.head.objectId : checkout.head.upstream!.name.slice(remote.name.length + 1),
 					referenceKind: action.permalink || checkout.head.type !== 'branch' ? 'commit' : 'branch',
 					target: action.target,
 					...(file ? { path: file, pathKind: directory ? ('directory' as const) : ('file' as const) } : {}),
@@ -1125,12 +905,7 @@ for (const action of [
 						? {
 								lines: {
 									start: selection.startLineNumber,
-									end:
-										selection.endLineNumber -
-										(selection.endColumn === 1 &&
-										selection.endLineNumber > selection.startLineNumber
-											? 1
-											: 0),
+									end: selection.endLineNumber - (selection.endColumn === 1 && selection.endLineNumber > selection.startLineNumber ? 1 : 0),
 								},
 							}
 						: {}),
@@ -1147,20 +922,14 @@ for (const action of [
 
 // Optional provider hook used by the Git extension immediately before its normal commit guard.
 CommandsRegistry.register('github.isBranchProtected', async (accessor, branch: unknown, remotes: unknown) => {
-	if (typeof branch !== 'string' || !Array.isArray(remotes) || remotes.length > 128)
-		throw new TypeError('Invalid branch protection request');
+	if (typeof branch !== 'string' || !Array.isArray(remotes) || remotes.length > 128) throw new TypeError('Invalid branch protection request');
 	if (accessor.get(IConfigurationService).getValue<boolean>('github.branchProtection') === false) return false;
 	const github = accessor.get(IGitHubService);
 	const accounts = await github.listAccounts();
 	for (const remote of remotes) {
 		const identity = remote?.identity;
 		if (identity?.provider !== 'github') continue;
-		if (
-			typeof identity.host !== 'string' ||
-			typeof identity.owner !== 'string' ||
-			typeof identity.repository !== 'string'
-		)
-			throw new TypeError('Invalid GitHub remote identity');
+		if (typeof identity.host !== 'string' || typeof identity.owner !== 'string' || typeof identity.repository !== 'string') throw new TypeError('Invalid GitHub remote identity');
 		const account = accounts.find(account => account.host === identity.host && account.status === 'ready');
 		if (!account) continue;
 		if (
@@ -1189,10 +958,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	setting: {
 		valueType: 'boolean',
 		title: localize('github.protection.setting', 'GitHub branch protection'),
-		description: localize(
-			'github.protection.description',
-			'Check active GitHub rulesets before committing to a protected branch.',
-		),
+		description: localize('github.protection.description', 'Check active GitHub rulesets before committing to a protected branch.'),
 	},
 });
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
@@ -1205,10 +971,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	setting: {
 		valueType: 'select',
 		title: localize('github.protocol.setting', 'GitHub Git protocol'),
-		description: localize(
-			'github.protocol.description',
-			'Protocol used when cloning or publishing GitHub repositories.',
-		),
+		description: localize('github.protocol.description', 'Protocol used when cloning or publishing GitHub repositories.'),
 		options: [
 			{ value: 'https', label: 'HTTPS' },
 			{ value: 'ssh', label: 'SSH' },

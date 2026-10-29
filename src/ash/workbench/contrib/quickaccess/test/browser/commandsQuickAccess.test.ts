@@ -17,11 +17,7 @@ import { formatNlsMessage, localize2, resetNlsResolver, setNlsResolver } from '.
 import { filterQuickPickItems } from '../../../../../platform/quickinput/browser/quickInputList.js';
 import { MenuId, MenusRegistry, IMenuService } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
-import {
-	CommandRegistry,
-	CommandsRegistry,
-	ICommandService,
-} from '../../../../../platform/commands/common/commands.js';
+import { CommandRegistry, CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IDialogService, DialogResult, DialogSeverity } from '../../../../../platform/dialogs/common/dialogs.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -84,12 +80,7 @@ function registerHistoryServices(services: InstantiationService, resources: Disp
 			}),
 		),
 	);
-	services.registerInstance(
-		IQuickInputService,
-		resources.add(
-			new TestQuickInputService({ container: dom.window.document.body, instantiationService: services }),
-		),
-	);
+	services.registerInstance(IQuickInputService, resources.add(new TestQuickInputService({ container: dom.window.document.body, instantiationService: services })));
 	services.registerInstance(IPreferencesService, {
 		openSettings: async () => {
 			throw new Error('Unexpected settings request');
@@ -107,9 +98,7 @@ test('Command Palette finds localized commands by their English title and report
 	using resources = new DisposableStore();
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
 	assert.ok(chinese);
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		const registry = new CommandRegistry();
 		resources.add(
@@ -170,9 +159,7 @@ test('Command Palette finds localized commands by their English title and report
 				'启动调试',
 			).includes(item),
 		);
-		const categorized = picker.items.find(
-			candidate => !('type' in candidate) && candidate.description === 'test.categorized',
-		);
+		const categorized = picker.items.find(candidate => !('type' in candidate) && candidate.description === 'test.categorized');
 		assert.ok(categorized && !('type' in categorized));
 		assert.deepEqual([categorized.label, categorized.detail], ['文件: 启动调试', 'File: Start Debugging']);
 		assert.ok(filterQuickPickItems([categorized], 'File').includes(categorized));
@@ -292,9 +279,7 @@ test('Command Palette retains the focused embedded editor actions while its pick
 	resources.add(resources.add(services.createInstance(CommandsQuickAccessProvider)).provide(picker));
 	focused = false;
 	updated.fire();
-	const item = picker.items.find(
-		candidate => !('type' in candidate) && candidate.description === 'test.outputCommand',
-	);
+	const item = picker.items.find(candidate => !('type' in candidate) && candidate.description === 'test.outputCommand');
 	assert.ok(item && !('type' in item));
 	picker.selectedItems = [item];
 	accept.fire({ inBackground: false });
@@ -339,11 +324,7 @@ test('Command history restores profile recency, bounds entries and follows live 
 		restoredServices.registerInstance(IConfigurationService, configuration);
 		restoredServices.registerInstance(IStorageService, restoredStorage);
 		using restored = restoredServices.createInstance(CommandsHistory);
-		assert.deepEqual(
-			[restored.peek('beta'), restored.peek('alpha')],
-			[1, 2],
-			'History follows the profile across workspaces and service recreation',
-		);
+		assert.deepEqual([restored.peek('beta'), restored.peek('alpha')], [1, 2], 'History follows the profile across workspaces and service recreation');
 		await configuration.updateValue('workbench.commandPalette.history', 1);
 		assert.deepEqual([history.peek('beta'), history.peek('alpha')], [undefined, 1]);
 		history.push('gamma');
@@ -360,21 +341,11 @@ test('Command history restores profile recency, bounds entries and follows live 
 		for (const invalid of [-1, NaN, Infinity, '50']) {
 			await assert.rejects(configuration.updateValue('workbench.commandPalette.history', invalid));
 		}
-		for (const raw of [
-			'invalid json',
-			'{"version":2,"entries":["alpha"]}',
-			'{"version":1,"entries":["alpha",2]}',
-			'{"version":1,"entries":["alpha","alpha"]}',
-		]) {
+		for (const raw of ['invalid json', '{"version":2,"entries":["alpha"]}', '{"version":1,"entries":["alpha",2]}', '{"version":1,"entries":["alpha","alpha"]}']) {
 			storage.store('commandPalette.mru.cache', raw, StorageScope.PROFILE, StorageTarget.USER);
 			assert.equal(history.peek('alpha'), undefined);
 		}
-		storage.store(
-			'commandPalette.mru.cache',
-			'{"version":1,"entries":["external"]}',
-			StorageScope.PROFILE,
-			StorageTarget.USER,
-		);
+		storage.store('commandPalette.mru.cache', '{"version":1,"entries":["external"]}', StorageScope.PROFILE, StorageTarget.USER);
 		assert.equal(history.peek('external'), 1);
 		using otherProfile = new BrowserStorageService({
 			ownerWindow: dom.window as unknown as Window,

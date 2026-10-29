@@ -4,15 +4,16 @@ import { JSDOM } from 'jsdom';
 import { StandardKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { Position } from '../../../common/core/position.js';
 import { Selection } from '../../../common/core/selection.js';
-import {
-	TextAreaInput,
-	type ITextAreaInputHost,
-} from '../../../browser/controller/editContext/textArea/textAreaEditContextInput.js';
+import { TextAreaInput, type ITextAreaInputHost } from '../../../browser/controller/editContext/textArea/textAreaEditContextInput.js';
 import { TextAreaState } from '../../../browser/controller/editContext/textArea/textAreaEditContextState.js';
 
 function createHost(getScreenReaderContent: () => TextAreaState = () => TextAreaState.EMPTY): ITextAreaInputHost {
 	return {
-		context: { viewModel: { getSelections: () => [new Selection(1, 1, 1, 1)] } } as ITextAreaInputHost['context'],
+		context: {
+			viewModel: {
+				getSelections: () => [new Selection(1, 1, 1, 1)],
+			},
+		} as ITextAreaInputHost['context'],
 		getScreenReaderContent,
 		deduceModelPosition: (anchor, deltaOffset, lineFeedCount) => {
 			assert.equal(lineFeedCount, 0);
@@ -79,7 +80,12 @@ test('textarea input publishes insertText through the standard type event', () =
 	element.dispatchEvent(browserEvent);
 	assert.equal(browserEvent.defaultPrevented, true);
 	assert.deepEqual(order, ['beforeinput', 'type']);
-	assert.deepEqual(typeData, { text: 'x', replacePrevCharCnt: 0, replaceNextCharCnt: 0, positionDelta: 0 });
+	assert.deepEqual(typeData, {
+		text: 'x',
+		replacePrevCharCnt: 0,
+		replaceNextCharCnt: 0,
+		positionDelta: 0,
+	});
 	dom.window.close();
 });
 
@@ -101,7 +107,12 @@ test('textarea input publishes normalized composition state', () => {
 	element.dispatchEvent(new dom.window.CompositionEvent('compositionend', { data: 'first\r\nsecond' }));
 	assert.deepEqual(composition, { data: 'x' });
 	assert.deepEqual(types, [
-		{ text: 'first\nsecond', replacePrevCharCnt: 0, replaceNextCharCnt: 0, positionDelta: -7 },
+		{
+			text: 'first\nsecond',
+			replacePrevCharCnt: 0,
+			replaceNextCharCnt: 0,
+			positionDelta: -7,
+		},
 	]);
 	assert.deepEqual(completed, [{ data: 'first\nsecond' }]);
 	dom.window.close();
@@ -119,9 +130,7 @@ test('textarea composition reads candidate text after the browser updates its va
 		element.dispatchEvent(new dom.window.CompositionEvent('compositionupdate', { data: text }));
 		element.value = text;
 		element.setSelectionRange(text.length, text.length);
-		element.dispatchEvent(
-			new dom.window.InputEvent('input', { data: text, inputType: 'insertCompositionText', isComposing: true }),
-		);
+		element.dispatchEvent(new dom.window.InputEvent('input', { data: text, inputType: 'insertCompositionText', isComposing: true }));
 	}
 	element.dispatchEvent(new dom.window.CompositionEvent('compositionend', { data: '你' }));
 	assert.deepEqual(types, [
@@ -146,9 +155,7 @@ test('textarea composition extracts candidates from the preserved native context
 		['你', 3],
 	] as const) {
 		element.setRangeText(text, 1, end, 'end');
-		element.dispatchEvent(
-			new dom.window.InputEvent('input', { data: text, inputType: 'insertCompositionText', isComposing: true }),
-		);
+		element.dispatchEvent(new dom.window.InputEvent('input', { data: text, inputType: 'insertCompositionText', isComposing: true }));
 	}
 	element.dispatchEvent(new dom.window.CompositionEvent('compositionend', { data: '你' }));
 	assert.equal(element.value, '前你后');
@@ -169,9 +176,7 @@ test('textarea composition accepts a system caret change after input', () => {
 	element.dispatchEvent(new dom.window.CompositionEvent('compositionstart'));
 	element.value = '你好';
 	element.setSelectionRange(2, 2);
-	element.dispatchEvent(
-		new dom.window.InputEvent('input', { data: '你好', inputType: 'insertCompositionText', isComposing: true }),
-	);
+	element.dispatchEvent(new dom.window.InputEvent('input', { data: '你好', inputType: 'insertCompositionText', isComposing: true }));
 	element.setSelectionRange(1, 1);
 	dom.window.document.dispatchEvent(new dom.window.Event('selectionchange'));
 	assert.deepEqual(types, [
@@ -222,10 +227,7 @@ test('textarea input releases composition ownership on blur', () => {
 	element.blur();
 	const lateStart = new dom.window.CompositionEvent('compositionstart', { cancelable: true });
 	element.dispatchEvent(lateStart);
-	assert.deepEqual(
-		{ prevented: lateStart.defaultPrevented, compositionStarts },
-		{ prevented: true, compositionStarts: 1 },
-	);
+	assert.deepEqual({ prevented: lateStart.defaultPrevented, compositionStarts }, { prevented: true, compositionStarts: 1 });
 	input.focusTextArea();
 	input.writeNativeTextAreaContent('refocus');
 	assert.equal(element.value, 'ready');

@@ -7,17 +7,10 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'mocha';
-import {
-	ConfigurationScope,
-	ConfigurationRegistry,
-	type IConfigurationNode,
-} from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, ConfigurationRegistry, type IConfigurationNode } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { ConfigurationTarget } from '../../../../../platform/configuration/common/configuration.js';
 import { TestConfigurationService as WorkspaceService } from '../../../../../workbench/services/configuration/test/common/testServices.js';
-import {
-	configurationSettingBinding,
-	SettingModel,
-} from '../../../../../workbench/services/preferences/common/settingsModels.js';
+import { configurationSettingBinding, SettingModel } from '../../../../../workbench/services/preferences/common/settingsModels.js';
 import { ActivityBarPosition, WorkbenchConfiguration } from '../../../../../workbench/common/configuration.js';
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
@@ -52,11 +45,7 @@ class TestPolicyService implements IPolicyService {
 	}
 }
 
-async function createLayeredConfiguration(
-	policies?: IPolicyService,
-	fileService = new FileService(),
-	fileProvider = new InMemoryFileSystemProvider(),
-) {
+async function createLayeredConfiguration(policies?: IPolicyService, fileService = new FileService(), fileProvider = new InMemoryFileSystemProvider()) {
 	const disposables = new DisposableStore();
 	try {
 		const provider = disposables.add(fileProvider);
@@ -68,19 +57,14 @@ async function createLayeredConfiguration(
 		const workspaceFile = URI.file('/project/example.code-workspace');
 		const folderFiles = roots.map(root => URI.joinPath(root, '.vscode', 'settings.json'));
 		const write = async (resource: URI, content: string): Promise<void> => {
-			await files.createDirectory(
-				resource.with({ path: resource.path.slice(0, resource.path.lastIndexOf('/')) }),
-			);
+			await files.createDirectory(resource.with({ path: resource.path.slice(0, resource.path.lastIndexOf('/')) }));
 			await files.writeFile({ resource, content }, { create: true, overwrite: true });
 		};
 		await write(
 			workspaceFile,
 			'// workspace\n{ "folders": [], "settings": { // keep settings\n"editor.layer": "workspace", "[typescript]": { // keep language\n"editor.layer": "workspace-ts" }, "editor.fixed": "ignored", "application.layer": "ignored" }, "unrelated": true }',
 		);
-		await write(
-			folderFiles[0]!,
-			'{ "editor.layer": "folder", "[typescript]": { "editor.layer": "folder-ts" }, "application.layer": "ignored", "window.layer": "ignored" }',
-		);
+		await write(folderFiles[0]!, '{ "editor.layer": "folder", "[typescript]": { "editor.layer": "folder-ts" }, "application.layer": "ignored", "window.layer": "ignored" }');
 		await write(folderFiles[1]!, '{ "editor.layer": "other" }');
 		const registry = new ConfigurationRegistry();
 		for (const [key, scope] of [
@@ -159,13 +143,7 @@ test('Workspace and folder layers resolve resource and language precedence, scop
 	);
 	const inspected = configuration.inspect('editor.layer', overrides);
 	assert.deepEqual(
-		[
-			inspected.defaultValue,
-			inspected.userValue,
-			inspected.workspaceValue,
-			inspected.workspaceFolderValue,
-			inspected.value,
-		],
+		[inspected.defaultValue, inspected.userValue, inspected.workspaceValue, inspected.workspaceFolderValue, inspected.value],
 		['default', 'user-ts', 'workspace-ts', 'folder-ts', 'folder-ts'],
 	);
 	assert.deepEqual(
@@ -173,14 +151,8 @@ test('Workspace and folder layers resolve resource and language precedence, scop
 		['/one', '/two'],
 	);
 	assert.deepEqual(configuration.keys().workspace, ['editor.layer', '[typescript]']);
-	await assert.rejects(
-		configuration.updateValue('application.layer', 'new', ConfigurationTarget.WORKSPACE),
-		/cannot be written/,
-	);
-	await assert.rejects(
-		configuration.updateValue('window.layer', 'new', { resource: roots[0] }, ConfigurationTarget.WORKSPACE_FOLDER),
-		/cannot be written/,
-	);
+	await assert.rejects(configuration.updateValue('application.layer', 'new', ConfigurationTarget.WORKSPACE), /cannot be written/);
+	await assert.rejects(configuration.updateValue('window.layer', 'new', { resource: roots[0] }, ConfigurationTarget.WORKSPACE_FOLDER), /cannot be written/);
 });
 
 test('Workspace writes preserve nested JSONC, target inference and combined language blocks', async () => {
@@ -190,16 +162,9 @@ test('Workspace writes preserve nested JSONC, target inference and combined lang
 	await configuration.updateValue('editor.layer', 'changed');
 	assert.equal(configuration.inspect('editor.layer').workspaceValue, 'changed');
 	assert.equal(JSON.parse((await configuration.read()).source)['editor.layer'], 'user');
-	await configuration.updateValue(
-		'editor.layer',
-		'changed-ts',
-		{ overrideIdentifier: 'typescript' },
-		ConfigurationTarget.WORKSPACE,
-	);
+	await configuration.updateValue('editor.layer', 'changed-ts', { overrideIdentifier: 'typescript' }, ConfigurationTarget.WORKSPACE);
 	const source = (await files.readFile(workspaceFile)).content;
-	assert.ok(
-		source.includes('// workspace') && source.includes('// keep settings') && source.includes('// keep language'),
-	);
+	assert.ok(source.includes('// workspace') && source.includes('// keep settings') && source.includes('// keep language'));
 	assert.ok(source.includes('"unrelated": true'));
 	await configuration.updateValue('editor.layer', 'changed-folder', { resource: roots[0] });
 	assert.equal(configuration.inspect('editor.layer', { resource: roots[0] }).workspaceFolderValue, 'changed-folder');
@@ -233,10 +198,7 @@ test('External folder edits emit resource-aware changes and invalid JSONC retain
 	await event;
 	assert.equal(configuration.getValue('editor.layer', { resource: roots[0] }), 'external');
 	await write(folderFiles[0]!, '{ broken');
-	await assert.rejects(
-		configuration.reloadConfiguration(ConfigurationTarget.WORKSPACE_FOLDER),
-		/JSONC|configuration|object|source/,
-	);
+	await assert.rejects(configuration.reloadConfiguration(ConfigurationTarget.WORKSPACE_FOLDER), /JSONC|configuration|object|source/);
 	assert.equal(configuration.getValue('editor.layer', { resource: roots[0] }), 'external');
 	assert.ok(errors.length > 0);
 	await write(folderFiles[0]!, '{}');
@@ -250,10 +212,7 @@ test('Workspace switching removes old folder layers and single-folder writes use
 	const { configuration, workspace, roots, folderFiles, write } = host;
 	workspace.updateWorkspace({ id: 'single', uri: roots[1]! });
 	await configuration.reloadConfiguration();
-	assert.deepEqual(
-		[configuration.getValue('editor.layer'), configuration.getConfigurationData().folders.length],
-		['other', 0],
-	);
+	assert.deepEqual([configuration.getValue('editor.layer'), configuration.getConfigurationData().folders.length], ['other', 0]);
 	await configuration.updateValue('editor.layer', 'single-written', ConfigurationTarget.WORKSPACE);
 	assert.ok((await host.files.readFile(folderFiles[1]!)).content.includes('single-written'));
 	await write(folderFiles[0]!, '{ "editor.layer": "retired" }');
@@ -262,10 +221,7 @@ test('Workspace switching removes old folder layers and single-folder writes use
 	workspace.updateWorkspace({ id: 'empty' });
 	await configuration.reloadConfiguration();
 	assert.equal(configuration.getValue('editor.layer'), 'user');
-	await assert.rejects(
-		configuration.updateValue('editor.layer', 'new', ConfigurationTarget.WORKSPACE),
-		/No settings resource/,
-	);
+	await assert.rejects(configuration.updateValue('editor.layer', 'new', ConfigurationTarget.WORKSPACE), /No settings resource/);
 });
 
 test('Policy overrides user, workspace, folder and language values, blocks writes and restores inheritance on removal', async () => {
@@ -276,26 +232,14 @@ test('Policy overrides user, workspace, folder and language values, blocks write
 	using cleanup = host.disposables;
 	const { configuration, roots } = host;
 	const overrides = { resource: roots[0], overrideIdentifier: 'typescript' };
-	const binding = configurationSettingBinding(
-		configuration,
-		host.registry.getConfiguration('editor.layer')!,
-		overrides,
-		ConfigurationTarget.WORKSPACE_FOLDER,
-	);
+	const binding = configurationSettingBinding(configuration, host.registry.getConfiguration('editor.layer')!, overrides, ConfigurationTarget.WORKSPACE_FOLDER);
 	assert.equal(binding.getValue(), 'managed', 'the Settings control displays policy above the selected layer');
 	assert.deepEqual(
-		[
-			configuration.getValue('editor.layer', overrides),
-			configuration.inspect('editor.layer', overrides).policyValue,
-			configuration.keys().policy,
-		],
+		[configuration.getValue('editor.layer', overrides), configuration.inspect('editor.layer', overrides).policyValue, configuration.keys().policy],
 		['managed', 'managed', ['editor.layer']],
 	);
 	assert.deepEqual(policies.policyDefinitions, { EditorLayer: { type: 'string' } });
-	await assert.rejects(
-		configuration.updateValue('editor.layer', 'new', overrides, ConfigurationTarget.WORKSPACE_FOLDER),
-		/administrator policy/,
-	);
+	await assert.rejects(configuration.updateValue('editor.layer', 'new', overrides, ConfigurationTarget.WORKSPACE_FOLDER), /administrator policy/);
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsMessages('zh-CN', chinese.bundles);
 	try {
@@ -312,10 +256,7 @@ test('Policy overrides user, workspace, folder and language values, blocks write
 	await assert.rejects(configuration.updateValue('editor.layer', 'invalid-policy-bypass'), /administrator policy/);
 	policies.values.delete('EditorLayer');
 	policies.changes.fire(['EditorLayer']);
-	assert.deepEqual(
-		[configuration.getValue('editor.layer', overrides), configuration.inspect('editor.layer').policyValue],
-		['folder-ts', undefined],
-	);
+	assert.deepEqual([configuration.getValue('editor.layer', overrides), configuration.inspect('editor.layer').policyValue], ['folder-ts', undefined]);
 	assert.equal(binding.getValue(), 'folder-ts');
 	await configuration.updateValue('editor.layer', 'unlocked', overrides, ConfigurationTarget.WORKSPACE_FOLDER);
 	assert.equal(configuration.getValue('editor.layer', overrides), 'unlocked');
@@ -447,24 +388,14 @@ test('Conditional folder writes reject a concurrent file revision and retain the
 	const host = await createLayeredConfiguration(undefined, new FileService(), provider);
 	using cleanup = host.disposables;
 	provider.conflict = true;
-	await assert.rejects(
-		host.configuration.updateValue(
-			'editor.layer',
-			'loser',
-			{ resource: host.roots[0] },
-			ConfigurationTarget.WORKSPACE_FOLDER,
-		),
-		/revision/i,
-	);
+	await assert.rejects(host.configuration.updateValue('editor.layer', 'loser', { resource: host.roots[0] }, ConfigurationTarget.WORKSPACE_FOLDER), /revision/i);
 	await host.configuration.reloadConfiguration(ConfigurationTarget.WORKSPACE_FOLDER);
 	assert.equal(host.configuration.getValue('editor.layer', { resource: host.roots[0] }), 'external winner');
 });
 
 test('Policy notifications during definition registration survive initialization and setting withdrawal', async () => {
 	class ChangingPolicyService extends TestPolicyService {
-		override async updatePolicyDefinitions(
-			definitions: Record<string, PolicyDefinition>,
-		): Promise<Record<string, PolicyValue>> {
+		override async updatePolicyDefinitions(definitions: Record<string, PolicyDefinition>): Promise<Record<string, PolicyValue>> {
 			const old = await super.updatePolicyDefinitions(definitions);
 			this.values.set('EditorLayer', 'arrived during registration');
 			this.changes.fire(['EditorLayer']);
@@ -521,10 +452,7 @@ test('Settings writes protect dirty working copies and explicit save retains unr
 	};
 	using registration = host.workingCopies.register(copy);
 	const original = (await host.files.readFile(host.workspaceFile)).content;
-	await assert.rejects(
-		host.configuration.updateValue('editor.layer', 'new', ConfigurationTarget.WORKSPACE),
-		/unsaved changes/,
-	);
+	await assert.rejects(host.configuration.updateValue('editor.layer', 'new', ConfigurationTarget.WORKSPACE), /unsaved changes/);
 	assert.equal((await host.files.readFile(host.workspaceFile)).content, original);
 	assert.equal(dirty, true);
 	await host.configuration.updateValue('editor.layer', 'new', {}, ConfigurationTarget.WORKSPACE, {
@@ -590,10 +518,7 @@ test('Late contributions apply current Sessions defaults and read-only rules acr
 		['sessions', 'sessions', 'sessions', undefined, 'language'],
 	);
 	await assert.rejects(sessions.updateValue('editor.dynamic', 'changed'), /read-only/);
-	await assert.rejects(
-		sessions.updateValue('editor.dynamic', 'changed', { overrideIdentifier: 'typescript' }),
-		/read-only/,
-	);
+	await assert.rejects(sessions.updateValue('editor.dynamic', 'changed', { overrideIdentifier: 'typescript' }), /read-only/);
 	assert.equal((await sessions.read()).source, source);
 
 	const editable: IConfigurationNode = {
@@ -608,11 +533,7 @@ test('Late contributions apply current Sessions defaults and read-only rules acr
 	};
 	registry.updateConfigurations({ add: [editable], remove: [fixed] });
 	assert.deepEqual(
-		[
-			sessions.inspect('editor.dynamic').defaultValue,
-			sessions.getValue('editor.dynamic'),
-			sessions.getValue('editor.dynamic', { overrideIdentifier: 'typescript' }),
-		],
+		[sessions.inspect('editor.dynamic').defaultValue, sessions.getValue('editor.dynamic'), sessions.getValue('editor.dynamic', { overrideIdentifier: 'typescript' })],
 		['new sessions', 'user', 'language'],
 	);
 	await sessions.updateValue('editor.dynamic', 'changed', { overrideIdentifier: 'typescript' });
@@ -631,25 +552,13 @@ test('Late contributions apply current Sessions defaults and read-only rules acr
 	assert.deepEqual(sessions.getConfigurationData().defaults.contents, {});
 	await assert.rejects(sessions.updateValue('editor.dynamic', 'unregistered'), /Unknown configuration key/);
 	registry.updateConfigurations({ add: [fixed], remove: [] });
-	assert.deepEqual(
-		[
-			sessions.getValue('editor.dynamic'),
-			sessions.getValue('editor.dynamic', { overrideIdentifier: 'typescript' }),
-		],
-		['sessions', 'sessions'],
-	);
+	assert.deepEqual([sessions.getValue('editor.dynamic'), sessions.getValue('editor.dynamic', { overrideIdentifier: 'typescript' })], ['sessions', 'sessions']);
 	await assert.rejects(sessions.updateValue('editor.dynamic', 'read-only again'), /read-only/);
 	assert.deepEqual(JSON.parse((await sessions.read()).source), {
 		'editor.dynamic': 'user',
 		'[typescript]': { 'editor.dynamic': 'changed' },
 	});
-	assert.deepEqual(changes, [
-		ConfigurationTarget.DEFAULT,
-		ConfigurationTarget.DEFAULT,
-		ConfigurationTarget.USER_LOCAL,
-		ConfigurationTarget.DEFAULT,
-		ConfigurationTarget.DEFAULT,
-	]);
+	assert.deepEqual(changes, [ConfigurationTarget.DEFAULT, ConfigurationTarget.DEFAULT, ConfigurationTarget.USER_LOCAL, ConfigurationTarget.DEFAULT, ConfigurationTarget.DEFAULT]);
 });
 
 test('Late typed registrations use Sessions defaults while invalid contribution defaults leave the registry unchanged', () => {
@@ -687,9 +596,7 @@ test('Sessions defaults, inspection and reset use the window default while ordin
 	const registry = createRegistry();
 	using sessions = new ConfigurationService({ registry });
 	using workbench = new WorkspaceService({ registry });
-	using model = new SettingModel(
-		configurationSettingBinding(sessions, registry.getConfiguration('editor.editable')!),
-	);
+	using model = new SettingModel(configurationSettingBinding(sessions, registry.getConfiguration('editor.editable')!));
 	assert.deepEqual(
 		[sessions.getValue('editor'), workbench.getValue('editor'), model.state.defaultValue],
 		[{ editable: 'sessions', fixed: 'sessions' }, { editable: 'workbench', fixed: 'workbench' }, 'sessions'],
@@ -702,16 +609,12 @@ test('Sessions defaults, inspection and reset use the window default while ordin
 	assert.equal(model.state.isDefault, false);
 	assert.equal(JSON.parse((await sessions.read()).source)['editor.editable'], 'workbench');
 	await model.reset();
-	assert.deepEqual(
-		[model.state.value, model.state.isDefault, JSON.parse((await sessions.read()).source)],
-		['sessions', true, {}],
-	);
+	assert.deepEqual([model.state.value, model.state.isDefault, JSON.parse((await sessions.read()).source)], ['sessions', true, {}]);
 });
 
 test('Sessions ignores fixed user and language values and rejects every typed write without changing the document', async () => {
 	const registry = createRegistry();
-	const source =
-		'{ "editor.fixed": "user", "editor.editable": "user", "[typescript]": { "editor.fixed": "language", "editor.editable": "language" } }';
+	const source = '{ "editor.fixed": "user", "editor.editable": "user", "[typescript]": { "editor.fixed": "language", "editor.editable": "language" } }';
 	using sessions = new ConfigurationService({ registry, source: source });
 	assert.deepEqual(
 		[
@@ -728,15 +631,7 @@ test('Sessions ignores fixed user and language values and rejects every typed wr
 	});
 	await assert.rejects(sessions.updateValue('editor.fixed', 'new'), /read-only/);
 	await assert.rejects(sessions.updateValue('editor.fixed', undefined), /read-only/);
-	await assert.rejects(
-		sessions.updateValue(
-			'editor.fixed',
-			'new',
-			{ overrideIdentifier: 'typescript' },
-			ConfigurationTarget.USER_LOCAL,
-		),
-		/read-only/,
-	);
+	await assert.rejects(sessions.updateValue('editor.fixed', 'new', { overrideIdentifier: 'typescript' }, ConfigurationTarget.USER_LOCAL), /read-only/);
 	assert.equal((await sessions.read()).source, source);
 });
 
@@ -756,20 +651,13 @@ test('Two windows share the profile file while ignored settings still notify fil
 		using fileChanged = files.onDidChangeFiles(() => fileChanges++);
 		await workbench.updateValue('editor.fixed', 'ordinary');
 		await sessions.reloadConfiguration();
-		assert.deepEqual(
-			[sessions.getValue('editor.fixed'), workbench.getValue('editor.fixed'), changes],
-			['sessions', 'ordinary', []],
-		);
+		assert.deepEqual([sessions.getValue('editor.fixed'), workbench.getValue('editor.fixed'), changes], ['sessions', 'ordinary', []]);
 		assert.ok(fileChanges > 0);
 		const stale = (await sessions.read()).revision;
 		await sessions.updateValue('editor.editable', 'shared');
 		await workbench.reloadConfiguration();
-		assert.deepEqual(
-			[sessions.getValue('editor.editable'), workbench.getValue('editor.editable')],
-			['shared', 'shared'],
-		);
-		const source =
-			'// shared file\n{ "editor.fixed": "file", "editor.editable": "external", "unrelated.key": true, "[typescript]": { "editor.fixed": "ignored" }, }\n';
+		assert.deepEqual([sessions.getValue('editor.editable'), workbench.getValue('editor.editable')], ['shared', 'shared']);
+		const source = '// shared file\n{ "editor.fixed": "file", "editor.editable": "external", "unrelated.key": true, "[typescript]": { "editor.fixed": "ignored" }, }\n';
 		await sessions.write(source);
 		await workbench.reloadConfiguration();
 		assert.deepEqual(
@@ -822,13 +710,7 @@ test('Production window settings keep Workbench values and report a localized Se
 		],
 		['${appName}', 'left', ActivityBarPosition.DEFAULT, false, 'Custom', 'right', ActivityBarPosition.TOP, true],
 	);
-	assert.deepEqual(
-		[
-			sessions.getValue(WorkbenchConfiguration.activityBarAutoHide),
-			workbench.getValue(WorkbenchConfiguration.activityBarAutoHide),
-		],
-		[false, true],
-	);
+	assert.deepEqual([sessions.getValue(WorkbenchConfiguration.activityBarAutoHide), workbench.getValue(WorkbenchConfiguration.activityBarAutoHide)], [false, true]);
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsMessages('zh-CN', chinese.bundles);
 	try {

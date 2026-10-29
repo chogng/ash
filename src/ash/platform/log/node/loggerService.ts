@@ -4,13 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { isRecord } from '../../../base/common/types.js';
 import { ConsoleLogSink } from '../common/consoleLogSink.js';
-import {
-	AbstractLoggerService,
-	type LogEntry,
-	type ILogFile,
-	type ILogFileCursor,
-	type ILogFileReadResult,
-} from '../common/log.js';
+import { AbstractLoggerService, type LogEntry, type ILogFile, type ILogFileCursor, type ILogFileReadResult } from '../common/log.js';
 import { LogService } from '../common/logServiceImpl.js';
 
 interface LoggerOptions {
@@ -45,12 +39,7 @@ export class LoggerService extends AbstractLoggerService<LogService> {
 		this.appServerLog = options.appServerLog;
 		this.maxFileBytes = options.maxFileBytes ?? 5 * 1024 * 1024;
 		this.retainedSessions = options.retainedSessions ?? 10;
-		if (
-			!Number.isSafeInteger(this.maxFileBytes) ||
-			this.maxFileBytes < 1 ||
-			!Number.isSafeInteger(this.retainedSessions) ||
-			this.retainedSessions < 1
-		) {
+		if (!Number.isSafeInteger(this.maxFileBytes) || this.maxFileBytes < 1 || !Number.isSafeInteger(this.retainedSessions) || this.retainedSessions < 1) {
 			throw new TypeError('Invalid log retention limits');
 		}
 		const timestamp = new Date().toISOString().replace(/[-:.Z]/g, '');
@@ -87,12 +76,7 @@ export class LoggerService extends AbstractLoggerService<LogService> {
 		if (!/^(main|window-[1-9]\d*)$/.test(source)) {
 			throw new TypeError('Invalid log source');
 		}
-		const error =
-			entry.error instanceof Error
-				? (entry.error.stack ?? entry.error.message)
-				: entry.error === undefined
-					? undefined
-					: String(entry.error);
+		const error = entry.error instanceof Error ? (entry.error.stack ?? entry.error.message) : entry.error === undefined ? undefined : String(entry.error);
 		const line = JSON.stringify({ ...entry, error, source, processId: process.pid }) + '\n';
 		const bytes = Buffer.byteLength(line);
 		if (bytes > this.maxFileBytes) {
@@ -156,12 +140,10 @@ export class LoggerService extends AbstractLoggerService<LogService> {
 			path = this.appServerLogPath;
 		} else {
 			const [session, file, extra] = id.split('/');
-			if (!session || !file || extra !== undefined || !SessionName.test(session) || !LogFileName.test(file))
-				throw new TypeError('Invalid log file identity');
+			if (!session || !file || extra !== undefined || !SessionName.test(session) || !LogFileName.test(file)) throw new TypeError('Invalid log file identity');
 			const directory = join(this.logsHome, session);
 			// A session directory cannot redirect the authenticated reader outside the log owner.
-			if ((await realpath(directory)) !== join(await realpath(this.logsHome), session))
-				throw new TypeError('Invalid log session directory');
+			if ((await realpath(directory)) !== join(await realpath(this.logsHome), session)) throw new TypeError('Invalid log session directory');
 			path = join(directory, file);
 		}
 		// O_NOFOLLOW is unavailable on some hosts. Reject redirected sources before
@@ -195,12 +177,7 @@ export class LoggerService extends AbstractLoggerService<LogService> {
 	public cleanUpLogs(): Promise<void> {
 		return this.run(async () => {
 			const sessions = (await readdir(this.logsHome, { withFileTypes: true }))
-				.filter(
-					entry =>
-						entry.isDirectory() &&
-						/^\d{8}T\d{9}-[\da-f-]{36}$/.test(entry.name) &&
-						join(this.logsHome, entry.name) !== this.sessionPath,
-				)
+				.filter(entry => entry.isDirectory() && /^\d{8}T\d{9}-[\da-f-]{36}$/.test(entry.name) && join(this.logsHome, entry.name) !== this.sessionPath)
 				.sort((left, right) => right.name.localeCompare(left.name));
 			for (const entry of sessions.slice(this.retainedSessions - 1)) {
 				const target = resolve(this.logsHome, entry.name);

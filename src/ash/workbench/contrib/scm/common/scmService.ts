@@ -24,8 +24,7 @@ export class SCMService extends Disposable implements ISCMService {
 	}
 
 	public registerSCMProvider(provider: ISCMProvider): ISCMRepository {
-		if (this.repositoryMap.has(provider.id))
-			throw new Error(`SCM repository '${provider.id}' is already registered`);
+		if (this.repositoryMap.has(provider.id)) throw new Error(`SCM repository '${provider.id}' is already registered`);
 		const repository: ISCMRepository = {
 			id: provider.id,
 			provider,

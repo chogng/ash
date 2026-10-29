@@ -2,14 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM, type DOMWindow } from 'jsdom';
 import { scheduleAtNextAnimationFrame } from '../../browser/scheduler.js';
-import {
-	alert,
-	AriaLiveRegion,
-	setARIAContainer,
-	setAriaAttribute,
-	setRole,
-	status,
-} from '../../browser/ui/aria/aria.js';
+import { alert, AriaLiveRegion, setARIAContainer, setAriaAttribute, setRole, status } from '../../browser/ui/aria/aria.js';
 
 test('ARIA helpers set, preserve false, and remove semantic attributes', () => {
 	const dom = new JSDOM('<!doctype html><body><button></button></body>');
@@ -31,7 +24,9 @@ test('ARIA helpers set, preserve false, and remove semantic attributes', () => {
 });
 
 test('AriaLiveRegion announces repeated status and alert messages', async () => {
-	const dom = new JSDOM('<!doctype html><body></body>', { pretendToBeVisual: true });
+	const dom = new JSDOM('<!doctype html><body></body>', {
+		pretendToBeVisual: true,
+	});
 	const region = new AriaLiveRegion(dom.window.document);
 
 	region.status('Ready');
@@ -63,7 +58,9 @@ test('AriaLiveRegion announces repeated status and alert messages', async () => 
 });
 
 test('module ARIA owner announces through the configured workbench container', async () => {
-	const dom = new JSDOM('<!doctype html><body><main></main></body>', { pretendToBeVisual: true });
+	const dom = new JSDOM('<!doctype html><body><main></main></body>', {
+		pretendToBeVisual: true,
+	});
 	const container = dom.window.document.querySelector('main');
 	assert.ok(container);
 	setARIAContainer(container);

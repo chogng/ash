@@ -19,12 +19,7 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { parseExtensionManifest } from '../../../../services/extensions/common/extensionManifest.js';
 import mediaManifest from '../../../../../../../extensions/media-preview/package.json' with { type: 'json' };
-import {
-	FileKind,
-	IFileService,
-	type IFileChangeEvent,
-	FileSystemProviderCapabilities,
-} from '../../../../../platform/files/common/files.js';
+import { FileKind, IFileService, type IFileChangeEvent, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { EditorPanes, getBuiltinEditorPaneFactory } from '../../../../browser/editor.js';
 import { EditorPaneMatch } from '../../../../browser/parts/editor/editorPane.js';
@@ -77,21 +72,9 @@ test('Built-in media declarations activate from the package catalog, localize, r
 	);
 	try {
 		await service.start();
-		const choices = ['PRODUCT.PNG', 'song.mp3', 'song.wav', 'song.ogg', 'movie.mp4', 'movie.webm'].map(
-			name => EditorPanes.getEditorPane({ resource: URI.file('/media/' + name) })?.id,
-		);
-		assert.deepEqual(choices, [
-			'ash.imagePreview',
-			AUDIO_PREVIEW_ID,
-			AUDIO_PREVIEW_ID,
-			AUDIO_PREVIEW_ID,
-			VIDEO_PREVIEW_ID,
-			VIDEO_PREVIEW_ID,
-		]);
-		assert.equal(
-			EditorPanes.getEditorPane({ resource: URI.file('/asset'), contentType: 'image/webp; charset=binary' })?.id,
-			'ash.imagePreview',
-		);
+		const choices = ['PRODUCT.PNG', 'song.mp3', 'song.wav', 'song.ogg', 'movie.mp4', 'movie.webm'].map(name => EditorPanes.getEditorPane({ resource: URI.file('/media/' + name) })?.id);
+		assert.deepEqual(choices, ['ash.imagePreview', AUDIO_PREVIEW_ID, AUDIO_PREVIEW_ID, AUDIO_PREVIEW_ID, VIDEO_PREVIEW_ID, VIDEO_PREVIEW_ID]);
+		assert.equal(EditorPanes.getEditorPane({ resource: URI.file('/asset'), contentType: 'image/webp; charset=binary' })?.id, 'ash.imagePreview');
 		assert.equal(
 			EditorPanes.getEditorPane({ resource: URI.file('/asset'), contentType: 'audio/wav' })?.canOpen({
 				resource: URI.file('/asset'),
@@ -100,9 +83,7 @@ test('Built-in media declarations activate from the package catalog, localize, r
 			EditorPaneMatch.Default,
 		);
 		assert.equal(
-			EditorPanes.getEditorPanesForInput({ resource: URI.file('/source.rs') }).some(
-				pane => pane.id === AUDIO_PREVIEW_ID,
-			),
+			EditorPanes.getEditorPanesForInput({ resource: URI.file('/source.rs') }).some(pane => pane.id === AUDIO_PREVIEW_ID),
 			false,
 		);
 		const oldAudio = EditorPanes.getEditorPane({ resource: URI.file('/song.mp3') });
@@ -171,8 +152,7 @@ class MediaFixture extends Disposable {
 		};
 		this.services.registerSingleton(IFileService, () =>
 			createTestFileService({
-				capabilities:
-					FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
+				capabilities: FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
 				onDidChangeCapabilities: Event.None,
 				watch: (): IDisposable => Disposable.None,
 
@@ -219,10 +199,7 @@ class MediaFixture extends Disposable {
 		});
 		const id = kind === 'audio' ? AUDIO_PREVIEW_ID : VIDEO_PREVIEW_ID;
 		this.preview = this._register(
-			getBuiltinEditorPaneFactory('ash.media-preview', id)!.create(
-				{ instantiationService: this.services },
-				kind === 'audio' ? 'Audio preview' : 'Video preview',
-			) as MediaPreview,
+			getBuiltinEditorPaneFactory('ash.media-preview', id)!.create({ instantiationService: this.services }, kind === 'audio' ? 'Audio preview' : 'Video preview') as MediaPreview,
 		);
 		this.preview.create(this.browser.window.document.body);
 		const mediaPrototype = this.browser.window.HTMLMediaElement.prototype;
@@ -245,30 +222,19 @@ class MediaFixture extends Disposable {
 test('Audio and video use the registered renderer, keyboard playback and stop before releasing their URLs', async () => {
 	for (const kind of ['audio', 'video'] as const) {
 		using fixture = new MediaFixture(kind);
-		await fixture.preview.setInput(
-			{ resource: URI.file('/media/sample'), label: 'Sample' },
-			new AbortController().signal,
-		);
+		await fixture.preview.setInput({ resource: URI.file('/media/sample'), label: 'Sample' }, new AbortController().signal);
 		const url = fixture.player.src;
-		assert.deepEqual(
-			[fixture.player.controls, fixture.player.autoplay, fixture.player.preload],
-			[true, false, 'metadata'],
-		);
+		assert.deepEqual([fixture.player.controls, fixture.player.autoplay, fixture.player.preload], [true, false, 'metadata']);
 		fixture.preview.focus();
 		assert.equal(fixture.browser.window.document.activeElement, fixture.player);
-		fixture.browser.window.document
-			.querySelector('.ash-media-preview')!
-			.dispatchEvent(new fixture.browser.window.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+		fixture.browser.window.document.querySelector('.ash-media-preview')!.dispatchEvent(new fixture.browser.window.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
 		assert.equal(fixture.playing, true);
 		assert.match(fixture.preview.getAccessibleContent(), /Sample[\s\S]*3 bytes[\s\S]*2 seconds[\s\S]*Playing/);
 		fixture.preview.setVisible(false);
 		assert.equal(fixture.playing, false);
 		fixture.operations.length = 0;
 		fixture.preview.clearInput();
-		assert.deepEqual(
-			[fixture.player.hasAttribute('src'), fixture.revoked, fixture.operations],
-			[false, [url], ['pause', 'load-cleared', 'revoke']],
-		);
+		assert.deepEqual([fixture.player.hasAttribute('src'), fixture.revoked, fixture.operations], [false, [url], ['pause', 'load-cleared', 'revoke']]);
 	}
 });
 
@@ -300,10 +266,7 @@ test('Audio and video keep first-open read failures in the pane and retry them',
 			}
 			return new Uint8Array([1, 2, 3]);
 		};
-		await fixture.preview.setInput(
-			{ resource: URI.file('/media/retry'), label: 'Retry sample' },
-			new AbortController().signal,
-		);
+		await fixture.preview.setInput({ resource: URI.file('/media/retry'), label: 'Retry sample' }, new AbortController().signal);
 
 		const failure = fixture.browser.window.document.querySelector<HTMLElement>('[role="alert"]')!;
 		assert.match(failure.textContent!, /Could not load media: Error: Read denied/);
@@ -314,10 +277,7 @@ test('Audio and video keep first-open read failures in the pane and retry them',
 
 		retry.click();
 		await setImmediate();
-		assert.deepEqual(
-			[failure.hidden, failure.textContent, retry.hidden, fixture.player.hasAttribute('src')],
-			[false, 'Could not load media: Error: Still unavailable', false, false],
-		);
+		assert.deepEqual([failure.hidden, failure.textContent, retry.hidden, fixture.player.hasAttribute('src')], [false, 'Could not load media: Error: Still unavailable', false, false]);
 		retry.click();
 		await setImmediate();
 		const url = fixture.player.src;
@@ -329,27 +289,16 @@ test('Audio and video keep first-open read failures in the pane and retry them',
 
 test('A late media error from the previous player cannot replace a newer preview state', async () => {
 	using fixture = new MediaFixture();
-	await fixture.preview.setInput(
-		{ resource: URI.file('/media/old.mp3'), label: 'Old song' },
-		new AbortController().signal,
-	);
+	await fixture.preview.setInput({ resource: URI.file('/media/old.mp3'), label: 'Old song' }, new AbortController().signal);
 	const oldPlayer = fixture.player;
 	const oldURL = oldPlayer.src;
-	await fixture.preview.setInput(
-		{ resource: URI.file('/media/new.mp3'), label: 'New song' },
-		new AbortController().signal,
-	);
+	await fixture.preview.setInput({ resource: URI.file('/media/new.mp3'), label: 'New song' }, new AbortController().signal);
 	const newPlayer = fixture.player;
 	const newURL = newPlayer.src;
 
 	oldPlayer.dispatchEvent(new fixture.browser.window.Event('error'));
 	assert.deepEqual(
-		[
-			oldPlayer === newPlayer,
-			fixture.browser.window.document.querySelector<HTMLElement>('[role="alert"]')!.hidden,
-			fixture.preview.getAccessibleContent().includes('New song'),
-			fixture.revoked,
-		],
+		[oldPlayer === newPlayer, fixture.browser.window.document.querySelector<HTMLElement>('[role="alert"]')!.hidden, fixture.preview.getAccessibleContent().includes('New song'), fixture.revoked],
 		[false, true, true, [oldURL]],
 	);
 	fixture.preview.clearInput();
@@ -361,10 +310,7 @@ test('Closing while a media read is pending ignores its late failure and leaves 
 	try {
 		const pending = new DeferredPromise<Uint8Array>();
 		fixture.read = () => pending.p;
-		const opening = fixture.preview.setInput(
-			{ resource: URI.file('/media/closing.mp3') },
-			new AbortController().signal,
-		);
+		const opening = fixture.preview.setInput({ resource: URI.file('/media/closing.mp3') }, new AbortController().signal);
 		const cancelled = assert.rejects(opening, /cancelled/);
 		const player = fixture.player;
 		fixture.preview.dispose();

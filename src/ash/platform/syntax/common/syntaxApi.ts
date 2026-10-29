@@ -5,9 +5,7 @@ import { syntaxLanguageDefinitions } from './syntaxLanguages.generated.js';
 
 export type SyntaxLanguage = (typeof syntaxLanguageDefinitions)[number]['id'];
 export const syntaxLanguages: readonly SyntaxLanguage[] = syntaxLanguageDefinitions.map(language => language.id);
-export const syntaxEditorLanguageIds: readonly string[] = syntaxLanguageDefinitions.flatMap(language => [
-	...language.editorIds,
-]);
+export const syntaxEditorLanguageIds: readonly string[] = syntaxLanguageDefinitions.flatMap(language => [...language.editorIds]);
 const aliases = new Map<string, SyntaxLanguage>();
 const editorLanguages = new Map<SyntaxLanguage, string>();
 for (const language of syntaxLanguageDefinitions) {
@@ -66,19 +64,7 @@ export interface SyntaxSelectionRange {
 	readonly range: SyntaxRange;
 }
 
-export type SyntaxSymbolKind =
-	| 'constant'
-	| 'enum'
-	| 'field'
-	| 'function'
-	| 'macro'
-	| 'method'
-	| 'module'
-	| 'static'
-	| 'struct'
-	| 'trait'
-	| 'type'
-	| 'variable';
+export type SyntaxSymbolKind = 'constant' | 'enum' | 'field' | 'function' | 'macro' | 'method' | 'module' | 'static' | 'struct' | 'trait' | 'type' | 'variable';
 
 export interface SyntaxSymbol {
 	readonly name: string;

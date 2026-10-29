@@ -79,12 +79,7 @@ export class ProcessRun {
 		this.graceMs = graceMs;
 	}
 
-	public async command(
-		command: string,
-		args: readonly string[],
-		env: NodeJS.ProcessEnv,
-		capture = false,
-	): Promise<{ code: number; output: string }> {
+	public async command(command: string, args: readonly string[], env: NodeJS.ProcessEnv, capture = false): Promise<{ code: number; output: string }> {
 		if (this.stopped) throw new Error('Process run was stopped; refusing to start another command.');
 		const child = spawn(command, args, {
 			cwd: this.cwd,
@@ -99,9 +94,7 @@ export class ProcessRun {
 		});
 		const result = new Promise<{ code: number; output: string }>((resolveExit, reject) => {
 			child.once('error', reject);
-			child.once(capture ? 'close' : 'exit', (code, signal) =>
-				resolveExit({ code: signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : (code ?? 1), output }),
-			);
+			child.once(capture ? 'close' : 'exit', (code, signal) => resolveExit({ code: signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : (code ?? 1), output }));
 		});
 		this.children.set(
 			child,
@@ -186,9 +179,7 @@ export class ProcessRun {
 
 	private async resources(): Promise<RunResource[]> {
 		if (!this.directory) return [];
-		const names = (await readdir(this.directory)).filter(
-			name => name.startsWith('resource-') && name.endsWith('.json'),
-		);
+		const names = (await readdir(this.directory)).filter(name => name.startsWith('resource-') && name.endsWith('.json'));
 		const resources: RunResource[] = [];
 		for (const name of names) {
 			try {
@@ -204,12 +195,10 @@ export class ProcessRun {
 		const current = await processes();
 		const roots = new Set<number>();
 		for (const child of this.children.keys()) {
-			if (child.pid && child.exitCode === null && child.signalCode === null && current.has(child.pid))
-				roots.add(child.pid);
+			if (child.pid && child.exitCode === null && child.signalCode === null && current.has(child.pid)) roots.add(child.pid);
 		}
 		for (const resource of await this.resources()) {
-			if (resource.process && current.get(resource.process.pid)?.started === resource.process.started)
-				roots.add(resource.process.pid);
+			if (resource.process && current.get(resource.process.pid)?.started === resource.process.started) roots.add(resource.process.pid);
 		}
 		for (const identity of this.owned.values()) {
 			if (current.get(identity.pid)?.started === identity.started) roots.add(identity.pid);
@@ -217,16 +206,9 @@ export class ProcessRun {
 		let changed = true;
 		while (changed) {
 			changed = false;
-			const groups = new Set(
-				[...this.owned.values(), ...[...roots].map(pid => current.get(pid)!)]
-					.filter(identity => identity.group === identity.pid)
-					.map(identity => identity.pid),
-			);
+			const groups = new Set([...this.owned.values(), ...[...roots].map(pid => current.get(pid)!)].filter(identity => identity.group === identity.pid).map(identity => identity.pid));
 			for (const identity of current.values()) {
-				if (
-					!roots.has(identity.pid) &&
-					(roots.has(identity.parent) || (identity.group !== undefined && groups.has(identity.group)))
-				) {
+				if (!roots.has(identity.pid) && (roots.has(identity.parent) || (identity.group !== undefined && groups.has(identity.group)))) {
 					roots.add(identity.pid);
 					changed = true;
 				}
@@ -252,9 +234,7 @@ export class ProcessRun {
 			// another helper between enumeration and delivery of the signal.
 			for (const root of this.owned.values()) {
 				if (root.group !== root.pid) continue;
-				const memberAlive = [...this.owned.values()].some(
-					member => member.group === root.pid && current.get(member.pid)?.started === member.started,
-				);
+				const memberAlive = [...this.owned.values()].some(member => member.group === root.pid && current.get(member.pid)?.started === member.started);
 				if (!memberAlive) continue;
 				try {
 					process.kill(-root.pid, 'SIGKILL');
@@ -280,16 +260,11 @@ export class ProcessRun {
 		const deadline = Date.now() + 5_000;
 		while (true) {
 			const remaining = await processes();
-			const alive = [...this.owned.values()].filter(
-				identity => remaining.get(identity.pid)?.started === identity.started,
-			);
+			const alive = [...this.owned.values()].filter(identity => remaining.get(identity.pid)?.started === identity.started);
 			if (!alive.length) break;
 			if (Date.now() >= deadline) {
-				for (const identity of alive)
-					if (terminationErrors.has(identity.pid)) errors.push(terminationErrors.get(identity.pid));
-				errors.push(
-					new Error(`Owned processes did not exit: ${alive.map(identity => identity.pid).join(', ')}`),
-				);
+				for (const identity of alive) if (terminationErrors.has(identity.pid)) errors.push(terminationErrors.get(identity.pid));
+				errors.push(new Error(`Owned processes did not exit: ${alive.map(identity => identity.pid).join(', ')}`));
 				break;
 			}
 			await new Promise<void>(resolveDelay => setTimeout(resolveDelay, 50));
@@ -318,9 +293,7 @@ async function processes(): Promise<Map<number, ProcessIdentity>> {
 	if (process.platform === 'win32') {
 		// A PowerShell 7 runner's module path is incompatible with the built-in
 		// Windows PowerShell used here. Let that host discover its own CIM modules.
-		const environment = Object.fromEntries(
-			Object.entries(process.env).filter(([name]) => name.toUpperCase() !== 'PSMODULEPATH'),
-		);
+		const environment = Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toUpperCase() !== 'PSMODULEPATH'));
 		const query = execute(
 			'powershell.exe',
 			[
@@ -334,14 +307,7 @@ async function processes(): Promise<Map<number, ProcessIdentity>> {
 		query.child.stdin?.end();
 		const { stdout } = await query;
 		const entries = JSON.parse(stdout) as { ProcessId: number; ParentProcessId: number; Started: string }[];
-		return new Map(
-			entries
-				.filter(entry => isProcessRunning(entry.ProcessId))
-				.map(entry => [
-					entry.ProcessId,
-					{ pid: entry.ProcessId, parent: entry.ParentProcessId, started: entry.Started },
-				]),
-		);
+		return new Map(entries.filter(entry => isProcessRunning(entry.ProcessId)).map(entry => [entry.ProcessId, { pid: entry.ProcessId, parent: entry.ParentProcessId, started: entry.Started }]));
 	}
 	const { stdout } = await execute('ps', ['-axo', 'pid=,ppid=,pgid=,stat=,lstart='], {
 		timeout: 5_000,
@@ -363,10 +329,7 @@ async function processes(): Promise<Map<number, ProcessIdentity>> {
 }
 
 /** Installs cancellation before any work starts and owns the cross-process registry. */
-export async function withProcessRun(
-	cwd: string,
-	action: (run: ProcessRun, environment: NodeJS.ProcessEnv) => Promise<void>,
-): Promise<void> {
+export async function withProcessRun(cwd: string, action: (run: ProcessRun, environment: NodeJS.ProcessEnv) => Promise<void>): Promise<void> {
 	const inherited = process.env.ASH_SMOKE_RUN_DIRECTORY;
 	const directory = inherited ?? (await mkdtemp(join(tmpdir(), 'ash-process-run-')));
 	const run = new ProcessRun(cwd, directory);

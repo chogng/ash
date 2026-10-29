@@ -10,10 +10,7 @@ import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import {
-	IAccessibleViewService,
-	AccessibleViewType,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibleViewType } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { exportTrace, TraceConnection, type TraceConnectionState, type TraceSpan } from './traceConnection.js';
 
@@ -38,10 +35,7 @@ export class TraceEditor extends EditorPane implements IEditorPane {
 	private exportButton!: Button;
 	private selected: string | undefined;
 	private visible: readonly TraceSpan[] = [];
-	private readonly rows = new Map<
-		string,
-		{ domNode: HTMLDivElement; label: HTMLSpanElement; bar: HTMLSpanElement }
-	>();
+	private readonly rows = new Map<string, { domNode: HTMLDivElement; label: HTMLSpanElement; bar: HTMLSpanElement }>();
 	private frame: number | undefined;
 	private shown = true;
 	private readonly listId = 'ash-trace-list-' + nextListId++;
@@ -101,11 +95,7 @@ export class TraceEditor extends EditorPane implements IEditorPane {
 				...defaultButtonStyles,
 				label: localize('trace.export', 'Export filtered OTLP'),
 				onClick: () => {
-					triggerDownload(
-						new Blob([exportTrace(this.filtered())], { type: 'application/json' }),
-						'ash-traces.json',
-						document,
-					);
+					triggerDownload(new Blob([exportTrace(this.filtered())], { type: 'application/json' }), 'ash-traces.json', document);
 				},
 			}),
 		);
@@ -118,11 +108,7 @@ export class TraceEditor extends EditorPane implements IEditorPane {
 				},
 			}),
 		);
-		this.filter = this.field(
-			this.domNode,
-			localize('trace.filter', 'Filter by name, outcome or trace ID'),
-			'search',
-		);
+		this.filter = this.field(this.domNode, localize('trace.filter', 'Filter by name, outcome or trace ID'), 'search');
 		this._register(this.filter.onDidChange(() => this.scheduleRender()));
 		this.statusDomNode = h(document, 'div');
 		this.statusDomNode.className = 'ash-trace-status';
@@ -161,15 +147,7 @@ export class TraceEditor extends EditorPane implements IEditorPane {
 				event.preventDefault();
 				event.stopPropagation();
 				const current = this.visible.findIndex(span => span.key === this.selected);
-				const index =
-					event.key === 'Home'
-						? 0
-						: event.key === 'End'
-							? this.visible.length - 1
-							: Math.max(
-									0,
-									Math.min(this.visible.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)),
-								);
+				const index = event.key === 'Home' ? 0 : event.key === 'End' ? this.visible.length - 1 : Math.max(0, Math.min(this.visible.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)));
 				this.select(this.visible[index]!.key);
 				this.rows.get(this.selected!)!.domNode.scrollIntoView({ block: 'nearest' });
 			}),
@@ -209,10 +187,7 @@ export class TraceEditor extends EditorPane implements IEditorPane {
 	public override focus(): void {
 		this.address.focus();
 		if (this.configuration.getValue<boolean>('accessibility.verbosity.trace')) {
-			this.statusDomNode.textContent = localize(
-				'trace.hint',
-				'Trace viewer. Press Alt+F1 for keyboard and connection help.',
-			);
+			this.statusDomNode.textContent = localize('trace.hint', 'Trace viewer. Press Alt+F1 for keyboard and connection help.');
 		}
 	}
 
@@ -235,11 +210,7 @@ export class TraceEditor extends EditorPane implements IEditorPane {
 
 	private filtered(): readonly TraceSpan[] {
 		const query = this.filter.value.trim().toLowerCase();
-		return this.connection.buffer.spans.filter(span =>
-			[span.name, span.outcome, outcomeLabel(span.outcome), span.traceId].some(value =>
-				value.toLowerCase().includes(query),
-			),
-		);
+		return this.connection.buffer.spans.filter(span => [span.name, span.outcome, outcomeLabel(span.outcome), span.traceId].some(value => value.toLowerCase().includes(query)));
 	}
 
 	private scheduleRender(): void {
@@ -264,13 +235,7 @@ export class TraceEditor extends EditorPane implements IEditorPane {
 		if (this.statusDomNode.textContent !== status) {
 			this.statusDomNode.textContent = status;
 		}
-		this.countDomNode.textContent = localize(
-			'trace.count',
-			'{0} shown / {1} retained · {2} dropped',
-			this.visible.length,
-			spans.length,
-			this.connection.buffer.dropped,
-		);
+		this.countDomNode.textContent = localize('trace.count', '{0} shown / {1} retained · {2} dropped', this.visible.length, spans.length, this.connection.buffer.dropped);
 		const keys = new Set(this.visible.map(span => span.key));
 		for (const [key, row] of this.rows) {
 			if (!keys.has(key)) {
@@ -353,9 +318,7 @@ export class TraceEditor extends EditorPane implements IEditorPane {
 		} else {
 			this.listDomNode.removeAttribute('aria-activedescendant');
 		}
-		const details = span
-			? exportTrace([span])
-			: localize('trace.empty', 'No spans. Connect, then perform an action in Ash.');
+		const details = span ? exportTrace([span]) : localize('trace.empty', 'No spans. Connect, then perform an action in Ash.');
 		if (this.detailsDomNode.textContent !== details) {
 			this.detailsDomNode.textContent = details;
 		}
@@ -387,15 +350,9 @@ function connectionLabel(state: TraceConnectionState): string {
 		case 'connected':
 			return localize('trace.connected', 'Connected · listening for completed spans');
 		case 'configurationError':
-			return localize(
-				'trace.configurationError',
-				'Use a loopback ws:// address with no query and a 64-digit hexadecimal token.',
-			);
+			return localize('trace.configurationError', 'Use a loopback ws:// address with no query and a 64-digit hexadecimal token.');
 		case 'connectionError':
-			return localize(
-				'trace.connectionError',
-				'Connection failed. Check the running App Server, address and token.',
-			);
+			return localize('trace.connectionError', 'Connection failed. Check the running App Server, address and token.');
 		case 'protocolError':
 			return localize('trace.protocolError', 'Invalid trace stream. The connection was closed.');
 	}

@@ -4,13 +4,7 @@ import type { MenuId } from '../../../../platform/actions/common/actions.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import type { Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import type {
-	EditorCloseReason,
-	EditorGroupChangeEvent,
-	EditorGroupId,
-	EditorGroupState,
-	EditorInstanceState,
-} from './editorState.js';
+import type { EditorCloseReason, EditorGroupChangeEvent, EditorGroupId, EditorGroupState, EditorInstanceState } from './editorState.js';
 
 export enum GroupDirection {
 	UP,

@@ -18,11 +18,7 @@ export class ProcessedIndentRulesSupport {
 	private readonly _indentRulesSupport: IndentRulesSupport;
 	private readonly _indentationLineProcessor: IndentationLineProcessor;
 
-	constructor(
-		model: IVirtualModel,
-		indentRulesSupport: IndentRulesSupport,
-		languageConfigurationService: ILanguageConfigurationService,
-	) {
+	constructor(model: IVirtualModel, indentRulesSupport: IndentRulesSupport, languageConfigurationService: ILanguageConfigurationService) {
 		this._indentRulesSupport = indentRulesSupport;
 		this._indentationLineProcessor = new IndentationLineProcessor(model, languageConfigurationService);
 	}
@@ -144,8 +140,7 @@ export class IndentationContextProcessor {
 			return emptyTokens;
 		}
 		const scopedLineTokensAtEndColumnOfPreviousLine = getScopedLineTokensAtEndColumnOfLine(previousLineNumber);
-		const doesLanguageContinueOnPreviousLine =
-			scopedLineTokens.languageId === scopedLineTokensAtEndColumnOfPreviousLine.languageId;
+		const doesLanguageContinueOnPreviousLine = scopedLineTokens.languageId === scopedLineTokensAtEndColumnOfPreviousLine.languageId;
 		if (!doesLanguageContinueOnPreviousLine) {
 			return emptyTokens;
 		}
@@ -190,16 +185,11 @@ class IndentationLineProcessor {
 	 */
 	getProcessedTokens(tokens: IViewLineTokens): IViewLineTokens {
 		const shouldRemoveBracketsFromTokenType = (tokenType: StandardTokenType): boolean => {
-			return (
-				tokenType === StandardTokenType.String ||
-				tokenType === StandardTokenType.RegEx ||
-				tokenType === StandardTokenType.Comment
-			);
+			return tokenType === StandardTokenType.String || tokenType === StandardTokenType.RegEx || tokenType === StandardTokenType.Comment;
 		};
 
 		const languageId = tokens.getLanguageId(0);
-		const bracketsConfiguration =
-			this.languageConfigurationService.getLanguageConfiguration(languageId).bracketsNew;
+		const bracketsConfiguration = this.languageConfigurationService.getLanguageConfiguration(languageId).bracketsNew;
 		const bracketsRegExp = bracketsConfiguration.getBracketRegExp({ global: true });
 		const textAndMetadata: { text: string; metadata: number }[] = [];
 		tokens.forEach((tokenIndex: number) => {

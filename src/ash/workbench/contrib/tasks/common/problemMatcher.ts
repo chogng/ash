@@ -26,15 +26,9 @@ export function registerProblemMatcherContributions(initial: ProblemMatcherContr
 	let disposed = false;
 	let current: ProblemMatcherContributions;
 	const replace = (supplied: ProblemMatcherContributions): void => {
-		if (disposed)
-			throw new ReferenceError(
-				localize('tasks.matcherRegistrationDisposed', 'Problem matcher registration is disposed'),
-			);
+		if (disposed) throw new ReferenceError(localize('tasks.matcherRegistrationDisposed', 'Problem matcher registration is disposed'));
 		const encoded = JSON.stringify(supplied);
-		if (encoded.length > 524288)
-			throw new RangeError(
-				localize('tasks.matcherContributionsTooLarge', 'Problem matcher contributions are too large'),
-			);
+		if (encoded.length > 524288) throw new RangeError(localize('tasks.matcherContributionsTooLarge', 'Problem matcher contributions are too large'));
 		const normalized = freezeJson(JSON.parse(encoded)) as ProblemMatcherContributions;
 		const owners = new Map(contributionOwners);
 		owners.set(owner, normalized);
@@ -67,29 +61,14 @@ function createCatalog(owners: Iterable<ProblemMatcherContributions>): ProblemMa
 			[owner.matchers, matchers],
 			[owner.patterns, patterns],
 		] as const) {
-			if (!Array.isArray(values) || values.length > 256)
-				throw new TypeError(
-					localize(
-						'tasks.matcherContributionArray',
-						'Problem contributions require arrays of at most 256 entries',
-					),
-				);
+			if (!Array.isArray(values) || values.length > 256) throw new TypeError(localize('tasks.matcherContributionArray', 'Problem contributions require arrays of at most 256 entries'));
 			for (const value of values) {
 				const contribution = record(value, 'Problem contribution');
 				const name = text(contribution.name, 'Problem contribution name');
-				if (name.length > 128 || name.startsWith('$') || /[\x00-\x1f\x7f]/.test(name))
-					throw new TypeError(localize('tasks.matcherContributionName', 'Invalid problem contribution name'));
+				if (name.length > 128 || name.startsWith('$') || /[\x00-\x1f\x7f]/.test(name)) throw new TypeError(localize('tasks.matcherContributionName', 'Invalid problem contribution name'));
 				const reference = `$${name}`;
-				if (target.has(reference))
-					throw new TypeError(
-						localize(
-							'tasks.matcherContributionDuplicate',
-							"Problem contribution '{0}' is already registered",
-							name,
-						),
-					);
-				if (target.size >= 2048)
-					throw new RangeError(localize('tasks.matcherContributionLimit', 'Too many problem contributions'));
+				if (target.has(reference)) throw new TypeError(localize('tasks.matcherContributionDuplicate', "Problem contribution '{0}' is already registered", name));
+				if (target.size >= 2048) throw new RangeError(localize('tasks.matcherContributionLimit', 'Too many problem contributions'));
 				target.set(reference, contribution);
 			}
 		}
@@ -149,20 +128,12 @@ export function parseProblemMatchers(values: readonly unknown[]): readonly Probl
 	return Object.freeze(values.map(value => parseMatcher(value, catalog)));
 }
 
-function matcherReference(
-	name: string,
-	snapshot: ProblemMatcherCatalog,
-	visiting = new Set<string>(),
-): Record<string, unknown> {
+function matcherReference(name: string, snapshot: ProblemMatcherCatalog, visiting = new Set<string>()): Record<string, unknown> {
 	const contributed = snapshot.matchers.get(name);
 	if (!contributed) return builtinMatcher(name);
-	if (visiting.has(name) || visiting.size >= 64)
-		throw new TypeError(localize('tasks.matcherBaseCycle', "Cyclic problem matcher base '{0}'", name));
+	if (visiting.has(name) || visiting.size >= 64) throw new TypeError(localize('tasks.matcherBaseCycle', "Cyclic problem matcher base '{0}'", name));
 	visiting.add(name);
-	const base =
-		contributed.base === undefined
-			? {}
-			: matcherReference(text(contributed.base, 'problemMatcher.base'), snapshot, visiting);
+	const base = contributed.base === undefined ? {} : matcherReference(text(contributed.base, 'problemMatcher.base'), snapshot, visiting);
 	visiting.delete(name);
 	const effective = { ...base, ...contributed };
 	delete effective.base;
@@ -184,22 +155,13 @@ function parseMatcher(value: unknown, snapshot: ProblemMatcherCatalog): ProblemM
 	const pattern = parsePatterns(patternValue);
 	const location = effective.fileLocation ?? 'relative';
 	const fileLocation = Array.isArray(location) ? location[0] : location;
-	if (
-		fileLocation !== 'relative' &&
-		fileLocation !== 'absolute' &&
-		fileLocation !== 'autoDetect' &&
-		fileLocation !== 'search'
-	) {
+	if (fileLocation !== 'relative' && fileLocation !== 'absolute' && fileLocation !== 'autoDetect' && fileLocation !== 'search') {
 		throw new TypeError('Unsupported problemMatcher.fileLocation');
 	}
 	let searchPaths: ProblemMatcher['searchPaths'];
 	if (fileLocation === 'search') {
-		const supplied =
-			Array.isArray(location) && location[1] !== undefined
-				? record(location[1], 'problemMatcher.fileLocation.search')
-				: { include: '${workspaceFolder}' };
-		if (Object.keys(supplied).some(key => key !== 'include' && key !== 'exclude'))
-			throw new TypeError('Invalid problemMatcher search paths');
+		const supplied = Array.isArray(location) && location[1] !== undefined ? record(location[1], 'problemMatcher.fileLocation.search') : { include: '${workspaceFolder}' };
+		if (Object.keys(supplied).some(key => key !== 'include' && key !== 'exclude')) throw new TypeError('Invalid problemMatcher search paths');
 		const paths = (value: unknown): readonly string[] => {
 			const values = value === undefined ? [] : Array.isArray(value) ? value : [value];
 			if (values.length > 64) throw new RangeError('Too many problemMatcher search paths');
@@ -219,10 +181,7 @@ function parseMatcher(value: unknown, snapshot: ProblemMatcherCatalog): ProblemM
 		severity: severity(effective.severity),
 		applyTo,
 		fileLocation,
-		filePrefix:
-			fileLocation !== 'search' && Array.isArray(location) && location[1] !== undefined
-				? text(location[1], 'problemMatcher.fileLocation')
-				: undefined,
+		filePrefix: fileLocation !== 'search' && Array.isArray(location) && location[1] !== undefined ? text(location[1], 'problemMatcher.fileLocation') : undefined,
 		searchPaths,
 		pattern: Object.freeze(pattern),
 		watching:
@@ -238,19 +197,13 @@ function parseMatcher(value: unknown, snapshot: ProblemMatcherCatalog): ProblemM
 
 function parsePatterns(value: unknown): readonly IProblemPattern[] {
 	const patterns = Array.isArray(value) ? value : [value];
-	if (patterns.length === 0 || patterns.length > 32)
-		throw new TypeError('problemMatcher.pattern must contain 1 to 32 patterns');
+	if (patterns.length === 0 || patterns.length > 32) throw new TypeError('problemMatcher.pattern must contain 1 to 32 patterns');
 	// Array entries combine captures across lines; defaults would manufacture
 	// fields that the author deliberately supplied in a different entry.
 	const defaults = !Array.isArray(value);
 	const parsed = patterns.map((entry, index) => parsePattern(entry, index, patterns.length, defaults));
-	const captures = (key: 'file' | 'message' | 'line' | 'location'): boolean =>
-		parsed.some(pattern => pattern[key] !== undefined);
-	if (
-		!captures('file') ||
-		!captures('message') ||
-		(parsed[0].kind !== 'file' && !captures('line') && !captures('location'))
-	) {
+	const captures = (key: 'file' | 'message' | 'line' | 'location'): boolean => parsed.some(pattern => pattern[key] !== undefined);
+	if (!captures('file') || !captures('message') || (parsed[0].kind !== 'file' && !captures('line') && !captures('location'))) {
 		throw new TypeError('Problem patterns require file, message and a line or location unless kind is file');
 	}
 	return Object.freeze(parsed);
@@ -391,13 +344,7 @@ function builtinMatcher(name: string): Record<string, unknown> {
 			pattern: builtinPattern(name),
 		};
 	}
-	if (
-		name === '$lessCompile' ||
-		name === '$jshint' ||
-		name === '$jshint-stylish' ||
-		name === '$eslint-compact' ||
-		name === '$eslint-stylish'
-	) {
+	if (name === '$lessCompile' || name === '$jshint' || name === '$jshint-stylish' || name === '$eslint-compact' || name === '$eslint-stylish') {
 		const owner = name.slice(1).split('-')[0]!;
 		return {
 			owner,

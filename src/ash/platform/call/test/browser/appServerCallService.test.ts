@@ -3,12 +3,7 @@ import { test } from 'mocha';
 import { setTimeout as delay } from 'node:timers/promises';
 import { AppServerCallService } from '../../browser/appServerCallService.js';
 import { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
-import {
-	WEB_APP_SERVER_CONNECT_EVENT,
-	WEB_APP_SERVER_CONNECTED_EVENT,
-	WEB_APP_SERVER_FRAME_EVENT,
-	type AppServerTransport,
-} from '../../../agentHost/common/appServerTransport.js';
+import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../agentHost/common/appServerTransport.js';
 import {
 	APP_SERVER_SCHEMA_HASH,
 	APP_SERVER_PROTOCOL_MAJOR,

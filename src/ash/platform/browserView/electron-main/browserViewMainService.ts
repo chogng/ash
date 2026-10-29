@@ -37,13 +37,7 @@ import { browserZoomFactors, browserZoomDefaultIndex } from '../common/browserVi
 export const IBrowserViewMainService = createServiceIdentifier<IBrowserViewMainService>('browserViewMainService');
 export interface IBrowserViewMainService extends IBrowserViewService {
 	tryGetBrowserView(id: string): BrowserView | undefined;
-	createTarget(
-		url: string,
-		sessionId: string,
-		signal: AbortSignal,
-		browserContextId?: string,
-		canvas?: IBrowserViewCreateOptions['canvas'],
-	): Promise<BrowserView>;
+	createTarget(url: string, sessionId: string, signal: AbortSignal, browserContextId?: string, canvas?: IBrowserViewCreateOptions['canvas']): Promise<BrowserView>;
 	createBrowserContext(threadId: string): string;
 	disposeBrowserContext(contextId: string, threadId: string): Promise<void>;
 	validateAgentAccess(id: string, sessionId: string): BrowserView;
@@ -56,32 +50,21 @@ export interface BrowserViewMainServiceOptions {
 	readonly getWorkspaceId: () => string;
 	readonly createSession: (partition: string) => Session;
 	readonly createView: (session: Session) => WebContentsView;
-	readonly getRemoteNetwork: () =>
-		{ readonly authority: string; readonly tunnels: SshPortForwardingService } | undefined;
+	readonly getRemoteNetwork: () => { readonly authority: string; readonly tunnels: SshPortForwardingService } | undefined;
 	readonly contextMenu: ElectronContextMenu;
 	readonly getNlsMessages: () => Readonly<Record<string, string>>;
 }
 /** The window manager is the sole table of live pages; each page owns its own disposal. */
 export class BrowserViewMainService extends Disposable implements IBrowserViewMainService {
-	public async setContentVisibility(
-		id: string,
-		rule: import('../common/browserView.js').IBrowserContentVisibilityRule | undefined,
-	): Promise<void> {
+	public async setContentVisibility(id: string, rule: import('../common/browserView.js').IBrowserContentVisibilityRule | undefined): Promise<void> {
 		this.target(id).setContentVisibility(rule);
 	}
-	public async setPermissions(
-		id: string,
-		origin: string,
-		grants: readonly IPermissionCategoryState[],
-	): Promise<void> {
+	public async setPermissions(id: string, origin: string, grants: readonly IPermissionCategoryState[]): Promise<void> {
 		const view = this.target(id);
 		view.session.permissions.setPermissions(id, origin, grants);
 	}
 	private preloadConfiguration: IBrowserViewWindowConfiguration | undefined;
-	public async updateWindowConfiguration(
-		windowId: number,
-		configuration: IBrowserViewWindowConfiguration,
-	): Promise<void> {
+	public async updateWindowConfiguration(windowId: number, configuration: IBrowserViewWindowConfiguration): Promise<void> {
 		if (windowId !== this.options.window.id) {
 			throw new Error('BrowserWindowAccessDenied');
 		}
@@ -105,11 +88,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 	public async stopFindInPage(id: string, keepSelection?: boolean): Promise<void> {
 		this.target(id).stopFindInPage(keepSelection);
 	}
-	public async toggleElementSelection(
-		id: string,
-		enabled?: boolean,
-		options?: IBrowserElementSelectionOptions,
-	): Promise<void> {
+	public async toggleElementSelection(id: string, enabled?: boolean, options?: IBrowserElementSelectionOptions): Promise<void> {
 		this.target(id).toggleElementSelection(enabled, options);
 	}
 	public async setElementComments(id: string, update: IBrowserElementCommentsUpdate): Promise<void> {
@@ -129,10 +108,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 	private readonly audiences = new Map<string, readonly string[]>();
 	private readonly grants = new Map<string, Map<string, AbortController>>();
 	private readonly histories = new Map<BrowserSession, BrowserSessionHistory>();
-	private readonly contexts = new Map<
-		string,
-		{ readonly threadId: string; readonly affinity: string; readonly session: BrowserSession }
-	>();
+	private readonly contexts = new Map<string, { readonly threadId: string; readonly affinity: string; readonly session: BrowserSession }>();
 	private contextMenuOwner: BrowserView | undefined;
 	constructor(
 		private readonly options: BrowserViewMainServiceOptions,
@@ -144,13 +120,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 		this._register(toDisposable(() => this.cancellation.abort(new Error('BrowserCapabilityUnavailable'))));
 	}
 	private async showContextMenu(view: BrowserView, params: ContextMenuParams): Promise<void> {
-		if (
-			this.contextMenuOwner ||
-			view.signal.aborted ||
-			view.webContents.isDestroyed() ||
-			!params.frame ||
-			params.frame.detached
-		) {
+		if (this.contextMenuOwner || view.signal.aborted || view.webContents.isDestroyed() || !params.frame || params.frame.detached) {
 			return;
 		}
 		const contents = view.webContents;
@@ -158,13 +128,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 		const actions = new Map<string, () => void | Promise<void>>();
 		// Main follows the client's current language pack, including changes while the window is open.
 		const text = (key: string, fallback: string): string => this.options.getNlsMessages()[key] ?? fallback;
-		const add = (
-			id: string,
-			label: string,
-			run: () => void | Promise<void>,
-			enabled = true,
-			target = items,
-		): void => {
+		const add = (id: string, label: string, run: () => void | Promise<void>, enabled = true, target = items): void => {
 			target.push({ type: 'action', id, label, enabled });
 			if (enabled) {
 				actions.set(id, run);
@@ -177,59 +141,19 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 		};
 		const flags = params.editFlags;
 		if (params.isEditable) {
-			add(
-				'undo',
-				text(
-					'browser.context.undo',
-					localize({ bundle: 'ash.workbench', key: 'browser.context.undo' }, 'Undo'),
-				),
-				() => contents.undo(),
-				flags.canUndo,
-			);
-			add(
-				'redo',
-				text(
-					'browser.context.redo',
-					localize({ bundle: 'ash.workbench', key: 'browser.context.redo' }, 'Redo'),
-				),
-				() => contents.redo(),
-				flags.canRedo,
-			);
+			add('undo', text('browser.context.undo', localize({ bundle: 'ash.workbench', key: 'browser.context.undo' }, 'Undo')), () => contents.undo(), flags.canUndo);
+			add('redo', text('browser.context.redo', localize({ bundle: 'ash.workbench', key: 'browser.context.redo' }, 'Redo')), () => contents.redo(), flags.canRedo);
 			separate();
-			add(
-				'cut',
-				text('browser.context.cut', localize({ bundle: 'ash.workbench', key: 'browser.context.cut' }, 'Cut')),
-				() => contents.cut(),
-				flags.canCut,
-			);
+			add('cut', text('browser.context.cut', localize({ bundle: 'ash.workbench', key: 'browser.context.cut' }, 'Cut')), () => contents.cut(), flags.canCut);
 		}
 		if (params.isEditable || params.selectionText) {
-			add(
-				'copy',
-				text(
-					'browser.context.copy',
-					localize({ bundle: 'ash.workbench', key: 'browser.context.copy' }, 'Copy'),
-				),
-				() => contents.copy(),
-				flags.canCopy,
-			);
+			add('copy', text('browser.context.copy', localize({ bundle: 'ash.workbench', key: 'browser.context.copy' }, 'Copy')), () => contents.copy(), flags.canCopy);
 		}
 		if (params.isEditable) {
-			add(
-				'paste',
-				text(
-					'browser.context.paste',
-					localize({ bundle: 'ash.workbench', key: 'browser.context.paste' }, 'Paste'),
-				),
-				() => contents.paste(),
-				flags.canPaste,
-			);
+			add('paste', text('browser.context.paste', localize({ bundle: 'ash.workbench', key: 'browser.context.paste' }, 'Paste')), () => contents.paste(), flags.canPaste);
 			add(
 				'pastePlain',
-				text(
-					'browser.context.pastePlain',
-					localize({ bundle: 'ash.workbench', key: 'browser.context.pastePlain' }, 'Paste as plain text'),
-				),
+				text('browser.context.pastePlain', localize({ bundle: 'ash.workbench', key: 'browser.context.pastePlain' }, 'Paste as plain text')),
 				() => contents.pasteAndMatchStyle(),
 				flags.canPaste,
 			);
@@ -244,32 +168,21 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 			}
 			add(
 				'openLink',
-				text(
-					'browser.context.openLink',
-					localize({ bundle: 'ash.workbench', key: 'browser.context.openLink' }, 'Open link in new tab'),
-				),
+				text('browser.context.openLink', localize({ bundle: 'ash.workbench', key: 'browser.context.openLink' }, 'Open link in new tab')),
 				() => {
 					this.events.fire({ type: 'openRequested', targetId: view.id, url: link! });
 				},
 				link !== undefined && view.getInfo().owner.type === 'user',
 			);
-			add(
-				'copyLink',
-				text(
-					'browser.context.copyLink',
-					localize({ bundle: 'ash.workbench', key: 'browser.context.copyLink' }, 'Copy link address'),
-				),
-				() => this.clipboard.writeText(params.linkURL),
+			add('copyLink', text('browser.context.copyLink', localize({ bundle: 'ash.workbench', key: 'browser.context.copyLink' }, 'Copy link address')), () =>
+				this.clipboard.writeText(params.linkURL),
 			);
 		}
 		if (params.mediaType === 'image' || params.mediaType === 'canvas') {
 			separate();
 			add(
 				'copyImage',
-				text(
-					'browser.context.copyImage',
-					localize({ bundle: 'ash.workbench', key: 'browser.context.copyImage' }, 'Copy image'),
-				),
+				text('browser.context.copyImage', localize({ bundle: 'ash.workbench', key: 'browser.context.copyImage' }, 'Copy image')),
 				() => contents.copyImageAt(params.x, params.y),
 				params.hasImageContents,
 			);
@@ -277,79 +190,42 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 			try {
 				const source = new URL(params.srcURL);
 				downloadable =
-					!source.username &&
-					!source.password &&
-					(['https:', 'http:', 'blob:'].includes(source.protocol) ||
-						(source.protocol === 'data:' && params.srcURL.startsWith('data:image/')));
+					!source.username && !source.password && (['https:', 'http:', 'blob:'].includes(source.protocol) || (source.protocol === 'data:' && params.srcURL.startsWith('data:image/')));
 			} catch {
 				/* A canvas without an address can still be copied. */
 			}
 			add(
 				'saveImage',
-				text(
-					'browser.context.saveImage',
-					localize({ bundle: 'ash.workbench', key: 'browser.context.saveImage' }, 'Save image as…'),
-				),
+				text('browser.context.saveImage', localize({ bundle: 'ash.workbench', key: 'browser.context.saveImage' }, 'Save image as…')),
 				() => contents.downloadURL(params.srcURL),
 				downloadable && params.hasImageContents,
 			);
 		}
 		separate();
-		add(
-			'selectAll',
-			text(
-				'browser.context.selectAll',
-				localize({ bundle: 'ash.workbench', key: 'browser.context.selectAll' }, 'Select all'),
-			),
-			() => contents.selectAll(),
-			flags.canSelectAll,
-		);
+		add('selectAll', text('browser.context.selectAll', localize({ bundle: 'ash.workbench', key: 'browser.context.selectAll' }, 'Select all')), () => contents.selectAll(), flags.canSelectAll);
 		separate();
-		add(
-			'back',
-			text('browser.back', localize({ bundle: 'ash.workbench', key: 'browser.back' }, 'Back')),
-			() => view.goBack(),
-			contents.navigationHistory.canGoBack(),
-		);
-		add(
-			'forward',
-			text('browser.forward', localize({ bundle: 'ash.workbench', key: 'browser.forward' }, 'Forward')),
-			() => view.goForward(),
-			contents.navigationHistory.canGoForward(),
-		);
-		add(
-			'reload',
-			text('browser.reload', localize({ bundle: 'ash.workbench', key: 'browser.reload' }, 'Reload')),
-			() => view.reload(),
-		);
+		add('back', text('browser.back', localize({ bundle: 'ash.workbench', key: 'browser.back' }, 'Back')), () => view.goBack(), contents.navigationHistory.canGoBack());
+		add('forward', text('browser.forward', localize({ bundle: 'ash.workbench', key: 'browser.forward' }, 'Forward')), () => view.goForward(), contents.navigationHistory.canGoForward());
+		add('reload', text('browser.reload', localize({ bundle: 'ash.workbench', key: 'browser.reload' }, 'Reload')), () => view.reload());
 		const zoom = view.getState().browserZoomIndex ?? browserZoomDefaultIndex;
 		const zoomItems: NativeContextMenuItem[] = [];
 		add(
 			'zoomIn',
-			text(
-				'browser.context.zoomIn',
-				localize({ bundle: 'ash.workbench', key: 'browser.context.zoomIn' }, 'Zoom in'),
-			),
+			text('browser.context.zoomIn', localize({ bundle: 'ash.workbench', key: 'browser.context.zoomIn' }, 'Zoom in')),
 			() => view.setBrowserZoomIndex(zoom + 1),
 			zoom < browserZoomFactors.length - 1,
 			zoomItems,
 		);
 		add(
 			'zoomOut',
-			text(
-				'browser.context.zoomOut',
-				localize({ bundle: 'ash.workbench', key: 'browser.context.zoomOut' }, 'Zoom out'),
-			),
+			text('browser.context.zoomOut', localize({ bundle: 'ash.workbench', key: 'browser.context.zoomOut' }, 'Zoom out')),
 			() => view.setBrowserZoomIndex(zoom - 1),
 			zoom > 0,
 			zoomItems,
 		);
 		add(
 			'resetZoom',
-			text(
-				'browser.context.resetZoom',
-				localize({ bundle: 'ash.workbench', key: 'browser.context.resetZoom' }, 'Reset zoom'),
-			),
+			text('browser.context.resetZoom', localize({ bundle: 'ash.workbench', key: 'browser.context.resetZoom' }, 'Reset zoom')),
 			() => view.setBrowserZoomIndex(browserZoomDefaultIndex),
 			true,
 			zoomItems,
@@ -377,13 +253,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 				x: (bounds.x + params.x) / windowZoom,
 				y: (bounds.y + params.y) / windowZoom,
 			});
-			if (
-				!cancelled &&
-				!view.signal.aborted &&
-				!contents.isDestroyed() &&
-				params.frame &&
-				!params.frame.detached
-			) {
+			if (!cancelled && !view.signal.aborted && !contents.isDestroyed() && params.frame && !params.frame.detached) {
 				view.focus();
 				if (selectedId) {
 					await actions.get(selectedId)?.();
@@ -416,11 +286,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 		}
 		const affinity = JSON.stringify([threadId, randomUUID()]);
 		const identity = this.sessionIdentity({ scope: BrowserViewStorageScope.Agent, affinity });
-		const session = BrowserSession.getOrCreate(
-			identity,
-			BrowserViewStorageScope.Agent,
-			this.options.createSession('ash-browser-' + identity),
-		);
+		const session = BrowserSession.getOrCreate(identity, BrowserViewStorageScope.Agent, this.options.createSession('ash-browser-' + identity));
 		this.contexts.set(identity, { threadId, affinity, session });
 		return identity;
 	}
@@ -439,13 +305,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 		await context.session.electronSession.clearStorageData();
 		await context.session.electronSession.clearCache();
 	}
-	public createTarget(
-		url: string,
-		sessionId: string,
-		signal: AbortSignal,
-		browserContextId?: string,
-		canvas?: IBrowserViewCreateOptions['canvas'],
-	): Promise<BrowserView> {
+	public createTarget(url: string, sessionId: string, signal: AbortSignal, browserContextId?: string, canvas?: IBrowserViewCreateOptions['canvas']): Promise<BrowserView> {
 		const pages = [...this.targets].map(([, view]) => view);
 		const owned = pages.filter(view => {
 			const owner = view.getInfo().owner;
@@ -461,19 +321,10 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 				: pages
 						.find(view => {
 							const owner = view.getInfo().owner;
-							return (
-								view.session.id === browserContextId &&
-								owner.type === 'agent' &&
-								owner.sessionId === sessionId
-							);
+							return view.session.id === browserContextId && owner.type === 'agent' && owner.sessionId === sessionId;
 						})
 						?.getInfo().session;
-		const affinity =
-			context?.threadId === sessionId
-				? context.affinity
-				: existing?.scope === BrowserViewStorageScope.Agent
-					? existing.affinity
-					: undefined;
+		const affinity = context?.threadId === sessionId ? context.affinity : existing?.scope === BrowserViewStorageScope.Agent ? existing.affinity : undefined;
 		if (browserContextId !== undefined && affinity === undefined) {
 			throw new Error('BrowserContextAccessDenied');
 		}
@@ -512,10 +363,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 	public validateAgentAccess(id: string, sessionId: string): BrowserView {
 		const view = this.target(id);
 		const owner = view.getInfo().owner;
-		if (
-			!(owner.type === 'agent' && owner.sessionId === sessionId) &&
-			!this.audiences.get(id)?.includes(sessionId)
-		) {
+		if (!(owner.type === 'agent' && owner.sessionId === sessionId) && !this.audiences.get(id)?.includes(sessionId)) {
 			throw new Error('BrowserTargetAccessDenied');
 		}
 		return view;
@@ -578,11 +426,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 		);
 		return creation;
 	}
-	private async create(
-		id: string,
-		options: IBrowserViewCreateOptions,
-		requestSignal: AbortSignal,
-	): Promise<BrowserView> {
+	private async create(id: string, options: IBrowserViewCreateOptions, requestSignal: AbortSignal): Promise<BrowserView> {
 		const signal = AbortSignal.any([requestSignal, this.cancellation.signal]);
 		signal.throwIfAborted();
 		const initialUrl = normalizeBrowserViewUrl(options.initialUrl);
@@ -595,19 +439,14 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 		try {
 			const storage = options.session;
 			const contextId = this.sessionIdentity(storage, id);
-			const persistent =
-				storage.scope === BrowserViewStorageScope.Global || storage.scope === BrowserViewStorageScope.Workspace;
-			const electronSession = this.options.createSession(
-				(persistent ? 'persist:' : '') + 'ash-browser-' + contextId,
-			);
+			const persistent = storage.scope === BrowserViewStorageScope.Global || storage.scope === BrowserViewStorageScope.Workspace;
+			const electronSession = this.options.createSession((persistent ? 'persist:' : '') + 'ash-browser-' + contextId);
 			const session = BrowserSession.getOrCreate(contextId, storage.scope, electronSession);
 			network = remoteNetwork ? await session.acquireRemote(remoteNetwork.tunnels, signal) : undefined;
 			signal.throwIfAborted();
 			let history = this.histories.get(session);
 			if (!history) {
-				const lease = await session.acquireHistory(() =>
-					this.instantiationService.createInstance(BrowserSessionHistory, session),
-				);
+				const lease = await session.acquireHistory(() => this.instantiationService.createInstance(BrowserSessionHistory, session));
 				try {
 					signal.throwIfAborted();
 					this._register(lease);
@@ -629,9 +468,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 				session,
 				history,
 				openContextMenu: (target: BrowserView, params: ContextMenuParams) => {
-					void this.showContextMenu(target, params).catch(error =>
-						this.log.error('Could not open browser context menu', error),
-					);
+					void this.showContextMenu(target, params).catch(error => this.log.error('Could not open browser context menu', error));
 				},
 				emitEvent: (event: BrowserViewEvent) => {
 					if (event.type === 'closed') {
@@ -667,11 +504,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 	async respondToFileRequest(id: string, requestId: string, data: string | null) {
 		this.target(id).respondToFileRequest(requestId, data);
 	}
-	async respondToAuthentication(
-		id: string,
-		requestId: string,
-		credentials: { readonly username: string; readonly password: string; readonly remember: boolean } | null,
-	) {
+	async respondToAuthentication(id: string, requestId: string, credentials: { readonly username: string; readonly password: string; readonly remember: boolean } | null) {
 		await this.target(id).respondToAuthentication(requestId, credentials);
 	}
 	async respondToPasswordSave(id: string, requestId: string, save: boolean) {

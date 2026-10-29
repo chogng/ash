@@ -2,11 +2,7 @@ import { EditorOption, EditorOptions } from './editorOptions.js';
 import { BareFontInfo, type IValidatedEditorOptions } from './fontInfo.js';
 
 /** Builds a bare font descriptor from a normalized editor-option source. */
-export function createBareFontInfoFromValidatedSettings(
-	options: IValidatedEditorOptions,
-	pixelRatio: number,
-	ignoreEditorZoom: boolean,
-): BareFontInfo {
+export function createBareFontInfoFromValidatedSettings(options: IValidatedEditorOptions, pixelRatio: number, ignoreEditorZoom: boolean): BareFontInfo {
 	const fontFamily = options.get(EditorOption.fontFamily);
 	const fontWeight = options.get(EditorOption.fontWeight);
 	const fontSize = options.get(EditorOption.fontSize);
@@ -14,17 +10,7 @@ export function createBareFontInfoFromValidatedSettings(
 	const fontVariationSettings = options.get(EditorOption.fontVariations);
 	const lineHeight = options.get(EditorOption.lineHeight);
 	const letterSpacing = options.get(EditorOption.letterSpacing);
-	return BareFontInfo._create(
-		fontFamily,
-		fontWeight,
-		fontSize,
-		fontFeatureSettings,
-		fontVariationSettings,
-		lineHeight,
-		letterSpacing,
-		pixelRatio,
-		ignoreEditorZoom,
-	);
+	return BareFontInfo._create(fontFamily, fontWeight, fontSize, fontFeatureSettings, fontVariationSettings, lineHeight, letterSpacing, pixelRatio, ignoreEditorZoom);
 }
 
 /** Builds a bare font descriptor from raw settings at a trust boundary. */
@@ -49,15 +35,5 @@ export function createBareFontInfoFromRawSettings(
 	const fontVariationSettings = EditorOptions.fontVariations.validate(options.fontVariations);
 	const lineHeight = EditorOptions.lineHeight.validate(options.lineHeight);
 	const letterSpacing = EditorOptions.letterSpacing.validate(options.letterSpacing);
-	return BareFontInfo._create(
-		fontFamily,
-		fontWeight,
-		fontSize,
-		fontFeatureSettings,
-		fontVariationSettings,
-		lineHeight,
-		letterSpacing,
-		pixelRatio,
-		ignoreEditorZoom,
-	);
+	return BareFontInfo._create(fontFamily, fontWeight, fontSize, fontFeatureSettings, fontVariationSettings, lineHeight, letterSpacing, pixelRatio, ignoreEditorZoom);
 }

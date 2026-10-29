@@ -1,9 +1,6 @@
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { CommandService } from '../../services/commands/common/commandService.js';
-import {
-	ILocalTranscriptionService,
-	ILocalTranscriptionModelService,
-} from '../../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../../platform/localTranscription/common/localTranscription.js';
 import { NullLocalTranscriptionService } from '../../services/localTranscription/browser/localTranscriptionService.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
@@ -14,19 +11,9 @@ import { TestExtensionService } from './testExtensionServices.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../services/storage/browser/storageService.js';
-import {
-	DictationOnboardingService,
-	IDictationOnboardingService,
-} from '../../contrib/chat/browser/speechToText/dictationOnboarding.js';
-import {
-	IVoiceCodeTranscriptionClient,
-	VoiceCodeTranscriptionClient,
-} from '../../contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
-import {
-	IVoiceCodeTranscriptionBackendService,
-	type DictationBackend,
-	type IDictationInputOptions,
-} from '../../../platform/renderer/common/dictation.js';
+import { DictationOnboardingService, IDictationOnboardingService } from '../../contrib/chat/browser/speechToText/dictationOnboarding.js';
+import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
+import { IVoiceCodeTranscriptionBackendService, type DictationBackend, type IDictationInputOptions } from '../../../platform/renderer/common/dictation.js';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../../platform/telemetry/common/telemetryUtils.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
@@ -50,16 +37,10 @@ export interface TestDictationCapture {
 }
 
 /** Admits fake recognition at the host boundary while exercising the production transcription client. */
-export function createTestDictationBackend(
-	owner: DisposableStore,
-	capture: TestDictationCapture,
-): IVoiceCodeTranscriptionBackendService {
+export function createTestDictationBackend(owner: DisposableStore, capture: TestDictationCapture): IVoiceCodeTranscriptionBackendService {
 	const transcript = owner.add(new Emitter<{ resourceId: string; text: string; isFinal: boolean }>());
 	const ended = owner.add(new Emitter<{ resourceId: string; error?: string }>());
-	const sessions = new Map<
-		string,
-		{ handle: Promise<TestDictationSession>; text?: string; cancelling?: Promise<void> }
-	>();
+	const sessions = new Map<string, { handle: Promise<TestDictationSession>; text?: string; cancelling?: Promise<void> }>();
 	return {
 		isConnected: true,
 		onDidChangeConnection: Event.None,
@@ -101,9 +82,7 @@ export function createTestDictationBackend(
 }
 
 /** Scoped browser-device fixture; capture processing and client delivery still use production code. */
-export function installTestDictationAudio(
-	target: Window & typeof globalThis,
-): IDisposable & {
+export function installTestDictationAudio(target: Window & typeof globalThis): IDisposable & {
 	emit(samples: Float32Array): void;
 	readonly requests: MediaStreamConstraints[];
 	readonly tracks: { stopped: boolean }[];
@@ -152,12 +131,7 @@ export function installTestDictationAudio(
 		readonly port = {
 			onmessage: null as MessagePort['onmessage'],
 			postMessage: () => {
-				queueMicrotask(() =>
-					this.port.onmessage?.call(
-						this.port as unknown as MessagePort,
-						{ data: { type: PCM_FLUSH_ACK } } as MessageEvent,
-					),
-				);
+				queueMicrotask(() => this.port.onmessage?.call(this.port as unknown as MessagePort, { data: { type: PCM_FLUSH_ACK } } as MessageEvent));
 			},
 		};
 		constructor() {
@@ -195,8 +169,7 @@ export function installTestDictationAudio(
 		tracks,
 		contexts,
 		emit: samples => {
-			for (const port of ports)
-				port.onmessage?.call(port as unknown as MessagePort, { data: samples } as MessageEvent);
+			for (const port of ports) port.onmessage?.call(port as unknown as MessagePort, { data: samples } as MessageEvent);
 		},
 		dispose: () => lifetime.dispose(),
 		[Symbol.dispose]: () => lifetime.dispose(),
@@ -205,30 +178,17 @@ export function installTestDictationAudio(
 
 /** Test profile storage is isolated from the browser's persistent user profile. */
 export function registerTestDictationOnboarding(services: InstantiationService, seen = true): void {
-	if (!services.has(ICommandService))
-		services.registerSingleton(ICommandService, () =>
-			services.invokeFunction(accessor => new CommandService(accessor)),
-		);
+	if (!services.has(ICommandService)) services.registerSingleton(ICommandService, () => services.invokeFunction(accessor => new CommandService(accessor)));
 	if (!services.has(ILogService)) services.registerInstance(ILogService, new NullLoggerService());
-	if (!services.has(IVoiceCodeTranscriptionBackendService))
-		services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
-	if (!services.has(IVoiceCodeTranscriptionClient))
-		services.registerSingleton(IVoiceCodeTranscriptionClient, () =>
-			services.createInstance(VoiceCodeTranscriptionClient),
-		);
+	if (!services.has(IVoiceCodeTranscriptionBackendService)) services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
+	if (!services.has(IVoiceCodeTranscriptionClient)) services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
 	if (!services.has(ITelemetryService)) services.registerInstance(ITelemetryService, NullTelemetryService);
-	if (!services.has(INotificationService))
-		services.registerSingleton(INotificationService, () => new TestNotificationService());
-	if (!services.has(ILocalTranscriptionModelService))
-		services.registerSingleton(ILocalTranscriptionModelService, () => new NullLocalTranscriptionService());
-	if (!services.has(ILocalTranscriptionService))
-		services.registerSingleton(ILocalTranscriptionService, () => new NullLocalTranscriptionService());
-	if (!services.has(IConfigurationService))
-		services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
-	if (!services.has(IContextKeyService))
-		services.registerSingleton(IContextKeyService, () => new ContextKeyService());
-	if (!services.has(IExtensionService))
-		services.registerSingleton(IExtensionService, () => new TestExtensionService());
+	if (!services.has(INotificationService)) services.registerSingleton(INotificationService, () => new TestNotificationService());
+	if (!services.has(ILocalTranscriptionModelService)) services.registerSingleton(ILocalTranscriptionModelService, () => new NullLocalTranscriptionService());
+	if (!services.has(ILocalTranscriptionService)) services.registerSingleton(ILocalTranscriptionService, () => new NullLocalTranscriptionService());
+	if (!services.has(IConfigurationService)) services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
+	if (!services.has(IContextKeyService)) services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+	if (!services.has(IExtensionService)) services.registerSingleton(IExtensionService, () => new TestExtensionService());
 	if (!services.has(IStorageService)) {
 		const entries = new Map<string, string>();
 		services.registerSingleton(
@@ -256,9 +216,6 @@ export function registerTestDictationOnboarding(services: InstantiationService, 
 				}),
 		);
 	}
-	if (seen)
-		services
-			.get(IStorageService)
-			.store('dictation.introductionSeen', true, StorageScope.PROFILE, StorageTarget.USER);
+	if (seen) services.get(IStorageService).store('dictation.introductionSeen', true, StorageScope.PROFILE, StorageTarget.USER);
 	services.registerSingleton(IDictationOnboardingService, () => services.createInstance(DictationOnboardingService));
 }

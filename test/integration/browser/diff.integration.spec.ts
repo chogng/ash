@@ -28,9 +28,7 @@ async function clickFileAction(section: Locator, name: string): Promise<void> {
 	await section.getByRole('button', { name, exact: true }).click();
 }
 
-test('sash dragging under CPU throttling retains inline diff zones and skips unaffected grid leaves', async ({
-	page,
-}, testInfo) => {
+test('sash dragging under CPU throttling retains inline diff zones and skips unaffected grid leaves', async ({ page }, testInfo) => {
 	await openDiffPage(page, 'zh-CN');
 	const shared = Array.from({ length: 200 }, (_, index) => `shared ${index}`).join('\n');
 	await page.evaluate(
@@ -64,11 +62,7 @@ test('sash dragging under CPU throttling retains inline diff zones and skips una
 		expect(state.layouts[0]).toBe(0);
 		expect(state.layouts[1]).toBeGreaterThan(0);
 		expect(state.layouts[2]).toBe(state.layouts[1]);
-		expect(
-			await retainedDeletion!.evaluate(
-				node => node === document.querySelector('#single .stanza-diff-inline-original-line'),
-			),
-		).toBe(true);
+		expect(await retainedDeletion!.evaluate(node => node === document.querySelector('#single .stanza-diff-inline-original-line'))).toBe(true);
 		await sash.focus();
 		await page.keyboard.press('ArrowLeft');
 		expect((await page.evaluate(() => window.ashDiffIntegration.resizeGridState())).sizes).toEqual([180, 490, 230]);
@@ -120,12 +114,7 @@ test('diff scrolling keeps retained decorations stable during wheel input', asyn
 			const observer = new MutationObserver(records => {
 				for (const record of records) {
 					if (!(record.target instanceof Element)) continue;
-					if (
-						record.target.matches('.view-overlay-line') &&
-						record.removedNodes.length > 0 &&
-						record.addedNodes.length > 0
-					)
-						retainedOverlayReplacements++;
+					if (record.target.matches('.view-overlay-line') && record.removedNodes.length > 0 && record.addedNodes.length > 0) retainedOverlayReplacements++;
 					if (record.target.matches('.stanza-diff-overview-lane')) overviewUpdates++;
 				}
 			});
@@ -137,9 +126,7 @@ test('diff scrolling keeps retained decorations stable during wheel input', asyn
 			try {
 				for (let frame = 0; frame < 90; frame++) {
 					const start = performance.now();
-					editor.dispatchEvent(
-						new WheelEvent('wheel', { deltaY: frame < 45 ? 40 : -40, bubbles: true, cancelable: true }),
-					);
+					editor.dispatchEvent(new WheelEvent('wheel', { deltaY: frame < 45 ? 40 : -40, bubbles: true, cancelable: true }));
 					wheelDurations.push(performance.now() - start);
 					const now = await nextFrame();
 					intervals.push(now - previous);
@@ -171,9 +158,7 @@ test('diff scrolling keeps retained decorations stable during wheel input', asyn
 	}
 });
 
-test('diff scrolling in a tall inline viewport preserves visible rows and keyboard focus', async ({
-	page,
-}, testInfo) => {
+test('diff scrolling in a tall inline viewport preserves visible rows and keyboard focus', async ({ page }, testInfo) => {
 	await openDiffPage(page, 'zh-CN');
 	await page.setViewportSize({ width: 1440, height: 1000 });
 	await page.locator('#single').evaluate(node => {
@@ -203,16 +188,12 @@ test('diff scrolling in a tall inline viewport preserves visible rows and keyboa
 		for (let iteration = 0; iteration < 30; iteration++) {
 			await page.mouse.wheel(0, 80);
 		}
-		await expect
-			.poll(() => page.evaluate(() => window.ashDiffIntegration.linePositions(1, 1).modifiedScrollTop))
-			.toBe(2400);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.linePositions(1, 1).modifiedScrollTop)).toBe(2400);
 		await expect(input).toBeFocused();
 		expect(await page.evaluate(() => window.ashDiffIntegration.layoutEventCount)).toBe(before);
 		const geometry = await editor.evaluate(node => {
 			const bounds = node.getBoundingClientRect();
-			const lines = [...node.querySelectorAll('.view-lines .view-line')].map(line =>
-				line.getBoundingClientRect(),
-			);
+			const lines = [...node.querySelectorAll('.view-lines .view-line')].map(line => line.getBoundingClientRect());
 			return {
 				height: bounds.height,
 				visibleRows: lines.filter(line => line.bottom > bounds.top && line.top < bounds.bottom).length,
@@ -252,20 +233,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await sections.nth(1).locator('.stanza-multi-diff-editor-header-toggle').focus();
 		const files = host.getByRole('button', { name: localized(locale, 'Files', '文件'), exact: true });
 		await files.focus();
-		await expect
-			.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().activeCodeEditor))
-			.toBe(true);
-		expect(await page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().active)).toBe(
-			'src/second.ts',
-		);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().activeCodeEditor)).toBe(true);
+		expect(await page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().active)).toBe('src/second.ts');
 		const inspect = sections.first().getByRole('button', { name: 'Inspect File', exact: true });
 		await expect(inspect).toBeVisible();
 		await expect(sections.nth(1).getByRole('button', { name: 'Inspect File', exact: true })).toHaveCount(0);
 		await inspect.focus();
 		await inspect.press('Enter');
-		expect(await page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().inspected)).toEqual([
-			'file:///workspace/src/first.ts',
-		]);
+		expect(await page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().inspected)).toEqual(['file:///workspace/src/first.ts']);
 		await page.evaluate(async () => {
 			await window.ashDiffIntegration.updateTitleEditorConfiguration('editor.fontSize', 18);
 			await window.ashDiffIntegration.updateTitleEditorConfiguration('editor.lineHeight', 30);
@@ -275,20 +250,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await window.ashDiffIntegration.updateTitleEditorConfiguration('diffEditor.showInlineChanges', false);
 			await window.ashDiffIntegration.updateTitleEditorConfiguration('diffEditor.loopChanges', false);
 		});
-		await expect
-			.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().fonts))
-			.toEqual([18, 18]);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().fonts)).toEqual([18, 18]);
 		expect(await page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().lines)).toEqual([30, 30]);
 		await expect(host.locator('.stanza-multi-diff-editor')).toHaveClass(/hide-line-numbers/);
 		await expect(host.locator('.stanza-diff-inline-added, .stanza-diff-inline-removed')).toHaveCount(0);
 		await expect(sections.first().locator('.stanza-editor').first()).toHaveCSS('font-family', /Courier New/);
-		await page.evaluate(() =>
-			window.ashDiffIntegration.updateTitleGit(['src/first.ts', 'src/second.ts', 'src/third.ts'], 2),
-		);
+		await page.evaluate(() => window.ashDiffIntegration.updateTitleGit(['src/first.ts', 'src/second.ts', 'src/third.ts'], 2));
 		await expect(sections).toHaveCount(3);
-		await expect
-			.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().lines))
-			.toEqual([30, 30, 30]);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().lines)).toEqual([30, 30, 30]);
 	});
 
 	test(`multi diff refreshes live Git without changing tabs or losing file state (${locale})`, async ({ page }) => {
@@ -301,41 +270,22 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await sections.nth(1).locator('.stanza-multi-diff-editor-header-toggle').focus();
 		const tabs = host.getByRole('tab');
 		const originalTab = await tabs.first().textContent();
-		await page.evaluate(() =>
-			window.ashDiffIntegration.updateTitleGit(['src/first.ts', 'src/second.ts', 'src/stale.ts'], 2, 150),
-		);
-		await page.evaluate(() =>
-			window.ashDiffIntegration.updateTitleGit(['src/first.ts', 'src/second.ts', 'src/latest.ts'], 3),
-		);
+		await page.evaluate(() => window.ashDiffIntegration.updateTitleGit(['src/first.ts', 'src/second.ts', 'src/stale.ts'], 2, 150));
+		await page.evaluate(() => window.ashDiffIntegration.updateTitleGit(['src/first.ts', 'src/second.ts', 'src/latest.ts'], 3));
 		await expect(sections).toHaveCount(3);
-		await expect(host.locator('.stanza-multi-diff-editor-title')).toHaveText([
-			'src/first.ts',
-			'src/second.ts',
-			'src/latest.ts',
-		]);
-		await expect(sections.first().locator('.stanza-multi-diff-editor-header-toggle')).toHaveAttribute(
-			'aria-expanded',
-			'false',
-		);
-		expect(await page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().active)).toBe(
-			'src/second.ts',
-		);
-		await expect
-			.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().contents))
-			.toEqual(['src/second.ts revision 3\nshared', 'src/latest.ts revision 3\nshared']);
+		await expect(host.locator('.stanza-multi-diff-editor-title')).toHaveText(['src/first.ts', 'src/second.ts', 'src/latest.ts']);
+		await expect(sections.first().locator('.stanza-multi-diff-editor-header-toggle')).toHaveAttribute('aria-expanded', 'false');
+		expect(await page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().active)).toBe('src/second.ts');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().contents)).toEqual(['src/second.ts revision 3\nshared', 'src/latest.ts revision 3\nshared']);
 		await expect(tabs).toHaveCount(1);
 		await expect(tabs.first()).toHaveText(originalTab!);
 		await page.evaluate(() => window.ashDiffIntegration.updateTitleGit([], 4));
 		await expect(sections).toHaveCount(0);
-		await expect(host.locator('.stanza-multi-diff-editor-empty')).toHaveText(
-			localized(locale, 'No changes in this selection.', '此选择中没有更改。'),
-		);
+		await expect(host.locator('.stanza-multi-diff-editor-empty')).toHaveText(localized(locale, 'No changes in this selection.', '此选择中没有更改。'));
 		await page.evaluate(() => window.ashDiffIntegration.updateTitleGit(['src/returned.ts'], 5));
 		await expect(host.locator('.stanza-multi-diff-editor-title')).toHaveText(['src/returned.ts']);
 		await expect(host.locator('.stanza-multi-diff-editor-empty')).toBeHidden();
-		await expect
-			.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().contents))
-			.toEqual(['src/returned.ts revision 5\nshared']);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().contents)).toEqual(['src/returned.ts revision 5\nshared']);
 	});
 }
 
@@ -345,17 +295,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('binary'));
 		const pane = page.locator('#title-comparison .stanza-multi-diff-editor-pane');
 		const binary = pane.locator('.stanza-multi-diff-editor-item-editor.binary');
-		await expect(binary).toHaveText(
-			localized(
-				locale,
-				'Binary file changed. Text comparison is unavailable.',
-				'二进制文件已更改，无法进行文本比较。',
-			),
-		);
+		await expect(binary).toHaveText(localized(locale, 'Binary file changed. Text comparison is unavailable.', '二进制文件已更改，无法进行文本比较。'));
 		await expect(pane.locator('.stanza-editor-input')).toHaveCount(0);
-		await expect(
-			pane.getByRole('button', { name: localized(locale, 'Open File', '打开文件'), exact: true }),
-		).toBeVisible();
+		await expect(pane.getByRole('button', { name: localized(locale, 'Open File', '打开文件'), exact: true })).toBeVisible();
 		await binary.focus();
 		await expect(binary).toBeFocused();
 		await expect(binary).toHaveCSS('outline-style', 'solid');
@@ -372,16 +314,12 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		});
 	});
 
-	test(`multi diff saves collapsed writable files from an inactive tab and retains failed edits (${locale})`, async ({
-		page,
-	}) => {
+	test(`multi diff saves collapsed writable files from an inactive tab and retains failed edits (${locale})`, async ({ page }) => {
 		await openDiffPage(page, locale);
 		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('writable'));
 		const pane = page.locator('#title-comparison .stanza-multi-diff-editor-pane');
 		for (const name of ['first', 'second']) {
-			const section = pane
-				.locator('.stanza-multi-diff-editor-section')
-				.filter({ has: page.getByRole('button', { name: new RegExp(`${name}\\.ts`) }) });
+			const section = pane.locator('.stanza-multi-diff-editor-section').filter({ has: page.getByRole('button', { name: new RegExp(`${name}\\.ts`) }) });
 			const input = section.locator('.stanza-diff-editor-side.modified .stanza-editor-input');
 			await input.focus();
 			await page.keyboard.press('ControlOrMeta+End');
@@ -418,17 +356,13 @@ for (const locale of ['en', 'zh-CN'] as const)
 		await page.evaluate(() => window.ashDiffIntegration.selectSessionCapture('review-change', 'transient'));
 		const message = page.locator('#session-changes .ash-sessions-editor-message');
 		await expect(message).toBeHidden();
-		const first = page
-			.locator('#session-changes .stanza-multi-diff-editor-section')
-			.filter({ has: page.getByText('file-0.ts', { exact: true }) });
+		const first = page.locator('#session-changes .stanza-multi-diff-editor-section').filter({ has: page.getByText('file-0.ts', { exact: true }) });
 		const viewed = first.getByRole('button', { name: localized(locale, 'Viewed', '已查看'), exact: true });
 		await clickFileAction(first, localized(locale, 'Viewed', '已查看'));
 		await expect(viewed).toHaveAttribute('aria-pressed', 'true');
 		await viewed.focus();
 		await page.evaluate(() => window.ashDiffIntegration.advanceSessionRevision());
-		await expect(message).toContainText(
-			localized(locale, 'This Turn capture changed while loading.', '此回合的更改在加载期间已更新。'),
-		);
+		await expect(message).toContainText(localized(locale, 'This Turn capture changed while loading.', '此回合的更改在加载期间已更新。'));
 		await expect(page.locator('#session-changes .stanza-multi-diff-editor-section')).toHaveCount(0);
 		expect(await page.evaluate(() => window.ashDiffIntegration.readSessionComparisonState())).toEqual({
 			hasControl: false,
@@ -451,9 +385,7 @@ for (const locale of ['en', 'zh-CN'] as const)
 	});
 
 for (const locale of ['en', 'zh-CN'] as const)
-	test(`session Changes rejects content read across a capture revision and recovers (${locale})`, async ({
-		page,
-	}) => {
+	test(`session Changes rejects content read across a capture revision and recovers (${locale})`, async ({ page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await openDiffPage(page, locale);
@@ -461,9 +393,7 @@ for (const locale of ['en', 'zh-CN'] as const)
 		await page.locator('#modified').focus();
 		await page.evaluate(() => window.ashDiffIntegration.changeSessionCaptureDuringRead());
 		const message = page.locator('#session-changes .ash-sessions-editor-message');
-		await expect(message).toContainText(
-			localized(locale, 'This Turn capture changed while loading.', '此回合的更改在加载期间已更新。'),
-		);
+		await expect(message).toContainText(localized(locale, 'This Turn capture changed while loading.', '此回合的更改在加载期间已更新。'));
 		await expect(page.locator('#session-changes .stanza-multi-diff-editor-section')).toHaveCount(0);
 		expect(await page.evaluate(() => window.ashDiffIntegration.readSessionComparisonState())).toEqual({
 			hasControl: false,
@@ -472,20 +402,14 @@ for (const locale of ['en', 'zh-CN'] as const)
 		await expect(page.locator('#modified')).toBeFocused();
 		await page.evaluate(() => window.ashDiffIntegration.selectSessionCapture('review-change'));
 		await expect(message).toBeHidden();
-		const first = page
-			.locator('#session-changes .stanza-multi-diff-editor-section')
-			.filter({ has: page.getByText('file-0.ts', { exact: true }) });
+		const first = page.locator('#session-changes .stanza-multi-diff-editor-section').filter({ has: page.getByText('file-0.ts', { exact: true }) });
 		await clickFileAction(first, localized(locale, 'Viewed', '已查看'));
-		await expect
-			.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState()))
-			.toEqual(['ash-turn-diff:/review-change/file-0.ts?session=review&thread=review-thread&revision=2']);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual(['ash-turn-diff:/review-change/file-0.ts?session=review&thread=review-thread&revision=2']);
 		expect(errors).toEqual([]);
 	});
 
 for (const locale of ['en', 'zh-CN'] as const)
-	test(`session Changes reveals a lazy file, reviews its revision and decorates the input (${locale})`, async ({
-		page,
-	}) => {
+	test(`session Changes reveals a lazy file, reviews its revision and decorates the input (${locale})`, async ({ page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await openDiffPage(page, locale);
@@ -495,19 +419,13 @@ for (const locale of ['en', 'zh-CN'] as const)
 		await expect.poll(() => label.evaluate(element => getComputedStyle(element, '::after').content)).toBe('"8"');
 		for (const theme of ['dark', 'light', 'contrast'] as const) {
 			await page.evaluate(theme => window.ashDiffIntegration.sessionTheme(theme), theme);
-			await expect
-				.poll(() => label.evaluate(element => getComputedStyle(element, '::after').backgroundColor))
-				.not.toBe('rgba(0, 0, 0, 0)');
+			await expect.poll(() => label.evaluate(element => getComputedStyle(element, '::after').backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
 			if (theme === 'contrast') {
-				await expect
-					.poll(() => label.evaluate(element => getComputedStyle(element, '::after').borderTopColor))
-					.not.toBe('rgba(0, 0, 0, 0)');
+				await expect.poll(() => label.evaluate(element => getComputedStyle(element, '::after').borderTopColor)).not.toBe('rgba(0, 0, 0, 0)');
 			}
 		}
 		await page.evaluate(() => window.ashDiffIntegration.revealSessionFile(7));
-		const row = page
-			.locator('#session-changes .stanza-multi-diff-editor-section')
-			.filter({ has: page.getByText('file-7.ts', { exact: true }) });
+		const row = page.locator('#session-changes .stanza-multi-diff-editor-section').filter({ has: page.getByText('file-7.ts', { exact: true }) });
 		const toggle = row.getByRole('button', { name: /file-7.ts/ });
 		await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 		await expect(row.locator('.stanza-diff-editor')).toBeVisible();
@@ -515,15 +433,11 @@ for (const locale of ['en', 'zh-CN'] as const)
 		await viewed.focus();
 		await page.keyboard.press('Space');
 		await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-		await expect
-			.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState()))
-			.toEqual(['ash-turn-diff:/review-change/file-7.ts?session=review&thread=review-thread&revision=1']);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual(['ash-turn-diff:/review-change/file-7.ts?session=review&thread=review-thread&revision=1']);
 		await clickFileAction(row, localized(locale, 'Viewed', '已查看'));
 		await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 		await clickFileAction(row, localized(locale, 'Open File', '打开文件'));
-		await expect
-			.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionOpenedFiles()))
-			.toEqual(['file:///workspace/file-7.ts']);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionOpenedFiles())).toEqual(['file:///workspace/file-7.ts']);
 		await clickFileAction(row, localized(locale, 'Collapse Unchanged Regions', '折叠未更改区域'));
 		await expect(row.locator('.ash-diff-hidden-region')).not.toHaveCount(0);
 		await clickFileAction(row, localized(locale, 'Expand Full File', '展开整个文件'));
@@ -543,15 +457,11 @@ for (const locale of ['en', 'zh-CN'] as const)
 		await page.evaluate(() => window.ashDiffIntegration.reviewSessionFile(7, 1));
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual([]);
 		await page.evaluate(() => window.ashDiffIntegration.reviewSessionFile(7, 2, true));
-		await expect
-			.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState()))
-			.toEqual(['ash-turn-diff:/review-change/file-7.ts?session=review&thread=review-thread&revision=2']);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual(['ash-turn-diff:/review-change/file-7.ts?session=review&thread=review-thread&revision=2']);
 		await page.evaluate(() => window.ashDiffIntegration.unsealSessionCapture());
 		await expect(page.locator('#session-changes .ash-sessions-editor-message')).toBeHidden();
 		await page.evaluate(() => window.ashDiffIntegration.revealSessionFile(7));
-		await expect(
-			row.getByRole('button', { name: localized(locale, 'Preview commit…', '预览提交…'), exact: true }),
-		).toBeDisabled();
+		await expect(row.getByRole('button', { name: localized(locale, 'Preview commit…', '预览提交…'), exact: true })).toBeDisabled();
 		expect(errors).toEqual([]);
 	});
 
@@ -562,9 +472,7 @@ test('diff feature revert buttons support keyboard, undo, read-only and live opt
 	await expect(button).toBeVisible();
 	await button.focus();
 	await page.keyboard.press('Space');
-	await expect
-		.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText))
-		.toBe('same\nbefore 😀 after\nlast');
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toBe('same\nbefore 😀 after\nlast');
 	await page.evaluate(() => window.ashDiffIntegration.undo());
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
 	await expect(button).toBeVisible();
@@ -614,9 +522,7 @@ test('Git diff center gutter preserves BOM encoding while staging and reverting'
 			},
 		]);
 	await gutter.getByRole('button', { name: 'Revert change', exact: true }).click();
-	await expect
-		.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().modified))
-		.toBe('before\nshared');
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().modified)).toBe('before\nshared');
 	await page.evaluate(() => window.ashDiffIntegration.saveTitleFiles());
 	expect(await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence())).toMatchObject({
 		dirty: false,
@@ -625,9 +531,7 @@ test('Git diff center gutter preserves BOM encoding while staging and reverting'
 });
 
 for (const locale of ['en', 'zh-CN'] as const) {
-	test(`Git diff center gutter stages its block and rejects an expired comparison (${locale})`, async ({
-		page,
-	}, testInfo) => {
+	test(`Git diff center gutter stages its block and rejects an expired comparison (${locale})`, async ({ page }, testInfo) => {
 		await openDiffPage(page, locale);
 		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('git'));
 		const first = page.locator('#title-comparison .stanza-multi-diff-editor-section').first();
@@ -643,9 +547,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			const original = node.querySelector('.stanza-diff-editor-side.original')!.getBoundingClientRect();
 			const modified = node.querySelector('.stanza-diff-editor-side.modified')!.getBoundingClientRect();
 			const gutter = node.querySelector('.ash-diff-gutter')!.getBoundingClientRect();
-			const controls = [...node.querySelectorAll('.ash-diff-gutter button')].map(button =>
-				button.getBoundingClientRect(),
-			);
+			const controls = [...node.querySelectorAll('.ash-diff-gutter button')].map(button => button.getBoundingClientRect());
 			return {
 				leftGap: gutter.left - original.right,
 				rightGap: modified.left - gutter.right,
@@ -672,11 +574,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await stage.click();
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.gitGutterCalls.length)).toBe(2);
 		expect(await page.evaluate(() => window.ashDiffIntegration.gitGutterCalls[1])).toEqual({
-			error: localized(
-				locale,
-				'Open the current comparison from Source Control before selecting lines.',
-				'请从源代码管理打开当前比较，再选中行。',
-			),
+			error: localized(locale, 'Open the current comparison from Source Control before selecting lines.', '请从源代码管理打开当前比较，再选中行。'),
 		});
 	});
 
@@ -691,15 +589,11 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		});
 		await expect(gutter.getByRole('button')).toHaveCount(2);
 		await expect(revert).toHaveCount(1);
-		await expect(
-			gutter.getByRole('button', { name: localized(locale, 'Stage change', '暂存更改'), exact: true }),
-		).toBeVisible();
+		await expect(gutter.getByRole('button', { name: localized(locale, 'Stage change', '暂存更改'), exact: true })).toBeVisible();
 		const modified = await page.evaluate(() => window.ashDiffIntegration.readTitleComparison().modified);
 		await page.evaluate(() => window.ashDiffIntegration.selectTitleModified([1, 1, 1, 27]));
 		await expect(gutter.getByRole('button')).toHaveCount(2);
-		await expect(
-			gutter.getByRole('button', { name: localized(locale, 'Stage selected lines', '暂存选中行'), exact: true }),
-		).toBeVisible();
+		await expect(gutter.getByRole('button', { name: localized(locale, 'Stage selected lines', '暂存选中行'), exact: true })).toBeVisible();
 		const selectionRevert = gutter.getByRole('button', {
 			name: localized(locale, 'Revert selected changes', '还原选中的更改'),
 			exact: true,
@@ -707,9 +601,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect(selectionRevert).toHaveCount(1);
 		await selectionRevert.focus();
 		await page.keyboard.press('Space');
-		await expect
-			.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().modified))
-			.toBe('before\nshared');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().modified)).toBe('before\nshared');
 		await expect(page.getByRole('dialog')).toHaveCount(0);
 		expect(await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence())).toMatchObject({
 			dirty: true,
@@ -717,16 +609,12 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		});
 		const input = host.locator('.modified .stanza-editor-input');
 		await input.press('ControlOrMeta+z');
-		await expect
-			.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().modified))
-			.toBe(modified);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().modified)).toBe(modified);
 		await page.evaluate(() => window.ashDiffIntegration.selectTitleModified([1, 1, 1, 1]));
 		await expect(revert).toHaveCount(1);
 		await revert.focus();
 		await page.keyboard.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().modified))
-			.toBe('before\nshared');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().modified)).toBe('before\nshared');
 		await page.evaluate(() => window.ashDiffIntegration.saveTitleFiles());
 		expect(await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence())).toMatchObject({
 			dirty: false,
@@ -738,24 +626,11 @@ for (const locale of ['en', 'zh-CN'] as const) {
 	test(`Git diff center gutter unstages selected lines with per-editor menus (${locale})`, async ({ page }) => {
 		await openDiffPage(page, locale);
 		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('git', 'staged'));
-		const gutter = page
-			.locator('#title-comparison .stanza-multi-diff-editor-section')
-			.first()
-			.locator('.ash-diff-gutter');
-		await expect(
-			gutter.getByRole('button', { name: localized(locale, 'Unstage change', '取消暂存更改'), exact: true }),
-		).toBeVisible();
-		await expect(
-			gutter.getByRole('button', { name: localized(locale, 'Stage change', '暂存更改'), exact: true }),
-		).toHaveCount(0);
-		await expect(
-			gutter.getByRole('button', { name: localized(locale, 'Revert change', '还原更改'), exact: true }),
-		).toHaveCount(0);
-		await expect(
-			page
-				.locator('#single .ash-diff-gutter')
-				.getByRole('button', { name: localized(locale, 'Unstage change', '取消暂存更改'), exact: true }),
-		).toHaveCount(0);
+		const gutter = page.locator('#title-comparison .stanza-multi-diff-editor-section').first().locator('.ash-diff-gutter');
+		await expect(gutter.getByRole('button', { name: localized(locale, 'Unstage change', '取消暂存更改'), exact: true })).toBeVisible();
+		await expect(gutter.getByRole('button', { name: localized(locale, 'Stage change', '暂存更改'), exact: true })).toHaveCount(0);
+		await expect(gutter.getByRole('button', { name: localized(locale, 'Revert change', '还原更改'), exact: true })).toHaveCount(0);
+		await expect(page.locator('#single .ash-diff-gutter').getByRole('button', { name: localized(locale, 'Unstage change', '取消暂存更改'), exact: true })).toHaveCount(0);
 		await page.evaluate(() => window.ashDiffIntegration.selectTitleModified([1, 1, 1, 27]));
 		const unstage = gutter.getByRole('button', {
 			name: localized(locale, 'Unstage selected lines', '取消暂存选中行'),
@@ -784,10 +659,7 @@ test('moved comparison supports keyboard exit, read-only views, wrapping and dis
 		const longLine = '  return compute(input, configuration); '.repeat(12);
 		const block = ['function load(input) {', longLine, '}'];
 		const stay = Array.from({ length: 12 }, (_, index) => `stay ${index}`);
-		window.ashDiffIntegration.setComparisonText(
-			['head', ...block, ...stay, 'tail'].join('\n'),
-			['head', ...stay, ...block, 'tail'].join('\n'),
-		);
+		window.ashDiffIntegration.setComparisonText(['head', ...block, ...stay, 'tail'].join('\n'), ['head', ...stay, ...block, 'tail'].join('\n'));
 		await window.ashDiffIntegration.setMoves(true);
 		window.ashDiffIntegration.setEditorFeatures({ readOnly: true });
 		window.ashDiffIntegration.toggleWordWrap();
@@ -800,9 +672,7 @@ test('moved comparison supports keyboard exit, read-only views, wrapping and dis
 	const move = editor.locator('.ash-diff-moved-links').getByRole('button');
 	const revealMove = async () => {
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().moves)).toBe(1);
-		await page.evaluate(() =>
-			window.ashDiffIntegration.scrollModified(window.ashDiffIntegration.linePositions(2, 14).modifiedTop),
-		);
+		await page.evaluate(() => window.ashDiffIntegration.scrollModified(window.ashDiffIntegration.linePositions(2, 14).modifiedTop));
 		await expect(move).toBeVisible();
 	};
 	await revealMove();
@@ -838,9 +708,7 @@ test('moved comparison supports keyboard exit, read-only views, wrapping and dis
 		const modifiedEnd = editor.locator('.modified .view-line').filter({ hasText: /^\}$/u });
 		await expect(originalEnd).toBeVisible();
 		await expect(modifiedEnd).toBeVisible();
-		await expect
-			.poll(async () => (await originalEnd.boundingBox())!.y - (await modifiedEnd.boundingBox())!.y)
-			.toBe(0);
+		await expect.poll(async () => (await originalEnd.boundingBox())!.y - (await modifiedEnd.boundingBox())!.y).toBe(0);
 	};
 	await assertVisibleBlockEndAligned();
 	await editor.getByRole('separator').press('ArrowLeft');
@@ -849,12 +717,7 @@ test('moved comparison supports keyboard exit, read-only views, wrapping and dis
 		.poll(() =>
 			page.evaluate(() => {
 				const position = window.ashDiffIntegration.linePositions(4, 16);
-				return (
-					position.originalTop -
-					position.originalScrollTop -
-					position.modifiedTop +
-					position.modifiedScrollTop
-				);
+				return position.originalTop - position.originalScrollTop - position.modifiedTop + position.modifiedScrollTop;
 			}),
 		)
 		.toBe(0);
@@ -886,9 +749,7 @@ test('moved comparison supports keyboard exit, read-only views, wrapping and dis
 
 for (const locale of ['en', 'zh-CN'] as const) {
 	for (const inline of [false, true]) {
-		test(`expanded unchanged regions can be folded again in a read-only diff (${locale}, ${inline ? 'inline' : 'side by side'})`, async ({
-			page,
-		}, testInfo) => {
+		test(`expanded unchanged regions can be folded again in a read-only diff (${locale}, ${inline ? 'inline' : 'side by side'})`, async ({ page }, testInfo) => {
 			await openDiffPage(page, locale);
 			const original = Array.from({ length: 36 }, (_, index) => `shared line ${index + 1}`);
 			const modified = [...original];
@@ -911,9 +772,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				name: localized(locale, 'Collapse unchanged region', '折叠未修改区域'),
 			});
 			await expect(regions).toHaveCount(4);
-			await expect(leading.locator('.ash-diff-hidden-region-count')).toHaveText(
-				localized(locale, '16 hidden lines', '隐藏 16 行'),
-			);
+			await expect(leading.locator('.ash-diff-hidden-region-count')).toHaveText(localized(locale, '16 hidden lines', '隐藏 16 行'));
 			await leading.locator('.ash-diff-hidden-region-count').dblclick();
 			await expect(regions).toHaveCount(2);
 			await expect(collapse).toBeVisible();
@@ -926,18 +785,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await page.keyboard.press('Space');
 			await expect(regions).toHaveCount(4);
 			await expect(collapse).toHaveCount(0);
-			await expect(leading.locator('.ash-diff-hidden-region-count')).toHaveText(
-				localized(locale, '16 hidden lines', '隐藏 16 行'),
-			);
+			await expect(leading.locator('.ash-diff-hidden-region-count')).toHaveText(localized(locale, '16 hidden lines', '隐藏 16 行'));
 			const visible = await page.evaluate(() => window.ashDiffIntegration.visibleDiffRanges());
 			for (const ranges of [visible.original, visible.modified]) {
 				expect(ranges.some(([start, end]) => start <= 5 && 5 <= end)).toBe(false);
 			}
 			await leading.locator('.ash-diff-hidden-region-above').click();
 			await leading.locator('.ash-diff-hidden-region-below').click();
-			await expect(leading.locator('.ash-diff-hidden-region-count')).toHaveText(
-				localized(locale, '12 hidden lines', '隐藏 12 行'),
-			);
+			await expect(leading.locator('.ash-diff-hidden-region-count')).toHaveText(localized(locale, '12 hidden lines', '隐藏 12 行'));
 			for (let step = 0; step < 6; step++) {
 				await leading.locator('.ash-diff-hidden-region-above').click();
 			}
@@ -951,9 +806,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					.click();
 			}
 			await expect(regions).toHaveCount(4);
-			await expect(leading.locator('.ash-diff-hidden-region-count')).toHaveText(
-				localized(locale, '16 hidden lines', '隐藏 16 行'),
-			);
+			await expect(leading.locator('.ash-diff-hidden-region-count')).toHaveText(localized(locale, '16 hidden lines', '隐藏 16 行'));
 			await page.evaluate(() => window.ashDiffIntegration.setHiddenRegions(false));
 			await expect(regions).toHaveCount(0);
 			await expect(page.locator('#single .ash-diff-fold-unchanged')).toHaveCount(0);
@@ -967,18 +820,12 @@ test('modified side accepts text input and original side remains read-only', asy
 	const modified = page.locator('#single .stanza-diff-editor-side.modified .stanza-editor');
 	await original.focus();
 	await page.keyboard.type('blocked');
-	expect((await page.evaluate(() => window.ashDiffIntegration.read())).originalText).toBe(
-		'same\nbefore 😀 after\nlast',
-	);
+	expect((await page.evaluate(() => window.ashDiffIntegration.read())).originalText).toBe('same\nbefore 😀 after\nlast');
 	await modified.focus();
 	await page.evaluate(() => window.ashDiffIntegration.selectModifiedAll());
 	await page.keyboard.type('same\nbefore 😀 after\nlast');
-	await expect
-		.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText))
-		.toBe('same\nbefore 😀 after\nlast');
-	await expect
-		.poll(() => page.evaluate(() => window.ashDiffIntegration.read().kinds))
-		.toEqual(['unchanged', 'unchanged', 'unchanged']);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toBe('same\nbefore 😀 after\nlast');
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().kinds)).toEqual(['unchanged', 'unchanged', 'unchanged']);
 });
 
 test('multi diff edits the shared modified model while its original column stays read-only', async ({ page }) => {
@@ -986,15 +833,11 @@ test('multi diff edits the shared modified model while its original column stays
 	const first = page.locator('#multi .stanza-multi-diff-editor-section').first();
 	await first.locator('.stanza-diff-editor-side.original .stanza-editor').focus();
 	await page.keyboard.type('blocked');
-	expect((await page.evaluate(() => window.ashDiffIntegration.read())).originalText).toBe(
-		'same\nbefore 😀 after\nlast',
-	);
+	expect((await page.evaluate(() => window.ashDiffIntegration.read())).originalText).toBe('same\nbefore 😀 after\nlast');
 	await first.locator('.stanza-diff-editor-side.modified .stanza-editor').focus();
 	await page.keyboard.press('ControlOrMeta+End');
 	await page.keyboard.type(' added');
-	await expect
-		.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText))
-		.toBe('same\nbefore 🤖 after\nlast added');
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toBe('same\nbefore 🤖 after\nlast added');
 	await expect(page.locator('#single .stanza-diff-inline-added').last()).toBeVisible();
 });
 
@@ -1021,9 +864,7 @@ test('unsaved input updates Diff and Quick Diff locally using the existing basel
 });
 
 for (const locale of ['en', 'zh-CN'] as const) {
-	test(`encoding status action saves, reopens and cancels without changing another editor (${locale})`, async ({
-		page,
-	}) => {
+	test(`encoding status action saves, reopens and cancels without changing another editor (${locale})`, async ({ page }) => {
 		await openDiffPage(page, locale);
 		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('encoding'));
 		const encoding = page.locator('#title-comparison [data-statusbar-item-id="ash.status.editor.encoding"]');
@@ -1032,10 +873,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await input.focus();
 		await encoding.getByRole('button').focus();
 		await page.keyboard.press('Enter');
-		await expect(picker).toHaveAttribute(
-			'placeholder',
-			localized(locale, 'Select an Encoding Action', '选择编码操作'),
-		);
+		await expect(picker).toHaveAttribute('placeholder', localized(locale, 'Select an Encoding Action', '选择编码操作'));
 		await page.keyboard.press('ArrowDown');
 		await page.keyboard.press('Enter');
 		await expect(picker).toHaveAttribute('placeholder', localized(locale, 'Select File Encoding', '选择文件编码'));
@@ -1043,17 +881,13 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await page.keyboard.press('Enter');
 		await expect(encoding).toHaveText('GBK');
 		await expect(input).toBeFocused();
-		expect(await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence().writes)).toEqual([
-			{ resource: '/title/after.ts', text: 'after\nshared', encoding: 'gbk' },
-		]);
+		expect(await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence().writes)).toEqual([{ resource: '/title/after.ts', text: 'after\nshared', encoding: 'gbk' }]);
 		expect(await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence().dirty)).toBe(false);
 		await encoding.getByRole('button').click();
 		await expect(picker).toBeFocused();
 		await page.keyboard.press('Enter');
 		await expect(picker).toHaveAttribute('placeholder', localized(locale, 'Select File Encoding', '选择文件编码'));
-		await expect(
-			page.getByText(localized(locale, 'Guessed from Content', '根据内容猜测'), { exact: true }),
-		).toBeVisible();
+		await expect(page.getByText(localized(locale, 'Guessed from Content', '根据内容猜测'), { exact: true })).toBeVisible();
 		await expect(page.locator('.ash-quick-pick-list').getByRole('option')).toHaveCount(48);
 		await picker.fill('cp1125');
 		await expect(page.locator('.ash-quick-pick-list').getByRole('option')).toHaveText(/CP 1125/);
@@ -1077,9 +911,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 }
 
 for (const locale of ['en', 'zh-CN'] as const) {
-	test(`encoding reopening confirms dirty discard and readonly sides offer only reopen (${locale})`, async ({
-		page,
-	}) => {
+	test(`encoding reopening confirms dirty discard and readonly sides offer only reopen (${locale})`, async ({ page }) => {
 		await openDiffPage(page, locale);
 		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('encoding'));
 		const encoding = page.locator('#title-comparison [data-statusbar-item-id="ash.status.editor.encoding"]');
@@ -1088,12 +920,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await inputs.first().focus();
 		await encoding.getByRole('button').click();
 		await expect(picker).toBeFocused();
-		await expect(
-			page.getByText(localized(locale, 'Reopen with Encoding', '通过编码重新打开'), { exact: true }),
-		).toBeVisible();
-		await expect(
-			page.getByText(localized(locale, 'Save with Encoding', '通过编码保存'), { exact: true }),
-		).not.toBeVisible();
+		await expect(page.getByText(localized(locale, 'Reopen with Encoding', '通过编码重新打开'), { exact: true })).toBeVisible();
+		await expect(page.getByText(localized(locale, 'Save with Encoding', '通过编码保存'), { exact: true })).not.toBeVisible();
 		await page.keyboard.press('Escape');
 		await inputs.last().focus();
 		await page.keyboard.press('End');
@@ -1116,9 +944,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					exact: true,
 				})
 				.click();
-			await expect
-				.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitlePersistence().dirty))
-				.toBe(!confirm);
+			await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitlePersistence().dirty)).toBe(!confirm);
 			await expect(encoding).toHaveText(confirm ? 'UTF-16 LE' : 'UTF-8');
 		}
 		expect(await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence().writes)).toHaveLength(0);

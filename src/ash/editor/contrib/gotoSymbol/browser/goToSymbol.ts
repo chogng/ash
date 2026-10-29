@@ -23,10 +23,7 @@ async function collect<T>(
 	position: Position,
 	recursive: boolean,
 	cancellation: CancellationToken | AbortSignal,
-	provide: (
-		provider: T,
-		request: LanguageLocationRequest,
-	) => readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>,
+	provide: (provider: T, request: LanguageLocationRequest) => readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>,
 	onError: (error: unknown) => void,
 ): Promise<LocationLink[]> {
 	const controller = new AbortController();
@@ -80,15 +77,7 @@ export function getDefinitionsAtPosition(
 	token: CancellationToken | AbortSignal,
 	onError: (error: unknown) => void = onUnexpectedExternalError,
 ): Promise<LocationLink[]> {
-	return collect(
-		registry,
-		model,
-		position,
-		recursive,
-		token,
-		(provider, request) => provider.provideDefinition(request, request.signal),
-		onError,
-	);
+	return collect(registry, model, position, recursive, token, (provider, request) => provider.provideDefinition(request, request.signal), onError);
 }
 
 export function getDeclarationsAtPosition(
@@ -99,15 +88,7 @@ export function getDeclarationsAtPosition(
 	token: CancellationToken | AbortSignal,
 	onError: (error: unknown) => void = onUnexpectedExternalError,
 ): Promise<LocationLink[]> {
-	return collect(
-		registry,
-		model,
-		position,
-		recursive,
-		token,
-		(provider, request) => provider.provideDeclaration(request, request.signal),
-		onError,
-	);
+	return collect(registry, model, position, recursive, token, (provider, request) => provider.provideDeclaration(request, request.signal), onError);
 }
 
 export function getImplementationsAtPosition(
@@ -118,15 +99,7 @@ export function getImplementationsAtPosition(
 	token: CancellationToken | AbortSignal,
 	onError: (error: unknown) => void = onUnexpectedExternalError,
 ): Promise<LocationLink[]> {
-	return collect(
-		registry,
-		model,
-		position,
-		recursive,
-		token,
-		(provider, request) => provider.provideImplementation(request, request.signal),
-		onError,
-	);
+	return collect(registry, model, position, recursive, token, (provider, request) => provider.provideImplementation(request, request.signal), onError);
 }
 
 export function getTypeDefinitionsAtPosition(
@@ -137,15 +110,7 @@ export function getTypeDefinitionsAtPosition(
 	token: CancellationToken | AbortSignal,
 	onError: (error: unknown) => void = onUnexpectedExternalError,
 ): Promise<LocationLink[]> {
-	return collect(
-		registry,
-		model,
-		position,
-		recursive,
-		token,
-		(provider, request) => provider.provideTypeDefinition(request, request.signal),
-		onError,
-	);
+	return collect(registry, model, position, recursive, token, (provider, request) => provider.provideTypeDefinition(request, request.signal), onError);
 }
 
 export function getReferencesAtPosition(
@@ -157,13 +122,5 @@ export function getReferencesAtPosition(
 	token: CancellationToken | AbortSignal,
 	onError: (error: unknown) => void = onUnexpectedExternalError,
 ): Promise<LocationLink[]> {
-	return collect(
-		registry,
-		model,
-		position,
-		recursive,
-		token,
-		(provider, request) => provider.provideReferences({ ...request, includeDeclaration: !compact }, request.signal),
-		onError,
-	);
+	return collect(registry, model, position, recursive, token, (provider, request) => provider.provideReferences({ ...request, includeDeclaration: !compact }, request.signal), onError);
 }

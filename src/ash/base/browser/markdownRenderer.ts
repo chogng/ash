@@ -1,11 +1,6 @@
 import { Marked, type MarkedExtension, type MarkedOptions, type Token, type Tokens } from '../common/marked/marked.js';
 import { addDisposableListener, getDocument, reset, h } from './dom.js';
-import {
-	basicMarkupHtmlTags,
-	type DomSanitizerConfig,
-	type SanitizeAttributeRule,
-	sanitizeHtmlToFragment,
-} from './domSanitize.js';
+import { basicMarkupHtmlTags, type DomSanitizerConfig, type SanitizeAttributeRule, sanitizeHtmlToFragment } from './domSanitize.js';
 import { Checkbox } from './ui/toggle/toggle.js';
 import { type IMarkdownString, parseHrefAndDimensions } from '../common/htmlContent.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../common/lifecycle.js';
@@ -87,39 +82,10 @@ function isImageDimension(element: Element, data: { readonly attrValue: string }
 }
 
 const SAFE_DATA_IMAGE = /^data:image\/(?:png|jpeg|gif|webp);base64,[a-z0-9+/]+={0,2}$/i;
-const RESOURCE_LINK_SCHEMES = [
-	Schemas.ashRemote,
-	Schemas.vscodeFileResource,
-	Schemas.vscodeRemote,
-	Schemas.vscodeRemoteResource,
-	Schemas.vscodeNotebookCell,
-	Schemas.internal,
-] as const;
-const DEFAULT_LINK_SCHEMES = [
-	Schemas.http,
-	Schemas.https,
-	Schemas.mailto,
-	Schemas.file,
-	Schemas.command,
-	...RESOURCE_LINK_SCHEMES,
-] as const;
-const DEFAULT_MEDIA_SCHEMES = [
-	Schemas.data,
-	Schemas.http,
-	Schemas.https,
-	Schemas.file,
-	Schemas.ashRemote,
-	Schemas.vscodeFileResource,
-	Schemas.vscodeRemote,
-	Schemas.vscodeRemoteResource,
-] as const;
-const RESOURCE_IMAGE_SCHEMES = [
-	Schemas.file,
-	Schemas.ashRemote,
-	Schemas.vscodeFileResource,
-	Schemas.vscodeRemote,
-	Schemas.vscodeRemoteResource,
-] as const;
+const RESOURCE_LINK_SCHEMES = [Schemas.ashRemote, Schemas.vscodeFileResource, Schemas.vscodeRemote, Schemas.vscodeRemoteResource, Schemas.vscodeNotebookCell, Schemas.internal] as const;
+const DEFAULT_LINK_SCHEMES = [Schemas.http, Schemas.https, Schemas.mailto, Schemas.file, Schemas.command, ...RESOURCE_LINK_SCHEMES] as const;
+const DEFAULT_MEDIA_SCHEMES = [Schemas.data, Schemas.http, Schemas.https, Schemas.file, Schemas.ashRemote, Schemas.vscodeFileResource, Schemas.vscodeRemote, Schemas.vscodeRemoteResource] as const;
+const RESOURCE_IMAGE_SCHEMES = [Schemas.file, Schemas.ashRemote, Schemas.vscodeFileResource, Schemas.vscodeRemote, Schemas.vscodeRemoteResource] as const;
 const SANITIZER_CONFIG: DomSanitizerConfig = {
 	allowedTags: { override: allowedMarkdownHtmlTags },
 	allowedAttributes: { override: allowedMarkdownHtmlAttributes },
@@ -209,14 +175,13 @@ class RenderedMarkdown extends Disposable implements IRenderedMarkdown {
 		const markdownString = typeof markdown === 'string' ? { value: markdown } : markdown;
 		const parser = this.getParser(markdownString);
 		parser.codeBlocks.length = 0;
-		const rawHtml = renderMarkdownWithParser(
-			parser,
-			markdownString,
-			this.markedOptions,
-			this.fillInIncompleteTokens,
-		);
+		const rawHtml = renderMarkdownWithParser(parser, markdownString, this.markedOptions, this.fillInIncompleteTokens);
 		const fragment = sanitizeMarkdownHtmlToFragment(
-			{ ownerDocument: this.ownerDocument, markdown: markdownString, sanitizerConfig: this.sanitizerConfig },
+			{
+				ownerDocument: this.ownerDocument,
+				markdown: markdownString,
+				sanitizerConfig: this.sanitizerConfig,
+			},
 			rawHtml,
 		);
 		if (markdownString.supportAlertSyntax) {
@@ -244,8 +209,7 @@ class RenderedMarkdown extends Disposable implements IRenderedMarkdown {
 				pending.push(
 					this.imageResourceLoader(resource)
 						.then(blob => {
-							if (!this.active || revision !== this.renderRevision || !this.element.contains(image))
-								return;
+							if (!this.active || revision !== this.renderRevision || !this.element.contains(image)) return;
 							const ownerWindow = this.ownerDocument.defaultView;
 							if (!ownerWindow) return;
 							const objectUrl = createObjectUrl(ownerWindow, blob);
@@ -289,13 +253,7 @@ class RenderedMarkdown extends Disposable implements IRenderedMarkdown {
 		const key = `${markdown.supportHtml === true}:${markdown.supportAlertSyntax === true}`;
 		let parser = this.parsers.get(key);
 		if (!parser) {
-			parser = createMarkdownParser(
-				markdown.supportHtml === true,
-				markdown.supportAlertSyntax === true,
-				this.markedExtensions,
-				this.transformUri,
-				this.sanitizerConfig?.replaceWithPlaintext,
-			);
+			parser = createMarkdownParser(markdown.supportHtml === true, markdown.supportAlertSyntax === true, this.markedExtensions, this.transformUri, this.sanitizerConfig?.replaceWithPlaintext);
 			this.parsers.set(key, parser);
 		}
 		return parser;
@@ -309,20 +267,12 @@ class RenderedMarkdown extends Disposable implements IRenderedMarkdown {
 }
 
 /** The caller owns the render lifetime; disposing prevents late asynchronous DOM updates. */
-export function renderMarkdown(
-	markdown: IMarkdownString,
-	options: MarkdownRenderOptions = {},
-	target?: HTMLElement,
-): IRenderedMarkdown {
+export function renderMarkdown(markdown: IMarkdownString, options: MarkdownRenderOptions = {}, target?: HTMLElement): IRenderedMarkdown {
 	return new RenderedMarkdown(markdown, options, target);
 }
 
 /** Parses Workbench Markdown; sanitize the returned HTML before inserting it into the DOM. */
-export function renderWorkbenchMarkdown(
-	markdown: string | IMarkdownString,
-	breaks = false,
-	options: MarkdownRenderOptions = {},
-): string {
+export function renderWorkbenchMarkdown(markdown: string | IMarkdownString, breaks = false, options: MarkdownRenderOptions = {}): string {
 	const markdownString = typeof markdown === 'string' ? { value: markdown } : markdown;
 	return renderMarkdownWithParser(
 		createMarkdownParser(
@@ -333,7 +283,10 @@ export function renderWorkbenchMarkdown(
 			options.sanitizerConfig?.replaceWithPlaintext,
 		),
 		markdownString,
-		{ ...options.markedOptions, breaks: options.markedOptions?.breaks ?? breaks },
+		{
+			...options.markedOptions,
+			breaks: options.markedOptions?.breaks ?? breaks,
+		},
 		options.fillInIncompleteTokens ?? false,
 	);
 }
@@ -352,9 +305,7 @@ function plaintextBlocks(tokens: readonly Token[], options: PlaintextMarkdownOpt
 		switch (token.type) {
 			case 'code': {
 				const code = token as Tokens.Code;
-				lines.push(
-					options.includeCodeBlocksFences ? `\`\`\`${code.lang ?? ''}\n${code.text}\n\`\`\`` : code.text,
-				);
+				lines.push(options.includeCodeBlocksFences ? `\`\`\`${code.lang ?? ''}\n${code.text}\n\`\`\`` : code.text);
 				break;
 			}
 			case 'heading':
@@ -372,11 +323,7 @@ function plaintextBlocks(tokens: readonly Token[], options: PlaintextMarkdownOpt
 				break;
 			case 'table': {
 				const table = token as Tokens.Table;
-				lines.push(
-					[table.header, ...table.rows]
-						.map(row => row.map(cell => plaintextInline(cell.tokens, options)).join('\t'))
-						.join('\n'),
-				);
+				lines.push([table.header, ...table.rows].map(row => row.map(cell => plaintextInline(cell.tokens, options)).join('\t')).join('\n'));
 				break;
 			}
 			case 'hr':
@@ -439,12 +386,7 @@ function plaintextHtml(source: string): string {
 	return read(fragment);
 }
 
-function renderMarkdownWithParser(
-	parserInstance: MarkdownParserInstance,
-	markdown: IMarkdownString,
-	markedOptions: Pick<MarkedOptions, 'breaks' | 'gfm'>,
-	fillIncompleteTokens: boolean,
-): string {
+function renderMarkdownWithParser(parserInstance: MarkdownParserInstance, markdown: IMarkdownString, markedOptions: Pick<MarkedOptions, 'breaks' | 'gfm'>, fillIncompleteTokens: boolean): string {
 	validateMarkdown(markdown.value);
 	const parserOptions = {
 		...markedOptions,
@@ -453,9 +395,7 @@ function renderMarkdownWithParser(
 		gfm: markedOptions.gfm ?? true,
 	} as const;
 	const markdownValue = markdown.supportThemeIcons ? markdownEscapeEscapedIcons(markdown.value) : markdown.value;
-	const value = fillIncompleteTokens
-		? completeIncompleteMarkdown(markdownValue, parserInstance.parser, parserOptions)
-		: markdownValue;
+	const value = fillIncompleteTokens ? completeIncompleteMarkdown(markdownValue, parserInstance.parser, parserOptions) : markdownValue;
 	const result = parserInstance.parser.parse(value, parserOptions);
 	if (typeof result !== 'string') {
 		throw new Error('synchronous Markdown rendering returned a promise');
@@ -524,23 +464,20 @@ export function sanitizeMarkdownHtmlToFragment(options: MarkdownSanitizerOptions
 	return sanitizeHtmlToFragment(rawHtml, {
 		ownerDocument: options.ownerDocument,
 		config: createMarkdownSanitizerConfig(options.markdown, options.sanitizerConfig),
-		afterSanitizeAttributes: element =>
-			applyMarkdownAttributePolicy(element, options.markdown, options.sanitizerConfig),
+		afterSanitizeAttributes: element => applyMarkdownAttributePolicy(element, options.markdown, options.sanitizerConfig),
 	});
 }
 
-function createMarkdownSanitizerConfig(
-	markdown: IMarkdownString | undefined,
-	config: MarkdownSanitizerConfig | undefined,
-): DomSanitizerConfig {
+function createMarkdownSanitizerConfig(markdown: IMarkdownString | undefined, config: MarkdownSanitizerConfig | undefined): DomSanitizerConfig {
 	return {
 		...SANITIZER_CONFIG,
 		allowedTags: { override: config?.allowedTags?.override ?? allowedMarkdownHtmlTags },
 		allowedAttributes: { override: config?.allowedAttributes?.override ?? allowedMarkdownHtmlAttributes },
-		allowedLinkProtocols: { override: [...DEFAULT_LINK_SCHEMES, ...(config?.allowedLinkSchemes?.augment ?? [])] },
+		allowedLinkProtocols: {
+			override: [...DEFAULT_LINK_SCHEMES, ...(config?.allowedLinkSchemes?.augment ?? [])],
+		},
 		allowedMediaProtocols: { override: DEFAULT_MEDIA_SCHEMES },
-		mediaSourceIsAllowed: source =>
-			SAFE_DATA_IMAGE.test(source) || resolveMarkdownImageTarget(source, markdown, config) !== undefined,
+		mediaSourceIsAllowed: source => SAFE_DATA_IMAGE.test(source) || resolveMarkdownImageTarget(source, markdown, config) !== undefined,
 		replaceWithPlaintext: config?.replaceWithPlaintext,
 	};
 }
@@ -569,11 +506,7 @@ interface MarkdownCheckboxOwner {
 	add(resource: Checkbox): Checkbox;
 }
 
-function upgradeMarkdownCheckboxes(
-	fragment: DocumentFragment,
-	ownerDocument: Document,
-	owner: MarkdownCheckboxOwner,
-): void {
+function upgradeMarkdownCheckboxes(fragment: DocumentFragment, ownerDocument: Document, owner: MarkdownCheckboxOwner): void {
 	for (const input of fragment.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')) {
 		const detachedHost = h(ownerDocument, 'span');
 		const checkbox = owner.add(
@@ -589,11 +522,7 @@ function upgradeMarkdownCheckboxes(
 	}
 }
 
-function applyMarkdownAttributePolicy(
-	element: Element,
-	markdown: IMarkdownString | undefined,
-	config: MarkdownSanitizerConfig | undefined,
-): void {
+function applyMarkdownAttributePolicy(element: Element, markdown: IMarkdownString | undefined, config: MarkdownSanitizerConfig | undefined): void {
 	if (element.hasAttribute('href')) {
 		const href = element.getAttribute('href') ?? '';
 		const target = resolveMarkdownLinkTarget(href, markdown, config);
@@ -619,18 +548,13 @@ function applyMarkdownAttributePolicy(
 	}
 }
 
-function resolveMarkdownImageTarget(
-	source: string,
-	markdown: IMarkdownString | undefined,
-	config?: MarkdownSanitizerConfig,
-): string | undefined {
+function resolveMarkdownImageTarget(source: string, markdown: IMarkdownString | undefined, config?: MarkdownSanitizerConfig): string | undefined {
 	try {
 		const base = markdown?.baseUri ? new URL(markdown.baseUri.toString()) : undefined;
 		const image = new URL(source, base);
 		const scheme = image.protocol.slice(0, -1);
 		if (scheme === Schemas.data) return undefined;
-		if (!DEFAULT_MEDIA_SCHEMES.some(allowed => allowed === scheme) || image.username || image.password)
-			return undefined;
+		if (!DEFAULT_MEDIA_SCHEMES.some(allowed => allowed === scheme) || image.username || image.password) return undefined;
 		const isLocalFile = scheme === Schemas.file && !image.hostname;
 		if (config?.remoteImageIsAllowed && !isLocalFile) {
 			if (!config.remoteImageIsAllowed(URI.parse(image.toString()))) return undefined;
@@ -643,11 +567,7 @@ function resolveMarkdownImageTarget(
 }
 
 /** Resolves a Markdown link only when its scheme is allowed by the content trust policy. */
-export function resolveMarkdownLinkTarget(
-	href: string,
-	markdown?: IMarkdownString,
-	config?: MarkdownSanitizerConfig,
-): string | undefined {
+export function resolveMarkdownLinkTarget(href: string, markdown?: IMarkdownString, config?: MarkdownSanitizerConfig): string | undefined {
 	if (href.startsWith('#')) return href;
 	if (/^[\u0000-\u0020]|[\r\n\u0000]/u.test(href)) return undefined;
 	const command = /^command:(?:\/\/\/)?([^/?#]+)(?:\?([^#]*))?(?:#.*)?$/i.exec(href);
@@ -658,12 +578,7 @@ export function resolveMarkdownLinkTarget(
 		} catch {
 			return undefined;
 		}
-		if (
-			!/^[A-Za-z0-9._-]+$/u.test(commandId) ||
-			!isTrustedMarkdownCommand(commandId, markdown?.isTrusted) ||
-			commandId === MARKDOWN_COMMAND_RESOURCE_ID
-		)
-			return undefined;
+		if (!/^[A-Za-z0-9._-]+$/u.test(commandId) || !isTrustedMarkdownCommand(commandId, markdown?.isTrusted) || commandId === MARKDOWN_COMMAND_RESOURCE_ID) return undefined;
 		return href;
 	}
 	try {
@@ -675,10 +590,7 @@ export function resolveMarkdownLinkTarget(
 		if (url.protocol === `${Schemas.mailto}:`) {
 			return url.pathname.length > 0 ? url.toString() : undefined;
 		}
-		if (
-			url.protocol === `${Schemas.file}:` &&
-			(markdown?.baseUri?.scheme === Schemas.file || markdown?.isTrusted === true)
-		) {
+		if (url.protocol === `${Schemas.file}:` && (markdown?.baseUri?.scheme === Schemas.file || markdown?.isTrusted === true)) {
 			return url.toString();
 		}
 		if (RESOURCE_LINK_SCHEMES.some(scheme => url.protocol === `${scheme}:`)) {
@@ -707,9 +619,7 @@ function isTrustedMarkdownCommand(commandId: string, trust: IMarkdownString['isT
 
 function renderMarkdownAlertIcons(fragment: DocumentFragment, ownerDocument: Document): void {
 	for (const placeholder of fragment.querySelectorAll<HTMLElement>('.ash-markdown-alert-icon')) {
-		const iconId = [...placeholder.classList]
-			.find(className => className.startsWith('ash-markdown-alert-icon-'))
-			?.slice('ash-markdown-alert-icon-'.length);
+		const iconId = [...placeholder.classList].find(className => className.startsWith('ash-markdown-alert-icon-'))?.slice('ash-markdown-alert-icon-'.length);
 		const icon = iconId ? getRegisteredIcon(iconId, ownerDocument) : undefined;
 		if (!icon) {
 			placeholder.remove();
@@ -792,11 +702,7 @@ function alertHeading(severity: keyof typeof ALERT_ICON_IDS): string {
 	}
 }
 
-function completeIncompleteMarkdown(
-	markdown: string,
-	parser: Marked,
-	parserOptions: Pick<MarkedOptions, 'breaks' | 'gfm'>,
-): string {
+function completeIncompleteMarkdown(markdown: string, parser: Marked, parserOptions: Pick<MarkedOptions, 'breaks' | 'gfm'>): string {
 	let value = markdown;
 	for (let attempt = 0; attempt < 3; attempt++) {
 		const tokens = parser.lexer(value, parserOptions);

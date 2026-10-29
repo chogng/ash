@@ -57,14 +57,12 @@ export function validateNativeContextMenuRequest(value: unknown): INativeContext
 	if (hasElementAnchor) keys.push('elementAnchor');
 	if (hasPositioningItem) keys.push('positioningItem');
 	requireExactKeys(request, keys);
-	const state = { itemCount: 0, ids: new Set<string>() };
+	const state = {
+		itemCount: 0,
+		ids: new Set<string>(),
+	};
 	const items = validateItems(request.items, 0, state);
-	if (
-		hasPositioningItem &&
-		(!Number.isInteger(request.positioningItem) ||
-			(request.positioningItem as number) < 0 ||
-			(request.positioningItem as number) >= items.length)
-	) {
+	if (hasPositioningItem && (!Number.isInteger(request.positioningItem) || (request.positioningItem as number) < 0 || (request.positioningItem as number) >= items.length)) {
 		throw new Error('positioningItem must index a top-level menu item');
 	}
 	return {
@@ -126,16 +124,15 @@ function validateItems(value: unknown, depth: number, state: IValidationState): 
 					...(item.accelerator === undefined
 						? {}
 						: {
-								accelerator: boundedString(
-									item.accelerator,
-									`items[${index}].accelerator`,
-									MAX_ID_LENGTH,
-								),
+								accelerator: boundedString(item.accelerator, `items[${index}].accelerator`, MAX_ID_LENGTH),
 							}),
 				};
 				return item.checked === undefined
 					? result
-					: { ...result, checked: boolean(item.checked, `items[${index}].checked`) };
+					: {
+							...result,
+							checked: boolean(item.checked, `items[${index}].checked`),
+						};
 			}
 			case 'submenu':
 				requireExactKeys(item, ['enabled', 'items', 'label', 'type']);

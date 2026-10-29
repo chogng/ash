@@ -55,11 +55,7 @@ test('SessionsList keeps session buttons and focus while refreshing', async () =
 		{ untitledSessionId: 'second', title: 'Second' },
 	];
 	for (const session of untitledSessions) {
-		writeNewChatDraftState(
-			storage,
-			{ mode: 'agent', text: session.title, contexts: [] },
-			`untitled:${session.untitledSessionId}`,
-		);
+		writeNewChatDraftState(storage, { mode: 'agent', text: session.title, contexts: [] }, `untitled:${session.untitledSessionId}`);
 	}
 	const sessionService = {
 		get untitledSessions() {
@@ -169,12 +165,7 @@ for (const mode of ['chat', 'code'] as const) {
 	for (const locale of ['en', 'zh-CN']) {
 		test(`SessionsList hides empty drafts and retains content drafts in ${mode} in ${locale}`, () => {
 			const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-			setNlsResolver((bundle, key, fallback, parameters) =>
-				formatNlsMessage(
-					locale === 'zh-CN' ? (chinese.bundles[bundle]?.[key] ?? fallback) : fallback,
-					parameters,
-				),
-			);
+			setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(locale === 'zh-CN' ? (chinese.bundles[bundle]?.[key] ?? fallback) : fallback, parameters));
 			try {
 				const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 				using domLifetime = toDisposable(() => dom.window.close());
@@ -236,36 +227,22 @@ for (const mode of ['chat', 'code'] as const) {
 					listMenus,
 					listNotifications,
 				);
-				const rowIds = (): string[] =>
-					[...list.domNode.querySelectorAll<HTMLElement>('[data-item]')].map(row => row.dataset.item!);
+				const rowIds = (): string[] => [...list.domNode.querySelectorAll<HTMLElement>('[data-item]')].map(row => row.dataset.item!);
 				assert.deepEqual(rowIds(), ['session:saved']);
 				writeNewChatDraftState(storage, { mode: 'agent', text: ' \n\t', contexts: [] }, 'untitled:blank');
 				assert.deepEqual(rowIds(), ['session:saved']);
 
-				writeNewChatDraftState(
-					storage,
-					{ mode: 'agent', text: 'Keep this draft', contexts: [] },
-					'untitled:blank',
-				);
+				writeNewChatDraftState(storage, { mode: 'agent', text: 'Keep this draft', contexts: [] }, 'untitled:blank');
 				assert.deepEqual(rowIds(), ['untitled:blank', 'session:saved']);
-				const button = list.domNode.querySelector<HTMLButtonElement>(
-					'[data-item="untitled:blank"] .ash-sessions-list-item',
-				)!;
+				const button = list.domNode.querySelector<HTMLButtonElement>('[data-item="untitled:blank"] .ash-sessions-list-item')!;
 				const label = locale === 'zh-CN' ? '新建会话（草稿）' : 'New Session (draft)';
 				assert.equal(button.textContent, label);
 				assert.equal(button.getAttribute('aria-label'), label);
 				assert.equal(button.getAttribute('aria-current'), 'page');
 				button.focus();
-				writeNewChatDraftState(
-					storage,
-					{ mode: 'agent', text: 'Keep this draft updated', contexts: [] },
-					'untitled:blank',
-				);
+				writeNewChatDraftState(storage, { mode: 'agent', text: 'Keep this draft updated', contexts: [] }, 'untitled:blank');
 				assert.equal(dom.window.document.activeElement, button);
-				assert.equal(
-					list.domNode.querySelector('[data-item="untitled:blank"] .ash-sessions-list-item'),
-					button,
-				);
+				assert.equal(list.domNode.querySelector('[data-item="untitled:blank"] .ash-sessions-list-item'), button);
 
 				// The attachment-only draft is parked outside the visible arrangement.
 				writeNewChatDraftState(
@@ -278,16 +255,9 @@ for (const mode of ['chat', 'code'] as const) {
 					'untitled:attachment',
 				);
 				assert.deepEqual(rowIds(), ['untitled:blank', 'untitled:attachment', 'session:saved']);
-				list.domNode
-					.querySelector<HTMLButtonElement>('[data-item="untitled:attachment"] .ash-sessions-list-item')!
-					.click();
+				list.domNode.querySelector<HTMLButtonElement>('[data-item="untitled:attachment"] .ash-sessions-list-item')!.click();
 				assert.deepEqual(opened, ['attachment']);
-				storage.store(
-					'sessions.inputDraft:untitled:corrupt',
-					'invalid JSON',
-					StorageScope.WORKSPACE,
-					StorageTarget.MACHINE,
-				);
+				storage.store('sessions.inputDraft:untitled:corrupt', 'invalid JSON', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 				assert.deepEqual(rowIds(), ['untitled:blank', 'untitled:attachment', 'session:saved']);
 
 				writeNewChatDraftState(storage, undefined, 'untitled:blank');
@@ -398,14 +368,8 @@ test('SessionsList updates passive status without changing row identity or selec
 	changes.fire();
 	assert.equal(list.domNode.querySelector('.ash-sessions-list-item'), button);
 	assert.equal(button.querySelector('.ash-sessions-list-management')?.textContent, 'Needs input');
-	assert.equal(
-		button.getAttribute('aria-label'),
-		'Background session. Needs input. fixture/repo #7 · Synthetic PR · Open · Checks failed',
-	);
-	assert.equal(
-		button.querySelector('[data-ash-icon-id="git-pull-request-error"]')?.getAttribute('aria-hidden'),
-		'true',
-	);
+	assert.equal(button.getAttribute('aria-label'), 'Background session. Needs input. fixture/repo #7 · Synthetic PR · Open · Checks failed');
+	assert.equal(button.querySelector('[data-ash-icon-id="git-pull-request-error"]')?.getAttribute('aria-hidden'), 'true');
 	assert.equal(button.getAttribute('aria-current'), 'false');
 	assert.equal(dom.window.document.activeElement, button);
 	assert.equal(items.scrollTop, 37);
@@ -418,15 +382,7 @@ test('SessionsList updates passive status without changing row identity or selec
 	const actions = menu!.getActions().filter(action => action.id !== 'ash.actions.separator');
 	assert.deepEqual(
 		actions.map(action => action.id),
-		[
-			'sessions.list.togglePin',
-			'agentSession.rename',
-			'agentSession.archive',
-			'agentSession.addToProject',
-			'agentSession.moveToGroup',
-			'agentSession.delete',
-			'sessions.openInNewWindow',
-		],
+		['sessions.list.togglePin', 'agentSession.rename', 'agentSession.archive', 'agentSession.addToProject', 'agentSession.moveToGroup', 'agentSession.delete', 'sessions.openInNewWindow'],
 	);
 	actions[1]!.run();
 	assert.deepEqual(executed, [['agentSession.rename', 'background']]);
@@ -444,9 +400,7 @@ test('SessionsList updates passive status without changing row identity or selec
 
 test('passive management labels use the installed Chinese catalog and retain unknown states', () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		const statuses = ['idle', 'needsInput', 'working', 'readyForReview', 'completed', 'failed', 'stopped'] as const;
 		assert.deepEqual(

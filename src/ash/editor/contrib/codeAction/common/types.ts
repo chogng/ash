@@ -1,11 +1,5 @@
 import { HierarchicalKind } from '../../../../base/common/hierarchicalKind.js';
-import {
-	CodeActionTriggerType,
-	normalizeLanguageWorkspaceEdit,
-	type LanguageCodeAction,
-	type LanguageCodeActionProvider,
-	type LanguageCodeActionRequest,
-} from '../../../common/languages.js';
+import { CodeActionTriggerType, normalizeLanguageWorkspaceEdit, type LanguageCodeAction, type LanguageCodeActionProvider, type LanguageCodeActionRequest } from '../../../common/languages.js';
 import { localize } from '../../../../nls.js';
 import type { ActionSet } from '../../../../platform/actionWidget/common/actionWidget.js';
 
@@ -55,10 +49,7 @@ export class CodeActionCommandArgs {
 		public readonly preferred: boolean,
 	) {}
 
-	public static fromUser(
-		arg: unknown,
-		defaults: { kind: HierarchicalKind; apply: CodeActionAutoApply },
-	): CodeActionCommandArgs {
+	public static fromUser(arg: unknown, defaults: { kind: HierarchicalKind; apply: CodeActionAutoApply }): CodeActionCommandArgs {
 		const values = arg === undefined ? {} : arg;
 		if (!values || typeof values !== 'object') {
 			throw new TypeError(localize('codeAction.invalidArguments', 'Code action arguments must be an object.'));
@@ -70,13 +61,8 @@ export class CodeActionCommandArgs {
 		if (options.preferred !== undefined && typeof options.preferred !== 'boolean') {
 			throw new TypeError(localize('codeAction.invalidPreferred', 'Code action preferred must be a boolean.'));
 		}
-		if (
-			options.apply !== undefined &&
-			!Object.values(CodeActionAutoApply).includes(options.apply as CodeActionAutoApply)
-		) {
-			throw new TypeError(
-				localize('codeAction.invalidApply', 'Code action apply must be first, ifSingle or never.'),
-			);
+		if (options.apply !== undefined && !Object.values(CodeActionAutoApply).includes(options.apply as CodeActionAutoApply)) {
+			throw new TypeError(localize('codeAction.invalidApply', 'Code action apply must be first, ifSingle or never.'));
 		}
 		return new CodeActionCommandArgs(
 			typeof options.kind === 'string' ? new HierarchicalKind(options.kind) : defaults.kind,
@@ -91,11 +77,7 @@ export function filtersAction(filter: CodeActionFilter, action: LanguageCodeActi
 	if (filter.include && !filter.include.contains(kind)) {
 		return false;
 	}
-	if (
-		filter.excludes?.some(
-			excluded => excluded.contains(kind) && !excluded.contains(filter.include ?? HierarchicalKind.None),
-		)
-	) {
+	if (filter.excludes?.some(excluded => excluded.contains(kind) && !excluded.contains(filter.include ?? HierarchicalKind.None))) {
 		return false;
 	}
 	if (filter.onlyIncludePreferredActions && !action.isPreferred) {
@@ -144,5 +126,8 @@ function normalizeAction(action: LanguageCodeAction): LanguageCodeAction {
 	if (action.isAI !== undefined && typeof action.isAI !== 'boolean') {
 		throw new TypeError('Code action AI marker must be boolean');
 	}
-	return Object.freeze({ ...action, ...(action.edit ? { edit: normalizeLanguageWorkspaceEdit(action.edit) } : {}) });
+	return Object.freeze({
+		...action,
+		...(action.edit ? { edit: normalizeLanguageWorkspaceEdit(action.edit) } : {}),
+	});
 }

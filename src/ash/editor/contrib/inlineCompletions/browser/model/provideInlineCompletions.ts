@@ -32,9 +32,7 @@ export async function provideInlineCompletions(
 		if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 		for (const item of items) {
 			const normalized = normalizeItem(item);
-			const completed = normalized.completeBracketPairs
-				? await completeBrackets(model, normalized, position, signal, languageConfigurationService)
-				: normalized;
+			const completed = normalized.completeBracketPairs ? await completeBrackets(model, normalized, position, signal, languageConfigurationService) : normalized;
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			result.push(completed);
 		}
@@ -46,8 +44,7 @@ function normalizeItem(item: LanguageInlineCompletionItem): LanguageInlineComple
 	if (!item || typeof item !== 'object' || typeof item.insertText !== 'string') {
 		throw new TypeError('Inline completion must contain insert text');
 	}
-	if (item.completeBracketPairs !== undefined && typeof item.completeBracketPairs !== 'boolean')
-		throw new TypeError('Inline completion completeBracketPairs must be a boolean');
+	if (item.completeBracketPairs !== undefined && typeof item.completeBracketPairs !== 'boolean') throw new TypeError('Inline completion completeBracketPairs must be a boolean');
 	return Object.freeze({
 		insertText: item.insertText,
 		...(item.completeBracketPairs === undefined ? {} : { completeBracketPairs: item.completeBracketPairs }),
@@ -80,13 +77,9 @@ async function completeBrackets(
 				metadata: line.getMetadata(index),
 			});
 		}
-		if (lineIndex < lines.length - 1)
-			segments.push({ text: '\n', metadata: line.getMetadata(line.getCount() - 1) });
+		if (lineIndex < lines.length - 1) segments.push({ text: '\n', metadata: line.getMetadata(line.getCount() - 1) });
 	}
 	const tokens = LineTokens.createFromTextAndMetadata(segments, lines[0]!.languageIdCodec);
-	const insertText = fixBracketsInLine(
-		tokens.sliceAndInflate(prefix.length, text.length, 0),
-		languageConfigurationService,
-	);
+	const insertText = fixBracketsInLine(tokens.sliceAndInflate(prefix.length, text.length, 0), languageConfigurationService);
 	return Object.freeze({ ...item, insertText });
 }

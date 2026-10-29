@@ -5,16 +5,10 @@ import { getSingletonServiceDescriptors } from '../../../platform/instantiation/
 import { ResolvedKeybindingItem } from '../../../platform/keybinding/common/resolvedKeybindingItem.js';
 import { KeybindingsRegistry, KeybindingRuleKind } from '../../../platform/keybinding/common/keybindingsRegistry.js';
 import { ActionWidgetService, IActionWidgetService } from '../../../platform/actionWidget/browser/actionWidget.js';
-import {
-	ILanguageFeatureDebounceService,
-	LanguageFeatureDebounceService,
-} from '../../common/services/languageFeatureDebounce.js';
+import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../common/services/languageFeatureDebounce.js';
 import { StandaloneCodeEditorService } from './standaloneCodeEditorService.js';
 import { StandaloneLayoutService } from './standaloneLayoutService.js';
-import {
-	IInlineCompletionsService,
-	InlineCompletionsService,
-} from '../../browser/services/inlineCompletionsService.js';
+import { IInlineCompletionsService, InlineCompletionsService } from '../../browser/services/inlineCompletionsService.js';
 import { IDataChannelService, NullDataChannelService } from '../../../platform/dataChannel/common/dataChannel.js';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../../platform/telemetry/common/telemetryUtils.js';
@@ -48,15 +42,9 @@ import {
 	type IConfigurationValue,
 } from '../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
-import {
-	ICodeEditorService,
-	type ICodeEditorService as ICodeEditorServiceContract,
-} from '../../browser/services/codeEditorService.js';
+import { ICodeEditorService, type ICodeEditorService as ICodeEditorServiceContract } from '../../browser/services/codeEditorService.js';
 import { type LanguageCompletionWorkerFactory, type SyntaxWorkerFactory } from '../../common/languages.js';
-import {
-	createEditorWorkerClient,
-	type VersionedEditorWorkerFactory,
-} from '../../browser/services/editorWorkerService.js';
+import { createEditorWorkerClient, type VersionedEditorWorkerFactory } from '../../browser/services/editorWorkerService.js';
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
@@ -65,29 +53,18 @@ import { EditorMarkdownCodeBlockRenderer } from '../../browser/widget/markdownRe
 import { OpenerService } from '../../browser/services/openerService.js';
 import { ILanguageService, type IAshLanguageService } from '../../common/languages/language.js';
 import { LanguageService } from '../../common/services/languageService.js';
-import {
-	ILanguageConfigurationService,
-	LanguageConfigurationService,
-} from '../../common/languages/languageConfigurationRegistry.js';
+import { ILanguageConfigurationService, LanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
 import { IModelService } from '../../common/services/model.js';
 import { ModelService } from '../../common/services/modelService.js';
 import { ITextModelService } from '../../common/services/resolverService.js';
 import { InMemoryTextModelService } from '../../common/services/inMemoryTextModelService.js';
-import {
-	ITextResourcePropertiesService,
-	type ITextResourcePropertiesService as ITextResourcePropertiesServiceContract,
-} from '../../common/services/textResourceConfiguration.js';
+import { ITextResourcePropertiesService, type ITextResourcePropertiesService as ITextResourcePropertiesServiceContract } from '../../common/services/textResourceConfiguration.js';
 import { isLinux, isMacintosh } from '../../../base/common/platform.js';
 import type { URI } from '../../../base/common/uri.js';
 import { IStandaloneThemeService } from '../common/standaloneTheme.js';
 import { StandaloneThemeService } from './standaloneThemeService.js';
 import { Emitter, Event } from '../../../base/common/event.js';
-import {
-	IWorkspaceContextService,
-	WorkbenchState,
-	type IWorkspace,
-	type IWorkspaceFolder,
-} from '../../../platform/workspace/common/workspace.js';
+import { IWorkspaceContextService, WorkbenchState, type IWorkspace, type IWorkspaceFolder } from '../../../platform/workspace/common/workspace.js';
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { BrowserClipboardService } from '../../../platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../platform/clipboard/common/clipboardService.js';
@@ -96,12 +73,7 @@ import { addDisposableListener, stopEvent } from '../../../base/browser/dom.js';
 import { ContextView } from '../../../base/browser/ui/contextview/contextview.js';
 import { RunOnceScheduler } from '../../../base/common/async.js';
 import { parseKeybinding } from '../../../base/common/keybindingParser.js';
-import {
-	type Keybinding,
-	type KeybindingEvent,
-	type ResolvedKeybinding,
-	resolveKeybinding,
-} from '../../../base/common/keybindings.js';
+import { type Keybinding, type KeybindingEvent, type ResolvedKeybinding, resolveKeybinding } from '../../../base/common/keybindings.js';
 import { CommandsRegistry, ICommandService, type ICommandEvent } from '../../../platform/commands/common/commands.js';
 import { IMenuService } from '../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../platform/actions/common/menuService.js';
@@ -109,11 +81,7 @@ import type { Context, IContextKey } from '../../../platform/contextkey/common/c
 import { BrowserContextMenuService } from '../../../platform/contextview/browser/contextMenuService.js';
 import { IContextMenuService, IContextViewService } from '../../../platform/contextview/browser/contextView.js';
 import { HoverService, IHoverService } from '../../../platform/hover/browser/hoverService.js';
-import {
-	IKeybindingService,
-	KeybindingContextKeys,
-	type KeybindingsSchemaContribution,
-} from '../../../platform/keybinding/common/keybinding.js';
+import { IKeybindingService, KeybindingContextKeys, type KeybindingsSchemaContribution } from '../../../platform/keybinding/common/keybinding.js';
 import { KeybindingResolver, KeybindingResolveKind } from '../../../platform/keybinding/common/keybindingResolver.js';
 import {
 	INotificationService,
@@ -127,10 +95,7 @@ import {
 	type IStatusHandle,
 } from '../../../platform/notification/common/notification.js';
 import { IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
-import {
-	AccessibilitySignalService,
-	IAccessibilitySignalService,
-} from '../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
+import { AccessibilitySignalService, IAccessibilitySignalService } from '../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { AccessibilityService } from '../../../platform/accessibility/browser/accessibilityService.js';
 import '../../../base/browser/ui/contextview/contextview.css';
 import '../../../base/browser/ui/menu/menu.css';
@@ -139,14 +104,7 @@ import '../../../base/browser/ui/keybindinglabel/keybindinglabel.css';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { StandaloneQuickInputService } from './quickInput/standaloneQuickInputService.js';
-import {
-	IBulkEditService,
-	ResourceEdit,
-	ResourceTextEdit,
-	type IBulkEditOptions,
-	type IBulkEditPreviewHandler,
-	type IBulkEditResult,
-} from '../../browser/services/bulkEditService.js';
+import { IBulkEditService, ResourceEdit, ResourceTextEdit, type IBulkEditOptions, type IBulkEditPreviewHandler, type IBulkEditResult } from '../../browser/services/bulkEditService.js';
 import { EditOperation } from '../../common/core/editOperation.js';
 import { Range } from '../../common/core/range.js';
 import { type ITextModel } from '../../common/model.js';
@@ -182,27 +140,19 @@ export class StandaloneBulkEditService implements IBulkEditService {
 		throw new Error('Bulk edit preview is unavailable in an embedded editor');
 	}
 
-	async apply(
-		value: ResourceEdit[] | import('../../common/languages.js').LanguageWorkspaceEdit,
-		options: IBulkEditOptions = {},
-	): Promise<IBulkEditResult> {
+	async apply(value: ResourceEdit[] | import('../../common/languages.js').LanguageWorkspaceEdit, options: IBulkEditOptions = {}): Promise<IBulkEditResult> {
 		const edits = Array.isArray(value) ? value : ResourceEdit.convert(value);
 		const byModel = new Map<ITextModel, ResourceTextEdit[]>();
 		for (const edit of edits) {
-			if (!(edit instanceof ResourceTextEdit))
-				throw new Error('Embedded editors only support text workspace edits');
-			const model = [options.editor, ...this.editors.listCodeEditors()]
-				.map(editor => editor?.getModel())
-				.find(candidate => candidate?.uri.toString() === edit.resource.toString());
+			if (!(edit instanceof ResourceTextEdit)) throw new Error('Embedded editors only support text workspace edits');
+			const model = [options.editor, ...this.editors.listCodeEditors()].map(editor => editor?.getModel()).find(candidate => candidate?.uri.toString() === edit.resource.toString());
 			if (!model) throw new Error(`No embedded editor owns ${edit.resource.toString()}`);
-			if (edit.versionId !== undefined && model.getVersionId() !== edit.versionId)
-				throw new Error('Workspace edit target changed');
+			if (edit.versionId !== undefined && model.getVersionId() !== edit.versionId) throw new Error('Workspace edit target changed');
 			const group = byModel.get(model) ?? [];
 			group.push(edit);
 			byModel.set(model, group);
 		}
-		if (options.token?.aborted || edits.length === 0)
-			return { ariaSummary: 'No edits were applied', isApplied: false };
+		if (options.token?.aborted || edits.length === 0) return { ariaSummary: 'No edits were applied', isApplied: false };
 		const applied = new Map<ITextModel, { readonly text: string; readonly alternativeVersionId: number }>();
 		try {
 			for (const [model, group] of byModel) {
@@ -225,10 +175,7 @@ export class StandaloneBulkEditService implements IBulkEditService {
 			resources: [...byModel.keys()].map(model => model.uri),
 			undo: async () => {
 				for (const [model, state] of applied) {
-					if (
-						model.getValue() !== state.text ||
-						model.getAlternativeVersionId() !== state.alternativeVersionId
-					) {
+					if (model.getValue() !== state.text || model.getAlternativeVersionId() !== state.alternativeVersionId) {
 						throw new Error('Workspace edit target changed before replacement');
 					}
 				}
@@ -262,17 +209,14 @@ export class StandaloneServiceCollection extends InstantiationService {
 	readonly codeEditorService: ICodeEditorServiceContract;
 
 	constructor(overrides: StandaloneServiceOverrides) {
-		if (overrides.languageFeaturesService && !overrides.languageConfigurationService)
-			throw new TypeError('Standalone language feature overrides require a language configuration service');
+		if (overrides.languageFeaturesService && !overrides.languageConfigurationService) throw new TypeError('Standalone language feature overrides require a language configuration service');
 		super();
 		this.registerSingleton(IWebWorkerService, () => new StandaloneWebWorkerService());
 		this.registerInstance(ILogService, new NullLoggerService());
 		this.registerSingleton(IInlineCompletionsService, () => this.createInstance(InlineCompletionsService));
 		this.registerInstance(IDataChannelService, new NullDataChannelService());
 		this.registerInstance(ITelemetryService, NullTelemetryService);
-		this.registerSingleton(ILanguageFeatureDebounceService, () =>
-			this.createInstance(LanguageFeatureDebounceService),
-		);
+		this.registerSingleton(ILanguageFeatureDebounceService, () => this.createInstance(LanguageFeatureDebounceService));
 		this.registerSingleton(IContextKeyService, () => new ContextKeyService());
 		this.registerSingleton(ICommandService, () => this.createInstance(StandaloneCommandService));
 		this.registerSingleton(INotificationService, () => this.createInstance(StandaloneNotificationService));
@@ -280,18 +224,8 @@ export class StandaloneServiceCollection extends InstantiationService {
 		this.registerSingleton(IMenuService, () => this.createInstance(new SyncDescriptor(MenuService)));
 		this.registerSingleton(IContextViewService, () => this.createInstance(StandaloneContextViewService));
 		this.registerSingleton(IActionWidgetService, () => this.createInstance(ActionWidgetService));
-		this.registerSingleton(IContextMenuService, () =>
-			this.createInstance(new SyncDescriptor(BrowserContextMenuService)),
-		);
-		this.registerSingleton(
-			IHoverService,
-			accessor =>
-				new HoverService(
-					accessor.get(IConfigurationService),
-					accessor.get(IContextViewService),
-					accessor.get(IContextMenuService),
-				),
-		);
+		this.registerSingleton(IContextMenuService, () => this.createInstance(new SyncDescriptor(BrowserContextMenuService)));
+		this.registerSingleton(IHoverService, accessor => new HoverService(accessor.get(IConfigurationService), accessor.get(IContextViewService), accessor.get(IContextMenuService)));
 		this.registerSingleton(IMarkerService, () => new MarkerService());
 		this.registerSingleton(IMarkerDecorationsService, () => this.createInstance(MarkerDecorationsService));
 		this.registerInstance(IClipboardService, new BrowserClipboardService(window.navigator.clipboard));
@@ -302,8 +236,7 @@ export class StandaloneServiceCollection extends InstantiationService {
 		this.registerSingleton(IQuickInputService, () => this.createInstance(StandaloneQuickInputService));
 		this.registerSingleton(IBulkEditService, () => this.createInstance(StandaloneBulkEditService));
 		this.codeEditorService = this.get(ICodeEditorService);
-		this.editorWorkerFactory =
-			overrides.editorWorkerFactory ?? (model => createEditorWorkerClient(model, this.get(IWebWorkerService)));
+		this.editorWorkerFactory = overrides.editorWorkerFactory ?? (model => createEditorWorkerClient(model, this.get(IWebWorkerService)));
 		this.syntaxWorkerFactory = overrides.syntaxWorkerFactory;
 		this.completionWorkerFactory = overrides.completionWorkerFactory;
 		const configurationService = this._register(new StandaloneConfigurationService());
@@ -318,25 +251,12 @@ export class StandaloneServiceCollection extends InstantiationService {
 					configurationService: accessor.get(IConfigurationService),
 				}),
 		);
-		this.registerSingleton(
-			ITextResourcePropertiesService,
-			accessor => new StandaloneResourcePropertiesService(accessor.get(IConfigurationService)),
-		);
+		this.registerSingleton(ITextResourcePropertiesService, accessor => new StandaloneResourcePropertiesService(accessor.get(IConfigurationService)));
 		if (overrides.languageService) this.registerInstance(ILanguageService, overrides.languageService);
 		else this.registerSingleton(ILanguageService, () => new LanguageService());
-		if (overrides.languageConfigurationService)
-			this.registerInstance(ILanguageConfigurationService, overrides.languageConfigurationService);
-		else
-			this.registerSingleton(
-				ILanguageConfigurationService,
-				accessor =>
-					new LanguageConfigurationService(
-						accessor.get(IConfigurationService),
-						accessor.get(ILanguageService),
-					),
-			);
-		if (overrides.languageFeaturesService)
-			this.registerInstance(ILanguageFeaturesService, overrides.languageFeaturesService);
+		if (overrides.languageConfigurationService) this.registerInstance(ILanguageConfigurationService, overrides.languageConfigurationService);
+		else this.registerSingleton(ILanguageConfigurationService, accessor => new LanguageConfigurationService(accessor.get(IConfigurationService), accessor.get(ILanguageService)));
+		if (overrides.languageFeaturesService) this.registerInstance(ILanguageFeaturesService, overrides.languageFeaturesService);
 		else this.registerSingleton(ILanguageFeaturesService, () => new LanguageFeaturesService());
 		const workspaceContext = new StandaloneWorkspaceContextService();
 		this.registerInstance(IWorkspaceContextService, workspaceContext);
@@ -364,9 +284,7 @@ export class StandaloneServiceCollection extends InstantiationService {
 				this.registerInstance(id, descriptor);
 			}
 		}
-		this.get(IMarkdownRendererService).setDefaultCodeBlockRenderer(
-			this.createInstance(EditorMarkdownCodeBlockRenderer),
-		);
+		this.get(IMarkdownRendererService).setDefaultCodeBlockRenderer(this.createInstance(EditorMarkdownCodeBlockRenderer));
 	}
 }
 
@@ -473,39 +391,21 @@ export class StandaloneKeybindingService extends Disposable implements IKeybindi
 		return keybinding ? this.resolveKeybinding(keybinding) : undefined;
 	}
 
-	lookupKeybindings(
-		command: string,
-		context = this.contextKeys.getContext(document.activeElement),
-	): readonly ResolvedKeybinding[] {
+	lookupKeybindings(command: string, context = this.contextKeys.getContext(document.activeElement)): readonly ResolvedKeybinding[] {
 		return this.resolver.lookupKeybindings(command, context);
 	}
 
-	lookupKeybinding(
-		command: string,
-		context: Context = this.contextKeys.getContext(document.activeElement),
-	): ResolvedKeybinding | undefined {
+	lookupKeybinding(command: string, context: Context = this.contextKeys.getContext(document.activeElement)): ResolvedKeybinding | undefined {
 		return this.resolver.lookupKeybinding(command, context);
 	}
 
 	private dispatch(event: KeyboardEvent): void {
 		const context = this.contextKeys.getContext(event.target as Node);
-		if (
-			event.defaultPrevented ||
-			event.isComposing ||
-			event.getModifierState('AltGraph') ||
-			!this.editors.getFocusedCodeEditor()?.hasWidgetFocus()
-		) {
+		if (event.defaultPrevented || event.isComposing || event.getModifierState('AltGraph') || !this.editors.getFocusedCodeEditor()?.hasWidgetFocus()) {
 			return;
 		}
 		// Button activation is a browser default action, which runs after event propagation.
-		if (
-			(event.key === 'Enter' || event.key === ' ') &&
-			!event.ctrlKey &&
-			!event.metaKey &&
-			!event.altKey &&
-			!event.shiftKey &&
-			(event.target as HTMLElement).tagName === 'BUTTON'
-		) {
+		if ((event.key === 'Enter' || event.key === ' ') && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && (event.target as HTMLElement).tagName === 'BUTTON') {
 			return;
 		}
 		if (['Control', 'Meta', 'Alt', 'Shift'].includes(event.key)) {
@@ -533,9 +433,7 @@ export class StandaloneKeybindingService extends Disposable implements IKeybindi
 		}
 		this.clearChords();
 		if (result.kind === KeybindingResolveKind.Command) {
-			void this.commands
-				.executeCommand(result.command, ...result.args)
-				.catch(error => this.notifications.error(String(error)));
+			void this.commands.executeCommand(result.command, ...result.args).catch(error => this.notifications.error(String(error)));
 		}
 	}
 
@@ -604,16 +502,13 @@ export class StandaloneNotificationService extends Disposable implements INotifi
 	}
 
 	info(message: NotificationMessage | NotificationMessage[]): void {
-		for (const entry of Array.isArray(message) ? message : [message])
-			this.notify({ severity: Severity.Info, message: entry }).close();
+		for (const entry of Array.isArray(message) ? message : [message]) this.notify({ severity: Severity.Info, message: entry }).close();
 	}
 	warn(message: NotificationMessage | NotificationMessage[]): void {
-		for (const entry of Array.isArray(message) ? message : [message])
-			this.notify({ severity: Severity.Warning, message: entry }).close();
+		for (const entry of Array.isArray(message) ? message : [message]) this.notify({ severity: Severity.Warning, message: entry }).close();
 	}
 	error(message: NotificationMessage | NotificationMessage[]): void {
-		for (const entry of Array.isArray(message) ? message : [message])
-			this.notify({ severity: Severity.Error, message: entry }).close();
+		for (const entry of Array.isArray(message) ? message : [message]) this.notify({ severity: Severity.Error, message: entry }).close();
 	}
 
 	protected override disposeCore(): void {
@@ -696,8 +591,7 @@ class StandaloneConfigurationService extends Disposable implements IConfiguratio
 			event =>
 				listener.call(thisArgs, {
 					...event,
-					affectsConfiguration: (section, overrides) =>
-						event.affectsConfiguration(section, withoutResource(overrides)),
+					affectsConfiguration: (section, overrides) => event.affectsConfiguration(section, withoutResource(overrides)),
 				}),
 			undefined,
 			disposables,
@@ -708,25 +602,14 @@ class StandaloneConfigurationService extends Disposable implements IConfiguratio
 	getValue<T>(overrides: IConfigurationOverrides): T;
 	getValue<T>(section: string, overrides: IConfigurationOverrides): T;
 	getValue<T>(arg1?: string | IConfigurationOverrides, arg2?: IConfigurationOverrides): T {
-		if (typeof arg1 === 'string')
-			return arg2 ? this.source.getValue<T>(arg1, withoutResource(arg2)) : this.source.getValue<T>(arg1);
+		if (typeof arg1 === 'string') return arg2 ? this.source.getValue<T>(arg1, withoutResource(arg2)) : this.source.getValue<T>(arg1);
 		return arg1 ? this.source.getValue<T>(withoutResource(arg1)) : this.source.getValue<T>();
 	}
 
 	updateValue(key: string, value: unknown): Promise<void>;
 	updateValue(key: string, value: unknown, target: ConfigurationTarget): Promise<void>;
-	updateValue(
-		key: string,
-		value: unknown,
-		overrides: IConfigurationOverrides | IConfigurationUpdateOverrides,
-	): Promise<void>;
-	updateValue(
-		key: string,
-		value: unknown,
-		overrides: IConfigurationOverrides | IConfigurationUpdateOverrides,
-		target: ConfigurationTarget,
-		options?: IConfigurationUpdateOptions,
-	): Promise<void>;
+	updateValue(key: string, value: unknown, overrides: IConfigurationOverrides | IConfigurationUpdateOverrides): Promise<void>;
+	updateValue(key: string, value: unknown, overrides: IConfigurationOverrides | IConfigurationUpdateOverrides, target: ConfigurationTarget, options?: IConfigurationUpdateOptions): Promise<void>;
 	updateValue(
 		key: string,
 		value: unknown,
@@ -737,9 +620,7 @@ class StandaloneConfigurationService extends Disposable implements IConfiguratio
 		if (typeof arg3 === 'number') return this.source.updateValue(key, value, arg3);
 		if (!arg3) return this.source.updateValue(key, value);
 		const overrides = withoutResource(arg3);
-		return arg4 === undefined
-			? this.source.updateValue(key, value, overrides)
-			: this.source.updateValue(key, value, overrides, arg4, options);
+		return arg4 === undefined ? this.source.updateValue(key, value, overrides) : this.source.updateValue(key, value, overrides, arg4, options);
 	}
 
 	inspect<T>(key: string, overrides?: IConfigurationOverrides): IConfigurationValue<Readonly<T>> {
@@ -760,13 +641,9 @@ class StandaloneConfigurationService extends Disposable implements IConfiguratio
 function withoutResource(overrides: IConfigurationOverrides): IConfigurationOverrides;
 function withoutResource(overrides: IConfigurationUpdateOverrides): IConfigurationUpdateOverrides;
 function withoutResource(overrides: IConfigurationOverrides | undefined): IConfigurationOverrides | undefined;
-function withoutResource(
-	overrides: IConfigurationOverrides | IConfigurationUpdateOverrides | undefined,
-): IConfigurationOverrides | IConfigurationUpdateOverrides | undefined {
+function withoutResource(overrides: IConfigurationOverrides | IConfigurationUpdateOverrides | undefined): IConfigurationOverrides | IConfigurationUpdateOverrides | undefined {
 	if (!overrides) return undefined;
-	return isConfigurationUpdateOverrides(overrides)
-		? { overrideIdentifiers: overrides.overrideIdentifiers }
-		: { overrideIdentifier: overrides.overrideIdentifier };
+	return isConfigurationUpdateOverrides(overrides) ? { overrideIdentifiers: overrides.overrideIdentifiers } : { overrideIdentifier: overrides.overrideIdentifier };
 }
 
 class StandaloneResourcePropertiesService implements ITextResourcePropertiesServiceContract {

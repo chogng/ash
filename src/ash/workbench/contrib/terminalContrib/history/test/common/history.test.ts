@@ -39,9 +39,7 @@ test('Terminal command history isolates PowerShell, Bash and Zsh and rejects unt
 			history.getCommands('zsh').map(entry => entry.command),
 			['echo zsh'],
 		);
-		assert.deepEqual(storage.keys(StorageScope.APPLICATION, StorageTarget.MACHINE), [
-			'terminal.shellIntegration.commandHistory.v1',
-		]);
+		assert.deepEqual(storage.keys(StorageScope.APPLICATION, StorageTarget.MACHINE), ['terminal.shellIntegration.commandHistory.v1']);
 	} finally {
 		dom.window.close();
 	}
@@ -131,12 +129,7 @@ test('Terminal command history disables writes at limit zero and ignores malform
 		});
 		using configuration = new WorkbenchConfigurationService();
 		const history = new TerminalCommandHistory(configuration, storage);
-		storage.store(
-			'terminal.shellIntegration.commandHistory.v1',
-			'{',
-			StorageScope.APPLICATION,
-			StorageTarget.MACHINE,
-		);
+		storage.store('terminal.shellIntegration.commandHistory.v1', '{', StorageScope.APPLICATION, StorageTarget.MACHINE);
 		assert.deepEqual(history.getCommands('powershell'), []);
 		await configuration.updateValue(TerminalHistorySettingId.ShellIntegrationCommandHistory, 0);
 		history.record('powershell', 'succeeded', 'Write-Output hidden', true, false);

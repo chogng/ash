@@ -108,8 +108,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	readonly onDidAccept: Event<TreeAcceptEvent<TNode>> = this._onDidAccept.event;
 	readonly onDidChangeFocus: Event<TreeFocusChangeEvent<TNode>> = this._onDidChangeFocus.event;
 	readonly onDidChangeSelection: Event<TreeSelectionChangeEvent<TNode>> = this._onDidChangeSelection.event;
-	readonly onDidRequestCollapseChange: Event<TreeCollapseRequestEvent<TNode>> =
-		this._onDidRequestCollapseChange.event;
+	readonly onDidRequestCollapseChange: Event<TreeCollapseRequestEvent<TNode>> = this._onDidRequestCollapseChange.event;
 	/** @deprecated Prefer the semantic pointer, accept, and collapse events. */
 	readonly onDidActivate: Event<TreeActivateEvent<TNode>> = this._onDidActivate.event;
 	readonly onDidChangeFind: Event<TreeFindResult<TNode>> = this._onDidChangeFind.event;
@@ -139,9 +138,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 				keyboardNavigationLabelProvider: options.keyboardNavigationLabelProvider
 					? {
 							getKeyboardNavigationLabel: node => {
-								const label = options.keyboardNavigationLabelProvider!.getKeyboardNavigationLabel(
-									node.element,
-								);
+								const label = options.keyboardNavigationLabelProvider!.getKeyboardNavigationLabel(node.element);
 								return typeof label === 'string' || label === undefined ? label : [...label];
 							},
 						}
@@ -169,20 +166,14 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		this.element = this.list.element;
 		this.domNode = this.list.domNode;
 		this.onDidScroll = this.list.onDidScroll;
-		this.element.classList.add(
-			'ash-tree',
-			`ash-tree-indent-guides-${options.indentGuides ?? 'none'}`,
-			`ash-tree-selection-${options.selectionPresentation ?? 'active'}`,
-		);
+		this.element.classList.add('ash-tree', `ash-tree-indent-guides-${options.indentGuides ?? 'none'}`, `ash-tree-selection-${options.selectionPresentation ?? 'active'}`);
 		if (options.indent !== undefined) this.element.style.setProperty('--ash-tree-indent', `${options.indent}px`);
 		if (options.enableStickyScroll) {
 			this.stickyContainer = h(this.element.ownerDocument, 'div');
 			this.stickyContainer.className = 'ash-tree-sticky-container';
 			this.stickyContainer.setAttribute('aria-hidden', 'true');
 			this.element.append(this.stickyContainer);
-			this._register(
-				addDisposableListener(this.stickyContainer, 'click', (event: MouseEvent) => this.onStickyClick(event)),
-			);
+			this._register(addDisposableListener(this.stickyContainer, 'click', (event: MouseEvent) => this.onStickyClick(event)));
 			this._register(this.list.onDidScroll(() => this.updateStickyScroll()));
 		}
 		this._register(this.list.onPointer(event => this.onListPointer(event.item, event.browserEvent)));
@@ -206,21 +197,12 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	get items(): readonly TNode[] {
 		return this.list.items;
 	}
-	public updateOptions(
-		options: Pick<
-			AbstractTreeOptions<T, TNode>,
-			'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'
-		>,
-	): void {
+	public updateOptions(options: Pick<AbstractTreeOptions<T, TNode>, 'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'>): void {
 		validateIndent(options.indent);
 		this.list.updateOptions(options);
 		if (options.indent !== undefined) this.element.style.setProperty('--ash-tree-indent', `${options.indent}px`);
 		if (options.indentGuides !== undefined) {
-			this.element.classList.remove(
-				'ash-tree-indent-guides-none',
-				'ash-tree-indent-guides-onHover',
-				'ash-tree-indent-guides-always',
-			);
+			this.element.classList.remove('ash-tree-indent-guides-none', 'ash-tree-indent-guides-onHover', 'ash-tree-indent-guides-always');
 			this.element.classList.add(`ash-tree-indent-guides-${options.indentGuides}`);
 		}
 		if (options.twistieAdditionalCssClass !== undefined) {
@@ -426,21 +408,13 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		const previous = this.list.items;
 		let start = splice.start;
 		let nextStart = 0;
-		while (
-			start < splice.start + splice.deleteCount &&
-			nextStart < splice.elements.length &&
-			previous[start] === splice.elements[nextStart]
-		) {
+		while (start < splice.start + splice.deleteCount && nextStart < splice.elements.length && previous[start] === splice.elements[nextStart]) {
 			start += 1;
 			nextStart += 1;
 		}
 		let previousEnd = splice.start + splice.deleteCount;
 		let nextEnd = splice.elements.length;
-		while (
-			previousEnd > start &&
-			nextEnd > nextStart &&
-			previous[previousEnd - 1] === splice.elements[nextEnd - 1]
-		) {
+		while (previousEnd > start && nextEnd > nextStart && previous[previousEnd - 1] === splice.elements[nextEnd - 1]) {
 			previousEnd -= 1;
 			nextEnd -= 1;
 		}
@@ -463,13 +437,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		const ancestors: AbstractTreeNode<T>[] = [];
 		for (let parent = node.parent; parent && parent.depth > 0; parent = parent.parent) ancestors.unshift(parent);
 		// Retained rows can move between parents without changing element identity or depth.
-		if (
-			indent.childElementCount === ancestors.length &&
-			ancestors.every(
-				(ancestor, index) => (indent.children[index] as HTMLElement).dataset.treeParentId === ancestor.id,
-			)
-		)
-			return;
+		if (indent.childElementCount === ancestors.length && ancestors.every((ancestor, index) => (indent.children[index] as HTMLElement).dataset.treeParentId === ancestor.id)) return;
 		indent.replaceChildren(
 			...ancestors.map(ancestor => {
 				const guide = h(indent.ownerDocument, 'span');
@@ -503,8 +471,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		twistie.setAttribute('aria-hidden', 'true');
 		const twistieState = { collapsible: node.collapsible, expanded: node.collapsible && !node.collapsed };
 		if (this.options.renderTwistie) this.options.renderTwistie(node, twistieState, twistie);
-		else if (twistieState.collapsible)
-			appendIcon(twistieState.expanded ? Lxicon.chevronDown : Lxicon.chevronRight, twistie);
+		else if (twistieState.collapsible) appendIcon(twistieState.expanded ? Lxicon.chevronDown : Lxicon.chevronRight, twistie);
 		const contents = h(document, 'span');
 		contents.className = 'ash-tree-contents';
 		contents.append(this.options.renderElement(node));
@@ -530,12 +497,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		if (!twistie) return;
 		twistie.className = ['ash-tree-twistie', this.twistieAdditionalCssClass?.(node)].filter(Boolean).join(' ');
 		const expanded = node.collapsible && !node.collapsed;
-		if (
-			rerender ||
-			elementChanged ||
-			row.dataset.treeExpanded !== String(expanded) ||
-			row.dataset.treeCollapsible !== String(node.collapsible)
-		) {
+		if (rerender || elementChanged || row.dataset.treeExpanded !== String(expanded) || row.dataset.treeCollapsible !== String(node.collapsible)) {
 			twistie.replaceChildren();
 			const state = { collapsible: node.collapsible, expanded };
 			if (this.options.renderTwistie) this.options.renderTwistie(node, state, twistie);
@@ -550,14 +512,12 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 
 	private onListPointer(node: TNode, browserEvent: MouseEvent): void {
 		const target = this.pointerTarget(browserEvent);
-		const canToggle =
-			browserEvent.button === 0 && (this.options.expandOnDoubleClick !== false || browserEvent.detail !== 2);
+		const canToggle = browserEvent.button === 0 && (this.options.expandOnDoubleClick !== false || browserEvent.detail !== 2);
 		if (target === 'twistie') {
 			if (canToggle) this.requestCollapseChange(node, browserEvent);
 			return;
 		}
-		if (canToggle && (!this.expandOnlyOnTwistieClick(node) || browserEvent.detail === 2))
-			this.requestCollapseChange(node, browserEvent);
+		if (canToggle && (!this.expandOnlyOnTwistieClick(node) || browserEvent.detail === 2)) this.requestCollapseChange(node, browserEvent);
 		const event = { element: node, target, browserEvent } as const;
 		this._onPointer.fire(event);
 		this._onDidActivate.fire({ element: node, browserEvent });
@@ -574,8 +534,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		if (!node) return;
 		if (event.key === 'ArrowRight' && node.collapsible) {
 			stopEvent(event);
-			if (node.collapsed)
-				this._onDidRequestCollapseChange.fire({ element: node, expanded: true, browserEvent: event });
+			if (node.collapsed) this._onDidRequestCollapseChange.fire({ element: node, expanded: true, browserEvent: event });
 			else if (node.children.length > 0) {
 				const childIndex = this.list.activeIndex + 1;
 				this.list.setActiveIndex(childIndex, event);
@@ -602,8 +561,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	}
 
 	private requestCollapseChange(node: TNode, browserEvent: MouseEvent): void {
-		if (node.collapsible)
-			this._onDidRequestCollapseChange.fire({ element: node, expanded: node.collapsed, browserEvent });
+		if (node.collapsible) this._onDidRequestCollapseChange.fire({ element: node, expanded: node.collapsed, browserEvent });
 	}
 
 	private expandOnlyOnTwistieClick(node: TNode): boolean {
@@ -640,9 +598,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		if (!this.findController) return;
 		if (this.findWidget && this.options.findWidgetStyles) {
 			const noMatches = !!this.findController.query && this.findController.matchedNodes.length === 0;
-			const color = noMatches
-				? this.options.findWidgetStyles.listFilterWidgetNoMatchesOutline
-				: this.options.findWidgetStyles.listFilterWidgetOutline;
+			const color = noMatches ? this.options.findWidgetStyles.listFilterWidgetNoMatchesOutline : this.options.findWidgetStyles.listFilterWidgetOutline;
 			this.findWidget.element.style.borderColor = color ?? '';
 		}
 		this._onDidChangeFind.fire({
@@ -668,12 +624,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 					normalized = typeof reaction === 'boolean' ? { accept: reaction } : reaction;
 				}
 				this.scheduleAutoExpand(normalized.accept && normalized.autoExpand ? resolved : undefined, event);
-				const feedback =
-					normalized.bubble === 'down' && resolved
-						? this.subtreeIndexes(resolved)
-						: resolved
-							? [this.items.indexOf(resolved)]
-							: [];
+				const feedback = normalized.bubble === 'down' && resolved ? this.subtreeIndexes(resolved) : resolved ? [this.items.indexOf(resolved)] : [];
 				return {
 					accept: normalized.accept,
 					effect: normalized.effect,
@@ -728,10 +679,8 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	}
 
 	private restoreStickyContainer(): void {
-		if (this.findWidget && this.findWidget.element.parentElement !== this.element)
-			this.element.append(this.findWidget.element);
-		if (this.stickyContainer && this.stickyContainer.parentElement !== this.element)
-			this.element.append(this.stickyContainer);
+		if (this.findWidget && this.findWidget.element.parentElement !== this.element) this.element.append(this.findWidget.element);
+		if (this.stickyContainer && this.stickyContainer.parentElement !== this.element) this.element.append(this.stickyContainer);
 	}
 
 	private updateStickyScroll(): void {
@@ -777,14 +726,11 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 
 function validateIndent(indent: number | undefined): void {
 	// Column-based renderers can supply their own indentation without changing the tree hierarchy.
-	if (indent !== undefined && indent !== 0 && (!Number.isFinite(indent) || indent < 4 || indent > 40))
-		throw new RangeError('Tree indent must be zero or between 4 and 40 pixels');
+	if (indent !== undefined && indent !== 0 && (!Number.isFinite(indent) || indent < 4 || indent > 40)) throw new RangeError('Tree indent must be zero or between 4 and 40 pixels');
 }
 
 function treeRowPadding(level: number): string {
-	return level === 1
-		? '8px'
-		: `calc(8px + ${Array.from({ length: level - 1 }, () => 'var(--ash-tree-indent, 8px)').join(' + ')})`;
+	return level === 1 ? '8px' : `calc(8px + ${Array.from({ length: level - 1 }, () => 'var(--ash-tree-indent, 8px)').join(' + ')})`;
 }
 
 interface TreeFindControllerOptions<T, TNode extends AbstractTreeNode<T>> {
@@ -817,16 +763,11 @@ class TreeFindController<T, TNode extends AbstractTreeNode<T>> {
 		return this.mode === 'filter' && this.pattern.length > 0;
 	}
 
-	update(
-		pattern: string,
-		candidates: readonly TNode[],
-		visibleNodes: readonly TNode[] = candidates,
-	): readonly TNode[] {
+	update(pattern: string, candidates: readonly TNode[], visibleNodes: readonly TNode[] = candidates): readonly TNode[] {
 		const previousActive = this.activeMatch?.id;
 		this.pattern = pattern;
 		this.matches = pattern.length === 0 ? [] : candidates.filter(node => this.matchesNode(node));
-		const preservedIndex =
-			previousActive === undefined ? -1 : this.matches.findIndex(node => node.id === previousActive);
+		const preservedIndex = previousActive === undefined ? -1 : this.matches.findIndex(node => node.id === previousActive);
 		this.activeIndex = preservedIndex >= 0 ? preservedIndex : this.matches.length > 0 ? 0 : -1;
 		if (!this.filtering) return visibleNodes;
 		const included = new Set<TNode>();
@@ -860,11 +801,7 @@ class TreeFindController<T, TNode extends AbstractTreeNode<T>> {
 		const pattern = this.pattern.toLocaleLowerCase();
 		return labels.some(label => {
 			const value = label.toLocaleLowerCase();
-			return (
-				(this.options.matchType === 'contiguous'
-					? matchesContiguousSubString(pattern, value)
-					: matchesSubString(pattern, value)) !== null
-			);
+			return (this.options.matchType === 'contiguous' ? matchesContiguousSubString(pattern, value) : matchesSubString(pattern, value)) !== null;
 		});
 	}
 }

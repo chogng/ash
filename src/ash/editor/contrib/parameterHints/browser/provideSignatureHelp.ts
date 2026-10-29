@@ -24,10 +24,7 @@ export async function provideSignatureHelp(
 		if (
 			request.context.kind === 'triggerCharacter' &&
 			!provider.signatureHelpTriggerCharacters?.includes(request.context.triggerCharacter) &&
-			!(
-				request.context.isRetrigger &&
-				provider.signatureHelpRetriggerCharacters?.includes(request.context.triggerCharacter)
-			)
+			!(request.context.isRetrigger && provider.signatureHelpRetriggerCharacters?.includes(request.context.triggerCharacter))
 		) {
 			continue;
 		}
@@ -51,21 +48,12 @@ function normalizeParameterHints(value: LanguageParameterHints): LanguageParamet
 	}
 	validateActiveIndex(value.activeSignature, value.signatures.length);
 	const signatures = value.signatures.map(signature => {
-		if (
-			!signature ||
-			typeof signature.label !== 'string' ||
-			!Array.isArray(signature.parameters) ||
-			(signature.documentation !== undefined && typeof signature.documentation !== 'string')
-		) {
+		if (!signature || typeof signature.label !== 'string' || !Array.isArray(signature.parameters) || (signature.documentation !== undefined && typeof signature.documentation !== 'string')) {
 			throw new TypeError('Parameter hints must contain a label, parameters and optional text documentation');
 		}
 		validateActiveIndex(signature.activeParameter, signature.parameters.length);
 		const parameters = signature.parameters.map((parameter: LanguageParameterInformation) => {
-			if (
-				!parameter ||
-				typeof parameter.label !== 'string' ||
-				(parameter.documentation !== undefined && typeof parameter.documentation !== 'string')
-			) {
+			if (!parameter || typeof parameter.label !== 'string' || (parameter.documentation !== undefined && typeof parameter.documentation !== 'string')) {
 				throw new TypeError('Parameter labels and documentation must be text');
 			}
 			return Object.freeze({ label: parameter.label, documentation: parameter.documentation });

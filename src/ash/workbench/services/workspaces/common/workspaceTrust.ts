@@ -7,15 +7,8 @@ import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import {
-	ASH_REMOTE_SCHEME,
-	getRemoteWorkspacePath,
-	isRemoteResource,
-} from '../../../../platform/remote/common/remote.js';
-import {
-	IWorkspaceContextService,
-	getWorkspaceRemoteAuthority,
-} from '../../../../platform/workspace/common/workspace.js';
+import { ASH_REMOTE_SCHEME, getRemoteWorkspacePath, isRemoteResource } from '../../../../platform/remote/common/remote.js';
+import { IWorkspaceContextService, getWorkspaceRemoteAuthority } from '../../../../platform/workspace/common/workspace.js';
 import {
 	DEVELOPMENT_DIR_PERMISSIONS,
 	IWorkspaceTrustApi,
@@ -75,12 +68,7 @@ export class WorkspaceTrustManagementService extends Disposable implements IWork
 	}
 
 	public canSetWorkspaceTrust(): boolean {
-		return (
-			!this.isDisposed &&
-			!!this.api.recovery &&
-			this.api.recovery.status === 'idle' &&
-			this.workspace.getWorkspace().folders.length > 0
-		);
+		return !this.isDisposed && !!this.api.recovery && this.api.recovery.status === 'idle' && this.workspace.getWorkspace().folders.length > 0;
 	}
 
 	public resolveWorkspaceTrust(): Promise<void> {
@@ -95,8 +83,7 @@ export class WorkspaceTrustManagementService extends Disposable implements IWork
 				if (
 					this.api.recovery?.status === 'failed' ||
 					this.api.recovery?.status === 'unavailable' ||
-					((!this.api.recovery || this.api.recovery.status === 'idle') &&
-						(state === 'stopped' || state === 'crashed'))
+					((!this.api.recovery || this.api.recovery.status === 'idle') && (state === 'stopped' || state === 'crashed'))
 				)
 					this.finishInitialization();
 				return;
@@ -126,8 +113,7 @@ export class WorkspaceTrustManagementService extends Disposable implements IWork
 		});
 		return operation.then(() => {
 			// A superseded read is not completion of the caller's request to resolve current trust.
-			if (!this.isDisposed && (generation !== this.generation || this.permissionChange))
-				return this.resolveWorkspaceTrust();
+			if (!this.isDisposed && (generation !== this.generation || this.permissionChange)) return this.resolveWorkspaceTrust();
 		});
 	}
 
@@ -150,58 +136,30 @@ export class WorkspaceTrustManagementService extends Disposable implements IWork
 		const connectionGeneration = this.api.connectionGeneration;
 		const sourceGeneration = this.sourceGeneration;
 		const assertTarget = (): void => {
-			if (
-				this.isDisposed ||
-				this.workspace.getWorkspace() !== workspace ||
-				this.api.connectionGeneration !== connectionGeneration ||
-				this.sourceGeneration !== sourceGeneration
-			)
+			if (this.isDisposed || this.workspace.getWorkspace() !== workspace || this.api.connectionGeneration !== connectionGeneration || this.sourceGeneration !== sourceGeneration)
 				throw new CancellationError();
 		};
 		const operation = this.mutationQueue.then(async () => {
 			await this.workspaceTrustInitialized;
 			assertTarget();
-			if (!this.canSetWorkspaceTrust())
-				throw new Error(
-					localize(
-						'workspaceTrust.hostOnly',
-						'Directory permissions can only be changed by an authorized desktop host.',
-					),
-				);
+			if (!this.canSetWorkspaceTrust()) throw new Error(localize('workspaceTrust.hostOnly', 'Directory permissions can only be changed by an authorized desktop host.'));
 			const paths = new Set<string>();
 			for (const uri of uris) {
 				const remote = isRemoteResource(uri);
 				const authority = getWorkspaceRemoteAuthority(workspace);
 				if (remote ? uri.authority !== authority : uri.scheme !== 'file' || !!authority)
-					throw new Error(
-						localize(
-							'workspaceTrust.unsupported',
-							'This host cannot manage directory permissions for this workspace.',
-						),
-					);
-				const canonical =
-					remote && this.resolver.getConnectionData(uri.authority)
-						? await this.resolver.getCanonicalURI(uri)
-						: uri;
+					throw new Error(localize('workspaceTrust.unsupported', 'This host cannot manage directory permissions for this workspace.'));
+				const canonical = remote && this.resolver.getConnectionData(uri.authority) ? await this.resolver.getCanonicalURI(uri) : uri;
 				assertTarget();
 				if (canonical.scheme !== uri.scheme || canonical.authority !== uri.authority)
-					throw new Error(
-						localize(
-							'workspaceTrust.unsupported',
-							'This host cannot manage directory permissions for this workspace.',
-						),
-					);
-				paths.add(
-					remote ? getRemoteWorkspacePath(canonical.with({ query: null, fragment: null })) : canonical.fsPath,
-				);
+					throw new Error(localize('workspaceTrust.unsupported', 'This host cannot manage directory permissions for this workspace.'));
+				paths.add(remote ? getRemoteWorkspacePath(canonical.with({ query: null, fragment: null })) : canonical.fsPath);
 			}
 			if (!paths.size) return;
 			const snapshot = await this.trust.listDirectories();
 			assertTarget();
 			if (expectedRevision !== undefined && snapshot.revision !== expectedRevision)
-				throw new Error(
-					localize('workspaceTrust.revisionChanged', 'Directory grants changed. Refresh before saving.'),
-				);
+				throw new Error(localize('workspaceTrust.revisionChanged', 'Directory grants changed. Refresh before saving.'));
 			let revision = snapshot.revision;
 			let written = false;
 			const permissionChange = (this.permissionChange = new DeferredPromise<void>());
@@ -209,11 +167,7 @@ export class WorkspaceTrustManagementService extends Disposable implements IWork
 				try {
 					for (const path of paths) {
 						assertTarget();
-						const result = await this.trust.setDirectoryPermissions(
-							path,
-							trusted ? DEVELOPMENT_DIR_PERMISSIONS : READ_DIR_PERMISSIONS,
-							revision,
-						);
+						const result = await this.trust.setDirectoryPermissions(path, trusted ? DEVELOPMENT_DIR_PERMISSIONS : READ_DIR_PERMISSIONS, revision);
 						written = true;
 						revision = result.revision;
 					}
@@ -248,19 +202,12 @@ export class WorkspaceTrustManagementService extends Disposable implements IWork
 		}
 		const canonical = connected ? await this.resolver.getCanonicalURI(uri) : uri;
 		// Resolver identities may narrow access, but cannot redirect a grant to another host or a local path.
-		if (
-			!this.current(generation) ||
-			(remote && (canonical.scheme !== uri.scheme || canonical.authority !== uri.authority))
-		) {
+		if (!this.current(generation) || (remote && (canonical.scheme !== uri.scheme || canonical.authority !== uri.authority))) {
 			return { uri, trusted: false, permissions: undefined };
 		}
-		const path = remote
-			? getRemoteWorkspacePath(canonical.with({ query: null, fragment: null }))
-			: canonical.fsPath;
+		const path = remote ? getRemoteWorkspacePath(canonical.with({ query: null, fragment: null })) : canonical.fsPath;
 		// Active roots use their runtime grant on both local and remote hosts; saved grants can differ.
-		const permissions = folder
-			? await this.trust.readWorkspaceDirectory(folder.id)
-			: (await this.trust.readDirectory(path)).permissions;
+		const permissions = folder ? await this.trust.readWorkspaceDirectory(folder.id) : (await this.trust.readDirectory(path)).permissions;
 		if (!this.current(generation)) {
 			return { uri, trusted: false, permissions: undefined };
 		}
@@ -275,10 +222,7 @@ export class WorkspaceTrustManagementService extends Disposable implements IWork
 		const generation = this.generation;
 		const workspace = this.workspace.getWorkspace();
 		const authority = getWorkspaceRemoteAuthority(workspace);
-		const resolved =
-			authority && this.resolver.getConnectionData(authority)
-				? await this.resolver.resolveAuthority(authority)
-				: undefined;
+		const resolved = authority && this.resolver.getConnectionData(authority) ? await this.resolver.resolveAuthority(authority) : undefined;
 		if (!this.current(generation)) return undefined;
 		const folders = workspace.folders;
 		if (folders.length === 0) {
@@ -286,9 +230,7 @@ export class WorkspaceTrustManagementService extends Disposable implements IWork
 				return undefined;
 			}
 			// This URI identifies the remote namespace; it is never used to grant or read the filesystem root.
-			const canonical = await this.resolver.getCanonicalURI(
-				URI.from({ scheme: ASH_REMOTE_SCHEME, authority, path: '/' }),
-			);
+			const canonical = await this.resolver.getCanonicalURI(URI.from({ scheme: ASH_REMOTE_SCHEME, authority, path: '/' }));
 			if (!this.current(generation)) return undefined;
 			const sameHost = canonical.scheme === ASH_REMOTE_SCHEME && canonical.authority === authority;
 			return { isTrusted: sameHost && resolved.options.isTrusted, isReadOnly: false };
@@ -301,10 +243,7 @@ export class WorkspaceTrustManagementService extends Disposable implements IWork
 			// A resolver may restrict trust; only Rust's actual capabilities authorize development.
 			isTrusted: resolved?.options?.isTrusted !== false && trustInfo.every(info => info.trusted),
 			isReadOnly: permissions.every(
-				allowed =>
-					allowed !== undefined &&
-					READ_DIR_PERMISSIONS.every(permission => allowed.includes(permission)) &&
-					allowed.every(permission => READ_DIR_PERMISSIONS.includes(permission)),
+				allowed => allowed !== undefined && READ_DIR_PERMISSIONS.every(permission => allowed.includes(permission)) && allowed.every(permission => READ_DIR_PERMISSIONS.includes(permission)),
 			),
 		};
 	}
@@ -314,8 +253,7 @@ export class WorkspaceTrustManagementService extends Disposable implements IWork
 		this.generation++;
 		this.projection = undefined;
 		this.foldersChanged.fire();
-		if (!this.permissionChange)
-			void this.resolveWorkspaceTrust().catch(error => console.error('Workspace trust refresh failed', error));
+		if (!this.permissionChange) void this.resolveWorkspaceTrust().catch(error => console.error('Workspace trust refresh failed', error));
 	}
 
 	private finishInitialization(): void {
@@ -344,8 +282,7 @@ export class WorkspaceTrustRequestService extends Disposable implements IWorkspa
 	public readonly onDidInitiateWorkspaceTrustRequest = this.requests.event;
 	private readonly startupRequests = this._register(new Emitter<void>());
 	public readonly onDidInitiateWorkspaceTrustRequestOnStartup = this.startupRequests.event;
-	private pending:
-		{ readonly response: DeferredPromise<boolean | undefined>; completion?: Promise<void> } | undefined;
+	private pending: { readonly response: DeferredPromise<boolean | undefined>; completion?: Promise<void> } | undefined;
 
 	constructor(
 		@IWorkspaceTrustManagementService private readonly management: IWorkspaceTrustManagementService,
@@ -396,8 +333,7 @@ export class WorkspaceTrustRequestService extends Disposable implements IWorkspa
 		return (pending.completion ??= Promise.resolve().then(async () => {
 			if (this.pending !== pending) return;
 			try {
-				if (trusted !== undefined && trusted !== this.management.isWorkspaceTrusted())
-					await this.management.setWorkspaceTrust(trusted);
+				if (trusted !== undefined && trusted !== this.management.isWorkspaceTrusted()) await this.management.setWorkspaceTrust(trusted);
 				if (this.pending === pending) this.completePending(this.management.isWorkspaceTrusted());
 			} catch (error) {
 				if (this.pending === pending) {

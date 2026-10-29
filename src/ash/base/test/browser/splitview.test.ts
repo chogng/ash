@@ -14,7 +14,10 @@ for (const [name, value] of Object.entries({
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
 	PointerEvent: browserEnvironment.window.MouseEvent,
 })) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
+	Object.defineProperty(globalThis, name, {
+		configurable: true,
+		value,
+	});
 }
 
 const { SplitView } = await import('../../browser/ui/splitview/splitview.js');
@@ -88,7 +91,11 @@ test('SplitView owns constrained pixel sizes and positions', () => {
 	assert.equal(panes[1]?.style.left, '35px');
 	assert.equal(panes[2]?.style.left, '207.5px');
 	assert.equal(panes[2]?.style.width, '292.5px');
-	assert.deepEqual(side.layouts.at(-1), { size: 292.5, offset: 207.5, orthogonalSize: 300 });
+	assert.deepEqual(side.layouts.at(-1), {
+		size: 292.5,
+		offset: 207.5,
+		orthogonalSize: 300,
+	});
 
 	split.dispose();
 	dom.window.close();
@@ -427,7 +434,11 @@ test('SplitView validates view constraints before mounting', () => {
 });
 
 function pointerEvent(targetWindow: typeof browserEnvironment.window, type: string, clientX: number): Event {
-	return new targetWindow.MouseEvent(type, { bubbles: true, button: 0, clientX });
+	return new targetWindow.MouseEvent(type, {
+		bubbles: true,
+		button: 0,
+		clientX,
+	});
 }
 
 function requiredSash(container: HTMLElement): HTMLElement {
@@ -436,24 +447,13 @@ function requiredSash(container: HTMLElement): HTMLElement {
 	return sash;
 }
 
-function dragSash(
-	targetWindow: typeof browserEnvironment.window,
-	sash: HTMLElement,
-	delta: number,
-	altKey = false,
-): void {
+function dragSash(targetWindow: typeof browserEnvironment.window, sash: HTMLElement, delta: number, altKey = false): void {
 	sash.dispatchEvent(dragEvent(targetWindow, sash, 'pointerdown', 0, altKey));
 	targetWindow.dispatchEvent(dragEvent(targetWindow, sash, 'pointermove', delta, altKey));
 	targetWindow.dispatchEvent(dragEvent(targetWindow, sash, 'pointerup', delta, altKey));
 }
 
-function dragEvent(
-	targetWindow: typeof browserEnvironment.window,
-	sash: HTMLElement,
-	type: string,
-	coordinate: number,
-	altKey = false,
-): MouseEvent {
+function dragEvent(targetWindow: typeof browserEnvironment.window, sash: HTMLElement, type: string, coordinate: number, altKey = false): MouseEvent {
 	const vertical = sash.classList.contains('ash-sash-vertical');
 	return new targetWindow.MouseEvent(type, {
 		bubbles: true,

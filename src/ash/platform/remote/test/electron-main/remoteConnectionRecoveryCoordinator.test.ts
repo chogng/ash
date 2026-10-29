@@ -3,10 +3,7 @@ import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
 import type { AppServerConnectionState } from '../../../agentHost/common/appServerApi.js';
 import { createSshRemoteWorkspaceUri } from '../../../../platform/remote/common/remote.js';
-import {
-	RemoteConnectionRecoveryCoordinator,
-	type RemoteConnectionRecoveryHost,
-} from '../../../../platform/remote/electron-main/remoteConnectionRecoveryCoordinator.js';
+import { RemoteConnectionRecoveryCoordinator, type RemoteConnectionRecoveryHost } from '../../../../platform/remote/electron-main/remoteConnectionRecoveryCoordinator.js';
 import { RemoteAppServerProcessLauncher } from '../../../../platform/remote/electron-main/remoteAppServerProcessLauncher.js';
 
 test('Remote runtime recovery verifies rollback before replacing the connection', async () => {

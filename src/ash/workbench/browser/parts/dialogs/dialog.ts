@@ -1,20 +1,9 @@
-import {
-	defaultButtonStyles,
-	defaultCheckboxStyles,
-	defaultDialogStyles,
-	defaultInputBoxStyles,
-} from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import {
-	type DialogRequest,
-	DialogResult,
-	DialogSeverity,
-	type IDialogHandler,
-	type IDialogOutcome,
-} from '../../../../platform/dialogs/common/dialogs.js';
+import { type DialogRequest, DialogResult, DialogSeverity, type IDialogHandler, type IDialogOutcome } from '../../../../platform/dialogs/common/dialogs.js';
 
 /** Maps queued domain requests to the service-independent Dialog widget. */
 export class BrowserDialogHandler implements IDialogHandler {
@@ -25,14 +14,7 @@ export class BrowserDialogHandler implements IDialogHandler {
 		const disposables = new DisposableStore();
 		try {
 			const buttons =
-				request.kind === 'choice'
-					? [...request.buttons]
-					: [
-							request.primaryButton ??
-								(request.kind === 'confirmation'
-									? localize('dialog.confirm', 'Confirm')
-									: localize('dialog.ok', 'OK')),
-						];
+				request.kind === 'choice' ? [...request.buttons] : [request.primaryButton ?? (request.kind === 'confirmation' ? localize('dialog.confirm', 'Confirm') : localize('dialog.ok', 'OK'))];
 			if (request.kind === 'prompt') buttons.push(request.secondaryButton);
 			if (request.kind !== 'message') buttons.push(request.cancelButton ?? localize('dialog.cancel', 'Cancel'));
 			const cancelId = request.kind === 'message' ? -1 : buttons.length - 1;
@@ -43,10 +25,7 @@ export class BrowserDialogHandler implements IDialogHandler {
 					inputBoxStyles: defaultInputBoxStyles,
 					dialogStyles: defaultDialogStyles,
 					cancelId,
-					type:
-						request.kind === 'message' || request.kind === 'choice'
-							? (request.severity ?? 'question')
-							: 'question',
+					type: request.kind === 'message' || request.kind === 'choice' ? (request.severity ?? 'question') : 'question',
 					detail: request.detail,
 					inputs: request.kind === 'input' ? request.inputs.map(input => ({ ...input })) : undefined,
 					checkboxLabel: request.checkbox?.label,
@@ -61,11 +40,7 @@ export class BrowserDialogHandler implements IDialogHandler {
 			disposables.add(addDisposableListener(signal, 'abort', () => dialog.dispose(), { once: true }));
 			const result = await dialog.show();
 			const cancelled = result.button === cancelId;
-			const button = cancelled
-				? DialogResult.Cancel
-				: request.kind === 'choice' || result.button === 0
-					? DialogResult.Primary
-					: DialogResult.Secondary;
+			const button = cancelled ? DialogResult.Cancel : request.kind === 'choice' || result.button === 0 ? DialogResult.Primary : DialogResult.Secondary;
 			return {
 				button,
 				...(request.kind === 'choice' && !cancelled ? { buttonIndex: result.button } : {}),

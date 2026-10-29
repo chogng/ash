@@ -3,9 +3,7 @@ import type { URI } from '../../../base/common/uri.js';
 
 export interface FileSearchDirectory {
 	readonly resource: URI;
-	readonly target:
-		| { readonly type: 'workspace'; readonly dirId: string }
-		| { readonly type: 'session'; readonly sessionId: string; readonly path: string };
+	readonly target: { readonly type: 'workspace'; readonly dirId: string } | { readonly type: 'session'; readonly sessionId: string; readonly path: string };
 }
 
 export interface FileSearchQuery {

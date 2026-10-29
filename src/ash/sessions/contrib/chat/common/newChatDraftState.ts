@@ -1,8 +1,5 @@
 import { isRecord } from '../../../../base/common/types.js';
-import {
-	validateOpenAgentsWindow,
-	type IOpenAgentsWindowOptions,
-} from '../../../../platform/native/common/nativeHost.js';
+import { validateOpenAgentsWindow, type IOpenAgentsWindowOptions } from '../../../../platform/native/common/nativeHost.js';
 import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
 
 type ChatDraft = NonNullable<IOpenAgentsWindowOptions['draft']>;
@@ -46,19 +43,12 @@ export function writeNewChatDraftState(storage: IStorageService, draft: ChatDraf
 }
 
 /** Conflicting legacy drafts get their own session before their old entry is removed. */
-export function migrateNewChatDraftState(
-	storage: IStorageService,
-	onError?: (error: unknown) => void,
-): readonly { readonly draft: ChatDraft; readonly key: string }[] {
+export function migrateNewChatDraftState(storage: IStorageService, onError?: (error: unknown) => void): readonly { readonly draft: ChatDraft; readonly key: string }[] {
 	const prefixes =
-		storage.get('sessions.activityBar.activePage', StorageScope.WORKSPACE) === 'code'
-			? ['sessions.codeDraftState', 'sessions.draftState']
-			: ['sessions.draftState', 'sessions.codeDraftState'];
+		storage.get('sessions.activityBar.activePage', StorageScope.WORKSPACE) === 'code' ? ['sessions.codeDraftState', 'sessions.draftState'] : ['sessions.draftState', 'sessions.codeDraftState'];
 	const recovered: { draft: ChatDraft; key: string }[] = [];
 	for (const prefix of prefixes) {
-		for (const key of storage
-			.keys(StorageScope.WORKSPACE, StorageTarget.MACHINE)
-			.filter(key => key === prefix || key.startsWith(`${prefix}:`))) {
+		for (const key of storage.keys(StorageScope.WORKSPACE, StorageTarget.MACHINE).filter(key => key === prefix || key.startsWith(`${prefix}:`))) {
 			try {
 				const draft = parseChatDraft(storage.get(key, StorageScope.WORKSPACE)!);
 				const identity = key.slice(prefix.length + 1);

@@ -5,12 +5,7 @@ import type { Keybinding } from '../../../base/common/keybindings.js';
 import { DisposableStore, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { getOrSet } from '../../../base/common/map.js';
 import { operatingSystem, OperatingSystem } from '../../../base/common/platform.js';
-import {
-	commandActionLabel,
-	type CommandActionTitle,
-	type ICommandAction,
-	isCommandActionToggleInfo,
-} from '../../action/common/action.js';
+import { commandActionLabel, type CommandActionTitle, type ICommandAction, isCommandActionToggleInfo } from '../../action/common/action.js';
 import { CommandsRegistry, type ICommandService } from '../../commands/common/commands.js';
 import type { ContextKeyExpression, IContextKeyService } from '../../contextkey/common/contextkey.js';
 import { ContextKeyExpr } from '../../contextkey/common/contextkey.js';
@@ -198,11 +193,7 @@ export interface IMenu extends IDisposable {
 export interface IMenuService {
 	createMenu(id: MenuId, contextKeyService?: IContextKeyService): IMenu;
 
-	getMenuActions(
-		id: MenuId,
-		options?: IMenuActionOptions,
-		contextKeyService?: IContextKeyService,
-	): readonly MenuActionGroup[];
+	getMenuActions(id: MenuId, options?: IMenuActionOptions, contextKeyService?: IContextKeyService): readonly MenuActionGroup[];
 }
 
 export const IMenuService = createServiceIdentifier<IMenuService>('menuService');
@@ -228,10 +219,7 @@ export class MenuItemAction implements IAction {
 		this.options = options;
 		this.commandService = commandService;
 		this.id = item.id;
-		this.label =
-			options?.renderShortTitle && item.shortTitle
-				? commandActionLabel(item.shortTitle)
-				: commandActionLabel(item.title);
+		this.label = options?.renderShortTitle && item.shortTitle ? commandActionLabel(item.shortTitle) : commandActionLabel(item.title);
 		this.tooltip = item.tooltip ? commandActionLabel(item.tooltip) : this.label;
 		this.icon = item.icon;
 		this.enabled = contextKeyService.contextMatchesRules(item.precondition);
@@ -332,10 +320,7 @@ export function registerAction2(ctor: new () => Action2): IDisposable {
 
 		for (const contribution of toArray(action.desc.keybinding)) {
 			const platformContribution = getPlatformKeybinding(contribution);
-			const keybindings = [
-				platformContribution?.primary ?? contribution.primary,
-				...(platformContribution?.secondary ?? contribution.secondary ?? []),
-			];
+			const keybindings = [platformContribution?.primary ?? contribution.primary, ...(platformContribution?.secondary ?? contribution.secondary ?? [])];
 			const when = ContextKeyExpr.and(action.desc.precondition, contribution.when);
 			for (const keybinding of keybindings) {
 				// Numeric zero explicitly disables a shortcut on the selected platform.
@@ -357,7 +342,12 @@ export function registerAction2(ctor: new () => Action2): IDisposable {
 		for (const placement of toArray(action.desc.menu)) {
 			menuItems.push({
 				id: placement.id,
-				item: { command: action.desc, when: placement.when, group: placement.group, order: placement.order },
+				item: {
+					command: action.desc,
+					when: placement.when,
+					group: placement.group,
+					order: placement.order,
+				},
 			});
 		}
 

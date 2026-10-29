@@ -1,12 +1,7 @@
 import { SettingsPageRenderer } from './settingsRenderers.js';
 import { validateJsonValue, type JsonValue } from '../../../../base/common/jsonValue.js';
 import type { LanguageServerConfiguration } from '../../../../platform/language/common/languageServerService.js';
-import {
-	defaultButtonStyles,
-	defaultCheckboxStyles,
-	defaultInputBoxStyles,
-	defaultSelectBoxStyles,
-} from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultCheckboxStyles, defaultInputBoxStyles, defaultSelectBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import './media/languageServerSettingsRenderer.css';
 import { h, isHTMLElement } from '../../../../base/browser/dom.js';
@@ -27,21 +22,12 @@ import {
 } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
-import {
-	ILanguageServerService,
-	type LanguageServerSnapshot,
-} from '../../../../platform/language/common/languageServerService.js';
-import {
-	IExtensionManagementService,
-	OPEN_EXTENSIONS_COMMAND_ID,
-} from '../../../../platform/extensionManagement/common/extensionManagementService.js';
+import { ILanguageServerService, type LanguageServerSnapshot } from '../../../../platform/language/common/languageServerService.js';
+import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { CLOSE_EDITOR_COMMAND_ID } from '../../../browser/parts/editor/editorCommands.js';
@@ -67,10 +53,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize({ bundle: 'ash.settings', key: 'lsp.verbosity' }, 'Language Servers Accessibility Help');
 		},
 		get description() {
-			return localize(
-				{ bundle: 'ash.settings', key: 'lsp.verbosityDescription' },
-				'Announce keyboard help when language server settings receive focus.',
-			);
+			return localize({ bundle: 'ash.settings', key: 'lsp.verbosityDescription' }, 'Announce keyboard help when language server settings receive focus.');
 		},
 	},
 });
@@ -101,8 +84,7 @@ export class LanguageServerSettingsRenderer extends SettingsPageRenderer<Setting
 	private loading = false;
 	private working = false;
 	private generation = 0;
-	private statusMessage:
-		{ readonly key: string; readonly text: string; readonly parameters: readonly (string | number)[] } | undefined;
+	private statusMessage: { readonly key: string; readonly text: string; readonly parameters: readonly (string | number)[] } | undefined;
 	private readonly instanceId = ++nextLanguageServerSettingsId;
 
 	constructor(
@@ -130,36 +112,56 @@ export class LanguageServerSettingsRenderer extends SettingsPageRenderer<Setting
 		this.directory = this._register(
 			new SelectBox(
 				this.field('directory'),
-				{ options: [], presentation: 'field', contextViewProvider: contextView },
+				{
+					options: [],
+					presentation: 'field',
+					contextViewProvider: contextView,
+				},
 				defaultSelectBoxStyles,
 			),
 		);
 		this.language = this._register(
-			new InputBox(this.field('language'), { inputBoxStyles: defaultInputBoxStyles, presentation: 'field' }),
+			new InputBox(this.field('language'), {
+				inputBoxStyles: defaultInputBoxStyles,
+				presentation: 'field',
+			}),
 		);
 		this.find = this.button(this.domNode, () => this.findServers());
 		this.list = this._register(
 			new SelectBox(
 				this.field('list'),
-				{ options: [], presentation: 'field', contextViewProvider: contextView },
+				{
+					options: [],
+					presentation: 'field',
+					contextViewProvider: contextView,
+				},
 				defaultSelectBoxStyles,
 			),
 		);
 		this.server = this._register(
-			new InputBox(this.field('server'), { inputBoxStyles: defaultInputBoxStyles, presentation: 'field' }),
+			new InputBox(this.field('server'), {
+				inputBoxStyles: defaultInputBoxStyles,
+				presentation: 'field',
+			}),
 		);
 		const enabledField = this.field('enabled');
-		this.enabled = this._register(new Checkbox(enabledField, { ...defaultCheckboxStyles }));
+		this.enabled = this._register(
+			new Checkbox(enabledField, {
+				...defaultCheckboxStyles,
+			}),
+		);
 		this.executable = this._register(
-			new InputBox(this.field('executable'), { inputBoxStyles: defaultInputBoxStyles, presentation: 'field' }),
+			new InputBox(this.field('executable'), {
+				inputBoxStyles: defaultInputBoxStyles,
+				presentation: 'field',
+			}),
 		);
 		this.advanced = this._register(
 			new InputBox(this.field('advanced'), {
 				inputBoxStyles: defaultInputBoxStyles,
 				presentation: 'field',
 				flexibleHeight: true,
-				placeholder:
-					'{ "languageIds": ["python"], "args": [], "environment": {}, "initializationOptions": {}, "settings": {} }',
+				placeholder: '{ "languageIds": ["python"], "args": [], "environment": {}, "initializationOptions": {}, "settings": {} }',
 			}),
 		);
 		const actions = h(document, 'div');
@@ -280,10 +282,7 @@ export class LanguageServerSettingsRenderer extends SettingsPageRenderer<Setting
 					kind: 'group',
 					id: LanguageServerSettingsTarget,
 					title: this.label('title', 'Language Servers'),
-					description: this.label(
-						'description',
-						'Configure language servers. View their logs and failures in Output.',
-					),
+					description: this.label('description', 'Configure language servers. View their logs and failures in Output.'),
 				},
 				children: [
 					{
@@ -343,9 +342,7 @@ export class LanguageServerSettingsRenderer extends SettingsPageRenderer<Setting
 				return;
 			}
 			this.snapshot = snapshot;
-			const ids = [
-				...new Set([...Object.keys(snapshot.configurations), ...snapshot.servers.map(server => server.id)]),
-			].sort();
+			const ids = [...new Set([...Object.keys(snapshot.configurations), ...snapshot.servers.map(server => server.id)])].sort();
 			this.list.setOptions(ids.map(id => ({ label: id, value: id })));
 			if (ids.includes(this.server.value)) {
 				this.list.value = this.server.value;
@@ -353,23 +350,16 @@ export class LanguageServerSettingsRenderer extends SettingsPageRenderer<Setting
 			this.server.value = this.list.value ?? '';
 			this.select();
 			if (snapshot.servers.length) {
-				this.setStatus('available', '{0} servers available. They start when a matching document needs them.', [
-					snapshot.servers.length,
-				]);
+				this.setStatus('available', '{0} servers available. They start when a matching document needs them.', [snapshot.servers.length]);
 			} else {
-				this.setStatus(
-					'empty',
-					'No enabled server is available. Find a package in Extensions or configure an executable.',
-				);
+				this.setStatus('empty', 'No enabled server is available. Find a package in Extensions or configure an executable.');
 			}
 			this.changed.fire();
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation) {
 				return;
 			}
-			this.setStatus('loadFailed', 'Could not load language servers: {0}', [
-				error instanceof Error ? error.message : String(error),
-			]);
+			this.setStatus('loadFailed', 'Could not load language servers: {0}', [error instanceof Error ? error.message : String(error)]);
 		} finally {
 			if (!this.isDisposed && generation === this.generation) {
 				this.loading = false;
@@ -381,9 +371,7 @@ export class LanguageServerSettingsRenderer extends SettingsPageRenderer<Setting
 	private select(): void {
 		const id = this.server.value.trim();
 		const config = this.snapshot?.configurations[id];
-		this.enabled.checked = config
-			? config.mode === 'enabled'
-			: !!this.snapshot?.servers.some(server => server.id === id);
+		this.enabled.checked = config ? config.mode === 'enabled' : !!this.snapshot?.servers.some(server => server.id === id);
 		this.executable.value = config?.executable ?? '';
 		const { mode: _mode, executable: _executable, ...advanced } = config ?? {};
 		this.advanced.value = Object.keys(advanced).length ? JSON.stringify(advanced, undefined, 2) : '{}';
@@ -432,11 +420,7 @@ export class LanguageServerSettingsRenderer extends SettingsPageRenderer<Setting
 			}
 			// A failed write may mean a revision conflict; only an explicit read permits another write.
 			this.snapshot = undefined;
-			this.setStatus(
-				'saveFailed',
-				'Could not save language server configuration: {0}. Refresh before saving again.',
-				[error instanceof Error ? error.message : String(error)],
-			);
+			this.setStatus('saveFailed', 'Could not save language server configuration: {0}. Refresh before saving again.', [error instanceof Error ? error.message : String(error)]);
 			return;
 		} finally {
 			this.working = false;
@@ -468,26 +452,14 @@ export class LanguageServerSettingsRenderer extends SettingsPageRenderer<Setting
 			});
 		} catch (error) {
 			if (!this.isDisposed) {
-				this.setStatus('findFailed', 'Could not open Extensions: {0}', [
-					error instanceof Error ? error.message : String(error),
-				]);
+				this.setStatus('findFailed', 'Could not open Extensions: {0}', [error instanceof Error ? error.message : String(error)]);
 			}
 		}
 	}
 
 	private updateActions(): void {
 		const enabled = !this.working && !this.loading;
-		for (const control of [
-			this.directory,
-			this.language,
-			this.list,
-			this.server,
-			this.enabled,
-			this.executable,
-			this.advanced,
-			this.find,
-			this.refreshButton,
-		]) {
+		for (const control of [this.directory, this.language, this.list, this.server, this.enabled, this.executable, this.advanced, this.find, this.refreshButton]) {
 			control.enabled = enabled;
 		}
 		this.save.enabled = enabled && !!this.snapshot && !!this.server.value.trim();
@@ -537,12 +509,7 @@ export class LanguageServerSettingsRenderer extends SettingsPageRenderer<Setting
 	}
 
 	private label(key: string, text: string, parameters: readonly (string | number)[] = []): string {
-		return this.localization.translate(
-			'ash.settings',
-			`lsp.${key}`,
-			text,
-			Object.fromEntries(parameters.map((value, index) => [String(index), value])),
-		);
+		return this.localization.translate('ash.settings', `lsp.${key}`, text, Object.fromEntries(parameters.map((value, index) => [String(index), value])));
 	}
 
 	private field(key: string): HTMLElement {
@@ -557,7 +524,11 @@ export class LanguageServerSettingsRenderer extends SettingsPageRenderer<Setting
 
 	private button(container: HTMLElement, run: () => Promise<void>): Button {
 		const button = this._register(
-			new Button(container, { ...defaultButtonStyles, label: '', presentation: 'secondary' }),
+			new Button(container, {
+				...defaultButtonStyles,
+				label: '',
+				presentation: 'secondary',
+			}),
 		);
 		this._register(
 			button.onDidClick(() => {
@@ -572,19 +543,11 @@ let nextLanguageServerSettingsId = 0;
 
 function parseAdvancedConfiguration(text: string): Omit<LanguageServerConfiguration, 'mode' | 'executable'> {
 	const value = validateJsonValue(JSON.parse(text || '{}'));
-	const object = (value: JsonValue): value is { readonly [key: string]: JsonValue } =>
-		value !== null && typeof value === 'object' && !Array.isArray(value);
-	if (
-		!object(value) ||
-		Object.keys(value).some(
-			key => !['languageIds', 'args', 'environment', 'initializationOptions', 'settings'].includes(key),
-		)
-	)
-		throw new TypeError('configuration');
+	const object = (value: JsonValue): value is { readonly [key: string]: JsonValue } => value !== null && typeof value === 'object' && !Array.isArray(value);
+	if (!object(value) || Object.keys(value).some(key => !['languageIds', 'args', 'environment', 'initializationOptions', 'settings'].includes(key))) throw new TypeError('configuration');
 	const strings = (value: JsonValue | undefined): readonly string[] | undefined => {
 		if (value === undefined) return undefined;
-		if (!Array.isArray(value) || !value.every((entry): entry is string => typeof entry === 'string'))
-			throw new TypeError('string array');
+		if (!Array.isArray(value) || !value.every((entry): entry is string => typeof entry === 'string')) throw new TypeError('string array');
 		return value;
 	};
 	const environment: Record<string, string> = {};

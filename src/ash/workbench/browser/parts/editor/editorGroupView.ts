@@ -7,14 +7,7 @@ import { Dimension, type IDimension } from '../../../../base/browser/dom.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { validateJsonValue } from '../../../../base/common/jsonValue.js';
-import {
-	Disposable,
-	DisposableStore,
-	DisposableMap,
-	MutableDisposable,
-	toDisposable,
-	type IDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, DisposableMap, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -78,20 +71,10 @@ import type { EditorHeaderActions } from './editorHeaderControl.js';
 import { type LanguageLocation, type LanguageWorkspaceEdit } from '../../../../editor/common/languages.js';
 import type { ILanguageDiagnosticsService } from '../../../services/language/common/languageDiagnosticsService.js';
 import type { IKeyboardLayoutService } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
-import type {
-	IContextKeyService,
-	IScopedContextKeyService,
-} from '../../../../platform/contextkey/browser/contextKeyService.js';
+import type { IContextKeyService, IScopedContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { getFlatContextMenuActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
-import type {
-	EditorCloseReason,
-	EditorGroupChangeEvent,
-	EditorGroupId,
-	EditorGroupState,
-	EditorInstanceId,
-	EditorInstanceState,
-} from '../../../services/editor/common/editorState.js';
+import type { EditorCloseReason, EditorGroupChangeEvent, EditorGroupId, EditorGroupState, EditorInstanceId, EditorInstanceState } from '../../../services/editor/common/editorState.js';
 import type { SerializedEditorViewState } from '../../../services/editor/common/editorWorkingSet.js';
 import { EditorGroupContextKeyController } from './editorContextKeys.js';
 import type { FileElement } from './breadcrumbsModel.js';
@@ -99,13 +82,7 @@ import type { IBreadcrumbsService } from './breadcrumbs.js';
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import type { LanguageDocumentSymbol } from '../../../../editor/common/languages.js';
 import { Range } from '../../../../editor/common/core/range.js';
-import {
-	associatedEditorId,
-	DiffEditorAssociationsConfiguration,
-	EditorAssociationsConfiguration,
-	EditorEnablePreviewConfiguration,
-	type EditorAssociations,
-} from './editorConfiguration.js';
+import { associatedEditorId, DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration, EditorEnablePreviewConfiguration, type EditorAssociations } from './editorConfiguration.js';
 import { ActiveEditorGroupLockedContext } from '../../../common/contextkeys.js';
 import { EditorFocusRecentEditorAfterCloseConfiguration } from '../../../services/editor/common/editorConfiguration.js';
 
@@ -128,11 +105,7 @@ export interface EditorGroupOptions {
 	readonly documentCollaborationApi?: IDocumentCollaborationApi;
 	readonly serverEvents?: IServerEventApi;
 	readonly workingCopyService?: IWorkingCopyService;
-	readonly onSave?: (
-		group: IEditorGroupView,
-		input: IResourceEditorInput,
-		pane: IEditorPane,
-	) => Promise<IResourceEditorInput | undefined>;
+	readonly onSave?: (group: IEditorGroupView, input: IResourceEditorInput, pane: IEditorPane) => Promise<IResourceEditorInput | undefined>;
 	readonly onWillCloseEditor?: (
 		group: IEditorGroupView,
 		input: IResourceEditorInput,
@@ -141,28 +114,16 @@ export interface EditorGroupOptions {
 		closingEditors?: readonly IEditorIdentifier[],
 	) => Promise<boolean>;
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
-	readonly onApplyWorkspaceEdit?: (
-		edit: LanguageWorkspaceEdit,
-		options?: IBulkEditOptions,
-	) => void | boolean | Promise<void | boolean>;
+	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>;
 	readonly titleActions?: EditorHeaderActions;
 	readonly showBreadcrumbPicker?: (element: FileElement, openFile: (resource: URI) => Promise<void>) => void;
 	readonly breadcrumbsService?: IBreadcrumbsService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
-	readonly showBreadcrumbSymbolPicker?: (
-		symbols: readonly LanguageDocumentSymbol[],
-		selected: LanguageDocumentSymbol,
-		reveal: (range: Range) => void,
-	) => void;
+	readonly showBreadcrumbSymbolPicker?: (symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => void;
 	readonly onDidActivate?: () => void;
 	/** Lets the layout owner reconsider an empty group after its latest open settles. */
 	readonly onDidFinishOpenEditor?: () => void;
-	readonly resolveOpenError?: (
-		error: unknown,
-		input: IResourceEditorInput,
-		options: EditorOpenOptions,
-		open: (options: EditorOpenOptions) => Promise<IEditorPane>,
-	) => unknown;
+	readonly resolveOpenError?: (error: unknown, input: IResourceEditorInput, options: EditorOpenOptions, open: (options: EditorOpenOptions) => Promise<IEditorPane>) => unknown;
 	readonly onWillOpenEditor?: (input: IResourceEditorInput) => Promise<void> | undefined;
 	readonly onOpenError?: (error: unknown, input: IResourceEditorInput, options: EditorOpenOptions) => Promise<void>;
 	readonly dragAndDrop?: IEditorTabDragAndDrop;
@@ -240,9 +201,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private readonly onSave: EditorGroupOptions['onSave'];
 	private readonly onWillCloseEditor: EditorGroupOptions['onWillCloseEditor'];
 	private readonly onOpenLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined;
-	private readonly onApplyWorkspaceEdit:
-		| ((edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>)
-		| undefined;
+	private readonly onApplyWorkspaceEdit: ((edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>) | undefined;
 	private readonly titleActions: EditorHeaderActions | undefined;
 	private readonly resolveOpenError: EditorGroupOptions['resolveOpenError'];
 	private readonly onWillOpenEditor: EditorGroupOptions['onWillOpenEditor'];
@@ -340,9 +299,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.domNode.setAttribute('aria-label', 'Editor group');
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
-		this.scopedContextKeyService = options.contextKeyService
-			? this._register(options.contextKeyService.createScoped(this.domNode))
-			: undefined;
+		this.scopedContextKeyService = options.contextKeyService ? this._register(options.contextKeyService.createScoped(this.domNode)) : undefined;
 		if (this.scopedContextKeyService && this.configurationService) {
 			const context = this.scopedContextKeyService;
 			const configuration = this.configurationService;
@@ -379,7 +336,10 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 				titleDelegate,
 				this.model,
 				options.titleActions
-					? { ...options.titleActions, contextKeyService: this.scopedContextKeyService }
+					? {
+							...options.titleActions,
+							contextKeyService: this.scopedContextKeyService,
+						}
 					: undefined,
 				options.configurationService,
 				onSelectBreadcrumb,
@@ -393,21 +353,12 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.contentDomNode.className = 'ash-editor-group-content';
 		this.panes = this._register(new EditorPanes(this.contentDomNode));
 		if (options.keybindingService) {
-			this.watermark = this._register(
-				instantiationService.createInstance(EditorGroupWatermark, this.contentDomNode),
-			);
+			this.watermark = this._register(instantiationService.createInstance(EditorGroupWatermark, this.contentDomNode));
 			this._register(options.keybindingService.onDidUpdateKeybindings(() => this.renderChrome()));
 		}
 		this.domNode.append(this.titleControl.domNode, this.contentDomNode);
 		if (this.scopedContextKeyService) {
-			this._register(
-				new EditorGroupContextKeyController(
-					this.scopedContextKeyService,
-					this,
-					this.registry,
-					this.languageResolver,
-				),
-			);
+			this._register(new EditorGroupContextKeyController(this.scopedContextKeyService, this, this.registry, this.languageResolver));
 		}
 		if (options.onDidActivate) {
 			this._register(
@@ -450,15 +401,9 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			});
 			menuContext.setContext(ResourceContext.key, resource?.toString());
 			menuContext.setContext(ResourceSchemeContext.key, resource?.scheme);
-			menuContext.setContext(
-				ResourceLanguageIdContext.key,
-				input.languageId ?? (resource && this.languageResolver?.resolveLanguageId({ resource })),
-			);
+			menuContext.setContext(ResourceLanguageIdContext.key, input.languageId ?? (resource && this.languageResolver?.resolveLanguageId({ resource })));
 			menuContext.setContext(ActiveEditorContext.key, entry.paneInstance.pane.id);
-			menuContext.setContext(
-				MultipleEditorsSelectedInGroupContext.key,
-				this.selectedInputs.includes(input) && this.selectedInputs.length > 1,
-			);
+			menuContext.setContext(MultipleEditorsSelectedInGroupContext.key, this.selectedInputs.includes(input) && this.selectedInputs.length > 1);
 			menuContext.setContext(ActiveEditorPinnedContext.key, !entry.preview);
 			menuContext.setContext(ActiveEditorStickyContext.key, entry.sticky);
 			menuContext.setContext(ActiveEditorFirstInGroupContext.key, editorIndex === 0);
@@ -468,11 +413,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		actions.contextMenuProvider.showContextMenu({
 			getAnchor: () => anchor,
 			getActions: () =>
-				getFlatContextMenuActions(
-					actions.menuService.getMenuActions(MenuId.EditorTitleContext, { arg: context }, menuContext),
-					undefined,
-					tab.ownerDocument.defaultView ?? undefined,
-				),
+				getFlatContextMenuActions(actions.menuService.getMenuActions(MenuId.EditorTitleContext, { arg: context }, menuContext), undefined, tab.ownerDocument.defaultView ?? undefined),
 			getActionsContext: () => context,
 			onHide: didCancel => {
 				menuContext?.dispose();
@@ -517,9 +458,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 
 	createEditorActions(disposables: DisposableStore, menuId = MenuId.EditorTitle): IActiveEditorActions {
 		const pane = this.activePane;
-		const menu = this.titleActions
-			? disposables.add(this.titleActions.menuService.createMenu(menuId, this.scopedContextKeyService))
-			: undefined;
+		const menu = this.titleActions ? disposables.add(this.titleActions.menuService.createMenu(menuId, this.scopedContextKeyService)) : undefined;
 		return {
 			get titleControl() {
 				return pane instanceof EditorPane ? pane.getTitleControl() : undefined;
@@ -528,16 +467,10 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 				const menuActions = getActionBarActions(menu?.getActions() ?? []);
 				return {
 					primary: [...(pane instanceof EditorPane ? pane.getActions(menuId) : []), ...menuActions.primary],
-					secondary: [
-						...(pane instanceof EditorPane ? pane.getSecondaryActions() : []),
-						...menuActions.secondary,
-					],
+					secondary: [...(pane instanceof EditorPane ? pane.getSecondaryActions() : []), ...menuActions.secondary],
 				};
 			},
-			onDidChange: Event.any(
-				pane instanceof EditorPane ? pane.onTitleAreaUpdate : Event.None,
-				menu ? Event.map(menu.onDidChange, () => undefined) : Event.None,
-			),
+			onDidChange: Event.any(pane instanceof EditorPane ? pane.onTitleAreaUpdate : Event.None, menu ? Event.map(menu.onDidChange, () => undefined) : Event.None),
 		};
 	}
 
@@ -607,40 +540,25 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const previousIndex = this.model.indexOf(input);
 		const focusedTab = this.domNode.ownerDocument.activeElement?.closest('.ash-tab');
 		// Moving rows replaces the tab's action button; restore focus to its stable tab identity.
-		const focusedTabId =
-			focusedTab && this.domNode.contains(focusedTab)
-				? focusedTab.querySelector<HTMLElement>('.ash-tab-label')?.id
-				: undefined;
+		const focusedTabId = focusedTab && this.domNode.contains(focusedTab) ? focusedTab.querySelector<HTMLElement>('.ash-tab-label')?.id : undefined;
 		if (sticky) {
 			this.model.stick(input);
 		} else {
 			this.model.unstick(input);
 		}
 		if (this.model.indexOf(input) !== previousIndex) {
-			this.editorChangeEmitter.fire(
-				Object.freeze({ kind: 'editorMoved', editor: this.editorState(entry), previousIndex }),
-			);
+			this.editorChangeEmitter.fire(Object.freeze({ kind: 'editorMoved', editor: this.editorState(entry), previousIndex }));
 		}
 		this.publishEditorState(entry);
 		if (focusedTabId) {
 			// Pointer activation can retain the old row until click finishes. Focus its visible replacement.
-			const tab = [...this.domNode.querySelectorAll<HTMLElement>('.ash-tab-label')].find(
-				label => label.id === focusedTabId && !label.closest('[hidden]'),
-			);
+			const tab = [...this.domNode.querySelectorAll<HTMLElement>('.ash-tab-label')].find(label => label.id === focusedTabId && !label.closest('[hidden]'));
 			tab?.focus();
 		}
 	}
 
-	async openEditor(
-		input: IResourceEditorInput,
-		options: EditorOpenOptions = {},
-		instanceId?: EditorInstanceId,
-	): Promise<IEditorPane> {
-		if (
-			input.toUntyped &&
-			options.preferredEditorId !== undefined &&
-			options.preferredEditorId !== input.editorId
-		) {
+	async openEditor(input: IResourceEditorInput, options: EditorOpenOptions = {}, instanceId?: EditorInstanceId): Promise<IEditorPane> {
+		if (input.toUntyped && options.preferredEditorId !== undefined && options.preferredEditorId !== input.editorId) {
 			const pane = await this.openEditor(input.toUntyped(), { ...options, index: this.model.indexOf(input) });
 			if (this.entry(input)) await this.closeEditor(input);
 			return pane;
@@ -664,8 +582,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.assertNotDisposed();
 		if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
 		const existing = this.entry(input);
-		const limitedReplacement =
-			this.model.editorLimit === 1 ? this.model.getEditorToReplace(input, options) : undefined;
+		const limitedReplacement = this.model.editorLimit === 1 ? this.model.getEditorToReplace(input, options) : undefined;
 		if (!existing && limitedReplacement && !(await this.confirmCloseEditor(limitedReplacement.input))) {
 			throw new CancellationError('Replacing the editor was cancelled');
 		}
@@ -698,11 +615,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 							EditorResourceAccessor.getOriginalUri(input, {
 								supportSideBySide: SideBySideEditor.PRIMARY,
 							})!.path,
-							this.configurationService.getValue<EditorAssociations>(
-								isResourceDiffEditorInput(input)
-									? DiffEditorAssociationsConfiguration
-									: EditorAssociationsConfiguration,
-							),
+							this.configurationService.getValue<EditorAssociations>(isResourceDiffEditorInput(input) ? DiffEditorAssociationsConfiguration : EditorAssociationsConfiguration),
 						)
 					: undefined;
 			const selected = this.registry.getEditorPane(matchInput, {
@@ -722,9 +635,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			this.model.updateEditor(input, { ...options, pinned: options.pinned ?? options.index !== undefined });
 			if (this.model.indexOf(input) !== previousIndex) {
 				this.model.pin(input);
-				this.editorChangeEmitter.fire(
-					Object.freeze({ kind: 'editorMoved', editor: this.editorState(existing), previousIndex }),
-				);
+				this.editorChangeEmitter.fire(Object.freeze({ kind: 'editorMoved', editor: this.editorState(existing), previousIndex }));
 			}
 			existing.labelListener.value = input.onDidChangeLabel?.(() => this.publishEditorState(existing));
 			if (options.inactive && this.activeInput) {
@@ -828,10 +739,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	): IEditorPane {
 		const pane = paneInstance.pane;
 		// Completed panes and error pages can commit; cancelled loads retain the previous tab.
-		const pinned =
-			options.pinned !== false ||
-			this.configurationService?.getValue<boolean>(EditorEnablePreviewConfiguration) === false ||
-			getEditorWorkingCopies(pane).some(copy => copy.isDirty);
+		const pinned = options.pinned !== false || this.configurationService?.getValue<boolean>(EditorEnablePreviewConfiguration) === false || getEditorWorkingCopies(pane).some(copy => copy.isDirty);
 		const replacing = this.model.getEditorToReplace(input, { ...options, pinned });
 		const replacement = replacing ? this.paneEntries.get(replacing.instanceId) : undefined;
 		const closedState = replacement ? this.editorState(replacement) : undefined;
@@ -870,8 +778,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			});
 		}
 		paneInstance.observeWorkingCopy(() => {
-			if (entry.preview && getEditorWorkingCopies(entry.paneInstance.pane).some(copy => copy.isDirty))
-				this.model.pin(entry.input);
+			if (entry.preview && getEditorWorkingCopies(entry.paneInstance.pane).some(copy => copy.isDirty)) this.model.pin(entry.input);
 			this.publishEditorState(entry);
 		});
 		this.ordinaryContent = undefined;
@@ -887,23 +794,12 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		return pane;
 	}
 
-	private async showOpenError(
-		input: IResourceEditorInput,
-		options: EditorOpenOptions,
-		error: unknown,
-		existing: EditorGroupEntry | undefined,
-	): Promise<IEditorPane> {
+	private async showOpenError(input: IResourceEditorInput, options: EditorOpenOptions, error: unknown, existing: EditorGroupEntry | undefined): Promise<IEditorPane> {
 		if (options.ignoreError || isCancellationError(error)) throw error;
-		const displayError = this.resolveOpenError
-			? this.resolveOpenError(error, input, options, openOptions => this.openEditor(input, openOptions))
-			: error;
+		const displayError = this.resolveOpenError ? this.resolveOpenError(error, input, options, openOptions => this.openEditor(input, openOptions)) : error;
 		// Failed reopens must not release the only owner of unsaved content. Keep its
 		// pane (and normal close confirmation) alive while reporting the open error.
-		if (
-			existing &&
-			(getEditorWorkingCopies(existing.paneInstance.pane).some(copy => copy.isDirty) ||
-				!(await this.confirmCloseEditor(existing.input)))
-		) {
+		if (existing && (getEditorWorkingCopies(existing.paneInstance.pane).some(copy => copy.isDirty) || !(await this.confirmCloseEditor(existing.input)))) {
 			if (!options.inactive) this.activateEntry(existing, false);
 			await this.onOpenError?.(displayError, input, options);
 			const current = this.entry(input)?.paneInstance.pane;
@@ -936,10 +832,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		return this.entry(input)?.paneInstance.pane;
 	}
 
-	async saveEditor(
-		input: IResourceEditorInput,
-		options: ISaveEditorsOptions = {},
-	): Promise<IResourceEditorInput | undefined> {
+	async saveEditor(input: IResourceEditorInput, options: ISaveEditorsOptions = {}): Promise<IResourceEditorInput | undefined> {
 		const entry = this.entry(input);
 		if (!entry || this.isDisposed) {
 			return undefined;
@@ -956,31 +849,19 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 		const { saveAs, ...saveOptions } = options;
 		await pane.save(saveOptions);
-		return !this.isDisposed &&
-			this.entry(input) === entry &&
-			!getEditorWorkingCopies(pane).some(copy => copy.isDirty)
-			? entry.input
-			: undefined;
+		return !this.isDisposed && this.entry(input) === entry && !getEditorWorkingCopies(pane).some(copy => copy.isDirty) ? entry.input : undefined;
 	}
 
-	async confirmCloseEditor(
-		input: IResourceEditorInput,
-		closingGroups?: readonly EditorGroupId[],
-		closingEditors?: readonly IEditorIdentifier[],
-	): Promise<boolean> {
+	async confirmCloseEditor(input: IResourceEditorInput, closingGroups?: readonly EditorGroupId[], closingEditors?: readonly IEditorIdentifier[]): Promise<boolean> {
 		const entry = this.entry(input);
 		if (!entry) return true;
 		// A clean file can still have unresolved save recovery; let the resource owner settle first.
-		if (this.onWillCloseEditor)
-			return this.onWillCloseEditor(this, entry.input, entry.paneInstance.pane, closingGroups, closingEditors);
+		if (this.onWillCloseEditor) return this.onWillCloseEditor(this, entry.input, entry.paneInstance.pane, closingGroups, closingEditors);
 		return !getEditorWorkingCopies(entry.paneInstance.pane).some(copy => copy.isDirty);
 	}
 
 	async closeEditor(input: IResourceEditorInput, options: EditorCloseOptions = {}): Promise<boolean> {
-		if (
-			(options.reason === undefined || options.reason === 'close') &&
-			(input.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.CannotClose
-		) {
+		if ((options.reason === undefined || options.reason === 'close') && (input.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.CannotClose) {
 			return false;
 		}
 		const entry = this.entry(input);
@@ -997,10 +878,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const closedState = this.editorState(entry, index);
 		const wasActive = this.activeEntry === entry;
 		const restoreFocus = wasActive && this.domNode.contains(this.domNode.ownerDocument.activeElement);
-		const nextInput = this.model.closeEditor(
-			entry.input,
-			this.configurationService?.getValue<boolean>(EditorFocusRecentEditorAfterCloseConfiguration) !== false,
-		);
+		const nextInput = this.model.closeEditor(entry.input, this.configurationService?.getValue<boolean>(EditorFocusRecentEditorAfterCloseConfiguration) !== false);
 		this.paneEntries.deleteAndDispose(entry.instanceId);
 		this.panes.disposePane(entry.paneInstance);
 		this.editorChangeEmitter.fire(Object.freeze({ kind: 'editorClosed', editor: closedState, reason }));
@@ -1048,17 +926,11 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.model.pin(input);
 		this.renderContent();
 		this.renderChrome();
-		this.editorChangeEmitter.fire(
-			Object.freeze({ kind: 'editorMoved', editor: this.editorState(entry), previousIndex: sourceIndex }),
-		);
+		this.editorChangeEmitter.fire(Object.freeze({ kind: 'editorMoved', editor: this.editorState(entry), previousIndex: sourceIndex }));
 		if (wasPreview) this.publishEditorState(entry);
 	}
 
-	private async openExternalEditors(
-		dataTransfer: DataTransfer | null,
-		target: IResourceEditorInput | undefined,
-		position: EditorTabDropPosition,
-	): Promise<void> {
+	private async openExternalEditors(dataTransfer: DataTransfer | null, target: IResourceEditorInput | undefined, position: EditorTabDropPosition): Promise<void> {
 		if (!dataTransfer) return;
 		const inputs = await extractExternalEditorInputs(dataTransfer);
 		let index = this.getEditorInsertionIndex(target, position);
@@ -1068,12 +940,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			// A specialized host must not replace its content with an unsupported file drop.
 			if (!this.registry.getEditorPanesForInput(source).length) continue;
 			const range = selection
-				? new Range(
-						selection.startLineNumber,
-						selection.startColumn,
-						selection.endLineNumber ?? selection.startLineNumber,
-						selection.endColumn ?? selection.startColumn,
-					)
+				? new Range(selection.startLineNumber, selection.startColumn, selection.endLineNumber ?? selection.startLineNumber, selection.endColumn ?? selection.startColumn)
 				: undefined;
 			await this.openEditor(source, { index, selection: range });
 			index += 1;
@@ -1089,11 +956,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const veto = input.canMove?.(this.id, target.id);
 		if (typeof veto === 'string') throw new Error(veto);
 		const viewState = this.saveEditorViewState(input);
-		await target.openEditor(
-			input,
-			{ index: targetIndex, pinned: true, preferredEditorId: entry.paneInstance.pane.id },
-			entry.instanceId,
-		);
+		await target.openEditor(input, { index: targetIndex, pinned: true, preferredEditorId: entry.paneInstance.pane.id }, entry.instanceId);
 		if (entry.sticky) target.stickEditor(input);
 		await this.closeEditor(input, { skipConfirmation: true, reason: 'move' });
 		target.activateEditor(input);
@@ -1124,10 +987,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 
 	layout(dimension: IDimension): void {
 		this.groupDimension = dimension;
-		this.dimension = new Dimension(
-			Math.max(0, dimension.width - this.contentRightInset),
-			Math.max(0, dimension.height - (this.titleVisible ? this.titleControl.height : 0)),
-		);
+		this.dimension = new Dimension(Math.max(0, dimension.width - this.contentRightInset), Math.max(0, dimension.height - (this.titleVisible ? this.titleControl.height : 0)));
 		this.panes.layout(this.dimension);
 		this.watermark?.layout(this.dimension.height);
 	}
@@ -1181,9 +1041,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			entry.paneInstance.setVisible(false);
 		}
 		if (changed) {
-			this.editorChangeEmitter.fire(
-				Object.freeze({ kind: 'activeEditorChanged', editor: this.editorState(entry) }),
-			);
+			this.editorChangeEmitter.fire(Object.freeze({ kind: 'activeEditorChanged', editor: this.editorState(entry) }));
 		}
 		this.renderChrome();
 		if (focus) this.panes.focus();
@@ -1229,9 +1087,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 		this.domNode.setAttribute('aria-label', label);
 		const closeKeybinding = this.keybindingService?.lookupKeybinding('workbench.action.closeActiveEditor');
-		const closeActionTooltip = closeKeybinding
-			? localize('workbench.closeEditorWithKeybinding', 'Close ({0})', getKeybindingLabel(closeKeybinding))
-			: localize('workbench.closeEditor', 'Close');
+		const closeActionTooltip = closeKeybinding ? localize('workbench.closeEditorWithKeybinding', 'Close ({0})', getKeybindingLabel(closeKeybinding)) : localize('workbench.closeEditor', 'Close');
 		this.titleControl.setEditors(
 			this.entries.map(entry => ({
 				instanceId: entry.instanceId,
@@ -1254,8 +1110,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 		const input = this.activeInput;
 		this.titleControl.setEditorTypes(input ? this.registry.getEditorPanesForInput(input) : [], async id => {
-			if (input && this.inputs.includes(input))
-				await this.openEditor(input, { preferredEditorId: id, pinned: true });
+			if (input && this.inputs.includes(input)) await this.openEditor(input, { preferredEditorId: id, pinned: true });
 		});
 	}
 

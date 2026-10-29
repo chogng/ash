@@ -6,16 +6,9 @@ import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { environment } from '../../../../../../base/common/platform.js';
 import { IClipboardService } from '../../../../../../platform/clipboard/common/clipboardService.js';
-import {
-	ContextKeyService,
-	IContextKeyService,
-} from '../../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
-import {
-	ITerminalService,
-	type ITerminalInstance,
-	type IXtermTerminal,
-} from '../../../../terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalInstance, type IXtermTerminal } from '../../../../terminal/browser/terminal.js';
 import { TerminalExtensionsRegistry } from '../../../../terminal/browser/terminalExtensions.js';
 import { TerminalClipboardContribution } from '../../browser/terminal.clipboard.contribution.js';
 import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -42,8 +35,7 @@ for (const newline of ['\n', '\r\n', '\r']) {
 			confirmations++;
 			item.close({ button: DialogResult.Cancel });
 		});
-		const paste = (text: string, bracketed = false) =>
-			services.invokeFunction(shouldPasteTerminalText, text, bracketed);
+		const paste = (text: string, bracketed = false) => services.invokeFunction(shouldPasteTerminalText, text, bracketed);
 		const single = `echo hello${newline} \t`;
 		const multiple = `echo hello${newline}echo world`;
 		assert.equal(configuration.getValue(TerminalSettingId.EnableMultiLinePasteWarning), 'auto');
@@ -154,10 +146,7 @@ function clipboardFixture() {
 			onSelectionChange: selectionChanged.event,
 			hasSelection: () => !!selection,
 			getSelection: () => selection,
-			getSelectionPosition: () =>
-				selection
-					? { start: { x: selectionX, y: 0 }, end: { x: selectionX + selection.length, y: 0 } }
-					: undefined,
+			getSelectionPosition: () => (selection ? { start: { x: selectionX, y: 0 }, end: { x: selectionX + selection.length, y: 0 } } : undefined),
 			clearSelection: () => {
 				selection = '';
 				selectionChanged.fire();
@@ -189,17 +178,12 @@ function clipboardFixture() {
 			activeChanged.fire(value);
 		},
 	} as unknown as ITerminalService);
-	const registration = TerminalExtensionsRegistry.getTerminalContributions().find(
-		item => item.id === TerminalClipboardContribution.ID,
-	)!;
-	const contribution = store.add(
-		services.createInstance(registration.ctor, { instance }),
-	) as TerminalClipboardContribution;
+	const registration = TerminalExtensionsRegistry.getTerminalContributions().find(item => item.id === TerminalClipboardContribution.ID)!;
+	const contribution = store.add(services.createInstance(registration.ctor, { instance })) as TerminalClipboardContribution;
 	contribution.xtermReady(screen);
 	return {
 		context: new InstanceContext(instance),
-		command: (id: string, context?: unknown) =>
-			services.invokeFunction(CommandsRegistry.getCommands().get(id)!.handler, context),
+		command: (id: string, context?: unknown) => services.invokeFunction(CommandsRegistry.getCommands().get(id)!.handler, context),
 		closeTarget: () => {
 			instances.length = 0;
 		},
@@ -283,9 +267,7 @@ for (const newline of ['\n', '\r\n', '\r']) {
 			completed = true;
 		});
 		await fixture.sendStarted;
-		assert.deepEqual(fixture.sendCalls, [
-			{ text: ' echo first \techo second ', shouldExecute: false, bracketedPaste: true },
-		]);
+		assert.deepEqual(fixture.sendCalls, [{ text: ' echo first \techo second ', shouldExecute: false, bracketedPaste: true }]);
 		assert.equal(completed, false);
 		await acknowledged.complete();
 		await paste;
@@ -339,10 +321,7 @@ for (const transition of ['switch', 'reconnect', 'dispose'] as const) {
 test('terminal auto-copy is configurable, ignores empty selections and reports clipboard failures', async () => {
 	using fixture = clipboardFixture();
 	assert.equal(fixture.configuration.getValue(TerminalSettingId.CopyOnSelection), false);
-	assert.equal(
-		fixture.configuration.getValue(TerminalSettingId.RightClickBehavior),
-		environment.os === 'mac' ? 'selectWord' : environment.os === 'windows' ? 'copyPaste' : 'default',
-	);
+	assert.equal(fixture.configuration.getValue(TerminalSettingId.RightClickBehavior), environment.os === 'mac' ? 'selectWord' : environment.os === 'windows' ? 'copyPaste' : 'default');
 	fixture.select('disabled');
 	assert.deepEqual(fixture.copied, []);
 	await fixture.configuration.updateValue(TerminalSettingId.CopyOnSelection, true);
@@ -380,10 +359,7 @@ test('terminal right click copies and clears only after its clipboard write succ
 	fixture.write(async () => {
 		throw new Error('Write denied');
 	});
-	await assert.rejects(
-		fixture.contribution.handleMouseEvent({ button: 2, shiftKey: false } as MouseEvent),
-		/Write denied/,
-	);
+	await assert.rejects(fixture.contribution.handleMouseEvent({ button: 2, shiftKey: false } as MouseEvent), /Write denied/);
 	assert.equal(fixture.selection(), 'new selection');
 	fixture.write(async () => {});
 	await fixture.contribution.handleMouseEvent({ button: 2, shiftKey: false } as MouseEvent);
@@ -413,10 +389,7 @@ test('terminal mouse policy preserves Shift and keyboard menus and updates word 
 	for (const behavior of ['default', 'copyPaste', 'paste', 'selectWord', 'nothing']) {
 		await fixture.configuration.updateValue(TerminalSettingId.RightClickBehavior, behavior);
 		assert.equal(fixture.screen.raw.options.rightClickSelectsWord, behavior === 'selectWord');
-		assert.equal(
-			fixture.mouse('contextmenu').defaultPrevented,
-			['copyPaste', 'paste', 'nothing'].includes(behavior),
-		);
+		assert.equal(fixture.mouse('contextmenu').defaultPrevented, ['copyPaste', 'paste', 'nothing'].includes(behavior));
 		assert.equal(fixture.mouse('contextmenu', true).defaultPrevented, false);
 		assert.equal(fixture.mouse('mousedown', true).defaultPrevented, false);
 	}

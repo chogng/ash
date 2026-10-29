@@ -36,10 +36,7 @@ export class PanelPart extends PaneCompositePart {
 		super(
 			container,
 			{
-				openComposite: (id, preserveFocus) =>
-					instantiationService.invokeFunction(accessor =>
-						accessor.get(IViewsService).openViewContainer(id, !preserveFocus),
-					),
+				openComposite: (id, preserveFocus) => instantiationService.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
 				viewDescriptorService,
 				contextKeyService,
 				localizationService,

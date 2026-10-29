@@ -33,13 +33,9 @@ export type DesignEffect = { readonly id: string; readonly visible?: boolean } &
 
 /** The object form is retained for files created before effect stacks were introduced. */
 
-export type DesignEffects =
-	readonly DesignEffect[] | { readonly x: number; readonly y: number; readonly blur: number; readonly color: string };
+export type DesignEffects = readonly DesignEffect[] | { readonly x: number; readonly y: number; readonly blur: number; readonly color: string };
 
-export function designEffects(shape: {
-	readonly id: string;
-	readonly effects?: DesignEffects;
-}): readonly DesignEffect[] {
+export function designEffects(shape: { readonly id: string; readonly effects?: DesignEffects }): readonly DesignEffect[] {
 	const effects = shape.effects;
 	if (!effects) {
 		return [];
@@ -52,16 +48,11 @@ export function designEffects(shape: {
 
 export function createDesignEffect(type: DesignEffect['type']): DesignEffect {
 	const id = generateUuid();
-	return type === 'drop-shadow' || type === 'inner-shadow'
-		? { id, type, x: 0, y: 4, blur: 4, spread: 0, color: '#00000040' }
-		: { id, type, blur: 4 };
+	return type === 'drop-shadow' || type === 'inner-shadow' ? { id, type, x: 0, y: 4, blur: 4, spread: 0, color: '#00000040' } : { id, type, blur: 4 };
 }
 
 export function canAddDesignEffect(effects: readonly DesignEffect[], type: DesignEffect['type']): boolean {
-	return (
-		effects.filter(effect => effect.type === type).length <
-		(type === 'drop-shadow' || type === 'inner-shadow' ? 8 : 1)
-	);
+	return effects.filter(effect => effect.type === type).length < (type === 'drop-shadow' || type === 'inner-shadow' ? 8 : 1);
 }
 
 export function designEffectMaxBlur(effect: DesignEffect): number {
@@ -107,16 +98,12 @@ export function designEffectPadding(shape: DesignShape): number {
 			children *= Math.max(shape.width / shape.contentWidth, shape.height / shape.contentHeight);
 		}
 	}
-	return (
-		(shadow + blur * 2 + children) *
-		(Math.abs(Math.cos((shape.rotation * Math.PI) / 180)) + Math.abs(Math.sin((shape.rotation * Math.PI) / 180)))
-	);
+	return (shadow + blur * 2 + children) * (Math.abs(Math.cos((shape.rotation * Math.PI) / 180)) + Math.abs(Math.sin((shape.rotation * Math.PI) / 180)));
 }
 
 export function parseDesignEffects(value: unknown): DesignEffects {
 	const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
-	const color = (value: unknown): boolean =>
-		typeof value === 'string' && /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(value);
+	const color = (value: unknown): boolean => typeof value === 'string' && /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(value);
 	const fail = (): never => {
 		throw new TypeError(localize('sessions.design.invalidEffects', 'Invalid design effect, shadow, or blur.'));
 	};
@@ -149,15 +136,7 @@ export function parseDesignEffects(value: unknown): DesignEffects {
 			return fail();
 		}
 		const shadow = entry.type === 'drop-shadow' || entry.type === 'inner-shadow';
-		const allowed = [
-			'id',
-			'type',
-			'blur',
-			'visible',
-			...(shadow
-				? ['x', 'y', 'color', 'spread', 'blendMode', ...(entry.type === 'drop-shadow' ? ['showBehind'] : [])]
-				: ['progressive']),
-		];
+		const allowed = ['id', 'type', 'blur', 'visible', ...(shadow ? ['x', 'y', 'color', 'spread', 'blendMode', ...(entry.type === 'drop-shadow' ? ['showBehind'] : [])] : ['progressive'])];
 		if (Object.keys(entry).some(key => !allowed.includes(key))) {
 			return fail();
 		}
@@ -174,11 +153,7 @@ export function parseDesignEffects(value: unknown): DesignEffects {
 		}
 		if (!shadow && entry.progressive !== undefined) {
 			const progressive = entry.progressive;
-			const point = (value: unknown): boolean =>
-				isRecord(value) &&
-				Object.keys(value).every(key => key === 'x' || key === 'y') &&
-				finite(value.x) &&
-				finite(value.y);
+			const point = (value: unknown): boolean => isRecord(value) && Object.keys(value).every(key => key === 'x' || key === 'y') && finite(value.x) && finite(value.y);
 			if (
 				!isRecord(progressive) ||
 				Object.keys(progressive).some(key => !['startBlur', 'start', 'end'].includes(key)) ||

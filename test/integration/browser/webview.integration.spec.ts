@@ -11,19 +11,13 @@ test('queues messages until content is ready and preserves the page for identica
 	await frame.getByRole('textbox', { name: 'First input' }).fill('keep this state');
 	await page.evaluate(() => window.ashWebviewIntegration.sameHtml());
 	await expect(frame.getByRole('textbox', { name: 'First input' })).toHaveValue('keep this state');
-	await expect
-		.poll(() => page.evaluate(() => window.ashWebviewIntegration.received))
-		.toEqual([{ view: 'first', message: 'before mount' }]);
+	await expect.poll(() => page.evaluate(() => window.ashWebviewIntegration.received)).toEqual([{ view: 'first', message: 'before mount' }]);
 });
 
 test('replacement cancels queued old messages and sends to the new document', async ({ page }) => {
-	await expect(page.frameLocator('iframe[title="First view"]').frameLocator('iframe').locator('output')).toHaveText(
-		'before mount',
-	);
+	await expect(page.frameLocator('iframe[title="First view"]').frameLocator('iframe').locator('output')).toHaveText('before mount');
 	expect(await page.evaluate(() => window.ashWebviewIntegration.replace())).toEqual([false, true]);
-	await expect(page.frameLocator('iframe[title="First view"]').frameLocator('iframe').locator('output')).toHaveText(
-		'replacement',
-	);
+	await expect(page.frameLocator('iframe[title="First view"]').frameLocator('iframe').locator('output')).toHaveText('replacement');
 	await expect
 		.poll(() => page.evaluate(() => window.ashWebviewIntegration.received))
 		.toEqual([
@@ -33,10 +27,7 @@ test('replacement cancels queued old messages and sends to the new document', as
 });
 
 test('tracks real iframe focus, forwards keyboard input and removes disposed instances', async ({ page }) => {
-	const firstInput = page
-		.frameLocator('iframe[title="First view"]')
-		.frameLocator('iframe')
-		.getByRole('textbox', { name: 'First input' });
+	const firstInput = page.frameLocator('iframe[title="First view"]').frameLocator('iframe').getByRole('textbox', { name: 'First input' });
 	await expect(firstInput).toBeVisible();
 	await page.locator('iframe[title="First view"]').focus();
 	await page.keyboard.press('F1');
@@ -45,11 +36,7 @@ test('tracks real iframe focus, forwards keyboard input and removes disposed ins
 	await expect.poll(() => page.evaluate(() => window.ashWebviewIntegration.active)).toBe('first');
 	await firstInput.press('F1');
 	await expect.poll(() => page.evaluate(() => window.ashWebviewIntegration.keyboard)).toContain('F1');
-	await page
-		.frameLocator('iframe[title="Second view"]')
-		.frameLocator('iframe')
-		.getByRole('textbox', { name: 'Second input' })
-		.click();
+	await page.frameLocator('iframe[title="Second view"]').frameLocator('iframe').getByRole('textbox', { name: 'Second input' }).click();
 	await expect.poll(() => page.evaluate(() => window.ashWebviewIntegration.active)).toBe('second');
 	await page.getByRole('textbox', { name: 'Workbench input' }).click();
 	await expect.poll(() => page.evaluate(() => window.ashWebviewIntegration.active)).toBeUndefined();
@@ -69,9 +56,7 @@ test('tracks real iframe focus, forwards keyboard input and removes disposed ins
 
 test('keeps keyboard focus requested before the document is ready', async ({ page }) => {
 	await page.evaluate(() => window.ashWebviewIntegration.mountFocused());
-	await expect(page.frameLocator('iframe[title="Loading view"]').frameLocator('iframe').locator('output')).toHaveText(
-		'Focused document',
-	);
+	await expect(page.frameLocator('iframe[title="Loading view"]').frameLocator('iframe').locator('output')).toHaveText('Focused document');
 	await expect
 		.poll(() =>
 			page
@@ -85,22 +70,14 @@ test('keeps keyboard focus requested before the document is ready', async ({ pag
 	await expect.poll(() => page.evaluate(() => window.ashWebviewIntegration.keyboard)).toEqual(['F1', 'F1']);
 });
 
-test('loads workspace images, CSS siblings, fonts and module imports while enforcing roots and script permissions', async ({
-	page,
-}) => {
+test('loads workspace images, CSS siblings, fonts and module imports while enforcing roots and script permissions', async ({ page }) => {
 	await page.evaluate(() => window.ashWebviewIntegration.mountResources());
 	const content = page.frameLocator('iframe[title="Resource view"]').frameLocator('iframe');
 	await expect(content.locator('body')).toHaveAttribute('data-answer', '42');
 	await expect(content.locator('body')).toHaveAttribute('data-isolated', 'true');
 	await expect(content.locator('body')).toHaveAttribute('data-inline', 'executed');
 	await expect(content.locator('body')).toHaveCSS('color', 'rgb(1, 2, 3)');
-	await expect
-		.poll(() =>
-			content
-				.getByRole('img', { name: 'Workspace image', exact: true })
-				.evaluate((image: HTMLImageElement) => image.naturalWidth),
-		)
-		.toBe(12);
+	await expect.poll(() => content.getByRole('img', { name: 'Workspace image', exact: true }).evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(12);
 	await expect
 		.poll(() =>
 			content.locator('body').evaluate(async () => {
@@ -109,24 +86,10 @@ test('loads workspace images, CSS siblings, fonts and module imports while enfor
 			}),
 		)
 		.toBe(true);
-	expect(
-		await content
-			.getByRole('img', { name: 'Denied image', exact: true })
-			.evaluate((image: HTMLImageElement) => image.naturalWidth),
-	).toBe(0);
+	expect(await content.getByRole('img', { name: 'Denied image', exact: true }).evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(0);
 	const disabled = page.frameLocator('iframe[title="Scripts disabled"]').frameLocator('iframe');
-	await expect
-		.poll(() =>
-			disabled
-				.getByRole('img', { name: 'Workspace image', exact: true })
-				.evaluate((image: HTMLImageElement) => image.naturalWidth),
-		)
-		.toBe(12);
-	expect(
-		await disabled
-			.locator('body')
-			.evaluate(body => ({ inline: body.getAttribute('data-inline'), module: body.getAttribute('data-answer') })),
-	).toEqual({ inline: null, module: null });
+	await expect.poll(() => disabled.getByRole('img', { name: 'Workspace image', exact: true }).evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(12);
+	expect(await disabled.locator('body').evaluate(body => ({ inline: body.getAttribute('data-inline'), module: body.getAttribute('data-answer') }))).toEqual({ inline: null, module: null });
 	const reads = await page.evaluate(() => window.ashWebviewIntegration.resourceReads);
 	expect(reads).toEqual(
 		expect.arrayContaining([

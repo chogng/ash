@@ -12,17 +12,7 @@ import {
 	type ObjectTreeSelectionChangeEvent,
 } from './objectTree.js';
 import type { ObjectTreeElement, ObjectTreeIdentityProvider, ObjectTreeNode } from './objectTreeModel.js';
-import type {
-	TreeDataSource,
-	TreeDragAndDrop,
-	TreeFilter,
-	TreeFindMatchType,
-	TreeFindMode,
-	TreeIndentGuides,
-	TreeKeyboardNavigationLabelProvider,
-	TreeSorter,
-	TreeTwistieState,
-} from './tree.js';
+import type { TreeDataSource, TreeDragAndDrop, TreeFilter, TreeFindMatchType, TreeFindMode, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreeSorter, TreeTwistieState } from './tree.js';
 
 export interface DataTreeOptions<T> {
 	readonly styles?: IListStyles;

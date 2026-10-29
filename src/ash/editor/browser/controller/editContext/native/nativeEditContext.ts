@@ -113,7 +113,11 @@ export class NativeEditContext extends AbstractEditContext {
 			throw new Error('The native EditContext API is unavailable');
 		}
 		const element = h(ownerDocument, 'div');
-		const nativeContext = EditContext.create(ownerWindow, { text: '', selectionStart: 0, selectionEnd: 0 });
+		const nativeContext = EditContext.create(ownerWindow, {
+			text: '',
+			selectionStart: 0,
+			selectionEnd: 0,
+		});
 		if (
 			typeof nativeContext.updateText !== 'function' ||
 			typeof nativeContext.updateSelection !== 'function' ||
@@ -151,9 +155,7 @@ export class NativeEditContext extends AbstractEditContext {
 		this.setEditContextOnDomNode();
 		this._register(NativeEditContextRegistry.register(options.ownerId, this));
 		container.append(imeTextArea);
-		this.focusTracker = this._register(
-			new FocusTracker(options.logService, element, focused => this.handleElementFocusChange(focused)),
-		);
+		this.focusTracker = this._register(new FocusTracker(options.logService, element, focused => this.handleElementFocusChange(focused)));
 		this.initializeController(options);
 		this.screenReaderSupport = this._register(
 			new ScreenReaderSupport({
@@ -185,7 +187,10 @@ export class NativeEditContext extends AbstractEditContext {
 
 	/** The model range currently represented by the browser's native buffer. */
 	get textWindow(): { readonly startOffset: number; readonly endOffset: number } {
-		return Object.freeze({ startOffset: this.shadowOffset, endOffset: this.shadowOffset + this.shadowText.length });
+		return Object.freeze({
+			startOffset: this.shadowOffset,
+			endOffset: this.shadowOffset + this.shadowText.length,
+		});
 	}
 
 	/** Installs DOM and native-context listeners after semantic consumers subscribe. */
@@ -193,26 +198,10 @@ export class NativeEditContext extends AbstractEditContext {
 		this.assertNotDisposed();
 		if (this.connected) return;
 		this.connected = true;
-		this._register(
-			addDisposableListener<KeyboardEvent>(this.domNode.domNode, 'keydown', event =>
-				this.keydownEmitter.fire(new StandardKeyboardEvent(event)),
-			),
-		);
-		this._register(
-			addDisposableListener<KeyboardEvent>(this.domNode.domNode, 'keyup', event =>
-				this.keyupEmitter.fire(new StandardKeyboardEvent(event)),
-			),
-		);
-		this._register(
-			addDisposableListener<KeyboardEvent>(this.imeTextArea, 'keydown', event =>
-				this.keydownEmitter.fire(new StandardKeyboardEvent(event)),
-			),
-		);
-		this._register(
-			addDisposableListener<KeyboardEvent>(this.imeTextArea, 'keyup', event =>
-				this.keyupEmitter.fire(new StandardKeyboardEvent(event)),
-			),
-		);
+		this._register(addDisposableListener<KeyboardEvent>(this.domNode.domNode, 'keydown', event => this.keydownEmitter.fire(new StandardKeyboardEvent(event))));
+		this._register(addDisposableListener<KeyboardEvent>(this.domNode.domNode, 'keyup', event => this.keyupEmitter.fire(new StandardKeyboardEvent(event))));
+		this._register(addDisposableListener<KeyboardEvent>(this.imeTextArea, 'keydown', event => this.keydownEmitter.fire(new StandardKeyboardEvent(event))));
+		this._register(addDisposableListener<KeyboardEvent>(this.imeTextArea, 'keyup', event => this.keyupEmitter.fire(new StandardKeyboardEvent(event))));
 		this._register(
 			addDisposableListener(this.imeTextArea, 'blur', () => {
 				if (this.imeFallbackFocused && this.imeTextArea.ownerDocument.activeElement !== this.domNode.domNode) {
@@ -231,12 +220,7 @@ export class NativeEditContext extends AbstractEditContext {
 					this.restoreNativeState();
 					return;
 				}
-				if (
-					event.inputType === 'historyUndo' ||
-					event.inputType === 'historyRedo' ||
-					event.inputType === 'insertLineBreak' ||
-					event.inputType === 'insertParagraph'
-				) {
+				if (event.inputType === 'historyUndo' || event.inputType === 'historyRedo' || event.inputType === 'insertLineBreak' || event.inputType === 'insertParagraph') {
 					if (event.inputType === 'insertLineBreak' || event.inputType === 'insertParagraph') {
 						this.pendingLineBreakTextUpdate = true;
 					}
@@ -250,9 +234,7 @@ export class NativeEditContext extends AbstractEditContext {
 				}
 			}),
 		);
-		this._register(
-			addDisposableListener<InputEvent>(this.domNode.domNode, 'input', event => this.inputEmitter.fire(event)),
-		);
+		this._register(addDisposableListener<InputEvent>(this.domNode.domNode, 'input', event => this.inputEmitter.fire(event)));
 		this._register(
 			addDisposableListener<ClipboardEvent>(this.domNode.domNode, 'copy', event => {
 				if (!this.isFocused()) {
@@ -303,41 +285,24 @@ export class NativeEditContext extends AbstractEditContext {
 				const metadata = pasteEvent.metadata;
 				this.viewController.paste(
 					pasteEvent.text,
-					this._context.configuration.options.get(EditorOption.emptySelectionClipboard) &&
-						!!metadata?.isFromEmptySelection,
+					this._context.configuration.options.get(EditorOption.emptySelectionClipboard) && !!metadata?.isFromEmptySelection,
 					metadata?.multicursorText ?? null,
 					metadata?.mode ?? null,
 				);
 			}),
 		);
-		this._register(
-			editContextAddDisposableListener(this.nativeContext, 'textupdate', event => this.handleTextUpdate(event)),
-		);
-		this._register(
-			editContextAddDisposableListener(this.nativeContext, 'textformatupdate', event =>
-				this.handleTextFormatUpdate(event),
-			),
-		);
-		this._register(
-			editContextAddDisposableListener(this.nativeContext, 'characterboundsupdate', event =>
-				this.handleCharacterBoundsUpdate(event),
-			),
-		);
-		this._register(
-			editContextAddDisposableListener(this.nativeContext, 'compositionstart', event =>
-				this.handleCompositionStart(event as CompositionEvent),
-			),
-		);
-		this._register(
-			editContextAddDisposableListener(this.nativeContext, 'compositionend', event =>
-				this.handleCompositionEnd(event as CompositionEvent),
-			),
-		);
+		this._register(editContextAddDisposableListener(this.nativeContext, 'textupdate', event => this.handleTextUpdate(event)));
+		this._register(editContextAddDisposableListener(this.nativeContext, 'textformatupdate', event => this.handleTextFormatUpdate(event)));
+		this._register(editContextAddDisposableListener(this.nativeContext, 'characterboundsupdate', event => this.handleCharacterBoundsUpdate(event)));
+		this._register(editContextAddDisposableListener(this.nativeContext, 'compositionstart', event => this.handleCompositionStart(event as CompositionEvent)));
+		this._register(editContextAddDisposableListener(this.nativeContext, 'compositionend', event => this.handleCompositionEnd(event as CompositionEvent)));
 		this._register(
 			editContextAddDisposableListener(this.nativeContext, 'compositionupdate', event => {
 				if (!this.composing) return;
 				const compositionEvent = event as CompositionEvent;
-				this.compositionUpdateEmitter.fire({ data: normalizeTextLineEndings(compositionEvent.data ?? '') });
+				this.compositionUpdateEmitter.fire({
+					data: normalizeTextLineEndings(compositionEvent.data ?? ''),
+				});
 			}),
 		);
 	}
@@ -380,10 +345,7 @@ export class NativeEditContext extends AbstractEditContext {
 
 	public handleWillCopy(): void {
 		this.logService.trace('NativeEditContext#handleWillCopy');
-		this.logService.trace(
-			'NativeEditContext#isFocused : ',
-			this.domNode.domNode === getActiveElement(this.domNode.domNode.ownerDocument),
-		);
+		this.logService.trace('NativeEditContext#isFocused : ', this.domNode.domNode === getActiveElement(this.domNode.domNode.ownerDocument));
 	}
 
 	getLastRenderData(): Position | null {
@@ -411,11 +373,7 @@ export class NativeEditContext extends AbstractEditContext {
 			this.domNode.domNode.tabIndex = this._context.configuration.options.get(EditorOption.tabIndex);
 		}
 		this.screenReaderSupport.onConfigurationChanged(event);
-		return (
-			event.hasChanged(EditorOption.readOnly) ||
-			event.hasChanged(EditorOption.ariaLabel) ||
-			event.hasChanged(EditorOption.tabIndex)
-		);
+		return event.hasChanged(EditorOption.readOnly) || event.hasChanged(EditorOption.ariaLabel) || event.hasChanged(EditorOption.tabIndex);
 	}
 
 	public override onCursorStateChanged(event: viewEvents.ViewCursorStateChangedEvent): boolean {
@@ -537,10 +495,7 @@ export class NativeEditContext extends AbstractEditContext {
 		this.pendingHighSurrogate = undefined;
 		const nativeText = typeof this.nativeContext.text === 'string' ? this.nativeContext.text : previousText;
 		if (nativeText !== nextText) this.nativeContext.updateText(0, nativeText.length, nextText);
-		if (
-			this.nativeContext.selectionStart !== nextSelectionStart ||
-			this.nativeContext.selectionEnd !== nextSelectionEnd
-		) {
+		if (this.nativeContext.selectionStart !== nextSelectionStart || this.nativeContext.selectionEnd !== nextSelectionEnd) {
 			this.nativeContext.updateSelection(nextSelectionStart, nextSelectionEnd);
 		}
 	}
@@ -620,11 +575,7 @@ export class NativeEditContext extends AbstractEditContext {
 		const previousText = this.shadowText;
 		const previousSelectionStart = this.shadowSelectionStart;
 		const previousSelectionEnd = this.shadowSelectionEnd;
-		if (
-			!isValidOffset(event.updateRangeStart, previousText.length) ||
-			!isValidOffset(event.updateRangeEnd, previousText.length)
-		)
-			return;
+		if (!isValidOffset(event.updateRangeStart, previousText.length) || !isValidOffset(event.updateRangeEnd, previousText.length)) return;
 		const updateRangeStart = event.updateRangeStart;
 		const updateRangeEnd = event.updateRangeEnd;
 		if (updateRangeEnd < updateRangeStart) return;
@@ -635,14 +586,8 @@ export class NativeEditContext extends AbstractEditContext {
 			return;
 		}
 		const nextText = previousText.slice(0, updateRangeStart) + text + previousText.slice(updateRangeEnd);
-		const selectionStart = clampOffset(
-			isFiniteOffset(event.selectionStart) ? event.selectionStart : updateRangeStart + text.length,
-			nextText.length,
-		);
-		const selectionEnd = clampOffset(
-			isFiniteOffset(event.selectionEnd) ? event.selectionEnd : selectionStart,
-			nextText.length,
-		);
+		const selectionStart = clampOffset(isFiniteOffset(event.selectionStart) ? event.selectionStart : updateRangeStart + text.length, nextText.length);
+		const selectionEnd = clampOffset(isFiniteOffset(event.selectionEnd) ? event.selectionEnd : selectionStart, nextText.length);
 		if (this.readOnlyState) {
 			this.restoreNativeState();
 			return;
@@ -664,13 +609,7 @@ export class NativeEditContext extends AbstractEditContext {
 			selectionEnd: absoluteSelectionEnd,
 			previousSelectionStart: absolutePreviousSelectionStart,
 			previousSelectionEnd: absolutePreviousSelectionEnd,
-			inputType: inferInputType(
-				text,
-				absoluteUpdateRangeStart,
-				absoluteUpdateRangeEnd,
-				absolutePreviousSelectionStart,
-				absolutePreviousSelectionEnd,
-			),
+			inputType: inferInputType(text, absoluteUpdateRangeStart, absoluteUpdateRangeEnd, absolutePreviousSelectionStart, absolutePreviousSelectionEnd),
 		});
 		if (this.composing) {
 			this.compositionEndOffset = Math.max(this.compositionStartOffset, updateRangeStart + text.length);
@@ -718,33 +657,29 @@ export class NativeEditContext extends AbstractEditContext {
 		if (!formats) return;
 		const normalized: EditContextTextFormat[] = [];
 		for (const format of formats) {
-			if (
-				!isValidOffset(format.rangeStart, this.shadowText.length) ||
-				!isValidOffset(format.rangeEnd, this.shadowText.length) ||
-				format.rangeEnd < format.rangeStart
-			) {
+			if (!isValidOffset(format.rangeStart, this.shadowText.length) || !isValidOffset(format.rangeEnd, this.shadowText.length) || format.rangeEnd < format.rangeStart) {
 				continue;
 			}
 			normalized.push(
 				Object.freeze({
 					rangeStart: this.shadowOffset + format.rangeStart,
 					rangeEnd: this.shadowOffset + format.rangeEnd,
-					underlineThickness:
-						typeof format.underlineThickness === 'string' ? format.underlineThickness : 'none',
+					underlineThickness: typeof format.underlineThickness === 'string' ? format.underlineThickness : 'none',
 				}),
 			);
 		}
-		this.textFormatUpdateEmitter.fire(Object.freeze({ formats: Object.freeze(normalized), browserEvent: event }));
+		this.textFormatUpdateEmitter.fire(
+			Object.freeze({
+				formats: Object.freeze(normalized),
+				browserEvent: event,
+			}),
+		);
 	}
 
 	private handleCharacterBoundsUpdate(event: CharacterBoundsUpdateEvent): void {
 		const updateStart = event.rangeStart;
 		const updateEnd = event.rangeEnd;
-		if (
-			!isValidOffset(updateStart, this.shadowText.length) ||
-			!isValidOffset(updateEnd, this.shadowText.length) ||
-			updateEnd < updateStart
-		) {
+		if (!isValidOffset(updateStart, this.shadowText.length) || !isValidOffset(updateEnd, this.shadowText.length) || updateEnd < updateStart) {
 			return;
 		}
 		if (updateEnd - updateStart > MAX_CHARACTER_BOUNDS_REQUEST_LENGTH) return;
@@ -766,10 +701,7 @@ export class NativeEditContext extends AbstractEditContext {
 		if (nativeText !== this.shadowText) {
 			this.nativeContext.updateText(0, nativeText.length, this.shadowText);
 		}
-		if (
-			this.nativeContext.selectionStart !== this.shadowSelectionStart ||
-			this.nativeContext.selectionEnd !== this.shadowSelectionEnd
-		) {
+		if (this.nativeContext.selectionStart !== this.shadowSelectionStart || this.nativeContext.selectionEnd !== this.shadowSelectionEnd) {
 			this.nativeContext.updateSelection(this.shadowSelectionStart, this.shadowSelectionEnd);
 		}
 	}
@@ -803,22 +735,11 @@ export class NativeEditContext extends AbstractEditContext {
 		const parentBounds = this.parentBounds ?? this.container.getBoundingClientRect();
 		const scrollLeft = hasPreparedBounds ? this.parentScrollLeft : this.container.scrollLeft;
 		const scrollTop = hasPreparedBounds ? this.parentScrollTop : this.container.scrollTop;
-		return new Rect(
-			parentBounds.left + position.left - scrollLeft,
-			parentBounds.top + position.top - scrollTop,
-			Math.max(1, width),
-			Math.max(1, position.height),
-		);
+		return new Rect(parentBounds.left + position.left - scrollLeft, parentBounds.top + position.top - scrollTop, Math.max(1, width), Math.max(1, position.height));
 	}
 }
 
-function inferInputType(
-	text: string,
-	updateRangeStart: number,
-	updateRangeEnd: number,
-	previousSelectionStart: number,
-	previousSelectionEnd: number,
-): string | undefined {
+function inferInputType(text: string, updateRangeStart: number, updateRangeEnd: number, previousSelectionStart: number, previousSelectionEnd: number): string | undefined {
 	if (text.length > 0) {
 		if (text === '\n') return 'insertLineBreak';
 		return updateRangeStart === updateRangeEnd ? 'insertText' : 'insertReplacementText';
@@ -831,11 +752,5 @@ function inferInputType(
 }
 
 function isEditingInputType(inputType: string): boolean {
-	return (
-		typeof inputType === 'string' &&
-		(inputType.startsWith('insert') ||
-			inputType.startsWith('delete') ||
-			inputType === 'historyUndo' ||
-			inputType === 'historyRedo')
-	);
+	return typeof inputType === 'string' && (inputType.startsWith('insert') || inputType.startsWith('delete') || inputType === 'historyUndo' || inputType === 'historyRedo');
 }

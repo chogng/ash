@@ -35,15 +35,8 @@ import {
 import { IResourceIconRenderer } from '../../../../../browser/labels.js';
 import { noFileIconTheme } from '../../../../../../platform/theme/common/themeService.js';
 import { BrowserContextViewService } from '../../../../../../platform/contextview/browser/contextViewService.js';
-import {
-	IContextMenuService,
-	IContextViewService,
-	type IContextMenuMenuDelegate,
-} from '../../../../../../platform/contextview/browser/contextView.js';
-import {
-	ContextKeyService,
-	IContextKeyService,
-} from '../../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextMenuService, IContextViewService, type IContextMenuMenuDelegate } from '../../../../../../platform/contextview/browser/contextView.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { ILabelService } from '../../../../../../platform/label/common/label.js';
 import { MenuService } from '../../../../../../platform/actions/common/menuService.js';
 import { MenuId } from '../../../../../../platform/actions/common/actions.js';
@@ -72,10 +65,7 @@ suite('Registered Chat reference attachments', () => {
 		},
 	};
 
-	function fixture(
-		resources: DisposableStore,
-		openConversation: IChatSessionNavigationService['openConversation'] = async () => {},
-	) {
+	function fixture(resources: DisposableStore, openConversation: IChatSessionNavigationService['openConversation'] = async () => {}) {
 		const services = resources.add(new InstantiationService());
 		const errors: unknown[] = [];
 		services.registerInstance(IChatSessionNavigationService, { openConversation } as IChatSessionNavigationService);
@@ -136,12 +126,7 @@ suite('Registered Chat reference attachments', () => {
 		} as unknown as ICommandService);
 		ResourceSchemeContext.bindTo(contextKeys).set('https');
 		const resource = URI.parse('file:///workspace/captured.ts#4,2-5,8');
-		using widget = services.createInstance(
-			FileAttachmentWidget,
-			{ ...attachment, kind: 'file', resource },
-			{ supportsDeletion: false, shouldFocusClearButton: false },
-			container,
-		);
+		using widget = services.createInstance(FileAttachmentWidget, { ...attachment, kind: 'file', resource }, { supportsDeletion: false, shouldFocusClearButton: false }, container);
 		let opened = 0;
 		resources.add(
 			widget.onDidOpen(() => {
@@ -164,9 +149,7 @@ suite('Registered Chat reference attachments', () => {
 		assert.deepEqual(JSON.parse(transfer.get('CodeFiles')!), ['/workspace/captured.ts']);
 		assert.equal(dataTransfer.effectAllowed, 'copyLink');
 		assert.ok(![...transfer.values()].some(value => value.includes('Earlier design')));
-		source.dispatchEvent(
-			new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }),
-		);
+		source.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }));
 		assert.equal(menus.length, 1);
 		const menu = menus[0]!;
 		assert.equal(menu.menuId, MenuId.ChatInputResourceAttachmentContext);
@@ -196,12 +179,7 @@ suite('Registered Chat reference attachments', () => {
 	test('file actions own native deletion and opening without acquiring or changing the saved snapshot', () => {
 		using resources = new DisposableStore();
 		const { services, container } = specializedFixture(resources);
-		using widget = services.createInstance(
-			FileAttachmentWidget,
-			{ ...attachment, kind: 'file', name: 'saved.ts' },
-			{ supportsDeletion: true, shouldFocusClearButton: true },
-			container,
-		);
+		using widget = services.createInstance(FileAttachmentWidget, { ...attachment, kind: 'file', name: 'saved.ts' }, { supportsDeletion: true, shouldFocusClearButton: true }, container);
 		const buttons = widget.element.querySelectorAll<HTMLButtonElement>('button');
 		assert.equal(document.activeElement, buttons[1]);
 		let opened = 0;
@@ -220,12 +198,7 @@ suite('Registered Chat reference attachments', () => {
 		buttons[1]!.click();
 		buttons[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }));
 		assert.deepEqual({ opened, removed }, { opened: 1, removed: 2 });
-		using readonly = services.createInstance(
-			FileAttachmentWidget,
-			{ ...attachment, kind: 'file' },
-			{ supportsDeletion: false, shouldFocusClearButton: false },
-			container,
-		);
+		using readonly = services.createInstance(FileAttachmentWidget, { ...attachment, kind: 'file' }, { supportsDeletion: false, shouldFocusClearButton: false }, container);
 		assert.equal(readonly.element.querySelectorAll('button').length, 1);
 	});
 
@@ -243,9 +216,7 @@ suite('Registered Chat reference attachments', () => {
 					assert.fail('Resource gestures must not activate the source');
 				},
 			} as unknown as IOpenerService);
-			const resource = URI.parse(
-				kind === 'directory' ? 'file:///workspace/folder' : 'file:///workspace/source.ts#3,2-4,5',
-			);
+			const resource = URI.parse(kind === 'directory' ? 'file:///workspace/folder' : 'file:///workspace/source.ts#3,2-4,5');
 			using widget = services.createInstance<IChatAttachmentWidgetInstance>(
 				type,
 				{
@@ -281,10 +252,7 @@ suite('Registered Chat reference attachments', () => {
 			}
 			source.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
 			assert.equal(menus.length, 1);
-			assert.equal(
-				menus[0]!.menuId,
-				kind === 'symbol' ? MenuId.ChatInputSymbolAttachmentContext : MenuId.ChatInputResourceAttachmentContext,
-			);
+			assert.equal(menus[0]!.menuId, kind === 'symbol' ? MenuId.ChatInputSymbolAttachmentContext : MenuId.ChatInputResourceAttachmentContext);
 			const actions = services
 				.createInstance(MenuService)
 				.getMenuActions(menus[0]!.menuId!, menus[0]!.menuActionOptions, menus[0]!.contextKeyService)
@@ -330,12 +298,7 @@ suite('Registered Chat reference attachments', () => {
 		using resources = new DisposableStore();
 		const { services, container } = specializedFixture(resources);
 		const pending = new DeferredPromise<{ name: string; content: string }>();
-		using widget = services.createInstance(
-			ImageAttachmentWidget,
-			{ ...attachment, kind: 'image', resolve: () => pending.p },
-			{ supportsDeletion: true, shouldFocusClearButton: false },
-			container,
-		);
+		using widget = services.createInstance(ImageAttachmentWidget, { ...attachment, kind: 'image', resolve: () => pending.p }, { supportsDeletion: true, shouldFocusClearButton: false }, container);
 		const buttons = widget.element.querySelectorAll<HTMLButtonElement>('button');
 		const thumbnail = widget.element.querySelector('img')!;
 		assert.equal(buttons[0]!.disabled, true);
@@ -425,10 +388,7 @@ suite('Registered Chat reference attachments', () => {
 						if (failure === 'resolve') throw new Error('Snapshot unavailable');
 						return {
 							name: 'saved.png',
-							content:
-								failure === 'format'
-									? 'https://example.invalid/image.png'
-									: 'data:image/png;base64,Y2FwdHVyZWQ=',
+							content: failure === 'format' ? 'https://example.invalid/image.png' : 'data:image/png;base64,Y2FwdHVyZWQ=',
 						};
 					},
 				},
@@ -491,27 +451,19 @@ suite('Registered Chat reference attachments', () => {
 		assert.deepEqual(errors, []);
 	});
 
-	for (const type of [
-		FileAttachmentWidget,
-		DefaultChatAttachmentWidget,
-		ElementChatAttachmentWidget,
-		SCMHistoryItemAttachmentWidget,
-		SCMHistoryItemChangeAttachmentWidget,
-	])
+	for (const type of [FileAttachmentWidget, DefaultChatAttachmentWidget, ElementChatAttachmentWidget, SCMHistoryItemAttachmentWidget, SCMHistoryItemChangeAttachmentWidget])
 		test(`${type.name} owns safe captured hover replacement and disposal`, () => {
 			using resources = new DisposableStore();
 			const { services, container } = specializedFixture(resources);
 			services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
-			using widget = services.createInstance<
-				IChatAttachmentWidgetInstance & Pick<FileAttachmentWidget, 'setHoverMessage' | 'hideHover'>
-			>(type, attachment, { supportsDeletion: true, shouldFocusClearButton: false }, container);
-			const source = widget.element.querySelector<HTMLButtonElement>('button')!;
-			widget.setHoverMessage(
-				new MarkdownString().appendCodeblock(
-					'plaintext',
-					'<button onclick="captured()">First captured preview</button>',
-				),
+			using widget = services.createInstance<IChatAttachmentWidgetInstance & Pick<FileAttachmentWidget, 'setHoverMessage' | 'hideHover'>>(
+				type,
+				attachment,
+				{ supportsDeletion: true, shouldFocusClearButton: false },
+				container,
 			);
+			const source = widget.element.querySelector<HTMLButtonElement>('button')!;
+			widget.setHoverMessage(new MarkdownString().appendCodeblock('plaintext', '<button onclick="captured()">First captured preview</button>'));
 			assert.match(source.title, /First captured preview/u);
 			assert.equal(container.querySelector('[onclick]'), null);
 			widget.setHoverMessage(new MarkdownString().appendText('Replacement captured preview'));
@@ -536,12 +488,7 @@ suite('Registered Chat reference attachments', () => {
 			},
 		} as unknown as IOpenerService);
 		const resource = URI.parse('https://example.test/captured?q=before#element');
-		using widget = services.createInstance(
-			ElementChatAttachmentWidget,
-			{ ...attachment, kind: 'browserElement', resource },
-			{ supportsDeletion: true, shouldFocusClearButton: true },
-			container,
-		);
+		using widget = services.createInstance(ElementChatAttachmentWidget, { ...attachment, kind: 'browserElement', resource }, { supportsDeletion: true, shouldFocusClearButton: true }, container);
 		const buttons = widget.element.querySelectorAll<HTMLButtonElement>('button');
 		assert.equal(buttons.length, 3);
 		assert.equal(document.activeElement, buttons[2]);
@@ -613,11 +560,7 @@ suite('Registered Chat reference attachments', () => {
 			await Promise.resolve();
 			assert.equal(opened, 1);
 			assert.equal(calls.length, 1);
-			assert.deepEqual(calls[0]!.slice(0, 3), [
-				change ? 'workbench.scm.action.graph.openFile' : 'workbench.scm.action.graph.viewChanges',
-				resource,
-				attachment.name,
-			]);
+			assert.deepEqual(calls[0]!.slice(0, 3), [change ? 'workbench.scm.action.graph.openFile' : 'workbench.scm.action.graph.viewChanges', resource, attachment.name]);
 			const token = calls[0]![3] as CancellationToken;
 			assert.equal(token.isCancellationRequested, false);
 			widget.dispose();
@@ -625,12 +568,7 @@ suite('Registered Chat reference attachments', () => {
 			await pending.error(new Error('Removed source'));
 			await new Promise<void>(resolve => setTimeout(resolve, 0));
 			assert.deepEqual(errors, []);
-			using legacy = services.createInstance<IChatAttachmentWidgetInstance>(
-				type,
-				{ ...attachment, resource: undefined },
-				{ supportsDeletion: false, shouldFocusClearButton: false },
-				container,
-			);
+			using legacy = services.createInstance<IChatAttachmentWidgetInstance>(type, { ...attachment, resource: undefined }, { supportsDeletion: false, shouldFocusClearButton: false }, container);
 			assert.equal(legacy.element.querySelectorAll('button').length, 1);
 		});
 
@@ -649,26 +587,11 @@ suite('Registered Chat reference attachments', () => {
 					return true;
 				},
 			} as unknown as IOpenerService);
-			const resource = URI.parse(
-				kind === 'searchResults'
-					? 'private://search-results'
-					: kind === 'symbol'
-						? 'file:///source.ts#2,1-4,1'
-						: 'https://example.test/captured',
-			);
-			using widget = services.createInstance(
-				DefaultChatAttachmentWidget,
-				{ ...attachment, kind, resource },
-				{ supportsDeletion: true, shouldFocusClearButton: false },
-				container,
-			);
+			const resource = URI.parse(kind === 'searchResults' ? 'private://search-results' : kind === 'symbol' ? 'file:///source.ts#2,1-4,1' : 'https://example.test/captured');
+			using widget = services.createInstance(DefaultChatAttachmentWidget, { ...attachment, kind, resource }, { supportsDeletion: true, shouldFocusClearButton: false }, container);
 			widget.element.querySelector('button')!.click();
 			await new Promise<void>(resolve => setTimeout(resolve, 0));
-			assert.deepEqual(calls, [
-				kind === 'searchResults'
-					? ['workbench.action.findInFiles']
-					: [resource, { fromUserGesture: true, openExternal: kind !== 'symbol' }],
-			]);
+			assert.deepEqual(calls, [kind === 'searchResults' ? ['workbench.action.findInFiles'] : [resource, { fromUserGesture: true, openExternal: kind !== 'symbol' }]]);
 		});
 
 	for (const type of [DefaultChatAttachmentWidget, PromptFileAttachmentWidget, ToolSetOrToolItemAttachmentWidget])
@@ -688,12 +611,7 @@ suite('Registered Chat reference attachments', () => {
 					return pending.p;
 				},
 			} as unknown as IOpenerService);
-			using widget = services.createInstance<IChatAttachmentWidgetInstance>(
-				type,
-				attachment,
-				{ supportsDeletion: true, shouldFocusClearButton: true },
-				container,
-			);
+			using widget = services.createInstance<IChatAttachmentWidgetInstance>(type, attachment, { supportsDeletion: true, shouldFocusClearButton: true }, container);
 			const buttons = widget.element.querySelectorAll<HTMLButtonElement>('button');
 			assert.equal(document.activeElement, buttons[1]);
 			let removed = 0;
@@ -718,12 +636,7 @@ suite('Registered Chat reference attachments', () => {
 			assert.equal(requests, 1);
 			assert.equal(removed, 3);
 			assert.deepEqual(errors, []);
-			using readonly = services.createInstance<IChatAttachmentWidgetInstance>(
-				type,
-				attachment,
-				{ supportsDeletion: false, shouldFocusClearButton: false },
-				container,
-			);
+			using readonly = services.createInstance<IChatAttachmentWidgetInstance>(type, attachment, { supportsDeletion: false, shouldFocusClearButton: false }, container);
 			assert.equal(readonly.element.querySelectorAll('button').length, 1);
 		});
 
@@ -743,12 +656,7 @@ suite('Registered Chat reference attachments', () => {
 		} as unknown as IOpenerService);
 		const directory = URI.file('/workspace/src');
 		const instruction = URI.parse('ash-remote://server/authorized/review.md');
-		using folder = services.createInstance(
-			FileAttachmentWidget,
-			{ ...attachment, kind: 'directory', resource: directory },
-			{ supportsDeletion: true, shouldFocusClearButton: false },
-			container,
-		);
+		using folder = services.createInstance(FileAttachmentWidget, { ...attachment, kind: 'directory', resource: directory }, { supportsDeletion: true, shouldFocusClearButton: false }, container);
 		using prompt = services.createInstance(
 			PromptFileAttachmentWidget,
 			{ ...attachment, kind: 'instruction', resource: instruction },
@@ -805,19 +713,9 @@ suite('Registered Chat reference attachments', () => {
 
 	test('other attachment widgets fail creation when their required source service is absent', () => {
 		using services = new InstantiationService();
-		for (const type of [
-			DefaultChatAttachmentWidget,
-			PromptFileAttachmentWidget,
-			ToolSetOrToolItemAttachmentWidget,
-		]) {
+		for (const type of [DefaultChatAttachmentWidget, PromptFileAttachmentWidget, ToolSetOrToolItemAttachmentWidget]) {
 			assert.throws(
-				() =>
-					services.createInstance<IChatAttachmentWidgetInstance>(
-						type,
-						attachment,
-						{ supportsDeletion: true, shouldFocusClearButton: false },
-						document.createElement('div'),
-					),
+				() => services.createInstance<IChatAttachmentWidgetInstance>(type, attachment, { supportsDeletion: true, shouldFocusClearButton: false }, document.createElement('div')),
 				/Unknown service: (?:openerService|commandService)/u,
 			);
 		}
@@ -857,9 +755,7 @@ suite('Registered Chat reference attachments', () => {
 			opened.push([session, thread]);
 		});
 		using contribution = services.createInstance(ChatReferenceAttachmentWidgetContribution);
-		using widget = services
-			.get(IChatAttachmentWidgetRegistry)
-			.createWidget(attachment, { supportsDeletion: true, shouldFocusClearButton: false }, container)!;
+		using widget = services.get(IChatAttachmentWidgetRegistry).createWidget(attachment, { supportsDeletion: true, shouldFocusClearButton: false }, container)!;
 		let events = 0;
 		resources.add(
 			widget.onDidOpen(() => {
@@ -876,12 +772,7 @@ suite('Registered Chat reference attachments', () => {
 	test('deletion options control native removal, keyboard deletion, middle click and initial focus', () => {
 		using resources = new DisposableStore();
 		const { services, container } = fixture(resources);
-		using widget = services.createInstance(
-			ChatReferenceAttachmentWidget,
-			attachment,
-			{ supportsDeletion: true, shouldFocusClearButton: true },
-			container,
-		);
+		using widget = services.createInstance(ChatReferenceAttachmentWidget, attachment, { supportsDeletion: true, shouldFocusClearButton: true }, container);
 		const buttons = widget.element.querySelectorAll<HTMLButtonElement>('button');
 		assert.equal(document.activeElement, buttons[1]);
 		let deletions = 0;
@@ -894,20 +785,13 @@ suite('Registered Chat reference attachments', () => {
 		buttons[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
 		buttons[0]!.dispatchEvent(new MouseEvent('auxclick', { button: 1, bubbles: true, cancelable: true }));
 		assert.equal(deletions, 3);
-		using readonly = services.createInstance(
-			ChatReferenceAttachmentWidget,
-			attachment,
-			{ supportsDeletion: false, shouldFocusClearButton: true },
-			container,
-		);
+		using readonly = services.createInstance(ChatReferenceAttachmentWidget, attachment, { supportsDeletion: false, shouldFocusClearButton: true }, container);
 		resources.add(
 			readonly.onDidDelete(() => {
 				deletions++;
 			}),
 		);
-		readonly.element.dispatchEvent(
-			new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }),
-		);
+		readonly.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }));
 		readonly.element.dispatchEvent(new MouseEvent('auxclick', { button: 1, bubbles: true, cancelable: true }));
 		assert.equal(readonly.element.querySelectorAll('button').length, 1);
 		assert.equal(deletions, 3);
@@ -921,12 +805,7 @@ suite('Registered Chat reference attachments', () => {
 			requests++;
 			return pending.p;
 		});
-		using widget = services.createInstance(
-			ChatReferenceAttachmentWidget,
-			attachment,
-			{ supportsDeletion: true, shouldFocusClearButton: false },
-			container,
-		);
+		using widget = services.createInstance(ChatReferenceAttachmentWidget, attachment, { supportsDeletion: true, shouldFocusClearButton: false }, container);
 		const buttons = [...widget.element.querySelectorAll<HTMLButtonElement>('button')];
 		let opened = 0;
 		let deleted = 0;
@@ -948,10 +827,7 @@ suite('Registered Chat reference attachments', () => {
 		buttons[1]!.click();
 		await pending.error(new Error('Retired source'));
 		await Promise.resolve();
-		assert.deepEqual(
-			{ requests, opened, deleted, errors, children: container.childElementCount },
-			{ requests: 1, opened: 0, deleted: 0, errors: [], children: 0 },
-		);
+		assert.deepEqual({ requests, opened, deleted, errors, children: container.childElementCount }, { requests: 1, opened: 0, deleted: 0, errors: [], children: 0 });
 	});
 
 	test('missing source identities never reach the generic opener or submit', () => {
@@ -972,9 +848,7 @@ suite('Registered Chat reference attachments', () => {
 				keys++;
 			}),
 		);
-		widget.element
-			.querySelector('button')!
-			.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		widget.element.querySelector('button')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 		widget.element.click();
 		assert.equal(keys, 0);
 	});
@@ -984,14 +858,7 @@ suite('Registered Chat reference attachments', () => {
 		services.registerSingleton(IChatAttachmentWidgetRegistry, () => new ChatAttachmentWidgetRegistry());
 		using contribution = services.createInstance(ChatReferenceAttachmentWidgetContribution);
 		assert.throws(
-			() =>
-				services
-					.get(IChatAttachmentWidgetRegistry)
-					.createWidget(
-						attachment,
-						{ supportsDeletion: false, shouldFocusClearButton: false },
-						document.createElement('div'),
-					),
+			() => services.get(IChatAttachmentWidgetRegistry).createWidget(attachment, { supportsDeletion: false, shouldFocusClearButton: false }, document.createElement('div')),
 			/Unknown service: chatSessionNavigationService/u,
 		);
 	});

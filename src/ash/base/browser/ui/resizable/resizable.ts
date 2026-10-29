@@ -152,7 +152,11 @@ export class ResizableHTMLElement extends Disposable {
 				if (edge === 'south') this.deltaY = event.delta;
 				if (edge === 'north') this.deltaY = -event.delta;
 				this.layout(this.resizeStart.height + this.deltaY, this.resizeStart.width + this.deltaX);
-				this._onDidResize.fire({ dimension: this._size, done: false, [edge]: true });
+				this._onDidResize.fire({
+					dimension: this._size,
+					done: false,
+					[edge]: true,
+				});
 			}),
 		);
 		this._register(

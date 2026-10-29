@@ -4,11 +4,7 @@ import { CommandService } from '../../../../services/commands/common/commandServ
 import { TerminalCommandId } from '../../common/terminal.js';
 import { parseTerminalReloadState, TerminalStorageKeys } from '../../common/terminalStorageKeys.js';
 import { INativeHostService } from '../../../../common/services.js';
-import type {
-	INativeHostApi,
-	ITerminalWindowTransfer,
-	ITerminalWindowTransferResult,
-} from '../../../../../platform/native/common/nativeHost.js';
+import type { INativeHostApi, ITerminalWindowTransfer, ITerminalWindowTransferResult } from '../../../../../platform/native/common/nativeHost.js';
 import type { ITerminalReconnectLease } from '../../../../../platform/terminal/common/terminal.js';
 import { TerminalTransferError, type ITerminalInstance } from '../../browser/terminal.js';
 import { TerminalAccessibilityHelpProvider } from '../../../terminalContrib/accessibility/browser/terminalAccessibilityHelp.js';
@@ -28,11 +24,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
-import {
-	ITerminalProcessService,
-	TERMINAL_REVIVE_STATE_KEY,
-	type ITerminalProcessCloseOptions,
-} from '../../../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, TERMINAL_REVIVE_STATE_KEY, type ITerminalProcessCloseOptions } from '../../../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { AbstractLifecycleService } from '../../../../services/lifecycle/common/lifecycleService.js';
 import { ILifecycleService, StartupKind, LifecyclePhase } from '../../../../services/lifecycle/common/lifecycle.js';
@@ -53,11 +45,7 @@ import { TerminalNativeContribution } from '../../electron-browser/terminalNativ
 // Only the host binding is replaced; final joins use the actual lifecycle coordinator.
 class WindowLifecycle extends AbstractLifecycleService {}
 
-function fixture(
-	owner: DisposableStore,
-	release: (id: string) => Promise<void>,
-	settings: Record<string, unknown> = {},
-) {
+function fixture(owner: DisposableStore, release: (id: string) => Promise<void>, settings: Record<string, unknown> = {}) {
 	const browser = new JSDOM('', { url: 'https://terminal.test' });
 	owner.add(toDisposable(() => browser.window.close()));
 	const services = owner.add(new InstantiationService());
@@ -88,10 +76,7 @@ function fixture(
 		takeTerminalTransfer: async () => undefined,
 		onDidRequestTerminalTransfer: () => ({ dispose() {} }),
 	} as unknown as INativeHostApi);
-	services.registerInstance(
-		IWorkspaceContextService,
-		owner.add(new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') })),
-	);
+	services.registerInstance(IWorkspaceContextService, owner.add(new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') })));
 	let next = 0;
 	const closes: string[] = [];
 	const writes: string[] = [];
@@ -99,15 +84,7 @@ function fixture(
 		operatingSystem: OperatingSystem.Macintosh,
 		onConnectionState: Event.None,
 		getConnectionState: async () => 'ready',
-		read: async ({
-			terminalId,
-			afterSequence,
-			afterCommandSequence,
-		}: {
-			terminalId: string;
-			afterSequence: number;
-			afterCommandSequence: number;
-		}) => ({
+		read: async ({ terminalId, afterSequence, afterCommandSequence }: { terminalId: string; afterSequence: number; afterCommandSequence: number }) => ({
 			terminalId,
 			chunks: [],
 			nextSequence: afterSequence,
@@ -281,9 +258,7 @@ suite('Desktop terminal exit revival', () => {
 					'terminal.integrated.enablePersistentSessions': enabled,
 				},
 			);
-			scope.services.get(INativeHostService).listWindows = async () => [
-				{ id: 1, title: 'Only window', current: true, focused: true },
-			];
+			scope.services.get(INativeHostService).listWindows = async () => [{ id: 1, title: 'Only window', current: true, focused: true }];
 			const instance = await scope.create();
 			instance.serializeState = async () => {
 				effects.push('serialize');
@@ -325,9 +300,7 @@ suite('Desktop terminal exit revival', () => {
 			};
 		}
 		await scope.lifecycle.shutdown('quit');
-		const state = parseTerminalReloadState(
-			scope.services.get(IStorageService).get(TerminalStorageKeys.Revive, StorageScope.WORKSPACE)!,
-		);
+		const state = parseTerminalReloadState(scope.services.get(IStorageService).get(TerminalStorageKeys.Revive, StorageScope.WORKSPACE)!);
 		assert.deepEqual(
 			state.instances.map(instance => instance.instanceId),
 			[interactive.instanceId],
@@ -355,9 +328,7 @@ suite('Desktop terminal exit revival', () => {
 		const processes = scope.services.get(ITerminalProcessService);
 		processes.getReconnectLease = async terminalId => {
 			requested.push(terminalId);
-			return terminalId === retired.id
-				? undefined
-				: { terminalId, reconnectToken: 'a'.repeat(64), reconnectGracePeriodMillis: 30000 };
+			return terminalId === retired.id ? undefined : { terminalId, reconnectToken: 'a'.repeat(64), reconnectGracePeriodMillis: 30000 };
 		};
 		let committed = false;
 		processes.prepareForReload = () => {
@@ -365,9 +336,7 @@ suite('Desktop terminal exit revival', () => {
 		};
 		await scope.lifecycle.shutdown('reload');
 		const storage = scope.services.get(IStorageService);
-		const credentials = JSON.parse(
-			(await scope.services.get(ISecretStorageService).get(TerminalStorageKeys.Reload))!,
-		);
+		const credentials = JSON.parse((await scope.services.get(ISecretStorageService).get(TerminalStorageKeys.Reload))!);
 		const checkpoint = parseTerminalReloadState(storage.get(credentials.stateKey, StorageScope.WORKSPACE)!);
 		assert.deepEqual(requested, [retired.id, healthy.id]);
 		assert.deepEqual(
@@ -382,10 +351,7 @@ suite('Desktop terminal exit revival', () => {
 			credentials.leases.map((lease: { terminalId: string }) => lease.terminalId),
 			[healthy.id],
 		);
-		assert.deepEqual(
-			{ committed, errors: scope.errors, closes: scope.closes },
-			{ committed: true, errors: [], closes: [] },
-		);
+		assert.deepEqual({ committed, errors: scope.errors, closes: scope.closes }, { committed: true, errors: [], closes: [] });
 	});
 
 	test('reload still fails if a live terminal cannot obtain its credential because of a transport error', async () => {
@@ -397,10 +363,7 @@ suite('Desktop terminal exit revival', () => {
 		scope.services.get(ITerminalProcessService).getReconnectLease = async () => {
 			throw failure;
 		};
-		await assert.rejects(
-			scope.lifecycle.shutdown('reload'),
-			error => error instanceof AggregateError && error.errors[0]?.cause === failure,
-		);
+		await assert.rejects(scope.lifecycle.shutdown('reload'), error => error instanceof AggregateError && error.errors[0]?.cause === failure);
 		assert.deepEqual(scope.closes, []);
 		assert.equal(await scope.services.get(ISecretStorageService).get(TerminalStorageKeys.Reload), undefined);
 	});
@@ -444,12 +407,7 @@ suite('Desktop terminal exit revival', () => {
 				StorageScope.WORKSPACE,
 				StorageTarget.MACHINE,
 			);
-			storage.store(
-				unrelatedKey,
-				'another window owns this checkpoint',
-				StorageScope.WORKSPACE,
-				StorageTarget.MACHINE,
-			);
+			storage.store(unrelatedKey, 'another window owns this checkpoint', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 			const cleared = new DeferredPromise<void>();
 			const flush = storage.flush.bind(storage);
 			storage.flush = async (...args) => {
@@ -517,12 +475,7 @@ suite('Desktop terminal exit revival', () => {
 		const instance = await scope.create();
 		const storage = scope.services.get(IStorageService);
 		await storage.flush();
-		storage.store(
-			TerminalStorageKeys.Revive,
-			JSON.stringify({ version: 1, kind: 'revive', workspaceId: 'workspace', instances: [], groups: [] }),
-			StorageScope.WORKSPACE,
-			StorageTarget.MACHINE,
-		);
+		storage.store(TerminalStorageKeys.Revive, JSON.stringify({ version: 1, kind: 'revive', workspaceId: 'workspace', instances: [], groups: [] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		// No DOM screen exists in this lifecycle fixture: the real serializer pauses
 		// the process manager before reporting that screen recovery is unavailable.
 		await scope.lifecycle.shutdown('quit');
@@ -618,24 +571,17 @@ suite('Desktop terminal move command transaction', () => {
 				await f.instance.sendText('after rollback', false);
 				assert.deepEqual(f.writes, ['after rollback']);
 				assert.deepEqual(f.killed, []);
-				if (failure !== 'detach')
-					assert.equal(f.attached[0]!.reconnectToken, (failure === 'receiver' ? 'b' : 'a').repeat(64));
+				if (failure !== 'detach') assert.equal(f.attached[0]!.reconnectToken, (failure === 'receiver' ? 'b' : 'a').repeat(64));
 			}
 		});
 
 	test('validates payload and target before detaching a paused source', async () => {
 		using owner = new DisposableStore();
 		const f = transferCommandFixture(owner);
-		await assert.rejects(
-			f.commands.executeCommand(TerminalCommandId.MoveIntoNewWindow, -1),
-			/Invalid terminal transfer target/,
-		);
+		await assert.rejects(f.commands.executeCommand(TerminalCommandId.MoveIntoNewWindow, -1), /Invalid terminal transfer target/);
 		assert.deepEqual(f.effects, []);
 		f.snapshot.vt = 'x'.repeat(16 * 1024 * 1024 + 1);
-		await assert.rejects(
-			f.commands.executeCommand(TerminalCommandId.MoveIntoNewWindow),
-			/Invalid terminal screen checkpoint/,
-		);
+		await assert.rejects(f.commands.executeCommand(TerminalCommandId.MoveIntoNewWindow), /Invalid terminal screen checkpoint/);
 		assert.deepEqual(f.effects, ['serialize', 'start']);
 		await f.instance.sendText('after validation', false);
 		assert.deepEqual(f.writes, ['after validation']);
@@ -653,10 +599,7 @@ suite('Desktop terminal move command transaction', () => {
 				throw new Error('unused');
 			},
 		};
-		await assert.rejects(
-			f.commands.executeCommand(TerminalCommandId.MoveIntoNewWindow),
-			/此终端无法将其进程移至其他窗口/,
-		);
+		await assert.rejects(f.commands.executeCommand(TerminalCommandId.MoveIntoNewWindow), /此终端无法将其进程移至其他窗口/);
 	});
 });
 
@@ -708,8 +651,7 @@ function transferCommandFixture(owner: DisposableStore, failure?: 'detach' | 'op
 		instanceId: 1,
 		state: 'running',
 		title: 'Shell',
-		shellLaunchConfig: undefined as
-			import('../../../../../platform/terminal/common/terminal.js').IShellLaunchConfig | undefined,
+		shellLaunchConfig: undefined as import('../../../../../platform/terminal/common/terminal.js').IShellLaunchConfig | undefined,
 		serializeState: async () => {
 			paused = true;
 			effects.push('serialize');
@@ -884,10 +826,7 @@ suite('Desktop terminal transfer receiver', () => {
 				assert.deepEqual(result.lease, rotated);
 				assert.ok(result.error && result.error.length <= 2_048);
 				assert.equal(result.error.includes(rotated.reconnectToken), false);
-				assert.deepEqual(
-					events,
-					failure === 'construction' ? [] : ['showPanel', 'focusWindow', 'detach', 'close'],
-				);
+				assert.deepEqual(events, failure === 'construction' ? [] : ['showPanel', 'focusWindow', 'detach', 'close']);
 			} else {
 				assert.deepEqual(result, { id: 'transfer-1' });
 				assert.deepEqual(events, ['showPanel', 'focusWindow', 'start', 'focusScreen']);

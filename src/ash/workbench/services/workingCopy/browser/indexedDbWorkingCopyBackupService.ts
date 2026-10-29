@@ -47,13 +47,7 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 		const workspaceId = this.workspaceId;
 		const database = await this.database;
 		const records = database
-			? await request<StoredBackup[]>(
-					database
-						.transaction(STORE_NAME, 'readonly')
-						.objectStore(STORE_NAME)
-						.index('workspaceId')
-						.getAll(workspaceId),
-				)
+			? await request<StoredBackup[]>(database.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).index('workspaceId').getAll(workspaceId))
 			: [...this.fallback.values()].filter(record => record.workspaceId === workspaceId);
 		const result = deserialize(records);
 		const byResource = new Map(records.map(record => [record.resource, record]));
@@ -122,13 +116,11 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 		const prepare = (source: readonly StoredBackup[], destination: readonly StoredBackup[]): StoredBackup[] => {
 			const current = new Map(source.map(record => [record.key, record]));
 			for (const [key, expected] of this.observed) {
-				if (expected.workspaceId === sourceId && !sameVersion(current.get(key), expected))
-					throw new BackupError('conflict');
+				if (expected.workspaceId === sourceId && !sameVersion(current.get(key), expected)) throw new BackupError('conflict');
 			}
 			const existing = new Set(destination.map(record => record.resource));
 			return source.map(record => {
-				if (!sameVersion(record, this.observed.get(record.key)) || existing.has(record.resource))
-					throw new BackupError('conflict');
+				if (!sameVersion(record, this.observed.get(record.key)) || existing.has(record.resource)) throw new BackupError('conflict');
 				return {
 					...record,
 					key: backupKey(target.id, URI.parse(record.resource)),
@@ -180,8 +172,7 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 		if (!workspaceId.trim()) throw new TypeError('Working-copy backup service requires a workspace id');
 		this.workspaceId = workspaceId;
 		this.observed.clear();
-		if (this.movedRecords?.workspaceId === workspaceId)
-			for (const record of this.movedRecords.records) this.observed.set(record.key, record);
+		if (this.movedRecords?.workspaceId === workspaceId) for (const record of this.movedRecords.records) this.observed.set(record.key, record);
 		this.movedRecords = undefined;
 	}
 
@@ -242,9 +233,7 @@ function openDatabase(factory: IDBFactory): Promise<IDBDatabase> {
 		const opening = factory.open(DATABASE_NAME, DATABASE_VERSION);
 		opening.onupgradeneeded = () => {
 			if (opening.result.objectStoreNames.contains(STORE_NAME)) return;
-			opening.result
-				.createObjectStore(STORE_NAME, { keyPath: 'key' })
-				.createIndex('workspaceId', 'workspaceId', { unique: false });
+			opening.result.createObjectStore(STORE_NAME, { keyPath: 'key' }).createIndex('workspaceId', 'workspaceId', { unique: false });
 		};
 		opening.onsuccess = () => resolve(opening.result);
 		opening.onerror = () => reject(opening.error ?? new Error('Failed to open working-copy backup database'));
@@ -285,16 +274,12 @@ function transactionDone(transaction: IDBTransaction): Promise<void> {
 	return new Promise((resolve, reject) => {
 		transaction.oncomplete = () => resolve();
 		transaction.onerror = () => reject(transaction.error ?? new Error('Working-copy backup transaction failed'));
-		transaction.onabort = () =>
-			reject(transaction.error ?? new Error('Working-copy backup transaction was aborted'));
+		transaction.onabort = () => reject(transaction.error ?? new Error('Working-copy backup transaction was aborted'));
 	});
 }
 
 function validateBackup(backup: WorkingCopyBackup): void {
-	if (!backup.resource || typeof backup.content !== 'string')
-		throw new TypeError('Working-copy backup requires a resource and serialized content');
-	if (backup.kind !== 'text' && backup.kind !== 'structuredDocument')
-		throw new TypeError('Working-copy backup kind is invalid');
-	if (!Number.isSafeInteger(backup.updatedAt) || backup.updatedAt < 0)
-		throw new RangeError('Working-copy backup timestamp is invalid');
+	if (!backup.resource || typeof backup.content !== 'string') throw new TypeError('Working-copy backup requires a resource and serialized content');
+	if (backup.kind !== 'text' && backup.kind !== 'structuredDocument') throw new TypeError('Working-copy backup kind is invalid');
+	if (!Number.isSafeInteger(backup.updatedAt) || backup.updatedAt < 0) throw new RangeError('Working-copy backup timestamp is invalid');
 }

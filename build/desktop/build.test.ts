@@ -8,35 +8,14 @@ import test from 'node:test';
 test('Desktop build stops at the failed host or renderer step before bundling', async t => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-build-'));
 	t.after(() => rm(root, { recursive: true, force: true }));
-	for (const directory of [
-		'build/protocol',
-		'build/resources',
-		'build/desktop',
-		'build/lib',
-		'build/node_modules/vite/bin',
-		'node_modules/@ash/typescript-compiler/bin',
-	]) {
+	for (const directory of ['build/protocol', 'build/resources', 'build/desktop', 'build/lib', 'build/node_modules/vite/bin', 'node_modules/@ash/typescript-compiler/bin']) {
 		await mkdir(join(root, directory), { recursive: true });
 	}
-	for (const file of [
-		'build/processes.ts',
-		'build/desktop/build.ts',
-		'build/desktop/host.ts',
-		'build/desktop/paths.ts',
-		'build/lib/incrementalOutput.ts',
-	]) {
+	for (const file of ['build/processes.ts', 'build/desktop/build.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts', 'build/lib/incrementalOutput.ts']) {
 		await copyFile(resolve(import.meta.dirname, '../..', file), join(root, file));
 	}
-	await symlink(
-		resolve(import.meta.dirname, '../../node_modules/bun'),
-		join(root, 'node_modules/bun'),
-		process.platform === 'win32' ? 'junction' : 'dir',
-	);
-	await symlink(
-		resolve(import.meta.dirname, '../../node_modules/typescript'),
-		join(root, 'node_modules/typescript'),
-		process.platform === 'win32' ? 'junction' : 'dir',
-	);
+	await symlink(resolve(import.meta.dirname, '../../node_modules/bun'), join(root, 'node_modules/bun'), process.platform === 'win32' ? 'junction' : 'dir');
+	await symlink(resolve(import.meta.dirname, '../../node_modules/typescript'), join(root, 'node_modules/typescript'), process.platform === 'win32' ? 'junction' : 'dir');
 	for (const project of ['main', 'preload']) {
 		await writeFile(
 			join(root, `tsconfig.${project}.json`),
@@ -89,10 +68,7 @@ test('Desktop build stops at the failed host or renderer step before bundling', 
     }
   `,
 	);
-	await writeFile(
-		join(root, 'build/node_modules/vite/bin/vite.js'),
-		"require('node:fs').appendFileSync('operations.log', (process.argv.includes('web') ? 'bundle-web' : 'bundle') + '\\n');",
-	);
+	await writeFile(join(root, 'build/node_modules/vite/bin/vite.js'), "require('node:fs').appendFileSync('operations.log', (process.argv.includes('web') ? 'bundle-web' : 'bundle') + '\\n');");
 	for (const [failure, expected] of [
 		['protocol', ['protocol']],
 		['tsconfig.main.json', ['protocol', 'localization', 'tsconfig.main.json']],
@@ -101,10 +77,7 @@ test('Desktop build stops at the failed host or renderer step before bundling', 
 		['', ['protocol', 'localization', 'tsconfig.main.json', 'tsconfig.preload.json', 'bundle']],
 	] as const) {
 		await writeFile(join(root, 'operations.log'), '');
-		await writeFile(
-			join(root, 'renderer.ts'),
-			`export const value: number = ${failure === 'tsconfig.renderer.json' ? "'invalid'" : '1'};`,
-		);
+		await writeFile(join(root, 'renderer.ts'), `export const value: number = ${failure === 'tsconfig.renderer.json' ? "'invalid'" : '1'};`);
 		const result = spawnSync(process.execPath, [join(root, 'build/desktop/build.ts'), 'all'], {
 			cwd: tmpdir(),
 			env: { ...process.env, FAILURE: failure },
@@ -117,8 +90,7 @@ test('Desktop build stops at the failed host or renderer step before bundling', 
 		if (failure === 'tsconfig.renderer.json') assert.match(result.stdout + result.stderr, /TS2322/);
 		if (!failure) assert.match(result.stdout + result.stderr, /No type errors in/);
 		assert.deepEqual((await readFile(join(root, 'operations.log'), 'utf8')).trim().split('\n'), expected);
-		if (failure !== 'protocol')
-			assert.equal(JSON.parse(await readFile(join(root, '.build/desktop/package.json'), 'utf8')).type, 'module');
+		if (failure !== 'protocol') assert.equal(JSON.parse(await readFile(join(root, '.build/desktop/package.json'), 'utf8')).type, 'module');
 	}
 	for (const [command, expected] of [
 		['host', ['protocol', 'localization', 'tsconfig.main.json', 'tsconfig.preload.json']],
@@ -134,10 +106,7 @@ test('Desktop build stops at the failed host or renderer step before bundling', 
 			timeout: 10_000,
 		});
 		assert.equal(result.status, 0, result.stdout + result.stderr);
-		assert.deepEqual(
-			(await readFile(join(root, 'operations.log'), 'utf8')).trim().split('\n').filter(Boolean),
-			expected,
-		);
+		assert.deepEqual((await readFile(join(root, 'operations.log'), 'utf8')).trim().split('\n').filter(Boolean), expected);
 	}
 	// A prepared build retains host compilation and preload validation while
 	// reusing the generation and no-emit checks owned by its caller.

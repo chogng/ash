@@ -14,9 +14,7 @@ export class AgentSessionsViewer extends Disposable {
 	readonly domNode: HTMLElement;
 	private readonly groups = new Map<string, { element: HTMLElement; list: HTMLUListElement; heading: HTMLElement }>();
 	private readonly rows = this._register(new DisposableMap<string, AgentSessionRow>());
-	private readonly menuRequested = this._register(
-		new Emitter<{ readonly item: IAgentSessionListItem; readonly anchor: ContextMenuAnchor; onHide(): void }>(),
-	);
+	private readonly menuRequested = this._register(new Emitter<{ readonly item: IAgentSessionListItem; readonly anchor: ContextMenuAnchor; onHide(): void }>());
 	readonly onDidRequestContextMenu = this.menuRequested.event;
 
 	constructor(container: HTMLElement) {
@@ -34,20 +32,9 @@ export class AgentSessionsViewer extends Disposable {
 		const sections = new Map<string, { label: string; rows: AgentSessionRow[] }>();
 		const present = new Set<string>();
 		for (const item of items) {
-			const row =
-				this.rows.get(item.id) ??
-				this.rows.set(
-					item.id,
-					new AgentSessionRow(this.domNode.ownerDocument, event => this.menuRequested.fire(event)),
-				);
+			const row = this.rows.get(item.id) ?? this.rows.set(item.id, new AgentSessionRow(this.domNode.ownerDocument, event => this.menuRequested.fire(event)));
 			row.update(item);
-			const id = item.pinned
-				? 'pinned'
-				: item.kind === 'draft'
-					? 'drafts'
-					: item.group
-						? `group:${item.group.sectionId}`
-						: 'sessions';
+			const id = item.pinned ? 'pinned' : item.kind === 'draft' ? 'drafts' : item.group ? `group:${item.group.sectionId}` : 'sessions';
 			const label = item.pinned
 				? localize('sessions.list.pinned', 'Pinned')
 				: item.kind === 'draft'
@@ -74,8 +61,7 @@ export class AgentSessionsViewer extends Disposable {
 			}
 			group.heading.textContent = section.label;
 			this.updateList(group.list, section.rows);
-			if (this.domNode.children[index] !== group.element)
-				this.domNode.insertBefore(group.element, this.domNode.children[index] ?? null);
+			if (this.domNode.children[index] !== group.element) this.domNode.insertBefore(group.element, this.domNode.children[index] ?? null);
 		}
 		for (const [id, group] of this.groups) {
 			if (!sections.has(id)) {
@@ -101,19 +87,10 @@ export class AgentSessionsViewer extends Disposable {
 	private onKeyDown(event: KeyboardEvent): void {
 		if (!isHTMLElement(event.target) || !event.target.classList.contains('ash-agent-session-row')) return;
 		if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
-		const buttons = [
-			...this.domNode.querySelectorAll<HTMLButtonElement>(
-				'.ash-agent-sessions-group:not([hidden]) .ash-agent-session-row',
-			),
-		];
+		const buttons = [...this.domNode.querySelectorAll<HTMLButtonElement>('.ash-agent-sessions-group:not([hidden]) .ash-agent-session-row')];
 		const index = buttons.indexOf(event.target as HTMLButtonElement);
 		if (index < 0) return;
-		const next =
-			event.key === 'Home'
-				? 0
-				: event.key === 'End'
-					? buttons.length - 1
-					: Math.max(0, Math.min(buttons.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
+		const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : Math.max(0, Math.min(buttons.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
 		buttons[next]?.focus();
 		event.preventDefault();
 	}
@@ -134,10 +111,7 @@ class AgentSessionRow extends Disposable {
 	private item: IAgentSessionListItem | undefined;
 	private readonly more: Button;
 
-	constructor(
-		document: Document,
-		showMenu: (event: { item: IAgentSessionListItem; anchor: ContextMenuAnchor; onHide(): void }) => void,
-	) {
+	constructor(document: Document, showMenu: (event: { item: IAgentSessionListItem; anchor: ContextMenuAnchor; onHide(): void }) => void) {
 		super();
 		this.domNode = h(document, 'li');
 		this.domNode.className = 'ash-agent-session-item';

@@ -4,21 +4,8 @@ import { setup, suite, teardown, test } from 'mocha';
 import { VSBuffer } from '../../../../common/buffer.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../common/cancellation.js';
 import { Emitter, Event } from '../../../../common/event.js';
-import {
-	Disposable,
-	DisposableStore,
-	DisposableTracker,
-	installDisposableTracker,
-	toDisposable,
-} from '../../../../common/lifecycle.js';
-import {
-	IPCClient,
-	IPCServer,
-	ProxyChannel,
-	type ClientConnectionEvent,
-	type IMessagePassingProtocol,
-	type IServerChannel,
-} from '../../common/ipc.js';
+import { Disposable, DisposableStore, DisposableTracker, installDisposableTracker, toDisposable } from '../../../../common/lifecycle.js';
+import { IPCClient, IPCServer, ProxyChannel, type ClientConnectionEvent, type IMessagePassingProtocol, type IServerChannel } from '../../common/ipc.js';
 
 class MemoryProtocol extends Disposable implements IMessagePassingProtocol {
 	private readonly messages = this._register(new Emitter<VSBuffer>());
@@ -98,10 +85,7 @@ suite('IPC channels', () => {
 		first.registerChannel('echo', channel);
 		second.registerChannel('echo', channel);
 		const payload = { items: [false, null, '你好'], count: 3 };
-		assert.deepEqual(
-			await Promise.all([first.getChannel('echo').call('read', payload), second.getChannel('echo').call('read')]),
-			[{ context: 'second', arg: payload }, { context: 'first' }],
-		);
+		assert.deepEqual(await Promise.all([first.getChannel('echo').call('read', payload), second.getChannel('echo').call('read')]), [{ context: 'second', arg: payload }, { context: 'first' }]);
 		await assert.rejects(first.getChannel('echo').call('fail'), {
 			name: 'TypeError',
 			message: 'Invalid operation',
@@ -117,10 +101,7 @@ suite('IPC channels', () => {
 		const client = resources.add(new IPCClient(a, 'renderer'));
 		const server = resources.add(new IPCClient(b, 'main'));
 		const bytes = new Uint8Array([0, 137, 80, 78, 71, 255]);
-		server.registerChannel(
-			'capture',
-			ProxyChannel.fromService({ captureScreenshot: async () => VSBuffer.wrap(bytes) }, resources),
-		);
+		server.registerChannel('capture', ProxyChannel.fromService({ captureScreenshot: async () => VSBuffer.wrap(bytes) }, resources));
 		const result = await client.getChannel('capture').call<VSBuffer>('captureScreenshot', []);
 		assert.ok(result instanceof VSBuffer);
 		assert.deepEqual(result.buffer, bytes);
@@ -180,9 +161,7 @@ suite('IPC channels', () => {
 		});
 		const first: number[] = [];
 		const second: number[] = [];
-		const listener = resources.add(
-			client.getChannel('changes').listen<number>('updated')(value => first.push(value)),
-		);
+		const listener = resources.add(client.getChannel('changes').listen<number>('updated')(value => first.push(value)));
 		resources.add(client.getChannel('changes').listen<number>('updated')(value => second.push(value)));
 		await setImmediate();
 		changes.fire(1);
@@ -305,9 +284,7 @@ suite('IPC channels', () => {
 		const first = open('selected');
 		const excluded = open('excluded');
 		const received: string[] = [];
-		using listener = server.getChannel('events', client => client.ctx === 'selected').listen<string>('changed')(
-			value => received.push(value),
-		);
+		using listener = server.getChannel('events', client => client.ctx === 'selected').listen<string>('changed')(value => received.push(value));
 		await setImmediate();
 		first.changes.fire('first');
 		excluded.changes.fire('excluded');

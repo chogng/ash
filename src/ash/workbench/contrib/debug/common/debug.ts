@@ -1,8 +1,4 @@
-import type {
-	IDebugAdapterProcessReadResult,
-	DebugAdapterConnection,
-	DebugConsoleEntry,
-} from '../../../../platform/debug/common/debugAdapterProcessService.js';
+import type { IDebugAdapterProcessReadResult, DebugAdapterConnection, DebugConsoleEntry } from '../../../../platform/debug/common/debugAdapterProcessService.js';
 import type { Event } from '../../../../base/common/event.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
@@ -74,10 +70,7 @@ export interface IDebugConfigurationProvider {
 	readonly id: string;
 	readonly type: string;
 	readonly triggerKind: DebugConfigurationProviderTriggerKind;
-	provideDebugConfigurations?(
-		folder: URI | undefined,
-		signal: AbortSignal,
-	): readonly DebugConfiguration[] | PromiseLike<readonly DebugConfiguration[]>;
+	provideDebugConfigurations?(folder: URI | undefined, signal: AbortSignal): readonly DebugConfiguration[] | PromiseLike<readonly DebugConfiguration[]>;
 	resolveDebugConfiguration?(
 		folder: URI | undefined,
 		configuration: DebugConfiguration,
@@ -108,10 +101,7 @@ export interface IDebugAdapterTracker extends IDisposable {
 export interface IDebugAdapterTrackerFactory {
 	readonly id: string;
 	readonly type: string;
-	createDebugAdapterTracker(
-		session: IDebugSession,
-		signal: AbortSignal,
-	): IDebugAdapterTracker | undefined | PromiseLike<IDebugAdapterTracker | undefined>;
+	createDebugAdapterTracker(session: IDebugSession, signal: AbortSignal): IDebugAdapterTracker | undefined | PromiseLike<IDebugAdapterTracker | undefined>;
 }
 
 export interface DebugAdapterTrackerFactoryRegistration extends IDisposable {
@@ -471,31 +461,12 @@ export interface IDebugSession extends IDisposable {
 	scopes(frameId: number): Promise<readonly IDebugScope[]>;
 	variables(reference: number, inspectionRevision?: number): Promise<readonly IDebugVariable[]>;
 	setVariable(variablesReference: number, name: string, value: string): Promise<IDebugVariable>;
-	evaluate(
-		expression: string,
-		frameId: number | undefined,
-		context: DebugEvaluateContext,
-	): Promise<IDebugEvaluateResult>;
-	completions(
-		frameId: number | undefined,
-		threadId: number,
-		text: string,
-		position: Position,
-		token: CancellationToken,
-	): Promise<IDebugCompletionsResponse | undefined>;
+	evaluate(expression: string, frameId: number | undefined, context: DebugEvaluateContext): Promise<IDebugEvaluateResult>;
+	completions(frameId: number | undefined, threadId: number, text: string, position: Position, token: CancellationToken): Promise<IDebugCompletionsResponse | undefined>;
 	source(source: IDebugSource): Promise<IDebugSourceContent>;
-	dataBreakpointInfo(
-		name: string,
-		variablesReference?: number,
-		frameId?: number,
-	): Promise<IDataBreakpointInfoResponse>;
+	dataBreakpointInfo(name: string, variablesReference?: number, frameId?: number): Promise<IDataBreakpointInfoResponse>;
 	/** Byte offset and instruction offset use different DAP units. */
-	disassemble(
-		memoryReference: string,
-		offset: number,
-		instructionOffset: number,
-		instructionCount: number,
-	): Promise<readonly IDisassembledInstruction[]>;
+	disassemble(memoryReference: string, offset: number, instructionOffset: number, instructionCount: number): Promise<readonly IDisassembledInstruction[]>;
 	setExceptionBreakpoints(filters: readonly string[]): Promise<void>;
 	disconnect(): Promise<void>;
 }
@@ -558,35 +529,18 @@ export interface IDebugService extends IDisposable {
 	/** Output from the integrated terminal created for this exact session. */
 	readonly onDidWriteTerminalData: Event<{ readonly session: IDebugSession; readonly data: string }>;
 	refresh(): Promise<readonly IDebugConfiguration[]>;
-	registerDebugAdapterTrackerFactories(
-		factories: readonly IDebugAdapterTrackerFactory[],
-	): DebugAdapterTrackerFactoryRegistration;
-	registerDebugConfigurationProviders(
-		providers: readonly IDebugConfigurationProvider[],
-	): DebugConfigurationProviderRegistration;
+	registerDebugAdapterTrackerFactories(factories: readonly IDebugAdapterTrackerFactory[]): DebugAdapterTrackerFactoryRegistration;
+	registerDebugConfigurationProviders(providers: readonly IDebugConfigurationProvider[]): DebugConfigurationProviderRegistration;
 	/** Supplies validated initial templates or configurations for dynamic selection. */
-	provideDebugConfigurations(
-		folder: URI,
-		signal?: AbortSignal,
-		triggerKind?: DebugConfigurationProviderTriggerKind,
-	): Promise<readonly DebugConfiguration[]>;
+	provideDebugConfigurations(folder: URI, signal?: AbortSignal, triggerKind?: DebugConfigurationProviderTriggerKind): Promise<readonly DebugConfiguration[]>;
 	start(configuration: IDebugConfiguration, options?: IDebugSessionOptions): Promise<IDebugSession>;
 	/** Binds a dynamic provider result to its current canonical workspace folder. */
-	startDynamicDebugging(
-		folder: URI | undefined,
-		configuration: DebugConfiguration,
-		options?: IDebugSessionOptions,
-	): Promise<IDebugSession>;
+	startDynamicDebugging(folder: URI | undefined, configuration: DebugConfiguration, options?: IDebugSessionOptions): Promise<IDebugSession>;
 	/** Starts a supplied configuration without adding it to launch.json. */
 	startDebugging(configuration: IDebugConfiguration, options?: IDebugSessionOptions): Promise<IDebugSession>;
 	startCompound(compound: IDebugCompound): Promise<readonly IDebugSession[]>;
 	setActiveSession(session: IDebugSession): void;
-	focusStackFrame(
-		frame: IDebugStackFrame | undefined,
-		thread?: IDebugThread,
-		session?: IDebugSession,
-		options?: { explicit?: boolean; preserveFocus?: boolean },
-	): Promise<void>;
+	focusStackFrame(frame: IDebugStackFrame | undefined, thread?: IDebugThread, session?: IDebugSession, options?: { explicit?: boolean; preserveFocus?: boolean }): Promise<void>;
 	restart(session?: IDebugSession): Promise<IDebugSession>;
 	stop(session?: IDebugSession): Promise<void>;
 	stopAll(): Promise<void>;
@@ -595,11 +549,7 @@ export interface IDebugService extends IDisposable {
 	toggleBreakpoint(resource: URI, lineNumber: number): void;
 	removeBreakpoint(id: string): void;
 	updateBreakpoint(id: string, update: IDebugBreakpointUpdate): void;
-	updateBreakpoints(
-		originalUri: URI,
-		data: Map<string, IBreakpointUpdateData>,
-		sendOnResourceSaved: boolean,
-	): Promise<void>;
+	updateBreakpoints(originalUri: URI, data: Map<string, IBreakpointUpdateData>, sendOnResourceSaved: boolean): Promise<void>;
 	setBreakpointsEnabled(enabled: boolean): void;
 	removeAllBreakpoints(): void;
 	addFunctionBreakpoint(options: IFunctionBreakpointOptions): void;
@@ -654,11 +604,7 @@ export interface DebugAdapterFactory {
 	readonly sourceId: string;
 	createDebugAdapter?(): DebugAdapterDescriptor;
 	/** Resolves invocation-dependent descriptors at dispatch, never during discovery. */
-	createDebugAdapterDescriptor?(
-		configuration: IDebugConfiguration,
-		signal: AbortSignal,
-		session: IDebugSession,
-	): PromiseLike<DebugAdapterDescriptor | undefined | null>;
+	createDebugAdapterDescriptor?(configuration: IDebugConfiguration, signal: AbortSignal, session: IDebugSession): PromiseLike<DebugAdapterDescriptor | undefined | null>;
 }
 
 export interface IAdapterManager extends IDisposable {
@@ -694,12 +640,7 @@ export interface IReplModel extends IDisposable {
 	evaluate(expression: string): Promise<void>;
 }
 
-export function createStaticDebugAdapterFactory(
-	type: string,
-	label: string,
-	sourceId: string,
-	executable: DebugAdapterExecutable,
-): DebugAdapterFactory {
+export function createStaticDebugAdapterFactory(type: string, label: string, sourceId: string, executable: DebugAdapterExecutable): DebugAdapterFactory {
 	const normalizedExecutable = normalizeExecutable(executable, `Debug Adapter '${type}'`);
 	return normalizeDebugAdapterFactory({ type, label, sourceId, createDebugAdapter: () => normalizedExecutable });
 }
@@ -709,37 +650,21 @@ export function normalizeDebugAdapterFactory(factory: DebugAdapterFactory): Debu
 	const type = normalizeIdentifier(factory.type, 'Debug Adapter type');
 	const label = normalizeText(factory.label, 'Debug Adapter label', 256);
 	const sourceId = normalizeIdentifier(factory.sourceId, 'Debug Adapter source ID');
-	if (typeof factory.createDebugAdapter !== 'function' && typeof factory.createDebugAdapterDescriptor !== 'function')
-		throw new TypeError(`Debug Adapter '${type}' must provide a factory`);
+	if (typeof factory.createDebugAdapter !== 'function' && typeof factory.createDebugAdapterDescriptor !== 'function') throw new TypeError(`Debug Adapter '${type}' must provide a factory`);
 	return Object.freeze({
 		type,
 		label,
 		sourceId,
 		...(factory.createDebugAdapter
 			? {
-					createDebugAdapter: () =>
-						normalizeDebugAdapterDescriptor(
-							factory.createDebugAdapter!.call(factory),
-							`Debug Adapter '${type}'`,
-						),
+					createDebugAdapter: () => normalizeDebugAdapterDescriptor(factory.createDebugAdapter!.call(factory), `Debug Adapter '${type}'`),
 				}
 			: {}),
 		...(factory.createDebugAdapterDescriptor
 			? {
-					createDebugAdapterDescriptor: async (
-						configuration: IDebugConfiguration,
-						signal: AbortSignal,
-						session: IDebugSession,
-					) => {
-						const descriptor = await factory.createDebugAdapterDescriptor!.call(
-							factory,
-							configuration,
-							signal,
-							session,
-						);
-						return descriptor === undefined || descriptor === null
-							? undefined
-							: normalizeDebugAdapterDescriptor(descriptor, `Debug Adapter '${type}'`);
+					createDebugAdapterDescriptor: async (configuration: IDebugConfiguration, signal: AbortSignal, session: IDebugSession) => {
+						const descriptor = await factory.createDebugAdapterDescriptor!.call(factory, configuration, signal, session);
+						return descriptor === undefined || descriptor === null ? undefined : normalizeDebugAdapterDescriptor(descriptor, `Debug Adapter '${type}'`);
 					},
 				}
 			: {}),
@@ -753,20 +678,11 @@ export function normalizeDebugAdapterDescriptor(value: unknown, owner: string): 
 	}
 	const input = value as Record<string, unknown>;
 	if (input.inline !== undefined) {
-		if (
-			Object.keys(input).some(key => !['inline', 'arguments'].includes(key)) ||
-			!Array.isArray(input.arguments) ||
-			input.arguments.length !== 0
-		) {
+		if (Object.keys(input).some(key => !['inline', 'arguments'].includes(key)) || !Array.isArray(input.arguments) || input.arguments.length !== 0) {
 			throw new TypeError(`${owner} inline adapter cannot include executable options`);
 		}
 		const inline = input.inline as InlineDebugAdapter;
-		if (
-			!inline ||
-			typeof inline.send !== 'function' ||
-			typeof inline.read !== 'function' ||
-			typeof inline.close !== 'function'
-		) {
+		if (!inline || typeof inline.send !== 'function' || typeof inline.read !== 'function' || typeof inline.close !== 'function') {
 			throw new TypeError(`${owner} inline adapter requires owned IO`);
 		}
 		return Object.freeze({ inline, arguments: Object.freeze([]) });
@@ -775,12 +691,7 @@ export function normalizeDebugAdapterDescriptor(value: unknown, owner: string): 
 		if (Object.keys(input).some(key => !['connection', 'arguments'].includes(key))) {
 			throw new TypeError(`${owner} connection contains unknown fields`);
 		}
-		if (
-			input.program !== undefined ||
-			input.cwd !== undefined ||
-			input.env !== undefined ||
-			(input.arguments !== undefined && (!Array.isArray(input.arguments) || input.arguments.length !== 0))
-		) {
+		if (input.program !== undefined || input.cwd !== undefined || input.env !== undefined || (input.arguments !== undefined && (!Array.isArray(input.arguments) || input.arguments.length !== 0))) {
 			throw new TypeError(`${owner} connection cannot include executable options`);
 		}
 		if (!input.connection || typeof input.connection !== 'object' || Array.isArray(input.connection)) {
@@ -796,10 +707,7 @@ export function normalizeDebugAdapterDescriptor(value: unknown, owner: string): 
 			) {
 				throw new TypeError(`${owner} server port is invalid`);
 			}
-			const host =
-				connection.host === undefined
-					? undefined
-					: normalizeText(connection.host as string, `${owner} server host`, 256);
+			const host = connection.host === undefined ? undefined : normalizeText(connection.host as string, `${owner} server host`, 256);
 			return Object.freeze({
 				connection: Object.freeze({
 					type: 'server',
@@ -830,8 +738,7 @@ function normalizeExecutable(executable: DebugAdapterExecutable, owner: string):
 	const program = normalizeText(executable.program, `${owner} program`, 4096);
 	if (!Array.isArray(executable.arguments)) throw new TypeError(`${owner} arguments must be an array`);
 	const argumentsList = executable.arguments.map((argument, index) => {
-		if (typeof argument !== 'string' || argument.length > 4096 || argument.includes('\0'))
-			throw new TypeError(`${owner} argument ${index} must be a bounded string without NUL`);
+		if (typeof argument !== 'string' || argument.length > 4096 || argument.includes('\0')) throw new TypeError(`${owner} argument ${index} must be a bounded string without NUL`);
 		return argument;
 	});
 	if (argumentsList.length > 256) throw new RangeError(`${owner} has too many arguments`);
@@ -844,11 +751,7 @@ function normalizeExecutable(executable: DebugAdapterExecutable, owner: string):
 			Array.isArray(env) ||
 			Object.keys(env).length > 128 ||
 			Object.entries(env).some(
-				([key, value]) =>
-					!key ||
-					key.length > 256 ||
-					/[=\0]/.test(key) ||
-					(value !== null && (typeof value !== 'string' || value.length > 32768 || value.includes('\0'))),
+				([key, value]) => !key || key.length > 256 || /[=\0]/.test(key) || (value !== null && (typeof value !== 'string' || value.length > 32768 || value.includes('\0'))),
 			))
 	)
 		throw new TypeError(`${owner} environment is invalid`);
@@ -865,8 +768,7 @@ function normalizeIdentifier(value: string, owner: string): string {
 }
 
 function normalizeText(value: string, owner: string, maximum: number): string {
-	if (typeof value !== 'string' || value.trim().length === 0 || value.length > maximum || value.includes('\0'))
-		throw new TypeError(`${owner} must contain 1 to ${maximum} characters without NUL`);
+	if (typeof value !== 'string' || value.trim().length === 0 || value.length > maximum || value.includes('\0')) throw new TypeError(`${owner} must contain 1 to ${maximum} characters without NUL`);
 	return value.trim();
 }
 

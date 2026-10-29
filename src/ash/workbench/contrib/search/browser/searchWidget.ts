@@ -6,10 +6,7 @@ import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import {
-	ContextScopedFindInput,
-	ContextScopedReplaceInput,
-} from '../../../../platform/history/browser/contextScopedHistoryWidget.js';
+import { ContextScopedFindInput, ContextScopedReplaceInput } from '../../../../platform/history/browser/contextScopedHistoryWidget.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ISearchHistoryService } from '../common/searchHistoryService.js';
 import { localize } from '../../../../nls.js';
@@ -41,11 +38,7 @@ export class SearchWidget extends Disposable {
 	public preserveCase = false;
 	private canReplace = false;
 
-	constructor(
-		container: HTMLElement,
-		@IInstantiationService instantiation: IInstantiationService,
-		@ISearchHistoryService history: ISearchHistoryService,
-	) {
+	constructor(container: HTMLElement, @IInstantiationService instantiation: IInstantiationService, @ISearchHistoryService history: ISearchHistoryService) {
 		super();
 		const document = container.ownerDocument;
 		this.domNode = h(document, 'div');
@@ -127,13 +120,7 @@ export class SearchWidget extends Disposable {
 			this._register(input.inputBox.onDidChange(() => this.changed.fire()));
 			this._register(
 				input.inputBox.onKeyDown(event => {
-					if (
-						event.key === 'Enter' &&
-						!event.isComposing &&
-						!event.shiftKey &&
-						!event.altKey &&
-						input === this.searchInput
-					) {
+					if (event.key === 'Enter' && !event.isComposing && !event.shiftKey && !event.altKey && input === this.searchInput) {
 						event.preventDefault();
 						event.stopPropagation();
 						this.submitted.fire();

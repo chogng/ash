@@ -5,11 +5,7 @@ import { CancellationTokenSource } from '../../../../../base/common/cancellation
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import {
-	IFileSearchService,
-	type FileSearchDirectory,
-	type FileSearchResult,
-} from '../../../../../platform/search/common/fileSearch.js';
+import { IFileSearchService, type FileSearchDirectory, type FileSearchResult } from '../../../../../platform/search/common/fileSearch.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { QueryBuilder } from '../../../search/common/queryBuilder.js';
@@ -97,9 +93,7 @@ test('Agent Host filename search rejects unavailable dependencies and unauthoriz
 		},
 	});
 	using provider = services.createInstance(AgentHostFileSearchProvider);
-	await assert.rejects(
-		provider.fileSearch(new QueryBuilder().file([folder.uri, URI.parse('ash-remote://other/workspace')])),
-	);
+	await assert.rejects(provider.fileSearch(new QueryBuilder().file([folder.uri, URI.parse('ash-remote://other/workspace')])));
 });
 
 for (const kind of ['fuzzy', 'glob'] as const) {
@@ -119,10 +113,7 @@ for (const kind of ['fuzzy', 'glob'] as const) {
 				uri: kind === 'fuzzy' ? folder.uri : URI.parse('ash-remote://host/next'),
 			};
 			let calls = 0;
-			const search = (
-				directory: FileSearchDirectory,
-				signal: AbortSignal | undefined,
-			): Promise<FileSearchResult> => {
+			const search = (directory: FileSearchDirectory, signal: AbortSignal | undefined): Promise<FileSearchResult> => {
 				if (++calls === 1) {
 					assert.deepEqual(directory, {
 						resource: folder.uri,

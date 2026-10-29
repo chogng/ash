@@ -61,8 +61,7 @@ export function createSessionVoiceService(scope: ISessionProviderScope): IAgentV
 				disposables,
 			),
 		getOptions: () => run(() => backend.getOptions()),
-		start: (source, selection, signal) =>
-			run(async () => identity(await backend.start(params(source), selection, signal))),
+		start: (source, selection, signal) => run(async () => identity(await backend.start(params(source), selection, signal))),
 		stop: () => run(() => backend.stop()),
 		interrupt: () => run(() => backend.interrupt()),
 		setMuted: muted => run(() => backend.setMuted(muted)),

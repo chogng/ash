@@ -1,12 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import {
-	validateImageViewRequest,
-	validateImageViewCompletion,
-	validateImageViewImage,
-	validateImageViewInitialization,
-	validateImageViewPermissionAction,
-} from '../../common/imageView.js';
+import { validateImageViewRequest, validateImageViewCompletion, validateImageViewImage, validateImageViewInitialization, validateImageViewPermissionAction } from '../../common/imageView.js';
 
 function image(): Uint8Array {
 	const bytes = new Uint8Array(33);
@@ -60,10 +54,7 @@ test('screen initialization requires bounded PNG pixels and content initializati
 		assert.throws(() => validateImageViewInitialization(invalid));
 	const content = { ...initial, presentation: presentation('content'), image: new Uint8Array() };
 	assert.equal(validateImageViewInitialization(content), content);
-	assert.throws(
-		() => validateImageViewInitialization({ ...content, image: image() }),
-		/cannot include screen pixels/,
-	);
+	assert.throws(() => validateImageViewInitialization({ ...content, image: image() }), /cannot include screen pixels/);
 });
 
 test('image view output is finite and cannot choose arbitrary native operations', () => {
@@ -83,10 +74,8 @@ test('image view output is finite and cannot choose arbitrary native operations'
 });
 
 test('permission guide can only act on the host-selected application bundle', () => {
-	for (const action of ['settings', 'drag', 'copyPath', 'retry', 'cancel'])
-		assert.equal(validateImageViewPermissionAction(action), action);
-	for (const invalid of [{ action: 'drag', path: '/tmp/other.app' }, 'grant', 'restart', undefined])
-		assert.throws(() => validateImageViewPermissionAction(invalid));
+	for (const action of ['settings', 'drag', 'copyPath', 'retry', 'cancel']) assert.equal(validateImageViewPermissionAction(action), action);
+	for (const invalid of [{ action: 'drag', path: '/tmp/other.app' }, 'grant', 'restart', undefined]) assert.throws(() => validateImageViewPermissionAction(invalid));
 	const permission = { applicationName: 'Ash.app', icon: image() };
 	const initial = {
 		permission,

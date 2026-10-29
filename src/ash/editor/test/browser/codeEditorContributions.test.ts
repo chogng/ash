@@ -6,11 +6,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/comm
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { CodeEditorContributions } from '../../browser/widget/codeEditor/codeEditorContributions.js';
-import {
-	EditorContributionInstantiation,
-	type TextEditorContributionConfigurationContext,
-	type TextEditorContributionContext,
-} from '../../browser/editorExtensions.js';
+import { EditorContributionInstantiation, type TextEditorContributionConfigurationContext, type TextEditorContributionContext } from '../../browser/editorExtensions.js';
 import type { ICodeEditor } from '../../browser/editorBrowser.js';
 
 suite('Code editor first-interaction lifetime', () => {
@@ -23,19 +19,11 @@ suite('Code editor first-interaction lifetime', () => {
 			const listeners = new Set<EventListenerOrEventListenerObject>();
 			const add = target.addEventListener.bind(target);
 			const remove = target.removeEventListener.bind(target);
-			target.addEventListener = ((
-				type: string,
-				listener: EventListenerOrEventListenerObject,
-				options?: boolean | AddEventListenerOptions,
-			) => {
+			target.addEventListener = ((type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) => {
 				listeners.add(listener);
 				add(type, listener, options);
 			}) as typeof target.addEventListener;
-			target.removeEventListener = ((
-				type: string,
-				listener: EventListenerOrEventListenerObject,
-				options?: boolean | EventListenerOptions,
-			) => {
+			target.removeEventListener = ((type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions) => {
 				listeners.delete(listener);
 				remove(type, listener, options);
 			}) as typeof target.removeEventListener;

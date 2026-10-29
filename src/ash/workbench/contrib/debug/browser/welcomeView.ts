@@ -59,26 +59,11 @@ export class WelcomeView extends ViewPane {
 
 	private updateWelcome(): void {
 		const hasFolder = this.workspace.getWorkspace().folders.length > 0;
-		this.button.label = hasFolder
-			? localize('debug.createLaunch', 'Create a launch.json file')
-			: localize('debug.openFolder', 'Open Folder');
-		this.button.enabled =
-			hasFolder ||
-			this.contexts.contextMatchesRules(
-				ContextKeyExpr.or(
-					OpenFolderWorkspaceSupportContext.isEqualTo(true),
-					BrowserLocalFolderSupportContext.isEqualTo(true),
-				),
-			);
+		this.button.label = hasFolder ? localize('debug.createLaunch', 'Create a launch.json file') : localize('debug.openFolder', 'Open Folder');
+		this.button.enabled = hasFolder || this.contexts.contextMatchesRules(ContextKeyExpr.or(OpenFolderWorkspaceSupportContext.isEqualTo(true), BrowserLocalFolderSupportContext.isEqualTo(true)));
 		this.description.textContent = hasFolder
-			? localize(
-					'debug.welcomeConfigure',
-					'To customize Run and Debug, create a launch.json file and add a debug configuration.',
-				)
-			: localize(
-					'debug.welcomeOpenFolder',
-					'To customize Run and Debug, open a folder and create a launch.json file.',
-				);
+			? localize('debug.welcomeConfigure', 'To customize Run and Debug, create a launch.json file and add a debug configuration.')
+			: localize('debug.welcomeOpenFolder', 'To customize Run and Debug, open a folder and create a launch.json file.');
 	}
 
 	private async configure(): Promise<void> {

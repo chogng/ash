@@ -8,10 +8,7 @@ import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 
-test('Sessions mode and page-tab activation reuse Parts while retaining the conversation and dirty document', async ({
-	target,
-	workbench,
-}) => {
+test('Sessions mode and page-tab activation reuse Parts while retaining the conversation and dirty document', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
@@ -25,9 +22,7 @@ test('Sessions mode and page-tab activation reuse Parts while retaining the conv
 	await document.waitForEditorFocus();
 	await document.waitForTypeInEditor('Retained dirty document');
 	await chat.waitForEditorFocus();
-	await expect(
-		page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }),
-	).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true })).toHaveAttribute('aria-pressed', 'true');
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
 	const creatorNavigation = page.locator('.ash-creator-home');
@@ -44,33 +39,18 @@ test('Sessions mode and page-tab activation reuse Parts while retaining the conv
 	await expect(page.locator('[data-part="auxiliarybar"]')).toContainText('Page');
 	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
 	await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
-	await expect(navigation.getByRole('button', { name: 'Artifacts', exact: true })).toHaveAttribute(
-		'aria-current',
-		'page',
-	);
+	await expect(navigation.getByRole('button', { name: 'Artifacts', exact: true })).toHaveAttribute('aria-current', 'page');
 	await creatorNavigation.getByRole('button', { name: 'Design', exact: true }).click();
 	expect(await sidebarContent.evaluate((element, retained) => element === retained, retainedSidebar)).toBe(true);
 	await navigation.getByRole('button', { name: 'Projects', exact: true }).focus();
 	await navigation.getByRole('button', { name: 'Projects', exact: true }).press('Enter');
-	await expect(navigation.getByRole('button', { name: 'Projects', exact: true })).toHaveAttribute(
-		'aria-current',
-		'page',
-	);
+	await expect(navigation.getByRole('button', { name: 'Projects', exact: true })).toHaveAttribute('aria-current', 'page');
 	await expect(page.locator('.ash-projects')).toBeVisible();
 	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
 	for (const part of parts) {
 		try {
-			expect(
-				await part.evaluate(
-					element =>
-						element.isConnected &&
-						element ===
-							element.ownerDocument!.querySelector(
-								`[data-part="${(element as HTMLElement).dataset.part}"]`,
-							),
-				),
-			).toBe(true);
+			expect(await part.evaluate(element => element.isConnected && element === element.ownerDocument!.querySelector(`[data-part="${(element as HTMLElement).dataset.part}"]`))).toBe(true);
 		} finally {
 			await part.dispose();
 		}
@@ -84,18 +64,12 @@ test('Sessions mode and page-tab activation reuse Parts while retaining the conv
 		.locator('[data-part="editor"]')
 		.getByRole('tab', { name: /^Untitled-1(?:,|$)/u })
 		.press('Delete');
-	await page
-		.getByRole('dialog', { name: 'Save Changes', exact: true })
-		.getByRole('button', { name: "Don't Save", exact: true })
-		.click();
+	await page.getByRole('dialog', { name: 'Save Changes', exact: true }).getByRole('button', { name: "Don't Save", exact: true }).click();
 });
 
 test('Sessions Artifacts retains Design and Slides canvases independently', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	const creator = page.locator('.ash-creator');
 	await expect(creator.getByRole('heading', { name: 'Artifacts', exact: true })).toBeVisible();
 	await expect(creator.locator('.ash-artifacts-create')).toHaveCount(3);
@@ -119,10 +93,7 @@ test('Sessions Artifacts retains Design and Slides canvases independently', asyn
 	await canvas.press('+');
 	const world = canvas.locator('.ash-canvas-world');
 	const transform = await world.evaluate(element => (element as HTMLElement).style.transform);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await expect(creator.getByRole('button', { name: 'Docs', exact: true })).toBeFocused();
 	await creator.getByRole('button', { name: 'Slides', exact: true }).click();
 	workspace = creator.locator('.ash-creator-workspace:visible');
@@ -131,63 +102,33 @@ test('Sessions Artifacts retains Design and Slides canvases independently', asyn
 	await workspace.getByRole('button', { name: 'Add slide', exact: true }).click();
 	await expect(canvas.locator('[data-shape-id]').first()).toBeVisible();
 	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await design.click();
 	canvas = creator.locator('.ash-creator-workspace:visible').getByRole('region', { name: 'Design canvas' });
 	await expect(canvas.locator('[data-shape-id]')).toHaveCount(1);
 	await expect.poll(() => world.evaluate(element => (element as HTMLElement).style.transform)).toBe(transform);
 	await canvas.press('ControlOrMeta+z');
 	await expect(canvas.locator('[data-shape-id]')).toHaveCount(0);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.setViewportSize({ width: 620, height: 860 });
 	await expect(creator).toHaveClass(/narrow/);
-	await expect
-		.poll(() =>
-			creator
-				.locator('.ash-creator-modes')
-				.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length),
-		)
-		.toBe(1);
+	await expect.poll(() => creator.locator('.ash-creator-modes').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(1);
 	await expect(design).toHaveCSS('min-width', '0px');
 });
 
-test('Sessions Creator resets side panel widths and retains them across page changes and reopening', async ({
-	application,
-	target,
-	workbench,
-}) => {
+test('Sessions Creator resets side panel widths and retains them across page changes and reopening', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	await new QuickAccess(page).runCommand('workbench.sessions.sidebar.designLayers');
 	const sidebar = page.locator('[data-part="sidebar"]');
-	const leftSash = sidebar
-		.locator('xpath=../../..')
-		.locator(':scope > .ash-sash:not(.ash-sash-disabled):visible')
-		.first();
-	const rightSash = page
-		.locator('[data-part="auxiliarybar"]')
-		.locator('xpath=../../..')
-		.locator(':scope > .ash-sash:not(.ash-sash-disabled):visible')
-		.last();
+	const leftSash = sidebar.locator('xpath=../../..').locator(':scope > .ash-sash:not(.ash-sash-disabled):visible').first();
+	const rightSash = page.locator('[data-part="auxiliarybar"]').locator('xpath=../../..').locator(':scope > .ash-sash:not(.ash-sash-disabled):visible').last();
 	const panelWidths = () =>
 		page
 			.locator('.ash-workbench-part-frame')
 			.evaluateAll(frames =>
-				frames
-					.filter(frame =>
-						frame.querySelector(':scope > [data-part="sidebar"], :scope > [data-part="auxiliarybar"]'),
-					)
-					.map(frame => Math.round(frame.getBoundingClientRect().width)),
+				frames.filter(frame => frame.querySelector(':scope > [data-part="sidebar"], :scope > [data-part="auxiliarybar"]')).map(frame => Math.round(frame.getBoundingClientRect().width)),
 			);
 	await expect.poll(panelWidths).toHaveLength(2);
 	// Establish the reset baseline after explicitly activating the tool view.
@@ -210,9 +151,7 @@ test('Sessions Creator resets side panel widths and retains them across page cha
 			await page.setViewportSize({ width, height: 800 });
 		}
 		// Electron DIP sizes and Chromium viewport sizes can round to adjacent pixels under Windows display scaling.
-		await expect
-			.poll(async () => Math.abs((await page.evaluate(() => window.innerWidth)) - contentWidth))
-			.toBeLessThanOrEqual(1);
+		await expect.poll(async () => Math.abs((await page.evaluate(() => window.innerWidth)) - contentWidth)).toBeLessThanOrEqual(1);
 		await expect.poll(panelWidths).toEqual(initialWidths);
 	}
 	await leftSash.focus();
@@ -238,10 +177,7 @@ test('Sessions Creator resets side panel widths and retains them across page cha
 	await leftSash.dblclick();
 	await rightSash.dblclick();
 	await expect.poll(panelWidths).toEqual(initialWidths);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	await expect.poll(panelWidths).toEqual(initialWidths);
 	await leftSash.focus();
@@ -252,22 +188,14 @@ test('Sessions Creator resets side panel widths and retains them across page cha
 	await expect.poll(panelWidths).toEqual(resized);
 });
 
-test('Sessions Creator uses Chinese mode names, actions and keyboard help', async ({
-	application,
-	target,
-	workbench,
-	restartWorkbench,
-}) => {
+test('Sessions Creator uses Chinese mode names, actions and keyboard help', async ({ application, target, workbench, restartWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 	await language.fill('简体中文');
 	await language.press('Enter');
 	({ workbench, application } = await restartWorkbench());
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	const creator = page.locator('.ash-creator');
 	for (const title of ['文档', '幻灯片', '设计']) {
 		await expect(creator.getByRole('button', { name: title, exact: true })).toBeVisible();
@@ -291,22 +219,13 @@ test('Sessions Creator uses Chinese mode names, actions and keyboard help', asyn
 		await expect(page.getByRole('menu').getByRole('menuitem', { name: label, exact: true })).toBeEnabled();
 	}
 	await page.keyboard.press('Escape');
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await expect(creator.getByRole('button', { name: '设计', exact: true })).toBeVisible();
 });
 
-test('Sessions Design vector booleans keep editable operands, holes, history and exported paths', async ({
-	target,
-	workbench,
-}, testInfo) => {
+test('Sessions Design vector booleans keep editable operands, holes, history and exported paths', async ({ target, workbench }, testInfo) => {
 	let page = await workbench.openAgentsWindow(target.kind);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	let canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
 	let properties = page.locator('[data-part="auxiliarybar"]');
@@ -365,9 +284,7 @@ test('Sessions Design vector booleans keep editable operands, holes, history and
 	await page.screenshot({ path: testInfo.outputPath('design-vector-booleans.png') });
 	if (target.kind === 'browser') {
 		await page.evaluate(async () => {
-			const folder = await (
-				await navigator.storage.getDirectory()
-			).getDirectoryHandle(`ash-vector-${crypto.randomUUID()}`, { create: true });
+			const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(`ash-vector-${crypto.randomUUID()}`, { create: true });
 			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
 		});
 		await canvas.press('Shift+F10');
@@ -385,9 +302,7 @@ test('Sessions Design vector booleans keep editable operands, holes, history and
 			.click();
 		await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Opened vectors.ash-design');
 		await canvas.press('Tab');
-		await expect(properties.getByRole('combobox', { name: 'Contour', exact: true }).locator('option')).toHaveCount(
-			2,
-		);
+		await expect(properties.getByRole('combobox', { name: 'Contour', exact: true }).locator('option')).toHaveCount(2);
 	}
 	await canvas.getByRole('button', { name: 'Code', exact: true }).click();
 	const code = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
@@ -396,15 +311,9 @@ test('Sessions Design vector booleans keep editable operands, holes, history and
 	expect(code).toContain('<path');
 });
 
-test('Sessions Design edits four gradient types, canvas stops and paint stacks through save and reopen', async ({
-	target,
-	workbench,
-}, testInfo) => {
+test('Sessions Design edits four gradient types, canvas stops and paint stacks through save and reopen', async ({ target, workbench }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }),
 		properties = page.locator('[data-part="auxiliarybar"]');
@@ -429,9 +338,7 @@ test('Sessions Design edits four gradient types, canvas stops and paint stacks t
 	const stops = properties.getByRole('combobox', { name: 'Gradient stop', exact: true });
 	await expect(stops.locator('option')).toHaveCount(3);
 	await canvas.press('ArrowRight');
-	await expect(properties.getByRole('spinbutton', { name: 'Gradient stop position (%)', exact: true })).toHaveValue(
-		'51',
-	);
+	await expect(properties.getByRole('spinbutton', { name: 'Gradient stop position (%)', exact: true })).toHaveValue('51');
 	const handle = canvas.locator('[data-gradient-stop]').nth(1),
 		box = await handle.boundingBox();
 	expect(box).toBeTruthy();
@@ -439,13 +346,9 @@ test('Sessions Design edits four gradient types, canvas stops and paint stacks t
 	await page.mouse.down();
 	await page.mouse.move(box!.x + box!.width / 2 + 24, box!.y + box!.height / 2, { steps: 4 });
 	await page.mouse.up();
-	await expect(properties.getByRole('spinbutton', { name: 'Gradient stop position (%)', exact: true })).toHaveValue(
-		'61',
-	);
+	await expect(properties.getByRole('spinbutton', { name: 'Gradient stop position (%)', exact: true })).toHaveValue('61');
 	await canvas.press('ControlOrMeta+z');
-	await expect(properties.getByRole('spinbutton', { name: 'Gradient stop position (%)', exact: true })).toHaveValue(
-		'51',
-	);
+	await expect(properties.getByRole('spinbutton', { name: 'Gradient stop position (%)', exact: true })).toHaveValue('51');
 	for (const next of ['radial', 'angular', 'diamond']) {
 		await type.selectOption(next);
 		if (next === 'radial') {
@@ -464,9 +367,7 @@ test('Sessions Design edits four gradient types, canvas stops and paint stacks t
 	await field('Paint opacity (%)', '35');
 	await properties.getByRole('combobox', { name: 'Fill blend mode', exact: true }).selectOption('screen');
 	await properties.getByRole('button', { name: 'Move fill down', exact: true }).click();
-	await expect(properties.getByRole('combobox', { name: 'Fill layer', exact: true }).locator('option')).toHaveCount(
-		2,
-	);
+	await expect(properties.getByRole('combobox', { name: 'Fill layer', exact: true }).locator('option')).toHaveCount(2);
 	await properties.getByRole('checkbox', { name: 'Fill visible', exact: true }).uncheck();
 	await expect(canvas.locator('[data-paint-id]')).toHaveCount(1);
 	await properties.getByRole('checkbox', { name: 'Fill visible', exact: true }).check();
@@ -481,11 +382,7 @@ test('Sessions Design edits four gradient types, canvas stops and paint stacks t
 	expect(paintedBox).toBeTruthy();
 	const corner = await paintPixel(page, paintedBox!.x + 12, paintedBox!.y + 12);
 	expect(corner.slice(0, 3)).toEqual([255, 255, 255]);
-	const center = await paintPixel(
-		page,
-		paintedBox!.x + paintedBox!.width / 2,
-		paintedBox!.y + paintedBox!.height / 2,
-	);
+	const center = await paintPixel(page, paintedBox!.x + paintedBox!.width / 2, paintedBox!.y + paintedBox!.height / 2);
 	expect(center[0]).toBeGreaterThan(240);
 	expect(center[1]).toBeLessThan(20);
 	expect(center[2]).toBeLessThan(20);
@@ -497,15 +394,9 @@ test('Sessions Design edits four gradient types, canvas stops and paint stacks t
 	expect(code).toContain('"type": "diamond"');
 });
 
-test('Sessions Design smooths corners and preserves aligned strokes around holes through outlining and reopen', async ({
-	target,
-	workbench,
-}, testInfo) => {
+test('Sessions Design smooths corners and preserves aligned strokes around holes through outlining and reopen', async ({ target, workbench }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }),
 		properties = page.locator('[data-part="auxiliarybar"]');
@@ -546,8 +437,7 @@ test('Sessions Design smooths corners and preserves aligned strokes around holes
 	await canvas.press('ControlOrMeta+e');
 	await field('Stroke width', '10');
 	const alignment = properties.getByRole('combobox', { name: 'Stroke alignment', exact: true });
-	const inside = (x: number, y: number) =>
-		plain.evaluate((path, p) => (path as SVGGeometryElement).isPointInFill(new DOMPoint(p.x, p.y)), { x, y });
+	const inside = (x: number, y: number) => plain.evaluate((path, p) => (path as SVGGeometryElement).isPointInFill(new DOMPoint(p.x, p.y)), { x, y });
 	await alignment.selectOption('inside');
 	await expect(canvas.locator('path[clip-path]')).toHaveCount(1);
 	await properties.getByRole('button', { name: 'Outline stroke', exact: true }).click();
@@ -578,15 +468,9 @@ test('Sessions Design smooths corners and preserves aligned strokes around holes
 	expect(code).toContain('"strokeAlignment": "outside"');
 });
 
-test('Sessions Design edits independent arrow endpoints, preserves network endpoints and outlines exported tips', async ({
-	target,
-	workbench,
-}, testInfo) => {
+test('Sessions Design edits independent arrow endpoints, preserves network endpoints and outlines exported tips', async ({ target, workbench }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }),
 		properties = page.locator('[data-part="auxiliarybar"]'),
@@ -616,23 +500,14 @@ test('Sessions Design edits independent arrow endpoints, preserves network endpo
 		return { x: b.x, y: b.y, width: b.width, height: b.height };
 	});
 	const besideTip = { x: tipBounds.x + tipBounds.width - 1, y: tipBounds.y + tipBounds.height / 2 + 5 };
-	expect(
-		await group
-			.locator('path[stroke]')
-			.evaluate((path, p) => (path as SVGGeometryElement).isPointInStroke(new DOMPoint(p.x, p.y)), besideTip),
-	).toBe(false);
+	expect(await group.locator('path[stroke]').evaluate((path, p) => (path as SVGGeometryElement).isPointInStroke(new DOMPoint(p.x, p.y)), besideTip)).toBe(false);
 	await properties.getByRole('button', { name: 'Outline stroke', exact: true }).click();
 	const outlined = canvas.locator('.ash-sessions-design-shapes > path[data-shape-id]');
 	const outlinedBounds = await outlined.evaluate(path => {
 		const b = (path as SVGGraphicsElement).getBBox();
 		return { x: b.x, y: b.y, width: b.width, height: b.height };
 	});
-	expect(
-		await outlined.evaluate(
-			(path, p) => (path as SVGGeometryElement).isPointInFill(new DOMPoint(p.x, p.y)),
-			besideTip,
-		),
-	).toBe(false);
+	expect(await outlined.evaluate((path, p) => (path as SVGGeometryElement).isPointInFill(new DOMPoint(p.x, p.y)), besideTip)).toBe(false);
 	for (const key of ['x', 'y', 'width', 'height'] as const) {
 		expect(Math.abs(tipBounds[key] - outlinedBounds[key])).toBeLessThan(0.1);
 	}
@@ -661,15 +536,9 @@ test('Sessions Design edits independent arrow endpoints, preserves network endpo
 	expect(code).toContain('"endpoint": "reverse-triangle"');
 });
 
-test('Sessions Design rounds editable nodes and previews signed offsets with holes and undo', async ({
-	target,
-	workbench,
-}, testInfo) => {
+test('Sessions Design rounds editable nodes and previews signed offsets with holes and undo', async ({ target, workbench }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }),
 		properties = page.locator('[data-part="auxiliarybar"]');
@@ -687,8 +556,7 @@ test('Sessions Design rounds editable nodes and previews signed offsets with hol
 	await canvas.press('Escape');
 	await field('Node corner radius', '20');
 	const artwork = canvas.locator('.ash-sessions-design-shapes > path[data-shape-id]');
-	const inside = (x: number, y: number) =>
-		artwork.evaluate((path, p) => (path as SVGGeometryElement).isPointInFill(new DOMPoint(p.x, p.y)), { x, y });
+	const inside = (x: number, y: number) => artwork.evaluate((path, p) => (path as SVGGeometryElement).isPointInFill(new DOMPoint(p.x, p.y)), { x, y });
 	expect(await inside(1, 1)).toBe(false);
 	expect(await inside(20, 20)).toBe(true);
 	await canvas.press('Enter');
@@ -749,15 +617,9 @@ test('Sessions Design rounds editable nodes and previews signed offsets with hol
 	await page.screenshot({ path: testInfo.outputPath('design-vector-offset.png') });
 });
 
-test('Sessions Design variable width supports canvas points, numeric editing, outlining and persistence', async ({
-	target,
-	workbench,
-}, testInfo) => {
+test('Sessions Design variable width supports canvas points, numeric editing, outlining and persistence', async ({ target, workbench }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }),
 		properties = page.locator('[data-part="auxiliarybar"]'),
@@ -788,15 +650,7 @@ test('Sessions Design variable width supports canvas points, numeric editing, ou
 	await page.mouse.down();
 	await page.mouse.move(bounds.x + bounds.width / 2 + 40, bounds.y + bounds.height / 2, { steps: 4 });
 	await page.mouse.up();
-	await expect
-		.poll(async () =>
-			Number(
-				await properties
-					.getByRole('spinbutton', { name: 'Width point position (%)', exact: true })
-					.inputValue(),
-			),
-		)
-		.toBeGreaterThan(60);
+	await expect.poll(async () => Number(await properties.getByRole('spinbutton', { name: 'Width point position (%)', exact: true }).inputValue())).toBeGreaterThan(60);
 	await canvas.press('ControlOrMeta+z');
 	await expect(ribbon).toHaveAttribute('d', wide!);
 	const side = canvas.locator('[data-width-handle="edge"]').nth(2),
@@ -838,15 +692,9 @@ test('Sessions Design variable width supports canvas points, numeric editing, ou
 	await page.screenshot({ path: testInfo.outputPath('design-variable-width.png') });
 });
 
-test('Sessions Design branches shared vector nodes and paints network regions', async ({
-	target,
-	workbench,
-}, testInfo) => {
+test('Sessions Design branches shared vector nodes and paints network regions', async ({ target, workbench }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }),
 		properties = page.locator('[data-part="auxiliarybar"]'),
@@ -875,31 +723,17 @@ test('Sessions Design branches shared vector nodes and paints network regions', 
 	await page.mouse.move(viewportBox.x + 100, viewportBox.y + 260);
 	await page.mouse.up();
 	await expect(nodes.locator('option')).toHaveCount(4);
-	await expect(
-		properties.getByRole('combobox', { name: 'Network segment', exact: true }).locator('option'),
-	).toHaveCount(4);
+	await expect(properties.getByRole('combobox', { name: 'Network segment', exact: true }).locator('option')).toHaveCount(4);
 	await canvas.press('Escape');
 	await canvas.press('v');
 	await nodes.selectOption('0');
-	const before = await canvas
-		.locator('.ash-sessions-design-shapes > g[data-shape-id] > path')
-		.last()
-		.getAttribute('d');
+	const before = await canvas.locator('.ash-sessions-design-shapes > g[data-shape-id] > path').last().getAttribute('d');
 	await canvas.press('ArrowRight');
-	await expect(canvas.locator('.ash-sessions-design-shapes > g[data-shape-id] > path').last()).not.toHaveAttribute(
-		'd',
-		before!,
-	);
+	await expect(canvas.locator('.ash-sessions-design-shapes > g[data-shape-id] > path').last()).not.toHaveAttribute('d', before!);
 	await canvas.press('ControlOrMeta+z');
-	await expect(canvas.locator('.ash-sessions-design-shapes > g[data-shape-id] > path').last()).toHaveAttribute(
-		'd',
-		before!,
-	);
+	await expect(canvas.locator('.ash-sessions-design-shapes > g[data-shape-id] > path').last()).toHaveAttribute('d', before!);
 	await properties.getByRole('checkbox', { name: 'Region filled', exact: true }).uncheck();
-	await expect(canvas.locator('.ash-sessions-design-shapes > g[data-shape-id] > path').first()).toHaveAttribute(
-		'd',
-		'',
-	);
+	await expect(canvas.locator('.ash-sessions-design-shapes > g[data-shape-id] > path').first()).toHaveAttribute('d', '');
 	await canvas.press('ControlOrMeta+z');
 	await expect(properties.getByRole('checkbox', { name: 'Region filled', exact: true })).toBeChecked();
 	await properties.getByRole('button', { name: 'Split segment', exact: true }).click();
@@ -910,9 +744,7 @@ test('Sessions Design branches shared vector nodes and paints network regions', 
 	const regionColor = properties.getByRole('textbox', { name: 'Region color', exact: true });
 	await regionColor.fill('#2266cc');
 	await regionColor.press('Tab');
-	await expect(canvas.locator('.ash-sessions-design-shapes > g[data-shape-id] > path[fill="#2266cc"]')).toHaveCount(
-		1,
-	);
+	await expect(canvas.locator('.ash-sessions-design-shapes > g[data-shape-id] > path[fill="#2266cc"]')).toHaveCount(1);
 	if (target.kind === 'browser') {
 		await reopenOutlinedDesign(page, 'network.ash-design');
 		await canvas.press('Tab');
@@ -926,15 +758,9 @@ test('Sessions Design branches shared vector nodes and paints network regions', 
 	expect(code).toContain('fill="#2266cc"');
 });
 
-test('Sessions Design connects crossings, merges anchors and previews simplification with atomic undo', async ({
-	target,
-	workbench,
-}, testInfo) => {
+test('Sessions Design connects crossings, merges anchors and previews simplification with atomic undo', async ({ target, workbench }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }),
 		properties = page.locator('[data-part="auxiliarybar"]'),
@@ -957,9 +783,7 @@ test('Sessions Design connects crossings, merges anchors and previews simplifica
 	await properties.getByRole('button', { name: 'Add intersection nodes', exact: true }).click();
 	await expect(nodes.locator('option')).toHaveCount(5);
 	await expect(segments.locator('option')).toHaveCount(6);
-	await expect(properties.getByRole('combobox', { name: 'Fill region', exact: true }).locator('option')).toHaveCount(
-		2,
-	);
+	await expect(properties.getByRole('combobox', { name: 'Fill region', exact: true }).locator('option')).toHaveCount(2);
 	await canvas.press('ControlOrMeta+z');
 	await expect(nodes.locator('option')).toHaveCount(4);
 	await canvas.press('p');
@@ -975,8 +799,7 @@ test('Sessions Design connects crossings, merges anchors and previews simplifica
 		}));
 		const x = (Math.min(...points.map(point => point.rect.x)) + Math.max(...points.map(point => point.rect.x))) / 2,
 			y = (Math.min(...points.map(point => point.rect.y)) + Math.max(...points.map(point => point.rect.y))) / 2;
-		return points.sort((a, b) => Math.hypot(a.rect.x - x, a.rect.y - y) - Math.hypot(b.rect.x - x, b.rect.y - y))[0]
-			.index;
+		return points.sort((a, b) => Math.hypot(a.rect.x - x, a.rect.y - y) - Math.hypot(b.rect.x - x, b.rect.y - y))[0].index;
 	});
 	await nodes.selectOption({ value: junction });
 	await properties.getByRole('button', { name: 'Cut at node', exact: true }).click();
@@ -1044,15 +867,9 @@ test('Sessions Design connects crossings, merges anchors and previews simplifica
 	await page.screenshot({ path: testInfo.outputPath('design-vector-topology.png') });
 });
 
-test('Sessions Design resolves overlapping lines, self-crossing cubics and tangent contacts', async ({
-	target,
-	workbench,
-}) => {
+test('Sessions Design resolves overlapping lines, self-crossing cubics and tangent contacts', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }),
 		properties = page.locator('[data-part="auxiliarybar"]'),
@@ -1153,15 +970,9 @@ test('Sessions Design resolves overlapping lines, self-crossing cubics and tange
 	}
 });
 
-test('Sessions Design converts shaped variable-font text to editable outlines and restores text with undo', async ({
-	target,
-	workbench,
-}, testInfo) => {
+test('Sessions Design converts shaped variable-font text to editable outlines and restores text with undo', async ({ target, workbench }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }),
 		properties = page.locator('[data-part="auxiliarybar"]');
@@ -1174,9 +985,7 @@ test('Sessions Design converts shaped variable-font text to editable outlines an
 	const family = properties.getByRole('combobox', { name: 'Font family', exact: true });
 	await family.fill('Noto Sans');
 	await family.press('Tab');
-	await properties
-		.getByLabel('Font file for outlines', { exact: true })
-		.setInputFiles('test/smoke/fixtures/design-fonts/NotoSans.ttf');
+	await properties.getByLabel('Font file for outlines', { exact: true }).setInputFiles('test/smoke/fixtures/design-fonts/NotoSans.ttf');
 	await expect(properties.getByRole('status').filter({ hasText: 'Font loaded.' })).toBeVisible();
 	const ink = await canvas
 		.locator('[data-text-paragraph]')
@@ -1262,12 +1071,7 @@ test('Sessions Design converts shaped variable-font text to editable outlines an
 	await page.screenshot({ path: testInfo.outputPath('design-text-outlines.png') });
 });
 
-async function reopenOutlinedDesign(
-	page: Page,
-	name: string,
-	application?: PlaywrightApplication,
-	filePath?: string,
-): Promise<void> {
+async function reopenOutlinedDesign(page: Page, name: string, application?: PlaywrightApplication, filePath?: string): Promise<void> {
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
 	if (application && 'windows' in application) {
 		if (!filePath) throw new Error('Desktop persistence requires a test-owned path');
@@ -1278,9 +1082,7 @@ async function reopenOutlinedDesign(
 		}, filePath);
 	} else {
 		await page.evaluate(async () => {
-			const folder = await (
-				await navigator.storage.getDirectory()
-			).getDirectoryHandle(`ash-outline-${crypto.randomUUID()}`, { create: true });
+			const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(`ash-outline-${crypto.randomUUID()}`, { create: true });
 			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
 		});
 	}
@@ -1293,20 +1095,13 @@ async function reopenOutlinedDesign(
 	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText(`Saved ${name}`);
 	await canvas.press('Escape');
 	await clickCanvasMenu(canvas, 'Open design', application);
-	if (!application || !('windows' in application))
-		await page.locator('.ash-quick-pick-row-label').getByText(name, { exact: true }).click();
+	if (!application || !('windows' in application)) await page.locator('.ash-quick-pick-row-label').getByText(name, { exact: true }).click();
 	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText(`Opened ${name}`);
 }
 
-test('Sessions Design keeps rich outline colors, truncation and font failures atomic across save and reopen', async ({
-	target,
-	workbench,
-}, testInfo) => {
+test('Sessions Design keeps rich outline colors, truncation and font failures atomic across save and reopen', async ({ target, workbench }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }),
 		properties = page.locator('[data-part="auxiliarybar"]');
@@ -1330,9 +1125,7 @@ test('Sessions Design keeps rich outline colors, truncation and font failures at
 	const family = properties.getByRole('combobox', { name: 'Font family', exact: true });
 	await family.fill('Noto Sans');
 	await family.press('Tab');
-	await properties
-		.getByLabel('Font file for outlines', { exact: true })
-		.setInputFiles('test/smoke/fixtures/design-fonts/NotoSans.ttf');
+	await properties.getByLabel('Font file for outlines', { exact: true }).setInputFiles('test/smoke/fixtures/design-fonts/NotoSans.ttf');
 	await expect(properties.getByRole('status').filter({ hasText: 'Font loaded.' })).toBeVisible();
 	const weight = properties.getByRole('spinbutton', { name: 'Font weight', exact: true });
 	await weight.fill('650');
@@ -1349,17 +1142,11 @@ test('Sessions Design keeps rich outline colors, truncation and font failures at
 	await canvas.press('Escape');
 	await canvas.press('Tab');
 	await properties.getByRole('button', { name: 'Flatten selection', exact: true }).click();
-	await expect(canvas.locator('.ash-sessions-design-shapes > g[data-shape-id] > path[fill="#cc2200"]')).toHaveCount(
-		1,
-	);
-	await expect(canvas.locator('.ash-sessions-design-shapes > g[data-shape-id] > path[fill="#808080"]')).toHaveCount(
-		1,
-	);
+	await expect(canvas.locator('.ash-sessions-design-shapes > g[data-shape-id] > path[fill="#cc2200"]')).toHaveCount(1);
+	await expect(canvas.locator('.ash-sessions-design-shapes > g[data-shape-id] > path[fill="#808080"]')).toHaveCount(1);
 	if (target.kind === 'browser') {
 		await reopenOutlinedDesign(page, 'outlined-text.ash-design');
-		await expect(
-			canvas.locator('.ash-sessions-design-shapes > g[data-shape-id] > path[fill="#cc2200"]'),
-		).toHaveCount(1);
+		await expect(canvas.locator('.ash-sessions-design-shapes > g[data-shape-id] > path[fill="#cc2200"]')).toHaveCount(1);
 	}
 	await canvas.press('Escape');
 	await canvas.press('t');
@@ -1393,10 +1180,7 @@ test(
 	{ tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] },
 	async ({ application, target, workbench, testWorkspace }, testInfo) => {
 		const page = await workbench.openAgentsWindow(target.kind);
-		await page
-			.locator('.ash-sessions-activity-content')
-			.getByRole('button', { name: 'Artifacts', exact: true })
-			.click();
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 		await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 		const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }),
 			properties = page.locator('[data-part="auxiliarybar"]');
@@ -1459,19 +1243,10 @@ test(
 		await action('Add effect');
 		await properties.getByRole('combobox', { name: 'Effect type', exact: true }).selectOption('background-blur');
 		await action('Add effect');
-		await expect(properties.getByRole('combobox', { name: 'Effect', exact: true }).locator('option')).toHaveCount(
-			4,
-		);
-		await reopenOutlinedDesign(
-			page,
-			'Effects stack.ash-design',
-			application,
-			join(await realpath(testWorkspace.directory), 'Effects stack.ash-design'),
-		);
+		await expect(properties.getByRole('combobox', { name: 'Effect', exact: true }).locator('option')).toHaveCount(4);
+		await reopenOutlinedDesign(page, 'Effects stack.ash-design', application, join(await realpath(testWorkspace.directory), 'Effects stack.ash-design'));
 		await canvas.press('ControlOrMeta+a');
-		await expect(properties.getByRole('combobox', { name: 'Effect', exact: true }).locator('option')).toHaveCount(
-			4,
-		);
+		await expect(properties.getByRole('combobox', { name: 'Effect', exact: true }).locator('option')).toHaveCount(4);
 		await page.screenshot({ path: testInfo.outputPath('design-effects-stack.png') });
 	},
 );
@@ -1482,10 +1257,7 @@ for (const type of ['layer-blur', 'background-blur'] as const) {
 		{ tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] },
 		async ({ application, target, workbench, testWorkspace }, testInfo) => {
 			const page = await workbench.openAgentsWindow(target.kind);
-			await page
-				.locator('.ash-sessions-activity-content')
-				.getByRole('button', { name: 'Artifacts', exact: true })
-				.click();
+			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 			await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 			const canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
 			const properties = page.locator('[data-part="auxiliarybar"]');
@@ -1578,22 +1350,10 @@ for (const type of ['layer-blur', 'background-blur'] as const) {
 			await expect(end).toHaveCount(0);
 			await field('Blur start X (%)', '-50');
 			await field('Blur end X (%)', '-50');
-			await reopenOutlinedDesign(
-				page,
-				`Progressive ${type}.ash-design`,
-				application,
-				join(await realpath(testWorkspace.directory), `Progressive ${type}.ash-design`),
-			);
-			await page
-				.getByRole('tree', { name: 'Layers', exact: true })
-				.getByRole('treeitem', { name: 'Progressive blur', exact: true })
-				.click();
-			await expect(properties.getByRole('combobox', { name: 'Blur mode', exact: true })).toHaveValue(
-				'progressive',
-			);
-			await expect(properties.getByRole('spinbutton', { name: 'Blur start X (%)', exact: true })).toHaveValue(
-				'-50',
-			);
+			await reopenOutlinedDesign(page, `Progressive ${type}.ash-design`, application, join(await realpath(testWorkspace.directory), `Progressive ${type}.ash-design`));
+			await page.getByRole('tree', { name: 'Layers', exact: true }).getByRole('treeitem', { name: 'Progressive blur', exact: true }).click();
+			await expect(properties.getByRole('combobox', { name: 'Blur mode', exact: true })).toHaveValue('progressive');
+			await expect(properties.getByRole('spinbutton', { name: 'Blur start X (%)', exact: true })).toHaveValue('-50');
 			await expect.poll(async () => Math.abs((await pixel(112, 200))[0] - blurred)).toBeLessThanOrEqual(2);
 			await page.screenshot({ path: testInfo.outputPath(`progressive-${type}.png`) });
 			if (type === 'background-blur') {
@@ -1618,9 +1378,7 @@ for (const type of ['layer-blur', 'background-blur'] as const) {
 				target.appServerMode === 'required'
 					? await readFile(exportPath, 'utf8')
 					: await page.evaluate(async () => {
-							const folder = await (
-								window as unknown as { showDirectoryPicker(): Promise<FileSystemDirectoryHandle> }
-							).showDirectoryPicker();
+							const folder = await (window as unknown as { showDirectoryPicker(): Promise<FileSystemDirectoryHandle> }).showDirectoryPicker();
 							return (await (await folder.getFileHandle('progressive.svg')).getFile()).text();
 						});
 
@@ -1646,11 +1404,7 @@ for (const type of ['layer-blur', 'background-blur'] as const) {
 				await preview.setContent(code);
 				const exported = await preview.locator('[data-design-kind="rectangle"]').last().boundingBox();
 				expect(exported).toBeTruthy();
-				await expect
-					.poll(async () =>
-						Math.abs((await paintPixel(preview, exported!.x + 112, exported!.y + 200))[0] - blurred),
-					)
-					.toBeLessThanOrEqual(2);
+				await expect.poll(async () => Math.abs((await paintPixel(preview, exported!.x + 112, exported!.y + 200))[0] - blurred)).toBeLessThanOrEqual(2);
 				await preview.screenshot({ path: testInfo.outputPath(`progressive-${type}-export.png`) });
 				const svgBounds = await preview.evaluate(async content => {
 					const root = new DOMParser().parseFromString(content, 'image/svg+xml').documentElement;
@@ -1663,19 +1417,7 @@ for (const type of ['layer-blur', 'background-blur'] as const) {
 				}, svg);
 				const imageBox = await preview.locator('img').boundingBox();
 				expect(imageBox).toBeTruthy();
-				await expect
-					.poll(async () =>
-						Math.abs(
-							(
-								await paintPixel(
-									preview,
-									imageBox!.x + 212 - svgBounds[0],
-									imageBox!.y + 300 - svgBounds[1],
-								)
-							)[0] - blurred,
-						),
-					)
-					.toBeLessThanOrEqual(2);
+				await expect.poll(async () => Math.abs((await paintPixel(preview, imageBox!.x + 212 - svgBounds[0], imageBox!.y + 300 - svgBounds[1]))[0] - blurred)).toBeLessThanOrEqual(2);
 				await preview.screenshot({ path: testInfo.outputPath(`progressive-${type}-svg.png`) });
 			} finally {
 				await preview.close();
@@ -1684,16 +1426,9 @@ for (const type of ['layer-blur', 'background-blur'] as const) {
 	);
 }
 
-test('Sessions Design automatically retains an untitled draft across window reopen without save confirmation', async ({
-	target,
-	workbench,
-	application,
-}, testInfo) => {
+test('Sessions Design automatically retains an untitled draft across window reopen without save confirmation', async ({ target, workbench, application }, testInfo) => {
 	let page = await workbench.openAgentsWindow(target.kind);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	let canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
 	await expect(page.locator('.ash-creator-header')).toBeHidden();
@@ -1703,10 +1438,7 @@ test('Sessions Design automatically retains an untitled draft across window reop
 		.poll(async () => {
 			const editor = await page.locator('[data-part="editor"]').boundingBox();
 			const canvasBounds = await canvas.locator('.ash-canvas-viewport').boundingBox();
-			return Math.max(
-				Math.abs(canvasBounds!.y - editor!.y),
-				Math.abs(canvasBounds!.y + canvasBounds!.height - editor!.y - editor!.height),
-			);
+			return Math.max(Math.abs(canvasBounds!.y - editor!.y), Math.abs(canvasBounds!.y + canvasBounds!.height - editor!.y - editor!.height));
 		})
 		.toBeLessThanOrEqual(2);
 	await canvas.press('r');
@@ -1717,27 +1449,16 @@ test('Sessions Design automatically retains an untitled draft across window reop
 	await canvas.press('ControlOrMeta+s');
 	await expect(page.getByRole('dialog')).toHaveCount(0);
 	const menu = await new Menus(page).inspect(application, () => canvas.press('Shift+F10'));
-	expect(menu).toEqual(
-		expect.arrayContaining([
-			expect.objectContaining({ label: 'Save a copy', enabled: true }),
-			expect.objectContaining({ label: 'Export SVG', enabled: true }),
-		]),
-	);
+	expect(menu).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Save a copy', enabled: true }), expect.objectContaining({ label: 'Export SVG', enabled: true })]));
 	await page.screenshot({ path: testInfo.outputPath('design-autosaved-draft.png') });
 	page = await workbench.reopenAgentsWindow(application, page);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	const design = page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true });
 	if (await design.isVisible()) {
 		await design.click();
 	}
 	canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
-	await expect(canvas.locator('.ash-sessions-design-shapes > rect[data-shape-id]')).toHaveAttribute(
-		'data-shape-id',
-		id!,
-	);
+	await expect(canvas.locator('.ash-sessions-design-shapes > rect[data-shape-id]')).toHaveAttribute('data-shape-id', id!);
 	await expect(canvas).not.toHaveClass(/\bdirty\b/u);
 	await canvas.press('Tab');
 	await canvas.press('ArrowRight');
@@ -1746,10 +1467,7 @@ test('Sessions Design automatically retains an untitled draft across window reop
 		await expect(canvas).not.toHaveClass(/\bdirty\b/u);
 	}
 	page = await workbench.reopenAgentsWindow(application, page);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	const reopenDesign = page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true });
 	if (await reopenDesign.isVisible()) {
 		await reopenDesign.click();
@@ -1765,23 +1483,14 @@ test('Sessions Design automatically retains an untitled draft across window reop
 		const saved = JSON.parse(await readFile(join(drafts, manifests[0]), 'utf8')) as {
 			artifacts: Record<string, { objects: Record<string, { x: number }> }>;
 		};
-		expect(Object.values(saved.artifacts).map(artifact => artifact.objects[id!])).toContainEqual(
-			expect.objectContaining({ x: Number(movedX) }),
-		);
+		expect(Object.values(saved.artifacts).map(artifact => artifact.objects[id!])).toContainEqual(expect.objectContaining({ x: Number(movedX) }));
 	}
 	await page.screenshot({ path: testInfo.outputPath('design-restored-after-close.png') });
 });
 
-test('Sessions Design color widgets edit page backgrounds and fills and restore them after closing', async ({
-	application,
-	target,
-	workbench,
-}, testInfo) => {
+test('Sessions Design color widgets edit page backgrounds and fills and restore them after closing', async ({ application, target, workbench }, testInfo) => {
 	let page = await workbench.openAgentsWindow(target.kind);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	let properties = page.locator('[data-part="auxiliarybar"]');
 	let canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
@@ -1812,18 +1521,13 @@ test('Sessions Design color widgets edit page backgrounds and fills and restore 
 	await expect(canvas.locator('rect[data-shape-id]')).toHaveAttribute('fill', '#2f6fed66');
 	const widget = color.locator('..');
 	await widget.scrollIntoViewIfNeeded();
-	await expect
-		.poll(() => widget.evaluate(element => element.scrollWidth - element.clientWidth))
-		.toBeLessThanOrEqual(1);
+	await expect.poll(() => widget.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
 	await page.screenshot({ path: testInfo.outputPath('fill-color-widget.png') });
 	if (target.kind === 'browser') {
 		await expect(canvas).not.toHaveClass(/\bdirty\b/u);
 	}
 	page = await workbench.reopenAgentsWindow(application, page);
-	await page
-		.locator('.ash-sessions-activity-content')
-		.getByRole('button', { name: 'Artifacts', exact: true })
-		.click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	const design = page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true });
 	if (await design.isVisible()) {
 		await design.click();

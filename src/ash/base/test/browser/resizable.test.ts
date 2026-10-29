@@ -12,7 +12,10 @@ for (const [name, value] of Object.entries({
 	Event: browserEnvironment.window.Event,
 	MouseEvent: browserEnvironment.window.MouseEvent,
 })) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
+	Object.defineProperty(globalThis, name, {
+		configurable: true,
+		value,
+	});
 }
 
 const { Dimension } = await import('../../browser/dom.js');
@@ -73,9 +76,23 @@ test('ResizableHTMLElement reports edge drag lifecycle', () => {
 
 	const east = resizable.domNode.querySelector<HTMLElement>('.ash-sash-vertical');
 	assert.ok(east);
-	east.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 0 }));
-	dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { clientX: 40 }));
-	dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { clientX: 40 }));
+	east.dispatchEvent(
+		new dom.window.MouseEvent('pointerdown', {
+			bubbles: true,
+			button: 0,
+			clientX: 0,
+		}),
+	);
+	dom.window.dispatchEvent(
+		new dom.window.MouseEvent('pointermove', {
+			clientX: 40,
+		}),
+	);
+	dom.window.dispatchEvent(
+		new dom.window.MouseEvent('pointerup', {
+			clientX: 40,
+		}),
+	);
 
 	assert.equal(willResize, 1);
 	assert.deepEqual(events, [
@@ -91,7 +108,9 @@ test('ResizableHTMLElement reports edge drag lifecycle', () => {
 test('bindResizableLayout connects and releases a generic layout target', () => {
 	const emitter = new Emitter<{ readonly width: number; readonly height: number }>();
 	const dimensions: Array<{ readonly width: number; readonly height: number }> = [];
-	const registration = bindResizableLayout(emitter.event, { layout: dimension => dimensions.push(dimension) });
+	const registration = bindResizableLayout(emitter.event, {
+		layout: dimension => dimensions.push(dimension),
+	});
 
 	emitter.fire({ width: 640, height: 480 });
 	registration.dispose();

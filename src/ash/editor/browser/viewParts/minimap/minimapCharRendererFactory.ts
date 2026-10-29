@@ -29,10 +29,7 @@ export class MinimapCharRendererFactory {
 		if (prebakedMiniMaps[scale]) {
 			factory = new MinimapCharRenderer(prebakedMiniMaps[scale](), scale);
 		} else {
-			factory = MinimapCharRendererFactory.createFromSampleData(
-				MinimapCharRendererFactory.createSampleData(fontFamily).data,
-				scale,
-			);
+			factory = MinimapCharRendererFactory.createFromSampleData(MinimapCharRendererFactory.createSampleData(fontFamily).data, scale);
 		}
 
 		this.lastFontFamily = fontFamily;
@@ -62,23 +59,14 @@ export class MinimapCharRendererFactory {
 			x += Constants.SAMPLED_CHAR_WIDTH;
 		}
 
-		return ctx.getImageData(
-			0,
-			0,
-			Constants.CHAR_COUNT * Constants.SAMPLED_CHAR_WIDTH,
-			Constants.SAMPLED_CHAR_HEIGHT,
-		);
+		return ctx.getImageData(0, 0, Constants.CHAR_COUNT * Constants.SAMPLED_CHAR_WIDTH, Constants.SAMPLED_CHAR_HEIGHT);
 	}
 
 	/**
 	 * Creates a character renderer from the canvas sample data.
 	 */
 	public static createFromSampleData(source: Uint8ClampedArray, scale: number): MinimapCharRenderer {
-		const expectedLength =
-			Constants.SAMPLED_CHAR_HEIGHT *
-			Constants.SAMPLED_CHAR_WIDTH *
-			Constants.RGBA_CHANNELS_CNT *
-			Constants.CHAR_COUNT;
+		const expectedLength = Constants.SAMPLED_CHAR_HEIGHT * Constants.SAMPLED_CHAR_WIDTH * Constants.RGBA_CHANNELS_CNT * Constants.CHAR_COUNT;
 		if (source.length !== expectedLength) {
 			throw new Error('Unexpected source in MinimapCharRenderer');
 		}
@@ -87,13 +75,7 @@ export class MinimapCharRendererFactory {
 		return new MinimapCharRenderer(charData, scale);
 	}
 
-	private static _downsampleChar(
-		source: Uint8ClampedArray,
-		sourceOffset: number,
-		dest: Uint8ClampedArray,
-		destOffset: number,
-		scale: number,
-	): number {
+	private static _downsampleChar(source: Uint8ClampedArray, sourceOffset: number, dest: Uint8ClampedArray, destOffset: number, scale: number): number {
 		const width = Constants.BASE_CHAR_WIDTH * scale;
 		const height = Constants.BASE_CHAR_HEIGHT * scale;
 

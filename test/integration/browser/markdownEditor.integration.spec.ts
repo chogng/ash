@@ -63,10 +63,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(content).toContainText('中文段落');
 		await expect(content.getByRole('heading', { name: 'Markdown audit', exact: true, level: 1 })).toBeVisible();
 		await expect(content.locator('strong')).toContainText('bold');
-		await expect(content.getByRole('link', { name: 'a link', exact: true })).toHaveAttribute(
-			'href',
-			'https://example.com/',
-		);
+		await expect(content.getByRole('link', { name: 'a link', exact: true })).toHaveAttribute('href', 'https://example.com/');
 		await expect(content.locator('.katex')).toHaveCount(2);
 		await expect(content.locator('.katex-display')).toHaveCount(1);
 		await expect(content.locator('.katex-error')).toHaveCount(0);
@@ -76,13 +73,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.evaluate(() => document.fonts.ready);
 		const formulaBounds = await content.locator('.katex-display').boundingBox();
 		expect(formulaBounds && formulaBounds.width > 0 && formulaBounds.height > 0).toBe(true);
-		expect(
-			await page.evaluate(() =>
-				[...document.fonts]
-					.filter(font => font.family.startsWith('KaTeX'))
-					.some(font => font.status === 'loaded'),
-			),
-		).toBe(true);
+		expect(await page.evaluate(() => [...document.fonts].filter(font => font.family.startsWith('KaTeX')).some(font => font.status === 'loaded'))).toBe(true);
 		expect(errors).toEqual([]);
 		await page.screenshot({ path: testInfo.outputPath(`markdown-editor-${locale}.png`), fullPage: true });
 	});
@@ -97,12 +88,8 @@ test('Markdown rich editor updates formulas and refuses untrusted math resources
 	await page.goto('/markdownEditor.html');
 	const content = page.locator('.ash-markdown-content');
 	await expect(content.locator('.katex')).toHaveCount(2);
-	const text =
-		'# Updated\n\n$$\n\\begin{pmatrix}a&b\\\\c&d\\end{pmatrix}\n$$\n\n$\\includegraphics{https://audit-image.invalid/pixel}$\n\n$\\unknownAuditCommand$';
-	await page.evaluate(
-		text => window.postMessage({ type: 'document', version: 2, text, readOnly: true }, location.origin),
-		text,
-	);
+	const text = '# Updated\n\n$$\n\\begin{pmatrix}a&b\\\\c&d\\end{pmatrix}\n$$\n\n$\\includegraphics{https://audit-image.invalid/pixel}$\n\n$\\unknownAuditCommand$';
+	await page.evaluate(text => window.postMessage({ type: 'document', version: 2, text, readOnly: true }, location.origin), text);
 	await expect(content.getByRole('heading', { name: 'Updated', exact: true, level: 1 })).toBeVisible();
 	await expect(content.locator('.katex-display')).toHaveCount(1);
 	await expect(content.locator('.katex-display')).toContainText('a');
@@ -126,14 +113,7 @@ test('Markdown rich editor formula updates preserve document styles', async ({ p
 	await page.evaluate(() => document.fonts.ready);
 	await using styles = await trackDocumentStyles(page.locator('html'));
 	for (let version = 2; version <= 4; version++) {
-		await page.evaluate(
-			version =>
-				window.postMessage(
-					{ type: 'document', version, text: `# Update ${version}\n\n$E=mc^2$\n`, readOnly: true },
-					location.origin,
-				),
-			version,
-		);
+		await page.evaluate(version => window.postMessage({ type: 'document', version, text: `# Update ${version}\n\n$E=mc^2$\n`, readOnly: true }, location.origin), version);
 		await expect(page.getByRole('heading', { name: `Update ${version}`, exact: true })).toBeVisible();
 		await expect(page.locator('.katex')).toHaveCount(1);
 		await styles.assertUnchanged();
@@ -146,9 +126,7 @@ for (const view of ['vscode.markdown.editor', 'vscode.markdown.preview.editor'])
 		await using outer = await trackDocumentStyles(page.locator('html'));
 		// The first update transfers theme variables from the bootstrap stylesheet
 		// to the sandbox root's inline style. Compare later updates in that state.
-		await page.evaluate(() =>
-			window.ashMarkdownHost.edit(0, window.ashMarkdownHost.text.length, '# Update 1\n\n$E=mc^2$\n'),
-		);
+		await page.evaluate(() => window.ashMarkdownHost.edit(0, window.ashMarkdownHost.text.length, '# Update 1\n\n$E=mc^2$\n'));
 		await expect(frame.getByRole('heading', { name: 'Update 1', exact: true })).toBeVisible();
 		await expect(frame.locator('.katex')).toHaveCount(1);
 		await outer.assertUnchanged();
@@ -156,15 +134,7 @@ for (const view of ['vscode.markdown.editor', 'vscode.markdown.preview.editor'])
 		{
 			await using inner = await trackDocumentStyles(frame.locator('html'));
 			for (let version = 2; version <= 4; version++) {
-				await page.evaluate(
-					version =>
-						window.ashMarkdownHost.edit(
-							0,
-							window.ashMarkdownHost.text.length,
-							`# Update ${version}\n\n$E=mc^2$\n`,
-						),
-					version,
-				);
+				await page.evaluate(version => window.ashMarkdownHost.edit(0, window.ashMarkdownHost.text.length, `# Update ${version}\n\n$E=mc^2$\n`), version);
 				await expect(frame.getByRole('heading', { name: `Update ${version}`, exact: true })).toBeVisible();
 				await expect(frame.locator('.katex')).toHaveCount(1);
 				await inner.assertUnchanged();
@@ -181,9 +151,7 @@ for (const view of ['vscode.markdown.editor', 'vscode.markdown.preview.editor'])
 }
 
 test('Markdown style isolation guard rejects a cross-origin stylesheet', async ({ page }) => {
-	await page.route('https://stylesheet.audit.invalid/katex.css', route =>
-		route.fulfill({ contentType: 'text/css', body: '.katex { color: red; }' }),
-	);
+	await page.route('https://stylesheet.audit.invalid/katex.css', route => route.fulfill({ contentType: 'text/css', body: '.katex { color: red; }' }));
 	await page.goto('/markdownEditor.html');
 	await expect(page.locator('.katex')).toHaveCount(2);
 	await using styles = await trackDocumentStyles(page.locator('html'));
@@ -195,11 +163,7 @@ test('Markdown style isolation guard rejects a cross-origin stylesheet', async (
 			link.href = 'https://stylesheet.audit.invalid/katex.css';
 			document.head.append(link);
 		});
-		await expect
-			.poll(() =>
-				page.locator('#test-cross-origin-style').evaluate((element: HTMLLinkElement) => element.sheet !== null),
-			)
-			.toBe(true);
+		await expect.poll(() => page.locator('#test-cross-origin-style').evaluate((element: HTMLLinkElement) => element.sheet !== null)).toBe(true);
 		await expect(page.locator('html').evaluateHandle(captureDocumentStyles)).rejects.toThrow(/SecurityError/);
 	} finally {
 		await page.locator('#test-cross-origin-style').evaluate(element => element.remove());
@@ -222,16 +186,8 @@ test('rich updates retain unchanged blocks and send only versioned range edits',
 	const input = frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true });
 	await input.press('End');
 	await input.pressSequentially('x');
-	await expect
-		.poll(() =>
-			page.evaluate(
-				() => window.ashMarkdownHost.messages.filter((message: any) => message.type === 'edit').length,
-			),
-		)
-		.toBe(1);
-	const message = (await page.evaluate(() =>
-		window.ashMarkdownHost.messages.find((message: any) => message.type === 'edit'),
-	)) as { start: number; end: number; text: string; version: number };
+	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.messages.filter((message: any) => message.type === 'edit').length)).toBe(1);
+	const message = (await page.evaluate(() => window.ashMarkdownHost.messages.find((message: any) => message.type === 'edit'))) as { start: number; end: number; text: string; version: number };
 	expect(message.text).toBe('x');
 	expect(message.start).toBe(message.end);
 	expect(message.version).toBeGreaterThan(1);
@@ -239,15 +195,10 @@ test('rich updates retain unchanged blocks and send only versioned range edits',
 	await expect(heading).toHaveAttribute('data-retained', 'true');
 });
 
-test('preview updates keep the sandbox, focus, selection and scroll while rendering metadata, anchors and math', async ({
-	page,
-}) => {
+test('preview updates keep the sandbox, focus, selection and scroll while rendering metadata, anchors and math', async ({ page }) => {
 	const frame = await openHost(page, 'en', 'vscode.markdown.preview.editor');
 	expect(await page.evaluate(() => window.ashMarkdownHost.editable)).toBe(false);
-	const content =
-		'---\ntitle: hidden metadata\n---\n\n# Cafe\u0301\n\n[Jump](#CAFE%CC%81)\n\n$E=mc^2$\n\n' +
-		'A stable paragraph with words.\n\n'.repeat(100) +
-		'Last paragraph.\n';
+	const content = '---\ntitle: hidden metadata\n---\n\n# Cafe\u0301\n\n[Jump](#CAFE%CC%81)\n\n$E=mc^2$\n\n' + 'A stable paragraph with words.\n\n'.repeat(100) + 'Last paragraph.\n';
 	await page.evaluate(text => window.ashMarkdownHost.edit(0, window.ashMarkdownHost.text.length, text), content);
 	await expect(frame.locator('#markdown-preview .katex')).toHaveCount(1);
 	await expect(frame.locator('#markdown-preview')).not.toContainText('hidden metadata');
@@ -269,11 +220,10 @@ test('preview updates keep the sandbox, focus, selection and scroll while render
 	await expect(frame.locator('#markdown-preview')).toContainText('Changed ending.');
 	await expect(frame.locator('#markdown-preview')).toHaveAttribute('data-retained', 'true');
 	await expect(heading).toBeFocused();
-	expect(
-		await frame
-			.locator('#markdown-preview')
-			.evaluate(() => ({ selection: getSelection()!.toString(), scroll: document.scrollingElement!.scrollTop })),
-	).toEqual({ selection: 'stable', scroll: 600 });
+	expect(await frame.locator('#markdown-preview').evaluate(() => ({ selection: getSelection()!.toString(), scroll: document.scrollingElement!.scrollTop }))).toEqual({
+		selection: 'stable',
+		scroll: 600,
+	});
 	await expect(frame.locator('textarea')).toHaveCount(0);
 });
 
@@ -317,10 +267,7 @@ test('disabling math refreshes an open preview without changing its source', asy
 	}
 });
 
-test('Rust Markdown extension and shared host preserve Chinese composition, source, saves and history', async ({
-	page,
-	context,
-}, testInfo) => {
+test('Rust Markdown extension and shared host preserve Chinese composition, source, saves and history', async ({ page, context }, testInfo) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	const frame = await openHost(page);
@@ -348,9 +295,7 @@ test('Rust Markdown extension and shared host preserve Chinese composition, sour
 	await input.press('Control+z');
 	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(initial);
 	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.dirty)).toBe(true);
-	await expect(frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true })).toHaveValue(
-		/中文段落 \*\*保留加粗\*\*/u,
-	);
+	await expect(frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true })).toHaveValue(/中文段落 \*\*保留加粗\*\*/u);
 	await frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true }).press('Control+Shift+z');
 	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(expected);
 	// The source view's undo acts on exactly the same history as the rich view.
@@ -366,10 +311,7 @@ test('Rust Markdown extension and shared host preserve Chinese composition, sour
 	await session.detach();
 });
 
-test('external edits during composition retain the draft and never overwrite the shared source', async ({
-	page,
-	context,
-}) => {
+test('external edits during composition retain the draft and never overwrite the shared source', async ({ page, context }) => {
 	const frame = await openHost(page, 'zh-CN');
 	await frame.locator('.ash-markdown-block').filter({ hasText: '中文段落' }).click();
 	const input = frame.getByRole('textbox', { name: '编辑 Markdown 段落', exact: true });
@@ -390,9 +332,7 @@ test('external edits during composition retain the draft and never overwrite the
 	await session.detach();
 });
 
-test('keyboard formatting and whole-source edits preserve unrelated CRLF and reference definitions', async ({
-	page,
-}) => {
+test('keyboard formatting and whole-source edits preserve unrelated CRLF and reference definitions', async ({ page }) => {
 	const frame = await openHost(page);
 	const initial = await page.evaluate(() => window.ashMarkdownHost.text);
 	await frame.getByRole('button', { name: 'Edit document source', exact: true }).click();
@@ -402,15 +342,11 @@ test('keyboard formatting and whole-source edits preserve unrelated CRLF and ref
 		element.setSelectionRange(offset, offset + 4);
 	});
 	await input.press('Control+b');
-	await expect
-		.poll(() => page.evaluate(() => window.ashMarkdownHost.text))
-		.toBe(initial.replace('中文段落', '**中文段落**'));
+	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(initial.replace('中文段落', '**中文段落**'));
 	await input.press('Control+b');
 	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(initial);
 	await input.press('Control+b');
-	await expect
-		.poll(() => page.evaluate(() => window.ashMarkdownHost.text))
-		.toBe(initial.replace('中文段落', '**中文段落**'));
+	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(initial.replace('中文段落', '**中文段落**'));
 	await input.press('Control+z');
 	await expect.poll(() => page.evaluate(() => window.ashMarkdownHost.text)).toBe(initial);
 	await frame.getByRole('textbox', { name: 'Edit document source', exact: true }).press('Alt+F10');
@@ -431,16 +367,10 @@ test('readonly Markdown remains inert and blocks HTML, unsafe links and remote i
 	await expect(page.locator('.ash-markdown-content')).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Bold', exact: true })).toBeDisabled();
 	await expect(page.getByRole('checkbox')).toBeDisabled();
-	const text =
-		'# Safe\n\n<script>window.auditExecuted=true</script>\n\n[unsafe](javascript:alert(1))\n\n![tracking](https://audit-image.invalid/pixel)\n\n- [ ] Readonly';
-	await page.evaluate(
-		text => window.postMessage({ type: 'document', version: 2, text, readOnly: true }, location.origin),
-		text,
-	);
+	const text = '# Safe\n\n<script>window.auditExecuted=true</script>\n\n[unsafe](javascript:alert(1))\n\n![tracking](https://audit-image.invalid/pixel)\n\n- [ ] Readonly';
+	await page.evaluate(text => window.postMessage({ type: 'document', version: 2, text, readOnly: true }, location.origin), text);
 	await expect(page.getByRole('heading', { name: 'Safe', exact: true })).toBeVisible();
-	await expect(
-		page.locator('.ash-markdown-content script, .ash-markdown-content img, .ash-markdown-content a'),
-	).toHaveCount(0);
+	await expect(page.locator('.ash-markdown-content script, .ash-markdown-content img, .ash-markdown-content a')).toHaveCount(0);
 	await page.getByRole('heading', { name: 'Safe', exact: true }).click();
 	await expect(page.locator('.ash-markdown-input')).toHaveCount(0);
 	expect(requests).toEqual([]);
@@ -496,10 +426,7 @@ test('an older Rust parse cannot replace a newer source version', async ({ page 
 	}
 });
 
-test('multi-megabyte source crosses the actual Rust extension boundary and retains saves and shared undo', async ({
-	page,
-	context,
-}, testInfo) => {
+test('multi-megabyte source crosses the actual Rust extension boundary and retains saves and shared undo', async ({ page, context }, testInfo) => {
 	test.setTimeout(120000);
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
@@ -511,9 +438,7 @@ test('multi-megabyte source crosses the actual Rust extension boundary and retai
 	const digest = (saved = false) =>
 		page.evaluate(async saved => {
 			const text = saved ? window.ashMarkdownHost.saved : window.ashMarkdownHost.text;
-			return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))]
-				.map(value => value.toString(16).padStart(2, '0'))
-				.join('');
+			return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map(value => value.toString(16).padStart(2, '0')).join('');
 		}, saved);
 	await page.goto('/markdownEditorHost.html?large=1');
 	const frame = page.frameLocator('#editor iframe').frameLocator('iframe');
@@ -542,10 +467,7 @@ test('multi-megabyte source crosses the actual Rust extension boundary and retai
 	await expect.poll(() => digest(), { timeout: 30000 }).toBe(expectedHash);
 	await page.evaluate(() => window.ashMarkdownHost.undo());
 	await expect.poll(() => digest(), { timeout: 30000 }).toBe(originalHash);
-	await expect(frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true })).not.toHaveValue(
-		/大文件输入/u,
-		{ timeout: 30000 },
-	);
+	await expect(frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true })).not.toHaveValue(/大文件输入/u, { timeout: 30000 });
 	await page.evaluate(() => window.ashMarkdownHost.redo());
 	await expect.poll(() => digest(), { timeout: 30000 }).toBe(expectedHash);
 	await expect(frame.getByRole('textbox', { name: 'Edit Markdown block', exact: true })).toHaveValue(/大文件输入/u, {

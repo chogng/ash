@@ -12,10 +12,7 @@ export const terminalStickyScrollConfiguration: Readonly<Record<string, IConfigu
 		type: 'boolean',
 		default: true,
 		get description() {
-			return localize(
-				'terminal.stickyScroll.enabled',
-				'Keep the current command at the top of the terminal while scrolling its output. Requires shell integration.',
-			);
+			return localize('terminal.stickyScroll.enabled', 'Keep the current command at the top of the terminal while scrolling its output. Requires shell integration.');
 		},
 	},
 	[TerminalStickyScrollSettingId.MaxLineCount]: {
@@ -24,10 +21,7 @@ export const terminalStickyScrollConfiguration: Readonly<Record<string, IConfigu
 		minimum: 1,
 		maximum: 10,
 		get description() {
-			return localize(
-				'terminal.stickyScroll.maxLineCount',
-				'Maximum command lines to keep at the top of the terminal, limited to 40% of its visible rows.',
-			);
+			return localize('terminal.stickyScroll.maxLineCount', 'Maximum command lines to keep at the top of the terminal, limited to 40% of its visible rows.');
 		},
 	},
 	[TerminalStickyScrollSettingId.IgnoredCommands]: {
@@ -35,10 +29,7 @@ export const terminalStickyScrollConfiguration: Readonly<Record<string, IConfigu
 		items: { type: 'string' },
 		default: ['clear', 'cls', 'clear-host', 'agent', 'agy', 'copilot', 'claude', 'codex', 'gemini'],
 		get description() {
-			return localize(
-				'terminal.stickyScroll.ignoredCommands',
-				'Commands whose output should not show a sticky command header.',
-			);
+			return localize('terminal.stickyScroll.ignoredCommands', 'Commands whose output should not show a sticky command header.');
 		},
 	},
 };

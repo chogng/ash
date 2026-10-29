@@ -18,10 +18,7 @@ test('language associations come from package contributions and stale output is 
 			contributes: { languages: [{ id: 'demo', extensions: ['.demo'], filenames: ['DemoFile'] }] },
 		}),
 	);
-	await writeFile(
-		resolve(root, 'extensions/demo/tree-sitter/grammars.json'),
-		JSON.stringify([{ languages: [{ id: 'legacy-demo', editorLanguage: 'demo', editorIds: ['demo'] }] }]),
-	);
+	await writeFile(resolve(root, 'extensions/demo/tree-sitter/grammars.json'), JSON.stringify([{ languages: [{ id: 'legacy-demo', editorLanguage: 'demo', editorIds: ['demo'] }] }]));
 	await mkdir(resolve(root, 'extensions/optional'), { recursive: true });
 	await writeFile(
 		resolve(root, 'extensions/optional/package.json'),
@@ -35,13 +32,7 @@ test('language associations come from package contributions and stale output is 
 	await copyFile(resolve(import.meta.dirname, '../.prettierrc.toml'), resolve(root, '.prettierrc.toml'));
 	const formatting = spawnSync(
 		resolve(import.meta.dirname, '../node_modules/bun', process.platform === 'win32' ? 'bun.exe' : 'bun'),
-		[
-			'fmt',
-			'--config',
-			resolve(root, '.prettierrc.toml'),
-			'--check',
-			resolve(root, 'src/ash/platform/language/common/languageFolding.generated.ts'),
-		],
+		['fmt', '--config', resolve(root, '.prettierrc.toml'), '--check', resolve(root, 'src/ash/platform/language/common/languageFolding.generated.ts')],
 		{ cwd: root, encoding: 'utf8' },
 	);
 	assert.equal(formatting.status, 0, formatting.stdout + formatting.stderr);
@@ -49,10 +40,7 @@ test('language associations come from package contributions and stale output is 
 	assert.match(generated, /"legacy-demo" => "demo"/);
 	assert.doesNotMatch(generated, /optional-language/);
 	assert.match(generated, /filenames: &\["demofile"\]/);
-	await writeFile(
-		manifest,
-		JSON.stringify({ contributes: { languages: [{ id: 'demo', extensions: ['.changed'] }] } }),
-	);
+	await writeFile(manifest, JSON.stringify({ contributes: { languages: [{ id: 'demo', extensions: ['.changed'] }] } }));
 	await assert.rejects(generateLanguageRegistry({ root, check: true }), /Stale language registration/);
 	await generateLanguageRegistry({ root });
 	await generateLanguageRegistry({ root, check: true });
@@ -66,10 +54,7 @@ test('JSONC folding configuration generates both runtimes and configuration edit
 	await writeFile(resolve(root, 'package.json'), '{"type":"module"}');
 	await mkdir(resolve(root, 'extensions/demo'), { recursive: true });
 	const manifest = resolve(root, 'extensions/demo/package.json');
-	await writeFile(
-		manifest,
-		JSON.stringify({ contributes: { languages: [{ id: 'demo', configuration: './rules.json' }] } }),
-	);
+	await writeFile(manifest, JSON.stringify({ contributes: { languages: [{ id: 'demo', configuration: './rules.json' }] } }));
 	const rules = resolve(root, 'extensions/demo/rules.json');
 	await writeFile(
 		rules,
@@ -77,9 +62,7 @@ test('JSONC folding configuration generates both runtimes and configuration edit
 { "folding": { "offSide": true, "markers": { "start": { "pattern": "^BEGIN", "flags": "i" }, "end": "^END" }, }, }`,
 	);
 	await generateLanguageRegistry({ root });
-	const generated = await import(
-		pathToFileURL(resolve(root, 'src/ash/platform/language/common/languageFolding.generated.ts')).href
-	);
+	const generated = await import(pathToFileURL(resolve(root, 'src/ash/platform/language/common/languageFolding.generated.ts')).href);
 	assert.equal(generated.getLanguageFoldingRules('demo').offSide, true);
 	assert.equal(generated.getLanguageFoldingRules('demo').markers.start.test('begin'), true);
 	assert.equal(generated.getLanguageFoldingRules('unknown'), undefined);
@@ -89,9 +72,6 @@ test('JSONC folding configuration generates both runtimes and configuration edit
 	await generateLanguageRegistry({ root });
 	await writeFile(resolve(root, 'src/ash/platform/language/common/languageFolding.generated.ts'), 'stale');
 	await assert.rejects(generateLanguageRegistry({ root, check: true }), /languageFolding.generated.ts/);
-	await writeFile(
-		manifest,
-		JSON.stringify({ contributes: { languages: [{ id: 'demo', configuration: '../outside.json' }] } }),
-	);
+	await writeFile(manifest, JSON.stringify({ contributes: { languages: [{ id: 'demo', configuration: '../outside.json' }] } }));
 	await assert.rejects(generateLanguageRegistry({ root }), /escapes its package/);
 });

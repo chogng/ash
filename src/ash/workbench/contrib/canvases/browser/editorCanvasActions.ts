@@ -48,21 +48,14 @@ registerAction2(
 		}
 		async run(accessor: ServicesAccessor): Promise<void> {
 			const canvases = accessor.get(ICanvasService);
-			const items = canvases.reopenableCanvases
-				.get()
-				.map(target => ({ label: target.canvas.title, description: target.canvas.instanceId, target }));
+			const items = canvases.reopenableCanvases.get().map(target => ({ label: target.canvas.title, description: target.canvas.instanceId, target }));
 			using resources = new DisposableStore();
 			const picker = resources.add(accessor.get(IQuickInputService).createQuickPick<(typeof items)[number]>());
 			picker.items = items;
-			picker.placeholder = picker.ariaLabel = localize(
-				'canvas.pick',
-				'Open a Canvas from a visible conversation',
-			);
+			picker.placeholder = picker.ariaLabel = localize('canvas.pick', 'Open a Canvas from a visible conversation');
 			resources.add(
 				canvases.reopenableCanvases.onDidChange(() => {
-					picker.items = canvases.reopenableCanvases
-						.get()
-						.map(target => ({ label: target.canvas.title, description: target.canvas.instanceId, target }));
+					picker.items = canvases.reopenableCanvases.get().map(target => ({ label: target.canvas.title, description: target.canvas.instanceId, target }));
 				}),
 			);
 			const selected = await new Promise<(typeof items)[number] | undefined>(resolve => {

@@ -6,15 +6,8 @@ import { TextLength } from '../../../core/text/textLength.js';
 /**
  * The end must be greater than or equal to the start.
  */
-export function lengthDiff(
-	startLineCount: number,
-	startColumnCount: number,
-	endLineCount: number,
-	endColumnCount: number,
-): Length {
-	return startLineCount !== endLineCount
-		? toLength(endLineCount - startLineCount, endColumnCount)
-		: toLength(0, endColumnCount - startColumnCount);
+export function lengthDiff(startLineCount: number, startColumnCount: number, endLineCount: number, endColumnCount: number): Length {
+	return startLineCount !== endLineCount ? toLength(endLineCount - startLineCount, endColumnCount) : toLength(0, endColumnCount - startColumnCount);
 }
 
 /**

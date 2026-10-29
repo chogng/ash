@@ -36,10 +36,7 @@ export class DiffEditorSash extends Disposable {
 		this._register(
 			this.sash.onDidChange(event => {
 				if (this.width <= MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth) return;
-				const left = Math.max(
-					MINIMUM_EDITOR_WIDTH + this.leadingWidth,
-					Math.min(this.width - MINIMUM_EDITOR_WIDTH, this.startLeft + event.delta),
-				);
+				const left = Math.max(MINIMUM_EDITOR_WIDTH + this.leadingWidth, Math.min(this.width - MINIMUM_EDITOR_WIDTH, this.startLeft + event.delta));
 				this.ratio = left / this.width;
 				this.onDidResize();
 			}),
@@ -56,10 +53,7 @@ export class DiffEditorSash extends Disposable {
 		const ratio = this.options.enableSplitViewResizing ? this.ratio : undefined;
 		// User movement starts in whole pixels. Recover the nearest pixel after
 		// the ratio round trip instead of flooring floating-point error into a lost step.
-		const desired =
-			ratio === undefined
-				? Math.floor(this.options.splitViewDefaultRatio * this.width)
-				: Math.round(ratio * this.width);
+		const desired = ratio === undefined ? Math.floor(this.options.splitViewDefaultRatio * this.width) : Math.round(ratio * this.width);
 		if (this.width <= MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth) return desired;
 		return Math.max(MINIMUM_EDITOR_WIDTH + this.leadingWidth, Math.min(this.width - MINIMUM_EDITOR_WIDTH, desired));
 	}
@@ -68,8 +62,7 @@ export class DiffEditorSash extends Disposable {
 		this.width = width;
 		this.leadingWidth = leadingWidth;
 		const left = this.left;
-		const visible =
-			!inlineView && this.options.enableSplitViewResizing && width > MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth;
+		const visible = !inlineView && this.options.enableSplitViewResizing && width > MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth;
 		this.element.hidden = !visible;
 		this.element.style.left = `${left}px`;
 		this.element.style.top = `${top}px`;
@@ -87,34 +80,16 @@ export class DiffEditorSash extends Disposable {
 
 	private updateLabel(): void {
 		this.element.setAttribute('aria-label', localize('diffEditor.resizeColumns', 'Resize diff editor columns'));
-		this.element.setAttribute(
-			'aria-description',
-			localize(
-				'diffEditor.resizeColumnsDescription',
-				'Use Left and Right Arrow keys to resize, Alt for one-pixel steps, or double-click to reset.',
-			),
-		);
+		this.element.setAttribute('aria-description', localize('diffEditor.resizeColumnsDescription', 'Use Left and Right Arrow keys to resize, Alt for one-pixel steps, or double-click to reset.'));
 	}
 
 	private updateValue(left: number): void {
-		const percent =
-			this.width > 0
-				? Math.round((left / this.width) * 100)
-				: Math.round(this.options.splitViewDefaultRatio * 100);
-		const minimumPercent =
-			this.width > MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth
-				? Math.round(((MINIMUM_EDITOR_WIDTH + this.leadingWidth) / this.width) * 100)
-				: 0;
+		const percent = this.width > 0 ? Math.round((left / this.width) * 100) : Math.round(this.options.splitViewDefaultRatio * 100);
+		const minimumPercent = this.width > MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth ? Math.round(((MINIMUM_EDITOR_WIDTH + this.leadingWidth) / this.width) * 100) : 0;
 		this.element.setAttribute('aria-valuemin', String(minimumPercent));
-		const maximumPercent =
-			this.width > MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth
-				? Math.round(((this.width - MINIMUM_EDITOR_WIDTH) / this.width) * 100)
-				: 100;
+		const maximumPercent = this.width > MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth ? Math.round(((this.width - MINIMUM_EDITOR_WIDTH) / this.width) * 100) : 100;
 		this.element.setAttribute('aria-valuemax', String(maximumPercent));
 		this.element.setAttribute('aria-valuenow', String(percent));
-		this.element.setAttribute(
-			'aria-valuetext',
-			localize('diffEditor.columnWidths', 'Original {0}%, modified {1}%', percent, 100 - percent),
-		);
+		this.element.setAttribute('aria-valuetext', localize('diffEditor.columnWidths', 'Original {0}%, modified {1}%', percent, 100 - percent));
 	}
 }

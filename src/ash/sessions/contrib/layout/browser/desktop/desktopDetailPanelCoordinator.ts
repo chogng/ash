@@ -19,21 +19,13 @@ export class DesktopDetailPanelCoordinator {
 		const input = this.editors.activeEditor;
 		return (
 			input !== undefined &&
-			(['ash-session-changes', 'file', 'ash-remote', 'untitled', 'ash-sessions-files'].includes(
-				input.resource.scheme,
-			) ||
-				isDiffEditorInput(input) ||
-				isMultiDiffEditorInput(input))
+			(['ash-session-changes', 'file', 'ash-remote', 'untitled', 'ash-sessions-files'].includes(input.resource.scheme) || isDiffEditorInput(input) || isMultiDiffEditorInput(input))
 		);
 	}
 
 	public async update(reveal: boolean): Promise<void> {
 		const input = this.editors.activeEditor;
-		const changes =
-			input &&
-			(input.resource.scheme === 'ash-session-changes' ||
-				isDiffEditorInput(input) ||
-				isMultiDiffEditorInput(input));
+		const changes = input && (input.resource.scheme === 'ash-session-changes' || isDiffEditorInput(input) || isMultiDiffEditorInput(input));
 		const files = input && ['file', 'ash-remote', 'untitled', 'ash-sessions-files'].includes(input.resource.scheme);
 		if (!changes && !files && this.layout.isPartVisible('editor')) {
 			this.layout.hidePart('auxiliarybar');

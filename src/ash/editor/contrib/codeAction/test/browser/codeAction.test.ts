@@ -43,9 +43,7 @@ for (const [command, kind] of [
 								{
 									kind: 'textDocument' as const,
 									resource: model.uri,
-									edits: [
-										{ range: new Range(1, 1, 1, 7), text: isPreferred ? 'preferred' : 'other' },
-									],
+									edits: [{ range: new Range(1, 1, 1, 7), text: isPreferred ? 'preferred' : 'other' }],
 								},
 							],
 						},
@@ -58,9 +56,11 @@ for (const [command, kind] of [
 				dimension: { width: 320, height: 80 },
 			});
 			await editor.invokeWithinContext(accessor =>
-				accessor
-					.get(ICommandService)
-					.executeCommand(command, { kind: matching ? kind : 'quickfix', preferred: true, apply: 'first' }),
+				accessor.get(ICommandService).executeCommand(command, {
+					kind: matching ? kind : 'quickfix',
+					preferred: true,
+					apply: 'first',
+				}),
 			);
 			assert.equal(model.getText(), matching ? 'preferred' : 'before');
 			if (matching) {
@@ -86,9 +86,7 @@ test('CodeActionController resolves an action with its original provider before 
 			return {
 				...action,
 				edit: {
-					entries: [
-						{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 7, 1, 12), text: 'result' }] },
-					],
+					entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 7, 1, 12), text: 'result' }] }],
 				},
 			};
 		},
@@ -112,9 +110,7 @@ test('CodeActionController resolves an action with its original provider before 
 	editor.setSelection(Selection.fromPositions(new Position(1, 7), new Position(1, 12)));
 	const input = container.querySelector<HTMLElement>('.stanza-editor-input')!;
 
-	input.dispatchEvent(
-		new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }),
-	);
+	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }));
 	await flushPromises();
 	const action = dom.window.document.querySelector<HTMLButtonElement>('.ash-action-widget button');
 	assert.ok(action);
@@ -152,9 +148,7 @@ test('Code actions without a resolver never use another provider resolver', asyn
 		onLanguageError: error => errors.push(error),
 	});
 	const input = container.querySelector<HTMLElement>('.stanza-editor-input')!;
-	input.dispatchEvent(
-		new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }),
-	);
+	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }));
 	await flushPromises();
 	const action = dom.window.document.querySelector<HTMLButtonElement>('.ash-action-widget button');
 	assert.ok(action);
@@ -231,21 +225,15 @@ for (const outcome of ['complete', 'canceled', 'error'] as const) {
 		});
 		const input = container.querySelector<HTMLElement>('.stanza-editor-input')!;
 		try {
-			input.dispatchEvent(
-				new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }),
-			);
+			input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }));
 			await flushPromises();
 			const menu = dom.window.document.querySelector<HTMLElement>('.ash-action-widget')!;
 			const action = menu.querySelector<HTMLButtonElement>('button')!;
 			action.click();
 			action.click();
 			assert.equal(calls, 1);
-			menu.dispatchEvent(
-				new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }),
-			);
-			input.dispatchEvent(
-				new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }),
-			);
+			menu.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
+			input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }));
 			await flushPromises();
 			const replacement = dom.window.document.querySelector('.ash-action-widget');
 			assert.ok(replacement);
@@ -293,9 +281,7 @@ test('a failing code action provider does not prevent another provider from retu
 		onLanguageError: error => errors.push(error),
 	});
 	const input = container.querySelector<HTMLElement>('.stanza-editor-input')!;
-	input.dispatchEvent(
-		new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }),
-	);
+	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }));
 	await flushPromises();
 	assert.equal(dom.window.document.querySelector('.ash-action-widget button')?.textContent, 'Healthy action');
 	assert.deepEqual(
@@ -317,10 +303,7 @@ for (const outcome of ['accept', 'cancel', 'change', 'dispose', 'commit error'] 
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 		try {
 			using fixture = new BulkEditTestServices([[URI.file('/workspace/preview.ts'), 'value']]);
-			using reference = await fixture.models.acquire(
-				{ resource: URI.file('/workspace/preview.ts'), languageId: 'typescript' },
-				new AbortController().signal,
-			);
+			using reference = await fixture.models.acquire({ resource: URI.file('/workspace/preview.ts'), languageId: 'typescript' }, new AbortController().signal);
 			const model = reference.model;
 			using features = new LanguageFeaturesService();
 			let released = 0;
@@ -372,9 +355,7 @@ for (const outcome of ['accept', 'cancel', 'change', 'dispose', 'commit error'] 
 			});
 			const input = dom.window.document.querySelector<HTMLElement>('.stanza-editor-input')!;
 			input.focus();
-			input.dispatchEvent(
-				new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }),
-			);
+			input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true }));
 			await flushPromises();
 			const action = dom.window.document.querySelector<HTMLButtonElement>('[role=menuitem]')!;
 			action.dispatchEvent(

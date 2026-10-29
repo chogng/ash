@@ -20,10 +20,7 @@ import {
 	MultipleEditorsSelectedInGroupContext,
 } from '../../../common/contextkeys.js';
 import { IEditorPartsService } from './editorParts.js';
-import {
-	ActiveGroupEditorsByMostRecentlyUsedQuickAccess,
-	AllEditorsByMostRecentlyUsedQuickAccess,
-} from './editorQuickAccess.js';
+import { ActiveGroupEditorsByMostRecentlyUsedQuickAccess, AllEditorsByMostRecentlyUsedQuickAccess } from './editorQuickAccess.js';
 import { EditorEnablePreviewConfiguration } from './editorConfiguration.js';
 import { IBreadcrumbsService } from './breadcrumbs.js';
 import { GoFilter, IHistoryService } from '../../../services/history/common/history.js';
@@ -46,9 +43,7 @@ registerAction2(
 			});
 		}
 		override run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {
-			const direction = accessor
-				.get(IConfigurationService)
-				.getValue<string>(EditorOpenSideBySideDirectionConfiguration);
+			const direction = accessor.get(IConfigurationService).getValue<string>(EditorOpenSideBySideDirectionConfiguration);
 			return splitEditors(accessor, args, direction === 'down' ? Direction.Down : Direction.Right);
 		}
 	},
@@ -57,16 +52,12 @@ registerAction2(
 for (const down of [false, true]) {
 	const primary = {
 		id: SPLIT_EDITOR,
-		title: down
-			? localize2('workbench.splitEditorDown', 'Split Down')
-			: localize2('workbench.splitEditorRight', 'Split Right'),
+		title: down ? localize2('workbench.splitEditorDown', 'Split Down') : localize2('workbench.splitEditorRight', 'Split Right'),
 		icon: down ? Lxicon.splitVertical : Lxicon.splitHorizontal,
 	};
 	const alternate = {
 		id: down ? 'workbench.action.splitEditorRight' : 'workbench.action.splitEditorDown',
-		title: down
-			? localize2('workbench.splitEditorRight', 'Split Right')
-			: localize2('workbench.splitEditorDown', 'Split Down'),
+		title: down ? localize2('workbench.splitEditorRight', 'Split Right') : localize2('workbench.splitEditorDown', 'Split Down'),
 		icon: down ? Lxicon.splitHorizontal : Lxicon.splitVertical,
 	};
 	MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
@@ -74,9 +65,7 @@ for (const down of [false, true]) {
 		alt: alternate,
 		group: 'navigation',
 		order: 100000,
-		when: down
-			? ContextKeyExpr.equals('config.workbench.editor.openSideBySideDirection', 'down')
-			: ContextKeyExpr.notEquals('config.workbench.editor.openSideBySideDirection', 'down'),
+		when: down ? ContextKeyExpr.equals('config.workbench.editor.openSideBySideDirection', 'down') : ContextKeyExpr.notEquals('config.workbench.editor.openSideBySideDirection', 'down'),
 	});
 }
 
@@ -128,10 +117,7 @@ registerAction2(
 		}
 		override run(accessor: ServicesAccessor): Promise<void> {
 			const configuration = accessor.get(IConfigurationService);
-			return configuration.updateValue(
-				EditorEnablePreviewConfiguration,
-				configuration.getValue<boolean>(EditorEnablePreviewConfiguration) !== true,
-			);
+			return configuration.updateValue(EditorEnablePreviewConfiguration, configuration.getValue<boolean>(EditorEnablePreviewConfiguration) !== true);
 		}
 	},
 );
@@ -149,10 +135,7 @@ registerAction2(
 					EditorPartMaximizedEditorGroupContext.isEqualTo(true),
 				),
 				keybinding: {
-					primary: Keybinding.chord(
-						logicalKey('k', { primaryKey: true }),
-						logicalKey('m', { primaryKey: true }),
-					),
+					primary: Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('m', { primaryKey: true })),
 				},
 			});
 		}
@@ -188,10 +171,7 @@ registerAction2(
 			super({
 				id: SplitEditorHorizontalCommandId,
 				title: localize2({ bundle: 'ash', key: 'workbench.splitEditorHorizontal' }, 'Split Editor Horizontal'),
-				tooltip: localize2(
-					{ bundle: 'ash', key: 'workbench.splitEditorHorizontal' },
-					'Split Editor Horizontal',
-				),
+				tooltip: localize2({ bundle: 'ash', key: 'workbench.splitEditorHorizontal' }, 'Split Editor Horizontal'),
 				icon: Lxicon.splitHorizontal,
 				f1: true,
 			});
@@ -291,18 +271,13 @@ registerAction2(
 				id: 'workbench.action.closeEditorsToTheLeft',
 				title: localize2({ bundle: 'ash', key: 'workbench.closeEditorsToTheLeft' }, 'Close to the Left'),
 				f1: true,
-				precondition: ContextKeyExpr.and(
-					EditorsVisibleContext.isEqualTo(true),
-					ActiveEditorFirstInGroupContext.isEqualTo(false),
-					MultipleEditorsSelectedInGroupContext.isEqualTo(false),
-				),
+				precondition: ContextKeyExpr.and(EditorsVisibleContext.isEqualTo(true), ActiveEditorFirstInGroupContext.isEqualTo(false), MultipleEditorsSelectedInGroupContext.isEqualTo(false)),
 				menu: { id: MenuId.EditorTitleContext, group: '1_close', order: 25 },
 			});
 		}
 
 		override async run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {
-			for (const { group, editors } of resolveCommandsContext(args, accessor.get(IEditorGroupsService))
-				.groupedEditors) {
+			for (const { group, editors } of resolveCommandsContext(args, accessor.get(IEditorGroupsService)).groupedEditors) {
 				if (editors.length !== 1) {
 					continue;
 				}
@@ -326,11 +301,7 @@ registerAction2(
 				id: CloseAllEditorsCommandId,
 				title: localize2({ bundle: 'ash', key: 'workbench.closeAllEditors' }, 'Close All Tabs'),
 				f1: true,
-				precondition: ContextKeyExpr.or(
-					EditorsVisibleContext.isEqualTo(true),
-					MultipleEditorGroupsContext.isEqualTo(true),
-					EditorPartMultipleEditorGroupsContext.isEqualTo(true),
-				),
+				precondition: ContextKeyExpr.or(EditorsVisibleContext.isEqualTo(true), MultipleEditorGroupsContext.isEqualTo(true), EditorPartMultipleEditorGroupsContext.isEqualTo(true)),
 				menu: [
 					{ id: MenuId.MenubarFileMenu, group: '6_close', order: 1 },
 					{
@@ -341,10 +312,7 @@ registerAction2(
 					},
 				],
 				keybinding: {
-					primary: Keybinding.chord(
-						logicalKey('k', { primaryKey: true }),
-						logicalKey('w', { primaryKey: true }),
-					),
+					primary: Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('w', { primaryKey: true })),
 				},
 			});
 		}
@@ -444,10 +412,7 @@ registerAction2(
 		constructor() {
 			super({
 				id: 'workbench.action.navigateBackInEditLocations',
-				title: localize2(
-					{ bundle: 'ash', key: 'workbench.navigateBackInEditLocations' },
-					'Go Back in Edit Locations',
-				),
+				title: localize2({ bundle: 'ash', key: 'workbench.navigateBackInEditLocations' }, 'Go Back in Edit Locations'),
 				f1: true,
 			});
 		}
@@ -463,10 +428,7 @@ registerAction2(
 		constructor() {
 			super({
 				id: 'workbench.action.navigateForwardInEditLocations',
-				title: localize2(
-					{ bundle: 'ash', key: 'workbench.navigateForwardInEditLocations' },
-					'Go Forward in Edit Locations',
-				),
+				title: localize2({ bundle: 'ash', key: 'workbench.navigateForwardInEditLocations' }, 'Go Forward in Edit Locations'),
 				f1: true,
 			});
 		}
@@ -482,10 +444,7 @@ registerAction2(
 		constructor() {
 			super({
 				id: 'workbench.action.navigateBackInNavigationLocations',
-				title: localize2(
-					{ bundle: 'ash', key: 'workbench.navigateBackInNavigationLocations' },
-					'Go Back in Navigation Locations',
-				),
+				title: localize2({ bundle: 'ash', key: 'workbench.navigateBackInNavigationLocations' }, 'Go Back in Navigation Locations'),
 				f1: true,
 			});
 		}
@@ -501,10 +460,7 @@ registerAction2(
 		constructor() {
 			super({
 				id: 'workbench.action.navigateForwardInNavigationLocations',
-				title: localize2(
-					{ bundle: 'ash', key: 'workbench.navigateForwardInNavigationLocations' },
-					'Go Forward in Navigation Locations',
-				),
+				title: localize2({ bundle: 'ash', key: 'workbench.navigateForwardInNavigationLocations' }, 'Go Forward in Navigation Locations'),
 				f1: true,
 			});
 		}
@@ -520,10 +476,7 @@ registerAction2(
 		constructor() {
 			super({
 				id: NavigateEditorMruCommandId,
-				title: localize2(
-					{ bundle: 'ash', key: 'workbench.nextRecentlyUsedEditor' },
-					'Open Next Recently Used Editor',
-				),
+				title: localize2({ bundle: 'ash', key: 'workbench.nextRecentlyUsedEditor' }, 'Open Next Recently Used Editor'),
 				f1: true,
 				menu: {
 					id: MenuId.MenubarGoMenu,
@@ -546,10 +499,7 @@ registerAction2(
 		constructor() {
 			super({
 				id: NavigateEditorMruBackwardsCommandId,
-				title: localize2(
-					{ bundle: 'ash', key: 'workbench.previousRecentlyUsedEditor' },
-					'Open Previous Recently Used Editor',
-				),
+				title: localize2({ bundle: 'ash', key: 'workbench.previousRecentlyUsedEditor' }, 'Open Previous Recently Used Editor'),
 				f1: true,
 				menu: {
 					id: MenuId.MenubarGoMenu,
@@ -583,10 +533,7 @@ registerAction2(
 					order: 3,
 				},
 				keybinding: {
-					primary: Keybinding.chord(
-						logicalKey('k', { primaryKey: true }),
-						logicalKey('p', { primaryKey: true }),
-					),
+					primary: Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('p', { primaryKey: true })),
 				},
 			});
 		}
@@ -605,10 +552,7 @@ registerAction2(
 		constructor() {
 			super({
 				id: MoveEditorToNewWindowCommandId,
-				title: localize2(
-					{ bundle: 'ash.workbench', key: 'command.MoveEditorToNewWindowAction' },
-					'Move to New Window',
-				),
+				title: localize2({ bundle: 'ash.workbench', key: 'command.MoveEditorToNewWindowAction' }, 'Move to New Window'),
 				f1: true,
 			});
 		}
@@ -624,10 +568,7 @@ registerAction2(
 		constructor() {
 			super({
 				id: CopyEditorToNewWindowCommandId,
-				title: localize2(
-					{ bundle: 'ash.workbench', key: 'command.CopyEditorToNewWindowAction' },
-					'Copy to New Window',
-				),
+				title: localize2({ bundle: 'ash.workbench', key: 'command.CopyEditorToNewWindowAction' }, 'Copy to New Window'),
 				f1: true,
 			});
 		}
@@ -638,16 +579,10 @@ registerAction2(
 	},
 );
 
-async function openEditorsInNewWindow(
-	accessor: ServicesAccessor,
-	args: readonly unknown[],
-	mode: 'move' | 'copy',
-): Promise<void> {
+async function openEditorsInNewWindow(accessor: ServicesAccessor, args: readonly unknown[], mode: 'move' | 'copy'): Promise<void> {
 	const parts = accessor.get(IEditorPartsService);
 	const context = resolveCommandsContext(args, accessor.get(IEditorGroupsService));
-	const editors = context.groupedEditors.flatMap(({ group, editors }) =>
-		group.editors.filter(editor => editors.includes(editor.input)),
-	);
+	const editors = context.groupedEditors.flatMap(({ group, editors }) => group.editors.filter(editor => editors.includes(editor.input)));
 	await parts.openEditorsInNewWindow(editors, mode);
 }
 
@@ -688,9 +623,7 @@ registerAction2(
 					if (!item) return;
 
 					picker.hide();
-					const untitled = accessor
-						.get(IUntitledTextEditorService)
-						.create({ initialValue: item.template.body, languageId: item.template.languageId });
+					const untitled = accessor.get(IUntitledTextEditorService).create({ initialValue: item.template.body, languageId: item.template.languageId });
 					void accessor
 						.get(IEditorPart)
 						.openEditor(new UntitledTextEditorInput(untitled))
@@ -724,10 +657,7 @@ for (const mode of ['move', 'copy'] as const) {
 		class EditorGroupToNewWindowAction extends Action2 {
 			constructor() {
 				super({
-					id:
-						mode === 'move'
-							? 'workbench.action.moveEditorGroupToNewWindow'
-							: 'workbench.action.copyEditorGroupToNewWindow',
+					id: mode === 'move' ? 'workbench.action.moveEditorGroupToNewWindow' : 'workbench.action.copyEditorGroupToNewWindow',
 					title:
 						mode === 'move'
 							? localize2('command.MoveEditorGroupToNewWindow', 'Move Editor Group into New Window')

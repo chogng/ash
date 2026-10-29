@@ -8,10 +8,7 @@ import { type IModelDecoration } from '../../../common/model.js';
 import { CustomLineHeightData, LineHeightsManager } from '../../../common/viewLayout/lineHeights.js';
 
 test('line heights resolve the tallest overlapping decoration', () => {
-	const heights = new LineHeightsManager(10, [
-		new CustomLineHeightData('wide', 2, 4, 18),
-		new CustomLineHeightData('tall', 3, 5, 24),
-	]);
+	const heights = new LineHeightsManager(10, [new CustomLineHeightData('wide', 2, 4, 18), new CustomLineHeightData('tall', 3, 5, 24)]);
 	assert.deepEqual(
 		[1, 2, 3, 4, 5, 6].map(line => heights.heightForLineNumber(line)),
 		[10, 18, 24, 24, 24, 10],
@@ -60,7 +57,13 @@ test('changing and removing a decoration takes effect immediately', () => {
 test('custom line height data uses visual ranges and the configured base height', () => {
 	const modelRange = new Range(2, 1, 4, 1);
 	const viewRange = new Range(3, 1, 6, 1);
-	const decorations = [{ id: 'block', range: modelRange, options: { lineHeight: 1.5 } }] as IModelDecoration[];
+	const decorations = [
+		{
+			id: 'block',
+			range: modelRange,
+			options: { lineHeight: 1.5 },
+		},
+	] as IModelDecoration[];
 	const coordinates = {
 		convertModelRangeToViewRange: (range: Range) => {
 			assert.strictEqual(range, modelRange);
@@ -76,7 +79,5 @@ test('custom line height data uses visual ranges and the configured base height'
 		},
 	} as unknown as IEditorConfiguration;
 
-	assert.deepEqual(CustomLineHeightData.fromDecorations(decorations, coordinates, configuration), [
-		new CustomLineHeightData('block', 3, 6, 30),
-	]);
+	assert.deepEqual(CustomLineHeightData.fromDecorations(decorations, coordinates, configuration), [new CustomLineHeightData('block', 3, 6, 30)]);
 });

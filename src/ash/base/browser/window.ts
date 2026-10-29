@@ -102,7 +102,11 @@ function registerMainWindowIfAvailable(): void {
 	const targetWindow = globalThis.window as BrowserWindow | undefined;
 	if (!targetWindow || windowIds.has(targetWindow)) return;
 	mainWindow = targetWindow;
-	const registration: IRegisteredWindow = { id: 1, window: targetWindow, disposables: new DisposableStore() };
+	const registration: IRegisteredWindow = {
+		id: 1,
+		window: targetWindow,
+		disposables: new DisposableStore(),
+	};
 	registrations.set(registration.id, registration);
 	windowIds.set(targetWindow, registration.id);
 }

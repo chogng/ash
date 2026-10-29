@@ -13,10 +13,7 @@ import { createDisconnectedFileApi } from '../../../files/browser/fileApi.js';
 import type { IFileApi, IFileSystemDirectory } from '../../../files/common/fileApi.js';
 import { FileService } from '../../../files/common/fileService.js';
 import { createDisconnectedResourceApi } from '../../browser/appServerApi.js';
-import {
-	AgentHostFileSystemProvider,
-	type IRemoteFilesystemConnection,
-} from '../../common/agentHostFileSystemProvider.js';
+import { AgentHostFileSystemProvider, type IRemoteFilesystemConnection } from '../../common/agentHostFileSystemProvider.js';
 import type { IResourceApi } from '../../common/appServerApi.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
 
@@ -25,12 +22,7 @@ const unavailable = (): never => {
 };
 const root = URI.from({ scheme: Schemas.ashRemote, authority: 'ssh+host', path: '/srv' });
 
-function connection(
-	resource: URI,
-	label: string,
-	api: Partial<IFileApi> = {},
-	resources: Partial<IResourceApi> = {},
-): IRemoteFilesystemConnection {
+function connection(resource: URI, label: string, api: Partial<IFileApi> = {}, resources: Partial<IResourceApi> = {}): IRemoteFilesystemConnection {
 	return {
 		api: {
 			...createDisconnectedFileApi(unavailable),
@@ -55,14 +47,11 @@ suite('Agent Host filesystem authority routes', () => {
 		using parent = provider.registerAuthority(root.authority, connection(root, 'parent'));
 		using child = provider.registerAuthority(root.authority, connection(nested, 'nested'));
 		using other = provider.registerAuthority(root.authority, connection(sibling, 'sibling'));
-		assert.deepEqual(
-			await Promise.all(
-				[root, nested, sibling].map(resource =>
-					files.readFile(URI.joinPath(resource, 'main.ts'), 'utf8').then(value => value.content),
-				),
-			),
-			['parent', 'nested', 'sibling'],
-		);
+		assert.deepEqual(await Promise.all([root, nested, sibling].map(resource => files.readFile(URI.joinPath(resource, 'main.ts'), 'utf8').then(value => value.content))), [
+			'parent',
+			'nested',
+			'sibling',
+		]);
 		child.dispose();
 		await assert.rejects(files.readFile(URI.joinPath(nested, 'main.ts'), 'utf8'));
 		assert.equal((await files.readFile(URI.joinPath(root, 'main.ts'), 'utf8')).content, 'parent');
@@ -87,9 +76,7 @@ suite('Agent Host filesystem authority routes', () => {
 		using registration = provider.registerAuthority(root.authority, connection(root, 'remote'));
 		const upper = root.with({ authority: 'ssh+HOST' });
 		assert.equal((await files.readFile(URI.joinPath(upper, 'main.ts'), 'utf8')).content, 'remote');
-		const translations = JSON.parse(
-			readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'),
-		);
+		const translations = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'));
 		setNlsMessages('zh-CN', translations);
 		try {
 			assert.throws(() => provider.registerAuthority(upper.authority, connection(upper, 'conflict')), {
@@ -240,9 +227,7 @@ suite('Agent Host filesystem authority routes', () => {
 					return { fileType: 'file', sizeBytes: 1, readonly: false, modifiedAtMillis: null };
 				},
 			});
-			using provider = new AgentHostFileSystemProvider(
-				primary ? parent : connection(URI.file('/workspace'), 'primary'),
-			);
+			using provider = new AgentHostFileSystemProvider(primary ? parent : connection(URI.file('/workspace'), 'primary'));
 			using parentMount = primary ? undefined : provider.registerAuthority(root.authority, parent);
 			using scope = provider.acquireCopyScope(root);
 			const nested = URI.joinPath(root, 'nested');
@@ -281,10 +266,7 @@ suite('Agent Host filesystem authority routes', () => {
 		const target = URI.joinPath(root, 'copied');
 		const temporary = URI.joinPath(root, '.ash-copy-private');
 		using scope = provider.acquireCopyScope(target);
-		using nested = provider.registerAuthority(
-			root.authority,
-			connection(URI.joinPath(temporary, 'nested'), 'nested'),
-		);
+		using nested = provider.registerAuthority(root.authority, connection(URI.joinPath(temporary, 'nested'), 'nested'));
 		await assert.rejects(scope.rename(temporary, target, 'error'), isCancellationError);
 		await assert.rejects(scope.delete(temporary, 'ignore', 'recursive'), isCancellationError);
 		assert.deepEqual(mutations, []);
@@ -323,12 +305,7 @@ suite('Agent Host filesystem authority routes', () => {
 		using cancellation = new CancellationTokenSource(sourceScope.token);
 		directories = [{ uri: root.with({ path: '/other' }), target: { type: 'environment', dirId: 'other' } }];
 		const resource = URI.joinPath(root, 'copied.bin');
-		const writing = targetScope.writeFile(
-			resource,
-			new Uint8Array([42]),
-			{ create: true, overwrite: false },
-			cancellation.token,
-		);
+		const writing = targetScope.writeFile(resource, new Uint8Array([42]), { create: true, overwrite: false }, cancellation.token);
 		const rejected = assert.rejects(writing, isCancellationError);
 		await started.p;
 		sourceMount.dispose();
@@ -387,10 +364,7 @@ suite('Agent Host filesystem authority routes', () => {
 		);
 		using identity = files.retainPathIdentity(resource);
 		await files.resolvePathIdentity(resource);
-		assert.equal(
-			files.getPathIdentity(resource)!.comparisonResource.toString(),
-			URI.joinPath(root, 'file.ts').toString(),
-		);
+		assert.equal(files.getPathIdentity(resource)!.comparisonResource.toString(), URI.joinPath(root, 'file.ts').toString());
 		original.dispose();
 		assert.equal(files.getPathIdentity(resource)!.comparisonResource.toString(), resource.toString());
 		using replacement = provider.registerAuthority(

@@ -2,10 +2,7 @@ import { Color, RGBA } from '../../../../base/common/color.js';
 import { type Event } from '../../../../base/common/event.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { Range } from '../../../common/core/range.js';
-import {
-	computeDefaultDocumentColors,
-	computeDefaultDocumentColorsAsync,
-} from '../../../common/languages/defaultDocumentColorsComputer.js';
+import { computeDefaultDocumentColors, computeDefaultDocumentColorsAsync } from '../../../common/languages/defaultDocumentColorsComputer.js';
 
 import {
 	createLanguageFeatureRequest,
@@ -36,17 +33,12 @@ export class ColorService {
 		private readonly model: TextModel,
 		private readonly providers: LanguageFeatureRegistry<LanguageColorProvider>,
 		private readonly resource?: URI,
-		private readonly onError: (error: unknown) => void = error =>
-			console.error('Stanza document color provider failed', error),
+		private readonly onError: (error: unknown) => void = error => console.error('Stanza document color provider failed', error),
 	) {
 		this.onDidChange = providers.onDidChange;
 	}
 
-	async provideDocumentColors(
-		languageId: string,
-		enablement: DefaultColorDecoratorsEnablement,
-		signal: AbortSignal,
-	): Promise<readonly ColorData[]> {
+	async provideDocumentColors(languageId: string, enablement: DefaultColorDecoratorsEnablement, signal: AbortSignal): Promise<readonly ColorData[]> {
 		const request = this.createRequest(languageId, signal);
 		const result: ColorData[] = [];
 		let validProviderFound = false;
@@ -69,12 +61,7 @@ export class ColorService {
 		return Object.freeze(result);
 	}
 
-	async provideColorPresentations(
-		languageId: string,
-		data: ColorData,
-		color: IColor,
-		signal: AbortSignal,
-	): Promise<readonly IColorPresentation[]> {
+	async provideColorPresentations(languageId: string, data: ColorData, color: IColor, signal: AbortSignal): Promise<readonly IColorPresentation[]> {
 		return (await this.requestColorPresentations(languageId, data, color, signal)) ?? Object.freeze([]);
 	}
 
@@ -89,12 +76,7 @@ export class ColorService {
 		const result: IColorPresentation[] = [];
 		let validProviderFound = false;
 		for (const provider of this.providers.ordered(this.model)) {
-			const values = await this.requestColorPresentations(
-				languageId,
-				{ provider, information: { range, color } },
-				color,
-				signal,
-			);
+			const values = await this.requestColorPresentations(languageId, { provider, information: { range, color } }, color, signal);
 			if (!isLanguageFeatureRequestCurrent(request)) {
 				return Object.freeze([]);
 			}
@@ -105,12 +87,7 @@ export class ColorService {
 			result.push(...values);
 		}
 		if (enablement === 'always' || (enablement === 'auto' && !validProviderFound)) {
-			const values = await this.provideColorPresentations(
-				languageId,
-				{ provider: this.defaultProvider, information: { range, color } },
-				color,
-				signal,
-			);
+			const values = await this.provideColorPresentations(languageId, { provider: this.defaultProvider, information: { range, color } }, color, signal);
 			if (!isLanguageFeatureRequestCurrent(request)) {
 				return Object.freeze([]);
 			}
@@ -119,12 +96,7 @@ export class ColorService {
 		return Object.freeze(result);
 	}
 
-	private async requestColorPresentations(
-		languageId: string,
-		data: ColorData,
-		color: IColor,
-		signal: AbortSignal,
-	): Promise<readonly IColorPresentation[] | undefined> {
+	private async requestColorPresentations(languageId: string, data: ColorData, color: IColor, signal: AbortSignal): Promise<readonly IColorPresentation[] | undefined> {
 		const request: LanguageColorPresentationRequest = Object.freeze({
 			...this.createRequest(languageId, signal),
 			color,
@@ -148,11 +120,7 @@ export class ColorService {
 		});
 	}
 
-	private async requestDocumentColors(
-		provider: LanguageColorProvider,
-		request: LanguageColorRequest,
-		signal: AbortSignal,
-	): Promise<readonly IColorInformation[] | undefined> {
+	private async requestDocumentColors(provider: LanguageColorProvider, request: LanguageColorRequest, signal: AbortSignal): Promise<readonly IColorInformation[] | undefined> {
 		try {
 			return await provider.provideDocumentColors(request, signal);
 		} catch (error) {
@@ -161,11 +129,7 @@ export class ColorService {
 		}
 	}
 
-	private async normalizeColors(
-		values: readonly IColorInformation[],
-		provider: LanguageColorProvider,
-		request: LanguageColorRequest,
-	): Promise<readonly ColorData[]> {
+	private async normalizeColors(values: readonly IColorInformation[], provider: LanguageColorProvider, request: LanguageColorRequest): Promise<readonly ColorData[]> {
 		const result: ColorData[] = [];
 		for (let index = 0; index < values.length; index++) {
 			if (index > 0 && index % 512 === 0) {
@@ -193,10 +157,7 @@ export class ColorService {
 
 /** Detects common CSS color literals when a language does not provide document colors. */
 export class DefaultDocumentColorProvider implements LanguageColorProvider {
-	provideDocumentColors(
-		request: LanguageColorRequest,
-		signal: AbortSignal,
-	): readonly IColorInformation[] | Promise<readonly IColorInformation[]> {
+	provideDocumentColors(request: LanguageColorRequest, signal: AbortSignal): readonly IColorInformation[] | Promise<readonly IColorInformation[]> {
 		signal.throwIfAborted();
 		const text = request.snapshot.getText();
 		let lineNumber = 1,
@@ -218,9 +179,7 @@ export class DefaultDocumentColorProvider implements LanguageColorProvider {
 				return { lineNumber, column: offset - lineStart + 1 };
 			},
 		};
-		return text.length < 65_536
-			? Object.freeze(computeDefaultDocumentColors(target))
-			: computeDefaultDocumentColorsAsync(target, signal).then(colors => Object.freeze(colors));
+		return text.length < 65_536 ? Object.freeze(computeDefaultDocumentColors(target)) : computeDefaultDocumentColorsAsync(target, signal).then(colors => Object.freeze(colors));
 	}
 
 	provideColorPresentations(request: LanguageColorPresentationRequest): readonly IColorPresentation[] {
@@ -239,19 +198,13 @@ function createColorPresentations(range: Range, color: IColor): readonly IColorP
 	const hue = hsla.h;
 	const saturation = Math.round(hsla.s * 100);
 	const lightness = Math.round(hsla.l * 100);
-	const hsl =
-		alphaByte === 255
-			? `hsl(${hue}, ${saturation}%, ${lightness}%)`
-			: `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
+	const hsl = alphaByte === 255 ? `hsl(${hue}, ${saturation}%, ${lightness}%)` : `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
 	const hex = `#${[red, green, blue, ...(alphaByte === 255 ? [] : [alphaByte])].map(channel => channel.toString(16).padStart(2, '0')).join('')}`;
-	return Object.freeze(
-		[rgb, hsl, hex].map(label => Object.freeze({ label, textEdit: Object.freeze({ range, text: label }) })),
-	);
+	return Object.freeze([rgb, hsl, hex].map(label => Object.freeze({ label, textEdit: Object.freeze({ range, text: label }) })));
 }
 
 function normalizePresentation(value: IColorPresentation): IColorPresentation {
-	if (!value || typeof value.label !== 'string' || value.label.trim().length === 0)
-		throw new TypeError('Language color presentation must provide a label');
+	if (!value || typeof value.label !== 'string' || value.label.trim().length === 0) throw new TypeError('Language color presentation must provide a label');
 	return {
 		label: value.label,
 		...(value.textEdit ? { textEdit: { range: value.textEdit.range, text: value.textEdit.text } } : {}),
@@ -261,8 +214,7 @@ function normalizePresentation(value: IColorPresentation): IColorPresentation {
 
 function assertColor(value: IColor): void {
 	for (const component of [value?.red, value?.green, value?.blue, value?.alpha]) {
-		if (!Number.isFinite(component) || component < 0 || component > 1)
-			throw new TypeError('Language color provider must return color components in the range [0, 1]');
+		if (!Number.isFinite(component) || component < 0 || component > 1) throw new TypeError('Language color provider must return color components in the range [0, 1]');
 	}
 }
 

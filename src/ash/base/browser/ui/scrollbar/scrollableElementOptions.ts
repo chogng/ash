@@ -128,7 +128,4 @@ export interface ScrollableElementCreationOptions {
 	mouseWheelSmoothScroll?: boolean;
 }
 
-export type ScrollableElementChangeOptions = Omit<
-	ScrollableElementCreationOptions,
-	'lazyRender' | 'className' | 'listenOnDomNode'
->;
+export type ScrollableElementChangeOptions = Omit<ScrollableElementCreationOptions, 'lazyRender' | 'className' | 'listenOnDomNode'>;

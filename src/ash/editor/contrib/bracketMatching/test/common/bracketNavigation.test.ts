@@ -16,28 +16,13 @@ test('Bracket navigation jumps and selects configured pairs without changing tex
 		languageConfigurationService: configurations,
 	});
 	const bracketPairs = model.bracketPairs;
-	const selections = primaryFirst(
-		[Selection.fromPositions(new Position(0 + 1, 0 + 1)), Selection.fromPositions(new Position(1 + 1, 8 + 1))],
-		1,
-	);
+	const selections = primaryFirst([Selection.fromPositions(new Position(0 + 1, 0 + 1)), Selection.fromPositions(new Position(1 + 1, 8 + 1))], 1);
 
 	const jumped = jumpToMatchingBrackets(bracketPairs, selections);
-	assert.deepEqual(
-		jumped,
-		primaryFirst(
-			[Selection.fromPositions(new Position(2 + 1, 0 + 1)), Selection.fromPositions(new Position(1 + 1, 2 + 1))],
-			1,
-		),
-	);
+	assert.deepEqual(jumped, primaryFirst([Selection.fromPositions(new Position(2 + 1, 0 + 1)), Selection.fromPositions(new Position(1 + 1, 2 + 1))], 1));
 	assert.deepEqual(
 		selectToMatchingBrackets(bracketPairs, jumped),
-		primaryFirst(
-			[
-				Selection.fromPositions(new Position(0 + 1, 0 + 1), new Position(2 + 1, 1 + 1)),
-				Selection.fromPositions(new Position(1 + 1, 2 + 1), new Position(1 + 1, 9 + 1)),
-			],
-			1,
-		),
+		primaryFirst([Selection.fromPositions(new Position(0 + 1, 0 + 1), new Position(2 + 1, 1 + 1)), Selection.fromPositions(new Position(1 + 1, 2 + 1), new Position(1 + 1, 9 + 1))], 1),
 	);
 	assert.equal(model.getText(), '{\n  (value)\n}');
 });

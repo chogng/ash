@@ -10,33 +10,14 @@ import {
 	parseRestoreFullscreen,
 } from '../../window/common/window.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
-import {
-	AbstractDisposable,
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-} from '../../../base/common/lifecycle.js';
+import { AbstractDisposable, Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { type IWorkspaceOpenTarget, WorkspaceOpenTargetKind } from '../../environment/common/argv.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import { createSshRemoteWorkspaceUri } from '../../remote/common/remote.js';
-import {
-	type IAnyWorkspaceIdentifier,
-	hasWorkspaceFileExtension,
-	isSingleFolderWorkspaceIdentifier,
-	isWorkspaceIdentifier,
-	serializeWorkspace,
-} from '../../workspace/common/workspace.js';
+import { type IAnyWorkspaceIdentifier, hasWorkspaceFileExtension, isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, serializeWorkspace } from '../../workspace/common/workspace.js';
 import { WORKSPACE_CONTEXT_READ_CHANNEL, validateWorkspaceContextRead } from '../../workspace/common/workspaceIpc.js';
-import {
-	createEmptyWorkspaceIdentifier,
-	getSingleFolderWorkspaceIdentifier,
-	getWorkspaceIdentifier,
-	type IWorkspacePathService,
-	WorkspacePathKind,
-} from '../../workspaces/node/workspaces.js';
+import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier, getWorkspaceIdentifier, type IWorkspacePathService, WorkspacePathKind } from '../../workspaces/node/workspaces.js';
 import {
 	WINDOW_CLOSE_RESPONSE_CHANNEL,
 	WINDOW_FULLSCREEN_CHANGED_CHANNEL,
@@ -54,29 +35,14 @@ import {
 	type IWorkbenchWindowInfo,
 	type RestoreWindowsSetting,
 } from '../../window/common/window.js';
-import {
-	focusWindow,
-	type IFocusableWindow,
-	type WorkspaceContextMainService,
-} from '../../window/electron-main/window.js';
+import { focusWindow, type IFocusableWindow, type WorkspaceContextMainService } from '../../window/electron-main/window.js';
 import type { WindowsStateHandler } from './windowsStateHandler.js';
 import { CodeWindow, type ICodeWindowHandle, type IWindowCreationOptions } from './windowImpl.js';
 import { createUuid } from '../../../base/common/uuid.js';
 import type { IOpenAgentsWindowOptions } from '../../native/common/nativeHost.js';
 import type { IAgentsWindowHandoffResult } from '../../window/common/window.js';
-import type {
-	IWindowConstructorOptions,
-	IWindowWebPreferences,
-	IOpenConfiguration,
-	IWindowsMainService,
-} from './windows.js';
-import {
-	WINDOW_OPEN_FILES_CHANNEL,
-	WINDOW_OPEN_FILES_RESPONSE_CHANNEL,
-	validateWindowFilesResponse,
-	type IWindowFilesRequest,
-	type WindowFilesResponse,
-} from '../../window/common/window.js';
+import type { IWindowConstructorOptions, IWindowWebPreferences, IOpenConfiguration, IWindowsMainService } from './windows.js';
+import { WINDOW_OPEN_FILES_CHANNEL, WINDOW_OPEN_FILES_RESPONSE_CHANNEL, validateWindowFilesResponse, type IWindowFilesRequest, type WindowFilesResponse } from '../../window/common/window.js';
 import type { ICodeWindow, IWindowBounds, IWindowState } from '../../window/electron-main/window.js';
 import { findWindowOnWorkspaceOrFolder } from './windowsFinder.js';
 
@@ -87,48 +53,21 @@ export interface IWorkbenchWindow<TWindow> extends IFocusableWindow, ICodeWindow
 	off(event: 'close', listener: (event: { preventDefault(): void }) => void): unknown;
 	off(event: 'focus', listener: () => void): unknown;
 	on(event: 'enter-full-screen' | 'leave-full-screen' | 'unresponsive' | 'responsive', listener: () => void): unknown;
-	off(
-		event: 'enter-full-screen' | 'leave-full-screen' | 'unresponsive' | 'responsive',
-		listener: () => void,
-	): unknown;
+	off(event: 'enter-full-screen' | 'leave-full-screen' | 'unresponsive' | 'responsive', listener: () => void): unknown;
 	readonly webContents: {
 		isDestroyed(): boolean;
 		reload(): void;
-		on(
-			event: 'render-process-gone',
-			listener: (event: unknown, details: Electron.RenderProcessGoneDetails) => void,
-		): unknown;
-		off(
-			event: 'render-process-gone',
-			listener: (event: unknown, details: Electron.RenderProcessGoneDetails) => void,
-		): unknown;
-		on(
-			event: 'did-fail-load',
-			listener: (event: unknown, code: number, description: string, url: string, mainFrame: boolean) => void,
-		): unknown;
-		off(
-			event: 'did-fail-load',
-			listener: (event: unknown, code: number, description: string, url: string, mainFrame: boolean) => void,
-		): unknown;
+		on(event: 'render-process-gone', listener: (event: unknown, details: Electron.RenderProcessGoneDetails) => void): unknown;
+		off(event: 'render-process-gone', listener: (event: unknown, details: Electron.RenderProcessGoneDetails) => void): unknown;
+		on(event: 'did-fail-load', listener: (event: unknown, code: number, description: string, url: string, mainFrame: boolean) => void): unknown;
+		off(event: 'did-fail-load', listener: (event: unknown, code: number, description: string, url: string, mainFrame: boolean) => void): unknown;
 		getZoomLevel(): number;
 		getZoomFactor(): number;
 		setZoomLevel(level: number): void;
-		on(
-			event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone' | 'will-prevent-unload',
-			listener: () => void,
-		): unknown;
-		off(
-			event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone' | 'will-prevent-unload',
-			listener: () => void,
-		): unknown;
-		on(
-			event: 'did-start-navigation',
-			listener: (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void,
-		): unknown;
-		off(
-			event: 'did-start-navigation',
-			listener: (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void,
-		): unknown;
+		on(event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone' | 'will-prevent-unload', listener: () => void): unknown;
+		off(event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone' | 'will-prevent-unload', listener: () => void): unknown;
+		on(event: 'did-start-navigation', listener: (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void): unknown;
+		off(event: 'did-start-navigation', listener: (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void): unknown;
 		send(channel: string, value: unknown): void;
 		once(event: 'render-process-gone', listener: () => void): unknown;
 	};
@@ -155,10 +94,7 @@ export interface IWorkbenchWindow<TWindow> extends IFocusableWindow, ICodeWindow
 	addTabbedWindow(window: TWindow): void;
 }
 
-export interface IManagedWindowOpenOptions<TWindow extends IWorkbenchWindow<TWindow>> extends Pick<
-	IWindowCreationOptions,
-	'workspace' | 'isSessionsWindow'
-> {
+export interface IManagedWindowOpenOptions<TWindow extends IWorkbenchWindow<TWindow>> extends Pick<IWindowCreationOptions, 'workspace' | 'isSessionsWindow'> {
 	readonly title: string;
 	readonly titleBarStyle?: IWindowCreationOptions['titleBarStyle'];
 	readonly backgroundColor?: IWindowCreationOptions['backgroundColor'];
@@ -183,8 +119,7 @@ class ManagedWindowHandoffs<TWindow extends IWorkbenchWindow<TWindow>> extends D
 	constructor(host: ICodeWindow<TWindow>) {
 		super();
 		const window = host.win;
-		const rejectInterrupted = (): void =>
-			this.rejectPending(new Error('Agents Window reloaded before the handoff completed'));
+		const rejectInterrupted = (): void => this.rejectPending(new Error('Agents Window reloaded before the handoff completed'));
 		this._register(host.onWillLoad(rejectInterrupted));
 		window.webContents.on('render-process-gone', rejectInterrupted);
 		this._register(
@@ -194,9 +129,7 @@ class ManagedWindowHandoffs<TWindow extends IWorkbenchWindow<TWindow>> extends D
 				}
 			}),
 		);
-		this._register(
-			toDisposable(() => this.rejectPending(new Error('Agents Window closed before the handoff completed'))),
-		);
+		this._register(toDisposable(() => this.rejectPending(new Error('Agents Window closed before the handoff completed'))));
 	}
 
 	public enqueue(options: IOpenAgentsWindowOptions): Promise<void> {
@@ -246,9 +179,7 @@ class ManagedWindowHost<TWindow extends IWorkbenchWindow<TWindow>> extends Dispo
 	private openRequests = 0;
 
 	constructor(
-		private readonly createWindow: (
-			options: IWindowConstructorOptions & Pick<IWindowCreationOptions, 'title' | 'icon' | 'tabbingIdentifier'>,
-		) => TWindow,
+		private readonly createWindow: (options: IWindowConstructorOptions & Pick<IWindowCreationOptions, 'title' | 'icon' | 'tabbingIdentifier'>) => TWindow,
 		private readonly onDidClose: () => void,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
@@ -388,10 +319,7 @@ class ManagedWindowHost<TWindow extends IWorkbenchWindow<TWindow>> extends Dispo
 }
 
 /** Owns window operations for the live Workbench windows of one Electron app. */
-export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>>
-	extends Disposable
-	implements IWindowsMainService
-{
+export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> extends Disposable implements IWindowsMainService {
 	private readonly workbenchWindows = this._register(new DisposableMap<number, CodeWindow<TWindow>>());
 	private readonly managedWindows = this._register(new DisposableMap<string, ManagedWindowHost<TWindow>>());
 	private readonly fileRequests = this._register(new DisposableMap<number, WindowFileRequest>());
@@ -400,10 +328,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>>
 	private lastClosedWindowState: IWindowState | undefined;
 	private nextFileRequest = 0;
 	constructor(
-		private readonly createEmptyWindow: (
-			configuration?: IOpenConfiguration,
-			reuseWindow?: TWindow,
-		) => Promise<TWindow | undefined>,
+		private readonly createEmptyWindow: (configuration?: IOpenConfiguration, reuseWindow?: TWindow) => Promise<TWindow | undefined>,
 		private readonly platform: NodeJS.Platform,
 		private readonly workspacePaths: IWorkspacePathService,
 		@IAuxiliaryWindowsMainService private readonly auxiliaryWindowsMainService: IAuxiliaryWindowsMainService,
@@ -412,9 +337,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>>
 		super();
 		this._register(
 			auxiliaryWindowsMainService.onDidChangeWindowState(({ parentId, event }) => {
-				const parent = [...this.getWindows(), ...this.managedWindowValues()].find(
-					window => window.id === parentId,
-				);
+				const parent = [...this.getWindows(), ...this.managedWindowValues()].find(window => window.id === parentId);
 				if (!parent || parent.isDestroyed()) return;
 				this.getWindowById(parent.id)?.send(AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL, event);
 				this.getWindowById(parent.id)?.send(WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL, {
@@ -430,9 +353,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>>
 	}
 
 	public getWindowById(id: number): ICodeWindow<TWindow> | undefined {
-		const host =
-			this.workbenchWindows.get(id) ??
-			[...this.managedWindows].map(([, window]) => window.codeWindow).find(window => window?.win.id === id);
+		const host = this.workbenchWindows.get(id) ?? [...this.managedWindows].map(([, window]) => window.codeWindow).find(window => window?.win.id === id);
 		return host && !host.win.isDestroyed() ? host : undefined;
 	}
 
@@ -455,23 +376,15 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>>
 		}
 		const lastAuxiliary = this.auxiliaryWindowsMainService.getLastActiveWindow();
 		const auxiliaryParent = lastAuxiliary && windows.find(window => window.id === lastAuxiliary.parentId);
-		const lastMain = windows
-			.map(window => this.getWindowById(window.id)!)
-			.sort((a, b) => b.lastFocusTime - a.lastFocusTime)[0];
+		const lastMain = windows.map(window => this.getWindowById(window.id)!).sort((a, b) => b.lastFocusTime - a.lastFocusTime)[0];
 		if (lastMain) {
-			return lastAuxiliary && auxiliaryParent && lastAuxiliary.lastFocusTime > lastMain.lastFocusTime
-				? auxiliaryParent
-				: lastMain.win;
+			return lastAuxiliary && auxiliaryParent && lastAuxiliary.lastFocusTime > lastMain.lastFocusTime ? auxiliaryParent : lastMain.win;
 		}
 		return auxiliaryParent;
 	}
 
 	/** Live window identity and configuration enter the sizing policy together for both window kinds. */
-	public getNewWindowState(
-		handler: WindowsStateHandler,
-		settings: Readonly<Record<string, unknown>>,
-		wasRestarted: boolean,
-	): IWindowState {
+	public getNewWindowState(handler: WindowsStateHandler, settings: Readonly<Record<string, unknown>>, wasRestarted: boolean): IWindowState {
 		const active = this.getLastActiveWindow();
 		return handler.getNewWindowState({
 			lastActiveWindow: active
@@ -481,9 +394,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>>
 					}
 				: undefined,
 			lastClosedWindow: this.lastClosedWindowState,
-			existingWindows: [...this.getWindows(), ...this.managedWindowValues()].map(window =>
-				this.getWindowById(window.id)!.getBounds(),
-			),
+			existingWindows: [...this.getWindows(), ...this.managedWindowValues()].map(window => this.getWindowById(window.id)!.getBounds()),
 			newWindowDimensions: parseNewWindowDimensions(settings[NEW_WINDOW_DIMENSIONS_SETTING] ?? 'default'),
 			restoreFullscreen: parseRestoreFullscreen(settings[RESTORE_FULLSCREEN_SETTING] ?? false),
 			wasRestarted,
@@ -500,8 +411,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>>
 		resources.add(toDisposable(() => window.off('close', closing)));
 		resources.add(
 			host.onDidClose(() => {
-				if (this.getWindows().length + this.managedWindowValues().length === 0)
-					this.lastClosedWindowState = closingState;
+				if (this.getWindows().length + this.managedWindowValues().length === 0) this.lastClosedWindowState = closingState;
 			}),
 		);
 		const fullscreenChanged = (): void => host.send(WINDOW_FULLSCREEN_CHANGED_CHANNEL, host.isFullScreen());
@@ -510,9 +420,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>>
 	}
 
 	public updateWorkspace(id: number, workspace: IAnyWorkspaceIdentifier): void {
-		const host =
-			this.workbenchWindows.get(id) ??
-			[...this.managedWindows].map(([, window]) => window.codeWindow).find(window => window?.id === id);
+		const host = this.workbenchWindows.get(id) ?? [...this.managedWindows].map(([, window]) => window.codeWindow).find(window => window?.id === id);
 		if (!host) throw new Error(`Workbench window ${id} is not registered`);
 		host.openedWorkspace = workspace;
 	}
@@ -522,9 +430,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>>
 		const hosts = [...this.workbenchWindows]
 			.map(([, host]) => host)
 			.filter(host => !host.win.isDestroyed())
-			.sort((a, b) =>
-				a.id === lastActive?.id ? -1 : b.id === lastActive?.id ? 1 : b.lastFocusTime - a.lastFocusTime,
-			);
+			.sort((a, b) => (a.id === lastActive?.id ? -1 : b.id === lastActive?.id ? 1 : b.lastFocusTime - a.lastFocusTime));
 		let host: CodeWindow<TWindow> | undefined;
 		if (isWorkspaceIdentifier(workspace)) {
 			host = findWindowOnWorkspaceOrFolder(hosts, workspace.configPath);
@@ -537,10 +443,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>>
 	}
 
 	/** Every newly restored renderer reads the same catalog. Claim each window once for this app run. */
-	public async restoreWorkspaces(
-		workspaces: readonly IAnyWorkspaceIdentifier[],
-		open: (workspace: IAnyWorkspaceIdentifier) => Promise<TWindow | undefined>,
-	): Promise<void> {
+	public async restoreWorkspaces(workspaces: readonly IAnyWorkspaceIdentifier[], open: (workspace: IAnyWorkspaceIdentifier) => Promise<TWindow | undefined>): Promise<void> {
 		const results = await Promise.allSettled(
 			workspaces.map(async workspace => {
 				if (this.recoveredWorkspaces.has(workspace.id)) return;
@@ -562,10 +465,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>>
 			);
 	}
 
-	public openWorkspace(
-		workspace: IAnyWorkspaceIdentifier,
-		create: () => Promise<TWindow | undefined>,
-	): Promise<TWindow | undefined> {
+	public openWorkspace(workspace: IAnyWorkspaceIdentifier, create: () => Promise<TWindow | undefined>): Promise<TWindow | undefined> {
 		this.assertNotDisposed();
 		const pending = this.workspaceOpenings.get(workspace.id);
 		if (pending) return pending;
@@ -588,16 +488,11 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>>
 		return opening;
 	}
 
-	public async open(
-		configuration: IOpenConfiguration,
-	): Promise<{ whenClosed: Promise<void>; whenFilesClosed: Promise<void> }> {
+	public async open(configuration: IOpenConfiguration): Promise<{ whenClosed: Promise<void>; whenFilesClosed: Promise<void> }> {
 		this.assertNotDisposed();
 		const needsWorkbench = !!configuration.workspace || configuration.files.length > 0;
 		const active = this.getLastActiveWindow(needsWorkbench ? 'workbench' : 'all');
-		const reuse =
-			!configuration.forceNewWindow && (configuration.forceReuseWindow || !configuration.workspace)
-				? active
-				: undefined;
+		const reuse = !configuration.forceNewWindow && (configuration.forceReuseWindow || !configuration.workspace) ? active : undefined;
 		const window = await this.createEmptyWindow(configuration, reuse);
 		if (!window) {
 			throw new Error('The launch request did not open a window');
@@ -652,19 +547,12 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>>
 	}
 
 	public createWindow(
-		createWindow: (
-			options: IWindowConstructorOptions & Pick<IWindowCreationOptions, 'title' | 'icon' | 'tabbingIdentifier'>,
-		) => TWindow,
+		createWindow: (options: IWindowConstructorOptions & Pick<IWindowCreationOptions, 'title' | 'icon' | 'tabbingIdentifier'>) => TWindow,
 		options: IWindowCreationOptions,
 		resources: DisposableStore,
 	): CodeWindow<TWindow> {
 		this.assertNotDisposed();
-		const host = this.instantiationService.createInstance(
-			CodeWindow<TWindow>,
-			createWindow,
-			{ ...options, workspace: options.workspace ?? createEmptyWorkspaceIdentifier() },
-			resources,
-		);
+		const host = this.instantiationService.createInstance(CodeWindow<TWindow>, createWindow, { ...options, workspace: options.workspace ?? createEmptyWorkspaceIdentifier() }, resources);
 		const window = host.win;
 		if (this.workbenchWindows.has(window.id)) {
 			host.dispose();
@@ -701,9 +589,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>>
 
 	public openManagedWindow(
 		key: string,
-		createWindow: (
-			options: IWindowConstructorOptions & Pick<IWindowCreationOptions, 'title' | 'icon' | 'tabbingIdentifier'>,
-		) => TWindow,
+		createWindow: (options: IWindowConstructorOptions & Pick<IWindowCreationOptions, 'title' | 'icon' | 'tabbingIdentifier'>) => TWindow,
 		options: IManagedWindowOpenOptions<TWindow>,
 		onDidClose: () => void,
 	): Promise<void> {
@@ -732,14 +618,10 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>>
 
 	public enqueueManagedWindowHandoff(key: string, options: IOpenAgentsWindowOptions): Promise<void> {
 		const host = this.managedWindows.get(key);
-		return host
-			? host.enqueueHandoff(options)
-			: Promise.reject(new Error('Agents Window is unavailable for handoff'));
+		return host ? host.enqueueHandoff(options) : Promise.reject(new Error('Agents Window is unavailable for handoff'));
 	}
 
-	public takeManagedWindowHandoff(
-		key: string,
-	): { readonly id: string; readonly options: IOpenAgentsWindowOptions } | undefined {
+	public takeManagedWindowHandoff(key: string): { readonly id: string; readonly options: IOpenAgentsWindowOptions } | undefined {
 		return this.managedWindows.get(key)?.takeHandoff();
 	}
 
@@ -765,28 +647,19 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>>
 		hasExplicitTarget: boolean,
 		wasRestarted: boolean,
 	): { readonly windows: readonly TEntry[]; readonly active: TEntry | undefined } {
-		const setting: RestoreWindowsSetting =
-			wasRestarted || configuredSetting === undefined ? 'all' : parseRestoreWindowsSetting(configuredSetting);
+		const setting: RestoreWindowsSetting = wasRestarted || configuredSetting === undefined ? 'all' : parseRestoreWindowsSetting(configuredSetting);
 		if (!session || setting === 'none' || (hasExplicitTarget && !wasRestarted && setting !== 'preserve')) {
 			return { windows: [], active: undefined };
 		}
 		const windows =
 			setting === 'one'
 				? [session.windows[session.active]].filter((entry): entry is TEntry => entry !== undefined)
-				: session.windows.filter(
-						entry =>
-							setting !== 'folders' ||
-							isSingleFolderWorkspaceIdentifier(entry.workspace) ||
-							isWorkspaceIdentifier(entry.workspace),
-					);
+				: session.windows.filter(entry => setting !== 'folders' || isSingleFolderWorkspaceIdentifier(entry.workspace) || isWorkspaceIdentifier(entry.workspace));
 		const active = session.windows[session.active];
 		return { windows, active: active && windows.includes(active) ? active : undefined };
 	}
 
-	public async resolveWorkspaceOpenTarget(
-		target: IWorkspaceOpenTarget | undefined,
-		cwd: string,
-	): Promise<IAnyWorkspaceIdentifier> {
+	public async resolveWorkspaceOpenTarget(target: IWorkspaceOpenTarget | undefined, cwd: string): Promise<IAnyWorkspaceIdentifier> {
 		if (!target) {
 			return createEmptyWorkspaceIdentifier();
 		}
@@ -804,10 +677,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>>
 		if (resolved.kind === WorkspacePathKind.Directory) {
 			return getSingleFolderWorkspaceIdentifier(URI.file(resolved.path));
 		}
-		if (
-			resolved.kind === WorkspacePathKind.File &&
-			(target.kind === WorkspaceOpenTargetKind.Workspace || hasWorkspaceFileExtension(resolved.path))
-		) {
+		if (resolved.kind === WorkspacePathKind.File && (target.kind === WorkspaceOpenTargetKind.Workspace || hasWorkspaceFileExtension(resolved.path))) {
 			return getWorkspaceIdentifier(URI.file(resolved.path));
 		}
 		return createEmptyWorkspaceIdentifier();
@@ -817,26 +687,13 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>>
 		for (const [, host] of this.managedWindows) host.failClose(window, message);
 	}
 
-	public perform(
-		source: TWindow,
-		operation: WindowOperation,
-	): void | number | boolean | readonly IWorkbenchWindowInfo[] | IAuxiliaryWindowState | Promise<void> {
-		const windows = [
-			...this.getWindows(),
-			...this.managedWindowValues(),
-			...this.auxiliaryWindowsMainService.getWindows().map(window => window.win),
-		].filter(window => !window.isDestroyed());
+	public perform(source: TWindow, operation: WindowOperation): void | number | boolean | readonly IWorkbenchWindowInfo[] | IAuxiliaryWindowState | Promise<void> {
+		const windows = [...this.getWindows(), ...this.managedWindowValues(), ...this.auxiliaryWindowsMainService.getWindows().map(window => window.win)].filter(window => !window.isDestroyed());
 		if (!windows.includes(source)) throw new Error('Workbench window is closed');
 		// Same-renderer editor windows share their owner's IPC route. Resolve only its descendants.
 		const target =
 			'windowName' in operation && operation.windowName !== undefined
-				? this.auxiliaryWindowsMainService
-						.getWindows()
-						.find(
-							window =>
-								window.parentId === source.id &&
-								window.win.webContents.mainFrame.name === operation.windowName,
-						)?.win
+				? this.auxiliaryWindowsMainService.getWindows().find(window => window.parentId === source.id && window.win.webContents.mainFrame.name === operation.windowName)?.win
 				: source;
 		if (!target) throw new Error('Auxiliary window is closed or belongs to another workbench');
 		switch (operation.kind) {
@@ -873,9 +730,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>>
 				}
 				return;
 			case 'getAuxiliaryState':
-				return this.auxiliaryWindowsMainService
-					.getWindowByWebContents(target.webContents as unknown as import('electron').WebContents)!
-					.getState();
+				return this.auxiliaryWindowsMainService.getWindowByWebContents(target.webContents as unknown as import('electron').WebContents)!.getState();
 			case 'getZoom':
 				return target.webContents.getZoomLevel();
 			case 'getZoomFactor':
@@ -896,9 +751,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>>
 					const host = this.getWindowById(window.id);
 					if (host) host.send(WINDOW_ZOOM_CHANGED_CHANNEL, operation.level);
 					else window.webContents.send(WINDOW_ZOOM_CHANGED_CHANNEL, operation.level);
-					const auxiliary = this.auxiliaryWindowsMainService
-						.getWindows()
-						.find(candidate => candidate.id === window.id);
+					const auxiliary = this.auxiliaryWindowsMainService.getWindows().find(candidate => candidate.id === window.id);
 					if (auxiliary)
 						this.getWindowById(source.id)!.send(AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL, {
 							windowName: auxiliary.win.webContents.mainFrame.name,
@@ -989,10 +842,7 @@ class WindowFileRequest extends AbstractDisposable {
 	}
 }
 
-export function windowOperationIpcRoute<TWindow extends IWorkbenchWindow<TWindow>>(
-	service: WindowsMainService<TWindow>,
-	window: TWindow,
-): IpcRoute<unknown, unknown> {
+export function windowOperationIpcRoute<TWindow extends IWorkbenchWindow<TWindow>>(service: WindowsMainService<TWindow>, window: TWindow): IpcRoute<unknown, unknown> {
 	return {
 		channel: WINDOW_OPERATION_CHANNEL,
 		validate: validateWindowOperation,
@@ -1001,9 +851,7 @@ export function windowOperationIpcRoute<TWindow extends IWorkbenchWindow<TWindow
 }
 
 /** The renderer selects recovery scopes; Main only creates their windows. */
-export function workspaceRecoveryIpcRoute(
-	restore: (workspaces: readonly IAnyWorkspaceIdentifier[]) => Promise<void>,
-): IpcRoute<unknown, unknown> {
+export function workspaceRecoveryIpcRoute(restore: (workspaces: readonly IAnyWorkspaceIdentifier[]) => Promise<void>): IpcRoute<unknown, unknown> {
 	return {
 		channel: WORKSPACE_RECOVERY_CHANNEL,
 		validate: validateWorkspaceRecovery,

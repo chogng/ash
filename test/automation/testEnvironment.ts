@@ -3,14 +3,8 @@ import { realpathSync, statSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 
 /** Keeps backend account and model-cache storage inside the test's temporary home. */
-export function createTestEnvironment(
-	directory: string,
-	source: Readonly<Record<string, string | undefined>>,
-	externalCodexHome?: string,
-): Record<string, string> {
-	const environment = Object.fromEntries(
-		Object.entries(source).filter((entry): entry is [string, string] => entry[1] !== undefined),
-	);
+export function createTestEnvironment(directory: string, source: Readonly<Record<string, string | undefined>>, externalCodexHome?: string): Record<string, string> {
+	const environment = Object.fromEntries(Object.entries(source).filter((entry): entry is [string, string] => entry[1] !== undefined));
 	// Product storage is isolated, but Cargo and rustup still use the host toolchain.
 	environment.CARGO_HOME = source.CARGO_HOME ?? join(source.HOME ?? homedir(), '.cargo');
 	environment.RUSTUP_HOME = source.RUSTUP_HOME ?? join(source.HOME ?? homedir(), '.rustup');

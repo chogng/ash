@@ -39,12 +39,7 @@ export class GlobalExtensionEnablementService extends Disposable implements IGlo
 		if (!disabled.some(extension => extension.id === id)) {
 			return false;
 		}
-		this.storage.store(
-			disabledExtensionsKey,
-			JSON.stringify(disabled.filter(extension => extension.id !== id)),
-			StorageScope.PROFILE,
-			StorageTarget.USER,
-		);
+		this.storage.store(disabledExtensionsKey, JSON.stringify(disabled.filter(extension => extension.id !== id)), StorageScope.PROFILE, StorageTarget.USER);
 		await this.storage.flush();
 		return true;
 	}
@@ -58,12 +53,7 @@ export class GlobalExtensionEnablementService extends Disposable implements IGlo
 		if (disabled.length >= 10000) {
 			throw new RangeError('Disabled extension identifiers exceed their limit');
 		}
-		this.storage.store(
-			disabledExtensionsKey,
-			JSON.stringify([...disabled, { id }]),
-			StorageScope.PROFILE,
-			StorageTarget.USER,
-		);
+		this.storage.store(disabledExtensionsKey, JSON.stringify([...disabled, { id }]), StorageScope.PROFILE, StorageTarget.USER);
 		await this.storage.flush();
 		return true;
 	}

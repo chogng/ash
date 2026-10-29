@@ -1,10 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import {
-	emptyPdfAnnotationDocument,
-	parsePdfAnnotationDocument,
-	serializePdfAnnotationDocument,
-} from '../../../../../../../extensions/pdf-viewer/common/pdfAnnotations.js';
+import { emptyPdfAnnotationDocument, parsePdfAnnotationDocument, serializePdfAnnotationDocument } from '../../../../../../../extensions/pdf-viewer/common/pdfAnnotations.js';
 
 test('PDF annotation documents round-trip through the versioned durable format', () => {
 	const source = {
@@ -28,7 +24,12 @@ test('PDF annotation documents round-trip through the versioned durable format',
 	assert.equal(serialized.endsWith('\n'), true);
 	assert.deepEqual(parsePdfAnnotationDocument(serialized), {
 		version: 1,
-		annotations: [{ ...source.annotations[0], color: '#f6c945' }],
+		annotations: [
+			{
+				...source.annotations[0],
+				color: '#f6c945',
+			},
+		],
 	});
 });
 

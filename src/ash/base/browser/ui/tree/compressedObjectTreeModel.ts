@@ -49,13 +49,10 @@ export class CompressibleObjectTreeModel<T> extends Disposable {
 			new ObjectTreeModel({
 				identityProvider: { getId: node => compressedId(node, options.identityProvider) },
 				defaultCollapseState: options.defaultCollapseState,
-				sorter: options.sorter
-					? { compare: (left, right) => options.sorter!.compare(last(left.elements), last(right.elements)) }
-					: undefined,
+				sorter: options.sorter ? { compare: (left, right) => options.sorter!.compare(last(left.elements), last(right.elements)) } : undefined,
 				filter: options.filter
 					? {
-							filter: (node, parentVisibility) =>
-								options.filter!.filter(last(node.elements), parentVisibility),
+							filter: (node, parentVisibility) => options.filter!.filter(last(node.elements), parentVisibility),
 						}
 					: undefined,
 			}),
@@ -126,12 +123,8 @@ export class CompressibleObjectTreeModel<T> extends Disposable {
 	}
 
 	private rebuild(nextRoots: readonly CompressibleTreeElement<T>[]): void {
-		const prepared = this.compressionEnabled
-			? nextRoots.map(compressTreeElement)
-			: nextRoots.map(noCompressTreeElement);
-		const retainIdentity = (
-			entry: ObjectTreeElement<CompressedTreeNode<T>>,
-		): ObjectTreeElement<CompressedTreeNode<T>> => {
+		const prepared = this.compressionEnabled ? nextRoots.map(compressTreeElement) : nextRoots.map(noCompressTreeElement);
+		const retainIdentity = (entry: ObjectTreeElement<CompressedTreeNode<T>>): ObjectTreeElement<CompressedTreeNode<T>> => {
 			const previous = this.getCompressedNode(entry.element.elements[0]!);
 			const unchanged =
 				previous?.incompressible === entry.element.incompressible &&
@@ -169,8 +162,7 @@ export class CompressibleObjectTreeModel<T> extends Disposable {
 
 	private requireCompressedId(element: T): string {
 		const node = this.getCompressedNode(element);
-		if (!node)
-			throw new RangeError(`Unknown compressible tree element: ${this.options.identityProvider.getId(element)}`);
+		if (!node) throw new RangeError(`Unknown compressible tree element: ${this.options.identityProvider.getId(element)}`);
 		return compressedId(node, this.options.identityProvider);
 	}
 }
@@ -197,8 +189,7 @@ export function decompressTreeElement<T>(input: ObjectTreeElement<CompressedTree
 		incompressible: index === 0 ? input.element.incompressible : undefined,
 		collapsible: index === input.element.elements.length - 1 ? input.collapsible : true,
 		collapsed: index === input.element.elements.length - 1 ? input.collapsed : false,
-		children:
-			index < input.element.elements.length - 1 ? [build(index + 1)] : input.children?.map(decompressTreeElement),
+		children: index < input.element.elements.length - 1 ? [build(index + 1)] : input.children?.map(decompressTreeElement),
 	});
 	return build(0);
 }

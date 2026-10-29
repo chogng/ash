@@ -1,9 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import {
-	attachLanguageTokenResultDelta,
-	getLanguageTokenResultDelta,
-} from '../../common/services/semanticTokensDto.js';
+import { attachLanguageTokenResultDelta, getLanguageTokenResultDelta } from '../../common/services/semanticTokensDto.js';
 import type { LanguageTokenResult } from '../../common/tokens/languageTokens.js';
 
 test('semantic token DTO attaches immutable validated delta metadata', () => {
@@ -16,10 +13,7 @@ test('semantic token DTO attaches immutable validated delta metadata', () => {
 
 test('semantic token DTO rejects invalid result and splice boundaries', () => {
 	const mutable: LanguageTokenResult = { tokens: [] };
-	assert.throws(
-		() => attachLanguageTokenResultDelta(mutable, { baseRequestId: 1, splices: [] }),
-		/immutable normalized result/,
-	);
+	assert.throws(() => attachLanguageTokenResultDelta(mutable, { baseRequestId: 1, splices: [] }), /immutable normalized result/);
 
 	const result: LanguageTokenResult = Object.freeze({ tokens: Object.freeze([]) });
 	assert.throws(

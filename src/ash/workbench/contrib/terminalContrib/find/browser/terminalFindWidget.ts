@@ -8,10 +8,7 @@ import { isCancellationError, onUnexpectedError } from '../../../../../base/comm
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { FindReplaceState, type INewFindReplaceState } from '../../../../../editor/contrib/find/browser/findState.js';
 import { localize } from '../../../../../nls.js';
-import {
-	AccessibilityVerbositySettingId,
-	IAccessibleViewService,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import type { ITerminalInstance, IXtermTerminal } from '../../../terminal/browser/terminal.js';
@@ -252,9 +249,7 @@ export class TerminalFindWidget extends Disposable {
 			caseSensitive: this.state.matchCase,
 			incremental: update,
 		};
-		const result = previous
-			? this.screen.findPrevious(this.state.searchString, options)
-			: this.screen.findNext(this.state.searchString, options);
+		const result = previous ? this.screen.findPrevious(this.state.searchString, options) : this.screen.findNext(this.state.searchString, options);
 		void result
 			.then(() => {
 				if (!this.isDisposed && generation === this.searchGeneration) {
@@ -283,7 +278,6 @@ export class TerminalFindWidget extends Disposable {
 			}
 		}
 		this.resultDomNode.textContent = message;
-		this.previous.enabled = this.next.enabled =
-			!this.invalidRegex && !!result?.resultCount && !!this.state.searchString;
+		this.previous.enabled = this.next.enabled = !this.invalidRegex && !!result?.resultCount && !!this.state.searchString;
 	}
 }

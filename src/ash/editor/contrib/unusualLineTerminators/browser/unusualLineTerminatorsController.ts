@@ -17,8 +17,7 @@ export class UnusualLineTerminatorsController extends Disposable {
 		readonly decorations: TextDecorationCollection<void>,
 	) {
 		super();
-		if (decorations.textModel !== model)
-			throw new TypeError('Stanza unusual line terminator dependencies must share a text model');
+		if (decorations.textModel !== model) throw new TypeError('Stanza unusual line terminator dependencies must share a text model');
 		this._register(model.onDidChangeContent(change => this.update(change)));
 		this.update();
 	}
@@ -29,9 +28,7 @@ export class UnusualLineTerminatorsController extends Disposable {
 		// The model already moved the old marks. Check those characters and the
 		// inserted text only; ordinary input never needs another document scan.
 		const ranges = change
-			? this.decorations.decorations
-					.map(value => value.range)
-					.filter(range => /^[\u0085\u2028\u2029]$/u.test(this.model.getValueInRange(range)))
+			? this.decorations.decorations.map(value => value.range).filter(range => /^[\u0085\u2028\u2029]$/u.test(this.model.getValueInRange(range)))
 			: [...findUnusualLineTerminators(this.model)];
 		if (change) {
 			let delta = 0;

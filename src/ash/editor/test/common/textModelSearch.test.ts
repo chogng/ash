@@ -34,7 +34,10 @@ test('regular-expression search supports multiline captures and bounded ranges',
 
 	const matches = findTextMatches(
 		model,
-		{ pattern: 'name: (ash|alpha)', patternKind: TextSearchPatternKind.RegularExpression },
+		{
+			pattern: 'name: (ash|alpha)',
+			patternKind: TextSearchPatternKind.RegularExpression,
+		},
 		{ range, resultLimit: 1 },
 	);
 
@@ -60,22 +63,21 @@ test('whole-word search uses Unicode word boundaries', () => {
 test('whole-word search obeys editor word separators', () => {
 	using model = new TextModel('foo.bar foo-bar foobar');
 	assert.deepEqual(
-		findTextMatches(model, { pattern: 'foo', wholeWord: true, wordSeparators: '.-' }).map(
-			match => match.range.getStartPosition().column,
-		),
+		findTextMatches(model, { pattern: 'foo', wholeWord: true, wordSeparators: '.-' }).map(match => match.range.getStartPosition().column),
 		[1, 9],
 	);
 	assert.deepEqual(
-		findTextMatches(model, { pattern: 'foo', wholeWord: true, wordSeparators: '-' }).map(
-			match => match.range.getStartPosition().column,
-		),
+		findTextMatches(model, { pattern: 'foo', wholeWord: true, wordSeparators: '-' }).map(match => match.range.getStartPosition().column),
 		[9],
 	);
 });
 
 test('zero-length regular expressions advance and next search wraps', () => {
 	using model = new TextModel('a\nb');
-	const lineStarts = findTextMatches(model, { pattern: '^', patternKind: TextSearchPatternKind.RegularExpression });
+	const lineStarts = findTextMatches(model, {
+		pattern: '^',
+		patternKind: TextSearchPatternKind.RegularExpression,
+	});
 	assert.deepEqual(
 		lineStarts.map(match => match.range.getStartPosition()),
 		[new Position(0 + 1, 0 + 1), new Position(1 + 1, 0 + 1)],
@@ -88,7 +90,11 @@ test('zero-length regular expressions advance and next search wraps', () => {
 test('invalid expressions and limits fail before scanning', () => {
 	using model = new TextModel('text');
 	assert.throws(
-		() => findTextMatches(model, { pattern: '(', patternKind: TextSearchPatternKind.RegularExpression }),
+		() =>
+			findTextMatches(model, {
+				pattern: '(',
+				patternKind: TextSearchPatternKind.RegularExpression,
+			}),
 		TextSearchQueryError,
 	);
 	assert.throws(() => findTextMatches(model, { pattern: 'text' }, { resultLimit: -1 }), RangeError);
@@ -100,18 +106,15 @@ test('TextModel exposes the editor search contract with wrapping and captures', 
 	const scopes = [new Range(1, 1, 1, 11), new Range(1, 7, 2, 12)];
 	const matches = model.findMatches('(alpha) (beta|gamma)', scopes, true, true, null, true);
 	assert.deepEqual(
-		matches.map(match => ({ range: match.range, captures: match.matches })),
+		matches.map(match => ({
+			range: match.range,
+			captures: match.matches,
+		})),
 		[
 			{ range: new Range(1, 1, 1, 11), captures: ['alpha beta', 'alpha', 'beta'] },
 			{ range: new Range(2, 1, 2, 12), captures: ['alpha gamma', 'alpha', 'gamma'] },
 		],
 	);
-	assert.deepEqual(
-		model.findNextMatch('alpha', new Position(2, 2), false, true, null, false)?.range,
-		new Range(1, 1, 1, 6),
-	);
-	assert.deepEqual(
-		model.findPreviousMatch('alpha', new Position(1, 1), false, true, null, false)?.range,
-		new Range(2, 1, 2, 6),
-	);
+	assert.deepEqual(model.findNextMatch('alpha', new Position(2, 2), false, true, null, false)?.range, new Range(1, 1, 1, 6));
+	assert.deepEqual(model.findPreviousMatch('alpha', new Position(1, 1), false, true, null, false)?.range, new Range(2, 1, 2, 6));
 });

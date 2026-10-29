@@ -49,27 +49,16 @@ export class SettingsSearchMenu extends Disposable {
 			{
 				id: 'settings.search.modified',
 				label: localize({ bundle: 'ash.settings', key: 'search.modified' }, 'Modified'),
-				tooltip: localize(
-					{ bundle: 'ash.settings', key: 'search.modifiedTooltip' },
-					'Show settings configured in the selected target and language',
-				),
+				tooltip: localize({ bundle: 'ash.settings', key: 'search.modifiedTooltip' }, 'Show settings configured in the selected target and language'),
 				enabled: true,
-				run: () =>
-					this.updateTokens([
-						...tokens.filter(token => token.toLocaleLowerCase() !== '@modified'),
-						'@modified',
-					]),
+				run: () => this.updateTokens([...tokens.filter(token => token.toLocaleLowerCase() !== '@modified'), '@modified']),
 			},
 			{
 				id: 'settings.search.id',
 				label: localize({ bundle: 'ash.settings', key: 'search.id' }, 'Setting ID…'),
 				tooltip: localize({ bundle: 'ash.settings', key: 'search.idTooltip' }, 'Filter by setting identifier'),
 				enabled: true,
-				run: () =>
-					this.updateTokens([
-						...tokens.filter(token => !token.toLocaleLowerCase().startsWith('@id:')),
-						'@id:',
-					]),
+				run: () => this.updateTokens([...tokens.filter(token => !token.toLocaleLowerCase().startsWith('@id:')), '@id:']),
 			},
 			...[
 				{
@@ -96,9 +85,7 @@ export class SettingsSearchMenu extends Disposable {
 				run: () => {
 					const selected = tokens.some(token => token.toLocaleLowerCase() === filter.token);
 					const retained = tokens.filter(token =>
-						selected
-							? token.toLocaleLowerCase() !== filter.token
-							: !['@tag:experimental', '@tag:preview', '@stable'].includes(token.toLocaleLowerCase()),
+						selected ? token.toLocaleLowerCase() !== filter.token : !['@tag:experimental', '@tag:preview', '@stable'].includes(token.toLocaleLowerCase()),
 					);
 					this.updateTokens(selected ? retained : [...retained, filter.token]);
 				},
@@ -107,10 +94,7 @@ export class SettingsSearchMenu extends Disposable {
 			{
 				id: 'settings.search.clearFilters',
 				label: localize({ bundle: 'ash.settings', key: 'search.clear' }, 'Clear Filters'),
-				tooltip: localize(
-					{ bundle: 'ash.settings', key: 'search.clearTooltip' },
-					'Remove Settings search filters',
-				),
+				tooltip: localize({ bundle: 'ash.settings', key: 'search.clearTooltip' }, 'Remove Settings search filters'),
 				enabled: hasFilters,
 				run: () => this.updateTokens(tokens.filter(token => !token.startsWith('@'))),
 			},

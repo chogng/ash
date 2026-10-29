@@ -10,17 +10,10 @@ import { type IStorageService, StorageScope, StorageTarget } from '../../../../.
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
 import type { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import {
-	IOutputService,
-	type IOutputChannel,
-	type OutputChannelKind,
-} from '../../../../services/output/common/output.js';
+import { IOutputService, type IOutputChannel, type OutputChannelKind } from '../../../../services/output/common/output.js';
 import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { OutputViewPane } from '../../browser/outputView.js';
-import {
-	IConfigurationService,
-	ConfigurationTarget,
-} from '../../../../../platform/configuration/common/configuration.js';
+import { IConfigurationService, ConfigurationTarget } from '../../../../../platform/configuration/common/configuration.js';
 import { Selection } from '../../../../../editor/common/core/selection.js';
 import '../../browser/output.contribution.js';
 import { DefaultSettings } from '../../../../services/preferences/common/settingsModels.js';
@@ -38,11 +31,7 @@ interface OutputViewTestEnvironment {
 	visibleLines(): Promise<readonly string[]>;
 }
 
-async function createOutputView(
-	resources: DisposableStore,
-	kind: OutputChannelKind = 'output',
-	storage?: IStorageService,
-): Promise<OutputViewTestEnvironment> {
+async function createOutputView(resources: DisposableStore, kind: OutputChannelKind = 'output', storage?: IStorageService): Promise<OutputViewTestEnvironment> {
 	const container = browserEnvironment.window.document.createElement('section');
 	browserEnvironment.window.document.body.append(container);
 	resources.add(toDisposable(() => container.remove()));
@@ -58,9 +47,7 @@ async function createOutputView(
 		disableHint: async () => undefined,
 		showAccessibleViewHelp: () => undefined,
 	});
-	const pane = resources.add(
-		services.createInstance(OutputViewPane, container, { id: 'ash.output.test', title: 'Output' }),
-	);
+	const pane = resources.add(services.createInstance(OutputViewPane, container, { id: 'ash.output.test', title: 'Output' }));
 	container.append(pane.element);
 	pane.setVisible(true);
 	const editor = services.get(ICodeEditorService).listCodeEditors()[0];
@@ -87,13 +74,7 @@ async function createOutputView(
 				return [];
 			}
 			const hidden = viewModel.getHiddenAreas();
-			return model
-				.getLinesContent()
-				.filter(
-					(text, index) =>
-						text.length > 0 &&
-						!hidden.some(range => index + 1 >= range.startLineNumber && index + 1 <= range.endLineNumber),
-				);
+			return model.getLinesContent().filter((text, index) => text.length > 0 && !hidden.some(range => index + 1 >= range.startLineNumber && index + 1 <= range.endLineNumber));
 		},
 	};
 }
@@ -133,19 +114,13 @@ test('Output channel menu survives channel registration and includes new channel
 	assert.equal(trigger.getAttribute('aria-expanded'), 'true');
 	const menu = browserEnvironment.window.document.querySelector('[role="menu"]')!;
 	assert.ok(menu);
-	assert.equal(
-		menu.querySelector('[aria-label="Second"]'),
-		null,
-		'The open menu retains its original channel snapshot',
-	);
+	assert.equal(menu.querySelector('[aria-label="Second"]'), null, 'The open menu retains its original channel snapshot');
 	view.services.get(IContextMenuService).hideContextMenu();
 	await Promise.resolve();
 	const updatedTrigger = actions.querySelector<HTMLButtonElement>(selector)!;
 	assert.equal(browserEnvironment.window.document.activeElement, updatedTrigger);
 	updatedTrigger.click();
-	const choice = browserEnvironment.window.document.querySelector<HTMLButtonElement>(
-		'[role^="menuitem"][aria-label="Second"]',
-	);
+	const choice = browserEnvironment.window.document.querySelector<HTMLButtonElement>('[role^="menuitem"][aria-label="Second"]');
 	assert.ok(choice);
 	choice.click();
 	await waitForChannel(view.editor, second);
@@ -198,7 +173,11 @@ test('Output keeps nested channel changes guarded until the outer editor operati
 	await waitForChannel(view.editor, second);
 	assert.deepEqual(
 		{ visible: await view.visibleLines(), input: input.value, retained: second.getText() },
-		{ visible: ['keep second'], input: 'second', retained: 'keep second\n' },
+		{
+			visible: ['keep second'],
+			input: 'second',
+			retained: 'keep second\n',
+		},
 	);
 });
 
@@ -243,7 +222,11 @@ test('Output yields between continuous editor diagnostics and retains every writ
 			retained: view.channel.getText(),
 			shared: reference.object.textEditorModel.getValue(),
 		},
-		{ visible: expected, retained: expected.join('\n') + '\n', shared: expected.join('\n') + '\n' },
+		{
+			visible: expected,
+			retained: expected.join('\n') + '\n',
+			shared: expected.join('\n') + '\n',
+		},
 	);
 });
 
@@ -279,7 +262,11 @@ test('Output disposal cancels a queued diagnostic render and leaves its channel 
 			retained: view.channel.getText(),
 			editors: view.services.get(ICodeEditorService).listCodeEditors().length,
 		},
-		{ renders: 1, retained: 'seed\nqueued diagnostic\nafter view disposal\n', editors: 0 },
+		{
+			renders: 1,
+			retained: 'seed\nqueued diagnostic\nafter view disposal\n',
+			editors: 0,
+		},
 	);
 });
 
@@ -296,7 +283,11 @@ test('ordinary Output filters individual lines without changing the shared text 
 			retained: view.channel.getText(),
 			shared: reference.object.textEditorModel.getValue(),
 		},
-		{ visible: ['keep first', 'last keep'], retained: text, shared: text },
+		{
+			visible: ['keep first', 'last keep'],
+			retained: text,
+			shared: text,
+		},
 	);
 	view.filter('!banned');
 	assert.deepEqual(await view.visibleLines(), ['keep first', 'drop', 'last keep']);
@@ -365,14 +356,10 @@ test('Output keeps severity and category filters and preserves multiline log rec
 });
 
 function categoryMenuItem(view: OutputViewTestEnvironment, category: string): HTMLButtonElement {
-	const button = view.pane.partTitleProjection!.actions!.querySelector<HTMLButtonElement>(
-		'[data-action-id="ash.output.filter"] button',
-	);
+	const button = view.pane.partTitleProjection!.actions!.querySelector<HTMLButtonElement>('[data-action-id="ash.output.filter"] button');
 	assert.ok(button);
 	button.click();
-	const item = [
-		...browserEnvironment.window.document.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]'),
-	].find(item => item.getAttribute('aria-label') === category);
+	const item = [...browserEnvironment.window.document.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]')].find(item => item.getAttribute('aria-label') === category);
 	assert.ok(item, `Category menu item is available: ${category}`);
 	return item;
 }
@@ -408,26 +395,17 @@ for (const restored of [false, true]) {
 			channel.appendLine({ text: `${label} other` });
 		}
 		using reference = await view.services.get(ITextModelService).createModelReference(view.channel.uri);
-		assert.deepEqual(
-			await view.visibleLines(),
-			restored ? ['first other'] : ['first lifecycle', 'first build', 'first other'],
-		);
+		assert.deepEqual(await view.visibleLines(), restored ? ['first other'] : ['first lifecycle', 'first build', 'first other']);
 		if (restored) assert.equal(storage.get('output.filterState', StorageScope.WORKSPACE), saved);
 		const firstChoice = categoryMenuItem(view, 'lifecycle');
 		assert.equal(firstChoice.getAttribute('aria-checked'), String(!restored));
 		firstChoice.click();
 		await new Promise<void>(resolve => setTimeout(resolve, 0));
-		assert.deepEqual(
-			await view.visibleLines(),
-			restored ? ['first lifecycle', 'first other'] : ['first build', 'first other'],
-		);
+		assert.deepEqual(await view.visibleLines(), restored ? ['first lifecycle', 'first other'] : ['first build', 'first other']);
 		assert.equal(reference.object.textEditorModel.getValue(), 'first lifecycle\nfirst build\nfirst other\n');
 		view.output.selectChannel(second.id);
 		await waitForChannel(view.editor, second);
-		assert.deepEqual(
-			await view.visibleLines(),
-			restored ? ['second lifecycle', 'second other'] : ['second lifecycle', 'second build', 'second other'],
-		);
+		assert.deepEqual(await view.visibleLines(), restored ? ['second lifecycle', 'second other'] : ['second lifecycle', 'second build', 'second other']);
 		const secondChoice = categoryMenuItem(view, 'lifecycle');
 		assert.equal(secondChoice.getAttribute('aria-checked'), 'true');
 		secondChoice.click();
@@ -435,10 +413,7 @@ for (const restored of [false, true]) {
 		assert.deepEqual(await view.visibleLines(), restored ? ['second other'] : ['second build', 'second other']);
 		view.output.selectChannel(view.channel.id);
 		await waitForChannel(view.editor, view.channel);
-		assert.deepEqual(
-			await view.visibleLines(),
-			restored ? ['first lifecycle', 'first other'] : ['first build', 'first other'],
-		);
+		assert.deepEqual(await view.visibleLines(), restored ? ['first lifecycle', 'first other'] : ['first build', 'first other']);
 		view.output.filters.reset();
 		assert.deepEqual(await view.visibleLines(), ['first lifecycle', 'first build', 'first other']);
 		assert.equal(second.getText(), 'second lifecycle\nsecond build\nsecond other\n');
@@ -501,12 +476,7 @@ test('Output announces a restored saved query and leaves it on input, Escape or 
 			}),
 		);
 		resources.add(toDisposable(() => browser.window.close()));
-		storage.store(
-			'output.filterState',
-			JSON.stringify({ text: 'keep !banned', hiddenSeverities: [], hiddenCategories: [] }),
-			StorageScope.WORKSPACE,
-			StorageTarget.MACHINE,
-		);
+		storage.store('output.filterState', JSON.stringify({ text: 'keep !banned', hiddenSeverities: [], hiddenCategories: [] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		const view = await createOutputView(resources, 'output', storage);
 		view.channel.append({ text: 'keep one\ndrop\nkeep banned' });
 		const input = view.pane.element.querySelector<HTMLInputElement>('.ash-output-filter-input')!;
@@ -519,9 +489,7 @@ test('Output announces a restored saved query and leaves it on input, Escape or 
 		if (action === 'input') {
 			view.filter('keep !banned');
 		} else if (action === 'escape') {
-			input.dispatchEvent(
-				new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-			);
+			input.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 		} else {
 			view.output.filters.reset();
 		}
@@ -563,12 +531,7 @@ test('ordinary Output keeps hidden line numbers and raw text across CR, empty ch
 		using reference = await view.services.get(ITextModelService).createModelReference(view.channel.uri);
 		view.filter('keep');
 		let raw = '';
-		const append = async (
-			text: string,
-			visible: readonly string[],
-			hidden: readonly number[],
-			modelText: string,
-		): Promise<void> => {
+		const append = async (text: string, visible: readonly string[], hidden: readonly number[], modelText: string): Promise<void> => {
 			view.channel.append({ text });
 			raw += text;
 			const rendered = await view.visibleLines();
@@ -576,11 +539,7 @@ test('ordinary Output keeps hidden line numbers and raw text across CR, empty ch
 			const areas = view.editor._getViewModel()!.getHiddenAreas();
 			const hiddenLines = model
 				.getLinesContent()
-				.flatMap((line, index) =>
-					line && areas.some(range => index + 1 >= range.startLineNumber && index + 1 <= range.endLineNumber)
-						? [index + 1]
-						: [],
-				);
+				.flatMap((line, index) => (line && areas.some(range => index + 1 >= range.startLineNumber && index + 1 <= range.endLineNumber) ? [index + 1] : []));
 			assert.deepEqual(
 				{
 					visible: rendered,
@@ -588,7 +547,12 @@ test('ordinary Output keeps hidden line numbers and raw text across CR, empty ch
 					retained: view.channel.getText(),
 					shared: model.getValue().replaceAll('\r\n', '\n'),
 				},
-				{ visible, hidden, retained: raw, shared: modelText },
+				{
+					visible,
+					hidden,
+					retained: raw,
+					shared: modelText,
+				},
 			);
 		};
 		await append('keep first\r', ['keep first'], [], 'keep first\n');
@@ -609,10 +573,7 @@ test('ordinary Output keeps hidden line numbers and raw text across CR, empty ch
 		view.filter('keep,!first');
 		assert.deepEqual(await view.visibleLines(), ['keep second']);
 		assert.equal(view.channel.getText(), 'keep first\r\ndrop\r\nkeep second');
-		assert.equal(
-			reference.object.textEditorModel.getValue().replaceAll('\r\n', '\n'),
-			'keep first\ndrop\nkeep second',
-		);
+		assert.equal(reference.object.textEditorModel.getValue().replaceAll('\r\n', '\n'), 'keep first\ndrop\nkeep second');
 	}
 });
 
@@ -676,9 +637,7 @@ test('Output pauses on an explicit cursor move to a visible older line without s
 });
 
 function autoScrollButton(view: OutputViewTestEnvironment): HTMLButtonElement {
-	const button = view.pane.partTitleProjection!.actions!.querySelector<HTMLButtonElement>(
-		'[data-action-id="ash.output.autoScroll"] button',
-	);
+	const button = view.pane.partTitleProjection!.actions!.querySelector<HTMLButtonElement>('[data-action-id="ash.output.autoScroll"] button');
 	assert.ok(button);
 	return button;
 }
@@ -690,9 +649,7 @@ function followsOutput(view: OutputViewTestEnvironment): boolean {
 function pressOutputKey(view: OutputViewTestEnvironment, key: string, options: KeyboardEventInit = {}): void {
 	const input = view.editor.controller.editContext.domNode.domNode;
 	input.focus();
-	input.dispatchEvent(
-		new browserEnvironment.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...options }),
-	);
+	input.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...options }));
 }
 
 test('Output smart scrolling uses the primary selection end and includes the final empty line', async () => {
@@ -760,10 +717,7 @@ test('Output programmatic cursor restoration and model updates preserve the curr
 	pressOutputKey(view, 'ArrowUp');
 	assert.equal(followsOutput(view), false);
 	view.editor.restoreViewState(saved);
-	assert.deepEqual(
-		{ line: view.editor.getPosition()!.lineNumber, following: followsOutput(view) },
-		{ line: 3, following: false },
-	);
+	assert.deepEqual({ line: view.editor.getPosition()!.lineNumber, following: followsOutput(view) }, { line: 3, following: false });
 	view.channel.replace({ text: 'replacement\nlast' });
 	view.channel.append({ text: '\nnext' });
 	assert.deepEqual(
@@ -779,20 +733,14 @@ test('Output reads live smart scrolling configuration on the next explicit curso
 	view.channel.append({ text: 'first\nsecond\nlast' });
 	const configuration = view.services.get(IConfigurationService);
 	assert.equal(configuration.getValue('output.smartScroll.enabled'), true);
-	await assert.rejects(
-		configuration.updateValue('output.smartScroll.enabled', 'false', ConfigurationTarget.USER),
-		/must be a boolean/,
-	);
+	await assert.rejects(configuration.updateValue('output.smartScroll.enabled', 'false', ConfigurationTarget.USER), /must be a boolean/);
 	view.editor.setPosition({ lineNumber: 3, column: 1 });
 	pressOutputKey(view, 'ArrowUp');
 	assert.equal(followsOutput(view), false);
 	await configuration.updateValue('output.smartScroll.enabled', false, ConfigurationTarget.USER);
 	assert.equal(followsOutput(view), false);
 	pressOutputKey(view, 'ArrowDown');
-	assert.deepEqual(
-		{ line: view.editor.getPosition()!.lineNumber, following: followsOutput(view) },
-		{ line: 3, following: false },
-	);
+	assert.deepEqual({ line: view.editor.getPosition()!.lineNumber, following: followsOutput(view) }, { line: 3, following: false });
 	await configuration.updateValue('output.smartScroll.enabled', true, ConfigurationTarget.USER);
 	assert.equal(followsOutput(view), false);
 	pressOutputKey(view, 'ArrowUp');
@@ -800,19 +748,14 @@ test('Output reads live smart scrolling configuration on the next explicit curso
 	assert.equal(followsOutput(view), true);
 	await configuration.updateValue('output.smartScroll.enabled', false, ConfigurationTarget.USER);
 	pressOutputKey(view, 'ArrowUp');
-	assert.deepEqual(
-		{ line: view.editor.getPosition()!.lineNumber, following: followsOutput(view) },
-		{ line: 2, following: true },
-	);
+	assert.deepEqual({ line: view.editor.getPosition()!.lineNumber, following: followsOutput(view) }, { line: 2, following: true });
 });
 
 test('Output retains manual scroll pausing and resuming when smart scrolling is disabled', async () => {
 	using resources = new DisposableStore();
 	const view = await createOutputView(resources);
 	view.editor.layout({ width: 640, height: 100 });
-	await view.services
-		.get(IConfigurationService)
-		.updateValue('output.smartScroll.enabled', false, ConfigurationTarget.USER);
+	await view.services.get(IConfigurationService).updateValue('output.smartScroll.enabled', false, ConfigurationTarget.USER);
 	view.channel.append({ text: Array.from({ length: 30 }, (_, index) => `line ${index + 1}`).join('\n') });
 	await view.visibleLines();
 	assert.ok(view.editor.getScrollTop() > 0);
@@ -830,8 +773,5 @@ test('Output smart scrolling is editable in the existing Settings interaction gr
 		?.groups.find(group => group.id === 'interaction')
 		?.settings.find(setting => setting.id === 'output.smartScroll.enabled');
 	assert.ok(setting);
-	assert.deepEqual(
-		{ type: setting.valueType, defaultValue: setting.configuration.defaultValue, title: setting.title },
-		{ type: 'boolean', defaultValue: true, title: 'Output smart scrolling' },
-	);
+	assert.deepEqual({ type: setting.valueType, defaultValue: setting.configuration.defaultValue, title: setting.title }, { type: 'boolean', defaultValue: true, title: 'Output smart scrolling' });
 });

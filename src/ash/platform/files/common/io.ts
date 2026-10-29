@@ -4,12 +4,7 @@ import { CancellationToken } from '../../../base/common/cancellation.js';
 import { canceled } from '../../../base/common/errors.js';
 import type { IDataTransformer, IErrorTransformer, WriteableStream } from '../../../base/common/stream.js';
 import type { URI } from '../../../base/common/uri.js';
-import {
-	createFileSystemProviderError,
-	FileSystemProviderErrorCode,
-	type IFileReadStreamOptions,
-	type IFileSystemProviderWithOpenReadWriteCloseCapability,
-} from './files.js';
+import { createFileSystemProviderError, FileSystemProviderErrorCode, type IFileReadStreamOptions, type IFileSystemProviderWithOpenReadWriteCloseCapability } from './files.js';
 
 export interface ICreateReadStreamOptions extends IFileReadStreamOptions {
 	readonly bufferSize: number;
@@ -59,17 +54,11 @@ export async function readFileIntoStream<T>(
 			}
 			total += count;
 			if (options.limits?.size !== undefined && total > options.limits.size) {
-				throw createFileSystemProviderError(
-					'File exceeds the read size limit',
-					FileSystemProviderErrorCode.FileTooLarge,
-				);
+				throw createFileSystemProviderError('File exceeds the read size limit', FileSystemProviderErrorCode.FileTooLarge);
 			}
 			position += count;
 			remaining -= count;
-			await raceCancellationError(
-				Promise.resolve(target.write(transformer(count === chunk.byteLength ? chunk : chunk.slice(0, count)))),
-				token,
-			);
+			await raceCancellationError(Promise.resolve(target.write(transformer(count === chunk.byteLength ? chunk : chunk.slice(0, count)))), token);
 		}
 	} catch (error) {
 		failure = error instanceof Error ? error : new Error(String(error));

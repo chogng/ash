@@ -1,18 +1,8 @@
 import { VSBuffer } from '../../../base/common/buffer.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import {
-	SocketCloseEventType,
-	type ISocket,
-	type SocketCloseEvent,
-	type SocketDiagnosticsEventType,
-} from '../../../base/parts/ipc/common/ipc.net.js';
-import {
-	IExtensionHostApi,
-	type ExtensionHostRuntime,
-	type ExtensionHostInvocationRequest,
-	type JsonValue,
-} from '../../../platform/agentHost/common/extensionHostApi.js';
+import { SocketCloseEventType, type ISocket, type SocketCloseEvent, type SocketDiagnosticsEventType } from '../../../base/parts/ipc/common/ipc.net.js';
+import { IExtensionHostApi, type ExtensionHostRuntime, type ExtensionHostInvocationRequest, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { IRemoteSocketFactoryService } from '../../../platform/remote/common/remoteSocketFactoryService.js';
 import { RemoteConnectionType } from '../../../platform/remote/common/remoteAuthorityResolver.js';
@@ -100,10 +90,7 @@ export class MainThreadManagedSockets extends Disposable {
 	}
 }
 
-type InvocationSource = Pick<
-	ExtensionHostInvocationRequest,
-	'extensionId' | 'activationGeneration' | 'incarnation' | 'registrationId'
->;
+type InvocationSource = Pick<ExtensionHostInvocationRequest, 'extensionId' | 'activationGeneration' | 'incarnation' | 'registrationId'>;
 
 class MainThreadManagedSocket extends Disposable implements ISocket {
 	private readonly data = this._register(new Emitter<VSBuffer>());
@@ -166,9 +153,7 @@ class MainThreadManagedSocket extends Disposable implements ISocket {
 					return;
 				}
 				for (let offset = 0; offset < bytes.byteLength; offset += 32768) {
-					const data = Array.from(bytes.subarray(offset, offset + 32768), byte =>
-						byte.toString(16).padStart(2, '0'),
-					).join('');
+					const data = Array.from(bytes.subarray(offset, offset + 32768), byte => byte.toString(16).padStart(2, '0')).join('');
 					await this.invoke('remoteWrite', { id: this.id, data });
 				}
 			})
@@ -196,17 +181,12 @@ class MainThreadManagedSocket extends Disposable implements ISocket {
 	}
 
 	private invoke(operation: string, payload: JsonValue): Promise<JsonValue> {
-		return this.api.invoke(
-			{ ...this.source, operation, payload, deadlineUnixMillis: Date.now() + 10_000 },
-			new AbortController().signal,
-		);
+		return this.api.invoke({ ...this.source, operation, payload, deadlineUnixMillis: Date.now() + 10_000 }, new AbortController().signal);
 	}
 
 	private async read(): Promise<void> {
 		try {
-			const request = this.pending.then(() =>
-				this.isDisposed ? null : this.invoke('remoteRead', { id: this.id }),
-			);
+			const request = this.pending.then(() => (this.isDisposed ? null : this.invoke('remoteRead', { id: this.id })));
 			this.pending = request;
 			const result = await request;
 			if (this.isDisposed) {
@@ -226,13 +206,7 @@ class MainThreadManagedSocket extends Disposable implements ISocket {
 			}
 			const hex = result.data;
 			if (hex) {
-				this.data.fire(
-					VSBuffer.wrap(
-						Uint8Array.from({ length: hex.length / 2 }, (_, index) =>
-							parseInt(hex.slice(index * 2, index * 2 + 2), 16),
-						),
-					),
-				);
+				this.data.fire(VSBuffer.wrap(Uint8Array.from({ length: hex.length / 2 }, (_, index) => parseInt(hex.slice(index * 2, index * 2 + 2), 16))));
 			}
 			if (result.ended && !this.endReceived) {
 				this.endReceived = true;

@@ -70,23 +70,13 @@ test(
 					directoryGrantsHost: true,
 				}));
 			try {
-				const config = await test.step('Read fixture directory permissions', () =>
-					host.client.request(APP_SERVER_METHODS['config/directoryGrants/list'], {}));
+				const config = await test.step('Read fixture directory permissions', () => host.client.request(APP_SERVER_METHODS['config/directoryGrants/list'], {}));
 				await test.step('Grant fixture command execution', () =>
 					host.client.request(APP_SERVER_METHODS['config/directoryGrants/set'], {
 						commandId: 'symphony-fixture-commands',
 						expectedRevision: config.revision,
 						path: testWorkspace.directory,
-						permissions: [
-							'readFiles',
-							'writeFiles',
-							'executeCommands',
-							'watchFiles',
-							'browseFiles',
-							'searchFiles',
-							'inspectRepository',
-							'mutateRepository',
-						],
+						permissions: ['readFiles', 'writeFiles', 'executeCommands', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository', 'mutateRepository'],
 					}));
 			} finally {
 				await host.close();
@@ -102,10 +92,7 @@ test(
 		);
 		let page = await workbench.openAgentsWindow(target.kind);
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-		await page
-			.locator('.ash-sessions-activity-content')
-			.getByRole('button', { name: 'Symphony', exact: true })
-			.click();
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Symphony', exact: true }).click();
 		let tasks = page.locator('.ash-symphony-tasks');
 		await tasks.getByRole('textbox', { name: 'Workflow file' }).fill(workflow);
 		await tasks.getByRole('button', { name: 'Load workflow', exact: true }).click();
@@ -161,9 +148,7 @@ test(
 		await expect(tasks.locator(`[data-conversation="${id}"]`)).toHaveClass(/\bselected\b/);
 		await expect(page.locator('.ash-symphony-monitor')).toContainText('30 tokens');
 		expect(symphonyModel.requests.length).toBe(calls);
-		await expect(
-			page.getByRole('button', { name: /Open dashboard|Open in VS Code|View changes|Commit/ }),
-		).toHaveCount(0);
+		await expect(page.getByRole('button', { name: /Open dashboard|Open in VS Code|View changes|Commit/ })).toHaveCount(0);
 		const beforeCleanup = await readdir(workspaceRoot);
 		await tasks.getByRole('textbox', { name: 'Task title' }).fill('Cleanup task');
 		await tasks.getByRole('textbox', { name: 'Instructions' }).fill('symphony-cleanup');
@@ -181,12 +166,7 @@ test(
 	},
 );
 
-test('Symphony keyboard help and controls use Chinese in the Agents Window', async ({
-	target,
-	application,
-	workbench,
-	restartWorkbench,
-}) => {
+test('Symphony keyboard help and controls use Chinese in the Agents Window', async ({ target, application, workbench, restartWorkbench }) => {
 	await workbench.page.keyboard.press('ControlOrMeta+,');
 	const settings = workbench.page.locator('.ash-settings-editor');
 	await settings.locator('[data-settings-category-id="general"]').click();
@@ -203,9 +183,7 @@ test('Symphony keyboard help and controls use Chinese in the Agents Window', asy
 	await expect(tasks.getByRole('button', { name: '载入工作流', exact: true })).toBeVisible();
 	await tasks.getByRole('textbox', { name: '工作流文件' }).focus();
 	await page.keyboard.press('Alt+F1');
-	await expect(page.getByRole('dialog', { name: '无障碍帮助' }).getByRole('textbox')).toHaveValue(
-		/Symphony 在 Ash 内调度任务/u,
-	);
+	await expect(page.getByRole('dialog', { name: '无障碍帮助' }).getByRole('textbox')).toHaveValue(/Symphony 在 Ash 内调度任务/u);
 	await page.keyboard.press('Escape');
 	await expect(tasks.getByRole('textbox', { name: '工作流文件' })).toBeFocused();
 	await page.keyboard.press('ControlOrMeta+,');
@@ -235,16 +213,7 @@ test(
 					commandId: 'execution-fixture-workspace',
 					expectedRevision: grants.revision,
 					path: testWorkspace.directory,
-					permissions: [
-						'readFiles',
-						'writeFiles',
-						'executeCommands',
-						'watchFiles',
-						'browseFiles',
-						'searchFiles',
-						'inspectRepository',
-						'mutateRepository',
-					],
+					permissions: ['readFiles', 'writeFiles', 'executeCommands', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository', 'mutateRepository'],
 				});
 			}
 			let page = await workbench.openAgentsWindow(target.kind);
@@ -256,9 +225,7 @@ test(
 			await expect(approval).toBeEnabled();
 			await approval.focus();
 			await page.keyboard.press('Alt+F1');
-			await expect(
-				page.getByRole('dialog', { name: 'Accessibility Help', exact: true }).getByRole('textbox'),
-			).toHaveValue(/New chats and workflows/);
+			await expect(page.getByRole('dialog', { name: 'Accessibility Help', exact: true }).getByRole('textbox')).toHaveValue(/New chats and workflows/);
 			await page.keyboard.press('Escape');
 			await expect(approval).toBeFocused();
 			await approval.click();
@@ -290,31 +257,16 @@ test(
 				await expect(settings).toContainText('Saved capabilities: Read files');
 				const grants = await host.client.request(APP_SERVER_METHODS['config/directoryGrants/list'], {});
 				const canonicalExtra = await realpath(extra);
-				expect(grants.entries.find(entry => entry.path === canonicalExtra)?.permissions).toContain(
-					'executeCommands',
-				);
+				expect(grants.entries.find(entry => entry.path === canonicalExtra)?.permissions).toContain('executeCommands');
 				await settings.getByRole('button', { name: 'Revoke directory grant', exact: true }).click();
-				await expect(
-					settings.getByRole('button', { name: 'Revoke directory grant', exact: true }),
-				).toBeDisabled();
-				expect(
-					(await host.client.request(APP_SERVER_METHODS['config/directoryGrants/list'], {})).entries.some(
-						entry => entry.path === canonicalExtra,
-					),
-				).toBe(false);
+				await expect(settings.getByRole('button', { name: 'Revoke directory grant', exact: true })).toBeDisabled();
+				expect((await host.client.request(APP_SERVER_METHODS['config/directoryGrants/list'], {})).entries.some(entry => entry.path === canonicalExtra)).toBe(false);
 			}
 			await page.keyboard.press('Escape');
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-			await expect(
-				page
-					.locator('.ash-sessions-chat-input')
-					.getByRole('button', { name: 'Permissions: Auto', exact: true }),
-			).toBeVisible();
+			await expect(page.locator('.ash-sessions-chat-input').getByRole('button', { name: 'Permissions: Auto', exact: true })).toBeVisible();
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-			await page
-				.locator('.ash-sessions-activity-content')
-				.getByRole('button', { name: 'Symphony', exact: true })
-				.click();
+			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Symphony', exact: true }).click();
 			const workflow = join(testWorkspace.directory, 'EXECUTION.md');
 			await writeFile(workflow, '---\ntracker:\n  kind: local\n---\n{{ issue.description }}\n');
 			const tasks = page.locator('.ash-symphony-tasks');
@@ -328,9 +280,7 @@ test(
 			const state = await host.client.request(APP_SERVER_METHODS['symphony/read'], {});
 			const conversation = state.conversations.find(item => item.title === 'Execution defaults')!;
 			const catalog = await host.client.request(APP_SERVER_METHODS['session/list'], {});
-			const session = catalog.sessions.find(item =>
-				item.threads.some(thread => thread.threadId === conversation.threadId),
-			)!;
+			const session = catalog.sessions.find(item => item.threads.some(thread => thread.threadId === conversation.threadId))!;
 			const thread = await host.client.request(APP_SERVER_METHODS['session/thread/read'], {
 				sessionId: session.sessionId,
 				threadId: conversation.threadId!,

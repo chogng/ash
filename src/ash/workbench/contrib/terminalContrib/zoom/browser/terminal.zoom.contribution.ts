@@ -8,10 +8,7 @@ import { Action2, registerAction2 } from '../../../../../platform/actions/common
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { ITerminalContribution, IXtermTerminal } from '../../../terminal/browser/terminal.js';
-import {
-	registerTerminalContribution,
-	type ITerminalContributionContext,
-} from '../../../terminal/browser/terminalExtensions.js';
+import { registerTerminalContribution, type ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
 import { TerminalZoomCommandId, TerminalZoomSettingId } from '../common/terminal.zoom.js';
 
 // Commands and wheel events from split panes must read the result of the previous
@@ -19,11 +16,7 @@ import { TerminalZoomCommandId, TerminalZoomSettingId } from '../common/terminal
 // service retains the font size; these queues own outstanding operations.
 const fontUpdates = new WeakMap<IConfigurationService, TaskQueue>();
 
-function updateFontSize(
-	configuration: IConfigurationService,
-	change: number,
-	isCurrent: () => boolean = () => true,
-): Promise<void> {
+function updateFontSize(configuration: IConfigurationService, change: number, isCurrent: () => boolean = () => true): Promise<void> {
 	let queue = fontUpdates.get(configuration);
 	if (!queue) {
 		queue = new TaskQueue();
@@ -32,10 +25,7 @@ function updateFontSize(
 	return queue.schedule(async () => {
 		if (!isCurrent()) return;
 		const setting = 'terminal.integrated.fontSize';
-		const size =
-			change === 0
-				? configuration.inspect<number>(setting).defaultValue
-				: configuration.getValue<number>(setting) + change;
+		const size = change === 0 ? configuration.inspect<number>(setting).defaultValue : configuration.getValue<number>(setting) + change;
 		if (size !== undefined) await configuration.updateValue(setting, clampTerminalFontSize(size));
 	});
 }
@@ -68,13 +58,7 @@ class TerminalMouseWheelZoomContribution extends Disposable implements ITerminal
 					const modifier = isMacintosh ? event.metaKey || event.ctrlKey : event.ctrlKey && !event.metaKey;
 					// Do not turn the inertia of an ordinary scroll into a font change when
 					// the modifier is pressed halfway through that scroll.
-					if (
-						!enabled ||
-						!modifier ||
-						event.shiftKey ||
-						event.altKey ||
-						event.timeStamp - lastOrdinaryScroll <= 50
-					) {
+					if (!enabled || !modifier || event.shiftKey || event.altKey || event.timeStamp - lastOrdinaryScroll <= 50) {
 						lastOrdinaryScroll = event.timeStamp;
 						smallPixelDelta = 0;
 						return;
@@ -95,14 +79,9 @@ class TerminalMouseWheelZoomContribution extends Disposable implements ITerminal
 						smallPixelDelta = 0;
 					}
 					if (change === 0) return;
-					void updateFontSize(
-						this.configuration,
-						change,
-						() =>
-							!this.isDisposed &&
-							!screen.isDisposed &&
-							this.configuration.getValue<boolean>(TerminalZoomSettingId.MouseWheelZoom),
-					).catch(onUnexpectedError);
+					void updateFontSize(this.configuration, change, () => !this.isDisposed && !screen.isDisposed && this.configuration.getValue<boolean>(TerminalZoomSettingId.MouseWheelZoom)).catch(
+						onUnexpectedError,
+					);
 				},
 				{ capture: true, passive: false },
 			),

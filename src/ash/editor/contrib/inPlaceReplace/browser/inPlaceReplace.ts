@@ -18,21 +18,13 @@ class InPlaceReplaceController extends Disposable {
 		private readonly onError: (error: unknown) => void,
 	) {
 		super();
-		if (viewport.textModel !== editor.getModel())
-			throw new TypeError('In-place replace dependencies must share a text model');
+		if (viewport.textModel !== editor.getModel()) throw new TypeError('In-place replace dependencies must share a text model');
 		this._register(
 			addDisposableListener(
 				input,
 				'keydown',
 				event => {
-					if (
-						event.defaultPrevented ||
-						event.isComposing ||
-						!event.shiftKey ||
-						(!event.ctrlKey && !event.metaKey) ||
-						event.altKey
-					)
-						return;
+					if (event.defaultPrevented || event.isComposing || !event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey) return;
 					const direction = event.key === ',' ? -1 : event.key === '.' ? 1 : undefined;
 					if (direction === undefined) return;
 					stopEvent(event);

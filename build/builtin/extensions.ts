@@ -53,12 +53,7 @@ const environment = JSON.stringify([
 ]);
 
 function preparedReferences(value: unknown): string[] {
-	return Array.isArray(value)
-		? value.filter(
-				(entry): entry is string =>
-					typeof entry === 'string' && /^[a-f0-9]{64}(?:-[a-f0-9]{32})?$/u.test(entry),
-			)
-		: [];
+	return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string' && /^[a-f0-9]{64}(?:-[a-f0-9]{32})?$/u.test(entry)) : [];
 }
 
 /** Vite also watches imported modules outside package roots (runtime bridges and shared sources). */
@@ -84,9 +79,7 @@ async function extensionOutputFingerprint(): Promise<string> {
 	return fingerprintPaths([
 		resolve(root, '.build/builtin/fixture.json'),
 		resolve(root, '.build/builtin/current.json'),
-		...packages
-			.filter(value => /^[a-f0-9]{64}(?:-[a-f0-9]{32})?$/u.test(value))
-			.map(value => resolve(root, '.build/builtin/packages', value)),
+		...packages.filter(value => /^[a-f0-9]{64}(?:-[a-f0-9]{32})?$/u.test(value)).map(value => resolve(root, '.build/builtin/packages', value)),
 		resolve(root, '.build/browser-extensions'),
 		...(await browserExtensionWatchFiles()),
 	]);
@@ -95,14 +88,8 @@ async function extensionOutputFingerprint(): Promise<string> {
 async function extensionFingerprint(): Promise<string> {
 	return (
 		(await fingerprintPaths(
-			[
-				...browserExtensionRoots,
-				resolve(root, '.build/desktop/localization/extensions'),
-				...toolchainFiles,
-				...(await browserExtensionWatchFiles()),
-			],
-			(path, directory) =>
-				!directory || !['node_modules', 'test', 'target', '.git'].includes(path.split(/[\\/]/).at(-1)!),
+			[...browserExtensionRoots, resolve(root, '.build/desktop/localization/extensions'), ...toolchainFiles, ...(await browserExtensionWatchFiles())],
+			(path, directory) => !directory || !['node_modules', 'test', 'target', '.git'].includes(path.split(/[\\/]/).at(-1)!),
 		)) +
 		JSON.stringify(browserExtensionRoots) +
 		environment
@@ -117,9 +104,7 @@ async function preparePackages(): Promise<boolean> {
 	const preinstalledLanguagePacks = await readPreinstalledLanguagePackIds();
 	const toolchain = await fingerprintPaths(toolchainFiles);
 	const packages: string[] = [];
-	for (const entry of (await readdir(browserExtensionRoots[0], { withFileTypes: true }))
-		.filter(entry => entry.isDirectory())
-		.sort((a, b) => a.name.localeCompare(b.name))) {
+	for (const entry of (await readdir(browserExtensionRoots[0], { withFileTypes: true })).filter(entry => entry.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
 		const packageRoot = resolve(browserExtensionRoots[0], entry.name);
 		const files = await readdir(packageRoot);
 		// Product capability processes have independent packages and no browser manifest.
@@ -129,8 +114,7 @@ async function preparePackages(): Promise<boolean> {
 		// Installed editor clients publish their own package; they are absent from the product catalog.
 		if (files.includes('package.json')) {
 			const manifestPath = resolve(packageRoot, 'package.json');
-			if ((await stat(manifestPath)).size > 4 * 1024 * 1024)
-				throw new RangeError('Browser extension manifest exceeds its byte limit');
+			if ((await stat(manifestPath)).size > 4 * 1024 * 1024) throw new RangeError('Browser extension manifest exceeds its byte limit');
 			const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
 			if (manifest.ashDistribution !== undefined && manifest.ashDistribution !== 'marketplace') {
 				throw new TypeError('Invalid extension distribution');
@@ -156,12 +140,7 @@ async function preparePackages(): Promise<boolean> {
 		const manifest = JSON.parse(manifestJson);
 		readExtensionUiTargets(manifest.ashUiTargets);
 		const id = `${manifest.publisher}.${manifest.name}`;
-		if (
-			index < builtInCount &&
-			manifest.engines?.ash &&
-			manifest.contributes?.localizations &&
-			!preinstalledLanguagePacks.has(`${manifest.publisher}/${manifest.name}`)
-		) {
+		if (index < builtInCount && manifest.engines?.ash && manifest.contributes?.localizations && !preinstalledLanguagePacks.has(`${manifest.publisher}/${manifest.name}`)) {
 			continue;
 		}
 		packageNames[id] = basename(packageRoot);
@@ -173,12 +152,7 @@ async function preparePackages(): Promise<boolean> {
 		let fileCount = 0;
 		async function readPackageFile(path: string): Promise<Buffer> {
 			const size = (await stat(path)).size;
-			if (
-				++fileCount > 4096 ||
-				size > 16 * 1024 * 1024 ||
-				packageBytes + size > 64 * 1024 * 1024 ||
-				snapshotBytes + size > 256 * 1024 * 1024
-			) {
+			if (++fileCount > 4096 || size > 16 * 1024 * 1024 || packageBytes + size > 64 * 1024 * 1024 || snapshotBytes + size > 256 * 1024 * 1024) {
 				throw new RangeError(`Browser extension '${id}' exceeds its resource budget`);
 			}
 			const bytes = await readFile(path);
@@ -190,28 +164,14 @@ async function preparePackages(): Promise<boolean> {
 			return bytes;
 		}
 		async function collect(resourceDirectory: string): Promise<void> {
-			for (const entry of (await readdir(resourceDirectory, { withFileTypes: true })).sort((a, b) =>
-				a.name.localeCompare(b.name),
-			)) {
+			for (const entry of (await readdir(resourceDirectory, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
 				if (entry.name.startsWith('.') || ['node_modules', 'test'].includes(entry.name)) {
 					continue;
 				}
 				if (manifest.ashRuntime?.kind === 'rust' && entry.isFile() && entry.name.endsWith('.ts')) {
 					continue;
 				}
-				if (
-					manifest.ashRuntime?.kind === 'rust' &&
-					[
-						'src',
-						'tests',
-						'browser',
-						'common',
-						'Cargo.toml',
-						'Cargo.lock',
-						'build.rs',
-						'BUILD.bazel',
-					].includes(entry.name)
-				) {
+				if (manifest.ashRuntime?.kind === 'rust' && ['src', 'tests', 'browser', 'common', 'Cargo.toml', 'Cargo.lock', 'build.rs', 'BUILD.bazel'].includes(entry.name)) {
 					continue;
 				}
 				const path = resolve(resourceDirectory, entry.name);
@@ -222,28 +182,18 @@ async function preparePackages(): Promise<boolean> {
 					}
 					await collect(path);
 				} else if (entry.isFile()) {
-					packageResources[relative(packageRoot, path).replaceAll('\\', '/')] = (
-						await readPackageFile(path)
-					).toString('base64');
+					packageResources[relative(packageRoot, path).replaceAll('\\', '/')] = (await readPackageFile(path)).toString('base64');
 				}
 			}
 		}
 		await collect(packageRoot);
 		if (manifest.ashLanguageServers?.version === 2) {
 			const bundled = await bundleLanguageServers(packageRoot, manifest.ashLanguageServers.servers);
-			await writeJsonCache(
-				resolve(root, '.build/browser-extensions', digest(packageRoot).slice(7) + '-servers.json'),
-				{ bundle: { files: bundled.files } },
-			);
+			await writeJsonCache(resolve(root, '.build/browser-extensions', digest(packageRoot).slice(7) + '-servers.json'), { bundle: { files: bundled.files } });
 			for (const [path, bytes] of Object.entries(bundled.resources)) {
-				if (!Object.hasOwn(packageResources, path) && ++fileCount > 4096)
-					throw new RangeError('Bundled language server exceeds its file budget');
+				if (!Object.hasOwn(packageResources, path) && ++fileCount > 4096) throw new RangeError('Bundled language server exceeds its file budget');
 				const difference = bytes.length - Buffer.from(packageResources[path] ?? '', 'base64').length;
-				if (
-					bytes.length > 16 * 1024 * 1024 ||
-					packageBytes + difference > 64 * 1024 * 1024 ||
-					snapshotBytes + difference > 256 * 1024 * 1024
-				)
+				if (bytes.length > 16 * 1024 * 1024 || packageBytes + difference > 64 * 1024 * 1024 || snapshotBytes + difference > 256 * 1024 * 1024)
 					throw new RangeError('Bundled language server exceeds its resource budget');
 				packageBytes += difference;
 				snapshotBytes += difference;
@@ -252,19 +202,11 @@ async function preparePackages(): Promise<boolean> {
 		}
 		if (manifest.ashRuntime?.kind === 'rust') {
 			const views = await compileExtensionWebviews(packageRoot, manifest.ashRuntime.webviews);
-			if (views.files.length)
-				await writeJsonCache(
-					resolve(root, '.build/browser-extensions', digest(packageRoot).slice(7) + '-views.json'),
-					{ bundle: { files: views.files } },
-				);
+			if (views.files.length) await writeJsonCache(resolve(root, '.build/browser-extensions', digest(packageRoot).slice(7) + '-views.json'), { bundle: { files: views.files } });
 			for (const [path, content] of Object.entries(views.resources)) {
 				const bytes = Buffer.from(content);
 				const difference = bytes.length - Buffer.from(packageResources[path] ?? '', 'base64').length;
-				if (
-					bytes.length > 16 * 1024 * 1024 ||
-					packageBytes + difference > 64 * 1024 * 1024 ||
-					snapshotBytes + difference > 256 * 1024 * 1024
-				)
+				if (bytes.length > 16 * 1024 * 1024 || packageBytes + difference > 64 * 1024 * 1024 || snapshotBytes + difference > 256 * 1024 * 1024)
 					throw new RangeError('Extension webview exceeds its resource budget');
 				packageBytes += difference;
 				snapshotBytes += difference;
@@ -272,11 +214,7 @@ async function preparePackages(): Promise<boolean> {
 			}
 		}
 		if (index < builtInCount && manifest.engines?.ash && manifest.contributes?.localizations) {
-			packageResources['localization/package.json'] = (
-				await readPackageFile(
-					resolve(root, '.build/desktop/localization/extensions', id, 'localization/package.json'),
-				)
-			).toString('base64');
+			packageResources['localization/package.json'] = (await readPackageFile(resolve(root, '.build/desktop/localization/extensions', id, 'localization/package.json'))).toString('base64');
 		}
 		if (typeof manifest.browser === 'string') {
 			// Each Worker imports one immutable module. Package dependencies stay inside that module.
@@ -310,8 +248,7 @@ async function preparePackages(): Promise<boolean> {
 					return location !== '..' && !location.startsWith('../') && !isAbsolute(location);
 				};
 				const assertPhysicalSource = async (path: string): Promise<void> => {
-					if (!withinPackage(await realpath(path.split('?')[0]), physicalPackageRoot))
-						throw new Error(`Extension import escapes its package through a symbolic link: ${path}`);
+					if (!withinPackage(await realpath(path.split('?')[0]), physicalPackageRoot)) throw new Error(`Extension import escapes its package through a symbolic link: ${path}`);
 				};
 				const entryPath = resolve(packageRoot, entry);
 				if (!withinPackage(entryPath)) throw new Error(`Extension entry escapes its package: ${entry}`);
@@ -319,13 +256,8 @@ async function preparePackages(): Promise<boolean> {
 				const assertDependency = (source: string, importer: string): void => {
 					if (source === '@ash/sdk') return;
 					if (source.startsWith('.') || isAbsolute(source)) {
-						if (!withinPackage(resolve(dirname(importer.split('?')[0]), source.split('?')[0])))
-							throw new Error(`Extension import escapes its package: ${source}`);
-					} else if (
-						!Object.keys(manifest.dependencies ?? {}).some(
-							name => source === name || source.startsWith(name + '/'),
-						)
-					) {
+						if (!withinPackage(resolve(dirname(importer.split('?')[0]), source.split('?')[0]))) throw new Error(`Extension import escapes its package: ${source}`);
+					} else if (!Object.keys(manifest.dependencies ?? {}).some(name => source === name || source.startsWith(name + '/'))) {
 						throw new Error(`Extension import requires a declared dependency or @ash/sdk: ${source}`);
 					}
 				};
@@ -337,8 +269,7 @@ async function preparePackages(): Promise<boolean> {
 						assertDependency(source, importer);
 						if (source.startsWith('.') || isAbsolute(source)) {
 							const resolved = await this.resolve(source, importer, { skipSelf: true });
-							if (resolved && !resolved.external && isAbsolute(resolved.id))
-								await assertPhysicalSource(resolved.id);
+							if (resolved && !resolved.external && isAbsolute(resolved.id)) await assertPhysicalSource(resolved.id);
 							return resolved;
 						}
 					},
@@ -359,18 +290,9 @@ async function preparePackages(): Promise<boolean> {
 							const source = ts.createSourceFile(path, _code, ts.ScriptTarget.Latest, true);
 							const imports = new Set<string>();
 							const visit = (node: ts.Node): void => {
-								if (
-									(ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-									node.moduleSpecifier &&
-									ts.isStringLiteral(node.moduleSpecifier)
-								)
+								if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier))
 									imports.add(node.moduleSpecifier.text);
-								if (
-									ts.isImportTypeNode(node) &&
-									ts.isLiteralTypeNode(node.argument) &&
-									ts.isStringLiteral(node.argument.literal)
-								)
-									imports.add(node.argument.literal.text);
+								if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && ts.isStringLiteral(node.argument.literal)) imports.add(node.argument.literal.text);
 								ts.forEachChild(node, visit);
 							};
 							visit(source);
@@ -380,8 +302,7 @@ async function preparePackages(): Promise<boolean> {
 								// could hide a dependency on the host's private declarations.
 								if (dependency.startsWith('.') || isAbsolute(dependency)) {
 									const resolved = await this.resolve(dependency, path, { skipSelf: true });
-									if (resolved && !resolved.external && isAbsolute(resolved.id))
-										await assertPhysicalSource(resolved.id);
+									if (resolved && !resolved.external && isAbsolute(resolved.id)) await assertPhysicalSource(resolved.id);
 								}
 							}
 							compiledSources.add(resource);
@@ -400,8 +321,7 @@ async function preparePackages(): Promise<boolean> {
 							async resolveId(source, importer) {
 								if (source === '@ash/sdk') return '\0ash-public-api';
 								if (source === '\0ash-api-bridge') return source;
-								if (source === resolve(packageRoot, '__ash_browser_entry__.js'))
-									return '\0ash-browser-entry';
+								if (source === resolve(packageRoot, '__ash_browser_entry__.js')) return '\0ash-browser-entry';
 								if (!source.endsWith('?webview')) return;
 								const resolved = await this.resolve(source.slice(0, -8), importer);
 								if (!resolved) throw new Error(`Cannot resolve extension webview: ${source}`);
@@ -412,9 +332,7 @@ async function preparePackages(): Promise<boolean> {
 								if (id === '\0ash-public-api') {
 									// The published entry owns the export inventory; reading its inert module
 									// here cannot grant product authority or invoke the host-only methods.
-									const names = Object.keys(
-										await import(pathToFileURL(resolve(root, 'sdk/typescript/index.js')).href),
-									);
+									const names = Object.keys(await import(pathToFileURL(resolve(root, 'sdk/typescript/index.js')).href));
 									return `import { bridge } from '\0ash-api-bridge'; const api = bridge.api; ${names.map(name => `export const ${name} = api.${name};`).join(' ')}`;
 								}
 								if (id === '\0ash-api-bridge') {
@@ -435,22 +353,12 @@ async function preparePackages(): Promise<boolean> {
 										lib: { entry: id.slice(0, -8), formats: ['iife'], name: 'AshExtensionWebview' },
 									},
 								});
-								const outputs = Array.isArray(webview)
-									? webview.flatMap(output => output.output)
-									: 'output' in webview
-										? webview.output
-										: [];
+								const outputs = Array.isArray(webview) ? webview.flatMap(output => output.output) : 'output' in webview ? webview.output : [];
 								const script = outputs
 									.filter(output => output.type === 'chunk')
 									.map(output => output.code)
 									.join('\n');
-								const style = outputs
-									.flatMap(output =>
-										output.type === 'asset' && output.fileName.endsWith('.css')
-											? [String(output.source)]
-											: [],
-									)
-									.join('\n');
+								const style = outputs.flatMap(output => (output.type === 'asset' && output.fileName.endsWith('.css') ? [String(output.source)] : [])).join('\n');
 								// Library assets stay in the Worker package; editor messages retain their existing JSON limit.
 								const payload = gzipSync(JSON.stringify({ script, style })).toString('base64');
 								return `export default ${JSON.stringify(payload)}`;
@@ -475,11 +383,7 @@ async function preparePackages(): Promise<boolean> {
 						},
 					},
 				});
-				const outputs = Array.isArray(result)
-					? result.flatMap(output => output.output)
-					: 'output' in result
-						? result.output
-						: [];
+				const outputs = Array.isArray(result) ? result.flatMap(output => output.output) : 'output' in result ? result.output : [];
 				const chunks = outputs.filter(output => output.type === 'chunk');
 				if (chunks.length !== 1) throw new Error(`Browser extension '${id}' must produce one ES module`);
 				module = Buffer.from(chunks[0].code);
@@ -488,15 +392,7 @@ async function preparePackages(): Promise<boolean> {
 					sources: [...compiledSources].sort(),
 					files: [...dependencies.keys()].sort(),
 				};
-				if (
-					!(
-						await Promise.all(
-							[...dependencies].map(
-								async ([path, fingerprint]) => (await fingerprintPaths([path])) === fingerprint,
-							),
-						)
-					).every(Boolean)
-				) {
+				if (!(await Promise.all([...dependencies].map(async ([path, fingerprint]) => (await fingerprintPaths([path])) === fingerprint))).every(Boolean)) {
 					throw new Error(`Browser extension '${id}' changed while bundling; retry preparation`);
 				}
 				await writeJsonCache(cachePath, {
@@ -515,11 +411,7 @@ async function preparePackages(): Promise<boolean> {
 			}
 			const previousSize = Buffer.from(packageResources[entry] ?? '', 'base64').byteLength;
 			const difference = module.byteLength - previousSize;
-			if (
-				module.byteLength > 16 * 1024 * 1024 ||
-				packageBytes + difference > 64 * 1024 * 1024 ||
-				snapshotBytes + difference > 256 * 1024 * 1024
-			) {
+			if (module.byteLength > 16 * 1024 * 1024 || packageBytes + difference > 64 * 1024 * 1024 || snapshotBytes + difference > 256 * 1024 * 1024) {
 				throw new RangeError(`Browser extension '${id}' exceeds its resource budget`);
 			}
 			packageBytes += difference;
@@ -549,24 +441,16 @@ async function preparePackages(): Promise<boolean> {
 }
 
 /** Ship Node servers and the runtime files they load dynamically in the same immutable package. */
-async function bundleLanguageServers(
-	packageRoot: string,
-	servers: unknown,
-): Promise<{ resources: Record<string, Buffer>; files: string[] }> {
-	if (!Array.isArray(servers) || !servers.length || servers.length > 32)
-		throw new TypeError('Invalid bundled language servers');
+async function bundleLanguageServers(packageRoot: string, servers: unknown): Promise<{ resources: Record<string, Buffer>; files: string[] }> {
+	if (!Array.isArray(servers) || !servers.length || servers.length > 32) throw new TypeError('Invalid bundled language servers');
 	const resources: Record<string, Buffer> = Object.create(null);
 	const files = new Set<string>();
 	const licensed = new Set<string>();
 	const require = createRequire(resolve(packageRoot, 'package.json'));
 	const safePath = (path: unknown): path is string =>
-		typeof path === 'string' &&
-		path.length <= 1024 &&
-		!/[\\:\0]/u.test(path) &&
-		path.split('/').every(part => part !== '' && part !== '.' && part !== '..');
+		typeof path === 'string' && path.length <= 1024 && !/[\\:\0]/u.test(path) && path.split('/').every(part => part !== '' && part !== '.' && part !== '..');
 	for (const server of servers) {
-		if (server?.runtime !== 'node' || !safePath(server.entrypoint) || !/\.(?:cjs|mjs)$/u.test(server.entrypoint))
-			throw new TypeError('Invalid bundled language-server entrypoint');
+		if (server?.runtime !== 'node' || !safePath(server.entrypoint) || !/\.(?:cjs|mjs)$/u.test(server.entrypoint)) throw new TypeError('Invalid bundled language-server entrypoint');
 		const result = await bundleNode({
 			absWorkingDir: packageRoot,
 			entryPoints: [server.entrypoint],
@@ -594,8 +478,7 @@ async function bundleLanguageServers(
 			const normalized = path.replaceAll('\\', '/');
 			const marker = normalized.lastIndexOf('/node_modules/');
 			const local = relative(packageRoot, path);
-			if (marker < 0 && (isAbsolute(local) || local === '..' || local.replaceAll('\\', '/').startsWith('../')))
-				throw new Error(`Language-server source escapes its package: ${input}`);
+			if (marker < 0 && (isAbsolute(local) || local === '..' || local.replaceAll('\\', '/').startsWith('../'))) throw new Error(`Language-server source escapes its package: ${input}`);
 			if (marker < 0) continue;
 			const name = /^(?:@[^/]+\/)?[^/]+/u.exec(normalized.slice(marker + '/node_modules/'.length))![0];
 			const dependencyRoot = resolve(normalized.slice(0, marker), 'node_modules', name);
@@ -608,18 +491,9 @@ async function bundleLanguageServers(
 				files.add(license);
 			}
 		}
-		if (
-			server.runtimePackages !== undefined &&
-			(!Array.isArray(server.runtimePackages) || server.runtimePackages.length > 16)
-		)
-			throw new TypeError('Invalid language-server runtime packages');
+		if (server.runtimePackages !== undefined && (!Array.isArray(server.runtimePackages) || server.runtimePackages.length > 16)) throw new TypeError('Invalid language-server runtime packages');
 		for (const name of server.runtimePackages ?? []) {
-			if (
-				typeof name !== 'string' ||
-				name.length > 128 ||
-				name.includes('..') ||
-				!/^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/u.test(name)
-			)
+			if (typeof name !== 'string' || name.length > 128 || name.includes('..') || !/^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/u.test(name))
 				throw new TypeError('Invalid language-server runtime package');
 			const dependencyRoot = dirname(require.resolve(`${name}/package.json`));
 			async function copy(directory: string): Promise<void> {
@@ -628,8 +502,7 @@ async function bundleLanguageServers(
 					const path = resolve(directory, entry.name);
 					if (entry.isDirectory()) await copy(path);
 					else if (entry.isFile()) {
-						resources[`node_modules/${name}/${relative(dependencyRoot, path).replaceAll('\\', '/')}`] =
-							await readFile(path);
+						resources[`node_modules/${name}/${relative(dependencyRoot, path).replaceAll('\\', '/')}`] = await readFile(path);
 						files.add(path);
 					} else throw new TypeError('Unsafe language-server runtime resource');
 				}
@@ -640,11 +513,7 @@ async function bundleLanguageServers(
 	return { resources, files: [...files] };
 }
 
-async function publishPackages(
-	extensions: { id: string; sourceKind: string }[],
-	resources: Record<string, Record<string, string>>,
-	packageNames: Record<string, string>,
-): Promise<boolean> {
+async function publishPackages(extensions: { id: string; sourceKind: string }[], resources: Record<string, Record<string, string>>, packageNames: Record<string, string>): Promise<boolean> {
 	const directory = resolve(root, '.build/builtin');
 	const previous = await readJsonCache(resolve(directory, 'current.json'));
 	const previousPackages = [...preparedReferences(previous?.builtIn), ...preparedReferences(previous?.user)];
@@ -663,12 +532,7 @@ async function publishPackages(
 			const destination = resolve(directory, 'packages', snapshot);
 			await mkdir(destination, { recursive: true });
 			for (const [path, encoded] of Object.entries(files)) {
-				if (
-					isAbsolute(path) ||
-					/[\\:\0]/u.test(path) ||
-					path.split('/').some(part => !part || part === '.' || part === '..')
-				)
-					throw new Error(`Invalid prepared extension resource: ${path}`);
+				if (isAbsolute(path) || /[\\:\0]/u.test(path) || path.split('/').some(part => !part || part === '.' || part === '..')) throw new Error(`Invalid prepared extension resource: ${path}`);
 				const output = resolve(destination, path);
 				await mkdir(dirname(output), { recursive: true });
 				await writeFile(output, Buffer.from(encoded, 'base64'));
@@ -700,11 +564,7 @@ async function packageMatches(directory: string, files: Record<string, string>):
 		await visit(directory);
 		if (paths.length !== Object.keys(files).length) return false;
 		for (const path of paths) {
-			if (
-				!Object.hasOwn(files, path) ||
-				(await readFile(resolve(directory, path))).toString('base64') !== files[path]
-			)
-				return false;
+			if (!Object.hasOwn(files, path) || (await readFile(resolve(directory, path))).toString('base64') !== files[path]) return false;
 		}
 		return true;
 	} catch {

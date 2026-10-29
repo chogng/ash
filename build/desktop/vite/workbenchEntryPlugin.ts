@@ -8,9 +8,7 @@ interface WorkbenchEntryServer {
 	transformIndexHtml(url: string, html: string): Promise<string>;
 }
 
-type ProductPage = { readonly url: string; readonly inputFile: string } & (
-	{ readonly sourceFile: string } | { readonly html: string }
-);
+type ProductPage = { readonly url: string; readonly inputFile: string } & ({ readonly sourceFile: string } | { readonly html: string });
 
 interface CSSDevelopmentHost {
 	readonly service: ICSSDevelopmentService;
@@ -24,18 +22,9 @@ export type AshWorkbenchEntryPlugin = Omit<Plugin, 'configureServer'> & {
 /**
  * Hosts product entry URLs independently of the layer that owns their HTML source.
  */
-export function workbenchEntryPlugin(
-	entryPath = '/browser/workbench/workbench.html',
-	pages: readonly ProductPage[] = [],
-	cssDevelopment?: CSSDevelopmentHost,
-): AshWorkbenchEntryPlugin {
+export function workbenchEntryPlugin(entryPath = '/browser/workbench/workbench.html', pages: readonly ProductPage[] = [], cssDevelopment?: CSSDevelopmentHost): AshWorkbenchEntryPlugin {
 	const inputs = new Map(pages.map(page => [normalizePath(page.inputFile), page]));
-	const inputFilter = inputs.size
-		? new RegExp(
-				`^(?:${[...inputs.keys()].map(path => path.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join('|')})$`,
-				'u',
-			)
-		: undefined;
+	const inputFilter = inputs.size ? new RegExp(`^(?:${[...inputs.keys()].map(path => path.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join('|')})$`, 'u') : undefined;
 	let root: string;
 	let development = false;
 	let preserveSymlinks = false;
@@ -45,13 +34,10 @@ export function workbenchEntryPlugin(
 		}
 		const html = await readFile(page.sourceFile, 'utf8');
 		// Vite's HTML input is rooted under Code, while the Sessions module stays at its owning source path.
-		return html.replace(
-			/(<script\b[^>]*\bsrc=["'])(\.\/[^"']+)(["'])/gu,
-			(_match, prefix: string, source: string, suffix: string) => {
-				const file = normalizePath(resolve(dirname(page.sourceFile), source));
-				return `${prefix}/@fs/${file.replace(/^\/+/u, '')}${suffix}`;
-			},
-		);
+		return html.replace(/(<script\b[^>]*\bsrc=["'])(\.\/[^"']+)(["'])/gu, (_match, prefix: string, source: string, suffix: string) => {
+			const file = normalizePath(resolve(dirname(page.sourceFile), source));
+			return `${prefix}/@fs/${file.replace(/^\/+/u, '')}${suffix}`;
+		});
 	}
 	return {
 		name: 'ash-workbench-entry',
@@ -70,30 +56,20 @@ export function workbenchEntryPlugin(
 						// Match Vite's resolved module identity, including symlinked source roots.
 						const file = preserveSymlinks ? source : await realpath(source);
 						const path = normalizePath(relative(root, file));
-						const url = path.startsWith('../')
-							? `/@fs/${normalizePath(file).replace(/^\/+/, '')}`
-							: `/${path}`;
+						const url = path.startsWith('../') ? `/@fs/${normalizePath(file).replace(/^\/+/, '')}` : `/${path}`;
 						const encoded = encodeURI(url).replaceAll('#', '%23').replaceAll('?', '%3F');
 						return { specifiers: [encoded, `${encoded}?import`], stylesheet: `${encoded}?direct` };
 					}),
 				);
-				const template = await readFile(
-					resolve(import.meta.dirname, '../../../src/ash/code/browser/workbench/workbench-dev.html'),
-					'utf8',
-				);
+				const template = await readFile(resolve(import.meta.dirname, '../../../src/ash/code/browser/workbench/workbench-dev.html'), 'utf8');
 				// Escape HTML delimiters before putting source paths in an executable page.
-				const prelude = template.replace(
-					'{{WORKBENCH_DEV_CSS_MODULES}}',
-					JSON.stringify(modules).replaceAll('<', '\\u003c'),
-				);
+				const prelude = template.replace('{{WORKBENCH_DEV_CSS_MODULES}}', JSON.stringify(modules).replaceAll('<', '\\u003c'));
 				return html.replace(/<head\b[^>]*>/iu, head => `${head}\n${prelude}`);
 			},
 		},
 		// Filter before invoking JavaScript so ordinary renderer modules bypass the HTML mount.
 		resolveId: inputs.size ? { filter: { id: inputFilter }, handler: id => id } : undefined,
-		load: inputs.size
-			? { filter: { id: inputFilter }, handler: id => readPage(inputs.get(normalizePath(id))!) }
-			: undefined,
+		load: inputs.size ? { filter: { id: inputFilter }, handler: id => readPage(inputs.get(normalizePath(id))!) } : undefined,
 		configureServer(server) {
 			server.middlewares.use((request, response, next) => {
 				const method = request.method;

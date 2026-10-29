@@ -3,12 +3,7 @@ import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { type ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
-import {
-	EditorAction,
-	registerEditorAction,
-	registerEditorContribution,
-	type ServicesAccessor,
-} from '../../../../editor/browser/editorExtensions.js';
+import { EditorAction, registerEditorAction, registerEditorContribution, type ServicesAccessor } from '../../../../editor/browser/editorExtensions.js';
 import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.js';
 import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -65,13 +60,7 @@ class CallHierarchyController extends Disposable {
 				if (event.defaultPrevented || event.isComposing || event.getModifierState('AltGraph')) {
 					return;
 				}
-				if (
-					event.altKey &&
-					event.shiftKey &&
-					!event.ctrlKey &&
-					!event.metaKey &&
-					event.key.toLowerCase() === 'h'
-				) {
+				if (event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'h') {
 					if (!editor.getAction('editor.showCallHierarchy')?.isSupported()) {
 						return;
 					}
@@ -96,13 +85,7 @@ class CallHierarchyController extends Disposable {
 		}
 		const request = (this.request = new AbortController());
 		try {
-			const model = await CallHierarchyModel.create(
-				this.view.textModel,
-				anchor,
-				request.signal,
-				this.features.callHierarchyProvider,
-				this.onError,
-			);
+			const model = await CallHierarchyModel.create(this.view.textModel, anchor, request.signal, this.features.callHierarchyProvider, this.onError);
 			if (request.signal.aborted) {
 				model?.dispose();
 				return;
@@ -124,9 +107,7 @@ class CallHierarchyController extends Disposable {
 			this.view.render(true, false);
 			await widget.showModel(model);
 			if (!request.signal.aborted) {
-				widget.element
-					.querySelector<HTMLButtonElement>('.stanza-editor-language-hierarchy-item')
-					?.focus({ preventScroll: true });
+				widget.element.querySelector<HTMLButtonElement>('.stanza-editor-language-hierarchy-item')?.focus({ preventScroll: true });
 			}
 		} catch (error) {
 			if (!request.signal.aborted) {
@@ -139,10 +120,7 @@ class CallHierarchyController extends Disposable {
 	private async open(item: LanguageHierarchyItem): Promise<void> {
 		const location = { resource: item.resource, range: item.range, selectionRange: item.selectionRange };
 		if (item.resource.toString() === this.view.textModel.uri.toString()) {
-			this.editor.setSelection(
-				Selection.fromPositions(item.selectionRange.getStartPosition(), item.selectionRange.getEndPosition()),
-				'editor.showCallHierarchy',
-			);
+			this.editor.setSelection(Selection.fromPositions(item.selectionRange.getStartPosition(), item.selectionRange.getEndPosition()), 'editor.showCallHierarchy');
 			this.editor.revealPosition(item.selectionRange.getStartPosition());
 			this.editor.focus();
 		} else {
@@ -163,13 +141,6 @@ registerEditorContribution({
 		if (context.kind !== 'text') {
 			return;
 		}
-		return context.instantiationService.createInstance(
-			CallHierarchyController,
-			context.controller.element,
-			context.editor,
-			context.view,
-			context.options.onOpenLocation,
-			context.onLanguageError,
-		);
+		return context.instantiationService.createInstance(CallHierarchyController, context.controller.element, context.editor, context.view, context.options.onOpenLocation, context.onLanguageError);
 	},
 });

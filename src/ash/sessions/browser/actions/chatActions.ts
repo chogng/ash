@@ -9,11 +9,7 @@ import { IQuickInputService, type IQuickPickItem } from '../../../platform/quick
 import type { SessionId, ThreadId } from '../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
-import {
-	CHAT_VIEW_ID,
-	NEW_CHAT_COMMAND_ID,
-	SHOW_CHAT_HISTORY_COMMAND_ID,
-} from '../../../workbench/contrib/chat/common/chat.js';
+import { CHAT_VIEW_ID, NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
 import { getInProgressSessionDescription } from '../../../workbench/contrib/chat/browser/chatSessions/chatSessionDescription.js';
 import { ChatContextKeys } from '../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { ChatAIDisabledSettingId } from '../../../platform/chat/common/chatSettings.js';
@@ -28,13 +24,16 @@ registerAction2(
 				title: localize2({ bundle: 'ash.sessions', key: 'command.NewChatAction' }, 'New Chat'),
 				icon: Lxicon.add,
 				f1: true,
-				menu: { id: MenuId.ChatTitle, group: 'navigation', order: 1 },
+				menu: {
+					id: MenuId.ChatTitle,
+					group: 'navigation',
+					order: 1,
+				},
 			});
 		}
 
 		override run(accessor: ServicesAccessor): Promise<boolean> {
-			if (accessor.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId))
-				return Promise.resolve(false);
+			if (accessor.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId)) return Promise.resolve(false);
 			const sessionService = accessor.get(ISessionsManagementService);
 			const viewsService = accessor.get(IViewsService);
 			sessionService.createUntitledSession();
@@ -44,10 +43,7 @@ registerAction2(
 );
 
 type ChatHistoryQuickPickItem = IQuickPickItem &
-	(
-		| { readonly kind: 'draft'; readonly untitledSessionId: string }
-		| { readonly kind: 'thread'; readonly sessionId: SessionId; readonly threadId: ThreadId }
-	);
+	({ readonly kind: 'draft'; readonly untitledSessionId: string } | { readonly kind: 'thread'; readonly sessionId: SessionId; readonly threadId: ThreadId });
 
 registerAction2(
 	class ShowChatHistoryAction extends Action2 {
@@ -56,19 +52,19 @@ registerAction2(
 				id: SHOW_CHAT_HISTORY_COMMAND_ID,
 				precondition: ChatContextKeys.enabled.isEqualTo(true),
 				title: localize2({ bundle: 'ash.sessions', key: 'command.ShowChatHistoryAction' }, 'Show Chat History'),
-				tooltip: localize(
-					{ bundle: 'ash.sessions', key: 'command.ShowChatHistoryAction' },
-					'Show Chat History',
-				),
+				tooltip: localize({ bundle: 'ash.sessions', key: 'command.ShowChatHistoryAction' }, 'Show Chat History'),
 				icon: Lxicon.history,
 				f1: true,
-				menu: { id: MenuId.ChatTitle, group: 'navigation', order: 2 },
+				menu: {
+					id: MenuId.ChatTitle,
+					group: 'navigation',
+					order: 2,
+				},
 			});
 		}
 
 		override run(accessor: ServicesAccessor): Promise<void> {
-			if (accessor.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId))
-				return Promise.resolve();
+			if (accessor.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId)) return Promise.resolve();
 			const sessions = accessor.get(ISessionsManagementService);
 			const views = accessor.get(IViewsService);
 			const quickPick = accessor.get(IQuickInputService).createQuickPick<ChatHistoryQuickPickItem>();
@@ -92,21 +88,13 @@ registerAction2(
 						label: session.title.trim() || localize('chat.title.default', 'Chat'),
 						description:
 							[
-								threads.length > 1
-									? localize('sessions.history.thread', 'Thread {0}', index + 1)
-									: undefined,
-								thread.origin.type !== 'root' && thread.title?.trim() !== session.title.trim()
-									? thread.title?.trim()
-									: undefined,
+								threads.length > 1 ? localize('sessions.history.thread', 'Thread {0}', index + 1) : undefined,
+								thread.origin.type !== 'root' && thread.title?.trim() !== session.title.trim() ? thread.title?.trim() : undefined,
 								sessionManagementLabel(thread.management),
 							]
 								.filter(Boolean)
 								.join(' · ') || undefined,
-						detail:
-							getInProgressSessionDescription(thread.management) ??
-							thread.management?.activity?.text ??
-							thread.management?.summary ??
-							undefined,
+						detail: getInProgressSessionDescription(thread.management) ?? thread.management?.activity?.text ?? thread.management?.summary ?? undefined,
 					}));
 				}),
 			];

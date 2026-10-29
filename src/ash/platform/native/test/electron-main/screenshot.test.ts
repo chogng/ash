@@ -8,17 +8,7 @@ test('screenshot rectangles reject malformed IPC and cannot select another windo
 	assert.equal(validateScreenshotRectangle(undefined), undefined);
 	const rect = { x: 0, y: 10, width: 20, height: 30 };
 	assert.deepEqual(validateScreenshotRectangle(rect), rect);
-	for (const value of [
-		null,
-		[],
-		{},
-		{ ...rect, windowId: 2 },
-		{ ...rect, x: -1 },
-		{ ...rect, y: Infinity },
-		{ ...rect, width: 0 },
-		{ ...rect, height: NaN },
-		{ ...rect, width: '20' },
-	]) {
+	for (const value of [null, [], {}, { ...rect, windowId: 2 }, { ...rect, x: -1 }, { ...rect, y: Infinity }, { ...rect, width: 0 }, { ...rect, height: NaN }, { ...rect, width: '20' }]) {
 		assert.throws(() => validateScreenshotRectangle(value), /Invalid screenshot rectangle/);
 	}
 });

@@ -15,19 +15,13 @@ suite('Image view permission messages', () => {
 		await frame.getByRole('button', { name: 'Drag application', exact: true }).click();
 		await expect(frame.locator('output p')).toHaveText(['drag:true']);
 		await frame.getByRole('button', { name: 'Copy path', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.imageViewPermissionFixture.calls()))
-			.toEqual(['settings', 'drag', 'copyPath']);
+		await expect.poll(() => page.evaluate(() => window.imageViewPermissionFixture.calls())).toEqual(['settings', 'drag', 'copyPath']);
 		// Repeated requests for the same operation must not launch another native action.
 		await frame.getByRole('button', { name: 'Open Settings', exact: true }).click();
 		await page.evaluate(() => window.imageViewPermissionFixture.release('copyPath', false));
 		await expect(frame.locator('output p')).toHaveText(['drag:true', 'copyPath:false']);
 		await page.evaluate(() => window.imageViewPermissionFixture.release('settings', true));
 		await expect(frame.locator('output p')).toHaveText(['drag:true', 'copyPath:false', 'settings:true']);
-		expect(await page.evaluate(() => window.imageViewPermissionFixture.calls())).toEqual([
-			'settings',
-			'drag',
-			'copyPath',
-		]);
+		expect(await page.evaluate(() => window.imageViewPermissionFixture.calls())).toEqual(['settings', 'drag', 'copyPath']);
 	});
 });

@@ -18,11 +18,7 @@ import { SuggestModel } from '../../../../../editor/contrib/suggest/browser/sugg
 import { SnippetController2 } from '../../../../../editor/contrib/snippet/browser/snippetController2.js';
 import { EditorContributionInstantiation } from '../../../../../editor/browser/editorExtensions.js';
 import { createTestCodeEditor } from '../../../../../editor/test/browser/testCodeEditor.js';
-import type {
-	ExtensionCatalog,
-	ExtensionDescriptor,
-	ExtensionResourceRequest,
-} from '../../../../../platform/extensions/common/extensionApi.js';
+import type { ExtensionCatalog, ExtensionDescriptor, ExtensionResourceRequest } from '../../../../../platform/extensions/common/extensionApi.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
@@ -114,11 +110,9 @@ test('refresh replaces snippets once, preserves a failed generation, and removes
 
 test('a later contribution commit failure retains both snippets and file-template defaults', async () => {
 	let invalid = false;
-	using fixture = createFixture(
-		{ Class: { prefix: 'class', body: 'old($1)$0', isFileTemplate: true } },
-		false,
-		() => ({ 'snippets.transactionCount': { type: 'integer', default: invalid ? 'invalid' : 1 } }),
-	);
+	using fixture = createFixture({ Class: { prefix: 'class', body: 'old($1)$0', isFileTemplate: true } }, false, () => ({
+		'snippets.transactionCount': { type: 'integer', default: invalid ? 'invalid' : 1 },
+	}));
 	await fixture.extensions.start();
 	const committed = fixture.extensions.currentCatalog;
 	const providerCatalog = fixture.features.completionProvider.providerCatalog;
@@ -267,12 +261,7 @@ test('file-template defaults remain available without duplicating templates for 
 });
 
 test('startup commits snippet resources before the completion contribution is created', async () => {
-	using fixture = createFixture(
-		{ Class: { prefix: 'class', body: 'class ${1:Name} {}', isFileTemplate: true } },
-		false,
-		undefined,
-		false,
-	);
+	using fixture = createFixture({ Class: { prefix: 'class', body: 'class ${1:Name} {}', isFileTemplate: true } }, false, undefined, false);
 	assert.equal(fixture.features.completionProvider.providerCatalog.providers.length, 0);
 	await fixture.extensions.start();
 	const catalog = fixture.extensions.currentCatalog;
@@ -304,12 +293,7 @@ test('production creation rejects missing required services and duplicate snippe
 	assert.throws(() => fixture.services.createInstance(descriptor), /already registered/);
 });
 
-function createFixture(
-	initial: Record<string, unknown>,
-	duplicateResource = false,
-	configurationProperties?: () => Record<string, unknown>,
-	startCompletionProvider = true,
-) {
+function createFixture(initial: Record<string, unknown>, duplicateResource = false, configurationProperties?: () => Record<string, unknown>, startCompletionProvider = true) {
 	const resources = new DisposableStore();
 	const languages = resources.add(new LanguageService());
 	const features = resources.add(new TestLanguageFeaturesService());

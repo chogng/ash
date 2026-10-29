@@ -1,13 +1,5 @@
-import {
-	EditorContributionInstantiation,
-	registerEditorContribution,
-} from '../../../../editor/browser/editorExtensions.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { EditorContributionInstantiation, registerEditorContribution } from '../../../../editor/browser/editorExtensions.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { FocusedViewContext } from '../../../common/contextkeys.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
@@ -15,12 +7,7 @@ import { localize } from '../../../../nls.js';
 import { TestingEditorContribution } from './testingEditorContribution.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
-import {
-	ViewContainerLocation,
-	type WorkbenchViewRegistry,
-	WorkbenchViewContainerId,
-	ViewsRegistry,
-} from '../../../common/views.js';
+import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from '../../../common/views.js';
 import { TESTING_VIEW_ID } from '../common/testing.js';
 import { TestingViewPane } from './testingViewPane.js';
 import './testingActions.js';
@@ -53,10 +40,7 @@ registerTestingView();
 registerEditorContribution({
 	id: 'workbench.contrib.testing.editor',
 	instantiation: EditorContributionInstantiation.Eager,
-	install: context =>
-		context.kind === 'text'
-			? context.instantiationService.createInstance(TestingEditorContribution, context.editor, context.model)
-			: undefined,
+	install: context => (context.kind === 'text' ? context.instantiationService.createInstance(TestingEditorContribution, context.editor, context.model) : undefined),
 });
 
 for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {

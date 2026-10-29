@@ -16,11 +16,7 @@ import {
 
 const maxBufferedBytes = 320 * 1024 * 1024;
 
-export async function authenticateWebAppServer(
-	endpoint: URL,
-	storage: Storage,
-	ticket: string | null,
-): Promise<AppServerWebSocketTransport> {
+export async function authenticateWebAppServer(endpoint: URL, storage: Storage, ticket: string | null): Promise<AppServerWebSocketTransport> {
 	if (
 		endpoint.protocol !== 'http:' ||
 		endpoint.hostname !== '127.0.0.1' ||
@@ -149,10 +145,7 @@ export class AppServerWebSocketTransport extends AbstractDisposable implements A
 					this.closed = true;
 					this.emit(WEB_APP_SERVER_CLOSED_EVENT, {
 						intentional: true,
-						message: localize(
-							'appServer.webAuthorizationExpired',
-							'Web authorization expired or was revoked. Open a new authenticated link.',
-						),
+						message: localize('appServer.webAuthorizationExpired', 'Web authorization expired or was revoked. Open a new authenticated link.'),
 					});
 					return;
 				}
@@ -160,17 +153,11 @@ export class AppServerWebSocketTransport extends AbstractDisposable implements A
 					throw new Error('Web App Server is unavailable');
 				}
 				const session = decodeWebSessionInfo(await response.json());
-				if (
-					session.workspaceId !== this.session.workspaceId ||
-					session.workspaceRoot !== this.session.workspaceRoot
-				) {
+				if (session.workspaceId !== this.session.workspaceId || session.workspaceRoot !== this.session.workspaceRoot) {
 					this.closed = true;
 					this.emit(WEB_APP_SERVER_CLOSED_EVENT, {
 						intentional: true,
-						message: localize(
-							'appServer.webWorkspaceChanged',
-							'Web workspace changed. Open a new authenticated link.',
-						),
+						message: localize('appServer.webWorkspaceChanged', 'Web workspace changed. Open a new authenticated link.'),
 					});
 					return;
 				}

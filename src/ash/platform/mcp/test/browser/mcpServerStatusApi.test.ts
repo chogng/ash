@@ -1,10 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
-import {
-	createAppServerMcpServerStatusApi,
-	createDisconnectedMcpServerStatusApi,
-} from '../../browser/mcpServerStatusApi.js';
+import { createAppServerMcpServerStatusApi, createDisconnectedMcpServerStatusApi } from '../../browser/mcpServerStatusApi.js';
 
 test('MCP status reads the backend identity and diagnostics without exposing transport configuration', async () => {
 	const requests: unknown[] = [];

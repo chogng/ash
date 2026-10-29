@@ -10,8 +10,7 @@ export type DocumentPluginChangeOrigin = 'user' | 'remote' | 'undo' | 'redo' | '
 /** Stable identity used to retrieve one plugin's state from a TextModel structure. */
 export class DocumentPluginKey<T> {
 	constructor(readonly name: string) {
-		if (typeof name !== 'string' || name.trim().length === 0)
-			throw new TypeError('Document plugin keys require a non-empty name');
+		if (typeof name !== 'string' || name.trim().length === 0) throw new TypeError('Document plugin keys require a non-empty name');
 		Object.freeze(this);
 	}
 }
@@ -74,26 +73,16 @@ export interface DocumentPlugin<T> {
 }
 
 export interface DocumentPluginOptions<T = unknown> {
-	readonly filterTransaction?: (
-		transaction: DocumentTransaction,
-		context: DocumentPluginTransactionContext,
-	) => boolean;
+	readonly filterTransaction?: (transaction: DocumentTransaction, context: DocumentPluginTransactionContext) => boolean;
 	readonly decorations?: (state: T, context: DocumentPluginDecorationContext<T>) => DocumentDecorationSet | undefined;
 }
 
 /** Creates a validated immutable plugin descriptor for a structured Stanza TextModel. */
-export function createDocumentPlugin<T>(
-	key: DocumentPluginKey<T>,
-	state: DocumentPluginState<T>,
-	options: DocumentPluginOptions<T> = {},
-): DocumentPlugin<T> {
+export function createDocumentPlugin<T>(key: DocumentPluginKey<T>, state: DocumentPluginState<T>, options: DocumentPluginOptions<T> = {}): DocumentPlugin<T> {
 	if (!key || typeof key.name !== 'string') throw new TypeError('Document plugins require a plugin key');
-	if (!state || typeof state.init !== 'function' || typeof state.apply !== 'function')
-		throw new TypeError(`Document plugin '${key.name}' requires init and apply state functions`);
-	if (options.filterTransaction !== undefined && typeof options.filterTransaction !== 'function')
-		throw new TypeError(`Document plugin '${key.name}' filterTransaction must be a function`);
-	if (options.decorations !== undefined && typeof options.decorations !== 'function')
-		throw new TypeError(`Document plugin '${key.name}' decorations must be a function`);
+	if (!state || typeof state.init !== 'function' || typeof state.apply !== 'function') throw new TypeError(`Document plugin '${key.name}' requires init and apply state functions`);
+	if (options.filterTransaction !== undefined && typeof options.filterTransaction !== 'function') throw new TypeError(`Document plugin '${key.name}' filterTransaction must be a function`);
+	if (options.decorations !== undefined && typeof options.decorations !== 'function') throw new TypeError(`Document plugin '${key.name}' decorations must be a function`);
 	return Object.freeze({
 		key,
 		state,

@@ -12,21 +12,15 @@ suite('files browser component', () => {
 		await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
 		await page.evaluate(() => window.ashFilesIntegration.prepareBrowserWatch('unavailable'));
 		await page.evaluate(() => window.ashFilesIntegration.changeBrowserFile('range.txt', '0123456789'));
-		expect(await page.evaluate(() => window.ashFilesIntegration.readBrowserStream('range.txt', 2, 5))).toEqual([
-			50, 51, 52, 53, 54,
-		]);
+		expect(await page.evaluate(() => window.ashFilesIntegration.readBrowserStream('range.txt', 2, 5))).toEqual([50, 51, 52, 53, 54]);
 	});
 
 	test('picked-folder observation maps both moved paths, filters excludes and recovers from missed or invalid observations', async function () {
 		const { page } = browserTests;
 
 		await page.goto('/files.html');
-		const root = await page.evaluate(() =>
-			window.ashFilesIntegration.prepareBrowserWatch('available', true, ['**/*.tmp']),
-		);
-		await expect
-			.poll(() => page.evaluate(() => window.ashFilesIntegration.observations))
-			.toEqual([{ disconnected: 0, recursive: true }]);
+		const root = await page.evaluate(() => window.ashFilesIntegration.prepareBrowserWatch('available', true, ['**/*.tmp']));
+		await expect.poll(() => page.evaluate(() => window.ashFilesIntegration.observations)).toEqual([{ disconnected: 0, recursive: true }]);
 		await expect.poll(() => page.evaluate(() => window.ashFilesIntegration.browserWatchEvents)).toEqual([null]);
 		await page.evaluate(() => {
 			window.ashFilesIntegration.releaseFirstBrowserWatch();
@@ -39,21 +33,13 @@ suite('files browser component', () => {
 				{ type: 'modified', relativePathComponents: ['ignored.tmp'] },
 			]);
 		});
-		expect(await page.evaluate(() => window.ashFilesIntegration.browserWatchEvents)).toEqual([
-			['src/created.ts', 'removed.ts', 'new.ts', 'old.ts'].map(path => `${root}/${path}`),
-		]);
+		expect(await page.evaluate(() => window.ashFilesIntegration.browserWatchEvents)).toEqual([['src/created.ts', 'removed.ts', 'new.ts', 'old.ts'].map(path => `${root}/${path}`)]);
 		expect(await page.evaluate(() => window.ashFilesIntegration.observations[0]?.disconnected)).toBe(0);
 		expect(await page.evaluate(() => window.ashFilesIntegration.foregroundSubscriptions)).toBe(2);
-		await page.evaluate(() =>
-			window.ashFilesIntegration.emitObservation(0, [{ type: 'unknown', relativePathComponents: [] }]),
-		);
+		await page.evaluate(() => window.ashFilesIntegration.emitObservation(0, [{ type: 'unknown', relativePathComponents: [] }]));
 		expect((await page.evaluate(() => window.ashFilesIntegration.browserWatchEvents)).at(-1)).toBeNull();
-		await page.evaluate(() =>
-			window.ashFilesIntegration.emitObservation(0, [{ type: 'errored', relativePathComponents: [] }]),
-		);
-		expect(await page.evaluate(() => window.ashFilesIntegration.observations)).toEqual([
-			{ disconnected: 1, recursive: true },
-		]);
+		await page.evaluate(() => window.ashFilesIntegration.emitObservation(0, [{ type: 'errored', relativePathComponents: [] }]));
+		expect(await page.evaluate(() => window.ashFilesIntegration.observations)).toEqual([{ disconnected: 1, recursive: true }]);
 		await page.evaluate(() => window.dispatchEvent(new Event('focus')));
 		await expect.poll(() => page.evaluate(() => window.ashFilesIntegration.observations.length)).toBe(2);
 		await page.evaluate(() => {
@@ -63,9 +49,7 @@ suite('files browser component', () => {
 			window.ashFilesIntegration.emitObservation(1, [{ type: 'modified', relativePathComponents: ['late.ts'] }]);
 		});
 		expect(await page.evaluate(() => window.ashFilesIntegration.browserWatchEvents)).toEqual([]);
-		expect(
-			await page.evaluate(() => window.ashFilesIntegration.observations.map(item => item.disconnected)),
-		).toEqual([1, 1]);
+		expect(await page.evaluate(() => window.ashFilesIntegration.observations.map(item => item.disconnected))).toEqual([1, 1]);
 		expect(await page.evaluate(() => window.ashFilesIntegration.foregroundSubscriptions)).toBe(0);
 	});
 
@@ -118,14 +102,9 @@ suite('files browser component', () => {
 		const controls = page.locator('#text-groups .stanza-editor-input');
 		await controls.last().focus();
 		await page.keyboard.insertText('must not change');
-		expect((await page.evaluate(() => window.ashFilesIntegration.getTextState())).values).toEqual([
-			'Provider content',
-			'Provider content',
-		]);
+		expect((await page.evaluate(() => window.ashFilesIntegration.getTextState())).values).toEqual(['Provider content', 'Provider content']);
 		await page.evaluate(() => window.ashFilesIntegration.closeFirstTextGroup());
-		await expect
-			.poll(() => page.evaluate(() => window.ashFilesIntegration.getTextState()))
-			.toEqual({ disposed: false, resolutions: 2, values: ['Remaining view'], sameModel: true });
+		await expect.poll(() => page.evaluate(() => window.ashFilesIntegration.getTextState())).toEqual({ disposed: false, resolutions: 2, values: ['Remaining view'], sameModel: true });
 		await expect(page.locator('#text-groups .view-lines')).toContainText('Remaining view');
 		await page.evaluate(() => window.ashFilesIntegration.closeTextGroups());
 		expect((await page.evaluate(() => window.ashFilesIntegration.getTextState())).disposed).toBe(true);

@@ -1,12 +1,4 @@
-import {
-	getDocumentBodyContent,
-	containsDocumentNode,
-	findDocumentNode,
-	type DocumentAttributes,
-	type DocumentMark,
-	type DocumentNode,
-	type DocumentNodeId,
-} from '../model/document.js';
+import { getDocumentBodyContent, containsDocumentNode, findDocumentNode, type DocumentAttributes, type DocumentMark, type DocumentNode, type DocumentNodeId } from '../model/document.js';
 import { type DocumentFragment } from '../model/documentSerialization.js';
 import { nodeSelection, type DocumentPoint, type DocumentSelection, textSelection } from '../core/documentSelection.js';
 import { type DocumentSchema, type DocumentTextStyleAttributes } from '../model/documentSchema.js';
@@ -38,13 +30,7 @@ export interface DocumentCommand {
 }
 
 /** Splits one paragraph or heading at a text offset and inserts its right half after it. */
-export function createSplitBlockCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	textNodeId: DocumentNodeId,
-	offset: number,
-): DocumentCommand | undefined {
+export function createSplitBlockCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, textNodeId: DocumentNodeId, offset: number): DocumentCommand | undefined {
 	const location = findDocumentNode(document, blockId);
 	if (!location?.parent || !isTextBearingBlock(location.node)) return undefined;
 	const textIndex = location.node.content.findIndex(child => child.id === textNodeId && child.text !== undefined);
@@ -63,8 +49,7 @@ export function createSplitBlockCommand(
 	else if (offset < text.text!.length) transaction = transaction.replaceText(text.id, offset, text.text!.length, '');
 	for (const child of trailing) transaction = transaction.deleteNode(child.id);
 	transaction = transaction.insertNode(location.parent.id, location.index + 1, newBlock);
-	for (let index = 0; index < trailing.length; index += 1)
-		transaction = transaction.insertNode(newBlock.id, (rightNode ? 1 : 0) + index, trailing[index]!);
+	for (let index = 0; index < trailing.length; index += 1) transaction = transaction.insertNode(newBlock.id, (rightNode ? 1 : 0) + index, trailing[index]!);
 	const focusText = rightNode ?? trailing.find(child => child.text !== undefined);
 	const point = focusText ? { nodeId: focusText.id, offset: 0 } : undefined;
 	if (point) transaction = transaction.withSelection(textSelection(point));
@@ -81,18 +66,10 @@ export function createSplitListItemCommand(
 	offset: number,
 ): DocumentCommand | undefined {
 	const itemLocation = findDocumentNode(document, listItemId);
-	if (!itemLocation?.parent || itemLocation.node.type !== 'listItem' || !isListType(itemLocation.parent.type))
-		return undefined;
+	if (!itemLocation?.parent || itemLocation.node.type !== 'listItem' || !isListType(itemLocation.parent.type)) return undefined;
 	const paragraphLocation = findDocumentNode(document, paragraphId);
-	if (
-		!paragraphLocation ||
-		paragraphLocation.parent?.id !== listItemId ||
-		!isTextBearingBlock(paragraphLocation.node)
-	)
-		return undefined;
-	const textIndex = paragraphLocation.node.content.findIndex(
-		child => child.id === textNodeId && child.text !== undefined,
-	);
+	if (!paragraphLocation || paragraphLocation.parent?.id !== listItemId || !isTextBearingBlock(paragraphLocation.node)) return undefined;
+	const textIndex = paragraphLocation.node.content.findIndex(child => child.id === textNodeId && child.text !== undefined);
 	const text = textIndex >= 0 ? paragraphLocation.node.content[textIndex] : undefined;
 	if (
 		(!text && (textNodeId.length > 0 || paragraphLocation.node.content.length > 0)) ||
@@ -112,37 +89,22 @@ export function createSplitListItemCommand(
 	const newItem = schema.createNode('listItem', { content: [rightParagraph] });
 	let transaction = new DocumentTransaction();
 	if (text && offset === 0) transaction = transaction.deleteNode(text.id);
-	else if (text && offset < text.text!.length)
-		transaction = transaction.replaceText(text.id, offset, text.text!.length, '');
+	else if (text && offset < text.text!.length) transaction = transaction.replaceText(text.id, offset, text.text!.length, '');
 	for (const child of trailingInline) transaction = transaction.deleteNode(child.id);
 	for (const child of trailingBlocks) transaction = transaction.deleteNode(child.id);
 	transaction = transaction.insertNode(itemLocation.parent.id, itemLocation.index + 1, newItem);
-	for (let index = 0; index < trailingInline.length; index += 1)
-		transaction = transaction.insertNode(
-			rightParagraph.id,
-			(rightText.length > 0 ? 1 : 0) + index,
-			trailingInline[index]!,
-		);
-	for (let index = 0; index < trailingBlocks.length; index += 1)
-		transaction = transaction.insertNode(newItem.id, index + 1, trailingBlocks[index]!);
-	const focusText =
-		rightParagraph.content.find(child => child.text !== undefined) ??
-		trailingInline.find(child => child.text !== undefined);
+	for (let index = 0; index < trailingInline.length; index += 1) transaction = transaction.insertNode(rightParagraph.id, (rightText.length > 0 ? 1 : 0) + index, trailingInline[index]!);
+	for (let index = 0; index < trailingBlocks.length; index += 1) transaction = transaction.insertNode(newItem.id, index + 1, trailingBlocks[index]!);
+	const focusText = rightParagraph.content.find(child => child.text !== undefined) ?? trailingInline.find(child => child.text !== undefined);
 	const point = focusText ? { nodeId: focusText.id, offset: 0 } : undefined;
 	if (point) transaction = transaction.withSelection(textSelection(point));
 	return { transaction, focus: { blockId: newItem.id, ...(point ? { point } : {}) } };
 }
 
 /** Exits an empty list item, removing the item and creating a paragraph when the list ends. */
-export function createExitEmptyListItemCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	listItemId: DocumentNodeId,
-	paragraphId: DocumentNodeId,
-): DocumentCommand | undefined {
+export function createExitEmptyListItemCommand(schema: DocumentSchema, document: DocumentNode, listItemId: DocumentNodeId, paragraphId: DocumentNodeId): DocumentCommand | undefined {
 	const itemLocation = findDocumentNode(document, listItemId);
-	if (!itemLocation?.parent || itemLocation.node.type !== 'listItem' || !isListType(itemLocation.parent.type))
-		return undefined;
+	if (!itemLocation?.parent || itemLocation.node.type !== 'listItem' || !isListType(itemLocation.parent.type)) return undefined;
 	const paragraphLocation = findDocumentNode(document, paragraphId);
 	if (
 		!paragraphLocation ||
@@ -173,22 +135,11 @@ export function createExitEmptyListItemCommand(
 }
 
 /** Joins a list item with its adjacent sibling while preserving nested blocks. */
-export function createJoinAdjacentListItemCommand(
-	document: DocumentNode,
-	listItemId: DocumentNodeId,
-	paragraphId: DocumentNodeId,
-	direction: AdjacentBlockDirection,
-): DocumentCommand | undefined {
+export function createJoinAdjacentListItemCommand(document: DocumentNode, listItemId: DocumentNodeId, paragraphId: DocumentNodeId, direction: AdjacentBlockDirection): DocumentCommand | undefined {
 	const itemLocation = findDocumentNode(document, listItemId);
-	if (!itemLocation?.parent || itemLocation.node.type !== 'listItem' || !isListType(itemLocation.parent.type))
-		return undefined;
+	if (!itemLocation?.parent || itemLocation.node.type !== 'listItem' || !isListType(itemLocation.parent.type)) return undefined;
 	const paragraphLocation = findDocumentNode(document, paragraphId);
-	if (
-		!paragraphLocation ||
-		paragraphLocation.parent?.id !== listItemId ||
-		!isTextBearingBlock(paragraphLocation.node)
-	)
-		return undefined;
+	if (!paragraphLocation || paragraphLocation.parent?.id !== listItemId || !isTextBearingBlock(paragraphLocation.node)) return undefined;
 	const adjacent = itemLocation.parent.content[itemLocation.index + (direction === 'backward' ? -1 : 1)];
 	if (!adjacent || adjacent.type !== 'listItem') return undefined;
 	const target = direction === 'backward' ? adjacent : itemLocation.node;
@@ -196,28 +147,17 @@ export function createJoinAdjacentListItemCommand(
 	const targetParagraph = target.content.at(-1);
 	const sourceParagraph = source.content[0];
 	const canMergeParagraphs =
-		targetParagraph !== undefined &&
-		sourceParagraph !== undefined &&
-		isTextBearingBlock(targetParagraph) &&
-		isTextBearingBlock(sourceParagraph) &&
-		targetParagraph.type === sourceParagraph.type;
+		targetParagraph !== undefined && sourceParagraph !== undefined && isTextBearingBlock(targetParagraph) && isTextBearingBlock(sourceParagraph) && targetParagraph.type === sourceParagraph.type;
 	const movedSourceContent = canMergeParagraphs ? source.content.slice(1) : source.content;
 	let transaction = new DocumentTransaction();
 	if (canMergeParagraphs) {
 		for (let index = 0; index < sourceParagraph.content.length; index += 1)
-			transaction = transaction.moveNode(
-				sourceParagraph.content[index]!.id,
-				targetParagraph.id,
-				targetParagraph.content.length + index,
-			);
+			transaction = transaction.moveNode(sourceParagraph.content[index]!.id, targetParagraph.id, targetParagraph.content.length + index);
 		transaction = transaction.deleteNode(sourceParagraph.id);
 	}
-	for (let index = 0; index < movedSourceContent.length; index += 1)
-		transaction = transaction.moveNode(movedSourceContent[index]!.id, target.id, target.content.length + index);
+	for (let index = 0; index < movedSourceContent.length; index += 1) transaction = transaction.moveNode(movedSourceContent[index]!.id, target.id, target.content.length + index);
 	transaction = transaction.deleteNode(source.id);
-	const focusParagraph = canMergeParagraphs
-		? targetParagraph
-		: [...target.content].reverse().find(child => isTextBearingBlock(child));
+	const focusParagraph = canMergeParagraphs ? targetParagraph : [...target.content].reverse().find(child => isTextBearingBlock(child));
 	const focusText = focusParagraph ? lastTextNode(focusParagraph.content) : undefined;
 	const point = focusText ? { nodeId: focusText.id, offset: focusText.text!.length } : undefined;
 	if (point) transaction = transaction.withSelection(textSelection(point));
@@ -233,10 +173,8 @@ export function createListItemIndentationCommand(
 	direction: ListItemIndentation,
 ): DocumentCommand | undefined {
 	const itemLocation = findDocumentNode(document, listItemId);
-	if (!itemLocation?.parent || itemLocation.node.type !== 'listItem' || !isListType(itemLocation.parent.type))
-		return undefined;
-	if (!findDocumentNode(document, paragraphId) || !itemLocation.node.content.some(child => child.id === paragraphId))
-		return undefined;
+	if (!itemLocation?.parent || itemLocation.node.type !== 'listItem' || !isListType(itemLocation.parent.type)) return undefined;
+	if (!findDocumentNode(document, paragraphId) || !itemLocation.node.content.some(child => child.id === paragraphId)) return undefined;
 	if (direction === 'in') {
 		const previous = itemLocation.parent.content[itemLocation.index - 1];
 		if (!previous || previous.type !== 'listItem') return undefined;
@@ -263,11 +201,7 @@ export function createListItemIndentationCommand(
 }
 
 /** Changes a text-bearing block between paragraph and heading without replacing its identity. */
-export function createSetBlockTypeCommand(
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	type: 'paragraph' | 'heading',
-): DocumentCommand | undefined {
+export function createSetBlockTypeCommand(document: DocumentNode, blockId: DocumentNodeId, type: 'paragraph' | 'heading'): DocumentCommand | undefined {
 	const location = findDocumentNode(document, blockId);
 	if (!location?.parent || !isTextBearingBlock(location.node) || location.node.type === type) return undefined;
 	const { styleId: _styleId, level, ...format } = location.node.attrs;
@@ -276,37 +210,23 @@ export function createSetBlockTypeCommand(
 }
 
 /** Wraps a text-bearing block in a blockquote or moves it out of its containing blockquote. */
-export function createToggleBlockquoteCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-): DocumentCommand | undefined {
+export function createToggleBlockquoteCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId): DocumentCommand | undefined {
 	const location = findDocumentNode(document, blockId);
 	if (!location?.parent || !isTextBearingBlock(location.node)) return undefined;
 	if (location.parent.type === 'blockquote') {
 		const blockquoteLocation = findDocumentNode(document, location.parent.id);
 		if (!blockquoteLocation?.parent) return undefined;
-		let transaction = new DocumentTransaction().moveNode(
-			blockId,
-			blockquoteLocation.parent.id,
-			blockquoteLocation.index,
-		);
+		let transaction = new DocumentTransaction().moveNode(blockId, blockquoteLocation.parent.id, blockquoteLocation.index);
 		if (location.parent.content.length === 1) transaction = transaction.deleteNode(location.parent.id);
 		return { transaction, focus: { blockId } };
 	}
 	const blockquote = schema.createNode('blockquote', { content: [location.node] });
-	const transaction = new DocumentTransaction()
-		.deleteNode(blockId)
-		.insertNode(location.parent.id, location.index, blockquote);
+	const transaction = new DocumentTransaction().deleteNode(blockId).insertNode(location.parent.id, location.index, blockquote);
 	return { transaction, focus: { blockId } };
 }
 
 /** Inserts a top-level horizontal rule immediately after the active text-bearing block. */
-export function createInsertHorizontalRuleCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-): DocumentCommand | undefined {
+export function createInsertHorizontalRuleCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId): DocumentCommand | undefined {
 	const location = findDocumentNode(document, blockId);
 	if (!location?.parent || location.parent.type !== 'doc' || !isTextBearingBlock(location.node)) return undefined;
 	const rule = schema.createNode('horizontalRule');
@@ -315,120 +235,69 @@ export function createInsertHorizontalRuleCommand(
 }
 
 /** Wraps a top-level text-bearing block in a list or changes an existing list's kind. */
-export function createToggleListCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	listType: 'bulletList' | 'orderedList',
-): DocumentCommand | undefined {
+export function createToggleListCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, listType: 'bulletList' | 'orderedList'): DocumentCommand | undefined {
 	const location = findDocumentNode(document, blockId);
 	if (!location?.parent || !isTextBearingBlock(location.node)) return undefined;
 	if (location.parent.type === 'listItem') {
 		const listLocation = findDocumentNode(document, location.parent.id);
-		if (!listLocation?.parent || !isListType(listLocation.parent.type) || listLocation.parent.type === listType)
-			return undefined;
+		if (!listLocation?.parent || !isListType(listLocation.parent.type) || listLocation.parent.type === listType) return undefined;
 		return {
-			transaction: new DocumentTransaction().setNodeType(
-				listLocation.parent.id,
-				listType,
-				listAttributes(listType, listLocation.parent.attrs),
-			),
+			transaction: new DocumentTransaction().setNodeType(listLocation.parent.id, listType, listAttributes(listType, listLocation.parent.attrs)),
 			focus: { blockId },
 		};
 	}
 	if (location.parent.type !== 'doc') return undefined;
 	const item = schema.createNode('listItem', { content: [location.node] });
 	const list = schema.createNode(listType, { attrs: listAttributes(listType, {}), content: [item] });
-	const transaction = new DocumentTransaction()
-		.deleteNode(blockId)
-		.insertNode(location.parent.id, location.index, list);
+	const transaction = new DocumentTransaction().deleteNode(blockId).insertNode(location.parent.id, location.index, list);
 	return { transaction, focus: { blockId } };
 }
 
 /** Joins the current text-bearing block with its compatible adjacent sibling. */
-export function createJoinAdjacentBlockCommand(
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	textNodeId: DocumentNodeId,
-	direction: AdjacentBlockDirection,
-): DocumentCommand | undefined {
+export function createJoinAdjacentBlockCommand(document: DocumentNode, blockId: DocumentNodeId, textNodeId: DocumentNodeId, direction: AdjacentBlockDirection): DocumentCommand | undefined {
 	const location = findDocumentNode(document, blockId);
 	if (!location?.parent || !isTextBearingBlock(location.node)) return undefined;
-	if (textNodeId && !location.node.content.some(child => child.id === textNodeId && child.text !== undefined))
-		return undefined;
+	if (textNodeId && !location.node.content.some(child => child.id === textNodeId && child.text !== undefined)) return undefined;
 	const adjacentIndex = direction === 'backward' ? location.index - 1 : location.index + 1;
 	const adjacent = location.parent.content[adjacentIndex];
 	if (!adjacent || !isTextBearingBlock(adjacent) || adjacent.type !== location.node.type) return undefined;
 	if (direction === 'backward') {
 		const targetLast = adjacent.content.at(-1);
 		const sourceFirst = location.node.content[0];
-		const canMerge =
-			targetLast?.text !== undefined &&
-			sourceFirst?.text !== undefined &&
-			marksEqual(targetLast.marks, sourceFirst.marks);
+		const canMerge = targetLast?.text !== undefined && sourceFirst?.text !== undefined && marksEqual(targetLast.marks, sourceFirst.marks);
 		const movedContent = canMerge ? location.node.content.slice(1) : location.node.content;
 		let transaction = new DocumentTransaction();
-		if (canMerge)
-			transaction = transaction
-				.replaceText(targetLast.id, targetLast.text!.length, targetLast.text!.length, sourceFirst.text!)
-				.deleteNode(sourceFirst.id);
-		for (let index = 0; index < movedContent.length; index += 1)
-			transaction = transaction.moveNode(movedContent[index]!.id, adjacent.id, adjacent.content.length + index);
+		if (canMerge) transaction = transaction.replaceText(targetLast.id, targetLast.text!.length, targetLast.text!.length, sourceFirst.text!).deleteNode(sourceFirst.id);
+		for (let index = 0; index < movedContent.length; index += 1) transaction = transaction.moveNode(movedContent[index]!.id, adjacent.id, adjacent.content.length + index);
 		transaction = transaction.deleteNode(location.node.id);
 		const point =
-			canMerge && movedContent.length === 0
-				? { nodeId: targetLast.id, offset: targetLast.text!.length + sourceFirst.text!.length }
-				: lastTextPoint([...adjacent.content, ...movedContent]);
+			canMerge && movedContent.length === 0 ? { nodeId: targetLast.id, offset: targetLast.text!.length + sourceFirst.text!.length } : lastTextPoint([...adjacent.content, ...movedContent]);
 		if (point) transaction = transaction.withSelection(textSelection(point));
 		return { transaction, focus: { blockId: adjacent.id, ...(point ? { point } : {}) } };
 	}
 	const targetLast = location.node.content.at(-1);
 	const sourceFirst = adjacent.content[0];
-	const canMerge =
-		targetLast?.text !== undefined &&
-		sourceFirst?.text !== undefined &&
-		marksEqual(targetLast.marks, sourceFirst.marks);
+	const canMerge = targetLast?.text !== undefined && sourceFirst?.text !== undefined && marksEqual(targetLast.marks, sourceFirst.marks);
 	const movedContent = canMerge ? adjacent.content.slice(1) : adjacent.content;
 	const point = lastTextPoint(location.node.content);
 	let transaction = new DocumentTransaction();
-	if (canMerge)
-		transaction = transaction
-			.replaceText(targetLast.id, targetLast.text!.length, targetLast.text!.length, sourceFirst.text!)
-			.deleteNode(sourceFirst.id);
-	for (let index = 0; index < movedContent.length; index += 1)
-		transaction = transaction.moveNode(
-			movedContent[index]!.id,
-			location.node.id,
-			location.node.content.length + index,
-		);
+	if (canMerge) transaction = transaction.replaceText(targetLast.id, targetLast.text!.length, targetLast.text!.length, sourceFirst.text!).deleteNode(sourceFirst.id);
+	for (let index = 0; index < movedContent.length; index += 1) transaction = transaction.moveNode(movedContent[index]!.id, location.node.id, location.node.content.length + index);
 	transaction = transaction.deleteNode(adjacent.id);
-	const focus =
-		canMerge && point && targetLast?.text !== undefined ? point : (point ?? firstTextPoint(adjacent.content));
+	const focus = canMerge && point && targetLast?.text !== undefined ? point : (point ?? firstTextPoint(adjacent.content));
 	if (focus) transaction = transaction.withSelection(textSelection(focus));
 	return { transaction, focus: { blockId: location.node.id, ...(focus ? { point: focus } : {}) } };
 }
 
 /** Joins adjacent text runs in one block when their marks are compatible. */
-export function createJoinAdjacentTextRunCommand(
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	textNodeId: DocumentNodeId,
-	direction: AdjacentBlockDirection,
-): DocumentCommand | undefined {
+export function createJoinAdjacentTextRunCommand(document: DocumentNode, blockId: DocumentNodeId, textNodeId: DocumentNodeId, direction: AdjacentBlockDirection): DocumentCommand | undefined {
 	const location = findDocumentNode(document, blockId);
 	if (!location || !isTextBearingBlock(location.node)) return undefined;
 	const index = location.node.content.findIndex(child => child.id === textNodeId && child.text !== undefined);
 	if (index < 0) return undefined;
 	const adjacent = location.node.content[index + (direction === 'backward' ? -1 : 1)];
 	const current = location.node.content[index];
-	if (
-		!adjacent ||
-		!current ||
-		adjacent.text === undefined ||
-		current.text === undefined ||
-		!marksEqual(adjacent.marks, current.marks)
-	)
-		return undefined;
+	if (!adjacent || !current || adjacent.text === undefined || current.text === undefined || !marksEqual(adjacent.marks, current.marks)) return undefined;
 	if (direction === 'backward') {
 		const offset = adjacent.text.length;
 		const transaction = new DocumentTransaction()
@@ -449,11 +318,7 @@ export function createJoinAdjacentTextRunCommand(
 }
 
 /** Moves a block within its current parent while preserving its identity. */
-export function createMoveBlockCommand(
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	direction: BlockMoveDirection,
-): DocumentCommand | undefined {
+export function createMoveBlockCommand(document: DocumentNode, blockId: DocumentNodeId, direction: BlockMoveDirection): DocumentCommand | undefined {
 	const location = findDocumentNode(document, blockId);
 	if (!location?.parent || location.node.type === 'doc') return undefined;
 	const nextIndex = direction === 'up' ? location.index - 1 : location.index + 1;
@@ -465,11 +330,7 @@ export function createMoveBlockCommand(
 }
 
 /** Inserts an empty paragraph after a block and makes it the next focus target. */
-export function createInsertParagraphAfterCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-): DocumentCommand | undefined {
+export function createInsertParagraphAfterCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId): DocumentCommand | undefined {
 	const location = findDocumentNode(document, blockId);
 	if (!location?.parent) return undefined;
 	const paragraph = schema.createNode('paragraph');
@@ -480,24 +341,9 @@ export function createInsertParagraphAfterCommand(
 }
 
 /** Inserts a rectangular table after the active block and focuses its first cell. */
-export function createInsertTableCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	rows = 2,
-	columns = 2,
-): DocumentCommand | undefined {
+export function createInsertTableCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, rows = 2, columns = 2): DocumentCommand | undefined {
 	const location = findDocumentNode(document, blockId);
-	if (
-		!location?.parent ||
-		!isTextBearingBlock(location.node) ||
-		!Number.isSafeInteger(rows) ||
-		!Number.isSafeInteger(columns) ||
-		rows < 1 ||
-		rows > 20 ||
-		columns < 1 ||
-		columns > 20
-	)
+	if (!location?.parent || !isTextBearingBlock(location.node) || !Number.isSafeInteger(rows) || !Number.isSafeInteger(columns) || rows < 1 || rows > 20 || columns < 1 || columns > 20)
 		return undefined;
 	const tableRows: DocumentNode[] = [];
 	let firstParagraph: DocumentNode | undefined;
@@ -516,36 +362,22 @@ export function createInsertTableCommand(
 }
 
 /** Returns the table, row, and cell containing a descendant node. */
-export function findTableCellContext(
-	document: DocumentNode,
-	descendantId: DocumentNodeId,
-): TableCellContext | undefined {
+export function findTableCellContext(document: DocumentNode, descendantId: DocumentNodeId): TableCellContext | undefined {
 	return findTableCellContextInNode(document, descendantId);
 }
 
 /** Returns the next or previous cell in document order without changing the document. */
-export function findAdjacentTableCell(
-	document: DocumentNode,
-	cellId: DocumentNodeId,
-	direction: TableCellDirection,
-): DocumentNodeId | undefined {
+export function findAdjacentTableCell(document: DocumentNode, cellId: DocumentNodeId, direction: TableCellDirection): DocumentNodeId | undefined {
 	const context = findTableCellContext(document, cellId);
 	if (!context) return undefined;
-	const cells = context.table.content.flatMap(row =>
-		row.type === 'tableRow' ? row.content.filter(cell => cell.type === 'tableCell') : [],
-	);
+	const cells = context.table.content.flatMap(row => (row.type === 'tableRow' ? row.content.filter(cell => cell.type === 'tableCell') : []));
 	const index = cells.findIndex(cell => cell.id === context.cell.id);
 	if (index < 0) return undefined;
 	return cells[index + (direction === 'backward' ? -1 : 1)]?.id;
 }
 
 /** Inserts an empty row into a table and focuses its first cell. */
-export function createInsertTableRowCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	tableId: DocumentNodeId,
-	index?: number,
-): DocumentCommand | undefined {
+export function createInsertTableRowCommand(schema: DocumentSchema, document: DocumentNode, tableId: DocumentNodeId, index?: number): DocumentCommand | undefined {
 	const table = findTableNode(document, tableId);
 	if (!table) return undefined;
 	const rows = table.content.filter(child => child.type === 'tableRow');
@@ -562,12 +394,7 @@ export function createInsertTableRowCommand(
 }
 
 /** Inserts an empty cell into every row at the given column position. */
-export function createInsertTableColumnCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	tableId: DocumentNodeId,
-	columnIndex: number,
-): DocumentCommand | undefined {
+export function createInsertTableColumnCommand(schema: DocumentSchema, document: DocumentNode, tableId: DocumentNodeId, columnIndex: number): DocumentCommand | undefined {
 	const table = findTableNode(document, tableId);
 	if (!table || !Number.isSafeInteger(columnIndex) || columnIndex < 0) return undefined;
 	const rows = table.content.filter(child => child.type === 'tableRow');
@@ -583,11 +410,7 @@ export function createInsertTableColumnCommand(
 }
 
 /** Deletes a row while keeping at least one row and focuses the nearest surviving row. */
-export function createDeleteTableRowCommand(
-	document: DocumentNode,
-	tableId: DocumentNodeId,
-	rowId: DocumentNodeId,
-): DocumentCommand | undefined {
+export function createDeleteTableRowCommand(document: DocumentNode, tableId: DocumentNodeId, rowId: DocumentNodeId): DocumentCommand | undefined {
 	const table = findTableNode(document, tableId);
 	if (!table || table.content.length <= 1) return undefined;
 	const rowIndex = table.content.findIndex(child => child.id === rowId && child.type === 'tableRow');
@@ -601,34 +424,25 @@ export function createDeleteTableRowCommand(
 }
 
 /** Deletes a column from every row while keeping at least one column. */
-export function createDeleteTableColumnCommand(
-	document: DocumentNode,
-	tableId: DocumentNodeId,
-	columnIndex: number,
-): DocumentCommand | undefined {
+export function createDeleteTableColumnCommand(document: DocumentNode, tableId: DocumentNodeId, columnIndex: number): DocumentCommand | undefined {
 	const table = findTableNode(document, tableId);
 	if (!table || !Number.isSafeInteger(columnIndex) || columnIndex < 0) return undefined;
 	const rows = table.content.filter(child => child.type === 'tableRow');
-	if (rows.length === 0 || rows.some(row => row.content.length <= 1) || columnIndex >= rows[0]!.content.length)
-		return undefined;
+	if (rows.length === 0 || rows.some(row => row.content.length <= 1) || columnIndex >= rows[0]!.content.length) return undefined;
 	let transaction = new DocumentTransaction();
 	for (const row of rows) transaction = transaction.deleteNode(row.content[columnIndex]!.id);
 	const targetCell = rows[0]!.content[columnIndex + 1] ?? rows[0]!.content[columnIndex - 1];
 	if (!targetCell) return undefined;
-	return { transaction, focus: { blockId: firstTableFocusId(targetCell) } };
+	return {
+		transaction,
+		focus: { blockId: firstTableFocusId(targetCell) },
+	};
 }
 
 /** Inserts an inline image into a paragraph or heading. */
-export function createInsertImageCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	src: string,
-	alt = '',
-): DocumentCommand | undefined {
+export function createInsertImageCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, src: string, alt = ''): DocumentCommand | undefined {
 	const location = findDocumentNode(document, blockId);
-	if (!location || !isTextBearingBlock(location.node) || typeof src !== 'string' || src.length === 0)
-		return undefined;
+	if (!location || !isTextBearingBlock(location.node) || typeof src !== 'string' || src.length === 0) return undefined;
 	const image = createImageNode(schema, src, alt);
 	const transaction = new DocumentTransaction().insertNode(blockId, location.node.content.length, image);
 	return { transaction, focus: { blockId } };
@@ -642,8 +456,7 @@ export function createInsertInlineNodeAtSelectionCommand(
 	selection: DocumentSelection,
 	node: DocumentNode,
 ): DocumentCommand | undefined {
-	if (selection.kind !== 'text' || node.text !== undefined || schema.getNodeSpec(node.type)?.kind !== 'inline')
-		return undefined;
+	if (selection.kind !== 'text' || node.text !== undefined || schema.getNodeSpec(node.type)?.kind !== 'inline') return undefined;
 	schema.validateFragment(node, { allowIncompleteContent: true });
 	return createReplaceInlineSelectionCommand(schema, document, blockId, selection, [node]);
 }
@@ -658,18 +471,11 @@ export function createInsertImageAtSelectionCommand(
 	alt = '',
 ): DocumentCommand | undefined {
 	if (typeof src !== 'string' || src.length === 0) return undefined;
-	return createReplaceInlineSelectionCommand(schema, document, blockId, selection, [
-		createImageNode(schema, src, alt),
-	]);
+	return createReplaceInlineSelectionCommand(schema, document, blockId, selection, [createImageNode(schema, src, alt)]);
 }
 
 /** Inserts a hard break at a text selection, replacing selected inline content atomically. */
-export function createInsertHardBreakCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	selection?: DocumentSelection,
-): DocumentCommand | undefined {
+export function createInsertHardBreakCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, selection?: DocumentSelection): DocumentCommand | undefined {
 	const location = findDocumentNode(document, blockId);
 	if (!location || !isTextBearingBlock(location.node)) return undefined;
 	const hardBreak = schema.createNode('hardBreak');
@@ -682,36 +488,17 @@ export function createInsertHardBreakCommand(
 }
 
 /** Deletes a non-collapsed inline selection, including image and hard-break nodes. */
-export function createDeleteInlineSelectionCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	selection: DocumentSelection,
-): DocumentCommand | undefined {
+export function createDeleteInlineSelectionCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, selection: DocumentSelection): DocumentCommand | undefined {
 	if (selection.kind === 'all') return createReplaceDocumentTextCommand(schema, document, '');
-	if (
-		selection.kind !== 'text' ||
-		(selection.anchor.nodeId === selection.head.nodeId && selection.anchor.offset === selection.head.offset)
-	)
-		return undefined;
-	return (
-		createReplaceInlineSelectionCommand(schema, document, blockId, selection, []) ??
-		createReplaceTextCommand(schema, document, blockId, selection, '')
-	);
+	if (selection.kind !== 'text' || (selection.anchor.nodeId === selection.head.nodeId && selection.anchor.offset === selection.head.offset)) return undefined;
+	return createReplaceInlineSelectionCommand(schema, document, blockId, selection, []) ?? createReplaceTextCommand(schema, document, blockId, selection, '');
 }
 
 /** Deletes an adjacent non-text inline node while keeping the caret in its text run. */
-export function createDeleteAdjacentInlineNodeCommand(
-	document: DocumentNode,
-	blockId: DocumentNodeId,
-	textNodeId: DocumentNodeId,
-	direction: AdjacentBlockDirection,
-): DocumentCommand | undefined {
+export function createDeleteAdjacentInlineNodeCommand(document: DocumentNode, blockId: DocumentNodeId, textNodeId: DocumentNodeId, direction: AdjacentBlockDirection): DocumentCommand | undefined {
 	const blockLocation = findDocumentNode(document, blockId);
 	if (!blockLocation || !isTextBearingBlock(blockLocation.node)) return undefined;
-	const textIndex = blockLocation.node.content.findIndex(
-		child => child.id === textNodeId && child.text !== undefined,
-	);
+	const textIndex = blockLocation.node.content.findIndex(child => child.id === textNodeId && child.text !== undefined);
 	const textNode = textIndex >= 0 ? blockLocation.node.content[textIndex] : undefined;
 	const adjacent = blockLocation.node.content[textIndex + (direction === 'backward' ? -1 : 1)];
 	if (!textNode || textNode.text === undefined || !adjacent || adjacent.text !== undefined) return undefined;
@@ -721,22 +508,13 @@ export function createDeleteAdjacentInlineNodeCommand(
 }
 
 /** Deletes a selected image or hard break and restores the nearest text caret. */
-export function createDeleteNodeSelectionCommand(
-	document: DocumentNode,
-	selection: DocumentSelection,
-): DocumentCommand | undefined {
+export function createDeleteNodeSelectionCommand(document: DocumentNode, selection: DocumentSelection): DocumentCommand | undefined {
 	if (selection.kind !== 'node') return undefined;
 	const location = findDocumentNode(document, selection.nodeId);
 	if (!location?.parent || location.node.text !== undefined || !isTextBearingBlock(location.parent)) return undefined;
 	const nextText = location.parent.content.slice(location.index + 1).find(child => child.text !== undefined);
-	const previousText = [...location.parent.content.slice(0, location.index)]
-		.reverse()
-		.find(child => child.text !== undefined);
-	const point = nextText
-		? { nodeId: nextText.id, offset: 0 }
-		: previousText
-			? { nodeId: previousText.id, offset: previousText.text!.length }
-			: undefined;
+	const previousText = [...location.parent.content.slice(0, location.index)].reverse().find(child => child.text !== undefined);
+	const point = nextText ? { nodeId: nextText.id, offset: 0 } : previousText ? { nodeId: previousText.id, offset: previousText.text!.length } : undefined;
 	let transaction = new DocumentTransaction().deleteNode(location.node.id);
 	if (point) transaction = transaction.withSelection(textSelection(point));
 	return { transaction, focus: { blockId: location.parent.id, ...(point ? { point } : {}) } };
@@ -781,25 +559,10 @@ export function createReplaceTextCommand(
 		let transaction = new DocumentTransaction();
 		for (let index = range.endIndex; index > range.startIndex; index -= 1) {
 			const node = blockLocation.node.content[index]!;
-			transaction =
-				node.text === undefined
-					? transaction.deleteNode(node.id)
-					: transaction.replaceText(
-							node.id,
-							0,
-							index === range.endIndex ? range.end.offset : node.text.length,
-							'',
-						);
+			transaction = node.text === undefined ? transaction.deleteNode(node.id) : transaction.replaceText(node.id, 0, index === range.endIndex ? range.end.offset : node.text.length, '');
 		}
-		transaction = transaction.replaceText(
-			startNode.id,
-			range.start.offset,
-			range.startIndex === range.endIndex ? range.end.offset : startNode.text!.length,
-			normalizedReplacement,
-		);
-		const retainedStart =
-			range.start.offset + normalizedReplacement.length > 0 ||
-			(range.startIndex === range.endIndex && range.end.offset < startNode.text!.length);
+		transaction = transaction.replaceText(startNode.id, range.start.offset, range.startIndex === range.endIndex ? range.end.offset : startNode.text!.length, normalizedReplacement);
+		const retainedStart = range.start.offset + normalizedReplacement.length > 0 || (range.startIndex === range.endIndex && range.end.offset < startNode.text!.length);
 		const point = retainedStart
 			? { nodeId: startNode.id, offset: range.start.offset + normalizedReplacement.length }
 			: range.end.offset < endNode.text!.length
@@ -816,21 +579,13 @@ export function createReplaceTextCommand(
 	let insertedNode: DocumentNode | undefined;
 	let suffixNode: DocumentNode | undefined;
 	let startIdUsed = false;
-	const createReplacementNode = (
-		text: string,
-		nodeMarks: DocumentNode['marks'],
-		id?: DocumentNodeId,
-	): DocumentNode | undefined => {
+	const createReplacementNode = (text: string, nodeMarks: DocumentNode['marks'], id?: DocumentNodeId): DocumentNode | undefined => {
 		if (text.length === 0) return undefined;
 		const node = schema.createText(text, { ...(id ? { id } : {}), marks: nodeMarks });
 		return node;
 	};
 	if (range.start.offset > 0) {
-		const prefix = createReplacementNode(
-			startNode.text!.slice(0, range.start.offset),
-			startNode.marks,
-			startNode.id,
-		);
+		const prefix = createReplacementNode(startNode.text!.slice(0, range.start.offset), startNode.marks, startNode.id);
 		if (prefix) {
 			prefixNode = prefix;
 			replacementNodes.push(prefix);
@@ -838,11 +593,7 @@ export function createReplaceTextCommand(
 		startIdUsed = true;
 	}
 	if (normalizedReplacement.length > 0) {
-		const inserted = createReplacementNode(
-			normalizedReplacement,
-			insertionMarks,
-			startIdUsed ? undefined : startNode.id,
-		);
+		const inserted = createReplacementNode(normalizedReplacement, insertionMarks, startIdUsed ? undefined : startNode.id);
 		if (inserted) {
 			insertedNode = inserted;
 			replacementNodes.push(inserted);
@@ -850,21 +601,15 @@ export function createReplaceTextCommand(
 		startIdUsed = true;
 	}
 	if (range.end.offset < endNode.text!.length) {
-		const suffix = createReplacementNode(
-			endNode.text!.slice(range.end.offset),
-			endNode.marks,
-			range.startIndex === range.endIndex ? undefined : endNode.id,
-		);
+		const suffix = createReplacementNode(endNode.text!.slice(range.end.offset), endNode.marks, range.startIndex === range.endIndex ? undefined : endNode.id);
 		if (suffix) {
 			suffixNode = suffix;
 			replacementNodes.push(suffix);
 		}
 	}
 	let transaction = new DocumentTransaction();
-	for (let index = range.endIndex; index >= range.startIndex; index -= 1)
-		transaction = transaction.deleteNode(blockLocation.node.content[index]!.id);
-	for (let index = 0; index < replacementNodes.length; index += 1)
-		transaction = transaction.insertNode(blockId, range.startIndex + index, replacementNodes[index]!);
+	for (let index = range.endIndex; index >= range.startIndex; index -= 1) transaction = transaction.deleteNode(blockLocation.node.content[index]!.id);
+	for (let index = 0; index < replacementNodes.length; index += 1) transaction = transaction.insertNode(blockId, range.startIndex + index, replacementNodes[index]!);
 	const caret = insertedNode ?? suffixNode ?? prefixNode;
 	const point = caret
 		? {
@@ -916,17 +661,11 @@ function createReplaceCrossBlockTextCommand(
 	replacementNodes.push(...endContent.slice(range.end.index + 1));
 	let transaction = new DocumentTransaction();
 	for (const child of startContent) transaction = transaction.deleteNode(child.id);
-	for (let index = range.start.parentIndex + 1; index < range.end.parentIndex; index += 1)
-		transaction = transaction.deleteNode(range.start.parent.content[index]!.id);
+	for (let index = range.start.parentIndex + 1; index < range.end.parentIndex; index += 1) transaction = transaction.deleteNode(range.start.parent.content[index]!.id);
 	transaction = transaction.deleteNode(range.end.block.id);
-	const removed = new Set(
-		range.start.parent.content.slice(range.start.parentIndex + 1, range.end.parentIndex + 1).map(node => node.id),
-	);
-	for (const section of document.content)
-		if (section.type === 'documentSection' && section.content.every(node => removed.has(node.id)))
-			transaction = transaction.deleteNode(section.id);
-	for (let index = 0; index < replacementNodes.length; index += 1)
-		transaction = transaction.insertNode(range.start.block.id, index, replacementNodes[index]!);
+	const removed = new Set(range.start.parent.content.slice(range.start.parentIndex + 1, range.end.parentIndex + 1).map(node => node.id));
+	for (const section of document.content) if (section.type === 'documentSection' && section.content.every(node => removed.has(node.id))) transaction = transaction.deleteNode(section.id);
+	for (let index = 0; index < replacementNodes.length; index += 1) transaction = transaction.insertNode(range.start.block.id, index, replacementNodes[index]!);
 	const point = insertedNode
 		? { nodeId: insertedNode.id, offset: insertedNode.text!.length }
 		: suffixNode
@@ -950,8 +689,7 @@ export function createPasteTextCommand(
 	if (selection.kind === 'all') return createReplaceDocumentTextCommand(schema, document, pastedText, marks);
 	if (selection.kind !== 'text') return undefined;
 	const normalizedText = normalizeInlineText(pastedText);
-	if (!normalizedText.includes('\n'))
-		return createReplaceTextCommand(schema, document, blockId, selection, normalizedText, marks);
+	if (!normalizedText.includes('\n')) return createReplaceTextCommand(schema, document, blockId, selection, normalizedText, marks);
 	const crossBlockCommand = createPasteCrossBlockTextCommand(schema, document, selection, normalizedText, marks);
 	if (crossBlockCommand) return crossBlockCommand;
 	const blockLocation = findDocumentNode(document, blockId);
@@ -990,13 +728,9 @@ export function createPasteTextCommand(
 	}
 	let transaction = new DocumentTransaction();
 	for (const child of blockLocation.node.content) transaction = transaction.deleteNode(child.id);
-	for (let index = 0; index < lineContents[0]!.length; index += 1)
-		transaction = transaction.insertNode(blockId, index, lineContents[0]![index]!);
-	const blocks = lineContents
-		.slice(1)
-		.map(content => schema.createNode(blockLocation.node.type, { attrs: blockLocation.node.attrs, content }));
-	for (let index = 0; index < blocks.length; index += 1)
-		transaction = transaction.insertNode(blockLocation.parent.id, blockLocation.index + index + 1, blocks[index]!);
+	for (let index = 0; index < lineContents[0]!.length; index += 1) transaction = transaction.insertNode(blockId, index, lineContents[0]![index]!);
+	const blocks = lineContents.slice(1).map(content => schema.createNode(blockLocation.node.type, { attrs: blockLocation.node.attrs, content }));
+	for (let index = 0; index < blocks.length; index += 1) transaction = transaction.insertNode(blockLocation.parent.id, blockLocation.index + index + 1, blocks[index]!);
 	const lastBlock = blocks.at(-1);
 	const focusNode = lastTextNode(lastBlock?.content ?? []) ?? lastTextNode(lineContents[0]!);
 	const focusBlockId = lastBlock?.id ?? blockId;
@@ -1027,8 +761,7 @@ function createPasteCrossBlockTextCommand(
 				marks: startNode.marks,
 			}),
 		);
-	if (range.end.offset < endNode.text!.length)
-		after.push(schema.createText(endNode.text!.slice(range.end.offset), { id: endNode.id, marks: endNode.marks }));
+	if (range.end.offset < endNode.text!.length) after.push(schema.createText(endNode.text!.slice(range.end.offset), { id: endNode.id, marks: endNode.marks }));
 	after.push(...endContent.slice(range.end.index + 1));
 	const insertionMarks = marks ? [...marks] : startNode.marks;
 	const lines = normalizedText.split('\n');
@@ -1042,23 +775,14 @@ function createPasteCrossBlockTextCommand(
 	}
 	let transaction = new DocumentTransaction();
 	for (const child of startContent) transaction = transaction.deleteNode(child.id);
-	for (let index = range.start.parentIndex + 1; index < range.end.parentIndex; index += 1)
-		transaction = transaction.deleteNode(range.start.parent.content[index]!.id);
+	for (let index = range.start.parentIndex + 1; index < range.end.parentIndex; index += 1) transaction = transaction.deleteNode(range.start.parent.content[index]!.id);
 	transaction = transaction.deleteNode(range.end.block.id);
-	const removed = new Set(
-		range.start.parent.content.slice(range.start.parentIndex + 1, range.end.parentIndex + 1).map(node => node.id),
-	);
-	for (const section of document.content)
-		if (section.type === 'documentSection' && section.content.every(node => removed.has(node.id)))
-			transaction = transaction.deleteNode(section.id);
-	for (let index = 0; index < lineContents[0]!.length; index += 1)
-		transaction = transaction.insertNode(range.start.block.id, index, lineContents[0]![index]!);
-	const blocks = lineContents
-		.slice(1)
-		.map(content => schema.createNode(range.start.block.type, { attrs: range.start.block.attrs, content }));
+	const removed = new Set(range.start.parent.content.slice(range.start.parentIndex + 1, range.end.parentIndex + 1).map(node => node.id));
+	for (const section of document.content) if (section.type === 'documentSection' && section.content.every(node => removed.has(node.id))) transaction = transaction.deleteNode(section.id);
+	for (let index = 0; index < lineContents[0]!.length; index += 1) transaction = transaction.insertNode(range.start.block.id, index, lineContents[0]![index]!);
+	const blocks = lineContents.slice(1).map(content => schema.createNode(range.start.block.type, { attrs: range.start.block.attrs, content }));
 	const insertion = findDocumentNode(document, range.start.block.id)!;
-	for (let index = 0; index < blocks.length; index += 1)
-		transaction = transaction.insertNode(insertion.parent!.id, insertion.index + index + 1, blocks[index]!);
+	for (let index = 0; index < blocks.length; index += 1) transaction = transaction.insertNode(insertion.parent!.id, insertion.index + index + 1, blocks[index]!);
 	const lastBlock = blocks.at(-1);
 	const focusNode = lastTextNode(lastBlock?.content ?? []) ?? lastTextNode(lineContents[0]!);
 	const focusBlockId = lastBlock?.id ?? range.start.block.id;
@@ -1089,13 +813,8 @@ export function createInsertFragmentCommand(
 	const range = resolveInlineRange(location.node, selection);
 	if (!range) return undefined;
 	const pastedBlocks = fragment.content.map(node => cloneNodeWithFreshIds(schema, node));
-	if (pastedBlocks.length === 1 && isTextBearingBlock(pastedBlocks[0]!))
-		return createReplaceInlineSelectionCommand(schema, document, blockId, selection, pastedBlocks[0]!.content);
-	if (
-		!schema.canContainChild(parent.type, location.node.type) ||
-		pastedBlocks.some(node => !schema.canContainChild(parent.type, node.type))
-	)
-		return undefined;
+	if (pastedBlocks.length === 1 && isTextBearingBlock(pastedBlocks[0]!)) return createReplaceInlineSelectionCommand(schema, document, blockId, selection, pastedBlocks[0]!.content);
+	if (!schema.canContainChild(parent.type, location.node.type) || pastedBlocks.some(node => !schema.canContainChild(parent.type, node.type))) return undefined;
 	const startNode = location.node.content[range.startIndex]!;
 	const endNode = location.node.content[range.endIndex]!;
 	const before = [...location.node.content.slice(0, range.startIndex)];
@@ -1130,30 +849,21 @@ export function createInsertFragmentCommand(
 		];
 		let transaction = new DocumentTransaction();
 		for (const child of location.node.content) transaction = transaction.deleteNode(child.id);
-		for (let index = 0; index < first.content.length; index += 1)
-			transaction = transaction.insertNode(blockId, index, first.content[index]!);
-		for (let index = 1; index < blocks.length; index += 1)
-			transaction = transaction.insertNode(parent.id, location.index + index, blocks[index]!);
+		for (let index = 0; index < first.content.length; index += 1) transaction = transaction.insertNode(blockId, index, first.content[index]!);
+		for (let index = 1; index < blocks.length; index += 1) transaction = transaction.insertNode(parent.id, location.index + index, blocks[index]!);
 		const focusBlock = blocks.at(-1)!;
 		const focusNode = lastTextNode(focusBlock.content) ?? firstTextNode(focusBlock.content);
 		const point = focusNode ? { nodeId: focusNode.id, offset: focusNode.text!.length } : undefined;
 		if (point) transaction = transaction.withSelection(textSelection(point));
 		return { transaction, focus: { blockId: focusBlock.id, ...(point ? { point } : {}) } };
 	}
-	const prefix =
-		before.length > 0
-			? schema.createNode(location.node.type, { attrs: location.node.attrs, content: before })
-			: undefined;
-	const suffix =
-		after.length > 0
-			? schema.createNode(location.node.type, { attrs: location.node.attrs, content: after })
-			: undefined;
+	const prefix = before.length > 0 ? schema.createNode(location.node.type, { attrs: location.node.attrs, content: before }) : undefined;
+	const suffix = after.length > 0 ? schema.createNode(location.node.type, { attrs: location.node.attrs, content: after }) : undefined;
 	const blocks = [...(prefix ? [prefix] : []), ...pastedBlocks, ...(suffix ? [suffix] : [])];
 	if (blocks.length === 0) return undefined;
 	let transaction = new DocumentTransaction();
 	transaction = transaction.deleteNode(location.node.id);
-	for (let index = 0; index < blocks.length; index += 1)
-		transaction = transaction.insertNode(parent.id, location.index + index, blocks[index]!);
+	for (let index = 0; index < blocks.length; index += 1) transaction = transaction.insertNode(parent.id, location.index + index, blocks[index]!);
 	const focusBlock = blocks.at(-1)!;
 	const focusNode = lastTextNodeDeep(focusBlock) ?? firstTextNodeDeep(focusBlock);
 	const point = focusNode ? { nodeId: focusNode.id, offset: focusNode.text!.length } : undefined;
@@ -1169,12 +879,7 @@ function cloneNodeWithFreshIds(schema: DocumentSchema, node: DocumentNode): Docu
 	});
 }
 
-function createReplaceDocumentTextCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	replacement: string,
-	marks?: readonly DocumentMark[],
-): DocumentCommand | undefined {
+function createReplaceDocumentTextCommand(schema: DocumentSchema, document: DocumentNode, replacement: string, marks?: readonly DocumentMark[]): DocumentCommand | undefined {
 	if (!schema.canContainChild(schema.topNodeType, 'paragraph')) return undefined;
 	const content = normalizeInlineText(replacement)
 		.split('\n')
@@ -1186,11 +891,7 @@ function createReplaceDocumentTextCommand(
 	return createReplaceDocumentContentCommand(schema, document, content);
 }
 
-function createReplaceDocumentFragmentCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	fragment: DocumentFragment,
-): DocumentCommand | undefined {
+function createReplaceDocumentFragmentCommand(schema: DocumentSchema, document: DocumentNode, fragment: DocumentFragment): DocumentCommand | undefined {
 	let content: readonly DocumentNode[];
 	try {
 		content = fragment.content.map(node => cloneNodeWithFreshIds(schema, node));
@@ -1203,17 +904,12 @@ function createReplaceDocumentFragmentCommand(
 	return createReplaceDocumentContentCommand(schema, document, content);
 }
 
-function createReplaceDocumentContentCommand(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	content: readonly DocumentNode[],
-): DocumentCommand | undefined {
+function createReplaceDocumentContentCommand(schema: DocumentSchema, document: DocumentNode, content: readonly DocumentNode[]): DocumentCommand | undefined {
 	if (document.type !== schema.topNodeType) return undefined;
 	if (content.some(node => !schema.canContainChild(schema.topNodeType, node.type))) return undefined;
 	let transaction = new DocumentTransaction();
 	for (const child of document.content) transaction = transaction.deleteNode(child.id);
-	for (let index = 0; index < content.length; index += 1)
-		transaction = transaction.insertNode(document.id, index, content[index]!);
+	for (let index = 0; index < content.length; index += 1) transaction = transaction.insertNode(document.id, index, content[index]!);
 	const focusBlock = lastEditableBlock(content);
 	const point = focusBlock ? lastTextPointInNode(focusBlock) : undefined;
 	transaction = point ? transaction.withSelection(textSelection(point)) : transaction.withSelection(undefined);
@@ -1285,17 +981,7 @@ export function createSetTextStyleCommand(
 	attrs: DocumentTextStyleAttributes,
 	storedMarks?: readonly DocumentMark[],
 ): DocumentCommand | undefined {
-	return createMarkCommand(
-		schema,
-		document,
-		blockId,
-		textNodeId,
-		selection,
-		'textStyle',
-		{ ...attrs },
-		'merge',
-		storedMarks,
-	);
+	return createMarkCommand(schema, document, blockId, textNodeId, selection, 'textStyle', { ...attrs }, 'merge', storedMarks);
 }
 
 /** Removes a mark across a text selection. */
@@ -1323,16 +1009,7 @@ export function createSetLinkMarkCommand(
 ): DocumentCommand | undefined {
 	const normalizedHref = typeof href === 'string' ? href.trim() : '';
 	if (normalizedHref.length === 0) return undefined;
-	return createSetMarkCommand(
-		schema,
-		document,
-		blockId,
-		textNodeId,
-		selection,
-		'link',
-		{ href: normalizedHref },
-		storedMarks,
-	);
+	return createSetMarkCommand(schema, document, blockId, textNodeId, selection, 'link', { href: normalizedHref }, storedMarks);
 }
 
 function createMarkCommand(
@@ -1346,17 +1023,13 @@ function createMarkCommand(
 	mode: 'remove' | 'set' | 'toggle' | 'merge',
 	storedMarks?: readonly DocumentMark[],
 ): DocumentCommand | undefined {
-	if (selection.kind !== 'text' || (selection.anchor.nodeId !== textNodeId && selection.head.nodeId !== textNodeId))
-		return undefined;
+	if (selection.kind !== 'text' || (selection.anchor.nodeId !== textNodeId && selection.head.nodeId !== textNodeId)) return undefined;
 	const blockLocation = findDocumentNode(document, blockId);
 	if (!blockLocation || !isTextBearingBlock(blockLocation.node)) return undefined;
 	const range = resolveInlineRange(blockLocation.node, selection);
 	if (!range) return undefined;
 	if (typeof markType !== 'string' || markType.length === 0) return undefined;
-	if (
-		range.selected.length === 0 ||
-		(range.startIndex === range.endIndex && range.start.offset === range.end.offset)
-	) {
+	if (range.selected.length === 0 || (range.startIndex === range.endIndex && range.start.offset === range.end.offset)) {
 		const point = selection.anchor;
 		const currentMarks = storedMarks ?? marksAtPoint(blockLocation.node, point);
 		const nextMarks = updateStoredMarks(schema, currentMarks, markType, attrs, mode);
@@ -1365,36 +1038,20 @@ function createMarkCommand(
 			focus: { blockId, point },
 		};
 	}
-	const removeMark =
-		mode === 'remove' ||
-		(mode === 'toggle' && range.selected.every(part => part.node.marks.some(mark => mark.type === markType)));
+	const removeMark = mode === 'remove' || (mode === 'toggle' && range.selected.every(part => part.node.marks.some(mark => mark.type === markType)));
 	const replacements = new Map<number, readonly TextSegment[]>();
 	for (let index = range.startIndex; index <= range.endIndex; index += 1) {
 		const node = blockLocation.node.content[index]!;
 		const from = index === range.startIndex ? range.start.offset : 0;
 		const to = index === range.endIndex ? range.end.offset : node.text!.length;
-		replacements.set(
-			index,
-			createMarkedTextSegments(
-				schema,
-				node,
-				from,
-				to,
-				markType,
-				attrs,
-				removeMark,
-				mode === 'set' || mode === 'merge',
-				mode === 'merge',
-			),
-		);
+		replacements.set(index, createMarkedTextSegments(schema, node, from, to, markType, attrs, removeMark, mode === 'set' || mode === 'merge', mode === 'merge'));
 	}
 	let transaction = new DocumentTransaction();
 	for (let index = range.endIndex; index >= range.startIndex; index -= 1) {
 		const node = blockLocation.node.content[index]!;
 		const replacement = replacements.get(index)!;
 		transaction = transaction.deleteNode(node.id);
-		for (let offset = 0; offset < replacement.length; offset += 1)
-			transaction = transaction.insertNode(blockId, index + offset, replacement[offset]!.node);
+		for (let offset = 0; offset < replacement.length; offset += 1) transaction = transaction.insertNode(blockId, index + offset, replacement[offset]!.node);
 	}
 	const mappedStart = mapInlineBoundary(range.start, replacements.get(range.startIndex)!, true);
 	const mappedEnd = mapInlineBoundary(range.end, replacements.get(range.endIndex)!, false);
@@ -1420,13 +1077,9 @@ function updateStoredMarks(
 	const remove = mode === 'remove' || (mode === 'toggle' && hasMark);
 	const existing = current.find(mark => mark.type === markType);
 	const nextAttrs = mode === 'merge' && existing ? { ...existing.attrs, ...attrs } : attrs;
-	const next = remove
-		? current.filter(mark => mark.type !== markType)
-		: [...current.filter(mark => mark.type !== markType), { type: markType, attrs: nextAttrs }];
+	const next = remove ? current.filter(mark => mark.type !== markType) : [...current.filter(mark => mark.type !== markType), { type: markType, attrs: nextAttrs }];
 	schema.validateMarks(next);
-	return Object.freeze(
-		next.map(mark => Object.freeze({ type: mark.type, attrs: Object.freeze({ ...(mark.attrs ?? {}) }) })),
-	);
+	return Object.freeze(next.map(mark => Object.freeze({ type: mark.type, attrs: Object.freeze({ ...(mark.attrs ?? {}) }) })));
 }
 
 function isTextBearingBlock(node: DocumentNode): boolean {
@@ -1442,14 +1095,7 @@ function createImageNode(schema: DocumentSchema, src: string, alt: string): Docu
 	return schema.createNode('image', { attrs: { src, ...(alt.length > 0 ? { alt } : {}) } });
 }
 
-function findTableCellContextInNode(
-	node: DocumentNode,
-	descendantId: DocumentNodeId,
-	table?: DocumentNode,
-	row?: DocumentNode,
-	rowIndex = -1,
-	columnIndex = -1,
-): TableCellContext | undefined {
+function findTableCellContextInNode(node: DocumentNode, descendantId: DocumentNodeId, table?: DocumentNode, row?: DocumentNode, rowIndex = -1, columnIndex = -1): TableCellContext | undefined {
 	if (node.type === 'table') {
 		for (let index = 0; index < node.content.length; index += 1) {
 			const child = node.content[index]!;
@@ -1467,8 +1113,7 @@ function findTableCellContextInNode(
 		return undefined;
 	}
 	if (node.type === 'tableCell') {
-		if (table && row && containsDocumentNode(node, descendantId))
-			return { table, row, cell: node, rowIndex, columnIndex };
+		if (table && row && containsDocumentNode(node, descendantId)) return { table, row, cell: node, rowIndex, columnIndex };
 		for (const child of node.content) {
 			const nested = findTableCellContextInNode(child, descendantId, table, row, rowIndex, columnIndex);
 			if (nested) return nested;
@@ -1482,10 +1127,7 @@ function findTableCellContextInNode(
 	return undefined;
 }
 
-function createTableRow(
-	schema: DocumentSchema,
-	columns: number,
-): { readonly row: DocumentNode; readonly firstBlockId: DocumentNodeId } {
+function createTableRow(schema: DocumentSchema, columns: number): { readonly row: DocumentNode; readonly firstBlockId: DocumentNodeId } {
 	const cells: DocumentNode[] = [];
 	let firstBlockId: DocumentNodeId | undefined;
 	for (let index = 0; index < columns; index += 1) {
@@ -1632,10 +1274,8 @@ function createReplaceInlineSelectionCommand(
 		nodes.push(suffixNode);
 	}
 	let transaction = new DocumentTransaction();
-	for (let index = range.endIndex; index >= range.startIndex; index -= 1)
-		transaction = transaction.deleteNode(location.node.content[index]!.id);
-	for (let index = 0; index < nodes.length; index += 1)
-		transaction = transaction.insertNode(blockId, range.startIndex + index, nodes[index]!);
+	for (let index = range.endIndex; index >= range.startIndex; index -= 1) transaction = transaction.deleteNode(location.node.content[index]!.id);
+	for (let index = 0; index < nodes.length; index += 1) transaction = transaction.insertNode(blockId, range.startIndex + index, nodes[index]!);
 	const point = suffixNode
 		? { nodeId: suffixNode.id, offset: 0 }
 		: prefixNode
@@ -1645,11 +1285,7 @@ function createReplaceInlineSelectionCommand(
 	return { transaction, focus: { blockId, ...(point ? { point } : {}) } };
 }
 
-function findInlineSelectionFallbackPoint(
-	content: readonly DocumentNode[],
-	startIndex: number,
-	endIndex: number,
-): DocumentPoint | undefined {
+function findInlineSelectionFallbackPoint(content: readonly DocumentNode[], startIndex: number, endIndex: number): DocumentPoint | undefined {
 	for (let index = endIndex + 1; index < content.length; index += 1) {
 		const text = content[index];
 		if (text?.text !== undefined) return { nodeId: text.id, offset: 0 };
@@ -1661,21 +1297,14 @@ function findInlineSelectionFallbackPoint(
 	return undefined;
 }
 
-function resolveInlineNodeRange(
-	block: DocumentNode,
-	selection: Extract<DocumentSelection, { kind: 'text' }>,
-): InlineNodeRange | undefined {
-	const anchorIndex = block.content.findIndex(
-		child => child.id === selection.anchor.nodeId && child.text !== undefined,
-	);
+function resolveInlineNodeRange(block: DocumentNode, selection: Extract<DocumentSelection, { kind: 'text' }>): InlineNodeRange | undefined {
+	const anchorIndex = block.content.findIndex(child => child.id === selection.anchor.nodeId && child.text !== undefined);
 	const headIndex = block.content.findIndex(child => child.id === selection.head.nodeId && child.text !== undefined);
 	if (anchorIndex < 0 || headIndex < 0) return undefined;
 	const anchorNode = block.content[anchorIndex]!;
 	const headNode = block.content[headIndex]!;
-	if (selection.anchor.offset > anchorNode.text!.length || selection.head.offset > headNode.text!.length)
-		return undefined;
-	const forward =
-		anchorIndex < headIndex || (anchorIndex === headIndex && selection.anchor.offset <= selection.head.offset);
+	if (selection.anchor.offset > anchorNode.text!.length || selection.head.offset > headNode.text!.length) return undefined;
+	const forward = anchorIndex < headIndex || (anchorIndex === headIndex && selection.anchor.offset <= selection.head.offset);
 	return {
 		startIndex: forward ? anchorIndex : headIndex,
 		endIndex: forward ? headIndex : anchorIndex,
@@ -1685,33 +1314,18 @@ function resolveInlineNodeRange(
 	};
 }
 
-function resolveCrossBlockTextRange(
-	document: DocumentNode,
-	selection: Extract<DocumentSelection, { kind: 'text' }>,
-): CrossBlockTextRange | undefined {
+function resolveCrossBlockTextRange(document: DocumentNode, selection: Extract<DocumentSelection, { kind: 'text' }>): CrossBlockTextRange | undefined {
 	const anchor = findTextBearingBlockLocation(document, selection.anchor.nodeId);
 	const head = findTextBearingBlockLocation(document, selection.head.nodeId);
 	if (!anchor || !head || anchor.block.id === head.block.id || anchor.parent.id !== head.parent.id) return undefined;
 	const forward = anchor.parentIndex < head.parentIndex;
 	const start = forward ? { location: anchor, point: selection.anchor } : { location: head, point: selection.head };
 	const end = forward ? { location: head, point: selection.head } : { location: anchor, point: selection.anchor };
-	const startIndex = start.location.block.content.findIndex(
-		child => child.id === start.point.nodeId && child.text !== undefined,
-	);
-	const endIndex = end.location.block.content.findIndex(
-		child => child.id === end.point.nodeId && child.text !== undefined,
-	);
+	const startIndex = start.location.block.content.findIndex(child => child.id === start.point.nodeId && child.text !== undefined);
+	const endIndex = end.location.block.content.findIndex(child => child.id === end.point.nodeId && child.text !== undefined);
 	const startNode = start.location.block.content[startIndex];
 	const endNode = end.location.block.content[endIndex];
-	if (
-		startIndex < 0 ||
-		endIndex < 0 ||
-		!startNode ||
-		!endNode ||
-		startNode.text === undefined ||
-		endNode.text === undefined
-	)
-		return undefined;
+	if (startIndex < 0 || endIndex < 0 || !startNode || !endNode || startNode.text === undefined || endNode.text === undefined) return undefined;
 	if (start.point.offset > startNode.text.length || end.point.offset > endNode.text.length) return undefined;
 	for (let index = start.location.parentIndex; index <= end.location.parentIndex; index += 1) {
 		if (!isTextBearingBlock(start.location.parent.content[index]!)) return undefined;
@@ -1722,37 +1336,25 @@ function resolveCrossBlockTextRange(
 	};
 }
 
-function findTextBearingBlockLocation(
-	root: DocumentNode,
-	textNodeId: DocumentNodeId,
-): TextBearingBlockLocation | undefined {
+function findTextBearingBlockLocation(root: DocumentNode, textNodeId: DocumentNodeId): TextBearingBlockLocation | undefined {
 	const textLocation = findDocumentNode(root, textNodeId);
 	const block = textLocation?.parent;
 	if (!block || !isTextBearingBlock(block)) return undefined;
 	const blockLocation = findDocumentNode(root, block.id);
 	if (!blockLocation?.parent) return undefined;
-	const linear =
-		blockLocation.parent === root ||
-		(blockLocation.parent.type === 'documentSection' && root.content.includes(blockLocation.parent));
+	const linear = blockLocation.parent === root || (blockLocation.parent.type === 'documentSection' && root.content.includes(blockLocation.parent));
 	const parent = linear ? { ...root, content: getDocumentBodyContent(root) } : blockLocation.parent;
 	return { block, parent, parentIndex: linear ? parent.content.indexOf(block) : blockLocation.index };
 }
 
-function resolveInlineRange(
-	block: DocumentNode,
-	selection: Extract<DocumentSelection, { kind: 'text' }>,
-): InlineRange | undefined {
-	const anchorIndex = block.content.findIndex(
-		child => child.id === selection.anchor.nodeId && child.text !== undefined,
-	);
+function resolveInlineRange(block: DocumentNode, selection: Extract<DocumentSelection, { kind: 'text' }>): InlineRange | undefined {
+	const anchorIndex = block.content.findIndex(child => child.id === selection.anchor.nodeId && child.text !== undefined);
 	const headIndex = block.content.findIndex(child => child.id === selection.head.nodeId && child.text !== undefined);
 	if (anchorIndex < 0 || headIndex < 0) return undefined;
 	const anchorNode = block.content[anchorIndex]!;
 	const headNode = block.content[headIndex]!;
-	if (selection.anchor.offset > anchorNode.text!.length || selection.head.offset > headNode.text!.length)
-		return undefined;
-	const forward =
-		anchorIndex < headIndex || (anchorIndex === headIndex && selection.anchor.offset <= selection.head.offset);
+	if (selection.anchor.offset > anchorNode.text!.length || selection.head.offset > headNode.text!.length) return undefined;
+	const forward = anchorIndex < headIndex || (anchorIndex === headIndex && selection.anchor.offset <= selection.head.offset);
 	const startIndex = forward ? anchorIndex : headIndex;
 	const endIndex = forward ? headIndex : anchorIndex;
 	const start = forward ? selection.anchor : selection.head;
@@ -1788,11 +1390,7 @@ function createMarkedTextSegments(
 			? node.marks.filter(mark => mark.type !== markType)
 			: replaceExisting
 				? node.marks.some(mark => mark.type === markType)
-					? node.marks.map(mark =>
-							mark.type === markType
-								? { type: markType, attrs: mergeExisting ? { ...mark.attrs, ...attrs } : attrs }
-								: mark,
-						)
+					? node.marks.map(mark => (mark.type === markType ? { type: markType, attrs: mergeExisting ? { ...mark.attrs, ...attrs } : attrs } : mark))
 					: [...node.marks, { type: markType, attrs }]
 				: node.marks.some(mark => mark.type === markType)
 					? node.marks

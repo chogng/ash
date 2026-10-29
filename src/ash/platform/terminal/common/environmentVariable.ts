@@ -44,11 +44,7 @@ export type ISerializableEnvironmentVariableCollection = [string, IEnvironmentVa
 export type ISerializableEnvironmentDescriptionMap = [string, IEnvironmentVariableCollectionDescription][];
 
 /** Immutable launch metadata; this does not contain the host's inherited environment. */
-export type ISerializableEnvironmentVariableCollections = readonly (readonly [
-	string,
-	ISerializableEnvironmentVariableCollection,
-	ISerializableEnvironmentDescriptionMap?,
-])[];
+export type ISerializableEnvironmentVariableCollections = readonly (readonly [string, ISerializableEnvironmentVariableCollection, ISerializableEnvironmentDescriptionMap?])[];
 
 export interface IEnvironmentVariableCollection {
 	readonly map: ReadonlyMap<string, IEnvironmentVariableMutator>;
@@ -57,17 +53,8 @@ export interface IEnvironmentVariableCollection {
 
 export interface IMergedEnvironmentVariableCollection {
 	readonly collections: ReadonlyMap<string, IEnvironmentVariableCollection>;
-	getVariableMap(
-		scope: EnvironmentVariableScope | undefined,
-	): Map<string, IExtensionOwnedEnvironmentVariableMutator[]>;
+	getVariableMap(scope: EnvironmentVariableScope | undefined): Map<string, IExtensionOwnedEnvironmentVariableMutator[]>;
 	getDescriptionMap(scope: EnvironmentVariableScope | undefined): Map<string, string | undefined>;
-	applyToProcessEnvironment(
-		env: IProcessEnvironment,
-		scope: EnvironmentVariableScope | undefined,
-		variableResolver?: (value: string) => Promise<string>,
-	): Promise<void>;
-	diff(
-		other: IMergedEnvironmentVariableCollection,
-		scope: EnvironmentVariableScope | undefined,
-	): IMergedEnvironmentVariableCollectionDiff | undefined;
+	applyToProcessEnvironment(env: IProcessEnvironment, scope: EnvironmentVariableScope | undefined, variableResolver?: (value: string) => Promise<string>): Promise<void>;
+	diff(other: IMergedEnvironmentVariableCollection, scope: EnvironmentVariableScope | undefined): IMergedEnvironmentVariableCollectionDiff | undefined;
 }

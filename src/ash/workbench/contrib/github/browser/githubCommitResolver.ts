@@ -37,11 +37,7 @@ export class GitHubCommitResolver extends Disposable {
 			return cached;
 		}
 		const token = entry.cancellation.token;
-		entry.pending = this.github.readCommit(
-			{ host: 'github.com', owner: target.owner, name: target.repo },
-			target.sha,
-			token,
-		);
+		entry.pending = this.github.readCommit({ host: 'github.com', owner: target.owner, name: target.repo }, target.sha, token);
 		try {
 			const commit = await entry.pending;
 			if (!token.isCancellationRequested) {

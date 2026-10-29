@@ -1,26 +1,10 @@
 import { isRecord } from 'ash:editor/base/common/types.js';
 import { isFiniteNumber, isSafeInteger } from 'ash:editor/base/common/numbers.js';
 import type { DocumentAttributes, DocumentMark, DocumentNode } from './document.js';
-import {
-	decodeDocumentNode,
-	DocumentSerializationError,
-	encodeDocumentNode,
-	type SerializedDocumentNode,
-} from './documentSerialization.js';
+import { decodeDocumentNode, DocumentSerializationError, encodeDocumentNode, type SerializedDocumentNode } from './documentSerialization.js';
 import { type DocumentSchema } from './documentSchema.js';
-import {
-	allSelection,
-	nodeSelection,
-	textSelection,
-	type DocumentPoint,
-	type DocumentSelection,
-} from '../core/documentSelection.js';
-import {
-	DocumentTransaction,
-	type DocumentStep,
-	type DocumentTransactionMetaEntry,
-	type DocumentTransactionOptions,
-} from './documentTransaction.js';
+import { allSelection, nodeSelection, textSelection, type DocumentPoint, type DocumentSelection } from '../core/documentSelection.js';
+import { DocumentTransaction, type DocumentStep, type DocumentTransactionMetaEntry, type DocumentTransactionOptions } from './documentTransaction.js';
 
 export const DOCUMENT_TRANSACTION_SERIALIZATION_FORMAT = 'ash.document.transaction';
 export const DOCUMENT_TRANSACTION_SERIALIZATION_VERSION = 1;
@@ -52,9 +36,7 @@ export type SerializedDocumentStep =
 	  };
 
 export type SerializedDocumentSelection =
-	| { readonly kind: 'all' }
-	| { readonly kind: 'node'; readonly nodeId: string }
-	| { readonly kind: 'text'; readonly anchor: DocumentPoint; readonly head: DocumentPoint };
+	{ readonly kind: 'all' } | { readonly kind: 'node'; readonly nodeId: string } | { readonly kind: 'text'; readonly anchor: DocumentPoint; readonly head: DocumentPoint };
 
 export interface SerializedDocumentTransaction {
 	readonly format: typeof DOCUMENT_TRANSACTION_SERIALIZATION_FORMAT;
@@ -77,8 +59,7 @@ type JsonValue = null | boolean | number | string | readonly JsonValue[] | { rea
 /** Serializes a Stanza transaction into a versioned, JSON-safe transport envelope. */
 export function serializeDocumentTransaction(transaction: DocumentTransaction, schema: DocumentSchema): string {
 	const metadata = transaction.metadata.map(entry => {
-		if (typeof entry.key !== 'string')
-			throw new DocumentSerializationError('Document transaction metadata symbols cannot be serialized');
+		if (typeof entry.key !== 'string') throw new DocumentSerializationError('Document transaction metadata symbols cannot be serialized');
 		return { key: entry.key, value: normalizeJsonValue(entry.value) };
 	});
 	const payload: SerializedDocumentTransaction = {
@@ -110,16 +91,10 @@ export function deserializeDocumentTransaction(value: string | unknown, schema: 
 		}
 	}
 	try {
-		if (
-			!isRecord(parsed) ||
-			parsed.format !== DOCUMENT_TRANSACTION_SERIALIZATION_FORMAT ||
-			parsed.version !== DOCUMENT_TRANSACTION_SERIALIZATION_VERSION ||
-			!isRecord(parsed.transaction)
-		)
+		if (!isRecord(parsed) || parsed.format !== DOCUMENT_TRANSACTION_SERIALIZATION_FORMAT || parsed.version !== DOCUMENT_TRANSACTION_SERIALIZATION_VERSION || !isRecord(parsed.transaction))
 			throw new DocumentSerializationError('Unsupported document transaction format or version');
 		const body = parsed.transaction;
-		if (!Array.isArray(body.steps))
-			throw new DocumentSerializationError('Document transaction steps must be an array');
+		if (!Array.isArray(body.steps)) throw new DocumentSerializationError('Document transaction steps must be an array');
 		const selection = body.selection === undefined ? undefined : decodeSelection(body.selection);
 		const options: DocumentTransactionOptions = {
 			addToHistory: requireBoolean(body.addToHistory, 'addToHistory'),
@@ -129,9 +104,7 @@ export function deserializeDocumentTransaction(value: string | unknown, schema: 
 			...(body.label === undefined ? {} : { label: requireString(body.label, 'label') }),
 			...(selection === undefined ? {} : { selection }),
 			...(body.storedMarks === undefined ? {} : { storedMarks: decodeMarks(body.storedMarks) }),
-			...(body.historyGroup === undefined
-				? {}
-				: { historyGroup: requireString(body.historyGroup, 'historyGroup') }),
+			...(body.historyGroup === undefined ? {} : { historyGroup: requireString(body.historyGroup, 'historyGroup') }),
 		};
 		return new DocumentTransaction(
 			body.steps.map(step => decodeStep(step, schema)),
@@ -243,10 +216,7 @@ function decodeSelection(value: unknown): DocumentSelection {
 		case 'node':
 			return nodeSelection(requireString(value.nodeId, 'selection.nodeId'));
 		case 'text':
-			return textSelection(
-				decodePoint(value.anchor, 'selection.anchor'),
-				decodePoint(value.head, 'selection.head'),
-			);
+			return textSelection(decodePoint(value.anchor, 'selection.anchor'), decodePoint(value.head, 'selection.head'));
 		default:
 			throw new DocumentSerializationError(`Unknown document selection '${kind}'`);
 	}
@@ -263,8 +233,7 @@ function decodePoint(value: unknown, name: string): DocumentPoint {
 function decodeMetadata(value: unknown): readonly DocumentTransactionMetaEntry[] {
 	if (!Array.isArray(value)) throw new DocumentSerializationError('Document transaction metadata must be an array');
 	return value.map((entry, index) => {
-		if (!isRecord(entry))
-			throw new DocumentSerializationError(`Document transaction metadata entry ${index} is invalid`);
+		if (!isRecord(entry)) throw new DocumentSerializationError(`Document transaction metadata entry ${index} is invalid`);
 		return { key: requireString(entry.key, `metadata[${index}].key`), value: entry.value };
 	});
 }
@@ -288,14 +257,8 @@ function decodeAttributes(value: unknown, name: string): DocumentAttributes {
 	if (!isRecord(value)) throw new DocumentSerializationError(`${name} must be an object`);
 	const attrs: Record<string, string | number | boolean | null> = {};
 	for (const [key, attribute] of Object.entries(value)) {
-		if (!/^[a-z][a-zA-Z0-9_-]*$/.test(key))
-			throw new DocumentSerializationError(`${name} contains an invalid attribute '${key}'`);
-		if (
-			attribute !== null &&
-			typeof attribute !== 'string' &&
-			typeof attribute !== 'boolean' &&
-			!isFiniteNumber(attribute)
-		)
+		if (!/^[a-z][a-zA-Z0-9_-]*$/.test(key)) throw new DocumentSerializationError(`${name} contains an invalid attribute '${key}'`);
+		if (attribute !== null && typeof attribute !== 'string' && typeof attribute !== 'boolean' && !isFiniteNumber(attribute))
 			throw new DocumentSerializationError(`${name}.${key} is not a document attribute value`);
 		attrs[key] = attribute;
 	}
@@ -306,18 +269,15 @@ function normalizeJsonValue(value: unknown, seen = new Set<object>()): JsonValue
 	if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
 	if (isFiniteNumber(value)) return value;
 	if (Array.isArray(value)) {
-		if (seen.has(value))
-			throw new DocumentSerializationError('Document transaction metadata cannot contain cycles');
+		if (seen.has(value)) throw new DocumentSerializationError('Document transaction metadata cannot contain cycles');
 		seen.add(value);
 		const result = value.map(item => normalizeJsonValue(item, seen));
 		seen.delete(value);
 		return result;
 	}
 	if (typeof value === 'object') {
-		if (seen.has(value))
-			throw new DocumentSerializationError('Document transaction metadata cannot contain cycles');
-		if (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null)
-			throw new DocumentSerializationError('Document transaction metadata must contain JSON objects');
+		if (seen.has(value)) throw new DocumentSerializationError('Document transaction metadata cannot contain cycles');
+		if (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) throw new DocumentSerializationError('Document transaction metadata must contain JSON objects');
 		seen.add(value);
 		const result: Record<string, JsonValue> = {};
 		for (const [key, item] of Object.entries(value)) result[key] = normalizeJsonValue(item, seen);
@@ -328,8 +288,7 @@ function normalizeJsonValue(value: unknown, seen = new Set<object>()): JsonValue
 }
 
 function requireString(value: unknown, name: string): string {
-	if (typeof value !== 'string' || value.length === 0)
-		throw new DocumentSerializationError(`${name} must be a non-empty string`);
+	if (typeof value !== 'string' || value.length === 0) throw new DocumentSerializationError(`${name} must be a non-empty string`);
 	return value;
 }
 

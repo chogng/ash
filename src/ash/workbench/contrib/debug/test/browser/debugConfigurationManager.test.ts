@@ -1,10 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import {
-	ConfigurationManager,
-	parseLaunchConfigurationDocument,
-	parseLaunchConfigurations,
-} from '../../browser/debugConfigurationManager.js';
+import { ConfigurationManager, parseLaunchConfigurationDocument, parseLaunchConfigurations } from '../../browser/debugConfigurationManager.js';
 
 test('configuration manager reconciles selection against refreshed catalogs and compounds', async () => {
 	using manager = new ConfigurationManager();
@@ -65,9 +61,7 @@ test('launch configurations parse an explicit generic DAP command', () => {
 });
 
 test('launch configurations retain a dormant type before its descriptor factory activates', () => {
-	const configuration = parseLaunchConfigurations(
-		'{"version":"0.2.0","configurations":[{"name":"Debug","type":"node","request":"launch"}]}',
-	)[0]!;
+	const configuration = parseLaunchConfigurations('{"version":"0.2.0","configurations":[{"name":"Debug","type":"node","request":"launch"}]}')[0]!;
 	assert.equal(configuration.type, 'node');
 	assert.equal(configuration.adapter, undefined);
 	assert.equal(configuration.adapterExplicit, false);
@@ -111,9 +105,8 @@ test('launch documents keep task orchestration out of DAP arguments and resolve 
 });
 
 test('launch configurations resolve declarative extension debug adapters by type', () => {
-	const configurations = parseLaunchConfigurations(
-		'{"version":"0.2.0","configurations":[{"name":"Debug","type":"demo","request":"launch","program":"app"}]}',
-		type => (type === 'demo' ? { program: 'demo-adapter', arguments: ['--stdio'] } : undefined),
+	const configurations = parseLaunchConfigurations('{"version":"0.2.0","configurations":[{"name":"Debug","type":"demo","request":"launch","program":"app"}]}', type =>
+		type === 'demo' ? { program: 'demo-adapter', arguments: ['--stdio'] } : undefined,
 	);
 	assert.deepEqual(configurations[0]?.adapter, { program: 'demo-adapter', arguments: ['--stdio'] });
 	assert.deepEqual(configurations[0]?.arguments, { program: 'app' });

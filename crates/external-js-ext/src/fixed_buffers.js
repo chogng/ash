@@ -25,10 +25,7 @@
 	globalThis.ArrayBuffer = FixedArrayBuffer;
 	// Neither API is part of the extension contract. Both can allocate backing stores
 	// through the isolate group's page allocator, outside the fixed-buffer budget.
-	if (
-		!Reflect.deleteProperty(globalThis, 'SharedArrayBuffer') ||
-		!Reflect.deleteProperty(globalThis, 'WebAssembly')
-	) {
+	if (!Reflect.deleteProperty(globalThis, 'SharedArrayBuffer') || !Reflect.deleteProperty(globalThis, 'WebAssembly')) {
 		throw new Error('Unable to exclude unbudgeted memory APIs');
 	}
 })();

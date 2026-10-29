@@ -10,12 +10,7 @@ import { test } from 'mocha';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
-import {
-	IQuickInputService,
-	type IQuickInputService as QuickInput,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickInputService as QuickInput, type IQuickPick, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
 import {
 	IApprovalEnvironmentService,
 	type IApprovalEnvironmentService as EnvironmentService,
@@ -104,9 +99,7 @@ class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<
 
 test('Chinese environment preparation keeps scan scope explicit and saves only reviewed entries for its composer', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	using services = new InstantiationService();
 	const choices = [
 		'扫描项目…',
@@ -138,8 +131,7 @@ test('Chinese environment preparation keeps scan scope explicit and saves only r
 				picker.choose(choices.shift()!);
 			}),
 		input: async options => {
-			const value =
-				options?.title === '会话上限：50' ? '100' : options?.title === '每会话命令数：200' ? '500' : '90';
+			const value = options?.title === '会话上限：50' ? '100' : options?.title === '每会话命令数：200' ? '500' : '90';
 			assert.ok(options?.validateInput);
 			for (const invalid of ['0', '-1', '1.5', '3651']) {
 				assert.ok(await options.validateInput(invalid));
@@ -234,12 +226,8 @@ test('Chinese environment preparation keeps scan scope explicit and saves only r
 			untitledSessionId: 'chosen',
 			inputState: {},
 		} as IChatWidgetModel);
-		assert.deepEqual(scans, [
-			{ ...scanOptions, recentCommands: true, history: { sessions: 100, commandsPerSession: 500, days: 90 } },
-		]);
-		assert.ok(
-			seen.some(title => title.includes('100/120') && title.includes('800/1000') && title.includes('40/80')),
-		);
+		assert.deepEqual(scans, [{ ...scanOptions, recentCommands: true, history: { sessions: 100, commandsPerSession: 500, days: 90 } }]);
+		assert.ok(seen.some(title => title.includes('100/120') && title.includes('800/1000') && title.includes('40/80')));
 		assert.deepEqual(writes, [
 			{
 				root: '/chosen',
@@ -255,14 +243,7 @@ test('Chinese environment preparation keeps scan scope explicit and saves only r
 			},
 		]);
 		assert.ok(seen.includes('审核环境：/chosen'));
-		assert.ok(
-			sourceDetails.some(
-				detail =>
-					detail.includes('会话 session-old') &&
-					detail.includes('聊天 thread-old') &&
-					detail.includes('轮次 turn-old'),
-			),
-		);
+		assert.ok(sourceDetails.some(detail => detail.includes('会话 session-old') && detail.includes('聊天 thread-old') && detail.includes('轮次 turn-old')));
 		assert.deepEqual(notices, ['已为这个项目保存审核环境。']);
 	} finally {
 		resetNlsResolver();
@@ -433,10 +414,7 @@ test('review preparation refuses explicit, window and durable remote targets bef
 			untitledSessions: [
 				{
 					untitledSessionId: 'chosen',
-					workspace:
-						scope === 'window'
-							? { type: 'current' }
-							: { type: 'ssh', host: 'build-host', root: '/same-as-local' },
+					workspace: scope === 'window' ? { type: 'current' } : { type: 'ssh', host: 'build-host', root: '/same-as-local' },
 				},
 			],
 		} as unknown as ISessionsManagementService);
@@ -455,9 +433,7 @@ test('review preparation refuses explicit, window and durable remote targets bef
 		using commands = new CommandService(services);
 		await assert.rejects(
 			commands.executeCommand('chat.guardian.setup', {
-				...(scope === 'thread'
-					? { sessionId: 'remote', threadId: 'remote-thread' }
-					: { untitledSessionId: 'chosen' }),
+				...(scope === 'thread' ? { sessionId: 'remote', threadId: 'remote-thread' } : { untitledSessionId: 'chosen' }),
 				inputState: {},
 			} as IChatWidgetModel),
 			/remote project is not supported yet/u,

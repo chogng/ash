@@ -8,19 +8,8 @@ import { isModifierKey } from '../../keyboardEvent.js';
 import type { ResolvedKeybinding } from '../../../common/keybindings.js';
 import { Disposable, toDisposable } from '../../../common/lifecycle.js';
 import { Lxicon } from '../../../common/lxicons.js';
-import {
-	ActionViewItem,
-	ButtonActionViewItem,
-	SeparatorActionViewItem,
-	type ActionViewItemOptions,
-} from '../actionbar/actionViewItems.js';
-import {
-	AnchorAxisAlignment,
-	AnchorPosition,
-	ContextView,
-	ContextViewFocusRestore,
-	ContextViewHideReason,
-} from '../contextview/contextview.js';
+import { ActionViewItem, ButtonActionViewItem, SeparatorActionViewItem, type ActionViewItemOptions } from '../actionbar/actionViewItems.js';
+import { AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewFocusRestore, ContextViewHideReason } from '../contextview/contextview.js';
 import { appendIcon } from '../lxicons/lxicon.js';
 import { KeybindingLabel } from '../keybindinglabel/keybindinglabel.js';
 
@@ -90,10 +79,7 @@ class MenuActionViewItem extends MenuButtonActionViewItem {
 		if (this.action.checked === undefined) {
 			this.button.domNode.setAttribute('role', 'menuitem');
 		} else {
-			this.button.domNode.setAttribute(
-				'role',
-				this.checkedActionRepresentation === 'radio' ? 'menuitemradio' : 'menuitemcheckbox',
-			);
+			this.button.domNode.setAttribute('role', this.checkedActionRepresentation === 'radio' ? 'menuitemradio' : 'menuitemcheckbox');
 			this.button.domNode.setAttribute('aria-checked', String(this.action.checked));
 			this.button.domNode.removeAttribute('aria-pressed');
 		}
@@ -173,13 +159,7 @@ class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 		if (this.contextViewContainer && this.contextViewContainer.ownerDocument !== ownerDocument) {
 			throw new Error('Context view container belongs to another document');
 		}
-		this.contextView = this._register(
-			new ContextView(
-				this.contextViewContainer ??
-					container.closest<HTMLElement>('dialog, [data-color-scheme]') ??
-					ownerDocument.body,
-			),
-		);
+		this.contextView = this._register(new ContextView(this.contextViewContainer ?? container.closest<HTMLElement>('dialog, [data-color-scheme]') ?? ownerDocument.body));
 		this.menu = this._register(
 			new Menu(
 				this.contextView.element,
@@ -229,11 +209,7 @@ class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 			addDisposableListener(container, 'mousemove', event => {
 				const previous = this.lastPointerPosition;
 				// Some input paths report zero deltas, so compare positions before ignoring movement.
-				const moved = Boolean(
-					event.movementX ||
-					event.movementY ||
-					(previous && (previous.x !== event.clientX || previous.y !== event.clientY)),
-				);
+				const moved = Boolean(event.movementX || event.movementY || (previous && (previous.x !== event.clientX || previous.y !== event.clientY)));
 				this.lastPointerPosition = { x: event.clientX, y: event.clientY };
 				if (moved) this.openFromPointer();
 			}),
@@ -246,9 +222,7 @@ class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 			}),
 		);
 		this._register(addDisposableListener(container, 'focusout', () => this.hideScheduler.schedule()));
-		this._register(
-			addDisposableListener(this.contextView.element, 'focusout', () => this.hideScheduler.schedule()),
-		);
+		this._register(addDisposableListener(this.contextView.element, 'focusout', () => this.hideScheduler.schedule()));
 		this._register(addDisposableListener(container, 'focusin', () => this.hideScheduler.cancel()));
 		this._register(addDisposableListener(this.contextView.element, 'focusin', () => this.hideScheduler.cancel()));
 	}
@@ -345,10 +319,7 @@ export interface MenuOptions {
 	readonly actionRunner?: IActionRunner;
 	readonly actionContext?: unknown;
 	readonly className?: string;
-	readonly actionViewItemProvider?: (
-		action: IAction,
-		options: MenuActionViewItemOptions,
-	) => ActionViewItem | undefined;
+	readonly actionViewItemProvider?: (action: IAction, options: MenuActionViewItemOptions) => ActionViewItem | undefined;
 	readonly getCheckedActionsRepresentation?: (action: IAction) => 'radio' | 'checkbox';
 }
 
@@ -405,8 +376,7 @@ export class Menu extends Disposable {
 				this._register(
 					toDisposable(() => {
 						for (const [property, original] of previous) {
-							if (original.value)
-								container.style.setProperty(property, original.value, original.priority);
+							if (original.value) container.style.setProperty(property, original.value, original.priority);
 							else container.style.removeProperty(property);
 						}
 					}),
@@ -438,9 +408,7 @@ export class Menu extends Disposable {
 					);
 				},
 			};
-			const item = this._register(
-				options.actionViewItemProvider?.(action, itemOptions) ?? createMenuActionViewItem(action, itemOptions),
-			);
+			const item = this._register(options.actionViewItemProvider?.(action, itemOptions) ?? createMenuActionViewItem(action, itemOptions));
 			if (item instanceof SubmenuMenuActionViewItem) {
 				this.submenus.push(item);
 			}
@@ -489,11 +457,7 @@ export class Menu extends Disposable {
 		this._register(
 			addDisposableListener(element, 'mousemove', event => {
 				const previous = this.lastPointerPosition;
-				const moved = Boolean(
-					event.movementX ||
-					event.movementY ||
-					(previous && (previous.x !== event.clientX || previous.y !== event.clientY)),
-				);
+				const moved = Boolean(event.movementX || event.movementY || (previous && (previous.x !== event.clientX || previous.y !== event.clientY)));
 				this.lastPointerPosition = { x: event.clientX, y: event.clientY };
 				// Showing a menu under a resting pointer must not select an action.
 				if (!moved) return;

@@ -8,11 +8,7 @@ import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
-import {
-	defaultExternalUriOpenerId,
-	IOpenerService,
-	type IExternalOpener,
-} from '../../../../platform/opener/common/opener.js';
+import { defaultExternalUriOpenerId, IOpenerService, type IExternalOpener } from '../../../../platform/opener/common/opener.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { testUrlMatchesGlob } from '../../../../platform/url/common/urlGlob.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
@@ -33,11 +29,7 @@ export interface IExternalUriOpenerService {
 	readonly _serviceBrand: undefined;
 	registerExternalOpenerProvider(provider: IExternalOpenerProvider): IDisposable;
 	/** Returns a handler without prompting, including handlers offered only as an option. */
-	getOpener(
-		uri: URI,
-		ctx: { sourceUri: URI; preferredOpenerId?: string },
-		token: CancellationToken,
-	): Promise<IExternalUriOpener | undefined>;
+	getOpener(uri: URI, ctx: { sourceUri: URI; preferredOpenerId?: string }, token: CancellationToken): Promise<IExternalUriOpener | undefined>;
 }
 
 export const IExternalUriOpenerService = createServiceIdentifier<IExternalUriOpenerService>('externalUriOpenerService');
@@ -68,11 +60,7 @@ export class ExternalUriOpenerService extends Disposable implements IExternalUri
 		return toDisposable(this.providers.push(provider));
 	}
 
-	public async getOpener(
-		uri: URI,
-		ctx: OpenerContext,
-		token: CancellationToken,
-	): Promise<IExternalUriOpener | undefined> {
+	public async getOpener(uri: URI, ctx: OpenerContext, token: CancellationToken): Promise<IExternalUriOpener | undefined> {
 		return (await this.selectOpeners(uri, ctx, token, true))[0];
 	}
 
@@ -106,18 +94,9 @@ export class ExternalUriOpenerService extends Disposable implements IExternalUri
 		return picked.opener.openExternalUri(uri, ctx, token);
 	}
 
-	private async selectOpeners(
-		uri: URI,
-		ctx: OpenerContext,
-		token: CancellationToken,
-		includeOptions: boolean,
-	): Promise<IExternalUriOpener[]> {
+	private async selectOpeners(uri: URI, ctx: OpenerContext, token: CancellationToken, includeOptions: boolean): Promise<IExternalUriOpener[]> {
 		this.assertNotDisposed();
-		if (
-			token.isCancellationRequested ||
-			ctx.preferredOpenerId === defaultExternalUriOpenerId ||
-			(uri.scheme !== Schemas.http && uri.scheme !== Schemas.https)
-		) {
+		if (token.isCancellationRequested || ctx.preferredOpenerId === defaultExternalUriOpenerId || (uri.scheme !== Schemas.http && uri.scheme !== Schemas.https)) {
 			return [];
 		}
 		const candidates = new Map<string, IExternalUriOpener>();
@@ -168,27 +147,17 @@ export class ExternalUriOpenerService extends Disposable implements IExternalUri
 				this.logService.error('externalUriOpener', error);
 			}
 		}
-		return includeOptions || choices.some(choice => choice.priority === ExternalUriOpenerPriority.Default)
-			? choices.map(choice => choice.opener)
-			: [];
+		return includeOptions || choices.some(choice => choice.priority === ExternalUriOpenerPriority.Default) ? choices.map(choice => choice.opener) : [];
 	}
 
-	private async prompt(
-		openers: readonly IExternalUriOpener[],
-		uri: URI,
-		token: CancellationToken,
-	): Promise<OpenerPick | undefined> {
+	private async prompt(openers: readonly IExternalUriOpener[], uri: URI, token: CancellationToken): Promise<OpenerPick | undefined> {
 		const session = this.prompts.add(new DisposableStore());
 		try {
 			return await new Promise<OpenerPick | undefined>(resolve => {
 				session.add(toDisposable(() => resolve(undefined)));
 				const picker = session.add(this.quickInputService.createQuickPick<OpenerPick>());
 				picker.ariaLabel = localize('externalUriOpener.choose', 'Choose how to open this link');
-				picker.placeholder = localize(
-					'externalUriOpener.prompt',
-					'How would you like to open {0}?',
-					uri.toString(),
-				);
+				picker.placeholder = localize('externalUriOpener.prompt', 'How would you like to open {0}?', uri.toString());
 				picker.items = [
 					...openers.map(opener => ({ label: opener.label, opener })),
 					{ label: localize('externalUriOpener.default', 'Open in default browser'), opener: 'default' },

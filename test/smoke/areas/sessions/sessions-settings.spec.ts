@@ -6,12 +6,7 @@ import { join } from 'node:path';
 import { Workbench } from '../../../automation/workbench.js';
 import { EditorGroup } from '../../../automation/editors.js';
 
-test('Sessions Settings command queries reuse search and restore saved values after reopening', async ({
-	application,
-	target,
-	workbench,
-	runningApplication,
-}, testInfo) => {
+test('Sessions Settings command queries reuse search and restore saved values after reopening', async ({ application, target, workbench, runningApplication }, testInfo) => {
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 	const group = workbench.editors.groupAt(0);
 	await group.editor.input.press('ControlOrMeta+A');
@@ -38,10 +33,7 @@ test('Sessions Settings command queries reuse search and restore saved values af
 		]),
 	);
 	await group.editor.input.press('ControlOrMeta+S');
-	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute(
-		'data-state',
-		/dirty|conflict/u,
-	);
+	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 	let sessionsPage = await workbench.openAgentsWindow(target.kind);
 	const openQuery = async (): Promise<void> => {
 		const launcher = sessionsPage.locator('.ash-sessions-activity-bottom button').last();
@@ -52,9 +44,7 @@ test('Sessions Settings command queries reuse search and restore saved values af
 		const settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
 		await expect(settings.getByRole('searchbox')).toHaveValue('chat.disableAIFeatures');
 		await expect(settings.getByRole('searchbox')).toBeFocused();
-		await settings
-			.getByRole('searchbox')
-			.evaluate(element => element.setAttribute('data-settings-query-reuse', 'retained'));
+		await settings.getByRole('searchbox').evaluate(element => element.setAttribute('data-settings-query-reuse', 'retained'));
 		await settings.getByRole('searchbox').press('Control+Alt+U');
 		await expect(settings.getByRole('searchbox')).toHaveAttribute('data-settings-query-reuse', 'retained');
 		await expect(settings.getByRole('searchbox')).toHaveValue('@id:chat.disableAIFeatures');
@@ -86,38 +76,23 @@ test('Sessions Settings command queries reuse search and restore saved values af
 	await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
 	await expect(settings).toHaveCount(0);
 	await openQuery();
-	await expect(
-		sessionsPage.locator('[data-settings-item-id="chat.disableAIFeatures"]').getByRole('switch'),
-	).toBeChecked();
-	await sessionsPage
-		.getByRole('dialog', { name: 'Sessions Settings' })
-		.evaluate(element => (element as HTMLDialogElement).requestClose());
+	await expect(sessionsPage.locator('[data-settings-item-id="chat.disableAIFeatures"]').getByRole('switch')).toBeChecked();
+	await sessionsPage.getByRole('dialog', { name: 'Sessions Settings' }).evaluate(element => (element as HTMLDialogElement).requestClose());
 	sessionsPage = await workbench.reopenAgentsWindow(application, sessionsPage);
 	await openQuery();
 	settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
-	await expect(
-		settings.locator('[data-settings-item-id="chat.disableAIFeatures"]').getByRole('switch'),
-	).toBeChecked();
+	await expect(settings.locator('[data-settings-item-id="chat.disableAIFeatures"]').getByRole('switch')).toBeChecked();
 	await expect.poll(readSaved).toBe(true);
 	await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
 	await openQuery();
-	await sessionsPage
-		.getByRole('dialog', { name: 'Sessions Settings' })
-		.getByRole('searchbox')
-		.fill('@lang:plaintext @id:editor.fontSize');
+	await sessionsPage.getByRole('dialog', { name: 'Sessions Settings' }).getByRole('searchbox').fill('@lang:plaintext @id:editor.fontSize');
 	await expect(sessionsPage.getByRole('dialog', { name: 'Sessions Settings' })).toHaveCount(0);
-	const sharedSettings = sessionsPage
-		.getByRole('dialog')
-		.filter({ has: sessionsPage.locator('.ash-settings-editor') });
+	const sharedSettings = sessionsPage.getByRole('dialog').filter({ has: sessionsPage.locator('.ash-settings-editor') });
 	await expect(sharedSettings.getByRole('searchbox')).toHaveValue('@lang:plaintext @id:editor.fontSize');
 	const languageSize = sharedSettings.locator('[data-settings-item-id="editor.fontSize"]').getByRole('spinbutton');
 	await languageSize.fill('24');
 	await languageSize.press('Tab');
-	await expect
-		.poll(
-			async () => JSON.parse((await readUserSettings(sessionsPage)).content)['[plaintext]']?.['editor.fontSize'],
-		)
-		.toBe(24);
+	await expect.poll(async () => JSON.parse((await readUserSettings(sessionsPage)).content)['[plaintext]']?.['editor.fontSize']).toBe(24);
 	expect(JSON.parse((await readUserSettings(sessionsPage)).content)['editor.fontSize']).toBeUndefined();
 	await sharedSettings.locator('.ash-modal-editor-close').click();
 	await sessionsPage.locator('.ash-sessions-activity-bottom button').last().focus();
@@ -135,12 +110,7 @@ test('Sessions Settings command queries reuse search and restore saved values af
 	expect(runningApplication.diagnostics.errors).toEqual([]);
 });
 
-test('Sessions Modified Settings refreshes after external writes, reset and window reload', async ({
-	application,
-	target,
-	workbench,
-	runningApplication,
-}, testInfo) => {
+test('Sessions Modified Settings refreshes after external writes, reset and window reload', async ({ application, target, workbench, runningApplication }, testInfo) => {
 	const workbenchUrl = workbench.page.url();
 	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
 	const group = workbench.editors.groupAt(0);
@@ -151,10 +121,7 @@ test('Sessions Modified Settings refreshes after external writes, reset and wind
 		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
 	}, '{ "window.menuStyle": "custom", "chat.disableAIFeatures": false, "workbench.activityBar.compact": true }');
 	await group.editor.input.press('ControlOrMeta+S');
-	await expect(group.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute(
-		'data-state',
-		/dirty|conflict/u,
-	);
+	await expect(group.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 	let sessionsPage = await workbench.openAgentsWindow(target.kind);
 	const openSettings = async (): Promise<void> => {
 		await sessionsPage.locator('.ash-sessions-activity-bottom button').last().click();
@@ -205,9 +172,7 @@ test('Sessions Modified Settings refreshes after external writes, reset and wind
 				element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
 			}, source);
 			await writerGroup.editor.input.press('ControlOrMeta+S');
-			await expect(
-				writerGroup.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..'),
-			).not.toHaveAttribute('data-state', /dirty|conflict/u);
+			await expect(writerGroup.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 		}
 	};
 	try {
@@ -233,9 +198,7 @@ test('Sessions Modified Settings refreshes after external writes, reset and wind
 	const remaining = { 'window.menuStyle': 'custom', 'workbench.activityBar.compact': true };
 	if ('windows' in application) {
 		const profile = await application.evaluate(() => process.env.ASH_HOME!);
-		await expect
-			.poll(async () => JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8')))
-			.toEqual(remaining);
+		await expect.poll(async () => JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))).toEqual(remaining);
 	} else {
 		await expect
 			.poll(() =>
@@ -255,9 +218,7 @@ test('Sessions Modified Settings refreshes after external writes, reset and wind
 	await settings.getByRole('menuitem', { name: 'Clear Filters', exact: true }).press('Enter');
 	await expect(settings.getByRole('searchbox')).toHaveValue('');
 	await settings.getByRole('button', { name: 'General', exact: true }).click();
-	await expect(
-		settings.locator('[data-settings-item-id="chat.disableAIFeatures"]').getByRole('switch'),
-	).not.toBeChecked();
+	await expect(settings.locator('[data-settings-item-id="chat.disableAIFeatures"]').getByRole('switch')).not.toBeChecked();
 	await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
 	await testInfo.attach('sessions-modified-settings-diagnostics', {
 		body: JSON.stringify(runningApplication.diagnostics),
@@ -266,11 +227,7 @@ test('Sessions Modified Settings refreshes after external writes, reset and wind
 	expect(runningApplication.diagnostics.errors).toEqual([]);
 });
 
-test('Sessions setting menus copy their current registered value as JSON', async ({
-	application,
-	target,
-	workbench,
-}) => {
+test('Sessions setting menus copy their current registered value as JSON', async ({ application, target, workbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
 	const group = workbench.editors.groupAt(0);
 	await group.editor.input.press('ControlOrMeta+A');
@@ -280,10 +237,7 @@ test('Sessions setting menus copy their current registered value as JSON', async
 		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
 	}, '{ "window.menuStyle": "custom", "chat.disableAIFeatures": true }');
 	await group.editor.input.press('ControlOrMeta+S');
-	await expect(group.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute(
-		'data-state',
-		/dirty|conflict/u,
-	);
+	await expect(group.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 	const sessionsPage = await workbench.openAgentsWindow(target.kind);
 	if ('windows' in application) {
 		await application.evaluate(({ clipboard }) => {
@@ -402,9 +356,7 @@ test('Sessions setting menus copy their current registered value as JSON', async
 		await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
 		await expect(settings).toHaveCount(0);
 		await expect(sessionsPage.locator('.ash-context-view-menu')).toHaveCount(0);
-		await expect(
-			sessionsPage.getByRole('tooltip').filter({ hasText: 'Configured in local user settings.' }),
-		).toHaveCount(0);
+		await expect(sessionsPage.getByRole('tooltip').filter({ hasText: 'Configured in local user settings.' })).toHaveCount(0);
 		await expect(sessionsPage.locator('.ash-sessions-activity-bottom button').last()).toBeFocused();
 	} finally {
 		if ('windows' in application) {
@@ -419,11 +371,7 @@ test('Sessions setting menus copy their current registered value as JSON', async
 	}
 });
 
-test('Workbench and Sessions keep one settings document across edits and window restarts', async ({
-	application,
-	target,
-	workbench,
-}) => {
+test('Workbench and Sessions keep one settings document across edits and window restarts', async ({ application, target, workbench }) => {
 	const source = JSON.stringify(
 		{
 			'window.title': 'Shared settings test',
@@ -445,14 +393,9 @@ test('Workbench and Sessions keep one settings document across edits and window 
 		clipboardData.setData('text/plain', text);
 		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
 	}, source);
-	await group.editor.waitForEditorContents(
-		contents => JSON.stringify(JSON.parse(contents)) === JSON.stringify(JSON.parse(source)),
-	);
+	await group.editor.waitForEditorContents(contents => JSON.stringify(JSON.parse(contents)) === JSON.stringify(JSON.parse(source)));
 	await workbench.quickaccess.runCommand('workbench.action.files.save');
-	await expect(group.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute(
-		'data-state',
-		/dirty|conflict/u,
-	);
+	await expect(group.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 	await expect(workbench.page.locator('[data-part="sidebar"]')).toHaveClass(/sidebar-right/u);
 	await expect(workbench.element).toHaveAttribute('data-layout-style', 'modern');
 
@@ -500,17 +443,11 @@ test('Workbench and Sessions keep one settings document across edits and window 
 	await expect(workbench.page.locator('[data-part="sidebar"]')).toHaveClass(/sidebar-right/u);
 });
 
-test('Sessions preferences opens shared shortcuts and retains the profile after reopening', async ({
-	application,
-	target,
-	workbench,
-	runningApplication,
-}, testInfo) => {
+test('Sessions preferences opens shared shortcuts and retains the profile after reopening', async ({ application, target, workbench, runningApplication }, testInfo) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	const openPreferences = async (): Promise<void> => {
 		const shortcuts = page.getByRole('dialog', { name: 'Keyboard Shortcuts', exact: true });
-		if (await shortcuts.isVisible())
-			await shortcuts.getByRole('button', { name: 'Close Keyboard Shortcuts', exact: true }).click();
+		if (await shortcuts.isVisible()) await shortcuts.getByRole('button', { name: 'Close Keyboard Shortcuts', exact: true }).click();
 		const accounts = page.getByRole('button', { name: 'Accounts', exact: true });
 		if ('windows' in application && process.platform === 'darwin') {
 			await captureElectronMenu(application, () => accounts.click(), { label: 'Settings' });
@@ -524,23 +461,15 @@ test('Sessions preferences opens shared shortcuts and retains the profile after 
 		await openPreferences();
 		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
 		await settings.locator('[data-settings-category-id="keyboard-shortcuts"]').click();
-		await settings
-			.locator('.ash-sessions-settings-page')
-			.getByRole('button', { name: 'Keyboard Shortcuts', exact: true })
-			.click();
+		await settings.locator('.ash-sessions-settings-page').getByRole('button', { name: 'Keyboard Shortcuts', exact: true }).click();
 		await expect(settings).toHaveCount(0);
 		await expect(page.locator('.ash-keybindings-editor')).toBeVisible();
 	};
 	await openShortcuts();
-	await expect(
-		page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Chat', exact: true }),
-	).toHaveAttribute('aria-current', 'page');
+	await expect(page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute('aria-current', 'page');
 	let shortcuts = page.locator('.ash-keybindings-editor');
 	await shortcuts.getByRole('searchbox').fill('workbench.action.openSettings');
-	const userRows = () =>
-		shortcuts
-			.locator('.ash-keybindings-row')
-			.filter({ has: page.locator('.ash-keybindings-source', { hasText: /^User$/u }) });
+	const userRows = () => shortcuts.locator('.ash-keybindings-row').filter({ has: page.locator('.ash-keybindings-source', { hasText: /^User$/u }) });
 	const defaultRow = shortcuts
 		.locator('.ash-keybindings-row')
 		.filter({ has: page.locator('.ash-keybindings-source', { hasText: /^System$/u }) })
@@ -586,22 +515,11 @@ test('Sessions preferences opens shared shortcuts and retains the profile after 
 	await expect(userRows()).toHaveCount(0);
 	await openPreferences();
 	await page.locator('[data-settings-category-id="keyboard-shortcuts"]').click();
-	await page
-		.locator('.ash-sessions-settings-page')
-		.getByRole('button', { name: 'Preferences: Open Keyboard Shortcuts (JSON)', exact: true })
-		.click();
-	const group = new EditorGroup(
-		page
-			.locator('.ash-editor-group:visible')
-			.filter({ has: page.getByRole('tab', { name: 'Keyboard Shortcuts (JSON)', exact: true }) }),
-	);
+	await page.locator('.ash-sessions-settings-page').getByRole('button', { name: 'Preferences: Open Keyboard Shortcuts (JSON)', exact: true }).click();
+	const group = new EditorGroup(page.locator('.ash-editor-group:visible').filter({ has: page.getByRole('tab', { name: 'Keyboard Shortcuts (JSON)', exact: true }) }));
 	await expect(group.tabs.getByText('Keyboard Shortcuts (JSON)', { exact: true })).toBeVisible();
 	await group.editor.waitForEditorContents(source => source.replace(/\s/gu, '') === '[]');
-	expect(
-		runningApplication.diagnostics.consoleErrors.filter(message =>
-			message.startsWith('Code editor contribution failed'),
-		),
-	).toEqual([]);
+	expect(runningApplication.diagnostics.consoleErrors.filter(message => message.startsWith('Code editor contribution failed'))).toEqual([]);
 	await testInfo.attach('sessions-preferences-shortcuts-diagnostics', {
 		body: JSON.stringify(runningApplication.diagnostics),
 		contentType: 'application/json',

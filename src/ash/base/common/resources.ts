@@ -100,9 +100,7 @@ export class ExtUri implements IExtUri {
 				return uri.withEncodedPath(`${shareRoot}/`);
 			}
 		}
-		return uri.withEncodedPath(
-			uri.scheme === 'file' && !uri.authority && /^\/[a-z]:$/i.test(parent) ? `${parent}/` : parent,
-		);
+		return uri.withEncodedPath(uri.scheme === 'file' && !uri.authority && /^\/[a-z]:$/i.test(parent) ? `${parent}/` : parent);
 	}
 
 	getComparisonKey(uri: URI): string {
@@ -122,19 +120,13 @@ export class ExtUri implements IExtUri {
 	isEqualOrParent(base: URI, parentCandidate: URI, ignoreFragment = false): boolean {
 		const baseEncoded = base.toEncodedComponents();
 		const parentEncoded = parentCandidate.toEncodedComponents();
-		if (
-			base.scheme !== parentCandidate.scheme ||
-			base.authority.toLowerCase() !== parentCandidate.authority.toLowerCase()
-		) {
+		if (base.scheme !== parentCandidate.scheme || base.authority.toLowerCase() !== parentCandidate.authority.toLowerCase()) {
 			return false;
 		}
 		if (normalizePercentEncoding(baseEncoded.query) !== normalizePercentEncoding(parentEncoded.query)) {
 			return false;
 		}
-		if (
-			!ignoreFragment &&
-			normalizePercentEncoding(baseEncoded.fragment) !== normalizePercentEncoding(parentEncoded.fragment)
-		) {
+		if (!ignoreFragment && normalizePercentEncoding(baseEncoded.fragment) !== normalizePercentEncoding(parentEncoded.fragment)) {
 			return false;
 		}
 
@@ -159,13 +151,7 @@ export class ExtUri implements IExtUri {
 		const path = comparisonPath(encoded.path, this.ignorePathCasing(uri));
 		const fragment = includeFragment ? normalizePercentEncoding(encoded.fragment) : '';
 
-		return [
-			keyPart(uri.scheme.toLowerCase()),
-			keyPart(uri.authority.toLowerCase()),
-			keyPart(path),
-			keyPart(normalizePercentEncoding(encoded.query)),
-			keyPart(fragment),
-		].join('');
+		return [keyPart(uri.scheme.toLowerCase()), keyPart(uri.authority.toLowerCase()), keyPart(path), keyPart(normalizePercentEncoding(encoded.query)), keyPart(fragment)].join('');
 	}
 }
 

@@ -41,31 +41,15 @@ export class PaneComposite extends ViewPaneContainer implements IPaneComposite {
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
-		super(
-			container,
-			options,
-			storageService,
-			themeService,
-			menuService,
-			configurationService,
-			instantiationService,
-			contextKeyService,
-		);
-		this.title = localize(
-			options.localizationService,
-			options.viewContainer.localizationKey,
-			options.viewContainer.title,
-		);
+		super(container, options, storageService, themeService, menuService, configurationService, instantiationService, contextKeyService);
+		this.title = localize(options.localizationService, options.viewContainer.localizationKey, options.viewContainer.title);
 		this.element.classList.add('ash-pane-composite');
 		this.element.classList.toggle('ash-pane-composite-pane-headers-hidden', options.paneHeaders === 'hidden');
 		this.element.classList.toggle('ash-pane-composite-pane-layout-fill', options.paneLayout === 'fill');
 		this.element.setAttribute('aria-label', this.title);
 		this.element.id = compositePanelId(options.viewContainer.location, options.viewContainer.id);
 		this.element.setAttribute('role', 'tabpanel');
-		this.element.setAttribute(
-			'aria-labelledby',
-			compositeTabId(options.viewContainer.location, options.viewContainer.id),
-		);
+		this.element.setAttribute('aria-labelledby', compositeTabId(options.viewContainer.location, options.viewContainer.id));
 		if (options.mergeViewWithContainerWhenSingleView) {
 			this._register(options.model.onDidChangeVisibleViewDescriptors(() => this.updateMergedPane()));
 			this.updateMergedPane();
@@ -95,12 +79,7 @@ export class PaneComposite extends ViewPaneContainer implements IPaneComposite {
 		const viewActions = this.mergedPane?.getSecondaryActions() ?? [];
 		if (containerActions.length === 0) return viewActions;
 		const onlyContainerAction = containerActions.length === 1 ? containerActions[0] : undefined;
-		if (
-			viewActions.length === 0 &&
-			onlyContainerAction instanceof SubmenuItemAction &&
-			onlyContainerAction.item.submenu === MenuId.for('ViewsSubMenu')
-		)
-			return onlyContainerAction.actions;
+		if (viewActions.length === 0 && onlyContainerAction instanceof SubmenuItemAction && onlyContainerAction.item.submenu === MenuId.for('ViewsSubMenu')) return onlyContainerAction.actions;
 		if (viewActions.length === 0) return containerActions;
 		return [...containerActions, new Separator(), ...viewActions];
 	}
@@ -125,9 +104,7 @@ export class PaneComposite extends ViewPaneContainer implements IPaneComposite {
 	}
 
 	get partTitleProjection(): PartTitleProjection | undefined {
-		const projections = this.panes
-			.map(pane => pane.partTitleProjection)
-			.filter((projection): projection is PartTitleProjection => projection !== undefined);
+		const projections = this.panes.map(pane => pane.partTitleProjection).filter((projection): projection is PartTitleProjection => projection !== undefined);
 		if (projections.length > 1) {
 			throw new Error('A PaneComposite may receive a title projection from only one visible View');
 		}

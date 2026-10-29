@@ -13,31 +13,16 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import { IFileService } from '../../../../platform/files/common/files.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { ASH_REMOTE_SCHEME } from '../../../../platform/remote/common/remote.js';
-import {
-	FocusedViewContext,
-	IsSessionsWindowContext,
-	ResourceSchemeContext,
-	WorkspaceFolderCountContext,
-} from '../../../../workbench/common/contextkeys.js';
+import { FocusedViewContext, IsSessionsWindowContext, ResourceSchemeContext, WorkspaceFolderCountContext } from '../../../../workbench/common/contextkeys.js';
 import { resolveCommandsContext } from '../../../../workbench/browser/parts/editor/editorCommandsContext.js';
 import { FileDownload } from '../../../../workbench/contrib/files/browser/fileImportExport.js';
 import { IEditorGroupsService } from '../../../../workbench/services/editor/common/editorGroupsService.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
-import {
-	SESSIONS_FILES_EMPTY_VIEW_ID,
-	SESSIONS_FILES_VIEW_ID,
-	SessionsExplorerEmptyView,
-	SessionsExplorerView,
-} from './filesView.js';
+import { SESSIONS_FILES_EMPTY_VIEW_ID, SESSIONS_FILES_VIEW_ID, SessionsExplorerEmptyView, SessionsExplorerView } from './filesView.js';
 
 export const SESSIONS_FILES_CONTAINER_ID = 'workbench.sessions.auxiliaryBar.filesContainer';
 
@@ -83,10 +68,7 @@ registerAction2(
 			super({
 				id: 'sessions.files.action.collapseExplorerFolders',
 				title: localize2({ bundle: 'ash', key: 'sessions.files.collapseFolders' }, 'Collapse folders'),
-				precondition: ContextKeyExpr.and(
-					IsSessionsWindowContext.isEqualTo(true),
-					ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0),
-				),
+				precondition: ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0)),
 				f1: true,
 			});
 		}
@@ -104,10 +86,7 @@ export class DownloadRemoteFileAction extends Action2 {
 	public static readonly ID = 'sessions.files.action.downloadRemoteFile';
 
 	constructor() {
-		const precondition = ContextKeyExpr.and(
-			IsSessionsWindowContext.isEqualTo(true),
-			ResourceSchemeContext.isEqualTo(ASH_REMOTE_SCHEME),
-		);
+		const precondition = ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ResourceSchemeContext.isEqualTo(ASH_REMOTE_SCHEME));
 		super({
 			id: DownloadRemoteFileAction.ID,
 			title: localize2({ bundle: 'ash', key: 'workbench.downloadFile' }, 'Download File...'),
@@ -143,16 +122,11 @@ AccessibleViewRegistry.register({
 	priority: 110,
 	when: ContextKeyExpr.and(
 		IsSessionsWindowContext.isEqualTo(true),
-		ContextKeyExpr.or(
-			FocusedViewContext.isEqualTo(SESSIONS_FILES_VIEW_ID),
-			FocusedViewContext.isEqualTo(SESSIONS_FILES_EMPTY_VIEW_ID),
-		),
+		ContextKeyExpr.or(FocusedViewContext.isEqualTo(SESSIONS_FILES_VIEW_ID), FocusedViewContext.isEqualTo(SESSIONS_FILES_EMPTY_VIEW_ID)),
 	),
 	getProvider: accessor => {
 		const folders = accessor.get(IWorkspaceContextService).getWorkspace().folders;
-		const view = accessor
-			.get(IViewsService)
-			.getViewWithId(folders.length > 0 ? SESSIONS_FILES_VIEW_ID : SESSIONS_FILES_EMPTY_VIEW_ID);
+		const view = accessor.get(IViewsService).getViewWithId(folders.length > 0 ? SESSIONS_FILES_VIEW_ID : SESSIONS_FILES_EMPTY_VIEW_ID);
 		if (!(view instanceof SessionsExplorerView || view instanceof SessionsExplorerEmptyView)) {
 			return undefined;
 		}

@@ -102,13 +102,8 @@ export class SelectionAnchorController extends Disposable {
 		}
 		if (!event.defaultPrevented && isPrimaryChord(event) && event.key.toLowerCase() === 'k') {
 			this.awaitingChord = true;
-			const targetWindow =
-				event.view ??
-				(event.currentTarget instanceof HTMLElement
-					? event.currentTarget.ownerDocument.defaultView
-					: undefined);
-			if (targetWindow)
-				this.chordTimeout.value = disposableWindowTimeout(targetWindow, () => this.clearPendingChord(), 5_000);
+			const targetWindow = event.view ?? (event.currentTarget instanceof HTMLElement ? event.currentTarget.ownerDocument.defaultView : undefined);
+			if (targetWindow) this.chordTimeout.value = disposableWindowTimeout(targetWindow, () => this.clearPendingChord(), 5_000);
 			return;
 		}
 		if (!event.defaultPrevented && event.key === 'Escape' && this.selectionAnchorSet) {

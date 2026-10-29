@@ -79,8 +79,7 @@ export class DesignLayersView extends ViewPane {
 				multipleSelectionSupport: true,
 				modelOptions: { identityProvider: { getId: shape => shape.id } },
 				keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: shapeLabel },
-				renderElement: shape =>
-					h(container.ownerDocument, 'span', { className: 'ash-design-layer-label' }, shapeLabel(shape)),
+				renderElement: shape => h(container.ownerDocument, 'span', { className: 'ash-design-layer-label' }, shapeLabel(shape)),
 			}),
 		);
 		this._register(
@@ -110,14 +109,10 @@ export class DesignLayersView extends ViewPane {
 						renderedShapes = shapes;
 						// Frontmost objects appear first, without changing the document's paint order.
 						const layers = (items: readonly DesignShape[]): DesignLayer[] =>
-							[...items]
-								.reverse()
-								.map(element => ({
-									element,
-									...(element.kind === 'frame' || element.kind === 'group'
-										? { children: layers(element.children) }
-										: {}),
-								}));
+							[...items].reverse().map(element => ({
+								element,
+								...(element.kind === 'frame' || element.kind === 'group' ? { children: layers(element.children) } : {}),
+							}));
 						this.tree.setChildren(layers(shapes ?? []));
 					}
 					empty.hidden = !!shapes?.length;
@@ -154,10 +149,7 @@ export class DesignPropertiesView extends ViewPane {
 		super(container, options);
 		this.contentElement.classList.add('ash-design-properties-view');
 		this.contentElement.tabIndex = 0;
-		this._register(contextKeys.createScoped(this.contentElement)).createKey(
-			'sessionsDesignPropertiesFocused',
-			true,
-		);
+		this._register(contextKeys.createScoped(this.contentElement)).createKey('sessionsDesignPropertiesFocused', true);
 		const empty = h(container.ownerDocument, 'p', { className: 'ash-design-panel-message' });
 		empty.textContent = localize('sessions.design.propertiesEmpty', 'Select one object to edit its properties.');
 		this.contentElement.append(empty);

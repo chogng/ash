@@ -57,9 +57,7 @@ export class ApplicationService {
 		assertNoLaunchOverrides(options.extraArgs);
 		const videoDirectory = join(options.runPath, '.recordings');
 		await mkdir(videoDirectory, { recursive: true });
-		this.running = this.options.web
-			? await this.startWeb(options, videoDirectory)
-			: await this.startDesktop(options, videoDirectory);
+		this.running = this.options.web ? await this.startWeb(options, videoDirectory) : await this.startDesktop(options, videoDirectory);
 		return this.running;
 	}
 
@@ -75,8 +73,7 @@ export class ApplicationService {
 	private async startDesktop(options: ApplicationLaunchOptions, videoDirectory: string): Promise<RunningApplication> {
 		const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-scenario-'));
 		try {
-			if (options.profileFixturePath)
-				await seedScenarioProfile(options.profileFixturePath, join(userDataDirectory, 'profile'));
+			if (options.profileFixturePath) await seedScenarioProfile(options.profileFixturePath, join(userDataDirectory, 'profile'));
 			if (options.userSettings) {
 				const settingsPath = join(userDataDirectory, 'profile', 'settings.json');
 				await mkdir(dirname(settingsPath), { recursive: true });
@@ -119,20 +116,12 @@ export class ApplicationService {
 		}
 		const port = await availablePort();
 		const baseURL = `http://127.0.0.1:${port}/`;
-		const server = spawn(
-			process.execPath,
-			[
-				join(repositoryRoot, 'build/desktop/launch/web.ts'),
-				join(repositoryRoot, '.build/desktop/renderer/ash'),
-				String(port),
-			],
-			{
-				cwd: repositoryRoot,
-				env: { ...process.env, ASH_WEB_APP_SERVER: '0' },
-				stdio: ['ignore', 'ignore', 'pipe'],
-				detached: process.platform !== 'win32',
-			},
-		);
+		const server = spawn(process.execPath, [join(repositoryRoot, 'build/desktop/launch/web.ts'), join(repositoryRoot, '.build/desktop/renderer/ash'), String(port)], {
+			cwd: repositoryRoot,
+			env: { ...process.env, ASH_WEB_APP_SERVER: '0' },
+			stdio: ['ignore', 'ignore', 'pipe'],
+			detached: process.platform !== 'win32',
+		});
 		const serverRun = new ProcessRun(repositoryRoot, undefined, 5_000);
 		await serverRun.own(server);
 		let serverErrors = '';
@@ -181,8 +170,7 @@ function createRunningApplication(input: {
 		const video = page.video();
 		if (video) videos.add(video);
 		page.on('console', message => {
-			if (message.type() === 'error' || message.type() === 'warning')
-				diagnosticMessages.push(`[console:${message.type()}] ${message.text()}`);
+			if (message.type() === 'error' || message.type() === 'warning') diagnosticMessages.push(`[console:${message.type()}] ${message.text()}`);
 		});
 		page.on('pageerror', error => diagnosticMessages.push(`[pageerror] ${error.stack ?? error.message}`));
 		page.on('crash', () => diagnosticMessages.push('[crash] Workbench page crashed'));
@@ -231,8 +219,7 @@ async function availablePort(): Promise<number> {
 async function waitForServer(url: string, process: ChildProcess): Promise<void> {
 	const deadline = Date.now() + 120_000;
 	while (Date.now() < deadline) {
-		if (process.exitCode !== null || process.signalCode !== null)
-			throw new Error(`Web server exited with code ${process.exitCode}.`);
+		if (process.exitCode !== null || process.signalCode !== null) throw new Error(`Web server exited with code ${process.exitCode}.`);
 		try {
 			const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
 			if (response.ok) return;

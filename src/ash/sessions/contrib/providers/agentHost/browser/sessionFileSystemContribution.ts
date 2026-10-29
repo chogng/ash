@@ -28,18 +28,11 @@ export class SessionFileSystemContribution extends Disposable {
 		const desired = new Map<string, { sessionId: string; directory: IFileSystemDirectory }>();
 		const roots = new Set<string>();
 		for (const session of this.sessions.sessions) {
-			if (
-				!session.providerId ||
-				session.providerId === this.defaultProviderId ||
-				!this.providers.getProvider(session.providerId)
-			)
-				continue;
+			if (!session.providerId || session.providerId === this.defaultProviderId || !this.providers.getProvider(session.providerId)) continue;
 			const provider = this.providers.getProvider(session.providerId)!;
 			const environment = provider.currentWorkspace();
 			const environmentRoot =
-				environment.type === 'ssh' || environment.type === 'local' || environment.type === 'provider'
-					? sessionWorkspaceUri(buildAgentHostSessionWorkspace(environment)!)
-					: undefined;
+				environment.type === 'ssh' || environment.type === 'local' || environment.type === 'provider' ? sessionWorkspaceUri(buildAgentHostSessionWorkspace(environment)!) : undefined;
 			for (const workspace of [session.workspace, ...session.chats.map(chat => chat.workspace)]) {
 				if (!workspace) continue;
 				const uri = sessionWorkspaceUri(workspace);

@@ -7,14 +7,7 @@ import { Disposable, toDisposable } from '../../../../../../base/common/lifecycl
 import { localize } from '../../../../../../nls.js';
 import { DesignMode } from '../../../common/config/editorConfiguration.js';
 import { getDesignShapeEntries } from '../../../common/model/hitTest.js';
-import {
-	designTextStyleAt,
-	designTextSegments,
-	designTextReplacement,
-	parseDesignTextProperties,
-	type DesignTextStyle,
-	type DesignTextShape,
-} from '../../../common/model/designText.js';
+import { designTextStyleAt, designTextSegments, designTextReplacement, parseDesignTextProperties, type DesignTextStyle, type DesignTextShape } from '../../../common/model/designText.js';
 import { renderDesignTextFrame } from '../../../browser/designTextRendering.js';
 import type { DesignEditorContributionContext, IDesignTextContribution } from '../../../browser/designEditorBrowser.js';
 import './designTextEditor.css';
@@ -77,9 +70,7 @@ export class DesignTextEditor extends Disposable implements IDesignTextContribut
 				}
 			}),
 		);
-		this._register(
-			addDisposableListener(this.overlay, 'beforeinput', event => this.beforeInput(event as InputEvent)),
-		);
+		this._register(addDisposableListener(this.overlay, 'beforeinput', event => this.beforeInput(event as InputEvent)));
 		this._register(
 			addDisposableListener(this.overlay, 'input', () => {
 				if (!this.composing) {
@@ -122,11 +113,7 @@ export class DesignTextEditor extends Disposable implements IDesignTextContribut
 		}
 	}
 	public edit(id: string): void {
-		if (
-			this.context.documentController.isBusy ||
-			this.context.getMode() === DesignMode.Code ||
-			this.context.getMode() === DesignMode.Motion
-		) {
+		if (this.context.documentController.isBusy || this.context.getMode() === DesignMode.Code || this.context.getMode() === DesignMode.Motion) {
 			return;
 		}
 		const shape = this.context.commands.text.get(id);
@@ -179,9 +166,7 @@ export class DesignTextEditor extends Disposable implements IDesignTextContribut
 			this.finish(false);
 			return;
 		}
-		const entry = getDesignShapeEntries(this.context.documentController.model.value.shapes).find(
-			entry => entry.shape.id === shape.id,
-		)!;
+		const entry = getDesignShapeEntries(this.context.documentController.model.value.shapes).find(entry => entry.shape.id === shape.id)!;
 		const world = entry.world;
 		for (const [key, value] of Object.entries({
 			x: 0,
@@ -198,12 +183,7 @@ export class DesignTextEditor extends Disposable implements IDesignTextContribut
 		this.overlay.style.display = '';
 		if (this.editor) {
 			const parent = this.editor.parentElement!;
-			parent.style.justifyContent =
-				shape.textVerticalAlign === 'center'
-					? 'center'
-					: shape.textVerticalAlign === 'bottom'
-						? 'flex-end'
-						: 'flex-start';
+			parent.style.justifyContent = shape.textVerticalAlign === 'center' ? 'center' : shape.textVerticalAlign === 'bottom' ? 'flex-end' : 'flex-start';
 		}
 		if (this.composing && this.rendered?.text !== shape.text) {
 			this.composing = false;
@@ -235,11 +215,7 @@ export class DesignTextEditor extends Disposable implements IDesignTextContribut
 			return;
 		}
 		const selection = this.context.ownerDocument.getSelection();
-		if (
-			!selection?.rangeCount ||
-			!this.editor.contains(selection.anchorNode) ||
-			!this.editor.contains(selection.focusNode)
-		) {
+		if (!selection?.rangeCount || !this.editor.contains(selection.anchorNode) || !this.editor.contains(selection.focusNode)) {
 			return;
 		}
 		const range = selection.getRangeAt(0);
@@ -308,10 +284,7 @@ export class DesignTextEditor extends Disposable implements IDesignTextContribut
 									styleId: this.pendingStyleId,
 									overrides: this.pendingOverrides,
 									style: {
-										fill: designTextStyleAt(
-											this.context.commands.text.get(this.id)!,
-											Math.max(0, start - 1),
-										).fill,
+										fill: designTextStyleAt(this.context.commands.text.get(this.id)!, Math.max(0, start - 1)).fill,
 										...this.pendingStyle,
 									},
 								},
@@ -333,11 +306,7 @@ export class DesignTextEditor extends Disposable implements IDesignTextContribut
 		const shape = this.context.commands.text.get(this.id)!;
 		if (event.inputType.startsWith('insert') && !['insertFromPaste', 'insertFromDrop'].includes(event.inputType)) {
 			event.preventDefault();
-			this.replace(
-				event.inputType === 'insertParagraph' || event.inputType === 'insertLineBreak'
-					? '\n'
-					: (event.data ?? ''),
-			);
+			this.replace(event.inputType === 'insertParagraph' || event.inputType === 'insertLineBreak' ? '\n' : (event.data ?? ''));
 		} else if (event.inputType.startsWith('delete')) {
 			event.preventDefault();
 			if (this.start === this.end) {
@@ -382,20 +351,7 @@ export class DesignTextEditor extends Disposable implements IDesignTextContribut
 			return;
 		}
 		this.typingGroup = {};
-		if (
-			!styleId &&
-			Object.keys(style).some(key =>
-				[
-					'textAlign',
-					'textDirection',
-					'paragraphSpacing',
-					'paragraphIndent',
-					'listType',
-					'textWrap',
-					'textTrim',
-				].includes(key),
-			)
-		) {
+		if (!styleId && Object.keys(style).some(key => ['textAlign', 'textDirection', 'paragraphSpacing', 'paragraphIndent', 'listType', 'textWrap', 'textTrim'].includes(key))) {
 			const shape = this.context.commands.text.get(this.id)!;
 			const start = shape.text.lastIndexOf('\n', Math.max(-1, this.start - 1)) + 1;
 			const newline = shape.text.indexOf('\n', Math.max(this.start, this.end - 1));
@@ -412,9 +368,7 @@ export class DesignTextEditor extends Disposable implements IDesignTextContribut
 				this.pendingStyleId = styleId;
 				this.pendingOverrides = [];
 			} else if (this.pendingStyleId) {
-				this.pendingOverrides = [
-					...new Set([...this.pendingOverrides, ...(Object.keys(style) as (keyof DesignTextStyle)[])]),
-				];
+				this.pendingOverrides = [...new Set([...this.pendingOverrides, ...(Object.keys(style) as (keyof DesignTextStyle)[])])];
 			}
 		} else {
 			this.changing = true;
@@ -428,10 +382,7 @@ export class DesignTextEditor extends Disposable implements IDesignTextContribut
 	}
 	private updateHelpHint(): void {
 		if (this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.DesignCanvas)) {
-			this.editor?.setAttribute(
-				'aria-description',
-				localize('sessions.design.textHelpHint', 'Press Alt+F1 for text editing help.'),
-			);
+			this.editor?.setAttribute('aria-description', localize('sessions.design.textHelpHint', 'Press Alt+F1 for text editing help.'));
 		} else {
 			this.editor?.removeAttribute('aria-description');
 		}
@@ -588,11 +539,7 @@ export class DesignTextEditor extends Disposable implements IDesignTextContribut
 			end: run.end - this.start,
 			style: { ...designTextStyleAt(shape, run.start) },
 		}));
-		event.clipboardData.setData(
-			'text/html',
-			renderDesignTextFrame(this.context.ownerDocument, { ...shape, text, textRuns, textTruncate: false })
-				.outerHTML,
-		);
+		event.clipboardData.setData('text/html', renderDesignTextFrame(this.context.ownerDocument, { ...shape, text, textRuns, textTruncate: false }).outerHTML);
 		event.clipboardData.setData('text/plain', text);
 		event.clipboardData.setData(clipboardType, JSON.stringify({ text, textRuns }));
 		if (event.type === 'cut') {

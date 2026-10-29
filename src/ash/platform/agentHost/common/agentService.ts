@@ -6,15 +6,8 @@ export const CanvasesEnabledSettingId = 'chat.canvases.enabled';
 
 /** Window-owned Canvas callbacks. App Server supplies task identity; extensions supply sources. */
 export interface IAgentCanvasHost {
-	listCanvases(
-		sessionId: string,
-		threadId: string,
-		signal: AbortSignal,
-	): Promise<readonly IAgentCanvasDefinition[] | undefined>;
-	openCanvasSource(
-		request: IAgentCanvasOpenRequest,
-		signal: AbortSignal,
-	): Promise<{ readonly url: string; readonly title?: string; readonly status?: string }>;
+	listCanvases(sessionId: string, threadId: string, signal: AbortSignal): Promise<readonly IAgentCanvasDefinition[] | undefined>;
+	openCanvasSource(request: IAgentCanvasOpenRequest, signal: AbortSignal): Promise<{ readonly url: string; readonly title?: string; readonly status?: string }>;
 	closeCanvasSource(threadId: string, targetId: string, signal: AbortSignal): Promise<void>;
 	acceptCanvasOpen(
 		request: { readonly sessionId: string; readonly threadId: string; readonly instanceId: string },
@@ -47,11 +40,7 @@ export interface IAgentSessionService {
 		readonly omittedFiles: number;
 	}>;
 	/** Optional runtime capability; cancellation belongs to the originating connection. */
-	invokeRuntime?(
-		providerId: string,
-		request: Agent.SessionRuntimeRequest,
-		signal: AbortSignal,
-	): Promise<Agent.SessionRuntimeResult>;
+	invokeRuntime?(providerId: string, request: Agent.SessionRuntimeRequest, signal: AbortSignal): Promise<Agent.SessionRuntimeResult>;
 	create(params: Agent.SessionCreateParams): Promise<Agent.SessionResult>;
 	listAgents(): Promise<Agent.AgentRoleListResult>;
 	read(params: Agent.SessionReadParams): Promise<Agent.SessionResult>;
@@ -99,70 +88,29 @@ export interface IAgentThreadService {
 	/** Domain notifications from this renderer's connection; disposing the listener releases it. */
 	readonly onDidUpdateThread: Event<Agent.ThreadUpdateEnvelope>;
 	readonly onDidUpdateThreadTranscript: Event<Agent.ThreadTranscriptUpdateEnvelope>;
-	readAttachment(
-		source: Agent.AgentAttachmentSource,
-		signal?: AbortSignal,
-	): Promise<{ readonly bytes: Uint8Array; readonly mimeType: string }>;
-	listAppTools(
-		source: Agent.AgentAttachmentSource & { readonly contentIndex: number },
-		signal?: AbortSignal,
-	): Promise<readonly Agent.AgentMcpAppTool[]>;
+	readAttachment(source: Agent.AgentAttachmentSource, signal?: AbortSignal): Promise<{ readonly bytes: Uint8Array; readonly mimeType: string }>;
+	listAppTools(source: Agent.AgentAttachmentSource & { readonly contentIndex: number }, signal?: AbortSignal): Promise<readonly Agent.AgentMcpAppTool[]>;
 	invokeAppTool(
 		source: Agent.AgentAttachmentSource & { readonly contentIndex: number },
 		name: string,
 		argumentsJson: string,
 		signal?: AbortSignal,
 	): Promise<Extract<Agent.ThreadItem, { readonly type: 'toolResult' }>>;
-	readToolResource(
-		source: Agent.AgentAttachmentSource & { readonly contentIndex: number },
-		signal?: AbortSignal,
-	): Promise<Agent.AgentToolResource>;
+	readToolResource(source: Agent.AgentAttachmentSource & { readonly contentIndex: number }, signal?: AbortSignal): Promise<Agent.AgentToolResource>;
 	/** Reads through the original App provider; the URI grants no local filesystem access. */
-	readAppResource(
-		source: Agent.AgentAttachmentSource & { readonly contentIndex: number },
-		uri: string,
-		signal?: AbortSignal,
-	): Promise<Agent.AgentToolResource>;
-	readHistoryState(params: {
-		readonly sessionId: string;
-		readonly threadId: string;
-	}): Promise<Agent.AgentThreadHistoryState>;
-	moveHistory(params: {
-		readonly sessionId: string;
-		readonly threadId: string;
-		readonly expectedSequence: number;
-		readonly direction: 'undo' | 'redo';
-		readonly commandId: string;
-	}): Promise<void>;
-	readContext(params: {
-		readonly sessionId: string;
-		readonly threadId: string;
-	}): Promise<{ readonly context: Agent.AgentContextUsage }>;
-	checkpoints(params: {
-		readonly sessionId: string;
-		readonly threadId: string;
-	}): Promise<readonly Agent.IMessageCheckpoint[]>;
-	restoreMessage(
-		params: Agent.IRestoreMessageOptions,
-	): Promise<{ readonly sessionId: string; readonly threadId: string }>;
+	readAppResource(source: Agent.AgentAttachmentSource & { readonly contentIndex: number }, uri: string, signal?: AbortSignal): Promise<Agent.AgentToolResource>;
+	readHistoryState(params: { readonly sessionId: string; readonly threadId: string }): Promise<Agent.AgentThreadHistoryState>;
+	moveHistory(params: { readonly sessionId: string; readonly threadId: string; readonly expectedSequence: number; readonly direction: 'undo' | 'redo'; readonly commandId: string }): Promise<void>;
+	readContext(params: { readonly sessionId: string; readonly threadId: string }): Promise<{ readonly context: Agent.AgentContextUsage }>;
+	checkpoints(params: { readonly sessionId: string; readonly threadId: string }): Promise<readonly Agent.IMessageCheckpoint[]>;
+	restoreMessage(params: Agent.IRestoreMessageOptions): Promise<{ readonly sessionId: string; readonly threadId: string }>;
 	readTrace(params: Agent.SessionTraceReadParams): Promise<Agent.SessionTraceReadResult>;
-	readTraceDiagnostics(
-		params: Agent.SessionTraceDiagnosticsReadParams,
-	): Promise<Agent.SessionTraceDiagnosticsReadResult>;
+	readTraceDiagnostics(params: Agent.SessionTraceDiagnosticsReadParams): Promise<Agent.SessionTraceDiagnosticsReadResult>;
 	readTracePayload(params: Agent.SessionTracePayloadReadParams): Promise<Agent.SessionTracePayloadReadResult>;
 	readTraceGraph(params: Agent.SessionReadParams): Promise<Agent.SessionTraceGraphReadResult>;
 	configureAdvisor(params: Agent.SessionOperationInput<'configureAdvisor'>): Promise<Agent.AdvisorConfigureResult>;
-	read(params: {
-		readonly sessionId: string;
-		readonly threadId: string;
-		readonly history?: Agent.ThreadSnapshotHistory;
-	}): Promise<Agent.ThreadRead>;
-	subscribe(params: {
-		readonly sessionId: string;
-		readonly threadId: string;
-		readonly afterSequence: number;
-		readonly history?: Agent.ThreadSnapshotHistory;
-	}): Promise<Agent.ThreadSubscription>;
+	read(params: { readonly sessionId: string; readonly threadId: string; readonly history?: Agent.ThreadSnapshotHistory }): Promise<Agent.ThreadRead>;
+	subscribe(params: { readonly sessionId: string; readonly threadId: string; readonly afterSequence: number; readonly history?: Agent.ThreadSnapshotHistory }): Promise<Agent.ThreadSubscription>;
 	unsubscribe(params: Agent.SessionReadParams & { readonly threadId: string }): Promise<void>;
 }
 
@@ -180,9 +128,7 @@ export interface IAgentTurnService {
 	compact(params: Agent.SessionOperationInput<'compactContext'>): Promise<Agent.TurnStartResult>;
 	steer(params: Agent.SessionOperationInput<'steerTurn'>, signal?: AbortSignal): Promise<Agent.TurnSteerResult>;
 	interrupt(params: Agent.SessionOperationInput<'interruptTurn'>): Promise<Agent.TurnInterruptResult>;
-	resolveInteraction(
-		params: Agent.SessionOperationInput<'resolveInteraction'>,
-	): Promise<Agent.TurnInteractionResolveResult>;
+	resolveInteraction(params: Agent.SessionOperationInput<'resolveInteraction'>): Promise<Agent.TurnInteractionResolveResult>;
 }
 
 export const IAgentSessionService = createServiceIdentifier<IAgentSessionService>('agentSessionService');
@@ -200,11 +146,7 @@ export interface IAgentVoiceService {
 	readonly onDidChange: Event<void>;
 	readonly onDidRequestTask: Event<Agent.AgentVoiceTaskRequest>;
 	getOptions(): Promise<readonly Agent.AgentVoiceConnectionChoice[]>;
-	start(
-		source: Agent.AgentVoiceSource,
-		selection: Agent.AgentVoiceSelection,
-		signal?: AbortSignal,
-	): Promise<Agent.AgentVoiceSessionState>;
+	start(source: Agent.AgentVoiceSource, selection: Agent.AgentVoiceSelection, signal?: AbortSignal): Promise<Agent.AgentVoiceSessionState>;
 	stop(): Promise<void>;
 	interrupt(): Promise<void>;
 	/** Closes microphone capture and model input while retaining playback and the conversation. */

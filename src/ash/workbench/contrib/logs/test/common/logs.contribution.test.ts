@@ -96,9 +96,7 @@ test('Show Window Log uses the installed Chinese translation in the command pale
 			['workbench.contrib.logs'],
 		);
 		contribution.advance(WorkbenchPhase.AfterRestored);
-		const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(
-			item => isMenuItem(item) && item.command.id === showWindowLogActionId,
-		);
+		const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(item => isMenuItem(item) && item.command.id === showWindowLogActionId);
 		assert.ok(item && isMenuItem(item));
 		assert.deepEqual(item.command.title, {
 			original: 'Developer: Show Window Log',

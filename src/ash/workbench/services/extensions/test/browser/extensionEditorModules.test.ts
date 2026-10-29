@@ -3,10 +3,7 @@ import { test } from 'mocha';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
-import type {
-	ExtensionDescriptor,
-	ExtensionRendererClient,
-} from '../../../../../platform/extensions/common/extensionApi.js';
+import type { ExtensionDescriptor, ExtensionRendererClient } from '../../../../../platform/extensions/common/extensionApi.js';
 import { loadExtensionEditorModule } from '../../browser/extensionEditorModules.js';
 import type { ExtensionEditorModuleRequest } from '../../browser/extensionEditor.js';
 
@@ -70,10 +67,7 @@ test('installed module and stylesheet digests are both verified before module ev
 			digest: corrupt === 'module' ? admission.digest : digest,
 			styleDigest: corrupt === 'style' ? admission.styleDigest : digest,
 		};
-		await assert.rejects(
-			loadExtensionEditorModule({ ...input, package: { ...owner, rendererClient } }),
-			/versions do not match/,
-		);
+		await assert.rejects(loadExtensionEditorModule({ ...input, package: { ...owner, rendererClient } }), /versions do not match/);
 	}
 });
 

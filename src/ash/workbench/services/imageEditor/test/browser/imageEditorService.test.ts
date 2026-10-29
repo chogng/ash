@@ -37,11 +37,7 @@ test('image interactions are fenced by their exact provider and never fall back 
 	const interaction = await service.resolve('screen', new AbortController().signal);
 	assert.equal(interaction.signal.aborted, false);
 	registration.dispose();
-	assert.equal(
-		owner.signal.aborted,
-		false,
-		'A registry lease owns its cancellation without mutating the provider owner',
-	);
+	assert.equal(owner.signal.aborted, false, 'A registry lease owns its cancellation without mutating the provider owner');
 	assert.equal(interaction.signal.aborted, true);
 	assert.equal(service.available, false);
 	await assert.rejects(service.resolve('screen', new AbortController().signal), /Enable one default image editor/);

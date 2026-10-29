@@ -1,18 +1,12 @@
 import type { JsonSchema, JsonSchemaType } from '../../../base/common/jsonSchema.js';
 import { validateJsonValue, type JsonValue } from '../../../base/common/jsonValue.js';
 import { Registry } from '../../registry/common/platform.js';
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-	type IConfigurationSettingSchema,
-} from './configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IConfigurationSettingSchema } from './configurationRegistry.js';
 
 export const ConfigurationSchemaId = 'ash://schemas/user-configuration';
 
 /** Projects registered typed configuration keys into the generic JSON schema vocabulary. */
-export function createConfigurationSchema(
-	registry: IConfigurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration),
-): JsonSchema {
+export function createConfigurationSchema(registry: IConfigurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)): JsonSchema {
 	return Object.freeze({
 		id: ConfigurationSchemaId,
 		title: 'Ash User Settings',
@@ -34,10 +28,7 @@ export function createConfigurationSchema(
 	});
 }
 
-function configurationPropertySchema(
-	defaultValue: JsonValue,
-	setting: IConfigurationSettingSchema | undefined,
-): JsonSchema {
+function configurationPropertySchema(defaultValue: JsonValue, setting: IConfigurationSettingSchema | undefined): JsonSchema {
 	const schema: {
 		title?: string;
 		description?: string;
@@ -47,7 +38,10 @@ function configurationPropertySchema(
 		maximum?: number;
 		enum?: readonly JsonValue[];
 		enumDescriptions?: readonly string[];
-	} = { type: jsonSchemaType(defaultValue), default: defaultValue };
+	} = {
+		type: jsonSchemaType(defaultValue),
+		default: defaultValue,
+	};
 	if (!setting) return Object.freeze(schema);
 	schema.title = setting.title;
 	schema.description = setting.description;

@@ -12,11 +12,7 @@ import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
 import { MainThreadEditors } from '../../browser/mainThreadEditors.js';
 import { createBinaryDiffEditorInput, createDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 import type { ExtensionHostFleetSnapshot } from '../../../../platform/agentHost/common/extensionHostApi.js';
-import type {
-	IActionPromptOptions,
-	IActionPromptResult,
-	IOpenDialogOptions,
-} from '../../../../platform/dialogs/common/dialogs.js';
+import type { IActionPromptOptions, IActionPromptResult, IOpenDialogOptions } from '../../../../platform/dialogs/common/dialogs.js';
 
 interface Copy {
 	resource: URI;
@@ -52,8 +48,7 @@ function bridge(
 			get: (resource: URI) => copies.filter(copy => copy.resource.toString() === resource.toString()),
 		},
 		{
-			invokeFunction: (callback: (accessor: { get(): unknown }) => unknown) =>
-				callback({ get: () => ({ read: () => markers }) }),
+			invokeFunction: (callback: (accessor: { get(): unknown }) => unknown) => callback({ get: () => ({ read: () => markers }) }),
 		},
 		{},
 		{},
@@ -71,10 +66,7 @@ test('comparison reveal activates the existing snapshot or live input without su
 		const modified = URI.parse('git-change:/unstaged/test.bin?revision=7&side=modified');
 		const live = URI.file('/test.bin');
 		const input = binary
-			? createBinaryDiffEditorInput(
-					{ resource: original, initialBytes: new Uint8Array([0]) },
-					{ resource: modified, initialBytes: new Uint8Array([1]) },
-				)
+			? createBinaryDiffEditorInput({ resource: original, initialBytes: new Uint8Array([0]) }, { resource: modified, initialBytes: new Uint8Array([1]) })
 			: createDiffEditorInput({ resource: original, initialText: 'before' }, { resource: live });
 		const opened: unknown[] = [];
 		const group = { id: 3, inputs: [input] };
@@ -101,19 +93,9 @@ test('comparison reveal activates the existing snapshot or live input without su
 		};
 		const signal = new AbortController().signal;
 		assert.equal(await api.handle(request, signal), true);
-		assert.equal(
-			(opened[0] as unknown[])[0],
-			input,
-			'Reuse must retain the original input and its snapshot/working-copy owner',
-		);
+		assert.equal((opened[0] as unknown[])[0], input, 'Reuse must retain the original input and its snapshot/working-copy owner');
 		assert.deepEqual((opened[0] as unknown[])[2], { groupId: 3 });
-		assert.equal(
-			await api.handle(
-				{ ...request, originalResource: original.with({ query: 'revision=8&side=original' }).toString() },
-				signal,
-			),
-			false,
-		);
+		assert.equal(await api.handle({ ...request, originalResource: original.with({ query: 'revision=8&side=original' }).toString() }, signal), false);
 		assert.equal(opened.length, 1, 'A different snapshot revision must load normally');
 		await assert.rejects(api.handle({ ...request, modifiedResources: [] }, signal), /Invalid comparison resources/);
 	}
@@ -126,31 +108,16 @@ test('active editor requests resolve numeric group context without reading a dif
 		activeInput: { resource: URI.file('/active.ts') },
 	};
 	const second = { id: 2, inputs: [{ resource: URI.file('/second.ts') }] };
-	using api = bridge(
-		[],
-		async () => ({ confirmed: true }),
-		[],
-		{ listCodeEditors: () => [] },
-		undefined,
-		undefined,
-		undefined,
-		{ groups: [first, second], activeGroup: first },
-	);
+	using api = bridge([], async () => ({ confirmed: true }), [], { listCodeEditors: () => [] }, undefined, undefined, undefined, { groups: [first, second], activeGroup: first });
 	const signal = new AbortController().signal;
 	const result = (await api.handle({ method: 'activeEditor', context: { groupId: 2, editorIndex: 0 } }, signal)) as {
 		input: { resource: string };
 	};
 	assert.equal(result.input.resource, second.inputs[0]!.resource.toString());
-	const missing = (await api.handle(
-		{ method: 'activeEditor', context: { groupId: 999, editorIndex: 0 } },
-		signal,
-	)) as { input: null };
+	const missing = (await api.handle({ method: 'activeEditor', context: { groupId: 999, editorIndex: 0 } }, signal)) as { input: null };
 	assert.equal(missing.input, null);
 	for (const groupId of ['2', -1, 1.5]) {
-		await assert.rejects(
-			api.handle({ method: 'activeEditor', context: { groupId } }, signal),
-			/Invalid editor group ID/u,
-		);
+		await assert.rejects(api.handle({ method: 'activeEditor', context: { groupId } }, signal), /Invalid editor group ID/u);
 	}
 });
 
@@ -214,18 +181,9 @@ test('extension modal choices preserve labels, selection, cancellation and bound
 	assert.deepEqual(await api.handle(request, controller.signal), { selection: 1 });
 	selection = undefined;
 	assert.deepEqual(await api.handle(request, controller.signal), { selection: null });
-	await assert.rejects(
-		api.handle({ ...request, buttons: [] }, controller.signal),
-		/Invalid extension dialog buttons/,
-	);
-	await assert.rejects(
-		api.handle({ ...request, buttons: [123] }, controller.signal),
-		/Invalid extension editor text/,
-	);
-	await assert.rejects(
-		api.handle({ ...request, severity: 'fatal' }, controller.signal),
-		/Invalid extension dialog severity/,
-	);
+	await assert.rejects(api.handle({ ...request, buttons: [] }, controller.signal), /Invalid extension dialog buttons/);
+	await assert.rejects(api.handle({ ...request, buttons: [123] }, controller.signal), /Invalid extension editor text/);
+	await assert.rejects(api.handle({ ...request, severity: 'fatal' }, controller.signal), /Invalid extension dialog severity/);
 	controller.abort();
 	await assert.rejects(api.handle(request, controller.signal), /aborted/i);
 });
@@ -260,10 +218,7 @@ test('repository preparation saves only selected staged copies and stops on canc
 	first.isDirty = true;
 	first.save = async () => undefined;
 	assert.equal(await api.handle(request, new AbortController().signal), false);
-	await assert.rejects(
-		api.handle({ ...request, paths: ['file:///outside/file.ts'] }, new AbortController().signal),
-		/exceeds repository/,
-	);
+	await assert.rejects(api.handle({ ...request, paths: ['file:///outside/file.ts'] }, new AbortController().signal), /exceeds repository/);
 });
 
 test('repository diagnostic policy blocks selected sources and honors an explicit source override', async () => {
@@ -289,10 +244,7 @@ test('repository diagnostic policy blocks selected sources and honors an explici
 	};
 	assert.equal(await api.handle(request, new AbortController().signal), false);
 	assert.equal(prompts, 1);
-	assert.equal(
-		await api.handle({ ...request, diagnostics: { '*': 'error', ts: 'none' } }, new AbortController().signal),
-		true,
-	);
+	assert.equal(await api.handle({ ...request, diagnostics: { '*': 'error', ts: 'none' } }, new AbortController().signal), true);
 	assert.equal(prompts, 1);
 });
 
@@ -350,20 +302,11 @@ test('timestamp formatting uses the client locale and rejects invalid batches', 
 	using api = bridge([], async () => ({ confirmed: true }));
 	try {
 		setNlsMessages('zh-CN', {});
-		const result = (await api.handle(
-			{ method: 'formatTimestamps', timestamps: [Date.now() - 60_000] },
-			new AbortController().signal,
-		)) as { date: string; relative: string }[];
+		const result = (await api.handle({ method: 'formatTimestamps', timestamps: [Date.now() - 60_000] }, new AbortController().signal)) as { date: string; relative: string }[];
 		assert.match(result[0].relative, /分钟/);
 		assert.ok(result[0].date.length > 0);
-		await assert.rejects(
-			api.handle({ method: 'formatTimestamps', timestamps: [Number.NaN] }, new AbortController().signal),
-			/Invalid timestamp/,
-		);
-		await assert.rejects(
-			api.handle({ method: 'formatTimestamps', timestamps: Array(513).fill(0) }, new AbortController().signal),
-			/Invalid timestamp/,
-		);
+		await assert.rejects(api.handle({ method: 'formatTimestamps', timestamps: [Number.NaN] }, new AbortController().signal), /Invalid timestamp/);
+		await assert.rejects(api.handle({ method: 'formatTimestamps', timestamps: Array(513).fill(0) }, new AbortController().signal), /Invalid timestamp/);
 	} finally {
 		resetNlsResolver();
 	}
@@ -386,19 +329,10 @@ test('AI edit evidence distinguishes chat from completions and expires after a m
 			correlationId: undefined,
 		}),
 	);
-	assert.deepEqual(
-		await api.handle({ method: 'aiEditedResources', root: 'file:///workspace', mode: 'chatAndAgent' }, signal),
-		[],
-	);
-	assert.deepEqual(
-		await api.handle({ method: 'aiEditedResources', root: 'file:///workspace', mode: 'all' }, signal),
-		[{ uri: model.uri.toString(), text: 'AI completion' }],
-	);
+	assert.deepEqual(await api.handle({ method: 'aiEditedResources', root: 'file:///workspace', mode: 'chatAndAgent' }, signal), []);
+	assert.deepEqual(await api.handle({ method: 'aiEditedResources', root: 'file:///workspace', mode: 'all' }, signal), [{ uri: model.uri.toString(), text: 'AI completion' }]);
 	model.applyEdits([{ range: new Range(1, 1, 1, 14), text: 'manual' }], EditSources.unknown({ name: 'user' }));
-	assert.deepEqual(
-		await api.handle({ method: 'aiEditedResources', root: 'file:///workspace', mode: 'all' }, signal),
-		[],
-	);
+	assert.deepEqual(await api.handle({ method: 'aiEditedResources', root: 'file:///workspace', mode: 'all' }, signal), []);
 	model.applyEdits(
 		[{ range: new Range(1, 1, 1, 7), text: 'chat' }],
 		EditSources.agentHostChatApplyEdits({
@@ -408,10 +342,7 @@ test('AI edit evidence distinguishes chat from completions and expires after a m
 			harness: 'ash',
 		}),
 	);
-	assert.deepEqual(
-		await api.handle({ method: 'aiEditedResources', root: 'file:///workspace', mode: 'chatAndAgent' }, signal),
-		[{ uri: model.uri.toString(), text: 'chat' }],
-	);
+	assert.deepEqual(await api.handle({ method: 'aiEditedResources', root: 'file:///workspace', mode: 'chatAndAgent' }, signal), [{ uri: model.uri.toString(), text: 'chat' }]);
 	assert.deepEqual(await api.handle({ method: 'aiEditedResources', root: 'file:///other', mode: 'all' }, signal), []);
 });
 
@@ -430,16 +361,7 @@ test('active editor metadata does not serialize the working copy when contents a
 	};
 	const input = { resource };
 	const group = { id: 1, inputs: [input], activeInput: input };
-	using api = bridge(
-		[copy],
-		async () => ({ confirmed: true }),
-		[],
-		{ listCodeEditors: () => [] },
-		undefined,
-		undefined,
-		undefined,
-		{ groups: [group], activeGroup: group },
-	);
+	using api = bridge([copy], async () => ({ confirmed: true }), [], { listCodeEditors: () => [] }, undefined, undefined, undefined, { groups: [group], activeGroup: group });
 	const signal = new AbortController().signal;
 	const metadata = (await api.handle({ method: 'activeEditor', includeContents: false }, signal)) as {
 		contents: string | null;
@@ -449,10 +371,7 @@ test('active editor metadata does not serialize the working copy when contents a
 	const document = (await api.handle({ method: 'activeEditor' }, signal)) as { contents: string };
 	assert.equal(document.contents, 'unsaved', 'Existing consumers retain their default full snapshot');
 	assert.equal(backups, 1);
-	await assert.rejects(
-		api.handle({ method: 'activeEditor', includeContents: 'false' }, signal),
-		/Invalid editor contents request/u,
-	);
+	await assert.rejects(api.handle({ method: 'activeEditor', includeContents: 'false' }, signal), /Invalid editor contents request/u);
 });
 
 suite('Diff hunk capture', () => {
@@ -469,11 +388,7 @@ suite('Diff hunk capture', () => {
 		test(`whole hunk without character ranges restores ${name}`, async () => {
 			using original = new TextModel(before, { resource: URI.parse('git-change:/original/file.ts') });
 			using modified = new TextModel(after, { resource: URI.file('/file.ts') });
-			const mapping = new DetailedLineRangeMapping(
-				new LineRange(originalLines[0], originalLines[1]),
-				new LineRange(modifiedLines[0], modifiedLines[1]),
-				undefined,
-			);
+			const mapping = new DetailedLineRangeMapping(new LineRange(originalLines[0], originalLines[1]), new LineRange(modifiedLines[0], modifiedLines[1]), undefined);
 			const originalEditor = { getModel: () => original };
 			const modifiedEditor = { getModel: () => modified };
 			const editor = {
@@ -484,24 +399,17 @@ suite('Diff hunk capture', () => {
 				diff: { changes: [mapping] },
 			};
 			using api = bridge([], async () => ({ confirmed: true }), [], { listDiffEditors: () => [editor] });
-			const context = JSON.parse(
-				JSON.stringify({ originalUri: original.uri.toString(), modifiedUri: modified.uri.toString(), mapping }),
-			);
+			const context = JSON.parse(JSON.stringify({ originalUri: original.uri.toString(), modifiedUri: modified.uri.toString(), mapping }));
 			const captured = (await api.handle({ method: 'diffChange', context }, new AbortController().signal)) as {
 				edits: { start: number; end: number; text: string }[];
 			};
 			assert.ok(captured);
 			assert.ok(captured.edits.length > 0, 'A valid whole-line change must produce an edit');
 			let reverted = after;
-			for (const edit of [...captured.edits].sort((left, right) => right.start - left.start))
-				reverted = reverted.slice(0, edit.start) + edit.text + reverted.slice(edit.end);
+			for (const edit of [...captured.edits].sort((left, right) => right.start - left.start)) reverted = reverted.slice(0, edit.start) + edit.text + reverted.slice(edit.end);
 			assert.equal(reverted, before);
 			context.mapping.modified.endLineNumberExclusive++;
-			assert.equal(
-				await api.handle({ method: 'diffChange', context }, new AbortController().signal),
-				null,
-				'Stale mappings still cannot authorize an edit',
-			);
+			assert.equal(await api.handle({ method: 'diffChange', context }, new AbortController().signal), null, 'Stale mappings still cannot authorize an edit');
 		});
 	}
 });

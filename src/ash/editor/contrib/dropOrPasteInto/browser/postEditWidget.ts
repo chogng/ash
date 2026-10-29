@@ -13,20 +13,10 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ActionListItemKind } from '../../../../platform/actionWidget/browser/actionList.js';
 import { IActionWidgetService } from '../../../../platform/actionWidget/browser/actionWidget.js';
-import {
-	ContentWidgetPositionPreference,
-	type ICodeEditor,
-	type IContentWidget,
-	type IContentWidgetPosition,
-} from '../../../browser/editorBrowser.js';
+import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../browser/editorBrowser.js';
 import { IBulkEditService, ResourceFileEdit, ResourceTextEdit } from '../../../browser/services/bulkEditService.js';
 import { Range } from '../../../common/core/range.js';
-import {
-	type DocumentDropEdit,
-	type DocumentPasteEdit,
-	type WorkspaceEdit,
-	type WorkspaceEditEntry,
-} from '../../../common/languages.js';
+import { type DocumentDropEdit, type DocumentPasteEdit, type WorkspaceEdit, type WorkspaceEditEntry } from '../../../common/languages.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import { CodeEditorStateFlag, EditorStateCancellationTokenSource } from '../../editorState/browser/editorState.js';
@@ -91,10 +81,7 @@ class PostEditWidget<T extends TransferEdit> extends Disposable implements ICont
 		this.button.domNode.setAttribute('aria-expanded', 'false');
 		this.button.domNode.setAttribute(
 			'aria-description',
-			localize(
-				'dropOrPaste.selectorHelp',
-				'Press Down Arrow or Enter to open the options. Escape closes the menu; Escape on this button returns to the editor.',
-			),
+			localize('dropOrPaste.selectorHelp', 'Press Down Arrow or Enter to open the options. Escape closes the menu; Escape on this button returns to the editor.'),
 		);
 		this._register(
 			addDisposableListener<KeyboardEvent>(this.button.domNode, 'keydown', event => {
@@ -219,20 +206,12 @@ export class PostEditWidgetManager<T extends TransferEdit> extends Disposable {
 		const candidate = edits.allEdits[edits.activeEditIndex];
 		if (!(model instanceof TextModel) || !candidate || ranges.length === 0 || token.isCancellationRequested) return;
 
-		const state = new EditorStateCancellationTokenSource(
-			this.editor,
-			CodeEditorStateFlag.Value | CodeEditorStateFlag.Selection,
-			undefined,
-			token,
-		);
+		const state = new EditorStateCancellationTokenSource(this.editor, CodeEditorStateFlag.Value | CodeEditorStateFlag.Selection, undefined, token);
 		let edit: T;
 		try {
 			edit = await resolve(candidate, state.token);
 		} catch (error) {
-			if (!state.token.isCancellationRequested)
-				this.notifications.error(
-					localize('dropOrPaste.resolveFailed', 'Could not resolve edit: {0}', String(error)),
-				);
+			if (!state.token.isCancellationRequested) this.notifications.error(localize('dropOrPaste.resolveFailed', 'Could not resolve edit: {0}', String(error)));
 			return;
 		} finally {
 			state.dispose();
@@ -249,20 +228,14 @@ export class PostEditWidgetManager<T extends TransferEdit> extends Disposable {
 							variables: createSnippetVariables(model.uri),
 							allowUnresolvedVariables: true,
 						});
-			combined = createCombinedWorkspaceEdit(
-				model.uri,
-				ranges,
-				snippet ? { ...edit, insertText: snippet.text } : edit,
-			);
+			combined = createCombinedWorkspaceEdit(model.uri, ranges, snippet ? { ...edit, insertText: snippet.text } : edit);
 		} catch (error) {
 			this.notifications.error(localize('dropOrPaste.invalidEdit', 'Could not prepare edit: {0}', String(error)));
 			return;
 		}
 		const snippetController = snippet?.placeholderGroups.length ? SnippetController2.get(this.editor) : undefined;
 		if (snippet?.placeholderGroups.length && !snippetController) {
-			this.notifications.error(
-				localize('dropOrPaste.snippetUnavailable', 'Snippet navigation is unavailable in this editor.'),
-			);
+			this.notifications.error(localize('dropOrPaste.snippetUnavailable', 'Snippet navigation is unavailable in this editor.'));
 			return;
 		}
 		const resourceEdits = combined.edits.map(entry => toResourceEdit(entry));
@@ -328,18 +301,9 @@ export class PostEditWidgetManager<T extends TransferEdit> extends Disposable {
 				void (async () => {
 					try {
 						await undo();
-						await this.applyEditAndShowIfNeeded(
-							ranges,
-							{ allEdits: edits.allEdits, activeEditIndex: newIndex },
-							canShowWidget,
-							resolve,
-							token,
-							nextSession,
-						);
+						await this.applyEditAndShowIfNeeded(ranges, { allEdits: edits.allEdits, activeEditIndex: newIndex }, canShowWidget, resolve, token, nextSession);
 					} catch (error) {
-						this.notifications.error(
-							localize('dropOrPaste.switchFailed', 'Could not change edit: {0}', String(error)),
-						);
+						this.notifications.error(localize('dropOrPaste.switchFailed', 'Could not change edit: {0}', String(error)));
 					} finally {
 						nextSession?.dispose();
 					}

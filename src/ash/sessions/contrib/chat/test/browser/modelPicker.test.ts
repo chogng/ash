@@ -104,9 +104,7 @@ suite('modelPicker browser component', () => {
 		await expect(page.getByRole('dialog')).toBeVisible();
 		await page.keyboard.press('Escape');
 		await expect(picker).toBeFocused();
-		await page.evaluate(() =>
-			window.ashModelPickerIntegration.configure({ thinking: true, secondWithoutThinking: true }),
-		);
+		await page.evaluate(() => window.ashModelPickerIntegration.configure({ thinking: true, secondWithoutThinking: true }));
 		await picker.press('ArrowDown');
 		await expect(page.getByRole('button', { name: 'Choose model', exact: true })).toBeFocused();
 		await page.keyboard.press('Enter');
@@ -127,13 +125,7 @@ suite('modelPicker browser component', () => {
 		const rail = page.locator('.ash-sessions-model-picker-thumb-rail');
 		const thumb = page.locator('.ash-sessions-model-picker-thumb');
 		const surface = page.locator('.ash-sessions-model-picker-surface');
-		await expect
-			.poll(() =>
-				surface.evaluate(
-					element => element.getAnimations().filter(animation => animation.playState === 'running').length,
-				),
-			)
-			.toBe(0);
+		await expect.poll(() => surface.evaluate(element => element.getAnimations().filter(animation => animation.playState === 'running').length)).toBe(0);
 		const bounds = (await rail.boundingBox())!;
 		const y = bounds.y + bounds.height / 2;
 		await page.mouse.move(bounds.x + bounds.width * 0.63, y);
@@ -186,9 +178,7 @@ suite('modelPicker browser component', () => {
 			// Resolve styles, then sample the real transitions at deterministic points.
 			const thumb = popup.querySelector<HTMLElement>('.ash-sessions-model-picker-thumb')!;
 			thumb.getBoundingClientRect();
-			const animations = popup
-				.getAnimations({ subtree: true })
-				.filter(animation => animation instanceof CSSTransition);
+			const animations = popup.getAnimations({ subtree: true }).filter(animation => animation instanceof CSSTransition);
 			for (const animation of animations) {
 				animation.pause();
 			}
@@ -213,19 +203,13 @@ suite('modelPicker browser component', () => {
 
 		await page.emulateMedia({ reducedMotion: 'reduce' });
 		await page.goto('/modelPicker.html');
-		await page.evaluate(() =>
-			window.ashModelPickerIntegration.configure({ thinking: true, emphasizedLevel: 'extraHigh' }),
-		);
+		await page.evaluate(() => window.ashModelPickerIntegration.configure({ thinking: true, emphasizedLevel: 'extraHigh' }));
 		await page.locator('.ash-sessions-model-picker').click();
 		const id = await page.getByRole('dialog').getAttribute('id');
 		await expect(page.locator('.ash-sessions-model-picker-surface')).toHaveCSS('animation-name', 'none');
 		await expect(page.locator('.ash-sessions-model-picker-pages')).toHaveCSS('transition-duration', '0s');
 		await expect(page.locator('.ash-sessions-model-picker-maximum-effects')).toHaveCSS('opacity', '1');
-		expect(
-			await page
-				.locator('.ash-sessions-model-picker-maximum-effects')
-				.evaluate(element => element.getAnimations({ subtree: true }).length),
-		).toBe(0);
+		expect(await page.locator('.ash-sessions-model-picker-maximum-effects').evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
 		for (let index = 0; index < 3; index++) {
 			await page.getByRole('button', { name: 'Choose model', exact: true }).click();
 			await expect(page.getByRole('menu')).toHaveAttribute('id', id!);
@@ -240,9 +224,7 @@ suite('modelPicker browser component', () => {
 		const { page } = browserTests;
 
 		await page.goto('/modelPicker.html');
-		await page.evaluate(() =>
-			window.ashModelPickerIntegration.configure({ thinking: true, emphasizedLevel: 'high' }),
-		);
+		await page.evaluate(() => window.ashModelPickerIntegration.configure({ thinking: true, emphasizedLevel: 'high' }));
 		const picker = page.locator('.ash-sessions-model-picker');
 		await picker.click();
 		const slider = page.getByRole('slider');
@@ -250,12 +232,7 @@ suite('modelPicker browser component', () => {
 		await slider.press('ArrowRight');
 		await slider.press('ArrowRight');
 		const effects = page.locator('.ash-sessions-model-picker-maximum-effects');
-		const running = () =>
-			effects.evaluate(
-				element =>
-					element.getAnimations({ subtree: true }).filter(animation => animation.playState === 'running')
-						.length,
-			);
+		const running = () => effects.evaluate(element => element.getAnimations({ subtree: true }).filter(animation => animation.playState === 'running').length);
 		await expect(picker).toHaveText('High');
 		await expect(effects).toHaveCSS('opacity', '1');
 		await expect.poll(running).toBeGreaterThan(1);
@@ -279,8 +256,7 @@ suite('modelPicker browser component', () => {
 
 		await page.goto('/modelPicker.html');
 		await page.addStyleTag({
-			content:
-				'.ash-sessions-model-picker-surface { animation: none; } .ash-sessions-model-picker-pages { transition-duration: 2s; }',
+			content: '.ash-sessions-model-picker-surface { animation: none; } .ash-sessions-model-picker-pages { transition-duration: 2s; }',
 		});
 		await page.evaluate(() => window.ashModelPickerIntegration.configure({ thinking: true }));
 		await page.locator('.ash-sessions-model-picker').click();
@@ -288,9 +264,7 @@ suite('modelPicker browser component', () => {
 		const before = (await pages.boundingBox())!.height;
 		await page.getByRole('button', { name: 'Choose model', exact: true }).click();
 		const intermediate = await pages.evaluate(element => {
-			const animation = element
-				.getAnimations()
-				.find(animation => animation instanceof CSSTransition && animation.transitionProperty === 'height');
+			const animation = element.getAnimations().find(animation => animation instanceof CSSTransition && animation.transitionProperty === 'height');
 			if (!animation) {
 				throw new Error('The panel height must transition between its two measured sizes');
 			}
@@ -335,18 +309,14 @@ suite('modelPicker browser component', () => {
 			}
 			await testInfo.attach('model-menu', { body: await page.screenshot(), contentType: 'image/png' });
 			await page.keyboard.press('Escape');
-			await page.evaluate(() =>
-				window.ashModelPickerIntegration.configure({ thinking: true, singleLevel: true }),
-			);
+			await page.evaluate(() => window.ashModelPickerIntegration.configure({ thinking: true, singleLevel: true }));
 			await picker.click();
 			await expect(page.getByRole('slider')).toBeDisabled();
 			await expect(page.getByRole('dialog')).toBeFocused();
 			await page.evaluate(() => window.ashModelPickerIntegration.configure({ disabled: true }));
 			await expect(picker).toBeDisabled();
 			await expect(page.getByRole('dialog')).toHaveCount(0);
-			await page.evaluate(() =>
-				window.ashModelPickerIntegration.configure({ thinking: true, emphasizedLevel: 'extraHigh' }),
-			);
+			await page.evaluate(() => window.ashModelPickerIntegration.configure({ thinking: true, emphasizedLevel: 'extraHigh' }));
 			await picker.click();
 			const effects = page.locator('.ash-sessions-model-picker-maximum-effects');
 			await expect(effects).toHaveCSS('opacity', '1');

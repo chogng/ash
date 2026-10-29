@@ -9,10 +9,7 @@ import { Disposable, DisposableMap, DisposableStore } from '../../../../base/com
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import {
-	IAccessibleViewService,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { localize } from '../../../../nls.js';
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
@@ -124,12 +121,7 @@ export class CreatorPage extends Disposable {
 			}),
 		);
 		this.back.hidden = true;
-		this.titleDomNode = h(
-			ownerDocument,
-			'h1',
-			{ className: 'ash-creator-title' },
-			localize('sessions.creator.title', 'Artifacts'),
-		);
+		this.titleDomNode = h(ownerDocument, 'h1', { className: 'ash-creator-title' }, localize('sessions.creator.title', 'Artifacts'));
 		header.append(this.titleDomNode);
 		this.homeDomNode = h(ownerDocument, 'div', { className: 'ash-creator-home' });
 		const toolbar = h(ownerDocument, 'div', { className: 'ash-artifacts-toolbar' });
@@ -137,30 +129,15 @@ export class CreatorPage extends Disposable {
 			className: 'ash-artifacts-filters',
 			attributes: { role: 'tablist', 'aria-label': localize('sessions.artifacts.filters', 'Artifact ownership') },
 		});
-		const labels = [
-			localize('sessions.artifacts.all', 'All'),
-			localize('sessions.artifacts.yours', 'Yours'),
-			localize('sessions.artifacts.shared', 'Shared with you'),
-		];
+		const labels = [localize('sessions.artifacts.all', 'All'), localize('sessions.artifacts.yours', 'Yours'), localize('sessions.artifacts.shared', 'Shared with you')];
 		labels.forEach((label, index) => {
-			const button = this._register(
-				new Button(filters, { ...defaultButtonStyles, label, onClick: () => this.selectFilter(index) }),
-			);
+			const button = this._register(new Button(filters, { ...defaultButtonStyles, label, onClick: () => this.selectFilter(index) }));
 			button.domNode.setAttribute('role', 'tab');
 			button.domNode.setAttribute('aria-controls', 'ash-artifacts-results');
 			this.filterButtons.push(button);
 			this._register(
 				addDisposableListener(button.domNode, 'keydown', event => {
-					const target =
-						event.key === 'Home'
-							? 0
-							: event.key === 'End'
-								? 2
-								: event.key === 'ArrowRight'
-									? (index + 1) % 3
-									: event.key === 'ArrowLeft'
-										? (index + 2) % 3
-										: undefined;
+					const target = event.key === 'Home' ? 0 : event.key === 'End' ? 2 : event.key === 'ArrowRight' ? (index + 1) % 3 : event.key === 'ArrowLeft' ? (index + 2) % 3 : undefined;
 					if (target === undefined) {
 						return;
 					}
@@ -228,12 +205,7 @@ export class CreatorPage extends Disposable {
 			}),
 		);
 		toolbar.append(filters, actions);
-		const introduction = h(
-			ownerDocument,
-			'h2',
-			{ className: 'ash-creator-introduction' },
-			localize('sessions.creator.introduction', 'Make something new'),
-		);
+		const introduction = h(ownerDocument, 'h2', { className: 'ash-creator-introduction' }, localize('sessions.creator.introduction', 'Make something new'));
 		const modes = h(ownerDocument, 'div', { className: 'ash-creator-modes' });
 		const docsEntry = h(ownerDocument, 'div', { className: 'ash-artifacts-docs-entry' });
 		modes.append(docsEntry);
@@ -256,10 +228,7 @@ export class CreatorPage extends Disposable {
 			[CreatorMode.Slides, 'slides'],
 			[CreatorMode.Design, 'design'],
 		] as const) {
-			const title =
-				mode === CreatorMode.Slides
-					? localize('sessions.creator.slides.title', 'Slides')
-					: localize('sessions.creator.design.title', 'Design');
+			const title = mode === CreatorMode.Slides ? localize('sessions.creator.slides.title', 'Slides') : localize('sessions.creator.design.title', 'Design');
 			const button = this.createTile(modes, kind, title, () => {
 				void commands.executeCommand('sessions.creator.openMode', mode);
 			});
@@ -276,14 +245,7 @@ export class CreatorPage extends Disposable {
 			},
 		});
 		this.homeDomNode.append(toolbar, introduction, modes, this.artifactsDomNode);
-		this.loading = this._register(
-			new LoadingSkeleton(
-				this.homeDomNode,
-				localize('sessions.artifacts.loading', 'Loading artifacts…'),
-				'cards',
-				3,
-			),
-		);
+		this.loading = this._register(new LoadingSkeleton(this.homeDomNode, localize('sessions.artifacts.loading', 'Loading artifacts…'), 'cards', 3));
 		this.artifactsDomNode.before(this.loading.element);
 		this.workspacesDomNode = h(ownerDocument, 'div', { className: 'ash-creator-workspaces' });
 		this.workspacesDomNode.hidden = true;
@@ -377,10 +339,7 @@ export class CreatorPage extends Disposable {
 			cards.push({
 				title: document.name,
 				kind: mode,
-				detail:
-					mode === CreatorMode.Design
-						? document.saveStatus
-						: localize('sessions.creator.slides.title', 'Slides'),
+				detail: mode === CreatorMode.Design ? document.saveStatus : localize('sessions.creator.slides.title', 'Slides'),
 				open: () => {
 					void this.commands.executeCommand('sessions.creator.openMode', mode);
 				},
@@ -396,11 +355,8 @@ export class CreatorPage extends Disposable {
 		this.artifactCards.clear();
 		this.artifactsDomNode.replaceChildren();
 		const query = this.search.value.trim().toLocaleLowerCase();
-		const cards =
-			this.filter === 2 ? [] : this.getArtifacts().filter(card => card.title.toLocaleLowerCase().includes(query));
-		const restoring =
-			this.filter !== 2 &&
-			[CreatorMode.Design, CreatorMode.Slides].some(mode => this.designs.getDocument(mode).isRestoring);
+		const cards = this.filter === 2 ? [] : this.getArtifacts().filter(card => card.title.toLocaleLowerCase().includes(query));
+		const restoring = this.filter !== 2 && [CreatorMode.Design, CreatorMode.Slides].some(mode => this.designs.getDocument(mode).isRestoring);
 		this.loading.setVisible(restoring && !cards.length);
 		this.artifactsDomNode.setAttribute('aria-busy', String(restoring));
 		cards.sort((a, b) => a.title.localeCompare(b.title) * (this.ascending ? 1 : -1));
@@ -415,9 +371,7 @@ export class CreatorPage extends Disposable {
 			);
 			button.domNode.classList.add('ash-artifacts-card', card.kind);
 			button.domNode.prepend(this.createIllustration(card.kind));
-			button.domNode.append(
-				h(this.domNode.ownerDocument, 'span', { className: 'ash-artifacts-card-detail' }, card.detail),
-			);
+			button.domNode.append(h(this.domNode.ownerDocument, 'span', { className: 'ash-artifacts-card-detail' }, card.detail));
 		}
 		if (cards.length === 0 && !restoring) {
 			const message =
@@ -425,13 +379,8 @@ export class CreatorPage extends Disposable {
 					? localize('sessions.artifacts.noShared', 'No artifacts have been shared with you.')
 					: query
 						? localize('sessions.artifacts.noResults', 'No artifacts match your search.')
-						: localize(
-								'sessions.artifacts.empty',
-								'Your work will appear here. Create a doc, slide deck or design to get started.',
-							);
-			this.artifactsDomNode.append(
-				h(this.domNode.ownerDocument, 'p', { className: 'ash-artifacts-empty' }, message),
-			);
+						: localize('sessions.artifacts.empty', 'Your work will appear here. Create a doc, slide deck or design to get started.');
+			this.artifactsDomNode.append(h(this.domNode.ownerDocument, 'p', { className: 'ash-artifacts-empty' }, message));
 		}
 	}
 
@@ -496,12 +445,10 @@ export class CreatorPage extends Disposable {
 		this.domNode.classList.toggle('narrow', dimension.width < 600);
 		this.domNode.classList.toggle('compact', dimension.width < 420);
 		if (this.mode !== undefined) {
-			this.workspaces
-				.get(this.mode)!
-				.layout({
-					width: dimension.width,
-					height: Math.max(0, dimension.height - (this.headerDomNode.hidden ? 0 : 52)),
-				});
+			this.workspaces.get(this.mode)!.layout({
+				width: dimension.width,
+				height: Math.max(0, dimension.height - (this.headerDomNode.hidden ? 0 : 52)),
+			});
 		}
 	}
 	public focus(): void {

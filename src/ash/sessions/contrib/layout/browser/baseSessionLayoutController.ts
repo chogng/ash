@@ -2,13 +2,7 @@ import { canceled, isCancellationError } from '../../../../base/common/errors.js
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import {
-	autorun,
-	constObservable,
-	derived,
-	observableSignalFromEvent,
-	observableValue,
-} from '../../../../base/common/observable.js';
+import { autorun, constObservable, derived, observableSignalFromEvent, observableValue } from '../../../../base/common/observable.js';
 import type { ISessionEditorWorkingSetState } from '../../../services/layout/common/sessionsLayoutService.js';
 import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { isRecord } from '../../../../base/common/types.js';
@@ -20,13 +14,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import {
-	ChatLayoutContext,
-	ChatLayoutPresentation,
-	chatLayoutOwnersEqual,
-	type IChatLayoutOwner,
-	type IChatLayoutSnapshot,
-} from '../../../common/chatLayout.js';
+import { ChatLayoutContext, ChatLayoutPresentation, chatLayoutOwnersEqual, type IChatLayoutOwner, type IChatLayoutSnapshot } from '../../../common/chatLayout.js';
 import '../../../common/sessionConfig.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
@@ -88,16 +76,13 @@ export abstract class BaseLayoutController extends Disposable {
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
-		this.chatLayoutPresentation = this._register(
-			instantiation.createInstance(ChatLayoutPresentation, true, constObservable(false)),
-		);
+		this.chatLayoutPresentation = this._register(instantiation.createInstance(ChatLayoutPresentation, true, constObservable(false)));
 		const owner = derived<IChatLayoutOwner | undefined>(reader => {
 			const selected = sessions.getSelection(reader).activeSelection;
 			if (!selected) {
 				return undefined;
 			}
-			const key =
-				selected.kind === 'session' ? selected.active.session.sessionId : selected.session.untitledSessionId;
+			const key = selected.kind === 'session' ? selected.active.session.sessionId : selected.session.untitledSessionId;
 			return {
 				sessionResource: URI.from({ scheme: 'ash-session', path: `/${key}` }),
 				chatResource: URI.from({
@@ -112,9 +97,7 @@ export abstract class BaseLayoutController extends Disposable {
 		if (raw !== undefined) {
 			const entries: unknown = JSON.parse(raw);
 			if (!Array.isArray(entries)) {
-				throw new TypeError(
-					localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'),
-				);
+				throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 			}
 			for (const entry of entries) {
 				if (
@@ -123,29 +106,18 @@ export abstract class BaseLayoutController extends Disposable {
 					(entry.editorWorkingSet !== undefined && !isRecord(entry.editorWorkingSet)) ||
 					(entry.panelViewContainerId !== undefined && typeof entry.panelViewContainerId !== 'string')
 				) {
-					throw new TypeError(
-						localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'),
-					);
+					throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 				}
 				// The editor owns validation and deserialization of its persisted working sets.
 				if (entry.editorWorkingSet) {
-					this.workingSets.set(
-						entry.sessionResource,
-						removeLegacyPageEditors(entry.editorWorkingSet as unknown as EditorWorkingSet),
-					);
+					this.workingSets.set(entry.sessionResource, removeLegacyPageEditors(entry.editorWorkingSet as unknown as EditorWorkingSet));
 				}
 				if (typeof entry.panelViewContainerId === 'string') {
 					this.panelViews.set(entry.sessionResource, entry.panelViewContainerId);
 				}
 				if (entry.partVisibility !== undefined) {
-					if (
-						!isRecord(entry.partVisibility) ||
-						typeof entry.partVisibility.editor !== 'boolean' ||
-						typeof entry.partVisibility.auxiliarybar !== 'boolean'
-					) {
-						throw new TypeError(
-							localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'),
-						);
+					if (!isRecord(entry.partVisibility) || typeof entry.partVisibility.editor !== 'boolean' || typeof entry.partVisibility.auxiliarybar !== 'boolean') {
+						throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 					}
 					this.chatVisibility.set(entry.sessionResource, {
 						editor: entry.partVisibility.editor,
@@ -163,11 +135,7 @@ export abstract class BaseLayoutController extends Disposable {
 					return;
 				}
 				const selected = this.sessions.getSelection();
-				if (
-					this.layout.isPartVisible('panel') &&
-					selected.activeSelection &&
-					selected.visibleSelections.length === 1
-				) {
+				if (this.layout.isPartVisible('panel') && selected.activeSelection && selected.visibleSelections.length === 1) {
 					this.panelViews.set(this.sessionKey(selected.activeSelection), event.composite.id);
 				}
 			}),
@@ -238,16 +206,8 @@ export abstract class BaseLayoutController extends Disposable {
 				const key = selection ? this.sessionKey(selection) : undefined;
 				const threadId = selection?.kind === 'session' ? selection.active.threadId : undefined;
 				// A pending directory restore follows the Thread; working sets remain Session-owned.
-				if (
-					key !== this.requestedSession ||
-					threadId !== this.requestedThread ||
-					layoutSnapshot.presentation !== this.requestedLayout?.presentation
-				) {
-					if (
-						key !== this.requestedSession ||
-						layoutSnapshot.presentation !== this.requestedLayout?.presentation
-					)
-						this.captureEditors();
+				if (key !== this.requestedSession || threadId !== this.requestedThread || layoutSnapshot.presentation !== this.requestedLayout?.presentation) {
+					if (key !== this.requestedSession || layoutSnapshot.presentation !== this.requestedLayout?.presentation) this.captureEditors();
 					if (
 						key &&
 						this.editorSession &&
@@ -270,10 +230,7 @@ export abstract class BaseLayoutController extends Disposable {
 					this.directoryRestore.abort();
 					this.directoryRestore = new AbortController();
 					this.revision += 1;
-					this.editorWorkingSetState.set(
-						{ ...this.editorWorkingSetState.get(), restoring: !!selection, applying: false },
-						undefined,
-					);
+					this.editorWorkingSetState.set({ ...this.editorWorkingSetState.get(), restoring: !!selection, applying: false }, undefined);
 				}
 				workspaceChanged.read(reader);
 				partVisibilityChanged.read(reader);
@@ -284,27 +241,18 @@ export abstract class BaseLayoutController extends Disposable {
 				}
 				if (selection && selected.visibleSelections.length === 1 && this.layout.isPartVisible('panel')) {
 					void this.panes
-						.openPaneComposite(
-							this.panelViews.get(this.sessionKey(selection)) ?? WorkbenchViewContainerId.Terminal,
-							ViewContainerLocation.Panel,
-						)
+						.openPaneComposite(this.panelViews.get(this.sessionKey(selection)) ?? WorkbenchViewContainerId.Terminal, ViewContainerLocation.Panel)
 						.catch(error => this.notifications.error(String(error)));
 				}
 				if (!selection || selected.visibleSelections.length !== 1 || !this.canRestoreSessionEditors()) {
-					this.editorWorkingSetState.set(
-						{ ...this.editorWorkingSetState.get(), restoring: false, applying: false },
-						undefined,
-					);
+					this.editorWorkingSetState.set({ ...this.editorWorkingSetState.get(), restoring: false, applying: false }, undefined);
 					return;
 				}
 				if (this.scheduledRevision === this.revision) {
 					return;
 				}
 				// Workspace switching precedes editor deserialization; file inputs must use the incoming directory.
-				if (
-					selection.kind === 'session' &&
-					this.workspace.getWorkspace().id !== selection.active.session.sessionId
-				) {
+				if (selection.kind === 'session' && this.workspace.getWorkspace().id !== selection.active.session.sessionId) {
 					return;
 				}
 				const revision = this.revision;
@@ -321,26 +269,16 @@ export abstract class BaseLayoutController extends Disposable {
 								return;
 							}
 							const latest = this.sessions.getSelection().activeSelection;
-							if (
-								latest?.kind !== 'session' ||
-								latest.active.session.sessionId !== selection.active.session.sessionId ||
-								latest.active.threadId !== selection.active.threadId
-							) {
+							if (latest?.kind !== 'session' || latest.active.session.sessionId !== selection.active.session.sessionId || latest.active.threadId !== selection.active.threadId) {
 								throw canceled();
 							}
-							const directory = latest.active.session.chats.find(
-								chat => chat.threadId === latest.active.threadId,
-							)?.workspace;
+							const directory = latest.active.session.chats.find(chat => chat.threadId === latest.active.threadId)?.workspace;
 							const folders = this.workspace.getWorkspace().folders;
 							if (directory === undefined) {
 								throw canceled();
 							}
 							const uri = directory ? sessionWorkspaceUri(directory) : undefined;
-							if (
-								uri
-									? folders.length !== 1 || !extUriBiasedIgnorePathCase.isEqual(folders[0]!.uri, uri)
-									: folders.length !== 0
-							) {
+							if (uri ? folders.length !== 1 || !extUriBiasedIgnorePathCase.isEqual(folders[0]!.uri, uri) : folders.length !== 0) {
 								throw canceled();
 							}
 						}
@@ -360,13 +298,7 @@ export abstract class BaseLayoutController extends Disposable {
 					})
 					.catch(error => {
 						if (!this.isDisposed && !isCancellationError(error)) {
-							this.notifications.error(
-								localize(
-									'sessions.layout.restoreFailed',
-									'Could not restore the editors for this session: {0}',
-									String(error),
-								),
-							);
+							this.notifications.error(localize('sessions.layout.restoreFailed', 'Could not restore the editors for this session: {0}', String(error)));
 						}
 					})
 					.finally(() => {
@@ -387,10 +319,7 @@ export abstract class BaseLayoutController extends Disposable {
 													: undefined,
 										}
 									: undefined;
-							this.editorWorkingSetState.set(
-								{ owner: selectedOwner, restoring: false, applying: false },
-								undefined,
-							);
+							this.editorWorkingSetState.set({ owner: selectedOwner, restoring: false, applying: false }, undefined);
 						}
 					});
 			}),
@@ -415,9 +344,7 @@ export abstract class BaseLayoutController extends Disposable {
 				this.retainedEditors.size &&
 				this.editor.groups.some(group => group.inputs.some(input => this.retainedEditors.has(input))) &&
 				snapshot.groups.length === previous.groups.length &&
-				snapshot.groups.every(
-					group => group.id !== undefined && previous.groups.some(saved => saved.id === group.id),
-				)
+				snapshot.groups.every(group => group.id !== undefined && previous.groups.some(saved => saved.id === group.id))
 			) {
 				// A hidden retained page has no new geometry. Preserve its split sizes while still capturing changes to tabs.
 				snapshot = {
@@ -463,23 +390,13 @@ export abstract class BaseLayoutController extends Disposable {
 		const owner = this.chatLayoutContext.state.get();
 		this.pendingRestore = this.pendingRestore
 			.then(async () => {
-				if (
-					!this.isDisposed &&
-					revision === this.revision &&
-					(!owner.presentation.active || this.chatLayoutContext.isCurrent(owner))
-				) {
+				if (!this.isDisposed && revision === this.revision && (!owner.presentation.active || this.chatLayoutContext.isCurrent(owner))) {
 					await operation();
 				}
 			})
 			.catch(error => {
 				if (!this.isDisposed) {
-					this.notifications.error(
-						localize(
-							'sessions.layout.restoreFailed',
-							'Could not restore the editors for this session: {0}',
-							String(error),
-						),
-					);
+					this.notifications.error(localize('sessions.layout.restoreFailed', 'Could not restore the editors for this session: {0}', String(error)));
 				}
 			});
 		return this.pendingRestore;
@@ -502,10 +419,7 @@ export abstract class BaseLayoutController extends Disposable {
 		this.editorWorkingSetState.set({ ...this.editorWorkingSetState.get(), applying: true }, undefined);
 		try {
 			await this.applyWorkingSet(saved ?? 'empty');
-			const visibility =
-				revision === this.revision && this.chatLayoutPresentation.configured === 'chat'
-					? this.chatVisibility.get(key)
-					: undefined;
+			const visibility = revision === this.revision && this.chatLayoutPresentation.configured === 'chat' ? this.chatVisibility.get(key) : undefined;
 			if (visibility) {
 				for (const part of ['editor', 'auxiliarybar'] as const) {
 					if (visibility[part]) {
@@ -549,16 +463,10 @@ export abstract class BaseLayoutController extends Disposable {
 			return;
 		}
 		const live = new Set([
+			...this.management.sessions.filter(session => session.status === 'active').map(session => `session:${session.sessionId}`),
 			...this.management.sessions
 				.filter(session => session.status === 'active')
-				.map(session => `session:${session.sessionId}`),
-			...this.management.sessions
-				.filter(session => session.status === 'active')
-				.flatMap(session =>
-					session.chats
-						.filter(chat => chat.status === 'active')
-						.map(chat => `chat:${JSON.stringify([session.sessionId, chat.threadId])}`),
-				),
+				.flatMap(session => session.chats.filter(chat => chat.status === 'active').map(chat => `chat:${JSON.stringify([session.sessionId, chat.threadId])}`)),
 			...this.management.untitledSessions.map(session => `untitled:${session.untitledSessionId}`),
 		]);
 		for (const key of this.workingSets.keys()) {
@@ -586,15 +494,11 @@ export abstract class BaseLayoutController extends Disposable {
 			return this.persistedSessionKey(selection.active.session.sessionId, selection.active.threadId);
 		}
 		const created = this.management.materializedSessions.get().get(selection.session.untitledSessionId);
-		return created
-			? this.persistedSessionKey(created.sessionId, created.threadId)
-			: `untitled:${selection.session.untitledSessionId}`;
+		return created ? this.persistedSessionKey(created.sessionId, created.threadId) : `untitled:${selection.session.untitledSessionId}`;
 	}
 
 	private persistedSessionKey(sessionId: string, threadId: string): string {
-		return this.chatLayoutPresentation.state.get().active
-			? `chat:${JSON.stringify([sessionId, threadId])}`
-			: `session:${sessionId}`;
+		return this.chatLayoutPresentation.state.get().active ? `chat:${JSON.stringify([sessionId, threadId])}` : `session:${sessionId}`;
 	}
 }
 

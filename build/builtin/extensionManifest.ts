@@ -3,13 +3,7 @@ export function readExtensionUiTargets(value: unknown): readonly ('ide' | 'agent
 	if (value === undefined) {
 		return undefined;
 	}
-	if (
-		!Array.isArray(value) ||
-		!value.length ||
-		value.length > 2 ||
-		new Set(value).size !== value.length ||
-		value.some(target => target !== 'ide' && target !== 'agents')
-	) {
+	if (!Array.isArray(value) || !value.length || value.length > 2 || new Set(value).size !== value.length || value.some(target => target !== 'ide' && target !== 'agents')) {
 		throw new TypeError('ashUiTargets must contain ide, agents, or both without duplicates');
 	}
 	return value;

@@ -4,11 +4,7 @@ import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
-import {
-	IBrowserPasswordService,
-	type BrowserPasswordState,
-	type BrowserSavedPassword,
-} from '../../../../platform/browserView/common/browserPasswordService.js';
+import { IBrowserPasswordService, type BrowserPasswordState, type BrowserSavedPassword } from '../../../../platform/browserView/common/browserPasswordService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import {
@@ -78,14 +74,8 @@ export class BrowserPasswordSettingsRenderer extends SettingsPageRenderer<Settin
 					if (
 						(
 							await this.dialogs.confirm({
-								message: localize(
-									'browser.passwords.clearConfirm',
-									'Delete all saved website passwords on this device?',
-								),
-								detail: localize(
-									'browser.passwords.clearDetail',
-									'This removes accounts from all browser storage sessions. HTTP and proxy authentication credentials are separate.',
-								),
+								message: localize('browser.passwords.clearConfirm', 'Delete all saved website passwords on this device?'),
+								detail: localize('browser.passwords.clearDetail', 'This removes accounts from all browser storage sessions. HTTP and proxy authentication credentials are separate.'),
 							})
 						).confirmed
 					) {
@@ -117,10 +107,7 @@ export class BrowserPasswordSettingsRenderer extends SettingsPageRenderer<Settin
 			}),
 		);
 		const hint = (): void => {
-			this.domNode.setAttribute(
-				'aria-description',
-				accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.Browser) ?? '',
-			);
+			this.domNode.setAttribute('aria-description', accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.Browser) ?? '');
 		};
 		hint();
 		this._register(
@@ -146,11 +133,7 @@ export class BrowserPasswordSettingsRenderer extends SettingsPageRenderer<Settin
 							{ type },
 							() =>
 								type === AccessibleViewType.View
-									? [
-											title.textContent,
-											this.status.textContent,
-											...this.state.entries.map(entry => `${entry.origin} ${entry.username}`),
-										].join('\n')
+									? [title.textContent, this.status.textContent, ...this.state.entries.map(entry => `${entry.origin} ${entry.username}`)].join('\n')
 									: localize(
 											'browser.passwords.help',
 											'Saved website passwords\nUse Search saved accounts to filter sites and usernames. Tab reaches Refresh, Delete all, and each account’s Edit and Delete buttons. Editing requires entering a new password; existing passwords are never shown. Escape cancels dialogs. Saved accounts use system encryption and are isolated by browser storage session. The save and autofill switches are in this Browser settings page. Autofill requires interaction with a visible same-origin login form or SPA panel. Username-first login can continue within this page and origin for two minutes. Verification codes are never filled. Agent and ephemeral sessions do not use saved accounts.',
@@ -199,10 +182,7 @@ export class BrowserPasswordSettingsRenderer extends SettingsPageRenderer<Settin
 			this.renderAccounts();
 		} catch {
 			if (!this.isDisposed && revision === this.revision) {
-				this.status.textContent = localize(
-					'browser.passwords.failed',
-					'Could not access saved website passwords. Check system encryption and retry.',
-				);
+				this.status.textContent = localize('browser.passwords.failed', 'Could not access saved website passwords. Check system encryption and retry.');
 			}
 		}
 	}
@@ -211,21 +191,11 @@ export class BrowserPasswordSettingsRenderer extends SettingsPageRenderer<Settin
 		this.controls.clear();
 		this.list.replaceChildren();
 		const query = this.search.value.toLowerCase();
-		const entries = this.state.entries.filter(entry =>
-			`${entry.origin} ${entry.username}`.toLowerCase().includes(query),
-		);
+		const entries = this.state.entries.filter(entry => `${entry.origin} ${entry.username}`.toLowerCase().includes(query));
 		this.status.textContent = !this.state.available
-			? localize(
-					'browser.passwords.unavailable',
-					'Website password storage requires Desktop and available system encryption.',
-				)
+			? localize('browser.passwords.unavailable', 'Website password storage requires Desktop and available system encryption.')
 			: this.state.corrupted
-				? localize(
-						'browser.passwords.corrupted',
-						'{0} saved accounts. {1} encrypted records could not be read and have been preserved.',
-						this.state.entries.length,
-						this.state.corrupted,
-					)
+				? localize('browser.passwords.corrupted', '{0} saved accounts. {1} encrypted records could not be read and have been preserved.', this.state.entries.length, this.state.corrupted)
 				: localize('browser.passwords.count', '{0} saved accounts.', this.state.entries.length);
 		for (const entry of entries) {
 			const row = h(this.list.ownerDocument, 'li');
@@ -234,29 +204,15 @@ export class BrowserPasswordSettingsRenderer extends SettingsPageRenderer<Settin
 			row.append(label);
 			this.list.append(row);
 			for (const [label, ariaLabel, run] of [
-				[
-					localize('browser.passwords.edit', 'Edit'),
-					localize('browser.passwords.editAccount', 'Edit account {0} on {1}', entry.username, entry.origin),
-					() => this.edit(entry),
-				],
+				[localize('browser.passwords.edit', 'Edit'), localize('browser.passwords.editAccount', 'Edit account {0} on {1}', entry.username, entry.origin), () => this.edit(entry)],
 				[
 					localize('browser.passwords.delete', 'Delete'),
-					localize(
-						'browser.passwords.deleteAccount',
-						'Delete account {0} on {1}',
-						entry.username,
-						entry.origin,
-					),
+					localize('browser.passwords.deleteAccount', 'Delete account {0} on {1}', entry.username, entry.origin),
 					async () => {
 						if (
 							(
 								await this.dialogs.confirm({
-									message: localize(
-										'browser.passwords.deleteConfirm',
-										'Delete the saved account {0} on {1}?',
-										entry.username,
-										entry.origin,
-									),
+									message: localize('browser.passwords.deleteConfirm', 'Delete the saved account {0} on {1}?', entry.username, entry.origin),
 								})
 							).confirmed
 						) {
@@ -265,9 +221,7 @@ export class BrowserPasswordSettingsRenderer extends SettingsPageRenderer<Settin
 					},
 				],
 			] as const) {
-				const button = this.controls.add(
-					new Button(row, { ...defaultButtonStyles, label, ariaLabel, presentation: 'secondary' }),
-				);
+				const button = this.controls.add(new Button(row, { ...defaultButtonStyles, label, ariaLabel, presentation: 'secondary' }));
 				button.label = label;
 				this.controls.add(
 					button.onDidClick(() => {
@@ -294,10 +248,7 @@ export class BrowserPasswordSettingsRenderer extends SettingsPageRenderer<Settin
 		});
 		if (result.confirmed) {
 			if (!result.values?.[0] || !result.values[1]) {
-				this.status.textContent = localize(
-					'browser.passwords.required',
-					'Enter a username and a new password.',
-				);
+				this.status.textContent = localize('browser.passwords.required', 'Enter a username and a new password.');
 				return;
 			}
 			await this.passwords.update(entry.id, result.values[0], result.values[1]);
@@ -311,10 +262,7 @@ export class BrowserPasswordSettingsRenderer extends SettingsPageRenderer<Settin
 			}
 		} catch {
 			if (!this.isDisposed) {
-				this.status.textContent = localize(
-					'browser.passwords.failed',
-					'Could not access saved website passwords. Check system encryption and retry.',
-				);
+				this.status.textContent = localize('browser.passwords.failed', 'Could not access saved website passwords. Check system encryption and retry.');
 			}
 		}
 	}

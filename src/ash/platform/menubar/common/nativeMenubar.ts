@@ -56,10 +56,7 @@ const MAX_LABEL_LENGTH = 512;
 /** Validates a complete renderer-to-main application menu snapshot. */
 export function validateNativeMenubarData(value: unknown): INativeMenubarData {
 	const record = looseRecord(value);
-	const data = exactRecord(
-		value,
-		record.touchBar === undefined ? ['menus', 'revision'] : ['menus', 'revision', 'touchBar'],
-	);
+	const data = exactRecord(value, record.touchBar === undefined ? ['menus', 'revision'] : ['menus', 'revision', 'touchBar']);
 	if (!Array.isArray(data.menus)) {
 		throw new Error('menubar menus must be an array');
 	}
@@ -67,7 +64,10 @@ export function validateNativeMenubarData(value: unknown): INativeMenubarData {
 		throw new Error('menubar contains too many top-level menus');
 	}
 
-	const state: IValidationState = { itemCount: 0, ids: new Set() };
+	const state: IValidationState = {
+		itemCount: 0,
+		ids: new Set(),
+	};
 	const touchBar = data.touchBar === undefined ? undefined : validateTouchBar(data.touchBar, state);
 	return {
 		revision: safeRevision(data.revision),
@@ -87,8 +87,7 @@ function validateTouchBar(value: unknown, state: IValidationState): readonly INa
 	return value.map((candidate, index) => {
 		const item = exactRecord(candidate, ['enabled', 'icon', 'id', 'label']);
 		const icon = boundedString(item.icon, `touchBar[${index}].icon`, 16_000);
-		if (!/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/u.test(icon))
-			throw new Error('touch bar icons must be PNG data URLs');
+		if (!/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/u.test(icon)) throw new Error('touch bar icons must be PNG data URLs');
 		return {
 			id: uniqueActionId(item.id, `touchBar[${index}].id`, state),
 			label: boundedString(item.label, `touchBar[${index}].label`, MAX_LABEL_LENGTH),
@@ -131,8 +130,7 @@ function validateItems(value: unknown, depth: number, state: IValidationState): 
 				if (item.checked !== undefined) keys.push('checked');
 				requireExactKeys(item, keys);
 				const id = uniqueActionId(item.id, `items[${index}].id`, state);
-				const altId =
-					item.altId === undefined ? undefined : uniqueActionId(item.altId, `items[${index}].altId`, state);
+				const altId = item.altId === undefined ? undefined : uniqueActionId(item.altId, `items[${index}].altId`, state);
 				const action: INativeMenubarAction = {
 					type: 'action',
 					id,
@@ -142,7 +140,10 @@ function validateItems(value: unknown, depth: number, state: IValidationState): 
 				};
 				return item.checked === undefined
 					? action
-					: { ...action, checked: boolean(item.checked, `items[${index}].checked`) };
+					: {
+							...action,
+							checked: boolean(item.checked, `items[${index}].checked`),
+						};
 			}
 			case 'submenu':
 				requireExactKeys(item, ['enabled', 'items', 'label', 'type']);

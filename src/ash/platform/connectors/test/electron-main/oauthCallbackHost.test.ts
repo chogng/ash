@@ -46,10 +46,7 @@ test('standalone callback forwards issuer and ignores malformed paths and non-GE
 	const pending = wait.invoke(result.id);
 	assert.equal(await callbackRequest(result.redirectUri, 'http://['), 404);
 	assert.equal(await callbackRequest(result.redirectUri, `${path}?state=s&code=c`, 'POST'), 404);
-	assert.equal(
-		await callbackRequest(result.redirectUri, `${path}?state=s&code=c&iss=https%3A%2F%2Fissuer.test`),
-		200,
-	);
+	assert.equal(await callbackRequest(result.redirectUri, `${path}?state=s&code=c&iss=https%3A%2F%2Fissuer.test`), 200);
 	assert.deepEqual(await pending, { state: 's', code: 'c', issuer: 'https://issuer.test' });
 });
 

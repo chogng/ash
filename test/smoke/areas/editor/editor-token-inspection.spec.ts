@@ -25,9 +25,7 @@ test(
 		await setting.getByRole('button', { name: /^Add / }).click();
 		const rule = setting.locator('.ash-string-map-row').last();
 		await rule.locator('[data-pattern-part="key"]').fill('rules');
-		await rule
-			.locator('[data-pattern-part="value"]')
-			.fill(JSON.stringify({ 'text.title': { foreground: '#654321', fontStyle: 'italic' } }));
+		await rule.locator('[data-pattern-part="value"]').fill(JSON.stringify({ 'text.title': { foreground: '#654321', fontStyle: 'italic' } }));
 		await rule.locator('[data-pattern-part="value"]').press('Tab');
 		await settings.locator('.ash-modal-editor-close').click();
 		await expect(heading).toHaveCSS('color', 'rgb(101, 67, 33)');
@@ -52,16 +50,11 @@ test(
 		await page.keyboard.press('Escape');
 		await expect(input).toBeFocused();
 		({ workbench } = await reloadWorkbench());
-		await expect(
-			workbench.editors.groupAt(0).content.locator('.stanza-editor-token').filter({ hasText: 'Heading' }),
-		).toHaveCSS('color', 'rgb(101, 67, 33)');
+		await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-token').filter({ hasText: 'Heading' })).toHaveCSS('color', 'rgb(101, 67, 33)');
 	},
 );
 
-test('token inspection handles plaintext, Chinese labels, keyboard close and focus restoration', async ({
-	workbench,
-	restartWorkbench,
-}) => {
+test('token inspection handles plaintext, Chinese labels, keyboard close and focus restoration', async ({ workbench, restartWorkbench }) => {
 	let page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const picker = page.getByRole('dialog', { name: 'Select Display Language' });
@@ -75,9 +68,7 @@ test('token inspection handles plaintext, Chinese labels, keyboard close and foc
 	await page.keyboard.insertText('plain text');
 	await workbench.quickaccess.runCommand('editor.action.inspectTMScopes');
 	const dialog = page.getByRole('dialog', { name: '编辑器词法单元', exact: true });
-	await expect(dialog.getByRole('textbox', { name: '编辑器词法单元检查', exact: true })).toHaveValue(
-		/语言：plaintext[\s\S]*此位置没有 Tree-sitter 捕获。/u,
-	);
+	await expect(dialog.getByRole('textbox', { name: '编辑器词法单元检查', exact: true })).toHaveValue(/语言：plaintext[\s\S]*此位置没有 Tree-sitter 捕获。/u);
 	await page.keyboard.press('Escape');
 	await expect(dialog).toHaveCount(0);
 	await expect(editor.input).toBeFocused();

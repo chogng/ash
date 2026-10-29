@@ -53,12 +53,7 @@ export function getBrowserTextResourceStore(textFiles: ITextFileService): Browse
 }
 
 function validateTextFileService(textFiles: ITextFileService): void {
-	if (
-		!textFiles ||
-		typeof textFiles.resolve !== 'function' ||
-		typeof textFiles.save !== 'function' ||
-		typeof textFiles.onDidChangeFiles !== 'function'
-	) {
+	if (!textFiles || typeof textFiles.resolve !== 'function' || typeof textFiles.save !== 'function' || typeof textFiles.onDidChangeFiles !== 'function') {
 		throw new TypeError('Browser resource store requires a Workbench text file service');
 	}
 }

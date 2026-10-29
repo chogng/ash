@@ -2,10 +2,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import {
-	ITraceSettingsService,
-	type TraceSettingsSnapshot,
-} from '../../../../platform/trace/common/traceSettingsService.js';
+import { ITraceSettingsService, type TraceSettingsSnapshot } from '../../../../platform/trace/common/traceSettingsService.js';
 import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 import type { SettingsSectionField, SettingsSectionModel } from '../../preferences/browser/settingsTreeModels.js';
 
@@ -52,10 +49,7 @@ export class TraceSettingsModel extends Disposable implements SettingsSectionMod
 				}
 				if (this.dirty) {
 					this.stale = true;
-					this.message = localize(
-						{ bundle: 'ash.settings', key: 'trace.changed' },
-						'Backend settings changed. Refresh before saving; refresh discards your draft.',
-					);
+					this.message = localize({ bundle: 'ash.settings', key: 'trace.changed' }, 'Backend settings changed. Refresh before saving; refresh discards your draft.');
 					this.changed.fire();
 				} else {
 					void this.refresh();
@@ -74,10 +68,7 @@ export class TraceSettingsModel extends Disposable implements SettingsSectionMod
 			{
 				id: 'enabled',
 				kind: 'boolean',
-				label: localize(
-					{ bundle: 'ash.settings', key: 'trace.enabled' },
-					'Record detailed requests and responses',
-				),
+				label: localize({ bundle: 'ash.settings', key: 'trace.enabled' }, 'Record detailed requests and responses'),
 				value: this.enabled,
 				enabled: editable,
 				setValue: value => {
@@ -88,15 +79,9 @@ export class TraceSettingsModel extends Disposable implements SettingsSectionMod
 			{
 				id: 'directory',
 				kind: 'text',
-				label: localize(
-					{ bundle: 'ash.settings', key: 'trace.directory' },
-					'Save directory on the App Server host',
-				),
+				label: localize({ bundle: 'ash.settings', key: 'trace.directory' }, 'Save directory on the App Server host'),
 				value: this.directory,
-				placeholder: localize(
-					{ bundle: 'ash.settings', key: 'trace.directoryPlaceholder' },
-					'Absolute directory path',
-				),
+				placeholder: localize({ bundle: 'ash.settings', key: 'trace.directoryPlaceholder' }, 'Absolute directory path'),
 				enabled: editable,
 				setValue: value => {
 					this.directory = value;
@@ -136,9 +121,7 @@ export class TraceSettingsModel extends Disposable implements SettingsSectionMod
 			{
 				id: 'status',
 				kind: 'status',
-				text: this.busy
-					? localize({ bundle: 'ash.settings', key: 'trace.busy' }, 'Reading or saving trace settings…')
-					: this.message,
+				text: this.busy ? localize({ bundle: 'ash.settings', key: 'trace.busy' }, 'Reading or saving trace settings…') : this.message,
 			},
 		];
 	}
@@ -172,41 +155,23 @@ export class TraceSettingsModel extends Disposable implements SettingsSectionMod
 	private edit(): void {
 		this.dirty = true;
 		if (!this.stale) {
-			this.message = localize(
-				{ bundle: 'ash.settings', key: 'trace.unsaved' },
-				'Unsaved changes. Save, then restart the owning App Server to apply them.',
-			);
+			this.message = localize({ bundle: 'ash.settings', key: 'trace.unsaved' }, 'Unsaved changes. Save, then restart the owning App Server to apply them.');
 		}
 		this.changed.fire();
 	}
 
 	private recordingText(): string {
 		if (!this.snapshot) {
-			return localize(
-				{ bundle: 'ash.settings', key: 'trace.unknown' },
-				'Current recording state is unavailable. Connect to App Server and refresh.',
-			);
+			return localize({ bundle: 'ash.settings', key: 'trace.unknown' }, 'Current recording state is unavailable. Connect to App Server and refresh.');
 		}
 		const state = this.snapshot.recording;
 		switch (state.type) {
 			case 'disabled':
-				return localize(
-					{ bundle: 'ash.settings', key: 'trace.disabled' },
-					'Current backend: detailed recording is off.',
-				);
+				return localize({ bundle: 'ash.settings', key: 'trace.disabled' }, 'Current backend: detailed recording is off.');
 			case 'enabled':
-				return localize(
-					{ bundle: 'ash.settings', key: 'trace.recording' },
-					'Current backend: detailed recording is enabled in {0}.',
-					state.directory,
-				);
+				return localize({ bundle: 'ash.settings', key: 'trace.recording' }, 'Current backend: detailed recording is enabled in {0}.', state.directory);
 			case 'unavailable':
-				return localize(
-					{ bundle: 'ash.settings', key: 'trace.unavailable' },
-					'Current backend: recording directory {0} is unavailable: {1}',
-					state.directory,
-					state.error,
-				);
+				return localize({ bundle: 'ash.settings', key: 'trace.unavailable' }, 'Current backend: recording directory {0} is unavailable: {1}', state.directory, state.error);
 		}
 	}
 
@@ -223,9 +188,7 @@ export class TraceSettingsModel extends Disposable implements SettingsSectionMod
 			);
 		}
 		const recording = snapshot.recording;
-		const applied = configured.enabled
-			? recording.type !== 'disabled' && configured.directory === recording.directory
-			: recording.type === 'disabled';
+		const applied = configured.enabled ? recording.type !== 'disabled' && configured.directory === recording.directory : recording.type === 'disabled';
 		return applied
 			? localize(
 					{ bundle: 'ash.settings', key: 'trace.applied' },
@@ -253,11 +216,7 @@ export class TraceSettingsModel extends Disposable implements SettingsSectionMod
 			}
 			this.snapshot = snapshot;
 			this.enabled = snapshot.configured?.enabled ?? snapshot.recording.type !== 'disabled';
-			this.directory = snapshot.configured
-				? (snapshot.configured.directory ?? '')
-				: snapshot.recording.type === 'disabled'
-					? ''
-					: snapshot.recording.directory;
+			this.directory = snapshot.configured ? (snapshot.configured.directory ?? '') : snapshot.recording.type === 'disabled' ? '' : snapshot.recording.directory;
 			this.dirty = false;
 			this.stale = false;
 		} catch {
@@ -265,10 +224,7 @@ export class TraceSettingsModel extends Disposable implements SettingsSectionMod
 				return;
 			}
 			this.snapshot = undefined;
-			this.message = localize(
-				{ bundle: 'ash.settings', key: 'trace.readFailed' },
-				'Could not read trace settings. Connect to App Server and refresh.',
-			);
+			this.message = localize({ bundle: 'ash.settings', key: 'trace.readFailed' }, 'Could not read trace settings. Connect to App Server and refresh.');
 		} finally {
 			if (!this.isDisposed && revision === this.revision) {
 				this.busy = false;
@@ -283,10 +239,7 @@ export class TraceSettingsModel extends Disposable implements SettingsSectionMod
 		}
 		const directory = this.directory.trim();
 		if (this.enabled && !directory) {
-			this.message = localize(
-				{ bundle: 'ash.settings', key: 'trace.required' },
-				'Enter an absolute save directory before enabling detailed recording.',
-			);
+			this.message = localize({ bundle: 'ash.settings', key: 'trace.required' }, 'Enter an absolute save directory before enabling detailed recording.');
 			this.changed.fire();
 			return;
 		}
@@ -339,10 +292,7 @@ export class TraceSettingsModel extends Disposable implements SettingsSectionMod
 			if (this.isDisposed || revision !== this.revision) {
 				return;
 			}
-			this.message = localize(
-				{ bundle: 'ash.settings', key: 'trace.chooseFailed' },
-				'Could not choose a directory. Enter an absolute path on the App Server host.',
-			);
+			this.message = localize({ bundle: 'ash.settings', key: 'trace.chooseFailed' }, 'Could not choose a directory. Enter an absolute path on the App Server host.');
 		} finally {
 			if (!this.isDisposed && revision === this.revision) {
 				this.busy = false;

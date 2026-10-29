@@ -2,21 +2,12 @@ import type { IResourceEditorInput } from '../../../common/editor.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
-import {
-	IBrowserViewService,
-	BrowserViewStorageScope,
-	normalizeBrowserViewUrl,
-	type IBrowserViewSessionOptions,
-} from '../../../../platform/browserView/common/browserView.js';
+import { IBrowserViewService, BrowserViewStorageScope, normalizeBrowserViewUrl, type IBrowserViewSessionOptions } from '../../../../platform/browserView/common/browserView.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../nls.js';
 import { EditorInput } from '../../../common/editor/editorInput.js';
 
-import {
-	type EditorInputSerializer,
-	requireRecord,
-	requireString,
-} from '../../../services/editor/common/editorInputSerializer.js';
+import { type EditorInputSerializer, requireRecord, requireString } from '../../../services/editor/common/editorInputSerializer.js';
 import { BrowserViewModel, IBrowserViewWorkbenchService, type IBrowserViewModel } from './browserView.js';
 import { BrowserViewUri } from '../../../../platform/browserView/common/browserViewUri.js';
 
@@ -127,10 +118,7 @@ export class BrowserEditorInput extends EditorInput {
 		const info = this.model?.info;
 		const session = info?.session ?? this.data.session;
 		// Restoring a tab restores user presentation, never an agent's authority or in-memory login.
-		const restoredSession =
-			session.scope === BrowserViewStorageScope.Agent
-				? { scope: BrowserViewStorageScope.Ephemeral as const }
-				: session;
+		const restoredSession = session.scope === BrowserViewStorageScope.Agent ? { scope: BrowserViewStorageScope.Ephemeral as const } : session;
 		return {
 			id: this.data.id,
 			url: info?.state.url ?? this.data.url,
@@ -167,11 +155,7 @@ export class BrowserEditorSerializer implements EditorInputSerializer {
 			throw new TypeError('Invalid browser editor id');
 		}
 		const session = requireRecord(data.session, 'browser storage');
-		if (
-			session.scope !== BrowserViewStorageScope.Global &&
-			session.scope !== BrowserViewStorageScope.Workspace &&
-			session.scope !== BrowserViewStorageScope.Ephemeral
-		) {
+		if (session.scope !== BrowserViewStorageScope.Global && session.scope !== BrowserViewStorageScope.Workspace && session.scope !== BrowserViewStorageScope.Ephemeral) {
 			throw new TypeError('Invalid restored browser storage');
 		}
 		if (typeof data.title !== 'string') {

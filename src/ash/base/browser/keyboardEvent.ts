@@ -52,12 +52,7 @@ export class StandardKeyboardEvent implements IKeyboardEvent {
 	constructor(readonly browserEvent: KeyboardEvent) {
 		this.key = browserEvent.key;
 		this.code = browserEvent.code;
-		this.keyCode = keyCodeFromKeyboardEvent(
-			browserEvent.key,
-			browserEvent.keyCode,
-			browserEvent.code,
-			browserEvent.location,
-		);
+		this.keyCode = keyCodeFromKeyboardEvent(browserEvent.key, browserEvent.keyCode, browserEvent.code, browserEvent.location);
 		this.scanCode = ScanCodeUtils.toEnum(browserEvent.code);
 		this.location = browserEvent.location;
 		this.ctrlKey = browserEvent.ctrlKey;

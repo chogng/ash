@@ -20,14 +20,8 @@ import { EnterMultiRootWorkspaceSupportContext } from '../common/contextkeys.js'
 import { WORKSPACE_EDIT_ERROR_CHANNEL } from '../../platform/workspace/common/workspaceIpc.js';
 import { INotificationService } from '../../platform/notification/common/notification.js';
 import { localize } from '../../nls.js';
-import {
-	WORKSPACE_RECOVERY_CHANNEL,
-	WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL,
-} from '../../platform/window/common/window.js';
-import {
-	serializeWorkspaceIdentifier,
-	type IAnyWorkspaceIdentifier,
-} from '../../platform/workspace/common/workspace.js';
+import { WORKSPACE_RECOVERY_CHANNEL, WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL } from '../../platform/window/common/window.js';
+import { serializeWorkspaceIdentifier, type IAnyWorkspaceIdentifier } from '../../platform/workspace/common/workspace.js';
 import { WorkingCopyBackupService } from '../services/workingCopy/browser/workingCopyBackupService.js';
 import { IndexedDbWorkingCopyBackupService } from '../services/workingCopy/browser/indexedDbWorkingCopyBackupService.js';
 import { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
@@ -105,29 +99,17 @@ export class DesktopMain extends Disposable {
 			const permissionDialog = this._register(new DirectoryPermissionDialog(container));
 			const transcriptionServices = this._register(new InstantiationService());
 			// Browser requests arrive during backend initialization, before the Parts exist.
-			const profileServices = this._register(
-				new InstantiationService(
-					new ServiceCollection(
-						...getSingletonServiceDescriptors().filter(([id]) => id === IPlaywrightService),
-					),
-				),
-			);
+			const profileServices = this._register(new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors().filter(([id]) => id === IPlaywrightService))));
 			const windowId = await invoke<unknown>('ash:ipc:window-id');
 			if (!Number.isSafeInteger(windowId) || (windowId as number) <= 0) {
 				throw new TypeError('Invalid Main IPC window ID');
 			}
 			// The scope releases its dependent services before closing their Main connection.
-			profileServices.registerSingleton(IMainProcessService, () =>
-				profileServices.createInstance(ElectronIPCMainProcessService, windowId as number),
-			);
+			profileServices.registerSingleton(IMainProcessService, () => profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
 			const mainProcessService = profileServices.get(IMainProcessService);
 			const expectsTerminalTransfer = await invoke<unknown>(WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL);
-			if (typeof expectsTerminalTransfer !== 'boolean')
-				throw new TypeError('Invalid terminal window startup intent');
-			const environment = new ElectronWorkbenchEnvironmentService(
-				await mainProcessService.getChannel('logger').call('getDefaultLogLevels'),
-				expectsTerminalTransfer,
-			);
+			if (typeof expectsTerminalTransfer !== 'boolean') throw new TypeError('Invalid terminal window startup intent');
+			const environment = new ElectronWorkbenchEnvironmentService(await mainProcessService.getChannel('logger').call('getDefaultLogLevels'), expectsTerminalTransfer);
 			profileServices.registerInstance(IWorkbenchEnvironmentService, environment);
 			const logger = this._register(profileServices.createInstance(NativeLogService, 'workbench'));
 			const playwrightService = profileServices.get(IPlaywrightService);
@@ -144,8 +126,7 @@ export class DesktopMain extends Disposable {
 							return {};
 						},
 						...this.rendererCapabilities,
-						(_client, _appServer, localClient) =>
-							registerLocalTranscriptionService(transcriptionServices, localClient),
+						(_client, _appServer, localClient) => registerLocalTranscriptionService(transcriptionServices, localClient),
 					],
 					{ browser: true, textDocuments: true },
 					permissionDialog,
@@ -154,14 +135,7 @@ export class DesktopMain extends Disposable {
 						if (!resolverScope.value) {
 							const scope = new DisposableStore();
 							resolverScope.value = scope;
-							const services = scope.add(
-								profileServices.createChild(
-									new ServiceCollection(
-										[IExtensionHostApi, localApi],
-										[IRemoteSocketFactoryService, factories],
-									),
-								),
-							);
+							const services = scope.add(profileServices.createChild(new ServiceCollection([IExtensionHostApi, localApi], [IRemoteSocketFactoryService, factories])));
 							localResolver = scope.add(services.createInstance(NativeExtensionService));
 						}
 						await localResolver!.resolveAuthority(authority, attempt);
@@ -179,12 +153,7 @@ export class DesktopMain extends Disposable {
 			const profileProvider = this._register(new FileUserDataProvider(api.localFiles, api.userDataHome));
 			this._register(profileFiles.registerProvider(Schemas.vscodeUserData, profileProvider));
 			profileServices.registerInstance(IFileService, profileFiles);
-			const userThemes = this._register(
-				await loadUserThemes(
-					profileServices,
-					URI.from({ scheme: Schemas.vscodeUserData, path: '/user/themes' }),
-				),
-			);
+			const userThemes = this._register(await loadUserThemes(profileServices, URI.from({ scheme: Schemas.vscodeUserData, path: '/user/themes' })));
 			performance.mark('ash.desktop.themes-ready');
 			const workspace = parseWorkspace(await api.workspace.getWorkspace());
 			performance.mark('ash.desktop.workspace-ready');
@@ -199,22 +168,9 @@ export class DesktopMain extends Disposable {
 					serviceCollection: new ServiceCollection(
 						[IWorkspaceEditingService, new SyncDescriptor(WorkspaceEditingService, [api.workspace])],
 						[ILoggerService, logger],
-						[
-							IPolicyService,
-							this._register(new PolicyChannelClient(mainProcessService.getChannel('policy'))),
-						],
-						[
-							IBrowserPasswordService,
-							ProxyChannel.toService<IBrowserPasswordService>(
-								mainProcessService.getChannel('browserPasswords'),
-							),
-						],
-						[
-							IBrowserViewService,
-							ProxyChannel.toService<IBrowserViewService>(
-								mainProcessService.getChannel(ipcBrowserViewChannelName),
-							),
-						],
+						[IPolicyService, this._register(new PolicyChannelClient(mainProcessService.getChannel('policy')))],
+						[IBrowserPasswordService, ProxyChannel.toService<IBrowserPasswordService>(mainProcessService.getChannel('browserPasswords'))],
+						[IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName))],
 						[IMainProcessService, mainProcessService],
 						[ISecretStorageService, this._register(profileServices.createInstance(SecretStorageService))],
 						[IRemoteAuthorityResolverService, resolver],
@@ -236,39 +192,31 @@ export class DesktopMain extends Disposable {
 								);
 								const ide = hosts.add(services.createInstance(AppServerIdeHost, documentClient!));
 								hosts.add(
-									services
-										.get(IEnvironmentVariableService)
-										.registerCollectionProvider('ash.ide', async () => {
-											const key = await ide.readTerminalWindowKey();
-											return {
-												persistent: false,
-												map: key
-													? new Map([
-															[
-																'ASH_IDE_WINDOW',
-																{
-																	variable: 'ASH_IDE_WINDOW',
-																	type: EnvironmentVariableMutatorType.Replace,
-																	value: key,
-																},
-															],
-														])
-													: new Map(),
-											};
-										}),
+									services.get(IEnvironmentVariableService).registerCollectionProvider('ash.ide', async () => {
+										const key = await ide.readTerminalWindowKey();
+										return {
+											persistent: false,
+											map: key
+												? new Map([
+														[
+															'ASH_IDE_WINDOW',
+															{
+																variable: 'ASH_IDE_WINDOW',
+																type: EnvironmentVariableMutatorType.Replace,
+																value: key,
+															},
+														],
+													])
+												: new Map(),
+										};
+									}),
 								);
 								return hosts;
 							}
 						: undefined,
 					createBrowserHost: documentClient
 						? services =>
-								registerAppServerBrowserHost(
-									documentClient!,
-									playwrightService,
-									mainProcessService,
-									services.get(IConfigurationService),
-									services.get(IAgentHostCanvasCollection),
-								)
+								registerAppServerBrowserHost(documentClient!, playwrightService, mainProcessService, services.get(IConfigurationService), services.get(IAgentHostCanvasCollection))
 						: undefined,
 					createLogService: () => {
 						// The factory owns failure cleanup and transfers the logger to the Workbench.
@@ -277,9 +225,7 @@ export class DesktopMain extends Disposable {
 					},
 					createWorkingCopyBackupService: (services, workspaceId) => {
 						if (!api.backup) return new IndexedDbWorkingCopyBackupService(workspaceId);
-						return services
-							.createChild(new ServiceCollection([IBackupService, api.backup]))
-							.createInstance(WorkingCopyBackupService);
+						return services.createChild(new ServiceCollection([IBackupService, api.backup])).createInstance(WorkingCopyBackupService);
 					},
 					createStorageService: async options => {
 						const storage = profileServices.createInstance(NativeWorkbenchStorageService, options);
@@ -302,11 +248,7 @@ export class DesktopMain extends Disposable {
 						this._register(
 							lifecycleService.onWillShutdown(event =>
 								event.join(
-									logger
-										.flush()
-										.catch(error =>
-											console.error('Could not flush Desktop logs during shutdown', error),
-										),
+									logger.flush().catch(error => console.error('Could not flush Desktop logs during shutdown', error)),
 									'Desktop logs flush',
 								),
 							),
@@ -332,21 +274,12 @@ export class DesktopMain extends Disposable {
 						this._register(toDisposable(() => support.reset()));
 						const errors = subscribe(WORKSPACE_EDIT_ERROR_CHANNEL, value => {
 							if (typeof value === 'string')
-								services
-									.get(INotificationService)
-									.error(
-										localize(
-											'workspace.reloadFailed',
-											'Could not update workspace folders. The last accepted folders were kept. {0}',
-											value,
-										),
-									);
+								services.get(INotificationService).error(localize('workspace.reloadFailed', 'Could not update workspace folders. The last accepted folders were kept. {0}', value));
 						});
 						this._register(toDisposable(() => errors.dispose()));
 						return (desktopWindow = services.createInstance(ElectronWindow, { invoke, subscribe }));
 					},
-					createUserDataFileSystemProvider: async () =>
-						new FileUserDataProvider(api.localFiles, api.userDataHome),
+					createUserDataFileSystemProvider: async () => new FileUserDataProvider(api.localFiles, api.userDataHome),
 					keyboardLayoutProvider: api.keyboardLayout,
 					userKeyboardLayoutApi: api.userKeyboardLayout,
 					nativeHostApi: api.nativeHost,
@@ -358,18 +291,10 @@ export class DesktopMain extends Disposable {
 					clipboardService: new ElectronRendererClipboardService(),
 					dialogHandler: new NativeDialogHandler(api.nativeHost, container),
 					userThemeService: userThemes,
-					createContextMenuService: services =>
-						services.createInstance(ElectronContextMenuService, api.nativeContextMenu),
-					createAuxiliaryWindowService: (owner, root, services) =>
-						services.createInstance(ElectronAuxiliaryWindowService, owner, root),
+					createContextMenuService: services => services.createInstance(ElectronContextMenuService, api.nativeContextMenu),
+					createAuxiliaryWindowService: (owner, root, services) => services.createInstance(ElectronAuxiliaryWindowService, owner, root),
 					createTitleService: (container, productName, groups, services) =>
-						services.createInstance(
-							ElectronTitleService,
-							container,
-							productName,
-							createElectronTitlebarPartFactory(),
-							groups,
-						),
+						services.createInstance(ElectronTitleService, container, productName, createElectronTitlebarPartFactory(), groups),
 				}),
 			);
 			performance.mark('ash.desktop.workbench-created');
@@ -443,9 +368,6 @@ export class DesktopMain extends Disposable {
 	}
 }
 
-export function main(
-	options: Pick<IStartWorkbenchOptions, 'productName'>,
-	rendererCapabilities: readonly ElectronRendererCapabilityContribution[] = [],
-): Promise<void> {
+export function main(options: Pick<IStartWorkbenchOptions, 'productName'>, rendererCapabilities: readonly ElectronRendererCapabilityContribution[] = []): Promise<void> {
 	return new DesktopMain(options, rendererCapabilities).open();
 }

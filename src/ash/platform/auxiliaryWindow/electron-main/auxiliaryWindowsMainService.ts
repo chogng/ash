@@ -1,22 +1,14 @@
 import { Emitter } from '../../../base/common/event.js';
 import type { IAuxiliaryWindowStateEvent } from '../../window/common/window.js';
 import type { BrowserWindow, BrowserWindowConstructorOptions, HandlerDetails, WebContents } from 'electron';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	toDisposable,
-	type IDisposable,
-} from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { AuxiliaryWindow, type IAuxiliaryWindow } from './auxiliaryWindow.js';
 import type { IAuxiliaryWindowsMainService } from './auxiliaryWindows.js';
 import type { TitleBarStyleConfiguration } from '../../window/common/window.js';
 import { resolveWindowTitleBarOptions, restoreWindowBounds } from '../../windows/electron-main/windows.js';
 
 export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliaryWindowsMainService {
-	private readonly stateChanged = this._register(
-		new Emitter<{ readonly parentId: number; readonly event: IAuxiliaryWindowStateEvent }>(),
-	);
+	private readonly stateChanged = this._register(new Emitter<{ readonly parentId: number; readonly event: IAuxiliaryWindowStateEvent }>());
 	readonly onDidChangeWindowState = this.stateChanged.event;
 	private readonly windows = this._register(new DisposableMap<number, AuxiliaryWindow>());
 	private readonly listeners = this._register(new DisposableMap<number, DisposableStore>());
@@ -25,11 +17,7 @@ export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliar
 		super();
 	}
 
-	public createWindow(
-		details: HandlerDetails,
-		titleBarStyle: TitleBarStyleConfiguration,
-		zoomLevel = 0,
-	): BrowserWindowConstructorOptions {
+	public createWindow(details: HandlerDetails, titleBarStyle: TitleBarStyleConfiguration, zoomLevel = 0): BrowserWindowConstructorOptions {
 		this.assertNotDisposed();
 		if (details.url !== 'about:blank') {
 			throw new TypeError('Auxiliary windows require an empty same-origin document');
@@ -39,8 +27,7 @@ export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliar
 		const requestedZoom = features.get('window-zoom-level');
 		const inheritedZoom = this.getFocusedWindow()?.win.webContents.getZoomLevel() ?? zoomLevel;
 		const effectiveZoom = requestedZoom === null ? inheritedZoom : Number(requestedZoom);
-		if (!Number.isFinite(effectiveZoom) || effectiveZoom < -8 || effectiveZoom > 8)
-			throw new TypeError('Invalid auxiliary zoom level');
+		if (!Number.isFinite(effectiveZoom) || effectiveZoom < -8 || effectiveZoom > 8) throw new TypeError('Invalid auxiliary zoom level');
 		options.webPreferences = { zoomFactor: 1.2 ** effectiveZoom };
 		options.alwaysOnTop = features.get('window-always-on-top') === 'yes';
 		options.fullscreen = features.get('window-fullscreen') === 'yes';
@@ -51,11 +38,7 @@ export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliar
 				continue;
 			}
 			const number = Number(value);
-			if (
-				value.trim() === '' ||
-				!Number.isSafeInteger(number) ||
-				((key === 'width' || key === 'height') && number <= 0)
-			) {
+			if (value.trim() === '' || !Number.isSafeInteger(number) || ((key === 'width' || key === 'height') && number <= 0)) {
 				throw new TypeError(`Invalid auxiliary window ${key}`);
 			}
 			if (key === 'left') {
@@ -69,11 +52,7 @@ export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliar
 		return options;
 	}
 
-	public registerWindow(
-		webContents: WebContents,
-		parentId: number,
-		options: Pick<BrowserWindowConstructorOptions, 'x' | 'y' | 'width' | 'height' | 'show'> = {},
-	): IDisposable {
+	public registerWindow(webContents: WebContents, parentId: number, options: Pick<BrowserWindowConstructorOptions, 'x' | 'y' | 'width' | 'height' | 'show'> = {}): IDisposable {
 		this.assertNotDisposed();
 		const window = this.resolveWindow(webContents);
 		if (!window || window.isDestroyed()) {
@@ -83,13 +62,7 @@ export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliar
 			throw new Error(`Auxiliary window ${window.id} is already registered`);
 		}
 		const { x, y, width, height } = options;
-		if (
-			process.platform === 'win32' &&
-			x !== undefined &&
-			y !== undefined &&
-			width !== undefined &&
-			height !== undefined
-		) {
+		if (process.platform === 'win32' && x !== undefined && y !== undefined && width !== undefined && height !== undefined) {
 			// Constructor frame conversion can otherwise grow restored popups at fractional DPI.
 			restoreWindowBounds(window, { x, y, width, height });
 		}

@@ -8,10 +8,7 @@ import type { CancellationToken } from '../../../../../base/common/cancellation.
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
-import {
-	IAccessibleViewService,
-	AccessibleViewType,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import '../../browser/debug.contribution.js';
@@ -20,14 +17,7 @@ import { IUriIdentityService } from '../../../../../platform/uriIdentity/common/
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import type { DebugConsoleEntry } from '../../../../../platform/debug/common/debugAdapterProcessService.js';
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
-import {
-	IDebugService,
-	type IReplModel,
-	type IDebugConsoleSession,
-	type IDebugSession,
-	type IDebugCompletionsResponse,
-	type IDebugCompletionItem,
-} from '../../common/debug.js';
+import { IDebugService, type IReplModel, type IDebugConsoleSession, type IDebugSession, type IDebugCompletionsResponse, type IDebugCompletionItem } from '../../common/debug.js';
 import { registerCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { Range } from '../../../../../editor/common/core/range.js';
@@ -79,9 +69,7 @@ suite('Debug Console view input and filtering', () => {
 		assert.deepEqual(fixture.console.evaluations, ['answer']);
 		await fixture.until(() => /42/.test(fixture.output.textContent!));
 		assert.match(fixture.output.textContent!, /42/);
-		const clear = fixture.view.partTitleProjection.actions!.querySelector<HTMLButtonElement>(
-			"[data-action-id='workbench.debug.panel.action.clearReplAction'] button",
-		)!;
+		const clear = fixture.view.partTitleProjection.actions!.querySelector<HTMLButtonElement>("[data-action-id='workbench.debug.panel.action.clearReplAction'] button")!;
 		assert.ok(clear.querySelector('.ash-icon'));
 		clear.click();
 		await fixture.until(() => fixture.output.textContent === '');
@@ -95,9 +83,7 @@ suite('Debug Console view input and filtering', () => {
 		fixture.console.append({ output: 'second needle\n' });
 		await fixture.until(() => fixture.output.querySelectorAll('[role=treeitem]').length === 3);
 		fixture.setInput('draft');
-		const action = fixture.view.partTitleProjection.actions!.querySelector<HTMLButtonElement>(
-			"[data-action-id='repl.action.find'] button",
-		)!;
+		const action = fixture.view.partTitleProjection.actions!.querySelector<HTMLButtonElement>("[data-action-id='repl.action.find'] button")!;
 		assert.equal(action.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'search');
 		action.click();
 		const find = fixture.output.querySelector<HTMLInputElement>('.ash-tree-find-widget input')!;
@@ -148,11 +134,7 @@ suite('Debug Console view input and filtering', () => {
 		assert.equal(fixture.view.getVisibleContent(), 'request\nfatal issue\n> value\n42\n');
 		assert.deepEqual(fixture.view.getFilterStats(), { total: 6, filtered: 4 });
 		assert.equal(group.getAttribute('aria-expanded'), 'true');
-		assert.equal(
-			fixture.console.activeSession.elements,
-			snapshot,
-			'Filtering must leave the backend snapshot untouched',
-		);
+		assert.equal(fixture.console.activeSession.elements, snapshot, 'Filtering must leave the backend snapshot untouched');
 		fixture.setFilter('');
 		await fixture.until(() => group.getAttribute('aria-expanded') === 'false');
 		assert.equal(group.getAttribute('aria-expanded'), 'false');
@@ -194,9 +176,7 @@ suite('Debug Console view input and filtering', () => {
 		const reads: [number, number | undefined][] = [];
 		fixture.debug.session.variables = async (reference, revision) => {
 			reads.push([reference, revision]);
-			return reference === 20
-				? [{ name: 'parent', value: 'Object', variablesReference: 21 }]
-				: [{ name: 'child', value: 'value', variablesReference: 0 }];
+			return reference === 20 ? [{ name: 'parent', value: 'Object', variablesReference: 21 }] : [{ name: 'child', value: 'value', variablesReference: 0 }];
 		};
 		fixture.console.append({ output: 'group\n', kind: 'group', collapsed: false });
 		fixture.console.append({ output: 'object\n', parentId: 1, variablesReference: 20, inspectionRevision: 7 });
@@ -248,10 +228,7 @@ suite('Debug Console view input and filtering', () => {
 			fixture.output.querySelector<HTMLElement>('.ash-tree-twistie')!.click();
 			await fixture.until(() => fixture.output.querySelectorAll('[role=treeitem]').length === 3);
 			assert.match(fixture.view.getVisibleContent(), /"retained": 42/);
-			assert.match(
-				fixture.view.getVisibleContent(),
-				failure === 'ended session' ? /The debug session has ended\./ : /Variable inspection unavailable/,
-			);
+			assert.match(fixture.view.getVisibleContent(), failure === 'ended session' ? /The debug session has ended\./ : /Variable inspection unavailable/);
 			assert.equal(reads, failure === 'ended session' ? 0 : 1);
 			const rows = fixture.output.querySelectorAll('[role=treeitem]');
 			assert.equal(rows[0]!.getAttribute('aria-expanded'), 'true');
@@ -291,10 +268,7 @@ suite('Debug Console view input and filtering', () => {
 		fixture.recreate();
 		fixture.key('ArrowUp');
 		assert.equal(fixture.view.getReplInput().getValue(), 'first()');
-		assert.deepEqual(JSON.parse(fixture.storage.get('debug.repl.history', StorageScope.WORKSPACE, '[]')), [
-			'second()',
-			'first()',
-		]);
+		assert.deepEqual(JSON.parse(fixture.storage.get('debug.repl.history', StorageScope.WORKSPACE, '[]')), ['second()', 'first()']);
 	});
 
 	test('keeps input and filter histories across workspace switches and clear-output actions', () => {
@@ -325,12 +299,7 @@ suite('Debug Console view input and filtering', () => {
 			fixture.key('ArrowUp');
 			assert.equal(fixture.view.getReplInput().getValue(), '');
 		}
-		fixture.storage.store(
-			'debug.repl.history',
-			JSON.stringify(Array.from({ length: 105 }, (_, index) => `entry-${index}`)),
-			StorageScope.WORKSPACE,
-			StorageTarget.MACHINE,
-		);
+		fixture.storage.store('debug.repl.history', JSON.stringify(Array.from({ length: 105 }, (_, index) => `entry-${index}`)), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		fixture.recreate();
 		for (let index = 0; index < 110; index++) fixture.key('ArrowUp');
 		assert.equal(fixture.view.getReplInput().getValue(), 'entry-5');
@@ -338,10 +307,7 @@ suite('Debug Console view input and filtering', () => {
 
 	test('accepts DAP replacement ranges and selection offsets without evaluating', async () => {
 		using fixture = new ReplFixture();
-		fixture.debug.complete = async () =>
-			completion([
-				{ label: 'call', text: 'call(value)', start: 5, length: 2, selectionStart: 5, selectionLength: 5 },
-			]);
+		fixture.debug.complete = async () => completion([{ label: 'call', text: 'call(value)', start: 5, length: 2, selectionStart: 5, selectionLength: 5 }]);
 		fixture.setInput('obj.ca + 1', 6);
 		fixture.key(' ', { ctrlKey: true, code: 'Space' });
 		await Promise.resolve();
@@ -389,15 +355,11 @@ suite('Debug Console view input and filtering', () => {
 		fixture.key('Enter', { isComposing: true });
 		assert.equal(fixture.view.getReplInput().getValue(), 'a');
 		assert.equal(fixture.input.getAttribute('aria-expanded'), 'true');
-		fixture.input.dispatchEvent(
-			new browserEnvironment.window.CompositionEvent('compositionstart', { bubbles: true }),
-		);
+		fixture.input.dispatchEvent(new browserEnvironment.window.CompositionEvent('compositionstart', { bubbles: true }));
 		assert.equal(fixture.input.getAttribute('aria-expanded'), 'false');
 		fixture.key('ArrowUp', { isComposing: true });
 		assert.equal(fixture.view.getReplInput().getValue(), 'a');
-		fixture.input.dispatchEvent(
-			new browserEnvironment.window.CompositionEvent('compositionend', { bubbles: true, data: '' }),
-		);
+		fixture.input.dispatchEvent(new browserEnvironment.window.CompositionEvent('compositionend', { bubbles: true, data: '' }));
 		fixture.key('ArrowUp');
 		assert.equal(fixture.view.getReplInput().getValue(), 'remembered');
 		assert.deepEqual(fixture.console.evaluations, ['remembered']);
@@ -480,8 +442,7 @@ suite('Debug Console view input and filtering', () => {
 	test('ignores an older completion response after a newer request and cancels on disposal', async () => {
 		using fixture = new ReplFixture();
 		const pending: { token: CancellationToken; resolve(value: IDebugCompletionsResponse): void }[] = [];
-		fixture.debug.complete = (_frame, _thread, _text, _position, token) =>
-			new Promise(resolve => pending.push({ token, resolve }));
+		fixture.debug.complete = (_frame, _thread, _text, _position, token) => new Promise(resolve => pending.push({ token, resolve }));
 		fixture.setInput('a');
 		fixture.key(' ', { ctrlKey: true, code: 'Space' });
 		fixture.key(' ', { ctrlKey: true, code: 'Space' });
@@ -525,9 +486,7 @@ suite('Debug Console view input and filtering', () => {
 		let requestPosition: unknown;
 		fixture.debug.complete = async (_frame, _thread, _text, position) => {
 			requestPosition = position;
-			return completion([
-				{ label: 'call', text: 'call(value)', start: 7, length: 2, selectionStart: 5, selectionLength: 5 },
-			]);
+			return completion([{ label: 'call', text: 'call(value)', start: 7, length: 2, selectionStart: 5, selectionLength: 5 }]);
 		};
 		fixture.key(' ', { ctrlKey: true, code: 'Space' });
 		await Promise.resolve();
@@ -570,10 +529,7 @@ class ReplFixture extends Disposable {
 		this.services.registerInstance(IEditorService, {} as never);
 		this.services.registerInstance(IUriIdentityService, {} as never);
 		this.services.registerInstance(IViewsService, { getViewWithId: () => this.view } as never);
-		this.services.registerInstance(
-			IWorkspaceContextService,
-			this._register(new TestWorkspaceService({ id: 'workspace', folders: [] })),
-		);
+		this.services.registerInstance(IWorkspaceContextService, this._register(new TestWorkspaceService({ id: 'workspace', folders: [] })));
 		this.services.registerInstance(IFileService, this._register(new FileService()));
 		registerCodeEditorServices(this.services);
 		this.recreate();
@@ -581,9 +537,7 @@ class ReplFixture extends Disposable {
 	recreate(): void {
 		this.views.clear();
 		this.view?.element.remove();
-		this.view = this.views.add(
-			this.services.createInstance(Repl, document.body, { id: 'ash.debugConsole.test', title: 'Debug Console' }),
-		);
+		this.view = this.views.add(this.services.createInstance(Repl, document.body, { id: 'ash.debugConsole.test', title: 'Debug Console' }));
 		document.body.append(this.view.element);
 		this.view.getReplInput().layout({ width: 600, height: 24 });
 		const element = this.view.element;
@@ -606,9 +560,7 @@ class ReplFixture extends Disposable {
 		return this.services.get(ICodeEditorService);
 	}
 	accessibleProvider(type: AccessibleViewType) {
-		const implementations = AccessibleViewRegistry.getImplementations().filter(
-			item => item.name === `debug.repl.${type}`,
-		);
+		const implementations = AccessibleViewRegistry.getImplementations().filter(item => item.name === `debug.repl.${type}`);
 		assert.equal(implementations.length, 1);
 		return this.services.invokeFunction(accessor => implementations[0]!.getProvider(accessor));
 	}

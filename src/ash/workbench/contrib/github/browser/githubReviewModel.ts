@@ -149,9 +149,7 @@ export class GitHubReviewModel extends Disposable {
 			return;
 		}
 		this.accounts = accounts;
-		this.selectedAccount =
-			accounts.find(account => account.id === this.selectedAccount?.id) ??
-			(this.selectedAccount ? undefined : accounts[0]);
+		this.selectedAccount = accounts.find(account => account.id === this.selectedAccount?.id) ?? (this.selectedAccount ? undefined : accounts[0]);
 		if (this.selectedAccount) {
 			this.accountIdentity = `${this.selectedAccount.id}/${this.selectedAccount.credentialRevision}/${this.selectedAccount.status}`;
 		}
@@ -212,30 +210,13 @@ export class GitHubReviewModel extends Disposable {
 		this.change.fire();
 	}
 	public get staleDraft(): boolean {
-		return (
-			!!this.draft &&
-			(this.draft.body.length > 0 || this.draft.comments.length > 0) &&
-			this.draft.commit !== this.pullRequest?.headCommit
-		);
+		return !!this.draft && (this.draft.body.length > 0 || this.draft.comments.length > 0) && this.draft.commit !== this.pullRequest?.headCommit;
 	}
 	public get canWrite(): boolean {
-		return (
-			this.ready &&
-			!this.busy &&
-			!this.submissionUncertain &&
-			!this.draft?.uncertain &&
-			!this.staleDraft &&
-			this.pullRequest?.state === 'open' &&
-			!this.pullRequest.mergedAt
-		);
+		return this.ready && !this.busy && !this.submissionUncertain && !this.draft?.uncertain && !this.staleDraft && this.pullRequest?.state === 'open' && !this.pullRequest.mergedAt;
 	}
 
-	public async loadRepository(
-		owner: string,
-		name: string,
-		mode: 'pullRequests' | 'issues' = this.mode === 'notifications' ? 'pullRequests' : this.mode,
-		filter = this.filter,
-	): Promise<void> {
+	public async loadRepository(owner: string, name: string, mode: 'pullRequests' | 'issues' = this.mode === 'notifications' ? 'pullRequests' : this.mode, filter = this.filter): Promise<void> {
 		await this.initialize();
 		if (this.busy) {
 			return;
@@ -316,9 +297,7 @@ export class GitHubReviewModel extends Disposable {
 			async token => {
 				await this.github.markNotificationRead(account.id, notification.id, token);
 				if (!token.isCancellationRequested) {
-					this.notifications = this.notifications.map(row =>
-						row.id === notification.id ? { ...row, unread: false } : row,
-					);
+					this.notifications = this.notifications.map(row => (row.id === notification.id ? { ...row, unread: false } : row));
 					this.selectedNotification = this.notifications.find(row => row.id === notification.id);
 				}
 			},
@@ -486,10 +465,7 @@ export class GitHubReviewModel extends Disposable {
 		}
 		this.clearSelection();
 		await this.run(async token => {
-			const [issue, comments] = await Promise.all([
-				this.github.readIssue(this.requireRepository(), number, token),
-				this.github.listComments(this.requireRepository(), number, 1, token),
-			]);
+			const [issue, comments] = await Promise.all([this.github.readIssue(this.requireRepository(), number, token), this.github.listComments(this.requireRepository(), number, 1, token)]);
 			if (token.isCancellationRequested) {
 				return;
 			}
@@ -542,12 +518,7 @@ export class GitHubReviewModel extends Disposable {
 		const pr = this.requirePullRequest();
 		const draft = this.ensureDraft();
 		await this.run(async token => {
-			const result = await this.github.reviewPullRequest(
-				this.requireRepository(),
-				pr.number,
-				{ commit: draft.commit, event, body: draft.body, comments: draft.comments },
-				token,
-			);
+			const result = await this.github.reviewPullRequest(this.requireRepository(), pr.number, { commit: draft.commit, event, body: draft.body, comments: draft.comments }, token);
 			if (token.isCancellationRequested) {
 				return;
 			}
@@ -572,12 +543,7 @@ export class GitHubReviewModel extends Disposable {
 				if (auto) {
 					await this.github.enableAutoMerge(repository, pr.number, { commit: pr.headCommit, method }, token);
 				} else {
-					const result = await this.github.mergePullRequest(
-						repository,
-						pr.number,
-						{ commit: pr.headCommit, method },
-						token,
-					);
+					const result = await this.github.mergePullRequest(repository, pr.number, { commit: pr.headCommit, method }, token);
 					if (!result.merged) {
 						throw new GitHubError(GitHubErrorCode.Conflict);
 					}
@@ -599,13 +565,7 @@ export class GitHubReviewModel extends Disposable {
 		}
 		await this.run(async token => {
 			const pr = this.requirePullRequest();
-			const diff = await this.github.readReviewDiff(
-				this.requireRepository(),
-				pr.number,
-				pr.headCommit,
-				page,
-				token,
-			);
+			const diff = await this.github.readReviewDiff(this.requireRepository(), pr.number, pr.headCommit, page, token);
 			if (token.isCancellationRequested) {
 				return;
 			}
@@ -624,12 +584,7 @@ export class GitHubReviewModel extends Disposable {
 			return;
 		}
 		await this.run(async token => {
-			const result = await this.github.readChecks(
-				this.requireRepository(),
-				this.requirePullRequest().headCommit,
-				previous.nextPage!,
-				token,
-			);
+			const result = await this.github.readChecks(this.requireRepository(), this.requirePullRequest().headCommit, previous.nextPage!, token);
 			if (!token.isCancellationRequested) {
 				this.checks = { ...result, checks: [...previous.checks, ...result.checks], statuses: result.statuses };
 			}
@@ -642,12 +597,7 @@ export class GitHubReviewModel extends Disposable {
 			return;
 		}
 		await this.run(async token => {
-			const result = await this.github.listPullRequestReviews(
-				this.requireRepository(),
-				this.requirePullRequest().number,
-				page,
-				token,
-			);
+			const result = await this.github.listPullRequestReviews(this.requireRepository(), this.requirePullRequest().number, page, token);
 			if (!token.isCancellationRequested) {
 				this.reviews = distinct([...this.reviews, ...result.items], item => item.id);
 				this.nextReviewsPage = result.nextPage;
@@ -661,12 +611,7 @@ export class GitHubReviewModel extends Disposable {
 			return;
 		}
 		await this.run(async token => {
-			const result = await this.github.listReviewThreads(
-				this.requireRepository(),
-				this.requirePullRequest().number,
-				cursor,
-				token,
-			);
+			const result = await this.github.listReviewThreads(this.requireRepository(), this.requirePullRequest().number, cursor, token);
 			if (!token.isCancellationRequested) {
 				this.threads = distinct([...this.threads, ...result.threads], thread => thread.id);
 				this.nextThreadsCursor = result.nextCursor;
@@ -679,13 +624,7 @@ export class GitHubReviewModel extends Disposable {
 			return;
 		}
 		await this.run(async token => {
-			const result = await this.github.readReviewThreadComments(
-				this.requireRepository(),
-				this.requirePullRequest().number,
-				thread.id,
-				thread.comments.nextCursor,
-				token,
-			);
+			const result = await this.github.readReviewThreadComments(this.requireRepository(), this.requirePullRequest().number, thread.id, thread.comments.nextCursor, token);
 			if (!token.isCancellationRequested) {
 				this.replaceThread({
 					...thread,
@@ -701,13 +640,7 @@ export class GitHubReviewModel extends Disposable {
 	public async reply(thread: GitHubReviewThread, body: string): Promise<void> {
 		await this.run(
 			async token => {
-				const comment = await this.github.replyReviewThread(
-					this.requireRepository(),
-					this.requirePullRequest().number,
-					thread.id,
-					body,
-					token,
-				);
+				const comment = await this.github.replyReviewThread(this.requireRepository(), this.requirePullRequest().number, thread.id, body, token);
 				if (!token.isCancellationRequested) {
 					this.replaceThread({
 						...thread,
@@ -723,13 +656,7 @@ export class GitHubReviewModel extends Disposable {
 	public async resolve(thread: GitHubReviewThread, state: GitHubReviewThreadState): Promise<void> {
 		await this.run(
 			async token => {
-				await this.github.resolveReviewThread(
-					this.requireRepository(),
-					this.requirePullRequest().number,
-					thread.id,
-					state,
-					token,
-				);
+				await this.github.resolveReviewThread(this.requireRepository(), this.requirePullRequest().number, thread.id, state, token);
 				if (!token.isCancellationRequested) {
 					this.replaceThread({ ...thread, resolved: state === 'resolved' });
 				}
@@ -743,21 +670,10 @@ export class GitHubReviewModel extends Disposable {
 		await this.run(() => work());
 	}
 
-	public async changeReviewers(
-		change: GitHubReviewerChange,
-		users: readonly string[],
-		teams: readonly string[],
-	): Promise<void> {
+	public async changeReviewers(change: GitHubReviewerChange, users: readonly string[], teams: readonly string[]): Promise<void> {
 		await this.run(
 			async token => {
-				const result = await this.github.changeReviewers(
-					this.requireRepository(),
-					this.requirePullRequest().number,
-					change,
-					users,
-					teams,
-					token,
-				);
+				const result = await this.github.changeReviewers(this.requireRepository(), this.requirePullRequest().number, change, users, teams, token);
 				if (!token.isCancellationRequested) {
 					this.requestedReviewers = result;
 				}
@@ -766,23 +682,13 @@ export class GitHubReviewModel extends Disposable {
 			true,
 		);
 	}
-	public async editReviewComment(
-		thread: GitHubReviewThread,
-		comment: GitHubReviewComment,
-		body: string,
-	): Promise<void> {
+	public async editReviewComment(thread: GitHubReviewThread, comment: GitHubReviewComment, body: string): Promise<void> {
 		if (!comment.canUpdate) {
 			throw new GitHubError(GitHubErrorCode.PermissionDenied);
 		}
 		await this.run(
 			async token => {
-				const updated = await this.github.updateReviewComment(
-					this.requireRepository(),
-					this.requirePullRequest().number,
-					comment.id,
-					body,
-					token,
-				);
+				const updated = await this.github.updateReviewComment(this.requireRepository(), this.requirePullRequest().number, comment.id, body, token);
 				if (!token.isCancellationRequested) {
 					this.replaceThread({
 						...thread,
@@ -803,12 +709,7 @@ export class GitHubReviewModel extends Disposable {
 		}
 		await this.run(
 			async token => {
-				await this.github.deleteReviewComment(
-					this.requireRepository(),
-					this.requirePullRequest().number,
-					comment.id,
-					token,
-				);
+				await this.github.deleteReviewComment(this.requireRepository(), this.requirePullRequest().number, comment.id, token);
 				if (!token.isCancellationRequested) {
 					const comments = thread.comments.comments.filter(item => item.id !== comment.id);
 					if (comments.length === 0 && !thread.comments.nextCursor) {
@@ -882,11 +783,7 @@ export class GitHubReviewModel extends Disposable {
 			true,
 		);
 	}
-	public async updateItem(
-		number: number,
-		mode: 'pullRequests' | 'issues',
-		update: GitHubUpdateIssue & GitHubUpdatePullRequest,
-	): Promise<void> {
+	public async updateItem(number: number, mode: 'pullRequests' | 'issues', update: GitHubUpdateIssue & GitHubUpdatePullRequest): Promise<void> {
 		await this.run(
 			async token => {
 				if (mode === 'pullRequests') {
@@ -894,19 +791,14 @@ export class GitHubReviewModel extends Disposable {
 					const result = await this.github.updatePullRequest(this.requireRepository(), number, update, token);
 					if (!token.isCancellationRequested) {
 						if (previous?.number === number) {
-							if (
-								result.headCommit !== previous.headCommit ||
-								result.baseBranch !== previous.baseBranch
-							) {
+							if (result.headCommit !== previous.headCommit || result.baseBranch !== previous.baseBranch) {
 								this.ready = false;
 								this.files = [];
 								this.baseCommit = undefined;
 							}
 							this.pullRequest = result;
 						}
-						this.pullRequests = this.pullRequests.map(item =>
-							item.number === result.number ? result : item,
-						);
+						this.pullRequests = this.pullRequests.map(item => (item.number === result.number ? result : item));
 					}
 				} else {
 					const result = await this.github.updateIssue(this.requireRepository(), number, update, token);
@@ -937,11 +829,7 @@ export class GitHubReviewModel extends Disposable {
 		this.busy = false;
 	}
 
-	private async run(
-		work: (token: CancellationToken) => Promise<void>,
-		submittedDraft?: ReviewDraft,
-		write = false,
-	): Promise<void> {
+	private async run(work: (token: CancellationToken) => Promise<void>, submittedDraft?: ReviewDraft, write = false): Promise<void> {
 		if (this.busy || submittedDraft?.uncertain || ((submittedDraft || write) && this.submissionUncertain)) {
 			return;
 		}
@@ -958,18 +846,10 @@ export class GitHubReviewModel extends Disposable {
 				if (error instanceof GitHubError && error.code === GitHubErrorCode.Conflict) {
 					this.ready = false;
 				}
-				if (
-					submittedDraft &&
-					error instanceof GitHubError &&
-					error.code === GitHubErrorCode.SubmissionUncertain
-				) {
+				if (submittedDraft && error instanceof GitHubError && error.code === GitHubErrorCode.SubmissionUncertain) {
 					submittedDraft.uncertain = true;
 				}
-				if (
-					(submittedDraft || write) &&
-					error instanceof GitHubError &&
-					error.code === GitHubErrorCode.SubmissionUncertain
-				) {
+				if ((submittedDraft || write) && error instanceof GitHubError && error.code === GitHubErrorCode.SubmissionUncertain) {
 					this.submissionUncertain = true;
 				}
 			}
@@ -986,11 +866,7 @@ export class GitHubReviewModel extends Disposable {
 			return;
 		}
 		this.accountRevision = state.revision;
-		const github = state.accounts.find(
-			account =>
-				account.provider === 'github' &&
-				(this.selectedAccount ? account.accountId === this.selectedAccount.id : true),
-		);
+		const github = state.accounts.find(account => account.provider === 'github' && (this.selectedAccount ? account.accountId === this.selectedAccount.id : true));
 		const identity = github ? `${github.accountId}/${github.credentialRevision}/${github.status}` : '';
 		if (this.accountIdentity !== undefined && identity !== this.accountIdentity) {
 			this.clearAccountContent();

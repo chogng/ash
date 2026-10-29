@@ -20,12 +20,7 @@ export class SettingsTreeIndicatorsLabel extends Disposable {
 	private readonly hover: Hover;
 	private readonly maturityDomNode: HTMLSpanElement;
 
-	constructor(
-		container: HTMLElement,
-		contextViewProvider: IContextViewProvider,
-		hoverDelay: () => number,
-		configuredText = configuredLabel(),
-	) {
+	constructor(container: HTMLElement, contextViewProvider: IContextViewProvider, hoverDelay: () => number, configuredText = configuredLabel()) {
 		super();
 		this.domNode = h(container.ownerDocument, 'span');
 		this.domNode.className = 'ash-settings-indicators';
@@ -82,15 +77,9 @@ export class SettingsTreeIndicatorsLabel extends Disposable {
 				? localize({ bundle: 'ash.settings', key: 'status.preview' }, 'Preview')
 				: '';
 		this.maturityDomNode.title = experimental
-			? localize(
-					{ bundle: 'ash.settings', key: 'status.experimentalDescription' },
-					'This feature is experimental and may change or be removed.',
-				)
+			? localize({ bundle: 'ash.settings', key: 'status.experimentalDescription' }, 'This feature is experimental and may change or be removed.')
 			: preview
-				? localize(
-						{ bundle: 'ash.settings', key: 'status.previewDescription' },
-						'This feature is in preview and may change.',
-					)
+				? localize({ bundle: 'ash.settings', key: 'status.previewDescription' }, 'This feature is in preview and may change.')
 				: '';
 	}
 

@@ -23,11 +23,7 @@ suite('github browser component', () => {
 			const glyph = card.locator('.ash-icon');
 			await expect(card.locator('.ash-github-hover-metadata')).toHaveText(label);
 			expect(
-				await page.evaluate(() =>
-					window.ashGitHubIntegration.accessibleContent(
-						'view' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType,
-					),
-				),
+				await page.evaluate(() => window.ashGitHubIntegration.accessibleContent('view' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType)),
 			).toContain(label);
 			await expect(glyph).toHaveAttribute('data-ash-icon-id', icon);
 			await expect(glyph).toHaveAttribute('aria-hidden', 'true');
@@ -57,11 +53,7 @@ suite('github browser component', () => {
 			await page.keyboard.press('F2');
 			await expect(page.locator('.ash-github-resource-hover .ash-github-hover-metadata')).toHaveText(label);
 			expect(
-				await page.evaluate(() =>
-					window.ashGitHubIntegration.accessibleContent(
-						'view' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType,
-					),
-				),
+				await page.evaluate(() => window.ashGitHubIntegration.accessibleContent('view' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType)),
 			).toContain(label);
 		}
 	});
@@ -70,9 +62,7 @@ suite('github browser component', () => {
 		const { page } = browserTests;
 
 		await page.goto('/github.html');
-		await page.evaluate(() =>
-			window.ashGitHubIntegration.render('[Waiting](https://github.com/team/repo/issues/9)'),
-		);
+		await page.evaluate(() => window.ashGitHubIntegration.render('[Waiting](https://github.com/team/repo/issues/9)'));
 		const link = page.locator('main a[href="https://github.com/team/repo/issues/9"]');
 		const spinner = link.locator('.ash-pixel-spinner');
 		await expect(link).toHaveAttribute('aria-busy', 'true');
@@ -92,11 +82,7 @@ suite('github browser component', () => {
 				.evaluate(element => getComputedStyle(element).animationName),
 		).toBe('none');
 		await page.evaluate(() => window.ashGitHubIntegration.theme('highContrast'));
-		expect(
-			await spinner.evaluate(
-				element => getComputedStyle(element).color === getComputedStyle(element.parentElement!).color,
-			),
-		).toBe(true);
+		expect(await spinner.evaluate(element => getComputedStyle(element).color === getComputedStyle(element.parentElement!).color)).toBe(true);
 		const retainedSpinner = await spinner.elementHandle();
 		await page.evaluate(() => window.ashGitHubIntegration.releaseIssue());
 		await expect(link).toContainText('Old private issue');
@@ -136,31 +122,17 @@ suite('github browser component', () => {
 		await expect(card.locator('.ash-github-hover-description')).toHaveText(/^Issue details .*…$/);
 		await expect(card).toHaveAttribute('data-github-content', /Long description Long description/);
 		expect(
-			await page.evaluate(() =>
-				window.ashGitHubIntegration.accessibleContent(
-					'view' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType,
-				),
-			),
+			await page.evaluate(() => window.ashGitHubIntegration.accessibleContent('view' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType)),
 		).toContain('Long description '.repeat(30).trim());
 		expect(
-			await page.evaluate(() =>
-				window.ashGitHubIntegration.accessibleContent(
-					'help' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType,
-				),
-			),
+			await page.evaluate(() => window.ashGitHubIntegration.accessibleContent('help' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType)),
 		).toContain('Escape closes the card');
 		await page.keyboard.press('Escape');
 		await expect(issue).toBeFocused();
 		await page.keyboard.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashGitHubIntegration.opened))
-			.toEqual(['https://github.com/team/repo/issues/7']);
+		await expect.poll(() => page.evaluate(() => window.ashGitHubIntegration.opened)).toEqual(['https://github.com/team/repo/issues/7']);
 		await expect(pr).toHaveText('Fix GitHub links · #8 · team/repo · Draft');
-		expect(
-			await page.evaluate(
-				() => window.ashGitHubIntegration.requests.filter(request => request.method === 'github/checks').length,
-			),
-		).toBe(0);
+		expect(await page.evaluate(() => window.ashGitHubIntegration.requests.filter(request => request.method === 'github/checks').length)).toBe(0);
 		await pr.focus();
 		await page.keyboard.press('F2');
 		await page.keyboard.press('Tab');
@@ -172,9 +144,7 @@ suite('github browser component', () => {
 		await expect(card.getByRole('link', { name: 'main', exact: true })).toBeFocused();
 		await page.keyboard.press('Tab');
 		await page.keyboard.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashGitHubIntegration.opened.at(-1)))
-			.toBe('https://github.com/contributor/fork/tree/feature%2Flinks');
+		await expect.poll(() => page.evaluate(() => window.ashGitHubIntegration.opened.at(-1))).toBe('https://github.com/contributor/fork/tree/feature%2Flinks');
 		await page.keyboard.press('Escape');
 		await commit.focus();
 		await page.keyboard.press('F2');
@@ -182,11 +152,7 @@ suite('github browser component', () => {
 		await expect(card).toContainText('Commit description');
 		await page.evaluate(() => window.ashGitHubIntegration.theme('highContrast'));
 		await expect(card.getByRole('link', { name: 'team/repo', exact: true })).toBeFocused();
-		expect(
-			await card
-				.getByRole('link', { name: 'team/repo', exact: true })
-				.evaluate(element => getComputedStyle(element).outlineStyle),
-		).not.toBe('none');
+		expect(await card.getByRole('link', { name: 'team/repo', exact: true }).evaluate(element => getComputedStyle(element).outlineStyle)).not.toBe('none');
 		await page.keyboard.press('Escape');
 		await repository.focus();
 		await page.keyboard.press('F2');
@@ -208,10 +174,7 @@ suite('github browser component', () => {
 		await expect(card).toBeVisible();
 		await expect(card.getByRole('link', { name: 'feature/links', exact: true })).toHaveCount(0);
 		await expect(card.locator('.ash-github-hover-branches')).toHaveText('main←feature/links');
-		await expect(card.getByRole('link', { name: 'main', exact: true })).toHaveAttribute(
-			'href',
-			'https://github.com/team/repo/tree/main',
-		);
+		await expect(card.getByRole('link', { name: 'main', exact: true })).toHaveAttribute('href', 'https://github.com/team/repo/tree/main');
 	});
 
 	test('rerendering duplicate cached links and retiring requests preserves data ownership', async function () {
@@ -226,33 +189,14 @@ suite('github browser component', () => {
 		const issue = page.locator('main a[href="https://github.com/team/repo/issues/7"]');
 		await expect(issue).toContainText('Open');
 		await page.evaluate(() =>
-			window.ashGitHubIntegration.render(
-				'[One](https://github.com/team/repo/issues/7) [Two](https://github.com/team/repo/issues/7) [Held](https://github.com/team/repo/issues/9)',
-			),
+			window.ashGitHubIntegration.render('[One](https://github.com/team/repo/issues/7) [Two](https://github.com/team/repo/issues/7) [Held](https://github.com/team/repo/issues/9)'),
 		);
 		await expect(issue).toHaveCount(2);
 		await expect(issue.nth(0)).toContainText('Open');
 		await expect(issue.nth(1)).toContainText('Open');
-		await expect
-			.poll(() =>
-				page.evaluate(
-					() =>
-						window.ashGitHubIntegration.requests.filter(
-							request => request.method === 'github/issue/read' && request.params.number === 9,
-						).length,
-				),
-			)
-			.toBe(1);
+		await expect.poll(() => page.evaluate(() => window.ashGitHubIntegration.requests.filter(request => request.method === 'github/issue/read' && request.params.number === 9).length)).toBe(1);
 		await page.evaluate(() => window.ashGitHubIntegration.render('[Remaining](https://example.org/)'));
-		await expect
-			.poll(() =>
-				page.evaluate(
-					() =>
-						window.ashGitHubIntegration.requests.filter(request => request.method === 'github/cancel')
-							.length,
-				),
-			)
-			.toBeGreaterThan(0);
+		await expect.poll(() => page.evaluate(() => window.ashGitHubIntegration.requests.filter(request => request.method === 'github/cancel').length)).toBeGreaterThan(0);
 		await page.evaluate(() => window.ashGitHubIntegration.releaseIssue());
 		await expect(page.locator('main')).not.toContainText('Old private issue');
 		await expect(page.getByRole('link', { name: 'Remaining' })).toBeVisible();
@@ -288,9 +232,7 @@ suite('github browser component', () => {
 			await expect(pr).toBeFocused();
 			for (const theme of ['light', 'highContrast'] as const) {
 				await page.evaluate(theme => window.ashGitHubIntegration.theme(theme), theme);
-				expect(await pr.locator('.ash-icon').evaluate(element => getComputedStyle(element).color)).not.toBe(
-					'rgba(0, 0, 0, 0)',
-				);
+				expect(await pr.locator('.ash-icon').evaluate(element => getComputedStyle(element).color)).not.toBe('rgba(0, 0, 0, 0)');
 				await expect(pr.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', expectedIcon);
 			}
 			const retainedAnchor = await pr.elementHandle();
@@ -338,10 +280,7 @@ suite('github browser component', () => {
 		const { page } = browserTests;
 
 		await page.goto('/github.html?cowork&prState=open&conflicts');
-		for (const pr of [
-			page.locator('main a[href="https://github.com/team/repo/pull/8"]').first(),
-			page.locator('.cowork-test-message a'),
-		]) {
+		for (const pr of [page.locator('main a[href="https://github.com/team/repo/pull/8"]').first(), page.locator('.cowork-test-message a')]) {
 			await expect(pr).toHaveAccessibleName(/Open · Merge conflicts/);
 			await expect(pr.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'git-pull-request-error');
 			await pr.focus();

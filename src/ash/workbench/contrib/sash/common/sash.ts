@@ -1,7 +1,4 @@
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 
 export const MinimumSashSize = 1;
@@ -28,8 +25,7 @@ export const SashConfiguration = Object.freeze({
 	hoverDelay: configurationRegistry.registerConfiguration<number>({
 		key: 'workbench.sash.hoverDelay',
 		defaultValue: 300,
-		parse: value =>
-			parseNumberInRange(value, 'workbench.sash.hoverDelay', MinimumSashHoverDelay, MaximumSashHoverDelay),
+		parse: value => parseNumberInRange(value, 'workbench.sash.hoverDelay', MinimumSashHoverDelay, MaximumSashHoverDelay),
 		setting: {
 			valueType: 'number',
 			title: 'Resize handle hover delay',

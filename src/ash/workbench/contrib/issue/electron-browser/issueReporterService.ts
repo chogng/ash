@@ -18,10 +18,7 @@ export class IssueReporterService extends IssueFormService {
 		const sections = [await super.readSystemInfo(context)];
 		try {
 			const system = await this.processes.getSystemInfo();
-			const screenReader =
-				system.screenReader === 'yes'
-					? localize('issue.screenReaderEnabled', 'Enabled')
-					: localize('issue.screenReaderDisabled', 'Disabled');
+			const screenReader = system.screenReader === 'yes' ? localize('issue.screenReaderEnabled', 'Enabled') : localize('issue.screenReaderDisabled', 'Disabled');
 			sections.unshift(
 				localize(
 					'issue.desktopSystem',
@@ -34,9 +31,7 @@ export class IssueReporterService extends IssueFormService {
 				),
 			);
 		} catch {
-			sections.unshift(
-				localize('issue.desktopDiagnosticsFailed', 'Desktop system diagnostics could not be collected.'),
-			);
+			sections.unshift(localize('issue.desktopDiagnosticsFailed', 'Desktop system diagnostics could not be collected.'));
 		}
 		try {
 			const performance = await this.processes.getPerformanceInfo();
@@ -44,9 +39,7 @@ export class IssueReporterService extends IssueFormService {
 				sections.push(localize('issue.desktopProcesses', 'Desktop processes\n{0}', performance.processInfo));
 			}
 		} catch {
-			sections.push(
-				localize('issue.processDiagnosticsFailed', 'Desktop process diagnostics could not be collected.'),
-			);
+			sections.push(localize('issue.processDiagnosticsFailed', 'Desktop process diagnostics could not be collected.'));
 		}
 		return sections.join('\n\n');
 	}

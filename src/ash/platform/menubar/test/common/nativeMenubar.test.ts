@@ -9,13 +9,27 @@ test('native menubar validation accepts a versioned nested snapshot', () => {
 			{
 				label: 'File',
 				items: [
-					{ type: 'action', id: 'action-1', altId: 'action-1-alt', label: 'New conversation', enabled: true },
+					{
+						type: 'action',
+						id: 'action-1',
+						altId: 'action-1-alt',
+						label: 'New conversation',
+						enabled: true,
+					},
 					{ type: 'separator' },
 					{
 						type: 'submenu',
 						label: 'Recent',
 						enabled: true,
-						items: [{ type: 'action', id: 'action-2', label: 'Pinned', enabled: false, checked: true }],
+						items: [
+							{
+								type: 'action',
+								id: 'action-2',
+								label: 'Pinned',
+								enabled: false,
+								checked: true,
+							},
+						],
 					},
 				],
 			},
@@ -23,22 +37,57 @@ test('native menubar validation accepts a versioned nested snapshot', () => {
 	};
 
 	assert.deepEqual(validateNativeMenubarData(data), data);
-	assert.deepEqual(validateNativeMenubarData({ revision: 4, menus: [] }), { revision: 4, menus: [] });
+	assert.deepEqual(
+		validateNativeMenubarData({
+			revision: 4,
+			menus: [],
+		}),
+		{
+			revision: 4,
+			menus: [],
+		},
+	);
 });
 
 test('native menubar validation rejects unsafe snapshots', () => {
-	const action = { type: 'action', id: 'duplicate', label: 'Action', enabled: true };
+	const action = {
+		type: 'action',
+		id: 'duplicate',
+		label: 'Action',
+		enabled: true,
+	};
 
-	assert.throws(
-		() => validateNativeMenubarData({ revision: 1, menus: [{ label: 'File', items: [action, action] }] }),
-		/duplicate/,
-	);
-	assert.throws(() => validateNativeMenubarData({ revision: -1, menus: [] }), /non-negative safe integer/);
 	assert.throws(
 		() =>
 			validateNativeMenubarData({
 				revision: 1,
-				menus: [{ label: 'File', items: [{ ...action, unexpected: true }] }],
+				menus: [
+					{
+						label: 'File',
+						items: [action, action],
+					},
+				],
+			}),
+		/duplicate/,
+	);
+	assert.throws(
+		() =>
+			validateNativeMenubarData({
+				revision: -1,
+				menus: [],
+			}),
+		/non-negative safe integer/,
+	);
+	assert.throws(
+		() =>
+			validateNativeMenubarData({
+				revision: 1,
+				menus: [
+					{
+						label: 'File',
+						items: [{ ...action, unexpected: true }],
+					},
+				],
 			}),
 		/exactly/,
 	);
@@ -46,7 +95,12 @@ test('native menubar validation rejects unsafe snapshots', () => {
 		() =>
 			validateNativeMenubarData({
 				revision: 1,
-				menus: [{ label: 'File', items: [{ ...action, altId: action.id }] }],
+				menus: [
+					{
+						label: 'File',
+						items: [{ ...action, altId: action.id }],
+					},
+				],
 			}),
 		/duplicate/,
 	);

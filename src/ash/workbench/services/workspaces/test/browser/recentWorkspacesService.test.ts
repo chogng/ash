@@ -5,11 +5,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { BrowserStorageService } from '../../../storage/browser/storageService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
-import {
-	IWorkspacesService,
-	LEGACY_RECENT_WORKSPACES_STORAGE_KEY,
-	RECENTLY_OPENED_STORAGE_KEY,
-} from '../../../../../platform/workspaces/common/workspaces.js';
+import { IWorkspacesService, LEGACY_RECENT_WORKSPACES_STORAGE_KEY, RECENTLY_OPENED_STORAGE_KEY } from '../../../../../platform/workspaces/common/workspaces.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { BrowserWorkspacesService } from '../../browser/workspacesService.js';
 import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';

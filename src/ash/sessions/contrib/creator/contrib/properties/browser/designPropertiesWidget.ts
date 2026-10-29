@@ -16,15 +16,7 @@ import { localize } from '../../../../../../nls.js';
 import type { DesignPoint } from '../../../common/core/geometry.js';
 import type { DocumentCommands } from '../../../common/commands/documentCommands.js';
 import type { DesignDocumentController } from '../../../browser/designDocumentController.js';
-import {
-	flattenDesignShapes,
-	type DesignAutoLayout,
-	type DesignConstraint,
-	type DesignGrid,
-	type DesignGridTrack,
-	type DesignImageCrop,
-	type DesignShape,
-} from '../../../common/model/document.js';
+import { flattenDesignShapes, type DesignAutoLayout, type DesignConstraint, type DesignGrid, type DesignGridTrack, type DesignImageCrop, type DesignShape } from '../../../common/model/document.js';
 import { getDesignGridCells } from '../../../common/model/layout.js';
 import { getDesignShapeEntries } from '../../../common/model/hitTest.js';
 import type { DesignSelection } from '../../../common/selection.js';
@@ -125,45 +117,17 @@ export class DesignPropertiesWidget extends Disposable {
 		this._register(this.pageColor.onDidCommitColor(color => this.commitColor(color, this.pageColor)));
 		this.pageDomNode = h(ownerDocument, 'div', { className: 'ash-design-page-properties' }, this.pageColor.domNode);
 		this.domNode.append(this.pageDomNode);
-		this.componentProperties = this._register(
-			new ComponentPropertiesWidget(documentController, commands.components, selection, ownerDocument, refresh),
-		);
+		this.componentProperties = this._register(new ComponentPropertiesWidget(documentController, commands.components, selection, ownerDocument, refresh));
 		this.domNode.append(this.componentProperties.domNode);
-		this.resourceProperties = this._register(
-			instantiation.createInstance(
-				ResourcePropertiesWidget,
-				documentController,
-				commands,
-				selection,
-				ownerDocument,
-			),
-		);
+		this.resourceProperties = this._register(instantiation.createInstance(ResourcePropertiesWidget, documentController, commands, selection, ownerDocument));
 		this.domNode.append(this.resourceProperties.domNode);
-		this.vectorProperties = this._register(
-			instantiation.createInstance(
-				VectorPropertiesWidget,
-				documentController,
-				commands,
-				selection,
-				ownerDocument,
-				refresh,
-				focusCanvas,
-			),
-		);
+		this.vectorProperties = this._register(instantiation.createInstance(VectorPropertiesWidget, documentController, commands, selection, ownerDocument, refresh, focusCanvas));
 		const layer = this.createSection(localize('sessions.design.layer', 'Layer'));
 		this.nameInput = h(ownerDocument, 'input', {
 			properties: { type: 'text', maxLength: 1024 },
 			attributes: { 'aria-label': localize('sessions.design.layerName', 'Layer name') },
 		});
-		layer.append(
-			h(
-				ownerDocument,
-				'label',
-				{ className: 'ash-design-property-wide' },
-				localize('sessions.design.layerName', 'Layer name'),
-				this.nameInput,
-			),
-		);
+		layer.append(h(ownerDocument, 'label', { className: 'ash-design-property-wide' }, localize('sessions.design.layerName', 'Layer name'), this.nameInput));
 		this._register(
 			addDisposableListener(this.nameInput, 'change', () => {
 				const shape = this.selectedShape;
@@ -176,12 +140,15 @@ export class DesignPropertiesWidget extends Disposable {
 		(this.arrangementProperties.parentElement as HTMLDetailsElement).open = false;
 		const arrangeButton = (label: string, run: () => void, enabled: () => boolean): void => {
 			const button = this._register(
-				new Button(this.arrangementProperties, { ...defaultButtonStyles, label, onClick: run }),
+				new Button(this.arrangementProperties, {
+					...defaultButtonStyles,
+					label,
+					onClick: run,
+				}),
 			);
 			this.arrangementButtons.push({ button, enabled });
 		};
-		const canReorder = (): boolean =>
-			[...this.selection.ids].some(id => !this.commands.components.isInstanceChild(id));
+		const canReorder = (): boolean => [...this.selection.ids].some(id => !this.commands.components.isInstanceChild(id));
 		arrangeButton(
 			localize('sessions.design.duplicate', 'Duplicate'),
 			() => {
@@ -275,12 +242,7 @@ export class DesignPropertiesWidget extends Disposable {
 			);
 		}
 		this.appearanceProperties = this.createSection(localize('sessions.design.appearance', 'Appearance'));
-		const fill = h(
-			ownerDocument,
-			'div',
-			{ className: 'ash-design-property-wide ash-design-fill' },
-			h(ownerDocument, 'span', {}, localize('sessions.design.fill', 'Fill')),
-		);
+		const fill = h(ownerDocument, 'div', { className: 'ash-design-property-wide ash-design-fill' }, h(ownerDocument, 'span', {}, localize('sessions.design.fill', 'Fill')));
 		this.appearanceProperties.append(fill);
 		this.fillDomNode = fill;
 		this.fillColor = this._register(
@@ -292,17 +254,8 @@ export class DesignPropertiesWidget extends Disposable {
 					[
 						...new Set(
 							flattenDesignShapes(this.documentController.model.value.shapes)
-								.filter(
-									shape =>
-										(shape.kind !== 'group' || !!shape.booleanOperation) && shape.kind !== 'image',
-								)
-								.flatMap(shape =>
-									designPaints(shape).flatMap(paint =>
-										paint.type === 'solid'
-											? [paint.color.toLowerCase()]
-											: paint.stops.map(stop => stop.color.toLowerCase()),
-									),
-								),
+								.filter(shape => (shape.kind !== 'group' || !!shape.booleanOperation) && shape.kind !== 'image')
+								.flatMap(shape => designPaints(shape).flatMap(paint => (paint.type === 'solid' ? [paint.color.toLowerCase()] : paint.stops.map(stop => stop.color.toLowerCase())))),
 						),
 					].map(fill => Color.Format.CSS.parseHex(fill)!),
 			}),
@@ -314,12 +267,7 @@ export class DesignPropertiesWidget extends Disposable {
 				if (!shape) {
 					return;
 				}
-				this.colorPreview = withDesignPaintColor(
-					shape,
-					this.selection.paintId,
-					this.selection.gradientStopId,
-					Color.Format.CSS.formatHexA(color, true),
-				);
+				this.colorPreview = withDesignPaintColor(shape, this.selection.paintId, this.selection.gradientStopId, Color.Format.CSS.formatHexA(color, true));
 				this.refresh();
 			}),
 		);
@@ -337,29 +285,10 @@ export class DesignPropertiesWidget extends Disposable {
 				}
 			}),
 		);
-		this.paints = this._register(
-			new PaintPropertiesWidget(
-				documentController,
-				commands,
-				selection,
-				ownerDocument,
-				() => this.refresh(),
-				focusCanvas,
-			),
-		);
+		this.paints = this._register(new PaintPropertiesWidget(documentController, commands, selection, ownerDocument, () => this.refresh(), focusCanvas));
 		this.appearanceProperties.append(this.paints.domNode);
 		this.effectProperties = this.createSection(localize('sessions.design.effects', 'Effects'));
-		this.effects = this._register(
-			instantiation.createInstance(
-				EffectPropertiesWidget,
-				documentController,
-				commands,
-				selection,
-				ownerDocument,
-				() => this.refresh(),
-				focusCanvas,
-			),
-		);
+		this.effects = this._register(instantiation.createInstance(EffectPropertiesWidget, documentController, commands, selection, ownerDocument, () => this.refresh(), focusCanvas));
 		this.effectProperties.append(this.effects.domNode);
 		this.textProperties = this.createSection(localize('sessions.design.typography', 'Typography'));
 		this.typography = this._register(new TextPropertiesWidget(ownerDocument, documentController, commands, text));
@@ -369,23 +298,11 @@ export class DesignPropertiesWidget extends Disposable {
 			properties: { type: 'number', min: '0', step: 'any' },
 			attributes: { 'aria-label': localize('sessions.design.strokeWidth', 'Stroke width') },
 		});
-		this.pathProperties.append(
-			h(
-				ownerDocument,
-				'label',
-				{ className: 'ash-design-property-wide' },
-				localize('sessions.design.strokeWidth', 'Stroke width'),
-				this.strokeWidthInput,
-			),
-		);
+		this.pathProperties.append(h(ownerDocument, 'label', { className: 'ash-design-property-wide' }, localize('sessions.design.strokeWidth', 'Stroke width'), this.strokeWidthInput));
 		this._register(
 			addDisposableListener(this.strokeWidthInput, 'change', () => {
 				const shape = this.selectedShape;
-				if (
-					shape?.kind === 'path' &&
-					this.strokeWidthInput.checkValidity() &&
-					Number.isFinite(this.strokeWidthInput.valueAsNumber)
-				) {
+				if (shape?.kind === 'path' && this.strokeWidthInput.checkValidity() && Number.isFinite(this.strokeWidthInput.valueAsNumber)) {
 					this.commands.updateShape({ ...shape, strokeWidth: this.strokeWidthInput.valueAsNumber });
 				} else {
 					this.refresh();
@@ -400,20 +317,8 @@ export class DesignPropertiesWidget extends Disposable {
 			attributes: { 'aria-label': localize('sessions.design.closed', 'Closed path') },
 		});
 		this.pathProperties.append(
-			h(
-				ownerDocument,
-				'label',
-				{ className: 'ash-design-property-wide' },
-				localize('sessions.design.node', 'Path node'),
-				this.nodeInput,
-			),
-			h(
-				ownerDocument,
-				'label',
-				{ className: 'ash-design-property-toggle ash-design-property-wide' },
-				this.closedInput,
-				localize('sessions.design.closed', 'Closed path'),
-			),
+			h(ownerDocument, 'label', { className: 'ash-design-property-wide' }, localize('sessions.design.node', 'Path node'), this.nodeInput),
+			h(ownerDocument, 'label', { className: 'ash-design-property-toggle ash-design-property-wide' }, this.closedInput, localize('sessions.design.closed', 'Closed path')),
 		);
 		this._register(
 			addDisposableListener(this.nodeInput, 'change', () => {
@@ -462,18 +367,8 @@ export class DesignPropertiesWidget extends Disposable {
 							if (index !== this.selection.nodeIndex) {
 								return node;
 							}
-							const point = field.startsWith('incoming')
-								? 'incoming'
-								: field.startsWith('outgoing')
-									? 'outgoing'
-									: 'anchor';
-							return moveDesignPathNode(
-								node,
-								point,
-								{ ...(point === 'anchor' ? node : node[point]), [axis]: value },
-								shape.width,
-								shape.height,
-							);
+							const point = field.startsWith('incoming') ? 'incoming' : field.startsWith('outgoing') ? 'outgoing' : 'anchor';
+							return moveDesignPathNode(node, point, { ...(point === 'anchor' ? node : node[point]), [axis]: value }, shape.width, shape.height);
 						}),
 					}));
 				}),
@@ -508,9 +403,7 @@ export class DesignPropertiesWidget extends Disposable {
 					input.setCustomValidity('');
 					const crop = { ...shape.crop, [field]: input.valueAsNumber / 100 };
 					if (!input.checkValidity() || crop.x + crop.width > 1 || crop.y + crop.height > 1) {
-						input.setCustomValidity(
-							localize('sessions.design.cropOutside', 'Keep the crop inside the original image.'),
-						);
+						input.setCustomValidity(localize('sessions.design.cropOutside', 'Keep the crop inside the original image.'));
 						input.reportValidity();
 						this.refresh();
 						return;
@@ -526,15 +419,7 @@ export class DesignPropertiesWidget extends Disposable {
 			properties: { type: 'checkbox' },
 			attributes: { 'aria-label': localize('sessions.design.clip', 'Clip contents') },
 		});
-		this.frameProperties.append(
-			h(
-				ownerDocument,
-				'label',
-				{ className: 'ash-design-property-toggle' },
-				this.clipInput,
-				localize('sessions.design.clip', 'Clip contents'),
-			),
-		);
+		this.frameProperties.append(h(ownerDocument, 'label', { className: 'ash-design-property-toggle' }, this.clipInput, localize('sessions.design.clip', 'Clip contents')));
 		this._register(
 			addDisposableListener(this.clipInput, 'change', () => {
 				const shape = this.selectedShape;
@@ -558,8 +443,7 @@ export class DesignPropertiesWidget extends Disposable {
 				['vertical', localize('sessions.design.vertical', 'Vertical')],
 				['grid', localize('sessions.design.gridLayout', 'Grid')],
 			],
-			() =>
-				this.selectedShape?.kind === 'frame' ? (this.selectedShape.autoLayout?.direction ?? 'none') : 'none',
+			() => (this.selectedShape?.kind === 'frame' ? (this.selectedShape.autoLayout?.direction ?? 'none') : 'none'),
 			value => {
 				const frame = this.selectedShape;
 				if (frame?.kind !== 'frame') {
@@ -600,8 +484,7 @@ export class DesignPropertiesWidget extends Disposable {
 					['fixed', localize('sessions.design.fixed', 'Fixed')],
 					['hug', localize('sessions.design.hug', 'Hug contents')],
 				],
-				() =>
-					this.selectedShape?.kind === 'frame' ? (this.selectedShape.autoLayout?.[axis] ?? 'fixed') : 'fixed',
+				() => (this.selectedShape?.kind === 'frame' ? (this.selectedShape.autoLayout?.[axis] ?? 'fixed') : 'fixed'),
 				value => {
 					const frame = this.selectedShape;
 					if (frame?.kind === 'frame' && frame.autoLayout) {
@@ -631,8 +514,7 @@ export class DesignPropertiesWidget extends Disposable {
 			this.autoLayoutFields,
 			localize('sessions.design.mainAlignment', 'Main-axis alignment'),
 			[...alignmentOptions, ['space-between', localize('sessions.design.spaceBetween', 'Space between')]],
-			() =>
-				this.selectedShape?.kind === 'frame' ? (this.selectedShape.autoLayout?.justify ?? 'start') : 'start',
+			() => (this.selectedShape?.kind === 'frame' ? (this.selectedShape.autoLayout?.justify ?? 'start') : 'start'),
 			value => {
 				const frame = this.selectedShape;
 				if (frame?.kind === 'frame' && frame.autoLayout) {
@@ -673,10 +555,7 @@ export class DesignPropertiesWidget extends Disposable {
 		);
 		this.layoutRefresh.push(() => {
 			crossGap.parentElement!.hidden = !this.selectedLayout?.wrap && this.selectedLayout?.direction !== 'grid';
-			const label =
-				this.selectedLayout?.direction === 'grid'
-					? localize('sessions.design.rowGap', 'Row gap')
-					: localize('sessions.design.lineGap', 'Line gap');
+			const label = this.selectedLayout?.direction === 'grid' ? localize('sessions.design.rowGap', 'Row gap') : localize('sessions.design.lineGap', 'Line gap');
 			crossGap.setAttribute('aria-label', label);
 			crossGap.parentElement!.firstChild!.textContent = label;
 		});
@@ -695,13 +574,7 @@ export class DesignPropertiesWidget extends Disposable {
 			this._register(
 				addDisposableListener(input, 'change', () => {
 					const frame = this.selectedShape;
-					if (
-						frame?.kind === 'frame' &&
-						frame.autoLayout &&
-						!this.documentController.isBusy &&
-						input.checkValidity() &&
-						Number.isFinite(input.valueAsNumber)
-					) {
+					if (frame?.kind === 'frame' && frame.autoLayout && !this.documentController.isBusy && input.checkValidity() && Number.isFinite(input.valueAsNumber)) {
 						this.updateAutoLayout(
 							field === 'gap'
 								? { ...frame.autoLayout, gap: input.valueAsNumber }
@@ -718,20 +591,11 @@ export class DesignPropertiesWidget extends Disposable {
 			this.layoutRefresh.push(() => {
 				const frame = this.selectedShape;
 				if (field === 'gap') {
-					const text =
-						frame?.kind === 'frame' && frame.autoLayout?.direction === 'grid'
-							? localize('sessions.design.columnGap', 'Column gap')
-							: label;
+					const text = frame?.kind === 'frame' && frame.autoLayout?.direction === 'grid' ? localize('sessions.design.columnGap', 'Column gap') : label;
 					input.setAttribute('aria-label', text);
 					input.parentElement!.firstChild!.textContent = text;
 				}
-				input.value = String(
-					frame?.kind === 'frame' && frame.autoLayout
-						? field === 'gap'
-							? frame.autoLayout.gap
-							: frame.autoLayout.padding[field]
-						: 0,
-				);
+				input.value = String(frame?.kind === 'frame' && frame.autoLayout ? (field === 'gap' ? frame.autoLayout.gap : frame.autoLayout.padding[field]) : 0);
 				input.disabled = this.documentController.isBusy;
 			});
 		}
@@ -758,11 +622,7 @@ export class DesignPropertiesWidget extends Disposable {
 						...shape,
 						sizing: { width: 'fixed' as const, height: 'fixed' as const, ...shape.sizing, [axis]: value },
 					};
-					const updates: DesignShape[] = [
-						updated.kind === 'frame' && updated.autoLayout
-							? { ...updated, autoLayout: { ...updated.autoLayout, [axis]: 'fixed' } }
-							: updated,
-					];
+					const updates: DesignShape[] = [updated.kind === 'frame' && updated.autoLayout ? { ...updated, autoLayout: { ...updated.autoLayout, [axis]: 'fixed' } } : updated];
 					if (value === 'fill') {
 						updates.push({ ...parent, autoLayout: { ...parent.autoLayout, [axis]: 'fixed' } });
 					}
@@ -821,9 +681,7 @@ export class DesignPropertiesWidget extends Disposable {
 			);
 			this.layoutRefresh.push(() => {
 				for (const option of select.options) {
-					option.disabled =
-						this.selectedShape?.kind === 'group' &&
-						(option.value === 'stretch' || option.value === 'scale');
+					option.disabled = this.selectedShape?.kind === 'group' && (option.value === 'stretch' || option.value === 'scale');
 				}
 			});
 		}
@@ -835,12 +693,7 @@ export class DesignPropertiesWidget extends Disposable {
 				attributes: { 'aria-label': localize('sessions.design.layoutGuide', 'Layout guide') },
 			},
 			h(ownerDocument, 'h3', {}, localize('sessions.design.layoutGuide', 'Layout guide')),
-			h(
-				ownerDocument,
-				'div',
-				{ className: 'ash-design-guide-row' },
-				localize('sessions.design.gridSize', 'Grid · {0} px', 12),
-			),
+			h(ownerDocument, 'div', { className: 'ash-design-guide-row' }, localize('sessions.design.gridSize', 'Grid · {0} px', 12)),
 		);
 		this.exportFormatInput = h(
 			ownerDocument,
@@ -896,10 +749,7 @@ export class DesignPropertiesWidget extends Disposable {
 		const fill = Color.Format.CSS.formatHexA(color, true);
 		this.colorPreview = undefined;
 		this.pageColorPreview = undefined;
-		if (
-			fill.toLowerCase() ===
-			(isPage ? (this.documentController.model.value.background ?? '#ffffff') : this.paints.color).toLowerCase()
-		) {
+		if (fill.toLowerCase() === (isPage ? (this.documentController.model.value.background ?? '#ffffff') : this.paints.color).toLowerCase()) {
 			this.refresh();
 			return;
 		}
@@ -908,9 +758,7 @@ export class DesignPropertiesWidget extends Disposable {
 			if (isPage) {
 				this.commands.setBackground(fill);
 			} else {
-				this.commands.updateShape(
-					withDesignPaintColor(shape!, this.selection.paintId, this.selection.gradientStopId, fill),
-				);
+				this.commands.updateShape(withDesignPaintColor(shape!, this.selection.paintId, this.selection.gradientStopId, fill));
 			}
 		} finally {
 			this.isCommittingColor = false;
@@ -918,10 +766,7 @@ export class DesignPropertiesWidget extends Disposable {
 	}
 
 	private renderFill(fill: string): void {
-		this.fillColor.setColor(
-			Color.Format.CSS.parseHex(fill)!,
-			`${this.selectedShape?.id}:${this.paints.paint?.id}:${this.selection.gradientStopId}`,
-		);
+		this.fillColor.setColor(Color.Format.CSS.parseHex(fill)!, `${this.selectedShape?.id}:${this.paints.paint?.id}:${this.selection.gradientStopId}`);
 	}
 
 	private createSection(title: string): HTMLElement {
@@ -950,9 +795,7 @@ export class DesignPropertiesWidget extends Disposable {
 	}
 
 	private get selectedParent(): Extract<DesignShape, { kind: 'frame' }> | undefined {
-		const entry = getDesignShapeEntries(this.documentController.model.value.shapes).find(
-			entry => entry.shape.id === this.selectedShape?.id,
-		);
+		const entry = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === this.selectedShape?.id);
 		return entry?.parent?.kind === 'frame' ? entry.parent : undefined;
 	}
 
@@ -1018,10 +861,7 @@ export class DesignPropertiesWidget extends Disposable {
 					cell.column = Math.min(cell.column, grid.columns.length - (cell.columnSpan ?? 1) + 1);
 				}
 			}
-			if (
-				!grid.autoRows &&
-				(frame.autoLayout!.grid?.autoRows || grid.rows.length < (frame.autoLayout!.grid?.rows.length ?? 0))
-			) {
+			if (!grid.autoRows && (frame.autoLayout!.grid?.autoRows || grid.rows.length < (frame.autoLayout!.grid?.rows.length ?? 0))) {
 				if (cell.rowSpan !== undefined) {
 					cell.rowSpan = Math.min(cell.rowSpan, grid.rows.length);
 				}
@@ -1053,13 +893,7 @@ export class DesignPropertiesWidget extends Disposable {
 					if (!grid) {
 						return;
 					}
-					const tracks =
-						value === undefined
-							? grid[axis]
-							: Array.from(
-									{ length: value },
-									(_, index) => grid[axis][index] ?? ({ sizing: 'fill', value: 1 } as const),
-								);
+					const tracks = value === undefined ? grid[axis] : Array.from({ length: value }, (_, index) => grid[axis][index] ?? ({ sizing: 'fill', value: 1 } as const));
 					this.updateGrid({
 						...grid,
 						[axis]: tracks,
@@ -1133,13 +967,10 @@ export class DesignPropertiesWidget extends Disposable {
 			});
 			container.append(fields);
 			const indexSelect = h(ownerDocument, 'select', { attributes: { 'aria-label': trackLabel } });
-			fields.append(
-				h(ownerDocument, 'label', { className: 'ash-design-property-wide' }, trackLabel, indexSelect),
-			);
+			fields.append(h(ownerDocument, 'label', { className: 'ash-design-property-wide' }, trackLabel, indexSelect));
 			let selectedIndex = 0;
 			let frameId: string | undefined;
-			const track = (): DesignGridTrack =>
-				this.selectedLayout?.grid?.[axis][selectedIndex] ?? { sizing: 'fill', value: 1 };
+			const track = (): DesignGridTrack => this.selectedLayout?.grid?.[axis][selectedIndex] ?? { sizing: 'fill', value: 1 };
 			const change = (track: DesignGridTrack): void => {
 				const grid = this.selectedLayout?.grid;
 				if (!grid) {
@@ -1170,11 +1001,7 @@ export class DesignPropertiesWidget extends Disposable {
 					: 1;
 				selectedIndex = Math.min(Math.max(0, selectedIndex), count - 1);
 				if (indexSelect.options.length !== count) {
-					indexSelect.replaceChildren(
-						...Array.from({ length: count }, (_, index) =>
-							h(ownerDocument, 'option', { properties: { value: String(index) } }, String(index + 1)),
-						),
-					);
+					indexSelect.replaceChildren(...Array.from({ length: count }, (_, index) => h(ownerDocument, 'option', { properties: { value: String(index) } }, String(index + 1))));
 				}
 				indexSelect.selectedIndex = selectedIndex;
 				indexSelect.disabled = this.documentController.isBusy;
@@ -1294,11 +1121,7 @@ export class DesignPropertiesWidget extends Disposable {
 						return;
 					}
 					const other = shape.sizeLimits?.[opposite];
-					if (
-						value !== undefined &&
-						other !== undefined &&
-						(field.startsWith('min') ? value > other : value < other)
-					) {
+					if (value !== undefined && other !== undefined && (field.startsWith('min') ? value > other : value < other)) {
 						return localize('sessions.design.sizeLimitsOrder', 'Minimum must not exceed maximum.');
 					}
 					const sizeLimits = { ...shape.sizeLimits };
@@ -1311,9 +1134,7 @@ export class DesignPropertiesWidget extends Disposable {
 					this.commands.updateShape({
 						...rest,
 						...(Object.keys(sizeLimits).length ? { sizeLimits } : {}),
-						...(shape.kind === 'text' && field === 'maxHeight' && value !== undefined
-							? { maxLines: undefined }
-							: {}),
+						...(shape.kind === 'text' && field === 'maxHeight' && value !== undefined ? { maxLines: undefined } : {}),
 					});
 				},
 				field.startsWith('min') ? 0 : 0.001,
@@ -1356,10 +1177,7 @@ export class DesignPropertiesWidget extends Disposable {
 				}
 				input.setCustomValidity('');
 				const next = optional && input.value === '' ? undefined : input.valueAsNumber;
-				if (
-					!input.checkValidity() ||
-					(next !== undefined && (!Number.isFinite(next) || (integer && !Number.isInteger(next))))
-				) {
+				if (!input.checkValidity() || (next !== undefined && (!Number.isFinite(next) || (integer && !Number.isInteger(next))))) {
 					input.setAttribute('aria-invalid', 'true');
 					input.reportValidity();
 					return;
@@ -1384,13 +1202,7 @@ export class DesignPropertiesWidget extends Disposable {
 		return input;
 	}
 
-	private addSelect<T extends string>(
-		container: HTMLElement,
-		label: string,
-		options: readonly (readonly [T, string])[],
-		value: () => T,
-		change: (value: T) => void,
-	): HTMLSelectElement {
+	private addSelect<T extends string>(container: HTMLElement, label: string, options: readonly (readonly [T, string])[], value: () => T, change: (value: T) => void): HTMLSelectElement {
 		const select = h(
 			this.domNode.ownerDocument,
 			'select',
@@ -1414,11 +1226,7 @@ export class DesignPropertiesWidget extends Disposable {
 	}
 
 	private get selectedShape(): DesignShape | undefined {
-		return this.selection.ids.size === 1
-			? flattenDesignShapes(this.documentController.model.value.shapes).find(shape =>
-					this.selection.ids.has(shape.id),
-				)
-			: undefined;
+		return this.selection.ids.size === 1 ? flattenDesignShapes(this.documentController.model.value.shapes).find(shape => this.selection.ids.has(shape.id)) : undefined;
 	}
 
 	public getActions(): readonly IAction[] {
@@ -1470,10 +1278,7 @@ export class DesignPropertiesWidget extends Disposable {
 		}
 		this.domNode.classList.toggle('visible', isVisible);
 		this.pageDomNode.hidden = this.selection.ids.size > 0;
-		this.pageColor.setColor(
-			Color.Format.CSS.parseHex(this.documentController.model.value.background ?? '#ffffff')!,
-			this.documentController.model.value.documentId,
-		);
+		this.pageColor.setColor(Color.Format.CSS.parseHex(this.documentController.model.value.background ?? '#ffffff')!, this.documentController.model.value.documentId);
 		this.pageColor.enabled = !this.documentController.isBusy && this.selection.ids.size === 0;
 		if (!shape) {
 			this.fillColor.enabled = false;
@@ -1489,41 +1294,22 @@ export class DesignPropertiesWidget extends Disposable {
 		this.autoLayoutFields.hidden = shape?.kind !== 'frame' || !shape.autoLayout;
 		const parent = this.selectedParent;
 		const inherited = !!shape && this.commands.components.isInstanceChild(shape.id);
-		const paintParent =
-			shape &&
-			getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === shape.id)
-				?.parent;
+		const paintParent = shape && getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === shape.id)?.parent;
 		const booleanChild = paintParent?.kind === 'group' && !!paintParent.booleanOperation;
-		this.constraintsProperties.parentElement!.hidden =
-			!shape ||
-			!parent ||
-			(!!parent.autoLayout && shape.layoutPositioning !== 'absolute') ||
-			this.commands.components.isInstanceChild(shape.id);
-		this.sizingProperties.parentElement!.hidden =
-			!shape ||
-			shape.kind === 'group' ||
-			!parent?.autoLayout ||
-			shape.layoutPositioning === 'absolute' ||
-			inherited;
+		this.constraintsProperties.parentElement!.hidden = !shape || !parent || (!!parent.autoLayout && shape.layoutPositioning !== 'absolute') || this.commands.components.isInstanceChild(shape.id);
+		this.sizingProperties.parentElement!.hidden = !shape || shape.kind === 'group' || !parent?.autoLayout || shape.layoutPositioning === 'absolute' || inherited;
 		this.gridProperties.parentElement!.hidden = this.selectedLayout?.direction !== 'grid';
-		this.gridCellProperties.parentElement!.hidden =
-			parent?.autoLayout?.direction !== 'grid' || shape?.layoutPositioning === 'absolute' || inherited;
-		this.limitsProperties.parentElement!.hidden =
-			!shape || shape.kind === 'group' || !(this.selectedLayout || parent?.autoLayout || shape.sizeLimits);
+		this.gridCellProperties.parentElement!.hidden = parent?.autoLayout?.direction !== 'grid' || shape?.layoutPositioning === 'absolute' || inherited;
+		this.limitsProperties.parentElement!.hidden = !shape || shape.kind === 'group' || !(this.selectedLayout || parent?.autoLayout || shape.sizeLimits);
 		for (const refresh of this.layoutRefresh) {
 			refresh();
 		}
 		this.positionSection.hidden = this.layoutSection.hidden = !shape;
-		this.exportButton.enabled =
-			!this.documentController.isBusy && this.documentController.model.value.shapes.length > 0;
+		this.exportButton.enabled = !this.documentController.isBusy && this.documentController.model.value.shapes.length > 0;
 		this.exportFormatInput.disabled = !this.exportButton.enabled;
 		this.effectProperties.parentElement!.hidden = !shape;
 		this.appearanceProperties.parentElement!.hidden = !shape;
-		this.fillDomNode.hidden =
-			!shape ||
-			(shape.kind === 'group' && !shape.booleanOperation) ||
-			shape.kind === 'image' ||
-			!this.paints.paint;
+		this.fillDomNode.hidden = !shape || (shape.kind === 'group' && !shape.booleanOperation) || shape.kind === 'image' || !this.paints.paint;
 		this.textProperties.parentElement!.hidden = shape?.kind !== 'text';
 		if (shape?.kind !== 'text') {
 			this.typography.update(undefined);
@@ -1533,9 +1319,7 @@ export class DesignPropertiesWidget extends Disposable {
 		this.frameProperties.hidden = shape?.kind !== 'frame';
 		if (!shape) {
 			this.headingDomNode.textContent =
-				this.selection.ids.size > 1
-					? localize('sessions.design.selectionCount', '{0} objects selected.', this.selection.ids.size)
-					: localize('sessions.design.page', 'Page');
+				this.selection.ids.size > 1 ? localize('sessions.design.selectionCount', '{0} objects selected.', this.selection.ids.size) : localize('sessions.design.page', 'Page');
 			return;
 		}
 		const titles: Record<DesignShape['kind'], string> = {
@@ -1557,11 +1341,7 @@ export class DesignPropertiesWidget extends Disposable {
 				(inherited && (field === 'x' || field === 'y' || field === 'rotation' || shape.kind === 'text'));
 		}
 		this.renderFill(this.paints.color);
-		this.fillColor.enabled =
-			!booleanChild &&
-			!this.documentController.isBusy &&
-			(shape.kind !== 'group' || !!shape.booleanOperation) &&
-			shape.kind !== 'image';
+		this.fillColor.enabled = !booleanChild && !this.documentController.isBusy && (shape.kind !== 'group' || !!shape.booleanOperation) && shape.kind !== 'image';
 		if (shape.kind === 'frame') {
 			this.clipInput.checked = shape.clip;
 			this.clipInput.disabled = this.documentController.isBusy || !!shape.instance || inherited;
@@ -1582,11 +1362,7 @@ export class DesignPropertiesWidget extends Disposable {
 				this.selection.nodeIndex = contour.nodes.length - 1;
 			}
 			if (this.nodeInput.options.length !== contour.nodes.length) {
-				this.nodeInput.replaceChildren(
-					...contour.nodes.map((_, index) =>
-						h(this.domNode.ownerDocument, 'option', { properties: { value: `${index}` } }, `${index + 1}`),
-					),
-				);
+				this.nodeInput.replaceChildren(...contour.nodes.map((_, index) => h(this.domNode.ownerDocument, 'option', { properties: { value: `${index}` } }, `${index + 1}`)));
 			}
 			this.nodeInput.value = `${this.selection.nodeIndex}`;
 			this.closedInput.checked = contour.closed;
@@ -1605,8 +1381,7 @@ export class DesignPropertiesWidget extends Disposable {
 				const dimension = axis === 'x' ? shape.width : shape.height;
 				input.value = `${point[axis] * dimension}`;
 				input.removeAttribute('max');
-				input.disabled =
-					this.documentController.isBusy || inherited || (!!shape.network && field !== 'x' && field !== 'y');
+				input.disabled = this.documentController.isBusy || inherited || (!!shape.network && field !== 'x' && field !== 'y');
 			}
 		}
 	}
@@ -1617,9 +1392,7 @@ export class DesignPropertiesWidget extends Disposable {
 			return;
 		}
 		if (shape.network) {
-			const edge = shape.network.edges.findIndex(
-				edge => edge.start === this.selection.nodeIndex || edge.end === this.selection.nodeIndex,
-			);
+			const edge = shape.network.edges.findIndex(edge => edge.start === this.selection.nodeIndex || edge.end === this.selection.nodeIndex);
 			if (edge >= 0) {
 				this.selection.nodeIndex = shape.network.vertices.length;
 				this.commands.vector.insertNode(shape, edge, 0);

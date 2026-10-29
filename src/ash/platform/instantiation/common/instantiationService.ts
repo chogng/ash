@@ -1,20 +1,7 @@
-import {
-	Disposable,
-	DisposableStore,
-	isDisposable,
-	toDisposable,
-	type IDisposable,
-} from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, isDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { type Event } from '../../../base/common/event.js';
 import { SyncDescriptor, type Constructor } from './descriptors.js';
-import {
-	IInstantiationService,
-	_util,
-	type ServiceIdentifier,
-	type ServicesAccessor,
-	type ServiceFactory,
-	type SingletonRegistrationOptions,
-} from './instantiation.js';
+import { IInstantiationService, _util, type ServiceIdentifier, type ServicesAccessor, type ServiceFactory, type SingletonRegistrationOptions } from './instantiation.js';
 import { ServiceCollection } from './serviceCollection.js';
 import { InstantiationType } from './extensions.js';
 
@@ -58,11 +45,7 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 		this.services.set(id, value);
 	}
 
-	public registerSingleton<T>(
-		id: ServiceIdentifier<T>,
-		factory: ServiceFactory<T>,
-		options: SingletonRegistrationOptions = {},
-	): void {
+	public registerSingleton<T>(id: ServiceIdentifier<T>, factory: ServiceFactory<T>, options: SingletonRegistrationOptions = {}): void {
 		this.assertNotDisposed();
 		this.assertCanRegister(id);
 		this.factories.set(id, {
@@ -111,12 +94,7 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 		}
 		const registration = this.factories.get(id);
 		if (registration) {
-			return this.resolve(
-				id,
-				() => registration.factory(this),
-				registration.transient,
-				registration.delayed,
-			) as T;
+			return this.resolve(id, () => registration.factory(this), registration.transient, registration.delayed) as T;
 		}
 		return this.parent?.getOptional(id);
 	}
@@ -138,21 +116,13 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 		const dependencies = _util.getServiceDependencies(construction.ctor);
 		for (const [offset, { index, id }] of dependencies.entries()) {
 			if (index !== explicitArguments.length + offset) {
-				throw new TypeError(
-					`Invalid constructor arguments for ${construction.ctor.name}: expected service ${id} at parameter ${index}`,
-				);
+				throw new TypeError(`Invalid constructor arguments for ${construction.ctor.name}: expected service ${id} at parameter ${index}`);
 			}
 		}
-		return Reflect.construct(construction.ctor, [
-			...explicitArguments,
-			...dependencies.map(({ id }) => this.get(id)),
-		]) as T;
+		return Reflect.construct(construction.ctor, [...explicitArguments, ...dependencies.map(({ id }) => this.get(id))]) as T;
 	}
 
-	public invokeFunction<R, TArguments extends unknown[]>(
-		fn: (accessor: ServicesAccessor, ...args: TArguments) => R,
-		...args: TArguments
-	): R {
+	public invokeFunction<R, TArguments extends unknown[]>(fn: (accessor: ServicesAccessor, ...args: TArguments) => R, ...args: TArguments): R {
 		this.assertNotDisposed();
 		let active = true;
 		const accessor: ServicesAccessor = {
@@ -222,12 +192,7 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 		}
 	}
 
-	private resolve(
-		id: ServiceIdentifier<unknown>,
-		factory: () => unknown,
-		transient: boolean,
-		delayed: boolean,
-	): unknown {
+	private resolve(id: ServiceIdentifier<unknown>, factory: () => unknown, transient: boolean, delayed: boolean): unknown {
 		const cycleStart = this.resolving.indexOf(id);
 		if (cycleStart >= 0) {
 			throw new Error(`Cyclic service dependency: ${[...this.resolving.slice(cycleStart), id].join(' -> ')}`);
@@ -304,11 +269,7 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 						const event: Event<unknown> = (listener, thisArgs, disposables) => {
 							this.assertNotDisposed();
 							if (instance) {
-								return (Reflect.get(instance, property) as Event<unknown>)(
-									listener,
-									thisArgs,
-									disposables,
-								);
+								return (Reflect.get(instance, property) as Event<unknown>)(listener, thisArgs, disposables);
 							}
 							const entry = {
 								property,

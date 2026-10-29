@@ -56,19 +56,10 @@ suite('Live browser CDP connection', () => {
 						request?.resolve(message.result);
 					}
 				} else {
-					if (
-						message.method === 'Runtime.consoleAPICalled' &&
-						message.params.args[0]?.value === 'waiting for cancellation'
-					) {
+					if (message.method === 'Runtime.consoleAPICalled' && message.params.args[0]?.value === 'waiting for cancellation') {
 						evaluationStarted.resolve();
 					}
-					debuggerTransport.emit(
-						'message',
-						{},
-						message.method,
-						message.params,
-						message.sessionId === transportSessionId ? undefined : message.sessionId,
-					);
+					debuggerTransport.emit('message', {}, message.method, message.params, message.sessionId === transportSessionId ? undefined : message.sessionId);
 				}
 			};
 			socket.addEventListener('message', receive);
@@ -94,8 +85,7 @@ suite('Live browser CDP connection', () => {
 					attached = false;
 					debuggerTransport.emit('detach', {}, 'detached');
 				},
-				sendCommand: (method: string, params?: object, sessionId?: string) =>
-					send(method, params, sessionId ?? transportSessionId),
+				sendCommand: (method: string, params?: object, sessionId?: string) => send(method, params, sessionId ?? transportSessionId),
 			});
 			using debuggerOwner = new BrowserViewDebugger(
 				Object.assign(new EventEmitter(), {
@@ -113,8 +103,7 @@ suite('Live browser CDP connection', () => {
 				debugger: debuggerOwner,
 				getInfo: () => info,
 				getState: () => state,
-				runOperation: async <T>(signal: AbortSignal, execute: (signal: AbortSignal) => Promise<T>) =>
-					execute(signal),
+				runOperation: async <T>(signal: AbortSignal, execute: (signal: AbortSignal) => Promise<T>) => execute(signal),
 			} as unknown as BrowserView;
 			using services = new InstantiationService();
 			services.registerInstance(IBrowserViewMainService, {
@@ -129,11 +118,8 @@ suite('Live browser CDP connection', () => {
 				agentAccessSignal: () => signal,
 			} as unknown as IBrowserViewMainService);
 			using cdp = services.createInstance(BrowserViewCDPService);
-			const perform = (
-				operation: BrowserCDPOperation,
-				requestSignal = signal,
-				uploads: readonly IBrowserUploadFile[] = [],
-			) => cdp.perform('thread', view, operation, requestSignal, null, uploads);
+			const perform = (operation: BrowserCDPOperation, requestSignal = signal, uploads: readonly IBrowserUploadFile[] = []) =>
+				cdp.perform('thread', view, operation, requestSignal, null, uploads);
 			await perform({ type: 'command', method: 'Runtime.enable', params: {} });
 			const evaluated = await perform({
 				type: 'command',
@@ -150,8 +136,7 @@ suite('Live browser CDP connection', () => {
 						type: 'command',
 						method: 'Runtime.evaluate',
 						params: {
-							expression:
-								'document.body.appendChild(Object.assign(document.createElement("input"), { type: "file", id: "upload" }))',
+							expression: 'document.body.appendChild(Object.assign(document.createElement("input"), { type: "file", id: "upload" }))',
 						},
 					})
 				).output,
@@ -162,24 +147,13 @@ suite('Live browser CDP connection', () => {
 				params: { objectId: input, files: ['/not-granted/secret.txt'] },
 			};
 			assert.match(JSON.parse((await perform(upload)).output).error.message, /BrowserFileAccessDenied/);
+			assert.deepEqual(JSON.parse((await perform(upload, signal, [{ name: 'allowed.txt', dataBase64: Buffer.from('authorized content').toString('base64') }])).output).result, {});
 			assert.deepEqual(
-				JSON.parse(
-					(
-						await perform(upload, signal, [
-							{ name: 'allowed.txt', dataBase64: Buffer.from('authorized content').toString('base64') },
-						])
-					).output,
-				).result,
-				{},
-			);
-			assert.deepEqual(
-				await page
-					.locator('#upload')
-					.evaluate(async (element: HTMLInputElement) => ({
-						name: element.files![0]!.name,
-						type: element.files![0]!.type,
-						content: await element.files![0]!.text(),
-					})),
+				await page.locator('#upload').evaluate(async (element: HTMLInputElement) => ({
+					name: element.files![0]!.name,
+					type: element.files![0]!.type,
+					content: await element.files![0]!.text(),
+				})),
 				{ name: 'allowed.txt', type: 'text/plain', content: 'authorized content' },
 			);
 			await page.locator('#upload').evaluate(element => element.remove());

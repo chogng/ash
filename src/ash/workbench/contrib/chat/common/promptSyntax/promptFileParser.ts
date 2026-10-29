@@ -92,8 +92,7 @@ export class PromptBody {
 		if (!path || path.startsWith('#') || /[\x00-\x1f\x7f\\]/u.test(path)) return undefined;
 		const packageResource = this.uri.scheme === Schemas.internal && this.uri.authority === 'skill';
 		// A pinned package reference never acquires access to host files or another package.
-		if (packageResource && (path.startsWith('/') || path.startsWith('~/') || /^[a-z][a-z\d+.-]*:/iu.test(path)))
-			return undefined;
+		if (packageResource && (path.startsWith('/') || path.startsWith('~/') || /^[a-z][a-z\d+.-]*:/iu.test(path))) return undefined;
 		if (path.startsWith('~/')) return userHome ? URI.joinPath(userHome, path.slice(2)) : undefined;
 		try {
 			const hasScheme = /^[a-z][a-z\d+.-]*:/iu.test(path);
@@ -119,12 +118,7 @@ export class PromptFileParser {
 		let headerEnd = content.length;
 		let headerClosed = false;
 		if (lines[0] === '---') {
-			headerRange = new Range(
-				Math.min(2, Math.floor(lines.length / 2) + 1),
-				1,
-				Math.floor(lines.length / 2) + 1,
-				lines.at(-1)!.length + 1,
-			);
+			headerRange = new Range(Math.min(2, Math.floor(lines.length / 2) + 1), 1, Math.floor(lines.length / 2) + 1, lines.at(-1)!.length + 1);
 			let offset = lines[0].length + (lines[1]?.length ?? 0);
 			for (let index = 2; index < lines.length; index += 2) {
 				offset += lines[index]!.length + (lines[index + 1]?.length ?? 0);
@@ -138,38 +132,14 @@ export class PromptFileParser {
 				}
 			}
 		}
-		const header = headerRange
-			? parseHeader(
-					uri,
-					content,
-					lines[0]!.length + (lines[1]?.length ?? 0),
-					headerEnd,
-					headerRange,
-					headerClosed,
-				)
-			: undefined;
-		const body =
-			bodyOffset < content.length
-				? new PromptBody(
-						new Range(bodyLine, 1, Math.floor(lines.length / 2) + 1, lines.at(-1)!.length + 1),
-						content,
-						uri,
-						bodyOffset,
-					)
-				: undefined;
+		const header = headerRange ? parseHeader(uri, content, lines[0]!.length + (lines[1]?.length ?? 0), headerEnd, headerRange, headerClosed) : undefined;
+		const body = bodyOffset < content.length ? new PromptBody(new Range(bodyLine, 1, Math.floor(lines.length / 2) + 1, lines.at(-1)!.length + 1), content, uri, bodyOffset) : undefined;
 		return new ParsedPromptFile(uri, content, header, body);
 	}
 }
 
 /** Applies Skill limits and editor coordinates to the shared YAML syntax tree. */
-function parseHeader(
-	uri: URI,
-	source: string,
-	offset: number,
-	end: number,
-	range: Range,
-	closed: boolean,
-): PromptHeader {
+function parseHeader(uri: URI, source: string, offset: number, end: number, range: Range, closed: boolean): PromptHeader {
 	const attributes: IHeaderAttribute[] = [];
 	const errors: ParseError[] = [];
 	const starts = [0];
@@ -194,32 +164,19 @@ function parseHeader(
 		errors.push({
 			code: 'unclosedHeader',
 			range: new Range(1, 1, 1, 4),
-			message: localize(
-				'prompt.syntax.unclosed',
-				'Close the Skill header with a line containing --- before the Markdown body.',
-			),
+			message: localize('prompt.syntax.unclosed', 'Close the Skill header with a line containing --- before the Markdown body.'),
 		});
 	const text = source.slice(offset, end);
 	const encoder = new TextEncoder();
 	const headerLines = text.split(/\r\n|\n|\r/u);
 	const exceedsBytes = encoder.encode(text).length > 16 * 1024;
-	if (
-		exceedsBytes ||
-		headerLines.filter((line, index) => index < headerLines.length - 1 || line.length > 0).length > 256 ||
-		headerLines.some(line => encoder.encode(line).length > 2048)
-	) {
+	if (exceedsBytes || headerLines.filter((line, index) => index < headerLines.length - 1 || line.length > 0).length > 256 || headerLines.some(line => encoder.encode(line).length > 2048)) {
 		errors.push({
 			code: 'headerTooLarge',
 			range,
 			message: exceedsBytes
-				? localize(
-						'prompt.syntax.tooLarge',
-						'The Skill header exceeds 16 KiB. Move instructions into the Markdown body.',
-					)
-				: localize(
-						'prompt.syntax.catalogLimits',
-						'The Skill header exceeds the catalog limits (16 KiB, 256 lines, or 2 KiB per line). Move instructions into the Markdown body.',
-					),
+				? localize('prompt.syntax.tooLarge', 'The Skill header exceeds 16 KiB. Move instructions into the Markdown body.')
+				: localize('prompt.syntax.catalogLimits', 'The Skill header exceeds the catalog limits (16 KiB, 256 lines, or 2 KiB per line). Move instructions into the Markdown body.'),
 		});
 		return new PromptHeader(range, uri, attributes, errors);
 	}
@@ -232,10 +189,7 @@ function parseHeader(
 			errors.push({
 				code: 'unsupportedYaml',
 				range: nodeRange,
-				message: localize(
-					'prompt.syntax.unsupported',
-					'Skill headers do not support YAML aliases, anchors, tags or deeply nested values.',
-				),
+				message: localize('prompt.syntax.unsupported', 'Skill headers do not support YAML aliases, anchors, tags or deeply nested values.'),
 			});
 			return { type: 'scalar', value: '', format: 'none', range: nodeRange };
 		}
@@ -248,16 +202,13 @@ function parseHeader(
 					return key.type === 'scalar' ? [{ key, value: convert(pair.value, depth + 1) }] : [];
 				}),
 			};
-		if (node?.type === 'sequence')
-			return { type: 'sequence', range: nodeRange, items: node.items.map(item => convert(item, depth + 1)) };
+		if (node?.type === 'sequence') return { type: 'sequence', range: nodeRange, items: node.items.map(item => convert(item, depth + 1)) };
 		return {
 			type: 'scalar',
 			value: node?.value ?? '',
 			format: node?.format ?? 'none',
 			range: nodeRange,
-			...(node?.format === 'none' && ['', '~', 'null', 'Null', 'NULL'].includes(node.value)
-				? { missing: true }
-				: {}),
+			...(node?.format === 'none' && ['', '~', 'null', 'Null', 'NULL'].includes(node.value) ? { missing: true } : {}),
 		};
 	};
 	try {
@@ -272,11 +223,7 @@ function parseHeader(
 				errors.push({
 					code: error.code,
 					range: at(error.startOffset, error.endOffset),
-					message: localize(
-						'prompt.syntax.invalidYaml',
-						'Invalid YAML in the Skill header ({0}).',
-						error.code,
-					),
+					message: localize('prompt.syntax.invalidYaml', 'Invalid YAML in the Skill header ({0}).', error.code),
 				});
 			}
 		}
@@ -286,20 +233,14 @@ function parseHeader(
 				attributes.push({
 					key: property.key.value,
 					keyRange: property.key.range,
-					range: Range.fromPositions(
-						property.key.range.getStartPosition(),
-						property.value.range.getEndPosition(),
-					),
+					range: Range.fromPositions(property.key.range.getStartPosition(), property.value.range.getEndPosition()),
 					value: property.value,
 				});
 		} else if (text.trim()) {
 			errors.push({
 				code: 'expectedMapping',
 				range: root.range,
-				message: localize(
-					'prompt.syntax.mapping',
-					'A Skill header must be a mapping of field names to values.',
-				),
+				message: localize('prompt.syntax.mapping', 'A Skill header must be a mapping of field names to values.'),
 			});
 		}
 	} catch {
@@ -331,12 +272,7 @@ function bodyFileReferences(body: string, startLine: number): readonly IBodyFile
 		};
 		const index = lineAt(offset);
 		const end = lineAt(offset + length);
-		return new Range(
-			startLine + index,
-			offset - starts[index]! + 1,
-			startLine + end,
-			offset + length - starts[end]! + 1,
-		);
+		return new Range(startLine + index, offset - starts[index]! + 1, startLine + end, offset + length - starts[end]! + 1);
 	};
 	const add = (content: string, offset: number, length: number, isMarkdownLink: boolean) => {
 		if (content.startsWith('#') || (/^[a-z][a-z\d+.-]*:/iu.test(content) && !content.startsWith('file:'))) return;
@@ -355,12 +291,7 @@ function bodyFileReferences(body: string, startLine: number): readonly IBodyFile
 			if (token.type === 'link' || token.type === 'def') {
 				const content = token.href as string;
 				const target = token.raw.indexOf(content, token.type === 'link' ? token.raw.indexOf('](') + 2 : 0);
-				add(
-					content,
-					target < 0 ? offset : offset + target,
-					target < 0 ? token.raw.length : content.length,
-					true,
-				);
+				add(content, target < 0 ? offset : offset + target, target < 0 ? token.raw.length : content.length, true);
 			} else if ('tokens' in token && Array.isArray(token.tokens)) {
 				walk(token.tokens, offset, limit);
 			} else if (token.type === 'list') {

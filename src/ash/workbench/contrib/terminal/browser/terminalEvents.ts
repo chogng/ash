@@ -1,9 +1,6 @@
 import { Event, EventMultiplexer } from '../../../../base/common/event.js';
 import { DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import type {
-	ITerminalCapabilityImplMap,
-	TerminalCapability,
-} from '../../../../platform/terminal/common/capabilities/capabilities.js';
+import type { ITerminalCapabilityImplMap, TerminalCapability } from '../../../../platform/terminal/common/capabilities/capabilities.js';
 import type { ITerminalInstance } from './terminal.js';
 
 /** One observable source per live instance/capability; no command or instance state is copied. */

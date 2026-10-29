@@ -2,10 +2,7 @@ import type { IExtensionService } from '../../../../src/ash/workbench/services/e
 import { createHash } from 'node:crypto';
 import { prepareAcademyExtension, startAcademyExtension } from '../../../../test/fixtures/academyExtension.js';
 import { MainThreadClientEditors } from '../../../../src/ash/workbench/api/browser/mainThreadClientEditors.js';
-import type {
-	IExtensionHostApi,
-	ExtensionHostFleetSnapshot,
-} from '../../../../src/ash/platform/agentHost/common/extensionHostApi.js';
+import type { IExtensionHostApi, ExtensionHostFleetSnapshot } from '../../../../src/ash/platform/agentHost/common/extensionHostApi.js';
 import { AdapterManager } from '../../../../src/ash/workbench/contrib/debug/browser/debugAdapterManager.js';
 import assert from 'node:assert/strict';
 import { before, test } from 'mocha';
@@ -43,21 +40,14 @@ for (const [locale, label] of [
 		const { URI } = await import('../../../../src/ash/base/common/uri.js');
 		const { toDisposable } = await import('../../../../src/ash/base/common/lifecycle.js');
 		const { resetNlsResolver } = await import('../../../../src/ash/nls.js');
-		const { initializeTestLocalization, createEmptyTestLanguagePacks } =
-			await import('../../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js');
-		const { GlobalExtensionEnablementService } =
-			await import('../../../../src/ash/platform/extensionManagement/common/extensionEnablementService.js');
-		const { BrowserStorageService } =
-			await import('../../../../src/ash/workbench/services/storage/browser/storageService.js');
-		const { ExtensionResourceLoaderService } =
-			await import('../../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js');
-		const { AppServerExtensionService } =
-			await import('../../../../src/ash/workbench/services/extensions/browser/appServerExtensionService.js');
+		const { initializeTestLocalization, createEmptyTestLanguagePacks } = await import('../../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js');
+		const { GlobalExtensionEnablementService } = await import('../../../../src/ash/platform/extensionManagement/common/extensionEnablementService.js');
+		const { BrowserStorageService } = await import('../../../../src/ash/workbench/services/storage/browser/storageService.js');
+		const { ExtensionResourceLoaderService } = await import('../../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js');
+		const { AppServerExtensionService } = await import('../../../../src/ash/workbench/services/extensions/browser/appServerExtensionService.js');
 		const { EditorPanes } = await import('../../../../src/ash/workbench/browser/editor.js');
-		const { DocumentTypes } =
-			await import('../../../../src/ash/workbench/services/documentEditor/common/documentTypes.js');
-		const { matchCodeEditor } =
-			await import('../../../../src/ash/workbench/contrib/codeEditor/browser/codeEditorInput.js');
+		const { DocumentTypes } = await import('../../../../src/ash/workbench/services/documentEditor/common/documentTypes.js');
+		const { matchCodeEditor } = await import('../../../../src/ash/workbench/contrib/codeEditor/browser/codeEditorInput.js');
 		const { EditorPaneMatch } = await import('../../../../src/ash/workbench/browser/parts/editor/editorPane.js');
 		using localization = toDisposable(resetNlsResolver);
 		initializeTestLocalization(locale);
@@ -65,35 +55,15 @@ for (const [locale, label] of [
 		assert.ok(help.includes(locale === 'zh-CN' ? 'Academy 文档提供' : 'Academy documents provide'));
 		assert.ok(help.includes(locale === 'zh-CN' ? '段落' : 'Paragraph'));
 		assert.equal(
-			createDocumentEditorPaneOptions(generalProfile).accessibilityHelp!().some(line =>
-				line.includes(locale === 'zh-CN' ? 'Academy 文档提供' : 'Academy documents provide'),
-			),
+			createDocumentEditorPaneOptions(generalProfile).accessibilityHelp!().some(line => line.includes(locale === 'zh-CN' ? 'Academy 文档提供' : 'Academy documents provide')),
 			false,
 		);
-		assert.throws(
-			() =>
-				academyProfile
-					.create()
-					.codec.deserialize({ format: 'ash.document', version: 2, documentType: 'general' }),
-			{
-				message:
-					locale === 'zh-CN'
-						? '结构化文档类型必须为“academy”。'
-						: "Structured document type must be 'academy'",
-			},
-		);
-		assert.throws(
-			() =>
-				academyProfile
-					.create()
-					.codec.deserialize({ format: 'ash.document', version: 1, documentType: 'academy' }),
-			{
-				message:
-					locale === 'zh-CN'
-						? '旧版结构化文档不能声明文档类型。'
-						: 'Legacy structured documents cannot declare a document type',
-			},
-		);
+		assert.throws(() => academyProfile.create().codec.deserialize({ format: 'ash.document', version: 2, documentType: 'general' }), {
+			message: locale === 'zh-CN' ? '结构化文档类型必须为“academy”。' : "Structured document type must be 'academy'",
+		});
+		assert.throws(() => academyProfile.create().codec.deserialize({ format: 'ash.document', version: 1, documentType: 'academy' }), {
+			message: locale === 'zh-CN' ? '旧版结构化文档不能声明文档类型。' : 'Legacy structured documents cannot declare a document type',
+		});
 		const dom = new JSDOM('', { url: 'https://ash.test' });
 		try {
 			using storage = new BrowserStorageService({
@@ -129,26 +99,22 @@ for (const [locale, label] of [
 					extensions: [
 						{
 							...entry,
-							rendererClient: enablement
-								.getDisabledExtensions()
-								.some(disabled => disabled.id === entry.id)
-								? undefined
-								: entry.rendererClient,
+							rendererClient: enablement.getDisabledExtensions().some(disabled => disabled.id === entry.id) ? undefined : entry.rendererClient,
 						},
 					],
 					diagnostics: [],
 				}),
-				resources: new ExtensionResourceLoaderService(
-					async request => new Uint8Array(await readFile(`extensions/academy/${request.path}`)),
-				),
+				resources: new ExtensionResourceLoaderService(async request => new Uint8Array(await readFile(`extensions/academy/${request.path}`))),
 			};
 			using adapters = new AdapterManager();
-			using service = new AppServerExtensionService({ api }, createEmptyTestLanguagePacks(), adapters);
-			const inputs = [
-				{ resource: URI.file('/paper.ash-academy') },
-				{ resource: URI.file('/paper.ASH-PAPER') },
-				{ resource: URI.file('/paper.bin'), contentType: academyProfile.contentType },
-			];
+			using service = new AppServerExtensionService(
+				{
+					api,
+				},
+				createEmptyTestLanguagePacks(),
+				adapters,
+			);
+			const inputs = [{ resource: URI.file('/paper.ash-academy') }, { resource: URI.file('/paper.ASH-PAPER') }, { resource: URI.file('/paper.bin'), contentType: academyProfile.contentType }];
 			assert.equal(DocumentTypes.find(inputs[0]), undefined);
 			await service.start();
 			assert.equal(DocumentTypes.find(inputs[0]), undefined, 'a declaration alone does not install an editor');
@@ -158,8 +124,7 @@ for (const [locale, label] of [
 					30_000,
 					async () => import('../../browser/editor.js'),
 					{
-						invoke: (request, signal) =>
-							provider.invoke(request.registrationId, request.operation, request.payload, signal),
+						invoke: (request, signal) => provider.invoke(request.registrationId, request.operation, request.payload, signal),
 					} as IExtensionHostApi,
 					api,
 					emptyEditorDeclarations,
@@ -193,10 +158,7 @@ for (const [locale, label] of [
 				await bridge.update({ generation: 2, extensions: [] });
 				for (const input of inputs) {
 					assert.throws(() => EditorPanes.getEditorPane(input), {
-						message:
-							locale === 'zh-CN'
-								? '编辑器扩展包不可用。'
-								: 'The editor extension package is unavailable.',
+						message: locale === 'zh-CN' ? '编辑器扩展包不可用。' : 'The editor extension package is unavailable.',
 					});
 					assert.equal(DocumentTypes.find(input), undefined);
 					assert.equal(matchCodeEditor(input), EditorPaneMatch.None);

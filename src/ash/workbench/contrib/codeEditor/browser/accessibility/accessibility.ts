@@ -19,13 +19,9 @@ registerAction2(
 		public override async run(accessor: ServicesAccessor): Promise<void> {
 			const accessibility = accessor.get(IAccessibilityService);
 			const enabled = !accessibility.isScreenReaderOptimized();
-			await accessor
-				.get(IConfigurationService)
-				.updateValue('editor.accessibilitySupport', enabled ? 'on' : 'off');
+			await accessor.get(IConfigurationService).updateValue('editor.accessibilitySupport', enabled ? 'on' : 'off');
 			accessibility.alert(
-				enabled
-					? localize('accessibility.screenReaderEnabled', 'Screen reader optimization enabled.')
-					: localize('accessibility.screenReaderDisabled', 'Screen reader optimization disabled.'),
+				enabled ? localize('accessibility.screenReaderEnabled', 'Screen reader optimization enabled.') : localize('accessibility.screenReaderDisabled', 'Screen reader optimization disabled.'),
 			);
 		}
 	},

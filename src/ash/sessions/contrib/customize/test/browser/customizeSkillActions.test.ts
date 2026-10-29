@@ -13,17 +13,13 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
 import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
-import {
-	ISessionPrimaryProviderServices,
-	type SessionProviderServices,
-} from '../../../../browser/agentHost/sessionProviderScopeService.js';
+import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { CustomizeSkillActions } from '../../browser/customizeSkillActions.js';
 
 const home = URI.file('/fixture-home');
 const target = URI.from({ scheme: Schemas.vscodeUserData, path: '/user/skills/meeting-notes/SKILL.md' });
-const instructions =
-	'---\nname: meeting-notes\ndescription: Summarize meeting notes.\n---\n\nKeep decisions and action items.\n';
+const instructions = '---\nname: meeting-notes\ndescription: Summarize meeting notes.\n---\n\nKeep decisions and action items.\n';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -32,9 +28,7 @@ function fixture() {
 	const files = resources.add(new FileService());
 	const provider = resources.add(new InMemoryFileSystemProvider());
 	resources.add(files.registerProvider('file', provider));
-	resources.add(
-		files.registerProvider(Schemas.vscodeUserData, resources.add(new FileUserDataProvider(provider, home))),
-	);
+	resources.add(files.registerProvider(Schemas.vscodeUserData, resources.add(new FileUserDataProvider(provider, home))));
 	const state = {
 		input: {
 			confirmed: true,
@@ -95,10 +89,7 @@ test('Create skill publishes valid instructions, registers their source, and ope
 	const { resources, files, state, actions } = fixture();
 	using lifetime = resources;
 	assert.equal(await actions.create(), true);
-	assert.equal(
-		(await files.readFile(target)).content,
-		'---\nname: "meeting-notes"\ndescription: "Summarize meeting notes."\n---\n\nKeep decisions and action items.\n',
-	);
+	assert.equal((await files.readFile(target)).content, '---\nname: "meeting-notes"\ndescription: "Summarize meeting notes."\n---\n\nKeep decisions and action items.\n');
 	assert.deepEqual(state.roots, ['/fixture-home/skills']);
 	assert.deepEqual(state.opened, [target.toString()]);
 	await assert.rejects(actions.create());
@@ -114,10 +105,7 @@ test('Upload skill retains package resources and exact manifest bytes', async ()
 	Object.defineProperty(reference, 'webkitRelativePath', { value: 'meeting-notes/references/notes.bin' });
 	assert.equal(await actions.uploadFiles([manifest, reference]), true);
 	assert.equal((await files.readFile(target)).content, instructions);
-	assert.deepEqual(
-		(await files.readFileBytes(URI.joinPath(target, '../references/notes.bin'))).bytes,
-		new Uint8Array([0, 255, 4]),
-	);
+	assert.deepEqual((await files.readFileBytes(URI.joinPath(target, '../references/notes.bin'))).bytes, new Uint8Array([0, 255, 4]));
 	assert.deepEqual(state.roots, ['/fixture-home/skills']);
 	assert.deepEqual(state.opened, []);
 });

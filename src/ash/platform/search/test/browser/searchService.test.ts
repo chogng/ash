@@ -115,18 +115,12 @@ test('browser file search returns complete multiline blocks and respects Unicode
 			return {
 				resource,
 				revision: '1',
-				bytes: new TextEncoder().encode(
-					'中文😀 first\r\nsecond end\r\nfirst\nsecond\nneedles needle 中文needle',
-				),
+				bytes: new TextEncoder().encode('中文😀 first\r\nsecond end\r\nfirst\nsecond\nneedles needle 中文needle'),
 			};
 		},
 	});
 	const progress: ContentSearchMatch[] = [];
-	const complete = await service.search(
-		folder,
-		{ ...query, text: 'first\nsecond' },
-		{ onProgress: matches => progress.push(...matches) },
-	);
+	const complete = await service.search(folder, { ...query, text: 'first\nsecond' }, { onProgress: matches => progress.push(...matches) });
 	assert.deepEqual(
 		{ complete, progress },
 		{
@@ -152,11 +146,7 @@ test('browser file search returns complete multiline blocks and respects Unicode
 		},
 	);
 	const regexMatches: ContentSearchMatch[] = [];
-	await service.search(
-		folder,
-		{ ...query, text: '(first)\r\n(second)', patternKind: 'regex' },
-		{ onProgress: matches => regexMatches.push(...matches) },
-	);
+	await service.search(folder, { ...query, text: '(first)\r\n(second)', patternKind: 'regex' }, { onProgress: matches => regexMatches.push(...matches) });
 	assert.deepEqual(regexMatches, progress);
 	const words: ContentSearchMatch[] = [];
 	await service.search(folder, { ...query, wholeWord: true }, { onProgress: matches => words.push(...matches) });
@@ -449,7 +439,9 @@ test('cancelling one concurrent search leaves the other search and its results i
 	const secondPending = service.search(
 		folder,
 		{ ...query, text: 'second' },
-		{ onProgress: matches => progress.push(...matches.map(match => match.preview)) },
+		{
+			onProgress: matches => progress.push(...matches.map(match => match.preview)),
+		},
 	);
 	controller.abort();
 	await rejected;

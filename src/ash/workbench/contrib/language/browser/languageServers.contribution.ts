@@ -1,11 +1,6 @@
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import {
 	ILanguageServerStatusService,
@@ -34,12 +29,8 @@ registerAction2(
 		}
 
 		public override async run(accessor: ServicesAccessor, languageId?: string): Promise<void> {
-			const language =
-				languageId ?? accessor.get(ICodeEditorService).getActiveCodeEditor()?.getModel()?.getLanguageId();
-			const input = createSettingsEditorInput(
-				LanguageServerSettingsTarget,
-				language ? { languageId: language } : {},
-			);
+			const language = languageId ?? accessor.get(ICodeEditorService).getActiveCodeEditor()?.getModel()?.getLanguageId();
+			const input = createSettingsEditorInput(LanguageServerSettingsTarget, language ? { languageId: language } : {});
 			await accessor.get(IEditorService).openEditor(input, { pinned: true }, 'modalGroup');
 		}
 	},
@@ -67,11 +58,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 		priority: 110,
 		getProvider: accessor => {
 			const focused = accessor.get(IContextViewService).container.ownerDocument.activeElement;
-			if (
-				!accessor.get(IContextKeyService).getValue(LanguageServerMenuFocused.key) &&
-				!focused?.closest(`[data-statusbar-item-id="${LANGUAGE_SERVER_STATUS_ENTRY_ID}"]`)
-			)
-				return undefined;
+			if (!accessor.get(IContextKeyService).getValue(LanguageServerMenuFocused.key) && !focused?.closest(`[data-statusbar-item-id="${LANGUAGE_SERVER_STATUS_ENTRY_ID}"]`)) return undefined;
 			const service = accessor.get(ILanguageServerStatusService);
 			return new AccessibleContentProvider(
 				AccessibleViewProviderId.LanguageServerStatus,

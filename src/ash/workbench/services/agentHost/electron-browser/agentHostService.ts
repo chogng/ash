@@ -2,10 +2,7 @@ import { CancellationError } from '../../../../base/common/errors.js';
 import { localize } from '../../../../nls.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createAppServerExtensionHostApi } from '../../../../platform/agentHost/browser/extensionHostApi.js';
-import {
-	type AppServerConnectionRecovery,
-	type AppServerProtocolClient,
-} from '../../../../platform/agentHost/browser/appServerProtocolClient.js';
+import { type AppServerConnectionRecovery, type AppServerProtocolClient } from '../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { RemoteAgentHostService } from '../../../../platform/agentHost/browser/remoteAgentHostServiceImpl.js';
 import type { IExtensionHostApi } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { LOCAL_APP_SERVER_INITIALIZE_TIMEOUT_MS } from '../../../../platform/agentHost/common/appServerTransport.js';
@@ -22,12 +19,7 @@ interface WorkbenchAgentHostOptions {
 	readonly capabilities: { readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean };
 	readonly onDidSuspendOS: INativeHostApi['onDidSuspendOS'];
 	readonly onDidResumeOS: INativeHostApi['onDidResumeOS'];
-	readonly resolveRemoteAuthority?: (
-		api: IExtensionHostApi,
-		factories: IRemoteSocketFactoryService,
-		authority: string,
-		attempt: number,
-	) => Promise<IAddress>;
+	readonly resolveRemoteAuthority?: (api: IExtensionHostApi, factories: IRemoteSocketFactoryService, authority: string, attempt: number) => Promise<IAddress>;
 	readonly initializeRemoteExtensions?: (api: IExtensionHostApi, authority: string) => Promise<IExtensionHostApi>;
 }
 
@@ -86,23 +78,13 @@ export class WorkbenchAgentHostService extends Disposable {
 			);
 			this.observePower(workspace.recovery);
 			if (!(await workspace.connect()))
-				throw new Error(
-					localize(
-						{ bundle: 'ash.workbench', key: 'agentHost.remoteWorkspaceUnavailable' },
-						'The remote workspace App Server connection is unavailable.',
-					),
-				);
+				throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHost.remoteWorkspaceUnavailable' }, 'The remote workspace App Server connection is unavailable.'));
 			this.assertNotDisposed();
 			this.selectedConnection = workspace;
 		} else if (remote.kind === 'remote') {
 			const { resolveRemoteAuthority, initializeRemoteExtensions } = this.options;
 			if (!resolveRemoteAuthority || !initializeRemoteExtensions)
-				throw new Error(
-					localize(
-						{ bundle: 'ash.workbench', key: 'agentHost.remoteResolverUnavailable' },
-						'This window does not provide a local Remote resolver.',
-					),
-				);
+				throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHost.remoteResolverUnavailable' }, 'This window does not provide a local Remote resolver.'));
 			const localExtensions = createAppServerExtensionHostApi(this.localConnection.client);
 			let attempt = 0;
 			const workspace = this._register(
@@ -121,10 +103,7 @@ export class WorkbenchAgentHostService extends Disposable {
 					onDidReconnectLocal: this.localConnection.onDidReconnect,
 					initialize: async (client: AppServerProtocolClient) => {
 						const generation = client.generation;
-						const extensions = await initializeRemoteExtensions(
-							createAppServerExtensionHostApi(client),
-							remote.authority,
-						);
+						const extensions = await initializeRemoteExtensions(createAppServerExtensionHostApi(client), remote.authority);
 						if (client.generation !== generation || client.state !== 'ready') throw new CancellationError();
 						this.remoteExtensions = extensions;
 					},
@@ -147,9 +126,7 @@ export class WorkbenchAgentHostService extends Disposable {
 			},
 			...(capabilities.browser ? { browser: { version: 4 as const, observe: true, input: true } } : {}),
 			...(capabilities.textDocuments ? { textDocuments: { version: 2 as const } } : {}),
-			...(desktopTools && capabilities.appTools
-				? { appTools: { version: 1 as const, agents: true, desktop: true } }
-				: {}),
+			...(desktopTools && capabilities.appTools ? { appTools: { version: 1 as const, agents: true, desktop: true } } : {}),
 		};
 	}
 

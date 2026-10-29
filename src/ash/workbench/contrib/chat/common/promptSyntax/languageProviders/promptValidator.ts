@@ -15,10 +15,7 @@ export class PromptValidator {
 					severity: LanguageDiagnosticSeverity.Error,
 					code: 'missingHeader',
 					source: 'Skill',
-					message: localize(
-						'prompt.validation.header',
-						'A Skill requires a YAML header enclosed by --- lines.',
-					),
+					message: localize('prompt.validation.header', 'A Skill requires a YAML header enclosed by --- lines.'),
 				},
 			];
 		const diagnostics: LanguageDiagnostic[] = header.errors.map(error => ({
@@ -45,19 +42,10 @@ export class PromptValidator {
 					severity: LanguageDiagnosticSeverity.Error,
 					code: 'unknownField',
 					source: 'Skill',
-					message: localize(
-						'prompt.validation.unknown',
-						'The Skill catalog does not accept the field {0}.',
-						attribute.key,
-					),
+					message: localize('prompt.validation.unknown', 'The Skill catalog does not accept the field {0}.', attribute.key),
 				});
 			} else if (attribute.key === 'metadata') {
-				if (
-					attribute.value.type !== 'map' ||
-					attribute.value.properties.some(
-						property => property.value.type !== 'scalar' || property.value.missing,
-					)
-				) {
+				if (attribute.value.type !== 'map' || attribute.value.properties.some(property => property.value.type !== 'scalar' || property.value.missing)) {
 					diagnostics.push({
 						range: attribute.value.range,
 						severity: LanguageDiagnosticSeverity.Error,
@@ -67,20 +55,12 @@ export class PromptValidator {
 					});
 				} else if (
 					attribute.value.properties.length > 64 ||
-					attribute.value.properties.some(
-						property =>
-							!property.key.value ||
-							length(property.key.value) > 128 ||
-							(property.value.type === 'scalar' && length(property.value.value) > 1024),
-					)
+					attribute.value.properties.some(property => !property.key.value || length(property.key.value) > 128 || (property.value.type === 'scalar' && length(property.value.value) > 1024))
 				) {
 					report(
 						attribute,
 						'metadataLimits',
-						localize(
-							'prompt.validation.metadataLimits',
-							'Metadata supports up to 64 entries, with names of 1 to 128 characters and values of up to 1024 characters.',
-						),
+						localize('prompt.validation.metadataLimits', 'Metadata supports up to 64 entries, with names of 1 to 128 characters and values of up to 1024 characters.'),
 					);
 				}
 			} else if (attribute.value.type !== 'scalar') {
@@ -89,79 +69,34 @@ export class PromptValidator {
 					severity: LanguageDiagnosticSeverity.Error,
 					code: 'textField',
 					source: 'Skill',
-					message: localize(
-						'prompt.validation.text',
-						'The Skill field {0} requires a text value.',
-						attribute.key,
-					),
+					message: localize('prompt.validation.text', 'The Skill field {0} requires a text value.', attribute.key),
 				});
 			} else if (!attribute.value.missing) {
 				const value = attribute.value.value;
 				if (attribute.key === 'name' && value) {
-					if (
-						value.length > getAttributeDefinition('name')!.maximumCharacters! ||
-						!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value)
-					) {
-						report(
-							attribute,
-							'invalidName',
-							localize(
-								'prompt.validation.name',
-								'A Skill name requires 1 to 64 lowercase letters, numbers and single hyphens.',
-							),
-						);
+					if (value.length > getAttributeDefinition('name')!.maximumCharacters! || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value)) {
+						report(attribute, 'invalidName', localize('prompt.validation.name', 'A Skill name requires 1 to 64 lowercase letters, numbers and single hyphens.'));
 					} else {
 						const directory = promptAST.uri.path.split('/').at(-2);
 						if (directory && value !== directory)
-							report(
-								attribute,
-								'nameMismatch',
-								localize(
-									'prompt.validation.nameMismatch',
-									'The Skill name {0} must match its parent directory {1}.',
-									value,
-									directory,
-								),
-							);
+							report(attribute, 'nameMismatch', localize('prompt.validation.nameMismatch', 'The Skill name {0} must match its parent directory {1}.', value, directory));
 					}
 				}
-				const maximum =
-					attribute.key === 'name' ? undefined : getAttributeDefinition(attribute.key)?.maximumCharacters;
-				if (
-					maximum !== undefined &&
-					((!value.trim() && attribute.key === 'compatibility') ||
-						(!value && attribute.key === 'allowed-tools') ||
-						length(value) > maximum)
-				) {
-					report(
-						attribute,
-						'fieldLength',
-						localize(
-							'prompt.validation.length',
-							'The Skill field {0} requires 1 to {1} characters.',
-							attribute.key,
-							maximum,
-						),
-					);
+				const maximum = attribute.key === 'name' ? undefined : getAttributeDefinition(attribute.key)?.maximumCharacters;
+				if (maximum !== undefined && ((!value.trim() && attribute.key === 'compatibility') || (!value && attribute.key === 'allowed-tools') || length(value) > maximum)) {
+					report(attribute, 'fieldLength', localize('prompt.validation.length', 'The Skill field {0} requires 1 to {1} characters.', attribute.key, maximum));
 				}
 			}
 		}
 		for (const key of ['name', 'description']) {
 			const attribute = header.getAttribute(key);
-			if (
-				!attribute ||
-				(attribute.value.type === 'scalar' && (attribute.value.missing || !attribute.value.value.trim()))
-			) {
+			if (!attribute || (attribute.value.type === 'scalar' && (attribute.value.missing || !attribute.value.value.trim()))) {
 				diagnostics.push({
 					range: attribute?.range ?? header.range,
 					severity: LanguageDiagnosticSeverity.Error,
 					code: 'requiredField',
 					source: 'Skill',
-					message: localize(
-						'prompt.validation.required',
-						'The Skill header requires a non-empty {0} field.',
-						key,
-					),
+					message: localize('prompt.validation.required', 'The Skill header requires a non-empty {0} field.', key),
 				});
 			}
 		}

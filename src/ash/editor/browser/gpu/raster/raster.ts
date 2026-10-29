@@ -3,12 +3,7 @@ import { type MetadataConsts } from '../../../common/encodedTokenAttributes.js';
 export interface IGlyphRasterizer {
 	readonly id: number;
 	readonly cacheKey: string;
-	rasterizeGlyph(
-		chars: string,
-		tokenMetadata: number,
-		decorationStyleSetId: number,
-		colorMap: string[],
-	): Readonly<IRasterizedGlyph>;
+	rasterizeGlyph(chars: string, tokenMetadata: number, decorationStyleSetId: number, colorMap: string[]): Readonly<IRasterizedGlyph>;
 	getTextMetrics(text: string): TextMetrics;
 }
 

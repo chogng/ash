@@ -34,12 +34,9 @@ export class ChatGPTEditorPane extends EditorPane {
 		const contextKeys = this._register(this.contextKeys.createScoped(root));
 		contextKeys.createKey('chatGPTFocused', true);
 		// Nested input editors must inherit this page's accessibility context.
-		const instantiation = this._register(
-			this.instantiation.createChild(new ServiceCollection([IContextKeyService, contextKeys])),
-		);
+		const instantiation = this._register(this.instantiation.createChild(new ServiceCollection([IContextKeyService, contextKeys])));
 		this.widget = this._register(instantiation.createInstance(ChatGPTWidget, root));
-		const update = (): void =>
-			this.widget.setScrollingOptimization(this.configuration.getValue<boolean>(chatGPTScrollOptimization));
+		const update = (): void => this.widget.setScrollingOptimization(this.configuration.getValue<boolean>(chatGPTScrollOptimization));
 		update();
 		this._register(
 			this.configuration.onDidChangeConfiguration(event => {
@@ -50,10 +47,7 @@ export class ChatGPTEditorPane extends EditorPane {
 		);
 		this._register(
 			addDisposableListener(root, 'focusin', event => {
-				if (
-					!root.contains(event.relatedTarget as Node) &&
-					this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.ChatGPT)
-				) {
+				if (!root.contains(event.relatedTarget as Node) && this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.ChatGPT)) {
 					status(localize('sessions.chatgpt.navigationHint', 'Press Alt+F1 for ChatGPT accessibility help.'));
 				}
 			}),

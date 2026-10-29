@@ -1,9 +1,6 @@
 import { LineDataEventAddon } from './lineDataEventAddon.js';
 import { DecorationAddon } from './decorationAddon.js';
-import {
-	TerminalCapability,
-	type ITerminalCommand,
-} from '../../../../../platform/terminal/common/capabilities/capabilities.js';
+import { TerminalCapability, type ITerminalCommand } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { ShellIntegrationAddon } from '../../../../../platform/terminal/common/xterm/shellIntegrationAddon.js';
 import type { TerminalShellIntegrationEvent } from '../../../../../platform/terminal/common/terminal.js';
 import { TerminalCapabilityStore } from '../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
@@ -31,10 +28,7 @@ import { Color } from '../../../../../base/common/color.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
 import { searchMatchBackground } from '../../../../../platform/theme/common/colors/searchColors.js';
 import { contrastBorder, focusBorder } from '../../../../../platform/theme/common/colors/baseColors.js';
-import {
-	AccessibilitySignal,
-	IAccessibilitySignalService,
-} from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
+import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { XtermAddonImporter } from './xtermAddonImporter.js';
 import { updateTerminalFontRendering } from './terminalFontRendering.js';
 import { TerminalWidgetManager } from '../widgets/widgetManager.js';
@@ -43,11 +37,7 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { TerminalLocation } from '../../../../../platform/terminal/common/terminal.js';
 import { editorBackground } from '../../../../../platform/theme/common/colors/editorColors.js';
 import { PANEL_BACKGROUND } from '../../../../common/theme.js';
-import {
-	scrollbarSliderBackground,
-	scrollbarSliderHoverBackground,
-	scrollbarSliderActiveBackground,
-} from '../../../../../platform/theme/common/colors/miscColors.js';
+import { scrollbarSliderBackground, scrollbarSliderHoverBackground, scrollbarSliderActiveBackground } from '../../../../../platform/theme/common/colors/miscColors.js';
 
 const addonImporter = new XtermAddonImporter();
 
@@ -70,8 +60,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		new MarkNavigationAddon(() =>
 			this.instance.capabilities?.has(TerminalCapability.CommandDetection)
 				? this.decorationAddon.markers
-				: (this.capabilities.get(TerminalCapability.PartialCommandDetection)?.commands ??
-					this.decorationAddon.markers),
+				: (this.capabilities.get(TerminalCapability.PartialCommandDetection)?.commands ?? this.decorationAddon.markers),
 		),
 	);
 	private visible = false;
@@ -110,9 +99,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		super();
 		this.decorationAddon = this._register(instantiation.createInstance(DecorationAddon, this.capabilities));
 		this.onDidRequestRunCommand = this.decorationAddon.onDidRequestRunCommand;
-		this.shellIntegration = this._register(
-			instantiation.createInstance(ShellIntegrationAddon, this.capabilities, undefined),
-		);
+		this.shellIntegration = this._register(instantiation.createInstance(ShellIntegrationAddon, this.capabilities, undefined));
 		this.element = h(container.ownerDocument, 'div');
 		this.element.className = 'ash-terminal-instance';
 		this.element.hidden = true;
@@ -129,10 +116,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 			this.capabilities.createOnDidAddCapabilityOfTypeEvent(TerminalCapability.CommandDetection)(capability => {
 				const listeners = new DisposableStore();
 				commandListeners.value = listeners;
-				const decorate = (
-					command: import('../../../../../platform/terminal/common/capabilities/capabilities.js').ITerminalCommand,
-					running: boolean,
-				) => {
+				const decorate = (command: import('../../../../../platform/terminal/common/capabilities/capabilities.js').ITerminalCommand, running: boolean) => {
 					if (!command.id || !command.marker) return;
 					this.decorationAddon.registerCommandDecoration(
 						{
@@ -140,13 +124,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 							command: command.command,
 							isTrusted: command.isTrusted,
 							cwd: command.cwd,
-							status: running
-								? 'running'
-								: command.exitCode === undefined
-									? 'completed'
-									: command.exitCode === 0
-										? 'succeeded'
-										: 'failed',
+							status: running ? 'running' : command.exitCode === undefined ? 'completed' : command.exitCode === 0 ? 'succeeded' : 'failed',
 							exitCode: command.exitCode,
 						},
 						this.instance.processId,
@@ -155,12 +133,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 				};
 				listeners.add(
 					capability.onCommandStarted(command => {
-						if (command.marker)
-							this.decorationAddon.registerCommandDecoration(
-								undefined,
-								this.instance.processId,
-								command.marker,
-							);
+						if (command.marker) this.decorationAddon.registerCommandDecoration(undefined, this.instance.processId, command.marker);
 					}),
 				);
 				listeners.add(capability.onCommandExecuted(command => decorate(command, true)));
@@ -176,8 +149,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		if (instance.onDidChangeTarget) {
 			this._register(
 				instance.onDidChangeTarget(() => {
-					if (this.terminal)
-						this.terminal.options.theme = terminalTheme(this.themeService.getColorTheme(), instance.target);
+					if (this.terminal) this.terminal.options.theme = terminalTheme(this.themeService.getColorTheme(), instance.target);
 				}),
 			);
 		}
@@ -211,11 +183,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 	}
 
 	private async loadTerminal(restored?: ITerminalDimensions & { readonly vt: string }): Promise<void> {
-		const [{ Terminal }, { FitAddon }] = await Promise.all([
-			import('@xterm/xterm'),
-			import('@xterm/addon-fit'),
-			import('@xterm/xterm/css/xterm.css'),
-		]);
+		const [{ Terminal }, { FitAddon }] = await Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit'), import('@xterm/xterm/css/xterm.css')]);
 		if (this.isDisposed) return;
 		const terminal = new Terminal({
 			disableStdin: this.instance.isReadOnly === true,
@@ -379,12 +347,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 			return false;
 		}
 		const previousOptions = this.activeSearch?.options;
-		if (
-			previousOptions &&
-			(previousOptions.regex !== options.regex ||
-				previousOptions.wholeWord !== options.wholeWord ||
-				previousOptions.caseSensitive !== options.caseSensitive)
-		) {
+		if (previousOptions && (previousOptions.regex !== options.regex || previousOptions.wholeWord !== options.wholeWord || previousOptions.caseSensitive !== options.caseSensitive)) {
 			// The addon caches decorated matches by query; option changes need a fresh cache too.
 			addon.clearDecorations();
 		}
@@ -488,10 +451,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		}
 		try {
 			const dimensions = this.fitAddon.proposeDimensions();
-			if (dimensions)
-				void this.resizeDebouncer
-					.resize(Math.min(512, dimensions.cols), Math.min(512, dimensions.rows), false)
-					.catch(onUnexpectedError);
+			if (dimensions) void this.resizeDebouncer.resize(Math.min(512, dimensions.cols), Math.min(512, dimensions.rows), false).catch(onUnexpectedError);
 		} catch {
 			return;
 		}
@@ -522,9 +482,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		registerMode('l', parameters => this.alternateScroll.set(parameters, false));
 		registerMode('s', parameters => this.alternateScroll.save(parameters));
 		registerMode('r', parameters => this.alternateScroll.restore(parameters));
-		terminal.attachCustomWheelEventHandler(() =>
-			this.alternateScroll.shouldProcessWheel(terminal.buffer.active.type, terminal.modes.mouseTrackingMode),
-		);
+		terminal.attachCustomWheelEventHandler(() => this.alternateScroll.shouldProcessWheel(terminal.buffer.active.type, terminal.modes.mouseTrackingMode));
 	}
 
 	public scrollToPreviousCommand(): void {
@@ -538,9 +496,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 /** Projects the workbench theme into xterm's renderer theme contract. */
 export function terminalTheme(theme: IColorTheme, target: TerminalLocation = TerminalLocation.Panel): ITheme {
 	return {
-		background:
-			theme.getColorCss(terminalColors.terminalBackground) ??
-			theme.getColorCss(target === TerminalLocation.Editor ? editorBackground : PANEL_BACKGROUND),
+		background: theme.getColorCss(terminalColors.terminalBackground) ?? theme.getColorCss(target === TerminalLocation.Editor ? editorBackground : PANEL_BACKGROUND),
 		foreground: theme.getColorCss(terminalColors.terminalForeground),
 		cursor: theme.getColorCss(terminalColors.terminalCursorForeground),
 		selectionForeground: theme.getColorCss(selectionForeground),

@@ -11,20 +11,11 @@ import { exportDesignSvg } from '../../../browser/svgRenderer.js';
 class SitesWorkspace extends CreatorCanvasWorkspace {
 	private pages!: CreatorFrameNavigator;
 	protected override createModeContent(): void {
-		this.pages = this._register(
-			new CreatorFrameNavigator(this.actionsDomNode, this.contentDomNode, this.document, id =>
-				this.editor.revealShape(id),
-			),
-		);
+		this.pages = this._register(new CreatorFrameNavigator(this.actionsDomNode, this.contentDomNode, this.document, id => this.editor.revealShape(id)));
 	}
 	private async exportWebsite(): Promise<void> {
 		const frames = this.pages.frames;
-		const navigation = frames
-			.map(
-				(_, index) =>
-					`<a href="#page-${index}">${localize('sessions.creator.pageNumber', 'Page {0}', index + 1)}</a>`,
-			)
-			.join(' ');
+		const navigation = frames.map((_, index) => `<a href="#page-${index}">${localize('sessions.creator.pageNumber', 'Page {0}', index + 1)}</a>`).join(' ');
 		const sections = frames
 			.map(
 				(frame, index) =>
@@ -40,21 +31,9 @@ class SitesWorkspace extends CreatorCanvasWorkspace {
 	}
 	protected override getModeActions(): readonly IAction[] {
 		return [
-			this.action('page', localize('sessions.creator.sites.addPage', 'Add web page'), () =>
-				this.pages.select(this.addFrame(1440, 900)),
-			),
-			this.action(
-				'preview',
-				localize('sessions.creator.sites.preview', 'Preview pages'),
-				() => this.pages.showPreview(true),
-				this.pages.frames.length > 0,
-			),
-			this.action(
-				'export',
-				localize('sessions.creator.sites.export', 'Export website'),
-				() => this.exportWebsite(),
-				this.pages.frames.length > 0,
-			),
+			this.action('page', localize('sessions.creator.sites.addPage', 'Add web page'), () => this.pages.select(this.addFrame(1440, 900))),
+			this.action('preview', localize('sessions.creator.sites.preview', 'Preview pages'), () => this.pages.showPreview(true), this.pages.frames.length > 0),
+			this.action('export', localize('sessions.creator.sites.export', 'Export website'), () => this.exportWebsite(), this.pages.frames.length > 0),
 		];
 	}
 	public override focus(): void {
@@ -79,6 +58,5 @@ registerCreatorMode({
 		'sessions.creator.sites.help',
 		'Add web page creates a website page. Pages selects the page to edit. Preview pages opens the page preview. Export website writes a standalone HTML file with page navigation and embedded artwork that scales to the browser width. Publishing and layout reflow are not available.',
 	),
-	create: (instantiation, ownerDocument) =>
-		instantiation.createInstance(SitesWorkspace, ownerDocument, CreatorMode.Sites),
+	create: (instantiation, ownerDocument) => instantiation.createInstance(SitesWorkspace, ownerDocument, CreatorMode.Sites),
 });

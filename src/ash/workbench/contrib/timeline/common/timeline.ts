@@ -79,12 +79,7 @@ export interface ITimelineService {
 	registerTimelineProvider(provider: TimelineProvider): IDisposable;
 	unregisterTimelineProvider(id: string): void;
 	getSources(): TimelineSource[];
-	getTimeline(
-		id: string,
-		uri: URI,
-		options: TimelineOptions,
-		tokenSource: CancellationTokenSource,
-	): TimelineRequest | undefined;
+	getTimeline(id: string, uri: URI, options: TimelineOptions, tokenSource: CancellationTokenSource): TimelineRequest | undefined;
 	setUri(uri: URI): void;
 }
 

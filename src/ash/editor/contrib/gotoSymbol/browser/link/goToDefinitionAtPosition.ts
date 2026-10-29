@@ -14,9 +14,7 @@ import { ClickLinkGesture, type ClickLinkMouseEvent, type ClickLinkKeyboardEvent
 export class GotoDefinitionAtPositionEditorContribution extends Disposable {
 	public static readonly ID = 'editor.contrib.gotodefinitionatposition';
 	public static get(editor: ICodeEditor): GotoDefinitionAtPositionEditorContribution | null {
-		return editor.getContribution<GotoDefinitionAtPositionEditorContribution>(
-			GotoDefinitionAtPositionEditorContribution.ID,
-		);
+		return editor.getContribution<GotoDefinitionAtPositionEditorContribution>(GotoDefinitionAtPositionEditorContribution.ID);
 	}
 	private readonly decorations;
 	private request: AbortController | undefined;
@@ -47,9 +45,7 @@ export class GotoDefinitionAtPositionEditorContribution extends Disposable {
 				editor.setPosition(mouse.target.position);
 				void ReferencesController.get(editor)
 					?.navigate('definition', {
-						peek:
-							!mouse.hasSideBySideModifier &&
-							editor.getOption(EditorOption.definitionLinkOpensInPeek) === true,
+						peek: !mouse.hasSideBySideModifier && editor.getOption(EditorOption.definitionLinkOpensInPeek) === true,
 						openToSide: mouse.hasSideBySideModifier,
 					})
 					.catch(this.onError);
@@ -84,14 +80,7 @@ export class GotoDefinitionAtPositionEditorContribution extends Disposable {
 		this.word = identity;
 		const request = (this.request = new AbortController());
 		try {
-			const links = await getDefinitionsAtPosition(
-				this.features.definitionProvider,
-				model,
-				position,
-				false,
-				request.signal,
-				this.onError,
-			);
+			const links = await getDefinitionsAtPosition(this.features.definitionProvider, model, position, false, request.signal, this.onError);
 			if (request.signal.aborted || links.length === 0) {
 				return;
 			}
@@ -121,11 +110,6 @@ registerEditorContribution({
 		if (context.kind !== 'text') {
 			return;
 		}
-		return context.instantiationService.createInstance(
-			GotoDefinitionAtPositionEditorContribution,
-			context.editor,
-			context.view,
-			context.onLanguageError,
-		);
+		return context.instantiationService.createInstance(GotoDefinitionAtPositionEditorContribution, context.editor, context.view, context.onLanguageError);
 	},
 });

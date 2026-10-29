@@ -20,26 +20,14 @@ async function clickBrowserControl(view: JSHandle<Electron.WebContentsView>, sel
 				view.webContents.sendInputEvent({ type, ...point, button: 'left', clickCount: 1 });
 			}
 		}, selector);
-	const input = await view.evaluate(
-		(view, selector) =>
-			view.webContents.executeJavaScript(
-				`document.querySelector(${JSON.stringify(selector)}) instanceof HTMLInputElement`,
-			),
-		selector,
-	);
+	const input = await view.evaluate((view, selector) => view.webContents.executeJavaScript(`document.querySelector(${JSON.stringify(selector)}) instanceof HTMLInputElement`), selector);
 	if (input) {
 		// Native focus can finish after navigation's title notification. Retry only
 		// focusing an input; submit actions must still be dispatched exactly once.
 		await expect
 			.poll(async () => {
 				await click();
-				return view.evaluate(
-					(view, selector) =>
-						view.webContents.executeJavaScript(
-							`document.activeElement.matches(${JSON.stringify(selector)})`,
-						),
-					selector,
-				);
+				return view.evaluate((view, selector) => view.webContents.executeJavaScript(`document.activeElement.matches(${JSON.stringify(selector)})`), selector);
 			})
 			.toBe(true);
 	} else {
@@ -52,13 +40,7 @@ test.describe('Ephemeral website credentials', () => {
 	test(
 		'ordinary Electron saves credentials in memory without a keychain or disk persistence',
 		{ tag: ['@electron-ui', '@electron-app-server'] },
-		async ({
-			application: initialApplication,
-			workbench: initialWorkbench,
-			reloadWorkbench,
-			target,
-			testWorkspace,
-		}) => {
+		async ({ application: initialApplication, workbench: initialWorkbench, reloadWorkbench, target, testWorkspace }) => {
 			let application = initialApplication;
 			let workbench = initialWorkbench;
 			const server = createServer((request, response) => {
@@ -77,11 +59,7 @@ test.describe('Ephemeral website credentials', () => {
 			let backend: Awaited<ReturnType<typeof connectProfile>> | undefined;
 			try {
 				const paths = await (application as ElectronApplication).evaluate(({ app, safeStorage }) => {
-					if (
-						!process.argv.includes('--use-inmemory-secretstorage') ||
-						process.env.ASH_USE_INMEMORY_SECRETSTORAGE !== '1'
-					)
-						throw new Error('Memory mode was not selected');
+					if (!process.argv.includes('--use-inmemory-secretstorage') || process.env.ASH_USE_INMEMORY_SECRETSTORAGE !== '1') throw new Error('Memory mode was not selected');
 					// Any application-level access to native credentials fails this scenario.
 					for (const method of ['isEncryptionAvailable', 'encryptString', 'decryptString'] as const) {
 						safeStorage[method] = () => {
@@ -114,33 +92,19 @@ test.describe('Ephemeral website credentials', () => {
 						]),
 					origin,
 				);
-				await expect(workbench.page.locator('.ash-browser-editor').getByRole('status')).toHaveText(
-					'Memory login',
-				);
+				await expect(workbench.page.locator('.ash-browser-editor').getByRole('status')).toHaveText('Memory login');
 				view = await (application as ElectronApplication).evaluateHandle(
 					({ BrowserWindow }, origin) =>
 						BrowserWindow.getAllWindows()
 							.flatMap(window => window.contentView.children)
-							.find(
-								child =>
-									'webContents' in child &&
-									(child as Electron.WebContentsView).webContents.getURL().startsWith(origin),
-							) as Electron.WebContentsView,
+							.find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL().startsWith(origin)) as Electron.WebContentsView,
 					origin,
 				);
-				await workbench.dialogs.confirm(application, 'Save website password', 'Save password', () =>
-					clickBrowserControl(view!, 'button'),
-				);
-				const state = () =>
-					workbench.page.evaluate(() =>
-						globalThis.ashTestMainProcess.call<BrowserPasswordState>('browserPasswords', 'readState', []),
-					);
-				await expect
-					.poll(async () => (await state()).entries.map(entry => entry.username))
-					.toEqual(['memory-account']);
+				await workbench.dialogs.confirm(application, 'Save website password', 'Save password', () => clickBrowserControl(view!, 'button'));
+				const state = () => workbench.page.evaluate(() => globalThis.ashTestMainProcess.call<BrowserPasswordState>('browserPasswords', 'readState', []));
+				await expect.poll(async () => (await state()).entries.map(entry => entry.username)).toEqual(['memory-account']);
 				const disk = await readFile(join(paths.storage, 'workbench-state.json'), 'utf8');
-				for (const value of ['browser.passwords.', 'memory-account', 'memory-password'])
-					expect(disk).not.toContain(value);
+				for (const value of ['browser.passwords.', 'memory-account', 'memory-password']) expect(disk).not.toContain(value);
 				if (process.platform === 'darwin')
 					await expect(stat(join(paths.home, 'Library', 'Keychains'))).rejects.toMatchObject({
 						code: 'ENOENT',
@@ -209,10 +173,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 										: request.url === '/invalid-action'
 											? form().replace('action="/login"', 'action="https://["')
 											: request.url === '/cross-button'
-												? form().replace(
-														'<button>',
-														'<button formaction="https://other.example/login">',
-													)
+												? form().replace('<button>', '<button formaction="https://other.example/login">')
 												: form(),
 					);
 				});
@@ -265,25 +226,16 @@ for (const locale of ['en', 'zh-CN'] as const) {
 								help: '无障碍帮助',
 								close: '关闭',
 							};
-				const state = () =>
-					workbench.page.evaluate(() =>
-						globalThis.ashTestMainProcess.call<BrowserPasswordState>('browserPasswords', 'readState', []),
-					);
+				const state = () => workbench.page.evaluate(() => globalThis.ashTestMainProcess.call<BrowserPasswordState>('browserPasswords', 'readState', []));
 				const editor = () => workbench.page.locator('.ash-browser-editor');
 				const navigate = async (next = url) => {
-					const previousDocument =
-						view &&
-						(await view.evaluate(view => view.webContents.executeJavaScript('performance.timeOrigin')));
+					const previousDocument = view && (await view.evaluate(view => view.webContents.executeJavaScript('performance.timeOrigin')));
 					const address = editor().getByRole('textbox', { name: labels.address, exact: true });
 					await address.fill(next);
 					await address.press('Enter');
 					await expect(editor().getByRole('status')).toHaveText('Login form');
 					if (view) {
-						await expect
-							.poll(() =>
-								view!.evaluate(view => view.webContents.executeJavaScript('performance.timeOrigin')),
-							)
-							.not.toBe(previousDocument);
+						await expect.poll(() => view!.evaluate(view => view.webContents.executeJavaScript('performance.timeOrigin'))).not.toBe(previousDocument);
 						await expect.poll(() => view!.evaluate(view => view.webContents.isLoading())).toBe(false);
 					}
 				};
@@ -291,11 +243,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					(application as ElectronApplication).evaluateHandle(({ BrowserWindow }, origin) => {
 						const view = BrowserWindow.getAllWindows()
 							.flatMap(window => window.contentView.children)
-							.find(
-								child =>
-									'webContents' in child &&
-									(child as Electron.WebContentsView).webContents.getURL().startsWith(origin),
-							);
+							.find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL().startsWith(origin));
 						if (!view) {
 							throw new Error('Missing login page');
 						}
@@ -310,31 +258,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					await expect
 						.poll(() =>
 							view!.evaluate(view =>
-								view.webContents.executeJavaScript(
-									'document.activeElement.selectionStart === 0 && document.activeElement.selectionEnd === document.activeElement.value.length',
-								),
+								view.webContents.executeJavaScript('document.activeElement.selectionStart === 0 && document.activeElement.selectionEnd === document.activeElement.value.length'),
 							),
 						)
 						.toBe(true);
 					await view!.evaluate((view, text) => view.webContents.insertText(text), text);
-					await expect
-						.poll(() =>
-							view!.evaluate(
-								(view, selector) =>
-									view.webContents.executeJavaScript(
-										`document.querySelector(${JSON.stringify(selector)}).value`,
-									),
-								selector,
-							),
-						)
-						.toBe(text);
+					await expect.poll(() => view!.evaluate((view, selector) => view.webContents.executeJavaScript(`document.querySelector(${JSON.stringify(selector)}).value`), selector)).toBe(text);
 				};
-				const values = () =>
-					view!.evaluate(view =>
-						view.webContents.executeJavaScript(
-							`Array.from(document.querySelectorAll('input'),input=>input.value)`,
-						),
-					);
+				const values = () => view!.evaluate(view => view.webContents.executeJavaScript(`Array.from(document.querySelectorAll('input'),input=>input.value)`));
 				const settings = async () => {
 					await workbench.settingsEditor.openUserSettingsUI();
 					await workbench.settingsEditor.selectGroup('workbench');
@@ -362,22 +293,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					);
 					await navigate();
 					view = await acquire();
-					expect(
-						await view.evaluate(view =>
-							view.webContents.executeJavaScript('[typeof process,typeof require,typeof browserViewAPI]'),
-						),
-					).toEqual(['undefined', 'undefined', 'undefined']);
+					expect(await view.evaluate(view => view.webContents.executeJavaScript('[typeof process,typeof require,typeof browserViewAPI]'))).toEqual(['undefined', 'undefined', 'undefined']);
 					// Observe the real preload IPC boundary without retaining any credentials.
 					type Capture = { submissions: number; hasPasswordForm?: boolean; dispose(): void };
 					await (application as ElectronApplication).evaluate(({ ipcMain }) => {
 						const host = globalThis as typeof globalThis & { passwordToggleCapture?: Capture };
-						const listener = (
-							_event: Electron.IpcMainEvent,
-							message: { type: string; data?: { hasPasswordForm?: boolean } },
-						) => {
+						const listener = (_event: Electron.IpcMainEvent, message: { type: string; data?: { hasPasswordForm?: boolean } }) => {
 							if (message.type === 'passwordSubmitted') host.passwordToggleCapture!.submissions++;
-							if (message.type === 'passwordPageState')
-								host.passwordToggleCapture!.hasPasswordForm = message.data?.hasPasswordForm;
+							if (message.type === 'passwordPageState') host.passwordToggleCapture!.hasPasswordForm = message.data?.hasPasswordForm;
 						};
 						host.passwordToggleCapture = {
 							submissions: 0,
@@ -396,19 +319,11 @@ for (const locale of ['en', 'zh-CN'] as const) {
 						await click(selector);
 						await expect
 							.poll(() =>
-								(application as ElectronApplication).evaluate(
-									() =>
-										(globalThis as typeof globalThis & { passwordToggleCapture: Capture })
-											.passwordToggleCapture.hasPasswordForm,
-								),
+								(application as ElectronApplication).evaluate(() => (globalThis as typeof globalThis & { passwordToggleCapture: Capture }).passwordToggleCapture.hasPasswordForm),
 							)
 							.toBe(!visible);
 						expect(
-							await (application as ElectronApplication).evaluate(
-								() =>
-									(globalThis as typeof globalThis & { passwordToggleCapture: Capture })
-										.passwordToggleCapture.submissions,
-							),
+							await (application as ElectronApplication).evaluate(() => (globalThis as typeof globalThis & { passwordToggleCapture: Capture }).passwordToggleCapture.submissions),
 						).toBe(0);
 						expect((await state()).entries).toHaveLength(0);
 					}
@@ -417,26 +332,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					await click('button');
 					await expect(editor().getByRole('status')).toHaveText('Login failed');
 					expect((await state()).entries).toHaveLength(0);
-					expect(
-						await (application as ElectronApplication).evaluate(
-							() =>
-								(globalThis as typeof globalThis & { passwordToggleCapture: Capture })
-									.passwordToggleCapture.submissions,
-						),
-					).toBe(1);
-					await (application as ElectronApplication).evaluate(() =>
-						(
-							globalThis as typeof globalThis & { passwordToggleCapture: Capture }
-						).passwordToggleCapture.dispose(),
-					);
+					expect(await (application as ElectronApplication).evaluate(() => (globalThis as typeof globalThis & { passwordToggleCapture: Capture }).passwordToggleCapture.submissions)).toBe(1);
+					await (application as ElectronApplication).evaluate(() => (globalThis as typeof globalThis & { passwordToggleCapture: Capture }).passwordToggleCapture.dispose());
 					await enter('input[name=username]', 'synthetic-account');
 					await enter('input[name=password]', currentPassword);
 					await workbench.dialogs.confirm(application, labels.saveTitle, labels.save, () => click('button'));
 					await expect(editor().getByRole('status')).toHaveText('Account page');
 					await expect.poll(async () => (await state()).entries.length).toBe(1);
-					const storagePath = await (application as ElectronApplication).evaluate(({ app }) =>
-						app.getPath('userData'),
-					);
+					const storagePath = await (application as ElectronApplication).evaluate(({ app }) => app.getPath('userData'));
 					const disk = await readFile(join(storagePath, 'workbench-state.json'), 'utf8');
 					expect(disk).toContain('ash-encrypted:1:');
 					expect(disk).not.toContain('synthetic-account');
@@ -455,9 +358,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					await expect.poll(values).toEqual(['synthetic-account', currentPassword]);
 					currentPassword = 'updated-login-password';
 					await enter('input[name=password]', currentPassword);
-					await workbench.dialogs.confirm(application, labels.updateTitle, labels.update, () =>
-						click('button'),
-					);
+					await workbench.dialogs.confirm(application, labels.updateTitle, labels.update, () => click('button'));
 					await navigate();
 					await click('input[name=username]');
 					await expect.poll(values).toEqual(['synthetic-account', currentPassword]);
@@ -465,17 +366,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					await workbench.dialogs.confirm(application, labels.saveTitle, labels.save, () => click('button'));
 					await expect.poll(async () => (await state()).entries.length).toBe(2);
 					await navigate();
-					await workbench.dialogs.confirm(application, labels.choose, 'second-account', () =>
-						click('input[name=username]'),
-					);
+					await workbench.dialogs.confirm(application, labels.choose, 'second-account', () => click('input[name=username]'));
 					await expect.poll(values).toEqual(['second-account', currentPassword]);
-					for (const excluded of [
-						'/new-password',
-						'/cross-form',
-						'/cross-button',
-						'/invalid-action',
-						'/hidden-password',
-					]) {
+					for (const excluded of ['/new-password', '/cross-form', '/cross-button', '/invalid-action', '/hidden-password']) {
 						await navigate(origin + excluded);
 						await enter('input[name=username]', 'second-account');
 						await click('input[name=password]');
@@ -486,10 +379,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					await expect(panel.getByRole('listitem')).toHaveCount(2);
 					await panel.getByRole('textbox', { name: labels.search, exact: true }).fill('second-account');
 					await expect(panel.getByRole('listitem')).toHaveCount(1);
-					const editName =
-						locale === 'en'
-							? `Edit account second-account on ${origin}`
-							: `编辑 ${origin} 上的账号 second-account`;
+					const editName = locale === 'en' ? `Edit account second-account on ${origin}` : `编辑 ${origin} 上的账号 second-account`;
 					await panel.getByRole('button', { name: editName, exact: true }).click();
 					const edit = workbench.page.getByRole('dialog', { name: labels.edit, exact: true });
 					await expect(edit.getByLabel(labels.password, { exact: true })).toHaveAttribute('type', 'password');
@@ -515,19 +405,13 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					await search.focus();
 					await search.press('Alt+F1');
 					const help = workbench.page.getByRole('dialog', { name: labels.help, exact: true });
-					await expect(help.getByRole('textbox')).toHaveValue(
-						locale === 'en' ? /existing passwords are never shown/ : /已有密码不会显示/,
-					);
-					await expect(help.getByRole('textbox')).toHaveValue(
-						locale === 'en' ? /Username-first login.*two minutes/ : /用户名优先.*两分钟/,
-					);
+					await expect(help.getByRole('textbox')).toHaveValue(locale === 'en' ? /existing passwords are never shown/ : /已有密码不会显示/);
+					await expect(help.getByRole('textbox')).toHaveValue(locale === 'en' ? /Username-first login.*two minutes/ : /用户名优先.*两分钟/);
 					await help.getByRole('button', { name: labels.close, exact: true }).click();
 					await expect(search).toBeFocused();
 					await closeSettings();
 					await navigate();
-					await workbench.dialogs.confirm(application, labels.choose, 'second-account', () =>
-						click('input[name=username]'),
-					);
+					await workbench.dialogs.confirm(application, labels.choose, 'second-account', () => click('input[name=username]'));
 					await expect.poll(values).toEqual(['second-account', 'managed-new-password']);
 					// Saving disabled: a successful new account must not create a record or a prompt.
 					await enter('input[name=username]', 'not-saved');
@@ -536,17 +420,10 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					await expect(editor().getByRole('status')).toHaveText('Account page');
 					expect((await state()).entries).toHaveLength(2);
 					panel = await settings();
-					const deleteName =
-						locale === 'en'
-							? `Delete account second-account on ${origin}`
-							: `删除 ${origin} 上的账号 second-account`;
-					await workbench.dialogs.confirm(application, labels.confirm, labels.confirm, () =>
-						panel.getByRole('button', { name: deleteName, exact: true }).click(),
-					);
+					const deleteName = locale === 'en' ? `Delete account second-account on ${origin}` : `删除 ${origin} 上的账号 second-account`;
+					await workbench.dialogs.confirm(application, labels.confirm, labels.confirm, () => panel.getByRole('button', { name: deleteName, exact: true }).click());
 					await expect(panel.getByRole('listitem')).toHaveCount(1);
-					await workbench.dialogs.confirm(application, labels.confirm, labels.confirm, () =>
-						panel.getByRole('button', { name: labels.clear, exact: true }).click(),
-					);
+					await workbench.dialogs.confirm(application, labels.confirm, labels.confirm, () => panel.getByRole('button', { name: labels.clear, exact: true }).click());
 					await expect(panel.getByRole('listitem')).toHaveCount(0);
 					await closeSettings();
 					await navigate();
@@ -554,17 +431,11 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					await click('input[name=password]');
 					await expect.poll(values).toEqual(['second-account', '']);
 					expect(accepted).toEqual(['synthetic-account', 'synthetic-account', 'second-account', 'not-saved']);
-					expect(await readFile(join(storagePath, 'workbench-state.json'), 'utf8')).not.toContain(
-						'browser.passwords.',
-					);
+					expect(await readFile(join(storagePath, 'workbench-state.json'), 'utf8')).not.toContain('browser.passwords.');
 					await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
 				} finally {
 					await (application as ElectronApplication)
-						.evaluate(() =>
-							(
-								globalThis as typeof globalThis & { passwordToggleCapture?: { dispose(): void } }
-							).passwordToggleCapture?.dispose(),
-						)
+						.evaluate(() => (globalThis as typeof globalThis & { passwordToggleCapture?: { dispose(): void } }).passwordToggleCapture?.dispose())
 						.catch(() => {});
 					await view?.dispose();
 					server.closeAllConnections();
@@ -586,8 +457,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				let releaseLogin: (() => void) | undefined;
 				let signedInUser = '';
 				const accepted: string[] = [];
-				const usernameStep =
-					'<title>Username step</title><form action="/steps/password"><input name="username" type="email" autocomplete="username"><button>Next</button></form>';
+				const usernameStep = '<title>Username step</title><form action="/steps/password"><input name="username" type="email" autocomplete="username"><button>Next</button></form>';
 				const passwordStep =
 					'<title>Password step</title><form method="post" action="/steps/login"><input name="password" type="password" autocomplete="current-password"><button>Sign in</button></form>';
 				const spa = (kind: string) => {
@@ -701,42 +571,24 @@ for (const locale of ['en', 'zh-CN'] as const) {
 								delete state.passwordPrompts;
 							},
 						};
-						dialog.showMessageBox = ((
-							...args: [Electron.MessageBoxOptions] | [Electron.BrowserWindow, Electron.MessageBoxOptions]
-						) => {
+						dialog.showMessageBox = ((...args: [Electron.MessageBoxOptions] | [Electron.BrowserWindow, Electron.MessageBoxOptions]) => {
 							const options = args.length === 1 ? args[0] : args[1];
 							state.passwordPrompts!.unexpected.push(options.title ?? '');
 							return Promise.resolve({ response: options.cancelId ?? 0, checkboxChecked: false });
 						}) as typeof dialog.showMessageBox;
 					});
-				const unexpected = () =>
-					(application as ElectronApplication).evaluate(
-						() =>
-							(globalThis as typeof globalThis & { passwordPrompts?: Capture }).passwordPrompts
-								?.unexpected ?? [],
-					);
+				const unexpected = () => (application as ElectronApplication).evaluate(() => (globalThis as typeof globalThis & { passwordPrompts?: Capture }).passwordPrompts?.unexpected ?? []);
 				const editor = () => workbench.page.locator('.ash-browser-editor');
 				const acquire = (prefix = origin) =>
 					(application as ElectronApplication).evaluateHandle(
 						({ BrowserWindow }, prefix) =>
 							BrowserWindow.getAllWindows()
 								.flatMap(window => window.contentView.children)
-								.find(
-									child =>
-										'webContents' in child &&
-										(child as Electron.WebContentsView).webContents.getURL().startsWith(prefix),
-								) as Electron.WebContentsView,
+								.find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL().startsWith(prefix)) as Electron.WebContentsView,
 						prefix,
 					);
 				let view: Awaited<ReturnType<typeof acquire>> | undefined;
-				const read = (selector: string) =>
-					view!.evaluate(
-						(view, selector) =>
-							view.webContents.executeJavaScript(
-								`document.querySelector(${JSON.stringify(selector)})?.value`,
-							),
-						selector,
-					);
+				const read = (selector: string) => view!.evaluate((view, selector) => view.webContents.executeJavaScript(`document.querySelector(${JSON.stringify(selector)})?.value`), selector);
 				const click = (selector: string) => clickBrowserControl(view!, selector);
 				const enter = async (selector: string, value: string) => {
 					await click(selector);
@@ -754,26 +606,17 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					await expect.poll(() => read(selector)).toBe(value);
 				};
 				const navigate = async (path: string, title: string, base = origin) => {
-					const previous =
-						view &&
-						(await view.evaluate(view => view.webContents.executeJavaScript('performance.timeOrigin')));
+					const previous = view && (await view.evaluate(view => view.webContents.executeJavaScript('performance.timeOrigin')));
 					const address = editor().getByRole('textbox', { name: addressLabel, exact: true });
 					await address.fill(base + path);
 					await address.press('Enter');
 					await expect(editor().getByRole('status')).toHaveText(title);
 					if (view) {
-						await expect
-							.poll(() =>
-								view!.evaluate(view => view.webContents.executeJavaScript('performance.timeOrigin')),
-							)
-							.not.toBe(previous);
+						await expect.poll(() => view!.evaluate(view => view.webContents.executeJavaScript('performance.timeOrigin'))).not.toBe(previous);
 						await expect.poll(() => view!.evaluate(view => view.webContents.isLoading())).toBe(false);
 					}
 				};
-				const state = () =>
-					workbench.page.evaluate(() =>
-						globalThis.ashTestMainProcess.call<BrowserPasswordState>('browserPasswords', 'readState', []),
-					);
+				const state = () => workbench.page.evaluate(() => globalThis.ashTestMainProcess.call<BrowserPasswordState>('browserPasswords', 'readState', []));
 				try {
 					await capture();
 					await installMainChannelTestClient(workbench.page);
@@ -826,17 +669,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
 						try {
 							await click('button');
 							await expect(editor().getByRole('status')).toHaveText('Signing in');
-							await view!.evaluate(view =>
-								view.webContents.executeJavaScript(
-									'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
-								),
-							);
+							await view!.evaluate(view => view.webContents.executeJavaScript('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))'));
 							expect(
-								await (application as ElectronApplication).evaluate(
-									() =>
-										(globalThis as typeof globalThis & { ashTestMessage?: { options?: unknown } })
-											.ashTestMessage?.options,
-								),
+								await (application as ElectronApplication).evaluate(() => (globalThis as typeof globalThis & { ashTestMessage?: { options?: unknown } }).ashTestMessage?.options),
 							).toBeUndefined();
 						} finally {
 							releaseLogin!();
@@ -890,22 +725,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					view = await acquire(workspaceUrl);
 					await click('[name=password]');
 					await expect.poll(() => read('[name=password]')).toBe('');
-					expect((await state()).entries.map(entry => [entry.username, entry.scope])).toEqual([
-						[username, 'global'],
-					]);
+					expect((await state()).entries.map(entry => [entry.username, entry.scope])).toEqual([[username, 'global']]);
 					expect(await unexpected()).toEqual([]);
 					expect(accepted).toEqual(['/steps/login', '/api/login', '/api/login', '/api/login']);
 					await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
 				} finally {
 					releaseLogin?.();
 					await view?.dispose();
-					await (application as ElectronApplication)
-						.evaluate(() =>
-							(
-								globalThis as typeof globalThis & { passwordPrompts?: Capture }
-							).passwordPrompts?.restore(),
-						)
-						.catch(() => {});
+					await (application as ElectronApplication).evaluate(() => (globalThis as typeof globalThis & { passwordPrompts?: Capture }).passwordPrompts?.restore()).catch(() => {});
 					for (const service of [server, other]) {
 						service.closeAllConnections();
 						await new Promise<void>(resolve => service.close(() => resolve()));

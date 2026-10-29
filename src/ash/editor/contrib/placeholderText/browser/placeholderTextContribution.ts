@@ -9,9 +9,7 @@ import { hotClassGetOriginalInstance } from '../../../../platform/observable/com
 /** Uses the editor option to present placeholder text while the model is empty. */
 export class PlaceholderTextContribution extends Disposable implements IEditorContribution {
 	public static get(editor: ICodeEditor): PlaceholderTextContribution {
-		return hotClassGetOriginalInstance(
-			editor.getContribution<PlaceholderTextContribution>(PlaceholderTextContribution.ID)!,
-		);
+		return hotClassGetOriginalInstance(editor.getContribution<PlaceholderTextContribution>(PlaceholderTextContribution.ID)!);
 	}
 
 	public static readonly ID = 'editor.contrib.placeholderText';

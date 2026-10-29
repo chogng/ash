@@ -5,10 +5,7 @@ import type { IResourceEditorInput } from '../../common/editor.js';
 import { EditorPane } from '../../browser/parts/editor/editorPane.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { createBinaryDiffEditorInput } from '../../common/editor/diffEditorInput.js';
-import {
-	DiffEditorAssociationsConfiguration,
-	EditorAssociationsConfiguration,
-} from '../../browser/parts/editor/editorConfiguration.js';
+import { DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration } from '../../browser/parts/editor/editorConfiguration.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -237,9 +234,7 @@ test('EditorGroupView selects a range of tabs and resolves close-command targets
 			const fourth = input('fourth');
 			await group.openEditor(fourth);
 			tab('third').focus();
-			tab('third').dispatchEvent(
-				new dom.window.KeyboardEvent('keydown', { bubbles: true, key: ' ', ctrlKey: true }),
-			);
+			tab('third').dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: ' ', ctrlKey: true }));
 			assert.deepEqual(group.selectedInputs, [third, fourth]);
 			assert.equal(dom.window.document.activeElement, tab('third'));
 			tab('third').click();
@@ -284,10 +279,7 @@ test('binary comparisons select the diff association using the modified file pat
 			registry,
 			configurationService: configuration,
 		});
-		const input = createBinaryDiffEditorInput(
-			{ resource: URI.file('/project/before.dat') },
-			{ resource: URI.file('/project/after.bin') },
-		);
+		const input = createBinaryDiffEditorInput({ resource: URI.file('/project/before.dat') }, { resource: URI.file('/project/after.bin') });
 		await group.openEditor(input, { pinned: true, ignoreError: true });
 		assert.deepEqual(
 			group.editors.map(editor => ({ paneId: editor.paneId, input: editor.input })),

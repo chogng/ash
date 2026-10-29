@@ -51,11 +51,7 @@ export class GlobalCompositeBar extends Disposable {
 		@IRendererHostService private readonly host: IRendererHost,
 	) {
 		super();
-		this.accountsVisible = this.storageService.getBoolean(
-			GlobalCompositeBar.accountsVisibilityKey,
-			StorageScope.PROFILE,
-			true,
-		);
+		this.accountsVisible = this.storageService.getBoolean(GlobalCompositeBar.accountsVisibilityKey, StorageScope.PROFILE, true);
 		this.domNode = h(container.ownerDocument, 'div');
 		this.domNode.className = 'ash-global-composite-bar';
 		container.append(this.domNode);
@@ -68,30 +64,15 @@ export class GlobalCompositeBar extends Disposable {
 				orientation: 'vertical',
 				actionViewItemProvider: (action, options) =>
 					this.createActionViewItem(action, options, {
-						position: () =>
-							getActivityHoverPosition(
-								ActivityBarPosition.DEFAULT,
-								this.configurationService.getValue<SideBarLocation>(
-									WorkbenchConfiguration.sideBarLocation,
-								),
-							),
+						position: () => getActivityHoverPosition(ActivityBarPosition.DEFAULT, this.configurationService.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation)),
 					}),
 			}),
 		);
 		this.renderActions();
 		this._register(
 			this.storageService.onDidChangeValue(event => {
-				if (
-					event.key !== GlobalCompositeBar.accountsVisibilityKey ||
-					event.scope !== StorageScope.PROFILE ||
-					!event.external
-				)
-					return;
-				this.accountsVisible = this.storageService.getBoolean(
-					GlobalCompositeBar.accountsVisibilityKey,
-					StorageScope.PROFILE,
-					true,
-				);
+				if (event.key !== GlobalCompositeBar.accountsVisibilityKey || event.scope !== StorageScope.PROFILE || !event.external) return;
+				this.accountsVisible = this.storageService.getBoolean(GlobalCompositeBar.accountsVisibilityKey, StorageScope.PROFILE, true);
 				this.renderActions();
 			}),
 		);
@@ -144,19 +125,12 @@ export class GlobalCompositeBar extends Disposable {
 		];
 	}
 
-	createActionViewItem(
-		action: IAction,
-		options: ActionViewItemOptions,
-		hoverOptions: IActivityHoverOptions = { position: () => HoverPosition.BELOW },
-	): ActionViewItem | undefined {
+	createActionViewItem(action: IAction, options: ActionViewItemOptions, hoverOptions: IActivityHoverOptions = { position: () => HoverPosition.BELOW }): ActionViewItem | undefined {
 		if (action.id !== 'ash.activityBar.accounts' && action.id !== 'ash.activityBar.manage') return undefined;
 		return new GlobalActivityActionViewItem(
 			hoverOptions,
 			action,
-			() =>
-				action.id === 'ash.activityBar.accounts'
-					? this.accountActions()
-					: getFlatContextMenuActions(this.manageMenu.getActions()),
+			() => (action.id === 'ash.activityBar.accounts' ? this.accountActions() : getFlatContextMenuActions(this.manageMenu.getActions())),
 			this.contextMenuService,
 			options,
 			// The title bar renders separate action items; the trigger's owner determines its menu direction.
@@ -164,12 +138,7 @@ export class GlobalCompositeBar extends Disposable {
 				this.domNode.contains(anchor)
 					? {
 							anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
-							anchorAlignment:
-								this.configurationService.getValue<SideBarLocation>(
-									WorkbenchConfiguration.sideBarLocation,
-								) === 'left'
-									? AnchorAlignment.Right
-									: AnchorAlignment.Left,
+							anchorAlignment: this.configurationService.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation) === 'left' ? AnchorAlignment.Right : AnchorAlignment.Left,
 						}
 					: { anchorAxisAlignment: AnchorAxisAlignment.Vertical, anchorAlignment: AnchorAlignment.Left },
 		);
@@ -186,12 +155,7 @@ export class GlobalCompositeBar extends Disposable {
 				checked: this.accountsVisible,
 				run: () => {
 					this.accountsVisible = !this.accountsVisible;
-					this.storageService.store(
-						GlobalCompositeBar.accountsVisibilityKey,
-						this.accountsVisible,
-						StorageScope.PROFILE,
-						StorageTarget.USER,
-					);
+					this.storageService.store(GlobalCompositeBar.accountsVisibilityKey, this.accountsVisible, StorageScope.PROFILE, StorageTarget.USER);
 					this.renderActions();
 				},
 			},
@@ -202,9 +166,7 @@ export class GlobalCompositeBar extends Disposable {
 		const manageLabel = this.label('workbench.manageAccounts', 'Manage Accounts');
 		const signOutLabel = this.label('workbench.signOut', 'Sign Out');
 		const githubConnected = this.accounts.some(account => account.provider === 'github');
-		const githubLabel = this.githubConnection.isConnecting
-			? this.label('workbench.cancelGitHubConnection', 'Cancel GitHub connection')
-			: this.label('workbench.connectGitHub', 'Connect GitHub');
+		const githubLabel = this.githubConnection.isConnecting ? this.label('workbench.cancelGitHubConnection', 'Cancel GitHub connection') : this.label('workbench.connectGitHub', 'Connect GitHub');
 		const accountActions = this.accounts.map(account => {
 			const name = account.displayName ?? account.email ?? account.provider;
 			const providerName = this.accountProviderName(account.provider);
@@ -237,10 +199,7 @@ export class GlobalCompositeBar extends Disposable {
 							label: githubLabel,
 							tooltip: githubLabel,
 							enabled: true,
-							run: () =>
-								this.githubConnection.isConnecting
-									? this.githubConnection.cancel()
-									: this.githubConnection.connect(),
+							run: () => (this.githubConnection.isConnecting ? this.githubConnection.cancel() : this.githubConnection.connect()),
 						},
 					]
 				: []),

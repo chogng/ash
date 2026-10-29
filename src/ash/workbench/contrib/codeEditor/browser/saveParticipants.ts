@@ -10,12 +10,7 @@ import { trimTrailingWhitespace } from '../../../../editor/common/commands/trimT
 import { EditOperation } from '../../../../editor/common/core/editOperation.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { Range } from '../../../../editor/common/core/range.js';
-import {
-	createLanguageFeatureRequest,
-	isLanguageFeatureRequestCurrent,
-	LanguageDiagnosticSeverity,
-	type LanguageCodeActionRequest,
-} from '../../../../editor/common/languages.js';
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, LanguageDiagnosticSeverity, type LanguageCodeActionRequest } from '../../../../editor/common/languages.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { EditSources } from '../../../../editor/common/textModelEditSource.js';
@@ -28,10 +23,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { IMarkerService, MarkerSeverity } from '../../../../platform/markers/common/markers.js';
 import type { IWorkbenchContribution } from '../../../common/contributions.js';
 import { SaveReason } from '../../../common/editor.js';
-import {
-	IFileTextModelService,
-	type ITextModelSaveParticipant,
-} from '../../../services/textmodelResolver/common/textModelResourceService.js';
+import { IFileTextModelService, type ITextModelSaveParticipant } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 
 const diagnosticSeverity = {
 	[MarkerSeverity.Error]: LanguageDiagnosticSeverity.Error,
@@ -55,9 +47,7 @@ class TrimWhitespaceParticipant implements ITextModelSaveParticipant {
 		if (reason === SaveReason.AUTO) {
 			for (const editor of editors) {
 				protectedPositions.push(...(editor.getSelections() ?? []).map(selection => selection.getPosition()));
-				const snippet = editor
-					.getContribution<SnippetController2>('snippetController2')
-					?.getSessionEnclosingRange();
+				const snippet = editor.getContribution<SnippetController2>('snippetController2')?.getSessionEnclosingRange();
 				if (!snippet) continue;
 				// Placeholder navigation can return to any tracked line in the active session.
 				for (let line = snippet.startLineNumber; line <= snippet.endLineNumber; line++) {
@@ -65,11 +55,7 @@ class TrimWhitespaceParticipant implements ITextModelSaveParticipant {
 				}
 			}
 		}
-		const operations = trimTrailingWhitespace(
-			model,
-			protectedPositions,
-			this.configuration.getValue<boolean>('files.trimTrailingWhitespaceInRegexAndStrings', overrides),
-		);
+		const operations = trimTrailingWhitespace(model, protectedPositions, this.configuration.getValue<boolean>('files.trimTrailingWhitespaceInRegexAndStrings', overrides));
 		if (operations.length === 0) return;
 		const editor = editors.find(candidate => candidate.hasTextFocus()) ?? editors[0];
 		const selections = [...(editor?.getSelections() ?? [])];
@@ -92,11 +78,7 @@ class FinalNewLineParticipant implements ITextModelSaveParticipant {
 		const editors = this.codeEditors.listCodeEditors().filter(editor => editor.getModel() === model);
 		const editor = editors.find(candidate => candidate.hasTextFocus()) ?? editors[0];
 		const selections = [...(editor?.getSelections() ?? [])];
-		model.pushEditOperations(
-			selections,
-			[EditOperation.insert(new Position(lastLine, model.getLineMaxColumn(lastLine)), model.getEOL())],
-			() => selections,
-		);
+		model.pushEditOperations(selections, [EditOperation.insert(new Position(lastLine, model.getLineMaxColumn(lastLine)), model.getEOL())], () => selections);
 	}
 }
 
@@ -112,23 +94,14 @@ class CodeActionOnSaveParticipant implements ITextModelSaveParticipant {
 		if (reason === SaveReason.AUTO) {
 			return;
 		}
-		const contribution = EditorExtensionsRegistry.getSomeEditorContributions([
-			'editor.contrib.codeActionController',
-		])[0];
+		const contribution = EditorExtensionsRegistry.getSomeEditorContributions(['editor.contrib.codeActionController'])[0];
 		if (!contribution) return;
-		const settings = this.configuration.getValue<Readonly<Record<string, 'always' | 'explicit' | 'never'>>>(
-			'editor.codeActionsOnSave',
-			{ overrideIdentifier: model.getLanguageId() },
-		);
+		const settings = this.configuration.getValue<Readonly<Record<string, 'always' | 'explicit' | 'never'>>>('editor.codeActionsOnSave', { overrideIdentifier: model.getLanguageId() });
 		const selected = Object.entries(settings)
 			.filter(([, mode]) => mode === 'always' || (mode === 'explicit' && reason === SaveReason.EXPLICIT))
 			.map(([kind]) => new HierarchicalKind(kind));
 		const kinds = selected.filter(kind => !selected.some(parent => !parent.equals(kind) && parent.contains(kind)));
-		kinds.sort(
-			(left, right) =>
-				Number(CodeActionKind.SourceFixAll.contains(right)) -
-				Number(CodeActionKind.SourceFixAll.contains(left)),
-		);
+		kinds.sort((left, right) => Number(CodeActionKind.SourceFixAll.contains(right)) - Number(CodeActionKind.SourceFixAll.contains(left)));
 		const excludes = Object.entries(settings)
 			.filter(([, mode]) => mode === 'never')
 			.map(([kind]) => new HierarchicalKind(kind));
@@ -137,11 +110,7 @@ class CodeActionOnSaveParticipant implements ITextModelSaveParticipant {
 			model.onWillDispose(() => lifetime.abort()),
 			toDisposable(() => lifetime.abort()),
 		);
-		const requestSignal = AbortSignal.any([
-			signal,
-			lifetime.signal,
-			...(contribution.providerSignal ? [contribution.providerSignal] : []),
-		]);
+		const requestSignal = AbortSignal.any([signal, lifetime.signal, ...(contribution.providerSignal ? [contribution.providerSignal] : [])]);
 		const { getCodeActions } = await import('../../../../editor/contrib/codeAction/browser/codeAction.js');
 		requestSignal.throwIfAborted();
 		for (const kind of kinds) {
@@ -152,7 +121,11 @@ class CodeActionOnSaveParticipant implements ITextModelSaveParticipant {
 					getCodeActions(
 						{ ordered: () => [provider] },
 						context,
-						{ include: kind, excludes, includeSourceActions: true },
+						{
+							include: kind,
+							excludes,
+							includeSourceActions: true,
+						},
 						error => {
 							throw error;
 						},
@@ -188,32 +161,20 @@ class CodeActionOnSaveParticipant implements ITextModelSaveParticipant {
 			resource: model.uri,
 			range: model.getFullModelRange(),
 			only: [kind.value],
-			diagnostics: this.markers
-				.read({ resource: model.uri })
-				.map(marker => ({
-					range: new Range(
-						marker.startLineNumber,
-						marker.startColumn,
-						marker.endLineNumber,
-						marker.endColumn,
-					),
-					severity: diagnosticSeverity[marker.severity],
-					message: marker.message,
-					source: marker.source,
-					code: typeof marker.code === 'object' ? marker.code.value : marker.code,
-				})),
+			diagnostics: this.markers.read({ resource: model.uri }).map(marker => ({
+				range: new Range(marker.startLineNumber, marker.startColumn, marker.endLineNumber, marker.endColumn),
+				severity: diagnosticSeverity[marker.severity],
+				message: marker.message,
+				source: marker.source,
+				code: typeof marker.code === 'object' ? marker.code.value : marker.code,
+			})),
 		};
 	}
 }
 
 function assertCurrent(request: LanguageCodeActionRequest): void {
 	if (!isLanguageFeatureRequestCurrent(request)) {
-		throw new CancellationError(
-			localize(
-				'codeActions.save.changed',
-				'The code changed while preparing to save. Save again to run code actions on the latest text.',
-			),
-		);
+		throw new CancellationError(localize('codeActions.save.changed', 'The code changed while preparing to save. Save again to run code actions on the latest text.'));
 	}
 }
 
@@ -221,10 +182,7 @@ function assertCurrent(request: LanguageCodeActionRequest): void {
 export class SaveParticipantsContribution extends Disposable implements IWorkbenchContribution {
 	public static readonly ID = 'workbench.contrib.saveParticipants';
 
-	constructor(
-		@IFileTextModelService models: IFileTextModelService,
-		@IInstantiationService instantiation: IInstantiationService,
-	) {
+	constructor(@IFileTextModelService models: IFileTextModelService, @IInstantiationService instantiation: IInstantiationService) {
 		super();
 		this._register(models.addSaveParticipant(instantiation.createInstance(TrimWhitespaceParticipant)));
 		this._register(models.addSaveParticipant(instantiation.createInstance(CodeActionOnSaveParticipant)));

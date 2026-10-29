@@ -3,13 +3,7 @@ import { test } from 'mocha';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { DocumentCommands } from '../../contrib/creator/common/commands/documentCommands.js';
 import { DesignModel } from '../../contrib/creator/common/model/designModel.js';
-import {
-	documentFromShapes,
-	flattenDesignShapes,
-	parseDesignDocument,
-	serializeDesignDocument,
-	type DesignShape,
-} from '../../contrib/creator/common/model/document.js';
+import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/creator/common/model/document.js';
 import {
 	designTextSegments,
 	designTextStyleAt,
@@ -220,10 +214,7 @@ test('Component text overrides carry their ranges and reset together after main 
 	};
 	model.applyEdit([main]);
 	const instanceId = commands.components.createInstance(main.id)!;
-	const instance = flattenDesignShapes(model.value.shapes).find(shape => shape.id === instanceId)! as Extract<
-		DesignShape,
-		{ kind: 'frame' }
-	>;
+	const instance = flattenDesignShapes(model.value.shapes).find(shape => shape.id === instanceId)! as Extract<DesignShape, { kind: 'frame' }>;
 	const id = instance.children[0].id;
 	commands.text.replace(id, 0, 5, 'Custom');
 	commands.text.format(id, 0, 6, { fontStyle: 'italic' });
@@ -345,12 +336,7 @@ test('Rich text keeps linked style overrides on inserted text and after scaling 
 test('Bold and underline shortcuts normalize mixed selections while preserving strikethrough', () => {
 	using model = new DesignModel();
 	const commands = new DocumentCommands(model);
-	const shape = formatDesignText(
-		formatDesignText(text(), 0, 5, { fontWeight: 700, textDecoration: 'line-through' }),
-		6,
-		11,
-		{ textDecoration: 'underline' },
-	);
+	const shape = formatDesignText(formatDesignText(text(), 0, 5, { fontWeight: 700, textDecoration: 'line-through' }), 6, 11, { textDecoration: 'underline' });
 	model.applyEdit([shape]);
 	commands.text.toggle(shape.id, 0, 11, 'bold');
 	assert.equal(designTextStyleAt(find(model, shape.id), 8).fontWeight, 700);

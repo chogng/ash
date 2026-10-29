@@ -5,15 +5,7 @@ import { Disposable, toDisposable } from '../../../common/lifecycle.js';
 import { Lxicon } from '../../../common/lxicons.js';
 import { addDisposableListener, stopEvent, h } from '../../dom.js';
 import { setAriaAttribute } from '../aria/aria.js';
-import {
-	AnchorAlignment,
-	AnchorAxisAlignment,
-	AnchorPosition,
-	ContextView,
-	ContextViewFocusRestore,
-	type ContextViewHideReason,
-	type IContextViewProvider,
-} from '../contextview/contextview.js';
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewFocusRestore, type ContextViewHideReason, type IContextViewProvider } from '../contextview/contextview.js';
 import { appendIcon } from '../lxicons/lxicon.js';
 
 export type DropdownContent = HTMLElement | (() => HTMLElement);
@@ -95,12 +87,7 @@ export class Dropdown extends Disposable {
 		this._register(addDisposableListener(button, 'click', () => this.toggle()));
 		this._register(
 			addDisposableListener(button, 'keydown', event => {
-				if (
-					event.key !== 'ArrowDown' &&
-					event.key !== 'ArrowUp' &&
-					event.key !== 'Enter' &&
-					event.key !== ' '
-				) {
+				if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Enter' && event.key !== ' ') {
 					return;
 				}
 				stopEvent(event);

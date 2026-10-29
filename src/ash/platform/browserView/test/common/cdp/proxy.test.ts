@@ -5,20 +5,13 @@ import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { CDPBrowserProxy } from '../../../common/cdp/proxy.js';
-import type {
-	CDPEvent,
-	CDPResponse,
-	CDPTargetEvent,
-	CDPTargetInfo,
-	ICDPBrowserHost,
-} from '../../../common/cdp/types.js';
+import type { CDPEvent, CDPResponse, CDPTargetEvent, CDPTargetInfo, ICDPBrowserHost } from '../../../common/cdp/types.js';
 
 function fixture() {
 	const store = new DisposableStore();
 	const events = store.add(new Emitter<CDPTargetEvent>());
 	const targets = new Map<string, CDPTargetInfo>();
-	const commands: Array<{ targetId: string; method: string; params: Record<string, unknown>; sessionId?: string }> =
-		[];
+	const commands: Array<{ targetId: string; method: string; params: Record<string, unknown>; sessionId?: string }> = [];
 	const browser: CDPTargetInfo = {
 		targetId: 'browser',
 		type: 'browser',
@@ -89,8 +82,7 @@ suite('CDP browser proxy', () => {
 		using f = fixture();
 		f.add('page-one');
 		const first = ((await f.proxy.sendCommand('Target.attachToBrowserTarget')) as { sessionId: string }).sessionId;
-		const nested = ((await f.proxy.sendCommand('Target.attachToBrowserTarget', {}, first)) as { sessionId: string })
-			.sessionId;
+		const nested = ((await f.proxy.sendCommand('Target.attachToBrowserTarget', {}, first)) as { sessionId: string }).sessionId;
 		const second = ((await f.proxy.sendCommand('Target.attachToBrowserTarget')) as { sessionId: string }).sessionId;
 		for (const sessionId of [nested, second]) {
 			await f.proxy.sendCommand('Target.setDiscoverTargets', { discover: true }, sessionId);
@@ -98,16 +90,11 @@ suite('CDP browser proxy', () => {
 			await f.proxy.sendCommand('Target.setAutoAttach', { autoAttach: true, flatten: true }, sessionId);
 		}
 		assert.deepEqual(
-			f.messages
-				.filter(message => 'method' in message && message.method === 'Target.attachedToTarget')
-				.map(message => message.sessionId),
+			f.messages.filter(message => 'method' in message && message.method === 'Target.attachedToTarget').map(message => message.sessionId),
 			[nested, second],
 		);
 		await f.proxy.sendCommand('Target.detachFromTarget', { sessionId: first });
-		assert.equal(
-			f.messages.filter(message => 'method' in message && message.method === 'Target.detachedFromTarget').length,
-			1,
-		);
+		assert.equal(f.messages.filter(message => 'method' in message && message.method === 'Target.detachedFromTarget').length, 1);
 		await f.proxy.sendMessage({ id: 1, method: 'Target.getTargets', sessionId: nested });
 		assert.deepEqual(f.messages.at(-1), {
 			id: 1,
@@ -205,10 +192,7 @@ suite('CDP browser proxy', () => {
 		assert.deepEqual(await f.proxy.sendCommand('Target.getTargetInfo', {}, control), {
 			targetInfo: { ...childInfo, attached: true },
 		});
-		await assert.rejects(
-			f.proxy.sendCommand('Target.attachToTarget', { targetId: 'unshared-frame', flatten: true }),
-			/BrowserTargetAccessDenied/,
-		);
+		await assert.rejects(f.proxy.sendCommand('Target.attachToTarget', { targetId: 'unshared-frame', flatten: true }), /BrowserTargetAccessDenied/);
 		await f.proxy.sendCommand('Target.detachFromTarget', { sessionId: control });
 		await f.proxy.sendCommand('Runtime.evaluate', {}, child);
 		f.events.fire({

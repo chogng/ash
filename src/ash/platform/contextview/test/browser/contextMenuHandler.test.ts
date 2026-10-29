@@ -52,10 +52,7 @@ test('context menus focus the container unless first-item selection is requested
 				autoSelectFirstItem,
 			});
 			const menu = dom.window.document.querySelector<HTMLElement>('[role="menu"]')!;
-			assert.equal(
-				dom.window.document.activeElement,
-				autoSelectFirstItem ? menu.querySelector('[role="menuitem"]') : menu,
-			);
+			assert.equal(dom.window.document.activeElement, autoSelectFirstItem ? menu.querySelector('[role="menuitem"]') : menu);
 			assert.equal(menu.querySelectorAll('.focused').length, autoSelectFirstItem ? 1 : 0);
 		}
 	} finally {

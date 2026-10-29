@@ -9,11 +9,8 @@ import { ViewModelEventsCollector } from '../../common/viewModelEventDispatcher.
 import { createTestCursorsController } from './testCursorConfiguration.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
-const range = (startColumn: number, endColumn: number): Range =>
-	Range.fromPositions(position(0, startColumn), position(0, endColumn));
-const selection = (anchorOffset: number, activeOffset: number): readonly Selection[] => [
-	Selection.fromPositions(position(0, anchorOffset), position(0, activeOffset)),
-];
+const range = (startColumn: number, endColumn: number): Range => Range.fromPositions(position(0, startColumn), position(0, endColumn));
+const selection = (anchorOffset: number, activeOffset: number): readonly Selection[] => [Selection.fromPositions(position(0, anchorOffset), position(0, activeOffset))];
 
 test('Composition revisions commit as one selection-aware undo step', () => {
 	using model = new TextModel('hello');
@@ -30,11 +27,24 @@ test('Composition revisions commit as one selection-aware undo step', () => {
 	controller.context.model.redo();
 
 	assert.deepEqual(
-		{ afterCommit, afterUndo, afterRedo: { text: model.getText(), selections: controller.getSelections() } },
 		{
-			afterCommit: { text: 'h你o', selections: selection(2, 2) },
-			afterUndo: { text: 'hello', selections: selection(1, 4) },
-			afterRedo: { text: 'h你o', selections: selection(2, 2) },
+			afterCommit,
+			afterUndo,
+			afterRedo: { text: model.getText(), selections: controller.getSelections() },
+		},
+		{
+			afterCommit: {
+				text: 'h你o',
+				selections: selection(2, 2),
+			},
+			afterUndo: {
+				text: 'hello',
+				selections: selection(1, 4),
+			},
+			afterRedo: {
+				text: 'h你o',
+				selections: selection(2, 2),
+			},
 		},
 	);
 });
@@ -64,7 +74,9 @@ test('External model edits release the active cursor composition', () => {
 });
 
 test('Active composition survives zero history budgets until resolution', () => {
-	using model = new TextModel('hello', { historyLimit: { transactions: 0, textUnits: 0 } });
+	using model = new TextModel('hello', {
+		historyLimit: { transactions: 0, textUnits: 0 },
+	});
 	using controller = createTestCursorsController(model, selection(1, 4));
 	const events = new ViewModelEventsCollector();
 	controller.startComposition(events);
@@ -85,8 +97,16 @@ test('No-op composition updates preserve the selection without history', () => {
 	controller.endComposition(events, 'keyboard');
 
 	assert.deepEqual(
-		{ text: model.getText(), selections: controller.getSelections(), canUndo: model.canUndo() },
-		{ text: 'a', selections: selection(0, 1), canUndo: false },
+		{
+			text: model.getText(),
+			selections: controller.getSelections(),
+			canUndo: model.canUndo(),
+		},
+		{
+			text: 'a',
+			selections: selection(0, 1),
+			canUndo: false,
+		},
 	);
 });
 
@@ -113,8 +133,16 @@ test('Composition returning to its original text leaves no undo step', () => {
 	controller.endComposition(events, 'keyboard');
 
 	assert.deepEqual(
-		{ text: model.getText(), canUndo: model.canUndo(), undo: controller.context.model.undo() },
-		{ text: 'a', canUndo: false, undo: undefined },
+		{
+			text: model.getText(),
+			canUndo: model.canUndo(),
+			undo: controller.context.model.undo(),
+		},
+		{
+			text: 'a',
+			canUndo: false,
+			undo: undefined,
+		},
 	);
 });
 
@@ -130,10 +158,7 @@ test('Composition keeps command ownership inside the standard lifecycle', () => 
 	assert.equal(model.getText(), 'Xb');
 
 	using multiModel = new TextModel('ab');
-	using multiController = createTestCursorsController(
-		multiModel,
-		primaryFirst([Selection.fromPositions(position(0, 0)), Selection.fromPositions(position(0, 2))], 0),
-	);
+	using multiController = createTestCursorsController(multiModel, primaryFirst([Selection.fromPositions(position(0, 0)), Selection.fromPositions(position(0, 2))], 0));
 	const multiEvents = new ViewModelEventsCollector();
 	multiController.startComposition(multiEvents);
 	multiController.compositionType(multiEvents, 'X', 0, 0, 0, 'keyboard');
@@ -148,23 +173,14 @@ test('Chinese composition revisions replace around a caret inside the candidate'
 	controller.startComposition(events);
 	controller.compositionType(events, '你好', 0, 0, 0, 'keyboard');
 	controller.compositionType(events, '', 0, 0, -1, 'keyboard');
-	assert.deepEqual(
-		{ text: model.getText(), selections: controller.getSelections() },
-		{ text: '前你好后', selections: selection(2, 2) },
-	);
+	assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, { text: '前你好后', selections: selection(2, 2) });
 	controller.compositionType(events, '您好', 1, 1, -1, 'keyboard');
-	assert.deepEqual(
-		{ text: model.getText(), selections: controller.getSelections() },
-		{ text: '前您好后', selections: selection(2, 2) },
-	);
+	assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, { text: '前您好后', selections: selection(2, 2) });
 	controller.compositionType(events, '您们好', 1, 1, 0, 'keyboard');
 	controller.endComposition(events, 'keyboard');
 	assert.equal(model.getText(), '前您们好后');
 	model.undo();
-	assert.deepEqual(
-		{ text: model.getText(), selections: controller.getSelections() },
-		{ text: '前后', selections: selection(1, 1) },
-	);
+	assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, { text: '前后', selections: selection(1, 1) });
 	model.redo();
 	assert.equal(model.getText(), '前您们好后');
 });
@@ -185,7 +201,12 @@ test('Cancelled Chinese composition restores a backward multiline selection with
 			canUndo: model.canUndo(),
 			canRedo: model.canRedo(),
 		},
-		{ text: '前一行\n后一行', selections: before, canUndo: false, canRedo: false },
+		{
+			text: '前一行\n后一行',
+			selections: before,
+			canUndo: false,
+			canRedo: false,
+		},
 	);
 });
 
@@ -200,7 +221,11 @@ test('Cancelling an unchanged composition preserves the preceding edit and origi
 	controller.endComposition(events, 'compositionCancel');
 	assert.deepEqual(
 		{ text: model.getText(), selections: controller.getSelections(), canRedo: model.canRedo() },
-		{ text: '中文!', selections: selection(1, 0), canRedo: false },
+		{
+			text: '中文!',
+			selections: selection(1, 0),
+			canRedo: false,
+		},
 	);
 	model.undo();
 	assert.equal(model.getText(), '中文');
@@ -218,7 +243,11 @@ test('Cancelling an empty composition preserves existing undo and redo history',
 	controller.endComposition(events, 'compositionCancel');
 	assert.deepEqual(
 		{ text: model.getText(), canUndo: model.canUndo(), canRedo: model.canRedo() },
-		{ text: '中文', canUndo: false, canRedo: true },
+		{
+			text: '中文',
+			canUndo: false,
+			canRedo: true,
+		},
 	);
 	model.redo();
 	assert.equal(model.getText(), '中文!');
@@ -241,7 +270,13 @@ test('Cancelling a composition which returned to its original text restores the 
 			canUndo: model.canUndo(),
 			canRedo: model.canRedo(),
 		},
-		{ text: '中文', selections: selection(1, 0), version: beforeVersion, canUndo: false, canRedo: false },
+		{
+			text: '中文',
+			selections: selection(1, 0),
+			version: beforeVersion,
+			canUndo: false,
+			canRedo: false,
+		},
 	);
 });
 

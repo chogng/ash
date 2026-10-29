@@ -51,14 +51,8 @@ test('section headers scan only visible chunks and reuse text candidates on toke
 		model.tokenization.setSemanticTokens(null, false);
 		layout.fire();
 		assert.equal(reads, 0, 'unchanged text is not scanned again for token/layout notifications');
-		model.applyOperations([
-			{ range: new Range(95_005, 1, 95_005, model.getLineMaxColumn(95_005)), text: '// ordinary comment' },
-		]);
-		assert.equal(
-			header.hasAttribute('data-section-header'),
-			false,
-			'content edits invalidate the visible candidates',
-		);
+		model.applyOperations([{ range: new Range(95_005, 1, 95_005, model.getLineMaxColumn(95_005)), text: '// ordinary comment' }]);
+		assert.equal(header.hasAttribute('data-section-header'), false, 'content edits invalidate the visible candidates');
 		assert.ok(reads < 500);
 		reads = 0;
 		root.children[0]!.setAttribute('data-logical-line-index', '0');

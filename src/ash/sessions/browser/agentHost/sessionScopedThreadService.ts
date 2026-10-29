@@ -13,9 +13,7 @@ export function createSessionThreadService(scope: ISessionProviderScope): IAgent
 	const params = <T extends { readonly sessionId: string; readonly threadId?: string }>(value: T): T => ({
 		...value,
 		sessionId: scope.backendIdentity(value.sessionId),
-		...('threadId' in value && value.threadId !== undefined
-			? { threadId: scope.backendIdentity(value.threadId) }
-			: {}),
+		...('threadId' in value && value.threadId !== undefined ? { threadId: scope.backendIdentity(value.threadId) } : {}),
 	});
 	const run = async <T>(operation: () => Promise<T>): Promise<T> => {
 		scope.assertCurrent();
@@ -111,9 +109,7 @@ export function createSessionThreadService(scope: ISessionProviderScope): IAgent
 				const [source, ...rest] = args;
 				const request = {
 					...params(source),
-					after: Object.fromEntries(
-						Object.entries(source.after).map(([id, cursor]) => [scope.backendIdentity(id), cursor]),
-					),
+					after: Object.fromEntries(Object.entries(source.after).map(([id, cursor]) => [scope.backendIdentity(id), cursor])),
 				};
 				const result = await backend.readTrace(request, ...rest);
 				const { projectSessionTrace } = await import('./sessionScopedTrace.js');

@@ -31,8 +31,7 @@ suite('TabList incremental updates', () => {
 			tabs.setTabs(items, 'first');
 			const buttons = [...tabs.element.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
 			buttons.forEach((button, index) => {
-				button.parentElement!.getBoundingClientRect = () =>
-					rect(index * 100 - viewport.scrollLeft, 0, index * 100 + 100 - viewport.scrollLeft, 24);
+				button.parentElement!.getBoundingClientRect = () => rect(index * 100 - viewport.scrollLeft, 0, index * 100 + 100 - viewport.scrollLeft, 24);
 			});
 			buttons[0]!.focus();
 			buttons[0]!.dispatchEvent(keyboardEvent(dom.window, 'End'));
@@ -95,10 +94,7 @@ suite('TabList incremental updates', () => {
 			const toolbar = tabs.element.querySelector('.ash-tab-actions')!;
 			const pinButton = toolbar.querySelector<HTMLButtonElement>('[data-action-id="pin"] button')!;
 			pinButton.focus();
-			tabs.setTabs(
-				[{ ...item, label: 'Renamed', actions: { ...item.actions, ariaLabel: 'Renamed actions' } }],
-				'first',
-			);
+			tabs.setTabs([{ ...item, label: 'Renamed', actions: { ...item.actions, ariaLabel: 'Renamed actions' } }], 'first');
 			assert.equal(tabs.element.querySelector('.ash-tab-actions'), toolbar);
 			assert.equal(dom.window.document.activeElement, pinButton);
 			assert.equal(toolbar.getAttribute('aria-label'), 'Renamed actions');
@@ -123,9 +119,7 @@ suite('TabList incremental updates', () => {
 			});
 			const items = [tab('first'), tab('second')];
 			tabs.setTabs(items, 'second');
-			const close = tabs.element.querySelector<HTMLButtonElement>(
-				'[data-action-id="second"] .ash-tab-close-action button',
-			)!;
+			const close = tabs.element.querySelector<HTMLButtonElement>('[data-action-id="second"] .ash-tab-close-action button')!;
 			close.focus();
 			tabs.setTabs([...items].reverse(), 'second');
 			assert.equal(dom.window.document.activeElement, close);
@@ -176,32 +170,19 @@ suite('TabList incremental updates', () => {
 				items.map(item => ({ ...item })),
 				'first',
 			);
-			assert.deepEqual(
-				observer.takeRecords(),
-				[],
-				'Equivalent item objects must not rewrite DOM attributes or content',
-			);
+			assert.deepEqual(observer.takeRecords(), [], 'Equivalent item objects must not rewrite DOM attributes or content');
 			tabs.setTabs(
 				items.map(item => ({ ...item })),
 				'second',
 			);
 			const mutations = observer.takeRecords();
 			assert.ok(mutations.length > 0);
-			assert.ok(
-				mutations.every(
-					mutation =>
-						mutation.type === 'attributes' &&
-						['class', 'aria-selected', 'tabindex'].includes(mutation.attributeName!),
-				),
-			);
+			assert.ok(mutations.every(mutation => mutation.type === 'attributes' && ['class', 'aria-selected', 'tabindex'].includes(mutation.attributeName!)));
 			assert.ok(
 				mutations.every(mutation => !third!.parentElement!.contains(mutation.target)),
 				'An unrelated tab needs no DOM updates',
 			);
-			assert.deepEqual(
-				[first!.getAttribute('aria-selected'), second!.getAttribute('aria-selected')],
-				['false', 'true'],
-			);
+			assert.deepEqual([first!.getAttribute('aria-selected'), second!.getAttribute('aria-selected')], ['false', 'true']);
 			assert.deepEqual([first!.tabIndex, second!.tabIndex, third!.tabIndex], [-1, 0, -1]);
 			tabs.setTabs(items, 'second', new Set(['second', 'third']));
 			assert.equal(third!.getAttribute('aria-selected'), 'true');
@@ -307,9 +288,7 @@ suite('TabList navigation presentation', () => {
 			expect((await root.boundingBox())!.width).toBeLessThanOrEqual(120);
 			await tabs.nth(1).press('End');
 			await expect(tabs.last()).toBeFocused();
-			await expect
-				.poll(() => root.locator('.ash-scrollbar-viewport').evaluate(element => element.scrollLeft))
-				.toBeGreaterThan(0);
+			await expect.poll(() => root.locator('.ash-scrollbar-viewport').evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
 			await page.evaluate(async () => {
 				window.ashTabListIntegration.refresh();
 				await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -322,9 +301,7 @@ suite('TabList navigation presentation', () => {
 			expect(focused.x + focused.width).toBeLessThanOrEqual(visible.x + visible.width + 1);
 			await tabs.last().press('Home');
 			await expect(tabs.first()).toBeFocused();
-			await expect
-				.poll(() => root.locator('.ash-scrollbar-viewport').evaluate(element => element.scrollLeft))
-				.toBe(0);
+			await expect.poll(() => root.locator('.ash-scrollbar-viewport').evaluate(element => element.scrollLeft)).toBe(0);
 		});
 });
 
@@ -381,9 +358,7 @@ test('TabList owns manual selection semantics and roving focus', () => {
 
 	tabList.setTabs(tabs, 'second');
 	assert.deepEqual(
-		[...tabList.element.querySelectorAll<HTMLElement>("[role='tab']")].map(element =>
-			element.getAttribute('aria-selected'),
-		),
+		[...tabList.element.querySelectorAll<HTMLElement>("[role='tab']")].map(element => element.getAttribute('aria-selected')),
 		['false', 'true'],
 	);
 	assert.deepEqual(
@@ -416,11 +391,7 @@ test('TabList retains label targets and focus while selection, state and order c
 		assert.equal(label.querySelector('.ash-icon-label-text')!.firstElementChild, text);
 		assert.equal(dom.window.document.activeElement, label);
 		assert.deepEqual(
-			[
-				label.getAttribute('aria-selected'),
-				label.closest('.ash-tab')?.classList.contains('preview'),
-				label.closest<HTMLElement>('.ash-tab')?.dataset.state,
-			],
+			[label.getAttribute('aria-selected'), label.closest('.ash-tab')?.classList.contains('preview'), label.closest<HTMLElement>('.ash-tab')?.dataset.state],
 			['true', true, 'dirty'],
 		);
 		label.click();
@@ -465,8 +436,7 @@ test('TabList reveals selected and keyboard-focused tabs when horizontal content
 	viewport.getBoundingClientRect = () => rect(0, 0, 100, 24);
 	const originalGetBoundingClientRect = dom.window.HTMLElement.prototype.getBoundingClientRect;
 	dom.window.HTMLElement.prototype.getBoundingClientRect = function (): DOMRect {
-		if (this.classList.contains('ash-tab'))
-			return this.dataset.actionId === 'second' ? rect(150, 0, 200, 24) : rect(0, 0, 50, 24);
+		if (this.classList.contains('ash-tab')) return this.dataset.actionId === 'second' ? rect(150, 0, 200, 24) : rect(0, 0, 50, 24);
 		return originalGetBoundingClientRect.call(this);
 	};
 
@@ -564,7 +534,9 @@ test('TabList forwards ActionBar drag positions using tab values', () => {
 	const [first, second] = tabList.element.querySelectorAll<HTMLElement>('.ash-tab');
 	assert.ok(first);
 	assert.ok(second);
-	Object.defineProperty(second, 'getBoundingClientRect', { value: () => ({ left: 100, width: 100 }) });
+	Object.defineProperty(second, 'getBoundingClientRect', {
+		value: () => ({ left: 100, width: 100 }),
+	});
 
 	first.dispatchEvent(dragEvent(dom.window, 'dragstart'));
 	second.dispatchEvent(dragEvent(dom.window, 'dragover', 175));
@@ -586,8 +558,25 @@ test('TabList renders IconLabel content, custom actions, and its standard close 
 		onClose: (value: string) => closed.push(value),
 		closeActionIcon: customCloseIcon,
 	});
-	const pin: IAction = { id: 'pin', label: 'Pin first', tooltip: 'Pin first', enabled: true, run: () => undefined };
-	tabList.setTabs([{ ...tab('first'), actions: { ariaLabel: 'First tab actions', items: [pin] } }], 'first');
+	const pin: IAction = {
+		id: 'pin',
+		label: 'Pin first',
+		tooltip: 'Pin first',
+		enabled: true,
+		run: () => undefined,
+	};
+	tabList.setTabs(
+		[
+			{
+				...tab('first'),
+				actions: {
+					ariaLabel: 'First tab actions',
+					items: [pin],
+				},
+			},
+		],
+		'first',
+	);
 	dom.window.document.body.append(tabList.element);
 	const selected = tabList.element.querySelector<HTMLButtonElement>("[role='tab']");
 	const closeButton = tabList.element.querySelector<HTMLButtonElement>('.ash-tab-close-action button');
@@ -598,9 +587,7 @@ test('TabList renders IconLabel content, custom actions, and its standard close 
 	assert.equal(tabList.element.querySelector('.ash-tab-actions')?.getAttribute('role'), 'toolbar');
 	assert.equal(tabList.element.querySelector('.ash-tab-actions')?.getAttribute('aria-label'), 'First tab actions');
 	assert.deepEqual(
-		[...tabList.element.querySelectorAll<HTMLElement>('.ash-tab-actions [data-action-id]')].map(
-			item => item.dataset.actionId,
-		),
+		[...tabList.element.querySelectorAll<HTMLElement>('.ash-tab-actions [data-action-id]')].map(item => item.dataset.actionId),
 		['pin', TAB_CLOSE_ACTION_ID],
 	);
 	assert.equal(closeButton.title, 'Close');
@@ -611,10 +598,7 @@ test('TabList renders IconLabel content, custom actions, and its standard close 
 	selected.dispatchEvent(keyboardEvent(dom.window, 'Delete'));
 	closeButton.click();
 	assert.deepEqual(closed, ['first', 'first']);
-	setNlsMessages(
-		'zh-CN',
-		JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')),
-	);
+	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
 	tabList.setTabs([tab('launch.json')], 'launch.json');
 	const localizedClose = tabList.element.querySelector<HTMLButtonElement>('.ash-tab-close-action button')!;
 	assert.equal(localizedClose.title, '关闭');
@@ -693,7 +677,10 @@ test('TabList supports vertical ActionBar navigation and scrolling', () => {
 
 test('TabList rejects ambiguous item and selection identities', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const tabList = new TabList(dom.window.document.body, { ariaLabel: 'Tabs', onActivate: () => undefined });
+	const tabList = new TabList(dom.window.document.body, {
+		ariaLabel: 'Tabs',
+		onActivate: () => undefined,
+	});
 	assert.throws(() => tabList.setTabs([tab('same'), tab('same')], 'same'), /Duplicate TabList item ID/);
 	assert.throws(() => tabList.setTabs([tab('first')], 'missing'), /Selected TabList item is not available/);
 
@@ -702,11 +689,21 @@ test('TabList rejects ambiguous item and selection identities', () => {
 });
 
 function tab(id: string): TabListItem<string> {
-	return { id, value: id, label: id, tabId: `${id}-tab`, panelId: `${id}-panel` };
+	return {
+		id,
+		value: id,
+		label: id,
+		tabId: `${id}-tab`,
+		panelId: `${id}-panel`,
+	};
 }
 
 function keyboardEvent(targetWindow: { readonly KeyboardEvent: typeof KeyboardEvent }, key: string): KeyboardEvent {
-	return new targetWindow.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key });
+	return new targetWindow.KeyboardEvent('keydown', {
+		bubbles: true,
+		cancelable: true,
+		key,
+	});
 }
 
 function dragEvent(targetWindow: { readonly Event: typeof Event }, type: string, clientX = 0): DragEvent {
@@ -725,10 +722,22 @@ function installMetrics(
 	},
 ): void {
 	Object.defineProperties(viewport, {
-		clientWidth: { configurable: true, get: () => metrics.width },
-		clientHeight: { configurable: true, get: () => metrics.height },
-		scrollWidth: { configurable: true, get: () => metrics.scrollWidth },
-		scrollHeight: { configurable: true, get: () => metrics.scrollHeight },
+		clientWidth: {
+			configurable: true,
+			get: () => metrics.width,
+		},
+		clientHeight: {
+			configurable: true,
+			get: () => metrics.height,
+		},
+		scrollWidth: {
+			configurable: true,
+			get: () => metrics.scrollWidth,
+		},
+		scrollHeight: {
+			configurable: true,
+			get: () => metrics.scrollHeight,
+		},
 	});
 }
 

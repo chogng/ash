@@ -25,16 +25,7 @@ test('scanner separates when-clause operators and preserves their source offsets
 
 test('scanner preserves path backslashes, Unicode words and regex character classes', () => {
 	const tokens = new Scanner().reset(String.raw`路径 == 'C:\docs' && 路径 =~ /[a-z/]+\/docs/i`).scan();
-	assert.deepEqual(tokens.map(Scanner.getLexeme), [
-		'路径',
-		'==',
-		String.raw`C:\docs`,
-		'&&',
-		'路径',
-		'=~',
-		String.raw`/[a-z/]+\/docs/i`,
-		'EOF',
-	]);
+	assert.deepEqual(tokens.map(Scanner.getLexeme), ['路径', '==', String.raw`C:\docs`, '&&', '路径', '=~', String.raw`/[a-z/]+\/docs/i`, 'EOF']);
 	assert.equal(tokens[2].type, TokenType.QuotedStr);
 	assert.equal(tokens[6].type, TokenType.RegexStr);
 });

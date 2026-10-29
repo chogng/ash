@@ -165,11 +165,7 @@ export class DebugEditContext {
 		listener: (this: GlobalEventHandlers, event: EditContextEventHandlersEventMap[K]) => void,
 		options?: boolean | AddEventListenerOptions,
 	): void;
-	addEventListener(
-		type: string,
-		listener: EventListenerOrEventListenerObject,
-		options?: boolean | AddEventListenerOptions,
-	): void {
+	addEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions): void {
 		if (!listener) return;
 		const wrapped: EventListener = event => {
 			if (this.debugging) {
@@ -184,11 +180,7 @@ export class DebugEditContext {
 		this.renderDebug();
 	}
 
-	removeEventListener(
-		type: string,
-		listener: EventListenerOrEventListenerObject | null,
-		options?: boolean | EventListenerOptions,
-	): void {
+	removeEventListener(type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | EventListenerOptions): void {
 		if (!listener) return;
 		const wrapped = this.listeners.get(listener);
 		if (!wrapped) return;

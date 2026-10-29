@@ -72,10 +72,7 @@ test('lexical readiness follows the current version and shares analysis across c
 	assert.equal(ready, false);
 	await secondResult.complete({ tokens: [{ range: new Range(1, 1, 1, 4), tokenType: 'string', modifiers: [] }] });
 	await reader;
-	assert.deepEqual(
-		[requests, model.tokenization.modelVersion, model.tokenization.getLineTokens(1).getStandardTokenType(0)],
-		[2, model.version, StandardTokenType.String],
-	);
+	assert.deepEqual([requests, model.tokenization.modelVersion, model.tokenization.getLineTokens(1).getStandardTokenType(0)], [2, model.version, StandardTokenType.String]);
 });
 
 test('lexical readiness rejects worker failures and model disposal', async () => {
@@ -112,9 +109,7 @@ test('disposing a model rejects readers already waiting for its lexical result',
 		languageIds: ['demo'],
 		provideTokens: (_request, signal) => {
 			void started.complete();
-			return new Promise<LanguageTokenResult>((_resolve, reject) =>
-				signal.addEventListener('abort', () => reject(signal.reason), { once: true }),
-			);
+			return new Promise<LanguageTokenResult>((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
 		},
 	});
 	using model = new TextModel('text', { languageId: 'demo', tokenization: { syntaxProviderRegistry: registry } });
@@ -144,15 +139,7 @@ test('plaintext and models above the tokenization limit are immediately ready', 
 
 test('scoped language tokens expose standard comment, string and regex categories', async () => {
 	using registry = new SyntaxProviderRegistry();
-	const scopes = [
-		'comment.block.demo',
-		'string.quoted.demo',
-		'regex.demo',
-		'regexp.demo',
-		'notacomment',
-		'commentary',
-		'string_value',
-	];
+	const scopes = ['comment.block.demo', 'string.quoted.demo', 'regex.demo', 'regexp.demo', 'notacomment', 'commentary', 'string_value'];
 	using registration = registry.register({
 		id: 'test.scoped-tokens',
 		languageIds: ['scoped'],
@@ -171,15 +158,7 @@ test('scoped language tokens expose standard comment, string and regex categorie
 	await waitFor(() => model.tokenization.hasAccurateTokensForLine(1));
 	assert.deepEqual(
 		scopes.map((_, index) => model.tokenization.getLineTokens(index + 1).getStandardTokenType(0)),
-		[
-			StandardTokenType.Comment,
-			StandardTokenType.String,
-			StandardTokenType.RegEx,
-			StandardTokenType.RegEx,
-			StandardTokenType.Other,
-			StandardTokenType.Other,
-			StandardTokenType.Other,
-		],
+		[StandardTokenType.Comment, StandardTokenType.String, StandardTokenType.RegEx, StandardTokenType.RegEx, StandardTokenType.Other, StandardTokenType.Other, StandardTokenType.Other],
 	);
 });
 
@@ -191,7 +170,15 @@ test('TextModel publishes current provider tokens through the standard and rende
 		languageIds: ['typescript'],
 		provideTokens: request => {
 			requests += 1;
-			return { tokens: [{ range: new Range(1, 1, 1, 8), tokenType: 'comment', modifiers: [] }] };
+			return {
+				tokens: [
+					{
+						range: new Range(1, 1, 1, 8),
+						tokenType: 'comment',
+						modifiers: [],
+					},
+				],
+			};
 		},
 	});
 	using model = new TextModel('comment value', {
@@ -265,12 +252,7 @@ test('TextModel owns complete and partial sparse semantic tokens', () => {
 	assert.equal(model.tokenization.hasSomeSemanticTokens(), false);
 	model.tokenization.setPartialSemanticTokens(new Range(1, 1, 1, 5), tokens);
 	assert.equal(model.tokenization.hasSomeSemanticTokens(), true);
-	assert.equal(
-		model.tokenization
-			.getLineTokens(1)
-			.getForeground(model.tokenization.getLineTokens(1).findTokenIndexAtOffset(2)),
-		7,
-	);
+	assert.equal(model.tokenization.getLineTokens(1).getForeground(model.tokenization.getLineTokens(1).findTokenIndexAtOffset(2)), 7);
 });
 
 test('hypothetical tokenization reports the asynchronous backend boundary', async () => {
@@ -289,10 +271,7 @@ test('hypothetical tokenization reports the asynchronous backend boundary', asyn
 		tokenization: { syntaxProviderRegistry: registry },
 	});
 	await waitFor(() => model.tokenization.hasAccurateTokensForLine(1));
-	assert.throws(
-		() => model.tokenization.getTokenTypeIfInsertingCharacter(1, 1, 'x'),
-		SynchronousTokenizationUnavailableError,
-	);
+	assert.throws(() => model.tokenization.getTokenTypeIfInsertingCharacter(1, 1, 'x'), SynchronousTokenizationUnavailableError);
 	assert.equal(model.tokenization.tokenizeLinesAt(1, ['inserted']), null);
 });
 
@@ -332,7 +311,10 @@ test('TextModel owns the syntax worker lifecycle and reanalyzes language-support
 	};
 	using model = new TextModel('value', {
 		languageId: 'typescript',
-		tokenization: { syntaxService: { workerFactory }, onDidChangeLanguageSupport: supportChanges.event },
+		tokenization: {
+			syntaxService: { workerFactory },
+			onDidChangeLanguageSupport: supportChanges.event,
+		},
 	});
 
 	await waitFor(() => model.tokenization.hasAccurateTokensForLine(1));
@@ -385,9 +367,7 @@ test('registered line tokenizers refresh existing models without clearing diagno
 		id: 'test.diagnostic',
 		languageIds: ['registry-test'],
 		provideDiagnostics: () => ({
-			diagnostics: [
-				{ range: new Range(1, 1, 1, 2), severity: LanguageDiagnosticSeverity.Warning, message: 'problem' },
-			],
+			diagnostics: [{ range: new Range(1, 1, 1, 2), severity: LanguageDiagnosticSeverity.Warning, message: 'problem' }],
 		}),
 	});
 	using model = new TextModel('alpha\nbeta', {
@@ -520,11 +500,7 @@ test('async hypothetical tokens are bounded by proposed text and never change li
 	await waitFor(() => model.tokenization.hasAccurateTokensForLine(1));
 	let changes = 0;
 	using listener = model.tokenization.onDidChange(() => changes++);
-	const preview = await model.tokenization.tokenizeLinesAtAsync(
-		1,
-		['long ( string', 'second'],
-		new AbortController().signal,
-	);
+	const preview = await model.tokenization.tokenizeLinesAtAsync(1, ['long ( string', 'second'], new AbortController().signal);
 	assert.deepEqual(
 		preview!.map(line => [line.getLineContent(), line.getStandardTokenType(0)]),
 		[
@@ -613,31 +589,13 @@ test('file readiness computes only the first line and attached view ranges drive
 		},
 	});
 	await model.tokenization.whenReady(new AbortController().signal);
-	assert.deepEqual(
-		[
-			scanned,
-			workers,
-			model.tokenization.hasAccurateTokensForLine(1),
-			model.tokenization.hasAccurateTokensForLine(5000),
-		],
-		[1, 0, true, false],
-	);
+	assert.deepEqual([scanned, workers, model.tokenization.hasAccurateTokensForLine(1), model.tokenization.hasAccurateTokensForLine(5000)], [1, 0, true, false]);
 	const view = model.onBeforeAttached();
 	try {
 		view.setVisibleLines([{ startLineNumber: 1, endLineNumber: 40 }], true);
-		assert.deepEqual(
-			[scanned, model.tokenization.hasAccurateTokensForLine(40), model.tokenization.hasAccurateTokensForLine(41)],
-			[40, true, false],
-		);
+		assert.deepEqual([scanned, model.tokenization.hasAccurateTokensForLine(40), model.tokenization.hasAccurateTokensForLine(41)], [40, true, false]);
 		view.setVisibleLines([{ startLineNumber: 4900, endLineNumber: 4940 }], true);
-		assert.deepEqual(
-			[
-				scanned,
-				model.tokenization.getLanguageTokens(4899)[0]?.tokenType,
-				model.tokenization.hasAccurateTokensForLine(4900),
-			],
-			[81, 'keyword', false],
-		);
+		assert.deepEqual([scanned, model.tokenization.getLanguageTokens(4899)[0]?.tokenType, model.tokenization.hasAccurateTokensForLine(4900)], [81, 'keyword', false]);
 		view.setVisibleLines([{ startLineNumber: 4900, endLineNumber: 4940 }], true);
 		assert.equal(scanned, 81);
 		assert.equal(model.tokenization.tokenCount, 81);
@@ -669,10 +627,7 @@ test('idle tokenization publishes bounded batches and stops when the last view d
 	const view = model.onBeforeAttached();
 	try {
 		await waitFor(() => model.tokenization.hasAccurateTokensForLine(350));
-		assert.ok(
-			ranges.length >= 4 &&
-				ranges.every(batch => batch.every(range => range.toLineNumber - range.fromLineNumber < 100)),
-		);
+		assert.ok(ranges.length >= 4 && ranges.every(batch => batch.every(range => range.toLineNumber - range.fromLineNumber < 100)));
 	} finally {
 		model.onBeforeDetached(view);
 	}

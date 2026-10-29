@@ -12,7 +12,10 @@ for (const [name, value] of Object.entries({
 	Event: browserEnvironment.window.Event,
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
 })) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
+	Object.defineProperty(globalThis, name, {
+		configurable: true,
+		value,
+	});
 }
 
 const { Pane, PaneView } = await import('../../browser/ui/splitview/paneview.js');
@@ -61,7 +64,11 @@ test('Pane retains one focus owner and releases its actions when their host move
 
 test('Pane owns titled collapse semantics and its stable visual state', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const pane = new Pane(dom.window.document.body, { id: 'test-pane', title: 'Test Pane', collapsed: true });
+	const pane = new Pane(dom.window.document.body, {
+		id: 'test-pane',
+		title: 'Test Pane',
+		collapsed: true,
+	});
 	dom.window.document.body.append(pane.element);
 
 	const button = pane.element.querySelector<HTMLButtonElement>('.ash-pane-view-header-button');
@@ -137,9 +144,7 @@ test('PaneView restores expanded sizes, retains content across moves and detache
 	input.focus();
 	view.movePane(second, first);
 	assert.deepEqual(
-		[...view.element.querySelectorAll('.ash-pane-view')].map(
-			element => (element as HTMLElement).dataset.paneViewId,
-		),
+		[...view.element.querySelectorAll('.ash-pane-view')].map(element => (element as HTMLElement).dataset.paneViewId),
 		['second', 'first'],
 	);
 	assert.equal(document.activeElement, input);
@@ -167,13 +172,9 @@ test('PaneView keeps minimum heights scrollable and supports header keyboard nav
 	const firstHeader = first.element.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')!;
 	const secondHeader = second.element.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')!;
 	firstHeader.focus();
-	firstHeader.dispatchEvent(
-		new browserEnvironment.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }),
-	);
+	firstHeader.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
 	assert.equal(document.activeElement, secondHeader);
-	secondHeader.dispatchEvent(
-		new browserEnvironment.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }),
-	);
+	secondHeader.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
 	assert.equal(second.isCollapsed(), true);
 	secondHeader.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
 	assert.equal(document.activeElement, firstHeader);
@@ -254,9 +255,7 @@ test('PaneView double-click resets expanded panes across a collapsed pane', () =
 	view.addPane(middle, 200);
 	view.addPane(last, 260);
 	view.layout(500, 280);
-	view.element
-		.querySelectorAll('.ash-sash')[1]!
-		.dispatchEvent(new browserEnvironment.window.MouseEvent('dblclick', { bubbles: true }));
+	view.element.querySelectorAll('.ash-sash')[1]!.dispatchEvent(new browserEnvironment.window.MouseEvent('dblclick', { bubbles: true }));
 	assert.deepEqual([view.getPaneSize(first), view.getPaneSize(middle), view.getPaneSize(last)], [236, 28, 236]);
 });
 
@@ -290,7 +289,13 @@ test('PaneView lays out once per toggle and retains its resize boundary', () => 
 			resizable: sash.getAttribute('aria-disabled'),
 			sizes: [view.getPaneSize(first), view.getPaneSize(second)],
 		},
-		{ layouts: 20, sash, sashCount: 1, resizable: 'false', sizes: [200, 200] },
+		{
+			layouts: 20,
+			sash,
+			sashCount: 1,
+			resizable: 'false',
+			sizes: [200, 200],
+		},
 	);
 	assert.equal(view.element.querySelector('.ash-split-view')!.classList.contains('animated'), true);
 	sash.focus();

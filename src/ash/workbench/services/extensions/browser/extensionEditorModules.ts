@@ -2,12 +2,7 @@ import { localize } from '../../../../nls.js';
 import { $ } from '../../../../base/browser/dom.js';
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { editorClientHost } from './editorClientHost.js';
-import type {
-	ExtensionEditorClientModule,
-	ExtensionEditorModule,
-	ExtensionEditorModuleLoader,
-	ExtensionResourceEditorModule,
-} from './extensionEditor.js';
+import type { ExtensionEditorClientModule, ExtensionEditorModule, ExtensionEditorModuleLoader, ExtensionResourceEditorModule } from './extensionEditor.js';
 
 const styledParents = new WeakMap<HTMLElement, object>();
 type EditorClientFactory = (host: typeof editorClientHost) => ExtensionEditorClientModule;
@@ -22,20 +17,12 @@ export const loadExtensionEditorModule: ExtensionEditorModuleLoader = async requ
 	signal.throwIfAborted();
 	const admission = owner.rendererClient;
 	if (!admission || admission.apiVersion !== 1) {
-		throw new Error(
-			localize('extensions.clientEditor.packageUnavailable', 'The editor extension package is unavailable.'),
-		);
+		throw new Error(localize('extensions.clientEditor.packageUnavailable', 'The editor extension package is unavailable.'));
 	}
 	if (entry !== admission.entry || expectedDigest !== admission.sourceDigest) {
-		throw new Error(
-			localize(
-				'extensions.clientEditor.versionMismatch',
-				'The editor component and extension versions do not match.',
-			),
-		);
+		throw new Error(localize('extensions.clientEditor.versionMismatch', 'The editor component and extension versions do not match.'));
 	}
-	const read = (path: string) =>
-		request.resources.readExtensionResourceBytes({ generation: request.generation, extensionId: owner.id, path });
+	const read = (path: string) => request.resources.readExtensionResourceBytes({ generation: request.generation, extensionId: owner.id, path });
 	const [moduleBytes, styleBytes] = await Promise.all([read(admission.entry), read(admission.style)]);
 	signal.throwIfAborted();
 	await Promise.all([verifyDigest(moduleBytes, admission.digest), verifyDigest(styleBytes, admission.styleDigest)]);
@@ -53,10 +40,7 @@ export const loadExtensionEditorModule: ExtensionEditorModuleLoader = async requ
 	if (
 		!component ||
 		typeof component !== 'object' ||
-		!(
-			('getEditorProfile' in component && typeof component.getEditorProfile === 'function') ||
-			('getResourceEditor' in component && typeof component.getResourceEditor === 'function')
-		)
+		!(('getEditorProfile' in component && typeof component.getEditorProfile === 'function') || ('getResourceEditor' in component && typeof component.getResourceEditor === 'function'))
 	) {
 		throw new TypeError('Installed client modules must provide document profiles or resource editors');
 	}
@@ -70,8 +54,7 @@ function importFactory(source: string, digest: string): Promise<EditorClientFact
 			const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
 			try {
 				const module: { createEditorModule?: unknown } = await import(/* @vite-ignore */ url);
-				if (typeof module.createEditorModule !== 'function')
-					throw new TypeError('Invalid editor client module factory');
+				if (typeof module.createEditorModule !== 'function') throw new TypeError('Invalid editor client module factory');
 				return module.createEditorModule as EditorClientFactory;
 			} finally {
 				URL.revokeObjectURL(url);
@@ -89,21 +72,11 @@ function importFactory(source: string, digest: string): Promise<EditorClientFact
 async function verifyDigest(bytes: Uint8Array, expectedDigest: string): Promise<void> {
 	const hash = await crypto.subtle.digest('SHA-256', Uint8Array.from(bytes));
 	const digest = `sha256:${Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('')}`;
-	if (digest !== expectedDigest)
-		throw new Error(
-			localize(
-				'extensions.clientEditor.versionMismatch',
-				'The editor component and extension versions do not match.',
-			),
-		);
+	if (digest !== expectedDigest) throw new Error(localize('extensions.clientEditor.versionMismatch', 'The editor component and extension versions do not match.'));
 }
 
 /** Styles follow actual views, including frozen dirty panes retained after the provider retires. */
-function withStyles(
-	component: ExtensionEditorModule | ExtensionResourceEditorModule,
-	css: string,
-	identity: string,
-): ExtensionEditorModule | ExtensionResourceEditorModule {
+function withStyles(component: ExtensionEditorModule | ExtensionResourceEditorModule, css: string, identity: string): ExtensionEditorModule | ExtensionResourceEditorModule {
 	const styles = new WeakMap<Document, { readonly element: HTMLStyleElement; references: number }>();
 	const acquire = (ownerDocument: Document): IDisposable => {
 		let style = styles.get(ownerDocument);
@@ -182,8 +155,7 @@ function withStyles(
 						private styleLease: IDisposable | undefined;
 						private styleParent: HTMLElement | undefined;
 						public override create(parent: HTMLElement): void {
-							if (this.styleLease)
-								throw new ReferenceError('Editor client view has already been created');
+							if (this.styleLease) throw new ReferenceError('Editor client view has already been created');
 							const lease = acquire(parent.ownerDocument);
 							parent.dataset.ashEditorClient = identity;
 							styledParents.set(parent, this);

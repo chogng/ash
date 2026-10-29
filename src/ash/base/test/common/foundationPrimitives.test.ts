@@ -19,10 +19,7 @@ test('array helpers preserve search, grouping, and queue boundaries', () => {
 		binarySearch2(values.length, index => numberComparator(values[index]!, 4)),
 		-3,
 	);
-	assert.deepEqual(
-		[...groupAdjacentBy([1, 3, 2, 4, 7], (left, right) => left % 2 === right % 2)],
-		[[1, 3], [2, 4], [7]],
-	);
+	assert.deepEqual([...groupAdjacentBy([1, 3, 2, 4, 7], (left, right) => left % 2 === right % 2)], [[1, 3], [2, 4], [7]]);
 	assert.equal(
 		sumBy(values, value => value),
 		16,

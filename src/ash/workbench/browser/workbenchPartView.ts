@@ -13,7 +13,12 @@ export interface WorkbenchPartFrameInsets {
 	readonly left: number;
 }
 
-export const NoWorkbenchPartFrameInsets: WorkbenchPartFrameInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+export const NoWorkbenchPartFrameInsets: WorkbenchPartFrameInsets = {
+	top: 0,
+	right: 0,
+	bottom: 0,
+	left: 0,
+};
 
 export interface WorkbenchPartViewOptions {
 	/** Whether the hosting Grid may snap this Part closed through its Sash. */
@@ -73,10 +78,7 @@ export class WorkbenchPartView<TPartId extends string = WorkbenchPartId> {
 
 	/** Nested hosts use the same inset calculation as the Part they are mounted inside. */
 	getContentSize(dimension: { readonly width: number; readonly height: number }): Dimension {
-		return new Dimension(
-			Math.max(0, dimension.width - this.frameInsets.left - this.frameInsets.right),
-			Math.max(0, dimension.height - this.frameInsets.top - this.frameInsets.bottom),
-		);
+		return new Dimension(Math.max(0, dimension.width - this.frameInsets.left - this.frameInsets.right), Math.max(0, dimension.height - this.frameInsets.top - this.frameInsets.bottom));
 	}
 
 	setVisible(visible: boolean): void {
@@ -88,12 +90,7 @@ export class WorkbenchPartView<TPartId extends string = WorkbenchPartId> {
 	}
 
 	setFrameInsets(insets: WorkbenchPartFrameInsets): void {
-		if (
-			this.frameInsets.top === insets.top &&
-			this.frameInsets.right === insets.right &&
-			this.frameInsets.bottom === insets.bottom &&
-			this.frameInsets.left === insets.left
-		) {
+		if (this.frameInsets.top === insets.top && this.frameInsets.right === insets.right && this.frameInsets.bottom === insets.bottom && this.frameInsets.left === insets.left) {
 			return;
 		}
 		this.frameInsets = insets;

@@ -24,10 +24,7 @@ export class ColorizedBracketPairsDecorationProvider extends Disposable implemen
 		this._register(
 			model.onDidChangeOptions(() => {
 				const next = model.getOptions().bracketPairColorizationOptions;
-				if (
-					options.enabled !== next.enabled ||
-					options.independentColorPoolPerBracketType !== next.independentColorPoolPerBracketType
-				) {
+				if (options.enabled !== next.enabled || options.independentColorPoolPerBracketType !== next.independentColorPoolPerBracketType) {
 					options = next;
 					this.changes.fire();
 				}
@@ -35,28 +32,12 @@ export class ColorizedBracketPairsDecorationProvider extends Disposable implemen
 		);
 	}
 
-	public getDecorationsInRange(
-		range: Range,
-		ownerId?: number,
-		_filterOutValidation?: boolean,
-		_filterFontDecorations?: boolean,
-		onlyMinimapDecorations = false,
-	): IModelDecoration[] {
+	public getDecorationsInRange(range: Range, ownerId?: number, _filterOutValidation?: boolean, _filterFontDecorations?: boolean, onlyMinimapDecorations = false): IModelDecoration[] {
 		const options = this.model.getOptions().bracketPairColorizationOptions;
-		if (
-			ownerId === undefined ||
-			!options.enabled ||
-			onlyMinimapDecorations ||
-			this.model.largeFile.tooLargeForTokenization
-		) {
+		if (ownerId === undefined || !options.enabled || onlyMinimapDecorations || this.model.largeFile.tooLargeForTokenization) {
 			return [];
 		}
-		const lines = new Range(
-			range.startLineNumber,
-			1,
-			range.endLineNumber,
-			this.model.getLineMaxColumn(range.endLineNumber),
-		);
+		const lines = new Range(range.startLineNumber, 1, range.endLineNumber, this.model.getLineMaxColumn(range.endLineNumber));
 		const decorations: IModelDecoration[] = [];
 		// Lazily constructing the tree during a query must not invalidate that same query.
 		this.activeQueries++;
@@ -70,9 +51,7 @@ export class ColorizedBracketPairsDecorationProvider extends Disposable implemen
 			if (bracket.isInvalid) {
 				continue;
 			}
-			const level = options.independentColorPoolPerBracketType
-				? bracket.nestingLevelOfEqualBracketType
-				: bracket.nestingLevel;
+			const level = options.independentColorPoolPerBracketType ? bracket.nestingLevelOfEqualBracketType : bracket.nestingLevel;
 			decorations.push({
 				id: `${this.model.id};bracket${bracket.range.toString()}`,
 				ownerId: 0,

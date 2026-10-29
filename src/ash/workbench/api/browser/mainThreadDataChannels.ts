@@ -3,18 +3,8 @@ import { runWithBufferedEvents } from '../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { observableValue } from '../../../base/common/observable.js';
 import type { URI } from '../../../base/common/uri.js';
-import {
-	IDataChannelService,
-	ILinkPresentationService,
-	parseLinkPresentation,
-	type ILinkPresentation,
-	type ILinkPresentationWatcher,
-} from '../../../platform/dataChannel/common/dataChannel.js';
-import {
-	IExtensionHostApi,
-	type ExtensionHostFleetSnapshot,
-	type JsonValue,
-} from '../../../platform/agentHost/common/extensionHostApi.js';
+import { IDataChannelService, ILinkPresentationService, parseLinkPresentation, type ILinkPresentation, type ILinkPresentationWatcher } from '../../../platform/dataChannel/common/dataChannel.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
 import { ILogService } from '../../../platform/log/common/log.js';
 
@@ -138,11 +128,7 @@ export class MainThreadDataChannels extends Disposable {
 					incarnation: runtime.incarnation,
 					activationGeneration: runtime.activationGeneration,
 				};
-				const invoke = async (
-					operation: string,
-					payload: JsonValue,
-					signal: AbortSignal,
-				): Promise<JsonValue> => {
+				const invoke = async (operation: string, payload: JsonValue, signal: AbortSignal): Promise<JsonValue> => {
 					const cancellation = AbortSignal.any([controller.signal, signal]);
 					const result = await this.api.invoke(
 						{
@@ -169,11 +155,7 @@ export class MainThreadDataChannels extends Disposable {
 									await invoke('receiveData', payload, controller.signal);
 								} catch (error) {
 									if (!controller.signal.aborted) {
-										this.logService.error(
-											'dataChannel',
-											`Extension '${extensionId}' could not receive channel data`,
-											error,
-										);
+										this.logService.error('dataChannel', `Extension '${extensionId}' could not receive channel data`, error);
 									}
 								}
 							}
@@ -187,10 +169,7 @@ export class MainThreadDataChannels extends Disposable {
 								return;
 							}
 							if (queue.length >= 32) {
-								this.logService.error(
-									'dataChannel',
-									`Extension '${extensionId}' exceeded its channel delivery queue`,
-								);
+								this.logService.error('dataChannel', `Extension '${extensionId}' exceeded its channel delivery queue`);
 								return;
 							}
 							queue.push(normalizeExtensionHostPayload({ data: event.data }));
@@ -209,12 +188,7 @@ export class MainThreadDataChannels extends Disposable {
 							},
 							{
 								createLinkPresentationWatcher: resource => {
-									const watcher = new ExtensionLinkPresentationWatcher(
-										resource,
-										registration.presentationKind,
-										invoke,
-										this.logService,
-									);
+									const watcher = new ExtensionLinkPresentationWatcher(resource, registration.presentationKind, invoke, this.logService);
 									watcher.start();
 									return watcher;
 								},
@@ -259,11 +233,7 @@ class ExtensionLinkPresentationWatcher extends Disposable implements ILinkPresen
 
 	private async refresh(): Promise<void> {
 		try {
-			const result = await this.invoke(
-				'provideLinkPresentation',
-				{ resource: this.resource.toString() },
-				this.controller.signal,
-			);
+			const result = await this.invoke('provideLinkPresentation', { resource: this.resource.toString() }, this.controller.signal);
 			const presentation = result === null ? undefined : parseLinkPresentation(result);
 			if (presentation && presentation.kind !== this.kind) {
 				throw new TypeError('Link provider returned a different presentation kind');

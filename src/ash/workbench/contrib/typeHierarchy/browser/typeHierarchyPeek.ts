@@ -1,8 +1,4 @@
-import {
-	defaultButtonStyles,
-	defaultFindWidgetStyles,
-	defaultListStyles,
-} from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultFindWidgetStyles, defaultListStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/typeHierarchy.css';
 import { h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -111,12 +107,7 @@ export class TypeHierarchyTreePeekWidget extends PeekViewWidget {
 		if (first) {
 			this.tree.setFocus(first);
 		}
-		this.buttons.forEach(button =>
-			button.domNode.setAttribute(
-				'aria-label',
-				localize('hierarchy.directionFor', '{0} for {1}', button.label, model.roots[0]!.name),
-			),
-		);
+		this.buttons.forEach(button => button.domNode.setAttribute('aria-label', localize('hierarchy.directionFor', '{0} for {1}', button.label, model.roots[0]!.name)));
 	}
 
 	public async updateDirection(direction: TypeHierarchyDirection): Promise<void> {

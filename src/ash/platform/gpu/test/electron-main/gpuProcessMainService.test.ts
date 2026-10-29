@@ -43,15 +43,7 @@ test('GPU lifecycle invalidates stale facts before exit and follows repeated rec
 	application.exit('GPU', 'killed');
 	application.update(software);
 	application.update(software);
-	assert.deepEqual(observed, [
-		accelerated,
-		undefined,
-		{ reason: 'crashed', status: undefined },
-		accelerated,
-		undefined,
-		{ reason: 'killed', status: undefined },
-		software,
-	]);
+	assert.deepEqual(observed, [accelerated, undefined, { reason: 'crashed', status: undefined }, accelerated, undefined, { reason: 'killed', status: undefined }, software]);
 });
 
 test('late GPU initialization snapshots software state and releases Electron listeners', () => {
@@ -77,9 +69,7 @@ test('late GPU initialization snapshots software state and releases Electron lis
 
 test('Desktop service scope owns exactly one eagerly resolved GPU monitor', () => {
 	const application = new GpuApplication();
-	const scope = new InstantiationService(
-		new ServiceCollection([IGPUProcessMainService, new SyncDescriptor(GPUProcessMainService, [application])]),
-	);
+	const scope = new InstantiationService(new ServiceCollection([IGPUProcessMainService, new SyncDescriptor(GPUProcessMainService, [application])]));
 	const service = scope.get(IGPUProcessMainService);
 	assert.equal(scope.get(IGPUProcessMainService), service);
 	assert.equal(application.listenerCount('gpu-info-update'), 1);

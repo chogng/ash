@@ -1,27 +1,11 @@
-import {
-	getNotificationsPosition,
-	NotificationsPosition,
-	type NotificationsModel,
-	type NotificationItem,
-} from '../../../common/notifications.js';
+import { getNotificationsPosition, NotificationsPosition, type NotificationsModel, type NotificationItem } from '../../../common/notifications.js';
 import './media/notificationsToasts.css';
 import { addDisposableListener, getActiveElement, isEditableElement } from '../../../../base/browser/dom.js';
 import type { IActionRunner } from '../../../../base/common/actions.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import {
-	INotificationService,
-	NotificationPriority,
-	NotificationsFilter,
-	Severity,
-} from '../../../../platform/notification/common/notification.js';
+import { INotificationService, NotificationPriority, NotificationsFilter, Severity } from '../../../../platform/notification/common/notification.js';
 import { IHostService } from '../../../services/host/browser/host.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 
@@ -55,20 +39,11 @@ export class NotificationsToasts extends Disposable {
 	) {
 		super();
 		const document = container.ownerDocument;
-		this.list = this._register(
-			instantiationService.createInstance(NotificationsList, container, 'toast', actionRunner),
-		);
+		this.list = this._register(instantiationService.createInstance(NotificationsList, container, 'toast', actionRunner));
 		this.element = this.list.domNode;
 		this.pending = this._register(
 			new PendingNotificationToasts<number>(
-				id =>
-					!this.hidden &&
-					model
-						.getNotifications()
-						.some(
-							current =>
-								current.id === id && !this.isFiltered(current) && !this.coversActiveInput(current),
-						),
+				id => !this.hidden && model.getNotifications().some(current => current.id === id && !this.isFiltered(current) && !this.coversActiveInput(current)),
 				callback => {
 					const window = this.element.ownerDocument.defaultView!;
 					const frame = window.requestAnimationFrame(callback);
@@ -112,30 +87,14 @@ export class NotificationsToasts extends Disposable {
 			addDisposableListener(this.element, 'focusin', event => {
 				const HTMLElement = document.defaultView?.HTMLElement;
 				const target = event.relatedTarget;
-				if (
-					HTMLElement &&
-					target instanceof HTMLElement &&
-					target !== document.body &&
-					!this.element.contains(target)
-				) {
+				if (HTMLElement && target instanceof HTMLElement && target !== document.body && !this.element.contains(target)) {
 					this.previousFocus = target;
 				}
 			}),
 		);
 		this._register(
 			addDisposableListener(this.element, 'keydown', event => {
-				if (
-					event.key !== 'Escape' ||
-					event.defaultPrevented ||
-					event.altKey ||
-					event.ctrlKey ||
-					event.metaKey ||
-					event.shiftKey ||
-					event.isComposing ||
-					this.hidden ||
-					this.isDisposed
-				)
-					return;
+				if (event.key !== 'Escape' || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing || this.hidden || this.isDisposed) return;
 				const target = event.target;
 				const HTMLElement = document.defaultView?.HTMLElement;
 				if (
@@ -179,38 +138,19 @@ export class NotificationsToasts extends Disposable {
 				const focusedRowIndex = rows.findIndex(row => row.contains(document.activeElement));
 				model.remove(id);
 				// Removal listeners can open the center, move focus, or dispose this owner.
-				if (
-					focusedIndex >= 0 &&
-					!this.hidden &&
-					!this.isDisposed &&
-					this.element.isConnected &&
-					document.activeElement === document.body
-				) {
+				if (focusedIndex >= 0 && !this.hidden && !this.isDisposed && this.element.isConnected && document.activeElement === document.body) {
 					const remaining = this.element.querySelectorAll<HTMLButtonElement>('[data-notification-close]');
 					const nextFocus = remaining[Math.min(focusedIndex, remaining.length - 1)] ?? this.previousFocus;
 					if (nextFocus?.isConnected) nextFocus.focus();
-				} else if (
-					focusedRowIndex >= 0 &&
-					!this.hidden &&
-					!this.isDisposed &&
-					this.element.isConnected &&
-					document.activeElement === document.body
-				) {
-					const nextFocus = this.element.children[
-						Math.min(focusedRowIndex, this.element.children.length - 1)
-					] as HTMLElement | undefined;
+				} else if (focusedRowIndex >= 0 && !this.hidden && !this.isDisposed && this.element.isConnected && document.activeElement === document.body) {
+					const nextFocus = this.element.children[Math.min(focusedRowIndex, this.element.children.length - 1)] as HTMLElement | undefined;
 					(nextFocus ?? this.previousFocus)?.focus();
 				}
 			}),
 		);
 		for (const item of model
 			.getNotifications()
-			.filter(
-				item =>
-					item.priority !== NotificationPriority.SILENT &&
-					!this.isFiltered(item) &&
-					!this.coversActiveInput(item),
-			)
+			.filter(item => item.priority !== NotificationPriority.SILENT && !this.isFiltered(item) && !this.coversActiveInput(item))
 			.slice(-3))
 			this.visible.add(item.id);
 		this.render();
@@ -244,8 +184,7 @@ export class NotificationsToasts extends Disposable {
 			if (!this.visible.has(id) || this.hidden) this.toastLifetimes.deleteAndDispose(id);
 		}
 		for (const item of items) {
-			if (this.visible.has(item.id) && this.model.get(item.id) && !this.toastLifetimes.has(item.id))
-				this.trackTimeout(item.id);
+			if (this.visible.has(item.id) && this.model.get(item.id) && !this.toastLifetimes.has(item.id)) this.trackTimeout(item.id);
 		}
 		if (this.wasVisible !== this.isVisible) {
 			this.wasVisible = this.isVisible;
@@ -258,9 +197,7 @@ export class NotificationsToasts extends Disposable {
 			item.priority !== NotificationPriority.URGENT &&
 			item.severity !== Severity.Error &&
 			(this.notificationService.getFilter() === NotificationsFilter.ERROR ||
-				(!!item.sourceId &&
-					this.notificationService.getFilter({ id: item.sourceId, label: item.source! }) ===
-						NotificationsFilter.ERROR))
+				(!!item.sourceId && this.notificationService.getFilter({ id: item.sourceId, label: item.source! }) === NotificationsFilter.ERROR))
 		);
 	}
 

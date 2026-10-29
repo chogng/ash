@@ -14,23 +14,14 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
-import {
-	IQuickInputService,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { IExplorerService } from '../../../files/browser/files.js';
 import { VIEW_ID as EXPLORER_VIEW_ID } from '../../../files/common/files.js';
-import type {
-	ITerminalContribution,
-	ITerminalExternalLinkProvider,
-	ITerminalInstance,
-	IXtermTerminal,
-} from '../../../terminal/browser/terminal.js';
+import type { ITerminalContribution, ITerminalExternalLinkProvider, ITerminalInstance, IXtermTerminal } from '../../../terminal/browser/terminal.js';
 import type { ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
 import { ITerminalConfigurationService } from '../../../terminal/browser/terminal.js';
 import { TerminalHover } from '../../../terminal/browser/widgets/terminalHoverWidget.js';
@@ -120,12 +111,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 						Promise.all(
 							[...external, ...candidates].slice(0, 32).map(async candidate => {
 								if (!candidate.range) return undefined;
-								if (
-									candidate.file &&
-									!this.canSearch(candidate) &&
-									!(await this.resolvePath(candidate))
-								)
-									return undefined;
+								if (candidate.file && !this.canSearch(candidate) && !(await this.resolvePath(candidate))) return undefined;
 								return {
 									text: candidate.text,
 									range: candidate.range,
@@ -141,9 +127,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 					.then(
 						links =>
 							callback(
-								this.isCurrent(generation, processId) &&
-									raw.buffer.active === buffer &&
-									this.lineContext(buffer, line - 1, 'picker')?.text === sourceLine
+								this.isCurrent(generation, processId) && raw.buffer.active === buffer && this.lineContext(buffer, line - 1, 'picker')?.text === sourceLine
 									? links.filter((link): link is NonNullable<typeof link> => !!link)
 									: undefined,
 							),
@@ -161,8 +145,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 		raw.options.linkHandler = handler;
 		this._register(
 			toDisposable(() => {
-				if (!screen.isDisposed && raw.options.linkHandler === handler)
-					raw.options.linkHandler = previousHandler;
+				if (!screen.isDisposed && raw.options.linkHandler === handler) raw.options.linkHandler = previousHandler;
 			}),
 		);
 		const scroll = raw.onScroll(() => this.hover.clear());
@@ -186,8 +169,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 			}
 			if (buffer.getLine(line)?.isWrapped) continue;
 			lines.push(line);
-			for (const candidate of this.candidates(buffer, line, 'picker'))
-				items.set(`${candidate.label}\0${candidate.cwd ?? ''}`, candidate);
+			for (const candidate of this.candidates(buffer, line, 'picker')) items.set(`${candidate.label}\0${candidate.cwd ?? ''}`, candidate);
 		}
 		const builtin = [...items.values()];
 		const selected = await this.pick(builtin, (pick, lifetime) => {
@@ -216,8 +198,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 				})
 				.catch(error => {
 					// The extension host can retire before this terminal is disposed.
-					if (!signal.aborted && !isCancellationError(error))
-						this.log.error('terminal', 'Terminal link provider activation failed', error);
+					if (!signal.aborted && !isCancellationError(error)) this.log.error('terminal', 'Terminal link provider activation failed', error);
 				})
 				.finally(() => (this.activation = undefined));
 		}
@@ -243,17 +224,11 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 			while (next >= 0 && !cancellation.isCancellationRequested && this.isCurrent(generation, processId)) {
 				const line = lines[next--]!;
 				try {
-					const links = await raceCancellationError(
-						this.externalCandidates(buffer, line, cancellation),
-						cancellation,
-					);
+					const links = await raceCancellationError(this.externalCandidates(buffer, line, cancellation), cancellation);
 					if (!this.isCurrent(generation, processId) || cancellation.isCancellationRequested) return;
 					if (links.length) {
 						results.set(line, links);
-						pick.items = [
-							...builtin,
-							...[...results.entries()].sort(([a], [b]) => a - b).flatMap(([, candidates]) => candidates),
-						];
+						pick.items = [...builtin, ...[...results.entries()].sort(([a], [b]) => a - b).flatMap(([, candidates]) => candidates)];
 					}
 				} catch {
 					return;
@@ -264,10 +239,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 		if (!lifetime.isDisposed) pick.busy = false;
 	}
 
-	private async pick(
-		items: LinkCandidate[],
-		enrich?: (pick: IQuickPick<LinkCandidate>, lifetime: DisposableStore) => void,
-	): Promise<LinkCandidate | undefined> {
+	private async pick(items: LinkCandidate[], enrich?: (pick: IQuickPick<LinkCandidate>, lifetime: DisposableStore) => void): Promise<LinkCandidate | undefined> {
 		const session = new DisposableStore();
 		this.picker.value = session;
 		try {
@@ -311,8 +283,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 			let content = current.translateToString(!continues);
 			// A wide glyph can wrap with one unused cell left in the previous row.
 			// Written spaces must survive wrapping; this empty padding cell must not.
-			if (continues && !current.getCell(current.length - 1)?.getChars() && next?.getCell(0)?.getWidth() === 2)
-				content = content.slice(0, -1);
+			if (continues && !current.getCell(current.length - 1)?.getChars() && next?.getCell(0)?.getWidth() === 2) content = content.slice(0, -1);
 			text += content;
 			if (text.length > 8192) return undefined;
 			if (mode === 'picker') continue;
@@ -321,8 +292,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 				const cell = current.getCell(col);
 				if (!cell?.getWidth()) continue;
 				const chars = cell.getChars() || ' ';
-				for (let unit = 0; unit < chars.length; unit++)
-					cells.push({ x: col + 1, y: row + 1, width: cell.getWidth() });
+				for (let unit = 0; unit < chars.length; unit++) cells.push({ x: col + 1, y: row + 1, width: cell.getWidth() });
 				offset += chars.length;
 			}
 		}
@@ -339,16 +309,11 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 		if (!context) return [];
 		const { text, range, first } = context;
 		const result: LinkCandidate[] = [];
-		const parsed = detectLinks(
-			text,
-			isWindowsRemotePath(this.context.instance.initialCwd) ? OperatingSystem.Windows : OperatingSystem.Linux,
-		);
+		const parsed = detectLinks(text, isWindowsRemotePath(this.context.instance.initialCwd) ? OperatingSystem.Windows : OperatingSystem.Linux);
 		// Word links are deliberately low-confidence: they search only when activated.
 		const occupied = parsed.map(file => ({
 			start: file.path.index,
-			end: file.suffix
-				? file.suffix.suffix.index + file.suffix.suffix.text.length
-				: file.path.index + file.path.text.length,
+			end: file.suffix ? file.suffix.suffix.index + file.suffix.suffix.text.length : file.path.index + file.path.text.length,
 		}));
 		const separators = new Set(this.configuration.config.wordSeparators ?? ' ()[]{}\',"`─‘’“”|');
 		let start = 0;
@@ -361,17 +326,10 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 			start = i + 1;
 		}
 		for (const file of this.fileLinksEnabled() ? parsed.sort((a, b) => a.path.index - b.path.index) : []) {
-			const end = file.suffix
-				? file.suffix.suffix.index + file.suffix.suffix.text.length
-				: file.path.index + file.path.text.length;
+			const end = file.suffix ? file.suffix.suffix.index + file.suffix.suffix.text.length : file.path.index + file.path.text.length;
 			const bufferRange = mode === 'picker' ? undefined : range(file.path.index, end);
-			const cwd =
-				this.context.instance.capabilities?.get(TerminalCapability.CommandDetection)?.getCwdForLine(first) ??
-				this.context.instance.cwd ??
-				this.context.instance.initialCwd;
-			const label =
-				file.path.text +
-				(file.suffix ? `:${file.suffix.row}${file.suffix.col === undefined ? '' : `:${file.suffix.col}`}` : '');
+			const cwd = this.context.instance.capabilities?.get(TerminalCapability.CommandDetection)?.getCwdForLine(first) ?? this.context.instance.cwd ?? this.context.instance.initialCwd;
+			const label = file.path.text + (file.suffix ? `:${file.suffix.row}${file.suffix.col === undefined ? '' : `:${file.suffix.col}`}` : '');
 			if (mode === 'picker' || bufferRange)
 				result.push({
 					label,
@@ -385,8 +343,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 		for (const link of computeLinks({ getLineCount: () => 1, getLineContent: () => text })) {
 			const url = String(link.url);
 			if (!/^https?:\/\//iu.test(url)) continue;
-			const bufferRange =
-				mode === 'picker' ? undefined : range(link.range.startColumn - 1, link.range.endColumn - 1);
+			const bufferRange = mode === 'picker' ? undefined : range(link.range.startColumn - 1, link.range.endColumn - 1);
 			if (mode === 'picker' || bufferRange)
 				result.push({
 					label: url,
@@ -400,12 +357,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 
 	private fileLinksEnabled(): boolean {
 		const mode = this.configuration.config.enableFileLinks;
-		return (
-			mode !== 'off' &&
-			(mode !== 'notRemote' ||
-				this.workspace.getWorkspace().folders.find(folder => folder.id === this.context.instance.dirId)?.uri
-					.scheme === 'file')
-		);
+		return mode !== 'off' && (mode !== 'notRemote' || this.workspace.getWorkspace().folders.find(folder => folder.id === this.context.instance.dirId)?.uri.scheme === 'file');
 	}
 
 	private canSearch(candidate: LinkCandidate): boolean {
@@ -413,11 +365,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 		return !!path && !/^(?:[\\/~]|[a-z]:|file:)/iu.test(path) && !/[\\/]$/u.test(path);
 	}
 
-	private async externalCandidates(
-		buffer: IBuffer,
-		line: number,
-		cancellation?: CancellationToken,
-	): Promise<LinkCandidate[]> {
+	private async externalCandidates(buffer: IBuffer, line: number, cancellation?: CancellationToken): Promise<LinkCandidate[]> {
 		if (!this.providers.linkProviders.size) return [];
 		const context = this.lineContext(buffer, line);
 		if (!context) return [];
@@ -429,13 +377,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 				if (!this.providers.linkProviders.has(provider)) continue;
 				for (const link of (links ?? []).slice(0, 256)) {
 					// Provider coordinates cross an extension boundary and must fit this snapshot.
-					if (
-						!Number.isSafeInteger(link.startIndex) ||
-						!Number.isSafeInteger(link.length) ||
-						link.startIndex < 0 ||
-						link.length <= 0 ||
-						link.startIndex + link.length > context.text.length
-					)
+					if (!Number.isSafeInteger(link.startIndex) || !Number.isSafeInteger(link.length) || link.startIndex < 0 || link.length <= 0 || link.startIndex + link.length > context.text.length)
 						continue;
 					const range = context.range(link.startIndex, link.startIndex + link.length);
 					if (!range) continue;
@@ -456,9 +398,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 		return this.lineContext(buffer, line, 'picker')?.text === context.text ? result : [];
 	}
 
-	private async resolvePath(
-		candidate: LinkCandidate,
-	): Promise<Awaited<ReturnType<TerminalLinkResolver['resolveLink']>> | undefined> {
+	private async resolvePath(candidate: LinkCandidate): Promise<Awaited<ReturnType<TerminalLinkResolver['resolveLink']>> | undefined> {
 		const path = candidate.file?.path.text;
 		if (!path) return undefined;
 		const instance = this.context.instance;
@@ -471,10 +411,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 		if (path.startsWith('~/') || (windows && path.startsWith('~\\'))) {
 			// Resolve home through the selected directory's execution grant, not the ambient App Server.
 			try {
-				const environment = await this.processes.getEnvironment(
-					[windows ? 'USERPROFILE' : 'HOME'],
-					instance.dirId,
-				);
+				const environment = await this.processes.getEnvironment([windows ? 'USERPROFILE' : 'HOME'], instance.dirId);
 				userHome = environment[windows ? 'USERPROFILE' : 'HOME'];
 			} catch {
 				return undefined;
@@ -492,34 +429,24 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 		);
 		// Native window opening currently accepts local paths only. Remote authority must
 		// never be discarded by passing an ash-remote resource to the local host owner.
-		if (
-			result?.isDirectory &&
-			this.workspace.getWorkspaceFolder(result.uri)?.id !== instance.dirId &&
-			result.uri.scheme !== 'file'
-		)
-			return undefined;
+		if (result?.isDirectory && this.workspace.getWorkspaceFolder(result.uri)?.id !== instance.dirId && result.uri.scheme !== 'file') return undefined;
 		return result;
 	}
 
 	private async open(candidate: LinkCandidate, generation: number, processId: number): Promise<void> {
 		if (!this.isCurrent(generation, processId)) return;
 		if (candidate.activate) {
-			if (candidate.provider && this.providers.linkProviders.has(candidate.provider))
-				candidate.activate(candidate.text);
+			if (candidate.provider && this.providers.linkProviders.has(candidate.provider)) candidate.activate(candidate.text);
 			return;
 		}
 		if (candidate.url) {
 			await this.openUrl(candidate.url);
 			return;
 		}
-		let resolved = candidate.resource
-			? { uri: candidate.resource, isDirectory: false }
-			: await this.resolvePath(candidate);
+		let resolved = candidate.resource ? { uri: candidate.resource, isDirectory: false } : await this.resolvePath(candidate);
 		if (!this.isCurrent(generation, processId)) return;
 		if (!resolved && this.canSearch(candidate)) {
-			const folder = this.workspace
-				.getWorkspace()
-				.folders.find(folder => folder.id === this.context.instance.dirId);
+			const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === this.context.instance.dirId);
 			if (folder) {
 				const path = candidate.file!.path.text.replaceAll('\\', '/').replace(/^\.\//u, '');
 				const request = this.searches.add(new DisposableStore());
@@ -540,24 +467,15 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 						...new Map(
 							matches.results
 								.filter(match => {
-									if (this.workspace.getWorkspaceFolder(match.resource)?.id !== folder.id)
-										return false;
-									const resourcePath = caseInsensitive
-										? match.resource.path.toLowerCase()
-										: match.resource.path;
+									if (this.workspace.getWorkspaceFolder(match.resource)?.id !== folder.id) return false;
+									const resourcePath = caseInsensitive ? match.resource.path.toLowerCase() : match.resource.path;
 									return resourcePath.endsWith(`/${suffix}`) || resourcePath === suffix;
 								})
 								.map(match => [match.resource.toString(), match.resource]),
 						).values(),
 					];
 					const choose = resources.length > 1 || (matches.limitHit && resources.length > 0);
-					const resource = choose
-						? (
-								await this.pick(
-									resources.map(resource => ({ ...candidate, label: resource.path, resource })),
-								)
-							)?.resource
-						: resources[0];
+					const resource = choose ? (await this.pick(resources.map(resource => ({ ...candidate, label: resource.path, resource }))))?.resource : resources[0];
 					if (resource) resolved = { uri: resource, isDirectory: false };
 					else if (choose) {
 						if (this.isCurrent(generation, processId)) this.screen?.focus();
@@ -573,13 +491,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 		}
 		if (!this.isCurrent(generation, processId)) return;
 		if (!resolved) {
-			this.notifications.warn(
-				localize(
-					'terminal.links.fileUnavailable',
-					'Could not open the terminal path: {0}',
-					candidate.file?.path.text ?? candidate.label,
-				),
-			);
+			this.notifications.warn(localize('terminal.links.fileUnavailable', 'Could not open the terminal path: {0}', candidate.file?.path.text ?? candidate.label));
 			return;
 		}
 		if (resolved.isDirectory) {
@@ -588,13 +500,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 					await this.host.openWindow([{ folderUri: resolved.uri }], { forceNewWindow: true });
 				} catch {
 					if (this.isCurrent(generation, processId))
-						this.notifications.warn(
-							localize(
-								'terminal.links.fileUnavailable',
-								'Could not open the terminal path: {0}',
-								candidate.file?.path.text ?? candidate.label,
-							),
-						);
+						this.notifications.warn(localize('terminal.links.fileUnavailable', 'Could not open the terminal path: {0}', candidate.file?.path.text ?? candidate.label));
 				}
 				return;
 			}
@@ -610,30 +516,16 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 	}
 
 	private async openUrl(url: string): Promise<void> {
-		if (!this.isDisposed)
-			await this.opener.open(url, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true });
+		if (!this.isDisposed) await this.opener.open(url, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true });
 	}
 
 	private isCurrent(generation: number, processId: number): boolean {
-		return (
-			!this.isDisposed &&
-			generation === this.generation &&
-			this.context.instance.processId === processId &&
-			!!this.screen &&
-			!this.screen.isDisposed
-		);
+		return !this.isDisposed && generation === this.generation && this.context.instance.processId === processId && !!this.screen && !this.screen.isDisposed;
 	}
 
 	private showHover(candidate: LinkCandidate): void {
 		const screen = this.screen;
-		if (
-			!screen ||
-			screen.isDisposed ||
-			!candidate.range ||
-			!this.configuration.config.showLinkHover ||
-			screen.element.hidden
-		)
-			return;
+		if (!screen || screen.isDisposed || !candidate.range || !this.configuration.config.showLinkHover || screen.element.hidden) return;
 		const rect = screen.element.querySelector('.xterm-screen')?.getBoundingClientRect();
 		if (!rect?.width || !rect.height) return;
 		const viewportY = screen.raw.buffer.active.viewportY;

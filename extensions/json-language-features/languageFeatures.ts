@@ -3,8 +3,7 @@ import * as jsonNamespace from 'vscode-json-languageservice';
 import type { Position, JSONSchema } from 'vscode-json-languageservice';
 import type { JsonSchemaContribution } from '@ash/sdk';
 
-const { getLanguageService, TextDocument } =
-	(jsonNamespace as typeof jsonNamespace & { default?: typeof jsonNamespace }).default ?? jsonNamespace;
+const { getLanguageService, TextDocument } = (jsonNamespace as typeof jsonNamespace & { default?: typeof jsonNamespace }).default ?? jsonNamespace;
 
 export interface JsonDocumentSnapshot {
 	readonly uri: string;
@@ -61,13 +60,7 @@ export class JsonLanguageFeatures {
 		const offset = document.offsetAt(position);
 		const node = parsed.getNodeFromOffset(offset, true);
 		// At the end of a populated container, offering its default would insert a second value.
-		if (
-			node &&
-			(node.type === 'array' || node.type === 'object') &&
-			node.offset + node.length === offset &&
-			/[\]}]/u.test(snapshot.text[offset - 1] ?? '')
-		)
-			return undefined;
+		if (node && (node.type === 'array' || node.type === 'object') && node.offset + node.length === offset && /[\]}]/u.test(snapshot.text[offset - 1] ?? '')) return undefined;
 		return this.service.doComplete(document, position, parsed);
 	}
 
@@ -98,14 +91,7 @@ export class JsonLanguageFeatures {
 			);
 			previous = end;
 		}
-		return parts.length
-			? TextDocument.create(
-					snapshot.uri,
-					snapshot.languageId,
-					snapshot.version,
-					parts.join('') + snapshot.text.slice(previous),
-				)
-			: document;
+		return parts.length ? TextDocument.create(snapshot.uri, snapshot.languageId, snapshot.version, parts.join('') + snapshot.text.slice(previous)) : document;
 	}
 
 	format(snapshot: JsonDocumentSnapshot, options: { tabSize: number; insertSpaces: boolean }) {
@@ -115,11 +101,7 @@ export class JsonLanguageFeatures {
 			allowTrailingComma: snapshot.languageId === 'jsonc',
 		});
 		if (errors.length) return [];
-		return this.service.format(
-			TextDocument.create(snapshot.uri, snapshot.languageId, snapshot.version, snapshot.text),
-			undefined,
-			options,
-		);
+		return this.service.format(TextDocument.create(snapshot.uri, snapshot.languageId, snapshot.version, snapshot.text), undefined, options);
 	}
 
 	async validate(snapshot: JsonDocumentSnapshot) {

@@ -9,12 +9,7 @@ const enum CICheckGroup {
 }
 
 function isFailedConclusion(conclusion: string | null | undefined): boolean {
-	return (
-		conclusion === 'failure' ||
-		conclusion === 'timed_out' ||
-		conclusion === 'action_required' ||
-		conclusion === 'startup_failure'
-	);
+	return conclusion === 'failure' || conclusion === 'timed_out' || conclusion === 'action_required' || conclusion === 'startup_failure';
 }
 
 function getCheckGroup(check: GitHubCheckRun): CICheckGroup {

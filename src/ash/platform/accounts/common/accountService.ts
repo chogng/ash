@@ -41,9 +41,7 @@ export type AccountLoginChallenge =
 			readonly userCode: string;
 	  };
 
-export type AccountLoginCompletionStatus =
-	| { readonly type: 'succeeded' }
-	| { readonly type: 'failed'; readonly failure: { readonly code: string; readonly message: string } };
+export type AccountLoginCompletionStatus = { readonly type: 'succeeded' } | { readonly type: 'failed'; readonly failure: { readonly code: string; readonly message: string } };
 
 export interface AccountLoginCompletion {
 	readonly loginId: string;

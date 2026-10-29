@@ -22,9 +22,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				const electron = application as ElectronApplication;
 				const origin = createServer((_request, response) => {
 					response.setHeader('Content-Type', 'text/html');
-					response.end(
-						'<title>Canvas fixture</title><button onclick="this.textContent=\'Clicked\'">Counter</button><p>Interactive Canvas fixture</p>',
-					);
+					response.end('<title>Canvas fixture</title><button onclick="this.textContent=\'Clicked\'">Counter</button><p>Interactive Canvas fixture</p>');
 				});
 				await new Promise<void>(resolve => origin.listen(0, '127.0.0.1', resolve));
 				const address = origin.address();
@@ -32,12 +30,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					throw new Error('Missing Canvas fixture origin');
 				}
 				const url = `http://127.0.0.1:${address.port}`;
-				const connection = await connectProfile(
-					application,
-					webAppServer,
-					testWorkspace.directory,
-					workbench.page,
-				);
+				const connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page);
 				try {
 					await installBrowserNetworkPolicy(electron, url);
 					const create = async (title: string) =>
@@ -65,33 +58,23 @@ for (const locale of ['en', 'zh-CN'] as const) {
 								}
 								await page.locator('.ash-agent-session-row').filter({ hasText: title }).click();
 							} else {
-								await page
-									.locator('.ash-sessions-list-item')
-									.filter({ hasText: title })
-									.first()
-									.click();
+								await page.locator('.ash-sessions-list-item').filter({ hasText: title }).first().click();
 							}
-							await expect(
-								page.locator(`[data-thread-id="${expectedThread}"]:visible`).first(),
-							).toBeVisible();
+							await expect(page.locator(`[data-thread-id="${expectedThread}"]:visible`).first()).toBeVisible();
 						};
 						await select(source.title, threadId);
 						const open = (title: string) =>
 							page.evaluate(
 								async ({ sessionId, threadId, url, title, token }) => {
-									return globalThis.ashTestMainProcess.call<{ targetId: string }>(
-										'browserHost',
-										'create',
-										{
-											id: crypto.randomUUID(),
-											params: {
-												threadId,
-												url,
-												networkToken: token,
-												canvas: { sessionId, instanceId: 'preview', title },
-											},
+									return globalThis.ashTestMainProcess.call<{ targetId: string }>('browserHost', 'create', {
+										id: crypto.randomUUID(),
+										params: {
+											threadId,
+											url,
+											networkToken: token,
+											canvas: { sessionId, instanceId: 'preview', title },
 										},
-									);
+									});
 								},
 								{
 									sessionId: source.sessionId,
@@ -101,32 +84,19 @@ for (const locale of ['en', 'zh-CN'] as const) {
 									token: browserNetworkToken,
 								},
 							);
-						const views = () =>
-							page.evaluate(() =>
-								globalThis.ashTestMainProcess.call<IBrowserViewInfo[]>(
-									'browserView',
-									'getBrowserViews',
-									[],
-								),
-							);
+						const views = () => page.evaluate(() => globalThis.ashTestMainProcess.call<IBrowserViewInfo[]>('browserView', 'getBrowserViews', []));
 						const first = await open('Interactive preview');
 						const canvas = page.locator('.ash-session-canvas:visible');
 						await expect(canvas).toBeVisible();
 						await expect(page.locator('.ash-browser-editor')).toHaveCount(0);
-						await expect
-							.poll(async () => (await views()).find(view => view.id === first.targetId)?.state.visible)
-							.toBe(true);
+						await expect.poll(async () => (await views()).find(view => view.id === first.targetId)?.state.visible).toBe(true);
 						windowIds.add((await views()).find(view => view.id === first.targetId)!.host.windowId);
 						const bounds = await canvas.locator('.ash-session-canvas-page').boundingBox();
 						const nativeBounds = await electron.evaluate(
 							({ BrowserWindow }, url) => {
 								const view = BrowserWindow.getAllWindows()
 									.flatMap(window => window.contentView.children)
-									.find(
-										child =>
-											'webContents' in child &&
-											(child as Electron.WebContentsView).webContents.getURL() === url,
-									);
+									.find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL() === url);
 								if (!view) {
 									throw new Error('Missing native Canvas');
 								}
@@ -135,16 +105,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
 							url + '/' + mode,
 						);
 						expect(
-							Math.abs(nativeBounds.x - bounds!.x) +
-								Math.abs(nativeBounds.y - bounds!.y) +
-								Math.abs(nativeBounds.width - bounds!.width) +
-								Math.abs(nativeBounds.height - bounds!.height),
+							Math.abs(nativeBounds.x - bounds!.x) + Math.abs(nativeBounds.y - bounds!.y) + Math.abs(nativeBounds.width - bounds!.width) + Math.abs(nativeBounds.height - bounds!.height),
 						).toBeLessThan(4);
-						const native = await electron.evaluateHandle(
-							({ webContents }, url) =>
-								webContents.getAllWebContents().find(contents => contents.getURL() === url)!,
-							url + '/' + mode,
-						);
+						const native = await electron.evaluateHandle(({ webContents }, url) => webContents.getAllWebContents().find(contents => contents.getURL() === url)!, url + '/' + mode);
 						try {
 							const button = await native.evaluate(contents =>
 								contents.executeJavaScript(
@@ -165,68 +128,44 @@ for (const locale of ['en', 'zh-CN'] as const) {
 									...position,
 								});
 							}, button);
-							expect(
-								await native.evaluate(contents =>
-									contents.executeJavaScript("document.querySelector('button').textContent"),
-								),
-							).toBe('Clicked');
+							expect(await native.evaluate(contents => contents.executeJavaScript("document.querySelector('button').textContent"))).toBe('Clicked');
 							await commands.runCommand('workbench.action.closeActiveEditor');
 							await expect(canvas).toHaveCount(0);
 							expect((await views()).some(view => view.id === first.targetId)).toBe(true);
 							await commands.runCommand('workbench.action.chat.reopenCanvas');
 							await commands.select('Interactive preview');
 							await expect(canvas).toBeVisible();
-							expect(
-								await native.evaluate(contents =>
-									contents.executeJavaScript("document.querySelector('button').textContent"),
-								),
-							).toBe('Clicked');
+							expect(await native.evaluate(contents => contents.executeJavaScript("document.querySelector('button').textContent"))).toBe('Clicked');
 							const updated = await open('Updated preview');
 							expect(updated.targetId).toBe(first.targetId);
-							await expect(page.getByRole('tab', { name: 'Updated preview', exact: true })).toHaveCount(
-								1,
-							);
+							await expect(page.getByRole('tab', { name: 'Updated preview', exact: true })).toHaveCount(1);
 							await select(other.title, other.threads[0]!.threadId);
-							await expect
-								.poll(
-									async () => (await views()).find(view => view.id === first.targetId)?.state.visible,
-								)
-								.toBe(false);
+							await expect.poll(async () => (await views()).find(view => view.id === first.targetId)?.state.visible).toBe(false);
 							await select(source.title, threadId);
 							await expect(canvas).toBeVisible();
 							await page.getByRole('tab', { name: 'Updated preview', exact: true }).click();
 							await canvas.locator('.ash-session-canvas-page').focus();
 							await page.keyboard.press('Alt+F1');
 							const help = page.getByRole('dialog');
-							await expect(help.getByRole('textbox')).toHaveValue(
-								locale === 'en' ? /interactive page owned by its conversation/ : /所属会话的交互页面/,
-							);
+							await expect(help.getByRole('textbox')).toHaveValue(locale === 'en' ? /interactive page owned by its conversation/ : /所属会话的交互页面/);
 							await help.press('Escape');
 							await canvas.locator('.ash-session-canvas-page').focus();
 							await page.keyboard.press('Alt+F2');
 							const content = page.getByRole('dialog');
 							await expect(content.getByRole('textbox')).toHaveValue(/Interactive Canvas fixture/);
 							await content.press('Escape');
-							await expect
-								.poll(
-									async () => (await views()).find(view => view.id === first.targetId)?.state.visible,
-								)
-								.toBe(true);
+							await expect.poll(async () => (await views()).find(view => view.id === first.targetId)?.state.visible).toBe(true);
 							await testInfo.attach(`canvas-${mode}-${locale}`, {
 								body: await page.screenshot(),
 								contentType: 'image/png',
 							});
-							const pixels = await native.evaluate(async contents =>
-								(await contents.capturePage()).toPNG().toString('base64'),
-							);
+							const pixels = await native.evaluate(async contents => (await contents.capturePage()).toPNG().toString('base64'));
 							await testInfo.attach(`canvas-page-${mode}-${locale}`, {
 								body: Buffer.from(pixels, 'base64'),
 								contentType: 'image/png',
 							});
 							await commands.runCommand('workbench.action.chat.closeCanvas');
-							await expect
-								.poll(async () => (await views()).some(view => view.id === first.targetId))
-								.toBe(false);
+							await expect.poll(async () => (await views()).some(view => view.id === first.targetId)).toBe(false);
 							await expect(canvas).toHaveCount(0);
 						} finally {
 							await native.dispose();
@@ -328,15 +267,11 @@ exports.activate = context => {
 			await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 			const install = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 			await install.getByRole('textbox').fill('canvas-extension');
-			await workbench.dialogs.expectMessage(application, 'Information', () =>
-				install.getByRole('textbox').press('Enter'),
-			);
+			await workbench.dialogs.expectMessage(application, 'Information', () => install.getByRole('textbox').press('Enter'));
 			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
 			await page.locator('[data-package-id="acme/canvas-smoke"]').click();
 			const details = page.locator('.ash-extension-editor:visible').filter({ hasText: 'acme/canvas-smoke' });
-			await workbench.dialogs.confirm(application, 'Canvas provider smoke', 'Grant permissions', () =>
-				details.getByRole('button', { name: 'Grant permissions', exact: true }).click(),
-			);
+			await workbench.dialogs.confirm(application, 'Canvas provider smoke', 'Grant permissions', () => details.getByRole('button', { name: 'Grant permissions', exact: true }).click());
 			await expect(details).toHaveAttribute('aria-busy', 'false');
 			if (!(await details.getByRole('switch').isChecked())) {
 				await details.getByRole('switch').focus();
@@ -348,14 +283,9 @@ exports.activate = context => {
 				await workbench.quickaccess.runCommand('agentSessions.toggleAgentSessionsSidebar');
 			}
 			await page.locator('.ash-agent-session-row').filter({ hasText: source.title }).click();
-			await expect(
-				page.locator(`[data-thread-id="${source.threads[0]!.threadId}"]:visible`).first(),
-			).toBeVisible();
+			await expect(page.locator(`[data-thread-id="${source.threads[0]!.threadId}"]:visible`).first()).toBeVisible();
 			await installMainChannelTestClient(page);
-			const views = () =>
-				page.evaluate(() =>
-					globalThis.ashTestMainProcess.call<IBrowserViewInfo[]>('browserView', 'getBrowserViews', []),
-				);
+			const views = () => page.evaluate(() => globalThis.ashTestMainProcess.call<IBrowserViewInfo[]>('browserView', 'getBrowserViews', []));
 			const chat = page.locator(`[data-thread-id="${source.threads[0]!.threadId}"]:visible`).first();
 			const message = chat.getByRole('textbox', { name: 'Chat message', exact: true });
 			await message.focus();
@@ -367,12 +297,7 @@ exports.activate = context => {
 			const canvas = page.locator('.ash-session-canvas:visible');
 			await expect(canvas).toBeVisible();
 			await expect
-				.poll(async () =>
-					(await chat.locator('.ash-chat-input-editor .stanza-editor-line-text').allTextContents())
-						.join(' ')
-						.replace(/\s+/g, ' ')
-						.trim(),
-				)
+				.poll(async () => (await chat.locator('.ash-chat-input-editor .stanza-editor-line-text').allTextContents()).join(' ').replace(/\s+/g, ' ').trim())
 				.toBe('Keep my draft while opening Canvas');
 			await expect(chat.getByRole('button', { name: /^Remove /u })).toHaveCount(0);
 			await expect(page.getByRole('tab', { name: 'Fixture board', exact: true })).toHaveCount(1);
@@ -397,45 +322,29 @@ exports.activate = context => {
 			await testInfo.attach('registered-canvas', { body: await page.screenshot(), contentType: 'image/png' });
 			const agents = await workbench.openAgentsWindow('electron');
 			await agents.locator('.ash-sessions-list-item').filter({ hasText: source.title }).first().click();
-			await expect(
-				agents.locator(`[data-thread-id="${source.threads[0]!.threadId}"]:visible`).first(),
-			).toBeVisible();
+			await expect(agents.locator(`[data-thread-id="${source.threads[0]!.threadId}"]:visible`).first()).toBeVisible();
 			const agentCommands = new QuickAccess(agents);
 			await agents.getByRole('button', { name: 'Canvas', exact: true }).click();
 			await agentCommands.select('Fixture board');
 			await expect(agents.locator('.ash-session-canvas:visible')).toBeVisible();
 			await installMainChannelTestClient(agents);
-			const agentViews = () =>
-				agents.evaluate(() =>
-					globalThis.ashTestMainProcess.call<IBrowserViewInfo[]>('browserView', 'getBrowserViews', []),
-				);
+			const agentViews = () => agents.evaluate(() => globalThis.ashTestMainProcess.call<IBrowserViewInfo[]>('browserView', 'getBrowserViews', []));
 			const agentNative = (await agentViews()).find(view => view.canvas?.canvasId === 'board')!;
-			await new Menus(agents).select(
-				application,
-				() =>
-					agents
-						.locator('[data-part="editor"] .ash-editor-title-control:visible')
-						.getByRole('button', { name: 'Add tab', exact: true })
-						.click(),
-				['Canvas', 'Fixture board'],
-			);
-			expect((await agentViews()).filter(view => view.canvas?.canvasId === 'board').map(view => view.id)).toEqual(
-				[agentNative.id],
-			);
+			await new Menus(agents).select(application, () => agents.locator('[data-part="editor"] .ash-editor-title-control:visible').getByRole('button', { name: 'Add tab', exact: true }).click(), [
+				'Canvas',
+				'Fixture board',
+			]);
+			expect((await agentViews()).filter(view => view.canvas?.canvasId === 'board').map(view => view.id)).toEqual([agentNative.id]);
 			expect(agentNative.host.windowId).not.toBe(native.host.windowId);
 			await agentCommands.runCommand('acme.canvas.pending');
 			await expect(agents.locator('.ash-session-canvas-message:visible')).toContainText('reconnecting');
 			await agents.locator('.ash-sessions-list-item').filter({ hasText: peer.title }).first().click();
-			await expect(
-				agents.locator(`[data-thread-id="${peer.threads[0]!.threadId}"]:visible`).first(),
-			).toBeVisible();
+			await expect(agents.locator(`[data-thread-id="${peer.threads[0]!.threadId}"]:visible`).first()).toBeVisible();
 			await agents.locator('.ash-sessions-list-item').filter({ hasText: source.title }).first().click();
 			await expect(agents.locator('.ash-session-canvas-message:visible')).toContainText('reconnecting');
 			await agentCommands.runCommand('acme.canvas.ready');
 			await expect(agents.locator('.ash-session-canvas-page:visible')).toBeVisible();
-			await expect
-				.poll(async () => (await agentViews()).find(view => view.id === agentNative.id)?.state.visible)
-				.toBe(true);
+			await expect.poll(async () => (await agentViews()).find(view => view.id === agentNative.id)?.state.visible).toBe(true);
 			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
 			await page.locator('[data-package-id="acme/canvas-smoke"]').dblclick();
 			await details.getByRole('switch').focus();

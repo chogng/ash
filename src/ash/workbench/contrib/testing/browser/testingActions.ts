@@ -97,34 +97,19 @@ async function executeTestOnCurrentLine(accessor: ServicesAccessor, mode: 'run' 
 			.get(model.uri)
 			.some(copy => copy.isDirty)
 	) {
-		notifications.info(
-			localize(
-				'testing.saveCursor',
-				'Save the file and refresh tests before running a test on the current line.',
-			),
-		);
+		notifications.info(localize('testing.saveCursor', 'Save the file and refresh tests before running a test on the current line.'));
 		return;
 	}
 	try {
-		const tests = testing.tests.filter(
-			test =>
-				test.resource && extUri.isEqual(test.resource, model.uri) && test.source?.line === position.lineNumber,
-		);
+		const tests = testing.tests.filter(test => test.resource && extUri.isEqual(test.resource, model.uri) && test.source?.line === position.lineNumber);
 		if (tests.length === 0) {
-			notifications.info(
-				localize('testing.noTestAtCursor', 'Place the cursor on a discovered test declaration to run it.'),
-			);
+			notifications.info(localize('testing.noTestAtCursor', 'Place the cursor on a discovered test declaration to run it.'));
 			return;
 		}
 		if (mode === 'debug') {
 			const test = tests.find(test => test.debuggable);
 			if (!test) {
-				notifications.info(
-					localize(
-						'testing.notDebuggable',
-						'This test is executed by rustdoc and cannot be launched in a debugger.',
-					),
-				);
+				notifications.info(localize('testing.notDebuggable', 'This test is executed by rustdoc and cannot be launched in a debugger.'));
 				return;
 			}
 			await testing.debugTest(test.key);

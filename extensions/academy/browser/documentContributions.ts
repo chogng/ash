@@ -51,14 +51,7 @@ export interface DocumentEditorContributionContext {
 	readonly setPageZoom: (zoom: number) => void;
 	readonly setReviewAuthor: (author: string) => void;
 	readonly focusEditor: () => void;
-	readonly runDocumentCommand: (
-		create: (
-			schema: DocumentSchema,
-			document: DocumentNode,
-			blockId: string,
-			selection: DocumentSelection | undefined,
-		) => DocumentCommand | undefined,
-	) => void;
+	readonly runDocumentCommand: (create: (schema: DocumentSchema, document: DocumentNode, blockId: string, selection: DocumentSelection | undefined) => DocumentCommand | undefined) => void;
 }
 
 /** A profile installs controls only into its own view lifetime. */

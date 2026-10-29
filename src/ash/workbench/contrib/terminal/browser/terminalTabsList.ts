@@ -68,11 +68,7 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 				canDrop: () => this.draggedTerminal !== undefined,
 				onDragStart: (instance, event) => {
 					this.draggedTerminal = instance;
-					if (instance.resource)
-						event.dataTransfer?.setData(
-							TerminalDataTransfers.Terminals,
-							JSON.stringify([instance.resource.toString()]),
-						);
+					if (instance.resource) event.dataTransfer?.setData(TerminalDataTransfers.Terminals, JSON.stringify([instance.resource.toString()]));
 				},
 				onDrop: (target, position) => {
 					if (this.draggedTerminal) this.moveTerminal(this.draggedTerminal, target, position);
@@ -176,15 +172,13 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 			if (!this.instanceListeners.has(instance)) {
 				const lifetime = new DisposableStore();
 				lifetime.add(instance.onDidChangeState(() => this.refresh()));
-				if (instance.statusList)
-					lifetime.add(instance.statusList.onDidChangePrimaryStatus(() => this.refresh()));
+				if (instance.statusList) lifetime.add(instance.statusList.onDidChangePrimaryStatus(() => this.refresh()));
 				this.instanceListeners.set(instance, lifetime);
 			}
 		}
 		// Group membership owns adjacency and pane order; the process list alone can interleave groups.
 		const positions = new Map(this.terminals.instances.map((instance, index) => [instance, index]));
-		const firstPosition = (group: (typeof this.groups.groups)[number]): number =>
-			Math.min(...group.terminalInstances.map(instance => positions.get(instance) ?? Number.POSITIVE_INFINITY));
+		const firstPosition = (group: (typeof this.groups.groups)[number]): number => Math.min(...group.terminalInstances.map(instance => positions.get(instance) ?? Number.POSITIVE_INFINITY));
 		const orderedGroups = [...this.groups.groups].sort((left, right) => firstPosition(left) - firstPosition(right));
 		const rows = orderedGroups.flatMap(group => group.terminalInstances);
 		const active = this.terminals.activeInstance;
@@ -208,9 +202,7 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 					value: instance,
 					label: instance.title,
 					tooltip: '',
-					ariaDescription:
-						[splitDescription, status?.icon ? status.tooltip : undefined].filter(Boolean).join(', ') ||
-						undefined,
+					ariaDescription: [splitDescription, status?.icon ? status.tooltip : undefined].filter(Boolean).join(', ') || undefined,
 					icon: status?.icon ?? terminalProfileIcon(instance.profile),
 					state: instance.state,
 					tabId: `${instance.id}-tab`,
@@ -222,16 +214,9 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 								label: localize('terminal.group.splitMenu', 'Split Terminal'),
 								tooltip: localize('terminal.group.splitMenu', 'Split Terminal'),
 								icon: Lxicon.splitHorizontal,
-								enabled:
-									instance.state === 'running' &&
-									!instance.isReadOnly &&
-									!instance.shellLaunchConfig?.customPtyImplementation,
+								enabled: instance.state === 'running' && !instance.isReadOnly && !instance.shellLaunchConfig?.customPtyImplementation,
 								// Row actions must target their own terminal, even when another pane has focus.
-								run: () =>
-									this.commands.executeCommand(
-										TerminalCommandId.Split,
-										new InstanceContext(instance),
-									),
+								run: () => this.commands.executeCommand(TerminalCommandId.Split, new InstanceContext(instance)),
 							},
 						],
 					},
@@ -263,8 +248,7 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 		for (const [instance, label] of this.labels) {
 			const statusIcon = instance.statusList?.primary?.icon;
 			label.setLabel(instance.title, undefined, { icon: statusIcon ?? terminalProfileIcon(instance.profile) });
-			label.iconElement.style.color =
-				!statusIcon && instance.profile.color ? `var(${colorCssVariable(instance.profile.color)})` : '';
+			label.iconElement.style.color = !statusIcon && instance.profile.color ? `var(${colorCssVariable(instance.profile.color)})` : '';
 			const branch = this.branches.get(instance)!;
 			const members = this.groups.getGroupForInstance(instance)!.terminalInstances;
 			const index = members.indexOf(instance);
@@ -292,19 +276,12 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 		if (this.isDisposed) return;
 		// Closing removes the pressed row button. Restore terminal input unless
 		// the user moved focus to another connected control while release awaited.
-		if (
-			document.activeElement === focusSource ||
-			(document.activeElement === document.body && !focusSource?.isConnected)
-		) {
+		if (document.activeElement === focusSource || (document.activeElement === document.body && !focusSource?.isConnected)) {
 			this.focused.fire();
 		}
 	}
 
-	private moveTerminal(
-		source: ITerminalInstance,
-		target: ITerminalInstance | undefined,
-		position: TabListDropPosition,
-	): void {
+	private moveTerminal(source: ITerminalInstance, target: ITerminalInstance | undefined, position: TabListDropPosition): void {
 		if (source === target) return;
 		const instances = this.terminals.instances;
 		const sourceIndex = instances.indexOf(source);

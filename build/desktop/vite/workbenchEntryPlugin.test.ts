@@ -14,7 +14,10 @@ test('Workbench entry redirects root requests to the shared Workbench', () => {
 	const result = invoke(middleware, { method: 'GET', url: '/?theme=dark' });
 	assert.deepEqual(result, {
 		ended: true,
-		headers: { 'Cache-Control': 'no-store', Location: '/browser/workbench/workbench.html?theme=dark' },
+		headers: {
+			'Cache-Control': 'no-store',
+			Location: '/browser/workbench/workbench.html?theme=dark',
+		},
 		nextCalled: false,
 		statusCode: 302,
 	});
@@ -37,10 +40,7 @@ test('Workbench entry leaves non-root and mutating requests to Vite', () => {
 
 test('Sessions development opens its page directly and preserves workspace parameters', () => {
 	const middleware = configuredMiddleware('/browser/sessions/sessions.html');
-	assert.equal(
-		invoke(middleware, { method: 'HEAD', url: '/?folder=project' }).headers.Location,
-		'/browser/sessions/sessions.html?folder=project',
-	);
+	assert.equal(invoke(middleware, { method: 'HEAD', url: '/?folder=project' }).headers.Location, '/browser/sessions/sessions.html?folder=project');
 });
 
 test('Sessions HTML is served and built from its owning layer with working module URLs', async () => {
@@ -90,10 +90,7 @@ test('Sessions HTML is served and built from its owning layer with working modul
 		const builtModule = /src="([^"]+\.js)"/u.exec(builtHtml)?.[1];
 		assert.ok(builtModule, builtHtml);
 		assert.doesNotMatch(builtHtml, /@fs\/|sessions\.ts/u);
-		assert.match(
-			await readFile(resolve(output, dirname(url.slice(1)), builtModule), 'utf8'),
-			/sessionsEntryLoaded/,
-		);
+		assert.match(await readFile(resolve(output, dirname(url.slice(1)), builtModule), 'utf8'), /sessionsEntryLoaded/);
 	} finally {
 		await server?.close();
 		assert.equal(dirname(resolve(directory)), resolve(tmpdir()));
@@ -113,10 +110,7 @@ for (const preserveSymlinks of [false, true]) {
 		await symlink(source, linkedSource, process.platform === 'win32' ? 'junction' : 'dir');
 		await mkdir(dirname(css));
 		await writeFile(css, '.css-test { color: red; }');
-		await writeFile(
-			join(root, 'index.html'),
-			'<html><head></head><body><script type="module" src="./entry.ts"></script></body></html>',
-		);
+		await writeFile(join(root, 'index.html'), '<html><head></head><body><script type="module" src="./entry.ts"></script></body></html>');
 		await writeFile(join(root, 'entry.ts'), 'import "../shared/style.css";');
 		const service = new CSSDevelopmentService({ sourceRoot: linkedSource, isBuilt: false });
 		const plugin = () => workbenchEntryPlugin(undefined, undefined, { service, sourceRoot: linkedSource });
@@ -180,10 +174,7 @@ test('CSS discovery shares concurrent scans, refreshes paths and skips filesyste
 		const built = new CSSDevelopmentService({ sourceRoot: join(directory, 'missing'), isBuilt: true });
 		assert.equal(built.isEnabled, false);
 		assert.deepEqual(await built.getCssModules(), []);
-		await assert.rejects(
-			new CSSDevelopmentService({ sourceRoot: join(directory, 'missing'), isBuilt: false }).getCssModules(),
-			{ code: 'ENOENT' },
-		);
+		await assert.rejects(new CSSDevelopmentService({ sourceRoot: join(directory, 'missing'), isBuilt: false }).getCssModules(), { code: 'ENOENT' });
 	} finally {
 		assert.equal(dirname(directory), tmpdir());
 		await rm(directory, { recursive: true, force: true });

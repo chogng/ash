@@ -61,8 +61,7 @@ function fixture(resources: DisposableStore) {
 		services,
 		opened,
 		requests,
-		run: (id: string, context?: unknown) =>
-			Promise.resolve(services.invokeFunction(CommandsRegistry.getCommand(id)!, context)),
+		run: (id: string, context?: unknown) => Promise.resolve(services.invokeFunction(CommandsRegistry.getCommand(id)!, context)),
 		select: (selection: typeof active) => {
 			active = selection;
 			revision++;
@@ -103,9 +102,7 @@ for (const window of ['IDE', 'Agents'] as const) {
 				commandId: (f.requests[0] as { commandId: string }).commandId,
 			},
 		]);
-		assert.deepEqual(f.opened, [
-			{ sessionId: window === 'IDE' ? 'forked-session' : 'source', threadId: 'forked-thread' },
-		]);
+		assert.deepEqual(f.opened, [{ sessionId: window === 'IDE' ? 'forked-session' : 'source', threadId: 'forked-thread' }]);
 	});
 }
 
@@ -165,11 +162,7 @@ test('edited request opens its result only while its original conversation is se
 	assert.equal(f.requests.length, 2);
 });
 
-for (const id of [
-	ForkConversationActionId,
-	'sessions.chatCompositeBar.addChat',
-	'workbench.action.chat.resendRequest',
-]) {
+for (const id of [ForkConversationActionId, 'sessions.chatCompositeBar.addChat', 'workbench.action.chat.resendRequest']) {
 	test(`${id} cannot open a late result after A-B-A navigation`, async () => {
 		using resources = new DisposableStore();
 		resources.add(registerAction2(ForkConversationAction));

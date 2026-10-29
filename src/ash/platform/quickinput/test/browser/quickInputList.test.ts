@@ -16,11 +16,7 @@ suite('Quick Input list filtering', () => {
 		const label = { label: 'Open Server' };
 		const detail = { label: 'Open', detail: 'Server' };
 		const unrelated = { label: 'Open Client' };
-		assert.deepEqual(filterQuickPickItems([description, label, detail, unrelated], ' OPEN  server '), [
-			label,
-			description,
-			detail,
-		]);
+		assert.deepEqual(filterQuickPickItems([description, label, detail, unrelated], ' OPEN  server '), [label, description, detail]);
 	});
 
 	test('keeps always-show items and unfiltered input order', () => {

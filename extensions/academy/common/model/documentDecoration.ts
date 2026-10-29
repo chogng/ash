@@ -22,10 +22,8 @@ export interface DocumentDecoration {
 
 /** Creates an immutable decoration that can be projected by any Stanza view. */
 export function createDocumentDecoration(options: DocumentDecorationOptions): DocumentDecoration {
-	if (typeof options.id !== 'string' || options.id.trim().length === 0)
-		throw new TypeError('Document decorations require a non-empty id');
-	if (options.className !== undefined && typeof options.className !== 'string')
-		throw new TypeError('Document decoration className must be a string');
+	if (typeof options.id !== 'string' || options.id.trim().length === 0) throw new TypeError('Document decorations require a non-empty id');
+	if (options.className !== undefined && typeof options.className !== 'string') throw new TypeError('Document decoration className must be a string');
 	return Object.freeze({
 		id: options.id,
 		from: Object.freeze({ ...options.from }),

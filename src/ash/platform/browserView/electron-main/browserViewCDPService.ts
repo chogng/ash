@@ -64,10 +64,7 @@ class BrowserCDPConnection extends Disposable {
 	private readonly group: BrowserViewGroup;
 	private readonly ready: Promise<void>;
 	private readonly cancellation = new AbortController();
-	private readonly pending = new Map<
-		number,
-		{ resolve: (response: CDPResponse) => void; reject: (error: Error) => void }
-	>();
+	private readonly pending = new Map<number, { resolve: (response: CDPResponse) => void; reject: (error: Error) => void }>();
 	private readonly roots = new Map<string, string>();
 	private readonly pendingRoots = new Map<string, Promise<string>>();
 	private readonly events: Array<{ event: CDPEvent; bytes: number }> = [];
@@ -77,9 +74,7 @@ class BrowserCDPConnection extends Disposable {
 
 	constructor(threadId: string, @IInstantiationService instantiation: IInstantiationService) {
 		super();
-		this.group = this._register(
-			instantiation.createInstance(BrowserViewGroup, { sandboxSessionId: threadId, agentOnly: true }, () => {}),
-		);
+		this.group = this._register(instantiation.createInstance(BrowserViewGroup, { sandboxSessionId: threadId, agentOnly: true }, () => {}));
 		this._register(this.group.onDidDestroy(() => this.dispose()));
 		this._register(
 			this.group.onCDPMessage(message => {
@@ -134,24 +129,14 @@ class BrowserCDPConnection extends Disposable {
 				void this.group.sendCDPMessage({ id: ++this.sequence, method, sessionId }).catch(() => {});
 			}
 		});
-		const response = await this.request(
-			operation.method,
-			operation.params,
-			sessionId,
-			signal,
-			networkToken,
-			uploads,
-		);
+		const response = await this.request(operation.method, operation.params, sessionId, signal, networkToken, uploads);
 		const output = JSON.stringify(response);
 		if (Buffer.byteLength(output) > 1024 * 1024) {
 			throw new Error('BrowserCDPResultTooLarge');
 		}
 		return {
 			output,
-			...(operation.method === 'Target.createTarget' &&
-			!response.error &&
-			isRecord(response.result) &&
-			typeof response.result.browserViewId === 'string'
+			...(operation.method === 'Target.createTarget' && !response.error && isRecord(response.result) && typeof response.result.browserViewId === 'string'
 				? { createdTargetId: response.result.browserViewId }
 				: {}),
 		};
@@ -165,13 +150,7 @@ class BrowserCDPConnection extends Disposable {
 		let pending = this.pendingRoots.get(page.id);
 		if (!pending) {
 			pending = (async () => {
-				const attached = await this.request(
-					'Target.attachToTarget',
-					{ targetId: await page.debugger.getTargetId(), flatten: true },
-					undefined,
-					signal,
-					networkToken,
-				);
+				const attached = await this.request('Target.attachToTarget', { targetId: await page.debugger.getTargetId(), flatten: true }, undefined, signal, networkToken);
 				if (attached.error || !isRecord(attached.result) || typeof attached.result.sessionId !== 'string') {
 					throw new Error('BrowserCDPAttachmentFailed');
 				}
@@ -200,9 +179,7 @@ class BrowserCDPConnection extends Disposable {
 		const response = promiseWithResolvers<CDPResponse>();
 		this.pending.set(id, response);
 		try {
-			void this.group
-				.sendCDPMessage({ id, method, params, sessionId }, { signal, networkToken, uploads })
-				.catch(response.reject);
+			void this.group.sendCDPMessage({ id, method, params, sessionId }, { signal, networkToken, uploads }).catch(response.reject);
 			return await raceCancellationError(response.promise, signal, 'BrowserRequestCancelled');
 		} finally {
 			this.pending.delete(id);

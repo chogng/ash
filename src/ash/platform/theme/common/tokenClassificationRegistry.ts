@@ -84,10 +84,7 @@ export class TokenClassificationRegistry extends Disposable {
 		return {
 			id: value,
 			match: (type, modifiers, modelLanguage): number => {
-				if (
-					(expectedLanguage && expectedLanguage !== modelLanguage) ||
-					expectedModifiers.some(modifier => !modifiers.includes(modifier))
-				) {
+				if ((expectedLanguage && expectedLanguage !== modelLanguage) || expectedModifiers.some(modifier => !modifiers.includes(modifier))) {
 					return -1;
 				}
 				let depth = 0;
@@ -101,20 +98,12 @@ export class TokenClassificationRegistry extends Disposable {
 					current = this.types.get(current)?.superType;
 					depth++;
 				}
-				return (
-					(expectedLanguage ? 10_000 : 0) +
-					expectedModifiers.length * 100 +
-					(expectedType === '*' ? 0 : 50 / (depth + 1))
-				);
+				return (expectedLanguage ? 10_000 : 0) + expectedModifiers.length * 100 + (expectedType === '*' ? 0 : 50 / (depth + 1));
 			},
 		};
 	}
 	/** Validate the complete catalog first; replacement and removal publish one revision. */
-	public replaceContributions(
-		owner: symbol,
-		types: readonly TokenTypeOrModifierContribution[],
-		modifiers: readonly TokenTypeOrModifierContribution[],
-	): void {
+	public replaceContributions(owner: symbol, types: readonly TokenTypeOrModifierContribution[], modifiers: readonly TokenTypeOrModifierContribution[]): void {
 		const previous = this.groups.get(owner);
 		if (!previous && !types.length && !modifiers.length) {
 			return;
@@ -200,24 +189,9 @@ const types = [
 	'event',
 ];
 for (const id of types) {
-	registry.registerTokenType(
-		id,
-		id,
-		['class', 'enum', 'interface', 'struct', 'typeParameter'].includes(id) ? 'type' : undefined,
-	);
+	registry.registerTokenType(id, id, ['class', 'enum', 'interface', 'struct', 'typeParameter'].includes(id) ? 'type' : undefined);
 }
-for (const id of [
-	'declaration',
-	'definition',
-	'readonly',
-	'static',
-	'deprecated',
-	'abstract',
-	'async',
-	'modification',
-	'documentation',
-	'defaultLibrary',
-]) {
+for (const id of ['declaration', 'definition', 'readonly', 'static', 'deprecated', 'abstract', 'async', 'modification', 'documentation', 'defaultLibrary']) {
 	registry.registerTokenModifier(id, id);
 }
 

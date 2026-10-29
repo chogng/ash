@@ -1,11 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { relative, resolve, sep, win32 } from 'node:path';
 import { normalizePath, type HtmlTagDescriptor, type Plugin } from 'vite';
-import {
-	analyzeHotReloadModule,
-	type HotReloadModuleAnalysis,
-	unsafeHotReloadChangeReason,
-} from './hotReloadAnalysis.ts';
+import { analyzeHotReloadModule, type HotReloadModuleAnalysis, unsafeHotReloadChangeReason } from './hotReloadAnalysis.ts';
 
 const hotExportsName = '__ashViteHotReloadExports';
 
@@ -43,9 +39,7 @@ export function hotReloadPlugin(options: HotReloadPluginOptions = {}): AshHotRel
 				watch: {
 					// Chokidar reads this override after selecting FSEvents. Pass an
 					// explicit opt-in before backend selection, preserving native defaults.
-					...(process.env.CHOKIDAR_USEPOLLING && !/^(?:false|0)$/iu.test(process.env.CHOKIDAR_USEPOLLING)
-						? { usePolling: true }
-						: {}),
+					...(process.env.CHOKIDAR_USEPOLLING && !/^(?:false|0)$/iu.test(process.env.CHOKIDAR_USEPOLLING) ? { usePolling: true } : {}),
 					awaitWriteFinish: { stabilityThreshold: 75, pollInterval: 10 },
 				},
 			},
@@ -56,9 +50,7 @@ export function hotReloadPlugin(options: HotReloadPluginOptions = {}): AshHotRel
 		},
 		transformIndexHtml: {
 			order: 'pre',
-			handler: () => [
-				{ tag: 'script', attrs: { type: 'module', src: viteFileUrl(setupPath) }, injectTo: 'head-prepend' },
-			],
+			handler: () => [{ tag: 'script', attrs: { type: 'module', src: viteFileUrl(setupPath) }, injectTo: 'head-prepend' }],
 		},
 		transform: {
 			order: 'pre',
@@ -67,8 +59,7 @@ export function hotReloadPlugin(options: HotReloadPluginOptions = {}): AshHotRel
 				if (!file.endsWith('.ts')) return undefined;
 				const analysis = analyzeHotReloadModule(code, file);
 				if (!analysis.syntaxValid || analysis.exportNames.length === 0) return undefined;
-				if (code.includes(hotExportsName))
-					throw new Error(`Reserved hot-reload export is already declared: ${hotExportsName}`);
+				if (code.includes(hotExportsName)) throw new Error(`Reserved hot-reload export is already declared: ${hotExportsName}`);
 				analyses.set(file, analysis);
 				// Unmarked services can share module-local state with a persistent view.
 				// Replacing their methods would bind live instances to the replacement
@@ -105,22 +96,11 @@ export function hotReloadPlugin(options: HotReloadPluginOptions = {}): AshHotRel
 	};
 }
 
-function injectHotReloadBoundary(
-	code: string,
-	exportNames: readonly string[],
-	moduleId: string,
-	patchPrototype: boolean,
-	widgetClassNames: readonly string[],
-): string {
+function injectHotReloadBoundary(code: string, exportNames: readonly string[], moduleId: string, patchPrototype: boolean, widgetClassNames: readonly string[]): string {
 	const exports = exportNames.join(', ');
 	const config = patchPrototype ? '{ mode: "patch-prototype" }' : '{}';
-	const widgetRegistrations = widgetClassNames
-		.map(name => `${name}.registerWidgetHotReplacement(${JSON.stringify(`${moduleId}#${name}`)});`)
-		.join('\n');
-	const widgetAcceptance =
-		widgetClassNames.length > 0
-			? ` || ${JSON.stringify(widgetClassNames)}.every(name => typeof newExports[name] === "function")`
-			: '';
+	const widgetRegistrations = widgetClassNames.map(name => `${name}.registerWidgetHotReplacement(${JSON.stringify(`${moduleId}#${name}`)});`).join('\n');
+	const widgetAcceptance = widgetClassNames.length > 0 ? ` || ${JSON.stringify(widgetClassNames)}.every(name => typeof newExports[name] === "function")` : '';
 	return `${code}
 
 ${widgetRegistrations}

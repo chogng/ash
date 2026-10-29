@@ -33,10 +33,7 @@ import '../../browser/accessibilityConfiguration.js';
 import '../../browser/accessibleViewActions.js';
 import { AccessibleViewService } from '../../browser/accessibleView.js';
 import { AccessibilityService } from '../../../../../platform/accessibility/browser/accessibilityService.js';
-import {
-	IAccessibilityService,
-	AccessibilitySupport,
-} from '../../../../../platform/accessibility/common/accessibility.js';
+import { IAccessibilityService, AccessibilitySupport } from '../../../../../platform/accessibility/common/accessibility.js';
 import { IStatusbarService, StatusbarAlignment } from '../../../../services/statusbar/browser/statusbar.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
@@ -66,10 +63,7 @@ test('Explorer accessibility hint follows the verbosity setting', async () => {
 	assert.match(accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.DiffEditor) ?? '', /Alt\+F1/);
 	await configuration.updateValue(AccessibilityVerbositySettingId.DiffEditor, false);
 	assert.equal(accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.DiffEditor), undefined);
-	assert.match(
-		accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.ChatModelConfiguration) ?? '',
-		/Alt\+F1/,
-	);
+	assert.match(accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.ChatModelConfiguration) ?? '', /Alt\+F1/);
 	await configuration.updateValue(AccessibilityVerbositySettingId.ChatModelConfiguration, false);
 	assert.equal(accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.ChatModelConfiguration), undefined);
 });
@@ -106,18 +100,10 @@ test('hint follows reassignment and removal of the help shortcut in Chinese', ()
 	using fixture = new AccessibleViewFixture();
 	initializeTestLocalization('zh-CN');
 	try {
-		fixture.helpKeybinding = fixture.keybindings.resolveKeybinding(
-			Keybinding.single(logicalKey('F1', { ctrlKey: true, shiftKey: true })),
-		);
-		assert.equal(
-			fixture.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.Explorer),
-			'按 Ctrl+Shift+F1 打开无障碍帮助。',
-		);
+		fixture.helpKeybinding = fixture.keybindings.resolveKeybinding(Keybinding.single(logicalKey('F1', { ctrlKey: true, shiftKey: true })));
+		assert.equal(fixture.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.Explorer), '按 Ctrl+Shift+F1 打开无障碍帮助。');
 		fixture.helpKeybinding = undefined;
-		assert.equal(
-			fixture.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.Explorer),
-			'在命令面板中运行“打开无障碍帮助”。',
-		);
+		assert.equal(fixture.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.Explorer), '在命令面板中运行“打开无障碍帮助”。');
 	} finally {
 		resetNlsResolver();
 	}
@@ -154,9 +140,7 @@ test('opening help publishes its state, disables only the active hint and releas
 	assert.equal(text.value, 'Alt+F1');
 	assert.match(text.getAttribute('aria-description') ?? '', /Alt\+F1/);
 	assert.equal(fixture.contextKeys.getValue('accessibilityHelpIsShown'), true);
-	fixture.helpKeybinding = fixture.keybindings.resolveKeybinding(
-		Keybinding.single(logicalKey('F1', { ctrlKey: true })),
-	);
+	fixture.helpKeybinding = fixture.keybindings.resolveKeybinding(Keybinding.single(logicalKey('F1', { ctrlKey: true })));
 	fixture.keybindingChanges.fire();
 	assert.equal(text.value, 'Control+F1');
 	changed.fire();
@@ -221,7 +205,11 @@ test('screen reader commands update policy, status and notification choices thro
 			entries: fixture.statusbar.getEntries(StatusbarAlignment.Right),
 			notifications: fixture.notifications.model.getNotifications(),
 		},
-		{ optimized: false, entries: [], notifications: [] },
+		{
+			optimized: false,
+			entries: [],
+			notifications: [],
+		},
 	);
 });
 
@@ -257,8 +245,7 @@ test('editor help reads the editor state and its focus hint respects verbosity a
 		hasWidgetFocus: () => false,
 		onDidFocusEditorText: focused.event,
 		onDidFocusEditorWidget: Event.None,
-		getOption: (option: EditorOption) =>
-			option === EditorOption.readOnly ? readOnly : option === EditorOption.tabFocusMode,
+		getOption: (option: EditorOption) => (option === EditorOption.readOnly ? readOnly : option === EditorOption.tabFocusMode),
 		focus: () => {
 			restored++;
 		},
@@ -327,10 +314,7 @@ test('notification content remains live through nested help and the reading posi
 
 test('dimming configuration validates the supported opacity range at the settings boundary', async () => {
 	using fixture = new AccessibleViewFixture();
-	await assert.rejects(
-		fixture.configuration.updateValue(AccessibilityWorkbenchSettingId.DimUnfocusedOpacity, 0.1),
-		/between 0.2 and 1/u,
-	);
+	await assert.rejects(fixture.configuration.updateValue(AccessibilityWorkbenchSettingId.DimUnfocusedOpacity, 0.1), /between 0.2 and 1/u);
 	assert.equal(fixture.configuration.getValue(AccessibilityWorkbenchSettingId.DimUnfocusedOpacity), 0.75);
 	await fixture.configuration.updateValue(AccessibilityWorkbenchSettingId.DimUnfocusedOpacity, 0.4);
 	assert.equal(fixture.configuration.getValue(AccessibilityWorkbenchSettingId.DimUnfocusedOpacity), 0.4);
@@ -353,9 +337,7 @@ test('closing the parent content view releases nested help and its keybinding li
 	const help = dialogs[1]!.querySelector('textarea')!;
 	assert.match(help.value, /Control\+Alt\+H/u);
 	help.setSelectionRange(2, 5);
-	fixture.disableHintKeybinding = fixture.keybindings.resolveKeybinding(
-		Keybinding.single(logicalKey('h', { ctrlKey: true, shiftKey: true })),
-	);
+	fixture.disableHintKeybinding = fixture.keybindings.resolveKeybinding(Keybinding.single(logicalKey('h', { ctrlKey: true, shiftKey: true })));
 	fixture.keybindingChanges.fire();
 	assert.match(help.value, /Control\+Shift\+H/u);
 	assert.deepEqual([help.selectionStart, help.selectionEnd], [2, 5]);
@@ -382,16 +364,9 @@ class AccessibleViewFixture extends Disposable {
 	public readonly statusbar = this._register(new StatusbarService());
 	public readonly notifications = this._register(new TestNotificationService());
 	public readonly accessibility: AccessibilityService;
-	private readonly mapper = new FallbackKeyboardMapper(
-		{ dispatch: KeyboardDispatchMode.Code, mapAltGrToCtrlAlt: false },
-		OperatingSystem.Windows,
-	);
-	public helpKeybinding: ResolvedKeybinding | undefined = this.mapper.resolveKeybinding(
-		Keybinding.single(logicalKey('F1', { altKey: true })),
-	)[0];
-	public disableHintKeybinding: ResolvedKeybinding | undefined = this.mapper.resolveKeybinding(
-		Keybinding.single(logicalKey('h', { ctrlKey: true, altKey: true })),
-	)[0];
+	private readonly mapper = new FallbackKeyboardMapper({ dispatch: KeyboardDispatchMode.Code, mapAltGrToCtrlAlt: false }, OperatingSystem.Windows);
+	public helpKeybinding: ResolvedKeybinding | undefined = this.mapper.resolveKeybinding(Keybinding.single(logicalKey('F1', { altKey: true })))[0];
+	public disableHintKeybinding: ResolvedKeybinding | undefined = this.mapper.resolveKeybinding(Keybinding.single(logicalKey('h', { ctrlKey: true, altKey: true })))[0];
 	public readonly keybindings: IKeybindingService = {
 		inChordMode: false,
 		onDidUpdateKeybindings: this.keybindingChanges.event,
@@ -424,10 +399,7 @@ class AccessibleViewFixture extends Disposable {
 		super();
 		this._register(toDisposable(() => this.browser.window.close()));
 		this._register(installEditorTestDom(this.browser, ['Node', 'Element', 'HTMLElement', 'HTMLButtonElement']));
-		this.browser.window.HTMLElement.prototype.scrollTo = function (
-			options?: ScrollToOptions | number,
-			y?: number,
-		): void {
+		this.browser.window.HTMLElement.prototype.scrollTo = function (options?: ScrollToOptions | number, y?: number): void {
 			this.scrollLeft = typeof options === 'number' ? options : (options?.left ?? this.scrollLeft);
 			this.scrollTop = typeof options === 'number' ? (y ?? this.scrollTop) : (options?.top ?? this.scrollTop);
 		};

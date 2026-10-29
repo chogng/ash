@@ -10,12 +10,7 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Event as EditorEvent } from '../../../../base/common/event.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
-import {
-	ContentWidgetPositionPreference,
-	type ICodeEditor,
-	type IContentWidget,
-	type IGlyphMarginWidget,
-} from '../../../browser/editorBrowser.js';
+import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IGlyphMarginWidget } from '../../../browser/editorBrowser.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { Selection } from '../../../common/core/selection.js';
@@ -26,10 +21,7 @@ import { EditorLineWrapping, EditorOption, RenderLineNumbersType } from '../../.
 import { EditorType, ScrollType, type IEditor } from '../../../common/editorCommon.js';
 import { VerticalRevealType } from '../../../common/viewEvents.js';
 import { IContextKeyService, ContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import {
-	AccessibilitySupport,
-	IAccessibilityService,
-} from '../../../../platform/accessibility/common/accessibility.js';
+import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { errorHandler, setUnexpectedErrorHandler } from '../../../../base/common/errors.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
@@ -37,14 +29,12 @@ import { TestLanguageFeaturesService } from '../../common/testLanguageFeaturesSe
 
 const { CodeEditorWidget } = await import('../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../testCodeEditor.js');
-const { TextAreaEditContextRegistry } =
-	await import('../../../browser/controller/editContext/textArea/textAreaEditContextRegistry.js');
+const { TextAreaEditContextRegistry } = await import('../../../browser/controller/editContext/textArea/textAreaEditContextRegistry.js');
 const { ViewPart } = await import('../../../browser/view/viewPart.js');
 const { observableCodeEditor } = await import('../../../browser/observableCodeEditor.js');
 const { InstantiationService } = await import('../../../../platform/instantiation/common/instantiationService.js');
 const { ILogService, NullLoggerService } = await import('../../../../platform/log/common/log.js');
-const { PlaceholderTextContribution } =
-	await import('../../../contrib/placeholderText/browser/placeholderTextContribution.js');
+const { PlaceholderTextContribution } = await import('../../../contrib/placeholderText/browser/placeholderTextContribution.js');
 const { VersionedEditorWorkerClient } = await import('../../../browser/services/editorWorkerService.js');
 const { EditorWorker } = await import('../../../common/services/editorWebWorker.js');
 await import('../../../contrib/inPlaceReplace/browser/inPlaceReplace.js');
@@ -302,7 +292,11 @@ test('force retokenize action refreshes the active model through its syntax prov
 		languageIds: ['retokenize'],
 		provideTokens: () => ({
 			tokens: [
-				{ range: new Range(1, 1, 1, 6), tokenType: ++requests === 1 ? 'string' : 'comment', modifiers: [] },
+				{
+					range: new Range(1, 1, 1, 6),
+					tokenType: ++requests === 1 ? 'string' : 'comment',
+					modifiers: [],
+				},
 			],
 		}),
 	});
@@ -354,10 +348,7 @@ test('an editor without contributions renders model tokens across model replacem
 		languageId: 'core-tokens',
 		tokenization: { syntaxProviderRegistry: providers },
 	});
-	await Promise.all([
-		model.tokenization.whenReady(new AbortController().signal),
-		replacement.tokenization.whenReady(new AbortController().signal),
-	]);
+	await Promise.all([model.tokenization.whenReady(new AbortController().signal), replacement.tokenization.whenReady(new AbortController().signal)]);
 	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using cleanup = toDisposable(() => dom.window.close());
@@ -376,12 +367,8 @@ test('an editor without contributions renders model tokens across model replacem
 	editor.layout({ width: 400, height: 80 });
 	editor.view.render(true, false);
 	assert.equal(editor.getDomNode().querySelector('.token-keyword')?.textContent, 'value');
-	editor.createDecorationsCollection([
-		{ range: new Range(1, 1, 1, 2), options: { description: 'own', inlineClassName: 'own-highlight' } },
-	]);
-	other.createDecorationsCollection([
-		{ range: new Range(1, 2, 1, 3), options: { description: 'other', inlineClassName: 'other-highlight' } },
-	]);
+	editor.createDecorationsCollection([{ range: new Range(1, 1, 1, 2), options: { description: 'own', inlineClassName: 'own-highlight' } }]);
+	other.createDecorationsCollection([{ range: new Range(1, 2, 1, 3), options: { description: 'other', inlineClassName: 'other-highlight' } }]);
 	assert.deepEqual(
 		editor.getLineDecorations(1)?.map(decoration => decoration.options.description),
 		['own'],
@@ -486,10 +473,7 @@ test('move selected text actions update text, selection and undo through the edi
 		model.setValue('012345\nabcdef');
 		editor.setSelections([new Selection(1, 3, 1, 5), new Selection(2, 3, 2, 5)]);
 		await left.run();
-		assert.deepEqual(
-			[model.getValue(), (editor.getSelections() ?? []).map(selection => selection.toString())],
-			['023145\nacdbef', ['[1,2 -> 1,4]', '[2,2 -> 2,4]']],
-		);
+		assert.deepEqual([model.getValue(), (editor.getSelections() ?? []).map(selection => selection.toString())], ['023145\nacdbef', ['[1,2 -> 1,4]', '[2,2 -> 2,4]']]);
 		model.setValue('012345\nabcdef');
 		editor.setSelection(new Selection(1, 2, 2, 3));
 		await left.run();
@@ -498,10 +482,7 @@ test('move selected text actions update text, selection and undo through the edi
 		editor.setSelection(new Selection(2, 1, 2, 1));
 		await left.run();
 		await right.run();
-		assert.deepEqual(
-			[model.getValue(), (editor.getSelections() ?? []).map(selection => selection.toString())],
-			['012345\nabcdef', ['[2,1 -> 2,1]']],
-		);
+		assert.deepEqual([model.getValue(), (editor.getSelections() ?? []).map(selection => selection.toString())], ['012345\nabcdef', ['[2,1 -> 2,1]']]);
 	} finally {
 		dom.window.close();
 	}
@@ -582,10 +563,7 @@ test('CodeEditorWidget actions keep their editor context across read-only change
 			context,
 		);
 		await action.run();
-		assert.deepEqual(
-			[first.getValue(), replacement.getValue(), second.getValue()],
-			['keep', 'keep', 'second\nkeep'],
-		);
+		assert.deepEqual([first.getValue(), replacement.getValue(), second.getValue()], ['keep', 'keep', 'second\nkeep']);
 		editor.dispose();
 		await assert.rejects(action.run(), ReferenceError);
 	} finally {
@@ -610,10 +588,7 @@ test('editor configuration updates rerender line-number, selection, whitespace, 
 	editor.view.render(true, false);
 
 	const lineNumber = (lineIndex: number): string =>
-		requiredElement<HTMLElement>(
-			editor.getDomNode(),
-			`.margin-view-overlays .view-overlay-line[data-line-index="${lineIndex}"] .line-numbers`,
-		).textContent ?? '';
+		requiredElement<HTMLElement>(editor.getDomNode(), `.margin-view-overlays .view-overlay-line[data-line-index="${lineIndex}"] .line-numbers`).textContent ?? '';
 	assert.equal(lineNumber(0), '1');
 	editor.setPosition(new Position(3, 1));
 	editor.view.render(true, false);
@@ -624,32 +599,23 @@ test('editor configuration updates rerender line-number, selection, whitespace, 
 	editor.view.render(true, false);
 	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-selection').length, 1);
 	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-whitespace').length, 4);
-	assert.equal(
-		editor.getDomNode().querySelectorAll('.view-overlay-line[data-line-index="1"] .stanza-editor-indent-guide')
-			.length,
-		1,
-	);
-	assert.equal(
-		editor.getDomNode().querySelectorAll('.view-overlay-line[data-line-index="2"] .stanza-editor-indent-guide')
-			.length,
-		1,
-	);
+	assert.equal(editor.getDomNode().querySelectorAll('.view-overlay-line[data-line-index="1"] .stanza-editor-indent-guide').length, 1);
+	assert.equal(editor.getDomNode().querySelectorAll('.view-overlay-line[data-line-index="2"] .stanza-editor-indent-guide').length, 1);
 
 	let configurationChanges = 0;
 	using configurationListener = editor.onDidChangeConfiguration(() => (configurationChanges += 1));
-	editor.updateOptions({ lineNumbers: 'off', renderWhitespace: 'all', guides: { indentation: false } });
+	editor.updateOptions({
+		lineNumbers: 'off',
+		renderWhitespace: 'all',
+		guides: { indentation: false },
+	});
 	editor.view.render(true, false);
 	assert.equal(configurationChanges, 1);
 	assert.equal(editor.getOption(EditorOption.lineNumbers).renderType, RenderLineNumbersType.Off);
 	assert.equal(editor.getOptions().get(EditorOption.renderWhitespace), 'all');
 	assert.equal(editor.getRawOptions().lineNumbers, 'off');
 	assert.equal(editor.getDomNode().classList.contains('hide-line-numbers'), true);
-	assert.equal(
-		requiredElement<HTMLElement>(editor.getDomNode(), '.margin').style.getPropertyValue(
-			'--stanza-editor-line-numbers-width',
-		),
-		'0px',
-	);
+	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), '.margin').style.getPropertyValue('--stanza-editor-line-numbers-width'), '0px');
 	assert.equal(editor.getDomNode().querySelectorAll('.margin-view-overlays .line-numbers').length, 0);
 	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-whitespace').length, 5);
 	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-indent-guide').length, 0);
@@ -691,9 +657,7 @@ test('simple line numbers and empty overlays do not create or serialize temporar
 		assert.equal(temporaryRowsSerialized, 0);
 		assert.equal(elementsCreated, 0);
 		assert.deepEqual(
-			[...editor.getDomNode().querySelectorAll('.margin-view-overlays .line-numbers')].map(
-				node => node.textContent,
-			),
+			[...editor.getDomNode().querySelectorAll('.margin-view-overlays .line-numbers')].map(node => node.textContent),
 			['1', '2', '3'],
 		);
 	} finally {
@@ -754,13 +718,7 @@ test('empty overlay results clear earlier selection, whitespace and indentation 
 	editor.setPosition(new Position(2, 1));
 	model.setValue('root\none\ntwo');
 	editor.view.render(true, false);
-	assert.equal(
-		editor
-			.getDomNode()
-			.querySelectorAll('.stanza-editor-selection, .stanza-editor-whitespace, .stanza-editor-indent-guide')
-			.length,
-		0,
-	);
+	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-selection, .stanza-editor-whitespace, .stanza-editor-indent-guide').length, 0);
 	editor.updateOptions({ renderWhitespace: 'all' });
 	model.setValue('root\n    one\n    two');
 	editor.setSelection(new Selection(3, 1, 3, 5));
@@ -787,11 +745,7 @@ test('indent guides use model indentation units and include blank lines in the a
 	editor.view.render(true, false);
 	editor.setPosition(new Position(3, 1));
 	editor.view.render(true, false);
-	const guides = (line: number) => [
-		...editor
-			.getDomNode()
-			.querySelectorAll<HTMLElement>(`.view-overlay-line[data-line-index="${line}"] .stanza-editor-indent-guide`),
-	];
+	const guides = (line: number) => [...editor.getDomNode().querySelectorAll<HTMLElement>(`.view-overlay-line[data-line-index="${line}"] .stanza-editor-indent-guide`)];
 	assert.deepEqual(
 		[0, 1, 2, 3, 4].map(line => guides(line).length),
 		[0, 2, 2, 2, 0],
@@ -926,9 +880,7 @@ test('common editor reveal modes scroll without changing selection or borrowing 
 });
 
 test('widget focus queries follow DOM focus before deferred blur events', () => {
-	const dom = new JSDOM(
-		'<!doctype html><body><main></main><aside></aside><button id="outside">outside</button></body>',
-	);
+	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside><button id="outside">outside</button></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using closeWindow = toDisposable(() => dom.window.close());
 	using model = new TextModel('text');
@@ -940,15 +892,7 @@ test('widget focus queries follow DOM focus before deferred blur events', () => 
 	first.focus();
 	header.focus();
 	const context = first.invokeWithinContext(accessor => accessor.get(IContextKeyService));
-	assert.deepEqual(
-		[
-			observed.isTextFocused.get(),
-			observed.isFocused.get(),
-			context.getValue('editorTextFocus'),
-			context.getValue('editorFocus'),
-		],
-		[false, true, false, true],
-	);
+	assert.deepEqual([observed.isTextFocused.get(), observed.isFocused.get(), context.getValue('editorTextFocus'), context.getValue('editorFocus')], [false, true, false, true]);
 
 	second.focus();
 	assert.deepEqual([first.hasWidgetFocus(), second.hasWidgetFocus()], [false, true]);
@@ -993,10 +937,7 @@ test('common editor columns follow tabs and Unicode after replacing and detachin
 	const control: IEditor = editor;
 	assert.equal(control.getEditorType(), EditorType.ICodeEditor);
 	assert.deepEqual(
-		[2, 3, 5, 7].map(column => [
-			control.getVisibleColumnFromPosition({ lineNumber: 1, column }),
-			control.getStatusbarColumn({ lineNumber: 1, column }),
-		]),
+		[2, 3, 5, 7].map(column => [control.getVisibleColumnFromPosition({ lineNumber: 1, column }), control.getStatusbarColumn({ lineNumber: 1, column })]),
 		[
 			[5, 5],
 			[7, 6],
@@ -1012,21 +953,9 @@ test('common editor columns follow tabs and Unicode after replacing and detachin
 	control.restoreViewState({ original: null, modified: null });
 	assert.deepEqual(control.getPosition(), new Position(1, 3));
 	control.setModel(replacement);
-	assert.deepEqual(
-		[
-			control.getVisibleColumnFromPosition({ lineNumber: 1, column: 2 }),
-			control.getStatusbarColumn({ lineNumber: 1, column: 2 }),
-		],
-		[9, 9],
-	);
+	assert.deepEqual([control.getVisibleColumnFromPosition({ lineNumber: 1, column: 2 }), control.getStatusbarColumn({ lineNumber: 1, column: 2 })], [9, 9]);
 	control.setModel(null);
-	assert.deepEqual(
-		[
-			control.getVisibleColumnFromPosition({ lineNumber: 1, column: 2 }),
-			control.getStatusbarColumn({ lineNumber: 1, column: 2 }),
-		],
-		[2, 2],
-	);
+	assert.deepEqual([control.getVisibleColumnFromPosition({ lineNumber: 1, column: 2 }), control.getStatusbarColumn({ lineNumber: 1, column: 2 })], [2, 2]);
 });
 
 test('CodeEditorWidget isolates model decorations by editor lifetime', () => {
@@ -1077,9 +1006,7 @@ test('CodeEditorWidget owns decoration collections and reveals without moving se
 	editor.layout({ width: 240, height: 40 });
 	const selection = Selection.fromPositions(new Position(1, 2));
 	editor.setSelection(selection);
-	const decorations = editor.createDecorationsCollection([
-		{ range: new Range(2, 1, 2, 4), options: { description: 'owned collection' } },
-	]);
+	const decorations = editor.createDecorationsCollection([{ range: new Range(2, 1, 2, 4), options: { description: 'owned collection' } }]);
 
 	editor.revealRange(new Range(4, 1, 4, 5));
 
@@ -1254,10 +1181,7 @@ test('CodeEditorWidget owns padding, placeholder, and current-line presentation 
 	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), '.view-line').style.top, '20px');
 	assert.equal(editor.getDomNode().style.getPropertyValue('--stanza-editor-padding-left'), '12px');
 	assert.equal(editor.getDomNode().style.getPropertyValue('--stanza-editor-padding-right'), '12px');
-	assert.equal(
-		requiredElement<HTMLElement>(editor.getDomNode(), '.stanza-editor-placeholder-text').style.top,
-		'20px',
-	);
+	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), '.stanza-editor-placeholder-text').style.top, '20px');
 	assert.equal(editor.view.viewportLayout.contentSize.height, 60);
 	dom.window.close();
 });
@@ -1277,9 +1201,7 @@ test('ViewCursors follows view positions, configuration, focus, composition, and
 	});
 	editor.layout({ width: 90, height: 100 });
 	editor.view.render(true, false);
-	const targetPosition = editor
-		._getViewModel()!
-		.coordinatesConverter.convertViewPositionToModelPosition(new Position(3, 1));
+	const targetPosition = editor._getViewModel()!.coordinatesConverter.convertViewPositionToModelPosition(new Position(3, 1));
 	editor.setPosition(targetPosition);
 	editor.view.render(true, false);
 
@@ -1287,9 +1209,7 @@ test('ViewCursors follows view positions, configuration, focus, composition, and
 	const primary = requiredElement<HTMLElement>(layer, '.cursor');
 	assert.equal(layer.getAttribute('role'), 'presentation');
 	assert.equal(layer.getAttribute('aria-hidden'), 'true');
-	const viewPosition = editor
-		._getViewModel()!
-		.coordinatesConverter.convertModelPositionToViewPosition(targetPosition);
+	const viewPosition = editor._getViewModel()!.coordinatesConverter.convertModelPositionToViewPosition(targetPosition);
 	assert.equal(viewPosition.lineNumber, 3);
 	assert.equal(primary.style.top, `${(viewPosition.lineNumber - 1) * 20}px`);
 	assert.equal(primary.style.visibility, 'hidden');
@@ -1304,9 +1224,7 @@ test('ViewCursors follows view positions, configuration, focus, composition, and
 	assert.ok(layer.querySelector('.cursor-primary'));
 	assert.ok(layer.querySelector('.cursor-secondary'));
 
-	editor.controller.textArea!.dispatchEvent(
-		new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Insert' }),
-	);
+	editor.controller.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Insert' }));
 	editor.view.render(true, false);
 	assert.equal(editor.getDomNode().classList.contains('overtype'), true);
 	assert.equal(layer.classList.contains('cursor-block-style'), true);
@@ -1317,9 +1235,7 @@ test('ViewCursors follows view positions, configuration, focus, composition, and
 	editor._getViewModel()!.onCompositionEnd();
 	editor.view.render(true, false);
 	assert.equal(primary.style.visibility, 'inherit');
-	editor.controller.textArea!.dispatchEvent(
-		new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Insert' }),
-	);
+	editor.controller.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Insert' }));
 	editor.view.render(true, false);
 	assert.equal(editor.getDomNode().classList.contains('overtype'), false);
 	assert.equal(layer.classList.contains('cursor-line-style'), true);
@@ -1389,8 +1305,7 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
 }
 
 test('trigger dispatches actions and commands in the receiving editor with its context', async () => {
-	const { EditorAction, EditorCommand, registerEditorAction, registerEditorCommand } =
-		await import('../../../browser/editorExtensions.js');
+	const { EditorAction, EditorCommand, registerEditorAction, registerEditorCommand } = await import('../../../browser/editorExtensions.js');
 	const calls: { editor: ICodeEditor; args: unknown }[] = [];
 	const condition = ContextKeyExpr.has('test.trigger.enabled');
 	registerEditorAction(
@@ -1454,8 +1369,7 @@ test('trigger dispatches actions and commands in the receiving editor with its c
 });
 
 test('trigger reports synchronous command errors and rejected action promises', async () => {
-	const { EditorAction, EditorCommand, registerEditorAction, registerEditorCommand } =
-		await import('../../../browser/editorExtensions.js');
+	const { EditorAction, EditorCommand, registerEditorAction, registerEditorCommand } = await import('../../../browser/editorExtensions.js');
 	const commandError = new Error('Command failed');
 	const actionError = new Error('Action failed');
 	registerEditorCommand(
@@ -1524,11 +1438,7 @@ test('formatting context keys follow registration, language changes, and model r
 	const read = () =>
 		editor.invokeWithinContext(accessor => {
 			const context = accessor.get(IContextKeyService);
-			return [
-				context.getValue('editorHasDocumentFormattingProvider'),
-				context.getValue('editorHasDocumentSelectionFormattingProvider'),
-				action.isSupported(),
-			];
+			return [context.getValue('editorHasDocumentFormattingProvider'), context.getValue('editorHasDocumentSelectionFormattingProvider'), action.isSupported()];
 		});
 	assert.deepEqual(read(), [false, false, false]);
 	using registration = features.documentRangeFormattingEditProvider.register('typescript', {
@@ -1558,8 +1468,7 @@ test('selection formatting merges expanded edits repeatedly before one undoable 
 		model,
 		contributions: [],
 	});
-	const { formatEditor, FormattingKind, FormattingConflicts } =
-		await import('../../../contrib/format/browser/format.js');
+	const { formatEditor, FormattingKind, FormattingConflicts } = await import('../../../contrib/format/browser/format.js');
 	using selector = FormattingConflicts.setFormatterSelector(async providers => providers[0]);
 	const features = editor.invokeWithinContext(accessor => accessor.get(ILanguageFeaturesService));
 	const queried: string[] = [];
@@ -1691,12 +1600,7 @@ test('format on type uses trigger characters, supports multiple cursors and undo
 			calls++;
 			return [
 				{
-					range: new Range(
-						position.lineNumber,
-						1,
-						position.lineNumber,
-						model.getLineMaxColumn(position.lineNumber),
-					),
+					range: new Range(position.lineNumber, 1, position.lineNumber, model.getLineMaxColumn(position.lineNumber)),
 					text: model.getLineContent(position.lineNumber).toUpperCase(),
 				},
 			];

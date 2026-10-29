@@ -13,10 +13,7 @@ suite('Terminal window lifetime preparation', () => {
 
 	test('closing a window during executable preparation rejects late ownership without spawning and uses the selected locale', async () => {
 		using localization = toDisposable(resetNlsResolver);
-		setNlsMessages(
-			'zh-CN',
-			JSON.parse(await readFile(resolve('extensions/language-pack-zh-cn/translations/workbench.json'), 'utf8')),
-		);
+		setNlsMessages('zh-CN', JSON.parse(await readFile(resolve('extensions/language-pack-zh-cn/translations/workbench.json'), 'utf8')));
 		const preparation = new DeferredPromise<{
 			executable: string;
 			profile: string;

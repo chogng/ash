@@ -24,12 +24,14 @@ const { ViewController } = await import('../../../../browser/view/viewController
 const { LinkedEditingContribution } = await import('../../browser/linkedEditing.js');
 
 test('linked editing applies one input transaction to every provider range', async () => {
-	const calls: Array<{ readonly model: TextModel; readonly position: Position; readonly token: CancellationToken }> =
-		[];
+	const calls: Array<{ readonly model: TextModel; readonly position: Position; readonly token: CancellationToken }> = [];
 	using fixture = createFixture({
 		provideLinkedEditingRanges: (model, position, token) => {
 			calls.push({ model: model as TextModel, position, token });
-			return { ranges: [new Range(1, 1, 1, 4), new Range(1, 5, 1, 8)], wordPattern: /^[a-z]+$/ };
+			return {
+				ranges: [new Range(1, 1, 1, 4), new Range(1, 5, 1, 8)],
+				wordPattern: /^[a-z]+$/,
+			};
 		},
 	});
 	await waitFor(() => fixture.viewport.domNode.domNode.classList.contains('linked-editing-active'));
@@ -71,9 +73,7 @@ test('linked editing uses F2 without consuming select-all-occurrences', async ()
 	});
 	const active = () => fixture.viewport.domNode.domNode.classList.contains('linked-editing-active');
 	await waitFor(active);
-	fixture.input.element.dispatchEvent(
-		new fixture.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
-	);
+	fixture.input.element.dispatchEvent(new fixture.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 	assert.equal(active(), false);
 	const occurrences = new fixture.dom.window.KeyboardEvent('keydown', {
 		key: 'L',
@@ -121,14 +121,7 @@ function createFixture(provider: LinkedEditingRangeProvider): Fixture {
 	});
 	viewport.layout({ width: 300, height: 40 });
 	const input = viewport.controller;
-	const contribution = new LinkedEditingContribution(
-		input,
-		editorFor(model, selections),
-		input.element,
-		viewport,
-		registry,
-		() => /^[a-z]+$/,
-	);
+	const contribution = new LinkedEditingContribution(input, editorFor(model, selections), input.element, viewport, registry, () => /^[a-z]+$/);
 	viewport.focus();
 	return {
 		dom,
@@ -162,8 +155,7 @@ function editorFor(model: TextModel, selections: CursorsController): ICodeEditor
 					source: 'test',
 				});
 			}),
-		executeCommands: (source: string | null | undefined, commands: (ICommand | null)[]) =>
-			selections.executeCommands(commands, source),
+		executeCommands: (source: string | null | undefined, commands: (ICommand | null)[]) => selections.executeCommands(commands, source),
 	} as unknown as ICodeEditor;
 }
 

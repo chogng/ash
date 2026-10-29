@@ -27,9 +27,7 @@ test('About Ash command opens the version dialog', async () => {
 
 test('About Ash command and dialog use the selected language', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) =>
-		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	);
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using registration = registerAction2(ShowAboutDialogAction);
 		using services = new InstantiationService();

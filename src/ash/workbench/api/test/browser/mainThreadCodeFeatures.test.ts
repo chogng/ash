@@ -18,12 +18,7 @@ suite('Client-owned Code features', () => {
 		const version = model.getVersionId();
 		const source = model.tokenization.renderedTokens;
 		using features = EditorExtensionsRegistry.registerEditorFeatures(getEditorFeatures());
-		for (const id of [
-			'editor.contrib.placeholderText',
-			'editor.contrib.folding',
-			'editor.contrib.suggestController',
-			'editor.contrib.renameController',
-		]) {
+		for (const id of ['editor.contrib.placeholderText', 'editor.contrib.folding', 'editor.contrib.suggestController', 'editor.contrib.renameController']) {
 			assert.ok(EditorExtensionsRegistry.getSomeEditorContributions([id]).length, id);
 		}
 		assert.ok(CommandsRegistry.getCommand('editor.action.rename'));

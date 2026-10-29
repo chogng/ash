@@ -8,22 +8,14 @@ import { StringSHA1 } from '../../../../base/common/hash.js';
 import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
 import { localize } from '../../../../nls.js';
-import {
-	IAccessibleViewService,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import {
-	ISCMService,
-	type ISCMConflictFile,
-	type ISCMConflictProvider,
-	type ISCMConflictResolution,
-} from '../common/scm.js';
+import { ISCMService, type ISCMConflictFile, type ISCMConflictProvider, type ISCMConflictResolution } from '../common/scm.js';
 import type { IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { TextFileEditor } from '../../files/browser/editors/textFileEditor.js';
@@ -129,10 +121,8 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		this.resolved = false;
 		this.stageIds = file.stageIds;
 		this.resultObjectId = file.resultObjectId;
-		if (file.current.kind !== 'text' || file.incoming.kind !== 'text' || file.result.kind !== 'text')
-			this.renderFileChoices(file);
-		const hasTextSources =
-			file.current.kind === 'text' && file.incoming.kind === 'text' && file.base.kind !== 'binary';
+		if (file.current.kind !== 'text' || file.incoming.kind !== 'text' || file.result.kind !== 'text') this.renderFileChoices(file);
+		const hasTextSources = file.current.kind === 'text' && file.incoming.kind === 'text' && file.base.kind !== 'binary';
 		if (!hasTextSources || file.result.kind !== 'text') {
 			this.mergeView.showUnavailableSources(
 				this.sourceText(file.base),
@@ -174,12 +164,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		} else {
 			this.resultLoaded = false;
 			this.finishButton.enabled = false;
-			this.setStatus(
-				localize(
-					{ bundle: 'ash', key: 'mergeEditor.nonText' },
-					'Choose which file version to keep, then complete the resolution.',
-				),
-			);
+			this.setStatus(localize({ bundle: 'ash', key: 'mergeEditor.nonText' }, 'Choose which file version to keep, then complete the resolution.'));
 		}
 	}
 
@@ -257,12 +242,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		if (!value || typeof value !== 'object') return undefined;
 		const state = value as Record<string, unknown>;
 		if (state.version !== 1 || state.resultHash !== digest(result.getValue())) return undefined;
-		if (
-			!Array.isArray(state.stageIds) ||
-			state.stageIds.length !== file.stageIds.length ||
-			!state.stageIds.every((id, index) => id === file.stageIds[index])
-		)
-			return undefined;
+		if (!Array.isArray(state.stageIds) || state.stageIds.length !== file.stageIds.length || !state.stageIds.every((id, index) => id === file.stageIds[index])) return undefined;
 		if (!Array.isArray(state.handled) || !state.handled.every(flag => typeof flag === 'boolean')) return undefined;
 		return state.handled;
 	}
@@ -294,16 +274,11 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 			this.setStatus(model.error.message);
 			return;
 		}
-		const unresolved = model?.isReady
-			? model.hunks.filter(hunk => hunk.unresolved).length
-			: parseMergeConflictBlocks(text).length;
+		const unresolved = model?.isReady ? model.hunks.filter(hunk => hunk.unresolved).length : parseMergeConflictBlocks(text).length;
 		if (this.lastBlockCount !== unresolved) {
 			this.setStatus(
 				unresolved === 0
-					? localize(
-							{ bundle: 'ash', key: 'mergeEditor.noBlocks' },
-							'All conflicts are handled. Review the result, then complete the merge.',
-						)
+					? localize({ bundle: 'ash', key: 'mergeEditor.noBlocks' }, 'All conflicts are handled. Review the result, then complete the merge.')
 					: localize({ bundle: 'ash', key: 'mergeEditor.blockCount' }, '{0} conflicts remain.', unresolved),
 			);
 			this.lastBlockCount = unresolved;
@@ -322,10 +297,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 					...defaultButtonStyles,
 					label:
 						file.current.kind === 'missing'
-							? localize(
-									{ bundle: 'ash', key: 'mergeEditor.keepCurrentDeletion' },
-									'Keep Current Deletion',
-								)
+							? localize({ bundle: 'ash', key: 'mergeEditor.keepCurrentDeletion' }, 'Keep Current Deletion')
 							: localize({ bundle: 'ash', key: 'mergeEditor.useCurrentFile' }, 'Use Current File'),
 					onClick: () => void this.chooseFile({ kind: 'current' }),
 				}),
@@ -337,10 +309,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 					...defaultButtonStyles,
 					label:
 						file.incoming.kind === 'missing'
-							? localize(
-									{ bundle: 'ash', key: 'mergeEditor.keepIncomingDeletion' },
-									'Keep Incoming Deletion',
-								)
+							? localize({ bundle: 'ash', key: 'mergeEditor.keepIncomingDeletion' }, 'Keep Incoming Deletion')
 							: localize({ bundle: 'ash', key: 'mergeEditor.useIncomingFile' }, 'Use Incoming File'),
 					onClick: () => void this.chooseFile({ kind: 'incoming' }),
 				}),
@@ -360,10 +329,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		try {
 			if (this.resultEditor.isDirty) {
 				const decision = await this.dialogs.confirm({
-					message: localize(
-						{ bundle: 'ash', key: 'mergeEditor.replaceUnsavedMergeResult' },
-						'Replace your unsaved result edits with the selected file version?',
-					),
+					message: localize({ bundle: 'ash', key: 'mergeEditor.replaceUnsavedMergeResult' }, 'Replace your unsaved result edits with the selected file version?'),
 					primaryButton: localize({ bundle: 'ash', key: 'mergeEditor.replaceMergeResult' }, 'Replace Result'),
 				});
 				if (!decision.confirmed) return;
@@ -396,12 +362,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		if (!input || !provider || !stageIds || !control || this.busy || this.resolved) return;
 		const model = this.modelSlot.value;
 		if (hasMergeConflictMarkers(control.getValue()) || (model && (!model.isReady || model.unresolvedCount > 0))) {
-			this.setStatus(
-				localize(
-					{ bundle: 'ash', key: 'mergeEditor.unresolved' },
-					'Review or resolve every conflict before completing the merge.',
-				),
-			);
+			this.setStatus(localize({ bundle: 'ash', key: 'mergeEditor.unresolved' }, 'Review or resolve every conflict before completing the merge.'));
 			this.focus();
 			return;
 		}
@@ -410,25 +371,11 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		control.updateOptions({ readOnly: true });
 		try {
 			if (this.resultEditor.hasExternalChange)
-				throw new Error(
-					localize(
-						{ bundle: 'ash', key: 'mergeEditor.fileChanged' },
-						'The result file changed outside this editor. Review it before completing the merge.',
-					),
-				);
+				throw new Error(localize({ bundle: 'ash', key: 'mergeEditor.fileChanged' }, 'The result file changed outside this editor. Review it before completing the merge.'));
 			if (this.resultEditor.isDirty) await this.resultEditor.save();
 			const saved = await provider.resolve(input.path);
-			if (
-				JSON.stringify(saved.stageIds) !== JSON.stringify(stageIds) ||
-				saved.result.kind !== 'text' ||
-				saved.result.text !== control.getValue()
-			) {
-				throw new Error(
-					localize(
-						{ bundle: 'ash', key: 'scm.mergeConflictChanged' },
-						'The conflict changed. Reopen this merge editor to review the new versions.',
-					),
-				);
+			if (JSON.stringify(saved.stageIds) !== JSON.stringify(stageIds) || saved.result.kind !== 'text' || saved.result.text !== control.getValue()) {
+				throw new Error(localize({ bundle: 'ash', key: 'scm.mergeConflictChanged' }, 'The conflict changed. Reopen this merge editor to review the new versions.'));
 			}
 			await provider.complete(input.path, stageIds, saved.resultObjectId, {
 				kind: 'edited',

@@ -16,12 +16,7 @@ import { operatingSystem, OperatingSystem } from '../../../base/common/platform.
 import { LabelService } from '../../services/label/common/labelService.js';
 import { TestWorkspaceService } from '../../services/configuration/test/common/testServices.js';
 import { DecorationsService } from '../../services/decorations/browser/decorationsService.js';
-import {
-	DEFAULT_LABELS_CONTAINER,
-	IResourceLabelService,
-	ResourceLabels,
-	type IResourceIconRenderer,
-} from '../../browser/labels.js';
+import { DEFAULT_LABELS_CONTAINER, IResourceLabelService, ResourceLabels, type IResourceIconRenderer } from '../../browser/labels.js';
 
 test('ResourceLabels formats files and reacts to icon and decoration changes', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -55,7 +50,10 @@ test('ResourceLabels formats files and reacts to icon and decoration changes', (
 	const label = labels.create(dom.window.document.body);
 	let decorationChanges = 0;
 	using decorationListener = labels.onDidChangeDecorations(() => (decorationChanges += 1));
-	label.setFile(resource, { fileKind: FileKind.File, fileDecorations: { colors: true, badges: true } });
+	label.setFile(resource, {
+		fileKind: FileKind.File,
+		fileDecorations: { colors: true, badges: true },
+	});
 
 	assert.equal(label.element.querySelector('.ash-icon-label-text')?.textContent, 'main.ts');
 	assert.equal(label.element.querySelector('.ash-icon-label-description')?.textContent, 'src');
@@ -80,10 +78,7 @@ test('ResourceLabels formats files and reacts to icon and decoration changes', (
 
 	decorationData = { letter: Lxicon.add, tooltip: 'Added' };
 	decorationUpdates.fire([resource]);
-	assert.equal(
-		label.element.querySelector('.ash-icon-label-suffix-icon .ash-icon')?.getAttribute('data-ash-icon-id'),
-		'add',
-	);
+	assert.equal(label.element.querySelector('.ash-icon-label-suffix-icon .ash-icon')?.getAttribute('data-ash-icon-id'), 'add');
 	label.setFile(resource, { fileDecorations: { colors: true, badges: false } });
 	assert.equal(label.element.querySelector('.ash-icon-label-suffix-icon .ash-icon'), null);
 	assert.equal(label.element.getAttribute('aria-label'), 'main.ts, Added');
@@ -143,20 +138,14 @@ test('a label group updates icon visibility and releases all of its labels', () 
 		const first = labels.create(dom.window.document.body);
 		const coloredIcon = { ...Lxicon.home, color: { id: 'editor.foreground' } };
 		first.setLabel('Custom', undefined, { icon: coloredIcon });
-		assert.equal(
-			first.element.querySelector<HTMLElement>('.ash-icon')?.style.color,
-			'var(--ash-editor-foreground)',
-		);
+		assert.equal(first.element.querySelector<HTMLElement>('.ash-icon')?.style.color, 'var(--ash-editor-foreground)');
 		labels.setIconVisibility(false);
 		assert.equal(first.element.querySelector('.ash-icon'), null);
 		first.setFile(URI.file('/first.ts'));
 		const second = labels.create(dom.window.document.body);
 		second.setFile(URI.file('/second.ts'));
 		assert.deepEqual(
-			[...dom.window.document.querySelectorAll('.ash-icon-label-icon')].map(icon => [
-				icon.textContent,
-				icon.classList.contains('is-reserved'),
-			]),
+			[...dom.window.document.querySelectorAll('.ash-icon-label-icon')].map(icon => [icon.textContent, icon.classList.contains('is-reserved')]),
 			[
 				['', false],
 				['', false],
@@ -206,10 +195,7 @@ test('untitled resource labels follow the draft name and keep the resource ident
 	}
 });
 
-function createTestLabelService(
-	workspace: ConstructorParameters<typeof LabelService>[0],
-	os: OperatingSystem = operatingSystem,
-): LabelService {
+function createTestLabelService(workspace: ConstructorParameters<typeof LabelService>[0], os: OperatingSystem = operatingSystem): LabelService {
 	const api = createDisconnectedRendererApi();
 	const host = { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: os } };
 	return new LabelService(workspace, new BrowserPathService(host, workspace), host);

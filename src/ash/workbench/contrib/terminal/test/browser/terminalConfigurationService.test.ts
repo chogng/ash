@@ -1,8 +1,5 @@
 import { IFileService } from '../../../../../platform/files/common/files.js';
-import {
-	ITerminalCompletionService,
-	TerminalCompletionService,
-} from '../../../terminalContrib/suggest/browser/terminalCompletionService.js';
+import { ITerminalCompletionService, TerminalCompletionService } from '../../../terminalContrib/suggest/browser/terminalCompletionService.js';
 import { ITerminalQuickFixService } from '../../../terminalContrib/quickFix/browser/quickFix.js';
 import { TerminalQuickFixService } from '../../../terminalContrib/quickFix/browser/terminalQuickFixService.js';
 import { ITerminalLinkProviderService } from '../../../terminalContrib/links/browser/links.js';
@@ -23,44 +20,25 @@ import { resetNlsResolver } from '../../../../../nls.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
 import { IConfigurationResolverService } from '../../../../services/configurationResolver/common/configurationResolver.js';
-import {
-	ITerminalContributionService,
-	ITerminalProfileResolverService,
-	ITerminalProfileService,
-} from '../../common/terminal.js';
+import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../common/terminal.js';
 import { BrowserTerminalProfileResolverService } from '../../browser/terminalProfileResolverService.js';
-import {
-	MainThreadTerminalService,
-	type ExtensionTerminalProfileRegistration,
-} from '../../../../api/browser/mainThreadTerminalService.js';
+import { MainThreadTerminalService, type ExtensionTerminalProfileRegistration } from '../../../../api/browser/mainThreadTerminalService.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
-import {
-	GeneralShellType,
-	PosixShellType,
-	TerminalLocation,
-	WindowsShellType,
-	type TerminalShellType,
-} from '../../../../../platform/terminal/common/terminal.js';
+import { GeneralShellType, PosixShellType, TerminalLocation, WindowsShellType, type TerminalShellType } from '../../../../../platform/terminal/common/terminal.js';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import {
-	IQuickInputService,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 
 /** This transport fixture routes issued resources independently of factory disposal. */
-function withPtyResources(
-	descriptors: readonly ExtensionTerminalProfileRegistration[],
-): readonly ExtensionTerminalProfileRegistration[] {
+function withPtyResources(descriptors: readonly ExtensionTerminalProfileRegistration[]): readonly ExtensionTerminalProfileRegistration[] {
 	return descriptors.map(descriptor => ({
 		...descriptor,
 		pty: descriptor.pty ?? {
@@ -86,10 +64,7 @@ import { TerminalProfileQuickpick } from '../../browser/terminalProfileQuickpick
 import { TerminalMainContribution } from '../../browser/terminalMainContribution.js';
 import { IEmbedderTerminalService } from '../../../../services/terminal/common/embedderTerminalService.js';
 import { TerminalService } from '../../browser/terminalService.js';
-import type {
-	ITerminalProcessCreateOptions,
-	ITerminalProcessCloseOptions,
-} from '../../../../../platform/terminal/common/terminal.js';
+import type { ITerminalProcessCreateOptions, ITerminalProcessCloseOptions } from '../../../../../platform/terminal/common/terminal.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
 
@@ -112,9 +87,7 @@ function createServices(
 	services.registerInstance(IFileService, files);
 	services.registerInstance(ILogService, new NullLoggerService());
 	const configuration = owner.add(new WorkbenchConfigurationService());
-	const connection = owner.add(
-		new Emitter<import('../../../../../platform/terminal/common/terminal.js').TerminalProcessConnectionState>(),
-	);
+	const connection = owner.add(new Emitter<import('../../../../../platform/terminal/common/terminal.js').TerminalProcessConnectionState>());
 	const workspace = owner.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') }));
 	let calls = 0;
 	const launches: ITerminalProcessCreateOptions[] = [];
@@ -132,22 +105,13 @@ function createServices(
 			PATH: '/execution/bin',
 			PROFILE_VALUE: 'environment value',
 		}),
-		resolveProfile: async (
-			selection: import('../../../../../platform/terminal/common/terminal.js').TerminalProcessProfileSelection,
-		) => ({
+		resolveProfile: async (selection: import('../../../../../platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({
 			profile:
 				selection.type === 'custom'
 					? { profileId: `custom:${selection.name}`, title: selection.name, isDefault: false }
-					: (shells.find(
-							profile => selection.type === 'profile' && selection.profileId === profile.profileId,
-						) ?? shells[0]!),
+					: (shells.find(profile => selection.type === 'profile' && selection.profileId === profile.profileId) ?? shells[0]!),
 			executable: selection.type === 'custom' ? selection.path.at(-1)! : '/execution/bin/shell',
-			args:
-				selection.type === 'custom'
-					? typeof selection.args === 'string'
-						? selection.args
-						: [...selection.args]
-					: [],
+			args: selection.type === 'custom' ? (typeof selection.args === 'string' ? selection.args : [...selection.args]) : [],
 		}),
 		getConnectionState: async () => 'ready',
 		create: async (options: ITerminalProcessCreateOptions) => {
@@ -191,9 +155,7 @@ function createServices(
 	} as unknown as IExtensionService);
 	services.registerInstance(IConfigurationResolverService, {
 		resolveWithEnvironment: async (env, folder, value) =>
-			value
-				.replaceAll('${workspaceFolder}', folder?.uri.path ?? '')
-				.replace(/\$\{env:([^}]+)\}/g, (_match: string, key: string) => env[key] ?? ''),
+			value.replaceAll('${workspaceFolder}', folder?.uri.path ?? '').replace(/\$\{env:([^}]+)\}/g, (_match: string, key: string) => env[key] ?? ''),
 	} as IConfigurationResolverService);
 	services.registerInstance(IWorkspaceContextService, workspace);
 	const stored = new Map<string, string>();
@@ -204,24 +166,13 @@ function createServices(
 		},
 	} as unknown as IStorageService);
 	services.registerInstance(ITerminalProcessService, processes);
-	services.registerInstance(
-		ITerminalCompletionService,
-		owner.add(services.createInstance(TerminalCompletionService)),
-	);
+	services.registerInstance(ITerminalCompletionService, owner.add(services.createInstance(TerminalCompletionService)));
 	services.registerInstance(ITerminalQuickFixService, owner.add(services.createInstance(TerminalQuickFixService)));
-	services.registerSingleton(ITerminalLinkProviderService, () =>
-		services.createInstance(TerminalLinkProviderService),
-	);
-	services.registerInstance(
-		IEnvironmentVariableService,
-		owner.add(services.createInstance(EnvironmentVariableService)),
-	);
+	services.registerSingleton(ITerminalLinkProviderService, () => services.createInstance(TerminalLinkProviderService));
+	services.registerInstance(IEnvironmentVariableService, owner.add(services.createInstance(EnvironmentVariableService)));
 	const profiles = owner.add(services.createInstance(TerminalProfileService));
 	services.registerInstance(ITerminalProfileService, profiles);
-	services.registerInstance(
-		ITerminalProfileResolverService,
-		owner.add(services.createInstance(BrowserTerminalProfileResolverService)),
-	);
+	services.registerInstance(ITerminalProfileResolverService, owner.add(services.createInstance(BrowserTerminalProfileResolverService)));
 	services.registerInstance(IViewsService, { openView: async () => undefined } as unknown as IViewsService);
 	services.registerInstance(IEditorService, {
 		activeEditor: undefined,
@@ -236,21 +187,10 @@ function createServices(
 	if (checkpoint) {
 		services
 			.get(IStorageService)
-			.store(
-				checkpoint.credentials ? 'terminal.reload.11111111-1111-1111-1111-111111111111' : 'terminal.revive',
-				checkpoint.state,
-				StorageScope.WORKSPACE,
-				StorageTarget.MACHINE,
-			);
-		if (checkpoint.credentials)
-			void services.get(ISecretStorageService).set('terminal.reload', checkpoint.credentials);
+			.store(checkpoint.credentials ? 'terminal.reload.11111111-1111-1111-1111-111111111111' : 'terminal.revive', checkpoint.state, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		if (checkpoint.credentials) void services.get(ISecretStorageService).set('terminal.reload', checkpoint.credentials);
 	}
-	services.registerInstance(
-		ITerminalService,
-		useInstances
-			? owner.add(services.createInstance(TerminalService))
-			: ({ ...Disposable.None } as unknown as ITerminalService),
-	);
+	services.registerInstance(ITerminalService, useInstances ? owner.add(services.createInstance(TerminalService)) : ({ ...Disposable.None } as unknown as ITerminalService));
 	return {
 		services,
 		configuration,
@@ -330,9 +270,7 @@ suite('Terminal configuration and interactive profiles', () => {
 			});
 			using contribution = services.createInstance(TerminalMainContribution);
 			await profiles.profilesReady;
-			const profile = profiles.contributedProfiles.find(
-				profile => profile.extensionIdentifier === 'ash.agent-host',
-			);
+			const profile = profiles.contributedProfiles.find(profile => profile.extensionIdentifier === 'ash.agent-host');
 			assert.ok(profile);
 			assert.equal(profile.title, locale === 'zh-CN' ? '智能体主机（本地）' : 'Agent Host (Local)');
 			const terminals = services.get(ITerminalService);
@@ -348,10 +286,7 @@ suite('Terminal configuration and interactive profiles', () => {
 			const provider = profiles.getContributedProfileProvider(profile.extensionIdentifier, profile.id)!;
 			connection.fire('crashed');
 			assert.deepEqual(profiles.contributedProfiles, []);
-			await assert.rejects(
-				provider.createContributedTerminalProfile({}),
-				/Terminal profile provider is unavailable|终端配置提供程序不可用/,
-			);
+			await assert.rejects(provider.createContributedTerminalProfile({}), /Terminal profile provider is unavailable|终端配置提供程序不可用/);
 			connection.fire('ready');
 			assert.equal(profiles.contributedProfiles.length, 2);
 			contribution.dispose();
@@ -440,8 +375,7 @@ suite('Terminal configuration and interactive profiles', () => {
 			const rejected = assert.rejects(creating, isCancellationError);
 			await entered.p;
 			if (retirement === 'connection') connection.fire('crashed');
-			else if (retirement === 'workspace')
-				workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
+			else if (retirement === 'workspace') workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
 			else contribution.dispose();
 			const instance = { instanceId: 123 } as ITerminalInstance;
 			completed.complete(instance);
@@ -500,10 +434,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.equal(shell.cwd, '/second/run');
 		assert.equal(shell.env?.SELECTED, '/second');
 		assert.deepEqual(routes, ['two']);
-		await assert.rejects(
-			resolver.resolveShellLaunchConfig({}, { os: OperatingSystem.Windows, remoteAuthority: undefined }),
-			/Select a workspace folder/,
-		);
+		await assert.rejects(resolver.resolveShellLaunchConfig({}, { os: OperatingSystem.Windows, remoteAuthority: undefined }), /Select a workspace folder/);
 	});
 
 	test('profile discovery and executable resolution stay on the selected root after reordering', async () => {
@@ -558,9 +489,7 @@ suite('Terminal configuration and interactive profiles', () => {
 			{ id: 'two', name: 'two', uri: URI.file('/second'), index: 1 },
 		];
 		workspace.updateWorkspace({ id: 'team', configuration: URI.file('/team.ash-workspace'), folders });
-		processes.listProfiles = async dirId => [
-			{ profileId: `${dirId}-shell`, title: `${dirId} shell`, isDefault: true },
-		];
+		processes.listProfiles = async dirId => [{ profileId: `${dirId}-shell`, title: `${dirId} shell`, isDefault: true }];
 		processes.resolveProfile = async (_selection, dirId) => ({
 			profile: { profileId: `${dirId}-shell`, title: `${dirId} shell`, isDefault: true },
 			executable: `/${dirId}/shell`,
@@ -748,10 +677,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		missing.registerInstance(IWorkspaceContextService, services.get(IWorkspaceContextService));
 		missing.registerInstance(IEditorService, services.get(IEditorService));
 		missing.registerInstance(ICommandService, services.get(ICommandService));
-		assert.throws(
-			() => missing.createInstance(TerminalProfileQuickpick),
-			/Unknown service: terminalProcessService/,
-		);
+		assert.throws(() => missing.createInstance(TerminalProfileQuickpick), /Unknown service: terminalProcessService/);
 	});
 
 	test('default selection persists the profile name at USER and updates available labels', async () => {
@@ -845,8 +771,7 @@ suite('Terminal configuration and interactive profiles', () => {
 				using picker = services.createInstance(TerminalProfileQuickpick);
 				const result = picker.showAndGetResult(kind);
 				await waitFor(ui.shown);
-				if (transition === 'workspace')
-					workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/other') });
+				if (transition === 'workspace') workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/other') });
 				else {
 					connection.fire('crashed');
 					connection.fire('ready');
@@ -906,10 +831,7 @@ suite('Terminal configuration and interactive profiles', () => {
 
 	test('configuration service fails if its required owner is absent', () => {
 		using services = new InstantiationService();
-		assert.throws(
-			() => services.createInstance(TerminalConfigurationService),
-			/Unknown service: configurationService/,
-		);
+		assert.throws(() => services.createInstance(TerminalConfigurationService), /Unknown service: configurationService/);
 	});
 	test('custom profile configuration hides detected entries and resolves argv, cwd and environment', async () => {
 		using owner = new DisposableStore();
@@ -939,13 +861,9 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.deepEqual(shell.args, ['environment value', 'literal;$HOME']);
 		assert.equal(shell.cwd, '/workspace/subdirectory');
 		assert.deepEqual(shell.env, { MODE: 'caller', Path: '/execution/bin', REMOVED: null });
-		await assert.rejects(
-			configuration.updateValue('terminal.integrated.profiles.windows', { Bad: { args: ['without path'] } }),
-		);
+		await assert.rejects(configuration.updateValue('terminal.integrated.profiles.windows', { Bad: { args: ['without path'] } }));
 		await assert.rejects(configuration.updateValue('terminal.integrated.profiles.windows', { Bad: { path: [] } }));
-		await assert.rejects(
-			configuration.updateValue('terminal.integrated.profiles.windows', { 'Bad\nname': { path: '/shell' } }),
-		);
+		await assert.rejects(configuration.updateValue('terminal.integrated.profiles.windows', { 'Bad\nname': { path: '/shell' } }));
 		await assert.rejects(
 			configuration.updateValue('terminal.integrated.profiles.windows', {
 				Bad: { path: '/shell', source: 'PowerShell' },
@@ -967,10 +885,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.deepEqual(await resolver.getDefaultShellArgs(options), ['literal argument']);
 		assert.equal((await resolver.getDefaultProfile(options)).path, '/automation/shell');
 		const shell = { executable: '/original/shell', args: ['original'] };
-		await assert.rejects(
-			resolver.resolveShellLaunchConfig(shell, { os: OperatingSystem.Linux, remoteAuthority: undefined }),
-			/execution host/,
-		);
+		await assert.rejects(resolver.resolveShellLaunchConfig(shell, { os: OperatingSystem.Linux, remoteAuthority: undefined }), /execution host/);
 		assert.deepEqual(shell, { executable: '/original/shell', args: ['original'] });
 		await assert.rejects(resolver.getEnvironment('unselected-host'), /execution host/);
 		assert.equal(resolver.getDefaultIcon().id, 'terminal');
@@ -1029,11 +944,7 @@ suite('Terminal configuration and interactive profiles', () => {
 				};
 				await resolver.resolveShellLaunchConfig(shell, options);
 				assert.equal(shell.icon?.id, entry.icon, `${name}: ${entry.executable} ${JSON.stringify(entry.args)}`);
-				assert.deepEqual(
-					shell.args,
-					entry.args ?? [],
-					'Icon inference must preserve the actual launch arguments',
-				);
+				assert.deepEqual(shell.args, entry.args ?? [], 'Icon inference must preserve the actual launch arguments');
 				const preview: IShellLaunchConfig = { executable: entry.executable, args: entry.args };
 				resolver.resolveIcon(preview, OperatingSystem.Windows);
 				assert.equal(preview.icon?.id, shell.icon?.id, 'Profile menus and resolved launches must agree');
@@ -1108,10 +1019,7 @@ suite('Terminal configuration and interactive profiles', () => {
 			});
 			const resolver = services.get(ITerminalProfileResolverService);
 			const options = { os: OperatingSystem.Windows, remoteAuthority: undefined, allowAutomationShell: true };
-			assert.equal(
-				await resolver.getDefaultShellArgs(options),
-				args.replace('${env:PROFILE_VALUE}', 'environment value'),
-			);
+			assert.equal(await resolver.getDefaultShellArgs(options), args.replace('${env:PROFILE_VALUE}', 'environment value'));
 			await configuration.updateValue('terminal.integrated.agentHostProfile.windows', {
 				path: 'C:\\Windows\\cmd.exe',
 				args,
@@ -1129,12 +1037,10 @@ suite('Terminal configuration and interactive profiles', () => {
 				args,
 			};
 			await resolver.resolveShellLaunchConfig(shell, options);
-			const terminal = await services
-				.get(ITerminalService)
-				.createTerminal({
-					dimensions: { rows: 24, cols: 80 },
-					profile: { type: 'custom', name: 'Shell', path: [shell.executable as string], args: shell.args! },
-				});
+			const terminal = await services.get(ITerminalService).createTerminal({
+				dimensions: { rows: 24, cols: 80 },
+				profile: { type: 'custom', name: 'Shell', path: [shell.executable as string], args: shell.args! },
+			});
 			assert.deepEqual(launches[0].profile, {
 				type: 'custom',
 				name: 'Shell',
@@ -1172,10 +1078,7 @@ suite('Terminal configuration and interactive profiles', () => {
 			const resolver = services.get(ITerminalProfileResolverService);
 			for (const executable of [undefined, '/bin/sh']) {
 				const shell = { executable, args: '-c "literal"' };
-				await assert.rejects(
-					resolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: undefined }),
-					/only supported on Windows/,
-				);
+				await assert.rejects(resolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: undefined }), /only supported on Windows/);
 				assert.deepEqual(shell, { executable, args: '-c "literal"' });
 			}
 			assert.deepEqual(launches, []);
@@ -1188,12 +1091,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		try {
 			Object.assign(processes, { operatingSystem: OperatingSystem.Linux });
 			await assert.rejects(
-				services
-					.get(ITerminalProfileResolverService)
-					.resolveShellLaunchConfig(
-						{ executable: '/bin/sh', args: '-c echo' },
-						{ os: OperatingSystem.Linux, remoteAuthority: undefined },
-					),
+				services.get(ITerminalProfileResolverService).resolveShellLaunchConfig({ executable: '/bin/sh', args: '-c echo' }, { os: OperatingSystem.Linux, remoteAuthority: undefined }),
 				{ message: '原始命令行字符串仅在 Windows 上受支持。' },
 			);
 		} finally {
@@ -1220,9 +1118,7 @@ suite('Terminal configuration and interactive profiles', () => {
 					packageDigest: digest,
 					profileId: 'raw',
 					title: 'Raw shell',
-					invoke: async (
-						operation,
-					): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> =>
+					invoke: async (operation): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> =>
 						operation === 'getTerminalEnvironment'
 							? { persistent: true, map: [] }
 							: {
@@ -1252,12 +1148,10 @@ suite('Terminal configuration and interactive profiles', () => {
 			Custom: { path: '/bin/custom', args: ['--login'], env: { CUSTOM: 'original', PATH: 'original-path' } },
 		});
 		owner.add(
-			services
-				.get(IEnvironmentVariableService)
-				.registerCollectionProvider('transient-provider', async () => ({
-					persistent: false,
-					map: new Map([['PATH', { variable: 'PATH', type: 3, value: 'prefix;' }]]),
-				})),
+			services.get(IEnvironmentVariableService).registerCollectionProvider('transient-provider', async () => ({
+				persistent: false,
+				map: new Map([['PATH', { variable: 'PATH', type: 3, value: 'prefix;' }]]),
+			})),
 		);
 		const terminals = services.get(ITerminalService);
 		const parent = await terminals.createTerminal({
@@ -1313,9 +1207,7 @@ suite('Terminal configuration and interactive profiles', () => {
 				map: new Map([['PATH', { variable: 'PATH', type: 3, value: prefix }]]),
 			})),
 		);
-		const terminal = await services
-			.get(ITerminalService)
-			.createTerminal({ config: { executable: '/shell', env: { PATH: 'caller' } }, deferStart: true });
+		const terminal = await services.get(ITerminalService).createTerminal({ config: { executable: '/shell', env: { PATH: 'caller' } }, deferStart: true });
 		const intent = terminal.revivalLaunch;
 		assert.equal(terminal.state, 'running');
 		assert.equal(launches[0]!.env!.PATH, 'old:caller');
@@ -1324,15 +1216,8 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.equal(launches.length, 2);
 		assert.equal(launches[1]!.env!.PATH, 'new:caller');
 		assert.equal(terminal.revivalLaunch, intent);
-		assert.equal(
-			terminal.extEnvironmentVariableCollection!.getVariableMap(undefined).get('PATH')![0]!.value,
-			'new:',
-		);
-		assert.equal(
-			'environmentVariableCollections' in launches[1]!,
-			false,
-			'UI metadata does not enter the process transport',
-		);
+		assert.equal(terminal.extEnvironmentVariableCollection!.getVariableMap(undefined).get('PATH')![0]!.value, 'new:');
+		assert.equal('environmentVariableCollections' in launches[1]!, false, 'UI metadata does not enter the process transport');
 		assert.equal('environmentVariableCollectionsPersistable' in launches[1]!, false);
 	});
 
@@ -1348,38 +1233,25 @@ suite('Terminal configuration and interactive profiles', () => {
 				});
 				const raw = { USER_VALUE: '${env:PROFILE_VALUE}', PATH: 'caller', REMOVED: null };
 				owner.add(
-					first.services
-						.get(IEnvironmentVariableService)
-						.registerCollectionProvider('transient-provider', async () => ({
-							persistent: false,
-							map: new Map([
-								[
-									'TRANSIENT_TOKEN',
-									{ variable: 'TRANSIENT_TOKEN', type: 1, value: 'original-window-token' },
-								],
-								['PATH', { variable: 'PATH', type: 3, value: 'original-prefix;' }],
-							]),
-						})),
+					first.services.get(IEnvironmentVariableService).registerCollectionProvider('transient-provider', async () => ({
+						persistent: false,
+						map: new Map([
+							['TRANSIENT_TOKEN', { variable: 'TRANSIENT_TOKEN', type: 1, value: 'original-window-token' }],
+							['PATH', { variable: 'PATH', type: 3, value: 'original-prefix;' }],
+						]),
+					})),
 				);
-				const terminal = await first.services
-					.get(ITerminalService)
-					.createTerminal({
-						config: { executable: '/shell', env: raw, strictEnv: strict },
+				const terminal = await first.services.get(ITerminalService).createTerminal({
+					config: { executable: '/shell', env: raw, strictEnv: strict },
+					deferStart: true,
+				});
+				if (mode === 'revive') {
+					const split = await first.services.get(ITerminalService).createTerminal({
+						config: terminal.shellLaunchConfig,
+						location: { parentTerminal: terminal },
 						deferStart: true,
 					});
-				if (mode === 'revive') {
-					const split = await first.services
-						.get(ITerminalService)
-						.createTerminal({
-							config: terminal.shellLaunchConfig,
-							location: { parentTerminal: terminal },
-							deferStart: true,
-						});
-					assert.deepEqual(
-						split.shellLaunchConfig!.env,
-						terminal.shellLaunchConfig!.env,
-						'A split applies the current collection exactly once',
-					);
+					assert.deepEqual(split.shellLaunchConfig!.env, terminal.shellLaunchConfig!.env, 'A split applies the current collection exactly once');
 					assert.deepEqual(split.revivalLaunch, terminal.revivalLaunch);
 				}
 
@@ -1391,11 +1263,7 @@ suite('Terminal configuration and interactive profiles', () => {
 				const snapshot = await terminal.serializeState();
 				assert.ok(snapshot.launch, 'The interactive config must retain a raw revival intent');
 				assert.deepEqual(snapshot.launch.env, raw);
-				assert.equal(
-					snapshot.environmentVariableCollections === undefined,
-					!strict,
-					'Transient collections stay in memory and are not persisted',
-				);
+				assert.equal(snapshot.environmentVariableCollections === undefined, !strict, 'Transient collections stay in memory and are not persisted');
 				const checkpoint = JSON.stringify({
 					version: 1,
 					...(mode === 'revive' ? { kind: 'revive' } : {}),
@@ -1416,58 +1284,32 @@ suite('Terminal configuration and interactive profiles', () => {
 					expiresAt: Date.now() + 60000,
 					leases: [lease],
 				});
-				const second = createServices(
-					owner,
-					true,
-					async () => {},
-					mode === 'transfer'
-						? undefined
-						: { state: checkpoint, credentials: mode === 'reload' ? credentials : undefined },
-				);
+				const second = createServices(owner, true, async () => {}, mode === 'transfer' ? undefined : { state: checkpoint, credentials: mode === 'reload' ? credentials : undefined });
 				Object.assign(second.processes, { attach: async () => snapshot.process, detach: async () => lease });
 				let refreshes = 0;
 				owner.add(
-					second.services
-						.get(IEnvironmentVariableService)
-						.registerCollectionProvider('transient-provider', async () => {
-							refreshes++;
-							return {
-								persistent: false,
-								map: new Map([
-									[
-										'TRANSIENT_TOKEN',
-										{ variable: 'TRANSIENT_TOKEN', type: 1, value: 'new-window-token' },
-									],
-									['PATH', { variable: 'PATH', type: 3, value: 'current-prefix;' }],
-								]),
-							};
-						}),
+					second.services.get(IEnvironmentVariableService).registerCollectionProvider('transient-provider', async () => {
+						refreshes++;
+						return {
+							persistent: false,
+							map: new Map([
+								['TRANSIENT_TOKEN', { variable: 'TRANSIENT_TOKEN', type: 1, value: 'new-window-token' }],
+								['PATH', { variable: 'PATH', type: 3, value: 'current-prefix;' }],
+							]),
+						};
+					}),
 				);
 				await second.services.get(ITerminalService).whenConnected;
-				const restored =
-					mode === 'transfer'
-						? await second.services.get(ITerminalService).importTerminalState(snapshot, lease)
-						: second.services.get(ITerminalService).instances[0]!;
+				const restored = mode === 'transfer' ? await second.services.get(ITerminalService).importTerminalState(snapshot, lease) : second.services.get(ITerminalService).instances[0]!;
 				assert.ok(restored);
 				assert.equal(second.launches.length, mode === 'revive' ? 1 : 0, 'Only revival starts a new process');
 				const liveEnvironment = restored.shellLaunchConfig!.env!;
 				const startsNewProcess = mode === 'revive';
 				assert.equal(liveEnvironment.PATH, !strict && startsNewProcess ? 'current-prefix;caller' : 'caller');
-				assert.equal(
-					liveEnvironment.USER_VALUE,
-					!strict && startsNewProcess ? 'environment value' : '${env:PROFILE_VALUE}',
-				);
-				assert.equal(
-					liveEnvironment.TRANSIENT_TOKEN,
-					!strict && startsNewProcess ? 'new-window-token' : undefined,
-				);
+				assert.equal(liveEnvironment.USER_VALUE, !strict && startsNewProcess ? 'environment value' : '${env:PROFILE_VALUE}');
+				assert.equal(liveEnvironment.TRANSIENT_TOKEN, !strict && startsNewProcess ? 'new-window-token' : undefined);
 				assert.equal(refreshes, !strict && startsNewProcess ? 1 : 0);
-				if (!startsNewProcess && !strict)
-					assert.equal(
-						restored.extEnvironmentVariableCollection,
-						undefined,
-						'The original process is retained with an unknown transient snapshot',
-					);
+				if (!startsNewProcess && !strict) assert.equal(restored.extEnvironmentVariableCollection, undefined, 'The original process is retained with an unknown transient snapshot');
 				assert.deepEqual(restored.revivalLaunch!.env, raw);
 				restored.start();
 				await waitFor(() => restored.state === 'exited');
@@ -1528,13 +1370,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		await services.get(IEnvironmentVariableService).refreshCollections();
 		assert.equal(services.get(IEnvironmentVariableService).collections.has('ash.git'), false);
 		bridge.replaceProfiles([]);
-		assert.throws(
-			() =>
-				bridge.replaceEnvironmentProviders([
-					{ runtimeId: 'other.product', packageDigest: runtimeDigest, invoke: async () => null },
-				]),
-			/Invalid terminal profile/,
-		);
+		assert.throws(() => bridge.replaceEnvironmentProviders([{ runtimeId: 'other.product', packageDigest: runtimeDigest, invoke: async () => null }]), /Invalid terminal profile/);
 	});
 
 	for (const sourceKind of ['user', 'plugin', 'registry'])
@@ -1555,13 +1391,7 @@ suite('Terminal configuration and interactive profiles', () => {
 				invoke: async () => null,
 			};
 			assert.throws(() => bridge.replaceEnvironmentProviders([descriptor]), /Invalid terminal profile/);
-			assert.throws(
-				() =>
-					bridge.replaceProfiles(
-						withPtyResources([{ ...descriptor, profileId: 'shell', title: 'External shell' }]),
-					),
-				/provider is unavailable/,
-			);
+			assert.throws(() => bridge.replaceProfiles(withPtyResources([{ ...descriptor, profileId: 'shell', title: 'External shell' }])), /provider is unavailable/);
 		});
 
 	test('extension environment snapshots reach the process through the original profile creation entry', async () => {
@@ -1724,9 +1554,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.equal(launches[0]!.strictEnv, true);
 		assert.equal(services.get(ITerminalService).instances.length, 1);
 		strict = 'true';
-		await assert.rejects(
-			profiles.getContributedProfileProvider('acme.environment', 'shell')!.createContributedTerminalProfile({}),
-		);
+		await assert.rejects(profiles.getContributedProfileProvider('acme.environment', 'shell')!.createContributedTerminalProfile({}));
 		assert.equal(launches.length, 1);
 	});
 
@@ -1794,9 +1622,7 @@ suite('Terminal configuration and interactive profiles', () => {
 			args: ['original'],
 			env: { ORIGINAL: 'value' },
 		};
-		const pending = services
-			.get(ITerminalProfileResolverService)
-			.resolveShellLaunchConfig(shell, { os: OperatingSystem.Windows, remoteAuthority: undefined });
+		const pending = services.get(ITerminalProfileResolverService).resolveShellLaunchConfig(shell, { os: OperatingSystem.Windows, remoteAuthority: undefined });
 		const cancelled = assert.rejects(pending, isCancellationError);
 		while (!release) await new Promise(resolve => setTimeout(resolve, 0));
 		connection.fire('crashed');
@@ -1863,10 +1689,7 @@ suite('Terminal configuration and interactive profiles', () => {
 			using owner = new DisposableStore();
 			const opened: number[] = [];
 			const { services, profiles } = createServices(owner, true, async input => {
-				opened.push(
-					(input as import('../../browser/terminalEditorInput.js').TerminalEditorInput).terminalInstance!
-						.instanceId,
-				);
+				opened.push((input as import('../../browser/terminalEditorInput.js').TerminalEditorInput).terminalInstance!.instanceId);
 			});
 			const terminals = services.get(ITerminalService);
 			const original = await terminals.createTerminal({ profile: { type: 'default' }, deferStart: true });
@@ -1896,11 +1719,7 @@ suite('Terminal configuration and interactive profiles', () => {
 						packageDigest: digest,
 						profileId: 'background',
 						title: 'Background',
-						invoke: async (
-							operation,
-						): Promise<
-							import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue
-						> => {
+						invoke: async (operation): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
 							if (operation === 'createTerminalProfile') {
 								await entered.complete();
 								await release.p;
@@ -1943,10 +1762,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		using owner = new DisposableStore();
 		const opened: number[] = [];
 		const { services, profiles } = createServices(owner, true, async input => {
-			opened.push(
-				(input as import('../../browser/terminalEditorInput.js').TerminalEditorInput).terminalInstance!
-					.instanceId,
-			);
+			opened.push((input as import('../../browser/terminalEditorInput.js').TerminalEditorInput).terminalInstance!.instanceId);
 		});
 		const terminals = services.get(ITerminalService);
 		const created = [new DeferredPromise<number>(), new DeferredPromise<number>()];
@@ -2012,9 +1828,7 @@ suite('Terminal configuration and interactive profiles', () => {
 				},
 			});
 			const requested = new DeferredPromise<void>();
-			const reply = new DeferredPromise<
-				import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue
-			>();
+			const reply = new DeferredPromise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue>();
 			const bridge = owner.add(services.createInstance(MainThreadTerminalService));
 			bridge.replaceProfiles(
 				withPtyResources([
@@ -2095,16 +1909,12 @@ suite('Terminal configuration and interactive profiles', () => {
 						});
 						createdId = instance.instanceId;
 						terminals.setActiveInstance(unrelated);
-						if (failure === 'workspace')
-							workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/elsewhere') });
+						if (failure === 'workspace') workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/elsewhere') });
 						return instance.instanceId;
 					},
 				}),
 			);
-			await assert.rejects(
-				terminals.createTerminal({ config: profiles.contributedProfiles[0]!, dirId: folder.id }),
-				isCancellationError,
-			);
+			await assert.rejects(terminals.createTerminal({ config: profiles.contributedProfiles[0]!, dirId: folder.id }), isCancellationError);
 			assert.ok(createdId);
 			assert.deepEqual(
 				terminals.instances.map(instance => instance.instanceId),
@@ -2157,36 +1967,33 @@ suite('Terminal configuration and interactive profiles', () => {
 				},
 			});
 			const operations: string[] = [];
-			const invoke: import('../../../../api/browser/extensionHostLanguageBridge.js').ExtensionHostProviderInvoker =
-				async (
-					operation,
-					payload,
-					signal,
-				): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
-					signal.throwIfAborted();
-					operations.push(operation);
-					if (operation === 'getTerminalEnvironment') return { persistent: true, map: [] };
-					if (operation === 'createTerminalProfile')
-						return custom
-							? {
-									options: { name: 'Extension PTY' },
-									pty: { ptyId: 'pty.1', registrationId: 'resource.1', acceptsInput: true },
-								}
-							: {
-									options: {
-										name: 'Extension shell',
-										shellPath: '/extension/shell',
-										shellArgs: ['literal argument'],
-										env: { PROFILE: 'value' },
-									},
-								};
-					if (operation === 'openTaskTerminal')
-						return { events: [{ type: 'data', data: 'synchronous open output' }] };
-					if (operation === 'inputTaskTerminal')
-						return { events: [{ type: 'data', data: `echo:${(payload as { data: string }).data}` }] };
-					if (operation === 'closeTaskTerminal') return null;
-					return { events: [] };
-				};
+			const invoke: import('../../../../api/browser/extensionHostLanguageBridge.js').ExtensionHostProviderInvoker = async (
+				operation,
+				payload,
+				signal,
+			): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
+				signal.throwIfAborted();
+				operations.push(operation);
+				if (operation === 'getTerminalEnvironment') return { persistent: true, map: [] };
+				if (operation === 'createTerminalProfile')
+					return custom
+						? {
+								options: { name: 'Extension PTY' },
+								pty: { ptyId: 'pty.1', registrationId: 'resource.1', acceptsInput: true },
+							}
+						: {
+								options: {
+									name: 'Extension shell',
+									shellPath: '/extension/shell',
+									shellArgs: ['literal argument'],
+									env: { PROFILE: 'value' },
+								},
+							};
+				if (operation === 'openTaskTerminal') return { events: [{ type: 'data', data: 'synchronous open output' }] };
+				if (operation === 'inputTaskTerminal') return { events: [{ type: 'data', data: `echo:${(payload as { data: string }).data}` }] };
+				if (operation === 'closeTaskTerminal') return null;
+				return { events: [] };
+			};
 			const bridge = owner.add(services.createInstance(MainThreadTerminalService));
 			const descriptor = {
 				runtimeId: 'runtime',
@@ -2197,12 +2004,7 @@ suite('Terminal configuration and interactive profiles', () => {
 			};
 			bridge.replaceProfiles(withPtyResources([descriptor]));
 			bridge.replaceProfiles(withPtyResources([descriptor]));
-			assert.equal(
-				await profiles
-					.getContributedProfileProvider('acme.extension', 'test')!
-					.createContributedTerminalProfile({}),
-				73,
-			);
+			assert.equal(await profiles.getContributedProfileProvider('acme.extension', 'test')!.createContributedTerminalProfile({}), 73);
 			assert.equal(launches.length, 1);
 			if (custom) {
 				assert.deepEqual(writes, ['synchronous open output']);
@@ -2258,13 +2060,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		for (const uriCwd of [false, true])
 			test(`contributed ${custom ? 'PTY' : 'shell'} creation keeps its selected root from ${uriCwd ? 'URI' : 'path'} cwd through the shared owner`, async () => {
 				using owner = new DisposableStore();
-				const { services, workspace, profiles, launches } = createServices(
-					owner,
-					true,
-					async () => {},
-					undefined,
-					OperatingSystem.Linux,
-				);
+				const { services, workspace, profiles, launches } = createServices(owner, true, async () => {}, undefined, OperatingSystem.Linux);
 				const folders = [
 					{ id: 'one', name: 'one', uri: URI.file('/workspace'), index: 0 },
 					{ id: 'two', name: 'two', uri: URI.file('/second'), index: 1 },
@@ -2291,11 +2087,7 @@ suite('Terminal configuration and interactive profiles', () => {
 							packageDigest: digest,
 							profileId: 'selected',
 							title: 'Selected extension',
-							invoke: async (
-								operation,
-							): Promise<
-								import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue
-							> => {
+							invoke: async (operation): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
 								operations.push(operation);
 								if (operation === 'createTerminalProfile')
 									return custom
@@ -2338,8 +2130,7 @@ suite('Terminal configuration and interactive profiles', () => {
 				await terminals.closeTerminal(instance);
 				assert.deepEqual(terminals.instances, []);
 				bridge.replaceProfiles([]);
-				if (custom)
-					await waitFor(() => operations.filter(operation => operation === 'closeTaskTerminal').length === 1);
+				if (custom) await waitFor(() => operations.filter(operation => operation === 'closeTaskTerminal').length === 1);
 			});
 
 	for (const custom of [false, true])
@@ -2377,13 +2168,7 @@ suite('Terminal configuration and interactive profiles', () => {
 						packageDigest: digest,
 						profileId: 'test',
 						title: 'Extension',
-						invoke: async (
-							operation,
-							payload,
-							signal,
-						): Promise<
-							import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue
-						> => {
+						invoke: async (operation, payload, signal): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
 							signal.throwIfAborted();
 							operations.push({ operation, payload });
 							if (operation === 'getTerminalEnvironment') return { persistent: true, map: [] };
@@ -2419,9 +2204,7 @@ suite('Terminal configuration and interactive profiles', () => {
 					},
 				]),
 			);
-			await profiles
-				.getContributedProfileProvider('acme.extension', 'test')!
-				.createContributedTerminalProfile({});
+			await profiles.getContributedProfileProvider('acme.extension', 'test')!.createContributedTerminalProfile({});
 			const instance = terminals.activeInstance!;
 			assert.equal(terminals.instances[0], instance);
 			await waitFor(() => instance.state === 'exited');
@@ -2503,10 +2286,7 @@ suite('Terminal configuration and interactive profiles', () => {
 				},
 			]),
 		);
-		await assert.rejects(
-			profiles.getContributedProfileProvider('acme.extension', 'pty')!.createContributedTerminalProfile({}),
-			error => error === failure,
-		);
+		await assert.rejects(profiles.getContributedProfileProvider('acme.extension', 'pty')!.createContributedTerminalProfile({}), error => error === failure);
 		assert.deepEqual(closed, [{ ptyId: 'pty.1' }]);
 	});
 
@@ -2534,20 +2314,10 @@ suite('Terminal configuration and interactive profiles', () => {
 						packageDigest: digest,
 						profileId: 'pty',
 						title: 'PTY',
-						invoke: async (
-							operation,
-							payload,
-						): Promise<
-							import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue
-						> => {
+						invoke: async (operation, payload): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
 							if (operation === 'createTerminalProfile')
 								return {
-									options:
-										malformed === 'name'
-											? { name: 'x'.repeat(257) }
-											: malformed === 'options'
-												? { unknown: true }
-												: { name: 'PTY' },
+									options: malformed === 'name' ? { name: 'x'.repeat(257) } : malformed === 'options' ? { unknown: true } : { name: 'PTY' },
 									pty: {
 										ptyId: 'pty.1',
 										registrationId: 'resource.1',
@@ -2561,10 +2331,7 @@ suite('Terminal configuration and interactive profiles', () => {
 					},
 				]),
 			);
-			await assert.rejects(
-				profiles.getContributedProfileProvider('acme.extension', 'pty')!.createContributedTerminalProfile({}),
-				TypeError,
-			);
+			await assert.rejects(profiles.getContributedProfileProvider('acme.extension', 'pty')!.createContributedTerminalProfile({}), TypeError);
 			assert.deepEqual(closed, [{ ptyId: 'pty.1' }]);
 		});
 
@@ -2604,10 +2371,7 @@ suite('Terminal configuration and interactive profiles', () => {
 				},
 			]),
 		);
-		const cancelled = assert.rejects(
-			profiles.getContributedProfileProvider('acme.extension', 'pty')!.createContributedTerminalProfile({}),
-			isCancellationError,
-		);
+		const cancelled = assert.rejects(profiles.getContributedProfileProvider('acme.extension', 'pty')!.createContributedTerminalProfile({}), isCancellationError);
 		while (!release) await new Promise(resolve => setTimeout(resolve, 0));
 		workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
 		release({
@@ -2655,10 +2419,7 @@ suite('Terminal configuration and interactive profiles', () => {
 				},
 			]),
 		);
-		const cancelled = assert.rejects(
-			profiles.getContributedProfileProvider('acme.extension', 'pty')!.createContributedTerminalProfile({}),
-			isCancellationError,
-		);
+		const cancelled = assert.rejects(profiles.getContributedProfileProvider('acme.extension', 'pty')!.createContributedTerminalProfile({}), isCancellationError);
 		while (!release) await new Promise(resolve => setTimeout(resolve, 0));
 		bridge.replaceProfiles([]);
 		await cancelled;
@@ -2721,11 +2482,7 @@ suite('Extension terminal ownership', () => {
 		assert.equal((createdEnvironment as Record<string, string>).NODE_OPTIONS, '--no-warnings --require=debug.cjs');
 		const id = (created as unknown as { value: { id: string } }).value.id;
 		output.fire({ data: 'x'.repeat(100_000) });
-		const result = await bridge.handle(
-			{ operation: 'readTerminal', terminalId: id, afterSequence: 0 },
-			signal,
-			source,
-		);
+		const result = await bridge.handle({ operation: 'readTerminal', terminalId: id, afterSequence: 0 }, signal, source);
 		assert.equal(result.result, 'value');
 		const value = (result as unknown as { value: { output: string; outputGap: boolean; closed: boolean } }).value;
 		assert.ok(value.output.length <= 65536);
@@ -2738,17 +2495,11 @@ suite('Extension terminal ownership', () => {
 			await assert.rejects(bridge.handle({ operation: 'disposeTerminal', terminalId: id }, signal, foreign));
 		}
 		exit.fire(0);
-		const closed = await bridge.handle(
-			{ operation: 'readTerminal', terminalId: id, afterSequence: 0 },
-			signal,
-			source,
-		);
+		const closed = await bridge.handle({ operation: 'readTerminal', terminalId: id, afterSequence: 0 }, signal, source);
 		assert.equal((closed as unknown as { value: { closed: boolean } }).value.closed, true);
 		bridge.clearOwnedTerminals();
 		assert.equal(closes, 1);
-		await assert.rejects(
-			bridge.handle({ operation: 'readTerminal', terminalId: id, afterSequence: 0 }, signal, source),
-		);
+		await assert.rejects(bridge.handle({ operation: 'readTerminal', terminalId: id, afterSequence: 0 }, signal, source));
 		const delayed = new DeferredPromise<ITerminalInstance>();
 		const creating = new DeferredPromise<void>();
 		Object.assign(services.get(ITerminalService), {
@@ -2757,11 +2508,7 @@ suite('Extension terminal ownership', () => {
 				return delayed.p;
 			},
 		});
-		const pending = bridge.handle(
-			{ operation: 'createTerminal', name: 'Late debug', cwd: null, env: {}, command: null },
-			signal,
-			source,
-		);
+		const pending = bridge.handle({ operation: 'createTerminal', name: 'Late debug', cwd: null, env: {}, command: null }, signal, source);
 		await creating.p;
 		bridge.clearOwnedTerminals();
 		await delayed.complete(terminal);
@@ -2834,10 +2581,7 @@ suite('Terminal creation owner', () => {
 		const terminals = services.get(ITerminalService);
 		const targets: unknown[] = [];
 		owner.add(terminals.onDidCreateInstance(instance => targets.push(instance.target)));
-		await assert.rejects(
-			terminals.createTerminal({ location: { viewColumn: 12 }, deferStart: true }),
-			/Editor failed/,
-		);
+		await assert.rejects(terminals.createTerminal({ location: { viewColumn: 12 }, deferStart: true }), /Editor failed/);
 		assert.deepEqual(targets, [TerminalLocation.Editor]);
 		assert.equal(terminals.instances.length, 0);
 		assert.equal(closed.length, 1);
@@ -2888,9 +2632,7 @@ suite('Extension terminal resource completion escaping', () => {
 				},
 			},
 		]);
-		return services
-			.get(ITerminalCompletionService)
-			.provideCompletions(instance, commandLine, commandLine.length, new AbortController().signal);
+		return services.get(ITerminalCompletionService).provideCompletions(instance, commandLine, commandLine.length, new AbortController().signal);
 	}
 
 	for (const { shell, insertText } of [
@@ -2906,9 +2648,7 @@ suite('Extension terminal resource completion escaping', () => {
 			using owner = new DisposableStore();
 			const result = await complete(owner, shell);
 			assert.deepEqual(
-				result
-					.map(({ label, insertText, replacementRange }) => ({ label, insertText, replacementRange }))
-					.sort((a, b) => a.label.localeCompare(b.label)),
+				result.map(({ label, insertText, replacementRange }) => ({ label, insertText, replacementRange })).sort((a, b) => a.label.localeCompare(b.label)),
 				[
 					{ label: 'provider $(syntax)', insertText: undefined, replacementRange: [4, 6] },
 					{ label: "sp ace'$(literal);&`literal`\\[x].txt", insertText, replacementRange: [4, 6] },

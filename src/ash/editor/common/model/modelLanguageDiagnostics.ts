@@ -22,12 +22,7 @@ export class ModelLanguageDiagnostics extends Disposable {
 		super();
 		const providers = registry ?? this._register(new SyntaxProviderRegistry());
 		this.results = this._register(createLanguageDiagnosticStore(model));
-		this.coordinator = this._register(
-			new LanguageRequestCoordinator(
-				model,
-				() => new SyntaxProviderWorker(providers, undefined, undefined, model),
-			),
-		);
+		this.coordinator = this._register(new LanguageRequestCoordinator(model, () => new SyntaxProviderWorker(providers, undefined, undefined, model)));
 		this._register(model.onDidChangeContent(() => this.schedule()));
 		this._register(model.onDidChangeLanguage(() => this.reset()));
 		this._register(providers.onDidChange(() => this.reset()));

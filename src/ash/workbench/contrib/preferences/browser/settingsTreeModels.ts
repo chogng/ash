@@ -1,10 +1,6 @@
 import type { Event } from '../../../../base/common/event.js';
 import type { ISetting } from '../../../services/preferences/common/preferences.js';
-import {
-	ObjectTreeModel,
-	type ObjectTreeElement,
-	type ObjectTreeNode,
-} from '../../../../base/browser/ui/tree/objectTreeModel.js';
+import { ObjectTreeModel, type ObjectTreeElement, type ObjectTreeNode } from '../../../../base/browser/ui/tree/objectTreeModel.js';
 import { TreeVisibility } from '../../../../base/browser/ui/tree/tree.js';
 import { SettingsSearchQuery } from './settingsSearch.js';
 
@@ -115,9 +111,7 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 	}
 
 	get visibleItems(): readonly SettingsTreeItem<T>[] {
-		return this.visibleNodes
-			.map(node => node.element)
-			.filter((node): node is SettingsTreeItem<T> => node.kind === 'item');
+		return this.visibleNodes.map(node => node.element).filter((node): node is SettingsTreeItem<T> => node.kind === 'item');
 	}
 
 	setChildren(children: readonly SettingsTreeNode<T>[]): void {
@@ -141,11 +135,9 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 
 	setNavigationTarget(targetId: string | undefined): void {
 		if (targetId === this.navigationTargetId) return;
-		if (targetId !== undefined && !this.has(targetId))
-			throw new RangeError(`Unknown Settings navigation target '${targetId}'`);
+		if (targetId !== undefined && !this.has(targetId)) throw new RangeError(`Unknown Settings navigation target '${targetId}'`);
 		this.navigationTargetId = targetId;
-		this.navigationScopeIds =
-			targetId === undefined ? undefined : collectNavigationScopeIds(this.getNode(targetId)!);
+		this.navigationScopeIds = targetId === undefined ? undefined : collectNavigationScopeIds(this.getNode(targetId)!);
 		this.refilter();
 	}
 
@@ -168,10 +160,7 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 	}
 
 	countVisibleItems(groupId?: string): number {
-		const roots =
-			groupId === undefined
-				? this.visibleChildren
-				: (this.getNode(groupId)?.children.filter(node => node.visible) ?? []);
+		const roots = groupId === undefined ? this.visibleChildren : (this.getNode(groupId)?.children.filter(node => node.visible) ?? []);
 		return roots.reduce((count, node) => count + countVisibleItems(node), 0);
 	}
 
@@ -209,8 +198,7 @@ function countVisibleItems<T>(node: ObjectTreeNode<SettingsTreeElement<T>>): num
 function validateSettingsNodes<T>(nodes: readonly SettingsTreeNode<T>[]): void {
 	const visit = (node: SettingsTreeNode<T>): void => {
 		const element = node.element;
-		if (!element.title.trim())
-			throw new TypeError(`Settings tree ${element.kind} '${element.id}' must have a title`);
+		if (!element.title.trim()) throw new TypeError(`Settings tree ${element.kind} '${element.id}' must have a title`);
 		if (element.kind === 'item' && (node.children?.length ?? 0) > 0) {
 			throw new TypeError(`Settings tree item '${element.id}' must not have children`);
 		}

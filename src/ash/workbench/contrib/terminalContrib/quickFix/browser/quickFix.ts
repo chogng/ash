@@ -13,18 +13,10 @@ export interface ITerminalQuickFix {
 	readonly run?: () => Promise<void>;
 }
 export interface ITerminalQuickFixProvider {
-	provideTerminalQuickFixes(
-		instance: ITerminalInstance,
-		command: ITerminalCommand,
-		signal: AbortSignal,
-	): Promise<readonly ITerminalQuickFix[]>;
+	provideTerminalQuickFixes(instance: ITerminalInstance, command: ITerminalCommand, signal: AbortSignal): Promise<readonly ITerminalQuickFix[]>;
 }
 export const ITerminalQuickFixService = createDecorator<ITerminalQuickFixService>('terminalQuickFixService');
 export interface ITerminalQuickFixService {
 	registerQuickFixProvider(id: string, provider: ITerminalQuickFixProvider): IDisposable;
-	provideTerminalQuickFixes(
-		instance: ITerminalInstance,
-		command: ITerminalCommand,
-		signal: AbortSignal,
-	): Promise<readonly ITerminalQuickFix[]>;
+	provideTerminalQuickFixes(instance: ITerminalInstance, command: ITerminalCommand, signal: AbortSignal): Promise<readonly ITerminalQuickFix[]>;
 }

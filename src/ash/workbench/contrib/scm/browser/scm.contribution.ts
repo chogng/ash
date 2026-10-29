@@ -1,20 +1,11 @@
-import {
-	ConfigurationScope,
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
-import {
-	ViewContainerLocation,
-	type WorkbenchViewRegistry,
-	WorkbenchViewContainerId,
-	ViewsRegistry,
-} from '../../../common/views.js';
+import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from '../../../common/views.js';
 import { ScmAgentReviewViewPane } from './scmAgentReviewViewPane.js';
 import { SCMHistoryViewPane } from './scmHistoryViewPane.js';
 import { SCMActiveRepositoryController, ScmStatusContribution } from './activity.js';
@@ -35,12 +26,7 @@ import { getBrowserTextResourceStore } from '../../codeEditor/browser/browserTex
 import { createBrowserEditorPart } from '../../codeEditor/browser/browserEditorPart.js';
 import { matchScmMergeEditor, SCM_MERGE_EDITOR_ID } from './scmMergeEditorInput.js';
 import { ScmMergeEditorPane, ScmMergeFocusedContext } from './scmMergeEditorPane.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import './media/scmMergeEditor.css';
 import './scm.service.contribution.js';
@@ -84,16 +70,12 @@ MenusRegistry.appendMenuItem(MenuId.SCMTitle, {
 });
 
 for (const mode of ['list', 'tree'] as const) {
-	const title =
-		mode === 'list' ? localize2('scm.viewAsList', 'View as List') : localize2('scm.viewAsTree', 'View as Tree');
+	const title = mode === 'list' ? localize2('scm.viewAsList', 'View as List') : localize2('scm.viewAsTree', 'View as Tree');
 	registerAction2(
 		class extends Action2 {
 			constructor() {
 				super({
-					id:
-						mode === 'list'
-							? 'workbench.scm.action.setListViewMode'
-							: 'workbench.scm.action.setTreeViewMode',
+					id: mode === 'list' ? 'workbench.scm.action.setListViewMode' : 'workbench.scm.action.setTreeViewMode',
 					title,
 					toggled: SCMViewModeContext.isEqualTo(mode),
 					menu: [
@@ -102,10 +84,7 @@ for (const mode of ['list', 'tree'] as const) {
 							id: MenuId.SCMTitle,
 							group: '0_view',
 							order: 1,
-							when: ContextKeyExpr.and(
-								ContextKeyExpr.notEquals(SCMProviderContext.key, ''),
-								ContextKeyExpr.notEquals(SCMViewModeContext.key, mode),
-							),
+							when: ContextKeyExpr.and(ContextKeyExpr.notEquals(SCMProviderContext.key, ''), ContextKeyExpr.notEquals(SCMViewModeContext.key, mode)),
 						},
 					],
 				});
@@ -162,10 +141,7 @@ configurationRegistry.registerConfiguration<'all' | 'filter'>({
 			return localize('scm.history.badgesTitle', 'Source Control › Graph: Badges');
 		},
 		get description() {
-			return localize(
-				'scm.history.badgesDescription',
-				'Choose whether the graph shows all reference badges or only the references selected by the filter.',
-			);
+			return localize('scm.history.badgesDescription', 'Choose whether the graph shows all reference badges or only the references selected by the filter.');
 		},
 		get options() {
 			return [
@@ -182,9 +158,7 @@ configurationRegistry.registerConfiguration<number>({
 	schema: { type: 'number', minimum: 1, maximum: 1000 },
 	parse: value => {
 		if (typeof value !== 'number' || !Number.isFinite(value) || value < 1 || value > 1000) {
-			throw new TypeError(
-				localize('scm.history.pageSizeInvalid', 'History page size must be a number between 1 and 1000.'),
-			);
+			throw new TypeError(localize('scm.history.pageSizeInvalid', 'History page size must be a number between 1 and 1000.'));
 		}
 		return Math.floor(value);
 	},
@@ -196,10 +170,7 @@ configurationRegistry.registerConfiguration<number>({
 			return localize('scm.history.pageSizeTitle', 'Source Control › Graph: Page Size');
 		},
 		get description() {
-			return localize(
-				'scm.history.pageSizeDescription',
-				'Number of commits loaded initially and with each additional page.',
-			);
+			return localize('scm.history.pageSizeDescription', 'Number of commits loaded initially and with each additional page.');
 		},
 	},
 });
@@ -210,9 +181,7 @@ configurationRegistry.registerConfiguration<boolean>({
 	schema: { type: 'boolean' },
 	parse: value => {
 		if (typeof value !== 'boolean') {
-			throw new TypeError(
-				localize('scm.history.pageOnScrollInvalid', 'Automatic history loading must be a boolean.'),
-			);
+			throw new TypeError(localize('scm.history.pageOnScrollInvalid', 'Automatic history loading must be a boolean.'));
 		}
 		return value;
 	},
@@ -222,10 +191,7 @@ configurationRegistry.registerConfiguration<boolean>({
 			return localize('scm.history.pageOnScrollTitle', 'Source Control › Graph: Page On Scroll');
 		},
 		get description() {
-			return localize(
-				'scm.history.pageOnScrollDescription',
-				'Automatically load the next page when the end of the commit graph is visible.',
-			);
+			return localize('scm.history.pageOnScrollDescription', 'Automatically load the next page when the end of the commit graph is visible.');
 		},
 	},
 });
@@ -237,10 +203,7 @@ for (const setting of [
 			return localize('scm.history.showIncomingTitle', 'Source Control › Graph: Show Incoming Changes');
 		},
 		get description() {
-			return localize(
-				'scm.history.showIncomingDescription',
-				'Show the incoming changes summary for the upstream branch.',
-			);
+			return localize('scm.history.showIncomingDescription', 'Show the incoming changes summary for the upstream branch.');
 		},
 	},
 	{
@@ -249,10 +212,7 @@ for (const setting of [
 			return localize('scm.history.showOutgoingTitle', 'Source Control › Graph: Show Outgoing Changes');
 		},
 		get description() {
-			return localize(
-				'scm.history.showOutgoingDescription',
-				'Show the outgoing changes summary for the current branch.',
-			);
+			return localize('scm.history.showOutgoingDescription', 'Show the outgoing changes summary for the current branch.');
 		},
 	},
 ]) {
@@ -263,9 +223,7 @@ for (const setting of [
 		schema: { type: 'boolean' },
 		parse: value => {
 			if (typeof value !== 'boolean') {
-				throw new TypeError(
-					localize('scm.history.changesSettingInvalid', 'History changes visibility must be a boolean.'),
-				);
+				throw new TypeError(localize('scm.history.changesSettingInvalid', 'History changes visibility must be a boolean.'));
 			}
 			return value;
 		},
@@ -300,26 +258,15 @@ AccessibleViewRegistry.register({
 			const description = pane.element.querySelector('[role="tree"]')?.getAttribute('aria-description');
 			if (!description) return undefined;
 			const content = description
-				.replaceAll(
-					'workbench.scm.action.focusPreviousResourceGroup',
-					'<keybinding:workbench.scm.action.focusPreviousResourceGroup>',
-				)
-				.replaceAll(
-					'workbench.scm.action.focusNextResourceGroup',
-					'<keybinding:workbench.scm.action.focusNextResourceGroup>',
-				);
+				.replaceAll('workbench.scm.action.focusPreviousResourceGroup', '<keybinding:workbench.scm.action.focusPreviousResourceGroup>')
+				.replaceAll('workbench.scm.action.focusNextResourceGroup', '<keybinding:workbench.scm.action.focusNextResourceGroup>');
 			return new AccessibleContentProvider(
 				AccessibleViewProviderId.Scm,
 				{ type: AccessibleViewType.Help },
 				() => content,
 				() => {
 					const active = focused.ownerDocument.activeElement;
-					if (
-						!pane.isDisposed &&
-						pane.isBodyVisible() &&
-						isFocusable(focused) &&
-						(active === focused.ownerDocument.body || pane.element.contains(active))
-					) {
+					if (!pane.isDisposed && pane.isBodyVisible() && isFocusable(focused) && (active === focused.ownerDocument.body || pane.element.contains(active))) {
 						restoreFocus(focused);
 					}
 				},
@@ -353,8 +300,7 @@ configurationRegistry.registerConfiguration<ScmWorkingSetDefault>({
 	key: 'scm.workingSets.default',
 	defaultValue: 'current',
 	parse(value: unknown): ScmWorkingSetDefault {
-		if (value !== 'current' && value !== 'empty')
-			throw new TypeError('scm.workingSets.default must be current or empty');
+		if (value !== 'current' && value !== 'empty') throw new TypeError('scm.workingSets.default must be current or empty');
 		return value;
 	},
 });
@@ -397,9 +343,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 							'scm.repositories.help',
 							'Repositories lists the source control repositories and worktrees available in this workspace. Use Up and Down Arrow to navigate, and Enter or Space to select a repository. Selection updates Changes, Graph and the status bar. Click the branch name in the status bar to switch branches. Each row shows the repository name, branch and changed file count. Repositories with the same name also show a distinguishing path.',
 						)
-					: [...list.querySelectorAll<HTMLElement>('[role="option"]')]
-							.map(row => row.getAttribute('aria-label'))
-							.join('\n');
+					: [...list.querySelectorAll<HTMLElement>('[role="option"]')].map(row => row.getAttribute('aria-label')).join('\n');
 			return new AccessibleContentProvider(
 				AccessibleViewProviderId.ScmRepositories,
 				{ type },
@@ -421,9 +365,7 @@ registerWorkbenchContribution('workbench.contrib.scmRepositories', WorkbenchPhas
 		const repositories = [...scm.repositories];
 		contextKeyService.bufferChangeEvents(() => {
 			count.set(repositories.length);
-			historyCount.set(
-				repositories.filter(repository => repository.provider.historyProvider !== undefined).length,
-			);
+			historyCount.set(repositories.filter(repository => repository.provider.historyProvider !== undefined).length);
 		});
 	};
 	resources.add(
@@ -473,9 +415,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 export const SCM_AGENT_REVIEW_VIEW_ID = 'ash.gitAgentReview';
 export const SCM_HISTORY_VIEW_ID = 'ash.gitGraph';
 
-registerWorkbenchContribution('workbench.contrib.scmActivity', WorkbenchPhase.BlockRestore, accessor =>
-	accessor.get(IInstantiationService).createInstance(SCMActiveRepositoryController),
-);
+registerWorkbenchContribution('workbench.contrib.scmActivity', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(SCMActiveRepositoryController));
 
 registerAction2(
 	class SCMHistoryRefreshAction extends Action2 {
@@ -491,10 +431,7 @@ registerAction2(
 		}
 
 		override async run(accessor: ServicesAccessor, target: unknown): Promise<void> {
-			const view =
-				target instanceof SCMHistoryViewPane
-					? target
-					: accessor.get(IViewsService).getActiveViewWithId<SCMHistoryViewPane>(SCM_HISTORY_VIEW_ID);
+			const view = target instanceof SCMHistoryViewPane ? target : accessor.get(IViewsService).getActiveViewWithId<SCMHistoryViewPane>(SCM_HISTORY_VIEW_ID);
 			await view?.runTitleOperation();
 		}
 	},
@@ -505,21 +442,15 @@ registerEditorPane({
 	name: localize({ bundle: 'ash', key: 'mergeEditor.title' }, 'Resolve merge conflict'),
 	canOpen: matchScmMergeEditor,
 	create: options => {
-		if (!options.textFileService || !options.instantiationService)
-			throw new Error('SCM merge editor requires the text file and instantiation services');
+		if (!options.textFileService || !options.instantiationService) throw new Error('SCM merge editor requires the text file and instantiation services');
 		const instantiationService = options.instantiationService;
-		const resultEditor = instantiationService.createInstance(
-			TextFileEditor,
-			getBrowserTextResourceStore(options.textFileService),
-			{
-				createPart: (partOptions: EditorPanePartOptions) =>
-					createBrowserEditorPart(instantiationService, partOptions),
-				minimap: { enabled: false },
-				workingCopyService: options.workingCopyService,
-				accessibilityService: options.accessibilityService,
-				languageDiagnosticsService: options.languageDiagnosticsService,
-			},
-		);
+		const resultEditor = instantiationService.createInstance(TextFileEditor, getBrowserTextResourceStore(options.textFileService), {
+			createPart: (partOptions: EditorPanePartOptions) => createBrowserEditorPart(instantiationService, partOptions),
+			minimap: { enabled: false },
+			workingCopyService: options.workingCopyService,
+			accessibilityService: options.accessibilityService,
+			languageDiagnosticsService: options.languageDiagnosticsService,
+		});
 		return instantiationService.createInstance(ScmMergeEditorPane, resultEditor);
 	},
 });
@@ -581,10 +512,7 @@ export function registerSCMViews(registry: WorkbenchViewRegistry = ViewsRegistry
 			title: 'Repositories',
 			localizationKey: { bundle: 'ash.views', key: 'repositories' },
 			order: 0,
-			when: ContextKeyExpr.and(
-				ContextKeyExpr.has('scm.providerCount'),
-				ContextKeyExpr.notEquals('scm.providerCount', 1),
-			),
+			when: ContextKeyExpr.and(ContextKeyExpr.has('scm.providerCount'), ContextKeyExpr.notEquals('scm.providerCount', 1)),
 			canToggleVisibility: true,
 			canMoveView: true,
 			ctorDescriptor: new SyncDescriptor(SCMRepositoriesViewPane),
@@ -623,9 +551,7 @@ export function registerSCMViews(registry: WorkbenchViewRegistry = ViewsRegistry
 	]);
 }
 
-registerWorkbenchContribution('workbench.contrib.scmStatus', WorkbenchPhase.BlockRestore, accessor =>
-	accessor.get(IInstantiationService).createInstance(ScmStatusContribution),
-);
+registerWorkbenchContribution('workbench.contrib.scmStatus', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ScmStatusContribution));
 
 registerWorkbenchContribution(
 	'workbench.contrib.scmWorkingSets',

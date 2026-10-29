@@ -33,10 +33,7 @@ export class AgentHostFileSearchProvider extends Disposable implements ISearchRe
 		);
 	}
 
-	public async fileSearch(
-		query: IFileQuery,
-		token: CancellationToken = CancellationToken.None,
-	): Promise<ISearchComplete> {
+	public async fileSearch(query: IFileQuery, token: CancellationToken = CancellationToken.None): Promise<ISearchComplete> {
 		if (this.isDisposed || token.isCancellationRequested) {
 			throw new CancellationError();
 		}
@@ -47,27 +44,19 @@ export class AgentHostFileSearchProvider extends Disposable implements ISearchRe
 		try {
 			const limit = query.maxResults ?? DEFAULT_MAX_RESULTS;
 			if (!Number.isSafeInteger(limit) || limit < 1 || limit > 5_000) {
-				throw new RangeError(
-					localize('search.invalidResultLimit', 'Search result limit must be between 1 and 5000.'),
-				);
+				throw new RangeError(localize('search.invalidResultLimit', 'Search result limit must be between 1 and 5000.'));
 			}
 			const workspaceFolders = snapshot.folders;
 			const folders = query.folderQueries.map(folderQuery => {
 				const folder = workspaceFolders.find(folder => extUri.isEqual(folder.uri, folderQuery.folder));
 				if (!folder) {
-					throw new RangeError(
-						localize('search.folderOutsideWorkspace', 'Search folder is outside the current workspace.'),
-					);
+					throw new RangeError(localize('search.folderOutsideWorkspace', 'Search folder is outside the current workspace.'));
 				}
 				return folder;
 			});
 			const candidates = new Map<string, { resource: URI; score: number; folderIndex: number; path: string }>();
-			const includePatterns = Object.keys(query.includePattern ?? {}).filter(
-				pattern => query.includePattern![pattern] === true,
-			);
-			const excludePatterns = Object.keys(query.excludePattern ?? {}).filter(
-				pattern => query.excludePattern![pattern] === true,
-			);
+			const includePatterns = Object.keys(query.includePattern ?? {}).filter(pattern => query.includePattern![pattern] === true);
+			const excludePatterns = Object.keys(query.excludePattern ?? {}).filter(pattern => query.excludePattern![pattern] === true);
 			let limitHit = false;
 			for (const folder of folders) {
 				if (controller.signal.aborted) {
@@ -80,15 +69,9 @@ export class AgentHostFileSearchProvider extends Disposable implements ISearchRe
 					? this.backend.glob(
 							directory,
 							{
-								includePatterns: includePatterns.length
-									? includePatterns
-									: query.filePattern
-										? [query.filePattern]
-										: [],
+								includePatterns: includePatterns.length ? includePatterns : query.filePattern ? [query.filePattern] : [],
 								excludePatterns,
-								...(includePatterns.length && query.filePattern
-									? { requiredPattern: query.filePattern }
-									: {}),
+								...(includePatterns.length && query.filePattern ? { requiredPattern: query.filePattern } : {}),
 								maxResults,
 							},
 							controller.signal,

@@ -4,12 +4,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { type IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import {
-	ContentWidgetPositionPreference,
-	type ICodeEditor,
-	type IContentWidget,
-	type IContentWidgetPosition,
-} from '../../../browser/editorBrowser.js';
+import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../browser/editorBrowser.js';
 import { type View } from '../../../browser/view.js';
 import { type LanguageParameterHints, type LanguageSignatureInformation } from '../../../common/languages.js';
 import { ParameterHintsModel } from './parameterHintsModel.js';
@@ -86,23 +81,11 @@ export class ParameterHintsWidget extends Disposable implements IContentWidget {
 		const previous = this.hints;
 		this.hints = hints;
 		const activeSignature = hints.activeSignature ?? 0;
-		if (
-			previous?.signatures === hints.signatures &&
-			this.isVisible &&
-			this.element.childElementCount === hints.signatures.length
-		) {
+		if (previous?.signatures === hints.signatures && this.isVisible && this.element.childElementCount === hints.signatures.length) {
 			const previousIndex = previous.activeSignature ?? 0;
 			if (previousIndex !== activeSignature) {
-				this.renderSignature(
-					this.element.children[previousIndex]! as HTMLElement,
-					hints.signatures[previousIndex]!,
-					false,
-				);
-				this.renderSignature(
-					this.element.children[activeSignature]! as HTMLElement,
-					hints.signatures[activeSignature]!,
-					true,
-				);
+				this.renderSignature(this.element.children[previousIndex]! as HTMLElement, hints.signatures[previousIndex]!, false);
+				this.renderSignature(this.element.children[activeSignature]! as HTMLElement, hints.signatures[activeSignature]!, true);
 			}
 			this.editor.layoutContentWidget(this);
 			return;
@@ -117,10 +100,7 @@ export class ParameterHintsWidget extends Disposable implements IContentWidget {
 		this.element.setAttribute(
 			'aria-description',
 			hints.signatures.length > 1
-				? localize(
-						'parameterHints.navigation',
-						'Use Up and Down to change the active signature. Press Escape to close.',
-					)
+				? localize('parameterHints.navigation', 'Use Up and Down to change the active signature. Press Escape to close.')
 				: localize('parameterHints.close', 'Press Escape to close.'),
 		);
 		this.element.hidden = false;
@@ -133,20 +113,13 @@ export class ParameterHintsWidget extends Disposable implements IContentWidget {
 		node.className = `stanza-editor-parameter-hints-signature${active ? ' active' : ''}`;
 		node.setAttribute('aria-current', String(active));
 		node.title = signature.documentation ?? '';
-		const parameter =
-			active && signature.activeParameter !== undefined
-				? signature.parameters[signature.activeParameter]
-				: undefined;
+		const parameter = active && signature.activeParameter !== undefined ? signature.parameters[signature.activeParameter] : undefined;
 		const start = parameter ? signature.label.indexOf(parameter.label) : -1;
 		if (parameter && start >= 0) {
 			const strong = h(this.element.ownerDocument, 'strong');
 			strong.className = 'stanza-editor-parameter-hints-parameter active';
 			strong.textContent = parameter.label;
-			node.replaceChildren(
-				signature.label.slice(0, start),
-				strong,
-				signature.label.slice(start + parameter.label.length),
-			);
+			node.replaceChildren(signature.label.slice(0, start), strong, signature.label.slice(start + parameter.label.length));
 		} else {
 			node.textContent = signature.label;
 		}

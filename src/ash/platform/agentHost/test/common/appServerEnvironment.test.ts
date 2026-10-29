@@ -91,7 +91,9 @@ test('App Server environment canonicalizes Windows keys case-insensitively', () 
 			AWS_SECRET_ACCESS_KEY: 'secret',
 		},
 		'windows',
-		{ ASH_HOME: 'C:\\state' },
+		{
+			ASH_HOME: 'C:\\state',
+		},
 		'desktop',
 	);
 
@@ -102,14 +104,8 @@ test('App Server environment canonicalizes Windows keys case-insensitively', () 
 });
 
 test('App Server product environment accepts only owned non-NUL variables', () => {
-	assert.throws(
-		() => buildAppServerEnvironment({}, 'macos', { OPENAI_API_KEY: 'secret' }, 'desktop'),
-		/Invalid App Server product environment variable/,
-	);
-	assert.throws(
-		() => buildAppServerEnvironment({}, 'macos', { ASH_HOME: 'bad\0path' }, 'desktop'),
-		/Invalid App Server product environment variable/,
-	);
+	assert.throws(() => buildAppServerEnvironment({}, 'macos', { OPENAI_API_KEY: 'secret' }, 'desktop'), /Invalid App Server product environment variable/);
+	assert.throws(() => buildAppServerEnvironment({}, 'macos', { ASH_HOME: 'bad\0path' }, 'desktop'), /Invalid App Server product environment variable/);
 });
 
 test('App Server environment excludes host authentication and launcher controls without filtering ordinary tokens', () => {
@@ -133,9 +129,7 @@ test('App Server environment excludes host authentication and launcher controls 
 		HTTPS_PROXY: 'http://localhost:8080',
 		EMPTY_VALUE: '',
 	});
-	for (const key of Object.keys(source).filter(
-		key => key !== 'GITHUB_TOKEN' && key !== 'HTTPS_PROXY' && !key.endsWith('VALUE'),
-	)) {
+	for (const key of Object.keys(source).filter(key => key !== 'GITHUB_TOKEN' && key !== 'HTTPS_PROXY' && !key.endsWith('VALUE'))) {
 		assert.equal(isAllowedAppServerEnvironmentKey(key), false, key);
 	}
 });
@@ -158,8 +152,5 @@ test('Shared App Server environment discards inherited agent attribution for eve
 	}
 	assert.equal(isAllowedAppServerEnvironmentKey(AiAgentEnvVar), false);
 	assert.equal(isAllowedAppServerEnvironmentKey('ai_agent'), false);
-	assert.throws(
-		() => buildAppServerEnvironment({}, 'macos', { [AiAgentEnvVar]: 'ash' }, 'desktop'),
-		/Invalid App Server product environment variable/,
-	);
+	assert.throws(() => buildAppServerEnvironment({}, 'macos', { [AiAgentEnvVar]: 'ash' }, 'desktop'), /Invalid App Server product environment variable/);
 });

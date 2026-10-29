@@ -1,17 +1,9 @@
 import { getActiveElement } from '../../../../../base/browser/dom.js';
 import { DisposableStore, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { getNLSLanguage, localize } from '../../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import {
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
@@ -22,19 +14,13 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	key: AccessibilityVerbositySettingId.Automations,
 	defaultValue: true,
 	parse: value => {
-		if (typeof value !== 'boolean')
-			throw new TypeError(
-				localize('automations.verbosityInvalid', 'Automations accessibility verbosity must be a boolean.'),
-			);
+		if (typeof value !== 'boolean') throw new TypeError(localize('automations.verbosityInvalid', 'Automations accessibility verbosity must be a boolean.'));
 		return value;
 	},
 	setting: {
 		valueType: 'boolean',
 		title: localize('automations.verbosityTitle', 'Automations accessibility help'),
-		description: localize(
-			'automations.verbosityDescription',
-			'Announce keyboard help when automation controls receive focus.',
-		),
+		description: localize('automations.verbosityDescription', 'Announce keyboard help when automation controls receive focus.'),
 	},
 });
 
@@ -48,15 +34,11 @@ export function registerAutomationsAccessibility(): IDisposable {
 				name: `sessionsAutomations${type}`,
 				when:
 					type === AccessibleViewType.Help
-						? ContextKeyExpr.or(
-								ContextKeyExpr.has('sessionsAutomationsFocused'),
-								ContextKeyExpr.has('sessionsAutomationDialogFocused'),
-							)
+						? ContextKeyExpr.or(ContextKeyExpr.has('sessionsAutomationsFocused'), ContextKeyExpr.has('sessionsAutomationDialogFocused'))
 						: ContextKeyExpr.has('sessionsAutomationsFocused'),
 				getProvider: accessor => {
 					const automations = accessor.get(IAutomationService);
-					const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as
-						HTMLElement | undefined;
+					const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement | undefined;
 					return new AccessibleContentProvider(
 						AccessibleViewProviderId.Automations,
 						{ type },
@@ -71,19 +53,10 @@ export function registerAutomationsAccessibility(): IDisposable {
 										'automations.hostHelp',
 										'When plans come from multiple hosts, each card identifies its host. Select Run on before choosing a directory or conversation. Changing hosts clears the previous directory and conversation. Only conversations from the selected host are offered.',
 									)
-								: (accessor
-										.get(ILayoutService)
-										.activeContainer.querySelector<HTMLElement>(
-											'.ash-automation-details:not([hidden])',
-										)?.innerText ??
+								: (accessor.get(ILayoutService).activeContainer.querySelector<HTMLElement>('.ash-automation-details:not([hidden])')?.innerText ??
 									[
 										...(automations.historyState?.get() === 'error'
-											? [
-													localize(
-														'automations.historyRefreshFailed',
-														'Run history could not be refreshed. Showing the last available history. Use Refresh to try again.',
-													),
-												]
+											? [localize('automations.historyRefreshFailed', 'Run history could not be refreshed. Showing the last available history. Use Refresh to try again.')]
 											: []),
 										...automations.automations
 											.get()
@@ -95,15 +68,10 @@ export function registerAutomationsAccessibility(): IDisposable {
 														'automations.hostedTitle',
 														'{0} · {1}',
 														plan.name,
-														automations.availableProviders
-															.get()
-															.find(provider => provider.id === plan.target.providerId)
-															?.label ??
+														automations.availableProviders.get().find(provider => provider.id === plan.target.providerId)?.label ??
 															localize('automations.hostOffline', 'Host unavailable'),
 													),
-													plan.enabled
-														? localize('automations.enabled', 'Enabled')
-														: localize('automations.paused', 'Paused'),
+													plan.enabled ? localize('automations.enabled', 'Enabled') : localize('automations.paused', 'Paused'),
 													plan.target.directory,
 													plan.prompt,
 												),

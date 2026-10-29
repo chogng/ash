@@ -19,17 +19,11 @@ test('response resources share immutable bytes by association and release only t
 	read.bytes[0] = 0;
 	assert.equal((await files.stat(first.resource)).readonly, true);
 	assert.equal(new TextDecoder().decode((await files.readFileBytes(first.resource)).bytes), '# File\r\n审阅\r\n');
-	await assert.rejects(
-		async () => files.writeFile({ resource: first.resource, content: 'overwrite' }),
-		FileOperationNotSupportedError,
-	);
+	await assert.rejects(async () => files.writeFile({ resource: first.resource, content: 'overwrite' }), FileOperationNotSupportedError);
 	await assert.rejects(provider.writeFile(), /read.only/iu);
 	assert.equal(new TextDecoder().decode((await files.readFileBytes(first.resource)).bytes), '# File\r\n审阅\r\n');
 	first.dispose();
-	assert.equal(
-		(await files.readFileBytes(second.resource)).bytes.length,
-		new TextEncoder().encode('# File\r\n审阅\r\n').length,
-	);
+	assert.equal((await files.readFileBytes(second.resource)).bytes.length, new TextEncoder().encode('# File\r\n审阅\r\n').length);
 	second.dispose();
 	await assert.rejects(files.readFileBytes(second.resource), /no longer available/iu);
 });
@@ -38,11 +32,7 @@ test('response resource reads cannot substitute a remote URI or another generate
 	using provider = new ChatResponseResourceFileSystemProvider();
 	using association = provider.associate(Uint8Array.from([0, 255, 1]), { name: 'data.bin' });
 	assert.deepEqual((await provider.readFile(association.resource)).bytes, Uint8Array.from([0, 255, 1]));
-	for (const resource of [
-		URI.parse('file:///data.bin'),
-		association.resource.with({ authority: 'other' }),
-		association.resource.with({ path: '/other.bin' }),
-	])
+	for (const resource of [URI.parse('file:///data.bin'), association.resource.with({ authority: 'other' }), association.resource.with({ path: '/other.bin' })])
 		await assert.rejects(provider.readFile(resource), /no longer available/iu);
 	provider.dispose();
 	await assert.rejects(provider.readFile(association.resource), /disposed/iu);

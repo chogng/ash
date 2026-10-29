@@ -2,13 +2,7 @@ import { Event } from '../../../base/common/event.js';
 import { LRUCache } from '../../../base/common/map.js';
 import type { IExtensionManagementService } from '../../extensionManagement/common/extensionManagementService.js';
 import type { IGlobalExtensionEnablementService } from '../../extensionManagement/common/extensionManagement.js';
-import type {
-	ExtensionCatalog,
-	ExtensionCatalogReload,
-	ExtensionDescriptor,
-	ExtensionResourceRequest,
-	IExtensionApi,
-} from '../common/extensionApi.js';
+import type { ExtensionCatalog, ExtensionCatalogReload, ExtensionDescriptor, ExtensionResourceRequest, IExtensionApi } from '../common/extensionApi.js';
 import { normalizeExtensionCatalog, MAX_EXTENSION_RESOURCE_BYTES } from '../common/extensionApi.js';
 import { readAppServerResource } from '../../agentHost/browser/appServerApi.js';
 import type { IResourceApi } from '../../agentHost/common/appServerApi.js';
@@ -30,10 +24,7 @@ export function createDisconnectedExtensionApi(unavailable: UnavailableOperation
 						source: 'builtIn',
 						subject: null,
 						code: 'sourceUnavailable',
-						message: localize(
-							'extensions.backend.unavailable',
-							'Connect to the App Server to load extensions.',
-						),
+						message: localize('extensions.backend.unavailable', 'Connect to the App Server to load extensions.'),
 					},
 				],
 			}),
@@ -49,8 +40,7 @@ export function withEnabledBuiltInExtensions(
 	supportsExtension?: (extension: ExtensionDescriptor) => boolean,
 ): IExtensionApi {
 	let preloadProviders = false;
-	let pendingProviders:
-		Promise<Awaited<ReturnType<IExtensionManagementService['listBuiltInProviders']>> | undefined> | undefined;
+	let pendingProviders: Promise<Awaited<ReturnType<IExtensionManagementService['listBuiltInProviders']>> | undefined> | undefined;
 	const readProviders = () => {
 		if (!management) return Promise.resolve(undefined);
 		if (pendingProviders) return pendingProviders;
@@ -75,20 +65,13 @@ export function withEnabledBuiltInExtensions(
 			const providerRead = !options?.includeDisabled && preloadProviders ? readProviders() : undefined;
 			const source = await catalogRead;
 			// Including disabled packages must not restore contributions owned by another window.
-			const catalog = supportsExtension
-				? { ...source, extensions: source.extensions.filter(supportsExtension) }
-				: source;
+			const catalog = supportsExtension ? { ...source, extensions: source.extensions.filter(supportsExtension) } : source;
 			if (options?.includeDisabled) {
 				return catalog;
 			}
 			const disabled = new Set(enablement.getDisabledExtensions().map(extension => extension.id));
 			const languageExtensions = new Set(
-				catalog.extensions
-					.filter(
-						extension =>
-							extension.sourceKind === 'builtIn' && JSON.parse(extension.manifestJson).ashLanguageServers,
-					)
-					.map(extension => extension.id),
+				catalog.extensions.filter(extension => extension.sourceKind === 'builtIn' && JSON.parse(extension.manifestJson).ashLanguageServers).map(extension => extension.id),
 			);
 			preloadProviders = languageExtensions.size > 0;
 			// The backend owns these extensions' enablement for both syntax and executable
@@ -108,18 +91,14 @@ export function withEnabledBuiltInExtensions(
 }
 
 /** Adapts the single Rust catalog and fences resource handles across connection incarnations. */
-export function createAppServerExtensionApi(
-	connection: AppServerProtocolClient,
-	resourceApi: IResourceApi,
-): IExtensionApi {
+export function createAppServerExtensionApi(connection: AppServerProtocolClient, resourceApi: IResourceApi): IExtensionApi {
 	let published: { connectionGeneration: number; backendGeneration: number; catalog: ExtensionCatalog } | undefined;
 	let generation = 0;
 	let pending: { readonly reload: ExtensionCatalogReload; readonly promise: Promise<ExtensionCatalog> } | undefined;
 	// Small immutable resources are shared by theme, declaration and executable loaders.
 	// Bound retained bytes to 64 × 128 KiB; large browser bundles remain uncached.
 	const resources = new LRUCache<string, Promise<Uint8Array>>(64);
-	const retired = () =>
-		new Error(localize('extensions.resources.retired', 'Extension resource generation has retired.'));
+	const retired = () => new Error(localize('extensions.resources.retired', 'Extension resource generation has retired.'));
 	return {
 		// An interrupted activation must retry against the newly initialized catalog.
 		onDidChange: (listener, thisArgs) =>
@@ -149,10 +128,7 @@ export function createAppServerExtensionApi(
 					return previous.catalog;
 				}
 				const catalog = normalizeExtensionCatalog(reply);
-				if (
-					published?.connectionGeneration === incarnation &&
-					published.backendGeneration === catalog.generation
-				) {
+				if (published?.connectionGeneration === incarnation && published.backendGeneration === catalog.generation) {
 					return published.catalog;
 				}
 				const exposed = Object.freeze({ ...catalog, generation: ++generation });
@@ -178,11 +154,7 @@ export function createAppServerExtensionApi(
 		},
 		resources: new ExtensionResourceLoaderService(async request => {
 			const snapshot = published;
-			if (
-				!snapshot ||
-				request.generation !== snapshot.catalog.generation ||
-				snapshot.connectionGeneration !== resourceApi.connectionGeneration
-			) {
+			if (!snapshot || request.generation !== snapshot.catalog.generation || snapshot.connectionGeneration !== resourceApi.connectionGeneration) {
 				throw retired();
 			}
 			const key = `${request.extensionId}\0${request.path}`;
@@ -211,11 +183,7 @@ export function createAppServerExtensionApi(
 	};
 }
 
-async function readExtensionResource(
-	connection: AppServerProtocolClient,
-	resourceApi: IResourceApi,
-	request: ExtensionResourceRequest,
-): Promise<Uint8Array> {
+async function readExtensionResource(connection: AppServerProtocolClient, resourceApi: IResourceApi, request: ExtensionResourceRequest): Promise<Uint8Array> {
 	const incarnation = resourceApi.connectionGeneration;
 	const opened = await appServerRequest(connection, 'extensions/resource/open', request);
 	return readAppServerResource(resourceApi, opened.resource, MAX_EXTENSION_RESOURCE_BYTES, undefined, incarnation);

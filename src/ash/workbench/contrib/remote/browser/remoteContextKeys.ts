@@ -9,10 +9,7 @@ import type { IAppServerRemoteAgentService } from '../../../services/remote/comm
 export type RemoteConnectionKind = 'unknown' | 'local' | 'ssh' | 'remote';
 
 export const RemoteConnectionKindContext = new RawContextKey<RemoteConnectionKind>('remoteConnectionKind', 'unknown');
-export const RemoteConnectionStateContext = new RawContextKey<RemoteConnectionState | 'unknown'>(
-	'remoteConnectionState',
-	'unknown',
-);
+export const RemoteConnectionStateContext = new RawContextKey<RemoteConnectionState | 'unknown'>('remoteConnectionState', 'unknown');
 export const RemoteConnectionsAvailableContext = new RawContextKey<boolean>('remoteConnectionsAvailable', false);
 
 export interface RemoteContextKeysOptions {
@@ -37,9 +34,7 @@ export class RemoteContextKeys extends Disposable implements IWorkbenchContribut
 		this.connectionKind.set(options.remoteAgentService.connection?.kind ?? 'unknown');
 		this.connectionState.set(options.remoteAgentService.connectionState ?? 'unknown');
 		this.connectionsAvailable.set(options.remoteConnectionService.available);
-		this._register(
-			options.remoteAgentService.onDidChangeConnection(connection => this.connectionKind.set(connection.kind)),
-		);
+		this._register(options.remoteAgentService.onDidChangeConnection(connection => this.connectionKind.set(connection.kind)));
 		this._register(options.remoteAgentService.onDidChangeConnectionState(state => this.connectionState.set(state)));
 		this._register(toDisposable(() => this.connectionKind.reset()));
 		this._register(toDisposable(() => this.connectionState.reset()));

@@ -10,11 +10,7 @@ import { registerEditorPane } from '../../../browser/editor.js';
 import { getBrowserTextResourceStore } from './browserTextResourceStore.js';
 import { createBrowserEditorPart } from './browserEditorPart.js';
 import { matchCodeEditor, matchDiffEditor } from './codeEditorInput.js';
-import {
-	CODE_EDITOR_ID,
-	TextResourceEditor,
-	type EditorPaneOptions,
-} from '../../../browser/parts/editor/textResourceEditor.js';
+import { CODE_EDITOR_ID, TextResourceEditor, type EditorPaneOptions } from '../../../browser/parts/editor/textResourceEditor.js';
 import { DIFF_EDITOR_ID } from '../../../common/editor/diffEditorInput.js';
 import { TextDiffEditor } from '../../../browser/parts/editor/textDiffEditor.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
@@ -28,14 +24,10 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { SaveParticipantsContribution } from './saveParticipants.js';
 import { DocumentSymbolsOutlineCreator } from './outline/documentSymbolsOutline.js';
 
-registerWorkbenchContribution('workbench.contrib.documentSymbolsOutline', WorkbenchPhase.BlockRestore, accessor =>
-	accessor.get(IInstantiationService).createInstance(DocumentSymbolsOutlineCreator),
-);
+registerWorkbenchContribution('workbench.contrib.documentSymbolsOutline', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(DocumentSymbolsOutlineCreator));
 
 // Cleanup uses CodeEditorService, whose EditorParts dependency is registered after BlockStartup.
-registerWorkbenchContribution(SaveParticipantsContribution.ID, WorkbenchPhase.BlockRestore, accessor =>
-	accessor.get(IInstantiationService).createInstance(SaveParticipantsContribution),
-);
+registerWorkbenchContribution(SaveParticipantsContribution.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(SaveParticipantsContribution));
 
 registerEditorPane({
 	id: CODE_EDITOR_ID,
@@ -47,8 +39,7 @@ registerEditorPane({
 		const configuration = options.configurationService;
 		const instantiationService = options.instantiationService;
 		if (!instantiationService) throw new Error('Stanza Code requires the Workbench instantiation service');
-		const isFile =
-			options.input?.resource.scheme === 'file' || (options.input && isRemoteResource(options.input.resource));
+		const isFile = options.input?.resource.scheme === 'file' || (options.input && isRemoteResource(options.input.resource));
 		const saveErrorHandler = isFile ? undefined : instantiationService.createInstance(TextFileSaveErrorHandler);
 		return instantiationService.createInstance(isFile ? TextFileEditor : TextResourceEditor, resourceStore, {
 			createPart: partOptions => createBrowserEditorPart(instantiationService, partOptions),
@@ -58,9 +49,7 @@ registerEditorPane({
 			experimentalGpuAcceleration: configuration?.getValue(CodeEditorConfiguration.experimentalGpuAcceleration),
 			wrappingIndent: configuration?.getValue(CodeEditorConfiguration.wrappingIndent),
 			renderLineHighlight: configuration?.getValue(CodeEditorConfiguration.renderLineHighlight),
-			renderLineHighlightOnlyWhenFocus: configuration?.getValue(
-				CodeEditorConfiguration.renderLineHighlightOnlyWhenFocus,
-			),
+			renderLineHighlightOnlyWhenFocus: configuration?.getValue(CodeEditorConfiguration.renderLineHighlightOnlyWhenFocus),
 			cursorStyle: configuration?.getValue(CodeEditorConfiguration.cursorStyle),
 			cursorBlinking: configuration?.getValue(CodeEditorConfiguration.cursorBlinking),
 			cursorSmoothCaretAnimation: configuration?.getValue(CodeEditorConfiguration.cursorSmoothCaretAnimation),
@@ -69,16 +58,9 @@ registerEditorPane({
 			guides: {
 				indentation: configuration?.getValue(CodeEditorConfiguration.indentationGuides),
 				bracketPairs: configuration?.getValue(CodeEditorConfiguration.bracketPairGuides),
-				bracketPairsHorizontal:
-					configuration?.getValue(CodeEditorConfiguration.bracketPairHorizontalGuides) === false
-						? false
-						: 'active',
-				highlightActiveBracketPair: configuration?.getValue(
-					CodeEditorConfiguration.highlightActiveBracketPairGuide,
-				),
-				highlightActiveIndentation: configuration?.getValue(
-					CodeEditorConfiguration.highlightActiveIndentationGuide,
-				),
+				bracketPairsHorizontal: configuration?.getValue(CodeEditorConfiguration.bracketPairHorizontalGuides) === false ? false : 'active',
+				highlightActiveBracketPair: configuration?.getValue(CodeEditorConfiguration.highlightActiveBracketPairGuide),
+				highlightActiveIndentation: configuration?.getValue(CodeEditorConfiguration.highlightActiveIndentationGuide),
 			},
 			bracketPairColorization: {
 				enabled: configuration?.getValue(CodeEditorConfiguration.bracketPairColorization) !== false,

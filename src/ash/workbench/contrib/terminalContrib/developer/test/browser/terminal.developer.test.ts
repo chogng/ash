@@ -11,13 +11,7 @@ import { InstantiationService } from '../../../../../../platform/instantiation/c
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../../services/commands/common/commandService.js';
 import { IStatusbarService, StatusbarAlignment } from '../../../../../services/statusbar/browser/statusbar.js';
-import {
-	ITerminalEditorService,
-	ITerminalGroupService,
-	ITerminalService,
-	type ITerminalInstance,
-	type IXtermTerminal,
-} from '../../../../terminal/browser/terminal.js';
+import { ITerminalEditorService, ITerminalGroupService, ITerminalService, type ITerminalInstance, type IXtermTerminal } from '../../../../terminal/browser/terminal.js';
 import type { IProcessDataEvent } from '../../../../../../platform/terminal/common/terminal.js';
 import { TerminalDeveloperCommandId } from '../../common/terminal.developer.js';
 import '../../browser/terminal.developer.contribution.js';

@@ -1,8 +1,4 @@
-import {
-	defaultButtonStyles,
-	defaultInputBoxStyles,
-	defaultSelectBoxStyles,
-} from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultInputBoxStyles, defaultSelectBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
@@ -101,7 +97,11 @@ export class SymphonyTasksView extends ViewPane {
 		const picker = this._register(
 			new SelectBox(
 				container,
-				{ options: [], ariaLabel: localize('symphony.workflow', 'Workflow'), presentation: 'field' },
+				{
+					options: [],
+					ariaLabel: localize('symphony.workflow', 'Workflow'),
+					presentation: 'field',
+				},
 				defaultSelectBoxStyles,
 			),
 		);
@@ -118,14 +118,7 @@ export class SymphonyTasksView extends ViewPane {
 				},
 			}),
 		);
-		container.append(
-			h(
-				document,
-				'p',
-				{ className: 'ash-symphony-muted' },
-				localize('symphony.dispatchHint', 'Pausing dispatch keeps current conversations running.'),
-			),
-		);
+		container.append(h(document, 'p', { className: 'ash-symphony-muted' }, localize('symphony.dispatchHint', 'Pausing dispatch keeps current conversations running.')));
 		const title = this._register(
 			new InputBox(container, {
 				inputBoxStyles: defaultInputBoxStyles,
@@ -152,11 +145,7 @@ export class SymphonyTasksView extends ViewPane {
 					if (picker.value && submittedTitle.trim()) {
 						void symphony.submit(picker.value, submittedTitle.trim(), submittedPrompt).then(() => {
 							// Submitting includes a refresh; preserve the next draft typed while it completes.
-							if (
-								!symphony.state.get().error &&
-								title.value === submittedTitle &&
-								prompt.value === submittedPrompt
-							) {
+							if (!symphony.state.get().error && title.value === submittedTitle && prompt.value === submittedPrompt) {
 								title.value = '';
 								prompt.value = '';
 							}
@@ -167,23 +156,14 @@ export class SymphonyTasksView extends ViewPane {
 		);
 		const error = h(document, 'p', { className: 'ash-symphony-error', attributes: { role: 'status' } });
 		const workflowError = h(document, 'p', { className: 'ash-symphony-error', attributes: { role: 'status' } });
-		container.append(
-			error,
-			workflowError,
-			h(document, 'h2', {}, localize('symphony.conversations', 'Conversations')),
-		);
+		container.append(error, workflowError, h(document, 'h2', {}, localize('symphony.conversations', 'Conversations')));
 		const list = h(document, 'div', {
 			className: 'ash-symphony-list',
 			attributes: { role: 'listbox', 'aria-label': localize('symphony.conversations', 'Conversations') },
 			properties: { tabIndex: 0 },
 		});
 		container.append(list);
-		const empty = h(
-			document,
-			'p',
-			{ className: 'ash-symphony-muted' },
-			localize('symphony.noConversations', 'Load a workflow and create a task, or wait for tracker issues.'),
-		);
+		const empty = h(document, 'p', { className: 'ash-symphony-muted' }, localize('symphony.noConversations', 'Load a workflow and create a task, or wait for tracker issues.'));
 		container.append(empty);
 		const rows = new Map<string, { node: HTMLElement; title: HTMLElement; metadata: HTMLElement }>();
 		const rowHovers = new Map<string, ReturnType<ReturnType<typeof getHoverDelegate>['setupHover']>>();
@@ -219,10 +199,7 @@ export class SymphonyTasksView extends ViewPane {
 		);
 		this._register(
 			addDisposableListener(container, 'focusin', event => {
-				if (
-					!container.contains(event.relatedTarget as Node) &&
-					configuration.getValue<boolean>(AccessibilityVerbositySettingId.Symphony)
-				) {
+				if (!container.contains(event.relatedTarget as Node) && configuration.getValue<boolean>(AccessibilityVerbositySettingId.Symphony)) {
 					status(localize('symphony.helpHint', 'Press Alt+F1 for Symphony keyboard help.'));
 				}
 			}),
@@ -233,9 +210,7 @@ export class SymphonyTasksView extends ViewPane {
 			picker.enabled = enable.enabled = symphony.available && !state.loading && state.workflows.length > 0;
 			create.enabled = symphony.available && !state.loading && !!picker.value && !!title.value.trim();
 			const workflow = state.workflows.find(workflow => workflow.id === picker.value);
-			enable.label = workflow?.enabled
-				? localize('symphony.disableWorkflow', 'Pause dispatch')
-				: localize('symphony.enableWorkflow', 'Resume dispatch');
+			enable.label = workflow?.enabled ? localize('symphony.disableWorkflow', 'Pause dispatch') : localize('symphony.enableWorkflow', 'Resume dispatch');
 			workflowError.textContent = workflow?.error ?? '';
 		};
 		this._register(title.onDidChange(updateControls));
@@ -280,10 +255,7 @@ export class SymphonyTasksView extends ViewPane {
 						list.append(node);
 						row = { node, title: heading, metadata };
 						rows.set(item.id, row);
-						rowHovers.set(
-							item.id,
-							this._register(getHoverDelegate().setupHover({ target: heading, content: item.title })),
-						);
+						rowHovers.set(item.id, this._register(getHoverDelegate().setupHover({ target: heading, content: item.title })));
 					}
 					row.title.textContent = item.title;
 					row.metadata.textContent = metrics(item);
@@ -294,13 +266,7 @@ export class SymphonyTasksView extends ViewPane {
 				empty.hidden = state.conversations.length > 0;
 				list.setAttribute('aria-activedescendant', state.selected ? `symphony-${state.selected}` : '');
 				if (!state.conversations.length) {
-					list.setAttribute(
-						'aria-description',
-						localize(
-							'symphony.noConversations',
-							'Load a workflow and create a task, or wait for tracker issues.',
-						),
-					);
+					list.setAttribute('aria-description', localize('symphony.noConversations', 'Load a workflow and create a task, or wait for tracker issues.'));
 				} else {
 					list.removeAttribute('aria-description');
 				}
@@ -349,10 +315,7 @@ export class SymphonyMonitorEditor extends EditorPane {
 			document,
 			'p',
 			{ className: 'ash-symphony-muted' },
-			localize(
-				'symphony.cumulative',
-				'Totals include every run, resume and retry in this conversation. Runtime excludes paused time.',
-			),
+			localize('symphony.cumulative', 'Totals include every run, resume and retry in this conversation. Runtime excludes paused time.'),
 		);
 		const actions = h(document, 'div', { className: 'ash-symphony-actions' });
 		this.domNode.append(heading, metadata, note, actions);
@@ -403,9 +366,7 @@ export class SymphonyMonitorEditor extends EditorPane {
 			properties: { tabIndex: 0 },
 		});
 		this.domNode.append(error, blocked);
-		const scrollable = this._register(
-			new ScrollableElement(this.domNode, { horizontal: 'hidden', vertical: 'auto' }),
-		);
+		const scrollable = this._register(new ScrollableElement(this.domNode, { horizontal: 'hidden', vertical: 'auto' }));
 		scrollable.contentElement.append(messages);
 		let previousMessages = '';
 		this._register(
@@ -413,41 +374,22 @@ export class SymphonyMonitorEditor extends EditorPane {
 				const state = this.symphony.state.read(reader);
 				const item = state.conversations.find(item => item.id === state.selected);
 				heading.textContent = item?.title ?? 'Symphony';
-				metadata.textContent = item
-					? metrics(item)
-					: localize('symphony.empty', 'Load a WORKFLOW.md file to begin.');
+				metadata.textContent = item ? metrics(item) : localize('symphony.empty', 'Load a WORKFLOW.md file to begin.');
 				note.hidden = !item;
 				pause.hidden = !item || ['paused', 'completed', 'stopping'].includes(item.status);
 				resume.hidden = !item || !['paused', 'completed'].includes(item.status);
 				complete.hidden = !item || item.status === 'completed';
 				pause.enabled = resume.enabled = complete.enabled = !state.loading;
 				error.textContent = state.error ?? item?.error ?? '';
-				blocked.textContent =
-					item?.status === 'blocked'
-						? localize(
-								'symphony.blockedHint',
-								'This conversation is waiting for approval or input. Respond in its Chat to continue.',
-							)
-						: '';
+				blocked.textContent = item?.status === 'blocked' ? localize('symphony.blockedHint', 'This conversation is waiting for approval or input. Respond in its Chat to continue.') : '';
 				const serialized = JSON.stringify([state.selected, state.messages]);
 				if (serialized !== previousMessages) {
-					const follow =
-						scrollable.scrollableElement.scrollHeight -
-							scrollable.scrollableElement.scrollTop -
-							scrollable.scrollableElement.clientHeight <
-						48;
+					const follow = scrollable.scrollableElement.scrollHeight - scrollable.scrollableElement.scrollTop - scrollable.scrollableElement.clientHeight < 48;
 					messages.replaceChildren(
 						...state.messages.map(message => {
 							const article = h(document, 'article', { className: 'ash-symphony-message' });
 							article.append(
-								h(
-									document,
-									'h2',
-									{},
-									message.role === 'user'
-										? localize('symphony.you', 'You')
-										: localize('symphony.assistant', 'Assistant'),
-								),
+								h(document, 'h2', {}, message.role === 'user' ? localize('symphony.you', 'You') : localize('symphony.assistant', 'Assistant')),
 								h(document, 'p', {}, message.text),
 							);
 							return article;
@@ -501,13 +443,7 @@ export function statusLabel(value: SymphonyStatus): string {
 function metrics(item: SymphonyConversation): string {
 	const seconds = Math.floor(item.durationMs / 1000);
 	const runtime = `${Math.floor(seconds / 3600)}:${String(Math.floor(seconds / 60) % 60).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
-	return localize(
-		'symphony.metrics',
-		'{0} · {1} tokens · {2}',
-		statusLabel(item.status),
-		`${item.tokensComplete ? '' : '≥'}${item.tokens.toLocaleString()}`,
-		runtime,
-	);
+	return localize('symphony.metrics', '{0} · {1} tokens · {2}', statusLabel(item.status), `${item.tokensComplete ? '' : '≥'}${item.tokens.toLocaleString()}`, runtime);
 }
 export function symphonyAccessibleContent(service: ISymphonyService): string {
 	const state = service.state.get();
@@ -518,10 +454,7 @@ export function symphonyAccessibleContent(service: ISymphonyService): string {
 		...state.workflows.map(workflow => `${workflow.path}\n${workflow.error ?? ''}`),
 		...state.conversations.map(item => `${item.title}\n${metrics(item)}`),
 		item?.error,
-		...state.messages.map(
-			message =>
-				`${message.role === 'user' ? localize('symphony.you', 'You') : localize('symphony.assistant', 'Assistant')}\n${message.text}`,
-		),
+		...state.messages.map(message => `${message.role === 'user' ? localize('symphony.you', 'You') : localize('symphony.assistant', 'Assistant')}\n${message.text}`),
 	]
 		.filter(Boolean)
 		.join('\n\n');

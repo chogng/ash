@@ -18,10 +18,7 @@ import {
 } from '../common/files.js';
 
 /** Owns file operation validation and serialization independently of the IPC host. */
-export abstract class AbstractDiskFileSystemProviderChannel<TContext>
-	extends Disposable
-	implements IServerChannel<TContext>
-{
+export abstract class AbstractDiskFileSystemProviderChannel<TContext> extends Disposable implements IServerChannel<TContext> {
 	private readonly streams = this._register(new DisposableMap<object, DisposableStore>());
 	private readonly watches = this._register(new DisposableMap<object, DisposableStore>());
 
@@ -125,25 +122,16 @@ export abstract class AbstractDiskFileSystemProviderChannel<TContext>
 		if (event !== 'fileChange') {
 			throw new Error(`Unknown file event: ${event}`);
 		}
-		return Event.map(this.provider.onDidChangeFiles, change =>
-			change.resources?.map(resource => resource.toString()),
-		) as Event<T>;
+		return Event.map(this.provider.onDidChangeFiles, change => change.resources?.map(resource => resource.toString())) as Event<T>;
 	}
 
-	public async call<T>(
-		_context: TContext,
-		command: string,
-		value?: unknown,
-		token: CancellationToken = CancellationToken.None,
-	): Promise<T> {
+	public async call<T>(_context: TContext, command: string, value?: unknown, token: CancellationToken = CancellationToken.None): Promise<T> {
 		this.assertNotDisposed();
 		if (token.isCancellationRequested) {
 			throw canceled();
 		}
 		if (
-			!['stat', 'readdir', 'readFile', 'writeFile', 'createFile', 'mkdir', 'copy', 'rename', 'delete'].includes(
-				command,
-			) ||
+			!['stat', 'readdir', 'readFile', 'writeFile', 'createFile', 'mkdir', 'copy', 'rename', 'delete'].includes(command) ||
 			!isRecord(value) ||
 			typeof value.resource !== 'string' ||
 			value.resource.length > 8192
@@ -188,11 +176,7 @@ export abstract class AbstractDiskFileSystemProviderChannel<TContext>
 				if (bytes.byteLength > 50 * 1024 * 1024) {
 					throw new TypeError('File write is too large');
 				}
-				const written = await this.provider.writeFile(
-					resource,
-					bytes,
-					value.options as unknown as IFileWriteOptions,
-				);
+				const written = await this.provider.writeFile(resource, bytes, value.options as unknown as IFileWriteOptions);
 				result = { ...written, stat: { ...written.stat, resource: resource.toString() } };
 				break;
 			}
@@ -208,24 +192,13 @@ export abstract class AbstractDiskFileSystemProviderChannel<TContext>
 				result = await this.provider.copy(resource, this.resource(value.target));
 				break;
 			case 'rename':
-				result = await this.provider.rename(
-					resource,
-					this.resource(value.target),
-					this.existing(value.existing),
-				);
+				result = await this.provider.rename(resource, this.resource(value.target), this.existing(value.existing));
 				break;
 			case 'delete': {
-				if (
-					!['error', 'ignore'].includes(value.missing as string) ||
-					!['fileOrEmptyDirectory', 'recursive'].includes(value.mode as string)
-				) {
+				if (!['error', 'ignore'].includes(value.missing as string) || !['fileOrEmptyDirectory', 'recursive'].includes(value.mode as string)) {
 					throw new TypeError('Invalid file delete');
 				}
-				result = await this.provider.delete(
-					resource,
-					value.missing as FileMissingTargetBehavior,
-					value.mode as FileDeleteMode,
-				);
+				result = await this.provider.delete(resource, value.missing as FileMissingTargetBehavior, value.mode as FileDeleteMode);
 				break;
 			}
 		}

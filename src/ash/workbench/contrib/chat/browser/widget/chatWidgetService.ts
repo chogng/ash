@@ -29,8 +29,7 @@ export class ChatWidgetService extends Disposable implements IChatWidgetService 
 				if (widget.visible) this.focused = widget;
 			}),
 		);
-		if (widget.visible && widget.domNode.contains(widget.domNode.ownerDocument.activeElement))
-			this.focused = widget;
+		if (widget.visible && widget.domNode.contains(widget.domNode.ownerDocument.activeElement)) this.focused = widget;
 		this.changed.fire();
 		return toDisposable(() => {
 			if (this.focused === widget) this.focused = undefined;

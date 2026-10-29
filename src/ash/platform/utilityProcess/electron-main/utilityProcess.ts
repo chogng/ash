@@ -1,9 +1,4 @@
-import {
-	MessageChannelMain,
-	utilityProcess,
-	type MessagePortMain,
-	type UtilityProcess as ElectronUtilityProcess,
-} from 'electron/main';
+import { MessageChannelMain, utilityProcess, type MessagePortMain, type UtilityProcess as ElectronUtilityProcess } from 'electron/main';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 
 export interface IUtilityProcessConfiguration {

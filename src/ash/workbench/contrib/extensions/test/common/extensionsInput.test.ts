@@ -62,10 +62,7 @@ test('Extensions tabs restore the selected installation without persisting capab
 	assert.equal(restored.readOnly, true);
 	using otherVersion = new ExtensionsInput({ ...summary, version: '2.0.0' }, 'installation-two');
 	assert.equal(restored.matches(otherVersion), false);
-	assert.throws(
-		() => EditorInputSerializers.deserialize({ typeId: input.typeId, value: { ...summary, installationId: 12 } }),
-		TypeError,
-	);
+	assert.throws(() => EditorInputSerializers.deserialize({ typeId: input.typeId, value: { ...summary, installationId: 12 } }), TypeError);
 });
 
 test('Extensions restores built-in and local sources separately and accepts older registry tabs', () => {
@@ -134,11 +131,7 @@ test('Capability tabs restore Skill, Connector and MCP identities without catalo
 			}),
 		TypeError,
 	);
-	assert.throws(
-		() =>
-			EditorInputSerializers.deserialize({ typeId: 'ash.extensions.capabilityInput', value: { kind: 'other' } }),
-		TypeError,
-	);
+	assert.throws(() => EditorInputSerializers.deserialize({ typeId: 'ash.extensions.capabilityInput', value: { kind: 'other' } }), TypeError);
 });
 
 test('legacy built-in Rust tabs restore and persist the Ash identity', () => {

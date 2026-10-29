@@ -5,10 +5,7 @@ import { ViewContainerLocation } from '../../common/views.js';
 import { IWorkbenchLayoutService, type WorkbenchPartId } from '../../services/layout/browser/layoutService.js';
 import { ILocalizationService } from '../../services/localization/common/localizationService.js';
 import { IViewDescriptorService } from '../../common/views.js';
-import {
-	type IPaneCompositePartService,
-	type PaneCompositeEvent,
-} from '../../services/panecomposite/browser/panecomposite.js';
+import { type IPaneCompositePartService, type PaneCompositeEvent } from '../../services/panecomposite/browser/panecomposite.js';
 import type { PaneCompositePart } from './paneCompositePart.js';
 import { PaneComposite } from '../panecomposite.js';
 import type { IProgressIndicator } from '../../../platform/progress/common/progress.js';
@@ -30,34 +27,19 @@ export class PaneCompositePartService extends Disposable implements IPaneComposi
 		super();
 		for (const [viewContainerLocation, part] of parts) {
 			// Parts publish close before removing the retained instance from their collection.
-			this._register(
-				part.onDidCompositeOpen(({ composite }) =>
-					this.opened.fire({ composite: part.getComposite(composite.getId())!, viewContainerLocation }),
-				),
-			);
-			this._register(
-				part.onDidCompositeClose(composite =>
-					this.closed.fire({ composite: part.getComposite(composite.getId())!, viewContainerLocation }),
-				),
-			);
+			this._register(part.onDidCompositeOpen(({ composite }) => this.opened.fire({ composite: part.getComposite(composite.getId())!, viewContainerLocation })));
+			this._register(part.onDidCompositeClose(composite => this.closed.fire({ composite: part.getComposite(composite.getId())!, viewContainerLocation })));
 		}
 	}
 
-	public async openPaneComposite(
-		id: string | undefined,
-		location: ViewContainerLocation,
-		focus = false,
-	): Promise<PaneComposite | undefined> {
+	public async openPaneComposite(id: string | undefined, location: ViewContainerLocation, focus = false): Promise<PaneComposite | undefined> {
 		const part = this.getPart(location);
 		const containerId = id ?? part.getCompositeIdToRestore();
 		const container = this.descriptors.getViewContainers(location).find(candidate => candidate.id === containerId);
 		if (!container) {
 			return undefined;
 		}
-		if (
-			container.hideIfEmpty &&
-			this.descriptors.getViewContainerModel(container.id).activeViewDescriptors.length === 0
-		) {
+		if (container.hideIfEmpty && this.descriptors.getViewContainerModel(container.id).activeViewDescriptors.length === 0) {
 			return undefined;
 		}
 		let composite = part.getComposite(container.id);
@@ -70,9 +52,7 @@ export class PaneCompositePartService extends Disposable implements IPaneComposi
 					throw error;
 				},
 				...part.getPaneCompositeOptions(),
-				...(container.mergeViewWithContainerWhenSingleView === undefined
-					? {}
-					: { mergeViewWithContainerWhenSingleView: container.mergeViewWithContainerWhenSingleView }),
+				...(container.mergeViewWithContainerWhenSingleView === undefined ? {} : { mergeViewWithContainerWhenSingleView: container.mergeViewWithContainerWhenSingleView }),
 			};
 			const created = container.ctorDescriptor
 				? this.instantiation.createInstance(container.ctorDescriptor, part.domNode, options)

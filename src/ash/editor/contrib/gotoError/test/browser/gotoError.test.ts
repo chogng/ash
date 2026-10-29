@@ -41,27 +41,15 @@ test('F8 navigates current diagnostics in both directions', () => {
 	const next = key(dom.window, false);
 	input.dispatchEvent(next);
 	assert.equal(next.defaultPrevented, true);
-	assert.deepEqual(
-		viewport.testViewModel.getSelections()[0]!,
-		Selection.fromPositions(new Position(0 + 1, 1 + 1), new Position(0 + 1, 2 + 1)),
-	);
-	assert.equal(
-		viewport.domNode.domNode.querySelector('.stanza-editor-accessibility-status')?.textContent,
-		'warning: first',
-	);
+	assert.deepEqual(viewport.testViewModel.getSelections()[0]!, Selection.fromPositions(new Position(0 + 1, 1 + 1), new Position(0 + 1, 2 + 1)));
+	assert.equal(viewport.domNode.domNode.querySelector('.stanza-editor-accessibility-status')?.textContent, 'warning: first');
 	input.dispatchEvent(key(dom.window, false));
-	assert.deepEqual(
-		viewport.testViewModel.getSelections()[0]!,
-		Selection.fromPositions(new Position(2 + 1, 1 + 1), new Position(2 + 1, 3 + 1)),
-	);
+	assert.deepEqual(viewport.testViewModel.getSelections()[0]!, Selection.fromPositions(new Position(2 + 1, 1 + 1), new Position(2 + 1, 3 + 1)));
 	const previous = key(dom.window, true);
 	assert.equal(previous.shiftKey, true);
 	input.dispatchEvent(previous);
 	assert.equal(previous.defaultPrevented, true);
-	assert.deepEqual(
-		viewport.testViewModel.getSelections()[0]!,
-		Selection.fromPositions(new Position(0 + 1, 1 + 1), new Position(0 + 1, 2 + 1)),
-	);
+	assert.deepEqual(viewport.testViewModel.getSelections()[0]!, Selection.fromPositions(new Position(0 + 1, 1 + 1), new Position(0 + 1, 2 + 1)));
 	dom.window.close();
 });
 

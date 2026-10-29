@@ -1,12 +1,4 @@
-import {
-	AstNode,
-	AstNodeKind,
-	BracketAstNode,
-	InvalidBracketAstNode,
-	ListAstNode,
-	PairAstNode,
-	TextAstNode,
-} from './ast.js';
+import { AstNode, AstNodeKind, BracketAstNode, InvalidBracketAstNode, ListAstNode, PairAstNode, TextAstNode } from './ast.js';
 import { BeforeEditPositionMapper, TextEditInfo } from './beforeEditPositionMapper.js';
 import { SmallImmutableSet } from './smallImmutableSet.js';
 import { lengthIsZero, lengthLessThan } from './length.js';
@@ -17,12 +9,7 @@ import { OpeningBracketId, Tokenizer, TokenKind } from './tokenizer.js';
 /**
  * Non incrementally built ASTs are immutable.
  */
-export function parseDocument(
-	tokenizer: Tokenizer,
-	edits: TextEditInfo[],
-	oldNode: AstNode | undefined,
-	createImmutableLists: boolean,
-): AstNode {
+export function parseDocument(tokenizer: Tokenizer, edits: TextEditInfo[], oldNode: AstNode | undefined, createImmutableLists: boolean): AstNode {
 	const parser = new Parser(tokenizer, edits, oldNode, createImmutableLists);
 	return parser.parseDocument();
 }
@@ -84,10 +71,7 @@ class Parser {
 
 			if (!child) {
 				const token = this.tokenizer.peek();
-				if (
-					!token ||
-					(token.kind === TokenKind.ClosingBracket && token.bracketIds.intersects(openedBracketIds))
-				) {
+				if (!token || (token.kind === TokenKind.ClosingBracket && token.bracketIds.intersects(openedBracketIds))) {
 					break;
 				}
 
@@ -102,9 +86,7 @@ class Parser {
 		}
 
 		// When there is no oldNodeReader, all items are created from scratch and must have the same height.
-		const result = this.oldNodeReader
-			? concat23Trees(items)
-			: concat23TreesOfSameHeight(items, this.createImmutableLists);
+		const result = this.oldNodeReader ? concat23Trees(items) : concat23TreesOfSameHeight(items, this.createImmutableLists);
 		return result;
 	}
 
@@ -112,20 +94,17 @@ class Parser {
 		if (this.oldNodeReader) {
 			const maxCacheableLength = this.positionMapper.getDistanceToNextChange(this.tokenizer.offset);
 			if (maxCacheableLength === null || !lengthIsZero(maxCacheableLength)) {
-				const cachedNode = this.oldNodeReader.readLongestNodeAt(
-					this.positionMapper.getOffsetBeforeChange(this.tokenizer.offset),
-					curNode => {
-						// The edit could extend the ending token, thus we cannot reuse nodes that touch the edit.
-						// If there is no edit anymore, we can reuse the node in any case.
-						if (maxCacheableLength !== null && !lengthLessThan(curNode.length, maxCacheableLength)) {
-							// Either the node contains edited text or touches edited text.
-							// In the latter case, brackets might have been extended (`end` -> `ending`), so even touching nodes cannot be reused.
-							return false;
-						}
-						const canBeReused = curNode.canBeReused(openedBracketIds);
-						return canBeReused;
-					},
-				);
+				const cachedNode = this.oldNodeReader.readLongestNodeAt(this.positionMapper.getOffsetBeforeChange(this.tokenizer.offset), curNode => {
+					// The edit could extend the ending token, thus we cannot reuse nodes that touch the edit.
+					// If there is no edit anymore, we can reuse the node in any case.
+					if (maxCacheableLength !== null && !lengthLessThan(curNode.length, maxCacheableLength)) {
+						// Either the node contains edited text or touches edited text.
+						// In the latter case, brackets might have been extended (`end` -> `ending`), so even touching nodes cannot be reused.
+						return false;
+					}
+					const canBeReused = curNode.canBeReused(openedBracketIds);
+					return canBeReused;
+				});
 
 				if (cachedNode) {
 					this._itemsFromCache++;
@@ -159,17 +138,9 @@ class Parser {
 				const child = this.parseList(set, level + 1);
 
 				const nextToken = this.tokenizer.peek();
-				if (
-					nextToken &&
-					nextToken.kind === TokenKind.ClosingBracket &&
-					(nextToken.bracketId === token.bracketId || nextToken.bracketIds.intersects(token.bracketIds))
-				) {
+				if (nextToken && nextToken.kind === TokenKind.ClosingBracket && (nextToken.bracketId === token.bracketId || nextToken.bracketIds.intersects(token.bracketIds))) {
 					this.tokenizer.read();
-					return PairAstNode.create(
-						token.astNode as BracketAstNode,
-						child,
-						nextToken.astNode as BracketAstNode,
-					);
+					return PairAstNode.create(token.astNode as BracketAstNode, child, nextToken.astNode as BracketAstNode);
 				} else {
 					return PairAstNode.create(token.astNode as BracketAstNode, child, null);
 				}

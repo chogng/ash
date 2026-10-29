@@ -76,9 +76,7 @@ for (const direction of ['Previous', 'Next'] as const) {
 				super({
 					id: `workbench.statusBar.focus${direction}`,
 					get title() {
-						return direction === 'Next'
-							? localize2('statusbar.focusNext', 'Focus Next Status Bar Entry')
-							: localize2('statusbar.focusPrevious', 'Focus Previous Status Bar Entry');
+						return direction === 'Next' ? localize2('statusbar.focusNext', 'Focus Next Status Bar Entry') : localize2('statusbar.focusPrevious', 'Focus Previous Status Bar Entry');
 					},
 					keybinding: {
 						primary: Keybinding.single(logicalKey(direction === 'Next' ? 'ArrowRight' : 'ArrowLeft')),
@@ -103,9 +101,7 @@ for (const edge of ['First', 'Last'] as const) {
 				super({
 					id: `workbench.statusBar.focus${edge}`,
 					get title() {
-						return edge === 'First'
-							? localize2('statusbar.focusFirst', 'Focus First Status Bar Entry')
-							: localize2('statusbar.focusLast', 'Focus Last Status Bar Entry');
+						return edge === 'First' ? localize2('statusbar.focusFirst', 'Focus First Status Bar Entry') : localize2('statusbar.focusLast', 'Focus Last Status Bar Entry');
 					},
 					keybinding: {
 						primary: Keybinding.single(logicalKey(edge === 'First' ? 'Home' : 'End')),

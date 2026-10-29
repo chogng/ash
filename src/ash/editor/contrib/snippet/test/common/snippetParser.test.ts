@@ -53,8 +53,17 @@ test('Completion snippets resolve explicit variables and retain defaults for unk
 			},
 		},
 	});
-	assert.deepEqual(snippet, { text: 'main.ts:fallback', placeholderGroups: [] });
-	assert.throws(() => parseSnippet('$MISSING', { variables: { resolveVariable: () => undefined } }), /has no value/);
+	assert.deepEqual(snippet, {
+		text: 'main.ts:fallback',
+		placeholderGroups: [],
+	});
+	assert.throws(
+		() =>
+			parseSnippet('$MISSING', {
+				variables: { resolveVariable: () => undefined },
+			}),
+		/has no value/,
+	);
 });
 
 test('Completion snippets apply deterministic tabstop and variable transforms during expansion', () => {
@@ -92,7 +101,11 @@ test('Completion snippets apply deterministic tabstop and variable transforms du
 
 test('Completion snippets reject malformed transform syntax before acceptance', () => {
 	for (const source of ['${1/[/x/}', '${1/a/x/z}', '${TM_FILENAME/a/x/']) {
-		assert.throws(() => parseSnippet(source, { variables: { resolveVariable: () => 'value' } }));
+		assert.throws(() =>
+			parseSnippet(source, {
+				variables: { resolveVariable: () => 'value' },
+			}),
+		);
 	}
 });
 

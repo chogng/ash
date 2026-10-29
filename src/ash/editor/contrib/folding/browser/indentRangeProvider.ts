@@ -6,10 +6,7 @@ export interface EditorIndentFoldingOptions {
 }
 
 /** Computes provider-owned fold ranges from decreasing leading indentation. */
-export function computeEditorIndentFoldingRanges(
-	model: TextModel,
-	options: EditorIndentFoldingOptions = {},
-): readonly EditorFoldingRange[] {
+export function computeEditorIndentFoldingRanges(model: TextModel, options: EditorIndentFoldingOptions = {}): readonly EditorFoldingRange[] {
 	const tabSize = readTabSize(options.tabSize);
 	const stack: IndentLine[] = [];
 	const ranges: EditorFoldingRange[] = [];
@@ -42,7 +39,12 @@ interface IndentLine {
 function appendRange(ranges: EditorFoldingRange[], startLineIndex: number, endLineIndex: number): void {
 	if (endLineIndex <= startLineIndex) return;
 	ranges.push(
-		Object.freeze({ startLineIndex, endLineIndex, collapsed: false, source: EditorFoldingRangeSource.Provider }),
+		Object.freeze({
+			startLineIndex,
+			endLineIndex,
+			collapsed: false,
+			source: EditorFoldingRangeSource.Provider,
+		}),
 	);
 }
 

@@ -48,12 +48,7 @@ function validateKeybindingEntry(value: unknown, index: number): IUserFriendlyKe
 		if (!parser.parse(when)) {
 			const error = parser.lexingErrors[0] ?? parser.parsingErrors[0];
 			throw new SyntaxError(
-				localize(
-					'contextkey.invalidWhen',
-					'Invalid when condition at offset {0}: {1}',
-					error.offset,
-					parser.parsingErrors[0]?.message ?? parser.lexingErrors[0]?.additionalInfo,
-				),
+				localize('contextkey.invalidWhen', 'Invalid when condition at offset {0}: {1}', error.offset, parser.parsingErrors[0]?.message ?? parser.lexingErrors[0]?.additionalInfo),
 			);
 		}
 	}

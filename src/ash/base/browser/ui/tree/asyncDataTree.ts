@@ -81,10 +81,7 @@ export interface CompressibleAsyncDataTreeOptions<T> extends AsyncDataTreeCommon
 	readonly getHeight?: (elements: readonly T[]) => number;
 	readonly dnd?: TreeDragAndDrop<T>;
 	readonly keyboardNavigationLabelProvider?: CompressibleKeyboardNavigationLabelProvider<T>;
-	readonly renderCompressedElements: (
-		elements: readonly T[],
-		node: ObjectTreeNode<CompressedTreeNode<T>>,
-	) => HTMLElement;
+	readonly renderCompressedElements: (elements: readonly T[], node: ObjectTreeNode<CompressedTreeNode<T>>) => HTMLElement;
 	readonly renderTwistie?: (elements: readonly T[], state: AsyncTreeTwistieState, container: HTMLSpanElement) => void;
 }
 
@@ -140,12 +137,7 @@ interface AsyncTreeCollapseEvent<T> {
 }
 
 interface AsyncTreeView<T> extends IDisposable {
-	updateOptions(
-		options: Pick<
-			AsyncDataTreeCommonOptions<T>,
-			'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'
-		> & { readonly compressionEnabled?: boolean },
-	): void;
+	updateOptions(options: Pick<AsyncDataTreeCommonOptions<T>, 'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'> & { readonly compressionEnabled?: boolean }): void;
 	readonly element: HTMLDivElement;
 	readonly domNode: HTMLDivElement;
 	readonly onPointer: Event<AsyncTreePointerEvent<T>>;
@@ -221,18 +213,14 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		protected readonly options: TOptions,
 	) {
 		super();
-		this.compressionEnabled =
-			'renderCompressedElements' in options
-				? (options as unknown as CompressibleAsyncDataTreeOptions<T>).compressionEnabled !== false
-				: undefined;
+		this.compressionEnabled = 'renderCompressedElements' in options ? (options as unknown as CompressibleAsyncDataTreeOptions<T>).compressionEnabled !== false : undefined;
 		this.tree = this._register(this.createTree(container, options));
 		this.element = this.tree.element;
 		this.domNode = this.tree.domNode;
 		this._register(
 			this.tree.onDidChangeCollapseState(({ element, collapsed }) => {
 				const state = this.states.get(this.getId(element));
-				if (!collapsed && state?.hasChildren && state.children === undefined && !this.isLoading(element))
-					void this.updateChildren(element).catch(() => undefined);
+				if (!collapsed && state?.hasChildren && state.children === undefined && !this.isLoading(element)) void this.updateChildren(element).catch(() => undefined);
 			}),
 		);
 		this._register(
@@ -249,12 +237,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	getInput(): TInput | undefined {
 		return this.input;
 	}
-	public updateOptions(
-		options: Pick<
-			AsyncDataTreeCommonOptions<T>,
-			'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'
-		> & { readonly compressionEnabled?: boolean },
-	): void {
+	public updateOptions(options: Pick<AsyncDataTreeCommonOptions<T>, 'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'> & { readonly compressionEnabled?: boolean }): void {
 		const state = this.getViewState();
 		if (options.compressionEnabled !== undefined) this.compressionEnabled = options.compressionEnabled;
 		this.tree.updateOptions(options);
@@ -287,9 +270,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		return {
 			focus: this.focus ? [this.getId(this.focus)] : [],
 			selection: this.selection.map(element => this.getId(element)),
-			expanded: [...this.states.values()]
-				.filter(state => state.hasChildren && this.tree.isCollapsed(state.element) === false)
-				.map(state => state.id),
+			expanded: [...this.states.values()].filter(state => state.hasChildren && this.tree.isCollapsed(state.element) === false).map(state => state.id),
 			scrollTop: this.scrollTop,
 		};
 	}
@@ -374,19 +355,13 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		if (generation !== this.generation || this.isDisposed) return;
 		const focused = viewState.focus?.[0];
 		if (focused && this.states.has(focused)) this.setFocus(this.states.get(focused)!.element);
-		this.setSelection(
-			(viewState.selection ?? []).flatMap(id => (this.states.has(id) ? [this.states.get(id)!.element] : [])),
-		);
+		this.setSelection((viewState.selection ?? []).flatMap(id => (this.states.has(id) ? [this.states.get(id)!.element] : [])));
 		if (viewState.scrollTop !== undefined) this.scrollTop = viewState.scrollTop;
 	}
 
-	async updateChildren(
-		element: TInput | T = this.requireInput(),
-		options: AsyncDataTreeUpdateOptions = {},
-	): Promise<void> {
+	async updateChildren(element: TInput | T = this.requireInput(), options: AsyncDataTreeUpdateOptions = {}): Promise<void> {
 		const parentId = element === this.input ? undefined : this.getId(element as T);
-		if (parentId !== undefined && !this.states.has(parentId))
-			throw new RangeError(`Unknown AsyncDataTree element: ${parentId}`);
+		if (parentId !== undefined && !this.states.has(parentId)) throw new RangeError(`Unknown AsyncDataTree element: ${parentId}`);
 		if (options.deferIfCollapsed && parentId !== undefined && this.canDeferChildren(element as T)) {
 			this.invalidateChildren(parentId);
 			return;
@@ -396,12 +371,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		if (options.deferIfCollapsed && current) {
 			// A change arriving during a read must be resolved after that read, not lost to request coalescing.
 			await current.promise.catch(() => undefined);
-			if (
-				this.isDisposed ||
-				generation !== this.generation ||
-				(parentId !== undefined && !this.states.has(parentId))
-			)
-				return;
+			if (this.isDisposed || generation !== this.generation || (parentId !== undefined && !this.states.has(parentId))) return;
 			if (parentId !== undefined && this.canDeferChildren(element as T)) {
 				this.invalidateChildren(parentId);
 				return;
@@ -443,12 +413,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		return id;
 	}
 
-	private async loadChildren(
-		parent: TInput | T,
-		parentId: string | undefined,
-		generation: number,
-		options: AsyncDataTreeUpdateOptions = {},
-	): Promise<void> {
+	private async loadChildren(parent: TInput | T, parentId: string | undefined, generation: number, options: AsyncDataTreeUpdateOptions = {}): Promise<void> {
 		const requestKey = parentId;
 		const current = this.requests.get(requestKey);
 		if (current?.generation === generation) return current.promise;
@@ -465,11 +430,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 				const resolvedCompact = new Set<string>();
 				if (this.compressionEnabled && this.options.isIncompressible) {
 					const ids = parentId === undefined ? this.rootChildren : this.states.get(parentId)!.children!;
-					await Promise.all(
-						ids.map(id =>
-							this.resolveCompactChain(id, generation, resolvedCompact, options.deferIfCollapsed),
-						),
-					);
+					await Promise.all(ids.map(id => this.resolveCompactChain(id, generation, resolvedCompact, options.deferIfCollapsed)));
 					if (!this.isCurrentRequest(requestKey, request)) return;
 				}
 				const viewState = this.getViewState();
@@ -481,21 +442,15 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 					);
 				this.restoreLoadedState(viewState);
 				if (!options.recursive) return;
-				const childIds =
-					parentId === undefined ? this.rootChildren : (this.states.get(parentId)?.children ?? []);
+				const childIds = parentId === undefined ? this.rootChildren : (this.states.get(parentId)?.children ?? []);
 				const refreshLoaded = async (ids: readonly string[]): Promise<void> => {
 					await Promise.all(
 						ids.flatMap(id => {
 							const child = this.states.get(id);
 							if (child?.children !== undefined && this.tree.isCollapsed(child.element) === false) {
-								return [
-									resolvedCompact.has(id)
-										? refreshLoaded(child.children)
-										: this.loadChildren(child.element, id, generation, options),
-								];
+								return [resolvedCompact.has(id) ? refreshLoaded(child.children) : this.loadChildren(child.element, id, generation, options)];
 							}
-							if (options.deferIfCollapsed && !resolvedCompact.has(id) && child?.children !== undefined)
-								this.invalidateChildren(id);
+							if (options.deferIfCollapsed && !resolvedCompact.has(id) && child?.children !== undefined) this.invalidateChildren(id);
 							return [];
 						}),
 					);
@@ -546,17 +501,10 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		}
 		const focused = state.focus?.[0];
 		if (focused && this.states.has(focused)) this.setFocus(this.states.get(focused)!.element);
-		this.setSelection(
-			(state.selection ?? []).flatMap(id => (this.states.has(id) ? [this.states.get(id)!.element] : [])),
-		);
+		this.setSelection((state.selection ?? []).flatMap(id => (this.states.has(id) ? [this.states.get(id)!.element] : [])));
 	}
 
-	private async resolveCompactChain(
-		id: string,
-		generation: number,
-		resolved: Set<string>,
-		deferIfCollapsed = false,
-	): Promise<void> {
+	private async resolveCompactChain(id: string, generation: number, resolved: Set<string>, deferIfCollapsed = false): Promise<void> {
 		const state = this.states.get(id);
 		if (!state?.hasChildren || this.options.isIncompressible?.(state.element)) return;
 		if (deferIfCollapsed && this.canDeferChildren(state.element)) {
@@ -567,28 +515,20 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		// Inspect only the continuation of a single-directory chain. Branches stay lazy.
 		let children: readonly T[];
 		try {
-			children = [
-				...(await this.readChildren(
-					state.element,
-					() => generation === this.generation && !this.isDisposed && this.states.get(id) === state,
-				)),
-			];
+			children = [...(await this.readChildren(state.element, () => generation === this.generation && !this.isDisposed && this.states.get(id) === state))];
 		} catch {
 			return; // An unreadable collapsed folder reports its error when expanded.
 		}
 		if (generation !== this.generation || this.isDisposed || this.states.get(id) !== state) return;
 		this.replaceChildren(id, children);
 		resolved.add(id);
-		if (children.length === 1)
-			await this.resolveCompactChain(this.getId(children[0]!), generation, resolved, deferIfCollapsed);
+		if (children.length === 1) await this.resolveCompactChain(this.getId(children[0]!), generation, resolved, deferIfCollapsed);
 	}
 
 	private async readChildren(element: TInput | T, isCurrent: () => boolean): Promise<Iterable<T>> {
 		const queue = this.childReads[this.nextChildRead]!;
 		this.nextChildRead = (this.nextChildRead + 1) % this.childReads.length;
-		const children = await queue.scheduleSkipIfCleared(() =>
-			isCurrent() ? this.dataSource.getChildren(element) : [],
-		);
+		const children = await queue.scheduleSkipIfCleared(() => (isCurrent() ? this.dataSource.getChildren(element) : []));
 		return children ?? [];
 	}
 
@@ -602,8 +542,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		const seen = new Set<string>();
 		for (const element of elements) {
 			const id = this.getId(element);
-			if (seen.has(id) || (this.states.has(id) && !oldChildIds.has(id)))
-				throw new Error(`Duplicate tree node ID: ${id}`);
+			if (seen.has(id) || (this.states.has(id) && !oldChildIds.has(id))) throw new Error(`Duplicate tree node ID: ${id}`);
 			seen.add(id);
 			childIds.push(id);
 			const previous = this.states.get(id);
@@ -716,21 +655,14 @@ export class AsyncDataTree<TInput, T> extends AbstractAsyncDataTree<TInput, T, A
 			reuseRows: options.reuseRows,
 			onDidRemoveRow: options.onDidRemoveRow,
 			renderElement: options.renderElement,
-			renderTwistie: options.renderTwistie
-				? (element, state, container) =>
-						options.renderTwistie!(element, { ...state, loading: this.isLoading(element) }, container)
-				: undefined,
+			renderTwistie: options.renderTwistie ? (element, state, container) => options.renderTwistie!(element, { ...state, loading: this.isLoading(element) }, container) : undefined,
 		});
 		return objectTreeView(tree, element => this.getId(element));
 	}
 }
 
 /** AsyncDataTree whose factory selects the canonical CompressibleObjectTree. */
-export class CompressibleAsyncDataTree<TInput, T> extends AbstractAsyncDataTree<
-	TInput,
-	T,
-	CompressibleAsyncDataTreeOptions<T>
-> {
+export class CompressibleAsyncDataTree<TInput, T> extends AbstractAsyncDataTree<TInput, T, CompressibleAsyncDataTreeOptions<T>> {
 	get onPointer(): Event<CompressibleTreePointerEvent<T>> {
 		return this.tree.onPointer as Event<CompressibleTreePointerEvent<T>>;
 	}
@@ -774,9 +706,7 @@ export class CompressibleAsyncDataTree<TInput, T> extends AbstractAsyncDataTree<
 			smoothScrolling: options.smoothScrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
-			twistieAdditionalCssClass: options.twistieAdditionalCssClass
-				? elements => options.twistieAdditionalCssClass!(last(elements))
-				: undefined,
+			twistieAdditionalCssClass: options.twistieAdditionalCssClass ? elements => options.twistieAdditionalCssClass!(last(elements)) : undefined,
 			expandOnDoubleClick: options.expandOnDoubleClick,
 			expandOnlyOnTwistieClick: options.expandOnlyOnTwistieClick,
 			getHeight: options.getHeight,
@@ -797,14 +727,7 @@ export class CompressibleAsyncDataTree<TInput, T> extends AbstractAsyncDataTree<
 			reuseRows: options.reuseRows,
 			onDidRemoveRow: options.onDidRemoveRow,
 			renderCompressedElements: options.renderCompressedElements,
-			renderTwistie: options.renderTwistie
-				? (elements, state, container) =>
-						options.renderTwistie!(
-							elements,
-							{ ...state, loading: this.isLoading(last(elements)) },
-							container,
-						)
-				: undefined,
+			renderTwistie: options.renderTwistie ? (elements, state, container) => options.renderTwistie!(elements, { ...state, loading: this.isLoading(last(elements)) }, container) : undefined,
 		});
 		return compressibleTreeView(tree);
 	}
@@ -891,9 +814,7 @@ function compressibleTreeView<T>(tree: CompressibleObjectTree<T>): AsyncTreeView
 			if (options.compressionEnabled !== undefined) tree.setCompressionEnabled(options.compressionEnabled);
 			tree.updateOptions({
 				...options,
-				twistieAdditionalCssClass: options.twistieAdditionalCssClass
-					? elements => options.twistieAdditionalCssClass!(last(elements))
-					: undefined,
+				twistieAdditionalCssClass: options.twistieAdditionalCssClass ? elements => options.twistieAdditionalCssClass!(last(elements)) : undefined,
 			});
 		},
 		setChildren: children => tree.setChildren(children),

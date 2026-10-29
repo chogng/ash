@@ -42,16 +42,10 @@ registerWorkbenchServiceContribution({
 		IViewsService,
 	],
 	install: context => {
-		const service = context.register(
-			context.container.createInstance(AppServerExtensionHostService, CommandsRegistry, 30_000),
-		);
+		const service = context.register(context.container.createInstance(AppServerExtensionHostService, CommandsRegistry, 30_000));
 		const ready = service.start();
 		context.blockRestorationUntil(ready);
-		void ready.catch(error =>
-			context.container
-				.get(ILogService)
-				.error('extensionHost', 'Executable Extension Host activation failed', error),
-		);
+		void ready.catch(error => context.container.get(ILogService).error('extensionHost', 'Executable Extension Host activation failed', error));
 		return service;
 	},
 });

@@ -117,8 +117,7 @@ test('Search sidebar hides line numbers by default and applies explicit changes 
 		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
 		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 3);
 		const snapshot = view.getSearchResultSnapshot();
-		const labels = (): (string | null)[] =>
-			[...view.element.querySelectorAll('.ash-search-line-number')].map(element => element.textContent);
+		const labels = (): (string | null)[] => [...view.element.querySelectorAll('.ash-search-line-number')].map(element => element.textContent);
 		assert.deepEqual(labels(), ['+1']);
 		assert.match(view.element.querySelector('.ash-search-match')!.getAttribute('aria-label')!, /Line 4, column 7/);
 		await configuration.updateValue(ContentSearchConfiguration.showLineNumbers, true);
@@ -156,11 +155,7 @@ test('Search exposes query and replacement as multiline inputs and folding repla
 		for (const label of ['Search workspace', 'Replace', 'Files to include', 'Files to exclude']) {
 			const field = input(view.element, label);
 			field.focus();
-			assert.equal(
-				context.getContext(field).getValue('searchViewletFocus'),
-				true,
-				`${label} inherits Search keyboard commands through its history scope`,
-			);
+			assert.equal(context.getContext(field).getValue('searchViewletFocus'), true, `${label} inherits Search keyboard commands through its history scope`);
 			assert.equal(context.getContext(field).getValue('historyNavigationWidgetFocus'), true);
 		}
 		replacement.value = 'first\nsecond';
@@ -295,14 +290,8 @@ test('Search compresses directory chains while retaining match identity, copy pa
 		view.element.querySelector<HTMLButtonElement>('button[aria-label="More Actions"]')!.click();
 		await actions.find(action => action.id === 'search.treeView')!.run();
 		const tree = view.getControl();
-		assert.equal(
-			view.element.querySelector('.ash-search-folder-path .ash-icon-label-text')?.textContent,
-			'deep/nested/folder',
-		);
-		assert.equal(
-			view.element.querySelector('.ash-search-folder-path .ash-icon-label')?.getAttribute('aria-label'),
-			'deep/nested/folder',
-		);
+		assert.equal(view.element.querySelector('.ash-search-folder-path .ash-icon-label-text')?.textContent, 'deep/nested/folder');
+		assert.equal(view.element.querySelector('.ash-search-folder-path .ash-icon-label')?.getAttribute('aria-label'), 'deep/nested/folder');
 		assert.equal(tree.model.rootNodes.length, 1);
 		const folder = tree.model.rootNodes[0]!.element;
 		assert.equal(folder.kind, 'folder');
@@ -338,11 +327,7 @@ test('Search lifecycle commands cancel retained results, replace running queries
 				const completion = new DeferredPromise<IContentSearchComplete>();
 				jobs.push({ query, options, completion });
 				options.onProgress?.(matches);
-				options.signal?.addEventListener(
-					'abort',
-					() => options.onProgress?.([{ ...matches[0]!, path: 'synchronous-abort.ts' }]),
-					{ once: true },
-				);
+				options.signal?.addEventListener('abort', () => options.onProgress?.([{ ...matches[0]!, path: 'synchronous-abort.ts' }]), { once: true });
 				return completion.p;
 			},
 		});
@@ -383,10 +368,7 @@ test('Search lifecycle commands cancel retained results, replace running queries
 		assert.equal(jobs[0]!.options.signal?.aborted, true);
 		assert.equal(view.getSearchResultSnapshot()?.matchCount, 2);
 		assert.equal(browser.window.document.activeElement, queryInput);
-		assert.equal(
-			view.element.querySelector('.ash-search-status')?.textContent,
-			'Search stopped. 2 results retained.',
-		);
+		assert.equal(view.element.querySelector('.ash-search-status')?.textContent, 'Search stopped. 2 results retained.');
 		assert.equal(view.cancelSearch(), false);
 		jobs[0]!.options.onProgress?.([{ ...matches[0]!, path: 'late-cancel.ts' }]);
 		assert.equal(view.searchResult.count, 2);
@@ -402,10 +384,7 @@ test('Search lifecycle commands cancel retained results, replace running queries
 		assert.equal(view.getControl().element.getAttribute('aria-busy'), 'true');
 		await commands.executeCommand('search.action.clearSearchResults');
 		assert.equal(jobs[2]!.options.signal?.aborted, true);
-		assert.deepEqual(
-			[queryInput.value, replacement.value, includes.value, excludes.value],
-			['', '', 'src/**', '**/*.test.ts'],
-		);
+		assert.deepEqual([queryInput.value, replacement.value, includes.value, excludes.value], ['', '', 'src/**', '**/*.test.ts']);
 		assert.deepEqual(
 			{
 				results: view.searchResult.count,
@@ -421,13 +400,9 @@ test('Search lifecycle commands cancel retained results, replace running queries
 		await commands.executeCommand('search.action.clearSearchResults');
 		assert.deepEqual([includes.value, excludes.value], ['', '']);
 		assert.equal(palette('search.action.clearSearchResults'), undefined);
-		queryInput.dispatchEvent(
-			new browser.window.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }),
-		);
+		queryInput.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
 		assert.equal(queryInput.value, 'again');
-		queryInput.dispatchEvent(
-			new browser.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }),
-		);
+		queryInput.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
 		assert.equal(queryInput.value, '');
 		queryInput.value = 'final';
 		queryInput.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
@@ -498,10 +473,7 @@ test('Search lifecycle clears zero-result queries and input-only patterns and an
 			field.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
 			assert.equal(clear()?.enabled, true);
 			await commands.executeCommand('search.action.clearSearchResults');
-			assert.deepEqual(
-				{ value: field.value, clear: clear(), results: view.searchResult.count },
-				{ value: '', clear: undefined, results: 0 },
-			);
+			assert.deepEqual({ value: field.value, clear: clear(), results: view.searchResult.count }, { value: '', clear: undefined, results: 0 });
 		}
 		input(view.element, 'Files to include').value = 'src/**';
 		await commands.executeCommand('search.action.refreshSearchResults');
@@ -730,18 +702,20 @@ test('BrowserContentSearchService pulls bounded batches and releases the job', a
 	const service = new BrowserContentSearchService(api);
 	const progress: ContentSearchMatch[] = [];
 
-	const complete = await service.search(
-		{ id: 'workspace', uri: URI.file('/workspace'), name: 'workspace', index: 0 },
-		query(),
-		{ onProgress: batch => progress.push(...batch) },
-	);
+	const complete = await service.search({ id: 'workspace', uri: URI.file('/workspace'), name: 'workspace', index: 0 }, query(), {
+		onProgress: batch => progress.push(...batch),
+	});
 
 	assert.deepEqual(readCursors, [0, 1]);
 	assert.deepEqual(
 		progress,
 		matches.map(match => ({ ...match, dirName: 'workspace' })),
 	);
-	assert.deepEqual(complete, { resultCount: 2, limitHit: true, error: undefined });
+	assert.deepEqual(complete, {
+		resultCount: 2,
+		limitHit: true,
+		error: undefined,
+	});
 	assert.equal(cancelCount, 1);
 });
 
@@ -777,12 +751,14 @@ test('SearchView submits typed filters and groups highlighted matches', async ()
 		pane.element.querySelector<HTMLButtonElement>('button[aria-label="Use Regular Expression"]')!.click();
 		details.click();
 		assert.equal(details.getAttribute('aria-expanded'), 'false');
-		input(pane.element, 'Search workspace').dispatchEvent(
-			new browser.window.KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true }),
-		);
+		input(pane.element, 'Search workspace').dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true }));
 		assert.equal(submitted, undefined);
 		input(pane.element, 'Search workspace').dispatchEvent(
-			new browser.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+			new browser.window.KeyboardEvent('keydown', {
+				key: 'Enter',
+				bubbles: true,
+				cancelable: true,
+			}),
 		);
 
 		await waitFor(() => pane.element.querySelector('.ash-search-status')?.textContent === '2 results');
@@ -797,10 +773,7 @@ test('SearchView submits typed filters and groups highlighted matches', async ()
 			freshness: 'current',
 		});
 		assert.equal(pane.element.querySelector('.ash-search-file-path .ash-icon-label-text')?.textContent, 'main.ts');
-		assert.equal(
-			pane.element.querySelector('.ash-search-file-path .ash-icon-label-description')?.textContent,
-			'src',
-		);
+		assert.equal(pane.element.querySelector('.ash-search-file-path .ash-icon-label-description')?.textContent, 'src');
 		assert.equal(pane.element.querySelector('.ash-search-file-count')?.textContent, '2');
 		assert.deepEqual(
 			[...pane.element.querySelectorAll('mark')].map(element => element.textContent),
@@ -842,19 +815,11 @@ test('SearchView applies configured query defaults and result limits', async () 
 		});
 		browser.window.document.body.append(pane.element);
 		input(pane.element, 'Search workspace').value = 'Needle';
-		assert.equal(
-			pane.element.querySelector('button[aria-label="Match Case"]')?.getAttribute('aria-pressed'),
-			'true',
-		);
-		assert.equal(
-			pane.element.querySelector('button[aria-label="Use Regular Expression"]')?.getAttribute('aria-pressed'),
-			'true',
-		);
+		assert.equal(pane.element.querySelector('button[aria-label="Match Case"]')?.getAttribute('aria-pressed'), 'true');
+		assert.equal(pane.element.querySelector('button[aria-label="Use Regular Expression"]')?.getAttribute('aria-pressed'), 'true');
 		assert.equal(input(pane.element, 'Files to include').value, 'src/**, packages/**');
 		assert.equal(input(pane.element, 'Files to exclude').value, '**/*.test.ts');
-		pane.element
-			.querySelector('form')
-			?.dispatchEvent(new browser.window.Event('submit', { bubbles: true, cancelable: true }));
+		pane.element.querySelector('form')?.dispatchEvent(new browser.window.Event('submit', { bubbles: true, cancelable: true }));
 		await waitFor(() => submitted !== undefined);
 		assert.deepEqual(submitted, {
 			text: 'Needle',
@@ -913,7 +878,10 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
 		navigator: browser.window.navigator,
 	};
 	for (const [name, value] of Object.entries(globals)) {
-		Object.defineProperty(globalThis, name, { configurable: true, value });
+		Object.defineProperty(globalThis, name, {
+			configurable: true,
+			value,
+		});
 	}
 	return Object.keys(globals);
 }
@@ -948,14 +916,8 @@ function createServices(
 	services.registerInstance(IContextKeyService, store.add(new ContextKeyService()));
 	services.registerInstance(IContextMenuService, menus);
 	services.registerInstance(IHoverService, store.add(new HoverService(configuration, contextView, menus)));
-	services.registerInstance(
-		IWorkspaceContextService,
-		workspace ?? store.add(new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') })),
-	);
-	services.registerInstance(
-		ILabelService,
-		store.add(createTestLabelService(services.get(IWorkspaceContextService), OperatingSystem.Linux)),
-	);
+	services.registerInstance(IWorkspaceContextService, workspace ?? store.add(new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') })));
+	services.registerInstance(ILabelService, store.add(createTestLabelService(services.get(IWorkspaceContextService), OperatingSystem.Linux)));
 	services.registerInstance(IEditorService, {
 		...emptyEditorServiceState,
 		onDidActiveEditorChange: Event.None,
@@ -1007,8 +969,7 @@ function registerView(services: InstantiationService, view: SearchView): void {
 		isViewVisible: id => id === SEARCH_VIEW_ID,
 		openView: async <T extends IView>(): Promise<T | null> => view as unknown as T,
 		closeView() {},
-		getActiveViewWithId: <T extends IView>(id: string) =>
-			id === SEARCH_VIEW_ID && view.isVisible() ? (view as unknown as T) : null,
+		getActiveViewWithId: <T extends IView>(id: string) => (id === SEARCH_VIEW_ID && view.isVisible() ? (view as unknown as T) : null),
 		getViewWithId: <T extends IView>(id: string) => (id === SEARCH_VIEW_ID ? (view as unknown as T) : null),
 		focusView: async () => {
 			view.focus();
@@ -1051,12 +1012,13 @@ test('Dismiss runs the registered command, restores focus and updates retained s
 				focused: tree.focus?.id,
 				status: view.element.querySelector('[role="status"]')!.textContent,
 			},
-			{ count: 2, focused: next.id, status: '2 results (result limit reached)' },
+			{
+				count: 2,
+				focused: next.id,
+				status: '2 results (result limit reached)',
+			},
 		);
-		assert.match(
-			view.getSearchResultSnapshot()!.content,
-			/# File: file:\/\/\/workspace\/src\/main\.ts\n  9:5-9:11: needle\n\n/,
-		);
+		assert.match(view.getSearchResultSnapshot()!.content, /# File: file:\/\/\/workspace\/src\/main\.ts\n  9:5-9:11: needle\n\n/);
 		tree.setSelection([next.id, view.searchResult.files[1]!.id]);
 		await services.get(ICommandService).executeCommand(SearchCommandIds.RemoveActionId);
 		await services.get(ICommandService).executeCommand(SearchCommandIds.RemoveActionId);
@@ -1067,7 +1029,12 @@ test('Dismiss runs the registered command, restores focus and updates retained s
 				snapshot: view.getSearchResultSnapshot(),
 				status: view.element.querySelector('[role="status"]')!.textContent,
 			},
-			{ count: 0, focused: undefined, snapshot: undefined, status: 'No results found.' },
+			{
+				count: 0,
+				focused: undefined,
+				snapshot: undefined,
+				status: 'No results found.',
+			},
 		);
 		assert.equal(browser.window.document.activeElement, tree.element);
 		view.element.querySelector<HTMLButtonElement>('button[aria-label="Refresh search"]')!.click();
@@ -1148,7 +1115,12 @@ for (const scenario of [
 					collapsed: tree.isCollapsed(expectedFile.id),
 					count: view.getSearchResultSnapshot()?.matchCount,
 				},
-				{ focus: expected.id, selection: [expected.id], collapsed: false, count: scenario.count },
+				{
+					focus: expected.id,
+					selection: [expected.id],
+					collapsed: false,
+					count: scenario.count,
+				},
 			);
 			assert.equal(browser.window.document.activeElement, tree.element);
 			assert.ok(tree.getVisibleElements().includes(expected));
@@ -1204,7 +1176,11 @@ test('Dismiss during a running search retains the job and accepts later batches 
 				busy: tree.element.getAttribute('aria-busy'),
 				status: view.element.querySelector('[role="status"]')!.textContent,
 			},
-			{ count: 0, busy: 'true', status: '0 results…' },
+			{
+				count: 0,
+				busy: 'true',
+				status: '0 results…',
+			},
 		);
 		finish!();
 		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 2);
@@ -1321,11 +1297,7 @@ test('Copy All formats the retained model in root, folder, filename and range or
 		const delimiter = isWindows ? '\r\n' : '\n';
 		const blocks = [
 			'/workspace/src/nested/z.ts' + delimiter + '  4,8: nested needle',
-			'/workspace/src/file2.ts' +
-				delimiter +
-				['  11,3:   needle\n  12:   next', '  20,3: a needle b needle', '  20,12: a needle b needle'].join(
-					delimiter,
-				),
+			'/workspace/src/file2.ts' + delimiter + ['  11,3:   needle\n  12:   next', '  20,3: a needle b needle', '  20,12: a needle b needle'].join(delimiter),
 			'/workspace/src/file10.ts' + delimiter + '  3,5: ten needle',
 			'/workspace/alpha.ts' + delimiter + '  1,6: root needle',
 			'/other/src/file2.ts' + delimiter + '  8,8: remote needle',
@@ -1341,10 +1313,7 @@ test('Copy All formats the retained model in root, folder, filename and range or
 		view.getControl().setSelection([dismissed.id]);
 		await services.get(ICommandService).executeCommand(SearchCommandIds.RemoveActionId);
 		await services.get(ICommandService).executeCommand(SearchCommandIds.CopyAllCommandId);
-		assert.equal(
-			written[1],
-			blocks.filter(block => !block.startsWith('/workspace/src/file10.ts')).join(delimiter + delimiter),
-		);
+		assert.equal(written[1], blocks.filter(block => !block.startsWith('/workspace/src/file10.ts')).join(delimiter + delimiter));
 		assert.equal(view.getSearchResultSnapshot()?.matchCount, 6);
 		assert.ok(!view.getSearchResultSnapshot()?.content.includes('file10.ts'));
 	} finally {
@@ -1390,16 +1359,11 @@ test('Copy All leaves the clipboard intact while Search is inactive and reads re
 		assert.equal(services.get(IViewsService).getActiveViewWithId(SEARCH_VIEW_ID), null);
 		assert.equal(services.get(IViewsService).getViewWithId(SEARCH_VIEW_ID), view);
 		await services.get(ICommandService).executeCommand(SearchCommandIds.CopyAllCommandId);
-		assert.deepEqual(
-			{ written, snapshot: view.getSearchResultSnapshot(), visible: view.isVisible() },
-			{ written: [], snapshot, visible: false },
-		);
+		assert.deepEqual({ written, snapshot: view.getSearchResultSnapshot(), visible: view.isVisible() }, { written: [], snapshot, visible: false });
 		view.setVisible(true);
 		await services.get(ICommandService).executeCommand(SearchCommandIds.CopyAllCommandId);
 		const delimiter = isWindows ? '\r\n' : '\n';
-		assert.deepEqual(written, [
-			['/workspace/src/main.ts', '  4,7: const needle = true;', '  9,5: use(needle);'].join(delimiter),
-		]);
+		assert.deepEqual(written, [['/workspace/src/main.ts', '  4,7: const needle = true;', '  9,5: use(needle);'].join(delimiter)]);
 	} finally {
 		browser.window.close();
 		for (const name of globals) {
@@ -1467,10 +1431,7 @@ test('Copy All uses the latest running batch and leaves the search and clipboard
 		addBatch!();
 		await commands.executeCommand(SearchCommandIds.CopyAllCommandId);
 		const delimiter = isWindows ? '\r\n' : '\n';
-		assert.deepEqual(written.slice(1), [
-			'/workspace/src/main.ts' + delimiter + '  4,7: const needle = true;',
-			'/workspace/src/main.ts' + delimiter + '  9,5: use(needle);',
-		]);
+		assert.deepEqual(written.slice(1), ['/workspace/src/main.ts' + delimiter + '  4,7: const needle = true;', '/workspace/src/main.ts' + delimiter + '  9,5: use(needle);']);
 		rejectWrite = true;
 		const before = view.searchResult.files[0]!.matches.map(match => match.id);
 		await assert.rejects(commands.executeCommand(SearchCommandIds.CopyAllCommandId), error => error === denied);
@@ -1556,21 +1517,12 @@ test('Copy uses the first selection or explicit row and formats match, file and 
 		tree.collapse(main.id);
 		const collapsedSelection = tree.selection.map(element => element.id);
 		await commands.executeCommand('search.action.copyMatch', main);
-		const folder = [...view.searchResult.children[0]!.children.values()].find(
-			element => element.kind === 'folder',
-		)!;
+		const folder = [...view.searchResult.children[0]!.children.values()].find(element => element.kind === 'folder')!;
 		await commands.executeCommand('search.action.copyMatch', folder);
 		const delimiter = isWindows ? '\r\n' : '\n';
-		const mainBlock = ['/workspace/src/main.ts', '  4,7: const needle = true;', '  9,5: use(needle);'].join(
-			delimiter,
-		);
+		const mainBlock = ['/workspace/src/main.ts', '  4,7: const needle = true;', '  9,5: use(needle);'].join(delimiter);
 		const nestedBlock = '/workspace/src/nested/file2.ts' + delimiter + '  10,6: 中文😀 needle\n  11:   next';
-		assert.deepEqual(written, [
-			'4,7: const needle = true;',
-			'10,6: 中文😀 needle\n11:   next',
-			mainBlock,
-			nestedBlock + delimiter + delimiter + mainBlock,
-		]);
+		assert.deepEqual(written, ['4,7: const needle = true;', '10,6: 中文😀 needle\n11:   next', mainBlock, nestedBlock + delimiter + delimiter + mainBlock]);
 		assert.deepEqual(view.getSearchResultSnapshot(), before);
 		assert.deepEqual(
 			tree.selection.map(element => element.id),
@@ -1580,10 +1532,7 @@ test('Copy uses the first selection or explicit row and formats match, file and 
 		view.searchResult.batchRemove([main.matches[0]!]);
 		await view.queueRefreshTree();
 		await commands.executeCommand('search.action.copyMatch', folder);
-		assert.equal(
-			written.at(-1),
-			nestedBlock + delimiter + delimiter + '/workspace/src/main.ts' + delimiter + '  9,5: use(needle);',
-		);
+		assert.equal(written.at(-1), nestedBlock + delimiter + delimiter + '/workspace/src/main.ts' + delimiter + '  9,5: use(needle);');
 		assert.equal(view.searchResult.count, 3);
 	} finally {
 		browser.window.close();
@@ -1660,10 +1609,7 @@ test('Copy leaves no-selection and inactive calls alone but honors dismissed exp
 		view.setVisible(true);
 		const before = view.searchResult.files[0]!.matches.map(match => match.id);
 		rejectWrite = true;
-		await assert.rejects(
-			commands.executeCommand('search.action.copyMatch', view.searchResult.files[0]!),
-			error => error === denied,
-		);
+		await assert.rejects(commands.executeCommand('search.action.copyMatch', view.searchResult.files[0]!), error => error === denied);
 		assert.deepEqual(
 			view.searchResult.files[0]!.matches.map(match => match.id),
 			before,
@@ -1768,16 +1714,11 @@ test('Copy keeps dismissed file arguments separate from active snapshots, late b
 		const services = createServices(store, browser, {
 			search: async (_query, options) => {
 				if (++searches > 1) {
-					options?.onProgress?.([
-						{ ...matches[0]!, preview: 'fresh needle', ranges: [{ start: 6, end: 12 }] },
-					]);
+					options?.onProgress?.([{ ...matches[0]!, preview: 'fresh needle', ranges: [{ start: 6, end: 12 }] }]);
 					return { resultCount: 1, limitHit: false, error: undefined };
 				}
 				progress = batch => options?.onProgress?.(batch);
-				progress([
-					...matches,
-					{ ...matches[0]!, path: 'keep.ts', preview: 'keep needle', ranges: [{ start: 5, end: 11 }] },
-				]);
+				progress([...matches, { ...matches[0]!, path: 'keep.ts', preview: 'keep needle', ranges: [{ start: 5, end: 11 }] }]);
 				await new Promise<void>(resolve => {
 					finish = resolve;
 				});
@@ -1815,9 +1756,7 @@ test('Copy keeps dismissed file arguments separate from active snapshots, late b
 		await commands.executeCommand(SearchCommandIds.CopyMatchCommandId, oldFolder);
 		await commands.executeCommand(SearchCommandIds.CopyAllCommandId);
 		const delimiter = isWindows ? '\r\n' : '\n';
-		const oldText = ['/workspace/src/main.ts', '  4,7: const needle = true;', '  9,5: use(needle);'].join(
-			delimiter,
-		);
+		const oldText = ['/workspace/src/main.ts', '  4,7: const needle = true;', '  9,5: use(needle);'].join(delimiter);
 		const keepText = '/workspace/keep.ts' + delimiter + '  4,6: keep needle';
 		assert.deepEqual(written, [oldText, keepText]);
 		assert.equal(view.searchResult.count, 1);
@@ -1832,19 +1771,9 @@ test('Copy keeps dismissed file arguments separate from active snapshots, late b
 		finish!();
 		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 2);
 		await commands.executeCommand(SearchCommandIds.CopyAllCommandId);
-		assert.equal(
-			written.at(-1),
-			'/workspace/src/main.ts' + delimiter + '  4,6: late NEEDLE' + delimiter + delimiter + keepText,
-		);
+		assert.equal(written.at(-1), '/workspace/src/main.ts' + delimiter + '  4,6: late NEEDLE' + delimiter + delimiter + keepText);
 		const snapshot = view.getSearchResultSnapshot()!;
-		assert.deepEqual(snapshot.content.split('\n').slice(2), [
-			'# File: file:///workspace/keep.ts',
-			'  4:6-4:12: needle',
-			'',
-			'# File: file:///workspace/src/main.ts',
-			'  4:6-4:12: NEEDLE',
-			'',
-		]);
+		assert.deepEqual(snapshot.content.split('\n').slice(2), ['# File: file:///workspace/keep.ts', '  4:6-4:12: needle', '', '# File: file:///workspace/src/main.ts', '  4:6-4:12: NEEDLE', '']);
 		view.element.querySelector<HTMLButtonElement>('button[aria-label="Refresh search"]')!.click();
 		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 1);
 		view.searchResult.batchRemove([replacement, oldFile, ...oldMatches]);
@@ -1852,11 +1781,7 @@ test('Copy keeps dismissed file arguments separate from active snapshots, late b
 		assert.equal(written.at(-1), '/workspace/src/main.ts' + delimiter + '  4,7: fresh needle');
 		await commands.executeCommand(SearchCommandIds.CopyMatchCommandId, oldFile);
 		assert.equal(written.at(-1), oldText);
-		assert.deepEqual(view.getSearchResultSnapshot()!.content.split('\n').slice(2), [
-			'# File: file:///workspace/src/main.ts',
-			'  4:7-4:13: needle',
-			'',
-		]);
+		assert.deepEqual(view.getSearchResultSnapshot()!.content.split('\n').slice(2), ['# File: file:///workspace/src/main.ts', '  4:7-4:13: needle', '']);
 	} finally {
 		finish?.();
 		browser.window.close();
@@ -1996,9 +1921,7 @@ test('Copy Path uses only the first selected file while explicit detached files 
 		await commands.executeCommand(SearchCommandIds.CopyPathCommandId, folder);
 		assert.deepEqual(written.slice(3), ['/workspace/src/main.ts', '/workspace']);
 		assert.equal(view.searchResult.count, 0);
-		using formatter = services
-			.get(ILabelService)
-			.registerFormatter({ scheme: 'file', formatting: { label: 'formatted:${path}', separator: '/' } });
+		using formatter = services.get(ILabelService).registerFormatter({ scheme: 'file', formatting: { label: 'formatted:${path}', separator: '/' } });
 		await commands.executeCommand(SearchCommandIds.CopyPathCommandId, file);
 		assert.equal(written.at(-1), 'formatted:/workspace/src/main.ts');
 	} finally {
@@ -2060,10 +1983,7 @@ test('Copy Path preserves a running search and propagates clipboard failures wit
 		const before = file.matches.map(match => match.id);
 		await services.get(ICommandService).executeCommand(SearchCommandIds.CopyPathCommandId, file);
 		rejected = true;
-		await assert.rejects(
-			services.get(ICommandService).executeCommand(SearchCommandIds.CopyPathCommandId, file),
-			error => error === denied,
-		);
+		await assert.rejects(services.get(ICommandService).executeCommand(SearchCommandIds.CopyPathCommandId, file), error => error === denied);
 		assert.deepEqual(
 			{
 				written,
@@ -2229,16 +2149,18 @@ test('Expand All palette follows late batches, preserves hidden retained state a
 				busy: tree.element.getAttribute('aria-busy'),
 				aborted,
 			},
-			{ label: 'Search: Expand All', enabled: true, busy: 'true', aborted: false },
+			{
+				label: 'Search: Expand All',
+				enabled: true,
+				busy: 'true',
+				aborted: false,
+			},
 		);
 		await palette()!.run();
 		assert.equal(palette(), undefined);
 		finish!();
 		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 3);
-		assert.deepEqual(
-			{ expandedMatches: tree.model.visibleNodes.filter(node => node.element.kind === 'match').length, aborted },
-			{ expandedMatches: 3, aborted: false },
-		);
+		assert.deepEqual({ expandedMatches: tree.model.visibleNodes.filter(node => node.element.kind === 'match').length, aborted }, { expandedMatches: 3, aborted: false });
 		for (const node of tree.model.rootNodes) {
 			tree.collapseRecursive(node.id);
 		}
@@ -2263,7 +2185,11 @@ test('Expand All palette follows late batches, preserves hidden retained state a
 				hasResults: services.get(IContextKeyService).getValue('hasSearchResult'),
 				hasCollapsible: services.get(IContextKeyService).getValue('viewHasSomeCollapsibleResult'),
 			},
-			{ palette: undefined, hasResults: false, hasCollapsible: false },
+			{
+				palette: undefined,
+				hasResults: false,
+				hasCollapsible: false,
+			},
 		);
 	} finally {
 		finish?.();
@@ -2274,10 +2200,7 @@ test('Expand All palette follows late batches, preserves hidden retained state a
 	}
 });
 
-function createTestLabelService(
-	workspace: ConstructorParameters<typeof LabelService>[0],
-	os: OperatingSystem = operatingSystem,
-): LabelService {
+function createTestLabelService(workspace: ConstructorParameters<typeof LabelService>[0], os: OperatingSystem = operatingSystem): LabelService {
 	const api = createDisconnectedRendererApi();
 	const host = { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: os } };
 	return new LabelService(workspace, new BrowserPathService(host, workspace), host);
@@ -2316,10 +2239,7 @@ suite('search browser component', () => {
 				exact: true,
 			});
 			for (const position of ['top', 'bottom']) {
-				await page.evaluate(
-					position => window.ashSearchIntegration.setActivityBarLocation(position as ActivityBarPosition),
-					position,
-				);
+				await page.evaluate(position => window.ashSearchIntegration.setActivityBarLocation(position as ActivityBarPosition), position);
 				await expect(switcher).toBeVisible();
 				await page.evaluate(() => window.ashSearchIntegration.setAutoHide(true));
 				await expect(switcher).toBeVisible();
@@ -2342,17 +2262,13 @@ suite('search browser component', () => {
 				await expect(switcher).toBeHidden();
 				await page.evaluate(() => window.ashSearchIntegration.setExplorerActive(true));
 				await expect(switcher).toBeVisible();
-				await page.evaluate(() =>
-					window.ashSearchIntegration.moveExplorer('auxiliarybar' as ViewContainerLocation),
-				);
+				await page.evaluate(() => window.ashSearchIntegration.moveExplorer('auxiliarybar' as ViewContainerLocation));
 				await expect(switcher).toBeHidden();
 				await page.evaluate(() => window.ashSearchIntegration.moveExplorer('sidebar' as ViewContainerLocation));
 				await expect(switcher).toBeVisible();
 			}
 			await page.evaluate(() => window.ashSearchIntegration.setExplorerActive(false));
-			await page.evaluate(() =>
-				window.ashSearchIntegration.setActivityBarLocation('default' as ActivityBarPosition),
-			);
+			await page.evaluate(() => window.ashSearchIntegration.setActivityBarLocation('default' as ActivityBarPosition));
 			await expect(switcher).not.toHaveAttribute('hidden');
 			expect(errors).toEqual([]);
 		});
@@ -2373,16 +2289,10 @@ suite('search browser component', () => {
 			await expect(boundary).toHaveAttribute('aria-orientation', 'vertical');
 			const partBounds = (await sidebar.locator('..').boundingBox())!;
 			const sashBounds = (await boundary.boundingBox())!;
-			expect(sashBounds.x + sashBounds.width / 2).toBeCloseTo(
-				position === 'left' ? partBounds.x + partBounds.width : partBounds.x,
-				0,
-			);
+			expect(sashBounds.x + sashBounds.width / 2).toBeCloseTo(position === 'left' ? partBounds.x + partBounds.width : partBounds.x, 0);
 			if (previous) {
 				const stillCurrent = await previous.evaluate(element => element.isConnected);
-				if (!stillCurrent)
-					expect(
-						await previous.evaluate(element => element.classList.contains('ash-primary-sidebar-sash')),
-					).toBe(false);
+				if (!stillCurrent) expect(await previous.evaluate(element => element.classList.contains('ash-primary-sidebar-sash'))).toBe(false);
 				await previous.dispose();
 			}
 		}
@@ -2416,10 +2326,7 @@ suite('search browser component', () => {
 							const svg = element.querySelector('.ash-icon');
 							if (!svg) return Number.POSITIVE_INFINITY;
 							const icon = svg.getBoundingClientRect();
-							return Math.max(
-								Math.abs(icon.x + icon.width / 2 - button.x - button.width / 2),
-								Math.abs(icon.y + icon.height / 2 - button.y - button.height / 2),
-							);
+							return Math.max(Math.abs(icon.x + icon.width / 2 - button.x - button.width / 2), Math.abs(icon.y + icon.height / 2 - button.y - button.height / 2));
 						}),
 					)
 					.toBeLessThan(0.01);
@@ -2514,18 +2421,12 @@ suite('search browser component', () => {
 			rows.evaluateAll(elements =>
 				elements.map(element => ({
 					preview: element.querySelector('.ash-search-preview')!.getBoundingClientRect().width,
-					origin:
-						element.querySelector('.ash-search-preview')!.getBoundingClientRect().left -
-						element.getBoundingClientRect().left,
+					origin: element.querySelector('.ash-search-preview')!.getBoundingClientRect().left - element.getBoundingClientRect().left,
 				})),
 			);
 		const unnumbered = await measure();
 		await page.evaluate(() => window.ashSearchIntegration.setLineNumbers(true));
-		expect((await rows.locator('.ash-search-line-number').allTextContents()).sort()).toEqual([
-			'1000:',
-			'3456:',
-			'43:',
-		]);
+		expect((await rows.locator('.ash-search-line-number').allTextContents()).sort()).toEqual(['1000:', '3456:', '43:']);
 		const numbered = await measure();
 		for (let index = 0; index < numbered.length; index++) {
 			expect(numbered[index].origin).toBeGreaterThan(unnumbered[index].origin);
@@ -2557,18 +2458,12 @@ suite('search browser component', () => {
 		const paneHeader = page.locator('.ash-search').locator('..').locator('.ash-pane-view-header');
 		await expect(title).toHaveText('Search');
 		await expect(paneHeader).toBeHidden();
-		await expect(
-			page
-				.locator('.ash-pane-composite-title-view-actions')
-				.getByRole('toolbar', { name: 'Search result actions', exact: true }),
-		).toHaveCount(1);
+		await expect(page.locator('.ash-pane-composite-title-view-actions').getByRole('toolbar', { name: 'Search result actions', exact: true })).toHaveCount(1);
 		await query.fill('needle');
 		await query.press('Enter');
 		await expect(page.getByRole('status')).toHaveText('1 results');
 		const before = await page.evaluate(() => window.ashSearchIntegration.snapshot());
-		const originalHost = await page
-			.locator('.ash-pane-composite-title-view-actions .ash-pane-view-header-actions')
-			.elementHandle();
+		const originalHost = await page.locator('.ash-pane-composite-title-view-actions .ash-pane-view-header-actions').elementHandle();
 		expect(originalHost).not.toBeNull();
 		const refresh = toolbar.getByRole('button', { name: 'Refresh search', exact: true });
 		await refresh.focus();
@@ -2577,15 +2472,7 @@ suite('search browser component', () => {
 		await expect(paneHeader).toBeVisible();
 		await expect(paneHeader.getByRole('toolbar', { name: 'Search result actions', exact: true })).toHaveCount(1);
 		await expect(refresh).toBeFocused();
-		expect(
-			await originalHost!.evaluate(
-				node =>
-					node ===
-					document
-						.querySelector('.ash-search')!
-						.parentElement!.querySelector('.ash-pane-view-header-actions'),
-			),
-		).toBe(true);
+		expect(await originalHost!.evaluate(node => node === document.querySelector('.ash-search')!.parentElement!.querySelector('.ash-pane-view-header-actions'))).toBe(true);
 		await page.evaluate(() => window.ashSearchIntegration.setSecondView(false));
 		await expect(paneHeader).toBeHidden();
 		await expect(refresh).toBeFocused();
@@ -2596,13 +2483,7 @@ suite('search browser component', () => {
 		await expect(title).toHaveText('Search');
 		await expect(toolbar).toBeVisible();
 		await expect(query).toHaveValue('needle');
-		expect(
-			await originalHost!.evaluate(
-				node =>
-					node ===
-					document.querySelector('.ash-pane-composite-title-view-actions .ash-pane-view-header-actions'),
-			),
-		).toBe(true);
+		expect(await originalHost!.evaluate(node => node === document.querySelector('.ash-pane-composite-title-view-actions .ash-pane-view-header-actions'))).toBe(true);
 		expect(await page.evaluate(() => window.ashSearchIntegration.snapshot())).toEqual(before);
 		await page.evaluate(() => window.ashSearchIntegration.setSecondView(true));
 		await paneHeader.getByRole('button', { name: 'Search', exact: true }).click();
@@ -2680,10 +2561,7 @@ suite('search browser component', () => {
 		await query.press('Enter');
 		await expect(page.getByRole('status')).toHaveText('3 results');
 		const tree = page.getByRole('tree', { name: 'Search results', exact: true });
-		await page
-			.getByRole('toolbar', { name: 'Search result actions', exact: true })
-			.getByRole('button', { name: 'More Actions', exact: true })
-			.click();
+		await page.getByRole('toolbar', { name: 'Search result actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click();
 		await page.evaluate(() => window.ashSearchIntegration.selectTreeView());
 		const before = await page.evaluate(() => window.ashSearchIntegration.snapshot());
 		await collapse.focus();
@@ -2753,35 +2631,23 @@ suite('search browser component', () => {
 		await query.press('Enter');
 		await expect(page.getByRole('status')).toHaveText('3 results');
 		const tree = page.getByRole('tree', { name: 'Search results', exact: true });
-		const first = tree
-			.getByRole('treeitem')
-			.filter({
-				has: page
-					.locator('.ash-search-file-path')
-					.filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }),
-			});
-		const other = tree
-			.getByRole('treeitem')
-			.filter({
-				has: page
-					.locator('.ash-search-file-path')
-					.filter({ has: page.locator('.ash-icon-label-description', { hasText: 'other • src' }) }),
-			});
+		const first = tree.getByRole('treeitem').filter({
+			has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }),
+		});
+		const other = tree.getByRole('treeitem').filter({
+			has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'other • src' }) }),
+		});
 		await first.click();
 		await other.click({ modifiers: ['ControlOrMeta'] });
 		const shortcut = 'ControlOrMeta+Alt+c';
 		await tree.press(shortcut);
-		await expect
-			.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites()))
-			.toEqual(['/workspace/src/main.ts']);
+		await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['/workspace/src/main.ts']);
 		await tree.press('ControlOrMeta+Shift+Alt+c');
 		await query.focus();
 		await query.press(shortcut);
 		await tree.getByRole('treeitem', { name: 'Line 1, column 6: 中文😀 needle needle', exact: true }).click();
 		await tree.press(shortcut);
-		expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual([
-			'/workspace/src/main.ts',
-		]);
+		expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['/workspace/src/main.ts']);
 		await expect(page.getByRole('status')).toHaveText('3 results');
 	});
 
@@ -2794,53 +2660,32 @@ suite('search browser component', () => {
 		await query.press('Enter');
 		await expect(page.getByRole('status')).toHaveText('3 results');
 		const tree = page.getByRole('tree', { name: 'Search results', exact: true });
-		const first = tree
-			.getByRole('treeitem')
-			.filter({
-				has: page
-					.locator('.ash-search-file-path')
-					.filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }),
-			});
-		const other = tree
-			.getByRole('treeitem')
-			.filter({
-				has: page
-					.locator('.ash-search-file-path')
-					.filter({ has: page.locator('.ash-icon-label-description', { hasText: 'other • src' }) }),
-			});
+		const first = tree.getByRole('treeitem').filter({
+			has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }),
+		});
+		const other = tree.getByRole('treeitem').filter({
+			has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'other • src' }) }),
+		});
 		await first.click();
 		await other.click({ button: 'right' });
-		await expect(
-			page.getByRole('menuitem', { name: 'Copy Path', exact: true }).locator('.ash-menu-keybinding'),
-		).toBeVisible();
+		await expect(page.getByRole('menuitem', { name: 'Copy Path', exact: true }).locator('.ash-menu-keybinding')).toBeVisible();
 		await page.getByRole('menuitem', { name: 'Copy Path', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites()))
-			.toEqual(['/other/src/main.ts']);
-		await page
-			.getByRole('toolbar', { name: 'Search result actions', exact: true })
-			.getByRole('button', { name: 'More Actions', exact: true })
-			.click();
+		await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['/other/src/main.ts']);
+		await page.getByRole('toolbar', { name: 'Search result actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click();
 		await page.evaluate(() => window.ashSearchIntegration.selectTreeView());
 		const folder = tree.getByRole('treeitem', { name: 'other', exact: true });
 		await folder.click();
 		await tree.press('ControlOrMeta+Alt+c');
-		expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual([
-			'/other/src/main.ts',
-		]);
+		expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['/other/src/main.ts']);
 		await tree.press('Shift+F10');
 		await page.getByRole('menuitem', { name: 'Copy Path', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites()))
-			.toEqual(['/other/src/main.ts', '/other']);
+		await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['/other/src/main.ts', '/other']);
 		const removedContent = await folder.locator('.ash-search-result').elementHandle();
 		expect(removedContent).not.toBeNull();
 		await tree.press('Shift+F10');
 		await expect(page.getByRole('menuitem', { name: 'Copy Path', exact: true })).toBeVisible();
 		await query.focus();
-		await page
-			.getByRole('button', { name: 'Refresh search', exact: true })
-			.evaluate((button: HTMLButtonElement) => button.click());
+		await page.getByRole('button', { name: 'Refresh search', exact: true }).evaluate((button: HTMLButtonElement) => button.click());
 		await expect(page.getByRole('menu')).toHaveCount(0);
 		await expect(query).toBeFocused();
 		await removedContent!.dispatchEvent('contextmenu', { bubbles: true, cancelable: true });
@@ -2868,12 +2713,8 @@ suite('search browser component', () => {
 		await page.keyboard.press('Escape');
 		await page.locator('.ash-search-file-path').click({ button: 'right' });
 		await page.getByRole('menuitem', { name: '复制路径', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites()))
-			.toEqual(['/workspace/src/main.ts']);
-		expect(await page.evaluate(() => window.ashSearchIntegration.help())).toContain(
-			'仅在选择首项是文件时复制其路径',
-		);
+		await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['/workspace/src/main.ts']);
+		expect(await page.evaluate(() => window.ashSearchIntegration.help())).toContain('仅在选择首项是文件时复制其路径');
 	});
 
 	test('Copy shortcut uses the first selection and a context menu copies its explicit row', async function () {
@@ -2890,14 +2731,10 @@ suite('search browser component', () => {
 		await first.click();
 		await other.click({ modifiers: ['ControlOrMeta'] });
 		await tree.press('ControlOrMeta+c');
-		await expect
-			.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites()))
-			.toEqual(['1,6: 中文😀 needle needle']);
+		await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['1,6: 中文😀 needle needle']);
 		await other.click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Copy', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites()))
-			.toEqual(['1,6: 中文😀 needle needle', '8,7: const needle = true;']);
+		await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['1,6: 中文😀 needle needle', '8,7: const needle = true;']);
 		await expect(page.getByRole('status')).toHaveText('3 results');
 	});
 
@@ -2917,9 +2754,7 @@ suite('search browser component', () => {
 		expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual([]);
 		await tree.focus();
 		await tree.press('ControlOrMeta+c');
-		await expect
-			.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites()))
-			.toEqual(['1,7: const needle = true;']);
+		await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['1,7: const needle = true;']);
 		await tree.press('Shift+F10');
 		await expect(page.getByRole('menuitem', { name: 'Copy', exact: true })).toBeVisible();
 		await page.keyboard.press('Escape');
@@ -2940,9 +2775,7 @@ suite('search browser component', () => {
 		await expect(page.getByRole('status')).toHaveText('1 个结果');
 		await page.locator('.ash-search-match').click({ button: 'right' });
 		await page.getByRole('menuitem', { name: '复制', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites()))
-			.toEqual(['1,7: const needle = true;']);
+		await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['1,7: const needle = true;']);
 		expect(await page.evaluate(() => window.ashSearchIntegration.help())).toContain('不会合并多选');
 	});
 
@@ -3012,9 +2845,7 @@ suite('search browser component', () => {
 		await tree.press('Shift+F10');
 		await expect(page.getByRole('menuitem', { name: 'Copy', exact: true })).toBeVisible();
 		await editor.focus();
-		await page
-			.getByRole('button', { name: 'Refresh search', exact: true })
-			.evaluate((button: HTMLButtonElement) => button.click());
+		await page.getByRole('button', { name: 'Refresh search', exact: true }).evaluate((button: HTMLButtonElement) => button.click());
 		await expect(page.getByRole('menu')).toHaveCount(0);
 		await expect(page.getByRole('status')).toHaveText('1 results');
 		await expect(query).toBeFocused();
@@ -3035,16 +2866,12 @@ suite('search browser component', () => {
 		await expect(tree).toBeFocused();
 		await expect(tree.locator('.ash-search-match')).toHaveCount(2);
 		const activeId = await tree.getAttribute('aria-activedescendant');
-		await expect(page.locator(`[id="${activeId}"]`)).toHaveAccessibleName(
-			'Line 1, column 13: 中文😀 needle needle',
-		);
+		await expect(page.locator(`[id="${activeId}"]`)).toHaveAccessibleName('Line 1, column 13: 中文😀 needle needle');
 		expect(await page.evaluate(() => window.ashSearchIntegration.snapshot()?.matchCount)).toBe(2);
 		await tree
 			.getByRole('treeitem')
 			.filter({
-				has: page
-					.locator('.ash-search-file-path')
-					.filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }),
+				has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }),
 			})
 			.click();
 		await page.evaluate(() => window.ashSearchIntegration.dismiss());
@@ -3065,9 +2892,7 @@ suite('search browser component', () => {
 		await page.evaluate(() => window.ashSearchIntegration.selectTreeView());
 		const tree = page.getByRole('tree', { name: 'Search results', exact: true });
 		const folder = (name: string) => tree.getByRole('treeitem', { name, exact: true });
-		const file = tree
-			.getByRole('treeitem')
-			.filter({ has: page.locator('.ash-search-file-path').getByText('b.ts', { exact: true }) });
+		const file = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').getByText('b.ts', { exact: true }) });
 		await folder('b/nested').locator('.ash-tree-twistie').click();
 		await folder('c').locator('.ash-tree-twistie').click();
 		await tree.getByRole('treeitem', { name: 'Line 2, column 7: const needle = true;', exact: true }).click();
@@ -3106,10 +2931,7 @@ suite('search browser component', () => {
 		await page.evaluate(() => window.ashSearchIntegration.selectTreeView());
 		const tree = page.getByRole('tree', { name: 'Search results', exact: true });
 		const folder = (name: string) => tree.getByRole('treeitem', { name, exact: true });
-		const file = (name: string) =>
-			tree
-				.getByRole('treeitem')
-				.filter({ has: page.locator('.ash-search-file-path').getByText(name, { exact: true }) });
+		const file = (name: string) => tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').getByText(name, { exact: true }) });
 		await file('b.ts').locator('.ash-tree-twistie').click();
 		await folder('b/nested').locator('.ash-tree-twistie').click();
 		await folder('c').locator('.ash-tree-twistie').click();
@@ -3152,13 +2974,9 @@ suite('search browser component', () => {
 		await query.fill('中文');
 		await query.press('Enter');
 		const tree = page.getByRole('tree', { name: 'Search results', exact: true });
-		const file = tree
-			.getByRole('treeitem')
-			.filter({
-				has: page
-					.locator('.ash-search-file-path')
-					.filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }),
-			});
+		const file = tree.getByRole('treeitem').filter({
+			has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }),
+		});
 		await file.click();
 		await tree
 			.locator('.ash-search-match')
@@ -3248,33 +3066,19 @@ suite('search browser component', () => {
 			for (const width of [180, 220, 280, 400, 600]) {
 				await page.evaluate(width => window.ashSearchIntegration.setWidth(width), width);
 				await query.focus();
-				await expect
-					.poll(() =>
-						page
-							.locator('.ash-search-widget')
-							.evaluate(widget => widget.classList.contains('ash-search-widget-narrow')),
-					)
-					.toBe(width < 284);
+				await expect.poll(() => page.locator('.ash-search-widget').evaluate(widget => widget.classList.contains('ash-search-widget-narrow'))).toBe(width < 284);
 				const geometry = await page.locator('.ash-search-widget').evaluate(widget => {
 					const field = widget.querySelector('.ash-search-query-field')!;
 					const bounds = field.getBoundingClientRect();
 					const input = field.querySelector('textarea')!.getBoundingClientRect();
-					const replacement = widget
-						.querySelector('.ash-search-replace-field textarea')!
-						.getBoundingClientRect();
+					const replacement = widget.querySelector('.ash-search-replace-field textarea')!.getBoundingClientRect();
 					const controls = field.querySelector('[role="toolbar"]')!.getBoundingClientRect();
 					const narrow = widget.classList.contains('ash-search-widget-narrow');
 					const widgetBounds = widget.getBoundingClientRect();
 					return {
 						inputWidth: input.width,
-						aligned:
-							Math.abs(input.left - replacement.left) < 0.01 &&
-							Math.abs(input.right - replacement.right) < 0.01,
-						inside:
-							controls.left >= bounds.left &&
-							controls.right <= bounds.right + 0.01 &&
-							controls.top >= bounds.top &&
-							controls.bottom <= bounds.bottom + 0.01,
+						aligned: Math.abs(input.left - replacement.left) < 0.01 && Math.abs(input.right - replacement.right) < 0.01,
+						inside: controls.left >= bounds.left && controls.right <= bounds.right + 0.01 && controls.top >= bounds.top && controls.bottom <= bounds.bottom + 0.01,
 						narrowOptions: !narrow || controls.top >= input.bottom,
 						fits: widget.scrollWidth <= widget.clientWidth,
 						width: widget.clientWidth,
@@ -3310,14 +3114,9 @@ suite('search browser component', () => {
 		const details = page.getByRole('button', { name: '切换搜索详细信息', exact: true });
 		await expect(details).toHaveText('搜索条件');
 		await details.click();
-		await expect(page.getByRole('textbox', { name: '包含的文件', exact: true })).toHaveAttribute(
-			'placeholder',
-			'例如 *.ts、src/**/include',
-		);
+		await expect(page.getByRole('textbox', { name: '包含的文件', exact: true })).toHaveAttribute('placeholder', '例如 *.ts、src/**/include');
 		await expect(page.getByRole('textbox', { name: '排除的文件', exact: true })).toBeVisible();
-		await expect(page.locator('.ash-search-filter-help')).toHaveText(
-			'用逗号分隔 glob 模式。“包含”限定搜索范围；“排除”跳过匹配的文件。',
-		);
+		await expect(page.locator('.ash-search-filter-help')).toHaveText('用逗号分隔 glob 模式。“包含”限定搜索范围；“排除”跳过匹配的文件。');
 		await page.getByRole('textbox', { name: '包含的文件', exact: true }).fill('src/**');
 		await details.click();
 		await expect(details).toHaveText('搜索条件 · 筛选已启用');
@@ -3386,15 +3185,9 @@ suite('search browser component', () => {
 				await page.getByRole('button', { name: 'More Actions', exact: true }).click();
 				await page.evaluate(() => window.ashSearchIntegration.selectTreeView());
 				await expect(tree.getByRole('treeitem', { name: 'src/ash', exact: true })).toHaveCount(1);
-				await expect(tree.getByRole('treeitem', { name: 'base/browser/ui/inputbox', exact: true })).toHaveCount(
-					1,
-				);
-				await expect(
-					tree.getByRole('treeitem', { name: 'workbench/contrib/search/browser', exact: true }),
-				).toHaveCount(1);
-				await expect(
-					tree.getByRole('treeitem', { name: 'src/ash/workbench/contrib/search/browser', exact: true }),
-				).toHaveCount(1);
+				await expect(tree.getByRole('treeitem', { name: 'base/browser/ui/inputbox', exact: true })).toHaveCount(1);
+				await expect(tree.getByRole('treeitem', { name: 'workbench/contrib/search/browser', exact: true })).toHaveCount(1);
+				await expect(tree.getByRole('treeitem', { name: 'src/ash/workbench/contrib/search/browser', exact: true })).toHaveCount(1);
 			} else {
 				await expect(tree.locator('.ash-search-folder-path')).toHaveCount(0);
 				await expect(tree.locator('.ash-icon-label-description')).toContainText([
@@ -3404,19 +3197,11 @@ suite('search browser component', () => {
 				]);
 			}
 			await expect(tree.locator('.ash-search-file-path .ash-icon-label-text')).toHaveText(
-				mode === 'tree'
-					? ['searchView.ts', 'inputbox.ts', 'searchView.ts']
-					: ['inputbox.ts', 'searchView.ts', 'searchView.ts'],
+				mode === 'tree' ? ['searchView.ts', 'inputbox.ts', 'searchView.ts'] : ['inputbox.ts', 'searchView.ts', 'searchView.ts'],
 			);
 			await expect(tree.locator('.ash-search-preview mark')).toHaveText(['layout', 'layout', 'layout']);
-			expect((await tree.locator('.ash-search-line-number').allTextContents()).sort()).toEqual([
-				'1000:',
-				'3456:',
-				'43:',
-			]);
-			const late = tree
-				.getByRole('treeitem')
-				.filter({ has: page.locator('.ash-search-line-number').getByText('3456:', { exact: true }) });
+			expect((await tree.locator('.ash-search-line-number').allTextContents()).sort()).toEqual(['1000:', '3456:', '43:']);
+			const late = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-line-number').getByText('3456:', { exact: true }) });
 			expect((await late.locator('.ash-search-preview').innerText()).length).toBeLessThanOrEqual(250);
 			await expect(late.locator('.ash-search-preview mark')).toHaveText('layout');
 			await late.dblclick();
@@ -3436,25 +3221,13 @@ suite('search browser component', () => {
 				for (const width of [180, 220, 280, 400, 600]) {
 					await page.evaluate(value => window.ashSearchIntegration.setWidth(value), width);
 					await query.focus();
-					await expect
-						.poll(() =>
-							page
-								.locator('.ash-search-widget')
-								.evaluate(widget => widget.classList.contains('ash-search-widget-narrow')),
-						)
-						.toBe(width < 284);
+					await expect.poll(() => page.locator('.ash-search-widget').evaluate(widget => widget.classList.contains('ash-search-widget-narrow'))).toBe(width < 284);
 					const geometry = await sidebar.evaluate(element => {
 						const bounds = element.getBoundingClientRect();
 						const title = element.querySelector('.ash-sidebar-title-label')!.getBoundingClientRect();
-						const toolbar = element
-							.querySelector('[aria-label="Search result actions"]')!
-							.getBoundingClientRect();
-						const input = element
-							.querySelector('.ash-search-query-field textarea')!
-							.getBoundingClientRect();
-						const replacement = element
-							.querySelector('.ash-search-replace-field textarea')!
-							.getBoundingClientRect();
+						const toolbar = element.querySelector('[aria-label="Search result actions"]')!.getBoundingClientRect();
+						const input = element.querySelector('.ash-search-query-field textarea')!.getBoundingClientRect();
+						const replacement = element.querySelector('.ash-search-replace-field textarea')!.getBoundingClientRect();
 						const previews = Array.from(element.querySelectorAll('.ash-search-match')).map(row => {
 							const content = row.getBoundingClientRect();
 							const line = row.querySelector('.ash-search-line-number')!.getBoundingClientRect();
@@ -3465,8 +3238,7 @@ suite('search browser component', () => {
 								origin: preview.left - content.left,
 								width: preview.width,
 								fits: preview.right <= bounds.right + 0.01,
-								highlightFits:
-									highlight.left >= preview.left - 0.01 && highlight.right <= preview.right + 0.01,
+								highlightFits: highlight.left >= preview.left - 0.01 && highlight.right <= preview.right + 0.01,
 							};
 						});
 						const files = Array.from(element.querySelectorAll('.ash-search-file-heading'))
@@ -3510,11 +3282,7 @@ suite('search browser component', () => {
 						expect(file.separated).toBe(true);
 						expect(file.fits).toBe(true);
 					}
-					await expect(
-						page
-							.locator('.ash-pane-composite-title-view-actions')
-							.getByRole('toolbar', { name: 'Search result actions', exact: true }),
-					).toHaveCount(1);
+					await expect(page.locator('.ash-pane-composite-title-view-actions').getByRole('toolbar', { name: 'Search result actions', exact: true })).toHaveCount(1);
 					await browserTests.info.attach(`search-${mode}-${theme}-${width}px`, {
 						body: await sidebar.screenshot(),
 						contentType: 'image/png',
@@ -3539,9 +3307,7 @@ suite('search browser component', () => {
 		const tree = page.getByRole('tree', { name: 'Search results', exact: true });
 		const rows = tree.getByRole('treeitem');
 		const workspaceFile = rows.filter({
-			has: page
-				.locator('.ash-search-file-path')
-				.filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }),
+			has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }),
 		});
 		await workspaceFile.locator('.ash-tree-twistie').click();
 		await expect(workspaceFile).toHaveAttribute('aria-expanded', 'false');
@@ -3549,9 +3315,7 @@ suite('search browser component', () => {
 		await workspaceFile.locator('.ash-tree-twistie').click();
 		await expect(workspaceFile).toHaveAttribute('aria-expanded', 'true');
 		await tree.locator('.ash-search-match').filter({ hasText: '中文😀 needle needle' }).last().click();
-		await expect(
-			rows.filter({ has: page.locator('.ash-search-match', { hasText: '中文😀 needle needle' }) }).last(),
-		).toHaveAccessibleName('Line 1, column 13: 中文😀 needle needle');
+		await expect(rows.filter({ has: page.locator('.ash-search-match', { hasText: '中文😀 needle needle' }) }).last()).toHaveAccessibleName('Line 1, column 13: 中文😀 needle needle');
 		await expect
 			.poll(() => page.evaluate(() => window.ashSearchIntegration.opened.at(-1)))
 			.toMatchObject({
@@ -3564,9 +3328,7 @@ suite('search browser component', () => {
 				},
 			});
 		await tree.press('ControlOrMeta+Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashSearchIntegration.opened.at(-1)))
-			.toMatchObject({ target: 'sideGroup', options: { pinned: true } });
+		await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.opened.at(-1))).toMatchObject({ target: 'sideGroup', options: { pinned: true } });
 		await tree.press('F4');
 		await expect
 			.poll(() => page.evaluate(() => window.ashSearchIntegration.opened.at(-1)))
@@ -3648,10 +3410,7 @@ suite('search browser component', () => {
 			await page.evaluate(theme => window.ashSearchIntegration.setTheme(theme), theme);
 			const geometry = await bar.evaluate(element => {
 				const bar = element.getBoundingClientRect();
-				const body = element
-					.closest('.ash-view-pane')!
-					.querySelector('.ash-pane-view-content')!
-					.getBoundingClientRect();
+				const body = element.closest('.ash-view-pane')!.querySelector('.ash-pane-view-content')!.getBoundingClientRect();
 				const style = getComputedStyle(element);
 				return {
 					top: bar.top - body.top,
@@ -3670,9 +3429,7 @@ suite('search browser component', () => {
 		await page.evaluate(() => window.ashSearchIntegration.setSecondView(true));
 		const header = pane.locator(':scope > .ash-pane-view-header');
 		await expect(header).toBeVisible();
-		expect((await bar.boundingBox())!.y).toBe(
-			(await header.boundingBox())!.y + (await header.boundingBox())!.height,
-		);
+		expect((await bar.boundingBox())!.y).toBe((await header.boundingBox())!.y + (await header.boundingBox())!.height);
 		await pane.locator('.ash-pane-view-header-button').press('ArrowLeft');
 		await expect(bar).toBeHidden();
 		await pane.locator('.ash-pane-view-header-button').press('ArrowRight');
@@ -3841,9 +3598,7 @@ suite('search browser component', () => {
 		await expect(query).toHaveValue('first\nsecond');
 		expect(await page.evaluate(() => window.ashSearchIntegration.queries.length)).toBe(0);
 		await query.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashSearchIntegration.queries[0]?.text))
-			.toBe('first\nsecond');
+		await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.queries[0]?.text)).toBe('first\nsecond');
 		await query.fill('needle');
 		await query.press('Enter');
 		await query.fill('draft');
@@ -3912,9 +3667,7 @@ suite('search browser component', () => {
 			'/workspace/src/main.ts\n  1,13: 中文😀 needle needle\n\n/other/src/main.ts\n  8,7: const needle = true;',
 		);
 		await page.evaluate(() => window.ashSearchIntegration.setClipboardFailure(true));
-		await expect(page.evaluate(() => window.ashSearchIntegration.copyAll())).rejects.toThrow(
-			'Clipboard permission denied',
-		);
+		await expect(page.evaluate(() => window.ashSearchIntegration.copyAll())).rejects.toThrow('Clipboard permission denied');
 		await expect(page.getByRole('status')).toHaveText('2 results');
 		expect((await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).length).toBe(3);
 	});
@@ -3937,9 +3690,7 @@ suite('search browser component', () => {
 		await page.evaluate(() => window.ashSearchIntegration.setSearchVisible(true));
 		await expect(query).toBeVisible();
 		await page.evaluate(() => window.ashSearchIntegration.copyAll());
-		expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual([
-			'/workspace/src/main.ts\n  1,7: const needle = true;',
-		]);
+		expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['/workspace/src/main.ts\n  1,7: const needle = true;']);
 	});
 
 	test('Copy All reads the latest incremental results and its help is translated', async function () {
@@ -3952,9 +3703,7 @@ suite('search browser component', () => {
 		const tree = page.getByRole('tree', { name: '搜索结果', exact: true });
 		await expect(tree).toHaveAttribute('aria-busy', 'true');
 		await page.evaluate(() => window.ashSearchIntegration.copyAll());
-		expect((await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).at(-1)).toBe(
-			'/workspace/src/main.ts\n  1,7: const needle = true;',
-		);
+		expect((await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).at(-1)).toBe('/workspace/src/main.ts\n  1,7: const needle = true;');
 		await page.evaluate(() => window.ashSearchIntegration.finishLateSearch());
 		await expect(tree).toHaveAttribute('aria-busy', 'false');
 		await page.evaluate(() => window.ashSearchIntegration.copyAll());
@@ -3982,15 +3731,11 @@ suite('search browser component', () => {
 			await tree.press('Control+Alt+c');
 			expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual([]);
 			await tree.press('Shift+Alt+c');
-			await expect
-				.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites()))
-				.toEqual(['C:\\workspace\\src\\main.ts']);
+			await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['C:\\workspace\\src\\main.ts']);
 			await tree.press('Control+Shift+Alt+c');
 			await query.focus();
 			await query.press('Shift+Alt+c');
-			expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual([
-				'C:\\workspace\\src\\main.ts',
-			]);
+			expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['C:\\workspace\\src\\main.ts']);
 		});
 		test('Copy formats a single multi-line match and its file with Windows labels and separators', async function () {
 			const { page } = browserTests;
@@ -4029,10 +3774,7 @@ suite('search browser component', () => {
 		await page.goto('/search.html');
 		await page.evaluate(async () => {
 			window.ashSearchIntegration.closeWorkspace();
-			await window.ashSearchIntegration.setDraftText(
-				'# Search: draft_token',
-				'untitled:/Search-results.code-search',
-			);
+			await window.ashSearchIntegration.setDraftText('# Search: draft_token', 'untitled:/Search-results.code-search');
 			await window.ashSearchIntegration.setDraftText('中文😀 draft_token draft_token');
 		});
 		const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
@@ -4040,22 +3782,15 @@ suite('search browser component', () => {
 		await query.press('Enter');
 		await expect(page.getByRole('status')).toHaveText('2 results');
 		await expect(page.locator('.ash-search-file-path')).toHaveText('Untitled-1');
-		await page
-			.getByRole('toolbar', { name: 'Search result actions', exact: true })
-			.getByRole('button', { name: 'More Actions', exact: true })
-			.click();
+		await page.getByRole('toolbar', { name: 'Search result actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click();
 		await page.evaluate(() => window.ashSearchIntegration.selectTreeView());
 		const tree = page.getByRole('tree', { name: 'Search results', exact: true });
 		await tree.getByRole('treeitem').first().click();
 		await tree.press('ArrowRight');
 		await tree.press('ArrowDown');
 		await tree.press('Enter');
-		await expect
-			.poll(() => page.evaluate(() => window.ashSearchIntegration.opened.at(-1)?.resource))
-			.toBe('untitled:/Untitled-1');
-		expect((await page.evaluate(() => window.ashSearchIntegration.snapshot()))?.content).toContain(
-			'# File: untitled:/Untitled-1',
-		);
+		await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.opened.at(-1)?.resource)).toBe('untitled:/Untitled-1');
+		expect((await page.evaluate(() => window.ashSearchIntegration.snapshot()))?.content).toContain('# File: untitled:/Untitled-1');
 		await page.evaluate(() => window.ashSearchIntegration.dismiss());
 		await expect(page.getByRole('status')).toHaveText('1 results');
 		await query.press('Enter');

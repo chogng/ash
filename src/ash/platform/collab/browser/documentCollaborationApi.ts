@@ -3,9 +3,7 @@ import type { UnavailableOperation } from '../../renderer/browser/disconnectedHo
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 
-export function createDisconnectedDocumentCollaborationApi(
-	unavailable: UnavailableOperation,
-): IDocumentCollaborationApi {
+export function createDisconnectedDocumentCollaborationApi(unavailable: UnavailableOperation): IDocumentCollaborationApi {
 	return {
 		open: () => unavailable('documentCollaboration.open'),
 		submit: () => unavailable('documentCollaboration.submit'),
@@ -14,9 +12,7 @@ export function createDisconnectedDocumentCollaborationApi(
 	};
 }
 
-export function createAppServerDocumentCollaborationApi(
-	connection: AppServerProtocolClient,
-): IDocumentCollaborationApi {
+export function createAppServerDocumentCollaborationApi(connection: AppServerProtocolClient): IDocumentCollaborationApi {
 	return {
 		open: params => appServerRequest(connection, 'document/collaboration/open', params),
 		submit: params => appServerRequest(connection, 'document/collaboration/submit', params),

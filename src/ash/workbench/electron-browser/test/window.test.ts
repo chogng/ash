@@ -70,10 +70,7 @@ test('desktop initialization reads privileges and installation proofs through in
 			errors.push(args);
 		},
 	});
-	services.registerInstance(
-		IEditorService,
-		{} as import('../../services/editor/common/editorService.js').IEditorService,
-	);
+	services.registerInstance(IEditorService, {} as import('../../services/editor/common/editorService.js').IEditorService);
 	services.registerInstance(IEditorGroupsService, {
 		onDidChangeGroups: Event.None,
 	} as import('../../services/editor/common/editorGroupsService.js').IEditorGroupsService);
@@ -87,17 +84,17 @@ test('desktop initialization reads privileges and installation proofs through in
 			}
 		},
 	} as unknown as import('../../services/title/browser/titleService.js').ITitleService);
-	const ipc = { invoke: async <T>() => undefined as T, subscribe: () => ({ dispose() {} }) };
+	const ipc = {
+		invoke: async <T>() => undefined as T,
+		subscribe: () => ({ dispose() {} }),
+	};
 	const development = new Promise<void>(resolve => {
 		updated = resolve;
 	});
 	using desktop = services.createInstance(ElectronWindow, ipc);
 	await desktop.initialize();
 	await development;
-	assert.deepEqual(
-		{ properties, warnings: notifications.model.getNotifications().length },
-		{ properties: [{ isAdmin: true }, { isPure: undefined }], warnings: 0 },
-	);
+	assert.deepEqual({ properties, warnings: notifications.model.getNotifications().length }, { properties: [{ isAdmin: true }, { isPure: undefined }], warnings: 0 });
 
 	reply = {
 		isBuilt: true,
@@ -171,10 +168,7 @@ test('desktop disposal prevents pending environment reads from updating titles',
 	using notifications = new TestNotificationService();
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(ILogService, { trace() {}, debug() {}, info() {}, warn() {}, error() {} });
-	services.registerInstance(
-		IEditorService,
-		{} as import('../../services/editor/common/editorService.js').IEditorService,
-	);
+	services.registerInstance(IEditorService, {} as import('../../services/editor/common/editorService.js').IEditorService);
 	services.registerInstance(IEditorGroupsService, {
 		onDidChangeGroups: Event.None,
 	} as import('../../services/editor/common/editorGroupsService.js').IEditorGroupsService);
@@ -316,13 +310,7 @@ test('desktop root uses client pixels at the current scale and rejects a stale i
 test('native client size IPC accepts physical pixels and rejects malformed dimensions', () => {
 	assert.deepEqual(validateWindowClientSize({ width: 1500, height: 999 }), { width: 1500, height: 999 });
 	assert.equal(validateWindowClientSize(undefined), undefined);
-	for (const value of [
-		null,
-		{ width: 1.5, height: 999 },
-		{ width: 1500, height: 0 },
-		{ width: NaN, height: 999 },
-		{ width: 1500, height: 999, inset: 1 },
-	]) {
+	for (const value of [null, { width: 1.5, height: 999 }, { width: 1500, height: 0 }, { width: NaN, height: 999 }, { width: 1500, height: 999, inset: 1 }]) {
 		assert.throws(() => validateWindowClientSize(value), /Invalid window client size/);
 	}
 });

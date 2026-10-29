@@ -9,11 +9,7 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 
-import {
-	MouseTargetType,
-	type ICodeEditor,
-	type IEditorMouseEvent,
-} from '../../../../../editor/browser/editorBrowser.js';
+import { MouseTargetType, type ICodeEditor, type IEditorMouseEvent } from '../../../../../editor/browser/editorBrowser.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import type { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
@@ -173,14 +169,12 @@ test('Debug breakpoint controller consumes the public glyph-margin mouse target'
 });
 
 function decorationState(model: TextModel): readonly unknown[] {
-	return model
-		.getAllDecorations()
-		.map(decoration => ({
-			lineNumber: decoration.range.getStartPosition().lineNumber,
-			lane: decoration.options.glyphMargin?.position,
-			persistLane: decoration.options.glyphMargin?.persistLane,
-			className: decoration.options.glyphMarginClassName,
-		}));
+	return model.getAllDecorations().map(decoration => ({
+		lineNumber: decoration.range.getStartPosition().lineNumber,
+		lane: decoration.options.glyphMargin?.position,
+		persistLane: decoration.options.glyphMargin?.persistLane,
+		className: decoration.options.glyphMarginClassName,
+	}));
 }
 
 class BreakpointDebugService extends Disposable {

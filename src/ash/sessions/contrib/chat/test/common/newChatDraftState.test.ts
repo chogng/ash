@@ -3,11 +3,7 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
-import {
-	migrateNewChatDraftState,
-	readNewChatDraftState,
-	writeNewChatDraftState,
-} from '../../common/newChatDraftState.js';
+import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../../common/newChatDraftState.js';
 
 const draft = {
 	mode: 'plan' as const,
@@ -57,12 +53,7 @@ test('stored drafts retain code reference positions and reject references to dif
 	};
 	writeNewChatDraftState(fixture.storage, selected, 'selection');
 	assert.deepEqual(readNewChatDraftState(fixture.storage, 'selection'), selected);
-	fixture.storage.store(
-		'sessions.inputDraft:selection',
-		JSON.stringify({ ...selected, text: 'Explain other.ts (6-9)' }),
-		StorageScope.WORKSPACE,
-		StorageTarget.MACHINE,
-	);
+	fixture.storage.store('sessions.inputDraft:selection', JSON.stringify({ ...selected, text: 'Explain other.ts (6-9)' }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	assert.throws(() => readNewChatDraftState(fixture.storage, 'selection'), /Invalid Agents Window context reference/);
 });
 
@@ -71,12 +62,7 @@ test('malformed legacy drafts preserve their raw entries while valid drafts stil
 	const storage = fixture.storage;
 	const malformed = '{unfinished';
 	storage.store('sessions.draftState:broken', malformed, StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	storage.store(
-		'sessions.codeDraftState:valid',
-		JSON.stringify(draft),
-		StorageScope.WORKSPACE,
-		StorageTarget.MACHINE,
-	);
+	storage.store('sessions.codeDraftState:valid', JSON.stringify(draft), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	const errors: unknown[] = [];
 	assert.deepEqual(
 		migrateNewChatDraftState(storage, error => errors.push(error)),

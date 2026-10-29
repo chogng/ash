@@ -15,17 +15,13 @@ test('Browser Workers cannot register SSH or impersonate the Rust product extens
 		expect(info.manifest.browser).toBeUndefined();
 		const external = await page.evaluate(() => window.remoteAuthorityIntegration.activate());
 		expect(external).toBeUndefined();
-		const impersonated = await page.evaluate(() =>
-			window.remoteAuthorityIntegration.activate('builtIn', 'ash.remote-ssh'),
-		);
+		const impersonated = await page.evaluate(() => window.remoteAuthorityIntegration.activate('builtIn', 'ash.remote-ssh'));
 		expect(impersonated).toMatchObject({
 			lifecycle: 'failed',
 			failure: { code: 'activationFailed', message: expect.stringContaining('Rust provider') },
 			registrations: [],
 		});
-		const localized = await page.evaluate(() =>
-			window.remoteAuthorityIntegration.activate('builtIn', 'ash.remote-ssh', 'zh-CN'),
-		);
+		const localized = await page.evaluate(() => window.remoteAuthorityIntegration.activate('builtIn', 'ash.remote-ssh', 'zh-CN'));
 		expect(localized).toMatchObject({
 			failure: { message: 'TypeError: 产品 SSH 扩展必须作为 Rust Provider 执行' },
 			registrations: [],

@@ -19,11 +19,7 @@ export class WorkspaceEditingService extends AbstractWorkspaceEditingService {
 		super(workspace, dialogs, workingCopies, hostService);
 	}
 
-	updateFolders(
-		index: number,
-		deleteCount = 0,
-		foldersToAdd: readonly { readonly uri: URI; readonly name?: string }[] = [],
-	): Promise<void> {
+	updateFolders(index: number, deleteCount = 0, foldersToAdd: readonly { readonly uri: URI; readonly name?: string }[] = []): Promise<void> {
 		return this.edit({
 			operation: 'folders',
 			index,
@@ -40,8 +36,7 @@ export class WorkspaceEditingService extends AbstractWorkspaceEditingService {
 	}
 
 	private async edit(request: WorkspaceEditRequest): Promise<void> {
-		if (!this.host.editWorkspace)
-			throw new Error(localize('workspace.editUnavailable', 'Workspace editing is unavailable in this host.'));
+		if (!this.host.editWorkspace) throw new Error(localize('workspace.editUnavailable', 'Workspace editing is unavailable in this host.'));
 		this.ensureConfigurationSaved();
 		await this.host.editWorkspace(request);
 	}

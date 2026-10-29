@@ -1,13 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { suite, test } from 'mocha';
-import {
-	createEventDeliveryQueue,
-	Emitter,
-	Event,
-	PauseableEmitter,
-	runWithBufferedEvents,
-	ValueWithChangeEvent,
-} from '../../common/event.js';
+import { createEventDeliveryQueue, Emitter, Event, PauseableEmitter, runWithBufferedEvents, ValueWithChangeEvent } from '../../common/event.js';
 import { DisposableStore, toDisposable, type IDisposable, noneDisposable } from '../../common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from './utils.js';
 
@@ -171,15 +164,7 @@ test('Emitter reports listener lifecycle in registration order', () => {
 	first.dispose();
 	assert.deepEqual(lifecycle, ['will-first', 'did-first', 'did-add', 'did-add', 'will-remove']);
 	second.dispose();
-	assert.deepEqual(lifecycle, [
-		'will-first',
-		'did-first',
-		'did-add',
-		'did-add',
-		'will-remove',
-		'will-remove',
-		'did-remove-last',
-	]);
+	assert.deepEqual(lifecycle, ['will-first', 'did-first', 'did-add', 'did-add', 'will-remove', 'will-remove', 'did-remove-last']);
 
 	emitter.event(() => undefined);
 	emitter.dispose();
@@ -230,7 +215,9 @@ test('Emitter queues reentrant events in FIFO order', () => {
 test('Emitter reports listener errors and continues delivery', () => {
 	const expected = new Error('listener failed');
 	const errors: unknown[] = [];
-	const emitter = new Emitter<void>({ onListenerError: error => errors.push(error) });
+	const emitter = new Emitter<void>({
+		onListenerError: error => errors.push(error),
+	});
 	const failing = emitter.event(() => {
 		throw expected;
 	});

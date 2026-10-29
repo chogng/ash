@@ -3,11 +3,7 @@ import { test } from 'mocha';
 import type { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { createDisconnectedGitHubService } from '../../../../../platform/github/browser/appServerGitHubService.js';
-import {
-	IGitHubService,
-	type GitHubChecks,
-	type GitHubPullRequest,
-} from '../../../../../platform/github/common/githubService.js';
+import { IGitHubService, type GitHubChecks, type GitHubPullRequest } from '../../../../../platform/github/common/githubService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { LazyGitHubResourceResolver, parseGitHubReferenceTarget } from '../../browser/lazyGitHubResourceHover.js';
 
@@ -29,13 +25,7 @@ const pullRequest: GitHubPullRequest = {
 };
 
 test('public reference parsing rejects enterprise hosts and unsafe reference identities', () => {
-	assert.deepEqual(
-		parseGitHubReferenceTarget(
-			URI.parse('https://github.com/team/repo/pull/7?tab=files#discussion'),
-			'pullRequest',
-		),
-		target,
-	);
+	assert.deepEqual(parseGitHubReferenceTarget(URI.parse('https://github.com/team/repo/pull/7?tab=files#discussion'), 'pullRequest'), target);
 	for (const uri of [
 		'http://github.com/team/repo/pull/7',
 		'https://enterprise.test/team/repo/pull/7',
@@ -64,9 +54,7 @@ test('hover intent loads all checks pages once while retaining prefetched core m
 			return {
 				state: 'success',
 				statuses: [],
-				checks: [
-					{ id: page, name: `test-${page}`, status: 'completed', conclusion: 'success', detailsUrl: null },
-				],
+				checks: [{ id: page, name: `test-${page}`, status: 'completed', conclusion: 'success', detailsUrl: null }],
 				nextPage: page === 1 ? 2 : null,
 			};
 		},
@@ -74,10 +62,7 @@ test('hover intent loads all checks pages once while retaining prefetched core m
 	using resolver = services.createInstance(LazyGitHubResourceResolver);
 	await resolver.prefetchPullRequest(target);
 	assert.deepEqual(reads, ['core']);
-	const [first, second] = await Promise.all([
-		resolver.resolvePullRequest(target),
-		resolver.resolvePullRequest(target),
-	]);
+	const [first, second] = await Promise.all([resolver.resolvePullRequest(target), resolver.resolvePullRequest(target)]);
 	await resolver.resolvePullRequest(target);
 	assert.deepEqual(
 		{
@@ -144,8 +129,5 @@ test('retiring a link cancels in-flight checks and prevents late state from reap
 	resolver.retain([]);
 	release({ state: 'success', statuses: [], checks: [], nextPage: null });
 	await pending;
-	assert.deepEqual(
-		{ canceled: cancellation.isCancellationRequested, state: state.get() },
-		{ canceled: true, state: { status: 'resolved', value: { pullRequest, checks: undefined } } },
-	);
+	assert.deepEqual({ canceled: cancellation.isCancellationRequested, state: state.get() }, { canceled: true, state: { status: 'resolved', value: { pullRequest, checks: undefined } } });
 });

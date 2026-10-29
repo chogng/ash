@@ -58,13 +58,7 @@ test(
 			await pause.focus();
 			await pause.press('Enter');
 			await expect(card()).toHaveAttribute('data-enabled', 'false');
-			await expect
-				.poll(
-					async () =>
-						(await connection.client.request(APP_SERVER_METHODS['automation/run/read'], { runId: run.id }))
-							.status,
-				)
-				.toBe('stopped');
+			await expect.poll(async () => (await connection.client.request(APP_SERVER_METHODS['automation/run/read'], { runId: run.id })).status).toBe('stopped');
 			const plans = await connection.client.request(APP_SERVER_METHODS['automation/list'], {});
 			expect(plans.automations[0]!.definition.condition).toEqual(condition);
 			expect(plans.automations[0]!.definition.session).toEqual({

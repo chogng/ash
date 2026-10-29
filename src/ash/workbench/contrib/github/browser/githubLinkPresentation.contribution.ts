@@ -1,27 +1,12 @@
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
-import {
-	Disposable,
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-	type IDisposable,
-} from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun, observableValue } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IAccountService } from '../../../../platform/accounts/common/accountService.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import {
-	ConfigurationScope,
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import {
 	ILinkPresentationService,
 	type ILinkPresentation,
@@ -51,11 +36,7 @@ import {
 	getPullRequestResourceStatus,
 	GitHubResourcePresentation,
 } from './githubResourceHover.js';
-import {
-	LazyGitHubResourceResolver,
-	parseGitHubReferenceTarget,
-	type IGitHubReferenceTarget,
-} from './lazyGitHubResourceHover.js';
+import { LazyGitHubResourceResolver, parseGitHubReferenceTarget, type IGitHubReferenceTarget } from './lazyGitHubResourceHover.js';
 
 type LinkTarget =
 	| { readonly kind: 'repository'; readonly owner: string; readonly repo: string }
@@ -92,11 +73,7 @@ export class GitHubLinkPresentationContribution extends Disposable {
 		let authenticationShown = false;
 		const reportError = (error: unknown): void => {
 			this.log.warn('github', 'Could not load GitHub link details', error);
-			if (
-				error instanceof GitHubError &&
-				error.code === GitHubErrorCode.AuthenticationRequired &&
-				!authenticationShown
-			) {
+			if (error instanceof GitHubError && error.code === GitHubErrorCode.AuthenticationRequired && !authenticationShown) {
 				authenticationShown = true;
 				const notification = this.notifications.notify({
 					severity: Severity.Info,
@@ -131,9 +108,7 @@ export class GitHubLinkPresentationContribution extends Disposable {
 				watcher.addCleanup(() => {
 					references.delete(reference);
 					resolver.retain([...references]);
-					commits.retain(
-						[...references].map(reference => reference.target).filter(target => target.kind === 'commit'),
-					);
+					commits.retain([...references].map(reference => reference.target).filter(target => target.kind === 'commit'));
 				});
 				const repositoryHref = `https://github.com/${target.owner}/${target.repo}`;
 				const open = (href: string): void => {
@@ -154,15 +129,9 @@ export class GitHubLinkPresentationContribution extends Disposable {
 				switch (target.kind) {
 					case 'repository':
 						watcher.load(async () => {
-							const info = await this.github.readRepository(
-								{ host: 'github.com', owner: target.owner, name: target.repo },
-								watcher.token,
-							);
+							const info = await this.github.readRepository({ host: 'github.com', owner: target.owner, name: target.repo }, watcher.token);
 							const tooltip = `${info.fullName}\n${localize('github.defaultBranch', 'Default branch: {0}', info.defaultBranch)}`;
-							return new GitHubResourcePresentation(
-								{ kind: 'repository', title: info.fullName, tooltip },
-								() => createRepositoryResourceHover({ ...common, repository: info }),
-							);
+							return new GitHubResourcePresentation({ kind: 'repository', title: info.fullName, tooltip }, () => createRepositoryResourceHover({ ...common, repository: info }));
 						});
 						break;
 					case 'issue':
@@ -199,9 +168,7 @@ export class GitHubLinkPresentationContribution extends Disposable {
 								return;
 							}
 							const { pullRequest, checks } = state.value;
-							const headHref = pullRequest.headRepository
-								? `https://github.com/${pullRequest.headRepository}/tree/${encodeURIComponent(pullRequest.headBranch)}`
-								: undefined;
+							const headHref = pullRequest.headRepository ? `https://github.com/${pullRequest.headRepository}/tree/${encodeURIComponent(pullRequest.headBranch)}` : undefined;
 							const checksStatus = getPullRequestChecksStatus(checks);
 							const secondaryStatus = checksStatus
 								? {
@@ -232,13 +199,8 @@ export class GitHubLinkPresentationContribution extends Disposable {
 											number: target.number,
 											pullRequest,
 											checksStatus,
-											onDidClickBaseBranch: () =>
-												open(
-													`${repositoryHref}/tree/${encodeURIComponent(pullRequest.baseBranch)}`,
-												),
-											headBranchLink: headHref
-												? { href: headHref, onClick: () => open(headHref) }
-												: undefined,
+											onDidClickBaseBranch: () => open(`${repositoryHref}/tree/${encodeURIComponent(pullRequest.baseBranch)}`),
+											headBranchLink: headHref ? { href: headHref, onClick: () => open(headHref) } : undefined,
 										});
 									},
 									computePullRequestIcon(getPullRequestResourceStatus(pullRequest).kind, {
@@ -383,9 +345,7 @@ function parseTarget(resource: URI): LinkTarget | undefined {
 }
 
 // Opener resolves CodeEditorService; editor parts are registered by the BlockRestore phase.
-registerWorkbenchContribution(GitHubLinkPresentationContribution.ID, WorkbenchPhase.BlockRestore, accessor =>
-	accessor.get(IInstantiationService).createInstance(GitHubLinkPresentationContribution),
-);
+registerWorkbenchContribution(GitHubLinkPresentationContribution.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(GitHubLinkPresentationContribution));
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.GitHub,
@@ -404,10 +364,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize('github.verbosity', 'GitHub link accessibility help');
 		},
 		get description() {
-			return localize(
-				'github.verbosityDescription',
-				'Announce how to access GitHub link details with the keyboard.',
-			);
+			return localize('github.verbosityDescription', 'Announce how to access GitHub link details with the keyboard.');
 		},
 	},
 });

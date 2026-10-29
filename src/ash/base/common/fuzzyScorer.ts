@@ -8,12 +8,7 @@ export type FuzzyScore = [number, number[]];
  * strongest alignment wins. Larger inputs retain the first valid alignment so
  * extension-provided labels cannot force quadratic work or storage per item.
  */
-export function scoreFuzzy(
-	target: string,
-	query: string,
-	queryLower: string,
-	allowNonContiguousMatches: boolean,
-): FuzzyScore {
+export function scoreFuzzy(target: string, query: string, queryLower: string, allowNonContiguousMatches: boolean): FuzzyScore {
 	if (!target || !query) return [0, []];
 	const targetLower = target.toLowerCase();
 	const pattern = [...foldCharacters(query, queryLower)];
@@ -112,10 +107,7 @@ function* foldCharacters(source: string, lowercase: string): IterableIterator<Fo
 		const boundary =
 			offset === 0 ||
 			/[\s._:/\\'"-]/.test(previous) ||
-			(previous.toLowerCase() === previous &&
-				previous.toUpperCase() !== previous &&
-				original.toUpperCase() === original &&
-				original.toLowerCase() !== original);
+			(previous.toLowerCase() === previous && previous.toUpperCase() !== previous && original.toUpperCase() === original && original.toLowerCase() !== original);
 		let first = true;
 		for (const _character of original.toLowerCase()) {
 			yield { value: folded.next().value!, original, offset, index: index++, boundary: first && boundary };
@@ -127,21 +119,14 @@ function* foldCharacters(source: string, lowercase: string): IterableIterator<Fo
 }
 
 function equalCharacters(left: FoldedCharacter, right: FoldedCharacter): boolean {
-	return (
-		left.value === right.value ||
-		((left.value === '/' || left.value === '\\') && (right.value === '/' || right.value === '\\'))
-	);
+	return left.value === right.value || ((left.value === '/' || left.value === '\\') && (right.value === '/' || right.value === '\\'));
 }
 
 function characterScore(character: FoldedCharacter, expected: FoldedCharacter): number {
 	return 2 + (character.boundary ? 6 : 0) + (character.original === expected.original ? 1 : 0);
 }
 
-function findFirstMatch(
-	candidate: Iterable<FoldedCharacter>,
-	pattern: readonly FoldedCharacter[],
-	allowNonContiguousMatches: boolean,
-): FoldedCharacter[] {
+function findFirstMatch(candidate: Iterable<FoldedCharacter>, pattern: readonly FoldedCharacter[], allowNonContiguousMatches: boolean): FoldedCharacter[] {
 	if (allowNonContiguousMatches) {
 		const result: FoldedCharacter[] = [];
 		for (const character of candidate) {

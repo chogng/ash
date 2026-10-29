@@ -3,23 +3,11 @@ import { StringSHA1 } from '../../../base/common/hash.js';
 import { Disposable, DisposableMap, type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { isLinux, isMacintosh } from '../../../base/common/platform.js';
-import type {
-	IConfigurationChangeEvent,
-	IConfigurationOverrides,
-	IConfigurationService,
-} from '../../../platform/configuration/common/configuration.js';
+import type { IConfigurationChangeEvent, IConfigurationOverrides, IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import '../config/editorConfigurationSchema.js';
 import { EditOperation, type ISingleEditOperation } from '../core/editOperation.js';
 import { Range } from '../core/range.js';
-import {
-	DefaultEndOfLine,
-	EndOfLinePreference,
-	EndOfLineSequence,
-	type ITextBuffer,
-	type ITextBufferFactory,
-	type ITextModel,
-	type ITextModelCreationOptions,
-} from '../model.js';
+import { DefaultEndOfLine, EndOfLinePreference, EndOfLineSequence, type ITextBuffer, type ITextBufferFactory, type ITextModel, type ITextModelCreationOptions } from '../model.js';
 import { TextModel, type TextModelUndoRedoSnapshot } from '../model/textModel.js';
 import type { ILanguageSelection, IAshLanguageService } from '../languages/language.js';
 import type { ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
@@ -32,10 +20,7 @@ import type { TextModelEditSource } from '../textModelEditSource.js';
 import type { ITextResourcePropertiesService } from './textResourceConfiguration.js';
 import { createPieceTreeTextBuffer } from '../model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js';
 
-export interface ModelServiceTokenizationOptions extends Pick<
-	TokenizationTextModelPartOptions,
-	'createSyntaxTokenBackend' | 'createSyntaxSession' | 'onDidChangeSyntaxBackend'
-> {
+export interface ModelServiceTokenizationOptions extends Pick<TokenizationTextModelPartOptions, 'createSyntaxTokenBackend' | 'createSyntaxSession' | 'onDidChangeSyntaxBackend'> {
 	readonly syntaxService?: SyntaxServiceOptions;
 	readonly onDidChangeLanguageSupport?: Event<void>;
 }
@@ -47,14 +32,10 @@ export class ModelService extends Disposable implements IModelService {
 	private readonly _models = this._register(new DisposableMap<string, ModelData>());
 	private readonly _disposedModels = new Map<string, DisposedModelInfo>();
 	private _disposedModelsHeapSize = 0;
-	private _modelCreationOptionsByLanguageAndResource: Record<string, ITextModelCreationOptions> = Object.create(
-		null,
-	) as Record<string, ITextModelCreationOptions>;
+	private _modelCreationOptionsByLanguageAndResource: Record<string, ITextModelCreationOptions> = Object.create(null) as Record<string, ITextModelCreationOptions>;
 	private readonly _onModelAdded = this._register(new Emitter<TextModel>());
 	private readonly _onModelRemoved = this._register(new Emitter<TextModel>());
-	private readonly _onModelModeChanged = this._register(
-		new Emitter<{ readonly model: TextModel; readonly oldLanguageId: string }>(),
-	);
+	private readonly _onModelModeChanged = this._register(new Emitter<{ readonly model: TextModel; readonly oldLanguageId: string }>());
 	readonly _serviceBrand: undefined;
 
 	readonly onModelAdded = this._onModelAdded.event;
@@ -73,21 +54,10 @@ export class ModelService extends Disposable implements IModelService {
 		this._register(this._configurationService.onDidChangeConfiguration(event => this._updateModelOptions(event)));
 	}
 
-	createModel(
-		value: string | ITextBufferFactory,
-		languageSelection: ILanguageSelection | null,
-		resource?: URI,
-		isForSimpleWidget = false,
-	): TextModel {
-		if (typeof value !== 'string' && !isTextBufferFactory(value))
-			throw new TypeError('Model value must be a string or ITextBufferFactory');
-		if (resource && this._models.has(resource.toString()))
-			throw new Error(`A model already exists for '${resource.toString()}'`);
-		const creationOptions = this.getCreationOptions(
-			languageSelection?.languageId ?? PLAINTEXT_LANGUAGE_ID,
-			resource,
-			isForSimpleWidget,
-		);
+	createModel(value: string | ITextBufferFactory, languageSelection: ILanguageSelection | null, resource?: URI, isForSimpleWidget = false): TextModel {
+		if (typeof value !== 'string' && !isTextBufferFactory(value)) throw new TypeError('Model value must be a string or ITextBufferFactory');
+		if (resource && this._models.has(resource.toString())) throw new Error(`A model already exists for '${resource.toString()}'`);
+		const creationOptions = this.getCreationOptions(languageSelection?.languageId ?? PLAINTEXT_LANGUAGE_ID, resource, isForSimpleWidget);
 		const model = new TextModel(readModelValue(value, creationOptions.defaultEOL), {
 			resource,
 			languageId: languageSelection?.languageId,
@@ -105,15 +75,13 @@ export class ModelService extends Disposable implements IModelService {
 						tokenization: {
 							languageIdCodec: this._languageService.languageIdCodec,
 							syntaxProviderRegistry: this._languageFeaturesService.syntaxProvider,
-							documentSemanticTokensProvider:
-								this._languageFeaturesService.documentSemanticTokensProvider,
+							documentSemanticTokensProvider: this._languageFeaturesService.documentSemanticTokensProvider,
 							...this._tokenizationOptions,
 						},
 					}
 				: {}),
 		});
-		if (creationOptions.detectIndentation)
-			model.detectIndentation(creationOptions.insertSpaces, creationOptions.tabSize);
+		if (creationOptions.detectIndentation) model.detectIndentation(creationOptions.insertSpaces, creationOptions.tabSize);
 		if (languageSelection) model.setLanguage(languageSelection);
 		const key = model.uri.toString();
 		const disposedModel = this._removeDisposedModel(model.uri);
@@ -143,8 +111,7 @@ export class ModelService extends Disposable implements IModelService {
 		const modelData = [...this._models].find(([, candidate]) => candidate.model === model)?.[1];
 		if (!modelData) throw new ReferenceError('Text model is not registered with this model service');
 		const concreteModel = modelData.model;
-		if (typeof value !== 'string' && !isTextBufferFactory(value))
-			throw new TypeError('Model value must be a string or ITextBufferFactory');
+		if (typeof value !== 'string' && !isTextBufferFactory(value)) throw new TypeError('Model value must be a string or ITextBufferFactory');
 		const { textBuffer, disposable } = createModelBuffer(value, concreteModel.getOptions().defaultEOL);
 		try {
 			if (concreteModel.equalsTextBuffer(textBuffer)) return;
@@ -180,13 +147,8 @@ export class ModelService extends Disposable implements IModelService {
 		return [...this._models].map(([, modelData]) => modelData.model);
 	}
 
-	getCreationOptions(
-		languageIdOrSelection: string | ILanguageSelection,
-		resource: URI | undefined,
-		isForSimpleWidget: boolean,
-	): ITextModelCreationOptions {
-		const language =
-			typeof languageIdOrSelection === 'string' ? languageIdOrSelection : languageIdOrSelection.languageId;
+	getCreationOptions(languageIdOrSelection: string | ILanguageSelection, resource: URI | undefined, isForSimpleWidget: boolean): ITextModelCreationOptions {
+		const language = typeof languageIdOrSelection === 'string' ? languageIdOrSelection : languageIdOrSelection.languageId;
 		const cacheKey = `${language}\0${resource?.toString() ?? ''}\0${isForSimpleWidget ? 'simple' : 'full'}`;
 		let options = this._modelCreationOptionsByLanguageAndResource[cacheKey];
 		if (!options) {
@@ -195,34 +157,13 @@ export class ModelService extends Disposable implements IModelService {
 			options = ModelService._readModelOptions(
 				{
 					tabSize: this._configurationService.getValue<number>(modelConfiguration.tabSize, overrides),
-					indentSize: this._configurationService.getValue<number | 'tabSize'>(
-						modelConfiguration.indentSize,
-						overrides,
-					),
-					insertSpaces: this._configurationService.getValue<boolean>(
-						modelConfiguration.insertSpaces,
-						overrides,
-					),
-					detectIndentation: this._configurationService.getValue<boolean>(
-						modelConfiguration.detectIndentation,
-						overrides,
-					),
-					trimAutoWhitespace: this._configurationService.getValue<boolean>(
-						modelConfiguration.trimAutoWhitespace,
-						overrides,
-					),
-					largeFileOptimizations: this._configurationService.getValue<boolean>(
-						modelConfiguration.largeFileOptimizations,
-						overrides,
-					),
-					bracketPairColorizationEnabled: this._configurationService.getValue<boolean>(
-						modelConfiguration.bracketPairColorizationEnabled,
-						overrides,
-					),
-					bracketPairColorizationIndependentColorPool: this._configurationService.getValue<boolean>(
-						modelConfiguration.bracketPairColorizationIndependentColorPool,
-						overrides,
-					),
+					indentSize: this._configurationService.getValue<number | 'tabSize'>(modelConfiguration.indentSize, overrides),
+					insertSpaces: this._configurationService.getValue<boolean>(modelConfiguration.insertSpaces, overrides),
+					detectIndentation: this._configurationService.getValue<boolean>(modelConfiguration.detectIndentation, overrides),
+					trimAutoWhitespace: this._configurationService.getValue<boolean>(modelConfiguration.trimAutoWhitespace, overrides),
+					largeFileOptimizations: this._configurationService.getValue<boolean>(modelConfiguration.largeFileOptimizations, overrides),
+					bracketPairColorizationEnabled: this._configurationService.getValue<boolean>(modelConfiguration.bracketPairColorizationEnabled, overrides),
+					bracketPairColorizationIndependentColorPool: this._configurationService.getValue<boolean>(modelConfiguration.bracketPairColorizationIndependentColorPool, overrides),
 					eol: this._getEOL(resource, language),
 				},
 				isForSimpleWidget,
@@ -232,10 +173,7 @@ export class ModelService extends Disposable implements IModelService {
 		return options;
 	}
 
-	private static _readModelOptions(
-		config: RawModelConfiguration,
-		isForSimpleWidget: boolean,
-	): ITextModelCreationOptions {
+	private static _readModelOptions(config: RawModelConfiguration, isForSimpleWidget: boolean): ITextModelCreationOptions {
 		return Object.freeze({
 			tabSize: config.tabSize,
 			indentSize: config.indentSize,
@@ -266,27 +204,19 @@ export class ModelService extends Disposable implements IModelService {
 
 	private _updateModelOptions(event: IConfigurationChangeEvent): void {
 		const oldOptionsByLanguageAndResource = this._modelCreationOptionsByLanguageAndResource;
-		this._modelCreationOptionsByLanguageAndResource = Object.create(null) as Record<
-			string,
-			ITextModelCreationOptions
-		>;
+		this._modelCreationOptionsByLanguageAndResource = Object.create(null) as Record<string, ITextModelCreationOptions>;
 		for (const [, modelData] of this._models) {
 			const model = modelData.model;
 			const overrides = { overrideIdentifier: model.getLanguageId(), resource: model.uri };
 			if (!MODEL_CONFIGURATION_KEYS.some(key => event.affectsConfiguration(key, overrides))) continue;
 			const cachePrefix = `${model.getLanguageId()}\0${model.uri.toString()}\0`;
-			const currentOptions =
-				oldOptionsByLanguageAndResource[`${cachePrefix}${model.isForSimpleWidget ? 'simple' : 'full'}`];
+			const currentOptions = oldOptionsByLanguageAndResource[`${cachePrefix}${model.isForSimpleWidget ? 'simple' : 'full'}`];
 			const newOptions = this.getCreationOptions(model.getLanguageId(), model.uri, model.isForSimpleWidget);
 			ModelService._setModelOptionsForModel(model, newOptions, currentOptions);
 		}
 	}
 
-	private static _setModelOptionsForModel(
-		model: ITextModel,
-		newOptions: ITextModelCreationOptions,
-		currentOptions: ITextModelCreationOptions | undefined,
-	): void {
+	private static _setModelOptionsForModel(model: ITextModel, newOptions: ITextModelCreationOptions, currentOptions: ITextModelCreationOptions | undefined): void {
 		if (currentOptions && currentOptions.defaultEOL !== newOptions.defaultEOL && model.getLineCount() === 1) {
 			model.setEOL(newOptions.defaultEOL === DefaultEndOfLine.LF ? EndOfLineSequence.LF : EndOfLineSequence.CRLF);
 		}
@@ -297,10 +227,8 @@ export class ModelService extends Disposable implements IModelService {
 			currentOptions.tabSize === newOptions.tabSize &&
 			currentOptions.indentSize === newOptions.indentSize &&
 			currentOptions.trimAutoWhitespace === newOptions.trimAutoWhitespace &&
-			currentOptions.bracketPairColorizationOptions.enabled ===
-				newOptions.bracketPairColorizationOptions.enabled &&
-			currentOptions.bracketPairColorizationOptions.independentColorPoolPerBracketType ===
-				newOptions.bracketPairColorizationOptions.independentColorPoolPerBracketType
+			currentOptions.bracketPairColorizationOptions.enabled === newOptions.bracketPairColorizationOptions.enabled &&
+			currentOptions.bracketPairColorizationOptions.independentColorPoolPerBracketType === newOptions.bracketPairColorizationOptions.independentColorPoolPerBracketType
 		)
 			return;
 		if (newOptions.detectIndentation) {
@@ -330,50 +258,24 @@ export class ModelService extends Disposable implements IModelService {
 
 	private _onDidChangeLanguage(model: TextModel, oldLanguageId: string): void {
 		const oldOptions = this.getCreationOptions(oldLanguageId, model.uri, model.isForSimpleWidget);
-		this._modelCreationOptionsByLanguageAndResource = Object.create(null) as Record<
-			string,
-			ITextModelCreationOptions
-		>;
+		this._modelCreationOptionsByLanguageAndResource = Object.create(null) as Record<string, ITextModelCreationOptions>;
 		const options = this.getCreationOptions(model.getLanguageId(), model.uri, model.isForSimpleWidget);
 		ModelService._setModelOptionsForModel(model, options, oldOptions);
 		this._languageService?.requestRichLanguageFeatures(model.getLanguageId());
 		this._onModelModeChanged.fire(Object.freeze({ model, oldLanguageId }));
 	}
 
-	private static _commonPrefix(
-		model: ITextModel,
-		modelLineCount: number,
-		modelLineDelta: number,
-		textBuffer: ITextBuffer,
-		textBufferLineCount: number,
-		textBufferLineDelta: number,
-	): number {
+	private static _commonPrefix(model: ITextModel, modelLineCount: number, modelLineDelta: number, textBuffer: ITextBuffer, textBufferLineCount: number, textBufferLineDelta: number): number {
 		const maximum = Math.min(modelLineCount, textBufferLineCount);
 		let result = 0;
-		while (
-			result < maximum &&
-			model.getLineContent(modelLineDelta + result) === textBuffer.getLineContent(textBufferLineDelta + result)
-		)
-			result += 1;
+		while (result < maximum && model.getLineContent(modelLineDelta + result) === textBuffer.getLineContent(textBufferLineDelta + result)) result += 1;
 		return result;
 	}
 
-	private static _commonSuffix(
-		model: ITextModel,
-		modelLineCount: number,
-		modelLineDelta: number,
-		textBuffer: ITextBuffer,
-		textBufferLineCount: number,
-		textBufferLineDelta: number,
-	): number {
+	private static _commonSuffix(model: ITextModel, modelLineCount: number, modelLineDelta: number, textBuffer: ITextBuffer, textBufferLineCount: number, textBufferLineDelta: number): number {
 		const maximum = Math.min(modelLineCount, textBufferLineCount);
 		let result = 0;
-		while (
-			result < maximum &&
-			model.getLineContent(modelLineDelta + modelLineCount - result) ===
-				textBuffer.getLineContent(textBufferLineDelta + textBufferLineCount - result)
-		)
-			result += 1;
+		while (result < maximum && model.getLineContent(modelLineDelta + modelLineCount - result) === textBuffer.getLineContent(textBufferLineDelta + textBufferLineCount - result)) result += 1;
 		return result;
 	}
 
@@ -382,60 +284,28 @@ export class ModelService extends Disposable implements IModelService {
 		const textBufferLineCount = textBuffer.getLineCount();
 		const commonPrefix = this._commonPrefix(model, modelLineCount, 1, textBuffer, textBufferLineCount, 1);
 		if (modelLineCount === textBufferLineCount && commonPrefix === modelLineCount) return [];
-		const commonSuffix = this._commonSuffix(
-			model,
-			modelLineCount - commonPrefix,
-			commonPrefix,
-			textBuffer,
-			textBufferLineCount - commonPrefix,
-			commonPrefix,
-		);
+		const commonSuffix = this._commonSuffix(model, modelLineCount - commonPrefix, commonPrefix, textBuffer, textBufferLineCount - commonPrefix, commonPrefix);
 		let oldRange: Range;
 		let newRange: Range;
 		if (commonSuffix > 0) {
 			oldRange = new Range(commonPrefix + 1, 1, modelLineCount - commonSuffix + 1, 1);
 			newRange = new Range(commonPrefix + 1, 1, textBufferLineCount - commonSuffix + 1, 1);
 		} else if (commonPrefix > 0) {
-			oldRange = new Range(
-				commonPrefix,
-				model.getLineMaxColumn(commonPrefix),
-				modelLineCount,
-				model.getLineMaxColumn(modelLineCount),
-			);
-			newRange = new Range(
-				commonPrefix,
-				textBuffer.getLineMaxColumn(commonPrefix),
-				textBufferLineCount,
-				textBuffer.getLineMaxColumn(textBufferLineCount),
-			);
+			oldRange = new Range(commonPrefix, model.getLineMaxColumn(commonPrefix), modelLineCount, model.getLineMaxColumn(modelLineCount));
+			newRange = new Range(commonPrefix, textBuffer.getLineMaxColumn(commonPrefix), textBufferLineCount, textBuffer.getLineMaxColumn(textBufferLineCount));
 		} else {
 			oldRange = new Range(1, 1, modelLineCount, model.getLineMaxColumn(modelLineCount));
 			newRange = new Range(1, 1, textBufferLineCount, textBuffer.getLineMaxColumn(textBufferLineCount));
 		}
-		return [
-			EditOperation.replaceMove(oldRange, textBuffer.getValueInRange(newRange, EndOfLinePreference.TextDefined)),
-		];
+		return [EditOperation.replaceMove(oldRange, textBuffer.getValueInRange(newRange, EndOfLinePreference.TextDefined))];
 	}
 
 	private _onWillDispose(key: string, model: TextModel): void {
 		const modelData = [...this._models].find(([, candidate]) => candidate.model === model)?.[1];
 		if (!modelData || modelData.model.uri.toString() !== key) return;
 		const snapshot = model.createUndoRedoSnapshot();
-		if (
-			snapshot &&
-			snapshot.contentLength <= DefaultModelSHA1Computer.MAX_MODEL_SIZE &&
-			this._shouldRestoreUndoStack() &&
-			this._schemaShouldMaintainUndoRedoElements(model.uri)
-		) {
-			this._insertDisposedModel(
-				new DisposedModelInfo(
-					model.uri,
-					snapshot,
-					Date.now(),
-					snapshot.contentLength + snapshot.history.textUnits,
-					snapshot.contentSHA1,
-				),
-			);
+		if (snapshot && snapshot.contentLength <= DefaultModelSHA1Computer.MAX_MODEL_SIZE && this._shouldRestoreUndoStack() && this._schemaShouldMaintainUndoRedoElements(model.uri)) {
+			this._insertDisposedModel(new DisposedModelInfo(model.uri, snapshot, Date.now(), snapshot.contentLength + snapshot.history.textUnits, snapshot.contentSHA1));
 			this._ensureDisposedModelsHeapSize(ModelService.MAX_MEMORY_FOR_CLOSED_FILES_UNDO_STACK);
 		}
 		this._onModelRemoved.fire(model);
@@ -444,11 +314,7 @@ export class ModelService extends Disposable implements IModelService {
 
 	protected _schemaShouldMaintainUndoRedoElements(resource: URI): boolean {
 		return (
-			resource.scheme === 'file' ||
-			resource.scheme === 'vscode-remote' ||
-			resource.scheme === 'vscode-userdata' ||
-			resource.scheme === 'vscode-notebook-cell' ||
-			resource.scheme === 'fake-fs'
+			resource.scheme === 'file' || resource.scheme === 'vscode-remote' || resource.scheme === 'vscode-userdata' || resource.scheme === 'vscode-notebook-cell' || resource.scheme === 'fake-fs'
 		);
 	}
 
@@ -521,12 +387,7 @@ const MODEL_CONFIGURATION_KEYS: readonly string[] = Object.freeze([
 ]);
 
 function isTextBufferFactory(value: unknown): value is ITextBufferFactory {
-	return (
-		!!value &&
-		typeof value === 'object' &&
-		typeof (value as ITextBufferFactory).create === 'function' &&
-		typeof (value as ITextBufferFactory).getFirstLineText === 'function'
-	);
+	return !!value && typeof value === 'object' && typeof (value as ITextBufferFactory).create === 'function' && typeof (value as ITextBufferFactory).getFirstLineText === 'function';
 }
 
 function readModelValue(value: string | ITextBufferFactory, defaultEOL: DefaultEndOfLine): string {
@@ -539,10 +400,7 @@ function readModelValue(value: string | ITextBufferFactory, defaultEOL: DefaultE
 	}
 }
 
-function createModelBuffer(
-	value: string | ITextBufferFactory,
-	defaultEOL: DefaultEndOfLine,
-): { readonly textBuffer: ITextBuffer; readonly disposable: IDisposable } {
+function createModelBuffer(value: string | ITextBufferFactory, defaultEOL: DefaultEndOfLine): { readonly textBuffer: ITextBuffer; readonly disposable: IDisposable } {
 	if (typeof value !== 'string') return value.create(defaultEOL);
 	const textBuffer = createPieceTreeTextBuffer(value, defaultEOL);
 	return { textBuffer, disposable: textBuffer };

@@ -20,27 +20,13 @@ import { ICommandService } from '../../../../../platform/commands/common/command
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { isModelPreparing } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { IDictationOnboardingService } from './dictationOnboarding.js';
-import {
-	IChatSpeechToTextService,
-	ChatSpeechToTextState,
-	isDictationActiveOnSurface,
-	type ChatDictationSurface,
-} from './chatSpeechToTextService.js';
+import { IChatSpeechToTextService, ChatSpeechToTextState, isDictationActiveOnSurface, type ChatDictationSurface } from './chatSpeechToTextService.js';
 
 import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
-import {
-	startDictation,
-	stopDictationForEditor,
-	isDictationActiveForEditor,
-	onDidChangeDictationEditor,
-	cancelDictation,
-} from './dictationSession.js';
+import { startDictation, stopDictationForEditor, isDictationActiveForEditor, onDidChangeDictationEditor, cancelDictation } from './dictationSession.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import {
-	ILocalTranscriptionModelService,
-	type ILocalTranscriptionModelSnapshot,
-} from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionModelService, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { localize } from '../../../../../nls.js';
 
@@ -64,17 +50,12 @@ export class DictationInput extends Disposable {
 		return this.committedText + this.preview.textContent;
 	}
 	public get isActive(): boolean {
-		return this.editor.codeEditor
-			? isDictationActiveForEditor(this.editor.codeEditor)
-			: this.active && isDictationActiveOnSurface(this.service, this.surface);
+		return this.editor.codeEditor ? isDictationActiveForEditor(this.editor.codeEditor) : this.active && isDictationActiveOnSurface(this.service, this.surface);
 	}
 	public readonly activeState = observableFromEvent(this, onDidChangeDictationEditor, () => this.isActive);
 	public readonly onDidChange = onDidChangeDictationEditor;
 	public get showButton(): boolean {
-		return (
-			this.configuration.getValue<boolean>('dictation.enabled') !== false &&
-			this.configuration.getValue<boolean>('dictation.showButton') !== false
-		);
+		return this.configuration.getValue<boolean>('dictation.enabled') !== false && this.configuration.getValue<boolean>('dictation.showButton') !== false;
 	}
 	public get isStarting(): boolean {
 		return this.isActive && this.service.isBusy && this.service.state === ChatSpeechToTextState.Idle;
@@ -84,29 +65,18 @@ export class DictationInput extends Disposable {
 	}
 	public get action(): MenuItemAction {
 		const active = this.isActive;
-		const label = active
-			? localize('chat.input.dictationStop', 'Stop dictation')
-			: localize('chat.input.dictate', 'Dictate message');
+		const label = active ? localize('chat.input.dictationStop', 'Stop dictation') : localize('chat.input.dictate', 'Dictate message');
 		return new DictationInputAction(
 			{
 				id: 'workbench.action.chat.toggleSpeechToText',
 				title: label,
 				icon: active ? Lxicon.stopCircle : Lxicon.mic,
-				tooltip:
-					active || this.isAvailable
-						? label
-						: localize('chat.input.dictationUnavailable', 'Dictation is unavailable'),
+				tooltip: active || this.isAvailable ? label : localize('chat.input.dictationUnavailable', 'Dictation is unavailable'),
 				precondition:
-					this.isAvailable &&
-					(!this.service.isBusy || active) &&
-					!this.isStarting &&
-					this.service.state !== ChatSpeechToTextState.Transcribing
+					this.isAvailable && (!this.service.isBusy || active) && !this.isStarting && this.service.state !== ChatSpeechToTextState.Transcribing
 						? ContextKeyExpr.true()
 						: ContextKeyExpr.false(),
-				toggled:
-					active && this.service.state === ChatSpeechToTextState.Recording
-						? ContextKeyExpr.true()
-						: ContextKeyExpr.false(),
+				toggled: active && this.service.state === ChatSpeechToTextState.Recording ? ContextKeyExpr.true() : ContextKeyExpr.false(),
 			},
 			this.contextKeys,
 			this.commands,
@@ -160,11 +130,7 @@ export class DictationInput extends Disposable {
 				return;
 			}
 			this.preparing = true;
-			const preparation = await readDictationPreparation(
-				this.configuration,
-				this.localTranscription,
-				this.speechProviders,
-			);
+			const preparation = await readDictationPreparation(this.configuration, this.localTranscription, this.speechProviders);
 			if (this.isDisposed || !this.isVisible() || this.service.isBusy) {
 				return;
 			}
@@ -199,9 +165,7 @@ export class DictationInput extends Disposable {
 					if (!this.active || this.recordingGeneration !== owner || !this.isVisible()) return;
 					const phrase = event.finalizedText.slice(this.committedText.length);
 					this.committedText = event.finalizedText;
-					this.preview.textContent = this.service.showTranscriptWhileDictating
-						? event.text.slice(event.finalizedText.length)
-						: '';
+					this.preview.textContent = this.service.showTranscriptWhileDictating ? event.text.slice(event.finalizedText.length) : '';
 					this.preview.hidden = !this.preview.textContent;
 					if (phrase && !this.editor.codeEditor) {
 						this.editor.insertText(phrase);
@@ -211,8 +175,7 @@ export class DictationInput extends Disposable {
 				}),
 			);
 			const window = this.preview.ownerDocument.defaultView as Window & typeof globalThis;
-			if (this.editor.codeEditor)
-				await startDictation(this.service, this.editor.codeEditor, window, this.logService, this.surface);
+			if (this.editor.codeEditor) await startDictation(this.service, this.editor.codeEditor, window, this.logService, this.surface);
 			else await this.service.start(window, this.surface);
 		} catch (error) {
 			this.active = false;

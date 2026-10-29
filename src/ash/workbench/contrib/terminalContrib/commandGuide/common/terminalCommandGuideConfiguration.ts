@@ -11,10 +11,7 @@ export const terminalCommandGuideConfiguration: Readonly<Record<string, IConfigu
 		default: true,
 		restricted: true,
 		get description() {
-			return localize(
-				'terminal.commandGuide.enabled',
-				'Show a guide beside a command and its output when hovering over the terminal.',
-			);
+			return localize('terminal.commandGuide.enabled', 'Show a guide beside a command and its output when hovering over the terminal.');
 		},
 	},
 };

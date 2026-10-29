@@ -1,11 +1,6 @@
 import type { DesignEffects } from './designEffects.js';
 import { designBlendModes, parseDesignPaints, type DesignBlendMode, type DesignPaint } from './designPaint.js';
-import {
-	parseDesignVectorNetwork,
-	freezeDesignVectorNetwork,
-	designNetworkStrokeContours,
-	type DesignVectorNetwork,
-} from './designVectorNetwork.js';
+import { parseDesignVectorNetwork, freezeDesignVectorNetwork, designNetworkStrokeContours, type DesignVectorNetwork } from './designVectorNetwork.js';
 import { isDesignVector, type DesignBooleanOperation, type DesignPathContour } from './designVector.js';
 import { designTextKeys, parseDesignTextProperties, type DesignTextProperties } from './designText.js';
 import { CreatorMode } from '../creator.js';
@@ -27,14 +22,7 @@ import {
 	type DesignStyleKind,
 	type DesignLayoutGuide,
 } from './designResources.js';
-import {
-	parsePrototypeProperties,
-	prototypeFrames,
-	prototypeScrollScope,
-	flattenPrototypeActions,
-	validatePrototypeExpressions,
-	type PrototypeInteraction,
-} from './prototype.js';
+import { parsePrototypeProperties, prototypeFrames, prototypeScrollScope, flattenPrototypeActions, validatePrototypeExpressions, type PrototypeInteraction } from './prototype.js';
 import type { DesignFrame, DesignPoint } from '../core/geometry.js';
 
 /** Geometry is in design pixels, independent of zoom and the display's pixel ratio. */
@@ -122,26 +110,18 @@ const designOverrideFields = [
 	'fontWeight',
 	'lineHeight',
 	'letterSpacing',
-	...designTextKeys.filter(
-		key => !['fill', 'fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'letterSpacing'].includes(key),
-	),
+	...designTextKeys.filter(key => !['fill', 'fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'letterSpacing'].includes(key)),
 	'effects',
 	'layoutGuide',
 	'bindings',
 	'styleBindings',
 	'variableModes',
 ] as const;
-export type DesignOverride =
-	| (typeof designOverrideFields)[number]
-	| `bindings:${DesignBindableProperty}`
-	| `styleBindings:${DesignStyleKind}`
-	| `variableModes:${string}`;
+export type DesignOverride = (typeof designOverrideFields)[number] | `bindings:${DesignBindableProperty}` | `styleBindings:${DesignStyleKind}` | `variableModes:${string}`;
 
 /** Resource overrides address individual properties so unrelated source bindings keep inheriting. */
 export function getDesignOverrideFields(shape: DesignShape, previous: DesignShape): readonly DesignOverride[] {
-	const fields: DesignOverride[] = designOverrideFields.filter(
-		field => !['bindings', 'styleBindings', 'variableModes'].includes(field),
-	);
+	const fields: DesignOverride[] = designOverrideFields.filter(field => !['bindings', 'styleBindings', 'variableModes'].includes(field));
 	for (const group of ['bindings', 'styleBindings', 'variableModes'] as const) {
 		for (const key of new Set([...Object.keys(shape[group] ?? {}), ...Object.keys(previous[group] ?? {})])) {
 			fields.push(`${group}:${key}` as DesignOverride);
@@ -182,21 +162,14 @@ function isDesignOverride(value: unknown): value is DesignOverride {
 	return (
 		extra === undefined &&
 		!!key &&
-		(group === 'bindings'
-			? Object.hasOwn(designPropertyTypes, key)
-			: group === 'styleBindings'
-				? Object.hasOwn(designStyleFields, key)
-				: group === 'variableModes' && isUuid(key))
+		(group === 'bindings' ? Object.hasOwn(designPropertyTypes, key) : group === 'styleBindings' ? Object.hasOwn(designStyleFields, key) : group === 'variableModes' && isUuid(key))
 	);
 }
-export type DesignComponent =
-	| { readonly kind: 'main'; readonly variant?: Readonly<Record<string, string>> }
-	| { readonly kind: 'set'; readonly properties: readonly string[] };
+export type DesignComponent = { readonly kind: 'main'; readonly variant?: Readonly<Record<string, string>> } | { readonly kind: 'set'; readonly properties: readonly string[] };
 
 export type DesignConstraint = 'start' | 'center' | 'end' | 'stretch' | 'scale';
 
-export type DesignGridTrack =
-	{ readonly sizing: 'fixed' | 'fill'; readonly value: number } | { readonly sizing: 'hug' };
+export type DesignGridTrack = { readonly sizing: 'fixed' | 'fill'; readonly value: number } | { readonly sizing: 'hug' };
 export interface DesignGrid {
 	readonly columns: readonly DesignGridTrack[];
 	readonly rows: readonly DesignGridTrack[];
@@ -234,16 +207,7 @@ export interface DesignMotion {
 	readonly keyframes: readonly DesignKeyframe[];
 }
 
-export const designEndpointStyles = [
-	'butt',
-	'round',
-	'square',
-	'line-arrow',
-	'triangle-arrow',
-	'reverse-triangle',
-	'diamond-arrow',
-	'circle-arrow',
-] as const;
+export const designEndpointStyles = ['butt', 'round', 'square', 'line-arrow', 'triangle-arrow', 'reverse-triangle', 'diamond-arrow', 'circle-arrow'] as const;
 export type DesignEndpoint = (typeof designEndpointStyles)[number];
 
 /** Path points use fractions of the shape bounds, so resizing preserves the curve. */
@@ -454,16 +418,10 @@ function freezeShape(shape: DesignShape): DesignShape {
 			...shape,
 			...(shape.network ? { network: freezeDesignVectorNetwork(shape.network) } : {}),
 			nodes: freezeNodes(shape.nodes),
-			...(shape.widthPoints
-				? { widthPoints: Object.freeze(shape.widthPoints.map(point => Object.freeze({ ...point }))) }
-				: {}),
+			...(shape.widthPoints ? { widthPoints: Object.freeze(shape.widthPoints.map(point => Object.freeze({ ...point }))) } : {}),
 			...(shape.subpaths
 				? {
-						subpaths: Object.freeze(
-							shape.subpaths.map(contour =>
-								Object.freeze({ ...contour, nodes: freezeNodes(contour.nodes) }),
-							),
-						),
+						subpaths: Object.freeze(shape.subpaths.map(contour => Object.freeze({ ...contour, nodes: freezeNodes(contour.nodes) }))),
 					}
 				: {}),
 			...(shape.dashArray ? { dashArray: Object.freeze([...shape.dashArray]) } : {}),
@@ -474,8 +432,7 @@ function freezeShape(shape: DesignShape): DesignShape {
 
 export function documentFromShapes(
 	shapes: readonly DesignShape[],
-	identity: Pick<DesignDocument, 'documentId' | 'artifactId'> &
-		Partial<Pick<DesignDocument, 'mode' | 'resources' | 'background'>> = {
+	identity: Pick<DesignDocument, 'documentId' | 'artifactId'> & Partial<Pick<DesignDocument, 'mode' | 'resources' | 'background'>> = {
 		documentId: generateUuid(),
 		artifactId: generateUuid(),
 	},
@@ -515,9 +472,7 @@ function readDocument(content: string, allowLibraries: boolean): DesignDocument 
 		}
 		const shapes = value.shapes.map(shape => parseShape(shape, ids));
 		if (flattenDesignShapes(shapes).some(shape => shape.kind === 'frame' || shape.kind === 'image')) {
-			throw new TypeError(
-				localize('sessions.design.invalidUnsupportedVersion1Object', 'Unsupported version 1 object'),
-			);
+			throw new TypeError(localize('sessions.design.invalidUnsupportedVersion1Object', 'Unsupported version 1 object'));
 		}
 		return documentFromShapes(shapes);
 	}
@@ -529,9 +484,7 @@ function readDocument(content: string, allowLibraries: boolean): DesignDocument 
 		!isUuid(value.artifactOrder[0]) ||
 		!isRecord(value.artifacts) ||
 		!isRecord(value.assets) ||
-		Object.keys(value).some(
-			key => !['schemaVersion', 'documentId', 'artifactOrder', 'artifacts', 'assets', 'resources'].includes(key),
-		)
+		Object.keys(value).some(key => !['schemaVersion', 'documentId', 'artifactOrder', 'artifacts', 'assets', 'resources'].includes(key))
 	) {
 		throw new TypeError(localize('sessions.design.invalidDocument', 'Invalid design document'));
 	}
@@ -547,10 +500,7 @@ function readDocument(content: string, allowLibraries: boolean): DesignDocument 
 	) {
 		throw new TypeError(localize('sessions.design.invalidComposition', 'Invalid design composition'));
 	}
-	if (
-		artifact.background !== undefined &&
-		(typeof artifact.background !== 'string' || !/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(artifact.background))
-	) {
+	if (artifact.background !== undefined && (typeof artifact.background !== 'string' || !/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(artifact.background))) {
 		throw new TypeError(localize('sessions.design.invalidComposition', 'Invalid design composition'));
 	}
 	const mode = artifact.mode === undefined ? CreatorMode.Design : artifact.mode;
@@ -606,9 +556,7 @@ function readDocument(content: string, allowLibraries: boolean): DesignDocument 
 				!Number.isSafeInteger(version.height) ||
 				!isPositiveNumber(version.height) ||
 				version.path !== `assets/${version.sha256}` ||
-				Object.keys(version).some(
-					key => !['id', 'sha256', 'path', 'mediaType', 'width', 'height'].includes(key),
-				)
+				Object.keys(version).some(key => !['id', 'sha256', 'path', 'mediaType', 'width', 'height'].includes(key))
 			) {
 				throw new TypeError(localize('sessions.design.invalidAssetVersion', 'Invalid design asset version'));
 			}
@@ -625,16 +573,8 @@ function readDocument(content: string, allowLibraries: boolean): DesignDocument 
 		return { id, name: asset.name, versions };
 	});
 	for (const shape of flattenDesignShapes(shapes)) {
-		if (
-			shape.kind === 'image' &&
-			!assets.some(
-				asset =>
-					asset.id === shape.assetId && asset.versions.some(version => version.id === shape.assetVersionId),
-			)
-		) {
-			throw new TypeError(
-				localize('sessions.design.invalidMissingDesignAssetVersion', 'Missing design asset version'),
-			);
+		if (shape.kind === 'image' && !assets.some(asset => asset.id === shape.assetId && asset.versions.some(version => version.id === shape.assetVersionId))) {
+			throw new TypeError(localize('sessions.design.invalidMissingDesignAssetVersion', 'Missing design asset version'));
 		}
 	}
 	const resources =
@@ -642,12 +582,7 @@ function readDocument(content: string, allowLibraries: boolean): DesignDocument 
 			? undefined
 			: parseDesignResources(value.resources, value => {
 					if (!allowLibraries) {
-						throw new TypeError(
-							localize(
-								'sessions.design.invalidResources',
-								'Invalid design resource, binding, or circular variable alias.',
-							),
-						);
+						throw new TypeError(localize('sessions.design.invalidResources', 'Invalid design resource, binding, or circular variable alias.'));
 					}
 					return readDocument(JSON.stringify(value), false);
 				});
@@ -656,14 +591,8 @@ function readDocument(content: string, allowLibraries: boolean): DesignDocument 
 	if (new Set(flattenDesignShapes(allShapes).map(shape => shape.id)).size !== flattenDesignShapes(allShapes).length) {
 		throw new TypeError(localize('sessions.design.invalidObjectOwnership', 'Invalid design object ownership'));
 	}
-	if (
-		flattenDesignShapes(shapes).some(
-			shape => shape.flowStart && (!shapes.includes(shape) || shape.kind !== 'frame' || shape.component),
-		)
-	) {
-		throw new TypeError(
-			localize('sessions.design.prototype.invalid', 'Invalid prototype interaction or flow starting point.'),
-		);
+	if (flattenDesignShapes(shapes).some(shape => shape.flowStart && (!shapes.includes(shape) || shape.kind !== 'frame' || shape.component))) {
+		throw new TypeError(localize('sessions.design.prototype.invalid', 'Invalid prototype interaction or flow starting point.'));
 	}
 	const targets = new Set(prototypeFrames(shapes).map(frame => frame.id));
 	const variants = new Set(
@@ -684,9 +613,7 @@ function readDocument(content: string, allowLibraries: boolean): DesignDocument 
 			),
 		)
 	) {
-		throw new TypeError(
-			localize('sessions.design.prototype.invalid', 'Invalid prototype interaction or flow starting point.'),
-		);
+		throw new TypeError(localize('sessions.design.prototype.invalid', 'Invalid prototype interaction or flow starting point.'));
 	}
 	for (const shape of flattenDesignShapes(shapes)) {
 		const owner = prototypeScrollScope(shapes, shape.id);
@@ -694,17 +621,9 @@ function readDocument(content: string, allowLibraries: boolean): DesignDocument 
 			if (
 				action.action === 'scrollTo' &&
 				ids.has(action.destination!) &&
-				(!owner ||
-					!flattenDesignShapes([owner]).some(
-						target => target.id === action.destination || target.sourceId === action.destination,
-					))
+				(!owner || !flattenDesignShapes([owner]).some(target => target.id === action.destination || target.sourceId === action.destination))
 			) {
-				throw new TypeError(
-					localize(
-						'sessions.design.prototype.invalid',
-						'Invalid prototype interaction or flow starting point.',
-					),
-				);
+				throw new TypeError(localize('sessions.design.prototype.invalid', 'Invalid prototype interaction or flow starting point.'));
 			}
 		}
 	}
@@ -726,10 +645,7 @@ function readDocument(content: string, allowLibraries: boolean): DesignDocument 
 
 /** Containers retain the only copy of their children; consumers derive identity lookup from this tree. */
 export function flattenDesignShapes(shapes: readonly DesignShape[]): readonly DesignShape[] {
-	return shapes.flatMap(shape => [
-		shape,
-		...(shape.kind === 'group' || shape.kind === 'frame' ? flattenDesignShapes(shape.children) : []),
-	]);
+	return shapes.flatMap(shape => [shape, ...(shape.kind === 'group' || shape.kind === 'frame' ? flattenDesignShapes(shape.children) : [])]);
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -741,12 +657,7 @@ function isPositiveNumber(value: unknown): value is number {
 }
 
 function parsePoint(value: unknown): DesignPoint {
-	if (
-		!isRecord(value) ||
-		!isFiniteNumber(value.x) ||
-		!isFiniteNumber(value.y) ||
-		Object.keys(value).some(key => key !== 'x' && key !== 'y')
-	) {
+	if (!isRecord(value) || !isFiniteNumber(value.x) || !isFiniteNumber(value.y) || Object.keys(value).some(key => key !== 'x' && key !== 'y')) {
 		throw new TypeError(localize('sessions.design.invalidPathPoint', 'Invalid design path point'));
 	}
 	return { x: value.x, y: value.y };
@@ -770,18 +681,11 @@ function parseShape(value: unknown, ids: Set<string>): DesignShape {
 	ids.add(value.id);
 	if (
 		(value.sourceId !== undefined && !isUuid(value.sourceId)) ||
-		(value.overrides !== undefined &&
-			(!Array.isArray(value.overrides) ||
-				new Set(value.overrides).size !== value.overrides.length ||
-				value.overrides.some(field => !isDesignOverride(field))))
+		(value.overrides !== undefined && (!Array.isArray(value.overrides) || new Set(value.overrides).size !== value.overrides.length || value.overrides.some(field => !isDesignOverride(field))))
 	) {
 		throw new TypeError(localize('sessions.design.invalidComponent', 'Invalid component or instance'));
 	}
-	if (
-		value.blendMode !== undefined &&
-		value.blendMode !== 'pass-through' &&
-		!designBlendModes.includes(value.blendMode as DesignBlendMode)
-	) {
+	if (value.blendMode !== undefined && value.blendMode !== 'pass-through' && !designBlendModes.includes(value.blendMode as DesignBlendMode)) {
 		throw new TypeError(localize('sessions.design.invalidPaint', 'Invalid design fill, gradient, or blend mode'));
 	}
 	const geometry: DesignShapeGeometry = {
@@ -801,33 +705,8 @@ function parseShape(value: unknown, ids: Set<string>): DesignShape {
 		...parseDesignResourceProperties(value),
 		...parsePrototypeProperties(value),
 	};
-	const keys = [
-		'id',
-		'kind',
-		'x',
-		'y',
-		'width',
-		'height',
-		'rotation',
-		'fill',
-		'fills',
-		'blendMode',
-		...resourceShapeKeys,
-	];
-	for (const key of [
-		'name',
-		'sizing',
-		'constraints',
-		'sizeLimits',
-		'gridCell',
-		'sourceId',
-		'overrides',
-		'interactions',
-		'flowStart',
-		'overflowDirection',
-		'scrollPosition',
-		'layoutPositioning',
-	]) {
+	const keys = ['id', 'kind', 'x', 'y', 'width', 'height', 'rotation', 'fill', 'fills', 'blendMode', ...resourceShapeKeys];
+	for (const key of ['name', 'sizing', 'constraints', 'sizeLimits', 'gridCell', 'sourceId', 'overrides', 'interactions', 'flowStart', 'overflowDirection', 'scrollPosition', 'layoutPositioning']) {
 		if (value[key] !== undefined) {
 			keys.push(key);
 		}
@@ -855,11 +734,7 @@ function parseShape(value: unknown, ids: Set<string>): DesignShape {
 			};
 			break;
 		case 'path': {
-			if (
-				(!value.network && typeof value.closed !== 'boolean') ||
-				!isFiniteNumber(value.strokeWidth) ||
-				value.strokeWidth < 0
-			) {
+			if ((!value.network && typeof value.closed !== 'boolean') || !isFiniteNumber(value.strokeWidth) || value.strokeWidth < 0) {
 				throw new TypeError(localize('sessions.design.invalidPath', 'Invalid design path'));
 			}
 			const parseNodes = (value: unknown): readonly DesignPathNode[] => {
@@ -869,18 +744,10 @@ function parseShape(value: unknown, ids: Set<string>): DesignShape {
 				return value.map((node: unknown): DesignPathNode => {
 					if (
 						!isRecord(node) ||
-						(node.endpoint !== undefined &&
-							!designEndpointStyles.includes(node.endpoint as DesignEndpoint)) ||
-						(node.cornerRadius !== undefined &&
-							(!isFiniteNumber(node.cornerRadius) || node.cornerRadius < 0)) ||
-						Object.keys(node).some(
-							key =>
-								!['x', 'y', 'incoming', 'outgoing', 'mirroring', 'cornerRadius', 'endpoint'].includes(
-									key,
-								),
-						) ||
-						(node.mirroring !== undefined &&
-							!['none', 'angle', 'angle-length'].includes(String(node.mirroring)))
+						(node.endpoint !== undefined && !designEndpointStyles.includes(node.endpoint as DesignEndpoint)) ||
+						(node.cornerRadius !== undefined && (!isFiniteNumber(node.cornerRadius) || node.cornerRadius < 0)) ||
+						Object.keys(node).some(key => !['x', 'y', 'incoming', 'outgoing', 'mirroring', 'cornerRadius', 'endpoint'].includes(key)) ||
+						(node.mirroring !== undefined && !['none', 'angle', 'angle-length'].includes(String(node.mirroring)))
 					) {
 						throw new TypeError(localize('sessions.design.invalidPathNode', 'Invalid design path node'));
 					}
@@ -894,21 +761,7 @@ function parseShape(value: unknown, ids: Set<string>): DesignShape {
 					};
 				});
 			};
-			keys.push(
-				'nodes',
-				'closed',
-				'strokeWidth',
-				'subpaths',
-				'network',
-				'fillRule',
-				'strokeCap',
-				'strokeAlignment',
-				'cornerSmoothing',
-				'strokeJoin',
-				'stroke',
-				'dashArray',
-				'widthPoints',
-			);
+			keys.push('nodes', 'closed', 'strokeWidth', 'subpaths', 'network', 'fillRule', 'strokeCap', 'strokeAlignment', 'cornerSmoothing', 'strokeJoin', 'stroke', 'dashArray', 'widthPoints');
 			const properties: Record<string, unknown> = {};
 			if (value.cornerSmoothing !== undefined) {
 				if (!isFiniteNumber(value.cornerSmoothing) || value.cornerSmoothing < 0 || value.cornerSmoothing > 1) {
@@ -936,11 +789,7 @@ function parseShape(value: unknown, ids: Set<string>): DesignShape {
 				properties.stroke = value.stroke;
 			}
 			if (value.dashArray !== undefined) {
-				if (
-					!Array.isArray(value.dashArray) ||
-					value.dashArray.length > 32 ||
-					value.dashArray.some(n => !isFiniteNumber(n) || n < 0.01)
-				) {
+				if (!Array.isArray(value.dashArray) || value.dashArray.length > 32 || value.dashArray.some(n => !isFiniteNumber(n) || n < 0.01)) {
 					throw new TypeError(localize('sessions.design.invalidPath', 'Invalid design path'));
 				}
 				properties.dashArray = value.dashArray;
@@ -953,9 +802,7 @@ function parseShape(value: unknown, ids: Set<string>): DesignShape {
 				properties.widthPoints = value.widthPoints.map(point => {
 					if (
 						!isRecord(point) ||
-						Object.keys(point).some(
-							key => !['id', 'contour', 'position', 'width', 'slope'].includes(key),
-						) ||
+						Object.keys(point).some(key => !['id', 'contour', 'position', 'width', 'slope'].includes(key)) ||
 						!isUuid(point.id) ||
 						ids.has(point.id) ||
 						!Number.isInteger(point.contour) ||
@@ -985,17 +832,10 @@ function parseShape(value: unknown, ids: Set<string>): DesignShape {
 					throw new TypeError(localize('sessions.design.invalidPath', 'Invalid design path'));
 				}
 				properties.subpaths = value.subpaths.map(contour => {
-					if (
-						!isRecord(contour) ||
-						typeof contour.closed !== 'boolean' ||
-						Object.keys(contour).some(key => !['nodes', 'closed', 'fill'].includes(key))
-					) {
+					if (!isRecord(contour) || typeof contour.closed !== 'boolean' || Object.keys(contour).some(key => !['nodes', 'closed', 'fill'].includes(key))) {
 						throw new TypeError(localize('sessions.design.invalidPath', 'Invalid design path'));
 					}
-					if (
-						contour.fill !== undefined &&
-						(typeof contour.fill !== 'string' || !/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(contour.fill))
-					) {
+					if (contour.fill !== undefined && (typeof contour.fill !== 'string' || !/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(contour.fill))) {
 						throw new TypeError(localize('sessions.design.invalidPath', 'Invalid design path'));
 					}
 					return {
@@ -1006,11 +846,7 @@ function parseShape(value: unknown, ids: Set<string>): DesignShape {
 				});
 			}
 			if (value.network !== undefined) {
-				if (
-					value.subpaths !== undefined ||
-					(value.nodes !== undefined && (!Array.isArray(value.nodes) || value.nodes.length)) ||
-					(value.closed !== undefined && value.closed !== false)
-				) {
+				if (value.subpaths !== undefined || (value.nodes !== undefined && (!Array.isArray(value.nodes) || value.nodes.length)) || (value.closed !== undefined && value.closed !== false)) {
 					throw new TypeError(localize('sessions.design.invalidNetwork', 'Invalid vector network'));
 				}
 				shape = {
@@ -1032,16 +868,11 @@ function parseShape(value: unknown, ids: Set<string>): DesignShape {
 					strokeWidth: value.strokeWidth,
 				};
 			}
-			const contourCount = shape.network
-				? designNetworkStrokeContours(shape.network).length
-				: 1 + (shape.subpaths?.length ?? 0);
+			const contourCount = shape.network ? designNetworkStrokeContours(shape.network).length : 1 + (shape.subpaths?.length ?? 0);
 			if (shape.widthPoints?.some(point => point.contour >= contourCount)) {
 				throw new TypeError(localize('sessions.design.invalidPath', 'Invalid design path'));
 			}
-			if (
-				shape.nodes.length + (shape.subpaths?.reduce((sum, contour) => sum + contour.nodes.length, 0) ?? 0) >
-				10000
-			) {
+			if (shape.nodes.length + (shape.subpaths?.reduce((sum, contour) => sum + contour.nodes.length, 0) ?? 0) > 10000) {
 				throw new TypeError(localize('sessions.design.invalidPath', 'Invalid design path'));
 			}
 			break;
@@ -1088,13 +919,7 @@ function parseShape(value: unknown, ids: Set<string>): DesignShape {
 			if (value.instance !== undefined) {
 				keys.push('instance');
 			}
-			if (
-				value.instance !== undefined &&
-				(!isRecord(value.instance) ||
-					!isUuid(value.instance.componentId) ||
-					Object.keys(value.instance).length !== 1 ||
-					value.component !== undefined)
-			) {
+			if (value.instance !== undefined && (!isRecord(value.instance) || !isUuid(value.instance.componentId) || Object.keys(value.instance).length !== 1 || value.component !== undefined)) {
 				throw new TypeError(localize('sessions.design.invalidComponent', 'Invalid component or instance'));
 			}
 			shape = {
@@ -1118,10 +943,7 @@ function parseShape(value: unknown, ids: Set<string>): DesignShape {
 				throw new TypeError(localize('sessions.design.invalidGroup', 'Invalid design group'));
 			}
 			keys.push('children', 'contentWidth', 'contentHeight', 'booleanOperation');
-			if (
-				value.booleanOperation !== undefined &&
-				!['union', 'subtract', 'intersect', 'exclude'].includes(String(value.booleanOperation))
-			) {
+			if (value.booleanOperation !== undefined && !['union', 'subtract', 'intersect', 'exclude'].includes(String(value.booleanOperation))) {
 				throw new TypeError(localize('sessions.design.invalidGroup', 'Invalid design group'));
 			}
 			shape = {
@@ -1130,9 +952,7 @@ function parseShape(value: unknown, ids: Set<string>): DesignShape {
 				children: value.children.map(child => parseShape(child, ids)),
 				contentWidth: value.contentWidth,
 				contentHeight: value.contentHeight,
-				...(value.booleanOperation
-					? { booleanOperation: value.booleanOperation as DesignBooleanOperation }
-					: {}),
+				...(value.booleanOperation ? { booleanOperation: value.booleanOperation as DesignBooleanOperation } : {}),
 			};
 			if (shape.booleanOperation && !isDesignVector(shape)) {
 				throw new TypeError(localize('sessions.design.invalidGroup', 'Invalid design group'));
@@ -1147,9 +967,7 @@ function parseShape(value: unknown, ids: Set<string>): DesignShape {
 	return shape;
 }
 
-function parseLayoutProperties(
-	value: Record<string, unknown>,
-): Pick<DesignShapeGeometry, 'name' | 'sizing' | 'constraints' | 'sizeLimits' | 'gridCell'> {
+function parseLayoutProperties(value: Record<string, unknown>): Pick<DesignShapeGeometry, 'name' | 'sizing' | 'constraints' | 'sizeLimits' | 'gridCell'> {
 	if (value.name !== undefined && (typeof value.name !== 'string' || value.name.length > 1024)) {
 		throw new TypeError(localize('sessions.design.invalidLayerName', 'Invalid layer name'));
 	}
@@ -1182,16 +1000,9 @@ function parseLayoutProperties(
 		limits !== undefined &&
 		(value.kind === 'group' ||
 			!isRecord(limits) ||
-			Object.entries(limits).some(
-				([key, limit]) =>
-					!['minWidth', 'maxWidth', 'minHeight', 'maxHeight'].includes(key) ||
-					!isFiniteNumber(limit) ||
-					limit < (key.startsWith('min') ? 0 : 0.001),
-			) ||
+			Object.entries(limits).some(([key, limit]) => !['minWidth', 'maxWidth', 'minHeight', 'maxHeight'].includes(key) || !isFiniteNumber(limit) || limit < (key.startsWith('min') ? 0 : 0.001)) ||
 			(isFiniteNumber(limits.minWidth) && isFiniteNumber(limits.maxWidth) && limits.minWidth > limits.maxWidth) ||
-			(isFiniteNumber(limits.minHeight) &&
-				isFiniteNumber(limits.maxHeight) &&
-				limits.minHeight > limits.maxHeight))
+			(isFiniteNumber(limits.minHeight) && isFiniteNumber(limits.maxHeight) && limits.minHeight > limits.maxHeight))
 	) {
 		throw new TypeError(localize('sessions.design.invalidSizeLimits', 'Invalid minimum or maximum dimensions'));
 	}
@@ -1202,10 +1013,7 @@ function parseLayoutProperties(
 			Object.entries(cell).some(([key, entry]) =>
 				['horizontal', 'vertical'].includes(key)
 					? !['start', 'center', 'end'].includes(entry as string)
-					: !['column', 'row', 'columnSpan', 'rowSpan'].includes(key) ||
-						!Number.isInteger(entry) ||
-						(entry as number) < 1 ||
-						(entry as number) > 1000,
+					: !['column', 'row', 'columnSpan', 'rowSpan'].includes(key) || !Number.isInteger(entry) || (entry as number) < 1 || (entry as number) > 1000,
 			))
 	) {
 		throw new TypeError(localize('sessions.design.invalidGridCell', 'Invalid grid cell'));
@@ -1236,21 +1044,7 @@ function parseAutoLayout(value: unknown): DesignAutoLayout {
 		!padding ||
 		['top', 'right', 'bottom', 'left'].some(key => !isFiniteNumber(padding[key]) || padding[key] < 0) ||
 		Object.keys(padding).some(key => !['top', 'right', 'bottom', 'left'].includes(key)) ||
-		Object.keys(value).some(
-			key =>
-				![
-					'direction',
-					'gap',
-					'crossGap',
-					'wrap',
-					'grid',
-					'padding',
-					'align',
-					'justify',
-					'width',
-					'height',
-				].includes(key),
-		)
+		Object.keys(value).some(key => !['direction', 'gap', 'crossGap', 'wrap', 'grid', 'padding', 'align', 'justify', 'width', 'height'].includes(key))
 	) {
 		throw new TypeError(localize('sessions.design.invalidAutoLayout', 'Invalid auto layout'));
 	}
@@ -1265,9 +1059,7 @@ function parseAutoLayout(value: unknown): DesignAutoLayout {
 					isRecord(track) &&
 					(track.sizing === 'hug'
 						? Object.keys(track).length === 1
-						: ['fixed', 'fill'].includes(track.sizing as string) &&
-							isPositiveNumber(track.value) &&
-							Object.keys(track).every(key => ['sizing', 'value'].includes(key))),
+						: ['fixed', 'fill'].includes(track.sizing as string) && isPositiveNumber(track.value) && Object.keys(track).every(key => ['sizing', 'value'].includes(key))),
 			);
 		if (
 			!isRecord(grid) ||
@@ -1312,17 +1104,8 @@ function parseMotion(value: unknown): DesignMotion {
 		}
 		return { offset: frame.offset, x: frame.x, y: frame.y, rotation: frame.rotation, opacity: frame.opacity };
 	});
-	if (
-		keyframes[0].offset !== 0 ||
-		keyframes.at(-1)!.offset !== 1 ||
-		keyframes.some((frame, index) => index > 0 && frame.offset <= keyframes[index - 1].offset)
-	) {
-		throw new TypeError(
-			localize(
-				'sessions.design.invalidDesignKeyframesMustBeOrderedFromZeroToOne',
-				'Design keyframes must be ordered from zero to one',
-			),
-		);
+	if (keyframes[0].offset !== 0 || keyframes.at(-1)!.offset !== 1 || keyframes.some((frame, index) => index > 0 && frame.offset <= keyframes[index - 1].offset)) {
+		throw new TypeError(localize('sessions.design.invalidDesignKeyframesMustBeOrderedFromZeroToOne', 'Design keyframes must be ordered from zero to one'));
 	}
 	return { duration: value.duration, loop: value.loop, keyframes };
 }
@@ -1376,8 +1159,7 @@ export function serializeDesignDocument(document: DesignDocument): string {
 }
 
 function parseComponent(value: unknown): DesignComponent {
-	const name = (text: unknown): text is string =>
-		typeof text === 'string' && text.trim().length > 0 && text.length <= 256;
+	const name = (text: unknown): text is string => typeof text === 'string' && text.trim().length > 0 && text.length <= 256;
 	if (isRecord(value)) {
 		if (
 			value.kind === 'set' &&
@@ -1393,9 +1175,7 @@ function parseComponent(value: unknown): DesignComponent {
 		if (
 			value.kind === 'main' &&
 			Object.keys(value).every(key => ['kind', 'variant'].includes(key)) &&
-			(value.variant === undefined ||
-				(isRecord(value.variant) &&
-					Object.entries(value.variant).every(([key, value]) => name(key) && name(value))))
+			(value.variant === undefined || (isRecord(value.variant) && Object.entries(value.variant).every(([key, value]) => name(key) && name(value))))
 		) {
 			return value as unknown as DesignComponent;
 		}
@@ -1409,11 +1189,7 @@ function validateDesignComponents(shapes: readonly DesignShape[]): void {
 	const fail = (): never => {
 		throw new TypeError(localize('sessions.design.invalidComponent', 'Invalid component or instance'));
 	};
-	const visit = (
-		shape: DesignShape,
-		insideInstance: boolean,
-		parentSet?: Extract<DesignShape, { kind: 'frame' }>,
-	): void => {
+	const visit = (shape: DesignShape, insideInstance: boolean, parentSet?: Extract<DesignShape, { kind: 'frame' }>): void => {
 		if (shape.sourceId && !insideInstance) {
 			fail();
 		}
@@ -1438,11 +1214,7 @@ function validateDesignComponents(shapes: readonly DesignShape[]): void {
 				}
 				const variant = (child as Extract<DesignShape, { kind: 'frame' }>).component;
 				const values = variant?.kind === 'main' ? variant.variant : undefined;
-				if (
-					!values ||
-					Object.keys(values).length !== properties.length ||
-					properties.some(property => !Object.hasOwn(values, property))
-				) {
+				if (!values || Object.keys(values).length !== properties.length || properties.some(property => !Object.hasOwn(values, property))) {
 					fail();
 				}
 				const key = JSON.stringify(properties.map(property => values![property]));
@@ -1459,11 +1231,7 @@ function validateDesignComponents(shapes: readonly DesignShape[]): void {
 			}
 		}
 		for (const child of shape.children) {
-			visit(
-				child,
-				insideInstance || (shape.kind === 'frame' && !!shape.instance),
-				shape.kind === 'frame' && shape.component?.kind === 'set' ? shape : undefined,
-			);
+			visit(child, insideInstance || (shape.kind === 'frame' && !!shape.instance), shape.kind === 'frame' && shape.component?.kind === 'set' ? shape : undefined);
 		}
 	};
 	shapes.forEach(shape => visit(shape, false));

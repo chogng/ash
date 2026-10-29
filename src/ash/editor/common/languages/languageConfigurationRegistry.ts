@@ -3,16 +3,7 @@ import { Disposable, IDisposable, markAsSingleton, toDisposable } from '../../..
 import * as strings from '../../../base/common/strings.js';
 import { ITextModel } from '../model.js';
 import { DEFAULT_WORD_REGEXP, ensureValidWordDefinition } from '../core/wordHelper.js';
-import {
-	EnterAction,
-	FoldingRules,
-	IAutoClosingPair,
-	IndentationRule,
-	LanguageConfiguration,
-	AutoClosingPairs,
-	CharacterPair,
-	ExplicitLanguageConfiguration,
-} from './languageConfiguration.js';
+import { EnterAction, FoldingRules, IAutoClosingPair, IndentationRule, LanguageConfiguration, AutoClosingPairs, CharacterPair, ExplicitLanguageConfiguration } from './languageConfiguration.js';
 import { CharacterPairSupport } from './supports/characterPair.js';
 import { BracketElectricCharacterSupport } from './supports/electricCharacter.js';
 import { IndentRulesSupport } from './supports/indentRules.js';
@@ -25,10 +16,7 @@ import { IConfigurationService } from '../../../platform/configuration/common/co
 import { ILanguageService } from './language.js';
 import { registerSingleton } from '../../../platform/instantiation/common/extensions.js';
 import { LanguageBracketsConfiguration } from './supports/languageBracketsConfiguration.js';
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 import { PLAINTEXT_LANGUAGE_ID } from './modesRegistry.js';
 
@@ -65,8 +53,7 @@ export class LanguageConfigurationServiceChangeEvent {
 	}
 }
 
-export const ILanguageConfigurationService =
-	createDecorator<ILanguageConfigurationService>('languageConfigurationService');
+export const ILanguageConfigurationService = createDecorator<ILanguageConfigurationService>('languageConfigurationService');
 
 export class LanguageConfigurationService extends Disposable implements ILanguageConfigurationService {
 	readonly _serviceBrand = undefined;
@@ -89,9 +76,7 @@ export class LanguageConfigurationService extends Disposable implements ILanguag
 		this._register(
 			this.configurationService.onDidChangeConfiguration(e => {
 				const globalConfigChanged = e.change.keys.some(k => languageConfigKeys.has(k));
-				const localConfigChanged = e.change.overrides
-					.filter(([overrideLangName, keys]) => keys.some(k => languageConfigKeys.has(k)))
-					.map(([overrideLangName]) => overrideLangName);
+				const localConfigChanged = e.change.overrides.filter(([overrideLangName, keys]) => keys.some(k => languageConfigKeys.has(k))).map(([overrideLangName]) => overrideLangName);
 
 				if (globalConfigChanged) {
 					this.configurations.clear();
@@ -129,12 +114,7 @@ export class LanguageConfigurationService extends Disposable implements ILanguag
 	}
 }
 
-function computeConfig(
-	languageId: string,
-	registry: LanguageConfigurationRegistry,
-	configurationService: IConfigurationService,
-	languageService: ILanguageService,
-): ResolvedLanguageConfiguration {
+function computeConfig(languageId: string, registry: LanguageConfigurationRegistry, configurationService: IConfigurationService, languageService: ILanguageService): ResolvedLanguageConfiguration {
 	let languageConfig = registry.getLanguageConfiguration(languageId);
 
 	if (!languageConfig) {
@@ -167,22 +147,13 @@ const customizedLanguageConfigKeys = Object.freeze({
 
 function parseConfiguredBracketPairs(value: unknown, key: string): CharacterPair[] | null {
 	if (value === null) return null;
-	if (
-		!Array.isArray(value) ||
-		value.some(
-			pair =>
-				!Array.isArray(pair) || pair.length !== 2 || typeof pair[0] !== 'string' || typeof pair[1] !== 'string',
-		)
-	) {
+	if (!Array.isArray(value) || value.some(pair => !Array.isArray(pair) || pair.length !== 2 || typeof pair[0] !== 'string' || typeof pair[1] !== 'string')) {
 		throw new TypeError(`${key} must be null or an array of string pairs`);
 	}
 	return value.map(pair => [pair[0], pair[1]] as CharacterPair);
 }
 
-function getCustomizedLanguageConfig(
-	languageId: string,
-	configurationService: IConfigurationService,
-): LanguageConfiguration {
+function getCustomizedLanguageConfig(languageId: string, configurationService: IConfigurationService): LanguageConfiguration {
 	const brackets = configurationService.getValue(customizedLanguageConfigKeys.brackets, {
 		overrideIdentifier: languageId,
 	});
@@ -348,7 +319,9 @@ export class LanguageConfigurationRegistry extends Disposable {
 						{ open: '`', close: '`' },
 					],
 					colorizedBracketPairs: [],
-					folding: { offSide: true },
+					folding: {
+						offSide: true,
+					},
 				},
 				0,
 			),
@@ -404,12 +377,7 @@ export class ResolvedLanguageConfiguration {
 	) {
 		this._brackets = null;
 		this._electricCharacter = null;
-		this._onEnterSupport =
-			this.underlyingConfig.brackets ||
-			this.underlyingConfig.indentationRules ||
-			this.underlyingConfig.onEnterRules
-				? new OnEnterSupport(this.underlyingConfig)
-				: null;
+		this._onEnterSupport = this.underlyingConfig.brackets || this.underlyingConfig.indentationRules || this.underlyingConfig.onEnterRules ? new OnEnterSupport(this.underlyingConfig) : null;
 		this.comments = ResolvedLanguageConfiguration._handleComments(this.underlyingConfig);
 		this.characterPair = new CharacterPairSupport(this.underlyingConfig);
 
@@ -443,12 +411,7 @@ export class ResolvedLanguageConfiguration {
 		return this._electricCharacter;
 	}
 
-	public onEnter(
-		autoIndent: EditorAutoIndentStrategy,
-		previousLineText: string,
-		beforeEnterText: string,
-		afterEnterText: string,
-	): EnterAction | null {
+	public onEnter(autoIndent: EditorAutoIndentStrategy, previousLineText: string, beforeEnterText: string, afterEnterText: string): EnterAction | null {
 		if (!this._onEnterSupport) {
 			return null;
 		}

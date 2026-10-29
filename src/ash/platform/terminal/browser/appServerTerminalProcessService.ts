@@ -2,11 +2,7 @@ import type { ITerminalAutoReply, TerminalProcessSignal } from '../common/termin
 import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { decodeBase64 } from '../../../base/common/buffer.js';
 import type { IAppServerApi } from '../../agentHost/common/appServerApi.js';
-import type {
-	TerminalReadResult,
-	TerminalCommandStatusEvent,
-	TerminalProcessReady,
-} from '../../../../../.build/protocol/typescript/index.js';
+import type { TerminalReadResult, TerminalCommandStatusEvent, TerminalProcessReady } from '../../../../../.build/protocol/typescript/index.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { appServerRequest, voidResult } from '../../agentHost/browser/appServerRequest.js';
 import { GeneralShellType, PosixShellType } from '../common/terminal.js';
@@ -65,10 +61,7 @@ export class AppServerTerminalProcessService implements ITerminalProcessService 
 			options.execution?.type === 'process'
 				? {
 						...options.execution,
-						args:
-							typeof options.execution.args === 'string'
-								? options.execution.args
-								: [...options.execution.args],
+						args: typeof options.execution.args === 'string' ? options.execution.args : [...options.execution.args],
 					}
 				: options.execution;
 		const created = await appServerRequest(this.connection, 'terminal/create', {
@@ -112,12 +105,8 @@ export class AppServerTerminalProcessService implements ITerminalProcessService 
 		return voidResult(appServerRequest(this.connection, 'terminal/sendSignal', options));
 	}
 
-	setAutoReplies(
-		options: ITerminalProcessCloseOptions & { readonly rules: readonly ITerminalAutoReply[] },
-	): Promise<void> {
-		return voidResult(
-			appServerRequest(this.connection, 'terminal/setAutoReplies', { ...options, rules: [...options.rules] }),
-		);
+	setAutoReplies(options: ITerminalProcessCloseOptions & { readonly rules: readonly ITerminalAutoReply[] }): Promise<void> {
+		return voidResult(appServerRequest(this.connection, 'terminal/setAutoReplies', { ...options, rules: [...options.rules] }));
 	}
 
 	async read(options: ITerminalProcessReadOptions): Promise<ITerminalProcessReadResult> {
@@ -152,14 +141,7 @@ export function profileSelection(profile: TerminalProcessProfileSelection) {
 
 /** Spawn and attach use the same execution-owned shell identity. */
 export function decodeTerminalProcessReady(ready: TerminalProcessReady): ITerminalProcessReady {
-	const shellType =
-		ready.shellType === 'bash'
-			? PosixShellType.Bash
-			: ready.shellType === 'zsh'
-				? PosixShellType.Zsh
-				: ready.shellType === 'pwsh'
-					? GeneralShellType.PowerShell
-					: undefined;
+	const shellType = ready.shellType === 'bash' ? PosixShellType.Bash : ready.shellType === 'zsh' ? PosixShellType.Zsh : ready.shellType === 'pwsh' ? GeneralShellType.PowerShell : undefined;
 	return {
 		pid: ready.pid,
 		cwd: ready.cwd,
@@ -168,10 +150,7 @@ export function decodeTerminalProcessReady(ready: TerminalProcessReady): ITermin
 			? {
 					launch: Object.freeze({
 						...ready.launch,
-						args:
-							typeof ready.launch.args === 'string'
-								? ready.launch.args
-								: Object.freeze([...ready.launch.args]),
+						args: typeof ready.launch.args === 'string' ? ready.launch.args : Object.freeze([...ready.launch.args]),
 					}),
 				}
 			: {}),
@@ -185,9 +164,7 @@ export function decodeTerminalProcessReadResult(result: TerminalReadResult): ITe
 		chunks: result.chunks.map(chunk => ({
 			sequence: chunk.sequence,
 			data: decodeBase64(chunk.dataBase64).buffer,
-			...(chunk.shellIntegration === undefined
-				? {}
-				: { shellIntegration: decodeShellBoundary(chunk.shellIntegration, result.terminalId) }),
+			...(chunk.shellIntegration === undefined ? {} : { shellIntegration: decodeShellBoundary(chunk.shellIntegration, result.terminalId) }),
 		})),
 		nextSequence: result.nextSequence,
 		outputGap: result.outputGap,
@@ -231,32 +208,17 @@ export function encodeTerminalProcessInput(bytes: Uint8Array): string {
 	return btoa(binary);
 }
 
-function decodeShellBoundary(
-	event: NonNullable<TerminalReadResult['chunks'][number]['shellIntegration']>,
-	terminalId: string,
-): TerminalShellIntegrationEvent {
+function decodeShellBoundary(event: NonNullable<TerminalReadResult['chunks'][number]['shellIntegration']>, terminalId: string): TerminalShellIntegrationEvent {
 	switch (event.type) {
 		case 'processReady':
 			return {
 				...event,
-				shellType:
-					event.shellType === 'bash'
-						? PosixShellType.Bash
-						: event.shellType === 'zsh'
-							? PosixShellType.Zsh
-							: event.shellType === 'pwsh'
-								? GeneralShellType.PowerShell
-								: undefined,
+				shellType: event.shellType === 'bash' ? PosixShellType.Bash : event.shellType === 'zsh' ? PosixShellType.Zsh : event.shellType === 'pwsh' ? GeneralShellType.PowerShell : undefined,
 			};
 		case 'environment':
 			return {
 				...event,
-				values:
-					event.values == null
-						? undefined
-						: Object.fromEntries(
-								Object.entries(event.values).map(([key, value]) => [key, value ?? undefined]),
-							),
+				values: event.values == null ? undefined : Object.fromEntries(Object.entries(event.values).map(([key, value]) => [key, value ?? undefined])),
 			};
 		case 'environmentEntry':
 		case 'environmentDelete':

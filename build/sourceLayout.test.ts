@@ -8,18 +8,13 @@ import ts from 'typescript';
 const repositoryRoot = resolve(import.meta.dirname, '..');
 
 test('production renderer projects exclude tests and host-only compilation roots', () => {
-	for (const project of [
-		'tsconfig.renderer.json',
-		'tsconfig.extensions-check.json',
-		'tsconfig.memories-check.json',
-	]) {
+	for (const project of ['tsconfig.renderer.json', 'tsconfig.extensions-check.json', 'tsconfig.memories-check.json']) {
 		const config = ts.getParsedCommandLineOfConfigFile(
 			join(repositoryRoot, project),
 			{},
 			{
 				...ts.sys,
-				onUnRecoverableConfigFileDiagnostic: diagnostic =>
-					assert.fail(ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')),
+				onUnRecoverableConfigFileDiagnostic: diagnostic => assert.fail(ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')),
 			},
 		);
 		assert.ok(config, project);
@@ -44,24 +39,9 @@ test('TypeScript project include patterns select existing sources', () => {
 });
 
 test('product build and launch tools have one owner while repository scripts remain shared', () => {
-	for (const directory of [
-		'src/scripts',
-		'scripts/desktop',
-		'scripts/code',
-		'build/remote',
-		'build/runtime',
-		'app-rs',
-		'app-ts',
-		'ash-rs',
-		'ash-cli',
-		'code',
-	]) {
+	for (const directory of ['src/scripts', 'scripts/desktop', 'scripts/code', 'build/remote', 'build/runtime', 'app-rs', 'app-ts', 'ash-rs', 'ash-cli', 'code']) {
 		// Ignored leftovers from an older checkout do not own repository sources.
-		const inventory = spawnSync(
-			'git',
-			['ls-files', '--cached', '--others', '--exclude-standard', '--', directory],
-			{ cwd: repositoryRoot, encoding: 'utf8' },
-		);
+		const inventory = spawnSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '--', directory], { cwd: repositoryRoot, encoding: 'utf8' });
 		assert.equal(inventory.status, 0, inventory.stderr);
 		assert.equal(inventory.stdout, '', `${directory} must not own product tooling`);
 	}
@@ -78,16 +58,7 @@ test('product build and launch tools have one owner while repository scripts rem
 		assert.equal(existsSync(join(repositoryRoot, 'scripts', entry)), false, entry);
 	}
 	assert.equal(existsSync(join(repositoryRoot, 'test/unit/mocha.ts')), true);
-	for (const entry of [
-		'code/build.py',
-		'app_server.py',
-		'remote.py',
-		'prepare.py',
-		'desktop/develop.py',
-		'lib/package.py',
-		'lib/package-layout.json',
-		'protocol/generate.py',
-	]) {
+	for (const entry of ['code/build.py', 'app_server.py', 'remote.py', 'prepare.py', 'desktop/develop.py', 'lib/package.py', 'lib/package-layout.json', 'protocol/generate.py']) {
 		assert.equal(existsSync(join(import.meta.dirname, entry)), true, entry);
 	}
 	for (const entry of ['run.py', 'run_package.py', 'install.sh', 'install.ps1']) {
@@ -96,26 +67,10 @@ test('product build and launch tools have one owner while repository scripts rem
 	assert.equal(existsSync(join(import.meta.dirname, 'code/package.py')), true);
 	assert.equal(existsSync(join(import.meta.dirname, 'code/update-sign/Cargo.toml')), true);
 	assert.equal(existsSync(join(import.meta.dirname, 'runtime/update-sign')), false);
-	for (const retiredEntry of [
-		'cargo_with_v8.py',
-		'lib/just_shell.py',
-		'compile.ts',
-		'watch.ts',
-		'vite',
-		'lib/compilation.ts',
-		'lib/appServer.ts',
-		'lib/web.ts',
-	]) {
+	for (const retiredEntry of ['cargo_with_v8.py', 'lib/just_shell.py', 'compile.ts', 'watch.ts', 'vite', 'lib/compilation.ts', 'lib/appServer.ts', 'lib/web.ts']) {
 		assert.equal(existsSync(join(import.meta.dirname, retiredEntry)), false, retiredEntry);
 	}
-	for (const entry of [
-		'build.ts',
-		'host.ts',
-		'watch-app-server.ts',
-		'appServer.ts',
-		'web.ts',
-		'vite/vite.config.ts',
-	]) {
+	for (const entry of ['build.ts', 'host.ts', 'watch-app-server.ts', 'appServer.ts', 'web.ts', 'vite/vite.config.ts']) {
 		assert.equal(existsSync(join(import.meta.dirname, 'desktop', entry)), true, entry);
 	}
 	for (const entry of ['compile.ts', 'compilation.ts', 'watch.ts']) {
@@ -134,18 +89,7 @@ test('frontend Node tools and backend package builders have separate language ow
 	for (const [directory, entries] of [
 		[
 			'desktop',
-			[
-				'__init__.py',
-				'analyze.py',
-				'develop.py',
-				'live.py',
-				'package_runtime.py',
-				'runtime_acceptance.py',
-				'test_analyze.py',
-				'test_develop.py',
-				'test_live.py',
-				'test_package_runtime.py',
-			],
+			['__init__.py', 'analyze.py', 'develop.py', 'live.py', 'package_runtime.py', 'runtime_acceptance.py', 'test_analyze.py', 'test_develop.py', 'test_live.py', 'test_package_runtime.py'],
 		],
 		['protocol', ['__init__.py', 'artifacts.py', 'generate.py', 'test_generate.py']],
 	] as const) {
@@ -169,10 +113,7 @@ test('frontend Node tools and backend package builders have separate language ow
 				join(import.meta.dirname, `lib/${name}.ts`),
 				join(import.meta.dirname, `lib/${name}.test.ts`),
 			]),
-			...['screenshotBlocksCi', 'screenshotDiffReport'].flatMap(name => [
-				join(import.meta.dirname, `lib/${name}.ts`),
-				join(import.meta.dirname, `lib/test/${name}.test.ts`),
-			]),
+			...['screenshotBlocksCi', 'screenshotDiffReport'].flatMap(name => [join(import.meta.dirname, `lib/${name}.ts`), join(import.meta.dirname, `lib/test/${name}.test.ts`)]),
 		]);
 		assert.deepEqual(
 			files.filter(path => !sharedTooling.has(path)),
@@ -200,24 +141,14 @@ test('Node build and repository command sources do not use runtime JavaScript', 
 
 test('build tools do not import repository command implementations', () => {
 	for (const path of walk(import.meta.dirname).filter(path => extname(path) === '.py')) {
-		assert.doesNotMatch(
-			readFileSync(path, 'utf8'),
-			/^\s*(?:from scripts(?:\.|\s)|import scripts(?:\.|\s|$))/m,
-			path,
-		);
+		assert.doesNotMatch(readFileSync(path, 'utf8'), /^\s*(?:from scripts(?:\.|\s)|import scripts(?:\.|\s|$))/m, path);
 	}
-	for (const path of walk(import.meta.dirname).filter(
-		path => extname(path) === '.ts' && !path.endsWith('.test.ts'),
-	)) {
+	for (const path of walk(import.meta.dirname).filter(path => extname(path) === '.ts' && !path.endsWith('.test.ts'))) {
 		assert.doesNotMatch(readFileSync(path, 'utf8'), /(?:from\s*|import\s*\()\s*["'][^"']*\/scripts\//u, path);
 	}
 	const runtime = join(repositoryRoot, 'src/ash/platform/agentHost/node');
 	for (const path of walk(runtime).filter(path => extname(path) === '.ts')) {
-		assert.doesNotMatch(
-			readFileSync(path, 'utf8'),
-			/(?:from\s*|import\s*\()\s*["'][^"']*\/(?:build|scripts)\//u,
-			path,
-		);
+		assert.doesNotMatch(readFileSync(path, 'utf8'), /(?:from\s*|import\s*\()\s*["'][^"']*\/(?:build|scripts)\//u, path);
 	}
 });
 

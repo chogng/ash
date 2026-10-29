@@ -61,13 +61,7 @@ export function parse(input: string, errors: YamlParseError[] = [], options: Par
 	const convert = (node: Node | null | undefined, accept: (value: YamlNode) => void): void => {
 		const startOffset = node?.range?.[0] ?? 0;
 		const endOffset = node?.range?.[1] ?? startOffset;
-		const code = isAlias(node)
-			? 'YAML_ALIAS'
-			: node?.tag
-				? 'YAML_TAG'
-				: node && 'anchor' in node && node.anchor
-					? 'YAML_ANCHOR'
-					: undefined;
+		const code = isAlias(node) ? 'YAML_ALIAS' : node?.tag ? 'YAML_TAG' : node && 'anchor' in node && node.anchor ? 'YAML_ANCHOR' : undefined;
 		if (code) {
 			errors.push({ code, message: 'YAML aliases, anchors and tags are not supported.', startOffset, endOffset });
 			accept({
@@ -88,11 +82,7 @@ export function parse(input: string, errors: YamlParseError[] = [], options: Par
 				pending.push(() =>
 					convert(isNode(pair.key) ? pair.key : undefined, key => {
 						if (key.type !== 'scalar') return;
-						pending.push(() =>
-							convert(isNode(pair.value) ? pair.value : undefined, value =>
-								properties.push({ key, value }),
-							),
-						);
+						pending.push(() => convert(isNode(pair.value) ? pair.value : undefined, value => properties.push({ key, value })));
 					}),
 				);
 			}

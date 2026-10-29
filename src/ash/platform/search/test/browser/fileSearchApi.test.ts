@@ -23,26 +23,20 @@ test('fuzzy RPC preserves backend scores, root URI and an explicit query', async
 		async request(definition: { method: string }, params: { operationId: string }): Promise<FileFuzzyResult> {
 			assert.equal(definition.method, 'file/search/fuzzy');
 			assert.ok(params.operationId);
-			assert.deepEqual(
-				{ ...params, operationId: undefined },
-				{ operationId: undefined, target: directory.target, query: '中文 service', maxResults: 100 },
-			);
+			assert.deepEqual({ ...params, operationId: undefined }, { operationId: undefined, target: directory.target, query: '中文 service', maxResults: 100 });
 			return { matches: [{ path: 'src/中文Service.ts', score: 42 }], totalMatches: 1, freshness: 'indexed' };
 		},
 	} as unknown as AppServerProtocolClient;
-	assert.deepEqual(
-		await createAppServerFileSearchApi(connection).fuzzy(directory, { query: '中文 service', maxResults: 100 }),
-		{
-			matches: [
-				{
-					path: 'src/中文Service.ts',
-					score: 42,
-					resource: URI.joinPath(directory.resource, 'src/中文Service.ts'),
-				},
-			],
-			totalMatches: 1,
-		},
-	);
+	assert.deepEqual(await createAppServerFileSearchApi(connection).fuzzy(directory, { query: '中文 service', maxResults: 100 }), {
+		matches: [
+			{
+				path: 'src/中文Service.ts',
+				score: 42,
+				resource: URI.joinPath(directory.resource, 'src/中文Service.ts'),
+			},
+		],
+		totalMatches: 1,
+	});
 });
 
 test('fuzzy cancellation keeps the terminal response and discards its late matches', async () => {
@@ -65,11 +59,7 @@ test('fuzzy cancellation keeps the terminal response and discards its late match
 		},
 	} as unknown as AppServerProtocolClient;
 	const controller = new AbortController();
-	const pending = createAppServerFileSearchApi(connection).fuzzy(
-		directory,
-		{ query: 'main', maxResults: 1 },
-		controller.signal,
-	);
+	const pending = createAppServerFileSearchApi(connection).fuzzy(directory, { query: 'main', maxResults: 1 }, controller.signal);
 	const rejected = assert.rejects(pending, isCancellationError);
 	controller.abort();
 	await cancelled.p;
@@ -96,11 +86,7 @@ for (const kind of ['glob', 'fuzzy'] as const) {
 			const controller = new AbortController();
 			const pending =
 				kind === 'glob'
-					? api.glob(
-							directory,
-							{ includePatterns: [], excludePatterns: [], maxResults: 1 },
-							controller.signal,
-						)
+					? api.glob(directory, { includePatterns: [], excludePatterns: [], maxResults: 1 }, controller.signal)
 					: api.fuzzy(directory, { query: 'main', maxResults: 1 }, controller.signal);
 			const rejected = assert.rejects(pending, isCancellationError);
 			if (replacement) {
@@ -110,17 +96,9 @@ for (const kind of ['glob', 'fuzzy'] as const) {
 			}
 			changed.fire(connection.state);
 			controller.abort();
-			await response.complete(
-				kind === 'glob'
-					? { paths: ['main.ts'], totalMatches: 1 }
-					: { matches: [{ path: 'main.ts', score: 1 }], totalMatches: 1 },
-			);
+			await response.complete(kind === 'glob' ? { paths: ['main.ts'], totalMatches: 1 } : { matches: [{ path: 'main.ts', score: 1 }], totalMatches: 1 });
 			await rejected;
-			assert.deepEqual(
-				methods,
-				[`file/search/${kind}`],
-				'an obsolete cancel handle must not send through a replacement connection',
-			);
+			assert.deepEqual(methods, [`file/search/${kind}`], 'an obsolete cancel handle must not send through a replacement connection');
 			assert.equal(changed.hasListeners(), false);
 		});
 	}
@@ -135,16 +113,9 @@ for (const kind of ['glob', 'fuzzy'] as const) {
 			request: () => response.p,
 		};
 		const api = createAppServerFileSearchApi(connection as unknown as AppServerProtocolClient);
-		const pending =
-			kind === 'glob'
-				? api.glob(directory, { includePatterns: [], excludePatterns: [], maxResults: 1 })
-				: api.fuzzy(directory, { query: 'main', maxResults: 1 });
+		const pending = kind === 'glob' ? api.glob(directory, { includePatterns: [], excludePatterns: [], maxResults: 1 }) : api.fuzzy(directory, { query: 'main', maxResults: 1 });
 		const rejected = assert.rejects(pending, isCancellationError);
-		void response.complete(
-			kind === 'glob'
-				? { paths: ['main.ts'], totalMatches: 1 }
-				: { matches: [{ path: 'main.ts', score: 1 }], totalMatches: 1 },
-		);
+		void response.complete(kind === 'glob' ? { paths: ['main.ts'], totalMatches: 1 } : { matches: [{ path: 'main.ts', score: 1 }], totalMatches: 1 });
 		connection.state = 'stopped';
 		changed.fire('stopped');
 		await rejected;

@@ -1,10 +1,7 @@
 import type { DocumentCodec } from '../../documentEditor/common/documentCodec.js';
 import type { DocumentTextModel } from '../../documentEditor/common/documentCodec.js';
 import type { FileReadOperation } from '../../../../platform/files/common/files.js';
-import {
-	createServiceIdentifier,
-	type ServiceIdentifier,
-} from '../../../../platform/instantiation/common/instantiation.js';
+import { createServiceIdentifier, type ServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { type Event } from '../../../../base/common/event.js';
 import { type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
@@ -29,11 +26,7 @@ export interface TextModelSaveRecoveryContext {
 
 /** Prepares durable recovery content after editing participants and before file publication. */
 export interface ITextModelSaveCompletionParticipant {
-	prepare(
-		model: TextModel,
-		signal: AbortSignal,
-		recovery: TextModelSaveRecoveryContext,
-	): Promise<TextModelSaveCompletion | undefined>;
+	prepare(model: TextModel, signal: AbortSignal, recovery: TextModelSaveRecoveryContext): Promise<TextModelSaveCompletion | undefined>;
 }
 
 /** The minimum identity and bootstrap data needed to acquire a text model. */
@@ -88,10 +81,7 @@ export interface TextModelAcquireOptions {
 }
 
 /** Resolves resource identities to reference-counted text models and their persisted baseline. */
-export interface ITextModelResourceService<
-	TInput extends TextModelInput = TextModelInput,
-	TReference extends TextModelReference = TextModelReference,
-> extends IDisposable {
+export interface ITextModelResourceService<TInput extends TextModelInput = TextModelInput, TReference extends TextModelReference = TextModelReference> extends IDisposable {
 	acquire(input: TInput, signal: AbortSignal, options?: TextModelAcquireOptions): Promise<TReference>;
 }
 
@@ -115,14 +105,12 @@ export interface IFileTextModelService extends ITextModelResourceService {
 	refresh(resource: URI): Promise<void>;
 }
 
-export const IFileTextModelService: ServiceIdentifier<IFileTextModelService> =
-	createServiceIdentifier<IFileTextModelService>('fileTextModelService');
+export const IFileTextModelService: ServiceIdentifier<IFileTextModelService> = createServiceIdentifier<IFileTextModelService>('fileTextModelService');
 
 export type { ITextResourceStore } from './textResourceStore.js';
 
 /** Service key used by hosts that register a text model service. */
-export const ITextModelResourceService: ServiceIdentifier<ITextModelResourceService> =
-	createServiceIdentifier<ITextModelResourceService>('textModelResourceService');
+export const ITextModelResourceService: ServiceIdentifier<ITextModelResourceService> = createServiceIdentifier<ITextModelResourceService>('textModelResourceService');
 
 /** Reports that a resource changed after the model established its saved baseline. */
 export class TextModelConflictError extends Error {

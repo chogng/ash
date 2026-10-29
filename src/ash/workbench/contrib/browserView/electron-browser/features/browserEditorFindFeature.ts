@@ -1,11 +1,6 @@
 import { Event } from '../../../../../base/common/event.js';
 import { BrowserEditor, BrowserEditorContribution } from '../browserEditor.js';
-import {
-	DisposableStore,
-	MutableDisposable,
-	toDisposable,
-	type IDisposable,
-} from '../../../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { localize } from '../../../../../nls.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -87,10 +82,7 @@ export class BrowserEditorFindFeature extends BrowserEditorContribution {
 			const value = await this.quickInput.input(
 				{
 					title: localize({ bundle: 'ash.workbench', key: 'browser.find' }, 'Find in Page'),
-					placeHolder: localize(
-						{ bundle: 'ash.workbench', key: 'browser.findPrompt' },
-						'Enter text to find. Use F3 or Shift+F3 to move between matches.',
-					),
+					placeHolder: localize({ bundle: 'ash.workbench', key: 'browser.findPrompt' }, 'Enter text to find. Use F3 or Shift+F3 to move between matches.'),
 					value: selection.trim() || session.term,
 				},
 				cancellation.token,
@@ -146,9 +138,7 @@ registerAction2(
 				precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId),
 			});
 		}
-		override async run(
-			accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor,
-		): Promise<void> {
+		override async run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): Promise<void> {
 			const pane = accessor.get(IEditorPart).activePane;
 			if (pane?.id === BrowserViewEditorId) {
 				await (pane as BrowserEditor).getContribution(BrowserEditorFindFeature)?.show();
@@ -166,9 +156,7 @@ registerAction2(
 				precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId),
 			});
 		}
-		override async run(
-			accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor,
-		): Promise<void> {
+		override async run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): Promise<void> {
 			const pane = accessor.get(IEditorPart).activePane;
 			if (pane?.id === BrowserViewEditorId) {
 				await (pane as BrowserEditor).getContribution(BrowserEditorFindFeature)?.hide();
@@ -186,9 +174,7 @@ registerAction2(
 				precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId),
 			});
 		}
-		override async run(
-			accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor,
-		): Promise<void> {
+		override async run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): Promise<void> {
 			const pane = accessor.get(IEditorPart).activePane;
 			if (pane?.id === BrowserViewEditorId) {
 				await (pane as BrowserEditor).getContribution(BrowserEditorFindFeature)?.next(true);
@@ -201,17 +187,12 @@ registerAction2(
 		constructor() {
 			super({
 				id: BrowserViewCommandId.FindPrevious,
-				title: localize2(
-					{ bundle: 'ash.workbench', key: 'browser.previousFindCommand' },
-					'Browser: Find Previous',
-				),
+				title: localize2({ bundle: 'ash.workbench', key: 'browser.previousFindCommand' }, 'Browser: Find Previous'),
 				f1: true,
 				precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId),
 			});
 		}
-		override async run(
-			accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor,
-		): Promise<void> {
+		override async run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): Promise<void> {
 			const pane = accessor.get(IEditorPart).activePane;
 			if (pane?.id === BrowserViewEditorId) {
 				await (pane as BrowserEditor).getContribution(BrowserEditorFindFeature)?.next(false);

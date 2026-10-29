@@ -28,9 +28,7 @@ test(
 		});
 		if (target.kind === 'browser' && target.appServerMode === 'disabled') {
 			await page.evaluate(async images => {
-				const folder = await (
-					await navigator.storage.getDirectory()
-				).getDirectoryHandle(`image-preview-${crypto.randomUUID()}`, { create: true });
+				const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(`image-preview-${crypto.randomUUID()}`, { create: true });
 				for (const image of images) {
 					const writer = await (await folder.getFileHandle(image.name, { create: true })).createWritable();
 					await writer.write(Uint8Array.from(atob(image.encoded), character => character.charCodeAt(0)));
@@ -41,10 +39,7 @@ test(
 				await invalid.close();
 				Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
 			}, images);
-			await workbench.editors
-				.groupAt(0)
-				.welcome.getByRole('button', { name: 'Open folder', exact: true })
-				.click();
+			await workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Open folder', exact: true }).click();
 		} else {
 			for (const image of images) {
 				await writeFile(join(testWorkspace.directory, image.name), Buffer.from(image.encoded, 'base64'));
@@ -60,9 +55,7 @@ test(
 			};
 			Object.defineProperty(window, 'imagePreviewRevokedURLs', { value: revoked, configurable: true });
 		});
-		await expect(
-			page.locator('.ash-explorer').getByRole('treeitem', { name: 'product.png', exact: true }),
-		).toBeVisible();
+		await expect(page.locator('.ash-explorer').getByRole('treeitem', { name: 'product.png', exact: true })).toBeVisible();
 		const explorer = page.locator('.ash-explorer');
 		await explorer.getByRole('treeitem', { name: 'product.png', exact: true }).dblclick();
 		const preview = page.locator('.ash-image-preview');
@@ -87,15 +80,11 @@ test(
 		expect(geometry.imageWidth).toBeLessThanOrEqual(geometry.width);
 		expect(geometry.imageHeight).toBeLessThanOrEqual(geometry.height);
 		await viewport.press('Alt+F1');
-		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(
-			/Press Plus or Minus[\s\S]*original file stays intact/,
-		);
+		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Press Plus or Minus[\s\S]*original file stays intact/);
 		await page.keyboard.press('Escape');
 		await expect(viewport).toBeFocused();
 		await viewport.press('Alt+F2');
-		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(
-			/Image: product.png[\s\S]*800 × 600 pixels[\s\S]*image\/png/,
-		);
+		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Image: product.png[\s\S]*800 × 600 pixels[\s\S]*image\/png/);
 		await page.keyboard.press('Escape');
 		if (target.kind === 'electron') {
 			const updated = await page.evaluate(() => {
@@ -106,28 +95,19 @@ test(
 			});
 			await writeFile(join(testWorkspace.directory, 'product.png'), Buffer.from(updated, 'base64'));
 			await expect(preview.locator('.ash-image-preview-summary')).toContainText('120 × 90 pixels');
-			await expect
-				.poll(() => page.evaluate(url => window.imagePreviewRevokedURLs.has(url!), originalURL))
-				.toBe(true);
+			await expect.poll(() => page.evaluate(url => window.imagePreviewRevokedURLs.has(url!), originalURL)).toBe(true);
 		}
 		for (const name of ['product.jpg', 'product.webp']) {
 			await explorer.getByRole('treeitem', { name, exact: true }).dblclick();
 			const activeImage = workbench.editors.groupAt(0).content.locator('.ash-image-preview:visible img');
 			await expect(activeImage).toHaveAttribute('alt', name);
-			await expect
-				.poll(() => activeImage.evaluate(element => (element as HTMLImageElement).naturalWidth))
-				.toBe(800);
+			await expect.poll(() => activeImage.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(800);
 		}
-		const lastURL = await workbench.editors
-			.groupAt(0)
-			.content.locator('.ash-image-preview:visible img')
-			.getAttribute('src');
+		const lastURL = await workbench.editors.groupAt(0).content.locator('.ash-image-preview:visible img').getAttribute('src');
 		await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
 		await expect.poll(() => page.evaluate(url => window.imagePreviewRevokedURLs.has(url!), lastURL)).toBe(true);
 		await explorer.getByRole('treeitem', { name: 'broken.png', exact: true }).dblclick();
-		await expect(workbench.editors.groupAt(0).content.getByRole('alert')).toContainText(
-			'Choose a PNG, JPEG or WebP image.',
-		);
+		await expect(workbench.editors.groupAt(0).content.getByRole('alert')).toContainText('Choose a PNG, JPEG or WebP image.');
 	},
 );
 
@@ -209,13 +189,9 @@ test(
 			await page.evaluate(() => window.mediaRetryProbe.pending.get('pending.png')!());
 			await expect.poll(async () => (await mediaPreviewEvidence(page)).pending).toEqual([]);
 			if (target.appServerMode === 'required') {
-				await expect
-					.poll(async () => (await mediaPreviewEvidence(page)).releasedResources.length)
-					.toBeGreaterThan(beforeLateRead.releasedResources.length);
+				await expect.poll(async () => (await mediaPreviewEvidence(page)).releasedResources.length).toBeGreaterThan(beforeLateRead.releasedResources.length);
 			} else {
-				await expect
-					.poll(async () => (await mediaPreviewEvidence(page)).completedReads)
-					.toContain('pending.png');
+				await expect.poll(async () => (await mediaPreviewEvidence(page)).completedReads).toContain('pending.png');
 			}
 			await expect(image).toHaveAttribute('src', currentURL);
 			await expect(preview.getByRole('alert')).toHaveCount(0);
@@ -224,10 +200,7 @@ test(
 			await expect
 				.poll(async () => {
 					const evidence = await mediaPreviewEvidence(page);
-					return (
-						evidence.created.every(url => evidence.revoked.includes(url)) &&
-						evidence.liveResources.length === 0
-					);
+					return evidence.created.every(url => evidence.revoked.includes(url)) && evidence.liveResources.length === 0;
 				})
 				.toBe(true);
 			await testInfo.attach('image-lifecycle', {

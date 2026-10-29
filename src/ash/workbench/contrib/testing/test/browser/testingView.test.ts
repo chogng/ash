@@ -52,9 +52,7 @@ suite('testing browser component', () => {
 		test(`failure navigation preserves ${scenario.name} resource ownership`, async function () {
 			const { page } = browserTests;
 
-			const query = new URLSearchParams(
-				Object.entries(scenario).filter(([key]) => key !== 'name' && key !== 'expected'),
-			);
+			const query = new URLSearchParams(Object.entries(scenario).filter(([key]) => key !== 'name' && key !== 'expected'));
 			await page.goto('/testing.html?' + query);
 			const tree = page.getByRole('tree', { name: 'Tests' });
 			await expect(tree).toContainText('checks::fails');
@@ -69,13 +67,7 @@ suite('testing browser component', () => {
 			await open.focus();
 			await open.press('Enter');
 			await expect
-				.poll(() =>
-					page.evaluate(
-						before =>
-							window.ashTestingIntegration.opened.slice(before).map(({ uri, line }) => ({ uri, line })),
-						openedBefore,
-					),
-				)
+				.poll(() => page.evaluate(before => window.ashTestingIntegration.opened.slice(before).map(({ uri, line }) => ({ uri, line })), openedBefore))
 				.toEqual([{ uri: scenario.expected, line: 4 }]);
 		});
 	}
@@ -97,18 +89,12 @@ suite('testing browser component', () => {
 		await page.mouse.down();
 		await page.mouse.move(handle.x + handle.width / 2, bounds.y + 1);
 		await page.mouse.up();
-		await expect
-			.poll(() =>
-				pane.locator('.ash-testing-tree .ash-scrollbar-viewport').evaluate(element => element.clientHeight),
-			)
-			.toBeGreaterThanOrEqual(120);
+		await expect.poll(() => pane.locator('.ash-testing-tree .ash-scrollbar-viewport').evaluate(element => element.clientHeight)).toBeGreaterThanOrEqual(120);
 		await pane.getByText('Test Scripts', { exact: true }).click();
 		const run = pane.getByRole('button', { name: 'Run Script', exact: true });
 		await run.scrollIntoViewIfNeeded();
 		await expect(run).toBeInViewport();
-		await expect
-			.poll(() => pane.locator('.ash-testing').evaluate(element => element.scrollHeight - element.clientHeight))
-			.toBeLessThanOrEqual(1);
+		await expect.poll(() => pane.locator('.ash-testing').evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
 		await run.focus();
 		await run.press('Enter');
 		await expect(page.getByRole('status')).toHaveText('Script invoked');
@@ -130,9 +116,7 @@ suite('testing browser component', () => {
 			.click();
 		await page.getByRole('button', { name: 'Run Selected', exact: true }).click();
 		await expect(page.getByRole('status')).toContainText('1 failed');
-		expect(await page.evaluate(() => window.ashTestingIntegration.runs())).toEqual([
-			['fixture:lib:fixture:checks::fails'],
-		]);
+		expect(await page.evaluate(() => window.ashTestingIntegration.runs())).toEqual([['fixture:lib:fixture:checks::fails']]);
 		await expect(page.getByRole('region', { name: 'Test result' })).toContainText('fixture failure');
 		await page.getByRole('button', { name: 'Open Failure Location', exact: true }).click();
 		expect(await page.evaluate(() => window.ashTestingIntegration.opened)).toContainEqual({
@@ -194,10 +178,7 @@ suite('testing browser component', () => {
 			.first()
 			.click({ modifiers: ['Alt'] });
 		await expect(page.getByRole('status')).toHaveText('Debugging test…');
-		expect((await page.evaluate(() => window.ashTestingIntegration.debugLaunches()))[0]?.arguments.args).toEqual([
-			'--exact',
-			'checks::passes',
-		]);
+		expect((await page.evaluate(() => window.ashTestingIntegration.debugLaunches()))[0]?.arguments.args).toEqual(['--exact', 'checks::passes']);
 		expect(await page.evaluate(() => window.ashTestingIntegration.runs())).toEqual([]);
 		await page.getByRole('button', { name: 'Cancel Tests', exact: true }).click();
 		await page.evaluate(() => window.ashTestingIntegration.addCases());

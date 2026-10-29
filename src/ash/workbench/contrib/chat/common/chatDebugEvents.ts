@@ -33,12 +33,8 @@ export type PerformanceUnknownReason =
 	| 'inconsistentTokenUsage'
 	| 'noTextOutputTokens'
 	| 'zeroGenerationDuration';
-export type PerformanceDuration =
-	| { readonly type: 'measured'; readonly microseconds: string }
-	| { readonly type: 'unknown'; readonly reason: PerformanceUnknownReason };
-export type PerformanceRate =
-	| { readonly type: 'estimated'; readonly tokensPerSecond: string }
-	| { readonly type: 'unknown'; readonly reason: PerformanceUnknownReason };
+export type PerformanceDuration = { readonly type: 'measured'; readonly microseconds: string } | { readonly type: 'unknown'; readonly reason: PerformanceUnknownReason };
+export type PerformanceRate = { readonly type: 'estimated'; readonly tokensPerSecond: string } | { readonly type: 'unknown'; readonly reason: PerformanceUnknownReason };
 
 /** Backend projections over exact durable events. Presentation never derives eligibility or TPS. */
 export interface InvocationPerformance {
@@ -63,9 +59,7 @@ export function performanceKey(threadId: string, eventId: string): string {
 
 function parsePerformance(value: unknown, threads: AgentTrace['threads']): AgentTracePerformance {
 	const invalid = (): never => {
-		throw new Error(
-			localize('chatDebug.invalidPerformance', 'Invalid model performance projection or event identity.'),
-		);
+		throw new Error(localize('chatDebug.invalidPerformance', 'Invalid model performance projection or event identity.'));
 	};
 	if (!isRecord(value) || value.formatVersion !== 1 || !Array.isArray(value.calls)) {
 		return invalid();
@@ -84,37 +78,19 @@ function parsePerformance(value: unknown, threads: AgentTrace['threads']): Agent
 		'noTextOutputTokens',
 		'zeroGenerationDuration',
 	]);
-	const unknown = (metric: Record<string, unknown>) =>
-		metric.type === 'unknown' && reasons.has(metric.reason as PerformanceUnknownReason);
+	const unknown = (metric: Record<string, unknown>) => metric.type === 'unknown' && reasons.has(metric.reason as PerformanceUnknownReason);
 	const events = new Map(
-		threads.flatMap(thread =>
-			thread.events
-				.filter(record => record.event.type === 'modelInvocationRecorded')
-				.map(record => [performanceKey(thread.threadId, record.eventId), record] as const),
-		),
+		threads.flatMap(thread => thread.events.filter(record => record.event.type === 'modelInvocationRecorded').map(record => [performanceKey(thread.threadId, record.eventId), record] as const)),
 	);
 	const seen = new Set<string>();
 	for (const call of value.calls) {
-		if (
-			!isRecord(call) ||
-			typeof call.threadId !== 'string' ||
-			typeof call.eventId !== 'string' ||
-			typeof call.turnId !== 'string' ||
-			typeof call.invocationId !== 'string'
-		) {
+		if (!isRecord(call) || typeof call.threadId !== 'string' || typeof call.eventId !== 'string' || typeof call.turnId !== 'string' || typeof call.invocationId !== 'string') {
 			return invalid();
 		}
 		const key = performanceKey(call.threadId, call.eventId);
 		const event = events.get(key)?.event;
 		const record = isRecord(event?.record) ? event.record : undefined;
-		if (
-			!record ||
-			seen.has(key) ||
-			call.turnId !== event?.turnId ||
-			call.invocationId !== record.invocationId ||
-			record.threadId !== call.threadId ||
-			record.turnId !== call.turnId
-		) {
+		if (!record || seen.has(key) || call.turnId !== event?.turnId || call.invocationId !== record.invocationId || record.threadId !== call.threadId || record.turnId !== call.turnId) {
 			return invalid();
 		}
 		seen.add(key);
@@ -134,15 +110,7 @@ function parsePerformance(value: unknown, threads: AgentTrace['threads']): Agent
 			}
 		}
 		const rate = call.textTps;
-		if (
-			!isRecord(rate) ||
-			(!unknown(rate) &&
-				!(
-					rate.type === 'estimated' &&
-					typeof rate.tokensPerSecond === 'string' &&
-					/^(0|[1-9]\d{0,25})\.\d$/.test(rate.tokensPerSecond)
-				))
-		) {
+		if (!isRecord(rate) || (!unknown(rate) && !(rate.type === 'estimated' && typeof rate.tokensPerSecond === 'string' && /^(0|[1-9]\d{0,25})\.\d$/.test(rate.tokensPerSecond)))) {
 			return invalid();
 		}
 	}
@@ -175,22 +143,10 @@ function parseOverview(value: unknown): AgentTraceOverview {
 	const invalid = (): never => {
 		throw new Error(localize('chatDebug.invalidOverview', 'Invalid execution overview or metric coverage.'));
 	};
-	if (
-		!isRecord(value) ||
-		value.formatVersion !== 1 ||
-		!isRecord(value.threadCursors) ||
-		!Object.values(value.threadCursors).every(integer)
-	) {
+	if (!isRecord(value) || value.formatVersion !== 1 || !isRecord(value.threadCursors) || !Object.values(value.threadCursors).every(integer)) {
 		return invalid();
 	}
-	for (const key of [
-		'eventCount',
-		'modelCalls',
-		'toolCalls',
-		'failedModelCalls',
-		'cancelledModelCalls',
-		'excludedModelCalls',
-	]) {
+	for (const key of ['eventCount', 'modelCalls', 'toolCalls', 'failedModelCalls', 'cancelledModelCalls', 'excludedModelCalls']) {
 		if (!integer(value[key])) {
 			return invalid();
 		}
@@ -220,18 +176,10 @@ function parseOverview(value: unknown): AgentTraceOverview {
 /** Older or stale summaries stay unavailable instead of invoking a second analyzer. */
 export function traceOverview(trace: AgentTrace): AgentTraceOverview | undefined {
 	const overview = trace.overview;
-	if (
-		!overview ||
-		Object.keys(overview.threadCursors).length !== trace.threads.length ||
-		overview.eventCount !== trace.threads.reduce((count, thread) => count + thread.events.length, 0)
-	) {
+	if (!overview || Object.keys(overview.threadCursors).length !== trace.threads.length || overview.eventCount !== trace.threads.reduce((count, thread) => count + thread.events.length, 0)) {
 		return undefined;
 	}
-	return trace.threads.every(
-		thread => overview.threadCursors[thread.threadId] === (thread.events.at(-1)?.sequence ?? 0),
-	)
-		? overview
-		: undefined;
+	return trace.threads.every(thread => overview.threadCursors[thread.threadId] === (thread.events.at(-1)?.sequence ?? 0)) ? overview : undefined;
 }
 
 export interface AgentTracePayloadRef {
@@ -283,11 +231,7 @@ export interface AgentTraceGraph {
 }
 
 export function diagnosticPayload(record: AgentTraceDiagnosticEvent): AgentTracePayloadRef | undefined {
-	const value =
-		record.event.requestPayload ??
-		record.event.responsePayload ??
-		record.event.partialOutput ??
-		record.event.executionPayload;
+	const value = record.event.requestPayload ?? record.event.responsePayload ?? record.event.partialOutput ?? record.event.executionPayload;
 	if (value === undefined || value === null) {
 		return undefined;
 	}
@@ -295,9 +239,7 @@ export function diagnosticPayload(record: AgentTraceDiagnosticEvent): AgentTrace
 		!isRecord(value) ||
 		typeof value.payloadId !== 'string' ||
 		!/^payload-[1-9]\d*$/.test(value.payloadId) ||
-		!['coreRequest', 'materializedRequest', 'modelResponse', 'partialOutput', 'hookExecution'].includes(
-			String(value.kind),
-		) ||
+		!['coreRequest', 'materializedRequest', 'modelResponse', 'partialOutput', 'hookExecution'].includes(String(value.kind)) ||
 		!integer(value.byteLength) ||
 		value.byteLength > 8 * 1024 * 1024 ||
 		!['saved', 'omitted'].includes(String(value.status)) ||
@@ -379,10 +321,7 @@ export function parseAgentTraceDiagnostics(value: unknown): AgentTraceDiagnostic
 		} else if (typeof event.event.attemptId !== 'string' || !event.event.attemptId || event.turnId === null) {
 			return invalidDiagnostics();
 		}
-		if (
-			['modelAttemptStarted', 'modelRequestPrepared', 'modelAttemptCompleted'].includes(event.event.type) &&
-			!payload
-		) {
+		if (['modelAttemptStarted', 'modelRequestPrepared', 'modelAttemptCompleted'].includes(event.event.type) && !payload) {
 			return invalidDiagnostics();
 		}
 		if (payload?.status === 'saved') {
@@ -400,12 +339,7 @@ export function parseAgentTraceDiagnostics(value: unknown): AgentTraceDiagnostic
 	return value as unknown as AgentTraceDiagnostics;
 }
 
-export function parseAgentTraceDiagnosticPage(
-	value: unknown,
-	cursor: unknown,
-	hasMore: unknown,
-	after: number,
-): AgentTraceDiagnosticPage {
+export function parseAgentTraceDiagnosticPage(value: unknown, cursor: unknown, hasMore: unknown, after: number): AgentTraceDiagnosticPage {
 	const diagnostics = parseAgentTraceDiagnostics(value);
 	if (
 		!integer(cursor) ||
@@ -419,10 +353,7 @@ export function parseAgentTraceDiagnosticPage(
 	return { diagnostics, cursor, hasMore };
 }
 
-export function mergeAgentTraceDiagnostics(
-	previous: AgentTraceDiagnostics | undefined,
-	page: AgentTraceDiagnostics,
-): AgentTraceDiagnostics {
+export function mergeAgentTraceDiagnostics(previous: AgentTraceDiagnostics | undefined, page: AgentTraceDiagnostics): AgentTraceDiagnostics {
 	if (!previous) {
 		return page;
 	}
@@ -442,13 +373,7 @@ export function parseAgentTraceGraph(value: unknown): AgentTraceGraph {
 	const invalid = (): never => {
 		throw new Error(localize('agentTrace.invalidGraph', 'Invalid trace relationships.'));
 	};
-	if (
-		!isRecord(value) ||
-		!isRecord(value.nodes) ||
-		!Array.isArray(value.edges) ||
-		!Array.isArray(value.warnings) ||
-		value.warnings.some(warning => typeof warning !== 'string')
-	) {
+	if (!isRecord(value) || !isRecord(value.nodes) || !Array.isArray(value.edges) || !Array.isArray(value.warnings) || value.warnings.some(warning => typeof warning !== 'string')) {
 		return invalid();
 	}
 	for (const [id, node] of Object.entries(value.nodes)) {
@@ -487,27 +412,12 @@ export interface AgentTracePage {
 
 /** Validates fields used by the reader for both wire pages and user-selected trace files. */
 export function parseAgentTrace(value: unknown): AgentTrace {
-	if (
-		!isRecord(value) ||
-		value.formatVersion !== 3 ||
-		typeof value.sessionId !== 'string' ||
-		!value.sessionId ||
-		!Array.isArray(value.threads) ||
-		!Array.isArray(value.historyPrefixes)
-	) {
-		throw new Error(
-			localize('agentTrace.invalidArtifact', 'Invalid execution trace. Expected rollout format version 3.'),
-		);
+	if (!isRecord(value) || value.formatVersion !== 3 || typeof value.sessionId !== 'string' || !value.sessionId || !Array.isArray(value.threads) || !Array.isArray(value.historyPrefixes)) {
+		throw new Error(localize('agentTrace.invalidArtifact', 'Invalid execution trace. Expected rollout format version 3.'));
 	}
 	const ids = new Set<string>();
 	for (const thread of value.threads) {
-		if (
-			!isRecord(thread) ||
-			typeof thread.threadId !== 'string' ||
-			!thread.threadId ||
-			ids.has(thread.threadId) ||
-			!Array.isArray(thread.events)
-		) {
+		if (!isRecord(thread) || typeof thread.threadId !== 'string' || !thread.threadId || ids.has(thread.threadId) || !Array.isArray(thread.events)) {
 			throw new Error(localize('agentTrace.invalidThread', 'Invalid or duplicate trace Thread.'));
 		}
 		ids.add(thread.threadId);
@@ -563,38 +473,22 @@ export function mergeAgentTrace(previous: AgentTrace | undefined, page: AgentTra
 			events: [...(existing?.events ?? []), ...thread.events.filter(record => record.sequence > after)],
 		});
 	}
-	const prefixes = new Map(
-		[...previous.historyPrefixes, ...page.historyPrefixes].map(prefix => [JSON.stringify(prefix), prefix]),
-	);
-	const calls = new Map(
-		[...(previous.performance?.calls ?? []), ...(page.performance?.calls ?? [])].map(call => [
-			performanceKey(call.threadId, call.eventId),
-			call,
-		]),
-	);
-	const performance: AgentTracePerformance | undefined =
-		previous.performance || page.performance ? { formatVersion: 1, calls: [...calls.values()] } : undefined;
+	const prefixes = new Map([...previous.historyPrefixes, ...page.historyPrefixes].map(prefix => [JSON.stringify(prefix), prefix]));
+	const calls = new Map([...(previous.performance?.calls ?? []), ...(page.performance?.calls ?? [])].map(call => [performanceKey(call.threadId, call.eventId), call]));
+	const performance: AgentTracePerformance | undefined = previous.performance || page.performance ? { formatVersion: 1, calls: [...calls.values()] } : undefined;
 	return {
 		...previous,
 		...page,
 		...(performance ? { performance } : {}),
 		historyPrefixes: [...prefixes.values()],
 		...(previous.diagnostics ? { diagnostics: previous.diagnostics } : {}),
-		...(previous.graph
-			? { graph: page.threads.some(thread => thread.events.length) ? undefined : previous.graph }
-			: {}),
+		...(previous.graph ? { graph: page.threads.some(thread => thread.events.length) ? undefined : previous.graph } : {}),
 		threads: [...threads.values()],
 	};
 }
 
 /** Checks pagination progress before a reader can advance its durable cursors. */
-export function parseAgentTracePage(
-	value: unknown,
-	cursors: unknown,
-	hasMore: unknown,
-	sessionId: string,
-	after: Readonly<Record<string, number>>,
-): AgentTracePage {
+export function parseAgentTracePage(value: unknown, cursors: unknown, hasMore: unknown, sessionId: string, after: Readonly<Record<string, number>>): AgentTracePage {
 	const trace = parseAgentTrace(value);
 	if (trace.sessionId !== sessionId) {
 		throw new Error(localize('agentTrace.changedSession', 'Trace belongs to another conversation.'));

@@ -7,17 +7,8 @@ import { generateUuid } from '../../../base/common/uuid.js';
 import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
 import { VSBuffer } from '../../../base/common/buffer.js';
 import { Emitter } from '../../../base/common/event.js';
-import {
-	appServerConnectionChannel,
-	getAppServerReadConsumption,
-	type AppServerConnectionTarget,
-} from '../common/appServerTransport.js';
-import {
-	SocketCloseEventType,
-	type ISocket,
-	type SocketCloseEvent,
-	type SocketDiagnosticsEventType,
-} from '../../../base/parts/ipc/common/ipc.net.js';
+import { appServerConnectionChannel, getAppServerReadConsumption, type AppServerConnectionTarget } from '../common/appServerTransport.js';
+import { SocketCloseEventType, type ISocket, type SocketCloseEvent, type SocketDiagnosticsEventType } from '../../../base/parts/ipc/common/ipc.net.js';
 
 /** Acquires and owns a renderer-exclusive MessagePort without interpreting protocol messages. */
 export class AppServerMessagePortTransport extends Disposable {
@@ -92,11 +83,7 @@ export class AppServerMessagePortTransport extends Disposable {
 			if (this.nonce !== nonce) {
 				throw new CancellationError();
 			}
-			if (
-				!isRecord(result) ||
-				typeof result.enabled !== 'boolean' ||
-				(result.enabled && result.byteStream !== true)
-			) {
+			if (!isRecord(result) || typeof result.enabled !== 'boolean' || (result.enabled && result.byteStream !== true)) {
 				throw new Error('Invalid connection acquisition response');
 			}
 			this.enabled = enabled = result.enabled;
@@ -194,10 +181,7 @@ class MessagePortSocket extends Disposable implements ISocket {
 			if (value.data instanceof Uint8Array && value.data.byteLength <= 320 * 1024 * 1024) {
 				// Ordinary MessagePort storage is already owned; only shared storage
 				// needs a copy before readers can safely retain or decode its contents.
-				const data =
-					value.data.buffer instanceof ArrayBuffer
-						? new Uint8Array(value.data.buffer, value.data.byteOffset, value.data.byteLength)
-						: new Uint8Array(value.data);
+				const data = value.data.buffer instanceof ArrayBuffer ? new Uint8Array(value.data.buffer, value.data.byteOffset, value.data.byteLength) : new Uint8Array(value.data);
 				const buffer = VSBuffer.wrap(data);
 				this.dataEmitter.fire(buffer);
 				const ack = (): void => {

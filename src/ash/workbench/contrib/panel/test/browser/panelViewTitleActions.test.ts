@@ -53,9 +53,7 @@ test('Output projects channel selection and active-channel clearing into the Pan
 		const titleActions = pane.partTitleProjection?.actions;
 		assert.ok(titleActions);
 		browser.window.document.body.append(pane.element, titleActions);
-		const selectChannel = titleActions.querySelector<HTMLButtonElement>(
-			"[data-action-id='ash.output.selectChannel'] button",
-		);
+		const selectChannel = titleActions.querySelector<HTMLButtonElement>("[data-action-id='ash.output.selectChannel'] button");
 		const clearOutput = titleActions.querySelector<HTMLButtonElement>("[data-action-id='ash.output.clear'] button");
 		assert.ok(selectChannel);
 		assert.ok(clearOutput);

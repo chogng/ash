@@ -10,21 +10,12 @@ import type { Workbench } from '../../../automation/workbench.js';
 import { expect, test } from '../../../automation/test.js';
 import { Menus } from '../../../automation/menus.js';
 import { waitForElectronWindowState } from '../../../automation/electronDriver.js';
-import {
-	DEFAULT_MENU_STYLE,
-	DEFAULT_TITLE_BAR_STYLE,
-	resolveContextMenuStyle,
-} from '../../../../src/ash/platform/window/common/window.js';
+import { DEFAULT_MENU_STYLE, DEFAULT_TITLE_BAR_STYLE, resolveContextMenuStyle } from '../../../../src/ash/platform/window/common/window.js';
 
 // Genuine OS popups need a focused owner for keyboard input and cancellation callbacks.
 const focusTest = test.extend({
 	electronWindowMode: async ({ target }, use) => {
-		const systemMenu =
-			resolveContextMenuStyle(
-				DEFAULT_MENU_STYLE,
-				DEFAULT_TITLE_BAR_STYLE,
-				process.platform === 'darwin' ? 'macos' : 'desktop',
-			) === 'system';
+		const systemMenu = resolveContextMenuStyle(DEFAULT_MENU_STYLE, DEFAULT_TITLE_BAR_STYLE, process.platform === 'darwin' ? 'macos' : 'desktop') === 'system';
 		await use(target.appServerMode === 'required' && systemMenu ? 'active' : undefined);
 	},
 });
@@ -34,10 +25,7 @@ const macFocusTest = test.extend({
 	},
 });
 
-async function notificationClipboard(
-	application: PlaywrightApplication,
-	page: Page,
-): Promise<{ read(): Promise<string> }> {
+async function notificationClipboard(application: PlaywrightApplication, page: Page): Promise<{ read(): Promise<string> }> {
 	// Start with a fixture value; never read or retain the user's previous clipboard.
 	const marker = 'ash-notification-copy-fixture';
 	if ('windows' in application) {
@@ -54,10 +42,7 @@ async function useCustomNotificationMenu(application: PlaywrightApplication, wor
 	await workbench.settingsEditor.openUserSettingsUI();
 	await workbench.settingsEditor.selectGroup('workbench');
 	await workbench.settingsEditor.selectCategory('layout');
-	await workbench.settingsEditor.element
-		.locator('[data-configuration-key="window.menuStyle"]')
-		.getByRole('combobox')
-		.click();
+	await workbench.settingsEditor.element.locator('[data-configuration-key="window.menuStyle"]').getByRole('combobox').click();
 	await workbench.page.getByRole('option', { name: 'Custom', exact: true }).click();
 	await workbench.page.keyboard.press('Escape');
 }
@@ -87,10 +72,7 @@ async function pressNotificationContextMenuKey(application: PlaywrightApplicatio
 	await new Promise<void>((resolve, reject) =>
 		execFile(
 			'osascript',
-			[
-				'-e',
-				`tell application "System Events"\n tell first application process whose unix id is ${pid}\n  key code 109 using {shift down}\n end tell\nend tell`,
-			],
+			['-e', `tell application "System Events"\n tell first application process whose unix id is ${pid}\n  key code 109 using {shift down}\n end tell\nend tell`],
 			{ timeout: 10_000 },
 			error => {
 				if (error) reject(error);
@@ -101,10 +83,7 @@ async function pressNotificationContextMenuKey(application: PlaywrightApplicatio
 }
 
 for (const input of ['mouse', 'ContextMenu', 'Shift+F10'] as const) {
-	test(`notification Copy Text via ${input} writes the message through the host clipboard and retains history`, async ({
-		application,
-		workbench,
-	}) => {
+	test(`notification Copy Text via ${input} writes the message through the host clipboard and retains history`, async ({ application, workbench }) => {
 		const page = workbench.page;
 		const clipboard = await notificationClipboard(application, page);
 		await workbench.quickaccess.runCommand('notifications.clearAll');
@@ -125,69 +104,58 @@ for (const input of ['mouse', 'ContextMenu', 'Shift+F10'] as const) {
 	});
 }
 
-test(
-	'notification Copy Text reports the real browser clipboard permission rejection once',
-	{ tag: ['@browser-ui', '@browser-app-server'] },
-	async ({ target, application, workbench }, testInfo) => {
-		const page = workbench.page;
-		await notificationClipboard(application, page);
-		const session = await page.context().newCDPSession(page);
-		const { targetInfo } = await session.send('Target.getTargetInfo');
-		const browserContextId = targetInfo.browserContextId;
-		assert.ok(browserContextId);
+test('notification Copy Text reports the real browser clipboard permission rejection once', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ target, application, workbench }, testInfo) => {
+	const page = workbench.page;
+	await notificationClipboard(application, page);
+	const session = await page.context().newCDPSession(page);
+	const { targetInfo } = await session.send('Target.getTargetInfo');
+	const browserContextId = targetInfo.browserContextId;
+	assert.ok(browserContextId);
+	try {
+		await page.context().clearPermissions();
+		// Browser-domain permission commands need the page's isolated context. Deny
+		// both clipboard variants rather than retain the marker's read/write grant.
+		for (const allowWithoutSanitization of [false, true]) {
+			await session.send('Browser.setPermission', {
+				browserContextId,
+				permission: { name: 'clipboard-write', allowWithoutSanitization },
+				setting: 'denied',
+				origin: new URL(page.url()).origin,
+			});
+		}
+		const permission = await page.evaluate(async () => (await navigator.permissions.query({ name: 'clipboard-write' as PermissionName })).state);
+		expect(permission).toBe('denied');
+		await workbench.quickaccess.runCommand('notifications.clearAll');
+		await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
+		await workbench.quickaccess.runCommand('notifications.showList');
+		const center = page.locator('.ash-notifications-center');
+		const id = await center.locator('[data-notification-id]').first().getAttribute('data-notification-id');
+		const row = center.locator(`[data-notification-id="${id}"]`);
+		await row.focus();
+		await row.press('Shift+F10');
+		await page.getByRole('menuitem', { name: 'Copy Text', exact: true }).click();
+		await expect(center.locator('[data-notification-id]')).toHaveCount(2);
+		await expect(center.locator('.ash-notification-message').filter({ hasText: /denied|not allowed|permissions/i })).toHaveCount(1);
+		await expect(row.getByRole('button', { name: 'Always Enable', exact: true })).toBeVisible();
+		await testInfo.attach('notification-clipboard-permission', {
+			body: JSON.stringify({
+				browserContextId,
+				permission,
+				messages: await center.locator('.ash-notification-message').allTextContents(),
+			}),
+			contentType: 'application/json',
+		});
+	} finally {
 		try {
 			await page.context().clearPermissions();
-			// Browser-domain permission commands need the page's isolated context. Deny
-			// both clipboard variants rather than retain the marker's read/write grant.
-			for (const allowWithoutSanitization of [false, true]) {
-				await session.send('Browser.setPermission', {
-					browserContextId,
-					permission: { name: 'clipboard-write', allowWithoutSanitization },
-					setting: 'denied',
-					origin: new URL(page.url()).origin,
-				});
-			}
-			const permission = await page.evaluate(
-				async () => (await navigator.permissions.query({ name: 'clipboard-write' as PermissionName })).state,
-			);
-			expect(permission).toBe('denied');
-			await workbench.quickaccess.runCommand('notifications.clearAll');
-			await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
-			await workbench.quickaccess.runCommand('notifications.showList');
-			const center = page.locator('.ash-notifications-center');
-			const id = await center.locator('[data-notification-id]').first().getAttribute('data-notification-id');
-			const row = center.locator(`[data-notification-id="${id}"]`);
-			await row.focus();
-			await row.press('Shift+F10');
-			await page.getByRole('menuitem', { name: 'Copy Text', exact: true }).click();
-			await expect(center.locator('[data-notification-id]')).toHaveCount(2);
-			await expect(
-				center.locator('.ash-notification-message').filter({ hasText: /denied|not allowed|permissions/i }),
-			).toHaveCount(1);
-			await expect(row.getByRole('button', { name: 'Always Enable', exact: true })).toBeVisible();
-			await testInfo.attach('notification-clipboard-permission', {
-				body: JSON.stringify({
-					browserContextId,
-					permission,
-					messages: await center.locator('.ash-notification-message').allTextContents(),
-				}),
-				contentType: 'application/json',
-			});
+			await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 		} finally {
-			try {
-				await page.context().clearPermissions();
-				await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
-			} finally {
-				await session.detach();
-			}
+			await session.detach();
 		}
-	},
-);
+	}
+});
 
-test('notification Copy Text copies a real backend action error without its controls', async ({
-	application,
-	workbench,
-}) => {
+test('notification Copy Text copies a real backend action error without its controls', async ({ application, workbench }) => {
 	const page = workbench.page;
 	const clipboard = await notificationClipboard(application, page);
 	await workbench.quickaccess.runCommand('notifications.clearAll');
@@ -197,9 +165,7 @@ test('notification Copy Text copies a real backend action error without its cont
 	try {
 		const center = page.locator('.ash-notifications-center');
 		await center.getByRole('button', { name: 'Always Enable', exact: true }).click();
-		const row = center
-			.locator('[data-notification-id]')
-			.filter({ has: page.locator('.ash-notification-message').filter({ hasText: failure.message }) });
+		const row = center.locator('[data-notification-id]').filter({ has: page.locator('.ash-notification-message').filter({ hasText: failure.message }) });
 		await expect(row).toHaveCount(1);
 		const message = await row.locator('.ash-notification-message').textContent();
 		await workbench.menus.select(application, async () => {
@@ -218,10 +184,7 @@ test('notification Copy Text copies a real backend action error without its cont
 	}
 });
 
-test('notification Copy Text menu Escape restores the row before center Escape restores its origin', async ({
-	application,
-	workbench,
-}) => {
+test('notification Copy Text menu Escape restores the row before center Escape restores its origin', async ({ application, workbench }) => {
 	const page = workbench.page;
 	await useCustomNotificationMenu(application, workbench);
 	const clipboard = await notificationClipboard(application, page);
@@ -274,9 +237,7 @@ interface NotificationPopupProbe {
 	restore(): void;
 }
 
-async function notificationPopupProbe(
-	application: PlaywrightApplication,
-): Promise<{ read(): Promise<Pick<NotificationPopupProbe, 'evidence' | 'writes'>>; restore(): Promise<void> }> {
+async function notificationPopupProbe(application: PlaywrightApplication): Promise<{ read(): Promise<Pick<NotificationPopupProbe, 'evidence' | 'writes'>>; restore(): Promise<void> }> {
 	if (!('windows' in application)) throw new Error('Expected Electron windows');
 	await application.evaluate(({ Menu, clipboard, BrowserWindow }) => {
 		const state = globalThis as typeof globalThis & { ashNotificationPopupProbe?: NotificationPopupProbe };
@@ -374,17 +335,10 @@ async function notificationPopupProbe(
 	return {
 		read: () =>
 			application.evaluate(() => {
-				const { evidence, writes } = (
-					globalThis as typeof globalThis & { ashNotificationPopupProbe: NotificationPopupProbe }
-				).ashNotificationPopupProbe;
+				const { evidence, writes } = (globalThis as typeof globalThis & { ashNotificationPopupProbe: NotificationPopupProbe }).ashNotificationPopupProbe;
 				return { evidence, writes };
 			}),
-		restore: () =>
-			application.evaluate(() =>
-				(
-					globalThis as typeof globalThis & { ashNotificationPopupProbe: NotificationPopupProbe }
-				).ashNotificationPopupProbe.restore(),
-			),
+		restore: () => application.evaluate(() => (globalThis as typeof globalThis & { ashNotificationPopupProbe: NotificationPopupProbe }).ashNotificationPopupProbe.restore()),
 	};
 }
 
@@ -407,9 +361,7 @@ macFocusTest(
 			await focusNotificationWindow(application, page);
 			await row.focus();
 			await pressNotificationContextMenuKey(application, row);
-			await expect
-				.poll(async () => (await probe.read()).evidence)
-				.toMatchObject([{ labels: ['Copy Text'], callback: false, closeCalls: 0 }]);
+			await expect.poll(async () => (await probe.read()).evidence).toMatchObject([{ labels: ['Copy Text'], callback: false, closeCalls: 0 }]);
 			const pid = application.process().pid;
 			assert.ok(Number.isSafeInteger(pid));
 			// Playwright's renderer key events do not drive the macOS popup. Send real
@@ -417,10 +369,7 @@ macFocusTest(
 			await new Promise<void>((resolve, reject) =>
 				execFile(
 					'osascript',
-					[
-						'-e',
-						`tell application "System Events"\n tell first application process whose unix id is ${pid}\n  set frontmost to true\n  key code 125\n  key code 36\n end tell\nend tell`,
-					],
+					['-e', `tell application "System Events"\n tell first application process whose unix id is ${pid}\n  set frontmost to true\n  key code 125\n  key code 36\n end tell\nend tell`],
 					{ timeout: 10_000 },
 					error => {
 						if (error) reject(error);
@@ -472,15 +421,9 @@ for (const waitForShow of [false, true]) {
 				await expect.poll(async () => (await evidence()).length).toBe(1);
 				// DOM click starts the real producer while the OS popup remains open. Its actual
 				// failed persistence adds a record, replaces the anchor, and cancels this request.
-				await row
-					.getByRole('button', { name: 'Always Enable', exact: true })
-					.evaluate(button => (button as HTMLButtonElement).click());
-				await expect(
-					center.locator('.ash-notification-message').filter({ hasText: failure.message }),
-				).toHaveCount(1);
-				await expect
-					.poll(async () => (await evidence())[0])
-					.toMatchObject({ labels: ['Copy Text'], callback: true, closeCalls: 1 });
+				await row.getByRole('button', { name: 'Always Enable', exact: true }).evaluate(button => (button as HTMLButtonElement).click());
+				await expect(center.locator('.ash-notification-message').filter({ hasText: failure.message })).toHaveCount(1);
+				await expect.poll(async () => (await evidence())[0]).toMatchObject({ labels: ['Copy Text'], callback: true, closeCalls: 1 });
 				const nextRow = center.locator('[data-notification-id]').first();
 				// Confirm ownership stayed with this window without reactivating the app between popups.
 				await waitForElectronWindowState(application, page, { focused: true });
@@ -488,12 +431,8 @@ for (const waitForShow of [false, true]) {
 				await pressNotificationContextMenuKey(application, nextRow);
 				await expect.poll(async () => (await evidence()).length).toBe(2);
 				if (waitForShow) await expect.poll(async () => Boolean((await evidence())[1].showOrder)).toBe(true);
-				await center
-					.getByRole('button', { name: 'Clear All', exact: true })
-					.evaluate(button => (button as HTMLButtonElement).click());
-				await expect
-					.poll(async () => (await evidence())[1])
-					.toMatchObject({ labels: ['Copy Text'], callback: true, closeCalls: 1 });
+				await center.getByRole('button', { name: 'Clear All', exact: true }).evaluate(button => (button as HTMLButtonElement).click());
+				await expect.poll(async () => (await evidence())[1]).toMatchObject({ labels: ['Copy Text'], callback: true, closeCalls: 1 });
 				const records = await evidence();
 				for (const record of records) expect(record.closeRequestOrder).toBeLessThan(record.callbackOrder!);
 				expect(records[0].callbackOrder).toBeLessThan(records[1].popupOrder);
@@ -521,40 +460,34 @@ for (const waitForShow of [false, true]) {
 	);
 }
 
-test(
-	'notification copy menu cancellation preserves a genuine DialogService modal focus',
-	{ tag: ['@browser-app-server', '@electron-app-server'] },
-	async ({ target, application, workbench }) => {
-		const page = workbench.page;
-		await useCustomNotificationMenu(application, workbench);
-		expect(await workbench.menus.isSystemMenu(application)).toBe(false);
-		await workbench.quickaccess.runCommand('notifications.clearAll');
-		await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
-		await workbench.quickaccess.runCommand('notifications.showList');
-		const row = page.locator('.ash-notifications-center [data-notification-id]');
-		await row.focus();
-		await row.press('Shift+F10');
-		await expect(page.getByRole('menuitem', { name: 'Copy Text', exact: true })).toBeVisible();
-		await workbench.quickaccess.open('>ash.extensions.installLocal');
-		const command = workbench.quickaccess.items.filter({
-			has: page
-				.locator('.ash-quick-pick-row-description')
-				.getByText('ash.extensions.installLocal', { exact: true }),
-		});
-		// Invoke the real command without an outside pointer event dismissing the menu first.
-		await command.evaluate(option => (option as HTMLElement).click());
-		const dialog = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
-		await expect(dialog).toBeVisible();
-		expect(await dialog.evaluate(element => element.matches(':modal'))).toBe(true);
-		await expect(dialog.getByRole('textbox')).toBeFocused();
-		await expect(page.getByRole('menu')).toHaveCount(1);
-		await page.locator('.ash-notifications-clear').evaluate(button => (button as HTMLButtonElement).click());
-		await expect(page.getByRole('menu')).toHaveCount(0);
-		await expect(dialog.getByRole('textbox')).toBeFocused();
-		await page.keyboard.press('Escape');
-		await expect(dialog).toBeHidden();
-	},
-);
+test('notification copy menu cancellation preserves a genuine DialogService modal focus', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench }) => {
+	const page = workbench.page;
+	await useCustomNotificationMenu(application, workbench);
+	expect(await workbench.menus.isSystemMenu(application)).toBe(false);
+	await workbench.quickaccess.runCommand('notifications.clearAll');
+	await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
+	await workbench.quickaccess.runCommand('notifications.showList');
+	const row = page.locator('.ash-notifications-center [data-notification-id]');
+	await row.focus();
+	await row.press('Shift+F10');
+	await expect(page.getByRole('menuitem', { name: 'Copy Text', exact: true })).toBeVisible();
+	await workbench.quickaccess.open('>ash.extensions.installLocal');
+	const command = workbench.quickaccess.items.filter({
+		has: page.locator('.ash-quick-pick-row-description').getByText('ash.extensions.installLocal', { exact: true }),
+	});
+	// Invoke the real command without an outside pointer event dismissing the menu first.
+	await command.evaluate(option => (option as HTMLElement).click());
+	const dialog = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
+	await expect(dialog).toBeVisible();
+	expect(await dialog.evaluate(element => element.matches(':modal'))).toBe(true);
+	await expect(dialog.getByRole('textbox')).toBeFocused();
+	await expect(page.getByRole('menu')).toHaveCount(1);
+	await page.locator('.ash-notifications-clear').evaluate(button => (button as HTMLButtonElement).click());
+	await expect(page.getByRole('menu')).toHaveCount(0);
+	await expect(dialog.getByRole('textbox')).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(dialog).toBeHidden();
+});
 
 test(
 	'Sessions startup notification copies through its window clipboard after real keybindings read failure',
@@ -566,11 +499,7 @@ test(
 			userData: app.getPath('userData'),
 		}));
 		assert.ok(paths.profile);
-		const [profile, userData, temporaryRoot] = await Promise.all([
-			realpath(paths.profile),
-			realpath(paths.userData),
-			realpath(tmpdir()),
-		]);
+		const [profile, userData, temporaryRoot] = await Promise.all([realpath(paths.profile), realpath(paths.userData), realpath(tmpdir())]);
 		assert.equal(relative(userData, profile), 'profile');
 		assert.equal(relative(temporaryRoot, userData), basename(userData));
 		assert.ok(basename(userData).startsWith('ash-'));
@@ -584,9 +513,7 @@ test(
 			const page = await workbench.openAgentsWindow(target.kind);
 			const clipboard = await notificationClipboard(application, page);
 			await page.getByRole('button', { name: 'Show Notification Center', exact: true }).click();
-			const row = page
-				.locator('.ash-notifications-center [data-notification-id]')
-				.filter({ hasText: 'Could not load keybindings.json' });
+			const row = page.locator('.ash-notifications-center [data-notification-id]').filter({ hasText: 'Could not load keybindings.json' });
 			await expect(row).toHaveCount(1);
 			const message = await row.locator('.ash-notification-message').textContent();
 			await new Menus(page).select(application, async () => {
@@ -602,11 +529,7 @@ test(
 	},
 );
 
-test('notification toast Escape, Copy Text, help, and removal use the Chinese labels and retained history', async ({
-	workbench,
-	application,
-	restartWorkbench,
-}) => {
+test('notification toast Escape, Copy Text, help, and removal use the Chinese labels and retained history', async ({ workbench, application, restartWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language', exact: true });
 	await picker.getByRole('combobox').fill('简体中文');
@@ -638,12 +561,8 @@ test('notification toast Escape, Copy Text, help, and removal use the Chinese la
 	await expect(row).toBeVisible();
 	await workbench.quickaccess.runCommand('editor.action.accessibilityHelp');
 	const help = page.getByRole('dialog', { name: '无障碍帮助', exact: true });
-	await expect(help.getByRole('textbox')).toHaveValue(
-		/通知弹出提示或其中的操作获得焦点时，按 Escape 可收起弹出提示并保留通知历史。/,
-	);
-	await expect(help.getByRole('textbox')).toHaveValue(
-		/按菜单键或 Shift\+F10，然后选择复制文本，可复制通知消息。按 Escape 可关闭菜单并返回通知。/,
-	);
+	await expect(help.getByRole('textbox')).toHaveValue(/通知弹出提示或其中的操作获得焦点时，按 Escape 可收起弹出提示并保留通知历史。/);
+	await expect(help.getByRole('textbox')).toHaveValue(/按菜单键或 Shift\+F10，然后选择复制文本，可复制通知消息。按 Escape 可关闭菜单并返回通知。/);
 	await page.keyboard.press('Escape');
 	await expect(center).toBeVisible();
 	await center.getByRole('button', { name: '移除通知', exact: true }).click();
@@ -652,11 +571,7 @@ test('notification toast Escape, Copy Text, help, and removal use the Chinese la
 });
 
 for (const useCenter of [false, true]) {
-	test(`notification ${useCenter ? 'center' : 'toast'} action failure reports the real settings write error`, async ({
-		workbench,
-		application,
-		driver,
-	}, testInfo) => {
+	test(`notification ${useCenter ? 'center' : 'toast'} action failure reports the real settings write error`, async ({ workbench, application, driver }, testInfo) => {
 		const page = workbench.page;
 		await workbench.quickaccess.runCommand('notifications.clearAll');
 		await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
@@ -673,8 +588,7 @@ for (const useCenter of [false, true]) {
 			await expect
 				.poll(
 					async () =>
-						(await errors.allTextContents()).some(message => message.includes(failure.message)) ||
-						driver.diagnostics.consoleErrors.some(message => message.includes(failure.message)),
+						(await errors.allTextContents()).some(message => message.includes(failure.message)) || driver.diagnostics.consoleErrors.some(message => message.includes(failure.message)),
 				)
 				.toBe(true);
 			await failure.assertUnchanged();
@@ -703,10 +617,7 @@ for (const useCenter of [false, true]) {
 	});
 }
 
-async function blockConfigurationWrite(
-	page: Page,
-	application: PlaywrightApplication,
-): Promise<{ message: string; assertUnchanged(): Promise<void>; dispose(): Promise<void> }> {
+async function blockConfigurationWrite(page: Page, application: PlaywrightApplication): Promise<{ message: string; assertUnchanged(): Promise<void>; dispose(): Promise<void> }> {
 	const message = 'Injected settings file write failure';
 	const original = await readUserSettings(page);
 	if (!('windows' in application)) {
@@ -729,9 +640,7 @@ async function blockConfigurationWrite(
 				expect(await readUserSettings(page)).toEqual(original);
 			},
 			async dispose() {
-				await page.evaluate(() =>
-					(globalThis as typeof globalThis & { restoreSettingsWrite(): void }).restoreSettingsWrite(),
-				);
+				await page.evaluate(() => (globalThis as typeof globalThis & { restoreSettingsWrite(): void }).restoreSettingsWrite());
 			},
 		};
 	}
@@ -749,8 +658,7 @@ async function blockConfigurationWrite(
 				delete (state as Partial<typeof state>).restoreSettingsWrite;
 			};
 			files.default.writeFile = async (...args: Parameters<typeof write>) => {
-				if (typeof args[0] === 'string' && args[0].startsWith(settings + '.') && args[0].endsWith('.tmp'))
-					throw new Error(message);
+				if (typeof args[0] === 'string' && args[0].startsWith(settings + '.') && args[0].endsWith('.tmp')) throw new Error(message);
 				return write(...args);
 			};
 			syncBuiltinESMExports();
@@ -763,18 +671,12 @@ async function blockConfigurationWrite(
 			expect(await readUserSettings(page)).toEqual(original);
 		},
 		async dispose() {
-			await application.evaluate(() =>
-				(globalThis as typeof globalThis & { restoreSettingsWrite(): void }).restoreSettingsWrite(),
-			);
+			await application.evaluate(() => (globalThis as typeof globalThis & { restoreSettingsWrite(): void }).restoreSettingsWrite());
 		},
 	};
 }
 
-test('notification status shows unread and do not disturb icons and restores the filter after restart', async ({
-	application,
-	workbench,
-	reloadWorkbench,
-}, testInfo) => {
+test('notification status shows unread and do not disturb icons and restores the filter after restart', async ({ application, workbench, reloadWorkbench }, testInfo) => {
 	let page = workbench.page;
 	const bellSelector = '[data-statusbar-item-id="ash.status.notifications"] [role="button"]';
 	const startupGeometry = await page.locator(bellSelector).evaluate(element => {
@@ -784,11 +686,8 @@ test('notification status shows unread and do not disturb icons and restores the
 		return {
 			direction: getComputedStyle(part).flexDirection,
 			icon: element.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'),
-			stylesheets: [...document.styleSheets]
-				.map((sheet, index) => ({ href: sheet.href, index }))
-				.filter(sheet => /(?:statusbarpart|\/media\/part)\.css/.test(sheet.href ?? '')),
-			inside:
-				bell.top >= bar.top && bell.bottom <= bar.bottom && bell.left >= bar.left && bell.right <= bar.right,
+			stylesheets: [...document.styleSheets].map((sheet, index) => ({ href: sheet.href, index })).filter(sheet => /(?:statusbarpart|\/media\/part)\.css/.test(sheet.href ?? '')),
+			inside: bell.top >= bar.top && bell.bottom <= bar.bottom && bell.left >= bar.left && bell.right <= bar.right,
 			hit: element.contains(document.elementFromPoint(bell.x + bell.width / 2, bell.y + bell.height / 2)),
 		};
 	});
@@ -805,11 +704,7 @@ test('notification status shows unread and do not disturb icons and restores the
 	await page.locator(bellSelector).focus();
 	await page.keyboard.press('Enter');
 	await expect(page.locator(bellSelector).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell');
-	await workbench.menus.select(
-		application,
-		() => page.getByRole('button', { name: 'Configure Do Not Disturb...', exact: true }).click(),
-		['Enable Do Not Disturb Mode'],
-	);
+	await workbench.menus.select(application, () => page.getByRole('button', { name: 'Configure Do Not Disturb...', exact: true }).click(), ['Enable Do Not Disturb Mode']);
 	await expect(page.locator(bellSelector).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell-slash');
 	await page.keyboard.press('Escape');
 	await expect(page.locator(bellSelector)).toBeFocused();
@@ -826,11 +721,7 @@ test('notification status shows unread and do not disturb icons and restores the
 	await expect(page.locator(bellSelector).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell');
 });
 
-test('notification position menus move the entry between the status bar and title bar and persist after reload', async ({
-	application,
-	workbench,
-	reloadWorkbench,
-}, testInfo) => {
+test('notification position menus move the entry between the status bar and title bar and persist after reload', async ({ application, workbench, reloadWorkbench }, testInfo) => {
 	let page = workbench.page;
 	const bell = '[data-statusbar-item-id="ash.status.notifications"] [role="button"]';
 	await workbench.quickaccess.runCommand('notifications.clearAll');
@@ -867,36 +758,31 @@ test('notification position menus move the entry between the status bar and titl
 	await expect(titleBell()).toHaveCount(0);
 });
 
-macFocusTest(
-	'notification ordinary toast expires into unread history in the real Workbench',
-	async ({ application, workbench }, testInfo) => {
-		const page = workbench.page;
-		if ('windows' in application) await focusNotificationWindow(application, page);
-		else await page.bringToFront();
-		await workbench.quickaccess.runCommand('notifications.clearAll');
-		await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
-		const toast = page.locator('.ash-notification');
-		await expect(toast).toBeVisible();
-		const id = await toast.getAttribute('data-notification-id');
-		const message = await toast.locator('.ash-notification-message').textContent();
-		const bell = page.locator('[data-statusbar-item-id="ash.status.notifications"] [role="button"]');
-		await page.mouse.move(0, 0);
-		await bell.focus();
-		await testInfo.attach('ordinary-toast-before-timeout', {
-			body: await page.screenshot(),
-			contentType: 'image/png',
-		});
-		await expect(toast).toHaveCount(0, { timeout: 16000 });
-		await expect(bell).toBeFocused();
-		await expect(bell.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell-dot');
-		await bell.click();
-		await expect(
-			page.locator(`.ash-notifications-row[data-notification-id="${id}"] .ash-notification-message`),
-		).toHaveText(message!);
-		await expect(bell.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell');
-		await testInfo.attach('ordinary-toast-retained-history', {
-			body: await page.screenshot(),
-			contentType: 'image/png',
-		});
-	},
-);
+macFocusTest('notification ordinary toast expires into unread history in the real Workbench', async ({ application, workbench }, testInfo) => {
+	const page = workbench.page;
+	if ('windows' in application) await focusNotificationWindow(application, page);
+	else await page.bringToFront();
+	await workbench.quickaccess.runCommand('notifications.clearAll');
+	await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
+	const toast = page.locator('.ash-notification');
+	await expect(toast).toBeVisible();
+	const id = await toast.getAttribute('data-notification-id');
+	const message = await toast.locator('.ash-notification-message').textContent();
+	const bell = page.locator('[data-statusbar-item-id="ash.status.notifications"] [role="button"]');
+	await page.mouse.move(0, 0);
+	await bell.focus();
+	await testInfo.attach('ordinary-toast-before-timeout', {
+		body: await page.screenshot(),
+		contentType: 'image/png',
+	});
+	await expect(toast).toHaveCount(0, { timeout: 16000 });
+	await expect(bell).toBeFocused();
+	await expect(bell.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell-dot');
+	await bell.click();
+	await expect(page.locator(`.ash-notifications-row[data-notification-id="${id}"] .ash-notification-message`)).toHaveText(message!);
+	await expect(bell.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell');
+	await testInfo.attach('ordinary-toast-retained-history', {
+		body: await page.screenshot(),
+		contentType: 'image/png',
+	});
+});

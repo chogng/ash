@@ -71,9 +71,7 @@ test('browser group selection uses available built-in names without disabling a 
 		const item = picker.items.find(item => 'label' in item && item.label === label) as IQuickPickItem;
 		assert.ok(item);
 		picker.activeItems = [item];
-		document.activeElement!.dispatchEvent(
-			new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
-		);
+		document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 	};
 	choose('Browser tools');
 	choose('Apply tool selection');

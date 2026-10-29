@@ -22,11 +22,7 @@ export class OutlineService extends Disposable implements IOutlineService {
 		return [...this.creators].some(creator => creator.matches(editor));
 	}
 
-	public async createOutline(
-		editor: IEditorPane,
-		target: OutlineTarget,
-		token: CancellationToken,
-	): Promise<IOutline<any> | undefined> {
+	public async createOutline(editor: IEditorPane, target: OutlineTarget, token: CancellationToken): Promise<IOutline<any> | undefined> {
 		this.assertNotDisposed();
 		throwIfCancelled(token);
 		const creator = [...this.creators].find(candidate => candidate.matches(editor));

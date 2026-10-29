@@ -40,13 +40,7 @@ suite('Embedder terminal creation', () => {
 		);
 		store.add(first.services.createInstance(TerminalMainContribution));
 		await waitFor(() => firstHost.opens === 1);
-		assert.deepEqual(
-			[
-				first.terminals.instances.map(instance => instance.title),
-				second.terminals.instances.map(instance => instance.title),
-			],
-			[['First window'], ['Second window']],
-		);
+		assert.deepEqual([first.terminals.instances.map(instance => instance.title), second.terminals.instances.map(instance => instance.title)], [['First window'], ['Second window']]);
 	});
 
 	test('a view subscribing after open receives synchronous output and exit', async () => {
@@ -112,10 +106,7 @@ suite('Embedder terminal creation', () => {
 			},
 		);
 		await instance.close();
-		assert.deepEqual(
-			{ remaining: terminals.instances.length, opens: host.opens, closes: host.closes },
-			{ remaining: 0, opens: 1, closes: 0 },
-		);
+		assert.deepEqual({ remaining: terminals.instances.length, opens: host.opens, closes: host.closes }, { remaining: 0, opens: 1, closes: 0 });
 	});
 
 	test('running host output is independent of the backend and keeps changed titles', async () => {
@@ -149,10 +140,7 @@ suite('Embedder terminal creation', () => {
 		const queued = store.add(new HostPty());
 		services.get(IEmbedderTerminalService).createTerminal({ name: 'Queued', pty: queued });
 		owner.dispose();
-		assert.deepEqual(
-			{ opens: queued.opens, closes: queued.closes, instances: terminals.instances.length },
-			{ opens: 0, closes: 1, instances: 0 },
-		);
+		assert.deepEqual({ opens: queued.opens, closes: queued.closes, instances: terminals.instances.length }, { opens: 0, closes: 1, instances: 0 });
 
 		const runningOwner = store.add(new DisposableStore());
 		const running = createServices(runningOwner);
@@ -161,10 +149,7 @@ suite('Embedder terminal creation', () => {
 		running.services.get(IEmbedderTerminalService).createTerminal({ name: 'Running', pty: active });
 		await waitFor(() => active.opens === 1);
 		runningOwner.dispose();
-		assert.deepEqual(
-			{ opens: active.opens, closes: active.closes, instances: running.terminals.instances.length },
-			{ opens: 1, closes: 1, instances: 0 },
-		);
+		assert.deepEqual({ opens: active.opens, closes: active.closes, instances: running.terminals.instances.length }, { opens: 1, closes: 1, instances: 0 });
 	});
 
 	test('window disposal before asynchronous publication releases an unopened host PTY', async () => {
@@ -176,10 +161,7 @@ suite('Embedder terminal creation', () => {
 		services.get(IEmbedderTerminalService).createTerminal({ name: 'Pending', pty: host });
 		owner.dispose();
 		await waitFor(() => host.closes === 1);
-		assert.deepEqual(
-			{ opens: host.opens, closes: host.closes, instances: terminals.instances.length },
-			{ opens: 0, closes: 1, instances: 0 },
-		);
+		assert.deepEqual({ opens: host.opens, closes: host.closes, instances: terminals.instances.length }, { opens: 0, closes: 1, instances: 0 });
 	});
 
 	test('closing during instance publication releases the PTY before it opens', async () => {
@@ -198,10 +180,7 @@ suite('Embedder terminal creation', () => {
 		);
 		services.get(IEmbedderTerminalService).createTerminal({ name: 'Closed', pty: host });
 		await assert.rejects(terminals.createTerminal(config), { name: 'CancellationError' });
-		assert.deepEqual(
-			{ opens: host.opens, closes: host.closes, instances: terminals.instances.length },
-			{ opens: 0, closes: 1, instances: 0 },
-		);
+		assert.deepEqual({ opens: host.opens, closes: host.closes, instances: terminals.instances.length }, { opens: 0, closes: 1, instances: 0 });
 	});
 
 	test('relaunch opens a new host process without requesting a backend shell', async () => {
@@ -223,7 +202,13 @@ suite('Embedder terminal creation', () => {
 				exitCode: instance.exitCode,
 				opens: host.opens,
 			},
-			{ instances: 1, title: 'Restarted', state: 'running', exitCode: undefined, opens: 2 },
+			{
+				instances: 1,
+				title: 'Restarted',
+				state: 'running',
+				exitCode: undefined,
+				opens: 2,
+			},
 		);
 		await instance.close();
 		assert.equal(host.closes, 1);

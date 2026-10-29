@@ -59,8 +59,7 @@ export namespace TunnelStates {
 	}
 }
 
-export type TunnelStatus =
-	TunnelStates.Uninitialized | TunnelStates.Connecting | TunnelStates.Connected | TunnelStates.Disconnected;
+export type TunnelStatus = TunnelStates.Uninitialized | TunnelStates.Connecting | TunnelStates.Connected | TunnelStates.Disconnected;
 export const IRemoteTunnelService = createDecorator<IRemoteTunnelService>('IRemoteTunnelService');
 
 /** Application-scoped inbound access. Port forwarding belongs to ITunnelService. */

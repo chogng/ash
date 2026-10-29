@@ -71,13 +71,7 @@ export class AppServerSocketTransport extends Disposable implements AppServerTra
 			this.disconnect();
 			return;
 		}
-		if (
-			event !== WEB_APP_SERVER_FRAME_EVENT ||
-			!this.socket ||
-			!isRecord(payload) ||
-			typeof payload.frame !== 'string' ||
-			/[\r\n]/.test(payload.frame)
-		) {
+		if (event !== WEB_APP_SERVER_FRAME_EVENT || !this.socket || !isRecord(payload) || typeof payload.frame !== 'string' || /[\r\n]/.test(payload.frame)) {
 			throw new Error('Invalid App Server transport frame');
 		}
 		this.socket.write(VSBuffer.fromString(`${payload.frame}${this.messageFraming ? '' : '\n'}`));
@@ -95,16 +89,8 @@ export class AppServerSocketTransport extends Disposable implements AppServerTra
 				return;
 			}
 			const isWebSocket = address.connectTo.type === RemoteConnectionType.WebSocket;
-			const query =
-				isWebSocket && address.connectionToken
-					? `connectionToken=${encodeURIComponent(address.connectionToken)}`
-					: '';
-			const socket = await this.factories.connect(
-				address.connectTo,
-				isWebSocket ? '/ash/app-server' : '',
-				query,
-				'ash-app-server',
-			);
+			const query = isWebSocket && address.connectionToken ? `connectionToken=${encodeURIComponent(address.connectionToken)}` : '';
+			const socket = await this.factories.connect(address.connectTo, isWebSocket ? '/ash/app-server' : '', query, 'ash-app-server');
 			if (this.isDisposed || revision !== this.revision) {
 				socket.dispose();
 				return;

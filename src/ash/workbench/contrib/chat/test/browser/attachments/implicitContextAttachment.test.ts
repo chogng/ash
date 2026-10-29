@@ -20,10 +20,7 @@ import { IWorkingCopyService } from '../../../../../services/workingCopy/common/
 import { emptyEditorServiceState } from '../../../../../test/common/testEditorService.js';
 import { ChatAttachmentModel } from '../../../browser/attachments/chatAttachmentModel.js';
 import { ImplicitContextAttachmentWidget } from '../../../browser/attachments/implicitContextAttachment.js';
-import {
-	ChatAttachmentResolveService,
-	IChatAttachmentResolveService,
-} from '../../../browser/attachments/chatAttachmentResolveService.js';
+import { ChatAttachmentResolveService, IChatAttachmentResolveService } from '../../../browser/attachments/chatAttachmentResolveService.js';
 
 setARIAContainer(document.body);
 
@@ -52,17 +49,13 @@ function setup(resources: DisposableStore, read: (resource: URI) => Promise<stri
 	} as unknown as IWorkingCopyService);
 	services.registerInstance(IWorkspaceContextService, {} as IWorkspaceContextService);
 	services.registerInstance(IFileSearchService, {} as IFileSearchService);
-	services.registerSingleton(IChatAttachmentResolveService, () =>
-		services.createInstance(ChatAttachmentResolveService),
-	);
+	services.registerSingleton(IChatAttachmentResolveService, () => services.createInstance(ChatAttachmentResolveService));
 	const notifications = resources.add(new TestNotificationService());
 	services.registerInstance(INotificationService, notifications);
 	const attachments = resources.add(new ChatAttachmentModel());
 	const input = document.createElement('textarea');
 	host.append(input);
-	const widget = resources.add(
-		services.createInstance(ImplicitContextAttachmentWidget, host, attachments, () => input.focus()),
-	);
+	const widget = resources.add(services.createInstance(ImplicitContextAttachmentWidget, host, attachments, () => input.focus()));
 	return {
 		widget,
 		attachments,
@@ -161,9 +154,7 @@ test('An unreadable suggested file reports failure and leaves the draft and sugg
 	const { widget, attachments, notifications } = setup(resources, async () => {
 		throw new Error('File unavailable');
 	});
-	const failed = new Promise<string>(resolve =>
-		resources.add(notifications.model.onDidAdd(item => resolve(item.message))),
-	);
+	const failed = new Promise<string>(resolve => resources.add(notifications.model.onDidAdd(item => resolve(item.message))));
 	widget.domNode.querySelector('button')!.click();
 	assert.match(await failed, /File unavailable/);
 	assert.equal(attachments.size, 0);
@@ -201,12 +192,7 @@ test('SCM diff suggestions attach the modified snapshot instead of the synthetic
 		contentType: 'application/octet-stream',
 	});
 	assert.equal(widget.domNode.hidden, true);
-	activateInput(
-		createBinaryDiffEditorInput(
-			{ resource: URI.file('/workspace/before.bin') },
-			{ resource: URI.file('/workspace/after.bin') },
-		),
-	);
+	activateInput(createBinaryDiffEditorInput({ resource: URI.file('/workspace/before.bin') }, { resource: URI.file('/workspace/after.bin') }));
 	assert.equal(widget.domNode.hidden, true);
 });
 
@@ -219,12 +205,7 @@ test('A file diff suggestion uses its modified working copy rather than the comp
 		},
 		'Unsaved modified text',
 	);
-	activateInput(
-		createDiffEditorInput(
-			{ resource: URI.file('/workspace/before.ts') },
-			{ resource: URI.file('/workspace/after.ts') },
-		),
-	);
+	activateInput(createDiffEditorInput({ resource: URI.file('/workspace/before.ts') }, { resource: URI.file('/workspace/after.ts') }));
 	assert.equal(widget.domNode.textContent, 'after.ts');
 	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(() => resolve())));
 	widget.domNode.querySelector('button')!.click();

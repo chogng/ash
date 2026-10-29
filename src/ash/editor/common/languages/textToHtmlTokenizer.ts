@@ -1,15 +1,7 @@
 import type { IViewLineTokens } from '../tokens/lineTokens.js';
 
 /** Serializes one selected line fragment; regular whitespace preserves source tabs. */
-export function tokenizeLineToHTML(
-	text: string,
-	viewLineTokens: IViewLineTokens,
-	colorMap: string[],
-	startOffset: number,
-	endOffset: number,
-	tabSize: number,
-	useNbsp: boolean,
-): string {
+export function tokenizeLineToHTML(text: string, viewLineTokens: IViewLineTokens, colorMap: string[], startOffset: number, endOffset: number, tabSize: number, useNbsp: boolean): string {
 	const fragments: string[] = [];
 	let column = 0;
 	if (useNbsp) {
@@ -39,10 +31,5 @@ export function tokenizeLineToHTML(
 }
 
 function escapeHtml(value: string): string {
-	return value
-		.replaceAll('&', '&amp;')
-		.replaceAll('<', '&lt;')
-		.replaceAll('>', '&gt;')
-		.replaceAll('"', '&quot;')
-		.replaceAll("'", '&#39;');
+	return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 }

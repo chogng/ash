@@ -127,14 +127,8 @@ suite('notifications browser component', () => {
 					direction: getComputedStyle(bar).flexDirection,
 					bar: bounds.toJSON(),
 					bell: target.toJSON(),
-					inside:
-						target.left >= bounds.left &&
-						target.right <= bounds.right &&
-						target.top >= bounds.top &&
-						target.bottom <= bounds.bottom,
-					hit: element.contains(
-						document.elementFromPoint(target.x + target.width / 2, target.y + target.height / 2),
-					),
+					inside: target.left >= bounds.left && target.right <= bounds.right && target.top >= bounds.top && target.bottom <= bounds.bottom,
+					hit: element.contains(document.elementFromPoint(target.x + target.width / 2, target.y + target.height / 2)),
 				};
 			});
 			await testInfo.attach('startup-statusbar-geometry', {
@@ -154,9 +148,7 @@ suite('notifications browser component', () => {
 	test('duplicate bursts produce one toast and retain only the replacement in history', async function () {
 		const { page } = browserTests;
 		await page.goto('/notifications.html');
-		const ids = await page.evaluate(() =>
-			Array.from({ length: 15 }, () => window.ashNotificationsIntegration.notifyOptions('Repeated notification')),
-		);
+		const ids = await page.evaluate(() => Array.from({ length: 15 }, () => window.ashNotificationsIntegration.notifyOptions('Repeated notification')));
 		await expect(page.locator('.ash-notification')).toHaveCount(1);
 		expect(await page.evaluate(() => window.ashNotificationsIntegration.history())).toEqual([ids.at(-1)]);
 		await page.evaluate(() => window.ashNotificationsIntegration.show());
@@ -168,52 +160,31 @@ suite('notifications browser component', () => {
 		const { page } = browserTests;
 		for (const language of ['', '?zh']) {
 			await page.goto(`/notifications.html${language}`);
-			await page.evaluate(() =>
-				window.ashNotificationsIntegration.notifyOptions('Long notification message '.repeat(30)),
-			);
+			await page.evaluate(() => window.ashNotificationsIntegration.notifyOptions('Long notification message '.repeat(30)));
 			const toast = page.locator('.ash-notification');
 			const expandLabel = language ? '展开通知' : 'Expand Notification';
 			const collapseLabel = language ? '收起通知' : 'Collapse Notification';
 			await expect(toast.locator('.ash-notification-message')).toHaveCSS('white-space', 'nowrap');
 			await toast.getByRole('button', { name: expandLabel, exact: true }).click();
-			await expect(toast.getByRole('button', { name: collapseLabel, exact: true })).toHaveAttribute(
-				'aria-expanded',
-				'true',
-			);
+			await expect(toast.getByRole('button', { name: collapseLabel, exact: true })).toHaveAttribute('aria-expanded', 'true');
 			await expect(toast.locator('.ash-notification-message')).toHaveCSS('white-space', 'pre-wrap');
 			await page.evaluate(() => window.ashNotificationsIntegration.show());
 			const row = page.locator('.ash-notifications-row');
 			await expect(row).toBeFocused();
-			await expect(row.getByRole('button', { name: collapseLabel, exact: true })).toHaveAttribute(
-				'aria-expanded',
-				'true',
-			);
+			await expect(row.getByRole('button', { name: collapseLabel, exact: true })).toHaveAttribute('aria-expanded', 'true');
 			await page.keyboard.press('ArrowLeft');
-			await expect(row.getByRole('button', { name: expandLabel, exact: true })).toHaveAttribute(
-				'aria-expanded',
-				'false',
-			);
+			await expect(row.getByRole('button', { name: expandLabel, exact: true })).toHaveAttribute('aria-expanded', 'false');
 			await page.keyboard.press('Enter');
 			await expect(row).toHaveClass(/expanded/);
 			await page.keyboard.press('Space');
 			await expect(row).not.toHaveClass(/expanded/);
-			await page.evaluate(() =>
-				window.ashNotificationsIntegration.setPosition(
-					'top-right' as import('../../common/notifications.js').NotificationsPosition,
-				),
-			);
+			await page.evaluate(() => window.ashNotificationsIntegration.setPosition('top-right' as import('../../common/notifications.js').NotificationsPosition));
 			const hide = page.locator('.ash-notifications-hide .ash-icon');
 			await expect(hide).toHaveAttribute('data-ash-icon-id', 'chevron-up');
-			await expect(
-				row.getByRole('button', { name: expandLabel, exact: true }).locator('.ash-icon'),
-			).toHaveAttribute('data-ash-icon-id', 'chevron-down');
+			await expect(row.getByRole('button', { name: expandLabel, exact: true }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'chevron-down');
 			await row.getByRole('button', { name: expandLabel, exact: true }).click();
 			await expect(row.getByRole('button', { name: collapseLabel, exact: true })).toBeFocused();
-			await page.evaluate(() =>
-				window.ashNotificationsIntegration.setPosition(
-					'bottom-right' as import('../../common/notifications.js').NotificationsPosition,
-				),
-			);
+			await page.evaluate(() => window.ashNotificationsIntegration.setPosition('bottom-right' as import('../../common/notifications.js').NotificationsPosition));
 			await expect(hide).toHaveAttribute('data-ash-icon-id', 'chevron-down');
 			await browserTests.info.attach(`expanded-${language ? 'zh' : 'en'}`, {
 				body: await page.screenshot(),
@@ -226,9 +197,7 @@ suite('notifications browser component', () => {
 		const { page } = browserTests;
 		await page.goto('/notifications.html');
 		const ids = await page.evaluate(() => {
-			const ids = ['First', 'Second', 'Third'].map(message =>
-				window.ashNotificationsIntegration.notifyOptions(message),
-			);
+			const ids = ['First', 'Second', 'Third'].map(message => window.ashNotificationsIntegration.notifyOptions(message));
 			window.ashNotificationsIntegration.show();
 			return ids;
 		});
@@ -376,11 +345,7 @@ suite('notifications browser component', () => {
 
 		await page.setViewportSize({ width: 360, height: 480 });
 		await page.goto('/notifications.html');
-		await page.evaluate(() =>
-			window.ashNotificationsIntegration.notify(
-				'A long notification with a URL https://example.test/very/long/path/without/spaces and another line\nSecond line',
-			),
-		);
+		await page.evaluate(() => window.ashNotificationsIntegration.notify('A long notification with a URL https://example.test/very/long/path/without/spaces and another line\nSecond line'));
 		const toast = page.locator('.ash-notification');
 		const close = toast.getByRole('button', { name: 'Remove notification', exact: true });
 		await expect(close).toBeVisible();
@@ -395,10 +360,7 @@ suite('notifications browser component', () => {
 			expect(await close.boundingBox()).toMatchObject({ width: 22, height: 22 });
 			await expect(close.locator('.ash-icon')).toHaveCount(1);
 			await expect(toast).toHaveCSS('border-radius', '8px');
-			await expect(toast.getByRole('button', { name: 'Run action', exact: true })).toHaveCSS(
-				'min-height',
-				'28px',
-			);
+			await expect(toast.getByRole('button', { name: 'Run action', exact: true })).toHaveCSS('min-height', '28px');
 			const geometry = await toast.evaluate(element => {
 				const bounds = element.getBoundingClientRect();
 				const close = element.querySelector('.ash-notification-close')!.getBoundingClientRect();
@@ -453,14 +415,9 @@ suite('notifications browser component', () => {
 		});
 		for (const property of ['display', 'visibility'] as const) {
 			await origin.focus();
-			const id = await page.evaluate(() =>
-				window.ashNotificationsIntegration.notify('Retain history without restoring hidden focus'),
-			);
+			const id = await page.evaluate(() => window.ashNotificationsIntegration.notify('Retain history without restoring hidden focus'));
 			await page.locator(`[data-notification-close="${id}"]`).focus();
-			await origin.evaluate(
-				(element, property) => element.style.setProperty(property, property === 'display' ? 'none' : 'hidden'),
-				property,
-			);
+			await origin.evaluate((element, property) => element.style.setProperty(property, property === 'display' ? 'none' : 'hidden'), property);
 			try {
 				await page.keyboard.press('Escape');
 				await expect(page.locator('.ash-notification')).toHaveCount(0);
@@ -492,11 +449,7 @@ suite('notifications browser component', () => {
 			for (let index = 0; index < 8; index++) window.ashNotificationsIntegration.notify(`Burst ${index}`);
 		});
 		await expect(page.locator('.ash-notification')).toHaveCount(3);
-		await expect(page.locator('.ash-notification .ash-notification-message')).toHaveText([
-			'Burst 7',
-			'Burst 6',
-			'Burst 5',
-		]);
+		await expect(page.locator('.ash-notification .ash-notification-message')).toHaveText(['Burst 7', 'Burst 6', 'Burst 5']);
 		await expect.poll(() => page.evaluate(() => window.ashNotificationsIntegration.history().length)).toBe(9);
 	});
 
@@ -509,14 +462,9 @@ suite('notifications browser component', () => {
 		await page.evaluate(() => window.ashNotificationsIntegration.extensionMessage(['Show Git Output', 'Retry']));
 		const toast = page.locator('.ash-notification');
 		await expect(toast.getByRole('img', { name: 'Error', exact: true })).toBeVisible();
-		await expect(toast.locator('.ash-notification-severity .ash-icon')).toHaveAttribute(
-			'data-ash-icon-id',
-			'error',
-		);
+		await expect(toast.locator('.ash-notification-severity .ash-icon')).toHaveAttribute('data-ash-icon-id', 'error');
 		await expect(toast.locator('.ash-notification-source')).toHaveText('Source: Git');
-		await expect(toast.getByRole('button', { name: 'Show Git Output', exact: true })).toHaveClass(
-			/ash-button-primary/,
-		);
+		await expect(toast.getByRole('button', { name: 'Show Git Output', exact: true })).toHaveClass(/ash-button-primary/);
 		await expect(toast.getByRole('button', { name: 'Retry', exact: true })).toHaveClass(/ash-button-secondary/);
 		const configure = toast.getByRole('button', { name: 'More Actions', exact: true });
 		await expect(configure.locator('[data-ash-icon-id="gear"]')).toBeVisible();
@@ -524,9 +472,7 @@ suite('notifications browser component', () => {
 		await page.keyboard.press('ArrowDown');
 		await expect(configure).toHaveAttribute('aria-expanded', 'true');
 		await page.getByRole('menuitem', { name: 'Manage Extension', exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.ashNotificationsIntegration.managed))
-			.toEqual({ query: 'fixture.git' });
+		await expect.poll(() => page.evaluate(() => window.ashNotificationsIntegration.managed)).toEqual({ query: 'fixture.git' });
 		await expect(toast).toBeVisible();
 		await testInfo.attach('extension-toast', { body: await page.screenshot(), contentType: 'image/png' });
 		await page.evaluate(() => window.ashNotificationsIntegration.show());
@@ -585,14 +531,8 @@ suite('notifications browser component', () => {
 			await page.clock.install();
 			await page.goto(`/notifications.html${locale === 'zh' ? '?zh' : ''}`);
 			await page.evaluate(() => window.ashNotificationsIntegration.invite());
-			await expect
-				.poll(() =>
-					page.evaluate(() => window.ashNotificationsIntegration.invitation().sessions[0]?.inProgress),
-				)
-				.toBe(true);
-			expect(
-				await page.evaluate(() => window.ashNotificationsIntegration.invitation().lastShown),
-			).toBeUndefined();
+			await expect.poll(() => page.evaluate(() => window.ashNotificationsIntegration.invitation().sessions[0]?.inProgress)).toBe(true);
+			expect(await page.evaluate(() => window.ashNotificationsIntegration.invitation().lastShown)).toBeUndefined();
 			await page.clock.fastForward(30_000);
 			await page.clock.runFor(32);
 			const toast = page.locator('.ash-notification');
@@ -600,15 +540,9 @@ suite('notifications browser component', () => {
 			const action = toast.getByRole('button', { name: label, exact: true });
 			await expect(action).toBeVisible();
 			await expect(toast.locator('.ash-notification-message')).toHaveText(
-				locale === 'zh'
-					? '在智能体窗口中继续，统一查看各个项目的智能体对话。'
-					: 'Continue in the Agents Window to keep track of your agent conversations across projects.',
+				locale === 'zh' ? '在智能体窗口中继续，统一查看各个项目的智能体对话。' : 'Continue in the Agents Window to keep track of your agent conversations across projects.',
 			);
-			await expect
-				.poll(() =>
-					page.evaluate(() => window.ashNotificationsIntegration.invitation().lastShown?.editorSessionCount),
-				)
-				.toBe(1);
+			await expect.poll(() => page.evaluate(() => window.ashNotificationsIntegration.invitation().lastShown?.editorSessionCount)).toBe(1);
 			for (let theme = 0; theme < 4; theme++) {
 				await page.evaluate(index => window.ashNotificationsIntegration.theme(index), theme);
 				await action.focus();
@@ -647,9 +581,7 @@ suite('notifications browser component', () => {
 		});
 		await page.clock.runFor(32);
 		await expect(page.locator('.ash-notification')).toBeVisible();
-		expect(await page.evaluate(() => window.ashNotificationsIntegration.presented())).toEqual([
-			'Visible presentation',
-		]);
+		expect(await page.evaluate(() => window.ashNotificationsIntegration.presented())).toEqual(['Visible presentation']);
 	});
 
 	test('notification bell stays visible at rest and projects unread and do not disturb states in every theme', async function () {
@@ -721,9 +653,7 @@ suite('notifications browser component', () => {
 		});
 		const compiler = page.locator('.ash-notification').filter({ hasText: 'Compiler info' });
 		await compiler.getByRole('button', { name: 'More Actions', exact: true }).click();
-		await page
-			.getByRole('menuitem', { name: "Turn Off Info and Warning Notifications from 'Compiler'", exact: true })
-			.click();
+		await page.getByRole('menuitem', { name: "Turn Off Info and Warning Notifications from 'Compiler'", exact: true }).click();
 		await expect(compiler).toHaveCount(0);
 		await expect(page.locator('.ash-notification')).toHaveCount(1);
 		await page.evaluate(() => {
@@ -734,20 +664,13 @@ suite('notifications browser component', () => {
 		await expect(page.locator('.ash-notification').filter({ hasText: 'Compiler error' })).toBeVisible();
 		await page.evaluate(() => {
 			window.ashNotificationsIntegration.show();
-			for (let i = 0; i < 10; i++)
-				window.ashNotificationsIntegration.sourceNotify(`Source ${i} message`, `source-${i}`, `Source ${i}`);
+			for (let i = 0; i < 10; i++) window.ashNotificationsIntegration.sourceNotify(`Source ${i} message`, `source-${i}`, `Source ${i}`);
 		});
 		const configure = page.getByRole('button', { name: 'Configure Do Not Disturb...', exact: true });
 		await configure.focus();
 		await page.keyboard.press('ArrowDown');
-		await expect(page.getByRole('menuitemcheckbox', { name: 'Compiler', exact: true })).toHaveAttribute(
-			'aria-checked',
-			'false',
-		);
-		await expect(page.getByRole('menuitemcheckbox', { name: 'Git', exact: true })).toHaveAttribute(
-			'aria-checked',
-			'true',
-		);
+		await expect(page.getByRole('menuitemcheckbox', { name: 'Compiler', exact: true })).toHaveAttribute('aria-checked', 'false');
+		await expect(page.getByRole('menuitemcheckbox', { name: 'Git', exact: true })).toHaveAttribute('aria-checked', 'true');
 		await page.getByRole('menuitem', { name: 'More...', exact: true }).click();
 		const picker = page.getByRole('dialog', {
 			name: 'Select sources to enable all notifications from',
@@ -758,22 +681,12 @@ suite('notifications browser component', () => {
 		await picker.getByRole('option').click();
 		await page.keyboard.press('Enter');
 		await expect(picker).toHaveCount(0);
-		expect(
-			(await page.evaluate(() => window.ashNotificationsIntegration.filters())).find(
-				source => source.id === 'compiler',
-			)?.filter,
-		).toBe(0);
-		await page.evaluate(() =>
-			window.ashNotificationsIntegration.command('notifications.toggleDoNotDisturbModeBySource'),
-		);
+		expect((await page.evaluate(() => window.ashNotificationsIntegration.filters())).find(source => source.id === 'compiler')?.filter).toBe(0);
+		await page.evaluate(() => window.ashNotificationsIntegration.command('notifications.toggleDoNotDisturbModeBySource'));
 		await picker.getByRole('combobox').fill('Git');
 		await picker.getByRole('option').click();
 		await page.keyboard.press('Escape');
-		expect(
-			(await page.evaluate(() => window.ashNotificationsIntegration.filters())).find(
-				source => source.id === 'git',
-			)?.filter,
-		).toBe(0);
+		expect((await page.evaluate(() => window.ashNotificationsIntegration.filters())).find(source => source.id === 'git')?.filter).toBe(0);
 		await testInfo.attach('source-configuration', { body: await page.screenshot(), contentType: 'image/png' });
 	});
 
@@ -824,14 +737,8 @@ suite('notifications browser component', () => {
 			}
 		}
 		expect(await page.evaluate(() => window.ashNotificationsIntegration.history())).toEqual([Number(id)]);
-		await page.evaluate(() =>
-			window.ashNotificationsIntegration.setPosition(
-				'top-right' as import('../../common/notifications.js').NotificationsPosition,
-			),
-		);
-		await page.evaluate(() =>
-			window.ashNotificationsIntegration.configure('workbench.notifications.showInTitleBar', false),
-		);
+		await page.evaluate(() => window.ashNotificationsIntegration.setPosition('top-right' as import('../../common/notifications.js').NotificationsPosition));
+		await page.evaluate(() => window.ashNotificationsIntegration.configure('workbench.notifications.showInTitleBar', false));
 		await expect(titleBell).toHaveCount(0);
 		await page.evaluate(() => window.ashNotificationsIntegration.hide());
 		await page.evaluate(() => window.ashNotificationsIntegration.notify('Top-right toast'));
@@ -922,10 +829,7 @@ suite('notifications browser component', () => {
 		await expect(page.locator('.ash-notification .ash-notification-message')).toHaveText('Error');
 		await page.clock.fastForward(3000);
 		await expect(page.locator('.ash-notification')).toHaveCount(0);
-		await expect(page.locator('[data-statusbar-item-id="ash.status.notifications"] .ash-icon')).toHaveAttribute(
-			'data-ash-icon-id',
-			'bell-dot',
-		);
+		await expect(page.locator('[data-statusbar-item-id="ash.status.notifications"] .ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell-dot');
 		await page.evaluate(() => window.ashNotificationsIntegration.show());
 		await expect(page.locator('.ash-notifications-row')).toHaveCount(3);
 		await testInfo.attach('expired-toasts-retain-history', {
@@ -1047,9 +951,7 @@ suite('notifications browser component', () => {
 					document.querySelector('main')!.append(input);
 					input.focus();
 					window.ashNotificationsIntegration.notifyOptions('Optional information', 1, 1);
-					await new Promise<void>(resolve =>
-						requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-					);
+					await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 				},
 				{ position, left, top },
 			);

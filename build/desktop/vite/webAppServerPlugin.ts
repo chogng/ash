@@ -31,9 +31,7 @@ export function webAppServerVitePlugin(entryPath: string): Plugin {
 				await launch.close();
 				throw error;
 			}
-			server.httpServer.once('listening', () =>
-				console.info(`Open Ash: ${authenticatedWebUrl(launch.info, origin, entryPath)}`),
-			);
+			server.httpServer.once('listening', () => console.info(`Open Ash: ${authenticatedWebUrl(launch.info, origin, entryPath)}`));
 			server.httpServer.once('close', () => void close?.());
 			void launch.exited.then(async code => {
 				if (closing) return;

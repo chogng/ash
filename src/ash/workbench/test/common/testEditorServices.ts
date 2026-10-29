@@ -4,18 +4,12 @@ import { WebWorkerService } from '../../../platform/webWorker/browser/webWorkerS
 import { IActivityService } from '../../services/activity/common/activity.js';
 import { ActivityService } from '../../services/activity/browser/activityService.js';
 import { IStatusbarService } from '../../services/statusbar/browser/statusbar.js';
-import {
-	BrowserAuxiliaryWindowService,
-	IAuxiliaryWindowService,
-} from '../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from '../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { IMessageHistoryService } from '../../../platform/messageHistory/common/messageHistory.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import '../../contrib/chat/browser/chat.shared.contribution.js';
-import {
-	ChatAttachmentResolveService,
-	IChatAttachmentResolveService,
-} from '../../contrib/chat/browser/attachments/chatAttachmentResolveService.js';
+import { ChatAttachmentResolveService, IChatAttachmentResolveService } from '../../contrib/chat/browser/attachments/chatAttachmentResolveService.js';
 import { IFileSearchService } from '../../../platform/search/common/fileSearch.js';
 import { BrowserFileSearchService } from '../../../platform/search/browser/browserFileSearchService.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../services/configuration/test/common/testServices.js';
@@ -40,10 +34,7 @@ import { BrowserTextModelService } from '../../services/textmodelResolver/browse
 import { noFileIconTheme, IThemeService } from '../../../platform/theme/common/themeService.js';
 import { ILabelService } from '../../../platform/label/common/label.js';
 import { LabelService } from '../../services/label/common/labelService.js';
-import {
-	IUntitledTextEditorService,
-	UntitledTextEditorService,
-} from '../../services/untitled/common/untitledTextEditorService.js';
+import { IUntitledTextEditorService, UntitledTextEditorService } from '../../services/untitled/common/untitledTextEditorService.js';
 import { IWorkingCopyService } from '../../services/workingCopy/common/workingCopyService.js';
 import { BrowserWorkingCopyService } from '../../services/workingCopy/browser/browserWorkingCopyService.js';
 import { IDecorationsService } from '../../services/decorations/common/decorations.js';
@@ -66,10 +57,7 @@ import { MemoryFileService } from '../../contrib/bulkEdit/test/browser/bulkEditT
 import { IWorkbenchEnvironmentService } from '../../services/environment/common/environmentService.js';
 import { BrowserWorkbenchEnvironmentService } from '../../services/environment/browser/environmentService.js';
 import { mainWindow } from '../../../base/browser/window.js';
-import {
-	FilesConfigurationService,
-	IFilesConfigurationService,
-} from '../../services/filesConfiguration/common/filesConfigurationService.js';
+import { FilesConfigurationService, IFilesConfigurationService } from '../../services/filesConfiguration/common/filesConfigurationService.js';
 import { TextFileService } from '../../services/textfile/browser/textFileService.js';
 import { IWebviewService } from '../../contrib/webview/browser/webview.js';
 import { WebviewService } from '../../contrib/webview/browser/webviewService.js';
@@ -77,10 +65,7 @@ import { IUriIdentityService } from '../../../platform/uriIdentity/common/uriIde
 import { UriIdentityService } from '../../../platform/uriIdentity/common/uriIdentityService.js';
 
 /** Assembles the same scheme router as the product around test-owned storage. */
-export function createTestFileService(
-	provider: IFileSystemProvider,
-	schemes: readonly string[] = [Schemas.file, Schemas.ashRemote, Schemas.vscodeUserData],
-): FileService {
+export function createTestFileService(provider: IFileSystemProvider, schemes: readonly string[] = [Schemas.file, Schemas.ashRemote, Schemas.vscodeUserData]): FileService {
 	return new TestFileService(provider, schemes);
 }
 
@@ -94,10 +79,7 @@ class TestFileService extends FileService {
 }
 
 /** Owns the real file-policy dependencies for file-service tests outside a Workbench. */
-export function createTestTextFileService(
-	files: IFileSystemProvider | IFileService,
-	configuration?: IConfigurationService,
-): TextFileService {
+export function createTestTextFileService(files: IFileSystemProvider | IFileService, configuration?: IConfigurationService): TextFileService {
 	return new TestTextFileService(files, configuration);
 }
 
@@ -119,11 +101,7 @@ class TestTextFileService extends TextFileService {
 }
 
 /** Uses real component services with an isolated browser-storage backend for each test scope. */
-export function createTestComponentServices(
-	storage?: IStorageService,
-	parent?: InstantiationService,
-	document: Document = globalThis.document,
-): InstantiationService {
+export function createTestComponentServices(storage?: IStorageService, parent?: InstantiationService, document: Document = globalThis.document): InstantiationService {
 	const services = parent ? parent.createChild() : new InstantiationService();
 	if (storage) {
 		services.registerInstance(IStorageService, storage);
@@ -135,24 +113,14 @@ export function createTestComponentServices(
 	return registerTestComponentServices(services, document);
 }
 
-export function registerTestComponentServices(
-	services: InstantiationService,
-	document: Document = globalThis.document,
-): InstantiationService {
-	if (!services.has(IActivityService))
-		services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
+export function registerTestComponentServices(services: InstantiationService, document: Document = globalThis.document): InstantiationService {
+	if (!services.has(IActivityService)) services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
 	if (!services.has(IElevatedFileService)) {
 		services.registerInstance(IElevatedFileService, new BrowserElevatedFileService());
 	}
 	if (!services.has(IWorkbenchEnvironmentService)) {
 		const location = document.defaultView!.location;
-		services.registerInstance(
-			IWorkbenchEnvironmentService,
-			new BrowserWorkbenchEnvironmentService(
-				location,
-				`http://{{uuid}}.localhost${location.port ? `:${location.port}` : ''}`,
-			),
-		);
+		services.registerInstance(IWorkbenchEnvironmentService, new BrowserWorkbenchEnvironmentService(location, `http://{{uuid}}.localhost${location.port ? `:${location.port}` : ''}`));
 	}
 	if (!services.has(IFileService)) {
 		services.registerSingleton(IFileService, () => createTestFileService(new MemoryFileService([])));
@@ -160,8 +128,7 @@ export function registerTestComponentServices(
 	if (!services.has(IWebviewService)) {
 		services.registerSingleton(IWebviewService, () => services.createInstance(WebviewService));
 	}
-	if (!services.has(IUriIdentityService))
-		services.registerSingleton(IUriIdentityService, () => services.createInstance(UriIdentityService));
+	if (!services.has(IUriIdentityService)) services.registerSingleton(IUriIdentityService, () => services.createInstance(UriIdentityService));
 	if (!services.has(IThemeService)) {
 		services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
 	}
@@ -177,10 +144,7 @@ export function registerTestComponentServices(
 				}),
 		);
 	}
-	if (!services.has(IAuxiliaryWindowService))
-		services.registerSingleton(IAuxiliaryWindowService, () =>
-			services.createInstance(BrowserAuxiliaryWindowService, document.defaultView!, document.body),
-		);
+	if (!services.has(IAuxiliaryWindowService)) services.registerSingleton(IAuxiliaryWindowService, () => services.createInstance(BrowserAuxiliaryWindowService, document.defaultView!, document.body));
 	return services;
 }
 
@@ -241,23 +205,15 @@ export function createTestEditorServices(
 ): InstantiationService {
 	const services = createTestComponentServices(storage, parent, document);
 	if (!services.has(IWebWorkerService)) services.registerInstance(IWebWorkerService, new WebWorkerService());
-	if (!services.has(IContextKeyService))
-		services.registerSingleton(IContextKeyService, () => new ContextKeyService());
-	if (!services.has(ILinkPresentationService))
-		services.registerSingleton(ILinkPresentationService, () => services.createInstance(LinkPresentationService));
+	if (!services.has(IContextKeyService)) services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+	if (!services.has(ILinkPresentationService)) services.registerSingleton(ILinkPresentationService, () => services.createInstance(LinkPresentationService));
 	if (configuration) {
 		services.registerInstance(IConfigurationService, configuration);
 	} else if (!services.has(IConfigurationService)) {
 		services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 	}
-	services.registerSingleton(
-		IWorkspaceContextService,
-		() => new TestWorkspaceService({ id: 'test-editor', folders: [] }),
-	);
-	if (!services.has(IFilesConfigurationService))
-		services.registerSingleton(IFilesConfigurationService, () =>
-			services.createInstance(FilesConfigurationService),
-		);
+	services.registerSingleton(IWorkspaceContextService, () => new TestWorkspaceService({ id: 'test-editor', folders: [] }));
+	if (!services.has(IFilesConfigurationService)) services.registerSingleton(IFilesConfigurationService, () => services.createInstance(FilesConfigurationService));
 	if (!services.has(IResourceIconRenderer))
 		services.registerInstance(IResourceIconRenderer, {
 			onDidChangeResourceIcons: Event.None,
@@ -276,27 +232,16 @@ export function createTestEditorServices(
 					contextKeyService: services.get(IContextKeyService),
 				}),
 		);
-	if (!services.has(IRendererHostService))
-		services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
-	if (!services.has(IPathService))
-		services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
-	if (!services.has(ILabelService))
-		services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
-	if (!services.has(IWorkingCopyService))
-		services.registerSingleton(IWorkingCopyService, () => services.createInstance(BrowserWorkingCopyService));
+	if (!services.has(IRendererHostService)) services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+	if (!services.has(IPathService)) services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
+	if (!services.has(ILabelService)) services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
+	if (!services.has(IWorkingCopyService)) services.registerSingleton(IWorkingCopyService, () => services.createInstance(BrowserWorkingCopyService));
 	// File-based Chat services resolve in this host scope, alongside their file and working-copy owners.
-	if (!services.has(IFileSearchService))
-		services.registerSingleton(IFileSearchService, () => services.createInstance(BrowserFileSearchService));
-	services.registerSingleton(IChatAttachmentResolveService, () =>
-		services.createInstance(ChatAttachmentResolveService),
-	);
-	if (!services.has(IUntitledTextEditorService))
-		services.registerSingleton(IUntitledTextEditorService, () =>
-			services.createInstance(UntitledTextEditorService),
-		);
+	if (!services.has(IFileSearchService)) services.registerSingleton(IFileSearchService, () => services.createInstance(BrowserFileSearchService));
+	services.registerSingleton(IChatAttachmentResolveService, () => services.createInstance(ChatAttachmentResolveService));
+	if (!services.has(IUntitledTextEditorService)) services.registerSingleton(IUntitledTextEditorService, () => services.createInstance(UntitledTextEditorService));
 	if (!services.has(ILogService)) services.registerInstance(ILogService, new NullLoggerService());
-	if (!services.has(IDecorationsService))
-		services.registerSingleton(IDecorationsService, () => services.createInstance(DecorationsService, document));
+	if (!services.has(IDecorationsService)) services.registerSingleton(IDecorationsService, () => services.createInstance(DecorationsService, document));
 	if (!services.has(ILanguageService)) services.registerSingleton(ILanguageService, () => new LanguageService());
 	if (!services.has(IFileTextModelService))
 		services.registerSingleton(IFileTextModelService, () =>
@@ -314,10 +259,8 @@ export function createTestEditorServices(
 				{},
 			),
 		);
-	if (!services.has(ITextModelResourceService))
-		services.registerSingleton(ITextModelResourceService, () => services.get(IFileTextModelService));
-	if (!services.has(ITextModelService))
-		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
+	if (!services.has(ITextModelResourceService)) services.registerSingleton(ITextModelResourceService, () => services.get(IFileTextModelService));
+	if (!services.has(ITextModelService)) services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 	services.registerSingleton(IResourceLabelService, () => services.createInstance(ResourceLabelService));
 	return services;
 }

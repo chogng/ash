@@ -1,11 +1,6 @@
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { observableValue } from '../../../../../base/common/observable.js';
-import {
-	isChatContextPickerPickItem,
-	type IChatContextPickerItem,
-	type IChatContextValueItem,
-	type IChatContextPickerPickItem,
-} from '../../../chat/browser/attachments/chatContextPickService.js';
+import { isChatContextPickerPickItem, type IChatContextPickerItem, type IChatContextValueItem, type IChatContextPickerPickItem } from '../../../chat/browser/attachments/chatContextPickService.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 import { IChatContextPickService } from '../../../chat/browser/attachments/chatContextPickService.js';
 import type { BrowserEditor } from '../../electron-browser/browserEditor.js';
@@ -25,11 +20,7 @@ import {
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { EditorInputSerializerRegistry } from '../../../../services/editor/common/editorInputSerializer.js';
-import {
-	BrowserEditorInput,
-	BrowserEditorSerializer,
-	type IBrowserEditorInputData,
-} from '../../common/browserEditorInput.js';
+import { BrowserEditorInput, BrowserEditorSerializer, type IBrowserEditorInputData } from '../../common/browserEditorInput.js';
 import { IBrowserViewWorkbenchService, type IBrowserViewModel } from '../../common/browserView.js';
 import { BrowserViewUri } from '../../../../../platform/browserView/common/browserViewUri.js';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
@@ -59,10 +50,7 @@ suite('Browser editor page model and restoration', () => {
 			type: 'stateChanged',
 			state: { ...first.state, title: 'Updated title', url: 'https://example.test/next' },
 		});
-		assert.deepEqual(
-			[first === second, f.creations, input.label, input.serialize().url],
-			[true, 1, 'Updated title', 'https://example.test/next'],
-		);
+		assert.deepEqual([first === second, f.creations, input.label, input.serialize().url], [true, 1, 'Updated title', 'https://example.test/next']);
 	});
 
 	test('a newer event wins over a snapshot response arriving later', async () => {
@@ -283,8 +271,7 @@ function fixture() {
 		onDidEvent: events.event,
 	};
 	const instantiation = store.add(new InstantiationService(new ServiceCollection([IBrowserViewService, service])));
-	const input = (inputData: IBrowserEditorInputData) =>
-		store.add(instantiation.createInstance(BrowserEditorInput, inputData));
+	const input = (inputData: IBrowserEditorInputData) => store.add(instantiation.createInstance(BrowserEditorInput, inputData));
 	instantiation.registerInstance(IBrowserViewWorkbenchService, {
 		onDidChangeBrowserViews: Event.None,
 		initialize: async () => {},
@@ -300,10 +287,7 @@ function fixture() {
 	return Object.assign(f, { service, instantiation, input });
 }
 
-async function readContextPicks(
-	source: IChatContextPickerItem | IChatContextValueItem,
-	query: string,
-): Promise<IChatContextPickerPickItem[]> {
+async function readContextPicks(source: IChatContextPickerItem | IChatContextValueItem, query: string): Promise<IChatContextPickerPickItem[]> {
 	if (source.type !== 'pickerPick') throw new Error('Expected the registered picker contract');
 	const picker = source.asPicker();
 	const cancellation = new CancellationTokenSource();

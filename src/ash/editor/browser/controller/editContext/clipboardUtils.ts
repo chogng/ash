@@ -132,19 +132,13 @@ export function createClipboardCopyEvent(
 	};
 }
 
-function generateDataToCopy(
-	viewModel: IViewModel,
-	id?: string,
-): { dataToCopy: ClipboardDataToCopy; metadata: ClipboardStoredMetadata } {
+function generateDataToCopy(viewModel: IViewModel, id?: string): { dataToCopy: ClipboardDataToCopy; metadata: ClipboardStoredMetadata } {
 	const emptySelectionClipboard = viewModel.getEditorOption(EditorOption.emptySelectionClipboard);
 	const copyWithSyntaxHighlighting = viewModel.getEditorOption(EditorOption.copyWithSyntaxHighlighting);
 	const selections = viewModel.getCursorStates().map(cursor => cursor.modelState.selection);
 	const { sourceRanges, sourceText } = viewModel.getPlainTextToCopy(selections, emptySelectionClipboard, isWindows);
 	const text = Array.isArray(sourceText) ? sourceText.join(isWindows ? '\r\n' : '\n') : sourceText;
-	const richText =
-		CopyOptions.forceCopyWithSyntaxHighlighting || (copyWithSyntaxHighlighting && text.length < 65_536)
-			? viewModel.getRichTextToCopy(selections, emptySelectionClipboard)
-			: null;
+	const richText = CopyOptions.forceCopyWithSyntaxHighlighting || (copyWithSyntaxHighlighting && text.length < 65_536) ? viewModel.getRichTextToCopy(selections, emptySelectionClipboard) : null;
 	const dataToCopy: ClipboardDataToCopy = Object.freeze({
 		isFromEmptySelection: emptySelectionClipboard && selections.length === 1 && selections[0]!.isEmpty(),
 		sourceRanges,
@@ -175,8 +169,7 @@ export function createClipboardPasteEvent(browserEvent: ClipboardEvent): IClipbo
 		metadata,
 		text,
 		browserEvent,
-		toExternalVSDataTransfer: () =>
-			browserEvent.clipboardData ? toExternalVSDataTransfer(browserEvent.clipboardData) : undefined,
+		toExternalVSDataTransfer: () => (browserEvent.clipboardData ? toExternalVSDataTransfer(browserEvent.clipboardData) : undefined),
 		setHandled: () => {
 			if (handled) return;
 			handled = true;
@@ -208,12 +201,7 @@ const ClipboardEventUtils = {
 		return [text, metadata];
 	},
 
-	setTextData(
-		clipboardData: IWritableClipboardData,
-		text: string,
-		html: string | null | undefined,
-		metadata: ClipboardStoredMetadata,
-	): void {
+	setTextData(clipboardData: IWritableClipboardData, text: string, html: string | null | undefined, metadata: ClipboardStoredMetadata): void {
 		clipboardData.setData(Mimes.text, text);
 		if (typeof html === 'string') clipboardData.setData(Mimes.html, html);
 		clipboardData.setData('vscode-editor-data', JSON.stringify(metadata));
@@ -281,11 +269,7 @@ function appendHtmlClipboardText(node: Node, parts: Array<string | null>): void 
 	}
 	if (node.nodeType !== node.ELEMENT_NODE && node.nodeType !== node.DOCUMENT_FRAGMENT_NODE) return;
 	const element = node.nodeType === node.ELEMENT_NODE ? (node as HTMLElement) : undefined;
-	if (
-		element &&
-		(element.localName === 'script' || element.localName === 'style' || element.localName === 'noscript')
-	)
-		return;
+	if (element && (element.localName === 'script' || element.localName === 'style' || element.localName === 'noscript')) return;
 	if (element?.localName === 'br') {
 		parts.push('\n');
 		return;

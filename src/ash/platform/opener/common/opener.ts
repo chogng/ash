@@ -68,11 +68,7 @@ export interface IExternalUriResolver {
 }
 
 export interface IExternalOpener {
-	openExternal(
-		href: string,
-		context: { readonly sourceUri: URI; readonly preferredOpenerId?: string },
-		token: CancellationToken,
-	): Promise<boolean>;
+	openExternal(href: string, context: { readonly sourceUri: URI; readonly preferredOpenerId?: string }, token: CancellationToken): Promise<boolean>;
 }
 
 /** Routes resources with replaceable external execution handlers. */

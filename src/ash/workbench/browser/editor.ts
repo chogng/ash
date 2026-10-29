@@ -42,12 +42,7 @@ export function getBuiltinEditorPaneFactory(extensionId: string, editorId: strin
 	return builtinEditorPaneFactories.get(`${extensionId}/${editorId}`);
 }
 
-export function registerBuiltinEditorPane(
-	extensionId: string,
-	editorId: string,
-	create: BuiltinEditorPaneFactory,
-	documentType?: Pick<DocumentType, 'id' | 'contentType'>,
-): void {
+export function registerBuiltinEditorPane(extensionId: string, editorId: string, create: BuiltinEditorPaneFactory, documentType?: Pick<DocumentType, 'id' | 'contentType'>): void {
 	const key = `${extensionId}/${editorId}`;
 	if (builtinEditorPaneFactories.has(key)) {
 		throw new Error(`Built-in editor factory is already registered: ${key}`);
@@ -66,9 +61,7 @@ export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistr
 	}
 
 	/** Validate an entire package before changing the available editors. */
-	public registerEditorPanes(
-		initial: readonly IEditorPaneDescriptor[],
-	): IDisposable & { replace(descriptors: readonly IEditorPaneDescriptor[]): void } {
+	public registerEditorPanes(initial: readonly IEditorPaneDescriptor[]): IDisposable & { replace(descriptors: readonly IEditorPaneDescriptor[]): void } {
 		let owned: readonly IEditorPaneDescriptor[] = [];
 		const documentTypes = DocumentTypes.registerTypes();
 		const replace = (descriptors: readonly IEditorPaneDescriptor[]): void => {
@@ -84,9 +77,7 @@ export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistr
 			if (owned.length === 0 && descriptors.length === 0) {
 				return;
 			}
-			documentTypes.replace(
-				descriptors.flatMap(descriptor => (descriptor.documentType ? [descriptor.documentType] : [])),
-			);
+			documentTypes.replace(descriptors.flatMap(descriptor => (descriptor.documentType ? [descriptor.documentType] : [])));
 			for (const descriptor of owned) {
 				this.descriptors.delete(descriptor.id);
 			}
@@ -127,10 +118,7 @@ export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistr
 			.map(({ descriptor }) => descriptor);
 	}
 
-	public getEditorPane(
-		input: IResourceEditorInput,
-		options: EditorOpenOptions = {},
-	): IEditorPaneDescriptor | undefined {
+	public getEditorPane(input: IResourceEditorInput, options: EditorOpenOptions = {}): IEditorPaneDescriptor | undefined {
 		const preferredEditorId = options.preferredEditorId;
 		if (preferredEditorId !== undefined) {
 			const preferred = this.descriptors.get(preferredEditorId);
@@ -144,9 +132,7 @@ export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistr
 		}
 		const pane = this.getEditorPanesForInput(input)[0];
 		if (!pane && DocumentTypes.requiresProvider(input)) {
-			throw new Error(
-				localize('extensions.clientEditor.packageUnavailable', 'The editor extension package is unavailable.'),
-			);
+			throw new Error(localize('extensions.clientEditor.packageUnavailable', 'The editor extension package is unavailable.'));
 		}
 		return pane;
 	}
@@ -188,12 +174,7 @@ function validateDescriptor(descriptor: IEditorPaneDescriptor): void {
 }
 
 function validateMatch(match: EditorPaneMatch, editorId: string): void {
-	if (
-		match !== EditorPaneMatch.None &&
-		match !== EditorPaneMatch.Optional &&
-		match !== EditorPaneMatch.Builtin &&
-		match !== EditorPaneMatch.Default
-	) {
+	if (match !== EditorPaneMatch.None && match !== EditorPaneMatch.Optional && match !== EditorPaneMatch.Builtin && match !== EditorPaneMatch.Default) {
 		throw new TypeError(`Editor pane '${editorId}' returned an invalid match`);
 	}
 }

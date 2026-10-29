@@ -1,13 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import {
-	clamp,
-	isFiniteNumber,
-	isNonNegativeSafeInteger,
-	isPositiveSafeInteger,
-	isSafeInteger,
-	rot,
-} from '../../common/numbers.js';
+import { clamp, isFiniteNumber, isNonNegativeSafeInteger, isPositiveSafeInteger, isSafeInteger, rot } from '../../common/numbers.js';
 
 test('clamp preserves values inside the range', () => {
 	assert.equal(clamp(4, 1, 8), 4);

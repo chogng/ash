@@ -51,8 +51,7 @@ export class LineBasedText extends AbstractText {
 		readonly lineCount: number,
 	) {
 		super();
-		if (!Number.isSafeInteger(lineCount) || lineCount < 1)
-			throw new RangeError('A text source must contain at least one line');
+		if (!Number.isSafeInteger(lineCount) || lineCount < 1) throw new RangeError('A text source must contain at least one line');
 	}
 
 	get length(): TextLength {
@@ -61,11 +60,9 @@ export class LineBasedText extends AbstractText {
 
 	getValueOfRange(range: Range): string {
 		validateLineRange(range, this.lineCount);
-		if (range.startLineNumber === range.endLineNumber)
-			return this.getLineContent(range.startLineNumber).slice(range.startColumn - 1, range.endColumn - 1);
+		if (range.startLineNumber === range.endLineNumber) return this.getLineContent(range.startLineNumber).slice(range.startColumn - 1, range.endColumn - 1);
 		let value = this.getLineContent(range.startLineNumber).slice(range.startColumn - 1);
-		for (let lineNumber = range.startLineNumber + 1; lineNumber < range.endLineNumber; lineNumber += 1)
-			value += `\n${this.getLineContent(lineNumber)}`;
+		for (let lineNumber = range.startLineNumber + 1; lineNumber < range.endLineNumber; lineNumber += 1) value += `\n${this.getLineContent(lineNumber)}`;
 		return `${value}\n${this.getLineContent(range.endLineNumber).slice(0, range.endColumn - 1)}`;
 	}
 
@@ -101,6 +98,5 @@ export class StringText extends AbstractText {
 }
 
 function validateLineRange(range: Range, lineCount: number): void {
-	if (range.startLineNumber < 1 || range.endLineNumber > lineCount)
-		throw new RangeError('Text range is outside the text source');
+	if (range.startLineNumber < 1 || range.endLineNumber > lineCount) throw new RangeError('Text range is outside the text source');
 }

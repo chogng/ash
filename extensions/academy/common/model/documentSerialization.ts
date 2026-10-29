@@ -43,11 +43,7 @@ export class DocumentSerializationError extends Error {
 }
 
 /** Encodes a schema-valid node for transport inside a transaction or fragment. */
-export function encodeDocumentNode(
-	node: DocumentNode,
-	schema: DocumentSchema,
-	options: DocumentValidationOptions = {},
-): SerializedDocumentNode {
+export function encodeDocumentNode(node: DocumentNode, schema: DocumentSchema, options: DocumentValidationOptions = {}): SerializedDocumentNode {
 	try {
 		schema.validateFragment(node, options);
 	} catch (error) {
@@ -57,11 +53,7 @@ export function encodeDocumentNode(
 }
 
 /** Decodes and validates one untrusted node value from a Stanza transport payload. */
-export function decodeDocumentNode(
-	value: unknown,
-	schema: DocumentSchema,
-	options: DocumentValidationOptions = {},
-): DocumentNode {
+export function decodeDocumentNode(value: unknown, schema: DocumentSchema, options: DocumentValidationOptions = {}): DocumentNode {
 	try {
 		const node = decodeNode(value);
 		schema.validateFragment(node, options);
@@ -97,30 +89,14 @@ export function deserializeDocument(value: string | unknown, schema: DocumentSch
 			throw new DocumentSerializationError('Structured document JSON is invalid', { cause: error });
 		}
 	}
-	if (
-		!isRecord(parsed) ||
-		parsed.format !== DOCUMENT_SERIALIZATION_FORMAT ||
-		(parsed.version !== 1 && parsed.version !== DOCUMENT_SERIALIZATION_VERSION)
-	)
+	if (!isRecord(parsed) || parsed.format !== DOCUMENT_SERIALIZATION_FORMAT || (parsed.version !== 1 && parsed.version !== DOCUMENT_SERIALIZATION_VERSION))
 		throw new DocumentSerializationError('Unsupported structured document format or version');
 	// Legacy files and collaboration snapshots had no kind. The receiving schema
 	// supplies it once; all subsequent persistence and snapshots use the v2 envelope.
 	if (parsed.version === 1) {
-		if ('documentType' in parsed)
-			throw new DocumentSerializationError(
-				localize(
-					'document.serialization.legacyType',
-					'Legacy structured documents cannot declare a document type',
-				),
-			);
+		if ('documentType' in parsed) throw new DocumentSerializationError(localize('document.serialization.legacyType', 'Legacy structured documents cannot declare a document type'));
 	} else if (parsed.documentType !== schema.documentType) {
-		throw new DocumentSerializationError(
-			localize(
-				'document.serialization.typeMismatch',
-				"Structured document type must be '{0}'",
-				schema.documentType,
-			),
-		);
+		throw new DocumentSerializationError(localize('document.serialization.typeMismatch', "Structured document type must be '{0}'", schema.documentType));
 	}
 	try {
 		const document = decodeNode(parsed.document);
@@ -156,12 +132,7 @@ export function deserializeDocumentFragment(value: string | unknown, schema: Doc
 			throw new DocumentSerializationError('Structured document fragment JSON is invalid', { cause: error });
 		}
 	}
-	if (
-		!isRecord(parsed) ||
-		parsed.format !== DOCUMENT_FRAGMENT_SERIALIZATION_FORMAT ||
-		parsed.version !== DOCUMENT_FRAGMENT_SERIALIZATION_VERSION ||
-		!Array.isArray(parsed.content)
-	)
+	if (!isRecord(parsed) || parsed.format !== DOCUMENT_FRAGMENT_SERIALIZATION_FORMAT || parsed.version !== DOCUMENT_FRAGMENT_SERIALIZATION_VERSION || !Array.isArray(parsed.content))
 		throw new DocumentSerializationError('Unsupported structured document fragment format or version');
 	try {
 		const content = Object.freeze(parsed.content.map(decodeNode));
@@ -194,20 +165,10 @@ export function documentSelectionToText(document: DocumentNode, selection: Docum
 	const head = findTextBearingBlockLocation(document, selection.head.nodeId);
 	if (!anchor || !head) return undefined;
 	if (anchor.block.id === head.block.id) {
-		const forward =
-			anchor.index < head.index ||
-			(anchor.index === head.index && selection.anchor.offset <= selection.head.offset);
-		const start = forward
-			? { location: anchor, point: selection.anchor }
-			: { location: head, point: selection.head };
+		const forward = anchor.index < head.index || (anchor.index === head.index && selection.anchor.offset <= selection.head.offset);
+		const start = forward ? { location: anchor, point: selection.anchor } : { location: head, point: selection.head };
 		const end = forward ? { location: head, point: selection.head } : { location: anchor, point: selection.anchor };
-		return textFromBlockRange(
-			start.location.block,
-			start.location.index,
-			start.point.offset,
-			end.location.index,
-			end.point.offset,
-		);
+		return textFromBlockRange(start.location.block, start.location.index, start.point.offset, end.location.index, end.point.offset);
 	}
 	if (anchor.parent.id !== head.parent.id) return undefined;
 	const forward = anchor.parentIndex < head.parentIndex;
@@ -216,17 +177,8 @@ export function documentSelectionToText(document: DocumentNode, selection: Docum
 	for (let index = start.location.parentIndex; index <= end.location.parentIndex; index += 1) {
 		if (!isTextBearingBlock(start.location.parent.content[index]!)) return undefined;
 	}
-	const parts: string[] = [
-		textFromBlockRange(
-			start.location.block,
-			start.location.index,
-			start.point.offset,
-			start.location.block.content.length - 1,
-			Number.MAX_SAFE_INTEGER,
-		),
-	];
-	for (let index = start.location.parentIndex + 1; index < end.location.parentIndex; index += 1)
-		parts.push(textFromBlock(start.location.parent.content[index]!));
+	const parts: string[] = [textFromBlockRange(start.location.block, start.location.index, start.point.offset, start.location.block.content.length - 1, Number.MAX_SAFE_INTEGER)];
+	for (let index = start.location.parentIndex + 1; index < end.location.parentIndex; index += 1) parts.push(textFromBlock(start.location.parent.content[index]!));
 	parts.push(textFromBlockRange(end.location.block, 0, 0, end.location.index, end.point.offset));
 	return parts.join('\n');
 }
@@ -239,11 +191,7 @@ export function documentToPlainText(document: DocumentNode, schema?: DocumentSch
 }
 
 /** Extracts a validated block fragment from a text selection. */
-export function extractDocumentFragment(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	selection: DocumentSelection,
-): DocumentFragment | undefined {
+export function extractDocumentFragment(schema: DocumentSchema, document: DocumentNode, selection: DocumentSelection): DocumentFragment | undefined {
 	const fragment = extractDocumentFragmentContent(schema, document, selection);
 	if (!fragment) return undefined;
 	// Clipboard fragments have no document-level style registry. Materialize only
@@ -259,33 +207,17 @@ export function extractDocumentFragment(
 	return Object.freeze({ content: Object.freeze(fragment.content.map(materialize)) });
 }
 
-function extractDocumentFragmentContent(
-	schema: DocumentSchema,
-	document: DocumentNode,
-	selection: DocumentSelection,
-): DocumentFragment | undefined {
-	if (selection.kind === 'all')
-		return Object.freeze({ content: Object.freeze([...getDocumentBodyContent(document)]) });
+function extractDocumentFragmentContent(schema: DocumentSchema, document: DocumentNode, selection: DocumentSelection): DocumentFragment | undefined {
+	if (selection.kind === 'all') return Object.freeze({ content: Object.freeze([...getDocumentBodyContent(document)]) });
 	if (selection.kind !== 'text') return undefined;
 	const anchor = findTextBearingBlockLocation(document, selection.anchor.nodeId);
 	const head = findTextBearingBlockLocation(document, selection.head.nodeId);
 	if (!anchor || !head) return undefined;
 	if (anchor.block.id === head.block.id) {
-		const forward =
-			anchor.index < head.index ||
-			(anchor.index === head.index && selection.anchor.offset <= selection.head.offset);
-		const start = forward
-			? { location: anchor, point: selection.anchor }
-			: { location: head, point: selection.head };
+		const forward = anchor.index < head.index || (anchor.index === head.index && selection.anchor.offset <= selection.head.offset);
+		const start = forward ? { location: anchor, point: selection.anchor } : { location: head, point: selection.head };
 		const end = forward ? { location: head, point: selection.head } : { location: anchor, point: selection.anchor };
-		const content = sliceInlineContent(
-			schema,
-			start.location.block,
-			start.location.index,
-			start.point.offset,
-			end.location.index,
-			end.point.offset,
-		);
+		const content = sliceInlineContent(schema, start.location.block, start.location.index, start.point.offset, end.location.index, end.point.offset);
 		if (content.length === 0) return undefined;
 		return Object.freeze({ content: Object.freeze([createBlock(schema, start.location.block, content)]) });
 	}
@@ -298,14 +230,7 @@ function extractDocumentFragmentContent(
 		const block = start.location.parent.content[index];
 		if (!block || !isTextBearingBlock(block)) return undefined;
 		if (index === start.location.parentIndex) {
-			const content = sliceInlineContent(
-				schema,
-				block,
-				start.location.index,
-				start.point.offset,
-				block.content.length - 1,
-				Number.MAX_SAFE_INTEGER,
-			);
+			const content = sliceInlineContent(schema, block, start.location.index, start.point.offset, block.content.length - 1, Number.MAX_SAFE_INTEGER);
 			blocks.push(createBlock(schema, block, content));
 		} else if (index === end.location.parentIndex) {
 			const content = sliceInlineContent(schema, block, 0, 0, end.location.index, end.point.offset);
@@ -318,14 +243,11 @@ function extractDocumentFragmentContent(
 }
 
 function decodeNode(value: unknown): DocumentNode {
-	if (!isRecord(value) || typeof value.id !== 'string' || typeof value.type !== 'string')
-		throw new DocumentSerializationError('Serialized document node is invalid');
-	if (!Array.isArray(value.content))
-		throw new DocumentSerializationError(`Serialized node '${value.id}' must contain an array`);
+	if (!isRecord(value) || typeof value.id !== 'string' || typeof value.type !== 'string') throw new DocumentSerializationError('Serialized document node is invalid');
+	if (!Array.isArray(value.content)) throw new DocumentSerializationError(`Serialized node '${value.id}' must contain an array`);
 	const attrs = decodeAttributes(value.attrs, `node:${value.id}`);
 	const marks = value.marks === undefined ? [] : decodeMarks(value.marks, value.id);
-	if (value.text !== undefined && typeof value.text !== 'string')
-		throw new DocumentSerializationError(`Serialized text for '${value.id}' is invalid`);
+	if (value.text !== undefined && typeof value.text !== 'string') throw new DocumentSerializationError(`Serialized text for '${value.id}' is invalid`);
 	return createDocumentNode({
 		id: value.id,
 		type: value.type,
@@ -354,11 +276,9 @@ function validateFragmentContent(content: readonly DocumentNode[], schema: Docum
 }
 
 function decodeMarks(value: unknown, nodeId: string): readonly DocumentMark[] {
-	if (!Array.isArray(value))
-		throw new DocumentSerializationError(`Serialized marks for '${nodeId}' must be an array`);
+	if (!Array.isArray(value)) throw new DocumentSerializationError(`Serialized marks for '${nodeId}' must be an array`);
 	return value.map(mark => {
-		if (!isRecord(mark) || typeof mark.type !== 'string')
-			throw new DocumentSerializationError(`Serialized mark on '${nodeId}' is invalid`);
+		if (!isRecord(mark) || typeof mark.type !== 'string') throw new DocumentSerializationError(`Serialized mark on '${nodeId}' is invalid`);
 		return Object.freeze({ type: mark.type, attrs: decodeAttributes(mark.attrs, `mark:${mark.type}`) });
 	});
 }
@@ -367,8 +287,7 @@ function decodeAttributes(value: unknown, owner: string): DocumentAttributes {
 	if (!isRecord(value)) throw new DocumentSerializationError(`Serialized attributes for '${owner}' are invalid`);
 	const attrs: Record<string, DocumentAttributeValue> = {};
 	for (const [key, attribute] of Object.entries(value)) {
-		if (!isAttributeValue(attribute))
-			throw new DocumentSerializationError(`Serialized attribute '${key}' on '${owner}' is invalid`);
+		if (!isAttributeValue(attribute)) throw new DocumentSerializationError(`Serialized attribute '${key}' on '${owner}' is invalid`);
 		attrs[key] = attribute;
 	}
 	return Object.freeze(attrs);
@@ -393,19 +312,14 @@ interface TextBearingBlockLocation {
 	readonly index: number;
 }
 
-function findTextBearingBlockLocation(
-	root: DocumentNode,
-	textNodeId: DocumentNodeId,
-): TextBearingBlockLocation | undefined {
+function findTextBearingBlockLocation(root: DocumentNode, textNodeId: DocumentNodeId): TextBearingBlockLocation | undefined {
 	const textLocation = findDocumentNode(root, textNodeId);
 	const block = textLocation?.parent;
 	if (!block || !isTextBearingBlock(block)) return undefined;
 	const blockLocation = findDocumentNode(root, block.id);
 	const index = block.content.findIndex(child => child.id === textNodeId && child.text !== undefined);
 	if (!blockLocation?.parent || index < 0) return undefined;
-	const linear =
-		blockLocation.parent === root ||
-		(blockLocation.parent.type === 'documentSection' && root.content.includes(blockLocation.parent));
+	const linear = blockLocation.parent === root || (blockLocation.parent.type === 'documentSection' && root.content.includes(blockLocation.parent));
 	const parent = linear ? { ...root, content: getDocumentBodyContent(root) } : blockLocation.parent;
 	return { block, parent, parentIndex: linear ? parent.content.indexOf(block) : blockLocation.index, index };
 }
@@ -414,13 +328,7 @@ function textFromBlock(block: DocumentNode): string {
 	return textFromBlockRange(block, 0, 0, block.content.length - 1, Number.MAX_SAFE_INTEGER);
 }
 
-function textFromBlockRange(
-	block: DocumentNode,
-	startIndex: number,
-	startOffset: number,
-	endIndex: number,
-	endOffset: number,
-): string {
+function textFromBlockRange(block: DocumentNode, startIndex: number, startOffset: number, endIndex: number, endOffset: number): string {
 	if (block.content.length === 0 || startIndex > endIndex) return '';
 	const parts: string[] = [];
 	for (let index = startIndex; index <= endIndex; index += 1) {
@@ -444,14 +352,7 @@ function isTextBearingBlock(node: DocumentNode): boolean {
 	return node.type === 'paragraph' || node.type === 'heading' || node.type === 'codeBlock';
 }
 
-function sliceInlineContent(
-	schema: DocumentSchema,
-	block: DocumentNode,
-	startIndex: number,
-	startOffset: number,
-	endIndex: number,
-	endOffset: number,
-): readonly DocumentNode[] {
+function sliceInlineContent(schema: DocumentSchema, block: DocumentNode, startIndex: number, startOffset: number, endIndex: number, endOffset: number): readonly DocumentNode[] {
 	if (block.content.length === 0 || startIndex < 0 || endIndex < startIndex) return [];
 	const content: DocumentNode[] = [];
 	for (let index = startIndex; index <= endIndex; index += 1) {
@@ -460,8 +361,7 @@ function sliceInlineContent(
 		if (child.text !== undefined) {
 			const from = index === startIndex ? Math.max(0, Math.min(startOffset, child.text.length)) : 0;
 			const to = index === endIndex ? Math.max(from, Math.min(endOffset, child.text.length)) : child.text.length;
-			if (to > from)
-				content.push(schema.createText(child.text.slice(from, to), { id: child.id, marks: child.marks }));
+			if (to > from) content.push(schema.createText(child.text.slice(from, to), { id: child.id, marks: child.marks }));
 		} else if (index > startIndex || startOffset === 0) {
 			content.push(
 				schema.createNode(child.type, {

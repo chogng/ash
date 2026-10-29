@@ -1,18 +1,9 @@
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize, localize2 } from '../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import {
-	ConfigurationScope,
-	Extensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -23,10 +14,7 @@ import { CHANNELS_VIEW_ID, COLLAB_CONTAINER_ID } from '../common/collab.js';
 import { CollabViewPane } from './collabViewPane.js';
 
 /** Each product entry registers the same views in its own registry. */
-export function registerCollabViews(
-	registry: WorkbenchViewRegistry = ViewsRegistry,
-	open?: (accessor: ServicesAccessor) => Promise<unknown>,
-): void {
+export function registerCollabViews(registry: WorkbenchViewRegistry = ViewsRegistry, open?: (accessor: ServicesAccessor) => Promise<unknown>): void {
 	registry.registerStaticViewContainer({
 		id: COLLAB_CONTAINER_ID,
 		title: 'Collab',
@@ -69,10 +57,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	defaultValue: true,
 	scope: ConfigurationScope.APPLICATION,
 	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean')
-			throw new TypeError(
-				localize('collaboration.invalidVerbosity', 'Collab accessibility verbosity must be a boolean.'),
-			);
+		if (typeof value !== 'boolean') throw new TypeError(localize('collaboration.invalidVerbosity', 'Collab accessibility verbosity must be a boolean.'));
 		return value;
 	},
 	setting: {
@@ -81,10 +66,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 			return localize('collaboration.verbosityTitle', 'Collab accessibility help');
 		},
 		get description() {
-			return localize(
-				'collaboration.verbosityDescription',
-				'Announce how to open accessibility help when the channel tree receives focus.',
-			);
+			return localize('collaboration.verbosityDescription', 'Announce how to open accessibility help when the channel tree receives focus.');
 		},
 	},
 });

@@ -179,8 +179,7 @@ export class AnnotatedString<T> implements IAnnotatedString<T> {
 				let r = annotation.range;
 
 				// Inserted text will extend the first intersecting annotation, if the edit truly overlaps it
-				const shouldExtend =
-					i === 0 && e.replaceRange.endExclusive > r.start && e.replaceRange.start < r.endExclusive;
+				const shouldExtend = i === 0 && e.replaceRange.endExclusive > r.start && e.replaceRange.start < r.endExclusive;
 				// Annotation shrinks by the overlap then grows with the new text length
 				const overlap = r.intersect(e.replaceRange)!.length;
 				r = r.deltaEnd(-overlap + (shouldExtend ? e.newText.length : 0));
@@ -265,9 +264,7 @@ export class AnnotationsUpdate<T> {
 		this._annotations = annotatedString.getAllAnnotations();
 	}
 
-	public serialize<TSerializedProperty extends DefinedValue>(
-		serializingFunc: (annotation: T) => TSerializedProperty,
-	): ISerializedAnnotation<TSerializedProperty>[] {
+	public serialize<TSerializedProperty extends DefinedValue>(serializingFunc: (annotation: T) => TSerializedProperty): ISerializedAnnotation<TSerializedProperty>[] {
 		return this._annotations.map(annotation => {
 			const range = { start: annotation.range.start, endExclusive: annotation.range.endExclusive };
 			if (!annotation.annotation) {

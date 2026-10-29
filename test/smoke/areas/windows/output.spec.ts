@@ -7,10 +7,7 @@ import { expect, test, writeEditorExtensionFixture } from '../../../automation/t
 import type { ElectronApplication } from '@playwright/test';
 import { readStorageEntries, seedStorageOnNextLoad } from '../../../automation/storage.js';
 import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storage/common/storage.js';
-import {
-	appServerDaemonExecutablePath,
-	appServerExecutablePath,
-} from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
+import { appServerDaemonExecutablePath, appServerExecutablePath } from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
 
 const execute = promisify(execFile);
 
@@ -42,12 +39,10 @@ for (const locale of ['en', 'zh-CN']) {
 							follow: 'Pause Following Output',
 							resume: 'Follow New Output',
 						};
-				const { logs, windowId } = await (application as ElectronApplication).evaluate(
-					({ app, BrowserWindow }) => ({
-						logs: app.getPath('logs'),
-						windowId: BrowserWindow.getAllWindows()[0]!.id,
-					}),
-				);
+				const { logs, windowId } = await (application as ElectronApplication).evaluate(({ app, BrowserWindow }) => ({
+					logs: app.getPath('logs'),
+					windowId: BrowserWindow.getAllWindows()[0]!.id,
+				}));
 				const session = '20200101T000000000-00000000-0000-0000-0000-000000000000';
 				await mkdir(join(logs, session), { recursive: true });
 				const historicRecord = {
@@ -65,9 +60,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await selectWindow();
 				const output = page.locator('[data-view-id="ash.output"]');
 				const visible = output.locator('.view-lines');
-				const filter = page
-					.locator('.ash-output-title-actions, [data-view-id="ash.output"]')
-					.getByRole('searchbox');
+				const filter = page.locator('.ash-output-title-actions, [data-view-id="ash.output"]').getByRole('searchbox');
 				await filter.fill(labels.ready);
 				await expect(visible).toContainText(labels.ready);
 				await expect(visible).toContainText('[information] [logs]');
@@ -97,9 +90,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await filter.fill('');
 				await output.locator('.stanza-editor-input').focus();
 				await page.keyboard.press('Alt+F1');
-				await expect(page.locator('.ash-accessible-view-content')).toHaveValue(
-					chinese ? /打开已保存的日志/u : /Open Saved Logs opens current or retained log files/u,
-				);
+				await expect(page.locator('.ash-accessible-view-content')).toHaveValue(chinese ? /打开已保存的日志/u : /Open Saved Logs opens current or retained log files/u);
 				await page.keyboard.press('Escape');
 				const current = (await readdir(logs))
 					.filter(name => /^\d{8}T/.test(name) && name !== session)
@@ -110,10 +101,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await workbench.quickaccess.runCommand('workbench.action.output.clear');
 				await expect(visible).toHaveText('');
 				expect(await readFile(windowLog, 'utf8')).toContain(labels.ready);
-				await appendFile(
-					windowLog,
-					JSON.stringify({ ...historicRecord, message: 'after-clear-output-token' }) + '\n',
-				);
+				await appendFile(windowLog, JSON.stringify({ ...historicRecord, message: 'after-clear-output-token' }) + '\n');
 				await expect(visible).toContainText('after-clear-output-token');
 				await expect(visible).not.toContainText(labels.ready);
 				await page.reload();
@@ -126,9 +114,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await filter.fill('');
 				await workbench.quickaccess.runCommand('workbench.action.output.openSavedLogs');
 				await workbench.quickaccess.select(`${chinese ? '窗口 99' : 'Window 99'} — 2020-01-01 00:00:00 UTC`);
-				await expect(visible).toContainText(
-					'1970-01-01T00:00:00.042Z [warning] [saved-source] historic-output-token 中文',
-				);
+				await expect(visible).toContainText('1970-01-01T00:00:00.042Z [warning] [saved-source] historic-output-token 中文');
 				await expect(visible).toContainText('original error context');
 				const selector = await page.locator('[data-action-id="ash.output.selectChannel"]').boundingBox();
 				const actions = await page.locator('[data-action-id="ash.output.more"]').boundingBox();
@@ -142,61 +128,53 @@ for (const locale of ['en', 'zh-CN']) {
 				});
 				const restarted = await reloadWorkbench();
 				await restarted.workbench.quickaccess.runCommand('workbench.action.output.openSavedLogs');
-				await restarted.workbench.quickaccess.select(
-					`${chinese ? '窗口 99' : 'Window 99'} — 2020-01-01 00:00:00 UTC`,
-				);
-				await expect(restarted.workbench.page.locator('[data-view-id="ash.output"] .view-lines')).toContainText(
-					'historic-output-token 中文',
-				);
+				await restarted.workbench.quickaccess.select(`${chinese ? '窗口 99' : 'Window 99'} — 2020-01-01 00:00:00 UTC`);
+				await expect(restarted.workbench.page.locator('[data-view-id="ash.output"] .view-lines')).toContainText('historic-output-token 中文');
 			},
 		);
 	});
 }
 
-test(
-	'Local App Server Output follows actual daemon diagnostics without deleting the source on clear',
-	{ tag: ['@electron-app-server'] },
-	async ({ application, workbench, reloadWorkbench }) => {
-		const host = await (application as ElectronApplication).evaluate(({ app }) => ({
-			appPath: app.getAppPath(),
-			profile: process.env.ASH_HOME!,
-		}));
-		const location = { appPath: host.appPath, isPackaged: false, platform: process.platform, resourcesPath: '' };
-		const daemon = appServerDaemonExecutablePath(location);
-		const env = { ...process.env, ASH_HOME: host.profile, ASH_APP_SERVER_PATH: appServerExecutablePath(location) };
-		const status = JSON.parse((await execute(daemon, ['version'], { env, timeout: 10_000 })).stdout) as {
-			logPath: string;
-		};
-		const failConnection = () =>
-			new Promise<void>((resolve, reject) => {
-				// A separate test-owned carrier sends invalid input. The managed backend
-				// emits the diagnostic; the production window's connection stays intact.
-				const carrier = execFile(daemon, ['connect'], { env, timeout: 5_000 }, error => {
-					if (error && 'killed' in error && error.killed) reject(error);
-					else resolve();
-				});
-				carrier.stdin!.end('{invalid-json}\n');
+test('Local App Server Output follows actual daemon diagnostics without deleting the source on clear', { tag: ['@electron-app-server'] }, async ({ application, workbench, reloadWorkbench }) => {
+	const host = await (application as ElectronApplication).evaluate(({ app }) => ({
+		appPath: app.getAppPath(),
+		profile: process.env.ASH_HOME!,
+	}));
+	const location = { appPath: host.appPath, isPackaged: false, platform: process.platform, resourcesPath: '' };
+	const daemon = appServerDaemonExecutablePath(location);
+	const env = { ...process.env, ASH_HOME: host.profile, ASH_APP_SERVER_PATH: appServerExecutablePath(location) };
+	const status = JSON.parse((await execute(daemon, ['version'], { env, timeout: 10_000 })).stdout) as {
+		logPath: string;
+	};
+	const failConnection = () =>
+		new Promise<void>((resolve, reject) => {
+			// A separate test-owned carrier sends invalid input. The managed backend
+			// emits the diagnostic; the production window's connection stays intact.
+			const carrier = execFile(daemon, ['connect'], { env, timeout: 5_000 }, error => {
+				if (error && 'killed' in error && error.killed) reject(error);
+				else resolve();
 			});
-		await failConnection();
-		await expect.poll(() => readFile(status.logPath, 'utf8')).toContain('invalid App Server inbound JSON');
-		const selectLog = async () => {
-			await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
-			await workbench.quickaccess.select('Local App Server');
-		};
-		await selectLog();
-		let visible = workbench.page.locator('[data-view-id="ash.output"] .view-lines');
-		await expect(visible).toContainText('invalid App Server inbound JSON');
-		await workbench.quickaccess.runCommand('workbench.action.output.clear');
-		await expect(visible).toHaveText('');
-		expect(await readFile(status.logPath, 'utf8')).toContain('invalid App Server inbound JSON');
-		await failConnection();
-		await expect(visible).toContainText('invalid App Server inbound JSON');
-		({ workbench } = await reloadWorkbench());
-		visible = workbench.page.locator('[data-view-id="ash.output"] .view-lines');
-		await selectLog();
-		await expect(visible).toContainText('invalid App Server inbound JSON');
-	},
-);
+			carrier.stdin!.end('{invalid-json}\n');
+		});
+	await failConnection();
+	await expect.poll(() => readFile(status.logPath, 'utf8')).toContain('invalid App Server inbound JSON');
+	const selectLog = async () => {
+		await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
+		await workbench.quickaccess.select('Local App Server');
+	};
+	await selectLog();
+	let visible = workbench.page.locator('[data-view-id="ash.output"] .view-lines');
+	await expect(visible).toContainText('invalid App Server inbound JSON');
+	await workbench.quickaccess.runCommand('workbench.action.output.clear');
+	await expect(visible).toHaveText('');
+	expect(await readFile(status.logPath, 'utf8')).toContain('invalid App Server inbound JSON');
+	await failConnection();
+	await expect(visible).toContainText('invalid App Server inbound JSON');
+	({ workbench } = await reloadWorkbench());
+	visible = workbench.page.locator('[data-view-id="ash.output"] .view-lines');
+	await selectLog();
+	await expect(visible).toContainText('invalid App Server inbound JSON');
+});
 
 test.describe('Git-backed ordinary Output', () => {
 	test.use({ gitRepository: true });
@@ -214,13 +192,8 @@ test.describe('Git-backed ordinary Output', () => {
 				await workbench.quickaccess.runCommand('git.showOutput');
 			};
 			const output = page.locator('[data-view-id="ash.output"]');
-			const filter = page
-				.locator('.ash-output-title-actions, [data-view-id="ash.output"]')
-				.getByRole('searchbox', { name: 'Filter Output', exact: true });
-			const visibleLines = async (): Promise<string[]> =>
-				(await output.locator('.view-line').allTextContents())
-					.map(line => line.replaceAll('\u00a0', ' '))
-					.filter(Boolean);
+			const filter = page.locator('.ash-output-title-actions, [data-view-id="ash.output"]').getByRole('searchbox', { name: 'Filter Output', exact: true });
+			const visibleLines = async (): Promise<string[]> => (await output.locator('.view-line').allTextContents()).map(line => line.replaceAll('\u00a0', ' ')).filter(Boolean);
 
 			// Real workspace changes reach the existing Git status owner and channel;
 			// this producer emits complete lines, while chunk boundaries are tested in components.
@@ -249,10 +222,7 @@ test.describe('Git-backed ordinary Output', () => {
 			expect(await filter.getAttribute('aria-description')).toBeNull();
 			await workbench.quickaccess.runCommand('workbench.action.output.openInEditor');
 			const editor = workbench.editors.groupAt(0).content;
-			const rawLines = async (): Promise<string[]> =>
-				(await editor.locator('.view-line').allTextContents())
-					.map(line => line.replaceAll('\u00a0', ' '))
-					.filter(Boolean);
+			const rawLines = async (): Promise<string[]> => (await editor.locator('.view-line').allTextContents()).map(line => line.replaceAll('\u00a0', ' ')).filter(Boolean);
 			await expect.poll(rawLines).toEqual(retainedLines);
 			await filter.fill('absent');
 			await expect(output.locator('.view-lines')).toHaveCount(0);
@@ -295,9 +265,7 @@ for (const locale of ['en', 'zh-CN']) {
 		async ({ target, workbench, reloadWorkbench, restartWorkbench }, testInfo) => {
 			if (locale === 'zh-CN') {
 				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-				const language = workbench.page
-					.getByRole('dialog', { name: 'Select Display Language' })
-					.getByRole('combobox');
+				const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 				await language.fill('简体中文');
 				await language.press('Enter');
 				({ workbench } = await restartWorkbench());
@@ -317,17 +285,14 @@ for (const locale of ['en', 'zh-CN']) {
 							placeholder: 'Filter Output (text1,text2,!exclude)',
 							restored: 'Saved filter restored. Edit or clear to use comma-separated filters.',
 							unsupported: 'A newer saved filter is preserved. Changes in this window are not saved.',
-							controls:
-								'Separate alternative text filters with commas and prefix exclusions with !. Spaces and - are literal.',
+							controls: 'Separate alternative text filters with commas and prefix exclusions with !. Spaces and - are literal.',
 						};
 			const selectChannel = async (): Promise<void> => {
 				await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
 				await workbench.quickaccess.select('App Server');
 			};
 			const output = page.locator('[data-view-id="ash.output"]');
-			const filter = page
-				.locator('.ash-output-title-actions, [data-view-id="ash.output"]')
-				.getByRole('searchbox', { name: labels.filter, exact: true });
+			const filter = page.locator('.ash-output-title-actions, [data-view-id="ash.output"]').getByRole('searchbox', { name: labels.filter, exact: true });
 			await page.addInitScript(() => {
 				const seed = sessionStorage.getItem('ash.test.output.seed');
 				if (seed === null) {
@@ -451,9 +416,7 @@ test.describe('Git-backed Output smart scrolling', () => {
 				test.setTimeout(90_000);
 				if (locale === 'zh-CN') {
 					await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-					const language = workbench.page
-						.getByRole('dialog', { name: 'Select Display Language' })
-						.getByRole('combobox');
+					const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 					await language.fill('简体中文');
 					await language.press('Enter');
 					({ workbench, application } = await restartWorkbench());
@@ -464,29 +427,22 @@ test.describe('Git-backed Output smart scrolling', () => {
 						? {
 								scroll: '自动滚动',
 								title: '输出智能滚动',
-								description:
-									'主光标移到较早的行时暂停自动滚动，移到最后一行时恢复。设置变更从下一次光标移动起生效。',
+								description: '主光标移到较早的行时暂停自动滚动，移到最后一行时恢复。设置变更从下一次光标移动起生效。',
 								help: '启用 output.smartScroll.enabled 时，主光标移到较早的行会暂停自动滚动，移到最后一行会恢复。设置变更从下一次光标移动起生效。',
 							}
 						: {
 								scroll: 'Auto Scroll',
 								title: 'Output smart scrolling',
-								description:
-									'Pause Auto Scroll when the primary cursor moves to an earlier line, and resume at the last line. Changes apply to the next cursor movement.',
+								description: 'Pause Auto Scroll when the primary cursor moves to an earlier line, and resume at the last line. Changes apply to the next cursor movement.',
 								help: 'With output.smartScroll.enabled, moving the primary cursor to an earlier line pauses Auto Scroll; moving it to the last line resumes it. Changing the setting affects the next cursor movement.',
 							};
 				const output = page.locator('[data-view-id="ash.output"]');
 				const input = output.locator('.stanza-editor-input');
 				const scroll = output.locator('.stanza-editor > .ash-smooth-scrollable');
-				const autoScroll = page
-					.locator('.ash-output-title-actions')
-					.getByRole('button', { name: labels.scroll, exact: true });
-				if (target.kind === 'browser')
-					await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+				const autoScroll = page.locator('.ash-output-title-actions').getByRole('button', { name: labels.scroll, exact: true });
+				if (target.kind === 'browser') await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 				const readClipboard = (): Promise<string> =>
-					target.kind === 'electron'
-						? (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText())
-						: page.evaluate(() => navigator.clipboard.readText());
+					target.kind === 'electron' ? (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText()) : page.evaluate(() => navigator.clipboard.readText());
 				const previousClipboard = await readClipboard();
 				const rawText = async (expected: string): Promise<string> => {
 					// Copy through the separate resource editor so observing raw text does not move the Output caret.
@@ -499,10 +455,7 @@ test.describe('Git-backed Output smart scrolling', () => {
 					return readClipboard();
 				};
 				const appendStatus = async (count: number): Promise<void> => {
-					await writeFile(
-						join(testWorkspace.directory, `output-scroll-${count}.ts`),
-						`export const value = ${count};\n`,
-					);
+					await writeFile(join(testWorkspace.directory, `output-scroll-${count}.ts`), `export const value = ${count};\n`);
 					await workbench.quickaccess.runCommand('git.refresh');
 					await expect(page.locator('[data-view-id="ash.gitView"] .ash-scm-change')).toHaveCount(count);
 				};
@@ -523,13 +476,7 @@ test.describe('Git-backed Output smart scrolling', () => {
 				};
 				try {
 					await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
-					await workbench.quickaccess.select(
-						target.kind === 'electron'
-							? locale === 'zh-CN'
-								? 'App Server 连接'
-								: 'App Server Connection'
-							: 'App Server',
-					);
+					await workbench.quickaccess.select(target.kind === 'electron' ? (locale === 'zh-CN' ? 'App Server 连接' : 'App Server Connection') : 'App Server');
 					const otherBefore = await rawText('[connection]');
 					await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 					await workbench.quickaccess.runCommand('git.showOutput');
@@ -555,9 +502,7 @@ test.describe('Git-backed Output smart scrolling', () => {
 					await input.press('ControlOrMeta+End');
 					await expect(autoScroll).toHaveAttribute('aria-pressed', 'true');
 					await input.press('Alt+F1');
-					await expect
-						.poll(() => page.locator('.ash-accessible-view-content').inputValue())
-						.toContain(labels.help);
+					await expect.poll(() => page.locator('.ash-accessible-view-content').inputValue()).toContain(labels.help);
 					await page.keyboard.press('Escape');
 					for (let count = 5; count <= 20; count++) await appendStatus(count);
 					await expect(output.locator('.view-lines')).toContainText('20 changed files');
@@ -567,8 +512,7 @@ test.describe('Git-backed Output smart scrolling', () => {
 							top: element.scrollTop,
 							height: element.scrollHeight,
 							viewport: element.clientHeight,
-							focused:
-								element.querySelector('.stanza-editor-input') === element.ownerDocument.activeElement,
+							focused: element.querySelector('.stanza-editor-input') === element.ownerDocument.activeElement,
 						}));
 					const quickInputBefore = await readViewport();
 					await expect(input).toBeFocused();
@@ -607,13 +551,7 @@ test.describe('Git-backed Output smart scrolling', () => {
 					await input.press('ArrowUp');
 					await expect(autoScroll).toHaveAttribute('aria-pressed', 'false');
 					await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
-					await workbench.quickaccess.select(
-						target.kind === 'electron'
-							? locale === 'zh-CN'
-								? 'App Server 连接'
-								: 'App Server Connection'
-							: 'App Server',
-					);
+					await workbench.quickaccess.select(target.kind === 'electron' ? (locale === 'zh-CN' ? 'App Server 连接' : 'App Server Connection') : 'App Server');
 					const otherAfter = await rawText('[connection]');
 					expect(otherAfter).toBe(otherBefore);
 					const status = await execute('git', ['status', '--porcelain=v2', '--untracked-files=all'], {
@@ -641,10 +579,7 @@ test.describe('Git-backed Output smart scrolling', () => {
 					});
 				} finally {
 					if (target.kind === 'electron') {
-						await (application as ElectronApplication).evaluate(
-							({ clipboard }, text) => clipboard.writeText(text),
-							previousClipboard,
-						);
+						await (application as ElectronApplication).evaluate(({ clipboard }, text) => clipboard.writeText(text), previousClipboard);
 					} else {
 						await page.evaluate(text => navigator.clipboard.writeText(text), previousClipboard);
 					}
@@ -663,9 +598,7 @@ for (const locale of ['en', 'zh-CN']) {
 			test.setTimeout(90_000);
 			if (locale === 'zh-CN') {
 				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-				const language = workbench.page
-					.getByRole('dialog', { name: 'Select Display Language' })
-					.getByRole('combobox');
+				const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 				await language.fill('简体中文');
 				await language.press('Enter');
 				({ workbench, application } = await restartWorkbench());
@@ -677,8 +610,7 @@ for (const locale of ['en', 'zh-CN']) {
 							filter: '筛选输出',
 							reset: '重置筛选',
 							unsupported: '已保留由较新版本保存的筛选条件。本窗口中的修改不会保存。',
-							categoryHelp:
-								'类别选项作用于所选通道。旧版保存的类别选项仍作用于所有通道，直到逐项更改；每次只将该类别迁移到所选通道。重置筛选会清除所有通道的类别选项。',
+							categoryHelp: '类别选项作用于所选通道。旧版保存的类别选项仍作用于所有通道，直到逐项更改；每次只将该类别迁移到所选通道。重置筛选会清除所有通道的类别选项。',
 						}
 					: {
 							filter: 'Filter Output',
@@ -689,11 +621,7 @@ for (const locale of ['en', 'zh-CN']) {
 						};
 			const output = () => page.locator('[data-view-id="ash.output"]');
 			const lines = async (): Promise<string[]> =>
-				(await output().locator('.view-line').allTextContents())
-					.map(line =>
-						line.replaceAll('\u00a0', ' ').replace(/^\d{4}-\d{2}-\d{2}T\S+ \[[^\]]+\] \[[^\]]+\] /u, ''),
-					)
-					.filter(Boolean);
+				(await output().locator('.view-line').allTextContents()).map(line => line.replaceAll('\u00a0', ' ').replace(/^\d{4}-\d{2}-\d{2}T\S+ \[[^\]]+\] \[[^\]]+\] /u, '')).filter(Boolean);
 			const select = async (requested: string): Promise<void> => {
 				const channel =
 					requested === 'Window' && locale === 'zh-CN'
@@ -713,11 +641,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await output().locator('.stanza-editor-input').focus();
 				await page.keyboard.press('ControlOrMeta+Home');
 			};
-			const openFilters = (): Promise<void> =>
-				page
-					.locator('.ash-output-title-actions')
-					.getByRole('button', { name: labels.filter, exact: true })
-					.click();
+			const openFilters = (): Promise<void> => page.locator('.ash-output-title-actions').getByRole('button', { name: labels.filter, exact: true }).click();
 			const category = async (name: string, checked: boolean, change: boolean): Promise<void> => {
 				// The existing menu driver observes and dispatches through Browser or Main
 				// according to the product's menu setting; Output and IPC remain real.
@@ -742,9 +666,7 @@ for (const locale of ['en', 'zh-CN']) {
 			const workspaceId =
 				target.kind === 'browser'
 					? await page.evaluate(() => {
-							const host = (
-								globalThis as unknown as { ashWebWorkbenchHost: { workspace: { id: string } } }
-							).ashWebWorkbenchHost;
+							const host = (globalThis as unknown as { ashWebWorkbenchHost: { workspace: { id: string } } }).ashWebWorkbenchHost;
 							return host.workspace.id;
 						})
 					: await page.evaluate(async () => {
@@ -756,8 +678,7 @@ for (const locale of ['en', 'zh-CN']) {
 							return (await bridge.ipcRenderer.invoke('ash:workspace:context:read')).id;
 						});
 			const identity = { scope: StorageScope.WORKSPACE, id: workspaceId };
-			const savedFilter = async (): Promise<string | undefined> =>
-				(await readStorageEntries(application, page, identity))['output.filterState']?.value;
+			const savedFilter = async (): Promise<string | undefined> => (await readStorageEntries(application, page, identity))['output.filterState']?.value;
 			await select('Extension Host');
 			// Ready is published only after the existing fleet reconcile/list response
 			// reaches the production owner. No producer or transport is replaced.
@@ -766,9 +687,7 @@ for (const locale of ['en', 'zh-CN']) {
 			const input = output().locator('.stanza-editor-input');
 			await input.focus();
 			await page.keyboard.press('Alt+F1');
-			await expect
-				.poll(() => page.locator('.ash-accessible-view-content').inputValue())
-				.toContain(labels.categoryHelp);
+			await expect.poll(() => page.locator('.ash-accessible-view-content').inputValue()).toContain(labels.categoryHelp);
 			await page.keyboard.press('Escape');
 			await expect(input).toBeFocused();
 			await select('Window');
@@ -776,10 +695,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect.poll(async () => (await lines()).join('')).toContain('Workbench restored');
 			await workbench.quickaccess.runCommand('workbench.action.output.openInEditor');
 			const rawEditor = workbench.editors.groupAt(0).content;
-			const rawLines = async (): Promise<string[]> =>
-				(await rawEditor.locator('.view-line').allTextContents())
-					.map(line => line.replaceAll('\u00a0', ' '))
-					.filter(Boolean);
+			const rawLines = async (): Promise<string[]> => (await rawEditor.locator('.view-line').allTextContents()).map(line => line.replaceAll('\u00a0', ' ')).filter(Boolean);
 			const rawWindow = await rawLines();
 			expect(rawWindow.join('')).toContain('Workbench restored');
 			await category('lifecycle', true, true);
@@ -851,11 +767,10 @@ for (const locale of ['en', 'zh-CN']) {
 			});
 			await reloadSeededOwner();
 			await select('Window');
-			await expect(
-				page
-					.locator('.ash-output-title-actions, [data-view-id="ash.output"]')
-					.getByRole('searchbox', { name: labels.filter, exact: true }),
-			).toHaveAttribute('title', labels.unsupported);
+			await expect(page.locator('.ash-output-title-actions, [data-view-id="ash.output"]').getByRole('searchbox', { name: labels.filter, exact: true })).toHaveAttribute(
+				'title',
+				labels.unsupported,
+			);
 			await category('lifecycle', true, true);
 			await expect.poll(async () => (await lines()).join('')).not.toContain('Workbench restored');
 			await select('Extension Host');
@@ -931,8 +846,7 @@ exports.activate = context => {
 			);
 			const manifestPath = join(root, 'package.json');
 			const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-			for (const command of manifest.contributes.commands)
-				command.title = 'Output wiring: ' + command.command.split('.').at(-1);
+			for (const command of manifest.contributes.commands) command.title = 'Output wiring: ' + command.command.split('.').at(-1);
 			await writeFile(manifestPath, JSON.stringify(manifest));
 			await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 			const install = workbench.page.getByRole('dialog', {
@@ -940,9 +854,7 @@ exports.activate = context => {
 				exact: true,
 			});
 			await install.getByRole('textbox').fill('output-extension');
-			await workbench.dialogs.expectMessage(application, 'Information', () =>
-				install.getByRole('textbox').press('Enter'),
-			);
+			await workbench.dialogs.expectMessage(application, 'Information', () => install.getByRole('textbox').press('Enter'));
 			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
 			await workbench.page
 				.getByRole('listbox', { name: 'Installed Extensions', exact: true })
@@ -953,15 +865,12 @@ exports.activate = context => {
 			await expect(details.getByRole('heading', { name: 'Output wiring smoke', exact: true })).toBeVisible();
 			await details.getByRole('switch').press('Space');
 			await expect(details.getByRole('switch')).toBeChecked();
-			await workbench.dialogs.confirm(application, 'Output wiring smoke', 'Grant permissions', () =>
-				details.getByRole('button', { name: 'Grant permissions', exact: true }).click(),
-			);
+			await workbench.dialogs.confirm(application, 'Output wiring smoke', 'Grant permissions', () => details.getByRole('button', { name: 'Grant permissions', exact: true }).click());
 
 			await expect(details.getByRole('button', { name: 'Revoke permissions', exact: true })).toBeVisible();
 			({ workbench, application } = await reloadWorkbench());
 			for (const mode of [windowMode]) {
-				const host =
-					mode === 'workbench' ? workbench : new Workbench(await workbench.openAgentsWindow(target.kind));
+				const host = mode === 'workbench' ? workbench : new Workbench(await workbench.openAgentsWindow(target.kind));
 				const page = host.page;
 				const output = page.locator('[data-view-id="ash.output"]');
 				const visible = output.locator('.view-lines');
@@ -979,11 +888,7 @@ exports.activate = context => {
 				await select('Extension Text');
 				await expect(visible).toContainText('first second');
 				await select('Extension Logs');
-				await host.menus.select(
-					application,
-					() => page.locator('[data-action-id="ash.output.more"] button').click(),
-					['Set Extension Logs Recording Level', 'Trace'],
-				);
+				await host.menus.select(application, () => page.locator('[data-action-id="ash.output.more"] button').click(), ['Set Extension Logs Recording Level', 'Trace']);
 				await expect(async () => {
 					await host.quickaccess.runCommand('acme.output.emit');
 					await expect(visible).toContainText('LEVEL=1;EVENTS=1');
@@ -1013,11 +918,7 @@ exports.activate = context => {
 				await expect(visible).toContainText('Window logging initialized.');
 				await host.quickaccess.runCommand('workbench.action.terminal.focus');
 				await select('Terminal');
-				await host.menus.select(
-					application,
-					() => page.locator('[data-action-id="ash.output.more"] button').click(),
-					['Set Terminal Recording Level', 'Trace'],
-				);
+				await host.menus.select(application, () => page.locator('[data-action-id="ash.output.more"] button').click(), ['Set Terminal Recording Level', 'Trace']);
 				await host.quickaccess.runCommand('workbench.action.terminal.focus');
 				await host.terminal.runCommand("printf 'OUTPUT_LOG_PROBE\\n'");
 				await select('Terminal');

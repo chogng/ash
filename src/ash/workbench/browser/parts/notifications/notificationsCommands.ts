@@ -10,11 +10,7 @@ import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { NotificationsPosition, NotificationsSettings } from '../../../common/notifications.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import {
-	INotificationService,
-	NotificationsFilter,
-	type INotificationSourceFilter,
-} from '../../../../platform/notification/common/notification.js';
+import { INotificationService, NotificationsFilter, type INotificationSourceFilter } from '../../../../platform/notification/common/notification.js';
 import { INotificationsCenter } from './notificationsCenter.js';
 import './notificationAccessibleView.js';
 
@@ -44,10 +40,7 @@ registerAction2(
 				title: localize2('notifications.showList', 'Show Notifications'),
 				f1: true,
 				keybinding: {
-					primary: Keybinding.chord(
-						logicalKey('k', { primaryKey: true }),
-						logicalKey('n', { primaryKey: true, shiftKey: true }),
-					),
+					primary: Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('n', { primaryKey: true, shiftKey: true })),
 				},
 			});
 		}
@@ -98,9 +91,7 @@ registerAction2(
 		}
 		override run(accessor: ServicesAccessor): void {
 			const service = accessor.get(INotificationService);
-			service.setFilter(
-				service.getFilter() === NotificationsFilter.ERROR ? NotificationsFilter.OFF : NotificationsFilter.ERROR,
-			);
+			service.setFilter(service.getFilter() === NotificationsFilter.ERROR ? NotificationsFilter.OFF : NotificationsFilter.ERROR);
 		}
 	},
 );
@@ -117,23 +108,14 @@ registerAction2(
 		override run(accessor: ServicesAccessor): void {
 			const service = accessor.get(INotificationService);
 			const lifetime = new DisposableStore();
-			const picker = lifetime.add(
-				accessor.get(IQuickInputService).createQuickPick<IQuickPickItem & INotificationSourceFilter>(),
-			);
+			const picker = lifetime.add(accessor.get(IQuickInputService).createQuickPick<IQuickPickItem & INotificationSourceFilter>());
 			const sources = service.getFilters().sort((a, b) => a.label.localeCompare(b.label));
 			picker.items = sources.map(source => ({ ...source, description: source.id }));
 			picker.canSelectMany = true;
-			picker.ariaLabel = picker.placeholder = localize(
-				'notifications.selectSources',
-				'Select sources to enable all notifications from',
-			);
+			picker.ariaLabel = picker.placeholder = localize('notifications.selectSources', 'Select sources to enable all notifications from');
 			picker.selectedItems = sources
 				.filter(source => source.filter === NotificationsFilter.OFF)
-				.map(
-					source =>
-						picker.items.find(item => 'id' in item && item.id === source.id) as IQuickPickItem &
-							INotificationSourceFilter,
-				);
+				.map(source => picker.items.find(item => 'id' in item && item.id === source.id) as IQuickPickItem & INotificationSourceFilter);
 			lifetime.add(
 				picker.onDidAccept(() => {
 					const enabled = new Set(picker.selectedItems.map(item => item.id));
@@ -173,10 +155,7 @@ registerAction2(
 					group: 'navigation',
 					order: 10000,
 					when: ContextKeyExpr.and(
-						ContextKeyExpr.equals(
-							`config.${NotificationsSettings.NOTIFICATIONS_POSITION}`,
-							NotificationsPosition.TOP_RIGHT,
-						),
+						ContextKeyExpr.equals(`config.${NotificationsSettings.NOTIFICATIONS_POSITION}`, NotificationsPosition.TOP_RIGHT),
 						ContextKeyExpr.equals(`config.${NotificationsSettings.NOTIFICATIONS_BUTTON}`, true),
 					),
 				},
@@ -189,12 +168,7 @@ registerAction2(
 );
 
 for (const [suffix, value, title, order] of [
-	[
-		'bottomRight',
-		NotificationsPosition.BOTTOM_RIGHT,
-		localize2('notifications.position.bottomRight', 'Bottom Right'),
-		1,
-	],
+	['bottomRight', NotificationsPosition.BOTTOM_RIGHT, localize2('notifications.position.bottomRight', 'Bottom Right'), 1],
 	['bottomLeft', NotificationsPosition.BOTTOM_LEFT, localize2('notifications.position.bottomLeft', 'Bottom Left'), 2],
 	['topRight', NotificationsPosition.TOP_RIGHT, localize2('notifications.position.topRight', 'Top Right'), 3],
 ] as const) {
@@ -209,9 +183,7 @@ for (const [suffix, value, title, order] of [
 				});
 			}
 			override async run(accessor: ServicesAccessor): Promise<void> {
-				await accessor
-					.get(IConfigurationService)
-					.updateValue(NotificationsSettings.NOTIFICATIONS_POSITION, value);
+				await accessor.get(IConfigurationService).updateValue(NotificationsSettings.NOTIFICATIONS_POSITION, value);
 			}
 		},
 	);

@@ -2,10 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { AccessibilitySupport } from '../../../platform/accessibility/common/accessibility.js';
 import { isMacintosh } from '../../../base/common/platform.js';
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 import {
 	EditorFontLigatures,
@@ -23,11 +20,7 @@ import {
 import { EditorZoom } from '../../common/config/editorZoom.js';
 import { createBareFontInfoFromRawSettings } from '../../common/config/fontInfoFromSettings.js';
 import { EDITOR_FONT_DEFAULTS } from '../../common/config/fontInfo.js';
-import {
-	editorConfiguration,
-	isDiffEditorConfigurationKey,
-	isEditorConfigurationKey,
-} from '../../common/config/editorConfigurationSchema.js';
+import { editorConfiguration, isDiffEditorConfigurationKey, isEditorConfigurationKey } from '../../common/config/editorConfigurationSchema.js';
 import { CodeEditorConfiguration } from '../../../workbench/contrib/codeEditor/common/editorConfiguration.js';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
@@ -107,9 +100,7 @@ test('common editor options normalize shared editor settings', () => {
 
 test('common editor options preserve VS Code internal enum and nested option contracts', () => {
 	assert.deepEqual(
-		['none', 'keep', 'brackets', 'advanced', 'full', undefined, 'invalid', 0].map(value =>
-			EditorOptions.autoIndent.validate(value),
-		),
+		['none', 'keep', 'brackets', 'advanced', 'full', undefined, 'invalid', 0].map(value => EditorOptions.autoIndent.validate(value)),
 		[
 			EditorAutoIndentStrategy.None,
 			EditorAutoIndentStrategy.Keep,
@@ -132,7 +123,10 @@ test('common editor options preserve VS Code internal enum and nested option con
 	assert.equal(EditorOptions.lineNumbers.validate('relative').renderType, RenderLineNumbersType.Relative);
 	assert.equal(EditorOptions.wrappingIndent.validate('deepIndent'), WrappingIndent.DeepIndent);
 
-	const inlineSuggest = EditorOptions.inlineSuggest.validate({ mode: 'prefix', edits: { showCollapsed: true } });
+	const inlineSuggest = EditorOptions.inlineSuggest.validate({
+		mode: 'prefix',
+		edits: { showCollapsed: true },
+	});
 	assert.equal(inlineSuggest.mode, 'prefix');
 	assert.equal(inlineSuggest.edits.showCollapsed, true);
 	assert.equal(inlineSuggest.edits.showLongDistanceHint, true);
@@ -229,36 +223,15 @@ test('editor zoom clamps levels and emits only effective changes', () => {
 });
 
 test('editor settings are registered by the common configuration owner', () => {
-	assert.equal(
-		configurationRegistry.getConfiguration(CodeEditorConfiguration.fontSize)?.defaultValue,
-		isMacintosh ? 12 : 14,
-	);
-	assert.equal(
-		configurationRegistry.getConfiguration(CodeEditorConfiguration.wordWrap)?.defaultValue,
-		EditorLineWrapping.Off,
-	);
+	assert.equal(configurationRegistry.getConfiguration(CodeEditorConfiguration.fontSize)?.defaultValue, isMacintosh ? 12 : 14);
+	assert.equal(configurationRegistry.getConfiguration(CodeEditorConfiguration.wordWrap)?.defaultValue, EditorLineWrapping.Off);
 	assert.equal(configurationRegistry.getConfiguration(CodeEditorConfiguration.colorDecorators)?.defaultValue, true);
-	assert.equal(
-		configurationRegistry.getConfiguration(CodeEditorConfiguration.colorDecoratorsActivatedOn)?.defaultValue,
-		'clickAndHover',
-	);
-	assert.equal(
-		configurationRegistry.getConfiguration(CodeEditorConfiguration.colorDecoratorsLimit)?.defaultValue,
-		500,
-	);
-	assert.equal(
-		configurationRegistry.getConfiguration(CodeEditorConfiguration.defaultColorDecorators)?.defaultValue,
-		'auto',
-	);
+	assert.equal(configurationRegistry.getConfiguration(CodeEditorConfiguration.colorDecoratorsActivatedOn)?.defaultValue, 'clickAndHover');
+	assert.equal(configurationRegistry.getConfiguration(CodeEditorConfiguration.colorDecoratorsLimit)?.defaultValue, 500);
+	assert.equal(configurationRegistry.getConfiguration(CodeEditorConfiguration.defaultColorDecorators)?.defaultValue, 'auto');
 	assert.equal(configurationRegistry.getConfiguration('editor.fontSize')?.key, CodeEditorConfiguration.fontSize);
-	assert.equal(
-		configurationRegistry.getConfiguration('editor.colorDecorators')?.key,
-		CodeEditorConfiguration.colorDecorators,
-	);
-	assert.equal(
-		configurationRegistry.getConfiguration('diffEditor.showInlineChanges')?.key,
-		CodeEditorConfiguration.diffShowInlineChanges,
-	);
+	assert.equal(configurationRegistry.getConfiguration('editor.colorDecorators')?.key, CodeEditorConfiguration.colorDecorators);
+	assert.equal(configurationRegistry.getConfiguration('diffEditor.showInlineChanges')?.key, CodeEditorConfiguration.diffShowInlineChanges);
 	assert.equal(editorConfiguration.properties['editor.tabSize']?.default, 4);
 	assert.equal(isEditorConfigurationKey('tabSize'), true);
 	assert.equal(isEditorConfigurationKey('notAnEditorSetting'), false);

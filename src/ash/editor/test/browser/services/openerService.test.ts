@@ -48,7 +48,10 @@ test('opener service resolves and delegates external resources explicitly', asyn
 });
 
 function editorService(): ICodeEditorService {
-	return { getFocusedCodeEditor: () => null, openCodeEditor: async () => null } as unknown as ICodeEditorService;
+	return {
+		getFocusedCodeEditor: () => null,
+		openCodeEditor: async () => null,
+	} as unknown as ICodeEditorService;
 }
 
 test('opener service requires its editor dependency at creation', () => {
@@ -79,10 +82,7 @@ test('explicit default selection bypasses all contributed handlers and releases 
 			throw new Error('host failed');
 		},
 	});
-	await assert.rejects(
-		opener.open('https://example.test/', { allowContributedOpeners: defaultExternalUriOpenerId }),
-		/host failed/u,
-	);
+	await assert.rejects(opener.open('https://example.test/', { allowContributedOpeners: defaultExternalUriOpenerId }), /host failed/u);
 	assert.deepEqual(calls, ['https://proxy.test/', 'release']);
 });
 
@@ -124,14 +124,7 @@ test('command links execute decoded object, positional, scalar and empty argumen
 		);
 	}
 	await opener.open('command:///test.opener.command', { allowCommands: ['test.opener.command'] });
-	assert.deepEqual(calls, [
-		[{ commands: ['first', 'second'], text: '%20 中文' }],
-		['one', 2],
-		[null],
-		[false],
-		[0],
-		[],
-	]);
+	assert.deepEqual(calls, [[{ commands: ['first', 'second'], text: '%20 中文' }], ['one', 2], [null], [false], [0], []]);
 	await assert.rejects(opener.open('command:test.opener.command?not-json', { allowCommands: true }), SyntaxError);
 	assert.equal(calls.length, 6);
 });

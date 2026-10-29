@@ -75,10 +75,7 @@ export function commonPrefixLength(left: string, right: string): number {
 export function commonSuffixLength(left: string, right: string): number {
 	const limit = Math.min(left.length, right.length);
 	let length = 0;
-	while (
-		length < limit &&
-		left.charCodeAt(left.length - length - 1) === right.charCodeAt(right.length - length - 1)
-	) {
+	while (length < limit && left.charCodeAt(left.length - length - 1) === right.charCodeAt(right.length - length - 1)) {
 		length += 1;
 	}
 	return length;
@@ -146,12 +143,7 @@ export class CodePointIterator {
 }
 
 export function isFullWidthCharacter(charCode: number): boolean {
-	return (
-		(charCode >= 0x2e80 && charCode <= 0xd7af) ||
-		(charCode >= 0xf900 && charCode <= 0xfaff) ||
-		(charCode >= 0xff01 && charCode <= 0xff5e) ||
-		(charCode >= 0xffe0 && charCode <= 0xffe6)
-	);
+	return (charCode >= 0x2e80 && charCode <= 0xd7af) || (charCode >= 0xf900 && charCode <= 0xfaff) || (charCode >= 0xff01 && charCode <= 0xff5e) || (charCode >= 0xffe0 && charCode <= 0xffe6);
 }
 
 export function isEmojiImprecise(value: number): boolean {
@@ -290,8 +282,7 @@ export function getCharContainingOffset(value: string, offset: number): readonly
 }
 
 export function regExpLeadsToEndlessLoop(regexp: RegExp): boolean {
-	if (regexp.source === '^' || regexp.source === '^$' || regexp.source === '$' || regexp.source === '^\\s*$')
-		return false;
+	if (regexp.source === '^' || regexp.source === '^$' || regexp.source === '$' || regexp.source === '^\\s*$') return false;
 	const match = regexp.exec('');
 	return Boolean(match && regexp.lastIndex === 0);
 }

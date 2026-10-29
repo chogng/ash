@@ -2,12 +2,7 @@ import type { IAction } from '../../../../../base/common/actions.js';
 import { decodeBase64 } from '../../../../../base/common/buffer.js';
 import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
-import {
-	NotificationPriority,
-	Severity,
-	type INotification,
-	type INotificationHandle,
-} from '../../../../../platform/notification/common/notification.js';
+import { NotificationPriority, Severity, type INotification, type INotificationHandle } from '../../../../../platform/notification/common/notification.js';
 
 /** Per-instance callbacks keep protocol replies and focus bound to the emitting process. */
 export interface IOsc99NotificationHost {
@@ -72,9 +67,7 @@ export class TerminalNotificationHandler extends Disposable {
 		const id = (fields.get('i') ?? '').replace(/[^a-zA-Z0-9_+.-]/g, '').slice(0, 256);
 		const type = fields.get('p') || 'title';
 		if (type === '?') {
-			this.reply(
-				`i=${id || '0'}:p=?:a=report,focus:c=1:o=always,unfocused,invisible:p=title,body,buttons,close,alive,?:u=0,1,2:w=1`,
-			);
+			this.reply(`i=${id || '0'}:p=?:a=report,focus:c=1:o=always,unfocused,invisible:p=title,body,buttons,close,alive,?:u=0,1,2:w=1`);
 			return true;
 		}
 		if (type === 'alive') {
@@ -96,11 +89,7 @@ export class TerminalNotificationHandler extends Disposable {
 		if (fields.get('e') === '1') {
 			try {
 				const unpadded = payload.replace(/=+$/, '');
-				if (
-					!/^[A-Za-z0-9+/_-]*={0,2}$/.test(payload) ||
-					unpadded.length % 4 === 1 ||
-					(unpadded.length !== payload.length && payload.length % 4 !== 0)
-				) {
+				if (!/^[A-Za-z0-9+/_-]*={0,2}$/.test(payload) || unpadded.length % 4 === 1 || (unpadded.length !== payload.length && payload.length % 4 !== 0)) {
 					throw new Error('Invalid base64 payload');
 				}
 				// The buffer decoder accepts URL-safe/unpadded base64; TextDecoder rejects
@@ -144,10 +133,7 @@ export class TerminalNotificationHandler extends Disposable {
 		if (/^\d{1,10}$/.test(fields.get('w') ?? '')) pending.wait = Math.min(Number(fields.get('w')), 2147483647);
 		if (['always', 'unfocused', 'invisible'].includes(fields.get('o') ?? '')) pending.occasion = fields.get('o')!;
 		if (fields.get('d') === '0') return true;
-		if (
-			(pending.occasion === 'unfocused' && this.host.isWindowFocused()) ||
-			(pending.occasion === 'invisible' && (this.host.isWindowFocused() || this.host.isTerminalVisible()))
-		) {
+		if ((pending.occasion === 'unfocused' && this.host.isWindowFocused()) || (pending.occasion === 'invisible' && (this.host.isWindowFocused() || this.host.isTerminalVisible()))) {
 			entry.pending = undefined;
 			if (!entry.handle) this.closeEntry(entry, 'dispose');
 			return true;
@@ -227,26 +213,17 @@ export class TerminalNotificationHandler extends Disposable {
 				action('terminal.osc99.dismiss', localize('terminal.notification.dismiss', 'Dismiss'), () => {
 					if (this.isCurrent(entry, content)) this.closeEntry(entry, 'dismiss');
 				}),
-				action(
-					'terminal.osc99.disable',
-					localize('terminal.notification.disable', 'Disable Terminal Notifications'),
-					async () => {
-						if (!this.isCurrent(entry, content)) return;
-						await this.host.updateEnableNotifications(false);
-						this.clear();
-					},
-				),
+				action('terminal.osc99.disable', localize('terminal.notification.disable', 'Disable Terminal Notifications'), async () => {
+					if (!this.isCurrent(entry, content)) return;
+					await this.host.updateEnableNotifications(false);
+					this.clear();
+				}),
 			],
 		};
 	}
 
 	private isCurrent(entry: NotificationEntry, content: NotificationContent): boolean {
-		return (
-			!this.isDisposed &&
-			this.host.isEnabled() &&
-			this.entries.get(entry.key) === entry &&
-			entry.displayed === content
-		);
+		return !this.isDisposed && this.host.isEnabled() && this.entries.get(entry.key) === entry && entry.displayed === content;
 	}
 
 	private activate(entry: NotificationEntry, button?: number): void {
@@ -299,8 +276,7 @@ function plainText(text: string): string {
 		}
 		if (character === ']') labels.pop();
 		const code = character.charCodeAt(0);
-		if ((code >= 32 && (code < 127 || code >= 160)) || character === '\t' || character === '\n')
-			output.push(character);
+		if ((code >= 32 && (code < 127 || code >= 160)) || character === '\t' || character === '\n') output.push(character);
 	}
 	return output.join('');
 }

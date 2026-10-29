@@ -7,10 +7,7 @@ import { isCancellationError } from '../../../../base/common/errors.js';
 import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
-import {
-	AccessibilityVerbositySettingId,
-	IAccessibleViewService,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -104,8 +101,7 @@ export class OutlinePane extends ViewPane {
 		const lines: string[] = [];
 		const visit = (parent: unknown, depth: number): void => {
 			for (const element of this.outline?.config.treeDataSource.getChildren(parent) ?? []) {
-				const label =
-					this.outline!.config.options.keyboardNavigationLabelProvider?.getKeyboardNavigationLabel(element);
+				const label = this.outline!.config.options.keyboardNavigationLabelProvider?.getKeyboardNavigationLabel(element);
 				lines.push(`${'  '.repeat(depth)}${typeof label === 'string' ? label : (label?.join(', ') ?? '')}`);
 				visit(element, depth + 1);
 			}
@@ -125,10 +121,7 @@ export class OutlinePane extends ViewPane {
 		this.editor = editor;
 		if (!this.isBodyVisible()) return;
 		this.emptyDomNode.hidden = false;
-		this.emptyDomNode.textContent = localize(
-			'outline.noEditor',
-			'The active editor cannot provide outline information.',
-		);
+		this.emptyDomNode.textContent = localize('outline.noEditor', 'The active editor cannot provide outline information.');
 		if (!editor || !this.outlines.canCreateOutline(editor)) return;
 		const generation = this.generation;
 		const lifetime = new DisposableStore();
@@ -145,10 +138,7 @@ export class OutlinePane extends ViewPane {
 				return;
 			}
 			if (!outline) {
-				this.emptyDomNode.textContent = localize(
-					'outline.noEditor',
-					'The active editor cannot provide outline information.',
-				);
+				this.emptyDomNode.textContent = localize('outline.noEditor', 'The active editor cannot provide outline information.');
 				return;
 			}
 			lifetime.add(outline);
@@ -171,12 +161,7 @@ export class OutlinePane extends ViewPane {
 			tree.element.classList.add('ash-outline-tree');
 			lifetime.add(
 				addDisposableListener(tree.element, 'keydown', (event: KeyboardEvent) => {
-					if (
-						(event.ctrlKey || event.metaKey) &&
-						!event.altKey &&
-						!event.shiftKey &&
-						event.key.toLowerCase() === 'f'
-					) {
+					if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'f') {
 						stopEvent(event);
 						tree.openFind();
 					}
@@ -185,9 +170,7 @@ export class OutlinePane extends ViewPane {
 			lifetime.add(toDisposable(() => tree.element.remove()));
 			lifetime.add(
 				tree.onDidOpen(event => {
-					void Promise.resolve(
-						outline.reveal(event.element, event.editorOptions, event.sideBySide, true),
-					).catch(error => this.log.error('outline', 'Could not reveal symbol', error));
+					void Promise.resolve(outline.reveal(event.element, event.editorOptions, event.sideBySide, true)).catch(error => this.log.error('outline', 'Could not reveal symbol', error));
 				}),
 			);
 			lifetime.add(
@@ -199,8 +182,7 @@ export class OutlinePane extends ViewPane {
 			this.updateAriaLabel();
 			this.render();
 		} catch (error) {
-			if (generation !== this.generation || token.token.isCancellationRequested || isCancellationError(error))
-				return;
+			if (generation !== this.generation || token.token.isCancellationRequested || isCancellationError(error)) return;
 			this.emptyDomNode.textContent = localize('outline.failed', 'Could not load document symbols.');
 			this.log.error('outline', 'Could not load outline', error);
 		} finally {
@@ -216,9 +198,7 @@ export class OutlinePane extends ViewPane {
 		if (this.outlineViewState.sortBy === OutlineSortOrder.ByName) compare = comparator.compareByName;
 		else if (this.outlineViewState.sortBy === OutlineSortOrder.ByKind) compare = comparator.compareByType;
 		const children = (parent: IOutline<unknown> | unknown): TreeElement<unknown>[] =>
-			[...treeDataSource.getChildren(parent)]
-				.sort(compare)
-				.map(element => ({ element, children: children(element) }));
+			[...treeDataSource.getChildren(parent)].sort(compare).map(element => ({ element, children: children(element) }));
 		const focused = tree.focus;
 		const selected = tree.selection;
 		tree.setChildren(children(outline));
@@ -287,11 +267,7 @@ export class OutlinePane extends ViewPane {
 					},
 				},
 				...[OutlineSortOrder.ByPosition, OutlineSortOrder.ByName, OutlineSortOrder.ByKind].map(sort => {
-					const labels = [
-						localize('outline.sortPosition', 'Sort by Position'),
-						localize('outline.sortName', 'Sort by Name'),
-						localize('outline.sortKind', 'Sort by Type'),
-					];
+					const labels = [localize('outline.sortPosition', 'Sort by Position'), localize('outline.sortName', 'Sort by Name'), localize('outline.sortKind', 'Sort by Type')];
 					const label = labels[sort]!;
 					return {
 						id: `outline.sort.${sort}`,

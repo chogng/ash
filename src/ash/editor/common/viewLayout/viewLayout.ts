@@ -49,22 +49,14 @@ class VerticalLayout {
 	private defaultLineHeight: number;
 	private paddingTop: number;
 	private paddingBottom: number;
-	public constructor(
-		lineCount: number,
-		lineHeight: number,
-		paddingTop = 0,
-		paddingBottom = 0,
-		customLineHeightData: readonly CustomLineHeightData[] = [],
-	) {
+	public constructor(lineCount: number, lineHeight: number, paddingTop = 0, paddingBottom = 0, customLineHeightData: readonly CustomLineHeightData[] = []) {
 		validateLineCount(lineCount);
 		this.paddingTop = nonNegativeFinite(paddingTop, 'paddingTop');
 		this.paddingBottom = nonNegativeFinite(paddingBottom, 'paddingBottom');
 		this.defaultLineHeight = lineHeight;
 		for (const data of customLineHeightData) this.customLineHeights.set(data.decorationId, data);
 		this.lineCountValue = lineCount;
-		this.linesLayout = new LinesLayout(lineCount, lineHeight, this.paddingTop, this.paddingBottom, [
-			...this.customLineHeights.values(),
-		]);
+		this.linesLayout = new LinesLayout(lineCount, lineHeight, this.paddingTop, this.paddingBottom, [...this.customLineHeights.values()]);
 	}
 	public get lineCount(): number {
 		return this.lineCountValue;
@@ -189,9 +181,7 @@ class VerticalLayout {
 			throw new RangeError('Line viewport coordinates must be finite and non-negative');
 		}
 		const lineCount = this.lineCount;
-		const visibleLines = !this.linesLayout.hasWhitespace()
-			? this.getVisibleLineRange(verticalOffset, viewportHeight)
-			: this.getVisibleLineRangeWithViewZones(verticalOffset, viewportHeight);
+		const visibleLines = !this.linesLayout.hasWhitespace() ? this.getVisibleLineRange(verticalOffset, viewportHeight) : this.getVisibleLineRangeWithViewZones(verticalOffset, viewportHeight);
 		const renderLines = visibleLines;
 		return Object.freeze({
 			lineCount,
@@ -200,9 +190,7 @@ class VerticalLayout {
 			renderLines,
 			renderTop: this.getVerticalOffsetForLineIndex(renderLines.startLineIndex),
 			relativeVerticalOffset: Object.freeze(
-				Array.from({ length: renderLines.endLineIndexExclusive - renderLines.startLineIndex }, (_, index) =>
-					this.getVerticalOffsetForLineIndex(renderLines.startLineIndex + index),
-				),
+				Array.from({ length: renderLines.endLineIndexExclusive - renderLines.startLineIndex }, (_, index) => this.getVerticalOffsetForLineIndex(renderLines.startLineIndex + index)),
 			),
 		});
 	}
@@ -227,14 +215,9 @@ class VerticalLayout {
 		if (viewportHeight === 0) return lineRange(0, 0);
 		const visibleBottom = verticalOffset + viewportHeight;
 		const startLineIndex = this.getLineNumberAtVerticalOffset(verticalOffset);
-		if (startLineIndex >= this.lineCount || this.getVerticalOffsetForLineIndex(startLineIndex) >= visibleBottom)
-			return lineRange(startLineIndex, startLineIndex);
+		if (startLineIndex >= this.lineCount || this.getVerticalOffsetForLineIndex(startLineIndex) >= visibleBottom) return lineRange(startLineIndex, startLineIndex);
 		let endLineIndexExclusive = startLineIndex;
-		while (
-			endLineIndexExclusive < this.lineCount &&
-			this.getVerticalOffsetForLineIndex(endLineIndexExclusive) < visibleBottom
-		)
-			endLineIndexExclusive += 1;
+		while (endLineIndexExclusive < this.lineCount && this.getVerticalOffsetForLineIndex(endLineIndexExclusive) < visibleBottom) endLineIndexExclusive += 1;
 		return lineRange(startLineIndex, endLineIndexExclusive);
 	}
 }
@@ -403,10 +386,7 @@ export class ViewLayout extends Disposable {
 				const paddingTop = this.linesLayout.padding.top;
 				scrollPosition = {
 					scrollLeft: this.getCurrentScrollLeft(),
-					scrollTop:
-						currentTop <= paddingTop
-							? currentTop
-							: paddingTop + ((currentTop - paddingTop) / this.linesLayout.lineHeight) * lineHeight,
+					scrollTop: currentTop <= paddingTop ? currentTop : paddingTop + ((currentTop - paddingTop) / this.linesLayout.lineHeight) * lineHeight,
 				};
 				this.linesLayout.setDefaultLineHeight(lineHeight);
 				reason = EditorViewportChangeReason.LineHeight;
@@ -471,10 +451,7 @@ export class ViewLayout extends Disposable {
 	}
 
 	public getWhitespaceViewportData(): IViewWhitespaceViewportData[] {
-		return this.linesLayout.getWhitespaceViewportData(
-			this.currentLayout.scrollPosition.top,
-			this.viewportSize.height,
-		);
+		return this.linesLayout.getWhitespaceViewportData(this.currentLayout.scrollPosition.top, this.viewportSize.height);
 	}
 
 	public getWhitespaces(): IEditorWhitespace[] {
@@ -508,10 +485,7 @@ export class ViewLayout extends Disposable {
 		if (this.linesLayout.lineHeight === next) return this.currentLayout;
 		const currentTop = this.currentLayout.scrollPosition.top;
 		const paddingTop = this.linesLayout.padding.top;
-		const nextTop =
-			currentTop <= paddingTop
-				? currentTop
-				: paddingTop + ((currentTop - paddingTop) / this.linesLayout.lineHeight) * next;
+		const nextTop = currentTop <= paddingTop ? currentTop : paddingTop + ((currentTop - paddingTop) / this.linesLayout.lineHeight) * next;
 		this.linesLayout.setDefaultLineHeight(next);
 		this.publish(EditorViewportChangeReason.LineHeight, {
 			scrollLeft: this.currentLayout.scrollPosition.left,
@@ -589,28 +563,19 @@ export class ViewLayout extends Disposable {
 		this.reportedContentHeight = contentHeight;
 		this.currentLayout = next;
 		if (previous.contentSize.width !== next.contentSize.width || previousContentHeight !== contentHeight) {
-			this.contentSizeEmitter.fire(
-				new ContentSizeChangedEvent(
-					previous.contentSize.width,
-					previousContentHeight,
-					next.contentSize.width,
-					contentHeight,
-				),
-			);
+			this.contentSizeEmitter.fire(new ContentSizeChangedEvent(previous.contentSize.width, previousContentHeight, next.contentSize.width, contentHeight));
 		}
 		if (layoutsEqual(previous, next)) return;
 		this.changeEmitter.fire(
-			Object.freeze({ reason: this.pendingReason ?? EditorViewportChangeReason.Scroll, layout: next }),
+			Object.freeze({
+				reason: this.pendingReason ?? EditorViewportChangeReason.Scroll,
+				layout: next,
+			}),
 		);
 	}
 
 	private readScrollDimensions(): { width: number; scrollWidth: number; height: number; scrollHeight: number } {
-		const contentWidth = Math.max(
-			this.viewportSize.width,
-			this.maxLineWidth,
-			this.overlayWidgetsMinWidth,
-			this.linesLayout.getWhitespaceMinWidth(),
-		);
+		const contentWidth = Math.max(this.viewportSize.width, this.maxLineWidth, this.overlayWidgetsMinWidth, this.linesLayout.getWhitespaceMinWidth());
 		const contentHeight = Math.max(this.viewportSize.height, this.linesLayout.getLinesTotalHeight());
 		// Public layout coordinates include the fixed gutter; scrollbar dimensions
 		// address only the body. Subtracting the same origin preserves the scroll range.
@@ -625,12 +590,7 @@ export class ViewLayout extends Disposable {
 
 	private createLayout(): EditorViewportLayout {
 		const contentSize = Object.freeze({
-			width: Math.max(
-				this.viewportSize.width,
-				this.maxLineWidth,
-				this.overlayWidgetsMinWidth,
-				this.linesLayout.getWhitespaceMinWidth(),
-			),
+			width: Math.max(this.viewportSize.width, this.maxLineWidth, this.overlayWidgetsMinWidth, this.linesLayout.getWhitespaceMinWidth()),
 			height: Math.max(this.viewportSize.height, this.linesLayout.getLinesTotalHeight()),
 		});
 		const maximumScrollPosition = Object.freeze({
@@ -652,9 +612,7 @@ export class ViewLayout extends Disposable {
 			visibleLines: viewportData.visibleLines,
 			renderLines: viewportData.renderLines,
 			renderTop: viewportData.renderTop,
-			...(this.linesLayout.getWhitespaces().length > 0
-				? { relativeVerticalOffset: viewportData.relativeVerticalOffset }
-				: {}),
+			...(this.linesLayout.getWhitespaces().length > 0 ? { relativeVerticalOffset: viewportData.relativeVerticalOffset } : {}),
 		});
 	}
 }

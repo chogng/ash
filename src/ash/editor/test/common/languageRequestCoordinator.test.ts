@@ -38,12 +38,9 @@ interface PendingWorkerRequest {
 	readonly completion: Deferred<TestResult>;
 }
 
-class ControlledLanguageWorker
-	implements LanguageWorker<TestLane, TestPayload, TestResult>, LanguageWorkerResultSettler
-{
+class ControlledLanguageWorker implements LanguageWorker<TestLane, TestPayload, TestResult>, LanguageWorkerResultSettler {
 	readonly requests: PendingWorkerRequest[] = [];
-	readonly settlements: Array<{ readonly requestId: number; readonly disposition: LanguageWorkerResultDisposition }> =
-		[];
+	readonly settlements: Array<{ readonly requestId: number; readonly disposition: LanguageWorkerResultDisposition }> = [];
 	readonly synchronizedChanges: TextModelChange[] = [];
 	readonly synchronizedAfterCancellation: boolean[] = [];
 	disposed = false;
@@ -100,19 +97,34 @@ test('Language requests apply immutable values for the captured model version', 
 	assert.equal(pending.request.requestId, 1);
 	assert.equal(pending.request.snapshot.version, 1);
 	assert.equal(pending.request.snapshot.getText(), 'alpha');
-	pending.completion.resolve({ label: pending.request.payload.label, text: pending.request.snapshot.getText() });
+	pending.completion.resolve({
+		label: pending.request.payload.label,
+		text: pending.request.snapshot.getText(),
+	});
 
-	assert.deepEqual(await first, { status: LanguageRequestStatus.Applied, requestId: 1, modelVersion: 1 });
+	assert.deepEqual(await first, {
+		status: LanguageRequestStatus.Applied,
+		requestId: 1,
+		modelVersion: 1,
+	});
 	assert.equal(Object.isFrozen(applied[0]), true);
 	assert.deepEqual(applied, [
-		{ requestId: 1, textModel: model, modelVersion: 1, value: { label: 'first', text: 'alpha' } },
+		{
+			requestId: 1,
+			textModel: model,
+			modelVersion: 1,
+			value: { label: 'first', text: 'alpha' },
+		},
 	]);
 
 	const second = coordinator.runLatest('tokens', { label: 'second' }, result => {
 		applied.push(result);
 	});
 	assert.equal(workers.length, 1);
-	worker.requests[1]!.completion.resolve({ label: 'second', text: 'alpha' });
+	worker.requests[1]!.completion.resolve({
+		label: 'second',
+		text: 'alpha',
+	});
 	assert.equal((await second).status, LanguageRequestStatus.Applied);
 });
 
@@ -180,7 +192,12 @@ test('Model changes cancel every captured language version', async () => {
 	const diagnostics = coordinator.runLatest('diagnostics', { label: 'diagnostics' }, result => {
 		applied.push(result.value);
 	});
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 3 + 1)), text: '!' }]);
+	model.applyEdits([
+		{
+			range: Range.fromPositions(new Position(0 + 1, 3 + 1)),
+			text: '!',
+		},
+	]);
 	assert.equal(
 		worker.requests.every(request => request.signal.aborted),
 		true,
@@ -210,7 +227,12 @@ test('Model synchronization failure discards the worker and recovers from a full
 	});
 	const first = coordinator.runLatest('tokens', { label: 'old' }, () => assert.fail('Old result must not apply'));
 
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 3 + 1)), text: '!' }]);
+	model.applyEdits([
+		{
+			range: Range.fromPositions(new Position(0 + 1, 3 + 1)),
+			text: '!',
+		},
+	]);
 
 	assert.equal(workers[0]!.disposed, true);
 	workers[0]!.requests[0]!.completion.resolve({ label: 'old', text: 'old' });
@@ -234,31 +256,18 @@ test('Caller cancellation is explicit before and during a request', async () => 
 	const beforeReason = new Error('not needed');
 	before.abort(beforeReason);
 
-	assert.deepEqual(
-		await coordinator.runLatest(
-			'tokens',
-			{ label: 'before' },
-			() => assert.fail('Cancelled request must not apply'),
-			{ signal: before.signal },
-		),
-		{
-			status: LanguageRequestStatus.Cancelled,
-			requestId: 1,
-			modelVersion: 1,
-			reason: LanguageRequestCancellationReason.Caller,
-			cause: beforeReason,
-		},
-	);
+	assert.deepEqual(await coordinator.runLatest('tokens', { label: 'before' }, () => assert.fail('Cancelled request must not apply'), { signal: before.signal }), {
+		status: LanguageRequestStatus.Cancelled,
+		requestId: 1,
+		modelVersion: 1,
+		reason: LanguageRequestCancellationReason.Caller,
+		cause: beforeReason,
+	});
 	assert.equal(workers.length, 0);
 
 	const during = new AbortController();
 	const duringReason = new Error('superseded by caller');
-	const pending = coordinator.runLatest(
-		'tokens',
-		{ label: 'during' },
-		() => assert.fail('Cancelled request must not apply'),
-		{ signal: during.signal },
-	);
+	const pending = coordinator.runLatest('tokens', { label: 'during' }, () => assert.fail('Cancelled request must not apply'), { signal: during.signal });
 	during.abort(duringReason);
 	assert.equal(workers[0]!.requests[0]!.signal.reason, duringReason);
 	workers[0]!.requests[0]!.completion.resolve({ label: 'during', text: 'text' });
@@ -280,12 +289,8 @@ test('Active worker failure restarts the worker and cancels peer lanes', async (
 		return worker;
 	});
 
-	const failed = coordinator.runLatest('tokens', { label: 'failed' }, () =>
-		assert.fail('Failed request must not apply'),
-	);
-	const peer = coordinator.runLatest('diagnostics', { label: 'peer' }, () =>
-		assert.fail('Restarted peer must not apply'),
-	);
+	const failed = coordinator.runLatest('tokens', { label: 'failed' }, () => assert.fail('Failed request must not apply'));
+	const peer = coordinator.runLatest('diagnostics', { label: 'peer' }, () => assert.fail('Restarted peer must not apply'));
 	const failure = new Error('worker crashed');
 	workers[0]!.requests[0]!.completion.reject(failure);
 	await assert.rejects(failed, failure);
@@ -313,11 +318,12 @@ test('Coordinator disposal and model disposal prevent late application', async (
 		workers.push(worker);
 		return worker;
 	});
-	const afterModel = coordinator.runLatest('tokens', { label: 'model-disposed' }, () =>
-		assert.fail('Disposed model result must not apply'),
-	);
+	const afterModel = coordinator.runLatest('tokens', { label: 'model-disposed' }, () => assert.fail('Disposed model result must not apply'));
 	model.dispose();
-	workers[0]!.requests[0]!.completion.resolve({ label: 'model-disposed', text: 'text' });
+	workers[0]!.requests[0]!.completion.resolve({
+		label: 'model-disposed',
+		text: 'text',
+	});
 	assert.deepEqual(await afterModel, {
 		status: LanguageRequestStatus.Cancelled,
 		requestId: 1,
@@ -327,16 +333,14 @@ test('Coordinator disposal and model disposal prevent late application', async (
 
 	const liveModel = new TextModel('live');
 	const liveWorker = new ControlledLanguageWorker();
-	const disposableCoordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(
-		liveModel,
-		() => liveWorker,
-	);
-	const afterCoordinator = disposableCoordinator.runLatest('tokens', { label: 'coordinator-disposed' }, () =>
-		assert.fail('Disposed coordinator result must not apply'),
-	);
+	const disposableCoordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(liveModel, () => liveWorker);
+	const afterCoordinator = disposableCoordinator.runLatest('tokens', { label: 'coordinator-disposed' }, () => assert.fail('Disposed coordinator result must not apply'));
 	disposableCoordinator.dispose();
 	assert.equal(liveWorker.disposed, true);
-	liveWorker.requests[0]!.completion.resolve({ label: 'coordinator-disposed', text: 'live' });
+	liveWorker.requests[0]!.completion.resolve({
+		label: 'coordinator-disposed',
+		text: 'live',
+	});
 	assert.deepEqual(await afterCoordinator, {
 		status: LanguageRequestStatus.Cancelled,
 		requestId: 1,
@@ -382,16 +386,25 @@ test('Result confirmation occurs only after the renderer application gate', asyn
 	worker.requests[0]!.completion.resolve({ label: 'first', text: 'text' });
 	assert.equal((await first).status, LanguageRequestStatus.Applied);
 
-	const cancelled = coordinator.runLatest('tokens', { label: 'cancelled' }, () =>
-		assert.fail('Cancelled result must not apply'),
-	);
-	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 4 + 1)), text: '!' }]);
+	const cancelled = coordinator.runLatest('tokens', { label: 'cancelled' }, () => assert.fail('Cancelled result must not apply'));
+	model.applyEdits([
+		{
+			range: Range.fromPositions(new Position(0 + 1, 4 + 1)),
+			text: '!',
+		},
+	]);
 	worker.requests[1]!.completion.resolve({ label: 'cancelled', text: 'text' });
 	assert.equal((await cancelled).status, LanguageRequestStatus.Cancelled);
 
 	assert.deepEqual(worker.settlements, [
-		{ requestId: 1, disposition: LanguageWorkerResultDisposition.Applied },
-		{ requestId: 2, disposition: LanguageWorkerResultDisposition.Discarded },
+		{
+			requestId: 1,
+			disposition: LanguageWorkerResultDisposition.Applied,
+		},
+		{
+			requestId: 2,
+			disposition: LanguageWorkerResultDisposition.Discarded,
+		},
 	]);
 });
 
@@ -409,9 +422,7 @@ test('closing a model cancels pending work without waiting for its worker', asyn
 	using model = new TextModel('old');
 	const worker = new ControlledLanguageWorker();
 	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(model, () => worker);
-	const pending = coordinator.runLatest('tokens', { label: 'closing' }, () =>
-		assert.fail('Closed model must not receive results'),
-	);
+	const pending = coordinator.runLatest('tokens', { label: 'closing' }, () => assert.fail('Closed model must not receive results'));
 	model.dispose();
 	assert.equal(worker.requests[0]!.signal.aborted, true);
 	assert.equal(worker.disposed, true);
@@ -430,9 +441,7 @@ test('a superseded request finishes even when its worker ignores cancellation', 
 	using model = new TextModel('text');
 	const worker = new ControlledLanguageWorker();
 	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(model, () => worker);
-	const first = coordinator.runLatest('tokens', { label: 'first' }, () =>
-		assert.fail('Superseded result must not apply'),
-	);
+	const first = coordinator.runLatest('tokens', { label: 'first' }, () => assert.fail('Superseded result must not apply'));
 	const applied: string[] = [];
 	const second = coordinator.runLatest('tokens', { label: 'second' }, result => applied.push(result.value.label));
 	assert.equal((await first).status, LanguageRequestStatus.Cancelled);
@@ -454,9 +463,7 @@ test('a model closed during worker creation releases the newly created worker', 
 		model.dispose();
 		return worker;
 	});
-	const outcome = await coordinator.runLatest('tokens', { label: 'closing' }, () =>
-		assert.fail('Closed model must not receive results'),
-	);
+	const outcome = await coordinator.runLatest('tokens', { label: 'closing' }, () => assert.fail('Closed model must not receive results'));
 	assert.deepEqual(
 		{ outcome, disposed: worker.disposed, requests: worker.requests.length },
 		{

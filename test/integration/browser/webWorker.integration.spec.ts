@@ -10,10 +10,7 @@ test('Web replaces a failed syntax Worker and keeps the live buffer and undo his
 	const failWorker = async () => {
 		const worker = page.workers().find(worker => /treeSitterWorkerMain/u.test(worker.url()))!;
 		expect(worker).toBeDefined();
-		const failed = page.waitForEvent(
-			'console',
-			message => message.type() === 'error' && message.text() === 'Injected syntax Worker failure',
-		);
+		const failed = page.waitForEvent('console', message => message.type() === 'error' && message.text() === 'Injected syntax Worker failure');
 		const replacement = page.waitForEvent('worker', candidate => /treeSitterWorkerMain/u.test(candidate.url()));
 		const retired = worker.waitForEvent('close');
 		await worker.evaluate(() => {
@@ -36,13 +33,7 @@ test('Web replaces a failed syntax Worker and keeps the live buffer and undo his
 	await expect(page.locator('.stanza-editor-token.token-keyword').filter({ hasText: /^def$/ })).toBeVisible();
 	await page.evaluate(() => window.treeSitterIntegration.edit());
 	await page.evaluate(() => window.treeSitterIntegration.ready());
-	expect(
-		await page.evaluate(() =>
-			window.treeSitterIntegration
-				.state()
-				.tokens.some(token => token.type === 'string' && token.text.includes('updated updated ')),
-		),
-	).toBe(true);
+	expect(await page.evaluate(() => window.treeSitterIntegration.state().tokens.some(token => token.type === 'string' && token.text.includes('updated updated ')))).toBe(true);
 	await failWorker();
 	await page.evaluate(() => window.treeSitterIntegration.ready());
 	await page.evaluate(() => window.treeSitterIntegration.undo());
@@ -66,9 +57,7 @@ test('persistent syntax Worker startup failure stops after one automatic replace
 		}),
 	);
 	await page.goto('/treeSitter.html?backend=offline');
-	await expect
-		.poll(() => page.evaluate(() => window.treeSitterIntegration?.state().errors))
-		.toEqual(expect.arrayContaining([expect.stringContaining('Injected persistent syntax Worker failure')]));
+	await expect.poll(() => page.evaluate(() => window.treeSitterIntegration?.state().errors)).toEqual(expect.arrayContaining([expect.stringContaining('Injected persistent syntax Worker failure')]));
 	expect(starts).toBe(2);
 	await expect.poll(() => page.workers().filter(worker => /treeSitterWorkerMain/u.test(worker.url())).length).toBe(0);
 	await page.evaluate(() => window.treeSitterIntegration.dispose());

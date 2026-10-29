@@ -8,10 +8,7 @@ import type { IReader } from '../../common/observable.js';
 import type { IDisposable } from '../../common/lifecycle.js';
 
 type HotReloadGlobal = typeof globalThis & {
-	$hotReload_applyNewExports?: (request: {
-		readonly oldExports: Record<string, unknown>;
-		readonly newSrc: string;
-	}) => ((newExports: Record<string, unknown>) => boolean) | undefined;
+	$hotReload_applyNewExports?: (request: { readonly oldExports: Record<string, unknown>; readonly newSrc: string }) => ((newExports: Record<string, unknown>) => boolean) | undefined;
 };
 
 enableHotReload();

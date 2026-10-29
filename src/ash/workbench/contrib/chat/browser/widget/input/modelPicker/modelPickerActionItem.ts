@@ -23,11 +23,7 @@ export interface IModelPickerDelegate {
 export class ModelPickerActionItem extends ActionViewItem {
 	private readonly pickerWidget: ModelPickerWidget;
 
-	constructor(
-		action: IAction,
-		delegate: IModelPickerDelegate,
-		@IInstantiationService instantiationService: IInstantiationService,
-	) {
+	constructor(action: IAction, delegate: IModelPickerDelegate, @IInstantiationService instantiationService: IInstantiationService) {
 		super(action);
 		this.pickerWidget = this._register(instantiationService.createInstance(ModelPickerWidget, delegate));
 	}

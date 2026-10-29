@@ -1,32 +1,16 @@
 import { Emitter } from '../../base/common/event.js';
-import {
-	getTextViewFeatures,
-	onDidChangeTextViewFeatures,
-	type TextViewFeatureContext,
-	type TextViewFeature,
-} from './view/viewFeatures.js';
+import { getTextViewFeatures, onDidChangeTextViewFeatures, type TextViewFeatureContext, type TextViewFeature } from './view/viewFeatures.js';
 import type { IMouseWheelEvent } from '../../base/browser/mouseEvent.js';
 import { Event } from '../../base/common/event.js';
 import { addDisposableListener, getClientArea, h } from '../../base/browser/dom.js';
 import { FastDomNode } from '../../base/browser/fastDomNode.js';
 import { PixelRatio, type IPixelRatioMonitor } from '../../base/browser/pixelRatio.js';
 import { runAtThisOrScheduleAtNextAnimationFrame } from '../../base/browser/scheduler.js';
-import {
-	DisposableMap,
-	DisposableStore,
-	MutableDisposable,
-	markAsSingleton,
-	toDisposable,
-	type IDisposable,
-} from '../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, MutableDisposable, markAsSingleton, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { type ISize } from '../../base/common/layout.js';
 import { clamp, isFiniteNumber } from '../../base/common/numbers.js';
-import {
-	resolveEditorIndentationOptions,
-	type EditorIndentationOptions,
-	type ResolvedEditorIndentationOptions,
-} from '../common/core/misc/indentation.js';
+import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from '../common/core/misc/indentation.js';
 import { Position } from '../common/core/position.js';
 import { type IDimension } from '../common/core/2d/dimension.js';
 import { ScrollType } from '../common/editorCommon.js';
@@ -47,18 +31,8 @@ import {
 	WrappingIndent,
 } from '../common/config/editorOptions.js';
 import { type FontInfo } from '../common/config/fontInfo.js';
-import {
-	type EditorViewportChange,
-	EditorViewportChangeReason,
-	type EditorViewportLayout,
-	ViewLayout,
-} from '../common/viewLayout/viewLayout.js';
-import {
-	type ClientPoint,
-	type EditorHitTarget,
-	EditorHitTargetKind,
-	hitTestStanzaVisualEditorPoint,
-} from '../common/viewModel/pointerHitTest.js';
+import { type EditorViewportChange, EditorViewportChangeReason, type EditorViewportLayout, ViewLayout } from '../common/viewLayout/viewLayout.js';
+import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestStanzaVisualEditorPoint } from '../common/viewModel/pointerHitTest.js';
 import { applyFontInfo } from './config/domFontInfo.js';
 import { EditorConfiguration } from './config/editorConfiguration.js';
 import { DecorationsOverlay } from './viewParts/decorations/decorations.js';
@@ -73,10 +47,7 @@ import { RulersGpu } from './viewParts/rulersGpu/rulersGpu.js';
 import { EditorScrollbar } from './viewParts/editorScrollbar/editorScrollbar.js';
 import { LineNumbersOverlay } from './viewParts/lineNumbers/lineNumbers.js';
 import { BlockDecorations } from './viewParts/blockDecorations/blockDecorations.js';
-import {
-	CurrentLineHighlightOverlay,
-	CurrentLineMarginHighlightOverlay,
-} from './viewParts/currentLineHighlight/currentLineHighlight.js';
+import { CurrentLineHighlightOverlay, CurrentLineMarginHighlightOverlay } from './viewParts/currentLineHighlight/currentLineHighlight.js';
 import { LinesDecorationsOverlay } from './viewParts/linesDecorations/linesDecorations.js';
 import { MarginViewLineDecorationsOverlay } from './viewParts/marginDecorations/marginDecorations.js';
 import { SelectionsOverlay } from './viewParts/selections/selections.js';
@@ -90,13 +61,7 @@ import { ViewOverlayWidgets } from './viewParts/overlayWidgets/overlayWidgets.js
 import { type ViewPart } from './view/viewPart.js';
 import { ViewContext } from '../common/viewModel/viewContext.js';
 import type { IColorTheme } from '../../platform/theme/common/themeService.js';
-import type {
-	IContentWidget,
-	IEditorAriaOptions,
-	IGlyphMarginWidget,
-	IOverlayWidget,
-	IViewZoneChangeAccessor,
-} from './editorBrowser.js';
+import type { IContentWidget, IEditorAriaOptions, IGlyphMarginWidget, IOverlayWidget, IViewZoneChangeAccessor } from './editorBrowser.js';
 import { ContentViewOverlays, MarginViewOverlays } from './view/viewOverlays.js';
 import { ViewLines } from './viewParts/viewLines/viewLines.js';
 import { ViewLinesGpu } from './viewParts/viewLinesGpu/viewLinesGpu.js';
@@ -107,11 +72,7 @@ import { ViewZones } from './viewParts/viewZones/viewZones.js';
 import { type HorizontalPosition, RenderingContext } from './view/renderingContext.js';
 import { ViewportData } from '../common/viewLayout/viewLinesViewportData.js';
 import { ViewController, type ICommandDelegate, type ViewControllerOptions } from './view/viewController.js';
-import {
-	type AbstractEditContext,
-	type EditContextCharacterBounds,
-	type EditContextOptions,
-} from './controller/editContext/editContext.js';
+import { type AbstractEditContext, type EditContextCharacterBounds, type EditContextOptions } from './controller/editContext/editContext.js';
 import { type IClipboardCopyEvent, type IClipboardPasteEvent } from './controller/editContext/clipboardUtils.js';
 import { NativeEditContext, type NativeEditContextOptions } from './controller/editContext/native/nativeEditContext.js';
 import { TextAreaEditContext } from './controller/editContext/textArea/textAreaEditContext.js';
@@ -203,10 +164,7 @@ export class View extends ViewEventHandler {
 	private readonly accessibilityStatusElement: HTMLDivElement;
 	private readonly viewContext: ViewContext;
 	private readonly viewParts: ViewPart[] = [];
-	private readonly featureScopes = new DisposableMap<
-		string,
-		DisposableStore & { readonly feature: TextViewFeature }
-	>();
+	private readonly featureScopes = new DisposableMap<string, DisposableStore & { readonly feature: TextViewFeature }>();
 	private readonly featureTokensChanged = this._register(new Emitter<void>());
 	private readonly scrollbar: EditorScrollbar;
 	private readonly viewGpuContext: ViewGpuContext | undefined;
@@ -263,15 +221,10 @@ export class View extends ViewEventHandler {
 		const ownerWindow = ownerDocument.defaultView;
 		if (!ownerWindow) throw new ReferenceError('Editor viewport requires a browser window');
 		this.pixelRatio = PixelRatio.getInstance(ownerWindow);
-		if (!(options.viewModel.model instanceof TextModel))
-			throw new TypeError('Editor view requires the editor text model implementation');
+		if (!(options.viewModel.model instanceof TextModel)) throw new TypeError('Editor view requires the editor text model implementation');
 		const viewport = options.viewModel.viewLayout;
-		if (!(viewport instanceof ViewLayout))
-			throw new TypeError('Editor view requires the editor view layout implementation');
-		if (
-			options.rootDomNode &&
-			(options.rootDomNode.parentElement !== options.container || options.rootDomNode.childNodes.length > 0)
-		) {
+		if (!(viewport instanceof ViewLayout)) throw new TypeError('Editor view requires the editor view layout implementation');
+		if (options.rootDomNode && (options.rootDomNode.parentElement !== options.container || options.rootDomNode.childNodes.length > 0)) {
 			throw new TypeError('Editor view requires an empty root in its container');
 		}
 		this.viewModel = options.viewModel;
@@ -293,10 +246,7 @@ export class View extends ViewEventHandler {
 		this.domNode.domNode.classList.add(`stanza-editor-focus-owner-${this.focusOutlineOwner}`);
 		this.domNode.domNode.classList.add(`stanza-editor-direction-${this.textDirection}`);
 		this.domNode.domNode.classList.add(`stanza-editor-mouse-${mouseStyle}`);
-		this.domNode.domNode.classList.toggle(
-			'hide-line-numbers',
-			options.configuration.options.get(EditorOption.lineNumbers).renderType === RenderLineNumbersType.Off,
-		);
+		this.domNode.domNode.classList.toggle('hide-line-numbers', options.configuration.options.get(EditorOption.lineNumbers).renderType === RenderLineNumbersType.Off);
 		this.domNode.domNode.style.tabSize = String(this.indentation.tabSize);
 		this.domNode.domNode.style.setProperty('--stanza-editor-padding-left', `${this.padding.left}px`);
 		this.domNode.domNode.style.setProperty('--stanza-editor-padding-right', `${this.padding.right}px`);
@@ -323,8 +273,7 @@ export class View extends ViewEventHandler {
 			options.container.append(this.domNode.domNode);
 			this._register(toDisposable(() => this.domNode.domNode.remove()));
 		}
-		this.textMeasurer =
-			options.textMeasurer ?? new BrowserTextMeasurer(this.textMetricsElement, this.editorConfiguration);
+		this.textMeasurer = options.textMeasurer ?? new BrowserTextMeasurer(this.textMetricsElement, this.editorConfiguration);
 		this._fontInfo = this.editorConfiguration.options.get(EditorOption.fontInfo);
 		applyFontInfo(this.domNode.domNode, this.fontInfo);
 		this.textMeasurer.refresh?.();
@@ -347,15 +296,12 @@ export class View extends ViewEventHandler {
 		// Update the shared theme before Parts handle the same theme event.
 		this.viewModel.addViewEventHandler(this);
 		this._register(toDisposable(() => this.viewModel.removeViewEventHandler(this)));
-		this.scrollbar = this.registerViewPart(
-			new EditorScrollbar(this.viewContext, this.contentNode, this.domNode, this.domNode),
-		);
+		this.scrollbar = this.registerViewPart(new EditorScrollbar(this.viewContext, this.contentNode, this.domNode, this.domNode));
 		this.domNode.domNode.prepend(this.scrollbar.getDomNode().domNode);
 		let gpuContext: ViewGpuContext | undefined;
 		try {
 			gpuContext =
-				this.editorConfiguration.options.get(EditorOption.experimentalGpuAcceleration) === 'on' &&
-				this.domNode.domNode.ownerDocument.defaultView?.navigator.gpu
+				this.editorConfiguration.options.get(EditorOption.experimentalGpuAcceleration) === 'on' && this.domNode.domNode.ownerDocument.defaultView?.navigator.gpu
 					? this._register(
 							new ViewGpuContext(
 								this.viewContext,
@@ -363,31 +309,24 @@ export class View extends ViewEventHandler {
 									const visualLine = this.visualProjection.lineAt(lineNumber - 1);
 									if (!visualLine || visualLine.projectionData?.injectionOffsets) return [];
 									return (
-										options.semanticTokenSource
-											?.getLineTokens(visualLine.logicalLineIndex)
-											.flatMap(token => {
-												const startColumn = Math.max(token.startColumn, visualLine.startColumn);
-												const endColumn = Math.min(token.endColumn, visualLine.endColumn);
-												return endColumn > startColumn
-													? [
-															{
-																...token,
-																startColumn: startColumn - visualLine.startColumn,
-																endColumn: endColumn - visualLine.startColumn,
-															},
-														]
-													: [];
-											}) ?? []
+										options.semanticTokenSource?.getLineTokens(visualLine.logicalLineIndex).flatMap(token => {
+											const startColumn = Math.max(token.startColumn, visualLine.startColumn);
+											const endColumn = Math.min(token.endColumn, visualLine.endColumn);
+											return endColumn > startColumn
+												? [
+														{
+															...token,
+															startColumn: startColumn - visualLine.startColumn,
+															endColumn: endColumn - visualLine.startColumn,
+														},
+													]
+												: [];
+										}) ?? []
 									);
 								},
 								theme => {
-									const preference = options.configurationService?.getValue<
-										boolean | 'configuredByTheme'
-									>(EditorSemanticHighlightingConfiguration);
-									return (
-										preference === true ||
-										(preference !== false && theme.semanticHighlighting === true)
-									);
+									const preference = options.configurationService?.getValue<boolean | 'configuredByTheme'>(EditorSemanticHighlightingConfiguration);
+									return preference === true || (preference !== false && theme.semanticHighlighting === true);
 								},
 							),
 						)
@@ -409,25 +348,19 @@ export class View extends ViewEventHandler {
 			);
 		}
 		this.controller = this._register(
-			new ViewController(
-				this,
-				options.viewModel,
-				options.controller ?? {},
-				options.commandDelegate,
-				controller => {
-					const input = createEditContext(this.viewContext, this.scrollbar.getDomNode().domNode, {
-						...options.controller,
-						readOnly: options.viewModel.cursorConfig.readOnly,
-						textDirection: this.editorTextDirection,
-						ownerId: controller.ownerId,
-						characterBoundsProvider: modelOffset => this.characterBoundsAt(modelOffset),
-						viewController: controller,
-						viewport: this,
-					});
-					this.scrollbar.getDomNode().domNode.append(input.domNode.domNode);
-					return this.registerViewPart(input);
-				},
-			),
+			new ViewController(this, options.viewModel, options.controller ?? {}, options.commandDelegate, controller => {
+				const input = createEditContext(this.viewContext, this.scrollbar.getDomNode().domNode, {
+					...options.controller,
+					readOnly: options.viewModel.cursorConfig.readOnly,
+					textDirection: this.editorTextDirection,
+					ownerId: controller.ownerId,
+					characterBoundsProvider: modelOffset => this.characterBoundsAt(modelOffset),
+					viewController: controller,
+					viewport: this,
+				});
+				this.scrollbar.getDomNode().domNode.append(input.domNode.domNode);
+				return this.registerViewPart(input);
+			}),
 		);
 		this.onWillCopy = this.controller.editContext.onWillCopy;
 		this.onWillCut = this.controller.editContext.onWillCut;
@@ -448,9 +381,7 @@ export class View extends ViewEventHandler {
 				readProjectionRevision: () => this.projectionRevision,
 				semanticTokenSource: options.semanticTokenSource,
 				semanticHighlightingEnabled: theme => {
-					const preference = options.configurationService?.getValue<boolean | 'configuredByTheme'>(
-						EditorSemanticHighlightingConfiguration,
-					);
+					const preference = options.configurationService?.getValue<boolean | 'configuredByTheme'>(EditorSemanticHighlightingConfiguration);
 					return preference === true || (preference !== false && theme.semanticHighlighting === true);
 				},
 				configuration: this.editorConfiguration,
@@ -471,9 +402,7 @@ export class View extends ViewEventHandler {
 					}),
 				)
 			: undefined;
-		this.contentViewOverlays = this.registerViewPart(
-			new ContentViewOverlays(this.viewContext, this.contentElement),
-		);
+		this.contentViewOverlays = this.registerViewPart(new ContentViewOverlays(this.viewContext, this.contentElement));
 		this.decorations = new DecorationsOverlay(this.viewContext, () => this.textLeft);
 		this.contentViewOverlays.addDynamicOverlay(new CurrentLineHighlightOverlay(this.viewContext));
 		this.contentViewOverlays.addDynamicOverlay(
@@ -528,20 +457,17 @@ export class View extends ViewEventHandler {
 			}),
 		);
 		this.glyphMarginWidgets = this.registerViewPart(new GlyphMarginWidgets(this.viewContext));
-		this.margin
-			.getDomNode()
-			.domNode.append(
-				this.viewZones.marginDomNode.domNode,
-				this.marginViewOverlays.getDomNode().domNode,
-				this.glyphMarginWidgets.domNode.domNode,
-			);
+		this.margin.getDomNode().domNode.append(this.viewZones.marginDomNode.domNode, this.marginViewOverlays.getDomNode().domNode, this.glyphMarginWidgets.domNode.domNode);
 		let rulersDomNode: HTMLElement | undefined;
 		if (this.viewLinesGpu) {
 			this.marginViewOverlays.addDynamicOverlay(new GpuMarkOverlay(this.viewContext, this.viewGpuContext!));
 			this.registerViewPart(new RulersGpu(this.viewContext, this.viewGpuContext!));
 		} else {
 			rulersDomNode = this.registerViewPart(
-				new Rulers(this.viewContext, { host: this.contentElement, readTextLeft: () => this.textLeft }),
+				new Rulers(this.viewContext, {
+					host: this.contentElement,
+					readTextLeft: () => this.textLeft,
+				}),
 			).domNode.domNode;
 		}
 		const featureContext: Omit<TextViewFeatureContext, 'register' | 'registerPart' | 'registerContentOverlay'> = {
@@ -553,9 +479,7 @@ export class View extends ViewEventHandler {
 			textMeasurer: this.textMeasurer,
 			semanticTokenSource: options.semanticTokenSource,
 			semanticHighlightingEnabled: theme => {
-				const preference = options.configurationService?.getValue<boolean | 'configuredByTheme'>(
-					EditorSemanticHighlightingConfiguration,
-				);
+				const preference = options.configurationService?.getValue<boolean | 'configuredByTheme'>(EditorSemanticHighlightingConfiguration);
 				return preference === true || (preference !== false && theme.semanticHighlighting === true);
 			},
 			readLayout: () => this.viewport.layout,
@@ -584,8 +508,7 @@ export class View extends ViewEventHandler {
 						);
 						return part;
 					},
-					registerContentOverlay: overlay =>
-						lifetime.add(this.contentViewOverlays.registerDynamicOverlay(overlay, this.decorations)),
+					registerContentOverlay: overlay => lifetime.add(this.contentViewOverlays.registerDynamicOverlay(overlay, this.decorations)),
 				};
 				if (feature.when && !feature.when(context)) {
 					lifetime.dispose();
@@ -612,9 +535,7 @@ export class View extends ViewEventHandler {
 		this._register(this.editorConfiguration.onDidChange(refreshFeatures));
 		refreshFeatures();
 		const decorationsOverviewRuler = this.registerViewPart(new DecorationsOverviewRuler(this.viewContext));
-		const scrollDecoration = this.registerViewPart(
-			new ScrollDecorationViewPart(this.viewContext, this.domNode.domNode),
-		);
+		const scrollDecoration = this.registerViewPart(new ScrollDecorationViewPart(this.viewContext, this.domNode.domNode));
 
 		// Paint selection and decoration backgrounds before glyphs, including opaque theme colors.
 		// Parts own their nodes; the host owns the visual stacking order.
@@ -634,30 +555,19 @@ export class View extends ViewEventHandler {
 			scrollDecoration.getDomNode().domNode,
 		);
 		const overviewRulerLayout = this.scrollbar.getOverviewRulerLayoutInfo();
-		overviewRulerLayout.parent.insertBefore(
-			decorationsOverviewRuler.getDomNode(),
-			overviewRulerLayout.insertBefore,
-		);
-		this._register(
-			addDisposableListener(decorationsOverviewRuler.getDomNode(), 'pointerdown', (event: PointerEvent) =>
-				this.delegateVerticalScrollbarPointerDown(event),
-			),
-		);
+		overviewRulerLayout.parent.insertBefore(decorationsOverviewRuler.getDomNode(), overviewRulerLayout.insertBefore);
+		this._register(addDisposableListener(decorationsOverviewRuler.getDomNode(), 'pointerdown', (event: PointerEvent) => this.delegateVerticalScrollbarPointerDown(event)));
 		this._register(new MouseHandler(this.viewContext, this.controller, this.createPointerHandlerHelper()));
-		ownerDocument.body.append(
-			this.contentWidgets.overflowingContentWidgetsDomNode.domNode,
-			this.overlayWidgets.overflowingOverlayWidgetsDomNode.domNode,
-		);
+		ownerDocument.body.append(this.contentWidgets.overflowingContentWidgetsDomNode.domNode, this.overlayWidgets.overflowingOverlayWidgetsDomNode.domNode);
 		const scrollDomNode = this.scrollbar.getDomNode().domNode;
 		this._register(
 			addDisposableListener(scrollDomNode, 'scroll', () => {
-				if (
-					scrollDomNode.scrollLeft === this.syncedScrollLeft &&
-					scrollDomNode.scrollTop === this.syncedScrollTop
-				)
-					return;
+				if (scrollDomNode.scrollLeft === this.syncedScrollLeft && scrollDomNode.scrollTop === this.syncedScrollTop) return;
 				viewport.setScrollPosition(
-					{ scrollLeft: scrollDomNode.scrollLeft, scrollTop: scrollDomNode.scrollTop },
+					{
+						scrollLeft: scrollDomNode.scrollLeft,
+						scrollTop: scrollDomNode.scrollTop,
+					},
 					ScrollType.Immediate,
 				);
 				this.syncScrollPosition(viewport.layout);
@@ -666,11 +576,7 @@ export class View extends ViewEventHandler {
 		this.updateAccessibilityStatus();
 		const semanticTokenSource = options.semanticTokenSource;
 		const updateTokenReadiness = () =>
-			this.domNode.domNode.classList.toggle(
-				'tokens-ready',
-				this.textModel.tokenization.modelVersion === this.textModel.version &&
-					this.textModel.tokenization.tokenCount > 0,
-			);
+			this.domNode.domNode.classList.toggle('tokens-ready', this.textModel.tokenization.modelVersion === this.textModel.version && this.textModel.tokenization.tokenCount > 0);
 		updateTokenReadiness();
 		if (semanticTokenSource) {
 			const refreshSemanticTokens = () => {
@@ -707,10 +613,7 @@ export class View extends ViewEventHandler {
 			this.editorConfiguration.onDidChange(event => {
 				if (event.hasChanged(EditorOption.mouseStyle)) {
 					for (const style of ['text', 'default', 'copy']) {
-						this.domNode.domNode.classList.toggle(
-							`stanza-editor-mouse-${style}`,
-							style === this.editorConfiguration.options.get(EditorOption.mouseStyle),
-						);
+						this.domNode.domNode.classList.toggle(`stanza-editor-mouse-${style}`, style === this.editorConfiguration.options.get(EditorOption.mouseStyle));
 					}
 				}
 				if (event.hasChanged(EditorOption.fontInfo)) this.applyFontConfiguration();
@@ -895,9 +798,7 @@ export class View extends ViewEventHandler {
 
 	/** Layout visibility is current even when the zone's DOM is awaiting a frame. */
 	isViewZoneVisible(id: string): boolean {
-		return this.viewport
-			.getWhitespaceViewportData()
-			.some(whitespace => whitespace.id === id && whitespace.height > 0);
+		return this.viewport.getWhitespaceViewportData().some(whitespace => whitespace.id === id && whitespace.height > 0);
 	}
 
 	createOverviewRuler(cssClassName: string): OverviewRuler {
@@ -977,11 +878,7 @@ export class View extends ViewEventHandler {
 		const line = this.model.getLineContent(visualLine.logicalLineIndex + 1);
 		const columnIndex = position.column - 1;
 		const domCaretLeft = this.domCaretLeft(visualLineIndex, columnIndex - visualLine.startColumn);
-		const caretLeft =
-			domCaretLeft ??
-			this.contentTextLeft +
-				(visualLine.wrappedTextIndentWidth ?? 0) +
-				this.textMeasurer.measureLineWidth(line.slice(visualLine.startColumn, columnIndex));
+		const caretLeft = domCaretLeft ?? this.contentTextLeft + (visualLine.wrappedTextIndentWidth ?? 0) + this.textMeasurer.measureLineWidth(line.slice(visualLine.startColumn, columnIndex));
 		const caretRight = caretLeft + Math.max(1, this.textMeasurer.measureLineWidth(' '));
 		let left = this.softWrapping ? 0 : layout.scrollPosition.left;
 		if (caretLeft < left + this.contentTextLeft) {
@@ -1004,11 +901,7 @@ export class View extends ViewEventHandler {
 				domCaretLeft ??
 				this.contentTextLeft +
 					(visualLine.wrappedTextIndentWidth ?? 0) +
-					this.textMeasurer.measureLineWidth(
-						this.model
-							.getLineContent(visualLine.logicalLineIndex + 1)
-							.slice(visualLine.startColumn, columnIndex),
-					),
+					this.textMeasurer.measureLineWidth(this.model.getLineContent(visualLine.logicalLineIndex + 1).slice(visualLine.startColumn, columnIndex)),
 			top: this.viewport.getVerticalOffsetForLineIndex(visualLineIndex),
 			height: this.viewport.layout.lineHeight,
 		});
@@ -1022,18 +915,12 @@ export class View extends ViewEventHandler {
 	}
 
 	/** Resolves the nearest browser-shaped cursor on one currently rendered visual line. */
-	getNearestPositionAtVisualHorizontalOffset(
-		visualLineIndex: number,
-		horizontalOffset: number,
-	): Position | undefined {
-		if (!isFiniteNumber(horizontalOffset))
-			throw new RangeError('Stanza visual cursor horizontal offset must be finite');
+	getNearestPositionAtVisualHorizontalOffset(visualLineIndex: number, horizontalOffset: number): Position | undefined {
+		if (!isFiniteNumber(horizontalOffset)) throw new RangeError('Stanza visual cursor horizontal offset must be finite');
 		if (this.editorTextDirection === EditorTextDirection.LeftToRight) return undefined;
 		const visualLine = this.visualProjection.lineAt(visualLineIndex);
 		if (!visualLine) return undefined;
-		const text = this.model
-			.getLineContent(visualLine.logicalLineIndex + 1)
-			.slice(visualLine.startColumn, visualLine.endColumn);
+		const text = this.model.getLineContent(visualLine.logicalLineIndex + 1).slice(visualLine.startColumn, visualLine.endColumn);
 		let nearestColumn: number | undefined;
 		let nearestDistance = Number.POSITIVE_INFINITY;
 		for (const column of getTextGraphemeBoundaries(text)) {
@@ -1046,9 +933,7 @@ export class View extends ViewEventHandler {
 				nearestDistance = distance;
 			}
 		}
-		return nearestColumn === undefined
-			? undefined
-			: new Position(visualLine.logicalLineIndex + 1, visualLine.startColumn + nearestColumn + 1);
+		return nearestColumn === undefined ? undefined : new Position(visualLine.logicalLineIndex + 1, visualLine.startColumn + nearestColumn + 1);
 	}
 
 	public delegateVerticalScrollbarPointerDown(event: PointerEvent): void {
@@ -1068,11 +953,7 @@ export class View extends ViewEventHandler {
 			delegateScrollFromMouseWheelEvent: event => this.delegateScrollFromMouseWheelEvent(event),
 			focusTextArea: () => this.controller.editContext.focus(),
 			dispatchTextAreaEvent: event => this.controller.element.dispatchEvent(event),
-			getLastRenderData: () =>
-				new PointerHandlerLastRenderData(
-					this.viewCursors.getLastRenderData(),
-					this.controller.editContext.getLastRenderData(),
-				),
+			getLastRenderData: () => new PointerHandlerLastRenderData(this.viewCursors.getLastRenderData(), this.controller.editContext.getLastRenderData()),
 			renderNow: () => {
 				if (!this.isDisposed) this.render(true, false);
 			},
@@ -1081,23 +962,15 @@ export class View extends ViewEventHandler {
 			getPositionFromDOMInfo: (spanNode, offset) => this.getPositionFromDOMInfo(spanNode, offset),
 			visibleRangeForPosition: (lineNumber, column): HorizontalPosition | null => {
 				const position = new Position(lineNumber, column);
-				return (
-					this.viewLines.visibleRangeForPosition(position) ??
-					this.viewLinesGpu?.visibleRangeForPosition(position) ??
-					null
-				);
+				return this.viewLines.visibleRangeForPosition(position) ?? this.viewLinesGpu?.visibleRangeForPosition(position) ?? null;
 			},
-			getLineWidth: lineNumber =>
-				this.viewLinesGpu?.getLineWidth(lineNumber) ?? this.viewLines.getLineWidth(lineNumber),
+			getLineWidth: lineNumber => this.viewLinesGpu?.getLineWidth(lineNumber) ?? this.viewLines.getLineWidth(lineNumber),
 		};
 	}
 
 	getTargetAtClientPoint(point: ClientPoint): EditorHitTarget | undefined {
 		validateClientPoint(point);
-		const domTarget =
-			this.editorTextDirection === EditorTextDirection.LeftToRight
-				? undefined
-				: this.getDomTargetAtClientPoint(point);
+		const domTarget = this.editorTextDirection === EditorTextDirection.LeftToRight ? undefined : this.getDomTargetAtClientPoint(point);
 		if (domTarget) return domTarget;
 		const bounds = this.domNode.domNode.getBoundingClientRect();
 		return this.hitTestViewportPoint(point.clientX - bounds.left, point.clientY - bounds.top);
@@ -1105,20 +978,14 @@ export class View extends ViewEventHandler {
 
 	getNearestTargetAtClientPoint(point: ClientPoint): EditorHitTarget | undefined {
 		validateClientPoint(point);
-		const domTarget =
-			this.editorTextDirection === EditorTextDirection.LeftToRight
-				? undefined
-				: this.getDomTargetAtClientPoint(point);
+		const domTarget = this.editorTextDirection === EditorTextDirection.LeftToRight ? undefined : this.getDomTargetAtClientPoint(point);
 		if (domTarget) return domTarget;
 		const layout = this.viewport.layout;
 		if (layout.viewportSize.width === 0 || layout.viewportSize.height === 0) {
 			return undefined;
 		}
 		const bounds = this.domNode.domNode.getBoundingClientRect();
-		return this.hitTestViewportPoint(
-			clamp(point.clientX - bounds.left, 0, layout.viewportSize.width - 0.5),
-			clamp(point.clientY - bounds.top, 0, layout.viewportSize.height - 0.5),
-		);
+		return this.hitTestViewportPoint(clamp(point.clientX - bounds.left, 0, layout.viewportSize.width - 0.5), clamp(point.clientY - bounds.top, 0, layout.viewportSize.height - 0.5));
 	}
 
 	private hitTestViewportPoint(left: number, top: number): EditorHitTarget | undefined {
@@ -1139,9 +1006,7 @@ export class View extends ViewEventHandler {
 
 	private getDomTargetAtClientPoint(point: ClientPoint): EditorHitTarget | undefined {
 		const document = this.domNode.domNode.ownerDocument as unknown as BrowserCaretDocument;
-		const caret =
-			document.caretPositionFromPoint?.(point.clientX, point.clientY) ??
-			document.caretRangeFromPoint?.(point.clientX, point.clientY);
+		const caret = document.caretPositionFromPoint?.(point.clientX, point.clientY) ?? document.caretRangeFromPoint?.(point.clientX, point.clientY);
 		if (!caret) return undefined;
 		const node = 'offsetNode' in caret ? caret.offsetNode : caret.startContainer;
 		const offset = 'offsetNode' in caret ? caret.offset : caret.startOffset;
@@ -1175,10 +1040,7 @@ export class View extends ViewEventHandler {
 	}
 
 	private get gutterWidth(): number {
-		return Math.max(
-			0,
-			this.editorConfiguration.options.get(EditorOption.layoutInfo).contentLeft - this.contentOffsetLeft,
-		);
+		return Math.max(0, this.editorConfiguration.options.get(EditorOption.layoutInfo).contentLeft - this.contentOffsetLeft);
 	}
 
 	private get textLeft(): number {
@@ -1190,19 +1052,12 @@ export class View extends ViewEventHandler {
 	}
 
 	private get contentOffsetLeft(): number {
-		return this.minimap.side === 'left'
-			? this.editorConfiguration.options.get(EditorOption.layoutInfo).minimap.minimapWidth
-			: 0;
+		return this.minimap.side === 'left' ? this.editorConfiguration.options.get(EditorOption.layoutInfo).minimap.minimapWidth : 0;
 	}
 
 	private prepareRenderPass(): EditorRenderPass | undefined {
 		if (this.isDisposed) return undefined;
-		if (
-			this.renderedLayout === this.viewport.layout &&
-			!this.shouldRender() &&
-			!this.viewParts.some(part => part.shouldRender())
-		)
-			return undefined;
+		if (this.renderedLayout === this.viewport.layout && !this.shouldRender() && !this.viewParts.some(part => part.shouldRender())) return undefined;
 		if (this.glyphMarginLanesDirty) {
 			this.glyphMarginLanesDirty = false;
 			this.computeGlyphMarginLanes();
@@ -1211,11 +1066,7 @@ export class View extends ViewEventHandler {
 		const startLineNumber = layout.visibleLines.startLineIndex + 1;
 		const endLineNumber = layout.visibleLines.endLineIndexExclusive;
 		if (startLineNumber <= endLineNumber) {
-			this.viewModel.setViewport(
-				startLineNumber,
-				endLineNumber,
-				Math.floor((startLineNumber + endLineNumber) / 2),
-			);
+			this.viewModel.setViewport(startLineNumber, endLineNumber, Math.floor((startLineNumber + endLineNumber) / 2));
 			this.viewModel.visibleLinesStabilized();
 		}
 		const viewportData = this.createViewportData();
@@ -1247,22 +1098,14 @@ export class View extends ViewEventHandler {
 					}
 				}
 				const textLayout = this.viewport.layout;
-				this.domNode.domNode.classList.toggle(
-					'horizontally-scrollable',
-					textLayout.maximumScrollPosition.left > 0,
-				);
-				this.domNode.domNode.classList.toggle(
-					'vertically-scrollable',
-					textLayout.maximumScrollPosition.top > 0,
-				);
+				this.domNode.domNode.classList.toggle('horizontally-scrollable', textLayout.maximumScrollPosition.left > 0);
+				this.domNode.domNode.classList.toggle('vertically-scrollable', textLayout.maximumScrollPosition.top > 0);
 				this.contentNode.setWidth(textLayout.contentSize.width - contentOffsetLeft);
 				this.contentNode.setHeight(textLayout.contentSize.height);
 				// Text rendering can change scroll geometry. Bind the context and
 				// collect invalidated Parts only after those changes have settled.
 				context = this.createRenderingContext(viewportData);
-				parts = this.viewParts.filter(
-					part => part !== this.viewLines && part !== this.viewLinesGpu && part.shouldRender(),
-				);
+				parts = this.viewParts.filter(part => part !== this.viewLines && part !== this.viewLinesGpu && part.shouldRender());
 			},
 			prepareParts: () => {
 				for (const part of parts) part.prepareRender(context);
@@ -1300,13 +1143,10 @@ export class View extends ViewEventHandler {
 
 	private scheduleProjection(): void {
 		if (this.isDisposed || this.pendingRender.value) return;
-		this.pendingRender.value = editorRenderingCoordinator.schedule(
-			this.domNode.domNode.ownerDocument.defaultView!,
-			() => {
-				this.pendingRender.clear();
-				return this.prepareRenderPass();
-			},
-		);
+		this.pendingRender.value = editorRenderingCoordinator.schedule(this.domNode.domNode.ownerDocument.defaultView!, () => {
+			this.pendingRender.clear();
+			return this.prepareRenderPass();
+		});
 	}
 
 	private updateAccessibilityStatus(): void {
@@ -1314,29 +1154,15 @@ export class View extends ViewEventHandler {
 		const selection = selectionSet[0]!;
 		if (!selection) return;
 		const position = selection.getPosition();
-		const selectedLength =
-			this.model.offsetAt(selection.getEndPosition()) - this.model.offsetAt(selection.getStartPosition());
+		const selectedLength = this.model.offsetAt(selection.getEndPosition()) - this.model.offsetAt(selection.getStartPosition());
 		if (selectionSet.length > 1) {
-			const totalSelectedLength = selectionSet.reduce(
-				(length, current) =>
-					length +
-					this.model.offsetAt(current.getEndPosition()) -
-					this.model.offsetAt(current.getStartPosition()),
-				0,
-			);
-			const summary =
-				totalSelectedLength === 0
-					? `${selectionSet.length} cursors`
-					: `${selectionSet.length} selections, ${totalSelectedLength} characters selected`;
-			this.announceAccessibilityStatus(
-				`${summary}; primary at Line ${position.lineNumber}, column ${position.column}`,
-			);
+			const totalSelectedLength = selectionSet.reduce((length, current) => length + this.model.offsetAt(current.getEndPosition()) - this.model.offsetAt(current.getStartPosition()), 0);
+			const summary = totalSelectedLength === 0 ? `${selectionSet.length} cursors` : `${selectionSet.length} selections, ${totalSelectedLength} characters selected`;
+			this.announceAccessibilityStatus(`${summary}; primary at Line ${position.lineNumber}, column ${position.column}`);
 			return;
 		}
 		this.announceAccessibilityStatus(
-			selectedLength === 0
-				? `Line ${position.lineNumber}, column ${position.column}`
-				: `Line ${position.lineNumber}, column ${position.column}, ${selectedLength} characters selected`,
+			selectedLength === 0 ? `Line ${position.lineNumber}, column ${position.column}` : `Line ${position.lineNumber}, column ${position.column}, ${selectedLength} characters selected`,
 		);
 	}
 
@@ -1362,10 +1188,7 @@ export class View extends ViewEventHandler {
 		return Object.freeze({
 			left: Math.min(start.left, end.left) - this.getLayoutInfo().contentLeft,
 			top: start.top,
-			width:
-				position.lineNumber === next.lineNumber
-					? Math.max(1, Math.abs(end.left - start.left))
-					: Math.max(1, this.measureTextWidth(' ')),
+			width: position.lineNumber === next.lineNumber ? Math.max(1, Math.abs(end.left - start.left)) : Math.max(1, this.measureTextWidth(' ')),
 			height: start.height,
 		});
 	}
@@ -1385,8 +1208,7 @@ export class View extends ViewEventHandler {
 		// Reading native scroll offsets can flush pending layout after Parts paint.
 		// The ViewLayout and native scroll listener already invalidate this position;
 		// unchanged renders need no round trip through browser layout.
-		if (this.syncedScrollLeft === layout.scrollPosition.left && this.syncedScrollTop === layout.scrollPosition.top)
-			return;
+		if (this.syncedScrollLeft === layout.scrollPosition.left && this.syncedScrollTop === layout.scrollPosition.top) return;
 		// Only the scrollbar wrapper scrolls physically. Viewport Parts are its
 		// siblings and consume the same ViewLayout state without browser scrolling.
 		const scrollDomNode = this.scrollbar.getDomNode().domNode;
@@ -1409,10 +1231,7 @@ export class View extends ViewEventHandler {
 	}
 
 	public override onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): boolean {
-		this.domNode.domNode.classList.toggle(
-			'hide-line-numbers',
-			this.editorConfiguration.options.get(EditorOption.lineNumbers).renderType === RenderLineNumbersType.Off,
-		);
+		this.domNode.domNode.classList.toggle('hide-line-numbers', this.editorConfiguration.options.get(EditorOption.lineNumbers).renderType === RenderLineNumbersType.Off);
 		if (event.hasChanged(EditorOption.fontInfo)) {
 			this.projectionRevision += 1;
 		}
@@ -1534,17 +1353,13 @@ class EditorRenderingCoordinator {
 const editorRenderingCoordinator = new EditorRenderingCoordinator();
 
 function validateEditorViewportOptions(options: EditorViewportOptions): void {
-	if (!(options.viewModel.model instanceof TextModel))
-		throw new TypeError('Editor view requires the editor text model implementation');
-	if (!(options.viewModel.viewLayout instanceof ViewLayout))
-		throw new TypeError('Editor view requires the editor view layout implementation');
+	if (!(options.viewModel.model instanceof TextModel)) throw new TypeError('Editor view requires the editor text model implementation');
+	if (!(options.viewModel.viewLayout instanceof ViewLayout)) throw new TypeError('Editor view requires the editor view layout implementation');
 	resolveEditorIndentationOptions(options.indentation);
 	const textDirection = options.textDirection ?? EditorTextDirection.Auto;
-	if (!Object.values(EditorTextDirection).includes(textDirection))
-		throw new TypeError('Unknown Stanza editor text direction');
+	if (!Object.values(EditorTextDirection).includes(textDirection)) throw new TypeError('Unknown Stanza editor text direction');
 	const focusOutlineOwner = options.focusOutlineOwner ?? 'editor';
-	if (focusOutlineOwner !== 'editor' && focusOutlineOwner !== 'host')
-		throw new TypeError('Unknown Stanza editor focus outline owner');
+	if (focusOutlineOwner !== 'editor' && focusOutlineOwner !== 'host') throw new TypeError('Unknown Stanza editor focus outline owner');
 	if (options.semanticTokenSource && options.semanticTokenSource.textModel !== options.viewModel.model) {
 		throw new TypeError('Stanza viewport and semantic token source must share one text model');
 	}
@@ -1552,11 +1367,7 @@ function validateEditorViewportOptions(options: EditorViewportOptions): void {
 
 type EditorEditContextOptions = EditContextOptions & Partial<Pick<NativeEditContextOptions, 'logService'>>;
 
-function createEditContext(
-	context: ViewContext,
-	container: HTMLElement,
-	options: EditorEditContextOptions,
-): AbstractEditContext {
+function createEditContext(context: ViewContext, container: HTMLElement, options: EditorEditContextOptions): AbstractEditContext {
 	const ownerWindow = container.ownerDocument.defaultView;
 	if (typeof ownerWindow?.EditContext !== 'function') return new TextAreaEditContext(context, container, options);
 	const logService = options.logService;
@@ -1640,9 +1451,7 @@ class BrowserTextMeasurer implements TextMeasurer {
 		const contentLeftPadding = cssNumber(style.paddingLeft, 0);
 		const horizontalPadding = contentLeftPadding + cssNumber(style.paddingRight, 0);
 		const font = `${style.fontStyle || 'normal'} ${style.fontVariantCaps || 'normal'} ${style.fontWeight || '400'} ${style.fontSize || `${fontSize}px`} ${style.fontFamily || 'monospace'}`;
-		const language =
-			this.referenceElement.closest('[lang]')?.getAttribute('lang') ??
-			this.referenceElement.ownerDocument.documentElement.lang;
+		const language = this.referenceElement.closest('[lang]')?.getAttribute('lang') ?? this.referenceElement.ownerDocument.documentElement.lang;
 		if (this.context) {
 			// Detached canvases do not inherit language, which affects the font
 			// selected for generic families such as monospace on Windows.
@@ -1662,17 +1471,7 @@ class BrowserTextMeasurer implements TextMeasurer {
 				? this.context.measureText('n').width
 				: undefined;
 		return Object.freeze({
-			signature: JSON.stringify([
-				language,
-				font,
-				letterSpacing,
-				style.fontFeatureSettings,
-				style.fontVariationSettings,
-				tabSize,
-				horizontalPadding,
-				spaceWidth,
-				monospaceWidth,
-			]),
+			signature: JSON.stringify([language, font, letterSpacing, style.fontFeatureSettings, style.fontVariationSettings, tabSize, horizontalPadding, spaceWidth, monospaceWidth]),
 			font,
 			fontSize,
 			letterSpacing,

@@ -22,8 +22,7 @@ export function acquirePort(
 	requestChannel: string | undefined,
 	responseChannel: string,
 	nonce: string = generateUuid(),
-	acquire: (channel: string, requestNonce: string) => ISandboxSubscription | void = (channel, requestNonce) =>
-		ipcMessagePort.acquire(channel, requestNonce),
+	acquire: (channel: string, requestNonce: string) => ISandboxSubscription | void = (channel, requestNonce) => ipcMessagePort.acquire(channel, requestNonce),
 ): CancelablePromise<MessagePort> {
 	const resources = new DisposableStore();
 	const targetWindow = window;
@@ -46,8 +45,7 @@ export function acquirePort(
 		resources.add(
 			addDisposableListener(targetWindow, 'message', (event: MessageEvent) => {
 				const response: unknown = event.data;
-				const responseNonce =
-					typeof response === 'string' ? response : isRecord(response) ? response.nonce : undefined;
+				const responseNonce = typeof response === 'string' ? response : isRecord(response) ? response.nonce : undefined;
 				if (event.source !== targetWindow || responseNonce !== nonce) {
 					return;
 				}

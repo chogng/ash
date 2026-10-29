@@ -91,19 +91,12 @@ export abstract class AbstractLineHighlightOverlay extends DynamicViewOverlay {
 			return;
 		}
 		const exactLines = new Set(this._cursorLineNumbers);
-		const activeModelLines = this._wordWrap
-			? new Set(this._cursorLineNumbers.map(lineNumber => this.modelLineAt(lineNumber)))
-			: undefined;
+		const activeModelLines = this._wordWrap ? new Set(this._cursorLineNumbers.map(lineNumber => this.modelLineAt(lineNumber))) : undefined;
 		this._renderData = [];
-		for (
-			let lineNumber = context.visibleRange.startLineNumber;
-			lineNumber <= context.visibleRange.endLineNumber;
-			lineNumber += 1
-		) {
+		for (let lineNumber = context.visibleRange.startLineNumber; lineNumber <= context.visibleRange.endLineNumber; lineNumber += 1) {
 			const exact = exactLines.has(lineNumber);
 			const wrapped = activeModelLines?.has(this.modelLineAt(lineNumber)) ?? false;
-			this._renderData[lineNumber - context.visibleRange.startLineNumber] =
-				exact || wrapped ? this._renderOne(context, exact) : '';
+			this._renderData[lineNumber - context.visibleRange.startLineNumber] = exact || wrapped ? this._renderOne(context, exact) : '';
 		}
 	}
 
@@ -112,18 +105,11 @@ export abstract class AbstractLineHighlightOverlay extends DynamicViewOverlay {
 	}
 
 	protected _shouldRenderInContent(): boolean {
-		return (
-			(this._renderLineHighlight === 'line' || this._renderLineHighlight === 'all') &&
-			this._selectionIsEmpty &&
-			(!this._renderLineHighlightOnlyWhenFocus || this._focused)
-		);
+		return (this._renderLineHighlight === 'line' || this._renderLineHighlight === 'all') && this._selectionIsEmpty && (!this._renderLineHighlightOnlyWhenFocus || this._focused);
 	}
 
 	protected _shouldRenderInMargin(): boolean {
-		return (
-			(this._renderLineHighlight === 'gutter' || this._renderLineHighlight === 'all') &&
-			(!this._renderLineHighlightOnlyWhenFocus || this._focused)
-		);
+		return (this._renderLineHighlight === 'gutter' || this._renderLineHighlight === 'all') && (!this._renderLineHighlightOnlyWhenFocus || this._focused);
 	}
 
 	protected abstract _renderOne(context: RenderingContext, exact: boolean): string;
@@ -131,9 +117,7 @@ export abstract class AbstractLineHighlightOverlay extends DynamicViewOverlay {
 	protected abstract _shouldRenderOther(): boolean;
 
 	private _readFromSelections(): boolean {
-		const cursorLineNumbers = [...new Set(this._selections.map(selection => selection.positionLineNumber))].sort(
-			(left, right) => left - right,
-		);
+		const cursorLineNumbers = [...new Set(this._selections.map(selection => selection.positionLineNumber))].sort((left, right) => left - right);
 		const selectionIsEmpty = this._selections.every(selection => selection.isEmpty());
 		const changed =
 			selectionIsEmpty !== this._selectionIsEmpty ||
@@ -145,9 +129,7 @@ export abstract class AbstractLineHighlightOverlay extends DynamicViewOverlay {
 	}
 
 	private modelLineAt(viewLineNumber: number): number {
-		return this._context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(
-			new Position(viewLineNumber, 1),
-		).lineNumber;
+		return this._context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(new Position(viewLineNumber, 1)).lineNumber;
 	}
 
 	private readConfiguration(): {
@@ -173,12 +155,7 @@ export abstract class AbstractLineHighlightOverlay extends DynamicViewOverlay {
 export class CurrentLineHighlightOverlay extends AbstractLineHighlightOverlay {
 	protected _renderOne(context: RenderingContext, exact: boolean): string {
 		return renderHighlight(
-			[
-				'current-line',
-				'stanza-editor-current-line-highlight',
-				...(this._shouldRenderOther() ? ['current-line-both'] : []),
-				...(exact ? ['current-line-exact'] : []),
-			],
+			['current-line', 'stanza-editor-current-line-highlight', ...(this._shouldRenderOther() ? ['current-line-both'] : []), ...(exact ? ['current-line-exact'] : [])],
 			Math.max(context.scrollWidth, this._contentWidth),
 		);
 	}

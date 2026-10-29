@@ -85,16 +85,11 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 		this.eol = eol;
 		this.originalBuffer = shouldNormalizeEOL ? normalizeEOL(text, eol) : text;
 		this.mightContainUnusualLineTerminatorsValue = text.includes('\u2028') || text.includes('\u2029');
-		if (this.originalBuffer.length > 0)
-			this.root = this.createRootNode(createPiece(PieceBuffer.Original, 0, this.originalBuffer));
+		if (this.originalBuffer.length > 0) this.root = this.createRootNode(createPiece(PieceBuffer.Original, 0, this.originalBuffer));
 	}
 
 	equals(other: ITextBuffer): boolean {
-		return (
-			this.bom === other.getBOM() &&
-			this.eol === other.getEOL() &&
-			this.getText() === other.createSnapshot().getText()
-		);
+		return this.bom === other.getBOM() && this.eol === other.getEOL() && this.getText() === other.createSnapshot().getText();
 	}
 
 	mightContainRTL(): boolean {
@@ -153,11 +148,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 		const segments: TextBufferSnapshotSegment[] = [];
 		if (preserveBOM && this.bom) segments.push({ source: this.bom, startOffset: 0, length: this.bom.length });
 		this.collectSnapshotSegments(this.root, segments);
-		return createTextBufferSnapshot(
-			segments,
-			this.getLength() + (preserveBOM ? this.bom.length : 0),
-			this.getLineCount(),
-		);
+		return createTextBufferSnapshot(segments, this.getLength() + (preserveBOM ? this.bom.length : 0), this.getLineCount());
 	}
 
 	private getTextBetweenOffsets(startOffset: number, endOffset: number): string {
@@ -258,25 +249,15 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 		return 0;
 	}
 
-	findMatchesLineByLine(
-		searchRange: Range,
-		searchData: SearchData,
-		captureMatches: boolean,
-		limitResultCount: number,
-	): FindMatch[] {
-		if (!Number.isSafeInteger(limitResultCount) || limitResultCount < 0)
-			throw new RangeError('PieceTreeTextBuffer search result limit must be a non-negative safe integer');
+	findMatchesLineByLine(searchRange: Range, searchData: SearchData, captureMatches: boolean, limitResultCount: number): FindMatch[] {
+		if (!Number.isSafeInteger(limitResultCount) || limitResultCount < 0) throw new RangeError('PieceTreeTextBuffer search result limit must be a non-negative safe integer');
 		const range = Range.lift(searchRange);
 		this.getOffsetAt(range.startLineNumber, range.startColumn);
 		this.getOffsetAt(range.endLineNumber, range.endColumn);
 		const flags = searchData.regex.flags.includes('g') ? searchData.regex.flags : `${searchData.regex.flags}g`;
 		const expression = new RegExp(searchData.regex.source, flags);
 		const matches: FindMatch[] = [];
-		for (
-			let lineNumber = range.startLineNumber;
-			lineNumber <= range.endLineNumber && matches.length < limitResultCount;
-			lineNumber += 1
-		) {
+		for (let lineNumber = range.startLineNumber; lineNumber <= range.endLineNumber && matches.length < limitResultCount; lineNumber += 1) {
 			const line = this.getLineContent(lineNumber);
 			const startIndex = lineNumber === range.startLineNumber ? range.startColumn - 1 : 0;
 			const endIndex = lineNumber === range.endLineNumber ? range.endColumn - 1 : line.length;
@@ -287,12 +268,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 				const matchStart = startIndex + match.index;
 				const matchEnd = matchStart + match[0].length;
 				if (isWholeWordMatch(line, matchStart, matchEnd, searchData)) {
-					matches.push(
-						new FindMatch(
-							new Range(lineNumber, matchStart + 1, lineNumber, matchEnd + 1),
-							captureMatches ? [...match] : null,
-						),
-					);
+					matches.push(new FindMatch(new Range(lineNumber, matchStart + 1, lineNumber, matchEnd + 1), captureMatches ? [...match] : null));
 				}
 				if (match[0].length === 0) {
 					if (expression.lastIndex >= value.length) break;
@@ -323,17 +299,10 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 		}
 		const lineIndex = this.countLineFeedsBefore(this.root, offset);
 		const startOffset = this.lineStartOffset(lineIndex);
-		return new Position(
-			lineIndex + 1,
-			Math.min(offset - startOffset, this.lineEndOffset(lineIndex) - startOffset) + 1,
-		);
+		return new Position(lineIndex + 1, Math.min(offset - startOffset, this.lineEndOffset(lineIndex) - startOffset) + 1);
 	}
 
-	applyEdits(
-		rawOperations: ValidAnnotatedEditOperation[],
-		recordTrimAutoWhitespace: boolean,
-		computeUndoEdits: boolean,
-	): ApplyEditsResult {
+	applyEdits(rawOperations: ValidAnnotatedEditOperation[], recordTrimAutoWhitespace: boolean, computeUndoEdits: boolean): ApplyEditsResult {
 		if (!Array.isArray(rawOperations)) throw new TypeError('PieceTreeTextBuffer edits must be an array');
 		const operations = rawOperations
 			.map<PreparedBufferEdit>((operation, sortIndex) => {
@@ -358,18 +327,13 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 		for (let index = 1; index < operations.length; index += 1) {
 			const previous = operations[index - 1]!;
 			const current = operations[index]!;
-			const ambiguousSharedStart =
-				current.rangeOffset === previous.rangeOffset &&
-				(current.rangeLength === 0 || previous.rangeLength === 0);
+			const ambiguousSharedStart = current.rangeOffset === previous.rangeOffset && (current.rangeLength === 0 || previous.rangeLength === 0);
 			if (current.rangeOffset < previous.rangeOffset + previous.rangeLength || ambiguousSharedStart) {
 				throw new RangeError('PieceTreeTextBuffer edits must not overlap');
 			}
 		}
 
-		const reverseOffsets = new Map<
-			PreparedBufferEdit,
-			{ readonly startOffset: number; readonly endOffset: number }
-		>();
+		const reverseOffsets = new Map<PreparedBufferEdit, { readonly startOffset: number; readonly endOffset: number }>();
 		let cumulativeDelta = 0;
 		for (const operation of operations) {
 			const startOffset = operation.rangeOffset + cumulativeDelta;
@@ -402,12 +366,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 						identifier: operation.identifier,
 						range: this.getRangeAt(offsets.startOffset, offsets.endOffset - offsets.startOffset),
 						text: operation.replacedText,
-						textChange: new TextChange(
-							operation.rangeOffset,
-							operation.replacedText,
-							offsets.startOffset,
-							operation.text,
-						),
+						textChange: new TextChange(operation.rangeOffset, operation.replacedText, offsets.startOffset, operation.text),
 					};
 				});
 		}
@@ -484,9 +443,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 	needsCompaction(): boolean {
 		const statistics = this.getStatistics();
 		const fragmented = statistics.pieceCount > MAXIMUM_PIECE_COUNT;
-		const disproportionatelyRetained =
-			statistics.reclaimableTextUnits >= MINIMUM_RECLAIMABLE_TEXT_UNITS &&
-			statistics.retainedTextUnits >= statistics.liveTextUnits * 2;
+		const disproportionatelyRetained = statistics.reclaimableTextUnits >= MINIMUM_RECLAIMABLE_TEXT_UNITS && statistics.retainedTextUnits >= statistics.liveTextUnits * 2;
 		const absolutelyRetained = statistics.reclaimableTextUnits >= MAXIMUM_RECLAIMABLE_TEXT_UNITS;
 		return fragmented || disproportionatelyRetained || absolutelyRetained;
 	}
@@ -524,13 +481,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 		this.collectSnapshotSegments(node.right, segments);
 	}
 
-	private collectRange(
-		node: PieceNode | undefined,
-		baseOffset: number,
-		startOffset: number,
-		endOffset: number,
-		parts: string[],
-	): void {
+	private collectRange(node: PieceNode | undefined, baseOffset: number, startOffset: number, endOffset: number, parts: string[]): void {
 		if (!node || startOffset >= endOffset) return;
 		const leftLength = nodeLength(node.left);
 		const pieceStartOffset = baseOffset + leftLength;
@@ -542,12 +493,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 		const intersectionEnd = Math.min(endOffset, pieceEndOffset);
 		if (intersectionStart < intersectionEnd) {
 			const buffer = node.piece.buffer === PieceBuffer.Original ? this.originalBuffer : this.addBuffer;
-			parts.push(
-				buffer.slice(
-					node.piece.startOffset + intersectionStart - pieceStartOffset,
-					node.piece.startOffset + intersectionEnd - pieceStartOffset,
-				),
-			);
+			parts.push(buffer.slice(node.piece.startOffset + intersectionStart - pieceStartOffset, node.piece.startOffset + intersectionEnd - pieceStartOffset));
 		}
 		if (endOffset > pieceEndOffset) {
 			this.collectRange(node.right, pieceEndOffset, Math.max(startOffset, pieceEndOffset), endOffset, parts);
@@ -661,13 +607,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 	}
 
 	private assertRange(startOffset: number, endOffset: number): void {
-		if (
-			!Number.isSafeInteger(startOffset) ||
-			!Number.isSafeInteger(endOffset) ||
-			startOffset < 0 ||
-			endOffset < startOffset ||
-			endOffset > this.getLength()
-		) {
+		if (!Number.isSafeInteger(startOffset) || !Number.isSafeInteger(endOffset) || startOffset < 0 || endOffset < startOffset || endOffset > this.getLength()) {
 			throw new RangeError(`Offsets must satisfy 0 <= start <= end <= ${this.getLength()}`);
 		}
 	}
@@ -699,14 +639,10 @@ function comparePreparedBufferEdits(left: PreparedBufferEdit, right: PreparedBuf
 function isWholeWordMatch(line: string, startIndex: number, endIndex: number, searchData: SearchData): boolean {
 	const classifier = searchData.wordSeparators;
 	if (!classifier) return true;
-	const firstIsRegular =
-		startIndex < line.length && classifier.get(line.charCodeAt(startIndex)) === WordCharacterClass.Regular;
-	const lastIsRegular =
-		endIndex > startIndex && classifier.get(line.charCodeAt(endIndex - 1)) === WordCharacterClass.Regular;
-	const beforeIsRegular =
-		startIndex > 0 && classifier.get(line.charCodeAt(startIndex - 1)) === WordCharacterClass.Regular;
-	const afterIsRegular =
-		endIndex < line.length && classifier.get(line.charCodeAt(endIndex)) === WordCharacterClass.Regular;
+	const firstIsRegular = startIndex < line.length && classifier.get(line.charCodeAt(startIndex)) === WordCharacterClass.Regular;
+	const lastIsRegular = endIndex > startIndex && classifier.get(line.charCodeAt(endIndex - 1)) === WordCharacterClass.Regular;
+	const beforeIsRegular = startIndex > 0 && classifier.get(line.charCodeAt(startIndex - 1)) === WordCharacterClass.Regular;
+	const afterIsRegular = endIndex < line.length && classifier.get(line.charCodeAt(endIndex)) === WordCharacterClass.Regular;
 	return !(firstIsRegular && beforeIsRegular) && !(lastIsRegular && afterIsRegular);
 }
 
@@ -726,30 +662,17 @@ interface TextBufferSnapshotSegment {
 	readonly length: number;
 }
 
-function createTextBufferSnapshot(
-	segments: readonly TextBufferSnapshotSegment[],
-	length: number,
-	lineCount: number,
-): TextBufferSnapshot {
+function createTextBufferSnapshot(segments: readonly TextBufferSnapshotSegment[], length: number, lineCount: number): TextBufferSnapshot {
 	const capturedSegments = Object.freeze(segments.map(segment => Object.freeze({ ...segment })));
 	return Object.freeze({
 		length,
 		lineCount,
-		getText: () =>
-			capturedSegments
-				.map(segment => segment.source.slice(segment.startOffset, segment.startOffset + segment.length))
-				.join(''),
-		getTextBetweenOffsets: (startOffset: number, endOffset: number) =>
-			readTextBetweenOffsets(capturedSegments, length, startOffset, endOffset),
+		getText: () => capturedSegments.map(segment => segment.source.slice(segment.startOffset, segment.startOffset + segment.length)).join(''),
+		getTextBetweenOffsets: (startOffset: number, endOffset: number) => readTextBetweenOffsets(capturedSegments, length, startOffset, endOffset),
 	});
 }
 
-function readTextBetweenOffsets(
-	segments: readonly TextBufferSnapshotSegment[],
-	length: number,
-	startOffset: number,
-	endOffset: number,
-): string {
+function readTextBetweenOffsets(segments: readonly TextBufferSnapshotSegment[], length: number, startOffset: number, endOffset: number): string {
 	assertOffsetRange(startOffset, endOffset, length);
 	if (startOffset === endOffset) return '';
 	const parts: string[] = [];
@@ -771,13 +694,7 @@ function readTextBetweenOffsets(
 }
 
 function assertOffsetRange(startOffset: number, endOffset: number, length: number): void {
-	if (
-		!Number.isSafeInteger(startOffset) ||
-		!Number.isSafeInteger(endOffset) ||
-		startOffset < 0 ||
-		endOffset < startOffset ||
-		endOffset > length
-	) {
+	if (!Number.isSafeInteger(startOffset) || !Number.isSafeInteger(endOffset) || startOffset < 0 || endOffset < startOffset || endOffset > length) {
 		throw new RangeError(`Offsets must satisfy 0 <= start <= end <= ${length}`);
 	}
 }

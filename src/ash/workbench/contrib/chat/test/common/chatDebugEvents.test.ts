@@ -158,9 +158,7 @@ suite('Agent trace artifact', () => {
 			events: [event],
 		};
 		assert.deepEqual(parseAgentTraceDiagnostics(capture).events, [event]);
-		assert.throws(() =>
-			parseAgentTraceDiagnostics({ ...capture, events: [{ ...event, event: { ...event.event, runId: '' } }] }),
-		);
+		assert.throws(() => parseAgentTraceDiagnostics({ ...capture, events: [{ ...event, event: { ...event.event, runId: '' } }] }));
 		assert.throws(() =>
 			parseAgentTraceDiagnostics({
 				...capture,
@@ -190,10 +188,7 @@ suite('Agent trace artifact', () => {
 			threads: [],
 			historyPrefixes: [{ digest: 'retained' }],
 		});
-		assert.deepEqual(
-			mergeAgentTrace(trace, { ...trace, historyPrefixes: [] }).historyPrefixes,
-			trace.historyPrefixes,
-		);
+		assert.deepEqual(mergeAgentTrace(trace, { ...trace, historyPrefixes: [] }).historyPrefixes, trace.historyPrefixes);
 	});
 
 	test('keeps independent diagnostic order and embedded evidence across incremental reads', () => {
@@ -223,9 +218,7 @@ suite('Agent trace artifact', () => {
 		assert.throws(() => parseAgentTraceDiagnosticPage(next, 1, false, 1));
 		assert.throws(() => parseAgentTraceDiagnosticPage({ ...next, events: [] }, 1, true, 1));
 		assert.throws(() => mergeAgentTraceDiagnostics(first, { ...next, captureId: 'replaced' }));
-		assert.throws(() =>
-			parseAgentTraceDiagnostics({ ...first, payloads: { 'payload-1': { unreferenced: true } } }),
-		);
+		assert.throws(() => parseAgentTraceDiagnostics({ ...first, payloads: { 'payload-1': { unreferenced: true } } }));
 		assert.throws(() =>
 			parseAgentTraceDiagnostics({
 				...first,
@@ -383,11 +376,7 @@ suite('Agent trace artifact', () => {
 			threads: [{ threadId: 'root', events: [record('root', 2)] }],
 		});
 		assert.equal(traceOverview(grown), undefined);
-		assert.throws(() =>
-			parseAgentTrace({ ...trace, overview: { ...trace.overview, totalTokens: { ...metric, missingCalls: 1 } } }),
-		);
-		assert.throws(() =>
-			parseAgentTrace({ ...trace, overview: { ...trace.overview, inputTokens: { ...metric, reported: '-1' } } }),
-		);
+		assert.throws(() => parseAgentTrace({ ...trace, overview: { ...trace.overview, totalTokens: { ...metric, missingCalls: 1 } } }));
+		assert.throws(() => parseAgentTrace({ ...trace, overview: { ...trace.overview, inputTokens: { ...metric, reported: '-1' } } }));
 	});
 });

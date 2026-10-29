@@ -27,9 +27,7 @@ suite('Terminal scoped logging', () => {
 			}),
 		);
 		const services = lifetime.add(new InstantiationService());
-		const workspace = lifetime.add(
-			new TestWorkspaceService({ id: 'workspace-original', uri: URI.file('/workspace') }),
-		);
+		const workspace = lifetime.add(new TestWorkspaceService({ id: 'workspace-original', uri: URI.file('/workspace') }));
 		services.registerInstance(ILoggerService, host);
 		services.registerInstance(IWorkspaceContextService, workspace);
 		const terminal = lifetime.add(services.createInstance(TerminalLogService));

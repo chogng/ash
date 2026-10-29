@@ -8,22 +8,10 @@ import { test } from 'mocha';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { Disposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
-import {
-	SocketCloseEventType,
-	type ISocket,
-	type SocketCloseEvent,
-	type SocketDiagnosticsEventType,
-} from '../../../../base/parts/ipc/common/ipc.net.js';
+import { SocketCloseEventType, type ISocket, type SocketCloseEvent, type SocketDiagnosticsEventType } from '../../../../base/parts/ipc/common/ipc.net.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
-import {
-	IRemoteSocketFactoryService,
-	RemoteSocketFactoryService,
-} from '../../../remote/common/remoteSocketFactoryService.js';
-import {
-	ManagedRemoteConnection,
-	RemoteConnectionType,
-	WebSocketRemoteConnection,
-} from '../../../remote/common/remoteAuthorityResolver.js';
+import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../../remote/common/remoteSocketFactoryService.js';
+import { ManagedRemoteConnection, RemoteConnectionType, WebSocketRemoteConnection } from '../../../remote/common/remoteAuthorityResolver.js';
 import { AppServerSocketTransport } from '../../browser/appServerSocketTransport.js';
 import {
 	AppServerFrame,
@@ -70,18 +58,13 @@ class PeerSocket extends Disposable implements ISocket {
 	public traceSocketEvent(_type: SocketDiagnosticsEventType): void {}
 }
 
-function assemble(
-	socket: PeerSocket,
-	webSocket = false,
-): { services: InstantiationService; transport: AppServerSocketTransport } {
+function assemble(socket: PeerSocket, webSocket = false): { services: InstantiationService; transport: AppServerSocketTransport } {
 	const services = new InstantiationService();
 	services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
-	const registration = services
-		.get(IRemoteSocketFactoryService)
-		.register(webSocket ? RemoteConnectionType.WebSocket : RemoteConnectionType.Managed, {
-			supports: () => true,
-			connect: async () => socket,
-		});
+	const registration = services.get(IRemoteSocketFactoryService).register(webSocket ? RemoteConnectionType.WebSocket : RemoteConnectionType.Managed, {
+		supports: () => true,
+		connect: async () => socket,
+	});
 	socket.own(registration);
 	const transport = services.createInstance(AppServerSocketTransport, {
 		getAddress: async () => ({
@@ -112,11 +95,7 @@ test('async frame consumption retains read credit for following partial chunks a
 		(value as AppServerFrame).consumed = ++frames === 1 ? first.p : second.p;
 	});
 	const receive = (text: string): VSBuffer => socket.receive(new TextEncoder().encode(text));
-	assert.equal(
-		getAppServerReadConsumption(receive('{')),
-		undefined,
-		'first frame fragments must release credit to avoid deadlock',
-	);
+	assert.equal(getAppServerReadConsumption(receive('{')), undefined, 'first frame fragments must release credit to avoid deadlock');
 	assert.equal(getAppServerReadConsumption(receive('}\n{')), first.p);
 	assert.equal(getAppServerReadConsumption(receive(' ')), first.p);
 	assert.equal(getAppServerReadConsumption(receive('}\n')), second.p);
@@ -143,21 +122,13 @@ test('App Server socket adapter preserves split UTF-8 frames and serializes one 
 		{ sent: socket.written, frames },
 		{
 			sent: ['{"id":1}\n'],
-			frames: [
-				new AppServerFrame('{"text":"你好"}', Buffer.byteLength('{"text":"你好"}')),
-				new AppServerFrame('{"id":2}', 8),
-			],
+			frames: [new AppServerFrame('{"text":"你好"}', Buffer.byteLength('{"text":"你好"}')), new AppServerFrame('{"id":2}', 8)],
 		},
 	);
 });
 
 test('malformed or unfinished peer frames close the socket and never reach the protocol client', async () => {
-	for (const bytes of [
-		new Uint8Array([255, 10]),
-		new TextEncoder().encode('\n'),
-		new TextEncoder().encode('{}\r\n'),
-		new TextEncoder().encode('{}'),
-	]) {
+	for (const bytes of [new Uint8Array([255, 10]), new TextEncoder().encode('\n'), new TextEncoder().encode('{}\r\n'), new TextEncoder().encode('{}')]) {
 		using socket = new PeerSocket();
 		const assembly = assemble(socket);
 		using services = assembly.services;
@@ -193,10 +164,7 @@ for (const packetBytes of [1, 7, 8192, 65536]) {
 			socket.receive(reusable.subarray(0, length));
 			reusable.fill(0);
 		}
-		assert.deepEqual(frames, [
-			new AppServerFrame(frame, Buffer.byteLength(frame)),
-			new AppServerFrame('{"next":true}', 13),
-		]);
+		assert.deepEqual(frames, [new AppServerFrame(frame, Buffer.byteLength(frame)), new AppServerFrame('{"next":true}', 13)]);
 	});
 }
 
@@ -218,10 +186,7 @@ test('large fragmented frames have bounded allocation and only one final concate
 		}
 		assert.deepEqual(frames, [new AppServerFrame(frame, Buffer.byteLength(frame))]);
 		const allocatedBytes = allocate.mock.calls.reduce((sum, call) => sum + call.arguments[0], 0);
-		assert.ok(
-			allocatedBytes <= 2 * input.length + 65536,
-			`allocated ${allocatedBytes} bytes for ${input.length} input bytes`,
-		);
+		assert.ok(allocatedBytes <= 2 * input.length + 65536, `allocated ${allocatedBytes} bytes for ${input.length} input bytes`);
 		assert.equal(concatenate.mock.calls.length, 1);
 	} finally {
 		allocate.mock.restore();
@@ -343,11 +308,7 @@ test('the real protocol client initializes through the socket adapter and peer c
 	socket.respondToWrite = frame => {
 		const request = JSON.parse(frame) as { method: string; id?: number };
 		if (request.method === 'initialize') {
-			socket.receive(
-				new TextEncoder().encode(
-					`${JSON.stringify({ jsonrpc: '2.0', id: request.id, result: createTestInitializeResult() })}\n`,
-				),
-			);
+			socket.receive(new TextEncoder().encode(`${JSON.stringify({ jsonrpc: '2.0', id: request.id, result: createTestInitializeResult() })}\n`));
 		}
 	};
 	const client = new AppServerProtocolClient(transport);

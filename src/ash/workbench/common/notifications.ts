@@ -23,9 +23,7 @@ export const enum NotificationsPosition {
 
 export function getNotificationsPosition(configurationService: IConfigurationService): NotificationsPosition {
 	const position = configurationService.getValue<NotificationsPosition>(NotificationsSettings.NOTIFICATIONS_POSITION);
-	return position === NotificationsPosition.BOTTOM_LEFT || position === NotificationsPosition.TOP_RIGHT
-		? position
-		: NotificationsPosition.BOTTOM_RIGHT;
+	return position === NotificationsPosition.BOTTOM_LEFT || position === NotificationsPosition.TOP_RIGHT ? position : NotificationsPosition.BOTTOM_RIGHT;
 }
 
 export interface IStatusMessageViewItem {
@@ -142,8 +140,7 @@ export class NotificationsModel extends Disposable {
 			},
 			onDidChangeVisibility: visibilityEmitter.event,
 			updateSeverity: severity => this.update(id, { severity }),
-			updateMessage: message =>
-				this.update(id, { message: message instanceof Error ? message.message : message }),
+			updateMessage: message => this.update(id, { message: message instanceof Error ? message.message : message }),
 			updateActions: actions => this.update(id, { actions: freezeActions(actions) }),
 			progress: {
 				infinite: () => this.update(id, { progress: { infinite: true } }),
@@ -200,28 +197,14 @@ export class NotificationsModel extends Disposable {
 	private findEquivalent(candidate: NotificationItem): NotificationItem | undefined {
 		if (candidate.hasProgress) return undefined;
 		return [...this.items.values()].find(item => {
-			if (
-				item.hasProgress ||
-				item.source !== candidate.source ||
-				item.sourceId !== candidate.sourceId ||
-				item.message !== candidate.message
-			)
-				return false;
+			if (item.hasProgress || item.source !== candidate.source || item.sourceId !== candidate.sourceId || item.message !== candidate.message) return false;
 			const primary = item.actions?.primary ?? [];
 			const other = candidate.actions?.primary ?? [];
-			return (
-				primary.length === other.length &&
-				primary.every((action, index) => action.id === other[index].id && action.label === other[index].label)
-			);
+			return primary.length === other.length && primary.every((action, index) => action.id === other[index].id && action.label === other[index].label);
 		});
 	}
 
-	private update(
-		id: number,
-		changes: Partial<
-			Pick<NotificationItem, 'severity' | 'message' | 'actions' | 'progress' | 'visible' | 'expanded'>
-		>,
-	): void {
+	private update(id: number, changes: Partial<Pick<NotificationItem, 'severity' | 'message' | 'actions' | 'progress' | 'visible' | 'expanded'>>): void {
 		const current = this.items.get(id);
 		if (!current) return;
 		const item = Object.freeze({
@@ -229,9 +212,7 @@ export class NotificationsModel extends Disposable {
 			...changes,
 			hasProgress: current.hasProgress || changes.progress !== undefined,
 			hasActiveProgress: hasActiveProgress('progress' in changes ? changes.progress : current.progress),
-			...('actions' in changes
-				? { expanded: !!changes.actions?.primary?.length, canCollapse: !changes.actions?.primary?.length }
-				: {}),
+			...('actions' in changes ? { expanded: !!changes.actions?.primary?.length, canCollapse: !changes.actions?.primary?.length } : {}),
 		});
 		this.items.set(id, item);
 		this._onDidChange.fire(item);

@@ -20,12 +20,7 @@ export interface ActionBarDragAndDrop {
 	readonly canDrop: (event: DragEvent, target: IAction | undefined, position: ActionBarDropPosition) => boolean;
 	readonly onDragStart: (action: IAction, event: DragEvent) => void;
 	readonly onDragEnter?: (target: IAction | undefined, position: ActionBarDropPosition, event: DragEvent) => void;
-	readonly onDragOver?: (
-		target: IAction | undefined,
-		position: ActionBarDropPosition,
-		event: DragEvent,
-		duration: number,
-	) => void;
+	readonly onDragOver?: (target: IAction | undefined, position: ActionBarDropPosition, event: DragEvent, duration: number) => void;
 	readonly onDragLeave?: () => void;
 	readonly onDrop: (target: IAction | undefined, position: ActionBarDropPosition, event: DragEvent) => void;
 	readonly onDragEnd: () => void;
@@ -110,9 +105,7 @@ export class ActionBar extends Disposable {
 			}),
 		);
 		// Capture before popup dismissal listeners can queue replacement of a clicked trigger.
-		this._register(
-			addDisposableListener(ownerDocument, 'pointerdown', event => this.beginPointerActivation(event), true),
-		);
+		this._register(addDisposableListener(ownerDocument, 'pointerdown', event => this.beginPointerActivation(event), true));
 		if (this.dragAndDrop) {
 			this._register(
 				new DragAndDropObserver(element, {
@@ -161,9 +154,7 @@ export class ActionBar extends Disposable {
 		const activeElement = this.element.ownerDocument.activeElement;
 		const focusedEntry = this.entries.find(({ container }) => container.contains(activeElement));
 		const focusedActionId = focusedEntry?.action.id;
-		const focusedControl = focusedEntry
-			? [...focusedEntry.container.querySelectorAll('button, [tabindex]')].indexOf(activeElement!)
-			: -1;
+		const focusedControl = focusedEntry ? [...focusedEntry.container.querySelectorAll('button, [tabindex]')].indexOf(activeElement!) : -1;
 		// Retained action identities keep their view and DOM through selection and reordering.
 		const retained = new Map(this.entries.map(entry => [entry.action, entry]));
 		const next = actions.map(action => {
@@ -190,15 +181,11 @@ export class ActionBar extends Disposable {
 				this.element.insertBefore(container, this.element.children[index] ?? null);
 			}
 		}
-		const tabStop =
-			next.find(entry => entry.action.enabled && entry.item === this.tabStop) ??
-			next.find(entry => entry.action.enabled);
+		const tabStop = next.find(entry => entry.action.enabled && entry.item === this.tabStop) ?? next.find(entry => entry.action.enabled);
 		this.tabStop = tabStop?.item;
 		for (const entry of next) entry.item.setTabbable(entry === tabStop);
 		if (focusedActionId && this.element.ownerDocument.activeElement !== activeElement) {
-			const entry =
-				next.find(({ action }) => action.id === focusedActionId && action.enabled) ??
-				next.find(({ action }) => action.enabled);
+			const entry = next.find(({ action }) => action.id === focusedActionId && action.enabled) ?? next.find(({ action }) => action.enabled);
 			if (entry) {
 				this._setTabStop(entry.item);
 				// Moving a retained container can blur a nested control; restore that control, not the item's default target.
@@ -231,9 +218,7 @@ export class ActionBar extends Disposable {
 			return;
 		}
 		// An updated action can become disabled without changing the collection's structure.
-		const tabStop =
-			this.entries.find(entry => entry.item === this.tabStop && entry.action.enabled) ??
-			this.entries.find(entry => entry.action.enabled);
+		const tabStop = this.entries.find(entry => entry.item === this.tabStop && entry.action.enabled) ?? this.entries.find(entry => entry.action.enabled);
 		if (tabStop) {
 			this._setTabStop(tabStop.item);
 		} else {
@@ -255,9 +240,7 @@ export class ActionBar extends Disposable {
 	}
 
 	focus(): void {
-		const entry =
-			this.entries.find(({ item, action }) => item === this.tabStop && action.enabled) ??
-			this.entries.find(({ action }) => action.enabled);
+		const entry = this.entries.find(({ item, action }) => item === this.tabStop && action.enabled) ?? this.entries.find(({ action }) => action.enabled);
 		if (!entry) return;
 		this._setTabStop(entry.item);
 		entry.item.focus();
@@ -339,16 +322,9 @@ export class ActionBar extends Disposable {
 	}
 
 	private beginPointerActivation(event: PointerEvent): void {
-		if (event.button !== 0 || !event.isPrimary || !isElement(event.target) || !this.element.contains(event.target))
-			return;
+		if (event.button !== 0 || !event.isPrimary || !isElement(event.target) || !this.element.contains(event.target)) return;
 		const control = event.target.closest('button, input, select, textarea, [role="button"], [tabindex]');
-		if (
-			!control ||
-			!this.element.contains(control) ||
-			control.matches(':disabled') ||
-			control.getAttribute('aria-disabled') === 'true'
-		)
-			return;
+		if (!control || !this.element.contains(control) || control.matches(':disabled') || control.getAttribute('aria-disabled') === 'true') return;
 		const listeners = new DisposableStore();
 		this.pointerActivation.value = listeners;
 		const finish = (): void => {
@@ -394,14 +370,8 @@ export class ActionBar extends Disposable {
 		const store = new DisposableStore();
 		container.draggable = false;
 		container.classList.remove(DndCssClasses.Draggable);
-		const item: DropdownActionViewItem = store.add(
-			this.actionViewItemProvider?.(action, this.actionViewItemOptions) ??
-				createActionViewItem(action, this.actionViewItemOptions),
-		);
-		const visibility =
-			item instanceof DropdownMenuActionViewItem
-				? item.onDidChangeVisibility
-				: item.onDidChangeDropdownVisibility;
+		const item: DropdownActionViewItem = store.add(this.actionViewItemProvider?.(action, this.actionViewItemOptions) ?? createActionViewItem(action, this.actionViewItemOptions));
+		const visibility = item instanceof DropdownMenuActionViewItem ? item.onDidChangeVisibility : item.onDidChangeDropdownVisibility;
 		if (visibility) {
 			store.add(visibility(visible => this.dropdownVisibilityChanged(item, visible)));
 			store.add(toDisposable(() => this.visibleDropdowns.delete(item)));
@@ -567,9 +537,7 @@ export class ActionBar extends Disposable {
 
 	private clearDropTarget(): void {
 		if (!this.dropTarget || !this.dropPosition) return;
-		this.dropTarget.classList.remove(
-			this.dropPosition === 'before' ? DndCssClasses.DropBefore : DndCssClasses.DropAfter,
-		);
+		this.dropTarget.classList.remove(this.dropPosition === 'before' ? DndCssClasses.DropBefore : DndCssClasses.DropAfter);
 		this.dropTarget = undefined;
 		this.dropPosition = undefined;
 	}
@@ -580,10 +548,7 @@ export class ActionBar extends Disposable {
 	}
 
 	private hasMatchingStructure(actions: readonly IAction[]): boolean {
-		return (
-			actions.length === this.entries.length &&
-			actions.every((action, index) => action.id === this.entries[index]?.action.id)
-		);
+		return actions.length === this.entries.length && actions.every((action, index) => action.id === this.entries[index]?.action.id);
 	}
 
 	private replaceEntry(entry: ActionBarEntry, action: IAction): void {
@@ -607,8 +572,7 @@ export class ActionBar extends Disposable {
 		// Split actions contain two controls; returning to their dropdown must not
 		// silently move keyboard focus to the primary action after a refresh.
 		const control = entry.container.querySelectorAll<HTMLElement>('button, [tabindex]')[controlIndex];
-		if (control && !control.matches(':disabled') && control.getAttribute('aria-disabled') !== 'true')
-			control.focus();
+		if (control && !control.matches(':disabled') && control.getAttribute('aria-disabled') !== 'true') control.focus();
 		else entry.item.focus();
 	}
 

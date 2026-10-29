@@ -116,25 +116,7 @@ export interface IBrowserViewFindInPageOptions {
 	readonly matchCase?: boolean;
 }
 
-export const browserZoomFactors = [
-	0.25,
-	1 / 3,
-	0.5,
-	2 / 3,
-	0.75,
-	0.8,
-	0.9,
-	1,
-	1.1,
-	1.25,
-	1.5,
-	1.75,
-	2,
-	2.5,
-	3,
-	4,
-	5,
-] as const;
+export const browserZoomFactors = [0.25, 1 / 3, 0.5, 2 / 3, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5] as const;
 export const browserZoomDefaultIndex = browserZoomFactors.indexOf(1);
 export interface IBrowserDeviceProfile {
 	readonly width?: number;
@@ -298,8 +280,7 @@ export interface IBrowserViewStorageKeys {
 
 export type IBrowserViewSessionOptions =
 	| {
-			readonly scope:
-				BrowserViewStorageScope.Global | BrowserViewStorageScope.Workspace | BrowserViewStorageScope.Ephemeral;
+			readonly scope: BrowserViewStorageScope.Global | BrowserViewStorageScope.Workspace | BrowserViewStorageScope.Ephemeral;
 	  }
 	| { readonly scope: BrowserViewStorageScope.Agent; readonly affinity: string };
 
@@ -322,11 +303,7 @@ export interface IBrowserViewInfo {
 export interface IBrowserViewService {
 	respondToPasswordSave(id: string, requestId: string, save: boolean): Promise<void>;
 	respondToPasswordFill(id: string, requestId: string, accountId: string | null): Promise<void>;
-	respondToAuthentication(
-		id: string,
-		requestId: string,
-		credentials: { readonly username: string; readonly password: string; readonly remember: boolean } | null,
-	): Promise<void>;
+	respondToAuthentication(id: string, requestId: string, credentials: { readonly username: string; readonly password: string; readonly remember: boolean } | null): Promise<void>;
 	/** Defer rendering matching elements on one HTTPS or bundled-page origin; undefined restores page-owned styles. */
 	setContentVisibility(id: string, rule: IBrowserContentVisibilityRule | undefined): Promise<void>;
 	setPermissions(id: string, origin: string, grants: readonly IPermissionCategoryState[]): Promise<void>;
@@ -407,9 +384,7 @@ export type BrowserViewAction =
 	| {
 			readonly type: 'typeText';
 			readonly text: string;
-			readonly target:
-				| { readonly type: 'focusedElement' }
-				| { readonly type: 'element'; readonly target: { readonly nodeId: string } };
+			readonly target: { readonly type: 'focusedElement' } | { readonly type: 'element'; readonly target: { readonly nodeId: string } };
 	  }
 	| { readonly type: 'scroll'; readonly deltaX: number; readonly deltaY: number }
 	| { readonly type: 'goBack' | 'reload' };
@@ -440,24 +415,15 @@ const TARGET_ID_PATTERN = /^browser_target_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[
 
 export function validateBrowserViewCreateRequest(value: unknown): IBrowserViewCreateRequest {
 	const request = exactRecord(value, ['targetId', 'options'], 'browser view create request');
-	const options = exactRecord(request.options, ['initialUrl', 'owner', 'session'], 'browser view options', [
-		'canvas',
-	]);
+	const options = exactRecord(request.options, ['initialUrl', 'owner', 'session'], 'browser view options', ['canvas']);
 	const owner = validateBrowserViewOwner(options.owner);
 	const session = validateBrowserViewSessionOptions(options.session);
-	if (
-		owner.type === 'agent' &&
-		(session.scope !== BrowserViewStorageScope.Agent || session.affinity !== owner.sessionId)
-	) {
+	if (owner.type === 'agent' && (session.scope !== BrowserViewStorageScope.Agent || session.affinity !== owner.sessionId)) {
 		throw new Error('Agent browser storage must belong to its session');
 	}
 	let canvas: IBrowserCanvasPresentation | undefined;
 	if (options.canvas !== undefined) {
-		const value = exactRecord(options.canvas, ['sessionId', 'instanceId', 'title'], 'Canvas presentation', [
-			'threadId',
-			'extensionId',
-			'canvasId',
-		]);
+		const value = exactRecord(options.canvas, ['sessionId', 'instanceId', 'title'], 'Canvas presentation', ['threadId', 'extensionId', 'canvasId']);
 		if (
 			typeof value.instanceId !== 'string' ||
 			!/^[A-Za-z0-9._-]{1,128}$/.test(value.instanceId) ||
@@ -474,13 +440,7 @@ export function validateBrowserViewCreateRequest(value: unknown): IBrowserViewCr
 					value.threadId.length > 1024 ||
 					typeof value.extensionId !== 'string' ||
 					typeof value.canvasId !== 'string')) ||
-			['threadId', 'extensionId', 'canvasId'].some(
-				key =>
-					value[key] !== undefined &&
-					(typeof value[key] !== 'string' ||
-						!(value[key] as string).trim() ||
-						(value[key] as string).length > 1024),
-			)
+			['threadId', 'extensionId', 'canvasId'].some(key => value[key] !== undefined && (typeof value[key] !== 'string' || !(value[key] as string).trim() || (value[key] as string).length > 1024))
 		) {
 			throw new TypeError('Invalid Canvas presentation');
 		}
@@ -527,11 +487,7 @@ function validateBrowserViewSessionOptions(value: unknown): IBrowserViewSessionO
 		return { scope: BrowserViewStorageScope.Agent, affinity: session.affinity };
 	}
 	exactRecord(value, ['scope'], 'browser session');
-	if (
-		session?.scope !== BrowserViewStorageScope.Global &&
-		session?.scope !== BrowserViewStorageScope.Workspace &&
-		session?.scope !== BrowserViewStorageScope.Ephemeral
-	) {
+	if (session?.scope !== BrowserViewStorageScope.Global && session?.scope !== BrowserViewStorageScope.Workspace && session?.scope !== BrowserViewStorageScope.Ephemeral) {
 		throw new Error('Invalid browser storage scope');
 	}
 	return { scope: session.scope };
@@ -561,12 +517,18 @@ export function validateBrowserViewVisibilityRequest(value: unknown): IBrowserVi
 	if (typeof request.visible !== 'boolean') {
 		throw new Error('browser view visible must be a boolean');
 	}
-	return { targetId: validateTargetId(request.targetId), visible: request.visible };
+	return {
+		targetId: validateTargetId(request.targetId),
+		visible: request.visible,
+	};
 }
 
 export function validateBrowserViewNavigateRequest(value: unknown): IBrowserViewNavigateRequest {
 	const request = exactRecord(value, ['targetId', 'url'], 'browser view navigate request');
-	return { targetId: validateTargetId(request.targetId), url: normalizeBrowserViewUrl(request.url) };
+	return {
+		targetId: validateTargetId(request.targetId),
+		url: normalizeBrowserViewUrl(request.url),
+	};
 }
 
 /** Normalizes URLs accepted by the embedded browser origin policy. */
@@ -588,12 +550,7 @@ export function normalizeBrowserViewUrl(value: unknown): string {
 	}
 	const localHttpHost = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]';
 	const localFile = url.protocol === 'file:' && (url.hostname === '' || url.hostname === 'localhost');
-	if (
-		url.protocol !== 'https:' &&
-		!(url.protocol === 'http:' && localHttpHost) &&
-		!localFile &&
-		url.href !== 'about:blank'
-	) {
+	if (url.protocol !== 'https:' && !(url.protocol === 'http:' && localHttpHost) && !localFile && url.href !== 'about:blank') {
 		throw new Error('browser view URL must use HTTPS, loopback HTTP, a local file, or about:blank');
 	}
 	return url.href;
@@ -607,32 +564,20 @@ function validateTargetId(value: unknown): BrowserViewTargetId {
 }
 
 function boundedInteger(value: unknown, field: string, allowNegative: boolean): number {
-	if (
-		!Number.isSafeInteger(value) ||
-		Math.abs(value as number) > MAX_BOUND_MAGNITUDE ||
-		(!allowNegative && (value as number) <= 0)
-	) {
+	if (!Number.isSafeInteger(value) || Math.abs(value as number) > MAX_BOUND_MAGNITUDE || (!allowNegative && (value as number) <= 0)) {
 		throw new Error(`${field} is outside the supported integer range`);
 	}
 	return value as number;
 }
 
-function exactRecord(
-	value: unknown,
-	keys: readonly string[],
-	label: string,
-	optionalKeys: readonly string[] = [],
-): Record<string, unknown> {
+function exactRecord(value: unknown, keys: readonly string[], label: string, optionalKeys: readonly string[] = []): Record<string, unknown> {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) {
 		throw new Error(`${label} must be an object`);
 	}
 	const result = value as Record<string, unknown>;
 	const actual = Object.keys(result).sort();
 	const expected = [...keys].sort();
-	if (
-		expected.some(key => !Object.hasOwn(result, key)) ||
-		actual.some(key => !expected.includes(key) && !optionalKeys.includes(key))
-	) {
+	if (expected.some(key => !Object.hasOwn(result, key)) || actual.some(key => !expected.includes(key) && !optionalKeys.includes(key))) {
 		throw new Error(`${label} must contain exactly: ${expected.join(', ')}`);
 	}
 	return result;

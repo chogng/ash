@@ -57,10 +57,7 @@ export class TerminalTypeAheadAddon extends Disposable implements ITerminalAddon
 					this.promptReady = true;
 				}),
 			);
-			for (const event of [
-				detection.promptInputModel.onDidFinishInput,
-				detection.promptInputModel.onDidInterrupt,
-			]) {
+			for (const event of [detection.promptInputModel.onDidFinishInput, detection.promptInputModel.onDidInterrupt]) {
 				this.capabilityListeners.add(
 					event(() => {
 						this.promptReady = false;
@@ -159,26 +156,14 @@ export class TerminalTypeAheadAddon extends Disposable implements ITerminalAddon
 
 	private render(raw: Terminal): void {
 		this.element.replaceChildren();
-		if (
-			!this.echoConfirmed ||
-			!this.pending ||
-			raw.buffer.active.type !== 'normal' ||
-			this.screen.element.hidden ||
-			this.screen.isDisposed
-		)
-			return;
+		if (!this.echoConfirmed || !this.pending || raw.buffer.active.type !== 'normal' || this.screen.element.hidden || this.screen.isDisposed) return;
 		const enabled = this.configuration.getValue<string>(TerminalTypeAheadSettingId.LocalEchoEnabled);
 		const threshold = this.configuration.getValue<number>(TerminalTypeAheadSettingId.LocalEchoLatencyThreshold);
 		const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === this.instance.dirId);
 		const remote = !!folder && folder.uri.scheme !== 'file';
 		if (enabled !== 'on' && (enabled !== 'auto' || !remote || threshold < 0 || this.latency < threshold)) return;
 		const title = this.instance.title.toLowerCase();
-		if (
-			this.configuration
-				.getValue<readonly string[]>(TerminalTypeAheadSettingId.LocalEchoExcludePrograms)
-				.some(program => program && title.includes(program.toLowerCase()))
-		)
-			return;
+		if (this.configuration.getValue<readonly string[]>(TerminalTypeAheadSettingId.LocalEchoExcludePrograms).some(program => program && title.includes(program.toLowerCase()))) return;
 		const bounds = this.screen.element.querySelector('.xterm-screen')?.getBoundingClientRect();
 		if (!bounds?.width || !bounds.height) return;
 		const parent = this.element.getBoundingClientRect();

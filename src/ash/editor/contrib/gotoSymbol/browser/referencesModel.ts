@@ -35,13 +35,7 @@ export class OneReference {
 		this.rangeCallback(this);
 	}
 	public get ariaMessage(): string {
-		return localize(
-			'references.referenceLabel',
-			'{0}, line {1}, column {2}',
-			basename(this.uri),
-			this.range.startLineNumber,
-			this.range.startColumn,
-		);
+		return localize('references.referenceLabel', '{0}, line {1}, column {2}', basename(this.uri), this.range.startLineNumber, this.range.startColumn);
 	}
 }
 
@@ -71,16 +65,11 @@ export class ReferencesModel extends Disposable {
 		const providerFirst = links[0];
 		const ordered = [...links].sort(
 			(a, b) =>
-				extUri.getComparisonKey(a.uri).localeCompare(extUri.getComparisonKey(b.uri)) ||
-				Range.compareRangesUsingStarts(a.targetSelectionRange ?? a.range, b.targetSelectionRange ?? b.range),
+				extUri.getComparisonKey(a.uri).localeCompare(extUri.getComparisonKey(b.uri)) || Range.compareRangesUsingStarts(a.targetSelectionRange ?? a.range, b.targetSelectionRange ?? b.range),
 		);
 		for (const link of ordered) {
 			const previous = this.references.at(-1);
-			if (
-				previous &&
-				extUri.isEqual(previous.uri, link.uri) &&
-				Range.equalsRange(previous.range, link.targetSelectionRange ?? link.range)
-			) {
+			if (previous && extUri.isEqual(previous.uri, link.uri) && Range.equalsRange(previous.range, link.targetSelectionRange ?? link.range)) {
 				continue;
 			}
 			let group = this.groups.at(-1);
@@ -88,9 +77,7 @@ export class ReferencesModel extends Disposable {
 				group = new FileReferences(this, link.uri);
 				this.groups.push(group);
 			}
-			const reference = new OneReference(link === providerFirst, group, link, reference =>
-				this.rangeChange.fire(reference),
-			);
+			const reference = new OneReference(link === providerFirst, group, link, reference => this.rangeChange.fire(reference));
 			group.children.push(reference);
 			this.references.push(reference);
 		}
@@ -100,20 +87,13 @@ export class ReferencesModel extends Disposable {
 		return this.references.length === 0;
 	}
 	public get ariaMessage(): string {
-		return localize(
-			'references.resultCount',
-			'{0} results in {1} files',
-			this.references.length,
-			this.groups.length,
-		);
+		return localize('references.resultCount', '{0} results in {1} files', this.references.length, this.groups.length);
 	}
 	public firstReference(): OneReference | undefined {
 		return this.references.find(reference => reference.isProviderFirst) ?? this.references[0];
 	}
 	public referenceAt(resource: URI, position: Position): OneReference | undefined {
-		return this.references.find(
-			reference => extUri.isEqual(reference.uri, resource) && Range.containsPosition(reference.range, position),
-		);
+		return this.references.find(reference => extUri.isEqual(reference.uri, resource) && Range.containsPosition(reference.range, position));
 	}
 	public nextOrPreviousReference(reference: OneReference, next: boolean): OneReference {
 		const index = this.references.indexOf(reference);
@@ -130,9 +110,7 @@ export class ReferencesModel extends Disposable {
 			while (prefix < source.length && source[prefix] === target[prefix]) {
 				prefix++;
 			}
-			const distance =
-				Math.abs(reference.range.startLineNumber - position.lineNumber) * 100 +
-				Math.abs(reference.range.startColumn - position.column);
+			const distance = Math.abs(reference.range.startLineNumber - position.lineNumber) * 100 + Math.abs(reference.range.startColumn - position.column);
 			if (prefix > bestPrefix || (prefix === bestPrefix && distance < bestDistance)) {
 				best = reference;
 				bestPrefix = prefix;

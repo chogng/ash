@@ -1,12 +1,7 @@
 import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
-import {
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-	type IAccessibleViewContentProvider,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, type IAccessibleViewContentProvider } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import type { ITerminalInstance, IXtermTerminal } from '../../../terminal/browser/terminal.js';
 import { BufferContentTracker } from './bufferContentTracker.js';
 

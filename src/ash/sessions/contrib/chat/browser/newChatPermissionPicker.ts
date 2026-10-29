@@ -66,9 +66,7 @@ export class NewChatPermissionPicker extends Disposable {
 		menu.append(heading);
 		const buttons: HTMLButtonElement[] = [];
 		let focusedItem: HTMLButtonElement;
-		this.listeners.add(
-			AccessibleViewRegistry.register(new SessionsChatAccessibilityHelp(menu, () => focusedItem.focus())),
-		);
+		this.listeners.add(AccessibleViewRegistry.register(new SessionsChatAccessibilityHelp(menu, () => focusedItem.focus())));
 		this.listeners.add(
 			addDisposableListener(menu, 'focusin', event => {
 				focusedItem = event.target as HTMLButtonElement;
@@ -114,9 +112,7 @@ export class NewChatPermissionPicker extends Disposable {
 			);
 			shortcut.element.classList.add('ash-sessions-permission-shortcut');
 			shortcut.element.setAttribute('aria-hidden', 'true');
-			this.listeners.add(
-				addDisposableListener(item, 'click', () => activate(`sessions.chat.permission.${definition.id}`)),
-			);
+			this.listeners.add(addDisposableListener(item, 'click', () => activate(`sessions.chat.permission.${definition.id}`)));
 			menu.append(item);
 			buttons.push(item);
 		}
@@ -126,9 +122,7 @@ export class NewChatPermissionPicker extends Disposable {
 		settings.className = 'ash-sessions-permission-settings';
 		settings.setAttribute('role', 'menuitem');
 		settings.textContent = localize('sessions.chat.permission.reviewModel', 'Review model…');
-		this.listeners.add(
-			addDisposableListener(settings, 'click', () => activate('sessions.chat.permission.reviewModel')),
-		);
+		this.listeners.add(addDisposableListener(settings, 'click', () => activate('sessions.chat.permission.reviewModel')));
 		menu.append(settings);
 		buttons.push(settings);
 		if (this.services.getOptional(IApprovalEnvironmentService)) {
@@ -138,9 +132,7 @@ export class NewChatPermissionPicker extends Disposable {
 			environment.className = 'ash-sessions-permission-settings';
 			environment.setAttribute('role', 'menuitem');
 			environment.textContent = localize('approvalEnvironment.title', 'Prepare review environment…');
-			this.listeners.add(
-				addDisposableListener(environment, 'click', () => activate(OPEN_GUARDIAN_SETUP_COMMAND_ID)),
-			);
+			this.listeners.add(addDisposableListener(environment, 'click', () => activate(OPEN_GUARDIAN_SETUP_COMMAND_ID)));
 			menu.append(environment);
 			buttons.push(environment);
 		}
@@ -152,20 +144,10 @@ export class NewChatPermissionPicker extends Disposable {
 					event.preventDefault();
 					event.stopPropagation();
 					buttons[Number(event.key) - 1]!.click();
-				} else if (
-					event.key === 'ArrowDown' ||
-					event.key === 'ArrowUp' ||
-					event.key === 'Home' ||
-					event.key === 'End'
-				) {
+				} else if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Home' || event.key === 'End') {
 					event.preventDefault();
 					event.stopPropagation();
-					const next =
-						event.key === 'Home'
-							? 0
-							: event.key === 'End'
-								? buttons.length - 1
-								: (index + (event.key === 'ArrowUp' ? -1 : 1) + buttons.length) % buttons.length;
+					const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (index + (event.key === 'ArrowUp' ? -1 : 1) + buttons.length) % buttons.length;
 					buttons[next]!.focus();
 				} else if (event.key === 'Tab') {
 					event.stopPropagation();
@@ -189,9 +171,6 @@ export class NewChatPermissionPicker extends Disposable {
 			},
 		});
 		this.button.setAttribute('aria-expanded', String(this.visible));
-		if (this.visible)
-			buttons[
-				approvalModeDefinitions.findIndex(definition => definition.id === this.model.inputState.approvalMode)
-			]!.focus();
+		if (this.visible) buttons[approvalModeDefinitions.findIndex(definition => definition.id === this.model.inputState.approvalMode)]!.focus();
 	}
 }

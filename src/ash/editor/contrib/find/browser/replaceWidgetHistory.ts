@@ -52,9 +52,7 @@ export class ReplaceWidgetHistory implements IHistory<string> {
 		}
 		try {
 			const parsed: unknown = JSON.parse(raw);
-			this.values = new Set(
-				Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === 'string') : [],
-			);
+			this.values = new Set(Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === 'string') : []);
 		} catch {
 			this.values.clear();
 		}
@@ -62,12 +60,7 @@ export class ReplaceWidgetHistory implements IHistory<string> {
 
 	public async save(): Promise<void> {
 		const values = [...this.values];
-		this.storageService.store(
-			ReplaceWidgetHistory.FIND_HISTORY_KEY,
-			JSON.stringify(values),
-			StorageScope.WORKSPACE,
-			StorageTarget.USER,
-		);
+		this.storageService.store(ReplaceWidgetHistory.FIND_HISTORY_KEY, JSON.stringify(values), StorageScope.WORKSPACE, StorageTarget.USER);
 		this.changeEmitter.fire(values);
 	}
 }

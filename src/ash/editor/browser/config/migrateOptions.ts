@@ -46,10 +46,7 @@ export class EditorSettingMigration {
 	}
 }
 
-function registerEditorSettingMigration(
-	key: string,
-	migrate: (value: unknown, read: ISettingsReader, write: ISettingsWriter) => void,
-): void {
+function registerEditorSettingMigration(key: string, migrate: (value: unknown, read: ISettingsReader, write: ISettingsWriter) => void): void {
 	EditorSettingMigration.items.push(new EditorSettingMigration(key, migrate));
 }
 
@@ -157,8 +154,7 @@ registerEditorSettingMigration('renderIndentGuides', (value, read, write) => {
 registerEditorSettingMigration('highlightActiveIndentGuide', (value, read, write) => {
 	if (value === undefined) return;
 	write('highlightActiveIndentGuide', undefined);
-	if (read('guides.highlightActiveIndentation') === undefined)
-		write('guides.highlightActiveIndentation', Boolean(value));
+	if (read('guides.highlightActiveIndentation') === undefined) write('guides.highlightActiveIndentation', Boolean(value));
 });
 
 const filteredSuggestionSettings: Readonly<Record<string, string>> = Object.freeze({
@@ -209,17 +205,9 @@ function moveLegacySetting(key: string, target: string, accepts: (value: unknown
 }
 
 moveLegacySetting('experimental.stickyScroll.enabled', 'stickyScroll.enabled', value => typeof value === 'boolean');
-moveLegacySetting(
-	'experimental.stickyScroll.maxLineCount',
-	'stickyScroll.maxLineCount',
-	value => typeof value === 'number',
-);
+moveLegacySetting('experimental.stickyScroll.maxLineCount', 'stickyScroll.maxLineCount', value => typeof value === 'number');
 moveLegacySetting('editor.experimentalEditContextEnabled', 'editor.editContext', value => typeof value === 'boolean');
-moveLegacySetting(
-	'codeActionWidget.includeNearbyQuickfixes',
-	'codeActionWidget.includeNearbyQuickFixes',
-	value => typeof value === 'boolean',
-);
+moveLegacySetting('codeActionWidget.includeNearbyQuickfixes', 'codeActionWidget.includeNearbyQuickFixes', value => typeof value === 'boolean');
 
 registerEditorSettingMigration('codeActionsOnSave', (value, _read, write) => {
 	if (typeof value !== 'object' || value === null) return;

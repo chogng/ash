@@ -9,10 +9,8 @@ export const REFERENCE_NODE_TYPE = 'reference';
 export const citationNodeSpec: DocumentNodeSpec = Object.freeze({
 	kind: 'inline',
 	validateAttributes: (attrs: DocumentAttributes) => {
-		if (typeof attrs.key !== 'string' || attrs.key.length === 0)
-			throw new TypeError('Citation key must be a non-empty string');
-		if (attrs.label !== undefined && typeof attrs.label !== 'string')
-			throw new TypeError('Citation label must be a string');
+		if (typeof attrs.key !== 'string' || attrs.key.length === 0) throw new TypeError('Citation key must be a non-empty string');
+		if (attrs.label !== undefined && typeof attrs.label !== 'string') throw new TypeError('Citation label must be a string');
 	},
 });
 
@@ -27,8 +25,7 @@ export const referenceNodeSpec: DocumentNodeSpec = Object.freeze({
 	groups: ['citation-reference'],
 	content: [{ type: 'paragraph', min: 1, max: 1 }],
 	validateAttributes: (attrs: DocumentAttributes) => {
-		if (typeof attrs.key !== 'string' || attrs.key.length === 0)
-			throw new TypeError('Reference key must be a non-empty string');
+		if (typeof attrs.key !== 'string' || attrs.key.length === 0) throw new TypeError('Reference key must be a non-empty string');
 		if (
 			(attrs.libraryId === undefined) !== (attrs.libraryEntryId === undefined) ||
 			(attrs.libraryId !== undefined &&

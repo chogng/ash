@@ -45,11 +45,7 @@ export class MultiDiffEditorModel extends Disposable implements IMultiDiffEditor
 	public setItems(items: readonly IDocumentDiffItem[]): void {
 		this.assertNotDisposed();
 		validateDocumentDiffItems(items);
-		if (
-			items.length === this.currentItems.length &&
-			items.every((item, index) => item === this.currentItems[index])
-		)
-			return;
+		if (items.length === this.currentItems.length && items.every((item, index) => item === this.currentItems[index])) return;
 		this.currentItems = Object.freeze([...items]);
 		this.itemsEmitter.fire(this.currentItems);
 	}
@@ -73,8 +69,7 @@ export function validateDocumentDiffItems(items: readonly IDocumentDiffItem[]): 
 		}
 		if (ids.has(item.id)) throw new TypeError(`Duplicate multi-diff item ID '${item.id}'`);
 		ids.add(item.id);
-		if (item.readOnly !== undefined && typeof item.readOnly !== 'boolean')
-			throw new TypeError('Multi-diff item read-only state must be boolean');
+		if (item.readOnly !== undefined && typeof item.readOnly !== 'boolean') throw new TypeError('Multi-diff item read-only state must be boolean');
 	}
 }
 

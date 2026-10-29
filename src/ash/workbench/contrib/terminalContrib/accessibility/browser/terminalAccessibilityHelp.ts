@@ -1,11 +1,6 @@
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
-import {
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-	type IAccessibleViewContentProvider,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, type IAccessibleViewContentProvider } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import type { ITerminalInstance } from '../../../terminal/browser/terminal.js';
 
 export class TerminalAccessibilityHelpProvider extends Disposable implements IAccessibleViewContentProvider {
@@ -30,10 +25,7 @@ export class TerminalAccessibilityHelpProvider extends Disposable implements IAc
 				'terminal.accessibility.overview',
 				'The terminal sends typed input to its running process. <keybinding:editor.action.accessibleView> opens the retained screen and scrollback as read-only text.',
 			),
-			localize(
-				'terminal.accessibility.find',
-				'<keybinding:workbench.action.terminal.focusFind> opens Find. Enter and Shift+Enter navigate its matches. Escape returns focus to the terminal.',
-			),
+			localize('terminal.accessibility.find', '<keybinding:workbench.action.terminal.focusFind> opens Find. Enter and Shift+Enter navigate its matches. Escape returns focus to the terminal.'),
 			localize(
 				'terminal.accessibility.screenNavigation',
 				'Terminal: Scroll Up and Scroll Down move through retained output by line or page. Scroll to Top and Scroll to Bottom reach either end. These commands preserve shell input and work with exited or read-only terminals. Scroll shortcuts apply only to the normal buffer; full-screen terminal applications retain their own keys. <keybinding:workbench.action.terminal.selectAll> selects the screen and scrollback. <keybinding:workbench.action.terminal.clearSelection> clears a selection; Escape keeps its Find behavior while Find is open. On Linux and Windows, Ctrl+A remains available to the shell.',
@@ -182,10 +174,7 @@ export class TerminalAccessibilityHelpProvider extends Disposable implements IAc
 				'terminal.accessibility.reuse',
 				'A completed task waits for a character key or Enter to close its terminal. Workbench shortcuts remain available. presentation.showReuseMessage controls the reuse notice. A new task terminal displays a close notice.',
 			),
-			localize(
-				'terminal.accessibility.close',
-				'Escape closes accessibility help or the accessible view and returns focus to the terminal.',
-			),
+			localize('terminal.accessibility.close', 'Escape closes accessibility help or the accessible view and returns focus to the terminal.'),
 			localize(
 				'terminal.accessibility.autoReplies',
 				'Auto Replies sends configured responses when exact text appears in raw process output. Rules run on the execution host, including while the terminal is hidden; each rule is limited to one reply per second. Remove a rule or set it to null to stop that response.',

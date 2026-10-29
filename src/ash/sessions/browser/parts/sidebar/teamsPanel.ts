@@ -84,10 +84,7 @@ export class TeamsPanel extends Disposable {
 			return;
 		}
 		const id = team.teamId;
-		const [runs, messages] = await Promise.all([
-			this.teams.listRuns(id),
-			this.teams.listMessages(id, team.coordinatorId),
-		]);
+		const [runs, messages] = await Promise.all([this.teams.listRuns(id), this.teams.listMessages(id, team.coordinatorId)]);
 		if (this.selectedId !== id) return;
 		this.runs = runs;
 		this.messages = messages;
@@ -136,18 +133,11 @@ export class TeamsPanel extends Disposable {
 		title.textContent = team.name;
 		detail.append(title);
 		if (team.description) this.paragraph(detail, team.description);
-		this.paragraph(
-			detail,
-			team.status === 'archived'
-				? localize('sessions.teams.archived', 'Archived')
-				: localize('sessions.teams.active', 'Active'),
-		);
+		this.paragraph(detail, team.status === 'archived' ? localize('sessions.teams.archived', 'Archived') : localize('sessions.teams.active', 'Active'));
 		const actions = h(document, 'div');
 		actions.className = 'ash-teams-actions';
 		if (team.status === 'active') {
-			this.button(actions, localize('sessions.teams.start', 'Start task'), () =>
-				this.perform(() => this.startTask(team)),
-			);
+			this.button(actions, localize('sessions.teams.start', 'Start task'), () => this.perform(() => this.startTask(team)));
 			this.button(actions, localize('sessions.teams.edit', 'Edit Team'), () =>
 				this.perform(async () => {
 					const name = await this.input(localize('sessions.teams.name', 'Team name'), team.name);
@@ -161,9 +151,7 @@ export class TeamsPanel extends Disposable {
 					await this.loadSelected();
 				}),
 			);
-			this.button(actions, localize('sessions.teams.add', 'Add member'), () =>
-				this.perform(() => this.addMember(team)),
-			);
+			this.button(actions, localize('sessions.teams.add', 'Add member'), () => this.perform(() => this.addMember(team)));
 			this.button(actions, localize('sessions.teams.archive', 'Archive'), () =>
 				this.perform(async () => {
 					await this.teams.archive(team);
@@ -187,28 +175,14 @@ export class TeamsPanel extends Disposable {
 		for (const member of team.members) {
 			const row = h(document, 'div');
 			row.className = 'ash-teams-member';
-			this.paragraph(
-				row,
-				`${member.name} · ${member.responsibility}${member.agentId === team.coordinatorId ? ` · ${localize('sessions.teams.lead', 'Lead')}` : ''}`,
-			);
-			this.paragraph(
-				row,
-				member.role.type === 'exact'
-					? member.role.name
-					: localize('sessions.teams.defaultRole', 'Default Agent'),
-			);
+			this.paragraph(row, `${member.name} · ${member.responsibility}${member.agentId === team.coordinatorId ? ` · ${localize('sessions.teams.lead', 'Lead')}` : ''}`);
+			this.paragraph(row, member.role.type === 'exact' ? member.role.name : localize('sessions.teams.defaultRole', 'Default Agent'));
 			if (team.status === 'active') {
 				this.button(row, localize('sessions.teams.editMember', 'Edit member'), () =>
 					this.perform(async () => {
-						const name = await this.input(
-							localize('sessions.teams.memberName', 'Member name'),
-							member.name,
-						);
+						const name = await this.input(localize('sessions.teams.memberName', 'Member name'), member.name);
 						if (!name) return;
-						const responsibility = await this.input(
-							localize('sessions.teams.memberResponsibility', 'Member responsibility'),
-							member.responsibility,
-						);
+						const responsibility = await this.input(localize('sessions.teams.memberResponsibility', 'Member responsibility'), member.responsibility);
 						if (!responsibility) return;
 						await this.teams.updateMember(team, { ...member, name, responsibility });
 						await this.loadSelected();
@@ -245,10 +219,7 @@ export class TeamsPanel extends Disposable {
 		const runsHeading = h(document, 'h4');
 		runsHeading.textContent = localize('sessions.teams.tasks', 'Tasks');
 		runs.append(runsHeading);
-		for (const run of this.runs)
-			this.button(runs, run.objective, () =>
-				this.perform(() => this.sessions.openThread(run.sessionId, run.coordinatorThreadId)),
-			);
+		for (const run of this.runs) this.button(runs, run.objective, () => this.perform(() => this.sessions.openThread(run.sessionId, run.coordinatorThreadId)));
 		detail.append(runs);
 		const discussion = h(document, 'div');
 		const discussionHeading = h(document, 'h4');
@@ -258,9 +229,7 @@ export class TeamsPanel extends Disposable {
 			const author = team.members.find(member => member.agentId === message.senderId)?.name ?? message.senderId;
 			this.paragraph(discussion, `${author}: ${message.text}`);
 		}
-		this.button(discussion, localize('sessions.teams.post', 'Post message'), () =>
-			this.perform(() => this.postMessage(team)),
-		);
+		this.button(discussion, localize('sessions.teams.post', 'Post message'), () => this.perform(() => this.postMessage(team)));
 		detail.append(discussion);
 		this.content.append(detail);
 	}
@@ -274,9 +243,7 @@ export class TeamsPanel extends Disposable {
 		if (description === undefined) return;
 		const coordinatorName = await this.input(localize('sessions.teams.coordinatorName', 'Lead name'));
 		if (!coordinatorName) return;
-		const responsibility = await this.input(
-			localize('sessions.teams.coordinatorResponsibility', 'Lead responsibility'),
-		);
+		const responsibility = await this.input(localize('sessions.teams.coordinatorResponsibility', 'Lead responsibility'));
 		if (!responsibility) return;
 		const role = await this.pickRole();
 		if (!role) return;
@@ -288,9 +255,7 @@ export class TeamsPanel extends Disposable {
 	private async addMember(team: Team): Promise<void> {
 		const name = await this.input(localize('sessions.teams.memberName', 'Member name'));
 		if (!name) return;
-		const responsibility = await this.input(
-			localize('sessions.teams.memberResponsibility', 'Member responsibility'),
-		);
+		const responsibility = await this.input(localize('sessions.teams.memberResponsibility', 'Member responsibility'));
 		if (!responsibility) return;
 		const role = await this.pickRole();
 		if (!role) return;

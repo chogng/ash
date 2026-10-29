@@ -7,12 +7,26 @@ test('status bar entries are grouped and ordered by alignment', () => {
 	using service = new StatusbarService();
 	using lowPriority = service.addEntry(
 		{ text: 'Low' },
-		{ id: 'test.low', alignment: StatusbarAlignment.Left, priority: 1 },
+		{
+			id: 'test.low',
+			alignment: StatusbarAlignment.Left,
+			priority: 1,
+		},
 	);
-	using right = service.addEntry({ text: 'Right' }, { id: 'test.right', alignment: StatusbarAlignment.Right });
+	using right = service.addEntry(
+		{ text: 'Right' },
+		{
+			id: 'test.right',
+			alignment: StatusbarAlignment.Right,
+		},
+	);
 	using highPriority = service.addEntry(
 		{ text: 'High' },
-		{ id: 'test.high', alignment: StatusbarAlignment.Left, priority: 10 },
+		{
+			id: 'test.high',
+			alignment: StatusbarAlignment.Left,
+			priority: 10,
+		},
 	);
 
 	assert.deepEqual(
@@ -33,10 +47,16 @@ test('status bar entry accessors update and remove their entry', () => {
 	});
 	const entry = service.addEntry(
 		{ text: 'Connecting' },
-		{ id: 'test.connection', alignment: StatusbarAlignment.Left },
+		{
+			id: 'test.connection',
+			alignment: StatusbarAlignment.Left,
+		},
 	);
 
-	entry.update({ text: 'Connected', tooltip: 'The app server is connected' });
+	entry.update({
+		text: 'Connected',
+		tooltip: 'The app server is connected',
+	});
 	assert.deepEqual(service.getEntries(StatusbarAlignment.Left)[0]?.entry, {
 		text: 'Connected',
 		tooltip: 'The app server is connected',
@@ -49,10 +69,23 @@ test('status bar entry accessors update and remove their entry', () => {
 
 test('status bar entry ids are unique while registered', () => {
 	using service = new StatusbarService();
-	using entry = service.addEntry({ text: 'First' }, { id: 'test.unique', alignment: StatusbarAlignment.Left });
+	using entry = service.addEntry(
+		{ text: 'First' },
+		{
+			id: 'test.unique',
+			alignment: StatusbarAlignment.Left,
+		},
+	);
 
 	assert.throws(
-		() => service.addEntry({ text: 'Duplicate' }, { id: 'test.unique', alignment: StatusbarAlignment.Right }),
+		() =>
+			service.addEntry(
+				{ text: 'Duplicate' },
+				{
+					id: 'test.unique',
+					alignment: StatusbarAlignment.Right,
+				},
+			),
 		/already exists/,
 	);
 });
@@ -60,10 +93,7 @@ test('status bar entry ids are unique while registered', () => {
 test('auxiliary status bars observe shared entries through their owner and retain local editor entries', () => {
 	using main = new StatusbarService();
 	using auxiliary = new StatusbarService(main);
-	using shared = main.addEntry(
-		{ text: 'Connected', showInAllWindows: true },
-		{ id: 'remote', alignment: StatusbarAlignment.Left },
-	);
+	using shared = main.addEntry({ text: 'Connected', showInAllWindows: true }, { id: 'remote', alignment: StatusbarAlignment.Left });
 	using mainOnly = main.addEntry({ text: 'Main only' }, { id: 'main', alignment: StatusbarAlignment.Left });
 	using editor = auxiliary.addEntry({ text: 'Ln 2' }, { id: 'editor', alignment: StatusbarAlignment.Right });
 	assert.deepEqual(

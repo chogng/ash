@@ -36,8 +36,7 @@ test('Explorer hides default metadata entries at every depth and honors user ove
 			})),
 	} as unknown as IFileService;
 	using source = new ExplorerDataSource(new FileSorter(configuration), files, configuration, workspace);
-	const visibleNames = async (resource: URI) =>
-		(await source.getChildren(new ExplorerItem(resource, 'project', FileKind.Directory))).map(item => item.name);
+	const visibleNames = async (resource: URI) => (await source.getChildren(new ExplorerItem(resource, 'project', FileKind.Directory))).map(item => item.name);
 	const visible = ['.vscode', 'src', '.gitignore', 'README.md'];
 	for (const resource of [root, URI.joinPath(root, 'src', 'nested')]) {
 		assert.deepEqual(await visibleNames(resource), visible);
@@ -58,15 +57,12 @@ test('Explorer applies exclusion conditions before nesting and reorders files wh
 	using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 	using configuration = new InMemoryConfigurationService();
 	const getValue = configuration.getValue.bind(configuration);
-	configuration.getValue = ((section?: string) =>
-		section ? getValue(section) : getValue()) as typeof configuration.getValue;
-	const entries = ['.git', 'folder', 'file10.ts', 'file2.ts', 'file2.js', 'file3.js', 'Upper.ts', 'lower.ts'].map(
-		name => ({
-			resource: URI.joinPath(root, name),
-			name,
-			kind: name === '.git' || name === 'folder' ? FileKind.Directory : FileKind.File,
-		}),
-	);
+	configuration.getValue = ((section?: string) => (section ? getValue(section) : getValue())) as typeof configuration.getValue;
+	const entries = ['.git', 'folder', 'file10.ts', 'file2.ts', 'file2.js', 'file3.js', 'Upper.ts', 'lower.ts'].map(name => ({
+		resource: URI.joinPath(root, name),
+		name,
+		kind: name === '.git' || name === 'folder' ? FileKind.Directory : FileKind.File,
+	}));
 	const files = {
 		readDirectory: async () => entries,
 		stat: async (resource: URI) => ({ resource, modifiedAtMillis: resource.path.includes('file2.ts') ? 20 : 10 }),
@@ -159,8 +155,7 @@ test('Explorer model groups generated files and keeps directories as separate ro
 	await configuration.updateValue(ExplorerFileNestingSettingId.Patterns, { '*.ts': '${capture}.js' });
 	using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 	const getValue = configuration.getValue.bind(configuration);
-	configuration.getValue = ((section?: string) =>
-		section ? getValue(section) : getValue()) as typeof configuration.getValue;
+	configuration.getValue = ((section?: string) => (section ? getValue(section) : getValue())) as typeof configuration.getValue;
 	using source = new ExplorerDataSource(new FileSorter(configuration), files, configuration, workspace);
 	const children = await source.getChildren(new ExplorerItem(root, 'project', FileKind.Directory));
 	assert.deepEqual(
@@ -229,26 +224,14 @@ test('Explorer drag policy moves a selection once, copies without overwrite, and
 	const copy = { ctrlKey: !isMacintosh, altKey: isMacintosh } as DragEvent;
 	assert.equal(dnd.getDragURI(new ExplorerItem(root, 'root', FileKind.Directory)), undefined);
 	assert.equal(dnd.onDragOver(data, folder, undefined, undefined, move), false);
-	assert.equal(
-		dnd.onDragOver(
-			data,
-			new ExplorerItem(child.resource.joinPathSegment('sub'), 'sub', FileKind.Directory),
-			undefined,
-			undefined,
-			copy,
-		),
-		false,
-	);
+	assert.equal(dnd.onDragOver(data, new ExplorerItem(child.resource.joinPathSegment('sub'), 'sub', FileKind.Directory), undefined, undefined, copy), false);
 	dnd.drop(data, dest, undefined, undefined, move);
 	await new Promise(resolve => setTimeout(resolve, 0));
 	assert.deepEqual(operations, []);
 	confirmed = true;
 	dnd.drop(data, dest, undefined, undefined, move);
 	await waitForEffects(() => operations.length === 2);
-	assert.deepEqual(operations, [
-		'move /project/folder /project/dest/folder',
-		'move /project/a.txt /project/dest/a.txt',
-	]);
+	assert.deepEqual(operations, ['move /project/folder /project/dest/folder', 'move /project/a.txt /project/dest/a.txt']);
 	dnd.drop({ ...data, elements: [a] }, dest, undefined, undefined, copy);
 	await waitForEffects(() => operations.length === 3);
 	assert.equal(operations[2], 'copy /project/a.txt /project/dest/a copy.txt');

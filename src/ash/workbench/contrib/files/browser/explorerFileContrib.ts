@@ -18,15 +18,9 @@ export interface IExplorerFileContributionDescriptor {
 }
 
 export interface IExplorerFileContributionRegistry {
-	readonly onDidRegisterDescriptor: (
-		listener: (descriptor: IExplorerFileContributionDescriptor) => void,
-	) => IDisposable;
+	readonly onDidRegisterDescriptor: (listener: (descriptor: IExplorerFileContributionDescriptor) => void) => IDisposable;
 	register(descriptor: IExplorerFileContributionDescriptor): void;
-	create(
-		instantiationService: IInstantiationService,
-		container: HTMLElement,
-		store: DisposableStore,
-	): readonly IExplorerFileContribution[];
+	create(instantiationService: IInstantiationService, container: HTMLElement, store: DisposableStore): readonly IExplorerFileContribution[];
 }
 
 export class ExplorerFileContributionRegistry extends Disposable implements IExplorerFileContributionRegistry {
@@ -40,11 +34,7 @@ export class ExplorerFileContributionRegistry extends Disposable implements IExp
 		this.registerEmitter.fire(descriptor);
 	}
 
-	public create(
-		instantiationService: IInstantiationService,
-		container: HTMLElement,
-		store: DisposableStore,
-	): readonly IExplorerFileContribution[] {
+	public create(instantiationService: IInstantiationService, container: HTMLElement, store: DisposableStore): readonly IExplorerFileContribution[] {
 		return this.descriptors.map(descriptor => store.add(descriptor.create(instantiationService, container)));
 	}
 }

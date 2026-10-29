@@ -1,18 +1,10 @@
 import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { Event } from '../../../base/common/event.js';
 import type { URI } from '../../../base/common/uri.js';
-import {
-	FileKind,
-	FileSystemProviderCapabilities,
-	type IFileSystemProvider,
-	type IFileStat,
-	type IFileBytes,
-	type IFileEntry,
-} from '../../../platform/files/common/files.js';
+import { FileKind, FileSystemProviderCapabilities, type IFileSystemProvider, type IFileStat, type IFileBytes, type IFileEntry } from '../../../platform/files/common/files.js';
 
 export class BinaryEditorTestFileSystemProvider implements IFileSystemProvider {
-	public readonly capabilities =
-		FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
 	public readonly onDidChangeCapabilities = Event.None;
 	public watch(): IDisposable {
 		return Disposable.None;

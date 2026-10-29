@@ -50,9 +50,7 @@ export class CustomViewGridPart extends Part implements ICustomViewGridPartServi
 		this.rendered.value = lifetime;
 		const view = lifetime.add(this.instantiation.createInstance(descriptor.ctor));
 		this.active = view;
-		const scrolling = lifetime.add(
-			new ScrollableElement(this.contentDomNode, { direction: 'vertical', tabIndex: -1 }),
-		);
+		const scrolling = lifetime.add(new ScrollableElement(this.contentDomNode, { direction: 'vertical', tabIndex: -1 }));
 		scrolling.element.classList.add('ash-custom-view-scroll');
 		const page = h(this.domNode.ownerDocument, 'div', { className: 'ash-custom-view-page' });
 		page.dataset.customViewId = descriptor.id;
@@ -87,9 +85,7 @@ export class CustomViewGridPart extends Part implements ICustomViewGridPartServi
 								presentation: action.id === descriptor.actions?.primaryActionId ? 'primary' : 'quiet',
 								enabled: action.enabled,
 								onClick: () => {
-									void Promise.resolve(action.run()).catch(error =>
-										this.notifications.error(String(error)),
-									);
+									void Promise.resolve(action.run()).catch(error => this.notifications.error(String(error)));
 								},
 							}),
 						);

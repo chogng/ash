@@ -25,14 +25,8 @@ for (const [name, kind] of [
 			assert.equal(manifest.ashDistribution, 'marketplace');
 			assert.ok(manifest.contributes);
 			assert.ok(!manifest.main && !manifest.browser && !manifest.ashRuntime);
-			assert.ok(
-				JSON.parse(await readFile(resolve(output, 'package', kind!, 'package.nls.zh-CN.json'), 'utf8'))
-					.displayName,
-			);
-			await assert.rejects(
-				buildDeclarativePackage(resolve(import.meta.dirname, '../../extensions', name!), output),
-				/Refusing to replace/,
-			);
+			assert.ok(JSON.parse(await readFile(resolve(output, 'package', kind!, 'package.nls.zh-CN.json'), 'utf8')).displayName);
+			await assert.rejects(buildDeclarativePackage(resolve(import.meta.dirname, '../../extensions', name!), output), /Refusing to replace/);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
@@ -53,10 +47,7 @@ test('A declarative submission rejects executable entry points', async () => {
 				browser: './main.js',
 			}),
 		);
-		await assert.rejects(
-			buildDeclarativePackage(resolve(directory, 'source'), resolve(directory, 'output')),
-			/without runtime code/,
-		);
+		await assert.rejects(buildDeclarativePackage(resolve(directory, 'source'), resolve(directory, 'output')), /without runtime code/);
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}

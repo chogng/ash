@@ -2,21 +2,12 @@ import { defaultButtonStyles } from '../../../../../../platform/theme/browser/de
 import './media/chatContextUsageWidget.css';
 import { addDisposableListener, h, isNode, svg } from '../../../../../../base/browser/dom.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
-import {
-	AnchorAlignment,
-	AnchorPosition,
-	ContextViewFocusRestore,
-} from '../../../../../../base/browser/ui/contextview/contextview.js';
+import { AnchorAlignment, AnchorPosition, ContextViewFocusRestore } from '../../../../../../base/browser/ui/contextview/contextview.js';
 import { getHoverDelegate, type IManagedHover } from '../../../../../../base/browser/ui/hover/hoverDelegate.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../../../base/common/lifecycle.js';
 import { createUuid } from '../../../../../../base/common/uuid.js';
 import { localize } from '../../../../../../nls.js';
-import {
-	AccessibleContentProvider,
-	AccessibleViewProviderId,
-	AccessibleViewType,
-	AccessibilityVerbositySettingId,
-} from '../../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IContextViewService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { getContextInputBudget, type ChatContextUsage } from '../../../../../services/chat/common/chatService.js';
@@ -64,9 +55,7 @@ export class ChatContextUsageWidget extends Disposable {
 		this.domNode.append(ring);
 		this.hoverContent = h(document, 'div');
 		this.hoverContent.className = 'ash-chat-context-usage-hover';
-		this.hover = this._register(
-			getHoverDelegate().setupHover({ target: this.domNode, content: this.hoverContent, groupId: 'actions' }),
-		);
+		this.hover = this._register(getHoverDelegate().setupHover({ target: this.domNode, content: this.hoverContent, groupId: 'actions' }));
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			this._register(
 				AccessibleViewRegistry.register({
@@ -103,8 +92,7 @@ export class ChatContextUsageWidget extends Disposable {
 		if (this.isDisposed) return;
 		this.usage = usage;
 		const capacity = usage && getContextInputBudget(usage);
-		const percentage =
-			usage && capacity !== undefined && capacity > 0 ? (usage.estimatedTokens / capacity) * 100 : undefined;
+		const percentage = usage && capacity !== undefined && capacity > 0 ? (usage.estimatedTokens / capacity) * 100 : undefined;
 		const filled = percentage !== undefined ? Math.min(100, Math.max(0, percentage)) : 0;
 		this.value.classList.toggle('empty', filled === 0);
 		this.value.setAttribute('stroke-dasharray', `${filled} ${100 - filled}`);
@@ -128,11 +116,7 @@ export class ChatContextUsageWidget extends Disposable {
 		this.details.value = details;
 		this.detailsListeners.add(
 			addDisposableListener(details.domNode, 'focusout', event => {
-				if (
-					!isNode(event.relatedTarget) ||
-					(!details.domNode.contains(event.relatedTarget) && event.relatedTarget !== this.domNode)
-				)
-					this.hideDetails();
+				if (!isNode(event.relatedTarget) || (!details.domNode.contains(event.relatedTarget) && event.relatedTarget !== this.domNode)) this.hideDetails();
 			}),
 		);
 		this.hover.hide();
@@ -185,11 +169,7 @@ export class ChatContextUsageWidget extends Disposable {
 					usage.estimatedTokens.toLocaleString(),
 					budget.toLocaleString(),
 				)
-			: localize(
-					'chat.input.contextRingUnknownLabel',
-					'Context usage: {0} tokens, capacity unavailable',
-					usage.estimatedTokens.toLocaleString(),
-				);
+			: localize('chat.input.contextRingUnknownLabel', 'Context usage: {0} tokens, capacity unavailable', usage.estimatedTokens.toLocaleString());
 	}
 
 	private get tooltip(): string {
@@ -204,10 +184,6 @@ export class ChatContextUsageWidget extends Disposable {
 					usage.estimatedTokens.toLocaleString(),
 					budget.toLocaleString(),
 				)
-			: localize(
-					'chat.input.contextRingUnknownHover',
-					'Estimated context: {0} tokens\nContext capacity unavailable.',
-					usage.estimatedTokens.toLocaleString(),
-				);
+			: localize('chat.input.contextRingUnknownHover', 'Estimated context: {0} tokens\nContext capacity unavailable.', usage.estimatedTokens.toLocaleString());
 	}
 }

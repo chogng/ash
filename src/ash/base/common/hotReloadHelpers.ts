@@ -21,9 +21,7 @@ export function observeHotReloadableExports(values: readonly unknown[], reader: 
 	if (!isHotReloadEnabled()) return;
 	const reload = observableSignalFromEvent('reload', event =>
 		registerHotReloadHandler(({ oldExports }) => {
-			const tracked = Object.entries(oldExports).filter(([, value]) =>
-				values.some(watched => currentExport(watched) === value),
-			);
+			const tracked = Object.entries(oldExports).filter(([, value]) => values.some(watched => currentExport(watched) === value));
 			if (tracked.length === 0) return undefined;
 			return newExports => {
 				if (tracked.some(([name]) => !(name in newExports))) return false;

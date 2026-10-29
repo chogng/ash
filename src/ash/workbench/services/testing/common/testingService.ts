@@ -35,9 +35,7 @@ export interface TestProfileContribution {
 
 export interface TestProfileProvider {
 	readonly id: string;
-	provideTestProfiles(
-		signal: AbortSignal,
-	): readonly TestProfileContribution[] | PromiseLike<readonly TestProfileContribution[]>;
+	provideTestProfiles(signal: AbortSignal): readonly TestProfileContribution[] | PromiseLike<readonly TestProfileContribution[]>;
 }
 
 /** One caller-owned Test Profile provider set that can be atomically replaced. */

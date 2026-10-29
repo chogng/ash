@@ -3,11 +3,7 @@ import { h } from '../../../../base/browser/dom.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
-import {
-	ViewPane,
-	type IViewPaneOptions,
-	type PartTitleProjection,
-} from '../../../../workbench/browser/parts/views/viewPane.js';
+import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from '../../../../workbench/browser/parts/views/viewPane.js';
 import { ExplorerView } from '../../../../workbench/contrib/files/browser/views/explorerView.js';
 
 // Explorer commands resolve this identity in each window's separate view catalog.

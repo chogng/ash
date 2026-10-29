@@ -6,12 +6,7 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
-import {
-	FileKind,
-	FileSystemProviderCapabilities,
-	type IFileChangeEvent,
-	type IWatchOptions,
-} from '../../../../../platform/files/common/files.js';
+import { FileKind, FileSystemProviderCapabilities, type IFileChangeEvent, type IWatchOptions } from '../../../../../platform/files/common/files.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { ExplorerService } from '../../browser/explorerService.js';
 import { ExplorerItem } from '../../common/explorerModel.js';
@@ -88,9 +83,7 @@ test('Explorer service batches workspace file invalidations and discards pending
 	const observed: string[] = [];
 	const batches: Array<readonly string[] | undefined> = [];
 	let resolveChange = (): void => {};
-	using rootListener = service.onDidChangeRoot(() =>
-		observed.push(service.getRoot()?.resource.toString() ?? 'empty'),
-	);
+	using rootListener = service.onDidChangeRoot(() => observed.push(service.getRoot()?.resource.toString() ?? 'empty'));
 	using fileListener = service.onDidChangeResources(resources => {
 		observed.push(resources?.[0]?.toString() ?? 'all');
 		batches.push(resources?.map(resource => resource.path));
@@ -113,11 +106,7 @@ test('Explorer service batches workspace file invalidations and discards pending
 	changes.fire({ resources: [URI.file('/project/main.ts'), URI.file('/next/other.ts')] });
 	await nextChange;
 
-	assert.deepEqual(observed, [
-		URI.file('/project/main.ts').toString(),
-		secondRoot.toString(),
-		URI.file('/next/other.ts').toString(),
-	]);
+	assert.deepEqual(observed, [URI.file('/project/main.ts').toString(), secondRoot.toString(), URI.file('/next/other.ts').toString()]);
 	assert.deepEqual([...watches], [[secondRoot.toString(), { recursive: true, excludes: [] }]]);
 	const rescan = new Promise<void>(resolve => {
 		resolveChange = resolve;
@@ -149,21 +138,9 @@ test('Explorer auto-reveal honors conditions and settings without changing manua
 	using service = new ExplorerService(workspace, files, configuration);
 	const resource = URI.file('/root/main.js');
 	await configuration.updateValue('explorer.autoRevealExclude', { '**/*.js': { when: '$(basename).ts' } });
-	assert.deepEqual(
-		[
-			service.shouldAutoReveal(resource, name => name === 'main.ts'),
-			service.shouldAutoReveal(resource, () => false),
-		],
-		[false, true],
-	);
+	assert.deepEqual([service.shouldAutoReveal(resource, name => name === 'main.ts'), service.shouldAutoReveal(resource, () => false)], [false, true]);
 	await configuration.updateValue('explorer.autoRevealExclude', { '**/hidden': true });
-	assert.deepEqual(
-		[
-			service.shouldAutoReveal(URI.file('/root/hidden/nested/main.js')),
-			service.shouldAutoReveal(URI.file('/root/visible/main.js')),
-		],
-		[false, true],
-	);
+	assert.deepEqual([service.shouldAutoReveal(URI.file('/root/hidden/nested/main.js')), service.shouldAutoReveal(URI.file('/root/visible/main.js'))], [false, true]);
 	await configuration.updateValue('explorer.autoRevealExclude', { '**/root': true });
 	assert.equal(service.shouldAutoReveal(resource), true);
 	await configuration.updateValue('explorer.autoRevealExclude', { '**/*.js': { when: '$(basename).ts' } });

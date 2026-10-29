@@ -130,8 +130,7 @@ async function bindEditor(
 	if (signal) lifetime.add(addDisposableListener(signal, 'abort', abort, { once: true }));
 	lifetime.add(
 		service.onDidUpdateTranscript(event => {
-			if (recording !== current || current.cancelled || !event.finalizedText.startsWith(current.committed))
-				return;
+			if (recording !== current || current.cancelled || !event.finalizedText.startsWith(current.committed)) return;
 			const text = event.finalizedText.slice(current.committed.length);
 			current.committed = event.finalizedText;
 			const selection = editor.getSelection();
@@ -141,9 +140,7 @@ async function bindEditor(
 			const before = model.getValue().slice(0, model.getOffsetAt(selection.getStartPosition()));
 			const separator = /[A-Za-z0-9]$/u.test(before) && /^[A-Za-z0-9]/u.test(text) ? ' ' : '';
 			editor.pushUndoStop();
-			editor.executeEdits('dictation', [{ range: selection, text: separator + text }], inverse =>
-				inverse.map(edit => Selection.fromPositions(edit.range.getEndPosition())),
-			);
+			editor.executeEdits('dictation', [{ range: selection, text: separator + text }], inverse => inverse.map(edit => Selection.fromPositions(edit.range.getEndPosition())));
 			editor.pushUndoStop();
 			editor.focus();
 		}),

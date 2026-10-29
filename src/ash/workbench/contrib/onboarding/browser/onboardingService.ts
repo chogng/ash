@@ -49,17 +49,12 @@ export class OnboardingScenarioService extends Disposable implements IOnboarding
 		const scenario = onboardingScenarioRegistry.get(id);
 		if (token.isCancellationRequested) return 'cancelled';
 		if (!scenario || !this.contextKeys.contextMatchesRules(scenario.when)) return 'unavailable';
-		if (scenario.isEligible && !(await scenario.isEligible(token)))
-			return token.isCancellationRequested ? 'cancelled' : 'unavailable';
+		if (scenario.isEligible && !(await scenario.isEligible(token))) return token.isCancellationRequested ? 'cancelled' : 'unavailable';
 		if (token.isCancellationRequested) return 'cancelled';
 		return this.showSteps(scenario.steps, token);
 	}
 
-	public showSteps(
-		steps: readonly IOnboardingStep[],
-		token: CancellationToken,
-		scope?: string,
-	): Promise<OnboardingOutcome> {
+	public showSteps(steps: readonly IOnboardingStep[], token: CancellationToken, scope?: string): Promise<OnboardingOutcome> {
 		const version = ++this.requestVersion;
 		this.active.value?.cancel();
 		const run = async (): Promise<OnboardingOutcome> => {
@@ -115,12 +110,7 @@ export class OnboardingScenarioService extends Disposable implements IOnboarding
 			if (this.storage.getBoolean(this.storageKey(scenario.id), StorageScope.PROFILE, false)) continue;
 			if (!this.contextKeys.contextMatchesRules(scenario.when)) continue;
 			if (scenario.isEligible && !(await scenario.isEligible(CancellationToken.None))) continue;
-			if (
-				this.isDisposed ||
-				this.active.value ||
-				this.configuration.getValue<boolean>(ONBOARDING_ENABLED_CONFIG) !== true
-			)
-				return;
+			if (this.isDisposed || this.active.value || this.configuration.getValue<boolean>(ONBOARDING_ENABLED_CONFIG) !== true) return;
 			const result = await this.showSteps(scenario.steps, CancellationToken.None);
 			if (result === 'completed' || result === 'dismissed') {
 				this.shownInWindow.add(scenario.id);

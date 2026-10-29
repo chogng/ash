@@ -1,11 +1,7 @@
 import { Menu, type BrowserWindow, type MenuItemConstructorOptions } from 'electron/main';
 import { Disposable, toDisposable } from '../../../common/lifecycle.js';
 import { promiseWithResolvers } from '../../../common/async.js';
-import {
-	type INativeContextMenuRequest,
-	type INativeContextMenuResult,
-	type NativeContextMenuItem,
-} from '../common/contextmenu.js';
+import { type INativeContextMenuRequest, type INativeContextMenuResult, type NativeContextMenuItem } from '../common/contextmenu.js';
 
 interface IMenuPopup {
 	readonly menu: Menu;
@@ -83,10 +79,7 @@ export class ElectronContextMenu extends Disposable {
 	}
 }
 
-function toTemplate(
-	items: readonly NativeContextMenuItem[],
-	select: (id: string) => void,
-): MenuItemConstructorOptions[] {
+function toTemplate(items: readonly NativeContextMenuItem[], select: (id: string) => void): MenuItemConstructorOptions[] {
 	return items.map((item): MenuItemConstructorOptions => {
 		switch (item.type) {
 			case 'separator':

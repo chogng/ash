@@ -5,14 +5,8 @@ import type { IWorkbenchProductIconTheme } from '../common/workbenchThemeService
 const iconIdPattern = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/u;
 /** Loads prepared font glyphs from an extension product icon theme. */
 export class ProductIconThemeData {
-	public static async load(
-		id: string,
-		label: string,
-		source: unknown,
-		readResource: (path: string) => Promise<Uint8Array>,
-	): Promise<IWorkbenchProductIconTheme> {
-		if (typeof source !== 'object' || source === null || Array.isArray(source))
-			throw new TypeError(`Product icon theme '${id}' must be an object`);
+	public static async load(id: string, label: string, source: unknown, readResource: (path: string) => Promise<Uint8Array>): Promise<IWorkbenchProductIconTheme> {
+		if (typeof source !== 'object' || source === null || Array.isArray(source)) throw new TypeError(`Product icon theme '${id}' must be an object`);
 		const fonts: IconFontDefinition[] = [];
 		const fontIds = new Map<string, IconFontDefinition>();
 		const sources = (source as Record<string, unknown>).fonts;
@@ -24,18 +18,10 @@ export class ProductIconThemeData {
 				throw new TypeError('Invalid product icon font');
 			}
 			const font = candidate as Record<string, unknown>;
-			if (
-				typeof font.id !== 'string' ||
-				!iconIdPattern.test(font.id) ||
-				fontIds.has(font.id) ||
-				!Array.isArray(font.src) ||
-				!font.src.length ||
-				font.src.length > 4
-			) {
+			if (typeof font.id !== 'string' || !iconIdPattern.test(font.id) || fontIds.has(font.id) || !Array.isArray(font.src) || !font.src.length || font.src.length > 4) {
 				throw new TypeError('Invalid product icon font');
 			}
-			const family =
-				'ash-product-' + [...id].map(char => char.codePointAt(0)!.toString(16)).join('-') + '-' + index;
+			const family = 'ash-product-' + [...id].map(char => char.codePointAt(0)!.toString(16)).join('-') + '-' + index;
 			const src: string[] = [];
 			for (const candidate of font.src) {
 				if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
@@ -49,12 +35,7 @@ export class ProductIconThemeData {
 			}
 			const weight = font.weight === undefined ? 'normal' : font.weight;
 			const style = font.style === undefined ? 'normal' : font.style;
-			if (
-				typeof weight !== 'string' ||
-				!/^(?:normal|bold|[1-9]00)$/u.test(weight) ||
-				typeof style !== 'string' ||
-				!/^(?:normal|italic|oblique)$/u.test(style)
-			) {
+			if (typeof weight !== 'string' || !/^(?:normal|bold|[1-9]00)$/u.test(weight) || typeof style !== 'string' || !/^(?:normal|italic|oblique)$/u.test(style)) {
 				throw new TypeError('Invalid icon font style or weight');
 			}
 			const definition = { id: family, src: src.join(','), weight, style };
@@ -62,18 +43,15 @@ export class ProductIconThemeData {
 			fonts.push(definition);
 		}
 		const definitions = (source as Record<string, unknown>).iconDefinitions;
-		if (typeof definitions !== 'object' || definitions === null || Array.isArray(definitions))
-			throw new TypeError(`Product icon theme '${id}' requires iconDefinitions`);
+		if (typeof definitions !== 'object' || definitions === null || Array.isArray(definitions)) throw new TypeError(`Product icon theme '${id}' requires iconDefinitions`);
 		const entries = Object.entries(definitions);
 		if (entries.length > 512) throw new RangeError(`Product icon theme '${id}' has too many icons`);
 		const icons = new Map<string, IconDefinition>();
 		for (const [iconId, value] of entries) {
 			if (!iconIdPattern.test(iconId)) throw new TypeError(`Invalid product icon ID '${iconId}'`);
-			if (typeof value !== 'object' || value === null || Array.isArray(value))
-				throw new TypeError(`Product icon '${iconId}' must declare fontCharacter`);
+			if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError(`Product icon '${iconId}' must declare fontCharacter`);
 			const definition = value as Record<string, unknown>;
-			if (definition.iconPath !== undefined)
-				throw new TypeError(`Product icon '${iconId}' must use a prepared font glyph`);
+			if (definition.iconPath !== undefined) throw new TypeError(`Product icon '${iconId}' must use a prepared font glyph`);
 			const fontId = definition.fontId === undefined ? fontIds.keys().next().value : definition.fontId;
 			const family = typeof fontId === 'string' ? fontIds.get(fontId) : undefined;
 			if (!family) throw new TypeError('Unknown product icon font');
@@ -100,21 +78,12 @@ export async function loadExtensionFontIcon(
 	return { icon: fontIconDefinition(font, character), font };
 }
 
-async function loadFontSource(
-	path: unknown,
-	format: string,
-	readResource: (path: string) => Promise<Uint8Array>,
-): Promise<string> {
+async function loadFontSource(path: unknown, format: string, readResource: (path: string) => Promise<Uint8Array>): Promise<string> {
 	if (typeof path !== 'string') {
 		throw new TypeError('Invalid icon font path');
 	}
 	const relative = path.replace(/^\.\//u, '');
-	if (
-		!relative ||
-		relative.length > 1024 ||
-		/[\\:%?#\x00-\x1f]/u.test(relative) ||
-		relative.split('/').some(part => !part || part === '.' || part === '..')
-	) {
+	if (!relative || relative.length > 1024 || /[\\:%?#\x00-\x1f]/u.test(relative) || relative.split('/').some(part => !part || part === '.' || part === '..')) {
 		throw new TypeError('Icon fonts must stay inside the theme directory');
 	}
 	const bytes = await readResource(relative);

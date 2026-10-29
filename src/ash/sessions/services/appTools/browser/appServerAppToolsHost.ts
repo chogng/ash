@@ -2,10 +2,7 @@ import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { AppServerProtocolClient } from '../../../../platform/agentHost/browser/appServerProtocolClient.js';
-import {
-	APP_SERVER_SERVER_REQUESTS,
-	type AppHostOperation,
-} from '../../../../../../.build/protocol/typescript/index.js';
+import { APP_SERVER_SERVER_REQUESTS, type AppHostOperation } from '../../../../../../.build/protocol/typescript/index.js';
 import type { IAppToolsHost } from './appTools.js';
 
 /** Binds one renderer connection to its window-owned application capabilities. */
@@ -49,12 +46,7 @@ export class AppServerAppToolsHost extends Disposable {
 			case 'tasksStatus':
 				return this.host.taskStatus(operation.directory, operation.runId);
 			case 'tasksOutput':
-				return this.host.taskOutput(
-					operation.directory,
-					operation.runId,
-					operation.cursor,
-					operation.maxCharacters,
-				);
+				return this.host.taskOutput(operation.directory, operation.runId, operation.cursor, operation.maxCharacters);
 			case 'tasksCancel':
 				return this.host.cancelTask(operation.directory, operation.runId);
 			case 'openFile':

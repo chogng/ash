@@ -34,10 +34,7 @@ import { IChatSpeechToTextService } from '../../chat/browser/speechToText/chatSp
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import {
-	Extensions as ConfigurationExtensions,
-	type IConfigurationRegistry,
-} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.DictationModels,
@@ -51,10 +48,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 	setting: {
 		valueType: 'boolean',
 		title: localize('dictation.models.verbosityTitle', 'Dictation model accessibility help'),
-		description: localize(
-			'dictation.models.verbosityDescription',
-			'Announce how to open accessibility help when the model table receives focus.',
-		),
+		description: localize('dictation.models.verbosityDescription', 'Announce how to open accessibility help when the model table receives focus.'),
 	},
 });
 
@@ -96,15 +90,16 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 	) {
 		super();
 		const document = container.ownerDocument;
-		this.controls = this._register(
-			instantiation.createInstance(LocalTranscriptionModelControls, h(document, 'div')),
-		);
+		this.controls = this._register(instantiation.createInstance(LocalTranscriptionModelControls, h(document, 'div')));
 		this.inputOptions = h(document, 'div');
 		this.inputOptions.className = 'ash-dictation-input-options';
 		this.microphone = this._register(
 			new SelectBox(
 				this.inputOptions,
-				{ options: [], ariaLabel: localize({ bundle: 'ash', key: 'dictation.microphone' }, 'Microphone') },
+				{
+					options: [],
+					ariaLabel: localize({ bundle: 'ash', key: 'dictation.microphone' }, 'Microphone'),
+				},
 				defaultSelectBoxStyles,
 			),
 		);
@@ -182,17 +177,11 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 				if (event.affectsConfiguration(AccessibilityVerbositySettingId.DictationModels)) {
 					updateHint();
 				}
-				if (
-					event.affectsConfiguration(DictationConfiguration.backend) ||
-					event.affectsConfiguration(DictationConfiguration.cloudProvider)
-				) {
+				if (event.affectsConfiguration(DictationConfiguration.backend) || event.affectsConfiguration(DictationConfiguration.cloudProvider)) {
 					this.updateVisibility();
 					this.changed.fire();
 				}
-				if (
-					event.affectsConfiguration(DictationConfiguration.inputDevice) ||
-					event.affectsConfiguration(DictationConfiguration.language)
-				) {
+				if (event.affectsConfiguration(DictationConfiguration.inputDevice) || event.affectsConfiguration(DictationConfiguration.language)) {
 					this.updateVisibility();
 				}
 			}),
@@ -274,10 +263,7 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 						kind: 'item',
 						id: 'dictation.cloudModel',
 						title: localize('dictation.cloudModel.title', 'Transcription model'),
-						description: localize(
-							'dictation.cloudModel.description',
-							'The transcription model follows the selected service. Voice input is independent of the chat model.',
-						),
+						description: localize('dictation.cloudModel.description', 'The transcription model follows the selected service. Voice input is independent of the chat model.'),
 						keywords: [backend.modelId, 'model', 'transcription'],
 						value: this.retainElement('dictation.cloudModel', this.cloudModel),
 					},
@@ -287,10 +273,7 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 						kind: 'item',
 						id: 'dictation.connection',
 						title: localize('dictation.connections.title', 'Cloud connection'),
-						description: localize(
-							'dictation.connections.description',
-							'Cloud dictation uses an API connection that supports transcription.',
-						),
+						description: localize('dictation.connections.description', 'Cloud dictation uses an API connection that supports transcription.'),
 						value: this.retainElement('dictation.connection', this.cloud),
 					},
 				},
@@ -301,10 +284,7 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 					kind: 'item',
 					id: DictationConfiguration.model,
 					title: localize('dictation.model.table', 'Local dictation models'),
-					description: localize(
-						'dictation.model.tableDescription',
-						'Install a model, select it for dictation, or uninstall it.',
-					),
+					description: localize('dictation.model.tableDescription', 'Install a model, select it for dictation, or uninstall it.'),
 					keywords: ['model', 'install', 'import', 'uninstall'],
 					value: this.retainElement(DictationConfiguration.model, this.controls.domNode),
 				},
@@ -328,22 +308,13 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 					kind: 'group',
 					id: 'dictation',
 					title: localize('settings.dictation.group', 'Voice input'),
-					description: localize(
-						'dictation.settings.description',
-						'Choose local or cloud transcription and manage local dictation models.',
-					),
+					description: localize('dictation.settings.description', 'Choose local or cloud transcription and manage local dictation models.'),
 				},
 				children: children.map(node => ({
 					...node,
 					element: {
 						...node.element,
-						keywords: [
-							...(node.element.keywords ?? []),
-							'dictation',
-							'speech',
-							localize('sessions.settings.dictation', 'Dictation'),
-							localize('settings.dictation.group', 'Voice input'),
-						],
+						keywords: [...(node.element.keywords ?? []), 'dictation', 'speech', localize('sessions.settings.dictation', 'Dictation'), localize('settings.dictation.group', 'Voice input')],
 					},
 				})),
 			},
@@ -373,10 +344,7 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 		try {
 			if (this.speech.isBusy) {
 				if (key === DictationConfiguration.inputDevice && this.speech.analyserNode)
-					await this.speech.switchMicrophone(
-						this.inputOptions.ownerDocument.defaultView as Window & typeof globalThis,
-						value,
-					);
+					await this.speech.switchMicrophone(this.inputOptions.ownerDocument.defaultView as Window & typeof globalThis, value);
 				else await this.speech.stopAndTranscribe();
 			}
 			await this.configuration.updateValue(key, value);
@@ -391,12 +359,7 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 			return;
 		}
 		try {
-			const options = await readDictationOptions(
-				this.inputOptions.ownerDocument.defaultView as Window & typeof globalThis,
-				this.configuration,
-				this.backend,
-				this.speechProviders,
-			);
+			const options = await readDictationOptions(this.inputOptions.ownerDocument.defaultView as Window & typeof globalThis, this.configuration, this.backend, this.speechProviders);
 			if (this.isDisposed || version !== this.requestVersion) {
 				return;
 			}
@@ -415,10 +378,7 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 					...this.microphone.options,
 					{
 						value: configuredDevice,
-						label: localize(
-							{ bundle: 'ash', key: 'dictation.missingMicrophone' },
-							'Selected microphone is disconnected',
-						),
+						label: localize({ bundle: 'ash', key: 'dictation.missingMicrophone' }, 'Selected microphone is disconnected'),
 						disabled: true,
 					},
 				]);
@@ -427,17 +387,11 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 			this.microphone.enabled = true;
 			const configuredLanguage = this.configuration.getValue<string>(DictationConfiguration.language);
 			const unavailableLanguage =
-				options.languages.length &&
-				configuredLanguage !== 'auto' &&
-				!options.languages.includes(configuredLanguage)
+				options.languages.length && configuredLanguage !== 'auto' && !options.languages.includes(configuredLanguage)
 					? [
 							{
 								value: configuredLanguage,
-								label: localize(
-									'dictation.unavailableLanguage',
-									'Language {0} is unavailable with this service',
-									configuredLanguage,
-								),
+								label: localize('dictation.unavailableLanguage', 'Language {0} is unavailable with this service', configuredLanguage),
 								disabled: true,
 							},
 						]
@@ -455,9 +409,7 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 					}).of(value)!,
 				})),
 			]);
-			this.language.value = options.languages.length
-				? this.configuration.getValue<string>(DictationConfiguration.language)
-				: 'auto';
+			this.language.value = options.languages.length ? this.configuration.getValue<string>(DictationConfiguration.language) : 'auto';
 			this.language.enabled = options.languages.length > 0;
 		} catch (error) {
 			if (!this.isDisposed && version === this.requestVersion) {
@@ -472,24 +424,14 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 			if (version !== this.requestVersion || this.isDisposed) {
 				return;
 			}
-			const connection =
-				this.configuration.getValue(DictationConfiguration.cloudProvider) === 'xai' ? 'xai' : 'openai';
+			const connection = this.configuration.getValue(DictationConfiguration.cloudProvider) === 'xai' ? 'xai' : 'openai';
 			const provider = providers.find(provider => provider.connection === connection);
 			this.connectionStatus.textContent = provider?.apiKeyConfigured
-				? localize(
-						'dictation.connections.configured',
-						'API key configured. This connection is shared with chat.',
-					)
-				: localize(
-						'dictation.connections.missing',
-						'This cloud API service requires an API key. Configure it in Models.',
-					);
+				? localize('dictation.connections.configured', 'API key configured. This connection is shared with chat.')
+				: localize('dictation.connections.missing', 'This cloud API service requires an API key. Configure it in Models.');
 		} catch {
 			if (version === this.requestVersion && !this.isDisposed) {
-				this.connectionStatus.textContent = localize(
-					'dictation.connections.failed',
-					'Could not read the dictation connection.',
-				);
+				this.connectionStatus.textContent = localize('dictation.connections.failed', 'Could not read the dictation connection.');
 			}
 		}
 	}

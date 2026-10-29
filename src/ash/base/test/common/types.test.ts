@@ -17,10 +17,7 @@ import {
 
 test('assert narrows caller-defined conditions', () => {
 	assert.equal(requireStringFromUnknown('value'), 'value');
-	assert.throws(
-		() => assertCondition(false, 'condition was not satisfied'),
-		new Error('condition was not satisfied'),
-	);
+	assert.throws(() => assertCondition(false, 'condition was not satisfied'), new Error('condition was not satisfied'));
 });
 
 test('assertDefined narrows non-nullable values', () => {
@@ -67,7 +64,13 @@ test('general type guards expose object, function, defined, and mutable contract
 			array: isObject([]),
 			defined: assertReturnsDefined('value'),
 		},
-		{ count: 2, function: true, object: true, array: false, defined: 'value' },
+		{
+			count: 2,
+			function: true,
+			object: true,
+			array: false,
+			defined: 'value',
+		},
 	);
 	assert.throws(() => assertReturnsDefined(undefined), /must not be null or undefined/);
 	assert.deepEqual([undefined, null, 0].filter(isDefined), [0]);

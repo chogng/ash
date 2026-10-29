@@ -74,9 +74,7 @@ suite('Chat image generation', () => {
 			expect(geometry[0]).toEqual({ width: 200, height: 200 });
 			expect(geometry[2]).toEqual({ width: 280, height: 210 });
 			expect(geometry[4]).toEqual({ width: 360, height: 220 });
-			expect(
-				geometry.every(({ width, height }) => width >= 200 && width <= 360 && height >= 200 && height <= 220),
-			).toBe(true);
+			expect(geometry.every(({ width, height }) => width >= 200 && width <= 360 && height >= 200 && height <= 220)).toBe(true);
 		} finally {
 			await animation.dispose();
 		}
@@ -100,10 +98,7 @@ suite('Chat image generation', () => {
 					window.ashChatTranscriptIntegration.showImageGeneration('success');
 				}, theme);
 				const result = page.locator('.ash-chat-generated-image-result');
-				await expect(result).toHaveAttribute(
-					'aria-label',
-					locale === 'en' ? 'Generated images (1)' : '生成的图片（1）',
-				);
+				await expect(result).toHaveAttribute('aria-label', locale === 'en' ? 'Generated images (1)' : '生成的图片（1）');
 				await expect(result.locator('img')).toBeVisible();
 				await expect(page.locator('.ash-chat-image-glyphs')).toHaveCount(0);
 				const open = result.getByRole('button', {
@@ -112,21 +107,15 @@ suite('Chat image generation', () => {
 				});
 				await open.focus();
 				await open.press('Enter');
-				await expect
-					.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().resource))
-					.toMatch(/^chat-response-resource:/);
-				await expect
-					.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.mediaPreviewState()))
-					.toMatchObject({ readonly: true });
+				await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().resource)).toMatch(/^chat-response-resource:/);
+				await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.mediaPreviewState())).toMatchObject({ readonly: true });
 				await page.evaluate(() => window.ashChatTranscriptIntegration.closeMediaPreview());
 				const download = page.waitForEvent('download');
 				await result.getByRole('button', { name: locale === 'en' ? 'Download' : '下载', exact: true }).click();
 				expect((await download).suggestedFilename()).toMatch(/\.png$/);
 				await page.locator('.ash-chat-tool-invocation summary').focus();
 				await page.evaluate(() => window.ashChatTranscriptIntegration.openAccessibleView(true));
-				await expect(page.locator('.ash-accessible-view-content')).toHaveValue(
-					locale === 'en' ? /Generated images appear outside/ : /生成的图片会显示在工具详情之外/,
-				);
+				await expect(page.locator('.ash-accessible-view-content')).toHaveValue(locale === 'en' ? /Generated images appear outside/ : /生成的图片会显示在工具详情之外/);
 				await page.keyboard.press('Escape');
 				await page.evaluate(() => {
 					document.querySelector<HTMLElement>('main')!.style.width = '180px';
@@ -137,10 +126,7 @@ suite('Chat image generation', () => {
 				expect(
 					await result.locator('img').evaluate(image => {
 						const bounds = image.getBoundingClientRect();
-						return (
-							bounds.width <= image.parentElement!.clientWidth &&
-							Math.abs(bounds.width / bounds.height - 360 / 220) < 0.01
-						);
+						return bounds.width <= image.parentElement!.clientWidth && Math.abs(bounds.width / bounds.height - 360 / 220) < 0.01;
 					}),
 				).toBe(true);
 				await expect(page.locator('.ash-chat-image-glyphs')).toHaveCount(0);
@@ -165,13 +151,7 @@ suite('Chat image generation', () => {
 			]);
 		await expect(page.locator('.ash-chat-image-generation-placeholder')).toBeVisible();
 		await page.evaluate(() => window.ashChatTranscriptIntegration.finishMedia());
-		await expect
-			.poll(() =>
-				page
-					.locator('.ash-chat-generated-image-result img')
-					.evaluateAll(images => images.map(image => (image as HTMLImageElement).naturalWidth)),
-			)
-			.toEqual([360, 360]);
+		await expect.poll(() => page.locator('.ash-chat-generated-image-result img').evaluateAll(images => images.map(image => (image as HTMLImageElement).naturalWidth))).toEqual([360, 360]);
 		await expect(page.locator('.ash-chat-image-glyphs')).toHaveCount(0);
 		await page.evaluate(() => window.ashChatTranscriptIntegration.remove());
 		await expect(page.locator('.ash-chat-generated-image-result')).toHaveCount(0);
@@ -187,9 +167,7 @@ suite('Chat image generation', () => {
 			await page.evaluate(state => window.ashChatTranscriptIntegration.showImageGeneration(state), state);
 			await expect(page.locator('.ash-chat-image-glyphs')).toHaveCount(0);
 			await expect(page.locator('.ash-chat-generated-image-result')).toHaveCount(0);
-			await expect(page.locator('.ash-chat-tool-invocation summary')).toHaveText(
-				state === 'failure' ? 'Image generation failed' : 'Image generation stopped',
-			);
+			await expect(page.locator('.ash-chat-tool-invocation summary')).toHaveText(state === 'failure' ? 'Image generation failed' : 'Image generation stopped');
 		});
 	}
 
@@ -264,9 +242,7 @@ suite('Chat image generation', () => {
 			window.ashChatTranscriptIntegration.showImageGeneration('pending');
 		});
 		await page.evaluate(() => window.ashChatTranscriptIntegration.showImageGeneration('success', 1, true));
-		await expect
-			.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.mediaState().requests.length))
-			.toBe(1);
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.mediaState().requests.length)).toBe(1);
 		await page.evaluate(() => {
 			window.ashChatTranscriptIntegration.remove();
 			window.ashChatTranscriptIntegration.finishMedia();
@@ -311,17 +287,9 @@ suite('Chat image generation', () => {
 					},
 				]);
 			}, url);
-			await expect(page.locator('.ash-chat-generated-image-result figcaption')).toHaveText(
-				'This media could not be loaded.',
-			);
+			await expect(page.locator('.ash-chat-generated-image-result figcaption')).toHaveText('This media could not be loaded.');
 			await expect(page.locator('.ash-chat-image-glyphs')).toHaveCount(0);
-			await expect(
-				page
-					.locator('.ash-chat-generated-image-result')
-					.getByRole('button', { name: 'Open image', exact: true }),
-			).toBeHidden();
-			await expect(
-				page.locator('.ash-chat-generated-image-result').getByRole('button', { name: 'Download', exact: true }),
-			).toBeHidden();
+			await expect(page.locator('.ash-chat-generated-image-result').getByRole('button', { name: 'Open image', exact: true })).toBeHidden();
+			await expect(page.locator('.ash-chat-generated-image-result').getByRole('button', { name: 'Download', exact: true })).toBeHidden();
 		});
 });

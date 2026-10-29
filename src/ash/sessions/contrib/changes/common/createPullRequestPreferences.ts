@@ -39,12 +39,7 @@ export class CreatePullRequestPreferences {
 	public update(change: ICreatePullRequestPreferences): void {
 		const value = this.validate({ ...this.read(), ...change });
 		try {
-			this.storage.store(
-				CreatePullRequestPreferences.key,
-				JSON.stringify(value),
-				StorageScope.PROFILE,
-				StorageTarget.MACHINE,
-			);
+			this.storage.store(CreatePullRequestPreferences.key, JSON.stringify(value), StorageScope.PROFILE, StorageTarget.MACHINE);
 		} catch {
 			this.log.warn('Changes', 'Could not save pull request form preferences.');
 		}
@@ -57,12 +52,8 @@ export class CreatePullRequestPreferences {
 		return {
 			...(typeof value.draft === 'boolean' ? { draft: value.draft } : {}),
 			...(value.mergeMode === 'manual' || value.mergeMode === 'auto' ? { mergeMode: value.mergeMode } : {}),
-			...(value.mergeMethod === 'MERGE' || value.mergeMethod === 'SQUASH' || value.mergeMethod === 'REBASE'
-				? { mergeMethod: value.mergeMethod }
-				: {}),
-			...(value.primaryAction === 'create' || value.primaryAction === 'sendToChat'
-				? { primaryAction: value.primaryAction }
-				: {}),
+			...(value.mergeMethod === 'MERGE' || value.mergeMethod === 'SQUASH' || value.mergeMethod === 'REBASE' ? { mergeMethod: value.mergeMethod } : {}),
+			...(value.primaryAction === 'create' || value.primaryAction === 'sendToChat' ? { primaryAction: value.primaryAction } : {}),
 		};
 	}
 }

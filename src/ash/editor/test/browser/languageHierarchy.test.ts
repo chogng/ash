@@ -32,10 +32,7 @@ test('hierarchy preserves provider identity and opaque data while expanding a re
 	fixture.container.querySelector<HTMLButtonElement>('.stanza-editor-language-hierarchy-expand')!.click();
 	await flushLanguageRequests();
 	assert.deepEqual(followedData, { opaque: 'root' });
-	assert.equal(
-		fixture.container.querySelectorAll('.stanza-editor-language-hierarchy-item')[1]?.textContent,
-		'caller',
-	);
+	assert.equal(fixture.container.querySelectorAll('.stanza-editor-language-hierarchy-item')[1]?.textContent, 'caller');
 	assert.deepEqual(fixture.errors, []);
 });
 

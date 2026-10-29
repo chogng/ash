@@ -1,11 +1,7 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Event } from '../../../../base/common/event.js';
 import { CancellationError } from '../../../../base/common/errors.js';
-import {
-	IUpdateService,
-	type UpdateCheckResult,
-	type UpdateReadyResult,
-} from '../../../../platform/update/common/updateService.js';
+import { IUpdateService, type UpdateCheckResult, type UpdateReadyResult } from '../../../../platform/update/common/updateService.js';
 import { IBrowserWorkbenchEnvironmentService } from '../../environment/browser/environmentService.js';
 import { IHostService } from '../../host/browser/host.js';
 
@@ -39,13 +35,7 @@ export function createWebUpdateProvider(document: Document): IUpdateProvider | u
 			});
 			if (!response.ok) throw new Error(`Web version request failed (${response.status})`);
 			const result: unknown = await response.json();
-			if (
-				typeof result !== 'object' ||
-				result === null ||
-				!('version' in result) ||
-				typeof result.version !== 'string' ||
-				!/^[a-f0-9]{64}$/u.test(result.version)
-			) {
+			if (typeof result !== 'object' || result === null || !('version' in result) || typeof result.version !== 'string' || !/^[a-f0-9]{64}$/u.test(result.version)) {
 				throw new TypeError('Invalid Web deployment version');
 			}
 			return result.version === currentVersion ? null : { version: result.version };
@@ -77,16 +67,11 @@ export class BrowserUpdateService extends Disposable implements IUpdateService {
 			.then(() => provider.checkForUpdate())
 			.then(update => {
 				if (this.isDisposed) throw new CancellationError();
-				if (
-					update !== null &&
-					(typeof update !== 'object' || typeof update.version !== 'string' || !update.version.trim())
-				) {
+				if (update !== null && (typeof update !== 'object' || typeof update.version !== 'string' || !update.version.trim())) {
 					throw new TypeError('Web update provider returned an invalid version');
 				}
 				this.available = update === null ? undefined : { version: update.version };
-				return update === null
-					? { status: 'current' as const }
-					: { status: 'available' as const, version: update.version };
+				return update === null ? { status: 'current' as const } : { status: 'available' as const, version: update.version };
 			})
 			.finally(() => {
 				this.checking = undefined;

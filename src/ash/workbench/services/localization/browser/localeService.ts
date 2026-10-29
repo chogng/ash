@@ -4,10 +4,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { normalizeLocale } from '../../../../platform/languagePacks/common/languagePackCatalog.js';
 import { ILanguagePackStore } from '../../../../platform/languagePacks/common/languagePackStore.js';
-import {
-	ILanguagePackService,
-	type ILanguagePackItem,
-} from '../../../../platform/languagePacks/common/languagePacks.js';
+import { ILanguagePackService, type ILanguagePackItem } from '../../../../platform/languagePacks/common/languagePacks.js';
 import { IHostService } from '../../host/browser/host.js';
 import { LocalizationConfiguration, type ILocaleService } from '../common/locale.js';
 
@@ -33,9 +30,7 @@ export class WorkbenchLocaleService extends Disposable implements ILocaleService
 	public async setLocale(item: ILanguagePackItem): Promise<void> {
 		await this.whenReady;
 		const requested = normalizeLocale(item.id);
-		const catalog = this.languagePacks.catalogs.find(
-			catalog => catalog.locale.toLowerCase() === requested.toLowerCase(),
-		);
+		const catalog = this.languagePacks.catalogs.find(catalog => catalog.locale.toLowerCase() === requested.toLowerCase());
 		if (!catalog) {
 			throw new RangeError(`Locale '${item.id}' is not installed`);
 		}
@@ -56,11 +51,7 @@ export class WorkbenchLocaleService extends Disposable implements ILocaleService
 
 	private async promptRestart(languageName: string): Promise<void> {
 		const { confirmed } = await this.dialogs.confirm({
-			message: localize(
-				{ bundle: 'ash.settings', key: 'displayLanguage.restartMessage' },
-				'Restart Ash to use {0}?',
-				languageName,
-			),
+			message: localize({ bundle: 'ash.settings', key: 'displayLanguage.restartMessage' }, 'Restart Ash to use {0}?', languageName),
 			detail: localize(
 				{ bundle: 'ash.settings', key: 'displayLanguage.restartDetail' },
 				'Your display language preference is saved. It will take effect after restarting the app or refreshing the page.',

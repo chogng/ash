@@ -9,11 +9,7 @@ suite('appTools browser component', () => {
 
 		await page.goto('/appTools.html');
 		await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
-		expect(
-			await page.evaluate(() =>
-				window.ashAppToolsIntegration.call({ type: 'openFile', path: '/workspace/a b.ts', line: 12 }),
-			),
-		).toEqual({ opened: true, path: '/workspace/a b.ts' });
+		expect(await page.evaluate(() => window.ashAppToolsIntegration.call({ type: 'openFile', path: '/workspace/a b.ts', line: 12 }))).toEqual({ opened: true, path: '/workspace/a b.ts' });
 		expect(
 			await page.evaluate(() =>
 				window.ashAppToolsIntegration.call({
@@ -25,13 +21,8 @@ suite('appTools browser component', () => {
 		).toEqual({ opened: true });
 		expect(
 			await page.evaluate(() => {
-				const [file, options] = window.ashAppToolsIntegration.opened[0] as [
-					{ resource: { scheme: string; path: string } },
-					{ selection: { startLineNumber: number; startColumn: number } },
-				];
-				const [review] = window.ashAppToolsIntegration.opened[1] as [
-					{ original: { resource: { path: string } }; modified: { resource: { path: string } } },
-				];
+				const [file, options] = window.ashAppToolsIntegration.opened[0] as [{ resource: { scheme: string; path: string } }, { selection: { startLineNumber: number; startColumn: number } }];
+				const [review] = window.ashAppToolsIntegration.opened[1] as [{ original: { resource: { path: string } }; modified: { resource: { path: string } } }];
 				return {
 					file: [file.resource.scheme, file.resource.path],
 					selection: [options.selection.startLineNumber, options.selection.startColumn],
@@ -43,14 +34,8 @@ suite('appTools browser component', () => {
 			selection: [12, 1],
 			review: ['/workspace/before.ts', '/workspace/after.ts'],
 		});
-		expect(
-			await page.evaluate(() =>
-				window.ashAppToolsIntegration.call({ type: 'openBrowser', url: 'https://example.com/review?item=1' }),
-			),
-		).toEqual({ opened: true });
-		expect(await page.evaluate(() => window.ashAppToolsIntegration.openedUrls)).toEqual([
-			'https://example.com/review?item=1',
-		]);
+		expect(await page.evaluate(() => window.ashAppToolsIntegration.call({ type: 'openBrowser', url: 'https://example.com/review?item=1' }))).toEqual({ opened: true });
+		expect(await page.evaluate(() => window.ashAppToolsIntegration.openedUrls)).toEqual(['https://example.com/review?item=1']);
 	});
 
 	test('application tools update the visible sidebar, preserve focus, persist and return explicit failures', async function () {
@@ -66,25 +51,13 @@ suite('appTools browser component', () => {
 				},
 		);
 		await expect(page.getByRole('heading', { name: '<Review>', exact: true })).toBeVisible();
-		await expect(page.getByRole('heading', { name: '<Review>', exact: true }).getByRole('button')).toHaveCSS(
-			'font-size',
-			'13px',
-		);
-		await expect(page.getByRole('heading', { name: '<Review>', exact: true }).getByRole('button')).toHaveAttribute(
-			'aria-expanded',
-			'true',
-		);
-		await page.evaluate(
-			sectionId => window.ashAppToolsIntegration.call({ type: 'moveSession', sessionId: 'session-2', sectionId }),
-			group.sectionId,
-		);
+		await expect(page.getByRole('heading', { name: '<Review>', exact: true }).getByRole('button')).toHaveCSS('font-size', '13px');
+		await expect(page.getByRole('heading', { name: '<Review>', exact: true }).getByRole('button')).toHaveAttribute('aria-expanded', 'true');
+		await page.evaluate(sectionId => window.ashAppToolsIntegration.call({ type: 'moveSession', sessionId: 'session-2', sectionId }), group.sectionId);
 		const rows = page.locator('.ash-sessions-list-item');
 		await expect(rows).toHaveText(['Task 2', 'Task 1']);
 		await rows.first().focus();
-		await page.evaluate(
-			sectionId => window.ashAppToolsIntegration.call({ type: 'renameSection', sectionId, name: 'Ship' }),
-			group.sectionId,
-		);
+		await page.evaluate(sectionId => window.ashAppToolsIntegration.call({ type: 'renameSection', sectionId, name: 'Ship' }), group.sectionId);
 		await expect(rows.first()).toBeFocused();
 		await expect(page.getByRole('heading', { name: 'Ship', exact: true })).toBeVisible();
 		expect(
@@ -101,16 +74,9 @@ suite('appTools browser component', () => {
 		await page.reload();
 		await expect(page.getByRole('heading', { name: 'Ship', exact: true })).toBeVisible();
 		await expect(rows).toHaveText(['Task 2', 'Task 1']);
-		await page.evaluate(() =>
-			window.ashAppToolsIntegration.call({ type: 'navigate', sessionId: 'session-1', threadId: 'thread-1' }),
-		);
-		expect(await page.evaluate(() => window.ashAppToolsIntegration.opened)).toEqual([
-			{ sessionId: 'session-1', threadId: 'thread-1' },
-		]);
-		await page.evaluate(
-			sectionId => window.ashAppToolsIntegration.call({ type: 'deleteSection', sectionId }),
-			group.sectionId,
-		);
+		await page.evaluate(() => window.ashAppToolsIntegration.call({ type: 'navigate', sessionId: 'session-1', threadId: 'thread-1' }));
+		expect(await page.evaluate(() => window.ashAppToolsIntegration.opened)).toEqual([{ sessionId: 'session-1', threadId: 'thread-1' }]);
+		await page.evaluate(sectionId => window.ashAppToolsIntegration.call({ type: 'deleteSection', sectionId }), group.sectionId);
 		await expect(rows).toHaveText(['Task 1', 'Task 2']);
 	});
 
@@ -153,9 +119,7 @@ suite('appTools browser component', () => {
 		await page.evaluate(() => window.ashAppToolsIntegration.cancelLast());
 		expect(await cancelled).toContain('cancelled');
 		await page.evaluate(() => window.ashAppToolsIntegration.releaseTerminal());
-		await expect
-			.poll(() => page.evaluate(() => window.ashAppToolsIntegration.closedTerminals))
-			.toEqual(['terminal-1']);
+		await expect.poll(() => page.evaluate(() => window.ashAppToolsIntegration.closedTerminals)).toEqual(['terminal-1']);
 		expect(await page.evaluate(() => window.ashAppToolsIntegration.call({ type: 'listSections' }))).toEqual({
 			sections: [],
 		});
@@ -457,9 +421,7 @@ suite('appTools browser component', () => {
 			);
 			const task = catalog.tasks.find(task => task.label === 'Check')!;
 			expect(task.revision).toHaveLength(64);
-			expect(catalog.tasks.find(task => task.label === 'Interactive')!.unavailableReason).toContain(
-				locale === 'zh-CN' ? '需要扩展' : 'needs an extension',
-			);
+			expect(catalog.tasks.find(task => task.label === 'Interactive')!.unavailableReason).toContain(locale === 'zh-CN' ? '需要扩展' : 'needs an extension');
 			const taskButton = page.getByRole('button', { name: 'Editor focus target' });
 			await taskButton.focus();
 			const run = await page.evaluate(
@@ -484,12 +446,7 @@ suite('appTools browser component', () => {
 				);
 			await expect.poll(async () => (await status()).terminalId).toBe('terminal-instance-1');
 			await expect
-				.poll(() =>
-					page.evaluate(
-						runId => window.ashAppToolsIntegration.taskRuns.find(run => run.runId === runId),
-						run.runId,
-					),
-				)
+				.poll(() => page.evaluate(runId => window.ashAppToolsIntegration.taskRuns.find(run => run.runId === runId), run.runId))
 				.toMatchObject({
 					runId: run.runId,
 					terminalId: 'terminal-instance-1',
@@ -526,14 +483,7 @@ suite('appTools browser component', () => {
 					run.runId,
 				);
 				expect(cancelled.status).toBe('canceled');
-				await expect
-					.poll(() =>
-						page.evaluate(
-							runId => window.ashAppToolsIntegration.taskRuns.find(run => run.runId === runId)?.status,
-							run.runId,
-						),
-					)
-					.toBe('canceled');
+				await expect.poll(() => page.evaluate(runId => window.ashAppToolsIntegration.taskRuns.find(run => run.runId === runId)?.status, run.runId)).toBe('canceled');
 			}
 			expect((await status()).status).toBe('canceled');
 			await expect(taskButton).toBeFocused();
@@ -590,14 +540,7 @@ suite('appTools browser component', () => {
 		});
 		await expect.poll(() => page.evaluate(() => window.ashAppToolsIntegration.terminalCreations.length)).toBe(1);
 		await page.evaluate(() => window.ashAppToolsIntegration.finishTask(1));
-		await expect
-			.poll(() =>
-				page.evaluate(
-					runId => window.ashAppToolsIntegration.taskRuns.find(run => run.runId === runId)?.status,
-					runId,
-				),
-			)
-			.toBe('failed');
+		await expect.poll(() => page.evaluate(runId => window.ashAppToolsIntegration.taskRuns.find(run => run.runId === runId)?.status, runId)).toBe('failed');
 		await expect(button).toBeFocused();
 		expect(
 			await page.evaluate(
@@ -645,24 +588,11 @@ suite('appTools browser component', () => {
 			).runId;
 		});
 		await expect.poll(() => page.evaluate(() => window.ashAppToolsIntegration.terminalCreations.length)).toBe(2);
-		await expect
-			.poll(() =>
-				page.evaluate(
-					runId => window.ashAppToolsIntegration.taskRuns.find(run => run.runId === runId)?.terminalId,
-					agent,
-				),
-			)
-			.toBe('terminal-instance-2');
+		await expect.poll(() => page.evaluate(runId => window.ashAppToolsIntegration.taskRuns.find(run => run.runId === runId)?.terminalId, agent)).toBe('terminal-instance-2');
 		await page.evaluate(() => window.ashAppToolsIntegration.disconnectAppServer());
+		await expect.poll(() => page.evaluate(() => window.ashAppToolsIntegration.closedTerminals)).toEqual(['terminal-2']);
 		await expect
-			.poll(() => page.evaluate(() => window.ashAppToolsIntegration.closedTerminals))
-			.toEqual(['terminal-2']);
-		await expect
-			.poll(() =>
-				page.evaluate(() =>
-					window.ashAppToolsIntegration.taskRuns.map(({ runId, status }) => ({ runId, status })),
-				),
-			)
+			.poll(() => page.evaluate(() => window.ashAppToolsIntegration.taskRuns.map(({ runId, status }) => ({ runId, status }))))
 			.toEqual([
 				{ runId: manual, status: 'running' },
 				{ runId: agent, status: 'canceled' },
@@ -755,25 +685,12 @@ suite('appTools browser component', () => {
 				{ invalidation, runId },
 			);
 			// Both inbound cancellations must be dispatched before the late handle is released.
-			if (invalidation === 'concurrent cancel')
-				await expect.poll(() => page.evaluate(() => window.ashAppToolsIntegration.taskCancelRequests)).toBe(2);
+			if (invalidation === 'concurrent cancel') await expect.poll(() => page.evaluate(() => window.ashAppToolsIntegration.taskCancelRequests)).toBe(2);
 			else await cancellation;
 			await page.evaluate(() => window.ashAppToolsIntegration.releaseTerminal());
-			if (invalidation === 'concurrent cancel')
-				expect(await cancellation).toEqual([
-					expect.objectContaining({ status: 'canceled' }),
-					expect.objectContaining({ status: 'canceled' }),
-				]);
-			await expect
-				.poll(() => page.evaluate(() => window.ashAppToolsIntegration.closedTerminals))
-				.toEqual(['terminal-1']);
-			await expect
-				.poll(() =>
-					page.evaluate(() =>
-						window.ashAppToolsIntegration.taskRuns.map(({ runId, status }) => ({ runId, status })),
-					),
-				)
-				.toEqual([{ runId, status: 'canceled' }]);
+			if (invalidation === 'concurrent cancel') expect(await cancellation).toEqual([expect.objectContaining({ status: 'canceled' }), expect.objectContaining({ status: 'canceled' })]);
+			await expect.poll(() => page.evaluate(() => window.ashAppToolsIntegration.closedTerminals)).toEqual(['terminal-1']);
+			await expect.poll(() => page.evaluate(() => window.ashAppToolsIntegration.taskRuns.map(({ runId, status }) => ({ runId, status })))).toEqual([{ runId, status: 'canceled' }]);
 		});
 	}
 });

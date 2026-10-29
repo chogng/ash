@@ -14,11 +14,7 @@ import { ChatSessionArchiveActionWordingSettingId } from '../../../../../platfor
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IDialogService, type IConfirmationDialogResult } from '../../../../../platform/dialogs/common/dialogs.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import {
-	IQuickInputService,
-	type IQuickPick,
-	type IQuickPickItem,
-} from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import type { ChatAgent } from '../../../../../workbench/services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
@@ -160,9 +156,7 @@ async function fixture(wording: 'archive' | 'done', archived = false) {
 			await sessions.openThread(sessionId, threadId);
 		},
 	});
-	const quickInput = resources.add(
-		new TestQuickInputService({ container: dom.window.document.body, instantiationService: services }),
-	);
+	const quickInput = resources.add(new TestQuickInputService({ container: dom.window.document.body, instantiationService: services }));
 	services.registerInstance(IQuickInputService, quickInput);
 	const commands = resources.add(new CommandService(services));
 	return Object.assign(resources, {
@@ -205,29 +199,11 @@ for (const locale of ['en', 'zh-CN']) {
 				confirmed = true;
 				await commands.executeCommand('agentSession.archive');
 				assert.deepEqual(provider.archived, ['first']);
-				assert.equal(
-					labels[0],
-					locale === 'en'
-						? wording === 'archive'
-							? 'Archive'
-							: 'Mark as Done'
-						: wording === 'archive'
-							? '归档'
-							: '标记为完成',
-				);
+				assert.equal(labels[0], locale === 'en' ? (wording === 'archive' ? 'Archive' : 'Mark as Done') : wording === 'archive' ? '归档' : '标记为完成');
 				const draft = sessions.createUntitledSession('Preserved draft');
 				const restore = commands.executeCommand('agentSession.restore');
 				const picker = await pickerFor(quickInput);
-				assert.equal(
-					picker.items[0]?.label,
-					locale === 'en'
-						? wording === 'archive'
-							? 'Unarchive All'
-							: 'Restore All'
-						: wording === 'archive'
-							? '全部取消归档'
-							: '全部恢复',
-				);
+				assert.equal(picker.items[0]?.label, locale === 'en' ? (wording === 'archive' ? 'Unarchive All' : 'Restore All') : wording === 'archive' ? '全部取消归档' : '全部恢复');
 				picker.selectedItems = [picker.items[0] as IQuickPickItem];
 				picker.accept();
 				await restore;
@@ -301,18 +277,12 @@ test('closing a pending restore picker does not open a conversation after its re
 	picker.hide();
 	await pending.complete();
 	await restoring;
-	assert.deepEqual(
-		{ restored: current.provider.restored, opened: current.opened },
-		{ restored: ['first'], opened: [] },
-	);
+	assert.deepEqual({ restored: current.provider.restored, opened: current.opened }, { restored: ['first'], opened: [] });
 });
 
 test('Session action wording rejects unsupported persisted values', async () => {
 	using current = await fixture('done');
-	await assert.rejects(
-		current.configuration.updateValue(ChatSessionArchiveActionWordingSettingId, 'invalid'),
-		/Choose Archive or Mark as Done/u,
-	);
+	await assert.rejects(current.configuration.updateValue(ChatSessionArchiveActionWordingSettingId, 'invalid'), /Choose Archive or Mark as Done/u);
 	assert.equal(current.configuration.getValue(ChatSessionArchiveActionWordingSettingId), 'done');
 });
 
@@ -394,8 +364,7 @@ test('Session naming retains its captured Session across navigation and cancella
 		return pending.p;
 	};
 	const naming = current.commands.executeCommand('agentSession.rename', 'first');
-	for (let attempt = 0; !requested && attempt < 100; attempt++)
-		await new Promise<void>(resolve => setTimeout(resolve, 0));
+	for (let attempt = 0; !requested && attempt < 100; attempt++) await new Promise<void>(resolve => setTimeout(resolve, 0));
 	assert.equal(requested, true);
 	current.sessions.selectThread('second', 'second-root');
 	pending.complete('A deliberate name');
@@ -479,13 +448,7 @@ test('sidebar destination commands act on the captured chat and reread the proje
 	assert.deepEqual(moved, [['second', 'group']]);
 });
 
-for (const action of [
-	'sessions.list.togglePin',
-	'agentSession.rename',
-	'agentSession.archive',
-	'agentSession.addToProject',
-	'agentSession.moveToGroup',
-]) {
+for (const action of ['sessions.list.togglePin', 'agentSession.rename', 'agentSession.archive', 'agentSession.addToProject', 'agentSession.moveToGroup']) {
 	test(`unsent item supports ${action} without submitting or changing another chat`, async () => {
 		using current = await fixture('archive');
 		const { sessions, commands, provider, storage, services, quickInput } = current;
@@ -568,11 +531,7 @@ for (const action of [
 			await commands.executeCommand(action, target);
 			assert.equal(storage.getBoolean('sessions.list.pinned.created-0', StorageScope.PROFILE), false);
 			assert.equal(provider.created.length, 1, 'A captured draft identity keeps resolving to the same chat');
-		} else if (action === 'agentSession.rename')
-			assert.equal(
-				sessions.sessions.find(value => value.sessionId === 'created-0')?.title,
-				'Named before sending',
-			);
+		} else if (action === 'agentSession.rename') assert.equal(sessions.sessions.find(value => value.sessionId === 'created-0')?.title, 'Named before sending');
 		else if (action === 'agentSession.archive') {
 			assert.deepEqual(provider.archived, ['created-0']);
 			await commands.executeCommand('agentSession.restore', 'created-0');

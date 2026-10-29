@@ -8,12 +8,7 @@ import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
-import type {
-	ICanvasContext,
-	ICanvasContextService,
-	ICanvasDefinition,
-	ICanvasService,
-} from '../../../../../workbench/contrib/canvases/common/canvas.js';
+import type { ICanvasContext, ICanvasContextService, ICanvasDefinition, ICanvasService } from '../../../../../workbench/contrib/canvases/common/canvas.js';
 import { SessionCanvasRegistryService } from '../../electron-browser/sessionCanvasService.js';
 import type { ISessionsService, SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 
@@ -47,13 +42,7 @@ suite('Session Canvas registry targeting', () => {
 				canvases: constObservable([]),
 				definitionProvider: {
 					onDidChangeDefinitions: definitionsChanged.event,
-					listCanvases: () =>
-						thread === 'first'
-							? stale.promise
-							: Promise.resolve([
-									definition,
-									{ ...definition, canvasId: 'requires-input', requiresInput: true },
-								]),
+					listCanvases: () => (thread === 'first' ? stale.promise : Promise.resolve([definition, { ...definition, canvasId: 'requires-input', requiresInput: true }])),
 					openCanvas: async () => {
 						opened.push(thread);
 					},

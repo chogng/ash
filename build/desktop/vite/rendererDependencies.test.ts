@@ -15,9 +15,7 @@ test('keeps the real LiveKit media dependency lazy and within renderer chunk lim
 				name: 'voice-fixture',
 				resolveId: id => (id === 'voice-entry' ? '\0voice-entry' : undefined),
 				load: id =>
-					id === '\0voice-entry'
-						? 'globalThis.startVoice = () => import("livekit-client").then(({ Room, ExternalE2EEKeyProvider }) => [Room, ExternalE2EEKeyProvider]);'
-						: undefined,
+					id === '\0voice-entry' ? 'globalThis.startVoice = () => import("livekit-client").then(({ Room, ExternalE2EEKeyProvider }) => [Room, ExternalE2EEKeyProvider]);' : undefined,
 			},
 			buildMetricsPlugin(),
 		],
@@ -25,13 +23,7 @@ test('keeps the real LiveKit media dependency lazy and within renderer chunk lim
 	});
 	assert.ok(!Array.isArray(result) && 'output' in result);
 	const chunks = result.output.filter(output => output.type === 'chunk');
-	assert.ok(
-		chunks.some(chunk =>
-			Object.keys(chunk.modules).some(id =>
-				id.replaceAll('\\', '/').endsWith('/livekit-client/src/room/Room.ts'),
-			),
-		),
-	);
+	assert.ok(chunks.some(chunk => Object.keys(chunk.modules).some(id => id.replaceAll('\\', '/').endsWith('/livekit-client/src/room/Room.ts'))));
 	assert.ok(chunks.every(chunk => Buffer.byteLength(chunk.code) <= 500_000));
 	const entry = chunks.find(chunk => chunk.isEntry)!;
 	assert.ok(entry.dynamicImports.length > 0);

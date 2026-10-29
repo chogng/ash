@@ -5,20 +5,13 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import {
-	DialogResult,
-	type IDialogService,
-	type IPromptDialogOptions,
-} from '../../../../../platform/dialogs/common/dialogs.js';
+import { DialogResult, type IDialogService, type IPromptDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import type { IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import type { IMessageDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import type { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import type { IQuickPick } from '../../../../../platform/quickinput/common/quickInput.js';
 import type { IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
-import {
-	IRemoteConnectionApi,
-	RemoteConnectionService,
-} from '../../../../../platform/remote/common/remoteConnectionService.js';
+import { IRemoteConnectionApi, RemoteConnectionService } from '../../../../../platform/remote/common/remoteConnectionService.js';
 import type { RemoteConnectionDefinition } from '../../../../../platform/remote/common/remoteConnectionService.js';
 import { showRemoteConnectionManager } from '../../browser/remoteConnectionManagement.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
@@ -40,9 +33,7 @@ test('Remote connection manager accepts Windows paths with a translated prompt',
 		assert.match((await pickerAt(quickInput, 3)).placeholder ?? '', /远程工作区.*C:\/work\/project/);
 		await enterText(quickInput, 3, 'c:\\work\\开发 project');
 		await operation;
-		assert.deepEqual(connections.saved, [
-			{ name: 'windows', host: 'windows-dev', workspace: 'c:\\work\\开发 project' },
-		]);
+		assert.deepEqual(connections.saved, [{ name: 'windows', host: 'windows-dev', workspace: 'c:\\work\\开发 project' }]);
 	} finally {
 		initializeTestLocalization('en');
 	}
@@ -83,9 +74,7 @@ test('Remote connection manager atomically edits and renames one observed target
 	await enterText(quickInput, 4, '/srv/production');
 	await operation;
 
-	assert.deepEqual(connections.updated, [
-		['build', { name: 'production', host: 'production-linux', workspace: '/srv/production' }],
-	]);
+	assert.deepEqual(connections.updated, [['build', { name: 'production', host: 'production-linux', workspace: '/srv/production' }]]);
 	assert.equal(dialogs.messages.at(-1)?.message, 'Remote connection updated');
 });
 

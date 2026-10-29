@@ -156,19 +156,14 @@ export function isConfigured<T>(value: IConfigurationValue<T>): value is IConfig
 export function isConfigurationOverrides(value: unknown): value is IConfigurationOverrides {
 	if (!value || typeof value !== 'object') return false;
 	const candidate = value as IConfigurationOverrides;
-	return (
-		(candidate.overrideIdentifier == null || typeof candidate.overrideIdentifier === 'string') &&
-		(candidate.resource == null || candidate.resource instanceof URI)
-	);
+	return (candidate.overrideIdentifier == null || typeof candidate.overrideIdentifier === 'string') && (candidate.resource == null || candidate.resource instanceof URI);
 }
 
 export function isConfigurationUpdateOverrides(value: unknown): value is IConfigurationUpdateOverrides {
 	if (!value || typeof value !== 'object') return false;
 	const candidate = value as IConfigurationUpdateOverrides & IConfigurationOverrides;
 	return (
-		(candidate.overrideIdentifiers == null ||
-			(Array.isArray(candidate.overrideIdentifiers) &&
-				candidate.overrideIdentifiers.every(identifier => typeof identifier === 'string'))) &&
+		(candidate.overrideIdentifiers == null || (Array.isArray(candidate.overrideIdentifiers) && candidate.overrideIdentifiers.every(identifier => typeof identifier === 'string'))) &&
 		candidate.overrideIdentifier == null &&
 		(candidate.resource == null || candidate.resource instanceof URI)
 	);
@@ -189,18 +184,8 @@ export interface IConfigurationService {
 	getValue<T>(section: string, overrides: IConfigurationOverrides): T;
 	updateValue(key: string, value: unknown): Promise<void>;
 	updateValue(key: string, value: unknown, target: ConfigurationTarget): Promise<void>;
-	updateValue(
-		key: string,
-		value: unknown,
-		overrides: IConfigurationOverrides | IConfigurationUpdateOverrides,
-	): Promise<void>;
-	updateValue(
-		key: string,
-		value: unknown,
-		overrides: IConfigurationOverrides | IConfigurationUpdateOverrides,
-		target: ConfigurationTarget,
-		options?: IConfigurationUpdateOptions,
-	): Promise<void>;
+	updateValue(key: string, value: unknown, overrides: IConfigurationOverrides | IConfigurationUpdateOverrides): Promise<void>;
+	updateValue(key: string, value: unknown, overrides: IConfigurationOverrides | IConfigurationUpdateOverrides, target: ConfigurationTarget, options?: IConfigurationUpdateOptions): Promise<void>;
 	inspect<T>(key: string, overrides?: IConfigurationOverrides): IConfigurationValue<Readonly<T>>;
 	reloadConfiguration(target?: ConfigurationTarget | IWorkspaceFolder): Promise<void>;
 	keys(): {
@@ -213,21 +198,13 @@ export interface IConfigurationService {
 	};
 }
 
-export function toValuesTree(
-	properties: IStringDictionary<unknown>,
-	conflictReporter: (message: string) => void,
-): IStringDictionary<unknown> {
+export function toValuesTree(properties: IStringDictionary<unknown>, conflictReporter: (message: string) => void): IStringDictionary<unknown> {
 	const root = Object.create(null) as IStringDictionary<unknown>;
 	for (const key in properties) addToValueTree(root, key, properties[key], conflictReporter);
 	return root;
 }
 
-export function addToValueTree(
-	settingsTreeRoot: IStringDictionary<unknown>,
-	key: string,
-	value: unknown,
-	conflictReporter: (message: string) => void,
-): void {
+export function addToValueTree(settingsTreeRoot: IStringDictionary<unknown>, key: string, value: unknown, conflictReporter: (message: string) => void): void {
 	const segments = key.split('.');
 	const last = segments.pop()!;
 	let current = settingsTreeRoot;
@@ -246,9 +223,7 @@ export function addToValueTree(
 				}
 				break;
 			default:
-				conflictReporter(
-					`Ignoring ${key} as ${segments.slice(0, index + 1).join('.')} is ${JSON.stringify(entry)}`,
-				);
+				conflictReporter(`Ignoring ${key} as ${segments.slice(0, index + 1).join('.')} is ${JSON.stringify(entry)}`);
 				return;
 		}
 		current = entry as IStringDictionary<unknown>;
@@ -281,11 +256,7 @@ function removeValue(valueTree: IStringDictionary<unknown> | unknown, segments: 
 
 export function getConfigurationValue<T>(config: IStringDictionary<unknown>, settingPath: string): T | undefined;
 export function getConfigurationValue<T>(config: IStringDictionary<unknown>, settingPath: string, defaultValue: T): T;
-export function getConfigurationValue<T>(
-	config: IStringDictionary<unknown>,
-	settingPath: string,
-	defaultValue?: T,
-): T | undefined {
+export function getConfigurationValue<T>(config: IStringDictionary<unknown>, settingPath: string, defaultValue?: T): T | undefined {
 	let current: unknown = config;
 	for (const component of settingPath.split('.')) {
 		if (typeof current !== 'object' || current === null) return defaultValue;

@@ -5,12 +5,7 @@ import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import {
-	IBrowserViewService,
-	BrowserViewStorageScope,
-	type BrowserViewEvent,
-	type IBrowserViewBounds,
-} from '../../../../../platform/browserView/common/browserView.js';
+import { IBrowserViewService, BrowserViewStorageScope, type BrowserViewEvent, type IBrowserViewBounds } from '../../../../../platform/browserView/common/browserView.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
@@ -59,10 +54,7 @@ suite('Browser page presentation', () => {
 		await settle(() => f.bounds.get('shared')?.x === 10);
 		first.dispose();
 		await settle(() => f.visible.get('shared') === false);
-		assert.deepEqual(
-			[f.bounds.get('shared'), f.visible.get('shared')],
-			[{ x: 10, y: 20, width: 300, height: 200 }, false],
-		);
+		assert.deepEqual([f.bounds.get('shared'), f.visible.get('shared')], [{ x: 10, y: 20, width: 300, height: 200 }, false]);
 	});
 
 	test('an input switch while positioning is pending cannot focus or retain the old page', async () => {

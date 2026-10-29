@@ -321,29 +321,22 @@ test('host deadlines cancel work while EOF is waiting for Worker decoding withou
 	try {
 		const transport = new ProtocolTransport();
 		const port = new TestAppServerDecodePort();
-		const client = new AppServerProtocolClient(
-			transport,
-			{ requestTimeoutMs: 100 },
-			new AppServerFrameDecoder(() => port),
-		);
+		const client = new AppServerProtocolClient(transport, { requestTimeoutMs: 100 }, new AppServerFrameDecoder(() => port));
 		using cleanup = toDisposable(() => client.dispose());
 		await client.connect();
 		let signal!: AbortSignal;
 		let finish!: () => void;
 		let effects = 0;
-		using handler = client.registerRequestHandler(
-			APP_SERVER_SERVER_REQUESTS['browser/create'],
-			async (_params, context) => {
-				signal = context.signal;
-				await new Promise<void>(resolve => {
-					finish = resolve;
-				});
-				if (!signal.aborted) {
-					effects++;
-				}
-				return { targetId: 'late' };
-			},
-		);
+		using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], async (_params, context) => {
+			signal = context.signal;
+			await new Promise<void>(resolve => {
+				finish = resolve;
+			});
+			if (!signal.aborted) {
+				effects++;
+			}
+			return { targetId: 'late' };
+		});
 		transport.hostRequest('deadline');
 		await flushHandlers();
 		mock.timers.tick(50);
@@ -406,13 +399,8 @@ for (const limit of ['bytes', 'count'] as const)
 		using cleanup = toDisposable(() => client.dispose());
 		await client.connect();
 		const rejected = assert.rejects(appServerRequest(client, 'session/list', {}), /queue capacity/);
-		const payload = largeFrame(
-			transport,
-			{ id: transport.frames.at(-1)!.id, result: { sessions: [] } },
-			limit === 'bytes' ? 320 * 1024 * 1024 : undefined,
-		);
-		for (let i = 0; i < (limit === 'count' ? 4096 : 1); i++)
-			transport.frame({ method: '$/cancelRequest', params: { id: 'x' } });
+		const payload = largeFrame(transport, { id: transport.frames.at(-1)!.id, result: { sessions: [] } }, limit === 'bytes' ? 320 * 1024 * 1024 : undefined);
+		for (let i = 0; i < (limit === 'count' ? 4096 : 1); i++) transport.frame({ method: '$/cancelRequest', params: { id: 'x' } });
 		await rejected;
 		await payload.consumed;
 		assert.equal(port.isDisposed, true);
@@ -474,11 +462,7 @@ test('request timeout during Worker decode terminates work and releases every qu
 	try {
 		const transport = new ProtocolTransport();
 		const port = new TestAppServerDecodePort();
-		const client = new AppServerProtocolClient(
-			transport,
-			{ requestTimeoutMs: 10 },
-			new AppServerFrameDecoder(() => port),
-		);
+		const client = new AppServerProtocolClient(transport, { requestTimeoutMs: 10 }, new AppServerFrameDecoder(() => port));
 		using cleanup = toDisposable(() => client.dispose());
 		await client.connect();
 		const rejected = assert.rejects(appServerRequest(client, 'session/list', {}), /timed out/);
@@ -561,11 +545,7 @@ test('an unresponsive notification decode has a deadline without any pending cli
 	try {
 		const transport = new ProtocolTransport();
 		const port = new TestAppServerDecodePort();
-		const client = new AppServerProtocolClient(
-			transport,
-			{ requestTimeoutMs: 10 },
-			new AppServerFrameDecoder(() => port),
-		);
+		const client = new AppServerProtocolClient(transport, { requestTimeoutMs: 10 }, new AppServerFrameDecoder(() => port));
 		using cleanup = toDisposable(() => client.dispose());
 		await client.connect();
 		const payload = largeFrame(transport, { method: '$/cancelRequest', params: { id: 'x' } });
@@ -1171,10 +1151,7 @@ test('directory grant clients reject a different schema before sending domain re
 	const transport = new ProtocolTransport(() => ({ ...createTestInitializeResult(), schemaHash: '0'.repeat(64) }));
 	const client = new AppServerProtocolClient(transport, { capabilities: { directoryGrantsHost: { version: 1 } } });
 	using cleanup = toDisposable(() => client.dispose());
-	await assert.rejects(
-		client.connect(),
-		error => error instanceof AppServerProtocolIncompatibleError && error.incompatibility.kind === 'schemaHash',
-	);
+	await assert.rejects(client.connect(), error => error instanceof AppServerProtocolIncompatibleError && error.incompatibility.kind === 'schemaHash');
 	assert.notEqual(client.state, 'ready');
 	assert.ok(transport.frames.every(frame => frame.method === 'initialize'));
 });
@@ -1415,7 +1392,12 @@ test('recovery uses capped exponential delays and resets the attempt limit after
 				await client.connect();
 			},
 			() => {},
-			{ autoRestore: true, initialDelayMs: 500, maxDelayMs: 1_500, maxAttempts: 3 },
+			{
+				autoRestore: true,
+				initialDelayMs: 500,
+				maxDelayMs: 1_500,
+				maxAttempts: 3,
+			},
 		);
 		await recovery.connect();
 		offline = true;
@@ -1458,7 +1440,12 @@ test('a policy disabling automatic restore still allows explicit reconnect', asy
 				await client.connect();
 			},
 			() => {},
-			{ autoRestore: false, initialDelayMs: 500, maxDelayMs: 1_500, maxAttempts: 3 },
+			{
+				autoRestore: false,
+				initialDelayMs: 500,
+				maxDelayMs: 1_500,
+				maxAttempts: 3,
+			},
 		);
 		await recovery.connect();
 		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'lost' });
@@ -1487,10 +1474,7 @@ test('canceled reads retire large payloads while preserving remote lifetime and 
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
 	const controller = new AbortController();
-	const canceledRead = assert.rejects(
-		client.request(APP_SERVER_METHODS['session/list'], {}, { signal: controller.signal }),
-		CancellationError,
-	);
+	const canceledRead = assert.rejects(client.request(APP_SERVER_METHODS['session/list'], {}, { signal: controller.signal }), CancellationError);
 	const canceledId = transport.frames.at(-1)!.id;
 	controller.abort();
 	// An out-of-order live response still validates and reaches its consumer.
@@ -1521,10 +1505,7 @@ test('canceling a read already queued in the Worker cannot publish its late vali
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
 	const controller = new AbortController();
-	const result = assert.rejects(
-		client.request(APP_SERVER_METHODS['session/list'], {}, { signal: controller.signal }),
-		CancellationError,
-	);
+	const result = assert.rejects(client.request(APP_SERVER_METHODS['session/list'], {}, { signal: controller.signal }), CancellationError);
 	const frame = largeFrame(transport, { id: transport.frames.at(-1)!.id, result: { sessions: [] } });
 	controller.abort();
 	await port.release();
@@ -1543,10 +1524,7 @@ test('canceled routing slots keep the existing request bound and deadline rather
 		const canceledReads: Promise<void>[] = [];
 		for (let i = 0; i < 128; i++) {
 			const controller = new AbortController();
-			const rejected = assert.rejects(
-				client.request(APP_SERVER_METHODS['session/list'], {}, { signal: controller.signal }),
-				/timed out/,
-			);
+			const rejected = assert.rejects(client.request(APP_SERVER_METHODS['session/list'], {}, { signal: controller.signal }), /timed out/);
 			canceledReads.push(rejected);
 			controller.abort();
 		}
@@ -1573,10 +1551,7 @@ test('aborted input sends no request and completion removes its abort listener b
 	await client.connect();
 	const controller = new AbortController();
 	controller.abort();
-	await assert.rejects(
-		client.request(APP_SERVER_METHODS['session/list'], {}, { signal: controller.signal }),
-		CancellationError,
-	);
+	await assert.rejects(client.request(APP_SERVER_METHODS['session/list'], {}, { signal: controller.signal }), CancellationError);
 	assert.equal(transport.frames.length, 1);
 	const completed = new AbortController();
 	const result = client.request(APP_SERVER_METHODS['session/list'], {}, { signal: completed.signal });

@@ -1,11 +1,5 @@
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import {
-	BROWSER_SEARCH_NONE,
-	BrowserSearchEngineId,
-	BrowserSearchEngineSettingId,
-	buildSearchUrl,
-	resolveAddressBarInputType,
-} from '../../common/browserSearch.js';
+import { BROWSER_SEARCH_NONE, BrowserSearchEngineId, BrowserSearchEngineSettingId, buildSearchUrl, resolveAddressBarInputType } from '../../common/browserSearch.js';
 
 /** Resolves address-bar intent; page loading and authorization remain with the page owner. */
 export class BrowserSearchFeatures {

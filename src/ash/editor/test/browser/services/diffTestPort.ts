@@ -14,7 +14,10 @@ export class DiffTestPort extends Disposable implements WebWorkerClientPort {
 		super();
 		const port = Object.assign(
 			toDisposable(() => {}),
-			{ onMessage: this.requests.event, send: (value: unknown): void => this.deliver(this.responses, value) },
+			{
+				onMessage: this.requests.event,
+				send: (value: unknown): void => this.deliver(this.responses, value),
+			},
 		);
 		this._register(new WebWorkerServer(port, diffWorkerChannel, diffWorkerHandler));
 	}

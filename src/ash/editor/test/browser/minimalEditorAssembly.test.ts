@@ -15,7 +15,12 @@ test('minimal text editor assembly creates only the engine surface', () => {
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('const value = (1);');
 	const resource = URI.file('C:\\project\\minimal.ts');
-	using editor = createTestCodeEditor({ container, ariaLabel: 'minimal.ts', model, placeholder: 'Not installed' });
+	using editor = createTestCodeEditor({
+		container,
+		ariaLabel: 'minimal.ts',
+		model,
+		placeholder: 'Not installed',
+	});
 	editor.layout({ width: 480, height: 120 });
 
 	assert.ok(container.querySelector('.stanza-editor'));
@@ -46,7 +51,12 @@ test('plain typing, deletion and Enter share cursor history without optional edi
 	editor.layout({ width: 480, height: 120 });
 	editor.focus();
 	const input = (inputType: string, data: string | null = null) => {
-		const event = new dom.window.InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType, data });
+		const event = new dom.window.InputEvent('beforeinput', {
+			bubbles: true,
+			cancelable: true,
+			inputType,
+			data,
+		});
 		editor.controller.element.dispatchEvent(event);
 		assert.equal(event.defaultPrevented, true);
 	};

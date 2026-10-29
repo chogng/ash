@@ -1,14 +1,7 @@
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
 import { designBounds } from '../core/geometry.js';
-import {
-	getDesignOverrideFields,
-	getDesignOverrideValue,
-	copyDesignOverride,
-	flattenDesignShapes,
-	type DesignOverride,
-	type DesignShape,
-} from '../model/document.js';
+import { getDesignOverrideFields, getDesignOverrideValue, copyDesignOverride, flattenDesignShapes, type DesignOverride, type DesignShape } from '../model/document.js';
 import type { DesignModel } from '../model/designModel.js';
 import { detachDesignInstance, remapDesignInstance, resetDesignOverrides } from '../model/components.js';
 import { getDesignLibraryShapes } from '../model/designResources.js';
@@ -32,10 +25,9 @@ export class ComponentCommands {
 		return flattenDesignShapes(this.sources).find(shape => shape.id === id);
 	}
 	public get mains(): readonly Frame[] {
-		return flattenDesignShapes([
-			...this.shapes,
-			...getDesignLibraryShapes(this.model.value.resources, true),
-		]).filter((shape): shape is Frame => shape.kind === 'frame' && shape.component?.kind === 'main');
+		return flattenDesignShapes([...this.shapes, ...getDesignLibraryShapes(this.model.value.resources, true)]).filter(
+			(shape): shape is Frame => shape.kind === 'frame' && shape.component?.kind === 'main',
+		);
 	}
 	public getInstance(id: string): Frame | undefined {
 		const entries = getDesignShapeEntries(this.shapes);
@@ -43,9 +35,7 @@ export class ComponentCommands {
 		if (!entry) {
 			return undefined;
 		}
-		return [entry.shape, ...[...entry.ancestors].reverse().map(id => this.find(id)!)].find(
-			(shape): shape is Frame => shape.kind === 'frame' && !!shape.instance,
-		);
+		return [entry.shape, ...[...entry.ancestors].reverse().map(id => this.find(id)!)].find((shape): shape is Frame => shape.kind === 'frame' && !!shape.instance);
 	}
 	public isInstanceChild(id: string): boolean {
 		return (
@@ -62,51 +52,33 @@ export class ComponentCommands {
 		if (shape?.kind === 'frame' && shape.component?.kind === 'set') {
 			return shape;
 		}
-		return flattenDesignShapes(this.sources).find(
-			(shape): shape is Frame =>
-				shape.kind === 'frame' &&
-				shape.component?.kind === 'set' &&
-				shape.children.some(child => child.id === id),
-		);
+		return flattenDesignShapes(this.sources).find((shape): shape is Frame => shape.kind === 'frame' && shape.component?.kind === 'set' && shape.children.some(child => child.id === id));
 	}
 	public getMain(id: string): Frame | undefined {
 		const instance = this.getInstance(id);
 		const source = instance?.instance ? this.find(instance.instance.componentId) : this.find(id);
 		return source?.kind === 'frame' && source.component?.kind === 'main' ? source : undefined;
 	}
-	private replace(
-		updates: ReadonlyMap<string, DesignShape>,
-		roots: readonly DesignShape[] = this.shapes,
-	): readonly DesignShape[] {
+	private replace(updates: ReadonlyMap<string, DesignShape>, roots: readonly DesignShape[] = this.shapes): readonly DesignShape[] {
 		const visit = (shape: DesignShape): DesignShape => {
 			const updated = updates.get(shape.id) ?? shape;
-			return updated.kind === 'frame' || updated.kind === 'group'
-				? { ...updated, children: updated.children.map(visit) }
-				: updated;
+			return updated.kind === 'frame' || updated.kind === 'group' ? { ...updated, children: updated.children.map(visit) } : updated;
 		};
 		return roots.map(visit);
 	}
-	private siblings(
-		parentId: string | undefined,
-		edit: (siblings: readonly DesignShape[]) => readonly DesignShape[],
-	): readonly DesignShape[] {
+	private siblings(parentId: string | undefined, edit: (siblings: readonly DesignShape[]) => readonly DesignShape[]): readonly DesignShape[] {
 		if (!parentId) {
 			return edit(this.shapes);
 		}
 		const parent = this.find(parentId);
-		return parent?.kind === 'frame' || parent?.kind === 'group'
-			? this.replace(new Map([[parentId, { ...parent, children: edit(parent.children) }]]))
-			: this.shapes;
+		return parent?.kind === 'frame' || parent?.kind === 'group' ? this.replace(new Map([[parentId, { ...parent, children: edit(parent.children) }]])) : this.shapes;
 	}
 	public canCreate(ids: ReadonlySet<string>): boolean {
 		const entries = getDesignShapeEntries(this.shapes).filter(entry => ids.has(entry.shape.id));
 		return (
 			entries.length > 0 &&
 			entries.every(
-				entry =>
-					entry.parent?.id === entries[0].parent?.id &&
-					!this.isInstanceChild(entry.shape.id) &&
-					!(entry.shape.kind === 'frame' && (entry.shape.component || entry.shape.instance)),
+				entry => entry.parent?.id === entries[0].parent?.id && !this.isInstanceChild(entry.shape.id) && !(entry.shape.kind === 'frame' && (entry.shape.component || entry.shape.instance)),
 			) &&
 			(entries[0].parent?.kind !== 'frame' || entries[0].parent.component?.kind !== 'set')
 		);
@@ -133,13 +105,7 @@ export class ComponentCommands {
 			component: { kind: 'main' },
 			children: entries.map(entry => shift(entry.shape, -bounds.x, -bounds.y)),
 		};
-		this.model.applyEdit(
-			this.siblings(entries[0].parent?.id, shapes =>
-				shapes.flatMap(shape =>
-					shape.id === entries.at(-1)!.shape.id ? [frame] : ids.has(shape.id) ? [] : [shape],
-				),
-			),
-		);
+		this.model.applyEdit(this.siblings(entries[0].parent?.id, shapes => shapes.flatMap(shape => (shape.id === entries.at(-1)!.shape.id ? [frame] : ids.has(shape.id) ? [] : [shape]))));
 		return frame.id;
 	}
 	public makeInstance(source: Frame): Frame {
@@ -182,12 +148,7 @@ export class ComponentCommands {
 	public canSwap(id: string, componentId: string): boolean {
 		const instance = this.find(id);
 		const main = this.find(componentId);
-		if (
-			instance?.kind !== 'frame' ||
-			!instance.instance ||
-			main?.kind !== 'frame' ||
-			main.component?.kind !== 'main'
-		) {
+		if (instance?.kind !== 'frame' || !instance.instance || main?.kind !== 'frame' || main.component?.kind !== 'main') {
 			return false;
 		}
 		const contains = (node: DesignShape, seen: Set<string>): boolean => {
@@ -204,9 +165,7 @@ export class ComponentCommands {
 					return true;
 				}
 			}
-			return (
-				(node.kind === 'frame' || node.kind === 'group') && node.children.some(child => contains(child, seen))
-			);
+			return (node.kind === 'frame' || node.kind === 'group') && node.children.some(child => contains(child, seen));
 		};
 		return !contains(main, new Set());
 	}
@@ -219,12 +178,7 @@ export class ComponentCommands {
 		const previous = this.getMain(id);
 		const set = this.getSet(main.id);
 		const inheritedSource = instance.sourceId ? this.find(instance.sourceId) : undefined;
-		let updated = remapDesignInstance(
-			instance,
-			main,
-			inheritedSource?.kind === 'frame' ? inheritedSource : previous,
-			!!set && !!previous && this.getSet(previous.id)?.id === set.id,
-		);
+		let updated = remapDesignInstance(instance, main, inheritedSource?.kind === 'frame' ? inheritedSource : previous, !!set && !!previous && this.getSet(previous.id)?.id === set.id);
 		if (this.isInstanceChild(id)) {
 			updated = { ...updated, overrides: [...new Set([...(updated.overrides ?? []), 'instance' as const])] };
 		}
@@ -242,13 +196,7 @@ export class ComponentCommands {
 	private pushEdits(id: string): readonly DesignShape[] | undefined {
 		const instance = this.find(id);
 		const main = this.getMain(id);
-		if (
-			instance?.kind !== 'frame' ||
-			!instance.instance ||
-			!main ||
-			!this.isLocal(main.id) ||
-			this.isInstanceChild(id)
-		) {
+		if (instance?.kind !== 'frame' || !instance.instance || !main || !this.isLocal(main.id) || this.isInstanceChild(id)) {
 			return;
 		}
 		if (
@@ -343,13 +291,7 @@ export class ComponentCommands {
 		}
 		const entries = getDesignShapeEntries(this.shapes).filter(entry => ids.has(entry.shape.id));
 		const set = makeSet(entries.map(entry => entry.shape as Frame));
-		this.model.applyEdit(
-			this.siblings(entries[0].parent?.id, shapes =>
-				shapes.flatMap(shape =>
-					shape.id === entries.at(-1)!.shape.id ? [set] : ids.has(shape.id) ? [] : [shape],
-				),
-			),
-		);
+		this.model.applyEdit(this.siblings(entries[0].parent?.id, shapes => shapes.flatMap(shape => (shape.id === entries.at(-1)!.shape.id ? [set] : ids.has(shape.id) ? [] : [shape]))));
 		return set.id;
 	}
 	public addVariant(id: string): string | undefined {
@@ -364,14 +306,7 @@ export class ComponentCommands {
 			const property = set.component.properties[0];
 			let suffix = set.children.length + 1;
 			const value = (): string => localize('sessions.design.variantNumber', 'Variant {0}', suffix);
-			while (
-				set.children.some(
-					child =>
-						child.kind === 'frame' &&
-						child.component?.kind === 'main' &&
-						child.component.variant?.[property] === value(),
-				)
-			) {
+			while (set.children.some(child => child.kind === 'frame' && child.component?.kind === 'main' && child.component.variant?.[property] === value())) {
 				suffix++;
 			}
 			copy = {
@@ -399,9 +334,7 @@ export class ComponentCommands {
 			copy = shift(copy, main.width + 24, 0) as Frame;
 			const container = makeSet([main, copy]);
 			const parentId = getDesignShapeEntries(this.shapes).find(entry => entry.shape.id === main.id)?.parent?.id;
-			this.model.applyEdit(
-				this.siblings(parentId, shapes => shapes.map(shape => (shape.id === main.id ? container : shape))),
-			);
+			this.model.applyEdit(this.siblings(parentId, shapes => shapes.map(shape => (shape.id === main.id ? container : shape))));
 		}
 		return copy.id;
 	}
@@ -424,37 +357,22 @@ export class ComponentCommands {
 				component: {
 					kind: 'main' as const,
 					variant: Object.fromEntries(
-						properties.map(property => [
-							property,
-							values[renamed?.[1] === property ? renamed[0] : property] ??
-								localize('sessions.design.defaultVariantValue', 'Default'),
-						]),
+						properties.map(property => [property, values[renamed?.[1] === property ? renamed[0] : property] ?? localize('sessions.design.defaultVariantValue', 'Default')]),
 					),
 				},
 			};
 		});
-		const keys = children.map(child =>
-			JSON.stringify(properties.map(property => child.component.variant[property])),
-		);
+		const keys = children.map(child => JSON.stringify(properties.map(property => child.component.variant[property])));
 		if (new Set(keys).size !== keys.length) {
 			return false;
 		}
-		this.model.applyEdit(
-			this.replace(new Map([[set.id, { ...set, component: { kind: 'set', properties }, children }]])),
-		);
+		this.model.applyEdit(this.replace(new Map([[set.id, { ...set, component: { kind: 'set', properties }, children }]])));
 		return true;
 	}
 	public setVariantValue(id: string, property: string, value: string): boolean {
 		const main = this.find(id);
 		const set = this.getSet(id);
-		if (
-			main?.kind !== 'frame' ||
-			main.component?.kind !== 'main' ||
-			set?.component?.kind !== 'set' ||
-			!set.component.properties.includes(property) ||
-			!value.trim() ||
-			value.length > 256
-		) {
+		if (main?.kind !== 'frame' || main.component?.kind !== 'main' || set?.component?.kind !== 'set' || !set.component.properties.includes(property) || !value.trim() || value.length > 256) {
 			return false;
 		}
 		const variant = { ...main.component.variant, [property]: value };
@@ -465,9 +383,7 @@ export class ComponentCommands {
 					child.kind === 'frame' &&
 					child.component?.kind === 'main' &&
 					set.component?.kind === 'set' &&
-					set.component.properties.every(
-						key => child.component?.kind === 'main' && child.component.variant?.[key] === variant[key],
-					),
+					set.component.properties.every(key => child.component?.kind === 'main' && child.component.variant?.[key] === variant[key]),
 			)
 		) {
 			return false;
@@ -482,16 +398,8 @@ export class ComponentCommands {
 			return;
 		}
 		const values = main.component?.kind === 'main' ? main.component.variant : undefined;
-		const candidates = set.children.filter(
-			(child): child is Frame =>
-				child.kind === 'frame' &&
-				child.component?.kind === 'main' &&
-				child.component.variant?.[property] === value,
-		);
-		const score = (child: Frame): number =>
-			Object.entries(values ?? {}).filter(
-				([key, value]) => child.component?.kind === 'main' && child.component.variant?.[key] === value,
-			).length;
+		const candidates = set.children.filter((child): child is Frame => child.kind === 'frame' && child.component?.kind === 'main' && child.component.variant?.[property] === value);
+		const score = (child: Frame): number => Object.entries(values ?? {}).filter(([key, value]) => child.component?.kind === 'main' && child.component.variant?.[key] === value).length;
 		candidates.sort((a, b) => score(b) - score(a));
 		if (candidates[0]) {
 			this.swap(id, candidates[0].id);
@@ -531,14 +439,10 @@ function recoverNestedInstance(instance: Frame, source: Frame): Frame {
 			field =>
 				!(root && field === 'instance') &&
 				!(node.kind === 'text' && (field === 'width' || field === 'height')) &&
-				JSON.stringify(getDesignOverrideValue(node, field)) !==
-					JSON.stringify(getDesignOverrideValue(target, field)),
+				JSON.stringify(getDesignOverrideValue(node, field)) !== JSON.stringify(getDesignOverrideValue(target, field)),
 		);
 		const result = { ...node, overrides, ...(root ? {} : { sourceId: target.id }) };
-		if (
-			(result.kind === 'frame' || result.kind === 'group') &&
-			(target.kind === 'frame' || target.kind === 'group')
-		) {
+		if ((result.kind === 'frame' || result.kind === 'group') && (target.kind === 'frame' || target.kind === 'group')) {
 			const remaining = [...result.children];
 			return {
 				...result,

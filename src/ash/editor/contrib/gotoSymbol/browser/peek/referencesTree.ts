@@ -6,10 +6,6 @@ export class DataSource {
 		return element instanceof ReferencesModel ? !element.isEmpty : element instanceof FileReferences;
 	}
 	public getChildren(element: ReferencesModel | TreeElement): TreeElement[] {
-		return element instanceof ReferencesModel
-			? element.groups
-			: element instanceof FileReferences
-				? element.children
-				: [];
+		return element instanceof ReferencesModel ? element.groups : element instanceof FileReferences ? element.children : [];
 	}
 }

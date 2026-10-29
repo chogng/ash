@@ -90,13 +90,7 @@ export class PairAstNode extends BaseAstNode {
 		if (closingBracket) {
 			length = lengthAdd(length, closingBracket.length);
 		}
-		return new PairAstNode(
-			length,
-			openingBracket,
-			child,
-			closingBracket,
-			child ? child.missingOpeningBracketIds : SmallImmutableSet.getEmpty(),
-		);
+		return new PairAstNode(length, openingBracket, child, closingBracket, child ? child.missingOpeningBracketIds : SmallImmutableSet.getEmpty());
 	}
 
 	public get kind(): AstNodeKind.Pair {
@@ -165,11 +159,7 @@ export class PairAstNode extends BaseAstNode {
 	}
 
 	public flattenLists(): PairAstNode {
-		return PairAstNode.create(
-			this.openingBracket.flattenLists(),
-			this.child && this.child.flattenLists(),
-			this.closingBracket && this.closingBracket.flattenLists(),
-		);
+		return PairAstNode.create(this.openingBracket.flattenLists(), this.child && this.child.flattenLists(), this.closingBracket && this.closingBracket.flattenLists());
 	}
 
 	public deepClone(): PairAstNode {
@@ -183,9 +173,7 @@ export class PairAstNode extends BaseAstNode {
 	}
 
 	public computeMinIndentation(offset: Length, textModel: ITextModel): number {
-		return this.child
-			? this.child.computeMinIndentation(lengthAdd(offset, this.openingBracket.length), textModel)
-			: Number.MAX_SAFE_INTEGER;
+		return this.child ? this.child.computeMinIndentation(lengthAdd(offset, this.openingBracket.length), textModel) : Number.MAX_SAFE_INTEGER;
 	}
 }
 
@@ -193,12 +181,7 @@ export abstract class ListAstNode extends BaseAstNode {
 	/**
 	 * This method uses more memory-efficient list nodes that can only store 2 or 3 children.
 	 */
-	public static create23(
-		item1: AstNode,
-		item2: AstNode,
-		item3: AstNode | null,
-		immutable: boolean = false,
-	): ListAstNode {
+	public static create23(item1: AstNode, item2: AstNode, item3: AstNode | null, immutable: boolean = false): ListAstNode {
 		let length = item1.length;
 		let missingBracketIds = item1.missingOpeningBracketIds;
 
@@ -231,9 +214,7 @@ export abstract class ListAstNode extends BaseAstNode {
 				length = lengthAdd(length, items[i].length);
 				unopenedBrackets = unopenedBrackets.merge(items[i].missingOpeningBracketIds);
 			}
-			return immutable
-				? new ImmutableArrayListAstNode(length, items[0].listHeight + 1, items, unopenedBrackets)
-				: new ArrayListAstNode(length, items[0].listHeight + 1, items, unopenedBrackets);
+			return immutable ? new ImmutableArrayListAstNode(length, items[0].listHeight + 1, items, unopenedBrackets) : new ArrayListAstNode(length, items[0].listHeight + 1, items, unopenedBrackets);
 		}
 	}
 
@@ -437,14 +418,7 @@ class TwoThreeListAstNode extends ListAstNode {
 	}
 
 	public deepClone(): ListAstNode {
-		return new TwoThreeListAstNode(
-			this.length,
-			this.listHeight,
-			this._item1.deepClone(),
-			this._item2.deepClone(),
-			this._item3 ? this._item3.deepClone() : null,
-			this.missingOpeningBracketIds,
-		);
+		return new TwoThreeListAstNode(this.length, this.listHeight, this._item1.deepClone(), this._item2.deepClone(), this._item3 ? this._item3.deepClone() : null, this.missingOpeningBracketIds);
 	}
 
 	public appendChildOfSameHeight(node: AstNode): void {
@@ -502,14 +476,7 @@ class TwoThreeListAstNode extends ListAstNode {
  */
 class Immutable23ListAstNode extends TwoThreeListAstNode {
 	override toMutable(): ListAstNode {
-		return new TwoThreeListAstNode(
-			this.length,
-			this.listHeight,
-			this.item1,
-			this.item2,
-			this.item3,
-			this.missingOpeningBracketIds,
-		);
+		return new TwoThreeListAstNode(this.length, this.listHeight, this.item1, this.item2, this.item3, this.missingOpeningBracketIds);
 	}
 
 	protected override throwIfImmutable(): void {
@@ -647,11 +614,7 @@ export class TextAstNode extends ImmutableLeafAstNode {
 				continue;
 			}
 
-			const visibleColumn = CursorColumns.visibleColumnFromColumn(
-				lineContent,
-				firstNonWsColumn,
-				textModel.getOptions().tabSize,
-			);
+			const visibleColumn = CursorColumns.visibleColumnFromColumn(lineContent, firstNonWsColumn, textModel.getOptions().tabSize);
 			result = Math.min(result, visibleColumn);
 		}
 
@@ -660,11 +623,7 @@ export class TextAstNode extends ImmutableLeafAstNode {
 }
 
 export class BracketAstNode extends ImmutableLeafAstNode {
-	public static create(
-		length: Length,
-		bracketInfo: BracketKind,
-		bracketIds: SmallImmutableSet<OpeningBracketId>,
-	): BracketAstNode {
+	public static create(length: Length, bracketInfo: BracketKind, bracketIds: SmallImmutableSet<OpeningBracketId>): BracketAstNode {
 		const node = new BracketAstNode(length, bracketInfo, bracketIds);
 		return node;
 	}

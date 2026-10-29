@@ -34,15 +34,10 @@ export class ChatInputTipPresenter extends Disposable {
 			return;
 		}
 		if (this.part.value) return;
-		const part = this.instantiation.createInstance(
-			ChatTipContentPart,
-			this.options.container.ownerDocument,
-			tip,
-			() => {
-				this.options.focusInput();
-				this.tips.dismissTip();
-			},
-		);
+		const part = this.instantiation.createInstance(ChatTipContentPart, this.options.container.ownerDocument, tip, () => {
+			this.options.focusInput();
+			this.tips.dismissTip();
+		});
 		this.part.value = part;
 		this.options.container.prepend(part.domNode);
 	}

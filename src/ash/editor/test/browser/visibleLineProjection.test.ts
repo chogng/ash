@@ -67,7 +67,10 @@ test('Visible visual-line projection removes hidden bodies while preserving wrap
 	using model = new TextModel('header\ninside\nend\nlast');
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
-	using projection = createViewModelLines(model, { wrapping: EditorLineWrapping.On, wrapWidth: 20 });
+	using projection = createViewModelLines(model, {
+		wrapping: EditorLineWrapping.On,
+		wrapWidth: 20,
+	});
 
 	assert.deepEqual(
 		projection.projection.lines.map(line => ({
@@ -115,7 +118,10 @@ test('Visible visual-line projection refreshes the source before collapsed range
 
 	assert.doesNotThrow(() =>
 		model.applyEdits([
-			{ range: Range.fromPositions(new Position(0 + 1, 0 + 1), model.positionAt(model.length)), text: 'x' },
+			{
+				range: Range.fromPositions(new Position(0 + 1, 0 + 1), model.positionAt(model.length)),
+				text: 'x',
+			},
 		]),
 	);
 	assert.equal(projection.projection.logicalLineCount, 1);
@@ -128,9 +134,7 @@ test('View-model lines keep the wrapping projection path when no visibility filt
 	using projection = createViewModelLines(model);
 
 	const initialProjection = projection.projection;
-	model.applyEdits([
-		{ range: Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 0 + 1)), text: 'x' },
-	]);
+	model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 0 + 1)), text: 'x' }]);
 	assert.notEqual(projection.projection, initialProjection);
 	assert.equal(projection.projection.visualLineCount, 2);
 });
@@ -140,25 +144,22 @@ for (const wrapWidth of [20, 200]) {
 		using model = new TextModel('header\nx\nlong hidden body\nlast');
 		using folding = new EditorFoldingModel(model);
 		using hiddenRanges = new EditorHiddenRangeModel(model, folding);
-		using lines = createViewModelLines(model, { wrapping: EditorLineWrapping.On, wrapWidth });
+		using lines = createViewModelLines(model, {
+			wrapping: EditorLineWrapping.On,
+			wrapWidth,
+		});
 		const converter = lines.createCoordinatesConverter();
 		using listener = hiddenRanges.onDidChange(() => lines.setHiddenAreas(hiddenRanges.hiddenRanges));
 		folding.setRanges([{ startLineIndex: 0, endLineIndex: 2, collapsed: true }]);
 		const headerEnd = converter.convertModelPositionToViewPosition(new Position(1, 7));
 		for (const lineNumber of [2, 3]) {
 			for (let column = 1; column <= model.getLineMaxColumn(lineNumber); column++) {
-				assert.deepEqual(
-					converter.convertModelPositionToViewPosition(new Position(lineNumber, column)),
-					headerEnd,
-				);
+				assert.deepEqual(converter.convertModelPositionToViewPosition(new Position(lineNumber, column)), headerEnd);
 			}
 		}
 		folding.setAllCollapsed(false);
 		const position = new Position(3, 8);
-		assert.deepEqual(
-			converter.convertViewPositionToModelPosition(converter.convertModelPositionToViewPosition(position)),
-			position,
-		);
+		assert.deepEqual(converter.convertViewPositionToModelPosition(converter.convertModelPositionToViewPosition(position)), position);
 	});
 }
 
@@ -175,17 +176,8 @@ class FixedTextMeasurer implements TextMeasurer {
 	}
 }
 
-function createViewModelLines(
-	model: TextModel,
-	options: ConstructorParameters<typeof ViewModelLinesFromProjectedModel>[4] = {},
-): ViewModelLinesFromProjectedModel {
-	return new ViewModelLinesFromProjectedModel(
-		model,
-		new DOMLineBreaksComputerFactory(new WeakRef({} as Window), new FixedTextMeasurer()),
-		TEST_FONT_INFO,
-		4,
-		options,
-	);
+function createViewModelLines(model: TextModel, options: ConstructorParameters<typeof ViewModelLinesFromProjectedModel>[4] = {}): ViewModelLinesFromProjectedModel {
+	return new ViewModelLinesFromProjectedModel(model, new DOMLineBreaksComputerFactory(new WeakRef({} as Window), new FixedTextMeasurer()), TEST_FONT_INFO, 4, options);
 }
 
 const TEST_FONT_INFO = new FontInfo(

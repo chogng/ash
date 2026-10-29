@@ -16,17 +16,8 @@ import { localize } from '../../../../nls.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import {
-	INotificationService,
-	NotificationsFilter,
-	Severity,
-} from '../../../../platform/notification/common/notification.js';
-import {
-	getNotificationsPosition,
-	NotificationsPosition,
-	NotificationsSettings,
-	type NotificationItem,
-} from '../../../common/notifications.js';
+import { INotificationService, NotificationsFilter, Severity } from '../../../../platform/notification/common/notification.js';
+import { getNotificationsPosition, NotificationsPosition, NotificationsSettings, type NotificationItem } from '../../../common/notifications.js';
 import { ConfigureNotificationAction } from './notificationsActions.js';
 
 /** Renders one immutable record for either notification surface. */
@@ -45,10 +36,7 @@ export class NotificationTemplateRenderer extends Disposable {
 	) {
 		super();
 		this.domNode = h(container.ownerDocument, 'article');
-		this.domNode.className =
-			presentation === 'toast'
-				? `ash-notification ash-notification-${Severity[item.severity].toLowerCase()}`
-				: 'ash-notifications-row';
+		this.domNode.className = presentation === 'toast' ? `ash-notification ash-notification-${Severity[item.severity].toLowerCase()}` : 'ash-notifications-row';
 		this.domNode.dataset.notificationId = String(item.id);
 		this.domNode.dataset.severity = Severity[item.severity].toLowerCase();
 		// The shared alert owner announces once, including arrivals while toasts are hidden.
@@ -78,14 +66,7 @@ export class NotificationTemplateRenderer extends Disposable {
 			[Severity.Error]: localize('notifications.error', 'Error'),
 		};
 		severity.setAttribute('aria-label', severityLabels[item.severity] ?? '');
-		appendIcon(
-			item.severity === Severity.Error
-				? Lxicon.error
-				: item.severity === Severity.Warning
-					? Lxicon.warning
-					: Lxicon.info,
-			severity,
-		);
+		appendIcon(item.severity === Severity.Error ? Lxicon.error : item.severity === Severity.Warning ? Lxicon.warning : Lxicon.info, severity);
 		this.domNode.append(severity);
 		const content = h(container.ownerDocument, 'div');
 		content.className = 'ash-notification-content';
@@ -122,8 +103,7 @@ export class NotificationTemplateRenderer extends Disposable {
 				ariaLabel: label,
 				actionViewItemProvider: (action, options) => {
 					if (action === close) return new NotificationCloseActionViewItem(action, item.id, presentation);
-					if (action.id === 'notification.toggle')
-						return new NotificationExpandActionViewItem(action, input.expanded);
+					if (action.id === 'notification.toggle') return new NotificationExpandActionViewItem(action, input.expanded);
 					if (action instanceof ConfigureNotificationAction)
 						return new DropdownMenuActionViewItem(
 							action,
@@ -133,16 +113,8 @@ export class NotificationTemplateRenderer extends Disposable {
 									const source = { id: item.sourceId, label: item.source };
 									const muted = notificationService.getFilter(source) === NotificationsFilter.ERROR;
 									const label = muted
-										? localize(
-												'notifications.source.enable',
-												"Turn On All Notifications from '{0}'",
-												source.label,
-											)
-										: localize(
-												'notifications.source.disable',
-												"Turn Off Info and Warning Notifications from '{0}'",
-												source.label,
-											);
+										? localize('notifications.source.enable', "Turn On All Notifications from '{0}'", source.label)
+										: localize('notifications.source.disable', "Turn Off Info and Warning Notifications from '{0}'", source.label);
 									actions.push({
 										id: 'notification.toggleSource',
 										label,
@@ -176,9 +148,7 @@ export class NotificationTemplateRenderer extends Disposable {
 			const actions: IAction[] = [];
 			if (configure) actions.push(configure);
 			if (input.canCollapse && (input.expanded || input.source || message.scrollWidth > message.clientWidth)) {
-				const label = input.expanded
-					? localize('notifications.collapse', 'Collapse Notification')
-					: localize('notifications.expand', 'Expand Notification');
+				const label = input.expanded ? localize('notifications.collapse', 'Collapse Notification') : localize('notifications.expand', 'Expand Notification');
 				const top = getNotificationsPosition(configurationService) === NotificationsPosition.TOP_RIGHT;
 				const icon = input.expanded === top ? Lxicon.chevronUp : Lxicon.chevronDown;
 				if (toggle?.label !== label || toggle.icon !== icon) {
@@ -234,30 +204,18 @@ export class NotificationTemplateRenderer extends Disposable {
 			severity.className = `ash-notification-severity ash-notification-severity-${severityName}`;
 			severity.setAttribute('aria-label', severityLabels[current.severity] ?? '');
 			severity.replaceChildren();
-			appendIcon(
-				current.severity === Severity.Error
-					? Lxicon.error
-					: current.severity === Severity.Warning
-						? Lxicon.warning
-						: Lxicon.info,
-				severity,
-			);
+			appendIcon(current.severity === Severity.Error ? Lxicon.error : current.severity === Severity.Warning ? Lxicon.warning : Lxicon.info, severity);
 			message.textContent = current.message;
 			progress.element.hidden = !current.hasActiveProgress;
 			progress.element.setAttribute('aria-label', current.message);
-			progress.value = current.progress?.total
-				? (current.progress.worked ?? 0) / current.progress.total
-				: undefined;
+			progress.value = current.progress?.total ? (current.progress.worked ?? 0) / current.progress.total : undefined;
 			if (previousActions !== current.actions) {
 				secondaryActions =
 					current.actions?.secondary?.map(action => {
 						const runnable = runnableAction(action);
 						return { ...runnable, run: () => actionRunner.run(runnable) };
 					}) ?? [];
-				configure =
-					current.sourceId || secondaryActions.length
-						? new ConfigureNotificationAction(secondaryActions)
-						: undefined;
+				configure = current.sourceId || secondaryActions.length ? new ConfigureNotificationAction(secondaryActions) : undefined;
 			}
 			updateToolbar();
 			if (current.actions === previousActions) return;
@@ -321,9 +279,7 @@ class NotificationCloseActionViewItem extends ButtonActionViewItem {
 
 	public override render(container: HTMLElement): void {
 		super.render(container);
-		this.button.domNode.classList.add(
-			this.presentation === 'toast' ? 'ash-notification-close' : 'ash-notifications-remove',
-		);
+		this.button.domNode.classList.add(this.presentation === 'toast' ? 'ash-notification-close' : 'ash-notifications-remove');
 		if (this.presentation === 'toast') {
 			this.button.domNode.dataset.notificationClose = String(this.id);
 		} else {

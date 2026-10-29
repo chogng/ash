@@ -21,24 +21,13 @@ test('Adjacent cursor insertion adds clamped carets and preserves existing selec
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 	});
-	view.testViewModel.setCursorStates(
-		'test',
-		CursorChangeReason.Explicit,
-		CursorState.fromModelSelections([Selection.fromPositions(new Position(2, 2))]),
-	);
+	view.testViewModel.setCursorStates('test', CursorChangeReason.Explicit, CursorState.fromModelSelections([Selection.fromPositions(new Position(2, 2))]));
 	let states = CursorMoveCommands.addCursorDown(view.testViewModel, view.testViewModel.getCursorStates(), true);
 	view.testViewModel.setCursorStates('test', CursorChangeReason.Explicit, states);
-	assert.deepEqual(modelSelections(view), [
-		Selection.fromPositions(new Position(2, 2)),
-		Selection.fromPositions(new Position(3, 2)),
-	]);
+	assert.deepEqual(modelSelections(view), [Selection.fromPositions(new Position(2, 2)), Selection.fromPositions(new Position(3, 2))]);
 	states = CursorMoveCommands.addCursorUp(view.testViewModel, view.testViewModel.getCursorStates(), true);
 	view.testViewModel.setCursorStates('test', CursorChangeReason.Explicit, states);
-	assert.deepEqual(modelSelections(view), [
-		Selection.fromPositions(new Position(2, 2)),
-		Selection.fromPositions(new Position(1, 2)),
-		Selection.fromPositions(new Position(3, 2)),
-	]);
+	assert.deepEqual(modelSelections(view), [Selection.fromPositions(new Position(2, 2)), Selection.fromPositions(new Position(1, 2)), Selection.fromPositions(new Position(3, 2))]);
 	dom.window.close();
 });
 
@@ -51,15 +40,8 @@ test('Adjacent cursor insertion does not emit an unchanged edge cursor', () => {
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 	});
-	view.testViewModel.setCursorStates(
-		'test',
-		CursorChangeReason.Explicit,
-		CursorState.fromModelSelections([Selection.fromPositions(new Position(1, 1), new Position(3, 4))]),
-	);
-	assert.equal(
-		CursorMoveCommands.addCursorDown(view.testViewModel, view.testViewModel.getCursorStates(), true).length,
-		1,
-	);
+	view.testViewModel.setCursorStates('test', CursorChangeReason.Explicit, CursorState.fromModelSelections([Selection.fromPositions(new Position(1, 1), new Position(3, 4))]));
+	assert.equal(CursorMoveCommands.addCursorDown(view.testViewModel, view.testViewModel.getCursorStates(), true).length, 1);
 	dom.window.close();
 });
 
@@ -75,39 +57,13 @@ test('CursorMoveCommands owns standard point, word, line, selection, and buffer 
 	view.layout({ width: 200, height: 40 });
 	setSelections(view, [Selection.fromPositions(new Position(1, 3))]);
 
-	apply(
-		view,
-		CursorMoveCommands.word(
-			view.testViewModel,
-			view.testViewModel.getPrimaryCursorState(),
-			false,
-			new Position(1, 3),
-		),
-	);
+	apply(view, CursorMoveCommands.word(view.testViewModel, view.testViewModel.getPrimaryCursorState(), false, new Position(1, 3)));
 	assert.deepEqual(modelSelections(view)[0], Selection.fromPositions(new Position(1, 1), new Position(1, 6)));
 	apply(view, CursorMoveCommands.cancelSelection(view.testViewModel, view.testViewModel.getPrimaryCursorState()));
 	assert.deepEqual(modelSelections(view)[0], Selection.fromPositions(new Position(1, 6)));
-	apply(
-		view,
-		CursorMoveCommands.moveTo(
-			view.testViewModel,
-			view.testViewModel.getPrimaryCursorState(),
-			false,
-			new Position(2, 3),
-			undefined,
-		),
-	);
+	apply(view, CursorMoveCommands.moveTo(view.testViewModel, view.testViewModel.getPrimaryCursorState(), false, new Position(2, 3), undefined));
 	assert.deepEqual(modelSelections(view)[0], Selection.fromPositions(new Position(2, 3)));
-	apply(
-		view,
-		CursorMoveCommands.line(
-			view.testViewModel,
-			view.testViewModel.getPrimaryCursorState(),
-			false,
-			new Position(1, 2),
-			undefined,
-		),
-	);
+	apply(view, CursorMoveCommands.line(view.testViewModel, view.testViewModel.getPrimaryCursorState(), false, new Position(1, 2), undefined));
 	assert.deepEqual(modelSelections(view)[0], Selection.fromPositions(new Position(1, 1), new Position(2, 1)));
 	apply(view, CursorMoveCommands.selectAll(view.testViewModel, view.testViewModel.getPrimaryCursorState()));
 	assert.deepEqual(modelSelections(view)[0], Selection.fromPositions(new Position(1, 1), new Position(2, 5)));
@@ -119,11 +75,7 @@ function modelSelections(view: InstanceType<typeof TestView>): Selection[] {
 }
 
 function setSelections(view: InstanceType<typeof TestView>, selections: readonly Selection[]): void {
-	view.testViewModel.setCursorStates(
-		'test',
-		CursorChangeReason.Explicit,
-		CursorState.fromModelSelections(selections),
-	);
+	view.testViewModel.setCursorStates('test', CursorChangeReason.Explicit, CursorState.fromModelSelections(selections));
 }
 
 function apply(view: InstanceType<typeof TestView>, state: PartialCursorState): void {

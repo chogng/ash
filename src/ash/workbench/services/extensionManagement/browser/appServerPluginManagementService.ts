@@ -2,12 +2,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import type { IPluginManagementApi } from '../../../../platform/extensionManagement/common/pluginManagementApi.js';
-import type {
-	IPluginManagementService,
-	PluginCatalogView,
-	PluginInstallation,
-	PluginPackageView,
-} from '../../../../platform/extensionManagement/common/pluginManagementService.js';
+import type { IPluginManagementService, PluginCatalogView, PluginInstallation, PluginPackageView } from '../../../../platform/extensionManagement/common/pluginManagementService.js';
 import { ILocalGitService } from '../../../../platform/git/common/localGitService.js';
 import { FileKind, IFileService } from '../../../../platform/files/common/files.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
@@ -45,9 +40,7 @@ export class AppServerPluginManagementService extends Disposable implements IPlu
 				...plugin,
 				...(uiTargets
 					? {
-							uiTargets: uiTargets.map(target =>
-								target === 'ide' ? ExtensionUiTarget.IDE : ExtensionUiTarget.Agents,
-							),
+							uiTargets: uiTargets.map(target => (target === 'ide' ? ExtensionUiTarget.IDE : ExtensionUiTarget.Agents)),
 						}
 					: {}),
 			})),
@@ -64,50 +57,22 @@ export class AppServerPluginManagementService extends Disposable implements IPlu
 		return { id: result.id, version: result.version, digest: result.digest };
 	}
 
-	async installFromGit(
-		folder: IWorkspaceFolder,
-		url: string,
-		reference: string | undefined,
-		packagePath: string,
-		signal: AbortSignal,
-	): Promise<PluginInstallation> {
+	async installFromGit(folder: IWorkspaceFolder, url: string, reference: string | undefined, packagePath: string, signal: AbortSignal): Promise<PluginInstallation> {
 		const controller = new AbortController();
 		const lifetime = this.gitInstalls.add(toDisposable(() => controller.abort()));
 		try {
-			return await this.installGitPackage(
-				folder,
-				url,
-				reference,
-				packagePath,
-				AbortSignal.any([signal, controller.signal]),
-			);
+			return await this.installGitPackage(folder, url, reference, packagePath, AbortSignal.any([signal, controller.signal]));
 		} finally {
 			this.gitInstalls.delete(lifetime);
 			lifetime.dispose();
 		}
 	}
 
-	private async installGitPackage(
-		folder: IWorkspaceFolder,
-		url: string,
-		reference: string | undefined,
-		packagePath: string,
-		signal: AbortSignal,
-	): Promise<PluginInstallation> {
+	private async installGitPackage(folder: IWorkspaceFolder, url: string, reference: string | undefined, packagePath: string, signal: AbortSignal): Promise<PluginInstallation> {
 		// Validate the user-entered package path before joining it to any host resource.
 		const parts = packagePath === '' || packagePath === '.' ? [] : packagePath.split('/');
-		if (
-			parts.some(
-				part =>
-					!/^[a-zA-Z0-9._-]+$/.test(part) || part === '.' || part === '..' || part.toLowerCase() === '.git',
-			)
-		) {
-			throw new Error(
-				localize(
-					{ bundle: 'ash.extensions', key: 'invalidGitPackagePath' },
-					'Enter a package path within the repository, using forward slashes.',
-				),
-			);
+		if (parts.some(part => !/^[a-zA-Z0-9._-]+$/.test(part) || part === '.' || part === '..' || part.toLowerCase() === '.git')) {
+			throw new Error(localize({ bundle: 'ash.extensions', key: 'invalidGitPackagePath' }, 'Enter a package path within the repository, using forward slashes.'));
 		}
 		const operationId = crypto.randomUUID();
 		const checkoutName = `ash-plugin-checkout-${operationId}`;
@@ -134,13 +99,7 @@ export class AppServerPluginManagementService extends Disposable implements IPlu
 		for (const part of parts) {
 			source = URI.joinPath(source, part);
 			if ((await this.files.stat(source)).kind !== FileKind.Directory) {
-				throw new Error(
-					localize(
-						{ bundle: 'ash.extensions', key: 'unsafeGitPackageEntry' },
-						'The package contains a symbolic link or unsupported file: {0}',
-						part,
-					),
-				);
+				throw new Error(localize({ bundle: 'ash.extensions', key: 'unsafeGitPackageEntry' }, 'The package contains a symbolic link or unsupported file: {0}', part));
 			}
 		}
 		await this.files.createDirectory(staging);
@@ -183,13 +142,7 @@ export class AppServerPluginManagementService extends Disposable implements IPlu
 			} else if (entry.kind === FileKind.File) {
 				await this.files.copy(entry.resource, target);
 			} else {
-				throw new Error(
-					localize(
-						{ bundle: 'ash.extensions', key: 'unsafeGitPackageEntry' },
-						'The package contains a symbolic link or unsupported file: {0}',
-						entry.name,
-					),
-				);
+				throw new Error(localize({ bundle: 'ash.extensions', key: 'unsafeGitPackageEntry' }, 'The package contains a symbolic link or unsupported file: {0}', entry.name));
 			}
 		}
 	}

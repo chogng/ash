@@ -21,9 +21,7 @@ registerEditorPane({
 	},
 });
 
-registerWorkbenchContribution(PreferencesContribution.ID, WorkbenchPhase.BlockStartup, accessor =>
-	PreferencesContribution.create(accessor),
-);
+registerWorkbenchContribution(PreferencesContribution.ID, WorkbenchPhase.BlockStartup, accessor => PreferencesContribution.create(accessor));
 
 registerEditorPane({
 	id: KeybindingsEditor.ID,

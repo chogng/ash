@@ -6,18 +6,10 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { ChatService } from '../../../../services/chat/browser/chatService.js';
 import type { IAgentThreadService, IAgentTurnService } from '../../../../../platform/agentHost/common/agentService.js';
-import type {
-	AgentInteractionOffer,
-	ThreadSubscription,
-	ThreadUpdateEnvelope,
-} from '../../../../../platform/agentHost/common/agent.js';
+import type { AgentInteractionOffer, ThreadSubscription, ThreadUpdateEnvelope } from '../../../../../platform/agentHost/common/agent.js';
 import type { IAgentModelsService } from '../../../../../platform/agentHost/common/agentModels.js';
 import type { IAgentExecutionSettingsService } from '../../../../../platform/agentHost/common/agentExecutionSettingsService.js';
-import type {
-	AppServerConnectionState,
-	IAppServerApi,
-	IServerEventApi,
-} from '../../../../../platform/agentHost/common/appServerApi.js';
+import type { AppServerConnectionState, IAppServerApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import type { ITurnChangesApi } from '../../../../../platform/turnChanges/common/turnChangesApi.js';
 
 const offer: AgentInteractionOffer = {
@@ -165,13 +157,7 @@ test('peer committed history cannot grant authority and one shared owner cannot 
 	assert.equal(f.count().unsubscriptions, 1);
 });
 
-for (const type of [
-	'interactionResolved',
-	'interactionCancelled',
-	'turnCompleted',
-	'turnFailed',
-	'turnInterrupted',
-] as const) {
+for (const type of ['interactionResolved', 'interactionCancelled', 'turnCompleted', 'turnFailed', 'turnInterrupted'] as const) {
 	test(`${type} retires only the corresponding grant`, async () => {
 		const f = fixture();
 		using cleanup = f.lifetime;

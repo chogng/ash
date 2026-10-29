@@ -10,10 +10,7 @@ import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ChatContentMarkdownRenderer } from '../../../../workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
 import type { ChatGPTMessage, ChatGPTResource } from './chatGPTClient.js';
-import {
-	ChatAttachmentsContentPart,
-	type IChatAttachmentResource,
-} from '../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatAttachmentsContentPart.js';
+import { ChatAttachmentsContentPart, type IChatAttachmentResource } from '../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatAttachmentsContentPart.js';
 import { IChatGPTService, type ChatGPTState } from './chatGPTService.js';
 import { completeChatGPTRichContent, getChatGPTMarkdownRenderOptions } from './chatGPTRichContent.js';
 import { ChatGPTInputWidget } from './chatGPTInputWidget.js';
@@ -65,14 +62,7 @@ export class ChatGPTWidget extends Disposable {
 		root.tabIndex = -1;
 		const main = this.element('main', 'ash-chatgpt-main');
 		this.scroll.append(this.welcome, this.messages);
-		this.loading = this._register(
-			new LoadingSkeleton(
-				this.scroll,
-				localize('sessions.loadingConversation', 'Loading conversation…'),
-				'transcript',
-				3,
-			),
-		);
+		this.loading = this._register(new LoadingSkeleton(this.scroll, localize('sessions.loadingConversation', 'Loading conversation…'), 'transcript', 3));
 		this.messages.setAttribute('role', 'log');
 		this.messages.setAttribute('aria-label', localize('sessions.chatgpt.conversation', 'Conversation'));
 		this.messages.setAttribute('aria-live', 'off');
@@ -120,11 +110,7 @@ export class ChatGPTWidget extends Disposable {
 		return element;
 	}
 
-	private listen<K extends keyof HTMLElementEventMap>(
-		element: HTMLElement,
-		type: K,
-		listener: (event: HTMLElementEventMap[K]) => void,
-	): void {
+	private listen<K extends keyof HTMLElementEventMap>(element: HTMLElement, type: K, listener: (event: HTMLElementEventMap[K]) => void): void {
 		this._register(addDisposableListener(element, type, listener));
 	}
 
@@ -169,10 +155,7 @@ export class ChatGPTWidget extends Disposable {
 		row.element.classList.toggle('complete', !active);
 		const latest = messages.at(-1)!;
 		const failed = messages.some(message => message.activity?.failed);
-		const steps =
-			messages.length === 1
-				? localize('sessions.chatgpt.activityOneStep', '1 step')
-				: localize('sessions.chatgpt.activitySteps', '{0} steps', messages.length);
+		const steps = messages.length === 1 ? localize('sessions.chatgpt.activityOneStep', '1 step') : localize('sessions.chatgpt.activitySteps', '{0} steps', messages.length);
 		const label = failed
 			? localize('sessions.chatgpt.activityFailed', 'Execution process · Some steps failed')
 			: active
@@ -210,9 +193,7 @@ export class ChatGPTWidget extends Disposable {
 					: activity.kind === 'result'
 						? localize('sessions.chatgpt.activityResult', 'Tool result: {0}', activity.tool ?? '')
 						: localize('sessions.chatgpt.activityProgress', 'Progress');
-			entry.summary.textContent = activity.failed
-				? localize('sessions.chatgpt.activityStepFailed', '{0} · Failed', name)
-				: name;
+			entry.summary.textContent = activity.failed ? localize('sessions.chatgpt.activityStepFailed', '{0} · Failed', name) : name;
 			// Tool input is untrusted data, never Markdown or executable rich content.
 			if (entry.content.textContent !== message.text) {
 				entry.content.textContent = message.text;
@@ -226,9 +207,7 @@ export class ChatGPTWidget extends Disposable {
 		const follow = this.atBottom() || conversationChanged;
 		this.followOutput = follow;
 		this.renderedConversationId = state.conversationId;
-		const loading =
-			state.loading?.kind === 'conversation' &&
-			(state.loading.id !== state.conversationId || !state.messages.length);
+		const loading = state.loading?.kind === 'conversation' && (state.loading.id !== state.conversationId || !state.messages.length);
 		this.loading.setVisible(loading);
 		this.messages.hidden = loading;
 		this.root.classList.toggle('empty', !state.messages.length && !loading);
@@ -236,11 +215,7 @@ export class ChatGPTWidget extends Disposable {
 		this.welcome.hidden = loading || state.messages.length > 0;
 		this.error.textContent = state.error;
 		this.error.hidden = !state.error;
-		this.status.textContent = state.sending
-			? localize('sessions.chatgpt.replying', 'ChatGPT is replying…')
-			: state.stopped
-				? localize('sessions.chatgpt.replyStopped', 'Reply stopped')
-				: '';
+		this.status.textContent = state.sending ? localize('sessions.chatgpt.replying', 'ChatGPT is replying…') : state.stopped ? localize('sessions.chatgpt.replyStopped', 'Reply stopped') : '';
 		this.status.hidden = !this.status.textContent;
 		this.messages.setAttribute('aria-busy', String(state.sending || state.loading?.kind === 'conversation'));
 		const ids = new Set(state.messages.filter(message => !message.activity).map(message => message.id));
@@ -323,22 +298,14 @@ export class ChatGPTWidget extends Disposable {
 				);
 				completeChatGPTRichContent(row.markdown.element, state.conversationId);
 				row.resources = [];
-				for (const placeholder of row.markdown.element.querySelectorAll<HTMLElement>(
-					'[data-chatgpt-resource]',
-				)) {
+				for (const placeholder of row.markdown.element.querySelectorAll<HTMLElement>('[data-chatgpt-resource]')) {
 					try {
 						const value: unknown = JSON.parse(placeholder.dataset.chatgptResource!);
-						if (
-							isRecord(value) &&
-							typeof value.uri === 'string' &&
-							typeof value.name === 'string' &&
-							['image', 'audio', 'video', 'document', 'html'].includes(value.kind as string)
-						) {
+						if (isRecord(value) && typeof value.uri === 'string' && typeof value.name === 'string' && ['image', 'audio', 'video', 'document', 'html'].includes(value.kind as string)) {
 							let frameOrigin: string | undefined;
 							if (typeof value.frameOrigin === 'string') {
 								const url = new URL(value.frameOrigin);
-								if (url.protocol === 'https:' && url.origin === value.frameOrigin)
-									frameOrigin = url.origin;
+								if (url.protocol === 'https:' && url.origin === value.frameOrigin) frameOrigin = url.origin;
 							}
 							row.resources = [
 								...row.resources,
@@ -363,9 +330,7 @@ export class ChatGPTWidget extends Disposable {
 			}
 			const resources = [...row.resources, ...(message.resources ?? [])];
 			const unique = resources.filter(
-				(resource, index) =>
-					resources.findIndex(other => other.uri === resource.uri) === index &&
-					(!resource.uri.startsWith('sandbox:') || !!state.conversationId),
+				(resource, index) => resources.findIndex(other => other.uri === resource.uri) === index && (!resource.uri.startsWith('sandbox:') || !!state.conversationId),
 			);
 			if (unique.length) {
 				const variables: IChatAttachmentResource[] = unique.map(resource => ({
@@ -382,13 +347,7 @@ export class ChatGPTWidget extends Disposable {
 					row.attachments = this.instantiation.createInstance(ChatAttachmentsContentPart, {
 						ownerDocument: row.body.ownerDocument,
 						variables,
-						readResource: (resource: URI, signal: AbortSignal) =>
-							this.chat.readResource(
-								resource.toString(),
-								this.renderedConversationId,
-								message.id,
-								signal,
-							),
+						readResource: (resource: URI, signal: AbortSignal) => this.chat.readResource(resource.toString(), this.renderedConversationId, message.id, signal),
 					});
 					row.element.append(row.attachments.domNode);
 				}

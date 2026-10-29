@@ -1,11 +1,7 @@
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import type { CancellationToken } from '../../../../base/common/cancellation.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
-import {
-	PickerQuickAccessProvider,
-	type IPickerQuickAccessItem,
-	type Picks,
-} from '../../../../platform/quickinput/browser/pickerQuickAccess.js';
+import { PickerQuickAccessProvider, type IPickerQuickAccessItem, type Picks } from '../../../../platform/quickinput/browser/pickerQuickAccess.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { type LanguageWorkspaceSymbol } from '../../../../editor/common/languages.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
@@ -27,11 +23,7 @@ export class SymbolsQuickAccessProvider extends PickerQuickAccessProvider<IPicke
 		super(SymbolsQuickAccessProvider.PREFIX);
 	}
 
-	protected override async _getPicks(
-		filter: string,
-		resources: DisposableStore,
-		token: CancellationToken,
-	): Promise<Picks<IPickerQuickAccessItem>> {
+	protected override async _getPicks(filter: string, resources: DisposableStore, token: CancellationToken): Promise<Picks<IPickerQuickAccessItem>> {
 		const controller = new AbortController();
 		resources.add(token.onCancellationRequested(() => controller.abort()));
 		if (token.isCancellationRequested) controller.abort();
@@ -45,17 +37,10 @@ export class SymbolsQuickAccessProvider extends PickerQuickAccessProvider<IPicke
 				accept: () => {
 					const picker = this.quickInput.currentQuickInput;
 					if (!picker) return;
-					void acceptWorkspaceSymbol(symbol, this.files, this.workingCopies, this.editor, picker, () =>
-						this.refresh(),
-					);
+					void acceptWorkspaceSymbol(symbol, this.files, this.workingCopies, this.editor, picker, () => this.refresh());
 				},
 			}));
-		const symbols = await getWorkspaceSymbols(
-			this.languageFeatures.workspaceSymbolProvider.allNoModel(),
-			filter,
-			controller.signal,
-			symbols => this.updatePicks(picksFor(symbols), token),
-		);
+		const symbols = await getWorkspaceSymbols(this.languageFeatures.workspaceSymbolProvider.allNoModel(), filter, controller.signal, symbols => this.updatePicks(picksFor(symbols), token));
 		return picksFor(symbols);
 	}
 }

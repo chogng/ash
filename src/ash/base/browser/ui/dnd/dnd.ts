@@ -26,5 +26,10 @@ export interface DragAndDropData<T> {
 
 /** Projects collection elements without erasing native or cross-list origin. */
 export function mapDragAndDropData<T, R>(data: DragAndDropData<T>, map: (element: T) => R): DragAndDropData<R> {
-	return { kind: data.kind, elements: data.elements.map(map), types: data.types, files: data.files };
+	return {
+		kind: data.kind,
+		elements: data.elements.map(map),
+		types: data.types,
+		files: data.files,
+	};
 }

@@ -46,7 +46,11 @@ test('active code editor follows the pane control when two editors share a model
 	const firstContainer = document.createElement('div');
 	const secondContainer = document.createElement('div');
 	document.body.append(firstContainer, secondContainer);
-	const options = { model, lineHeight: 20, instantiationService: services };
+	const options = {
+		model,
+		lineHeight: 20,
+		instantiationService: services,
+	};
 	const first = resources.add(createTestCodeEditor({ ...options, container: firstContainer }));
 	const second = resources.add(createTestCodeEditor({ ...options, container: secondContainer }));
 	control = first;

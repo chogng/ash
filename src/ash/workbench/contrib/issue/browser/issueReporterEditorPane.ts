@@ -9,10 +9,7 @@ import { CancellationError } from '../../../../base/common/errors.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import {
-	IAccessibleViewService,
-	AccessibilityVerbositySettingId,
-} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IAccountService } from '../../../../platform/accounts/common/accountService.js';
 import { IGitHubService } from '../../../../platform/github/common/githubService.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
@@ -90,9 +87,7 @@ export class IssueReporterEditorPane extends EditorPane implements IEditorPane {
 			this.type.append(option);
 		}
 		typeLabel.append(this.type);
-		this._register(
-			addDisposableListener(this.type, 'change', () => this.form.update({ issueType: Number(this.type.value) })),
-		);
+		this._register(addDisposableListener(this.type, 'change', () => this.form.update({ issueType: Number(this.type.value) })));
 		const titleLabel = this.label(content, localize('issue.reportTitle', 'Title'));
 		this.title = this._register(
 			new InputBox(titleLabel, {
@@ -107,29 +102,14 @@ export class IssueReporterEditorPane extends EditorPane implements IEditorPane {
 		this.description = h(document, 'textarea');
 		this.description.rows = 8;
 		this.description.maxLength = 65_536;
-		this.description.placeholder = localize(
-			'issue.descriptionHint',
-			'What happened? What did you expect? How can we reproduce it?',
-		);
+		this.description.placeholder = localize('issue.descriptionHint', 'What happened? What did you expect? How can we reproduce it?');
 		bodyLabel.append(this.description);
-		this._register(
-			addDisposableListener(this.description, 'input', () =>
-				this.form.update({ issueBody: this.description.value }),
-			),
-		);
+		this._register(addDisposableListener(this.description, 'input', () => this.form.update({ issueBody: this.description.value })));
 		const diagnostics = h(document, 'div');
 		diagnostics.className = 'issue-reporter-diagnostics';
 		content.append(diagnostics);
-		this.system = this.checkbox(
-			diagnostics,
-			localize('issue.includeSystem', 'Include system information'),
-			checked => this.form.update({ includeSystemInfo: checked }),
-		);
-		this.extensions = this.checkbox(
-			diagnostics,
-			localize('issue.includeExtensions', 'Include installed extensions'),
-			checked => this.form.update({ includeExtensions: checked }),
-		);
+		this.system = this.checkbox(diagnostics, localize('issue.includeSystem', 'Include system information'), checked => this.form.update({ includeSystemInfo: checked }));
+		this.extensions = this.checkbox(diagnostics, localize('issue.includeExtensions', 'Include installed extensions'), checked => this.form.update({ includeExtensions: checked }));
 		const details = h(document, 'details');
 		details.append(h(document, 'summary', localize('issue.preview', 'Preview the report that will be submitted')));
 		this.preview = h(document, 'pre');
@@ -172,10 +152,7 @@ export class IssueReporterEditorPane extends EditorPane implements IEditorPane {
 						.connect()
 						.catch(() => {
 							if (!this.isDisposed) {
-								this.status.textContent = localize(
-									'issue.signInFailed',
-									'GitHub sign-in failed. Your report remains here.',
-								);
+								this.status.textContent = localize('issue.signInFailed', 'GitHub sign-in failed. Your report remains here.');
 							}
 						})
 						.finally(() => {
@@ -232,10 +209,7 @@ export class IssueReporterEditorPane extends EditorPane implements IEditorPane {
 			},
 			() => {
 				if (!this.isDisposed && !receivedAccountEvent) {
-					this.account.textContent = localize(
-						'issue.accountUnavailable',
-						'GitHub account information is unavailable.',
-					);
+					this.account.textContent = localize('issue.accountUnavailable', 'GitHub account information is unavailable.');
 				}
 			},
 		);
@@ -283,8 +257,7 @@ export class IssueReporterEditorPane extends EditorPane implements IEditorPane {
 		this.extensions.checked = data.includeExtensions;
 		this.extensions.disabled = locked;
 		this.preview.textContent = this.form.serialize();
-		this.target.textContent =
-			data.context?.reportIssueUrl ?? localize('issue.loadingTarget', 'Loading report destination…');
+		this.target.textContent = data.context?.reportIssueUrl ?? localize('issue.loadingTarget', 'Loading report destination…');
 		if (data.context) {
 			this.target.href = data.context.reportIssueUrl;
 		}
@@ -292,9 +265,7 @@ export class IssueReporterEditorPane extends EditorPane implements IEditorPane {
 		this.cancel.hidden = !data.searching;
 		this.submit.enabled = !!data.context && !!data.issueTitle.trim() && !!data.issueBody.trim() && !locked;
 		this.newReport.hidden = !data.createdIssue;
-		this.submit.label = data.submitting
-			? localize('issue.submitting', 'Submitting…')
-			: localize('issue.submit', 'Submit to GitHub');
+		this.submit.label = data.submitting ? localize('issue.submitting', 'Submitting…') : localize('issue.submit', 'Submit to GitHub');
 		this.created.hidden = !data.createdIssue;
 		if (data.createdIssue) {
 			this.created.href = data.createdIssue.html_url;
@@ -321,13 +292,8 @@ export class IssueReporterEditorPane extends EditorPane implements IEditorPane {
 			this.results.replaceChildren();
 			for (const issue of data.similarIssues) {
 				const item = h(this.domNode.ownerDocument, 'li');
-				const state =
-					issue.state === 'open' ? localize('issue.open', 'open') : localize('issue.closed', 'closed');
-				const link = h(
-					this.domNode.ownerDocument,
-					'a',
-					localize('issue.similarIssue', '{0} ({1})', issue.title, state),
-				);
+				const state = issue.state === 'open' ? localize('issue.open', 'open') : localize('issue.closed', 'closed');
+				const link = h(this.domNode.ownerDocument, 'a', localize('issue.similarIssue', '{0} ({1})', issue.title, state));
 				link.href = issue.html_url;
 				item.append(link);
 				this.results.append(item);
@@ -352,10 +318,7 @@ export class IssueReporterEditorPane extends EditorPane implements IEditorPane {
 			this.signIn.hidden = ready;
 		} catch {
 			if (!this.isDisposed && generation === this.accountGeneration) {
-				this.account.textContent = localize(
-					'issue.accountUnavailable',
-					'GitHub account information is unavailable.',
-				);
+				this.account.textContent = localize('issue.accountUnavailable', 'GitHub account information is unavailable.');
 				this.signIn.hidden = false;
 			}
 		}
@@ -384,13 +347,11 @@ export class IssueReporterEditorPane extends EditorPane implements IEditorPane {
 				if (!link.hasAttribute('href')) {
 					return;
 				}
-				void this.opener
-					.open(link.href, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true })
-					.catch(() => {
-						if (!this.isDisposed) {
-							this.status.textContent = localize('issue.openFailed', 'Could not open the GitHub page.');
-						}
-					});
+				void this.opener.open(link.href, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true }).catch(() => {
+					if (!this.isDisposed) {
+						this.status.textContent = localize('issue.openFailed', 'Could not open the GitHub page.');
+					}
+				});
 			}),
 		);
 	}

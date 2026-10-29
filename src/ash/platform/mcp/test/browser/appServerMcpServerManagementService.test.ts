@@ -3,10 +3,7 @@ import { test } from 'mocha';
 import { Emitter } from '../../../../base/common/event.js';
 import { AppServerRemoteError } from '../../../agentHost/common/appServerError.js';
 import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
-import {
-	AppServerMcpServerManagementService,
-	createDisconnectedMcpServerManagementService,
-} from '../../browser/appServerMcpServerManagementService.js';
+import { AppServerMcpServerManagementService, createDisconnectedMcpServerManagementService } from '../../browser/appServerMcpServerManagementService.js';
 import type { McpServerConfiguration } from '../../common/mcpServerManagementService.js';
 
 test('MCP management writes the reviewed revision, preserves transport and credential references, and invalidates snapshots', async () => {
@@ -26,9 +23,7 @@ test('MCP management writes the reviewed revision, preserves transport and crede
 		onStateChange: states.event,
 		request: async (definition: { method: string }, params: unknown) => {
 			requests.push({ method: definition.method, params });
-			return definition.method === 'config/read'
-				? { revision: 7, mcpServers: { [configured.id]: { ...configured, secret: 'never expose' } } }
-				: { revision: 8 };
+			return definition.method === 'config/read' ? { revision: 7, mcpServers: { [configured.id]: { ...configured, secret: 'never expose' } } } : { revision: 8 };
 		},
 	} as unknown as AppServerProtocolClient;
 	using service = new AppServerMcpServerManagementService(connection);
@@ -63,14 +58,7 @@ test('MCP management writes the reviewed revision, preserves transport and crede
 			{ method: 'mcp/server/remove', params: { serverId: configured.id, expectedRevision: 9 } },
 		],
 	);
-	assert.equal(
-		new Set(
-			writes
-				.filter(request => (request.params as Record<string, unknown>).commandId)
-				.map(request => (request.params as Record<string, unknown>).commandId),
-		).size,
-		3,
-	);
+	assert.equal(new Set(writes.filter(request => (request.params as Record<string, unknown>).commandId).map(request => (request.params as Record<string, unknown>).commandId)).size, 3);
 	notifications.fire({ method: 'config/changed' });
 	states.fire();
 	assert.equal(changes, 7);
@@ -162,9 +150,7 @@ test('MCP browser login completes on the same connection and forwards the issuer
 						},
 					};
 				}
-				return definition.method === 'mcp/oauth/start'
-					? { flowId: 'flow', authorizationUrl: 'https://issuer.test/authorize' }
-					: { serverId: 'user:mcp:test' };
+				return definition.method === 'mcp/oauth/start' ? { flowId: 'flow', authorizationUrl: 'https://issuer.test/authorize' } : { serverId: 'user:mcp:test' };
 			},
 		} as unknown as AppServerProtocolClient,
 		{
@@ -198,10 +184,7 @@ test('MCP browser login completes on the same connection and forwards the issuer
 				scopes: [],
 			},
 		],
-		[
-			'mcp/oauth/complete',
-			{ flowId: 'flow', state: 'state', authorizationCode: 'code', issuer: 'https://issuer.test' },
-		],
+		['mcp/oauth/complete', { flowId: 'flow', state: 'state', authorizationCode: 'code', issuer: 'https://issuer.test' }],
 		['mcp/oauth/logout', { serverId: 'user:mcp:test' }],
 	]);
 	assert.deepEqual(resources, ['open', 'close:callback']);

@@ -20,16 +20,10 @@ function mount(webview: WebviewElement): void {
 
 function message(webview: WebviewElement, data: unknown, source: Window | null = webview.element.contentWindow): void {
 	const url = new URL(webview.element.src);
-	mainWindow.dispatchEvent(
-		new mainWindow.MessageEvent('message', { source, data, origin: `${url.protocol}//${url.host}` }),
-	);
+	mainWindow.dispatchEvent(new mainWindow.MessageEvent('message', { source, data, origin: `${url.protocol}//${url.host}` }));
 }
 
-function lifecycle(
-	webview: WebviewElement,
-	type: string,
-	channel = webview.element.getAttribute('data-ash-webview-channel'),
-): void {
+function lifecycle(webview: WebviewElement, type: string, channel = webview.element.getAttribute('data-ash-webview-channel')): void {
 	message(webview, { channel: channel + ':lifecycle', type });
 }
 
@@ -61,10 +55,7 @@ suite('Webview element', () => {
 		assert.match(new URL(webview.element.src).hostname, /^[\w-]+\.localhost$/);
 		assert.notEqual(new URL(webview.element.src).origin, mainWindow.location.origin);
 		webview.dispose();
-		assert.deepEqual(
-			{ connected: webview.element.isConnected, html: webview.element.srcdoc },
-			{ connected: false, html: '' },
-		);
+		assert.deepEqual({ connected: webview.element.isConnected, html: webview.element.srcdoc }, { connected: false, html: '' });
 	});
 
 	test('accepts only the owned iframe source and current document channel', () => {
@@ -118,8 +109,7 @@ suite('Webview element', () => {
 				assert.ok(documentHtml.includes("frame-src 'none'"));
 				assert.equal(documentHtml.includes("'wasm-unsafe-eval'"), false);
 				assert.ok(!documentHtml.includes("'unsafe-eval'"));
-				if (messageProtocol === 'mcp')
-					assert.ok(webview.element.getAttribute('allow')!.includes("microphone 'none'"));
+				if (messageProtocol === 'mcp') assert.ok(webview.element.getAttribute('allow')!.includes("microphone 'none'"));
 			} finally {
 				target.postMessage = original;
 			}
@@ -196,11 +186,7 @@ suite('Webview element', () => {
 		const original = target.postMessage;
 		const buffer = new ArrayBuffer(4);
 		const sent: unknown[] = [];
-		target.postMessage = (
-			value: unknown,
-			origin?: string | WindowPostMessageOptions,
-			transfer?: Transferable[],
-		) => {
+		target.postMessage = (value: unknown, origin?: string | WindowPostMessageOptions, transfer?: Transferable[]) => {
 			if ((value as { message: unknown }).message === 'invalid') {
 				throw new mainWindow.DOMException('Cannot clone message', 'DataCloneError');
 			}
@@ -212,9 +198,7 @@ suite('Webview element', () => {
 			lifecycle(webview, 'ready');
 			await rejected;
 			assert.equal(await transferred, true);
-			assert.deepEqual(sent, [
-				{ value: buffer, origin: new URL(webview.element.src).origin, transfer: [buffer] },
-			]);
+			assert.deepEqual(sent, [{ value: buffer, origin: new URL(webview.element.src).origin, transfer: [buffer] }]);
 			await assert.rejects(webview.postMessage('invalid'), { name: 'DataCloneError' });
 		} finally {
 			target.postMessage = original;
@@ -235,9 +219,7 @@ suite('Webview element', () => {
 		lifecycle(webview, 'focus');
 		const pending = webview.postMessage('unsent');
 		webview.dispose();
-		mainWindow.dispatchEvent(
-			new mainWindow.MessageEvent('message', { source: target, data: { channel, message: 'late' } }),
-		);
+		mainWindow.dispatchEvent(new mainWindow.MessageEvent('message', { source: target, data: { channel, message: 'late' } }));
 		webview.element.dispatchEvent(new mainWindow.Event('focus'));
 		assert.deepEqual(
 			{ events, focused: webview.isFocused, sent: await pending, late: await webview.postMessage('late') },

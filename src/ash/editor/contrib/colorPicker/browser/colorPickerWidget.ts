@@ -6,12 +6,7 @@ import { localize } from '../../../../nls.js';
 import { type Color } from '../../../../base/common/color.js';
 import { ColorPicker } from '../../../../base/browser/ui/colorPicker/colorPicker.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
-import {
-	ContentWidgetPositionPreference,
-	type ICodeEditor,
-	type IContentWidget,
-	type IContentWidgetPosition,
-} from '../../../browser/editorBrowser.js';
+import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../browser/editorBrowser.js';
 import { type Position } from '../../../common/core/position.js';
 import { type ColorPickerModel } from './colorPickerModel.js';
 
@@ -44,12 +39,7 @@ export class ColorPickerWidget extends Disposable implements IContentWidget {
 			className: 'stanza-editor-color-picker-presentation',
 			attributes: { 'aria-label': localize('colorPicker.documentFormat', 'Document color format') },
 		});
-		const heading = h(
-			ownerDocument,
-			'div',
-			{ className: 'stanza-editor-color-picker-header' },
-			this.presentationSelect,
-		);
+		const heading = h(ownerDocument, 'div', { className: 'stanza-editor-color-picker-header' }, this.presentationSelect);
 		this._register(
 			new Button(heading, {
 				...defaultButtonStyles,
@@ -110,11 +100,7 @@ export class ColorPickerWidget extends Disposable implements IContentWidget {
 			}),
 		);
 		this._register(this.picker.onDidCommitColor(() => this.model?.flushColor()));
-		this._register(
-			addDisposableListener(this.presentationSelect, 'change', () =>
-				this.selectPresentation(this.presentationSelect.selectedIndex),
-			),
-		);
+		this._register(addDisposableListener(this.presentationSelect, 'change', () => this.selectPresentation(this.presentationSelect.selectedIndex)));
 		// Let the controls receive pointer input before isolating it from editor selection handling.
 		this._register(addDisposableListener(this.domNode, 'pointerdown', event => event.stopPropagation()));
 		this._register(addDisposableListener(this.domNode, 'mousedown', event => event.stopPropagation()));
@@ -157,11 +143,7 @@ export class ColorPickerWidget extends Disposable implements IContentWidget {
 	}
 
 	public getAccessibleContent(): string {
-		return (
-			this.picker.getAccessibleContent() +
-			'\n' +
-			localize('colorPicker.documentValue', 'Document value: {0}', this.model?.presentation?.label ?? '')
-		);
+		return this.picker.getAccessibleContent() + '\n' + localize('colorPicker.documentValue', 'Document value: {0}', this.model?.presentation?.label ?? '');
 	}
 
 	public focus(): void {
@@ -253,9 +235,7 @@ export class ColorPickerWidget extends Disposable implements IContentWidget {
 
 	private renderPresentations(): void {
 		const presentations = this.model?.colorPresentations ?? [];
-		this.presentationSelect.replaceChildren(
-			...presentations.map(presentation => h(this.domNode.ownerDocument, 'option', {}, presentation.label)),
-		);
+		this.presentationSelect.replaceChildren(...presentations.map(presentation => h(this.domNode.ownerDocument, 'option', {}, presentation.label)));
 		this.applyButton.enabled = presentations.length > 0;
 		this.presentationSelect.disabled = presentations.length === 0;
 		this.renderSelectedPresentation();

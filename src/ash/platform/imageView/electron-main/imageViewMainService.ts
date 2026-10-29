@@ -2,17 +2,7 @@ import { nativeImage, shell } from 'electron';
 import { basename, dirname, join } from 'node:path';
 import { localize2 } from '../../../nls.js';
 import { getDesktopScreenshots } from '../../native/electron-main/nativeHostMainService.js';
-import {
-	app,
-	BrowserWindow,
-	clipboard,
-	ClipboardItem,
-	dialog,
-	screen,
-	systemPreferences,
-	type WebPreferences,
-	type Display,
-} from 'electron/main';
+import { app, BrowserWindow, clipboard, ClipboardItem, dialog, screen, systemPreferences, type WebPreferences, type Display } from 'electron/main';
 import { writeFile } from 'node:fs/promises';
 import { Disposable, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { normalizeEntryUrl, type IpcRoute, type TrustedIpcRouter } from '../../ipc/electron-main/trustedIpcRouter.js';
@@ -126,8 +116,7 @@ export class ImageViewMainService extends Disposable {
 			};
 			const displayMetricsChanged = (_event: unknown, _display: Display, metrics: string[]): void => {
 				// Dock/menu visibility changes only workArea; frozen desktop coordinates remain valid.
-				if (metrics.some(metric => metric === 'bounds' || metric === 'scaleFactor' || metric === 'rotation'))
-					displaysChanged();
+				if (metrics.some(metric => metric === 'bounds' || metric === 'scaleFactor' || metric === 'rotation')) displaysChanged();
 			};
 			screen.on('display-added', displaysChanged);
 			screen.on('display-removed', displaysChanged);
@@ -168,8 +157,7 @@ export class ImageViewMainService extends Disposable {
 						}
 						throw error;
 					});
-		if (!frames || this.capture !== capture || capture.generation !== generation || this.owner.isDestroyed())
-			return;
+		if (!frames || this.capture !== capture || capture.generation !== generation || this.owner.isDestroyed()) return;
 		if (capture.request.source === 'screen' && this.needsScreenPermission(true)) {
 			await this.showPermissionGuide(capture);
 			return;
@@ -263,8 +251,7 @@ export class ImageViewMainService extends Disposable {
 			loaded.push(
 				(async () => {
 					const timeout = setTimeout(() => {
-						if (this.capture === capture && capture.generation === generation)
-							this.finish(undefined, new Error('ImageViewUnavailable'));
+						if (this.capture === capture && capture.generation === generation) this.finish(undefined, new Error('ImageViewUnavailable'));
 					}, 15_000);
 					resources.add(toDisposable(() => clearTimeout(timeout)));
 					if (this.options.entry.useDevelopmentUrl) await view.loadURL(this.options.entry.url);
@@ -299,9 +286,7 @@ export class ImageViewMainService extends Disposable {
 		// TCC grants access to the running bundle, which can differ from the installed release.
 		const bundlePath = dirname(dirname(dirname(app.getPath('exe'))));
 		// The shipped application artwork avoids an OS file-icon lookup for our own bundle.
-		const icon = nativeImage
-			.createFromPath(join(app.getAppPath(), 'resources', 'darwin', 'ash.png'))
-			.resize({ width: 64, height: 64 });
+		const icon = nativeImage.createFromPath(join(app.getAppPath(), 'resources', 'darwin', 'ash.png')).resize({ width: 64, height: 64 });
 		if (icon.isEmpty()) throw new Error('ImageViewUnavailable');
 		if (this.capture !== capture || this.owner.isDestroyed()) return;
 		const area = screen.getDisplayMatching(this.owner.getBounds()).workArea;
@@ -352,18 +337,9 @@ export class ImageViewMainService extends Disposable {
 		};
 		const resumeIfGranted = (): void => {
 			// Returning from Settings replaces a separate Continue action. A drop alone never grants access.
-			if (
-				this.capture === capture &&
-				!guide.isDestroyed() &&
-				systemPreferences.getMediaAccessStatus('screen') === 'granted'
-			) {
+			if (this.capture === capture && !guide.isDestroyed() && systemPreferences.getMediaAccessStatus('screen') === 'granted') {
 				complete(true);
-			} else if (
-				this.capture === capture &&
-				!guide.isDestroyed() &&
-				guide.isVisible() &&
-				this.owner.isFocused()
-			) {
+			} else if (this.capture === capture && !guide.isDestroyed() && guide.isVisible() && this.owner.isFocused()) {
 				guide.focus();
 			}
 		};
@@ -410,10 +386,7 @@ export class ImageViewMainService extends Disposable {
 						invoke: value => {
 							const result = value as ImageViewCompletion;
 							if (result.kind === 'cancel') setImmediate(() => complete(false));
-							else if (result.kind === 'error')
-								setImmediate(
-									() => this.capture === capture && this.finish(undefined, new Error(result.message)),
-								);
+							else if (result.kind === 'error') setImmediate(() => this.capture === capture && this.finish(undefined, new Error(result.message)));
 							else throw new TypeError('Screen permission guide cannot export images');
 							return true;
 						},
@@ -486,9 +459,7 @@ export class ImageViewMainService extends Disposable {
 						lastLayout = layout;
 						nextControlsRead = Date.now() + 1_000;
 					}
-					const list = recordingList
-						? { ...recordingList, x: recordingList.x + settings.x, y: recordingList.y + settings.y }
-						: undefined;
+					const list = recordingList ? { ...recordingList, x: recordingList.x + settings.x, y: recordingList.y + settings.y } : undefined;
 					const workArea = screen.getDisplayMatching(settings).workArea;
 					const [guideWidth, guideHeight] = guide.getSize();
 					const key = JSON.stringify([settings, workArea, guideWidth, guideHeight, list]);
@@ -496,12 +467,7 @@ export class ImageViewMainService extends Disposable {
 						return;
 					}
 					lastBounds = key;
-					const position = placement!.getPermissionGuidePosition(
-						settings,
-						{ width: guideWidth, height: guideHeight },
-						workArea,
-						list,
-					);
+					const position = placement!.getPermissionGuidePosition(settings, { width: guideWidth, height: guideHeight }, workArea, list);
 					guide.setPosition(position.x, position.y, false);
 				};
 				followSettings();

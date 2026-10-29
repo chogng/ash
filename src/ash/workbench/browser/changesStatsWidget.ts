@@ -13,19 +13,12 @@ export interface IChangesStats {
 }
 
 export function getChangesStatsFilesLabel(files: number): string {
-	return files === 1
-		? localize('changesStatsWidget.file', '{0} file', files)
-		: localize('changesStatsWidget.files', '{0} files', files);
+	return files === 1 ? localize('changesStatsWidget.file', '{0} file', files) : localize('changesStatsWidget.files', '{0} files', files);
 }
 
 /** Shared presentation of file and line counts; callers retain the statistics owner. */
 export class ChangesStatsWidget extends Disposable {
-	constructor(
-		container: HTMLElement,
-		stats: IObservable<IChangesStats | undefined>,
-		showFiles: boolean,
-		@IInstantiationService instantiationService: IInstantiationService,
-	) {
+	constructor(container: HTMLElement, stats: IObservable<IChangesStats | undefined>, showFiles: boolean, @IInstantiationService instantiationService: IInstantiationService) {
 		super();
 		const element = h(container.ownerDocument, 'span', { className: 'ash-changes-stats' });
 		container.append(element);

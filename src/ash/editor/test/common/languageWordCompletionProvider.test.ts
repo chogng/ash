@@ -1,9 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
-import {
-	createLanguageCompletionInvokeContext,
-	type LanguageCompletionProviderRequest,
-} from '../../common/languages.js';
+import { createLanguageCompletionInvokeContext, type LanguageCompletionProviderRequest } from '../../common/languages.js';
 import { createLanguageWordCompletionProvider } from '../../common/services/editorWebWorker.js';
 import { Position } from '../../common/core/position.js';
 import { TextModel } from '../../common/model/textModel.js';
@@ -50,9 +47,7 @@ test('Word completion validates limits and observes cancellation', async () => {
 	const controller = new AbortController();
 	controller.abort('cancelled');
 
-	assert.throws(() =>
-		provider.provideCompletions(request(model, new Position(0 + 1, model.getText().length + 1)), controller.signal),
-	);
+	assert.throws(() => provider.provideCompletions(request(model, new Position(0 + 1, model.getText().length + 1)), controller.signal));
 });
 
 function request(model: TextModel, position: Position): LanguageCompletionProviderRequest {

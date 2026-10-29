@@ -2,49 +2,20 @@ import { URI } from '../../../base/common/uri.js';
 import { extUri } from '../../../base/common/resources.js';
 import { match } from '../../../base/common/glob.js';
 import { FileKind, IFileService } from '../../../platform/files/common/files.js';
-import {
-	ITerminalCompletionService,
-	type ITerminalCompletion,
-} from '../../contrib/terminalContrib/suggest/browser/terminalCompletionService.js';
-import {
-	ITerminalQuickFixService,
-	type ITerminalQuickFix,
-} from '../../contrib/terminalContrib/quickFix/browser/quickFix.js';
-import {
-	TerminalProcessExtHostProxy,
-	type ExtensionTerminalPty,
-} from '../../contrib/terminal/browser/terminalProcessExtHostProxy.js';
+import { ITerminalCompletionService, type ITerminalCompletion } from '../../contrib/terminalContrib/suggest/browser/terminalCompletionService.js';
+import { ITerminalQuickFixService, type ITerminalQuickFix } from '../../contrib/terminalContrib/quickFix/browser/quickFix.js';
+import { TerminalProcessExtHostProxy, type ExtensionTerminalPty } from '../../contrib/terminal/browser/terminalProcessExtHostProxy.js';
 import { IEnvironmentVariableService } from '../../contrib/terminal/common/environmentVariable.js';
-import {
-	deserializeEnvironmentDescriptionMap,
-	deserializeEnvironmentVariableCollection,
-} from '../../../platform/terminal/common/environmentVariableShared.js';
+import { deserializeEnvironmentDescriptionMap, deserializeEnvironmentVariableCollection } from '../../../platform/terminal/common/environmentVariableShared.js';
 import { CancellationError } from '../../../base/common/errors.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	toDisposable,
-	type IDisposable,
-} from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { ThemeIcon } from '../../../base/common/themables.js';
 import { localize } from '../../../nls.js';
-import {
-	GeneralShellType,
-	PosixShellType,
-	WindowsShellType,
-	ITerminalProcessService,
-	type IShellLaunchConfig,
-	type TerminalArguments,
-} from '../../../platform/terminal/common/terminal.js';
+import { GeneralShellType, PosixShellType, WindowsShellType, ITerminalProcessService, type IShellLaunchConfig, type TerminalArguments } from '../../../platform/terminal/common/terminal.js';
 import { escapeNonWindowsPath } from '../../../platform/terminal/common/terminalEnvironment.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
-import {
-	ITerminalService,
-	ITerminalGroupService,
-	type ITerminalInstance,
-} from '../../contrib/terminal/browser/terminal.js';
+import { ITerminalService, ITerminalGroupService, type ITerminalInstance } from '../../contrib/terminal/browser/terminal.js';
 import { ITerminalProfileService, ITerminalProfileResolverService } from '../../contrib/terminal/common/terminal.js';
 import type { ExtensionHostProviderInvoker } from './extensionHostLanguageBridge.js';
 import type { JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
@@ -53,10 +24,7 @@ import { ILogService } from '../../../platform/log/common/log.js';
 import { RequestStore } from '../../../platform/terminal/common/requestStore.js';
 import { addDisposableListener } from '../../../base/browser/dom.js';
 import { ITerminalLinkProviderService } from '../../contrib/terminalContrib/links/browser/links.js';
-import type {
-	ExtensionClientSource,
-	ExtensionHostFleetSnapshot,
-} from '../../../platform/agentHost/common/extensionHostApi.js';
+import type { ExtensionClientSource, ExtensionHostFleetSnapshot } from '../../../platform/agentHost/common/extensionHostApi.js';
 import type { ExtensionClientOperation, ExtensionClientResult } from '../common/extHost.protocol.js';
 import { Event } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';
@@ -153,10 +121,7 @@ export class MainThreadTerminalService extends Disposable {
 
 	/** Extension handles are scoped to an exact activation; the terminal service owns the shell. */
 	async handle(
-		operation: Extract<
-			ExtensionClientOperation,
-			{ operation: 'createTerminal' | 'readTerminal' | 'disposeTerminal' }
-		>,
+		operation: Extract<ExtensionClientOperation, { operation: 'createTerminal' | 'readTerminal' | 'disposeTerminal' }>,
 		signal: AbortSignal,
 		source: ExtensionClientSource,
 	): Promise<ExtensionClientResult> {
@@ -166,13 +131,7 @@ export class MainThreadTerminalService extends Disposable {
 			const cwd = operation.cwd === null ? undefined : text(operation.cwd, 8192);
 			const command = operation.command === null ? undefined : text(operation.command, 32768, true);
 			if (command?.includes('\0')) throw invalid();
-			if (
-				!operation.env ||
-				typeof operation.env !== 'object' ||
-				Array.isArray(operation.env) ||
-				Object.keys(operation.env).length > 128
-			)
-				throw invalid();
+			if (!operation.env || typeof operation.env !== 'object' || Array.isArray(operation.env) || Object.keys(operation.env).length > 128) throw invalid();
 			const env: Record<string, string | null> = {};
 			for (const [key, value] of Object.entries(operation.env)) {
 				if (!key || key.length > 256 || /[=\0]/.test(key)) throw invalid();
@@ -185,10 +144,7 @@ export class MainThreadTerminalService extends Disposable {
 			signal = AbortSignal.any([signal, cancellation.signal]);
 			try {
 				const generation = this.workspaceGeneration;
-				const folder =
-					cwd === undefined
-						? this.workspace.getWorkspace().folders[0]
-						: (this.workspace.getWorkspaceFolder(URI.file(cwd)) ?? undefined);
+				const folder = cwd === undefined ? this.workspace.getWorkspace().folders[0] : (this.workspace.getWorkspaceFolder(URI.file(cwd)) ?? undefined);
 				const os = this.terminalProcesses.operatingSystem;
 				if (os === undefined) throw new CancellationError();
 				const options = {
@@ -221,15 +177,9 @@ export class MainThreadTerminalService extends Disposable {
 						if (!key || key.length > 256 || /[=\0]/.test(key)) throw invalid();
 						const suffix = text(value, 32768, true);
 						if (suffix.includes('\0')) throw invalid();
-						const same = (candidate: string): boolean =>
-							os === OperatingSystem.Windows
-								? candidate.toLowerCase() === key.toLowerCase()
-								: candidate === key;
+						const same = (candidate: string): boolean => (os === OperatingSystem.Windows ? candidate.toLowerCase() === key.toLowerCase() : candidate === key);
 						const existing = Object.keys(environment).find(same);
-						const valueBeforeAppend =
-							existing === undefined
-								? inherited[Object.keys(inherited).find(same) ?? key]
-								: environment[existing];
+						const valueBeforeAppend = existing === undefined ? inherited[Object.keys(inherited).find(same) ?? key] : environment[existing];
 						environment[existing ?? key] = `${valueBeforeAppend ?? ''}${suffix}`;
 					}
 				}
@@ -298,12 +248,7 @@ export class MainThreadTerminalService extends Disposable {
 
 		const id = text(operation.terminalId, 256);
 		const entry = this.ownedTerminals.get(id);
-		if (
-			!entry ||
-			entry.source.extensionId !== source.extensionId ||
-			entry.source.incarnation !== source.incarnation ||
-			entry.source.activationGeneration !== source.activationGeneration
-		)
+		if (!entry || entry.source.extensionId !== source.extensionId || entry.source.incarnation !== source.incarnation || entry.source.activationGeneration !== source.activationGeneration)
 			throw invalid();
 		if (operation.operation === 'disposeTerminal') {
 			entry.listeners.dispose();
@@ -311,12 +256,7 @@ export class MainThreadTerminalService extends Disposable {
 			await this.terminals.closeTerminal(entry.terminal);
 			return { result: 'done' };
 		}
-		if (
-			!Number.isSafeInteger(operation.afterSequence) ||
-			operation.afterSequence < 0 ||
-			operation.afterSequence > entry.next
-		)
-			throw invalid();
+		if (!Number.isSafeInteger(operation.afterSequence) || operation.afterSequence < 0 || operation.afterSequence > entry.next) throw invalid();
 		return {
 			result: 'value',
 			value: {
@@ -372,254 +312,175 @@ export class MainThreadTerminalService extends Disposable {
 	}
 
 	replaceCompletionProviders(next: readonly ExtensionTerminalCompletionRegistration[]): void {
-		this.replaceProviders(
-			next,
-			this.completionDescriptors,
-			this.completionRegistrations,
-			(descriptor, lifetime, controller) => {
-				return this.completions.registerTerminalCompletionProvider(
-					descriptor.runtimeId,
-					descriptor.registrationId,
-					{
-						provideCompletions: async (instance, commandLine, cursorIndex, signal) => {
-							using pending = new DisposableStore();
-							const request = this.terminalRequest(instance, controller.signal, signal, pending);
-							if (!request.valid()) return [];
-							const result = record(
-								await descriptor.invoke(
-									'provideTerminalCompletions',
-									{
-										commandLine,
-										cursorIndex,
-										terminal: {
-											id: instance.id,
-											name: instance.title,
-											processId: instance.processId ?? null,
-										},
+		this.replaceProviders(next, this.completionDescriptors, this.completionRegistrations, (descriptor, lifetime, controller) => {
+			return this.completions.registerTerminalCompletionProvider(
+				descriptor.runtimeId,
+				descriptor.registrationId,
+				{
+					provideCompletions: async (instance, commandLine, cursorIndex, signal) => {
+						using pending = new DisposableStore();
+						const request = this.terminalRequest(instance, controller.signal, signal, pending);
+						if (!request.valid()) return [];
+						const result = record(
+							await descriptor.invoke(
+								'provideTerminalCompletions',
+								{
+									commandLine,
+									cursorIndex,
+									terminal: {
+										id: instance.id,
+										name: instance.title,
+										processId: instance.processId ?? null,
 									},
-									request.signal,
-								),
-								['items', 'resourceOptions'],
-							);
-							if (!request.valid()) return [];
-							if (!Array.isArray(result.items) || result.items.length > 1000) throw invalid();
-							const items: ITerminalCompletion[] = result.items.map(value => {
-								const item = record(value, [
-									'label',
-									'replacementRange',
-									'detail',
-									'documentation',
-									'kind',
-								]);
-								const label = text(item.label, 32768);
-								const range = item.replacementRange;
-								if (
-									!Array.isArray(range) ||
-									range.length !== 2 ||
-									range.some(value => typeof value !== 'number' || !Number.isSafeInteger(value)) ||
-									(range[0] as number) < 0 ||
-									(range[1] as number) < (range[0] as number) ||
-									(range[1] as number) > commandLine.length
-								)
-									throw invalid();
-								if (
-									item.kind !== undefined &&
-									(typeof item.kind !== 'number' ||
-										!Number.isInteger(item.kind) ||
-										item.kind < 0 ||
-										item.kind > 16)
-								)
-									throw invalid();
-								return {
-									label,
-									replacementRange: [range[0] as number, range[1] as number],
-									...(item.detail === undefined ? {} : { detail: text(item.detail, 4096, true) }),
-									...(item.documentation === undefined
-										? {}
-										: { documentation: text(item.documentation, 32768, true) }),
-									...(item.kind === undefined ? {} : { kind: item.kind }),
-								};
-							});
-							if (result.resourceOptions !== undefined) {
-								const options = record(result.resourceOptions, [
-									'showFiles',
-									'showDirectories',
-									'globPattern',
-									'cwd',
-								]);
-								if (
-									(options.showFiles !== undefined && typeof options.showFiles !== 'boolean') ||
-									(options.showDirectories !== undefined &&
-										typeof options.showDirectories !== 'boolean')
-								)
-									throw invalid();
-								const cwd = URI.parse(text(options.cwd, 32768));
-								const glob =
-									options.globPattern === undefined ? undefined : text(options.globPattern, 2048);
-								const folder = this.workspace
-									.getWorkspace()
-									.folders.find(folder => folder.id === instance.dirId);
-								// Resource suggestions use the file service's existing workspace authority;
-								// an extension cannot turn completion into an arbitrary host filesystem read.
-								// Literal resource insertion requires a known shell and a plain token.
-								// Quoted or expanded input stays with the shell's own completion parser.
-								const literalShell = [
-									PosixShellType.Bash,
-									PosixShellType.Zsh,
-									PosixShellType.Sh,
-									PosixShellType.Ksh,
-									PosixShellType.Fish,
-									GeneralShellType.PowerShell,
-									WindowsShellType.GitBash,
-								].some(shell => shell === instance.shellType);
-								if (
-									(options.showFiles || options.showDirectories) &&
-									literalShell &&
-									/^[\p{L}\p{N}._/@%+=~ -]*$/u.test(commandLine) &&
-									folder &&
-									extUri.isEqualOrParent(cwd, folder.uri)
-								) {
-									const tokenStart = commandLine.lastIndexOf(' ', cursorIndex - 1) + 1;
-									const typed = commandLine.slice(tokenStart, cursorIndex);
-									let entries: Awaited<ReturnType<IFileService['readDirectory']>>;
-									try {
-										entries = await this.files.readDirectory(cwd);
-									} catch {
-										return request.valid() ? items : [];
-									}
-									if (!request.valid()) return [];
-									for (const entry of entries.slice(0, 1000)) {
-										if (
-											!entry.name.startsWith(typed) ||
-											/[\x00-\x1f\x7f]/.test(entry.name) ||
-											(glob && !match(glob, entry.name))
-										)
-											continue;
-										if (
-											(entry.kind === FileKind.File && options.showFiles) ||
-											(entry.kind === FileKind.Directory && options.showDirectories)
-										) {
-											const label = entry.name + (entry.kind === FileKind.Directory ? '/' : '');
-											items.push({
-												label,
-												insertText: escapeNonWindowsPath(label, instance.shellType),
-												replacementRange: [tokenStart, cursorIndex],
-											});
-										}
+								},
+								request.signal,
+							),
+							['items', 'resourceOptions'],
+						);
+						if (!request.valid()) return [];
+						if (!Array.isArray(result.items) || result.items.length > 1000) throw invalid();
+						const items: ITerminalCompletion[] = result.items.map(value => {
+							const item = record(value, ['label', 'replacementRange', 'detail', 'documentation', 'kind']);
+							const label = text(item.label, 32768);
+							const range = item.replacementRange;
+							if (
+								!Array.isArray(range) ||
+								range.length !== 2 ||
+								range.some(value => typeof value !== 'number' || !Number.isSafeInteger(value)) ||
+								(range[0] as number) < 0 ||
+								(range[1] as number) < (range[0] as number) ||
+								(range[1] as number) > commandLine.length
+							)
+								throw invalid();
+							if (item.kind !== undefined && (typeof item.kind !== 'number' || !Number.isInteger(item.kind) || item.kind < 0 || item.kind > 16)) throw invalid();
+							return {
+								label,
+								replacementRange: [range[0] as number, range[1] as number],
+								...(item.detail === undefined ? {} : { detail: text(item.detail, 4096, true) }),
+								...(item.documentation === undefined ? {} : { documentation: text(item.documentation, 32768, true) }),
+								...(item.kind === undefined ? {} : { kind: item.kind }),
+							};
+						});
+						if (result.resourceOptions !== undefined) {
+							const options = record(result.resourceOptions, ['showFiles', 'showDirectories', 'globPattern', 'cwd']);
+							if ((options.showFiles !== undefined && typeof options.showFiles !== 'boolean') || (options.showDirectories !== undefined && typeof options.showDirectories !== 'boolean'))
+								throw invalid();
+							const cwd = URI.parse(text(options.cwd, 32768));
+							const glob = options.globPattern === undefined ? undefined : text(options.globPattern, 2048);
+							const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === instance.dirId);
+							// Resource suggestions use the file service's existing workspace authority;
+							// an extension cannot turn completion into an arbitrary host filesystem read.
+							// Literal resource insertion requires a known shell and a plain token.
+							// Quoted or expanded input stays with the shell's own completion parser.
+							const literalShell = [
+								PosixShellType.Bash,
+								PosixShellType.Zsh,
+								PosixShellType.Sh,
+								PosixShellType.Ksh,
+								PosixShellType.Fish,
+								GeneralShellType.PowerShell,
+								WindowsShellType.GitBash,
+							].some(shell => shell === instance.shellType);
+							if ((options.showFiles || options.showDirectories) && literalShell && /^[\p{L}\p{N}._/@%+=~ -]*$/u.test(commandLine) && folder && extUri.isEqualOrParent(cwd, folder.uri)) {
+								const tokenStart = commandLine.lastIndexOf(' ', cursorIndex - 1) + 1;
+								const typed = commandLine.slice(tokenStart, cursorIndex);
+								let entries: Awaited<ReturnType<IFileService['readDirectory']>>;
+								try {
+									entries = await this.files.readDirectory(cwd);
+								} catch {
+									return request.valid() ? items : [];
+								}
+								if (!request.valid()) return [];
+								for (const entry of entries.slice(0, 1000)) {
+									if (!entry.name.startsWith(typed) || /[\x00-\x1f\x7f]/.test(entry.name) || (glob && !match(glob, entry.name))) continue;
+									if ((entry.kind === FileKind.File && options.showFiles) || (entry.kind === FileKind.Directory && options.showDirectories)) {
+										const label = entry.name + (entry.kind === FileKind.Directory ? '/' : '');
+										items.push({
+											label,
+											insertText: escapeNonWindowsPath(label, instance.shellType),
+											replacementRange: [tokenStart, cursorIndex],
+										});
 									}
 								}
 							}
-							return request.valid() ? items : [];
-						},
+						}
+						return request.valid() ? items : [];
 					},
-					...descriptor.triggerCharacters,
-				);
-			},
-		);
+				},
+				...descriptor.triggerCharacters,
+			);
+		});
 	}
 
 	replaceQuickFixProviders(next: readonly ExtensionTerminalQuickFixRegistration[]): void {
-		this.replaceProviders(
-			next,
-			this.quickFixDescriptors,
-			this.quickFixRegistrations,
-			(descriptor, lifetime, controller) => {
-				return this.quickFixes.registerQuickFixProvider(
-					`${descriptor.runtimeId}/${descriptor.registrationId}`,
-					{
-						provideTerminalQuickFixes: async (instance, command, signal) => {
-							using pending = new DisposableStore();
-							const request = this.terminalRequest(instance, controller.signal, signal, pending);
-							if (!request.valid() || command.wasReplayed || command.exitCode === undefined) return [];
-							const commandSnapshot = {
-								commandLine: command.command,
-								exitCode: command.exitCode,
-								terminalId: instance.id,
-							};
-							const matcher = record(
-								await descriptor.invoke(
-									'provideTerminalQuickFixes',
-									{ ...commandSnapshot, phase: 'matcher' },
-									request.signal,
-								),
-								['matches', 'outputMatcher'],
-							);
-							if (!request.valid() || matcher.matches === false) return [];
-							if (matcher.matches !== true) throw invalid();
-							let outputLines: string[] = [];
-							if (matcher.outputMatcher !== null) {
-								const window = record(matcher.outputMatcher, ['anchor', 'offset', 'length']);
-								if (
-									(window.anchor !== 'top' && window.anchor !== 'bottom') ||
-									typeof window.offset !== 'number' ||
-									!Number.isSafeInteger(window.offset) ||
-									window.offset < 0 ||
-									typeof window.length !== 'number' ||
-									!Number.isSafeInteger(window.length) ||
-									window.length < 1 ||
-									window.length > 40
-								)
-									throw invalid();
-								const output = command.getOutputMatch({
-									lineMatcher: /[\s\S]*/,
-									anchor: window.anchor,
-									offset: window.offset,
-									length: window.length,
-									multipleMatches: true,
-								});
-								if (!output || output.outputLines.some(line => line.length > 32768)) return [];
-								outputLines = output.outputLines;
-							}
-							const result = record(
-								await descriptor.invoke(
-									'provideTerminalQuickFixes',
-									{ ...commandSnapshot, phase: 'provide', outputLines },
-									request.signal,
-								),
-								['fixes'],
-							);
-							if (!request.valid()) return [];
-							if (!Array.isArray(result.fixes) || result.fixes.length > 100) throw invalid();
-							return result.fixes.map(value => {
-								const fix = record(value, ['kind', 'label', 'id', 'shouldExecute']);
-								const label = text(fix.label, 32768);
-								if (fix.kind === 'terminalCommand') {
-									if (typeof fix.shouldExecute !== 'boolean') throw invalid();
-									return { label, terminalCommand: label, shouldExecute: fix.shouldExecute };
-								}
-								if (fix.kind === 'opener') {
-									const uri = URI.parse(label);
-									if (!['http', 'https', 'file', 'ash-remote', 'vscode-remote'].includes(uri.scheme))
-										throw invalid();
-									return { label, uri };
-								}
-								if (fix.kind !== 'command') throw invalid();
-								const id = text(fix.id, 256);
-								return {
-									label,
-									run: async () => {
-										if (!request.bindingValid()) return;
-										using activation = new DisposableStore();
-										const active = this.terminalRequest(
-											instance,
-											controller.signal,
-											signal,
-											activation,
-										);
-										if (active.valid())
-											await descriptor.invoke(
-												'handleTerminalQuickFix',
-												{ id, terminalId: instance.id, commandLine: command.command },
-												active.signal,
-											);
-									},
-								} satisfies ITerminalQuickFix;
-							});
-						},
-					},
-				);
-			},
-		);
+		this.replaceProviders(next, this.quickFixDescriptors, this.quickFixRegistrations, (descriptor, lifetime, controller) => {
+			return this.quickFixes.registerQuickFixProvider(`${descriptor.runtimeId}/${descriptor.registrationId}`, {
+				provideTerminalQuickFixes: async (instance, command, signal) => {
+					using pending = new DisposableStore();
+					const request = this.terminalRequest(instance, controller.signal, signal, pending);
+					if (!request.valid() || command.wasReplayed || command.exitCode === undefined) return [];
+					const commandSnapshot = {
+						commandLine: command.command,
+						exitCode: command.exitCode,
+						terminalId: instance.id,
+					};
+					const matcher = record(await descriptor.invoke('provideTerminalQuickFixes', { ...commandSnapshot, phase: 'matcher' }, request.signal), ['matches', 'outputMatcher']);
+					if (!request.valid() || matcher.matches === false) return [];
+					if (matcher.matches !== true) throw invalid();
+					let outputLines: string[] = [];
+					if (matcher.outputMatcher !== null) {
+						const window = record(matcher.outputMatcher, ['anchor', 'offset', 'length']);
+						if (
+							(window.anchor !== 'top' && window.anchor !== 'bottom') ||
+							typeof window.offset !== 'number' ||
+							!Number.isSafeInteger(window.offset) ||
+							window.offset < 0 ||
+							typeof window.length !== 'number' ||
+							!Number.isSafeInteger(window.length) ||
+							window.length < 1 ||
+							window.length > 40
+						)
+							throw invalid();
+						const output = command.getOutputMatch({
+							lineMatcher: /[\s\S]*/,
+							anchor: window.anchor,
+							offset: window.offset,
+							length: window.length,
+							multipleMatches: true,
+						});
+						if (!output || output.outputLines.some(line => line.length > 32768)) return [];
+						outputLines = output.outputLines;
+					}
+					const result = record(await descriptor.invoke('provideTerminalQuickFixes', { ...commandSnapshot, phase: 'provide', outputLines }, request.signal), ['fixes']);
+					if (!request.valid()) return [];
+					if (!Array.isArray(result.fixes) || result.fixes.length > 100) throw invalid();
+					return result.fixes.map(value => {
+						const fix = record(value, ['kind', 'label', 'id', 'shouldExecute']);
+						const label = text(fix.label, 32768);
+						if (fix.kind === 'terminalCommand') {
+							if (typeof fix.shouldExecute !== 'boolean') throw invalid();
+							return { label, terminalCommand: label, shouldExecute: fix.shouldExecute };
+						}
+						if (fix.kind === 'opener') {
+							const uri = URI.parse(label);
+							if (!['http', 'https', 'file', 'ash-remote', 'vscode-remote'].includes(uri.scheme)) throw invalid();
+							return { label, uri };
+						}
+						if (fix.kind !== 'command') throw invalid();
+						const id = text(fix.id, 256);
+						return {
+							label,
+							run: async () => {
+								if (!request.bindingValid()) return;
+								using activation = new DisposableStore();
+								const active = this.terminalRequest(instance, controller.signal, signal, activation);
+								if (active.valid()) await descriptor.invoke('handleTerminalQuickFix', { id, terminalId: instance.id, commandLine: command.command }, active.signal);
+							},
+						} satisfies ITerminalQuickFix;
+					});
+				},
+			});
+		});
 	}
 
 	private replaceProviders<T extends ExtensionTerminalLinkRegistration>(
@@ -717,11 +578,7 @@ export class MainThreadTerminalService extends Disposable {
 						if (!instances.has(instance)) {
 							const listeners = new DisposableStore();
 							generations.set(instance, 0);
-							listeners.add(
-								instance.onDidChangeState(() =>
-									generations.set(instance, (generations.get(instance) ?? 0) + 1),
-								),
-							);
+							listeners.add(instance.onDidChangeState(() => generations.set(instance, (generations.get(instance) ?? 0) + 1)));
 							instances.set(instance, listeners);
 						}
 						const generation = this.workspaceGeneration;
@@ -789,11 +646,7 @@ export class MainThreadTerminalService extends Disposable {
 												length,
 												terminal: { id: instance.id, name: instance.title, processId },
 											},
-											AbortSignal.any([
-												controller.signal,
-												cancellation.signal,
-												AbortSignal.timeout(5_000),
-											]),
+											AbortSignal.any([controller.signal, cancellation.signal, AbortSignal.timeout(5_000)]),
 										);
 									};
 									void activate().catch(error => {
@@ -832,16 +685,12 @@ export class MainThreadTerminalService extends Disposable {
 			lifetime.add(
 				this.environmentVariables.registerCollectionProvider(extension.id, async () => {
 					const snapshot = record(await descriptor.invoke('getTerminalEnvironment', {}, controller.signal));
-					if (Object.keys(snapshot).some(key => !['persistent', 'map', 'descriptionMap'].includes(key)))
-						throw invalid();
+					if (Object.keys(snapshot).some(key => !['persistent', 'map', 'descriptionMap'].includes(key))) throw invalid();
 					if (typeof snapshot.persistent !== 'boolean') throw invalid();
 					return {
 						persistent: snapshot.persistent,
 						map: deserializeEnvironmentVariableCollection(snapshot.map),
-						descriptionMap:
-							snapshot.descriptionMap === undefined
-								? undefined
-								: deserializeEnvironmentDescriptionMap(snapshot.descriptionMap),
+						descriptionMap: snapshot.descriptionMap === undefined ? undefined : deserializeEnvironmentDescriptionMap(snapshot.descriptionMap),
 					};
 				}),
 			);
@@ -853,10 +702,7 @@ export class MainThreadTerminalService extends Disposable {
 	replaceProfiles(next: readonly ExtensionTerminalProfileRegistration[]): void {
 		if (this.isDisposed) throw new CancellationError();
 		const keys = new Set(next.map(profile => `${profile.runtimeId}/${profile.profileId}`));
-		if (keys.size !== next.length)
-			throw new Error(
-				localize('terminal.profile.duplicate', 'Terminal profile is already registered: {0}', 'extension'),
-			);
+		if (keys.size !== next.length) throw new Error(localize('terminal.profile.duplicate', 'Terminal profile is already registered: {0}', 'extension'));
 		for (const key of this.descriptors.keys()) {
 			if (!keys.has(key)) {
 				this.registrations.deleteAndDispose(key);
@@ -867,22 +713,13 @@ export class MainThreadTerminalService extends Disposable {
 			const key = `${descriptor.runtimeId}/${descriptor.profileId}`;
 			if (this.descriptors.get(key) === descriptor) continue;
 			const extension = this.extensionForRuntime(descriptor);
-			if (!extension)
-				throw new Error(
-					localize(
-						'terminal.profile.providerUnavailable',
-						'Terminal profile provider is unavailable: {0}',
-						descriptor.title,
-					),
-				);
+			if (!extension) throw new Error(localize('terminal.profile.providerUnavailable', 'Terminal profile provider is unavailable: {0}', descriptor.title));
 			this.registrations.deleteAndDispose(key);
 			this.descriptors.delete(key);
 			const lifetime = new DisposableStore();
 			const controller = new AbortController();
 			lifetime.add(toDisposable(() => controller.abort()));
-			const requests = lifetime.add(
-				this.instantiation.createInstance(RequestStore<ProfileReply, { signal: AbortSignal }>, undefined),
-			);
+			const requests = lifetime.add(this.instantiation.createInstance(RequestStore<ProfileReply, { signal: AbortSignal }>, undefined));
 			lifetime.add(
 				requests.onCreateRequest(({ requestId, signal }) => {
 					if (signal.aborted) {
@@ -923,16 +760,7 @@ export class MainThreadTerminalService extends Disposable {
 								if (!signal.aborted) requests.acceptReply(requestId, { error });
 							},
 						)
-						.catch(error =>
-							this.log.error(
-								'terminal',
-								localize(
-									'terminal.profile.lateReleaseFailed',
-									'Failed to release a late extension terminal profile.',
-								),
-								error,
-							),
-						);
+						.catch(error => this.log.error('terminal', localize('terminal.profile.lateReleaseFailed', 'Failed to release a late extension terminal profile.'), error));
 				}),
 			);
 			try {
@@ -961,32 +789,15 @@ export class MainThreadTerminalService extends Disposable {
 							const value = record(reply.value);
 							// Claim the opaque resource before validating display metadata so every
 							// rejected reply has a release path, including malformed options.
-							let unclaimed =
-								value.pty === undefined ? undefined : profilePtyHandle(descriptor, value.pty);
+							let unclaimed = value.pty === undefined ? undefined : profilePtyHandle(descriptor, value.pty);
 							try {
 								const result = record(value, ['options', 'pty']);
-								if (lifetime.isDisposed || generation !== this.workspaceGeneration)
-									throw new CancellationError();
+								if (lifetime.isDisposed || generation !== this.workspaceGeneration) throw new CancellationError();
 								if (result.options === null) return undefined;
-								const options = record(result.options, [
-									'name',
-									'shellPath',
-									'shellArgs',
-									'cwd',
-									'env',
-									'strictEnv',
-									'icon',
-									'color',
-								]);
+								const options = record(result.options, ['name', 'shellPath', 'shellArgs', 'cwd', 'env', 'strictEnv', 'icon', 'color']);
 								const name = text(options.name ?? descriptor.title, 256);
-								const icon =
-									presentation.icon ??
-									(options.icon === undefined
-										? undefined
-										: ThemeIcon.fromId(text(options.icon, 256)));
-								const color =
-									presentation.color ??
-									(options.color === undefined ? undefined : text(options.color, 256));
+								const icon = presentation.icon ?? (options.icon === undefined ? undefined : ThemeIcon.fromId(text(options.icon, 256)));
+								const color = presentation.color ?? (options.color === undefined ? undefined : text(options.color, 256));
 								let instance: ITerminalInstance;
 								if (result.pty !== undefined) {
 									const pty = profilePty(descriptor, result.pty);
@@ -1001,11 +812,7 @@ export class MainThreadTerminalService extends Disposable {
 											icon,
 											color,
 											customPtyImplementation: (terminalId, cols, rows) => {
-												if (
-													descriptor.pty!.signal.aborted ||
-													generation !== this.workspaceGeneration
-												)
-													throw new CancellationError();
+												if (descriptor.pty!.signal.aborted || generation !== this.workspaceGeneration) throw new CancellationError();
 												const resource = initialPty;
 												initialPty = undefined;
 												const childLifetime = new DisposableStore();
@@ -1023,17 +830,8 @@ export class MainThreadTerminalService extends Disposable {
 													async signal => {
 														// Relaunch asks the original factory for a new resource;
 														// existing IO never goes back through that factory.
-														const value = record(
-															await descriptor.invoke(
-																'createTerminalProfile',
-																{},
-																signal,
-															),
-														);
-														const resource =
-															value.pty === undefined
-																? undefined
-																: profilePtyHandle(descriptor, value.pty);
+														const value = record(await descriptor.invoke('createTerminalProfile', {}, signal));
+														const resource = value.pty === undefined ? undefined : profilePtyHandle(descriptor, value.pty);
 														try {
 															const reply = record(value, ['options', 'pty']);
 															return profilePty(descriptor, reply.pty);
@@ -1043,14 +841,7 @@ export class MainThreadTerminalService extends Disposable {
 														}
 													},
 												);
-												childLifetime.add(
-													addDisposableListener(
-														descriptor.pty!.signal,
-														'abort',
-														() => child.shutdown(true),
-														{ once: true },
-													),
-												);
+												childLifetime.add(addDisposableListener(descriptor.pty!.signal, 'abort', () => child.shutdown(true), { once: true }));
 												childLifetime.add(toDisposable(() => child.shutdown(true)));
 												this.processes.add(childLifetime);
 												unclaimed = undefined;
@@ -1063,23 +854,11 @@ export class MainThreadTerminalService extends Disposable {
 										name,
 										icon,
 										color,
-										executable:
-											options.shellPath === undefined
-												? undefined
-												: text(options.shellPath, 32768),
-										args:
-											options.shellArgs === undefined
-												? undefined
-												: argumentsList(options.shellArgs),
-										cwd:
-											typeof presentation.cwd === 'string'
-												? presentation.cwd
-												: options.cwd === undefined
-													? undefined
-													: text(options.cwd, 32768),
+										executable: options.shellPath === undefined ? undefined : text(options.shellPath, 32768),
+										args: options.shellArgs === undefined ? undefined : argumentsList(options.shellArgs),
+										cwd: typeof presentation.cwd === 'string' ? presentation.cwd : options.cwd === undefined ? undefined : text(options.cwd, 32768),
 										env: environment(options.env),
-										strictEnv:
-											options.strictEnv === undefined ? undefined : boolean(options.strictEnv),
+										strictEnv: options.strictEnv === undefined ? undefined : boolean(options.strictEnv),
 									};
 									instance = await this.terminals.createTerminal({
 										config: shell,
@@ -1117,16 +896,7 @@ export class MainThreadTerminalService extends Disposable {
 	private async releasePty(pty: Pick<ExtensionTerminalPty, 'ptyId' | 'invoke'>): Promise<void> {
 		await pty
 			.invoke('closeTaskTerminal', { ptyId: pty.ptyId }, AbortSignal.timeout(5_000))
-			.catch(error =>
-				this.log.error(
-					'terminal',
-					localize(
-						'terminal.profile.lateReleaseFailed',
-						'Failed to release a late extension terminal profile.',
-					),
-					error,
-				),
-			);
+			.catch(error => this.log.error('terminal', localize('terminal.profile.lateReleaseFailed', 'Failed to release a late extension terminal profile.'), error));
 	}
 
 	private extensionForRuntime(descriptor: ExtensionTerminalEnvironmentRegistration) {
@@ -1134,17 +904,11 @@ export class MainThreadTerminalService extends Disposable {
 			// A Plugin's executable authority and declarative catalog hash different
 			// domains. Only its backend-attested pair can join those identities.
 			if (extension.sourceKind === 'plugin' && extension.runtimeBinding) {
-				return (
-					extension.runtimeBinding.runtimeId === descriptor.runtimeId &&
-					extension.runtimeBinding.packageDigest === descriptor.packageDigest
-				);
+				return extension.runtimeBinding.runtimeId === descriptor.runtimeId && extension.runtimeBinding.packageDigest === descriptor.packageDigest;
 			}
 			// Product executables retain their source fingerprint; other packages
 			// retain the standard exact catalog digest fence.
-			return (
-				extension.packageSha256 === descriptor.packageDigest ||
-				(extension.sourceKind === 'builtIn' && extension.id === descriptor.runtimeId)
-			);
+			return extension.packageSha256 === descriptor.packageDigest || (extension.sourceKind === 'builtIn' && extension.id === descriptor.runtimeId);
 		});
 	}
 
@@ -1158,48 +922,29 @@ export class MainThreadTerminalService extends Disposable {
 	}
 }
 
-function profilePty(
-	descriptor: ExtensionTerminalProfileRegistration,
-	value: JsonValue | undefined,
-): ExtensionTerminalPty {
+function profilePty(descriptor: ExtensionTerminalProfileRegistration, value: JsonValue | undefined): ExtensionTerminalPty {
 	const pty = record(value, ['ptyId', 'acceptsInput', 'registrationId']);
 	if (typeof pty.acceptsInput !== 'boolean') throw invalid();
 	return { ...profilePtyHandle(descriptor, value), acceptsInput: pty.acceptsInput };
 }
 
-function profilePtyHandle(
-	descriptor: ExtensionTerminalProfileRegistration,
-	value: JsonValue | undefined,
-): Pick<ExtensionTerminalPty, 'ptyId' | 'invoke'> {
+function profilePtyHandle(descriptor: ExtensionTerminalProfileRegistration, value: JsonValue | undefined): Pick<ExtensionTerminalPty, 'ptyId' | 'invoke'> {
 	const pty = record(value);
 	if (!descriptor.pty) throw invalid();
 	return { ptyId: text(pty.ptyId, 256), invoke: descriptor.pty.invoker(text(pty.registrationId, 256)) };
 }
 
 function invalid(): TypeError {
-	return new TypeError(
-		localize('terminal.profile.invalidProviderResult', 'Invalid terminal profile provider response.'),
-	);
+	return new TypeError(localize('terminal.profile.invalidProviderResult', 'Invalid terminal profile provider response.'));
 }
 
 function record(value: unknown, keys?: readonly string[]): Record<string, JsonValue> {
-	if (
-		!value ||
-		typeof value !== 'object' ||
-		Array.isArray(value) ||
-		(keys && Object.keys(value).some(key => !keys.includes(key)))
-	)
-		throw invalid();
+	if (!value || typeof value !== 'object' || Array.isArray(value) || (keys && Object.keys(value).some(key => !keys.includes(key)))) throw invalid();
 	return value as Record<string, JsonValue>;
 }
 
 function text(value: unknown, maximum: number, allowEmpty = false): string {
-	if (
-		typeof value !== 'string' ||
-		value.length > maximum ||
-		(!allowEmpty && (!value || /[\u0000-\u001f\u007f]/.test(value)))
-	)
-		throw invalid();
+	if (typeof value !== 'string' || value.length > maximum || (!allowEmpty && (!value || /[\u0000-\u001f\u007f]/.test(value)))) throw invalid();
 	return value;
 }
 
@@ -1223,13 +968,7 @@ function environment(value: unknown): Readonly<Record<string, string | null>> | 
 	return Object.freeze(
 		Object.fromEntries(
 			Object.entries(values).map(([key, value]) => {
-				if (
-					!key ||
-					key.length > 256 ||
-					/[=\u0000]/.test(key) ||
-					(value !== null && (typeof value !== 'string' || value.length > 32768 || value.includes('\0')))
-				)
-					throw invalid();
+				if (!key || key.length > 256 || /[=\u0000]/.test(key) || (value !== null && (typeof value !== 'string' || value.length > 32768 || value.includes('\0')))) throw invalid();
 				return [key, value as string | null];
 			}),
 		),

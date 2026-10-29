@@ -6,12 +6,7 @@ import { canceled, isCancellationError, onUnexpectedError } from '../../../../..
 import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { derived, observableValue } from '../../../../../base/common/observable.js';
-import {
-	isToolSet,
-	type ILanguageModelToolsService,
-	type IToolData,
-	type IToolSet,
-} from '../../common/tools/languageModelToolsService.js';
+import { isToolSet, type ILanguageModelToolsService, type IToolData, type IToolSet } from '../../common/tools/languageModelToolsService.js';
 
 interface Catalog {
 	readonly profiles: readonly ToolProductProfile[];
@@ -83,8 +78,7 @@ export class LanguageModelToolsService extends Disposable implements ILanguageMo
 			do {
 				this.readAgain = false;
 				result = await this.api.read();
-				if (this.disposed || epoch !== this.epoch || generation !== this.appServer.connectionGeneration)
-					throw canceled();
+				if (this.disposed || epoch !== this.epoch || generation !== this.appServer.connectionGeneration) throw canceled();
 			} while (this.readAgain);
 			const tools: readonly IToolData[] = Object.freeze(
 				result.tools.map(tool =>
@@ -104,11 +98,7 @@ export class LanguageModelToolsService extends Disposable implements ILanguageMo
 			);
 			const byId = new Map(tools.map(tool => [tool.id, tool]));
 			const sourceGroups = result.sourceGroups.map(set => {
-				const members = Object.freeze(
-					set.tools
-						.map(id => byId.get(id))
-						.filter((tool): tool is IToolData => tool !== undefined && tool.exposure !== 'hidden'),
-				);
+				const members = Object.freeze(set.tools.map(id => byId.get(id)).filter((tool): tool is IToolData => tool !== undefined && tool.exposure !== 'hidden'));
 				return Object.freeze({
 					kind: 'source' as const,
 					id: set.id,
@@ -120,11 +110,7 @@ export class LanguageModelToolsService extends Disposable implements ILanguageMo
 				});
 			});
 			const namedSets: IToolSet[] = result.toolSets.map(set => {
-				const members = Object.freeze(
-					set.tools
-						.map(id => byId.get(id))
-						.filter((tool): tool is IToolData => tool !== undefined && tool.exposure !== 'hidden'),
-				);
+				const members = Object.freeze(set.tools.map(id => byId.get(id)).filter((tool): tool is IToolData => tool !== undefined && tool.exposure !== 'hidden'));
 				return Object.freeze({
 					kind: 'capability' as const,
 					id: set.id,
@@ -160,11 +146,7 @@ export class LanguageModelToolsService extends Disposable implements ILanguageMo
 				references.set(name, set);
 			}
 			this.catalog.set({
-				profiles: Object.freeze(
-					result.profiles.map(profile =>
-						Object.freeze({ ...profile, sets: Object.freeze([...profile.sets]) }),
-					),
-				),
+				profiles: Object.freeze(result.profiles.map(profile => Object.freeze({ ...profile, sets: Object.freeze([...profile.sets]) }))),
 				tools,
 				sets,
 				names,

@@ -6,16 +6,8 @@ import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { observableValue } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import {
-	DataChannelForwardingTelemetryService,
-	forwardToChannelIf,
-} from '../../../../../platform/dataChannel/browser/forwardingTelemetryService.js';
-import {
-	IDataChannelService,
-	parseLinkPresentation,
-	type IDataChannelEvent,
-	type ILinkPresentation,
-} from '../../../../../platform/dataChannel/common/dataChannel.js';
+import { DataChannelForwardingTelemetryService, forwardToChannelIf } from '../../../../../platform/dataChannel/browser/forwardingTelemetryService.js';
+import { IDataChannelService, parseLinkPresentation, type IDataChannelEvent, type ILinkPresentation } from '../../../../../platform/dataChannel/common/dataChannel.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ITelemetryService, type ITelemetryData } from '../../../../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryServiceShape } from '../../../../../platform/telemetry/common/telemetryUtils.js';
@@ -92,10 +84,7 @@ test('link rules honor context conditions, matching resources, and provider life
 	using watcher = links.createLinkPresentationWatcher('issues', resource)!;
 	assert.equal(watcher.presentation.get()?.title, 'Issue');
 	contexts.setContext('offline', true);
-	assert.deepEqual(
-		{ rules: links.linkPresentationRules, value: watcher.presentation.get(), disposed },
-		{ rules: [], value: undefined, disposed: 1 },
-	);
+	assert.deepEqual({ rules: links.linkPresentationRules, value: watcher.presentation.get(), disposed }, { rules: [], value: undefined, disposed: 1 });
 	contexts.setContext('offline', false);
 	using replacement = links.createLinkPresentationWatcher('issues', resource)!;
 	registration.dispose();
@@ -142,9 +131,7 @@ suite('dataChannel browser component', () => {
 		await expect(link).toHaveText('Issue one · #1 · Open · +2 −1');
 		await expect(link).toHaveAccessibleName('Issue one · #1 · Open · +2 −1');
 		await page.getByRole('button', { name: 'Publish edit event' }).click();
-		await expect(page.getByRole('status', { name: 'Extension channel delivery' })).toHaveText(
-			'{"data":{"eventName":"inlineCompletion.endOfLife","data":{"accepted":true,"durationMs":5}}}',
-		);
+		await expect(page.getByRole('status', { name: 'Extension channel delivery' })).toHaveText('{"data":{"eventName":"inlineCompletion.endOfLife","data":{"accepted":true,"durationMs":5}}}');
 		await page.getByRole('button', { name: 'Replace extension' }).click();
 		await expect(link).toHaveText('<img src=x onerror=alert(1)> · #1 · Open · +2 −1');
 		await expect(link).toBeFocused();
@@ -162,9 +149,7 @@ suite('dataChannel browser component', () => {
 		await expect(link).not.toHaveAttribute('aria-busy');
 		await link.focus();
 		await page.keyboard.press('Enter');
-		await expect(page.getByRole('status', { name: 'Extension URL delivery' })).toHaveText(
-			'default:https://example.com/issues/1',
-		);
+		await expect(page.getByRole('status', { name: 'Extension URL delivery' })).toHaveText('default:https://example.com/issues/1');
 		await expect(page.getByRole('link', { name: 'Plain link' })).toHaveAttribute('href', 'https://example.org/');
 		expect(errors).toEqual([]);
 	});

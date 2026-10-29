@@ -15,13 +15,7 @@ export class TeamsManagementService implements ITeamsManagementService {
 		this.currentTeams.set(await this.provider.list());
 	}
 
-	async create(
-		name: string,
-		description: string,
-		coordinatorName: string,
-		responsibility: string,
-		role: TeamRole = { type: 'default' },
-	): Promise<Team> {
+	async create(name: string, description: string, coordinatorName: string, responsibility: string, role: TeamRole = { type: 'default' }): Promise<Team> {
 		const coordinator: TeamMember = {
 			agentId: `agent:${createUuid()}`,
 			name: coordinatorName,
@@ -39,12 +33,7 @@ export class TeamsManagementService implements ITeamsManagementService {
 		return team;
 	}
 
-	async addMember(
-		team: Team,
-		name: string,
-		responsibility: string,
-		role: TeamRole = { type: 'default' },
-	): Promise<Team> {
+	async addMember(team: Team, name: string, responsibility: string, role: TeamRole = { type: 'default' }): Promise<Team> {
 		const member: TeamMember = { agentId: `agent:${createUuid()}`, name, responsibility, role };
 		return this.apply(team, { type: 'addMember', member });
 	}
@@ -69,13 +58,7 @@ export class TeamsManagementService implements ITeamsManagementService {
 	}
 
 	async startRun(team: Team, objective: string): Promise<TeamRun> {
-		return this.provider.startRun(
-			`team-command:${createUuid()}`,
-			`team-run:${createUuid()}`,
-			team.teamId,
-			team.revision,
-			objective,
-		);
+		return this.provider.startRun(`team-command:${createUuid()}`, `team-run:${createUuid()}`, team.teamId, team.revision, objective);
 	}
 
 	listRuns(teamId: string): Promise<readonly TeamRun[]> {
@@ -84,13 +67,7 @@ export class TeamsManagementService implements ITeamsManagementService {
 	listMessages(teamId: string, readerId: string): Promise<readonly TeamMessage[]> {
 		return this.provider.listMessages(teamId, readerId);
 	}
-	postMessage(
-		teamId: string,
-		runId: string | null,
-		senderId: string,
-		receiverId: string | null,
-		text: string,
-	): Promise<TeamMessage> {
+	postMessage(teamId: string, runId: string | null, senderId: string, receiverId: string | null, text: string): Promise<TeamMessage> {
 		return this.provider.postMessage(`team-message:${createUuid()}`, teamId, runId, senderId, receiverId, text);
 	}
 

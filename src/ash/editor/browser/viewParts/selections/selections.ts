@@ -1,9 +1,6 @@
 import './selections.css';
 import { h, reset, svg } from '../../../../base/browser/dom.js';
-import {
-	createStanzaVisualSelectionGeometry,
-	type VisualSelectionRectangle,
-} from '../../../common/viewModel/visualSelectionGeometry.js';
+import { createStanzaVisualSelectionGeometry, type VisualSelectionRectangle } from '../../../common/viewModel/visualSelectionGeometry.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { ColorScheme } from '../../../../platform/theme/common/theme.js';
 import { type Selection } from '../../../common/core/selection.js';
@@ -116,14 +113,7 @@ function projectStanzaSelectionOverlays(
 		startLineIndex: Math.max(0, context.viewportData.startLineNumber - 2),
 		endLineIndexExclusive: context.viewportData.endLineNumber + 1,
 	};
-	const geometry = createStanzaVisualSelectionGeometry(
-		model,
-		modelSelections,
-		projection,
-		renderLines,
-		textLeft,
-		textMeasurer,
-	);
+	const geometry = createStanzaVisualSelectionGeometry(model, modelSelections, projection, renderLines, textLeft, textMeasurer);
 	const segments = new Map<number, Map<number, VisualSelectionRectangle[]>>();
 	for (const rectangle of geometry.selections) {
 		let lines = segments.get(rectangle.selectionIndex);
@@ -155,13 +145,7 @@ function projectStanzaSelectionOverlays(
 		const roundLines = rounded && [...lines.values()].every(line => line.length === 1);
 		for (const [lineIndex, rectangles] of lines) {
 			for (const rectangle of rectangles) {
-				const element = appendSelection(
-					rows,
-					rectangle.selectionIndex,
-					lineIndex,
-					rectangle.left,
-					rectangle.width,
-				);
+				const element = appendSelection(rows, rectangle.selectionIndex, lineIndex, rectangle.left, rectangle.width);
 				if (!element || !roundLines) continue;
 				const above = lines.get(lineIndex - 1)?.[0];
 				const below = lines.get(lineIndex + 1)?.[0];
@@ -171,13 +155,7 @@ function projectStanzaSelectionOverlays(
 	}
 }
 
-function appendSelection(
-	rows: ReadonlyMap<number, HTMLElement>,
-	selectionIndex: number,
-	visualLineIndex: number,
-	left: number,
-	width: number,
-): HTMLElement | undefined {
+function appendSelection(rows: ReadonlyMap<number, HTMLElement>, selectionIndex: number, visualLineIndex: number, left: number, width: number): HTMLElement | undefined {
 	const row = rows.get(visualLineIndex);
 	if (!row) return;
 	const element = h(row.ownerDocument, 'div');
@@ -204,8 +182,7 @@ function roundSelectionSegment(
 		['top', above],
 		['bottom', below],
 	] as const) {
-		const connected =
-			neighbor && neighbor.left < right - tolerance && neighbor.left + neighbor.width > left + tolerance;
+		const connected = neighbor && neighbor.left < right - tolerance && neighbor.left + neighbor.width > left + tolerance;
 		for (const horizontal of ['left', 'right'] as const) {
 			const edge = horizontal === 'left' ? left : right;
 			const neighborEdge = neighbor ? neighbor.left + (horizontal === 'right' ? neighbor.width : 0) : edge;

@@ -114,31 +114,16 @@ for (const mode of ['paste', 'drop'] as const) {
 		// A new widget resolves the current language instead of retaining its construction-time label.
 		editor.controller.editContext.domNode.domNode.focus();
 		const event = new dom.window.Event(mode, { bubbles: true, cancelable: true });
-		Object.defineProperties(
-			event,
-			mode === 'paste'
-				? { clipboardData: { value: data } }
-				: { dataTransfer: { value: data }, clientX: { value: 80 }, clientY: { value: 10 } },
-		);
+		Object.defineProperties(event, mode === 'paste' ? { clipboardData: { value: data } } : { dataTransfer: { value: data }, clientX: { value: 80 }, clientY: { value: 10 } });
 		(mode === 'paste' ? editor.controller.editContext.domNode.domNode : editor.getDomNode()).dispatchEvent(event);
 		await waitFor(() => dom.window.document.querySelector('.stanza-editor-post-edit-selector') !== null);
 		assert.equal(editor.getValue(), 'alphaPREFERRED');
 		assert.equal(event.defaultPrevented, true);
-		await services
-			.get(ICommandService)
-			.executeCommand(
-				mode === 'paste'
-					? 'workbench.action.configurePreferredPasteAction'
-					: 'workbench.action.configurePreferredDropAction',
-			);
-		const trigger = dom.window.document.querySelector<HTMLButtonElement>(
-			'.stanza-editor-post-edit-selector button',
-		)!;
+		await services.get(ICommandService).executeCommand(mode === 'paste' ? 'workbench.action.configurePreferredPasteAction' : 'workbench.action.configurePreferredDropAction');
+		const trigger = dom.window.document.querySelector<HTMLButtonElement>('.stanza-editor-post-edit-selector button')!;
 		trigger.click();
 		const settingLabel = mode === 'paste' ? '配置首选粘贴方式...' : '配置首选拖放方式...';
-		const setting = [...dom.window.document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(
-			item => item.textContent === settingLabel,
-		)!;
+		const setting = [...dom.window.document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(item => item.textContent === settingLabel)!;
 		assert.ok(setting);
 		setting.click();
 		await waitFor(() => opened.length === 2);
@@ -194,17 +179,17 @@ test('schema tracks both provider registries, accepts unknown kinds, and removes
 	);
 	using drop = features.documentDropEditProvider.register(
 		{ language: 'plaintext', hasAccessToAllModels: true },
-		{ providedDropEditKinds: [kind], provideDocumentDropEdits: () => undefined },
+		{
+			providedDropEditKinds: [kind],
+			provideDocumentDropEdits: () => undefined,
+		},
 	);
 	const schema = createConfigurationSchema();
 	const kinds = (key: string): readonly unknown[] => (schema.properties![key].items as JsonSchema).anyOf![1].enum!;
 	assert.equal(kinds(pasteAsPreferenceConfig).filter(value => value === kind.value).length, 1);
 	assert.ok(kinds(dropAsPreferenceConfig).includes(kind.value));
 	assert.ok(JSON.stringify(additions).includes(kind.value));
-	assert.equal(
-		validateJsonSchema(parseJsonDocument('{"editor.pasteAs.preferences":["future.kind"]}'), schema).length,
-		0,
-	);
+	assert.equal(validateJsonSchema(parseJsonDocument('{"editor.pasteAs.preferences":["future.kind"]}'), schema).length, 0);
 	await assert.rejects(services.get(IConfigurationService).updateValue(pasteAsPreferenceConfig, [42]), TypeError);
 	paste.dispose();
 	drop.dispose();
@@ -229,17 +214,7 @@ for (const [args, expected] of [
 				read: async () => [
 					{
 						types: ['text/plain', 'text/html', 'text/uri-list'],
-						getType: async (type: string) =>
-							new Blob(
-								[
-									type === 'text/html'
-										? '<b>markup</b>'
-										: type === 'text/uri-list'
-											? 'https://example.test/'
-											: 'plain',
-								],
-								{ type },
-							),
+						getType: async (type: string) => new Blob([type === 'text/html' ? '<b>markup</b>' : type === 'text/uri-list' ? 'https://example.test/' : 'plain'], { type }),
 					},
 				],
 			},
@@ -256,11 +231,7 @@ for (const [args, expected] of [
 		});
 		editor.setSelection(new Selection(1, 1, 1, 4));
 		editor.focus();
-		await editor.invokeWithinContext(accessor =>
-			accessor
-				.get(ICommandService)
-				.executeCommand(args ? 'editor.action.pasteAs' : 'editor.action.pasteAsText', ...(args ? [args] : [])),
-		);
+		await editor.invokeWithinContext(accessor => accessor.get(ICommandService).executeCommand(args ? 'editor.action.pasteAs' : 'editor.action.pasteAsText', ...(args ? [args] : [])));
 		assert.equal(editor.getValue(), expected);
 		assert.equal(dom.window.document.querySelector('[role=dialog]'), null);
 	});

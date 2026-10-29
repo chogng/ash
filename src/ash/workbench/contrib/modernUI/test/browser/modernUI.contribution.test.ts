@@ -2,16 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { h } from '../../../../../base/browser/dom.js';
-import type {
-	AuxiliaryWindowOpenOptions,
-	IAuxiliaryWindow,
-	IAuxiliaryWindowService as IAuxiliaryWindowServiceContract,
-} from '../../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import type { AuxiliaryWindowOpenOptions, IAuxiliaryWindow, IAuxiliaryWindowService as IAuxiliaryWindowServiceContract } from '../../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import type { WorkbenchLayoutStyle } from '../../../../common/configuration.js';
-import type {
-	Position as PanelPosition,
-	IWorkbenchLayoutService as IWorkbenchLayoutServiceContract,
-} from '../../../../services/layout/browser/layoutService.js';
+import type { Position as PanelPosition, IWorkbenchLayoutService as IWorkbenchLayoutServiceContract } from '../../../../services/layout/browser/layoutService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 Object.defineProperty(globalThis, 'window', { configurable: true, value: browserEnvironment.window });
@@ -23,10 +16,8 @@ const { IConfigurationService } = await import('../../../../../platform/configur
 const { InstantiationService } = await import('../../../../../platform/instantiation/common/instantiationService.js');
 const { WorkbenchConfiguration } = await import('../../../../common/configuration.js');
 const { WorkbenchContributionsRegistry, WorkbenchPhase } = await import('../../../../common/contributions.js');
-const { IAuxiliaryWindowService } =
-	await import('../../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js');
-const { TestConfigurationService: WorkbenchConfigurationService } =
-	await import('../../../../services/configuration/test/common/testServices.js');
+const { IAuxiliaryWindowService } = await import('../../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js');
+const { TestConfigurationService: WorkbenchConfigurationService } = await import('../../../../services/configuration/test/common/testServices.js');
 const { IWorkbenchLayoutService, Position } = await import('../../../../services/layout/browser/layoutService.js');
 const { BrowserLayoutService } = await import('../../../../../platform/layout/browser/layoutService.js');
 await import('../../browser/modernUI.contribution.js');

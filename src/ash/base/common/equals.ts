@@ -12,11 +12,7 @@ export function strictEquals<T>(left: T, right: T): boolean {
 export function strictEqualsC<T>(): EqualityComparer<T> {
 	return strictEquals;
 }
-export function arrayEquals<T>(
-	left: readonly T[],
-	right: readonly T[],
-	equals: EqualityComparer<T> = strictEquals,
-): boolean {
+export function arrayEquals<T>(left: readonly T[], right: readonly T[], equals: EqualityComparer<T> = strictEquals): boolean {
 	return arraysEqual(left, right, equals);
 }
 export function arrayEqualsC<T>(equals: EqualityComparer<T> = strictEquals): EqualityComparer<readonly T[]> {
@@ -42,11 +38,7 @@ export function thisEqualsC<T extends IEquatable<T>>(): EqualityComparer<T> {
 	return (left, right) => left.equals(right);
 }
 
-export function equalsIfDefined<T>(
-	left: T | null | undefined,
-	right: T | null | undefined,
-	equals: EqualityComparer<T>,
-): boolean {
+export function equalsIfDefined<T>(left: T | null | undefined, right: T | null | undefined, equals: EqualityComparer<T>): boolean {
 	if (left == null || right == null) return left === right;
 	return equals(left, right);
 }

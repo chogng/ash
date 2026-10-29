@@ -161,10 +161,7 @@ export interface TaskProvider {
 	readonly id: string;
 	readonly type?: string;
 	provideTasks(signal: AbortSignal): readonly TaskProviderTask[] | PromiseLike<readonly TaskProviderTask[]>;
-	resolveTask?(
-		task: IWorkspaceTask,
-		signal: AbortSignal,
-	): TaskProviderTask | undefined | PromiseLike<TaskProviderTask | undefined>;
+	resolveTask?(task: IWorkspaceTask, signal: AbortSignal): TaskProviderTask | undefined | PromiseLike<TaskProviderTask | undefined>;
 }
 
 /** One caller-owned provider set that can be atomically replaced. */
@@ -208,20 +205,8 @@ export interface ITaskOutput {
 /** Keeps output pages serializable as UTF-8 strings across the application host boundary. */
 export function readTaskOutput(text: string, offset: number, cursor: number, maxCharacters: number): ITaskOutput {
 	const outputEnd = offset + text.length;
-	if (
-		!Number.isSafeInteger(cursor) ||
-		cursor < 0 ||
-		cursor > outputEnd ||
-		!Number.isSafeInteger(maxCharacters) ||
-		maxCharacters < 1 ||
-		maxCharacters > 65_536
-	)
-		throw new RangeError(
-			localize(
-				'tasks.invalidOutputRange',
-				'Invalid task output cursor or limit. Start with cursor=0 and use a limit between 1 and 65536.',
-			),
-		);
+	if (!Number.isSafeInteger(cursor) || cursor < 0 || cursor > outputEnd || !Number.isSafeInteger(maxCharacters) || maxCharacters < 1 || maxCharacters > 65_536)
+		throw new RangeError(localize('tasks.invalidOutputRange', 'Invalid task output cursor or limit. Start with cursor=0 and use a limit between 1 and 65536.'));
 	let start = Math.max(cursor, offset) - offset;
 	if (isLowSurrogate(text.charCodeAt(start)) && isHighSurrogate(text.charCodeAt(start - 1))) start--;
 	let end = Math.min(text.length, start + maxCharacters);
@@ -256,15 +241,7 @@ export function waitForTask(run: ITaskRun, signal?: AbortSignal): Promise<TaskRu
 		return Promise.resolve(run.isReady && run.status === 'running' ? 'succeeded' : run.status);
 	}
 	if (run.task.isBackground && run.hasBackgroundMatcher === false) {
-		return Promise.reject(
-			new Error(
-				localize(
-					'tasks.backgroundMatcherRequired',
-					"Background task '{0}' needs a problem matcher with begin and end patterns.",
-					run.task.label,
-				),
-			),
-		);
+		return Promise.reject(new Error(localize('tasks.backgroundMatcherRequired', "Background task '{0}' needs a problem matcher with begin and end patterns.", run.task.label)));
 	}
 	return new Promise((resolve, reject) => {
 		let statusListener: IDisposable | undefined;
@@ -300,7 +277,6 @@ export function waitForTask(run: ITaskRun, signal?: AbortSignal): Promise<TaskRu
 		signal?.addEventListener('abort', abort, { once: true });
 		// A producer may deliver its retained ready/exit state during subscription.
 		if (signal?.aborted) abort();
-		else if (run.status !== 'running' || run.isReady)
-			finish(run.isReady && run.status === 'running' ? 'succeeded' : run.status);
+		else if (run.status !== 'running' || run.isReady) finish(run.isReady && run.status === 'running' ? 'succeeded' : run.status);
 	});
 }

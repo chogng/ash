@@ -6,10 +6,7 @@ import { StorageScope, type IStorageService } from '../../platform/storage/commo
 import type { ISessionGroupsService } from '../services/sessions/browser/sessionGroupsService.js';
 import type { SessionsViewSelection } from '../services/sessions/browser/sessionsService.js';
 import { localize } from '../../nls.js';
-import type {
-	IAgentSessionListItem,
-	IAgentSessionsModel,
-} from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsModel.js';
+import type { IAgentSessionListItem, IAgentSessionsModel } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsModel.js';
 import type { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { getInProgressSessionDescription } from '../../workbench/contrib/chat/browser/chatSessions/chatSessionDescription.js';
 
@@ -60,8 +57,7 @@ function sessionItems(
 	}));
 	for (const session of sessions.sessions) {
 		if (session.status !== 'active') continue;
-		const selectedThreadId =
-			sessions.active?.session.sessionId === session.sessionId ? sessions.active.threadId : undefined;
+		const selectedThreadId = sessions.active?.session.sessionId === session.sessionId ? sessions.active.threadId : undefined;
 		const thread =
 			session.chats.find(chat => chat.threadId === selectedThreadId && chat.status === 'active') ??
 			session.chats.find(chat => chat.status === 'active' && chat.origin.type === 'root') ??
@@ -70,17 +66,12 @@ function sessionItems(
 		items.push({
 			id: `session:${session.sessionId}`,
 			title: session.title.trim() || localize('chat.sessions.untitled', 'Untitled session'),
-			description:
-				getInProgressSessionDescription(thread.management ?? session.management) ??
-				session.workspace?.root ??
-				'',
+			description: getInProgressSessionDescription(thread.management ?? session.management) ?? session.workspace?.root ?? '',
 			kind: 'session',
 			pinned: storage.getBoolean(`sessions.list.pinned.${session.sessionId}`, StorageScope.PROFILE, false),
 			group: groups.groups.find(group => group.sessionIds.includes(session.sessionId)),
 			getActions: () => actions({ kind: 'session', active: { session, threadId: thread.threadId } }),
-			active:
-				sessions.activeUntitledSession === undefined &&
-				sessions.active?.session.sessionId === session.sessionId,
+			active: sessions.activeUntitledSession === undefined && sessions.active?.session.sessionId === session.sessionId,
 			open: () => {
 				sessions.selectThread(session.sessionId, thread.threadId);
 				onDidOpen?.();
@@ -111,10 +102,7 @@ export function createSessionItemActions(
 	});
 	return [
 		{
-			...action(
-				'sessions.list.togglePin',
-				pinned ? localize('sessions.list.unpin', 'Unpin chat') : localize('sessions.list.pin', 'Pin chat'),
-			),
+			...action('sessions.list.togglePin', pinned ? localize('sessions.list.unpin', 'Unpin chat') : localize('sessions.list.pin', 'Pin chat')),
 			run: async () => {
 				try {
 					const id = await commands.executeCommand<string>('sessions.list.togglePin', target);

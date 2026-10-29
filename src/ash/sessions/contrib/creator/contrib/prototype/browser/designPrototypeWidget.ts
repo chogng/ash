@@ -9,10 +9,7 @@ import { generateUuid } from '../../../../../../base/common/uuid.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import { localize } from '../../../../../../nls.js';
-import type {
-	DesignEditorContributionContext,
-	IDesignPrototypeContribution,
-} from '../../../browser/designEditorBrowser.js';
+import type { DesignEditorContributionContext, IDesignPrototypeContribution } from '../../../browser/designEditorBrowser.js';
 import { CreatorMode } from '../../../common/creator.js';
 import { flattenDesignShapes, type DesignShape } from '../../../common/model/document.js';
 import { getDesignLibraryShapes, getDesignResourceCatalog } from '../../../common/model/designResources.js';
@@ -27,12 +24,7 @@ import {
 	type PrototypeInteraction,
 	type PrototypeStep,
 } from '../../../common/model/prototype.js';
-import {
-	parsePrototypeExpression,
-	formatPrototypeExpression,
-	prototypeExpressionType,
-	type PrototypeExpression,
-} from '../../../common/model/prototypeExpression.js';
+import { parsePrototypeExpression, formatPrototypeExpression, prototypeExpressionType, type PrototypeExpression } from '../../../common/model/prototypeExpression.js';
 import { springProgress, prototypeTransitionDuration } from '../../../common/model/prototypePlayback.js';
 import { PrototypeConnections } from './prototypeConnections.js';
 import { PrototypePreview } from './prototypePreview.js';
@@ -88,9 +80,7 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 		);
 		this.preview = this._register(
 			new PrototypePreview(context, url => {
-				void opener
-					.open(URI.parse(url), { openExternal: true, allowCommands: false })
-					.catch(error => status(String(error)));
+				void opener.open(URI.parse(url), { openExternal: true, allowCommands: false }).catch(error => status(String(error)));
 			}),
 		);
 		this.previewDomNode = this.preview.domNode;
@@ -123,41 +113,18 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 		const doc = this.context.documentController.model.value;
 		const frames = prototypeFrames(doc.shapes);
 		const selected = this.context.selection.ids;
-		const shape =
-			selected.size === 1 ? flattenDesignShapes(doc.shapes).find(shape => selected.has(shape.id)) : undefined;
-		this.button(
-			'preview',
-			localize('sessions.design.prototype.preview', 'Prototype preview'),
-			() => this.showPreview(),
-			!!frames.length,
-		);
-		this.check(
-			'connections',
-			localize('sessions.design.prototype.connections', 'Show connections'),
-			this.showConnections,
-			value => {
-				this.showConnections = value;
-				this.connections.update(this.scale, this.active && value);
-			},
-		);
+		const shape = selected.size === 1 ? flattenDesignShapes(doc.shapes).find(shape => selected.has(shape.id)) : undefined;
+		this.button('preview', localize('sessions.design.prototype.preview', 'Prototype preview'), () => this.showPreview(), !!frames.length);
+		this.check('connections', localize('sessions.design.prototype.connections', 'Show connections'), this.showConnections, value => {
+			this.showConnections = value;
+			this.connections.update(this.scale, this.active && value);
+		});
 		if (shape && frames.some(frame => frame.id === shape.id)) {
-			this.check(
-				'startingPoint',
-				localize('sessions.design.prototype.startingPoint', 'Flow starting point'),
-				!!shape.flowStart,
-				value =>
-					this.context.commands.prototype.setFlow(
-						shape.id,
-						value ? localize('sessions.design.prototype.defaultFlow', 'Flow 1') : undefined,
-					),
+			this.check('startingPoint', localize('sessions.design.prototype.startingPoint', 'Flow starting point'), !!shape.flowStart, value =>
+				this.context.commands.prototype.setFlow(shape.id, value ? localize('sessions.design.prototype.defaultFlow', 'Flow 1') : undefined),
 			);
 			if (shape.flowStart) {
-				this.input(
-					'flowName',
-					localize('sessions.design.prototype.flowName', 'Flow name'),
-					shape.flowStart,
-					value => this.context.commands.prototype.setFlow(shape.id, value),
-				);
+				this.input('flowName', localize('sessions.design.prototype.flowName', 'Flow name'), shape.flowStart, value => this.context.commands.prototype.setFlow(shape.id, value));
 			}
 		}
 		if (!shape) {
@@ -166,10 +133,7 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 					this.context.ownerDocument,
 					'p',
 					{},
-					localize(
-						'sessions.design.prototype.selectHotspot',
-						'Select a layer to add an interaction. Drag its connection handle to a destination screen, or use the fields below.',
-					),
+					localize('sessions.design.prototype.selectHotspot', 'Select a layer to add an interaction. Drag its connection handle to a destination screen, or use the fields below.'),
 				),
 			);
 			return;
@@ -215,48 +179,28 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 				'interaction',
 				localize('sessions.design.prototype.interaction', 'Interaction'),
 				interaction.id,
-				interactions.map((item, index) => [
-					item.id,
-					`${index + 1}. ${triggerLabels()[item.trigger]} · ${item.actions.map(action => actionLabels()[action.action]).join(' → ')}`,
-				]),
+				interactions.map((item, index) => [item.id, `${index + 1}. ${triggerLabels()[item.trigger]} · ${item.actions.map(action => actionLabels()[action.action]).join(' → ')}`]),
 				value => {
 					this.interactionId = value;
 					this.update(this.scale, this.active, true);
 				},
 			);
-			this.select(
-				'trigger',
-				localize('sessions.design.prototype.trigger', 'Trigger'),
-				interaction.trigger,
-				Object.entries(triggerLabels()),
-				value =>
-					edit({
-						trigger: value as PrototypeInteraction['trigger'],
-						...(value === 'delay' ? { delay: interaction.delay ?? 800 } : {}),
-						...(value === 'key' ? { key: interaction.key ?? 'Enter' } : {}),
-					}),
+			this.select('trigger', localize('sessions.design.prototype.trigger', 'Trigger'), interaction.trigger, Object.entries(triggerLabels()), value =>
+				edit({
+					trigger: value as PrototypeInteraction['trigger'],
+					...(value === 'delay' ? { delay: interaction.delay ?? 800 } : {}),
+					...(value === 'key' ? { key: interaction.key ?? 'Enter' } : {}),
+				}),
 			);
 			if (interaction.trigger === 'delay') {
-				this.number(
-					'delay',
-					localize('sessions.design.prototype.delayMs', 'Delay (ms)'),
-					interaction.delay ?? 800,
-					1,
-					60000,
-					value => edit({ delay: value }),
-				);
+				this.number('delay', localize('sessions.design.prototype.delayMs', 'Delay (ms)'), interaction.delay ?? 800, 1, 60000, value => edit({ delay: value }));
 			}
 			if (interaction.trigger === 'key') {
-				this.input(
-					'key',
-					localize('sessions.design.prototype.keyName', 'Key'),
-					interaction.key ?? 'Enter',
-					value => {
-						if (value && value.length <= 64) {
-							edit({ key: value });
-						}
-					},
-				);
+				this.input('key', localize('sessions.design.prototype.keyName', 'Key'), interaction.key ?? 'Enter', value => {
+					if (value && value.length <= 64) {
+						edit({ key: value });
+					}
+				});
 			}
 			this.renderActions(interaction.actions, actions => edit({ actions }), shape.id, 'actions', 0);
 			this.button('remove', localize('sessions.design.prototype.remove', 'Remove interaction'), () =>
@@ -277,16 +221,11 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 		return {
 			action: type,
 			transition: defaultPrototypeTransition,
-			...(['navigate', 'overlay', 'swap'].includes(type)
-				? { destination: prototypeFrames(doc.shapes)[0]?.id }
-				: {}),
+			...(['navigate', 'overlay', 'swap'].includes(type) ? { destination: prototypeFrames(doc.shapes)[0]?.id } : {}),
 			...(type === 'scrollTo' ? { destination: prototypeScrollTargets(doc.shapes, shapeId)[0]?.id } : {}),
 			...(type === 'changeTo'
 				? {
-						destination: prototypeVariants(
-							[...doc.shapes, ...getDesignLibraryShapes(doc.resources)],
-							shapeId,
-						)[0]?.id,
+						destination: prototypeVariants([...doc.shapes, ...getDesignLibraryShapes(doc.resources)], shapeId)[0]?.id,
 					}
 				: {}),
 			...(type === 'url' ? { url: '' } : {}),
@@ -295,32 +234,15 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 						variableId: variable.id,
 						value: {
 							kind: 'literal',
-							value:
-								variable.type === 'number'
-									? 0
-									: variable.type === 'boolean'
-										? false
-										: variable.type === 'color'
-											? '#000000'
-											: '',
+							value: variable.type === 'number' ? 0 : variable.type === 'boolean' ? false : variable.type === 'color' ? '#000000' : '',
 						} as const,
 					}
 				: {}),
-			...(type === 'setMode'
-				? { collectionId: catalog.collections[0].id, modeId: catalog.collections[0].defaultMode }
-				: {}),
-			...(type === 'conditional'
-				? { branches: [{ condition: { kind: 'literal', value: true } as const, actions: [] }, { actions: [] }] }
-				: {}),
+			...(type === 'setMode' ? { collectionId: catalog.collections[0].id, modeId: catalog.collections[0].defaultMode } : {}),
+			...(type === 'conditional' ? { branches: [{ condition: { kind: 'literal', value: true } as const, actions: [] }, { actions: [] }] } : {}),
 		};
 	}
-	private renderActions(
-		actions: readonly PrototypeStep[],
-		change: (actions: readonly PrototypeStep[]) => void,
-		shapeId: string,
-		prefix: string,
-		depth: number,
-	): void {
+	private renderActions(actions: readonly PrototypeStep[], change: (actions: readonly PrototypeStep[]) => void, shapeId: string, prefix: string, depth: number): void {
 		const parent = this.parent;
 		const doc = this.context.documentController.model.value;
 		const frames = prototypeFrames(doc.shapes),
@@ -332,22 +254,11 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 				this.context.ownerDocument,
 				'fieldset',
 				{ className: 'ash-prototype-action', attributes: { 'data-prototype-action': path } },
-				h(
-					this.context.ownerDocument,
-					'legend',
-					{},
-					localize(
-						'sessions.design.prototype.actionNumber',
-						'{0}. {1}',
-						index + 1,
-						actionLabels()[action.action],
-					),
-				),
+				h(this.context.ownerDocument, 'legend', {}, localize('sessions.design.prototype.actionNumber', '{0}. {1}', index + 1, actionLabels()[action.action])),
 			);
 			(parent ?? this.fields).append(group);
 			this.parent = group;
-			const replace = (next: PrototypeStep): void =>
-				change(actions.map((item, i) => (i === index ? next : item)));
+			const replace = (next: PrototypeStep): void => change(actions.map((item, i) => (i === index ? next : item)));
 			const editStep = (changes: Partial<PrototypeStep>): void => replace({ ...action, ...changes });
 			this.select(
 				`${path}.action`,
@@ -370,30 +281,17 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 					const next = this.createAction(value as PrototypeStep['action'], shapeId);
 					replace({
 						...next,
-						...(!['conditional', 'setVariable', 'setMode', 'url', 'scrollTo'].includes(value) &&
-						action.action !== 'scrollTo'
-							? { transition: action.transition }
-							: {}),
-						...(['navigate', 'overlay', 'swap'].includes(value) &&
-						frames.some(frame => frame.id === action.destination)
-							? { destination: action.destination }
-							: {}),
+						...(!['conditional', 'setVariable', 'setMode', 'url', 'scrollTo'].includes(value) && action.action !== 'scrollTo' ? { transition: action.transition } : {}),
+						...(['navigate', 'overlay', 'swap'].includes(value) && frames.some(frame => frame.id === action.destination) ? { destination: action.destination } : {}),
 					});
 				},
 			);
 
 			const scrollTargets = prototypeScrollTargets(doc.shapes, shapeId),
-				wiredTarget = prototypeScrollTargets(doc.shapes, shapeId, false).find(
-					target => target.id === action.destination || target.sourceId === action.destination,
-				);
+				wiredTarget = prototypeScrollTargets(doc.shapes, shapeId, false).find(target => target.id === action.destination || target.sourceId === action.destination);
 			const destinations =
 				action.action === 'scrollTo'
-					? [
-							...scrollTargets,
-							...(wiredTarget && !scrollTargets.some(target => target.id === action.destination)
-								? [{ ...wiredTarget, id: action.destination! }]
-								: []),
-						]
+					? [...scrollTargets, ...(wiredTarget && !scrollTargets.some(target => target.id === action.destination) ? [{ ...wiredTarget, id: action.destination! }] : [])]
 					: action.action === 'changeTo'
 						? variants
 						: frames;
@@ -403,53 +301,26 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 					localize('sessions.design.prototype.destination', 'Destination'),
 					action.destination ?? '',
 					[
-						...destinations.map(
-							(frame, index) =>
-								[
-									frame.id,
-									frame.name ||
-										localize('sessions.design.prototype.screenNumber', 'Screen {0}', index + 1),
-								] as const,
-						),
+						...destinations.map((frame, index) => [frame.id, frame.name || localize('sessions.design.prototype.screenNumber', 'Screen {0}', index + 1)] as const),
 						...(!destinations.some(frame => frame.id === action.destination)
-							? [
-									[
-										action.destination ?? '',
-										localize('sessions.design.prototype.missingDestination', 'Missing destination'),
-									] as const,
-								]
+							? [[action.destination ?? '', localize('sessions.design.prototype.missingDestination', 'Missing destination')] as const]
 							: []),
 					],
 					value => editStep({ destination: value }),
 				);
 			}
 			if (['navigate', 'overlay', 'swap'].includes(action.action)) {
-				this.check(
-					`${path}.resetScroll`,
-					localize('sessions.design.prototype.resetScroll', 'Reset scroll position'),
-					!!action.resetScroll,
-					resetScroll => editStep({ resetScroll }),
-				);
+				this.check(`${path}.resetScroll`, localize('sessions.design.prototype.resetScroll', 'Reset scroll position'), !!action.resetScroll, resetScroll => editStep({ resetScroll }));
 			}
 			if (action.action === 'url') {
-				this.input(
-					`${path}.url`,
-					localize('sessions.design.prototype.link', 'Link URL'),
-					action.url ?? '',
-					value => {
-						if (!value || isPrototypeUrl(value)) {
-							editStep({ url: value });
-						} else {
-							status(
-								localize(
-									'sessions.design.prototype.invalidUrl',
-									'Enter an http, https or mailto link.',
-								),
-							);
-							this.update(this.scale, this.active, true);
-						}
-					},
-				);
+				this.input(`${path}.url`, localize('sessions.design.prototype.link', 'Link URL'), action.url ?? '', value => {
+					if (!value || isPrototypeUrl(value)) {
+						editStep({ url: value });
+					} else {
+						status(localize('sessions.design.prototype.invalidUrl', 'Enter an http, https or mailto link.'));
+						this.update(this.scale, this.active, true);
+					}
+				});
 			}
 			if (action.action === 'overlay' || action.action === 'swap') {
 				const overlay = action.overlay ?? { position: 'center', closeOutside: true, background: true };
@@ -466,17 +337,11 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 					],
 					value => editStep({ overlay: { ...overlay, position: value as typeof overlay.position } }),
 				);
-				this.check(
-					`${path}.closeOutside`,
-					localize('sessions.design.prototype.closeOutside', 'Close when clicking outside'),
-					overlay.closeOutside,
-					value => editStep({ overlay: { ...overlay, closeOutside: value } }),
+				this.check(`${path}.closeOutside`, localize('sessions.design.prototype.closeOutside', 'Close when clicking outside'), overlay.closeOutside, value =>
+					editStep({ overlay: { ...overlay, closeOutside: value } }),
 				);
-				this.check(
-					`${path}.background`,
-					localize('sessions.design.prototype.background', 'Add background behind overlay'),
-					overlay.background,
-					value => editStep({ overlay: { ...overlay, background: value } }),
+				this.check(`${path}.background`, localize('sessions.design.prototype.background', 'Add background behind overlay'), overlay.background, value =>
+					editStep({ overlay: { ...overlay, background: value } }),
 				);
 			}
 			if (!['conditional', 'setVariable', 'setMode', 'url'].includes(action.action)) {
@@ -485,20 +350,13 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 					`${path}.transition`,
 					localize('sessions.design.prototype.transition', 'Transition'),
 					transition.type,
-					Object.entries(transitionLabels()).filter(([key]) =>
-						action.action === 'scrollTo' ? key === 'instant' || key === 'scroll' : key !== 'scroll',
-					),
+					Object.entries(transitionLabels()).filter(([key]) => (action.action === 'scrollTo' ? key === 'instant' || key === 'scroll' : key !== 'scroll')),
 					value => editStep({ transition: { ...transition, type: value as typeof transition.type } }),
 				);
 				if (transition.type !== 'instant') {
 					if (transition.easing !== 'spring') {
-						this.number(
-							`${path}.duration`,
-							localize('sessions.design.prototype.duration', 'Duration (ms)'),
-							transition.duration,
-							1,
-							10000,
-							value => editStep({ transition: { ...transition, duration: value } }),
+						this.number(`${path}.duration`, localize('sessions.design.prototype.duration', 'Duration (ms)'), transition.duration, 1, 10000, value =>
+							editStep({ transition: { ...transition, duration: value } }),
 						);
 					}
 					this.select(
@@ -517,9 +375,7 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 								transition: {
 									...transition,
 									easing: value as typeof transition.easing,
-									...(value === 'spring'
-										? { spring: transition.spring ?? defaultPrototypeSpring }
-										: { duration: Math.min(10000, transition.duration) }),
+									...(value === 'spring' ? { spring: transition.spring ?? defaultPrototypeSpring } : { duration: Math.min(10000, transition.duration) }),
 								},
 							}),
 					);
@@ -553,14 +409,7 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 					action.variableId ?? '',
 					[
 						...variables.map(item => [item.id, item.name] as const),
-						...(!variable
-							? [
-									[
-										action.variableId ?? '',
-										localize('sessions.design.prototype.missingVariable', 'Missing variable'),
-									] as const,
-								]
-							: []),
+						...(!variable ? [[action.variableId ?? '', localize('sessions.design.prototype.missingVariable', 'Missing variable')] as const] : []),
 					],
 					id => {
 						const selected = variables.find(item => item.id === id)!;
@@ -568,25 +417,12 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 							variableId: id,
 							value: {
 								kind: 'literal',
-								value:
-									selected.type === 'number'
-										? 0
-										: selected.type === 'boolean'
-											? false
-											: selected.type === 'color'
-												? '#000000'
-												: '',
+								value: selected.type === 'number' ? 0 : selected.type === 'boolean' ? false : selected.type === 'color' ? '#000000' : '',
 							},
 						});
 					},
 				);
-				this.expression(
-					`${path}.value`,
-					localize('sessions.design.prototype.valueExpression', 'Value or expression'),
-					action.value!,
-					variable?.type,
-					value => editStep({ value }),
-				);
+				this.expression(`${path}.value`, localize('sessions.design.prototype.valueExpression', 'Value or expression'), action.value!, variable?.type, value => editStep({ value }));
 			}
 			if (action.action === 'setMode') {
 				const collection = collections.find(item => item.id === action.collectionId);
@@ -596,14 +432,7 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 					action.collectionId ?? '',
 					[
 						...collections.map(item => [item.id, item.name] as const),
-						...(!collection
-							? [
-									[
-										action.collectionId ?? '',
-										localize('sessions.design.prototype.missingCollection', 'Missing collection'),
-									] as const,
-								]
-							: []),
+						...(!collection ? [[action.collectionId ?? '', localize('sessions.design.prototype.missingCollection', 'Missing collection')] as const] : []),
 					],
 					id => editStep({ collectionId: id, modeId: collections.find(item => item.id === id)!.defaultMode }),
 				);
@@ -613,14 +442,7 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 					action.modeId ?? '',
 					[
 						...(collection?.modes.map(mode => [mode.id, mode.name] as const) ?? []),
-						...(!collection?.modes.some(mode => mode.id === action.modeId)
-							? [
-									[
-										action.modeId ?? '',
-										localize('sessions.design.prototype.missingMode', 'Missing mode'),
-									] as const,
-								]
-							: []),
+						...(!collection?.modes.some(mode => mode.id === action.modeId) ? [[action.modeId ?? '', localize('sessions.design.prototype.missingMode', 'Missing mode')] as const] : []),
 					],
 					modeId => editStep({ modeId }),
 				);
@@ -651,26 +473,12 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 							branches: branches.map((item, i) => (i === branchIndex ? { ...item, ...changes } : item)),
 						});
 					if (branch.condition) {
-						this.expression(
-							`${branchPath}.condition`,
-							localize('sessions.design.prototype.condition', 'Condition'),
-							branch.condition,
-							'boolean',
-							condition => editBranch({ condition }),
-						);
+						this.expression(`${branchPath}.condition`, localize('sessions.design.prototype.condition', 'Condition'), branch.condition, 'boolean', condition => editBranch({ condition }));
 					}
-					this.renderActions(
-						branch.actions,
-						actions => editBranch({ actions }),
-						shapeId,
-						branchPath,
-						depth + 1,
-					);
+					this.renderActions(branch.actions, actions => editBranch({ actions }), shapeId, branchPath, depth + 1);
 					if (branchIndex > 0) {
-						this.button(
-							`${branchPath}.remove`,
-							localize('sessions.design.prototype.removeBranch', 'Remove branch'),
-							() => editStep({ branches: branches.filter((_, i) => i !== branchIndex) }),
+						this.button(`${branchPath}.remove`, localize('sessions.design.prototype.removeBranch', 'Remove branch'), () =>
+							editStep({ branches: branches.filter((_, i) => i !== branchIndex) }),
 						);
 					}
 				}
@@ -689,12 +497,7 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 					branches.length < 100,
 				);
 				if (branches.at(-1)?.condition) {
-					this.button(
-						`${path}.else`,
-						localize('sessions.design.prototype.addElse', 'Add else'),
-						() => editStep({ branches: [...branches, { actions: [] }] }),
-						branches.length < 100,
-					);
+					this.button(`${path}.else`, localize('sessions.design.prototype.addElse', 'Add else'), () => editStep({ branches: [...branches, { actions: [] }] }), branches.length < 100);
 				}
 			}
 			const buttons = h(this.context.ownerDocument, 'div', { className: 'ash-prototype-action-buttons' });
@@ -706,24 +509,9 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 				next.splice(index + offset, 0, action);
 				change(next);
 			};
-			this.button(
-				`${path}.up`,
-				localize('sessions.design.prototype.moveUp', 'Move action up'),
-				() => move(-1),
-				index > 0,
-			);
-			this.button(
-				`${path}.down`,
-				localize('sessions.design.prototype.moveDown', 'Move action down'),
-				() => move(1),
-				index < actions.length - 1,
-			);
-			this.button(
-				`${path}.remove`,
-				localize('sessions.design.prototype.removeAction', 'Remove action'),
-				() => change(actions.filter((_, i) => i !== index)),
-				depth > 0 || actions.length > 1,
-			);
+			this.button(`${path}.up`, localize('sessions.design.prototype.moveUp', 'Move action up'), () => move(-1), index > 0);
+			this.button(`${path}.down`, localize('sessions.design.prototype.moveDown', 'Move action down'), () => move(1), index < actions.length - 1);
+			this.button(`${path}.remove`, localize('sessions.design.prototype.removeAction', 'Remove action'), () => change(actions.filter((_, i) => i !== index)), depth > 0 || actions.length > 1);
 			this.parent = parent;
 		}
 		this.parent = parent;
@@ -741,9 +529,7 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 	private renderScroll(shape: DesignShape): void {
 		const path = prototypePath(this.context.documentController.model.value.shapes, shape.id),
 			parent = path.at(-2);
-		const edit = (
-			settings: Pick<Partial<DesignShape>, 'overflowDirection' | 'scrollPosition' | 'layoutPositioning'>,
-		): void => this.context.commands.prototype.setScroll(shape.id, settings);
+		const edit = (settings: Pick<Partial<DesignShape>, 'overflowDirection' | 'scrollPosition' | 'layoutPositioning'>): void => this.context.commands.prototype.setScroll(shape.id, settings);
 		if (shape.kind === 'frame') {
 			this.select(
 				'overflow',
@@ -759,25 +545,12 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 			);
 			const range = prototypeScrollRange(shape);
 			if (shape.overflowDirection && shape.overflowDirection !== 'none' && !range.x && !range.y) {
-				this.fields.append(
-					h(
-						this.context.ownerDocument,
-						'p',
-						{},
-						localize(
-							'sessions.design.prototype.noOverflow',
-							'Content must extend beyond the frame to scroll.',
-						),
-					),
-				);
+				this.fields.append(h(this.context.ownerDocument, 'p', {}, localize('sessions.design.prototype.noOverflow', 'Content must extend beyond the frame to scroll.')));
 			}
 		}
 		if (parent?.kind === 'frame' && parent.autoLayout) {
-			this.check(
-				'absolute',
-				localize('sessions.design.prototype.ignoreLayout', 'Ignore auto layout'),
-				shape.layoutPositioning === 'absolute',
-				value => edit({ layoutPositioning: value ? 'absolute' : 'auto' }),
+			this.check('absolute', localize('sessions.design.prototype.ignoreLayout', 'Ignore auto layout'), shape.layoutPositioning === 'absolute', value =>
+				edit({ layoutPositioning: value ? 'absolute' : 'auto' }),
 			);
 		}
 		const owner = path
@@ -785,44 +558,22 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 			.reverse()
 			.find(item => item.kind === 'frame' && item.overflowDirection && item.overflowDirection !== 'none');
 		if (owner || (shape.scrollPosition && shape.scrollPosition !== 'scroll')) {
-			const options: [string, string][] = [
-				['scroll', localize('sessions.design.prototype.scrollWithParent', 'Scroll with parent')],
-			];
+			const options: [string, string][] = [['scroll', localize('sessions.design.prototype.scrollWithParent', 'Scroll with parent')]];
 			if (!(parent?.kind === 'frame' && parent.autoLayout) || shape.layoutPositioning === 'absolute') {
 				options.push(['fixed', localize('sessions.design.prototype.fixed', 'Fixed')]);
 			}
 			if (owner?.overflowDirection !== 'horizontal') {
 				options.push(['sticky', localize('sessions.design.prototype.sticky', 'Sticky')]);
 			}
-			this.select(
-				'scrollPosition',
-				localize('sessions.design.prototype.scrollPosition', 'Scroll position'),
-				shape.scrollPosition ?? 'scroll',
-				options,
-				value => edit({ scrollPosition: value as DesignShape['scrollPosition'] }),
+			this.select('scrollPosition', localize('sessions.design.prototype.scrollPosition', 'Scroll position'), shape.scrollPosition ?? 'scroll', options, value =>
+				edit({ scrollPosition: value as DesignShape['scrollPosition'] }),
 			);
 			if (parent?.kind === 'frame' && parent.autoLayout && shape.layoutPositioning !== 'absolute') {
-				this.fields.append(
-					h(
-						this.context.ownerDocument,
-						'p',
-						{},
-						localize(
-							'sessions.design.prototype.fixedRequiresAbsolute',
-							'Enable Ignore auto layout to use fixed positioning.',
-						),
-					),
-				);
+				this.fields.append(h(this.context.ownerDocument, 'p', {}, localize('sessions.design.prototype.fixedRequiresAbsolute', 'Enable Ignore auto layout to use fixed positioning.')));
 			}
 		}
 	}
-	private expression(
-		key: string,
-		label: string,
-		value: PrototypeExpression,
-		expected: string | undefined,
-		change: (value: PrototypeExpression) => void,
-	): void {
+	private expression(key: string, label: string, value: PrototypeExpression, expected: string | undefined, change: (value: PrototypeExpression) => void): void {
 		const variables = getDesignResourceCatalog(this.context.documentController.model.value.resources).variables;
 		const input = h(this.context.ownerDocument, 'input', {
 			properties: { type: 'text', value: formatPrototypeExpression(value, variables), maxLength: 8192 },
@@ -836,16 +587,7 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 			try {
 				const expression = parsePrototypeExpression(input.value, variables),
 					type = prototypeExpressionType(expression, variables);
-				if (
-					expected &&
-					type &&
-					expected !== type &&
-					!(
-						expected === 'color' &&
-						expression.kind === 'literal' &&
-						/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(String(expression.value))
-					)
-				) {
+				if (expected && type && expected !== type && !(expected === 'color' && expression.kind === 'literal' && /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(String(expression.value)))) {
 					throw new TypeError(
 						localize(
 							'sessions.design.prototype.expressionType',
@@ -884,19 +626,11 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 				`${key}.insert`,
 				localize('sessions.design.prototype.insertVariable', 'Insert variable'),
 				'',
-				[
-					['', localize('sessions.design.prototype.chooseVariable', 'Choose a variable…')],
-					...variables.map(variable => [variable.id, variable.name] as const),
-				],
+				[['', localize('sessions.design.prototype.chooseVariable', 'Choose a variable…')], ...variables.map(variable => [variable.id, variable.name] as const)],
 				id => {
 					if (id) {
 						const reference = formatPrototypeExpression({ kind: 'variable', id }, variables);
-						input.setRangeText(
-							reference,
-							input.selectionStart ?? input.value.length,
-							input.selectionEnd ?? input.value.length,
-							'end',
-						);
+						input.setRangeText(reference, input.selectionStart ?? input.value.length, input.selectionEnd ?? input.value.length, 'end');
 						input.focus();
 					}
 				},
@@ -919,9 +653,7 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 			});
 		}
 		const duration = prototypeTransitionDuration(transition);
-		const values = Array.from({ length: 101 }, (_, index) =>
-			springProgress(((index / 100) * duration) / 1000, spring),
-		);
+		const values = Array.from({ length: 101 }, (_, index) => springProgress(((index / 100) * duration) / 1000, spring));
 		const min = Math.min(0, ...values),
 			max = Math.max(1, ...values),
 			y = (value: number): number => 60 - ((value - min) / (max - min)) * 52;
@@ -950,15 +682,7 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 				attributes: { d: values.map((value, index) => `${index ? 'L' : 'M'} ${index} ${y(value)}`).join(' ') },
 			}),
 		);
-		(this.parent ?? this.fields).append(
-			graph,
-			h(
-				this.context.ownerDocument,
-				'span',
-				{},
-				localize('sessions.design.prototype.settlingDuration', 'Settling duration: {0} ms', duration),
-			),
-		);
+		(this.parent ?? this.fields).append(graph, h(this.context.ownerDocument, 'span', {}, localize('sessions.design.prototype.settlingDuration', 'Settling duration: {0} ms', duration)));
 	}
 	public showPreview(): void {
 		this.connections.cancel();
@@ -987,9 +711,7 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 		const variables = getDesignResourceCatalog(doc.resources).variables;
 		return flattenDesignShapes(doc.shapes)
 			.flatMap(shape => [
-				shape.flowStart
-					? localize('sessions.design.prototype.flowDescription', 'Flow: {0}', shape.flowStart)
-					: '',
+				shape.flowStart ? localize('sessions.design.prototype.flowDescription', 'Flow: {0}', shape.flowStart) : '',
 				...(shape.interactions ?? []).map(item =>
 					localize(
 						'sessions.design.prototype.connectionDescription',
@@ -1005,14 +727,9 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 									? formatPrototypeExpression(action.value, variables)
 									: action.branches
 										? action.branches
-												.map(branch =>
-													branch.condition
-														? formatPrototypeExpression(branch.condition, variables)
-														: localize('sessions.design.prototype.else', 'Else'),
-												)
+												.map(branch => (branch.condition ? formatPrototypeExpression(branch.condition, variables) : localize('sessions.design.prototype.else', 'Else')))
 												.join(', ')
-										: prototypeFrames(doc.shapes).find(frame => frame.id === action.destination)
-												?.name || transitionLabels()[action.transition.type],
+										: prototypeFrames(doc.shapes).find(frame => frame.id === action.destination)?.name || transitionLabels()[action.transition.type],
 							)
 							.join(', '),
 					),
@@ -1036,12 +753,7 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 		button.enabled = enabled && !this.context.documentController.isBusy;
 		button.domNode.dataset.prototypeControl = key;
 	}
-	private control<T extends HTMLInputElement | HTMLSelectElement>(
-		key: string,
-		label: string,
-		input: T,
-		run: () => void,
-	): T {
+	private control<T extends HTMLInputElement | HTMLSelectElement>(key: string, label: string, input: T, run: () => void): T {
 		input.dataset.prototypeControl = key;
 		input.setAttribute('aria-label', label);
 		input.disabled = this.context.documentController.isBusy;
@@ -1050,11 +762,7 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 				this.context.ownerDocument,
 				'label',
 				{
-					className:
-						input instanceof this.context.ownerDocument.defaultView!.HTMLInputElement &&
-						input.type === 'checkbox'
-							? 'ash-prototype-checkbox'
-							: 'ash-prototype-field',
+					className: input instanceof this.context.ownerDocument.defaultView!.HTMLInputElement && input.type === 'checkbox' ? 'ash-prototype-checkbox' : 'ash-prototype-field',
 				},
 				label,
 				input,
@@ -1069,19 +777,9 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 		);
 		return input;
 	}
-	private select(
-		key: string,
-		label: string,
-		value: string,
-		options: readonly (readonly [string, string])[],
-		change: (value: string) => void,
-	): void {
+	private select(key: string, label: string, value: string, options: readonly (readonly [string, string])[], change: (value: string) => void): void {
 		const input = h(this.context.ownerDocument, 'select');
-		input.replaceChildren(
-			...options.map(([id, text]) =>
-				h(this.context.ownerDocument, 'option', { properties: { value: id } }, text),
-			),
-		);
+		input.replaceChildren(...options.map(([id, text]) => h(this.context.ownerDocument, 'option', { properties: { value: id } }, text)));
 		input.value = value;
 		this.control(key, label, input, () => change(input.value));
 	}
@@ -1089,14 +787,7 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 		const input = h(this.context.ownerDocument, 'input', { properties: { type: 'text', value, maxLength: 2048 } });
 		this.control(key, label, input, () => change(input.value.trim()));
 	}
-	private number(
-		key: string,
-		label: string,
-		value: number,
-		min: number,
-		max: number,
-		change: (value: number) => void,
-	): void {
+	private number(key: string, label: string, value: number, min: number, max: number, change: (value: number) => void): void {
 		const input = h(this.context.ownerDocument, 'input', {
 			properties: { type: 'number', step: 'any', value: `${value}`, min: `${min}`, max: `${max}` },
 		});

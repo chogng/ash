@@ -36,8 +36,7 @@ export function detectLinks(line: string, os: OperatingSystem): IParsedLink[] {
 	for (const match of line.matchAll(/(["'`])([^"'`\r\n]+)\1/g)) {
 		const index = match.index + 1;
 		const following = line.slice(match.index + match[0].length);
-		const location =
-			/^(?:,?\s+line\s+\d+(?:,?\s+(?:col(?:umn)?|character)\s+\d+)?|:\d+(?::\d+)?)/u.exec(following)?.[0] ?? '';
+		const location = /^(?:,?\s+line\s+\d+(?:,?\s+(?:col(?:umn)?|character)\s+\d+)?|:\d+(?::\d+)?)/u.exec(following)?.[0] ?? '';
 		if (location) {
 			const candidate = parseCandidate(match[2] + location, index, os);
 			if (candidate?.suffix) {
@@ -53,8 +52,7 @@ export function detectLinks(line: string, os: OperatingSystem): IParsedLink[] {
 		add(match[1], match.index + 1);
 	}
 	// Compiler diagnostics often put an unquoted absolute path at the start.
-	const diagnostic =
-		/^\s*((?:\/|[A-Za-z]:[\\/]|\.{1,2}\/)[^\r\n]+?(?::\d+(?::\d+)?|\(\d+,?\s*\d*\)))(?=\s|:|$)/u.exec(line);
+	const diagnostic = /^\s*((?:\/|[A-Za-z]:[\\/]|\.{1,2}\/)[^\r\n]+?(?::\d+(?::\d+)?|\(\d+,?\s*\d*\)))(?=\s|:|$)/u.exec(line);
 	if (diagnostic) add(diagnostic[1], diagnostic.index + diagnostic[0].indexOf(diagnostic[1]));
 	for (const match of line.matchAll(/[^\s"'`<>{}\[\]]+/g)) {
 		const text = match[0].replace(/^[(&]+/u, '').replace(/[;,.]+$/u, '');
@@ -66,10 +64,7 @@ export function detectLinks(line: string, os: OperatingSystem): IParsedLink[] {
 
 function parseCandidate(text: string, index: number, os: OperatingSystem): IParsedLink | undefined {
 	if (text.length > 4096 || (/^[a-z][a-z\d+.-]*:\/\//iu.test(text) && !text.startsWith('file://'))) return undefined;
-	const location =
-		/(?::(\d+)(?::(\d+))?|\((\d+)(?:,\s*(\d+))?\)|,?\s+line\s+(\d+)(?:,?\s+(?:col(?:umn)?|character)\s+(\d+))?)(?::|\))?$/u.exec(
-			text,
-		);
+	const location = /(?::(\d+)(?::(\d+))?|\((\d+)(?:,\s*(\d+))?\)|,?\s+line\s+(\d+)(?:,?\s+(?:col(?:umn)?|character)\s+(\d+))?)(?::|\))?$/u.exec(text);
 	const path = location ? text.slice(0, location.index) : text.replace(/[):]+$/u, '');
 	if (!path || /^(?:https?|data|command):/iu.test(path)) return undefined;
 	const hasSeparator = path.includes('/') || (os === OperatingSystem.Windows && path.includes('\\'));
@@ -78,8 +73,7 @@ function parseCandidate(text: string, index: number, os: OperatingSystem): IPars
 	const row = Number(location[1] ?? location[3] ?? location[5]);
 	const colText = location[2] ?? location[4] ?? location[6];
 	const col = colText === undefined ? undefined : Number(colText);
-	if (![row, col ?? 1].every(value => Number.isSafeInteger(value) && value > 0 && value <= 0x7fffffff))
-		return undefined;
+	if (![row, col ?? 1].every(value => Number.isSafeInteger(value) && value > 0 && value <= 0x7fffffff)) return undefined;
 	return {
 		path: { index, text: path },
 		suffix: {
